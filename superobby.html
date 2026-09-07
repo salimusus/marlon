@@ -1215,6 +1215,8 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
   city.pets = [];
   for (let i = 0; i < 3; i++) city.pets.push(makePet('dog', rnd(-20, 20), rnd(76, 96), [0x8b4a2b, 0xd8c8a0, 0x1b1b1b][i]));
   for (let i = 0; i < 3; i++) city.pets.push(makePet('cat', rnd(-20, 20), rnd(76, 96), [0xff8f3a, 0x8f98ab, 0xf4f6fa][i]));
+  { const sv = store.json('superobby.chien', null);   // le chien adopté revient à chaque partie
+    if (sv && sv.nom) { chien.nom = sv.nom; adopterChien(city.pets.find(x => x.kind === 'dog'), true); } }
   buildCinema(0, 98);
   for (const [x, z] of [[-20, 70], [20, 70], [-14, 88], [-10, 80], [10, 80]]) coin(x, 0.3, z);   // plus de pièce entre les bancs du cinéma
   city.zones.push({ name: 'Parc', emoji: '🌳', x1: -30, x2: 30, z1: 48, z2: 100, hint: '🌳 Parc : balançoires, boules, vélos, propulseur et animaux !' });
@@ -1249,6 +1251,7 @@ function makePet(kind, x, z, color) {
 }
 function petsTick(dt) {
   for (const p of city.pets) {
+    if (p.adopte) continue;   // le chien adopté suit son maître : chienTick s'en occupe
     const dpl = Math.hypot(P.pos.x - p.x, P.pos.z - p.z);
     if (dpl < 6 && !drive.car && P.pos.y < 3) p.follow = simTime + 8;
     const following = simTime < p.follow;
@@ -1265,8 +1268,8 @@ function petsTick(dt) {
     p.head.rotation.y = Math.sin(simTime * 1.3 + p.x) * 0.3;
     if (dpl < 7 && simTime > p.soundT) { p.soundT = simTime + rnd(4, 9); if (p.kind === 'dog') { sfx.tone(180, 0, .09, 'square', .05, 120); sfx.tone(180, .11, .09, 'square', .05, 120); } else sfx.tone(700, 0, .35, 'sine', .04, 500); }
   }
-  const near = city.pets.find(p => Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < 1.8);
-  if (near !== city.petNear) { city.petNear = near; if (near && !isMobile) msg(near.kind === 'dog' ? '🐶 E : caresser le chien' : '🐱 E : caresser le chat', 1000); }
+  const near = city.pets.find(p => !p.adopte && Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < 1.8);
+  if (near !== city.petNear) { city.petNear = near; if (near && !isMobile) msg(near.kind === 'dog' ? (chien.pet ? '🐶 E : caresser le chien' : '🐶 E : caresser · écris « adopte » pour l\'adopter') : '🐱 E : caresser le chat', 1600); }
 }
 function petAnimal(p) {
   if (simTime < p.petT) return; p.petT = simTime + 1.5; p.follow = simTime + 20;
@@ -1889,6 +1892,7 @@ const siren = (() => { let o1 = null, o2 = null, g = null, timer = null; return 
 }; })();
 function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 moyen (écraser), 3 grave (KO / grenade)
   police.crimeLevel = Math.max(police.crimeLevel, sev);
+  if (sev >= 3 && typeof coupAlerte === 'function') coupAlerte();   // le complice démarre
   police.wanted = clamp(police.wanted + level, 0, 3); police.decayT = simTime + 45 + police.crimeLevel * 40; police.lastSeen = [P.pos.x, P.pos.z];
   msg(`🚔 Infraction : ${what} ! Niveau ${'★'.repeat(police.wanted)}`, 1800); chat(null, `🚔 La police recherche ${myCfg.name} (${what})`);
   $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`; $('wanted').classList.add('on'); siren.start();
@@ -2242,6 +2246,87 @@ function dayTick() {   // horloge de la ville : 6 minutes = 24 h ; nuit de 20 h 
     msg(lamps ? '🌙 La nuit tombe sur la ville' : '☀️ Le jour se lève', 1500);
   }
   const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); $('clock').textContent = `${lamps ? '🌙' : '☀️'} ${hh}h${mm < 10 ? '0' : ''}${mm}`; $('clock').style.display = '';
+}
+// ================= MÉTÉO : pluie et neige =================
+// Un seul nuage de segments sert aux deux : longs et rapides pour la pluie,
+// courts, lents et flottants pour la neige. Il suit la caméra, donc il tombe partout.
+const meteo = { kind: 'clair', force: 0, next: 0, seg: null, flocons: null, pos: null, pts: null, base: null, vy: null, drift: null,
+  N: 1600, sol: null, solParc: null, abri: false, abriT: 0, tonnerre: 0, ecl: 0 };
+function buildMeteo() {
+  if (meteo.seg) return;
+  const N = meteo.N, pos = new Float32Array(N * 6);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = new THREE.LineBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0, depthWrite: false });
+  const seg = new THREE.LineSegments(g, m); seg.frustumCulled = false; seg.renderOrder = 3; seg.visible = false; scene.add(seg);
+  // Les flocons en segments d'un pixel se voyaient à peine : la neige tombe en points ronds.
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32; const g2 = cv.getContext('2d');
+  const rad = g2.createRadialGradient(16, 16, 0, 16, 16, 16); rad.addColorStop(0, '#ffffff'); rad.addColorStop(0.55, 'rgba(255,255,255,.85)'); rad.addColorStop(1, 'rgba(255,255,255,0)');
+  g2.fillStyle = rad; g2.fillRect(0, 0, 32, 32);
+  const gp = new THREE.BufferGeometry(); const ppos = new Float32Array(N * 3); gp.setAttribute('position', new THREE.BufferAttribute(ppos, 3));
+  const flocons = new THREE.Points(gp, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(cv), size: 0.34, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true }));
+  flocons.frustumCulled = false; flocons.renderOrder = 3; flocons.visible = false; scene.add(flocons);
+  meteo.flocons = flocons; meteo.pts = ppos;
+  meteo.seg = seg; meteo.pos = pos; meteo.base = new Float32Array(N * 3); meteo.vy = new Float32Array(N); meteo.drift = new Float32Array(N);
+  for (let i = 0; i < N; i++) { meteo.base[i * 3] = rnd(-45, 45); meteo.base[i * 3 + 1] = rnd(-6, 30); meteo.base[i * 3 + 2] = rnd(-45, 45); meteo.vy[i] = rnd(0.85, 1.15); meteo.drift[i] = rnd(0, 6.283); }
+  // manteau blanc au sol : une nappe sur la chaussée (sous les planchers, donc jamais à l'intérieur)
+  const nappe = (y, w, d, x, z) => { const mm = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ color: 0xf2f7ff, transparent: true, opacity: 0, depthWrite: false })); mm.rotation.x = -Math.PI / 2; mm.position.set(x, y, z); mm.visible = false; mm.renderOrder = 1; scene.add(mm); return mm; };
+  meteo.sol = nappe(0.09, 460, 480, 30, 60);
+  meteo.solParc = nappe(0.315, 60, 52, 0, 74);
+}
+function meteoSet(kind, duree) {
+  meteo.kind = kind; meteo.next = simTime + (duree || rnd(70, 150));
+  if (kind !== 'clair') msg(kind === 'pluie' ? '🌧️ La pluie arrive…' : '❄️ Il commence à neiger !', 2200);
+  else msg('☀️ Le ciel se dégage', 1800);
+  chat(null, kind === 'pluie' ? '🌧️ Averse sur la ville' : kind === 'neige' ? '❄️ Chute de neige' : '☀️ Beau temps');
+}
+function meteoTick(dt) {
+  if (!running) return;
+  buildMeteo();
+  if (simTime > meteo.next) meteoSet(pickOne(['clair', 'clair', 'clair', 'pluie', 'pluie', 'neige']));
+  const veut = meteo.kind === 'clair' ? 0 : 1;
+  meteo.force += (veut - meteo.force) * Math.min(1, dt * 0.35);   // l'averse monte et retombe doucement
+  // sous un toit : on coupe les gouttes, sinon il pleuvait dans les maisons
+  if (simTime > meteo.abriT) { meteo.abriT = simTime + 0.25; meteo.abri = false;
+    for (const o of solids) { const bas = o.y - o.h / 2; if (bas < P.pos.y + 2.2 || bas > P.pos.y + 26 || o.h > 30) continue;
+      if (P.pos.x > o.x - o.w / 2 && P.pos.x < o.x + o.w / 2 && P.pos.z > o.z - o.d / 2 && P.pos.z < o.z + o.d / 2) { meteo.abri = true; break; } } }
+  const f = meteo.force * (meteo.abri ? 0.05 : 1);
+  const seg = meteo.seg, flocons = meteo.flocons, neige = meteo.kind === 'neige', actif = f > 0.02;
+  seg.visible = actif && !neige; flocons.visible = actif && neige;
+  seg.material.opacity = f * 0.55; flocons.material.opacity = f;
+  if (actif) {
+    const N = meteo.N, pos = meteo.pos, pts = meteo.pts, base = meteo.base, L = 0.62, V = neige ? 2.2 : 26;
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    for (let i = 0; i < N; i++) {
+      let y = base[i * 3 + 1] - V * meteo.vy[i] * dt;
+      if (y < -8) y += 38;
+      base[i * 3 + 1] = y;
+      const ph = meteo.drift[i] + simTime * (neige ? 1.1 : 4);
+      const x = cx + base[i * 3] + (neige ? Math.sin(ph) * 1.9 : Math.sin(ph) * 0.15);
+      const z = cz + base[i * 3 + 2] + (neige ? Math.cos(ph * 0.7) * 1.9 : 0);
+      const yy = cy + y;
+      if (neige) { pts[i * 3] = x; pts[i * 3 + 1] = yy; pts[i * 3 + 2] = z; }
+      else { pos[i * 6] = x; pos[i * 6 + 1] = yy; pos[i * 6 + 2] = z; pos[i * 6 + 3] = x + 0.06; pos[i * 6 + 4] = yy - L; pos[i * 6 + 5] = z; }
+    }
+    if (neige) flocons.geometry.attributes.position.needsUpdate = true; else seg.geometry.attributes.position.needsUpdate = true;
+  }
+  // manteau de neige au sol (repères de la ville : ailleurs les nappes n'auraient pas de sens)
+  const blanc = neige && city.on ? f : 0;
+  for (const n of [meteo.sol, meteo.solParc]) { if (!n) continue; n.material.opacity = blanc * 0.82; n.visible = blanc > 0.02; }
+  // ciel voilé, brouillard et lumière : la pluie assombrit, la neige blanchit.
+  // Réservé à la ville : ailleurs, dayTick ne réinitialise pas ces valeurs à chaque image
+  // et les multiplications s'accumuleraient jusqu'au noir complet.
+  if (city.on && f > 0.01 && scene.background && scene.background.isColor) {
+    const voile = new THREE.Color(neige ? 0xdfe8f2 : 0x5a6a80);
+    scene.background.lerp(voile, f * 0.55); if (scene.fog) { scene.fog.color.copy(scene.background); }
+    sun.intensity *= 1 - f * 0.45; hemi.intensity *= 1 - f * (neige ? 0.1 : 0.3);
+  }
+  // bruit d'averse et coups de tonnerre
+  if (f > 0.35 && !meteo.abri && simTime > meteo.tonnerre) {
+    meteo.tonnerre = simTime + (neige ? 999 : rnd(14, 34));
+    if (!neige) { sfx.noise(1.1, 260, .06); sfx.tone(48, 0, 1.3, 'sine', .07, 32); meteo.ecl = simTime + 0.12; }
+  }
+  if (city.on && meteo.ecl > simTime) { hemi.intensity += 1.6; if (scene.background && scene.background.isColor) scene.background.lerp(new THREE.Color(0xffffff), 0.5); }
+  if (f > 0.2 && !meteo.abri && simTime > (meteo.sonT || 0)) { meteo.sonT = simTime + (neige ? 3.5 : 0.55); sfx.noise(neige ? .5 : .5, neige ? 900 : 2600, neige ? .012 : .05 * f); }
 }
 function buildDeco() {   // lampadaires et fleurs le long des grands axes, statue au centre
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
@@ -3014,6 +3099,24 @@ const poolTrous = () => VILLAS.map(v => ({
   x0: v.x + POOL_DX - POOL_W / 2, x1: v.x + POOL_DX + POOL_W / 2,
   z0: v.z + POOL_DZ - POOL_D / 2, z1: v.z + POOL_DZ + POOL_D / 2,
 }));
+function buildNiche(x, z, y, vx, vz) {   // niche du chien, contre le mur à côté du lit
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = Math.PI / 2; worldGroup.add(g);
+  const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  add(1.7, 0.12, 1.5, 0, 0.06, 0, 0x6b4423);                                   // plancher
+  add(1.7, 1.0, 0.16, 0, 0.6, -0.67, 0x8b5a2b);                                // fond
+  for (const dx of [-0.77, 0.77]) add(0.16, 1.0, 1.5, dx, 0.6, 0, 0x8b5a2b);   // côtés
+  for (const dx of [-0.62, 0.62]) add(0.46, 0.75, 0.16, dx, 0.48, 0.67, 0x8b5a2b);   // façade percée d'une entrée
+  add(1.7, 0.28, 0.16, 0, 0.99, 0.67, 0x8b5a2b);
+  for (const sg of [-1, 1]) { const t = add(1.05, 0.14, 1.75, sg * 0.44, 1.3, 0, 0xb03a2e); t.rotation.z = sg * -0.75; }   // toit à deux pentes
+  add(1.2, 0.3, 1.1, 0, 0.19, 0.02, 0xffd6a5);                                 // coussin
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.3), new THREE.MeshBasicMaterial({ map: textTexture('🐶'), transparent: true }));
+  pl.position.set(0, 1.05, 0.76); g.add(pl);
+  // Collision creuse : une boîte pleine empêchait le chien d'entrer dans sa propre niche.
+  const O = { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true };
+  box(x - 0.78, y + 0.55, z, 0.2, 1.1, 1.7, 0, O);
+  box(x, y + 0.55, z - 0.8, 1.7, 1.1, 0.2, 0, O); box(x, y + 0.55, z + 0.8, 1.7, 1.1, 0.2, 0, O);
+  city.niche = { x, z, y: y + 0.12, ry: Math.PI / 2, vx, vz };
+}
 function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage sur la rue (portail voitures), portillon piéton vers le perron, maison 2 étages, ascenseur, piscine et jardin
   const F = 4.6, mine = !!opt.mine, roof = opt.roof || 0xb03a2e, wallC = opt.wall || 0xf4efe2;
   const HP = VILLA_HALF, FY = 0.5;                                  // demi-parcelle (40 x 40 m) ; FY = dessus de la dalle du rez-de-chaussée
@@ -3170,6 +3273,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   // étage : deux chambres
   box(HX - 1, F + 2.75, HZ - 1, 0.4, 4.3, HD - 5, wallC, { studs: false, noRoute: true });
   villaBed(HX - 6, HZ - 3.5, 0, F + 0.75); villaBed(HX + 5, HZ - 3.5, 0, F + 0.75);
+  if (mine) buildNiche(HX - 9, HZ - 3.5, F + 0.75, vx, vz);   // niche du chien adopté, juste à côté du lit
   tvSet(HX - 6, HZ + 4, Math.PI, 2.6, F + 0.75); tvSet(HX + 5, HZ + 4, Math.PI, 2.6, F + 0.75);
   for (const bx3 of [HX - 6, HX + 5]) { box(bx3, F + 0.78, HZ + 0.5, 5.5, 0.04, 5.5, 0xb03a2e, { deco: true, noEdges: true, studs: false }); box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); for (let i = 0; i < 5; i++) box(bx3 - 1.1 + i * 0.55, F + 1.9, HZ - 6.3, 0.4, 1.6, 0.2, pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453]), { deco: true, studs: false }); const ch = new THREE.Mesh(unitRound, lam(0xc9a84c)); ch.scale.set(1.1, 0.12, 1.1); ch.position.set(bx3, F + 3.4, HZ); worldGroup.add(ch); const bl = new THREE.Mesh(unitRound, neonMat(0xfff2b0)); bl.scale.set(0.7, 0.1, 0.7); bl.position.set(bx3, F + 3.3, HZ); worldGroup.add(bl); }
   // emplacements de décoration (les objets achetés se posent ici) — tous vérifiés libres de tout meuble
@@ -3787,7 +3891,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = null;
-  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; bots.forEach(b => { b.rdv = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -4450,7 +4554,7 @@ function updateLeaderboard() {
   const others = net.on ? [...net.remotes.values()].map(r => ({ name: r.name, stage: r.st, color: r.color })) : bots.map(b => ({ name: b.name, stage: b.stage, color: b.color }));
   const rows = [{ name: myCfg.name, stage: WORLDS[worldIdx].free ? city.goals + city.tennis + city.shots + city.tags : (won ? 9 : (cp ? cp.idx : 1)), me: true }, ...others.map(o => WORLDS[worldIdx].free && o.color && !net.on ? Object.assign(o, { stage: 0 }) : o)];
   rows.sort((a, b) => b.stage - a.stage || a.name.localeCompare(b.name));
-  $('lbRows').innerHTML = rows.map(r => `<div class="lbr${r.me ? ' me' : ''}"><span class="nm" style="color:${r.color || '#fff'}">${esc(r.name)}</span><span>${r.stage === 9 ? '🏆' : r.stage}</span></div>`).join('');
+  $('lbRows').innerHTML = rows.map(r => `<div class="lbr${r.me ? ' me' : ''}"><span class="nm" style="color:${r.color || '#fff'}">${estAmi(r.name) ? '⭐ ' : ''}${esc(r.name)}</span><span>${r.stage === 9 ? '🏆' : r.stage}</span></div>`).join('');
 }
 function renderWorlds() {
   $('worldGrid').innerHTML = WORLDS.map((w, i) => {
@@ -4519,6 +4623,10 @@ const HELP = [
   [/mission|gagner|argent facile/, 'ouvre les missions avec 📋 (touche M) : livraison, taxi, chien perdu, chasse aux pièces, tour chrono, sauvetage en hélico… ça rapporte des pièces, et le GPS (chevrons bleus au sol + radar en bas) te guide 💰'],
   [/prison|cellule|libre|sortir/, 'si la police t\'arrête tu vas en prison : pour sortir il faut réussir Prairie (et Volcan, Glace, Espace selon le délit) ou payer l\'amende 🔒'],
   [/deco|déco|tableau|meuble|vase|plante/, 'va au magasin 🛋️ Maison & Déco de la rue commerçante (ou 🛒 → onglet « Déco maison ») : l\'objet est livré devant ta villa, tu le prends (E) et tu le poses sur un des emplacements bleus 🖼️'],
+  [/ami|amie|copain|copine|pote/, 'écris à quelqu\'un par son nom pour devenir ami : « Lucas_2014 tu veux être mon ami ? ». Ensuite tu peux lui donner rendez-vous, jouer avec lui, l\'inviter chez toi ou organiser un coup ⭐'],
+  [/chien|adopter|niche|aboie/, 'approche-toi d\'un chien du parc et écris « adopte » : tu lui donnes un nom, il te suit partout (même en voiture), il a sa niche à côté de ton lit et il attaque si tu écris « attaque » 🐶'],
+  [/pluie|neige|meteo|météo|temps qu|orage/, 'la météo change toute seule : averses de pluie avec du tonnerre, chutes de neige qui blanchissent les rues. Sous un toit tu es à l\'abri 🌧️❄️'],
+  [/braquage|braquer|coup|complice|fuite/, 'avec un ami : écris-lui « on organise un braquage ». Il t\'attend au volant devant la banque, tu forces un coffre, tu montes (E) et il file se planquer dans ta villa 🕶️'],
   [/cinema|cinéma|film|dessin anim/, 'le cinéma en plein air est tout au fond du parc : assieds-toi sur un banc (E) face au grand écran, trois dessins animés passent en boucle 🎬'],
   [/voler une voiture|carjack|braquer une voiture|voler la voiture/, 'colle-toi à la portière d\'une voiture qui roule : elle pile, appuie sur E et tu éjectes le conducteur — mais c\'est un gros délit, la police débarque 🚗'],
   [/immeuble|hangar|entrepot|entrepôt|entrer|batiment|bâtiment/, 'toutes les portes sont ouvertes maintenant : halls des immeubles, maisons du quartier ouest, entrepôts de la zone industrielle (on y rentre même en voiture) 🏢'],
@@ -4612,6 +4720,280 @@ function resetBot(b, wait) {
   b.cpPos = b.pos.clone(); b.cpStep = 0; b.facing = 0; b.av.group.visible = true; b.av.group.position.copy(b.pos);
 }
 function botSay(b, list) { const t = pickOne(list); chat(b.name, t, b.color); bubble(b.av, t); }
+// ================= AMIS, CHIEN ADOPTÉ ET COUPS ORGANISÉS =================
+const amis = new Set(store.json('superobby.amis', []));
+const saveAmis = () => store.set('superobby.amis', JSON.stringify([...amis]));
+const estAmi = n => amis.has(String(n));
+const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null };
+const coup = { etat: 'aucun', bot: null, car: null, route: null, routeT: 0, t: 0 };
+
+// Un message peut s'adresser à quelqu'un par son nom : « Lucas_2014 rendez-vous au parc ».
+function trouveBot(txt) {
+  const n = norm(txt);
+  for (const b of bots) { const nb = norm(b.name); if (n.includes(nb) || n.includes(nb.split('_')[0])) return b; }
+  return null;
+}
+// Lieu cité dans le message : on se sert des zones de la ville, plus quelques synonymes.
+const SYNO_LIEUX = [[/circuit|kart|grille/, 'Départ'], [/manege|manège|carrousel|grande roue/, 'Fête foraine'],
+  [/chez moi|ma villa|a la maison|chez toi/, 'Villa'], [/foot|ballon/, 'Foot'], [/court|raquette/, 'Tennis'],
+  [/cine|ciné/, 'Cinéma'], [/salle de sport|muscu/, 'Commerces'], [/bord de mer|sable/, 'Plage'], [/coffre|braquer la banque/, 'Banque']];
+function lieuDe(txt) {
+  const n = norm(txt);
+  let best = null;
+  for (const z of city.zones) { const nz = norm(z.name); if (nz.length > 3 && n.includes(nz)) { if (!best || nz.length > norm(best.name).length) best = z; } }
+  if (!best) for (const [re, nom] of SYNO_LIEUX) if (re.test(n)) { best = city.zones.find(z => z.name === nom) || best; if (best) break; }
+  if (!best) return null;
+  return { nom: `${best.emoji} ${best.name}`, x: (best.x1 + best.x2) / 2, z: (best.z1 + best.z2) / 2 };
+}
+function devenirAmi(b) {
+  if (estAmi(b.name)) { botSay(b, [`on est déjà amis ${myCfg.name} 😄`, 'mais on est déjà potes !']); return; }
+  amis.add(b.name); saveAmis(); updateLeaderboard();
+  botSay(b, [`avec plaisir ${myCfg.name}, on est amis ! ⭐`, `ok ${myCfg.name} ! amis pour la vie ⭐`]);
+  chat(null, `⭐ ${myCfg.name} et ${b.name} sont maintenant amis (${amis.size} ami${amis.size > 1 ? 's' : ''})`);
+  msg(`⭐ ${b.name} est ton ami ! Écris-lui pour un rendez-vous, un jeu ou un coup`, 3200); sfx.win();
+}
+function fixerRdv(b, lieu, jeu) {
+  b.rdv = { x: lieu.x, z: lieu.z, y: 0.3, nom: lieu.nom, jeu: jeu || null, arrive: false };
+  b.wait = 0; b.target = null; b.fight = null;
+  setBeacon(lieu.x, lieu.z);
+  botSay(b, [jeu ? `ok, on joue à ${jeu} à ${lieu.nom} ! j'arrive 🏃` : `rendez-vous à ${lieu.nom}, j'y vais 🏃`]);
+  msg(`📍 Rendez-vous avec ${b.name} : ${lieu.nom}`, 2600);
+}
+function organiserCoup(b) {
+  if (!estAmi(b.name)) { botSay(b, ['on n\'est pas encore assez potes pour ça 😅', 'deviens mon ami d\'abord !']); return; }
+  const banque = city.zones.find(z => z.name === 'Banque');
+  const bx = banque ? (banque.x1 + banque.x2) / 2 : -52, bz = banque ? (banque.z1 + banque.z2) / 2 : 70;
+  // voiture de fuite : la plus proche de la banque, garée devant, moteur tournant
+  let c = null, dmin = Infinity;
+  for (const v of city.cars) { if (v.heli || v.busy || v.kind === 'jetski' || v.kind === 'bike') continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
+  if (!c) { botSay(b, ['je ne trouve aucune voiture 😬']); return; }
+  c.x = bx + 13; c.z = bz + 2; c.h = Math.PI / 2; settleVehicle(c); c.g.rotation.y = c.h; vehicleSolid(c);
+  coup.etat = 'attente'; coup.bot = b; coup.car = c; coup.t = simTime;
+  b.rdv = { x: c.x + 2, z: c.z + 2, y: 0.3, nom: 'la voiture de fuite', arrive: false, coup: true };
+  b.wait = 0; b.target = null;
+  setBeacon(c.x, c.z);
+  botSay(b, [`ok ${myCfg.name} : je t'attends au volant devant la banque, moteur tournant 🚗💨`]);
+  chat(null, `🕶️ ${b.name} prépare la voiture de fuite devant la banque — à toi de forcer le coffre !`);
+  msg('🕶️ Coup organisé ! Force un coffre, puis rejoins la voiture (E)', 4000); sfx.check();
+}
+function coupAlerte() {   // appelé quand le joueur commet le vol
+  if (coup.etat !== 'attente' || !coup.bot) return;
+  coup.etat = 'pret'; coup.t = simTime;
+  botSay(coup.bot, [`vite ${myCfg.name}, monte, je démarre ! 🚗💨`]);
+  msg('🚗 Ton complice t\'attend : monte dans la voiture (E) !', 3000);
+  if (coup.car) setBeacon(coup.car.x, coup.car.z);
+}
+function coupMonter() {   // le joueur saute dans la voiture, l'ami conduit
+  const c = coup.car; if (!c) return;
+  coup.etat = 'fuite'; coup.route = null; coup.t = simTime;
+  if (drive.car) exitCar();
+  me.group.visible = false; P.vel.set(0, 0, 0);
+  if (coup.bot) { coup.bot.av.group.visible = false; botSay(coup.bot, ['accroche-toi, on file à ta villa ! 💨']); }
+  msg('💨 En route vers ta villa : ton ami conduit !', 3000); engine.start('car');
+}
+function coupFin(ok) {
+  const b = coup.bot;
+  if (coup.car) { coup.car.speed = 0; }
+  me.group.visible = true;
+  if (b) { b.av.group.visible = !net.on; b.rdv = null; b.wait = 2; }
+  if (ok) {
+    const part = 30 + Math.floor(Math.random() * 25);
+    wallet += part; saveWallet(); updateHud(); sfx.win(); sfx.register();
+    clearWanted('🏠 Planqué chez toi : la police perd ta trace');
+    police.crimeLevel = 0;
+    msg(`🏠 Planqués dans ta villa ! Part du butin : +${part} 🪙`, 3600);
+    if (b) chat(null, `🕶️ ${b.name} et ${myCfg.name} se sont planqués dans la villa avec le butin`);
+  }
+  coup.etat = 'aucun'; coup.bot = null; coup.car = null; coup.route = null; clearBeacon();
+}
+function coupTick(dt) {
+  if (coup.etat === 'aucun') return;
+  const c = coup.car; if (!c) { coup.etat = 'aucun'; return; }
+  if (coup.etat === 'attente' || coup.etat === 'pret') {
+    // moteur tournant : petites fumées et clignotants
+    if (simTime > (coup.fum || 0)) { coup.fum = simTime + 0.5; burst(c.x - Math.sin(c.h) * 2.4, c.y + 0.4, c.z - Math.cos(c.h) * 2.4, 0x9aa4b8, 2); }
+    if (coup.etat === 'pret' && simTime - coup.t > 90) { botSay(coup.bot, ['trop tard, je me tire !']); coupFin(false); }
+    return;
+  }
+  // fuite : l'ami conduit jusqu'à l'allée de la villa
+  const TX = 48, TZ = 184;
+  const dist = Math.hypot(TX - c.x, TZ - c.z);
+  if (dist < 5) { coupFin(true); return; }
+  if (!coup.route || simTime > coup.routeT) { coup.routeT = simTime + 2.5; const pth = navPath(c.x, c.z, TX, TZ); coup.route = pth && pth.length ? pth.concat([[TX, TZ]]) : [[TX, TZ]]; }
+  while (coup.route.length > 1 && Math.hypot(coup.route[0][0] - c.x, coup.route[0][1] - c.z) < 3) coup.route.shift();
+  const wp = coup.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z, want = Math.atan2(dx, dz);
+  let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  c.h += clamp(dh, -1, 1) * 3 * dt;
+  c.speed = (c.speed || 0) + ((Math.abs(dh) > 1 ? 9 : 24) - (c.speed || 0)) * Math.min(1, dt * 2.5);
+  const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
+  const opt = { bar: true, pol: true };   // une voiture de fuite bouscule les véhicules garés
+  let bloque = 0;
+  if (!carBlocked(nx, c.z, c.solid, 1.4, opt)) c.x = nx; else { c.speed *= 0.4; bloque++; }
+  if (!carBlocked(c.x, nz, c.solid, 1.4, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
+  // coincée contre un mur : on la remet sur son itinéraire plutôt que de laisser la fuite s'enliser
+  coup.bloqueT = bloque ? (coup.bloqueT || 0) + dt : 0;
+  if (coup.bloqueT > 2) { coup.bloqueT = 0; const w2 = coup.route[Math.min(1, coup.route.length - 1)];
+    c.x = w2[0]; c.z = w2[1]; c.route = null; coup.route = null; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+  c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+  c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
+  P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h;
+  cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
+  $('act').textContent = `💨 Fuite vers la villa · ${Math.round(dist)} m`;
+  if (simTime - coup.t > 200) coupFin(true);   // sécurité : on ne reste pas coincé
+}
+// ---- chien adopté ----
+function adopterChien(p, silencieux) {
+  if (!p) return false;
+  if (chien.pet && chien.pet !== p) chien.pet.adopte = false;
+  chien.pet = p; p.adopte = true; p.follow = 1e9;
+  if (!silencieux) {
+    chien.attenteNom = true;
+    msg('🐶 Tu as adopté le chien ! Écris son nom dans le chat', 4200); sfx.win();
+    chat(null, '🐶 Comment veux-tu appeler ton chien ? Écris son nom dans le chat.');
+    aboie(2);
+  }
+  if (chien.nom) nommerChien(chien.nom, true);
+  return true;
+}
+function nommerChien(nom, silencieux) {
+  chien.nom = String(nom).slice(0, 14); chien.attenteNom = false;
+  store.set('superobby.chien', JSON.stringify({ nom: chien.nom }));
+  const p = chien.pet; if (!p) return;
+  if (chien.tag) { p.g.remove(chien.tag); chien.tag = null; }
+  chien.tag = nameTag('🐶 ' + chien.nom); chien.tag.position.y = 1.5; chien.tag.scale.multiplyScalar(0.7); p.g.add(chien.tag);
+  if (!silencieux) { msg(`🐶 ${chien.nom} te suivra partout ! Sa niche est près de ton lit`, 3800); chat(null, `🐶 ${myCfg.name} a adopté ${chien.nom}`); aboie(3); sfx.win(); }
+}
+function aboie(n = 1) {
+  const p = chien.pet; if (!p) return;
+  for (let i = 0; i < n; i++) { sfx.tone(200 - i * 8, i * 0.16, .08, 'square', .07, 130); sfx.tone(150, i * 0.16 + .06, .07, 'square', .05, 90); }
+  p.aboiA = simTime + 0.35;
+}
+function chienAttaque(txt) {
+  const p = chien.pet; if (!p) { msg('🐶 Tu n\'as pas encore de chien', 1600); return; }
+  let cible = null, dmin = 26;
+  const vise = trouveBot(txt);
+  if (vise && vise.av.group.visible) cible = { bot: vise, x: vise.pos.x, z: vise.pos.z, nom: vise.name };
+  if (!cible) { for (const b of bots) { if (!b.av.group.visible || b.ko) continue; const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < dmin) { dmin = d; cible = { bot: b, x: b.pos.x, z: b.pos.z, nom: b.name }; } } }
+  if (!cible) for (const r of net.remotes.values()) { if (r.dead) continue; const d = Math.hypot(r.cur.x - P.pos.x, r.cur.z - P.pos.z); if (d < dmin) { dmin = d; cible = { rem: r, x: r.cur.x, z: r.cur.z, nom: r.name }; } }
+  if (!cible) { msg('🐶 Personne à attaquer dans le coin', 1600); aboie(1); return; }
+  chien.attaque = cible; chien.attaqueT = simTime + 14; chien.couche = false;
+  msg(`🐶 ${chien.nom || 'Le chien'} attaque ${cible.nom} !`, 2600); aboie(4);
+  chat(null, `🐶 ${chien.nom || 'Le chien'} de ${myCfg.name} fonce sur ${cible.nom} !`);
+}
+function chienTick(dt) {
+  const p = chien.pet; if (!p) return;
+  const niche = city.niche;
+  // mordre : le chien court sur sa cible et la secoue
+  if (chien.attaque && simTime < chien.attaqueT) {
+    const c = chien.attaque, b = c.bot;
+    if (b && (!b.av.group.visible || b.ko)) { chien.attaque = null; }
+    else {
+      const tx = b ? b.pos.x : c.rem ? c.rem.cur.x : c.x, tz = b ? b.pos.z : c.rem ? c.rem.cur.z : c.z;
+      const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1;
+      if (d > 1.2) { const o = { x: p.x, y: p.y - 0.3, z: p.z }; npcMove(o, dx / d * 7 * dt, dz / d * 7 * dt, 0.3); p.x = o.x; p.z = o.z; }
+      p.facing = Math.atan2(dx, dz);
+      p.y = groundUnder(p.x, p.z, null, p.y + 0.7);
+      p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 16)) * 0.1, p.z);
+      let dh2 = p.facing - p.g.rotation.y; dh2 = Math.atan2(Math.sin(dh2), Math.cos(dh2)); p.g.rotation.y += dh2 * Math.min(1, dt * 10);
+      if (simTime > chien.aboiT) { chien.aboiT = simTime + 0.8; aboie(2); }
+      if (d < 1.6 && simTime > (chien.morsT || 0)) {
+        chien.morsT = simTime + 1.1;
+        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0;
+          b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
+          burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 5); sfx.noise(.08, 500, .07);
+          bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
+          if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; chien.attaque = null; botSay(b, ['j\'abandonne… 🐶']); infraction('chien lâché sur ' + b.name, 1, 2); }
+          else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('chien lâché sur ' + b.name, 1, 2); }
+        } else if (c.rem) { netSend({ t: 'punch', id: c.rem.id, by: (chien.nom || 'le chien') + ' de ' + myCfg.name, dx: dx / d, dz: dz / d, dmg: 9, kb: 1.5 }); }
+      }
+      return;
+    }
+  }
+  chien.attaque = null;
+  // à la villa, quand le maître s'assoit ou se couche, le chien va dans sa niche
+  const dansVilla = niche && Math.abs(P.pos.x - niche.vx) < 22 && Math.abs(P.pos.z - niche.vz) < 22;
+  const repos = dansVilla && (P.sit || (P.sleep && simTime < P.sleep));
+  if (repos) {
+    const dx = niche.x - p.x, dz = niche.z - p.z, d = Math.hypot(dx, dz);
+    if (d > 0.5) {
+      if (d > 10) { p.x = niche.x; p.z = niche.z; p.y = niche.y; }
+      // les trois derniers mètres sans collision : les parois de la niche et le lit
+      // empêchaient le chien d'entrer chez lui
+      else if (d < 3) { p.x += dx / d * 3.4 * dt; p.z += dz / d * 3.4 * dt; p.y += (niche.y - p.y) * Math.min(1, dt * 6); }
+      else { const o = { x: p.x, y: p.y - 0.3, z: p.z }; npcMove(o, dx / d * 3.4 * dt, dz / d * 3.4 * dt, 0.3); p.x = o.x; p.z = o.z; p.y = groundUnder(p.x, p.z, null, p.y + 0.9); }
+      p.facing = Math.atan2(dx, dz); chien.couche = false;
+      p.g.position.set(p.x, p.y, p.z);
+    } else {
+      if (!chien.couche) { chien.couche = true; aboie(1); }
+      p.x = niche.x; p.z = niche.z; p.y = niche.y; p.facing = niche.ry;
+      p.g.position.set(p.x, p.y - 0.17, p.z);   // couché : le corps posé au sol de la niche
+      p.g.rotation.x = 0.06 + Math.sin(simTime * 1.6) * 0.02;   // respiration
+      p.tail.rotation.y = Math.sin(simTime * 2) * 0.25;
+    }
+    let dh = p.facing - p.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); p.g.rotation.y += dh * Math.min(1, dt * 6);
+    return;
+  }
+  chien.couche = false; p.g.rotation.x = 0;
+  // en voiture : le chien monte à côté du maître
+  if (drive.car && !drive.car.heli) {
+    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h), lx = -0.5, lz = c.kind === 'truck' ? 2.4 : 0.1;
+    p.x = c.x + lx * cs + lz * sn; p.z = c.z - lx * sn + lz * cs; p.y = c.y + (c.rider ? 0.6 : -0.05);
+    p.g.position.set(p.x, p.y, p.z); p.g.rotation.y = c.h; p.facing = c.h;
+    p.tail.rotation.y = Math.sin(simTime * 8) * 0.4;
+    if (simTime > chien.aboiT && Math.abs(drive.speed) > 12) { chien.aboiT = simTime + rnd(6, 14); aboie(1); }
+    return;
+  }
+  // sinon : il suit le maître partout, et se téléporte s'il est vraiment distancé
+  const dx = P.pos.x - p.x, dz = P.pos.z - p.z, d = Math.hypot(dx, dz);
+  if (d > 25 || Math.abs(P.pos.y - p.y) > 6) { p.x = P.pos.x - Math.sin(P.facing) * 1.4; p.z = P.pos.z - Math.cos(P.facing) * 1.4; p.y = P.pos.y; }
+  else if (d > 1.9) {
+    const spd = Math.min(7.5, 3 + d * 0.5), o = { x: p.x, y: p.y - 0.3, z: p.z };
+    const bloque = npcMove(o, dx / d * spd * dt, dz / d * spd * dt, 0.3); p.x = o.x; p.z = o.z;
+    p.facing = Math.atan2(dx, dz);
+    p.stuckT = bloque ? (p.stuckT || 0) + dt : 0;
+    if (p.stuckT > 1.6) { p.stuckT = 0; p.x = P.pos.x - Math.sin(P.facing) * 1.4; p.z = P.pos.z - Math.cos(P.facing) * 1.4; p.y = P.pos.y; }
+    p.tail.rotation.y = Math.sin(simTime * 14) * 0.5;
+  } else { p.facing = Math.atan2(dx, dz); p.tail.rotation.y = Math.sin(simTime * 6) * 0.4; }
+  p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+  p.g.position.set(p.x, p.y + (d > 1.9 ? Math.abs(Math.sin(simTime * 12)) * 0.08 : 0), p.z);
+  let dh = p.facing - p.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); p.g.rotation.y += dh * Math.min(1, dt * 8);
+  if (simTime > chien.aboiT) { chien.aboiT = simTime + rnd(7, 16); aboie(1); }
+}
+// ---- interprétation des messages adressés à un ami ou au chien ----
+function commandeSociale(txt) {
+  const t = norm(txt);
+  if (chien.attenteNom && !/^\//.test(txt)) { nommerChien(txt.replace(/[^\p{L}\p{N} '-]/gu, '').trim() || 'Rex'); return true; }
+  if (/\battaque|mords|mord\b/.test(t)) { chienAttaque(txt); return true; }
+  if (/\b(adopte|adopter|j.?adopte|je veux ce chien)\b/.test(t)) {
+    const p = city.pets.filter(x => x.kind === 'dog').map(x => ({ x, d: Math.hypot(x.x - P.pos.x, x.z - P.pos.z) })).sort((a, b) => a.d - b.d)[0];
+    if (!p || p.d > 9) { msg('🐶 Approche-toi d\'un chien du parc pour l\'adopter', 2400); return true; }
+    adopterChien(p.x); return true;
+  }
+  if (/\b(mes amis|liste des amis|qui sont mes amis)\b/.test(t)) { chat(null, amis.size ? `⭐ Tes amis : ${[...amis].join(', ')}` : '⭐ Tu n\'as pas encore d\'ami : écris « <nom> tu veux être mon ami ? »'); return true; }
+  const b = trouveBot(txt);
+  const cible = b || dialog.lastBot;
+  if (!cible) return false;
+  if (/\b(ami|amie|amis|copain|copine|pote)\b/.test(t) && !/mes amis/.test(t)) { dialog.lastBot = cible; devenirAmi(cible); return true; }
+  if (!estAmi(cible.name)) return false;   // le reste est réservé aux amis
+  dialog.lastBot = cible;
+  if (/\b(braquage|braquer|un coup|le coup|casse|cambriol|voler la banque)\b/.test(t)) { organiserCoup(cible); return true; }
+  if (/\b(chez moi|ma villa|a la maison|viens a la villa|invite)\b/.test(t)) {
+    const v = city.zones.find(z => z.name === 'Villa');
+    if (v) { fixerRdv(cible, { nom: '🏠 ta villa', x: (v.x1 + v.x2) / 2, z: (v.z1 + v.z2) / 2 }); return true; }
+  }
+  const lieu = lieuDe(txt);
+  if (/\b(rendez.?vous|rdv|retrouve|rejoins|on se voit|viens)\b/.test(t)) {
+    if (lieu) { fixerRdv(cible, lieu); return true; }
+    botSay(cible, ['où ça ? dis-moi un endroit (le parc, le circuit, la plage…)']); return true;
+  }
+  if (/\b(on joue|jouer|partie|match|jeu)\b/.test(t)) {
+    const jeu = /foot/.test(t) ? 'au foot' : /tennis/.test(t) ? 'au tennis' : /course|kart|circuit/.test(t) ? 'à la course' : /boule|petanque|pétanque/.test(t) ? 'aux boules' : /cache/.test(t) ? 'à cache-cache' : 'ensemble';
+    const l = lieu || (jeu === 'au foot' ? lieuDe('foot') : jeu === 'au tennis' ? lieuDe('tennis') : jeu === 'à la course' ? lieuDe('circuit') : jeu === 'aux boules' ? lieuDe('parc') : lieuDe('parc'));
+    if (l) { fixerRdv(cible, l, jeu); return true; }
+  }
+  return false;
+}
+
 function npcBlocked(x, y, z, hw = 0.4) {   // un personnage (bot, garde, animal) heurte-t-il un obstacle ?
   for (const o of solids) { if (o.veh || o.bar) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
   return false;
@@ -4661,6 +5043,7 @@ function updateBot(b, dt) {
     if (b.wait <= 0) resetBot(b, rnd(3, 12));
     return;
   }
+  if (b.wait > 0 && b.rdv && !b.rdv.arrive) b.wait = 0;   // en route vers un rendez-vous : pas de pause
   if (b.wait > 0) {
     b.wait -= dt;
     if (b.dance > 0) { b.dance -= dt; b.facing += dt * 2.5; }
@@ -4669,6 +5052,26 @@ function updateBot(b, dt) {
   }
   if (b.ko || (b.fight && simTime < b.fightT)) return;   // KO ou en train de se battre : géré par combatTick
   if (WORLDS[worldIdx].free) {   // ville : balade entre quelques points
+    if (b.rdv) {   // rendez-vous fixé par message : le bot s'y rend puis attend sur place
+      const dr = Math.hypot(b.rdv.x - b.pos.x, b.rdv.z - b.pos.z);
+      if (dr > 1.8) {
+        // en ligne droite il restait bloqué contre le premier mur : on suit un itinéraire
+        if (!b.rdvRoute || simTime > (b.rdvRouteT || 0)) { b.rdvRouteT = simTime + 3;
+          const pth = navPath(b.pos.x, b.pos.z, b.rdv.x, b.rdv.z);
+          b.rdvRoute = pth && pth.length ? pth.concat([[b.rdv.x, b.rdv.z]]) : [[b.rdv.x, b.rdv.z]]; }
+        while (b.rdvRoute.length > 1 && Math.hypot(b.rdvRoute[0][0] - b.pos.x, b.rdvRoute[0][1] - b.pos.z) < 1.8) b.rdvRoute.shift();
+        const w = b.rdvRoute[0];
+        if ((b.stuckT || 0) > 2.5) { b.stuckT = 0; b.pos.x = w[0]; b.pos.z = w[1]; if (b.rdvRoute.length > 1) b.rdvRoute.shift(); }
+        b.target = [w[0], b.pos.y, w[1]];
+      }
+      else {
+        b.target = null; b.wait = 1.2;
+        b.rdvRoute = null;
+        if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
+        const dp = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
+        if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
+      }
+    }
     if (!b.target) { b.target = pickOne(city.wander); }
     const dx = b.target[0] - b.pos.x, dz = b.target[2] - b.pos.z, dist = Math.hypot(dx, dz), stepLen = b.speed * 0.7 * dt;
     if (dist <= stepLen) { b.pos.set(b.target[0], b.target[1], b.target[2]); b.target = null; b.wait = rnd(1.5, 5); }
@@ -5256,7 +5659,7 @@ function cityCommon(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
+  safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -5957,7 +6360,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyM' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if (e.code === 'KeyF' && running && !paused && city.on) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); return; }
   if (e.code === 'KeyX' && running && !paused) { fire(); return; }
 
@@ -5981,7 +6384,7 @@ chatIn.addEventListener('keydown', e => {
       else {
         bubble(me, t);
         if (net.on) netSend({ t: 'chat', name: myCfg.name, text: t });
-        else botReply(t);
+        if (!commandeSociale(t) && !net.on) botReply(t);
       }
     }
     chatIn.blur();
@@ -6041,7 +6444,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 $('aimBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); });
 $('drawBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) drawWeapon(); });
 for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).addEventListener('pointerdown', e => { e.preventDefault(); P[k === 'downHeld2' ? 'downAim' : 'upHeld'] = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $(id).addEventListener(ev, () => { P[k === 'downHeld2' ? 'downAim' : 'upHeld'] = false; }); }
-$('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
+$('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
 $('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
@@ -6191,6 +6594,7 @@ function frame() {
   if (running && !paused && !net.on && simTime > nextChat) { const b = pickOne(bots); const t = pickOne(CHAT_IDLE); chat(b.name, t, b.color); if (t === '/e dance') b.dance = 3; else bubble(b.av, t); dialog.lastBot = b; nextChat = simTime + rnd(16, 32); }
   if (running && !paused && !net.on && simTime > dialog.nextAsk) { botAsk(); dialog.nextAsk = simTime + rnd(45, 80); }
   if (running && !paused && !net.on && city.on) for (const b of bots) { const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < 3.5 && simTime > (b.greetT || 0)) { b.greetT = simTime + 45; const g = pickOne([`salut ${myCfg.name} !`, `coucou ${myCfg.name}, ça va ?`, `hé ${myCfg.name}, tu viens jouer ?`, 'salut toi !', `${myCfg.name} ! trop content de te voir`]); bubble(b.av, g); voice.say(g, !!b.girl); } }
+  if (!paused) { try { meteoTick(dt); } catch (e) { if (loopErr++ < 3) console.error('météo', e); } }
   if (P.jet && !gym.on && race.state === 'idle') $('act').textContent = `🚀 Carburant ${Math.round(P.fuel)}%`;
   if (city.on && running && city.zone && city.zone.name === 'Parc' && simTime > (city.birdT || 0)) { city.birdT = simTime + rnd(2.5, 7); sfx.bird(); }
   lbTimer += dt; if (lbTimer > 0.5) { lbTimer = 0; updateLeaderboard(); }

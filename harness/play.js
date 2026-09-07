@@ -913,6 +913,156 @@ test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »
     detail: `symboles dits en lettres=${symboles} (« ${r.maths.slice(0, 60)}… ») · énoncé + 4 réponses lus=${enonce} · « c'est gagné » dit=${gagne} (« ${r.gagne.slice(0, 40)} ») · bonne carte surlignée après une erreur=${vert}` };
 });
 
+
+test('il pleut et il neige, et on est à l\'abri sous un toit', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 10, hour: 12 });
+    const lis = () => ({ seg: __G.meteo.seg.visible, flocons: __G.meteo.flocons.visible,
+      op: +Math.max(__G.meteo.seg.material.opacity, __G.meteo.flocons.material.opacity).toFixed(2),
+      sol: +__G.meteo.sol.material.opacity.toFixed(2) });
+    __G.meteoSet('pluie', 600); __G.meteo.force = 1; __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    const pluie = lis();
+    __G.meteoSet('neige', 600); __G.meteo.force = 1; __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    const neige = lis();
+    // sous le hall d'un immeuble : plus une goutte
+    __G.P.pos.set(-35.5, 0.4, -27); __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    const abri = __G.meteo.abri, opAbri = +__G.meteo.flocons.material.opacity.toFixed(2);
+    __G.meteoSet('clair', 600); __G.meteo.force = 0; __G.meteoTick(0.016);
+    return { pluie, neige, abri, opAbri, clair: lis() };
+  });
+  const ok = r.pluie.seg && !r.pluie.flocons && r.pluie.op > 0.4 && r.pluie.sol === 0
+    && r.neige.flocons && !r.neige.seg && r.neige.sol > 0.5
+    && r.abri && r.opAbri < 0.1 && !r.clair.seg && !r.clair.flocons;
+  return { ok, detail: `pluie : gouttes=${r.pluie.seg} opacité ${r.pluie.op} · neige : flocons=${r.neige.flocons} manteau au sol ${r.neige.sol} · sous un toit : abri=${r.abri} (opacité ${r.opAbri}) · beau temps : rien` };
+});
+
+test('on devient ami avec un bot en lui écrivant', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    __G.amis.clear();
+    const avant = __G.amis.size;
+    const traite = __G.commandeSociale('Lucas_2014 tu veux être mon ami ?');
+    const liste = __G.commandeSociale('mes amis');
+    const etoile = document.getElementById('lbRows').textContent.includes('⭐');
+    return { avant, traite, apres: [...__G.amis], liste, etoile };
+  });
+  const ok = r.traite && r.avant === 0 && r.apres.includes('Lucas_2014') && r.liste && r.etoile;
+  return { ok, detail: `« Lucas_2014 tu veux être mon ami ? » → amis : ${r.apres.join(', ')} · ⭐ au classement=${r.etoile}` };
+});
+
+test('un ami se rend au rendez-vous fixé par message', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0]; b.rdv = null; b.ko = 0; b.fight = null; b.wait = 0;
+    b.pos.set(0, 0.3, 6); b.av.group.position.copy(b.pos);
+    const traite = __G.commandeSociale('Lucas_2014 rendez-vous au parc');
+    const cible = b.rdv ? { x: b.rdv.x, z: b.rdv.z, nom: b.rdv.nom } : null;
+    const d0 = cible ? Math.hypot(b.pos.x - cible.x, b.pos.z - cible.z) : 0;
+    for (let i = 0; i < 3000; i++) __G.updateBot(b, 1 / 30);
+    const d1 = cible ? Math.hypot(b.pos.x - cible.x, b.pos.z - cible.z) : 0;
+    const arrive = !!(b.rdv && b.rdv.arrive);
+    b.rdv = null;
+    return { traite, cible, d0: +d0.toFixed(1), d1: +d1.toFixed(1), arrive };
+  });
+  const ok = r.traite && r.cible && r.d1 < 2 && r.arrive;
+  return { ok, detail: `rendez-vous ${r.cible ? r.cible.nom : '—'} : le bot part de ${r.d0} m et arrive à ${r.d1} m (annonce son arrivée=${r.arrive})` };
+});
+
+test('on adopte un chien, on le nomme et il suit partout', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 80, hour: 12 });
+    __G.store.set('superobby.chien', ''); __G.chien.pet = null; __G.chien.nom = '';
+    const d = __G.city.pets.find(x => x.kind === 'dog');
+    __G.P.pos.set(d.x + 2, 0.4, d.z);
+    const loin = __G.commandeSociale('adopte');           // proche : doit adopter
+    const nomme = __G.commandeSociale('Rex');
+    // il suit à pied
+    __G.P.pos.set(20, 0.4, 92);
+    for (let i = 0; i < 400; i++) __G.chienTick(1 / 60);
+    const aPied = Math.hypot(__G.chien.pet.x - __G.P.pos.x, __G.chien.pet.z - __G.P.pos.z);
+    // il monte en voiture avec son maître
+    const c = __G.city.cars.find(v => !v.heli && v.kind !== 'jetski');
+    __G.P.pos.set(c.x, c.y + 0.4, c.z); __G.enterCar(c);
+    for (let i = 0; i < 60; i++) __G.chienTick(1 / 60);
+    const enVoiture = Math.hypot(__G.chien.pet.x - c.x, __G.chien.pet.z - c.z);
+    __G.exitCar();
+    return { loin, nomme, nom: __G.chien.nom, adopte: !!__G.chien.pet.adopte,
+      aPied: +aPied.toFixed(2), enVoiture: +enVoiture.toFixed(2), tag: !!__G.chien.tag };
+  });
+  const ok = r.loin && r.nomme && r.nom === 'Rex' && r.adopte && r.aPied < 2.5 && r.enVoiture < 2 && r.tag;
+  return { ok, detail: `adopté et nommé « ${r.nom} » (étiquette=${r.tag}) · il suit à ${r.aPied} m à pied et à ${r.enVoiture} m du véhicule` };
+});
+
+test('le chien va se coucher dans sa niche quand le maître s\'assoit', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
+    const niche = __G.city.niche;
+    if (!niche) return { ok: false, pourquoi: 'aucune niche dans la villa' };
+    __G.chien.pet = null; __G.chien.nom = 'Rex';
+    __G.adopterChien(__G.city.pets.find(x => x.kind === 'dog'), true);
+    const d = __G.chien.pet;
+    d.x = niche.x + 4; d.z = niche.z + 4; d.y = niche.y;
+    // le maître s'assoit à l'étage de sa villa
+    const banc = __G.city.benches.find(b => Math.abs(b.x - 60) < 16 && Math.abs(b.z - 168) < 16);
+    __G.P.pos.set(niche.x + 3, niche.y, niche.z + 3); __G.P.sit = banc || { x: niche.x + 3, z: niche.z + 3, y: niche.y, facing: 0, assise: 0.6 };
+    for (let i = 0; i < 600; i++) __G.chienTick(1 / 60);
+    const dist = Math.hypot(d.x - niche.x, d.z - niche.z);
+    const couche = __G.chien.couche, basse = +(d.g.position.y - niche.y).toFixed(2);
+    __G.P.sit = null;
+    return { ok: true, niche: [niche.x, +niche.y.toFixed(2), niche.z], dist: +dist.toFixed(2), couche, basse };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  return { ok: r.dist < 0.4 && r.couche && r.basse < 0, detail: `niche en (${r.niche[0]}, ${r.niche[2]}) à l'étage (y=${r.niche[1]}) · le chien s'y rend (${r.dist} m) et se couche (${r.couche}, corps abaissé de ${r.basse} m)` };
+});
+
+test('le chien attaque quand son maître écrit « attaque »', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 80, hour: 12 });
+    __G.chien.pet = null; __G.chien.nom = 'Rex';
+    __G.adopterChien(__G.city.pets.find(x => x.kind === 'dog'), true);
+    const b = __G.bots[1]; b.ko = 0; b.hp = 100; b.wait = 9999; b.av.group.visible = true;
+    // pelouse dégagée du parc : ni bancs, ni cabine de projection
+    b.pos.set(-16, 0.15, 84); b.av.group.position.copy(b.pos);
+    __G.P.pos.set(-22, 0.4, 84);
+    __G.chien.pet.x = -21; __G.chien.pet.z = 84; __G.chien.pet.y = 0.15;
+    __G.P.crime = 0; __G.police.wanted = 0;   // un test précédent peut avoir armé le délai anti-spam des délits
+    const traite = __G.commandeSociale('MaxiBloc attaque !');
+    const vise = __G.chien.attaque ? __G.chien.attaque.nom : null;
+    for (let i = 0; i < 900; i++) __G.chienTick(1 / 60);
+    const hp = b.hp, wanted = __G.police.wanted;
+    __G.chien.attaque = null; b.hp = 100; b.wait = 0; __G.clearWanted('fin');
+    return { traite, vise, hp, wanted };
+  });
+  const ok = r.traite && r.vise === 'MaxiBloc' && r.hp < 100 && r.wanted > 0;
+  return { ok, detail: `cible verrouillée : ${r.vise} · le bot tombe à ${r.hp} PV · c'est un délit (recherché ${r.wanted}★)` };
+});
+
+test('un ami organise un braquage, attend au volant et file à la villa', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -40, y: 1, z: 70, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const pasAmi = __G.commandeSociale('Nathan_pro on organise un braquage');   // pas ami : refus
+    const etatApresRefus = __G.coup.etat;
+    const traite = __G.commandeSociale('Lucas_2014 on organise un braquage');
+    const c = __G.coup.car, attente = __G.coup.etat, complice = __G.coup.bot && __G.coup.bot.name;
+    __G.police.wanted = 0;
+    __G.infraction('braquer la banque', 3, 3);      // le vol déclenche le complice
+    const pret = __G.coup.etat;
+    __G.P.pos.set(c.x + 1.5, 0.4, c.z + 1.5);
+    __G.coupMonter();
+    const fuite = __G.coup.etat, cache = !__G.me.group.visible;
+    const sous = __G.wallet;
+    let n = 0; while (__G.coup.etat === 'fuite' && n < 60000) { __G.coupTick(1 / 60); n++; }
+    const arrive = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 184);
+    return { pasAmi, etatApresRefus, traite, attente, complice, pret, fuite, cache,
+      arrive: +arrive.toFixed(1), fin: __G.coup.etat, wanted: __G.police.wanted, gain: __G.wallet - sous, secondes: +(n / 60).toFixed(0) };
+  });
+  const ok = !r.pasAmi && r.etatApresRefus === 'aucun' && r.traite && r.attente === 'attente' && r.pret === 'pret'
+    && r.fuite === 'fuite' && r.cache && r.arrive < 6 && r.fin === 'aucun' && r.wanted === 0 && r.gain > 0;
+  return { ok, detail: `refusé à un non-ami=${!r.pasAmi} · ${r.complice} attend au volant → braquage → embarquement → ${r.secondes} s de fuite, arrivée à ${r.arrive} m de la villa · recherché remis à ${r.wanted}, butin +${r.gain} 🪙` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'superobby.html');
   const {srv,port}=await serve(file);

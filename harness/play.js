@@ -123,6 +123,80 @@ test('le tennis ne sert pas sur un court vide', async p => {
   return { ok: r.ok, detail: r.ok ? 'service tenté sur un court vide sans exception' : 'exception : ' + r.err };
 });
 
+// attend N secondes de temps SIMULÉ (le rendu logiciel avance bien moins vite que le temps réel)
+async function attendreSim(p, secondes, maxMs = 120000) {
+  const t0 = await p.evaluate(() => __G.simTime), debut = Date.now();
+  while (Date.now() - debut < maxMs) {
+    await p.waitForTimeout(250);
+    if (await p.evaluate(t => __G.simTime - t, t0) >= secondes) return true;
+  }
+  return false;
+}
+
+// maintient « avancer » jusqu'à atteindre la hauteur visée ; renvoie la hauteur maximale atteinte.
+// On relève le maximum et non la hauteur finale : sinon le joueur dépasse la plateforme et retombe.
+async function grimpe(p, v, cible, maxMs = 45000) {
+  await p.evaluate(vv => __SHOT.go(vv), v);
+  await p.waitForTimeout(200);
+  const y0 = await p.evaluate(() => __G.P.pos.y);
+  let ymax = y0; const debut = Date.now();
+  await p.keyboard.down('ArrowUp');
+  while (Date.now() - debut < maxMs) {
+    await p.waitForTimeout(200);
+    const y = await p.evaluate(() => __G.P.pos.y);
+    if (y > ymax) ymax = y;
+    if (ymax >= cible - 0.05) break;
+  }
+  await p.keyboard.up('ArrowUp');
+  return { y0, ymax, atteint: ymax >= cible - 0.05 };
+}
+
+// attend qu'une condition devienne vraie dans la page
+async function attendre(p, condition, maxMs = 120000) {
+  const debut = Date.now();
+  while (Date.now() - debut < maxMs) { await p.waitForTimeout(250); if (await p.evaluate(condition)) return true; }
+  return false;
+}
+
+// maintient une touche jusqu'à ce que la condition soit vraie
+async function pousser(p, touche, condition, maxMs = 45000) {
+  const debut = Date.now();
+  await p.keyboard.down(touche);
+  let ok = false;
+  while (Date.now() - debut < maxMs) { await p.waitForTimeout(200); if (await p.evaluate(condition)) { ok = true; break; } }
+  await p.keyboard.up(touche);
+  return ok;
+}
+
+test('on monte à pied sur la terrasse du poste de secours (plage)', async p => {
+  // yaw = 0 : « avancer » va vers -z, donc du sable vers la terrasse
+  const r = await grimpe(p, { world: 4, x: 110.5, y: 0.5, z: 36, facing: 0, yaw: 0, pitch: 0.3, dist: 10, hour: 12, hideHud: true }, 3.2);
+  return { ok: r.atteint, detail: `hauteur ${r.y0.toFixed(2)} → ${r.ymax.toFixed(2)} m au plus haut (terrasse à 3,20 m)` };
+});
+
+test('on monte à pied sur le bord de la piscine publique', async p => {
+  const r = await grimpe(p, { world: 4, x: -51, y: 0.5, z: -3, facing: 0, yaw: 0, pitch: 0.3, dist: 10, hour: 12, hideHud: true }, 2.4);
+  return { ok: r.atteint, detail: `hauteur ${r.y0.toFixed(2)} → ${r.ymax.toFixed(2)} m au plus haut (margelle à 2,40 m)` };
+});
+
+test('on monte à l\'étage par l\'escalier d\'une villa voisine', async p => {
+  // Villa Azur : maison en (111, 162), escalier en x=119 qui remonte vers le nord
+  const r = await grimpe(p, { world: 4, x: 119, y: 0.7, z: 169.2, facing: 0, yaw: 0, pitch: 0.3, dist: 8, hour: 12, hideHud: true }, 5.35);
+  return { ok: r.atteint, detail: `hauteur ${r.y0.toFixed(2)} → ${r.ymax.toFixed(2)} m au plus haut (étage à 5,35 m)` };
+});
+
+test('l\'ascenseur de la villa monte, puis laisse ressortir', async p => {
+  await p.evaluate(() => __SHOT.go({ world: 4, x: 71, y: 0.8, z: 166.4, facing: 0, yaw: 0, pitch: 0.2, dist: 8, hour: 12, hideHud: true }));
+  const monte = await attendre(p, () => __G.city.lift.y > 5);   // on attend que la cabine soit arrivée en haut
+  const haut = await p.evaluate(() => ({ y: __G.P.pos.y, cab: __G.city.lift.y }));
+  // on sort vers l'ouest (le palier est à 2,6 m à gauche de la cabine)
+  await pousser(p, 'ArrowLeft', () => Math.abs(__G.P.pos.x - 71) > 2);
+  const sorti = await p.evaluate(() => ({ x: __G.P.pos.x, y: __G.P.pos.y }));
+  const ecart = Math.abs(sorti.x - 71);
+  return { ok: monte && haut.y > 4.5 && ecart > 1.6 && ecart < 6 && sorti.y > 4.5,
+    detail: `monté à ${haut.y.toFixed(2)} m (cabine ${haut.cab.toFixed(2)}), puis sorti de ${ecart.toFixed(2)} m en restant à ${sorti.y.toFixed(2)} m` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

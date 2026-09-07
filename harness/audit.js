@@ -145,3 +145,4 @@ for (const p2 of posts) for (const b of bldg)
   if (p2.o.x > b.x0 && p2.o.x < b.x1 && p2.o.z > b.z0 && p2.o.z < b.z1) { np++;
     if (np <= 10) console.log(`   poteau ${p2.o.w}x${p2.o.h} @(${p2.o.x.toFixed(1)},${p2.o.z.toFixed(1)}) dans ${b.o.w}x${b.o.d} @(${b.o.x.toFixed(1)},${b.o.z.toFixed(1)})  [${zoneOf(p2.o.x,p2.o.z)}]`); }
 console.log(`   -> ${np}`);
+

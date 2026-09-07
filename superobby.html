@@ -869,7 +869,7 @@ function buildPool() {   // piscine surélevée (ouest, décalée au nord pour l
   box(-51, 1.05, -8 + Z, 12, 1.9, 9, 0, { material: wm, deco: true, noEdges: true, noShadow: true });
   for (let i = 0; i < 4; i++) box(-45.6 - i * 1.2, (2.0 - i * 0.5) / 2, -8 + Z, 1.2, 2.0 - i * 0.5, 9, 0xd6e4ff, { studs: false, noRoute: true });   // petit bain en escalier (monte vers l'est)
   for (let i = 0; i < 3; i++) box(-51, (0.6 + i * 0.6) / 2, 2.6 - i * 1 + Z, 6, 0.6 + i * 0.6, 1, deck, { studs: false, noRoute: true });   // marches d'accès (sud)
-  truss(-60.4, 2.4, -8 + Z, 4, -1, 0); box(-59.5, 6.2, -8 + Z, 3, 0.4, 3, 0x4f8dff, { studs: false, noRoute: true }); box(-56.5, 6.25, -8 + Z, 3.4, 0.14, 0.8, 0xffffff, { studs: false, noRoute: true });   // plongeoir
+  truss(-60.4, 2.4, -8 + Z, 4, -1, 0); box(-61.2, 4.4, -8 + Z, 0.4, 4, 1.4, 0xc9ced8, { studs: false, noRoute: true });   // dosseret : on monte en poussant vers l'ouest, il n'y avait rien pour retenir le joueur qui glissait de l'échelle box(-59.5, 6.2, -8 + Z, 3, 0.4, 3, 0x4f8dff, { studs: false, noRoute: true }); box(-56.5, 6.25, -8 + Z, 3.4, 0.14, 0.8, 0xffffff, { studs: false, noRoute: true });   // plongeoir
   for (const [x, z] of [[-45, -16.5], [-57, -16.5], [-45, 0.5], [-57, 0.5]]) tree(x, 0, z + Z, 0x3fae4a);
   coin(-51, 6.3, -8 + Z); coin(-51, 2.4, -14.25 + Z); coin(-51, 2.4, -1.75 + Z);
   city.water = { x1: -57, x2: -45, z1: -12.5 + Z, z2: -3.5 + Z, top: 2.0 };
@@ -2173,8 +2173,8 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const tx = rnd(105, 110), tz = -50 + i * 38; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); solids.push({ mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6 }); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); } }   // palmiers
   // poste de secours
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(112 + dx, 1.5, 30 + dz, 0.2, 3, 0.2, 0xf4f6fa, { studs: false, noRoute: true });
-  box(112, 3.1, 30, 3, 0.2, 3, 0xf4f6fa, { studs: false, noRoute: true }); box(112, 3.9, 30 + 1.4, 3, 1.4, 0.15, 0xff5c5c, { studs: false, noRoute: true }); box(112, 4.9, 30, 3.4, 0.3, 3.4, 0xffd23f, { deco: true, studs: false });
-  for (let i = 0; i < 6; i++) box(110.5, 0.25 + i * 0.5, 31.8 + i * 0.35, 1.2, 0.5, 0.35, 0xf4f6fa, { studs: false, noRoute: true });
+  box(112, 3.1, 30, 3, 0.2, 3, 0xf4f6fa, { studs: false, noRoute: true }); box(112.4, 3.9, 30 + 1.4, 2.2, 1.4, 0.15, 0xff5c5c, { studs: false, noRoute: true });   // garde-corps raccourci : il barrait l'arrivée de l'escalier box(112, 4.9, 30, 3.4, 0.3, 3.4, 0xffd23f, { deco: true, studs: false });
+  for (let i = 0; i < 6; i++) { const h2 = 3 - i * 0.5; box(110.5, h2 / 2, 31.9 + i * 0.55, 1.2, h2, 0.6, 0xf4f6fa, { studs: false, noRoute: true }); }   // l'escalier montait dans le mauvais sens : on butait sur une marche de 3 m en venant du sable
   box(112, 6, 30, 0.1, 2, 0.1, 0x3b4252, { deco: true, studs: false }); box(112.4, 6.6, 30, 0.7, 0.45, 0.04, 0xff5c5c, { deco: true, studs: false });
   // bateau qui tangue
   const boat = new THREE.Group(); boat.position.set(133, 1.6, 20); worldGroup.add(boat);
@@ -2575,7 +2575,8 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
       tvSet(bx3, HZ + 4, Math.PI, 2.4, F + 0.75); box(bx3, F + 0.78, HZ + 0.5, 5, 0.04, 5, pickOne([0xb03a2e, 0x2f6fd0]), { deco: true, noEdges: true, studs: false });
       box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); }
     // escalier intérieur (les voisins n'ont pas d'ascenseur) : 12 marches de 0,40 m, sous la limite de 0,60 m qu'on peut franchir
-    for (let i = 0; i < 12; i++) { const top = 0.5 + (i + 1) * (F + 0.25 - 0.5) / 12; box(HX + 8, top / 2, HZ + 7.2 - i * 0.6, 2.6, top, 0.62, 0xe6ded0, { studs: false, noRoute: true }); }
+    // 8 marches de 0,54 m (sous la limite de 0,60 m) et 0,90 m de giron : plus profondes que la boîte du joueur, sinon on butait à chaque marche
+    for (let i = 0; i < 8; i++) { const top = 0.5 + (i + 1) * (F + 0.25 - 0.5) / 8; box(HX + 8, top / 2, HZ + 7.2 - i * 0.9, 2.6, top, 0.95, 0xe6ded0, { studs: false, noRoute: true }); }
     box(HX + 6.6, F + 1.2, HZ + 4, 0.2, 1.1, 8, 0xc9a84c, { deco: true, studs: false });   // garde-corps de la trémie
     for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
     city.zones.push({ name: opt.name || 'Villa', emoji: '🏡', x1: vx - HP - 1, x2: vx + HP + 1, z1: vz - HP - 1, z2: vz + HP + 1, hint: `🏡 ${opt.name || 'Villa'} : villa du quartier (salon, cuisine, chambres, piscine)` });

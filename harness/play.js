@@ -309,6 +309,103 @@ test('la visée reste peu coûteuse (un seul passage sur les solides)', async p 
   return { ok: r.ms < 0.5, detail: `${r.ms} ms par visée sur ${r.solides} solides` };
 });
 
+test('les bancs et les canapés arrêtent le joueur et servent d\'assise', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const b = __G.city.benches.find(s => s.assise != null && !s.y);
+    const solide = __G.solids.some(o => Math.abs(o.x - b.x) < 1.6 && Math.abs(o.z - b.z) < 1.6 && o.h > 0.4 && o.h < 1);
+    const canapes = __G.city.benches.filter(s => s.y > 0).length;
+    return { solide, sieges: __G.city.benches.length, canapes };
+  });
+  return { ok: r.solide && r.canapes >= 2, detail: `${r.sieges} assises dont ${r.canapes} en intérieur ; banc solide : ${r.solide}` };
+});
+
+test('la piscine de la villa fait 1,80 m de fond', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
+    const P2 = __G.city.villaPool, cx = (P2.x1 + P2.x2) / 2, cz = (P2.z1 + P2.z2) / 2;
+    const plein = y => __G.solids.some(o => cx > o.x - o.w / 2 && cx < o.x + o.w / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2 && cz > o.z - o.d / 2 && cz < o.z + o.d / 2);
+    return { surface: P2.top, eau: [0.5, 0, -0.5, -0.75].every(y => !plein(y)), fond: plein(-0.95) };
+  });
+  return { ok: r.eau && r.fond, detail: `surface à ${r.surface} m, eau libre jusqu'à -0,75 m, fond étanche : ${r.fond}` };
+});
+
+test('le stand de tir a des cibles et on peut les toucher', async p => {
+  const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: 52, y: 1, z: 11, hour: 12 }); return __G.city.targets.length; });
+  if (!n) return { ok: false, detail: 'aucune cible dans le jeu' };
+  const r = await p.evaluate(() => {
+    __G.P.pos.set(47, 0.4, 11); __G.P.facing = Math.PI; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
+    __G.P.aimToggle = true; __G.P.aim = true; __G.P.fireCd = 0; __G.aimTick(); __G.fire();
+    return __G.city.shots;
+  });
+  await attendre(p, () => __G.city.shots > 0 || __G.shots.length === 0, 25000);
+  const apres = await p.evaluate(() => __G.city.shots);
+  return { ok: n === 3 && apres > r, detail: `${n} cibles, compteur de touches ${r} → ${apres}` };
+});
+
+test('les cages de but existent, avec filet', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -13, y: 1, z: -13, hour: 12 });
+    // poteaux : fins, ~2,1 m de haut, aux deux bouts du terrain
+    const poteaux = __G.solids.filter(o => o.h > 1.9 && o.h < 2.3 && o.w < 0.4 && o.d < 0.4 && Math.abs(o.z + 13) < 3 && (Math.abs(o.x + 22) < 0.5 || Math.abs(o.x + 4) < 0.5));
+    const filets = __G.solids.filter(o => Math.abs(o.z + 13) < 4 && (o.x < -21 || o.x > -5) && o.material && o.material.alphaTest);
+    return { poteaux: poteaux.length, filets: filets.length };
+  });
+  return { ok: r.poteaux >= 4 && r.filets >= 6, detail: `${r.poteaux} poteaux, ${r.filets} panneaux de filet` };
+});
+
+test('les feux ne sont plus qu\'aux carrefours', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const carrefours = __G.city.crossings;
+    const orphelins = __G.city.trafficLights.filter(t =>
+      !carrefours.some(c => Math.abs(t.x - c[0]) < 12 && Math.abs(t.z - c[1]) < 12));
+    return { feux: __G.city.trafficLights.length, carrefours: carrefours.length, orphelins: orphelins.length };
+  });
+  return { ok: r.orphelins === 0, detail: `${r.feux} feux sur ${r.carrefours} carrefours, ${r.orphelins} hors carrefour` };
+});
+
+test('le parc compte quatre balançoires', async p => {
+  const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: -12, y: 1, z: 66, hour: 12 }); return __G.city.swings.length; });
+  return { ok: n === 4, detail: `${n} balançoires` };
+});
+
+test('dans la villa, le frigo est accessible et donne à manger', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
+    const f = __G.city.fridge;
+    if (!f) return { ok: false, pourquoi: 'aucun frigo enregistré' };
+    __G.P.pos.set(f.x, 0.6, f.z);   // on se place devant
+    return { ok: true, x: +f.x.toFixed(1), z: +f.z.toFixed(1) };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  await attendre(p, () => !!__G.city.fridgeNear, 20000);
+  const proche = await p.evaluate(() => !!__G.city.fridgeNear);
+  const ouvert = await p.evaluate(() => { __G.openFridge(); return __G.uiOpen; });
+  await p.evaluate(() => __G.closeUI());
+  return { ok: proche && ouvert === 'fridgeUI', detail: `frigo en (${r.x}, ${r.z}), détecté : ${proche}, fenêtre ouverte : ${ouvert}` };
+});
+
+test('un véhicule cabossé montre ses dégâts et fume', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const c = __G.city.cars.find(v => v.parts && v.parts.hood);
+    if (!c) return { ok: false, pourquoi: 'aucun véhicule avec carrosserie' };
+    __G.P.pos.set(c.x, 0.5, c.z + 4);           // à portée pour que la fumée se déclenche
+    const avant = { capot: c.parts.hood.rotation.x, pc: c.parts.bumpers[0] ? c.parts.bumpers[0].rotation.z : 0 };
+    __G.vehicleDamage(c, 45);                    // petits dégâts : fumée blanche
+    const apres = { capot: c.parts.hood.rotation.x, pc: c.parts.bumpers[0] ? c.parts.bumpers[0].rotation.z : 0, dmg: c.dmg };
+    c.fumT = 0; __G.fumeeTick(0.5);              // une bouffée blanche
+    __G.vehicleDamage(c, 40);                    // gros dégâts : fumée noire
+    c.fumT = 0; __G.fumeeTick(0.5);
+    return { ok: true, avant, apres, dmgFinal: c.dmg };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  const ok = r.apres.capot !== r.avant.capot && r.apres.pc !== r.avant.pc && r.dmgFinal > 80;
+  return { ok, detail: `capot ${r.avant.capot.toFixed(2)} → ${r.apres.capot.toFixed(2)}, pare-chocs ${r.avant.pc.toFixed(2)} → ${r.apres.pc.toFixed(2)}, dégâts ${r.dmgFinal}` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

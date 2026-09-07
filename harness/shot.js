@@ -48,7 +48,7 @@ window.__G = {
   get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
   get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
   set wallet(v) { wallet = v; }, set running(v) { running = v; },
-  aimTick, fire, drawWeapon, WEAPONS,
+  aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget,
   // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
   // sur la version d'origine pour pouvoir comparer les deux
   ctrlText: typeof ctrlText === 'function' ? ctrlText : null,

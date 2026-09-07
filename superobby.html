@@ -944,13 +944,14 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
     box(x, 0.42, z + 0.68, 1.1, 0.34, 0.05, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(label) }), deco: true, noEdges: true });
     vitrine(x, z + 1.2, 'armes', key, label, 1.7);
   };
-  stand(48, 17.5, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙'); stand(52, 16.5, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙'); stand(56, 17.5, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙');
+  // présentoirs le long des murs : l'allée centrale reste libre entre la porte (2,2 m) et le comptoir
+  stand(47.9, 17.2, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙'); stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙'); stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙');
   for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
   for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(57.4, 2.7, 19 + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.3); worldGroup.add(r); }   // râtelier mural
   box(57.5, 2.4, 20.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
   box(46.6, 2.6, 22.6, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible
   city.armory = { x: 52, z: 20.8 };
-  for (const x of [45, 52, 59]) lamp(x, 13.2);
+  for (const x of [45.5, 58.5]) lamp(x, 13.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
   city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: 45, x2: 59, z1: 12, z2: 26, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
 }
 function buildHelipad() {   // héliport (est, nord)
@@ -993,9 +994,10 @@ function buildCircuit() {
   plat(6, 0.16, 113, 30, 7, 0x565b66, { studs: false, noRoute: true }, 0.12);   // voie des stands (hors piste)
   box(6, 2.6, 109.4, 30, 0.4, 0.4, 0xc9ced8, { deco: true, studs: false }); for (const dx of [-14, -7, 0, 7, 14]) box(6 + dx, 1.4, 109.4, 0.3, 2.8, 0.3, 0xc9ced8, { studs: false, noRoute: true });
   box(6, 3.2, 109.4, 8, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏁 STANDS') }), deco: true, noEdges: true });
-  for (let i = 0; i < 4; i++) { const c = makeCar([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453][i], -6 + i * 3.2, 113, -Math.PI / 2, { kart: true, num: i + 1 }); city.cars.push(c); }
+  const gridPos = k => [-7 + Math.floor(k / 2) * 5, 113 + (k % 2 ? 1.7 : -1.7)];   // grille en quinconce : un kart fait 4,4 m de long
+  for (let i = 0; i < 4; i++) { const [gx2, gz2] = gridPos(i); const c = makeCar([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453][i], gx2, gz2, -Math.PI / 2, { kart: true, num: i + 1 }); city.cars.push(c); }
   raceKarts = [];
-  for (let i = 0; i < BOT_DEFS.length; i++) { const c = makeCar([0xb57cff, 0xff8f3a, 0x35d0e6, 0xc9ced8, 0xff7ad9][i], 9 + i * 2.6, 113, -Math.PI / 2, { kart: true, num: 5 + i }); c.tag = nameTag(BOT_DEFS[i].name); c.tag.position.y = 2.2; c.g.add(c.tag); c.solid.ai = true; raceKarts.push(c); }
+  for (let i = 0; i < BOT_DEFS.length; i++) { const [gx2, gz2] = gridPos(4 + i); const c = makeCar([0xb57cff, 0xff8f3a, 0x35d0e6, 0xc9ced8, 0xff7ad9][i], gx2, gz2, -Math.PI / 2, { kart: true, num: 5 + i }); c.tag = nameTag(BOT_DEFS[i].name); c.tag.position.y = 2.2; c.g.add(c.tag); c.solid.ai = true; raceKarts.push(c); }
   for (const g of RACE_GATES) coin(g[0], 0, g[1]);
   // boosters (flèches lumineuses sur la piste)
   const bt = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#1b2a4a'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3ef2ff'; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round'; for (const ox of [-18, 6]) { g.beginPath(); g.moveTo(24 + ox, 12); g.lineTo(42 + ox, 32); g.lineTo(24 + ox, 52); g.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; })();
@@ -1586,14 +1588,10 @@ const WORLDS = [
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts);
       B('bureau', () => buildOffice(38, 9)); B('rue commerçante', buildMall); B('fête foraine', buildFair); B('déco', buildDeco); B('rues', buildStreets); B('banque', () => buildBank(-52, 70));
       B('plage', buildBeach); B('rallye', buildRally); B('école', () => buildSchool(-62, 212)); B('hôpital', () => buildHospital(12, 212));
-      B('ma villa', () => buildVilla(60, 176, { mine: true }));
-      B('villa 2', () => buildVilla(108, 176, { name: '🏡 Villa Azur', roof: 0x2f6fd0, wall: 0xeef3f8 }));
-      B('villa 3', () => buildVilla(156, 176, { name: '🏡 Villa Palmier', roof: 0x3fae4a, wall: 0xfff4e0 }));
-      B('villa 4', () => buildVilla(84, 220, { name: '🏡 Villa Corail', roof: 0xff8f3a, wall: 0xfdeee6 }));
-      B('villa 5', () => buildVilla(132, 220, { name: '🏡 Villa Émeraude', roof: 0x7a5ad6, wall: 0xf3eefd }));
+      VILLAS.forEach((v, i) => B(v.mine ? 'ma villa' : 'villa ' + (i + 1), () => buildVilla(v.x, v.z, v)));
       B('quartier', buildResidential);
       // sécurité : aucun feu tricolore ne doit se retrouver dans un jardin ou une maison
-      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v[0]) < 23 && Math.abs(t.z - v[1]) < 21)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } }
+      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } }
       // routes : anneau + croix
       road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, 0, 6, 46); road(0, 0, 46, 6);
       // quartiers (trottoirs / pelouses)
@@ -1628,7 +1626,7 @@ const WORLDS = [
       // ---- immeubles autour de la ville ----
       const cols = [0xff8f3a, 0x4f8dff, 0xb57cff, 0x35d0e6, 0xff5c5c, 0xffd23f, 0x5cc453, 0xc9ced8];
       let k = 0;
-      for (const z of [-30, -18, 18, 30]) for (const x of [-35.5, 35.5]) building(x, z, 7, 6 + (k * 7) % 14, 9, cols[k++ % cols.length]);
+      for (const z of [-27, -16, 16, 27]) for (const x of [-35.5, 35.5]) building(x, z, 7, 6 + (k * 7) % 14, 9, cols[k++ % cols.length]);   // décalés : les angles ne s'encastrent plus dans les rangées nord/sud
       for (const x of [-30, -18, -6, 6, 18, 30]) building(x, -35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);
       for (const x of [-13, -1, 11, 23, 32]) building(x, 35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);   // entrée du parc bien dégagée (x -32 → -17)
       // ---- route vers le parc + grand circuit autour de la ville ----
@@ -1894,7 +1892,7 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   for (let i = 0; i < 14; i++) box(-45 + i * 7, 5.2, 134, 0.35, 0.35, 0.35, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande
   for (const x of [-45, 45]) { box(x, 2.6, 134, 0.2, 5.2, 0.2, 0x3b4252, { studs: false, noRoute: true }); } box(0, 5.3, 134, 91, 0.06, 0.06, 0x3b4252, { deco: true, noEdges: true, studs: false });
   box(0, 3, 176, 60, 6, 6, 0x5cc453, { studs: false, noRoute: true }); 'SUPER OBBY'.split('').forEach((ch, i) => { if (ch !== ' ') box(-27 + i * 5.4, 8.2, 176, 4.6, 4.4, 0.6, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(ch) }), deco: true, noEdges: true }); });   // lettres sur la colline
-  for (let i = 0; i < 6; i++) lamp(-40 + i * 16, 178 - 4);
+  for (let i = 0; i < 6; i++) lamp(-40 + i * 16, 170);   // devant la colline aux lettres, plus dedans
   city.zones.push({ name: 'Fête foraine', emoji: '🎡', x1: -46, x2: 46, z1: 132, z2: 178, hint: '🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons' });
 }
 const breakables = [];   // mobilier urbain cassable (lampadaires, feux, vitrines)
@@ -1981,7 +1979,7 @@ function dayTick() {   // horloge de la ville : 6 minutes = 24 h ; nuit de 20 h 
   const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); $('clock').textContent = `${lamps ? '🌙' : '☀️'} ${hh}h${mm < 10 ? '0' : ''}${mm}`; $('clock').style.display = '';
 }
 function buildDeco() {   // lampadaires et fleurs le long des grands axes, statue au centre
-  for (const z of [-34, -20, 20, 34]) for (const x of [-4.2, 4.2]) lamp(x, z);
+  for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
   for (const x of [-34, -20, 20, 34]) for (const z of [-4.2, 4.2]) lamp(x, z);
   for (const [x, z] of [[-30, -4.5], [30, -4.5], [-30, 4.5], [30, 4.5]]) flowerBed(x, z, 3, 1);
   const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3 });
@@ -2223,7 +2221,6 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   city.zones.push({ name: 'Plage', emoji: '🏖️', x1: 103, x2: 141, z1: -55, z2: 145, hint: '🏖️ Plage : nage dans les vagues, jet-skis au bord de l\'eau (E), coquillages et missions de sauveteur' });
 }
 const RALLY = { x1: -80, x2: 80, z1: -78, z2: -62, hills: [], mesh: null };
-const VILLAS = [[60, 176], [108, 176], [156, 176], [84, 220], [132, 220]];   // centres des parcelles (zones interdites au mobilier urbain)
 function terrainH(x, z) {   // relief du rallye : collines gaussiennes + tremplins + trous
   if (x < RALLY.x1 || x > RALLY.x2 || z < RALLY.z1 || z > RALLY.z2) return null;
   let h = 1.4;
@@ -2457,36 +2454,71 @@ function docsTick(dt) {   // les médecins font leur ronde
 }
 // ---------- VILLA DU JOUEUR ----------
 const RAW = [{ e: '🥩', n: 'Steak', f: 6, m: 4, cook: true }, { e: '🍗', n: 'Poulet', f: 5, m: 4, cook: true }, { e: '🐟', n: 'Poisson', f: 2, m: 3, cook: true }, { e: '🥚', n: 'Œufs', f: 3, m: 2, cook: true }, { e: '🍟', n: 'Frites', f: 8, m: 0, cook: true }, { e: '🥦', n: 'Légumes', f: -4, m: 1, cook: true }, { e: '🥤', n: 'Soda', f: 5, m: 0 }, { e: '🧃', n: 'Jus de fruit', f: 1, m: 0 }, { e: '🥛', n: 'Lait', f: 1, m: 1 }, { e: '🍰', n: 'Gâteau', f: 9, m: 0 }, { e: '🍇', n: 'Raisin', f: -1, m: 0 }, { e: '🧀', n: 'Fromage', f: 4, m: 1 }];
-function sofa(x, z, ry, col) { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); }; add(3.4, 0.45, 1.3, 0, 0.45, 0, col); add(3.4, 0.9, 0.3, 0, 0.95, -0.65, col); for (const sx of [-1.65, 1.65]) add(0.3, 0.7, 1.3, sx, 0.8, 0, col); for (const dx of [-0.9, 0.9]) add(1.2, 0.2, 1.1, dx, 0.78, 0.05, col); box(x, 0.22, z, 3.4, 0.45, 1.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }); }
+function sofa(x, z, ry, col, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); }; add(3.4, 0.45, 1.3, 0, 0.45, 0, col); add(3.4, 0.9, 0.3, 0, 0.95, -0.65, col); for (const sx of [-1.65, 1.65]) add(0.3, 0.7, 1.3, sx, 0.8, 0, col); for (const dx of [-0.9, 0.9]) add(1.2, 0.2, 1.1, dx, 0.78, 0.05, col); box(x, y + 0.22, z, 3.4, 0.45, 1.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }); }
 function villaBed(x, z, ry, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); }; add(3.4, 0.5, 4.4, 0, 0.35, 0, 0x6b4423); add(3.3, 0.4, 4.2, 0, 0.75, 0, 0xffffff); add(3.3, 0.12, 2.4, 0, 0.98, 0.9, 0x4f8dff); for (const dx of [-0.8, 0.8]) add(1.3, 0.25, 0.7, dx, 1.05, -1.5, 0xffffff); add(3.6, 1.6, 0.25, 0, 0.9, -2.3, 0x8b5a2b); for (const dx of [-2.2, 2.2]) { add(0.8, 0.6, 0.8, dx, 0.35, -1.8, 0x8b5a2b); add(0.3, 0.6, 0.3, dx, 1, -1.8, 0xffd23f); } box(x, y + 0.45, z, 3.4, 0.9, 4.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }); city.beds.push({ x, z, ry, y }); }
-function tvSet(x, z, ry, w, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, mat) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); g.add(m); return m; }; add(w, 0.5, 0.5, 0, 0.3, 0, lam(0x2b2f3a)); add(0.2, 0.6, 0.2, 0, 0.85, 0, lam(0x2b2f3a)); add(w, w * 0.56, 0.12, 0, 1.6 + w * 0.28, 0, lam(0x111318)); const scr = add(w - 0.16, w * 0.5, 0.03, 0, 1.6 + w * 0.28, 0.08, new THREE.MeshLambertMaterial({ color: 0x0a1a3a, emissive: 0x123a7a, emissiveIntensity: 0.8 })); city.tvs.push(scr); }
-function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage sur la rue, maison 2 étages, ascenseur près de l'entrée, piscine et jardin
+function tvSet(x, z, ry, w, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, mat) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); g.add(m); return m; }; add(w, 0.5, 0.5, 0, 0.3, 0, lam(0x2b2f3a)); add(0.22, 1.05 + w * 0.28, 0.22, 0, 1.05 + w * 0.14, 0, lam(0x2b2f3a)); add(w, w * 0.56, 0.12, 0, 1.6 + w * 0.28, 0, lam(0x111318)); const scr = add(w - 0.16, w * 0.5, 0.03, 0, 1.6 + w * 0.28, 0.08, new THREE.MeshLambertMaterial({ color: 0x0a1a3a, emissive: 0x123a7a, emissiveIntensity: 0.8 })); city.tvs.push(scr); }
+const VILLA_HALF = 20;   // demi-parcelle : 40 x 40 m, laisse 8 m entre deux plots pour les rues transversales
+const AV_N = 196, AV_S = 250;   // avenues du quartier résidentiel (rangée nord / rangée sud)
+const VILLAS = [   // rangée nord : la clôture sud tombe à 2,5 m du bord de l'avenue ; rangée sud : idem
+  { x: 60, z: 168, mine: true },
+  { x: 108, z: 168, name: '🏡 Villa Azur', roof: 0x2f6fd0, wall: 0xeef3f8 },
+  { x: 156, z: 168, name: '🏡 Villa Palmier', roof: 0x3fae4a, wall: 0xfff4e0 },
+  { x: 108, z: 222, name: '🏡 Villa Corail', roof: 0xff8f3a, wall: 0xfdeee6 },
+  { x: 156, z: 222, name: '🏡 Villa Émeraude', roof: 0x7a5ad6, wall: 0xf3eefd },
+];
+const VILLA_STREETS = [36, 84, 132, 180];   // rues transversales, entre les plots
+function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage sur la rue (portail voitures), portillon piéton vers le perron, maison 2 étages, ascenseur, piscine et jardin
   const F = 4.6, mine = !!opt.mine, roof = opt.roof || 0xb03a2e, wallC = opt.wall || 0xf4efe2;
+  const HP = VILLA_HALF, FY = 0.5;                                  // demi-parcelle (40 x 40 m) ; FY = dessus de la dalle du rez-de-chaussée
   const HX = vx + 3, HZ = vz - 6, HW = 22, HD = 16;                 // maison
-  plat(vx, 0.3, vz, 44, 40, 0x6fbf4a, { studs: false, noRoute: true }, 0.2);
-  // clôture, portail au sud (à droite), muret bas
-  for (const [x, z, w, d] of [[vx, vz - 20.2, 44, 0.6], [vx - 22.2, vz, 0.6, 40], [vx + 22.2, vz, 0.6, 40]]) box(x, 1.4, z, w, 2.8, d, 0xe0d6c0, { studs: false, noRoute: true });
-  box(vx - 13, 1.4, vz + 20.2, 18, 2.8, 0.6, 0xe0d6c0, { studs: false, noRoute: true }); box(vx + 15.5, 1.4, vz + 20.2, 13, 2.8, 0.6, 0xe0d6c0, { studs: false, noRoute: true });
-  for (const dx of [-4, 5]) { box(vx + dx, 1.8, vz + 20.2, 0.8, 3.6, 0.8, 0xc9a84c, { studs: false, noRoute: true }); box(vx + dx, 3.8, vz + 20.2, 1, 0.5, 1, 0xffd23f, { deco: true, studs: false }); }
-  const gate = new THREE.Group(); gate.position.set(vx + 0.5, 0, vz + 20.2); worldGroup.add(gate);
-  for (let i = 0; i < 2; i++) { const half = new THREE.Group(); half.position.x = i ? 2.2 : -2.2; gate.add(half); for (let k = 0; k < 5; k++) { const bar = new THREE.Mesh(unitRound, lam(0x2b3550)); bar.scale.set(0.12, 2.5, 0.12); bar.position.set(-0.9 + k * 0.45, 1.35, 0); half.add(bar); } for (const [yy, cc] of [[2.6, 0xc9a84c], [0.3, 0x2b3550]]) { const t = new THREE.Mesh(unitRound, lam(cc)); t.scale.set(2.2, 0.16, 0.16); t.position.y = yy; half.add(t); } }
-  const gsolid = box(vx + 0.5, 1.3, vz + 20.2, 4.6, 2.6, 0.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
-  const gateObj = { g: gate, solid: gsolid, x: vx + 0.5, z: vz + 20.2, open: 0, kind: 'gate' };
-  // allée goudronnée : du portail vers le garage (à l'ouest, porte face à la rue)
-  plat(vx + 0.5, 0.44, vz + 16, 7, 9, 0x565b66, { studs: false, noRoute: true }, 0.1);
-  plat(vx - 6, 0.44, vz + 17, 18, 6, 0x565b66, { studs: false, noRoute: true }, 0.1);
-  const GX = vx - 12, GZ = vz + 11;
+  const GX = vx - 12, GZ = vz + 11;                                 // garage : porte au sud, face à la rue
+  const WX = vx + 6, FZ = vz + HP + 0.2;                            // axe perron/allée piétonne ; ligne de clôture sud
+  plat(vx, 0.3, vz, HP * 2, HP * 2, 0x6fbf4a, { studs: false, noRoute: true }, 0.2);
+  // clôture : nord, ouest, est
+  for (const [x, z, w, d] of [[vx, vz - HP - 0.2, HP * 2, 0.6], [vx - HP - 0.2, vz, 0.6, HP * 2], [vx + HP + 0.2, vz, 0.6, HP * 2]])
+    box(x, 1.4, z, w, 2.8, d, 0xe0d6c0, { studs: false, noRoute: true });
+  // clôture sud : deux ouvertures — le portail des voitures pile devant le garage, le portillon dans l'axe du perron
+  const CAR_W = 13.2, PED_W = 6;                                    // largeurs des deux ouvertures
+  const carL = GX - CAR_W / 2, carR = GX + CAR_W / 2, pedL = WX - PED_W / 2, pedR = WX + PED_W / 2;
+  for (const [a, b] of [[vx - HP, carL], [carR, pedL], [pedR, vx + HP]])
+    if (b - a > 0.05) box((a + b) / 2, 1.4, FZ, b - a, 2.8, 0.6, 0xe0d6c0, { studs: false, noRoute: true });
+  for (const px of [carL, carR, pedL, pedR]) {   // piliers de part et d'autre de chaque ouverture
+    box(px, 1.8, FZ, 0.8, 3.6, 0.8, 0xc9a84c, { studs: false, noRoute: true });
+    box(px, 3.8, FZ, 1, 0.5, 1, 0xffd23f, { deco: true, studs: false });
+  }
+  // un seul constructeur de grille pour les deux portails (cohérence visuelle)
+  const makeGate = (cx, width, kind) => {
+    const g = new THREE.Group(); g.position.set(cx, 0, FZ); worldGroup.add(g);
+    const half = width / 2, bars = Math.max(4, Math.round(half / 0.45));
+    for (let i = 0; i < 2; i++) {
+      const leaf = new THREE.Group(); leaf.position.x = i ? half / 2 : -half / 2; g.add(leaf);
+      for (let k = 0; k < bars; k++) { const bar = new THREE.Mesh(unitRound, lam(0x2b3550)); bar.scale.set(0.12, 2.5, 0.12); bar.position.set(-half / 2 + 0.25 + k * (half - 0.5) / (bars - 1), 1.35, 0); leaf.add(bar); }
+      for (const [yy, cc] of [[2.6, 0xc9a84c], [0.3, 0x2b3550]]) { const t = new THREE.Mesh(unitRound, lam(cc)); t.scale.set(half, 0.16, 0.16); t.position.y = yy; leaf.add(t); }
+    }
+    const solid = box(cx, 1.3, FZ, width - 0.2, 2.6, 0.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+    g.children[0].position.x = -width / 4; g.children[1].position.x = width / 4;   // fermé : les deux battants se rejoignent
+    return { g, solid, x: cx, z: FZ, open: 0, kind, w: width, y0: 1.3 };
+  };
+  const gateObj = makeGate(GX, CAR_W, 'gate');          // portail des voitures, devant le garage
+  const pedObj = makeGate(WX, PED_W, 'gate');           // portillon piéton, dans l'axe du perron
+  // allée goudronnée : tout droit du portail jusque dans le garage
+  plat(GX, 0.44, vz + HP - 3.5, CAR_W, 15, 0x565b66, { studs: false, noRoute: true }, 0.1);
+  plat(GX, 0.44, vz + HP + 4.5, CAR_W, 9, 0x565b66, { studs: false, noRoute: true }, 0.1);   // bateau jusqu'à la chaussée
+  // allée piétonne dallée : du portillon au perron
+  plat(WX, 0.44, vz + 12.4, 3.2, 16.4, 0xd8d2c4, { studs: false, noRoute: true }, 0.1);
+  for (let i = 0; i < 8; i++) box(WX, 0.46, vz + 5.4 + i * 2, 2.6, 0.03, 1.5, 0xe8e2d4, { deco: true, noEdges: true, studs: false });
+  // garage : trois murs + toit, la porte coulissante ferme le côté sud
   plat(GX, 0.46, GZ, 13, 13, 0x606672, { studs: false, noRoute: true }, 0.1);
   box(GX, 2.8, GZ - 6.7, 13, 5.6, 0.4, wallC, { studs: false, noRoute: true }); box(GX - 6.3, 2.8, GZ, 0.4, 5.6, 13, wallC, { studs: false, noRoute: true }); box(GX + 6.3, 2.8, GZ, 0.4, 5.6, 13, wallC, { studs: false, noRoute: true });
   box(GX, 5.8, GZ, 13.8, 0.5, 13.8, roof, { deco: true, studs: false }); box(GX, 6.3, GZ, 14.2, 0.3, 14.2, 0xc9a84c, { deco: true, studs: false });
-  for (const dx of [-4.6, 4.6]) box(GX + dx, 0.5, GZ, 0.25, 0.12, 11, 0xffd23f, { deco: true, noEdges: true, studs: false });   // marquage de la place
+  for (const dx of [-4.6, 4.6]) box(GX + dx, 0.51, GZ, 0.25, 0.12, 11, 0xffd23f, { deco: true, noEdges: true, studs: false });   // marquage de la place
   box(GX, 3.2, GZ - 6.4, 3, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🅿️ ta place') }), deco: true, noEdges: true });
   const gd = new THREE.Group(); gd.position.set(GX, 0, GZ + 6.5); worldGroup.add(gd);
-  for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(unitRound, lam(0xc9ced8)); sl.scale.set(12.4, 0.78, 0.22); sl.position.y = 0.5 + i * 0.8; gd.add(sl); }
+  const slats = [];
+  for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(unitRound, lam(0xc9ced8)); sl.scale.set(12.4, 0.78, 0.22); sl.position.y = 0.5 + i * 0.8; gd.add(sl); slats.push(sl); }
   const gdSolid = box(GX, 2.8, GZ + 6.5, 12.4, 5.6, 0.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
-  const garageObj = { g: gd, solid: gdSolid, x: GX, z: GZ + 6.5, open: 0, kind: 'garage' };
-  plat(GX, 0.44, GZ + 12, 13, 8, 0x565b66, { studs: false, noRoute: true }, 0.1);   // devant du garage jusqu'à la rue
-  if (mine) { city.gate = gateObj; city.garageDoor = garageObj; } else { city.autoDoors.push(gateObj, garageObj); }
+  const garageObj = { g: gd, solid: gdSolid, x: GX, z: GZ + 6.5, open: 0, kind: 'garage', slats, lintel: 5.4, y0: 2.8 };
+  if (mine) { city.gate = gateObj; city.garageDoor = garageObj; city.autoDoors.push(pedObj); } else { city.autoDoors.push(gateObj, pedObj, garageObj); }
   box(GX, 6.9, GZ + 6.5, 5, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚗 GARAGE') }), deco: true, noEdges: true });
   // maison : murs, baie vitrée et porte au sud
   plat(HX, 0.5, HZ, HW, HD, 0xf0eadc, { studs: false, noRoute: true }, 0.2);
@@ -2494,11 +2526,13 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   box(HX - HW / 2 + 0.2, F + 0.5, HZ, 0.4, F * 2, HD, wallC, { studs: false, noRoute: true }); box(HX + HW / 2 - 0.2, F + 0.5, HZ, 0.4, F * 2, HD, wallC, { studs: false, noRoute: true });
   box(HX - 7.5, F + 0.5, HZ + HD / 2 - 0.2, 7, F * 2, 0.4, wallC, { studs: false, noRoute: true }); box(HX + 8, F + 0.5, HZ + HD / 2 - 0.2, 6, F * 2, 0.4, wallC, { studs: false, noRoute: true });
   box(HX + 0.5, F * 2 - 0.5, HZ + HD / 2 - 0.2, 9, 2.2, 0.4, wallC, { studs: false, noRoute: true });
-  box(HX + 3, 1.8, HZ + HD / 2 - 0.25, 4, 3.4, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });   // baie
+  box(HX + 0.5, 5.55, HZ + HD / 2 - 0.2, 9, 4.1, 0.4, wallC, { studs: false, noRoute: true });   // trumeau : ferme la façade entre le rez-de-chaussée et l'étage
+  box(HX - 1.25, 2, HZ + HD / 2 - 0.2, 5.5, 3, 0.4, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true });   // baie vitrée (vitrage solide)
+  box(HX + 4.75, 2, HZ + HD / 2 - 0.2, 0.5, 3, 0.4, wallC, { studs: false, noRoute: true });   // meneau : ne laisse ouverte que la porte, dans l'axe du perron
   for (const [fx, fy] of [[-8, 2.4], [8, 2.4], [-8, 7], [-2.5, 7], [3, 7], [8, 7]]) { box(HX + fx, fy, HZ + HD / 2 - 0.25, 3, 1.8, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(HX + fx, fy + 1.05, HZ + HD / 2 - 0.32, 3.3, 0.2, 0.3, roof, { deco: true, studs: false }); }
   for (const side of [-1, 1]) for (const fy of [2.4, 7]) box(HX + side * (HW / 2 - 0.25), fy, HZ - 3, 0.1, 1.8, 3, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
   {   // plancher de l'étage percé d'une trémie (cage d'ascenseur / escalier)
-    const OX = HX + 8, OZ = HZ + 4.4, OW = 4.2, OD = 4.2, w0 = HW - 0.8, d0 = HD - 0.8, x0 = HX - w0 / 2, x1 = HX + w0 / 2, z0 = HZ - d0 / 2, z1 = HZ + d0 / 2;
+    const OX = HX + 8, OZ = mine ? HZ + 4.4 : HZ + 4, OW = 4.2, OD = mine ? 4.2 : 8, w0 = HW - 0.8, d0 = HD - 0.8, x0 = HX - w0 / 2, x1 = HX + w0 / 2, z0 = HZ - d0 / 2, z1 = HZ + d0 / 2;
     const hx0 = Math.max(x0, OX - OW / 2), hx1 = Math.min(x1, OX + OW / 2), hz0 = Math.max(z0, OZ - OD / 2), hz1 = Math.min(z1, OZ + OD / 2);
     const put = (a, b, c, d) => { if (b - a > 0.05 && d - c > 0.05) box((a + b) / 2, F + 0.6, (c + d) / 2, b - a, 0.3, d - c, 0xe6ded0, { studs: false, noRoute: true }); };
     put(x0, hx0, z0, z1); put(hx1, x1, z0, z1); put(hx0, hx1, z0, hz0); put(hx0, hx1, hz1, z1);
@@ -2509,33 +2543,38 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   plat(HX + 3, 0.55, HZ + HD / 2 + 1.6, 6, 3, 0xe8e2d4, { studs: false, noRoute: true }, 0.12);
   for (const dx of [-2.2, 2.2]) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 3.6, 12), lam(0xffffff)); col.position.set(HX + 3 + dx, 2.3, HZ + HD / 2 + 2.4); worldGroup.add(col); }
   box(HX + 3, 4.3, HZ + HD / 2 + 2.4, 6.4, 0.4, 3.4, roof, { deco: true, studs: false });
-  if (!mine) {   // villa voisine : même plan, meublée (salon, cuisine, chambres, piscine, jardin)
+  // piscine et terrasse : à l'est, dégagées de l'allée piétonne
+  const PX = vx + 13.6, PZ = vz + 11;
+  plat(PX + 0.2, 0.42, PZ, 12, 13, 0xe8e2d4, { studs: false, noRoute: true }, 0.12);
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) { const tx = PX - 5.3 + i * 2.1, tz = PZ - 5.3 + j * 2.1;
+    if ((i + j) % 2 === 0 && (Math.abs(tx - PX) > 5.2 || Math.abs(tz - PZ) > 4.9)) box(tx, 0.43, tz, 1.9, 0.02, 1.9, 0xd8d2c4, { deco: true, noEdges: true, studs: false }); }
+  box(PX, 0.42, PZ, 10, 0.1, 9, 0x9fdcff, { studs: false, noRoute: true }); box(PX, 0.1, PZ, 9, 0.6, 8, 0x2f9be6, { studs: false, noRoute: true, noEdges: true });
+  box(PX, 0.5, PZ, 9, 1, 8, 0, { material: new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.6 }), deco: true, noEdges: true, noShadow: true });
+  for (const [ox, oz, ow, od] of [[PX, PZ - 4.7, 10.6, 0.6], [PX, PZ + 4.7, 10.6, 0.6], [PX - 5, PZ, 0.6, 9.4], [PX + 5, PZ, 0.6, 9.4]]) box(ox, 0.5, oz, ow, 0.4, od, 0xe8e2d4, { studs: false, noRoute: true });
+  for (const dz of [-2.2, 2.2]) { const ch = new THREE.Mesh(unitRound, lam(0xffffff)); ch.scale.set(2.2, 0.14, 0.9); ch.position.set(PX - 6.6, 0.72, PZ + dz); ch.rotation.z = 0.18; worldGroup.add(ch); }
+  { const par = new THREE.Mesh(new THREE.ConeGeometry(1.8, 0.7, 12), lam(0xff5c5c)); par.position.set(PX - 6.6, 2.9, PZ + 4.9); worldGroup.add(par); const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.8, 8), lam(0xf4f6fa)); pl.position.set(PX - 6.6, 1.6, PZ + 4.9); worldGroup.add(pl); }
+  box(vx + 14.5, 4.4, FZ + 0.4, 6, 1, 0.15, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(mine ? '🏠 MA VILLA' : (opt.name || '🏡 VILLA')) }), deco: true, noEdges: true });
+  if (!mine) {   // villa voisine : même plan, meublée (salon, cuisine, chambres)
     for (const dz of [-3, 3]) { const w = new THREE.Mesh(unitRound, lam(0xfff2b0)); w.scale.set(2.2, 1.5, 0.06); w.position.set(HX + dz * 2.5, 7, HZ + HD / 2 - 0.35); worldGroup.add(w); }
-    sofa(HX - 6, HZ + 2, Math.PI, pickOne([0x5a3a22, 0x2b3550, 0x6b4423])); sofa(HX - 10, HZ - 2, Math.PI / 2, 0x5a3a22);
-    box(HX - 7.5, 0.85, HZ - 1, 2.6, 0.14, 1.4, 0x3b2a1a, { deco: true, studs: false });
-    tvSet(HX - 3.4, HZ - 4.4, Math.PI / 2, 3);
-    box(HX - 7.5, 0.62, HZ - 0.5, 7, 0.04, 6, pickOne([0xb03a2e, 0x2f6fd0, 0x5cc453]), { deco: true, noEdges: true, studs: false });
-    const kx2 = HX + 5, kz2 = HZ - 4.2;
-    box(kx2, 1.0, kz2 - 2.6, 9, 1, 1.2, 0xf4f6fa, { studs: false, noRoute: true }); box(kx2, 1.55, kz2 - 2.6, 9.2, 0.12, 1.3, 0x2b2f3a, { deco: true, studs: false });
-    for (let i = 0; i < 4; i++) box(kx2 - 3.3 + i * 2.2, 3.1, kz2 - 2.9, 2, 1.4, 0.6, 0xe8e2d4, { deco: true, studs: false });
-    box(kx2 + 5, 1.7, kz2 - 2.2, 2.4, 3.4, 1.6, 0xc9ced8, { studs: false, noRoute: true });   // frigo
-    box(kx2 - 0.5, 0.95, kz2 + 1, 4.4, 1.9, 2, 0xe8e2d4, { studs: false, noRoute: true }); box(kx2 - 0.5, 1.95, kz2 + 1, 4.8, 0.12, 2.3, 0x2b2f3a, { deco: true, studs: false });
-    box(HX - 1, 0.9, HZ + 4.5, 3.4, 0.14, 1.8, 0x6b4423, { deco: true, studs: false }); for (const [dx, dz] of [[-1.5, -0.7], [1.5, -0.7], [-1.5, 0.7], [1.5, 0.7]]) box(HX - 1 + dx, 0.45, HZ + 4.5 + dz, 0.14, 0.9, 0.14, 0x6b4423, { deco: true, studs: false });
-    for (const dx of [-1.1, 1.1]) for (const dz of [-1.4, 1.4]) box(HX - 1 + dx, 0.5, HZ + 4.5 + dz, 0.6, 0.1, 0.6, 0x5a3a22, { deco: true, studs: false });
+    sofa(HX - 6, HZ + 2, Math.PI, pickOne([0x5a3a22, 0x2b3550, 0x6b4423]), FY); sofa(HX - 10, HZ - 2, Math.PI / 2, 0x5a3a22, FY);
+    box(HX - 7.5, FY + 0.35, HZ - 1, 2.6, 0.14, 1.4, 0x3b2a1a, { deco: true, studs: false });
+    tvSet(HX - 3.4, HZ - 4.4, Math.PI / 2, 3, FY);
+    box(HX - 7.5, FY + 0.02, HZ - 0.5, 7, 0.04, 6, pickOne([0xb03a2e, 0x2f6fd0, 0x5cc453]), { deco: true, noEdges: true, studs: false });
+    villaKitchen(HX, HZ, false, FY);
+    box(HX - 1, FY + 0.4, HZ + 4.5, 3.4, 0.14, 1.8, 0x6b4423, { deco: true, studs: false }); for (const [dx, dz] of [[-1.5, -0.7], [1.5, -0.7], [-1.5, 0.7], [1.5, 0.7]]) box(HX - 1 + dx, FY + 0.2, HZ + 4.5 + dz, 0.14, 0.9, 0.14, 0x6b4423, { deco: true, studs: false });
+    for (const dx of [-1.1, 1.1]) for (const dz of [-1.4, 1.4]) box(HX - 1 + dx, FY + 0.25, HZ + 4.5 + dz, 0.6, 0.1, 0.6, 0x5a3a22, { deco: true, studs: false });
     // étage : deux chambres meublées
-    box(HX - 1, F + 1.9, HZ - 1, 0.4, 3.4, HD - 5, wallC, { studs: false, noRoute: true });
+    box(HX - 1, F + 2.75, HZ - 1, 0.4, 4.3, HD - 5, wallC, { studs: false, noRoute: true });
     for (const bx3 of [HX - 6, HX + 5]) { const g2 = new THREE.Group(); g2.position.set(bx3, F + 0.75, HZ - 3.5); worldGroup.add(g2);
       const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g2.add(m); };
       add(3.2, 0.5, 4.2, 0, 0.35, 0, 0x6b4423); add(3.1, 0.4, 4, 0, 0.75, 0, 0xffffff); add(3.1, 0.12, 2.2, 0, 0.98, 0.9, pickOne([0x4f8dff, 0xff7ad9, 0x5cc453])); add(3.4, 1.5, 0.25, 0, 0.9, -2.2, 0x8b5a2b);
       tvSet(bx3, HZ + 4, Math.PI, 2.4, F + 0.75); box(bx3, F + 0.78, HZ + 0.5, 5, 0.04, 5, pickOne([0xb03a2e, 0x2f6fd0]), { deco: true, noEdges: true, studs: false });
       box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); }
-    // escalier intérieur (les voisins n'ont pas d'ascenseur)
-    for (let i = 0; i < 10; i++) box(HX + 9 - i * 0.1, 0.6 + i * 0.5, HZ + 5.5 - i * 1.05, 2.6, (i + 1) * 0.5, 1.1, 0xe6ded0, { studs: false, noRoute: true });
-    for (const [dx, dz] of [[-18, -16], [18, -16], [-18, 16], [18, 6]]) palm(vx + dx, vz + dz);
-    plat(vx + 14, 0.45, vz + 10, 9, 8, 0x9fdcff, { studs: false, noRoute: true }, 0.1); box(vx + 14, 0.55, vz + 10, 8, 1, 7, 0, { material: new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.6 }), deco: true, noEdges: true, noShadow: true });
-    for (const dz of [-2, 2]) { const ch = new THREE.Mesh(unitRound, lam(0xffffff)); ch.scale.set(2.2, 0.14, 0.9); ch.position.set(vx + 7.5, 0.72, vz + 10 + dz); ch.rotation.z = 0.18; worldGroup.add(ch); }
-    box(vx + 8, 4.4, vz + 20.6, 6, 1, 0.15, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(opt.name || '🏡 VILLA') }), deco: true, noEdges: true });
-    city.zones.push({ name: opt.name || 'Villa', emoji: '🏡', x1: vx - 23, x2: vx + 23, z1: vz - 21, z2: vz + 21, hint: `🏡 ${opt.name || 'Villa'} : villa du quartier (salon, cuisine, chambres, piscine)` });
+    // escalier intérieur (les voisins n'ont pas d'ascenseur) : 12 marches de 0,40 m, sous la limite de 0,60 m qu'on peut franchir
+    for (let i = 0; i < 12; i++) { const top = 0.5 + (i + 1) * (F + 0.25 - 0.5) / 12; box(HX + 8, top / 2, HZ + 7.2 - i * 0.6, 2.6, top, 0.62, 0xe6ded0, { studs: false, noRoute: true }); }
+    box(HX + 6.6, F + 1.2, HZ + 4, 0.2, 1.1, 8, 0xc9a84c, { deco: true, studs: false });   // garde-corps de la trémie
+    for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
+    city.zones.push({ name: opt.name || 'Villa', emoji: '🏡', x1: vx - HP - 1, x2: vx + HP + 1, z1: vz - HP - 1, z2: vz + HP + 1, hint: `🏡 ${opt.name || 'Villa'} : villa du quartier (salon, cuisine, chambres, piscine)` });
     return;
   }
   // ---------- MA VILLA : intérieur ----------
@@ -2554,67 +2593,41 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   box(EX - 2.6, F + 0.72, EZ, 2.2, 0.24, 3.2, 0xe6ded0, { studs: false, noRoute: true });   // palier de sortie à l'étage
   box(EX - 3.4, 3.4, EZ, 0.1, 0.7, 2.4, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🛗 ASCENSEUR') }), deco: true, noEdges: true });
   // salon
-  sofa(HX - 6, HZ + 2, Math.PI, 0x5a3a22); sofa(HX - 10, HZ - 2, Math.PI / 2, 0x5a3a22);
-  box(HX - 7.5, 0.85, HZ - 1, 2.6, 0.14, 1.4, 0x3b2a1a, { deco: true, studs: false }); for (const dx of [-1, 1]) box(HX - 7.5 + dx, 0.45, HZ - 1, 0.16, 0.8, 0.16, 0x3b2a1a, { deco: true, studs: false });
-  tvSet(HX - 3.4, HZ - 4.4, Math.PI / 2, 3.2);
-  box(HX - 7.5, 0.62, HZ - 0.5, 7, 0.04, 6, 0xb03a2e, { deco: true, noEdges: true, studs: false });
-  // cuisine américaine
-  const KX = HX + 5, KZ = HZ - 4.2;
-  box(KX, 1.0, KZ - 2.6, 9, 1, 1.2, 0xf4f6fa, { studs: false, noRoute: true }); box(KX, 1.55, KZ - 2.6, 9.2, 0.12, 1.3, 0x2b2f3a, { deco: true, studs: false });
-  for (let i = 0; i < 4; i++) { box(KX - 3.3 + i * 2.2, 3.1, KZ - 2.9, 2, 1.4, 0.6, 0xe8e2d4, { deco: true, studs: false }); box(KX - 3.3 + i * 2.2, 1.6, KZ - 2.05, 1.9, 0.06, 0.05, 0xc9a84c, { deco: true, studs: false }); }
-  const fr = new THREE.Group(); fr.position.set(KX + 5, 0, KZ - 2.2); worldGroup.add(fr);
-  const fbody = new THREE.Mesh(unitRound, lam(0xc9ced8)); fbody.scale.set(2.4, 3.4, 1.6); fbody.position.y = 1.7; fbody.castShadow = true; fr.add(fbody);
-  for (const dx of [-0.58, 0.58]) { const dr = new THREE.Mesh(unitRound, lam(0xdfe4ea)); dr.scale.set(1.1, 3.2, 0.12); dr.position.set(dx, 1.7, 0.82); fr.add(dr); const hd = new THREE.Mesh(unitRound, lam(0x8f98ab)); hd.scale.set(0.1, 1.6, 0.12); hd.position.set(dx > 0 ? 0.2 : -0.2, 1.9, 0.92); fr.add(hd); }
-  { const disp = new THREE.Mesh(unitRound, lam(0x2b2f3a)); disp.scale.set(0.7, 0.9, 0.08); disp.position.set(-0.55, 2.2, 0.9); fr.add(disp); }
-  box(KX + 5, 1.7, KZ - 2.2, 2.4, 3.4, 1.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
-  city.fridge = { x: KX + 5, z: KZ - 1.2 };
-  const SX = KX - 2.4, SZ = KZ - 2.6;
-  box(SX, 0.95, SZ, 2.4, 1.9, 1.2, 0xdfe4ea, { studs: false, noRoute: true }); box(SX, 1.62, SZ, 2.5, 0.14, 1.3, 0x2b2f3a, { deco: true, studs: false });
-  box(SX, 2.4, SZ - 0.3, 2.5, 1.4, 0.6, 0xc9ced8, { deco: true, studs: false });
-  city.burners = [];
-  for (let i = 0; i < 4; i++) { const bx2 = SX - 0.6 + (i % 2) * 1.2, bz2 = SZ - 0.28 + Math.floor(i / 2) * 0.56; const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 6, 14), lam(0x2b2f3a)); ring.rotation.x = Math.PI / 2; ring.position.set(bx2, 1.7, bz2); worldGroup.add(ring); const fl = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.06, 6, 14), neonMat(0x4f8dff)); fl.rotation.x = Math.PI / 2; fl.position.set(bx2, 1.73, bz2); fl.visible = false; worldGroup.add(fl); const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 10), lam(0xff5c5c)); knob.rotation.x = Math.PI / 2; knob.position.set(bx2, 1.35, SZ + 0.62); worldGroup.add(knob); city.burners.push({ x: bx2, z: bz2, ring, fl, knob, on: false, food: null, mesh: null, t: 0 }); }
-  const pan = new THREE.Group(); pan.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 0.16, 16), lam(0x2b2f3a))); const ph = new THREE.Mesh(unitRound, lam(0x1b1b1b)); ph.scale.set(0.7, 0.06, 0.08); ph.position.set(0.6, 0.02, 0); pan.add(ph); pan.position.set(city.burners[0].x, 1.78, city.burners[0].z); worldGroup.add(pan); city.pan = pan; city.panBurner = 0;
-  city.stove = { x: SX, z: SZ + 1.1 };
-  box(KX - 0.5, 0.95, KZ + 1, 4.4, 1.9, 2, 0xe8e2d4, { studs: false, noRoute: true }); box(KX - 0.5, 1.95, KZ + 1, 4.8, 0.12, 2.3, 0x2b2f3a, { deco: true, studs: false });
-  for (const dx of [-1.4, 0, 1.4]) { box(KX - 0.5 + dx, 0.65, KZ + 2.6, 0.5, 0.1, 0.5, 0x5a3a22, { deco: true, studs: false }); box(KX - 0.5 + dx, 0.33, KZ + 2.6, 0.1, 0.65, 0.1, 0x8f98ab, { deco: true, studs: false }); }
-  box(HX - 1, 0.9, HZ + 4.5, 3.4, 0.14, 1.8, 0x6b4423, { deco: true, studs: false }); for (const [dx, dz] of [[-1.5, -0.7], [1.5, -0.7], [-1.5, 0.7], [1.5, 0.7]]) box(HX - 1 + dx, 0.45, HZ + 4.5 + dz, 0.14, 0.9, 0.14, 0x6b4423, { deco: true, studs: false });
-  for (const dx of [-1.1, 1.1]) for (const dz of [-1.4, 1.4]) { box(HX - 1 + dx, 0.5, HZ + 4.5 + dz, 0.6, 0.1, 0.6, 0x5a3a22, { deco: true, studs: false }); box(HX - 1 + dx, 0.85, HZ + 4.5 + dz + (dz > 0 ? 0.28 : -0.28), 0.6, 0.7, 0.08, 0x5a3a22, { deco: true, studs: false }); }
+  sofa(HX - 6, HZ + 2, Math.PI, 0x5a3a22, FY); sofa(HX - 10, HZ - 2, Math.PI / 2, 0x5a3a22, FY);
+  box(HX - 7.5, FY + 0.35, HZ - 1, 2.6, 0.14, 1.4, 0x3b2a1a, { deco: true, studs: false }); for (const dx of [-1, 1]) box(HX - 7.5 + dx, FY + 0.2, HZ - 1, 0.16, 0.8, 0.16, 0x3b2a1a, { deco: true, studs: false });
+  tvSet(HX - 3.4, HZ - 4.4, Math.PI / 2, 3.2, FY);
+  box(HX - 7.5, FY + 0.02, HZ - 0.5, 7, 0.04, 6, 0xb03a2e, { deco: true, noEdges: true, studs: false });
+  villaKitchen(HX, HZ, true, FY);
+  box(HX - 1, FY + 0.4, HZ + 4.5, 3.4, 0.14, 1.8, 0x6b4423, { deco: true, studs: false }); for (const [dx, dz] of [[-1.5, -0.7], [1.5, -0.7], [-1.5, 0.7], [1.5, 0.7]]) box(HX - 1 + dx, FY + 0.2, HZ + 4.5 + dz, 0.14, 0.9, 0.14, 0x6b4423, { deco: true, studs: false });
+  for (const dx of [-1.1, 1.1]) for (const dz of [-1.4, 1.4]) { box(HX - 1 + dx, FY + 0.25, HZ + 4.5 + dz, 0.6, 0.1, 0.6, 0x5a3a22, { deco: true, studs: false }); box(HX - 1 + dx, FY + 0.6, HZ + 4.5 + dz + (dz > 0 ? 0.28 : -0.28), 0.6, 0.7, 0.08, 0x5a3a22, { deco: true, studs: false }); }
   // étage : deux chambres
-  box(HX - 1, F + 1.9, HZ - 1, 0.4, 3.4, HD - 5, wallC, { studs: false, noRoute: true });
+  box(HX - 1, F + 2.75, HZ - 1, 0.4, 4.3, HD - 5, wallC, { studs: false, noRoute: true });
   villaBed(HX - 6, HZ - 3.5, 0, F + 0.75); villaBed(HX + 5, HZ - 3.5, 0, F + 0.75);
   tvSet(HX - 6, HZ + 4, Math.PI, 2.6, F + 0.75); tvSet(HX + 5, HZ + 4, Math.PI, 2.6, F + 0.75);
   for (const bx3 of [HX - 6, HX + 5]) { box(bx3, F + 0.78, HZ + 0.5, 5.5, 0.04, 5.5, 0xb03a2e, { deco: true, noEdges: true, studs: false }); box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); for (let i = 0; i < 5; i++) box(bx3 - 1.1 + i * 0.55, F + 1.9, HZ - 6.3, 0.4, 1.6, 0.2, pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453]), { deco: true, studs: false }); const ch = new THREE.Mesh(unitRound, lam(0xc9a84c)); ch.scale.set(1.1, 0.12, 1.1); ch.position.set(bx3, F + 3.4, HZ); worldGroup.add(ch); const bl = new THREE.Mesh(unitRound, neonMat(0xfff2b0)); bl.scale.set(0.7, 0.1, 0.7); bl.position.set(bx3, F + 3.3, HZ); worldGroup.add(bl); }
-  // emplacements de décoration (les objets achetés se posent ici)
+  // emplacements de décoration (les objets achetés se posent ici) — tous vérifiés libres de tout meuble
   city.decorSlots = [
     { x: HX - 10.4, y: 2.4, z: HZ - 2, wall: true, ry: Math.PI / 2, n: 'Mur du salon' },
     { x: HX - 10.4, y: 2.4, z: HZ + 3, wall: true, ry: Math.PI / 2, n: 'Mur de l\'entrée' },
     { x: HX + 2.5, y: 2.4, z: HZ - 7.6, wall: true, ry: 0, n: 'Mur de la cuisine' },
     { x: HX - 9.4, y: 0.6, z: HZ + 5.6, n: 'Coin du salon' },
     { x: HX - 1.5, y: 0.6, z: HZ + 6.4, n: 'Près de l\'entrée' },
-    { x: HX + 9.5, y: 0.6, z: HZ - 6, n: 'Coin cuisine' },
+    { x: HX + 9.5, y: 0.6, z: HZ - 3, n: 'Coin cuisine' },
     { x: HX - 9.6, y: F + 0.75, z: HZ + 5.6, n: 'Chambre gauche' },
-    { x: HX + 9.6, y: F + 0.75, z: HZ + 5.6, n: 'Chambre droite' },
+    { x: HX + 9.5, y: F + 0.75, z: HZ - 5, n: 'Chambre droite' },
     { x: HX - 1, y: F + 2.4, z: HZ - 7.6, wall: true, ry: 0, n: 'Mur de l\'étage' },
   ];
-  // livraison des achats devant le perron
-  city.delivery = { x: HX + 3, z: HZ + HD / 2 + 4.5 };
-  box(city.delivery.x, 0.36, city.delivery.z, 3.4, 0.06, 3.4, 0xd8d2c4, { deco: true, noEdges: true, studs: false });
-  box(city.delivery.x, 1.7, city.delivery.z + 1.9, 3, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('📦 LIVRAISONS') }), deco: true, noEdges: true }); box(city.delivery.x, 0.9, city.delivery.z + 1.9, 0.12, 1.6, 0.12, 0x3b4252, { studs: false, noRoute: true });
-  // piscine (côté est, loin de la maison) + terrasse
-  const PX = vx + 14, PZ = vz + 10;
-  plat(vx + 5, 0.42, vz + 9, 10, 12, 0xe8e2d4, { studs: false, noRoute: true }, 0.12);
-  for (let i = 0; i < 5; i++) for (let j = 0; j < 6; j++) if ((i + j) % 2 === 0) box(vx + 1 + i * 2, 0.43, vz + 4 + j * 2, 1.9, 0.02, 1.9, 0xd8d2c4, { deco: true, noEdges: true, studs: false });
-  box(PX, 0.42, PZ, 10, 0.1, 9, 0x9fdcff, { studs: false, noRoute: true }); box(PX, 0.1, PZ, 9, 0.6, 8, 0x2f9be6, { studs: false, noRoute: true, noEdges: true });
-  box(PX, 0.5, PZ, 9, 1, 8, 0, { material: new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.6 }), deco: true, noEdges: true, noShadow: true });
-  for (const [ox, oz, ow, od] of [[PX, PZ - 4.7, 10.6, 0.6], [PX, PZ + 4.7, 10.6, 0.6], [PX - 5, PZ, 0.6, 9.4], [PX + 5, PZ, 0.6, 9.4]]) box(ox, 0.5, oz, ow, 0.4, od, 0xe8e2d4, { studs: false, noRoute: true });
+  // livraison des achats sur l'allée, devant le perron
+  city.delivery = { x: WX, z: HZ + HD / 2 + 4.5 };
+  box(city.delivery.x, 0.5, city.delivery.z, 3, 0.06, 3, 0xc9a84c, { deco: true, noEdges: true, studs: false });
+  box(city.delivery.x + 2.2, 1.7, city.delivery.z, 0.1, 0.7, 3, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('📦 LIVRAISONS') }), deco: true, noEdges: true }); box(city.delivery.x + 2.2, 0.9, city.delivery.z, 0.12, 1.6, 0.12, 0x3b4252, { studs: false, noRoute: true });
   city.villaPool = { x1: PX - 4.5, x2: PX + 4.5, z1: PZ - 4, z2: PZ + 4, top: 1.0 };
-  for (const dz of [-2, 2]) { const ch = new THREE.Mesh(unitRound, lam(0xffffff)); ch.scale.set(2.2, 0.14, 0.9); ch.position.set(PX - 7.2, 0.72, PZ + dz); ch.rotation.z = 0.18; worldGroup.add(ch); }
-  { const par = new THREE.Mesh(new THREE.ConeGeometry(1.8, 0.7, 12), lam(0xff5c5c)); par.position.set(PX - 7.2, 2.9, PZ + 4.4); worldGroup.add(par); const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.8, 8), lam(0xf4f6fa)); pl.position.set(PX - 7.2, 1.6, PZ + 4.4); worldGroup.add(pl); }
-  // jardin : fontaine, palmiers, trampoline
-  const fo = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.7, 20), lam(0xe8e2d4)); fo.position.set(vx - 6, 0.65, vz + 4); worldGroup.add(fo); solids.push({ mesh: fo, x: vx - 6, y: 0.65, z: vz + 4, w: 4.4, h: 0.7, d: 4.4 });
-  const fw = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.2, 20), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); fw.position.set(vx - 6, 0.95, vz + 4); worldGroup.add(fw);
-  box(vx - 6, 1.6, vz + 4, 0.5, 1.6, 0.5, 0xe8e2d4, { deco: true, studs: false }); box(vx - 6, 2.7, vz + 4, 0.25, 1.2, 0.25, 0, { material: neonMat(0x9fdcff), deco: true, noEdges: true });
-  for (const [dx, dz] of [[-19, -16], [19, -16], [-19, 16], [19, 16], [-20, -4]]) palm(vx + dx, vz + dz);
+  // jardin : fontaine entre le garage et l'allée, palmiers, trampoline
+  const FX = vx - 1, FZ2 = vz + 9;
+  const fo = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.7, 20), lam(0xe8e2d4)); fo.position.set(FX, 0.65, FZ2); worldGroup.add(fo); solids.push({ mesh: fo, x: FX, y: 0.65, z: FZ2, w: 4.4, h: 0.7, d: 4.4 });
+  const fw = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.2, 20), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); fw.position.set(FX, 0.95, FZ2); worldGroup.add(fw);
+  box(FX, 1.6, FZ2, 0.5, 1.6, 0.5, 0xe8e2d4, { deco: true, studs: false }); box(FX, 2.7, FZ2, 0.25, 1.2, 0.25, 0, { material: neonMat(0x9fdcff), deco: true, noEdges: true });
+  for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
   const TX = vx - 15, TZ = vz - 12;
   const mat2 = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.2, 24), lam(0x2b3550)); mat2.position.set(TX, 1.5, TZ); worldGroup.add(mat2);
   const rim = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.18, 8, 24), lam(0x4f8dff)); rim.rotation.x = Math.PI / 2; rim.position.set(TX, 1.55, TZ); worldGroup.add(rim);
@@ -2623,26 +2636,65 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   for (let i = 0; i < 4; i++) box(TX - 1.4 + i * 0.9, 0.8 + i * 0.35, TZ + 3.4 - i * 0.3, 1.2, 0.25, 0.9, 0xc9ced8, { studs: false, noRoute: true });
   box(TX, 1.5, TZ, 5.6, 0.3, 5.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, bounce: Math.sqrt(2 * G * 7) });
   city.tramp = { x: TX, z: TZ, y: 1.65 };
-  box(vx + 8, 4.4, vz + 20.6, 6, 1, 0.15, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏠 MA VILLA') }), deco: true, noEdges: true });
-  for (const dz of [-8, 8]) lamp(vx + 21, vz + dz);
+  for (const dz of [-8, 8]) lamp(vx + HP - 1.4, vz + dz);
   city.villa = { x: vx, z: vz };
-  city.zones.push({ name: 'Villa', emoji: '🏠', x1: vx - 23, x2: vx + 23, z1: vz - 21, z2: vz + 21, hint: '🏠 Ta villa : garage sur la rue, ascenseur près de l\'entrée, cuisine, chambres à l\'étage, piscine et trampoline' });
+  city.zones.push({ name: 'Villa', emoji: '🏠', x1: vx - HP - 1, x2: vx + HP + 1, z1: vz - HP - 1, z2: vz + HP + 1, hint: '🏠 Ta villa : garage sur la rue, ascenseur près de l\'entrée, cuisine, chambres à l\'étage, piscine et trampoline' });
   loadDecor();
 }
+// cuisine commune à toutes les villas : plan de travail en deux tronçons de part et
+// d'autre de la cuisinière, frigo dégagé du mur est, îlot central.
+function villaKitchen(HX, HZ, mine, FY) {
+  const KX = HX + 5, KZ = HZ - 4.2;
+  const BZ = KZ - 2.6;                                     // axe du plan de travail (le long du mur nord)
+  const SX = KX - 0.6, SW = 2.4;                           // cuisinière
+  const RUN = [[HX + 0.4, SX - SW / 2], [SX + SW / 2, HX + 7.6]];   // deux tronçons de plan de travail
+  for (const [a, b] of RUN) { if (b - a < 0.3) continue; const cx = (a + b) / 2, w = b - a;
+    box(cx, FY + 0.5, BZ, w, 1, 1.2, 0xf4f6fa, { studs: false, noRoute: true }); box(cx, FY + 1.05, BZ, w + 0.2, 0.12, 1.3, 0x2b2f3a, { deco: true, studs: false }); }
+  for (const ux of [SX + 2.2, SX + 4.4]) if (ux < HX + 7) { box(ux, FY + 2.6, BZ - 0.3, 2, 1.4, 0.6, 0xe8e2d4, { deco: true, studs: false }); box(ux, FY + 1.1, BZ + 0.55, 1.9, 0.06, 0.05, 0xc9a84c, { deco: true, studs: false }); }
+  // frigo : plaqué au mur nord, dégagé du mur est de la maison
+  const FRX = HX + 8.6, FRZ = BZ + 0.2;
+  const fr = new THREE.Group(); fr.position.set(FRX, FY, FRZ); worldGroup.add(fr);
+  const fbody = new THREE.Mesh(unitRound, lam(0xc9ced8)); fbody.scale.set(2.2, 3.4, 1.4); fbody.position.y = 1.7; fbody.castShadow = true; fr.add(fbody);
+  for (const dx of [-0.53, 0.53]) { const dr = new THREE.Mesh(unitRound, lam(0xdfe4ea)); dr.scale.set(1, 3.2, 0.12); dr.position.set(dx, 1.7, 0.72); fr.add(dr); const hd = new THREE.Mesh(unitRound, lam(0x8f98ab)); hd.scale.set(0.1, 1.6, 0.12); hd.position.set(dx > 0 ? 0.18 : -0.18, 1.9, 0.82); fr.add(hd); }
+  { const disp = new THREE.Mesh(unitRound, lam(0x2b2f3a)); disp.scale.set(0.7, 0.9, 0.08); disp.position.set(-0.5, 2.2, 0.8); fr.add(disp); }
+  box(FRX, FY + 1.7, FRZ, 2.2, 3.4, 1.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  // cuisinière : four, hotte, et quatre feux (seule ma villa s'en sert pour cuisiner)
+  box(SX, FY + 0.95, BZ, SW, 1.9, 1.2, 0xdfe4ea, { studs: false, noRoute: true }); box(SX, FY + 1.62, BZ, SW + 0.1, 0.14, 1.3, 0x2b2f3a, { deco: true, studs: false });
+  box(SX, FY + 2.4, BZ - 0.3, SW + 0.1, 1.4, 0.6, 0xc9ced8, { deco: true, studs: false });
+  // îlot central
+  box(KX - 0.5, FY + 0.95, KZ + 1, 4.4, 1.9, 2, 0xe8e2d4, { studs: false, noRoute: true }); box(KX - 0.5, FY + 1.95, KZ + 1, 4.8, 0.12, 2.3, 0x2b2f3a, { deco: true, studs: false });
+  for (const dx of [-1.4, 0, 1.4]) { box(KX - 0.5 + dx, FY + 0.65, KZ + 2.6, 0.5, 0.1, 0.5, 0x5a3a22, { deco: true, studs: false }); box(KX - 0.5 + dx, FY + 0.33, KZ + 2.6, 0.1, 0.65, 0.1, 0x8f98ab, { deco: true, studs: false }); }
+  if (!mine) return;
+  city.fridge = { x: FRX, z: FRZ + 1.6 };
+  city.burners = [];
+  for (let i = 0; i < 4; i++) { const bx2 = SX - 0.6 + (i % 2) * 1.2, bz2 = BZ - 0.28 + Math.floor(i / 2) * 0.56;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 6, 14), lam(0x2b2f3a)); ring.rotation.x = Math.PI / 2; ring.position.set(bx2, FY + 1.7, bz2); worldGroup.add(ring);
+    const fl = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.06, 6, 14), neonMat(0x4f8dff)); fl.rotation.x = Math.PI / 2; fl.position.set(bx2, FY + 1.73, bz2); fl.visible = false; worldGroup.add(fl);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 10), lam(0xff5c5c)); knob.rotation.x = Math.PI / 2; knob.position.set(bx2, FY + 1.35, BZ + 0.62); worldGroup.add(knob);
+    city.burners.push({ x: bx2, z: bz2, ring, fl, knob, on: false, food: null, mesh: null, t: 0 }); }
+  const pan = new THREE.Group(); pan.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 0.16, 16), lam(0x2b2f3a)));
+  const ph = new THREE.Mesh(unitRound, lam(0x1b1b1b)); ph.scale.set(0.7, 0.06, 0.08); ph.position.set(0.6, 0.02, 0); pan.add(ph);
+  pan.position.set(city.burners[0].x, FY + 1.78, city.burners[0].z); worldGroup.add(pan); city.pan = pan; city.panBurner = 0;
+  city.stove = { x: SX, z: BZ + 1.1 };
+}
 function buildResidential() {   // avenues du quartier sud : les villas donnent sur la rue, feux et passages piétons aux carrefours
-  road(40, 196, 300, 9, 0, true);      // avenue principale (devant la rangée nord de villas)
-  road(60, 240, 260, 9, 0, true);      // avenue sud (devant la rangée sud)
-  for (const x of [36, 84, 132, 180]) road(x, 218, 9, 54, 0, true);   // rues transversales entre les plots
+  road(40, AV_N, 300, 9, 0, true);      // avenue nord (devant la rangée nord de villas)
+  road(70, AV_S, 280, 9, 0, true);      // avenue sud (devant la rangée sud)
+  for (const x of VILLA_STREETS) road(x, (AV_N + AV_S) / 2, 7, AV_S - AV_N + 18, 0, true);   // rues transversales, entre les plots
   road(-62, 172, 9, 50, 0, true); road(12, 172, 9, 50, 0, true);      // descentes depuis la ville vers l'école et l'hôpital
-  for (const [x, z] of [[36, 196], [84, 196], [132, 196], [180, 196], [36, 240], [84, 240], [132, 240], [180, 240], [-62, 196], [12, 196]]) {
-    crosswalk(x - 8, z, false, 9); crosswalk(x + 8, z, false, 9); crosswalk(x, z - 8, true, 9); crosswalk(x, z + 8, true, 9);
-    trafficLight(x + 6.2, z - 6.2, Math.PI, 'A'); trafficLight(x - 6.2, z + 6.2, 0, 'A'); trafficLight(x - 6.2, z - 6.2, -Math.PI / 2, 'B'); trafficLight(x + 6.2, z + 6.2, Math.PI / 2, 'B');
-    city.crossings.push([x, z]);
+  const onPlot = (x, z) => VILLAS.some(v => Math.abs(x - v.x) < VILLA_HALF + 1.5 && Math.abs(z - v.z) < VILLA_HALF + 1.5);
+  const onStreet = x => VILLA_STREETS.some(sx => Math.abs(x - sx) < 9) || Math.abs(x + 62) < 9 || Math.abs(x - 12) < 9;
+  for (const av of [AV_N, AV_S]) for (const x of VILLA_STREETS.concat(av === AV_N ? [-62, 12] : [])) {
+    crosswalk(x - 8, av, false, 9); crosswalk(x + 8, av, false, 9); crosswalk(x, av - 8, true, 9); crosswalk(x, av + 8, true, 9);
+    trafficLight(x + 6.2, av - 6.2, Math.PI, 'A'); trafficLight(x - 6.2, av + 6.2, 0, 'A'); trafficLight(x - 6.2, av - 6.2, -Math.PI / 2, 'B'); trafficLight(x + 6.2, av + 6.2, Math.PI / 2, 'B');
+    city.crossings.push([x, av]);
   }
-  for (let i = 0; i < 18; i++) { const lx = -70 + i * 14; if (Math.abs(lx - 36) > 9 && Math.abs(lx - 84) > 9 && Math.abs(lx - 132) > 9 && Math.abs(lx - 180) > 9) { lamp(lx, 190.5); lamp(lx, 201.5); } }
-  for (let i = 0; i < 14; i++) { const lx = -60 + i * 18; if (Math.abs(lx - 36) > 9 && Math.abs(lx - 84) > 9 && Math.abs(lx - 132) > 9) tree(lx, 0, 205.5, C.leaf); }
-  for (const [x, z, t] of [[-30, 196, '🎡 Ville ↑'], [-40, 196, '🏫 École ←'], [0, 196, '🏥 Hôpital ↓'], [60, 190, '🏡 Villas →']]) { box(x, 3.4, z + 6.5, 7, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(t) }), deco: true, noEdges: true }); box(x, 1.8, z + 6.5, 0.18, 3.2, 0.18, 0x3b4252, { studs: false, noRoute: true }); }
-  city.zones.push({ name: 'Quartier résidentiel', emoji: '🏡', x1: 34, x2: 182, z1: 150, z2: 262, hint: '🏡 Quartier résidentiel : 5 villas identiques, avenue avec feux et passages piétons' });
+  for (const av of [AV_N, AV_S]) for (const dz of [-5.6, 5.6]) for (let i = 0; i < 20; i++) {   // lampadaires sur les bas-côtés, jamais dans une parcelle
+    const lx = -70 + i * 14; if (!onStreet(lx) && !onPlot(lx, av + dz)) lamp(lx, av + dz);
+  }
+  for (let i = 0; i < 16; i++) { const lx = -60 + i * 18; if (!onStreet(lx) && !onPlot(lx, AV_S + 9)) tree(lx, 0, AV_S + 9, C.leaf); }
+  for (const [x, z, t] of [[-30, AV_N, '🎡 Ville ↑'], [-40, AV_N, '🏫 École ←'], [0, AV_N, '🏥 Hôpital ↓'], [24, AV_N, '🏡 Villas →']]) { box(x, 3.4, z + 6.5, 7, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(t) }), deco: true, noEdges: true }); box(x, 1.8, z + 6.5, 0.18, 3.2, 0.18, 0x3b4252, { studs: false, noRoute: true }); }
+  city.zones.push({ name: 'Quartier résidentiel', emoji: '🏡', x1: 30, x2: 190, z1: AV_N - 52, z2: AV_S + 14, hint: '🏡 Quartier résidentiel : 5 villas identiques, avenues avec feux et passages piétons' });
 }
 const DECOR = [
   { id: 'tableau', n: 'Tableau', e: '🖼️', p: 25, wall: true }, { id: 'miroir', n: 'Miroir doré', e: '🪞', p: 22, wall: true }, { id: 'horloge', n: 'Horloge', e: '🕰️', p: 18, wall: true },
@@ -2757,25 +2809,35 @@ function villaTickInner(dt) {
     const want = d < dist ? 1 : 0;
     if (want !== obj.want) { obj.want = want; if (want) sfx.tone(600, 0, .2, 'sine', .05, 900); }
     obj.open += (want - obj.open) * Math.min(1, dt * 1.6);
-    if (obj === city.gate) { obj.g.children[0].position.x = -4 - obj.open * 3.6; obj.g.children[1].position.x = 4 + obj.open * 3.6; }
-    else { obj.g.position.y = obj.open * 4.4; }
-    obj.solid.mesh.position.y = obj.open > 0.75 ? -50 : (obj === city.gate ? 1.4 : 2.2); obj.solid.y = obj.solid.mesh.position.y;
+    if (obj.kind === 'gate') {   // les deux battants coulissent derrière les piliers
+      const half = obj.w / 4, run = obj.w / 2;
+      obj.g.children[0].position.x = -half - obj.open * run; obj.g.children[1].position.x = half + obj.open * run;
+    } else {   // rideau de garage : il s'enroule sous le linteau au lieu de traverser le toit
+      obj.g.position.y = obj.open * 5.6;
+      for (const sl of obj.slats) sl.visible = sl.position.y + obj.g.position.y < obj.lintel;
+    }
+    obj.solid.mesh.position.y = obj.open > 0.75 ? -50 : obj.y0; obj.solid.y = obj.solid.mesh.position.y;
   }
   // ascenseur : monte quand on est dessus, redescend une fois vide
   const L = city.lift;
   if (L) {
-    const onIt = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && P.pos.y > L.y - 1 && P.pos.y < L.y + 3 && !drive.car && !P.sit && !P.ride;
+    const onIt = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && Math.abs(P.pos.y - L.y) < 1.4 && !drive.car && !P.sit && !P.ride;
+    const moving = Math.abs(L.y - L.target) > 0.05;
     L.rider = onIt;
-    if (onIt) {
-      if (simTime > (L.cd || 0) && Math.abs(L.y - L.target) < 0.05) { L.cd = simTime + 3; L.target = L.target === L.low ? L.high : L.low; msg(L.target === L.high ? '🛗 Montée…' : '🛗 Descente…', 1200); sfx.tone(700, 0, .12, 'sine', .05); }
-    }
+    // la cabine part 1,2 s après qu'on est monté ; elle ne repart pas tant qu'on reste dedans à l'arrivée
+    if (onIt && !moving) {
+      if (!L.since) { L.since = simTime; L.msgT = 0; }
+      if (simTime - L.since > 1.2 && simTime > (L.cd || 0)) { L.cd = simTime + 2.5; L.since = 0;
+        L.target = L.target === L.low ? L.high : L.low; msg(L.target === L.high ? '🛗 Montée…' : '🛗 Descente…', 1200); sfx.tone(700, 0, .12, 'sine', .05); }
+    } else if (!onIt) L.since = 0;
     const before = L.y; L.y += (L.target - L.y) * Math.min(1, dt * 2.2);
     L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
-    if (onIt) {   // le joueur est solidement porté par la cabine tant qu'il est dedans
-      P.pos.x = clamp(P.pos.x, L.x - 1.2, L.x + 1.2); P.pos.z = clamp(P.pos.z, L.z - 1.2, L.z + 1.2);
-      P.pos.y = L.y + 0.1; P.vel.y = 0; P.grounded = true; P.coyote = 0.12; P.standing = L.solid;
+    if (onIt) {
+      // pendant le trajet la cabine retient le joueur ; à l'arrivée elle le relâche, sinon on ne pourrait jamais sortir
+      if (moving) { P.pos.x = clamp(P.pos.x, L.x - 1.3, L.x + 1.3); P.pos.z = clamp(P.pos.z, L.z - 1.3, L.z + 1.3); }
+      if (P.pos.y < L.y + 0.1) { P.pos.y = L.y + 0.1; P.vel.y = 0; P.grounded = true; P.coyote = 0.12; P.standing = L.solid; }
       if (Math.abs(L.y - before) > 0.001 && simTime > (L.sndT || 0)) { L.sndT = simTime + 0.6; sfx.tone(220, 0, .2, 'sine', .02); }
-      if (Math.abs(L.y - L.target) < 0.05 && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 4; msg('🛗 Étage : sors vers la gauche', 1500); }
+      if (!moving && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 6; msg('🛗 Étage : sors vers la gauche', 1500); }
     }
   }
   if (city.tvs) for (const t of city.tvs) { t.material.emissive.setHSL((simTime * 0.08) % 1, 0.6, 0.35); }
@@ -4028,7 +4090,7 @@ function moveAxis(axis, amount, canStep) {
       } else { P.pos.y = o.y - o.h / 2 - P.h; P.vel.y = 0; }
     } else {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
-      if (rise > 0 && rise <= STEP_UP && canStep) { P.pos.y = top; continue; }
+      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }   // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
       const half = (axis === 'x' ? o.w : o.d) / 2;
       const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);

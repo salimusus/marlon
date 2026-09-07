@@ -35,6 +35,21 @@ window.__SHOT = {
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
 };
+window.__G = {
+  P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY,
+  loadWorld, cityReset, enterCar, exitCar, openUI, closeUI, takeAway, eatCarried, openFridge,
+  respawn, die, msg, chat, infraction, clearWanted, jailEnter, jailFree, startMission, endMission,
+  toggleMenu, applyMyLook, buildNav, navPath, throwGrenade, equipWeapon, fire, punch, kick, sitBench,
+  get solids() { return solids; }, get breakables() { return breakables; }, get shots() { return shots; },
+  get grenades() { return grenades; }, get debris() { return debrisParts; }, get uiOpen() { return uiOpen; },
+  get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
+  get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
+  set wallet(v) { wallet = v; }, set running(v) { running = v; },
+  bodyClass() { return document.body.className; },
+  hud() { return { jump: document.getElementById('jumpBtn').textContent, car: document.getElementById('carBtn').textContent,
+    punch: document.getElementById('punchBtn').textContent, emote: document.getElementById('emoteBtn').textContent }; },
+  arm() { return me.rig.armR.children.length; },
+};
 `;
 
 function serve(htmlFile) {

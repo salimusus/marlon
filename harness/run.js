@@ -33,6 +33,7 @@ globalThis.__G = {
   overlaps, step, cityStep, cityCommon, applyQuality, genPath, resetGame, respawn, cityReset,
   updateBot, policeTick, missionTick, villaTick, petsTick, driveStep, heliStep, shotsTick,
   enterCar, exitCar, terrainH, allAvatars, buildVilla, msg, chat,
+  pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
 };
 `;
 

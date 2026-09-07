@@ -65,6 +65,7 @@ class Obj3D {
   remove(...o) { for (const c of o) { const i = this.children.indexOf(c); if (i >= 0) { this.children.splice(i, 1); c.parent = null; } } return this; }
   clear() { this.children.slice().forEach(c => this.remove(c)); return this; }
   traverse(fn) { fn(this); for (const c of this.children.slice()) c.traverse(fn); }
+  getObjectByName(n) { let r = null; this.traverse(o => { if (!r && o.name === n) r = o; }); return r; }
   lookAt() { return this; }
   getWorldPosition(t) { let x = 0, y = 0, z = 0, n = this; while (n) { x += n.position.x; y += n.position.y; z += n.position.z; n = n.parent; } return (t || new V3()).set(x, y, z); }
   getWorldQuaternion(t) { return t || new Quat(); }

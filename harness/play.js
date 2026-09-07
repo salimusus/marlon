@@ -442,7 +442,7 @@ test('une voiture trop abîmée explose, et la réparation la remet à neuf', as
 test('on s\'assoit et on se relève sans sortir de la villa', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
-    const s2 = __G.city.benches.find(b => b.y > 0);   // un canapé du salon
+    const s2 = __G.city.benches.find(b => b.y > 0 && Math.abs(b.x - 60) < 16 && Math.abs(b.z - 168) < 16);   // le fauteuil du salon de MA villa
     if (!s2) return { ok: false };
     __G.P.pos.set(s2.x, s2.y + 1, s2.z + 1.2);
     __G.sitBench(s2);
@@ -629,6 +629,183 @@ test('300 images de simulation en ville sans exception', async p => {
   await p.waitForTimeout(5000);
   const s = await p.evaluate(()=>({t:__G.simTime, run:__G.running}));
   return { ok: s.t>3 && s.run, detail:`simTime=${s.t.toFixed(1)} s` };
+});
+
+
+test('on éjecte le conducteur et on vole une voiture du trafic', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
+    const c = __G.city.aiCars.find(v => v.driver && v.spd > 0);
+    if (!c) return { ok: false, pourquoi: 'aucune voiture du trafic avec conducteur' };
+    __G.police.wanted = 0; __G.police.crimeLevel = 0;
+    // on se plante à la portière : la voiture doit piler et proposer le vol
+    const cs = Math.cos(c.h), sn = Math.sin(c.h);
+    __G.P.pos.set(c.x + 2.2 * cs, 0.4, c.z - 2.2 * sn); __G.P.vel.set(0, 0, 0);
+    __G.cityStep(0.05);
+    const propose = __G.city.jackNear === c, arret = !!c.stopped;
+    const nom = c.driver.name, aiAvant = __G.city.aiCars.length;
+    __G.stealCar(c);
+    return { ok: true, propose, arret, nom,
+      auVolant: __G.drive.car === c, plusDansTrafic: !__G.city.aiCars.includes(c) && __G.city.cars.includes(c),
+      fuyards: __G.city.fleeing.length, wanted: __G.police.wanted, gravite: __G.police.crimeLevel, aiAvant };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  await p.evaluate(() => { __G.exitCar(); __G.clearWanted('fin'); });
+  const ok = r.propose && r.arret && r.auVolant && r.plusDansTrafic && r.fuyards === 1 && r.wanted >= 2 && r.gravite === 3;
+  return { ok, detail: `pile à la portière=${r.arret} · vol proposé=${r.propose} · au volant=${r.auVolant} · ${r.nom} s'enfuit (${r.fuyards}) · recherché ${r.wanted}★ gravité ${r.gravite}` };
+});
+
+test('le conducteur éjecté s\'enfuit à pied puis disparaît', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
+    __G.city.fleeing.length = 0;   // un vol d'un test précédent peut avoir laissé un fuyard
+    const c = __G.city.aiCars.find(v => v.driver);
+    __G.P.pos.set(c.x + 2.2, 0.4, c.z);
+    __G.stealCar(c); __G.exitCar();
+    const f = __G.city.fleeing[0]; const d0 = Math.hypot(f.x - __G.P.pos.x, f.z - __G.P.pos.z);
+    for (let i = 0; i < 40; i++) __G.cityStep(0.05);
+    const d1 = Math.hypot(f.x - __G.P.pos.x, f.z - __G.P.pos.z);
+    f.t = __G.simTime - 1; __G.cityStep(0.05);   // au bout de 14 s il s'efface
+    const reste = __G.city.fleeing.length;
+    __G.clearWanted('fin');
+    return { d0: +d0.toFixed(1), d1: +d1.toFixed(1), reste };
+  });
+  return { ok: r.d1 > r.d0 + 1 && r.reste === 0, detail: `s'éloigne de ${r.d0} m à ${r.d1} m, puis quitte la scène (${r.reste} restant)` };
+});
+
+test('la voiture du joueur démarre roues avant sur la ligne à damiers', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 118, hour: 12 });
+    __G.startCountdown(4);
+    const k = __G.drive.car;
+    if (!k) return { ok: false, pourquoi: 'aucun kart' };
+    // le kart roule vers -x : les roues avant sont à 1,3 m devant le centre
+    const avant = k.x + Math.sin(k.h) * 1.3;
+    __G.race.state = 'idle'; __G.exitCar();
+    return { ok: true, x: +k.x.toFixed(2), z: +k.z.toFixed(2), avant: +avant.toFixed(2), h: +k.h.toFixed(2) };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  const surPiste = r.z > 119.5 && r.z < 128.5;
+  return { ok: Math.abs(r.avant) < 0.15 && surPiste, detail: `centre (${r.x}, ${r.z}) → roues avant à x=${r.avant} (ligne à x=0), sur la piste=${surPiste}` };
+});
+
+test('le cinéma du parc projette un dessin animé', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 90, hour: 12 });
+    const ci = __G.city.cinema; if (!ci) return { ok: false, pourquoi: 'pas de cinéma' };
+    const bancs = __G.city.benches.filter(b => b.cine);
+    const t0 = ci.t, i0 = ci.i;
+    for (let k = 0; k < 400; k++) { ci.next = 0; __G.cinemaTick(0.05); }   // 20 s de projection
+    const change = ci.t !== t0 || ci.i !== i0;
+    // on s'assoit au premier rang : on doit regarder vers l'écran (+z)
+    const b = bancs.sort((x, y) => y.z - x.z)[0];
+    __G.P.sit = null; __G.sitBench(b);
+    return { ok: true, bancs: bancs.length, change, ecranZ: ci.z, bancZ: b.z, facing: +__G.P.facing.toFixed(2), assis: __G.P.sit === b };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  await p.evaluate(() => { __G.P.sit = null; });
+  const ok = r.bancs === 12 && r.change && r.assis && Math.abs(r.facing) < 0.01 && r.bancZ < r.ecranZ;
+  return { ok, detail: `${r.bancs} bancs face à l'écran (z ${r.bancZ} < ${r.ecranZ}), film qui avance=${r.change}, regard=${r.facing} (0 = vers l'écran)` };
+});
+
+// marche en ligne droite depuis un point de départ jusqu'à une condition
+// (yaw : 0 = on avance vers -z, -PI/2 = vers +x, PI = vers +z)
+async function marcher(p, vue, condition, maxMs = 60000) {
+  await p.evaluate(v => __SHOT.go(v), vue);
+  await p.waitForTimeout(400);
+  return await pousser(p, 'ArrowUp', condition, maxMs);
+}
+
+test('on entre à pied dans un hangar de la zone industrielle', async p => {
+  const vue = { world: 4, x: 82, y: 0.6, z: -20, facing: -Math.PI / 2, yaw: -Math.PI / 2, pitch: 0.3, dist: 9, hour: 12, hideHud: true };
+  const ok = await marcher(p, vue, () => __G.P.pos.x > 88);   // 88 = bien à l'intérieur (mur à 85,4)
+  const pos = await p.evaluate(() => ({ x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1) }));
+  return { ok, detail: `parti de x=82, arrivé en (${pos.x}, ${pos.z}) — l'entrepôt occupe x 85 → 99 (c'était un bloc plein)` };
+});
+
+test('on entre à pied dans une maison du quartier ouest', async p => {
+  const vue = { world: 4, x: -92, y: 0.6, z: -43, facing: 0, yaw: 0, pitch: 0.3, dist: 9, hour: 12, hideHud: true };
+  const ok = await marcher(p, vue, () => __G.P.pos.z < -49);
+  const pos = await p.evaluate(() => ({ x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1), y: +__G.P.pos.y.toFixed(2) }));
+  return { ok, detail: `parti de z=-43, arrivé en (${pos.x}, ${pos.z}) à y=${pos.y} — le salon est autour de z = -50` };
+});
+
+test('le hall des immeubles de la ville est ouvert', async p => {
+  const vue = { world: 4, x: -6, y: 0.6, z: -30, facing: 0, yaw: 0, pitch: 0.3, dist: 9, hour: 12, hideHud: true };
+  const ok = await marcher(p, vue, () => __G.P.pos.z < -34);
+  const pos = await p.evaluate(() => ({ x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1), y: +__G.P.pos.y.toFixed(2) }));
+  return { ok, detail: `parti de z=-30, arrivé en (${pos.x}, ${pos.z}) à y=${pos.y} — le hall est centré sur z = -35,5` };
+});
+
+test('le magasin de déco vend, livre et laisse poser une TV géante', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 46, y: 1, z: 58, hour: 12 });
+    const vit = __G.city.vitrines.filter(v => v.tab === 'deco');
+    const item = __G.DECOR.find(d => d.id === 'tvgeante');
+    if (!item) return { ok: false, pourquoi: 'pas de TV géante au catalogue' };
+    __G.city.parcels.length = 0;
+    __G.deliverDecor(item);
+    const colis = __G.city.parcels.length;
+    __G.P.deco = null;
+    __G.grabParcel(__G.city.parcels[0]);
+    const enMain = __G.P.deco && __G.P.deco.id;
+    // un emplacement mural de la villa
+    const mur = __G.city.decorSlots.findIndex(s2 => s2.wall);
+    const tvAvant = __G.city.tvs.length;
+    __G.city.slotNear = mur; __G.dropDecor();
+    const pose = __G.city.placed.find(d => d.slot === mur);
+    // remplacements successifs : ni écran fantôme, ni mur invisible, ni siège orphelin
+    const sol = __G.city.decorSlots.findIndex(s2 => !s2.wall);
+    __G.placeDecor('fauteuil', sol, true);
+    const solAvant = __G.solids.length, bancsAvant = __G.city.benches.length;
+    for (let i = 0; i < 3; i++) { __G.placeDecor('plante', sol, true); __G.placeDecor('fauteuil', sol, true); }
+    __G.placeDecor('tvgeante', mur, true);
+    const avecEcran = __G.city.tvs.length;
+    __G.placeDecor('tableau', mur, true);   // la TV remplacée par un tableau ne doit plus clignoter
+    const fuites = { sol: __G.solids.length - solAvant, bancs: __G.city.benches.length - bancsAvant,
+      ecranRetire: avecEcran - __G.city.tvs.length };
+    return { ok: true, vitrines: vit.length, colis, enMain, murOnly: !!__G.DECOR.find(d => d.id === 'tvgeante').wall,
+      posee: pose ? pose.id : null, tvPlus: __G.city.tvs.length - tvAvant, fuites };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  const propre = r.fuites.ecranRetire === 1 && r.fuites.sol === 0 && r.fuites.bancs === 0;
+  const ok = r.vitrines >= 8 && r.colis === 1 && r.enMain === 'tvgeante' && r.posee === 'tvgeante' && propre;
+  return { ok, detail: `${r.vitrines} présentoirs · livrée en colis=${r.colis} · en main=${r.enMain} · posée au mur=${r.posee} · rien ne fuit au remplacement (solides +${r.fuites.sol}, assises +${r.fuites.bancs}, écran retiré=${r.fuites.ecranRetire === 1})` };
+});
+
+test('le fusil tire comme le pistolet : un coup, cible verrouillée, touchée', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    const b = __G.bots[0];
+    __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
+    b.pos.set(112, 0.4, 78); b.ko = 0; b.dead = 0; b.hp = 100; b.wait = 9999; b.target = null; b.av.group.visible = true;
+    __G.bots.slice(1).forEach(o => { o.av.group.visible = false; });
+    __G.owned.add('arme:rifle'); __G.equipWeapon('rifle');
+    const n0 = __G.shots.length;
+    __G.P.fireCd = 0; __G.P.drawn = false; __G.fire();
+    const tirs = __G.shots.length - n0, lock = __G.P.lock ? __G.P.lock.nom : null;
+    for (let i = 0; i < 60; i++) __G.shotsTick(1 / 120);   // la balle parcourt la distance
+    return { tirs, lock, hp: __G.bots[0].hp, holster: __G.P.holsterT > __G.simTime, spread: __G.WEAPONS.rifle.spread };
+  });
+  await p.evaluate(() => { __G.equipWeapon(null); __G.bots.forEach(o => { o.av.group.visible = true; o.hp = 100; }); });
+  const ok = r.tirs === 1 && r.lock && r.hp < 100 && r.holster && r.spread <= 0.006;
+  return { ok, detail: `1 appui → ${r.tirs} balle · verrouillé sur ${r.lock} · bot à ${r.hp} PV · rengainage programmé=${r.holster} · dispersion ${r.spread}` };
+});
+
+test('E maintenu force bien le coffre de la banque', async p => {
+  await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const sf = __G.city.safes[0]; sf.open = false; sf.progress = 0;
+    __G.P.pos.set(sf.x, sf.y + 0.2, sf.z);
+  });
+  await p.waitForTimeout(600);
+  const vu = await p.evaluate(() => !!__G.city.safeNear);
+  await p.keyboard.down('KeyE');
+  const monte = await attendre(p, () => __G.city.safes[0].progress > 0.05, 25000);
+  const v = await p.evaluate(() => +(__G.city.safes[0].progress || 0).toFixed(2));
+  await p.keyboard.up('KeyE');
+  await p.evaluate(() => { __G.city.safes[0].progress = 0; __G.clearWanted('fin'); __G.police.alarmT = 0; });
+  return { ok: vu && monte, detail: `coffre détecté=${vu} · progression après maintien de E : ${Math.round(v * 100)} %` };
 });
 
 (async()=>{

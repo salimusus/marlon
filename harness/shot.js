@@ -9,7 +9,7 @@ const OUT = process.env.SHOT_DIR || path.join(ROOT, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
 // vues : [nom, x, y, z du joueur, orientation]
-const VIEWS = JSON.parse(fs.readFileSync(path.join(__dirname, 'views.json'), 'utf8'));
+const VIEWS = JSON.parse(fs.readFileSync(process.env.VUES || path.join(__dirname, 'views.json'), 'utf8'));
 
 
 const HOOK = `
@@ -52,6 +52,9 @@ window.__G = {
   aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget, explodeVehicle, sitBench, sleepBed, placeDecor, repairVisual, rideEnter, infraction,
   // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
   // sur la version d'origine pour pouvoir comparer les deux
+  cityStep, cityCommon, startCountdown, deliverDecor, grabParcel, dropDecor, DECOR, shotsTick, safesTick, keys, decorMesh,
+  stealCar: typeof stealCar === 'function' ? stealCar : null,
+  cinemaTick: typeof cinemaTick === 'function' ? cinemaTick : null,
   ctrlText: typeof ctrlText === 'function' ? ctrlText : null,
   castSolids: typeof castSolids === 'function' ? castSolids : null,
   rayBox: typeof rayBox === 'function' ? rayBox : null,

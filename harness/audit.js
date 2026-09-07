@@ -27,7 +27,7 @@ const gi = x => Math.round((x-MINX)/CS), gj = z => Math.round((z-MINZ)/CS);
 const mk = (hwPad, minTop) => {
   const g = new Uint8Array(nx*nz);
   for (const b of boxes) {
-    if (b.y1 < minTop || b.y0 > 2.6) continue;
+    if (b.y1 < minTop || b.y0 >= 1.95) continue;   // le joueur (1,90 m) passe sous un linteau
     if (b.o.material && b.o.material.visible === false && b.o.bounce) continue;
     for (let i = Math.max(0,gi(b.x0-hwPad)); i <= Math.min(nx-1,gi(b.x1+hwPad)); i++)
       for (let j = Math.max(0,gj(b.z0-hwPad)); j <= Math.min(nz-1,gj(b.z1+hwPad)); j++) g[j*nx+i] = 1;

@@ -34,6 +34,7 @@ globalThis.__G = {
   updateBot, policeTick, missionTick, villaTick, petsTick, driveStep, heliStep, shotsTick,
   enterCar, exitCar, terrainH, allAvatars, buildVilla, msg, chat,
   pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
+  schQuestion, schTirage, school, swingTick, sitSwing, CULT,
 };
 `;
 

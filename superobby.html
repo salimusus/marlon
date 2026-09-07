@@ -346,7 +346,7 @@ body.lobby #emoteBtn{display:none}
       <div class="shopgrid" id="schChoices" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr))"></div>
       <p class="sub" id="schScore"></p>
     </div>
-    <div class="row"><button class="btn sec" id="schClose">Sortir de la classe</button></div>
+    <div class="row"><button class="btn" id="schRelire">🔊 Relire la question</button><button class="btn sec" id="schClose">Sortir de la classe</button></div>
   </div>
 </div>
 <div class="overlay hidden" id="bankUI">
@@ -1281,8 +1281,11 @@ function swingTick(dt) {
     if (sw.rider === 'me' && sw.amp > 0.3 && Math.sign(prev) !== Math.sign(sw.ang)) sfx.whoosh();
     sw.piv.rotation.x = sw.ang;
     if (sw.rider === 'me') {
-      const seatX = sw.x, seatY = 3.55 - sw.L * Math.cos(sw.ang), seatZ = sw.z + sw.L * Math.sin(sw.ang);
-      const vz = sw.amp * w * Math.cos(sw.t * w) * sw.L * Math.cos(sw.ang), vy = sw.amp * w * Math.cos(sw.t * w) * sw.L * Math.sin(sw.ang);
+      // Le pivot tourne autour de x : la planche, en (0, −L, 0), part vers z − L·sin(ang).
+      // Le signe était inversé, le joueur oscillait donc du côté opposé au siège (jusqu'à 4,5 m d'écart).
+      const seatX = sw.x, seatY = 3.55 - sw.L * Math.cos(sw.ang), seatZ = sw.z - sw.L * Math.sin(sw.ang);
+      const dAng = sw.amp * w * Math.cos(sw.t * w);
+      const vz = -dAng * sw.L * Math.cos(sw.ang), vy = dAng * sw.L * Math.sin(sw.ang);
       // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,51 m plus bas, comme sur un banc
       P.pos.set(seatX, seatY - 0.46, seatZ); P.vel.set(0, vy, vz); P.facing = 0;
       if (P.jumpBuf > 0) { P.jumpBuf = 0; sw.rider = null; P.swing = null; P.vel.set(0, vy * 1.3 + 6, vz * 1.5); P.grounded = false; msg('🎠 Wouhou !', 700); sfx.jump(); }
@@ -2127,7 +2130,8 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.2, 10), lam(0xffffff)); mast.position.y = 2.1; spin.add(mast);
   const horses = [];
   for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3, hx = Math.cos(a) * 4, hz = Math.sin(a) * 4; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4, 6), lam(0xffd23f)); pole.position.set(hx, 2, hz); spin.add(pole); const h = new THREE.Group(); h.position.set(hx, 1.3, hz); h.rotation.y = -a; spin.add(h); const body = new THREE.Mesh(unitRound, lam([0xffffff, 0x8b4a2b, 0x1b1b1b, 0xd8c8a0, 0xff7ad9, 0x4f8dff][i])); body.scale.set(0.5, 0.6, 1.4); h.add(body); const head = new THREE.Mesh(unitRound, lam(0xffffff)); head.scale.set(0.4, 0.5, 0.5); head.position.set(0, 0.55, 0.75); h.add(head); const sad = new THREE.Mesh(unitRound, lam(0xff5c5c)); sad.scale.set(0.55, 0.15, 0.6); sad.position.y = 0.35; h.add(sad); for (const dz of [-0.45, 0.45]) for (const dx of [-0.15, 0.15]) { const leg = new THREE.Mesh(unitBox, lam(0xffffff)); leg.scale.set(0.12, 0.6, 0.12); leg.position.set(dx, -0.55, dz); h.add(leg); } horses.push({ g: h, a }); }
-  city.rides.push({ kind: 'carousel', n: 'le carrousel', e: '🎠', group: spin, horses, x: cx, z: cz, ang: 0, speed: 0.6, ex: cx + 6.5, ez: cz, rider: null });
+  city.rides.push({ kind: 'carousel', n: 'le carrousel', e: '🎠', group: spin, horses, x: cx, z: cz, ang: 0, speed: 0.6, ex: cx + 6.5, ez: cz, rayon: 5.5, rider: null });
+  sign(cx + 7.5, 0.05, cz, '🎠 E : monter sur un cheval', false, -Math.PI / 2);
   box(cx + 6.5, 3.2, cz - 2, 2.6, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎠 CARROUSEL') }), deco: true, noEdges: true }); box(cx + 6.5, 1.4, cz - 2, 0.15, 2.8, 0.15, 0x3b4252, { deco: true, studs: false });
   // stands : barbe à papa, tir aux canards (déco), ballons, guirlandes lumineuses, lettres SUPER OBBY
   const stand = (x, z, col, title) => { box(x, 1.4, z, 4, 0.1, 3, col, { deco: true, studs: false }); box(x, 0.9, z + 1, 4, 1, 0.8, C.wood, { studs: false, noRoute: true }); for (const dx of [-1.8, 1.8]) box(x + dx, 1.4, z, 0.12, 2.8, 0.12, 0xffffff, { deco: true, studs: false }); const roof = new THREE.Mesh(new THREE.ConeGeometry(3, 1.4, 4), lam(col)); roof.position.set(x, 3.5, z); roof.rotation.y = Math.PI / 4; worldGroup.add(roof); box(x, 2.9, z + 1.6, 3, 0.6, 0.08, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(title) }), deco: true, noEdges: true }); };
@@ -2563,57 +2567,282 @@ function buildRally() {   // terrain de rallye au nord : collines arrondies, tre
 const SCH_AGES = [{ k: 'a4', n: '4-6 ans', r: 4 }, { k: 'a7', n: '7-8 ans', r: 7 }, { k: 'a9', n: '9-10 ans', r: 11 }];
 const SCH_SUBJ = [{ k: 'math', n: 'Maths', e: '➕' }, { k: 'geo', n: 'Géométrie', e: '📐' }, { k: 'logi', n: 'Logique', e: '🧩' }, { k: 'cult', n: 'Culture générale', e: '🌍' }];
 const CULT = {
-  a4: [['De quelle couleur est le ciel par beau temps ?', ['bleu', 'vert', 'rouge', 'noir']], ['Combien de pattes a un chat ?', ['4', '2', '6', '8']], ['Quel animal fait « meuh » ?', ['la vache', 'le chien', 'le chat', 'le canard']], ['Où vivent les poissons ?', ['dans l\'eau', 'dans les arbres', 'sous terre', 'dans le ciel']], ['Quel fruit est jaune et courbé ?', ['la banane', 'la pomme', 'la fraise', 'le raisin']], ['Combien de doigts as-tu à une main ?', ['5', '4', '6', '10']]],
-  a7: [['Quelle est la capitale de la France ?', ['Paris', 'Lyon', 'Marseille', 'Nice']], ['Combien de jours dans une semaine ?', ['7', '5', '10', '12']], ['Quelle planète habitons-nous ?', ['la Terre', 'Mars', 'Vénus', 'Jupiter']], ['Quel est le plus grand océan ?', ['le Pacifique', 'l\'Atlantique', 'l\'Indien', 'l\'Arctique']], ['Combien de mois dans une année ?', ['12', '10', '7', '24']], ['Quel animal est le roi de la savane ?', ['le lion', 'le zèbre', 'la girafe', 'le singe']]],
-  a9: [['Quel est le plus haut sommet du monde ?', ['l\'Everest', 'le mont Blanc', 'le Kilimandjaro', 'les Andes']], ['Qui a peint la Joconde ?', ['Léonard de Vinci', 'Picasso', 'Monet', 'Van Gogh']], ['Quel gaz respirons-nous surtout ?', ['l\'azote', 'l\'oxygène', 'le CO2', 'l\'hélium']], ['Combien de continents ?', ['6 ou 7', '3', '10', '12']], ['Quel fleuve traverse Paris ?', ['la Seine', 'la Loire', 'le Rhône', 'la Garonne']], ['En quelle année a eu lieu la Révolution française ?', ['1789', '1515', '1918', '1492']]],
+  a4: [
+    ['De quelle couleur est le ciel par beau temps ?', ['bleu', 'vert', 'rouge', 'noir']],
+    ['Combien de pattes a un chat ?', ['4', '2', '6', '8']],
+    ['Quel animal fait « meuh » ?', ['la vache', 'le chien', 'le chat', 'le canard']],
+    ['Où vivent les poissons ?', ['dans l\'eau', 'dans les arbres', 'sous terre', 'dans le ciel']],
+    ['Quel fruit est jaune et courbé ?', ['la banane', 'la pomme', 'la fraise', 'le raisin']],
+    ['Combien de doigts as-tu à une main ?', ['5', '4', '6', '10']],
+    ['Quel animal fait « ouaf » ?', ['le chien', 'le chat', 'la vache', 'le mouton']],
+    ['De quelle couleur est la neige ?', ['blanche', 'noire', 'verte', 'orange']],
+    ['Quel animal a une trompe ?', ['l\'éléphant', 'le lion', 'la girafe', 'le lapin']],
+    ['Que met-on à ses pieds pour sortir ?', ['des chaussures', 'un chapeau', 'des gants', 'une écharpe']],
+    ['Quel animal fait « cot cot » et pond des œufs ?', ['la poule', 'le canard', 'le cheval', 'la souris']],
+    ['Combien de roues a un vélo ?', ['2', '3', '4', '1']],
+    ['Quel astre brille la nuit ?', ['la lune', 'le soleil', 'le nuage', 'la pluie']],
+    ['De quelle couleur est une tomate mûre ?', ['rouge', 'bleue', 'violette', 'grise']],
+    ['Quel animal saute et vit près de la mare ?', ['la grenouille', 'le chat', 'le poisson', 'l\'oiseau']],
+    ['Avec quoi écrit-on sur une feuille ?', ['un crayon', 'une cuillère', 'un ballon', 'une chaussure']],
+    ['Où dort-on la nuit ?', ['dans un lit', 'dans le frigo', 'dans la voiture', 'dans la piscine']],
+    ['Quel animal vit dans une ruche ?', ['l\'abeille', 'le poisson', 'le chien', 'la vache']],
+    ['Combien de pattes a un oiseau ?', ['2', '4', '6', '8']],
+    ['Quelle saison est la plus chaude ?', ['l\'été', 'l\'hiver', 'l\'automne', 'le printemps']],
+    ['Quel animal grimpe aux arbres et mange des bananes ?', ['le singe', 'le poisson', 'la vache', 'le canard']],
+    ['De quelle couleur est l\'herbe ?', ['verte', 'bleue', 'rouge', 'noire']],
+    ['Que boit-on quand on a soif ?', ['de l\'eau', 'du sable', 'de la peinture', 'de la farine']],
+    ['Quel animal donne le lait ?', ['la vache', 'le chat', 'la poule', 'le poisson']],
+    ['Combien as-tu d\'yeux ?', ['2', '1', '3', '4']],
+    ['Quel animal a des rayures noires et blanches ?', ['le zèbre', 'le lion', 'l\'ours', 'le renard']],
+    ['À quoi sert un parapluie ?', ['à se protéger de la pluie', 'à manger', 'à dormir', 'à nager']],
+    ['Quel jour vient juste après lundi ?', ['mardi', 'dimanche', 'jeudi', 'samedi']],
+    ['Quel animal de la mer a huit bras ?', ['la pieuvre', 'le requin', 'la baleine', 'le crabe']],
+    ['De quelle couleur est un citron ?', ['jaune', 'bleu', 'noir', 'rose']],
+    ['Où va-t-on pour apprendre à lire ?', ['à l\'école', 'à la piscine', 'au garage', 'au cinéma']],
+    ['Combien de pattes a une araignée ?', ['8', '4', '6', '2']],
+  ],
+  a7: [
+    ['Quelle est la capitale de la France ?', ['Paris', 'Lyon', 'Marseille', 'Nice']],
+    ['Combien de jours dans une semaine ?', ['7', '5', '10', '12']],
+    ['Quelle planète habitons-nous ?', ['la Terre', 'Mars', 'Vénus', 'Jupiter']],
+    ['Quel est le plus grand océan ?', ['le Pacifique', 'l\'Atlantique', 'l\'Indien', 'l\'Arctique']],
+    ['Combien de mois dans une année ?', ['12', '10', '7', '24']],
+    ['Quel animal est le roi de la savane ?', ['le lion', 'le zèbre', 'la girafe', 'le singe']],
+    ['Combien y a-t-il de saisons ?', ['4', '2', '6', '12']],
+    ['Quel est le plus grand animal du monde ?', ['la baleine bleue', 'l\'éléphant', 'le requin', 'la girafe']],
+    ['Quelles sont les couleurs du drapeau français ?', ['bleu, blanc, rouge', 'vert, blanc, rouge', 'bleu, jaune, rouge', 'noir, rouge, or']],
+    ['Quel est le plus grand désert chaud du monde ?', ['le Sahara', 'le Gobi', 'l\'Atacama', 'le Kalahari']],
+    ['Combien de minutes dans une heure ?', ['60', '30', '100', '24']],
+    ['Comment appelle-t-on le petit du chien ?', ['le chiot', 'le chaton', 'le poulain', 'l\'agneau']],
+    ['Quel animal change de couleur pour se cacher ?', ['le caméléon', 'le lion', 'le dauphin', 'le hibou']],
+    ['Quelle est la capitale de l\'Italie ?', ['Rome', 'Milan', 'Venise', 'Naples']],
+    ['Quel métal est attiré par un aimant ?', ['le fer', 'l\'or', 'le cuivre', 'l\'aluminium']],
+    ['Combien de secondes dans une minute ?', ['60', '100', '30', '24']],
+    ['Quel est le plus grand animal terrestre ?', ['l\'éléphant', 'le rhinocéros', 'l\'hippopotame', 'la girafe']],
+    ['Comment appelle-t-on celui qui étudie les étoiles ?', ['un astronome', 'un agronome', 'un géologue', 'un archéologue']],
+    ['Quelle est la capitale de l\'Espagne ?', ['Madrid', 'Barcelone', 'Séville', 'Valence']],
+    ['Combien de côtés a un hexagone ?', ['6', '5', '7', '8']],
+    ['Quel animal est un mammifère et sait voler ?', ['la chauve-souris', 'l\'aigle', 'le papillon', 'la mouche']],
+    ['Quel est le contraire de « chaud » ?', ['froid', 'mouillé', 'rapide', 'grand']],
+    ['Comment appelle-t-on le petit du chat ?', ['le chaton', 'le chiot', 'le veau', 'le poussin']],
+    ['Quel organe envoie le sang dans tout le corps ?', ['le cœur', 'le foie', 'le poumon', 'l\'estomac']],
+    ['Combien de lettres dans l\'alphabet français ?', ['26', '24', '30', '20']],
+    ['Quelle est la plus grosse planète du système solaire ?', ['Jupiter', 'Saturne', 'la Terre', 'Mars']],
+    ['Quel animal vit sur la banquise du pôle Nord ?', ['l\'ours polaire', 'le manchot', 'le chameau', 'le koala']],
+    ['Avec quoi fabrique-t-on le verre ?', ['du sable', 'du bois', 'du fer', 'de l\'eau']],
+    ['Dans quel pays vit le kangourou ?', ['en Australie', 'au Canada', 'au Brésil', 'en Chine']],
+    ['Combien d\'heures dans une journée ?', ['24', '12', '60', '30']],
+    ['Quel est le plus long fleuve de France ?', ['la Loire', 'la Seine', 'le Rhône', 'la Garonne']],
+    ['Quelle est la capitale de l\'Angleterre ?', ['Londres', 'Dublin', 'Édimbourg', 'Manchester']],
+  ],
+  a9: [
+    ['Quel est le plus haut sommet du monde ?', ['l\'Everest', 'le mont Blanc', 'le Kilimandjaro', 'les Andes']],
+    ['Qui a peint la Joconde ?', ['Léonard de Vinci', 'Picasso', 'Monet', 'Van Gogh']],
+    ['Quel gaz respirons-nous surtout ?', ['l\'azote', 'l\'oxygène', 'le CO2', 'l\'hélium']],
+    ['Combien de continents ?', ['6 ou 7', '3', '10', '12']],
+    ['Quel fleuve traverse Paris ?', ['la Seine', 'la Loire', 'le Rhône', 'la Garonne']],
+    ['En quelle année a eu lieu la Révolution française ?', ['1789', '1515', '1918', '1492']],
+    ['Qui a écrit « Les Misérables » ?', ['Victor Hugo', 'Molière', 'Zola', 'Balzac']],
+    ['Quelle est la capitale du Japon ?', ['Tokyo', 'Kyoto', 'Osaka', 'Pékin']],
+    ['Quel est le plus long fleuve du monde ?', ['le Nil', 'l\'Amazone', 'le Mississippi', 'le Danube']],
+    ['Combien d\'os dans le corps d\'un adulte ?', ['206', '150', '300', '412']],
+    ['Quelle planète est la plus proche du Soleil ?', ['Mercure', 'Vénus', 'Mars', 'la Terre']],
+    ['Qui a découvert la pénicilline ?', ['Alexander Fleming', 'Louis Pasteur', 'Marie Curie', 'Isaac Newton']],
+    ['Quelle est la formule chimique de l\'eau ?', ['H2O', 'CO2', 'O2', 'NaCl']],
+    ['À quelle vitesse voyage la lumière (environ) ?', ['300 000 km/s', '3 000 km/s', '30 km/s', '1 000 000 km/s']],
+    ['Qui a écrit « Le Petit Prince » ?', ['Saint-Exupéry', 'Jules Verne', 'La Fontaine', 'Perrault']],
+    ['Combien de joueurs par équipe sur un terrain de football ?', ['11', '9', '7', '5']],
+    ['Quelle est la capitale de l\'Allemagne ?', ['Berlin', 'Munich', 'Hambourg', 'Francfort']],
+    ['Quel est le plus grand pays du monde ?', ['la Russie', 'le Canada', 'la Chine', 'les États-Unis']],
+    ['Combien font la somme des angles d\'un triangle ?', ['180°', '90°', '360°', '270°']],
+    ['Quel océan borde la France à l\'ouest ?', ['l\'Atlantique', 'le Pacifique', 'l\'Indien', 'l\'Arctique']],
+    ['Qui a formulé la théorie de la relativité ?', ['Einstein', 'Newton', 'Galilée', 'Darwin']],
+    ['Quel métal est liquide à température ambiante ?', ['le mercure', 'le plomb', 'l\'étain', 'le zinc']],
+    ['Quelle est la monnaie de la France ?', ['l\'euro', 'le franc', 'la livre', 'le dollar']],
+    ['Combien de côtés a un dodécagone ?', ['12', '10', '8', '20']],
+    ['Quel est le plus petit os du corps humain ?', ['l\'étrier', 'le fémur', 'la clavicule', 'le radius']],
+    ['En quelle année l\'homme a-t-il marché sur la Lune ?', ['1969', '1959', '1975', '1981']],
+    ['Quel est le plus grand désert du monde ?', ['l\'Antarctique', 'le Sahara', 'le Gobi', 'l\'Arctique']],
+    ['Quelle est la capitale du Canada ?', ['Ottawa', 'Toronto', 'Montréal', 'Vancouver']],
+    ['Combien de cordes a une guitare classique ?', ['6', '4', '8', '12']],
+    ['Quel est l\'animal le plus rapide du monde ?', ['le faucon pèlerin', 'le guépard', 'l\'espadon', 'l\'autruche']],
+    ['De quelle couleur devient le papier tournesol dans un acide ?', ['rouge', 'bleu', 'vert', 'jaune']],
+    ['Quel est le principal composant de l\'air ?', ['l\'azote', 'l\'oxygène', 'le CO2', 'la vapeur d\'eau']],
+  ],
 };
+// Générateurs d'exercices : plusieurs modèles par matière et par niveau, tirés au sort.
+// Avant, il n'y avait qu'un ou deux modèles par case : on retombait sans cesse sur les mêmes.
 function schQuestion(subj, age) {
   const lvl = age === 'a4' ? 0 : age === 'a7' ? 1 : 2, uniq = a => [...new Set(a)];
-  const mk = (q, ans, wrongs, fig) => { const opts = uniq([String(ans), ...wrongs.map(String)]).slice(0, 4); while (opts.length < 4) opts.push(String(+ans + opts.length * 3 + 1)); return { q, a: String(ans), opts: opts.sort(() => Math.random() - 0.5), fig }; };
-  if (subj === 'math') {
-    if (lvl === 0) { const a = Math.floor(rnd(1, 10)), b = Math.floor(rnd(1, 10)); if (Math.random() < 0.5) return mk(`${a} + ${b} = ?`, a + b, [a + b + 1, a + b - 1, a + b + 2], `${'🍎'.repeat(a)} + ${'🍏'.repeat(b)}`); const c = Math.max(a, b), dd = Math.min(a, b); return mk(`${c} − ${dd} = ?`, c - dd, [c - dd + 1, c - dd + 2, c + dd]); }
-    if (lvl === 1) { const r = Math.random(); if (r < 0.4) { const a = Math.floor(rnd(2, 10)), b = Math.floor(rnd(2, 10)); return mk(`${a} × ${b} = ?`, a * b, [a * b + a, a * b - b, a * b + 3]); } if (r < 0.7) { const b = Math.floor(rnd(2, 9)), q = Math.floor(rnd(2, 9)); return mk(`${b * q} ÷ ${b} = ?`, q, [q + 1, q - 1, q + 2]); } const a = Math.floor(rnd(20, 90)), b = Math.floor(rnd(10, 60)); return mk(`${a} + ${b} = ?`, a + b, [a + b + 10, a + b - 10, a + b + 1]); }
-    const r = Math.random(); if (r < 0.35) { const a = Math.floor(rnd(11, 30)), b = Math.floor(rnd(11, 20)); return mk(`${a} × ${b} = ?`, a * b, [a * b + b, a * b - a, a * b + 10]); }
-    if (r < 0.7) { const n = Math.floor(rnd(2, 12)); return mk(`Combien font ${n}² (${n} × ${n}) ?`, n * n, [n * n + n, n * n - n, n * 2]); }
-    const p = Math.floor(rnd(2, 9)) * 10, pc = [10, 25, 50][Math.floor(rnd(0, 3))]; return mk(`Combien font ${pc} % de ${p} ?`, p * pc / 100, [p * pc / 50, p / 2, pc]);
-  }
-  if (subj === 'geo') {
-    if (lvl === 0) { const shapes = [['un carré', 4, '🟥'], ['un triangle', 3, '🔺'], ['un rectangle', 4, '▭'], ['un cercle', 0, '⚪']]; const sh = pickOne(shapes); if (sh[1] === 0) return mk('Combien de côtés a un cercle ?', 0, [1, 3, 4], '⚪'); return mk(`Combien de côtés a ${sh[0]} ?`, sh[1], [sh[1] + 1, sh[1] - 1, sh[1] + 2], sh[2]); }
-    if (lvl === 1) { const r = Math.random(); if (r < 0.4) { const c = Math.floor(rnd(2, 12)); return mk(`Le périmètre d'un carré de côté ${c} cm ?`, 4 * c, [c * 3, c * c, 4 * c + 4], '🟥'); } if (r < 0.7) { const a = Math.floor(rnd(2, 10)), b = Math.floor(rnd(2, 10)); return mk(`L'aire d'un rectangle ${a} × ${b} cm ?`, a * b, [2 * (a + b), a + b, a * b + a], '▭'); } return mk('Combien de faces a un cube ?', 6, [4, 8, 12], '🧊'); }
-    const r = Math.random(); if (r < 0.35) { const c = Math.floor(rnd(3, 12)); return mk(`L'aire d'un carré de côté ${c} cm ?`, c * c, [4 * c, c * 2, c * c + c], '🟥'); }
-    if (r < 0.7) { const b = Math.floor(rnd(4, 12)), h = Math.floor(rnd(2, 10)) * 2; return mk(`L'aire d'un triangle base ${b}, hauteur ${h} ?`, b * h / 2, [b * h, b + h, b * h / 4], '🔺'); }
-    return mk('Combien de degrés dans un angle droit ?', 90, [180, 45, 360], '📐');
-  }
-  if (subj === 'logi') {
-    if (lvl === 0) { const st = Math.floor(rnd(1, 4)), a = Math.floor(rnd(1, 5)); const seq = [a, a + st, a + 2 * st]; return mk(`Suite : ${seq.join(', ')}, … ?`, a + 3 * st, [a + 2 * st, a + 4 * st, a + 3 * st + 1]); }
-    if (lvl === 1) { const r = Math.random(); if (r < 0.5) { const a = Math.floor(rnd(2, 6)); const seq = [a, a * 2, a * 4]; return mk(`Suite : ${seq.join(', ')}, … ?`, a * 8, [a * 6, a * 5, a * 16]); } const n = Math.floor(rnd(3, 9)); return mk(`J'ai ${n} bonbons, j'en donne la moitié. Combien m'en reste-t-il ? (arrondi au plus proche)`, Math.round(n / 2), [n, n - 1, Math.round(n / 2) + 2]); }
-    const r = Math.random(); if (r < 0.5) { const seq = [1, 1, 2, 3, 5, 8, 13]; const i = Math.floor(rnd(3, 6)); return mk(`Suite : ${seq.slice(0, i).join(', ')}, … ?`, seq[i], [seq[i] + 1, seq[i] - 1, seq[i] + 3]); } const a = Math.floor(rnd(2, 8)); return mk(`Si 3 chats attrapent 3 souris en 3 minutes, combien de minutes pour que ${a} chats attrapent ${a} souris ?`, 3, [a, a * 3, 1]);
-  }
+  const mk = (q, ans, wrongs, fig) => {
+    const opts = uniq([String(ans), ...wrongs.map(String)]).slice(0, 4), n = +ans;
+    // Le remplissage retombait parfois sur une option déjà présente : deux cartes identiques,
+    // dont parfois deux fois la bonne réponse.
+    for (let k = 1; opts.length < 4 && k < 80 && Number.isFinite(n); k++) {
+      const c = n + (k % 2 ? Math.ceil(k / 2) : -Math.ceil(k / 2));
+      if (c < 0) continue; const v = String(c); if (!opts.includes(v)) opts.push(v);
+    }
+    for (const j of ['—', '??', '…']) if (opts.length < 4 && !opts.includes(j)) opts.push(j);
+    return { q, a: String(ans), opts: opts.sort(() => Math.random() - 0.5), fig };
+  };
+  const I = (a, b) => Math.floor(rnd(a, b));
+  const GEN = {
+    math: [
+      [ // 4-6 ans
+        () => { const a = I(1, 10), b = I(1, 10); return mk(`${a} + ${b} = ?`, a + b, [a + b + 1, a + b - 1, a + b + 2], `${'🍎'.repeat(a)} + ${'🍏'.repeat(b)}`); },
+        () => { const a = I(2, 11), b = I(1, a); return mk(`${a} − ${b} = ?`, a - b, [a - b + 1, a - b + 2, a + b], `${'🍬'.repeat(a)}`); },
+        () => { const a = I(1, 12); return mk(`Quel nombre vient juste après ${a} ?`, a + 1, [a - 1, a + 2, a + 3]); },
+        () => { const a = I(1, 10); return mk(`Le double de ${a}, c'est ?`, a * 2, [a * 2 + 1, a + 2, a * 3]); },
+        () => { const n = I(3, 10), e = pickOne(['⭐', '🐟', '🎈', '🍓', '🚗']); return mk(`Combien y a-t-il de ${e} ?`, n, [n + 1, n - 1, n + 2], e.repeat(n)); },
+        () => { const a = I(1, 20), b = I(1, 20); const g = Math.max(a, b); return mk(`Quel nombre est le plus grand : ${a} ou ${b} ?`, g, [Math.min(a, b), g + 1, g - 2]); },
+        () => { const a = I(1, 6), b = I(1, 6), c = I(1, 6); return mk(`${a} + ${b} + ${c} = ?`, a + b + c, [a + b + c + 1, a + b + c - 1, a + b + c + 2]); },
+        () => { const a = I(1, 10); return mk(`${a} + 10 = ?`, a + 10, [a + 1, a + 20, a + 11]); },
+      ],
+      [ // 7-8 ans
+        () => { const a = I(2, 10), b = I(2, 10); return mk(`${a} × ${b} = ?`, a * b, [a * b + a, a * b - b, a * b + 3]); },
+        () => { const b = I(2, 9), q = I(2, 9); return mk(`${b * q} ÷ ${b} = ?`, q, [q + 1, q - 1, q + 2]); },
+        () => { const a = I(20, 90), b = I(10, 60); return mk(`${a} + ${b} = ?`, a + b, [a + b + 10, a + b - 10, a + b + 1]); },
+        () => { const a = I(40, 99), b = I(10, 39); return mk(`${a} − ${b} = ?`, a - b, [a - b + 10, a - b - 1, a + b]); },
+        () => { const a = I(3, 20), r = I(5, 30); return mk(`${a} + ? = ${a + r}`, r, [r + 1, r - 2, a]); },
+        () => { const n = I(3, 25) * 2; return mk(`La moitié de ${n}, c'est ?`, n / 2, [n / 2 + 1, n / 2 - 1, n * 2]); },
+        () => { const a = I(2, 15); return mk(`Le triple de ${a}, c'est ?`, a * 3, [a * 2, a * 3 + 1, a + 3]); },
+        () => { const a = I(10, 50), b = I(2, a - 1); return mk(`J'ai ${a} €, je dépense ${b} €. Combien me reste-t-il ?`, a - b, [a + b, a - b + 1, b], '🪙'); },
+      ],
+      [ // 9-10 ans
+        () => { const a = I(11, 30), b = I(11, 20); return mk(`${a} × ${b} = ?`, a * b, [a * b + b, a * b - a, a * b + 10]); },
+        () => { const n = I(2, 16); return mk(`Combien font ${n}² (${n} × ${n}) ?`, n * n, [n * n + n, n * n - n, n * 2]); },
+        () => { const p = I(2, 10) * 10, pc = pickOne([10, 20, 25, 50]); return mk(`Combien font ${pc} % de ${p} ?`, p * pc / 100, [p * pc / 50, p / 2, pc]); },
+        () => { const b = I(3, 9), q = I(2, 12), r = I(1, b - 1); return mk(`Quel est le reste de ${b * q + r} ÷ ${b} ?`, r, [r + 1, r - 1 || b - 1, q]); },
+        () => { const n = I(2, 12) * 4; return mk(`Combien font les 3/4 de ${n} ?`, n * 3 / 4, [n / 4, n / 2, n * 3 / 4 + 2]); },
+        () => { const a = I(2, 20), b = I(2, 20), c = 3 * I(2, 20) - a - b; return mk(`Quelle est la moyenne de ${a}, ${b} et ${c} ?`, (a + b + c) / 3, [(a + b + c) / 3 + 1, a + b + c, (a + b) / 2]); },
+        () => { const a = I(2, 12), b = I(2, 9), c = I(2, 9); return mk(`${a} + ${b} × ${c} = ?  (priorité à la multiplication)`, a + b * c, [(a + b) * c, a * b + c, a + b + c]); },
+        () => { const n = I(2, 15); return mk(`Quelle est la racine carrée de ${n * n} ?`, n, [n + 1, n * 2, n * n / 2]); },
+      ],
+    ],
+    geo: [
+      [
+        () => { const sh = pickOne([['un carré', 4, '🟥'], ['un triangle', 3, '🔺'], ['un rectangle', 4, '▭']]); return mk(`Combien de côtés a ${sh[0]} ?`, sh[1], [sh[1] + 1, sh[1] - 1, sh[1] + 2], sh[2]); },
+        () => mk('Combien de côtés a un cercle ?', 0, [1, 3, 4], '⚪'),
+        () => mk('Combien de coins a un carré ?', 4, [3, 5, 6], '🟥'),
+        () => mk('Quelle forme est toute ronde ?', 'le cercle', ['le carré', 'le triangle', 'le rectangle'], '⚪'),
+        () => mk('Quelle forme a exactement 3 côtés ?', 'le triangle', ['le carré', 'le cercle', 'le rectangle'], '🔺'),
+        () => mk('Combien de côtés a un rectangle ?', 4, [3, 5, 2], '▭'),
+        () => mk('Un ballon de football a la forme d\'une… ?', 'sphère', ['cube', 'pyramide', 'étoile'], '⚽'),
+        () => mk('Combien de coins a un triangle ?', 3, [4, 2, 5], '🔺'),
+        () => mk('Quelle forme a 4 côtés tous égaux ?', 'le carré', ['le triangle', 'le cercle', 'le rectangle'], '🟥'),
+        () => mk('Une roue de vélo a la forme d\'un… ?', 'cercle', ['carré', 'triangle', 'rectangle'], '🚲'),
+        () => mk('Une porte a plutôt la forme d\'un… ?', 'rectangle', ['cercle', 'triangle', 'losange'], '🚪'),
+        () => mk('Combien de côtés a un losange ?', 4, [3, 5, 6], '🔷'),
+      ],
+      [
+        () => { const c = I(2, 12); return mk(`Le périmètre d'un carré de côté ${c} cm ?`, 4 * c, [c * 3, c * c, 4 * c + 4], '🟥'); },
+        () => { const a = I(2, 10), b = I(2, 10); return mk(`L'aire d'un rectangle ${a} × ${b} cm ?`, a * b, [2 * (a + b), a + b, a * b + a], '▭'); },
+        () => mk('Combien de faces a un cube ?', 6, [4, 8, 12], '🧊'),
+        () => mk('Combien d\'arêtes a un cube ?', 12, [6, 8, 16], '🧊'),
+        () => mk('Combien de sommets a un cube ?', 8, [6, 12, 4], '🧊'),
+        () => { const a = I(2, 10), b = I(2, 10); return mk(`Le périmètre d'un rectangle ${a} × ${b} cm ?`, 2 * (a + b), [a * b, a + b, 4 * a], '▭'); },
+        () => { const sh = pickOne([['un pentagone', 5], ['un hexagone', 6], ['un octogone', 8]]); return mk(`Combien de côtés a ${sh[0]} ?`, sh[1], [sh[1] + 1, sh[1] - 1, sh[1] + 2], '📐'); },
+      ],
+      [
+        () => { const c = I(3, 12); return mk(`L'aire d'un carré de côté ${c} cm ?`, c * c, [4 * c, c * 2, c * c + c], '🟥'); },
+        () => { const b = I(4, 12), h = I(1, 6) * 2; return mk(`L'aire d'un triangle de base ${b} et de hauteur ${h} ?`, b * h / 2, [b * h, b + h, b * h / 4], '🔺'); },
+        () => mk('Combien de degrés dans un angle droit ?', '90°', ['180°', '45°', '360°'], '📐'),
+        () => mk('Combien de degrés fait un tour complet ?', '360°', ['180°', '90°', '270°'], '🔄'),
+        () => { const c = I(2, 8); return mk(`Le volume d'un cube d'arête ${c} cm ?`, c * c * c, [c * c, 6 * c * c, c * 3], '🧊'); },
+        () => { const r = I(2, 10); return mk(`Le périmètre d'un cercle de rayon ${r} (avec π ≈ 3) ?`, 6 * r, [3 * r, 3 * r * r, 2 * r], '⭕'); },
+        () => { const r = I(2, 8); return mk(`L'aire d'un disque de rayon ${r} (avec π ≈ 3) ?`, 3 * r * r, [6 * r, r * r, 3 * r], '⭕'); },
+        () => mk('Combien font la somme des angles d\'un triangle ?', '180°', ['90°', '360°', '270°'], '🔺'),
+      ],
+    ],
+    logi: [
+      [
+        () => { const st = I(1, 4), a = I(1, 5); const seq = [a, a + st, a + 2 * st]; return mk(`Suite : ${seq.join(', ')}, … ?`, a + 3 * st, [a + 2 * st, a + 4 * st, a + 3 * st + 1]); },
+        () => { const bon = pickOne([['🍎 🍐 🍌 🚗', 'la voiture', ['la pomme', 'la poire', 'la banane']], ['🐶 🐱 🐭 🌳', 'l\'arbre', ['le chien', 'le chat', 'la souris']], ['🚗 🚌 🚲 🍕', 'la pizza', ['la voiture', 'le bus', 'le vélo']]]); return mk('Quel est l\'intrus ?', bon[1], bon[2], bon[0]); },
+        () => { const p = pickOne([['🔴 🔵 🔴 🔵 …', '🔴'], ['⭐ 🌙 ⭐ 🌙 …', '⭐'], ['🟢 🟡 🟢 🟡 …', '🟢']]); return mk('Que vient-il après ?', p[1], ['🟣', '⚫', '🟤'], p[0]); },
+        () => { const jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']; const i = I(0, 6); return mk(`Quel jour vient après ${jours[i]} ?`, jours[(i + 1) % 7], [jours[(i + 3) % 7], jours[(i + 5) % 7], jours[(i + 6) % 7]]); },
+        () => { const a = I(5, 12); const seq = [a, a - 1, a - 2]; return mk(`On compte à l'envers : ${seq.join(', ')}, … ?`, a - 3, [a - 4, a + 1, a - 2]); },
+        () => { const n = I(2, 6); return mk(`${n} enfants ont chacun 1 ballon. Combien de ballons ?`, n, [n + 1, n * 2, n - 1], '🎈'.repeat(n)); },
+      ],
+      [
+        () => { const a = I(2, 6); const seq = [a, a * 2, a * 4]; return mk(`Suite : ${seq.join(', ')}, … ?`, a * 8, [a * 6, a * 5, a * 16]); },
+        () => { const n = I(2, 9) * 2; return mk(`J'ai ${n} bonbons, j'en donne la moitié. Combien m'en reste-t-il ?`, n / 2, [n, n - 1, n / 2 + 2], '🍬'); },
+        () => { const p = I(2, 9), n = I(2, 6); return mk(`Un gâteau coûte ${p} €. Combien coûtent ${n} gâteaux ?`, p * n, [p + n, p * n + p, p * (n - 1)], '🍰'); },
+        () => { const pairs = [I(1, 20) * 2, I(1, 20) * 2, I(1, 20) * 2], impair = I(1, 20) * 2 + 1; return mk(`Lequel est impair : ${[...pairs, impair].sort(() => Math.random() - 0.5).join(', ')} ?`, impair, pairs); },
+        () => mk('Marie est plus grande que Paul, Paul est plus grand que Léa. Qui est le plus petit ?', 'Léa', ['Marie', 'Paul', 'on ne peut pas savoir']),
+        () => { const st = I(2, 6), a = I(20, 40); return mk(`Suite décroissante : ${[a, a - st, a - 2 * st].join(', ')}, … ?`, a - 3 * st, [a - 4 * st, a - 2 * st, a]); },
+        () => { const n = I(3, 8); return mk(`Combien de pattes ont ${n} chats ?`, n * 4, [n * 2, n + 4, n * 4 + 2], '🐱'.repeat(Math.min(n, 8))); },
+      ],
+      [
+        () => { const seq = [1, 1, 2, 3, 5, 8, 13, 21]; const i = I(3, 7); return mk(`Suite de Fibonacci : ${seq.slice(0, i).join(', ')}, … ?`, seq[i], [seq[i] + 1, seq[i] - 1, seq[i] + 3]); },
+        () => { const a = I(2, 8); return mk(`Si 3 chats attrapent 3 souris en 3 minutes, combien de minutes pour que ${a} chats attrapent ${a} souris ?`, 3, [a, a * 3, 1]); },
+        () => { const i = I(2, 6); const seq = [1, 4, 9, 16, 25, 36, 49, 64]; return mk(`Suite des carrés : ${seq.slice(0, i).join(', ')}, … ?`, seq[i], [seq[i] + 2, seq[i - 1] * 2, seq[i] - 3]); },
+        () => { const h = I(8, 20), m = I(1, 5) * 10; const f = (h * 60 + m + 45) % 1440; const hh = Math.floor(f / 60), mm = f % 60; return mk(`Un train part à ${h} h ${m < 10 ? '0' + m : m} et roule 45 minutes. À quelle heure arrive-t-il ?`, `${hh} h ${mm < 10 ? '0' + mm : mm}`, [`${hh} h ${m < 10 ? '0' + m : m}`, `${(hh + 1) % 24} h ${mm < 10 ? '0' + mm : mm}`, `${hh} h ${(mm + 15) % 60}`], '🚆'); },
+        () => mk('Si 5 machines fabriquent 5 objets en 5 minutes, combien de minutes pour que 100 machines fabriquent 100 objets ?', 5, [100, 20, 1]),
+        () => { const a = I(2, 6); const seq = [a, a * 2 - 1, (a * 2 - 1) * 2 - 1]; return mk(`Suite : ${seq.join(', ')}, … ? (×2 puis −1)`, seq[2] * 2 - 1, [seq[2] * 2, seq[2] + a, seq[2] * 2 - 2]); },
+        () => { const n = I(3, 9); return mk(`Combien de poignées de main si ${n} personnes se saluent toutes une fois ?`, n * (n - 1) / 2, [n * n, n - 1, n * (n - 1)], '🤝'); },
+      ],
+    ],
+  };
+  if (GEN[subj]) return pickOne(GEN[subj][lvl])();
   const list = CULT[age], q = pickOne(list); return { q: q[0], a: q[1][0], opts: [...q[1]].sort(() => Math.random() - 0.5), fig: '' };
 }
-const school = { subj: null, age: 'a4', q: null, ok: 0, tot: 0, streak: 0, room: null, doneT: {} };
+// Tirage sans répétition : on redemande un exercice tant qu'il est déjà tombé récemment.
+function schTirage(subj, age) {
+  const cle = subj + age; let vus = school.vus[cle] || (school.vus[cle] = []);
+  let q = schQuestion(subj, age);
+  for (let i = 0; i < 40 && vus.includes(q.q); i++) q = schQuestion(subj, age);
+  // réserve épuisée (peu de modèles à ce niveau) : on repart pour un tour complet
+  if (vus.includes(q.q)) vus = school.vus[cle] = [];
+  vus.push(q.q); if (vus.length > 14) vus.shift();
+  return q;
+}
+const school = { subj: null, age: 'a4', q: null, ok: 0, tot: 0, streak: 0, room: null, doneT: {}, vus: {} };
 function openSchool(room) {
   school.room = room; school.subj = room.subj; school.q = null; school.ok = 0; school.tot = 0;
   $('schTitle').textContent = `${room.e} Classe de ${room.n}`;
-  $('schSub').textContent = 'Choisis ton niveau, réponds aux questions et gagne des pièces (bonne réponse : 3 🪙, série de 3 : bonus)';
+  $('schSub').textContent = 'Choisis ton niveau, réponds aux questions et gagne des pièces (bonne réponse : 3 🪙, série de 3 : bonus). La maîtresse lit tout à voix haute — 🔊 pour réécouter.';
   $('schAge').innerHTML = SCH_AGES.map(a => `<b class="${a.k === school.age ? 'sel' : ''}" data-k="${a.k}">${a.n}</b>`).join('');
   $('schAge').querySelectorAll('b').forEach(b => b.addEventListener('click', () => { school.age = b.dataset.k; $('schAge').querySelectorAll('b').forEach(x => x.classList.toggle('sel', x === b)); nextQuestion(); }));
   $('schGrid').style.display = 'none'; $('schQ').style.display = ''; openUI('schoolUI'); nextQuestion();
 }
+// La maîtresse lit l'énoncé à voix haute : les enfants qui ne lisent pas encore peuvent jouer.
+// Les symboles mathématiques sont dits en toutes lettres, sinon la synthèse vocale les avale.
+function schDire(txt) {
+  const dit = String(txt)
+    .replace(/(\d)\s*²/g, '$1 au carré').replace(/×/g, ' fois ').replace(/÷/g, ' divisé par ')
+    .replace(/\+/g, ' plus ').replace(/[−–]/g, ' moins ').replace(/=/g, ' égale ')
+    .replace(/%/g, ' pour cent ').replace(/°/g, ' degrés ').replace(/€/g, ' euros ')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/…/g, ' et ensuite ')
+    .replace(/\s+/g, ' ').trim();
+  voice.say(dit, true, true);
+  return dit;
+}
+function schLire() {   // relit la question et les réponses
+  const q = school.q; if (!q) return;
+  const n = ['un', 'deux', 'trois', 'quatre'];
+  schDire(`${q.q} ... ${q.opts.map((o, i) => `Réponse ${n[i]} : ${o}`).join('. ')}`);
+}
 function nextQuestion() {
-  const q = schQuestion(school.subj, school.age); school.q = q;
+  const q = schTirage(school.subj, school.age); school.q = q;
   $('schQuestion').textContent = q.q; $('schFig').innerHTML = q.fig ? `<div style="font-size:30px">${q.fig}</div>` : '';
-  $('schChoices').innerHTML = q.opts.map((o, i) => `<div class="item" data-i="${i}">${o}</div>`).join('');
+  const num = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
+  $('schChoices').innerHTML = q.opts.map((o, i) => `<div class="item" data-i="${i}"><span class="e">${num[i]}</span>${o}</div>`).join('');
   $('schChoices').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => answer(q.opts[+el.dataset.i], el)));
   $('schScore').textContent = `Score : ${school.ok}/${school.tot} · série ${school.streak}`;
+  schLire();
 }
 function answer(v, el) {
-  if (!school.q) return; const good = v === school.q.a; school.tot++;
-  if (good) { school.ok++; school.streak++; let gain = 3 + (school.age === 'a9' ? 2 : school.age === 'a7' ? 1 : 0); if (school.streak % 3 === 0) { gain += 8; msg(`🎉 Série de ${school.streak} ! +${gain} 🪙`, 1600); } wallet += gain; saveWallet(); updateHud(); sfx.coin(); el.style.background = '#d6ffd6'; el.style.borderColor = '#5cc453'; }
-  else { school.streak = 0; sfx.hit(); el.style.background = '#ffd6d6'; el.style.borderColor = '#ff5c5c'; $('schChoices').querySelectorAll('.item').forEach(x => { if (x.textContent === school.q.a) { x.style.background = '#d6ffd6'; x.style.borderColor = '#5cc453'; } }); }
-  school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, good ? 550 : 1300);
+  if (!school.q) return; const q = school.q, good = v === q.a; school.tot++;
+  if (good) { school.ok++; school.streak++; let gain = 3 + (school.age === 'a9' ? 2 : school.age === 'a7' ? 1 : 0); if (school.streak % 3 === 0) { gain += 8; msg(`🎉 Série de ${school.streak} ! +${gain} 🪙`, 1600); } wallet += gain; saveWallet(); updateHud(); sfx.coin(); el.style.background = '#d6ffd6'; el.style.borderColor = '#5cc453';
+    msg('🎉 C\'est gagné !', 1200); schDire(school.streak % 3 === 0 ? `C'est gagné ! Bravo, ${school.streak} bonnes réponses de suite !` : 'C\'est gagné !'); }
+  else { school.streak = 0; sfx.hit(); el.style.background = '#ffd6d6'; el.style.borderColor = '#ff5c5c';
+    // la bonne carte se repérait par son texte : le numéro ajouté devant l'avait cassé
+    $('schChoices').querySelectorAll('.item').forEach(x => { if (q.opts[+x.dataset.i] === q.a) { x.style.background = '#d6ffd6'; x.style.borderColor = '#5cc453'; } });
+    schDire(`Non. La bonne réponse était : ${q.a}`); }
+  school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, good ? 1500 : 2800);
 }
-$('schClose').addEventListener('click', closeUI);
+$('schClose').addEventListener('click', () => { voice.stop(); closeUI(); });
+$('schRelire').addEventListener('click', () => schLire());
 function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe : tableau, bureau du maître, tables et chaises
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g);
   const M = (lx, lz) => [x + lx * Math.cos(ry) + lz * Math.sin(ry), z - lx * Math.sin(ry) + lz * Math.cos(ry)];
@@ -5058,7 +5287,10 @@ function cityCommon(dt) {
   const meterNear = !!city.meter && Math.hypot(P.pos.x - city.meter.x, P.pos.z - city.meter.z) < 2.2 && !drive.car; if (meterNear !== city.meterNear) { city.meterNear = meterNear; if (meterNear && !isMobile) msg('🅿️ E : prendre un ticket (5 🪙)', 1400); }
   const classNear = city.classes.find(c => Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 2.4) || null; if (classNear !== city.classNear) { city.classNear = classNear; if (classNear && !isMobile) msg(`${classNear.e} E : faire des exercices de ${classNear.n}`, 1400); }
   const deskNear = !!city.bankDesk && Math.hypot(P.pos.x - city.bankDesk.x, P.pos.z - city.bankDesk.z) < 2.6 && P.pos.y < 2; if (deskNear !== city.deskNear) { city.deskNear = deskNear; if (deskNear && !isMobile) msg('🏦 E : déposer ou retirer de l\'argent', 1200); }
-  const rideNear = city.rides.find(r => !P.ride && Math.hypot(P.pos.x - r.ex, P.pos.z - r.ez) < 2.5) || null;
+  // On ne pouvait monter qu'en se plaçant à 2,5 m d'un unique point d'entrée invisible.
+  // Les manèges qui ont un « rayon » se prennent depuis tout leur pourtour.
+  const rideNear = city.rides.find(r => !P.ride && (Math.hypot(P.pos.x - r.ex, P.pos.z - r.ez) < 3
+    || (r.rayon && Math.hypot(P.pos.x - r.x, P.pos.z - r.z) < r.rayon + 2.5))) || null;
   if (rideNear !== city.rideNear) { city.rideNear = rideNear; if (rideNear && !isMobile) msg(`${rideNear.e} E : monter dans ${rideNear.n}`, 1200); }
   // proximité : râtelier, zone de départ de la course
   const rackNear = Math.hypot(P.pos.x - 8.5, P.pos.z + 5.2) < 3.2; if (rackNear !== city.rackNear) { city.rackNear = rackNear; document.body.classList.toggle('racknear', rackNear || !!city.gunNear); if (rackNear && !isMobile) msg(P.racket ? '🎾 E : ranger la raquette' : '🎾 E : prendre une raquette', 1200); }

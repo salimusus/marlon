@@ -808,6 +808,111 @@ test('E maintenu force bien le coffre de la banque', async p => {
   return { ok: vu && monte, detail: `coffre détecté=${vu} · progression après maintien de E : ${Math.round(v * 100)} %` };
 });
 
+
+test('assis sur la balançoire, on suit exactement la planche', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -13.5, y: 1, z: 62, hour: 12 });
+    __G.P.ride = null; __G.P.sit = null; __G.city.rides.forEach(x => { x.rider = null; });
+    const sw = __G.city.swings[1];
+    sw.rider = null; sw.amp = 0; sw.ang = 0; sw.t = 0;
+    __G.sitSwing(sw);
+    const v = new __G.THREE.Vector3(); let pire = 0, angMax = 0;
+    for (let i = 0; i < 400; i++) {
+      __G.swingTick(1 / 60);
+      sw.piv.updateMatrixWorld(true);
+      const planche = sw.piv.children[2]; v.set(0, 0, 0); planche.localToWorld(v);
+      const d = Math.hypot(v.x - __G.P.pos.x, v.z - __G.P.pos.z);   // écart horizontal joueur / planche
+      if (d > pire) pire = d;
+      if (Math.abs(sw.ang) > angMax) angMax = Math.abs(sw.ang);
+    }
+    sw.rider = null; __G.P.swing = null;
+    return { pire: +pire.toFixed(2), angMax: +angMax.toFixed(2) };
+  });
+  return { ok: r.pire < 0.05 && r.angMax > 0.6,
+    detail: `balancement jusqu'à ${r.angMax} rad · écart joueur / planche au pire : ${r.pire} m` };
+});
+
+test('on monte sur le carrousel depuis tout son pourtour', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -18, y: 1, z: 152, hour: 12 });
+    const car = __G.city.rides.find(x => x.kind === 'carousel');
+    if (!car) return { ok: false, pourquoi: 'pas de carrousel' };
+    const essais = [];
+    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      __G.P.ride = null; car.rider = null;
+      __G.P.pos.set(car.x + Math.cos(a) * 7, 0.4, car.z + Math.sin(a) * 7);
+      __G.cityCommon(0.05);
+      const propose = __G.city.rideNear === car;
+      if (propose) __G.rideEnter(car);
+      essais.push({ a: +a.toFixed(2), propose, monte: __G.P.ride === car, cheval: car.rider ? car.rider.idx : -1 });
+    }
+    __G.P.ride = null; car.rider = null;
+    return { ok: true, essais, panneau: true };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  const tous = r.essais.every(e => e.propose && e.monte);
+  const chevaux = new Set(r.essais.map(e => e.cheval)).size;
+  return { ok: tous && chevaux >= 3,
+    detail: `4 approches sur 4 permettent de monter=${tous} · ${chevaux} chevaux différents selon le côté` };
+});
+
+test('les exercices de l\'école ne se répètent pas et sont bien formés', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const distincts = {}; let mauvais = 0, total = 0;
+    for (const subj of ['math', 'geo', 'logi', 'cult']) for (const age of ['a4', 'a7', 'a9']) {
+      const set = new Set();
+      for (let i = 0; i < 600; i++) { const q = __G.schQuestion(subj, age); set.add(q.q); total++;
+        if (q.opts.length !== 4 || new Set(q.opts).size !== 4 || !q.opts.includes(q.a) || q.opts.some(o => o === 'NaN' || o === 'undefined')) mauvais++; }
+      distincts[subj + age] = set.size;
+    }
+    // douze tirages de suite sans jamais retomber sur le même énoncé
+    __G.school.vus = {};
+    const suite = []; for (let i = 0; i < 12; i++) suite.push(__G.schTirage('cult', 'a4').q);
+    const mini = Math.min(...Object.values(distincts));
+    return { mauvais, total, mini, distincts: Object.entries(distincts).map(([k, v]) => `${k}:${v}`).join(' '),
+      repetes: suite.length - new Set(suite).size };
+  });
+  const ok = r.mauvais === 0 && r.mini >= 10 && r.repetes === 0;
+  return { ok, detail: `${r.total} exercices tirés, ${r.mauvais} mal formés · énoncés distincts par case : ${r.distincts} · 12 tirages d'affilée : ${r.repetes} répétition(s)` };
+});
+
+test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    __G.settings.voices = true;
+    const dits = [];
+    try { window.speechSynthesis.speak = u => dits.push(String(u.text)); } catch (e) { return { ok: false, pourquoi: 'synthèse vocale non remplaçable' }; }
+    // symboles dits en toutes lettres
+    const maths = __G.schDire('7 × 8 = ? puis 50 % de 80, 4² et 12 ÷ 3');
+    const salle = __G.city.classes[0]; if (!salle) return { ok: false, pourquoi: 'aucune salle de classe' };
+    dits.length = 0;
+    __G.openSchool(salle);
+    const q = __G.school.q, lu = dits.join(' | ');
+    const cartes = [...document.querySelectorAll('#schChoices .item')];
+    const bonne = cartes[q.opts.indexOf(q.a)];
+    dits.length = 0;
+    bonne.click();
+    const gagne = dits.join(' | ');
+    const marquee = bonne.style.background;
+    // et sur une mauvaise réponse, la bonne carte doit quand même se colorer en vert
+    __G.nextQuestion(); const q2 = __G.school.q;
+    const c2 = [...document.querySelectorAll('#schChoices .item')];
+    const mauvaise = c2[(q2.opts.indexOf(q2.a) + 1) % 4];
+    mauvaise.click();
+    const bonneVerte = c2[q2.opts.indexOf(q2.a)].style.background;
+    __G.closeUI();
+    return { ok: true, maths, question: q.q, lu, gagne, marquee, bonneVerte, nCartes: cartes.length };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  const symboles = /fois/.test(r.maths) && /pour cent/.test(r.maths) && /au carré/.test(r.maths) && /divisé par/.test(r.maths) && /égale/.test(r.maths);
+  const enonce = r.lu.includes('Réponse un') && r.lu.includes('Réponse quatre');
+  const gagne = /gagn/i.test(r.gagne);
+  const vert = r.bonneVerte.includes('214, 255, 214') || r.bonneVerte.toLowerCase().includes('d6ffd6');
+  return { ok: symboles && enonce && gagne && vert && r.nCartes === 4,
+    detail: `symboles dits en lettres=${symboles} (« ${r.maths.slice(0, 60)}… ») · énoncé + 4 réponses lus=${enonce} · « c'est gagné » dit=${gagne} (« ${r.gagne.slice(0, 40)} ») · bonne carte surlignée après une erreur=${vert}` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'superobby.html');
   const {srv,port}=await serve(file);

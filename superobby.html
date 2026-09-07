@@ -2755,7 +2755,7 @@ function grabParcel(pc) {
   const item = DECOR.find(d => d.id === pc.id);
   P.deco = { id: pc.id, n: pc.n, wallOk: true, wallOnly: !!(item && item.wall) };
   P.decoMesh = decorMesh(pc.id); P.decoMesh.scale.setScalar(0.6); worldGroup.add(P.decoMesh);
-  msg(`${pc.e} ${pc.n} en main : approche un emplacement lumineux et appuie sur ${isMobile ? '✋' : 'E'}`, 3000); sfx.coin();
+  msg(`${pc.e} ${pc.n} en main : approche un emplacement lumineux et appuie sur E`, 3000); sfx.coin();
 }
 function dropDecor() {
   if (city.slotNear == null) { msg('✨ Approche-toi d\'un emplacement lumineux (anneau bleu)', 1600); return; }
@@ -3806,7 +3806,16 @@ function netTick(dt, myAnim, sp) {
 
 // ================= INTERFACE =================
 const msgEl = $('msg'); let msgTimer = 0;
+// Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
+// deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
+// au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
+const ctrlText = t => {
+  t = String(t);
+  if (!document.body.classList.contains('touch')) return t;
+  return t.replace(/Espace \/ SAUT/g, 'SAUT').replace(/\bEspace(?=\s*(?:\/|pour|ou|,))/g, 'SAUT').replace(/\bE\b/g, '✋');
+};
 function msg(text, ms = 1400) {
+  text = ctrlText(text);
   msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16); msgEl.classList.add('show');
   clearTimeout(msgTimer); msgTimer = setTimeout(() => msgEl.classList.remove('show'), ms);
 }
@@ -4512,7 +4521,12 @@ function cityCommon(dt) {
     else { city.repairT = simTime + 3; wallet -= 10; saveWallet(); updateHud(); drive.car.dmg = 0; drive.car.dead = false; repairVisual(drive.car); msg('🔧 Véhicule réparé ! (10 🪙)', 1600); sfx.register(); burst(drive.car.x, 1, drive.car.z, 0x3ef2ff, 12); }
   }
   // zone actuelle
-  let z = null; for (const zn of city.zones) if (P.pos.x > zn.x1 && P.pos.x < zn.x2 && P.pos.z > zn.z1 && P.pos.z < zn.z2) z = zn;
+  // la zone la plus petite l'emporte : dans une villa on veut l'indication de la villa,
+  // pas celle du quartier qui l'englobe (avant, c'était le dernier de la liste qui gagnait)
+  let z = null, zArea = Infinity;
+  for (const zn of city.zones) if (P.pos.x > zn.x1 && P.pos.x < zn.x2 && P.pos.z > zn.z1 && P.pos.z < zn.z2) {
+    const a = (zn.x2 - zn.x1) * (zn.z2 - zn.z1); if (a < zArea) { zArea = a; z = zn; }
+  }
   if (z !== city.zone) { city.zone = z; if (z) msg(z.name === 'Tennis' && !P.racket ? '🎾 Prends une raquette au râtelier !' : z.hint, 2200); updateAct(); }
   const safe = (name, fn) => { try { fn(); } catch (e) { if (!safeSeen[name]) { safeSeen[name] = 1; console.error(name, e); msg('⚠️ Petit souci technique (' + name + ') — le jeu continue', 2500); } } };
   safe('tirs', () => shotsTick(dt)); safe('grenades', () => grenadesTick(dt)); safe('sport', () => gymTick(dt)); safe('police', () => policeTick(dt)); safe('combat', () => combatTick(dt)); safe('mission', () => missionTick(dt));
@@ -4537,7 +4551,7 @@ function cityCommon(dt) {
   const gunNear = !!city.armory && Math.hypot(P.pos.x - city.armory.x, P.pos.z - city.armory.z) < 3.2;
   if (gunNear !== city.gunNear) { city.gunNear = gunNear; document.body.classList.toggle('racknear', gunNear || !!city.rackNear); if (gunNear && !isMobile) msg('🔫 E : voir toutes les armes', 1200); }
   const vit = city.vitrines.find(v => Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < v.r) || null;
-  if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · ${isMobile ? '✋' : 'E'} pour acheter`, 1500); }
+  if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · E pour acheter`, 1500); }
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
   if (offNear !== city.offNear) { city.offNear = offNear; if (offNear && !isMobile) msg('📋 E : choisir une mission', 1200); }
   const benchNear = (!P.sit && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg('🪑 E : s\'asseoir', 900); }
@@ -4669,7 +4683,7 @@ function takeAway(it) {
   if (P.carryMesh) { me.rig.armR.remove(P.carryMesh); P.carryMesh = null; }
   P.snack = it; const idx = FOOD.indexOf(it); const m = foodMesh(idx >= 0 ? idx : 0); m.position.set(0, -0.72, 0.16); me.rig.armR.add(m); P.carryMesh = m;
   document.body.classList.add('carry');
-  msg(`${it.e} ${it.n} à emporter ! ${isMobile ? '✋' : 'E'} pour le manger (tu peux sortir et t\'asseoir sur un banc)`, 2600);
+  msg(`${it.e} ${it.n} à emporter ! E pour le manger (tu peux sortir et t\'asseoir sur un banc)`, 2600);
 }
 function eatCarried() { if (!P.snack) return; const it = P.snack; P.snack = null; if (P.carryMesh) { me.rig.armR.remove(P.carryMesh); P.carryMesh = null; } document.body.classList.remove('carry'); startEating(it); }
 // ---- Boutique façon Fortnite : cartes colorées par rareté, un clic = sélection, un bouton = acheter / équiper ----

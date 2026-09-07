@@ -197,6 +197,30 @@ test('l\'ascenseur de la villa monte, puis laisse ressortir', async p => {
     detail: `monté à ${haut.y.toFixed(2)} m (cabine ${haut.cab.toFixed(2)}), puis sorti de ${ecart.toFixed(2)} m en restant à ${sorti.y.toFixed(2)} m` };
 });
 
+test('la zone affichée est la plus précise (villa, pas « quartier »)', async p => {
+  await p.evaluate(() => __SHOT.go({ world: 4, x: 60, y: 1, z: 180, facing: 0, yaw: 0, pitch: 0.3, dist: 12, hour: 12, hideHud: true }));
+  const ok = await attendre(p, () => __G.city.zone && __G.city.zone.name === 'Villa', 20000);
+  const z = await p.evaluate(() => __G.city.zone ? __G.city.zone.name : null);
+  return { ok, detail: `dans le jardin de ma villa, zone annoncée : « ${z} »` };
+});
+
+test('les libellés de commandes suivent le mode tactile', async p => {
+  const r = await p.evaluate(() => {
+    const avant = __G.ctrlText('🚗 Appuie sur E pour conduire');
+    __G.tactile(true);
+    const tactile = {
+      action: __G.ctrlText('🚗 Appuie sur E pour conduire'),
+      saut: __G.ctrlText('🪑 Assis (Espace / SAUT pour se lever)'),
+      monde: __G.ctrlText('🌍 Monde : Espace (Difficile)'),   // le monde ne doit PAS être renommé
+    };
+    __G.tactile(false);
+    return { avant, ...tactile };
+  });
+  const ok = r.avant.includes(' E ') && r.action.includes('✋') && r.saut.includes('SAUT')
+    && !r.saut.includes('Espace') && r.monde.includes('Espace');
+  return { ok, detail: `clavier « ${r.avant} » ; tactile « ${r.action} » / « ${r.saut} » ; monde préservé : ${r.monde.includes('Espace')}` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

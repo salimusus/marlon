@@ -65,7 +65,8 @@ canvas#c{filter:saturate(1.06) contrast(1.04)}
 #cross{position:fixed;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}
 #cross::before,#cross::after{content:'';position:absolute;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.8)}
 #cross::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%)}#cross::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%)}
-body.aim #cross{display:block}
+body.aim #cross,body.lock #cross{display:block}
+body.lock #cross::before,body.lock #cross::after{background:#ff6b6b}
 .shopgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:46vh;overflow-y:auto;padding:4px}
 .item{border:2px solid #dbe3f5;border-radius:12px;padding:10px 8px;cursor:pointer;background:#f7f9fe;font-size:13px;font-weight:800;color:#1b2a4a;text-align:center}
 .item .pr{display:block;font-size:12px;color:#ff9f1c;font-weight:800;margin-top:3px}
@@ -1180,7 +1181,8 @@ function swingTick(dt) {
     if (sw.rider === 'me') {
       const seatX = sw.x, seatY = 3.55 - sw.L * Math.cos(sw.ang), seatZ = sw.z + sw.L * Math.sin(sw.ang);
       const vz = sw.amp * w * Math.cos(sw.t * w) * sw.L * Math.cos(sw.ang), vy = sw.amp * w * Math.cos(sw.t * w) * sw.L * Math.sin(sw.ang);
-      P.pos.set(seatX, seatY - 0.55, seatZ); P.vel.set(0, vy, vz); P.facing = 0;
+      // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,51 m plus bas, comme sur un banc
+      P.pos.set(seatX, seatY - 0.46, seatZ); P.vel.set(0, vy, vz); P.facing = 0;
       if (P.jumpBuf > 0) { P.jumpBuf = 0; sw.rider = null; P.swing = null; P.vel.set(0, vy * 1.3 + 6, vz * 1.5); P.grounded = false; msg('🎠 Wouhou !', 700); sfx.jump(); }
     }
   }
@@ -4747,7 +4749,7 @@ function cityCommon(dt) {
   safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
-  if (P.firing && P.weapon === 'rifle') fire(); if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);
+  if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
   const jetNear = !!city.jetSpot && Math.hypot(P.pos.x - city.jetSpot.x, P.pos.z - city.jetSpot.z) < 2.6; if (jetNear !== city.jetNear) { city.jetNear = jetNear; if (jetNear && !isMobile) msg(P.jet ? '🚀 E : ranger le propulseur' : '🚀 E : enfiler le propulseur', 1200); }
   const swingNear = city.swings.find(sw => !sw.rider && Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 1.9) || null; if (swingNear !== city.swingNear) { city.swingNear = swingNear; if (swingNear && !isMobile) msg('🎠 E : s\'asseoir sur la balançoire', 1000); }
   const bouleNear = !!city.boules && P.pos.x > 8 && P.pos.x < 16 && P.pos.z > 68 && P.pos.z < 74 && !P.swing; if (bouleNear !== city.bouleNear) { city.bouleNear = bouleNear; if (bouleNear && !isMobile) msg('🎯 E : lancer une boule vers le cochonnet', 1200); }
@@ -4970,7 +4972,7 @@ function toggleJet() {
 }
 function equipWeapon(kind) {   // équipe une arme (ou range : null)
   P.weapon = kind; P.gun = !!kind; P.aimToggle = false; P.drawn = false; $('drawBtn').textContent = '✊'; document.body.classList.remove('drawn'); $('aimBtn').classList.remove('on'); setWeapon(me, kind, false); document.body.classList.toggle('gun', !!kind);
-  if (kind) { const w = WEAPONS[kind]; if (kind !== 'grenade') { P.ammo = w.ammo; P.ammoMax = w.ammo; } msg(`${w.e} ${w.n} rangé dans l'étui · ${isMobile ? '✊ pour dégainer' : 'G pour dégainer'}`, 2400); if (kind === 'grenade' && !P.grenades) { P.weapon = null; P.gun = false; setWeapon(me, null); document.body.classList.remove('gun'); } }
+  if (kind) { const w = WEAPONS[kind]; if (kind !== 'grenade') { P.ammo = w.ammo; P.ammoMax = w.ammo; } msg(`${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic'} pour tirer : le personnage vise tout seul la cible la plus proche`, 2600); if (kind === 'grenade' && !P.grenades) { P.weapon = null; P.gun = false; setWeapon(me, null); document.body.classList.remove('gun'); } }
   else msg('🔫 Arme rangée', 900);
   if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   updateAct();
@@ -4982,7 +4984,7 @@ function drawWeapon(on) {   // dégainer / rengainer
   if (P.weapon !== 'grenade') setWeapon(me, P.weapon, P.drawn);
   document.body.classList.toggle('drawn', !!P.drawn);
   $('drawBtn').textContent = P.drawn ? '🔻' : '✊';
-  msg(P.drawn ? `🔫 ${WEAPONS[P.weapon].n} dégainé · ${isMobile ? 'vise en faisant glisser l\'écran, 🔫 pour tirer' : 'vise à la souris, clic pour tirer'}` : '🤚 Arme rangée dans l\'étui', 1600);
+  if (!P.drawn) msg('🤚 Arme rangée dans l\'étui', 900);
   sfx.tone(P.drawn ? 900 : 500, 0, .09, 'triangle', .05, P.drawn ? 1200 : 320);
 }
 function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
@@ -5074,17 +5076,46 @@ function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
   return rayBox(ox, oy, oz, dx, dy, dz, px, py + 1, pz, 0.42, 1, 0.42, maxD);
 }
 const AIM_MAX = 120, aimDir = new THREE.Vector3(0, 0, 1);
+const LOCK_PORTEE = 45, LOCK_CONE = 1.15;   // portée du verrouillage et demi-angle du cône devant le joueur
+// Cible la plus proche devant le joueur, en vue directe : bots, joueurs distants,
+// gardes et cibles du stand de tir. Sert au tir automatique.
+function cibleAuto() {
+  const ox = P.pos.x, oy = P.pos.y + 1.35, oz = P.pos.z, vue = cam.yaw + Math.PI;
+  const cand = [];
+  if (!net.on) for (const b of bots) { if (b.av.group.visible && !b.ko && !b.dead) cand.push({ x: b.pos.x, y: b.pos.y, z: b.pos.z, nom: b.name }); }
+  for (const r of net.remotes.values()) if (!r.dead && !r.car) cand.push({ x: r.cur.x, y: r.cur.y, z: r.cur.z, nom: r.name });
+  for (const g of city.guards) if (!g.ko) cand.push({ x: g.x, y: g.y, z: g.z, nom: 'un garde' });
+  for (const t of city.targets) if (!t.hidden) cand.push({ x: t.m.position.x, y: t.y - 1, z: t.z, nom: 'une cible' });
+  let best = null, meilleur = Infinity;
+  for (const c of cand) {
+    const dx = c.x - ox, dz = c.z - oz, dh = Math.hypot(dx, dz);
+    if (dh > LOCK_PORTEE || dh < 0.6) continue;
+    let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
+    if (ec > LOCK_CONE) continue;
+    const ty = c.y + 1, ddx = c.x - ox, ddy = ty - oy, ddz = c.z - oz, L = Math.hypot(ddx, ddy, ddz) || 1;
+    const h = castSolids(ox, oy, oz, ddx / L, ddy / L, ddz / L, L - 0.6, true);
+    if (h.o) continue;                       // un mur s'interpose
+    const note = dh + ec * 14;               // le plus proche et le plus en face l'emporte
+    if (note < meilleur) { meilleur = note; best = c; }
+  }
+  return best;
+}
 function aimTick() {   // la visée part du joueur : direction = son orientation (gauche/droite), hauteur = flèches haut/bas
-  // Direction de visée = celle de la caméra (visée à la souris). Le rayon part des yeux du
-  // personnage : le réticule marque donc toujours le point réellement touché.
+  // Visée automatique : si une cible est verrouillée, on vise droit dessus ; sinon on suit
+  // la caméra. Le rayon part des yeux du personnage, le réticule marque donc le point touché.
   const ox = P.pos.x, oy = P.pos.y + 1.35, oz = P.pos.z;
-  const ay = cam.yaw + Math.PI, ap = -cam.pitch, cp = Math.cos(ap);
-  const dx = Math.sin(ay) * cp, dy = Math.sin(ap), dz = Math.cos(ay) * cp;
+  let dx, dy, dz, dMax = AIM_MAX;
+  if (P.lock) {
+    dx = P.lock.x - ox; dy = (P.lock.y + 1) - oy; dz = P.lock.z - oz;
+    const L = Math.hypot(dx, dy, dz) || 1; dx /= L; dy /= L; dz /= L; dMax = L;
+  } else {
+    const ay = cam.yaw + Math.PI, ap = -cam.pitch, cp = Math.cos(ap);
+    dx = Math.sin(ay) * cp; dy = Math.sin(ap); dz = Math.cos(ay) * cp;
+  }
   aimDir.set(dx, dy, dz);
-  let dMax = AIM_MAX;
   if (dy < -1e-6) dMax = Math.min(dMax, (0.03 - oy) / dy);   // le sol arrête le rayon
   const h = castSolids(ox, oy, oz, dx, dy, dz, dMax, false);
-  const d = Math.max(0.7, h.d);
+  const d = Math.max(0.7, Math.min(h.d, dMax));
   aimPoint.set(ox + dx * d, oy + dy * d, oz + dz * d);
   laserDot.position.copy(aimPoint);
   const v = aimPoint.clone().project(camera); const el = $('cross');
@@ -5093,9 +5124,13 @@ function aimTick() {   // la visée part du joueur : direction = son orientation
 }
 function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un tir venu du réseau
   if (!remote) {
-    if (!P.weapon || drive.car || P.sit || P.swing || P.ride || gym.on || P.fireCd > simTime) return;   // assis / sur un manège : la visée n'est pas calculée, on ne tire pas au jugé
-    if (!P.drawn && P.weapon !== 'grenade') { drawWeapon(true); return; }   // premier appui : on dégaine
+    if (!P.weapon || drive.car || P.sit || P.swing || P.ride || gym.on || P.fireCd > simTime) return;   // assis / sur un manège : on ne tire pas au jugé
     if (P.weapon === 'grenade') return throwGrenade();
+    // Tir automatique : un seul appui suffit — on dégaine, on verrouille la cible la plus
+    // proche, on tire un coup, puis l'arme retourne dans l'étui.
+    P.lock = cibleAuto();
+    if (P.lock) P.facing = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z);
+    if (!P.drawn) { drawWeapon(true); setWeapon(me, P.weapon, true); }
     const w = WEAPONS[P.weapon];
     if (P.ammo <= 0) { if (simTime > P.reloadT) { P.ammo = w.ammo; msg('🔫 Chargeur plein', 700); sfx.register(); } else return; }
     P.ammo--; if (P.ammo === 0) { P.reloadT = simTime + w.reload; msg('🔫 Rechargement…', 1200); sfx.tone(300, .4, .15, 'triangle', .04, 200); }
@@ -5104,6 +5139,7 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     me.rig.swing = P.weapon === 'rifle' ? 0.06 : 0.14; if (me.gun && me.gun.flash) { me.gun.flash.visible = true; setTimeout(() => { if (me.gun) me.gun.flash.visible = false; }, 45); }
     cam.kick = (cam.kick || 0) + (P.weapon === 'rifle' ? 0.012 : 0.03);
     aimTick();   // visée recalculée à l'instant du tir : plus de point de visée périmé
+    P.holsterT = simTime + 0.85;   // rengainage automatique après le coup
     const rx = Math.cos(P.facing), rz = -Math.sin(P.facing);
     // Bouche du canon calculée depuis la position et la visée du joueur, et non depuis la
     // pose rendue de l'avatar, qui a une image de retard : la balle partait alors d'où le
@@ -5674,7 +5710,7 @@ function frame() {
   }
   me.group.rotation.y = P.facing;
   // couché : le personnage bascule à plat sur le matelas au lieu de rester debout dessus
-  me.group.rotation.x = (P.sleep && simTime < P.sleep) ? -Math.PI / 2 : 0;
+  me.group.rotation.x = (P.sleep && simTime < P.sleep) ? -Math.PI / 2 : (P.swing ? -P.swing.ang : 0);   // couché à plat, ou incliné avec la balançoire
   const riding = drive.car && drive.car.rider;
   if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; } else me.group.rotation.z = 0;
   const myAnim = (P.sleep && simTime < P.sleep) ? 'sleep' : riding ? 'ride' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
@@ -5682,8 +5718,12 @@ function frame() {
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
   const armed = !!(P.gun && P.drawn && !drive.car && running && !gym.on && !P.sit && !P.swing && !P.ride);
-  if (armed) {
-    // Visée à la souris : on tire là où regarde la caméra. Le personnage s'oriente vers
+  if (armed && P.lock) {   // cible verrouillée : le personnage se tourne vers elle
+    P.facing = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z);
+    const dh = Math.hypot(P.lock.x - P.pos.x, P.lock.z - P.pos.z) || 1;
+    P.aimPitch = clamp(Math.atan2((P.lock.y + 1) - (P.pos.y + 1.35), dh), -0.9, 1.1);
+  } else if (armed) {
+    // Sans cible : on tire là où regarde la caméra. Le personnage s'oriente vers
     // la visée et le bras suit l'inclinaison. Les flèches ↑/↓ (et les boutons tactiles)
     // restent utilisables pour ajuster la hauteur sans la souris.
     const up = keys.has('ArrowUp') || P.upHeld, dn = keys.has('ArrowDown') || P.downAim;
@@ -5692,10 +5732,14 @@ function frame() {
     P.facing = cam.yaw + Math.PI;
     P.aimPitch = clamp(-cam.pitch, -0.9, 1.1);
   } else if (P.aimPitch) P.aimPitch *= 1 - Math.min(1, dt * 3);
+  // verrouillage automatique : visible dès qu'une arme est équipée, pour qu'on sache sur quoi on tirera
+  P.lock = (P.weapon && P.weapon !== 'grenade' && running && !paused && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on) ? cibleAuto() : null;
+  if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); }
   P.aim = armed && !!(P.aimHeld || P.aimToggle);   // visée « épaule » (zoom) en plus
   const aiming = armed;
-  document.body.classList.toggle('aim', aiming); document.body.classList.toggle('armed', armed); laserDot.visible = aiming;
-  if (aiming) aimTick();
+  document.body.classList.toggle('aim', aiming); document.body.classList.toggle('armed', armed);
+  laserDot.visible = !!P.lock; document.body.classList.toggle('lock', !!P.lock);   // repère posé sur la cible verrouillée
+  if (aiming || P.lock) aimTick();
   if (P.gun && P.weapon !== 'grenade') { const wantHand = armed; if (wantHand !== !!me.inHand) setWeapon(me, P.weapon, wantHand); }
   document.body.classList.toggle('drawn', !!P.drawn);
   if (armed && me.gun && me.inHand) { me.rig.armR.rotation.x = -1.55 - P.aimPitch; me.rig.armR.rotation.z = -0.12; }   // le bras suit la hauteur de visée

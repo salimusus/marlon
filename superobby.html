@@ -1742,9 +1742,9 @@ const siren = (() => { let o1 = null, o2 = null, g = null, timer = null; return 
 }; })();
 function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 moyen (écraser), 3 grave (KO / grenade)
   police.crimeLevel = Math.max(police.crimeLevel, sev);
-  police.wanted = clamp(police.wanted + level, 0, 3); police.decayT = simTime + 45; police.lastSeen = [P.pos.x, P.pos.z];
+  police.wanted = clamp(police.wanted + level, 0, 3); police.decayT = simTime + 45 + police.crimeLevel * 40; police.lastSeen = [P.pos.x, P.pos.z];
   msg(`🚔 Infraction : ${what} ! Niveau ${'★'.repeat(police.wanted)}`, 1800); chat(null, `🚔 La police recherche ${myCfg.name} (${what})`);
-  $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · cache-toi dans une planque`; $('wanted').classList.add('on'); siren.start();
+  $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`; $('wanted').classList.add('on'); siren.start();
   for (const pc of police.cars) pc.active = true;
 }
 function clearWanted(reason) {
@@ -2072,7 +2072,12 @@ function buildDeco() {   // lampadaires et fleurs le long des grands axes, statu
 }
 function rideEnter(r) {
   if (P.ride || drive.car) return;
-  if (r.kind === 'wheel') { r.rider = { idx: 0 }; } else { r.rider = { idx: 0 }; }
+  if (r.kind === 'wheel') { r.rider = { idx: 0 }; }
+  else {   // on enfourche le cheval le plus proche, pas toujours le même
+    let best = 0, dmin = Infinity, v = new THREE.Vector3();
+    r.horses.forEach((h, i) => { h.g.getWorldPosition(v); const d = Math.hypot(v.x - P.pos.x, v.z - P.pos.z); if (d < dmin) { dmin = d; best = i; } });
+    r.rider = { idx: best };
+  }
   P.ride = r; P.vel.set(0, 0, 0); P.swing = null; msg(`${r.e} C'est parti ! (Espace / SAUT pour descendre)`, 1800); sfx.check();
 }
 function ridesTick(dt) {
@@ -2083,7 +2088,8 @@ function ridesTick(dt) {
     if (P.ride === r) {
       r.group.updateMatrixWorld(true);
       if (r.kind === 'wheel') { const g = r.gondolas[r.rider.idx]; const v = new THREE.Vector3(0, -0.9, 0); g.piv.localToWorld(v); worldGroup.worldToLocal(v); P.pos.set(v.x, v.y - 0.35, v.z); P.facing = Math.PI / 2; }
-      else { const h = r.horses[r.rider.idx]; const v = new THREE.Vector3(0, 0.35, -0.1); h.g.localToWorld(v); worldGroup.worldToLocal(v); P.pos.set(v.x, v.y - 0.2, v.z); P.facing = r.ang + Math.PI / 2 - h.a; }
+      // assis en selle : dessus de la selle moins 0,51 m, comme sur un banc
+      else { const h = r.horses[r.rider.idx]; const v = new THREE.Vector3(0, 0.425, -0.05); h.g.localToWorld(v); worldGroup.worldToLocal(v); P.pos.set(v.x, v.y - 0.51, v.z); P.facing = r.ang + Math.PI / 2 - h.a; }
       P.vel.set(0, 0, 0); cam.target.lerp(new THREE.Vector3(P.pos.x, P.pos.y + 1.5, P.pos.z), 0.3);
       if (P.jumpBuf > 0) { P.jumpBuf = 0; P.ride = null; r.rider = null; P.vel.set(0, 4, 0); msg(`${r.e} Terminé !`, 800); }
     }
@@ -2789,7 +2795,9 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   const rim = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.18, 8, 24), lam(0x4f8dff)); rim.rotation.x = Math.PI / 2; rim.position.set(TX, 1.55, TZ); worldGroup.add(rim);
   for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.5, 8), lam(0x8f98ab)); leg.position.set(TX + Math.cos(a) * 2.7, 0.75, TZ + Math.sin(a) * 2.7); worldGroup.add(leg); const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.2, 8), lam(0x4f8dff)); pole.position.set(TX + Math.cos(a) * 3, 3.2, TZ + Math.sin(a) * 3); worldGroup.add(pole); }
   const net = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.05, 3.2, 20, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(10, 3); return t; })(), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide })); net.position.set(TX, 3.2, TZ); worldGroup.add(net);
-  for (let i = 0; i < 4; i++) box(TX - 1.4 + i * 0.9, 0.8 + i * 0.35, TZ + 3.4 - i * 0.3, 1.2, 0.25, 0.9, 0xc9ced8, { studs: false, noRoute: true });
+  // marches d'accès : la première faisait 0,625 m depuis la pelouse, au-dessus des 0,60 m
+  // franchissables — on ne pouvait donc pas monter sur le trampoline
+  for (let i = 0; i < 4; i++) { const top = 0.3 + (i + 1) * (1.65 - 0.3) / 4; box(TX, top - 0.125, TZ + 4.7 - i * 0.5, 1.7, 0.25, 0.6, 0xc9ced8, { studs: false, noRoute: true }); }
   box(TX, 1.5, TZ, 5.6, 0.3, 5.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, bounce: Math.sqrt(2 * G * 7) });
   city.tramp = { x: TX, z: TZ, y: 1.65 };
   for (const dz of [-8, 8]) lamp(vx + HP - 1.4, vz + dz);
@@ -3176,9 +3184,9 @@ function policeTick(dt) {
   if (police.wanted > 0) {
     if (!hidden) police.lastSeen = [P.pos.x, P.pos.z];
     const near = police.cars.some(pc => Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z) < 14);
-    if (hidden && !near) { police.hideT += dt; if (police.hideT > 6) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) clearWanted('🕵️ Semé ! La police a abandonné'); else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
+    if (hidden && !near) { police.hideT += dt; if (police.hideT > 6 + (police.crimeLevel || 0) * 5) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) clearWanted('🕵️ Semé ! La police a abandonné'); else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
     else police.hideT = 0;
-    if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45; if (police.wanted <= 0) clearWanted('🚔 La police ne te cherche plus'); }
+    if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) clearWanted('🚔 La police ne te cherche plus'); }   // plus le délit est grave, plus elle s'accroche
   }
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
@@ -3218,9 +3226,15 @@ function policeTick(dt) {
       if ((pc.stuckTot || 0) >= 5 && pc.active && dist > 20) { pc.stuckTot = 0; const [ms] = nearS(tx, tz); const [lx, lz] = loopPos(ms); pc.x = lx; pc.z = lz; pc.route = null; pc.speed = 2; msg('🚔 Des renforts arrivent !', 1200); }   // vraiment coincée : renforts sur l'anneau routier
     } else pc.stuck = Math.max(0, (pc.stuck || 0) - dt * 0.5);
     pc.y = groundUnder(pc.x, pc.z, pc.solid, pc.y || 0); pc.g.position.set(pc.x, pc.y, pc.z); pc.g.rotation.y = pc.h; pc.wheels.forEach(w => w.rotation.x -= pc.speed * dt / 0.3); vehicleSolid(pc);
-    if (police.alarmT > simTime && pc.active && !hidden && simTime > (pc.shotT || 0)) {   // braquage : les policiers tirent
+    // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
+    // Plus le délit est grave, plus elle tire loin, souvent et juste.
+    const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
+    if ((braquage || police.wanted >= 2) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
       const d = Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z);
-      if (d < 30 && d > 3) { pc.shotT = simTime + 0.55; const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); dir.x += rnd(-0.05, 0.05); dir.y += rnd(-0.03, 0.03); dir.z += rnd(-0.05, 0.05); dir.normalize().multiplyScalar(70); const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, dmg: 6 }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
+      const portee = braquage ? 32 : 14 + police.wanted * 5 + tenace * 3;
+      if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.45, 1.8 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
+        dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
+        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, dmg: 4 + police.wanted + tenace }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
     }
     // arrestation : la police me touche (ou reste coincée tout près : les agents descendent et m'attrapent à pied)
     const dP = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z);

@@ -514,6 +514,85 @@ test('on est bien assis sur la balançoire', async p => {
   return { ok, detail: `assis à y=${a.y} (attendu ≈0,49), corps incliné de ${a.rot} pour une nacelle à ${a.ang}` };
 });
 
+test('la police ouvre le feu à partir du niveau 2', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 34, hour: 12 });
+    const pc = __G.police.cars[0];
+    if (!pc) return { ok: false, pourquoi: 'aucune voiture de police' };
+    __G.P.pos.set(pc.x + 12, 0.5, pc.z); __G.P.hp = 100;
+    __G.police.alarmT = 0;
+    const compte = () => __G.shots.filter(s => s.police).length;
+    // la traque elle-même (décompte du niveau, arrestation) n'est pas l'objet du test :
+    // on la neutralise pour n'observer que l'ouverture du feu
+    const tourne = (n, w) => { __G.shots.length = 0; pc.shotT = 0; pc.nearT = 0;
+      for (let i = 0; i < n; i++) {
+        __G.police.wanted = w; __G.police.crimeLevel = w; pc.active = true;
+        __G.police.decayT = __G.simTime + 999; __G.police.arrestT = __G.simTime + 999;
+        __G.police.lastSeen = [__G.P.pos.x, __G.P.pos.z];
+        __G.P.pos.set(pc.x + 12, 0.5, pc.z);   // on garde 12 m d'écart : la voiture fonce sinon jusqu'au contact
+        __G.policeTick(0.05);
+      }
+      return compte(); };
+    const n1 = tourne(30, 1), n3 = tourne(30, 3);
+    __G.police.wanted = 0; __G.police.crimeLevel = 0; __G.clearWanted('fin');
+    return { ok: true, n1, n3 };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  return { ok: r.n3 > 0 && r.n3 >= r.n1, detail: `niveau 1 : ${r.n1} tir(s) · niveau 3 : ${r.n3} tir(s)` };
+});
+
+test('plus le délit est grave, plus la police s\'accroche', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const mesure = sev => { __G.police.wanted = 0; __G.police.crimeLevel = 0;
+      __G.infraction('test', 2, sev); const d = __G.police.decayT - __G.simTime; __G.clearWanted('fin'); return +d.toFixed(0); };
+    const petit = mesure(1), grave = mesure(3);
+    __G.clearWanted('fin');
+    return { petit, grave };
+  });
+  return { ok: r.grave > r.petit * 1.5, detail: `petit délit : abandon dans ${r.petit} s · délit grave : ${r.grave} s` };
+});
+
+test('on monte sur le trampoline de la villa et on rebondit', async p => {
+  const m = await grimpe(p, { world: 4, x: 45, y: 0.6, z: 162.5, facing: Math.PI, yaw: 0, pitch: 0.3, dist: 10, hour: 12, hideHud: true }, 1.6, 70000);
+  const r = await p.evaluate(() => {
+    // on se laisse tomber sur la toile depuis 4 m
+    __G.P.pos.set(45, 4, 156); __G.P.vel.set(0, -2, 0);
+    return { y0: +__G.P.pos.y.toFixed(2) };
+  });
+  const monte = await attendre(p, () => __G.P.vel.y > 3, 25000);
+  const v = await p.evaluate(() => +__G.P.vel.y.toFixed(1));
+  return { ok: m.atteint && monte, detail: `marches : ${m.y0.toFixed(2)} → ${m.ymax.toFixed(2)} m (toile à 1,65) · rebond : vitesse verticale ${v} m/s` };
+});
+
+test('on enfourche le cheval le plus proche du carrousel', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -18, y: 1, z: 152, hour: 12 });
+    const car = __G.city.rides.find(x => x.kind === 'carousel');
+    if (!car) return { ok: false, pourquoi: 'pas de carrousel' };
+    const v = new __G.THREE.Vector3();
+    const pos = i => { car.horses[i].g.getWorldPosition(v); return { x: v.x, z: v.z }; };
+    // on se place à côté du cheval 3
+    const cible = pos(3);
+    __G.P.pos.set(cible.x, 1.2, cible.z); __G.P.ride = null; car.rider = null;
+    __G.rideEnter(car);
+    return { ok: true, idx: car.rider ? car.rider.idx : -1 };
+  });
+  if (!r.ok) return { ok: false, detail: r.pourquoi };
+  await p.waitForTimeout(700);
+  const a = await p.evaluate(() => {
+    const car = __G.city.rides.find(x => x.kind === 'carousel');
+    const h = car.horses[car.rider.idx];
+    const v = new __G.THREE.Vector3(0, 0.425, -0.05);
+    h.g.localToWorld(v); __G.worldGroup.worldToLocal(v);
+    const ecart = +(__G.P.pos.y - (v.y - 0.51)).toFixed(2);
+    __G.P.ride = null; car.rider = null;
+    return { ecart, y: +__G.P.pos.y.toFixed(2), selle: +v.y.toFixed(2) };
+  });
+  return { ok: r.idx === 3 && Math.abs(a.ecart) < 0.05,
+    detail: `cheval choisi : n°${r.idx} (attendu 3) · joueur à ${a.y} m pour une selle à ${a.selle} m` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);
@@ -564,7 +643,9 @@ test('300 images de simulation en ville sans exception', async p => {
   await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'load'});
   await page.waitForFunction(()=>window.__SHOT&&window.__SHOT.ready,null,{timeout:60000});
   let pass=0, fail=0;
+  const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;
   for(const c of CASES){
+    if (filtre && !filtre.test(c.n)) continue;
     const before=errors.length;
     let r; try { r=await c.fn(page); } catch(e){ r={ok:false,detail:'exception : '+e.message}; }
     const newErr=errors.slice(before);

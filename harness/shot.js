@@ -40,7 +40,7 @@ window.__SHOT = {
 };
 window.__G = {
   P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats, owned,
-  updateBot, tennisMatchTick,
+  updateBot, tennisMatchTick, policeTick, worldGroup, THREE,
   loadWorld, cityReset, enterCar, exitCar, openUI, closeUI, takeAway, eatCarried, openFridge,
   respawn, die, msg, chat, infraction, clearWanted, jailEnter, jailFree, startMission, endMission,
   toggleMenu, applyMyLook, buildNav, navPath, throwGrenade, equipWeapon, fire, punch, kick, sitBench,
@@ -49,7 +49,7 @@ window.__G = {
   get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
   get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
   set wallet(v) { wallet = v; }, set running(v) { running = v; },
-  aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget, explodeVehicle, sitBench, sleepBed, placeDecor, repairVisual,
+  aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget, explodeVehicle, sitBench, sleepBed, placeDecor, repairVisual, rideEnter, infraction,
   // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
   // sur la version d'origine pour pouvoir comparer les deux
   ctrlText: typeof ctrlText === 'function' ? ctrlText : null,

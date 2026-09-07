@@ -423,6 +423,45 @@ test('la visée suit la caméra (visée à la souris)', async p => {
   return { ok, detail: `caméra 0° → visée ${JSON.stringify(r.nord)} ; 180° → ${JSON.stringify(r.sud)} ; inclinée vers le haut → y=${r.haut.y}` };
 });
 
+test('une voiture trop abîmée explose, et la réparation la remet à neuf', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const c = __G.city.cars.find(v => v.parts && v.parts.hood);
+    __G.P.pos.set(c.x, 0.5, c.z + 5);
+    const debrisAvant = __G.debris.length;
+    __G.vehicleDamage(c, 100);
+    const apres = { explose: !!c.explosed, mort: !!c.dead, debris: __G.debris.length - debrisAvant,
+      noir: c.g.children.some(o => o.material && o.material.color && o.material.color.getHex() === 0x2f2b28) };
+    c.dmg = 0; c.dead = false; __G.repairVisual(c);
+    return { ...apres, repare: !c.explosed };
+  });
+  return { ok: r.explose && r.mort && r.debris >= 3 && r.repare,
+    detail: `explosion : ${r.explose}, ${r.debris} pièces arrachées, carrosserie noircie : ${r.noir}, remise à neuf : ${r.repare}` };
+});
+
+test('on s\'assoit et on se relève sans sortir de la villa', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
+    const s2 = __G.city.benches.find(b => b.y > 0);   // un canapé du salon
+    if (!s2) return { ok: false };
+    __G.P.pos.set(s2.x, s2.y + 1, s2.z + 1.2);
+    __G.sitBench(s2);
+    const assis = { y: +__G.P.pos.y.toFixed(2), facing: +__G.P.facing.toFixed(2), attendu: +(s2.y + s2.assise - 0.51).toFixed(2) };
+    __G.P.jumpBuf = 1; __G.P.sit = s2;
+    // on rejoue la levée
+    const av = { x: __G.P.pos.x, z: __G.P.pos.z };
+    return { ok: true, assis, av, sx: s2.x, sz: s2.z, sy: s2.y };
+  });
+  if (!r.ok) return { ok: false, detail: 'aucun canapé trouvé' };
+  await p.waitForTimeout(900);
+  const apres = await p.evaluate(() => ({ x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1), y: +__G.P.pos.y.toFixed(2), sit: !!__G.P.sit }));
+  // la maison va de x 52,4 à 73,6 et z 154,4 à 169,6 : on doit rester dedans
+  const dedans = apres.x > 52 && apres.x < 74 && apres.z > 154 && apres.z < 170;
+  const bonneAssise = Math.abs(r.assis.y - r.assis.attendu) < 0.01;
+  return { ok: dedans && bonneAssise && !apres.sit,
+    detail: `assis à y=${r.assis.y} (attendu ${r.assis.attendu}) ; relevé en (${apres.x}, ${apres.z}) — dans la maison : ${dedans}` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

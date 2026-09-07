@@ -32,6 +32,7 @@ window.__SHOT = {
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
+    if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
@@ -48,7 +49,7 @@ window.__G = {
   get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
   get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
   set wallet(v) { wallet = v; }, set running(v) { running = v; },
-  aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget,
+  aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget, explodeVehicle, sitBench, sleepBed, placeDecor, repairVisual,
   // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
   // sur la version d'origine pour pouvoir comparer les deux
   ctrlText: typeof ctrlText === 'function' ? ctrlText : null,

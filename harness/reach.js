@@ -15,5 +15,7 @@ while(q.length){const c=q.pop(),i=c%nx,j=(c-i)/nx;for(const[di,dj]of[[1,0],[-1,0
 const at=(x,z)=>{const i=gi(x),j=gj(z);return i>=0&&j>=0&&i<nx&&j<nz?(g[j*nx+i]?'DANS UN MUR':(seen[j*nx+i]?'atteignable':'ISOLÉ')):'hors grille';};
 for (const [n,x,z] of [['devant l\'armurerie',52,12],['seuil de l\'armurerie',52,14.6],['intérieur armurerie',52,20],
   ['comptoir armurerie',52,21.5],['est de la ville',45,5],['héliport',52,-13],['plage',113,45],['banque',-52,70],
-  ['école',-62,212],['hôpital',12,212],['ma villa (jardin)',60,180],['piscine publique',-51,-15]])
+  ['école',-62,212],['hôpital',12,212],['ma villa (jardin)',60,180],['piscine publique',-51,-15],
+  ['Villa Azur (jardin)',108,180],['Villa Palmier (jardin)',156,180],['Villa Corail (jardin)',108,234],['Villa Émeraude (jardin)',156,234],
+  ['parking hôpital',24,219],['commissariat',-54,28]])
   console.log(`  ${at(x,z).padEnd(12)}  ${n}  (${x}, ${z})`);

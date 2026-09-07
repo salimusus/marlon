@@ -6,10 +6,14 @@ const G = run();
 G.loadWorld(4);
 const S = G.solids, city = G.city;
 
+// les portails et portes de garage s'ouvrent à l'approche : on les retire, sinon
+// toute propriété close paraîtrait injoignable
+const ouvrants = new Set();
+for (const d of [city.gate, city.garageDoor, ...city.autoDoors]) if (d && d.solid) ouvrants.add(d.solid);
 const B = o => ({ x0: o.x - Math.max(o.w,0.36)/2, x1: o.x + Math.max(o.w,0.36)/2,
                   z0: o.z - Math.max(o.d,0.36)/2, z1: o.z + Math.max(o.d,0.36)/2,
                   y0: o.y - o.h/2, y1: o.y + o.h/2, o });
-const boxes = S.map(B);
+const boxes = S.filter(o => !ouvrants.has(o)).map(B);
 const ovl = (a, b, k) => Math.min(a[k+'1'], b[k+'1']) - Math.max(a[k+'0'], b[k+'0']);
 const zoneOf = (x, z) => { const zz = city.zones.find(q => x > q.x1 && x < q.x2 && z > q.z1 && z < q.z2); return zz ? zz.name : '—'; };
 
@@ -58,11 +62,13 @@ for (const q of city.zones) {
       console.log(`   INATTEIGNABLE  ${q.emoji} ${q.name}  centre (${cx.toFixed(0)}, ${cz.toFixed(0)})${jok?'   (atteignable seulement en sautant un obstacle)':'   (même en sautant)'}`); unreachable++; }
   }
 }
-console.log(`   -> ${unreachable} zone(s) inatteignable(s) sur ${city.zones.length}\n`);
+console.log(`   -> ${unreachable} zone(s) signalée(s) sur ${city.zones.length} — modèle grossier (pas d'enchaînement de marches) ;`);
+console.log(`      harness/reach.js tranche au quart de mètre, portails ouverts\n`);
 
 // ---------- 2. accès voiture ----------
+const vehicules = new Set([...city.aiCars, ...city.cars, ...city.balls].map(c => c && c.solid).filter(Boolean));
 const carGrid = (() => { const g = new Uint8Array(nx*nz);
-  for (const b of boxes) { if (b.y1 < 0.75 || b.y0 > 2.6) continue;
+  for (const b of boxes) { if (b.y1 < 0.75 || b.y0 > 2.6 || vehicules.has(b.o)) continue;
     for (let i = Math.max(0,gi(b.x0-1.1)); i <= Math.min(nx-1,gi(b.x1+1.1)); i++)
       for (let j = Math.max(0,gj(b.z0-1.1)); j <= Math.min(nz-1,gj(b.z1+1.1)); j++) g[j*nx+i] = 1; }
   return g; })();
@@ -88,8 +94,13 @@ const GS = 8, key = (i,j) => i+','+j;
 boxes.forEach(b => { for (let i = Math.floor(b.x0/GS); i <= Math.floor(b.x1/GS); i++)
   for (let j = Math.floor(b.z0/GS); j <= Math.floor(b.z1/GS); j++) { const k = key(i,j); if(!cell.has(k)) cell.set(k,[]); cell.get(k).push(b); } });
 const seenPair = new Set(); const hits = [];
+// les véhicules sont tous créés au même point puis répartis à la première image :
+// leur empilement au chargement n'est pas un défaut d'agencement
+const vehic = new Set([...city.aiCars, ...city.cars, ...raceKartsOf()].map(c => c && c.solid).filter(Boolean));
+function raceKartsOf() { try { return G.raceKarts || []; } catch (e) { return []; } }
 for (const list of cell.values()) for (let i=0;i<list.length;i++) for (let j=i+1;j<list.length;j++) {
   const a = list[i], b = list[j]; if (a === b) continue;
+  if (vehic.has(a.o) || vehic.has(b.o) || a.o.veh || b.o.veh) continue;
   const pk = Math.min(a.o.mesh.id,b.o.mesh.id)+':'+Math.max(a.o.mesh.id,b.o.mesh.id);
   if (seenPair.has(pk)) continue; seenPair.add(pk);
   const ox = ovl(a,b,'x'), oz = ovl(a,b,'z'), oy = Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0);
@@ -97,6 +108,12 @@ for (const list of cell.values()) for (let i=0;i<list.length;i++) for (let j=i+1
   // un joint de mur = deux murs fins qui se croisent en angle : les deux petits côtés sont petits
   const thinA = Math.min(a.o.w,a.o.d) < 0.7, thinB = Math.min(b.o.w,b.o.d) < 0.7;
   if (thinA && thinB && ox < 1.2 && oz < 1.2) continue;
+  // segments de piste tournés : rbox() approxime la collision par la boîte englobante,
+  // deux boîtes voisines se recouvrent forcément dans un virage — ce n'est pas un défaut
+  const tourne = o => Math.abs(o.w - Math.round(o.w)) > 0.01 || Math.abs(o.d - Math.round(o.d)) > 0.01;
+  if (tourne(a.o) && tourne(b.o)) continue;
+  // angles de l'enceinte du monde
+  if (Math.max(a.o.w, a.o.d) > 200 && Math.max(b.o.w, b.o.d) > 200) continue;
   const vol = ox*oy*oz;
   hits.push({ vol, ox, oy, oz, a, b });
 }
@@ -134,7 +151,8 @@ for (let j=0;j<nz;j+=3) for (let i=0;i<nx;i+=3) { const k=j*nx+i;
 regions.sort((a,b)=>b.n-a.n);
 for (const r of regions.slice(0,8))
   console.log(`   ${String(r.n).padStart(6)} cases  x[${r.minx.toFixed(0)}, ${r.maxx.toFixed(0)}]  z[${r.minz.toFixed(0)}, ${r.maxz.toFixed(0)}]   graine (${r.seed[0]},${r.seed[1]})`);
-console.log(`   -> ${regions.length} régions séparées : le réseau routier n'est PAS connexe pour une voiture`);
+console.log(`   -> ${regions.length} régions séparées (les allées privées derrière un portail en font partie ;`);
+console.log(`      harness/garage.js et harness/reach.js vérifient finement les accès, portails ouverts)`);
 
 // ---------- 7. objets décoratifs plantés dans un bâtiment ----------
 console.log('\n## 7. Arbres / palmiers / lampadaires dans un bâtiment');

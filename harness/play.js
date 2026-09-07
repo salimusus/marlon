@@ -70,6 +70,59 @@ test("un gros délit donne encore une lourde peine (la remise à zéro ne doit p
   return { ok: r.niveau===3 && r.crime===0, detail:`peine=${r.niveau} (attendu 3), crimeLevel remis à ${r.crime}` };
 });
 
+test('un bot bloqué contre un mur ne fait plus planter la boucle', async p => {
+  await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
+  const r = await p.evaluate(()=>{
+    const b = __G.bots[0];
+    // état exact qui plantait : le bot est dans un immeuble (chaque pas est bloqué) et vient
+    // d'atteindre 1,2 s de blocage, donc sa destination est remise à null au pas suivant
+    b.pos.set(35.5, 0.3, 16); b.target = [80, 0.3, 16]; b.wait = 0; b.stuckT = 1.19;
+    try { for (let i = 0; i < 6; i++) __G.updateBot(b, 0.05); return { ok: true }; }
+    catch (e) { return { ok: false, err: String(e && e.message || e) }; }
+  });
+  return { ok: r.ok, detail: r.ok ? 'six pas simulés en état bloqué, aucune exception' : 'exception : ' + r.err };
+});
+
+test('la mission « Livraison express » a une destination réelle', async p => {
+  await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
+  const snack = await p.evaluate(()=>__G.city.snack);
+  if (!snack) return { ok:false, detail:'city.snack vaut toujours null' };
+  await p.evaluate(()=>{ __SHOT.go({world:4,x:0,y:1,z:0,hour:12}); __G.startMission('livraison'); });
+  await p.waitForTimeout(600);
+  const m = await p.evaluate(()=>({cur: __G.mission.cur ? __G.mission.cur.id || true : null}));
+  await p.evaluate(()=>__G.endMission(false, true));
+  return { ok: !!m.cur, detail:`snack en (${snack.x}, ${snack.z}), mission acceptée=${!!m.cur}` };
+});
+
+test('les indicateurs de proximité repartent à zéro hors de la ville', async p => {
+  await p.evaluate(()=>{ __SHOT.go({world:4,x:0,y:1,z:0,hour:12});
+    __G.city.stoveNear = true; __G.city.rideNear = { dummy:1 }; __G.city.swingNear = { dummy:1 }; });
+  await p.evaluate(()=>__G.loadWorld(0)); await p.waitForTimeout(400);
+  await p.keyboard.press('KeyE'); await p.waitForTimeout(400);
+  const r = await p.evaluate(()=>({stove:!!__G.city.stoveNear, ride:!!__G.city.rideNear, swing:!!__G.city.swingNear,
+    prisRide:!!__G.P.ride, prisSwing:!!__G.P.swing}));
+  return { ok: !r.stove && !r.ride && !r.swing && !r.prisRide && !r.prisSwing,
+    detail:`gazinière=${r.stove} manège=${r.ride} balançoire=${r.swing}, joueur coincé=${r.prisRide||r.prisSwing}` };
+});
+
+test('les matériaux des ballons sont déclarés partagés', async p => {
+  const r = await p.evaluate(()=>({ foot: __G.shared.has(__G.ballMats.foot), tennis: __G.shared.has(__G.ballMats.tennis) }));
+  return { ok: r.foot && r.tennis, detail:`foot partagé=${r.foot}, tennis partagé=${r.tennis} (sinon clearWorld les détruit à chaque changement de monde)` };
+});
+
+test('le tennis ne sert pas sur un court vide', async p => {
+  await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
+  const r = await p.evaluate(()=>{
+    __G.P.racket = false;                       // personne sur le court
+    __G.tm.on = true; __G.tm.serve = 0; __G.tm.serveT = -1; __G.tm.graceT = 0; __G.tm.s = [0, 0]; __G.tm.names = ['a', 'b'];
+    __G.city.balls.length = 0;                  // aucune balle : le service va être tenté
+    try { __G.tennisMatchTick(0.016); return { ok: true }; }
+    catch (e) { return { ok: false, err: String(e && e.message || e) }; }
+    finally { __G.tm.on = false; }
+  });
+  return { ok: r.ok, detail: r.ok ? 'service tenté sur un court vide sans exception' : 'exception : ' + r.err };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

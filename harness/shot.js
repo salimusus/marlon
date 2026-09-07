@@ -36,7 +36,8 @@ window.__SHOT = {
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
 };
 window.__G = {
-  P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY,
+  P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats,
+  updateBot, tennisMatchTick,
   loadWorld, cityReset, enterCar, exitCar, openUI, closeUI, takeAway, eatCarried, openFridge,
   respawn, die, msg, chat, infraction, clearWanted, jailEnter, jailFree, startMission, endMission,
   toggleMenu, applyMyLook, buildNav, navPath, throwGrenade, equipWeapon, fire, punch, kick, sitBench,

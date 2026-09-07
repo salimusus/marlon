@@ -225,7 +225,8 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
   await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
     const b = __G.bots[0];
-    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
+    __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0;   // la visée suit la caméra : on la pointe vers +z
     b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
@@ -246,7 +247,8 @@ test('une balle ne traverse plus une cloison fine', async p => {
   await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
     const b = __G.bots[0];
-    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
+    __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0;   // la visée suit la caméra : on la pointe vers +z
     b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
     // cloison de 30 cm entre le joueur et le bot : plus mince que la distance parcourue
     // par une balle en une image, donc invisible pour un test ponctuel
@@ -271,7 +273,7 @@ test('une balle s\'arrête sur le mur et ne le traverse pas', async p => {
     // un mur artificiel droit devant, à 6 m
     const mur = { mesh: { position: { x: 0, y: 1.5, z: 6 } }, x: 0, y: 1.5, z: 6, w: 8, h: 3, d: 0.6 };
     __G.solids.push(mur);
-    __G.P.pos.set(0, 0.4, 0); __G.P.facing = 0; __G.P.aimPitch = 0;
+    __G.P.pos.set(0, 0.4, 0); __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0;
     __G.aimTick();
     const d = __G.aimPoint.z;
     const derriere = __G.castSolids(0, 1.35, 0, 0, 0, 1, 60, false);
@@ -284,22 +286,23 @@ test('une balle s\'arrête sur le mur et ne le traverse pas', async p => {
 
 test('le tir part bien de la bouche du canon', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
-    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    __G.P.pos.set(110, 0.4, 60); __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0;
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
-    __G.aimTick();
-    const m = __G.muzzle();
-    if (!m) return { ok: false };
-    return { ok: true, dx: +(m.x - 110).toFixed(2), dy: +(m.y - 0.4).toFixed(2), dz: +(m.z - 60).toFixed(2) };
+    __G.shots.length = 0; __G.P.fireCd = 0; __G.P.ammo = 8; __G.aimTick(); __G.fire();
+    const s = __G.shots[0];
+    if (!s) return { ok: false };
+    return { ok: true, dx: +(s.p.x - 110).toFixed(2), dy: +(s.p.y - 0.4).toFixed(2), dz: +(s.p.z - 60).toFixed(2) };
   });
-  // la bouche doit être devant le joueur (dz > 0) et à hauteur de poitrine
-  return { ok: r.ok && r.dz > 0.4 && r.dy > 0.8 && r.dy < 2, detail: r.ok ? `bouche à ${r.dx} / ${r.dy} / ${r.dz} du joueur` : 'pas de bouche de canon' };
+  // la balle doit naître devant le joueur, à hauteur de poitrine, légèrement à droite
+  const ok = r.ok && r.dz > 0.4 && r.dy > 0.8 && r.dy < 2 && Math.abs(r.dx) < 0.8;
+  return { ok, detail: r.ok ? `départ de la balle à ${r.dx} / ${r.dy} / ${r.dz} du joueur` : 'aucune balle créée' };
 });
 
 test('la visée reste peu coûteuse (un seul passage sur les solides)', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
-    __G.P.facing = 0.7; __G.P.aimPitch = 0.1;
+    __G.cam.yaw = 0.7; __G.cam.pitch = 0.1;
     const t0 = performance.now();
     for (let i = 0; i < 200; i++) __G.aimTick();
     return { ms: +((performance.now() - t0) / 200).toFixed(3), solides: __G.solids.length };
@@ -334,7 +337,8 @@ test('le stand de tir a des cibles et on peut les toucher', async p => {
   const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: 52, y: 1, z: 11, hour: 12 }); return __G.city.targets.length; });
   if (!n) return { ok: false, detail: 'aucune cible dans le jeu' };
   const r = await p.evaluate(() => {
-    __G.P.pos.set(47, 0.4, 11); __G.P.facing = Math.PI; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    __G.P.pos.set(47, 0.4, 11); __G.P.vel.set(0, 0, 0);
+    __G.cam.yaw = 0; __G.cam.pitch = 0; __G.P.facing = Math.PI;   // caméra vers -z : on regarde les cibles
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true; __G.P.fireCd = 0; __G.aimTick(); __G.fire();
     return __G.city.shots;
@@ -404,6 +408,19 @@ test('un véhicule cabossé montre ses dégâts et fume', async p => {
   if (!r.ok) return { ok: false, detail: r.pourquoi };
   const ok = r.apres.capot !== r.avant.capot && r.apres.pc !== r.avant.pc && r.dmgFinal > 80;
   return { ok, detail: `capot ${r.avant.capot.toFixed(2)} → ${r.apres.capot.toFixed(2)}, pare-chocs ${r.avant.pc.toFixed(2)} → ${r.apres.pc.toFixed(2)}, dégâts ${r.dmgFinal}` };
+});
+
+test('la visée suit la caméra (visée à la souris)', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 100, hour: 12 });
+    __G.P.pos.set(110, 0.4, 100);
+    const vise = (yaw, pitch) => { __G.cam.yaw = yaw; __G.cam.pitch = pitch; __G.aimTick();
+      return { x: +__G.aimDir.x.toFixed(2), y: +__G.aimDir.y.toFixed(2), z: +__G.aimDir.z.toFixed(2) }; };
+    return { nord: vise(0, 0), sud: vise(Math.PI, 0), est: vise(-Math.PI / 2, 0), haut: vise(Math.PI, -0.6) };
+  });
+  // caméra à yaw=0 : elle est derrière le joueur côté +z, donc on vise vers -z
+  const ok = r.nord.z < -0.9 && r.sud.z > 0.9 && r.est.x > 0.9 && r.haut.y > 0.5;
+  return { ok, detail: `caméra 0° → visée ${JSON.stringify(r.nord)} ; 180° → ${JSON.stringify(r.sud)} ; inclinée vers le haut → y=${r.haut.y}` };
 });
 
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {

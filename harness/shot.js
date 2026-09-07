@@ -31,12 +31,14 @@ window.__SHOT = {
     cam.freeUntil = 1e9;                         // fige l'orientation demandée
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
+    if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
+    if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
 };
 window.__G = {
-  P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats,
+  P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats, owned,
   updateBot, tennisMatchTick,
   loadWorld, cityReset, enterCar, exitCar, openUI, closeUI, takeAway, eatCarried, openFridge,
   respawn, die, msg, chat, infraction, clearWanted, jailEnter, jailFree, startMission, endMission,
@@ -46,7 +48,18 @@ window.__G = {
   get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
   get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
   set wallet(v) { wallet = v; }, set running(v) { running = v; },
-  ctrlText, bodyClass() { return document.body.className; },
+  aimTick, fire, drawWeapon, WEAPONS,
+  // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
+  // sur la version d'origine pour pouvoir comparer les deux
+  ctrlText: typeof ctrlText === 'function' ? ctrlText : null,
+  castSolids: typeof castSolids === 'function' ? castSolids : null,
+  rayBox: typeof rayBox === 'function' ? rayBox : null,
+  rayPerso: typeof rayPerso === 'function' ? rayPerso : null,
+  get aimPoint() { return aimPoint; },
+  get aimDir() { return typeof aimDir !== 'undefined' ? aimDir : null; },
+  muzzle() { const w = me.weapons && me.weapons[P.weapon]; const m = w && w.userData && w.userData.muzzle;
+    return m ? m.getWorldPosition(new THREE.Vector3()) : null; },
+  bodyClass() { return document.body.className; },
   tactile(on) { document.body.classList.toggle('touch', !!on); },
   hud() { return { jump: document.getElementById('jumpBtn').textContent, car: document.getElementById('carBtn').textContent,
     punch: document.getElementById('punchBtn').textContent, emote: document.getElementById('emoteBtn').textContent }; },

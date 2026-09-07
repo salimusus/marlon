@@ -221,6 +221,94 @@ test('les libellés de commandes suivent le mode tactile', async p => {
   return { ok, detail: `clavier « ${r.avant} » ; tactile « ${r.action} » / « ${r.saut} » ; monde préservé : ${r.monde.includes('Espace')}` };
 });
 
+test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
+  await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
+    const b = __G.bots[0];
+    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
+    __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
+  });
+  const hp0 = await p.evaluate(() => __G.bots[0].hp);
+  // Une balle avance de ~4,7 m par image : l'ancien test ponctuel ne la voyait dans la
+  // boîte du bot (0,84 m) qu'environ une fois sur six. La rafale rend l'écart visible.
+  for (let i = 0; i < 6; i++) {
+    await p.evaluate(() => { __G.P.fireCd = 0; __G.P.ammo = 8; __G.P.aim = true; __G.aimTick(); __G.fire(); });
+    await attendre(p, () => __G.shots.length === 0, 20000);
+  }
+  const hp1 = await p.evaluate(() => __G.bots[0].hp);
+  const touches = Math.round((hp0 - hp1) / 24);
+  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts)` };
+});
+
+test('une balle ne traverse plus une cloison fine', async p => {
+  await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
+    const b = __G.bots[0];
+    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0; __G.P.vel.set(0, 0, 0);
+    b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
+    // cloison de 30 cm entre le joueur et le bot : plus mince que la distance parcourue
+    // par une balle en une image, donc invisible pour un test ponctuel
+    const mur = { mesh: { position: { x: 110, y: 1.5, z: 66 } }, x: 110, y: 1.5, z: 66, w: 6, h: 3, d: 0.3 };
+    __G.solids.push(mur); window.__mur = mur;
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
+    __G.P.aimToggle = true; __G.P.aim = true;
+  });
+  const hp0 = await p.evaluate(() => __G.bots[0].hp);
+  for (let i = 0; i < 4; i++) {
+    await p.evaluate(() => { __G.P.fireCd = 0; __G.P.ammo = 8; __G.P.aim = true; __G.aimTick(); __G.fire(); });
+    await attendre(p, () => __G.shots.length === 0, 20000);
+  }
+  const hp1 = await p.evaluate(() => __G.bots[0].hp);
+  await p.evaluate(() => { const i = __G.solids.indexOf(window.__mur); if (i >= 0) __G.solids.splice(i, 1); });
+  return { ok: hp1 === hp0, detail: `4 balles tirées à travers la cloison : le bot derrière a perdu ${hp0 - hp1} point(s) de vie (attendu 0)` };
+});
+
+test('une balle s\'arrête sur le mur et ne le traverse pas', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    // un mur artificiel droit devant, à 6 m
+    const mur = { mesh: { position: { x: 0, y: 1.5, z: 6 } }, x: 0, y: 1.5, z: 6, w: 8, h: 3, d: 0.6 };
+    __G.solids.push(mur);
+    __G.P.pos.set(0, 0.4, 0); __G.P.facing = 0; __G.P.aimPitch = 0;
+    __G.aimTick();
+    const d = __G.aimPoint.z;
+    const derriere = __G.castSolids(0, 1.35, 0, 0, 0, 1, 60, false);
+    __G.solids.splice(__G.solids.indexOf(mur), 1);
+    return { viseZ: +d.toFixed(2), distMur: +derriere.d.toFixed(2) };
+  });
+  // le mur commence à z = 5.7 : le réticule doit s'y arrêter, pas filer au-delà
+  return { ok: r.viseZ > 5.4 && r.viseZ < 6.1, detail: `réticule posé à z=${r.viseZ} (mur à 5,70 m)` };
+});
+
+test('le tir part bien de la bouche du canon', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
+    __G.P.pos.set(110, 0.4, 60); __G.P.facing = 0; __G.P.aimPitch = 0;
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
+    __G.aimTick();
+    const m = __G.muzzle();
+    if (!m) return { ok: false };
+    return { ok: true, dx: +(m.x - 110).toFixed(2), dy: +(m.y - 0.4).toFixed(2), dz: +(m.z - 60).toFixed(2) };
+  });
+  // la bouche doit être devant le joueur (dz > 0) et à hauteur de poitrine
+  return { ok: r.ok && r.dz > 0.4 && r.dy > 0.8 && r.dy < 2, detail: r.ok ? `bouche à ${r.dx} / ${r.dy} / ${r.dz} du joueur` : 'pas de bouche de canon' };
+});
+
+test('la visée reste peu coûteuse (un seul passage sur les solides)', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    __G.P.facing = 0.7; __G.P.aimPitch = 0.1;
+    const t0 = performance.now();
+    for (let i = 0; i < 200; i++) __G.aimTick();
+    return { ms: +((performance.now() - t0) / 200).toFixed(3), solides: __G.solids.length };
+  });
+  // l'ancienne visée échantillonnait tous les 0,60 m sur 90 m, soit ~150 passages sur la
+  // liste des solides à chaque image : elle mesurait 1,67 ms contre 0,15 ms ici
+  return { ok: r.ms < 0.5, detail: `${r.ms} ms par visée sur ${r.solides} solides` };
+});
+
 test('les ballons de la fête foraine ne s\'accumulent pas', async p => {
   await p.evaluate(()=>__G.loadWorld(4)); await p.waitForTimeout(500);
   const n1 = await p.evaluate(()=>__G.city.balloons.length);

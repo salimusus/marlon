@@ -902,13 +902,27 @@ function grenadeMesh() {   // grenade « boule de choc » : sphère quadrillée,
   const pin = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 14), lam(0xffd23f)); pin.position.set(-0.07, -0.56, 0); pin.rotation.y = Math.PI / 2; g.add(pin);
   return g;
 }
-function wrapWeapon(mesh, dy, dz) {   // enveloppe l'arme pour que l'origine du groupe tombe sur la poignée
-  const g = new THREE.Group(); mesh.position.set(0, dy, dz); g.add(mesh); g.userData.inner = mesh; return g;
+// Enveloppe une arme : l'origine du groupe tombe exactement sur la poignée et le canon
+// pointe vers +z. (0, gy, gz) = poignée telle qu'elle est modélisée ; (mx, my, mz) = bouche.
+function wrapWeapon(mesh, gy, gz, mx, my, mz) {
+  const g = new THREE.Group();
+  mesh.position.set(0, -gy, -gz); g.add(mesh); g.userData.inner = mesh;
+  const muz = new THREE.Object3D(); muz.position.set(mx, my - gy, mz - gz); g.add(muz); g.userData.muzzle = muz;
+  return g;
 }
 function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, sinon rangée (étui à la hanche / dos)
   if (!av.weapons) {
-    av.weapons = { pistol: wrapWeapon(gunMesh(), 0.78, -0.18), rifle: wrapWeapon(rifleMesh(), 0.7, -0.1), grenade: wrapWeapon(grenadeMesh(), 0.75, 0) };
+    // Poignées relevées sur les modèles : pistolet (0, -0.84, -0.02), fusil (0, -0.82, -0.14),
+    // grenade (0, -0.75, 0). Bouches : pistolet (0, -0.62, 0.66), fusil (0, -0.64, 1.0).
+    av.weapons = { pistol: wrapWeapon(gunMesh(), -0.84, -0.02, 0, -0.62, 0.66),
+                   rifle: wrapWeapon(rifleMesh(), -0.82, -0.14, 0, -0.64, 1.0),
+                   grenade: wrapWeapon(grenadeMesh(), -0.75, 0, 0, -0.75, 0.16) };
     for (const m of Object.values(av.weapons)) { m.visible = false; av.group.add(m); }
+    // Nœud « main droite » au bout du bras, tourné pour que le +z de l'arme descende le long
+    // du bras : quand le bras se lève pour viser, le canon pointe droit devant. Avant, l'arme
+    // était posée 0,16 m au-delà du poing et son canon partait vers le ciel.
+    const hand = new THREE.Group(); hand.position.set(0, -2 * S, 0); hand.rotation.x = Math.PI / 2;
+    av.rig.armR.add(hand); av.rig.handR = hand;
     const h = new THREE.Group(); av.group.add(h);
     const belt = new THREE.Mesh(unitRound, lam(0x5a3a1e)); belt.scale.set(2.2 * S, 0.24 * S, 1.16 * S); belt.position.y = 1.95 * S; h.add(belt);
     const buckle = new THREE.Mesh(unitRound, lam(0xffd23f)); buckle.scale.set(0.34 * S, 0.24 * S, 0.12 * S); buckle.position.set(0, 1.95 * S, 0.58 * S); h.add(buckle);
@@ -918,21 +932,22 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
   }
   for (const [k, m] of Object.entries(av.weapons)) {
     m.visible = k === kind; if (k !== kind) continue;
-    if (inHand || k === 'grenade') {   // en main : dans la main droite
-      if (m.parent !== av.rig.armR) { m.parent && m.parent.remove(m); av.rig.armR.add(m); }
-      m.position.set(0, -0.82, 0.12); m.rotation.set(k === 'rifle' ? -0.15 : 0, 0, 0); m.scale.setScalar(1);
+    if (inHand || k === 'grenade') {   // en main : la poignée dans le poing
+      if (m.parent !== av.rig.handR) { m.parent && m.parent.remove(m); av.rig.handR.add(m); }
+      m.position.set(0, 0, 0.02); m.rotation.set(0, 0, 0); m.scale.setScalar(1);
     } else {   // rangée : pistolet dans l'étui à la hanche droite (canon vers le bas), fusil en bandoulière dans le dos
       if (m.parent !== av.group) { m.parent && m.parent.remove(m); av.group.add(m); }
-      if (k === 'pistol') { m.position.set(1.06 * S, 1.72 * S, 0.02); m.rotation.set(Math.PI * 0.94, 0, 0.18); m.scale.setScalar(0.95); }
-      else { m.position.set(-0.1 * S, 3.05 * S, -0.78 * S); m.rotation.set(-1.5, 0.1, 1.05); m.scale.setScalar(0.95); }
+      // rangée : poignée sur l'étui, canon vers le bas pour le pistolet ; fusil en bandoulière
+      if (k === 'pistol') { m.position.set(1.02 * S, 1.9 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.25, 0, 0.12); m.scale.setScalar(0.95); }
+      else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(Math.PI / 2, 0.12, 1.15); m.scale.setScalar(0.95); }
     }
   }
   av.holster.visible = kind === 'pistol' && !inHand;
   av.gun = av.weapons[kind] ? av.weapons[kind].userData.inner : null; av.inHand = !!inHand;
 }
 const WEAPONS = {
-  pistol: { n: 'Pistolet', e: '🔫', p: 20, ammo: 8, reload: 1.2, cd: 0.28, speed: 95, spread: 0.006, auto: false, dmg: 24 },
-  rifle: { n: 'Fusil d\'assaut', e: '🎯', p: 45, ammo: 30, reload: 2.0, cd: 0.085, speed: 110, spread: 0.028, auto: true, dmg: 12 },
+  pistol: { n: 'Pistolet', e: '🔫', p: 20, ammo: 8, reload: 1.2, cd: 0.28, speed: 95, spread: 0.006, auto: false, dmg: 24, muzzle: [0.34, 1.3, 0.62] },
+  rifle: { n: 'Fusil d\'assaut', e: '🎯', p: 45, ammo: 30, reload: 2.0, cd: 0.085, speed: 110, spread: 0.028, auto: true, dmg: 12, muzzle: [0.3, 1.28, 1.05] },
   grenade: { n: 'Grenades de choc ×5', e: '💣', p: 15, ammo: 5, consumable: true },
 };
 function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E devant le présentoir = achat direct), comptoir, râtelier, munitions
@@ -2155,15 +2170,18 @@ function guardsTick(dt) {
 }   // bureau des missions : kiosque ouvert avec grand tableau, agent, panneau lumineux
 function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, serviettes, planches, bateau, poste de secours, jet-skis, coquillages, bouées
   const sea1 = 122, sea2 = 206;
-  plat(113, 0.08, 45, 18, 240, 0xf2dea0, { studs: false, noRoute: true }, 0.16);
-  plat(164, 0.02, 45, 84, 240, 0x1d6fa8, { studs: false, noRoute: true, noEdges: true }, 0.04);   // fond marin
-  const geo = new THREE.PlaneGeometry(85, 242, 34, 70); geo.rotateX(-Math.PI / 2);
-  const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f9be6, transparent: true, opacity: 0.72, side: THREE.DoubleSide })); sea.position.set(164, 1.55, 45); worldGroup.add(sea);
-  city.seaMesh = sea; city.sea = { x1: sea1, x2: sea2, z1: -75, z2: 165, top: 1.6 };
-  const foam = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); foam.scale.set(1.2, 0.05, 240); foam.position.set(sea1 + 0.3, 1.62, 45); worldGroup.add(foam); city.foam = foam;
-  road(102, 45, 4, 200, 0, true); road(90, 0, 30, 6, 0, true);
+  // la plage s'arrête au nord du quartier résidentiel (parcelles à partir de z = 147) :
+  // le sable traversait la Villa Azur et la Villa Palmier se dressait au milieu de la mer
+  const BZ1 = -75, BZ2 = 138, BZC = (BZ1 + BZ2) / 2, BZD = BZ2 - BZ1;
+  plat(113, 0.08, BZC, 18, BZD, 0xf2dea0, { studs: false, noRoute: true }, 0.16);
+  plat(164, 0.02, BZC, 84, BZD, 0x1d6fa8, { studs: false, noRoute: true, noEdges: true }, 0.04);   // fond marin
+  const geo = new THREE.PlaneGeometry(85, BZD + 2, 34, 70); geo.rotateX(-Math.PI / 2);
+  const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f9be6, transparent: true, opacity: 0.72, side: THREE.DoubleSide })); sea.position.set(164, 1.55, BZC); worldGroup.add(sea);
+  city.seaMesh = sea; city.sea = { x1: sea1, x2: sea2, z1: BZ1, z2: BZ2, top: 1.6 };
+  const foam = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); foam.scale.set(1.2, 0.05, BZD); foam.position.set(sea1 + 0.3, 1.62, BZC); worldGroup.add(foam); city.foam = foam;
+  road(102, BZC, 4, BZD - 16, 0, true); road(90, 0, 30, 6, 0, true);
   for (let i = 0; i < 12; i++) {   // parasols + serviettes
-    const px = rnd(106, 115), pz = -55 + i * 20 + rnd(-3, 3), col = pickOne([0xff5c5c, 0xffd23f, 0x4f8dff, 0xff7ad9, 0x5cc453]);
+    const px = rnd(106, 115), pz = BZ1 + 10 + i * ((BZD - 22) / 11) + rnd(-3, 3), col = pickOne([0xff5c5c, 0xffd23f, 0x4f8dff, 0xff7ad9, 0x5cc453]);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), lam(0xf4f6fa)); pole.position.set(px, 1.4, pz); worldGroup.add(pole);
     const par = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.7, 12), lam(col)); par.position.set(px, 2.7, pz); worldGroup.add(par);
     box(px + 1.5, 0.2, pz + 0.8, 1.2, 0.06, 2.2, pickOne([0xffffff, 0xffd23f, 0x35d0e6, 0xff7ad9]), { deco: true, noEdges: true, studs: false });   // serviette
@@ -2187,7 +2205,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   city.buoys = []; for (let i = 0; i < 5; i++) { const bz = -30 + i * 30, bx = 126 + (i % 2) * 8; const b = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), lam(i % 2 ? 0xff5c5c : 0xffd23f)); b.position.set(bx, 1.9, bz); worldGroup.add(b); city.buoys.push({ x: bx, z: bz, m: b }); }
   city.shells = [];
   for (let i = 0; i < 16; i++) {   // coquillages variés (conques, étoiles de mer, bigorneaux)
-    const cx = rnd(104.5, 120), cz = rnd(-60, 150), kind = i % 3, col = pickOne([0xffe6cc, 0xffb6c1, 0xffffff, 0xffd9a0]);
+    const cx = rnd(104.5, 120), cz = rnd(BZ1 + 12, BZ2 - 10), kind = i % 3, col = pickOne([0xffe6cc, 0xffb6c1, 0xffffff, 0xffd9a0]);
     let sh;
     if (kind === 0) { sh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), lam(col)); sh.scale.set(1, 0.45, 1.3); }
     else if (kind === 1) { sh = new THREE.Group(); for (let k = 0; k < 5; k++) { const arm = new THREE.Mesh(unitRound, lam(0xff8f3a)); arm.scale.set(0.14, 0.07, 0.42); arm.rotation.y = k * Math.PI * 2 / 5; arm.position.set(Math.sin(k * Math.PI * 2 / 5) * 0.18, 0, Math.cos(k * Math.PI * 2 / 5) * 0.18); sh.add(arm); } }
@@ -2201,7 +2219,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
     const body = new THREE.Mesh(unitRound, lam(col)); body.scale.set(0.28, 0.34, 0.8); g.add(body);
     const tail = new THREE.Mesh(unitRound, lam(col)); tail.scale.set(0.06, 0.4, 0.35); tail.position.z = -0.5; g.add(tail);
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), lam(0x111111)); eye.position.set(0.12, 0.08, 0.3); g.add(eye);
-    g.position.set(rnd(126, 200), rnd(0.5, 1.2), rnd(-70, 160)); worldGroup.add(g);
+    g.position.set(rnd(126, 200), rnd(0.5, 1.2), rnd(BZ1 + 6, BZ2 - 8)); worldGroup.add(g);
     city.fish.push({ g, tail, x: g.position.x, z: g.position.z, y: g.position.y, h: rnd(0, 6.28), sp: rnd(1.6, 3.2), t: rnd(0, 6) });
   }
   const sk = new THREE.Group();
@@ -2222,7 +2240,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   box(112, 4.2, 26, 4.4, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('⚠️ ATTENTION REQUIN') }), deco: true, noEdges: true });
   box(103, 3.5, -52, 4, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏖️ PLAGE') }), deco: true, noEdges: true }); box(103, 1.5, -52, 0.15, 3, 0.15, 0x3b4252, { studs: false, noRoute: true });
   for (let i = 0; i < 4; i++) lamp(102, -30 + i * 50);
-  city.zones.push({ name: 'Plage', emoji: '🏖️', x1: 103, x2: 141, z1: -55, z2: 145, hint: '🏖️ Plage : nage dans les vagues, jet-skis au bord de l\'eau (E), coquillages et missions de sauveteur' });
+  city.zones.push({ name: 'Plage', emoji: '🏖️', x1: 103, x2: 141, z1: BZ1 + 10, z2: BZ2, hint: '🏖️ Plage : nage dans les vagues, jet-skis au bord de l\'eau (E), coquillages et missions de sauveteur' });
 }
 const RALLY = { x1: -80, x2: 80, z1: -78, z2: -62, hills: [], mesh: null };
 function terrainH(x, z) {   // relief du rallye : collines gaussiennes + tremplins + trous
@@ -2460,7 +2478,9 @@ function docsTick(dt) {   // les médecins font leur ronde
 const RAW = [{ e: '🥩', n: 'Steak', f: 6, m: 4, cook: true }, { e: '🍗', n: 'Poulet', f: 5, m: 4, cook: true }, { e: '🐟', n: 'Poisson', f: 2, m: 3, cook: true }, { e: '🥚', n: 'Œufs', f: 3, m: 2, cook: true }, { e: '🍟', n: 'Frites', f: 8, m: 0, cook: true }, { e: '🥦', n: 'Légumes', f: -4, m: 1, cook: true }, { e: '🥤', n: 'Soda', f: 5, m: 0 }, { e: '🧃', n: 'Jus de fruit', f: 1, m: 0 }, { e: '🥛', n: 'Lait', f: 1, m: 1 }, { e: '🍰', n: 'Gâteau', f: 9, m: 0 }, { e: '🍇', n: 'Raisin', f: -1, m: 0 }, { e: '🧀', n: 'Fromage', f: 4, m: 1 }];
 function sofa(x, z, ry, col, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); }; add(3.4, 0.45, 1.3, 0, 0.45, 0, col); add(3.4, 0.9, 0.3, 0, 0.95, -0.65, col); for (const sx of [-1.65, 1.65]) add(0.3, 0.7, 1.3, sx, 0.8, 0, col); for (const dx of [-0.9, 0.9]) add(1.2, 0.2, 1.1, dx, 0.78, 0.05, col); box(x, y + 0.22, z, 3.4, 0.45, 1.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }); }
 function villaBed(x, z, ry, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g.add(m); }; add(3.4, 0.5, 4.4, 0, 0.35, 0, 0x6b4423); add(3.3, 0.4, 4.2, 0, 0.75, 0, 0xffffff); add(3.3, 0.12, 2.4, 0, 0.98, 0.9, 0x4f8dff); for (const dx of [-0.8, 0.8]) add(1.3, 0.25, 0.7, dx, 1.05, -1.5, 0xffffff); add(3.6, 1.6, 0.25, 0, 0.9, -2.3, 0x8b5a2b); for (const dx of [-2.2, 2.2]) { add(0.8, 0.6, 0.8, dx, 0.35, -1.8, 0x8b5a2b); add(0.3, 0.6, 0.3, dx, 1, -1.8, 0xffd23f); } box(x, y + 0.45, z, 3.4, 0.9, 4.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }); city.beds.push({ x, z, ry, y }); }
-function tvSet(x, z, ry, w, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, mat) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); g.add(m); return m; }; add(w, 0.5, 0.5, 0, 0.3, 0, lam(0x2b2f3a)); add(0.22, 1.05 + w * 0.28, 0.22, 0, 1.05 + w * 0.14, 0, lam(0x2b2f3a)); add(w, w * 0.56, 0.12, 0, 1.6 + w * 0.28, 0, lam(0x111318)); const scr = add(w - 0.16, w * 0.5, 0.03, 0, 1.6 + w * 0.28, 0.08, new THREE.MeshLambertMaterial({ color: 0x0a1a3a, emissive: 0x123a7a, emissiveIntensity: 0.8 })); city.tvs.push(scr); }
+function tvSet(x, z, ry, w, y = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; worldGroup.add(g); const add = (sx, sy, sz2, px, py, pz, mat) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); g.add(m); return m; }; add(w, 0.5, 0.5, 0, 0.3, 0, lam(0x2b2f3a)); add(0.22, 1.05 + w * 0.28, 0.22, 0, 1.05 + w * 0.14, 0, lam(0x2b2f3a)); add(w, w * 0.56, 0.12, 0, 1.6 + w * 0.28, 0, lam(0x111318)); const scr = add(w - 0.16, w * 0.5, 0.03, 0, 1.6 + w * 0.28, 0.08, new THREE.MeshLambertMaterial({ color: 0x0a1a3a, emissive: 0x123a7a, emissiveIntensity: 0.8 }));
+  scr.userData.tvPhase = (Math.abs(x) * 0.7 + Math.abs(z) * 0.31) % 6.283;   // chaque poste scintille à son rythme
+  city.tvs.push(scr); }
 const VILLA_HALF = 20;   // demi-parcelle : 40 x 40 m, laisse 8 m entre deux plots pour les rues transversales
 const AV_N = 196, AV_S = 250;   // avenues du quartier résidentiel (rangée nord / rangée sud)
 const VILLAS = [   // rangée nord : la clôture sud tombe à 2,5 m du bord de l'avenue ; rangée sud : idem
@@ -2574,9 +2594,22 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
       add(3.2, 0.5, 4.2, 0, 0.35, 0, 0x6b4423); add(3.1, 0.4, 4, 0, 0.75, 0, 0xffffff); add(3.1, 0.12, 2.2, 0, 0.98, 0.9, pickOne([0x4f8dff, 0xff7ad9, 0x5cc453])); add(3.4, 1.5, 0.25, 0, 0.9, -2.2, 0x8b5a2b);
       tvSet(bx3, HZ + 4, Math.PI, 2.4, F + 0.75); box(bx3, F + 0.78, HZ + 0.5, 5, 0.04, 5, pickOne([0xb03a2e, 0x2f6fd0]), { deco: true, noEdges: true, studs: false });
       box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); }
-    // escalier intérieur (les voisins n'ont pas d'ascenseur) : 12 marches de 0,40 m, sous la limite de 0,60 m qu'on peut franchir
-    // 8 marches de 0,54 m (sous la limite de 0,60 m) et 0,90 m de giron : plus profondes que la boîte du joueur, sinon on butait à chaque marche
-    for (let i = 0; i < 8; i++) { const top = 0.5 + (i + 1) * (F + 0.25 - 0.5) / 8; box(HX + 8, top / 2, HZ + 7.2 - i * 0.9, 2.6, top, 0.95, 0xe6ded0, { studs: false, noRoute: true }); }
+    // Escalier des villas voisines (elles n'ont pas d'ascenseur). Marches à claire-voie :
+    // avant, chaque marche était un bloc plein montant du sol, ce qui donnait un empilement
+    // de monolithes au milieu du séjour au lieu d'un escalier. 8 marches de 0,54 m (sous la
+    // limite franchissable de 0,60) et 0,90 m de giron, plus profond que la boîte du joueur.
+    const EW = 2.6, ESX = HX + 8, EN = 8, ERISE = (F + 0.25 - 0.5) / EN, ERUN = 0.9, EZ0 = HZ + 7.1;
+    for (let i = 0; i < EN; i++) {
+      const top = 0.5 + (i + 1) * ERISE, z = EZ0 - i * ERUN;
+      box(ESX, top - 0.1, z, EW, 0.2, ERUN + 0.06, 0xe6ded0, { studs: false, noRoute: true });          // marche
+      box(ESX, top - 0.1 - ERISE / 2, z - ERUN / 2 - 0.02, EW, ERISE, 0.1, 0xd8d2c4, { deco: true, studs: false });   // contremarche
+    }
+    {   // garde-corps ajouré côté pièce : balustres et main courante suivent la pente, marche par marche
+      for (let i = 0; i < EN; i++) { const top = 0.5 + (i + 1) * ERISE, z = EZ0 - i * ERUN;
+        box(ESX - EW / 2 - 0.06, top + 0.5, z, 0.1, 1, 0.1, 0xc9a84c, { deco: true, studs: false });
+        box(ESX - EW / 2 - 0.06, top + 0.92, z, 0.14, 0.14, ERUN + 0.34, 0xc9a84c, { deco: true, studs: false }); }
+      box(ESX, F + 0.6, EZ0 - EN * ERUN + 0.3, EW, 0.3, 1.2, 0xe6ded0, { studs: false, noRoute: true });   // palier au ras du plancher de l'étage (0,50 m au-dessus de la dernière marche)
+    }
     box(HX + 6.6, F + 1.2, HZ + 4, 0.2, 1.1, 8, 0xc9a84c, { deco: true, studs: false });   // garde-corps de la trémie
     for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
     city.zones.push({ name: opt.name || 'Villa', emoji: '🏡', x1: vx - HP - 1, x2: vx + HP + 1, z1: vz - HP - 1, z2: vz + HP + 1, hint: `🏡 ${opt.name || 'Villa'} : villa du quartier (salon, cuisine, chambres, piscine)` });
@@ -2845,7 +2878,14 @@ function villaTickInner(dt) {
       if (!moving && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 6; msg('🛗 Étage : sors vers la gauche', 1500); }
     }
   }
-  if (city.tvs) for (const t of city.tvs) { t.material.emissive.setHSL((simTime * 0.08) % 1, 0.6, 0.35); }
+  // Image de télévision : légères variations autour d'un blanc bleuté, comme un écran allumé.
+  // Avant, la teinte balayait les 360° du cercle chromatique en boucle : les postes viraient
+  // au rouge, au vert, au violet… en permanence.
+  if (city.tvs) for (const t of city.tvs) {
+    const ph = t.userData.tvPhase || 0;
+    const f = 0.95 + 0.22 * Math.sin(simTime * 2.3 + ph) + 0.1 * Math.sin(simTime * 9.7 + ph * 2);
+    t.material.emissive.setRGB(0.3 * f, 0.45 * f, 0.85 * f);
+  }
   if (P.sleep && simTime < P.sleep) { P.vel.set(0, 0, 0); }
   stoveTick(dt);
 }
@@ -4829,24 +4869,57 @@ function grenadesTick(dt) {
 }
 const shockwaves = [];
 const laserDot = (() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), neonMat(0xff3030)); m.visible = false; scene.add(m); return m; })();
-function aimTick() {   // la visée part du joueur : direction = son orientation (gauche/droite), hauteur = flèches haut/bas
-  const org = new THREE.Vector3(P.pos.x, P.pos.y + 1.35, P.pos.z);
-  const dir = new THREE.Vector3(Math.sin(P.facing) * Math.cos(P.aimPitch), Math.sin(P.aimPitch), Math.cos(P.facing) * Math.cos(P.aimPitch));
-  const p = org.clone(); let hitP = null;
-  for (let d = 0; d < 90 && !hitP; d += 0.6) {
-    p.addScaledVector(dir, 0.6);
-    if (p.y <= 0.05) { hitP = p.clone(); break; }
-    if (d < 1.2) continue;
-    for (const o of solids) { if (o.h > 30 || o.veh) continue; if (p.x > o.x - o.w / 2 && p.x < o.x + o.w / 2 && p.y > o.y - o.h / 2 && p.y < o.y + o.h / 2 && p.z > o.z - o.d / 2 && p.z < o.z + o.d / 2) { hitP = p.clone(); break; } }
+// ---- lancer de rayon : la visée et les balles partagent la même géométrie ----
+// Rayon contre une boîte alignée (méthode des tranches). Renvoie la distance d'entrée,
+// ou -1 si le rayon manque la boîte. Remplace l'ancien échantillonnage tous les 0,60 m,
+// qui traversait les murs fins et coûtait 150 passages sur la liste des solides par image.
+function rayBox(ox, oy, oz, dx, dy, dz, cx, cy, cz, hx, hy, hz, maxD) {
+  let t0 = 0, t1 = maxD;
+  const slab = (o, d, c, h) => {
+    if (Math.abs(d) < 1e-9) return o >= c - h && o <= c + h;
+    let a = (c - h - o) / d, b = (c + h - o) / d;
+    if (a > b) { const t = a; a = b; b = t; }
+    if (a > t0) t0 = a;
+    if (b < t1) t1 = b;
+    return t0 <= t1;
+  };
+  if (!slab(ox, dx, cx, hx) || !slab(oy, dy, cy, hy) || !slab(oz, dz, cz, hz)) return -1;
+  return t0;
+}
+// Premier solide rencontré le long d'un rayon (un seul passage sur la liste).
+function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
+  let best = maxD, hit = null;
+  for (const o of solids) {
+    if (o.h > 30 || o.veh) continue;
+    if (ignoreVitres && o.glass) continue;
+    const t = rayBox(ox, oy, oz, dx, dy, dz, o.x, o.y, o.z,
+      Math.max(o.w, 0.36) / 2, o.h / 2, Math.max(o.d, 0.36) / 2, best);
+    if (t >= 0 && t < best) { best = t; hit = o; }
   }
-  aimPoint.copy(hitP || p); laserDot.position.copy(aimPoint);
+  return { d: best, o: hit };
+}
+// Boîte d'un personnage debout (joueur, bot, garde, joueur distant).
+function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
+  return rayBox(ox, oy, oz, dx, dy, dz, px, py + 1, pz, 0.42, 1, 0.42, maxD);
+}
+const AIM_MAX = 120, aimDir = new THREE.Vector3(0, 0, 1);
+function aimTick() {   // la visée part du joueur : direction = son orientation (gauche/droite), hauteur = flèches haut/bas
+  const ox = P.pos.x, oy = P.pos.y + 1.35, oz = P.pos.z, cp = Math.cos(P.aimPitch);
+  const dx = Math.sin(P.facing) * cp, dy = Math.sin(P.aimPitch), dz = Math.cos(P.facing) * cp;
+  aimDir.set(dx, dy, dz);
+  let dMax = AIM_MAX;
+  if (dy < -1e-6) dMax = Math.min(dMax, (0.03 - oy) / dy);   // le sol arrête le rayon
+  const h = castSolids(ox, oy, oz, dx, dy, dz, dMax, false);
+  const d = Math.max(0.7, h.d);
+  aimPoint.set(ox + dx * d, oy + dy * d, oz + dz * d);
+  laserDot.position.copy(aimPoint);
   const v = aimPoint.clone().project(camera); const el = $('cross');
   el.style.left = ((v.x * 0.5 + 0.5) * 100) + '%'; el.style.top = ((-v.y * 0.5 + 0.5) * 100) + '%';   // le réticule suit le point visé
   $('aimUp').classList.toggle('on', P.aimPitch > 0.02); $('aimDown').classList.toggle('on', P.aimPitch < -0.02);
 }
 function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un tir venu du réseau
   if (!remote) {
-    if (!P.weapon || drive.car || P.fireCd > simTime) return;
+    if (!P.weapon || drive.car || P.sit || P.swing || P.ride || gym.on || P.fireCd > simTime) return;   // assis / sur un manège : la visée n'est pas calculée, on ne tire pas au jugé
     if (!P.drawn && P.weapon !== 'grenade') { drawWeapon(true); return; }   // premier appui : on dégaine
     if (P.weapon === 'grenade') return throwGrenade();
     const w = WEAPONS[P.weapon];
@@ -4856,11 +4929,21 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     if (me.weapons && me.weapons[P.weapon]) me.weapons[P.weapon].rotation.x = -0.12;   // léger recul de l'arme
     me.rig.swing = P.weapon === 'rifle' ? 0.06 : 0.14; if (me.gun && me.gun.flash) { me.gun.flash.visible = true; setTimeout(() => { if (me.gun) me.gun.flash.visible = false; }, 45); }
     cam.kick = (cam.kick || 0) + (P.weapon === 'rifle' ? 0.012 : 0.03);
+    aimTick();   // visée recalculée à l'instant du tir : plus de point de visée périmé
     const rx = Math.cos(P.facing), rz = -Math.sin(P.facing);
-    const origin = new THREE.Vector3(P.pos.x + rx * 0.35 + Math.sin(P.facing) * 0.6, P.pos.y + 1.3, P.pos.z + rz * 0.35 + Math.cos(P.facing) * 0.6);
+    // Bouche du canon calculée depuis la position et la visée du joueur, et non depuis la
+    // pose rendue de l'avatar, qui a une image de retard : la balle partait alors d'où le
+    // personnage se trouvait à l'image précédente.
+    const off = w.muzzle || [0.34, 1.3, 0.62];
+    const origin = new THREE.Vector3(P.pos.x, P.pos.y, P.pos.z)
+      .addScaledVector(new THREE.Vector3(rx, 0, rz), off[0])
+      .add(new THREE.Vector3(0, off[1], 0))
+      .addScaledVector(aimDir, off[2]);
     burst(origin.x + rx * 0.2, origin.y - 0.1, origin.z + rz * 0.2, 0xffd23f, 1);   // douille
     const aiming = !!P.aim, sp = aiming ? w.spread : w.spread * 2.2;
-    const dirV = new THREE.Vector3().subVectors(aimPoint, origin).normalize();
+    const dirV = new THREE.Vector3().subVectors(aimPoint, origin);
+    if (dirV.lengthSq() < 1e-6) dirV.copy(aimDir);
+    dirV.normalize();
     dirV.x += rnd(-sp, sp); dirV.y += rnd(-sp, sp); dirV.z += rnd(-sp, sp); dirV.normalize().multiplyScalar(w.speed);
     updateAct();
     const s = { m: null, p: origin, v: dirV, t: 0, mine: true, dmg: w.dmg };
@@ -4875,30 +4958,73 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
 const shotGeo = new THREE.BoxGeometry(0.045, 0.045, 0.7); shared.add(shotGeo);
 const shotMat = neonMat(0xffcc55); shared.add(shotMat);
 function spawnShot(s) { s.m = new THREE.Mesh(shotGeo, shotMat); s.m.position.copy(s.p); s.m.lookAt(s.p.clone().add(s.v)); scene.add(s.m); }
+const segTmp = new THREE.Vector3();
 function shotsTick(dt) {
   for (let i = shots.length - 1; i >= 0; i--) {
-    const s = shots[i]; s.t += dt; s.v.y -= 2 * dt; s.p.addScaledVector(s.v, dt); s.m.position.copy(s.p);
-    let hit = s.t > 1.2 || s.p.y < 0;
-    if (!hit && !s.mine && !drive.car && Math.abs(s.p.x - P.pos.x) < 0.6 && s.p.y > P.pos.y && s.p.y < P.pos.y + 2 && Math.abs(s.p.z - P.pos.z) < 0.6) {   // une balle (police ou joueur) me touche
-      hit = true; const L = Math.hypot(s.v.x, s.v.z) || 1; hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L, s.v.z / L, 1.2);
+    const s = shots[i];
+    s.t += dt;
+    if (s.t > 1.6) { scene.remove(s.m); shots.splice(i, 1); continue; }
+    // Segment réellement parcouru pendant cette image. On cherche le PREMIER obstacle
+    // rencontré dessus, au lieu de ne tester que le point d'arrivée : une balle avance
+    // de près de deux mètres par image et traversait donc les murs, les bots et les
+    // cibles sans rien toucher. (Les tirs sont des lasers : plus de chute non plus,
+    // sinon le point d'impact ne correspondrait pas au réticule.)
+    const seg = segTmp.copy(s.v).multiplyScalar(dt);
+    const L = seg.length();
+    if (L < 1e-6) continue;
+    const dx = seg.x / L, dy = seg.y / L, dz = seg.z / L;
+    let best = L, quoi = null, cible = null;
+
+    if (dy < -1e-9) { const t = (0 - s.p.y) / dy; if (t >= 0 && t < best) { best = t; quoi = 'sol'; cible = null; } }
+    const hs = castSolids(s.p.x, s.p.y, s.p.z, dx, dy, dz, best, true);
+    if (hs.o) { best = hs.d; quoi = 'solide'; cible = hs.o; }
+
+    if (!s.mine && !drive.car) {   // une balle (police ou joueur) me touche
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, P.pos.x, P.pos.y, P.pos.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'moi'; cible = null; }
     }
-    if (!hit) for (const o of solids) if (o.h < 30 && !o.glass && s.p.x > o.x - o.w / 2 && s.p.x < o.x + o.w / 2 && s.p.y > o.y - o.h / 2 && s.p.y < o.y + o.h / 2 && s.p.z > o.z - o.d / 2 && s.p.z < o.z + o.d / 2) { hit = true; burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 3); break; }
-    if (!hit && s.mine) {
-      for (const tg of city.targets) if (!tg.hidden && Math.abs(s.p.x - tg.x) < 0.7 && Math.abs(s.p.y - tg.y) < 0.85 && Math.abs(s.p.z - tg.m.position.z) < 0.85) {
-        tg.hidden = simTime + 2.4; city.shots++; sfx.check(); sfx.clack(); burst(tg.x, tg.y, tg.m.position.z, 0xffd23f, 10); updateAct(); msg('🎯 Touché !', 500); hit = true; break;
+    if (s.mine) {
+      for (const tg of city.targets) if (!tg.hidden) {
+        const t = rayBox(s.p.x, s.p.y, s.p.z, dx, dy, dz, tg.x, tg.y, tg.m.position.z, 0.7, 0.85, 0.85, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'cible'; cible = tg; }
       }
-      if (!hit) for (const r of net.remotes.values()) if (!r.dead && !r.car && Math.abs(s.p.x - r.cur.x) < 0.6 && s.p.y > r.cur.y && s.p.y < r.cur.y + 2 && Math.abs(s.p.z - r.cur.z) < 0.6) {
-        city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); burst(r.cur.x, r.cur.y + 1, r.cur.z, 0xff5c5c, 8); updateAct(); hit = true; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 2); } break;
+      for (const r of net.remotes.values()) if (!r.dead && !r.car) {
+        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, r.cur.x, r.cur.y, r.cur.z, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'distant'; cible = r; }
       }
-      if (!hit && !net.on) for (const b of bots) if (b.av.group.visible && !b.ko && Math.abs(s.p.x - b.pos.x) < 0.6 && s.p.y > b.pos.y && s.p.y < b.pos.y + 2 && Math.abs(s.p.z - b.pos.z) < 0.6) {
-        hit = true; city.tags++; burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 8); b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
-        const L = Math.hypot(s.v.x, s.v.z) || 1; b.pos.x += s.v.x / L * 0.8; b.pos.z += s.v.z / L * 0.8;
-        if (b.hp <= 0) botKill(b); else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
-        updateAct(); break;
+      if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko) {
+        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, b.pos.x, b.pos.y, b.pos.z, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'bot'; cible = b; }
       }
-      if (!hit) for (const gd of city.guards) if (!gd.ko && Math.abs(s.p.x - gd.x) < 0.6 && s.p.y > gd.y && s.p.y < gd.y + 2 && Math.abs(s.p.z - gd.z) < 0.6) { hit = true; gd.hp -= (s.dmg || 20); burst(gd.x, gd.y + 1, gd.z, 0xff5c5c, 8); if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`); bankAlarm(); break; }
+      for (const gd of city.guards) if (!gd.ko) {
+        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
+      }
     }
-    if (hit) { scene.remove(s.m); shots.splice(i, 1); }
+
+    if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
+    s.p.set(s.p.x + dx * best, s.p.y + dy * best, s.p.z + dz * best);   // point d'impact exact
+    const L2 = Math.hypot(s.v.x, s.v.z) || 1;
+    if (quoi === 'solide') burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 3);
+    else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
+    else if (quoi === 'cible') {
+      const tg = cible; tg.hidden = simTime + 2.4; city.shots++; sfx.check(); sfx.clack();
+      burst(tg.x, tg.y, tg.m.position.z, 0xffd23f, 10); updateAct(); msg('🎯 Touché !', 500);
+    } else if (quoi === 'distant') {
+      const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); burst(r.cur.x, r.cur.y + 1, r.cur.z, 0xff5c5c, 8); updateAct();
+      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 2); }
+    } else if (quoi === 'bot') {
+      const b = cible; city.tags++; burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 8);
+      b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
+      b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
+      if (b.hp <= 0) botKill(b); else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
+      updateAct();
+    } else if (quoi === 'garde') {
+      const gd = cible; gd.hp -= (s.dmg || 20); burst(gd.x, gd.y + 1, gd.z, 0xff5c5c, 8);
+      if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
+      bankAlarm();
+    }
+    scene.remove(s.m); shots.splice(i, 1);
   }
   for (const tg of city.targets) {   // la cible bascule quand elle est touchée puis se relève
     if (tg.hidden && simTime > tg.hidden) tg.hidden = 0;

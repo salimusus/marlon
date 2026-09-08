@@ -5383,10 +5383,16 @@ function policeTick(dt) {
   // Caché dans un bâtiment, on ne se fait pas arrêter… sauf s'ils t'ont vu entrer : alors
   // ils savent où tu es, descendent de voiture et viennent te chercher à pied.
   const abri = abriDuJoueur();
+  // Braquage en cours : la banque n'est pas une cachette. La première voiture qui apercevait
+  // le voleur effaçait police.sait, et plus personne ne descendait de voiture : les agents
+  // n'entraient jamais dans la banque quand les voitures partaient de loin.
+  const braqueur = police.alarmT > simTime && !drive.car && city.bank
+    && Math.abs(P.pos.x - city.bank.x) < city.bank.w / 2 && Math.abs(P.pos.z - city.bank.z) < city.bank.d / 2;
   const vuPar = police.wanted > 0 && !abri && police.cars.some(pc => pc.active && policeVoit(pc, 42));
-  if (vuPar) { police.vuT = simTime; police.sait = null; }
+  if (vuPar) { police.vuT = simTime; if (!braqueur) police.sait = null; }
+  if (braqueur) police.sait = [city.bank.x, city.bank.z];   // tant qu'il est dedans, ils savent où venir
   if (police.wanted > 0 && abri === 'batiment' && !police.sait && simTime - (police.vuT || -99) < 3.5) policeInvestit([P.pos.x, P.pos.z], 'Ils t\'ont vu entrer');
-  if (police.sait && !abri && simTime - (police.vuT || 0) > 9) police.sait = null;   // ressorti et hors de vue : ils perdent la trace
+  if (police.sait && !abri && !braqueur && simTime - (police.vuT || 0) > 9) police.sait = null;   // ressorti et hors de vue : ils perdent la trace
   const hidden = !!abri && !police.sait;
   agentsTick(dt);
   if (police.wanted > 0) {

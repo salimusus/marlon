@@ -2625,6 +2625,41 @@ test('le salon de tatouage encre le corps, en plusieurs endroits et couleurs', a
   return { ok, detail: `${r.motifs} motifs (lion, tigre, panthère, aigle, singe, serpent, dragon, idéogrammes, texte libre…) tous dessinés, ${r.zones} zones du corps, ${r.couleursDistinctes} encres bien distinctes, ${r.tailles} tailles · cinq tatouages posés d'un coup sur ${r.ou.join(', ')} en ${new Set(r.taillesPosees).size} tailles pour ${r.cout} 🪙 · gardés à la sauvegarde (${r.sauve}), effaçables un par un (${r.apresRetrait} restants), visibles aussi sur les autres joueurs (${r.surUnBot}) · le salon existe en ville et s'ouvre à l'approche (${r.detecte})` };
 });
 
+test('braquage : même parties de loin, les voitures de police finissent par vider leurs agents dans la banque', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -52, y: 1, z: 70, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    const bk = __G.city.bank;
+    // les voitures reviennent d'une intervention à l'autre bout de la ville
+    __G.police.cars.forEach((c, i) => { c.x = 12 + i * 6; c.z = 41; c.g.position.set(c.x, 0, c.z);
+      c.speed = 0; c.route = null; c.debarque = false; c.active = true; c.goHome = false; });
+    const depart = Math.round(Math.min(...__G.police.cars.map(c => Math.hypot(c.x - bk.x, c.z - bk.z))));
+    __G.P.pos.set(-57, 10.05, 70);
+    const t0 = __G.simTime;
+    __G.police.alarmT = 0; __G.police.coffres = 0;
+    __G.bankAlarm(); __G.police.arrestT = 1e9; __G.police.renfortT = 0;
+    __G.police.cars.forEach(c => { c.active = true; c.goHome = false; c.debarque = false; });
+    let perdu = 0;
+    // l'alarme dure 60 s : c'est pendant ce temps-là que la police doit garder sa cible
+    for (let i = 0; i < 1650; i++) {
+      __G.simTime = t0 + i / 30; __G.P.pos.set(-57, 10.05, 70); __G.policeTick(1 / 30); __G.police.arrestT = 1e9;
+      if (!__G.police.sait) perdu++;
+    }
+    const agents = __G.police.agents.filter(a => Math.abs(a.x - bk.x) < 9 && Math.abs(a.z - bk.z) < 9).length;
+    const res = { depart, agents, perdu, wanted: __G.police.wanted };
+    // ressorti dans la rue : les agents ne campent pas dans la banque, ils le poursuivent
+    const t1 = __G.simTime;
+    const dAgents = () => Math.min(...__G.police.agents.map(a => Math.hypot(a.x - (bk.x + 26), a.z - (bk.z + 4))));
+    res.avantFuite = +dAgents().toFixed(1);
+    for (let i = 0; i < 900; i++) { __G.simTime = t1 + i / 30; __G.P.pos.set(bk.x + 26, 0.3, bk.z + 4); __G.policeTick(1 / 30); __G.police.arrestT = 1e9; }
+    res.apresFuite = +dAgents().toFixed(1);
+    __G.jail.on = false; __G.clearWanted();
+    return res;
+  });
+  const ok = r.depart > 60 && r.agents >= 1 && r.perdu === 0 && r.wanted >= 1 && r.apresFuite < r.avantFuite - 3;
+  return { ok, detail: `voitures parties à ${r.depart} m de la banque : la police garde la trace du braqueur pendant tout le hold-up (${r.perdu} image sans cible, niveau ${r.wanted}★) et ${r.agents} agents entrent à pied · une fois ressorti dans la rue, les agents le poursuivent (${r.avantFuite} m → ${r.apresFuite} m)` };
+});
+
 test("le gang du joueur se recrute dans le chat et ramène le butin", async p => {
   const r = await p.evaluate(async () => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });

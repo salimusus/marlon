@@ -1,7 +1,7 @@
 # SuperObby
 
 Un jeu de plateforme et de ville ouverte en 3D qui tient dans **un seul fichier HTML**
-(`superobby.html`). Pas d'installation, pas de serveur : on ouvre le fichier dans un
+(`index.html`). Pas d'installation, pas de serveur : on ouvre le fichier dans un
 navigateur et on joue.
 
 - 4 parcours d'obstacles + une grande ville (banque, commissariat, villas, cinéma,
@@ -19,10 +19,11 @@ navigateur et on joue.
 
 ## Jouer
 
-Ouvrir `superobby.html` dans un navigateur récent (Chrome, Edge, Firefox, Safari).
-Pour jouer à plusieurs, le fichier doit être servi par une adresse que les autres
-appareils peuvent atteindre (GitHub Pages, un partage local, n'importe quel
-hébergement statique).
+Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox, Safari).
+Pour jouer à plusieurs — et pour que les QR codes du mode TV soient utiles — le fichier
+doit être servi par une adresse que les autres appareils peuvent atteindre. Le dépôt est
+prêt pour GitHub Pages : le jeu étant à la racine sous `index.html`, il suffit d'activer
+Pages sur la branche pour obtenir une adresse publique.
 
 ### Sur la télé, avec le téléphone comme manette
 
@@ -50,9 +51,9 @@ Le dossier `harness/` contient une suite de tests jouée dans un vrai Chromium
 (Playwright) : chaque comportement du jeu y est mesuré, pas seulement vérifié.
 
 ```sh
-node harness/play.js            # toute la suite
+node harness/play.js                      # toute la suite
 FILTRE='parachute' node harness/play.js   # un sous-ensemble
-node harness/shot.js            # captures d'écran
+node harness/shot.js                      # captures d'écran
 ```
 
 `shots/` rassemble les captures de référence.

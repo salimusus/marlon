@@ -1,4 +1,4 @@
-// Charge superobby.html, en extrait le script, l'exécute avec les bouchons et
+// Charge index.html, en extrait le script, l'exécute avec les bouchons et
 // expose l'état interne du jeu pour les vérifications d'agencement.
 'use strict';
 const fs = require('fs');
@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 const stubs = require('./stubs.js');
 
-const HTML = (process.argv[2] && /\.html$/.test(process.argv[2]) ? process.argv[2] : null) || path.join(__dirname, '..', 'superobby.html');
+const HTML = (process.argv[2] && /\.html$/.test(process.argv[2]) ? process.argv[2] : null) || path.join(__dirname, '..', 'index.html');
 
 function extractScript(html) {
   // le gros script du jeu est le dernier bloc <script> sans attribut src

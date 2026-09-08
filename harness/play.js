@@ -2047,9 +2047,9 @@ test('le QR affiché sur la télé est un vrai code lisible par un téléphone',
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
     if (__G.uiOpen) __G.closeUI();
-    const essais = ['https://salimusus.github.io/marlon/superobby.html#manette=ABCD',
+    const essais = ['https://salimusus.github.io/marlon/index.html#manette=ABCD',
       'http://192.168.1.20:8080/#jeu=WXYZ', 'A',
-      'https://un-domaine-assez-long.example.com/dossier/jeu/superobby.html#manette=ZZZZ'];
+      'https://un-domaine-assez-long.example.com/dossier/jeu/index.html#manette=ZZZZ'];
     const out = essais.map(t => { const q = __G.QR.matrice(t); return q ? { t, N: q.N, m: q.m } : { t, N: 0 }; });
     __G.ouvreSalonTV();
     const affiche = { code: __G.tv.code, lien: document.getElementById('lienManette').textContent,
@@ -2239,7 +2239,7 @@ test('le mode zombie a bien disparu du jeu', async p => {
     __G.closeUI(); __G.jail.on = false;
     return { restes, boutons, devore: 'devore' in __G.P, hp: __G.P.hp };
   });
-  const src = require('fs').readFileSync(path.join(ROOT, 'superobby.html'), 'utf8');
+  const src = require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const mots = (src.match(/zombie|zomb[a-z]*|ZOM_/gi) || []).length;
   const ok = r.restes.length === 0 && !r.boutons.some(b => /zombie|🧟/i.test(b)) && !r.devore && mots === 0;
   return { ok, detail: `plus aucun symbole du mode zombie dans le jeu (${r.restes.length} restant${r.restes.length > 1 ? 's' : ''}), ${mots} occurrence${mots > 1 ? 's' : ''} du mot dans le fichier · l'écran de prison propose ${r.boutons.length} boutons, aucun zombie · P.devore supprimé=${!r.devore}` };
@@ -2514,7 +2514,7 @@ test('douze habitants qui jouent, roulent, chapardent et braquent', async p => {
 });
 
 (async()=>{
-  const file=process.argv[2]||path.join(ROOT,'superobby.html');
+  const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);
   const browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});

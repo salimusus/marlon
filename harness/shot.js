@@ -217,7 +217,7 @@ function serve(htmlFile) {
 }
 
 (async () => {
-  const file = process.argv[2] || path.join(ROOT, 'superobby.html');
+  const file = process.argv[2] || path.join(ROOT, 'index.html');
   const { srv, port } = await serve(file);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage'] });

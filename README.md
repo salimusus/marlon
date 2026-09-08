@@ -44,6 +44,10 @@ navigateur et on joue.
   protéger »), chien à adopter
 - Braquages, police et armée
 - Multijoueur en pair à pair (PeerJS), chacun sur son appareil
+- Pensé pour tourner partout : les collisions passent par une grille spatiale et la vie de
+  la ville est cadencée sur l'affichage plutôt que sur la physique, ce qui divise par plus
+  de six le travail du processeur par seconde de jeu — de quoi rester fluide sur téléphone
+  comme sur la télé
 
 ## Jouer
 

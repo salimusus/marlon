@@ -377,6 +377,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
+    <div class="pill cityonly" id="respect">⭐ 0 · 🚩 0</div>
     <div class="pill" id="timer">⏱ 0:00</div>
     <div class="pill" id="coins">🪙 0/0</div>
     <div class="pill" id="deaths">💀 0</div>
@@ -3470,7 +3471,7 @@ function ridesTick(dt) {
     sharkTick(dt);
   }
 }
-const bank = { balance: +store.get('superobby.bank') || 0 };
+const bank = { balance: +store.get('superobby.bank') || 0, coffresJour: 0, jourT: 0 };
 const saveBank = () => store.set('superobby.bank', String(bank.balance));
 function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert : hall et guichet, bureaux, salle des coffres
   const W = 20, D = 20, F = 4.8, H = F * 3, wallC = 0xe8e2d4, trim = 0xc9a84c, marble = 0xd6d0c4;
@@ -3709,6 +3710,12 @@ function safesTick(dt) {
     return;
   }
   if (sf.progress >= 1) { sf.open = true; sf.door.position.x += 0.5; sf.door.rotation.y = -1.7; sf.door.position.z -= 0.55;
+    // La banque se réapprovisionne : le premier coffre du jour vaut 500, le suivant 300, puis
+    // 150, 75 et 50. Sinon il suffisait d'enchaîner les coffres pour finir le jeu en une heure.
+    if (simTime > (bank.jourT || 0)) { bank.jourT = simTime + day.len; bank.coffresJour = 0; }
+    const bareme = [500, 300, 150, 75];
+    sf.amount = bareme[bank.coffresJour] != null ? bareme[bank.coffresJour] : 50;
+    bank.coffresJour++;
     wallet += sf.amount; saveWallet(); updateHud();
     police.butin = (police.butin || 0) + sf.amount;   // le butin ne part pas dans les 30 % perdus si on tombe
     burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register(); sfx.coin();
@@ -6569,11 +6576,18 @@ function msg(text, ms = 1400) {
 }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+// Résumé de la guerre des gangs affiché en haut de l'écran. On passe par cet objet plutôt que
+// de lire gang/guerre directement : updateHud() tourne dès le démarrage, avant que ces
+// constantes ne soient initialisées.
+const HUD_GUERRE = { rep: 0, terr: 0, total: 8, rang: 'Débutant' };
 function updateHud() {
   $('coins').textContent = WORLDS[worldIdx] && WORLDS[worldIdx].free ? `🪙 ${wallet}` : `🪙 ${coinCount}/${coins.length} · ${wallet}`;
   $('deaths').textContent = `💀 ${deaths}`;
   $('meName').textContent = myCfg.name;
   const st = $('stageTxt'); if (st && cp) st.textContent = `${cp.idx}/8`;
+  // pastille de la guerre des gangs : respect gagné et quartiers tenus
+  const rp = $('respect');
+  if (rp) { rp.textContent = `⭐ ${HUD_GUERRE.rep} · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
 }
 function updateTimer() { $('timer').textContent = '⏱ ' + fmt(elapsed); }
 function showBest() {
@@ -10966,10 +10980,19 @@ function buildGangs() {
   gang.planque = buildPlanque(Z.x + 34, Z.z + 26, { joueur: true, couleur: 0x5cc453 });
   gang.planque.coffre.amount = gang.magot || 0;
   gang.planque.coffre.joueur = true;
+  // on refait les recrues gagnées lors des parties précédentes (elles vivent dans la sauvegarde)
+  gang.membresLibres = [];
+  const modeleJoueur = { id: 'joueur', nom: gang.nom, hat: 'bandanaV', couleur: 0x5cc453, chefNom: '' };
+  for (const r of (guerre.sauveRecrues || [])) {
+    const m = creerGangeur(modeleJoueur, gang.planque.x + rnd(-7, 7), gang.planque.z + rnd(5, 9));
+    m.nom = r.n || m.nom; m.gang = 'joueur'; m.recrue = true; m.force = r.f || 0;
+    gang.membresLibres.push(m);
+  }
   // partage initial des quartiers : trois aux gangs, le reste neutre
   if (!Object.keys(guerre.territoires).length) {
     guerre.territoires = { zone: 'rouge', industriel: 'bleu', plage: 'jaune' };
   }
+  majHudGuerre();
   city.zones.push({ name: 'Territoire ' + gangs[0].nom, emoji: '🚩', x1: Z.x - 40, x2: Z.x - 8, z1: Z.z - 32, z2: Z.z - 12, hint: '🚩 Territoire de gang — on n\'est pas le bienvenu' });
 }
 function gangTick(dt) {
@@ -11190,6 +11213,13 @@ $('plainteBack').addEventListener('click', closeUI);
 // faire tomber les chefs. Chaque gang détruit renaît ailleurs, plus fort, avec un nouveau
 // chef : la ville ne se rend jamais vraiment.
 function rangJoueur() { let r = RANGS[0]; for (const x of RANGS) if (gang.rep >= x.r) r = x; return r; }
+function majHudGuerre() {   // recopie l'état de la guerre dans la pastille du haut
+  HUD_GUERRE.rep = gang.rep;
+  HUD_GUERRE.terr = Object.keys(guerre.territoires || {}).filter(k => guerre.territoires[k] === 'joueur').length;
+  HUD_GUERRE.total = TERRITOIRES.length;
+  HUD_GUERRE.rang = rangJoueur().n;
+  updateHud();
+}
 function gangDe(id) { return gangs.find(g => g.id === id) || null; }
 function territoireDe(x, z) {
   let best = null, bd = Infinity;
@@ -11201,6 +11231,7 @@ function nomGang(id) { const g = gangDe(id); return id === 'joueur' ? gang.nom :
 function gagneRep(n, quoi) {
   const av = rangJoueur();
   gang.rep += n;
+  majHudGuerre();
   const ap = rangJoueur();
   if (ap !== av) { msg(`🏅 Nouveau rang : ${ap.n} ! Ton gang peut compter ${ap.max} membres`, 4200); sfx.win(); chat(null, `🏅 ${myCfg.name} est maintenant « ${ap.n} »`); }
   else if (quoi) msg(`🚩 +${n} points de réputation (${quoi})`, 1600);
@@ -11344,9 +11375,18 @@ function otageTick(dt) {
       sfx.win();
     }
   }
-  // les otages enfermés attendent
-  for (const o of gang.otages) {
+  // les otages enfermés attendent — et leurs copains finissent par venir les délivrer
+  for (const o of gang.otages.slice()) {
     if (o === P.otage) continue;
+    if (!o.enfermeT) o.enfermeT = simTime;
+    if (simTime - o.enfermeT > 300) {   // cinq minutes sans surveillance : évasion
+      const G = gangDe(o.gang);
+      msg(`🚪 ${o.nom} s'est échappé de ta planque${G ? ' — ses copains sont venus le chercher' : ''}`, 3800);
+      chat(null, `🚪 ${o.nom} a été délivré de la planque de ${myCfg.name}`);
+      if (G) { G.relation = clamp((G.relation || 0) - 10, -100, 100); }
+      libereOtage(o, false); sfx.die();
+      continue;
+    }
     o.av.group.position.set(o.x, o.y, o.z);
     animateRig(o.av.rig, 'idle', 0, dt, simTime);
     if (simTime > (o.sayT || 0) && Math.hypot(P.pos.x - o.x, P.pos.z - o.z) < 12) {
@@ -11524,7 +11564,7 @@ function captureTick(dt) {
   $('act').textContent = `🚩 Prise de ${t.n} : ${Math.round(gang.capture.p * 100)} %`;
   if (gang.capture.p >= 1) {
     guerre.territoires[t.k] = 'joueur';
-    gang.capture = null;
+    gang.capture = null; majHudGuerre();
     msg(`🚩 ${t.n} est à toi ! Il te rapporte de l'argent chaque minute`, 4600); sfx.win(); sfx.cheer();
     chat(null, `🚩 ${myCfg.name} contrôle ${t.n}`);
     gagneRep(45, 'quartier pris');
@@ -11562,7 +11602,7 @@ function repriseTick() {
     if (garde) { chat(G.chefNom, `on a essayé de prendre ${t.n}, mais ${myCfg.name} avait laissé du monde…`, G.couleur); return; }
     msg(`🚩 Les ${G.nom} t'ont pris ${t.n} ! Va le reprendre`, 4200); sfx.die();
   }
-  guerre.territoires[t.k] = G.id;
+  guerre.territoires[t.k] = G.id; majHudGuerre();
   chat(null, `🚩 ${G.nom} contrôle maintenant ${t.n}`);
   saveGuerre();
 }
@@ -11615,6 +11655,7 @@ function saveGuerre() {
       terr: guerre.territoires, saison: guerre.saison,
       gangs: {} };
     for (const g of gangs) d.gangs[g.id] = { nom: g.nom, chef: g.chefNom, gen: g.generation, force: g.force, rel: g.relation, magot: g.magot, connu: !!g.connu };
+    d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0 }));
     store.set('superobby.guerre', JSON.stringify(d));
   } catch (e) {}
 }
@@ -11623,7 +11664,7 @@ function loadGuerre() {
   if (!d) return;
   gang.rep = d.rep || 0; gang.force = d.force || 20; gang.magot = d.magot || 0; gang.armes = d.armes || 0;
   guerre.territoires = d.terr || {}; guerre.saison = d.saison || 1;
-  guerre.sauve = d.gangs || null;
+  guerre.sauve = d.gangs || null; guerre.sauveRecrues = d.recrues || [];
 }
 $('guerreBtn').addEventListener('click', () => { if (running && city.on) openGuerre(); });
 $('guerreBack').addEventListener('click', closeUI);

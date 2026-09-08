@@ -1042,7 +1042,9 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   const fz = -d / 2 + 0.15, dw = 2.2, side = (w - dw) / 2;
   for (const sx of [-1, 1]) {
     B(sx * (dw / 2 + side / 2), 0.9, fz, side, 1.2, 0.3, wallC, { studs: false, noRoute: true });
-    { const gl = B(sx * (dw / 2 + side / 2), 2.55, fz, side, 2.1, 0.12, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); breakables.push({ kind: 'glass', solid: gl, m: gl.mesh, x: gl.x, z: gl.z, r: side / 2 + 0.3, broken: false, cracked: false }); }
+    { const gl = B(sx * (dw / 2 + side / 2), 2.55, fz, side, 2.1, 0.12, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true });
+      const br = { kind: 'glass', solid: gl, m: gl.mesh, x: gl.x, z: gl.z, r: side / 2 + 0.3, broken: false, cracked: false };
+      gl.brk = br; breakables.push(br); }   // gl.brk : la balle qui touche ce solide sait quoi casser
     B(sx * (dw / 2 + side / 2), 3.95, fz, side, 0.9, 0.3, wallC, { studs: false, noRoute: true });
     B(sx * (dw / 2 + 0.08), 1.75, fz, 0.16, 2.9, 0.34, 0x2b3550, { deco: true, studs: false });
   }
@@ -1066,7 +1068,8 @@ function lamp(x, z) {   // lampadaire cassable
   const post = new THREE.Mesh(unitBox, lam(0x3b4252)); post.scale.set(0.18, 4.4, 0.18); post.position.y = 2.2; post.castShadow = true; g.add(post);
   const bulb = new THREE.Mesh(unitBox, neonMat(0xfff2b0)); bulb.scale.set(0.7, 0.4, 0.7); bulb.position.y = 4.5; g.add(bulb);
   const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid);
-  breakables.push({ kind: 'lamp', g, bulb, solid, x, z, r: 0.5, broken: false });
+  const br = { kind: 'lamp', g, bulb, solid, x, z, r: 0.5, broken: false };
+  solid.brk = br; breakables.push(br);
 }
 function flowerBed(x, z, w, d) { box(x, 0.25, z, w, 0.5, d, 0x8b4a2b, { studs: false, noRoute: true }); for (let i = 0; i < Math.floor(w * d / 1.2); i++) box(x + rnd(-w / 2 + 0.3, w / 2 - 0.3), 0.7, z + rnd(-d / 2 + 0.3, d / 2 - 0.3), 0.3, 0.3, 0.3, pickOne([0xff5c5c, 0xffd23f, 0xff7ad9, 0xffffff, 0xb57cff]), { deco: true, studs: false }); }
 function buildGarage(x, z) {   // Garage custom : trois travées, cabine de peinture, comptoir de préparation
@@ -1153,12 +1156,27 @@ function buildShops() {
   vitrine(-11.4, 18.2, 'snack', 'food:0', '🍔 Burger 3 🪙', 1.4); vitrine(-7.2, 18.2, 'snack', 'food:4', '🍦 Glace 2 🪙', 1.4);
   // ---- salle de sport ----
   shop(-1, 19.5, 7, 7, 0x35d0e6, '🏋️ Salle de sport', 0x35d0e6);
-  box(-2.9, 0.7, 18, 1.2, 0.5, 2.4, 0x2b3550, { studs: false, noRoute: true }); box(-2.9, 1.6, 18, 0.1, 0.1, 2.8, 0x8f98ab, { deco: true, studs: false }); for (const dz of [-1.2, 1.2]) box(-2.9, 1.6, 18 + dz, 0.6, 0.6, 0.25, 0x111111, { deco: true, studs: false });   // banc + barre
-  box(0.7, 0.55, 18.5, 1.4, 0.35, 3, 0x3b4252, { studs: false, noRoute: true }); box(0.7, 1.5, 17.2, 1.2, 1.4, 0.12, 0x8f98ab, { deco: true, studs: false }); box(0.7, 1.55, 17.13, 0.8, 0.5, 0.02, 0x3ef2ff, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });   // tapis de course
+  // ---- développé couché : le banc s'allonge dans l'axe z, la barre passe EN TRAVERS au-dessus
+  // de la poitrine (avant, la barre était dans l'axe du corps et le point d'accroche tombait
+  // 60 cm derrière le banc : le joueur restait planté debout à côté).
+  box(-2.9, 0.7, 18.2, 1.2, 0.5, 2.6, 0x2b3550, { studs: false, noRoute: true });                       // assise
+  box(-2.9, 0.35, 18.2, 0.9, 0.7, 0.35, 0x3b4252, { deco: true, studs: false });                        // pied central
+  for (const sx of [-0.62, 0.62]) box(-2.9 + sx, 0.85, 16.75, 0.12, 1.7, 0.12, 0x8f98ab, { deco: true, studs: false });   // montants, derrière la tête
+  const barre = box(-2.9, 1.45, 17.65, 2.6, 0.09, 0.09, 0xcfd6e4, { deco: true, studs: false });        // barre au-dessus de la poitrine
+  for (const sx of [-1.05, 1.05]) box(-2.9 + sx, 1.45, 17.65, 0.16, 0.62, 0.62, 0x111111, { deco: true, studs: false });  // disques
+  // ---- tapis de course : le joueur court DEBOUT sur la bande, face à la console
+  box(0.7, 0.55, 18.4, 1.4, 0.35, 3, 0x3b4252, { studs: false, noRoute: true });                        // châssis
+  const bande = box(0.7, 0.74, 18.4, 1.05, 0.06, 2.6, 0x1b1f2a, { deco: true, studs: false, noEdges: true });   // bande roulante
+  const rayures = [];
+  for (let i = 0; i < 5; i++) rayures.push(box(0.7, 0.78, 17.3 + i * 0.55, 1, 0.02, 0.12, 0x5a6274, { deco: true, studs: false, noEdges: true, noShadow: true }));
+  box(0.7, 1.5, 16.85, 1.2, 1.4, 0.12, 0x8f98ab, { deco: true, studs: false });                          // console
+  box(0.7, 1.55, 16.78, 0.8, 0.5, 0.02, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
+  for (const sx of [-0.56, 0.56]) box(0.7 + sx, 1.1, 17.1, 0.08, 0.9, 0.08, 0x8f98ab, { deco: true, studs: false });   // poignées
   for (let i = 0; i < 4; i++) box(-3.8 + i * 0.8, 0.8, 22.4, 0.7, 0.28, 0.28, 0x111111, { deco: true, studs: false }); box(-2.6, 0.55, 22.4, 3.2, 0.1, 0.5, 0x8f98ab, { deco: true, studs: false });   // râtelier d'haltères
   box(1.7, 1.6, 22.5, 0.12, 2.2, 2.6, 0, { material: new THREE.MeshLambertMaterial({ color: 0xbfe6ff, emissive: 0x334455 }), deco: true, noEdges: true });   // miroir
   box(2.1, 2.2, 20.3, 0.6, 1.4, 0.6, 0xff5c5c, { deco: true, studs: false }); box(2.1, 3.5, 20.3, 0.08, 1.3, 0.08, 0x3b4252, { deco: true, studs: false });   // sac de frappe
-  city.gym = { bench: { x: -2.9, z: 19.8 }, run: { x: 0.7, z: 20.5 } };
+  // points d'accroche : le milieu du banc (on s'y allonge) et la bande du tapis (on y court)
+  city.gym = { bench: { x: -2.9, z: 18.4, y: 0.95, barre }, run: { x: 0.7, z: 18.5, y: 0.77, rayures } };
   for (const x of [-23.5, -14, -5]) lamp(x, 14.8); flowerBed(-19, 11.5, 4, 1.2); flowerBed(-1, 11.5, 4, 1.2);
   city.zones.push({ name: 'Commerces', emoji: '🛍️', x1: -25, x2: 4, z1: 10, z2: 24, hint: '🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir' });
 }
@@ -2403,7 +2421,7 @@ function makeVehicle(kind, color, x, z, h) {
   }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D }; vehicleSolid(c); return c;
+  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h] }; vehicleSolid(c); return c;
 }
 function makeHeli(x, y, z, h) {
   const g = new THREE.Group(), red = lam(0xe0202a), white = lam(0xf4f6fa), dark = lam(0x2b3550), glassM = new THREE.MeshLambertMaterial({ color: 0x8fd3ff, transparent: true, opacity: 0.75 });
@@ -2437,7 +2455,7 @@ function makeHeli(x, y, z, h) {
   bx(neonMat(0x30ff60), 0.12, 0.12, 0.12, 0, 2.1, -6.7, false);
   g.position.set(x, y, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 1.2, z, 2.6, 2.4, 4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  return { g, wheels: [], x, y, z, h, busy: false, solid, heli: true, rotor, tail, vx: 0, vz: 0, vy: 0, spin: 0, beacon, baseW: 2.6, baseD: 7 };
+  return { g, wheels: [], x, y, z, h, busy: false, solid, heli: true, rotor, tail, vx: 0, vz: 0, vy: 0, spin: 0, beacon, baseW: 2.6, baseD: 7, home0: [x, z, h], y0: y };
 }
 const TARGET = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
@@ -2728,7 +2746,7 @@ let worldIdx = 0, PATH = [];
 const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
-const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0 };
+const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -2739,17 +2757,38 @@ const siren = (() => { let o1 = null, o2 = null, g = null, timer = null; return 
     let hi = false; timer = setInterval(() => { hi = !hi; const t = c.currentTime; o1.frequency.linearRampToValueAtTime(hi ? 800 : 600, t + 0.6); o2.frequency.linearRampToValueAtTime(hi ? 1600 : 1200, t + 0.6); }, 700); },
   stop() { clearInterval(timer); timer = null; const c = sfx.ctx(); if (g && c) { g.gain.setTargetAtTime(0.0001, c.currentTime, 0.2); } const a = o1, b = o2; setTimeout(() => { try { a && a.stop(); b && b.stop(); } catch (e) {} }, 600); o1 = o2 = null; g = null; },
 }; })();
+// Un policier (voiture ou agent à pied) a-t-il le joueur sous les yeux ?
+function policeTemoin(rayon = 44) {
+  if (police.cars.some(pc => policeVoit(pc, rayon))) return true;
+  return police.agents.some(a => Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 24 && Math.abs(a.y - P.pos.y) < 3);
+}
+const AVERT_FENETRE = 90;      // les petits délits s'oublient au bout d'une minute et demie
+const DELAI_POLICE = { 1: 15, 2: 10, 3: 6 };   // secondes avant que les voitures ne démarrent
 function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 moyen (écraser), 3 grave (KO / grenade)
+  // Petit délit que personne n'a vu : la police ferme les yeux. Trois en une minute et demie
+  // et là seulement la traque démarre — avant, un coup de poing lançait toute la police.
+  if (sev <= 1 && police.wanted === 0 && !policeTemoin()) {
+    police.avert = (simTime - (police.avertT || -999) < AVERT_FENETRE) ? (police.avert || 0) + 1 : 1;
+    police.avertT = simTime;
+    if (police.avert < 3) {
+      msg(`⚠️ ${what} : la police laisse passer (avertissement ${police.avert}/3)`, 2200);
+      return;
+    }
+    police.avert = 0;
+  }
   police.crimeLevel = Math.max(police.crimeLevel, sev);
   if (sev >= 3 && typeof coupAlerte === 'function') coupAlerte();   // le complice démarre
-  police.wanted = clamp(police.wanted + level, 0, 3); police.decayT = simTime + 45 + police.crimeLevel * 40; police.lastSeen = [P.pos.x, P.pos.z];
-  msg(`🚔 Infraction : ${what} ! Niveau ${'★'.repeat(police.wanted)}`, 1800); chat(null, `🚔 La police recherche ${myCfg.name} (${what})`);
-  $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`; $('wanted').classList.add('on'); siren.start();
-  for (const pc of police.cars) pc.active = true;
+  police.wanted = clamp(police.wanted + level, 0, 3); police.decayT = simTime + 40 + police.crimeLevel * 35; police.lastSeen = [P.pos.x, P.pos.z];
+  // fenêtre de fuite : les voitures ne s'élancent qu'après un délai (plus le délit est grave,
+  // plus elles arrivent vite). Avant, elles démarraient dans la seconde.
+  const delai = DELAI_POLICE[Math.min(3, sev)] || 12;
+  if (!police.reactT || police.reactT > simTime + delai) police.reactT = simTime + delai;
+  msg(`🚔 Infraction : ${what} ! Niveau ${'★'.repeat(police.wanted)} — file, ils arrivent dans ${delai} s`, 2400); chat(null, `🚔 La police recherche ${myCfg.name} (${what})`);
+  $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · la police arrive dans ${delai} s — sauve-toi !`; $('wanted').classList.add('on'); siren.start();
 }
 function clearWanted(reason) {
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
   police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
@@ -2820,7 +2859,26 @@ function startMission(id) {
   if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1]); }
   if (id === 'pieces') { d.coins = []; const spots = [...OPEN_SPOTS].sort(() => Math.random() - 0.5).slice(0, 10); for (const sp of spots) { const c = coin(sp[0], sp[1], sp[2]); c.mesh.material = new THREE.MeshLambertMaterial({ color: 0x3ef2ff, emissive: 0x1e8fa0 }); c.blue = true; d.coins.push(c); } mission.limit = 90; }
   if (id === 'chrono') { d.armed = false; d.maxIdx = 0; setBeacon(0, 124); }
-  if (id === 'secours') { const bl = solids.filter(o => o.h >= 8 && o.w >= 6 && o.h < 30 && Math.abs(o.x) < 66 && o.z > -50 && o.z < 118 && !o.veh); const b = pickOne(bl); d.roof = { x: b.x, z: b.z, y: b.y + b.h / 2 }; setBeacon(b.x, b.z, d.roof.y); const mk = new THREE.Mesh(unitRound, lam(0xff5c5c)); mk.scale.set(0.9, 0.9, 0.9); mk.position.set(b.x, d.roof.y + 0.45, b.z); worldGroup.add(mk); d.marker = mk; }
+  if (id === 'secours') {
+    // On se pose sur un VRAI toit (ceux qui ont un ascenseur et un parachute), pas sur le
+    // premier gros bloc venu : avant, le blessé atterrissait sur un pan de mur où l'hélico
+    // ne pouvait pas se poser, et la mission était infaisable.
+    const t = pickOne((city.toits || []).filter(o => Math.hypot(o.x - 51, o.z + 13) > 25));
+    if (t) d.roof = { x: t.x, z: t.z, y: t.y };
+    else { const b = pickOne(solids.filter(o => o.h >= 8 && o.w >= 6 && o.h < 30 && Math.abs(o.x) < 66 && o.z > -50 && o.z < 118 && !o.veh));
+      if (!b) { msg('🚁 Aucun toit accessible pour l\'instant', 2000); mission.cur = null; return; }
+      d.roof = { x: b.x, z: b.z, y: b.y + b.h / 2 }; }
+    setBeacon(d.roof.x, d.roof.z, d.roof.y);
+    // le blessé : un petit personnage allongé qui fait signe, pas une simple boule rouge
+    const mk = new THREE.Group(); mk.position.set(d.roof.x, d.roof.y + 0.1, d.roof.z); worldGroup.add(mk);
+    const corps = new THREE.Mesh(unitRound, lam(0xffd23f)); corps.scale.set(0.5, 0.35, 1.1); corps.position.y = 0.2; mk.add(corps);
+    const tete = new THREE.Mesh(unitRound, lam(0xf0c9a0)); tete.scale.set(0.42, 0.42, 0.42); tete.position.set(0, 0.32, -0.68); mk.add(tete);
+    const bras = new THREE.Mesh(unitRound, lam(0xf0c9a0)); bras.scale.set(0.22, 0.7, 0.22); bras.position.set(0.3, 0.55, -0.4); mk.add(bras);
+    const croix = new THREE.Mesh(unitRound, lam(0xff2020)); croix.scale.set(0.7, 0.06, 0.24); croix.position.set(0, 0.42, 0.1); mk.add(croix);
+    const croix2 = new THREE.Mesh(unitRound, lam(0xff2020)); croix2.scale.set(0.24, 0.06, 0.7); croix2.position.set(0, 0.42, 0.1); mk.add(croix2);
+    mk.userData.bras = bras;
+    worldGroup.add(mk); d.marker = mk; d.blesse = mk;
+  }
   if (id === 'nettoyage') { d.bags = []; for (let i = 0; i < 6; i++) { const x = rnd(-26, 26), z = rnd(50, 98); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); } d.total = d.bags.length; clearBeacon(); }
   if (id === 'buteur') { d.goal = city.goals + 3; setBeacon(-13, -8, 0.3); }
   if (id === 'coquillages') { city.shells.forEach(sh => { sh.taken = false; sh.m.visible = true; }); d.left = city.shells.length; setBeacon(112, 40, 0.15); }
@@ -2884,9 +2942,13 @@ function missionTick(dt) {
     else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(0, 124); } } }
   }
   if (m.id === 'secours') {
+    if (d.blesse && d.blesse.userData.bras && mission.step === 0) d.blesse.userData.bras.rotation.x = Math.sin(simTime * 4) * 0.7;   // il fait signe
     const heli = drive.car && drive.car.heli ? drive.car : null; if (!heli) return;
-    if (mission.step === 0 && heli.landed && Math.hypot(heli.x - d.roof.x, heli.z - d.roof.z) < 6 && heli.y > d.roof.y - 1.5) { mission.step = 1; d.marker.visible = false; setBeacon(51, -13, 0.2); msg('🚁 Blessé à bord ! Direction l\'héliport', 1500); sfx.coin(); }
-    else if (mission.step === 1 && heli.landed && Math.hypot(heli.x - 51, heli.z + 13) < 6) endMission(true);
+    // tolérance élargie : se poser SUR le toit ou juste à côté suffit
+    if (mission.step === 0 && heli.landed && Math.hypot(heli.x - d.roof.x, heli.z - d.roof.z) < 8 && heli.y > d.roof.y - 2.5) {
+      mission.step = 1; d.marker.visible = false; setBeacon(51, -13, 0.2);
+      msg('🚁 Blessé à bord ! Direction l\'héliport (colonne bleue)', 2200); sfx.coin();
+    } else if (mission.step === 1 && heli.landed && Math.hypot(heli.x - 51, heli.z + 13) < 8) endMission(true);
   }
   if (m.id === 'nettoyage') { for (let i = d.bags.length - 1; i >= 0; i--) { const b = d.bags[i]; if (near(b.x, b.z, 1.4)) { worldGroup.remove(b.m); d.bags.splice(i, 1); sfx.coin(); burst(b.x, 1, b.z, 0x5cc453, 5); } } if (!d.bags.length) endMission(true); }
   if (m.id === 'buteur') { if (city.goals >= d.goal) endMission(true); }
@@ -3092,7 +3154,7 @@ function trafficLight(x, z, ry, group) {   // feu tricolore : poteau + boîtier,
   const head = new THREE.Mesh(unitRound, lam(0x1b1b1b)); head.scale.set(0.55, 1.5, 0.45); head.position.set(0, 3.7, 1.55); g.add(head);
   const lamps = [0xff2020, 0xffa020, 0x30ff60].map((col, i) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0x000000 })); l.position.set(0, 4.2 - i * 0.5, 1.8); l.userData.col = col; g.add(l); return l; });
   const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid);
-  const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, broken: false }; city.trafficLights.push(tl); breakables.push(tl); return tl;
+  const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, broken: false }; solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
 }
 function lightsTick() {
   const T = simTime % 23, ns = T < 5 ? 0 : T < 10 ? 2 : T < 11.5 ? 1 : T < 16.5 ? 0 : T < 21.5 ? 0 : 0;   // groupe A
@@ -3480,6 +3542,15 @@ function openBank() {
   $('bankWd50').onclick = () => { const n = Math.min(50, bank.balance); wallet += n; bank.balance -= n; saveWallet(); saveBank(); updateHud(); draw(); sfx.coin(); };
 }
 $('bankClose').addEventListener('click', closeUI);
+// Un BOT braque la banque : les gardes s'affolent et la police le poursuit, mais le joueur
+// n'est pas recherché — avant, bankAlarm() lui collait deux étoiles sans qu'il ait rien fait.
+function bankAlarmBot(auteur) {
+  police.alarmeBot = simTime + 45;
+  city.guards.forEach(gd => { gd.alert = true; });
+  sfx.noise(.5, 900, .1); sfx.tone(900, 0, .3, 'square', .03, 700);
+  const b = city.bank;
+  if (b && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 70) msg(`🚨 Alarme de la banque : ${auteur && auteur.name ? auteur.name : 'quelqu\'un'} braque le guichet !`, 2800);
+}
 function bankAlarm() {   // alerte de braquage : plus on a forcé de coffres, plus la riposte est dure
   if (police.alarmT > simTime) { police.alarmT = simTime + 60; return; }
   const n = police.coffres || 0;                       // coffres déjà ouverts
@@ -5018,17 +5089,24 @@ function buildOffice(x, z) {   // bureau des missions : kiosque ouvert avec gran
 }
 $('missClose').addEventListener('click', closeUI); $('missBtn').addEventListener('click', () => { if (running && city.on) openMissions(city.offNear); });
 // ---- navigation des voitures de police : grille de cases (3 m) + recherche de chemin A* ----
-const NAV = { cs: 3, x0: -99, z0: -78, nx: 100, nz: 121, blocked: null };
+// La grille couvre TOUTE la ville (murs d'enceinte à x ±201,5 et z −81,5 / 281,5) : avant elle
+// s'arrêtait à x = −99, si bien que tout itinéraire vers l'ouest (La Zone, quartiers, villas des
+// chefs) était rabattu sur le bord de la grille — GPS de travers et police qui n'arrivait jamais.
+const NAV = { cs: 3, x0: -201, z0: -81, nx: 135, nz: 122, blocked: null };
 function buildNav() {
-  const { cs, x0, z0, nx, nz } = NAV; const bl = new Uint8Array(nx * nz);
-  const obs = solids.filter(o => (!o.veh || (!o.pol && !o.ai)) && o.h < 30 && o.y + o.h / 2 > 0.45 && o.y - o.h / 2 < 1.6);
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const cx = x0 + i * cs, cz = z0 + j * cs, m = cs / 2 + 1.1;
-    let mur = false;
-    for (const o of obs) { if (cx + m > o.x - o.w / 2 && cx - m < o.x + o.w / 2 && cz + m > o.z - o.d / 2 && cz - m < o.z + o.d / 2) { mur = true; break; } }
-    if (!mur) for (const b of city.batiments) { if (cx > b.x - b.w / 2 && cx < b.x + b.w / 2 && cz > b.z - b.d / 2 && cz < b.z + b.d / 2) { mur = true; break; } }
-    if (mur) bl[j * nx + i] = 1;
+  // On parcourt les obstacles et on marque les cases qu'ils couvrent (avant : chaque case testait
+  // tous les obstacles, soit des dizaines de millions de tests à chaque reconstruction).
+  const { cs, x0, z0, nx, nz } = NAV, bl = new Uint8Array(nx * nz), m = cs / 2 + 1.1;
+  const marque = (x1, x2, z1, z2) => {
+    const i1 = Math.max(0, Math.ceil((x1 - x0) / cs)), i2 = Math.min(nx - 1, Math.floor((x2 - x0) / cs));
+    const j1 = Math.max(0, Math.ceil((z1 - z0) / cs)), j2 = Math.min(nz - 1, Math.floor((z2 - z0) / cs));
+    for (let j = j1; j <= j2; j++) { const r = j * nx; for (let i = i1; i <= i2; i++) bl[r + i] = 1; }
+  };
+  for (const o of solids) {
+    if ((o.veh && (o.pol || o.ai)) || o.h >= 30 || o.y + o.h / 2 <= 0.45 || o.y - o.h / 2 >= 1.6) continue;
+    marque(o.x - o.w / 2 - m, o.x + o.w / 2 + m, o.z - o.d / 2 - m, o.z + o.d / 2 + m);
   }
+  for (const b of city.batiments) marque(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
   NAV.blocked = bl;
 }
 function navCell(x, z) { return [clamp(Math.round((x - NAV.x0) / NAV.cs), 0, NAV.nx - 1), clamp(Math.round((z - NAV.z0) / NAV.cs), 0, NAV.nz - 1)]; }
@@ -5380,6 +5458,20 @@ function policeTick(dt) {
     $('wanted').textContent = '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi';
     msg('🚔 Les voitures de police arrivent !', 2200);
   }
+  // délai d'intervention : tant qu'il court, les voitures restent au commissariat et le joueur
+  // voit le compte à rebours ; à zéro, tout le monde s'élance.
+  if (police.reactT) {
+    if (simTime > police.reactT) {
+      police.reactT = 0;
+      police.cars.forEach(pc => { pc.active = true; pc.goHome = false; });
+      $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`;
+      if (police.wanted > 0) msg('🚔 Les voitures de police s\'élancent !', 2000);
+    } else if (police.wanted > 0) {
+      $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · la police arrive dans ${Math.ceil(police.reactT - simTime)} s — sauve-toi !`;
+    }
+  }
+  // les gardes de la banque se calment quand l'alarme déclenchée par un bot s'éteint
+  if (police.alarmeBot && simTime > police.alarmeBot) { police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); }
   // Caché dans un bâtiment, on ne se fait pas arrêter… sauf s'ils t'ont vu entrer : alors
   // ils savent où tu es, descendent de voiture et viennent te chercher à pied.
   const abri = abriDuJoueur();
@@ -7624,6 +7716,53 @@ function repairVisual(c) {
   p.doors.forEach((dr, i) => { dr.rotation.y = 0; dr.position.x = i < 2 ? -1.06 : 1.06; });
   p.bumpers.forEach((b, i) => { if (!b.parent || b.parent !== c.g) { const k = debrisParts.findIndex(x => x.m === b); if (k >= 0) debrisParts.splice(k, 1); worldGroup.remove(b); c.g.add(b); b.position.set(0, 0.36, i === 0 ? 2.2 : -2.2); b.rotation.set(0, 0, 0); } });
 }
+// ================= REMISE EN ÉTAT DE LA VILLE =================
+// Rien ne reste cassé ou abandonné pour toujours : les vitrines sont remplacées, les
+// lampadaires redressés, les véhicules laissés n'importe où regagnent leur place et les
+// épaves sont remorquées — mais seulement quand le joueur a le dos tourné.
+const DELAI_REPARE = { glass: 75, lamp: 110, light: 110 }, DELAI_VEHICULE = 75, DELAI_EPAVE = 130;
+function repareChose(b) {
+  if (b.kind === 'glass') {
+    if (b.broken) {
+      if (b.m && !b.m.parent) worldGroup.add(b.m);
+      if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid);
+    }
+    if (b.mat0) b.m.material = b.mat0;
+  } else {
+    b.g.quaternion.identity();
+    if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid);
+    if (b.bulb && b.mat0) b.bulb.material = b.mat0;
+    if (b.lamps && b.mats0) b.lamps.forEach((l, i) => { if (b.mats0[i]) l.material = b.mats0[i]; });
+  }
+  b.broken = false; b.cracked = false; b.casseT = 0;
+  burst(b.x, 1.6, b.z, 0x9fdcff, 8);
+}
+function remiseTick(dt) {
+  if (!city.on || simTime < (city.remiseT || 0)) return;
+  city.remiseT = simTime + 2;   // une ronde toutes les 2 s suffit
+  const loin = (x, z, d) => Math.hypot(P.pos.x - x, P.pos.z - z) > d;
+  let repares = 0, ramenes = 0;
+  for (const b of breakables) {
+    if (!b.casseT || (!b.broken && !b.cracked)) continue;
+    if (simTime - b.casseT > (DELAI_REPARE[b.kind] || 90) && loin(b.x, b.z, 26)) { repareChose(b); repares++; }
+  }
+  for (const c of city.cars) {
+    if (!c.home0 || c === drive.car || c.busy || c.kart) { c.loinT = 0; continue; }
+    const [hx, hz, hh] = c.home0;
+    const epave = !!(c.dead || c.explosed);
+    if (Math.hypot(c.x - hx, c.z - hz) < 9 && !epave) { c.loinT = 0; continue; }
+    c.loinT = (c.loinT || 0) + 2;
+    if (c.loinT < (epave ? DELAI_EPAVE : DELAI_VEHICULE) || !loin(c.x, c.z, 38)) continue;
+    if (epave) { c.dmg = 0; c.dead = false; repairVisual(c); }
+    c.x = hx; c.z = hz; c.h = hh; c.speed = 0; c.vx = 0; c.vz = 0; c.vy = 0; c.loinT = 0;
+    if (c.heli) { c.y = c.y0 != null ? c.y0 : 0.2; c.landed = true; c.spin = 0; }
+    c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = hh;
+    settleVehicle(c); vehicleSolid(c);
+    burst(hx, 1, hz, 0x9fdcff, 10); ramenes++;
+  }
+  if (ramenes && city.zone) msg(ramenes > 1 ? `🔧 ${ramenes} véhicules ont été ramenés à leur place` : '🔧 Un véhicule a été ramené à sa place', 2000);
+  if (repares && city.zone) msg(repares > 1 ? `🧰 ${repares} objets cassés ont été remplacés` : '🧰 La ville a remplacé ce qui était cassé', 2000);
+}
 // Fumée du moteur : blanche dès que le véhicule est cabossé, noire quand il est mal en point.
 function fumeeTick(dt) {
   const tous = [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts];
@@ -7672,6 +7811,10 @@ function vehicleDamage(c, amount) {
 // — sinon la police lui collait la vitrine sur le dos et le prenait en chasse.
 function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.broken) return;
+  b.casseT = simTime;   // heure de la casse : la ville remet tout en état au bout d'un moment
+  if (!b.mat0 && b.m) b.mat0 = b.m.material;
+  if (!b.mat0 && b.bulb) b.mat0 = b.bulb.material;
+  if (!b.mats0 && b.lamps) b.mats0 = b.lamps.map(l => l.material);
   const spd = sansDelit ? 0 : Math.abs(drive.speed);
   if (b.kind === 'glass') {
     if (!b.cracked) { b.cracked = true; b.m.material = crackedGlass; sfx.clack(); sfx.noise(.15, 2500, .06); msg('💥 Vitrine fissurée', 700); return; }
@@ -7683,7 +7826,7 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
     if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
     burst(b.x, 3, b.z, 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1); msg(b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !', 900);
   }
-  if (!sansDelit) vehicleDamage(c, Math.min(25, spd * 0.8));
+  if (!sansDelit && c && c.parts) vehicleDamage(c, Math.min(25, spd * 0.8));   // c peut être un simple point d'impact (une balle)
 }
 function gearOf(ratio) { return ratio < 0.02 ? 0 : ratio < 0.18 ? 1 : ratio < 0.38 ? 2 : ratio < 0.58 ? 3 : ratio < 0.8 ? 4 : 5; }
 function driveStep(dt) {
@@ -7905,7 +8048,7 @@ function cityCommon(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -8152,9 +8295,22 @@ function startGym(kind) {
 function gymTick(dt) {
   if (!gym.on) return;
   const st = gym.on === 'bench' ? city.gym.bench : city.gym.run;
-  P.pos.x += (st.x - P.pos.x) * Math.min(1, dt * 6); P.pos.z += (st.z - P.pos.z) * Math.min(1, dt * 6); P.vel.set(0, 0, 0); P.facing = 0;
-  if (gym.on === 'bench') { if (P.jumpBuf > 0) { P.jumpBuf = 0; gym.reps++; me.rig.swing = 0.3; sfx.tone(220 + gym.reps * 5, 0, .08, 'square', .05); } }
-  else gym.reps += dt * 1.5;
+  // on se cale sur l'appareil : allongé sur le banc, debout sur la bande du tapis, face à la console
+  P.pos.x += (st.x - P.pos.x) * Math.min(1, dt * 8); P.pos.z += (st.z - P.pos.z) * Math.min(1, dt * 8);
+  if (st.y != null) P.pos.y = st.y;
+  P.vel.set(0, 0, 0); P.grounded = true; P.facing = Math.PI;
+  if (gym.on === 'bench') {
+    if (P.jumpBuf > 0) { P.jumpBuf = 0; gym.reps++; gym.pousse = simTime + 0.32; me.rig.swing = 0.3; sfx.tone(220 + gym.reps * 5, 0, .08, 'square', .05); }
+    const b = city.gym.bench.barre;   // la barre monte à chaque répétition
+    if (b && b.mesh) b.mesh.position.y = 1.45 + (simTime < (gym.pousse || 0) ? 0.24 : 0);
+  } else {
+    gym.reps += dt * 1.5;
+    for (const r of city.gym.run.rayures || []) {   // la bande défile sous les pieds
+      if (!r.mesh) continue;
+      r.mesh.position.z -= dt * 3.4;
+      if (r.mesh.position.z < 17.15) r.mesh.position.z += 2.75;
+    }
+  }
   const left = Math.max(0, gym.end - simTime);
   $('act').textContent = gym.on === 'bench' ? `🏋️ ${gym.reps} reps · ${left.toFixed(0)}s` : `🏃 ${left.toFixed(0)}s`;
   if (left <= 0) {
@@ -8512,10 +8668,28 @@ function shotsTick(dt) {
       }
     }
 
+    // Les vitrines : la balle les traverse (on peut viser quelqu'un derrière la vitre) mais
+    // elles se fissurent puis explosent — avant, tirer dessus ne faisait rien du tout.
+    if (s.mine) {
+      for (const b of breakables) {
+        const o = b.solid; if (b.broken || !o || !o.glass) continue;
+        const t = rayBox(s.p.x, s.p.y, s.p.z, dx, dy, dz, o.x, o.y, o.z, Math.max(o.w, 0.36) / 2, o.h / 2, Math.max(o.d, 0.36) / 2, Math.min(L, best));
+        if (t < 0) continue;
+        if (!s.vitres) s.vitres = new Set();
+        if (s.vitres.has(b)) continue;        // une balle ne casse chaque vitre qu'une fois
+        s.vitres.add(b);
+        burst(s.p.x + dx * t, s.p.y + dy * t, s.p.z + dz * t, 0x9fdcff, 7); breakThing(b, { x: o.x, z: o.z });
+      }
+    }
     if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
     s.p.set(s.p.x + dx * best, s.p.y + dy * best, s.p.z + dz * best);   // point d'impact exact
     const L2 = Math.hypot(s.v.x, s.v.z) || 1;
-    if (quoi === 'solide') burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 3);
+    if (quoi === 'solide') {
+      // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
+      const br = cible && cible.brk;
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); burst(s.p.x, s.p.y, s.p.z, 0x9fdcff, 8); sfx.clack(); }
+      else burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 3);
+    }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
     else if (quoi === 'cible') {
       const tg = cible; tg.hidden = simTime + 2.4; city.shots++; sfx.check(); sfx.clack();
@@ -9114,13 +9288,14 @@ function frame() {
   // Couché : le personnage bascule à plat, sur le dos. Avec l'ordre d'Euler par défaut il
   // s'allongeait toujours vers le nord quelle que soit son orientation ; en 'YXZ' il
   // s'allonge dans l'axe où il regarde, tête sur l'oreiller quel que soit le sens du lit.
-  const couche = P.sleep && simTime < P.sleep;
+  // allongé : au lit… ou sur le banc de développé couché (avant, le joueur restait debout)
+  const couche = (P.sleep && simTime < P.sleep) || gym.on === 'bench';
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
   else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
   const riding = drive.car && drive.car.rider;
   if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; } else me.group.rotation.z = 0;
   const sousVoile = !!(P.voile && P.voileMesh);
-  const myAnim = couche ? 'sleep' : riding ? 'ride' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
+  const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
   if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
@@ -10201,7 +10376,7 @@ function activiteTick(b, dt) {
     botSay(b, ['j\'ai le magot, je file ! 💰💨', 'ça a marché !!']);
     chat(null, `🚨 ${b.name} a braqué la banque et prend la fuite !`);
     burst(b.pos.x, b.pos.y + 1.4, b.pos.z, 0xffd23f, 16); sfx.win();
-    try { bankAlarm(); } catch (e) {}
+    try { bankAlarmBot(b); } catch (e) {}
     police.cars.forEach(pc => { pc.active = true; pc.chasse = b; });
     const h = pickOne(city.hideouts || []) || { x: 0, z: 0 };
     b.rdv = { x: h.x, z: h.z, y: 0.3, nom: '🕳️ sa planque', arrive: false, libre: true };
@@ -10390,7 +10565,13 @@ function gangMissionTick(dt) {
     m.etape = 'action'; m.fin = simTime + 8;
     for (const b of m.membres) { burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0xffd23f, 6); }
     botSay(m.membres[0], [pickOne(['on y est, on fait vite !', 'personne ne bouge !', 'à nous de jouer 😤'])]);
-    if (m.type === 'banque' || m.type === 'boutique') { try { bankAlarm(); } catch (e) {} infraction('complice d\'un braquage', 2, 2); }
+    if (m.type === 'banque' || m.type === 'boutique') {
+      try { bankAlarmBot(m.membres[0]); } catch (e) {}
+      // complice seulement si le joueur est sur le coup : sinon on envoyait la police sur lui
+      // alors qu'il était à l'autre bout de la ville.
+      const p0 = m.membres[0];
+      if (p0 && Math.hypot(P.pos.x - p0.pos.x, P.pos.z - p0.pos.z) < 40) infraction('complice d\'un braquage', 2, 2);
+    }
     return;
   }
   if (m.etape === 'action' && simTime > m.fin) {

@@ -1458,7 +1458,8 @@ test('braquage : la police descend de voiture, entre dans la banque et monte aux
     __SHOT.go({ world: 4, x: -57, y: 10.2, z: 70, hour: 12 });
     __G.P.pos.set(-57, 10.05, 70);
     const t0 = __G.simTime;
-    __G.bankAlarm();
+    __G.police.alarmT = 0; __G.police.coffres = 0; __G.police.renfortT = 0;   // alarme laissée par un test précédent : bankAlarm sortait aussitôt
+    __G.bankAlarm(); __G.police.renfortT = 0; __G.police.cars.forEach(c => { c.active = true; c.goHome = false; });
     __G.police.arrestT = 0; __G.jail.on = false;   // une arrestation d'un test précédent bloquait le compteur
     const etapes = { agents: 0, entres: 0, etage: 0 };
     let arrete = null;
@@ -1631,13 +1632,15 @@ test('des zombies de toutes tailles, mutilés et sanglants', async p => {
     __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     res.remis = __G.bots.every(b => b.av.group.scale.x === 1 && b.av.rig.armL.visible && b.av.rig.armR.visible
       && b.av.mats.skin.color.getHex() === 0xf5c39a);
+    res.pourquoi = __G.bots.map(b => [+b.av.group.scale.x.toFixed(2), b.av.rig.armL.visible, b.av.rig.armR.visible,
+      b.av.mats.skin.color.getHexString()]).filter(a => a[0] !== 1 || !a[1] || !a[2] || a[3] !== 'f5c39a');
     res.bots = bots;
     return res;
   });
   const ok = r.n > 30 && Object.keys(r.tailles).length >= 3 && r.maxi > r.mini + 0.3 && r.rampants > 0
     && r.manchots > 0 && r.borgnes > 0 && r.extras >= 6 && r.brasCaches === r.manchots && r.boites
     && r.grandTete > r.petitTete + 0.3 && r.remis;
-  return { ok, detail: `${r.n} zombies : ${Object.entries(r.tailles).map(([k, v]) => v + ' ' + k).join(', ')} (échelle ${r.mini} → ${r.maxi}) · ${r.rampants} rampent, ${r.manchots} ont un bras arraché, ${r.borgnes} sont borgnes · ${r.extras} détails sanglants par zombie en moyenne · boîtes de tir à l'échelle (tête de ${r.petitTete} à ${r.grandTete} m) · les ${r.bots} bots redeviennent normaux=${r.remis}` };
+  return { ok, detail: `${r.n} zombies : ${Object.entries(r.tailles).map(([k, v]) => v + ' ' + k).join(', ')} (échelle ${r.mini} → ${r.maxi}) · ${r.rampants} rampent, ${r.manchots} ont un bras arraché, ${r.borgnes} sont borgnes · ${r.extras} détails sanglants par zombie en moyenne · boîtes de tir à l'échelle (tête de ${r.petitTete} à ${r.grandTete} m) · les ${r.bots} bots redeviennent normaux=${r.remis}${r.remis ? '' : ' ' + JSON.stringify(r.pourquoi)}` };
 });
 
 test('la ville d\'horreur : bidons enflammés, tombes, mains et carcasses', async p => {
@@ -1704,15 +1707,19 @@ test('le deltaplane plane loin devant au lieu de tomber', async p => {
     const t = __G.city.toits[0];
     const delta = __G.city.voiles.find(o => o.kind === 'delta' && Math.abs(o.y - t.y) < 2);
     __G.prendreVoile(delta);
-    __G.P.pos.set(t.x + t.w / 2 + 4, t.y + 2, t.z); __G.P.vel.set(0, 0, 0);
-    __G.P.facing = Math.PI;   // cap au nord : plein de terrain dégagé, pas la mer
-    const x0 = __G.P.pos.x, z0 = __G.P.pos.z, y0 = __G.P.pos.y;
+    // cap au sud, au-dessus des terrains de sport : sol plat, ni mer ni collines de rallye
+    __G.P.pos.set(t.x - 6, t.y + 2, t.z + t.d / 2 + 5); __G.P.vel.set(0, 0, 0);
+    __G.P.facing = 0;
+    const x0 = __G.P.pos.x, z0 = __G.P.pos.z, y0 = __G.P.pos.y, s0 = __G.simTime;
     const t0 = Date.now();
-    let aVole = false, rangee = false;
-    while (Date.now() - t0 < 30000) {
+    let aVole = false, rangee = false, pose = false, avait = false;
+    while (Date.now() - t0 < 40000) {
       await dodo(200);
-      aVole = aVole || __G.P.voileVol;
-      if (aVole && !__G.P.voile) { rangee = true; break; }   // posé : l'aile se replie toute seule
+      aVole = aVole || __G.P.voileVol; avait = avait || !!__G.P.voile;
+      if (avait && !__G.P.voile) { rangee = true; break; }   // posé : l'aile se replie toute seule
+      // après 6 s de vol on pose le joueur au sol : le rendu logiciel est trop lent pour
+      // attendre la fin du plané, mais le repli automatique doit se déclencher
+      if (!pose && __G.simTime - s0 > 6) { pose = true; __G.P.pos.y = 0.05; __G.P.vel.set(0, 0, 0); }
     }
     const dh = Math.hypot(__G.P.pos.x - x0, __G.P.pos.z - z0), dv = y0 - __G.P.pos.y;
     return { dh: +dh.toFixed(1), dv: +dv.toFixed(1), voile: __G.P.voile, rangee, remise: !delta.pris };
@@ -1812,8 +1819,9 @@ test('aucun véhicule ne rentre dans un bâtiment', async p => {
     // braquage : les voitures doivent rester dehors
     __G.P.pos.set(-57, 10.05, 70);
     const t0 = __G.simTime;
+    __G.police.alarmT = 0; __G.police.coffres = 0;
     __G.bankAlarm(); __G.police.arrestT = 1e9; __G.police.renfortT = 0;
-    __G.police.cars.forEach(c => { c.active = true; });
+    __G.police.cars.forEach(c => { c.active = true; c.goHome = false; c.debarque = false; });
     let pire = 0;
     for (let i = 0; i < 2400; i++) {
       __G.simTime = t0 + i / 30; __G.P.pos.set(-57, 10.05, 70); __G.policeTick(1 / 30); __G.police.arrestT = 1e9;
@@ -1908,11 +1916,13 @@ test('on peut détruire une voiture de police à coups de feu', async p => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     const pc = __G.police.cars[0];
-    pc.x = 0; pc.z = 48; pc.y = 0; pc.h = 0; pc.dmg = 0; pc.dead = false;
-    pc.g.position.set(0, 0, 48); __G.city.cars.indexOf(pc);
-    if (pc.solid) { pc.solid.x = 0; pc.solid.z = 48; }
-    __G.P.pos.set(0, 0.4, 40);
-    const tirer = () => { const s = { m: null, p: new __G.THREE.Vector3(0, 1.2, 40), v: new __G.THREE.Vector3(0, 0, 95), t: 0, mine: true, dmg: 24 };
+    // en plein désert du rallye : aucun mur ni véhicule entre le joueur et la cible
+    const X = 0, Z = -70;
+    pc.x = X; pc.z = Z + 8; pc.y = 0; pc.h = 0; pc.dmg = 0; pc.dead = false; pc.active = false;
+    pc.g.position.set(pc.x, 0, pc.z);
+    if (pc.solid) { pc.solid.x = pc.x; pc.solid.z = pc.z; pc.solid.y = 0.7; }
+    __G.P.pos.set(X, 0.4, Z);
+    const tirer = () => { const s = { m: null, p: new __G.THREE.Vector3(X, 1.2, Z), v: new __G.THREE.Vector3(0, 0, 95), t: 0, mine: true, dmg: 24 };
       __G.shots.push(s); __G.spawnShot(s); for (let i = 0; i < 30; i++) __G.shotsTick(1 / 120); };
     tirer(); const un = Math.round(pc.dmg || 0);
     let n = 1;

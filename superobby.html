@@ -6233,7 +6233,9 @@ function conduire(c, tx, tz, dt, st) {
   if (!st.route || simTime > (st.routeT || 0)) { st.routeT = simTime + 2.5;
     const pth = navPath(c.x, c.z, tx, tz); st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]]; }
   while (st.route.length > 1 && Math.hypot(st.route[0][0] - c.x, st.route[0][1] - c.z) < 3) st.route.shift();
-  const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z, want = Math.atan2(dx, dz);
+  const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
+  // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage
+  const want = ((st.evT || 0) > simTime) ? st.evH : Math.atan2(dx, dz);
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   c.h += clamp(dh, -1, 1) * 3 * dt;
   const vmax = dist < 9 ? 7 : (Math.abs(dh) > 1 ? 9 : 24);
@@ -6245,9 +6247,20 @@ function conduire(c, tx, tz, dt, st) {
   if (!carBlocked(nx, c.z, c.solid, cr, opt, 0, c.h, cL)) c.x = nx; else { c.speed *= 0.4; bloque++; }
   if (!carBlocked(c.x, nz, c.solid, cr, opt, 0, c.h, cL)) c.z = nz; else { c.speed *= 0.4; bloque++; }
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
+  // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
+  // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
+  if (bloque && (st.evT || 0) < simTime) {
+    for (const a of [0.6, -0.6, 1.2, -1.2, 1.9, -1.9]) {
+      const hh = c.h + a;
+      if (!carBlocked(c.x + Math.sin(hh) * 4.5, c.z + Math.cos(hh) * 4.5, c.solid, cr, opt, 0, hh, cL)
+        && !carBlocked(c.x + Math.sin(hh) * 2, c.z + Math.cos(hh) * 2, c.solid, cr, opt, 0, hh, cL)) {
+        st.evH = hh; st.evT = simTime + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
+      }
+    }
+  }
   // La fuite après braquage se débloque en sautant au point de passage suivant ; un ami
   // qui te conduit, lui, s'arrête et le dit plutôt que de traverser les murs.
-  if (st.saut !== false && st.bloqueT > 2) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
+  if (st.saut !== false && st.bloqueT > 3.5) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
     c.x = w2[0]; c.z = w2[1]; st.route = null; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
@@ -6260,7 +6273,7 @@ function botPrendVoiture(b, lieu, genre) {
   for (const v of city.cars) {
     if (v.heli || v.busy || v.kind === 'jetski' || v === coup.car || v === drive.car) continue;
     // « va me chercher un vélo » / « une moto » : on cible le bon type d'engin
-    if (genre === 'bike' ? v.kind !== 'bike' : genre === 'moto' ? v.kind !== 'moto' : v.kind === 'bike') continue;
+    if (genre === 'bike' ? v.kind !== 'bike' : genre === 'moto' ? v.kind !== 'moto' : v.rider) continue;   // « une voiture » : pas un deux-roues
     const d = Math.hypot(v.x - b.pos.x, v.z - b.pos.z); if (d < dmin) { dmin = d; c = v; }
   }
   if (!c) { botSay(b, [`je ne trouve aucun${genre === 'moto' ? 'e moto' : genre === 'bike' ? ' vélo' : 'e voiture'} libre 😬`]); return; }
@@ -6308,9 +6321,11 @@ function botDriveTick(dt) {
     const st = b.drive; if (!st) continue;
     const c = st.car;
     if (st.etat === 'route') {
-      st.saut = false;
+      // L'ami ne renonce plus au premier obstacle : comme la voiture de fuite, il saute au
+      // point de passage suivant s'il reste coincé — ainsi aucun véhicule ne reste bloqué.
+      st.saut = true;
       const d = conduire(c, st.tx, st.tz, dt, st);
-      const coince = (st.bloqueT || 0) > 5;
+      const coince = (st.bloqueT || 0) > 12;   // on insiste bien plus longtemps avant d'abandonner
       if (d < 8 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
         botSay(b, [coince ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
           : st.passager ? `voilà, on est arrivés à ${st.nom} 🚗` : `je suis à ${st.nom} avec la voiture, monte à côté de moi ! (E)`]);

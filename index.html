@@ -7612,7 +7612,10 @@ function step(dt, active) {
   if (inWater && !P.climbing) {
     if (!P.swimming) { P.swimming = true; sfx.splash(); burst(P.pos.x, w.top, P.pos.z, 0x9fdcff, 14); if (simTime > city.splashT) { city.splashT = simTime + 20; msg('🏊 Tu nages ! Espace pour sauter', 1500); } }
     const a = 1 - Math.exp(-4 * dt); P.vel.x += (wantX * 0.55 - P.vel.x) * a; P.vel.z += (wantZ * 0.55 - P.vel.z) * a;
-    const floatY = w.top - (w.depth || 1.35);   // profondeur propre au bassin : sinon le petit bassin de la villa visait un point sous son propre fond P.vel.y += (floatY - P.pos.y) * 14 * dt; P.vel.y -= P.vel.y * 5 * dt;
+    // profondeur propre au bassin : sinon le petit bassin de la villa visait un point sous son propre fond.
+    // (ces deux lignes de flottaison avaient été avalées par le commentaire : on marchait au fond de l'eau)
+    const floatY = w.top - (w.depth || 1.35);
+    P.vel.y += (floatY - P.pos.y) * 14 * dt; P.vel.y -= P.vel.y * 5 * dt;
     if (P.jumpBuf > 0) { P.vel.y = 6.5; P.jumpBuf = 0; sfx.jump(); }
     P.coyote = 0;
   } else if (P.climbing) {
@@ -7854,7 +7857,16 @@ function repairVisual(c) {
   p.lights.forEach((l, i) => { l.material = i < 2 ? neonMat(0xffffcc) : neonMat(0xff3030); });
   if (p.hood) { p.hood.rotation.x = 0; p.hood.position.set(0, 1.0, 1.4); } [p.ws, p.rw, ...p.sides].forEach(m => { if (m) m.material = glassCar; });
   p.doors.forEach((dr, i) => { dr.rotation.y = 0; dr.position.x = i < 2 ? -1.06 : 1.06; });
-  p.bumpers.forEach((b, i) => { if (!b.parent || b.parent !== c.g) { const k = debrisParts.findIndex(x => x.m === b); if (k >= 0) debrisParts.splice(k, 1); worldGroup.remove(b); c.g.add(b); b.position.set(0, 0.36, i === 0 ? 2.2 : -2.2); b.rotation.set(0, 0, 0); } });
+  // Toutes les pièces détachées reviennent à leur place : avant, seuls les pare-chocs
+  // étaient recollés et un véhicule explosé restait sans capot ni portières.
+  const recolle = (m, px, py, pz) => {
+    if (!m || m.parent === c.g) return;
+    const k = debrisParts.findIndex(x => x.m === m); if (k >= 0) debrisParts.splice(k, 1);
+    worldGroup.remove(m); c.g.add(m); m.position.set(px, py, pz); m.rotation.set(0, 0, 0); m.visible = true;
+  };
+  p.bumpers.forEach((b, i) => recolle(b, 0, 0.36, i === 0 ? 2.2 : -2.2));
+  if (p.hood) recolle(p.hood, 0, 1.0, 1.4);
+  p.doors.forEach((dr, i) => recolle(dr, i < 2 ? -1.06 : 1.06, 0.8, i % 2 ? -0.8 : 0.5));   // portières : mêmes positions qu'à la construction
 }
 // ================= REMISE EN ÉTAT DE LA VILLE =================
 // Rien ne reste cassé ou abandonné pour toujours : les vitrines sont remplacées, les
@@ -7869,7 +7881,7 @@ function repareChose(b) {
     }
     if (b.mat0) b.m.material = b.mat0;
   } else {
-    b.g.quaternion.identity();
+    if (b.quat0) b.g.quaternion.copy(b.quat0); else b.g.quaternion.identity();
     if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid);
     if (b.bulb && b.mat0) b.bulb.material = b.mat0;
     if (b.lamps && b.mats0) b.lamps.forEach((l, i) => { if (b.mats0[i]) l.material = b.mats0[i]; });
@@ -7890,7 +7902,8 @@ function remiseTick(dt) {
     if (!c.home0 || c === drive.car || c.busy || c.kart) { c.loinT = 0; continue; }
     const [hx, hz, hh] = c.home0;
     const epave = !!(c.dead || c.explosed);
-    if (Math.hypot(c.x - hx, c.z - hz) < 9 && !epave) { c.loinT = 0; continue; }
+    const enVol = !!(c.heli && (c.y || 0) > (c.y0 || 0) + 1.5);
+    if (Math.hypot(c.x - hx, c.z - hz) < 9 && !epave && !enVol) { c.loinT = 0; continue; }
     c.loinT = (c.loinT || 0) + 2;
     if (c.loinT < (epave ? DELAI_EPAVE : DELAI_VEHICULE) || !loin(c.x, c.z, 38)) continue;
     if (epave) { c.dmg = 0; c.dead = false; repairVisual(c); }
@@ -7952,6 +7965,7 @@ function vehicleDamage(c, amount) {
 function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.broken) return;
   b.casseT = simTime;   // heure de la casse : la ville remet tout en état au bout d'un moment
+  if (!b.quat0 && b.g) b.quat0 = b.g.quaternion.clone();   // orientation d'origine, pour le redressement
   if (!b.mat0 && b.m) b.mat0 = b.m.material;
   if (!b.mat0 && b.bulb) b.mat0 = b.bulb.material;
   if (!b.mats0 && b.lamps) b.mats0 = b.lamps.map(l => l.material);
@@ -10574,7 +10588,8 @@ function activiteTick(b, dt) {
     chat(null, `🚨 ${b.name} a braqué la banque et prend la fuite !`);
     burst(b.pos.x, b.pos.y + 1.4, b.pos.z, 0xffd23f, 16); sfx.win();
     try { bankAlarmBot(b); } catch (e) {}
-    police.cars.forEach(pc => { pc.active = true; pc.chasse = b; });
+    // Avant, on mettait toutes les voitures en « active » pour de bon (pc.chasse n'est lu
+    // nulle part) : la fenêtre de fuite du joueur sautait à sa prochaine infraction.
     const h = pickOne(city.hideouts || []) || { x: 0, z: 0 };
     b.rdv = { x: h.x, z: h.z, y: 0.3, nom: '🕳️ sa planque', arrive: false, libre: true };
     b.rdvRoute = null; b.wait = 0;

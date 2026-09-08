@@ -1526,6 +1526,12 @@ test('un coffre vaut 500 🪙 et se réfugier dans sa villa sauve le butin', asy
     __G.safesTick(1 / 30);
     __G.keys.delete('KeyE'); __G.city.safeNear = null;
     const gain = __G.wallet - avant, coffres = __G.police.coffres;
+    const dansLaPoche = __G.wallet, hud = (document.getElementById('coins') || {}).textContent;
+    // mis KO juste après : les 30 % perdus ne mordent pas sur le butin du coffre
+    const avantKO = __G.wallet;
+    __G.P.hp = 40; __G.hurt(99, 'un test', 0, 0, 0);
+    const apresKO = __G.wallet, perdu = avantKO - apresKO;
+    __G.P.hp = 100; __G.police.butin = 0;
     // fuite jusqu'à la villa : plus on a de coffres, plus il faut tenir
     const mesure = n => {
       __G.police.coffres = n; __G.police.wanted = 3; __G.police.crimeLevel = 3; __G.police.sait = null;
@@ -1541,10 +1547,11 @@ test('un coffre vaut 500 🪙 et se réfugier dans sa villa sauve le butin', asy
     __G.P.pos.set(70, 0.3, 158);
     const un = mesure(1), deux = mesure(2), trois = mesure(3);
     __G.police.coffres = 0; __G.clearWanted();
-    return { gain, coffres, un, deux, trois };
+    return { gain, coffres, un, deux, trois, dansLaPoche, hud, perdu, apresKO };
   });
-  const ok = r.gain === 500 && r.coffres === 1 && r.un && r.deux && r.trois && r.deux > r.un && r.trois > r.deux;
-  return { ok, detail: `coffre forcé : +${r.gain} 🪙 (${r.coffres} coffre au compteur) · temps à tenir dans la villa : ${r.un} s avec 1 coffre, ${r.deux} s avec 2, ${r.trois} s avec 3` };
+  const ok = r.gain === 500 && r.coffres === 1 && r.perdu < 500 && r.apresKO >= 500
+    && r.un && r.deux && r.trois && r.deux > r.un && r.trois > r.deux;
+  return { ok, detail: `coffre forcé : +${r.gain} 🪙 dans le porte-monnaie (total ${r.dansLaPoche}, HUD « ${r.hud} ») · mis KO juste après : seulement ${r.perdu} 🪙 perdus, il reste ${r.apresKO} · temps à tenir dans la villa : ${r.un} s avec 1 coffre, ${r.deux} s avec 2, ${r.trois} s avec 3` };
 });
 
 test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecteur', async p => {
@@ -1619,7 +1626,7 @@ test('des zombies de toutes tailles, mutilés et sanglants', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
     if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.jail.on = true; __G.zombieStart(2);
+    __G.zombieStart(2);
     const zs = __G.zombie.zoms;
     const tailles = {}; zs.forEach(z => { tailles[z.taille] = (tailles[z.taille] || 0) + 1; });
     const ech = zs.map(z => z.ech);
@@ -1683,7 +1690,10 @@ test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
     __G.P.pos.set(para.x, para.y + 0.4, para.z); await dodo(1200);
     const detecte = !!__G.city.voileNear;
     __G.prendreVoile(para);
-    __G.P.pos.set(t.x + t.w / 2 + 3, t.y + 1, t.z); __G.P.vel.set(0, 0, 0);
+    // saut depuis 7 m plutôt que depuis le toit : en rendu logiciel le temps simulé avance
+    // 8 fois moins vite que la montre, et une descente de 14 m à 3,2 m/s ne tenait pas
+    // dans le temps imparti — le parachute était accusé de ne pas se replier
+    __G.P.pos.set(t.x + t.w / 2 + 3, 7, t.z); __G.P.vel.set(0, 0, 0);
     const y0 = __G.P.pos.y, s0 = __G.simTime;
     let vmin = 0, aVole = false, rangee = false; const t1 = Date.now();
     while (Date.now() - t1 < 45000) {
@@ -2057,6 +2067,159 @@ test('rien ne dépasse des murs de l\'armurerie, et la banque est meublée', asy
   });
   const ok = r.n === 0 && r.objets >= 12 && r.meubles >= 60 && r.assises >= 2;
   return { ok, detail: `armurerie : ${r.objets} objets à l'intérieur, ${r.n} qui dépassent des murs${r.n ? ' (' + JSON.stringify(r.dehors) + ')' : ''} · banque : ${r.meubles} éléments dans le hall dont ${r.assises} canapés où s'asseoir` };
+});
+
+test('on voit le joueur voler : suspendu sous la voilure, à plat ventre sous l\'aile', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const THREE = __G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    if (__G.P.voile) __G.rangeVoile(false);
+    await dodo(400);
+    const mesure = (kind, facing) => {
+      if (__G.P.voile) __G.rangeVoile(false);
+      const o = __G.city.voiles.find(v => v.kind === kind && !v.pris);
+      __G.prendreVoile(o);
+      __G.P.pos.set(0, 60, 40); __G.P.vel.set(0, -2, 0); __G.P.facing = facing;
+      __G.P.grounded = false; __G.P.standing = null; __G.P.voileVol = true;
+      __G.voileTick(1 / 60); __G.voilePose(1 / 60);
+      const g = __G.P.voileMesh, aile = g.userData.voile;
+      g.updateMatrixWorld(true); __G.me.group.updateMatrixWorld(true);
+      let toiles = 0; aile.traverse(m => { if (m.isMesh) toiles++; });
+      const hautVoile = aile.getWorldPosition(new THREE.Vector3()).y - __G.P.pos.y;
+      const tete = __G.me.rig.head.getWorldPosition(new THREE.Vector3());
+      // distance de la tête devant le joueur, dans l'axe du vol
+      const devant = (tete.x - __G.P.pos.x) * Math.sin(facing) + (tete.z - __G.P.pos.z) * Math.cos(facing);
+      const res = { pieces: g.children.length, toiles, hautVoile: +hautVoile.toFixed(2),
+        inclinaison: +__G.me.group.rotation.x.toFixed(2), ordre: __G.me.group.rotation.order,
+        teteDevant: +devant.toFixed(2), teteHaut: +(tete.y - __G.P.pos.y).toFixed(2),
+        bras: +__G.me.rig.armL.rotation.x.toFixed(2) };
+      __G.rangeVoile(false);
+      return res;
+    };
+    const para = mesure('parachute', 1.2);
+    const delta = mesure('delta', 0.6);
+    return { para, delta, apres: { rot: +__G.me.group.rotation.x.toFixed(2), bras: +__G.me.rig.armL.rotation.x.toFixed(2) } };
+  });
+  const ok = r.para.pieces >= 10 && r.para.toiles >= 9 && r.para.hautVoile > 3
+    && Math.abs(r.para.inclinaison) < 0.1 && r.para.teteHaut > 1.2 && r.para.bras < -1.5
+    && r.delta.toiles >= 11 && r.delta.inclinaison > 1.2 && r.delta.teteDevant > 0.4
+    && r.apres.rot === 0 && r.apres.bras === 0;
+  return { ok, detail: `parachute : ${r.para.pieces} pièces (voilure de ${r.para.toiles} morceaux à ${r.para.hautVoile} m au-dessus), joueur debout dans le harnais (inclinaison ${r.para.inclinaison}, bras levés ${r.para.bras}) · deltaplane : aile de ${r.delta.toiles} morceaux, joueur à plat ventre (inclinaison ${r.delta.inclinaison}) tête ${r.delta.teteDevant} m devant lui · rig remis à zéro après=${r.apres.rot === 0 && r.apres.bras === 0}` };
+});
+
+test('les morts-vivants ont mâchoire, dents, os à nu et chairs pourries', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
+    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.zombieStart(2);
+    const zs = __G.zombie.zoms;
+    const res = { n: zs.length,
+      machoires: zs.filter(z => z.machoire).length,
+      eventres: zs.filter(z => z.eventre).length,
+      details: Math.round(zs.reduce((a, z) => a + z.extras.length, 0) / zs.length),
+      mini: Math.min(...zs.map(z => z.extras.length)),
+      maillotEfface: zs.every(z => !z.av.mats.front.map && !z.av.mats.back.map) };
+    // la mâchoire bouge d'une image à l'autre
+    const z0 = zs.find(z => !z.rampe);
+    __G.zombie.mange = null; __G.P.devore = false;
+    z0.chasse = true; const a1 = z0.machoire.rotation.x;
+    await dodo(500); const a2 = z0.machoire.rotation.x;
+    res.machoireBouge = Math.abs(a2 - a1) > 0.01;
+    const botZ = zs.filter(z => z.bot);
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    res.maillotRendu = botZ.every(z => z.av.mats.front.map && z.av.mats.back.map);
+    res.plusDeGore = __G.bots.every(b => { let n = 0; b.av.rig.head.traverse(() => n++); return n < 40; });
+    res.bots = botZ.length;
+    return res;
+  });
+  const ok = r.n > 20 && r.machoires === r.n && r.eventres > 0 && r.details >= 15 && r.mini >= 10
+    && r.maillotEfface && r.machoireBouge && r.maillotRendu && r.plusDeGore;
+  return { ok, detail: `${r.n} zombies, ${r.details} morceaux de gore chacun en moyenne (au moins ${r.mini}) · ${r.machoires} mâchoires articulées qui claquent=${r.machoireBouge} · ${r.eventres} éventrés côtes à nu · maillot imprimé effacé=${r.maillotEfface} et rendu aux ${r.bots} bots à la fin=${r.maillotRendu}` };
+});
+
+test('le zombie s\'agenouille et plante sa bouche sur le ventre du joueur allongé', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const THREE = __G.THREE;
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
+    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.zombieStart(1);
+    await dodo(600);
+    if (__G.uiOpen) __G.closeUI();   // un écran de prison en retard mettrait le jeu en pause
+    __G.P.facing = 1.1;
+    const z = __G.zombie.zoms.find(o => !o.mort && !o.rampe);
+    // un zombie rapide a pu attraper le joueur pendant l'attente : on repart d'une page blanche
+    __G.zombie.mange = null; __G.P.devore = false; __G.P.hp = 100;
+    z.cd = 0; z.x = __G.P.pos.x + 1; z.z = __G.P.pos.z;
+    __G.zombieAttrape(z);
+    __G.zombie.mangeT = __G.simTime + 60;
+    const t0 = __G.simTime;
+    await dodo(700);
+    const memeZombie = __G.zombie.mange === z;
+    if (!memeZombie || __G.simTime === t0 || __G.uiOpen) return { rate: true, mange: !!__G.zombie.mange, meme: memeZombie,
+      hp: Math.round(__G.P.hp), on: __G.zombie.on, ui: __G.uiOpen, fige: __G.simTime === t0 };
+    __G.me.group.updateMatrixWorld(true); z.av.group.updateMatrixWorld(true);
+    const ventre = __G.me.torso.localToWorld(new THREE.Vector3(0, -0.13, 0.2));
+    const bouche = z.av.rig.head.localToWorld(new THREE.Vector3(0, 0.11, 0.3));
+    const tete = __G.me.rig.head.getWorldPosition(new THREE.Vector3());
+    const f = __G.P.facing;
+    const devant = (tete.x - __G.P.pos.x) * Math.sin(f) + (tete.z - __G.P.pos.z) * Math.cos(f);
+    const pied = z.av.rig.legL.localToWorld(new THREE.Vector3(0, -0.72, 0));
+    const sol = __G.groundUnder(z.av.group.position.x, z.av.group.position.z, null, 3);
+    const res = {
+      ecart: +ventre.distanceTo(bouche).toFixed(3),
+      corpsAplat: +__G.me.group.rotation.x.toFixed(2), teteDevant: +devant.toFixed(2),
+      busteFlechi: +z.av.group.rotation.x.toFixed(2),
+      jambesRepliees: +z.av.rig.legL.rotation.x.toFixed(2),
+      genouAuSol: +(pied.y - sol).toFixed(2),
+      machoire: +z.machoire.rotation.x.toFixed(2),
+    };
+    // on se dégage : le zombie se relève
+    __G.zombie.luttes = 99; await dodo(500);
+    res.releve = +z.av.group.rotation.x.toFixed(2);
+    res.libere = !__G.P.devore && !__G.zombie.mange;
+    res.dosDroit = +z.av.rig.head.rotation.x.toFixed(2);
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    return res;
+  });
+  if (r.rate) return { ok: false, detail: `le zombie visé n'a pas mordu (même zombie=${r.meme}, un autre mange=${r.mange}, PV ${r.hp}, mode zombie=${r.on}, fenêtre ouverte=${r.ui}, horloge figée=${r.fige})` };
+  const ok = r.ecart < 0.2 && Math.abs(r.corpsAplat + Math.PI / 2) < 0.05 && r.teteDevant > 1
+    && r.busteFlechi > 0.7 && r.genouAuSol < 0.35 && r.libere && Math.abs(r.releve) < 0.3 && Math.abs(r.dosDroit) < 0.3;
+  return { ok, detail: `bouche du zombie à ${r.ecart} m du ventre du joueur · joueur couché à plat (${r.corpsAplat} rad) tête ${r.teteDevant} m devant ses pieds · zombie à genoux : buste fléchi ${r.busteFlechi} rad, jambes ${r.jambesRepliees}, genou à ${r.genouAuSol} m du sol, mâchoire ouverte ${r.machoire} · dégagé après la lutte=${r.libere}, le zombie se redresse (buste ${r.releve}, nuque ${r.dosDroit})` };
+});
+
+test('le fusil à lunette se porte dans le dos, comme le fusil d\'assaut', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const THREE = __G.THREE;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(300);
+    const out = {};
+    for (const k of ['rifle', 'sniper']) {
+      __G.owned.add('arme:' + k); __G.equipWeapon(k);
+      __G.P.drawn = false; __G.setWeapon(__G.me, k, false);
+      await dodo(150);
+      const m = __G.me.weapons[k];
+      __G.me.group.updateMatrixWorld(true);
+      const rel = __G.me.group.worldToLocal(m.getWorldPosition(new THREE.Vector3()));
+      let pieces = 0; m.traverse(o => { if (o.isMesh) pieces++; });
+      out[k] = { visible: m.visible, surLeCorps: m.parent === __G.me.group, pieces,
+        x: +rel.x.toFixed(2), y: +rel.y.toFixed(2), z: +rel.z.toFixed(2) };
+    }
+    // dégainé, il passe dans la main droite
+    __G.P.drawn = true; __G.setWeapon(__G.me, 'sniper', true);
+    out.enMain = __G.me.weapons.sniper.parent === __G.me.rig.handR;
+    __G.P.drawn = false; __G.setWeapon(__G.me, null, false);
+    return out;
+  });
+  const s = r.sniper, f = r.rifle;
+  const ok = s.visible && s.surLeCorps && s.z < -0.15 && s.y > 0.5 && s.pieces >= 12
+    && Math.abs(s.z - f.z) < 0.05 && Math.abs(s.y - f.y) < 0.05 && r.enMain;
+  return { ok, detail: `fusil à lunette : ${s.pieces} pièces, visible=${s.visible}, en bandoulière dans le dos à (${s.x}, ${s.y}, ${s.z}) — même place que le fusil d'assaut (${f.x}, ${f.y}, ${f.z}) · il passe en main quand on dégaine=${r.enMain}` };
 });
 
 (async()=>{

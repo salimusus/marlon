@@ -947,12 +947,30 @@ function wrapWeapon(mesh, gy, gz, mx, my, mz) {
   const muz = new THREE.Object3D(); muz.position.set(mx, my - gy, mz - gz); g.add(muz); g.userData.muzzle = muz;
   return g;
 }
+function sniperMesh() {   // fusil à lunette : canon long, grosse lunette, bipied, crosse de précision
+  const g = rifleMesh();
+  const dark = lam(0x1b1f28), grey = lam(0x8f98ab), verre = neonMat(0x9fdcff);
+  const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
+  // canon rallongé
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.42, 8), dark); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 1.0); g.add(c);
+  bx(dark, 0.075, 0.075, 0.12, 0, -0.64, 1.22);                 // frein de bouche
+  // grosse lunette de visée
+  const lu = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.42, 10), dark); lu.rotation.x = Math.PI / 2; lu.position.set(0, -0.47, 0.16); g.add(lu);
+  const par = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.1, 10), dark); par.rotation.x = Math.PI / 2; par.position.set(0, -0.47, 0.38); g.add(par);
+  const oc = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.06, 10), verre); oc.rotation.x = Math.PI / 2; oc.position.set(0, -0.47, -0.06); g.add(oc);
+  bx(grey, 0.03, 0.09, 0.04, 0, -0.52, 0.3); bx(grey, 0.03, 0.09, 0.04, 0, -0.52, 0.02);   // colliers
+  // bipied replié sous le garde-main
+  for (const sg of [-1, 1]) bx(grey, 0.02, 0.16, 0.02, sg * 0.05, -0.74, 0.6, 0.5);
+  bx(dark, 0.1, 0.2, 0.12, 0, -0.86, -0.5);                     // busc de crosse
+  return g;
+}
 function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, sinon rangée (étui à la hanche / dos)
   if (!av.weapons) {
     // Poignées relevées sur les modèles : pistolet (0, -0.84, -0.02), fusil (0, -0.82, -0.14),
     // grenade (0, -0.75, 0). Bouches : pistolet (0, -0.62, 0.66), fusil (0, -0.64, 1.0).
     av.weapons = { pistol: wrapWeapon(gunMesh(), -0.84, -0.02, 0, -0.62, 0.66),
                    rifle: wrapWeapon(rifleMesh(), -0.82, -0.14, 0, -0.64, 1.0),
+                   sniper: wrapWeapon(sniperMesh(), -0.82, -0.14, 0, -0.64, 1.28),
                    grenade: wrapWeapon(grenadeMesh(), -0.75, 0, 0, -0.75, 0.16) };
     for (const m of Object.values(av.weapons)) { m.visible = false; av.group.add(m); }
     // Nœud « main droite » au bout du bras, tourné pour que le +z de l'arme descende le long
@@ -976,7 +994,7 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
       if (m.parent !== av.group) { m.parent && m.parent.remove(m); av.group.add(m); }
       // rangée : poignée sur l'étui, canon vers le bas pour le pistolet ; fusil en bandoulière
       if (k === 'pistol') { m.position.set(1.02 * S, 1.9 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.25, 0, 0.12); m.scale.setScalar(0.95); }
-      else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(Math.PI / 2, 0.12, 1.15); m.scale.setScalar(0.95); }
+      else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(Math.PI / 2, 0.12, 1.15); m.scale.setScalar(k === 'sniper' ? 0.9 : 0.95); }
     }
   }
   av.holster.visible = kind === 'pistol' && !inHand;
@@ -2242,7 +2260,7 @@ let worldIdx = 0, PATH = [];
 const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
-const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0 };
+const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -3010,10 +3028,15 @@ function safesTick(dt) {
   const held = keys.has('KeyE') || P.handHeld;
   if (held) { sf.progress += dt / 3.2; sf.dial.rotation.x += dt * 12; $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}%`; if (simTime > (sf.tickT || 0)) { sf.tickT = simTime + 0.25; sfx.tone(1200, 0, .03, 'square', .03); } bankAlarm(); }
   else if (sf.progress > 0) { sf.progress = Math.max(0, sf.progress - dt / 6); $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}%`; }
-  if (sf.progress >= 1) { sf.open = true; sf.door.position.x += 0.5; sf.door.rotation.y = -1.7; sf.door.position.z -= 0.55; wallet += sf.amount; saveWallet(); updateHud(); burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register();
+  if (sf.progress >= 1) { sf.open = true; sf.door.position.x += 0.5; sf.door.rotation.y = -1.7; sf.door.position.z -= 0.55;
+    wallet += sf.amount; saveWallet(); updateHud();
+    police.butin = (police.butin || 0) + sf.amount;   // le butin ne part pas dans les 30 % perdus si on tombe
+    burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register(); sfx.coin();
+    for (let k = 0; k < 6; k++) setTimeout(() => { try { sfx.coin(); } catch (e) {} }, 120 * k);
     police.coffres = (police.coffres || 0) + 1;   // plus on force de coffres, plus la fuite est dure
     const reste = ['un jeu d\'enfant', 'ça va se corser', 'ils vont te traquer', 'presque impossible'][Math.min(3, police.coffres - 1)];
-    msg(`💰 Coffre ouvert : +${sf.amount} 🪙 (${police.coffres} coffre${police.coffres > 1 ? 's' : ''} — ${reste}) ! Fuis vers ta villa`, 3200);
+    msg(`💰 +${sf.amount} 🪙 dans ta poche ! Tu as maintenant ${wallet} 🪙 · ${police.coffres} coffre${police.coffres > 1 ? 's' : ''} (${reste}) — file vers ta villa`, 4200);
+    chat(null, `💰 ${myCfg.name} rafle ${sf.amount} 🪙 dans un coffre (total : ${wallet} 🪙)`);
     updateAct(); infraction('braquer la banque', 3, 3); }
 }
 function guardsTick(dt) {
@@ -4092,18 +4115,105 @@ function ouvreVoile() {   // la voilure se déploie dès qu'on quitte le toit
   if (P.voileMesh) return;
   const g = new THREE.Group(); worldGroup.add(g); P.voileMesh = g;
   if (P.voile === 'parachute') {
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(2.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xff5c5c, side: THREE.DoubleSide }));
-    dome.position.y = 3.4; g.add(dome);
-    for (const a of [0, 1.57, 3.14, 4.71]) { const c = new THREE.Mesh(unitRound, lam(0xeeeeee)); c.scale.set(0.05, 2.4, 0.05); c.position.set(Math.cos(a) * 1.5, 2.2, Math.sin(a) * 1.5); g.add(c); }
+    // Vraie voilure ronde : huit fuseaux rouges et blancs, cheminée au sommet, suspentes
+    // jusqu'au harnais du joueur.
+    const R = 2.9;
+    const rouge = new THREE.MeshLambertMaterial({ color: 0xff5c5c, side: THREE.DoubleSide });
+    const blanc = new THREE.MeshLambertMaterial({ color: 0xf4f8ff, side: THREE.DoubleSide });
+    const voile = new THREE.Group(); voile.position.y = 3.9; g.add(voile); g.userData.voile = voile;
+    for (let i = 0; i < 8; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(R, 8, 6, i * Math.PI / 4, Math.PI / 4, 0, Math.PI / 2.1), i % 2 ? rouge : blanc);
+      voile.add(seg);
+    }
+    const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12), new THREE.MeshLambertMaterial({ color: 0x2b3550 }));
+    vent.position.y = R * 0.96; voile.add(vent);
+    const bord = new THREE.Mesh(new THREE.TorusGeometry(R * 0.99, 0.07, 6, 24), new THREE.MeshLambertMaterial({ color: 0xd63b3b }));
+    bord.rotation.x = Math.PI / 2; voile.add(bord);
+    // suspentes : huit fils qui convergent sur le harnais, au-dessus des épaules
+    const fil = new THREE.MeshLambertMaterial({ color: 0xe8e2d4 });
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2, hx = Math.cos(a) * R * 0.92, hz = Math.sin(a) * R * 0.92;
+      const dep = new THREE.Vector3(hx, 3.9, hz), arr = new THREE.Vector3(0, 1.75, 0);
+      const L = dep.distanceTo(arr);
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, L, 4), fil);
+      c.position.copy(dep).add(arr).multiplyScalar(0.5);
+      c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(arr, dep).normalize());
+      g.add(c);
+    }
+    const harnais = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0x3b4252 }));
+    harnais.scale.set(0.5, 0.16, 0.34); harnais.position.y = 1.72; g.add(harnais);
+    const sac = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xff5c5c }));
+    sac.scale.set(0.52, 0.42, 0.26); sac.position.set(0, 1.35, -0.32); g.add(sac);
   } else {
-    const aile = new THREE.Mesh(new THREE.ConeGeometry(3.2, 1.1, 3), new THREE.MeshLambertMaterial({ color: 0x3ef2ff, side: THREE.DoubleSide }));
-    aile.rotation.x = Math.PI / 2; aile.position.y = 2.1; g.add(aile);
-    const bar = new THREE.Mesh(unitRound, lam(0x8b8f98)); bar.scale.set(1.8, 0.08, 0.08); bar.position.y = 1.4; g.add(bar);
+    // Vrai deltaplane : aile delta en toile, tubes d'attaque, quille et trapèze,
+    // avec le joueur suspendu à plat ventre sous la quille.
+    const aile = new THREE.Group(); aile.position.y = 2.15; g.add(aile); g.userData.voile = aile;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const nez = V(0, 0.12, 3.4), tg = V(-4.2, 0.75, -2.2), td = V(4.2, 0.75, -2.2), q = V(0, -0.05, -1.1);
+    const toile = (a, b, c, col) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z], 3));
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
+      aile.add(m); return m;
+    };
+    toile(nez, tg, q, 0x3ef2ff); toile(nez, q, td, 0xffd23f);
+    toile(tg, V(-2.1, 0.45, -2.5), q, 0x2bb8d8); toile(td, q, V(2.1, 0.45, -2.5), 0xe0a820);
+    const tube = (a, b, r2, col) => {
+      const L = a.distanceTo(b);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r2, r2, L, 6), new THREE.MeshLambertMaterial({ color: col }));
+      m.position.copy(a).add(b).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(V(0, 1, 0), new THREE.Vector3().subVectors(b, a).normalize());
+      aile.add(m); return m;
+    };
+    tube(nez, tg, 0.075, 0x8f98ab); tube(nez, td, 0.075, 0x8f98ab);
+    tube(nez, V(0, -0.05, -2.4), 0.07, 0xc9ced8);         // quille
+    tube(tg, td, 0.05, 0x8f98ab);                          // transversale
+    // trapèze de commande sous l'aile
+    const bas = V(0, -1.5, 0.5);
+    tube(V(-0.95, -0.05, 1.1), bas, 0.05, 0xc9ced8); tube(V(0.95, -0.05, 1.1), bas, 0.05, 0xc9ced8);
+    tube(V(-0.95, -1.5, 0.5), V(0.95, -1.5, 0.5), 0.055, 0xff5c5c);   // barre de contrôle
+    const sangle = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0x3b4252 }));
+    sangle.scale.set(0.12, 0.9, 0.12); sangle.position.set(0, -0.6, -0.2); aile.add(sangle);
   }
   sfx.tone(300, 0, .35, 'sine', .05, 520);
 }
+// Pose du joueur sous la voile : suspendu au harnais sous le parachute, à plat ventre
+// sous le deltaplane, les mains sur la barre.
+function voilePose(dt) {
+  if (!P.voile || !P.voileMesh) return;
+  const g = P.voileMesh;
+  const vx = P.vel.x, vz = P.vel.z, v = Math.hypot(vx, vz);
+  if (P.voile === 'parachute') {
+    me.group.position.set(P.pos.x, P.pos.y, P.pos.z);
+    me.group.rotation.set(0, P.facing, 0, 'YXZ');
+    me.rig.armL.rotation.set(-2.5, 0, 0.5); me.rig.armR.rotation.set(-2.5, 0, -0.5);
+    me.rig.legL.rotation.set(0.35, 0, 0); me.rig.legR.rotation.set(0.2, 0, 0);
+    g.position.set(P.pos.x, P.pos.y, P.pos.z);
+    g.rotation.y = P.facing;
+    // la voilure se balance dans le sens de la dérive
+    if (g.userData.voile) g.userData.voile.rotation.set(Math.sin(simTime * 1.3) * 0.06 - Math.min(0.25, v * 0.02), 0, Math.cos(simTime * 1.1) * 0.06);
+  } else {
+    // À plat ventre sous la quille, la tête vers le nez de l'aile et les mains sur la barre.
+    // L'axe pieds→tête de l'avatar est son +Y local : une rotation de +90° autour de X le
+    // couche dans le sens du vol (avec -90° il volait tête en arrière et sur le dos).
+    const h = P.facing, sx = Math.sin(h), cz = Math.cos(h);
+    me.group.position.set(P.pos.x - sx * 0.9, P.pos.y + 1.15, P.pos.z - cz * 0.9);
+    me.group.rotation.set(Math.PI / 2 - 0.18, h, 0, 'YXZ');
+    // bras tendus vers l'avant-bas : les mains tombent sur la barre de contrôle
+    me.rig.armL.rotation.set(-2.55, 0, 0.28); me.rig.armR.rotation.set(-2.55, 0, -0.28);
+    me.rig.legL.rotation.set(0.2, 0, 0.06); me.rig.legR.rotation.set(0.2, 0, -0.06);
+    g.position.set(P.pos.x, P.pos.y + 0.2, P.pos.z);
+    g.rotation.set(0, h, 0, 'YXZ');
+    if (g.userData.voile) { const roul = clamp(-(P.roulis || 0), -0.5, 0.5);
+      g.userData.voile.rotation.set(Math.sin(simTime * 1.6) * 0.03, 0, roul); }
+  }
+}
 function rangeVoile(atterri) {
   if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; }
+  me.group.rotation.set(0, P.facing, 0, 'YXZ'); P.roulis = 0;
+  me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
+  me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
   if (P.voile) msg(atterri ? '🪂 Bien posé ! La voile se replie toute seule' : '🪂 Voile rangée', 1800);
   if (P.voileSrc) { P.voileSrc.pris = false; P.voileSrc.g.visible = true; P.voileSrc = null; }   // le matériel revient sur le toit
   P.voile = null; P.voileVol = false;
@@ -4134,11 +4244,11 @@ function voileTick(dt) {
     if (P.vel.y < -2.6) P.vel.y = -2.6;
     const { ix } = readInput();
     P.facing -= ix * 1.5 * dt;
+    P.roulis = (P.roulis || 0) + (ix * 0.5 - (P.roulis || 0)) * Math.min(1, dt * 3);   // inclinaison de l'aile
     // vitesse imposée : l'amortissement des commandes au sol annulait sinon le vol plané
     const v = 14;
     P.vel.x = Math.sin(P.facing) * v; P.vel.z = Math.cos(P.facing) * v;
   }
-  if (P.voileMesh) { P.voileMesh.position.set(P.pos.x, P.pos.y, P.pos.z); P.voileMesh.rotation.y = P.voile === 'delta' ? P.facing : 0; }
   if (simTime > (P.voileSnd || 0)) { P.voileSnd = simTime + 1.2; sfx.noise(.25, 700, .015); }
 }
 function liftTick(L, dt) {
@@ -4416,7 +4526,7 @@ function policeInvestit(pt, raison) {
 }
 function policeRepli() {   // fin de traque : les agents remontent en voiture (on les retire)
   for (const a of police.agents) { scene.remove(a.av.group); const i = city.mannequins.indexOf(a.av); if (i >= 0) city.mannequins.splice(i, 1); }
-  police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0;
+  police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.butin = 0;
   for (const pc of police.cars) pc.debarque = false;
 }
 function arrestation(raison) {
@@ -4757,7 +4867,7 @@ function hurt(dmg, by, dx, dz, kb = 2) {   // je prends un coup
   P.hp = Math.max(0, P.hp - dmg); P.hurtT = simTime; $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
   P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5; sfx.hit(); burst(P.pos.x, P.pos.y + 1.2, P.pos.z, 0xff5c5c, 6);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  if (P.hp <= 0) { const lost = Math.floor(wallet * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
+  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
 }
 function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénération du joueur
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
@@ -5177,7 +5287,7 @@ const MUNITIONS = {
   inc: { n: 'Cartouches incendiaires ×20', e: '🔥', p: 55, mul: 1.4, nb: 20, feu: true, desc: 'À l\'impact, une flaque de feu brûle tout ce qui passe pendant 12 s.' },
   exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
 };
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, devore: false, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false };
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, devore: false, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0 };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -5933,41 +6043,84 @@ const ZOM_TAILLES = [
   { n: 'petit', s: 0.74, large: 0.95 }, { n: 'normal', s: 1, large: 1 },
   { n: 'normal', s: 1, large: 1 }, { n: 'grand', s: 1.3, large: 0.9 }, { n: 'gros', s: 1.06, large: 1.55 },
 ];
+const ZOM_M = {};   // matériaux partagés : 50 zombies × 20 morceaux, autant ne pas en créer 1000
+function zm(k, c, em, ei) {
+  return ZOM_M[k] || (ZOM_M[k] = new THREE.MeshLambertMaterial(em == null
+    ? { color: c } : { color: c, emissive: em, emissiveIntensity: ei == null ? 0.6 : ei }));
+}
 function zomLook(av, o) {
-  const S2 = 0.36, ex = [];
-  const rouge = () => new THREE.MeshLambertMaterial({ color: 0x6e0212, emissive: 0x2c0008, emissiveIntensity: 0.6 });
-  const oeil = () => new THREE.MeshLambertMaterial({ color: 0xff2a12, emissive: 0xff2000, emissiveIntensity: 1 });
+  const ex = [];
+  const sang = () => zm('sang', 0x6e0212, 0x2c0008, 0.55);
+  const caillot = () => zm('caillot', 0x3a0208);
+  const os = () => zm('os', 0xd7d0bc);
+  const dent = () => zm('dent', 0xf7f3e6);
+  const chair = () => zm('chair', 0x8d5a4a);
+  const pourri = () => zm('pourri', 0x53603f);
+  const tissu = () => zm('tissu', 0x2a3324);
+  const noir = () => zm('orbite', 0x120909);
+  const acier = () => zm('acier', 0xc9ced8);
   const bx = (mat, sx, sy, sz, px, py, pz, parent) => {
     const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz);
     (parent || av.group).add(m); ex.push(m); return m;
   };
   const tete = av.rig.head;
-  // yeux rouges qui luisent ; certains n'en ont plus qu'un
+  // ---- tête : orbites creusées, yeux qui luisent, mâchoire décrochée et dents ----
   o.borgne = Math.random() < 0.3;
   const yeux = o.borgne ? [rnd(0, 1) < 0.5 ? -1 : 1] : [-1, 1];
-  for (const sg of yeux) bx(oeil(), 0.1, 0.1, 0.06, sg * 0.08, 0.31, 0.25, tete);
+  for (const sg of [-1, 1]) bx(noir(), 0.13, 0.13, 0.05, sg * 0.105, 0.31, 0.24, tete);   // deux orbites creuses, bien séparées
+  for (const sg of yeux) bx(zm('oeil', 0xff2a12, 0xff2000, 1), 0.085, 0.085, 0.06, sg * 0.105, 0.31, 0.26, tete);
+  bx(zm('necrose', 0x3f4a32), 0.07, 0.08, 0.04, rnd(-0.15, 0.15), rnd(0.2, 0.44), 0.245, tete);   // plaque de chair nécrosée
   if (o.borgne) { const sg = yeux[0] > 0 ? -1 : 1;
-    bx(new THREE.MeshLambertMaterial({ color: 0x140a0a }), 0.15, 0.15, 0.05, sg * 0.08, 0.31, 0.25, tete);
-    bx(rouge(), 0.05, 0.22, 0.04, sg * 0.08, 0.18, 0.26, tete); }   // coulée sous l'orbite
-  // bouche : mâchoire décrochée et sang qui dégouline
-  if (Math.random() < 0.55) bx(new THREE.MeshLambertMaterial({ color: 0x1a0a0a }), 0.18, 0.12, 0.05, 0, 0.14, 0.25, tete);
-  bx(rouge(), 0.12, 0.2, 0.04, rnd(-0.05, 0.05), 0.03, 0.25, tete);
-  // éclaboussures sur le torse et les jambes
-  for (let i = 0; i < 3; i++) bx(rouge(), rnd(0.1, 0.3), rnd(0.06, 0.2), 0.05, rnd(-0.3, 0.3), rnd(0.75, 1.35), 0.2);
-  if (Math.random() < 0.5) for (let i = 0; i < 2; i++) bx(rouge(), rnd(0.08, 0.2), rnd(0.1, 0.3), 0.05, rnd(-0.3, 0.3), rnd(0.3, 0.7), 0.19);
-  // côtes à nu
-  if (Math.random() < 0.35) { for (let i = 0; i < 3; i++) bx(new THREE.MeshLambertMaterial({ color: 0xe8e4d8 }), 0.34, 0.05, 0.05, 0.05, 1.0 + i * 0.12, 0.2); }
-  // bras arraché : le moignon saigne
+    bx(sang(), 0.05, 0.24, 0.04, sg * 0.08, 0.17, 0.26, tete); }   // coulée sous l'orbite vide
+  // mâchoire articulée : elle claque en marchant et s'ouvre en grand pour dévorer
+  const mach = new THREE.Group(); mach.position.set(0, 0.11, 0.08); tete.add(mach); ex.push(mach); o.machoire = mach;
+  const m1 = new THREE.Mesh(unitRound, chair()); m1.scale.set(0.24, 0.1, 0.26); m1.position.set(0, -0.05, 0.11); mach.add(m1);
+  bx(noir(), 0.21, 0.1, 0.04, 0, 0.12, 0.24, tete);          // gorge sombre, derrière les dents
+  for (let i = -1; i <= 1; i++) {                            // trois dents du haut, trois du bas
+    const d1 = new THREE.Mesh(unitRound, dent()); d1.scale.set(0.045, 0.05, 0.05); d1.position.set(i * 0.06, 0.02, 0.22); mach.add(d1);
+    if (i !== 0 || Math.random() < 0.6) bx(dent(), 0.045, 0.055, 0.05, i * 0.06, 0.165, 0.24, tete);
+  }
+  bx(sang(), 0.11, 0.14, 0.04, rnd(-0.04, 0.04), 0.01, 0.25, tete);   // sang au menton
+  if (Math.random() < 0.45) { bx(os(), 0.3, 0.16, 0.3, 0, 0.46, -0.02, tete);        // crâne scalpé
+    bx(sang(), 0.2, 0.06, 0.22, 0.05, 0.42, 0.06, tete); }
+  if (Math.random() < 0.35) bx(sang(), 0.05, 0.2, 0.05, 0.16, 0.3, 0.15, tete);      // balafre sur la joue
+  // ---- torse : plaie ouverte, côtes à nu, viscères, vêtements déchirés ----
+  o.eventre = Math.random() < 0.4;
+  if (o.eventre) {
+    const cx = rnd(-0.08, 0.08);
+    bx(noir(), 0.3, 0.34, 0.06, cx, 1.02, 0.19);                                       // cage thoracique ouverte
+    for (let i = 0; i < 3; i++) bx(os(), 0.24, 0.035, 0.06, cx, 0.93 + i * 0.095, 0.2);  // côtes à nu
+    bx(sang(), 0.14, 0.12, 0.1, cx, 0.88, 0.22);                                       // viscères qui pendent
+  } else if (Math.random() < 0.4) {
+    const cx = rnd(-0.12, 0.12);
+    bx(noir(), 0.2, 0.22, 0.05, cx, 1.08, 0.19);
+    for (let i = 0; i < 2; i++) bx(os(), 0.16, 0.035, 0.06, cx, 1.03 + i * 0.085, 0.2);
+  }
+  for (let i = 0; i < 3; i++) bx(sang(), rnd(0.1, 0.28), rnd(0.06, 0.2), 0.05, rnd(-0.28, 0.28), rnd(0.78, 1.35), 0.2);
+  bx(caillot(), rnd(0.12, 0.26), rnd(0.1, 0.24), 0.05, rnd(-0.25, 0.25), rnd(0.85, 1.3), -0.2);   // dos éclaboussé
+  for (let i = 0; i < 2; i++) bx(tissu(), rnd(0.08, 0.18), rnd(0.12, 0.3), 0.04, rnd(-0.3, 0.3), rnd(0.62, 0.86), rnd(0, 1) < 0.5 ? 0.2 : -0.2);   // lambeaux
+  // ---- membres : chair pourrie, os à nu, mains ensanglantées ----
+  for (const g2 of [av.rig.armL, av.rig.armR]) {
+    if (Math.random() < 0.6) bx(pourri(), 0.18, rnd(0.1, 0.2), 0.18, g2.position.x, rnd(1.0, 1.3), 0);
+    bx(caillot(), 0.2, 0.12, 0.2, g2.position.x, 0.78, 0);                              // main rouge de sang
+  }
+  if (Math.random() < 0.3) bx(os(), 0.07, 0.22, 0.07, (Math.random() < 0.5 ? -1 : 1) * 0.54, 0.95, 0.06);   // os qui perce l'avant-bras
+  for (const sg of [-1, 1]) if (Math.random() < 0.5) bx(pourri(), 0.17, rnd(0.1, 0.2), 0.17, sg * 0.18, rnd(0.25, 0.6), 0);
+  if (Math.random() < 0.45) bx(sang(), rnd(0.1, 0.2), rnd(0.1, 0.25), 0.05, rnd(-0.25, 0.25), rnd(0.3, 0.66), 0.19);
+  // ---- bras arraché : le moignon saigne ----
   o.manchot = Math.random() < 0.28;
   if (o.manchot) {
     const g2 = Math.random() < 0.5 ? av.rig.armL : av.rig.armR;
     g2.visible = false; o.brasCache = g2;
-    bx(rouge(), 0.18, 0.16, 0.18, g2.position.x, 1.36, 0);
+    bx(sang(), 0.19, 0.17, 0.19, g2.position.x, 1.36, 0);
+    bx(os(), 0.06, 0.14, 0.06, g2.position.x, 1.28, 0);
   }
-  // couteau ou hache plantée dans le dos
-  if (Math.random() < 0.22) {
-    bx(new THREE.MeshLambertMaterial({ color: 0xc9ced8 }), 0.06, 0.42, 0.06, rnd(-0.2, 0.2), 1.15, -0.24);
-    bx(new THREE.MeshLambertMaterial({ color: 0x2b2118 }), 0.08, 0.18, 0.08, 0, 1.42, -0.24);
+  // ---- couteau, hache ou barre plantée dans le dos ----
+  if (Math.random() < 0.24) {
+    const dx = rnd(-0.2, 0.2);
+    bx(acier(), 0.06, 0.42, 0.06, dx, 1.15, -0.24);
+    bx(zm('manche', 0x2b2118), 0.08, 0.18, 0.08, dx, 1.42, -0.24);
+    bx(sang(), 0.12, 0.1, 0.05, dx, 1.02, -0.21);
   }
   o.extras = ex;
   return ex;
@@ -5979,12 +6132,19 @@ function makeZombie(x, z, kind, bot) {
   const vert = pickOne([0x40503a, 0x37452f, 0x4a4438, 0x2f3b33]);
   av.mats.skin.color.setHex(pickOne([0x86a86a, 0x9fb583, 0x76925e, 0xa8b394]));
   av.mats.shirt.color.setHex(vert); av.mats.sleeve.color.setHex(0x33422e); av.mats.pants.color.setHex(pickOne([0x2b3325, 0x231f1a, 0x2f2a33]));
+  // le maillot imprimé (nom + numéro) faisait très « joueur de foot » : on l'efface, un
+  // zombie porte des loques d'une seule couleur. On garde les textures pour les rendre au bot.
   av.mats.front.color.setHex(vert); av.mats.back.color.setHex(vert);   // les faces avant/arrière du maillot ont leur propre matériau
   if (av.mats.hair) av.mats.hair.color.setHex(0x4a4438);
   if (av.mats.jacket) av.mats.jacket.color.setHex(0x33422e);
   if (av.mats.bag) av.mats.bag.color.setHex(0x33422e);
   av.tag.visible = false; av.group.visible = true;
   const z0 = { av, x, y: groundUnder(x, z, null, 2), z, kind, hp: 3, facing: rnd(0, 6.283), chasse: false, cd: 0, mort: false, bot: bot || null, pas: rnd(0, 6.283) };
+  // on retient le maillot imprimé sur l'avatar lui-même (et une seule fois) : si le même bot
+  // est zombifié deux fois, on ne mémorise pas la version déjà effacée
+  if (!av.maillot) av.maillot = { f: av.mats.front.map, b: av.mats.back.map };
+  av.mats.front.map = null; av.mats.back.map = null;
+  av.mats.front.needsUpdate = true; av.mats.back.needsUpdate = true;
   // gabarit : petit, normal, grand ou gros
   const T = pickOne(ZOM_TAILLES);
   z0.taille = T.n; z0.ech = T.s;
@@ -5992,6 +6152,9 @@ function makeZombie(x, z, kind, bot) {
   // certains rampent : ils avancent à plat ventre, très lentement mais silencieusement
   z0.rampe = kind !== 'rapide' && Math.random() < 0.22;
   zomLook(av, z0);
+  // ordre d'Euler 'YXZ' : le cap tourne d'abord, l'inclinaison ensuite — sinon un rampant
+  // qui change de direction bascule sur le côté au lieu de rester à plat ventre
+  av.group.rotation.order = 'YXZ';
   if (z0.rampe) { av.group.rotation.x = -1.25; av.rig.armL.rotation.x = -1.5; av.rig.armR.rotation.x = -1.5; }
   // boîtes de tir adaptées au gabarit (tête / corps, sans recouvrement)
   z0.boite = z0.rampe
@@ -6099,7 +6262,8 @@ function zombieFin(gagne) {
     for (const m of (z.extras || [])) if (m.parent) m.parent.remove(m);   // sang, yeux rouges, couteau…
     if (z.brasCache) z.brasCache.visible = true;
     if (z.bot) { z.bot.hp = 100; z.bot.wait = 1; z.bot.ko = 0;
-      z.av.group.scale.set(1, 1, 1); z.av.group.rotation.set(0, 0, 0); z.av.rig.armL.rotation.set(0, 0, 0); z.av.rig.armR.rotation.set(0, 0, 0); }
+      z.av.group.scale.set(1, 1, 1); z.av.group.rotation.set(0, 0, 0, 'XYZ'); z.av.rig.armL.rotation.set(0, 0, 0); z.av.rig.armR.rotation.set(0, 0, 0);
+      z.av.rig.legL.rotation.set(0, 0, 0); z.av.rig.legR.rotation.set(0, 0, 0); z.av.rig.head.rotation.set(0, 0, 0); }
     else { scene.remove(z.av.group); const k = city.mannequins.indexOf(z.av); if (k >= 0) city.mannequins.splice(k, 1); } }
   // les bots reprennent leur peau et leurs couleurs d'origine
   bots.forEach((b, i) => { const d = BOT_DEFS[i], j = jerseyOf(d.jersey);
@@ -6108,6 +6272,8 @@ function zombieFin(gagne) {
     b.av.rig.armL.visible = true; b.av.rig.armR.visible = true; b.av.group.scale.set(1, 1, 1);
     b.av.mats.skin.color.set(0xf5c39a); b.av.mats.shirt.color.set(j.base); b.av.mats.sleeve.color.set(j.sl);
     b.av.mats.front.color.set(0xffffff); b.av.mats.back.color.set(0xffffff);
+    if (b.av.maillot) { b.av.mats.front.map = b.av.maillot.f; b.av.mats.back.map = b.av.maillot.b;
+      b.av.mats.front.needsUpdate = true; b.av.mats.back.needsUpdate = true; }   // nom et numéro rendus
     if (b.av.mats.hair) b.av.mats.hair.color.set(PAL.hair ? PAL.hair[d.hairColor || 0] : 0x3b2a1a);
     if (b.av.mats.jacket) b.av.mats.jacket.color.set(0xffffff); if (b.av.mats.bag) b.av.mats.bag.color.set(0xffffff);
     b.av.mats.pants.color.set(PAL.pants[d.girl ? 4 : (i * 3 + 2) % 6]);
@@ -6172,6 +6338,45 @@ function zombieAmbiance(dt) {
   if (simTime > zombie.criT) { zombie.criT = simTime + rnd(7, 16);
     sfx.noise(.5, 900, .04); sfx.tone(rnd(280, 420), 0, .55, 'sawtooth', .04, 120); }
 }
+// Point du ventre du joueur allongé : il est couché sur le dos, tête vers l'avant, donc
+// son ventre est à ~0,95 m devant ses pieds. C'est là que le zombie plante sa mâchoire.
+function ventreDuJoueur() {
+  return new THREE.Vector3(P.pos.x + Math.sin(P.facing) * 0.95, P.pos.y + 0.38, P.pos.z + Math.cos(P.facing) * 0.95);
+}
+// Le zombie se met à genoux sur le flanc du joueur, buste plongé, et on cale sa bouche
+// exactement sur le point visé : on pose la silhouette, on mesure où tombe la mâchoire,
+// puis on décale le groupe de la différence.
+function zomAGenoux(z, cible, dt) {
+  const av = z.av, gr = av.group, r = av.rig;
+  const cote = (z.cote || (z.cote = Math.random() < 0.5 ? -1 : 1));
+  // il arrive par le côté et regarde le ventre
+  const yaw = P.facing + Math.PI / 2 * cote + Math.PI;
+  const morsure = 0.5 + Math.sin(simTime * 7) * 0.28;   // la mâchoire claque
+  // buste penché à 1 rad, nuque cassée vers le bas : genoux au sol, croupe relevée,
+  // et les bras plaquent le corps du joueur devant lui
+  gr.rotation.set(1.0, yaw, Math.sin(simTime * 3.1) * 0.07, 'YXZ');
+  r.legL.rotation.set(-0.45, 0, 0.12); r.legR.rotation.set(-0.45, 0, -0.12);   // genoux plantés au sol
+  r.armL.rotation.set(-1.8 + Math.sin(simTime * 5) * 0.14, 0, 0.5);
+  r.armR.rotation.set(-1.8 - Math.sin(simTime * 5) * 0.14, 0, -0.5);
+  r.head.rotation.set(0.85 + morsure * 0.16, 0, 0);   // nuque cassée vers le ventre
+  if (z.machoire) z.machoire.rotation.x = morsure;
+  const sol = groundUnder(cible.x, cible.z, null, cible.y + 1);
+  gr.position.set(cible.x - Math.sin(yaw) * 0.55, sol + 0.05, cible.z - Math.cos(yaw) * 0.55);
+  gr.updateMatrixWorld(true);
+  const bouche = r.head.localToWorld(new THREE.Vector3(0, 0.11, 0.3));
+  gr.position.x += cible.x - bouche.x; gr.position.z += cible.z - bouche.z;
+  gr.position.y = Math.max(sol - 0.12, gr.position.y + (cible.y - bouche.y));
+  gr.updateMatrixWorld(true);
+  z.x = gr.position.x; z.z = gr.position.z;
+}
+function zomReleve(z) {
+  const r = z.av.rig;
+  z.av.group.rotation.set(z.rampe ? -1.25 : 0, z.av.group.rotation.y, 0, 'YXZ');
+  r.legL.rotation.set(0, 0, 0); r.legR.rotation.set(0, 0, 0);
+  r.head.rotation.set(0, 0, 0);
+  if (z.machoire) z.machoire.rotation.x = 0;
+  z.av.group.position.y = z.y;
+}
 function zombieTick(dt) {
   if (!zombie.on) return;
   zombieAmbiance(dt);
@@ -6180,14 +6385,14 @@ function zombieTick(dt) {
   if (zombie.mange) {
     const z = zombie.mange;
     P.vel.set(0, 0, 0);
-    z.x = P.pos.x + Math.sin(P.facing) * 0.85; z.z = P.pos.z + Math.cos(P.facing) * 0.85;
-    z.av.group.position.set(z.x, z.y, z.z); z.av.group.rotation.set(0.9, P.facing + Math.PI, 0);
-    if (simTime > (zombie.sangT || 0)) { zombie.sangT = simTime + 0.12; burst(P.pos.x, P.pos.y + 0.5, P.pos.z, 0x8b0010, 4); sfx.noise(.06, 220, .05); }
+    const v = ventreDuJoueur();
+    zomAGenoux(z, v, dt);
+    if (simTime > (zombie.sangT || 0)) { zombie.sangT = simTime + 0.12; burst(v.x, v.y + 0.12, v.z, 0x8b0010, 4); sfx.noise(.06, 220, .05); }
     if (P.jumpBuf > 0) { P.jumpBuf = 0; zombie.luttes++; sfx.tone(300 + zombie.luttes * 40, 0, .06, 'square', .05); }
     P.hp = Math.max(0, P.hp - N.degat * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = '#ff5c5c';
     $('act').textContent = `🧟 DÉBATS-TOI ! ${zombie.luttes}/${N.lutte}`;
-    if (zombie.luttes >= N.lutte) { z.av.group.rotation.set(0, 0, 0); zombieLibere(true); }
-    else if (P.hp <= 0 || simTime > zombie.mangeT) { z.av.group.rotation.set(0, 0, 0); zombieEchec(); }
+    if (zombie.luttes >= N.lutte) { zomReleve(z); zombieLibere(true); }
+    else if (P.hp <= 0 || simTime > zombie.mangeT) { zomReleve(z); zombieEchec(); }
     return;
   }
   // détection : on est plus discret à l'abri, accroupi derrière un mur, ou immobile
@@ -6220,7 +6425,11 @@ function zombieTick(dt) {
       z.av.rig.armL.rotation.z = 0.16; z.av.rig.armR.rotation.z = -0.16;
       if (vit > 0 && z.chasse) { z.av.rig.legL.rotation.x = Math.sin(z.pas) * 0.6; z.av.rig.legR.rotation.x = -Math.sin(z.pas) * 0.6; }
       z.av.group.rotation.z = Math.sin(simTime * 1.7 + z.pas) * 0.06;
+      z.av.rig.head.rotation.z = Math.sin(z.pas * 0.5) * 0.13;        // la tête dodeline
+      z.av.rig.head.rotation.x = 0.1 + Math.sin(z.pas * 0.37) * 0.08;
     }
+    // la mâchoire décrochée claque, en grand quand il t'a repéré
+    if (z.machoire) z.machoire.rotation.x = 0.16 + Math.abs(Math.sin(simTime * 2.4 + z.pas)) * (z.chasse ? 0.5 : 0.12);
     if (z.chasse && simTime > (z.criT || 0)) { z.criT = simTime + rnd(2.5, 6); if (d < 30) { sfx.tone(rnd(90, 150), 0, .35, 'sawtooth', .05, 60); sfx.noise(.18, 300, .04); } }
     if (d < 1.2 && simTime > z.cd && (!P.court || z.kind === 'immobile') && !P.devore) zombieAttrape(z);
   }
@@ -8671,12 +8880,20 @@ function frame() {
     P.facing += d * Math.min(1, dt * 14);
   }
   me.group.rotation.y = P.facing;
-  // couché : le personnage bascule à plat sur le matelas au lieu de rester debout dessus
-  me.group.rotation.x = ((P.sleep && simTime < P.sleep) || P.devore) ? -Math.PI / 2 : (P.swing ? -P.swing.ang : 0);   // couché à plat, ou incliné avec la balançoire
+  // Couché : le personnage bascule à plat, sur le dos. Avec l'ordre d'Euler par défaut il
+  // s'allongeait toujours vers le nord quelle que soit son orientation ; en 'YXZ' il
+  // s'allonge dans l'axe où il regarde (tête devant), ce qui permet de caler précisément
+  // le zombie sur son ventre.
+  const couche = (P.sleep && simTime < P.sleep) || P.devore;
+  if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
+  else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
+  if (P.devore) me.group.position.y = P.pos.y + 0.18;   // le corps repose sur le sol, pas dedans
   const riding = drive.car && drive.car.rider;
   if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; } else me.group.rotation.z = 0;
+  const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = ((P.sleep && simTime < P.sleep) || P.devore) ? 'sleep' : riding ? 'ride' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
+  if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
   const armed = !!(P.gun && P.drawn && !drive.car && running && !gym.on && !P.sit && !P.swing && !P.ride);

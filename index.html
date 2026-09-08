@@ -234,6 +234,25 @@ body.lobby #emoteBtn{display:none}
 .wcard .wb{margin-top:8px;background:rgba(0,0,0,.25);border-radius:8px;padding:4px 6px;font-size:12px}
 .wcard .done{position:absolute;top:8px;right:10px;font-size:18px}
 @media (max-height:560px){.keys{display:none}h1{font-size:32px}.card{padding:16px 18px}}
+/* ---- salon de tatouage ---- */
+#tatoo .card{max-width:min(900px,95vw)}
+.tatgrid{display:grid;grid-template-columns:1fr 210px;gap:14px;align-items:start}
+@media (max-width:640px){.tatgrid{grid-template-columns:1fr}}
+.tatmotifs{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;max-height:34vh;overflow-y:auto}
+.tatm{background:#f3f6fd;border:2px solid #dbe3f5;border-radius:11px;padding:6px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tatm span{font-size:22px;line-height:1}
+.tatm i{font-style:normal;font-size:11px;font-weight:800;color:#1b2a4a;text-align:center;line-height:1.1}
+.tatm.on{border-color:#5cc453;background:#eaf9ec}
+.tatcote{display:flex;flex-direction:column;gap:6px}
+#tatooApercu{width:128px;height:128px;align-self:center;background:#fff;border:2px solid #dbe3f5;border-radius:12px}
+#tatooMot{border:2px solid #dbe3f5;border-radius:10px;padding:7px 9px;font-weight:800;text-align:center;text-transform:uppercase;color:#1b2a4a;outline:none}
+.tatlab{font-size:12px;font-weight:800;color:#7a86a0;margin-top:4px;text-transform:uppercase;letter-spacing:.4px}
+.tatencres{display:flex;gap:6px;flex-wrap:wrap}
+.tatencres i{width:26px;height:26px;border-radius:50%;border:3px solid #dbe3f5;cursor:pointer;display:block}
+.tatencres i.sel{border-color:#1b2a4a;transform:scale(1.12)}
+.tatliste{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 2px;font-size:12px}
+.tatliste b{background:#eef2fb;border-radius:9px;padding:4px 8px;color:#1b2a4a;display:inline-flex;gap:6px;align-items:center}
+.tatliste u{cursor:pointer;color:#e03131;text-decoration:none;font-weight:900}
 /* ---- atelier de customisation ---- */
 #atelier .card{max-width:min(880px,94vw)}
 #atelierOnglets{justify-content:center;margin:6px 0 10px}
@@ -500,6 +519,31 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
     <div class="mpr" style="justify-content:center">
       <button class="btn" id="atelierOk">Valider</button>
       <button class="btn sec" id="atelierBack">Retour</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="tatoo">
+  <div class="card wide">
+    <h2>🖊️ Salon de tatouage</h2>
+    <p class="sub">Choisis ton motif, l'endroit sur le corps, l'encre et la taille. Tu peux en cumuler autant que tu veux.</p>
+    <div class="tatgrid">
+      <div>
+        <div id="tatooMotifs" class="tatmotifs"></div>
+      </div>
+      <div class="tatcote">
+        <canvas id="tatooApercu" width="128" height="128"></canvas>
+        <input id="tatooMot" maxlength="10" placeholder="TON TEXTE" autocomplete="off">
+        <div class="tatlab">Où ?</div><div class="pills" id="tatooZones"></div>
+        <div class="tatlab">Encre</div><div id="tatooEncres" class="tatencres"></div>
+        <div class="tatlab">Taille</div><div class="pills" id="tatooTailles"></div>
+      </div>
+    </div>
+    <div class="tatlab">Tes tatouages</div><div id="tatooListe" class="tatliste"></div>
+    <p id="tatooPrix" class="tuneprix"></p>
+    <div class="mpr" style="justify-content:center">
+      <button class="btn" id="tatooOk">Se faire tatouer</button>
+      <button class="btn sec" id="tatooBack">Retour</button>
     </div>
   </div>
 </div>
@@ -2659,6 +2703,37 @@ function openMissions(atOffice) {
   $('missGrid').querySelectorAll('[data-m]:not([disabled])').forEach(b => b.addEventListener('click', () => { if (mission.cur && mission.cur.id === b.dataset.m) { endMission(false, true); openMissions(here); } else startMission(b.dataset.m); }));
   openUI('missions');
 }
+function buildTatoo(SX, SZ) {   // 🖊️ salon de tatouage : fauteuil, table, flashs au mur, néon
+  const F = 1, th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][F];
+  const M = shop(SX, SZ, 8, 7, 0x2b2f3a, '🖊️ TATOUAGE', 0xd42b2b, F).M;
+  const FY = 0.36;
+  const B = (lx, ly, lz, w, h, d, c, o) => { const [px, pz] = M(lx, lz); return box(px, ly, pz, F % 2 ? d : w, h, F % 2 ? w : d, c, o); };
+  // fauteuil de tatouage : assise, dossier incliné, repose-bras
+  B(-1.2, FY + 0.5, 0.6, 2.4, 0.5, 1.1, 0x1b1b1b, { studs: false, noRoute: true });
+  B(-2.1, FY + 1.1, 0.6, 0.6, 1.3, 1.1, 0x1b1b1b, { studs: false, noRoute: true });
+  for (const dz of [-0.75, 0.75]) B(-1.1, FY + 0.85, 0.6 + dz, 1.6, 0.16, 0.2, 0x8b1b1b, { deco: true, studs: false });
+  // table à encres et machine
+  B(0.9, FY + 0.55, 1.4, 1.2, 0.6, 0.9, 0xc9ced8, { studs: false, noRoute: true });
+  for (let i = 0; i < 6; i++) { const [px, pz] = M(0.55 + (i % 3) * 0.35, 1.15 + Math.floor(i / 3) * 0.4);
+    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.18, 8), lam([0x141821, 0x2f6fe0, 0xd42b2b, 0x2fa04a, 0xe0a820, 0x8b4fd0][i]));
+    p2.position.set(px, FY + 0.94, pz); worldGroup.add(p2); }
+  { const [px, pz] = M(1.2, 1.9); const mach = new THREE.Mesh(unitRound, lam(0x3b4252));
+    mach.scale.set(0.16, 0.3, 0.16); mach.position.set(px, FY + 1.0, pz); worldGroup.add(mach); }
+  // flashs accrochés au mur du fond : douze petits dessins tirés du catalogue
+  for (let i = 0; i < 12; i++) {
+    const [px, pz] = M(-3 + (i % 6) * 1.2, 3.2);
+    const mot = TATOO_MOTIFS[(i * 2) % TATOO_MOTIFS.length];
+    const mat = new THREE.MeshBasicMaterial({ map: tatooTexture(mot.k, ['noir', 'rouge', 'bleu', 'dore'][i % 4]), transparent: true });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
+    pl.position.set(px, 2.1 + Math.floor(i / 6) * 1.1, pz); pl.rotation.y = th + Math.PI; worldGroup.add(pl);
+    box(px, 2.1 + Math.floor(i / 6) * 1.1, pz + (F % 2 ? 0 : 0.06), 1.05, 1.05, 0.06, 0xf4f6fa, { deco: true, studs: false });
+  }
+  B(0, 4.9, -3.4, 4.4, 0.5, 0.12, 0, { material: neonMat(0xff2fd6), deco: true, noEdges: true });
+  const [dx, dz] = M(-1.2, -0.6);
+  city.tatooDesk = { x: dx, z: dz };
+  city.zones.push({ name: 'Tatouage', emoji: '🖊️', x1: SX - 5, x2: SX + 5, z1: SZ - 5, z2: SZ + 5,
+    hint: '🖊️ Salon de tatouage : anime, symboles, textes — E devant le fauteuil' });
+}
 function buildDecoShop(SX, SZ) {   // 🛋️ Maison & Déco : on y achète les objets qui se posent dans la villa
   const F = 1;                      // devanture tournée vers l'est, face à la rue commerçante
   const th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][F];
@@ -2706,6 +2781,7 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   M = sh(88, 0x5cc453, '📚 Librairie');
   { for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) { const [px, pz] = M(-3.5 + i * 0.7, 2.6); box(px, 1.2 + r * 1.1, pz, 0.3, 0.9, 0.5, pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xb57cff, 0xffffff]), { deco: true, studs: false }); } const [cx, cz] = M(0, -0.5); box(cx, 0.85, cz, 0.8, 1, 3, C.wood, { studs: false, noRoute: true }); }
   buildDecoShop(43, 58);   // en face, côté ouest de la rue : le magasin de décoration
+  buildTatoo(43, 80);      // et le salon de tatouage, un peu plus haut sur le même trottoir
   for (const z of [40, 52, 64, 76, 88]) { lamp(55.5, z + 5.5); flowerBed(55.5, z - 5, 1.2, 3); }
   for (let i = 0; i < 6; i++) bench(48.5, 40 + i * 9, Math.PI / 2);   // bancs le long de la rue
   for (let i = 0; i < 14; i++) box(49 + (i % 2) * 6, 5.4, 34 + i * 4.3, 0.5, 0.5, 0.5, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande de la rue
@@ -5219,12 +5295,18 @@ const shots = [];   // projectiles laser
 const gym = { on: null, reps: 0, end: 0 };
 let uiOpen = null, aimPoint = new THREE.Vector3();
 const SHOP = {
-  Chapeaux: [{ id: 'none', n: 'Aucun', e: '🙂', p: 0 }, { id: 'beanie', n: 'Bonnet', e: '🧢', p: 8 }, { id: 'top', n: 'Haut-de-forme', e: '🎩', p: 15 }, { id: 'crown', n: 'Couronne', e: '👑', p: 30 }, { id: 'cowboy', n: 'Cowboy', e: '🤠', p: 12 }, { id: 'helmet', n: 'Casque', e: '⛑️', p: 10 }, { id: 'pirate', n: 'Pirate', e: '🏴‍☠️', p: 14 }],
+  Chapeaux: [{ id: 'none', n: 'Tête nue', e: '🙂', p: 0 }, { id: 'beanie', n: 'Bonnet', e: '🧢', p: 8 }, { id: 'bob', n: 'Bob', e: '🪣', p: 9 }, { id: 'bandana', n: 'Bandana rouge', e: '🔴', p: 7 }, { id: 'bandanaB', n: 'Bandana bleu', e: '🔵', p: 7 }, { id: 'bandanaJ', n: 'Bandana jaune', e: '🟡', p: 7 }, { id: 'cagoule', n: 'Cagoule', e: '🥷', p: 16 }, { id: 'moto', n: 'Casque de moto', e: '🏍️', p: 22 }, { id: 'audio', n: 'Casque audio', e: '🎧', p: 14 }, { id: 'capuche', n: 'Capuche', e: '🧥', p: 11 }, { id: 'helmet', n: 'Casque de chantier', e: '⛑️', p: 10 }, { id: 'top', n: 'Haut-de-forme', e: '🎩', p: 15 }, { id: 'cowboy', n: 'Chapeau de cowboy', e: '🤠', p: 12 }, { id: 'pirate', n: 'Bicorne de pirate', e: '🏴‍☠️', p: 14 }, { id: 'crown', n: 'Couronne', e: '👑', p: 30 }],
+  Hauts: [{ id: 'foot', n: 'Maillot de foot', e: '⚽', p: 0 }, { id: 'basket', n: 'Maillot de basket', e: '🏀', p: 12 }, { id: 'debardeur', n: 'Débardeur', e: '🎽', p: 9 }, { id: 'torse', n: 'Torse nu', e: '💪', p: 0 }],
   Vestes: [{ id: 0, n: 'Sans veste', e: '👕', p: 0 }, { id: 1, n: 'Veste marine', e: '🧥', p: 12 }, { id: 2, n: 'Veste rouge', e: '🧥', p: 12 }, { id: 3, n: 'Veste bleue', e: '🧥', p: 12 }, { id: 4, n: 'Veste verte', e: '🧥', p: 12 }, { id: 5, n: 'Veste jaune', e: '🧥', p: 12 }, { id: 6, n: 'Veste noire', e: '🧥', p: 14 }],
-  Bas: [{ id: 'pants', n: 'Pantalon', e: '👖', p: 0 }, { id: 'shorts', n: 'Short', e: '🩳', p: 6 }, { id: 'skirt', n: 'Jupe', e: '👗', p: 6 }],
+  Bas: [{ id: 'pants', n: 'Pantalon', e: '👖', p: 0 }, { id: 'baggy', n: 'Baggy large', e: '👖', p: 11 }, { id: 'shorts', n: 'Short', e: '🩳', p: 6 }, { id: 'skirt', n: 'Jupe', e: '👗', p: 6 }],
+  Chaussures: [{ id: 'basket', n: 'Baskets', e: '👟', p: 0 }, { id: 'ville', n: 'Chaussures de ville', e: '👞', p: 8 }, { id: 'bottes', n: 'Bottes', e: '🥾', p: 14 }, { id: 'cowboy', n: 'Bottes de cowboy', e: '🤠', p: 20 }, { id: 'tongs', n: 'Tongs', e: '🩴', p: 4 }],
+  Poignets: [{ id: 'rien', n: 'Poignets nus', e: '🙂', p: 0 }, { id: 'bracelet', n: 'Bracelet doré', e: '📿', p: 10 }, { id: 'montre', n: 'Montre', e: '⌚', p: 18 }, { id: 'deux', n: 'Bracelet + montre', e: '✨', p: 26 }],
   Lunettes: [{ id: 0, n: 'Sans lunettes', e: '🙂', p: 0 }, { id: 1, n: 'Lunettes de soleil', e: '🕶️', p: 9 }],
   Sacs: [{ id: 0, n: 'Sans sac', e: '🙂', p: 0 }, { id: 1, n: 'Sac rouge', e: '🎒', p: 10 }, { id: 2, n: 'Sac bleu', e: '🎒', p: 10 }, { id: 3, n: 'Sac vert', e: '🎒', p: 10 }, { id: 4, n: 'Sac violet', e: '🎒', p: 10 }, { id: 5, n: 'Sac jaune', e: '🎒', p: 10 }],
 };
+const CHAUSSURES = { basket: { c: 0x2b3550, h: 0.3, tige: 0, eperon: false }, ville: { c: 0x3b2a1a, h: 0.26, tige: 0, eperon: false },
+  bottes: { c: 0x4a3418, h: 0.34, tige: 0.9, eperon: false }, cowboy: { c: 0x8b5a2b, h: 0.32, tige: 1.1, eperon: true },
+  tongs: { c: 0xff8f3a, h: 0.14, tige: 0, eperon: false } };
 const FOOD = [{ e: '🍔', n: 'Burger', p: 3, f: 9 }, { e: '🍕', n: 'Pizza', p: 3, f: 11 }, { e: '🍟', n: 'Frites', p: 2, f: 6 }, { e: '🥤', n: 'Soda', p: 2, f: 5 }, { e: '🍦', n: 'Glace', p: 2, f: 7 }, { e: '🍩', n: 'Donut', p: 2, f: 8 }, { e: '🥗', n: 'Salade', p: 2, f: -5 }, { e: '🍎', n: 'Pomme', p: 1, f: -3 }, { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3 }];
 let jumpHeld = false, downHeld = false;
 function cityReset() {
@@ -5234,7 +5316,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.tuneDesk = null; city.tuneNear = false; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -5446,28 +5528,48 @@ function buildAvatar(cfg) {
     cowboy: { c: 0x8b4a2b, parts: [[2.4, 0.12, 2.2, 0, 1.42, 0], [1.3, 0.75, 1.4, 0, 1.82, 0]] },
     helmet: { c: 0xf4f6fa, parts: [[1.6, 0.95, 1.65, 0, 1.15, 0], [1.72, 0.2, 0.55, 0, 0.98, 0.62]] },
     pirate: { c: 0x1b1b1b, parts: [[2.3, 0.35, 1.0, 0, 1.6, 0], [1.2, 0.7, 1.0, 0, 1.75, 0]] },
+    bandana: { c: 0xd42b2b, parts: [[1.5, 0.45, 1.52, 0, 1.28, 0], [0.35, 0.6, 0.3, 0.45, 1.05, -0.75], [0.3, 0.5, 0.25, -0.4, 1.0, -0.78]] },
+    bandanaB: { c: 0x2f6fe0, parts: [[1.5, 0.45, 1.52, 0, 1.28, 0], [0.35, 0.6, 0.3, 0.45, 1.05, -0.75], [0.3, 0.5, 0.25, -0.4, 1.0, -0.78]] },
+    bandanaJ: { c: 0xf2c21a, parts: [[1.5, 0.45, 1.52, 0, 1.28, 0], [0.35, 0.6, 0.3, 0.45, 1.05, -0.75], [0.3, 0.5, 0.25, -0.4, 1.0, -0.78]] },
+    bob: { c: 0x6fb26b, parts: [[2.1, 0.16, 2.1, 0, 1.3, 0], [1.5, 0.62, 1.5, 0, 1.62, 0]] },
+    moto: { c: 0xe03131, parts: [[1.62, 1.35, 1.66, 0, 1.05, 0], [1.5, 0.5, 0.3, 0, 1.02, 0.75], [1.68, 0.18, 0.6, 0, 1.62, 0.6]] },
+    cagoule: { c: 0x1b1b1b, parts: [[1.5, 1.5, 1.5, 0, 0.9, 0], [0.9, 0.34, 0.2, 0, 1.0, 0.72]] },
+    audio: { c: 0x2b2f3a, parts: [[1.62, 0.28, 0.9, 0, 1.5, 0], [0.34, 0.62, 0.5, -0.82, 0.95, 0], [0.34, 0.62, 0.5, 0.82, 0.95, 0]] },
+    capuche: { c: 0x4a5162, parts: [[1.7, 1.3, 1.5, 0, 0.9, -0.2], [1.55, 0.3, 0.4, 0, 1.5, 0.4]] },
   };
   const hatGroups = {};
   for (const [k, h] of Object.entries(HATS)) { const grp = new THREE.Group(); head.add(grp); const mat = M(h.c); h.parts.forEach(([w, hh, d, x, y, z]) => part(w * S, hh * S, d * S, mat, x * S, y * S, z * S, grp)); grp.visible = cfg.hat === k; hatGroups[k] = grp; }
   capParts.forEach(p => p.visible = cfg.cap != null && !(cfg.hat && cfg.hat !== 'none'));
   const limb = (x, w, top, bottom, topH) => {
     const p = new THREE.Group(); p.position.set(x, 4 * S, 0); g.add(p);
-    part(w, topH, S, top, 0, -topH / 2, 0, p);
-    part(w * 0.96, 2 * S - topH, S * 0.96, bottom, 0, -topH - (2 * S - topH) / 2, 0, p);
+    p.manche = part(w, topH, S, top, 0, -topH / 2, 0, p);      // la manche : elle disparaît en débardeur
+    p.avantBras = part(w * 0.96, 2 * S - topH, S * 0.96, bottom, 0, -topH - (2 * S - topH) / 2, 0, p);
     return p;
   };
   const leg = x => {
     const p = new THREE.Group(); p.position.set(x, 2 * S, 0); g.add(p);
-    part(S, 1.0 * S, S, pants, 0, -0.5 * S, 0, p);
+    p.cuisse = part(S, 1.0 * S, S, pants, 0, -0.5 * S, 0, p);
     p.low = part(0.96 * S, 0.72 * S, 0.96 * S, cfg.shorts ? skin : pants, 0, -1.36 * S, 0, p);
-    part(0.98 * S, 0.3 * S, 0.98 * S, shoe, 0, -1.87 * S, 0, p);
+    p.shoe = part(0.98 * S, 0.3 * S, 0.98 * S, shoe, 0, -1.87 * S, 0, p);
+    p.tige = part(1.02 * S, 0.8 * S, 1.02 * S, shoe, 0, -1.42 * S, 0, p); p.tige.visible = false;   // tige de botte
+    p.eperon = part(0.5 * S, 0.12 * S, 0.5 * S, M(0xd8c26a), 0, -1.85 * S, -0.55 * S, p); p.eperon.visible = false;
     return p;
   };
   const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, walk: 0, swing: 0, kick: 0 };
+  // ---- poignets : bracelet à gauche, montre à droite (celle qui prévient des cambriolages) ----
+  const braceletM = M(0xffd23f), montreM = M(0x2b2f3a);
+  const bracelet = part(1.16 * S, 0.2 * S, 1.16 * S, braceletM, 0, -1.72 * S, 0, rig.armL); bracelet.visible = false;
+  const montre = new THREE.Group(); montre.position.set(0, -1.68 * S, 0); rig.armR.add(montre); montre.visible = false;
+  part(1.14 * S, 0.16 * S, 1.14 * S, montreM, 0, 0, 0, montre);
+  const cadran = part(0.62 * S, 0.14 * S, 0.4 * S, M(0x9fdcff), 0, 0.06 * S, 0.52 * S, montre);
   const skirt = part(2.3 * S, 0.75 * S, 1.25 * S, pants, 0, 1.75 * S, 0, g); skirt.visible = !!cfg.skirt;
+  // débardeur : deux bretelles posées par-dessus le torse nu
+  const bretelles = new THREE.Group(); bretelles.position.y = 3 * S; g.add(bretelles); bretelles.visible = false;
+  for (const sx of [-0.62, 0.62]) part(0.42 * S, 2.1 * S, 1.1 * S, shirt, sx * S, 0, 0, bretelles);
+  part(1.9 * S, 0.5 * S, 1.06 * S, shirt, 0, -0.72 * S, 0, bretelles);
   const tag = nameTag(cfg.name); g.add(tag);
   scene.add(g);
-  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin }, capParts, setHair, skirt, jacket, bag, glasses, hatGroups, torso, tag, name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 };
+  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, bracelet: braceletM, montre: montreM }, capParts, setHair, skirt, jacket, bag, glasses, hatGroups, torso, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 };
   applyStats(av, cfg.m || 0, cfg.f || 0);
   return av;
 }
@@ -5490,7 +5592,33 @@ function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, 
   av.jacket.visible = !!look.jacket; if (look.jacket) av.mats.jacket.color.set(PAL.jacket[look.jacket] || 0x1b2a4a);
   av.bag.visible = !!look.bag; if (look.bag) av.mats.bag.color.set(PAL.bag[look.bag] || 0xff5c5c);
   av.glasses.visible = !!look.glasses;
-  for (const lg of [av.rig.legL, av.rig.legR]) lg.low.material = look.shorts ? av.mats.skin : av.mats.pants;
+  // ---- haut du corps : maillot de foot, de basket, débardeur ou torse nu ----
+  const haut = look.haut || 'foot';
+  const nu = haut === 'torse', sansManche = nu || haut === 'basket' || haut === 'debardeur';
+  for (const br of [av.rig.armL, av.rig.armR]) if (br.manche) br.manche.material = sansManche ? av.mats.skin : av.mats.sleeve;
+  if (av.bretelles) av.bretelles.visible = haut === 'debardeur';
+  av.torso.material = nu || haut === 'debardeur'
+    ? [av.mats.skin, av.mats.skin, av.mats.skin, av.mats.skin, av.mats.skin, av.mats.skin]
+    : [av.mats.shirt, av.mats.shirt, av.mats.shirt, av.mats.shirt, av.mats.front, av.mats.back];
+  // ---- bas : pantalon, baggy large, short ou jupe ----
+  for (const lg of [av.rig.legL, av.rig.legR]) {
+    lg.low.material = look.shorts ? av.mats.skin : av.mats.pants;
+    const large = look.baggy ? 1.28 : 1;
+    if (lg.cuisse) lg.cuisse.scale.set(large, 1, large);
+    lg.low.scale.set(look.baggy && !look.shorts ? 1.24 : 1, 1, look.baggy && !look.shorts ? 1.24 : 1);
+  }
+  // ---- chaussures : baskets, ville, bottes, cowboy ou tongs ----
+  const ch = CHAUSSURES[look.chaussures || 'basket'] || CHAUSSURES.basket;
+  av.mats.shoe.color.setHex(ch.c);
+  for (const lg of [av.rig.legL, av.rig.legR]) {
+    if (lg.shoe) { lg.shoe.scale.set(1, ch.h / 0.3, ch.tige ? 1.06 : 1); lg.shoe.position.y = -1.87 * 0.36 + (ch.h - 0.3) * 0.36 * 0.5; }
+    if (lg.tige) { lg.tige.visible = ch.tige > 0; lg.tige.scale.set(1, ch.tige, 1); lg.tige.position.y = -1.72 * 0.36 + ch.tige * 0.18; }
+    if (lg.eperon) lg.eperon.visible = !!ch.eperon;
+  }
+  // ---- poignets ----
+  if (av.bracelet) av.bracelet.visible = !!look.bracelet;
+  if (av.montre) av.montre.visible = !!look.montre;
+  poseTatouages(av, look.tatouages);
   av.num = look.num || av.num;
   if (av.mats.back.map) av.mats.back.map.dispose(); if (av.mats.front.map) av.mats.front.map.dispose();
   av.mats.front.map = jerseyFront(j); av.mats.front.needsUpdate = true;
@@ -5610,8 +5738,10 @@ const savedAv = store.json('superobby.avatar', {});
 const myCfg = { name: store.get('superobby.name') || 'Joueur' + Math.floor(rnd(10, 99)),
   jersey: savedAv.jersey ?? Math.floor(Math.random() * JERSEYS.length), pants: savedAv.pants ?? Math.floor(Math.random() * 6), cap: savedAv.cap ?? Math.floor(Math.random() * 6),
   num: savedAv.num ?? Math.floor(rnd(1, 99)), hair: savedAv.hair ?? 0, hairColor: savedAv.hairColor ?? 0, skirt: !!savedAv.skirt,
-  hat: savedAv.hat || 'none', jacket: savedAv.jacket || 0, bag: savedAv.bag || 0, glasses: !!savedAv.glasses, shorts: !!savedAv.shorts };
-const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim });
+  hat: savedAv.hat || 'none', jacket: savedAv.jacket || 0, bag: savedAv.bag || 0, glasses: !!savedAv.glasses, shorts: !!savedAv.shorts,
+  haut: savedAv.haut || 'foot', baggy: !!savedAv.baggy, chaussures: savedAv.chaussures || 'basket',
+  bracelet: !!savedAv.bracelet, montre: !!savedAv.montre, tatouages: Array.isArray(savedAv.tatouages) ? savedAv.tatouages : [] };
+const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, haut: myCfg.haut, baggy: myCfg.baggy, chaussures: myCfg.chaussures, bracelet: myCfg.bracelet, montre: myCfg.montre, tatouages: myCfg.tatouages, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim });
 const me = buildAvatar({ name: myCfg.name, jersey: myCfg.jersey, pants: PAL.pants[myCfg.pants], cap: PAL.cap[myCfg.cap], num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, m: stats.m, f: stats.f });
 function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
 
@@ -7486,9 +7616,11 @@ function cityCommon(dt) {
   }
   const near = city.gym && Math.hypot(P.pos.x - city.gym.bench.x, P.pos.z - city.gym.bench.z) < 2.2 ? 'bench' : city.gym && Math.hypot(P.pos.x - city.gym.run.x, P.pos.z - city.gym.run.z) < 2.2 ? 'run' : null;
   if (near !== city.shopNear) { city.shopNear = near; if (near && !isMobile) msg(near === 'bench' ? '🏋️ E : soulever la barre' : '🏃 E : courir sur le tapis', 1300); }
-  document.body.classList.toggle('racknear', !!(city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
+  document.body.classList.toggle('racknear', !!(city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
   const gunNear = !!city.armory && Math.hypot(P.pos.x - city.armory.x, P.pos.z - city.armory.z) < 3.2;
   if (gunNear !== city.gunNear) { city.gunNear = gunNear; document.body.classList.toggle('racknear', gunNear || !!city.rackNear); if (gunNear && !isMobile) msg('🔫 E : voir toutes les armes', 1200); }
+  const tatooNear = !!city.tatooDesk && Math.hypot(P.pos.x - city.tatooDesk.x, P.pos.z - city.tatooDesk.z) < 3 && !drive.car;
+  if (tatooNear !== city.tatooNear) { city.tatooNear = tatooNear; if (tatooNear && !isMobile) msg('🖊️ E : te faire tatouer', 2000); }
   const tuneNear = !!city.tuneDesk && Math.hypot(P.pos.x - city.tuneDesk.x, P.pos.z - city.tuneDesk.z) < 3 && !drive.car;
   if (tuneNear !== city.tuneNear) { city.tuneNear = tuneNear; if (tuneNear && !isMobile) msg('🎨 E : préparer ta voiture (peinture, kits, moteur, nitro)', 2200); }
   const vit = city.vitrines.find(v => Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < v.r) || null;
@@ -7631,10 +7763,18 @@ function closeUI() { if (!uiOpen) return; $(uiOpen).classList.add('hidden'); uiO
 const itemKey = (cat, it) => `${cat}:${it.id}`;
 function applyShopItem(cat, it) {
   if (cat === 'Chapeaux') myCfg.hat = it.id; else if (cat === 'Vestes') myCfg.jacket = it.id; else if (cat === 'Lunettes') myCfg.glasses = !!it.id; else if (cat === 'Sacs') myCfg.bag = it.id;
-  else if (cat === 'Bas') { myCfg.shorts = it.id === 'shorts'; myCfg.skirt = it.id === 'skirt'; }
+  else if (cat === 'Bas') { myCfg.shorts = it.id === 'shorts'; myCfg.skirt = it.id === 'skirt'; myCfg.baggy = it.id === 'baggy'; }
+  else if (cat === 'Hauts') myCfg.haut = it.id;
+  else if (cat === 'Chaussures') myCfg.chaussures = it.id;
+  else if (cat === 'Poignets') { myCfg.bracelet = it.id === 'bracelet' || it.id === 'deux'; myCfg.montre = it.id === 'montre' || it.id === 'deux'; }
   applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
 }
-function currentShopId(cat) { return cat === 'Chapeaux' ? myCfg.hat : cat === 'Vestes' ? myCfg.jacket : cat === 'Lunettes' ? (myCfg.glasses ? 1 : 0) : cat === 'Sacs' ? myCfg.bag : (myCfg.shorts ? 'shorts' : myCfg.skirt ? 'skirt' : 'pants'); }
+function currentShopId(cat) {
+  return cat === 'Chapeaux' ? myCfg.hat : cat === 'Vestes' ? myCfg.jacket : cat === 'Lunettes' ? (myCfg.glasses ? 1 : 0)
+    : cat === 'Sacs' ? myCfg.bag : cat === 'Hauts' ? (myCfg.haut || 'foot') : cat === 'Chaussures' ? (myCfg.chaussures || 'basket')
+    : cat === 'Poignets' ? (myCfg.bracelet && myCfg.montre ? 'deux' : myCfg.bracelet ? 'bracelet' : myCfg.montre ? 'montre' : 'rien')
+    : (myCfg.baggy ? 'baggy' : myCfg.shorts ? 'shorts' : myCfg.skirt ? 'skirt' : 'pants');
+}
 function eat(it) {   // on achète, on emporte : E (ou ✋) pour manger où l'on veut, même assis sur un banc dehors
   if (wallet < it.p) { msg(`Il te manque ${it.p - wallet} 🪙`, 1200); return; }
   wallet -= it.p; saveWallet(); sfx.register(); updateHud(); closeUI();
@@ -8320,7 +8460,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -8449,7 +8589,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -8792,6 +8932,152 @@ function frame() {
 
 // hook
 applyQuality();
+// ================= SALON DE TATOUAGE =================
+// Les motifs sont dessinés au trait sur un petit canevas : on peut donc changer l'encre
+// (six couleurs) sans refaire le dessin. Les idéogrammes et les textes passent par la
+// police du navigateur — les glyphes chinois sont monochromes, la couleur les suit.
+const TATOO_ENCRES = [
+  { k: 'noir', n: 'Noir', c: '#141821' }, { k: 'bleu', n: 'Bleu', c: '#2f6fe0' },
+  { k: 'rouge', n: 'Rouge', c: '#d42b2b' }, { k: 'vert', n: 'Vert', c: '#2fa04a' },
+  { k: 'dore', n: 'Doré', c: '#e0a820' }, { k: 'violet', n: 'Violet', c: '#8b4fd0' },
+];
+const TATOO_TAILLES = [{ k: 'petit', n: 'Petit', s: 0.18, p: 15 }, { k: 'moyen', n: 'Moyen', s: 0.28, p: 30 }, { k: 'gros', n: 'Gros', s: 0.40, p: 55 }];
+const TATOO_ZONES = [
+  { k: 'brasG', n: 'Bras gauche', e: '💪' }, { k: 'brasD', n: 'Bras droit', e: '💪' },
+  { k: 'epauleG', n: 'Épaule gauche', e: '🫱' }, { k: 'epauleD', n: 'Épaule droite', e: '🫲' },
+  { k: 'cou', n: 'Cou', e: '🧣' }, { k: 'torse', n: 'Torse', e: '🫀' }, { k: 'dos', n: 'Dos', e: '🔙' },
+  { k: 'cuisseG', n: 'Cuisse gauche', e: '🦵' }, { k: 'cuisseD', n: 'Cuisse droite', e: '🦵' },
+  { k: 'molletG', n: 'Mollet gauche', e: '🦿' }, { k: 'molletD', n: 'Mollet droit', e: '🦿' },
+];
+// dessins : chaque motif reçoit un contexte 2D de 128×128 déjà réglé sur la bonne encre
+const TATOO_MOTIFS = [
+  { k: 'lion', n: 'Lion', e: '🦁', d: g => { crinière(g, 64, 60, 40, 14); g.beginPath(); g.arc(64, 60, 24, 0, 7); g.fill();
+      trou(g, 55, 54, 5); trou(g, 73, 54, 5); g.beginPath(); g.moveTo(64, 64); g.lineTo(58, 74); g.lineTo(70, 74); g.closePath(); trouPath(g); } },
+  { k: 'tigre', n: 'Tigre', e: '🐯', d: g => { g.beginPath(); g.ellipse(64, 62, 30, 27, 0, 0, 7); g.fill();
+      g.beginPath(); g.moveTo(40, 34); g.lineTo(48, 46); g.lineTo(34, 48); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(88, 34); g.lineTo(80, 46); g.lineTo(94, 48); g.closePath(); g.fill();
+      for (const [x, y, w] of [[40, 50, 14], [88, 50, -14], [44, 62, 12], [84, 62, -12]]) { g.save(); g.globalCompositeOperation = 'destination-out'; g.lineWidth = 5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y + 6); g.stroke(); g.restore(); }
+      trou(g, 55, 58, 4); trou(g, 73, 58, 4); } },
+  { k: 'panthere', n: 'Panthère', e: '🐆', d: g => { g.beginPath(); g.ellipse(60, 70, 34, 15, -0.15, 0, 7); g.fill();
+      g.beginPath(); g.arc(96, 56, 12, 0, 7); g.fill();
+      g.beginPath(); g.moveTo(96, 46); g.lineTo(102, 34); g.lineTo(106, 48); g.closePath(); g.fill();
+      for (const x of [40, 56, 72]) { g.fillRect(x, 78, 8, 26); }
+      g.lineWidth = 7; g.beginPath(); g.moveTo(28, 66); g.quadraticCurveTo(6, 54, 18, 32); g.stroke(); } },
+  { k: 'aigle', n: 'Aigle', e: '🦅', d: g => { g.beginPath(); g.moveTo(64, 40); g.lineTo(8, 58); g.lineTo(36, 62); g.lineTo(14, 84); g.lineTo(56, 66); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(64, 40); g.lineTo(120, 58); g.lineTo(92, 62); g.lineTo(114, 84); g.lineTo(72, 66); g.closePath(); g.fill();
+      g.beginPath(); g.ellipse(64, 62, 10, 26, 0, 0, 7); g.fill();
+      g.beginPath(); g.arc(64, 32, 11, 0, 7); g.fill();
+      g.beginPath(); g.moveTo(74, 30); g.lineTo(88, 34); g.lineTo(74, 38); g.closePath(); g.fill(); } },
+  { k: 'singe', n: 'Singe', e: '🐒', d: g => { g.beginPath(); g.arc(64, 62, 28, 0, 7); g.fill();
+      g.beginPath(); g.arc(34, 56, 12, 0, 7); g.fill(); g.beginPath(); g.arc(94, 56, 12, 0, 7); g.fill();
+      trou(g, 64, 70, 16); g.fillStyle = g.__encre; trou(g, 55, 52, 5); trou(g, 73, 52, 5); } },
+  { k: 'serpent', n: 'Serpent', e: '🐍', d: g => { g.lineWidth = 11; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(30, 108); g.bezierCurveTo(110, 96, 14, 66, 96, 52); g.bezierCurveTo(124, 46, 96, 22, 70, 30); g.stroke();
+      g.beginPath(); g.arc(66, 30, 10, 0, 7); g.fill();
+      g.lineWidth = 4; g.beginPath(); g.moveTo(58, 30); g.lineTo(42, 26); g.moveTo(58, 30); g.lineTo(42, 34); g.stroke(); } },
+  { k: 'dragon', n: 'Dragon', e: '🐉', d: g => { g.lineWidth = 10; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(24, 104); g.bezierCurveTo(96, 100, 20, 60, 84, 46); g.stroke();
+      g.beginPath(); g.arc(90, 40, 13, 0, 7); g.fill();
+      g.beginPath(); g.moveTo(96, 28); g.lineTo(112, 16); g.lineTo(104, 34); g.closePath(); g.fill();
+      for (const [x, y] of [[44, 92], [58, 76], [72, 60]]) { g.beginPath(); g.moveTo(x, y); g.lineTo(x + 6, y - 16); g.lineTo(x + 14, y - 2); g.closePath(); g.fill(); } } },
+  { k: 'loup', n: 'Loup', e: '🐺', d: g => { g.beginPath(); g.moveTo(64, 26); g.lineTo(96, 60); g.lineTo(82, 104); g.lineTo(46, 104); g.lineTo(32, 60); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(34, 56); g.lineTo(24, 22); g.lineTo(50, 40); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(94, 56); g.lineTo(104, 22); g.lineTo(78, 40); g.closePath(); g.fill();
+      trou(g, 54, 62, 5); trou(g, 74, 62, 5); trou(g, 64, 88, 6); } },
+  { k: 'crane', n: 'Crâne', e: '💀', d: g => { g.beginPath(); g.ellipse(64, 56, 30, 32, 0, 0, 7); g.fill();
+      g.fillRect(48, 82, 32, 22); trou(g, 52, 56, 9); trou(g, 76, 56, 9); trou(g, 64, 74, 5);
+      g.save(); g.globalCompositeOperation = 'destination-out'; for (const x of [56, 64, 72]) g.fillRect(x - 2, 84, 4, 20); g.restore(); } },
+  { k: 'coeur', n: 'Cœur', e: '❤️', d: g => { g.beginPath(); g.moveTo(64, 104); g.bezierCurveTo(4, 62, 30, 18, 64, 46); g.bezierCurveTo(98, 18, 124, 62, 64, 104); g.fill(); } },
+  { k: 'etoile', n: 'Étoile', e: '⭐', d: g => { etoile(g, 64, 64, 42, 18, 5); } },
+  { k: 'eclair', n: 'Éclair', e: '⚡', d: g => { g.beginPath(); g.moveTo(76, 14); g.lineTo(40, 70); g.lineTo(62, 70); g.lineTo(50, 114); g.lineTo(92, 54); g.lineTo(68, 54); g.closePath(); g.fill(); } },
+  { k: 'dollar', n: 'Dollar', e: '💲', d: g => { texte(g, '$', 108); } },
+  { k: 'billets', n: 'Liasse de billets', e: '💵', d: g => { for (let i = 0; i < 3; i++) { g.save(); g.translate(64, 64); g.rotate(-0.25 + i * 0.25); g.strokeRect(-38, -20 + i * 4, 76, 40); g.restore(); } texte(g, '$', 54); } },
+  { k: 'croix', n: 'Croix', e: '✝️', d: g => { g.fillRect(54, 10, 20, 108); g.fillRect(28, 40, 72, 20); } },
+  { k: 'ancre', n: 'Ancre', e: '⚓', d: g => { g.lineWidth = 9; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(64, 26); g.lineTo(64, 104); g.moveTo(34, 46); g.lineTo(94, 46); g.stroke();
+      g.beginPath(); g.moveTo(24, 76); g.quadraticCurveTo(34, 112, 64, 108); g.quadraticCurveTo(94, 112, 104, 76); g.stroke();
+      g.beginPath(); g.arc(64, 20, 11, 0, 7); g.stroke(); } },
+  { k: 'tribal', n: 'Tribal', e: '🌀', d: g => { g.lineWidth = 10; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(20, 104); g.bezierCurveTo(70, 96, 26, 44, 74, 30); g.stroke();
+      g.beginPath(); g.moveTo(48, 90); g.bezierCurveTo(84, 84, 62, 52, 100, 44); g.stroke();
+      g.beginPath(); g.moveTo(76, 100); g.bezierCurveTo(110, 92, 96, 70, 116, 62); g.stroke(); } },
+  { k: 'rose', n: 'Rose', e: '🌹', d: g => { for (let i = 4; i >= 1; i--) { g.beginPath(); g.arc(64, 52, i * 9, 0, 7); i % 2 ? g.stroke() : g.fill(); g.lineWidth = 5; }
+      g.lineWidth = 8; g.beginPath(); g.moveTo(64, 84); g.lineTo(64, 118); g.stroke();
+      g.beginPath(); g.ellipse(46, 96, 16, 7, -0.5, 0, 7); g.fill(); } },
+  { k: 'flamme', n: 'Flamme', e: '🔥', d: g => { g.beginPath(); g.moveTo(64, 12); g.bezierCurveTo(102, 52, 96, 74, 88, 88);
+      g.bezierCurveTo(96, 60, 74, 56, 74, 40); g.bezierCurveTo(58, 62, 62, 74, 56, 86);
+      g.bezierCurveTo(46, 70, 46, 56, 46, 48); g.bezierCurveTo(28, 70, 30, 96, 50, 112);
+      g.bezierCurveTo(96, 122, 104, 78, 64, 12); g.fill(); } },
+  { k: 'poing', n: 'Poing serré', e: '✊', d: g => { g.fillRect(36, 46, 56, 46);
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(44 + i * 16, 46, 8, Math.PI, 0); g.fill(); }
+      g.fillRect(30, 88, 68, 16); } },
+  { k: 'force', n: 'Force (力)', e: '🀄', d: g => { texte(g, '力', 104); } },
+  { k: 'amour', n: 'Amour (愛)', e: '🀄', d: g => { texte(g, '愛', 100); } },
+  { k: 'dragonCh', n: 'Dragon (龍)', e: '🀄', d: g => { texte(g, '龍', 96); } },
+  { k: 'chance', n: 'Chance (福)', e: '🀄', d: g => { texte(g, '福', 100); } },
+  { k: 'guerrier', n: 'Guerrier (武)', e: '🀄', d: g => { texte(g, '武', 100); } },
+  { k: 'texte', n: 'Ton texte', e: '🔤', d: (g, mot) => { texte(g, (mot || 'LOVE').slice(0, 10), 70); } },
+];
+function trou(g, x, y, r) { g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.restore(); }
+function trouPath(g) { g.save(); g.globalCompositeOperation = 'destination-out'; g.fill(); g.restore(); }
+function crinière(g, x, y, R, n) { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2;
+  g.beginPath(); g.moveTo(x + Math.cos(a) * (R - 12), y + Math.sin(a) * (R - 12));
+  g.lineTo(x + Math.cos(a + 0.2) * (R + 14), y + Math.sin(a + 0.2) * (R + 14));
+  g.lineTo(x + Math.cos(a - 0.2) * (R + 14), y + Math.sin(a - 0.2) * (R + 14)); g.closePath(); g.fill(); } }
+function etoile(g, x, y, R, r, n) { g.beginPath();
+  for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, d = i % 2 ? r : R;
+    i ? g.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d) : g.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); }
+  g.closePath(); g.fill(); }
+function texte(g, t, taille) {
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  let s2 = taille;
+  do { g.font = `bold ${s2}px "Noto Sans SC", "Nunito", system-ui, sans-serif`; s2 -= 4; } while (g.measureText(t).width > 116 && s2 > 14);
+  g.fillText(t, 64, 66);
+}
+const TATOO_CACHE = new Map();
+function tatooTexture(motif, encre, mot) {
+  const cle = motif + '|' + encre + '|' + (mot || '');
+  if (TATOO_CACHE.has(cle)) return TATOO_CACHE.get(cle);
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const col = (TATOO_ENCRES.find(e => e.k === encre) || TATOO_ENCRES[0]).c;
+  g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 6; g.lineJoin = 'round'; g.__encre = col;
+  const m = TATOO_MOTIFS.find(x => x.k === motif) || TATOO_MOTIFS[0];
+  try { m.d(g, mot); } catch (e) {}
+  const t = new THREE.CanvasTexture(c); t.needsUpdate = true;
+  TATOO_CACHE.set(cle, t); return t;
+}
+// Où se pose l'encre : parent, position locale et orientation, pour chaque zone du corps.
+function tatooPlace(av, zone) {
+  const S2 = 0.36, D = 0.2;
+  switch (zone) {
+    case 'brasG': return { p: av.rig.armL, x: -D, y: -0.38, z: 0, ry: -Math.PI / 2 };
+    case 'brasD': return { p: av.rig.armR, x: D, y: -0.38, z: 0, ry: Math.PI / 2 };
+    case 'epauleG': return { p: av.rig.armL, x: -D, y: -0.11, z: 0, ry: -Math.PI / 2 };
+    case 'epauleD': return { p: av.rig.armR, x: D, y: -0.11, z: 0, ry: Math.PI / 2 };
+    case 'cou': return { p: av.rig.head, x: 0, y: 0.04, z: 0.26, ry: 0 };
+    case 'torse': return { p: av.group, x: 0, y: 3 * S2, z: 0.2, ry: 0 };
+    case 'dos': return { p: av.group, x: 0, y: 3 * S2, z: -0.2, ry: Math.PI };
+    case 'cuisseG': return { p: av.rig.legL, x: -D, y: -0.18, z: 0, ry: -Math.PI / 2 };
+    case 'cuisseD': return { p: av.rig.legR, x: D, y: -0.18, z: 0, ry: Math.PI / 2 };
+    case 'molletG': return { p: av.rig.legL, x: -D, y: -0.5, z: 0, ry: -Math.PI / 2 };
+    case 'molletD': return { p: av.rig.legR, x: D, y: -0.5, z: 0, ry: Math.PI / 2 };
+    default: return null;
+  }
+}
+function poseTatouages(av, list) {
+  for (const m of (av.tatouages || [])) { if (m.parent) m.parent.remove(m); if (m.material) m.material.dispose(); }
+  av.tatouages = [];
+  for (const t of (list || [])) {
+    const pl = tatooPlace(av, t.zone); if (!pl) continue;
+    const taille = (TATOO_TAILLES.find(x => x.k === t.taille) || TATOO_TAILLES[1]).s;
+    const mat = new THREE.MeshLambertMaterial({ map: tatooTexture(t.motif, t.encre, t.mot), transparent: true, depthWrite: false, alphaTest: 0.05, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(taille, taille), mat);
+    m.position.set(pl.x, pl.y, pl.z); m.rotation.y = pl.ry; m.renderOrder = 2;
+    pl.p.add(m); av.tatouages.push(m);
+  }
+}
+
 loadWorld(0); running = false;
 if (isMobile) { $('chat').classList.remove('open'); $('chatBtn').classList.remove('on'); }
 showBest(); updateHud(); updateTimer(); updateLeaderboard();
@@ -9139,6 +9425,9 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
 // ---- boutons du salon TV -------------------------------------------------------------
 $('tvBtn').addEventListener('click', () => ouvreSalonTV());
 $('atelierBack').addEventListener('click', () => closeUI());
+$('tatooBack').addEventListener('click', () => closeUI());
+$('tatooOk').addEventListener('click', () => tatouer());
+$('tatooMot').addEventListener('input', e => { tatoo.mot = e.target.value.toUpperCase() || 'LOVE'; majTatoo(); });
 $('atelierOk').addEventListener('click', () => validerAtelier());
 $('tvStart').addEventListener('click', () => { modeTV(true); ouvreSalonTV(); });
 $('manetteStart').addEventListener('click', () => manetteOuvre(''));
@@ -9612,6 +9901,64 @@ function vieTick(dt) {
   if (occupes >= Math.ceil(bots.length * 0.6)) return;
   const b = pickOne(libres);
   lancerActivite(b, choisirActivite());
+}
+
+// ---- salon de tatouage : on compose son motif puis on paie ----
+const tatoo = { motif: 'lion', zone: 'brasG', encre: 'noir', taille: 'moyen', mot: 'LOVE' };
+function tatooPrix() {
+  const t = TATOO_TAILLES.find(x => x.k === tatoo.taille) || TATOO_TAILLES[1];
+  return t.p + (tatoo.encre === 'noir' ? 0 : 10);
+}
+function openTatoo() { openUI('tatoo'); majTatoo(); }
+function majTatoo() {
+  const gril = TATOO_MOTIFS.map(m => `<button class="tatm ${tatoo.motif === m.k ? 'on' : ''}" data-m="${m.k}"><span>${m.e}</span><i>${m.n}</i></button>`).join('');
+  $('tatooMotifs').innerHTML = gril;
+  $('tatooMotifs').querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { tatoo.motif = b.dataset.m; majTatoo(); }));
+  $('tatooZones').innerHTML = TATOO_ZONES.map(z => `<b data-z="${z.k}" class="${tatoo.zone === z.k ? 'sel' : ''}">${z.e} ${z.n}</b>`).join('');
+  $('tatooZones').querySelectorAll('[data-z]').forEach(b => b.addEventListener('click', () => { tatoo.zone = b.dataset.z; majTatoo(); }));
+  $('tatooEncres').innerHTML = TATOO_ENCRES.map(e => `<i data-e="${e.k}" class="${tatoo.encre === e.k ? 'sel' : ''}" style="background:${e.c}" title="${e.n}"></i>`).join('');
+  $('tatooEncres').querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { tatoo.encre = b.dataset.e; majTatoo(); }));
+  $('tatooTailles').innerHTML = TATOO_TAILLES.map(t => `<b data-t="${t.k}" class="${tatoo.taille === t.k ? 'sel' : ''}">${t.n} · ${t.p} 🪙</b>`).join('');
+  $('tatooTailles').querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { tatoo.taille = b.dataset.t; majTatoo(); }));
+  $('tatooMot').style.display = tatoo.motif === 'texte' ? '' : 'none';
+  $('tatooMot').value = tatoo.mot;
+  // aperçu
+  const c = $('tatooApercu'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const col = (TATOO_ENCRES.find(e => e.k === tatoo.encre) || TATOO_ENCRES[0]).c;
+  g.save(); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 6; g.lineJoin = 'round'; g.__encre = col;
+  const m = TATOO_MOTIFS.find(x => x.k === tatoo.motif) || TATOO_MOTIFS[0];
+  try { m.d(g, tatoo.mot); } catch (e) {}
+  g.restore();
+  const liste = myCfg.tatouages || [];
+  $('tatooListe').innerHTML = liste.length
+    ? liste.map((t, i) => { const mm = TATOO_MOTIFS.find(x => x.k === t.motif), zz = TATOO_ZONES.find(x => x.k === t.zone);
+        return `<b>${mm ? mm.e : '🖊️'} ${mm ? mm.n : t.motif} · ${zz ? zz.n : t.zone} <u data-del="${i}">✕</u></b>`; }).join('')
+    : '<span style="color:#7a86a0;font-weight:600">Aucun tatouage pour l\'instant.</span>';
+  $('tatooListe').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    myCfg.tatouages.splice(+b.dataset.del, 1); applyMyLook();
+    store.set('superobby.avatar', JSON.stringify(myLook()));
+    if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
+    msg('🧽 Tatouage effacé', 1400); majTatoo();
+  }));
+  const p = tatooPrix();
+  $('tatooPrix').textContent = `${p} 🪙 (tu as ${wallet} 🪙) · ${liste.length} tatouage${liste.length > 1 ? 's' : ''} sur la peau`;
+  $('tatooOk').disabled = p > wallet;
+  $('tatooOk').style.opacity = p > wallet ? 0.5 : 1;
+}
+function tatouer() {
+  const p = tatooPrix();
+  if (wallet < p) { msg(`Il te manque ${p - wallet} 🪙`, 1600); return; }
+  wallet -= p; saveWallet(); updateHud();
+  myCfg.tatouages = myCfg.tatouages || [];
+  myCfg.tatouages.push({ motif: tatoo.motif, zone: tatoo.zone, encre: tatoo.encre, taille: tatoo.taille, mot: tatoo.mot });
+  applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook()));
+  if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
+  const m = TATOO_MOTIFS.find(x => x.k === tatoo.motif), z = TATOO_ZONES.find(x => x.k === tatoo.zone);
+  msg(`${m.e} Tatouage « ${m.n} » sur ${z.n.toLowerCase()} ! −${p} 🪙`, 3000);
+  sfx.tone(220, 0, .5, 'sawtooth', .04, 180); sfx.win();
+  chat(null, `🖊️ ${myCfg.name} s'est fait tatouer ${m.n.toLowerCase()} sur ${z.n.toLowerCase()}`);
+  majTatoo();
 }
 
 loop();

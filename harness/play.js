@@ -2517,6 +2517,114 @@ test('douze habitants qui jouent, roulent, chapardent et braquent', async p => {
   return { ok, detail: `${r.n} habitants (5 avant) · ${r.activites.length} activités qui démarrent toutes : ${Object.entries(r.faites).map(([k, f]) => k + '→' + f.but).join(', ')} · le chapardeur file vers ${r.vol.planque} · le braqueur lance ${r.braquage.voitures} voitures de police · le jeu en déclenche tout seul (${r.auto} bots occupés, ${r.journal} lignes au journal)` };
 });
 
+test('la boutique habille de la tête aux pieds : hauts, bas, chaussures, poignets', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    await dodo(400);
+    const av = __G.me;
+    const cats = Object.fromEntries(Object.entries(__G.SHOP).map(([k, v]) => [k, v.length]));
+    const total = Object.values(__G.SHOP).reduce((a, v) => a + v.length, 0);
+    const lit = () => ({ manche: av.rig.armL.manche.material === av.mats.skin,
+      torseNu: Array.isArray(av.torso.material) && av.torso.material[0] === av.mats.skin,
+      bretelles: av.bretelles.visible, semelle: av.mats.shoe.color.getHexString(),
+      tige: av.rig.legL.tige.visible, eperon: av.rig.legL.eperon.visible,
+      bracelet: av.bracelet.visible, montre: av.montre.visible,
+      cuisse: +av.rig.legL.cuisse.scale.x.toFixed(2) });
+    const essai = {};
+    for (const [cat, id, nom] of [['Hauts', 'torse', 'torseNu'], ['Hauts', 'debardeur', 'debardeur'],
+      ['Hauts', 'basket', 'basket'], ['Hauts', 'foot', 'foot'], ['Chaussures', 'cowboy', 'cowboy'],
+      ['Chaussures', 'bottes', 'bottes'], ['Chaussures', 'basket', 'baskets'],
+      ['Bas', 'baggy', 'baggy'], ['Bas', 'pants', 'pantalon'], ['Poignets', 'deux', 'poignets'],
+      ['Poignets', 'rien', 'nus']]) { __G.applyShopItem(cat, { id }); essai[nom] = lit(); }
+    const chap = {};
+    for (const id of ['bandana', 'bandanaB', 'bandanaJ', 'bob', 'cagoule', 'moto', 'audio', 'capuche']) {
+      __G.applyShopItem('Chapeaux', { id }); chap[id] = !!(av.hatGroups[id] && av.hatGroups[id].visible);
+    }
+    __G.applyShopItem('Chapeaux', { id: 'none' });
+    // ce qu'on porte est retenu d'une partie à l'autre
+    __G.applyShopItem('Chaussures', { id: 'bottes' }); __G.applyShopItem('Hauts', { id: 'debardeur' });
+    const sauv = JSON.parse(localStorage.getItem('superobby.avatar') || '{}');
+    __G.applyShopItem('Chaussures', { id: 'basket' }); __G.applyShopItem('Hauts', { id: 'foot' });
+    return { cats, total, essai, chap, catalogue: __G.catalog('accessoires').length,
+      sauv: { chaussures: sauv.chaussures, haut: sauv.haut },
+      idCourant: __G.currentShopId('Chaussures') };
+  });
+  const e = r.essai;
+  const ok = r.total >= 45 && Object.keys(r.cats).length >= 8 && r.catalogue === r.total
+    && e.torseNu.torseNu && e.torseNu.manche && e.debardeur.bretelles && e.basket.manche && !e.basket.torseNu
+    && !e.foot.manche && !e.foot.torseNu
+    && e.cowboy.tige && e.cowboy.eperon && e.bottes.tige && !e.bottes.eperon && !e.baskets.tige
+    && e.cowboy.semelle !== e.bottes.semelle && e.baggy.cuisse > 1.2 && e.pantalon.cuisse === 1
+    && e.poignets.bracelet && e.poignets.montre && !e.nus.bracelet
+    && Object.values(r.chap).every(Boolean)
+    && r.sauv.chaussures === 'bottes' && r.sauv.haut === 'debardeur' && r.idCourant === 'basket';
+  return { ok, detail: `${r.total} articles en ${Object.keys(r.cats).length} rayons (${Object.entries(r.cats).map(([k, v]) => k + ' ' + v).join(', ')}) · maillot de foot, de basket, débardeur et torse nu changent vraiment le buste · bottes et bottes de cowboy sortent une tige (${e.cowboy.semelle} vs ${e.bottes.semelle}) et l'éperon (${e.cowboy.eperon}) · le baggy élargit les jambes (${e.baggy.cuisse}×) · bracelet et montre apparaissent au poignet · ${Object.keys(r.chap).length} nouveaux couvre-chefs (bandanas, bob, cagoule, casques…) · la tenue est mémorisée (${r.sauv.chaussures}, ${r.sauv.haut})` };
+});
+
+test('le salon de tatouage encre le corps, en plusieurs endroits et couleurs', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 43, y: 1, z: 80, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    await dodo(500);
+    const av = __G.me;
+    // chaque motif du catalogue dessine vraiment quelque chose
+    const vides = [];
+    for (const m of __G.TATOO_MOTIFS) {
+      const t = __G.tatooTexture(m.k, 'noir', 'TEST');
+      const g = t.image.getContext('2d'), d = g.getImageData(0, 0, 128, 128).data;
+      let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 20) n++;
+      if (n < 200) vides.push(m.k);
+    }
+    // l'encre change vraiment la couleur du dessin
+    const couleur = enc => { const g = __G.tatooTexture('coeur', enc).image.getContext('2d');
+      const d = g.getImageData(64, 64, 1, 1).data; return [d[0], d[1], d[2]].join(','); };
+    const teintes = __G.TATOO_ENCRES.map(e => couleur(e.k));
+    __G.wallet = 900; __G.myCfg.tatouages = []; __G.applyMyLook();
+    const sous0 = __G.wallet;
+    const poser = (motif, zone, encre, taille) => { Object.assign(__G.tatoo, { motif, zone, encre, taille, mot: 'BOSS' }); __G.tatouer(); };
+    poser('lion', 'brasG', 'noir', 'gros');
+    poser('dollar', 'cou', 'dore', 'petit');
+    poser('force', 'dos', 'rouge', 'moyen');
+    poser('texte', 'molletD', 'bleu', 'moyen');
+    poser('serpent', 'cuisseG', 'vert', 'moyen');
+    av.group.updateMatrixWorld(true);
+    const ou = av.tatouages.map(m => m.parent === av.rig.armL ? 'brasG' : m.parent === av.rig.head ? 'cou'
+      : m.parent === av.group ? 'buste' : m.parent === av.rig.legR ? 'molletD' : m.parent === av.rig.legL ? 'cuisseG' : '?');
+    const tailles = av.tatouages.map(m => +m.geometry.parameters.width.toFixed(2));
+    const res = { motifs: __G.TATOO_MOTIFS.length, zones: __G.TATOO_ZONES.length, encres: __G.TATOO_ENCRES.length,
+      tailles: __G.TATOO_TAILLES.length, vides, couleursDistinctes: new Set(teintes).size,
+      poses: __G.myCfg.tatouages.length, meshes: av.tatouages.length, ou, taillesPosees: tailles,
+      cout: sous0 - __G.wallet, salon: !!__G.city.tatooDesk };
+    // sauvegarde, retrait, et un bot peut aussi en porter
+    res.sauve = (JSON.parse(localStorage.getItem('superobby.avatar') || '{}').tatouages || []).length;
+    __G.myCfg.tatouages.splice(0, 1); __G.applyMyLook();
+    res.apresRetrait = av.tatouages.length;
+    const b = __G.bots[0];
+    __G.applyLook(b.av, b.name, { jersey: 0, tatouages: [{ motif: 'aigle', zone: 'torse', encre: 'noir', taille: 'moyen' }] });
+    res.surUnBot = b.av.tatouages.length;
+    __G.applyLook(b.av, b.name, { jersey: 0, tatouages: [] });
+    __G.myCfg.tatouages = []; __G.applyMyLook();
+    // le salon est bien dans la ville et se détecte
+    __G.P.pos.set(__G.city.tatooDesk.x, 0.4, __G.city.tatooDesk.z + 1.2); __G.P.vel.set(0, 0, 0);
+    for (let i = 0; i < 40 && !__G.city.tatooNear; i++) { await dodo(120); __G.P.pos.set(__G.city.tatooDesk.x, 0.4, __G.city.tatooDesk.z + 1.2); }
+    res.detecte = __G.city.tatooNear;
+    __G.openTatoo(); res.fenetre = __G.uiOpen === 'tatoo';
+    res.grille = document.querySelectorAll('#tatooMotifs .tatm').length;
+    __G.closeUI();
+    return res;
+  });
+  const attendu = ['brasG', 'cou', 'buste', 'molletD', 'cuisseG'];
+  const ok = r.motifs >= 24 && r.zones >= 10 && r.encres === 6 && r.tailles === 3 && r.vides.length === 0
+    && r.couleursDistinctes === 6 && r.poses === 5 && r.meshes === 5
+    && attendu.every(z => r.ou.includes(z)) && new Set(r.taillesPosees).size === 3
+    && r.cout > 100 && r.sauve === 5 && r.apresRetrait === 4 && r.surUnBot === 1
+    && r.salon && r.detecte && r.fenetre && r.grille === r.motifs;
+  return { ok, detail: `${r.motifs} motifs (lion, tigre, panthère, aigle, singe, serpent, dragon, idéogrammes, texte libre…) tous dessinés, ${r.zones} zones du corps, ${r.couleursDistinctes} encres bien distinctes, ${r.tailles} tailles · cinq tatouages posés d'un coup sur ${r.ou.join(', ')} en ${new Set(r.taillesPosees).size} tailles pour ${r.cout} 🪙 · gardés à la sauvegarde (${r.sauve}), effaçables un par un (${r.apresRetrait} restants), visibles aussi sur les autres joueurs (${r.surUnBot}) · le salon existe en ville et s'ouvre à l'approche (${r.detecte})` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

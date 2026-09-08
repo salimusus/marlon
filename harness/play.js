@@ -1868,6 +1868,10 @@ test('un seul coffre laisse le temps de fuir, trois font venir tout le monde', a
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: -57, y: 10.2, z: 70, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    // Les coffres rapportent de moins en moins DANS LA JOURNÉE (500, 300, 150, 75, puis 50) :
+    // un test précédent a pu en ouvrir un et le premier de celui-ci ne vaudrait plus 500.
+    // On repart donc d'une journée neuve.
+    __G.bank.coffresJour = 0; __G.bank.jourT = 0;
     const essai = n => {
       __G.clearWanted(); __G.police.alarmT = 0; __G.police.coffres = n;
       __G.city.guards.forEach(g => { g.alert = false; });

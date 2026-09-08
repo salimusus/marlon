@@ -749,28 +749,25 @@ test('le magasin de déco vend, livre et laisse poser une TV géante', async p =
     __G.P.deco = null;
     __G.grabParcel(__G.city.parcels[0]);
     const enMain = __G.P.deco && __G.P.deco.id;
-    // un emplacement mural de la villa
-    const mur = __G.city.decorSlots.findIndex(s2 => s2.wall);
-    const tvAvant = __G.city.tvs.length;
-    __G.city.slotNear = mur; __G.dropDecor();
-    const pose = __G.city.placed.find(d => d.slot === mur);
+    // on l'accroche au mur du salon, où l'on veut
+    __G.city.placed.slice().forEach(o => __G.retirerDeco(o, true));
+    __G.P.pos.set(56, 0.5, 156.8); __G.P.facing = Math.PI;   // face au mur nord du séjour
+    __G.parcelTick(0.016); __G.dropDecor();
+    const pose = __G.city.placed[0] ? __G.city.placed[0].id : null;
+    const auMur = !!(__G.city.placed[0] && __G.city.placed[0].mur);
     // remplacements successifs : ni écran fantôme, ni mur invisible, ni siège orphelin
-    const sol = __G.city.decorSlots.findIndex(s2 => !s2.wall);
-    __G.placeDecor('fauteuil', sol, true);
-    const solAvant = __G.solids.length, bancsAvant = __G.city.benches.length;
-    for (let i = 0; i < 3; i++) { __G.placeDecor('plante', sol, true); __G.placeDecor('fauteuil', sol, true); }
-    __G.placeDecor('tvgeante', mur, true);
-    const avecEcran = __G.city.tvs.length;
-    __G.placeDecor('tableau', mur, true);   // la TV remplacée par un tableau ne doit plus clignoter
-    const fuites = { sol: __G.solids.length - solAvant, bancs: __G.city.benches.length - bancsAvant,
-      ecranRetire: avecEcran - __G.city.tvs.length };
-    return { ok: true, vitrines: vit.length, colis, enMain, murOnly: !!__G.DECOR.find(d => d.id === 'tvgeante').wall,
-      posee: pose ? pose.id : null, tvPlus: __G.city.tvs.length - tvAvant, fuites };
+    const solAvant0 = __G.solids.length, bancsAvant0 = __G.city.benches.length, tv0 = __G.city.tvs.length;
+    const objs = [];
+    for (let i = 0; i < 4; i++) objs.push(__G.placeLibre(i % 2 ? 'plante' : 'fauteuil', 58 + i, 0.3, 166, 0, false, true));
+    objs.forEach(o => __G.retirerDeco(o, true));
+    const fuites = { sol: __G.solids.length - solAvant0, bancs: __G.city.benches.length - bancsAvant0,
+      ecranRetire: 1 - (__G.city.tvs.length - tv0) };
+    return { ok: true, vitrines: vit.length, colis, enMain, posee: pose, auMur, fuites };
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
-  const propre = r.fuites.ecranRetire === 1 && r.fuites.sol === 0 && r.fuites.bancs === 0;
-  const ok = r.vitrines >= 8 && r.colis === 1 && r.enMain === 'tvgeante' && r.posee === 'tvgeante' && propre;
-  return { ok, detail: `${r.vitrines} présentoirs · livrée en colis=${r.colis} · en main=${r.enMain} · posée au mur=${r.posee} · rien ne fuit au remplacement (solides +${r.fuites.sol}, assises +${r.fuites.bancs}, écran retiré=${r.fuites.ecranRetire === 1})` };
+  const propre = r.fuites.sol === 0 && r.fuites.bancs === 0;
+  const ok = r.vitrines >= 8 && r.colis === 1 && r.enMain === 'tvgeante' && r.posee === 'tvgeante' && r.auMur && propre;
+  return { ok, detail: `${r.vitrines} présentoirs · livrée en colis=${r.colis} · en main=${r.enMain} · accrochée au mur choisi=${r.auMur} · rien ne fuit au retrait (solides +${r.fuites.sol}, assises +${r.fuites.bancs})` };
 });
 
 test('le fusil tire comme le pistolet : un coup, cible verrouillée, touchée', async p => {
@@ -920,12 +917,12 @@ test('il pleut et il neige, et on est à l\'abri sous un toit', async p => {
     const lis = () => ({ seg: __G.meteo.seg.visible, flocons: __G.meteo.flocons.visible,
       op: +Math.max(__G.meteo.seg.material.opacity, __G.meteo.flocons.material.opacity).toFixed(2),
       sol: +__G.meteo.sol.material.opacity.toFixed(2) });
-    __G.meteoSet('pluie', 600); __G.meteo.force = 1; __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    __G.meteoSet('pluie', 600); __G.meteo.force = 1; __G.cam.dedansT = 0; __G.meteoTick(0.016);
     const pluie = lis();
-    __G.meteoSet('neige', 600); __G.meteo.force = 1; __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    __G.meteoSet('neige', 600); __G.meteo.force = 1; __G.cam.dedansT = 0; __G.meteoTick(0.016);
     const neige = lis();
     // sous le hall d'un immeuble : plus une goutte
-    __G.P.pos.set(-35.5, 0.4, -27); __G.meteo.abriT = 0; __G.meteoTick(0.016);
+    __G.P.pos.set(-35.5, 0.4, -27); __G.cam.dedansT = 0; __G.meteoTick(0.016);
     const abri = __G.meteo.abri, opAbri = +__G.meteo.flocons.material.opacity.toFixed(2);
     __G.meteoSet('clair', 600); __G.meteo.force = 0; __G.meteoTick(0.016);
     return { pluie, neige, abri, opAbri, clair: lis() };
@@ -1061,6 +1058,143 @@ test('un ami organise un braquage, attend au volant et file à la villa', async 
   const ok = !r.pasAmi && r.etatApresRefus === 'aucun' && r.traite && r.attente === 'attente' && r.pret === 'pret'
     && r.fuite === 'fuite' && r.cache && r.arrive < 6 && r.fin === 'aucun' && r.wanted === 0 && r.gain > 0;
   return { ok, detail: `refusé à un non-ami=${!r.pasAmi} · ${r.complice} attend au volant → braquage → embarquement → ${r.secondes} s de fuite, arrivée à ${r.arrive} m de la villa · recherché remis à ${r.wanted}, butin +${r.gain} 🪙` };
+});
+
+
+test('la caméra se rapproche dans une pièce et devant un objet', async p => {
+  // la distance de caméra glisse doucement : on attend qu'elle se stabilise
+  const lis = async cond => { await attendre(p, cond, 40000); return p.evaluate(() => ({ dedans: __G.cam.dedans, dist: +__G.cam.dist.toFixed(2), inter: !!__G.city.interact })); };
+  await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
+  const dehors = await lis(() => __G.cam.dist > 7.5);
+  await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
+  const dedans = await lis(() => __G.cam.dist < 4.2);
+  await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
+  const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);
+  // le point visé rattrape le joueur par interpolation : on attend qu'il l'ait rejoint
+  await attendre(p, () => Math.hypot(__G.cam.target.x - __G.P.pos.x, __G.cam.target.z - __G.P.pos.z) < 1.5, 30000);
+  const cible = await p.evaluate(() => ({ dx: +(__G.cam.target.x - __G.P.pos.x).toFixed(2), dz: +(__G.cam.target.z - __G.P.pos.z).toFixed(2) }));
+  await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));
+  const retour = await lis(() => __G.cam.dist > 7.5);
+  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 4.2
+    && frigo.inter && frigo.dist < dedans.dist + 0.1 && (Math.abs(cible.dx) + Math.abs(cible.dz)) > 0.1 && retour.dist > 7;
+  return { ok, detail: `rue : ${dehors.dist} m · hall d'immeuble : ${dedans.dist} m · devant le frigo : ${frigo.dist} m (objet cadré, décalage ${cible.dx}/${cible.dz}) · de retour dehors : ${retour.dist} m` };
+});
+
+test('on pose la déco où on veut, et on peut la reprendre', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 165, hour: 12 });
+    __G.city.placed.slice().forEach(o => __G.retirerDeco(o, true));
+    // un fauteuil posé à l'endroit exact où regarde le joueur
+    __G.P.deco = { id: 'fauteuil', n: 'Fauteuil', wallOnly: false };
+    __G.P.decoMesh = __G.decorMesh('fauteuil'); __G.worldGroup.add(__G.P.decoMesh);
+    __G.P.pos.set(58, 0.3, 166); __G.P.facing = 0;
+    __G.parcelTick(0.016);
+    const vise = { x: +__G.city.pose.x.toFixed(2), z: +__G.city.pose.z.toFixed(2), ok: __G.city.pose.ok };
+    __G.dropDecor();
+    const o = __G.city.placed[0];
+    const pose1 = o ? { id: o.id, x: +o.x.toFixed(2), z: +o.z.toFixed(2), mur: o.mur } : null;
+    const assise = __G.city.benches.some(b => b.deco && Math.abs(b.x - o.x) < 0.01);
+    // deuxième pose, ailleurs : les deux coexistent (plus d'emplacements imposés)
+    __G.P.deco = { id: 'plante', n: 'Plante', wallOnly: false };
+    __G.P.decoMesh = __G.decorMesh('plante'); __G.worldGroup.add(__G.P.decoMesh);
+    __G.P.pos.set(64, 0.3, 160); __G.P.facing = Math.PI / 2;
+    __G.parcelTick(0.016); __G.dropDecor();
+    const deux = __G.city.placed.length;
+    // sauvegarde puis rechargement : les positions libres sont conservées
+    const sauve = JSON.parse(__G.store.json('superobby.decor', '[]') === '[]' ? '[]' : JSON.stringify(__G.store.json('superobby.decor', [])));
+    __G.loadDecor();
+    const apres = __G.city.placed.map(d => ({ id: d.id, x: +d.x.toFixed(2), z: +d.z.toFixed(2) }));
+    // on reprend le premier en main
+    __G.P.pos.set(apres[0].x, 0.3, apres[0].z); __G.P.deco = null;
+    __G.parcelTick(0.016);
+    const proche = !!__G.city.decoNear;
+    __G.reprendreDeco(__G.city.decoNear);
+    const enMain = __G.P.deco && __G.P.deco.id, reste = __G.city.placed.length;
+    __G.P.deco = null; if (__G.P.decoMesh) __G.worldGroup.remove(__G.P.decoMesh); __G.P.decoMesh = null;
+    __G.city.placed.slice().forEach(o2 => __G.retirerDeco(o2, true));
+    return { vise, pose1, assise, deux, sauve: sauve.length, apres, proche, enMain, reste };
+  });
+  const colle = r.pose1 && Math.abs(r.pose1.x - r.vise.x) < 0.01 && Math.abs(r.pose1.z - r.vise.z) < 0.01;
+  const ok = colle && r.deux === 2 && r.sauve === 2 && r.apres.length === 2 && r.proche && r.enMain === 'fauteuil' && r.reste === 1 && r.assise;
+  return { ok, detail: `posé exactement où le joueur visait (${r.pose1 ? r.pose1.x + ', ' + r.pose1.z : '—'})=${colle} · deux objets libres coexistent (${r.deux}) · sauvegardés et rechargés (${r.apres.length}) · repris en main=${r.enMain}, il en reste ${r.reste} · on peut s'asseoir dessus=${r.assise}` };
+});
+
+test('un cadre s\'accroche au mur le plus proche', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 165, hour: 12 });
+    __G.city.placed.slice().forEach(o => __G.retirerDeco(o, true));
+    __G.P.deco = { id: 'tableau', n: 'Tableau', wallOnly: true };
+    __G.P.decoMesh = __G.decorMesh('tableau'); __G.worldGroup.add(__G.P.decoMesh);
+    // loin de tout mur : refus
+    __G.P.pos.set(60, 0.3, 180); __G.P.facing = 0;
+    __G.parcelTick(0.016);
+    const loin = __G.city.pose.ok;
+    __G.dropDecor();
+    const rienPose = __G.city.placed.length;
+    // face au mur nord du séjour : accroché
+    __G.P.pos.set(56, 0.3, 156.8); __G.P.facing = Math.PI;
+    __G.parcelTick(0.016);
+    const pres = __G.city.pose.ok;
+    __G.dropDecor();
+    const o = __G.city.placed[0];
+    const res = o ? { mur: o.mur, y: +o.y.toFixed(2), ry: +o.ry.toFixed(2), sansCollision: !o.solide } : null;
+    __G.city.placed.slice().forEach(x => __G.retirerDeco(x, true));
+    __G.P.deco = null; if (__G.P.decoMesh) __G.worldGroup.remove(__G.P.decoMesh); __G.P.decoMesh = null;
+    return { loin, rienPose, pres, res };
+  });
+  const ok = !r.loin && r.rienPose === 0 && r.pres && r.res && r.res.mur && r.res.y > 1.5 && r.res.sansCollision;
+  return { ok, detail: `loin d'un mur : refusé (${r.rienPose} objet posé) · face au mur : accroché à ${r.res ? r.res.y : '—'} m, orientation ${r.res ? r.res.ry : '—'}, sans volume de collision` };
+});
+
+test('le micro existe et une phrase dite déclenche la même commande', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0]; b.rdv = null; b.drive = null;
+    const dispo = !!__G.micro && __G.micro.dispo;
+    const bouton = !!document.getElementById('micBtn');
+    __G.micro.envoyer('Lucas_2014 rendez-vous au parc à côté des balançoires');
+    const rdv = b.rdv ? b.rdv.nom : null;
+    const dansLeChat = document.getElementById('chatLog').textContent.includes('balançoires');
+    b.rdv = null;
+    return { dispo, bouton, rdv, dansLeChat };
+  });
+  const ok = r.bouton && r.rdv && r.dansLeChat;
+  return { ok, detail: `bouton 🎤 présent=${r.bouton} · reconnaissance vocale du navigateur=${r.dispo} · la phrase dite apparaît dans le chat=${r.dansLeChat} et fixe le rendez-vous « ${r.rdv} »` };
+});
+
+test('un ami prend une voiture, vient te chercher et te conduit', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -40, y: 1, z: 70, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Nathan_pro');
+    const b = __G.bots.find(x => x.name === 'Nathan_pro');
+    b.drive = null; b.rdv = null; b.ko = 0; b.wait = 0; b.fight = null;
+    b.pos.set(-20, 0.3, 40); b.av.group.position.copy(b.pos);
+    const ordre = __G.commandeSociale('Nathan_pro prends une voiture et viens me retrouver devant la banque');
+    const dest = b.rdv && b.rdv.auto ? [Math.round(b.rdv.auto.tx), Math.round(b.rdv.auto.tz)] : null;
+    for (let i = 0; i < 6000 && !b.drive; i++) __G.updateBot(b, 1 / 30);
+    const auVolant = !!b.drive;
+    let n = 0; while (b.drive && b.drive.etat === 'route' && n < 120000) { __G.botDriveTick(1 / 60); n++; }
+    const c = b.drive.car;
+    const arrivee = Math.hypot(c.x - (dest ? dest[0] : 0), c.z - (dest ? dest[1] : 0));
+    // on monte à côté de lui
+    __G.P.pos.set(c.x + 2, c.y + 0.4, c.z + 2); __G.botDriveTick(1 / 60);
+    const propose = __G.city.botCarNear && __G.city.botCarNear.name;
+    __G.monterAvecBot(b);
+    const passager = b.drive.passager, cache = !__G.me.group.visible;
+    // « va à la villa »
+    const ordre2 = __G.commandeSociale('Nathan_pro va à la villa');
+    let m = 0; while (b.drive && b.drive.etat === 'route' && m < 120000) { __G.botDriveTick(1 / 60); m++; }
+    const dVilla = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 190);
+    const suit = Math.hypot(__G.P.pos.x - b.drive.car.x, __G.P.pos.z - b.drive.car.z);
+    __G.botDescendre(b, false);
+    const descendu = !b.drive && __G.me.group.visible;
+    return { ordre, dest, auVolant, arrivee: +arrivee.toFixed(1), propose, passager, cache, ordre2,
+      dVilla: +dVilla.toFixed(1), suit: +suit.toFixed(2), descendu, s1: +(n / 60).toFixed(0), s2: +(m / 60).toFixed(0) };
+  });
+  const ok = r.ordre && r.dest && r.auVolant && r.arrivee < 9 && r.propose === 'Nathan_pro' && r.passager && r.cache
+    && r.ordre2 && r.dVilla < 9 && r.suit < 0.5 && r.descendu;
+  return { ok, detail: `« prends une voiture et viens devant la banque » → au volant en ${r.s1} s, garé à ${r.arrivee} m · montée proposée (${r.propose}) · « va à la villa » → ${r.s2} s, arrivé à ${r.dVilla} m de l'allée (le joueur reste à bord, ${r.suit} m) · descente OK` };
 });
 
 (async()=>{

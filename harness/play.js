@@ -253,7 +253,7 @@ test('une balle ne traverse plus une cloison fine', async p => {
     // cloison de 30 cm entre le joueur et le bot : plus mince que la distance parcourue
     // par une balle en une image, donc invisible pour un test ponctuel
     const mur = { mesh: { position: { x: 110, y: 1.5, z: 66 } }, x: 110, y: 1.5, z: 66, w: 6, h: 3, d: 0.3 };
-    __G.solids.push(mur); window.__mur = mur;
+    __G.solids.push(mur); __G.sgridSale(); window.__mur = mur;   // sgridSale : le jeu invalide la grille à chaque ajout, le test doit faire pareil
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true;
   });
@@ -263,7 +263,7 @@ test('une balle ne traverse plus une cloison fine', async p => {
     await attendre(p, () => __G.shots.length === 0, 20000);
   }
   const hp1 = await p.evaluate(() => __G.bots[0].hp);
-  await p.evaluate(() => { const i = __G.solids.indexOf(window.__mur); if (i >= 0) __G.solids.splice(i, 1); });
+  await p.evaluate(() => { const i = __G.solids.indexOf(window.__mur); if (i >= 0) __G.solids.splice(i, 1); __G.sgridSale(); });
   return { ok: hp1 === hp0, detail: `4 balles tirées à travers la cloison : le bot derrière a perdu ${hp0 - hp1} point(s) de vie (attendu 0)` };
 });
 
@@ -272,12 +272,12 @@ test('une balle s\'arrête sur le mur et ne le traverse pas', async p => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
     // un mur artificiel droit devant, à 6 m
     const mur = { mesh: { position: { x: 0, y: 1.5, z: 6 } }, x: 0, y: 1.5, z: 6, w: 8, h: 3, d: 0.6 };
-    __G.solids.push(mur);
+    __G.solids.push(mur); __G.sgridSale();   // sinon la grille spatiale ignore ce mur posé à la main
     __G.P.pos.set(0, 0.4, 0); __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0; __G.P.lock = null;
     __G.aimTick();
     const d = __G.aimPoint.z;
     const derriere = __G.castSolids(0, 1.35, 0, 0, 0, 1, 60, false);
-    __G.solids.splice(__G.solids.indexOf(mur), 1);
+    __G.solids.splice(__G.solids.indexOf(mur), 1); __G.sgridSale();
     return { viseZ: +d.toFixed(2), distMur: +derriere.d.toFixed(2) };
   });
   // le mur commence à z = 5.7 : le réticule doit s'y arrêter, pas filer au-delà
@@ -3444,6 +3444,23 @@ test('la grille spatiale dit exactement la même chose qu\'un balayage complet',
   });
   const ok = r.manquantsVeh === 0 && r.manquantsDecor === 0 && r.vues === r.roulantes && r.partie && r.memeLongueur && !r.fantome;
   return { ok, detail: `0 solide manquant sur ~2 200 x 900 points (décor ${r.manquantsDecor}, avec véhicules ${r.manquantsVeh}) · ${r.vues}/${r.roulantes} voitures en mouvement vues à leur place · vitrine brisée retirée=${r.partie}, longueur inchangée après « réparation »=${r.memeLongueur}, fantôme dans la grille=${r.fantome}` };
+});
+
+test('la ville vit au rythme de l\'écran, pas à 120 Hz', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G;
+    G.VILLE.acc = 0; G.VILLE.tours = 0;
+    for (let i = 0; i < 120; i++) G.cityCommon(1 / 120);   // une seconde de jeu, au pas de la physique
+    const tours = G.VILLE.tours;
+    // et le décompte doit rester juste quand l'image est plus lente que le pas de physique
+    G.VILLE.acc = 0; G.VILLE.tours = 0;
+    for (let i = 0; i < 30; i++) G.cityCommon(1 / 30);     // une seconde de jeu, image par image
+    return { tours, toursLent: G.VILLE.tours };
+  });
+  // 60 passages pour une seconde : le rythme de l'écran, pas les 120 de la physique.
+  const ok = r.tours >= 55 && r.tours <= 65 && r.toursLent === 30;
+  return { ok, detail: `${r.tours} passages de la vie de la ville par seconde de jeu (attendu 60, et surtout pas 120) · à 30 images/s, ${r.toursLent} passages : aucun tour perdu ni doublé` };
 });
 
 (async()=>{

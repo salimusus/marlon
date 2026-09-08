@@ -230,6 +230,8 @@ window.__G = {
   exitCar: typeof exitCar === 'function' ? exitCar : null,
   cityTick: typeof cityTick === 'function' ? cityTick : null,
   cityCommon: typeof cityCommon === 'function' ? cityCommon : null,
+  cityVie: typeof cityVie === 'function' ? cityVie : null,
+  VILLE: typeof VILLE === 'object' ? VILLE : null,
   VILLAS: typeof VILLAS !== 'undefined' ? VILLAS : null,
   botTirePourMoi: typeof botTirePourMoi === 'function' ? botTirePourMoi : null,
   botRangeArme: typeof botRangeArme === 'function' ? botRangeArme : null,

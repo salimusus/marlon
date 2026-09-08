@@ -760,11 +760,12 @@ const stars = (() => {
   p.visible = false; scene.add(p); return p;
 })();
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
-// Ni la scène ni le monde ne bougent jamais. Or dans three.js r128, un parent dont
-// matrixAutoUpdate vaut vrai force le recalcul de la matrice de TOUS ses descendants à
-// chaque image : les 22 000 objets de la ville étaient recomposés pour rien, 13 ms par
-// image. En coupant le drapeau ici, seuls les objets qui bougent vraiment se recalculent
-// (leur propre matrixAutoUpdate reste actif) : 13,7 ms → 7,2 ms, mesuré.
+// Ni la scène ni le monde ne bougent jamais : inutile de recomposer leur matrice à chaque
+// image, et surtout de forcer par ricochet celle de leurs 22 000 descendants (three.js r128
+// propage le drapeau depuis tout parent dont matrixAutoUpdate est actif). Le gain mesuré est
+// modeste — l'essentiel du coût est la simple traversée du graphe, pas le calcul — mais il
+// est gratuit. Geler en plus tout le décor immobile a été essayé et mesuré : 13,4 ms contre
+// 13,1 ms sans, donc aucun gain pour un vrai risque de figer un objet censé bouger. Écarté.
 scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false;
 scene.updateMatrix(); worldGroup.updateMatrix();
 function applyQuality() {
@@ -8340,7 +8341,21 @@ function cityStep(dt) {
   if (!drive.car) cityCommon(dt);
 }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image
+// La physique du joueur tourne à pas fixe de 1/120 s (précision des sauts et des collisions),
+// mais la VIE de la ville — police, gangs, manèges, animaux, missions — n'a aucun besoin
+// d'être recalculée deux fois par image affichée. On l'aligne donc sur le rythme de l'écran
+// (un peu moins sur téléphone) en lui passant le temps réellement écoulé : moitié moins de
+// travail sur ordinateur, trois fois moins sur téléphone, et rigoureusement le même jeu à
+// l'œil. Les tirs restent exacts : une balle teste tout le segment qu'elle parcourt.
+const VILLE = { acc: 0, tours: 0 };   // `tours` : compteur de passages, lu par le banc d'essai
 function cityCommon(dt) {
+  VILLE.acc += dt;
+  const pas = isMobile ? 1 / 40 : 1 / 60;
+  if (VILLE.acc < pas) return;
+  const d = VILLE.acc; VILLE.acc = 0; VILLE.tours++;
+  cityVie(d);
+}
+function cityVie(dt) {
   // garage : réparation du véhicule conduit
   if (drive.car && city.garage && (drive.car.dmg || 0) > 0 && Math.abs(drive.car.x - city.garage.x) < 4.5 && Math.abs(drive.car.z - city.garage.z) < 3.5 && simTime > (city.repairT || 0)) {
     if (wallet < 10) { if (simTime > (city.repairMsgT || 0)) { city.repairMsgT = simTime + 4; msg('🔧 Réparation : 10 🪙 (il t\'en manque)', 1600); } }
@@ -9055,7 +9070,7 @@ function shotsTick(dt) {
       // les gardes ripostent, mais tirer sur l'un d'eux n'est pas un braquage de banque :
       // avant, la moindre balle perdue déclenchait l'alerte maximale et trois voitures.
       gd.alert = true; police.riposte = simTime + 30;
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2); }
+      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2, true); }   // sans pitié : on ne tire pas sur un vigile par accident
     }
     if (s.feu) feuAuSol(s.p.x, Math.max(0.05, s.p.y - 0.6), s.p.z);
     if (s.boom) balleExplose(s.p.x, s.p.y, s.p.z);

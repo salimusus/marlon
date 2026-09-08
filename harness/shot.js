@@ -34,6 +34,14 @@ window.__SHOT = {
     document.getElementById('start').classList.add('hidden');
     document.getElementById('worlds').classList.add('hidden');
     running = true; paused = false; dead = false;
+    // Un chef de gang peut donner rendez-vous et, quand on arrive sur place, la fenetre de
+    // reunion MET LE JEU EN PAUSE : tous les tests qui suivaient echouaient alors sans
+    // rapport avec ce qu'ils mesuraient. On repousse les rendez-vous spontanes ; le test de
+    // la guerre des gangs, lui, appelle proposeReunion() explicitement.
+    try {
+      if (typeof guerre !== 'undefined') { guerre.reunion = null; guerre.prochaineReunion = simTime + 1e6; }
+      if (typeof gangs !== 'undefined') for (const g of gangs) g.reunionT = simTime + 1e6;
+    } catch (e) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
     if (v.hour != null) simTime = ((v.hour - 7 + 24) % 24) / 24 * day.len;   // l'heure se pilote par simTime
     if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); }

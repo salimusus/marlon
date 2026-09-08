@@ -1244,6 +1244,10 @@ test('le cinéma a beaucoup de films variés qui ne repassent pas en boucle', as
 test('double appui sur avancer : on court, on s\'épuise, on récupère', async p => {
   await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }); __G.P.energie = 100; __G.P.essouffle = false; __G.P.run = false;
+    // pas de rendez-vous de chef de gang pendant le test : la fenêtre met le jeu en pause
+    __G.guerre.reunion = null; __G.guerre.prochaineReunion = __G.simTime + 1e6;
+    __G.gangs.forEach(g => { g.reunionT = __G.simTime + 1e6; });
+    if (__G.uiOpen) __G.closeUI();
     // l'essoufflement est bref (la jauge remonte aussitôt) : on le guette image par image,
     // sinon un sondage toutes les 250 ms peut passer à côté.
     const s = window.__souffle = { vu: false, coupe: false, mini: 100, couru: 0 };
@@ -1254,10 +1258,17 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
   await p.waitForTimeout(500);
   const etat = await p.evaluate(() => ({ jeu: __G.running, pause: __G.paused, ui: __G.uiOpen,
     volant: !!__G.drive.car, focus: (document.activeElement || {}).id || '' }));
-  // double appui rapide sur « avancer »
-  await p.keyboard.press('ArrowUp'); await p.waitForTimeout(90);
-  await p.keyboard.down('ArrowUp');
-  const court = await attendre(p, () => __G.P.run && __G.P.court, 20000);
+  // Double appui rapide sur « avancer ». La fenêtre du jeu est de 340 ms de temps RÉEL :
+  // en rendu logiciel une pause de 90 ms peut en durer 500 et le double appui passe à la
+  // trappe. On réessaie donc jusqu'à ce que la course parte, au lieu de jouer aux dés.
+  let court = false;
+  for (let essai = 0; essai < 6 && !court; essai++) {
+    await p.keyboard.up('ArrowUp');
+    await p.evaluate(() => { __G.P.tapT = -9999; __G.P.run = false; __G.P.energie = 100; __G.P.essouffle = false; });
+    await p.keyboard.press('ArrowUp');
+    await p.keyboard.down('ArrowUp');
+    court = await attendre(p, () => __G.P.run && __G.P.court, 4000);
+  }
   const vite = await p.evaluate(() => ({ court: __G.P.court, e: Math.round(__G.P.energie) }));
   // le temps simulé avance lentement en rendu logiciel : on amorce la jauge au lieu
   // d'attendre les six secondes de course
@@ -1876,7 +1887,9 @@ test('un seul coffre laisse le temps de fuir, trois font venir tout le monde', a
     return { un, deux, trois, gain, montant: sf.amount };
   });
   const ok = r.gain === 500 && r.montant === 500 && r.un.retard > r.deux.retard && r.deux.retard > r.trois.retard
-    && r.trois.retard === 0 && r.un.gardes < r.trois.gardes && r.un.voitures < r.trois.voitures && r.un.traque < r.trois.traque;
+    // le quatrième coffre ne ramène plus le délai à zéro : il reste un plancher de 6 s pour
+    // laisser au joueur une chance de sortir de la banque (demande explicite du joueur).
+    && r.trois.retard <= 9 && r.un.gardes < r.trois.gardes && r.un.voitures < r.trois.voitures && r.un.traque < r.trois.traque;
   return { ok, detail: `coffre = ${r.gain} 🪙 versés d'un coup · premier coffre : la police démarre après ${r.un.retard} s (${r.un.voitures} voitures, ${r.un.gardes} garde alerté, traque ${r.un.traque} s) · au deuxième : ${r.deux.retard} s, ${r.deux.gardes} gardes · au quatrième : ${r.trois.retard} s, ${r.trois.voitures} voitures, ${r.trois.gardes} gardes et ${r.trois.traque} s de traque` };
 });
 
@@ -2502,13 +2515,18 @@ test('douze habitants qui jouent, roulent, chapardent et braquent', async p => {
     v.rdv = { x: v.pos.x, z: v.pos.z, y: 0.3, nom: 'boutique', arrive: true, libre: true };
     __G.activiteTick(v, 1 / 30);
     const vol = { etape: v.activite.etape, planque: v.rdv && v.rdv.nom };
-    // le braquage réveille la police
+    // Le braquage d'un BOT affole les gardes de la banque, mais ne doit PAS retomber sur le
+    // joueur : avant, il lui collait deux étoiles et lançait toutes les voitures alors qu'il
+    // n'avait rien fait (« braquage alerte se déclenche tout seul »). On vérifie donc les
+    // gardes en alerte et l'absence totale de conséquence pour le joueur.
     __G.clearWanted(); __G.police.cars.forEach(c => { c.active = false; });
+    __G.city.guards.forEach(g => { g.alert = false; });
     const q = __G.bots[1];
     q.activite = { k: 'braquage', fin: __G.simTime + 60, etape: 'route' };
     q.rdv = { x: q.pos.x, z: q.pos.z, y: 0.3, nom: 'banque', arrive: true, libre: true };
     __G.activiteTick(q, 1 / 30);
-    const braquage = { etape: q.activite.etape, voitures: __G.police.cars.filter(c => c.active).length };
+    const braquage = { etape: q.activite.etape, gardes: __G.city.guards.filter(g => g.alert).length,
+      joueurRecherche: __G.police.wanted || 0, voitures: __G.police.cars.filter(c => c.active).length };
     // le journal de la ville se remplit, et vieTick lance tout seul
     __G.bots.forEach(x => { x.activite = null; x.rdv = null; x.fight = null; x.bagarre = null; });
     __G.vie.t = 0; __G.vie.journal.length = 0;
@@ -2521,8 +2539,8 @@ test('douze habitants qui jouent, roulent, chapardent et braquent', async p => {
   });
   const toutes = Object.values(r.faites).every(f => f.ok && f.but);
   const ok = r.n === 12 && toutes && r.vol.etape === 'fuite' && r.braquage.etape === 'fuite'
-    && r.braquage.voitures > 0 && r.auto > 0;
-  return { ok, detail: `${r.n} habitants (5 avant) · ${r.activites.length} activités qui démarrent toutes : ${Object.entries(r.faites).map(([k, f]) => k + '→' + f.but).join(', ')} · le chapardeur file vers ${r.vol.planque} · le braqueur lance ${r.braquage.voitures} voitures de police · le jeu en déclenche tout seul (${r.auto} bots occupés, ${r.journal} lignes au journal)` };
+    && r.braquage.gardes > 0 && r.braquage.joueurRecherche === 0 && r.braquage.voitures === 0 && r.auto > 0;
+  return { ok, detail: `${r.n} habitants (5 avant) · ${r.activites.length} activités qui démarrent toutes : ${Object.entries(r.faites).map(([k, f]) => k + '→' + f.but).join(', ')} · le chapardeur file vers ${r.vol.planque} · le braqueur affole ${r.braquage.gardes} garde(s) sans que le joueur soit inquiété (recherché ${r.braquage.joueurRecherche}, ${r.braquage.voitures} voiture lancée contre lui) · le jeu en déclenche tout seul (${r.auto} bots occupés, ${r.journal} lignes au journal)` };
 });
 
 test('la boutique habille de la tête aux pieds : hauts, bas, chaussures, poignets', async p => {
@@ -2795,10 +2813,11 @@ test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", asyn
   });
   const hats = r.gangs.map(g => g.hat);
   const ok = r.gangs.length === 3 && new Set(hats).size === 3 && hats.every(h => /^bandana/.test(h))
-    && r.gangs.every(g => g.n === 3 && g.kits >= 6 && g.peinture !== 0)
+    // depuis la guerre des gangs, un gang rival compte un chef et cinq hommes, pas trois
+    && r.gangs.every(g => g.n >= 3 && g.kits >= 6 && g.peinture !== 0)
     && ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
     && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine && r.recherche === 0;
-  return { ok, detail: `3 gangs de 3 membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherché ${r.recherche})` };
+  return { ok, detail: `${r.gangs.length} gangs de ${r.gangs.map(g => g.n).join('/')} membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherché ${r.recherche})` };
 });
 
 test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en échec", async p => {
@@ -3049,8 +3068,11 @@ test("à la salle de sport on s'allonge vraiment sur le banc et on court sur le 
     const bench = G.city.gym.bench, run = G.city.gym.run;
     res.appareils = { banc: [bench.x, bench.z, bench.y], tapis: [run.x, run.z, run.y] };
     // le point d'accroche est SUR l'appareil (avant, il tombait 60 cm derrière)
-    const solide = (x, z, y) => G.solids.some(o => Math.abs(o.x - x) < o.w / 2 + 0.1 && Math.abs(o.z - z) < o.d / 2 + 0.1 && Math.abs((o.y + o.h / 2) - y) < 0.12);
-    res.surLAppareil = { banc: solide(bench.x, bench.z, bench.y), tapis: solide(run.x, run.z, run.y) };
+    const solide = (x, z, y, tol) => G.solids.some(o => Math.abs(o.x - x) < o.w / 2 + 0.1 && Math.abs(o.z - z) < o.d / 2 + 0.1 && (o.y + o.h / 2) <= y + 0.02 && (o.y + o.h / 2) > y - tol);
+    // Debout sur le tapis, les pieds touchent la bande : l'ancre est à quelques centimètres
+    // de la surface. ALLONGÉ sur le banc, c'est le dos qui repose sur le coussin et l'ancre
+    // se retrouve un demi-torse plus haut — d'où deux tolérances différentes.
+    res.surLAppareil = { banc: solide(bench.x, bench.z, bench.y, 0.25), tapis: solide(run.x, run.z, run.y, 0.12) };
     // développé couché : allongé, la barre monte à chaque répétition
     G.P.pos.set(bench.x, 1, bench.z);
     G.startGym('bench'); G.gym.end = G.simTime + 600;

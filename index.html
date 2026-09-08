@@ -11656,7 +11656,10 @@ function armerMembre(b) {
 // ---- réunions de chefs ----
 function proposeReunion(G) {
   const lieux = [['le parc', 0, 80], ['la plage', 150, 30], ['la fête foraine', -30, -30], ['la place du centre', 0, 40], ['La Zone', -145, 40]];
-  const l = pickOne(lieux);
+  // Un rendez-vous doit se mériter : si le chef choisissait le lieu où l'on se trouve déjà,
+  // la réunion s'ouvrait dans la seconde et figeait le jeu sans qu'on ait bougé d'un mètre.
+  const loin = lieux.filter(([, x, z]) => Math.hypot(P.pos.x - x, P.pos.z - z) > 30);
+  const l = pickOne(loin.length ? loin : lieux);
   guerre.reunion = { gang: G, x: l[1], z: l[2], nom: l[0], fin: simTime + 150, arrive: false };
   G.reunionT = simTime + rnd(300, 600);
   chat(G.chefNom, `on doit parler, ${myCfg.name}. Rendez-vous à ${l[0]}, tout de suite.`, G.couleur);

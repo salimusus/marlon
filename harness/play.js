@@ -2739,19 +2739,23 @@ test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", asyn
     res.hpRival = vic.hp;
     // vitrine cassée
     const vit = G.breakables.find(b => b.kind === 'glass' && !b.broken);
+    G.clearWanted(); G.P.crime = 0;
     g0.etat = 'boutique'; g0.cible = [vit.x, vit.z];
     for (const m of g0.membres) { m.x = vit.x + 1; m.z = vit.z; m.cd = -1; }
+    G.gangTick(0.05); vit.cracked = true; for (const m of g0.membres) m.cd = -1;
     G.gangTick(0.05);
     res.vitrine = !!(vit.broken || vit.cracked);
-    G.P.hp = 100; g0.etat = 'repos'; g0.cible = null;
+    // la casse du gang ne doit pas être mise sur le dos du joueur
+    res.recherche = G.police.wanted || 0;
+    G.P.hp = 100; g0.etat = 'repos'; g0.cible = null; G.clearWanted();
     return res;
   });
   const hats = r.gangs.map(g => g.hat);
   const ok = r.gangs.length === 3 && new Set(hats).size === 3 && hats.every(h => /^bandana/.test(h))
     && r.gangs.every(g => g.n === 3 && g.kits >= 6 && g.peinture !== 0)
     && ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
-    && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine;
-  return { ok, detail: `3 gangs de 3 membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine` };
+    && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine && r.recherche === 0;
+  return { ok, detail: `3 gangs de 3 membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherché ${r.recherche})` };
 });
 
 test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en échec", async p => {

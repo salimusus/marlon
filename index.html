@@ -7662,20 +7662,22 @@ function vehicleDamage(c, amount) {
   if (amount > 2) burst(c.x, 1, c.z, 0x8f98ab, Math.min(10, 3 + amount));
   applyDamageVisual(c, Math.sin(c.h || 0) * (drive.car === c ? drive.speed : 3), Math.cos(c.h || 0) * (drive.car === c ? drive.speed : 3));
 }
-function breakThing(b, c) {   // mobilier percuté par un véhicule
+// sansDelit : la casse n'est pas l'œuvre du joueur (un gang qui saccage une devanture)
+// — sinon la police lui collait la vitrine sur le dos et le prenait en chasse.
+function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.broken) return;
-  const spd = Math.abs(drive.speed);
+  const spd = sansDelit ? 0 : Math.abs(drive.speed);
   if (b.kind === 'glass') {
     if (!b.cracked) { b.cracked = true; b.m.material = crackedGlass; sfx.clack(); sfx.noise(.15, 2500, .06); msg('💥 Vitrine fissurée', 700); return; }
     b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900);
-    if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
+    if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
   } else {
     b.broken = true; const dx = b.x - c.x, dz = b.z - c.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
     b.g.quaternion.setFromAxisAngle(ax, 1.35); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1);
     if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
     burst(b.x, 3, b.z, 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1); msg(b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !', 900);
   }
-  vehicleDamage(c, Math.min(25, spd * 0.8));
+  if (!sansDelit) vehicleDamage(c, Math.min(25, spd * 0.8));
 }
 function gearOf(ratio) { return ratio < 0.02 ? 0 : ratio < 0.18 ? 1 : ratio < 0.38 ? 2 : ratio < 0.58 ? 3 : ratio < 0.8 ? 4 : 5; }
 function driveStep(dt) {
@@ -10476,7 +10478,7 @@ function gangTick(dt) {
       // vitrine brisée
       if (G.etat === 'boutique' && d < 3) for (const br of breakables)
         if (br.kind === 'glass' && !br.broken && Math.hypot(br.x - m.x, br.z - m.z) < 3.5 && simTime > m.cd) {
-          m.cd = simTime + 2; br.cracked = true; breakThing(br, { x: m.x, z: m.z }); msg('🚩 Un gang casse une vitrine !', 2200); }
+          m.cd = simTime + 2; br.cracked = true; breakThing(br, { x: m.x, z: m.z }, true); msg('🚩 Un gang casse une vitrine !', 2200); }
     }
   }
 }

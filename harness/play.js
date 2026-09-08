@@ -1272,17 +1272,25 @@ test('la nuit des zombies démarre depuis la prison avec son décor', async p =>
     __G.zombieStart(1);
     const z = __G.zombie, kinds = {};
     z.zoms.forEach(o => { kinds[o.kind] = (kinds[o.kind] || 0) + 1; });
-    const dep = Math.hypot(__G.P.pos.x - __G.police.station.x, __G.P.pos.z - (__G.police.station.z - 13));
+    const dep = Math.hypot(__G.P.pos.x - __G.police.station.x, __G.P.pos.z - (__G.police.station.z - 22));
+    // le départ doit être DEHORS : on mesure la surface libre autour (la cellule est fermée)
+    const aire = pt => { const vus = new Set(); const pile = [[Math.round(pt[0]), Math.round(pt[1])]]; let n = 0;
+      while (pile.length && n < 400) { const [x, z] = pile.pop(); const k = x + ',' + z;
+        if (vus.has(k)) continue; vus.add(k);
+        if (__G.npcBlocked(x, 0.3, z, 0.42)) continue; n++;
+        pile.push([x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]); }
+      return n; };
+    const aireDepart = aire(__G.zombie.depart), aireCellule = aire([__G.police.station.x, __G.police.station.z - 13]);
     __G.zombieTick(1 / 60);
     return { on: z.on, zoms: z.zoms.length, kinds, deco: z.deco.length, chauves: (z.bats || []).length,
       arme: __G.P.weapon, dep: +dep.toFixed(1), but: z.but, neige: __G.meteo.kind, lune: !!(z.lune && z.lune.visible),
-      horloge: document.getElementById('clock').textContent, niveaux: __G.ZOM_NIV.length,
-      bots: __G.bots.every(b => b.av.mats.skin.color.getHex() === 0x86a86a) };
+      horloge: document.getElementById('clock').textContent, niveaux: __G.ZOM_NIV.length, aireDepart, aireCellule,
+      bots: __G.bots.every(b => b.av.mats.skin.color.getHex() !== 0xf5c39a) };
   });
   const ok = r.on && r.zoms >= 30 && r.kinds.lent > 0 && r.kinds.rapide > 0 && r.kinds.immobile > 0
     && r.deco > 60 && r.chauves > 6 && r.arme === 'pistol' && r.dep < 2 && r.neige === 'neige' && r.lune
-    && r.niveaux === 3 && r.bots && r.horloge.includes('zombie');
-  return { ok, detail: `${r.zoms} zombies (${r.kinds.lent} lents, ${r.kinds.immobile} immobiles, ${r.kinds.rapide} rapides) · ${r.deco} décors + ${r.chauves} chauves-souris · départ au commissariat (${r.dep} m), objectif ${r.but} · neige=${r.neige}, pleine lune=${r.lune} · les bots sont devenus verts=${r.bots} · ${r.niveaux} difficultés` };
+    && r.niveaux === 3 && r.bots && r.horloge.includes('zombie') && r.aireDepart >= 400 && r.aireCellule < 120;
+  return { ok, detail: `${r.zoms} zombies (${r.kinds.lent} lents, ${r.kinds.immobile} immobiles, ${r.kinds.rapide} rapides) · ${r.deco} décors + ${r.chauves} chauves-souris · départ devant le commissariat (${r.dep} m) et non plus dans la cellule (surface libre ${r.aireDepart} cases contre ${r.aireCellule} dans la cellule) · objectif ${r.but} · neige=${r.neige}, pleine lune=${r.lune} · ${r.niveaux} difficultés` };
 });
 
 test('le zombie rapide attrape le marcheur mais pas le coureur', async p => {
@@ -1307,7 +1315,7 @@ test('le zombie rapide attrape le marcheur mais pas le coureur', async p => {
 
 test('trois balles dans le corps ou une seule dans la tête', async p => {
   const r = await p.evaluate(() => {
-    __G.zombieFin(false); __G.jail.on = true; __G.zombieStart(1);
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI(); __G.jail.on = true; __G.zombieStart(1);
     const z = __G.zombie; z.mange = null; __G.P.devore = false;
     __G.P.pos.set(0, 0.4, 40);
     const a = z.zoms.find(o => !o.mort), b = z.zoms.filter(o => !o.mort && o !== a)[0];
@@ -1316,11 +1324,13 @@ test('trois balles dans le corps ou une seule dans la tête', async p => {
         v: new __G.THREE.Vector3(0, (cible.y + hy - (__G.P.pos.y + 1)) / 6 * 95, 95), t: 0, mine: true, dmg: 24 };
       __G.shots.push(s); __G.spawnShot(s); for (let i = 0; i < 40; i++) __G.shotsTick(1 / 120); };
     a.hp = 3; a.mort = false; b.hp = 3; b.mort = false;
-    tirer(a, 0.9); const un = a.hp, mort1 = a.mort;
-    tirer(a, 0.9); tirer(a, 0.9); const mort3 = a.mort;
+    // les zombies n'ont plus tous la même taille : on vise d'après leur propre boîte
+    const corpsA = a.boite.corps[0], teteB = b.boite.tete[0];
+    tirer(a, corpsA); const un = a.hp, mort1 = a.mort;
+    tirer(a, corpsA); tirer(a, corpsA); const mort3 = a.mort;
     b.x = 1e5; tirer(b, 0);   // on écarte l'autre pendant les tirs sur a
     b.hp = 3; b.mort = false;
-    tirer(b, 1.72); const tete = b.mort;
+    tirer(b, teteB); const tete = b.mort;
     return { un, mort1, mort3, tete, tues: z.tues };
   });
   const ok = r.un === 2 && !r.mort1 && r.mort3 && r.tete;
@@ -1571,6 +1581,219 @@ test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecte
     && r.av.texte.includes('ARMÉE') && r.dHeli != null && r.dHeli < 18 && (r.tirs > 0 || r.degats > 0)
     && !r.apres.on && r.apres.mil === 0 && r.apres.agents === 0;
   return { ok, detail: `policier abattu en ${r.coups} balles · armée déployée : ${r.av.mil} 4×4 + hélicoptère (projecteur=${r.av.tache}), niveau ${r.av.wanted}★ · l'hélico tourne à ${r.dHeli} m du joueur · ils tirent (${r.tirs} balles en vol, ${r.degats} PV perdus) · tout est nettoyé à la fin (armée=${r.apres.on}, 4×4=${r.apres.mil})` };
+});
+
+test('la nuit des zombies est noire : lune, lampadaires et éclairs', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
+    await dodo(300);
+    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.jail.on = true; __G.zombieStart(1);
+    await dodo(2200);
+    const lum = { sun: +__G.sun.intensity.toFixed(2), hemi: +__G.hemi.intensity.toFixed(2),
+      ciel: __G.scene.background.getHexString(), far: __G.scene.fog.far };
+    const halos = __G.day.glows.filter(s => s.visible).length, flaques = __G.zombie.flaques.filter(f => f.m.visible).length;
+    // éclair : on force le prochain et on regarde la lumière bondir
+    __G.zombie.eclairT = 0; __G.zombie.eclair = 0;
+    const pic = { sun: 0, hemi: 0 };
+    for (let i = 0; i < 20; i++) { __G.simTime += 0.02; __G.zombieTick(1 / 60);
+      pic.sun = Math.max(pic.sun, +__G.sun.intensity.toFixed(2)); pic.hemi = Math.max(pic.hemi, +__G.hemi.intensity.toFixed(2)); }
+    const lune = !!(__G.zombie.lune && __G.zombie.lune.visible);
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(600);
+    const apres = { halos: __G.day.glows.filter(s => s.visible).length, flaques: __G.zombie.flaques.length };
+    return { lum, halos, flaques, pic, lune, apres };
+  });
+  const noir = parseInt(r.lum.ciel, 16);
+  const ok = r.lum.sun < 0.2 && r.lum.hemi < 0.2 && noir < 0x202020 && r.halos > 40 && r.flaques > 20
+    && r.lune && r.pic.hemi > r.lum.hemi + 0.5 && r.apres.halos === 0 && r.apres.flaques === 0;
+  return { ok, detail: `lune + lampadaires seulement : soleil ${r.lum.sun}, ambiance ${r.lum.hemi}, ciel #${r.lum.ciel}, brouillard à ${r.lum.far} m · ${r.halos} halos de lampadaires et ${r.flaques} flaques de lumière au sol · éclair : ambiance ${r.lum.hemi} → ${r.pic.hemi} · tout s'éteint à la fin (${r.apres.halos} halos)` };
+});
+
+test('des zombies de toutes tailles, mutilés et sanglants', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
+    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.jail.on = true; __G.zombieStart(2);
+    const zs = __G.zombie.zoms;
+    const tailles = {}; zs.forEach(z => { tailles[z.taille] = (tailles[z.taille] || 0) + 1; });
+    const ech = zs.map(z => z.ech);
+    const res = { n: zs.length, tailles, mini: Math.min(...ech), maxi: Math.max(...ech),
+      rampants: zs.filter(z => z.rampe).length, manchots: zs.filter(z => z.manchot).length,
+      borgnes: zs.filter(z => z.borgne).length,
+      extras: Math.round(zs.reduce((a, z) => a + z.extras.length, 0) / zs.length),
+      brasCaches: zs.filter(z => z.manchot && z.brasCache && !z.brasCache.visible).length,
+      // la boîte de tir suit le gabarit
+      boites: zs.every(z => z.boite && z.boite.tete[0] > 0.3 && z.boite.corps[0] > 0.2),
+      petitTete: Math.min(...zs.map(z => z.boite.tete[0])), grandTete: Math.max(...zs.map(z => z.boite.tete[0])) };
+    const bots = __G.bots.length;
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    res.remis = __G.bots.every(b => b.av.group.scale.x === 1 && b.av.rig.armL.visible && b.av.rig.armR.visible
+      && b.av.mats.skin.color.getHex() === 0xf5c39a);
+    res.bots = bots;
+    return res;
+  });
+  const ok = r.n > 30 && Object.keys(r.tailles).length >= 3 && r.maxi > r.mini + 0.3 && r.rampants > 0
+    && r.manchots > 0 && r.borgnes > 0 && r.extras >= 6 && r.brasCaches === r.manchots && r.boites
+    && r.grandTete > r.petitTete + 0.3 && r.remis;
+  return { ok, detail: `${r.n} zombies : ${Object.entries(r.tailles).map(([k, v]) => v + ' ' + k).join(', ')} (échelle ${r.mini} → ${r.maxi}) · ${r.rampants} rampent, ${r.manchots} ont un bras arraché, ${r.borgnes} sont borgnes · ${r.extras} détails sanglants par zombie en moyenne · boîtes de tir à l'échelle (tête de ${r.petitTete} à ${r.grandTete} m) · les ${r.bots} bots redeviennent normaux=${r.remis}` };
+});
+
+test('la ville d\'horreur : bidons enflammés, tombes, mains et carcasses', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
+    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.jail.on = true; __G.zombieStart(1);
+    const deco = __G.zombie.deco;
+    const feux = deco.filter(g => g.userData.feu).length, bougies = deco.filter(g => g.userData.flamme).length;
+    // les flammes bougent d'une image à l'autre
+    const f0 = deco.find(g => g.userData.feu);
+    const a = f0.userData.feu.scale.y; __G.simTime += 0.2; __G.zombieTick(1 / 60);
+    const b = f0.userData.feu.scale.y;
+    const n = deco.length, bats = __G.zombie.bats.length;
+    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    return { n, feux, bougies, anime: Math.abs(a - b) > 0.01, bats, reste: __G.zombie.deco.length };
+  });
+  const ok = r.n > 150 && r.feux >= 8 && r.bougies > 0 && r.anime && r.bats > 12 && r.reste === 0;
+  return { ok, detail: `${r.n} éléments de décor dont ${r.feux} bidons/carcasses en feu et ${r.bougies} bougies · les flammes vacillent=${r.anime} · ${r.bats} chauves-souris · tout est retiré à la fin (${r.reste})` };
+});
+
+test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(300);
+    const t = __G.city.toits[0], L = t.lift;
+    const nb = { lifts: __G.city.lifts.length, toits: __G.city.toits.length, voiles: __G.city.voiles.length };
+    __G.P.pos.set(L.x, L.low + 0.3, L.z); __G.P.vel.set(0, 0, 0);
+    const t0 = Date.now(); let haut = 0;
+    while (Date.now() - t0 < 30000) { await dodo(250); haut = Math.max(haut, __G.P.pos.y); if (__G.P.pos.y > L.high - 0.4) break; }
+    const monte = haut;
+    // parachute posé sur le toit
+    const para = __G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
+    __G.P.pos.set(para.x, para.y + 0.4, para.z); await dodo(1200);
+    const detecte = !!__G.city.voileNear;
+    __G.prendreVoile(para);
+    __G.P.pos.set(t.x + t.w / 2 + 3, t.y + 1, t.z); __G.P.vel.set(0, 0, 0);
+    const y0 = __G.P.pos.y, s0 = __G.simTime;
+    let vmin = 0; const t1 = Date.now();
+    while (Date.now() - t1 < 30000) { await dodo(200); vmin = Math.min(vmin, __G.P.vel.y); if (__G.P.grounded && __G.P.pos.y < 3) break; }
+    await dodo(900);
+    return { nb, monte: +monte.toFixed(2), high: +L.high.toFixed(2), toit: +t.y.toFixed(1), detecte,
+      chute: { de: +y0.toFixed(1), a: +__G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(__G.simTime - s0).toFixed(1) },
+      voileApres: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !para.pris };
+  });
+  const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.chute.vMin > -7 && r.chute.vMin < -1
+    && r.chute.a < 2 && !r.voileApres && !r.mesh && r.remise;
+  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${!r.voileApres} et remise sur le toit=${r.remise}` };
+});
+
+test('le deltaplane plane loin devant au lieu de tomber', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(300);
+    const t = __G.city.toits[0];
+    const delta = __G.city.voiles.find(o => o.kind === 'delta' && Math.abs(o.y - t.y) < 2);
+    __G.prendreVoile(delta);
+    __G.P.pos.set(t.x + t.w / 2 + 4, t.y + 2, t.z); __G.P.vel.set(0, 0, 0);
+    __G.P.facing = Math.PI;   // cap au nord : plein de terrain dégagé, pas la mer
+    const x0 = __G.P.pos.x, z0 = __G.P.pos.z, y0 = __G.P.pos.y;
+    const t0 = Date.now();
+    let aVole = false, rangee = false;
+    while (Date.now() - t0 < 30000) {
+      await dodo(200);
+      aVole = aVole || __G.P.voileVol;
+      if (aVole && !__G.P.voile) { rangee = true; break; }   // posé : l'aile se replie toute seule
+    }
+    const dh = Math.hypot(__G.P.pos.x - x0, __G.P.pos.z - z0), dv = y0 - __G.P.pos.y;
+    return { dh: +dh.toFixed(1), dv: +dv.toFixed(1), voile: __G.P.voile, rangee, remise: !delta.pris };
+  });
+  const ok = r.dh > r.dv * 2 && r.dh > 20 && r.rangee && !r.voile && r.remise;
+  return { ok, detail: `deltaplane : ${r.dh} m parcourus à l'horizontale pour ${r.dv} m de descente (plané 1:${(r.dh / Math.max(1, r.dv)).toFixed(1)}) · replié tout seul à l'atterrissage=${r.rangee} et remis sur le toit=${r.remise}` };
+});
+
+test('les amis exécutent tous les ordres qu\'on leur donne', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0], c = __G.bots[1];
+    const reset = () => { b.rdv = null; b.ordre = null; b.bagarre = null; b.garde = 0; b.ko = 0; b.fight = null;
+      b.wait = 0; b.drive = null; b.dance = 0; b.pos.set(4, 0.3, 40); };
+    const essai = txt => { reset(); const ok = __G.commandeSociale('Lucas_2014 ' + txt);
+      return { txt, ok, ordre: b.ordre && b.ordre.type, rdv: b.rdv ? (b.rdv.nom || 'rdv') : null,
+        cible: b.bagarre ? b.bagarre.cible.name : null, danse: +(b.dance || 0).toFixed(1), garde: b.garde > 0 }; };
+    const res = [
+      essai('suis-moi'), essai('attends-moi ici'), essai('protège-moi'), essai('tape ' + c.name),
+      essai('va me chercher à manger'), essai('cache-toi'), essai('danse'), essai('saute'), essai('salue'),
+      essai('va me chercher une voiture et amène-la ici'), essai('cours me chercher un vélo'),
+      essai('va me chercher une moto'), essai('attends-moi avec la voiture'), essai('viens'),
+      essai('rendez-vous au parc'), essai('stop'),
+    ];
+    reset();
+    const aide = __G.commandeSociale('Lucas_2014 tu peux faire quoi ?');
+    const inconnu = __G.commandeSociale('Lucas_2014 blblblbl xyzzy');
+    return { res, aide, inconnu, ordres: __G.AIDE_ORDRES ? __G.AIDE_ORDRES.length : 0 };
+  });
+  const compris = r.res.filter(x => x.ok).length;
+  const agit = r.res.filter(x => x.ordre || x.rdv || x.cible || x.danse > 0).length;
+  const ok = compris === r.res.length && agit >= 14 && r.aide;
+  return { ok, detail: `${compris}/${r.res.length} ordres compris et ${agit} suivis d'effet · suivre=${r.res[0].ordre}, attendre=${r.res[1].ordre}, protéger=${r.res[2].garde}, taper=${r.res[3].cible}, manger=${r.res[4].rdv}, cacher=${r.res[5].rdv}, voiture=${r.res[9].rdv}, vélo=${r.res[10].rdv}, moto=${r.res[11].rdv} · la liste d'aide répond=${r.aide}` };
+});
+
+test('un ami frappe le bot désigné et lui rapporte à manger', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0], c = __G.bots[1];
+    b.ko = 0; c.ko = 0; c.hp = 100; b.pos.set(0, 0.3, 44); c.pos.set(0, 0.3, 50);
+    b.rdv = null; b.ordre = null; b.bagarre = null; b.wait = 0;
+    __G.commandeSociale('Lucas_2014 tape ' + c.name);
+    const pv0 = c.hp;
+    for (let i = 0; i < 1200; i++) { __G.simTime += 1 / 30; __G.combatTick(1 / 30); }
+    const pv1 = c.hp, d = Math.hypot(b.pos.x - c.pos.x, b.pos.z - c.pos.z);
+    // livraison de nourriture
+    b.bagarre = null; b.ordre = null; b.rdv = null; b.wait = 0; b.fight = null;
+    b.pos.set(__G.city.snack.x, 0.3, __G.city.snack.z + 3);
+    __G.P.pos.set(0, 0.3, 40);   // en pleine rue : la livraison ne doit pas buter sur une devanture
+    if (__G.P.snack) __G.P.snack = null;
+    __G.commandeSociale('Lucas_2014 va me chercher à manger');
+    const commande = b.rdv && b.rdv.livre ? b.rdv.livre.n : null;
+    for (let i = 0; i < 2400 && !__G.P.snack; i++) { __G.simTime += 1 / 30; __G.updateBot(b, 1 / 30); }
+    const livre = __G.P.snack ? __G.P.snack.n : null;
+    __G.P.snack = null; document.body.classList.remove('carry');
+    b.rdv = null; b.ordre = null;
+    return { pv0, pv1, d: +d.toFixed(1), commande, livre };
+  });
+  const ok = r.pv1 < r.pv0 - 20 && r.d < 3 && r.commande && r.livre === r.commande;
+  return { ok, detail: `« tape » : le bot visé passe de ${r.pv0} à ${r.pv1} PV, l'ami est venu à ${r.d} m · « va me chercher à manger » : il commande un ${r.commande} et te le met en main (${r.livre})` };
+});
+
+test('le cinéma projette en 640×360 avec finition et publicités', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    const ci = __G.city.cinema;
+    const genres = [...new Set(__G.FILMS.map(f => f.genre))];
+    let img = 0, err = null;
+    try {
+      for (let i = 0; i < __G.FILMS.length; i++) { ci.i = i;
+        for (let k = 0; k < 25; k++) { ci.t = k * 0.6; ci.next = -1; __G.simTime = 2000 + k; __G.cinemaTick(0); img++; } }
+    } catch (e) { err = e.message; }
+    // bandes noires en haut et en bas, image non vide au milieu
+    const haut = ci.g.getImageData(0, 2, ci.cv.width, 4).data;
+    let noirHaut = 0; for (let i = 0; i < haut.length; i += 4) if (haut[i] + haut[i + 1] + haut[i + 2] < 30) noirHaut++;
+    const mid = ci.g.getImageData(0, ci.cv.height / 2 - 30, ci.cv.width, 60).data;
+    let clairs = 0; for (let i = 0; i < mid.length; i += 40) if (mid[i] + mid[i + 1] + mid[i + 2] > 120) clairs++;
+    return { n: __G.FILMS.length, genres, pubs: __G.FILMS.filter(f => f.genre === 'publicité').length,
+      duree: Math.round(__G.FILMS.reduce((t, f) => t + f.d, 0)), taille: [ci.cv.width, ci.cv.height],
+      img, err, noirHaut: noirHaut / (haut.length / 4), clairs, videos: __G.VIDEOS.length };
+  });
+  const ok = !r.err && r.n >= 20 && r.pubs >= 3 && r.taille[0] === 640 && r.taille[1] === 360
+    && r.noirHaut > 0.9 && r.clairs > 50;
+  return { ok, detail: `${r.n} films (${r.pubs} publicités, ${r.genres.length} genres, ${r.duree} s) · toile ${r.taille[0]}×${r.taille[1]} · ${r.img} images dessinées sans erreur · bandes noires de cinéma sur ${Math.round(r.noirHaut * 100)} % du bord haut, image vivante au centre (${r.clairs} points clairs)` };
 });
 
 (async()=>{

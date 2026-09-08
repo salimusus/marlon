@@ -637,11 +637,13 @@ test('on éjecte le conducteur et on vole une voiture du trafic', async p => {
     __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
     const c = __G.city.aiCars.find(v => v.driver && v.spd > 0);
     if (!c) return { ok: false, pourquoi: 'aucune voiture du trafic avec conducteur' };
-    __G.police.wanted = 0; __G.police.crimeLevel = 0;
+    __G.police.wanted = 0; __G.police.crimeLevel = 0; __G.police.avert = 0;
+    // les autres voitures du trafic s'écartent : sinon c'est l'une d'elles qui devient la cible
+    for (const v of __G.city.aiCars) if (v !== c) { v.x += 300; v.z += 300; v.g.position.set(v.x, v.y || 0, v.z); }
     // on se plante à la portière : la voiture doit piler et proposer le vol
     const cs = Math.cos(c.h), sn = Math.sin(c.h);
     __G.P.pos.set(c.x + 2.2 * cs, 0.4, c.z - 2.2 * sn); __G.P.vel.set(0, 0, 0);
-    __G.cityStep(0.05);
+    for (let i = 0; i < 3; i++) { __G.P.pos.set(c.x + 2.2 * Math.cos(c.h), 0.4, c.z - 2.2 * Math.sin(c.h)); __G.cityStep(0.05); }
     const propose = __G.city.jackNear === c, arret = !!c.stopped;
     const nom = c.driver.name, aiAvant = __G.city.aiCars.length;
     __G.stealCar(c);
@@ -651,7 +653,7 @@ test('on éjecte le conducteur et on vole une voiture du trafic', async p => {
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
   await p.evaluate(() => { __G.exitCar(); __G.clearWanted('fin'); });
-  const ok = r.propose && r.arret && r.auVolant && r.plusDansTrafic && r.fuyards === 1 && r.wanted >= 2 && r.gravite === 3;
+  const ok = r.propose && r.arret && r.auVolant && r.plusDansTrafic && r.fuyards === 1 && r.wanted >= 2 && r.gravite === 2;
   return { ok, detail: `pile à la portière=${r.arret} · vol proposé=${r.propose} · au volant=${r.auVolant} · ${r.nom} s'enfuit (${r.fuyards}) · recherché ${r.wanted}★ gravité ${r.gravite}` };
 });
 

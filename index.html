@@ -2832,12 +2832,12 @@ function policeTemoin(rayon = 28) {
 }
 const AVERT_FENETRE = 90;      // les petits délits s'oublient au bout d'une minute et demie
 const DELAI_POLICE = { 1: 30, 2: 22, 3: 14 };   // secondes de fuite avant que les voitures ne démarrent
-function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 moyen (écraser), 3 grave (KO / grenade)
+function infraction(what, level, sev = 1, sansPitie) {   // sev : 1 petit délit (coup), 2 moyen (écraser), 3 grave (KO / grenade) ; sansPitie : jamais d'avertissement
   // Petit délit que personne n'a vu : la police ferme les yeux. Trois en une minute et demie
   // et là seulement la traque démarre — avant, un coup de poing lançait toute la police.
   // clémence élargie aux délits moyens et à quatre avertissements : le témoin doit être
   // vraiment proche (28 m), sinon une voiture garée au commissariat « voyait » tout le quartier.
-  if (sev <= 2 && police.wanted === 0 && !policeTemoin(28)) {
+  if (!sansPitie && sev <= 2 && police.wanted === 0 && !policeTemoin(28)) {
     police.avert = (simTime - (police.avertT || -999) < AVERT_FENETRE) ? (police.avert || 0) + 1 : 1;
     police.avertT = simTime;
     if (police.avert < 4) {
@@ -7156,8 +7156,8 @@ function chienTick(dt) {
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
           burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 5); sfx.noise(.08, 500, .07);
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
-          if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; chien.attaque = null; botSay(b, ['j\'abandonne… 🐶']); infraction('chien lâché sur ' + b.name, 1, 1); }
-          else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('chien lâché sur ' + b.name, 1, 1); }
+          if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; chien.attaque = null; botSay(b, ['j\'abandonne… 🐶']); infraction('chien lâché sur ' + b.name, 1, 2, true); }
+          else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('chien lâché sur ' + b.name, 1, 2, true); }
         } else if (c.rem) { netSend({ t: 'punch', id: c.rem.id, by: (chien.nom || 'le chien') + ' de ' + myCfg.name, dx: dx / d, dz: dz / d, dmg: 9, kb: 1.5 }); }
       }
       return;
@@ -8222,7 +8222,7 @@ function stealCar(c) {   // vol à l'arraché : le conducteur est éjecté et pr
   city.jackNear = null; city.near = null;
   enterCar(c);
   msg('🚗 Voiture volée ! La police te recherche', 2600); sfx.hit();
-  infraction('vol de voiture', 1, 2);
+  infraction('vol de voiture', 2, 2, true);
 }
 function fleeTick(dt) {   // les conducteurs éjectés détalent puis disparaissent
   for (let i = city.fleeing.length - 1; i >= 0; i--) {

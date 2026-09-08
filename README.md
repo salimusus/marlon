@@ -12,6 +12,20 @@ navigateur et on joue.
   rabaissée, moteur apparent, trois moteurs (100/300/500 ch), amortisseurs et nitro
 - Douze habitants qui vivent leur vie : tennis, foot, vélo, moto, cinéma, plage — et
   parfois un chapardage ou un braquage
+- Boutique de vêtements complète (chapeaux, bandanas, maillots, débardeur, torse nu,
+  baggy, short, chaussures, bottes, bottes de cowboy, bracelet, montre…) et salon de
+  tatouage : animaux, symboles, idéogrammes ou texte libre, en six encres, trois
+  tailles et onze zones du corps
+- Gangs : le joueur recrute ses amis (« Nathan veux-tu venir dans le gang ? ») et leur
+  confie des missions — voler de l'argent, braquer la banque ou une boutique, voler une
+  voiture, cambrioler une villa, attaquer un gang rival, faire le guet
+- Trois gangs rivaux autonomes (bandana rouge, bleu ou jaune, voitures customisées) qui
+  s'en prennent aux boutiques, aux joueurs, aux autres gangs — et à ta villa : l'alarme
+  achetée chez « Maison & Déco » est livrée avec une montre qui clignote en rouge, et il
+  reste à rentrer chez soi (ou à y envoyer son gang) pour faire fuir les cambrioleurs
+- « La Zone » : un quartier pauvre avec ses immeubles de trois étages ouverts (escaliers
+  extérieurs, coursives, appartements meublés, toits), ses carcasses de voitures, ses
+  poubelles, ses tags, ses affiches déchirées et ses chiens errants
 - Amis bots qui obéissent aux ordres écrits ou dictés au micro (jusqu'à « tire pour me
   protéger »), chien à adopter
 - Braquages, police et armée

@@ -2625,6 +2625,273 @@ test('le salon de tatouage encre le corps, en plusieurs endroits et couleurs', a
   return { ok, detail: `${r.motifs} motifs (lion, tigre, panthère, aigle, singe, serpent, dragon, idéogrammes, texte libre…) tous dessinés, ${r.zones} zones du corps, ${r.couleursDistinctes} encres bien distinctes, ${r.tailles} tailles · cinq tatouages posés d'un coup sur ${r.ou.join(', ')} en ${new Set(r.taillesPosees).size} tailles pour ${r.cout} 🪙 · gardés à la sauvegarde (${r.sauve}), effaçables un par un (${r.apresRetrait} restants), visibles aussi sur les autres joueurs (${r.surUnBot}) · le salon existe en ville et s'ouvre à l'approche (${r.detecte})` };
 });
 
+test("le gang du joueur se recrute dans le chat et ramène le butin", async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    const chapeau = av => Object.entries(av.hatGroups).filter(([, g]) => g.visible).map(([k]) => k)[0] || null;
+    const b1 = G.bots[0], b2 = G.bots[1];
+    G.amis.delete(b1.name); G.amis.delete(b2.name);
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    // inconnu : il refuse d'entrer dans le gang
+    G.commandeSociale(b1.name + ' veux-tu venir dans le gang ?');
+    res.sansAmi = G.gang.membres.length;
+    G.amis.add(b1.name); G.amis.add(b2.name);
+    res.rec1 = G.commandeSociale(b1.name + ' veux-tu venir dans le gang ?');
+    res.rec2 = G.commandeSociale(b2.name.split('_')[0] + ' rejoins le gang');
+    res.membres = G.gang.membres.map(b => b.name);
+    res.bandanas = G.gang.membres.map(b => chapeau(b.av));
+    // mission : ordre à deux noms, puis butin
+    const w0 = G.wallet; G.wallet = 100; G.gang.butin = 0;
+    res.ordre = G.commandeSociale(b1.name + ' et ' + b2.name + ' allez braquer la banque');
+    res.mission = G.gang.mission ? { type: G.gang.mission.type, n: G.gang.mission.membres.length } : null;
+    res.enRoute = G.gang.membres.every(b => b.rdv && !b.rdv.arrive);
+    for (const b of G.gang.membres) if (b.rdv) b.rdv.arrive = true;
+    G.gangMissionTick(0.016);
+    res.etape = G.gang.mission && G.gang.mission.etape;
+    if (G.gang.mission) G.gang.mission.fin = 0;
+    G.gangMissionTick(0.016);
+    res.gain = G.wallet - 100; res.butin = G.gang.butin;
+    res.finie = !G.gang.mission && G.gang.membres.every(b => !b.gangMission);
+    G.wallet = w0;
+    // on peut renvoyer un membre
+    G.commandeSociale(b2.name + ' quitte le gang');
+    res.apresRenvoi = G.gang.membres.map(b => b.name);
+    res.chapeauRendu = chapeau(b2.av);
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    return res;
+  });
+  const ok = r.sansAmi === 0 && r.rec1 && r.rec2 && r.membres.length === 2
+    && r.bandanas.every(h => h === 'bandanaV') && r.ordre && r.mission && r.mission.type === 'banque'
+    && r.mission.n === 2 && r.enRoute && r.etape === 'action' && r.gain > 0 && r.butin === r.gain && r.finie
+    && r.apresRenvoi.length === 1 && r.chapeauRendu !== 'bandanaV';
+  return { ok, detail: `un inconnu refuse (${r.sansAmi} membre), deux amis recrutés par le chat (${r.membres.join(', ')}) avec bandana vert · « allez braquer la banque » lance la mission à ${r.mission && r.mission.n} et rapporte ${r.gain} 🪙 au portefeuille · le renvoi laisse ${r.apresRenvoi.length} membre et lui rend son chapeau (${r.chapeauRendu})` };
+});
+
+test('chaque ordre du gang lance la bonne mission', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    const b1 = G.bots[0], b2 = G.bots[1];
+    G.amis.add(b1.name); G.amis.add(b2.name);
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    G.commandeSociale(b1.name + ' veux-tu venir dans le gang ?');
+    G.commandeSociale(b2.name + ' rejoins le gang');
+    const essai = txt => { G.gang.mission = null;
+      G.gang.membres.forEach(b => { b.gangMission = null; b.rdv = null; b.ordre = null; });
+      const pris = G.commandeSociale(txt);
+      return pris && G.gang.mission ? G.gang.mission.type : null; };
+    res.argent = essai('le gang allez voler de l\'argent à ' + G.bots[4].name);
+    res.banque = essai(b1.name + ' et ' + b2.name + ' allez braquer le coffre de la banque');
+    res.voiture = essai('les gars allez voler une voiture');
+    res.rival = essai(b1.name + ' et ' + b2.name + ' allez attaquer les bleus');
+    res.villa = essai('le gang allez cambrioler une villa');
+    res.boutique = essai('le gang allez braquer une boutique');
+    res.guet = essai('le gang faites le guet');
+    // le gang part vraiment quelque part
+    res.rdv = G.gang.membres.map(b => b.rdv ? [Math.round(b.rdv.x), Math.round(b.rdv.z)] : null);
+    // annulation
+    G.gang.mission = null; essai('le gang allez braquer la banque');
+    res.annule = G.commandeSociale('le gang rentrez à la maison') && !G.gang.mission;
+    // un message anodin ne déclenche rien
+    G.gang.mission = null;
+    res.neutre = G.commandeSociale('il fait beau aujourd\'hui');
+    res.aide = G.GANG_ORDRES.length;
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    return res;
+  });
+  const attendus = { argent: 'argent', banque: 'banque', voiture: 'voiture', rival: 'gangRival', villa: 'villa', boutique: 'boutique', guet: 'guet' };
+  const rates = Object.entries(attendus).filter(([k, v]) => r[k] !== v);
+  const ok = rates.length === 0 && r.annule && r.neutre === false && r.aide >= 7 && r.rdv.every(v => v);
+  return { ok, detail: `7 ordres reconnus (${Object.values(attendus).join(', ')})${rates.length ? ' — ratés : ' + JSON.stringify(rates) : ''}, le gang reçoit un point de rendez-vous, « rentrez à la maison » annule tout, et une phrase anodine ne déclenche rien` };
+});
+
+test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -145, y: 1, z: 40, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 500));
+    const G = __G, res = {};
+    const chapeau = av => Object.entries(av.hatGroups).filter(([, g]) => g.visible).map(([k]) => k)[0] || null;
+    res.gangs = G.gangs.map(g => ({ id: g.id, n: g.membres.length, hat: chapeau(g.membres[0].av),
+      kits: g.voit && g.voit.tune ? g.voit.tune.kits.length : 0,
+      peinture: g.voit && g.voit.bodyMat ? g.voit.bodyMat.color.getHex() : 0, couleur: g.couleur }));
+    const g0 = G.gangs[0];
+    const etats = new Set();
+    for (let k = 0; k < 40; k++) { g0.t = -1; G.gangTick(0.05); etats.add(g0.etat); }
+    res.etats = [...etats];
+    // ils traquent le joueur et le frappent
+    G.P.pos.set(g0.base[0] + 14, 0.3, g0.base[1]); G.P.hp = 100;
+    g0.t = 1e9; g0.etat = 'joueur'; g0.cible = [G.P.pos.x, G.P.pos.z];
+    const d0 = Math.hypot(g0.membres[0].x - G.P.pos.x, g0.membres[0].z - G.P.pos.z);
+    for (let k = 0; k < 120; k++) G.gangTick(0.05);
+    res.approche = [+d0.toFixed(1), +Math.hypot(g0.membres[0].x - G.P.pos.x, g0.membres[0].z - G.P.pos.z).toFixed(1)];
+    const hp0 = G.P.hp;
+    for (const m of g0.membres) { m.x = G.P.pos.x + 1; m.z = G.P.pos.z; m.cd = -1; }
+    G.gangTick(0.05);
+    res.degats = hp0 - G.P.hp;
+    // bagarre entre gangs
+    const g1 = G.gangs[1], vic = g1.membres[0];
+    vic.hp = 100; vic.ko = 0; g0.etat = 'rival'; g0.cible = [g1.base[0], g1.base[1]];
+    for (const m of g0.membres) { m.x = vic.x + 1; m.z = vic.z; m.cd = -1; m.ko = 0; }
+    G.gangTick(0.05);
+    res.hpRival = vic.hp;
+    // vitrine cassée
+    const vit = G.breakables.find(b => b.kind === 'glass' && !b.broken);
+    g0.etat = 'boutique'; g0.cible = [vit.x, vit.z];
+    for (const m of g0.membres) { m.x = vit.x + 1; m.z = vit.z; m.cd = -1; }
+    G.gangTick(0.05);
+    res.vitrine = !!(vit.broken || vit.cracked);
+    G.P.hp = 100; g0.etat = 'repos'; g0.cible = null;
+    return res;
+  });
+  const hats = r.gangs.map(g => g.hat);
+  const ok = r.gangs.length === 3 && new Set(hats).size === 3 && hats.every(h => /^bandana/.test(h))
+    && r.gangs.every(g => g.n === 3 && g.kits >= 6 && g.peinture !== 0)
+    && ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
+    && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine;
+  return { ok, detail: `3 gangs de 3 membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine` };
+});
+
+test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en échec", async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    res.article = G.DECOR.find(d => d.id === 'alarme') || null;
+    res.villa = !!G.city.villaMine;
+    G.owned.delete('deco:alarme');
+    res.sansAlarme = G.alarmeInstallee();
+    // sans alarme : personne ne prévient
+    G.P.pos.set(0, 1, 60);
+    G.declencheCambriolage(G.gangs[0]);
+    res.discret = { en: G.cambrio.on, alerte: G.cambrio.alerte, ecran: document.body.classList.contains('alarme') };
+    G.cambrio.t = 0; G.cambrioTick(0.016);
+    // avec alarme : montre au poignet, écran rouge
+    G.myCfg.montre = false; G.applyMyLook();
+    G.owned.add('deco:alarme');
+    G.wallet = 500;
+    G.declencheCambriolage(G.gangs[0]);
+    res.avecAlarme = { en: G.cambrio.on, alerte: G.cambrio.alerte > 0, ecran: document.body.classList.contains('alarme'),
+      montre: !!G.myCfg.montre && G.me.montre.visible, butin: G.cambrio.butin };
+    // le cadran clignote au rythme du temps de jeu : on l'observe pendant plusieurs images
+    const couleurs = new Set();
+    for (let k = 0; k < 60 && couleurs.size < 2; k++) {
+      await new Promise(r2 => setTimeout(r2, 200));
+      G.cambrioTick(0.016); couleurs.add(G.me.cadran.material.color.getHexString());
+    }
+    res.cadran = [...couleurs];
+    // le joueur rapplique : les voleurs fuient sans rien emporter
+    const w0 = G.wallet;
+    G.P.pos.set(G.city.villaMine.x + 3, 1, G.city.villaMine.z);
+    G.cambrioTick(0.016);
+    res.sauve = { en: G.cambrio.on, perte: w0 - G.wallet, ecran: document.body.classList.contains('alarme'),
+      cadran: G.me.cadran.material.color.getHexString() };
+    // personne n'intervient : le butin part
+    G.P.pos.set(0, 1, 60);
+    G.declencheCambriolage(G.gangs[1]);
+    const w1 = G.wallet, butin = G.cambrio.butin;
+    G.cambrio.t = 0; G.cambrioTick(0.016);
+    res.rate = { en: G.cambrio.on, perte: w1 - G.wallet, attendu: butin };
+    // le gang du joueur peut aussi faire fuir les voleurs
+    const b1 = G.bots[0]; G.amis.add(b1.name);
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    G.rejoindreGang(b1);
+    G.declencheCambriolage(G.gangs[0]);
+    b1.pos.set(G.city.villaMine.x + 4, 0.3, G.city.villaMine.z);
+    const w2 = G.wallet; G.cambrioTick(0.016);
+    res.parLeGang = { en: G.cambrio.on, perte: w2 - G.wallet };
+    G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    return res;
+  });
+  const ok = r.article && r.article.p > 0 && r.villa && !r.sansAlarme
+    && r.discret.en && r.discret.alerte === 0 && !r.discret.ecran
+    && r.avecAlarme.en && r.avecAlarme.alerte && r.avecAlarme.ecran && r.avecAlarme.montre && r.avecAlarme.butin > 0
+    && r.cadran.includes('ff2020') && r.cadran.length > 1
+    && !r.sauve.en && r.sauve.perte === 0 && !r.sauve.ecran && r.sauve.cadran === '9fdcff'
+    && !r.rate.en && r.rate.perte === r.rate.attendu && r.rate.perte > 0
+    && !r.parLeGang.en && r.parLeGang.perte === 0;
+  return { ok, detail: `« ${r.article && r.article.n} » à ${r.article && r.article.p} 🪙 : sans elle le cambriolage est silencieux, avec elle l'écran vire au rouge et la montre livrée clignote (${r.cadran.join('/')}) · le joueur qui rentre chez lui fait fuir les voleurs (perte ${r.sauve.perte} 🪙), son gang aussi (${r.parLeGang.perte} 🪙), et si personne ne bouge le butin part (−${r.rate.perte} 🪙)` };
+});
+
+test('La Zone : un quartier pauvre praticable du trottoir au toit', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -145, y: 1, z: 40, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 500));
+    const G = __G, res = {};
+    const imm = G.city.zoneImmeubles;
+    res.n = imm.length;
+    res.etages = imm.map(i => i.etages);
+    const b = imm[0], ex = b.x + b.w / 2 + 1.6;
+    // chaque marche des deux volées est là, à 40 cm de la précédente
+    const marches = [], trous = [];
+    for (let f = 0; f < b.etages - 1; f++) {
+      const sens = f % 2 ? -1 : 1, z0 = b.z - (b.d / 2 - 1) * sens, rise = b.h / 8;
+      for (let i = 0; i < 8; i++) {
+        const zz = z0 + sens * (i * 0.62 + 0.31), attendu = f * b.h + 0.2 + (i + 1) * rise;
+        const y = G.groundUnder(ex, zz, null, attendu + 0.3);
+        marches.push(+y.toFixed(2));
+        if (Math.abs(y - attendu) > 0.12) trous.push([f, i, +y.toFixed(2), +attendu.toFixed(2)]);
+      }
+    }
+    res.marches = marches.length; res.trous = trous;
+    res.montee = [marches[0], marches[marches.length - 1]];
+    // planchers des trois niveaux, sous chaque appartement
+    res.planchers = [0, 1, 2].map(f => [-1, 1].map(sx =>
+      +G.groundUnder(b.x + sx * b.w / 4, b.z, null, f * b.h + 0.8).toFixed(2)));
+    res.toit = +G.groundUnder(b.x, b.z, null, b.etages * b.h + 1).toFixed(2);
+    // mobilier dans les appartements de chaque étage
+    res.meubles = [0, 1, 2].map(f => G.solids.filter(o => o.y > f * b.h && o.y < (f + 1) * b.h
+      && Math.abs(o.x - b.x) < 8 && Math.abs(o.z - b.z) < 8 && o.h < 2 && o.w < 3).length);
+    // aucun immeuble ne chevauche un autre bâtiment de la ville
+    const chev = [];
+    for (const a of imm) for (const c of G.city.batiments) {
+      if (Math.abs(a.x - c.x) < 0.01 && Math.abs(a.z - c.z) < 0.01) continue;
+      if (Math.abs(a.x - c.x) < (a.w + c.w) / 2 - 0.2 && Math.abs(a.z - c.z) < (a.d + c.d) / 2 - 0.2) chev.push([a.x, a.z]);
+    }
+    res.chevauchements = chev.length;
+    // le quartier repose bien sur le sol de la ville
+    res.sol = [[-40, -30], [40, 30], [0, 0], [-40, 30], [40, -30]].map(([dx, dz]) =>
+      +G.groundUnder(-145 + dx, 40 + dz, null, 1).toFixed(2));
+    res.errants = G.city.errants.length;
+    res.zone = G.city.zones.some(z => z.name === 'La Zone');
+    // décor du bidonville : carcasses (murs invisibles), poubelles, déchets
+    res.poubelles = G.solids.filter(o => Math.abs(o.x + 145) < 42 && Math.abs(o.z - 40) < 32
+      && o.h > 1 && o.h < 1.2 && o.w < 1).length;
+    // un mur de la Zone arrête bien le joueur (mêmes règles que le reste de la ville)
+    res.mur = G.npcBlocked(b.x, 0.3, b.z - b.d / 2 + 0.15, 0.4);
+    res.vide = G.npcBlocked(b.x, 0.3, b.z + b.d / 2 + 6, 0.4);
+    return res;
+  });
+  const ok = r.n === 5 && r.etages.every(e => e === 3) && r.trous.length === 0 && r.marches === 16
+    && r.planchers.every((pp, f) => pp.every(y => Math.abs(y - (f * 3.2 + 0.2)) < 0.05))
+    && r.toit > 9.5 && r.meubles.every(m => m >= 6) && r.chevauchements === 0
+    && r.sol.every(y => y > 0.04) && r.errants >= 4 && r.zone && r.poubelles >= 10 && r.mur && !r.vide;
+  return { ok, detail: `5 immeubles de 3 étages, ${r.marches} marches d'escalier extérieur sans trou (${r.montee[0]} m → ${r.montee[1]} m), planchers à ${r.planchers.map(x => x[0]).join('/')} m et toit à ${r.toit} m, ${r.meubles.join('/')} meubles par niveau, ${r.errants} chiens errants, ${r.poubelles} poubelles · aucun chevauchement avec les bâtiments de la ville, sol continu sous tout le quartier, murs bloquants comme ailleurs` };
+});
+
+test("la boutique « maison & déco » s'est étoffée, alarme comprise", async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 43, y: 1, z: 58, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = { vides: [] };
+    res.n = G.DECOR.length;
+    for (const d of G.DECOR) {
+      let g; try { g = G.decorMesh(d.id); } catch (e) { res.vides.push([d.id, 'erreur']); continue; }
+      const n = g ? (function c(o) { let k = o.children.length; for (const ch of o.children) k += c(ch); return k; })(g) : 0;
+      if (n < 1) res.vides.push([d.id, n]);
+    }
+    res.murals = G.DECOR.filter(d => d.wall).length;
+    res.alarme = G.DECOR.find(d => d.id === 'alarme') || null;
+    res.doublons = G.DECOR.length - new Set(G.DECOR.map(d => d.id)).size;
+    res.sansPrix = G.DECOR.filter(d => !(d.p > 0)).length;
+    return res;
+  });
+  const ok = r.n >= 34 && r.vides.length === 0 && r.murals >= 6 && r.alarme && r.doublons === 0 && r.sansPrix === 0;
+  return { ok, detail: `${r.n} articles de décoration, tous modélisés en 3D (${r.murals} à accrocher au mur), l'alarme « ${r.alarme && r.alarme.n} » à ${r.alarme && r.alarme.p} 🪙, aucun doublon ni article sans prix` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

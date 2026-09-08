@@ -86,6 +86,13 @@ body.lock #cross::before,body.lock #cross::after{background:#ff6b6b}
 .statbar i{display:inline-block;width:80px;height:8px;border-radius:4px;background:#eef2fb;vertical-align:middle;overflow:hidden}
 .statbar i b{display:block;height:100%;background:#4f8dff}
 #flash{position:fixed;inset:0;background:#ff3b3b;opacity:0;pointer-events:none;transition:opacity .45s;z-index:4}
+#scope{position:fixed;inset:0;pointer-events:none;z-index:5;display:none;background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 26%,rgba(0,0,0,.55) 34%,rgba(0,0,0,.97) 46%)}
+body.zoom #scope{display:block}
+#scope::before,#scope::after{content:'';position:absolute;background:rgba(20,20,20,.85)}
+#scope::before{left:0;right:0;top:50%;height:1px}
+#scope::after{top:0;bottom:0;left:50%;width:1px}
+#scope b{position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px 0 0 -33px;border:2px solid rgba(255,60,60,.75);border-radius:50%}
+#scope i{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;background:#ff3b3b;border-radius:50%}
 #flash.on{opacity:.45;transition:none}
 
 /* ---------- tactile ---------- */
@@ -267,6 +274,7 @@ body.lobby #emoteBtn{display:none}
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
 <div id="flash"></div>
+<div id="scope"><b></b><i></i></div>
 <div id="joyHome"></div>
 <div id="joy"><div id="knob"></div></div>
 <button id="jumpBtn">SAUT</button>
@@ -979,6 +987,7 @@ const WEAPONS = {
   // Le fusil tire comme le pistolet : un coup par appui, cible verrouillée. Sa dispersion de
   // 0,028 rad (1,6°) faisait manquer la cible verrouillée à 20 m ; la lunette la ramène sous celle du pistolet.
   rifle: { n: 'Fusil d\'assaut', e: '🎯', p: 45, ammo: 30, reload: 2.0, cd: 0.22, speed: 110, spread: 0.004, dmg: 12, muzzle: [0.3, 1.28, 1.05] },
+  sniper: { n: 'Fusil à lunette', e: '🔭', p: 90, ammo: 5, reload: 2.6, cd: 0.9, speed: 190, spread: 0.0006, dmg: 80, muzzle: [0.3, 1.3, 1.25], lunette: true },
   grenade: { n: 'Grenades de choc ×5', e: '💣', p: 15, ammo: 5, consumable: true },
 };
 function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E devant le présentoir = achat direct), comptoir, râtelier, munitions
@@ -1000,9 +1009,11 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
   stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
   stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
   for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
-  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(57.4, 2.7, 19 + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.3); worldGroup.add(r); }   // râtelier mural
+  // Râtelier : les fusils étaient posés à x = 57,4 en travers — leur canon traversait le mur
+  // est (57,7 → 58). On les rentre de 90 cm et on réduit un peu l'échelle.
+  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(56.5, 2.7, 19 + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.1); worldGroup.add(r); }   // râtelier mural
   box(57.5, 2.4, 20.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
-  box(46.6, 2.6, 22.6, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible
+  box(49, 2.6, 22.9, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible (elle débordait du mur ouest)
   city.armory = { x: 52, z: 20.8 };
   // Stand de tir devant la boutique : la fonction makeTarget existait mais n'était jamais
   // appelée — le jeu n'avait aucune cible sur laquelle s'entraîner.
@@ -1735,6 +1746,9 @@ function building(x, z, w, h, d, color, dir) {
   // Immeubles hauts : ascenseur extérieur qui monte sur le toit, et là-haut un parachute
   // et un deltaplane pour sauter dans le vide.
   if (h >= 12) toitAccessible(x, z, w, d, GF + hh, fx, fz);
+  // Une porte de hall fait 2,6 m de large : les voitures de police entraient dans les halls.
+  // L'intérieur des bâtiments est désormais interdit aux véhicules (les piétons passent).
+  city.batiments.push({ x, z, w: w - 0.5, d: d - 0.5, toit: GF + hh });
 }
 // Ascenseur vitré collé à la façade + toit équipé (parachute, deltaplane, garde-corps).
 function toitAccessible(x, z, w, d, toit, fx, fz) {
@@ -2225,10 +2239,10 @@ const WORLDS = [
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
-const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0 };
+const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -2249,7 +2263,7 @@ function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 
 }
 function clearWanted(reason) {
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
   police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
@@ -2630,6 +2644,74 @@ function meteoSet(kind, duree) {
   else msg('☀️ Le ciel se dégage', 1800);
   chat(null, kind === 'pluie' ? '🌧️ Averse sur la ville' : kind === 'neige' ? '❄️ Chute de neige' : '☀️ Beau temps');
 }
+// ---- Décor de neige : congères, toits et lampadaires enneigés, capots blancs, bonshommes
+// de neige et plaques de verglas. Construit une seule fois par monde, montré quand il neige.
+function buildNeigeDecor() {
+  if (city.neigeG || !city.on) return;
+  const G = new THREE.Group(); worldGroup.add(G); city.neigeG = G; G.visible = false;
+  const blanc = new THREE.MeshLambertMaterial({ color: 0xf4f8ff });
+  const glaceM = new THREE.MeshLambertMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.72 });
+  const bx = (w, h, d, x, y, z, p) => { const m = new THREE.Mesh(unitRound, blanc); m.scale.set(w, h, d); m.position.set(x, y, z); (p || G).add(m); return m; };
+  const boule = (r, x, y, z, p) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), blanc); m.position.set(x, y, z); (p || G).add(m); return m; };
+  // casquettes de neige sur les lampadaires et les feux
+  for (const b of breakables) { if (b.kind === 'lamp') bx(0.86, 0.16, 0.86, b.x, 4.78, b.z); else if (b.kind === 'light') bx(0.6, 0.14, 0.5, b.x, 4.1, b.z); }
+  // toits des immeubles
+  for (const b of city.batiments) if (b.toit) bx(b.w + 0.5, 0.22, b.d + 0.5, b.x, b.toit + 0.14, b.z);
+  // capots et toits des véhicules : accrochés au véhicule, ils le suivent
+  city.neigeVeh = [];
+  for (const c of city.cars) {
+    if (c.heli) continue;
+    const m = new THREE.Mesh(unitRound, blanc);
+    if (c.rider) m.scale.set(0.5, 0.1, 1.2), m.position.set(0, (c.spec.seat || 1) + 0.1, 0);
+    else m.scale.set(1.9, 0.12, 3.2), m.position.set(0, 1.68, -0.2);
+    m.visible = false; c.g.add(m); city.neigeVeh.push(m);
+  }
+  // congères, bonshommes de neige et plaques de verglas le long des rues
+  city.glace = [];
+  const libre = (x, z) => !npcBlocked(x, 0.3, z, 1.2) && groundUnder(x, z, null, 1.5) < 0.6;
+  let poses = 0;
+  for (let i = 0; i < 260 && poses < 150; i++) {
+    const x = rnd(-95, 130), z = rnd(-60, 200);
+    if (!libre(x, z)) continue;
+    poses++;
+    const r = Math.random();
+    if (r < 0.62) {   // congère
+      const w = rnd(1.4, 3.6);
+      const m = boule(w / 2, x, 0.02, z); m.scale.set(1, rnd(0.22, 0.4), rnd(0.7, 1.1));
+    } else if (r < 0.82) {   // plaque de verglas
+      const rr = rnd(1.6, 3.4);
+      const m = new THREE.Mesh(new THREE.CircleGeometry(rr, 14), glaceM);
+      m.rotation.x = -Math.PI / 2; m.position.set(x, 0.045, z); m.renderOrder = 1; G.add(m);
+      city.glace.push({ x, z, r: rr });
+    } else {   // bonhomme de neige
+      const g2 = new THREE.Group(); g2.position.set(x, 0, z); G.add(g2);
+      boule(0.62, 0, 0.55, 0, g2); boule(0.44, 0, 1.32, 0, g2); boule(0.3, 0, 1.9, 0, g2);
+      const nez = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.36, 7), new THREE.MeshLambertMaterial({ color: 0xff8f3a }));
+      nez.rotation.x = Math.PI / 2; nez.position.set(0, 1.92, 0.3); g2.add(nez);
+      const noir = new THREE.MeshLambertMaterial({ color: 0x1b1b22 });
+      for (const dx of [-0.11, 0.11]) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.08); o.position.set(dx, 2.02, 0.24); g2.add(o); }
+      for (let k = 0; k < 3; k++) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.09); o.position.set(0, 1.15 - k * 0.22, 0.42); g2.add(o); }
+      const echarpe = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xff5c5c }));
+      echarpe.scale.set(0.68, 0.14, 0.68); echarpe.position.y = 1.66; g2.add(echarpe);
+      const cha = new THREE.Mesh(unitRound, noir); cha.scale.set(0.56, 0.06, 0.56); cha.position.y = 2.16; g2.add(cha);
+      const cha2 = new THREE.Mesh(unitRound, noir); cha2.scale.set(0.36, 0.34, 0.36); cha2.position.y = 2.32; g2.add(cha2);
+      for (const sg of [-1, 1]) { const br = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0x6b4423 })); br.scale.set(0.9, 0.07, 0.07); br.position.set(sg * 0.6, 1.4, 0); br.rotation.z = sg * 0.4; g2.add(br); }
+    }
+  }
+}
+function neigeDecor(on) {
+  if (on) buildNeigeDecor();
+  if (!city.neigeG) return;
+  if (city.neigeG.visible === on) return;
+  city.neigeG.visible = on;
+  for (const m of (city.neigeVeh || [])) m.visible = on;
+}
+// verglas : on glisse sur les plaques quand la neige tient au sol
+function surGlace(x, z) {
+  if (!city.neigeG || !city.neigeG.visible) return false;
+  for (const g of (city.glace || [])) if (Math.hypot(x - g.x, z - g.z) < g.r) return true;
+  return false;
+}
 function meteoTick(dt) {
   if (!running) return;
   buildMeteo();
@@ -2660,6 +2742,7 @@ function meteoTick(dt) {
   // manteau de neige au sol (repères de la ville : ailleurs les nappes n'auraient pas de sens)
   const blanc = neige && city.on ? f : 0;
   for (const n of [meteo.sol, meteo.solParc]) { if (!n) continue; n.material.opacity = blanc * 0.82; n.visible = blanc > 0.02; }
+  neigeDecor(blanc > 0.35);
   // ciel voilé, brouillard et lumière : la pluie assombrit, la neige blanchit.
   // Réservé à la ville : ailleurs, dayTick ne réinitialise pas ces valeurs à chaque image
   // et les multiplications s'accumuleraient jusqu'au noir complet.
@@ -2803,7 +2886,72 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   mkGuard('Garde Nina', 2 * F + 0.3, [[bx + 7, bz - 8], [bx + 7, bz + 8], [bx - 7, bz + 8], [bx - 7, bz - 8]]);
   mkGuard('Garde Tom', 2 * F + 0.3, [[bx - 6, bz + 2], [bx - 6, bz - 8], [bx + 2, bz - 8]]);
   lamp(ex + 4.5, bz - 6); lamp(ex + 4.5, bz + 6); flowerBed(ex + 3, bz + 8.5, 1.4, 3); flowerBed(ex + 3, bz - 8.5, 1.4, 3);
-  city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 1.6, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
+  // ---- décor du hall : colonnes, guichets, distributeurs, salon, lustre, tableaux ----
+  {
+    const bois = 0x6b4423, or = 0xc9a84c, verre = 0x9fdcff;
+    // quatre colonnes de marbre à chapiteau doré
+    for (const cx of [-6, 6]) for (const cz of [-6, 6]) {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, F - 0.4, 12), lam(marble));
+      c.position.set(bx + cx, (F - 0.4) / 2 + 0.36, bz + cz); worldGroup.add(c);
+      solids.push({ mesh: c, x: bx + cx, y: F / 2, z: bz + cz, w: 0.9, h: F, d: 0.9 });
+      box(bx + cx, F - 0.1, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
+      box(bx + cx, 0.5, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
+    }
+    // comptoir d'accueil courbe avec vitre, ordinateurs et lampe
+    box(bx - 5.5, 0.95, bz - 2, 5.2, 1.2, 0.9, bois, { studs: false, noRoute: true });
+    box(bx - 5.5, 1.62, bz - 2, 5.4, 0.14, 1.1, or, { deco: true, studs: false });
+    box(bx - 5.5, 2.3, bz - 2, 5.2, 1.2, 0.06, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
+    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 1.95, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+      box(bx - 5.5 + dx, 1.72, bz - 1.9, 0.7, 0.05, 0.35, 0x3b4252, { deco: true, studs: false }); }
+    { const l = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.4, 10), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8 }));
+      l.position.set(bx - 7.8, 1.95, bz - 2); worldGroup.add(l); }
+    // deux distributeurs automatiques près de l'entrée
+    for (const dz of [-3.4, 3.4]) {
+      const ex2 = bx + W / 2 - 1.3;
+      box(ex2, 1.2, bz + dz, 0.7, 1.8, 1.2, 0x3b4252, { studs: false, noRoute: true });
+      box(ex2 - 0.38, 1.55, bz + dz, 0.06, 0.6, 0.8, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
+      box(ex2 - 0.38, 1.0, bz + dz, 0.06, 0.18, 0.5, or, { deco: true, studs: false });
+    }
+    // salon d'attente : deux canapés, table basse, magazines, plantes
+    for (const [sx2, sz2, ry] of [[4.5, -6.5, 0], [4.5, 6.5, Math.PI]]) {
+      box(bx + sx2, 0.62, bz + sz2, 2.8, 0.5, 1.0, 0x4f8dff, { studs: false, noRoute: true, assise: 0.62 });
+      box(bx + sx2, 1.1, bz + sz2 + (ry ? 0.5 : -0.5), 2.8, 0.9, 0.25, 0x3a6fd8, { deco: true, studs: false });
+      city.benches.push({ x: bx + sx2, y: 0.36, z: bz + sz2, assise: 0.5, facing: ry });
+    }
+    box(bx + 4.5, 0.62, bz, 1.6, 0.12, 1.0, verre, { deco: true, studs: false });
+    box(bx + 4.5, 0.4, bz, 0.2, 0.5, 0.2, 0x8f98ab, { deco: true, studs: false });
+    for (let i = 0; i < 3; i++) box(bx + 4.2 + i * 0.3, 0.7, bz + rnd(-0.3, 0.3), 0.4, 0.03, 0.3, [0xff5c5c, 0xffd23f, 0x3ef2ff][i], { deco: true, studs: false });
+    for (const [px, pz] of [[-8, -8], [8, 8], [-8, 8]]) {
+      box(bx + px, 0.6, bz + pz, 0.7, 0.6, 0.7, 0x8b5a2b, { deco: true, studs: false });
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.7, 9, 7), lam(0x3fae4a)); f.position.set(bx + px, 1.5, bz + pz); f.scale.y = 1.3; worldGroup.add(f);
+    }
+    // cordons de file d'attente devant le guichet
+    for (let i = 0; i < 4; i++) { const px = bx - 8 + i * 1.8;
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1, 8), lam(or)); p.position.set(px, 0.86, bz + 0.6); worldGroup.add(p);
+      if (i < 3) box(px + 0.9, 1.2, bz + 0.6, 1.8, 0.06, 0.06, 0x8b1a2b, { deco: true, studs: false }); }
+    // lustre au centre de l'atrium + grande horloge + tableaux
+    { const lu = new THREE.Group(); lu.position.set(bx, F * 2.6, bz); worldGroup.add(lu);
+      const anneau = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 6, 20), lam(or)); anneau.rotation.x = Math.PI / 2; lu.add(anneau);
+      for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2;
+        const b2 = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0xffd23f, emissiveIntensity: 1 }));
+        b2.scale.setScalar(0.22); b2.position.set(Math.cos(a) * 1.5, 0.1, Math.sin(a) * 1.5); lu.add(b2); }
+      const t = new THREE.Mesh(unitRound, lam(or)); t.scale.set(0.06, 3, 0.06); t.position.y = 1.5; lu.add(t); }
+    { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.16, 18), lam(or)); h.rotation.x = Math.PI / 2;
+      h.position.set(bx - W / 2 + 0.45, 3.2, bz); worldGroup.add(h);
+      const cad = new THREE.Mesh(new THREE.CircleGeometry(0.78, 18), lam(0xf4f0e4)); cad.position.set(bx - W / 2 + 0.55, 3.2, bz); cad.rotation.y = Math.PI / 2; worldGroup.add(cad);
+      for (const [lg, ang] of [[0.6, 1.1], [0.4, 2.6]]) { const ai = new THREE.Mesh(unitRound, lam(0x1b1b22));
+        ai.scale.set(0.04, lg, 0.05); ai.position.set(bx - W / 2 + 0.6, 3.2 + Math.cos(ang) * lg / 2, bz + Math.sin(ang) * lg / 2);
+        ai.rotation.x = -ang; worldGroup.add(ai); } }
+    for (const [tz, col] of [[-7.5, 0x2f6f4a], [7.5, 0x6b3a5a]]) {
+      box(bx - W / 2 + 0.5, 2.6, bz + tz, 0.12, 1.6, 2.2, or, { deco: true, studs: false });
+      box(bx - W / 2 + 0.56, 2.6, bz + tz, 0.06, 1.3, 1.9, col, { deco: true, studs: false });
+    }
+    // lingots et liasses sur le comptoir de l'étage des coffres
+    for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, or, { deco: true, studs: false });
+    for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
+  }
+  city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5 });   // plus de voiture de police dans le hall
+  city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 3.5, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
   city.zones.push({ name: 'Banque', emoji: '🏦', x1: bx - 11, x2: bx + 14, z1: bz - 11, z2: bz + 11, hint: '🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés' });
 }
 function openBank() {
@@ -2815,15 +2963,22 @@ function openBank() {
   $('bankWd50').onclick = () => { const n = Math.min(50, bank.balance); wallet += n; bank.balance -= n; saveWallet(); saveBank(); updateHud(); draw(); sfx.coin(); };
 }
 $('bankClose').addEventListener('click', closeUI);
-function bankAlarm() {   // alerte spéciale : niveau maximum, toutes les voitures de police, qui tirent sur les voleurs
+function bankAlarm() {   // alerte de braquage : plus on a forcé de coffres, plus la riposte est dure
   if (police.alarmT > simTime) { police.alarmT = simTime + 60; return; }
-  police.alarmT = simTime + 60; police.crimeLevel = 3; police.wanted = 3; police.decayT = simTime + 90; police.lastSeen = [P.pos.x, P.pos.z];
-  while (police.cars.length < 5) { const sx = police.station.x + 5 + (police.cars.length - 2) * 3.2, pc = makeCar(0xf4f6fa, sx, 14, 0, { police: true }); pc.home = [sx, 14]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
-  police.cars.forEach(pc => { pc.active = true; pc.goHome = false; });
-  $('wanted').textContent = '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi'; $('wanted').classList.add('on'); siren.start();
-  msg('🚨 ALARME DE LA BANQUE !', 2500); sfx.noise(.8, 900, .12); sfx.tone(900, 0, .4, 'square', .04, 700); sfx.tone(900, .5, .4, 'square', .04, 700);
+  const n = police.coffres || 0;                       // coffres déjà ouverts
+  const retard = Math.max(0, 16 - n * 6);              // délai avant que les voitures démarrent
+  const nbVoitures = 3 + Math.min(2, n);
+  police.alarmT = simTime + 60; police.crimeLevel = n >= 2 ? 3 : 2; police.wanted = n >= 1 ? 3 : 2;
+  police.decayT = simTime + 55 + n * 30; police.renfortT = simTime + retard; police.lastSeen = [P.pos.x, P.pos.z];
+  while (police.cars.length < nbVoitures) { const sx = police.station.x + 5 + (police.cars.length - 2) * 3.2, pc = makeCar(0xf4f6fa, sx, 14, 0, { police: true }); pc.home = [sx, 14]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
+  police.cars.forEach(pc => { pc.active = retard <= 0; pc.goHome = false; });
+  $('wanted').textContent = retard > 0 ? `🚨 BRAQUAGE ! La police arrive dans ${retard} s — prends l'argent et file`
+    : '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi';
+  $('wanted').classList.add('on'); siren.start();
+  msg(retard > 0 ? `🚨 ALARME ! La police met ${retard} s à arriver : file maintenant` : '🚨 ALARME DE LA BANQUE ! Toutes les unités arrivent', 2800); sfx.noise(.8, 900, .12); sfx.tone(900, 0, .4, 'square', .04, 700); sfx.tone(900, .5, .4, 'square', .04, 700);
   chat(null, `🚨 ${myCfg.name} braque la banque ! Toutes les unités en route`);
-  for (const gd of city.guards) gd.alert = true;
+  // au premier coffre, un seul garde bouge ; ensuite tout le monde
+  city.guards.forEach((gd, i) => { gd.alert = i < 1 + n; });   // un seul garde au premier coffre, tous ensuite
   // tant que le voleur est dans la banque, la police entre à pied pour l'arrêter
   if (city.bank) { police.sait = [city.bank.x, city.bank.z]; police.vuT = simTime; msg('🚔 Les voitures foncent sur la banque : ils vont entrer à pied !', 3000); }
 }
@@ -4141,7 +4296,10 @@ function buildNav() {
   const obs = solids.filter(o => (!o.veh || (!o.pol && !o.ai)) && o.h < 30 && o.y + o.h / 2 > 0.45 && o.y - o.h / 2 < 1.6);
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const cx = x0 + i * cs, cz = z0 + j * cs, m = cs / 2 + 1.1;
-    for (const o of obs) { if (cx + m > o.x - o.w / 2 && cx - m < o.x + o.w / 2 && cz + m > o.z - o.d / 2 && cz - m < o.z + o.d / 2) { bl[j * nx + i] = 1; break; } }
+    let mur = false;
+    for (const o of obs) { if (cx + m > o.x - o.w / 2 && cx - m < o.x + o.w / 2 && cz + m > o.z - o.d / 2 && cz - m < o.z + o.d / 2) { mur = true; break; } }
+    if (!mur) for (const b of city.batiments) { if (cx > b.x - b.w / 2 && cx < b.x + b.w / 2 && cz > b.z - b.d / 2 && cz < b.z + b.d / 2) { mur = true; break; } }
+    if (mur) bl[j * nx + i] = 1;
   }
   NAV.blocked = bl;
 }
@@ -4458,6 +4616,14 @@ function armeeTick(dt) {
 function policeTick(dt) {
   if (!police.cars.length) return;
   if (armee.on) armeeTick(dt);
+  // renforts du braquage : les voitures ne démarrent qu'au bout du délai (plus court si on
+  // a forcé plusieurs coffres)
+  if (police.alarmT > simTime && police.renfortT && simTime > police.renfortT) {
+    police.renfortT = 0;
+    police.cars.forEach(pc => { if (!pc.active) { pc.active = true; pc.goHome = false; } });
+    $('wanted').textContent = '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi';
+    msg('🚔 Les voitures de police arrivent !', 2200);
+  }
   // Caché dans un bâtiment, on ne se fait pas arrêter… sauf s'ils t'ont vu entrer : alors
   // ils savent où tu es, descendent de voiture et viennent te chercher à pied.
   const abri = abriDuJoueur();
@@ -4662,7 +4828,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); if (zombie.on) zombieFin(false); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; zombie.flaques = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); if (zombie.on) zombieFin(false); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; zombie.flaques = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -5004,7 +5170,14 @@ function burst(x, y, z, color, n = 8) {
 
 // ================= JOUEUR =================
 const JUMP = 12, SPEED = 7, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, devore: false, voile: null, voileMesh: null, voileSrc: null };
+// Cartouches : la qualité change les dégâts et l'effet à l'impact.
+const MUNITIONS = {
+  std: { n: 'Cartouches standard', e: '🔸', p: 0, mul: 1, desc: 'Les munitions de base, fournies avec l\'arme.' },
+  perf: { n: 'Cartouches perforantes ×30', e: '🔹', p: 35, mul: 2.2, nb: 30, desc: 'Deux fois plus de dégâts : elles traversent les gilets.' },
+  inc: { n: 'Cartouches incendiaires ×20', e: '🔥', p: 55, mul: 1.4, nb: 20, feu: true, desc: 'À l\'impact, une flaque de feu brûle tout ce qui passe pendant 12 s.' },
+  exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
+};
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, devore: false, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -6109,16 +6282,20 @@ function botConduireVers(b, lieu) {
 function monterAvecBot(b) {
   const st = b && b.drive; if (!st || st.passager) return;
   if (drive.car) exitCar();
-  st.passager = true; city.rideBot = b; me.group.visible = false; P.vel.set(0, 0, 0);
-  clearBeacon(); engine.start('car');
-  botSay(b, [`installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
-  msg(`🚗 Tu es monté avec ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
+  const moto = !!st.car.rider;
+  st.passager = true; city.rideBot = b; me.group.visible = moto; P.vel.set(0, 0, 0);
+  clearBeacon(); engine.start(moto ? 'moto' : 'car');
+  botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
+  msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
 function botDescendre(b, garde) {
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
   st.passager = false; city.rideBot = null; me.group.visible = true; engine.stop(); updateAct();
+  me.group.rotation.set(0, 0, 0); me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
+  me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
+  if (b.av) b.av.group.rotation.z = 0;
   if (!garde) {
     c.busy = false; c.speed = 0;
     b.pos.set(c.x + Math.cos(c.h) * 2.4, c.y, c.z - Math.sin(c.h) * 2.4);
@@ -6145,15 +6322,30 @@ function botDriveTick(dt) {
       if (!st.passager && simTime - st.annonce > 240) { botSay(b, ['bon, je rends la voiture !']); botDescendre(b, false); continue; }
     }
     // le conducteur reste visible au volant
-    const cs = Math.cos(c.h), sn = Math.sin(c.h), sx = 0.5, sz = c.kind === 'truck' ? 2.55 : 0.3, sy = c.kind === 'truck' ? 0.3 : -0.35;
+    const cs = Math.cos(c.h), sn = Math.sin(c.h);
+    // Deux-roues : l'ami est en selle à l'avant, le joueur derrière lui (bien visible).
+    const moto = !!c.rider;
+    const sx = moto ? 0 : 0.5, sz = moto ? 0.3 : (c.kind === 'truck' ? 2.55 : 0.3);
+    const sy = moto ? (c.spec.seat - 0.55) : (c.kind === 'truck' ? 0.3 : -0.35);
     b.av.group.visible = !net.on;
     b.av.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
-    b.av.group.rotation.y = c.h; b.pos.set(c.x, c.y, c.z); b.facing = c.h;
+    b.av.group.rotation.y = c.h; b.av.group.rotation.z = moto ? (c.tilt || 0) : 0;
+    b.pos.set(c.x, c.y, c.z); b.facing = c.h;
     b.av.rig.armL.rotation.x = b.av.rig.armR.rotation.x = -1.2;
     if (st.passager) {
-      P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h; me.group.visible = false;
-      cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
-      $('act').textContent = st.etat === 'route' ? `🚗 ${b.name} conduit vers ${st.nom} · ${Math.round(Math.hypot(st.tx - c.x, st.tz - c.z))} m` : `🚗 Arrivés à ${st.nom} · E pour descendre`;
+      if (moto) {   // en croupe : on voit le joueur assis derrière, penché comme l'ami
+        const lz = -0.62;
+        P.pos.set(c.x + lz * sn, c.y + c.spec.seat - 0.5, c.z + lz * cs); P.vel.set(0, 0, 0); P.facing = c.h;
+        me.group.visible = true; me.group.position.copy(P.pos); me.group.rotation.set(0, c.h, c.tilt || 0, 'YXZ');
+        me.rig.armL.rotation.x = me.rig.armR.rotation.x = -1.1;
+        me.rig.legL.rotation.x = me.rig.legR.rotation.x = -0.55;
+        cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.8, c.z), Math.min(1, dt * 6));
+      } else {
+        P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h; me.group.visible = false;
+        cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
+      }
+      const emo = moto ? '🏍️' : '🚗';
+      $('act').textContent = st.etat === 'route' ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(Math.hypot(st.tx - c.x, st.tz - c.z))} m` : `${emo} Arrivés à ${st.nom} · E pour descendre`;
     }
   }
   // proposer de monter quand un ami attend au volant tout près
@@ -6312,10 +6504,24 @@ const AIDE_ORDRES = [
   'va me chercher à manger', 'cache-toi', 'danse', 'saute', 'salue', 'viens', 'rendez-vous au parc',
 ];
 function botDit(b, t) { botSay(b, [t]); }
-function botStop(b, dire) {
+// Un véhicule réservé par un ami reste « busy » : s'il abandonne, il faut le rendre,
+// sinon la voiture était perdue pour tout le monde.
+function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0; }
+function botStop(b, dire, libre) {
+  if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
+  if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
   b.ordre = null; b.rdv = null; b.rdvRoute = null; b.bagarre = null; b.garde = 0;
   b.wait = 0.6; b.target = null;
+  if (libre) { b.wait = 0.2; resetBot(b, rnd(1, 4)); }   // « annule » : il reprend sa vie
   if (dire) botDit(b, pickOne(['ok, j\'arrête là 👍', 'compris, je ne bouge plus', 'très bien !']));
+}
+// Ronde de sécurité : une voiture réservée que plus personne n'utilise est rendue au parc.
+function libereVehiculesOublies() {
+  const pris = new Set();
+  if (drive.car) pris.add(drive.car);
+  if (coup.car) pris.add(coup.car);
+  for (const b of bots) { if (b.drive && b.drive.car) pris.add(b.drive.car); if (b.rdv && b.rdv.auto) pris.add(b.rdv.auto.car); }
+  for (const c of city.cars) if (c.busy && !pris.has(c)) { c.busy = false; c.speed = 0; }
 }
 function botSuis(b) {
   b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true };
@@ -6406,6 +6612,12 @@ function commandeSociale(txt) {
   // ---- ordres : l'ami exécute ----
   if (/\b(tu peux faire quoi|que peux.?tu faire|tes ordres|aide|liste des ordres)\b/.test(t)) {
     chat(null, `📋 Tu peux demander à ${cible.name} : ${AIDE_ORDRES.join(' · ')}`); return true;
+  }
+  if (/\b(annule|annuler|oublie|oublier|laisse tomber le rendez|plus besoin|tant pis)\b/.test(t)) {
+    botStop(cible, false, true);
+    botDit(cible, pickOne(['ok, on annule ! je vaque à mes occupations 👋', 'pas de souci, j\'annule tout', 'comme tu veux, j\'y vais alors']));
+    msg(`❌ Rendez-vous annulé : ${cible.name} refait ce qu'il veut`, 2600);
+    return true;
   }
   if (/\b(stop|arrete.?toi|arrête.?toi|laisse tomber|c.?est bon|repos|libre)\b/.test(t) && !cible.drive) { botStop(cible, true); return true; }
   if (/\b(suis.?moi|suis moi|viens avec moi|colle.?toi|accompagne.?moi|reste avec moi)\b/.test(t)) { botSuis(cible); return true; }
@@ -6693,7 +6905,7 @@ function step(dt, active) {
   if (P.sit) { sitTick(dt); cityCommon(dt); return; }
 
   if (P.standing && P.standing.conv) { P.pos.x += P.standing.conv.x * dt; P.pos.z += P.standing.conv.z * dt; }
-  const onIce = !!(P.standing && P.standing.ice);
+  const onIce = !!(P.standing && P.standing.ice) || (P.grounded && surGlace(P.pos.x, P.pos.z));
 
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
@@ -6746,6 +6958,11 @@ function step(dt, active) {
     P.vel.y = CLIMB; P.jumpBuf = 0; P.grounded = false;
     P.vel.x += (wantX * 0.5 - P.vel.x) * 0.3; P.vel.z += (wantZ * 0.5 - P.vel.z) * 0.3;
   } else {
+    // bruit de pas : feutré dans la neige, il crisse à chaque foulée
+    if (P.grounded && len > 0.3 && city.neigeG && city.neigeG.visible && !drive.car && simTime > (P.pasT || 0)) {
+      P.pasT = simTime + (P.court ? 0.26 : 0.42);
+      sfx.noise(.09, 950, .022); sfx.tone(120, 0, .05, 'triangle', .012, 90);
+    }
     const a = 1 - Math.exp(-(P.grounded ? (onIce ? 2.2 : 14) : 4) * dt);
     P.vel.x += (wantX - P.vel.x) * a; P.vel.z += (wantZ - P.vel.z) * a;
     P.coyote = P.grounded ? 0.12 : P.coyote - dt;
@@ -6823,6 +7040,11 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
     const x0 = o.x - o.w / 2 - r, x1 = o.x + o.w / 2 + r, z0 = o.z - o.d / 2 - r, z1 = o.z + o.d / 2 + r;
     if (x > x0 && x < x1 && z > z0 && z < z1) return true;
     if (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1))) return true;
+  }
+  for (const b of city.batiments) {   // intérieur d'un bâtiment : interdit aux véhicules
+    const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
+    if ((x > x0 && x < x1 && z > z0 && z < z1)
+      || (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1)))) return true;
   }
   return false;
 }
@@ -7231,6 +7453,7 @@ function cityCommon(dt) {
     if (wallet < 10) { if (simTime > (city.repairMsgT || 0)) { city.repairMsgT = simTime + 4; msg('🔧 Réparation : 10 🪙 (il t\'en manque)', 1600); } }
     else { city.repairT = simTime + 3; wallet -= 10; saveWallet(); updateHud(); drive.car.dmg = 0; drive.car.dead = false; repairVisual(drive.car); msg('🔧 Véhicule réparé ! (10 🪙)', 1600); sfx.register(); burst(drive.car.x, 1, drive.car.z, 0x3ef2ff, 12); }
   }
+  if (simTime > (city.libT || 0)) { city.libT = simTime + 3; libereVehiculesOublies(); }
   // parachute / deltaplane posé sur un toit
   {
     let v = null;
@@ -7250,7 +7473,7 @@ function cityCommon(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('zombies', () => zombieTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('zombies', () => zombieTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -7434,6 +7657,13 @@ function catalog(tab) {
   if (tab === 'tenues') JERSEYS.forEach((j, i) => items.push({ key: 'jersey:' + i, cat: 'jersey', id: i, n: j.name, e: '👕', p: 0, desc: 'Maillot ' + j.name + ' — gratuit, avec ton nom et ton numéro dans le dos.', owned: () => true, equipped: () => myCfg.jersey === i, act: () => { myCfg.jersey = i; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); } }));
   if (tab === 'accessoires') for (const [cat, list] of Object.entries(SHOP)) list.forEach(it => items.push({ key: itemKey(cat, it), cat, id: it.id, n: it.n, e: it.e, p: it.p, desc: DESC[cat], owned: () => it.p === 0 || owned.has(itemKey(cat, it)), equipped: () => String(currentShopId(cat)) === String(it.id), buy: () => { owned.add(itemKey(cat, it)); saveOwned(); }, act: () => applyShopItem(cat, it) }));
   if (tab === 'armes') for (const [k, w] of Object.entries(WEAPONS)) items.push({ key: 'arme:' + k, cat: 'arme', id: k, n: w.n, e: w.e, p: w.p, consumable: !!w.consumable, desc: k === 'pistol' ? 'Pistolet laser précis, 8 balles, rechargement rapide.' : k === 'rifle' ? 'Fusil laser à lunette, 30 balles : un appui = un coup, visée automatique sur la cible la plus proche.' : 'Lot de 5 grenades de choc : elles projettent tout le monde dans un rayon de 6 m.', owned: () => w.consumable ? (P.grenades || 0) > 0 : owned.has('arme:' + k), equipped: () => P.weapon === k, buy: () => { if (w.consumable) P.grenades = (P.grenades || 0) + w.ammo; else { owned.add('arme:' + k); saveOwned(); } store.set('superobby.grenades', String(P.grenades || 0)); }, act: () => equipWeapon(k) });
+  if (tab === 'armes') for (const [k, m] of Object.entries(MUNITIONS)) {
+    if (k === 'std') continue;
+    items.push({ key: 'muni:' + k, cat: 'muni', id: k, n: m.n, e: m.e, p: m.p, consumable: true, desc: m.desc,
+      owned: () => (P.muniStock[k] || 0) > 0, equipped: () => P.munition === k,
+      buy: () => { P.muniStock[k] = (P.muniStock[k] || 0) + m.nb; P.munition = k; saveMunitions(); msg(`${m.e} ${m.n} chargées`, 2000); },
+      act: () => { P.munition = k; saveMunitions(); } });
+  }
   if (tab === 'deco') DECOR.forEach(it => items.push({ key: 'deco:' + it.id, cat: 'deco', id: it.id, n: it.n, e: it.e, p: it.p, consumable: true, desc: (it.wall ? 'Se pose sur un mur.' : 'Se pose au sol.') + ' Livré devant ta villa : va le chercher et place-le où tu veux.', owned: () => false, equipped: () => false, buy: () => {}, act: () => deliverDecor(it) }));
   if (tab === 'vedette') { const all = [...catalog('accessoires'), ...catalog('armes')].filter(x => x.p > 0); const day = Math.floor(Date.now() / 86400000); for (let i = 0; i < 6 && all.length; i++) { const k = (day * 7 + i * 13) % all.length; items.push(all.splice(k, 1)[0]); } }
   return items;
@@ -7502,6 +7732,7 @@ function equipWeapon(kind) {   // équipe une arme (ou range : null)
   updateAct();
 }
 function toggleGun() { equipWeapon(P.weapon ? null : (owned.has('arme:pistol') ? 'pistol' : null)); }
+function fermeLunette() { if (P.zoom) { P.zoom = false; document.body.classList.remove('zoom'); } }
 function drawWeapon(on) {   // dégainer / rengainer
   if (!P.weapon) { msg('🔫 Achète une arme à l\'armurerie', 1400); return; }
   P.drawn = on == null ? !P.drawn : on;
@@ -7666,10 +7897,80 @@ function aimTick() {   // la visée part du joueur : direction = son orientation
   el.style.left = ((v.x * 0.5 + 0.5) * 100) + '%'; el.style.top = ((-v.y * 0.5 + 0.5) * 100) + '%';   // le réticule suit le point visé
   $('aimUp').classList.toggle('on', P.aimPitch > 0.02); $('aimDown').classList.toggle('on', P.aimPitch < -0.02);
 }
+const saveMunitions = () => { store.set('superobby.muni', JSON.stringify({ k: P.munition, s: P.muniStock })); };
+(() => { try { const d = JSON.parse(store.get('superobby.muni') || 'null'); if (d) { P.munition = d.k || 'std'; P.muniStock = d.s || {}; } } catch (e) {} })();
+function muniActive() {   // la cartouche utilisée pour le prochain tir (on retombe sur les standards une fois le stock vide)
+  const k = P.munition;
+  if (k !== 'std' && (P.muniStock[k] || 0) <= 0) { P.munition = 'std'; saveMunitions(); }
+  return MUNITIONS[P.munition] || MUNITIONS.std;
+}
+// ---- feu au sol laissé par une cartouche incendiaire ----
+function feuAuSol(x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z); worldGroup.add(g);
+  const flammes = [];
+  for (let i = 0; i < 5; i++) {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(rnd(0.3, 0.6), rnd(0.9, 1.7), 7),
+      new THREE.MeshLambertMaterial({ color: i % 2 ? 0xff8a20 : 0xffd23f, emissive: 0xff5a00, emissiveIntensity: 1, transparent: true, opacity: 0.85 }));
+    f.position.set(rnd(-1.1, 1.1), rnd(0.4, 0.8), rnd(-1.1, 1.1)); g.add(f); flammes.push(f);
+  }
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.6, depthWrite: false }));
+  halo.scale.set(8, 8, 1); halo.position.y = 1; g.add(halo);
+  city.feux.push({ g, flammes, x, y, z, r: 2.8, fin: simTime + 12, cd: 0 });
+  sfx.noise(.5, 500, .08);
+}
+function feuxTick(dt) {
+  for (let i = city.feux.length - 1; i >= 0; i--) {
+    const f = city.feux[i];
+    if (simTime > f.fin) { worldGroup.remove(f.g); city.feux.splice(i, 1); continue; }
+    const reste = (f.fin - simTime) / 12;
+    f.flammes.forEach((m, k) => { m.scale.setScalar((0.7 + Math.sin(simTime * 9 + k * 2) * 0.25) * (0.4 + reste * 0.8)); });
+    if (simTime < f.cd) continue;
+    f.cd = simTime + 0.5;
+    for (const b of bots) if (!b.ko && Math.hypot(b.pos.x - f.x, b.pos.z - f.z) < f.r) {
+      b.hp = (b.hp ?? 100) - 14; b.fight = 'flee'; b.fightT = simTime + 4; b.wait = 0;
+      burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff8a20, 5);
+      if (b.hp <= 0) botKill(b); else if (Math.random() < 0.4) botSay(b, ['ça brûle !!', 'au feu !', 'aïe aïe aïe !']);
+    }
+    for (const a of police.agents) if (!a.ko && Math.hypot(a.x - f.x, a.z - f.z) < f.r) {
+      a.hp -= 16; burst(a.x, a.y + 1, a.z, 0xff8a20, 5);
+      if (a.hp <= 0) agentTue(a); else if (Math.random() < 0.4) bubble(a.av, 'ça brûle !');
+    }
+    for (const z of (zombie.zoms || [])) if (!z.mort && Math.hypot(z.x - f.x, z.z - f.z) < f.r) { z.hp -= 1; burst(z.x, z.y + 1, z.z, 0xff8a20, 4); if (z.hp <= 0) zombieMort(z, false); }
+    if (!drive.car && Math.hypot(P.pos.x - f.x, P.pos.z - f.z) < f.r && Math.abs(P.pos.y - f.y) < 2.5 && P.hp > 0) hurt(9, 'les flammes', 0, 0, 0.5);
+  }
+}
+// ---- balle explosive ----
+function balleExplose(x, y, z) {
+  burst(x, y, z, 0xff8a20, 26); burst(x, y, z, 0x8b8f98, 14);
+  sfx.noise(.55, 240, .13); sfx.tone(66, 0, .55, 'sawtooth', .09, 34);
+  const R = 4.5;
+  for (const b of breakables) if (!b.broken && Math.hypot(b.x - x, b.z - z) < R) breakThing(b, { x, z });
+  for (const v of [...city.cars, ...city.aiCars, ...police.cars]) {
+    if (!v.solid || Math.hypot(v.x - x, v.z - z) > R + 1.5) continue;
+    const av = v.dmg || 0; vehicleDamage(v, 70); applyDamageVisual(v, (v.x - x) * 2, (v.z - z) * 2);
+    if ((v.dmg || 0) >= 100 && av < 100) explodeVehicle(v);
+  }
+  for (const b of bots) if (!b.ko && Math.hypot(b.pos.x - x, b.pos.z - z) < R) { b.hp = (b.hp ?? 100) - 65; if (b.hp <= 0) botKill(b); else { b.fight = 'flee'; b.fightT = simTime + 5; } }
+  for (const a of police.agents) if (!a.ko && Math.hypot(a.x - x, a.z - z) < R) { a.hp -= 80; if (a.hp <= 0) agentTue(a); }
+  for (const z of (zombie.zoms || [])) if (!z.mort && Math.hypot(z.x - x, z.z - z) < R) zombieMort(z, false);
+  for (const gd of city.guards) if (!gd.ko && Math.hypot(gd.x - x, gd.z - z) < R) { gd.hp -= 70; if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; } }
+  if (!drive.car && Math.hypot(P.pos.x - x, P.pos.z - z) < R * 0.8 && P.hp > 0) hurt(28, 'ton explosif', (P.pos.x - x) / R, (P.pos.z - z) / R, 3);
+  if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('faire exploser un quartier', 2, 3); }
+}
 function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un tir venu du réseau
   if (!remote) {
     if (!P.weapon || drive.car || P.sit || P.swing || P.ride || gym.on || P.fireCd > simTime) return;   // assis / sur un manège : on ne tire pas au jugé
     if (P.weapon === 'grenade') return throwGrenade();
+    // Fusil à lunette : un premier appui met l'œil dans la lunette (image grossie), le
+    // second tire. On garde le tir unique suivi du rengainage.
+    if (WEAPONS[P.weapon].lunette && !P.zoom) {
+      P.zoom = true; P.zoomT = simTime + 12; P.lock = cibleAuto();
+      if (P.lock) P.facing = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z);
+      if (!P.drawn) { drawWeapon(true); setWeapon(me, P.weapon, true); }
+      P.holsterT = 0; document.body.classList.add('zoom');
+      msg('🔭 Dans la lunette… appuie encore pour tirer (G pour ranger)', 2600); sfx.tone(900, 0, .06, 'sine', .03, 1200);
+      return;
+    }
     // Tir automatique : un seul appui suffit — on dégaine, on verrouille la cible la plus
     // proche, on tire un coup, puis l'arme retourne dans l'étui.
     P.lock = cibleAuto();
@@ -7701,8 +8002,11 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     dirV.normalize();
     dirV.x += rnd(-sp, sp); dirV.y += rnd(-sp, sp); dirV.z += rnd(-sp, sp); dirV.normalize().multiplyScalar(w.speed);
     updateAct();
-    const s = { m: null, p: origin, v: dirV, t: 0, mine: true, dmg: w.dmg };
+    const mu = muniActive();
+    if (mu !== MUNITIONS.std) { P.muniStock[P.munition] = Math.max(0, (P.muniStock[P.munition] || 0) - 1); saveMunitions(); }
+    const s = { m: null, p: origin, v: dirV, t: 0, mine: true, dmg: Math.round(w.dmg * mu.mul), feu: !!mu.feu, boom: !!mu.boom };
     shots.push(s); spawnShot(s);
+    fermeLunette();
     if (P.weapon === 'rifle') { sfx.noise(.05, 1500, .08); sfx.tone(160, 0, .05, 'triangle', .06, 70); } else { sfx.noise(.07, 1100, .13); sfx.tone(200, 0, .09, 'triangle', .09, 60); }
     if (net.on) netSend({ t: 'fire', p: [+s.p.x.toFixed(2), +s.p.y.toFixed(2), +s.p.z.toFixed(2)], v: [+s.v.x.toFixed(2), +s.v.y.toFixed(2), +s.v.z.toFixed(2)], dmg: w.dmg, name: myCfg.name });
     return;
@@ -7759,6 +8063,12 @@ function shotsTick(dt) {
         const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
         if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
       }
+      // les véhicules encaissent les balles (et finissent par exploser)
+      for (const v of [...city.cars, ...city.aiCars, ...police.cars]) {
+        const o = v.solid; if (!o || v === drive.car) continue;
+        const t = rayBox(s.p.x, s.p.y, s.p.z, dx, dy, dz, o.x, v.y + 0.8, o.z, o.w / 2, 0.85, o.d / 2, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'vehicule'; cible = v; }
+      }
       // zombies : la tête est une boîte à part, un seul tir suffit dessus
       if (zombie.on) for (const zz of zombie.zoms) {
         if (zz.mort) continue;
@@ -7795,6 +8105,17 @@ function shotsTick(dt) {
       burst(zz.x, zz.y + (teteZ ? 1.6 : 1), zz.z, 0x8b0010, teteZ ? 18 : 9);
       if (zz.hp <= 0) zombieMort(zz, teteZ);
       else { sfx.tone(90, 0, .12, 'sawtooth', .06, 50); msg(`🧟 Touché (${zz.hp} restant${zz.hp > 1 ? 's' : ''}) — vise la tête !`, 900); }
+    } else if (quoi === 'vehicule') {
+      const v = cible;
+      burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 6); sfx.noise(.05, 900, .05);
+      const av = v.dmg || 0;
+      vehicleDamage(v, (s.dmg || 20) * 1.6);
+      applyDamageVisual(v, s.v.x / L2 * 3, s.v.z / L2 * 3);
+      if ((v.dmg || 0) >= 100 && av < 100) {
+        explodeVehicle(v);
+        if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); }
+        else msg('💥 Véhicule détruit !', 1600);
+      } else if (v.mil || (v.solid && v.solid.pol)) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } }
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); burst(a.x, a.y + 1.2, a.z, 0xff5c5c, 9);
       police.riposte = simTime + 30;
@@ -7805,6 +8126,8 @@ function shotsTick(dt) {
       if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
       bankAlarm();
     }
+    if (s.feu) feuAuSol(s.p.x, Math.max(0.05, s.p.y - 0.6), s.p.z);
+    if (s.boom) balleExplose(s.p.x, s.p.y, s.p.z);
     scene.remove(s.m); shots.splice(i, 1);
   }
   for (const tg of city.targets) {   // la cible bascule quand elle est touchée puis se relève
@@ -8352,7 +8675,8 @@ function frame() {
   } else if (P.aimPitch) P.aimPitch *= 1 - Math.min(1, dt * 3);
   // verrouillage automatique : visible dès qu'une arme est équipée, pour qu'on sache sur quoi on tirera
   P.lock = (P.weapon && P.weapon !== 'grenade' && running && !paused && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on) ? cibleAuto() : null;
-  if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); }
+  if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); fermeLunette(); }
+  if (P.zoom && (simTime > (P.zoomT || 0) || !P.drawn || drive.car || P.sit)) fermeLunette();
   P.aim = armed && !!(P.aimHeld || P.aimToggle);   // visée « épaule » (zoom) en plus
   const aiming = armed;
   document.body.classList.toggle('aim', aiming); document.body.classList.toggle('armed', armed);
@@ -8400,6 +8724,7 @@ function frame() {
       want = Math.min(want, 1.6 + cam.plafond);
     }
     if (!veh) want = Math.max(want, 2.2);
+    if (P.zoom) want = 2.4;   // œil dans la lunette : on colle au joueur et on grossit l'image
     if (inter && !aiming) { want = Math.min(want, dedans ? 3.1 : 4.3);
       tmpV.x += clamp(inter.x - P.pos.x, -1.2, 1.2) * 0.45; tmpV.z += clamp(inter.z - P.pos.z, -1.2, 1.2) * 0.45; }
     if (Math.abs(cam.dist - want) > 0.05) cam.dist += (want - cam.dist) * Math.min(1, dt * (want < cam.dist ? 8 : 4));
@@ -8425,6 +8750,10 @@ function frame() {
     } else cam.libre = null;
     camera.position.copy(cam.target).addScaledVector(dir, d);
     if (camera.position.y < 0.4) camera.position.y = 0.4;
+  }
+  {   // champ de vision : resserré dans la lunette du fusil (effet de grossissement ×3)
+    const fovVoulu = P.zoom ? 20 : 55;
+    if (Math.abs(camera.fov - fovVoulu) > 0.2) { camera.fov += (fovVoulu - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
   }
   camera.lookAt(cam.target);
   if (city.on && running) { try { gpsTick(); } catch (e) {} }

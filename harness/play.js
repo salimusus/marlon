@@ -1801,6 +1801,248 @@ test('le cinéma projette en 640×360 avec finition et publicités', async p => 
   return { ok, detail: `${r.n} films (${r.pubs} publicités, ${r.genres.length} genres, ${r.duree} s) · toile ${r.taille[0]}×${r.taille[1]} · ${r.img} images dessinées sans erreur · bandes noires de cinéma sur ${Math.round(r.noirHaut * 100)} % du bord haut, image vivante au centre (${r.clairs} points clairs)` };
 });
 
+test('aucun véhicule ne rentre dans un bâtiment', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -52, y: 1, z: 70, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    const bk = __G.city.bank;
+    const dedans = __G.carBlocked(bk.x, bk.z, null, 1.4, { veh: true, bar: true });
+    const dehors = __G.carBlocked(bk.x + bk.w / 2 + 6, bk.z, null, 1.4, {});
+    const nb = __G.city.batiments.length;
+    // braquage : les voitures doivent rester dehors
+    __G.P.pos.set(-57, 10.05, 70);
+    const t0 = __G.simTime;
+    __G.bankAlarm(); __G.police.arrestT = 1e9; __G.police.renfortT = 0;
+    __G.police.cars.forEach(c => { c.active = true; });
+    let pire = 0;
+    for (let i = 0; i < 2400; i++) {
+      __G.simTime = t0 + i / 30; __G.P.pos.set(-57, 10.05, 70); __G.policeTick(1 / 30); __G.police.arrestT = 1e9;
+      for (const c of __G.police.cars) {
+        const dx = bk.w / 2 - Math.abs(c.x - bk.x), dz = bk.d / 2 - Math.abs(c.z - bk.z);
+        if (dx > 0 && dz > 0) pire = Math.max(pire, Math.min(dx, dz));
+      }
+    }
+    const agents = __G.police.agents.filter(a => Math.abs(a.x - bk.x) < 9 && Math.abs(a.z - bk.z) < 9).length;
+    __G.jail.on = false; __G.clearWanted();
+    return { dedans, dehors, nb, pire: +pire.toFixed(2), agents };
+  });
+  const ok = r.dedans && !r.dehors && r.nb >= 15 && r.pire < 0.6 && r.agents >= 1;
+  return { ok, detail: `${r.nb} bâtiments fermés aux véhicules · intérieur de la banque bloqué=${r.dedans}, parvis libre=${!r.dehors} · pendant tout le braquage, aucune voiture de police ne dépasse de ${r.pire} m à l'intérieur (elles restaient garées dans le hall) · ${r.agents} agents entrés à pied` };
+});
+
+test('en moto, l\'ami conduit et le joueur est assis derrière', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0];
+    const moto = __G.city.cars.find(c => c.kind === 'moto' && !c.busy);
+    if (!moto) return { err: 'pas de moto' };
+    b.rdv = null; b.ordre = null; b.ko = 0; b.fight = null; b.wait = 0;
+    b.drive = { car: moto, tx: 0, tz: 40, nom: 'toi', etat: 'route', passager: false, annonce: __G.simTime };
+    moto.busy = true; moto.h = 0; moto.x = 0; moto.z = 44; moto.y = 0; moto.g.position.set(0, 0, 44);
+    __G.P.pos.set(0, 0.4, 44);
+    __G.monterAvecBot(b);
+    for (let i = 0; i < 20; i++) { __G.simTime += 1 / 30; __G.botDriveTick(1 / 30); }
+    const cs = Math.cos(moto.h), sn = Math.sin(moto.h);
+    const lzJ = (__G.P.pos.x - moto.x) * sn + (__G.P.pos.z - moto.z) * cs;
+    const av = b.av.group.position, lzA = (av.x - moto.x) * sn + (av.z - moto.z) * cs;
+    const res = { visible: __G.me.group.visible, lzJoueur: +lzJ.toFixed(2), lzAmi: +lzA.toFixed(2),
+      hJoueur: +(__G.P.pos.y - moto.y).toFixed(2), passager: !!b.drive.passager, act: document.getElementById('act').textContent.slice(0, 24) };
+    __G.botDescendre(b, false);
+    res.apres = { visible: __G.me.group.visible, rot: +__G.me.group.rotation.z.toFixed(2) };
+    return res;
+  });
+  const ok = !r.err && r.visible && r.lzJoueur < r.lzAmi - 0.5 && r.hJoueur > 0.3 && r.passager
+    && r.act.includes('🏍️') && r.apres.visible;
+  return { ok, detail: `le joueur est visible en croupe : il est à ${r.lzJoueur} m derrière le centre, l'ami à ${r.lzAmi} m devant (assise à ${r.hJoueur} m) · le HUD annonce « ${r.act}… » · c'est bien l'ami qui conduit (passager=${r.passager})` };
+});
+
+test('on annule le rendez-vous : l\'ami reprend sa vie et rend le véhicule', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0];
+    b.rdv = null; b.ordre = null; b.drive = null; b.ko = 0; b.wait = 0; b.pos.set(6, 0.3, 40);
+    __G.commandeSociale('Lucas_2014 va me chercher une voiture et amène-la ici');
+    const c = b.rdv && b.rdv.auto ? b.rdv.auto.car : null;
+    if (c) c.busy = true;
+    const avant = { rdv: !!b.rdv, busy: !!(c && c.busy) };
+    __G.commandeSociale('Lucas_2014 annule le rendez-vous');
+    const apres = { rdv: !!b.rdv, ordre: !!b.ordre, busy: !!(c && c.busy) };
+    // une voiture oubliée par un bot disparu est rendue par la ronde de sécurité
+    const c2 = __G.city.cars.find(v => v !== c && !v.heli && !v.busy);
+    c2.busy = true;
+    __G.libereVehiculesOublies();
+    const rendue = !c2.busy;
+    return { avant, apres, rendue };
+  });
+  const ok = r.avant.rdv && r.avant.busy && !r.apres.rdv && !r.apres.ordre && !r.apres.busy && r.rendue;
+  return { ok, detail: `rendez-vous en cours (voiture réservée=${r.avant.busy}) → annulé : plus de rendez-vous=${!r.apres.rdv}, voiture rendue=${!r.apres.busy} · une voiture oubliée par un bot est rendue automatiquement=${r.rendue}` };
+});
+
+test('quand il neige : congères, bonshommes, capots blancs et verglas', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.meteoSet('neige', 600); __G.meteo.force = 1;
+    await dodo(2200);
+    const G = __G.city.neigeG;
+    let bonshommes = 0, congeres = 0;
+    if (G) G.children.forEach(c => { if (c.type === 'Group') bonshommes++; else if (c.geometry && c.geometry.type === 'SphereGeometry') congeres++; });
+    const g0 = __G.city.glace[0];
+    const glisse = __G.surGlace(g0.x, g0.z), sec = __G.surGlace(g0.x + 40, g0.z + 40);
+    const capots = (__G.city.neigeVeh || []).filter(m => m.visible).length;
+    const sol = __G.meteo.sol ? +__G.meteo.sol.material.opacity.toFixed(2) : 0;
+    __G.meteoSet('clair', 600); __G.meteo.force = 0;
+    await dodo(1500);
+    const apres = { visible: G.visible, capots: (__G.city.neigeVeh || []).filter(m => m.visible).length, glisse: __G.surGlace(g0.x, g0.z) };
+    return { decor: !!G, bonshommes, congeres, glace: __G.city.glace.length, capots, sol, glisse, sec, apres };
+  });
+  const ok = r.decor && r.bonshommes >= 8 && r.congeres >= 40 && r.glace >= 8 && r.capots >= 8
+    && r.sol > 0.5 && r.glisse && !r.sec && !r.apres.visible && !r.apres.glisse;
+  return { ok, detail: `${r.congeres} congères, ${r.bonshommes} bonshommes de neige, ${r.glace} plaques de verglas, ${r.capots} véhicules enneigés, manteau au sol à ${r.sol} · on glisse sur une plaque=${r.glisse} et pas à côté=${!r.sec} · tout disparaît au retour du beau temps=${!r.apres.visible}` };
+});
+
+test('on peut détruire une voiture de police à coups de feu', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    const pc = __G.police.cars[0];
+    pc.x = 0; pc.z = 48; pc.y = 0; pc.h = 0; pc.dmg = 0; pc.dead = false;
+    pc.g.position.set(0, 0, 48); __G.city.cars.indexOf(pc);
+    if (pc.solid) { pc.solid.x = 0; pc.solid.z = 48; }
+    __G.P.pos.set(0, 0.4, 40);
+    const tirer = () => { const s = { m: null, p: new __G.THREE.Vector3(0, 1.2, 40), v: new __G.THREE.Vector3(0, 0, 95), t: 0, mine: true, dmg: 24 };
+      __G.shots.push(s); __G.spawnShot(s); for (let i = 0; i < 30; i++) __G.shotsTick(1 / 120); };
+    tirer(); const un = Math.round(pc.dmg || 0);
+    let n = 1;
+    while (n < 12 && !pc.dead) { tirer(); n++; }
+    const res = { un, n, dmg: Math.round(pc.dmg || 0), dead: !!pc.dead, wanted: __G.police.wanted, riposte: __G.police.riposte > __G.simTime };
+    __G.clearWanted();
+    return res;
+  });
+  const ok = r.un > 10 && r.dead && r.n <= 8 && r.riposte;
+  return { ok, detail: `une balle inflige ${r.un} de dégâts à la voiture de police · elle explose au bout de ${r.n} balles (dégâts ${r.dmg}) · la police riposte aussitôt=${r.riposte}` };
+});
+
+test('le fusil à lunette vise d\'abord, puis tire au second appui', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    __G.owned.add('arme:sniper'); __G.saveOwned(); __G.equipWeapon('sniper');
+    __G.P.ammo = 5; __G.P.fireCd = 0; __G.P.zoom = false;
+    const w = __G.WEAPONS.sniper;
+    const n0 = __G.shots.length;
+    __G.fire();
+    const apres1 = { zoom: __G.P.zoom, tirs: __G.shots.length - n0, classe: document.body.classList.contains('zoom'), degaine: __G.P.drawn };
+    __G.P.fireCd = 0;
+    __G.fire();
+    const apres2 = { zoom: __G.P.zoom, tirs: __G.shots.length - n0, classe: document.body.classList.contains('zoom'), holster: __G.P.holsterT > 0 };
+    __G.shots.length = n0;
+    __G.equipWeapon(null);
+    return { p: w.p, dmg: w.dmg, portee: w.speed, apres1, apres2, scope: !!document.getElementById('scope') };
+  });
+  const ok = r.apres1.zoom && r.apres1.tirs === 0 && r.apres1.classe && r.apres1.degaine
+    && !r.apres2.zoom && r.apres2.tirs === 1 && !r.apres2.classe && r.apres2.holster && r.scope && r.dmg >= 60;
+  return { ok, detail: `fusil à lunette (${r.p} 🪙, ${r.dmg} de dégâts) · 1er appui : œil dans la lunette (grossissement affiché=${r.apres1.classe}), aucun tir · 2ᵉ appui : ${r.apres2.tirs} balle partie et rengainage programmé=${r.apres2.holster}` };
+});
+
+test('cartouches perforantes, incendiaires et explosives', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    const types = Object.keys(__G.MUNITIONS);
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.ammo = 99;
+    const tirer = () => { __G.P.fireCd = 0; const n = __G.shots.length; __G.fire();
+      const s = __G.shots[__G.shots.length - 1]; return n < __G.shots.length ? { dmg: s.dmg, feu: !!s.feu, boom: !!s.boom } : null; };
+    __G.P.munition = 'std'; const std = tirer();
+    __G.P.munition = 'perf'; __G.P.muniStock.perf = 10; const perf = tirer();
+    __G.P.munition = 'inc'; __G.P.muniStock.inc = 10; const inc = tirer();
+    __G.P.munition = 'exp'; __G.P.muniStock.exp = 10; const exp = tirer();
+    const stockApres = __G.P.muniStock.perf;
+    __G.shots.length = 0;
+    // feu au sol : il brûle un bot qui passe dedans
+    const b = __G.bots[0]; b.ko = 0; b.hp = 100; b.pos.set(20, 0.3, 60); b.av.group.position.copy(b.pos);
+    __G.feuAuSol(20, 0.1, 60);
+    const feux0 = __G.city.feux.length;
+    for (let i = 0; i < 200; i++) { __G.simTime += 1 / 30; __G.feuxTick(1 / 30); }
+    const brule = 100 - (b.hp ?? 100);
+    // explosion : elle casse le mobilier urbain et abîme les véhicules
+    const lamp = __G.breakables.find(x => x.kind === 'lamp' && !x.broken);
+    const car = __G.city.cars.find(c => !c.heli);
+    car.x = lamp.x + 2; car.z = lamp.z; car.dmg = 0; car.dead = false; if (car.solid) { car.solid.x = car.x; car.solid.z = car.z; }
+    __G.P.pos.set(lamp.x + 12, 0.4, lamp.z + 12);
+    __G.balleExplose(lamp.x, 1, lamp.z);
+    const res = { types, std, perf, inc, exp, stockApres, feux0, brule: Math.round(brule),
+      lampCassee: !!lamp.broken, degatsVoiture: Math.round(car.dmg || 0) };
+    __G.city.feux.forEach(f => __G.worldGroup.remove(f.g)); __G.city.feux.length = 0;
+    __G.P.munition = 'std'; __G.equipWeapon(null); __G.clearWanted();
+    return res;
+  });
+  const ok = r.types.length === 4 && r.perf.dmg > r.std.dmg * 1.8 && r.inc.feu && r.exp.boom
+    && r.stockApres === 9 && r.feux0 === 1 && r.brule > 20 && r.lampCassee && r.degatsVoiture > 40;
+  return { ok, detail: `4 sortes de cartouches · standard ${r.std.dmg} dégâts, perforantes ${r.perf.dmg}, incendiaires ${r.inc.dmg} (feu=${r.inc.feu}), explosives ${r.exp.dmg} (explosion=${r.exp.boom}) · le stock se décompte (${r.stockApres} restantes) · le feu au sol brûle un bot de ${r.brule} PV · l'explosion casse le lampadaire=${r.lampCassee} et met ${r.degatsVoiture} de dégâts à la voiture d'à côté` };
+});
+
+test('un seul coffre laisse le temps de fuir, trois font venir tout le monde', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -57, y: 10.2, z: 70, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    const essai = n => {
+      __G.clearWanted(); __G.police.alarmT = 0; __G.police.coffres = n;
+      __G.city.guards.forEach(g => { g.alert = false; });
+      const t0 = __G.simTime;
+      __G.bankAlarm();
+      return { retard: +Math.max(0, (__G.police.renfortT || t0) - t0).toFixed(0), voitures: __G.police.cars.length,
+        actives: __G.police.cars.filter(c => c.active).length, gardes: __G.city.guards.filter(g => g.alert).length,
+        etoiles: __G.police.wanted, traque: +(__G.police.decayT - t0).toFixed(0) };
+    };
+    const un = essai(0), deux = essai(1), trois = essai(3);   // 0 = on force le premier coffre
+    // le coffre verse bien 500 pièces d'un coup
+    const sf = __G.city.safes.find(s => !s.open) || __G.city.safes[0];
+    sf.open = false; sf.progress = 0.99; __G.city.safeNear = sf; __G.keys.add('KeyE');
+    const av = __G.wallet; __G.safesTick(1 / 30); __G.keys.delete('KeyE'); __G.city.safeNear = null;
+    const gain = __G.wallet - av;
+    __G.police.coffres = 0; __G.clearWanted();
+    return { un, deux, trois, gain, montant: sf.amount };
+  });
+  const ok = r.gain === 500 && r.montant === 500 && r.un.retard > r.deux.retard && r.deux.retard > r.trois.retard
+    && r.trois.retard === 0 && r.un.gardes < r.trois.gardes && r.un.voitures < r.trois.voitures && r.un.traque < r.trois.traque;
+  return { ok, detail: `coffre = ${r.gain} 🪙 versés d'un coup · premier coffre : la police démarre après ${r.un.retard} s (${r.un.voitures} voitures, ${r.un.gardes} garde alerté, traque ${r.un.traque} s) · au deuxième : ${r.deux.retard} s, ${r.deux.gardes} gardes · au quatrième : ${r.trois.retard} s, ${r.trois.voitures} voitures, ${r.trois.gardes} gardes et ${r.trois.traque} s de traque` };
+});
+
+test('rien ne dépasse des murs de l\'armurerie, et la banque est meublée', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 52, y: 1, z: 19, hour: 12 });
+    const B = new __G.THREE.Box3(), p2 = new __G.THREE.Vector3();
+    const murs = { x1: 46, x2: 58, z1: 14.5, z2: 23.5 };
+    const dehors = [];
+    let objets = 0;
+    __G.worldGroup.traverse(o => {
+      if (!o.isMesh || !o.geometry) return;
+      o.getWorldPosition(p2);
+      if (p2.x < 46.4 || p2.x > 57.6 || p2.z < 14.9 || p2.z > 23.1 || p2.y < 0.4 || p2.y > 4.3) return;
+      B.setFromObject(o);
+      if (B.max.x - B.min.x > 5 || B.max.z - B.min.z > 5) return;   // la structure elle-même
+      objets++;
+      const d = Math.max(murs.x1 - B.min.x, B.min.x * 0 + B.max.x - murs.x2, murs.z1 - B.min.z, B.max.z - murs.z2);
+      if (d > 0.05) dehors.push({ x: +p2.x.toFixed(1), z: +p2.z.toFixed(1), y: +p2.y.toFixed(1), d: +d.toFixed(2) });
+    });
+    // banque : on compte les objets du hall
+    const bk = __G.city.bank;
+    let meubles = 0;
+    __G.worldGroup.traverse(o => {
+      if (!o.isMesh || !o.geometry) return;
+      o.getWorldPosition(p2);
+      if (Math.abs(p2.x - bk.x) < 9.5 && Math.abs(p2.z - bk.z) < 9.5 && p2.y > 0.4 && p2.y < 4.6) meubles++;
+    });
+    const assises = __G.city.benches.filter(b => Math.abs(b.x - bk.x) < 9 && Math.abs(b.z - bk.z) < 9).length;
+    return { objets, dehors: dehors.slice(0, 5), n: dehors.length, meubles, assises };
+  });
+  const ok = r.n === 0 && r.objets >= 12 && r.meubles >= 60 && r.assises >= 2;
+  return { ok, detail: `armurerie : ${r.objets} objets à l'intérieur, ${r.n} qui dépassent des murs${r.n ? ' (' + JSON.stringify(r.dehors) + ')' : ''} · banque : ${r.meubles} éléments dans le hall dont ${r.assises} canapés où s'asseoir` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'superobby.html');
   const {srv,port}=await serve(file);

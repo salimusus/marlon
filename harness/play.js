@@ -2931,6 +2931,457 @@ test("la boutique « maison & déco » s'est étoffée, alarme comprise", async 
   return { ok, detail: `${r.n} articles de décoration, tous modélisés en 3D (${r.murals} à accrocher au mur), l'alarme « ${r.alarme && r.alarme.n} » à ${r.alarme && r.alarme.p} 🪙, aucun doublon ni article sans prix` };
 });
 
+test('la ville se répare : vitrines remplacées, véhicules et hélico ramenés à leur place', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -19, y: 1, z: 12, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 500));
+    const G = __G, res = {};
+    // une vitrine cassée est remplacée au bout d'un moment, hors de vue
+    const v = G.breakables.filter(b => b.kind === 'glass')
+      .map(b => ({ b, d: Math.hypot(b.x - G.P.pos.x, b.z - G.P.pos.z) })).sort((a, c) => a.d - c.d)[0].b;
+    G.breakThing(v, { x: v.x, z: v.z }, true); G.breakThing(v, { x: v.x, z: v.z }, true);
+    res.cassee = { broken: !!v.broken, retireDesSolides: G.solids.indexOf(v.solid) < 0, casseT: !!v.casseT };
+    G.P.pos.set(60, 1, 60); v.casseT = G.simTime - 200; G.city.remiseT = 0;
+    G.remiseTick(2);
+    res.reparee = { broken: !!v.broken, solide: G.solids.indexOf(v.solid) >= 0, mesh: !!v.m.parent };
+    // un lampadaire couché se redresse dans son orientation d'origine
+    const l = G.breakables.find(b => b.kind === 'lamp' && !b.broken);
+    G.breakThing(l, { x: l.x + 2, z: l.z }, true);
+    const couche = Math.abs(l.g.quaternion.x) + Math.abs(l.g.quaternion.z);
+    l.casseT = G.simTime - 300; G.city.remiseT = 0; G.P.pos.set(l.x + 90, 1, l.z + 90);
+    G.remiseTick(2);
+    res.lampadaire = { couche: +couche.toFixed(2), redresse: Math.abs(l.g.quaternion.x) + Math.abs(l.g.quaternion.z) < 0.02, casse: !!l.broken };
+    // une voiture abandonnée à l'autre bout de la ville revient à sa place
+    const c = G.city.cars.find(x => !x.busy && !x.kart && !x.heli);
+    const home = c.home0.slice();
+    c.x = home[0] + 70; c.z = home[1] + 40; c.g.position.set(c.x, 0, c.z); c.loinT = 0;
+    G.P.pos.set(-100, 1, 230);
+    for (let i = 0; i < 60; i++) { G.city.remiseT = 0; G.remiseTick(2); }
+    res.voiture = { revenue: Math.hypot(c.x - home[0], c.z - home[1]) < 1.5 };
+    // l'hélicoptère laissé en vol au-dessus de sa base redescend aussi
+    const h = G.city.cars.find(x => x.heli);
+    h.x = h.home0[0]; h.z = h.home0[1]; h.y = 30; h.g.position.set(h.x, h.y, h.z); h.loinT = 0;
+    for (let i = 0; i < 60; i++) { G.city.remiseT = 0; G.remiseTick(2); }
+    res.helico = { y: +h.y.toFixed(2), pose: h.y < 1 };
+    // une épave est remorquée et réparée
+    const e = G.city.cars.filter(x => x.parts && x !== c)[0];
+    G.explodeVehicle(e); e.dead = true;
+    const detache = [e.parts.hood, ...e.parts.doors].filter(m => m.parent !== e.g).length;
+    e.loinT = 0; e.x = e.home0[0] + 60; e.z = e.home0[1];
+    for (let i = 0; i < 80; i++) { G.city.remiseT = 0; G.remiseTick(2); }
+    res.epave = { detacheAvant: detache, detacheApres: [e.parts.hood, ...e.parts.doors].filter(m => m.parent !== e.g).length,
+      revenue: Math.hypot(e.x - e.home0[0], e.z - e.home0[1]) < 1.5, dead: !!e.dead };
+    return res;
+  });
+  const ok = r.cassee.broken && r.cassee.retireDesSolides && r.cassee.casseT
+    && !r.reparee.broken && r.reparee.solide && r.reparee.mesh
+    && r.lampadaire.couche > 0.1 && r.lampadaire.redresse && !r.lampadaire.casse
+    && r.voiture.revenue && r.helico.pose
+    && r.epave.detacheAvant >= 3 && r.epave.detacheApres === 0 && r.epave.revenue && !r.epave.dead;
+  return { ok, detail: `vitrine brisée puis remplacée (solide et mesh de retour) · lampadaire couché (${r.lampadaire.couche}) puis redressé · voiture abandonnée à 80 m ramenée à sa place · hélico laissé à 30 m d'altitude reposé à ${r.helico.y} m · épave remorquée et recollée (${r.epave.detacheAvant} pièces détachées → ${r.epave.detacheApres})` };
+});
+
+test('une balle fissure puis fait voler la vitrine en éclats, et traverse pour toucher derrière', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -19, y: 1, z: 12, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    G.clearWanted(); G.police.avert = 0;
+    const vitres = G.breakables.filter(b => b.kind === 'glass');
+    res.nb = vitres.length;
+    const v = vitres.map(b => ({ b, d: Math.hypot(b.x - G.P.pos.x, b.z - G.P.pos.z) })).sort((a, c) => a.d - c.d)[0].b;
+    res.lien = !!v.solid.brk;
+    const tirer = () => {
+      const sh = { m: null, p: new G.THREE.Vector3(v.x, v.solid.y, v.z - 6), v: new G.THREE.Vector3(0, 0, 90), t: 0, mine: true, dmg: 20 };
+      G.shots.push(sh); G.spawnShot(sh);
+      for (let i = 0; i < 8; i++) G.shotsTick(1 / 60);
+    };
+    tirer(); res.apres1 = { fissuree: !!v.cracked, brisee: !!v.broken };
+    tirer(); res.apres2 = { brisee: !!v.broken, solideRetire: G.solids.indexOf(v.solid) < 0 };
+    // la balle ne s'arrête pas sur la vitre : un bot placé derrière est touché
+    const v2 = vitres.find(b => !b.broken && b !== v);
+    const b = G.bots[0]; b.ko = 0; b.hp = 100;
+    b.pos.set(v2.x, 0.3, v2.z + 2.2); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    b.pos.y = 0.3; b.av.group.position.copy(b.pos);
+    const sh2 = { m: null, p: new G.THREE.Vector3(v2.x, 1.9, v2.z - 5), v: new G.THREE.Vector3(0, 0, 90), t: 0, mine: true, dmg: 20 };
+    G.shots.push(sh2); G.spawnShot(sh2);
+    for (let i = 0; i < 8; i++) G.shotsTick(1 / 60);
+    res.traverse = { vitre: !!v2.cracked || !!v2.broken, botTouche: b.hp < 100 };
+    return res;
+  });
+  const ok = r.nb >= 20 && r.lien && r.apres1.fissuree && !r.apres1.brisee && r.apres2.brisee && r.apres2.solideRetire
+    && r.traverse.vitre && r.traverse.botTouche;
+  return { ok, detail: `${r.nb} vitrines de boutique · première balle : fissure, deuxième : éclats (le solide disparaît) · la balle poursuit sa route à travers la vitre et touche ce qu'il y a derrière (${r.traverse.botTouche})` };
+});
+
+test("à la salle de sport on s'allonge vraiment sur le banc et on court sur le tapis", async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -2.9, y: 1, z: 22, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    const bench = G.city.gym.bench, run = G.city.gym.run;
+    res.appareils = { banc: [bench.x, bench.z, bench.y], tapis: [run.x, run.z, run.y] };
+    // le point d'accroche est SUR l'appareil (avant, il tombait 60 cm derrière)
+    const solide = (x, z, y) => G.solids.some(o => Math.abs(o.x - x) < o.w / 2 + 0.1 && Math.abs(o.z - z) < o.d / 2 + 0.1 && Math.abs((o.y + o.h / 2) - y) < 0.12);
+    res.surLAppareil = { banc: solide(bench.x, bench.z, bench.y), tapis: solide(run.x, run.z, run.y) };
+    // développé couché : allongé, la barre monte à chaque répétition
+    G.P.pos.set(bench.x, 1, bench.z);
+    G.startGym('bench'); G.gym.end = G.simTime + 600;
+    for (let i = 0; i < 30; i++) G.gymTick(1 / 30);
+    for (let k = 0; k < 25 && Math.abs(G.me.group.rotation.x + Math.PI / 2) > 0.2; k++) await new Promise(r2 => setTimeout(r2, 200));
+    res.banc = { pos: [+G.P.pos.x.toFixed(2), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(2)],
+      allonge: Math.abs(G.me.group.rotation.x + Math.PI / 2) < 0.2, reps: G.gym.reps };
+    const y0 = G.city.gym.bench.barre.mesh.position.y;
+    G.P.jumpBuf = 1; G.gymTick(1 / 30);
+    res.barre = { repos: +y0.toFixed(2), pousse: +G.city.gym.bench.barre.mesh.position.y.toFixed(2), reps: G.gym.reps };
+    G.gym.on = null;
+    // tapis de course : debout sur la bande, qui défile
+    G.P.pos.set(run.x, 1, run.z);
+    G.startGym('run'); G.gym.end = G.simTime + 600;
+    const z0 = G.city.gym.run.rayures[0].mesh.position.z;
+    for (let i = 0; i < 30; i++) G.gymTick(1 / 30);
+    for (let k = 0; k < 25 && Math.abs(G.me.group.rotation.x) > 0.2; k++) await new Promise(r2 => setTimeout(r2, 200));
+    res.tapis = { pos: [+G.P.pos.x.toFixed(2), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(2)],
+      debout: Math.abs(G.me.group.rotation.x) < 0.2, bande: +(z0 - G.city.gym.run.rayures[0].mesh.position.z).toFixed(2) };
+    G.gym.on = null;
+    return res;
+  });
+  const surBanc = Math.abs(r.banc.pos[0] - r.appareils.banc[0]) < 0.3 && Math.abs(r.banc.pos[2] - r.appareils.banc[1]) < 0.3 && Math.abs(r.banc.pos[1] - r.appareils.banc[2]) < 0.05;
+  const surTapis = Math.abs(r.tapis.pos[0] - r.appareils.tapis[0]) < 0.3 && Math.abs(r.tapis.pos[2] - r.appareils.tapis[1]) < 0.3;
+  const ok = r.surLAppareil.banc && r.surLAppareil.tapis && surBanc && r.banc.allonge && r.barre.pousse > r.barre.repos + 0.1
+    && r.barre.reps > 0 && surTapis && r.tapis.debout && Math.abs(r.tapis.bande) > 0.5;
+  return { ok, detail: `banc à ${r.appareils.banc.join(', ')} : le joueur s'y allonge (rotation ${r.banc.allonge}) et la barre monte de ${r.barre.repos} à ${r.barre.pousse} m à chaque répétition · tapis à ${r.appareils.tapis.join(', ')} : il y court debout et la bande défile de ${Math.abs(r.tapis.bande)} m` };
+});
+
+test('au commissariat, une plainte envoie une patrouille chercher un bot et le met en cellule', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 26, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 500));
+    const G = __G, res = {};
+    res.guichet = !!G.city.plainteDesk;
+    // le commissariat est meublé : bureaux, armoire, casiers…
+    const sx = G.police.station.x, sz = G.police.station.z;
+    res.meubles = G.solids.filter(o => Math.abs(o.x - sx) < 9 && Math.abs(o.z - sz) < 6 && o.h < 3 && o.y < 3).length;
+    // on s'approche du guichet
+    G.P.pos.set(G.city.plainteDesk.x, 0.4, G.city.plainteDesk.z + 1.2);
+    for (let i = 0; i < 40 && !G.city.plainteNear; i++) { await new Promise(r2 => setTimeout(r2, 120)); G.P.pos.set(G.city.plainteDesk.x, 0.4, G.city.plainteDesk.z + 1.2); }
+    res.proche = G.city.plainteNear;
+    G.openPlainte();
+    res.fenetre = G.uiOpen === 'plainte';
+    res.choix = { qui: document.querySelectorAll('#plainteQui b').length, motifs: document.querySelectorAll('#plainteQuoi b').length };
+    const b = G.bots[3];
+    b.prison = 0; b.pos.set(sx + 8, 0.3, sz + 14); b.av.group.position.copy(b.pos);
+    G.plainte.qui = b; G.plainte.motif = 'voiture';
+    const w0 = G.wallet;
+    G.deposerPlainte();
+    res.patrouille = G.plainte.chasse ? G.plainte.chasse.agents.length : 0;
+    for (let i = 0; i < 400 && G.plainte.chasse; i++) G.plainteTick(1 / 30);
+    res.arrestation = { enCellule: !!b.prison, distanceCellule: +Math.hypot(b.pos.x - G.police.cell.x, b.pos.z - G.police.cell.z).toFixed(1),
+      prime: G.wallet - w0, agentsRestants: G.police.agents.length };
+    // il ne bouge plus de sa cellule
+    const av = [b.pos.x, b.pos.z];
+    G.updateBot(b, 1 / 30);
+    res.reste = Math.hypot(b.pos.x - av[0], b.pos.z - av[1]) < 0.01;
+    // fin de peine
+    b.prison = G.simTime - 1; G.plainteTick(1 / 30);
+    res.libere = !b.prison;
+    return res;
+  });
+  const ok = r.guichet && r.meubles >= 8 && r.proche && r.fenetre && r.choix.qui >= 10 && r.choix.motifs === 6
+    && r.patrouille === 2 && r.arrestation.enCellule && r.arrestation.distanceCellule < 4
+    && r.arrestation.prime === 15 && r.arrestation.agentsRestants === 0 && r.reste && r.libere;
+  return { ok, detail: `commissariat meublé (${r.meubles} meubles) avec guichet des plaintes · ${r.choix.qui} personnes et ${r.choix.motifs} motifs proposés · deux agents partent, attrapent le bot et l'enferment à ${r.arrestation.distanceCellule} m du centre de la cellule (+${r.arrestation.prime} 🪙) · il y reste jusqu'à la fin de sa peine, puis sort` };
+});
+
+test('la police laisse une vraie fenêtre de fuite et ferme les yeux sur les broutilles', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    G.clearWanted(); G.police.avert = 0;
+    G.P.pos.set(0, 0.3, 60);   // loin du commissariat, personne ne voit rien
+    // trois broutilles : que des avertissements
+    G.infraction('petit délit 1', 1, 1); G.infraction('petit délit 2', 1, 1); G.infraction('petit délit 3', 1, 1);
+    res.broutilles = { wanted: G.police.wanted, avert: G.police.avert };
+    G.infraction('petit délit 4', 1, 1);
+    res.quatrieme = { wanted: G.police.wanted, fenetre: Math.round(G.police.reactT - G.simTime) };
+    // un délit grave : traque immédiate, mais les voitures restent au poste le temps de la fenêtre
+    G.clearWanted(); G.police.avert = 0;
+    G.infraction('délit grave', 3, 3);
+    res.grave = { wanted: G.police.wanted, fenetre: Math.round(G.police.reactT - G.simTime), actives: G.police.cars.filter(c => c.active).length };
+    const t0 = G.simTime;
+    for (let i = 0; i < 200; i++) { G.simTime = t0 + i * 0.1; G.policeTick(0.1); }
+    res.apresFenetre = { actives: G.police.cars.filter(c => c.active).length, react: G.police.reactT };
+    // pendant la poursuite, pas de faux compte à rebours
+    G.infraction('deuxième délit', 1, 2);
+    res.pendant = { react: G.police.reactT, hud: document.getElementById('wanted').textContent };
+    // un délit vu par la police ne bénéficie d'aucune clémence
+    G.clearWanted(); G.police.avert = 0;
+    const pc = G.police.cars[0]; pc.x = G.P.pos.x + 8; pc.z = G.P.pos.z; pc.active = true;
+    res.temoin = G.policeTemoin(28);
+    G.infraction('vu par la police', 1, 1);
+    res.vu = { wanted: G.police.wanted };
+    G.clearWanted();
+    return res;
+  });
+  const ok = r.broutilles.wanted === 0 && r.broutilles.avert === 3 && r.quatrieme.wanted === 1
+    && r.quatrieme.fenetre >= 25 && r.grave.wanted === 3 && r.grave.fenetre >= 12 && r.grave.actives === 0
+    && r.apresFenetre.actives >= 2 && r.pendant.react === 0 && !/arrive dans/.test(r.pendant.hud)
+    && r.temoin && r.vu.wanted >= 1;
+  return { ok, detail: `trois petits délits non vus = trois avertissements (traque à zéro), le quatrième lance la traque avec ${r.quatrieme.fenetre} s d'avance · un délit grave donne ${r.grave.fenetre} s de fuite avec les voitures encore au poste, qui s'élancent ensuite (${r.apresFenetre.actives}) · plus de faux compte à rebours pendant la poursuite · un délit commis sous les yeux d'une patrouille compte tout de suite` };
+});
+
+test('les coffres de la banque rapportent de moins en moins et un braquage de bot n\'incrimine pas le joueur', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -52, y: 1, z: 70, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    G.wallet = 0; G.bank.coffresJour = 0; G.bank.jourT = G.simTime + 9999;
+    const gains = [];
+    for (let i = 0; i < 5; i++) {
+      const sf = G.city.safes.find(s => !s.planque);
+      sf.open = false; sf.progress = 1; G.city.safeNear = sf; G.keys.add('KeyE');
+      const w = G.wallet; G.safesTick(0.05); gains.push(G.wallet - w); sf.open = false;
+    }
+    G.keys.delete('KeyE'); G.city.safeNear = null;
+    res.gains = gains;
+    // le lendemain, la banque est réapprovisionnée
+    G.bank.jourT = G.simTime - 1;
+    const sf2 = G.city.safes.find(s => !s.planque);
+    sf2.open = false; sf2.progress = 1; G.city.safeNear = sf2; G.keys.add('KeyE');
+    const w2 = G.wallet; G.safesTick(0.05); res.lendemain = G.wallet - w2;
+    G.keys.delete('KeyE'); G.city.safeNear = null;
+    // un bot braque la banque : alerte des gardes, mais le joueur n'est pas recherché
+    G.clearWanted();
+    const b = G.bots[1];
+    b.activite = { k: 'braquage', etape: 'route', fin: G.simTime + 60 };
+    b.rdv = { x: 0, z: 0, arrive: true };
+    G.activiteTick(b, 0.1);
+    res.botBraque = { wanted: G.police.wanted, voituresActives: G.police.cars.filter(c => c.active).length,
+      alarmeBot: G.police.alarmeBot > G.simTime, gardesAlertes: G.city.guards.filter(g => g.alert).length };
+    G.clearWanted();
+    return res;
+  });
+  const ok = JSON.stringify(r.gains) === JSON.stringify([500, 300, 150, 75, 50]) && r.lendemain === 500
+    && r.botBraque.wanted === 0 && r.botBraque.voituresActives === 0 && r.botBraque.alarmeBot && r.botBraque.gardesAlertes > 0;
+  return { ok, detail: `coffres du jour : ${r.gains.join(' → ')} 🪙 puis ${r.lendemain} 🪙 le lendemain (la banque se réapprovisionne) · quand un bot braque la banque, les gardes s'affolent (${r.botBraque.gardesAlertes}) mais le joueur n'est ni recherché ni poursuivi` };
+});
+
+test('la mission sauvetage se joue de bout en bout et le GPS suit un vrai chemin de piéton', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 51, y: 1, z: -8, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 500));
+    const G = __G, res = {};
+    G.wallet = 0; G.clearWanted();
+    G.startMission('secours');
+    const d = G.mission.data, roof = d.roof;
+    res.toit = { x: Math.round(roof.x), z: Math.round(roof.z), y: +roof.y.toFixed(1),
+      vraiToit: (G.city.toits || []).some(t => Math.abs(t.x - roof.x) < 1 && Math.abs(t.z - roof.z) < 1) };
+    res.alerte = { wanted: G.police.wanted };
+    const heli = G.city.cars.find(c => c.heli);
+    G.enterCar(heli);
+    heli.x = roof.x; heli.z = roof.z; heli.y = roof.y + 0.02; heli.vy = -0.2;
+    for (let i = 0; i < 120; i++) G.driveStep(1 / 60);
+    res.pose = { landed: !!heli.landed, y: +heli.y.toFixed(2) };
+    G.missionTick(0.1);
+    res.etape = G.mission.step;
+    heli.x = 51; heli.z = -13; heli.y = 0.2; heli.vy = 0;
+    for (let i = 0; i < 60; i++) G.driveStep(1 / 60);
+    G.missionTick(0.1);
+    res.fin = { finie: !G.mission.cur, gain: G.wallet };
+    // on descend d'un hélico en vol : il se pose au lieu de rester en l'air
+    G.enterCar(heli); heli.y = 26; heli.landed = false; G.exitCar();
+    res.descente = { y: +heli.y.toFixed(2), pose: !!heli.landed };
+    // GPS : grille piétonne, tracé qui ne traverse pas les murs
+    G.setBeacon(-52, 70, 0.2);
+    G.gpsRoute.hide(); G.gpsRoute.update();
+    const bloque = g => { let n = 0; for (let i = 0; i < g.length; i++) if (g[i]) n++; return Math.round(n / g.length * 100); };
+    if (!G.NAV.blocked) G.buildNav();
+    res.grilles = { auto: bloque(G.NAV.blocked), pieton: bloque(G.NAV.pieton) };
+    G.clearBeacon();
+    return res;
+  });
+  const ok = r.toit.vraiToit && r.alerte.wanted === 0 && r.pose.landed && r.etape === 1 && r.fin.finie && r.fin.gain === 70
+    && r.descente.pose && r.descente.y < 1 && r.grilles.pieton < r.grilles.auto;
+  return { ok, detail: `le blessé attend sur un vrai toit accessible (${r.toit.x}, ${r.toit.z}) à ${r.toit.y} m, prendre la mission ne déclenche aucune alerte · l'hélico compte comme posé sur le toit, le blessé embarque et la mission se termine à l'héliport (+${r.fin.gain} 🪙) · quitter l'hélico en vol le pose (${r.descente.y} m) · le GPS a sa grille de piéton (${r.grilles.pieton} % de cases bloquées contre ${r.grilles.auto} % pour les voitures)` };
+});
+
+test('la police ne roule plus sous le sable du terrain de rallye', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: -40, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 400));
+    const G = __G, res = {};
+    const pc = G.police.cars[0];
+    pc.x = 0; pc.z = -70; pc.active = true; pc.route = null;
+    G.police.wanted = 1; G.police.lastSeen = [0, -70]; G.police.reactT = 0;
+    for (let i = 0; i < 30; i++) G.policeTick(1 / 30);
+    const sol = G.groundCar(pc.x, pc.z, pc.solid, pc.y);
+    res.surLeSable = { y: +pc.y.toFixed(2), relief: +sol.toFixed(2), sousLeSable: pc.y < sol - 0.3 };
+    // les itinéraires contournent les dunes
+    G.NAV.blocked = null; G.buildNav();
+    const dans = (x, z) => x > G.RALLY.x1 && x < G.RALLY.x2 && z > G.RALLY.z1 && z < G.RALLY.z2;
+    const ch = G.navPath(-90, -70, 90, -70) || [];
+    res.itineraire = { points: ch.length, dansLesDunes: ch.filter(pt => dans(pt[0], pt[1])).length };
+    // un agent à pied suit lui aussi le relief
+    const a = G.creerAgent(-20, -70, 0.3, false);
+    a.x = -20; a.z = -70;
+    G.P.pos.set(20, 0.3, -70);
+    G.police.sait = null; G.police.lastSeen = [20, -70]; G.police.wanted = 2; G.police.vuT = G.simTime;
+    for (let i = 0; i < 200; i++) G.agentsTick(1 / 30);
+    res.agent = { x: +a.x.toFixed(1), y: +a.y.toFixed(2), relief: +G.groundCar(a.x, a.z, null, a.y + 0.8).toFixed(2), aMarche: Math.abs(a.x + 20) > 1 };
+    G.clearWanted();
+    return res;
+  });
+  const ok = !r.surLeSable.sousLeSable && Math.abs(r.surLeSable.y - r.surLeSable.relief) < 0.4
+    && r.itineraire.points > 3 && r.itineraire.dansLesDunes === 0
+    && r.agent.aMarche && Math.abs(r.agent.y - r.agent.relief) < 0.6;
+  return { ok, detail: `la voiture de police roule à ${r.surLeSable.y} m sur un relief à ${r.surLeSable.relief} m (elle passait dessous) · les itinéraires contournent les dunes (${r.itineraire.dansLesDunes} point sur ${r.itineraire.points} dans le terrain) · un agent à pied traverse le sable à ${r.agent.y} m pour un relief de ${r.agent.relief} m` };
+});
+
+test('la guerre des gangs : chefs, planques, kidnapping, braquage, élimination et renaissance', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 700));
+    const G = __G, res = {};
+    // identité : nom, chef, villa, planque, magot
+    res.gangs = G.gangs.map(g => ({ nom: g.nom, chef: g.chefNom, membres: g.membres.length,
+      chefEnJeu: !!(g.chef && g.chef.chef), villa: !!g.villaPos, planque: !!g.planque, magot: g.magot > 0,
+      coffre: g.planque.coffre.amount === g.magot }));
+    res.planques = G.city.planques.length;
+    res.maPlanque = !!(G.gang.planque && G.gang.planque.joueur);
+    // on cogne un membre : il encaisse et finit KO
+    const g0 = G.gangs[0], m = g0.membres.find(x => !x.chef);
+    const rep0 = G.gang.rep;
+    let coups = 0;
+    while (!m.ko && coups < 40) { m.x = G.P.pos.x + 1.2; m.z = G.P.pos.z; m.av.group.position.set(m.x, m.y, m.z); G.P.punchT = 0; G.P.combo = 0; G.attack('punch'); coups++; }
+    res.combat = { coups, ko: !!m.ko, rep: G.gang.rep - rep0, gangEnColere: g0.etat === 'joueur' };
+    // kidnapping puis interrogatoire
+    G.P.pos.set(m.x, 0.3, m.z + 1);
+    res.kidnappable = !!G.peutKidnapper();
+    G.kidnapper(m);
+    const pl = G.gang.planque;
+    for (let i = 0; i < 3000 && G.P.otage; i++) {
+      const dx = pl.x - G.P.pos.x, dz = pl.z - G.P.pos.z, d = Math.hypot(dx, dz) || 1;
+      G.P.pos.x += dx / d * Math.min(0.08, d); G.P.pos.z += dz / d * Math.min(0.08, d);
+      G.otageTick(1 / 60);
+    }
+    res.otage = { enferme: G.gang.otages.length === 1, dansLaPlanque: G.gang.otages[0] ? Math.hypot(G.gang.otages[0].x - pl.x, G.gang.otages[0].z - pl.z) < 8 : false };
+    G.P.pos.set(G.gang.otages[0].x, 0.3, G.gang.otages[0].z + 1);
+    G.interroger(G.gang.otages[0]);
+    res.interrogatoire = { planqueConnue: !!g0.connu, balise: !!(G.beacon.m && G.beacon.m.visible) };
+    // braquage de la planque
+    const w0 = G.wallet, magot = g0.magot;
+    const cof = g0.planque.coffre;
+    cof.progress = 1; G.city.safeNear = cof; G.keys.add('KeyE'); G.safesTick(0.05);
+    G.keys.delete('KeyE'); G.city.safeNear = null;
+    res.braquage = { gain: G.wallet - w0, attendu: magot, magotVide: g0.magot === 0, guerre: g0.relation <= -50 };
+    // élimination : tout le monde au tapis
+    const nom0 = g0.nom, chef0 = g0.chefNom;
+    for (const x of g0.membres.slice()) { x.hp = 1; x.ko = 0; G.gangeurKO(x, 'test'); }
+    res.elimination = { dissous: !!g0.mort, recrues: (G.gang.membresLibres || []).length,
+      territoiresLiberes: !Object.values(G.guerre.territoires).includes('rouge') };
+    // renaissance
+    g0.mort = G.simTime - 1; G.renaitGang(g0);
+    res.renaissance = { nouveauNom: g0.nom !== nom0, nouveauChef: g0.chefNom !== chef0, generation: g0.generation,
+      plusFort: g0.force > 25, magot: g0.magot > 0, debout: g0.membres.filter(x => !x.ko).length };
+    return res;
+  });
+  const ok = r.gangs.length === 3 && r.gangs.every(g => g.chefEnJeu && g.villa && g.planque && g.magot && g.coffre && g.membres >= 5)
+    && r.planques === 4 && r.maPlanque
+    && r.combat.ko && r.combat.rep >= 3 && r.combat.gangEnColere
+    && r.kidnappable && r.otage.enferme && r.otage.dansLaPlanque
+    && r.interrogatoire.planqueConnue && r.interrogatoire.balise
+    && r.braquage.gain === r.braquage.attendu && r.braquage.magotVide && r.braquage.guerre
+    && r.elimination.dissous && r.elimination.recrues >= 1 && r.elimination.territoiresLiberes
+    && r.renaissance.nouveauNom && r.renaissance.nouveauChef && r.renaissance.generation === 2
+    && r.renaissance.plusFort && r.renaissance.magot && r.renaissance.debout >= 4;
+  return { ok, detail: `3 gangs nommés avec leur chef en jeu, leur villa et leur planque (${r.planques} planques dont la tienne) · ${r.combat.coups} coups pour mettre un membre au tapis (+${r.combat.rep} ⭐, le gang réagit) · il est kidnappé et enfermé dans ta planque, l'interrogatoire révèle leur planque · le coffre rapporte ${r.braquage.gain} 🪙 et déclenche la guerre · gang éliminé : ${r.elimination.recrues} recrue(s) changent de camp, ses quartiers se libèrent, puis il renaît (génération ${r.renaissance.generation}, ${r.renaissance.debout} hommes, plus fort)` };
+});
+
+test('territoires, revenus, réunions de chefs, entraînement et sauvegarde de la guerre', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 700));
+    const G = __G, res = {};
+    res.quartiers = G.TERRITOIRES.length;
+    // entraînement et armement par le chat
+    const b1 = G.bots[0];
+    G.amis.add(b1.name); G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    G.commandeSociale(b1.name + ' veux-tu venir dans le gang ?');
+    const f0 = G.gang.force;
+    res.ordreSport = G.commandeSociale(b1.name + ' va t\'entraîner à la salle de sport');
+    b1.rdv.arrive = true;
+    for (let i = 0; i < 400; i++) G.entrainementTick(1 / 30);
+    G.wallet = 300;
+    res.ordreArme = G.commandeSociale(b1.name + ' prends un fusil');
+    res.entrainement = { force0: f0, force: G.gang.force, arme: !!b1.arme, cout: 300 - G.wallet };
+    // prise d'un quartier
+    const t = G.TERRITOIRES.find(x => x.k === 'parc');
+    G.guerre.territoires.parc = 'bleu';
+    G.P.pos.set(t.x, 0.3, t.z);
+    b1.pos.set(t.x + 3, 0.3, t.z); 
+    G.gangs.forEach(g => g.membres.forEach(m => { m.x = 400; m.z = 400; }));
+    for (let i = 0; i < 60; i++) G.captureTick(1);
+    res.capture = { proprio: G.guerre.territoires.parc, rep: G.gang.rep };
+    // revenus versés dans la planque
+    G.gang.magot = 0; G.guerre.t = 0; G.revenusTick();
+    res.revenus = { magot: G.gang.magot, coffre: G.gang.planque.coffre.amount };
+    // réunion de chef : rendez-vous, arrivée, choix
+    const jaune = G.gangs.find(g => g.id === 'jaune');
+    G.proposeReunion(jaune);
+    res.rdv = { propose: !!G.guerre.reunion, lieu: G.guerre.reunion.nom, balise: !!(G.beacon.m && G.beacon.m.visible) };
+    G.P.pos.set(G.guerre.reunion.x, 0.3, G.guerre.reunion.z);
+    G.reunionTick(0.1);
+    res.ouverte = G.uiOpen === 'reunion';
+    G.wallet = 2000;
+    const rel0 = jaune.relation;
+    G.choixReunion('allie');
+    res.alliance = { avant: rel0, apres: jaune.relation, allie: !!jaune.allieJoueur, ui: G.uiOpen };
+    // sauvegarde compacte
+    G.saveGuerre();
+    const sv = JSON.parse(localStorage.getItem('superobby.guerre') || '{}');
+    res.sauvegarde = { octets: JSON.stringify(sv).length, rep: sv.rep === G.gang.rep, gangs: Object.keys(sv.gangs || {}).length,
+      terr: sv.terr && sv.terr.parc === 'joueur' };
+    // rang du joueur
+    G.gang.rep = 1200; res.rang = G.rangJoueur().n; G.gang.rep = sv.rep;
+    return res;
+  });
+  const ok = r.quartiers === 8 && r.ordreSport && r.ordreArme && r.entrainement.force > r.entrainement.force0
+    && r.entrainement.arme && r.entrainement.cout === 60
+    && r.capture.proprio === 'joueur' && r.revenus.magot > 0 && r.revenus.coffre === r.revenus.magot
+    && r.rdv.propose && r.rdv.balise && r.ouverte && r.alliance.allie && r.alliance.apres > r.alliance.avant && !r.alliance.ui
+    && r.sauvegarde.octets < 1200 && r.sauvegarde.rep && r.sauvegarde.gangs === 3 && r.sauvegarde.terr
+    && r.rang === 'Baron de la ville';
+  return { ok, detail: `${r.quartiers} quartiers à prendre · « va t'entraîner » monte la force du gang de ${r.entrainement.force0} à ${r.entrainement.force} et « prends un fusil » l'arme pour ${r.entrainement.cout} 🪙 · le parc bascule chez le joueur et lui verse ${r.revenus.magot} 🪙 de protection dans sa planque · un chef donne rendez-vous à ${r.rdv.lieu} et l'alliance se conclut (relation ${r.alliance.avant} → ${r.alliance.apres}) · tout tient dans ${r.sauvegarde.octets} octets de sauvegarde · à 1200 ⭐ le joueur est « ${r.rang} »` };
+});
+
+test('on nage à la surface au lieu de marcher au fond de la mer', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 150, y: 1, z: 40, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 600));
+    const G = __G, res = {};
+    const sea = G.city.sea;
+    // on tombe de 5 m au-dessus de l'eau et on laisse la physique tourner (appel direct de
+    // step : le rendu logiciel du banc d'essai est bien trop lent pour attendre en temps réel)
+    G.P.pos.set((sea.x1 + sea.x2) / 2, sea.top + 5, (sea.z1 + sea.z2) / 2); G.P.vel.set(0, 0, 0);
+    const suivi = [];
+    for (let i = 0; i < 420; i++) { G.step(1 / 60, true); if (i % 60 === 0) suivi.push(+G.P.pos.y.toFixed(2)); }
+    res.mer = { y: +G.P.pos.y.toFixed(2), surface: +sea.top.toFixed(2), nage: !!G.P.swimming,
+      fond: +(sea.top - 1.35).toFixed(2), suivi };
+    // la piscine de la villa aussi
+    const pool = G.city.villaPool;
+    if (pool) {
+      G.P.pos.set((pool.x1 + pool.x2) / 2, pool.top + 3, (pool.z1 + pool.z2) / 2); G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 420; i++) G.step(1 / 60, true);
+      res.piscine = { y: +G.P.pos.y.toFixed(2), surface: +pool.top.toFixed(2), nage: !!G.P.swimming };
+    }
+    return res;
+  });
+  const okMer = r.mer.nage && r.mer.y > r.mer.surface - 1.6 && r.mer.y < r.mer.surface + 0.6;
+  const okPiscine = !r.piscine || (r.piscine.nage && r.piscine.y > r.piscine.surface - 1.6 && r.piscine.y < r.piscine.surface + 0.6);
+  return { ok: okMer && okPiscine, detail: `tombé de 5 m dans la mer (surface ${r.mer.surface} m), le joueur remonte flotter à ${r.mer.y} m au lieu de couler au fond (${r.mer.suivi.join(' → ')})${r.piscine ? ` · dans la piscine de la villa (surface ${r.piscine.surface} m) il flotte à ${r.piscine.y} m` : ''}` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

@@ -2398,7 +2398,7 @@ function makeCar(color, x, z, h, opt = {}) {
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 0.7, z, 2.6, 1.4, 4.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   for (const w of wheels) w.position.y = 0.36;
-  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kart, baseW: 2.4, baseD: 4.4, dmg: 0, lampR: g.lampR, lampB: g.lampB, bodyMat: body, tuneMesh: [], parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors: [] } };
+  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kart, baseW: 2.4, baseD: 4.4, dmg: 0, home0: [x, z, h], lampR: g.lampR, lampB: g.lampB, bodyMat: body, tuneMesh: [], parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors: [] } };
   if (kart) c.spec = { max: 32, rev: -9, accel: 26, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 38, rev: -9, accel: 32, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 26, rev: -8, accel: 19, turn: 2.1, seat: 0 };
   vehicleSolid(c); return c;
 }

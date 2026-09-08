@@ -133,6 +133,7 @@ window.__G = {
   bank: typeof bank !== 'undefined' ? bank : null,
   buildGangs: typeof buildGangs === 'function' ? buildGangs : null,
   driveStep: typeof driveStep === 'function' ? driveStep : null,
+  step: typeof step === 'function' ? step : null,
   gangeurKO: typeof gangeurKO === 'function' ? gangeurKO : null,
   verifieElimination: typeof verifieElimination === 'function' ? verifieElimination : null,
   renaitGang: typeof renaitGang === 'function' ? renaitGang : null,

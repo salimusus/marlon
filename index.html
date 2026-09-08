@@ -45,6 +45,34 @@ body.touch .ibtn.touchonly{display:grid}
 .lbr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 #lb.closed #lbRows{display:none}
 @media (max-width:640px){#top{grid-template-columns:auto 1fr}.tr{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 52px)}#lb{min-width:128px;font-size:12px}.lbr .nm{max-width:82px}.lbr,.lbh{padding:4px 8px}.pill{font-size:12px;padding:6px 7px}#me{display:none}.tc{gap:4px}.ibtn{width:36px;height:36px;font-size:16px}#world .wn{display:none}#respect .rt{display:none}}
+/* Téléphone en portrait : la colonne du milieu se retrouvait coincée à 40 px de large et
+   ses pastilles débordaient de l'écran par la droite. On lui donne toute la largeur, sur
+   une deuxième ligne, et on lui interdit de dépasser. */
+@media (max-width:480px){#top{grid-template-columns:minmax(0,1fr)}
+  #top>*{min-width:0;max-width:100%}
+  .tl{flex-wrap:wrap}
+  .tc{justify-content:flex-start;flex-wrap:wrap;margin-top:6px}
+  .tr{position:static;align-items:flex-start;margin-top:6px}
+  #lb{min-width:0;width:100%}#lbRows{max-height:30vh;overflow-y:auto}
+  .pill{font-size:11px;padding:5px 6px}}
+/* Téléphone COUCHÉ : large mais très bas de plafond, donc les règles « petit écran » calées
+   sur la largeur ne s'appliquaient pas. Résultat : la colonne du milieu était écrasée à
+   quelques dizaines de pixels et ses pastilles s'empilaient en colonne au beau milieu de la
+   vue, pendant que le tableau des scores descendait par-dessus le bouton SAUT. On passe donc
+   aussi en mode compact quand la HAUTEUR est faible : pastilles sur leur propre ligne sous
+   les boutons, barre de vie masquée, tableau des scores borné et défilant. */
+@media (max-height:500px){#top{grid-template-columns:minmax(0,1fr)}
+  .tl{flex-wrap:wrap}
+  /* les pastilles passent sous les boutons, et s'arrêtent avant le tableau des scores */
+  .tc{justify-content:flex-start;flex-wrap:wrap;min-width:0;margin-top:6px;padding-right:165px}
+  /* le tableau des scores sort du flux : sinon, s'étalant sur les deux lignes de la grille,
+     il repoussait les pastilles au beau milieu de l'écran */
+  .tr{position:fixed;right:calc(env(safe-area-inset-right) + 10px);top:calc(env(safe-area-inset-top) + 52px)}
+  #me{display:none}
+  .pill{font-size:12px;padding:5px 7px}
+  /* et il s'arrête bien au-dessus du bouton SAUT */
+  #lb{min-width:150px;max-height:calc(100vh - 165px);display:flex;flex-direction:column}
+  #lbRows{overflow-y:auto;min-height:0}}
 body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lobby #emoteBtn{display:none!important}
 
 /* ---------- chat ---------- */

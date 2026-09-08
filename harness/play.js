@@ -3485,6 +3485,47 @@ test('la ville vit au rythme de l\'écran, pas à 120 Hz', async p => {
   return { ok, detail: `${r.tours} passages de la vie de la ville par seconde de jeu (attendu 60, et surtout pas 120) · à 30 images/s, ${r.toursLent} passages : aucun tour perdu ni doublé` };
 });
 
+test('rien ne déborde de l\'écran, du téléphone couché à la télé', async p => {
+  const FORMATS = [[812, 375, 'téléphone couché'], [390, 844, 'téléphone debout'], [1920, 1080, 'télé 1080p'], [1024, 640, 'ordinateur']];
+  const avant = p.viewportSize();
+  const res = [];
+  for (const [w, h, nom] of FORMATS) {
+    await p.setViewportSize({ width: w, height: h });
+    await p.evaluate(() => { __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 }); window.dispatchEvent(new Event('resize')); });
+    // le rendu logiciel tourne à 2 images/s : on attend que la toile ait vraiment suivi
+    // la nouvelle taille au lieu de parier sur un délai fixe
+    await p.waitForFunction(v => { const c = document.getElementById('c').getBoundingClientRect();
+      return Math.abs(c.width - v.w) < 2 && Math.abs(c.height - v.h) < 2; }, { w, h }, { timeout: 30000 }).catch(() => {});
+    await p.waitForTimeout(400);
+    const r = await p.evaluate(({ w, h }) => {
+      // ce qui dépasse À L'INTÉRIEUR d'une boîte qui défile n'est pas un débordement
+      const dansUnDefilement = e => { for (let n = e.parentElement; n && n !== document.body; n = n.parentElement) {
+        const st = getComputedStyle(n); if (/auto|scroll|hidden/.test(st.overflowY + st.overflowX)) return true; } return false; };
+      const deb = [], petits = [];
+      for (const e of document.querySelectorAll('body *')) {
+        const st = getComputedStyle(e);
+        if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
+        const b = e.getBoundingClientRect();
+        if (b.width < 2 || b.height < 2) continue;
+        if ((b.right > w + 1 || b.bottom > h + 1 || b.left < -1 || b.top < -1) && !dansUnDefilement(e))
+          deb.push(`${e.tagName}#${e.id || ''}.${(e.className || '').toString().split(' ')[0]}`);
+      }
+      if (document.body.classList.contains('touch'))
+        for (const e of document.querySelectorAll('button,.btn,.ibtn')) {
+          if (getComputedStyle(e).display === 'none') continue;
+          const b = e.getBoundingClientRect();
+          if (b.width > 2 && (b.width < 34 || b.height < 34)) petits.push(e.id || e.className);
+        }
+      return { deb: deb.slice(0, 5), petits: petits.slice(0, 5) };
+    }, { w, h });
+    res.push({ nom, ...r });
+  }
+  await p.setViewportSize(avant);
+  await p.evaluate(() => { __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 }); });
+  const ok = res.every(r => r.deb.length === 0 && r.petits.length === 0);
+  return { ok, detail: res.map(r => `${r.nom} : ${r.deb.length ? 'déborde (' + r.deb.join(', ') + ')' : 'rien ne déborde'}${r.petits.length ? ' · cibles trop petites : ' + r.petits.join(', ') : ''}`).join(' · ') };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

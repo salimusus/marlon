@@ -1392,16 +1392,19 @@ test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur 
     for (let i = 0; i < 3000; i++) __G.updateBot(b, 1 / 30);
     const d1 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z);
     const arrive = !!(b.rdv && b.rdv.arrive);
-    // il s'arrête : 5 s plus tard il est toujours à côté
-    for (let i = 0; i < 150; i++) __G.updateBot(b, 1 / 30);
-    const d2 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z);
+    // il s'arrête : trente secondes plus tard il est toujours à côté (avant, il repartait
+    // se promener dès qu'il était arrivé)
+    let loin = 0;
+    for (let i = 0; i < 900; i++) { __G.updateBot(b, 1 / 30);
+      loin = Math.max(loin, Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z)); }
+    const d2 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z), dmax = loin;
     // et le lieu seul reste compris
     const helipo = __G.lieuDe('va à l\'hélicoptère');
     b.rdv = null;
-    return { traite, suit, lieu: lieu && lieu.nom, d0: +d0.toFixed(1), d1: +d1.toFixed(1), d2: +d2.toFixed(1), arrive, helipo: helipo && helipo.nom };
+    return { traite, suit, lieu: lieu && lieu.nom, d0: +d0.toFixed(1), d1: +d1.toFixed(1), d2: +d2.toFixed(1), dmax: +dmax.toFixed(1), arrive, helipo: helipo && helipo.nom };
   });
-  const ok = r.traite && r.suit && r.lieu === '🚁 Héliport' && r.d1 < 3 && r.d2 < 3.5 && r.arrive;
-  return { ok, detail: `lieu reconnu : ${r.lieu} · le bot part de ${r.d0} m, arrive à ${r.d1} m et reste à ${r.d2} m (annonce=${r.arrive})` };
+  const ok = r.traite && r.suit && r.lieu === '🚁 Héliport' && r.d1 < 3 && r.d2 < 3.5 && r.dmax < 4.5 && r.arrive;
+  return { ok, detail: `lieu reconnu : ${r.lieu} · le bot part de ${r.d0} m, arrive à ${r.d1} m et reste à ${r.d2} m pendant 30 s sans jamais s'éloigner de plus de ${r.dmax} m (annonce=${r.arrive})` };
 });
 
 test('les véhicules ne se chevauchent plus', async p => {
@@ -1702,30 +1705,33 @@ test('le deltaplane plane loin devant au lieu de tomber', async p => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    if (__G.P.voile) __G.rangeVoile(false);   // rien qui traîne d'un test précédent
+    if (__G.P.voile) __G.rangeVoile(false);
     await dodo(300);
     const t = __G.city.toits[0];
     const delta = __G.city.voiles.find(o => o.kind === 'delta' && Math.abs(o.y - t.y) < 2);
     __G.prendreVoile(delta);
-    // cap au sud, au-dessus des terrains de sport : sol plat, ni mer ni collines de rallye
-    __G.P.pos.set(t.x - 6, t.y + 2, t.z + t.d / 2 + 5); __G.P.vel.set(0, 0, 0);
-    __G.P.facing = 0;
-    const x0 = __G.P.pos.x, z0 = __G.P.pos.z, y0 = __G.P.pos.y, s0 = __G.simTime;
-    const t0 = Date.now();
-    let aVole = false, rangee = false, pose = false, avait = false;
-    while (Date.now() - t0 < 40000) {
-      await dodo(200);
-      aVole = aVole || __G.P.voileVol; avait = avait || !!__G.P.voile;
-      if (avait && !__G.P.voile) { rangee = true; break; }   // posé : l'aile se replie toute seule
-      // après 6 s de vol on pose le joueur au sol : le rendu logiciel est trop lent pour
-      // attendre la fin du plané, mais le repli automatique doit se déclencher
-      if (!pose && __G.simTime - s0 > 6) { pose = true; __G.P.pos.y = 0.05; __G.P.vel.set(0, 0, 0); }
+    // vol simulé pas à pas : le rendu logiciel est trop lent pour suivre un plané réel
+    __G.P.pos.set(0, 40, 40); __G.P.vel.set(0, 0, 0); __G.P.facing = 0;
+    __G.P.grounded = false; __G.P.voileVol = true; __G.P.sit = null; __G.P.swimming = false;
+    const x0 = __G.P.pos.x, z0 = __G.P.pos.z, y0 = __G.P.pos.y;
+    let vmin = 0;
+    for (let i = 0; i < 900; i++) {
+      __G.P.vel.y -= 30 / 60;                       // gravité
+      __G.voileTick(1 / 60);
+      vmin = Math.min(vmin, __G.P.vel.y);
+      __G.P.pos.x += __G.P.vel.x / 60; __G.P.pos.y += __G.P.vel.y / 60; __G.P.pos.z += __G.P.vel.z / 60;
+      if (__G.P.pos.y <= 1) break;
     }
     const dh = Math.hypot(__G.P.pos.x - x0, __G.P.pos.z - z0), dv = y0 - __G.P.pos.y;
-    return { dh: +dh.toFixed(1), dv: +dv.toFixed(1), voile: __G.P.voile, rangee, remise: !delta.pris };
+    const enVol = __G.P.voile;
+    // au sol, l'aile se replie toute seule et revient sur le toit
+    __G.P.grounded = true; __G.P.pos.y = 0.2;
+    __G.voileTick(1 / 60);
+    return { dh: +dh.toFixed(1), dv: +dv.toFixed(1), vmin: +vmin.toFixed(2), enVol,
+      voile: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !delta.pris };
   });
-  const ok = r.dh > r.dv * 2 && r.dh > 20 && r.rangee && !r.voile && r.remise;
-  return { ok, detail: `deltaplane : ${r.dh} m parcourus à l'horizontale pour ${r.dv} m de descente (plané 1:${(r.dh / Math.max(1, r.dv)).toFixed(1)}) · replié tout seul à l'atterrissage=${r.rangee} et remis sur le toit=${r.remise}` };
+  const ok = r.enVol === 'delta' && r.dh > r.dv * 2 && r.dh > 60 && r.vmin > -3 && !r.voile && !r.mesh && r.remise;
+  return { ok, detail: `deltaplane : ${r.dh} m parcourus à l'horizontale pour ${r.dv} m de descente (plané 1:${(r.dh / Math.max(1, r.dv)).toFixed(1)}, chute plafonnée à ${r.vmin} m/s) · replié tout seul à l'atterrissage=${!r.voile} et remis sur le toit=${r.remise}` };
 });
 
 test('les amis exécutent tous les ordres qu\'on leur donne', async p => {

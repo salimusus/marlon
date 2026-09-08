@@ -6103,6 +6103,9 @@ function zombieFin(gagne) {
     else { scene.remove(z.av.group); const k = city.mannequins.indexOf(z.av); if (k >= 0) city.mannequins.splice(k, 1); } }
   // les bots reprennent leur peau et leurs couleurs d'origine
   bots.forEach((b, i) => { const d = BOT_DEFS[i], j = jerseyOf(d.jersey);
+    // par sécurité : même si un bot n'était plus dans la liste des zombies (deux parties
+    // enchaînées), il retrouve ses deux bras et sa taille
+    b.av.rig.armL.visible = true; b.av.rig.armR.visible = true; b.av.group.scale.set(1, 1, 1);
     b.av.mats.skin.color.set(0xf5c39a); b.av.mats.shirt.color.set(j.base); b.av.mats.sleeve.color.set(j.sl);
     b.av.mats.front.color.set(0xffffff); b.av.mats.back.color.set(0xffffff);
     if (b.av.mats.hair) b.av.mats.hair.color.set(PAL.hair ? PAL.hair[d.hairColor || 0] : 0x3b2a1a);
@@ -6791,6 +6794,9 @@ function updateBot(b, dt) {
         if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
       }
     }
+    // Arrivé au rendez-vous, il reste sur place : avant, il repartait aussitôt se promener
+    // et s'éloignait du joueur qu'il venait de rejoindre.
+    if (!b.target && b.rdv) { animateRig(av.rig, b.dance > 0 ? 'dance' : 'idle', 0, dt, simTime); sync(); return; }
     if (!b.target) { b.target = pickOne(city.wander); }
     const dx = b.target[0] - b.pos.x, dz = b.target[2] - b.pos.z, dist = Math.hypot(dx, dz), stepLen = b.speed * 0.7 * dt;
     if (dist <= stepLen) { b.pos.set(b.target[0], b.target[1], b.target[2]); b.target = null; b.wait = rnd(1.5, 5); }

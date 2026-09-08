@@ -2222,6 +2222,261 @@ test('le fusil à lunette se porte dans le dos, comme le fusil d\'assaut', async
   return { ok, detail: `fusil à lunette : ${s.pieces} pièces, visible=${s.visible}, en bandoulière dans le dos à (${s.x}, ${s.y}, ${s.z}) — même place que le fusil d'assaut (${f.x}, ${f.y}, ${f.z}) · il passe en main quand on dégaine=${r.enMain}` };
 });
 
+// --- Décodeur QR indépendant : il relit la matrice produite par le jeu comme un vrai
+// lecteur (démasquage, désentrelacement, syndromes de Reed-Solomon) et rend le texte.
+const QRLIRE = (() => {
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+  const EC = [null, { ec: 7, nb: 1, dc: 19 }, { ec: 10, nb: 1, dc: 34 }, { ec: 15, nb: 1, dc: 55 },
+    { ec: 20, nb: 1, dc: 80 }, { ec: 26, nb: 1, dc: 108 }, { ec: 18, nb: 2, dc: 68 }];
+  const ALIGN = [[], [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34]];
+  const MASKS = [(r, c) => (r + c) % 2 === 0, (r, c) => r % 2 === 0, (r, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0, (r, c) => (((r >> 1) + Math.floor(c / 3)) % 2) === 0,
+    (r, c) => ((r * c) % 2 + (r * c) % 3) === 0, (r, c) => (((r * c) % 2 + (r * c) % 3) % 2) === 0,
+    (r, c) => (((r + c) % 2 + (r * c) % 3) % 2) === 0];
+  function reserve(N, v) {
+    const res = []; for (let i = 0; i < N; i++) res.push(new Array(N).fill(false));
+    const R = (r, c) => { if (r >= 0 && r < N && c >= 0 && c < N) res[r][c] = true; };
+    for (const [r0, c0] of [[0, 0], [0, N - 7], [N - 7, 0]])
+      for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) R(r0 + r, c0 + c);
+    for (const a of ALIGN[v]) for (const b of ALIGN[v]) {
+      if ((a < 9 && b < 9) || (a < 9 && b > N - 10) || (a > N - 10 && b < 9)) continue;
+      for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++) R(a + r, b + c);
+    }
+    for (let i = 8; i < N - 8; i++) { R(6, i); R(i, 6); }
+    R(N - 8, 8);
+    for (let i = 0; i < 9; i++) { R(8, i); R(i, 8); }
+    for (let i = 0; i < 8; i++) { R(8, N - 1 - i); R(N - 1 - i, 8); }
+    return res;
+  }
+  return function lire(m, N) {
+    const v = (N - 17) / 4, info = EC[v];
+    if (!info) return { erreur: 'version ' + v + ' inconnue' };
+    let f = 0;
+    for (let k = 0; k < 15; k++) {
+      let bit;
+      if (k < 6) bit = m[8][k]; else if (k < 8) bit = m[8][k + 1]; else if (k === 8) bit = m[7][8]; else bit = m[14 - k][8];
+      f |= bit << k;
+    }
+    f ^= 0x5412;
+    let d = f; for (let i = 4; i >= 0; i--) if (d & (1 << (i + 10))) d ^= 0x537 << i;
+    if (d & 0x3ff) return { erreur: 'format illisible' };
+    if (((f >> 13) & 3) !== 1) return { erreur: 'niveau de correction inattendu' };
+    const masque = (f >> 10) & 7, res = reserve(N, v), mk = MASKS[masque];
+    const bits = []; let haut = true;
+    for (let c = N - 1; c > 0; c -= 2) {
+      if (c === 6) c--;
+      for (let k = 0; k < N; k++) { const r = haut ? N - 1 - k : k;
+        for (const cc of [c, c - 1]) { if (res[r][cc]) continue; bits.push(m[r][cc] ^ (mk(r, cc) ? 1 : 0)); } }
+      haut = !haut;
+    }
+    const flux = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) { let x = 0; for (let j = 0; j < 8; j++) x = (x << 1) | bits[i + j]; flux.push(x); }
+    const blocs = Array.from({ length: info.nb }, () => []), ecs = Array.from({ length: info.nb }, () => []);
+    let i = 0;
+    for (let k = 0; k < info.dc; k++) for (let b = 0; b < info.nb; b++) blocs[b].push(flux[i++]);
+    for (let k = 0; k < info.ec; k++) for (let b = 0; b < info.nb; b++) ecs[b].push(flux[i++]);
+    for (let b = 0; b < info.nb; b++) {
+      const mot = blocs[b].concat(ecs[b]);
+      for (let j = 0; j < info.ec; j++) { let val = 0; for (const o of mot) val = mul(val, EXP[j]) ^ o;
+        if (val !== 0) return { erreur: 'correction d\'erreur invalide (bloc ' + b + ')' }; }
+    }
+    const data = [].concat(...blocs);
+    if ((data[0] >> 4) !== 4) return { erreur: 'ce n\'est pas un QR en mode octet' };
+    const len = ((data[0] & 15) << 4) | (data[1] >> 4), oct = [];
+    for (let k = 0; k < len; k++) oct.push(((data[1 + k] & 15) << 4) | (data[2 + k] >> 4));
+    return { version: v, masque, texte: Buffer.from(oct).toString('utf8') };
+  };
+})();
+
+test('le QR affiché sur la télé est un vrai code lisible par un téléphone', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    const essais = ['https://salimusus.github.io/marlon/superobby.html#manette=ABCD',
+      'http://192.168.1.20:8080/#jeu=WXYZ', 'A',
+      'https://un-domaine-assez-long.example.com/dossier/jeu/superobby.html#manette=ZZZZ'];
+    const out = essais.map(t => { const q = __G.QR.matrice(t); return q ? { t, N: q.N, m: q.m } : { t, N: 0 }; });
+    __G.ouvreSalonTV();
+    const affiche = { code: __G.tv.code, lien: document.getElementById('lienManette').textContent,
+      largeur: document.getElementById('qrManette').width };
+    __G.closeUI();
+    return { out, affiche, tropLong: !__G.QR.matrice('x'.repeat(200)) };
+  });
+  const lus = r.out.map(c => c.N ? QRLIRE(c.m, c.N) : { erreur: 'pas de QR' });
+  const ok = lus.every((l, i) => !l.erreur && l.texte === r.out[i].t)
+    && r.affiche.code.length === 4 && r.affiche.lien.includes('#manette=' + r.affiche.code)
+    && r.affiche.largeur > 60 && r.tropLong;
+  const det = lus.map((l, i) => l.erreur ? `❌ ${l.erreur}` : `v${l.version}/masque ${l.masque} → ${l.texte === r.out[i].t ? 'texte exact' : 'texte faux'}`);
+  return { ok, detail: `4 QR relus par un décodeur indépendant : ${det.join(' · ')} · la télé affiche le code ${r.affiche.code} et le lien ${r.affiche.lien.slice(0, 46)}…` };
+});
+
+test('le mode TV grossit tout l\'affichage et enlève les boutons du pouce', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    __G.modeTV(false);
+    const px = s => parseFloat(s) || 0;
+    const avant = { pill: px(getComputedStyle(document.querySelector('.pill')).fontSize),
+      lb: px(getComputedStyle(document.getElementById('lb')).minWidth),
+      saut: getComputedStyle(document.getElementById('jumpBtn')).display,
+      gps: px(getComputedStyle(document.getElementById('gps')).width),
+      marge: px(getComputedStyle(document.getElementById('top')).paddingLeft) };
+    __G.modeTV(true);
+    const apres = { pill: px(getComputedStyle(document.querySelector('.pill')).fontSize),
+      lb: px(getComputedStyle(document.getElementById('lb')).minWidth),
+      saut: getComputedStyle(document.getElementById('jumpBtn')).display,
+      joy: getComputedStyle(document.getElementById('joyHome')).display,
+      gps: px(getComputedStyle(document.getElementById('gps')).width),
+      marge: px(getComputedStyle(document.getElementById('top')).paddingLeft),
+      msg: px(getComputedStyle(document.getElementById('msg')).fontSize) };
+    const garde = localStorage.getItem('superobby.tv');
+    __G.modeTV(false);
+    return { avant, apres, garde, remis: !document.body.classList.contains('tv') };
+  });
+  const ok = r.apres.pill > r.avant.pill && r.apres.lb > r.avant.lb && r.apres.gps > r.avant.gps
+    && r.apres.marge > r.avant.marge + 10 && r.apres.saut === 'none' && r.apres.joy === 'none'
+    && r.garde === '1' && r.remis;
+  return { ok, detail: `pastilles ${r.avant.pill}px → ${r.apres.pill}px, tableau des joueurs ${r.avant.lb}px → ${r.apres.lb}px, radar ${r.avant.gps}px → ${r.apres.gps}px, marge d'écran ${r.avant.marge}px → ${r.apres.marge}px, messages à ${r.apres.msg}px · boutons tactiles cachés=${r.apres.saut === 'none' && r.apres.joy === 'none'} · réglage mémorisé=${r.garde === '1'}` };
+});
+
+test('le téléphone sert de télécommande : déplacement, caméra, boutons et chat', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    __G.P.pos.set(110, 0.5, 60); __G.P.vel.set(0, 0, 0);
+    await dodo(400);
+    const depart = __G.P.pos.clone();
+    __G.telCommande({ t: 'hello', nom: 'Téléphone de Marlon' });
+    __G.telCommande({ t: 'ax', x: 0, y: 1 });
+    const axe = { x: __G.tel.x, y: __G.tel.y };
+    await dodo(1400);
+    const avance = +depart.distanceTo(__G.P.pos).toFixed(2);
+    __G.telCommande({ t: 'ax', x: 0, y: 0 });
+    const yaw0 = __G.cam.yaw, pitch0 = __G.cam.pitch;
+    __G.telCommande({ t: 'look', dx: 120, dy: 40 });
+    const cam = { yaw: +(yaw0 - __G.cam.yaw).toFixed(3), pitch: +(__G.cam.pitch - pitch0).toFixed(3) };
+    __G.P.jumpBuf = 0; __G.P.grounded = true;
+    __G.telCommande({ t: 'btn', b: 'saut', down: true });
+    const saut = __G.P.jumpBuf;
+    __G.telCommande({ t: 'btn', b: 'saut', down: false });
+    __G.P.energie = 100; __G.P.essouffle = false;
+    __G.telCommande({ t: 'btn', b: 'course', down: true });
+    const court = __G.P.run;
+    __G.telCommande({ t: 'btn', b: 'course', down: false });
+    const courtFin = __G.P.run;
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.drawn = false;
+    __G.telCommande({ t: 'btn', b: 'degaine', down: true }); __G.telCommande({ t: 'btn', b: 'degaine', down: false });
+    const degaine = !!__G.P.drawn;
+    // le journal du chat est plafonné à 40 lignes : on regarde le texte de la dernière
+    __G.telCommande({ t: 'chat', text: 'message envoye depuis la manette' });
+    const lignes = document.getElementById('chatLog').children;
+    const chat = lignes.length && /message envoye depuis la manette/.test(lignes[lignes.length - 1].textContent) ? 1 : 0;
+    // la page manette elle-même
+    __G.manetteOuvre('ABCD');
+    await dodo(200);
+    const page = { on: document.getElementById('manette').classList.contains('on'),
+      boutons: document.querySelectorAll('#telBtns .tb').length,
+      code: document.getElementById('telCode').value,
+      stick: !!document.getElementById('telKnob'),
+      pause: !!window.__manetteSeule };
+    __G.manetteFerme();
+    const fermee = !document.getElementById('manette').classList.contains('on') && !window.__manetteSeule;
+    __G.equipWeapon(null); __G.P.drawn = false;
+    return { axe, avance, cam, saut, court, courtFin, degaine, chat, page, fermee, nom: __G.tel.nom };
+  });
+  const ok = r.axe.y === 1 && r.avance > 0.15 && r.cam.yaw > 0.3 && r.cam.pitch > 0.1 && r.saut === 0.15
+    && r.court && !r.courtFin && r.degaine && r.chat === 1
+    && r.page.on && r.page.boutons >= 10 && r.page.code === 'ABCD' && r.page.pause && r.fermee;
+  return { ok, detail: `manette « ${r.nom} » : le joueur avance de ${r.avance} m, la caméra pivote de ${r.cam.yaw} rad et s'incline de ${r.cam.pitch} · saut=${r.saut}, course=${r.court}→${r.courtFin}, dégainage=${r.degaine}, message envoyé=${r.chat === 1} · la page manette montre ${r.page.boutons} boutons, pré-remplit le code ${r.page.code} et met la 3D en veille=${r.page.pause}` };
+});
+
+test('la manette de salon a tous les boutons, et la croix navigue dans les menus', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    await dodo(300);
+    const gp = { axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false })) };
+    navigator.getGamepads = () => [gp];
+    const presse = async i => { gp.buttons[i].pressed = true; __G.pollGamepad(1 / 60); const v = __G.P.jumpBuf; gp.buttons[i].pressed = false; __G.pollGamepad(1 / 60); await dodo(30); return v; };
+    __G.pollGamepad(1 / 60);
+    // stick gauche = déplacement, stick droit = caméra
+    gp.axes = [0.9, -0.9, 0, 0]; __G.pollGamepad(1 / 60);
+    const stick = { x: +__G.pad.x.toFixed(2), y: +__G.pad.y.toFixed(2) };
+    const yaw0 = __G.cam.yaw; gp.axes = [0, 0, 1, 0]; __G.pollGamepad(1 / 60);
+    const camera = +(yaw0 - __G.cam.yaw).toFixed(3);
+    gp.axes = [0, 0, 0, 0]; __G.pollGamepad(1 / 60);
+    // A = saut, B = action, Y = dégainer, gâchette = courir
+    __G.P.jumpBuf = 0;
+    const saut = await presse(0);
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.drawn = false;
+    await presse(3);
+    const degaine = !!__G.P.drawn;
+    __G.P.energie = 100; __G.P.essouffle = false;
+    gp.buttons[6].pressed = true; __G.pollGamepad(1 / 60);
+    const court = __G.P.run;
+    gp.buttons[6].pressed = false; __G.pollGamepad(1 / 60);
+    // dans un menu : la croix promène la bague jaune, A valide
+    __G.openUI('tvsalon');
+    __G.pollGamepad(1 / 60);
+    gp.buttons[13].pressed = true; __G.pollGamepad(1 / 60); gp.buttons[13].pressed = false; __G.pollGamepad(1 / 60);
+    const premier = document.querySelector('#tvsalon .focustv');
+    gp.buttons[13].pressed = true; __G.pollGamepad(1 / 60); gp.buttons[13].pressed = false; __G.pollGamepad(1 / 60);
+    const second = document.querySelector('#tvsalon .focustv');
+    const nav = { bague: !!premier, bouge: !!second && second !== premier,
+      quoi: second ? (second.textContent || second.id).slice(0, 22) : null,
+      pasDeMarche: __G.pad.x === 0 && __G.pad.y === 0 };
+    // A ferme la fenêtre en validant « Fermer »
+    document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+    document.getElementById('tvFerme').classList.add('focustv');
+    await presse(0); await dodo(120);
+    nav.valide = !__G.uiOpen;
+    if (__G.uiOpen) __G.closeUI();
+    __G.equipWeapon(null); __G.P.drawn = false; __G.P.run = false;
+    delete navigator.getGamepads;
+    return { stick, camera, saut, degaine, court, nav };
+  });
+  const ok = r.stick.x > 0.5 && r.stick.y > 0.5 && r.camera > 0.02 && r.saut === 0.15 && r.degaine
+    && r.court && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
+  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), gâchette fait courir (${r.court}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
+});
+
+test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (__G.uiOpen) __G.closeUI();
+    document.getElementById('codeIn').value = '';
+    const avant = __G.net.code;
+    // PeerJS n'est pas chargé dans le banc d'essai : on met un faux pair pour vérifier
+    // que le lien déclenche bien la connexion
+    const vraiPeer = window.Peer;
+    window.Peer = function () { this.on = () => {}; this.connect = () => ({ on: () => {}, open: false }); this.destroy = () => {}; };
+    location.hash = '#jeu=KLMN';
+    await dodo(700);
+    const rempli = document.getElementById('codeIn').value;
+    const statut = document.getElementById('mpStatus').textContent;
+    __G.netTeardown && __G.netTeardown();
+    if (vraiPeer) window.Peer = vraiPeer; else delete window.Peer;
+    location.hash = '';
+    await dodo(200);
+    // et le lien manette ouvre la télécommande
+    location.hash = '#manette=WXYZ';
+    await dodo(400);
+    const man = { on: document.getElementById('manette').classList.contains('on'),
+      code: document.getElementById('telCode').value };
+    __G.manetteFerme();
+    await dodo(150);
+    return { avant, rempli, statut, man, hashVide: !location.hash };
+  });
+  const ok = r.rempli === 'KLMN' && /KLMN/.test(r.statut) && r.man.on && r.man.code === 'WXYZ' && r.hashVide;
+  return { ok, detail: `lien #jeu=KLMN : le code est pré-rempli (« ${r.rempli} ») et la connexion démarre (« ${r.statut} ») · lien #manette=WXYZ : la télécommande s'ouvre avec le code ${r.man.code}` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'superobby.html');
   const {srv,port}=await serve(file);

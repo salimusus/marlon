@@ -234,6 +234,91 @@ body.lobby #emoteBtn{display:none}
 .wcard .wb{margin-top:8px;background:rgba(0,0,0,.25);border-radius:8px;padding:4px 6px;font-size:12px}
 .wcard .done{position:absolute;top:8px;right:10px;font-size:18px}
 @media (max-height:560px){.keys{display:none}h1{font-size:32px}.card{padding:16px 18px}}
+/* ================= Mode TV : on joue de loin, tout doit être plus gros ================= */
+body.tv{--k:1}
+body.tv #top{padding:calc(env(safe-area-inset-top) + 3vh) calc(env(safe-area-inset-right) + 3.2vw) 0 calc(env(safe-area-inset-left) + 3.2vw);gap:14px}
+body.tv .pill{font-size:clamp(17px,1.5vw,26px);padding:12px 17px;border-radius:14px;border-width:2px}
+body.tv .ibtn{width:clamp(48px,3.6vw,66px);height:clamp(48px,3.6vw,66px);font-size:clamp(22px,1.8vw,30px);border-radius:14px}
+body.tv #me{font-size:clamp(16px,1.3vw,24px);padding:10px 14px;border-radius:14px}
+body.tv .hp{width:clamp(120px,10vw,190px);height:13px}
+body.tv .hp.st{height:9px}
+body.tv #lb{font-size:clamp(15px,1.2vw,22px);min-width:clamp(230px,17vw,330px);border-radius:14px}
+body.tv .lbh,body.tv .lbr{padding:9px 14px;font-size:clamp(14px,1.1vw,20px)}
+body.tv #chat{left:calc(env(safe-area-inset-left) + 3.2vw);top:calc(env(safe-area-inset-top) + 3vh + 68px);width:clamp(320px,24vw,460px)}
+body.tv #chatLog{font-size:clamp(15px,1.2vw,22px);max-height:22vh}
+body.tv #chatIn{font-size:clamp(15px,1.2vw,22px);padding:11px 13px}
+body.tv #msg{font-size:clamp(38px,4.6vw,86px);top:22%}
+body.tv #msg.long{font-size:clamp(24px,2.6vw,46px)}
+body.tv #gps{width:clamp(150px,11vw,210px);height:clamp(150px,11vw,210px);bottom:calc(env(safe-area-inset-bottom) + 3vh)}
+body.tv #wanted{font-size:clamp(20px,1.8vw,32px);padding:10px 18px}
+body.tv #cross{transform:translate(-50%,-50%) scale(1.7)}
+body.tv #missionHud{font-size:clamp(15px,1.2vw,22px)}
+/* une TV n'a pas d'écran tactile : les gros boutons du pouce ne servent à rien */
+body.tv #joyHome,body.tv #joy,body.tv #jumpBtn,body.tv #emoteBtn,body.tv #carBtn,body.tv #raceBtn,
+body.tv #racketBtn,body.tv #fireBtn,body.tv #punchBtn,body.tv #drawBtn,body.tv #aimBtn,
+body.tv #aimUp,body.tv #aimDown{display:none!important}
+body.tv .card{max-width:min(940px,86vw);font-size:clamp(15px,1.15vw,21px)}
+body.tv .card h1{font-size:clamp(38px,4vw,72px)}
+body.tv .card h2{font-size:clamp(26px,2.4vw,44px)}
+body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
+/* navigation à la manette / télécommande : l'élément visé est entouré */
+.focustv{outline:4px solid #ffd23f!important;outline-offset:3px;box-shadow:0 0 0 8px rgba(255,210,63,.25)!important}
+
+/* ================= Salon TV : code, QR et manettes connectées ================= */
+#tvsalon .card{max-width:min(1000px,92vw)}
+.tvgrid{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;margin:14px 0 6px}
+.tvcase{flex:1 1 260px;min-width:250px;background:#f3f6fd;border:2px solid #dbe3f5;border-radius:16px;padding:14px;text-align:center}
+.tvcase h3{font-size:clamp(16px,1.4vw,24px);margin-bottom:8px;color:#1b2a4a}
+.tvcase p{color:#556}
+.tvcase canvas{width:min(190px,42vw);height:auto;image-rendering:pixelated;background:#fff;border-radius:10px;padding:7px}
+.tvcode{font-size:clamp(30px,3.4vw,58px);font-weight:800;letter-spacing:9px;color:#1b2a4a;margin:6px 0}
+.tvlien{font-size:11px;word-break:break-all;color:#7a86a0;margin-top:6px}
+#tvManettes{font-size:clamp(13px,1.1vw,19px);color:#1b2a4a;margin-top:6px;min-height:22px;font-weight:800}
+
+/* ================= Manette : le téléphone devient la télécommande ================= */
+#manette{position:fixed;inset:0;z-index:60;background:linear-gradient(160deg,#12203c,#1b2a4a 45%,#0d1730);
+  display:none;flex-direction:column;color:#fff;touch-action:none;overflow:hidden}
+#manette.on{display:flex}
+#telTop{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 8px) 14px 6px;font-size:14px;font-weight:800}
+#telEtat{flex:1;color:#9fe3ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#telTop button{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);color:#fff;border-radius:10px;padding:7px 10px;font-size:14px;font-weight:800}
+#telCo{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px}
+#telCo h2{font-size:26px}
+#telCo p{font-size:14px;color:#c3cde4;text-align:center;max-width:320px;line-height:1.4}
+#telCode{width:220px;text-transform:uppercase;text-align:center;letter-spacing:10px;font-size:30px;font-weight:800;
+  border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.3);color:#fff;border-radius:14px;padding:12px;outline:none}
+#telCode:focus{border-color:#ffd23f}
+#telJeu{flex:1;display:none;position:relative}
+#manette.pret #telJeu{display:block}
+#manette.pret #telCo{display:none}
+#telStick{position:absolute;left:0;top:0;width:52%;height:100%}
+#telBase{position:absolute;left:50%;top:52%;width:min(46vw,240px);height:min(46vw,240px);transform:translate(-50%,-50%);
+  border-radius:50%;background:rgba(255,255,255,.09);border:2px solid rgba(255,255,255,.3)}
+#telKnob{position:absolute;left:50%;top:50%;width:38%;height:38%;transform:translate(-50%,-50%);border-radius:50%;
+  background:rgba(255,255,255,.9);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+#telVise{position:absolute;right:0;top:0;width:48%;height:56%;background:rgba(255,255,255,.03);
+  border-left:1px dashed rgba(255,255,255,.14)}
+#telVise span{position:absolute;left:50%;top:16%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.35);font-weight:800;text-align:center;width:88%}
+#telBtns{position:absolute;right:8px;bottom:calc(env(safe-area-inset-bottom) + 8px);width:48%;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tb{height:clamp(48px,9vh,74px);border-radius:16px;border:2px solid rgba(255,255,255,.28);background:rgba(255,255,255,.13);
+  color:#fff;font-size:clamp(13px,3.4vw,18px);font-weight:800;display:grid;place-items:center;line-height:1.05;text-align:center}
+.tb:active,.tb.on{background:rgba(255,210,63,.55);border-color:#ffd23f;transform:scale(.96)}
+.tb.gros{grid-column:span 3;height:clamp(52px,10vh,80px);background:rgba(93,220,90,.28);border-color:rgba(93,220,90,.6)}
+#telBar{display:flex;gap:8px;padding:6px 10px calc(env(safe-area-inset-bottom) + 6px)}
+#telBar input{flex:1;border:1px solid rgba(255,255,255,.28);background:rgba(0,0,0,.35);color:#fff;border-radius:10px;padding:9px;font-size:14px;font-weight:700;outline:none}
+#telBar button{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:10px;padding:9px 12px;font-size:16px;font-weight:800}
+/* téléphone tenu à l'horizontale : le pouce gauche sur le stick, le droit sur les boutons,
+   et la zone caméra au milieu pour qu'ils ne se marchent plus dessus */
+@media (orientation:landscape){
+  #telStick{width:34%}
+  #telBase{width:min(30vw,190px);height:min(30vw,190px)}
+  #telVise{left:34%;right:40%;width:auto;height:100%;border-right:1px dashed rgba(255,255,255,.14)}
+  #telBtns{left:auto;right:8px;width:38%;top:50%;bottom:auto;transform:translateY(-50%);gap:6px}
+  .tb{height:clamp(36px,13vh,56px);font-size:clamp(11px,1.9vw,15px);border-radius:12px}
+  .tb.gros{height:clamp(38px,14vh,60px)}
+  #telBar{padding:4px 8px calc(env(safe-area-inset-bottom) + 4px)}
+}
 </style>
 </head>
 <body class="lobby">
@@ -248,6 +333,7 @@ body.lobby #emoteBtn{display:none}
     <button class="ibtn cityonly" id="storeBtn" title="Boutique">🛒</button>
     <button class="ibtn cityonly" id="missBtn" title="Missions">📋</button>
     <button class="ibtn" id="jailBtn" title="Prison" style="display:none">🔒</button>
+    <button class="ibtn" id="tvBtn" title="Jouer sur la télé">📺</button>
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
@@ -304,6 +390,7 @@ body.lobby #emoteBtn{display:none}
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer · manette compatible</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
+      <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
     <div class="mp">
       <div class="mph"><b>Multijoueur</b><span id="mpStatus">Solo (avec des bots)</span></div>
@@ -312,9 +399,78 @@ body.lobby #emoteBtn{display:none}
         <input id="codeIn" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
         <button class="btn sec small" id="joinBtn">Rejoindre</button>
       </div>
+      <div class="mpr" style="margin-top:8px">
+        <button class="btn sec small" id="tvStart">📺 Jouer sur la télé</button>
+        <button class="btn sec small" id="manetteStart">🎮 Servir de manette</button>
+      </div>
     </div>
     <p id="bestTime"></p>
     <button class="btn" id="play">Jouer</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="tvsalon">
+  <div class="card">
+    <h2>📺 Jouer sur la télé</h2>
+    <p class="sub">Le jeu s'affiche en grand sur l'écran, et ton téléphone devient la manette.</p>
+    <div class="tvgrid">
+      <div class="tvcase">
+        <h3>🎮 Ton téléphone = la manette</h3>
+        <canvas id="qrManette" width="180" height="180"></canvas>
+        <div class="tvcode" id="tvCode">----</div>
+        <p>Scanne le code, ou ouvre le jeu sur ton téléphone et entre ce code dans « Manette ».</p>
+        <div class="tvlien" id="lienManette"></div>
+      </div>
+      <div class="tvcase">
+        <h3>👥 Tes amis jouent avec toi</h3>
+        <canvas id="qrJeu" width="180" height="180"></canvas>
+        <div class="tvcode" id="tvCodeJeu">----</div>
+        <p>Chacun scanne avec son téléphone et arrive directement dans ta ville.</p>
+        <button class="btn sec small" id="tvCreePartie">Ouvrir la partie aux amis</button>
+        <div class="tvlien" id="lienJeu"></div>
+      </div>
+    </div>
+    <div id="tvManettes">Aucune manette connectée pour l'instant.</div>
+    <div class="mpr" style="justify-content:center;margin-top:10px">
+      <button class="btn sec small" id="tvGros">Affichage géant : oui</button>
+      <button class="btn sec small" id="tvPleinEcran">Plein écran</button>
+    </div>
+    <button class="btn" id="tvFerme">Fermer</button>
+  </div>
+</div>
+
+<div id="manette">
+  <div id="telTop">
+    <span id="telEtat">Manette SuperObby</span>
+    <button id="telQuitte">Quitter</button>
+  </div>
+  <div id="telCo">
+    <h2>🎮 Manette</h2>
+    <p>Entre le code à 4 lettres affiché sur la télé, puis appuie sur Connecter.</p>
+    <input id="telCode" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" inputmode="text">
+    <button class="btn" id="telGo" style="max-width:260px">Connecter</button>
+    <p id="telErr" style="color:#ffd23f"></p>
+  </div>
+  <div id="telJeu">
+    <div id="telStick"><div id="telBase"><div id="telKnob"></div></div></div>
+    <div id="telVise"><span>glisse ici pour tourner la caméra</span></div>
+    <div id="telBtns">
+      <button class="tb gros" data-b="saut">SAUT</button>
+      <button class="tb" data-b="action">✋<br>Action</button>
+      <button class="tb" data-b="tir">🔫<br>Tirer</button>
+      <button class="tb" data-b="degaine">✊<br>Arme</button>
+      <button class="tb" data-b="course">🏃<br>Courir</button>
+      <button class="tb" data-b="frappe">👊<br>Frapper</button>
+      <button class="tb" data-b="danse">🕺<br>Danser</button>
+      <button class="tb" data-b="course_auto">🏁<br>Course</button>
+      <button class="tb" data-b="viser">🎯<br>Viser</button>
+      <button class="tb" data-b="menu">☰<br>Menu</button>
+    </div>
+  </div>
+  <div id="telBar">
+    <input id="telChat" placeholder="Écris à tes amis / donne un ordre…" maxlength="80" autocomplete="off">
+    <button id="telMic" title="Parler">🎤</button>
+    <button id="telEnvoi">➤</button>
   </div>
 </div>
 
@@ -6165,6 +6321,9 @@ function makeZombie(x, z, kind, bot) {
 function zombieDispo() { return city.on && police.cell; }
 function zombieStart(niv) {
   if (!zombieDispo()) { msg('🧟 Le mode zombie se joue en ville', 2000); return; }
+  // relancer une nuit sans terminer la précédente laissait le sang et les mâchoires
+  // collés aux bots : on ferme proprement d'abord
+  if (zombie.on) zombieFin(false);
   closeUI();
   zombie.on = true; zombie.niveau = clamp(niv, 0, 2); zombie.t0 = simTime; zombie.morts = 0; zombie.tues = 0;
   zombie.eclairT = simTime + rnd(8, 16); zombie.eclair = 0;   // sinon un éclair partait dès la première image
@@ -7139,14 +7298,14 @@ function step(dt, active) {
 
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  let ix = clamp(kr + joy.x + pad.x, -1, 1), iz = clamp(kf + joy.y + pad.y, -1, 1);
+  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y, -1, 1);
   let wantX, wantZ, len;
   // arme dégainée : on passe en déplacement relatif à la caméra, sinon Q/D ferait tourner
   // le personnage contre la visée
   if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
     // mode "rotation" : gauche/droite font pivoter le personnage, avant/arrière le déplacent dans la direction où il regarde
     // (au joystick : poussé presque tout droit = pas de virage ; virage d'autant plus vif qu'on pousse sur le côté)
-    const ax = clamp(joy.x + pad.x, -1, 1), ay = clamp(joy.y + pad.y, -1, 1);
+    const ax = clamp(joy.x + pad.x + tel.x, -1, 1), ay = clamp(joy.y + pad.y + tel.y, -1, 1);
     let turnIn = kr;
     if (Math.abs(ax) > 0.02) { const straight = Math.abs(ay) > 0.55 && Math.abs(ax) < 0.32; turnIn += straight ? 0 : ax * Math.abs(ax); }
     if (Math.abs(turnIn) > 0.02) P.facing -= clamp(turnIn, -1, 1) * settings.turn * Math.PI / 180 * dt;
@@ -7246,7 +7405,7 @@ function step(dt, active) {
 function readInput() {
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  return { ix: clamp(kr + joy.x + pad.x, -1, 1), iz: clamp(kf + joy.y + pad.y, -1, 1) };
+  return { ix: clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz: clamp(kf + joy.y + pad.y + tel.y, -1, 1) };
 }
 // Rayon et demi-longueur d'échantillonnage d'un véhicule : trois disques répartis sur sa
 // longueur couvrent tout le rectangle, coins compris.
@@ -8703,17 +8862,50 @@ $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 let gamepadOk = true;
+// Manette de salon : toutes les touches du clavier ont leur bouton, et la croix
+// directionnelle promène la bague jaune dans les menus — on joue de son canapé.
+const PAD_MAP = {   // bouton standard → touche du jeu
+  0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 7: 'KeyX',
+  8: 'KeyT', 9: 'Escape', 12: 'ArrowUp', 13: 'ArrowDown',
+};
 function pollGamepad(dt) {
   if (!gamepadOk || !navigator.getGamepads) return;
   let gp = null;
   try { gp = navigator.getGamepads()[0]; } catch (e) { gamepadOk = false; return; }   // manette interdite (iframe, politique de permissions)
-  if (!gp) { pad.x = pad.y = 0; return; }
+  if (!gp) { pad.x = pad.y = 0; if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; } return; }
   const dz = v => Math.abs(v) < 0.18 ? 0 : v;
-  pad.x = dz(gp.axes[0] || 0); pad.y = -dz(gp.axes[1] || 0);
-  if (running && !paused) { cam.yaw -= dz(gp.axes[2] || 0) * dt * 2.6; cam.pitch = clamp(cam.pitch + dz(gp.axes[3] || 0) * dt * 1.6, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25); }
-  const a = !!(gp.buttons[0] && gp.buttons[0].pressed); if (a && !pad.a) P.jumpBuf = 0.15; pad.a = a;
-  if (gp.buttons[9] && gp.buttons[9].pressed && !pad.start) { if (running) toggleMenu(); } pad.start = !!(gp.buttons[9] && gp.buttons[9].pressed);
+  const menu = !!document.querySelector('.overlay:not(.hidden)');
+  pad.x = menu ? 0 : dz(gp.axes[0] || 0); pad.y = menu ? 0 : -dz(gp.axes[1] || 0);
+  if (running && !paused && !menu) {
+    cam.yaw -= dz(gp.axes[2] || 0) * dt * 2.6;
+    cam.pitch = clamp(cam.pitch + dz(gp.axes[3] || 0) * dt * 1.6, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+  }
+  const bas = pad.bas || {};
+  const app = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const neuf = {};
+  for (let i = 0; i < 17; i++) neuf[i] = app(i);
+  // dans un menu : croix = déplacer la bague, A = valider, B = fermer
+  if (menu) {
+    if (neuf[12] && !bas[12]) navBouge(-1);
+    if (neuf[13] && !bas[13]) navBouge(1);
+    if (neuf[14] && !bas[14]) navBouge(-1);
+    if (neuf[15] && !bas[15]) navBouge(1);
+    if (neuf[0] && !bas[0]) navValide();
+    if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9])) telTouche('Escape', true);
+  } else {
+    for (const [i, k] of Object.entries(PAD_MAP)) {
+      if (neuf[i] === bas[i]) continue;
+      telTouche(k, neuf[i]);
+    }
+    // gâchette gauche ou clic du stick : on court tant qu'on la tient
+    const court = neuf[6] || neuf[10];
+    if (court !== (bas[6] || bas[10])) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
+    if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
+  }
+  pad.bas = neuf; pad.a = neuf[0];
 }
+window.addEventListener('gamepadconnected', () => { msg('🎮 Manette connectée !', 2200); document.body.classList.add('manette'); });
+window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; });
 
 // ---- plein écran, orientation, veille (tablette Android) ----
 function goFullscreen() {
@@ -8830,6 +9022,9 @@ const tmpV = new THREE.Vector3();
 let loopErr = 0;
 function loop() {
   requestAnimationFrame(loop);
+  // en mode manette, le téléphone n'affiche que les boutons : inutile de faire tourner
+  // la ville en 3D, ça viderait la batterie pour rien
+  if (window.__manetteSeule) { clock.getDelta(); return; }
   try { frame(); } catch (e) { if (loopErr++ < 3) console.error(e); }
 }
 function frame() {
@@ -9009,6 +9204,414 @@ applyQuality();
 loadWorld(0); running = false;
 if (isMobile) { $('chat').classList.remove('open'); $('chatBtn').classList.remove('on'); }
 showBest(); updateHud(); updateTimer(); updateLeaderboard();
+// ===================================================================================
+//  Jouer sur la télé : le téléphone devient la manette, les amis rejoignent d'un scan
+// ===================================================================================
+
+// ---- QR code maison (mode octet, correction L, versions 1 à 6) ----------------------
+// Aucune bibliothèque : le jeu tient dans un seul fichier et doit marcher hors ligne.
+const QR = (() => {
+  const EC = [null, { ec: 7, nb: 1, dc: 19 }, { ec: 10, nb: 1, dc: 34 }, { ec: 15, nb: 1, dc: 55 },
+    { ec: 20, nb: 1, dc: 80 }, { ec: 26, nb: 1, dc: 108 }, { ec: 18, nb: 2, dc: 68 }];
+  const ALIGN = [[], [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34]];
+  // table des logarithmes de GF(256) pour Reed-Solomon
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+  function genPoly(n) { let g = [1]; for (let i = 0; i < n; i++) { const ng = new Array(g.length + 1).fill(0);
+    for (let j = 0; j < g.length; j++) { ng[j] ^= g[j]; ng[j + 1] ^= mul(g[j], EXP[i]); } g = ng; } return g; }
+  function reste(data, n) {
+    const g = genPoly(n), r = new Array(n).fill(0);
+    for (const d of data) { const f = d ^ r[0]; r.shift(); r.push(0);
+      if (f) for (let i = 0; i < n; i++) r[i] ^= mul(g[i + 1], f); }
+    return r;
+  }
+  function bits(txt) {
+    const oct = new TextEncoder().encode(txt);
+    let v = 1; while (v <= 6 && oct.length > EC[v].dc * EC[v].nb - 2) v++;
+    if (v > 6) return null;                      // trop long pour un QR maison : on affichera le lien
+    const info = EC[v], total = info.dc * info.nb;
+    const b = [];
+    const push = (val, n) => { for (let i = n - 1; i >= 0; i--) b.push((val >> i) & 1); };
+    push(4, 4); push(oct.length, 8);
+    for (const o of oct) push(o, 8);
+    for (let i = 0; i < 4 && b.length < total * 8; i++) b.push(0);
+    while (b.length % 8) b.push(0);
+    const octets = [];
+    for (let i = 0; i < b.length; i += 8) { let x = 0; for (let j = 0; j < 8; j++) x = (x << 1) | b[i + j]; octets.push(x); }
+    const REMP = [0xEC, 0x11];
+    for (let i = 0; octets.length < total; i++) octets.push(REMP[i % 2]);
+    // blocs de données + blocs de correction, puis entrelacement
+    const blocs = [], ecs = [];
+    for (let i = 0; i < info.nb; i++) { const d = octets.slice(i * info.dc, (i + 1) * info.dc); blocs.push(d); ecs.push(reste(d, info.ec)); }
+    const flux = [];
+    for (let i = 0; i < info.dc; i++) for (const d of blocs) flux.push(d[i]);
+    for (let i = 0; i < info.ec; i++) for (const e of ecs) flux.push(e[i]);
+    return { v, flux };
+  }
+  const MASKS = [(r, c) => (r + c) % 2 === 0, (r, c) => r % 2 === 0, (r, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0, (r, c) => (((r >> 1) + Math.floor(c / 3)) % 2) === 0,
+    (r, c) => ((r * c) % 2 + (r * c) % 3) === 0, (r, c) => (((r * c) % 2 + (r * c) % 3) % 2) === 0,
+    (r, c) => (((r + c) % 2 + (r * c) % 3) % 2) === 0];
+  function squelette(N, v) {
+    const m = [], res = [];
+    for (let i = 0; i < N; i++) { m.push(new Array(N).fill(0)); res.push(new Array(N).fill(false)); }
+    const pose = (r, c, val) => { if (r >= 0 && r < N && c >= 0 && c < N) { m[r][c] = val; res[r][c] = true; } };
+    const oeil = (r0, c0) => {   // motif de repérage 7×7 + séparateur
+      for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) {
+        const dedans = r >= 0 && r <= 6 && c >= 0 && c <= 6;
+        const noir = dedans && (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+        pose(r0 + r, c0 + c, noir ? 1 : 0);
+      }
+    };
+    oeil(0, 0); oeil(0, N - 7); oeil(N - 7, 0);
+    for (const a of ALIGN[v]) for (const b of ALIGN[v]) {
+      if ((a < 9 && b < 9) || (a < 9 && b > N - 10) || (a > N - 10 && b < 9)) continue;
+      for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++)
+        pose(a + r, b + c, (Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0)) ? 1 : 0);
+    }
+    for (let i = 8; i < N - 8; i++) { pose(6, i, i % 2 === 0 ? 1 : 0); pose(i, 6, i % 2 === 0 ? 1 : 0); }
+    pose(N - 8, 8, 1);                                   // module toujours noir
+    for (let i = 0; i < 9; i++) { if (!res[8][i]) { m[8][i] = 0; res[8][i] = true; } if (!res[i][8]) { m[i][8] = 0; res[i][8] = true; } }
+    for (let i = 0; i < 8; i++) { res[8][N - 1 - i] = true; res[N - 1 - i][8] = true; }
+    return { m, res };
+  }
+  function format(masque) {
+    let v = (0b01 << 3) | masque, d = v << 10;
+    for (let i = 4; i >= 0; i--) if (d & (1 << (i + 10))) d ^= 0x537 << i;
+    return ((v << 10) | d) ^ 0x5412;
+  }
+  function penalite(m, N) {
+    let p = 0, noirs = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (m[r][c]) noirs++;
+    for (let r = 0; r < N; r++) { let run = 1;
+      for (let c = 1; c < N; c++) { if (m[r][c] === m[r][c - 1]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let c = 0; c < N; c++) { let run = 1;
+      for (let r = 1; r < N; r++) { if (m[r][c] === m[r - 1][c]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let r = 0; r < N - 1; r++) for (let c = 0; c < N - 1; c++)
+      if (m[r][c] === m[r][c + 1] && m[r][c] === m[r + 1][c] && m[r][c] === m[r + 1][c + 1]) p += 3;
+    p += Math.floor(Math.abs(noirs * 100 / (N * N) - 50) / 5) * 10;
+    return p;
+  }
+  function matrice(txt) {
+    const d = bits(txt); if (!d) return null;
+    const N = 17 + 4 * d.v;
+    let best = null;
+    for (let mk = 0; mk < 8; mk++) {
+      const { m, res } = squelette(N, d.v);
+      let i = 0, haut = true;
+      for (let c = N - 1; c > 0; c -= 2) {
+        if (c === 6) c--;                                 // la colonne 6 est la ligne de synchro
+        for (let k = 0; k < N; k++) {
+          const r = haut ? N - 1 - k : k;
+          for (const cc of [c, c - 1]) {
+            if (res[r][cc]) continue;
+            let bit = i < d.flux.length * 8 ? (d.flux[i >> 3] >> (7 - (i & 7))) & 1 : 0;
+            i++;
+            if (MASKS[mk](r, cc)) bit ^= 1;
+            m[r][cc] = bit;
+          }
+        }
+        haut = !haut;
+      }
+      const f = format(mk);
+      for (let k = 0; k < 15; k++) {
+        const bit = (f >> k) & 1;
+        if (k < 6) m[8][k] = bit; else if (k < 8) m[8][k + 1] = bit; else if (k === 8) m[7][8] = bit; else m[14 - k][8] = bit;
+        if (k < 8) m[N - 1 - k][8] = bit; else m[8][N - 15 + k] = bit;
+      }
+      const p = penalite(m, N);
+      if (!best || p < best.p) best = { p, m, N };
+    }
+    return best;
+  }
+  function dessine(cv, txt) {
+    const q = matrice(txt);
+    const g = cv.getContext('2d');
+    if (!q) { g.clearRect(0, 0, cv.width, cv.height); cv.style.display = 'none'; return false; }
+    cv.style.display = '';
+    const marge = 4, taille = q.N + marge * 2, px = Math.max(2, Math.floor(180 / taille));
+    cv.width = cv.height = taille * px;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#11182c';
+    for (let r = 0; r < q.N; r++) for (let c = 0; c < q.N; c++)
+      if (q.m[r][c]) g.fillRect((c + marge) * px, (r + marge) * px, px, px);
+    return true;
+  }
+  return { matrice, dessine };
+})();
+
+// ---- entrée venue du téléphone : elle s'ajoute au clavier et au joystick tactile ----
+const tel = { on: false, x: 0, y: 0, nom: '', vus: 0 };
+
+function telTouche(code, bas) {   // on rejoue une vraie touche : tout le jeu y répond déjà
+  try { window.dispatchEvent(new KeyboardEvent(bas ? 'keydown' : 'keyup', { code, key: code, bubbles: true })); } catch (e) {}
+}
+const TEL_TOUCHES = { saut: 'Space', action: 'KeyE', tir: 'KeyX', degaine: 'KeyG', frappe: 'KeyV',
+  danse: 'KeyE', course_auto: 'KeyF', menu: 'Escape', hautVisee: 'ArrowUp', basVisee: 'ArrowDown' };
+
+function telCommande(d) {   // message reçu d'une manette
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'ax') { tel.x = clamp(+d.x || 0, -1, 1); tel.y = clamp(+d.y || 0, -1, 1); return; }
+  if (d.t === 'look') {
+    cam.yaw -= (+d.dx || 0) * 0.0055;
+    cam.pitch = clamp(cam.pitch + (+d.dy || 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+    cam.freeUntil = simTime + 2.5; return;
+  }
+  if (d.t === 'btn') {
+    if (d.b === 'course') { P.run = !!d.down && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); return; }
+    if (d.b === 'viser') { if (d.down) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } return; }
+    const k = TEL_TOUCHES[d.b]; if (k) telTouche(k, !!d.down);
+    return;
+  }
+  if (d.t === 'chat' && d.text) {
+    const t = String(d.text).slice(0, 80).trim(); if (!t) return;
+    chat(myCfg.name, t, '#ffffff'); sfx.chat(); bubble(me, t);
+    if (net.on) netSend({ t: 'chat', name: myCfg.name, text: t });
+    if (!commandeSociale(t) && !net.on) botReply(t);
+    return;
+  }
+  if (d.t === 'hello') { tel.nom = String(d.nom || 'Manette').slice(0, 16); tvManettesMaj(); }
+}
+
+// ---- côté télé : on héberge un salon de manettes ------------------------------------
+const tv = { on: false, code: null, peer: null, conns: [] };
+const lienBase = () => location.href.split('#')[0];
+function tvManettesMaj() {
+  const n = tv.conns.filter(c => c.open).length;
+  const el = $('tvManettes'); if (!el) return;
+  el.textContent = n === 0 ? 'Aucune manette connectée pour l\'instant.'
+    : `🎮 ${n} manette${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}${tel.nom ? ' · ' + tel.nom : ''}`;
+  tel.on = n > 0;
+}
+function tvHeberge() {
+  if (typeof Peer === 'undefined') { $('tvManettes').textContent = 'Pas de connexion : la manette a besoin d\'Internet.'; return; }
+  if (tv.peer) return;
+  const code = net.on && net.code ? net.code : makeCode();
+  let peer;
+  try { peer = new Peer('superobby-tv-' + code, { debug: 0 }); } catch (e) { return; }
+  tv.peer = peer; tv.code = code;
+  peer.on('open', () => { tv.on = true; tvSalonMaj(); });
+  peer.on('connection', c => {
+    c.on('open', () => { tv.conns.push(c); tel.on = true; tvManettesMaj();
+      msg('🎮 Une manette est connectée !', 2200); sfx.win();
+      try { c.send({ t: 'ok', jeu: myCfg.name }); } catch (_) {} });
+    c.on('data', d => telCommande(d));
+    const fin = () => { const i = tv.conns.indexOf(c); if (i >= 0) tv.conns.splice(i, 1); tel.x = tel.y = 0; P.run = false; tvManettesMaj(); };
+    c.on('close', fin); c.on('error', fin);
+  });
+  peer.on('error', e => { if (e.type === 'unavailable-id') { tv.peer = null; setTimeout(tvHeberge, 400); } });
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (_) {} });
+}
+function tvSalonMaj() {
+  if (!tv.code) tv.code = net.on && net.code ? net.code : makeCode();   // le code s'affiche même sans réseau
+  const code = tv.code;
+  $('tvCode').textContent = code;
+  $('tvCodeJeu').textContent = net.on && net.code ? net.code : '— crée une partie —';
+  const lm = lienBase() + '#manette=' + code;
+  $('lienManette').textContent = lm;
+  QR.dessine($('qrManette'), lm);
+  if (net.on && net.code) {
+    const lj = lienBase() + '#jeu=' + net.code;
+    $('lienJeu').textContent = lj; QR.dessine($('qrJeu'), lj);
+  } else {
+    $('lienJeu').textContent = '';
+    $('qrJeu').style.display = 'none';
+  }
+  $('tvCodeJeu').style.fontSize = net.on && net.code ? '' : '0';
+  $('tvCreePartie').style.display = net.on && net.code ? 'none' : '';
+  tvManettesMaj();
+  $('tvGros').textContent = 'Affichage géant : ' + (document.body.classList.contains('tv') ? 'oui' : 'non');
+}
+function modeTV(on) {
+  document.body.classList.toggle('tv', on);
+  store.set('superobby.tv', on ? '1' : '0');
+  try { resize(); } catch (e) {}
+}
+function ouvreSalonTV() {
+  openUI('tvsalon');
+  tvHeberge();
+  tvSalonMaj();
+}
+
+// ---- côté téléphone : l'écran devient une manette -----------------------------------
+const man = { peer: null, conn: null, id: null, x: 0, y: 0, lx: 0, ly: 0, env: 0 };
+function manetteOuvre(code) {
+  document.getElementById('manette').classList.add('on');
+  running = false; window.__manetteSeule = true;
+  try { renderer.setAnimationLoop && renderer.setAnimationLoop(null); } catch (e) {}
+  if (code) { $('telCode').value = code; manetteConnecte(code); }
+}
+function manetteFerme() {
+  document.getElementById('manette').classList.remove('on');
+  try { if (man.peer) man.peer.destroy(); } catch (_) {}
+  man.peer = null; man.conn = null; window.__manetteSeule = false;
+  if (location.hash) location.hash = '';
+}
+function manetteEtat(t) { $('telEtat').textContent = t; }
+function manetteConnecte(code) {
+  if (typeof Peer === 'undefined') { $('telErr').textContent = 'Pas de connexion Internet.'; return; }
+  $('telErr').textContent = '';
+  manetteEtat('Connexion à ' + code + '…');
+  try { if (man.peer) man.peer.destroy(); } catch (_) {}
+  let peer; try { peer = new Peer(undefined, { debug: 0 }); } catch (e) { $('telErr').textContent = 'Manette indisponible.'; return; }
+  man.peer = peer;
+  peer.on('open', () => {
+    const c = peer.connect('superobby-tv-' + code, { reliable: false });
+    man.conn = c;
+    c.on('open', () => {
+      document.getElementById('manette').classList.add('pret');
+      manetteEtat('🎮 Connecté à la télé · code ' + code);
+      try { c.send({ t: 'hello', nom: (localStorage.getItem('superobby.name') || 'Manette') }); } catch (_) {}
+      if (navigator.vibrate) navigator.vibrate(60);
+    });
+    c.on('close', () => { document.getElementById('manette').classList.remove('pret'); manetteEtat('Déconnecté'); });
+    c.on('error', () => { $('telErr').textContent = 'Connexion impossible : vérifie le code.'; });
+  });
+  peer.on('error', e => { $('telErr').textContent = e.type === 'peer-unavailable' ? 'Aucune télé avec ce code.' : 'Erreur réseau.'; });
+}
+function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); } catch (_) {} } }
+
+// ---- les gestes sur le téléphone-manette --------------------------------------------
+(() => {
+  const el = id => document.getElementById(id);
+  const stick = el('telStick'), base = el('telBase'), knob = el('telKnob'), vise = el('telVise');
+  let sid = null, vid = null, dernier = 0;
+  const R = () => base.getBoundingClientRect().width / 2;
+  stick.addEventListener('pointerdown', e => {
+    e.preventDefault(); sid = e.pointerId;
+    const b = stick.getBoundingClientRect();
+    base.style.left = (e.clientX - b.left) + 'px'; base.style.top = (e.clientY - b.top) + 'px';
+    man.cx = e.clientX; man.cy = e.clientY;
+    try { stick.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  stick.addEventListener('pointermove', e => {
+    if (e.pointerId !== sid) return;
+    let dx = e.clientX - man.cx, dy = e.clientY - man.cy;
+    const d = Math.hypot(dx, dy), r = R();
+    if (d > r) { dx *= r / d; dy *= r / d; }
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    // zone morte franche puis réponse progressive : on marche doucement au centre,
+    // on court quand on pousse à fond — c'est ce qui manquait au joystick tactile
+    let mag = Math.min(1, d / r); mag = mag < 0.14 ? 0 : (mag - 0.14) / 0.86;
+    mag = mag * (0.55 + 0.45 * mag);
+    const nx = d > 0.01 ? dx / d : 0, ny = d > 0.01 ? dy / d : 0;
+    man.x = nx * mag; man.y = -ny * mag;
+  });
+  const lache = e => {
+    if (e.pointerId === sid) { sid = null; man.x = man.y = 0; knob.style.transform = 'translate(-50%,-50%)'; manEnvoie({ t: 'ax', x: 0, y: 0 }); }
+    if (e.pointerId === vid) vid = null;
+  };
+  stick.addEventListener('pointerup', lache); stick.addEventListener('pointercancel', lache);
+  vise.addEventListener('pointerdown', e => { e.preventDefault(); vid = e.pointerId; man.lx = e.clientX; man.ly = e.clientY;
+    try { vise.setPointerCapture(e.pointerId); } catch (_) {} });
+  vise.addEventListener('pointermove', e => {
+    if (e.pointerId !== vid) return;
+    manEnvoie({ t: 'look', dx: e.clientX - man.lx, dy: e.clientY - man.ly });
+    man.lx = e.clientX; man.ly = e.clientY;
+  });
+  vise.addEventListener('pointerup', lache); vise.addEventListener('pointercancel', lache);
+  // 25 messages par seconde suffisent et gardent la liaison fluide
+  setInterval(() => {
+    if (!man.conn || !man.conn.open) return;
+    if (man.x !== man.px || man.y !== man.py) { manEnvoie({ t: 'ax', x: +man.x.toFixed(3), y: +man.y.toFixed(3) }); man.px = man.x; man.py = man.y; }
+  }, 40);
+  for (const b of document.querySelectorAll('#telBtns .tb')) {
+    const nom = b.dataset.b;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('on'); manEnvoie({ t: 'btn', b: nom, down: true });
+      if (navigator.vibrate) navigator.vibrate(18); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave'])
+      b.addEventListener(ev, () => { b.classList.remove('on'); manEnvoie({ t: 'btn', b: nom, down: false }); });
+  }
+  const envoieChat = () => { const t = el('telChat').value.trim(); if (!t) return; manEnvoie({ t: 'chat', text: t }); el('telChat').value = ''; el('telChat').blur(); };
+  el('telEnvoi').addEventListener('click', envoieChat);
+  el('telChat').addEventListener('keydown', e => { if (e.key === 'Enter') envoieChat(); });
+  el('telMic').addEventListener('click', () => {
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Rec) { el('telChat').placeholder = 'Micro indisponible — écris ton message'; return; }
+    try {
+      const r = new Rec(); r.lang = 'fr-FR'; r.continuous = false; r.interimResults = false;
+      r.onresult = ev => { const t = ev.results[0][0].transcript.trim(); if (t) manEnvoie({ t: 'chat', text: t }); };
+      r.start(); el('telMic').textContent = '🔴';
+      r.onend = () => { el('telMic').textContent = '🎤'; };
+    } catch (_) {}
+  });
+  el('telGo').addEventListener('click', () => {
+    const c = el('telCode').value.trim().toUpperCase();
+    if (c.length === 4) manetteConnecte(c); else el('telErr').textContent = 'Entre les 4 lettres affichées sur la télé.';
+  });
+  el('telCode').addEventListener('keydown', e => { if (e.key === 'Enter') el('telGo').click(); });
+  el('telQuitte').addEventListener('click', manetteFerme);
+})();
+
+// ---- boutons du salon TV -------------------------------------------------------------
+$('tvBtn').addEventListener('click', () => ouvreSalonTV());
+$('tvStart').addEventListener('click', () => { modeTV(true); ouvreSalonTV(); });
+$('manetteStart').addEventListener('click', () => manetteOuvre(''));
+$('tvFerme').addEventListener('click', () => closeUI());
+$('tvGros').addEventListener('click', () => { modeTV(!document.body.classList.contains('tv')); tvSalonMaj(); });
+$('tvCreePartie').addEventListener('click', () => {
+  hostGame();
+  $('tvCreePartie').textContent = 'Ouverture…';
+  let n = 0;
+  const t = setInterval(() => { if (net.on || ++n > 30) { clearInterval(t); $('tvCreePartie').textContent = 'Ouvrir la partie aux amis'; tvSalonMaj(); } }, 300);
+});
+$('tvPleinEcran').addEventListener('click', () => {
+  const d = document.documentElement;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (d.requestFullscreen) d.requestFullscreen().catch(() => {});
+});
+
+// ---- navigation au clavier / à la manette dans les menus (on joue de loin) ------------
+// Les flèches (ou la croix directionnelle d'une manette) déplacent une bague jaune d'un
+// bouton à l'autre, Entrée ou A valide : plus besoin de souris devant la télé.
+const NAVTV = { i: 0 };
+function navCibles() {
+  const ouvert = document.querySelector('.overlay:not(.hidden)');
+  const racine = ouvert || document.body;
+  return [...racine.querySelectorAll('button:not([disabled]), input, .sw i, .pills b, .wcard')]
+    .filter(e => e.offsetParent !== null);
+}
+function navBouge(d) {
+  const c = navCibles(); if (!c.length) return false;
+  const actuel = c.findIndex(e => e.classList.contains('focustv'));
+  c.forEach(e => e.classList.remove('focustv'));
+  let i = actuel < 0 ? 0 : (actuel + d + c.length) % c.length;
+  c[i].classList.add('focustv');
+  try { c[i].scrollIntoView({ block: 'nearest' }); } catch (_) {}
+  NAVTV.i = i; return true;
+}
+function navValide() {
+  const e = document.querySelector('.focustv'); if (!e) return false;
+  if (e.tagName === 'INPUT') { e.focus(); return true; }
+  e.click(); setTimeout(() => { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); }, 60);
+  return true;
+}
+window.addEventListener('keydown', e => {
+  if (!document.body.classList.contains('tv')) return;
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const ouvert = document.querySelector('.overlay:not(.hidden)');
+  if (!ouvert) return;
+  if (e.code === 'ArrowDown' || e.code === 'ArrowRight') { if (navBouge(1)) e.preventDefault(); }
+  else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') { if (navBouge(-1)) e.preventDefault(); }
+  else if (e.code === 'Enter' || e.code === 'NumpadEnter') { if (navValide()) e.preventDefault(); }
+});
+
+// ---- arrivée par un lien : #manette=CODE, #jeu=CODE, #tv ------------------------------
+function routeLien() {
+  const h = (location.hash || '').replace(/^#/, '');
+  const m = /^manette=?([A-Za-z]{0,4})$/.exec(h);
+  if (m) { manetteOuvre(m[1] ? m[1].toUpperCase() : ''); return 'manette'; }
+  const j = /^jeu=([A-Za-z]{4})$/.exec(h);
+  if (j) { const c = j[1].toUpperCase(); $('codeIn').value = c; setTimeout(() => joinGame(c), 400); return 'jeu'; }
+  if (h === 'tv') { modeTV(true); return 'tv'; }
+  return null;
+}
+if (store.get('superobby.tv') === '1') modeTV(true);
+routeLien();
+window.addEventListener('hashchange', routeLien);
+
 loop();
 })();
 </script>

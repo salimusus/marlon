@@ -1,0 +1,52 @@
+# SuperObby
+
+Un jeu de plateforme et de ville ouverte en 3D qui tient dans **un seul fichier HTML**
+(`superobby.html`). Pas d'installation, pas de serveur : on ouvre le fichier dans un
+navigateur et on joue.
+
+- 4 parcours d'obstacles + une grande ville (banque, commissariat, villas, cinéma,
+  armurerie, école, hôpital, parc, plage, circuit de course…)
+- Véhicules, hélicoptère, jet-ski, parachute et deltaplane
+- Amis bots qui obéissent aux ordres écrits ou dictés au micro, chien à adopter
+- Braquages, police, armée, mode zombie nocturne
+- Multijoueur en pair à pair (PeerJS), chacun sur son appareil
+
+## Jouer
+
+Ouvrir `superobby.html` dans un navigateur récent (Chrome, Edge, Firefox, Safari).
+Pour jouer à plusieurs, le fichier doit être servi par une adresse que les autres
+appareils peuvent atteindre (GitHub Pages, un partage local, n'importe quel
+hébergement statique).
+
+### Sur la télé, avec le téléphone comme manette
+
+1. Sur la télé (ou l'ordinateur branché dessus), cliquer sur **📺** en haut de l'écran.
+2. Le jeu passe en affichage géant et montre deux QR codes :
+   - le premier transforme un téléphone en **manette** (stick, caméra, boutons, chat et micro) ;
+   - le second, après « Ouvrir la partie aux amis », permet à d'autres joueurs de
+     **rejoindre la ville** d'un simple scan.
+3. Sans QR code, il suffit d'ouvrir le jeu sur le téléphone, de choisir
+   « 🎮 Servir de manette » et de taper le code à 4 lettres affiché sur la télé.
+
+Une manette de salon (Xbox, PlayStation, générique USB ou Bluetooth) fonctionne aussi :
+sticks pour bouger et regarder, A pour sauter, B pour agir, X pour frapper, Y pour
+dégainer, gâchettes pour tirer et courir, croix directionnelle pour naviguer dans les
+menus.
+
+### Clavier
+
+`Z Q S D` déplacement · `Espace` sauter · `E` agir / monter en voiture · `G` dégainer ·
+`X` tirer · `V` frapper · `F` course · `/` chat · `Échap` menu.
+
+## Banc d'essai
+
+Le dossier `harness/` contient une suite de tests jouée dans un vrai Chromium
+(Playwright) : chaque comportement du jeu y est mesuré, pas seulement vérifié.
+
+```sh
+node harness/play.js            # toute la suite
+FILTRE='parachute' node harness/play.js   # un sous-ensemble
+node harness/shot.js            # captures d'écran
+```
+
+`shots/` rassemble les captures de référence.

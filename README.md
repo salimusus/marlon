@@ -26,6 +26,20 @@ navigateur et on joue.
 - « La Zone » : un quartier pauvre avec ses immeubles de trois étages ouverts (escaliers
   extérieurs, coursives, appartements meublés, toits), ses carcasses de voitures, ses
   poubelles, ses tags, ses affiches déchirées et ses chiens errants
+- **La guerre des gangs** — le but du jeu : prendre la ville. Chaque gang a un nom, un chef
+  en chair et en os, une villa à un coin de la ville et une planque secrète où dort son
+  magot. On monte son gang (amis recrutés, vaincus retournés), on l'entraîne à la salle de
+  sport et au stand de tir, on l'arme, on kidnappe un rival pour lui faire avouer où est la
+  planque, on la braque, on prend les quartiers un par un (chacun verse sa « protection »
+  toutes les deux minutes) et on répond aux chefs qui donnent rendez-vous : alliance,
+  tribut ou déclaration de guerre. Un gang mis au tapis est dissous, ses hommes changent de
+  camp… et il renaît quelques minutes plus tard sous un nouveau nom, avec un nouveau chef,
+  plus fort et plus riche. Rang du joueur : Débutant → Petite frappe → Caïd → Baron →
+  Parrain, qui fixe la taille du gang.
+- Commissariat aménagé avec son guichet des plaintes : on signale quelqu'un, une patrouille
+  part le chercher et l'enferme en cellule
+- Une ville qui se répare toute seule : vitrines remplacées, lampadaires redressés,
+  véhicules abandonnés ramenés à leur place, épaves remorquées
 - Amis bots qui obéissent aux ordres écrits ou dictés au micro (jusqu'à « tire pour me
   protéger »), chien à adopter
 - Braquages, police et armée
@@ -56,8 +70,10 @@ menus.
 
 ### Clavier
 
-`Z Q S D` déplacement · `Espace` sauter · `E` agir / monter en voiture · `G` dégainer ·
-`X` tirer · `V` frapper · `F` course · `/` chat · `Échap` menu.
+`Z Q S D` déplacement · `Espace` sauter · `E` agir / monter en voiture (et attraper un
+rival KO, interroger un otage, forcer un coffre en maintenant) · `G` dégainer · `X` tirer ·
+`V` frapper · `F` course · `/` chat · `Échap` menu.
+Boutons en haut de l'écran : 🛒 boutique · 📋 missions · 🚩 la guerre des gangs · 📺 mode TV.
 
 ## Banc d'essai
 

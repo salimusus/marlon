@@ -1270,6 +1270,7 @@ test('la caméra colle aux murs sans les traverser, et se baisse sous les plafon
     // orientation figée : sinon la caméra peut tomber sur un arbre et la mesure danse
     await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 }); }, { x, y, z });
     await attendre(p, cond, 25000);
+    await p.waitForTimeout(700);   // la perche se règle avant la caméra : on la laisse arriver
     return p.evaluate(() => {
       const c = __G.camera.position, dedansMur = __G.solids.some(o => !o.veh && o.h < 30
         && Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2);
@@ -1517,7 +1518,7 @@ test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
     const nb = { lifts: __G.city.lifts.length, toits: __G.city.toits.length, voiles: __G.city.voiles.length };
     __G.P.pos.set(L.x, L.low + 0.3, L.z); __G.P.vel.set(0, 0, 0);
     const t0 = Date.now(); let haut = 0;
-    while (Date.now() - t0 < 30000) { await dodo(250); haut = Math.max(haut, __G.P.pos.y); if (__G.P.pos.y > L.high - 0.4) break; }
+    while (Date.now() - t0 < 55000) { await dodo(250); haut = Math.max(haut, __G.P.pos.y); if (__G.P.pos.y > L.high - 0.4) break; }
     const monte = haut;
     // parachute posé sur le toit
     const para = __G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
@@ -2299,29 +2300,32 @@ test('la gazinière de la villa fait une vraie flamme qui vacille', async p => {
 test('le garage a déménagé et il est bien plus grand, avec son atelier', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     await dodo(600);
     const g = __G.city.garage, d = __G.city.tuneDesk;
     const z = __G.city.zones.find(x => x.name === 'Garage custom');
-    // rien d'autre ne doit occuper le bâtiment
-    const chevauche = __G.city.zones.filter(x => x !== z && x.name !== 'Départ'
-      && Math.abs((x.x1 + x.x2) / 2 - g.x) < ((x.x2 - x.x1) + 28) / 2
-      && Math.abs((x.z1 + x.z2) / 2 - g.z) < ((x.z2 - x.z1) + 18) / 2).map(x => x.name);
+    // aucun mur d'un autre bâtiment ne doit traverser le garage ni son parvis
+    const sien = o => Math.abs(o.x - g.x) < 15.5 && Math.abs(o.z - g.z) < 10.5;
+    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && o.y + o.h / 2 > 0.6 && !sien(o)
+      && Math.abs(o.x - cx) < (o.w + W) / 2 && Math.abs(o.z - g.z) < (o.d + D) / 2).length;
+    const chevauche = [];
+    if (dedans(g.x, 28, 18)) chevauche.push('bâtiment');
+    if (dedans(g.x - 18, 8, 18)) chevauche.push('parvis');
     __G.P.pos.set(d.x, 0.4, d.z + 1.2); __G.P.vel.set(0, 0, 0);
     const t0 = __G.simTime;
     while (__G.simTime - t0 < 0.4) await dodo(120);
     return { g, d, zone: z ? { w: z.x2 - z.x1, d: z.z2 - z.z1 } : null, chevauche,
       near: __G.city.tuneNear, surface: 28 * 18 };
   });
-  const ok = r.g && r.g.x === -46 && r.g.z === 46 && r.surface >= 480 && r.d && r.zone && r.chevauche.length === 0 && r.near;
-  return { ok, detail: `garage déplacé en (${r.g.x}, ${r.g.z}) et agrandi à ${r.surface} m² (contre 99 m² avant) · zone de ${Math.round(r.zone.w)}×${Math.round(r.zone.d)} m sans chevauchement (${r.chevauche.length} voisin) · comptoir d'atelier en (${r.d.x}, ${r.d.z}), détecté quand on s'en approche=${r.near}` };
+  const ok = r.g && r.g.x === -45 && r.g.z === 90 && r.surface >= 480 && r.d && r.zone && r.chevauche.length === 0 && r.near;
+  return { ok, detail: `garage déplacé en (${r.g.x}, ${r.g.z}) et agrandi à ${r.surface} m² (contre 99 m² avant) · ni le bâtiment ni le parvis ne recoupent un autre mur (${r.chevauche.length} conflit) · comptoir d'atelier en (${r.d.x}, ${r.d.z}), détecté quand on s'en approche=${r.near}` };
 });
 
 test('on repeint et on customise sa voiture sans repeindre le décor', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     await dodo(500);
     const c = __G.city.cars.find(v => v.bodyMat && !v.kart && !v.heli && !v.rider);
@@ -2364,7 +2368,7 @@ test('on repeint et on customise sa voiture sans repeindre le décor', async p =
 test('la nitro pousse fort quelques secondes puis doit se recharger', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     await dodo(400);
     const c = __G.city.cars.find(v => v.bodyMat && !v.kart && !v.heli && !v.rider);

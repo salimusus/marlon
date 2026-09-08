@@ -2434,7 +2434,7 @@ const WORLDS = [
       city.zones.push({ name: 'Tennis', emoji: '🎾', x1: 3, x2: 23, z1: -23, z2: -3, hint: '🎾 Renvoie la balle par-dessus le filet !' });
       // ---- parking + magasins (SO) ----
       city.cars.push(makeCar(0xff5c5c, -15, 9, 0), makeCar(0x4f8dff, -19, 9, 0), makeCar(0xffd23f, -15, 3.5, 0), makeCar(0x111111, -19, 3.5, 0, { sport: true }));
-      buildGarage(-46, 46);
+      buildGarage(-45, 90);
       buildShops(); sign(-3.6, 0.3, 3.6, '🚗 Parking');
       for (let i = 0; i < 3; i++) coin(-9 - i * 5, 0.3, 4.5);
       // ---- parc à trampolines (SE) ----

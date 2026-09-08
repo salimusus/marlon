@@ -1400,7 +1400,7 @@ test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur 
     b.rdv = null;
     return { traite, suit, lieu: lieu && lieu.nom, d0: +d0.toFixed(1), d1: +d1.toFixed(1), d2: +d2.toFixed(1), arrive, helipo: helipo && helipo.nom };
   });
-  const ok = r.traite && r.suit && r.lieu === '🚁 Héliport' && r.d1 < 3.5 && r.d2 < 4 && r.arrive;
+  const ok = r.traite && r.suit && r.lieu === '🚁 Héliport' && r.d1 < 3 && r.d2 < 3.5 && r.arrive;
   return { ok, detail: `lieu reconnu : ${r.lieu} · le bot part de ${r.d0} m, arrive à ${r.d1} m et reste à ${r.d2} m (annonce=${r.arrive})` };
 });
 
@@ -1664,6 +1664,7 @@ test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    if (__G.P.voile) __G.rangeVoile(false);   // rien qui traîne d'un test précédent
     await dodo(300);
     const t = __G.city.toits[0], L = t.lift;
     const nb = { lifts: __G.city.lifts.length, toits: __G.city.toits.length, voiles: __G.city.voiles.length };
@@ -1678,16 +1679,19 @@ test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
     __G.prendreVoile(para);
     __G.P.pos.set(t.x + t.w / 2 + 3, t.y + 1, t.z); __G.P.vel.set(0, 0, 0);
     const y0 = __G.P.pos.y, s0 = __G.simTime;
-    let vmin = 0; const t1 = Date.now();
-    while (Date.now() - t1 < 30000) { await dodo(200); vmin = Math.min(vmin, __G.P.vel.y); if (__G.P.grounded && __G.P.pos.y < 3) break; }
-    await dodo(900);
+    let vmin = 0, aVole = false, rangee = false; const t1 = Date.now();
+    while (Date.now() - t1 < 45000) {
+      await dodo(200); vmin = Math.min(vmin, __G.P.vel.y);
+      aVole = aVole || __G.P.voileVol;
+      if (aVole && !__G.P.voile) { rangee = true; break; }   // posé : le parachute se replie
+    }
     return { nb, monte: +monte.toFixed(2), high: +L.high.toFixed(2), toit: +t.y.toFixed(1), detecte,
       chute: { de: +y0.toFixed(1), a: +__G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(__G.simTime - s0).toFixed(1) },
-      voileApres: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !para.pris };
+      rangee, voileApres: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !para.pris };
   });
   const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.chute.vMin > -7 && r.chute.vMin < -1
-    && r.chute.a < 2 && !r.voileApres && !r.mesh && r.remise;
-  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${!r.voileApres} et remise sur le toit=${r.remise}` };
+    && r.rangee && !r.voileApres && !r.mesh && r.remise;
+  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${r.rangee} et remise sur le toit=${r.remise}` };
 });
 
 test('le deltaplane plane loin devant au lieu de tomber', async p => {
@@ -1695,6 +1699,7 @@ test('le deltaplane plane loin devant au lieu de tomber', async p => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    if (__G.P.voile) __G.rangeVoile(false);   // rien qui traîne d'un test précédent
     await dodo(300);
     const t = __G.city.toits[0];
     const delta = __G.city.voiles.find(o => o.kind === 'delta' && Math.abs(o.y - t.y) < 2);

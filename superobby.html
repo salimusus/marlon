@@ -6534,7 +6534,8 @@ function updateBot(b, dt) {
           takeAway(it); botDit(b, `tiens, ton ${it.n} ! ${it.e}`); msg(`${it.e} ${b.name} t'a rapporté un ${it.n} !`, 2600); sfx.coin(); }
       }
       const dr = Math.hypot(b.rdv.x - b.pos.x, b.rdv.z - b.pos.z);
-      if (dr > 1.8) {
+      // « viens » / « suis-moi » : il s'arrête vraiment à côté du joueur (1,1 m au lieu de 1,8)
+      if (dr > (b.rdv.suit ? 1.1 : 1.8)) {
         // en ligne droite il restait bloqué contre le premier mur : on suit un itinéraire
         if (!b.rdvRoute || simTime > (b.rdvRouteT || 0)) { b.rdvRouteT = simTime + 3;
           const pth = navPath(b.pos.x, b.pos.z, b.rdv.x, b.rdv.z);

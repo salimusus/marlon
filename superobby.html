@@ -3998,7 +3998,7 @@ function policeVoit(o, portee = 45) {
   if (d > portee || d < 0.4) return d <= portee;
   // un lancer de rayon par véhicule et par agent à chaque image coûterait cher :
   // la ligne de vue est recalculée quatre fois par seconde
-  if (simTime < (o.vueT || 0)) return o.vue;
+  if (simTime < (o.vueT || 0) && simTime > o.vueT - 0.3) return o.vue;
   o.vueT = simTime + 0.25;
   const oy = (o.y || 0) + 1.5;
   const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d, dy = (P.pos.y + 1.2 - oy) / d;
@@ -4777,7 +4777,9 @@ const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
 function sousToit() {
-  if (simTime < cam.dedansT) return cam.dedans;
+  // le cache dure un quart de seconde ; en multijoueur l'horloge peut reculer d'un coup
+  // (synchro avec l'hôte) et l'ancienne condition figeait alors la valeur pour toujours
+  if (simTime < cam.dedansT && simTime > cam.dedansT - 0.3) return cam.dedans;
   cam.dedansT = simTime + 0.25; cam.dedans = false;
   for (const o of solids) {
     const bas = o.y - o.h / 2;
@@ -7832,7 +7834,7 @@ function frame() {
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Plus la pièce est étroite, plus la caméra se rapproche ; plus le
     // plafond est bas, plus elle s'abaisse — sinon elle passait au-dessus et on ne voyait rien.
-    if (simTime > (cam.mesT || 0)) {
+    if (simTime > (cam.mesT || 0) || simTime < cam.mesT - 0.25) {
       cam.mesT = simTime + 0.2;
       const m = camLibres(P.pos.x, P.pos.y + 1.5, P.pos.z, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]], 9, veh ? veh.solid : null);
       cam.salle = Math.min(m[0], m[1], m[2], m[3]); cam.plafond = m[4];

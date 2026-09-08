@@ -520,7 +520,7 @@ test('la police ouvre le feu à partir du niveau 2', async p => {
     const pc = __G.police.cars[0];
     if (!pc) return { ok: false, pourquoi: 'aucune voiture de police' };
     __G.P.pos.set(pc.x + 12, 0.5, pc.z); __G.P.hp = 100;
-    __G.police.alarmT = 0;
+    __G.police.alarmT = 0; __G.police.riposte = 0; __G.police.agents = [];   // riposte d'un test précédent : elle ferait tirer dès le niveau 1
     const compte = () => __G.shots.filter(s => s.police).length;
     // la traque elle-même (décompte du niveau, arrestation) n'est pas l'objet du test :
     // on la neutralise pour n'observer que l'ouverture du feu
@@ -1345,7 +1345,8 @@ test('atteindre la villa libère de prison et remet tout en ordre', async p => {
 
 test('la caméra colle aux murs sans les traverser, et se baisse sous les plafonds bas', async p => {
   const lis = async (x, y, z, cond) => {
-    await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12 }); }, { x, y, z });
+    // orientation figée : sinon la caméra peut tomber sur un arbre et la mesure danse
+    await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 }); }, { x, y, z });
     await attendre(p, cond, 25000);
     return p.evaluate(() => {
       const c = __G.camera.position, dedansMur = __G.solids.some(o => !o.veh && o.h < 30
@@ -1356,15 +1357,15 @@ test('la caméra colle aux murs sans les traverser, et se baisse sous les plafon
     });
   };
   await p.evaluate(() => { __G.cam.pitch = 0.6; });
-  const rue = await lis(0, 1, 40, () => __G.cam.dist > 6);
+  const rue = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const cuisine = await lis(70, 1, 158, () => __G.cam.dist < 4);
   await p.evaluate(() => { __G.cam.pitch = 0.6; });
   await p.waitForTimeout(900);
   const basPlafond = await p.evaluate(() => ({ pitch: +__G.cam.pitch.toFixed(2), plafond: +(__G.cam.plafond || 9).toFixed(1) }));
-  const retour = await lis(0, 1, 40, () => __G.cam.dist > 6);
+  const retour = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const ok = !rue.dedansMur && !cuisine.dedansMur && !retour.dedansMur
-    && cuisine.dist < rue.dist - 2 && cuisine.plafond < 3.2 && basPlafond.pitch < 0.42 && cuisine.libre != null && retour.dist > 6;
-  return { ok, detail: `rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (place ${cuisine.salle} m, plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
+    && cuisine.dist < rue.dist - 2 && cuisine.plafond < 3.2 && basPlafond.pitch < 0.42 && cuisine.libre != null && retour.dist > 7;
+  return { ok, detail: `rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · de retour dehors : ${retour.dist} m · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
 });
 
 test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur et s\'arrête', async p => {
@@ -1448,6 +1449,7 @@ test('braquage : la police descend de voiture, entre dans la banque et monte aux
     __G.P.pos.set(-57, 10.05, 70);
     const t0 = __G.simTime;
     __G.bankAlarm();
+    __G.police.arrestT = 0; __G.jail.on = false;   // une arrestation d'un test précédent bloquait le compteur
     const etapes = { agents: 0, entres: 0, etage: 0 };
     let arrete = null;
     for (let i = 0; i < 3600; i++) {
@@ -1482,6 +1484,7 @@ test('caché dans un bâtiment, la police ne t\'arrête pas — sauf si elle t\'
     const t1 = __G.simTime;
     __G.police.wanted = 3; __G.police.crimeLevel = 3; __G.police.decayT = t1 + 9999; __G.police.vuT = t1; __G.police.villaT = 0;
     __G.police.cars.forEach(c => { c.active = true; c.debarque = false; c.nearT = 0; c.x = 70; c.z = 166; c.y = 0; });
+    __G.police.arrestT = 0;
     __G.policeInvestit([70, 158], 'test');
     const agents2 = __G.police.agents.length;
     let dmin = 99;

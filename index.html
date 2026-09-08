@@ -10281,7 +10281,7 @@ function rejoindreGang(b) {
   if (estDuGang(b)) { botDit(b, 'je suis déjà dans ton gang 😎'); return true; }
   if (!estAmi(b.name)) { botDit(b, 'on se connaît à peine… deviens mon ami d\'abord'); return true; }
   gang.membres.push(b);
-  b.gang = 'joueur'; b.hatAvant = b.hat;
+  b.gang = 'joueur';
   try { applyLook(b.av, b.name, Object.assign(botLook(b), { hat: 'bandanaV' })); } catch (e) {}   // ton gang porte le bandana vert
   botDit(b, pickOne(['carrément, je suis avec toi ! 😤', 'ok chef, le gang c\'est nous 💪', 'compte sur moi']));
   msg(`🤝 ${b.name} rejoint ton gang (${gang.membres.length} membre${gang.membres.length > 1 ? 's' : ''})`, 3000);

@@ -16,6 +16,9 @@ const HOOK = `
 window.__SHOT = {
   ready: true,
   go(v) {
+    // le champ de chat garde le focus d'un test a l'autre et avale alors toutes les
+    // touches (le jeu ignore les keydown quand chatIn est actif) : on le relache.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');
     document.getElementById('start').classList.add('hidden');
@@ -75,11 +78,20 @@ window.__G = {
   adopterChien: typeof adopterChien === 'function' ? adopterChien : null,
   petsTick, sitBench, sleepBed, store, updateBot,
   parcelTick, dropDecor, grabParcel, placeLibre, retirerDeco, reprendreDeco, pointPose, murProche, loadDecor, decorSave, sousToit,
+  zombie: typeof zombie !== 'undefined' ? zombie : null,
+  ZOM_NIV: typeof ZOM_NIV !== 'undefined' ? ZOM_NIV : null,
+  zombieStart: typeof zombieStart === 'function' ? zombieStart : null,
+  zombieTick: typeof zombieTick === 'function' ? zombieTick : null,
+  zombieFin: typeof zombieFin === 'function' ? zombieFin : null,
+  zombieAttrape: typeof zombieAttrape === 'function' ? zombieAttrape : null,
+  openJail, jail, jailFree, shotsTick, fire, aimTick, spawnShot,
   meteo: typeof meteo !== 'undefined' ? meteo : null,
   meteoTick: typeof meteoTick === 'function' ? meteoTick : null,
   meteoSet: typeof meteoSet === 'function' ? meteoSet : null,
   stealCar: typeof stealCar === 'function' ? stealCar : null,
   cinemaTick: typeof cinemaTick === 'function' ? cinemaTick : null,
+  FILMS: typeof FILMS !== 'undefined' ? FILMS : null,
+  filmSuivant: typeof filmSuivant === 'function' ? filmSuivant : null,
   ctrlText: typeof ctrlText === 'function' ? ctrlText : null,
   castSolids: typeof castSolids === 'function' ? castSolids : null,
   rayBox: typeof rayBox === 'function' ? rayBox : null,

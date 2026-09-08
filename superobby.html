@@ -2082,7 +2082,7 @@ let worldIdx = 0, PATH = [];
 const city = { on: false, aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
-const police = { cars: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0 };
+const police = { cars: [], agents: [], wanted: 0, decayT: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -2103,7 +2103,9 @@ function infraction(what, level, sev = 1) {   // sev : 1 petit délit (coup), 2 
 }
 function clearWanted(reason) {
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.alarmT = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop(); police.cars.forEach(pc => { pc.active = false; pc.goHome = true; });
+  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  armeeFin(); policeRepli();
+  police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
 }
 const MISSIONS = [
@@ -2603,8 +2605,11 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // Escaliers larges (3 m) : marches à claire-voie qui partent du plancher de départ et
   // arrivent au ras du plancher d'arrivée. Avant, c'étaient des blocs pleins montant du sol,
   // et la dernière marche dépassait le plancher de 11 cm.
+  const escaliers = [];
   const stairs = (y0, y1, zc, dir) => {
     const n = 10, len = 1.5, x0 = bx - W / 2 + 1.5, rise = (y1 - y0) / n;
+    // mémorisé pour que les policiers à pied trouvent l'escalier et montent aux étages
+    escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });   // 35 cm : plus près du mur, un agent naissait dedans et ne pouvait plus bouger
     for (let i = 0; i < n; i++) {
       const x = x0 + (dir > 0 ? i : n - 1 - i) * len + len / 2, top = y0 + (i + 1) * rise;
       box(x, top - 0.09, zc, len + 0.06, 0.18, 3, marble, { studs: false, noRoute: true });
@@ -2641,7 +2646,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     for (let k = 0; k < 4; k++) box(sx + 0.2, y + 0.45 + (k % 2) * 0.32, sz - 0.3 + Math.floor(k / 2) * 0.6, 0.6, 0.28, 0.45, 0xffd23f, { deco: true, studs: false });   // lingots à l'intérieur
     const door = new THREE.Mesh(unitRound, lam(0x4a5060)); door.scale.set(0.14, 1.7, 1.4); door.position.set(sx + 0.82, y + 0.95, sz); worldGroup.add(door);
     const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), lam(0xffd23f)); dial.rotation.z = Math.PI / 2; dial.position.set(sx + 0.93, y + 1.05, sz); worldGroup.add(dial);
-    city.safes.push({ x: sx + 1.6, z: sz, y, door, dial, open: false, progress: 0, amount: 30 + Math.floor(Math.random() * 25) });
+    city.safes.push({ x: sx + 1.6, z: sz, y, door, dial, open: false, progress: 0, amount: 500 });
   }
   for (const [cx, cz] of [[bx - 8, bz + 8], [bx + 8, bz - 8]]) { box(cx, 2 * F + 3.6, cz, 0.35, 0.3, 0.7, 0x111111, { deco: true, studs: false }); box(cx, 2 * F + 3.6, cz + 0.45, 0.12, 0.12, 0.12, 0, { material: neonMat(0xff2020), deco: true, noEdges: true }); }   // caméras
   // gardes
@@ -2651,7 +2656,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   mkGuard('Garde Nina', 2 * F + 0.3, [[bx + 7, bz - 8], [bx + 7, bz + 8], [bx - 7, bz + 8], [bx - 7, bz - 8]]);
   mkGuard('Garde Tom', 2 * F + 0.3, [[bx - 6, bz + 2], [bx - 6, bz - 8], [bx + 2, bz - 8]]);
   lamp(ex + 4.5, bz - 6); lamp(ex + 4.5, bz + 6); flowerBed(ex + 3, bz + 8.5, 1.4, 3); flowerBed(ex + 3, bz - 8.5, 1.4, 3);
-  city.bank = { x: bx, z: bz, w: W, d: D };
+  city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 1.6, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
   city.zones.push({ name: 'Banque', emoji: '🏦', x1: bx - 11, x2: bx + 14, z1: bz - 11, z2: bz + 11, hint: '🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés' });
 }
 function openBank() {
@@ -2666,12 +2671,14 @@ $('bankClose').addEventListener('click', closeUI);
 function bankAlarm() {   // alerte spéciale : niveau maximum, toutes les voitures de police, qui tirent sur les voleurs
   if (police.alarmT > simTime) { police.alarmT = simTime + 60; return; }
   police.alarmT = simTime + 60; police.crimeLevel = 3; police.wanted = 3; police.decayT = simTime + 90; police.lastSeen = [P.pos.x, P.pos.z];
-  while (police.cars.length < 5) { const sx = police.station.x + 5 + (police.cars.length - 2) * 3.2, pc = makeCar(0xf4f6fa, sx, 14, 0, { police: true }); pc.home = [sx, 14]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.active = false; city.cars.splice(city.cars.indexOf(pc), 1); police.cars.push(pc); }
+  while (police.cars.length < 5) { const sx = police.station.x + 5 + (police.cars.length - 2) * 3.2, pc = makeCar(0xf4f6fa, sx, 14, 0, { police: true }); pc.home = [sx, 14]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
   police.cars.forEach(pc => { pc.active = true; pc.goHome = false; });
   $('wanted').textContent = '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi'; $('wanted').classList.add('on'); siren.start();
   msg('🚨 ALARME DE LA BANQUE !', 2500); sfx.noise(.8, 900, .12); sfx.tone(900, 0, .4, 'square', .04, 700); sfx.tone(900, .5, .4, 'square', .04, 700);
   chat(null, `🚨 ${myCfg.name} braque la banque ! Toutes les unités en route`);
   for (const gd of city.guards) gd.alert = true;
+  // tant que le voleur est dans la banque, la police entre à pied pour l'arrêter
+  if (city.bank) { police.sait = [city.bank.x, city.bank.z]; police.vuT = simTime; msg('🚔 Les voitures foncent sur la banque : ils vont entrer à pied !', 3000); }
 }
 function sharkTick(dt) {   // le requin blanc patrouille, charge le nageur le plus proche et mord
   const sh = city.shark; if (!sh) return;
@@ -2701,7 +2708,11 @@ function safesTick(dt) {
   const held = keys.has('KeyE') || P.handHeld;
   if (held) { sf.progress += dt / 3.2; sf.dial.rotation.x += dt * 12; $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}%`; if (simTime > (sf.tickT || 0)) { sf.tickT = simTime + 0.25; sfx.tone(1200, 0, .03, 'square', .03); } bankAlarm(); }
   else if (sf.progress > 0) { sf.progress = Math.max(0, sf.progress - dt / 6); $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}%`; }
-  if (sf.progress >= 1) { sf.open = true; sf.door.position.x += 0.5; sf.door.rotation.y = -1.7; sf.door.position.z -= 0.55; wallet += sf.amount; saveWallet(); updateHud(); burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register(); msg(`💰 Coffre ouvert : +${sf.amount} 🪙 ! File avant la police`, 2500); updateAct(); infraction('braquer la banque', 3, 3); }
+  if (sf.progress >= 1) { sf.open = true; sf.door.position.x += 0.5; sf.door.rotation.y = -1.7; sf.door.position.z -= 0.55; wallet += sf.amount; saveWallet(); updateHud(); burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register();
+    police.coffres = (police.coffres || 0) + 1;   // plus on force de coffres, plus la fuite est dure
+    const reste = ['un jeu d\'enfant', 'ça va se corser', 'ils vont te traquer', 'presque impossible'][Math.min(3, police.coffres - 1)];
+    msg(`💰 Coffre ouvert : +${sf.amount} 🪙 (${police.coffres} coffre${police.coffres > 1 ? 's' : ''} — ${reste}) ! Fuis vers ta villa`, 3200);
+    updateAct(); infraction('braquer la banque', 3, 3); }
 }
 function guardsTick(dt) {
   for (const gd of city.guards) {
@@ -3979,23 +3990,280 @@ function jailWorldDone(i) {   // une épreuve réussie compte pour la libératio
   if (!left.length) { jail.on = false; saveJail(); $('jailBtn').style.display = 'none'; msg('🔓 Épreuves réussies : tu es libre !', 3000); chat(null, `🔓 ${myCfg.name} a purgé sa peine`); }
   else msg(`🔒 Épreuve validée ! Il reste : ${left.map(w => WORLDS[w].emoji + ' ' + WORLDS[w].name).join(', ')}`, 3200);
 }
+// ---- policiers à pied, planques dans les bâtiments et intervention de l'armée ----
+const armee = { on: false, heli: null, faisceau: null, tache: null, t0: 0, cible: [0, 0] };
+// Ligne de vue depuis une voiture de police ou un agent jusqu'au joueur.
+function policeVoit(o, portee = 45) {
+  const d = Math.hypot(P.pos.x - o.x, P.pos.z - o.z);
+  if (d > portee || d < 0.4) return d <= portee;
+  // un lancer de rayon par véhicule et par agent à chaque image coûterait cher :
+  // la ligne de vue est recalculée quatre fois par seconde
+  if (simTime < (o.vueT || 0)) return o.vue;
+  o.vueT = simTime + 0.25;
+  const oy = (o.y || 0) + 1.5;
+  const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d, dy = (P.pos.y + 1.2 - oy) / d;
+  o.vue = castSolids(o.x, oy, o.z, dx, dy, dz, d, true).d >= d - 0.6;
+  return o.vue;
+}
+// Le joueur est-il à couvert ? 'planque' = garage à semer la police, 'batiment' = sous un toit.
+function abriDuJoueur() {
+  if (drive.car) return null;
+  if (city.hideouts && city.hideouts.some(h => Math.abs(P.pos.x - h.x) < h.w / 2 - 0.5 && Math.abs(P.pos.z - h.z) < h.d / 2 - 0.5)) return 'planque';
+  return sousToit() ? 'batiment' : null;
+}
+function creerAgent(x, z, y, mil) {
+  const n = police.agents.length + 1;
+  const av = buildAvatar({ name: mil ? `Soldat ${n}` : `Agent ${n}`, jersey: 12, pants: mil ? 0x4a5a34 : PAL.pants[1],
+    cap: mil ? 0x3a4526 : 0x1b2a4a, num: 1, hat: 'helmet', jacket: 1, glasses: true, m: 60 });
+  if (mil) for (const k of ['shirt', 'sleeve', 'front', 'back', 'jacket']) if (av.mats[k]) av.mats[k].color.set(0x4a5a34);
+  av.group.position.set(x, y, z); city.mannequins.push(av);
+  const a = { av, name: av.name, x, y, z, facing: 0, hp: mil ? 110 : 70, ko: 0, shotT: 0, coupT: 0,
+    mil: !!mil, route: null, routeT: 0, stuckT: 0, sayT: 0, nee: simTime };
+  police.agents.push(a); return a;
+}
+function policeDebarque(pc, n) {   // les agents descendent de la voiture et continuent à pied
+  if (pc.debarque) return 0;
+  pc.debarque = true; pc.speed = 0; pc.route = null;
+  for (let i = 0; i < n; i++) creerAgent(pc.x + rnd(-1.6, 1.6), pc.z + rnd(-1.6, 1.6), pc.y || 0, pc.mil);
+  return n;
+}
+// Ils savent dans quel bâtiment tu es : les voitures s'arrêtent devant et les agents entrent.
+function policeInvestit(pt, raison) {
+  police.sait = [pt[0], pt[1]];
+  const max = clamp(2 + (police.coffres || 0) * 2 + (armee.on ? 4 : 0), 2, 10);
+  const proches = police.cars.filter(pc => pc.active && !pc.debarque)
+    .sort((a, b) => Math.hypot(a.x - pt[0], a.z - pt[1]) - Math.hypot(b.x - pt[0], b.z - pt[1]));
+  let sortis = 0;
+  for (const pc of proches) { if (police.agents.length >= max) break; sortis += policeDebarque(pc, 2); }
+  if (sortis) { msg(`🚨 ${raison} : les policiers descendent de voiture et entrent !`, 3000); chat(null, `🚔 Les agents entrent à pied pour arrêter ${myCfg.name}`); sfx.tone(700, 0, .18, 'square', .05, 500); }
+}
+function policeRepli() {   // fin de traque : les agents remontent en voiture (on les retire)
+  for (const a of police.agents) { scene.remove(a.av.group); const i = city.mannequins.indexOf(a.av); if (i >= 0) city.mannequins.splice(i, 1); }
+  police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0;
+  for (const pc of police.cars) pc.debarque = false;
+}
+function arrestation(raison) {
+  police.arrestT = simTime + 8;
+  jail.on = true; jail.level = police.crimeLevel || 1; jail.done = []; saveJail(); police.crimeLevel = 0;
+  msg(`🚔 ${raison} !`, 1800);
+  clearWanted(); chat(null, `🚔 ${myCfg.name} a été arrêté et mis en prison`); sfx.die(); jailEnter(true);
+}
+function agentTire(a, dmg, disp) {
+  a.shotT = simTime + (a.mil ? 0.7 : 1.15);
+  const origin = new THREE.Vector3(a.x, a.y + 1.45, a.z);
+  const dir = new THREE.Vector3(P.pos.x - a.x, (P.pos.y + 1.1) - (a.y + 1.45), P.pos.z - a.z).normalize();
+  dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp);
+  dir.normalize().multiplyScalar(85);
+  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: a.name, dmg };
+  shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60);
+  a.av.rig.armR.rotation.x = -1.5;
+}
+function agentsTick(dt) {
+  if (!police.agents.length) return;
+  const but = police.sait || police.lastSeen;
+  for (let i = police.agents.length - 1; i >= 0; i--) {
+    const a = police.agents[i];
+    if (a.ko) {
+      a.av.group.rotation.x = -Math.PI / 2; a.av.group.position.set(a.x, a.y + 0.4, a.z);
+      if (simTime > a.ko) { scene.remove(a.av.group); const k = city.mannequins.indexOf(a.av); if (k >= 0) city.mannequins.splice(k, 1); police.agents.splice(i, 1); }
+      continue;
+    }
+    const dP = Math.hypot(P.pos.x - a.x, P.pos.z - a.z), meme = Math.abs(P.pos.y - a.y) < 2.6;
+    const voit = meme && !drive.car && policeVoit(a, 30);
+    if (voit) { police.vuT = simTime; police.lastSeen = [P.pos.x, P.pos.z]; }
+    let tx = voit ? P.pos.x : but ? but[0] : a.x, tz = voit ? P.pos.z : but ? but[1] : a.z;
+    const bk = city.bank;
+    a.surEsc = false;
+    // Cible dans la banque et agent dehors : on passe par la porte (sinon ils s'écrasaient
+    // contre la façade ouest, juste derrière l'escalier).
+    const dansBanque = (x, z) => bk && Math.abs(x - bk.x) < bk.w / 2 - 0.6 && Math.abs(z - bk.z) < bk.d / 2 - 0.6;
+    const agentDedans = dansBanque(a.x, a.z);
+    if (bk && bk.porte && dansBanque(tx, tz) && !agentDedans) {
+      // on s'aligne d'abord face à la porte : sinon on se coince entre la façade et les colonnes
+      const al = Math.abs(a.z - bk.porte[1]) < 2.2 && a.x < bk.approche[0] + 1.5;
+      const c3 = al ? bk.porte : bk.approche; tx = c3[0]; tz = c3[1];
+    }
+    // Le joueur est à un autre étage : on passe par l'escalier au lieu de tourner en rond.
+    else if (bk && bk.esc && bk.esc.length && agentDedans) {
+      // Escalier : une fois engagé sur une volée, on la monte jusqu'au bout (sans ça,
+      // l'agent hésitait entre le pied et le sommet et redescendait sans arrêt).
+      if (a.esc) {
+        const e = a.esc, arr = a.escMonte ? e.haut : e.bas, ya = a.escMonte ? e.y1 : e.y0;
+        if (Math.abs(a.y - ya) < 0.3 || Math.abs(a.z - e.z) > 3.2) a.esc = null;   // 0,6 relâchait une marche trop tôt : l'agent redescendait
+        else { tx = arr[0]; tz = arr[1]; a.surEsc = true; }
+      }
+      if (!a.esc && Math.abs(P.pos.y - a.y) > 2) {
+        const monte = P.pos.y > a.y;
+        // la volée qui MÈNE à l'étage visé (à mi-marches, la hauteur n'est plus celle du palier)
+        const e = bk.esc.find(v => monte ? (a.y > v.y0 - 1.4 && a.y < v.y1 - 0.3) : (a.y > v.y0 + 0.3 && a.y < v.y1 + 1.4));
+        if (e) {
+          const dep = monte ? e.bas : e.haut, arr = monte ? e.haut : e.bas;
+          if (Math.hypot(a.x - dep[0], a.z - dep[1]) < 1.4) { a.esc = e; a.escMonte = monte; tx = arr[0]; tz = arr[1]; a.surEsc = true; }
+          else if (Math.abs(a.x - dep[0]) > 2.2) { tx = dep[0]; tz = bk.z; }   // on longe d'abord le milieu de la banque, sinon on butte sous les marches
+          else { tx = dep[0]; tz = dep[1]; }
+        }
+      }
+    }
+    const spd = (a.mil ? 5 : 4.1) + Math.min(1.2, (police.coffres || 0) * 0.3);
+    const d = Math.hypot(tx - a.x, tz - a.z);
+    if (d > 1.4) {
+      // au loin on suit l'itinéraire du quadrillage ; de près on va droit au but (le
+      // quadrillage est fait pour les voitures et ignore l'intérieur des bâtiments)
+      let wx = tx, wz = tz;
+      if (d > 26) {
+        if (!a.route || simTime > a.routeT || Math.hypot(tx - (a.rtx || 1e9), tz - (a.rtz || 1e9)) > 5) {
+          a.routeT = simTime + 1.6; a.rtx = tx; a.rtz = tz;
+          const pth = navPath(a.x, a.z, tx, tz);
+          a.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
+        }
+        while (a.route.length > 1 && Math.hypot(a.route[0][0] - a.x, a.route[0][1] - a.z) < 1.6) a.route.shift();
+        wx = a.route[0][0]; wz = a.route[0][1];
+      } else a.route = null;
+      const dx = wx - a.x, dz = wz - a.z;
+      let ang = Math.atan2(dx, dz);
+      if ((a.evT || 0) > simTime) ang = a.evH;   // contournement en cours
+      const sx = Math.sin(ang) * spd * dt, sz = Math.cos(ang) * spd * dt;
+      const o = { x: a.x, y: a.y, z: a.z };
+      let bloq = npcMove(o, sx, sz, 0.4);
+      if (bloq) {   // marche d'escalier : on retente un cran plus haut
+        const o2 = { x: a.x, y: a.y + 0.55, z: a.z };
+        if (!npcMove(o2, sx, sz, 0.4)) { o.x = o2.x; o.z = o2.z; a.y += 0.55; bloq = false; }
+      }
+      a.x = o.x; a.z = o.z; a.facing = ang;
+      if (bloq) {
+        a.stuckT += dt;
+        // dans l'escalier on ne contourne pas : on réessaie, sinon on tombe des marches
+        if ((a.evT || 0) < simTime && !a.surEsc) {   // on longe l'obstacle jusqu'à trouver la porte
+          const base = Math.atan2(dx, dz);
+          for (const off of [0.8, -0.8, 1.5, -1.5, 2.2, -2.2]) {
+            const h2 = base + off, sx2 = Math.sin(h2), sz2 = Math.cos(h2);
+            // on vérifie de près ET de loin : un mur mince laissait croire que la voie
+            // était libre derrière lui, et l'agent se collait dessus sans avancer
+            if (!npcBlocked(a.x + sx2 * 0.5, a.y, a.z + sz2 * 0.5, 0.4) && !npcBlocked(a.x + sx2 * 1.4, a.y, a.z + sz2 * 1.4, 0.4)) { a.evH = h2; a.evT = simTime + 1.1; break; }
+          }
+        }
+        if (a.stuckT > 6) { a.stuckT = 0; a.evT = 0; a.route = null; }
+      } else a.stuckT = Math.max(0, a.stuckT - dt);
+      animateRig(a.av.rig, 'walk', spd, dt, simTime);
+    } else { a.facing = Math.atan2(P.pos.x - a.x, P.pos.z - a.z); animateRig(a.av.rig, 'idle', 0, dt, simTime); }
+    const gy = groundUnder(a.x, a.z, null, a.y + 0.6);   // escaliers et étages : ils suivent le sol
+    // on monte la marche d'un coup (avec un rattrapage progressif, l'agent restait un
+    // instant trop bas et la marche suivante le bloquait : il glissait alors sur le côté)
+    if (gy > a.y) a.y = Math.min(gy, a.y + Math.max(0.7, 20 * dt)); else a.y = Math.max(gy, a.y - 9 * dt);
+    a.av.group.position.set(a.x, a.y, a.z);
+    let dh = a.facing - a.av.group.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    a.av.group.rotation.y += dh * Math.min(1, dt * 8);
+    if (voit && simTime > (a.sayT || 0)) { a.sayT = simTime + 7; bubble(a.av, pickOne(a.mil ? ['cible en vue !', 'feu à volonté !', 'ne le laissez pas filer'] : ['police, ne bouge plus !', 'les mains en l\'air !', 'il est là !'])); }
+    // l'armée tire à vue ; la police riposte si on lui tire dessus, si l'alerte est maximale
+    // ou pendant un braquage
+    const tire = a.mil || armee.on || simTime < (police.riposte || 0) || police.wanted >= 2 || police.alarmT > simTime;
+    if (tire && voit && dP > 2 && dP < 26 && simTime > a.shotT && P.hp > 0) agentTire(a, a.mil ? 16 : 5 + police.wanted, a.mil ? 0.02 : 0.05);
+    if (dP < 1.9 && meme && P.hp > 0) {
+      if (a.mil || armee.on) { if (simTime > a.coupT) { a.coupT = simTime + 1.3; a.av.rig.swing = 0.3; hurt(15, a.name, (P.pos.x - a.x) / (dP || 1), (P.pos.z - a.z) / (dP || 1), 1.8); } }
+      else if (police.wanted > 0 && simTime > police.arrestT && !jail.on) { arrestation('Un agent t\'a rattrapé à pied'); return; }
+    }
+  }
+}
+function agentTue(a) {   // un policier abattu : c'est l'armée qui prend le relais
+  a.ko = simTime + 60; a.hp = 0;
+  burst(a.x, a.y + 1, a.z, 0xff2020, 14); sfx.die();
+  chat(null, `🚨 ${myCfg.name} a abattu un policier !`);
+  armeeAlerte();
+}
+function armeeAlerte() {
+  if (armee.on) return;
+  armee.on = true; armee.t0 = simTime;
+  police.crimeLevel = 4; police.wanted = 3; police.decayT = simTime + 300; police.riposte = simTime + 300;
+  msg('🎖️ L\'ARMÉE EST DÉPLOYÉE ! Ils tirent à vue — fuis !', 4200);
+  chat(null, '🎖️ Alerte militaire : 4×4 et hélicoptère à la recherche du fugitif');
+  $('wanted').textContent = '🎖️ ARMÉE À TES TROUSSES : ils tirent pour tuer — cache-toi longtemps';
+  $('wanted').classList.add('on'); siren.start();
+  sfx.tone(120, 0, 1.2, 'sawtooth', .06, 60); sfx.noise(1, 500, .1);
+  const sx = police.station.x, sz = police.station.z;
+  for (let i = 0; i < 4; i++) {
+    const pc = makeCar(0x4a5a34, sx - 8 + i * 3.6, sz - 14, 0, { police: true });
+    pc.home = [sx - 8 + i * 3.6, sz - 14]; pc.solid.pol = true; vehicleSolid(pc);
+    pc.speed = 0; pc.active = true; pc.mil = true; pc.spec = { max: 34, rev: -8, accel: 24, turn: 2.1, seat: 0 };
+    const k = city.cars.indexOf(pc); if (k >= 0) city.cars.splice(k, 1);
+    police.cars.push(pc);
+  }
+  const h = makeHeli(P.pos.x, 26, P.pos.z - 30, 0);
+  const k = city.cars.indexOf(h); if (k >= 0) city.cars.splice(k, 1);
+  h.busy = true; h.spin = 1; armee.heli = h;
+  // projecteur : un cône lumineux sous l'hélicoptère et une tache au sol
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(7, 24, 18, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+  cone.position.set(0, -12, 0); h.g.add(cone); armee.faisceau = cone;
+  const tache = new THREE.Mesh(new THREE.CircleGeometry(7, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.34, depthWrite: false }));
+  tache.rotation.x = -Math.PI / 2; tache.position.y = 0.06; worldGroup.add(tache); armee.tache = tache;
+}
+function armeeFin() {
+  if (!armee.on) return;
+  armee.on = false;
+  if (armee.heli) { worldGroup.remove(armee.heli.g); const i = solids.indexOf(armee.heli.solid); if (i >= 0) solids.splice(i, 1); }
+  if (armee.tache) worldGroup.remove(armee.tache);
+  armee.heli = null; armee.faisceau = null; armee.tache = null;
+  for (let i = police.cars.length - 1; i >= 0; i--) { const pc = police.cars[i]; if (!pc.mil) continue; worldGroup.remove(pc.g); const k = solids.indexOf(pc.solid); if (k >= 0) solids.splice(k, 1); police.cars.splice(i, 1); }
+}
+function armeeTick(dt) {
+  const h = armee.heli; if (!h) return;
+  // il tourne au-dessus du dernier point connu, projecteur allumé
+  const cible = police.lastSeen || [P.pos.x, P.pos.z];
+  const ang = simTime * 0.5, rx = cible[0] + Math.cos(ang) * 12, rz = cible[1] + Math.sin(ang) * 12;
+  h.x += (rx - h.x) * Math.min(1, dt * 0.9); h.z += (rz - h.z) * Math.min(1, dt * 0.9);
+  h.y += (24 - h.y) * Math.min(1, dt * 0.8);
+  h.h = Math.atan2(cible[0] - h.x, cible[1] - h.z);
+  h.g.position.set(h.x, h.y, h.z); h.g.rotation.y = h.h;
+  h.rotor.rotation.y += dt * 32; h.tail.rotation.x += dt * 52;
+  if (h.solid) { h.solid.x = h.x; h.solid.z = h.z; h.solid.y = h.y + 1.2; }
+  if (armee.tache) { armee.tache.position.set(h.x, 0.06, h.z); armee.tache.material.opacity = 0.26 + Math.sin(simTime * 3) * 0.06; }
+  // pris dans le faisceau : ils te repèrent même la nuit
+  const dF = Math.hypot(P.pos.x - h.x, P.pos.z - h.z);
+  if (dF < 7.5 && !abriDuJoueur()) { police.vuT = simTime; police.lastSeen = [P.pos.x, P.pos.z]; police.hideT = 0;
+    if (simTime > (armee.spotT || 0)) { armee.spotT = simTime + 5; msg('🔦 Le projecteur t\'a repéré !', 1800); } }
+  if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; if (dF < 60) sfx.tone(60, 0, .5, 'sawtooth', .03, 40); }
+}
 function policeTick(dt) {
   if (!police.cars.length) return;
-  const hidden = city.hideouts && city.hideouts.some(h => Math.abs(P.pos.x - h.x) < h.w / 2 - 0.5 && Math.abs(P.pos.z - h.z) < h.d / 2 - 0.5);
+  if (armee.on) armeeTick(dt);
+  // Caché dans un bâtiment, on ne se fait pas arrêter… sauf s'ils t'ont vu entrer : alors
+  // ils savent où tu es, descendent de voiture et viennent te chercher à pied.
+  const abri = abriDuJoueur();
+  const vuPar = police.wanted > 0 && !abri && police.cars.some(pc => pc.active && policeVoit(pc, 42));
+  if (vuPar) { police.vuT = simTime; police.sait = null; }
+  if (police.wanted > 0 && abri === 'batiment' && !police.sait && simTime - (police.vuT || -99) < 3.5) policeInvestit([P.pos.x, P.pos.z], 'Ils t\'ont vu entrer');
+  if (police.sait && !abri && simTime - (police.vuT || 0) > 9) police.sait = null;   // ressorti et hors de vue : ils perdent la trace
+  const hidden = !!abri && !police.sait;
+  agentsTick(dt);
   if (police.wanted > 0) {
     if (!hidden) police.lastSeen = [P.pos.x, P.pos.z];
-    const near = police.cars.some(pc => Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z) < 14);
-    if (hidden && !near) { police.hideT += dt; if (police.hideT > 6 + (police.crimeLevel || 0) * 5) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) clearWanted('🕵️ Semé ! La police a abandonné'); else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
+    // fuite réussie : se réfugier chez soi après un coup (plus on a forcé de coffres,
+    // plus il faut tenir longtemps — et à trois coffres ils te suivent jusque dans la villa)
+    const vz = city.zones.find(z => z.name === 'Villa');
+    if (vz && abri && P.pos.x > vz.x1 && P.pos.x < vz.x2 && P.pos.z > vz.z1 && P.pos.z < vz.z2) {
+      police.villaT = (police.villaT || 0) + dt;
+      const need = 4 + (police.coffres || 0) * 6 + (armee.on ? 25 : 0);
+      if (police.villaT > need) { const butin = (police.coffres || 0) * 500; police.villaT = 0; armeeFin(); clearWanted(butin ? `🏠 Planqué chez toi : tu t'en sors avec ${butin} 🪙 !` : '🏠 Planqué chez toi : la police a perdu ta trace'); sfx.win(); updateAct(); }
+      else if (police.sait) police.villaT = 0;
+      else $('act').textContent = `🏠 Reste caché encore ${Math.ceil(need - police.villaT)} s…`;
+    } else police.villaT = 0;
+    const near = police.cars.some(pc => Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z) < 14) || police.agents.some(a => !a.ko && Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 12);
+    if (hidden && !near) { police.hideT += dt; if (police.hideT > 6 + (police.crimeLevel || 0) * 5) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) { armeeFin(); clearWanted('🕵️ Semé ! La police a abandonné'); } else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
     else police.hideT = 0;
-    if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) clearWanted('🚔 La police ne te cherche plus'); }   // plus le délit est grave, plus elle s'accroche
+    if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) { armeeFin(); clearWanted('🚔 La police ne te cherche plus'); } }   // plus le délit est grave, plus elle s'accroche
   }
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
-    if (pc.active && police.wanted > 0 && police.lastSeen) { tx = police.lastSeen[0]; tz = police.lastSeen[1]; }
+    if (pc.debarque) { pc.speed = 0; continue; }   // les agents sont descendus : la voiture attend devant le bâtiment
+    if (pc.active && police.wanted > 0 && police.sait) { tx = police.sait[0]; tz = police.sait[1]; }
+    else if (pc.active && police.wanted > 0 && police.lastSeen) { tx = police.lastSeen[0]; tz = police.lastSeen[1]; }
     else if (pc.goHome) { tx = pc.home[0]; tz = pc.home[1]; if (Math.hypot(pc.x - tx, pc.z - tz) < 2) { pc.goHome = false; pc.speed = 0; continue; } }
     if (tx == null) continue;
     const dist = Math.hypot(tx - pc.x, tz - pc.z);
+    if (police.sait && pc.active && !pc.debarque && police.agents.length < 10
+        && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) { policeDebarque(pc, 2); continue; }
     // itinéraire par points de passage : sortie du commissariat par la voie nord, puis l'anneau routier, puis la cible
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
     if (!pc.route || simTime > (pc.routeT || 0) || Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6) {
@@ -4013,7 +4281,8 @@ function policeTick(dt) {
     }
     const nx = pc.x + Math.sin(pc.h) * pc.speed * dt, nz = pc.z + Math.cos(pc.h) * pc.speed * dt;
     const opt = { bar: true, veh: true, pol: true };
-    const bx = carBlocked(nx, pc.z, pc.solid, 1.4, opt), bz = carBlocked(pc.x, nz, pc.solid, 1.4, opt);
+    const [pr, pL] = vehHalf(pc);
+    const bx = carBlocked(nx, pc.z, pc.solid, pr, opt, 0, pc.h, pL), bz = carBlocked(pc.x, nz, pc.solid, pr, opt, 0, pc.h, pL);
     if (!bx) pc.x = nx; if (!bz) pc.z = nz;
     if (bx || bz) {
       pc.stuck = (pc.stuck || 0) + dt;
@@ -4030,22 +4299,24 @@ function policeTick(dt) {
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
     const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
-    if ((braquage || police.wanted >= 2) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
+    if ((braquage || armee.on || police.wanted >= 2 || simTime < (police.riposte || 0)) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
       const d = Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z);
-      const portee = braquage ? 32 : 14 + police.wanted * 5 + tenace * 3;
+      const portee = armee.on ? 40 : braquage ? 32 : 14 + police.wanted * 5 + tenace * 3;
       if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.45, 1.8 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
         dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
-        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, dmg: 4 + police.wanted + tenace }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
+        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: (pc.mil ? 16 : 4) + police.wanted + tenace }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
     }
     // arrestation : la police me touche (ou reste coincée tout près : les agents descendent et m'attrapent à pied)
     const dP = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z);
-    if (pc.active && police.wanted > 0 && !hidden && dP < 20 && Math.abs(drive.speed) < 6) { pc.nearT = (pc.nearT || 0) + dt; } else pc.nearT = 0;
-    if (pc.active && police.wanted > 0 && !hidden && ((dP < 3.6 && Math.abs(drive.speed) < 12) || pc.nearT > 7) && simTime > police.arrestT) {
-      if (pc.nearT > 7) msg('🚔 Les agents t\'ont rattrapé à pied !', 1500); pc.nearT = 0;
-      police.arrestT = simTime + 8;
-      jail.on = true; jail.level = police.crimeLevel || 1; jail.done = []; saveJail(); police.crimeLevel = 0;
-      clearWanted(); chat(null, `🚔 ${myCfg.name} a été arrêté et mis en prison`); sfx.die(); jailEnter(true);
+    // à l'abri dans un bâtiment, seule une arrestation par un agent à pied compte : la
+    // voiture garée dehors ne t'attrape plus à travers les murs
+    if (pc.active && police.wanted > 0 && !abri && dP < 20 && Math.abs(drive.speed) < 6 && policeVoit(pc, 22)) { pc.nearT = (pc.nearT || 0) + dt; } else pc.nearT = 0;
+    if (pc.active && !pc.mil && !armee.on && police.wanted > 0 && !abri && Math.abs(P.pos.y - (pc.y || 0)) < 3
+        && ((dP < 3.6 && Math.abs(drive.speed) < 12) || pc.nearT > 7) && simTime > police.arrestT) {
+      pc.nearT = 0; arrestation(pc.nearT > 7 ? 'Les agents t\'ont rattrapé à pied' : 'La police t\'a coincé');
     }
+    // les militaires ne t'arrêtent pas : ils descendent et t'abattent
+    if (pc.mil && pc.active && dP < 16 && !pc.debarque && police.agents.length < 10 && simTime > (pc.debT || 0)) { pc.debT = simTime + 12; policeDebarque(pc, 2); }
   }
 }
 function nearestFighter(range) {   // bot ou joueur le plus proche devant moi
@@ -4115,7 +4386,7 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   const sx = police.station.x, sz = police.station.z;
   building(sx, sz, 16, 8, 10, 0xd6e4ff, 2); box(sx, 5, sz, 16.4, 0.6, 10.4, 0x1b2a6b, { deco: true, studs: false });
   box(sx, 6.6, sz + 5.1, 8, 1.4, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('POLICE') }), deco: true, noEdges: true });
-  for (const dx of [5, 10]) { const pc = makeCar(0xf4f6fa, sx + dx, 9, 0, { police: true }); pc.home = [sx + dx, 9]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.detourT = 0; pc.active = false; city.cars.splice(city.cars.indexOf(pc), 1); police.cars.push(pc); }
+  for (const dx of [5, 10]) { const pc = makeCar(0xf4f6fa, sx + dx, 9, 0, { police: true }); pc.home = [sx + dx, 9]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.detourT = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
   road(-46, 9, 6, 12, 0, true);   // sortie du commissariat vers la route ouest
   // prison : cellule grillagée accolée au commissariat
   const cx = sx, cz = sz - 11, cw = 8, cd = 8, ch = 5;
@@ -4159,7 +4430,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); if (zombie.on) zombieFin(false); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); if (zombie.on) zombieFin(false); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -5016,9 +5287,17 @@ function trouveBot(txt) {
   return null;
 }
 // Lieu cité dans le message : on se sert des zones de la ville, plus quelques synonymes.
-const SYNO_LIEUX = [[/circuit|kart|grille/, 'Départ'], [/manege|manège|carrousel|grande roue/, 'Fête foraine'],
+const SYNO_LIEUX = [[/circuit|kart|grille/, 'Départ'], [/manege|manège|carrousel|grande roue|fete foraine/, 'Fête foraine'],
   [/chez moi|ma villa|a la maison|chez toi/, 'Villa'], [/foot|ballon/, 'Foot'], [/court|raquette/, 'Tennis'],
-  [/cine|ciné/, 'Cinéma'], [/salle de sport|muscu/, 'Commerces'], [/bord de mer|sable/, 'Plage'], [/coffre|braquer la banque/, 'Banque']];
+  [/cine|ciné/, 'Cinéma'], [/salle de sport|muscu|magasin|boutique|commerce/, 'Commerces'], [/bord de mer|sable|mer\b/, 'Plage'], [/coffre|braquer la banque/, 'Banque'],
+  // il manquait la moitié des lieux : « viens devant l'hélicoptère » ne trouvait rien et le bot ne bougeait pas
+  [/helico|helicopter|helipor|heliport/, 'Héliport'], [/commissariat|poste de police|chez les flics/, 'Commissariat'],
+  [/hopital|docteur|medecin|urgence/, 'Hôpital'], [/ecole|classe|maitresse|maîtresse/, 'École'],
+  [/entrepot|hangar|usine|industriel/, 'Zone industrielle'], [/stand de tir|cible/, 'Stand de tir'],
+  [/armurerie|arme\b|fusil|pistolet/, 'Armurerie'], [/piscine|plongeoir|nager/, 'Piscine'],
+  [/trampoline/, 'Trampolines'], [/parking|garage/, 'Parking'], [/deco|décoration|meuble/, 'Maison & Déco'],
+  [/mission|bureau/, 'Bureau des missions'], [/rallye|desert|dune/, 'Rallye'], [/anneau|anneaux/, 'Héliport'],
+  [/jardin|balancoire|balançoire|toboggan|aire de jeu/, 'Parc']];
 function lieuDe(txt) {
   const n = norm(txt);
   let best = null;
@@ -5038,6 +5317,16 @@ function devenirAmi(b) {
   botSay(b, [`avec plaisir ${myCfg.name}, on est amis ! ⭐`, `ok ${myCfg.name} ! amis pour la vie ⭐`]);
   chat(null, `⭐ ${myCfg.name} et ${b.name} sont maintenant amis (${amis.size} ami${amis.size > 1 ? 's' : ''})`);
   msg(`⭐ ${b.name} est ton ami ! Écris-lui pour un rendez-vous, un jeu ou un coup`, 3200); sfx.win();
+}
+// « Nathan viens », « rejoins-moi », « viens devant l'hélicoptère » : le bot vient se
+// planter à côté du joueur et s'arrête là (avant, faute de lieu reconnu, il ne bougeait pas).
+function venirAMoi(b, quoi) {
+  const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz) || 1;
+  b.rdv = { x: P.pos.x + dx / d * 1.6, z: P.pos.z + dz / d * 1.6, y: 0.3, nom: quoi || 'à côté de toi', arrive: false, suit: true };
+  b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
+  setBeacon(P.pos.x, P.pos.z);
+  botSay(b, [`j'arrive ${myCfg.name} ! 🏃`, quoi ? `ok, je te rejoins ${quoi} 🏃` : 'ok, je viens vers toi 🏃']);
+  msg(`🏃 ${b.name} vient te rejoindre${quoi ? ' (' + quoi + ')' : ''}`, 2400);
 }
 function fixerRdv(b, lieu, jeu) {
   b.rdv = { x: lieu.x, z: lieu.z, y: 0.3, nom: lieu.nom, jeu: jeu || null, arrive: false };
@@ -5378,8 +5667,9 @@ function conduire(c, tx, tz, dt, st) {
   const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
   const opt = { bar: true, pol: true };
   let bloque = 0;
-  if (!carBlocked(nx, c.z, c.solid, 1.4, opt)) c.x = nx; else { c.speed *= 0.4; bloque++; }
-  if (!carBlocked(c.x, nz, c.solid, 1.4, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
+  const [cr, cL] = vehHalf(c);
+  if (!carBlocked(nx, c.z, c.solid, cr, opt, 0, c.h, cL)) c.x = nx; else { c.speed *= 0.4; bloque++; }
+  if (!carBlocked(c.x, nz, c.solid, cr, opt, 0, c.h, cL)) c.z = nz; else { c.speed *= 0.4; bloque++; }
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
   // La fuite après braquage se débloque en sautant au point de passage suivant ; un ami
   // qui te conduit, lui, s'arrête et le dit plutôt que de traverser les murs.
@@ -5643,9 +5933,15 @@ function commandeSociale(txt) {
     if (v) { fixerRdv(cible, { nom: '🏠 ta villa', x: (v.x1 + v.x2) / 2, z: (v.z1 + v.z2) / 2 }); return true; }
   }
   const lieu = lieuDe(txt);
-  if (/\b(rendez.?vous|rdv|retrouve|rejoins|on se voit|viens)\b/.test(t)) {
+  if (/\b(rendez.?vous|rdv|on se voit)\b/.test(t)) {
     if (lieu) { fixerRdv(cible, lieu); return true; }
-    botSay(cible, ['où ça ? dis-moi un endroit (le parc, le circuit, la plage…)']); return true;
+    venirAMoi(cible); return true;
+  }
+  // « viens », « rejoins-moi », « viens devant l'hélicoptère » : il vient à côté du joueur et
+  // s'arrête. Si le lieu cité est loin du joueur, c'est là-bas qu'on se donne rendez-vous.
+  if (/\b(viens|vient|rejoins|rejoint|retrouve|approche|amene.?toi|ramene.?toi|suis.?moi|par ici)\b/.test(t)) {
+    if (lieu && Math.hypot(P.pos.x - lieu.x, P.pos.z - lieu.z) > 30) { fixerRdv(cible, lieu); return true; }
+    venirAMoi(cible, lieu ? lieu.nom : null); return true;
   }
   if (/\b(on joue|jouer|partie|match|jeu)\b/.test(t)) {
     const jeu = /foot/.test(t) ? 'au foot' : /tennis/.test(t) ? 'au tennis' : /course|kart|circuit/.test(t) ? 'à la course' : /boule|petanque|pétanque/.test(t) ? 'aux boules' : /cache/.test(t) ? 'à cache-cache' : 'ensemble';
@@ -5715,6 +6011,11 @@ function updateBot(b, dt) {
   if (b.ko || (b.fight && simTime < b.fightT)) return;   // KO ou en train de se battre : géré par combatTick
   if (WORLDS[worldIdx].free) {   // ville : balade entre quelques points
     if (b.rdv) {   // rendez-vous fixé par message : le bot s'y rend puis attend sur place
+      if (b.rdv.suit) {   // « viens » : le point de rendez-vous, c'est le joueur lui-même
+        const ex = b.pos.x - P.pos.x, ez = b.pos.z - P.pos.z, ed = Math.hypot(ex, ez) || 1;
+        if (b.rdv.arrive && ed > 5.5) b.rdv.arrive = false;   // le joueur s'est éloigné : il le suit à nouveau
+        if (!b.rdv.arrive) { b.rdv.x = P.pos.x + ex / ed * 1.6; b.rdv.z = P.pos.z + ez / ed * 1.6; }
+      }
       const dr = Math.hypot(b.rdv.x - b.pos.x, b.rdv.z - b.pos.z);
       if (dr > 1.8) {
         // en ligne droite il restait bloqué contre le premier mur : on suit un itinéraire
@@ -5735,7 +6036,8 @@ function updateBot(b, dt) {
           botSay(b, [`j'ai la voiture, je file vers ${a.nom} 🚗💨`]);
           return;
         }
-        if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
+        if (b.rdv.suit) b.facing = Math.atan2(P.pos.x - b.pos.x, P.pos.z - b.pos.z);   // arrivé : il se tourne vers toi
+        if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
         const dp = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
         if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
       }
@@ -5951,7 +6253,18 @@ function readInput() {
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
   return { ix: clamp(kr + joy.x + pad.x, -1, 1), iz: clamp(kf + joy.y + pad.y, -1, 1) };
 }
-function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0) {
+// Rayon et demi-longueur d'échantillonnage d'un véhicule : trois disques répartis sur sa
+// longueur couvrent tout le rectangle, coins compris.
+function vehHalf(c) {
+  const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
+  return [Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, A * 2 / 3];
+}
+// h = orientation du véhicule, L = demi-longueur : on teste l'avant, le milieu et l'arrière.
+// Avec un seul disque au centre, les coins d'une voiture en biais s'enfonçaient de 60 cm
+// dans les murs — on voyait le capot traverser la façade.
+function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
+  const deux = h != null && L > 0.05, sn = deux ? Math.sin(h) * L : 0, cs = deux ? Math.cos(h) * L : 0;
+  const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
   for (const o of solids) {
     if (o === self) continue;
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
@@ -5959,9 +6272,32 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0) {
     if (o.pol && opt.pol) continue;   // les voitures de police ne se bloquent pas entre elles
     if (o.veh && opt.pol && o.w < 1.7 && o.d < 3) continue;   // ni les vélos / motos garés
     const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;
-    if (x + r > o.x - o.w / 2 && x - r < o.x + o.w / 2 && z + r > o.z - o.d / 2 && z - r < o.z + o.d / 2) return true;
+    const x0 = o.x - o.w / 2 - r, x1 = o.x + o.w / 2 + r, z0 = o.z - o.d / 2 - r, z1 = o.z + o.d / 2 + r;
+    if (x > x0 && x < x1 && z > z0 && z < z1) return true;
+    if (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1))) return true;
   }
   return false;
+}
+// Aucun véhicule ne doit en chevaucher un autre : on écarte les paires qui se recouvrent.
+// (La voiture conduite a son propre traitement, resolveVehicleOverlap.)
+function separerVehicules() {
+  const tous = [];
+  for (const v of city.cars) tous.push(v);
+  for (const v of city.aiCars) tous.push(v);
+  for (const v of police.cars) tous.push(v);
+  for (let i = 0; i < tous.length; i++) for (let j = i + 1; j < tous.length; j++) {
+    const a = tous[i], b = tous[j];
+    if (a === drive.car || b === drive.car || a.heli || b.heli || !a.solid || !b.solid) continue;
+    if (Math.abs((a.y || 0) - (b.y || 0)) > 2.5) continue;   // pas le même niveau (parking en terrasse)
+    const ox = (a.solid.w + b.solid.w) / 2 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 - Math.abs(a.z - b.z);
+    if (ox <= 0 || oz <= 0) continue;
+    // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte
+    const ra = a.s != null || a.busy, rb = b.s != null || b.busy;
+    const pa = ra && !rb ? 0 : rb && !ra ? 1 : 0.5, pb = 1 - pa;
+    if (ox < oz) { const sg = Math.sign(a.x - b.x) || 1; a.x += sg * ox * pa; b.x -= sg * ox * pb; }
+    else { const sg = Math.sign(a.z - b.z) || 1; a.z += sg * oz * pa; b.z -= sg * oz * pb; }
+    for (const v of [a, b]) if (v.s == null) { v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
+  }
 }
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
@@ -6187,7 +6523,8 @@ function driveStep(dt) {
   // autres obstacles : on glisse sur l'axe libre, on ne rebondit que si tout est bloqué
   if (Math.abs(drive.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(tl.x - c.x) < 4.5 && Math.abs(tl.z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
   if (Math.abs(drive.speed) > 5) for (const b of breakables) if (!b.broken && Math.abs(b.x - nx) < b.r + rr + 0.5 && Math.abs(b.z - nz) < b.r + rr + 0.5) { breakThing(b, c); }
-  const bx = carBlocked(nx, c.z, c.solid, rr, {}, c.y), bz = carBlocked(c.x, nz, c.solid, rr, {}, c.y);
+  const [vr, vL] = vehHalf(c);
+  const bx = carBlocked(nx, c.z, c.solid, vr, {}, c.y, c.h, vL), bz = carBlocked(c.x, nz, c.solid, vr, {}, c.y, c.h, vL);
   if (!bx) c.x = nx; if (!bz) c.z = nz;
   if (bx || bz) {
     if (bx && bz) { drive.speed *= -0.3; } else drive.speed *= 0.9;
@@ -6277,6 +6614,7 @@ function fleeTick(dt) {   // les conducteurs éjectés détalent puis disparaiss
     animateRig(f.av.rig, 'walk', 5, dt, simTime);
   }
 }
+const LOOP_LEN = 208;   // périmètre de l'anneau routier : sert à espacer les voitures du trafic
 const loopPos = s => {   // position le long de l'anneau routier (périmètre 208)
   s = ((s % 208) + 208) % 208;
   if (s < 52) return [26, 26 - s, Math.PI];
@@ -6286,8 +6624,26 @@ const loopPos = s => {   // position le long de l'anneau routier (périmètre 20
 };
 function cityStep(dt) {
   let jack = null;
+  const flotte = [...city.cars, ...city.aiCars, ...police.cars];
   for (const c of city.aiCars) {
     let spd = c.spd || 8.5;
+    {   // on ne roule plus dans le véhicule de devant : on garde une longueur de sécurité
+      const fx = Math.sin(c.h), fz = Math.cos(c.h); let gap = 99, longDevant = 4.4;
+      for (const v of flotte) {
+        if (v === c || v.heli) continue;
+        if (v.s != null) {   // même anneau : on compare les abscisses curvilignes (fiable en virage)
+          let ds = v.s - c.s; while (ds < 0) ds += LOOP_LEN; while (ds > LOOP_LEN) ds -= LOOP_LEN;
+          if (ds > 0.01 && ds < gap) { gap = ds; longDevant = v.baseD || 4.4; }
+          continue;
+        }
+        const dx = v.x - c.x, dz = v.z - c.z, along = dx * fx + dz * fz;
+        if (along < 0.5 || along > 10) continue;
+        if (Math.abs(-dx * fz + dz * fx) > 2.3) continue;
+        if (along < gap) { gap = along; longDevant = v.baseD || 4.4; }
+      }
+      const mini = 1.2 + ((c.baseD || 4.4) + longDevant) / 2;   // la longueur de CELUI DE DEVANT compte (un camion fait 8,6 m)
+      if (gap < mini) { spd = 0; c.stopped = true; } else if (gap < mini + 3) spd = Math.min(spd, (gap - mini) * 3);
+    }
     {   // arrêt au feu rouge : on regarde le prochain carrefour devant nous
       const fx = Math.sin(c.h), fz = Math.cos(c.h); let stop = false;
       for (const [cx, cz] of city.crossings) { const dx = cx - c.x, dz = cz - c.z, d = Math.hypot(dx, dz); if (d < 9 && d > 3.5 && (dx * fx + dz * fz) / d > 0.9) { const ns = Math.abs(fz) > 0.5; const grp = ns ? 'A' : 'B'; const ph = city.trafficLights.find(t => t.group === grp); if (ph && ph.state !== 2) stop = true; } }
@@ -6300,6 +6656,7 @@ function cityStep(dt) {
       const half = c.half || [1.4, 2.4];
       if (Math.abs(lx) > half[0] - 0.5 && Math.abs(lx) < half[0] + 2 && Math.abs(lz) < half[1]) { spd = 0; c.stopped = true; jack = c; }
     }
+    if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // véhicule à l'arrêt (ambulance) : loopPos(0) le téléportait sur l'anneau
     c.s += spd * dt; const [x, z, h] = loopPos(c.s); c.x = x; c.z = z; c.h = h; c.y = groundUnder(x, z, c.solid, c.y); c.g.position.set(x, c.y, z); c.g.rotation.y = h; c.wheels.forEach(w => w.rotation.x -= spd * dt / 0.3); vehicleSolid(c);
     if (c.driver) placeDriver(c);
     if (!drive.car) {   // bousculade si le joueur est sur la route
@@ -6316,6 +6673,7 @@ function cityStep(dt) {
   for (const c of city.cars) if (c.heli) { const flying = drive.car === c || c.busy; c.spin = clamp(c.spin + (flying ? 0.6 : -0.4) * dt, 0, 1); c.rotor.rotation.y += dt * (2 + 30 * c.spin); c.tail.rotation.x += dt * (4 + 50 * c.spin); if (c.beacon) c.beacon.visible = (simTime % 1) < 0.5; }
   if (near !== city.near) { city.near = near; if (near && !isMobile) msg('🚗 Appuie sur E pour conduire', 1200); }
   document.body.classList.toggle('carnear', !!city.near || !!city.jackNear || !!drive.car);
+  separerVehicules();
   if (!drive.car) cityCommon(dt);
 }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image
@@ -6683,6 +7041,25 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
   }
   return { d: best, o: hit };
 }
+// Distances libres depuis un point, dans plusieurs directions, en un seul passage sur les
+// solides. La caméra est une bille de 0,3 m : elle s'arrête AVANT le mur au lieu de s'y
+// enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
+function camLibres(ox, oy, oz, dirs, maxD, skip) {
+  const R = 0.3, out = dirs.map(() => maxD);
+  for (const o of solids) {
+    if (o === skip || o.glass || o.h > 30 || o.veh) continue;
+    const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
+    if (o.y + hy < oy - 1.4) continue;   // sol et petits meubles : la caméra passe au-dessus
+    // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
+    // tomberaient à zéro dès qu'on frôle un mur
+    if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) continue;
+    for (let i = 0; i < dirs.length; i++) {
+      const t = rayBox(ox, oy, oz, dirs[i][0], dirs[i][1], dirs[i][2], o.x, o.y, o.z, hx, hy, hz, out[i]);
+      if (t >= 0 && t < out[i]) out[i] = t;
+    }
+  }
+  return out;
+}
 // Boîte d'un personnage debout (joueur, bot, garde, joueur distant).
 function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
   return rayBox(ox, oy, oz, dx, dy, dz, px, py + 1, pz, 0.42, 1, 0.42, maxD);
@@ -6753,6 +7130,7 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     cam.kick = (cam.kick || 0) + (P.weapon === 'rifle' ? 0.012 : 0.03);
     aimTick();   // visée recalculée à l'instant du tir : plus de point de visée périmé
     P.holsterT = simTime + 0.85;   // rengainage automatique après le coup
+    if (police.wanted > 0 || police.agents.length) police.riposte = simTime + 30;   // tirer sur la police : elle riposte
     const rx = Math.cos(P.facing), rz = -Math.sin(P.facing);
     // Bouche du canon calculée depuis la position et la visée du joueur, et non depuis la
     // pose rendue de l'avatar, qui a une image de retard : la balle partait alors d'où le
@@ -6823,6 +7201,10 @@ function shotsTick(dt) {
         const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
         if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
       }
+      for (const a of police.agents) if (!a.ko) {
+        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
+        if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
+      }
       // zombies : la tête est une boîte à part, un seul tir suffit dessus
       if (zombie.on) for (const zz of zombie.zoms) {
         if (zz.mort) continue;
@@ -6858,6 +7240,11 @@ function shotsTick(dt) {
       burst(zz.x, zz.y + (teteZ ? 1.6 : 1), zz.z, 0x8b0010, teteZ ? 18 : 9);
       if (zz.hp <= 0) zombieMort(zz, teteZ);
       else { sfx.tone(90, 0, .12, 'sawtooth', .06, 50); msg(`🧟 Touché (${zz.hp} restant${zz.hp > 1 ? 's' : ''}) — vise la tête !`, 900); }
+    } else if (quoi === 'agent') {
+      const a = cible; a.hp -= (s.dmg || 20); burst(a.x, a.y + 1.2, a.z, 0xff5c5c, 9);
+      police.riposte = simTime + 30;
+      if (a.hp <= 0) agentTue(a);
+      else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'garde') {
       const gd = cible; gd.hp -= (s.dmg || 20); burst(gd.x, gd.y + 1, gd.z, 0xff5c5c, 8);
       if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
@@ -7442,6 +7829,22 @@ function frame() {
     const inter = !veh && city.on ? city.interact : null;
     let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4) : 0);
     if (dedans) want = Math.min(want, 3.5);
+    // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
+    // murs et le plafond). Plus la pièce est étroite, plus la caméra se rapproche ; plus le
+    // plafond est bas, plus elle s'abaisse — sinon elle passait au-dessus et on ne voyait rien.
+    if (simTime > (cam.mesT || 0)) {
+      cam.mesT = simTime + 0.2;
+      const m = camLibres(P.pos.x, P.pos.y + 1.5, P.pos.z, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]], 9, veh ? veh.solid : null);
+      cam.salle = Math.min(m[0], m[1], m[2], m[3]); cam.plafond = m[4];
+    }
+    if (!veh && cam.plafond != null && cam.plafond < 3) {
+      // plafond bas : on aplatit la visée et on raccourcit la perche, sinon la caméra
+      // monte dans la dalle du dessus et l'image est bouchée
+      const pmax = clamp((cam.plafond - 1.1) * 0.22, 0.04, 0.9);
+      if (cam.pitch > pmax) cam.pitch = pmax;
+      want = Math.min(want, 1.6 + cam.plafond);
+    }
+    if (!veh) want = Math.max(want, 2.2);
     if (inter && !aiming) { want = Math.min(want, dedans ? 3.1 : 4.3);
       tmpV.x += clamp(inter.x - P.pos.x, -1.2, 1.2) * 0.45; tmpV.z += clamp(inter.z - P.pos.z, -1.2, 1.2) * 0.45; }
     if (Math.abs(cam.dist - want) > 0.05) cam.dist += (want - cam.dist) * Math.min(1, dt * (want < cam.dist ? 8 : 4));
@@ -7451,16 +7854,20 @@ function frame() {
   {
     const dir = new THREE.Vector3(Math.sin(cam.yaw) * cpch, Math.sin(cam.pitch), Math.cos(cam.yaw) * cpch);
     let d = cam.dist;
-    if (running) {   // collision de caméra : on avance depuis le joueur vers la caméra et on s'arrête avant le premier mur
-      const q = new THREE.Vector3(), veh2 = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null), skip = veh2 ? veh2.solid : null;
+    if (running) {
+      // Collision de caméra : au lieu d'un seul rayon échantillonné tous les 40 cm (qui
+      // traversait les cloisons fines et laissait la caméra frôler les murs), on lance un
+      // vrai cône de trois rayons — l'axe et deux côtés — et on s'arrête avant le premier mur.
+      const veh2 = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null), skip = veh2 ? veh2.solid : null;
       if (city.bank && Math.abs(P.pos.x - city.bank.x) < city.bank.w / 2 && Math.abs(P.pos.z - city.bank.z) < city.bank.d / 2 && P.pos.y > 4) { if (cam.pitch > 0.32) cam.pitch = 0.32; }   // à l'étage de la banque : caméra basse pour voir l'intérieur
-      for (let t = 0.8; t < cam.dist; t += 0.4) {
-        q.copy(cam.target).addScaledVector(dir, t); let blocked = false;
-        for (const o of solids) { if (o === skip || o.glass || o.h > 30 || o.y + o.h / 2 < cam.target.y - 0.5) continue; if (q.x > o.x - o.w / 2 && q.x < o.x + o.w / 2 && q.y > o.y - o.h / 2 && q.y < o.y + o.h / 2 && q.z > o.z - o.d / 2 && q.z < o.z + o.d / 2) { blocked = true; break; } }
-        if (blocked) { d = Math.max(1.1, t - 0.5); break; }
-      }
-      if (q.y < 0.3 && d === cam.dist) {} 
-    }
+      const sp = Math.sin(cam.pitch);
+      const g = a => [Math.sin(cam.yaw + a) * cpch, sp, Math.cos(cam.yaw + a) * cpch];
+      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(0.4), g(-0.4)], cam.dist + 0.6, skip);
+      const libre = Math.max(1.05, Math.min(r[0], r[1] + 0.35, r[2] + 0.35) - 0.12);
+      // on se rapproche tout de suite, on s'éloigne en douceur (sinon la caméra saute)
+      cam.libre = cam.libre == null || libre < cam.libre ? libre : cam.libre + (libre - cam.libre) * Math.min(1, dt * 4);
+      d = Math.min(cam.dist, cam.libre);
+    } else cam.libre = null;
     camera.position.copy(cam.target).addScaledVector(dir, d);
     if (camera.position.y < 0.4) camera.position.y = 0.4;
   }

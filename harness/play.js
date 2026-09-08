@@ -1244,6 +1244,8 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
     requestAnimationFrame(h);
   });
   await p.waitForTimeout(500);
+  const etat = await p.evaluate(() => ({ jeu: __G.running, pause: __G.paused, ui: __G.uiOpen,
+    volant: !!__G.drive.car, focus: (document.activeElement || {}).id || '' }));
   // double appui rapide sur « avancer »
   await p.keyboard.press('ArrowUp'); await p.waitForTimeout(90);
   await p.keyboard.down('ArrowUp');
@@ -1260,7 +1262,7 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
   const recup = await attendre(p, () => !__G.P.essouffle && __G.P.energie > 46, 40000);
   const fin = await p.evaluate(() => ({ e: Math.round(__G.P.energie), essouffle: __G.P.essouffle }));
   return { ok: court && vite.court && vide && apres.vu && apres.coupe && recup && !fin.essouffle,
-    detail: `double appui → course (énergie ${vite.e} %, ${apres.couru} images de course) · jauge tombée à ${apres.mini} % : essoufflé=${apres.vu}, course coupée=${apres.coupe} · après repos : ${fin.e} % et on peut recourir` };
+    detail: `état : ${JSON.stringify(etat)} · double appui → course (énergie ${vite.e} %, ${apres.couru} images de course) · jauge tombée à ${apres.mini} % : essoufflé=${apres.vu}, course coupée=${apres.coupe} · après repos : ${fin.e} % et on peut recourir` };
 });
 
 test('la nuit des zombies démarre depuis la prison avec son décor', async p => {
@@ -1339,6 +1341,233 @@ test('atteindre la villa libère de prison et remet tout en ordre', async p => {
   });
   const ok = !r.on && !r.jail && r.zoms === 0 && r.deco === 0 && r.gain > 0 && r.peau && !r.lune && r.tags && r.meteo === 'clair';
   return { ok, detail: `${r.avant.zoms} zombies et ${r.avant.deco} décors retirés · sorti de prison=${!r.jail} · prime +${r.gain} 🪙 · bots redevenus normaux (peau=${r.peau}, noms=${r.tags}) · lune éteinte, météo « ${r.meteo} »` };
+});
+
+test('la caméra colle aux murs sans les traverser, et se baisse sous les plafonds bas', async p => {
+  const lis = async (x, y, z, cond) => {
+    await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12 }); }, { x, y, z });
+    await attendre(p, cond, 25000);
+    return p.evaluate(() => {
+      const c = __G.camera.position, dedansMur = __G.solids.some(o => !o.veh && o.h < 30
+        && Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2);
+      return { dist: +__G.cam.dist.toFixed(2), libre: __G.cam.libre == null ? null : +__G.cam.libre.toFixed(2),
+        salle: __G.cam.salle == null ? null : +__G.cam.salle.toFixed(1), plafond: __G.cam.plafond == null ? null : +__G.cam.plafond.toFixed(1),
+        pitch: +__G.cam.pitch.toFixed(2), dedansMur, y: +c.y.toFixed(2) };
+    });
+  };
+  await p.evaluate(() => { __G.cam.pitch = 0.6; });
+  const rue = await lis(0, 1, 40, () => __G.cam.dist > 6);
+  const cuisine = await lis(70, 1, 158, () => __G.cam.dist < 4);
+  await p.evaluate(() => { __G.cam.pitch = 0.6; });
+  await p.waitForTimeout(900);
+  const basPlafond = await p.evaluate(() => ({ pitch: +__G.cam.pitch.toFixed(2), plafond: +(__G.cam.plafond || 9).toFixed(1) }));
+  const retour = await lis(0, 1, 40, () => __G.cam.dist > 6);
+  const ok = !rue.dedansMur && !cuisine.dedansMur && !retour.dedansMur
+    && cuisine.dist < rue.dist - 2 && cuisine.plafond < 3.2 && basPlafond.pitch < 0.42 && cuisine.libre != null && retour.dist > 6;
+  return { ok, detail: `rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (place ${cuisine.salle} m, plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
+});
+
+test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur et s\'arrête', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 52, y: 1, z: -13, hour: 12 });   // héliport
+    __G.P.pos.set(52, 0.3, -13);
+    __G.amis.clear(); __G.amis.add('Lucas_2014');
+    const b = __G.bots[0]; b.rdv = null; b.ko = 0; b.fight = null; b.wait = 0; b.drive = null;
+    b.pos.set(20, 0.3, 20); b.av.group.position.copy(b.pos);
+    const lieu = __G.lieuDe("Lucas_2014 viens devant l'hélicoptère");
+    const traite = __G.commandeSociale("Lucas_2014 viens devant l'hélicoptère");
+    const suit = !!(b.rdv && b.rdv.suit);
+    const d0 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z);
+    for (let i = 0; i < 3000; i++) __G.updateBot(b, 1 / 30);
+    const d1 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z);
+    const arrive = !!(b.rdv && b.rdv.arrive);
+    // il s'arrête : 5 s plus tard il est toujours à côté
+    for (let i = 0; i < 150; i++) __G.updateBot(b, 1 / 30);
+    const d2 = Math.hypot(b.pos.x - __G.P.pos.x, b.pos.z - __G.P.pos.z);
+    // et le lieu seul reste compris
+    const helipo = __G.lieuDe('va à l\'hélicoptère');
+    b.rdv = null;
+    return { traite, suit, lieu: lieu && lieu.nom, d0: +d0.toFixed(1), d1: +d1.toFixed(1), d2: +d2.toFixed(1), arrive, helipo: helipo && helipo.nom };
+  });
+  const ok = r.traite && r.suit && r.lieu === '🚁 Héliport' && r.d1 < 3.5 && r.d2 < 4 && r.arrive;
+  return { ok, detail: `lieu reconnu : ${r.lieu} · le bot part de ${r.d0} m, arrive à ${r.d1} m et reste à ${r.d2} m (annonce=${r.arrive})` };
+});
+
+test('les véhicules ne se chevauchent plus', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    const gros = __G.city.cars.filter(c => !c.heli && !c.rider && (c.baseD || 4.4) > 4);
+    const a = gros[0], b = gros[1];
+    b.h = a.h = 0; b.x = a.x + 0.6; b.z = a.z; b.y = a.y; b.g.position.set(b.x, b.y, b.z);
+    const chevauche = v => (v[0].solid.w + v[1].solid.w) / 2 - Math.abs(v[0].x - v[1].x) > 0 && (v[0].solid.d + v[1].solid.d) / 2 - Math.abs(v[0].z - v[1].z) > 0;
+    const avant = chevauche([a, b]);
+    for (let i = 0; i < 10; i++) __G.separerVehicules();
+    const apres = chevauche([a, b]), ecart = Math.hypot(a.x - b.x, a.z - b.z);
+    // trafic : toutes les voitures au même endroit de l'anneau, elles doivent s'espacer
+    const ai = __G.city.aiCars.filter(c => c.spd);
+    ai.forEach((c, i) => { c.s = 40 + i * 0.5; });
+    for (let i = 0; i < 600; i++) __G.cityStep(1 / 60);
+    let pire = 99;
+    for (let i = 0; i < ai.length; i++) for (let j = i + 1; j < ai.length; j++) pire = Math.min(pire, Math.hypot(ai[i].x - ai[j].x, ai[i].z - ai[j].z));
+    return { avant, apres, ecart: +ecart.toFixed(2), ai: ai.length, pire: +pire.toFixed(2) };
+  });
+  const ok = r.avant && !r.apres && r.ecart > 2 && r.pire > 4;
+  return { ok, detail: `deux voitures posées l'une sur l'autre : chevauchement ${r.avant} → ${r.apres} (écart ${r.ecart} m) · ${r.ai} voitures du trafic lâchées au même point : la plus courte distance reste ${r.pire} m` };
+});
+
+test('une voiture lancée en biais dans un mur ne le traverse pas', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -34, y: 1, z: 64, hour: 12 });
+    // mur est de la banque : x = -42,2 (épaisseur 0,4), de z = 60 à 68
+    const mur = __G.solids.find(o => Math.abs(o.x + 42.2) < 0.3 && o.d > 7 && o.d < 9 && o.h > 10 && Math.abs(o.z - 64) < 1);
+    const c = __G.city.cars.find(v => !v.heli && !v.rider && (v.baseD || 4.4) > 4);
+    c.x = -34; c.z = 56; c.y = 0; c.h = Math.atan2(-1, 1) * 1;   // 45° vers le mur (ouest-nord)
+    c.g.position.set(c.x, 0, c.z); __G.enterCar(c); __G.drive.speed = 26;
+    let pire = 0;
+    for (let i = 0; i < 240; i++) {
+      __G.drive.speed = Math.max(__G.drive.speed, 18);
+      __G.driveStep(1 / 60);
+      const cs = Math.cos(c.h), sn = Math.sin(c.h), A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+      for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A]]) {
+        const x = c.x + lx * cs + lz * sn, z = c.z - lx * sn + lz * cs;
+        const dx = mur.w / 2 - Math.abs(x - mur.x), dz = mur.d / 2 - Math.abs(z - mur.z);
+        if (dx > 0 && dz > 0) pire = Math.max(pire, Math.min(dx, dz));
+      }
+    }
+    const fin = { x: +c.x.toFixed(2), z: +c.z.toFixed(2) };
+    __G.exitCar();
+    return { pire: +pire.toFixed(2), fin, mur: mur ? { x: mur.x, w: mur.w } : null };
+  });
+  const ok = !!r.mur && r.pire < 0.06 && r.fin.x > -42;
+  return { ok, detail: `enfoncement maximal d'un coin dans le mur : ${r.pire} m (mur en x = ${r.mur ? r.mur.x : '?'}) · la voiture s'arrête en x = ${r.fin.x}` };
+});
+
+test('braquage : la police descend de voiture, entre dans la banque et monte aux coffres', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -57, y: 10.2, z: 70, hour: 12 });
+    __G.P.pos.set(-57, 10.05, 70);
+    const t0 = __G.simTime;
+    __G.bankAlarm();
+    const etapes = { agents: 0, entres: 0, etage: 0 };
+    let arrete = null;
+    for (let i = 0; i < 3600; i++) {
+      __G.simTime = t0 + i / 30; __G.P.pos.set(-57, 10.05, 70); __G.policeTick(1 / 30);
+      etapes.agents = Math.max(etapes.agents, __G.police.agents.length);
+      etapes.entres = Math.max(etapes.entres, __G.police.agents.filter(a => Math.abs(a.x + 52) < 9 && Math.abs(a.z - 70) < 9).length);
+      etapes.etage = Math.max(etapes.etage, ...__G.police.agents.map(a => a.y));
+      if (__G.jail.on) { arrete = +(i / 30).toFixed(1); break; }
+    }
+    const jail = __G.jail.on; __G.jail.on = false; __G.clearWanted();
+    return { agents: etapes.agents, entres: etapes.entres, etage: +etapes.etage.toFixed(1), arrete, jail, restants: __G.police.agents.length };
+  });
+  const ok = r.agents >= 2 && r.entres >= 1 && r.etage > 8 && r.jail && r.arrete < 90 && r.restants === 0;
+  return { ok, detail: `${r.agents} agents à pied, ${r.entres} entrés dans la banque, montés jusqu'à ${r.etage} m (coffres à 9,9) · arrestation à ${r.arrete} s · agents retirés à la fin=${r.restants === 0}` };
+});
+
+test('caché dans un bâtiment, la police ne t\'arrête pas — sauf si elle t\'a vu entrer', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 });   // cuisine de la villa
+    __G.P.pos.set(70, 0.3, 158);
+    const t0 = __G.simTime;
+    const poser = () => { __G.police.wanted = 3; __G.police.crimeLevel = 3; __G.police.decayT = t0 + 9999;
+      __G.police.hideT = 0; __G.police.villaT = 0; __G.police.sait = null; __G.police.vuT = -99; __G.police.coffres = 3;
+      __G.police.cars.forEach(c => { c.active = true; c.debarque = false; c.nearT = 0; c.x = 70; c.z = 166; c.y = 0; }); };
+    poser();
+    __G.cam.dedansT = -1;   // le test de toit est mis en cache 1/4 de seconde
+    const abri = __G.abriDuJoueur();
+    let jail1 = false;
+    for (let i = 0; i < 1200; i++) { __G.simTime = t0 + i / 30; __G.P.pos.set(70, 0.3, 158); __G.policeTick(1 / 30); if (__G.jail.on) { jail1 = true; break; } }
+    const agents1 = __G.police.agents.length;
+    // maintenant ils t'ont vu entrer : ils descendent et viennent te chercher
+    const t1 = __G.simTime;
+    __G.police.wanted = 3; __G.police.crimeLevel = 3; __G.police.decayT = t1 + 9999; __G.police.vuT = t1; __G.police.villaT = 0;
+    __G.police.cars.forEach(c => { c.active = true; c.debarque = false; c.nearT = 0; c.x = 70; c.z = 166; c.y = 0; });
+    __G.policeInvestit([70, 158], 'test');
+    const agents2 = __G.police.agents.length;
+    let dmin = 99;
+    for (let i = 0; i < 1500; i++) {
+      __G.simTime = t1 + i / 30; __G.P.pos.set(70, 0.3, 158); __G.policeTick(1 / 30);
+      for (const a of __G.police.agents) dmin = Math.min(dmin, Math.hypot(a.x - 70, a.z - 158));
+      if (__G.jail.on) break;
+    }
+    const jail2 = __G.jail.on;
+    __G.jail.on = false; __G.clearWanted();
+    return { abri, jail1, agents1, agents2, dmin: +dmin.toFixed(1), jail2 };
+  });
+  const ok = r.abri === 'batiment' && !r.jail1 && r.agents1 === 0 && r.agents2 >= 2 && r.dmin < 6;
+  return { ok, detail: `à couvert (${r.abri}) sans avoir été vu : arrêté=${r.jail1}, agents envoyés=${r.agents1} · vu en train d'entrer : ${r.agents2} agents descendent et s'approchent à ${r.dmin} m (arrêté=${r.jail2})` };
+});
+
+test('un coffre vaut 500 🪙 et se réfugier dans sa villa sauve le butin', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -59, y: 10.2, z: 64, hour: 12 });
+    const sf = __G.city.safes[0];
+    sf.open = false; sf.progress = 0.99;
+    const avant = __G.wallet;
+    __G.P.pos.set(sf.x, 10.05, sf.z);
+    __G.city.safeNear = sf; __G.keys.add('KeyE');
+    __G.safesTick(1 / 30);
+    __G.keys.delete('KeyE'); __G.city.safeNear = null;
+    const gain = __G.wallet - avant, coffres = __G.police.coffres;
+    // fuite jusqu'à la villa : plus on a de coffres, plus il faut tenir
+    const mesure = n => {
+      __G.police.coffres = n; __G.police.wanted = 3; __G.police.crimeLevel = 3; __G.police.sait = null;
+      __G.police.vuT = -99; __G.police.villaT = 0; __G.police.hideT = 0; __G.police.agents = [];
+      const t0 = __G.simTime; __G.police.decayT = t0 + 9999;
+      __G.police.cars.forEach(c => { c.active = true; c.debarque = false; c.x = 70; c.z = 172; });
+      for (let i = 0; i < 3000; i++) {
+        __G.simTime = t0 + i / 30; __G.P.pos.set(70, 0.3, 158); __G.policeTick(1 / 30);
+        if (__G.police.wanted === 0) return +(i / 30).toFixed(1);
+      }
+      return null;
+    };
+    __G.P.pos.set(70, 0.3, 158);
+    const un = mesure(1), deux = mesure(2), trois = mesure(3);
+    __G.police.coffres = 0; __G.clearWanted();
+    return { gain, coffres, un, deux, trois };
+  });
+  const ok = r.gain === 500 && r.coffres === 1 && r.un && r.deux && r.trois && r.deux > r.un && r.trois > r.deux;
+  return { ok, detail: `coffre forcé : +${r.gain} 🪙 (${r.coffres} coffre au compteur) · temps à tenir dans la villa : ${r.un} s avec 1 coffre, ${r.deux} s avec 2, ${r.trois} s avec 3` };
+});
+
+test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecteur', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.P.pos.set(0, 0.3, 40);
+    const t0 = __G.simTime;
+    __G.police.wanted = 2; __G.police.crimeLevel = 2; __G.police.decayT = t0 + 999;
+    const a = __G.creerAgent(4, 40, 0.3, false);
+    const pv = a.hp;
+    // trois balles dans l'agent
+    let coups = 0;
+    for (let k = 0; k < 8 && !a.ko; k++) {
+      const sh = { m: null, p: new __G.THREE.Vector3(0, 1.3, 40), v: new __G.THREE.Vector3(90, 0, 0), t: 0, mine: true, dmg: 24 };
+      __G.shots.push(sh); __G.spawnShot(sh); __G.shotsTick(1 / 60); coups++;
+    }
+    const arm = __G.armee;
+    const av = { on: arm.on, heli: !!arm.heli, tache: !!arm.tache, mil: __G.police.cars.filter(c => c.mil).length,
+      wanted: __G.police.wanted, texte: document.getElementById('wanted').textContent };
+    // l'hélico vient tourner au-dessus du joueur et le projecteur le repère
+    __G.police.lastSeen = [0, 40];
+    let degats = 0;
+    for (let i = 0; i < 900; i++) {
+      __G.simTime = t0 + i / 30; __G.P.pos.set(0, 0.3, 40); __G.policeTick(1 / 30);
+      __G.shotsTick(1 / 30);
+      if (__G.P.hp < 100) { degats += 100 - __G.P.hp; __G.P.hp = 100; }   // on se soigne pour ne pas mourir pendant la mesure
+    }
+    const h = arm.heli;
+    const dHeli = h ? +Math.hypot(h.x - 0, h.z - 40).toFixed(1) : null;
+    const tirs = __G.shots.filter(s => !s.mine).length;
+    degats = Math.round(degats);
+    __G.P.hp = 100;
+    __G.clearWanted();
+    const apres = { on: arm.on, heli: !!arm.heli, mil: __G.police.cars.filter(c => c.mil).length, agents: __G.police.agents.length };
+    return { coups, ko: !!a.ko, av, dHeli, tirs, degats, apres };
+  });
+  const ok = r.ko && r.av.on && r.av.heli && r.av.tache && r.av.mil === 4 && r.av.wanted === 3
+    && r.av.texte.includes('ARMÉE') && r.dHeli != null && r.dHeli < 18 && (r.tirs > 0 || r.degats > 0)
+    && !r.apres.on && r.apres.mil === 0 && r.apres.agents === 0;
+  return { ok, detail: `policier abattu en ${r.coups} balles · armée déployée : ${r.av.mil} 4×4 + hélicoptère (projecteur=${r.av.tache}), niveau ${r.av.wanted}★ · l'hélico tourne à ${r.dHeli} m du joueur · ils tirent (${r.tirs} balles en vol, ${r.degats} PV perdus) · tout est nettoyé à la fin (armée=${r.apres.on}, 4×4=${r.apres.mil})` };
 });
 
 (async()=>{

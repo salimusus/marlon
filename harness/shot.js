@@ -19,6 +19,16 @@ window.__SHOT = {
     // le champ de chat garde le focus d'un test a l'autre et avale alors toutes les
     // touches (le jeu ignore les keydown quand chatIn est actif) : on le relache.
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    // un test precedent peut laisser le joueur au volant, assis ou une fenetre ouverte :
+    // on repart d'un etat propre, sinon les touches sont ignorees.
+    try {
+      if (uiOpen) closeUI();
+      if (typeof city !== 'undefined' && city.rideBot && typeof botDescendre === 'function') botDescendre(city.rideBot, true);
+      if (drive.car) exitCar();
+      P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null; P.devore = false;
+      P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
+      if (typeof gym !== 'undefined') gym.on = null;
+    } catch (e) {}
     if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');
     document.getElementById('start').classList.add('hidden');
@@ -52,6 +62,7 @@ window.__G = {
   get paused() { return paused; }, get running() { return running; }, get wallet() { return wallet; },
   get worldIdx() { return worldIdx; }, get simTime() { return simTime; },
   set wallet(v) { wallet = v; }, set running(v) { running = v; },
+  set simTime(v) { simTime = v; },   // les tests avancent l'horloge de simulation sans attendre le rendu
   aimTick, fire, drawWeapon, WEAPONS, vehicleDamage, fumeeTick, makeTarget, explodeVehicle, sitBench, sleepBed, placeDecor, repairVisual, rideEnter, infraction,
   // ces outils n'existent que dans la version corrigée : le crochet doit rester chargeable
   // sur la version d'origine pour pouvoir comparer les deux
@@ -85,6 +96,24 @@ window.__G = {
   zombieFin: typeof zombieFin === 'function' ? zombieFin : null,
   zombieAttrape: typeof zombieAttrape === 'function' ? zombieAttrape : null,
   openJail, jail, jailFree, shotsTick, fire, aimTick, spawnShot,
+  armee: typeof armee !== 'undefined' ? armee : null,
+  armeeAlerte: typeof armeeAlerte === 'function' ? armeeAlerte : null,
+  armeeTick: typeof armeeTick === 'function' ? armeeTick : null,
+  armeeFin: typeof armeeFin === 'function' ? armeeFin : null,
+  agentsTick: typeof agentsTick === 'function' ? agentsTick : null,
+  creerAgent: typeof creerAgent === 'function' ? creerAgent : null,
+  policeInvestit: typeof policeInvestit === 'function' ? policeInvestit : null,
+  policeDebarque: typeof policeDebarque === 'function' ? policeDebarque : null,
+  policeVoit: typeof policeVoit === 'function' ? policeVoit : null,
+  abriDuJoueur: typeof abriDuJoueur === 'function' ? abriDuJoueur : null,
+  agentTue: typeof agentTue === 'function' ? agentTue : null,
+  arrestation: typeof arrestation === 'function' ? arrestation : null,
+  separerVehicules: typeof separerVehicules === 'function' ? separerVehicules : null,
+  vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
+  camLibres: typeof camLibres === 'function' ? camLibres : null,
+  venirAMoi: typeof venirAMoi === 'function' ? venirAMoi : null,
+  lieuDe: typeof lieuDe === 'function' ? lieuDe : null,
+  bankAlarm, carBlocked, policeTick, driveStep, loopPos, makeCar, groundUnder, npcBlocked, npcMove, navPath, camera, safesTick, hurt,
   meteo: typeof meteo !== 'undefined' ? meteo : null,
   meteoTick: typeof meteoTick === 'function' ? meteoTick : null,
   meteoSet: typeof meteoSet === 'function' ? meteoSet : null,

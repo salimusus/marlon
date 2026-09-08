@@ -44,7 +44,7 @@ body.touch .ibtn.touchonly{display:grid}
 .lbr.me{background:rgba(255,255,255,.14)}
 .lbr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 #lb.closed #lbRows{display:none}
-@media (max-width:640px){#top{grid-template-columns:auto 1fr}.tr{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 52px)}#lb{min-width:128px;font-size:12px}.lbr .nm{max-width:82px}.lbr,.lbh{padding:4px 8px}.pill{font-size:12px;padding:6px 7px}#me{display:none}.tc{gap:4px}.ibtn{width:36px;height:36px;font-size:16px}#world .wn{display:none}}
+@media (max-width:640px){#top{grid-template-columns:auto 1fr}.tr{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 52px)}#lb{min-width:128px;font-size:12px}.lbr .nm{max-width:82px}.lbr,.lbh{padding:4px 8px}.pill{font-size:12px;padding:6px 7px}#me{display:none}.tc{gap:4px}.ibtn{width:36px;height:36px;font-size:16px}#world .wn{display:none}#respect .rt{display:none}}
 body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lobby #emoteBtn{display:none!important}
 
 /* ---------- chat ---------- */
@@ -377,7 +377,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
-    <div class="pill cityonly" id="respect">⭐ 0 · 🚩 0</div>
+    <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt"> · 🚩 0/8</span></div>
     <div class="pill" id="timer">⏱ 0:00</div>
     <div class="pill" id="coins">🪙 0/0</div>
     <div class="pill" id="deaths">💀 0</div>
@@ -6624,7 +6624,7 @@ function updateHud() {
   const st = $('stageTxt'); if (st && cp) st.textContent = `${cp.idx}/8`;
   // pastille de la guerre des gangs : respect gagné et quartiers tenus
   const rp = $('respect');
-  if (rp) { rp.textContent = `⭐ ${HUD_GUERRE.rep} · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
+  if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt"> · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
 }
 function updateTimer() { $('timer').textContent = '⏱ ' + fmt(elapsed); }
 function showBest() {
@@ -11084,6 +11084,13 @@ function gangTick(dt) {
         if (Math.hypot(P.pos.x - G.membres[0].x, P.pos.z - G.membres[0].z) < 120) chat(null, `🚩 ${G.nom} te cherchent…`); }
       else if (r < 0.7 && gangs.length > 1) { const o = pickOne(gangs.filter(x => x !== G)); G.etat = 'rival'; G.cible = [o.base[0], o.base[1]];
         chat(null, `🚩 ${G.nom} attaquent ${o.nom} !`); }
+      else if (r < 0.78 && G.relation < -40 && gang.planque && gang.magot > 0) {
+        // en guerre : ils viennent piller TA planque
+        G.etat = 'planque'; G.cible = [gang.planque.x, gang.planque.z]; G.t = simTime + 70;
+        chat(G.chefNom, `on va se servir dans la planque de ${myCfg.name}…`, G.couleur);
+        msg(`🚩 Les ${G.nom} marchent sur ta planque ! Va la défendre`, 4200);
+        setBeacon(gang.planque.x, gang.planque.z, 0.3); sfx.tone(150, 0, .4, 'sawtooth', .07, 80);
+      }
       else if (r < 0.85 && VILLAS.length) { const v = pickOne(VILLAS); G.etat = 'cambriolage'; G.cible = [v.x, v.z];
         if (v.mine) declencheCambriolage(G); }
       else { G.etat = 'repos'; G.cible = null; }
@@ -11091,6 +11098,31 @@ function gangTick(dt) {
     if (G.etat === 'joueur' && G.cible) { G.cible = [P.pos.x, P.pos.z]; }
     const but = G.cible || G.base;
     for (const m of G.membres) {
+      // les gardes ne quittent pas la planque : ils tiennent leur poste et chargent
+      // quiconque s'approche du magot
+      if (m.garde && !m.ko) {
+        const dP = Math.hypot(P.pos.x - m.x, P.pos.z - m.z);
+        const cible = dP < 12 && !drive.car ? [P.pos.x, P.pos.z] : m.garde;
+        const dx2 = cible[0] - m.x, dz2 = cible[1] - m.z, d2 = Math.hypot(dx2, dz2) || 1;
+        if (d2 > (dP < 12 ? 1.5 : 1)) {
+          const o = { x: m.x, y: m.y, z: m.z };
+          npcMove(o, dx2 / d2 * 3.6 * dt, dz2 / d2 * 3.6 * dt, 0.4); m.x = o.x; m.z = o.z;
+          animateRig(m.av.rig, 'walk', 3.6, dt, simTime);
+        } else {
+          animateRig(m.av.rig, 'idle', 0, dt, simTime);
+          if (dP < 2 && simTime > m.cd && P.hp > 0 && !drive.car) {
+            m.cd = simTime + 1.4; m.av.rig.swing = 0.3;
+            hurt(9, 'un garde des ' + G.nom, (P.pos.x - m.x) / (dP || 1), (P.pos.z - m.z) / (dP || 1), 1.5);
+            if (simTime > (m.sayT || 0)) { m.sayT = simTime + 8; bubble(m.av, pickOne(['dégage de notre planque !', 'personne ne touche au magot !'])); }
+          }
+        }
+        m.y = groundUnder(m.x, m.z, null, m.y + 0.8);
+        m.av.group.position.set(m.x, m.y, m.z);
+        m.facing = Math.atan2(dx2, dz2);
+        let dh2 = m.facing - m.av.group.rotation.y; dh2 = Math.atan2(Math.sin(dh2), Math.cos(dh2));
+        m.av.group.rotation.y += dh2 * Math.min(1, dt * 6);
+        continue;
+      }
       if (m.ko) { if (simTime < m.ko) { m.av.group.rotation.x = -Math.PI / 2; continue; } m.ko = 0; m.hp = 60; m.av.group.rotation.x = 0; }
       const dx = but[0] - m.x, dz = but[1] - m.z, d = Math.hypot(dx, dz) || 1;
       if (d > 2.2) {
@@ -11115,6 +11147,26 @@ function gangTick(dt) {
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
             o2.hp -= 14; burst(o2.x, o2.y + 1.2, o2.z, 0xff5c5c, 5); sfx.hit();
             if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; } } } }
+      // pillage de la planque du joueur
+      if (G.etat === 'planque' && gang.planque && d < 4 && simTime > (G.pilleT || 0)) {
+        G.pilleT = simTime + 6;
+        const defendu = Math.hypot(P.pos.x - gang.planque.x, P.pos.z - gang.planque.z) < 16
+          || (gang.membresLibres || []).some(r2 => Math.hypot(r2.x - gang.planque.x, r2.z - gang.planque.z) < 16)
+          || gang.membres.some(b2 => Math.hypot(b2.pos.x - gang.planque.x, b2.pos.z - gang.planque.z) < 16);
+        if (defendu) {
+          G.etat = 'repos'; G.cible = null; G.t = simTime + 60; clearBeacon();
+          msg('🛡️ Ta planque est défendue : ils repartent les mains vides !', 3600); sfx.win();
+          gagneRep(15, 'planque défendue');
+        } else {
+          const vol = Math.min(gang.magot, 40 + Math.floor(rnd(0, 60)));
+          gang.magot -= vol; if (gang.planque) gang.planque.coffre.amount = gang.magot;
+          G.magot += vol; if (G.planque) G.planque.coffre.amount = G.magot;
+          G.etat = 'repos'; G.cible = null; G.t = simTime + 90; clearBeacon();
+          msg(`💸 Les ${G.nom} ont pris ${vol} 🪙 dans ta planque !`, 4200); sfx.die();
+          chat(null, `💸 ${G.nom} ont pillé la planque de ${myCfg.name} (−${vol} 🪙)`);
+          saveGuerre();
+        }
+      }
       // vitrine brisée
       if (G.etat === 'boutique' && d < 3) for (const br of breakables)
         if (br.kind === 'glass' && !br.broken && Math.hypot(br.x - m.x, br.z - m.z) < 3.5 && simTime > m.cd) {

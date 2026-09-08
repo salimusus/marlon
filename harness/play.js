@@ -544,13 +544,19 @@ test('la police ouvre le feu à partir du niveau 2', async p => {
 test('plus le délit est grave, plus la police s\'accroche', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
-    const mesure = sev => { __G.police.wanted = 0; __G.police.crimeLevel = 0;
-      __G.infraction('test', 2, sev); const d = __G.police.decayT - __G.simTime; __G.clearWanted('fin'); return +d.toFixed(0); };
+    // sansPitie : on court-circuite la clémence (un petit délit non vu est pardonné, ce que
+    // vérifie le test « la police laisse passer les petites infractions »). Ici on ne mesure
+    // que la ténacité : à délit reconnu, la traque doit durer plus longtemps si c'est grave.
+    const mesure = sev => { __G.police.wanted = 0; __G.police.crimeLevel = 0; __G.police.avert = 0;
+      __G.infraction('test', 2, sev, true); const d = __G.police.decayT - __G.simTime; __G.clearWanted('fin'); return +d.toFixed(0); };
     const petit = mesure(1), grave = mesure(3);
+    // et le pendant : le même petit délit, sans témoin et sans « sans pitié », est pardonné
+    __G.police.wanted = 0; __G.police.crimeLevel = 0; __G.police.avert = 0;
+    __G.infraction('test', 2, 1); const pardonne = __G.police.wanted === 0;
     __G.clearWanted('fin');
-    return { petit, grave };
+    return { petit, grave, pardonne };
   });
-  return { ok: r.grave > r.petit * 1.5, detail: `petit délit : abandon dans ${r.petit} s · délit grave : ${r.grave} s` };
+  return { ok: r.grave > r.petit * 1.5 && r.pardonne, detail: `petit délit : abandon dans ${r.petit} s · délit grave : ${r.grave} s · petit délit sans témoin pardonné=${r.pardonne}` };
 });
 
 test('on monte sur le trampoline de la villa et on rebondit', async p => {
@@ -3401,6 +3407,43 @@ test('on nage à la surface au lieu de marcher au fond de la mer', async p => {
   const okMer = r.mer.nage && r.mer.y > r.mer.surface - 1.6 && r.mer.y < r.mer.surface + 0.6;
   const okPiscine = !r.piscine || (r.piscine.nage && r.piscine.y > r.piscine.surface - 1.6 && r.piscine.y < r.piscine.surface + 0.6);
   return { ok: okMer && okPiscine, detail: `tombé de 5 m dans la mer (surface ${r.mer.surface} m), le joueur remonte flotter à ${r.mer.y} m au lieu de couler au fond (${r.mer.suivi.join(' → ')})${r.piscine ? ` · dans la piscine de la villa (surface ${r.piscine.surface} m) il flotte à ${r.piscine.y} m` : ''}` };
+});
+
+test('la grille spatiale dit exactement la même chose qu\'un balayage complet', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G, S = G.solids;
+    for (let i = 0; i < 300; i++) G.cityStep(1 / 60);   // les voitures quittent leur point de départ
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    // 1) aucun solide ne doit manquer, véhicules en mouvement compris
+    const cmp = (rayon, avecVeh) => {
+      let manquants = 0;
+      for (let k = 0; k < 900; k++) {
+        const x = rnd(-200, 200), z = rnd(-90, 200), grille = new Set(G.solidsAutour(x, z, rayon, avecVeh));
+        for (const o of S) {
+          if (!avecVeh && o.veh) continue;
+          if (Math.abs(o.x - x) < o.w / 2 + rayon && Math.abs(o.z - z) < o.d / 2 + rayon && !grille.has(o)) manquants++;
+        }
+      }
+      return manquants;
+    };
+    const manquantsVeh = cmp(2, true), manquantsDecor = cmp(6, false);
+    // 2) les voitures qui roulent sont bien vues à leur position du moment
+    const roulantes = G.city.aiCars.filter(c => c.solid);
+    const vues = roulantes.filter(c => G.solidsAutour(c.solid.x, c.solid.z, 2, true).includes(c.solid)).length;
+    // 3) le piège : casser une vitrine puis en remettre une autre garde la MÊME longueur
+    const br = G.breakables.filter(b => b.solid && b.solid.glass && !b.broken);
+    const a = br[0], b = br[1], solA = a.solid, solB = b.solid, n0 = S.length;
+    G.solidsAutour(solA.x, solA.z, 2, false);
+    G.breakThing(a, { x: solA.x, z: solA.z }); G.breakThing(a, { x: solA.x, z: solA.z });
+    const partie = !S.includes(solA);
+    S.push(solB);   // « réparation » : on retombe sur la longueur de départ
+    const memeLongueur = S.length === n0;
+    const fantome = G.solidsAutour(solA.x, solA.z, 2, false).includes(solA);
+    return { manquantsVeh, manquantsDecor, vues, roulantes: roulantes.length, partie, memeLongueur, fantome };
+  });
+  const ok = r.manquantsVeh === 0 && r.manquantsDecor === 0 && r.vues === r.roulantes && r.partie && r.memeLongueur && !r.fantome;
+  return { ok, detail: `0 solide manquant sur ~2 200 x 900 points (décor ${r.manquantsDecor}, avec véhicules ${r.manquantsVeh}) · ${r.vues}/${r.roulantes} voitures en mouvement vues à leur place · vitrine brisée retirée=${r.partie}, longueur inchangée après « réparation »=${r.memeLongueur}, fantôme dans la grille=${r.fantome}` };
 });
 
 (async()=>{

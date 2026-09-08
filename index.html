@@ -760,6 +760,13 @@ const stars = (() => {
   p.visible = false; scene.add(p); return p;
 })();
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
+// Ni la scène ni le monde ne bougent jamais. Or dans three.js r128, un parent dont
+// matrixAutoUpdate vaut vrai force le recalcul de la matrice de TOUS ses descendants à
+// chaque image : les 22 000 objets de la ville étaient recomposés pour rien, 13 ms par
+// image. En coupant le drapeau ici, seuls les objets qui bougent vraiment se recalculent
+// (leur propre matrixAutoUpdate reste actif) : 13,7 ms → 7,2 ms, mesuré.
+scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false;
+scene.updateMatrix(); worldGroup.updateMatrix();
 function applyQuality() {
   const q = settings.quality, low = q === 'low', dlss = q === 'dlss';
   // "DLSS" : rendu en résolution réduite puis agrandi à l'écran (upscaling), ombres conservées
@@ -774,6 +781,15 @@ function applyQuality() {
 const C = { base: 0xa3a2a5, grass: 0x5cc453, stone: 0xc9ced8, stone2: 0x8f98ab, wood: 0x9c6a3c, leaf: 0x3fae4a, red: 0xff5c5c, blue: 0x4f8dff,
   purple: 0xb57cff, orange: 0xffa040, teal: 0x35d0e6, yellow: 0xffd23f, lava: 0xff3b1f, dark: 0x2b3550, pink: 0xff5cd6, neon: 0x3dff7a,
   rock: 0x4a4550, rock2: 0x625c66, snow: 0xe6eef7, ice: 0x9fdcff, pine: 0x2f7a4a, space: 0x2a2a44, cyan: 0x3ef2ff, magenta: 0xff4fd8, lime: 0x9dff3a };
+// ---- grille spatiale des solides (déclarée ici, au plus près de `solids`, pour qu'elle
+// existe déjà quand le premier monde se construit) ----
+const SGRID = { cs: 12, x0: -216, z0: -96, nx: 36, nz: 32, cells: null, n: -1, t: -99 };
+const SVIDE = [];
+// La longueur de `solids` ne suffit pas à repérer un changement : casser une vitrine pendant
+// qu'une autre est réparée laisse le compte identique et la grille pointait alors sur des
+// solides fantômes (une balle traversait un mur, une autre butait sur du vide). Tout ajout,
+// tout retrait et toute remise à zéro appellent donc explicitement cette fonction.
+function sgridSale() { SGRID.n = -1; }
 let solids = [], kills = [], coins = [], checkpoints = [], blinkers = [], movers = [], spinners = [], conveyors = [], clouds = [], pads = [], trusses = [], crumbles = [], decoSpin = [], route = [];
 let goal = null, spawn = new THREE.Vector3(0, 0, 3);
 const shared = new Set();
@@ -823,7 +839,7 @@ function clearWorld() {
     for (const m of mats) { if (shared.has(m)) continue; if (m.map && !shared.has(m.map)) m.map.dispose(); m.dispose(); }
   });
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
-  solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = [];
+  solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; sgridSale();
   goal = null; cityReset();
 }
 
@@ -835,7 +851,7 @@ function box(x, y, z, w, h, d, color, opt = {}) {
   if (!opt.noEdges && !opt.neon) addEdges(m);
   worldGroup.add(m);
   const o = Object.assign({ mesh: m, x, y, z, w: Math.max(w, 0.36), h, d: Math.max(d, 0.36) }, opt);   // murs fins épaissis pour la collision
-  if (opt.kill) kills.push(o); else if (!opt.deco) solids.push(o);
+  if (opt.kill) kills.push(o); else if (!opt.deco) solids.push(o); sgridSale();
   return o;
 }
 function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un véhicule (dalles, parking, parc…)
@@ -1109,7 +1125,7 @@ function lamp(x, z) {   // lampadaire cassable
   const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
   const post = new THREE.Mesh(unitBox, lam(0x3b4252)); post.scale.set(0.18, 4.4, 0.18); post.position.y = 2.2; post.castShadow = true; g.add(post);
   const bulb = new THREE.Mesh(unitBox, neonMat(0xfff2b0)); bulb.scale.set(0.7, 0.4, 0.7); bulb.position.y = 4.5; g.add(bulb);
-  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid);
+  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid); sgridSale();
   const br = { kind: 'lamp', g, bulb, solid, x, z, r: 0.5, broken: false };
   solid.brk = br; breakables.push(br);
 }
@@ -1384,7 +1400,7 @@ function buildHelipad() {   // héliport (est, nord)
   g.fillStyle = '#ffd23f'; g.font = 'bold 84px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('H', 64, 70);
   const pad = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 0.2, 32), [lam(0x2b3550), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }), lam(0x2b3550)]);
   pad.position.set(51, 0.1, -13); pad.receiveShadow = true; worldGroup.add(pad);
-  solids.push({ mesh: pad, x: 51, y: 0.1, z: -13, w: 11, h: 0.2, d: 11 });
+  solids.push({ mesh: pad, x: 51, y: 0.1, z: -13, w: 11, h: 0.2, d: 11 }); sgridSale();
   city.cars.push(makeHeli(51, 0.2, -13, 0));
   sign(44, 0, -6, '🚁 Hélico : E pour monter'); coin(51, 0.2, -19);
   box(58, 1.5, -22, 3, 3, 3, 0x8f98ab); box(58, 3.6, -22, 1.2, 1.2, 1.2, 0xff5c5c, { deco: true, studs: false });   // petite tour de contrôle
@@ -1428,7 +1444,7 @@ function buildCircuit() {
   const bm = new THREE.MeshLambertMaterial({ map: bt, emissive: 0x3ef2ff, emissiveIntensity: 0.35 });
   for (const sPos of [45, 200, 320, 470]) { const [x, z, h] = pathPos(sPos); rbox(x, z, 4, 3, 0.12, -Math.atan2(Math.cos(h), Math.sin(h)), bm, { y: 0.05 }); city.boosters.push({ x, z, cd: 0 }); }
   // entrées : ouvertures dans la barrière intérieure au bout des routes est / ouest (z = 0) et au nord
-  for (const o of solids.filter(o => o.mesh && o.bar && ((Math.abs(o.z) < 4 && Math.abs(Math.abs(o.x) - 68) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z - 124) - 5) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z + 54) - 5) < 1.5)))) { worldGroup.remove(o.mesh); solids.splice(solids.indexOf(o), 1); }
+  for (const o of solids.filter(o => o.mesh && o.bar && ((Math.abs(o.z) < 4 && Math.abs(Math.abs(o.x) - 68) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z - 124) - 5) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z + 54) - 5) < 1.5)))) { worldGroup.remove(o.mesh); solids.splice(solids.indexOf(o), 1); } sgridSale();
 }
 // ================= LA ZONE : le quartier pauvre =================
 // Bidonville à l'ouest de la ville : immeubles de trois étages où l'on entre vraiment
@@ -1582,7 +1598,7 @@ function buildZone(X, Z) {
     const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 1.1, 10), lam(pickOne([0x3f6b3a, 0x2b3550, 0x5a4a3a])));
     p2.position.set(px, 0.65, pz); worldGroup.add(p2);
     box(px, 1.24, pz, 0.9, 0.14, 0.9, 0x2b2f3a, { deco: true, studs: false });
-    solids.push({ mesh: p2, x: px, y: 0.65, z: pz, w: 0.9, h: 1.1, d: 0.9 });
+    solids.push({ mesh: p2, x: px, y: 0.65, z: pz, w: 0.9, h: 1.1, d: 0.9 }); sgridSale();
   }
   for (let i = 0; i < 70; i++) {
     const px = X + rnd(-40, 40), pz = Z + rnd(-30, 30);
@@ -1593,7 +1609,7 @@ function buildZone(X, Z) {
     const px = X + rnd(-36, 36), pz = Z + rnd(-26, 26);
     if (i % 2) box(px, 0.24, pz, 1.2, 0.16, 1.2, 0xb08d5a, { studs: false, noRoute: true });
     else { const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 1, 10), lam(pickOne([0xd8622b, 0x4a5162])));
-      b2.position.set(px, 0.6, pz); worldGroup.add(b2); solids.push({ mesh: b2, x: px, y: 0.6, z: pz, w: 0.8, h: 1, d: 0.8 }); }
+      b2.position.set(px, 0.6, pz); worldGroup.add(b2); solids.push({ mesh: b2, x: px, y: 0.6, z: pz, w: 0.8, h: 1, d: 0.8 }); } sgridSale();
   }
   // murets tagués qui bordent le quartier
   for (let i = 0; i < 6; i++) {
@@ -1614,7 +1630,7 @@ function buildZone(X, Z) {
   for (const [dx, dz] of [[-30, 4], [18, -6]]) {
     const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.1, 10), lam(0x4a4238));
     b2.position.set(X + dx, 0.65, Z + dz); worldGroup.add(b2);
-    solids.push({ mesh: b2, x: X + dx, y: 0.65, z: Z + dz, w: 0.9, h: 1.1, d: 0.9 });
+    solids.push({ mesh: b2, x: X + dx, y: 0.65, z: Z + dz, w: 0.9, h: 1.1, d: 0.9 }); sgridSale();
     const fl = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.9, 8), neonMat(0xff8f3a));
     fl.position.set(X + dx, 1.6, Z + dz); worldGroup.add(fl);
     const l2 = new THREE.PointLight(0xff8f3a, 1.1, 12); l2.position.set(X + dx, 1.9, Z + dz); worldGroup.add(l2);
@@ -2055,7 +2071,7 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
   for (const [x, z, f] of [[-6, 70, Math.PI / 2], [6, 78, -Math.PI / 2]]) bench(x, z, f);   // les bancs du fond sont désormais ceux du cinéma
   // fontaine centrale
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.6, 24), lam(0xc9ced8)); basin.position.set(0, 0.6, 74); basin.receiveShadow = true; worldGroup.add(basin);
-  solids.push({ mesh: basin, x: 0, y: 0.6, z: 74, w: 6.2, h: 0.6, d: 6.2 });
+  solids.push({ mesh: basin, x: 0, y: 0.6, z: 74, w: 6.2, h: 0.6, d: 6.2 }); sgridSale();
   const wat = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.2, 24), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); wat.position.set(0, 0.85, 74); worldGroup.add(wat);
   box(0, 1.6, 74, 0.5, 1.6, 0.5, 0xc9ced8, { deco: true, studs: false }); box(0, 2.9, 74, 0.25, 1.2, 0.25, 0, { material: neonMat(0x9fdcff), deco: true, noEdges: true });
   // balançoires
@@ -2569,7 +2585,7 @@ function setGun(av, on) {
 function rbox(x, z, len, thick, h, ang, material, opt = {}) {   // boîte tournée (visuel) + collision approximée par sa boîte englobante
   const m = new THREE.Mesh(unitBox, material); m.scale.set(len, h, thick); m.position.set(x, h / 2 + (opt.y || 0), z); m.rotation.y = ang; m.receiveShadow = true;
   if (opt.shadow) m.castShadow = true; worldGroup.add(m);
-  if (opt.solid) { const c = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang)); solids.push({ mesh: m, x, y: h / 2 + (opt.y || 0), z, w: len * c + thick * sn, h, d: len * sn + thick * c, bar: !!opt.bar }); }
+  if (opt.solid) { const c = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang)); solids.push({ mesh: m, x, y: h / 2 + (opt.y || 0), z, w: len * c + thick * sn, h, d: len * sn + thick * c, bar: !!opt.bar }); } sgridSale();
   return m;
 }
 function trackInfo(x, z) {   // point le plus proche du tracé du circuit : décalage latéral signé, tangente, distance
@@ -2732,7 +2748,7 @@ const WORLDS = [
       B('routes de l\'ouest', routesOuest); B('gangs', buildGangs);
       B('quartier', buildResidential);
       // sécurité : aucun feu tricolore ne doit se retrouver dans un jardin ou une maison
-      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } }
+      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
       // routes : anneau + croix
       road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, 0, 6, 46); road(0, 0, 46, 6);
       // quartiers (trottoirs / pelouses)
@@ -3147,7 +3163,7 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   for (let i = 0; i < 14; i++) box(49 + (i % 2) * 6, 5.4, 34 + i * 4.3, 0.5, 0.5, 0.5, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande de la rue
   for (const z of [36, 92]) { box(52, 6.6, z, 8, 0.08, 0.08, 0x3b4252, { deco: true, noEdges: true, studs: false }); for (const x of [48.1, 55.9]) box(x, 3.3, z, 0.15, 6.6, 0.15, 0x3b4252, { studs: false, noRoute: true }); }
   box(52, 7.2, 36, 6, 1, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🛍️ RUE COMMERÇANTE') }), deco: true, noEdges: true });
-  const duck = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), lam(0xffd23f)); duck.position.set(45, 1.7, 100); worldGroup.add(duck); const dh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), lam(0xffd23f)); dh.position.set(45, 3.6, 101.2); worldGroup.add(dh); const beak = new THREE.Mesh(unitRound, lam(0xff8f3a)); beak.scale.set(0.9, 0.35, 0.9); beak.position.set(45, 3.4, 102.4); worldGroup.add(beak); solids.push({ mesh: duck, x: 45, y: 1.7, z: 100, w: 3.2, h: 3.4, d: 3.2 });   // canard géant
+  const duck = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), lam(0xffd23f)); duck.position.set(45, 1.7, 100); worldGroup.add(duck); const dh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), lam(0xffd23f)); dh.position.set(45, 3.6, 101.2); worldGroup.add(dh); const beak = new THREE.Mesh(unitRound, lam(0xff8f3a)); beak.scale.set(0.9, 0.35, 0.9); beak.position.set(45, 3.4, 102.4); worldGroup.add(beak); solids.push({ mesh: duck, x: 45, y: 1.7, z: 100, w: 3.2, h: 3.4, d: 3.2 });   // canard géant sgridSale();
   city.zones.push({ name: 'Rue commerçante', emoji: '🛍️', x1: 45, x2: 68, z1: 34, z2: 94, hint: '🛍️ Rue commerçante : pizzeria, glacier, jouets, arcade, librairie (E devant les vitrines)' });
 }
 function buildFair() {   // fête foraine au sud du circuit : grande roue, carrousel, stands, ballons, guirlandes
@@ -3166,7 +3182,7 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   city.rides.push({ kind: 'wheel', n: 'la grande roue', e: '🎡', group: wheel, gondolas, x: wx, z: wz, R, ang: 0, speed: 0.22, ex: wx - 5, ez: wz - 1, rider: null });
   // carrousel
   const cx = -18, cz = 152;
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.5, 24), lam(0xff5c5c)); base.position.set(cx, 0.55, cz); worldGroup.add(base); solids.push({ mesh: base, x: cx, y: 0.55, z: cz, w: 11, h: 0.5, d: 11 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.5, 24), lam(0xff5c5c)); base.position.set(cx, 0.55, cz); worldGroup.add(base); solids.push({ mesh: base, x: cx, y: 0.55, z: cz, w: 11, h: 0.5, d: 11 }); sgridSale();
   const spin = new THREE.Group(); spin.position.set(cx, 0.8, cz); worldGroup.add(spin);
   const top = new THREE.Mesh(new THREE.ConeGeometry(6.2, 2.2, 24), lam(0xffd23f)); top.position.y = 5.2; spin.add(top);
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.2, 10), lam(0xffffff)); mast.position.y = 2.1; spin.add(mast);
@@ -3246,7 +3262,7 @@ function trafficLight(x, z, ry, group) {   // feu tricolore : poteau + boîtier,
   const arm = new THREE.Mesh(unitBox, lam(0x3b4252)); arm.scale.set(0.15, 0.15, 1.6); arm.position.set(0, 4.3, 0.8); g.add(arm);
   const head = new THREE.Mesh(unitRound, lam(0x1b1b1b)); head.scale.set(0.55, 1.5, 0.45); head.position.set(0, 3.7, 1.55); g.add(head);
   const lamps = [0xff2020, 0xffa020, 0x30ff60].map((col, i) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0x000000 })); l.position.set(0, 4.2 - i * 0.5, 1.8); l.userData.col = col; g.add(l); return l; });
-  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid);
+  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid); sgridSale();
   const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, broken: false }; solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
 }
 function lightsTick() {
@@ -3436,7 +3452,7 @@ function buildDeco() {   // lampadaires et fleurs le long des grands axes, statu
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
   for (const x of [-34, -20, 20, 34]) for (const z of [-4.2, 4.2]) lamp(x, z);
   for (const [x, z] of [[-30, -4.5], [30, -4.5], [-30, 4.5], [30, 4.5]]) flowerBed(x, z, 3, 1);
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3 });
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3 }); sgridSale();
   const statue = mannequin(0, -28, 0, { jersey: 0, hat: 'crown', jacket: 5 }); statue.group.position.y = 1.2; statue.group.scale.setScalar(1.6); statue.group.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = lam(0xd4a017); }); statue.rig.armR.rotation.x = -2.6;
 }
 function rideEnter(r) {
@@ -3488,7 +3504,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   const ex = bx + W / 2 - 0.2;   // façade est avec la grande porte
   box(ex, H / 2, bz - D / 2 + (D - 4) / 4, 0.4, H, (D - 4) / 2, wallC, { studs: false, noRoute: true }); box(ex, H / 2, bz + D / 2 - (D - 4) / 4, 0.4, H, (D - 4) / 2, wallC, { studs: false, noRoute: true });
   box(ex, (H + 3.6) / 2, bz, 0.4, H - 3.6, 4, wallC, { studs: false, noRoute: true });
-  for (const dz of [-2.4, 2.4]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 3.8, 12), lam(0xffffff)); c.position.set(ex + 1.3, 1.9, bz + dz); worldGroup.add(c); solids.push({ mesh: c, x: ex + 1.3, y: 1.9, z: bz + dz, w: 0.8, h: 3.8, d: 0.8 }); }
+  for (const dz of [-2.4, 2.4]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 3.8, 12), lam(0xffffff)); c.position.set(ex + 1.3, 1.9, bz + dz); worldGroup.add(c); solids.push({ mesh: c, x: ex + 1.3, y: 1.9, z: bz + dz, w: 0.8, h: 3.8, d: 0.8 }); } sgridSale();
   box(ex + 1.3, 4.1, bz, 1.6, 0.6, 6.4, trim, { deco: true, studs: false }); const ped = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 3), lam(trim)); ped.rotation.x = Math.PI / 2; ped.rotation.z = Math.PI / 2; ped.position.set(ex + 0.9, 5.5, bz); ped.scale.set(1, 1, 1); worldGroup.add(ped);   // fronton
   box(ex + 0.45, 7.3, bz, 0.1, 1.3, 10, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏦 BANQUE DE SUPER OBBY') }), deco: true, noEdges: true });
   for (let f = 0; f < 3; f++) for (const dz of [-7, 7]) { box(ex + 0.25, f * F + 2.7, bz + dz, 0.1, 1.8, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(ex + 0.3, f * F + 3.7, bz + dz, 0.2, 0.15, 2.8, trim, { deco: true, studs: false }); }
@@ -3565,7 +3581,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     for (const cx of [-6, 6]) for (const cz of [-6, 6]) {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, F - 0.4, 12), lam(marble));
       c.position.set(bx + cx, (F - 0.4) / 2 + 0.36, bz + cz); worldGroup.add(c);
-      solids.push({ mesh: c, x: bx + cx, y: F / 2, z: bz + cz, w: 0.9, h: F, d: 0.9 });
+      solids.push({ mesh: c, x: bx + cx, y: F / 2, z: bz + cz, w: 0.9, h: F, d: 0.9 }); sgridSale();
       box(bx + cx, F - 0.1, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
       box(bx + cx, 0.5, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
     }
@@ -3771,7 +3787,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
     if (i % 3 === 0) { const sb = new THREE.Mesh(unitRound, lam(pickOne([0xff5c5c, 0x4f8dff, 0xffd23f]))); sb.scale.set(0.6, 2.2, 0.1); sb.position.set(px - 1.2, 1.1, pz - 1); sb.rotation.x = 0.25; worldGroup.add(sb); }   // planche de surf plantée
     if (i % 3 === 1) { const sb = new THREE.Mesh(unitRound, lam(0xffffff)); sb.scale.set(0.6, 0.1, 2.2); sb.position.set(px - 1.2, 0.21, pz + 1.5); worldGroup.add(sb); }
   }
-  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const tx = rnd(105, 110), tz = -50 + i * 38; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); solids.push({ mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6 }); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); } }   // palmiers
+  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const tx = rnd(105, 110), tz = -50 + i * 38; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); solids.push({ mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6 }); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); } }   // palmiers sgridSale();
   // poste de secours
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(112 + dx, 1.5, 30 + dz, 0.2, 3, 0.2, 0xf4f6fa, { studs: false, noRoute: true });
   box(112, 3.1, 30, 3, 0.2, 3, 0xf4f6fa, { studs: false, noRoute: true }); box(112.4, 3.9, 30 + 1.4, 2.2, 1.4, 0.15, 0xff5c5c, { studs: false, noRoute: true });   // garde-corps raccourci : il barrait l'arrivée de l'escalier box(112, 4.9, 30, 3.4, 0.3, 3.4, 0xffd23f, { deco: true, studs: false });
@@ -4300,14 +4316,14 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   g2.fillStyle = '#2b3550'; g2.fillRect(0, 0, 128, 128); g2.strokeStyle = '#ffffff'; g2.lineWidth = 6; g2.beginPath(); g2.arc(64, 64, 52, 0, Math.PI * 2); g2.stroke();
   g2.fillStyle = '#ff3030'; g2.font = 'bold 84px Arial, sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText('H', 64, 70);
   const pad = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.2, 32), [lam(0x2b3550), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }), lam(0x2b3550)]);
-  pad.position.set(hpx, 0.1, hpz); pad.receiveShadow = true; worldGroup.add(pad); solids.push({ mesh: pad, x: hpx, y: 0.1, z: hpz, w: 13, h: 0.2, d: 13 });
+  pad.position.set(hpx, 0.1, hpz); pad.receiveShadow = true; worldGroup.add(pad); solids.push({ mesh: pad, x: hpx, y: 0.1, z: hpz, w: 13, h: 0.2, d: 13 }); sgridSale();
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; box(hpx + Math.cos(a) * 7.6, 0.3, hpz + Math.sin(a) * 7.6, 0.3, 0.4, 0.3, 0, { material: neonMat(0xffd23f), deco: true, noEdges: true }); }
   city.cars.push(makeHeli(hpx, 0.2, hpz, Math.PI));
   box(hpx + 9, 2.4, hpz, 0.15, 1, 4, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚁 URGENCES') }), deco: true, noEdges: true });
   lamp(ex + 5, hz - 8); lamp(ex + 5, hz + 8); flowerBed(ex + 3, hz + 9.5, 1.4, 3); flowerBed(ex + 3, hz - 9.5, 1.4, 3);
   for (const dz of [-2, 2]) bench(ex + 4.5, hz + dz, Math.PI / 2);
   box(ex + 2.5, 0.4, hz, 5, 0.06, 6, 0xd6e4ff, { deco: true, noEdges: true, studs: false });   // parvis
-  for (const dz of [-2.4, 2.4]) { const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3.6, 12), lam(0xffffff)); col2.position.set(ex + 2.2, 1.8, hz + dz); worldGroup.add(col2); solids.push({ mesh: col2, x: ex + 2.2, y: 1.8, z: hz + dz, w: 0.7, h: 3.6, d: 0.7 }); }
+  for (const dz of [-2.4, 2.4]) { const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3.6, 12), lam(0xffffff)); col2.position.set(ex + 2.2, 1.8, hz + dz); worldGroup.add(col2); solids.push({ mesh: col2, x: ex + 2.2, y: 1.8, z: hz + dz, w: 0.7, h: 3.6, d: 0.7 }); } sgridSale();
   box(ex + 2.2, 3.9, hz, 1.6, 0.5, 6, 0xd6e4ff, { deco: true, studs: false });
   city.zones.push({ name: 'Hôpital', emoji: '🏥', x1: hx - 14, x2: hx + 28, z1: hz - 13, z2: hz + 26, hint: '🏥 Hôpital : E à l\'accueil pour te faire soigner · parking payant (horodateur) · héliport' });
 }
@@ -4562,7 +4578,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   city.villaPool = { x1: PX - POOL_W / 2 + 0.3, x2: PX + POOL_W / 2 - 0.3, z1: PZ - POOL_D / 2 + 0.3, z2: PZ + POOL_D / 2 - 0.3, top: PSURF, depth: 1.35 };   // 1,80 m de fond : on nage vraiment, sans racler le carrelage
   // jardin : fontaine entre le garage et l'allée, palmiers, trampoline
   const FX = vx - 1, FZ2 = vz + 9;
-  const fo = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.7, 20), lam(0xe8e2d4)); fo.position.set(FX, 0.65, FZ2); worldGroup.add(fo); solids.push({ mesh: fo, x: FX, y: 0.65, z: FZ2, w: 4.4, h: 0.7, d: 4.4 });
+  const fo = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.7, 20), lam(0xe8e2d4)); fo.position.set(FX, 0.65, FZ2); worldGroup.add(fo); solids.push({ mesh: fo, x: FX, y: 0.65, z: FZ2, w: 4.4, h: 0.7, d: 4.4 }); sgridSale();
   const fw = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.2, 20), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); fw.position.set(FX, 0.95, FZ2); worldGroup.add(fw);
   box(FX, 1.6, FZ2, 0.5, 1.6, 0.5, 0xe8e2d4, { deco: true, studs: false }); box(FX, 2.7, FZ2, 0.25, 1.2, 0.25, 0, { material: neonMat(0x9fdcff), deco: true, noEdges: true });
   for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
@@ -4805,7 +4821,7 @@ function retirerDeco(o, silent) {   // on décroche un objet posé (pour le dép
   const i = city.placed.indexOf(o); if (i < 0) return;
   city.placed.splice(i, 1); worldGroup.remove(o.g);
   const scr = o.g.getObjectByName('ecran'); if (scr) { const k = city.tvs.indexOf(scr); if (k >= 0) city.tvs.splice(k, 1); }
-  if (o.solide) { const k = solids.indexOf(o.solide); if (k >= 0) solids.splice(k, 1); if (o.solide.mesh) worldGroup.remove(o.solide.mesh); }
+  if (o.solide) { const k = solids.indexOf(o.solide); if (k >= 0) solids.splice(k, 1); if (o.solide.mesh) worldGroup.remove(o.solide.mesh); } sgridSale();
   for (let k = city.benches.length - 1; k >= 0; k--) { const b = city.benches[k]; if (b.deco && Math.abs(b.x - o.x) < 0.01 && Math.abs(b.z - o.z) < 0.01) city.benches.splice(k, 1); }
   if (!silent) decorSave();
 }
@@ -4869,7 +4885,7 @@ function dropDecor() {
   placeLibre(P.deco.id, pt.x, pt.y, pt.z, pt.ry, pt.mur);
   worldGroup.remove(P.decoMesh); P.deco = null; P.decoMesh = null; city.pose = null;
 }
-function palm(x, z) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); solids.push({ mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7 }); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); } }
+function palm(x, z) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); solids.push({ mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7 }); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); } } sgridSale();
 function openFridge() {
   $('fridgeGrid').innerHTML = RAW.map((it, i) => `<div class="item" data-i="${i}"><span class="e">${it.e}</span>${it.n}<span class="pr">${it.cook ? 'à cuire' : 'à boire / manger'}</span></div>`).join('');
   $('fridgeGrid').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => {
@@ -5546,10 +5562,10 @@ function armeeAlerte() {
 function armeeFin() {
   if (!armee.on) return;
   armee.on = false;
-  if (armee.heli) { worldGroup.remove(armee.heli.g); const i = solids.indexOf(armee.heli.solid); if (i >= 0) solids.splice(i, 1); }
+  if (armee.heli) { worldGroup.remove(armee.heli.g); const i = solids.indexOf(armee.heli.solid); if (i >= 0) solids.splice(i, 1); } sgridSale();
   if (armee.tache) worldGroup.remove(armee.tache);
   armee.heli = null; armee.faisceau = null; armee.tache = null;
-  for (let i = police.cars.length - 1; i >= 0; i--) { const pc = police.cars[i]; if (!pc.mil) continue; worldGroup.remove(pc.g); const k = solids.indexOf(pc.solid); if (k >= 0) solids.splice(k, 1); police.cars.splice(i, 1); }
+  for (let i = police.cars.length - 1; i >= 0; i--) { const pc = police.cars[i]; if (!pc.mil) continue; worldGroup.remove(pc.g); const k = solids.indexOf(pc.solid); if (k >= 0) solids.splice(k, 1); police.cars.splice(i, 1); } sgridSale();
 }
 function armeeTick(dt) {
   const h = armee.heli; if (!h) return;
@@ -7415,16 +7431,19 @@ function commandeSociale(txt) {
 // Parcourir les 2 400 solides de la ville à chaque test de collision coûtait 0,3 ms par appel,
 // soit une vingtaine de millisecondes par image rien que pour faire marcher les bots et les
 // gangs. On range les solides dans des cases de 12 m et on ne teste plus que la case utile.
-const SGRID = { cs: 12, x0: -216, z0: -96, nx: 36, nz: 32, cells: null, n: -1, t: -99 };
-const SVIDE = [];
 function buildSGrid() {
-  const { cs, x0, z0, nx, nz } = SGRID, cells = new Array(nx * nz);
+  const { cs, x0, z0, nx, nz } = SGRID, cells = new Array(nx * nz), veh = [];
   for (const o of solids) {
+    // Les véhicules changent de case à chaque image : les ranger dans la grille les aurait
+    // laissés à jamais sur leur case de départ (on traversait une voiture qui roule et on
+    // butait sur un fantôme à son point d'apparition). On les garde donc à part, dans une
+    // petite liste qu'on parcourt en entier — ils sont une trentaine, pas deux mille.
+    if (o.veh) { veh.push(o); continue; }
     const i1 = Math.max(0, Math.floor((o.x - o.w / 2 - x0) / cs)), i2 = Math.min(nx - 1, Math.floor((o.x + o.w / 2 - x0) / cs));
     const j1 = Math.max(0, Math.floor((o.z - o.d / 2 - z0) / cs)), j2 = Math.min(nz - 1, Math.floor((o.z + o.d / 2 - z0) / cs));
     for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const k = j * nx + i; (cells[k] || (cells[k] = [])).push(o); }
   }
-  SGRID.cells = cells; SGRID.n = solids.length; SGRID.t = simTime;
+  SGRID.cells = cells; SGRID.veh = veh; SGRID.n = solids.length; SGRID.t = simTime;
 }
 function solidsPres(x, z) {   // les solides de la case qui contient ce point (liste complète hors grille)
   if (!SGRID.cells || solids.length !== SGRID.n || simTime - SGRID.t > 1) buildSGrid();
@@ -7435,14 +7454,17 @@ function solidsPres(x, z) {   // les solides de la case qui contient ce point (l
 }
 // Même chose pour une BOÎTE (un véhicule) : on rassemble les cases qu'elle touche. Un même
 // solide peut revenir deux fois si la boîte chevauche deux cases : sans conséquence ici.
-function solidsAutour(x, z, r) {
+// `avecVeh` : les appelants qui doivent voir les véhicules (le joueur, les voitures entre
+// elles, l'hélico) demandent en plus la petite liste tenue à jour à chaque image ; les
+// autres (tirs, caméra, piétons) les ignorent de toute façon et ne la paient pas.
+function solidsAutour(x, z, r, avecVeh) {
   if (!SGRID.cells || solids.length !== SGRID.n || simTime - SGRID.t > 1) buildSGrid();
   const { cs, x0, z0, nx, nz } = SGRID;
   const i1 = Math.floor((x - r - x0) / cs), i2 = Math.floor((x + r - x0) / cs);
   const j1 = Math.floor((z - r - z0) / cs), j2 = Math.floor((z + r - z0) / cs);
   if (i1 < 0 || j1 < 0 || i2 >= nx || j2 >= nz) return solids;
-  if (i1 === i2 && j1 === j2) return SGRID.cells[j1 * nx + i1] || SVIDE;
-  const out = [];
+  if (i1 === i2 && j1 === j2 && !avecVeh) return SGRID.cells[j1 * nx + i1] || SVIDE;
+  const out = avecVeh ? SGRID.veh.slice() : [];
   for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
   return out;
 }
@@ -7607,7 +7629,7 @@ const isSolid = o => !(o.blink && !o.mesh.visible);
 
 function moveAxis(axis, amount, canStep) {
   P.pos[axis] += amount;
-  for (const o of solidsAutour(P.pos.x, P.pos.z, 2)) {   // grille spatiale : on ne teste que les solides du coin
+  for (const o of solidsAutour(P.pos.x, P.pos.z, 2, true)) {   // grille spatiale : on ne teste que les solides du coin
     if (!isSolid(o) || !overlaps(o, P.pos.x, P.pos.y, P.pos.z)) continue;
     if (axis === 'y') {
       if (amount <= 0) {
@@ -7807,7 +7829,7 @@ function vehHalf(c) {
 function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   const deux = h != null && L > 0.05, sn = deux ? Math.sin(h) * L : 0, cs = deux ? Math.cos(h) * L : 0;
   const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
-  for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L))) {
+  for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
     if (o.veh && !opt.veh) continue; if (o.bar && !opt.bar) continue;   // par défaut : véhicules gérés à part, barrières par le couloir de piste
@@ -7873,7 +7895,7 @@ function exitCar() {
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)
   let top = 0;
-  for (const o of solidsAutour(x, z, 3)) {
+  for (const o of solidsAutour(x, z, 3, true)) {
     if (o === self || o.h > 30) continue;
     if (x > o.x - o.w / 2 - 0.9 && x < o.x + o.w / 2 + 0.9 && z > o.z - o.d / 2 - 0.9 && z < o.z + o.d / 2 + 0.9) top = Math.max(top, o.y + o.h / 2);
   }
@@ -7882,7 +7904,7 @@ function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour pos
 const hrace = { on: false, next: 0, t0: 0 };
 function heliBlocked(x, y, z, c) {   // l'hélico est une boîte (selon son orientation) ; on teste tous les solides sauf le sien
   const W = 2.6, D = 6.4, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h)), hw = (W * cs + D * sn) / 2 * 0.85, hd = (W * sn + D * cs) / 2 * 0.85, y0 = y + 0.15, y1 = y + 2.9;
-  for (const o of solidsAutour(x, z, Math.max(hw, hd) + 1)) {
+  for (const o of solidsAutour(x, z, Math.max(hw, hd) + 1, true)) {
     if (o === c.solid || o.h > 30) continue;
     if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && y1 > o.y - o.h / 2 && y0 < o.y + o.h / 2 && z + hd > o.z - o.d / 2 && z - hd < o.z + o.d / 2) return o;
   }
@@ -8000,12 +8022,12 @@ function repareChose(b) {
   if (b.kind === 'glass') {
     if (b.broken) {
       if (b.m && !b.m.parent) worldGroup.add(b.m);
-      if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid);
+      if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid); sgridSale();
     }
     if (b.mat0) b.m.material = b.mat0;
   } else {
     if (b.quat0) b.g.quaternion.copy(b.quat0); else b.g.quaternion.identity();
-    if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid);
+    if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid); sgridSale();
     if (b.bulb && b.mat0) b.bulb.material = b.mat0;
     if (b.lamps && b.mats0) b.lamps.forEach((l, i) => { if (b.mats0[i]) l.material = b.mats0[i]; });
   }
@@ -8095,11 +8117,11 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   const spd = sansDelit ? 0 : Math.abs(drive.speed);
   if (b.kind === 'glass') {
     if (!b.cracked) { b.cracked = true; b.m.material = crackedGlass; sfx.clack(); sfx.noise(.15, 2500, .06); msg('💥 Vitrine fissurée', 700); return; }
-    b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900);
+    b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900); sgridSale();
     if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
   } else {
     b.broken = true; const dx = b.x - c.x, dz = b.z - c.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
-    b.g.quaternion.setFromAxisAngle(ax, 1.35); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1);
+    b.g.quaternion.setFromAxisAngle(ax, 1.35); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); sgridSale();
     if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
     burst(b.x, 3, b.z, 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1); msg(b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !', 900);
   }
@@ -8295,13 +8317,20 @@ function cityStep(dt) {
   for (const c of city.cars) if (c.heli) {
     const flying = drive.car === c || c.busy;
     c.spin = clamp(c.spin + (flying ? 0.6 : -0.4) * dt, 0, 1);
-    c.rotor.rotation.y += dt * (2 + 26 * c.spin); c.tail.rotation.x += dt * (4 + 40 * c.spin);
+    // au ralenti le rotor tournait à 2 rad/s : sur quatre pales symétriques (une image
+    // identique tous les 90°) on ne le voyait pas bouger. 6 rad/s = un tour par seconde.
+    c.rotor.rotation.y += dt * (6 + 22 * c.spin); c.tail.rotation.x += dt * (8 + 36 * c.spin);
     // au-delà d'un demi-régime on passe au disque flou : les pales fines clignotaient
     // d'une image à l'autre et paraissaient figées
     if (c.disque) {
       const vite = c.spin > 0.45;
       c.disque.visible = vite; c.disque.material.opacity = 0.2 + 0.35 * c.spin;
-      if (c.pales) for (const p of c.pales) p.visible = !vite;
+      // le disque avançait de 26,7° par image (60 i/s) alors que ses stries reviennent
+      // tous les 27,7° : stroboscopiquement il paraissait à l'arrêt, voire reculer. On le
+      // fait tourner à contresens dans son propre plan pour ne garder qu'un mouvement lent
+      // et lisible, et on garde deux pales visibles — ce sont elles qui donnent la vitesse.
+      c.disque.rotation.z = -c.rotor.rotation.y * 0.86;
+      if (c.pales) c.pales.forEach((p, i) => { p.visible = !vite || i < 4; });
     }
     if (c.beacon) c.beacon.visible = (simTime % 1) < 0.5;
   }

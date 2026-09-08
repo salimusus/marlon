@@ -138,6 +138,8 @@ window.__G = {
   buildSGrid: typeof buildSGrid === 'function' ? buildSGrid : null,
   solidsPres: typeof solidsPres === 'function' ? solidsPres : null,
   solidsAutour: typeof solidsAutour === 'function' ? solidsAutour : null,
+  sgridSale: typeof sgridSale === 'function' ? sgridSale : null,
+  SGRID: typeof SGRID === 'object' ? SGRID : null,
   gangeurKO: typeof gangeurKO === 'function' ? gangeurKO : null,
   verifieElimination: typeof verifieElimination === 'function' ? verifieElimination : null,
   renaitGang: typeof renaitGang === 'function' ? renaitGang : null,

@@ -1234,7 +1234,12 @@ function buildPool() {   // piscine surélevée (ouest, décalée au nord pour l
   box(-51, 1.05, -8 + Z, 12, 1.9, 9, 0, { material: wm, deco: true, noEdges: true, noShadow: true });
   for (let i = 0; i < 4; i++) box(-45.6 - i * 1.2, (2.0 - i * 0.5) / 2, -8 + Z, 1.2, 2.0 - i * 0.5, 9, 0xd6e4ff, { studs: false, noRoute: true });   // petit bain en escalier (monte vers l'est)
   for (let i = 0; i < 3; i++) box(-51, (0.6 + i * 0.6) / 2, 2.6 - i * 1 + Z, 6, 0.6 + i * 0.6, 1, deck, { studs: false, noRoute: true });   // marches d'accès (sud)
-  truss(-60.4, 2.4, -8 + Z, 4, -1, 0); box(-61.2, 4.4, -8 + Z, 0.4, 4, 1.4, 0xc9ced8, { studs: false, noRoute: true });   // dosseret : on monte en poussant vers l'ouest, il n'y avait rien pour retenir le joueur qui glissait de l'échelle box(-59.5, 6.2, -8 + Z, 3, 0.4, 3, 0x4f8dff, { studs: false, noRoute: true }); box(-56.5, 6.25, -8 + Z, 3.4, 0.14, 0.8, 0xffffff, { studs: false, noRoute: true });   // plongeoir
+  // dosseret : on monte en poussant vers l'ouest, il n'y avait rien pour retenir le joueur
+  // qui glissait de l'échelle. (La plateforme et le plongeoir avaient disparu du jeu :
+  // ils étaient écrits À LA SUITE de ce commentaire, donc jamais exécutés.)
+  truss(-60.4, 2.4, -8 + Z, 4, -1, 0); box(-61.2, 4.4, -8 + Z, 0.4, 4, 1.4, 0xc9ced8, { studs: false, noRoute: true });
+  box(-59.5, 6.2, -8 + Z, 3, 0.4, 3, 0x4f8dff, { studs: false, noRoute: true });                 // plateforme du plongeoir
+  box(-56.5, 6.25, -8 + Z, 3.4, 0.14, 0.8, 0xffffff, { studs: false, noRoute: true });           // planche du plongeoir
   for (const [x, z] of [[-45, -16.5], [-57, -16.5], [-45, 0.5], [-57, 0.5]]) tree(x, 0, z + Z, 0x3fae4a);
   coin(-51, 6.3, -8 + Z); coin(-51, 2.4, -14.25 + Z); coin(-51, 2.4, -1.75 + Z);
   city.water = { x1: -57, x2: -45, z1: -12.5 + Z, z2: -3.5 + Z, top: 2.0 };
@@ -5234,7 +5239,7 @@ function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-v
     marque(o.x - o.w / 2 - m, o.x + o.w / 2 + m, o.z - o.d / 2 - m, o.z + o.d / 2 + m);
   }
   for (const b of city.batiments) marque(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
-  if (RALLY.mesh && !pieton) marque(RALLY.x1, RALLY.x2, RALLY.z1, RALLY.z2);   // dunes du rallye : interdites aux voitures
+  if (RALLY.mesh && !pieton) marque(RALLY.x1 - m, RALLY.x2 + m, RALLY.z1 - m, RALLY.z2 + m);   // dunes du rallye : interdites aux voitures
   if (pieton) NAV.pieton = bl; else NAV.blocked = bl;
 }
 function navCell(x, z) { return [clamp(Math.round((x - NAV.x0) / NAV.cs), 0, NAV.nx - 1), clamp(Math.round((z - NAV.z0) / NAV.cs), 0, NAV.nz - 1)]; }
@@ -5658,7 +5663,11 @@ function policeTick(dt) {
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
     if (!pc.route || simTime > (pc.routeT || 0) || Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6) {
       pc.routeT = simTime + 2.5; pc.routeTx = tx; pc.routeTz = tz;
-      const path = navPath(pc.x, pc.z, tx, tz); pc.route = path && path.length ? (path.reached ? path.concat([[tx, tz]]) : path) : [[tx, tz]];
+      const path = navPath(pc.x, pc.z, tx, tz);
+      // cible posée sur le sable du rallye : on s'arrête au bord (sinon le dernier segment
+      // était une ligne droite en plein milieu des dunes)
+      const surSable = !!RALLY.mesh && terrainH(tx, tz) != null;
+      pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]);
     }
     while (pc.route.length > 1 && Math.hypot(pc.route[0][0] - pc.x, pc.route[0][1] - pc.z) < 2.6) pc.route.shift();
     const wp = pc.route[0], dx = wp[0] - pc.x, dz = wp[1] - pc.z, want = Math.atan2(dx, dz);
@@ -5685,7 +5694,13 @@ function policeTick(dt) {
       if (pc.stuck > 2.5 && (pc.revT || 0) < simTime) { pc.stuck = 0; pc.revT = simTime + 1.2; pc.route = null; pc.stuckTot = (pc.stuckTot || 0) + 1; }
       if ((pc.stuckTot || 0) >= 5 && pc.active && dist > 20) { pc.stuckTot = 0; const [ms] = nearS(tx, tz); const [lx, lz] = loopPos(ms); pc.x = lx; pc.z = lz; pc.route = null; pc.speed = 2; msg('🚔 Des renforts arrivent !', 1200); }   // vraiment coincée : renforts sur l'anneau routier
     } else pc.stuck = Math.max(0, (pc.stuck || 0) - dt * 0.5);
-    pc.y = groundCar(pc.x, pc.z, pc.solid, pc.y || 0); pc.g.position.set(pc.x, pc.y, pc.z);   // groundCar : le relief du rallye compte, sinon la voiture roulait SOUS le sable pc.g.rotation.y = pc.h; pc.wheels.forEach(w => w.rotation.x -= pc.speed * dt / 0.3); vehicleSolid(pc);
+    // groundCar : le relief du rallye compte, sinon la voiture roulait SOUS le sable
+    pc.y = groundCar(pc.x, pc.z, pc.solid, pc.y || 0);
+    pc.g.position.set(pc.x, pc.y, pc.z); pc.g.rotation.y = pc.h;
+    { const av = groundCar(pc.x + Math.sin(pc.h) * 2, pc.z + Math.cos(pc.h) * 2, pc.solid, pc.y + 1);   // inclinaison sur la pente
+      const ar = groundCar(pc.x - Math.sin(pc.h) * 2, pc.z - Math.cos(pc.h) * 2, pc.solid, pc.y + 1);
+      pc.g.rotation.x = clamp(Math.atan2(ar - av, 4), -0.5, 0.5); }
+    pc.wheels.forEach(w => w.rotation.x -= pc.speed * dt / 0.3); vehicleSolid(pc);
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
     const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;

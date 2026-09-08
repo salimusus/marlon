@@ -2931,6 +2931,25 @@ test("la boutique « maison & déco » s'est étoffée, alarme comprise", async 
   return { ok, detail: `${r.n} articles de décoration, tous modélisés en 3D (${r.murals} à accrocher au mur), l'alarme « ${r.alarme && r.alarme.n} » à ${r.alarme && r.alarme.p} 🪙, aucun doublon ni article sans prix` };
 });
 
+test("aucun commentaire n'avale du code (le piège qui a coulé le nageur et figé la police)", async p => {
+  const src = fs.readFileSync(process.argv[2] || path.join(ROOT, 'index.html'), 'utf8');
+  const i = src.lastIndexOf('<script>'), j = src.lastIndexOf('</script>');
+  const lignes = src.slice(i + 8, j).split('\n');
+  const INSTRUCTION = /^\s*[A-Za-z_$][\w.$\[\]]*\s*(\(|[-+*/]?=[^=])/;
+  const suspects = [];
+  lignes.forEach((l, k) => {
+    const m = /(?<![:"'`\/])\/\/(?!\/)(.*)$/.exec(l);
+    if (!m) return;
+    const c = m[1];
+    if (!c.includes(';') || /https?:/.test(c)) return;
+    if (!c.split(';').slice(1).some(x => INSTRUCTION.test(x) && (x.includes('.') || x.includes('(')))) return;
+    suspects.push(k + 1);
+  });
+  return { ok: suspects.length === 0,
+    detail: suspects.length ? `lignes où un // avale du code : ${suspects.join(', ')}`
+      : `${lignes.length} lignes relues : aucun bout de code caché derrière un commentaire de fin de ligne` };
+});
+
 test('la ville se répare : vitrines remplacées, véhicules et hélico ramenés à leur place', async p => {
   const r = await p.evaluate(async () => {
     __SHOT.go({ world: 4, x: -19, y: 1, z: 12, hour: 12 });

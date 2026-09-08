@@ -840,7 +840,7 @@ function box(x, y, z, w, h, d, color, opt = {}) {
 }
 function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un véhicule (dalles, parking, parc…)
   let top = 0;
-  for (const o of solids) { if (o === self || o.veh || o.bar || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
+  for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
   return top;
 }
 function settleVehicle(c) { c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.y = c.y; if (c.solid) c.solid.y = c.y + 0.7; }
@@ -7396,8 +7396,43 @@ function commandeSociale(txt) {
   return false;
 }
 
+// ---- grille spatiale des solides ----
+// Parcourir les 2 400 solides de la ville à chaque test de collision coûtait 0,3 ms par appel,
+// soit une vingtaine de millisecondes par image rien que pour faire marcher les bots et les
+// gangs. On range les solides dans des cases de 12 m et on ne teste plus que la case utile.
+const SGRID = { cs: 12, x0: -216, z0: -96, nx: 36, nz: 32, cells: null, n: -1, t: -99 };
+const SVIDE = [];
+function buildSGrid() {
+  const { cs, x0, z0, nx, nz } = SGRID, cells = new Array(nx * nz);
+  for (const o of solids) {
+    const i1 = Math.max(0, Math.floor((o.x - o.w / 2 - x0) / cs)), i2 = Math.min(nx - 1, Math.floor((o.x + o.w / 2 - x0) / cs));
+    const j1 = Math.max(0, Math.floor((o.z - o.d / 2 - z0) / cs)), j2 = Math.min(nz - 1, Math.floor((o.z + o.d / 2 - z0) / cs));
+    for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const k = j * nx + i; (cells[k] || (cells[k] = [])).push(o); }
+  }
+  SGRID.cells = cells; SGRID.n = solids.length; SGRID.t = simTime;
+}
+function solidsPres(x, z) {   // les solides de la case qui contient ce point (liste complète hors grille)
+  if (!SGRID.cells || solids.length !== SGRID.n || simTime - SGRID.t > 1) buildSGrid();
+  const { cs, x0, z0, nx, nz } = SGRID;
+  const i = Math.floor((x - x0) / cs), j = Math.floor((z - z0) / cs);
+  if (i < 0 || j < 0 || i >= nx || j >= nz) return solids;
+  return SGRID.cells[j * nx + i] || SVIDE;
+}
+// Même chose pour une BOÎTE (un véhicule) : on rassemble les cases qu'elle touche. Un même
+// solide peut revenir deux fois si la boîte chevauche deux cases : sans conséquence ici.
+function solidsAutour(x, z, r) {
+  if (!SGRID.cells || solids.length !== SGRID.n || simTime - SGRID.t > 1) buildSGrid();
+  const { cs, x0, z0, nx, nz } = SGRID;
+  const i1 = Math.floor((x - r - x0) / cs), i2 = Math.floor((x + r - x0) / cs);
+  const j1 = Math.floor((z - r - z0) / cs), j2 = Math.floor((z + r - z0) / cs);
+  if (i1 < 0 || j1 < 0 || i2 >= nx || j2 >= nz) return solids;
+  if (i1 === i2 && j1 === j2) return SGRID.cells[j1 * nx + i1] || SVIDE;
+  const out = [];
+  for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
+  return out;
+}
 function npcBlocked(x, y, z, hw = 0.4) {   // un personnage (bot, garde, animal) heurte-t-il un obstacle ?
-  for (const o of solids) { if (o.veh || o.bar) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
+  for (const o of solidsPres(x, z)) { if (o.veh || o.bar) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
   return false;
 }
 function npcMove(obj, dx, dz, hw) {   // déplacement axe par axe avec blocage ; renvoie vrai si bloqué
@@ -7557,7 +7592,7 @@ const isSolid = o => !(o.blink && !o.mesh.visible);
 
 function moveAxis(axis, amount, canStep) {
   P.pos[axis] += amount;
-  for (const o of solids) {
+  for (const o of solidsAutour(P.pos.x, P.pos.z, 2)) {   // grille spatiale : on ne teste que les solides du coin
     if (!isSolid(o) || !overlaps(o, P.pos.x, P.pos.y, P.pos.z)) continue;
     if (axis === 'y') {
       if (amount <= 0) {
@@ -7757,7 +7792,7 @@ function vehHalf(c) {
 function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   const deux = h != null && L > 0.05, sn = deux ? Math.sin(h) * L : 0, cs = deux ? Math.cos(h) * L : 0;
   const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
-  for (const o of solids) {
+  for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L))) {
     if (o === self) continue;
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
     if (o.veh && !opt.veh) continue; if (o.bar && !opt.bar) continue;   // par défaut : véhicules gérés à part, barrières par le couloir de piste
@@ -7823,7 +7858,7 @@ function exitCar() {
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)
   let top = 0;
-  for (const o of solids) {
+  for (const o of solidsAutour(x, z, 3)) {
     if (o === self || o.h > 30) continue;
     if (x > o.x - o.w / 2 - 0.9 && x < o.x + o.w / 2 + 0.9 && z > o.z - o.d / 2 - 0.9 && z < o.z + o.d / 2 + 0.9) top = Math.max(top, o.y + o.h / 2);
   }
@@ -7832,7 +7867,7 @@ function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour pos
 const hrace = { on: false, next: 0, t0: 0 };
 function heliBlocked(x, y, z, c) {   // l'hélico est une boîte (selon son orientation) ; on teste tous les solides sauf le sien
   const W = 2.6, D = 6.4, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h)), hw = (W * cs + D * sn) / 2 * 0.85, hd = (W * sn + D * cs) / 2 * 0.85, y0 = y + 0.15, y1 = y + 2.9;
-  for (const o of solids) {
+  for (const o of solidsAutour(x, z, Math.max(hw, hd) + 1)) {
     if (o === c.solid || o.h > 30) continue;
     if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && y1 > o.y - o.h / 2 && y0 < o.y + o.h / 2 && z + hd > o.z - o.d / 2 && z - hd < o.z + o.d / 2) return o;
   }
@@ -8658,7 +8693,8 @@ function rayBox(ox, oy, oz, dx, dy, dz, cx, cy, cz, hx, hy, hz, maxD) {
 // Premier solide rencontré le long d'un rayon (un seul passage sur la liste).
 function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
   let best = maxD, hit = null;
-  for (const o of solids) {
+  // on ne balaie que les cases traversées par le rayon (au lieu des 2 400 solides de la ville)
+  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, Math.abs(maxD) / 2 + 3)) {
     if (o.h > 30 || o.veh) continue;
     if (ignoreVitres && o.glass) continue;
     const t = rayBox(ox, oy, oz, dx, dy, dz, o.x, o.y, o.z,
@@ -8672,7 +8708,7 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
 function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const R = 0.3, out = dirs.map(() => maxD);
-  for (const o of solids) {
+  for (const o of solidsAutour(ox, oz, maxD + 1)) {
     if (o === skip || o.glass || o.h > 30 || o.veh) continue;
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
     if (o.y + hy < oy - 1.4) continue;   // sol et petits meubles : la caméra passe au-dessus

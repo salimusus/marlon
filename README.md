@@ -7,8 +7,14 @@ navigateur et on joue.
 - 4 parcours d'obstacles + une grande ville (banque, commissariat, villas, cinéma,
   armurerie, école, hôpital, parc, plage, circuit de course…)
 - Véhicules, hélicoptère, jet-ski, parachute et deltaplane
-- Amis bots qui obéissent aux ordres écrits ou dictés au micro, chien à adopter
-- Braquages, police, armée, mode zombie nocturne
+- Garage custom : peinture (toutes couleurs, métallisé, fluo), aileron, jupes, grosses
+  jantes, becquet, vitres teintées, nom sur la portière, double échappement, caisse
+  rabaissée, moteur apparent, trois moteurs (100/300/500 ch), amortisseurs et nitro
+- Douze habitants qui vivent leur vie : tennis, foot, vélo, moto, cinéma, plage — et
+  parfois un chapardage ou un braquage
+- Amis bots qui obéissent aux ordres écrits ou dictés au micro (jusqu'à « tire pour me
+  protéger »), chien à adopter
+- Braquages, police et armée
 - Multijoueur en pair à pair (PeerJS), chacun sur son appareil
 
 ## Jouer

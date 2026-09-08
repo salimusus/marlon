@@ -1265,94 +1265,6 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
     detail: `état : ${JSON.stringify(etat)} · double appui → course (énergie ${vite.e} %, ${apres.couru} images de course) · jauge tombée à ${apres.mini} % : essoufflé=${apres.vu}, course coupée=${apres.coupe} · après repos : ${fin.e} % et on peut recourir` };
 });
 
-test('la nuit des zombies démarre depuis la prison avec son décor', async p => {
-  const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
-    __G.jail.on = true;
-    __G.zombieStart(1);
-    const z = __G.zombie, kinds = {};
-    z.zoms.forEach(o => { kinds[o.kind] = (kinds[o.kind] || 0) + 1; });
-    const dep = Math.hypot(__G.P.pos.x - __G.police.station.x, __G.P.pos.z - (__G.police.station.z - 22));
-    // le départ doit être DEHORS : on mesure la surface libre autour (la cellule est fermée)
-    const aire = pt => { const vus = new Set(); const pile = [[Math.round(pt[0]), Math.round(pt[1])]]; let n = 0;
-      while (pile.length && n < 400) { const [x, z] = pile.pop(); const k = x + ',' + z;
-        if (vus.has(k)) continue; vus.add(k);
-        if (__G.npcBlocked(x, 0.3, z, 0.42)) continue; n++;
-        pile.push([x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]); }
-      return n; };
-    const aireDepart = aire(__G.zombie.depart), aireCellule = aire([__G.police.station.x, __G.police.station.z - 13]);
-    __G.zombieTick(1 / 60);
-    return { on: z.on, zoms: z.zoms.length, kinds, deco: z.deco.length, chauves: (z.bats || []).length,
-      arme: __G.P.weapon, dep: +dep.toFixed(1), but: z.but, neige: __G.meteo.kind, lune: !!(z.lune && z.lune.visible),
-      horloge: document.getElementById('clock').textContent, niveaux: __G.ZOM_NIV.length, aireDepart, aireCellule,
-      bots: __G.bots.every(b => b.av.mats.skin.color.getHex() !== 0xf5c39a) };
-  });
-  const ok = r.on && r.zoms >= 30 && r.kinds.lent > 0 && r.kinds.rapide > 0 && r.kinds.immobile > 0
-    && r.deco > 60 && r.chauves > 6 && r.arme === 'pistol' && r.dep < 2 && r.neige === 'neige' && r.lune
-    && r.niveaux === 3 && r.bots && r.horloge.includes('zombie') && r.aireDepart >= 400 && r.aireCellule < 120;
-  return { ok, detail: `${r.zoms} zombies (${r.kinds.lent} lents, ${r.kinds.immobile} immobiles, ${r.kinds.rapide} rapides) · ${r.deco} décors + ${r.chauves} chauves-souris · départ devant le commissariat (${r.dep} m) et non plus dans la cellule (surface libre ${r.aireDepart} cases contre ${r.aireCellule} dans la cellule) · objectif ${r.but} · neige=${r.neige}, pleine lune=${r.lune} · ${r.niveaux} difficultés` };
-});
-
-test('le zombie rapide attrape le marcheur mais pas le coureur', async p => {
-  const r = await p.evaluate(() => {
-    const z = __G.zombie;
-    const r2 = z.zoms.find(o => o.kind === 'rapide' && !o.mort);
-    z.zoms = [r2];   // un seul zombie pour mesurer proprement
-    __G.P.pos.set(0, 0.4, 40); r2.x = 8; r2.z = 40; r2.y = __G.P.pos.y; r2.chasse = false; r2.cd = 0;
-    __G.P.court = false; __G.P.devore = false; z.mange = null; __G.P.vel.set(1.5, 0, 0);
-    for (let i = 0; i < 150; i++) __G.zombieTick(1 / 60);
-    const marche = { chasse: r2.chasse, pris: !!z.mange, d: +Math.hypot(r2.x - __G.P.pos.x, r2.z - __G.P.pos.z).toFixed(2) };
-    z.mange = null; __G.P.devore = false; r2.cd = 0; r2.x = __G.P.pos.x + 1; r2.z = __G.P.pos.z;
-    __G.P.court = true;
-    for (let i = 0; i < 240; i++) __G.zombieTick(1 / 60);
-    const course = { pris: !!z.mange, d: +Math.hypot(r2.x - __G.P.pos.x, r2.z - __G.P.pos.z).toFixed(2) };
-    z.mange = null; __G.P.devore = false; __G.P.court = false;
-    return { marche, course };
-  });
-  const ok = r.marche.chasse && r.marche.pris && !r.course.pris;
-  return { ok, detail: `au pas : repéré=${r.marche.chasse}, attrapé=${r.marche.pris} (à ${r.marche.d} m) · en courant : attrapé=${r.course.pris} même collé à ${r.course.d} m` };
-});
-
-test('trois balles dans le corps ou une seule dans la tête', async p => {
-  const r = await p.evaluate(() => {
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI(); __G.jail.on = true; __G.zombieStart(1);
-    const z = __G.zombie; z.mange = null; __G.P.devore = false;
-    __G.P.pos.set(0, 0.4, 40);
-    const a = z.zoms.find(o => !o.mort), b = z.zoms.filter(o => !o.mort && o !== a)[0];
-    const tirer = (cible, hy) => { cible.x = __G.P.pos.x; cible.z = __G.P.pos.z + 6; cible.y = __G.P.pos.y;
-      const s = { m: null, p: new __G.THREE.Vector3(__G.P.pos.x, __G.P.pos.y + 1, __G.P.pos.z),
-        v: new __G.THREE.Vector3(0, (cible.y + hy - (__G.P.pos.y + 1)) / 6 * 95, 95), t: 0, mine: true, dmg: 24 };
-      __G.shots.push(s); __G.spawnShot(s); for (let i = 0; i < 40; i++) __G.shotsTick(1 / 120); };
-    a.hp = 3; a.mort = false; b.hp = 3; b.mort = false;
-    // les zombies n'ont plus tous la même taille : on vise d'après leur propre boîte
-    const corpsA = a.boite.corps[0], teteB = b.boite.tete[0];
-    tirer(a, corpsA); const un = a.hp, mort1 = a.mort;
-    tirer(a, corpsA); tirer(a, corpsA); const mort3 = a.mort;
-    b.x = 1e5; tirer(b, 0);   // on écarte l'autre pendant les tirs sur a
-    b.hp = 3; b.mort = false;
-    tirer(b, teteB); const tete = b.mort;
-    return { un, mort1, mort3, tete, tues: z.tues };
-  });
-  const ok = r.un === 2 && !r.mort1 && r.mort3 && r.tete;
-  return { ok, detail: `1 balle dans le corps : 3 → ${r.un} points, encore debout=${!r.mort1} · abattu à la 3ᵉ=${r.mort3} · abattu d'une seule balle dans la tête=${r.tete}` };
-});
-
-test('atteindre la villa libère de prison et remet tout en ordre', async p => {
-  const r = await p.evaluate(() => {
-    if (!__G.zombie.on) { __G.jail.on = true; __G.zombieStart(1); }
-    __G.jail.on = true;
-    const avant = { zoms: __G.zombie.zoms.length, deco: __G.zombie.deco.length, sous: __G.wallet };
-    __G.P.pos.set(60, 0.4, 168); __G.P.devore = false; __G.zombie.mange = null;
-    __G.zombieTick(1 / 60);
-    const skin = __G.bots.map(b => b.av.mats.skin.color.getHex());
-    return { avant, on: __G.zombie.on, jail: __G.jail.on, zoms: __G.zombie.zoms.length, deco: __G.zombie.deco.length,
-      gain: __G.wallet - avant.sous, peau: skin.every(h => h === 0xf5c39a), lune: !!(__G.zombie.lune && __G.zombie.lune.visible),
-      tags: __G.bots.every(b => b.av.tag.visible), meteo: __G.meteo.kind };
-  });
-  const ok = !r.on && !r.jail && r.zoms === 0 && r.deco === 0 && r.gain > 0 && r.peau && !r.lune && r.tags && r.meteo === 'clair';
-  return { ok, detail: `${r.avant.zoms} zombies et ${r.avant.deco} décors retirés · sorti de prison=${!r.jail} · prime +${r.gain} 🪙 · bots redevenus normaux (peau=${r.peau}, noms=${r.tags}) · lune éteinte, météo « ${r.meteo} »` };
-});
-
 test('la caméra colle aux murs sans les traverser, et se baisse sous les plafonds bas', async p => {
   const lis = async (x, y, z, cond) => {
     // orientation figée : sinon la caméra peut tomber sur un arbre et la mesure danse
@@ -1592,84 +1504,6 @@ test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecte
     && r.av.texte.includes('ARMÉE') && r.dHeli != null && r.dHeli < 18 && (r.tirs > 0 || r.degats > 0)
     && !r.apres.on && r.apres.mil === 0 && r.apres.agents === 0;
   return { ok, detail: `policier abattu en ${r.coups} balles · armée déployée : ${r.av.mil} 4×4 + hélicoptère (projecteur=${r.av.tache}), niveau ${r.av.wanted}★ · l'hélico tourne à ${r.dHeli} m du joueur · ils tirent (${r.tirs} balles en vol, ${r.degats} PV perdus) · tout est nettoyé à la fin (armée=${r.apres.on}, 4×4=${r.apres.mil})` };
-});
-
-test('la nuit des zombies est noire : lune, lampadaires et éclairs', async p => {
-  const r = await p.evaluate(async () => {
-    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
-    await dodo(300);
-    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.jail.on = true; __G.zombieStart(1);
-    await dodo(2200);
-    const lum = { sun: +__G.sun.intensity.toFixed(2), hemi: +__G.hemi.intensity.toFixed(2),
-      ciel: __G.scene.background.getHexString(), far: __G.scene.fog.far };
-    const halos = __G.day.glows.filter(s => s.visible).length, flaques = __G.zombie.flaques.filter(f => f.m.visible).length;
-    // éclair : on force le prochain et on regarde la lumière bondir
-    __G.zombie.eclairT = 0; __G.zombie.eclair = 0;
-    const pic = { sun: 0, hemi: 0 };
-    for (let i = 0; i < 20; i++) { __G.simTime += 0.02; __G.zombieTick(1 / 60);
-      pic.sun = Math.max(pic.sun, +__G.sun.intensity.toFixed(2)); pic.hemi = Math.max(pic.hemi, +__G.hemi.intensity.toFixed(2)); }
-    const lune = !!(__G.zombie.lune && __G.zombie.lune.visible);
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    await dodo(600);
-    const apres = { halos: __G.day.glows.filter(s => s.visible).length, flaques: __G.zombie.flaques.length };
-    return { lum, halos, flaques, pic, lune, apres };
-  });
-  const noir = parseInt(r.lum.ciel, 16);
-  const ok = r.lum.sun < 0.2 && r.lum.hemi < 0.2 && noir < 0x202020 && r.halos > 40 && r.flaques > 20
-    && r.lune && r.pic.hemi > r.lum.hemi + 0.5 && r.apres.halos === 0 && r.apres.flaques === 0;
-  return { ok, detail: `lune + lampadaires seulement : soleil ${r.lum.sun}, ambiance ${r.lum.hemi}, ciel #${r.lum.ciel}, brouillard à ${r.lum.far} m · ${r.halos} halos de lampadaires et ${r.flaques} flaques de lumière au sol · éclair : ambiance ${r.lum.hemi} → ${r.pic.hemi} · tout s'éteint à la fin (${r.apres.halos} halos)` };
-});
-
-test('des zombies de toutes tailles, mutilés et sanglants', async p => {
-  const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
-    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.zombieStart(2);
-    const zs = __G.zombie.zoms;
-    const tailles = {}; zs.forEach(z => { tailles[z.taille] = (tailles[z.taille] || 0) + 1; });
-    const ech = zs.map(z => z.ech);
-    const res = { n: zs.length, tailles, mini: Math.min(...ech), maxi: Math.max(...ech),
-      rampants: zs.filter(z => z.rampe).length, manchots: zs.filter(z => z.manchot).length,
-      borgnes: zs.filter(z => z.borgne).length,
-      extras: Math.round(zs.reduce((a, z) => a + z.extras.length, 0) / zs.length),
-      brasCaches: zs.filter(z => z.manchot && z.brasCache && !z.brasCache.visible).length,
-      // la boîte de tir suit le gabarit
-      boites: zs.every(z => z.boite && z.boite.tete[0] > 0.3 && z.boite.corps[0] > 0.2),
-      petitTete: Math.min(...zs.map(z => z.boite.tete[0])), grandTete: Math.max(...zs.map(z => z.boite.tete[0])) };
-    const bots = __G.bots.length;
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    res.remis = __G.bots.every(b => b.av.group.scale.x === 1 && b.av.rig.armL.visible && b.av.rig.armR.visible
-      && b.av.mats.skin.color.getHex() === 0xf5c39a);
-    res.pourquoi = __G.bots.map(b => [+b.av.group.scale.x.toFixed(2), b.av.rig.armL.visible, b.av.rig.armR.visible,
-      b.av.mats.skin.color.getHexString()]).filter(a => a[0] !== 1 || !a[1] || !a[2] || a[3] !== 'f5c39a');
-    res.bots = bots;
-    return res;
-  });
-  const ok = r.n > 30 && Object.keys(r.tailles).length >= 3 && r.maxi > r.mini + 0.3 && r.rampants > 0
-    && r.manchots > 0 && r.borgnes > 0 && r.extras >= 6 && r.brasCaches === r.manchots && r.boites
-    && r.grandTete > r.petitTete + 0.3 && r.remis;
-  return { ok, detail: `${r.n} zombies : ${Object.entries(r.tailles).map(([k, v]) => v + ' ' + k).join(', ')} (échelle ${r.mini} → ${r.maxi}) · ${r.rampants} rampent, ${r.manchots} ont un bras arraché, ${r.borgnes} sont borgnes · ${r.extras} détails sanglants par zombie en moyenne · boîtes de tir à l'échelle (tête de ${r.petitTete} à ${r.grandTete} m) · les ${r.bots} bots redeviennent normaux=${r.remis}${r.remis ? '' : ' ' + JSON.stringify(r.pourquoi)}` };
-});
-
-test('la ville d\'horreur : bidons enflammés, tombes, mains et carcasses', async p => {
-  const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
-    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.jail.on = true; __G.zombieStart(1);
-    const deco = __G.zombie.deco;
-    const feux = deco.filter(g => g.userData.feu).length, bougies = deco.filter(g => g.userData.flamme).length;
-    // les flammes bougent d'une image à l'autre
-    const f0 = deco.find(g => g.userData.feu);
-    const a = f0.userData.feu.scale.y; __G.simTime += 0.2; __G.zombieTick(1 / 60);
-    const b = f0.userData.feu.scale.y;
-    const n = deco.length, bats = __G.zombie.bats.length;
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    return { n, feux, bougies, anime: Math.abs(a - b) > 0.01, bats, reste: __G.zombie.deco.length };
-  });
-  const ok = r.n > 150 && r.feux >= 8 && r.bougies > 0 && r.anime && r.bats > 12 && r.reste === 0;
-  return { ok, detail: `${r.n} éléments de décor dont ${r.feux} bidons/carcasses en feu et ${r.bougies} bougies · les flammes vacillent=${r.anime} · ${r.bats} chauves-souris · tout est retiré à la fin (${r.reste})` };
 });
 
 test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
@@ -2109,88 +1943,6 @@ test('on voit le joueur voler : suspendu sous la voilure, à plat ventre sous l\
   return { ok, detail: `parachute : ${r.para.pieces} pièces (voilure de ${r.para.toiles} morceaux à ${r.para.hautVoile} m au-dessus), joueur debout dans le harnais (inclinaison ${r.para.inclinaison}, bras levés ${r.para.bras}) · deltaplane : aile de ${r.delta.toiles} morceaux, joueur à plat ventre (inclinaison ${r.delta.inclinaison}) tête ${r.delta.teteDevant} m devant lui · rig remis à zéro après=${r.apres.rot === 0 && r.apres.bras === 0}` };
 });
 
-test('les morts-vivants ont mâchoire, dents, os à nu et chairs pourries', async p => {
-  const r = await p.evaluate(async () => {
-    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
-    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.zombieStart(2);
-    const zs = __G.zombie.zoms;
-    const res = { n: zs.length,
-      machoires: zs.filter(z => z.machoire).length,
-      eventres: zs.filter(z => z.eventre).length,
-      details: Math.round(zs.reduce((a, z) => a + z.extras.length, 0) / zs.length),
-      mini: Math.min(...zs.map(z => z.extras.length)),
-      maillotEfface: zs.every(z => !z.av.mats.front.map && !z.av.mats.back.map) };
-    // la mâchoire bouge d'une image à l'autre
-    const z0 = zs.find(z => !z.rampe);
-    __G.zombie.mange = null; __G.P.devore = false;
-    z0.chasse = true; const a1 = z0.machoire.rotation.x;
-    await dodo(500); const a2 = z0.machoire.rotation.x;
-    res.machoireBouge = Math.abs(a2 - a1) > 0.01;
-    const botZ = zs.filter(z => z.bot);
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    res.maillotRendu = botZ.every(z => z.av.mats.front.map && z.av.mats.back.map);
-    res.plusDeGore = __G.bots.every(b => { let n = 0; b.av.rig.head.traverse(() => n++); return n < 40; });
-    res.bots = botZ.length;
-    return res;
-  });
-  const ok = r.n > 20 && r.machoires === r.n && r.eventres > 0 && r.details >= 15 && r.mini >= 10
-    && r.maillotEfface && r.machoireBouge && r.maillotRendu && r.plusDeGore;
-  return { ok, detail: `${r.n} zombies, ${r.details} morceaux de gore chacun en moyenne (au moins ${r.mini}) · ${r.machoires} mâchoires articulées qui claquent=${r.machoireBouge} · ${r.eventres} éventrés côtes à nu · maillot imprimé effacé=${r.maillotEfface} et rendu aux ${r.bots} bots à la fin=${r.maillotRendu}` };
-});
-
-test('le zombie s\'agenouille et plante sa bouche sur le ventre du joueur allongé', async p => {
-  const r = await p.evaluate(async () => {
-    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    const THREE = __G.THREE;
-    __SHOT.go({ world: 4, x: -54, y: 1, z: 6, hour: 12 });
-    if (__G.zombie.on) __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    __G.zombieStart(1);
-    await dodo(600);
-    if (__G.uiOpen) __G.closeUI();   // un écran de prison en retard mettrait le jeu en pause
-    __G.P.facing = 1.1;
-    const z = __G.zombie.zoms.find(o => !o.mort && !o.rampe);
-    // un zombie rapide a pu attraper le joueur pendant l'attente : on repart d'une page blanche
-    __G.zombie.mange = null; __G.P.devore = false; __G.P.hp = 100;
-    z.cd = 0; z.x = __G.P.pos.x + 1; z.z = __G.P.pos.z;
-    __G.zombieAttrape(z);
-    __G.zombie.mangeT = __G.simTime + 60;
-    const t0 = __G.simTime;
-    await dodo(700);
-    const memeZombie = __G.zombie.mange === z;
-    if (!memeZombie || __G.simTime === t0 || __G.uiOpen) return { rate: true, mange: !!__G.zombie.mange, meme: memeZombie,
-      hp: Math.round(__G.P.hp), on: __G.zombie.on, ui: __G.uiOpen, fige: __G.simTime === t0 };
-    __G.me.group.updateMatrixWorld(true); z.av.group.updateMatrixWorld(true);
-    const ventre = __G.me.torso.localToWorld(new THREE.Vector3(0, -0.13, 0.2));
-    const bouche = z.av.rig.head.localToWorld(new THREE.Vector3(0, 0.11, 0.3));
-    const tete = __G.me.rig.head.getWorldPosition(new THREE.Vector3());
-    const f = __G.P.facing;
-    const devant = (tete.x - __G.P.pos.x) * Math.sin(f) + (tete.z - __G.P.pos.z) * Math.cos(f);
-    const pied = z.av.rig.legL.localToWorld(new THREE.Vector3(0, -0.72, 0));
-    const sol = __G.groundUnder(z.av.group.position.x, z.av.group.position.z, null, 3);
-    const res = {
-      ecart: +ventre.distanceTo(bouche).toFixed(3),
-      corpsAplat: +__G.me.group.rotation.x.toFixed(2), teteDevant: +devant.toFixed(2),
-      busteFlechi: +z.av.group.rotation.x.toFixed(2),
-      jambesRepliees: +z.av.rig.legL.rotation.x.toFixed(2),
-      genouAuSol: +(pied.y - sol).toFixed(2),
-      machoire: +z.machoire.rotation.x.toFixed(2),
-    };
-    // on se dégage : le zombie se relève
-    __G.zombie.luttes = 99; await dodo(500);
-    res.releve = +z.av.group.rotation.x.toFixed(2);
-    res.libere = !__G.P.devore && !__G.zombie.mange;
-    res.dosDroit = +z.av.rig.head.rotation.x.toFixed(2);
-    __G.zombieFin(false); __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    return res;
-  });
-  if (r.rate) return { ok: false, detail: `le zombie visé n'a pas mordu (même zombie=${r.meme}, un autre mange=${r.mange}, PV ${r.hp}, mode zombie=${r.on}, fenêtre ouverte=${r.ui}, horloge figée=${r.fige})` };
-  const ok = r.ecart < 0.2 && Math.abs(r.corpsAplat + Math.PI / 2) < 0.05 && r.teteDevant > 1
-    && r.busteFlechi > 0.7 && r.genouAuSol < 0.35 && r.libere && Math.abs(r.releve) < 0.3 && Math.abs(r.dosDroit) < 0.3;
-  return { ok, detail: `bouche du zombie à ${r.ecart} m du ventre du joueur · joueur couché à plat (${r.corpsAplat} rad) tête ${r.teteDevant} m devant ses pieds · zombie à genoux : buste fléchi ${r.busteFlechi} rad, jambes ${r.jambesRepliees}, genou à ${r.genouAuSol} m du sol, mâchoire ouverte ${r.machoire} · dégagé après la lutte=${r.libere}, le zombie se redresse (buste ${r.releve}, nuque ${r.dosDroit})` };
-});
-
 test('le fusil à lunette se porte dans le dos, comme le fusil d\'assaut', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
@@ -2475,6 +2227,290 @@ test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
   });
   const ok = r.rempli === 'KLMN' && /KLMN/.test(r.statut) && r.man.on && r.man.code === 'WXYZ' && r.hashVide;
   return { ok, detail: `lien #jeu=KLMN : le code est pré-rempli (« ${r.rempli} ») et la connexion démarre (« ${r.statut} ») · lien #manette=WXYZ : la télécommande s'ouvre avec le code ${r.man.code}` };
+});
+
+test('le mode zombie a bien disparu du jeu', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    const restes = ['zombie', 'zombieStart', 'zombieTick', 'ZOM_NIV', 'makeZombie', 'zomLook', 'ventreDuJoueur']
+      .filter(n => { try { return eval('typeof ' + n) !== 'undefined'; } catch (e) { return false; } });
+    __G.jail.on = true; __G.openJail();
+    const boutons = [...document.querySelectorAll('#jailBtns button')].map(b => b.textContent);
+    __G.closeUI(); __G.jail.on = false;
+    return { restes, boutons, devore: 'devore' in __G.P, hp: __G.P.hp };
+  });
+  const src = require('fs').readFileSync(path.join(ROOT, 'superobby.html'), 'utf8');
+  const mots = (src.match(/zombie|zomb[a-z]*|ZOM_/gi) || []).length;
+  const ok = r.restes.length === 0 && !r.boutons.some(b => /zombie|🧟/i.test(b)) && !r.devore && mots === 0;
+  return { ok, detail: `plus aucun symbole du mode zombie dans le jeu (${r.restes.length} restant${r.restes.length > 1 ? 's' : ''}), ${mots} occurrence${mots > 1 ? 's' : ''} du mot dans le fichier · l'écran de prison propose ${r.boutons.length} boutons, aucun zombie · P.devore supprimé=${!r.devore}` };
+});
+
+test('les policiers portent le bleu marine et les écussons jaunes', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    __G.police.agents = [];
+    const a = __G.creerAgent(112, 62, 0.4, false);
+    const m = __G.creerAgent(115, 62, 0.4, true);
+    const bleu = h => { const c = new __G.THREE.Color(h); return c.b > c.r * 1.4 && c.b > c.g * 1.3 && c.b < 0.5; };
+    const compte = (grp, teinte) => { let n = 0; grp.traverse(o => { if (o.isMesh && o.material && o.material.color && teinte(o.material.color.getHex())) n++; }); return n; };
+    const jaune = h => { const c = new __G.THREE.Color(h); return c.r > 0.85 && c.g > 0.7 && c.b < 0.35; };
+    const res = {
+      corps: ['shirt', 'sleeve', 'front', 'back', 'jacket'].map(k => a.av.mats[k] && a.av.mats[k].color.getHexString()),
+      bleuCorps: ['shirt', 'sleeve', 'front', 'back', 'jacket'].every(k => !a.av.mats[k] || bleu(a.av.mats[k].color.getHex())),
+      jaunes: compte(a.av.group, jaune),
+      surLesBras: compte(a.av.rig.armL, jaune) + compte(a.av.rig.armR, jaune),
+      casque: a.av.hatGroups && a.av.hatGroups.helmet ? compte(a.av.hatGroups.helmet, jaune) : 0,
+      maillotEfface: !a.av.mats.front.map && !a.av.mats.back.map,
+      militaireKaki: !bleu(m.av.mats.shirt.color.getHex()) && compte(m.av.group, jaune) > 4,
+    };
+    __G.police.agents.forEach(x => __G.worldGroup.parent.remove(x.av.group));
+    __G.police.agents = [];
+    return res;
+  });
+  const ok = r.bleuCorps && r.jaunes >= 10 && r.surLesBras >= 6 && r.casque >= 2 && r.maillotEfface && r.militaireKaki;
+  return { ok, detail: `uniforme bleu marine (${r.corps.filter(Boolean).join(', ')}) · ${r.jaunes} pièces jaunes dont ${r.surLesBras} cousues sur les bras (épaulettes et galons) et ${r.casque} sur le casque · maillot de foot effacé=${r.maillotEfface} · les militaires gardent le kaki avec les mêmes marquages=${r.militaireKaki}` };
+});
+
+test('la gazinière de la villa fait une vraie flamme qui vacille', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 168, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(400);
+    const b = __G.city.burners[0];
+    const eteinte = b.fl.visible;
+    let dards = 0, halo = 0;
+    b.fl.traverse(o => { if (o.isMesh) dards++; if (o.isPointLight) halo++; });
+    __G.P.pos.set(__G.city.stove.x, 0.4, __G.city.stove.z); __G.city.stoveNear = true;
+    __G.useStove();
+    const allumee = b.fl.visible;
+    const y0 = b.fl.scale.y; __G.simTime += 0.13; __G.stoveTick(1 / 30);
+    const y1 = b.fl.scale.y; __G.simTime += 0.13; __G.stoveTick(1 / 30);
+    const y2 = b.fl.scale.y;
+    const intensite = b.fl.userData.halo ? +b.fl.userData.halo.intensity.toFixed(2) : 0;
+    __G.useStove();
+    return { eteinte, dards, halo, allumee, apres: b.fl.visible, vacille: y0 !== y1 || y1 !== y2,
+      echelles: [y0, y1, y2].map(v => +v.toFixed(3)), intensite, foyers: __G.city.burners.length };
+  });
+  const ok = !r.eteinte && r.dards >= 20 && r.halo === 1 && r.allumee && !r.apres && r.vacille && r.intensite > 0.5;
+  return { ok, detail: `${r.foyers} foyers · flamme de ${r.dards} dards (bleus au pied, orange en pointe) et ${r.halo} halo lumineux · éteinte au repos=${!r.eteinte}, allumée avec E=${r.allumee}, rééteinte=${!r.apres} · elle vacille : hauteurs ${r.echelles.join(' → ')}, halo à ${r.intensite}` };
+});
+
+test('le garage a déménagé et il est bien plus grand, avec son atelier', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(600);
+    const g = __G.city.garage, d = __G.city.tuneDesk;
+    const z = __G.city.zones.find(x => x.name === 'Garage custom');
+    // rien d'autre ne doit occuper le bâtiment
+    const chevauche = __G.city.zones.filter(x => x !== z && x.name !== 'Départ'
+      && Math.abs((x.x1 + x.x2) / 2 - g.x) < ((x.x2 - x.x1) + 28) / 2
+      && Math.abs((x.z1 + x.z2) / 2 - g.z) < ((x.z2 - x.z1) + 18) / 2).map(x => x.name);
+    __G.P.pos.set(d.x, 0.4, d.z + 1.2); __G.P.vel.set(0, 0, 0);
+    const t0 = __G.simTime;
+    while (__G.simTime - t0 < 0.4) await dodo(120);
+    return { g, d, zone: z ? { w: z.x2 - z.x1, d: z.z2 - z.z1 } : null, chevauche,
+      near: __G.city.tuneNear, surface: 28 * 18 };
+  });
+  const ok = r.g && r.g.x === -46 && r.g.z === 46 && r.surface >= 480 && r.d && r.zone && r.chevauche.length === 0 && r.near;
+  return { ok, detail: `garage déplacé en (${r.g.x}, ${r.g.z}) et agrandi à ${r.surface} m² (contre 99 m² avant) · zone de ${Math.round(r.zone.w)}×${Math.round(r.zone.d)} m sans chevauchement (${r.chevauche.length} voisin) · comptoir d'atelier en (${r.d.x}, ${r.d.z}), détecté quand on s'en approche=${r.near}` };
+});
+
+test('on repeint et on customise sa voiture sans repeindre le décor', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(500);
+    const c = __G.city.cars.find(v => v.bodyMat && !v.kart && !v.heli && !v.rider);
+    const autre = __G.city.cars.find(v => v !== c && v.bodyMat);
+    const avant = { max: c.spec.max, accel: c.spec.accel, turn: c.spec.turn,
+      pieces: c.g.children.length, roue: c.wheels[0].scale.x, couleur: c.bodyMat.color.getHexString(),
+      autre: autre ? autre.bodyMat.color.getHexString() : null, partage: autre ? autre.bodyMat === c.bodyMat : false };
+    __G.wallet = 5000;
+    const t = { couleur: 0x3ef2ff, finition: 'fluo', kits: __G.TUNE_KITS.map(k => k.k), moteur: 2, amorti: 2 };
+    __G.tuneApply(c, t);
+    const apres = { max: +c.spec.max.toFixed(1), accel: +c.spec.accel.toFixed(1), turn: c.spec.turn,
+      ajouts: c.tuneMesh.length, roue: +c.wheels[0].scale.x.toFixed(2),
+      couleur: c.bodyMat.color.getHexString(), brille: c.bodyMat.emissive.getHex() > 0,
+      autre: autre ? autre.bodyMat.color.getHexString() : null,
+      vitres: c.parts.ws.material.color.getHex(), nitro: !!c.nitroPret };
+    // achat au comptoir
+    __G.P.pos.set(__G.city.tuneDesk.x, 0.4, __G.city.tuneDesk.z + 1.2);
+    const sous = __G.wallet;
+    __G.openAtelier();
+    const ouvert = __G.uiOpen === 'atelier';
+    const onglets = document.querySelectorAll('#atelierOnglets b').length;
+    const nuances = (document.querySelectorAll('#atelierCorps .nuancier i') || []).length;
+    __G.tuning.couleur = null; __G.tuning.finition = 'mate'; __G.tuning.kits = [];
+    __G.tuning.moteur = 0; __G.tuning.amorti = 0;
+    __G.closeUI();
+    __G.tuneApply(c, { couleur: null, finition: 'mate', kits: [], moteur: 0, amorti: 0 });
+    const remis = { ajouts: c.tuneMesh.length, roue: c.wheels[0].scale.x, max: c.spec.max };
+    return { avant, apres, remis, ouvert, onglets, nuances, sous,
+      kits: __G.TUNE_KITS.length, moteurs: __G.TUNE_MOTEURS.map(m => m.n), amortis: __G.TUNE_AMORTIS.length,
+      couleurs: __G.TUNE_COULEURS.length, finitions: __G.TUNE_FINITIONS.map(f => f.n) };
+  });
+  const ok = !r.avant.partage && r.apres.couleur === '3ef2ff' && r.apres.autre === r.avant.autre
+    && r.apres.brille && r.apres.ajouts >= 18 && r.apres.roue > 1.1 && r.apres.max > r.avant.max * 1.6
+    && r.apres.turn > r.avant.turn && r.apres.nitro && r.apres.vitres < 0x222222
+    && r.ouvert && r.onglets === 4 && r.nuances >= 20 && r.remis.ajouts === 0 && r.remis.max === r.avant.max
+    && r.couleurs >= 20 && r.kits >= 10 && r.moteurs.length === 3 && r.amortis === 3;
+  return { ok, detail: `${r.couleurs} couleurs, ${r.finitions.join('/')} · ${r.kits} kits posés (${r.apres.ajouts} pièces ajoutées, jantes ×${r.apres.roue}, vitres teintées, nitro=${r.apres.nitro}) · moteur ${r.moteurs.join(' → ')} : pointe ${r.avant.max} → ${r.apres.max}, reprise ${r.avant.accel} → ${r.apres.accel} · ${r.amortis} qualités d'amortisseurs : ${r.avant.turn} → ${r.apres.turn} · la voiture d'à côté garde sa couleur (${r.apres.autre}) · tout se retire proprement=${r.remis.ajouts === 0}` };
+});
+
+test('la nitro pousse fort quelques secondes puis doit se recharger', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -46, y: 1, z: 46, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(400);
+    const c = __G.city.cars.find(v => v.bodyMat && !v.kart && !v.heli && !v.rider);
+    __G.tuneApply(c, { couleur: null, finition: 'mate', kits: [], moteur: 0, amorti: 0 });
+    __G.drive.car = c; __G.drive.speed = 8; __G.drive.nitroT = 0; __G.drive.nitroCd = 0;
+    const sansKit = __G.nitroGo();
+    __G.tuneApply(c, { couleur: null, finition: 'mate', kits: ['nitro'], moteur: 0, amorti: 0 });
+    const flammes = (c.nitroFlammes || []).length;
+    const avant = __G.drive.speed;
+    const lance = __G.nitroGo();
+    let v = avant;
+    for (let i = 0; i < 30; i++) { __G.nitroTick(1 / 30); __G.simTime += 1 / 30; v = __G.drive.speed; }
+    const visible = c.nitroFlammes[0].visible;
+    const encore = __G.nitroGo();          // pendant la recharge : refusé
+    __G.simTime += 4;                       // la poussée s'arrête
+    __G.nitroTick(1 / 30);
+    const apresFin = c.nitroFlammes[0].visible;
+    __G.simTime += 12; const recharge = __G.nitroGo();
+    __G.drive.car = null; __G.drive.speed = 0; __G.drive.nitroT = 0;
+    __G.tuneApply(c, { couleur: null, finition: 'mate', kits: [], moteur: 0, amorti: 0 });
+    return { sansKit, flammes, lance, avant: +avant.toFixed(1), apres: +v.toFixed(1), visible, encore, apresFin, recharge };
+  });
+  const ok = !r.sansKit && r.flammes === 4 && r.lance && r.apres > r.avant * 2 && r.visible
+    && !r.encore && !r.apresFin && r.recharge;
+  return { ok, detail: `sans le kit la nitro ne part pas (${r.sansKit}) · avec le kit : ${r.flammes} flammes aux pots, la vitesse passe de ${r.avant} à ${r.apres} en 1 s et les flammes sortent=${r.visible} · impossible de la relancer tant qu'elle recharge (${r.encore}), les flammes s'éteignent à la fin (${!r.apresFin}) et elle repart après 14 s (${r.recharge})` };
+});
+
+test('le requin blanc a un vrai corps fuselé et le ventre blanc', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    await dodo(500);
+    const sk = __G.city.shark.g;
+    let corps = null, triangles = 0, morceaux = 0;
+    sk.traverse(o => { if (!o.isMesh) return; morceaux++;
+      const g = o.geometry;
+      if (g.type === 'LatheGeometry' || (g.attributes.color && g.attributes.position.count > 100)) corps = g;
+      if (g.attributes.position.count === 3) triangles++; });
+    let dos = null, ventre = null;
+    if (corps && corps.attributes.color) {
+      const pos = corps.attributes.position, col = corps.attributes.color;
+      let hautY = -9, basY = 9, ih = 0, ib = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), r2 = Math.hypot(x, y);
+        if (r2 < 0.3) continue;
+        const t = y / r2;
+        if (t > hautY) { hautY = t; ih = i; }
+        if (t < basY) { basY = t; ib = i; }
+      }
+      dos = [col.getX(ih), col.getY(ih), col.getZ(ih)].map(v => +v.toFixed(2));
+      ventre = [col.getX(ib), col.getY(ib), col.getZ(ib)].map(v => +v.toFixed(2));
+    }
+    // longueur du poisson
+    const bb = new __G.THREE.Box3().setFromObject(sk);
+    return { morceaux, triangles, aCorps: !!corps, sommets: corps ? corps.attributes.position.count : 0,
+      dos, ventre, longueur: +(bb.max.z - bb.min.z).toFixed(1), hauteur: +(bb.max.y - bb.min.y).toFixed(1) };
+  });
+  const clair = c => c && c[0] > 0.8 && c[1] > 0.8 && c[2] > 0.8;
+  const sombre = c => c && c[0] < 0.6 && c[1] < 0.6;
+  const ok = r.aCorps && r.sommets > 150 && r.triangles >= 10 && sombre(r.dos) && clair(r.ventre) && r.longueur > 6;
+  return { ok, detail: `corps tourné d'un seul tenant (${r.sommets} sommets) au lieu de pavés empilés · contre-ombrage peint sommet par sommet : dos ${JSON.stringify(r.dos)}, ventre ${JSON.stringify(r.ventre)} · ${r.triangles} nageoires triangulaires (dorsales, pectorales, pelviennes, anale, caudale en croissant) · ${r.longueur} m de long pour ${r.hauteur} m de haut, ${r.morceaux} morceaux en tout` };
+});
+
+test('un ami tire sur la police et sur les agresseurs pour te protéger', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(400);
+    __G.police.agents = [];
+    __G.bots.forEach(x => { x.activite = null; x.rdv = null; x.ordre = null; x.fight = null; x.bagarre = null; x.garde = 0; x.gardeArme = 0; x.ko = 0; x.hp = 100; });
+    const b = __G.bots[0];
+    __G.amis.add(b.name);
+    const compris = __G.commandeSociale(b.name + ' tire pour me protéger');
+    const etat = { garde: !!b.gardeArme, arme: !!b.av.gun, ordre: b.ordre && b.ordre.type, colle: !!(b.rdv && b.rdv.colle) };
+    // un policier arrive sur le joueur
+    const a = __G.creerAgent(__G.P.pos.x + 6, __G.P.pos.z + 2, 0.3, false);
+    b.pos.set(__G.P.pos.x + 1, 0.3, __G.P.pos.z);
+    const hp0 = a.hp, n0 = __G.shots.length;
+    for (let i = 0; i < 10; i++) { b.tirT = 0; __G.gardeArmeTick(b, 1 / 30); }
+    const surPolice = { balles: __G.shots.length - n0, degats: hp0 - a.hp, ko: !!a.ko };
+    __G.police.agents = [];
+    // un bot qui t'attaque
+    const o = __G.bots[1];
+    o.fight = 'chase'; o.fightT = __G.simTime + 20; o.hp = 100; o.pos.set(__G.P.pos.x + 3, 0.3, __G.P.pos.z + 1);
+    const hpo = o.hp, n1 = __G.shots.length;
+    for (let i = 0; i < 4; i++) { b.tirT = 0; __G.gardeArmeTick(b, 1 / 30); }
+    const surBot = { balles: __G.shots.length - n1, degats: hpo - o.hp, fuite: o.fight === 'flee' };
+    // un passant tranquille n'est pas une cible
+    o.fight = null; o.fightT = 0;
+    const n2 = __G.shots.length; b.tirT = 0; __G.gardeArmeTick(b, 1 / 30);
+    const surInnocent = __G.shots.length - n2;
+    __G.botStop(b, false);
+    const rangee = !b.gardeArme && !b.av.gun;
+    __G.bots.forEach(x => { x.fight = null; x.hp = 100; });
+    return { compris, etat, surPolice, surBot, surInnocent, rangee,
+      aide: __G.AIDE_ORDRES ? __G.AIDE_ORDRES.includes('tire pour me protéger') : null };
+  });
+  const ok = r.compris && r.etat.garde && r.etat.arme && r.etat.colle && r.surPolice.balles >= 3
+    && r.surPolice.degats > 40 && r.surBot.balles >= 1 && r.surBot.degats > 20 && r.surBot.fuite && r.surInnocent === 0 && r.rangee;
+  return { ok, detail: `« tire pour me protéger » compris=${r.compris} : l'ami dégaine (${r.etat.arme}), te colle (${r.etat.colle}) · sur la police : ${r.surPolice.balles} balles, ${r.surPolice.degats} de dégâts, agent au tapis=${r.surPolice.ko} · sur un bot qui t'attaque : ${r.surBot.balles} balles, il prend la fuite=${r.surBot.fuite} · il ne tire pas sur un passant tranquille (${r.surInnocent} balle) · « stop » lui fait ranger l'arme=${r.rangee}` };
+});
+
+test('douze habitants qui jouent, roulent, chapardent et braquent', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    await dodo(600);
+    const net = { bots: __G.bots.length, karts: __G.race && __G.race.ai ? null : null };
+    __G.bots.forEach(x => { x.activite = null; x.rdv = null; x.ordre = null; x.fight = null; x.bagarre = null; x.drive = null; x.ko = 0; });
+    // chaque activité doit démarrer pour de bon
+    const faites = {};
+    for (const act of __G.ACTIVITES) {
+      const bb = __G.bots.find(x => !x.activite && !x.fight && !x.bagarre) || __G.bots[0];
+      bb.activite = null; bb.rdv = null; bb.ordre = null; bb.fight = null; bb.bagarre = null;
+      const ok = __G.lancerActivite(bb, act) !== false;
+      faites[act.k] = { ok, but: bb.rdv ? bb.rdv.nom : (bb.fight ? 'le joueur' : bb.bagarre ? 'un bot' : null) };
+    }
+    // le chapardage se termine par une fuite vers une planque
+    const v = __G.bots[0];
+    v.activite = { k: 'vol', fin: __G.simTime + 60, etape: 'route' };
+    v.rdv = { x: v.pos.x, z: v.pos.z, y: 0.3, nom: 'boutique', arrive: true, libre: true };
+    __G.activiteTick(v, 1 / 30);
+    const vol = { etape: v.activite.etape, planque: v.rdv && v.rdv.nom };
+    // le braquage réveille la police
+    __G.clearWanted(); __G.police.cars.forEach(c => { c.active = false; });
+    const q = __G.bots[1];
+    q.activite = { k: 'braquage', fin: __G.simTime + 60, etape: 'route' };
+    q.rdv = { x: q.pos.x, z: q.pos.z, y: 0.3, nom: 'banque', arrive: true, libre: true };
+    __G.activiteTick(q, 1 / 30);
+    const braquage = { etape: q.activite.etape, voitures: __G.police.cars.filter(c => c.active).length };
+    // le journal de la ville se remplit, et vieTick lance tout seul
+    __G.bots.forEach(x => { x.activite = null; x.rdv = null; x.fight = null; x.bagarre = null; });
+    __G.vie.t = 0; __G.vie.journal.length = 0;
+    for (let i = 0; i < 8; i++) { __G.vie.t = 0; __G.vieTick(1 / 30); __G.simTime += 1; }
+    const auto = __G.bots.filter(x => x.activite || x.fight || x.bagarre).length;
+    __G.bots.forEach(x => { x.activite = null; x.rdv = null; x.fight = null; x.bagarre = null; });
+    __G.clearWanted();
+    return { n: net.bots, faites, vol, braquage, auto, journal: __G.vie.journal.length,
+      activites: __G.ACTIVITES.map(a => a.k) };
+  });
+  const toutes = Object.values(r.faites).every(f => f.ok && f.but);
+  const ok = r.n === 12 && toutes && r.vol.etape === 'fuite' && r.braquage.etape === 'fuite'
+    && r.braquage.voitures > 0 && r.auto > 0;
+  return { ok, detail: `${r.n} habitants (5 avant) · ${r.activites.length} activités qui démarrent toutes : ${Object.entries(r.faites).map(([k, f]) => k + '→' + f.but).join(', ')} · le chapardeur file vers ${r.vol.planque} · le braqueur lance ${r.braquage.voitures} voitures de police · le jeu en déclenche tout seul (${r.auto} bots occupés, ${r.journal} lignes au journal)` };
 });
 
 (async()=>{

@@ -8693,6 +8693,7 @@ const ORDRES_CAT = [
     { e: '🚙', t: 'Vole une voiture', p: 'va voler une voiture', d: 'il te la ramène' },
     { e: '👛', t: 'Détrousse un passant', p: 'va voler un passant', d: '' },
     { e: '😤', t: 'Attaque un gang rival', p: 'attaque le gang rival', d: '' },
+    { e: '🥊', t: 'Coince un gangster isolé', p: 'coincez un gangster isole', d: 'à deux : butin, et il peut rejoindre ton gang', gang: true },
     { e: '👀', t: 'Fais le guet', p: 'fais le guet', d: '', gang: true },
     { e: '👥', t: 'Envoie deux hommes à la banque', p: 'envoie deux hommes braquer la banque', d: 'à deux, deux fois plus de chances', gang: true },
     { e: '🧑‍🤝‍🧑', t: 'Envoie tout le gang', p: 'envoie tous les hommes braquer la banque', d: 'la meilleure chance de réussite', gang: true },
@@ -12666,7 +12667,27 @@ const GANG_MISSIONS = {
   villa: { e: '🏠', n: 'cambrioler une villa', duree: 40, gain: [150, 380], difficulte: 60 },
   boutique: { e: '🛍️', n: 'braquer une boutique', duree: 28, gain: [70, 190], difficulte: 38 },
   guet: { e: '👀', n: 'faire le guet', duree: 60, gain: [0, 0], difficulte: 0 },
+  // Prendre un gangster ADVERSE À PART, loin de ses copains : la difficulté, c'est LUI.
+  gangeur: { e: '🥊', n: 'coincer un gangster isolé', duree: 32, gain: [50, 140], difficulte: 0 },
 };
+// Un homme d'un gang rival loin de ses copains : la proie idéale pour deux de tes hommes.
+function gangeurIsole(G) {
+  let best = null, bs = -1;
+  for (const g2 of gangs) {
+    if (G && g2 !== G) continue;
+    if (g2.mort && simTime < g2.mort) continue;
+    for (const m of g2.membres) {
+      if (m.ko || m.captif || m.chef) continue;
+      // à quelle distance sont ses plus proches copains ?
+      let seul = 999;
+      for (const o of g2.membres) { if (o === m || o.ko) continue; seul = Math.min(seul, Math.hypot(o.x - m.x, o.z - m.z)); }
+      const d = Math.hypot(m.x - P.pos.x, m.z - P.pos.z);
+      const score = seul - d / 12;   // bien isolé et pas trop loin de toi
+      if (seul > 12 && score > bs) { bs = score; best = { m, gang: g2, seul: Math.round(seul), d: Math.round(d) }; }
+    }
+  }
+  return best;
+}
 function missionGang(membres, type, cible, lieuForce) {
   const M = GANG_MISSIONS[type]; if (!M || !membres.length) return false;
   // `lieuForce` : quand le joueur désigne une boutique précise (« vole la boutique tatoo »),
@@ -12674,18 +12695,20 @@ function missionGang(membres, type, cible, lieuForce) {
   const lieu = lieuForce ? lieuForce : type === 'banque' ? (city.bank ? { x: city.bank.x + 8, z: city.bank.z } : null)
     : type === 'villa' ? (VILLAS[1] ? { x: VILLAS[1].x, z: VILLAS[1].z } : null)
     : type === 'boutique' ? pickOne(city.vitrines || [])
+    : type === 'gangeur' ? ((cible && cible.m) ? { x: cible.m.x, z: cible.m.z } : null)
     : type === 'gangRival' ? ((cible && cible.base) ? { x: cible.base[0], z: cible.base[1] } : gangs[0] ? { x: gangs[0].base[0], z: gangs[0].base[1] } : null)
     : type === 'voiture' ? pickOne(city.cars.filter(c => !c.busy && !c.kart)) || null
     : cible ? { x: cible.pos.x, z: cible.pos.z } : pickOne(city.wander) ? { x: pickOne(city.wander)[0], z: pickOne(city.wander)[2] } : null;
   if (!lieu) { botDit(membres[0], 'je ne vois pas où aller pour ça 😕'); return false; }
-  gang.mission = { type, M, membres: [...membres], fin: simTime + M.duree, etape: 'route', cible: (cible && cible.name) || null };
+  gang.mission = { type, M, membres: [...membres], fin: simTime + M.duree, etape: 'route', cible: (cible && (cible.name || cible.nom)) || null, proie: type === 'gangeur' ? cible : null };
   for (const b of membres) {
     b.gangMission = gang.mission;
     b.rdv = { x: lieu.x + rnd(-2.5, 2.5), z: lieu.z + rnd(-2.5, 2.5), y: 0.3, nom: M.e + ' ' + M.n, arrive: false, libre: true, gang: true };
     b.rdvRoute = null; b.wait = 0; b.target = null; b.activite = null; b.ordre = { type: 'gang' };
   }
   const eq = membres.reduce((a, b) => a + perfDe(b), 0);
-  const diff = (M.difficulte || 35) + (type === 'gangRival' ? gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4 : 0);
+  const diff = (M.difficulte || 35) + (type === 'gangRival' ? gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4
+    : type === 'gangeur' && cible && cible.m ? perfDe(cible.m) * 1.15 : 0);
   gang.mission.chanceDep = Math.round(clamp(eq / (eq + diff), 0.1, 0.95) * 100);
   botDit(membres[0], pickOne([`on y va, ${M.n} 😎`, `ok chef, on s'occupe de ${M.n}`, 'considère que c\'est fait 💪']));
   msg(`${M.e} ${membres.map(b => b.name).join(' et ')} partent ${M.n} · ${gang.mission.chanceDep} % de chances${membres.length > 1 ? ' (à plusieurs, c\'est bien mieux)' : ' — envoie-les à deux !'}`, 4200);
@@ -12698,6 +12721,10 @@ function typeMission(t) {
   if (/\b(cambriol\w+|villa|maison)\b/.test(t)) return 'villa';
   if (/\b(boutique|magasin|commerce|superette|epicerie)\b/.test(t)) return 'boutique';
   if (/\b(voiture|caisse|bagnole|auto)\b/.test(t)) return 'voiture';
+  // « coincez un gangster isolé », « tabassez un rouge tout seul » : on vise UN homme, pas
+  // le quartier entier. Ce test passe avant celui du gang pour ne pas se faire avaler.
+  if (/\b(isole|isolé|tout seul|seul|gangster|gangeur|coince|coincer|coincez|tabasse|tabassez|type|mec)\b/.test(t)
+      && /\b(rouge|rouges|bleu|bleus|jaune|jaunes|gang|gangster|adverse|rival|rivaux|ennemi)\b/.test(t)) return 'gangeur';
   if (/\b(les rouges|les bleus|les jaunes|gang rival|autre gang|gang adverse|rivaux)\b/.test(t)) return 'gangRival';
   if (/\b(argent|fric|monnaie|pieces|thune|sous|butin|portefeuille|porte.?monnaie)\b/.test(t)) return 'argent';
   if (/\b(guet|surveill\w+|garde|planque|repere\w*)\b/.test(t)) return 'guet';
@@ -12761,6 +12788,12 @@ function ordreGang(txt) {
   } else if (type === 'gangRival') {
     const id = /rouge/.test(t) ? 'rouge' : /bleu/.test(t) ? 'bleu' : /jaune/.test(t) ? 'jaune' : null;
     cible = (id && gangs.find(G => G.id === id)) || pickOne(gangs) || null;
+  } else if (type === 'gangeur') {
+    const id = /rouge/.test(t) ? 'rouge' : /bleu/.test(t) ? 'bleu' : /jaune/.test(t) ? 'jaune' : null;
+    cible = gangeurIsole(id ? gangs.find(G => G.id === id) : null);
+    if (!cible) { botDit(equipe[0], 'ils sont tous en groupe, aucun n\'est isolé 😕'); return true; }
+    msg(`🥊 Cible : ${cible.nom || cible.m.nom} des ${cible.gang.nom}, seul à ${cible.seul} m de ses copains`, 3600);
+    setBeacon(cible.m.x, cible.m.z, 0.3);
   }
   return missionGang(equipe, type, cible);
 }
@@ -12820,7 +12853,8 @@ function gangMissionTick(dt) {
     // donc bel et bien les chances. En face, un gang rival oppose la sienne ; la police
     // aussi quand elle est déjà sur le coup.
     const equipe = m.membres.reduce((a, b) => a + perfDe(b), 0);
-    const rival = m.type === 'gangRival' ? (gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4) : 0;
+    const rival = m.type === 'gangRival' ? (gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4)
+      : m.type === 'gangeur' && m.proie ? perfDe(m.proie.m) * 1.15 : 0;
     const flics = police.wanted > 0 ? policePerf() * 0.5 : 0;
     const difficulte = (m.M.difficulte || 35) + rival + flics;
     const chance = clamp(equipe / (equipe + difficulte), 0.1, 0.95);
@@ -12834,6 +12868,25 @@ function gangMissionTick(dt) {
     if (gagne > 0) { wallet += gagne; saveWallet(); updateHud(); gang.butin += gagne; sfx.coin(); }
     for (const b of m.membres) perfGagne(b, m.membres.length > 1 ? 4 : 6, 'coup réussi');
     majForceGang();
+    // ON A COINCÉ LE GANGSTER : il tombe, on lui prend ses pièces, et s'il est nettement
+    // dominé il peut changer de camp — c'est comme ça qu'on fait grossir son gang.
+    if (m.type === 'gangeur' && m.proie && m.proie.m) {
+      const v = m.proie.m, G2 = m.proie.gang;
+      v.ko = simTime + 20; v.hp = 0; v.chasse = null;
+      burst(v.x, v.y + 1.2, v.z, 0xffd23f, 12); sfx.hit();
+      G2.relation = clamp((G2.relation || 0) - 25, -100, 100);
+      chat(G2.chefNom, `vous allez me le payer, ${myCfg.name} !`, G2.couleur);
+      const place = rangJoueur().max - (gang.membres.length + (gang.membresLibres || []).length);
+      const ecart = equipe - perfDe(v) * 1.15;
+      const chanceRecrue = clamp(0.25 + ecart / 260, 0.1, 0.85);
+      if (place > 0 && Math.random() < chanceRecrue) {
+        setTimeout(() => { try { recruteVaincu(v, G2); } catch (e) {} }, 900);
+        msg(`🤝 ${v.nom} est à terre… et il change de camp !`, 4200);
+      } else {
+        msg(`🥊 ${v.nom} est au tapis (${Math.round(chanceRecrue * 100)} % de chances qu'il vous rejoigne)${place > 0 ? ' — il a refusé' : ' · ton gang est au complet'}`, 4000);
+      }
+      gagneRep(25, 'gangster coincé');
+    }
     msg(`${m.M.e} ${m.membres.map(b => b.name).join(' et ')} : mission réussie (${m.chance} % de chances) ! +${gagne} 🪙`, 3800);
     chat(null, `${m.M.e} Le gang rapporte ${gagne} 🪙 à ${myCfg.name}`);
     if (m.type === 'voiture') {
@@ -12996,6 +13049,25 @@ function gangTick(dt) {
         G.force = forceGangRival(G) || G.force;
       }
       G.t = simTime + rnd(35, 80);
+      // EMBUSCADE : plutôt que de déplacer tout le gang, ils détachent un ou deux hommes
+      // pour aller cueillir le joueur — ou l'un de SES hommes — là où il se trouve.
+      if (G.relation < -20 && Math.random() < 0.35 && !G.membres.some(m => m.chasse)) {
+        const dispo = G.membres.filter(m => !m.ko && !m.captif);
+        const proies = [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }]
+          .concat(gang.membres.filter(b => !b.ko && !b.mort && b.av.group.visible)
+            .map(b => ({ bot: b, x: b.pos.x, z: b.pos.z, nom: b.name })));
+        const proie = pickOne(proies);
+        const nb = Math.random() < 0.45 ? 2 : 1;
+        const envoyes = dispo.sort((a, b2) => Math.hypot(a.x - proie.x, a.z - proie.z) - Math.hypot(b2.x - proie.x, b2.z - proie.z)).slice(0, nb);
+        if (envoyes.length && Math.hypot(envoyes[0].x - proie.x, envoyes[0].z - proie.z) < 140) {
+          for (const m of envoyes) m.chasse = { joueur: !!proie.joueur, bot: proie.bot || null, fin: simTime + 70 };
+          msg(`⚔️ ${envoyes.length > 1 ? envoyes.length + ' hommes des' : 'Un homme des'} ${G.nom} ${envoyes.length > 1 ? 'foncent' : 'fonce'} sur ${proie.joueur ? 'toi' : proie.nom} !`, 4200);
+          chat(G.chefNom, proie.joueur ? `on va s'occuper de ${myCfg.name}…` : `chopez ${proie.nom}, il est seul`, G.couleur);
+          sfx.tone(140, 0, .35, 'sawtooth', .06, 90);
+          G.t = simTime + 80;
+          continue;
+        }
+      }
       const r = Math.random();
       if (r < 0.3 && city.vitrines && city.vitrines.length) { const v = pickOne(city.vitrines); G.etat = 'boutique'; G.cible = [v.x, v.z];
         chat(null, `🚩 ${G.nom} s'en prennent à une boutique !`); }
@@ -13017,6 +13089,42 @@ function gangTick(dt) {
     if (G.etat === 'joueur' && G.cible) { G.cible = [P.pos.x, P.pos.z]; }
     const but = G.cible || G.base;
     for (const m of G.membres) {
+      // EMBUSCADE : cet homme-là a été détaché pour aller chercher le joueur ou l'un de ses
+      // hommes. Il marche sur SA cible, sans attendre le reste de son gang.
+      if (m.chasse && !m.ko) {
+        const c = m.chasse;
+        const vise = c.joueur ? { x: P.pos.x, z: P.pos.z, vivant: P.hp > 0 && !drive.car }
+                              : { x: c.bot.pos.x, z: c.bot.pos.z, vivant: !c.bot.ko && !c.bot.mort && c.bot.av.group.visible };
+        if (!vise.vivant || simTime > c.fin) { m.chasse = null; }
+        else {
+          const dx3 = vise.x - m.x, dz3 = vise.z - m.z, d3 = Math.hypot(dx3, dz3) || 1;
+          if (d3 > 1.6) {
+            const o = { x: m.x, y: m.y, z: m.z };
+            npcMove(o, dx3 / d3 * 4.4 * dt, dz3 / d3 * 4.4 * dt, 0.4); m.x = o.x; m.z = o.z;
+            animateRig(m.av.rig, 'walk', 4.4, dt, simTime);
+          } else if (simTime > m.cd) {
+            m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
+            if (c.joueur) hurt(Math.max(3, Math.round(5 + perfDe(m) / 8 - perfDe(P) / 16)), G.nom, dx3 / d3, dz3 / d3, 1.4);
+            else {
+              const b2 = c.bot;
+              b2.hp = (b2.hp ?? 100) - Math.max(4, Math.round(9 + (perfDe(m) - perfDe(b2)) / 5));
+              burst(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, 0xff5c5c, 5); sfx.hit();
+              m.hp -= Math.max(2, Math.round(4 + perfDe(b2) / 8));   // il rend les coups
+              if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; m.chasse = null; perfGagne(b2, 3, 'il a repoussé une embuscade'); }
+              else if (b2.hp <= 0) { b2.hp = 0; m.chasse = null;
+                if (perfDe(m) > perfDe(b2) + 20 && Math.random() < 0.4) tuerMembre(b2, `les ${G.nom}`);
+                else { b2.ko = simTime + 12; perfPerd(b2, 5); msg(`🤕 ${b2.name} s'est fait tabasser par les ${G.nom}`, 3200); } }
+            }
+            if (simTime > (m.sayT || 0)) { m.sayT = simTime + 7; bubble(m.av, pickOne(['c\'est notre quartier !', 'tu vas payer !', 'on t\'avait prévenu'])); }
+          } else animateRig(m.av.rig, 'idle', 0, dt, simTime);
+          m.y = groundUnder(m.x, m.z, null, m.y + 0.6);
+          m.facing = Math.atan2(dx3, dz3);
+          m.av.group.position.set(m.x, m.y, m.z);
+          let dh3 = m.facing - m.av.group.rotation.y; dh3 = Math.atan2(Math.sin(dh3), Math.cos(dh3));
+          m.av.group.rotation.y += dh3 * Math.min(1, dt * 6);
+          continue;
+        }
+      }
       // les gardes ne quittent pas la planque : ils tiennent leur poste et chargent
       // quiconque s'approche du magot
       if (m.garde && !m.ko) {

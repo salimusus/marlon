@@ -22,6 +22,19 @@ lignes.forEach((l, k) => {
   if (!morceaux.some(x => INSTRUCTION.test(x) && (x.includes('.') || x.includes('(')))) return;
   suspects.push([k + 1, l.trim()]);
 });
+// Vérification de SYNTAXE : une apostrophe non échappée dans une chaîne, une parenthèse
+// oubliée, et la page ne démarre plus du tout. Le banc d'essai mettait plusieurs minutes à
+// le dire ; ici c'est immédiat.
+{
+  let dur = false;
+  const blocs = [...src.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  blocs.forEach((b, i) => {
+    try { new Function(b[1]); }
+    catch (e) { dur = true; console.log(`❌ erreur de syntaxe dans le script #${i + 1} : ${e.message}`); }
+  });
+  if (dur) process.exit(1);
+  console.log(`✅ syntaxe JavaScript valide (${blocs.length} bloc${blocs.length > 1 ? 's' : ''})`);
+}
 if (!suspects.length) { console.log('✅ aucun code avalé par un commentaire'); process.exit(0); }
 console.log(`❌ ${suspects.length} ligne(s) où un commentaire semble avaler du code :`);
 for (const [n, l] of suspects) console.log(`  ${n} : ${l.slice(0, 180)}`);

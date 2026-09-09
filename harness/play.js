@@ -4455,6 +4455,66 @@ test('les hommes du gang ont des points de vie, et l\'hôpital les remet d\'aplo
   return { ok, detail: `après une bagarre, un homme du gang reste à ${r.gang}/100 PV quand un passant remonte à ${r.passant} : sa vie compte · le soigner coûte ${r.prix.bas} 🪙 à 28 PV contre ${r.prix.haut} 🪙 à 80 PV · « va à l'hôpital » l'y envoie vraiment, on paie ${r.soigne.paye} 🪙 à l'arrivée et il repart à 100/100 · refusé si le porte-monnaie est vide · un homme au tapis est relevé (${r.releve.vie}/100) · « le gang allez à l'hôpital » les envoie tous · les jauges ❤️ et 📈 s'affichent dans la liste des ordres, le choix des personnes et le tableau de la guerre` };
 });
 
+
+test('escarmouches : ils viennent te chercher, et on coince leurs isolés', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    for (let i = 0; i < 3; i++) { const b = G.bots[i]; G.devenirAmi(b); G.rejoindreGang(b); b.perf = 60; b.hp = 100; }
+    // ---- CÔTÉ ADVERSE : ils détachent un ou deux hommes sur toi ou sur l'un des tiens ----
+    const Gr = G.gangs[0]; Gr.relation = -60; Gr.etat = 'repos';
+    Gr.membres.forEach(m => { m.chasse = null; m.ko = 0; m.x = G.P.pos.x + 18; m.z = G.P.pos.z + 18; });
+    let n = 0;
+    for (let i = 0; i < 60 && !n; i++) { Gr.t = G.simTime - 1; G.gangTick(1 / 60); n = Gr.membres.filter(m => m.chasse).length; }
+    res.embuscade = { hommes: n, surLeJoueur: n ? !!Gr.membres.find(m => m.chasse).chasse.joueur : null };
+    // ils marchent VRAIMENT sur leur proie
+    const ch = Gr.membres.find(m => m.chasse);
+    Gr.membres.forEach(m => { if (m.chasse) m.chasse = { joueur: true, bot: null, fin: G.simTime + 999 }; });
+    const d0 = Math.hypot(ch.x - G.P.pos.x, ch.z - G.P.pos.z);
+    for (let i = 0; i < 200; i++) G.gangTick(1 / 60);
+    res.approche = { avant: Math.round(d0), apres: Math.round(Math.hypot(ch.x - G.P.pos.x, ch.z - G.P.pos.z)) };
+    // et ils tapent un HOMME du gang quand c'est lui qui est visé
+    const victime = G.gang.membres[0]; victime.hp = 100;
+    victime.pos.set(60, 0.3, 60); victime.av.group.position.copy(victime.pos);
+    Gr.membres.forEach(m => { m.chasse = null; });
+    const cogneur = Gr.membres[0];
+    cogneur.x = 61; cogneur.z = 61; cogneur.perf = 80; cogneur.cd = 0; cogneur.hp = 200;
+    cogneur.chasse = { joueur: false, bot: victime, fin: G.simTime + 999 };
+    for (let i = 0; i < 20; i++) { cogneur.cd = 0; G.gangTick(1 / 60); }
+    res.tape = victime.hp < 100;
+    Gr.membres.forEach(m => { m.chasse = null; }); victime.hp = 100; victime.ko = 0;
+    // ---- CÔTÉ JOUEUR : coincer un gangster isolé ----
+    const g2 = G.gangs[1];
+    g2.membres.forEach((m, i) => { m.ko = 0; m.hp = 90; m.x = -80 + i * 45; m.z = -80 + i * 45; m.perf = 25; });
+    const proie = g2.membres[1]; proie.x = 20; proie.z = 20;
+    const c = G.gangeurIsole();
+    res.isole = c ? { nom: c.m.nom, seul: c.seul } : null;
+    res.type = G.typeMission('coincez un gangster isole');
+    G.gang.mission = null; G.wallet = 0;
+    res.ordre = G.ordreGang('le gang coincez un gangster isole');
+    res.mission = G.gang.mission ? { type: G.gang.mission.type, n: G.gang.mission.membres.length,
+      chance: G.gang.mission.chanceDep, proie: G.gang.mission.proie ? G.gang.mission.proie.m.nom : null } : null;
+    // on mène le coup à son terme, avec des hommes assez forts pour ne pas dépendre du hasard
+    const v = G.gang.mission.proie.m, avantLibres = (G.gang.membresLibres || []).length;
+    G.gang.mission.membres.forEach(b => { b.perf = 100; b.rdv.arrive = true; });
+    G.gang.mission.etape = 'action'; G.gang.mission.fin = G.simTime - 1;
+    G.gangMissionTick(1 / 60);
+    res.gain = { pieces: G.wallet, vaincuKO: v.ko > G.simTime, missionFinie: !G.gang.mission };
+    // le ralliement se fait juste après (petit délai pour l'effet)
+    await dodo(1500);
+    res.recrue = { rallie: (G.gang.membresLibres || []).some(x => x.nom === v.nom),
+      libres: (G.gang.membresLibres || []).length, avant: avantLibres, plusChezEux: !g2.membres.includes(v) };
+    return res;
+  });
+  const ok = r.embuscade.hommes >= 1 && r.approche.apres < r.approche.avant - 3 && r.tape
+    && r.isole && r.isole.seul > 12 && r.type === 'gangeur' && r.ordre
+    && r.mission && r.mission.type === 'gangeur' && r.mission.n >= 2 && r.mission.proie === r.isole.nom
+    && r.gain.pieces > 0 && r.gain.vaincuKO && r.gain.missionFinie
+    && r.recrue.rallie && r.recrue.plusChezEux;
+  return { ok, detail: `les rivaux détachent ${r.embuscade.hommes} homme(s) sur ${r.embuscade.surLeJoueur ? 'le joueur' : 'un de tes hommes'} et marchent vraiment dessus (${r.approche.avant} m → ${r.approche.apres} m), et ils tabassent le membre visé · à l'inverse « coincez un gangster isolé » repère ${r.isole.nom}, seul à ${r.isole.seul} m de ses copains, envoie ${r.mission.n} hommes (${r.mission.chance} % de chances), rapporte ${r.gain.pieces} 🪙 — et le vaincu change de camp (${r.recrue.avant} → ${r.recrue.libres} recrues)` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

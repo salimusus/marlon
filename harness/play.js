@@ -4289,6 +4289,99 @@ test('le coiffeur propose dix coupes et douze couleurs', async p => {
   return { ok, detail: `salon en ville · ${r.coupes} coupes (afro ${r.blocs.afro}, dreadlocks ${r.blocs.dreads} mèches, crête iroquoise ${r.blocs.iroquoise}, punk ${r.blocs.punk}, nattes ${r.blocs.nattes}, mulet ${r.blocs.mulet}, plaquée ${r.blocs.plaquee}) et ${r.couleurs} couleurs · on essaie sans payer et on repart avec son ancienne tête · la coupe payée ${r.achat.paye} 🪙 est mémorisée (gratuite ensuite)` };
 });
 
+
+test('gardes du corps, protection d\'un membre et de la villa, missions à plusieurs', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const noms = [];
+    for (let i = 0; i < 5; i++) { const b = G.bots[i]; G.devenirAmi(b); G.rejoindreGang(b); b.perf = 20 + i * 15; b.arme = i === 0; noms.push(b.name); }
+    res.gang = G.gang.membres.length;
+    // GARDES DU CORPS : trois au maximum, chacun à sa place autour du joueur
+    const g = [];
+    for (let i = 0; i < 4; i++) { const b = G.bots[i];
+      const ok = G.commandeSociale(`${b.name} viens tu es mon garde du corps`); if (G.uiOpen) G.closeUI();
+      g.push({ ok, garde: !!(b.gardeCorps && b.gardeCorps > G.simTime), arme: !!(b.gardeArme && b.gardeArme > G.simTime), slot: b.rdv ? b.rdv.slot : null }); }
+    res.gardes = { quatre: g, actifs: G.gardesDuCorps().length, arme1: g[0].arme,
+      placesDistinctes: new Set(g.slice(0, 3).map(x => x.slot)).size };
+    // un garde du corps armé tire sur la police qui te course
+    const b0 = G.bots[0];
+    b0.pos.set(G.P.pos.x + 1, 0.3, G.P.pos.z + 1); b0.av.group.position.copy(b0.pos);
+    G.police.wanted = 2;
+    const ag = { x: G.P.pos.x + 6, z: G.P.pos.z, y: 0.3, ko: 0, hp: 100, name: 'Agent', av: { rig: { armR: { rotation: {} } }, group: { position: { set() {} } } } };
+    G.police.agents.push(ag);
+    b0.tirT = 0; G.gardeArmeTick(b0, 1 / 60);
+    res.tirSurLaPolice = ag.hp < 100;
+    G.police.agents.length = 0; G.clearWanted();
+    // « stop » le libère
+    G.botStop(b0, false, false);
+    res.libere = !b0.gardeCorps && G.gardesDuCorps().length === 2;
+    // PROTÉGER UN AUTRE MEMBRE
+    const a = G.bots[0], c = G.bots[4];
+    res.protege = G.commandeSociale(`${a.name} va proteger ${c.name}`) && a.protege === c;
+    if (G.uiOpen) G.closeUI();
+    // il suit celui qu'il protège
+    c.pos.set(30, 0.3, 30); G.protectionTick(1 / 60);
+    res.suit = Math.hypot(a.rdv.x - c.pos.x, a.rdv.z - c.pos.z) < 3;
+    // GARDER LA VILLA
+    const d = G.bots[1]; G.botStop(d, false, false);
+    res.villa = G.commandeSociale(`${d.name} va proteger ma villa`) && !!d.gardeVilla;
+    if (G.uiOpen) G.closeUI();
+    res.versLaVilla = !!(d.rdv && G.city.villaMine && Math.hypot(d.rdv.x - G.city.villaMine.x, d.rdv.z - G.city.villaMine.z) < 20);
+    // MISSIONS À PLUSIEURS
+    G.gang.mission = null;
+    G.gang.membres.forEach(b => { b.gangMission = null; b.rdv = null; b.ordre = null; b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null; });
+    const envoie = t => { G.gang.mission = null; const ok = G.ordreGang(t);
+      const n = G.gang.mission ? G.gang.mission.membres.length : 0, ch = G.gang.mission ? G.gang.mission.chanceDep : 0;
+      G.gang.mission = null; G.gang.membres.forEach(b => { b.gangMission = null; b.rdv = null; b.ordre = null; }); return { ok, n, ch }; };
+    res.missions = { deux: envoie('envoie deux hommes braquer la banque'), trois: envoie('envoie trois hommes braquer la banque'),
+      tous: envoie('envoie tous les hommes braquer la banque'), nommes: envoie(`${noms[0]} et ${noms[1]} allez braquer la banque`) };
+    // LA JAUGE DE PERFORMANCE dans la liste des ordres et dans le choix des personnes
+    G.openOrdres(G.bots[2]);
+    const sub = document.getElementById('ordresSub').innerHTML;
+    res.jauge = { barre: /█|░/.test(sub), etoiles: /★/.test(sub) };
+    G.closeUI(); G.openQui();
+    res.jaugeListe = /█|░/.test(document.getElementById('ordresGrid').innerHTML);
+    G.closeUI();
+    return res;
+  });
+  const m = r.missions;
+  const ok = r.gardes.actifs === 3 && r.gardes.quatre[3].garde === false && r.gardes.placesDistinctes === 3
+    && r.gardes.arme1 && r.tirSurLaPolice && r.libere
+    && r.protege && r.suit && r.villa && r.versLaVilla
+    && m.deux.n === 2 && m.trois.n === 3 && m.tous.n === 5 && m.nommes.n === 2
+    && m.trois.ch > m.deux.ch && m.tous.ch > m.trois.ch
+    && r.jauge.barre && r.jauge.etoiles && r.jaugeListe;
+  return { ok, detail: `3 gardes du corps au maximum (le 4e est refusé), chacun à sa place autour du joueur, et l'armé tire sur la police · « stop » en libère un · « va protéger X » le fait coller son coéquipier, « va protéger ma villa » l'envoie monter la garde chez toi · missions à plusieurs : 2 hommes ${m.deux.ch} %, 3 hommes ${m.trois.ch} %, tout le gang (5) ${m.tous.ch} %, deux nommés ${m.nommes.ch} % · la jauge de performance s'affiche dans la liste des ordres et dans le choix des personnes` };
+});
+
+test('on peut renommer son chien quand on veut', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 70, hour: 12 });
+    const G = __G;
+    const pet = G.city.pets.find(x => x.kind === 'dog');
+    G.P.pos.set(pet.x, 0.5, pet.z); G.adopterChien(pet, true);
+    G.chien.nom = 'Rex'; G.chien.attenteNom = false; G.P.pos.set(0, 0.5, 70);
+    const res = { depart: G.chien.nom };
+    // en une phrase
+    res.direct = G.commandeSociale('appelle mon chien Bella'); res.apresDirect = G.chien.nom;
+    if (G.uiOpen) G.closeUI();
+    // par l'ordre de sa liste : il redemande, on répond
+    res.ordre = G.chienOrdre('nom', ''); res.attend = G.chien.attenteNom;
+    G.commandeSociale('Titan'); res.apresOrdre = G.chien.nom;
+    // la médaille au-dessus de sa tête suit le nom
+    res.medaille = !!G.chien.tag;
+    // et l'ordre existe bien dans sa liste cliquable
+    G.openOrdresChien();
+    res.dansLaListe = [...document.querySelectorAll('#ordresGrid [data-chien]')].some(b => b.dataset.chien === 'nom');
+    G.closeUI();
+    return res;
+  });
+  const ok = r.depart === 'Rex' && r.direct && r.apresDirect === 'Bella'
+    && r.ordre && r.attend && r.apresOrdre === 'Titan' && r.medaille && r.dansLaListe;
+  return { ok, detail: `« appelle mon chien Bella » le renomme d'un coup (${r.depart} → ${r.apresDirect}), et l'ordre 🏷️ de sa liste redemande son nom dans le chat (${r.apresDirect} → ${r.apresOrdre}) · sa médaille suit` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

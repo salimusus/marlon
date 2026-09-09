@@ -7799,6 +7799,7 @@ const ORDRES_CHIEN = [
   { id: 'dort', e: '🛏️', t: 'Dors', mots: /\bdors|dormir|dodo|niche|au lit\b/, dit: 'il va dormir dans sa niche' },
   { id: 'garde', e: '🛡️', t: 'Défends-moi', mots: /\bdefend|défend|protege|protège|garde moi|garde\b/, dit: 'il mord quiconque t\'attaque' },
   { id: 'mords', e: '🦷', t: 'Mords / Attaque', mots: /\bmords|mord|attaque|mordre\b/, dit: 'il fonce sur la cible' },
+  { id: 'nom', e: '🏷️', t: 'Change son nom', mots: /\bnom|nomme|nommer|renomme|renommer|appelle|appeler|baptise|baptiser|prenom\b/, dit: 'écris son nouveau nom dans le chat' },
 ];
 function chienNom() { return chien.nom || 'Le chien'; }
 // Remet le chien d'aplomb : corps droit, quatre pattes tendues. Chaque pose repart de là.
@@ -7872,6 +7873,14 @@ function chienOrdre(id, txt) {
   const o = ORDRES_CHIEN.find(x => x.id === id); if (!o) return false;
   if (id === 'mords') { chienAttaque(txt || ''); return true; }
   if (id === 'balle') return chienBalle();
+  if (id === 'nom') {
+    // On pouvait nommer son chien à l'adoption, et une seule fois. Maintenant on le renomme
+    // quand on veut : on redemande le nom, la médaille au-dessus de sa tête suit.
+    chien.attenteNom = true;
+    msg(`🏷️ Écris le nouveau nom de ton chien dans le chat (il s'appelle ${chienNom()})`, 4000);
+    chat(null, `🏷️ Comment veux-tu appeler ton chien ? Écris son nouveau nom.`);
+    aboie(2); return true;
+  }
   if (id === 'aboie') { chien.ordre = 'aboie'; chien.aboiFin = simTime + 20; chien.poste = { x: p.x, z: p.z }; aboie(3); chienDit('ouaf ouaf ! il donne de la voix 📢', 2200); return true; }
   if (id === 'saute') { chien.saut = simTime + 0.9; aboie(1); chienDit('hop ! 🦘', 1500); return true; }
   if (id === 'patte') { chien.patte = simTime + 2.2; chienPose('assis'); aboie(1); chienDit('il te donne la patte 🐾', 2000); return true; }
@@ -8325,6 +8334,9 @@ function gardeTick(b) {
 function commandeExacte(txt) {
   const t = norm(txt);
   if (chien.attenteNom && !/^\//.test(txt)) { nommerChien(txt.replace(/[^\p{L}\p{N} '-]/gu, '').trim() || 'Rex'); return true; }
+  // « appelle mon chien Rex », « renomme le chien Bella » : le nom est dans la phrase même
+  if (chien.pet) { const m2 = /(?:appelle|appeler|renomme|renommer|nomme|nommer|baptise|baptiser)\s+(?:le\s+|la\s+|mon\s+|ma\s+)?(?:chien|chienne|chiot|toutou)?\s*:?\s*([\p{L}][\p{L}\p{N}'-]{1,13})\s*$/iu.exec(txt.trim());
+    if (m2 && !/^(chien|chienne|chiot|toutou)$/i.test(m2[1])) { nommerChien(m2[1]); return true; } }
   if (ordreGang(txt)) return true;   // ordres collectifs au gang (avant le chien : « allez attaquer les bleus »)
   // « attaque … » ne veut pas dire « chien, mords-le » quand la phrase parle d'un gang :
   // cette branche avalait « attaque un membre d'un gang adverse » et le chien partait seul.
@@ -8634,6 +8646,8 @@ const ORDRES_CAT = [
     { e: '👛', t: 'Détrousse un passant', p: 'va voler un passant', d: '' },
     { e: '😤', t: 'Attaque un gang rival', p: 'attaque le gang rival', d: '' },
     { e: '👀', t: 'Fais le guet', p: 'fais le guet', d: '', gang: true },
+    { e: '👥', t: 'Envoie deux hommes à la banque', p: 'envoie deux hommes braquer la banque', d: 'à deux, deux fois plus de chances', gang: true },
+    { e: '🧑‍🤝‍🧑', t: 'Envoie tout le gang', p: 'envoie tous les hommes braquer la banque', d: 'la meilleure chance de réussite', gang: true },
   ] },
   { n: '💪 Entraînement', l: [
     { e: '🏋️', t: 'Va à la salle de sport', p: 'va t entrainer au sport', d: 'monte la force du gang', gang: true },
@@ -8656,10 +8670,19 @@ function openOrdres(b) {
   ordresBot = b;
   const duGang = estDuGang(b), ami = estAmi(b.name);
   $('ordresTitre').textContent = `📣 Ordres pour ${b.name}`;
-  $('ordresSub').innerHTML = ami
+  // sa jauge de performance, juste sous son nom : on voit d'un coup d'œil s'il est prêt
+  const v = perfDe(b);
+  const jauge = ami ? `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">`
+      + `📈 ${perfBarre(v)} ${v}/100 ${perfEtoiles(v)}</span>`
+      + `<span style="display:block;font-weight:600;color:#7a86a0">${b.arme ? '🔫 armé · ' : ''}`
+      + `${b.gardeCorps && simTime < b.gardeCorps ? '🛡️ ton garde du corps · ' : ''}`
+      + `${b.gardeVilla && simTime < b.gardeVilla ? '🏠 garde ta villa · ' : ''}`
+      + `${b.protege ? '🛡️ protège ' + b.protege.name + ' · ' : ''}`
+      + `entraîne-le au sport et au tir pour le faire monter</span>` : '';
+  $('ordresSub').innerHTML = jauge + (ami
     ? (duGang ? '😎 <b>Membre de ton gang</b> — il fait tout ce que tu demandes. Clique, ou écris-le en toutes lettres.'
               : '⭐ <b>Ton ami</b> — clique un ordre, ou écris-le en toutes lettres dans le chat.')
-    : 'Vous n\'êtes pas encore amis — il n\'obéira qu\'une fois ami. Un clic suffit :';
+    : 'Vous n\'êtes pas encore amis — il n\'obéira qu\'une fois ami. Un clic suffit :');
   let html = '';
   // On ne devrait pas avoir à taper la bonne phrase pour se faire un ami : deux boutons
   // font tout le chemin (ami, puis gang) directement depuis la liste.
@@ -8727,7 +8750,10 @@ function openQui() {
   if (avecChien) html += `<p class="osec">🐶 Ton chien</p><button class="ocard" data-chienqui="1"><span>🐶</span>${chienNom()}<i>assis, couché, la balle, mords…</i></button>`;
   for (const { titre, l } of lignes) {
     html += `<p class="osec">${titre}</p>`;
-    for (const b of l) html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : estAmi(b.name) ? ' · ami' : ''}</i></button>`;
+    for (const b of l) { const v = perfDe(b), am = estAmi(b.name);
+      html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}`
+        + (am ? `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">${perfBarre(v, 8)} ${v} ${perfEtoiles(v)}</i>` : '')
+        + `<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : am ? ' · ami' : ''}${b.gardeCorps && simTime < b.gardeCorps ? ' · 🛡️ garde' : ''}</i></button>`; }
   }
   $('ordresGrid').innerHTML = html;
   $('ordresGrid').querySelectorAll('[data-chienqui]').forEach(btn => btn.addEventListener('click', () => openOrdresChien()));
@@ -12633,10 +12659,22 @@ function ordreGang(txt) {
   }
   const nommes = trouveBots(txt).filter(b => estDuGang(b));
   const collectif = /\b(le gang|mon gang|l.equipe|la bande|tout le monde|les gars|la team|vous deux|allez y|allez-y)\b/.test(t);
-  if (!nommes.length && !collectif) return false;
+  // « ENVOIE DEUX HOMMES braquer la banque » : on peut demander un nombre plutôt que des noms.
+  // On envoie alors les plus performants qui sont libres — deux valent mieux qu'un.
+  let combien = 0;
+  { const m2 = /\b(\d+|un|une|deux|trois|quatre|cinq|tous|toute?s?)\s+(?:les\s+|mes\s+|de\s+|des\s+)?(hommes?|gars|membres?|types?|potes?|amis?)\b/.exec(t);
+    if (m2) combien = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, tous: 99, tout: 99, toutes: 99, toute: 99 }[m2[1]] || (+m2[1] || 0); }
+  if (!nommes.length && !collectif && !combien) return false;
   // un ordre collectif se reconnaît à son verbe au pluriel ou au mot « gang »
-  if (!collectif && !/\b(allez|aller|allons|partez|foncez|occupez|faites|volez|braquez|attaquez|cambriolez|piquez|surveillez|rentrez|revenez)\b/.test(t)) return false;
-  const equipe = nommes.length ? nommes : gang.membres.slice();
+  if (!collectif && !combien && !/\b(allez|aller|allons|partez|foncez|occupez|faites|volez|braquez|attaquez|cambriolez|piquez|surveillez|rentrez|revenez|envoie|envoies|envoyez|envoi|expedie|expedier)\b/.test(t)) return false;
+  let equipe = nommes.length ? nommes : gang.membres.slice();
+  if (!nommes.length && combien) {
+    // les plus aguerris d'abord, et on laisse tranquilles ceux qui gardent déjà quelque chose
+    const libres = gang.membres.filter(b => !b.ko && !b.mort && !(b.gardeVilla && simTime < b.gardeVilla))
+      .sort((a, c) => perfDe(c) - perfDe(a));
+    equipe = libres.slice(0, Math.min(combien, libres.length));
+    if (!equipe.length) { msg('😴 Aucun homme disponible', 2000); return true; }
+  }
   if (/\b(rentre\w*|revenez|revien\w*|stop|arretez|laissez tomber|annule\w*|repos|abandonnez)\b/.test(t)) {
     for (const b of equipe) { b.gangMission = null; botStop(b, false, true); }
     if (gang.mission && !gang.mission.membres.some(b => b.gangMission)) gang.mission = null;

@@ -13327,12 +13327,31 @@ function frame() {
       const sp = Math.sin(cam.pitch);
       const g = a => [Math.sin(cam.yaw + a) * cpch, sp, Math.cos(cam.yaw + a) * cpch];
       const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(0.4), g(-0.4)], cam.dist + 0.6, skip);
-      const libre = Math.max(1.05, Math.min(r[0], r[1] + 0.35, r[2] + 0.35) - 0.12);
+      // 12 cm de garde ne suffisaient pas : la camera mordait encore le coin d'un meuble.
+      // Et le plancher de 1,05 m l'empechait de reculer assez dans une cuisine encombree :
+      // elle finissait DANS le placard. On s'arrete 30 cm avant l'obstacle, quitte a se
+      // coller au joueur (0,5 m au minimum, pour ne pas lui traverser la tete).
+      const libre = Math.max(0.5, Math.min(r[0], r[1] + 0.35, r[2] + 0.35) - 0.3);
       // on se rapproche tout de suite, on s'éloigne en douceur (sinon la caméra saute)
       cam.libre = cam.libre == null || libre < cam.libre ? libre : cam.libre + (libre - cam.libre) * Math.min(1, dt * 4);
       d = Math.min(cam.dist, cam.libre);
     } else cam.libre = null;
     camera.position.copy(cam.target).addScaledVector(dir, d);
+    // Garde-fou. camLibres ignore volontairement une boite qui contient deja le point de
+    // depart (sinon toutes les directions tomberaient a zero des qu'on frole un mur) : la
+    // camera pouvait donc finir DANS ce meuble-la. On verifie sa position finale et on la
+    // ramene vers le joueur jusqu'a en sortir.
+    if (running) for (let k = 0; k < 8 && d > 0.4; k++) {
+      const c = camera.position; let coince = false;
+      for (const o of solidsAutour(c.x, c.z, 2)) {
+        if (o.glass || o.h > 30 || o.veh) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 + 0.15 && Math.abs(c.y - o.y) < o.h / 2 + 0.15
+          && Math.abs(c.z - o.z) < o.d / 2 + 0.15) { coince = true; break; }
+      }
+      if (!coince) break;
+      d = Math.max(0.4, d - 0.3); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
+      camera.position.copy(cam.target).addScaledVector(dir, d);
+    }
     // La secousse : un coup qui porte se sent à l'image. Elle retombe toute seule.
     if (cam.shake > 0.001) {
       const reste = Math.max(0, (cam.shakeT || 0) - simTime);

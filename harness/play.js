@@ -1327,8 +1327,9 @@ test('la caméra colle aux murs sans les traverser, et se baisse sous les plafon
     await attendre(p, cond, 25000);
     await p.waitForTimeout(700);   // la perche se règle avant la caméra : on la laisse arriver
     return p.evaluate(() => {
-      const c = __G.camera.position, dedansMur = __G.solids.some(o => !o.veh && o.h < 30
+      const c = __G.camera.position, dedans = __G.solids.filter(o => !o.veh && o.h < 30
         && Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2);
+      const dedansMur = dedans.length > 0;
       return { dist: +__G.cam.dist.toFixed(2), libre: __G.cam.libre == null ? null : +__G.cam.libre.toFixed(2),
         salle: __G.cam.salle == null ? null : +__G.cam.salle.toFixed(1), plafond: __G.cam.plafond == null ? null : +__G.cam.plafond.toFixed(1),
         pitch: +__G.cam.pitch.toFixed(2), dedansMur, y: +c.y.toFixed(2) };

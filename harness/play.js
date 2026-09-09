@@ -5158,6 +5158,57 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
   return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler` };
 });
 
+
+test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un mur', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const g = G.city.garage, d0 = G.city.tuneDesk;
+    for (const v of G.city.cars) { v.x += 300; v.z += 300; v.g.position.set(v.x, v.y, v.z); }
+    G.P.pos.set(d0.x, 0.3, d0.z - 1);
+    G.openAtelier();
+    document.getElementById('atelierAmener').click();
+    const c = G.tuneCible();
+    res.pose = { x: +(c.x - g.x).toFixed(1), z: +(c.z - g.z).toFixed(1), h: +c.h.toFixed(2), y: +c.y.toFixed(2) };
+    // dans un mur ? on compare son volume aux solides du décor
+    const o = c.solid; let dansMur = 0;
+    for (const so of G.solids) {
+      if (so === o || so.deco) continue;
+      if (Math.abs(so.x - o.x) < (so.w + o.w) / 2 - 0.05 && Math.abs(so.z - o.z) < (so.d + o.d) / 2 - 0.05
+        && Math.abs((so.y || 0) - (c.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) dansMur++;
+    }
+    res.dansMur = dansMur;
+    const murs = c2 => { const o2 = c2.solid; let n = 0;
+      for (const so of G.solids) { if (so === o2 || so.deco) continue;
+        if (Math.abs(so.x - o2.x) < (so.w + o2.w) / 2 - 0.05 && Math.abs(so.z - o2.z) < (so.d + o2.d) / 2 - 0.05
+          && Math.abs((so.y || 0) - (c2.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) n++; } return n; };
+    // elle roule vraiment : on recule et elle bouge
+    const z0 = c.z;
+    G.enterCar(c);
+    for (let i = 0; i < 200; i++) { G.keys.add('KeyS'); G.step(1 / 60, true); }
+    G.keys.delete('KeyS');
+    res.bouge = +Math.abs(c.z - z0).toFixed(1);
+    // et une voiture coincée dans le mur du fond est remise droite sur le pont
+    // pile là où l'ancien code la déposait : à cheval sur le mur sud, derrière le comptoir
+    c.x = d0.x + 3.2; c.z = d0.z + 1.2; c.h = 1.2; c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
+    G.exitCar();
+    G.P.pos.set(d0.x, 0.3, d0.z - 1);
+    G.majAtelier();
+    res.bouton = document.getElementById('atelierAmener').textContent;
+    res.coince = murs(c);
+    document.getElementById('atelierAmener').click();
+    res.remise = { x: +(c.x - g.x).toFixed(1), z: +(c.z - g.z).toFixed(1), h: +c.h.toFixed(2) };
+    res.apresMurs = murs(c);
+    G.closeUI();
+    return res;
+  });
+  const travees = [-8.5, 0, 8.5];
+  const surTravee = p2 => travees.some(t => Math.abs(p2.x - t) < 0.6) && Math.abs(p2.z) < 0.6 && Math.abs(p2.h) < 0.05;
+  const ok = surTravee(r.pose) && r.dansMur === 0 && r.pose.y > 0.1 && r.pose.y < 1
+    && r.bouge > 2 && /Remettre/.test(r.bouton) && r.coince > 0 && surTravee(r.remise) && r.apresMurs === 0;
+  return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, bien droite), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

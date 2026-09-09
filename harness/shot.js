@@ -100,6 +100,10 @@ window.__SHOT = {
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
+    if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
+      try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
+        amenerVoitureAtelier(); } catch (e) {}
+    }
     if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
       try {
         const b = bots[0];

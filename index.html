@@ -12961,18 +12961,47 @@ function tuneCible() {   // la voiture qu'on prépare : celle qu'on conduit, sin
   }
   return best;
 }
-// « Amener une voiture » : on va chercher la plus proche du quartier et on la gare devant
-// l'atelier. Sans ça, le joueur pouvait rester bloqué devant un bouton grisé sans
-// comprendre ce qu'on attendait de lui.
+// LA TRAVÉE DE L'ATELIER : les trois ponts élévateurs du garage, rails rouges au sol. On y
+// pose la voiture bien droite et bien dégagée. Avant, elle était déposée juste derrière le
+// comptoir, à cheval sur le mur du fond — elle y restait coincée pour de bon.
+function traveesAtelier() {
+  const g = city.garage, d0 = city.tuneDesk;
+  if (g) return [[g.x - 8.5, g.z], [g.x, g.z], [g.x + 8.5, g.z]];
+  return d0 ? [[d0.x, d0.z - 5]] : [];
+}
+function traveeLibre(sauf) {
+  const d0 = city.tuneDesk, l = traveesAtelier();
+  if (!l.length) return null;
+  const occupee = (px, pz) => city.cars.some(v => v !== sauf && Math.hypot(v.x - px, v.z - pz) < 3.6)
+    || Math.hypot(P.pos.x - px, P.pos.z - pz) < 1.6;
+  const libres = l.filter(([px, pz]) => !occupee(px, pz));
+  const choix = (libres.length ? libres : l)
+    .sort((a, b) => Math.hypot(a[0] - d0.x, a[1] - d0.z) - Math.hypot(b[0] - d0.x, b[1] - d0.z))[0];
+  return choix || null;
+}
+// Poser une voiture sur la travée : bien droite, roues au sol, collision remise à jour.
+function poseSurTravee(v) {
+  const t = traveeLibre(v); if (!v || !t) return false;
+  v.x = t[0]; v.z = t[1]; v.h = 0; v.speed = 0; v.vy = 0; v.busy = false;
+  settleVehicle(v);
+  v.g.position.set(v.x, v.y, v.z); v.g.rotation.set(0, v.h, 0); vehicleSolid(v);
+  return true;
+}
+// « Amener une voiture » / « Remettre la voiture en place » : si elle est coincée dans le
+// décor, ce bouton la sort de là et la range sur la travée.
 function amenerVoitureAtelier() {
   const d0 = city.tuneDesk; if (!d0) return false;
-  let best = null, bd = 1e9;
-  for (const v of city.cars) { if (v.kart || v.rider || v.busy || v.heli || v.kind === 'jetski') continue;
-    const d = Math.hypot(v.x - d0.x, v.z - d0.z); if (d < bd) { bd = d; best = v; } }
-  if (!best) { msg('🚗 Aucune voiture libre dans la ville', 2400); return false; }
-  best.x = d0.x + 3.2; best.z = d0.z + 1.2; best.h = Math.PI / 2; best.speed = 0;
-  settleVehicle(best); best.g.position.set(best.x, best.y, best.z); best.g.rotation.y = best.h; vehicleSolid(best);
-  msg('🚗 Une voiture t\'attend devant l\'atelier !', 2600); sfx.check();
+  let v = tuneCible();
+  // Même au volant : si la caisse est prise dans un mur, ce bouton la sort de là avec toi
+  // dedans. C'était LE cas où on restait coincé sans rien pouvoir faire.
+  if (!v) {
+    let bd = 1e9;
+    for (const c of city.cars) { if (c.kart || c.rider || c.heli || c.kind === 'jetski') continue;
+      const d = Math.hypot(c.x - d0.x, c.z - d0.z); if (d < bd) { bd = d; v = c; } }
+  }
+  if (!v) { msg('🚗 Aucune voiture libre dans la ville', 2400); return false; }
+  if (!poseSurTravee(v)) { msg('🚗 Pas de place libre dans l\'atelier', 2400); return false; }
+  msg('🚗 La voiture est en place sur le pont de l\'atelier !', 2800); sfx.check();
   return true;
 }
 function tunePrix(t) {   // ce qu'il reste à payer par rapport à ce qui est déjà acheté
@@ -13051,7 +13080,10 @@ function majAtelier() {
   $('atelierOk').style.opacity = ($('atelierOk').disabled ? 0.5 : 1);
   // Un bouton grisé sans explication, c'est un bug pour le joueur : il dit ce qui manque.
   $('atelierOk').textContent = !cible ? '🚗 Il faut une voiture' : manque ? `🪙 Il te manque ${prix - wallet}` : 'Valider';
-  $('atelierAmener').style.display = cible ? 'none' : '';
+  // Toujours visible : sans voiture il en amène une, avec une voiture coincée il la
+  // remet droite sur le pont. C'est la sortie de secours quand elle est prise dans un mur.
+  $('atelierAmener').style.display = '';
+  $('atelierAmener').textContent = cible ? '🚗 Remettre la voiture en place' : '🚗 Amener une voiture';
   function apercu() { const c2 = tuneCible(); if (c2) tuneApply(c2, t); }
 }
 // La note dépend des dégâts : 10 🪙 pour trois rayures, jusqu'à 120 🪙 pour une épave.

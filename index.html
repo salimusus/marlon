@@ -6421,6 +6421,34 @@ function bubble(av, text) {   // bulle de chat au-dessus de la tête
 // l'on marchait. On la redimensionne donc à chaque image pour qu'elle garde à peu près la
 // même taille à l'écran quelle que soit la distance, et on la fait disparaître au loin.
 const BULLE_K = 0.115;
+// Un avatar mesure 2,59 m et l'habitacle d'une voiture 2,12 m : le conducteur ne peut pas
+// y tenir en entier, et ses pieds dépassaient de 61 cm SOUS la carrosserie. Dans une caisse
+// fermée on masque donc les jambes — invisibles derrière la portière de toute façon — et on
+// remonte le buste à hauteur de vitre. Sur un deux-roues, un jet-ski ou dans l'hélico, où
+// les jambes se voient vraiment, on les garde.
+function jambesEnCabine(av, cacher) {
+  const g = av && (av.group || av); if (!g || !g.traverse) return;
+  if (!!g.userData.jambesCachees === !!cacher) return;
+  g.userData.jambesCachees = !!cacher;
+  if (cacher) {
+    // On masque TOUT ce qui se trouve sous le bassin — jambes, chaussures, et le reste :
+    // ce n'était pas que les jambes qui dépassaient sous la carrosserie.
+    const caches = [];
+    g.traverse(o => {
+      if (!o.isMesh || !o.visible || !o.geometry) return;
+      o.geometry.computeBoundingBox();
+      const bb = o.geometry.boundingBox; if (!bb) return;
+      let y = bb.max.y, n = o;
+      while (n && n !== g) { y = y * (n.scale ? n.scale.y : 1) + (n.position ? n.position.y : 0); n = n.parent; }
+      if (y < 0.85) { o.visible = false; caches.push(o); }
+    });
+    g.userData.cachesCabine = caches;
+  } else {
+    for (const o of (g.userData.cachesCabine || [])) o.visible = true;
+    g.userData.cachesCabine = null;
+  }
+}
+const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
 function tickBubbles() {
   const cp = camera.position;
   for (const av of allAvatars()) {
@@ -7236,6 +7264,7 @@ function monterAvecBot(b) {
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
 function botDescendre(b, garde) {
+  jambesEnCabine(b.av, false);   // il retrouve ses jambes en sortant
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
@@ -7274,8 +7303,10 @@ function botDriveTick(dt) {
     const cs = Math.cos(c.h), sn = Math.sin(c.h);
     // Deux-roues : l'ami est en selle à l'avant, le joueur derrière lui (bien visible).
     const moto = !!c.rider;
+    const fermeB = caisseFermee(c);
+    jambesEnCabine(b.av, fermeB);
     const sx = moto ? 0 : 0.5, sz = moto ? 0.3 : (c.kind === 'truck' ? 2.55 : 0.3);
-    const sy = moto ? (c.spec.seat - 0.55) : (c.kind === 'truck' ? 0.3 : -0.35);
+    const sy = moto ? (c.spec.seat - 0.55) : (c.kind === 'truck' ? 0.3 : (fermeB ? -0.2 : -0.35));
     b.av.group.visible = !net.on;
     b.av.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
     b.av.group.rotation.y = c.h; b.av.group.rotation.z = moto ? (c.tilt || 0) : 0;
@@ -7473,7 +7504,8 @@ const AIDE_ORDRES = [
 function botDit(b, t) { botSay(b, [t]); }
 // Un véhicule réservé par un ami reste « busy » : s'il abandonne, il faut le rendre,
 // sinon la voiture était perdue pour tout le monde.
-function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0; }
+function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0;
+  for (const b of bots) if (b.drive && b.drive.car === c) jambesEnCabine(b.av, false); }
 function botStop(b, dire, libre) {
   if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
   if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
@@ -10236,11 +10268,14 @@ function frame() {
     // décalages que ceux déjà utilisés pour un ami bot qui conduit : à droite du milieu, un
     // peu en avant, et assez bas pour que la tête ne traverse pas le toit.
     const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const ferme = caisseFermee(c);
+    jambesEnCabine(me, ferme);
     const sx = c.kind === 'truck' ? 0.55 : 0.5, sz = c.kind === 'truck' ? 2.55 : 0.3;
-    const sy = c.heli ? 0.05 : c.kind === 'truck' ? 0.3 : -0.35;
+    // jambes masquées : on remonte de 45 cm pour que le buste arrive à hauteur de vitre
+    const sy = c.heli ? 0.05 : c.kind === 'truck' ? 0.3 : (ferme ? -0.2 : -0.35);   // buste remonté : plus rien ne dépasse sous la caisse
     me.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
     me.group.rotation.set(c.tiltX || 0, c.h, 0, 'YXZ');
-  } else me.group.rotation.z = 0;
+  } else { jambesEnCabine(me, false); me.group.rotation.z = 0; }
   const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);

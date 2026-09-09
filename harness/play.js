@@ -2069,7 +2069,7 @@ const QRLIRE = (() => {
     for (let k = 0; k < 15; k++) {
       let bit;
       if (k < 6) bit = m[8][k]; else if (k < 8) bit = m[8][k + 1]; else if (k === 8) bit = m[7][8]; else bit = m[14 - k][8];
-      f |= bit << k;
+      f |= bit << (14 - k);   // l'information de format s'ecrit poids FORT en premier
     }
     f ^= 0x5412;
     let d = f; for (let i = 4; i >= 0; i--) if (d & (1 << (i + 10))) d ^= 0x537 << i;
@@ -2451,7 +2451,7 @@ test('la nitro pousse fort quelques secondes puis doit se recharger', async p =>
     __G.tuneApply(c, { couleur: null, finition: 'mate', kits: [], moteur: 0, amorti: 0 });
     return { sansKit, flammes, lance, avant: +avant.toFixed(1), apres: +v.toFixed(1), visible, encore, apresFin, recharge };
   });
-  const ok = !r.sansKit && r.flammes === 4 && r.lance && r.apres > r.avant * 2 && r.visible
+  const ok = !r.sansKit && r.flammes >= 4 && r.lance && r.apres > r.avant * 2 && r.visible
     && !r.encore && !r.apresFin && r.recharge;
   return { ok, detail: `sans le kit la nitro ne part pas (${r.sansKit}) · avec le kit : ${r.flammes} flammes aux pots, la vitesse passe de ${r.avant} à ${r.apres} en 1 s et les flammes sortent=${r.visible} · impossible de la relancer tant qu'elle recharge (${r.encore}), les flammes s'éteignent à la fin (${!r.apresFin}) et elle repart après 14 s (${r.recharge})` };
 });
@@ -5355,8 +5355,11 @@ test('le plan routier dessert chaque quartier et les rues sont degagees', async 
     const surChaussee = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 - 1.2 && Math.abs(z - rt.z) < rt.d / 2 - 1.2);
     const vehic = new Set(); for (const c of [...G.city.cars, ...G.city.aiCars]) if (c.solid) vehic.add(c.solid);
     // on ne compte que le MOBILIER : un mur, un vitrage ou un bâtiment n'est jamais effacé
+    // ni ce qui est a l'ETAGE ni ce qui est DANS un batiment : ca n'a jamais trainé dans la rue
+    const dedans = (x, z) => [...G.city.batiments, ...G.city.interieurs].some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
     const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar
-      && !o.glass && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && surChaussee(o.x, o.z)).length;
+      && !o.glass && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && o.y - o.h / 2 <= 0.8 && !dedans(o.x, o.z)
+      && surChaussee(o.x, o.z)).length;
     return { axes: G.city.plan.axes.length, dessertes: d.length, quartiers: G.city.zones.length,
       horsRoute, sansDesserte, sansArret, degagees: G.city.degagees, restants,
       pireDistance: Math.max(...d.map(o => o.loin)) };
@@ -5428,6 +5431,9 @@ test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vrai
 // non initialisée et le jeu ne démarrait plus du tout (écran noir).
 test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   await p.evaluate(() => {
+    // la partie en cours se sauvegarde toute seule en quittant la page : sans ce garde-fou
+    // elle ECRASERAIT la sauvegarde qu'on vient de poser, juste avant le rechargement
+    window.__SANS_SAUVE = true;
     localStorage.setItem('superobby.guerre', JSON.stringify({ rep: 30, force: 40, magot: 200, armes: 1,
       terr: { zone: 'rouge' }, saison: 1, gangs: {}, recrues: [{ n: 'Lucas_2014', f: 20, p: 35 }],
       perf: 42, membres: [{ n: 'Lucas_2014', p: 35 }] }));

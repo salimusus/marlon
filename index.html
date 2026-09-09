@@ -194,6 +194,10 @@ body.touch.city #punchBtn{display:block}
 body.lobby #punchBtn{display:none!important}
 #wanted{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 56px);transform:translateX(-50%);background:rgba(200,30,30,.8);color:#fff;font-weight:800;padding:6px 14px;border-radius:10px;display:none;z-index:4;font-size:15px;animation:wblink 1s infinite}
 #wanted.on{display:block}
+/* jauge de performance du joueur, sous le bandeau du haut */
+#perfHud{position:fixed;left:10px;top:calc(env(safe-area-inset-top) + 108px);background:rgba(20,28,48,.72);color:#eaf0ff;font-weight:800;padding:5px 10px;border-radius:10px;z-index:4;font-size:13px;letter-spacing:-.5px}
+#perfHud b{font-family:ui-monospace,monospace;letter-spacing:-1.5px}
+body.tv #perfHud{font-size:clamp(15px,1.3vw,22px)}
 #missionHud{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 92px);transform:translateX(-50%);background:rgba(20,30,60,.75);color:#fff;font-weight:800;padding:6px 14px;border-radius:10px;display:none;z-index:4;font-size:14px;max-width:80vw;text-align:center}
 #missionHud.on{display:block}
 #gps{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);width:130px;height:130px;border-radius:50%;background:rgba(10,16,36,.72);border:3px solid rgba(255,255,255,.55);display:none;z-index:4;box-shadow:0 6px 18px rgba(0,0,0,.35)}
@@ -431,6 +435,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
 <div id="vignette"></div>
 <div id="msg"></div>
 <div id="wanted">🚔 Recherché</div>
+<div id="perfHud" class="pill" style="display:none"></div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -2892,7 +2897,7 @@ let worldIdx = 0, PATH = [];
 const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
-const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0 };
+const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -2947,6 +2952,7 @@ function infraction(what, level, sev = 1, sansPitie) {   // sev : 1 petit délit
   $('wanted').classList.add('on'); siren.start();
 }
 function clearWanted(reason) {
+  police.usure = 0;   // ils repartent frais pour la prochaine fois
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
   police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
@@ -3182,7 +3188,7 @@ function endMission(success, quiet) {
   if (d.marker) worldGroup.remove(d.marker);
   if (d.bags) for (const b of d.bags) worldGroup.remove(b.m);
   clearBeacon('mission'); mission.cur = null; mission.data = {};
-  if (success) { wallet += m.r; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); msg(`✅ Mission réussie : +${m.r} 🪙`, 3000); chat(null, `📋 ${myCfg.name} a réussi la mission « ${m.n} » (+${m.r} 🪙)`); }
+  if (success) { wallet += m.r; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); perfGagne(P, 4, 'mission du bureau réussie'); msg(`✅ Mission réussie : +${m.r} 🪙`, 3000); chat(null, `📋 ${myCfg.name} a réussi la mission « ${m.n} » (+${m.r} 🪙)`); }
   else if (!quiet) { msg('❌ Mission échouée', 1800); sfx.die(); }
   updateMissionHud();
 }
@@ -4419,6 +4425,7 @@ function nextQuestion() {
 function answer(v, el) {
   if (!school.q) return; const q = school.q, good = v === q.a; school.tot++;
   if (good) { school.ok++; school.streak++; let gain = 3 + (school.age === 'a9' ? 2 : school.age === 'a7' ? 1 : 0); if (school.streak % 3 === 0) { gain += 8; msg(`🎉 Série de ${school.streak} ! +${gain} 🪙`, 1600); } wallet += gain; saveWallet(); updateHud(); sfx.coin(); el.style.background = '#d6ffd6'; el.style.borderColor = '#5cc453';
+    perfGagne(P, school.streak % 3 === 0 ? 2 : 1, null);
     msg('🎉 C\'est gagné !', 1200); schDire(school.streak % 3 === 0 ? `C'est gagné ! Bravo, ${school.streak} bonnes réponses de suite !` : 'C\'est gagné !'); }
   else { school.streak = 0; sfx.hit(); el.style.background = '#ffd6d6'; el.style.borderColor = '#ff5c5c';
     // la bonne carte se repérait par son texte : le numéro ajouté devant l'avait cassé
@@ -5527,7 +5534,7 @@ function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-v
     marque(o.x - o.w / 2 - m, o.x + o.w / 2 + m, o.z - o.d / 2 - m, o.z + o.d / 2 + m);
   }
   for (const b of city.batiments) marque(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
-  if (RALLY.mesh && !pieton) marque(RALLY.x1 - m, RALLY.x2 + m, RALLY.z1 - m, RALLY.z2 + m);   // dunes du rallye : interdites aux voitures
+  if (RALLY.mesh && !pieton) marque(RALLY.x1 - m, RALLY.x2 + m, RALLY.z1 - m, RALLY.z2 + m);   // dunes du rallye : interdites aux voitures (un piéton, lui, marche sur le sable)
   if (pieton) { NAV.pieton = bl; NAV.blocked = bl; return; }
   NAV.blocked = bl; NAV.voit = bl;
   // Carte de COÛT : rouler sur la chaussée coûte 1, couper à travers un jardin coûte 3.
@@ -5849,7 +5856,7 @@ function agentsTick(dt) {
       } else a.stuckT = Math.max(0, a.stuckT - dt);
       animateRig(a.av.rig, 'walk', spd, dt, simTime);
     } else { a.facing = Math.atan2(P.pos.x - a.x, P.pos.z - a.z); animateRig(a.av.rig, 'idle', 0, dt, simTime); }
-    const gy = groundUnder(a.x, a.z, null, a.y + 0.6);   // escaliers et étages : ils suivent le sol
+    const gy = groundCar(a.x, a.z, null, a.y + 0.6);   // escaliers, étages ET dunes du rallye : ils suivent le sol (avec groundUnder, un agent traversait le sable par en dessous)
     // on monte la marche d'un coup (avec un rattrapage progressif, l'agent restait un
     // instant trop bas et la marche suivante le bloquait : il glissait alors sur le côté)
     if (gy > a.y) a.y = Math.min(gy, a.y + Math.max(0.7, 20 * dt)); else a.y = Math.max(gy, a.y - 9 * dt);
@@ -6002,6 +6009,10 @@ function policeTick(dt) {
       else $('act').textContent = `🏠 Reste caché encore ${Math.ceil(need - police.villaT)} s…`;
     } else police.villaT = 0;
     const near = police.cars.some(pc => Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z) < 14) || police.agents.some(a => !a.ko && Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 12);
+    // La police PERD DE LA PERFORMANCE quand le joueur reste hors de sa portée, et elle en
+    // perd doucement avec le temps : une traque qui s'éternise s'essouffle.
+    if (!near) police.usure = (police.usure || 0) + dt * (hidden ? 2.2 : 0.9);
+    else police.usure = Math.max(0, (police.usure || 0) - dt * 3);
     if (hidden && !near) { police.hideT += dt; if (police.hideT > 6 + (police.crimeLevel || 0) * 5) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) { armeeFin(); clearWanted('🕵️ Semé ! La police a abandonné'); } else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
     else police.hideT = 0;
     if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) { armeeFin(); clearWanted('🚔 La police ne te cherche plus'); } }   // plus le délit est grave, plus elle s'accroche
@@ -6067,7 +6078,7 @@ function policeTick(dt) {
       const portee = armee.on ? 40 : braquage ? 32 : 10 + police.wanted * 4 + tenace * 2;
       if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.8, 2.2 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
         dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
-        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: (pc.mil ? 16 : 4) + police.wanted + tenace }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
+        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: Math.max(2, Math.round(((pc.mil ? 16 : 4) + police.wanted + tenace) * (0.45 + policePerf() / 100))) }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
     }
     // arrestation : la police me touche (ou reste coincée tout près : les agents descendent et m'attrapent à pied)
     const dP = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z);
@@ -6706,7 +6717,7 @@ const MUNITIONS = {
   inc: { n: 'Cartouches incendiaires ×20', e: '🔥', p: 55, mul: 1.4, nb: 20, feu: true, desc: 'À l\'impact, une flaque de feu brûle tout ce qui passe pendant 12 s.' },
   exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
 };
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0 };
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, perf: +store.get('superobby.perf') || 10 };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -7033,6 +7044,7 @@ const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;'
 // constantes ne soient initialisées.
 const HUD_GUERRE = { rep: 0, terr: 0, total: 8, rang: 'Débutant' };
 function updateHud() {
+  try { majPerfHud(); } catch (e) {}
   $('coins').textContent = WORLDS[worldIdx] && WORLDS[worldIdx].free ? `🪙 ${wallet}` : `🪙 ${coinCount}/${coins.length} · ${wallet}`;
   $('deaths').textContent = `💀 ${deaths}`;
   $('meName').textContent = myCfg.name;
@@ -7262,9 +7274,29 @@ const SYNO_LIEUX = [[/circuit|kart|grille/, 'Départ'], [/manege|manège|carrous
   [/hopital|docteur|medecin|urgence/, 'Hôpital'], [/ecole|classe|maitresse|maîtresse/, 'École'],
   [/entrepot|hangar|usine|industriel/, 'Zone industrielle'], [/stand de tir|cible/, 'Stand de tir'],
   [/armurerie|arme\b|fusil|pistolet/, 'Armurerie'], [/piscine|plongeoir|nager/, 'Piscine'],
-  [/trampoline/, 'Trampolines'], [/parking|garage/, 'Parking'], [/deco|décoration|meuble/, 'Maison & Déco'],
+  [/trampoline/, 'Trampolines'], [/parking/, 'Parking'], [/deco|décoration|meuble/, 'Maison & Déco'],
+  // « emmène-moi au garage » visait le PARKING, à l'autre bout de la ville
+  [/garage|atelier|tuning|carrosserie|peinture|reparation|réparation|reparer|réparer/, 'Garage custom'],
+  [/tatou|tato\b|tattoo|encre/, 'Tatouage'], [/snack|burger|fast.?food|glace/, 'Commerces'],
   [/mission|bureau/, 'Bureau des missions'], [/rallye|desert|dune/, 'Rallye'], [/anneau|anneaux/, 'Héliport'],
   [/jardin|balancoire|balançoire|toboggan|aire de jeu/, 'Parc']];
+// Les repères RÉELS de la ville, relus à chaque appel : ils bougent d'un monde à l'autre et
+// une table de coordonnées écrite en dur finissait toujours par pointer à côté.
+function ANCRES_VIVES() {
+  const A = {};
+  const p = (nom, o) => { if (o && o.x != null && o.z != null) A[nom] = { x: o.x, z: o.z }; };
+  p('Garage custom', city.garage || city.tuneDesk);
+  p('Tatouage', city.tatooDesk);
+  p('Banque', city.bank);
+  p('Commissariat', police.station);
+  p('Bureau des missions', city.office);
+  p('Villa', city.villaMine);
+  p('Armurerie', city.armory);
+  p('Commerces', city.snack);
+  p('Stand de tir', (city.targets && city.targets[0]) ? { x: city.targets[0].x, z: city.targets[0].z + 6 } : null);
+  p('Piscine', city.villaPool);
+  return A;
+}
 function lieuDe(txt) {
   const n = norm(txt);
   let best = null;
@@ -7275,7 +7307,12 @@ function lieuDe(txt) {
   // tombe au milieu du salon, une voiture ne peut pas s'y garer.
   const ARRETS = { Villa: [48, 190], Banque: [-39, 72], École: [-62, 202], Hôpital: [26, 214] };
   const a = ARRETS[best.name];
-  return { nom: `${best.emoji} ${best.name}`, x: (best.x1 + best.x2) / 2, z: (best.z1 + best.z2) / 2,
+  // Le centre géométrique d'une zone n'est pas toujours l'endroit visé : on préfère le VRAI
+  // repère quand il existe (le comptoir du garage, le guichet du tatoueur, le poste de
+  // police…). Sans cela, « emmène-moi au garage » envoyait au milieu d'un pâté de maisons.
+  const vif = ANCRES_VIVES()[best.name];
+  const cx = vif ? vif.x : (best.x1 + best.x2) / 2, cz = vif ? vif.z : (best.z1 + best.z2) / 2;
+  return { nom: `${best.emoji} ${best.name}`, x: cx, z: cz,
     auto: a ? { x: a[0], z: a[1] } : null };
 }
 function devenirAmi(b) {
@@ -9730,6 +9767,7 @@ function gymTick(dt) {
   if (left <= 0) {
     const r = gym.reps, dm = gym.on === 'bench' ? Math.round(r * 0.6) : Math.round(r * 0.15), df = gym.on === 'bench' ? -Math.round(r * 0.3) : -Math.round(r * 0.8);
     stats.m = clamp(stats.m + dm, 0, 100); stats.f = clamp(stats.f + df, 0, 100); saveStats(); applyStats(me, stats.m, stats.f);
+    perfGagne(P, gym.on === 'bench' ? 3 : 2, 'entraînement');
     msg(`💪 +${dm} muscle${df ? ` · ${df} ventre` : ''} (muscles ${stats.m}%)`, 2600); sfx.win(); bubble(me, pickOne(['je suis costaud !', 'ça brûle !', 'encore une série ?']));
     gym.on = null; updateAct(); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   }
@@ -10112,7 +10150,7 @@ function shotsTick(dt) {
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
     else if (quoi === 'cible') {
-      const tg = cible; tg.hidden = simTime + 2.4; city.shots++; sfx.check(); sfx.clack();
+      const tg = cible; tg.hidden = simTime + 2.4; city.shots++; perfGagne(P, 1, null); sfx.check(); sfx.clack();
       burst(tg.m.position.x, tg.y, tg.z, 0xffd23f, 10); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
       const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); burst(r.cur.x, r.cur.y + 1, r.cur.z, 0xff5c5c, 8); updateAct();
@@ -12009,6 +12047,72 @@ function tatouer() {
   majTatoo();
 }
 
+
+// ================= LES BARRES DE PERFORMANCE =================
+// Tout ce qui se bat en ville a une performance de 0 à 100 : le joueur, les membres de son
+// gang, ceux des gangs rivaux, la police et l'armée. Elle décide de la réussite des coups,
+// des dégâts au corps à corps et de la résistance. Elle se gagne à l'entraînement (salle de
+// sport, stand de tir), à l'expérience (missions réussies, exercices de l'école) et se perd
+// quand on se fait démolir.
+const PERF_SEUILS = [30, 55, 80];   // ★ / ★★ / ★★★ / ★★★★
+const perfDe = o => clamp(Math.round((o && o.perf != null) ? o.perf : 0), 0, 100);
+function perfEtoiles(v) { return '★'.repeat(1 + PERF_SEUILS.filter(s => v >= s).length); }
+function perfCouleur(v) { return v >= 80 ? '#5cc453' : v >= 55 ? '#ffd23f' : v >= 30 ? '#ff8f3a' : '#ff5c5c'; }
+function perfBarre(v, n = 12) { const p = clamp(Math.round(v / 100 * n), 0, n); return '█'.repeat(p) + '░'.repeat(n - p); }
+// une ligne de tableau : nom, jauge colorée, note en étoiles
+function perfLigne(nom, v, sous, teinte) {
+  const c = perfCouleur(v);
+  return `<b style="border-left:6px solid ${teinte || c};display:block">${nom}`
+    + `<span style="display:block;font-family:monospace;color:${c};letter-spacing:-1px">${perfBarre(v)} ${v}/100 ${perfEtoiles(v)}</span>`
+    + (sous ? `<span style="display:block;font-weight:600;color:#7a86a0">${sous}</span>` : '') + '</b>';
+}
+const savePerf = () => store.set('superobby.perf', String(Math.round(P.perf || 0)));
+// Gagner de la performance. `quoi` sert au message : on ne prévient que pour le joueur et
+// pour les hommes du gang, pas pour les rivaux qui progressent dans leur coin.
+function perfGagne(o, n, quoi) {
+  if (!o || !n) return 0;
+  const av = perfDe(o);
+  o.perf = clamp(av + n, 0, 100);
+  const gain = perfDe(o) - av;
+  if (!gain) return 0;
+  if (o === P) { savePerf(); if (quoi) msg(`📈 Performance +${gain} (${quoi}) — tu es à ${perfDe(P)}/100 ${perfEtoiles(perfDe(P))}`, 2600); majPerfHud(); }
+  else if (o.name && estDuGang(o)) { if (quoi) msg(`📈 ${o.name} progresse : ${perfDe(o)}/100 ${perfEtoiles(perfDe(o))} (${quoi})`, 2400); majForceGang(); }
+  return gain;
+}
+function perfPerd(o, n, quoi) {
+  if (!o || !n) return 0;
+  const av = perfDe(o);
+  o.perf = clamp(av - Math.abs(n), 0, 100);
+  if (o === P) { savePerf(); majPerfHud(); if (quoi) msg(`📉 Performance −${av - perfDe(o)} (${quoi})`, 2200); }
+  else if (o.name && estDuGang(o)) majForceGang();
+  return av - perfDe(o);
+}
+// La force du gang n'est plus un chiffre à part : c'est la moyenne de ses hommes.
+function majForceGang() {
+  const l = gang.membres.concat(gang.membresLibres || []);
+  if (!l.length) { gang.force = perfDe(P); return gang.force; }
+  gang.force = Math.round(l.reduce((a, b) => a + perfDe(b), 0) / l.length);
+  return gang.force;
+}
+function forceGangRival(G) {
+  const l = (G.membres || []).filter(m => !m.ko && !m.captif && !m.mort);
+  if (!l.length) return 0;
+  return Math.round(l.reduce((a, m) => a + perfDe(m), 0) / l.length);
+}
+// La police : une étoile = petite performance, deux = moyenne, trois = grande, l'armée est
+// hors catégorie. Elle S'USE quand le joueur reste hors de portée, et avec le temps.
+function policePerf() {
+  if (armee.on) return clamp(100 - (police.usure || 0) * 0.4, 55, 100);
+  const base = [0, 30, 55, 80][clamp(police.wanted, 0, 3)] || 0;
+  return clamp(base - (police.usure || 0), 0, 100);
+}
+function majPerfHud() {
+  const el = $('perfHud'); if (!el) return;
+  const v = perfDe(P);
+  el.innerHTML = `📈 <b style="color:${perfCouleur(v)}">${perfBarre(v, 8)}</b> ${v} ${perfEtoiles(v)}`;
+  el.style.display = city.on ? '' : 'none';
+}
+
 // ================= GANGS =================
 // Le joueur monte son équipe de braqueurs parmi ses amis, et trois gangs rivaux vivent
 // leur vie dans La Zone : ils braquent les boutiques, cambriolent les villas et se
@@ -12019,6 +12123,11 @@ function rejoindreGang(b) {
   if (!estAmi(b.name)) { botDit(b, 'on se connaît à peine… deviens mon ami d\'abord'); return true; }
   gang.membres.push(b);
   b.gang = 'joueur';
+  if (b.perf == null) {
+    const sv = (guerre.sauvePerf || []).find(x => x.n === b.name);
+    b.perf = sv ? clamp(sv.p, 0, 100) : clamp(Math.round(rnd(12, 26)), 0, 100);   // un débutant : à toi de le faire progresser
+  }
+  majForceGang();
   try { applyLook(b.av, b.name, Object.assign(botLook(b), { hat: 'bandanaV' })); } catch (e) {}   // ton gang porte le bandana vert
   botDit(b, pickOne(['carrément, je suis avec toi ! 😤', 'ok chef, le gang c\'est nous 💪', 'compte sur moi']));
   msg(`🤝 ${b.name} rejoint ton gang (${gang.membres.length} membre${gang.membres.length > 1 ? 's' : ''})`, 3000);
@@ -12037,14 +12146,16 @@ function botLook(b) {
     skirt: !!d.skirt, hat: 'none', jacket: d.jacket || 0, bag: d.bag || 0, glasses: !!d.glasses, shorts: !!d.shorts, m: d.m, f: d.f };
 }
 // ---- missions confiées au gang ----
+// `difficulte` : ce que l'équipe doit surpasser. Un homme à 20 de performance a donc une
+// chance sur trois de rater une boutique, et presque aucune de tenir la banque tout seul.
 const GANG_MISSIONS = {
-  argent: { e: '💰', n: 'voler de l\'argent', duree: 26, gain: [40, 120] },
-  banque: { e: '🏦', n: 'braquer la banque', duree: 46, gain: [220, 500] },
-  voiture: { e: '🚗', n: 'voler une voiture', duree: 30, gain: [80, 200] },
-  gangRival: { e: '😤', n: 'attaquer un gang rival', duree: 34, gain: [60, 180] },
-  villa: { e: '🏠', n: 'cambrioler une villa', duree: 40, gain: [150, 380] },
-  boutique: { e: '🛍️', n: 'braquer une boutique', duree: 28, gain: [70, 190] },
-  guet: { e: '👀', n: 'faire le guet', duree: 60, gain: [0, 0] },
+  argent: { e: '💰', n: 'voler de l\'argent', duree: 26, gain: [40, 120], difficulte: 22 },
+  banque: { e: '🏦', n: 'braquer la banque', duree: 46, gain: [220, 500], difficulte: 85 },
+  voiture: { e: '🚗', n: 'voler une voiture', duree: 30, gain: [80, 200], difficulte: 30 },
+  gangRival: { e: '😤', n: 'attaquer un gang rival', duree: 34, gain: [60, 180], difficulte: 20 },
+  villa: { e: '🏠', n: 'cambrioler une villa', duree: 40, gain: [150, 380], difficulte: 60 },
+  boutique: { e: '🛍️', n: 'braquer une boutique', duree: 28, gain: [70, 190], difficulte: 38 },
+  guet: { e: '👀', n: 'faire le guet', duree: 60, gain: [0, 0], difficulte: 0 },
 };
 function missionGang(membres, type, cible, lieuForce) {
   const M = GANG_MISSIONS[type]; if (!M || !membres.length) return false;
@@ -12063,8 +12174,11 @@ function missionGang(membres, type, cible, lieuForce) {
     b.rdv = { x: lieu.x + rnd(-2.5, 2.5), z: lieu.z + rnd(-2.5, 2.5), y: 0.3, nom: M.e + ' ' + M.n, arrive: false, libre: true, gang: true };
     b.rdvRoute = null; b.wait = 0; b.target = null; b.activite = null; b.ordre = { type: 'gang' };
   }
+  const eq = membres.reduce((a, b) => a + perfDe(b), 0);
+  const diff = (M.difficulte || 35) + (type === 'gangRival' ? gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4 : 0);
+  gang.mission.chanceDep = Math.round(clamp(eq / (eq + diff), 0.1, 0.95) * 100);
   botDit(membres[0], pickOne([`on y va, ${M.n} 😎`, `ok chef, on s'occupe de ${M.n}`, 'considère que c\'est fait 💪']));
-  msg(`${M.e} ${membres.map(b => b.name).join(' et ')} partent ${M.n}`, 3200);
+  msg(`${M.e} ${membres.map(b => b.name).join(' et ')} partent ${M.n} · ${gang.mission.chanceDep} % de chances${membres.length > 1 ? ' (à plusieurs, c\'est bien mieux)' : ' — envoie-les à deux !'}`, 4200);
   chat(null, `${M.e} Le gang de ${myCfg.name} part ${M.n}`);
   return true;
 }
@@ -12121,6 +12235,39 @@ function ordreGang(txt) {
   }
   return missionGang(equipe, type, cible);
 }
+// Un coup peut RATER : les hommes rentrent bredouilles, cabossés, et l'un d'eux peut se
+// faire prendre — voire tuer — par la police ou par le gang d'en face.
+function gangMissionRatee(m) {
+  const noms = m.membres.map(b => b.name).join(' et ');
+  msg(`${m.M.e} Raté ! ${noms} n'y arrivent pas (${m.chance} % de chances)`, 3800); sfx.die();
+  chat(null, `${m.M.e} Le coup du gang de ${myCfg.name} a échoué`);
+  for (const b of m.membres) { perfPerd(b, 3); b.gangMission = null; b.ordre = null; b.rdv = null; b.wait = rnd(1, 3); }
+  // plus l'homme était faible, plus il risque gros
+  const risque = m.type === 'gangRival' ? 0.45 : m.type === 'banque' ? 0.35 : 0.2;
+  const pauvre = m.membres.slice().sort((a, b) => perfDe(a) - perfDe(b))[0];
+  if (pauvre && Math.random() < risque * (1 - perfDe(pauvre) / 140)) {
+    tuerMembre(pauvre, m.type === 'gangRival' ? 'le gang d\'en face' : 'la police');
+  } else if (pauvre) {
+    botDit(pauvre, pickOne(['on a failli y rester… 😰', 'ils étaient trop forts pour nous', 'faut qu\'on s\'entraîne, chef']));
+  }
+  majForceGang(); saveGuerre();
+  gang.mission = null;
+}
+// Un membre du gang peut mourir. C'est définitif : il quitte le gang et disparaît de la ville.
+function tuerMembre(b, par) {
+  if (!b) return false;
+  const i = gang.membres.indexOf(b);
+  if (i >= 0) gang.membres.splice(i, 1);
+  b.gang = null; b.gangMission = null; b.ordre = null; b.rdv = null; b.drive = null; b.mort = simTime;
+  b.ko = simTime + 1e9; b.hp = 0;
+  if (b.av) { b.av.group.visible = false; }
+  burst(b.pos.x, b.pos.y + 1, b.pos.z, 0x8f98ab, 14); sfx.die();
+  msg(`💀 ${b.name} est mort — tué par ${par}. Tu perds un homme.`, 5000);
+  chat(null, `💀 ${b.name}, du gang de ${myCfg.name}, a été tué par ${par}`);
+  amis.delete(b.name); saveAmis(); updateLeaderboard();
+  majForceGang(); saveGuerre();
+  return true;
+}
 function gangMissionTick(dt) {
   const m = gang.mission; if (!m) return;
   const arrives = m.membres.filter(b => b.rdv && b.rdv.arrive).length;
@@ -12138,10 +12285,23 @@ function gangMissionTick(dt) {
     return;
   }
   if (m.etape === 'action' && simTime > m.fin) {
-    const g2 = Math.floor(rnd(m.M.gain[0], m.M.gain[1])) * (1 + (m.membres.length - 1) * 0.25);
+    // LA PERFORMANCE DÉCIDE. On additionne celle des hommes envoyés : deux hommes doublent
+    // donc bel et bien les chances. En face, un gang rival oppose la sienne ; la police
+    // aussi quand elle est déjà sur le coup.
+    const equipe = m.membres.reduce((a, b) => a + perfDe(b), 0);
+    const rival = m.type === 'gangRival' ? (gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4) : 0;
+    const flics = police.wanted > 0 ? policePerf() * 0.5 : 0;
+    const difficulte = (m.M.difficulte || 35) + rival + flics;
+    const chance = clamp(equipe / (equipe + difficulte), 0.1, 0.95);
+    const reussi = Math.random() < chance;
+    m.chance = Math.round(chance * 100);
+    if (!reussi) { gangMissionRatee(m); return; }
+    const g2 = Math.floor(rnd(m.M.gain[0], m.M.gain[1])) * (1 + (m.membres.length - 1) * 0.25) * (0.7 + equipe / 200);
     const gagne = Math.floor(g2);
     if (gagne > 0) { wallet += gagne; saveWallet(); updateHud(); gang.butin += gagne; sfx.coin(); }
-    msg(`${m.M.e} ${m.membres.map(b => b.name).join(' et ')} : mission réussie ! +${gagne} 🪙`, 3600);
+    for (const b of m.membres) perfGagne(b, m.membres.length > 1 ? 4 : 6, 'coup réussi');
+    majForceGang();
+    msg(`${m.M.e} ${m.membres.map(b => b.name).join(' et ')} : mission réussie (${m.chance} % de chances) ! +${gagne} 🪙`, 3800);
     chat(null, `${m.M.e} Le gang rapporte ${gagne} 🪙 à ${myCfg.name}`);
     if (m.type === 'voiture') {
       const c = city.cars.find(c2 => !c2.busy && !c2.kart);
@@ -12172,7 +12332,9 @@ function creerGangeur(G, x, z, chef) {
   }
   av.group.position.set(x, 0.3, z);
   return { av, nom, x, y: 0.3, z, facing: rnd(0, 6.28), hp: chef ? 170 : 90, hpMax: chef ? 170 : 90,
-    ko: 0, pas: rnd(0, 6.28), gang: G.id, cd: 0, chef: !!chef, arme: false };
+    ko: 0, pas: rnd(0, 6.28), gang: G.id, cd: 0, chef: !!chef, arme: false,
+    // performance de départ : le niveau de son gang, plus la prime du chef
+    perf: clamp(Math.round((G.force || 25) + (chef ? 18 : 0) + rnd(-6, 6)), 5, 100) };
 }
 // ---- planque : hangar aveugle où un gang cache son magot (et où le joueur garde le sien) ----
 function buildPlanque(x, z, opt = {}) {
@@ -12293,6 +12455,13 @@ function gangTick(dt) {
   for (const G of gangs) {
     // fin d'action : on rentre au quartier
     if (simTime > G.t) {
+      // Ils PROGRESSENT aussi, à leur manière : chaque coup mené à bien aguerrit leurs
+      // hommes. Ils n'ont ni bureau des missions ni école, alors ils montent moins vite que
+      // toi — mais si tu les laisses tranquilles, ils finissent par te dépasser.
+      if (G.etat && G.etat !== 'repos') {
+        for (const m of G.membres) if (!m.ko && !m.captif) perfGagne(m, G.etat === 'planque' ? 2 : 1);
+        G.force = forceGangRival(G) || G.force;
+      }
       G.t = simTime + rnd(35, 80);
       const r = Math.random();
       if (r < 0.3 && city.vitrines && city.vitrines.length) { const v = pickOne(city.vitrines); G.etat = 'boutique'; G.cible = [v.x, v.z];
@@ -12356,14 +12525,37 @@ function gangTick(dt) {
       if (G.etat === 'joueur' && Math.hypot(P.pos.x - m.x, P.pos.z - m.z) < 1.8 && simTime > m.cd && P.hp > 0 && !drive.car) {
         m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
         const l = Math.hypot(P.pos.x - m.x, P.pos.z - m.z) || 1;
-        hurt(8, G.nom, (P.pos.x - m.x) / l, (P.pos.z - m.z) / l, 1.4);
+        // un gangster performant tape plus fort ; le joueur entraîné encaisse mieux
+        const coupF = Math.max(3, Math.round(5 + perfDe(m) / 8 - perfDe(P) / 16));
+        hurt(coupF, G.nom, (P.pos.x - m.x) / l, (P.pos.z - m.z) / l, 1.4);
       }
-      // bagarre entre gangs
+      // bagarre entre gangs : les coups portent selon la PERFORMANCE de celui qui frappe
       if (G.etat === 'rival') for (const O of gangs) { if (O === G) continue;
         for (const o2 of O.membres) { if (o2.ko) continue;
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
-            o2.hp -= 14; burst(o2.x, o2.y + 1.2, o2.z, 0xff5c5c, 5); sfx.hit();
-            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; } } } }
+            o2.hp -= 6 + Math.round(perfDe(m) / 6); burst(o2.x, o2.y + 1.2, o2.z, 0xff5c5c, 5); sfx.hit();
+            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; perfGagne(m, 2); perfPerd(o2, 5); } } } }
+      // ILS S'EN PRENNENT AUSSI À TES HOMMES — et peuvent les tuer. Un membre bien entraîné
+      // encaisse et rend les coups ; un débutant envoyé seul face à un chef y laisse la peau.
+      if ((G.etat === 'rival' || G.etat === 'joueur') && gang.membres.length) {
+        for (const b of gang.membres) {
+          if (b.ko || b.mort || !b.av || !b.av.group.visible) continue;
+          if (Math.hypot(b.pos.x - m.x, b.pos.z - m.z) > 1.8 || simTime < m.cd) continue;
+          m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
+          const attaque = perfDe(m), defense = perfDe(b);
+          b.hp = (b.hp ?? 100) - Math.max(4, Math.round(10 + (attaque - defense) / 5));
+          burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0xff5c5c, 5); sfx.hit();
+          // il rend les coups
+          m.hp -= Math.max(2, Math.round(4 + defense / 8));
+          if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 3, 'il a mis un rival au tapis'); botSay(b, ['et voilà ! 😤', 'personne ne touche au gang !']); }
+          else if (b.hp <= 0) {
+            b.hp = 0;
+            if (attaque > defense + 20 && Math.random() < 0.5) tuerMembre(b, `les ${G.nom}`);
+            else { b.ko = simTime + 12; b.fight = null; perfPerd(b, 6); botSay(b, ['aïe… ils sont costauds', 'au secours chef !']);
+              msg(`🤕 ${b.name} est au tapis (${perfDe(b)}/100) — fais-le s'entraîner !`, 3200); }
+          }
+        }
+      }
       // pillage de la planque du joueur
       if (G.etat === 'planque' && gang.planque && d < 4 && simTime > (G.pilleT || 0)) {
         G.pilleT = simTime + 6;
@@ -12803,11 +12995,11 @@ function entrainementTick(dt) {
     b.entrainT = (b.entrainT || 0) + dt;
     if (b.entrainT > 12) {
       b.entrainT = 0;
-      const gainF = b.rdv.entrain === 'tir' ? 3 : 2;
-      gang.force = Math.min(100, gang.force + gainF);
-      b.force = (b.force || 0) + gainF;
+      const gainF = b.rdv.entrain === 'tir' ? 5 : 4;
+      perfGagne(b, gainF, b.rdv.entrain === 'tir' ? 'stand de tir' : 'salle de sport');
+      b.force = perfDe(b); majForceGang();
       botDit(b, b.rdv.entrain === 'tir' ? 'dans le mille ! 🎯' : 'je suis plus costaud ! 💪');
-      msg(`💪 Force du gang : ${gang.force}/100 (+${gainF})`, 2400);
+      msg(`💪 ${b.name} : ${perfDe(b)}/100 ${perfEtoiles(perfDe(b))} · force du gang ${gang.force}/100`, 2600);
       sfx.win(); b.rdv = null; b.ordre = null; b.wait = 1;
       saveGuerre();
     }
@@ -12819,7 +13011,7 @@ function armerMembre(b) {
   if (wallet < prix) { msg(`Il te manque ${prix - wallet} 🪙 pour lui acheter une arme`, 2200); return true; }
   wallet -= prix; saveWallet(); updateHud();
   b.arme = true; gang.armes = (gang.armes || 0) + 1;
-  gang.force = Math.min(100, gang.force + 3);
+  perfGagne(b, 6, 'il est armé'); majForceGang();
   try { botTirePourMoi(b); } catch (e) {}
   botDit(b, 'merci chef, je suis armé 🔫');
   msg(`🔫 ${b.name} est armé (−${prix} 🪙) · force du gang ${gang.force}/100`, 3000);
@@ -12980,15 +13172,25 @@ function openGuerre() { openUI('guerre'); majGuerre(); }
 function majGuerre() {
   const r = rangJoueur();
   $('guerreSub').innerHTML = `But du jeu : <b>contrôler la ville</b>. Bats les gangs, prends leurs quartiers, vide leurs planques et recrute leurs membres.`;
-  $('guerreMoi').innerHTML = `<b>🚩 ${gang.nom} · rang « ${r.n} » (${gang.rep} pts)</b>`
-    + `<b>👥 ${gang.membres.length + (gang.membresLibres || []).length}/${r.max} membres (${gang.membres.length} amis + ${(gang.membresLibres || []).length} recrues) · 💪 force ${gang.force}/100 · 🔫 ${gang.armes || 0} armés</b>`
-    + `<b>💰 magot dans ta planque : ${gang.magot} 🪙</b>`
+  majForceGang();
+  // Les barres de performance : la tienne, celle de chacun de tes hommes, celle de la police.
+  const pol = Math.round(policePerf());
+  $('guerreMoi').innerHTML = `<b>🚩 ${gang.nom} · rang « ${r.n} » (${gang.rep} pts) · 👥 ${gang.membres.length + (gang.membresLibres || []).length}/${r.max} · 🔫 ${gang.armes || 0} armés · 💰 ${gang.magot} 🪙</b>`
+    + perfLigne(`🧑 ${myCfg.name} (toi)`, perfDe(P), 'Salle de sport, stand de tir, missions du bureau et exercices de l\'école font monter ta jauge')
+    + gang.membres.map(b => perfLigne(`😎 ${b.name}${b.arme ? ' 🔫' : ''}`, perfDe(b),
+        b.ko && b.ko > simTime ? 'au tapis, il récupère' : 'entraîne-le au sport et au tir, envoie-le en mission')).join('')
+    + (gang.membres.length ? '' : '<b style="color:#7a86a0">Recrute des amis dans ton gang pour voir leurs jauges ici.</b>')
+    + perfLigne(`🚓 La police${armee.on ? ' et l\'armée 🎖️' : ''}`, pol,
+        armee.on ? 'L\'armée est déployée : performance maximale' :
+        police.wanted ? `Niveau ${'★'.repeat(police.wanted)} · reste hors de leur portée : ils s'essoufflent (usure ${Math.round(police.usure || 0)})`
+                      : 'Aucune traque en cours', armee.on ? '#8b1b1b' : '#4f8dff')
     + (gang.otages.length ? `<b>🔒 otages : ${gang.otages.map(o => o.nom).join(', ')}</b>` : '');
   $('guerreListe').innerHTML = gangs.map(g => {
     const debout = g.membres.filter(m => !m.ko && !m.captif).length;
     const rel = g.allieJoueur ? '🤝 allié' : g.relation < -50 ? '⚔️ en guerre' : g.relation < 0 ? '😠 hostile' : g.relation > 30 ? '🙂 cordial' : '😐 neutre';
     const pl = g.connu ? `planque repérée (${Math.round(g.planque.x)}, ${Math.round(g.planque.z)})` : 'planque inconnue';
-    return `<b style="border-left:6px solid ${g.teinte}">${g.mort ? '💀 ' : ''}${g.nom} · chef ${g.chefNom} · ${debout} hommes · force ${g.force} · ${rel} · ${pl}</b>`;
+    const f = forceGangRival(g) || g.force;
+    return perfLigne(`${g.mort ? '💀 ' : ''}${g.nom} · chef ${g.chefNom}`, f, `${debout} hommes debout · ${rel} · ${pl}`, g.teinte);
   }).join('');
   $('guerreTerr').innerHTML = TERRITOIRES.map(t => {
     const o = proprio(t.k);
@@ -13003,7 +13205,9 @@ function saveGuerre() {
       terr: guerre.territoires, saison: guerre.saison,
       gangs: {} };
     for (const g of gangs) d.gangs[g.id] = { nom: g.nom, chef: g.chefNom, gen: g.generation, force: g.force, rel: g.relation, magot: g.magot, connu: !!g.connu };
-    d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0 }));
+    d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0, p: perfDe(m) }));
+    d.perf = perfDe(P);
+    d.membres = gang.membres.map(b => ({ n: b.name, p: perfDe(b) }));   // la progression de chaque homme
     store.set('superobby.guerre', JSON.stringify(d));
   } catch (e) {}
 }
@@ -13013,6 +13217,8 @@ function loadGuerre() {
   gang.rep = d.rep || 0; gang.force = d.force || 20; gang.magot = d.magot || 0; gang.armes = d.armes || 0;
   guerre.territoires = d.terr || {}; guerre.saison = d.saison || 1;
   guerre.sauve = d.gangs || null; guerre.sauveRecrues = d.recrues || [];
+  guerre.sauvePerf = d.membres || [];   // on retrouve le niveau de chacun à la reprise
+  if (d.perf != null) { P.perf = clamp(d.perf, 0, 100); savePerf(); }
 }
 $('guerreBtn').addEventListener('click', () => { if (running && city.on) openGuerre(); });
 $('guerreBack').addEventListener('click', closeUI);

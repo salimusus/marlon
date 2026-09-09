@@ -2385,7 +2385,7 @@ test('on repeint et on customise sa voiture sans repeindre le décor', async p =
   const ok = !r.avant.partage && r.apres.couleur === '3ef2ff' && r.apres.autre === r.avant.autre
     && r.apres.brille && r.apres.ajouts >= 18 && r.apres.roue > 1.1 && r.apres.max > r.avant.max * 1.6
     && r.apres.turn > r.avant.turn && r.apres.nitro && r.apres.vitres < 0x222222
-    && r.ouvert && r.onglets === 4 && r.nuances >= 20 && r.remis.ajouts === 0 && r.remis.max === r.avant.max
+    && r.ouvert && r.onglets === 5 && r.nuances >= 20 && r.remis.ajouts === 0 && r.remis.max === r.avant.max
     && r.couleurs >= 20 && r.kits >= 10 && r.moteurs.length === 3 && r.amortis === 3;
   return { ok, detail: `${r.couleurs} couleurs, ${r.finitions.join('/')} · ${r.kits} kits posés (${r.apres.ajouts} pièces ajoutées, jantes ×${r.apres.roue}, vitres teintées, nitro=${r.apres.nitro}) · moteur ${r.moteurs.join(' → ')} : pointe ${r.avant.max} → ${r.apres.max}, reprise ${r.avant.accel} → ${r.apres.accel} · ${r.amortis} qualités d'amortisseurs : ${r.avant.turn} → ${r.apres.turn} · la voiture d'à côté garde sa couleur (${r.apres.autre}) · tout se retire proprement=${r.remis.ajouts === 0}` };
 });
@@ -4093,6 +4093,90 @@ test('le salon de tatouage : grandes tailles, faces arrière et détatouage', as
     && r.tailles.length === 5 && r.boutons.tout === 1 && r.un.reste === 1 && r.un.paye === 20
     && r.tout.reste === 0 && r.tout.paye === 40 && r.fauche === 2;
   return { ok, detail: `${r.tailles.length} tailles jusqu'à ${Math.max(...r.tailles)} (0,40 avant) · ${r.zones} emplacements dont ${r.arriere.length} de dos (${r.arriere.join(', ')}), tous posés correctement · détatouage au laser : 1 motif = ${r.un.paye} 🪙, tout effacer = ${r.tout.paye} 🪙, refusé sans argent (${r.fauche} tatouages gardés)` };
+});
+
+test('les barres de performance : entraînement, missions, police qui s\'essouffle', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    // le joueur progresse en s'entraînant et en réussissant des missions
+    G.P.perf = 10;
+    G.perfGagne(G.P, 3, null); G.perfGagne(G.P, 4, null);
+    res.joueur = { depart: 10, apres: G.perfDe(G.P), hud: (document.getElementById('perfHud').textContent || '').includes('/') === false };
+    res.etoiles = [5, 40, 60, 90].map(v => G.perfEtoiles(v));
+    // la police : une étoile = petite performance, l'armée = maximale
+    const paliers = {};
+    for (const w of [0, 1, 2, 3]) { G.police.wanted = w; G.police.usure = 0; paliers[w] = Math.round(G.policePerf()); }
+    G.armee.on = true; paliers.armee = Math.round(G.policePerf()); G.armee.on = false;
+    G.police.wanted = 3; G.police.usure = 40; paliers.uses = Math.round(G.policePerf());
+    // se cacher hors de portée use la police
+    G.police.wanted = 3; G.police.usure = 0; G.police.cars.forEach(c => { c.x = -400; c.z = -400; });
+    G.P.pos.set(0, 0.4, 8);
+    const u0 = G.police.usure;
+    for (let i = 0; i < 60; i++) G.policeTick(0.1);
+    paliers.apresFuite = Math.round(G.policePerf());
+    res.usureMontee = G.police.usure > u0;
+    G.police.wanted = 0; G.police.usure = 0; G.clearWanted();
+    res.police = paliers;
+    // deux hommes valent mieux qu'un, et un homme entraîné vaut mieux que deux débutants
+    const a = G.bots[0], b = G.bots[1];
+    G.devenirAmi(a); G.rejoindreGang(a); G.devenirAmi(b); G.rejoindreGang(b);
+    const chance = (membres, type) => { G.gang.mission = null; G.missionGang(membres, type);
+      const c = G.gang.mission ? G.gang.mission.chanceDep : null; G.gang.mission = null;
+      membres.forEach(m => { m.gangMission = null; m.rdv = null; m.ordre = null; }); return c; };
+    a.perf = 30; b.perf = 30;
+    res.chances = { un: chance([a], 'boutique'), deux: chance([a, b], 'boutique'), banqueUn: chance([a], 'banque') };
+    a.perf = 90; b.perf = 90;
+    res.entraines = { deux: chance([a, b], 'boutique'), banque: chance([a, b], 'banque') };
+    res.force = G.majForceGang();
+    // les gangs rivaux ont leur propre niveau, chefs en tête
+    res.rivaux = G.gangs.map(g => ({ f: G.forceGangRival(g), chef: G.perfDe(g.chef) }));
+    res.chefsPlusForts = G.gangs.every(g => G.perfDe(g.chef) >= G.forceGangRival(g));
+    // un homme peut mourir : il quitte le gang pour de bon
+    const avant = G.gang.membres.length;
+    G.tuerMembre(a, 'la police');
+    res.mort = { avant, apres: G.gang.membres.length, disparu: !a.av.group.visible, plusAmi: !G.estAmi(a.name) };
+    // le tableau montre les jauges
+    G.openGuerre();
+    const moi = document.getElementById('guerreMoi').innerHTML;
+    res.panneau = { ouvert: G.uiOpen === 'guerre', barres: (moi.match(/█|░/g) || []).length > 10,
+      police: /police/i.test(moi), joueur: moi.includes('(toi)') };
+    G.closeUI();
+    return res;
+  });
+  const ok = r.joueur.apres === 17 && r.etoiles.join('') === '★★★★★★★★★★'
+    && r.police[0] === 0 && r.police[1] === 30 && r.police[2] === 55 && r.police[3] === 80
+    && r.police.armee === 100 && r.police.uses === 40 && r.usureMontee && r.police.apresFuite < 80
+    && r.chances.deux > r.chances.un && r.entraines.deux > r.chances.deux
+    && r.chances.banqueUn < r.entraines.banque && r.chefsPlusForts
+    && r.mort.apres === r.mort.avant - 1 && r.mort.disparu && r.mort.plusAmi
+    && r.panneau.ouvert && r.panneau.barres && r.panneau.police && r.panneau.joueur;
+  return { ok, detail: `le joueur passe de 10 à ${r.joueur.apres}/100 (sport, tir, missions, école) · police : ${r.police[1]}/${r.police[2]}/${r.police[3]} selon les étoiles, ${r.police.armee} pour l'armée, et elle tombe à ${r.police.uses} quand on lui échappe (${r.police.apresFuite} après une fuite réelle) · un braquage de boutique passe de ${r.chances.un} % à ${r.chances.deux} % à deux, et ${r.entraines.deux} % avec deux hommes entraînés (banque : ${r.chances.banqueUn} % → ${r.entraines.banque} %) · les gangs rivaux ont leur niveau (${r.rivaux.map(x => x.f).join('/')}, chefs ${r.rivaux.map(x => x.chef).join('/')}) · un homme tué quitte le gang pour de bon` };
+});
+
+test('les lieux visés par les ordres pointent sur les vrais bâtiments', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const paires = [
+      ['emmene moi au garage', G.city.garage], ['conduis moi a l atelier', G.city.garage],
+      ['emmene moi chez le tatoueur', G.city.tatooDesk], ['conduis moi a la banque', G.city.bank],
+      ['emmene moi au commissariat', G.police.station], ['emmene moi au bureau des missions', G.city.office],
+      ['conduis moi a la villa', G.city.villaMine], ['emmene moi a l armurerie', G.city.armory],
+      ['emmene moi au snack', G.city.snack],
+    ];
+    const rates = [], ecarts = [];
+    for (const [txt, o] of paires) {
+      const l = G.lieuDe(txt);
+      if (!l || !o) { rates.push(txt + ':introuvable'); continue; }
+      const d = Math.hypot(l.x - o.x, l.z - o.z);
+      ecarts.push(Math.round(d));
+      if (d > 3) rates.push(`${txt} → ${Math.round(d)} m du vrai lieu`);
+    }
+    return { n: paires.length, rates, pire: Math.max(...ecarts) };
+  });
+  const ok = r.rates.length === 0;
+  return { ok, detail: `${r.n} formulations mènent au bon bâtiment (écart maximal ${r.pire} m)${r.rates.length ? ' · ratés : ' + r.rates.join(', ') : ''}` };
 });
 
 (async()=>{

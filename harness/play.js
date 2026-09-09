@@ -4387,6 +4387,65 @@ test('on peut renommer son chien quand on veut', async p => {
   return { ok, detail: `« appelle mon chien Bella » le renomme d'un coup (${r.depart} → ${r.apresDirect}), et l'ordre 🏷️ de sa liste redemande son nom dans le chat (${r.apresDirect} → ${r.apresOrdre}) · sa médaille suit` };
 });
 
+
+test('les hommes du gang ont des points de vie, et l\'hôpital les remet d\'aplomb', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const a = G.bots[0], b = G.bots[1], passant = G.bots[5];
+    G.devenirAmi(a); G.rejoindreGang(a); G.devenirAmi(b); G.rejoindreGang(b);
+    a.hp = 100; b.hp = 100;
+    res.neuf = { vie: G.vieDe(a), prix: G.prixSoin(a) };
+    // il sort d'une bagarre : un HOMME DU GANG ne se remet presque pas tout seul…
+    a.hp = 28; a.fight = 'fight'; a.fightT = G.simTime - 1;
+    passant.hp = 28; passant.fight = 'fight'; passant.fightT = G.simTime - 1;
+    G.combatTick(1 / 60);
+    res.gang = G.vieDe(a); res.passant = G.vieDe(passant);
+    // …et le soigner coûte d'autant plus cher qu'il est mal en point
+    a.hp = 28; const px28 = G.prixSoin(a);
+    a.hp = 80; const px80 = G.prixSoin(a);
+    a.hp = 28; res.prix = { bas: px28, haut: px80, croissant: px28 > px80 };
+    // ordre : il part vraiment vers l'hôpital, on paie à l'arrivée
+    G.wallet = 500;
+    res.ordre = G.commandeSociale(`${a.name} va a l hopital`); if (G.uiOpen) G.closeUI();
+    res.enRoute = !!(a.rdv && a.rdv.soin && G.city.medDesk
+      && Math.hypot(a.rdv.x - G.city.medDesk.x, a.rdv.z - G.city.medDesk.z) < 4);
+    const w0 = G.wallet;
+    a.rdv.arrive = true; G.soinTick(1 / 60);
+    res.soigne = { vie: G.vieDe(a), paye: w0 - G.wallet, attendu: px28, libre: !a.rdv };
+    // sans argent, on ne l'envoie pas pour rien
+    b.hp = 30; G.wallet = 2; G.botHopital(b);
+    res.fauche = !(b.rdv && b.rdv.soin);
+    // un homme au tapis coûte plus cher, et l'hôpital le remet debout
+    G.wallet = 500; b.hp = 0; b.ko = G.simTime + 30;
+    res.prixKO = G.prixSoin(b) > px28;
+    G.botHopital(b); b.rdv.arrive = true; G.soinTick(1 / 60);
+    res.releve = { vie: G.vieDe(b), debout: !b.ko };
+    // ordre collectif : « soignez-vous »
+    G.wallet = 500; a.hp = 40; b.hp = 50;
+    res.collectif = G.ordreGang('le gang allez a l hopital') && !!(a.rdv && a.rdv.soin) && !!(b.rdv && b.rdv.soin);
+    a.rdv = null; b.rdv = null; a.hp = 55; b.hp = 100;
+    // LES JAUGES : vie et performance, dans la liste des ordres, le choix des personnes et le tableau
+    G.openOrdres(a);
+    const sub = document.getElementById('ordresSub').innerHTML;
+    res.panneau = { perf: /📈/.test(sub) && /█|░/.test(sub), vie: /❤️/.test(sub), prix: /🏥/.test(sub) };
+    res.carte = [...document.querySelectorAll('#ordresGrid [data-p]')].some(x => /hopital/.test(x.dataset.p));
+    G.closeUI(); G.openQui();
+    res.choix = /❤️/.test(document.getElementById('ordresGrid').innerHTML);
+    G.closeUI(); G.openGuerre();
+    res.tableau = /❤️/.test(document.getElementById('guerreMoi').innerHTML);
+    G.closeUI();
+    return res;
+  });
+  const ok = r.neuf.vie === 100 && r.neuf.prix === 0
+    && r.gang < r.passant && r.gang <= 35 && r.passant >= 45
+    && r.prix.croissant && r.ordre && r.enRoute
+    && r.soigne.vie === 100 && r.soigne.paye === r.soigne.attendu && r.soigne.libre
+    && r.fauche && r.prixKO && r.releve.vie === 100 && r.releve.debout && r.collectif
+    && r.panneau.perf && r.panneau.vie && r.panneau.prix && r.carte && r.choix && r.tableau;
+  return { ok, detail: `après une bagarre, un homme du gang reste à ${r.gang}/100 PV quand un passant remonte à ${r.passant} : sa vie compte · le soigner coûte ${r.prix.bas} 🪙 à 28 PV contre ${r.prix.haut} 🪙 à 80 PV · « va à l'hôpital » l'y envoie vraiment, on paie ${r.soigne.paye} 🪙 à l'arrivée et il repart à 100/100 · refusé si le porte-monnaie est vide · un homme au tapis est relevé (${r.releve.vie}/100) · « le gang allez à l'hôpital » les envoie tous · les jauges ❤️ et 📈 s'affichent dans la liste des ordres, le choix des personnes et le tableau de la guerre` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

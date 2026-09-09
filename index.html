@@ -6216,8 +6216,12 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
   for (const b of bots) {
     if (!b.ko) { gardeTick(b); gardeArmeTick(b, dt); if (bagarreTick(b, dt)) continue; }
-    if (b.ko) { if (simTime < b.ko) { b.av.group.rotation.x = -Math.PI / 2; b.av.group.position.y = b.pos.y + 0.4; b.wait = 1; continue; } b.ko = 0; b.robbed = false; b.hp = 60; b.av.group.rotation.x = 0; b.av.group.position.y = b.pos.y; botSay(b, ['ouf…', 'tu vas voir la prochaine fois', 'plus jamais ça']); }
-    if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null; b.hp = Math.min(100, (b.hp ?? 100) + 20); } continue; }
+    if (b.ko) { if (simTime < b.ko) { b.av.group.rotation.x = -Math.PI / 2; b.av.group.position.y = b.pos.y + 0.4; b.wait = 1; continue; } b.ko = 0; b.robbed = false; b.hp = estDuGang(b) ? 15 : 60; b.av.group.rotation.x = 0; b.av.group.position.y = b.pos.y; botSay(b, ['ouf…', 'tu vas voir la prochaine fois', 'plus jamais ça']); }
+    // Un passant récupère tout seul après une bagarre. UN HOMME DE TON GANG, NON : ses points
+    // de vie restent là où les coups les ont laissés. Il faut l'envoyer à l'hôpital (payant)
+    // ou attendre très longtemps — sa jauge de vie compte vraiment.
+    if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null;
+      b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); } continue; }
     const dx = P.pos.x - b.pos.x, dz = P.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
     b.wait = 0.3; b.dance = 0;
     if (b.fight === 'flee') { const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -dx / d * 5.5 * dt, -dz / d * 5.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-dx, -dz); animateRig(b.av.rig, 'walk', 5.5, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
@@ -8278,6 +8282,45 @@ function protectionTick(dt) {
     }
   }
 }
+// ================= LA SANTÉ DES HOMMES DU GANG =================
+// Chacun a sa jauge de vie. Elle descend aux coups et ne remonte presque plus toute seule :
+// on envoie l'homme à l'hôpital, et on paie — d'autant plus cher qu'il est mal en point.
+const vieDe = b => clamp(Math.round(b && b.hp != null ? b.hp : 100), 0, 100);
+function prixSoin(b) {
+  if (!b) return 0;
+  const manque = 100 - vieDe(b);
+  if (!manque && !b.ko) return 0;
+  return Math.max(10, Math.round(manque * 0.9) + (b.ko && simTime < b.ko ? 40 : 0));
+}
+function botHopital(b) {
+  if (!city.medDesk) { botDit(b, 'je ne trouve pas l\'hôpital 😕'); return false; }
+  const px = prixSoin(b);
+  if (!px) { botDit(b, 'je suis en pleine forme, garde ton argent 💪'); return true; }
+  if (wallet < px) { msg(`🏥 Le soigner coûte ${px} 🪙 — il t'en manque ${px - wallet}`, 3000); return true; }
+  b.soin = px; b.ko = 0; b.av.group.rotation.x = 0;
+  b.rdv = { x: city.medDesk.x, z: city.medDesk.z + 1.6, y: 0.3, nom: '🏥 l\'hôpital', arrive: false, libre: true, soin: true };
+  b.rdvRoute = null; b.wait = 0; b.target = null; b.bagarre = null; b.fight = null;
+  b.ordre = { type: 'soin' };
+  botDit(b, pickOne(['j\'y vais, je me fais recoudre 🏥', 'ok, direction l\'hôpital']));
+  msg(`🏥 ${b.name} part se faire soigner (${vieDe(b)}/100 PV · ${px} 🪙 à l'arrivée)`, 3600);
+  return true;
+}
+// Il est arrivé au guichet : on paie et il repart d'aplomb.
+function soinTick(dt) {
+  for (const b of gang.membres.concat(bots.filter(b2 => estAmi(b2.name)))) {
+    if (!b.rdv || !b.rdv.soin || !b.rdv.arrive) continue;
+    const px = b.soin || prixSoin(b);
+    if (wallet < px) { msg(`🏥 ${b.name} attend au guichet : il manque ${px - wallet} 🪙`, 2600); b.soinT = simTime + 4; continue; }
+    wallet -= px; saveWallet(); updateHud();
+    b.hp = 100; b.ko = 0; b.soin = 0; b.fight = null;
+    b.av.group.rotation.x = 0;
+    burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0x5cc453, 14); sfx.win(); sfx.register();
+    botDit(b, pickOne(['me revoilà d\'aplomb ! 💪', 'comme neuf, merci chef', 'les docteurs m\'ont retapé']));
+    msg(`🏥 ${b.name} est soigné : 100/100 PV · −${px} 🪙`, 3200);
+    chat(null, `🏥 ${b.name} sort de l'hôpital, remis sur pied`);
+    b.rdv = null; b.ordre = null; b.wait = 1;
+  }
+}
 function botCache(b) {
   const h = (city.hideouts || []).map(o => ({ o, d: Math.hypot(o.x - b.pos.x, o.z - b.pos.z) })).sort((a, c) => a.d - c.d)[0];
   if (!h) { botDit(b, 'je ne vois pas où me cacher'); return; }
@@ -8391,6 +8434,8 @@ function commandeExacte(txt) {
   if (/\b(attends.?moi ici|attend ici|attends ici|reste ici|bouge pas|ne bouge pas|reste la|reste là|patiente)\b/.test(t) && !/voiture|caisse|bagnole/.test(t)) { botAttendIci(cible); return true; }
   if (/\b(tire|tires|tirer|flingue|fusille|degomme|dégomme|abats|abattre)\b/.test(t) && /\b(protege|protège|proteger|protéger|moi|defends|défends|couvre|couvrir)\b/.test(t)) { botTirePourMoi(cible); return true; }
   // « viens tu es mon garde du corps » : protection permanente, et on peut en avoir plusieurs
+  // « va à l'hôpital », « va te soigner », « fais-toi soigner »
+  if (/\b(hopital|hôpital|soigne|soigner|soins|infirmerie|docteur|medecin|médecin|urgences|blesse|blessé)\b/.test(t)) { botHopital(cible); return true; }
   if (/\b(garde du corps|gardes du corps|body ?guard|protege.?moi en permanence|colle moi)\b/.test(t)) { botGardeDuCorps(cible); return true; }
   // « va protéger ma villa »
   if (/\b(protege|protège|proteger|protéger|defends|défends|garde|gardes|surveille|surveiller)\b/.test(t)
@@ -8528,6 +8573,8 @@ const INTENTS = [
     fn: b => botDefi(b) },
   { id: 'gardeCorps', cles: [['garde', 'gardes', 'bodyguard', 'body'], ['corps', 'guard', 'permanence']],
     fn: b => botGardeDuCorps(b) },
+  { id: 'hopital', cles: [['hopital', 'soigne', 'soigner', 'soin', 'soins', 'infirmerie', 'docteur', 'medecin', 'urgences']],
+    fn: b => botHopital(b) },
   { id: 'gardeVilla', cles: [['protege', 'proteger', 'protegez', 'defends', 'defendre', 'garde', 'garder', 'surveille', 'surveiller'],
       ['villa', 'maison', 'baraque', 'domicile', 'crib']],
     fn: b => botGardeVilla(b) },
@@ -8629,6 +8676,7 @@ const ORDRES_CAT = [
     { e: '🔫', t: 'Tire pour me protéger', p: 'tire pour me proteger', d: 'il dégaine' },
     { e: '👊', t: 'Tape quelqu\'un', p: 'tape le plus proche', d: 'sur le plus proche' },
     { e: '🔪', t: 'Arme-toi', p: 'arme toi', d: 'il achète un fusil', gang: true },
+    { e: '🏥', t: 'Va te faire soigner', p: 'va a l hopital', d: 'tu paies selon ses blessures' },
   ] },
   { n: '🚗 Véhicules', l: [
     { e: '🚗', t: 'Amène une voiture', p: 'va me chercher une voiture ici', d: 'il vient te chercher' },
@@ -8672,8 +8720,11 @@ function openOrdres(b) {
   $('ordresTitre').textContent = `📣 Ordres pour ${b.name}`;
   // sa jauge de performance, juste sous son nom : on voit d'un coup d'œil s'il est prêt
   const v = perfDe(b);
+  const pv = vieDe(b), soin = prixSoin(b);
   const jauge = ami ? `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">`
       + `📈 ${perfBarre(v)} ${v}/100 ${perfEtoiles(v)}</span>`
+      + `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(pv)}">`
+      + `❤️ ${perfBarre(pv)} ${pv}/100 PV${soin ? ` · 🏥 ${soin} 🪙 pour le soigner` : ' · en pleine forme'}</span>`
       + `<span style="display:block;font-weight:600;color:#7a86a0">${b.arme ? '🔫 armé · ' : ''}`
       + `${b.gardeCorps && simTime < b.gardeCorps ? '🛡️ ton garde du corps · ' : ''}`
       + `${b.gardeVilla && simTime < b.gardeVilla ? '🏠 garde ta villa · ' : ''}`
@@ -8752,7 +8803,8 @@ function openQui() {
     html += `<p class="osec">${titre}</p>`;
     for (const b of l) { const v = perfDe(b), am = estAmi(b.name);
       html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}`
-        + (am ? `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">${perfBarre(v, 8)} ${v} ${perfEtoiles(v)}</i>` : '')
+        + (am ? `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">📈 ${perfBarre(v, 8)} ${v}</i>`
+              + `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(vieDe(b))}">❤️ ${perfBarre(vieDe(b), 8)} ${vieDe(b)}</i>` : '')
         + `<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : am ? ' · ami' : ''}${b.gardeCorps && simTime < b.gardeCorps ? ' · 🛡️ garde' : ''}</i></button>`; }
   }
   $('ordresGrid').innerHTML = html;
@@ -9833,6 +9885,7 @@ function cityCommon(dt) {
 function cityVie(dt) {
   for (const r of (city.barbierRubans || [])) r.rotation.y += dt * 1.6;   // l'enseigne du coiffeur tourne
   protectionTick(dt);   // gardes du corps, protection d'un membre, garde de la villa
+  soinTick(dt);         // les blessés qu'on a envoyés à l'hôpital
   // garage : réparation du véhicule conduit
   if (drive.car && city.garage && (drive.car.dmg || 0) > 0 && Math.abs(drive.car.x - city.garage.x) < 4.5 && Math.abs(drive.car.z - city.garage.z) < 3.5 && simTime > (city.repairT || 0)) {
     if (wallet < 10) { if (simTime > (city.repairMsgT || 0)) { city.repairMsgT = simTime + 4; msg('🔧 Réparation : 10 🪙 (il t\'en manque)', 1600); } }
@@ -12512,6 +12565,7 @@ function tatouer() {
 const perfDe = o => clamp(Math.round((o && o.perf != null) ? o.perf : 0), 0, 100);
 function perfEtoiles(v) { return '★'.repeat(1 + [30, 55, 80].filter(s => v >= s).length); }   // ★ / ★★ / ★★★ / ★★★★
 function perfCouleur(v) { return v >= 80 ? '#5cc453' : v >= 55 ? '#ffd23f' : v >= 30 ? '#ff8f3a' : '#ff5c5c'; }
+const vieCouleur = v => v >= 70 ? '#5cc453' : v >= 40 ? '#ffd23f' : v >= 15 ? '#ff8f3a' : '#ff5c5c';
 function perfBarre(v, n = 12) { const p = clamp(Math.round(v / 100 * n), 0, n); return '█'.repeat(p) + '░'.repeat(n - p); }
 // une ligne de tableau : nom, jauge colorée, note en étoiles
 function perfLigne(nom, v, sous, teinte) {
@@ -12680,6 +12734,13 @@ function ordreGang(txt) {
     if (gang.mission && !gang.mission.membres.some(b => b.gangMission)) gang.mission = null;
     botDit(equipe[0], pickOne(['ok, on rentre 👌', 'compris, on laisse tomber']));
     msg('🏳️ Le gang abandonne la mission', 2400);
+    return true;
+  }
+  if (/\b(hopital|hôpital|soigne|soignez|soigner|soins|infirmerie|urgences)\b/.test(t)) {
+    let n = 0, total = 0;
+    for (const b of equipe.slice().sort((a, c) => vieDe(a) - vieDe(c))) { const px = prixSoin(b); if (!px) continue;
+      if (total + px > wallet) break; if (botHopital(b)) { n++; total += px; } }
+    msg(n ? `🏥 ${n} homme${n > 1 ? 's' : ''} part${n > 1 ? 'ent' : ''} se faire soigner (${total} 🪙 en tout)` : '💪 Tout le monde est en forme', 3200);
     return true;
   }
   if (/\b(entraine|entraîne|entrainez|entraînez|musclez|sport)\b/.test(t)) {
@@ -13647,8 +13708,10 @@ function majGuerre() {
   const pol = Math.round(policePerf());
   $('guerreMoi').innerHTML = `<b>🚩 ${gang.nom} · rang « ${r.n} » (${gang.rep} pts) · 👥 ${gang.membres.length + (gang.membresLibres || []).length}/${r.max} · 🔫 ${gang.armes || 0} armés · 💰 ${gang.magot} 🪙</b>`
     + perfLigne(`🧑 ${myCfg.name} (toi)`, perfDe(P), 'Salle de sport, stand de tir, missions du bureau et exercices de l\'école font monter ta jauge')
-    + gang.membres.map(b => perfLigne(`😎 ${b.name}${b.arme ? ' 🔫' : ''}`, perfDe(b),
-        b.ko && b.ko > simTime ? 'au tapis, il récupère' : 'entraîne-le au sport et au tir, envoie-le en mission')).join('')
+    + gang.membres.map(b => { const pv = vieDe(b), px = prixSoin(b);
+        return perfLigne(`😎 ${b.name}${b.arme ? ' 🔫' : ''}`, perfDe(b),
+          `<span style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(pv)}">❤️ ${perfBarre(pv)} ${pv}/100 PV</span>`
+          + (px ? ` · 🏥 « ${b.name} va à l'hôpital » pour ${px} 🪙` : ' · en pleine forme')); }).join('')
     + (gang.membres.length ? '' : '<b style="color:#7a86a0">Recrute des amis dans ton gang pour voir leurs jauges ici.</b>')
     + perfLigne(`🚓 La police${armee.on ? ' et l\'armée 🎖️' : ''}`, pol,
         armee.on ? 'L\'armée est déployée : performance maximale' :

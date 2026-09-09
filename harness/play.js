@@ -4728,6 +4728,62 @@ test('la liste des ordres montre ce qu\'on a demandé et où ça en est', async 
   return { ok, detail: `chaque ordre donné est noté avec son avancement : « ${r.enCours[0] ? r.enCours[0].t : '?'} » ⏳ en cours, « ${r.reussi[0] ? r.reussi[0].t : '?'} » ✅ réussi, un coup ❌ raté, et 💀 perte quand l'homme y laisse la vie · le panneau 📣 affiche la liste sous ses jauges` };
 });
 
+
+test('les coups ont un vrai impact : onde de choc, éclats orientés, traînée et secousse', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    const G = __G, res = {};
+    const b = G.bots[0];
+    b.pos.set(G.P.pos.x, G.P.pos.y, G.P.pos.z - 1.5); b.wait = 9; b.ko = 0; b.hp = 100; b.fight = null;
+    b.av.group.visible = true; b.av.group.position.copy(b.pos);
+    G.P.facing = Math.PI;   // il frappe vers −z
+    G.cam.shake = 0;
+    G.P.punchT = 0; G.punch();
+    const types = {};
+    for (const f of G.fx) { const t2 = f.m.geometry.type; types[t2] = (types[t2] || 0) + 1; }
+    res.poing = { effets: G.fx.length, types,
+      anneaux: G.fx.filter(f => f.m.geometry.type === 'RingGeometry').length,
+      additifs: G.fx.filter(f => f.mat.blending === 2).length,
+      secousse: +(G.cam.shake || 0).toFixed(3), pvBot: b.hp };
+    // les éclats partent DANS LE SENS DU COUP (vers −z), pas dans tous les sens
+    const av = G.fx.filter(f => f.v);
+    res.gerbe = { n: av.length, versLeCoup: av.filter(f => f.v.z < 0).length };
+    // ils s'effacent en fondu : à mi-vie l'opacité a déjà baissé
+    const opac0 = av.length ? av[0].mat.opacity : 0;
+    for (let i = 0; i < 5; i++) G.fxTick(1 / 30);
+    res.fondu = av.length ? av[0].mat.opacity < opac0 : false;
+    for (let i = 0; i < 400; i++) G.fxTick(1 / 30);
+    res.efface = G.fx.length;
+    // une balle dans le décor : étincelles, fumée et trace d'impact
+    G.impact(0, 1.3, 3, { x: 0, y: 0, z: 1 }, 'mur', 1.2);
+    for (let i = 0; i < 3; i++) G.fxTick(1 / 30);
+    res.mur = { effets: G.fx.length,
+      fumee: G.fx.filter(f => f.m.geometry.type === 'SphereGeometry').length,
+      trace: G.fx.filter(f => f.m.geometry.type === 'CircleGeometry').length };
+    for (let i = 0; i < 400; i++) G.fxTick(1 / 30);
+    res.murEfface = G.fx.length;
+    // le garde-fou : une mêlée générale ne noie pas la scène
+    for (let i = 0; i < 300; i++) G.impact(0, 1.3, 0, null, 'sang', 1);
+    res.plafond = G.fx.length;
+    for (let i = 0; i < 400; i++) G.fxTick(1 / 30);
+    res.plafondEfface = G.fx.length;
+    // le pas de temps est plafonné : sur une image lente l'impact reste visible
+    G.impact(0, 1.3, 0, null, 'poing', 1);
+    const n0 = G.fx.length; G.fxTick(2);   // une image de deux secondes
+    res.imageLente = { avant: n0, apres: G.fx.length };
+    for (let i = 0; i < 400; i++) G.fxTick(1 / 30);
+    return res;
+  });
+  const ok = r.poing.effets >= 14 && r.poing.anneaux >= 2 && r.poing.additifs >= 3
+    && r.poing.secousse > 0.05 && r.poing.pvBot < 100
+    && r.gerbe.n >= 6 && r.gerbe.versLeCoup / r.gerbe.n > 0.7
+    && r.fondu && r.efface === 0
+    && r.mur.fumee >= 2 && r.mur.trace === 1 && r.murEfface === 0
+    && r.plafond < 400 && r.plafondEfface === 0
+    && r.imageLente.apres > 0;
+  return { ok, detail: `un coup de poing pose ${r.poing.effets} éléments — ${r.poing.anneaux} ondes de choc, ${r.poing.additifs} lumières additives, une traînée sur le trajet du poing — et secoue la caméra (${r.poing.secousse}) · ${r.gerbe.versLeCoup}/${r.gerbe.n} éclats partent dans le sens du coup au lieu de gicler au hasard · tout s'efface en FONDU (plus de cubes qui disparaissent d'un coup) · une balle dans le décor laisse ${r.mur.fumee} bouffées de fumée et une trace d'impact · au-delà de 220 effets on arrête d'en créer (${r.plafond} au pire d'une mêlée générale) et une image lente n'avale plus l'impact` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

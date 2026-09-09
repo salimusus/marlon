@@ -96,6 +96,18 @@ window.__SHOT = {
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
+    if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
+      try {
+        const b = bots[0];
+        b.pos.set(P.pos.x + Math.sin(P.facing) * 1.5, P.pos.y, P.pos.z + Math.cos(P.facing) * 1.5);
+        b.rdv = null; b.wait = 9; b.ko = 0; b.hp = 100; b.av.group.visible = true;
+        b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
+        setTimeout(function () { try { P.punchT = 0; P.combo = v.coup === 'combo' ? 2 : 0; attack(v.coup === 'kick' ? 'kick' : 'punch'); } catch (e) {} }, Math.max(300, (v.wait || 1200) - 90));
+      } catch (e) {}
+    }
+    if (v.balleMur) {   // une balle qui vient de frapper le décor
+      try { setTimeout(function () { try { impact(P.pos.x + Math.sin(P.facing) * 3, P.pos.y + 1.3, P.pos.z + Math.cos(P.facing) * 3, { x: Math.sin(P.facing), y: 0, z: Math.cos(P.facing) }, 'mur', 1.2); } catch (e) {} }, Math.max(300, (v.wait || 1200) - 90)); } catch (e) {}
+    }
     if (v.partie) {   // une partie de sport contre un membre, pour la capture
       try {
         const b = bots[0];
@@ -127,6 +139,11 @@ window.__G = {
   toggleRacket: typeof toggleRacket === 'function' ? toggleRacket : null,
   setRacket: typeof setRacket === 'function' ? setRacket : null,
   finDuel: typeof finDuel === 'function' ? finDuel : null,
+  fx: typeof fx !== 'undefined' ? fx : null,
+  impact: typeof impact === 'function' ? impact : null,
+  fxTick: typeof fxTick === 'function' ? fxTick : null,
+  fxTrainee: typeof fxTrainee === 'function' ? fxTrainee : null,
+  camSecousse: typeof camSecousse === 'function' ? camSecousse : null,
   noteOrdre: typeof noteOrdre === 'function' ? noteOrdre : null,
   finirOrdre: typeof finirOrdre === 'function' ? finirOrdre : null,
   journalHtml: typeof journalHtml === 'function' ? journalHtml : null,

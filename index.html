@@ -6185,8 +6185,13 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   me.rig.swing = kind === 'kick' ? 0.45 : 0.28; if (kind === 'kick') me.rig.kick = 0.45;
   sfx.noise(.1, 700, .07);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
+  fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
   if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sfx.tone(140, 0, .06, 'triangle', .04, 90); return; }   // dans le vide
-  sfx.tone(90, 0, .1, 'square', .1, 50); sfx.noise(.08, 300, .1); burst(target.x, P.pos.y + 1.2, target.z, kind === 'kick' ? 0xff5c5c : 0xffd23f, 6);
+  sfx.tone(90, 0, .1, 'square', .1, 50); sfx.noise(.08, 300, .1);
+  // le point de contact, à hauteur de torse, un peu devant le poing
+  const ix = P.pos.x + fx * 0.75, iz = P.pos.z + fz * 0.75, iy = P.pos.y + (kind === 'kick' ? 0.85 : 1.25);
+  impact(ix, iy, iz, { x: fx, y: 0, z: fz }, kind === 'kick' ? 'pied' : 'poing', finisher ? 1.45 : 1);
+  camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
   msg(kind === 'kick' ? '🦵 Coup de pied !' : finisher ? '👊 Combo x3 !' : '👊', 500);
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
@@ -6211,7 +6216,9 @@ function kick() { attack('kick'); }
 function hurt(dmg, by, dx, dz, kb = 2) {   // je prends un coup
   if (P.hp <= 0) return;
   P.hp = Math.max(0, P.hp - dmg); P.hurtT = simTime; $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
-  P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5; sfx.hit(); burst(P.pos.x, P.pos.y + 1.2, P.pos.z, 0xff5c5c, 6);
+  P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5; sfx.hit();
+  impact(P.pos.x + dx * 0.4, P.pos.y + 1.2, P.pos.z + dz * 0.4, { x: dx, y: 0, z: dz }, 'sang', Math.min(1.5, 0.7 + dmg / 22));
+  camSecousse(0.1 + Math.min(0.24, dmg / 90), 0.28);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
 }
@@ -6345,7 +6352,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -6874,12 +6881,163 @@ function explode(av) {
   av.group.visible = false;
 }
 const burstGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
-function burst(x, y, z, color, n = 8) {
-  const mat = lam(color);
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(burstGeo, mat); m.position.set(x, y, z); scene.add(m);
-    debris.push({ m, vel: new THREE.Vector3(rnd(-3, 3), rnd(2, 6), rnd(-3, 3)), ang: new THREE.Vector3(rnd(-8, 8), rnd(-8, 8), 0), t: 0, life: 0.6, tiny: true });
+// ================= LES IMPACTS =================
+// Un coup qui porte, une balle qui touche : au lieu d'un simple nuage de cubes opaques qui
+// disparaissaient d'un coup, on compose trois couches, comme dans un vrai jeu de combat —
+// une ONDE DE CHOC en anneau, une GERBE D'ÉCLATS orientée dans le sens du coup, et un
+// ÉCLAIR très court. Tout s'efface en fondu ; rien ne « pope ».
+const FX_ANNEAU = new THREE.RingGeometry(0.42, 0.5, 24);      // anneau fin : l'onde de choc
+const FX_ECLAT = new THREE.BoxGeometry(0.04, 0.04, 0.2);      // éclat fin, orienté par sa vitesse
+const FX_BOULE = new THREE.SphereGeometry(0.5, 10, 7);        // éclair et fumée
+const FX_MARQUE = new THREE.CircleGeometry(0.12, 12);         // trace laissée par une balle
+const fx = [];
+const FX_MAX = 220;   // garde-fou : au-delà, on ne crée plus rien (téléphone, mêlée générale)
+function fxMat(color, additif, opac) {
+  const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opac == null ? 1 : opac, depthWrite: false });
+  if (additif) m.blending = THREE.AdditiveBlending;
+  return m;
+}
+function fxAjoute(m, mat, vie, maj) {
+  scene.add(m); fx.push({ m, mat, t: 0, vie, maj });
+  return m;
+}
+function fxTick(dt) {
+  // On plafonne le pas : sur une image lente (téléphone modeste, ordinateur chargé), un
+  // impact de deux dixièmes de seconde était consommé d'un seul coup et personne ne le
+  // voyait. Les effets vivent en NOMBRE D'IMAGES autant qu'en secondes.
+  dt = Math.min(dt, 1 / 30);
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i]; f.t += dt;
+    const k = f.t / f.vie;
+    if (k >= 1) { scene.remove(f.m); f.mat.dispose(); fx.splice(i, 1); continue; }
+    f.maj(f, k, dt);
   }
+}
+// L'anneau : il s'ouvre vite puis ralentit, face au sens du coup.
+function fxAnneau(x, y, z, dir, color, taille = 1, vie = 0.24) {
+  if (fx.length > FX_MAX) return;
+  const mat = fxMat(color, true, 0.9), m = new THREE.Mesh(FX_ANNEAU, mat);
+  m.position.set(x, y, z);
+  if (dir) m.lookAt(x + dir.x, y + dir.y, z + dir.z); else m.rotation.x = -Math.PI / 2;
+  m.scale.setScalar(0.3 * taille);
+  fxAjoute(m, mat, vie, (f, k) => {
+    const e = 1 - Math.pow(1 - k, 3);                 // large tout de suite, puis il freine
+    f.m.scale.setScalar((0.3 + e * 1.5) * taille);
+    f.mat.opacity = 0.9 * (1 - k) * (1 - k);
+  });
+}
+// L'éclair : une bouffée de lumière de quelques centièmes de seconde au point de contact.
+function fxEclair(x, y, z, color, taille = 1, vie = 0.11) {
+  if (fx.length > FX_MAX) return;
+  const mat = fxMat(color, true, 1), m = new THREE.Mesh(FX_BOULE, mat);
+  m.position.set(x, y, z); m.scale.setScalar(0.24 * taille);
+  fxAjoute(m, mat, vie, (f, k) => { f.m.scale.setScalar((0.24 + k * 0.5) * taille); f.mat.opacity = 1 - k; });
+}
+// Les éclats : fins, allongés, couchés dans le sens de leur vol, et ils s'effacent en fondu.
+function fxEclats(x, y, z, dir, color, n = 8, force = 1) {
+  if (fx.length > FX_MAX) return;
+  const mat = fxMat(color, false, 1);
+  const base = dir ? new THREE.Vector3(dir.x, dir.y, dir.z).normalize() : null;
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(FX_ECLAT, mat);
+    m.position.set(x, y, z);
+    let v;
+    if (base) {   // gerbe dans un cône autour du coup : on voit d'où il vient
+      v = base.clone();
+      v.x += rnd(-0.75, 0.75); v.y += rnd(-0.45, 0.85); v.z += rnd(-0.75, 0.75);
+      v.normalize().multiplyScalar(rnd(2.2, 5.4) * force);
+    } else v = new THREE.Vector3(rnd(-2.4, 2.4), rnd(1.8, 4.4), rnd(-2.4, 2.4)).multiplyScalar(force);
+    const l = rnd(0.6, 1.35);
+    m.scale.set(1, 1, l);
+    fx.push({ m, mat, t: 0, vie: rnd(0.22, 0.38), v, maj: (f, k, d2) => {
+      f.v.y -= 15 * d2;
+      f.m.position.addScaledVector(f.v, d2);
+      const sp = f.v.length();
+      if (sp > 0.05) f.m.lookAt(f.m.position.x + f.v.x, f.m.position.y + f.v.y, f.m.position.z + f.v.z);
+      f.m.scale.set(1 - k * 0.75, 1 - k * 0.75, l * (1 + sp * 0.06));   // il s'étire à la vitesse, et s'affine en s'éteignant
+      f.mat.opacity = 1 - k * k;
+    } });
+    scene.add(m);
+  }
+}
+// La fumée : deux ou trois bouffées grises qui s'ouvrent doucement (murs, sol, béton).
+function fxFumee(x, y, z, n = 3, color = 0xc9ced8) {
+  if (fx.length > FX_MAX) return;
+  for (let i = 0; i < n; i++) {
+    const mat = fxMat(color, false, 0.45), m = new THREE.Mesh(FX_BOULE, mat);
+    m.position.set(x + rnd(-0.12, 0.12), y + rnd(-0.1, 0.16), z + rnd(-0.12, 0.12));
+    m.scale.setScalar(0.16);
+    const mont = rnd(0.35, 0.8);
+    fxAjoute(m, mat, rnd(0.45, 0.75), (f, k, d2) => {
+      f.m.scale.setScalar(0.16 + k * 0.55); f.m.position.y += mont * d2; f.mat.opacity = 0.45 * (1 - k);
+    });
+  }
+}
+// La marque d'impact : un petit disque sombre collé sur ce qu'on vient de toucher.
+function fxMarque(x, y, z, dir) {
+  if (fx.length > FX_MAX) return;
+  const mat = fxMat(0x1b2030, false, 0.7), m = new THREE.Mesh(FX_MARQUE, mat);
+  m.position.set(x - dir.x * 0.03, y - dir.y * 0.03, z - dir.z * 0.03);
+  m.lookAt(x - dir.x, y - dir.y, z - dir.z);
+  fxAjoute(m, mat, 5.5, (f, k) => { f.mat.opacity = 0.7 * Math.min(1, (1 - k) * 4); });
+}
+// LA TRAÎNÉE DU COUP : un arc de lumière très court sur le trajet du poing ou du pied.
+// C'est ce qui manquait le plus — on voyait le bras bouger, mais pas le geste.
+function fxTrainee(x, y, z, facing, pied) {
+  if (fx.length > FX_MAX) return;
+  const mat = fxMat(pied ? 0xffb066 : 0xffffff, true, 0.5);
+  const n = 8, r = pied ? 0.95 : 0.8;
+  const av = Math.sin(facing), pr = Math.cos(facing);
+  const a0 = pied ? -1.15 : 0.95, a1 = pied ? 0.35 : -0.9;
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (a1 - a0) * (i / (n - 1));
+    const px = x + av * Math.cos(a) * r, py = y + Math.sin(a) * r, pz = z + pr * Math.cos(a) * r;
+    const m = new THREE.Mesh(FX_ECLAT, mat);
+    m.position.set(px, py, pz);
+    m.scale.set(1.9, 1.9, 0.9);
+    // couché dans le sens du geste : le shard suit la tangente de l'arc
+    m.lookAt(px + av * -Math.sin(a) * r, py + Math.cos(a) * r, pz + pr * -Math.sin(a) * r);
+    fx.push({ m, mat, t: -i * 0.011, vie: 0.18, maj: (f, k) => {
+      const o = clamp(1 - k, 0, 1); f.mat.opacity = 0.5 * o * o; f.m.scale.z = 0.9 * (0.4 + o * 0.8);
+    } });
+    scene.add(m);
+  }
+}
+function fxClear() { for (const f of fx) { scene.remove(f.m); f.mat.dispose(); } fx.length = 0; }
+// LA SECOUSSE DE CAMÉRA : un coup qui porte se sent aussi à l'image.
+function camSecousse(amp = 0.18, duree = 0.22) {
+  cam.shake = Math.max(cam.shake || 0, amp); cam.shakeT = Math.max(cam.shakeT || 0, simTime + duree);
+}
+// L'impact complet, réglé par le genre de coup.
+// genre : 'poing' | 'pied' | 'balle' | 'mur' | 'sang' | 'metal'
+function impact(x, y, z, dir, genre = 'poing', force = 1) {
+  const d = dir && (dir.x || dir.y || dir.z) ? dir : null;
+  if (genre === 'mur' || genre === 'metal') {
+    fxEclair(x, y, z, 0xfff0c4, 0.8 * force, 0.08);
+    fxEclats(x, y, z, d ? { x: -d.x, y: 0.5, z: -d.z } : null, 0xffd23f, 6, 0.9 * force);
+    fxAnneau(x, y, z, d, 0xffe9a8, 0.55 * force, 0.18);
+    if (genre === 'mur') fxFumee(x, y, z, 2);
+    if (d) fxMarque(x, y, z, d);
+    return;
+  }
+  if (genre === 'balle') {   // la balle touche quelqu'un
+    fxEclair(x, y, z, 0xffd2d2, 0.9 * force, 0.09);
+    fxEclats(x, y, z, d ? { x: -d.x * 0.5, y: 0.7, z: -d.z * 0.5 } : null, 0xff5c5c, 8, 1.05 * force);
+    fxAnneau(x, y, z, d, 0xff8f8f, 0.7 * force, 0.2);
+    return;
+  }
+  if (genre === 'sang') { fxEclats(x, y, z, d, 0xff5c5c, 7, 0.9 * force); fxAnneau(x, y, z, d, 0xff7a7a, 0.6 * force, 0.2); return; }
+  // le corps à corps : éclair blanc, anneau large, éclats dorés (poing) ou rouges (pied)
+  const chaud = genre === 'pied' ? 0xff8f3a : 0xffd23f;
+  fxEclair(x, y, z, 0xffffff, (genre === 'pied' ? 1.2 : 0.95) * force, 0.1);
+  fxAnneau(x, y, z, d, 0xffffff, (genre === 'pied' ? 1.15 : 0.85) * force, 0.22);
+  fxAnneau(x, y, z, d, chaud, (genre === 'pied' ? 0.8 : 0.6) * force, 0.3);
+  fxEclats(x, y, z, d, chaud, genre === 'pied' ? 10 : 7, force);
+}
+function burst(x, y, z, color, n = 8) {
+  // Le vieux nuage de cubes reste appelé de partout : il gagne le fondu et les éclats fins.
+  fxEclats(x, y, z, null, color, Math.min(n, 10), 0.9);
+  fxAnneau(x, y, z, null, color, 0.55, 0.22);
 }
 
 // ================= JOUEUR =================
@@ -6892,7 +7050,7 @@ const MUNITIONS = {
   exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
 };
 const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, perf: +store.get('superobby.perf') || 10 };
-const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0 };
+const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0, shake: 0, shakeT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
 function sousToit() {
@@ -8015,7 +8173,7 @@ function chienTick(dt) {
         else if (d < 1.8 && simTime > (chien.morsT || 0)) {
           chien.morsT = simTime + 1.1;
           const mordu = 5 + Math.round(perfDe(chien) / 9);
-          g3.hp -= mordu; burst(g3.x, g3.y + 1.1, g3.z, 0xff5c5c, 6); sfx.hit(); sfx.noise(.08, 500, .07);
+          g3.hp -= mordu; impact(g3.x, g3.y + 1.1, g3.z, { x: p.x - g3.x, y: 0, z: p.z - g3.z }, 'sang', 1); sfx.hit(); sfx.noise(.08, 500, .07);
           bubble(g3.av, pickOne(['aïe ! ce chien !', 'dégage sale bête !', 'rappelle ton clebs !']));
           // il RALENTIT sa proie : le gangster perd du temps sur le joueur, qui peut filer
           g3.cd = simTime + 1.6; g3.mordu = simTime + 2.2;
@@ -8031,7 +8189,7 @@ function chienTick(dt) {
         chien.morsT = simTime + 1.1;
         if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0;
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
-          burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 5); sfx.noise(.08, 500, .07);
+          impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sfx.noise(.08, 500, .07);
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
           if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; chien.attaque = null; botSay(b, ['j\'abandonne… 🐶']); infraction('chien lâché sur ' + b.name, 1, 2, true); }
           else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('chien lâché sur ' + b.name, 1, 2, true); }
@@ -8375,7 +8533,7 @@ function protectionTick(dt) {
       }
       if (!b.bagarre) for (const G of gangs) for (const m of G.membres) {
         if (m.ko || Math.hypot(m.x - c.pos.x, m.z - c.pos.z) > 6) continue;
-        m.hp -= 9 + Math.round(perfDe(b) / 10); burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 4);
+        m.hp -= 9 + Math.round(perfDe(b) / 10); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 0.9);
         if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2); }
         b.av.rig.swing = 0.3; break;
       }
@@ -8389,7 +8547,7 @@ function protectionTick(dt) {
           b.villaCd = simTime + 1.2;
           b.rdv = { x: m.x + 1, z: m.z + 1, y: 0.3, nom: 'intrus', arrive: false, libre: true }; b.rdvRoute = null; b.wait = 0;
           if (Math.hypot(b.pos.x - m.x, b.pos.z - m.z) < 2) {
-            m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 5); sfx.hit();
+            m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
             if (m.hp <= 0) { m.ko = simTime + 18; m.hp = 0; perfGagne(b, 2, 'il a défendu ta villa'); botSay(b, ['et voilà ! 😤', 'la villa est à nous !']); }
           }
           break;
@@ -8467,7 +8625,7 @@ function bagarreTick(b, dt) {
     g.cd = simTime + 1.1; b.av.rig.swing = 0.3;
     c.hp = (c.hp ?? 100) - 12; c.fight = 'flee'; c.fightT = simTime + 6; c.wait = 0;
     c.pos.x += dx / d * 0.5; c.pos.z += dz / d * 0.5;
-    burst(c.pos.x, c.pos.y + 1.2, c.pos.z, 0xff5c5c, 6); sfx.hit();
+    impact(c.pos.x, c.pos.y + 1.2, c.pos.z, null, 'sang', 1); sfx.hit();
     if (Math.random() < 0.5) botSay(c, ['aïe !', 'arrête !', 'au secours !']);
     if (c.hp <= 0) { botKill(c); b.bagarre = null; b.ordre = null; }
   } else animateRig(b.av.rig, 'idle', 0, dt, simTime);
@@ -8487,7 +8645,7 @@ function gardeTick(b) {
     if (m.ko || Math.hypot(m.x - P.pos.x, m.z - P.pos.z) > 7) continue;
     b.gardeCd = simTime + 1.2; b.av.rig.swing = 0.3;
     b.facing = Math.atan2(m.x - b.pos.x, m.z - b.pos.z);
-    m.hp -= 9 + Math.round(perfDe(b) / 9); burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 5); sfx.hit();
+    m.hp -= 9 + Math.round(perfDe(b) / 9); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
     if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2, 'il t\'a défendu'); botSay(b, ['personne ne touche au chef ! 😤']); }
     return;
   }
@@ -10766,28 +10924,30 @@ function shotsTick(dt) {
     if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
     s.p.set(s.p.x + dx * best, s.p.y + dy * best, s.p.z + dz * best);   // point d'impact exact
     const L2 = Math.hypot(s.v.x, s.v.z) || 1;
-    if (quoi === 'solide') {
+    if (quoi === 'sol') { impact(s.p.x, s.p.y + 0.02, s.p.z, { x: dx, y: dy, z: dz }, 'mur', 0.9); }
+    else if (quoi === 'solide') {
       // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
       const br = cible && cible.brk;
-      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); burst(s.p.x, s.p.y, s.p.z, 0x9fdcff, 8); sfx.clack(); }
-      else burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 3);
+      const nd = { x: dx, y: dy, z: dz };
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); }
+      else impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1);
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
     else if (quoi === 'cible') {
       const tg = cible; tg.hidden = simTime + 2.4; city.shots++; perfGagne(P, 1, null); sfx.check(); sfx.clack();
-      burst(tg.m.position.x, tg.y, tg.z, 0xffd23f, 10); updateAct(); msg('🎯 Touché !', 500);
+      impact(tg.m.position.x, tg.y, tg.z, { x: dx, y: dy, z: dz }, 'metal', 1.2); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
-      const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); burst(r.cur.x, r.cur.y + 1, r.cur.z, 0xff5c5c, 8); updateAct();
+      const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); impact(r.cur.x, r.cur.y + 1, r.cur.z, { x: dx, y: dy, z: dz }, 'balle', 1); updateAct();
       if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 2); }
     } else if (quoi === 'bot') {
-      const b = cible; city.tags++; burst(b.pos.x, b.pos.y + 1, b.pos.z, 0xff5c5c, 8);
+      const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
       if (b.hp <= 0) botKill(b); else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;
-      burst(s.p.x, s.p.y, s.p.z, 0xffd23f, 6); sfx.noise(.05, 900, .05);
+      impact(s.p.x, s.p.y, s.p.z, { x: dx, y: dy, z: dz }, 'metal', 1.1); sfx.noise(.05, 900, .05);
       const av = v.dmg || 0;
       vehicleDamage(v, (s.dmg || 20) * 1.6);
       applyDamageVisual(v, s.v.x / L2 * 3, s.v.z / L2 * 3);
@@ -10797,16 +10957,16 @@ function shotsTick(dt) {
         else msg('💥 Véhicule détruit !', 1600);
       } else if (v.mil || (v.solid && v.solid.pol)) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } }
     } else if (quoi === 'agent') {
-      const a = cible; a.hp -= (s.dmg || 20); burst(a.x, a.y + 1.2, a.z, 0xff5c5c, 9);
+      const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       police.riposte = simTime + 30;
       if (a.hp <= 0) agentTue(a);
       else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
-      const m = cible; m.hp -= (s.dmg || 20); burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 9); sfx.hit();
+      const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
       if (m.hp <= 0) gangeurKO(m, 'le joueur');
       else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
     } else if (quoi === 'garde') {
-      const gd = cible; gd.hp -= (s.dmg || 20); burst(gd.x, gd.y + 1, gd.z, 0xff5c5c, 8);
+      const gd = cible; gd.hp -= (s.dmg || 20); impact(gd.x, gd.y + 1.2, gd.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
       // les gardes ripostent, mais tirer sur l'un d'eux n'est pas un braquage de banque :
       // avant, la moindre balle perdue déclenchait l'alerte maximale et trois voitures.
@@ -11492,6 +11652,7 @@ function frame() {
     if (d.tiny) { const s = Math.max(0.05, 1 - d.t / d.life); d.m.scale.setScalar(s); }
     if (d.t > d.life) { scene.remove(d.m); debris.splice(i, 1); }
   }
+  fxTick(dt);
 
   // joueur
   me.group.position.copy(P.pos);
@@ -11623,6 +11784,18 @@ function frame() {
       d = Math.min(cam.dist, cam.libre);
     } else cam.libre = null;
     camera.position.copy(cam.target).addScaledVector(dir, d);
+    // La secousse : un coup qui porte se sent à l'image. Elle retombe toute seule.
+    if (cam.shake > 0.001) {
+      const reste = Math.max(0, (cam.shakeT || 0) - simTime);
+      if (reste <= 0) cam.shake = 0;
+      else {
+        const a = cam.shake * Math.min(1, reste * 5);
+        camera.position.x += Math.sin(simTime * 61) * a;
+        camera.position.y += Math.sin(simTime * 83 + 1.7) * a * 0.8;
+        camera.position.z += Math.sin(simTime * 71 + 3.1) * a;
+        cam.shake -= cam.shake * Math.min(1, dt * 6);
+      }
+    }
     if (camera.position.y < 0.4) camera.position.y = 0.4;
   }
   {   // champ de vision : resserré dans la lunette du fusil (effet de grossissement ×3)
@@ -12599,10 +12772,10 @@ function gardeArmeTick(b, dt) {
   shots.push(sh); spawnShot(sh);
   sfx.noise(.05, 1250, .05); sfx.tone(190, 0, .06, 'triangle', .04, 60);
   // touche directe : la balle de l'ami compte tout de suite (le rayon générique ne vise que le joueur)
-  if (c.agent) { c.agent.hp -= 22; burst(c.agent.x, c.agent.y + 1.3, c.agent.z, 0xff5c5c, 6);
+  if (c.agent) { c.agent.hp -= 22; impact(c.agent.x, c.agent.y + 1.3, c.agent.z, null, 'sang', 1);
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }
   else if (c.bot) { c.bot.hp = (c.bot.hp ?? 100) - 22; c.bot.fight = 'flee'; c.bot.fightT = simTime + 6;
-    burst(c.bot.pos.x, c.bot.pos.y + 1.2, c.bot.pos.z, 0xff5c5c, 6);
+    impact(c.bot.pos.x, c.bot.pos.y + 1.2, c.bot.pos.z, null, 'sang', 1);
     if (c.bot.hp <= 0) botKill(c.bot); }
   if (simTime > (b.criT || 0)) { b.criT = simTime + 5; botSay(b, [`recule, ${c.nom} !`, 'je te couvre !', 'baisse-toi !']); }
   return true;
@@ -13426,7 +13599,7 @@ function gangTick(dt) {
             else {
               const b2 = c.bot;
               b2.hp = (b2.hp ?? 100) - Math.max(4, Math.round(9 + (perfDe(m) - perfDe(b2)) / 5));
-              burst(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, 0xff5c5c, 5); sfx.hit();
+              impact(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, null, 'sang', 0.9); sfx.hit();
               m.hp -= Math.max(2, Math.round(4 + perfDe(b2) / 8));   // il rend les coups
               if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; m.chasse = null; perfGagne(b2, 3, 'il a repoussé une embuscade'); }
               else if (b2.hp <= 0) { b2.hp = 0; m.chasse = null;
@@ -13496,7 +13669,7 @@ function gangTick(dt) {
       if (G.etat === 'rival') for (const O of gangs) { if (O === G) continue;
         for (const o2 of O.membres) { if (o2.ko) continue;
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
-            o2.hp -= 6 + Math.round(perfDe(m) / 6); burst(o2.x, o2.y + 1.2, o2.z, 0xff5c5c, 5); sfx.hit();
+            o2.hp -= 6 + Math.round(perfDe(m) / 6); impact(o2.x, o2.y + 1.2, o2.z, { x: o2.x - m.x, y: 0, z: o2.z - m.z }, 'sang', 0.9); sfx.hit();
             if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; perfGagne(m, 2); perfPerd(o2, 5); } } } }
       // ILS S'EN PRENNENT AUSSI À TES HOMMES — et peuvent les tuer. Un membre bien entraîné
       // encaisse et rend les coups ; un débutant envoyé seul face à un chef y laisse la peau.
@@ -13507,7 +13680,7 @@ function gangTick(dt) {
           m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
           const attaque = perfDe(m), defense = perfDe(b);
           b.hp = (b.hp ?? 100) - Math.max(4, Math.round(10 + (attaque - defense) / 5));
-          burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0xff5c5c, 5); sfx.hit();
+          impact(b.pos.x, b.pos.y + 1.2, b.pos.z, null, 'sang', 0.9); sfx.hit();
           // il rend les coups
           m.hp -= Math.max(2, Math.round(4 + defense / 8));
           if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 3, 'il a mis un rival au tapis'); botSay(b, ['et voilà ! 😤', 'personne ne touche au gang !']); }
@@ -13823,7 +13996,7 @@ function recruesTick(dt) {
       animateRig(m.av.rig, 'idle', 0, dt, simTime);
       if (cible && simTime > (m.cd || 0)) {   // il frappe l'ennemi
         m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
-        cible.hp -= 12 + Math.round(gang.force / 12); burst(cible.x, cible.y + 1.2, cible.z, 0xff5c5c, 6); sfx.hit();
+        cible.hp -= 12 + Math.round(gang.force / 12); impact(cible.x, cible.y + 1.2, cible.z, null, 'sang', 1); sfx.hit();
         if (cible.hp <= 0) gangeurKO(cible, m.nom);
       }
     }

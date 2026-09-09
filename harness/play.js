@@ -3530,6 +3530,79 @@ test('rien ne déborde de l\'écran, du téléphone couché à la télé', async
   return { ok, detail: res.map(r => `${r.nom} : ${r.deb.length ? 'déborde (' + r.deb.join(', ') + ')' : 'rien ne déborde'}${r.petits.length ? ' · cibles trop petites : ' + r.petits.join(', ') : ''}`).join(' · ') };
 });
 
+test('le GPS trace le chemin jusqu\'au bout, même à l\'autre bout de la ville', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G, out = [];
+    const depart = [[0, 0, 'centre'], [-150, 40, 'La Zone'], [110, 60, 'plage'], [60, 168, 'ma villa']];
+    const buts = [[38, 8.6, 'bureau des missions'], [-52, 70, 'banque'], [110, 30, 'plage'], [-145, 40, 'La Zone'], [60, 168, 'ma villa']];
+    for (const [px, pz, nomD] of depart) for (const [x, z, nom] of buts) {
+      if (Math.hypot(px - x, pz - z) < 20) continue;
+      G.P.pos.set(px, 1, pz); G.P.vel.set(0, 0, 0);
+      G.setBeacon(x, z, 0.3); G.gpsRoute.hide(); G.gpsRoute.update();
+      const cones = [];
+      G.scene.traverse(o => { if (o.isMesh && o.visible && o.geometry && o.geometry.type === 'ConeGeometry'
+        && o.material && o.material.color && o.material.color.getHex() === 0x3ef2ff) cones.push(o); });
+      let reste = 1e9;
+      for (const c of cones) reste = Math.min(reste, Math.hypot(c.position.x - x, c.position.z - z));
+      out.push({ trajet: nomD + ' → ' + nom, loin: Math.round(Math.hypot(px - x, pz - z)),
+                 chevrons: cones.length, reste: cones.length ? Math.round(reste) : null });
+    }
+    G.clearBeacon();
+    return out;
+  });
+  const incomplets = r.filter(e => e.reste === null || e.reste > 12);
+  const plusLong = r.reduce((a, b) => (b.loin > a.loin ? b : a), r[0]);
+  return { ok: incomplets.length === 0 && r.length >= 15,
+    detail: `${r.length} trajets d'un bout à l'autre de la ville : la traînée de chevrons va jusqu'à la cible dans tous les cas (le plus long, ${plusLong.trajet} à ${plusLong.loin} m, s'arrête à ${plusLong.reste} m du but avec ${plusLong.chevrons} chevrons)${incomplets.length ? ' · incomplets : ' + incomplets.map(e => e.trajet).join(', ') : ''}` };
+});
+
+test('on se voit assis au volant de la voiture qu\'on prend', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
+    const G = __G;
+    const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy) || G.city.cars[0];
+    c.x = 26; c.z = 0; c.h = 0.7; c.g.position.set(c.x, c.y || 0, c.z);
+    if (G.drive.car) G.exitCar();
+    G.enterCar(c);
+    await new Promise(r2 => setTimeout(r2, 900));   // la boucle de rendu place l'avatar
+    const av = G.me.group;
+    // écart entre l'avatar et le centre de la voiture, exprimé dans le repère de la voiture
+    const dx = av.position.x - c.x, dz = av.position.z - c.z;
+    const cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const droite = dx * cs - dz * sn, avantArriere = dx * sn + dz * cs;
+    return { visible: av.visible, y: +av.position.y.toFixed(2), voitureY: +(c.y || 0).toFixed(2),
+      droite: +droite.toFixed(2), avantArriere: +avantArriere.toFixed(2),
+      capAvatar: +av.rotation.y.toFixed(2), capVoiture: +c.h.toFixed(2),
+      dansLaCaisse: Math.abs(droite) < (c.baseW || 2.4) / 2 && Math.abs(avantArriere) < (c.baseD || 4.4) / 2 };
+  });
+  await p.evaluate(() => { if (__G.drive.car) __G.exitCar(); });
+  const ok = r.visible && r.dansLaCaisse && Math.abs(r.capAvatar - r.capVoiture) < 0.05
+    && r.y > r.voitureY - 0.6 && r.y < r.voitureY + 0.6;
+  return { ok, detail: `avatar visible=${r.visible}, à ${r.droite} m à droite et ${r.avantArriere} m en avant du centre (donc dans la caisse=${r.dansLaCaisse}), à ${r.y} m de haut, orienté comme la voiture (${r.capAvatar} contre ${r.capVoiture})` };
+});
+
+test('les escaliers de la banque ne rasent plus le mur', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -52, y: 1, z: 70, hour: 12 });
+    const G = __G, bk = G.city.bank;
+    // pour chaque volée : de quelle épaisseur est la bande de marbre inutile contre le mur ?
+    return bk.esc.map(e => {
+      const marches = G.solids.filter(o => Math.abs(o.z - e.z) < 2.5 && o.h < 0.3 && o.y > e.y0 && o.y < e.y1 + 1);
+      const prof = marches.length ? Math.max(...marches.map(o => o.d)) : 0;
+      const murNord = e.z < bk.z, bordVolee = murNord ? e.z - prof / 2 : e.z + prof / 2;
+      // la vraie face intérieure du mur, pas le plan nominal : le mur a une épaisseur
+      const murs = G.solids.filter(o => o.h > 3 && o.w > 8 && Math.abs(o.x - bk.x) < bk.w
+        && (murNord ? o.z < bk.z - bk.d / 2 + 1.5 : o.z > bk.z + bk.d / 2 - 1.5));
+      const face = murs.length ? (murNord ? Math.max(...murs.map(o => o.z + o.d / 2)) : Math.min(...murs.map(o => o.z - o.d / 2)))
+                               : (murNord ? bk.z - bk.d / 2 : bk.z + bk.d / 2);
+      return { volee: +e.y0.toFixed(1), largeur: +prof.toFixed(2), fenteContreLeMur: +Math.abs(bordVolee - face).toFixed(2) };
+    });
+  });
+  const ok = r.length === 2 && r.every(v => v.largeur >= 3.4 && v.fenteContreLeMur <= 0.25);
+  return { ok, detail: r.map(v => `volée depuis ${v.volee} m : ${v.largeur} m de large, ${v.fenteContreLeMur} m de fente contre le mur (il y en avait 0,45 avec une main courante dedans)`).join(' · ') };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

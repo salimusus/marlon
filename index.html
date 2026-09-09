@@ -2959,10 +2959,18 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
       // près au lieu de tracer un trait droit à travers les immeubles
       const fin = path && path.reached === false ? [] : [[beacon.x, beacon.z]];
       const pts = [[P.pos.x, P.pos.z], ...(path || []), ...fin];
+      // Les chevrons étaient espacés de 3 m, plafonnés à 60 : la traînée s'arrêtait au bout
+      // de 180 m. Or la ville fait 400 m de large et un trajet courant en réclame 200 à 380 :
+      // le GPS lâchait le joueur avant la moitié du chemin. On mesure d'abord l'itinéraire et
+      // on RÉPARTIT les chevrons dessus — serrés de près où la précision compte, étirés au
+      // loin — pour que la traînée aille toujours jusqu'au bout.
+      let total = 0;
+      for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      const MAXC = 90, pas = Math.max(3, total / (MAXC - 4));
       let k = 0;
-      for (let i = 0; i < pts.length - 1 && k < 60; i++) {
-        const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.floor(L / 3));
-        for (let j = 0; j < n && k < 60; j++) { const t = (j + 0.5) / n, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.5) continue; if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); scene.add(pool[k]); } const m = pool[k++]; const gy = groundCar(x, z, null, 0); m.position.set(x, gy + 0.35, z); m.lookAt(b[0], gy + 0.35, b[1]); m.visible = true; }
+      for (let i = 0; i < pts.length - 1 && k < MAXC; i++) {
+        const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(L / pas));
+        for (let j = 0; j < n && k < MAXC; j++) { const t = (j + 0.5) / n, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.5) continue; if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); scene.add(pool[k]); } const m = pool[k++]; const gy = groundCar(x, z, null, 0); m.position.set(x, gy + 0.35, z); m.lookAt(b[0], gy + 0.35, b[1]); m.visible = true; }
       }
       for (let i = k; i < pool.length; i++) pool[i].visible = false;
     },
@@ -3553,21 +3561,31 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // arrivent au ras du plancher d'arrivée. Avant, c'étaient des blocs pleins montant du sol,
   // et la dernière marche dépassait le plancher de 11 cm.
   const escaliers = [];
-  const stairs = (y0, y1, zc, dir) => {
+  // La volée flottait à 45 cm du mur, main courante comprise : on montait dans une fente, et
+  // la bande de marbre entre la rampe et la paroi ne servait à rien. On l'élargit à 3,60 m
+  // pour qu'elle vienne SE PLAQUER contre le mur — plus de fente — et on ne garde la rampe
+  // que du côté du hall, le mur faisant garde-corps de l'autre. L'AXE ne bouge pas d'un
+  // centimètre : les policiers à pied s'y repèrent pour monter aux coffres.
+  const LARG = 3.6;
+  const stairs = (y0, y1, zc, dir, cote) => {
     const n = 10, len = 1.5, x0 = bx - W / 2 + 1.5, rise = (y1 - y0) / n;
     // mémorisé pour que les policiers à pied trouvent l'escalier et montent aux étages
     escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });   // 35 cm : plus près du mur, un agent naissait dedans et ne pouvait plus bouger
     for (let i = 0; i < n; i++) {
       const x = x0 + (dir > 0 ? i : n - 1 - i) * len + len / 2, top = y0 + (i + 1) * rise;
-      box(x, top - 0.09, zc, len + 0.06, 0.18, 3, marble, { studs: false, noRoute: true });
-      box(x - dir * (len / 2 + 0.03), top - 0.09 - rise / 2, zc, 0.1, rise, 3, 0xc9c2b4, { deco: true, studs: false });
-      for (const sz of [-1.55, 1.55]) {   // balustres et main courante, marche par marche
+      box(x, top - 0.09, zc, len + 0.06, 0.18, LARG, marble, { studs: false, noRoute: true });
+      box(x - dir * (len / 2 + 0.03), top - 0.09 - rise / 2, zc, 0.1, rise, LARG, 0xc9c2b4, { deco: true, studs: false });
+      {   // balustres et main courante côté hall, marche par marche (côté mur : le mur suffit)
+        const sz = cote * (LARG / 2 - 0.12);
         box(x, top + 0.5, zc + sz, 0.09, 1, 0.09, trim, { deco: true, studs: false });
         box(x, top + 1, zc + sz, len + 0.3, 0.12, 0.12, trim, { deco: true, studs: false });
       }
     }
   };
-  stairs(0.36, F + 0.3, bz - D / 2 + 2.2, 1); stairs(F + 0.3, F * 2 + 0.3, bz + D / 2 - 2.2, -1);
+  // Les deux volées rasaient le mur : 65 cm entre la main courante et la paroi, on montait
+  // dans une fente. On les rentre d'1,20 m dans le hall — 1,85 m de dégagement — sans toucher
+  // au comptoir (à l'ouest) ni au tapis central.
+  stairs(0.36, F + 0.3, bz - D / 2 + 2.2, 1, 1); stairs(F + 0.3, F * 2 + 0.3, bz + D / 2 - 2.2, -1, -1);   // rampe côté hall : +z pour la volée nord, -z pour la volée sud
   // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
   box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
   box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
@@ -4541,17 +4559,30 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     // avant, chaque marche était un bloc plein montant du sol, ce qui donnait un empilement
     // de monolithes au milieu du séjour au lieu d'un escalier. 8 marches de 0,54 m (sous la
     // limite franchissable de 0,60) et 0,90 m de giron, plus profond que la boîte du joueur.
-    const EW = 2.6, ESX = HX + 8, EN = 8, ERISE = (F + 0.25 - 0.5) / EN, ERUN = 0.9, EZ0 = HZ + 7.1;
+    // L'escalier partait de la cote 0,50 — celle du séjour surélevé — alors que le plancher
+    // à son pied est à 0,30 : la PREMIÈRE marche demandait donc 0,74 m d'un coup, au-dessus
+    // de la limite franchissable de 0,60, et on ne montait tout simplement jamais à l'étage.
+    // On repart du vrai plancher (0,30) pour arriver au ras de l'étage (5,35), en dix marches
+    // régulières de 0,505 m. Le giron passe de 0,90 à 0,76 pour que la volée tienne dans la
+    // trémie, mais les marches se chevauchent (profondeur 0,86) : pas de trou sous les pieds.
+    // …et son pied venait buter à SEPT CENTIMÈTRES du mur du fond : même sans cela, on
+    // n'avait pas la place de se planter devant la première marche pour l'escalader. On
+    // recule la volée de 70 cm (1,20 m de dégagement au pied) et on reprend le gabarit des
+    // escaliers de La Zone, qui eux se montent sans peine : 0,46 m de hauteur, 0,62 m de giron.
+    const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 8, EN = 11;
+    const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.62, EZ0 = HZ + 6.4;
     for (let i = 0; i < EN; i++) {
-      const top = 0.5 + (i + 1) * ERISE, z = EZ0 - i * ERUN;
-      box(ESX, top - 0.1, z, EW, 0.2, ERUN + 0.06, 0xe6ded0, { studs: false, noRoute: true });          // marche
+      const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
+      box(ESX, top - 0.1, z, EW, 0.2, ERUN + 0.1, 0xe6ded0, { studs: false, noRoute: true });          // marche
       box(ESX, top - 0.1 - ERISE / 2, z - ERUN / 2 - 0.02, EW, ERISE, 0.1, 0xd8d2c4, { deco: true, studs: false });   // contremarche
     }
     {   // garde-corps ajouré côté pièce : balustres et main courante suivent la pente, marche par marche
-      for (let i = 0; i < EN; i++) { const top = 0.5 + (i + 1) * ERISE, z = EZ0 - i * ERUN;
+      for (let i = 0; i < EN; i++) { const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
         box(ESX - EW / 2 - 0.06, top + 0.5, z, 0.1, 1, 0.1, 0xc9a84c, { deco: true, studs: false });
         box(ESX - EW / 2 - 0.06, top + 0.92, z, 0.14, 0.14, ERUN + 0.34, 0xc9a84c, { deco: true, studs: false }); }
-      box(ESX, F + 0.6, EZ0 - EN * ERUN + 0.3, EW, 0.3, 1.2, 0xe6ded0, { studs: false, noRoute: true });   // palier au ras du plancher de l'étage (0,50 m au-dessus de la dernière marche)
+      // la dixième marche arrive pile au niveau de l'étage : le palier n'est plus qu'un
+      // raccord, à la MÊME hauteur, au lieu d'une dernière marche de 0,50 à escalader
+      box(ESX, ETAGE - 0.15, EZ0 - (EN - 1) * ERUN - 0.6, EW, 0.3, 1.2, 0xe6ded0, { studs: false, noRoute: true });
     }
     box(HX + 6.6, F + 1.2, HZ + 4, 0.2, 1.1, 8, 0xc9a84c, { deco: true, studs: false });   // garde-corps de la trémie
     for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
@@ -7657,15 +7688,31 @@ const overlaps = (o, px, py, pz) =>
 const isSolid = o => !(o.blink && !o.mesh.visible);
 
 function moveAxis(axis, amount, canStep) {
+  const avant = P.pos[axis];
   P.pos[axis] += amount;
+  if (axis === 'y') {
+    // On retient la surface la PLUS HAUTE sous les pieds (et le plafond le plus bas au-dessus).
+    // Avant, c'était le DERNIER solide rencontré qui l'emportait, dans l'ordre où la grille les
+    // rend : dès qu'un plancher chevauchait une marche, on repassait sous la marche et on ne
+    // montait jamais l'escalier. On ne retient que les surfaces que le joueur SURVOLAIT avant
+    // ce déplacement, pour ne pas se faire téléporter sur le toit d'un mur qu'on traverse.
+    let best = null;
+    for (const o of solidsAutour(P.pos.x, P.pos.z, 2, true)) {
+      if (!isSolid(o) || !overlaps(o, P.pos.x, P.pos.y, P.pos.z)) continue;
+      if (amount <= 0) { if (o.y + o.h / 2 > avant + 0.02) continue; if (!best || o.y + o.h / 2 > best.y + best.h / 2) best = o; }
+      else { if (o.y - o.h / 2 < avant + P.h - 0.02) continue; if (!best || o.y - o.h / 2 < best.y - best.h / 2) best = o; }
+    }
+    if (best) {
+      if (amount <= 0) {
+        P.pos.y = best.y + best.h / 2; P.vel.y = 0; P.grounded = true; P.standing = best;
+        if (best.bounce) { P.vel.y = best.bounce; P.grounded = false; P.standing = null; best.squish = 1; sfx.bounce(); }
+      } else { P.pos.y = best.y - best.h / 2 - P.h; P.vel.y = 0; }
+    }
+    return;
+  }
   for (const o of solidsAutour(P.pos.x, P.pos.z, 2, true)) {   // grille spatiale : on ne teste que les solides du coin
     if (!isSolid(o) || !overlaps(o, P.pos.x, P.pos.y, P.pos.z)) continue;
-    if (axis === 'y') {
-      if (amount <= 0) {
-        P.pos.y = o.y + o.h / 2; P.vel.y = 0; P.grounded = true; P.standing = o;
-        if (o.bounce) { P.vel.y = o.bounce; P.grounded = false; P.standing = null; o.squish = 1; sfx.bounce(); }
-      } else { P.pos.y = o.y - o.h / 2 - P.h; P.vel.y = 0; }
-    } else {
+    {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
       if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }   // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
       const half = (axis === 'x' ? o.w : o.d) / 2;
@@ -7900,7 +7947,8 @@ function separerVehicules() {
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
-  drive.car = c; drive.speed = 0; me.group.visible = !!c.rider; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
+  // on se voit désormais au volant, comme les amis bots conducteurs
+  drive.car = c; drive.speed = 0; me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
   if (c.solid) { c.solid.ai = true; NAV.blocked = null; NAV.pieton = null; }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
@@ -9669,9 +9717,20 @@ function frame() {
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
   else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
   const riding = drive.car && drive.car.rider;
-  if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; } else me.group.rotation.z = 0;
+  if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; }
+  else if (drive.car) {
+    // Au volant d'une voiture fermée, le joueur était purement et simplement RENDU INVISIBLE :
+    // on conduisait un véhicule vide. On l'assied maintenant à la place du conducteur — mêmes
+    // décalages que ceux déjà utilisés pour un ami bot qui conduit : à droite du milieu, un
+    // peu en avant, et assez bas pour que la tête ne traverse pas le toit.
+    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const sx = c.kind === 'truck' ? 0.55 : 0.5, sz = c.kind === 'truck' ? 2.55 : 0.3;
+    const sy = c.heli ? 0.05 : c.kind === 'truck' ? 0.3 : -0.35;
+    me.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
+    me.group.rotation.set(c.tiltX || 0, c.h, 0, 'YXZ');
+  } else me.group.rotation.z = 0;
   const sousVoile = !!(P.voile && P.voileMesh);
-  const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
+  const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
   if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser

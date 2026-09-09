@@ -100,7 +100,16 @@ window.__SHOT = {
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
-    if (v.hour != null) simTime = ((v.hour - 7 + 12) % 12) / 12 * day.len;   // l'heure se pilote par simTime (journée de 7 h à 19 h)
+    // L'heure se pilote par simTime (journee de 7 h a 19 h). Mais l'horloge ne doit JAMAIS
+    // reculer : des minuteries posees par un test precedent (le prochain habitant qui va au
+    // casino, la prochaine reunion de gang...) vivent sur des objets qui, eux, survivent, et
+    // se retrouvaient alors dans un futur inatteignable. On avance donc d'un nombre entier de
+    // journees : meme heure affichee, horloge toujours croissante.
+    if (v.hour != null) {
+      const cible = ((v.hour - 7 + 12) % 12) / 12 * day.len;
+      const jours = Math.max(0, Math.ceil((simTime - cible) / day.len));
+      simTime = cible + jours * day.len;
+    }
     if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); }
     if (v.facing != null) P.facing = v.facing;
     cam.yaw = v.yaw != null ? v.yaw : P.facing;

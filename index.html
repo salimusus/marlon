@@ -2005,9 +2005,15 @@ function casinoTick(dt) {
   if (simTime > (c.botT || 0)) {
     c.botT = simTime + rnd(3, 7);
     const libres = c.machines.filter(m => !m.bot);
-    const dispo = bots.filter(b => !b.ko && !b.drive && !b.rdv && !b.bagarre && !b.sport && b.av.group.visible
+    // On accepte aussi un habitant deja en balade (foot, velo, sa villa) : en exigeant qu'il
+    // n'ait AUCUN rendez-vous, le casino restait desert, tout le monde vaquant a quelque
+    // chose. En revanche on ne detourne jamais quelqu'un a qui on a donne un ordre, ni un ami.
+    const libreDeSonTemps = b => !b.rdv || !(b.rdv.suit || b.rdv.colle || b.rdv.fixe || b.rdv.auto
+      || b.rdv.coup || b.rdv.suivre || b.rdv.jeu || b.rdv.touche);
+    const dispo = bots.filter(b => !b.ko && !b.drive && !b.bagarre && !b.sport && b.av.group.visible
+      && !amis.has(b.name) && !gang.membres.includes(b) && libreDeSonTemps(b)
       && Math.hypot(b.pos.x - c.x, b.pos.z - c.z) < 46);
-    if (libres.length && dispo.length && Math.random() < 0.6) {
+    if (libres.length && dispo.length && Math.random() < 0.75) {
       const m = pickOne(libres), b = pickOne(dispo);
       m.bot = b; b.casino = m;
       b.rdv = { x: m.x + Math.sin(m.ry) * 1.5, z: m.z + Math.cos(m.ry) * 1.5, y: 0.9, nom: '🎰 le casino', arrive: false, libre: true };

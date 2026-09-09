@@ -5421,7 +5421,10 @@ test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vrai
       full: G.POKER_GAINS[G.pokerRang(main([[0,5],[1,5],[2,5],[3,8],[0,8]]))].n,
     };
     // des bots viennent jouer aux machines
-    for (const x of G.bots.slice(0, 6)) { x.pos.set(c.x + (Math.random() - 0.5) * 20, 0.9, c.z + (Math.random() - 0.5) * 16); x.rdv = null; x.ko = 0; x.wait = 0; x.av.group.visible = true; }
+    // des HABITANTS, pas ton equipe : les tests precedents en ont fait des amis ou des
+    // membres du gang, et un homme a toi ne va pas tirer les bras des machines tout seul
+    for (const x of G.bots.slice(0, 6)) { G.amis.delete(x.name); if (G.gang.membres.includes(x)) G.quitterGang(x);
+      x.pos.set(c.x + (Math.random() - 0.5) * 20, 0.9, c.z + (Math.random() - 0.5) * 16); x.rdv = null; x.ko = 0; x.wait = 0; x.av.group.visible = true; }
     G.closeUI();
     let joueurs = 0;
     for (let i = 0; i < 60 * 90; i++) { G.step(1 / 60, true); for (const x of G.bots) G.updateBot(x, 1 / 60); joueurs = Math.max(joueurs, c.machines.filter(mm => mm.bot).length); }

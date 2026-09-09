@@ -5769,3 +5769,52 @@ test('le moteur change de voix a 300 et a 500 chevaux', async p => {
   const ok = r.grave && r.gros && r.scie && r.bourd && r.coupe && r.lu === 2 && r.auVolant === 2 && r.apresRetour === 0;
   return { ok, detail: `une 100 chevaux et une 500 chevaux ronronnaient exactement pareil : le régime ne dépendait que du rapport de boîte · chaque niveau a maintenant sa voix — la fondamentale descend (${r.base.join(' → ')} Hz), le volume monte (${r.gain.join(' → ')}), une SCIE vient épaissir le grave (${r.sub.join(' → ')}) et un bourdonnement s'installe (${r.bourdF.join(' → ')} Hz) · le bloc change de voix en montant dedans (niveau ${r.auVolant}) et dès qu'on repasse au moteur d'origine a l'atelier (${r.apresRetour})` };
 });
+
+test('la sauvegarde garde tout et se recharge toute seule', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // --- on se constitue une partie : argent, achats, tenue, voiture préparée, équipe ---
+    G.wallet = 1234;
+    G.owned.add('vet:casquette'); G.owned.add('tune:kit:nitro'); G.owned.add('arme:pistol');
+    G.myCfg.jersey = 5; G.myCfg.hat = 'casquette';
+    G.tuning.moteur = 2; G.tuning.kits = ['nitro', 'echap', 'jantes']; G.tuning.couleur = 0x35d0e6;
+    const equipe = G.bots.slice(0, 3);
+    for (const b of equipe) { G.amis.add(b.name); b.perf = 44; G.rejoindreGang(b); }
+    // une voiture garée dans TON garage
+    const g = G.city.monGarage;
+    const v = G.city.cars.find(c => c.parts && c.parts.ws && !c.kart);
+    v.busy = 0; v.x = g.x; v.z = g.z; v.color = 0x35d0e6; v.dmg = 17;
+    v.g.position.set(v.x, 0, v.z); G.vehicleSolid(v);
+    const equipeNoms = equipe.map(b => b.name);
+    G.sauveTout();
+    const ecrit = {
+      argent: G.store.get('superobby.wallet'), achats: JSON.parse(G.store.get('superobby.owned') || '[]').length,
+      tenue: !!G.store.get('superobby.avatar'), voiture: G.store.json('superobby.mavoiture', null),
+      tuning: G.store.json('superobby.tuning', null),
+      equipe: (G.store.json('superobby.guerre', null) || {}).membres || [],
+    };
+    // --- on quitte la ville et on revient : tout doit revenir tout seul ---
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12, garderSauvegarde: true });
+    const videApres = G.gang.membres.length;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderSauvegarde: true });
+    const gang2 = G.gang.membres.map(b => b.name);
+    const auto = G.maVoiture();
+    const res = {
+      ecrit, videApres, gang2, tousLa: equipeNoms.every(n => gang2.includes(n)),
+      perfGardee: G.gang.membres.every(b => G.perfDe(b) >= 40),
+      voiture: auto ? { color: auto.color, dmg: Math.round(auto.dmg), moteur: G.moteurDe(auto), pointe: Math.round(auto.spec.max) } : null,
+      argent: G.wallet, achats: G.owned.size, dansLeGarage: auto ? G.dansMonGarage(auto) : false,
+      // la sauvegarde automatique tourne toute seule
+      autoT: (() => { G.simTime += 100; const a = G.autoSauve(); const b = G.autoSauve(); return [a, b]; })(),
+    };
+    G.gang.membres = []; G.wallet = 25;
+    return res;
+  });
+  const ok = r.ecrit.argent === '1234' && r.ecrit.achats >= 3 && r.ecrit.tenue && r.ecrit.voiture
+    && r.ecrit.equipe.length === 3 && r.videApres === 0 && r.tousLa && r.perfGardee
+    && r.voiture && r.voiture.color === 0x35d0e6 && r.voiture.dmg === 17 && r.voiture.moteur === 2
+    && r.dansLeGarage && r.argent === 1234 && r.achats >= 3
+    && r.autoT[0] === true && r.autoT[1] === false;
+  return { ok, detail: `l'équipe était bien écrite dans la sauvegarde mais jamais relue (on repartait seul a chaque partie) et la voiture du garage n'était nulle part · tout revient maintenant tout seul en rentrant en ville : ${r.argent} 🪙, ${r.achats} achats, la tenue, les ${r.gang2.length} hommes du gang avec leur niveau (${r.perfGardee}) et TA voiture reposée dans ton garage (couleur #${r.voiture.color.toString(16)}, ${r.voiture.dmg} % de bosses, moteur ${r.voiture.moteur}, pointe ${r.voiture.pointe}) · et ça se sauvegarde tout seul toutes les 20 s (${r.autoT[0]} puis ${r.autoT[1]} juste après) et en fermant l'onglet` };
+});

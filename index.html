@@ -3572,6 +3572,7 @@ const WORLDS = [
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       finirPlan();        // le mapping : une desserte sur la route pour chaque quartier
       navSale(); buildNav();
+      B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
 ];
@@ -5941,8 +5942,78 @@ function sleepBed() {
 // LA SAUVEGARDE COMPLÈTE. Dormir n'enregistrait que la moitié de la partie : ni le gang,
 // ni les amis, ni la performance, ni la DÉCO posée, ni les colis livrés, ni le chien, ni la
 // voiture préparée. On retrouvait donc une partie amputée au retour.
+// ================= LA SAUVEGARDE COMPLÈTE =================
+// Tout ce qu'on gagne est gardé — l'argent, les vêtements achetés, la voiture préparée, les
+// hommes du gang — et tout est rechargé TOUT SEUL au démarrage. Avant, l'équipe était bien
+// écrite dans la sauvegarde mais jamais relue : on repartait chaque fois seul, et la voiture
+// du garage n'était nulle part.
+function maVoiture() {
+  for (const v of (city.cars || [])) if (v && v.parts && v.parts.ws && dansMonGarage(v)) return v;
+  if (drive.car && drive.car.parts && drive.car.parts.ws && !drive.car.kart) return drive.car;
+  return null;
+}
+function sauveMaVoiture() {
+  const v = maVoiture();
+  if (!v) return false;
+  store.set('superobby.mavoiture', JSON.stringify({ kind: v.kind || 'car', color: v.color != null ? v.color : 0xff5c5c, dmg: Math.round(v.dmg || 0) }));
+  return true;
+}
+// On la repose dans TON garage à la reprise, avec sa peinture, ses kits et ses bosses.
+function restaureMaVoiture() {
+  const d = store.json('superobby.mavoiture', null), g = city.monGarage;
+  if (!d || !g || !city.on) return null;
+  if (maVoiture()) return maVoiture();   // il y en a déjà une : on n'en empile pas
+  const v = makeCar(d.color != null ? d.color : 0xff5c5c, g.x, g.z, Math.PI);
+  v.dmg = clamp(d.dmg || 0, 0, 99);
+  city.cars.push(v); settleVehicle(v); vehicleSolid(v);
+  try { tuneApply(v, tuning); } catch (e) {}
+  return v;
+}
+// Les hommes de ton gang reviennent avec toi, avec leur niveau et leur bandana.
+function restaureGang() {
+  const svg = guerre.sauvePerf || [];
+  if (!svg.length || !bots.length) return 0;
+  let n = 0;
+  for (const sv of svg) {
+    const b = bots.find(x => x.name === sv.n);
+    if (!b || gang.membres.includes(b) || b.mort) continue;
+    amis.add(b.name);   // un homme de ton gang est forcément un ami
+    gang.membres.push(b); b.gang = 'joueur';
+    if (b.perf == null) b.perf = clamp(sv.p != null ? sv.p : 15, 0, 100);
+    try { applyLook(b.av, b.name, Object.assign(botLook(b), { hat: 'bandanaV' })); } catch (e) {}
+    n++;
+  }
+  if (n) { majForceGang(); saveAmis(); }
+  return n;
+}
+// LE RECHARGEMENT AUTOMATIQUE : appelé à la construction de la ville.
+function rechargeTout() {
+  const hommes = essaieSauve('gang', () => restaureGang()) || 0;
+  const auto = essaieSauve('voiture', () => restaureMaVoiture());
+  const bouts = [];
+  if (wallet) bouts.push(`${wallet} 🪙`);
+  if (hommes) bouts.push(`${hommes} homme${hommes > 1 ? 's' : ''} dans le gang`);
+  if (auto) bouts.push('ta voiture au garage');
+  if (owned.size) bouts.push(`${owned.size} achat${owned.size > 1 ? 's' : ''}`);
+  if (bouts.length) setTimeout(() => msg('💾 Partie rechargée : ' + bouts.join(' · '), 3200), 900);
+  return { hommes, auto: !!auto, wallet, achats: owned.size };
+}
+function essaieSauve(nom, fn) { try { return fn(); } catch (e) { console.error('sauvegarde ' + nom, e); return null; } }
+// SAUVEGARDE AUTOMATIQUE. On ne perd plus une partie parce qu'on a fermé l'onglet sans aller
+// dormir : tout est écrit toutes les 20 s de jeu, et une dernière fois en quittant la page.
+let autoSauveT = 0;
+function autoSauve(force) {
+  if (!city.on && !force) return false;
+  if (!force && simTime < autoSauveT) return false;
+  autoSauveT = simTime + 20;
+  sauveTout();
+  return true;
+}
+for (const ev of ['pagehide', 'beforeunload']) window.addEventListener(ev, () => { try { sauveTout(); } catch (e) {} });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { try { sauveTout(); } catch (e) {} } });
 function sauveTout() {
   const essaie = (nom, fn) => { try { fn(); } catch (e) { console.error('sauvegarde ' + nom, e); } };
+  essaie('ma voiture', () => sauveMaVoiture());
   essaie('porte-monnaie', () => store.set('superobby.wallet', String(wallet)));
   essaie('banque', () => store.set('superobby.bank', String(bank.balance)));
   essaie('tenue', () => store.set('superobby.avatar', JSON.stringify(myLook())));
@@ -11289,7 +11360,7 @@ function cityVie(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -15657,6 +15728,9 @@ function saveGuerre() {
     d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0, p: perfDe(m) }));
     d.perf = perfDe(P);
     d.membres = gang.membres.map(b => ({ n: b.name, p: perfDe(b) }));   // la progression de chaque homme
+    // on tient à jour l'instantané que relit restaureGang() : si on change de monde et qu'on
+    // revient, l'équipe reformée est celle d'il y a une seconde, pas celle du démarrage
+    if (d.membres.length || !(guerre.sauvePerf || []).length) guerre.sauvePerf = d.membres;
     store.set('superobby.guerre', JSON.stringify(d));
   } catch (e) {}
 }

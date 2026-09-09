@@ -55,10 +55,11 @@ window.__SHOT = {
         // devant la villa faussait le test suivant sans aucun rapport avec ce qu'il mesurait.
         b.hp = 100; b.ko = 0; b.mort = 0; b.robbed = false;
         b.gardeCorps = 0; b.gardeVilla = 0; b.gardeArme = 0; b.protege = null; b.soin = 0;
-        b.arme = false; b.perf = null; b.journal = null; b.sport = null;
+        b.arme = false; b.journal = null; b.sport = null;
+        if (!v.garderSauvegarde) b.perf = null;   // sauf quand le test verifie que la sauvegarde rend son niveau a chacun
         if (b.av) { b.av.group.rotation.x = 0; b.av.group.visible = true; }
       }
-      if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; if (gang.missions) gang.missions.length = 0; }
+      if (typeof gang !== 'undefined') { if (!v.garderSauvegarde) gang.membres.length = 0; gang.mission = null; gang.rates = 0; if (gang.missions) gang.missions.length = 0; }
       // les effets d'impact survivent au changement de test (ils vieillissent dans la boucle
       // de rendu, qui tourne a peine dans le banc d'essai) : on repart d'une scene propre
       if (typeof fxClear === 'function') { try { fxClear(); } catch (e7) {} }
@@ -70,6 +71,9 @@ window.__SHOT = {
         for (const pc of (city.parcels || [])) worldGroup.remove(pc.g);
         city.parcels = [];
         localStorage.removeItem('superobby.decor'); localStorage.removeItem('superobby.colis');
+        // la voiture et l'equipe rechargees par la sauvegarde ne doivent pas deborder d'un test a
+        // l'autre — sauf quand le test verifie justement la sauvegarde (garderSauvegarde)
+        if (!v.garderSauvegarde) { localStorage.removeItem('superobby.mavoiture'); if (typeof guerre !== 'undefined') guerre.sauvePerf = []; }
       } catch (e8) {}
       for (const b of bots) b.gangMission = null;
       // une partie de tennis ou de foot laissee en cours faussait le test suivant
@@ -417,6 +421,19 @@ window.__G = {
   GRILLE_JOUEUR: typeof GRILLE_JOUEUR !== 'undefined' ? GRILLE_JOUEUR : 0,
   startCountdown: typeof startCountdown === 'function' ? startCountdown : null,
   raceTick: typeof raceTick === 'function' ? raceTick : null,
+  sauveTout: typeof sauveTout === 'function' ? sauveTout : null,
+  rechargeTout: typeof rechargeTout === 'function' ? rechargeTout : null,
+  restaureGang: typeof restaureGang === 'function' ? restaureGang : null,
+  restaureMaVoiture: typeof restaureMaVoiture === 'function' ? restaureMaVoiture : null,
+  sauveMaVoiture: typeof sauveMaVoiture === 'function' ? sauveMaVoiture : null,
+  maVoiture: typeof maVoiture === 'function' ? maVoiture : null,
+  autoSauve: typeof autoSauve === 'function' ? autoSauve : null,
+  saveGuerre: typeof saveGuerre === 'function' ? saveGuerre : null,
+  loadGuerre: typeof loadGuerre === 'function' ? loadGuerre : null,
+  guerre: typeof guerre !== 'undefined' ? guerre : null,
+  gang: typeof gang !== 'undefined' ? gang : null,
+  store: typeof store !== 'undefined' ? store : null,
+  rejoindreGang: typeof rejoindreGang === 'function' ? rejoindreGang : null,
   TUNE_MOTEURS: typeof TUNE_MOTEURS !== 'undefined' ? TUNE_MOTEURS : null,
   KIT_VITESSE: typeof KIT_VITESSE !== 'undefined' ? KIT_VITESSE : null,
   MOTEUR_VOIX: typeof MOTEUR_VOIX !== 'undefined' ? MOTEUR_VOIX : null,

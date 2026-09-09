@@ -2699,8 +2699,12 @@ test('braquage : même parties de loin, les voitures de police finissent par vid
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
     const bk = __G.city.bank;
     // les voitures reviennent d'une intervention à l'autre bout de la ville
-    __G.police.cars.forEach((c, i) => { c.x = 12 + i * 6; c.z = 41; c.g.position.set(c.x, 0, c.z);
-      c.speed = 0; c.route = null; c.debarque = false; c.active = true; c.goHome = false; });
+    // remise a neuf COMPLETE : un test precedent laisse parfois une voiture en l'air, calee
+    // ou deja debarquee, et elle n'arrivait alors jamais jusqu'a la banque
+    __G.police.agents.slice().forEach(a => __G.police.agents.pop());
+    __G.police.cars.forEach((c, i) => { c.x = 12 + i * 6; c.z = 41; c.y = 0; c.h = Math.PI; c.g.position.set(c.x, 0, c.z);
+      c.speed = 0; c.route = null; c.routeT = 0; c.stuck = 0; c.nearT = 0; c.debT = 0;
+      c.debarque = false; c.active = true; c.goHome = false; });
     const depart = Math.round(Math.min(...__G.police.cars.map(c => Math.hypot(c.x - bk.x, c.z - bk.z))));
     __G.P.pos.set(-57, 10.05, 70);
     const t0 = __G.simTime;
@@ -2711,6 +2715,7 @@ test('braquage : même parties de loin, les voitures de police finissent par vid
     // l'alarme dure 60 s : c'est pendant ce temps-là que la police doit garder sa cible
     for (let i = 0; i < 1650; i++) {
       __G.simTime = t0 + i / 30; __G.P.pos.set(-57, 10.05, 70); __G.policeTick(1 / 30); __G.police.arrestT = 1e9;
+      __G.police.decayT = __G.simTime + 9999;   // ici on teste la POURSUITE, pas l'oubli au bout de 45 s
       if (!__G.police.sait) perdu++;
     }
     const agents = __G.police.agents.filter(a => Math.abs(a.x - bk.x) < 9 && Math.abs(a.z - bk.z) < 9).length;
@@ -2719,7 +2724,9 @@ test('braquage : même parties de loin, les voitures de police finissent par vid
     const t1 = __G.simTime;
     const dAgents = () => Math.min(...__G.police.agents.map(a => Math.hypot(a.x - (bk.x + 26), a.z - (bk.z + 4))));
     res.avantFuite = +dAgents().toFixed(1);
-    for (let i = 0; i < 900; i++) { __G.simTime = t1 + i / 30; __G.P.pos.set(bk.x + 26, 0.3, bk.z + 4); __G.policeTick(1 / 30); __G.police.arrestT = 1e9; }
+    // descendre DEUX volees et ressortir par la grande porte prend du temps : on laisse 90 s
+    for (let i = 0; i < 2700; i++) { __G.simTime = t1 + i / 30; __G.P.pos.set(bk.x + 26, 0.3, bk.z + 4); __G.policeTick(1 / 30);
+      __G.police.arrestT = 1e9; __G.police.decayT = __G.simTime + 9999; }
     res.apresFuite = +dAgents().toFixed(1);
     __G.jail.on = false; __G.clearWanted();
     return res;

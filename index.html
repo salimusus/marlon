@@ -6798,7 +6798,9 @@ function agentsTick(dt) {
     }
     const dP = Math.hypot(P.pos.x - a.x, P.pos.z - a.z), meme = Math.abs(P.pos.y - a.y) < 2.6;
     const voit = meme && !drive.car && policeVoit(a, 30);
-    if (voit) { police.vuT = simTime; police.lastSeen = [P.pos.x, P.pos.z]; }
+    // Un agent qui VOIT le fuyard le signale a tout le monde : sinon ses collegues restaient
+    // sur le lieu du delit (la banque) pendant que lui seul le poursuivait dans la rue.
+    if (voit) { police.vuT = simTime; police.lastSeen = [P.pos.x, P.pos.z]; if (police.sait) police.sait = [P.pos.x, P.pos.z]; }
     let tx = voit ? P.pos.x : but ? but[0] : a.x, tz = voit ? P.pos.z : but ? but[1] : a.z;
     const bk = city.bank;
     a.surEsc = false;
@@ -6817,7 +6819,10 @@ function agentsTick(dt) {
       // l'agent hésitait entre le pied et le sommet et redescendait sans arrêt).
       if (a.esc) {
         const e = a.esc, arr = a.escMonte ? e.haut : e.bas, ya = a.escMonte ? e.y1 : e.y0;
-        if (Math.abs(a.y - ya) < 0.3 || Math.abs(a.z - e.z) > 3.2) a.esc = null;   // 0,6 relâchait une marche trop tôt : l'agent redescendait
+        // On lâche la volée quand on est ARRIVÉ : a la bonne hauteur, ou simplement au pied
+        // (ou en haut) des marches. Sans ce second test, un agent qui redescendait s'arrêtait
+        // sur la dernière marche a 80 cm — jamais tout a fait a 36 — et campait là.
+        if (Math.abs(a.y - ya) < 0.3 || Math.hypot(a.x - arr[0], a.z - arr[1]) < 1.6 || Math.abs(a.z - e.z) > 3.2) a.esc = null;   // 0,6 relâchait une marche trop tôt : l'agent redescendait
         else { tx = arr[0]; tz = arr[1]; a.surEsc = true; }
       }
       if (!a.esc && Math.abs(P.pos.y - a.y) > 2) {
@@ -6832,13 +6837,33 @@ function agentsTick(dt) {
         }
       }
     }
+    // SORTIR : la banque n'a qu'une porte. Un agent redescendu des coffres pour poursuivre le
+    // braqueur dans la rue tournait en rond dans l'angle sud-ouest, faute de la viser.
+    if (bk && bk.porte && agentDedans && !a.surEsc && !dansBanque(tx, tz) && Math.abs(P.pos.y - a.y) < 2) {
+      const auSeuil = a.x > bk.porte[0] - 1.2 && Math.abs(a.z - bk.porte[1]) < 2.2;
+      // Et on QUITTE D'ABORD la volée : en filant vers la porte le long des marches, l'agent
+      // remontait l'escalier au lieu de sortir. On gagne le milieu du hall, puis la porte.
+      const surVolee = (bk.esc || []).some(e => Math.abs(a.z - e.z) < 3.4
+        && a.x > Math.min(e.bas[0], e.haut[0]) - 1.5 && a.x < Math.max(e.bas[0], e.haut[0]) + 1.5);
+      const c4 = auSeuil ? bk.approche : surVolee ? [a.x, bk.z] : bk.porte; tx = c4[0]; tz = c4[1];
+    }
     const spd = (a.mil ? 5 : 4.1) + Math.min(1.2, (police.coffres || 0) * 0.3);
     const d = Math.hypot(tx - a.x, tz - a.z);
     if (d > 1.4) {
       // au loin on suit l'itinéraire du quadrillage ; de près on va droit au but (le
       // quadrillage est fait pour les voitures et ignore l'intérieur des bâtiments)
       let wx = tx, wz = tz;
-      if (d > 26) {
+      // ET des que la ligne droite est barree. Le garage custom ferme tout le nord de la
+      // banque sur 28 m : un agent debarque de ce cote-la se collait a son mur du fond et
+      // n'entrait jamais. On teste donc la vue (4 fois par seconde, jamais dans l'escalier
+      // ni a l'interieur, ou les marches et les etages fausseraient le sondage).
+      if (!agentDedans && !a.surEsc && simTime > (a.vueT || 0)) {
+        a.vueT = simTime + 0.25; a.vueLibre = true;
+        const pas = Math.min(24, Math.max(2, Math.ceil(d / 1.5)));
+        for (let k = 1; k <= pas; k++) { const u = k / pas;
+          if (npcBlocked(a.x + (tx - a.x) * u, a.y, a.z + (tz - a.z) * u, 0.4)) { a.vueLibre = false; break; } }
+      } else if (agentDedans || a.surEsc) a.vueLibre = true;
+      if (d > 26 || a.vueLibre === false) {
         if (!a.route || simTime > a.routeT || Math.hypot(tx - (a.rtx || 1e9), tz - (a.rtz || 1e9)) > 5) {
           a.routeT = simTime + 1.6; a.rtx = tx; a.rtz = tz;
           // à PIED : on suit la grille des piétons. Sur celle des voitures (marge d'une
@@ -7001,7 +7026,9 @@ function policeTick(dt) {
   const braqueur = police.alarmT > simTime && !drive.car && city.bank
     && Math.abs(P.pos.x - city.bank.x) < city.bank.w / 2 && Math.abs(P.pos.z - city.bank.z) < city.bank.d / 2;
   const vuPar = police.wanted > 0 && !abri && police.cars.some(pc => pc.active && policeVoit(pc, 42));
-  if (vuPar) { police.vuT = simTime; if (!braqueur) police.sait = null; }
+  // Une voiture qui APERCOIT le fuyard donne sa position par radio : sans ca, les agents a
+  // pied restaient dans la banque avec pour seule adresse le lieu du delit.
+  if (vuPar) { police.vuT = simTime; police.lastSeen = [P.pos.x, P.pos.z]; if (!braqueur) police.sait = null; }
   if (braqueur) police.sait = [city.bank.x, city.bank.z];   // tant qu'il est dedans, ils savent où venir
   if (police.wanted > 0 && abri === 'batiment' && !police.sait && simTime - (police.vuT || -99) < 3.5) policeInvestit([P.pos.x, P.pos.z], 'Ils t\'ont vu entrer');
   if (police.sait && !abri && !braqueur && simTime - (police.vuT || 0) > 9) police.sait = null;   // ressorti et hors de vue : ils perdent la trace

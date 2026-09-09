@@ -4762,7 +4762,8 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   const gdSolid = box(GX, 2.8, GZ + 6.5, 12.4, 5.6, 0.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
   gdSolid.porte = true;
   const garageObj = { g: gd, solid: gdSolid, x: GX, z: GZ + 6.5, open: 0, kind: 'garage', slats, lintel: 5.4, y0: 2.8 };
-  if (mine) { city.gate = gateObj; city.garageDoor = garageObj; city.autoDoors.push(pedObj); city.villaMine = { x: vx, z: vz }; } else { city.autoDoors.push(gateObj, pedObj, garageObj); }
+  if (mine) { city.gate = gateObj; city.garageDoor = garageObj; city.autoDoors.push(pedObj); city.villaMine = { x: vx, z: vz };
+    city.monGarage = { x: GX, z: GZ, w: 13, d: 13 }; } else { city.autoDoors.push(gateObj, pedObj, garageObj); }
   box(GX, 6.9, GZ + 6.5, 5, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚗 GARAGE') }), deco: true, noEdges: true });
   // maison : murs, baie vitrée et porte au sud
   plat(HX, 0.5, HZ, HW, HD, 0xf0eadc, { studs: false, noRoute: true }, 0.2);
@@ -5099,6 +5100,9 @@ function decorMesh(id) {   // modèle 3D d'un objet de déco
 // personnage, l'aperçu se pose au sol (ou s'aligne sur un mur pour les cadres).
 const decorSave = () => store.set('superobby.decor', JSON.stringify(city.placed.map(d =>
   ({ id: d.id, x: +d.x.toFixed(2), y: +d.y.toFixed(2), z: +d.z.toFixed(2), ry: +d.ry.toFixed(3), m: d.mur ? 1 : 0 }))));
+// Les colis livrés mais pas encore ramassés étaient PERDUS au rechargement : on avait payé
+// et l'objet n'arrivait jamais. Ils sont désormais enregistrés comme le reste.
+const colisSave = () => store.set('superobby.colis', JSON.stringify((city.parcels || []).map(pc => pc.id)));
 const DECOR_DIM = { fauteuil: [1.5, 1.1, 1.4], aquarium: [1.4, 1.5, 0.8], statue: [0.8, 1.8, 0.8],
   plante: [1.0, 1.8, 1.0], peluche: [1.1, 1.4, 1.1], vase: [0.7, 0.9, 0.7], lampe: [0.6, 1.7, 0.6],
   canape: [3.0, 1.1, 1.4], commode: [1.7, 1.2, 0.8], bibli: [1.9, 2.2, 0.6] };
@@ -5173,15 +5177,24 @@ function loadDecor() {
     if (typeof d.x === 'number') placeLibre(d.id, d.x, d.y, d.z, d.ry || 0, !!d.m, true);
     else if (typeof d.s === 'number') placeDecor(d.id, d.s, true);   // ancien format par emplacement
   }
+  // Les colis payés mais pas encore ramassés reviennent avec toi.
+  const colis = store.json('superobby.colis', []);
+  for (const id of colis) { const it = DECOR.find(x => x.id === id); if (it) deliverDecor(it); }
 }
 function deliverDecor(item) {   // l'objet est livré devant le perron dans un carton
-  if (!city.delivery) { msg('📦 La livraison arrive devant ta villa', 1800); return; }
-  const g = new THREE.Group(); g.position.set(city.delivery.x + rnd(-1, 1), 0.4, city.delivery.z + rnd(-1, 1)); worldGroup.add(g);
+  // Sans point de livraison (pas encore de villa), l'achat était PERDU : on payait et rien
+  // n'arrivait. Le livreur dépose alors le carton à tes pieds.
+  const pt = city.delivery || { x: P.pos.x + Math.sin(P.facing) * 2, z: P.pos.z + Math.cos(P.facing) * 2 };
+  const g = new THREE.Group(); g.position.set(pt.x + rnd(-1, 1), 0.4, pt.z + rnd(-1, 1)); worldGroup.add(g);
   const crate = new THREE.Mesh(unitRound, lam(0xc08b4a)); crate.scale.set(1.2, 1.2, 1.2); crate.position.y = 0.6; g.add(crate);
   for (const s2 of [-1, 1]) { const t = new THREE.Mesh(unitRound, lam(0xe0d0a0)); t.scale.set(1.24, 0.12, 0.3); t.position.set(0, 0.6, s2 * 0.3); g.add(t); }
   const lbl = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ map: textTexture(item.e), transparent: true })); lbl.position.set(0, 0.7, 0.63); g.add(lbl);
   city.parcels.push({ g, id: item.id, e: item.e, n: item.n, x: g.position.x, z: g.position.z });
-  msg(`📦 ${item.n} livré devant ta villa ! Va le chercher (E) et pose-le où tu veux`, 3200); sfx.register();
+  colisSave();
+  // le radar t'y emmène : on ne cherche plus son colis dans toute la ville
+  setBeacon(g.position.x, g.position.z, 0.4);
+  msg(city.delivery ? `📦 ${item.n} livré devant ta villa ! Suis le radar, prends-le (E) et pose-le où tu veux`
+                    : `📦 ${item.n} livré ici même ! Prends-le (E) et pose-le où tu veux`, 3600); sfx.register();
 }
 function parcelTick(dt) {
   for (const pc of city.parcels) { pc.g.rotation.y += dt * 0.6; pc.g.position.y = 0.4 + Math.sin(simTime * 2) * 0.06; }
@@ -5199,7 +5212,8 @@ function parcelTick(dt) {
   }
 }
 function grabParcel(pc) {
-  worldGroup.remove(pc.g); city.parcels.splice(city.parcels.indexOf(pc), 1);
+  worldGroup.remove(pc.g); city.parcels.splice(city.parcels.indexOf(pc), 1); colisSave();
+  clearBeacon();
   const item = DECOR.find(d => d.id === pc.id);
   P.deco = { id: pc.id, n: pc.n, wallOnly: !!(item && item.wall) };
   P.decoMesh = decorMesh(pc.id); worldGroup.add(P.decoMesh);
@@ -5264,8 +5278,30 @@ function sleepBed() {
   P.pos.set(b.x + Math.sin(b.ry) * 0.55, (b.y || 0) + 0.78, b.z + Math.cos(b.ry) * 0.55);
   P.vel.set(0, 0, 0); P.facing = b.ry + Math.PI; P.sleep = simTime + 4.2; P.sleepBed = b;
   msg('😴 Zzz… sauvegarde de la partie', 2200); sfx.tone(300, 0, .5, 'sine', .04, 200);
-  store.set('superobby.wallet', String(wallet)); store.set('superobby.bank', String(bank.balance)); store.set('superobby.avatar', JSON.stringify(myLook())); store.set('superobby.stats', JSON.stringify(stats)); store.set('superobby.owned', JSON.stringify([...owned])); store.set('superobby.grenades', String(P.grenades || 0)); store.set('superobby.progress', JSON.stringify(progress));
+  sauveTout();
   setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; msg('💾 Partie sauvegardée · tu es en pleine forme !', 2600); sfx.win(); }, 2300);
+}
+// LA SAUVEGARDE COMPLÈTE. Dormir n'enregistrait que la moitié de la partie : ni le gang,
+// ni les amis, ni la performance, ni la DÉCO posée, ni les colis livrés, ni le chien, ni la
+// voiture préparée. On retrouvait donc une partie amputée au retour.
+function sauveTout() {
+  const essaie = (nom, fn) => { try { fn(); } catch (e) { console.error('sauvegarde ' + nom, e); } };
+  essaie('porte-monnaie', () => store.set('superobby.wallet', String(wallet)));
+  essaie('banque', () => store.set('superobby.bank', String(bank.balance)));
+  essaie('tenue', () => store.set('superobby.avatar', JSON.stringify(myLook())));
+  essaie('forme', () => store.set('superobby.stats', JSON.stringify(stats)));
+  essaie('achats', () => store.set('superobby.owned', JSON.stringify([...owned])));
+  essaie('grenades', () => store.set('superobby.grenades', String(P.grenades || 0)));
+  essaie('progression', () => store.set('superobby.progress', JSON.stringify(progress)));
+  essaie('gang', () => saveGuerre());
+  essaie('amis', () => saveAmis());
+  essaie('performance', () => savePerf());
+  essaie('deco', () => decorSave());
+  essaie('colis', () => colisSave());
+  essaie('chien', () => sauveChien());
+  essaie('voiture', () => saveTuning());
+  essaie('prison', () => saveJail());
+  essaie('munitions', () => saveMunitions());
 }
 // ---- parachute et deltaplane : sauter d'un toit et se poser en douceur ----
 function prendreVoile(o) {
@@ -7738,7 +7774,19 @@ function journalHtml(b) {
     return `<span style="display:block">${o.e} ${o.t} — <b style="color:${col}">${e} ${lib}</b></span>`;
   }).join('');
 }
+// UN HOMME EN GARDE NE PART JAMAIS. Garde du corps, protecteur, gardien de villa : à chaque
+// image on lui remet une consigne « colle au joueur », qui écrase le rendez-vous de sa
+// mission. Sa fiche disait « ⏳ braquer une boutique » et il restait planté à côté de toi.
+// Toute mission qui l'envoie ailleurs lui fait donc poser la garde.
+function libereGarde(b) {
+  if (!b || !(b.gardeCorps || b.gardeVilla || b.protege || b.garde)) return false;
+  b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null; b.garde = 0; b.gardeArme = 0;
+  if (b.rdv && (b.rdv.suit || b.rdv.suivre || b.rdv.touche)) { b.rdv = null; b.rdvRoute = null; }
+  b.wait = 0; b.target = null;
+  return true;
+}
 function fixerRdv(b, lieu, jeu) {
+  libereGarde(b);
   noteOrdre(b, jeu ? (jeu === 'au foot' ? '⚽' : jeu === 'au tennis' ? '🎾' : '🎲') : '📍',
     jeu ? `partie ${jeu}` : `rendez-vous à ${lieu.nom}`);
   b.rdv = { x: lieu.x, z: lieu.z, y: 0.3, nom: lieu.nom, jeu: jeu || null, arrive: false };
@@ -7760,7 +7808,7 @@ function organiserCoup(b) {
   const bx = banque ? (banque.x1 + banque.x2) / 2 : -52, bz = banque ? (banque.z1 + banque.z2) / 2 : 70;
   // voiture de fuite : la plus proche de la banque, garée devant, moteur tournant
   let c = null, dmin = Infinity;
-  for (const v of city.cars) { if (v.heli || v.busy || v.kind === 'jetski' || v.kind === 'bike') continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
+  for (const v of city.cars) { if (v.heli || v.busy || v.kind === 'jetski' || v.kind === 'bike' || dansMonGarage(v)) continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
   if (!c) { botSay(b, ['je ne trouve aucune voiture 😬']); return; }
   c.x = bx + 13; c.z = bz + 2; c.h = Math.PI / 2; settleVehicle(c); c.g.rotation.y = c.h; vehicleSolid(c);
   coup.etat = 'attente'; coup.bot = b; coup.car = c; coup.t = simTime;
@@ -7870,7 +7918,7 @@ function botPrendVoiture(b, lieu, genre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
   for (const v of city.cars) {
-    if (v.heli || v.busy || v.kind === 'jetski' || v === coup.car || v === drive.car) continue;
+    if (v.heli || v.busy || v.kind === 'jetski' || v === coup.car || v === drive.car || dansMonGarage(v)) continue;   // pas la tienne, garée chez toi
     // « va me chercher un vélo » / « une moto » : on cible le bon type d'engin
     if (genre === 'bike' ? v.kind !== 'bike' : genre === 'moto' ? v.kind !== 'moto' : v.rider) continue;   // « une voiture » : pas un deux-roues
     const d = Math.hypot(v.x - b.pos.x, v.z - b.pos.z); if (d < dmin) { dmin = d; c = v; }
@@ -8010,6 +8058,7 @@ function adopterChien(p, silencieux) {
   if (chien.nom) nommerChien(chien.nom, true);
   return true;
 }
+const sauveChien = () => store.set('superobby.chien', JSON.stringify({ nom: chien.nom || '' }));
 function nommerChien(nom, silencieux) {
   chien.nom = String(nom).slice(0, 14); chien.attenteNom = false;
   store.set('superobby.chien', JSON.stringify({ nom: chien.nom }));
@@ -8629,7 +8678,7 @@ function botHopital(b) {
   b.soin = px; b.ko = 0; b.av.group.rotation.x = 0;
   b.rdv = { x: city.medDesk.x, z: city.medDesk.z + 1.6, y: 0.3, nom: '🏥 l\'hôpital', arrive: false, libre: true, soin: true };
   b.rdvRoute = null; b.wait = 0; b.target = null; b.bagarre = null; b.fight = null;
-  b.ordre = { type: 'soin' };
+  b.ordre = { type: 'soin' }; libereGarde(b);
   noteOrdre(b, '🏥', 'aller se faire soigner');
   botDit(b, pickOne(['j\'y vais, je me fais recoudre 🏥', 'ok, direction l\'hôpital']));
   msg(`🏥 ${b.name} part se faire soigner (${vieDe(b)}/100 PV · ${px} 🪙 à l'arrivée)`, 3600);
@@ -9335,12 +9384,7 @@ function botSport(b, jeu) {
   const l = lieuDe(foot ? 'foot' : 'tennis');
   if (!l) { botDit(b, 'je ne trouve pas le terrain 😕'); return false; }
   finDuel('tennis'); finDuel('foot');   // une seule partie à la fois
-  // Un garde du corps ne pouvait pas jouer : protectionTick lui remettait un rendez-vous
-  // « colle au joueur » à chaque image, et il ne partait jamais sur le terrain.
-  if (b.gardeCorps || b.protege || b.gardeVilla) {
-    b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null; b.garde = 0; b.gardeArme = 0;
-    botDit(b, 'je pose la garde le temps de la partie 👍');
-  }
+  if (libereGarde(b)) botDit(b, 'je pose la garde le temps de la partie 👍');
   // Il choisit le camp que tu n'occupes pas, et va s'y placer.
   const cote = foot ? (inZone(P.pos, FOOT_ZONE) && P.pos.x < -13 ? 1 : 0)
                     : (inZone(P.pos, TENNIS_ZONE) && P.pos.z < -13 ? 0 : 1);
@@ -9367,7 +9411,7 @@ function botPromeneChien(b) {
   const parc = lieuDe('parc') || lieuDe('plage') || { x: P.pos.x + 30, z: P.pos.z + 30, nom: 'le parc' };
   chien.promeneur = b; chien.promeneT = simTime + 95; chien.promeneRetour = false;
   b.rdv = { x: parc.x + rnd(-4, 4), z: parc.z + rnd(-4, 4), y: 0.3, nom: '🐕 la promenade', arrive: false, libre: true };
-  b.rdvRoute = null; b.wait = 0; b.activite = null; b.ordre = { type: 'chien' };
+  b.rdvRoute = null; b.wait = 0; b.activite = null; b.ordre = { type: 'chien' }; libereGarde(b);
   noteOrdre(b, '🐕', 'promener ton chien');
   botDit(b, pickOne([`🐕 viens ${chien.nom || 'le chien'}, on va faire un tour !`, '🐕 allez, en promenade !']));
   msg(`🐕 ${b.name} emmène ${chien.nom || 'ton chien'} en promenade`, 3200);
@@ -12946,6 +12990,13 @@ function nitroTick(dt) {
 
 // ---- fenêtre de l'atelier ----
 let atelierTab = 'peinture';
+// TA PLACE DE PARKING : une voiture garée dans le garage de ta villa t'appartient. Plus
+// rien ne vient la chercher — ni l'atelier, ni un coup, ni un membre du gang. On en a vu
+// disparaître une, garée bien sagement chez soi.
+function dansMonGarage(v) {
+  const g = city.monGarage; if (!g || !v) return false;
+  return Math.abs(v.x - g.x) < g.w / 2 + 1 && Math.abs(v.z - g.z) < g.d / 2 + 1;
+}
 function tuneCible() {   // la voiture qu'on prépare : celle qu'on conduit, sinon la plus proche
   if (drive.car && !drive.car.kart) return drive.car;
   // On regarde autour du JOUEUR *et* autour du COMPTOIR : une voiture garée devant
@@ -12996,7 +13047,7 @@ function amenerVoitureAtelier() {
   // dedans. C'était LE cas où on restait coincé sans rien pouvoir faire.
   if (!v) {
     let bd = 1e9;
-    for (const c of city.cars) { if (c.kart || c.rider || c.heli || c.kind === 'jetski') continue;
+    for (const c of city.cars) { if (c.kart || c.rider || c.heli || c.kind === 'jetski' || dansMonGarage(c)) continue;
       const d = Math.hypot(c.x - d0.x, c.z - d0.z); if (d < bd) { bd = d; v = c; } }
   }
   if (!v) { msg('🚗 Aucune voiture libre dans la ville', 2400); return false; }
@@ -13589,13 +13640,13 @@ function missionGang(membres, type, cible, lieuForce) {
     : type === 'boutique' ? pickOne(city.vitrines || [])
     : type === 'gangeur' ? ((cible && cible.m) ? { x: cible.m.x, z: cible.m.z } : null)
     : type === 'gangRival' ? ((cible && cible.base) ? { x: cible.base[0], z: cible.base[1] } : gangs[0] ? { x: gangs[0].base[0], z: gangs[0].base[1] } : null)
-    : type === 'voiture' ? pickOne(city.cars.filter(c => !c.busy && !c.kart)) || null
+    : type === 'voiture' ? pickOne(city.cars.filter(c => !c.busy && !c.kart && !dansMonGarage(c))) || null
     : cible ? { x: cible.pos.x, z: cible.pos.z } : pickOne(city.wander) ? { x: pickOne(city.wander)[0], z: pickOne(city.wander)[2] } : null;
   if (!lieu) { botDit(membres[0], 'je ne vois pas où aller pour ça 😕'); return false; }
   // PLUSIEURS COUPS EN MÊME TEMPS : un seul créneau bloquait tout le gang dès qu'un homme
   // était sur une mission. Chaque coup a maintenant sa propre fiche, et seuls les hommes
   // déjà occupés sont refusés.
-  for (const b of membres) quitteMission(b);   // il lâche son coup précédent, s'il en avait un
+  for (const b of membres) { quitteMission(b); if (libereGarde(b)) botDit(b, 'je pose la garde, on a un coup 👊'); }
   const mis = { type, M, membres: [...membres], fin: simTime + M.duree, etape: 'route', cible: (cible && (cible.name || cible.nom)) || null, proie: type === 'gangeur' ? cible : null };
   gang.missions.push(mis);
   gang.mission = mis;   // la plus récente, pour tout ce qui n'en regarde qu'une
@@ -13826,7 +13877,7 @@ function gangUneMissionTick(m, dt) {
     msg(`${m.M.e} ${m.membres.map(b => b.name).join(' et ')} : mission réussie (${m.chance} % de chances) ! +${gagne} 🪙`, 3800);
     chat(null, `${m.M.e} Le gang rapporte ${gagne} 🪙 à ${myCfg.name}`);
     if (m.type === 'voiture') {
-      const c = city.cars.find(c2 => !c2.busy && !c2.kart);
+      const c = city.cars.find(c2 => !c2.busy && !c2.kart && !dansMonGarage(c2));
       if (c) { c.x = P.pos.x + rnd(-6, 6); c.z = P.pos.z + rnd(-6, 6); c.g.position.set(c.x, 0, c.z); vehicleSolid(c);
         msg('🚗 Ils t\'ont ramené une voiture !', 2600); }
     }
@@ -14568,7 +14619,7 @@ function entrainerMembre(b, lieu) {
     : (city.gym ? { x: city.gym.run.x + 2, z: city.gym.run.z + 2 } : null);
   if (!pt) { botDit(b, 'je ne trouve pas la salle…'); return false; }
   b.rdv = { x: pt.x, z: pt.z, y: 0.3, nom: lieu === 'tir' ? '🎯 le stand de tir' : '🏋️ la salle de sport', arrive: false, libre: true, entrain: lieu };
-  b.rdvRoute = null; b.wait = 0; b.ordre = { type: 'entrainement' };
+  b.rdvRoute = null; b.wait = 0; b.ordre = { type: 'entrainement' }; libereGarde(b);
   noteOrdre(b, lieu === 'tir' ? '🎯' : '🏋️', lieu === 'tir' ? 'entraînement au stand de tir' : 'entraînement à la salle de sport');
   botDit(b, lieu === 'tir' ? 'ok, je vais m\'entraîner au tir 🎯' : 'j\'y vais, je me muscle 💪');
   msg(`💪 ${b.name} part s'entraîner — la force de ton gang va monter`, 3000);

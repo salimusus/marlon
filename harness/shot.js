@@ -62,6 +62,15 @@ window.__SHOT = {
       // les effets d'impact survivent au changement de test (ils vieillissent dans la boucle
       // de rendu, qui tourne a peine dans le banc d'essai) : on repart d'une scene propre
       if (typeof fxClear === 'function') { try { fxClear(); } catch (e7) {} }
+      // la deco posee et les colis livres par un test precedent changeaient le SOL sous les
+      // pieds du test suivant : on repart d'un terrain nu
+      try {
+        for (const d of (city.placed || [])) { if (d.g) worldGroup.remove(d.g); if (d.solid) { const i = solids.indexOf(d.solid); if (i >= 0) solids.splice(i, 1); } }
+        city.placed = [];
+        for (const pc of (city.parcels || [])) worldGroup.remove(pc.g);
+        city.parcels = [];
+        localStorage.removeItem('superobby.decor'); localStorage.removeItem('superobby.colis');
+      } catch (e8) {}
       for (const b of bots) b.gangMission = null;
       // une partie de tennis ou de foot laissee en cours faussait le test suivant
       if (typeof finDuel === 'function') { try { finDuel('tennis'); finDuel('foot'); } catch (e4) {} }
@@ -383,6 +392,11 @@ window.__G = {
   prixVeto: typeof prixVeto === 'function' ? prixVeto : null,
   chienVeto: typeof chienVeto === 'function' ? chienVeto : null,
   day: typeof day !== 'undefined' ? day : null,
+  DECOR: typeof DECOR !== 'undefined' ? DECOR : null,
+  deliverDecor: typeof deliverDecor === 'function' ? deliverDecor : null,
+  dansMonGarage: typeof dansMonGarage === 'function' ? dansMonGarage : null,
+  sleepBed: typeof sleepBed === 'function' ? sleepBed : null,
+  sauveTout: typeof sauveTout === 'function' ? sauveTout : null,
   openAtelier: typeof openAtelier === 'function' ? openAtelier : null,
   majAtelier: typeof majAtelier === 'function' ? majAtelier : null,
   tuneCible: typeof tuneCible === 'function' ? tuneCible : null,

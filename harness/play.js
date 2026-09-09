@@ -5107,6 +5107,7 @@ test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si
     document.getElementById('atelierAmener').click();
     res.apres = { texte: ok.textContent, grise: ok.disabled, cible: !!G.tuneCible(),
       distance: Math.round(Math.hypot(G.tuneCible().x - d0.x, G.tuneCible().z - d0.z)),
+      surTravee: Math.abs(G.tuneCible().z - G.city.garage.z) < 0.6,
       amener: document.getElementById('atelierAmener').style.display !== 'none' };
     // sans assez d'argent, il le dit aussi : on choisit un kit payant, puis on vide la poche
     document.querySelector('#atelierOnglets [data-t="kits"]').click();
@@ -5123,7 +5124,7 @@ test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si
     return res;
   });
   const ok = !r.sansVoiture.cible && r.sansVoiture.grise && /voiture/i.test(r.sansVoiture.texte) && r.sansVoiture.amener
-    && r.apres.cible && !r.apres.grise && r.apres.texte === 'Valider' && r.apres.distance <= 6 && !r.apres.amener
+    && r.apres.cible && !r.apres.grise && r.apres.texte === 'Valider' && r.apres.surTravee && r.apres.distance <= 12
     && r.kitChoisi && r.sansArgent.grise && /manque/i.test(r.sansArgent.texte)
     && r.garee;
   return { ok, detail: `sans voiture au comptoir, « Valider » n'est plus un bouton gris muet : il affiche « ${r.sansVoiture.texte} » et un bouton « 🚗 Amener une voiture » gare une caisse à ${r.apres.distance} m de l'atelier · s'il manque de l'argent, il l'écrit aussi (« ${r.sansArgent.texte} ») · et une voiture garée devant l'atelier compte désormais même quand on s'avance jusqu'à la borne` };
@@ -5207,6 +5208,79 @@ test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un 
   const ok = surTravee(r.pose) && r.dansMur === 0 && r.pose.y > 0.1 && r.pose.y < 1
     && r.bouge > 2 && /Remettre/.test(r.bouton) && r.coince > 0 && surTravee(r.remise) && r.apresMurs === 0;
   return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, bien droite), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
+});
+
+
+test('dormir sauvegarde TOUT, la deco achetee arrive toujours, et ta voiture reste chez toi', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    // 1) la deco achetee arrive meme sans point de livraison : avant, on payait pour rien
+    const it = G.DECOR[0];
+    const liv = G.city.delivery; G.city.delivery = null;
+    const n0 = G.city.parcels.length;
+    G.deliverDecor(it);
+    res.sansVilla = { colis: G.city.parcels.length - n0,
+      distance: G.city.parcels.length ? +Math.hypot(G.city.parcels[0].x - G.P.pos.x, G.city.parcels[0].z - G.P.pos.z).toFixed(1) : -1 };
+    G.city.delivery = liv;
+    res.colisEnregistres = JSON.parse(localStorage.getItem('superobby.colis') || '[]').length;
+    // 2) ta voiture garee dans le garage de ta villa n'est plus emmenee par l'atelier
+    const g = G.city.monGarage;
+    res.garageConnu = !!g;
+    const v = G.city.cars[0];
+    v.x = g.x; v.z = g.z; v.g.position.set(v.x, v.y, v.z);
+    res.reconnue = G.dansMonGarage(v);
+    const x0 = v.x, z0 = v.z;
+    G.P.pos.set(G.city.tuneDesk.x, 0.3, G.city.tuneDesk.z - 1);
+    G.openAtelier(); document.getElementById('atelierAmener').click(); G.closeUI();
+    res.deplacee = +Math.hypot(v.x - x0, v.z - z0).toFixed(1);
+    // 3) dormir enregistre TOUTE la partie, pas la moitie
+    const cles = ['guerre', 'amis', 'perf', 'decor', 'colis', 'chien', 'tuning', 'wallet', 'stats', 'owned'];
+    cles.forEach(k => localStorage.removeItem('superobby.' + k));
+    G.amis.add('Lucas_2014'); G.P.perf = 55; G.chien.nom = 'Rex';
+    const b = G.city.beds[0];
+    G.P.pos.set(b.x, b.y + 1, b.z); G.city.bedNear = b;
+    G.sleepBed();
+    res.dodo = cles.filter(k => localStorage.getItem('superobby.' + k) != null);
+    res.total = cles.length;
+    return res;
+  });
+  const ok = r.sansVilla.colis === 1 && r.sansVilla.distance < 4
+    && r.colisEnregistres === 1
+    && r.garageConnu && r.reconnue && r.deplacee === 0
+    && r.dodo.length === r.total;
+  return { ok, detail: `acheter de la deco sans avoir de villa faisait perdre l'achat : le carton est maintenant depose a ${r.sansVilla.distance} m de toi, et il est ENREGISTRE (il revient si tu recharges) · une voiture garee dans le garage de ta villa est reconnue comme la tienne : l'atelier ne va plus la chercher (${r.deplacee} m de deplacement) · et dormir enregistre les ${r.dodo.length}/${r.total} morceaux de la partie (gang, amis, performance, deco, colis, chien, voiture preparee…) au lieu de la moitie` };
+});
+
+
+test('un garde du corps envoye en mission part vraiment', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const l = G.bots.slice(0, 3);
+    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.gangMission = null;
+      b.pos.set(G.P.pos.x + 2, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
+    for (const b of l) G.botGardeDuCorps(b);
+    res.gardes = l.filter(b => b.gardeCorps).length;
+    G.missionGang([l[0], l[1]], 'boutique');
+    res.envoi = { missions: G.gang.missions.length, gardeLachee: !l[0].gardeCorps && !l[1].gardeCorps,
+      gardeGardee: !!l[2].gardeCorps, rdv: l[0].rdv ? l[0].rdv.nom : null,
+      journal: (l[0].journal || []).some(o => o.etat === 'cours' && /boutique/.test(o.t)) };
+    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    res.trajet = { parti0: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(0),
+      parti1: +Math.hypot(l[1].pos.x - G.P.pos.x, l[1].pos.z - G.P.pos.z).toFixed(0),
+      reste2: +Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z).toFixed(0) };
+    // l'entrainement aussi envoie vraiment le garde
+    G.entrainerMembre(l[2], 'tir');
+    res.entrain = { gardeLachee: !l[2].gardeCorps, rdv: l[2].rdv ? l[2].rdv.entrain : null };
+    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    res.entrainLoin = +Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z).toFixed(0);
+    return res;
+  });
+  const ok = r.gardes === 3 && r.envoi.missions === 1 && r.envoi.gardeLachee && r.envoi.gardeGardee && r.envoi.journal
+    && r.trajet.parti0 > 8 && r.trajet.parti1 > 8 && r.trajet.reste2 < 4
+    && r.entrain.gardeLachee && r.entrain.rdv === 'tir' && r.entrainLoin > 8;
+  return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur), pendant que le garde NON envoye reste a ${r.trajet.reste2} m · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
 });
 
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste

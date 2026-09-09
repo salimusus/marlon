@@ -5960,3 +5960,41 @@ test('on connecte une smart TV et le telephone sert de manette', async p => {
     && r.routeMan.x === 'manette' && r.routeMan.ouvert && r.badgeVu;
   return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton reste TOUJOURS a l'écran (il disparaissait des que le navigateur ne connaissait pas l'API Presentation — Safari, Firefox, ou Chrome hors https) : « ${r.texteApi} » quand l'appareil sait diffuser, « ${r.texteSansApi} » sinon, et il copie alors le lien tout seul · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
 });
+
+test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, R = G.renderer;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const mp = (L, ratio) => +((L * ratio) * (L * ratio * 9 / 16) / 1e6).toFixed(2);
+    // 1) LE PLAFOND DE PIXELS : sur une télé 4K on rendait 8 mégapixels par image
+    G.modeTV(false); G.applyQuality();
+    const avant = mp(3840, 1);   // ce que coûtait une image en 4K sans plafond
+    const pc4k = G.ratioRendu(3840), pcPix = mp(3840, pc4k);
+    G.modeTV(true); G.applyQuality();
+    const tv4k = G.ratioRendu(3840), tvPix = mp(3840, tv4k);
+    const tv1080 = G.ratioRendu(1920);
+    // 2) LA RÉSOLUTION DYNAMIQUE : ça rame, on descend ; ça respire, on remonte
+    const paliers = [];
+    for (let i = 0; i < 200; i++) { G.fluiditeTick(45); if (i % 50 === 0) paliers.push(+G.rendu.ech.toFixed(2)); }
+    const bas = { ech: +G.rendu.ech.toFixed(3), ombres: G.rendu.ombres, baisses: G.rendu.baisses };
+    for (let i = 0; i < 500; i++) G.fluiditeTick(15);
+    const haut = { ech: +G.rendu.ech.toFixed(3), ombres: G.rendu.ombres, hausses: G.rendu.hausses };
+    // 3) une image isolée très lente ne doit RIEN dégrader (chargement, onglet qui revient)
+    G.applyQuality(); const depart = G.rendu.ech;
+    for (let i = 0; i < 40; i++) G.fluiditeTick(i === 20 ? 900 : 14);
+    const apresPic = +G.rendu.ech.toFixed(3);
+    // 4) LES OMBRES : entièrement recalculées a chaque image, c'est la 2e dépense
+    G.modeTV(true); const cad = []; for (let i = 0; i < 6; i++) { G.ombresCadence(); cad.push(R.shadowMap.needsUpdate); }
+    const autoTV = R.shadowMap.autoUpdate;
+    G.modeTV(false); G.ombresCadence(); const autoPC = R.shadowMap.autoUpdate;
+    G.applyQuality();
+    const majOmbres = cad.filter(Boolean).length;
+    return { avant, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
+      paliers, bas, haut, depart, apresPic, cad, majOmbres, autoTV, autoPC, min: G.rendu.min };
+  });
+  const ok = r.tvPix < r.pcPix / 2 && r.tvPix < 1.6 && r.tv4k < 0.45
+    && r.bas.ech <= r.min + 0.01 && r.bas.ombres === false && r.bas.baisses >= 3
+    && r.haut.ech > r.bas.ech + 0.2 && r.haut.ombres === true
+    && r.apresPic === 1 && r.majOmbres === 3 && r.autoTV === false && r.autoPC === true;
+  return { ok, detail: `une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en 4K le jeu calculait ${r.avant} mégapixels par image et saccadait · en mode TV le rendu est plafonné a 1600 px de large — ${r.tvPix} mégapixels, la télé agrandit elle-même (c'est son métier) · et la résolution s'ajuste toute seule : a 22 images/s elle descend par paliers ${r.paliers.join(' → ')} jusqu'au plancher ${r.bas.ech} (${r.bas.baisses} baisses) puis les ombres s'éteignent, et dès que ça respire elles se rallument et l'échelle remonte a ${r.haut.ech} · une seule image très lente (900 ms) ne dégrade rien (échelle restée a ${r.apresPic}) · enfin la carte d'ombres, recalculée a chaque image, ne l'est plus qu'une image sur deux sur la télé (${r.majOmbres} mises a jour sur 6) et reste inchangée ailleurs` };
+});

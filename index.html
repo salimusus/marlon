@@ -893,11 +893,73 @@ const worldGroup = new THREE.Group(); scene.add(worldGroup);
 // 13,1 ms sans, donc aucun gain pour un vrai risque de figer un objet censé bouger. Écarté.
 scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false;
 scene.updateMatrix(); worldGroup.updateMatrix();
+// ================= FLUIDITÉ : LA RÉSOLUTION S'ADAPTE TOUTE SEULE =================
+// Une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en
+// 4K le jeu calculait 8 millions de pixels par image et saccadait. Deux garde-fous :
+//   1. un PLAFOND de pixels rendus (on rend en 1600 de large et la télé agrandit — elle sait
+//      très bien faire ça, c'est son métier) ;
+//   2. une résolution DYNAMIQUE : on mesure le temps de chaque image et, si ça rame, on
+//      descend l'échelle de rendu par paliers ; dès que ça respire, on la remonte. Si ça rame
+//      encore au plus bas, les ombres s'éteignent, et se rallument quand ça va mieux.
+const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0 };
+const PLAFOND_TV = 1600, PLAFOND_PC = 2560;
+function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : PLAFOND_PC; }
+function ratioQualite() {
+  const q = settings.quality;
+  if (q === 'low') return 1;
+  if (q === 'dlss') return Math.min(window.devicePixelRatio, 2) * 0.62;
+  return Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2);
+}
+// le ratio réellement envoyé au moteur : qualité × échelle adaptative, borné par le plafond
+function ratioRendu(largeur) {
+  const L = Math.max(320, largeur || window.innerWidth);
+  return Math.max(0.35, Math.min(ratioQualite() * rendu.ech, plafondPixels() / L));
+}
+function appliqueRendu() {
+  const r = ratioRendu(window.innerWidth);
+  if (Math.abs(renderer.getPixelRatio() - r) > 0.01) { renderer.setPixelRatio(r); renderer.setSize(window.innerWidth, window.innerHeight); }
+  return r;
+}
+function ombresRendu(on) {
+  if (rendu.ombres === on) return;
+  rendu.ombres = on;
+  const low = settings.quality === 'low';
+  sun.castShadow = on && !low; renderer.shadowMap.enabled = on && !low;
+}
+// LA CARTE D'OMBRES : elle était entièrement recalculée à CHAQUE image. Sur une télé c'est
+// la deuxième dépense après les pixels. On la rafraîchit une image sur deux : à 60 images
+// par seconde, personne ne voit une ombre en retard de 16 millisecondes.
+let ombreN = 0;
+function ombresCadence() {
+  const tv = document.body.classList.contains('tv');
+  if (!tv) { if (!renderer.shadowMap.autoUpdate) renderer.shadowMap.autoUpdate = true; return; }
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = (++ombreN % 2) === 0;
+}
+// Mesure lissée : on garde les 30 dernières images et on regarde la MÉDIANE (une image
+// isolée très lente — un chargement, un onglet qui revient — ne doit pas tout dégrader).
+function fluiditeTick(ms) {
+  const t = rendu.tps; t.push(ms); if (t.length > 30) t.shift();
+  // horloge murale : simTime n'avance pas quand le jeu est en pause ou dans un menu
+  rendu.majT = (rendu.majT || 0) + ms;
+  if (t.length < 20 || rendu.majT < 600) return;
+  rendu.majT = 0;
+  const med = [...t].sort((a, b) => a - b)[t.length >> 1];
+  rendu.med = Math.round(med * 10) / 10;
+  if (med > 1000 / 42) {          // moins de 42 images/s : on allège
+    if (rendu.ech > rendu.min) { rendu.ech = Math.max(rendu.min, rendu.ech * 0.86); rendu.baisses++; appliqueRendu(); }
+    else if (rendu.ombres) ombresRendu(false);   // au plancher, on coupe les ombres
+  } else if (med < 1000 / 57) {   // ça respire : on remonte doucement
+    if (!rendu.ombres && rendu.ech > 0.8) ombresRendu(true);
+    else if (rendu.ech < 1) { rendu.ech = Math.min(1, rendu.ech * 1.07); rendu.hausses++; appliqueRendu(); }
+  }
+}
 function applyQuality() {
   const q = settings.quality, low = q === 'low', dlss = q === 'dlss';
   // "DLSS" : rendu en résolution réduite puis agrandi à l'écran (upscaling), ombres conservées
-  renderer.setPixelRatio(low ? 1 : dlss ? Math.min(window.devicePixelRatio, 2) * 0.62 : Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
-  sun.castShadow = !low; renderer.shadowMap.enabled = !low;
+  rendu.ech = 1; rendu.tps.length = 0; ombresRendu(!low);
+  appliqueRendu();
+  sun.castShadow = !low && rendu.ombres; renderer.shadowMap.enabled = !low && rendu.ombres;
   const sm = dlss ? 1024 : (isMobile ? 1024 : 2048); if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   worldGroup.traverse(o => { if (o.isMesh) o.material && (o.material.needsUpdate = true); });
   $('qualBtn').textContent = 'Qualité : ' + (low ? 'basse' : dlss ? 'DLSS 5 (upscaling)' : 'haute');
@@ -12884,6 +12946,7 @@ ctrlLabel();
 // ================= BOUCLE =================
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
+  try { appliqueRendu(); } catch (e) {}   // le plafond de pixels dépend de la largeur de l'écran
   camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize); resize();
@@ -12901,7 +12964,9 @@ function loop() {
   try { frame(); } catch (e) { if (loopErr++ < 3) console.error(e); }
 }
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const brut = clock.getDelta();
+  const dt = Math.min(brut, 0.05);
+  try { fluiditeTick(brut * 1000); ombresCadence(); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images
   pollGamepad(dt);
   const active = running && !paused && !dead && !won;
   acc += dt; let n = 0;

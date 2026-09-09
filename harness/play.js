@@ -681,20 +681,53 @@ test('le conducteur éjecté s\'enfuit à pied puis disparaît', async p => {
   return { ok: r.d1 > r.d0 + 1 && r.reste === 0, detail: `s'éloigne de ${r.d0} m à ${r.d1} m, puis quitte la scène (${r.reste} restant)` };
 });
 
-test('la voiture du joueur démarre roues avant sur la ligne à damiers', async p => {
+test('la grille de depart : tout le monde part, aligne, et le joueur au milieu', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 118, hour: 12 });
-    __G.startCountdown(4);
-    const k = __G.drive.car;
-    if (!k) return { ok: false, pourquoi: 'aucun kart' };
-    // le kart roule vers -x : les roues avant sont à 1,3 m devant le centre
-    const avant = k.x + Math.sin(k.h) * 1.3;
-    __G.race.state = 'idle'; __G.exitCar();
-    return { ok: true, x: +k.x.toFixed(2), z: +k.z.toFixed(2), avant: +avant.toFixed(2), h: +k.h.toFixed(2) };
+    __SHOT.go({ world: 4, x: 152, y: 1, z: -125, hour: 12 });
+    const G = __G, c = G.city.circuit, mer = G.city.sea;
+    // 1) la piste ne trempe plus dans la mer
+    let dansMer = 0, marge = 1e9;
+    for (const pt of G.RACE_PTS) {
+      if (pt[0] > mer.x1 - 4 && pt[0] < mer.x2 + 4 && pt[1] > mer.z1 - 4 && pt[1] < mer.z2 + 4) dansMer++;
+      marge = Math.min(marge, mer.z1 - pt[1]);
+    }
+    // 2) les dix places de la grille sont SUR la piste, derriere la ligne
+    const places = []; for (let k = 0; k < G.GRILLE_N; k++) places.push(G.grilleDepart(k));
+    const surPiste = places.filter(g => Math.abs(Math.hypot(g[0] - c.x, g[1] - c.z) - c.r) < 4.5).length;
+    // 3) on lance la course
+    G.startCountdown(4);
+    const ai = G.race.ai, kart = G.drive.car;
+    const tous = new Set([...G.raceKarts, ...G.city.cars.filter(k => k.kart)]);
+    const attendue = G.grilleDepart(G.GRILLE_JOUEUR);
+    const ecartJoueur = kart ? +Math.hypot(kart.x - attendue[0], kart.z - attendue[1]).toFixed(2) : -1;
+    const devant = ai.filter(a => -a.s < G.grilleRecul(G.GRILLE_JOUEUR)).length;
+    const derriere = ai.filter(a => -a.s > G.grilleRecul(G.GRILLE_JOUEUR)).length;
+    const horsPiste = ai.filter(a => Math.abs(Math.hypot(a.k.x - c.x, a.k.z - c.z) - c.r) > 4.5).length;
+    // cap : chaque kart regarde exactement dans le sens de la piste
+    const capFaux = ai.filter(a => { const h = G.pathPos(a.s, a.off)[2]; let d = a.k.h - h; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d) > 0.05; }).length;
+    // 4) la ligne a damiers barre la piste (elle courait DANS son axe)
+    const lg = G.city.ligne;
+    // 5) le joueur boucle bien son tour sur la VRAIE ligne (le test visait l'ancien tracé)
+    const bouclage = G.surLaLigne(lg.x, lg.z) && !G.surLaLigne(0, 124);
+    G.race.state = 'running'; G.race.startT = G.simTime;
+    const s0 = ai.map(a => a.s);
+    const portillons = [];
+    for (const g of G.RACE_GATES) { G.P.pos.set(g[0], 0.3, g[1]); G.raceTick(0.05); portillons.push(G.race.my.next); }
+    G.P.pos.set(lg.x + 60, 0.3, lg.z); G.raceTick(0.05);
+    G.P.pos.set(lg.x, 0.3, lg.z); G.raceTick(0.05);
+    const tour = G.race.my.lap;
+    const avance = ai.filter((a, i) => a.s > s0[i] + 3).length;   // chacun a bien quitté sa case
+    // on repart propre
+    G.race.state = 'idle'; G.exitCar();
+    return { dansMer, marge: Math.round(marge), places: G.GRILLE_N, surPiste,
+      karts: tous.size, partants: ai.length, horsPiste, capFaux, ecartJoueur, devant, derriere, bouclage,
+      ligne: [lg.x, lg.z], portillons: portillons[portillons.length - 1], tour, avance };
   });
-  if (!r.ok) return { ok: false, detail: r.pourquoi };
-  const surPiste = r.z > 119.5 && r.z < 128.5;
-  return { ok: Math.abs(r.avant) < 0.15 && surPiste, detail: `centre (${r.x}, ${r.z}) → roues avant à x=${r.avant} (ligne à x=0), sur la piste=${surPiste}` };
+  const ok = r.dansMer === 0 && r.marge > 20 && r.surPiste === r.places
+    && r.partants === r.karts - 1 && r.horsPiste === 0 && r.capFaux === 0
+    && r.ecartJoueur < 0.2 && r.devant >= 3 && r.derriere >= 3 && r.bouclage
+    && r.portillons === 7 && r.tour === 1 && r.avance === r.partants;
+  return { ok, detail: `la ligne de depart et la tribune etaient SOUS LA MER et le portique posé dans l'axe de la piste · l'anneau est remonté a ${r.marge} m au nord du rivage (${r.dansMer} point de piste dans l'eau) et la ligne a damiers barre la piste en (${r.ligne[0]}, ${r.ligne[1]}) · les ${r.places} emplacements peints sont sur la piste (${r.surPiste}/${r.places}), et au top depart les ${r.karts} karts s'elancent tous (${r.partants} pilotes + le joueur, ${r.horsPiste} hors piste, ${r.capFaux} de travers) · le joueur demarre pile sur sa case du MILIEU (${r.ecartJoueur} m d'ecart, ${r.devant} devant lui et ${r.derriere} derriere) · un tour complet est bien compté (${r.portillons}/7 portillons puis la ligne → tour ${r.tour}) et les ${r.avance} pilotes ont quitté leur case` };
 });
 
 test('le cinéma du parc projette un dessin animé', async p => {
@@ -5302,11 +5335,11 @@ test('le circuit est un petit anneau a l\'ecart, il ne traverse plus la ville', 
     const karts = G.city.cars.filter(k => k.kart);
     return { centre: [c.x, c.z], rayon: c.r, longueur: Math.round(G.RACE_LEN),
       rond: +(rayonMax - rayonMin).toFixed(1), loinDeLaVille: Math.round(dmin), coupeRoutes: coupe,
-      karts: karts.length, kartsSurGrille: karts.every(k => Math.hypot(k.x - c.depart.x, k.z - c.depart.z) < 24) };
+      karts: karts.length, kartsSurGrille: karts.every(k => Math.abs(Math.hypot(k.x - c.x, k.z - c.z) - c.r) < 4.5) };
   });
   const ok = r.rond < 0.5 && r.loinDeLaVille > 100 && r.coupeRoutes === 0
     && r.karts >= 4 && r.kartsSurGrille && r.longueur > 150 && r.longueur < 260;
-  return { ok, detail: `la piste faisait tout le tour de la ville et coupait les rues · c'est maintenant un ANNEAU PARFAIT de ${r.rayon} m de rayon (${r.rond} m d'écart entre le point le plus proche et le plus loin du centre), long de ${r.longueur} m, posé a ${r.loinDeLaVille} m du centre-ville · il ne croise ${r.coupeRoutes} route, et les ${r.karts} karts sont sur la grille` };
+  return { ok, detail: `la piste faisait tout le tour de la ville et coupait les rues · c'est maintenant un ANNEAU PARFAIT de ${r.rayon} m de rayon (${r.rond} m d'écart entre le point le plus proche et le plus loin du centre), long de ${r.longueur} m, posé a ${r.loinDeLaVille} m du centre-ville · il ne croise ${r.coupeRoutes} route, et les ${r.karts} karts attendent alignés sur la grille` };
 });
 
 test('le plan routier dessert chaque quartier et les rues sont degagees', async p => {

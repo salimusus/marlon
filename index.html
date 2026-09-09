@@ -1114,7 +1114,9 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
 // barrières bloquaient les quartiers et il fallait y percer des ouvertures. C'est maintenant
 // un petit anneau circulaire posé à l'écart, au sud-est, relié à la ville par une route.
-const RACE_C = { x: 152, z: -98, r: 33 };
+// La mer va de x 122 a 206 et de z -75 a 138 : l'anneau posé a z -98 avait la ligne de
+// depart ET la tribune SOUS L'EAU. On le remonte au nord de la plage, 44 m au large.
+const RACE_C = { x: 152, z: -152, r: 33 };
 const RACE_PTS = (() => {
   const pts = [], n = 56;
   // départ en bas de l'anneau (z le plus grand), puis vers l'ouest : sens horaire vu de dessus
@@ -1125,7 +1127,7 @@ const RACE_PTS = (() => {
 const RACE_LEN = (() => { let L = 0; for (let i = 0; i < RACE_PTS.length; i++) { const a = RACE_PTS[i], b = RACE_PTS[(i + 1) % RACE_PTS.length]; L += Math.hypot(b[0] - a[0], b[1] - a[1]); } return L; })();
 const RACE_CUM = (() => { const c = [0]; for (let i = 0; i < RACE_PTS.length; i++) { const a = RACE_PTS[i], b = RACE_PTS[(i + 1) % RACE_PTS.length]; c.push(c[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); } return c; })();
 const RACE_SEG = RACE_LEN / RACE_PTS.length;
-const RACE_GATES = [1, 2, 3, 4, 5, 6, 7].map(k => RACE_PTS[Math.floor(k * RACE_PTS.length / 8)]);
+const RACE_GATES = [1, 2, 3, 4, 5, 6, 7].map(k => RACE_PTS[Math.floor(k * (RACE_PTS.length - 8) / 8)]);   // on s'arrête avant la grille : ni pièce ni portillon posé au milieu des voitures
 function pathPos(s, off = 0) {   // position le long du tracé (s en unités), décalage latéral optionnel
   s = ((s % RACE_LEN) + RACE_LEN) % RACE_LEN;
   let i = 0; while (i < RACE_PTS.length - 1 && RACE_CUM[i + 1] <= s) i++;
@@ -1133,6 +1135,17 @@ function pathPos(s, off = 0) {   // position le long du tracé (s en unités), d
   const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1, h = Math.atan2(dx, dz);
   return [a[0] + dx * u - dz / L * off, a[1] + dz * u + dx / L * off, h];
 }
+// LA GRILLE DE DÉPART. Dix emplacements en quinconce, posés SUR la piste juste derrière la
+// ligne à damiers et orientés comme elle : plus personne ne démarre de travers dans la voie
+// des stands. Le joueur prend la place du milieu, les autres se rangent autour de lui.
+const GRILLE_N = 10, GRILLE_PAS = 6, GRILLE_ECART = 2.3, GRILLE_RECUL = 7;
+const GRILLE_JOUEUR = 4;   // 3e rang sur 5 : pile au milieu de la grille
+function grilleRecul(k) { return GRILLE_RECUL + Math.floor(k / 2) * GRILLE_PAS; }
+function grilleEcart(k) { return k % 2 ? GRILLE_ECART : -GRILLE_ECART; }
+function grilleDepart(k) { return pathPos(-grilleRecul(k), grilleEcart(k)); }   // [x, z, cap]
+// La ligne d'arrivée : en bas de l'anneau, coupée par la piste selon −x.
+function ligneDepart() { return (typeof city !== 'undefined' && city.ligne) || { x: RACE_C.x, z: RACE_C.z + RACE_C.r }; }
+function surLaLigne(x, z) { const l = ligneDepart(); return Math.abs(z - l.z) < 2.6 && Math.abs(x - l.x) < 5; }
 function raceProgress(x, z) {   // index du point du tracé le plus proche (0 = ligne de départ)
   let best = 0, bd = Infinity;
   for (let i = 0; i < RACE_PTS.length; i++) { const d = (RACE_PTS[i][0] - x) ** 2 + (RACE_PTS[i][1] - z) ** 2; if (d < bd) { bd = d; best = i; } }
@@ -1493,14 +1506,28 @@ function buildCircuit() {
     if (i % 4 < 2) { rbox(cx + nx * 4.2, cz + nz * 4.2, L + 0.5, 0.7, 0.09, -ang, kerb); rbox(cx - nx * 4.2, cz - nz * 4.2, L + 0.5, 0.7, 0.09, -ang, kerb); }   // vibreurs
   }
   for (let i = 0; i < 8; i++) { const a = Math.PI / 4 * i + 0.4; tireStack(CX + (R + 7) * Math.cos(a), CZ + (R + 7) * Math.sin(a)); }
-  // portique départ / arrivée, en travers de la ligne (la piste y va selon −x)
-  for (const dx of [-5.4, 5.4]) box(CX + dx, 2.2, SZ, 0.5, 4.4, 0.5, 0xc9ced8, { studs: false, noRoute: true });
+  // PORTIQUE ET LIGNE À DAMIERS. Au point de départ la piste file selon −x : la ligne doit
+  // donc barrer la piste selon z, et les deux pylônes se dresser de part et d'autre. Tout
+  // était encore posé selon l'ancien tracé (qui montait selon z) : le portique s'alignait
+  // DANS l'axe de la piste et la ligne courait le long de la course au lieu de la couper.
+  for (const dz of [-5.4, 5.4]) box(CX, 2.2, SZ + dz, 0.5, 4.4, 0.5, 0xc9ced8, { studs: false, noRoute: true });
   const ct = CHECKER.clone(); ct.needsUpdate = true; ct.repeat.set(9, 1);
-  box(CX, 4.6, SZ, 11, 1.2, 0.3, 0, { material: new THREE.MeshLambertMaterial({ map: ct }), deco: true, noEdges: true, studs: false });
+  box(CX, 4.6, SZ, 0.3, 1.2, 11, 0, { material: new THREE.MeshLambertMaterial({ map: ct }), deco: true, noEdges: true, studs: false });
   city.lights = [];
-  for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0x333333, emissive: 0x000000 })); l.scale.set(0.5, 0.5, 0.35); l.position.set(CX - 2.5 + i * 1.25, 3.6, SZ - 0.35); worldGroup.add(l); city.lights.push(l); }
-  const lt = CHECKER.clone(); lt.needsUpdate = true; lt.repeat.set(9, 1);
-  const line = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.2), new THREE.MeshBasicMaterial({ map: lt })); line.rotation.x = -Math.PI / 2; line.position.set(CX, 0.1, SZ); worldGroup.add(line);
+  for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0x333333, emissive: 0x000000 })); l.scale.set(0.35, 0.5, 0.5); l.position.set(CX + 0.35, 3.6, SZ - 2.5 + i * 1.25); worldGroup.add(l); city.lights.push(l); }
+  const lt = CHECKER.clone(); lt.needsUpdate = true; lt.repeat.set(1, 9);
+  const line = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 9), new THREE.MeshBasicMaterial({ map: lt })); line.rotation.x = -Math.PI / 2; line.position.set(CX, 0.1, SZ); worldGroup.add(line);
+  city.ligne = { x: CX, z: SZ };
+  // LA GRILLE PEINTE : un emplacement blanc numéroté par voiture, aligné sur la piste.
+  const gm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+  for (let k = 0; k < GRILLE_N; k++) {
+    const [gx3, gz3, gh3] = grilleDepart(k), ang = -Math.atan2(Math.cos(gh3), Math.sin(gh3));
+    const av = [Math.sin(gh3), Math.cos(gh3)], co = [Math.cos(gh3), -Math.sin(gh3)];   // devant, côté droit
+    rbox(gx3 + av[0] * 1.6, gz3 + av[1] * 1.6, 0.26, 3.2, 0.03, ang, gm, { y: 0.08 });   // le trait où l'on pose les roues avant
+    for (const c2 of [-1, 1]) rbox(gx3 + co[0] * c2 * 1.6, gz3 + co[1] * c2 * 1.6, 3.2, 0.26, 0.03, ang, gm, { y: 0.08 });
+    const nm = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({ map: textTexture(String(k + 1)), transparent: true }));
+    nm.rotation.x = -Math.PI / 2; nm.rotation.z = -gh3; nm.position.set(gx3 - av[0] * 0.9, 0.09, gz3 - av[1] * 0.9); worldGroup.add(nm);
+  }
   // voie des stands et grille : À L'INTÉRIEUR de l'anneau, derrière la ligne
   const PZ = SZ - 12;
   plat(CX, 0.16, PZ, 34, 8, 0x565b66, { studs: false, noRoute: true }, 0.12);
@@ -1511,22 +1538,25 @@ function buildCircuit() {
   // tribune, à l'extérieur de l'anneau
   box(CX, 1.2, SZ + 8, 34, 2.4, 3, 0x8f98ab, { studs: false, noRoute: true });
   for (let i = 0; i < 12; i++) box(CX - 16 + i * 3, 2.9, SZ + 7.5, 1.8, 1, 1.2, [0xff5c5c, 0x4f8dff, 0xffd23f][i % 3], { deco: true, studs: false });
-  const gridPos = k => [CX - 13 + Math.floor(k / 2) * 5, PZ + (k % 2 ? 1.8 : -1.8)];   // grille en quinconce
-  for (let i = 0; i < 4; i++) { const [gx2, gz2] = gridPos(i); const c = makeCar([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453][i], gx2, gz2, -Math.PI / 2, { kart: true, num: i + 1 }); city.cars.push(c); }
+  // Les karts attendent SUR LA GRILLE, alignés dans le sens de la piste (avant, ils étaient
+  // rangés en travers dans la voie des stands : le départ partait de côté).
+  for (let i = 0; i < 4; i++) { const [gx2, gz2, gh2] = grilleDepart(i); const c = makeCar([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453][i], gx2, gz2, gh2, { kart: true, num: i + 1 }); city.cars.push(c); }
   raceKarts = [];
-  for (let i = 0; i < BOTS_COUREURS; i++) { const [gx2, gz2] = gridPos(4 + i); const c = makeCar([0xb57cff, 0xff8f3a, 0x35d0e6, 0xc9ced8, 0xff7ad9][i], gx2, gz2, -Math.PI / 2, { kart: true, num: 5 + i }); c.tag = nameTag(BOT_DEFS[i].name); c.tag.position.y = 2.2; c.g.add(c.tag); c.solid.ai = true; raceKarts.push(c); }
+  for (let i = 0; i < BOTS_COUREURS; i++) { const [gx2, gz2, gh2] = grilleDepart(5 + i); const c = makeCar([0xb57cff, 0xff8f3a, 0x35d0e6, 0xc9ced8, 0xff7ad9][i], gx2, gz2, gh2, { kart: true, num: 5 + i }); c.tag = nameTag(BOT_DEFS[i].name); c.tag.position.y = 2.2; c.g.add(c.tag); c.solid.ai = true; raceKarts.push(c); }
   for (const g of RACE_GATES) coin(g[0], 0, g[1]);
   // boosters (flèches lumineuses sur la piste)
   const bt = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#1b2a4a'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3ef2ff'; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round'; for (const ox of [-18, 6]) { g.beginPath(); g.moveTo(24 + ox, 12); g.lineTo(42 + ox, 32); g.lineTo(24 + ox, 52); g.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; })();
   const bm = new THREE.MeshLambertMaterial({ map: bt, emissive: 0x3ef2ff, emissiveIntensity: 0.35 });
-  for (let k = 0; k < 4; k++) { const [x, z, h] = pathPos(RACE_LEN * (0.14 + k * 0.25)); rbox(x, z, 4, 3, 0.12, -Math.atan2(Math.cos(h), Math.sin(h)), bm, { y: 0.05 }); city.boosters.push({ x, z, cd: 0 }); }
+  // la dernière flèche lumineuse tombait en plein sur la grille de départ : on resserre
+  for (let k = 0; k < 4; k++) { const [x, z, h] = pathPos(RACE_LEN * (0.14 + k * 0.22)); rbox(x, z, 4, 3, 0.12, -Math.atan2(Math.cos(h), Math.sin(h)), bm, { y: 0.05 }); city.boosters.push({ x, z, cd: 0 }); }
   // ENTRÉE DU CIRCUIT : une ouverture dans la barrière extérieure, côté ville (nord-ouest),
   // au bout de la route qui vient du quartier est.
   const eA = Math.PI * 1.25;
   const ex = CX + R * Math.cos(eA), ez = CZ + R * Math.sin(eA);
   for (const o of solids.filter(o => o.mesh && o.bar && Math.hypot(o.x - ex, o.z - ez) < 7)) { worldGroup.remove(o.mesh); solids.splice(solids.indexOf(o), 1); }
   sgridSale();
-  city.circuit = { x: CX, z: CZ, r: R, depart: { x: CX, z: PZ }, entree: { x: ex, z: ez } };
+  const [jx, jz] = grilleDepart(GRILLE_JOUEUR);
+  city.circuit = { x: CX, z: CZ, r: R, depart: { x: jx, z: jz }, stands: { x: CX, z: PZ }, ligne: { x: CX, z: SZ }, entree: { x: ex, z: ez } };
 }
 // ================= LES JEUX DU CASINO =================
 // Machines à sous, roulette et poker fermé. On mise de VRAIES pièces, on gagne ou on perd,
@@ -2846,9 +2876,11 @@ const PLAN_ROUTIER = {
   // Les axes AJOUTÉS par le plan : ceux qui manquaient pour que chaque quartier soit
   // vraiment desservi. Les rues historiques du centre restent où elles sont.
   axes: [
-    { n: 'Rocade sud-est', x: 121, z: -70, w: 46, d: 8 },
-    { n: 'Bretelle du circuit', x: 140, z: -96, w: 8, d: 60 },
-    { n: 'Accès circuit', x: 133, z: -122, w: 20, d: 8 },
+    // La route du circuit passait DANS LA MER (elle filait vers x = 144 à z = -70, en plein
+    // dedans). Elle longe maintenant la plage par l'ouest, puis remonte au nord du rivage.
+    { n: 'Rocade du nord-est', x: 109, z: -70, w: 22, d: 8 },
+    { n: 'Bretelle du circuit', x: 115, z: -128, w: 8, d: 120 },
+    { n: 'Accès circuit', x: 122, z: -176, w: 24, d: 8 },
     { n: 'Route du littoral', x: 100, z: 130, w: 8, d: 70 },
     { n: 'Avenue du casino', x: 60, z: 300, w: 150, d: 9 },
     { n: 'Boulevard du casino', x: 60, z: 250, w: 9, d: 112 },
@@ -2860,7 +2892,7 @@ const PLAN_ROUTIER = {
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
   dessertes: [
     { n: 'Villa', x: 48, z: 190 },
-    { n: 'Départ', x: 140, z: -70 },
+    { n: 'Départ', x: 129, z: -176 },
     { n: 'Rallye', x: 0, z: -50 },
     { n: 'Casino', x: 60, z: 282 },
   ],
@@ -3405,7 +3437,7 @@ const WORLDS = [
       city.zones.push({ name: 'Parking', emoji: '🚗', x1: -23, x2: -3, z1: 3, z2: 14, hint: '🚗 Parking : E (ou 🚗) devant une voiture, une moto ou le camion pour monter' });
       city.zones.push({ name: 'Trampolines', emoji: '🤸', x1: 3, x2: 23, z1: 3, z2: 23, hint: '🤸 Trampolines : saute dessus pour t\'envoler vers les pièces de la tour' });
       city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 42, x2: 62, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
-      city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 19, x2: RACE_C.x + 19, z1: RACE_C.z + RACE_C.r - 18, z2: RACE_C.z + RACE_C.r + 3, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
+      city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 20, x2: RACE_C.x + 34, z1: RACE_C.z + RACE_C.r - 20, z2: RACE_C.z + RACE_C.r + 4, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
       buildClouds(0xffffff, 10); noSigns = false;
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
@@ -3658,7 +3690,7 @@ function startMission(id) {
   if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2], 0, 'mission'); mission.limit = 120; }
   if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112], [-130, 40], [110, 60], [-40, 130], [46, 130], [-70, -40], [70, -40]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1], 0, 'mission'); }
   if (id === 'pieces') { d.coins = []; const spots = [...OPEN_SPOTS].sort(() => Math.random() - 0.5).slice(0, 10); for (const sp of spots) { const c = coin(sp[0], sp[1], sp[2]); c.mesh.material = new THREE.MeshLambertMaterial({ color: 0x3ef2ff, emissive: 0x1e8fa0 }); c.blue = true; d.coins.push(c); } mission.limit = 90; }
-  if (id === 'chrono') { d.armed = false; d.maxIdx = 0; setBeacon(0, 124, 0, 'mission'); }
+  if (id === 'chrono') { const l0 = ligneDepart(); d.armed = false; d.maxIdx = 0; setBeacon(l0.x, l0.z, 0, 'mission'); }
   if (id === 'secours') {
     // On se pose sur un VRAI toit (ceux qui ont un ascenseur et un parachute), pas sur le
     // premier gros bloc venu : avant, le blessé atterrissait sur un pan de mur où l'hélico
@@ -3773,10 +3805,10 @@ function missionTick(dt) {
   if (m.id === 'pieces') { if (d.coins.every(c => c.taken)) endMission(true); }
   if (m.id === 'chrono') {
     const kart = drive.car && drive.car.kart;
-    const inLine = Math.abs(P.pos.x) < 1.6 && P.pos.z > 119 && P.pos.z < 129;
+    const inLine = surLaLigne(P.pos.x, P.pos.z);   // le vieux test (x ≈ 0, z entre 119 et 129) visait l'ANCIEN tracé : aucun tour n'était bouclé
     if (!kart) { /* pas de return : le bandeau continue de s'actualiser */ }
     else if (mission.step === 0) { if (inLine && drive.speed > 2) { mission.step = 1; mission.t0 = simTime; d.maxIdx = 0; clearBeacon('mission'); msg('⏱️ Tour lancé !', 900); sfx.check(); } }
-    else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(0, 124, 0, 'mission'); } } }
+    else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { const l1 = ligneDepart(); msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(l1.x, l1.z, 0, 'mission'); } } }
   }
   if (m.id === 'secours') {
     if (d.blesse && mission.step === 0) {
@@ -12065,18 +12097,28 @@ function launchRace() {
 function startCountdown(sec) {
   race.state = 'countdown'; race.goT = simTime + sec; race.cd = 99; race.results = []; race.my = { next: 0, lap: 0, t: null, done: false, inLine: false };
   race.ai = []; document.body.classList.remove('racenear');
-  if (!net.on) race.ai = raceKarts.map((k, i) => ({ k, s: -(12 + i * 2.2), off: (i % 2 ? 1.6 : -1.6), speed: 19 + rnd(-1, 2.5), lap: 0, done: false, t: null, name: BOT_DEFS[i].name, h: -Math.PI / 2 }));
-  // tout le monde sur la grille : les karts des bots à leur place, le joueur dans un kart en pole
-  race.ai.forEach(a => { const [x, z, h] = pathPos(a.s, a.off); a.k.x = x; a.k.z = z; a.k.h = h; a.h = h; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = h; vehicleSolid(a.k); });
+  // ON PLACE LE JOUEUR D'ABORD : il démarre AU MILIEU de la grille (3e rang sur 5). Avant, son
+  // kart était posé dans la voie des stands, de travers et douze mètres derrière la ligne.
+  const slot = net.on ? (net.host ? 0 : 1 + (net.remotes.size % 3)) : 0;
+  const placeJoueur = net.on ? (GRILLE_JOUEUR + slot) % GRILLE_N : GRILLE_JOUEUR;
+  let kart = null;
   if (city.on) {
-    const slot = net.on ? (net.host ? 0 : 1 + (net.remotes.size % 3)) : 0;
-    let kart = drive.car && drive.car.kart ? drive.car : null;
+    kart = drive.car && drive.car.kart ? drive.car : null;
     if (!kart) { const free = city.cars.filter(c => c.kart && !c.busy); kart = free[slot] || free[0] || null; if (kart) { if (drive.car) exitCar(); if (P.swing) P.swing = null; enterCar(kart); } }
-    // Grille : le kart démarrait à x = -1,6, donc DÉJÀ au-delà de la ligne, et les places
-    // 2 et 3 tombaient à z = 117, hors de la piste (portique z 118,6 → 129,4).
-    // Les roues avant sont à 1,3 m du centre : x = 1,3 les pose pile sur les damiers.
-    if (kart) { const gx = RACE_C.x - 13 + Math.floor(slot / 2) * 6.4, gz = RACE_C.z + RACE_C.r - 12 + (slot % 2 ? 1.8 : -1.8); kart.x = gx; kart.z = gz; kart.h = -Math.PI / 2; kart.g.position.set(gx, 0, gz); kart.g.rotation.y = kart.h; vehicleSolid(kart); drive.speed = 0; P.pos.set(gx, 0.3, gz); P.facing = kart.h; cam.yaw = kart.h + Math.PI; cam.target.set(gx, 1.8, gz); }
   }
+  // TOUTES LES VOITURES PRENNENT LE DÉPART. Seuls les cinq karts des coureurs s'élançaient :
+  // les karts libres restaient plantés sur la grille pendant toute la course.
+  const partants = [];
+  for (const k of [...raceKarts, ...city.cars.filter(c => c.kart)]) if (k && k !== kart && !partants.includes(k)) partants.push(k);
+  const places = []; for (let i = 0; i < GRILLE_N; i++) if (i !== placeJoueur) places.push(i);
+  if (!net.on) race.ai = partants.slice(0, places.length).map((k, i) => {
+    const ib = raceKarts.indexOf(k), pl = places[i];
+    return { k, s: -grilleRecul(pl), off: grilleEcart(pl), speed: 19 + rnd(-1, 2.5), lap: 0, done: false, t: null,
+      name: ib >= 0 && BOT_DEFS[ib] ? BOT_DEFS[ib].name : `Kart ${k.num || i + 1}`, h: 0 };
+  });
+  // tout le monde aligné SUR la piste, dans le sens de la course
+  race.ai.forEach(a => { const [x, z, h] = pathPos(a.s, a.off); a.k.x = x; a.k.z = z; a.k.h = h; a.h = h; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = h; vehicleSolid(a.k); });
+  if (kart) { const [gx, gz, gh] = grilleDepart(placeJoueur); kart.x = gx; kart.z = gz; kart.h = gh; kart.g.position.set(gx, 0, gz); kart.g.rotation.y = gh; vehicleSolid(kart); drive.speed = 0; P.pos.set(gx, 0.3, gz); P.facing = gh; cam.yaw = gh + Math.PI; cam.target.set(gx, 1.8, gz); }
   msg('🏁 En place sur la grille… départ dans 3 s !', 2200); sfx.check(); chat(null, `🏁 Course lancée : ${race.laps} tours du circuit !`);
 }
 function onRaceFinish(name, t, isMe) {
@@ -12101,12 +12143,12 @@ function raceTick(dt) {
     if (left <= 0) { race.state = 'running'; race.startT = simTime; msg('🏁 PARTEZ !', 1200); sfx.win(); city.lights.forEach(l => { l.material.color.set(0x30ff60); l.material.emissive.set(0x30ff60); }); setTimeout(() => city.lights.forEach(l => { l.material.color.set(0x333333); l.material.emissive.set(0x000000); }), 3000); }
     return;
   }
-  if (race.state === 'done') { if (simTime > race.endT) { race.state = 'idle'; race.ai.forEach((a, i) => { const [x, z] = [RACE_C.x + 4 + i * 2.6, RACE_C.z + RACE_C.r - 12]; a.k.x = x; a.k.z = z; a.k.h = -Math.PI / 2; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = -Math.PI / 2; a.h = -Math.PI / 2; vehicleSolid(a.k); }); race.ai = []; updateAct(); } return; }
+  if (race.state === 'done') { if (simTime > race.endT) { race.state = 'idle'; race.ai.forEach((a, i) => { const [x, z, h] = grilleDepart(i % GRILLE_N); a.k.x = x; a.k.z = z; a.k.h = h; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = h; a.h = h; vehicleSolid(a.k); }); race.ai = []; updateAct(); } return; }
   if (race.state !== 'running') return;
   const m = race.my;
   if (!m.done) {
     const g = RACE_GATES[m.next]; if (g && Math.hypot(P.pos.x - g[0], P.pos.z - g[1]) < 6.5) { m.next++; sfx.coin(); msg(`🏁 ${m.next}/${RACE_GATES.length}`, 600); }
-    const inLine = Math.abs(P.pos.x) < 1.6 && P.pos.z > 119 && P.pos.z < 129;
+    const inLine = surLaLigne(P.pos.x, P.pos.z);   // le vieux test (x ≈ 0, z entre 119 et 129) visait l'ANCIEN tracé : aucun tour n'était bouclé
     if (inLine && !m.inLine && m.next >= RACE_GATES.length) {
       m.next = 0; m.lap++;
       if (m.lap >= race.laps) { m.done = true; m.t = simTime - race.startT; if (net.on && !net.host) netSend({ t: 'race', st: 'finish', name: myCfg.name, time: m.t }); onRaceFinish(myCfg.name, m.t, true); }

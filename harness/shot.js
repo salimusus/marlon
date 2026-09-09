@@ -99,6 +99,19 @@ window.__SHOT = {
       if (typeof defi !== 'undefined') defi.on = null;
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
+    // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
+    // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.
+    try {
+      if (typeof bots !== 'undefined') for (const b of bots) {
+        if (Math.abs(b.pos.x) < 260 && Math.abs(b.pos.z) < 340) continue;
+        b.pos.set((Math.random() - 0.5) * 60, 0.3, 40 + (Math.random() - 0.5) * 60);
+        b.av.group.position.copy(b.pos); b.av.group.visible = true; b.rdv = null; b.wait = 0;
+      }
+      if (typeof gangs !== 'undefined') for (const g of gangs) for (const m of g.membres) {
+        if (Math.abs(m.x) < 260 && Math.abs(m.z) < 340) continue;
+        m.x -= 400; m.z -= 400; if (m.av) m.av.group.position.set(m.x, m.y, m.z);
+      }
+    } catch (e11) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
     // L'heure se pilote par simTime (journee de 7 h a 19 h). Mais l'horloge ne doit JAMAIS
     // reculer : des minuteries posees par un test precedent (le prochain habitant qui va au

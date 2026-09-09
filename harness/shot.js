@@ -58,7 +58,7 @@ window.__SHOT = {
         b.arme = false; b.perf = null; b.journal = null; b.sport = null;
         if (b.av) { b.av.group.rotation.x = 0; b.av.group.visible = true; }
       }
-      if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; }
+      if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; if (gang.missions) gang.missions.length = 0; }
       // une partie de tennis ou de foot laissee en cours faussait le test suivant
       if (typeof finDuel === 'function') { try { finDuel('tennis'); finDuel('foot'); } catch (e4) {} }
       if (typeof P !== 'undefined' && P.racket) { P.racket = false; try { setRacket(me, false); } catch (e5) {} }

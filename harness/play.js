@@ -4973,6 +4973,48 @@ test('une séance de sport paie vraiment, et l\'effort compte', async p => {
   return { ok, detail: `la séance ne donne plus 3 points quoi qu'on fasse : elle SE PROLONGE tant qu'on force (${r.intense.duree} s au lieu de 8) et le gain suit l'effort — ${r.mou.gagne} points en poussant mollement, ${r.intense.gagne} en s'arrachant · et il devient plus dur de monter : la MÊME séance ne rapporte que ${r.expert.gagne} points à un athlète déjà à 85/100 · le tapis fait monter l'endurance (${r.endurance.avant} → ${r.endurance.apres}) et allonge vraiment le sprint : ${r.endurance.sprintAvant} s → ${r.endurance.sprintApres} s` };
 });
 
+
+test('on peut donner plusieurs ordres à plusieurs membres à la fois', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const l = G.bots.slice(0, 4);
+    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.gangMission = null; b.journal = null;
+      b.pos.set(G.P.pos.x + 3, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
+    // quatre ordres différents à quatre hommes, à la suite
+    res.pris = [
+      G.commandeSociale(`${l[0].name} braque la banque`),
+      G.commandeSociale(`${l[1].name} vole une boutique`),
+      G.commandeSociale(`${l[2].name} va t entrainer au sport`),
+      G.commandeSociale(`${l[3].name} on joue au tennis`),
+    ];
+    res.etat = {
+      missions: G.gang.missions.length,
+      coup0: l[0].gangMission ? l[0].gangMission.type : null,
+      coup1: l[1].gangMission ? l[1].gangMission.type : null,
+      entrain2: l[2].rdv ? l[2].rdv.entrain : null,
+      sport3: l[3].sport ? l[3].sport.jeu : null,
+      enCours: l.map(b => (b.journal || []).filter(o => o.etat === 'cours').length),
+    };
+    // un homme déjà parti refuse un deuxième coup — sans casser ceux des autres
+    res.refus = G.commandeSociale(`${l[0].name} vole une voiture`);
+    res.apresRefus = { missions: G.gang.missions.length, type0: l[0].gangMission ? l[0].gangMission.type : null };
+    // les deux coups avancent ensemble et se terminent chacun de leur côté
+    for (let i = 0; i < 60 * 220 && G.gang.missions.length; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    res.fin = { missions: G.gang.missions.length,
+      soldes: l.slice(0, 2).map(b => (b.journal || []).filter(o => o.etat === 'reussi' || o.etat === 'rate').length),
+      libres: l.slice(0, 2).every(b => !b.gangMission) };
+    return res;
+  });
+  const ok = r.pris.every(Boolean)
+    && r.etat.missions === 2 && r.etat.coup0 === 'banque' && r.etat.coup1 === 'boutique'
+    && r.etat.entrain2 === 'sport' && r.etat.sport3 === 'tennis'
+    && r.etat.enCours.every(n => n === 1)
+    && r.apresRefus.missions === 2 && r.apresRefus.type0 === 'banque'
+    && r.fin.missions === 0 && r.fin.libres && r.fin.soldes.every(n => n >= 1);
+  return { ok, detail: `quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti refuse poliment un second coup sans casser celui des autres, et chaque mission se solde de son côté` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

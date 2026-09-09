@@ -12824,7 +12824,9 @@ function gangMissionTick(dt) {
     const flics = police.wanted > 0 ? policePerf() * 0.5 : 0;
     const difficulte = (m.M.difficulte || 35) + rival + flics;
     const chance = clamp(equipe / (equipe + difficulte), 0.1, 0.95);
-    const reussi = Math.random() < chance;
+    // Une équipe deux fois plus forte que la cible ne rate pas : à ce niveau-là, l'entraînement
+    // paie vraiment et le joueur n'est plus à la merci d'un mauvais tirage.
+    const reussi = equipe >= difficulte * 2 || Math.random() < chance;
     m.chance = Math.round(chance * 100);
     if (!reussi) { gangMissionRatee(m); return; }
     const g2 = Math.floor(rnd(m.M.gain[0], m.M.gain[1])) * (1 + (m.membres.length - 1) * 0.25) * (0.7 + equipe / 200);

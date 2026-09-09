@@ -3722,6 +3722,10 @@ test('les habitants prennent aussi la voiture, pas seulement le vélo', async p 
     const b = G.bots.find(x => !x.ko && x.av.group.visible);
     window.__conducteur = b;
     b.activite = null; b.rdv = null; b.drive = null; b.ordre = null; b.wait = 0;
+    // on gare une voiture libre juste à côté de lui : sous rendu logiciel, le trajet à pied
+    // mangeait tout le temps imparti et le test échouait sur la montre, pas sur le jeu
+    { const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+      if (c) { c.x = b.pos.x + 3; c.z = b.pos.z + 3; c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c); } }
     const lance = G.lancerActivite(b, { k: 'voiture', e: '🚗', n: 'faire un tour en voiture' }) !== false;
     if (b.activite) b.activite.fin = G.simTime + 600;   // on lui laisse le temps d'arriver
     return { dansListe, lance, nom: b.name, cible: b.rdv ? [+b.rdv.x.toFixed(1), +b.rdv.z.toFixed(1)] : null };
@@ -4299,6 +4303,11 @@ test('gardes du corps, protection d\'un membre et de la villa, missions à plusi
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G, res = {};
+    // on repart d'un gang PROPRE : un test précédent a pu enrôler ou poster des hommes
+    G.gang.membres.length = 0;
+    G.bots.forEach(b => { b.gang = null; b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null; b.garde = 0;
+      b.gardeArme = 0; b.rdv = null; b.ordre = null; b.drive = null; b.ko = 0; b.hp = 100; b.mort = 0; });
+    G.gang.mission = null;
     const noms = [];
     for (let i = 0; i < 5; i++) { const b = G.bots[i]; G.devenirAmi(b); G.rejoindreGang(b); b.perf = 20 + i * 15; b.arme = i === 0; noms.push(b.name); }
     res.gang = G.gang.membres.length;

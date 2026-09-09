@@ -387,7 +387,9 @@ body.tv #tvBadge.on{display:block}
 .tvcase{flex:1 1 260px;min-width:250px;background:#f3f6fd;border:2px solid #dbe3f5;border-radius:16px;padding:14px;text-align:center}
 .tvcase h3{font-size:clamp(16px,1.4vw,24px);margin-bottom:8px;color:#1b2a4a}
 .tvcase p{color:#556}
-.tvcase canvas{width:min(190px,42vw);height:auto;image-rendering:pixelated;background:#fff;border-radius:10px;padding:7px}
+/* surtout PAS image-rendering:pixelated ici : la carte réduit l'image, et le mode « pixelisé »
+   supprime alors des lignes de modules entières — le code devient illisible */
+.tvcase canvas{width:min(200px,44vw);height:auto;background:#fff;border-radius:10px;padding:7px}
 .tvcode{font-size:clamp(30px,3.4vw,58px);font-weight:800;letter-spacing:9px;color:#1b2a4a;margin:6px 0}
 .tvlien{font-size:11px;word-break:break-all;color:#7a86a0;margin-top:6px}
 /* le lien de la télé, on doit pouvoir le lire de loin et le sélectionner d'un seul appui */
@@ -13534,11 +13536,15 @@ const QR = (() => {
         }
         haut = !haut;
       }
+      // L'INFORMATION DE FORMAT. Deux erreurs ici rendaient TOUS les QR illisibles, alors que
+      // le dessin avait l'air parfait : les quinze bits étaient écrits à l'envers (le bit de
+      // poids faible en premier au lieu du poids fort), et la seconde copie débordait d'un
+      // module — elle écrasait le « module toujours noir » et laissait un trou en (8, N−8).
       const f = format(mk);
       for (let k = 0; k < 15; k++) {
-        const bit = (f >> k) & 1;
+        const bit = (f >> (14 - k)) & 1;
         if (k < 6) m[8][k] = bit; else if (k < 8) m[8][k + 1] = bit; else if (k === 8) m[7][8] = bit; else m[14 - k][8] = bit;
-        if (k < 8) m[N - 1 - k][8] = bit; else m[8][N - 15 + k] = bit;
+        if (k < 7) m[N - 1 - k][8] = bit; else m[8][N - 15 + k] = bit;
       }
       const p = penalite(m, N);
       if (!best || p < best.p) best = { p, m, N };
@@ -13550,7 +13556,10 @@ const QR = (() => {
     const g = cv.getContext('2d');
     if (!q) { g.clearRect(0, 0, cv.width, cv.height); cv.style.display = 'none'; return false; }
     cv.style.display = '';
-    const marge = 4, taille = q.N + marge * 2, px = Math.max(2, Math.floor(180 / taille));
+    // On dessinait 2 à 4 pixels par module, puis le navigateur réduisait l'image à la taille
+    // de la carte : un module perdait des pixels au passage et le lecteur décrochait. On dessine
+    // maintenant TRÈS large, l'affichage n'a plus qu'à réduire proprement.
+    const marge = 4, taille = q.N + marge * 2, px = Math.max(6, Math.ceil(420 / taille));
     cv.width = cv.height = taille * px;
     g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
     g.fillStyle = '#11182c';

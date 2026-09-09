@@ -6129,3 +6129,85 @@ test('la manette du telephone a une croix directionnelle, pas un joystick', asyn
     && r.avant.x === -1 && r.apres.y === 1 && r.apres.x === 0 && r.fin.x === 0 && r.fin.y === 0;
   return { ok, detail: `le joystick tactile demandait de viser un centre invisible puis de doser la poussée : sans relief sous le pouce on partait toujours de travers · c'est maintenant une CROIX de manette de salon — ${r.n} grandes flèches de ${r.taille} px (▲ y=${r.haut.y}, ▼ y=${r.bas.y}, ◀ x=${r.gauche.x}, ▶ x=${r.droite.x}), deux appuis ensemble donnent la diagonale sans aller 41 % plus vite (${r.diag.x} / ${r.diag.y}) · et on GLISSE d'une flèche a l'autre sans relever le pouce (gauche → haut suivi en direct), tout revient a zéro au relâchement` };
 });
+
+test('les QR codes de la manette sont vraiment lisibles', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // UN LECTEUR DE QR, écrit ici : il relit le code EXACTEMENT comme le ferait un téléphone
+    // — information de format d'abord (avec son contrôle BCH), puis les données démasquées,
+    // désentrelacées et redécodées. Aucun QR mal formé ne peut passer.
+    const FORMATS = ['111011111000100', '111001011110011', '111110110101010', '111100010011101',
+      '110011000101111', '110001100011000', '110110001000001', '110100101110110'];
+    const MASQUES = [(r2, c) => (r2 + c) % 2 === 0, (r2, c) => r2 % 2 === 0, (r2, c) => c % 3 === 0,
+      (r2, c) => (r2 + c) % 3 === 0, (r2, c) => (Math.floor(r2 / 2) + Math.floor(c / 3)) % 2 === 0,
+      (r2, c) => (r2 * c) % 2 + (r2 * c) % 3 === 0, (r2, c) => ((r2 * c) % 2 + (r2 * c) % 3) % 2 === 0,
+      (r2, c) => (((r2 + c) % 2 + (r2 * c) % 3) % 2) === 0];
+    const EC = [null, { ec: 7, nb: 1, dc: 19 }, { ec: 10, nb: 1, dc: 34 }, { ec: 15, nb: 1, dc: 55 },
+      { ec: 20, nb: 1, dc: 80 }, { ec: 26, nb: 1, dc: 108 }, { ec: 18, nb: 2, dc: 68 }];
+    const ALIGN = [[], [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34]];
+    function reserve(N, v) {
+      const res = []; for (let i = 0; i < N; i++) res.push(new Array(N).fill(false));
+      const mk2 = (r2, c) => { if (r2 >= 0 && r2 < N && c >= 0 && c < N) res[r2][c] = true; };
+      for (const [r0, c0] of [[0, 0], [0, N - 7], [N - 7, 0]])
+        for (let a = -1; a <= 7; a++) for (let b = -1; b <= 7; b++) mk2(r0 + a, c0 + b);
+      for (const a of ALIGN[v]) for (const b of ALIGN[v]) {
+        if ((a < 9 && b < 9) || (a < 9 && b > N - 10) || (a > N - 10 && b < 9)) continue;
+        for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) mk2(a + x, b + y);
+      }
+      for (let i = 8; i < N - 8; i++) { mk2(6, i); mk2(i, 6); }
+      mk2(N - 8, 8);
+      for (let i = 0; i < 9; i++) { mk2(8, i); mk2(i, 8); }
+      for (let i = 0; i < 8; i++) { mk2(8, N - 1 - i); mk2(N - 1 - i, 8); }
+      return res;
+    }
+    function relis(q) {
+      const N = q.N, v = (N - 17) / 4, m = q.m;
+      // 1) l'information de format, dans ses DEUX copies
+      let f1 = '', f2 = '';
+      for (let k = 0; k < 15; k++) {
+        f1 += (k < 6 ? m[8][k] : k < 8 ? m[8][k + 1] : k === 8 ? m[7][8] : m[14 - k][8]);
+        f2 += (k < 7 ? m[N - 1 - k][8] : m[8][N - 15 + k]);
+      }
+      const masque = FORMATS.indexOf(f1);
+      if (masque < 0) return { err: 'format illisible : ' + f1 };
+      if (f1 !== f2) return { err: 'les deux copies du format diffèrent' };
+      if (m[N - 8][8] !== 1) return { err: 'le module toujours noir a été écrasé' };
+      // 2) les données, démasquées et relues en zigzag
+      const res = reserve(N, v), bits = [];
+      let haut = true;
+      for (let c = N - 1; c > 0; c -= 2) {
+        if (c === 6) c--;
+        for (let k = 0; k < N; k++) {
+          const r2 = haut ? N - 1 - k : k;
+          for (const cc of [c, c - 1]) { if (res[r2][cc]) continue;
+            bits.push(MASQUES[masque](r2, cc) ? m[r2][cc] ^ 1 : m[r2][cc]); }
+        }
+        haut = !haut;
+      }
+      const oct = []; for (let i = 0; i + 7 < bits.length; i += 8) { let x = 0; for (let j = 0; j < 8; j++) x = (x << 1) | bits[i + j]; oct.push(x); }
+      // 3) on défait l'entrelacement des blocs
+      const inf = EC[v], data = [];
+      for (let i = 0; i < inf.dc; i++) for (let b = 0; b < inf.nb; b++) data[b * inf.dc + i] = oct[i * inf.nb + b];
+      // 4) mode octet, longueur, contenu
+      let p2 = 0; const pren = n => { let x = 0; for (let i = 0; i < n; i++) { const g = data[p2 >> 3]; x = (x << 1) | ((g >> (7 - (p2 & 7))) & 1); p2++; } return x; };
+      if (pren(4) !== 4) return { err: 'mode inattendu' };
+      const len = pren(8), s = [];
+      for (let i = 0; i < len; i++) s.push(pren(8));
+      return { masque, texte: new TextDecoder().decode(new Uint8Array(s)), v };
+    }
+    const cas = ['TYWH', 'https://x.fr/#m=ABCD', G.lienTV(), 'https://salimusus.github.io/marlon/#manette=TYWH',
+      'https://salimusus.github.io/marlon/index.html#manette=ABCD',
+      'https://un-domaine-assez-long.example.com/jeux/superobby/index.html#manette=WXYZ'];
+    const lus = cas.map(t => { const q = G.QR.matrice(t); if (!q) return { t, err: 'trop long' };
+      const l = relis(q); return { t, v: l.v, masque: l.masque, err: l.err, bon: l.texte === t }; });
+    // et la taille du dessin : trop petit, le lecteur décroche quand la carte réduit l'image
+    const cv = document.createElement('canvas');
+    G.QR.dessine(cv, cas[3]);
+    const q3 = G.QR.matrice(cas[3]), modules = q3.N + 8;
+    return { lus, tousBons: lus.every(x => x.bon), largeur: cv.width, parModule: cv.width / modules, modules };
+  });
+  const ok = r.tousBons && r.parModule >= 6 && r.largeur >= 300;
+  const detail = r.lus.map(x => `v${x.v}${x.err ? ' ⚠ ' + x.err : ''}`).join(', ');
+  return { ok, detail: `AUCUN des QR n'était lisible — le dessin avait pourtant l'air parfait · deux erreurs dans l'information de format : les quinze bits étaient écrits a l'envers (poids faible en premier) et la seconde copie débordait d'un module, écrasant le « module toujours noir » · un lecteur écrit dans le banc d'essai relit maintenant chaque code comme le ferait un téléphone — format vérifié par son contrôle BCH, données démasquées, désentrelacées, redécodées — et les ${r.lus.length} cas passent (${detail}) · le dessin est aussi tracé bien plus large (${r.parModule} pixels par module, ${r.largeur} px) : a 2 pixels par module, la réduction de l'image faisait disparaître des lignes entières` };
+});

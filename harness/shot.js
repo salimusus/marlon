@@ -429,6 +429,7 @@ window.__G = {
   appliqueRendu: typeof appliqueRendu === 'function' ? appliqueRendu : null,
   ratioRendu: typeof ratioRendu === 'function' ? ratioRendu : null,
   demarreTV: typeof demarreTV === 'function' ? demarreTV : null,
+  QR: typeof QR !== 'undefined' ? QR : null,
   tvPasseLaMain: typeof tvPasseLaMain === 'function' ? tvPasseLaMain : null,
   tvHeberge: typeof tvHeberge === 'function' ? tvHeberge : null,
   manetteOuvre: typeof manetteOuvre === 'function' ? manetteOuvre : null,

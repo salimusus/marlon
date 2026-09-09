@@ -227,6 +227,11 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
     const b = __G.bots[0];
     __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
     __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0; __G.P.lock = null;   // sans cible verrouillée, la visée suit la caméra
+    // on degage le terrain : le verrouillage automatique se refait a chaque image, et un
+    // habitant ou un gangster laisse la par un test precedent recevait toute la rafale
+    for (const o of __G.bots) if (o !== __G.bots[0]) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    for (const G2 of __G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
+    __G.police.agents.slice().forEach(a => { a.x += 400; a.z += 400; });
     b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
@@ -249,6 +254,11 @@ test('une balle ne traverse plus une cloison fine', async p => {
     const b = __G.bots[0];
     __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
     __G.cam.yaw = Math.PI; __G.cam.pitch = 0; __G.P.facing = 0; __G.P.lock = null;   // sans cible verrouillée, la visée suit la caméra
+    // on degage le terrain : le verrouillage automatique se refait a chaque image, et un
+    // habitant ou un gangster laisse la par un test precedent recevait toute la rafale
+    for (const o of __G.bots) if (o !== __G.bots[0]) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    for (const G2 of __G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
+    __G.police.agents.slice().forEach(a => { a.x += 400; a.z += 400; });
     b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
     // cloison de 30 cm entre le joueur et le bot : plus mince que la distance parcourue
     // par une balle en une image, donc invisible pour un test ponctuel
@@ -3110,8 +3120,14 @@ test('une balle fissure puis fait voler la vitrine en éclats, et traverse pour 
     tirer(); res.apres1 = { fissuree: !!v.cracked, brisee: !!v.broken };
     tirer(); res.apres2 = { brisee: !!v.broken, solideRetire: G.solids.indexOf(v.solid) < 0 };
     // la balle ne s'arrête pas sur la vitre : un bot placé derrière est touché
-    const v2 = vitres.find(b => !b.broken && b !== v);
-    const b = G.bots[0]; b.ko = 0; b.hp = 100;
+    // la plus proche encore intacte : un test precedent a pu en briser plusieurs, et on se
+    // retrouvait a tirer a l'autre bout de la ville, derriere un comptoir
+    const v2 = vitres.filter(x => !x.broken && x !== v)
+      .sort((a, c) => Math.hypot(a.x - v.x, a.z - v.z) - Math.hypot(c.x - v.x, c.z - v.z))[0];
+    // et on degage la ligne de tir de tout ce qui pourrait encaisser la balle a sa place
+    for (const o of G.bots) if (o !== G.bots[0]) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    for (const G2 of G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
+    const b = G.bots[0]; b.ko = 0; b.hp = 100; b.dead = 0; b.fight = null;
     b.pos.set(v2.x, 0.3, v2.z + 2.2); b.av.group.position.copy(b.pos); b.av.group.visible = true;
     b.pos.y = 0.3; b.av.group.position.copy(b.pos);
     const sh2 = { m: null, p: new G.THREE.Vector3(v2.x, 1.9, v2.z - 5), v: new G.THREE.Vector3(0, 0, 90), t: 0, mine: true, dmg: 20 };

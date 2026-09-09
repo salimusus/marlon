@@ -11273,8 +11273,10 @@ function remiseTick(dt) {
     if (!b.casseT || (!b.broken && !b.cracked)) continue;
     if (simTime - b.casseT > (DELAI_REPARE[b.kind] || 90) && loin(b.x, b.z, 26)) { repareChose(b); repares++; }
   }
-  for (const c of city.cars) {
-    if (!c.home0 || c === drive.car || c.busy || c.kart) { c.loinT = 0; continue; }
+  // Les karts aussi : apres une course ils restaient la ou ils s'etaient arretes et la grille
+  // de depart restait vide pour la suivante. Hors course, ils regagnent leur emplacement.
+  for (const c of [...city.cars, ...raceKarts]) {
+    if (!c.home0 || c === drive.car || c.busy || (c.kart && race.state !== 'idle')) { c.loinT = 0; continue; }
     const [hx, hz, hh] = c.home0;
     const epave = !!(c.dead || c.explosed);
     const enVol = !!(c.heli && (c.y || 0) > (c.y0 || 0) + 1.5);

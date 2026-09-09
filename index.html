@@ -224,6 +224,11 @@ body.city #gps{display:block}body.lobby #gps{display:none!important}
 .mcard{border:2px solid #dbe3f5;border-radius:12px;padding:10px;background:#f7f9fe;text-align:left;font-size:13px;color:#1b2a4a}
 .mcard b{display:block;font-size:14px}.mcard .mr{color:#ff9f1c;font-weight:900}.mcard .btn{margin:8px 0 0;padding:6px 12px;font-size:13px}
 .mcard.active{border-color:#4f8dff;background:#eef4ff}
+.ocard{border:2px solid #dbe3f5;border-radius:12px;padding:9px 8px;background:#f7f9fe;color:#1b2a4a;font-weight:800;font-size:13px;cursor:pointer;text-align:center;line-height:1.25}
+.ocard:hover{border-color:#4f8dff;background:#eef4ff}
+.ocard span{display:block;font-size:20px;margin-bottom:2px}
+.ocard i{display:block;font-weight:600;font-style:normal;font-size:11px;color:#5a6480;margin-top:3px}
+.osec{grid-column:1/-1;font-weight:900;color:#1b2a4a;margin:6px 0 0;font-size:13px}
 @keyframes wblink{50%{background:rgba(30,60,200,.8)}}
 /* alarme de villa : l'écran se voile de rouge et la montre du joueur clignote */
 body.alarme::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:58;box-shadow:inset 0 0 130px 34px rgba(255,26,26,.6);animation:alrm 1.05s infinite}
@@ -595,6 +600,14 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
   </div>
 </div>
 
+<div class="overlay hidden" id="ordres">
+  <div class="card" style="max-width:640px">
+    <h2 id="ordresTitre">📣 Ordres</h2>
+    <p class="sub" id="ordresSub"></p>
+    <div id="ordresGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:52vh;overflow-y:auto;padding:2px"></div>
+    <div class="mpr"><button class="btn sec" id="ordresBack">Fermer</button></div>
+  </div>
+</div>
 <div class="overlay hidden" id="reunion">
   <div class="card">
     <h2 id="reunionTitre">🤝 Réunion des chefs</h2>
@@ -3144,7 +3157,26 @@ function missionTick(dt) {
   if (mission.limit && simTime - mission.t0 > mission.limit) { endMission(false); return; }
   const near = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
   if (m.id === 'livraison') {
-    if (mission.step === 0 && near(city.snack.x, city.snack.z, 3.5)) { mission.step = 1; mission.t0 = simTime; mission.limit = 90; const h = pickOne([[-92, -50], [-92, -36], [-92, 40], [-92, 54], [-92, 68], [-92, 84]]); d.dest = [h[0] + 5, h[1] + 4]; setBeacon(d.dest[0], d.dest[1]); msg('📦 Colis récupéré ! Livre-le vite', 1500); sfx.coin(); }
+    if (mission.step === 0 && near(city.snack.x, city.snack.z, 3.5)) {
+      mission.step = 1; mission.t0 = simTime;
+      // On tirait la maison AU HASARD parmi six et on laissait 90 s : certaines sont à
+      // 240 m du snack, soit bien plus d'une minute et demie de marche — la mission
+      // s'annulait toute seule en chemin. On prend la PLUS PROCHE et on calcule le temps
+      // sur la longueur réelle de l'itinéraire, avec de la marge.
+      const maisons = [[-92, -50], [-92, -36], [-92, 40], [-92, 54], [-92, 68], [-92, 84]]
+        .map(h => ({ x: h[0] + 5, z: h[1] + 4 }));
+      let h = maisons[0], dmin = Infinity;
+      for (const m2 of maisons) { const dd = Math.hypot(m2.x - P.pos.x, m2.z - P.pos.z); if (dd < dmin) { dmin = dd; h = m2; } }
+      d.dest = [h.x, h.z];
+      let route = dmin;
+      try { if (!NAV.pieton) buildNav(true); const auto = NAV.blocked; NAV.blocked = NAV.pieton;
+        const pth = navPath(P.pos.x, P.pos.z, h.x, h.z); NAV.blocked = auto;
+        if (pth && pth.length) { let L = 0, a = [P.pos.x, P.pos.z]; for (const b2 of pth) { L += Math.hypot(b2[0] - a[0], b2[1] - a[1]); a = b2; } route = L; }
+      } catch (e) {}
+      mission.limit = Math.max(75, Math.round(route / 3.2) + 30);   // ~3,2 m/s de moyenne, plus 30 s de marge
+      setBeacon(d.dest[0], d.dest[1]);
+      msg(`📦 Colis récupéré ! Livre-le à ${Math.round(route)} m — ${mission.limit} s`, 2600); sfx.coin();
+    }
     else if (mission.step === 1 && near(d.dest[0], d.dest[1], 4)) endMission(true);
   }
   if (m.id === 'taxi') {
@@ -7599,12 +7631,16 @@ function commandeExacte(txt) {
     const ou = lieuVoit || (/\b(la.?bas|là.?bas)\b/.test(t) && beacon.m && beacon.m.visible ? { nom: 'là-bas', x: beacon.x, z: beacon.z } : { nom: 'ta position', x: P.pos.x, z: P.pos.z });
     botPrendVoiture(cible, ou, deux); return true;
   }
-  if (cible.drive && /\b(va|vas|conduis|emmene|emmène|amene|amène|direction|roule|depose|dépose)\b/.test(t)) {
-    if (lieuVoit) { botConduireVers(cible, lieuVoit); return true; }
-    botSay(cible, ['où ça ? dis-moi un endroit (la villa, le parc, la plage…)']); return true;
+  // « conduis-moi à la villa » : s'il n'a pas encore de véhicule, il va en chercher un et
+  // t'y emmène — avant, l'ordre ne marchait que s'il était déjà au volant.
+  if (/\b(conduis|emmene|emmène|depose|dépose)\b.{0,24}\b(moi|nous)\b/.test(t) || (cible.drive && /\b(va|vas|conduis|emmene|emmène|amene|amène|direction|roule|depose|dépose)\b/.test(t))) {
+    if (!lieuVoit) { botSay(cible, ['où ça ? dis-moi un endroit (la villa, le parc, la plage…)']); return true; }
+    if (cible.drive) { botConduireVers(cible, lieuVoit); return true; }
+    botPrendVoiture(cible, lieuVoit, null); return true;
   }
-  if (cible.drive && /\b(descend|descends|arrete|arrête|stop|c.?est bon|merci ca ira)\b/.test(t)) {
-    botDescendre(cible, false); botSay(cible, ['à bientôt ! 👋']); return true;
+  if (/\b(descend|descends|gare.?toi|arrete la voiture)\b/.test(t)) {
+    if (cible.drive) { botDescendre(cible, false); botSay(cible, ['à bientôt ! 👋']); return true; }
+    botSay(cible, ['je ne suis pas au volant 🙂']); return true;
   }
   if (/\b(chez moi|ma villa|a la maison|viens a la villa|invite)\b/.test(t)) {
     const v = city.zones.find(z => z.name === 'Villa');
@@ -7709,6 +7745,8 @@ const INTENTS = [
   { id: 'volBot', cles: [V_VOLER, ['bot', 'bots', 'passant', 'passants', 'habitant', 'habitants', 'type',
       'mec', 'gars', 'fille', 'personne', 'quelqu', 'portefeuille', 'poche', 'poches', 'gens']],
     fn: (b, ctx) => botMission(b, 'argent', ctx.victime) },
+  { id: 'guet', cles: [['guet', 'guette', 'guetter', 'surveille', 'surveiller', 'surveillance', 'planque', 'vigie', 'repere']],
+    fn: b => botMission(b, 'guet') },
   { id: 'volVoiture', cles: [V_VOLER, ['voiture', 'voitures', 'caisse', 'bagnole', 'auto', 'vehicule', 'tire']],
     fn: b => botMission(b, 'voiture') },
   { id: 'manger', cles: [['manger', 'bouffe', 'bouffer', 'nourriture', 'burger', 'pizza', 'sandwich',
@@ -7757,8 +7795,104 @@ function interpreteOrdre(txt) {
   return true;
 }
 function commandeSociale(txt) {
-  // d'abord les tournures reconnues au mot près (rapides et sûres), puis l'interprète
-  return commandeExacte(txt) || interpreteOrdre(txt);
+  // Le nom tout seul ouvre la liste des ordres : on n'a plus à deviner la bonne formule.
+  const seul = nomSeul(txt);
+  if (seul) return openOrdres(seul);
+  // sinon : les tournures reconnues au mot près, puis l'interprète
+  if (commandeExacte(txt) || interpreteOrdre(txt)) return true;
+  // on a bien parlé à quelqu'un mais sans se faire comprendre : on lui montre la liste
+  const b = trouveBot(txt);
+  if (b && (estAmi(b.name) || estDuGang(b))) { botDit(b, 'je n\'ai pas compris 🤔 voilà ce que je sais faire :'); return openOrdres(b); }
+  return false;
+}
+
+// ================= LA LISTE DES ORDRES =================
+// Écrire (ou dire) le nom de quelqu'un ouvre la liste de tout ce qu'on peut lui demander :
+// plus besoin de deviner la formule exacte, on clique. Les ordres réservés au gang
+// n'apparaissent que pour un membre du gang.
+const ORDRES_CAT = [
+  { n: '🚶 Le suivre et le placer', l: [
+    { e: '🫡', t: 'Suis-moi', p: 'suis moi', d: 'il te colle partout' },
+    { e: '✋', t: 'Attends ici', p: 'attends moi ici', d: 'il ne bouge plus' },
+    { e: '🏃', t: 'Viens me voir', p: 'viens', d: 'il te rejoint' },
+    { e: '🙈', t: 'Cache-toi', p: 'cache toi', d: 'il file se planquer' },
+    { e: '🛑', t: 'Stop', p: 'stop', d: 'il reprend sa vie' },
+  ] },
+  { n: '🛡️ Te protéger et se battre', l: [
+    { e: '🛡️', t: 'Protège-moi', p: 'protege moi', d: 'garde du corps' },
+    { e: '🔫', t: 'Tire pour me protéger', p: 'tire pour me proteger', d: 'il dégaine' },
+    { e: '👊', t: 'Tape quelqu\'un', p: 'tape le plus proche', d: 'sur le plus proche' },
+    { e: '🔪', t: 'Arme-toi', p: 'arme toi', d: 'il achète un fusil', gang: true },
+  ] },
+  { n: '🚗 Véhicules', l: [
+    { e: '🚗', t: 'Amène une voiture', p: 'va me chercher une voiture ici', d: 'il vient te chercher' },
+    { e: '🚲', t: 'Amène un vélo', p: 'va me chercher un velo ici', d: '' },
+    { e: '🏍️', t: 'Amène une moto', p: 'va me chercher une moto ici', d: '' },
+    { e: '🏁', t: 'Conduis-moi à la villa', p: 'conduis moi a la villa', d: 'une fois à bord' },
+    { e: '🚪', t: 'Descends', p: 'descends', d: 'il rend le véhicule' },
+  ] },
+  { n: '💰 Coups et business', l: [
+    { e: '🏦', t: 'Braque la banque', p: 'va braquer la banque', d: 'il te rapporte le magot' },
+    { e: '🛍️', t: 'Braque une boutique', p: 'va voler la boutique', d: '' },
+    { e: '💉', t: 'Braque le tatoueur', p: 'va voler la boutique de tatouage', d: '' },
+    { e: '🏠', t: 'Cambriole une villa', p: 'va cambrioler une villa', d: '' },
+    { e: '🚙', t: 'Vole une voiture', p: 'va voler une voiture', d: 'il te la ramène' },
+    { e: '👛', t: 'Détrousse un passant', p: 'va voler un passant', d: '' },
+    { e: '😤', t: 'Attaque un gang rival', p: 'attaque le gang rival', d: '' },
+    { e: '👀', t: 'Fais le guet', p: 'fais le guet', d: '', gang: true },
+  ] },
+  { n: '💪 Entraînement', l: [
+    { e: '🏋️', t: 'Va à la salle de sport', p: 'va t entrainer au sport', d: 'monte la force du gang', gang: true },
+    { e: '🎯', t: 'Va au stand de tir', p: 'va t entrainer au stand de tir', d: 'monte la force du gang', gang: true },
+  ] },
+  { n: '🎉 Vie et loisirs', l: [
+    { e: '🍔', t: 'Va me chercher à manger', p: 'va me chercher a manger', d: '' },
+    { e: '🐕', t: 'Promène mon chien', p: 'va promener mon chien', d: '' },
+    { e: '🎾', t: 'On joue au tennis', p: 'on joue au tennis', d: '' },
+    { e: '⚽', t: 'On joue au foot', p: 'on joue au foot', d: '' },
+    { e: '🏁', t: 'Lance-moi un défi', p: 'lance un defi', d: 'de l\'argent à gagner' },
+    { e: '💃', t: 'Danse', p: 'danse', d: '' },
+    { e: '🦘', t: 'Saute', p: 'saute', d: '' },
+    { e: '👋', t: 'Salue', p: 'salue', d: '' },
+  ] },
+];
+let ordresBot = null;
+function openOrdres(b) {
+  if (!b) return false;
+  ordresBot = b;
+  const duGang = estDuGang(b), ami = estAmi(b.name);
+  $('ordresTitre').textContent = `📣 Ordres pour ${b.name}`;
+  $('ordresSub').innerHTML = ami
+    ? (duGang ? '😎 <b>Membre de ton gang</b> — il fait tout ce que tu demandes. Clique, ou écris-le en toutes lettres.'
+              : '⭐ <b>Ton ami</b> — clique un ordre, ou écris-le en toutes lettres dans le chat.')
+    : `Vous n'êtes pas encore amis : écris « ${b.name} tu veux être mon ami ? », puis « ${b.name} veux-tu venir dans le gang ? »`;
+  let html = '';
+  for (const cat of ORDRES_CAT) {
+    const dispo = cat.l.filter(o => !o.gang || duGang);
+    if (!dispo.length) continue;
+    html += `<p class="osec">${cat.n}</p>`;
+    for (const o of dispo) html += `<button class="ocard" data-p="${o.p}"><span>${o.e}</span>${o.t}${o.d ? `<i>${o.d}</i>` : ''}</button>`;
+  }
+  $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-p]').forEach(btn => btn.addEventListener('click', () => {
+    const b2 = ordresBot; closeUI();
+    if (!b2) return;
+    chat(myCfg.name, `${b2.name} ${btn.dataset.p}`);
+    if (!commandeSociale(`${b2.name} ${btn.dataset.p}`)) botDit(b2, 'je ne sais pas faire ça 😅');
+  }));
+  openUI('ordres');
+  return true;
+}
+$('ordresBack').addEventListener('click', closeUI);
+// Le nom seul (ou le nom suivi de rien qu'on comprenne) ouvre la liste.
+function nomSeul(txt) {
+  const b = trouveBot(txt); if (!b) return null;
+  // sur le texte BRUT restant : en filtrant les mots outils, « Nathan suis moi » ne laissait
+  // rien du tout et ouvrait la liste au lieu de le faire te suivre.
+  const reste = norm(txt).replace(norm(b.name), ' ').replace(norm(b.name.split('_')[0]), ' ')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!reste) return b;
+  return /^(ordre|ordres|liste|aide|help|quoi|commande|commandes|liste des ordres|tes ordres|que peux tu faire)$/.test(reste) ? b : null;
 }
 
 // ---- actions nouvelles que l'on peut désormais demander ----

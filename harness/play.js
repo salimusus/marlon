@@ -3739,6 +3739,64 @@ test('on descend de voiture à côté, jamais dans la carrosserie ni dans un mur
     detail: r.map(v => `${v.nom} : ${v.refus ? 'montée refusée' : `on ressort à ${v.d} m, hors de la caisse=${!v.dansLaCaisse}, hors des murs=${!v.dansUnMur}`}`).join(' · ') };
 });
 
+test('la livraison du colis se termine dans le temps imparti', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G;
+    G.wallet = 0; G.startMission('livraison');
+    if (!G.mission.cur) return { erreur: 'mission refusée' };
+    G.P.pos.set(G.city.snack.x, 0.6, G.city.snack.z); G.P.vel.set(0, 0, 0);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const d = G.mission.data, limite = G.mission.limit, etape = G.mission.step;
+    if (!d.dest) return { erreur: 'pas de destination après le colis' };
+    // on suit l'itinéraire piéton, comme le ferait le joueur
+    if (!G.NAV.pieton) G.buildNav(true);
+    const auto = G.NAV.blocked; G.NAV.blocked = G.NAV.pieton;
+    const pth = G.navPath(G.P.pos.x, G.P.pos.z, d.dest[0], d.dest[1]);
+    G.NAV.blocked = auto;
+    let route = 0, a = [G.P.pos.x, G.P.pos.z];
+    for (const b of (pth || [])) { route += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
+    for (const q of (pth || [])) { G.P.pos.set(q[0], 0.6, q[1]); for (let i = 0; i < 10; i++) G.step(1 / 60, true); if (!G.mission.cur) break; }
+    if (G.mission.cur) { G.P.pos.set(d.dest[0], 0.6, d.dest[1]); for (let i = 0; i < 30; i++) G.step(1 / 60, true); }
+    return { etape, limite, route: Math.round(route), finie: !G.mission.cur, gain: G.wallet,
+      marge: +(limite - route / 3.2).toFixed(0) };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.etape === 1 && r.finie && r.gain > 0 && r.marge >= 25;
+  return { ok, detail: `colis récupéré au snack (étape ${r.etape}), maison la plus proche à ${r.route} m d'itinéraire, ${r.limite} s accordées (${r.marge} s de marge à 3,2 m/s) · livrée : ${r.finie}, +${r.gain} 🪙` };
+});
+
+test('écrire le nom de quelqu\'un ouvre la liste de ses ordres, et chacun s\'exécute', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G, ami = G.bots[0];
+    G.devenirAmi(ami);
+    const chiot = G.city.pets.find(x => x.kind === 'dog');
+    if (chiot) { G.P.pos.set(chiot.x, 0.5, chiot.z); G.adopterChien(chiot); }
+    G.P.pos.set(0, 0.5, 0); G.chien.attenteNom = false; G.wallet = 5000;
+    G.rejoindreGang(ami);
+    const ouvre = G.commandeSociale(ami.name) && G.uiOpen === 'ordres';
+    const phrases = [...document.querySelectorAll('#ordresGrid [data-p]')].map(b => b.dataset.p);
+    G.closeUI();
+    const rates = [];
+    for (const ph of phrases) {
+      ami.ordre = null; ami.rdv = null; ami.activite = null; ami.dance = 0; ami.wait = 0;
+      ami.bagarre = null; ami.garde = 0; ami.drive = null; ami.arme = false;
+      G.gang.mission = null; G.defi.on = null; G.chien.promeneur = null;
+      if (G.uiOpen) G.closeUI();
+      const compris = G.commandeSociale(ami.name + ' ' + ph);
+      const effet = G.gang.mission ? 'mission' : G.defi.on ? 'défi' : G.chien.promeneur ? 'promenade'
+        : ami.dance > 0 ? 'danse' : ami.rdv ? 'rdv' : ami.bagarre ? 'bagarre' : ami.garde ? 'garde'
+        : ami.arme ? 'armé' : ami.ordre ? 'ordre' : (G.uiOpen === 'ordres' ? null : 'réponse');
+      if (!compris || !effet) rates.push(ph);
+    }
+    if (G.uiOpen) G.closeUI();
+    return { duGang: G.estDuGang(ami), ouvre, n: phrases.length, rates };
+  });
+  const ok = r.ouvre && r.duGang && r.n >= 30 && r.rates.length === 0;
+  return { ok, detail: `le nom seul ouvre la liste (${r.n} ordres, membre du gang=${r.duGang}) et chacun s'exécute${r.rates.length ? ' · ratés : ' + r.rates.join(', ') : ''}` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

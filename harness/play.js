@@ -4622,8 +4622,11 @@ test('un membre joue vraiment au tennis contre toi, en trois jeux gagnants', asy
     const b = G.bots[0];
     G.amis.add(b.name);
     b.pos.set(20, 0.3, 10); b.rdv = null; b.sport = null; b.wait = 0; b.ko = 0;
-    G.botSport(b, 'tennis');
-    res.ordre = { cote: b.sport.cote, journal: (b.journal || []).map(o => o.t + ':' + o.etat) };
+    // ON PASSE PAR LA PHRASE, comme la carte 📣 : c'est ce chemin-là qui était cassé —
+    // une règle générique « on joue… » attrapait l'ordre avant et se contentait d'un
+    // rendez-vous, sans raquette et sans partie.
+    res.parLaPhrase = G.commandeSociale(`${b.name} on joue au tennis`);
+    res.ordre = { cote: b.sport ? b.sport.cote : null, journal: (b.journal || []).map(o => o.t + ':' + o.etat) };
     let tours = 0;
     for (let i = 0; i < 4000 && !(b.sport && b.sport.pret); i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); tours++; }
     res.arrivee = { pret: !!(b.sport && b.sport.pret), raquette: !!(b.av.racket && b.av.racket.visible),
@@ -4646,11 +4649,11 @@ test('un membre joue vraiment au tennis contre toi, en trois jeux gagnants', asy
     return res;
   });
   const gagnants = r.partie.dernier ? Math.max(r.partie.dernier.j[0], r.partie.dernier.j[1]) : 0;
-  const ok = r.arrivee.pret && r.arrivee.raquette && r.arrivee.cote === 1
+  const ok = r.parLaPhrase && r.ordre.cote === 1 && r.arrivee.pret && r.arrivee.raquette && r.arrivee.cote === 1
     && r.debut.match && r.debut.raquettePretee && r.debut.bot
     && r.partie.echanges > 10 && gagnants >= 2 && r.partie.fini && r.partie.sportEfface && !r.partie.raquetteBot
     && r.partie.journal.some(x => /partie au tennis:reussi/.test(x));
-  return { ok, detail: `« on joue au tennis » : il file au court (${r.arrivee.secondes} s), prend une raquette et se met de l'autre côté du filet · il t'en prête une si tu n'en as pas · la partie se joue en 3 jeux gagnants, ${r.partie.echanges} balles échangées, score final ${r.partie.dernier ? r.partie.dernier.j.join('–') : '?'} en jeux · à la fin chacun range sa raquette et l'ordre passe à « réussi »` };
+  return { ok, detail: `« <nom> on joue au tennis » écrit dans le chat (ou la carte 📣) lance une VRAIE partie : il file au court (${r.arrivee.secondes} s), prend une raquette et se met de l'autre côté du filet · il t'en prête une si tu n'en as pas · la partie se joue en 3 jeux gagnants, ${r.partie.echanges} balles échangées, score final ${r.partie.dernier ? r.partie.dernier.j.join('–') : '?'} en jeux · à la fin chacun range sa raquette et l'ordre passe à « réussi »` };
 });
 
 test('un membre joue au foot contre toi : partie en trois buts', async p => {
@@ -4932,6 +4935,42 @@ test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arri�
     && r.clic && /Ordres pour/.test(r.page2.titre) && r.page2.retour && r.page2.ordres > 10
     && /À qui donner un ordre/.test(r.apresRetour.titre) && !r.apresRetour.retour;
   return { ok, detail: `la première page du 📣 liste les missions en cours de tout le gang (« braquer la banque », « entraînement au stand de tir ») et chaque carte porte l'ordre du moment · un clic ouvre sa fiche (${r.page2.ordres} ordres) avec un bouton « ← Retour » qui ramène à la liste ; ce bouton n'apparaît pas sur la première page` };
+});
+
+
+test('une séance de sport paie vraiment, et l\'effort compte', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 18, hour: 12 });
+    const G = __G;
+    const seance = (kind, tousLesN, perfDepart) => {
+      G.P.perf = perfDepart; G.gym.on = null;
+      G.startGym(kind);
+      const t0 = G.simTime;
+      for (let i = 0; i < 60 * 45 && G.gym.on; i++) {
+        if (tousLesN && i % tousLesN === 0) G.P.jumpBuf = 1;
+        G.step(1 / 60, true); G.gymTick(1 / 60);
+      }
+      return { duree: Math.round(G.simTime - t0), gagne: G.perfDe(G.P) - perfDepart,
+        endu: G.stats.endu, sprint: +G.sprintDuree().toFixed(1) };
+    };
+    G.stats.m = 0; G.stats.f = 30; G.stats.endu = 0; G.stats.recBanc = 0; G.stats.recTapis = 0;
+    const res = {};
+    res.mou = seance('bench', 40, 10);        // il pousse mollement
+    G.stats.recBanc = 0;
+    res.intense = seance('bench', 6, 10);     // il s'arrache
+    G.stats.recBanc = 0;
+    res.expert = seance('bench', 6, 85);      // la même séance, mais déjà très fort
+    const enduAv = G.stats.endu, sprintAv = G.sprintDuree();
+    res.tapis = seance('run', 8, 10);
+    res.endurance = { avant: enduAv, apres: G.stats.endu, sprintAvant: +sprintAv.toFixed(1), sprintApres: +G.sprintDuree().toFixed(1) };
+    G.gym.on = null;
+    return res;
+  });
+  const ok = r.mou.gagne >= 4 && r.intense.gagne > r.mou.gagne + 2
+    && r.expert.gagne > 0 && r.expert.gagne < r.intense.gagne * 0.7
+    && r.mou.duree > 20 && r.intense.duree > 25
+    && r.endurance.apres > r.endurance.avant && r.endurance.sprintApres > r.endurance.sprintAvant + 0.5;
+  return { ok, detail: `la séance ne donne plus 3 points quoi qu'on fasse : elle SE PROLONGE tant qu'on force (${r.intense.duree} s au lieu de 8) et le gain suit l'effort — ${r.mou.gagne} points en poussant mollement, ${r.intense.gagne} en s'arrachant · et il devient plus dur de monter : la MÊME séance ne rapporte que ${r.expert.gagne} points à un athlète déjà à 85/100 · le tapis fait monter l'endurance (${r.endurance.avant} → ${r.endurance.apres}) et allonge vraiment le sprint : ${r.endurance.sprintAvant} s → ${r.endurance.sprintApres} s` };
 });
 
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste

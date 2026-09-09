@@ -6337,7 +6337,11 @@ const FOOT_ZONE = { x1: -23, x2: -3, z1: -23, z2: -3 };
 const DUEL_GAGNANTS = 3, JEU_POINTS = 4;
 const fm = { on: false, s: [0, 0], names: ['', ''], cote: 0, bot: null, graceT: 0 };
 const shots = [];   // projectiles laser
-const gym = { on: null, reps: 0, end: 0 };
+// Une séance dure 12 s au départ, et SE PROLONGE tant qu'on force : chaque répétition
+// (ou chaque foulée sur le tapis) rallonge le chrono, jusqu'à 34 s. Qui s'arrache
+// s'entraîne plus longtemps — et gagne davantage.
+const GYM_BASE = 12, GYM_MAX = 34;
+const gym = { on: null, reps: 0, end: 0, debut: 0, foulee: 0 };
 let uiOpen = null, aimPoint = new THREE.Vector3();
 const SHOP = {
   Chapeaux: [{ id: 'none', n: 'Tête nue', e: '🙂', p: 0 }, { id: 'beanie', n: 'Bonnet', e: '🧢', p: 8 }, { id: 'bob', n: 'Bob', e: '🪣', p: 9 }, { id: 'bandana', n: 'Bandana rouge', e: '🔴', p: 7 }, { id: 'bandanaB', n: 'Bandana bleu', e: '🔵', p: 7 }, { id: 'bandanaJ', n: 'Bandana jaune', e: '🟡', p: 7 }, { id: 'bandanaV', n: 'Bandana vert', e: '🟢', p: 7 }, { id: 'cagoule', n: 'Cagoule', e: '🥷', p: 16 }, { id: 'moto', n: 'Casque de moto', e: '🏍️', p: 22 }, { id: 'audio', n: 'Casque audio', e: '🎧', p: 14 }, { id: 'capuche', n: 'Capuche', e: '🧥', p: 11 }, { id: 'helmet', n: 'Casque de chantier', e: '⛑️', p: 10 }, { id: 'top', n: 'Haut-de-forme', e: '🎩', p: 15 }, { id: 'cowboy', n: 'Chapeau de cowboy', e: '🤠', p: 12 }, { id: 'pirate', n: 'Bicorne de pirate', e: '🏴‍☠️', p: 14 }, { id: 'crown', n: 'Couronne', e: '👑', p: 30 }],
@@ -6563,7 +6567,12 @@ const PAL = {
   jacket: [null, 0x1b2a4a, 0xff5c5c, 0x4f8dff, 0x5cc453, 0xffd23f, 0x111111],
   bag: [null, 0xff5c5c, 0x4f8dff, 0x5cc453, 0xb57cff, 0xffd23f],
 };
-const stats = store.json('superobby.stats', { m: 0, f: 0 });
+// `endu` : l'endurance, gagnée au tapis de course — elle allonge vraiment le sprint.
+// `recBanc` / `recTapis` : les records personnels, à battre pour un bonus.
+const stats = Object.assign({ m: 0, f: 0, endu: 0, recBanc: 0, recTapis: 0, seances: 0 }, store.json('superobby.stats', {}));
+const enduDe = () => clamp(stats.endu || 0, 0, 100);
+// Sprint : 6,5 s au départ, jusqu'à 14 s en pleine forme. La récupération suit.
+const sprintDuree = () => 6.5 + enduDe() * 0.075;
 const saveStats = () => store.set('superobby.stats', JSON.stringify(stats));
 const statMul = () => ({ speed: clamp(1 + stats.m / 100 * 0.15 - stats.f / 100 * 0.3, 0.65, 1.2), jump: clamp(1 + stats.m / 100 * 0.12 - stats.f / 100 * 0.2, 0.75, 1.15) });
 let wallet = +store.get('superobby.wallet') || 25;
@@ -8799,8 +8808,13 @@ function commandeExacte(txt) {
     venirAMoi(cible, lieu ? lieu.nom : null); return true;
   }
   if (/\b(on joue|jouer|partie|match|jeu)\b/.test(t)) {
-    const jeu = /foot/.test(t) ? 'au foot' : /tennis/.test(t) ? 'au tennis' : /course|kart|circuit/.test(t) ? 'à la course' : /boule|petanque|pétanque/.test(t) ? 'aux boules' : /cache/.test(t) ? 'à cache-cache' : 'ensemble';
-    const l = lieu || (jeu === 'au foot' ? lieuDe('foot') : jeu === 'au tennis' ? lieuDe('tennis') : jeu === 'à la course' ? lieuDe('circuit') : jeu === 'aux boules' ? lieuDe('parc') : lieuDe('parc'));
+    // TENNIS et FOOT : ce n'est pas un simple rendez-vous, c'est une VRAIE partie. Cette
+    // règle attrapait « on joue au tennis » AVANT le catalogue d'ordres : le membre allait
+    // au terrain les mains vides, sans raquette et sans jamais lancer la partie.
+    if (/tennis|raquette/.test(t)) return botSport(cible, 'tennis');
+    if (/foot|ballon/.test(t)) return botSport(cible, 'foot');
+    const jeu = /course|kart|circuit/.test(t) ? 'à la course' : /boule|petanque|pétanque/.test(t) ? 'aux boules' : /cache/.test(t) ? 'à cache-cache' : 'ensemble';
+    const l = lieu || (jeu === 'à la course' ? lieuDe('circuit') : lieuDe('parc'));
     if (l) { fixerRdv(cible, l, jeu); return true; }
   }
   return false;
@@ -9616,8 +9630,8 @@ function step(dt, active) {
     const bouge = len > 0.05;
     const peut = P.run && bouge && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on && !P.eat && P.energie > 0;
     P.court = peut;
-    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / 6.5); wantX *= 1.55; wantZ *= 1.55; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
-    else { P.energie = Math.min(100, P.energie + dt * (P.essouffle ? 100 / 11 : 100 / 7)); if (P.essouffle && P.energie > 45) P.essouffle = false; }
+    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / sprintDuree()); wantX *= 1.55; wantZ *= 1.55; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
+    else { P.energie = Math.min(100, P.energie + dt * (P.essouffle ? 100 / (11 - enduDe() * 0.03) : 100 / (7 - enduDe() * 0.02))); if (P.essouffle && P.energie > 45) P.essouffle = false; }
     const bar = $('stBar'); if (bar) { bar.style.width = P.energie + '%'; $('stBar').parentNode.classList.toggle('vide', P.essouffle); }
   }
   if (P.boostT > simTime) { wantX *= 1.8; wantZ *= 1.8; }
@@ -10636,8 +10650,11 @@ $('storeClose').addEventListener('click', closeUI);
 $('storeBtn').addEventListener('click', () => { if (running && city.on) openStore(); });
 function startGym(kind) {
   if (gym.on) return;
-  gym.on = kind; gym.reps = 0; gym.end = simTime + 8; P.vel.set(0, 0, 0);
-  msg(kind === 'bench' ? (isMobile ? '🏋️ Appuie vite sur SAUT pour soulever !' : '🏋️ Appuie vite sur Espace pour soulever !') : '🏃 Cours sur le tapis !', 1800); sfx.check();
+  gym.on = kind; gym.reps = 0; gym.debut = simTime; gym.end = simTime + GYM_BASE; gym.foulee = 0; gym.repT = 0; P.vel.set(0, 0, 0);
+  const touche = isMobile ? 'SAUT' : 'Espace';
+  msg(kind === 'bench' ? `🏋️ Appuie vite sur ${touche} pour soulever — chaque répétition rallonge la séance !`
+                       : `🏃 Appuie sur ${touche} au rythme de tes foulées : plus tu accélères, plus tu progresses !`, 3000);
+  sfx.check();
 }
 function gymTick(dt) {
   if (!gym.on) return;
@@ -10647,26 +10664,78 @@ function gymTick(dt) {
   if (st.y != null) P.pos.y = st.y;
   P.vel.set(0, 0, 0); P.grounded = true; P.facing = Math.PI;
   if (gym.on === 'bench') {
-    if (P.jumpBuf > 0) { P.jumpBuf = 0; gym.reps++; gym.pousse = simTime + 0.32; me.rig.swing = 0.3; sfx.tone(220 + gym.reps * 5, 0, .08, 'square', .05); }
+    // Une répétition est un VRAI mouvement : on ne compte pas plus de trois par seconde,
+    // sinon marteler la touche suffisait à devenir champion.
+    if (P.jumpBuf > 0) { P.jumpBuf = 0;
+      if (simTime > (gym.repT || 0)) { gym.repT = simTime + 0.3; gym.reps++; gym.pousse = simTime + 0.32; me.rig.swing = 0.3;
+        gym.end = Math.min(gym.debut + GYM_MAX, gym.end + 0.5);   // il force : la série continue
+        sfx.tone(220 + gym.reps * 5, 0, .08, 'square', .05); } }
     const b = city.gym.bench.barre;   // la barre monte à chaque répétition
     if (b && b.mesh) b.mesh.position.y = 1.6 + (simTime < (gym.pousse || 0) ? 0.3 : 0);   // elle monte quand il pousse
   } else {
-    gym.reps += dt * 1.5;
+    gym.reps += dt * 1.2;   // il trotte tout seul…
+    if (P.jumpBuf > 0) {    // …et chaque appui est une foulée : la bande accélère
+      P.jumpBuf = 0;
+      if (simTime > (gym.repT || 0)) { gym.repT = simTime + 0.26; gym.reps += 1; gym.foulee = simTime + 0.28;
+        gym.end = Math.min(gym.debut + GYM_MAX, gym.end + 0.45);
+        me.rig.swing = 0.2; sfx.tone(300 + (Math.round(gym.reps) % 8) * 12, 0, .05, 'square', .04); }
+    }
+    const vite = simTime < (gym.foulee || 0);
     for (const r of city.gym.run.rayures || []) {   // la bande défile sous les pieds
       if (!r.mesh) continue;
-      r.mesh.position.z += dt * 3.4;   // vers l'ARRIÈRE du coureur : il court sur place
+      r.mesh.position.z += dt * (vite ? 6.4 : 3.4);   // vers l'ARRIÈRE du coureur : il court sur place
       if (r.mesh.position.z > 19.9) r.mesh.position.z -= 2.75;
     }
   }
   const left = Math.max(0, gym.end - simTime);
-  $('act').textContent = gym.on === 'bench' ? `🏋️ ${gym.reps} reps · ${left.toFixed(0)}s` : `🏃 ${left.toFixed(0)}s`;
-  if (left <= 0) {
-    const r = gym.reps, dm = gym.on === 'bench' ? Math.round(r * 0.6) : Math.round(r * 0.15), df = gym.on === 'bench' ? -Math.round(r * 0.3) : -Math.round(r * 0.8);
-    stats.m = clamp(stats.m + dm, 0, 100); stats.f = clamp(stats.f + df, 0, 100); saveStats(); applyStats(me, stats.m, stats.f);
-    perfGagne(P, gym.on === 'bench' ? 3 : 2, 'entraînement');
-    msg(`💪 +${dm} muscle${df ? ` · ${df} ventre` : ''} (muscles ${stats.m}%)`, 2600); sfx.win(); bubble(me, pickOne(['je suis costaud !', 'ça brûle !', 'encore une série ?']));
-    gym.on = null; updateAct(); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
-  }
+  $('act').textContent = gym.on === 'bench' ? `🏋️ ${gym.reps} reps · ${left.toFixed(0)}s` : `🏃 ${Math.round(gym.reps)} foulées · ${left.toFixed(0)}s`;
+  if (left <= 0) finirSeance();
+}
+// FIN DE SÉANCE : le gain de performance dépend de ce qu'on a VRAIMENT fait, et il devient
+// plus dur à mesure qu'on monte — un débutant décolle, un athlète doit s'arracher. Avant,
+// toute séance donnait 3 points, qu'on ait fait deux répétitions ou trente.
+function finirSeance() {
+  if (!gym.on) return;
+  const banc = gym.on === 'bench';
+  const reps = Math.round(gym.reps), duree = Math.max(1, simTime - gym.debut);
+  const rythme = reps / duree;
+  const dm = banc ? Math.round(reps * 0.22) : Math.round(reps * 0.05);
+  const df = banc ? -Math.round(reps * 0.12) : -Math.round(reps * 0.3);
+  stats.m = clamp(stats.m + dm, 0, 100); stats.f = clamp(stats.f + df, 0, 100);
+  // l'effort réel : les répétitions rapportées à une bonne séance
+  const effort = clamp(reps / (banc ? 30 : 38), 0.25, 3.4);
+  const v0 = perfDe(P);
+  const rendement = clamp(1.3 - v0 / 105, 0.2, 1.3);   // 10 → 1.2 · 50 → 0.82 · 90 → 0.44
+  let gain = Math.max(1, Math.round((banc ? 3.2 : 2.6) * effort * rendement));
+  // record personnel battu : ça se paie
+  const cle = banc ? 'recBanc' : 'recTapis';
+  const record = reps > (stats[cle] || 0);
+  if (record) { stats[cle] = reps; gain += 2; }
+  // la régularité paie aussi : une séance sur deux machines dans la foulée
+  stats.seances = (stats.seances || 0) + 1;
+  const enchaine = gym.derniere && simTime - gym.derniere < 120 && gym.dernierType && gym.dernierType !== gym.on;
+  if (enchaine) gain += 2;
+  // l'endurance : le tapis la fait vraiment monter, le banc un peu
+  const dEndu = banc ? Math.round(effort * 0.7) : Math.round(effort * 3.5);
+  const enduAv = enduDe();
+  stats.endu = clamp(enduAv + dEndu, 0, 100);
+  saveStats(); applyStats(me, stats.m, stats.f);
+  const vraiGain = perfGagne(P, gain, null);
+  const v1 = perfDe(P);
+  P.energie = 100; P.essouffle = false;   // on sort de la salle en pleine forme
+  const lignes = [`💪 Séance finie : ${reps} ${banc ? 'répétitions' : 'foulées'} en ${Math.round(duree)} s (${rythme.toFixed(1)}/s)`];
+  lignes.push(`📈 Performance +${vraiGain} → ${v1}/100 ${perfEtoiles(v1)}`);
+  if (record) lignes.push(`🏆 Record personnel battu (${reps}) : +2 de bonus`);
+  if (enchaine) lignes.push('🔁 Deux machines à la suite : +2 de bonus');
+  if (dm) lignes.push(`🦾 Muscles +${dm} (${stats.m}%)`);
+  if (df) lignes.push(`🔥 Ventre ${df} (${stats.f}%)`);
+  if (stats.endu > enduAv) lignes.push(`🫁 Endurance +${stats.endu - enduAv} → ${stats.endu}/100 · tu tiens ${sprintDuree().toFixed(1)} s en sprint`);
+  msg(lignes.slice(0, 3).join(' · '), 5200); sfx.win(); sfx.cheer();
+  for (const l of lignes) chat(null, l);
+  bubble(me, record ? 'nouveau record ! 🏆' : pickOne(['je suis costaud !', 'ça brûle !', 'encore une série ?']));
+  gym.derniere = simTime; gym.dernierType = gym.on;
+  gym.on = null; updateAct(); majPerfHud();
+  if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
 }
 function toggleJet() {
   if (!city.jetNear && !P.jet) return;

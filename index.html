@@ -1579,7 +1579,7 @@ function immeubleZone(x, z, w, d, col, dir) {
       box(exf, top - rise / 2, zz, 2.4, rise, len + 0.06, 0x9a9088, { studs: false, noRoute: true });   // marche pleine
       box(exf + (f % 2 ? 1.25 : -1.25), top + 0.5, zz, 0.08, 1, 0.08, 0x6b6157, { deco: true, studs: false });   // rampe côté vide
     }
-    plat(ex + 1.3, y1 + 0.2, z + (d / 2 - 1) * sens, 5.4, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier reliant les deux bandes
+    plat(ex + 1.3, y1, z + (d / 2 - 1) * sens, 5.4, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier reliant les deux bandes, de plain-pied avec la dernière marche ET l'étage
   }
   // coursive : on passe du palier à l'appartement
   for (let f = 1; f < N; f++) plat(x + w / 4, f * H + 0.4, z + d / 2 + 0.9, w / 2 + 3.4, 1.8, 0x9a9088, { studs: false, noRoute: true }, 0.4);
@@ -4615,7 +4615,15 @@ function buildNiche(x, z, y, vx, vz) {   // niche du chien, contre le mur à cô
   const O = { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true };
   box(x - 0.78, y + 0.55, z, 0.2, 1.1, 1.7, 0, O);
   box(x, y + 0.55, z - 0.8, 1.7, 1.1, 0.2, 0, O); box(x, y + 0.55, z + 0.8, 1.7, 1.1, 0.2, 0, O);
-  city.niche = { x, z, y: y + 0.12, ry: Math.PI / 2, vx, vz };
+  // Gamelle à côté de la niche : « mange » envoie le chien manger ses croquettes ici.
+  const gx = x + 1.5, gz = z + 0.4;
+  const gam = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.24, 0.16, 14), lam(0x4f8dff));
+  gam.position.set(gx, y + 0.08, gz); worldGroup.add(gam);
+  const croq = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.06, 12), lam(0x8b5a2b));
+  croq.position.set(gx, y + 0.15, gz); worldGroup.add(croq);
+  const bol = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.22, 0.14, 14), lam(0x9fdcff));
+  bol.position.set(gx + 0.7, y + 0.07, gz); worldGroup.add(bol);   // et son bol d'eau
+  city.niche = { x, z, y: y + 0.12, ry: Math.PI / 2, vx, vz, gx, gz, gy: y + 0.12 };
 }
 function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage sur la rue (portail voitures), portillon piéton vers le perron, maison 2 étages, ascenseur, piscine et jardin
   const F = 4.6, mine = !!opt.mine, roof = opt.roof || 0xb03a2e, wallC = opt.wall || 0xf4efe2;
@@ -5805,7 +5813,10 @@ function agentsTick(dt) {
       if (d > 26) {
         if (!a.route || simTime > a.routeT || Math.hypot(tx - (a.rtx || 1e9), tz - (a.rtz || 1e9)) > 5) {
           a.routeT = simTime + 1.6; a.rtx = tx; a.rtz = tz;
-          const pth = navPath(a.x, a.z, tx, tz);
+          // à PIED : on suit la grille des piétons. Sur celle des voitures (marge d'une
+          // demi-voiture, et depuis peu une préférence pour la chaussée), un agent faisait
+          // le tour du pâté de maisons au lieu de couper par le trottoir.
+          const pth = navEnPieton(() => navPath(a.x, a.z, tx, tz));
           a.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
         }
         while (a.route.length > 1 && Math.hypot(a.route[0][0] - a.x, a.route[0][1] - a.z) < 1.6) a.route.shift();
@@ -7222,7 +7233,7 @@ function botSay(b, list) { const t = pickOne(list); chat(b.name, t, b.color); bu
 const amis = new Set(store.json('superobby.amis', []));
 const saveAmis = () => store.set('superobby.amis', JSON.stringify([...amis]));
 const estAmi = n => amis.has(String(n));
-const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null };
+const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null, ordre: null, ordreT: 0, poste: null, saut: 0, patte: 0, garde: 0, balle: null, repas: 0 };
 const coup = { etat: 'aucun', bot: null, car: null, route: null, routeT: 0, t: 0 };
 
 // Un message peut s'adresser à quelqu'un par son nom : « Lucas_2014 rendez-vous au parc ».
@@ -7479,7 +7490,9 @@ function botDriveTick(dt) {
     const moto = !!c.rider;
     const fermeB = caisseFermee(c);
     jambesEnCabine(b.av, fermeB);
-    const sx = moto ? 0 : 0.5, sz = moto ? 0.3 : (c.kind === 'truck' ? 2.55 : 0.3);
+    // Deux-roues : le conducteur est bien AVANT sur la selle et le passager derrière lui.
+    // À 0,30 et −0,62 les deux bonshommes se chevauchaient : on les écarte à 1,25 m.
+    const sx = moto ? 0 : 0.5, sz = moto ? 0.5 : (c.kind === 'truck' ? 2.55 : 0.3);
     const sy = moto ? (c.spec.seat - 0.55) : (c.kind === 'truck' ? 0.3 : (fermeB ? -0.2 : -0.35));
     b.av.group.visible = !net.on;
     b.av.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
@@ -7488,11 +7501,16 @@ function botDriveTick(dt) {
     b.av.rig.armL.rotation.x = b.av.rig.armR.rotation.x = -1.2;
     if (st.passager) {
       if (moto) {   // en croupe : on voit le joueur assis derrière, penché comme l'ami
-        const lz = -0.62;
+        const lz = -0.75;
         P.pos.set(c.x + lz * sn, c.y + c.spec.seat - 0.5, c.z + lz * cs); P.vel.set(0, 0, 0); P.facing = c.h;
         me.group.visible = true; me.group.position.copy(P.pos); me.group.rotation.set(0, c.h, c.tilt || 0, 'YXZ');
-        me.rig.armL.rotation.x = me.rig.armR.rotation.x = -1.1;
-        me.rig.legL.rotation.x = me.rig.legR.rotation.x = -0.55;
+        // vraie posture de passager : les bras tendus vers le conducteur, les jambes pliées
+        // sur les cale-pieds et légèrement écartées de part et d'autre de la selle
+        // les bras passent DE CHAQUE CÔTÉ du conducteur (et non au travers) : on les écarte
+        me.rig.armL.rotation.x = me.rig.armR.rotation.x = -1.05;
+        me.rig.armL.rotation.z = 0.34; me.rig.armR.rotation.z = -0.34;
+        me.rig.legL.rotation.x = me.rig.legR.rotation.x = -0.9;
+        me.rig.legL.rotation.z = 0.14; me.rig.legR.rotation.z = -0.14;
         cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.8, c.z), Math.min(1, dt * 6));
       } else {
         P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h; me.group.visible = false;
@@ -7565,8 +7583,89 @@ function chienAttaque(txt) {
   msg(`🐶 ${chien.nom || 'Le chien'} attaque ${cible.nom} !`, 2600); aboie(4);
   chat(null, `🐶 ${chien.nom || 'Le chien'} de ${myCfg.name} fonce sur ${cible.nom} !`);
 }
+// ================= LES ORDRES DU CHIEN =================
+// Le chien ne savait faire qu'une chose : attaquer. Il obéit maintenant comme un vrai
+// chien dressé — assis, couché, debout, reste, au pied, saute, la patte, aboie, mange,
+// dors, va chercher la balle, mords, défends-moi.
+const ORDRES_CHIEN = [
+  { id: 'assis', e: '🐕‍🦺', t: 'Assis', mots: /\bassis|assied|assieds|asseoir\b/, dit: 'il s\'assoit et te regarde' },
+  { id: 'couche', e: '😴', t: 'Couché', mots: /\bcouche|couché|couches|allonge|couchee\b/, dit: 'il se couche par terre' },
+  { id: 'debout', e: '🧍', t: 'Debout', mots: /\bdebout|leve toi|lève|releve\b/, dit: 'il se relève' },
+  { id: 'reste', e: '✋', t: 'Reste ici', mots: /\breste|attend|attends|bouge pas|pas bouger|stop\b/, dit: 'il ne bouge plus d\'ici' },
+  { id: 'suit', e: '🫡', t: 'Au pied', mots: /\bau pied|suis moi|suis|viens|ici|rejoin\w*\b/, dit: 'il te suit partout' },
+  { id: 'saute', e: '🦘', t: 'Saute', mots: /\bsaute|saut|jump\b/, dit: 'il fait un bond' },
+  { id: 'patte', e: '🐾', t: 'Donne la patte', mots: /\bla patte|donne la patte|patte\b/, dit: 'il lève la patte' },
+  { id: 'aboie', e: '📢', t: 'Aboie', mots: /\baboie|aboyer|parle|ouaf\b/, dit: 'ouaf ouaf !' },
+  { id: 'balle', e: '🎾', t: 'Va chercher la balle', mots: /\bballe|balle|rapporte|va chercher|fetch|jouer\b/, dit: 'tu lances, il rapporte' },
+  { id: 'mange', e: '🍖', t: 'Mange', mots: /\bmange|manger|gamelle|croquette|repas|faim\b/, dit: 'il file à sa gamelle' },
+  { id: 'dort', e: '🛏️', t: 'Dors', mots: /\bdors|dormir|dodo|niche|au lit\b/, dit: 'il va dormir dans sa niche' },
+  { id: 'garde', e: '🛡️', t: 'Défends-moi', mots: /\bdefend|défend|protege|protège|garde moi|garde\b/, dit: 'il mord quiconque t\'attaque' },
+  { id: 'mords', e: '🦷', t: 'Mords / Attaque', mots: /\bmords|mord|attaque|mordre\b/, dit: 'il fonce sur la cible' },
+];
+function chienNom() { return chien.nom || 'Le chien'; }
+function chienDit(t, ms = 2200) { msg(`🐶 ${chienNom()} : ${t}`, ms); }
+function chienPose(id, duree) {
+  const p = chien.pet; if (!p) return false;
+  chien.ordre = id; chien.ordreT = duree ? simTime + duree : 0;
+  chien.poste = (id === 'reste' || id === 'assis' || id === 'couche' || id === 'debout') ? { x: p.x, z: p.z } : null;
+  return true;
+}
+// « va chercher la balle » : on lance vraiment une balle devant soi, le chien la rapporte
+// et la laisse tomber à tes pieds. On peut relancer aussitôt.
+function chienBalle() {
+  const p = chien.pet; if (!p) { msg('🐶 Tu n\'as pas encore de chien', 1600); return false; }
+  if (chien.balle && chien.balle.m) worldGroup.remove(chien.balle.m);
+  const dist = 14 + Math.random() * 8;
+  const bx = P.pos.x + Math.sin(P.facing) * dist, bz = P.pos.z + Math.cos(P.facing) * dist;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), lam(0xd4ff4f));
+  m.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); worldGroup.add(m);
+  chien.balle = { m, x: bx, z: bz, y: 0.25, etat: 'vol', t: 0, dep: [P.pos.x, P.pos.y + 1.2, P.pos.z] };
+  chien.ordre = 'balle'; chien.ordreT = 0; chien.poste = null;
+  chienDit('ouaf ! il court après la balle 🎾', 2200); aboie(2);
+  return true;
+}
+function chienGamelle() {
+  const n = city.niche;
+  return n ? { x: n.gx != null ? n.gx : n.x + 1.5, z: n.gz != null ? n.gz : n.z + 0.4, y: n.gy != null ? n.gy : n.y } : null;
+}
+function chienOrdre(id, txt) {
+  const p = chien.pet;
+  if (!p) { msg('🐶 Tu n\'as pas encore de chien — approche-toi d\'un chien du parc et écris « adopte »', 3000); return true; }
+  const o = ORDRES_CHIEN.find(x => x.id === id); if (!o) return false;
+  if (id === 'mords') { chienAttaque(txt || ''); return true; }
+  if (id === 'balle') return chienBalle();
+  if (id === 'aboie') { aboie(3); chienDit('ouaf ouaf ! 📢', 1600); return true; }
+  if (id === 'saute') { chien.saut = simTime + 0.9; aboie(1); chienDit('hop ! 🦘', 1500); return true; }
+  if (id === 'patte') { chien.patte = simTime + 2.2; chienPose('assis'); aboie(1); chienDit('il te donne la patte 🐾', 2000); return true; }
+  if (id === 'garde') { chien.garde = simTime + 180; chien.ordre = 'suit'; chien.poste = null; chienDit('en garde ! il mordra quiconque t\'attaque 🛡️', 2800); aboie(2); return true; }
+  if (id === 'mange') { chien.ordre = 'mange'; chien.poste = null; chien.repas = 0; chienDit('il file à sa gamelle 🍖', 2200); return true; }
+  if (id === 'dort') { chien.ordre = 'dort'; chien.poste = null; chienDit('il va se coucher dans sa niche 🛏️', 2400); return true; }
+  chienPose(id);
+  chienDit(o.dit, 2000); aboie(1);
+  return true;
+}
+// Panier du chien à l'arrière du deux-roues : il n'apparaît que quand le chien est à bord.
+function panierChien(c, on) {
+  if (!c) return null;
+  if (on && !c.panier) {
+    const g = new THREE.Group();
+    const osier = lam(0xb98b52), bord = lam(0x8b5a2b);
+    const fond = new THREE.Mesh(unitRound, osier); fond.scale.set(0.62, 0.08, 0.72); g.add(fond);
+    for (const [dx, dz, w2, d2] of [[-0.31, 0, 0.06, 0.72], [0.31, 0, 0.06, 0.72], [0, -0.36, 0.62, 0.06], [0, 0.36, 0.62, 0.06]]) {
+      const m = new THREE.Mesh(unitRound, osier); m.scale.set(w2, 0.34, d2); m.position.set(dx, 0.2, dz); g.add(m);
+    }
+    const l1 = new THREE.Mesh(unitRound, bord); l1.scale.set(0.68, 0.06, 0.78); l1.position.y = 0.38; g.add(l1);
+    const cous = new THREE.Mesh(unitRound, lam(0xff8f3a)); cous.scale.set(0.54, 0.1, 0.64); cous.position.y = 0.09; g.add(cous);
+    c.g.add(g); c.panier = g;
+  }
+  if (c.panier) c.panier.visible = !!on;
+  return c.panier;
+}
 function chienTick(dt) {
   const p = chien.pet; if (!p) return;
+  // le panier ne reste pas accroché à un deux-roues que le chien a quitté
+  const surVeh = drive.car || (city.rideBot && city.rideBot.drive && city.rideBot.drive.passager ? city.rideBot.drive.car : null);
+  if (chien.panierVeh && chien.panierVeh !== surVeh) { panierChien(chien.panierVeh, false); chien.panierVeh = null; }
   const niche = city.niche;
   // mordre : le chien court sur sa cible et la secoue
   if (chien.attaque && simTime < chien.attaqueT) {
@@ -7595,6 +7694,91 @@ function chienTick(dt) {
     }
   }
   chien.attaque = null;
+  // ---- il exécute l'ordre reçu ----
+  // « défends-moi » : dès que quelqu'un s'en prend au maître, le chien lui saute dessus
+  if (chien.garde > simTime && !chien.attaque) {
+    for (const b of bots) {
+      if (b.ko || !b.av.group.visible) continue;
+      if (b.fight && b.fight !== 'flee' && simTime < (b.fightT || 0) && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 9) { chienAttaque(b.name); break; }
+    }
+  }
+  const saute = chien.saut > simTime ? Math.abs(Math.sin((chien.saut - simTime) * 7)) * 0.9 : 0;
+  if (chien.ordre === 'balle' && chien.balle) {
+    const bl = chien.balle;
+    if (bl.etat === 'vol') {   // la balle vole en cloche
+      bl.t += dt * 1.6;
+      if (bl.t >= 1) { bl.t = 1; bl.etat = 'sol'; }
+      const tx = bl.dep[0] + (bl.x - bl.dep[0]) * bl.t, tz = bl.dep[2] + (bl.z - bl.dep[2]) * bl.t;
+      const sol = groundUnder(tx, tz, null, 6);
+      bl.m.position.set(tx, sol + 0.25 + Math.sin(bl.t * Math.PI) * 4, tz);
+      if (bl.etat === 'sol') { bl.y = sol + 0.25; bl.m.position.set(bl.x, bl.y, bl.z); sfx.tone(500, 0, .06, 'sine', .04, 320); }
+    }
+    const versBalle = bl.etat === 'sol' || bl.etat === 'vol';
+    const cible = versBalle ? { x: bl.x, z: bl.z } : { x: P.pos.x, z: P.pos.z };
+    const dxb = cible.x - p.x, dzb = cible.z - p.z, db = Math.hypot(dxb, dzb) || 1;
+    if (db > (versBalle ? 0.9 : 1.6)) {
+      const o = { x: p.x, y: p.y - 0.3, z: p.z };
+      npcMove(o, dxb / db * 8 * dt, dzb / db * 8 * dt, 0.3); p.x = o.x; p.z = o.z;
+      p.facing = Math.atan2(dxb, dzb);
+      p.tail.rotation.y = Math.sin(simTime * 18) * 0.6;
+    } else if (versBalle && bl.etat === 'sol') {
+      bl.etat = 'gueule'; aboie(1);
+    } else if (bl.etat === 'gueule') {
+      worldGroup.remove(bl.m); chien.balle = null; chien.ordre = 'suit';
+      burst(p.x, p.y + 0.6, p.z, 0xd4ff4f, 6); aboie(2);
+      chienDit('il te rapporte la balle ! Relance quand tu veux 🎾', 2400);
+    }
+    p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+    p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 14)) * 0.09 + saute, p.z);
+    if (bl.etat === 'gueule' && bl.m) bl.m.position.set(p.x + Math.sin(p.facing) * 0.5, p.y + 0.7, p.z + Math.cos(p.facing) * 0.5);
+    let dhb = p.facing - p.g.rotation.y; dhb = Math.atan2(Math.sin(dhb), Math.cos(dhb)); p.g.rotation.y += dhb * Math.min(1, dt * 10);
+    return;
+  }
+  if (chien.ordre === 'mange' || chien.ordre === 'dort') {
+    const but = chien.ordre === 'mange' ? chienGamelle() : (city.niche ? { x: city.niche.x, z: city.niche.z, y: city.niche.y } : null);
+    if (!but) { chien.ordre = 'suit'; chienDit('il ne trouve ni gamelle ni niche — elles sont à ta villa 🏠', 2800); }
+    else {
+      const dxm = but.x - p.x, dzm = but.z - p.z, dm = Math.hypot(dxm, dzm);
+      if (dm > 0.6) {
+        if (dm > 40) { p.x = but.x; p.z = but.z; }
+        else { const o = { x: p.x, y: p.y - 0.3, z: p.z }; npcMove(o, dxm / dm * 5 * dt, dzm / dm * 5 * dt, 0.3); p.x = o.x; p.z = o.z; }
+        p.facing = Math.atan2(dxm, dzm);
+        p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+        p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 12)) * 0.08, p.z);
+        p.g.rotation.x = 0;
+      } else {
+        p.x = but.x; p.z = but.z; p.y = but.y != null ? but.y : groundUnder(p.x, p.z, null, p.y + 0.9);
+        if (chien.ordre === 'mange') {
+          p.g.position.set(p.x, p.y - 0.05, p.z);
+          p.g.rotation.x = 0.35 + Math.sin(simTime * 9) * 0.12;   // la tête plonge dans la gamelle
+          p.tail.rotation.y = Math.sin(simTime * 10) * 0.5;
+          if (!chien.repas) { chien.repas = simTime + 8; chienDit('miam ! il mange ses croquettes 🍖', 2200); sfx.tone(300, 0, .1, 'sine', .04, 200); }
+          if (simTime > chien.repas) { chien.repas = 0; chien.ordre = 'suit'; p.g.rotation.x = 0; chienDit('il a fini son repas, ventre plein ! 🐶', 2200); aboie(2); }
+        } else {
+          p.g.position.set(p.x, p.y - 0.17, p.z);
+          p.g.rotation.x = 0.06 + Math.sin(simTime * 1.4) * 0.03;   // il dort, il respire
+          p.tail.rotation.y = Math.sin(simTime * 1.2) * 0.12;
+          chien.couche = true;
+        }
+      }
+      let dhm = p.facing - p.g.rotation.y; dhm = Math.atan2(Math.sin(dhm), Math.cos(dhm)); p.g.rotation.y += dhm * Math.min(1, dt * 6);
+      return;
+    }
+  }
+  if (chien.poste && (chien.ordre === 'assis' || chien.ordre === 'couche' || chien.ordre === 'debout' || chien.ordre === 'reste')) {
+    p.x = chien.poste.x; p.z = chien.poste.z;
+    p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+    const versMaitre = Math.atan2(P.pos.x - p.x, P.pos.z - p.z);
+    p.facing = versMaitre;
+    const patte = chien.patte > simTime;
+    if (chien.ordre === 'couche') { p.g.position.set(p.x, p.y - 0.17, p.z); p.g.rotation.x = 0.06 + Math.sin(simTime * 1.6) * 0.02; chien.couche = true; }
+    else if (chien.ordre === 'assis') { p.g.position.set(p.x, p.y - 0.06 + saute, p.z); p.g.rotation.x = -0.42; chien.couche = false; }
+    else { p.g.position.set(p.x, p.y + saute, p.z); p.g.rotation.x = 0; chien.couche = false; }
+    p.tail.rotation.y = Math.sin(simTime * (patte ? 12 : 4)) * (patte ? 0.6 : 0.3);
+    if (patte && Math.random() < dt * 2) burst(p.x, p.y + 0.5, p.z, 0xffd23f, 2);
+    let dhp = p.facing - p.g.rotation.y; dhp = Math.atan2(Math.sin(dhp), Math.cos(dhp)); p.g.rotation.y += dhp * Math.min(1, dt * 6);
+    return;
+  }
   // à la villa, quand le maître s'assoit ou se couche, le chien va dans sa niche
   const dansVilla = niche && Math.abs(P.pos.x - niche.vx) < 22 && Math.abs(P.pos.z - niche.vz) < 22;
   const repos = dansVilla && (P.sit || (P.sleep && simTime < P.sleep));
@@ -7632,12 +7816,23 @@ function chienTick(dt) {
   // En véhicule : le chien a sa place dans CHACUN d'eux. L'hélicoptère et le jet-ski en
   // étaient exclus (le chien restait planté sur le tarmac), et le camion n'avait pas de
   // repère à lui.
-  if (drive.car) {
-    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h), dessus = !!c.rider;
+  // On embarque aussi quand c'est un AMI qui conduit : avant, le chien restait planté sur
+  // le trottoir pendant que son maître partait en moto.
+  const vehChien = drive.car || (city.rideBot && city.rideBot.drive && city.rideBot.drive.passager ? city.rideBot.drive.car : null);
+  if (vehChien) {
+    const c = vehChien, cs = Math.cos(c.h), sn = Math.sin(c.h), dessus = !!c.rider;
     let lx, lz, ly;
     if (c.heli) { lx = -0.6; lz = 0.25; ly = (c.y != null ? 0 : 0) + 0.55; }            // à côté du pilote, dans la bulle
     else if (c.kind === 'jetski') { lx = 0; lz = -0.85; ly = 0.95; }                     // en croupe, derrière le pilote
-    else if (dessus) { lx = 0; lz = -0.8; ly = ((c.spec && c.spec.seat ? c.spec.seat : 1) - 0.2); }   // vélo, moto, scooter
+    else if (dessus) {
+      // deux-roues : le chien voyage dans son panier, tout à l'arrière — et derrière le
+      // passager quand un ami conduit, sinon il lui montait sur les genoux
+      const av = !!(city.rideBot && city.rideBot.drive && city.rideBot.drive.passager && city.rideBot.drive.car === c);
+      panierChien(c, true); chien.panierVeh = c;
+      const pz = av ? -1.3 : -1.1;
+      if (c.panier) c.panier.position.set(0, (c.spec && c.spec.seat ? c.spec.seat : 1) - 0.36, pz);
+      lx = 0; lz = pz; ly = ((c.spec && c.spec.seat ? c.spec.seat : 1) - 0.08);
+    }
     else if (c.kind === 'truck') { lx = -0.52; lz = 2.45; ly = 1.2; }                    // cabine du camion
     else { lx = -0.52; lz = 0.05; ly = 0.45; }                                           // siège passager
     p.x = c.x + lx * cs + lz * sn; p.z = c.z - lx * sn + lz * cs; p.y = c.y + ly;
@@ -7661,7 +7856,7 @@ function chienTick(dt) {
     p.tail.rotation.y = Math.sin(simTime * 14) * 0.5;
   } else { p.facing = Math.atan2(dx, dz); p.tail.rotation.y = Math.sin(simTime * 6) * 0.4; }
   p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
-  p.g.position.set(p.x, p.y + (d > 1.9 ? Math.abs(Math.sin(simTime * 12)) * 0.08 : 0), p.z);
+  p.g.position.set(p.x, p.y + (d > 1.9 ? Math.abs(Math.sin(simTime * 12)) * 0.08 : 0) + (chien.saut > simTime ? Math.abs(Math.sin((chien.saut - simTime) * 7)) * 0.9 : 0), p.z);
   let dh = p.facing - p.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); p.g.rotation.y += dh * Math.min(1, dt * 8);
   if (simTime > chien.aboiT) { chien.aboiT = simTime + rnd(7, 16); aboie(1); }
 }
@@ -7772,6 +7967,18 @@ function commandeExacte(txt) {
   if (ordreGang(txt)) return true;   // ordres collectifs au gang (avant le chien : « allez attaquer les bleus »)
   // « attaque … » ne veut pas dire « chien, mords-le » quand la phrase parle d'un gang :
   // cette branche avalait « attaque un membre d'un gang adverse » et le chien partait seul.
+  // ---- les ordres du chien ----
+  // Le nom du chien tout seul ouvre sa liste d'ordres, comme pour un ami.
+  if (chien.pet && chien.nom && norm(txt).replace(/[^a-z0-9]+/g, ' ').trim() === norm(chien.nom)) { openOrdresChien(); return true; }
+  if (chien.pet || /\bchien|chiot|toutou\b/.test(t)) {
+    const viseChien = !trouveBot(txt) || /\bchien|chiot|toutou\b/.test(t) || (chien.nom && t.includes(norm(chien.nom)));
+    if (viseChien) {
+      for (const o of ORDRES_CHIEN) {
+        if (o.id === 'mords') continue;   // traité juste après, avec le garde-fou des gangs
+        if (o.mots.test(t)) { chienOrdre(o.id, txt); return true; }
+      }
+    }
+  }
   if (/\battaque|mords|mord\b/.test(t) && !/\b(gang|rival|rivaux|adverse|ennemi|rouges|bleus|jaunes)\b/.test(t)) { chienAttaque(txt); return true; }
   if (/\b(adopte|adopter|j.?adopte|je veux ce chien)\b/.test(t)) {
     const p = city.pets.filter(x => x.kind === 'dog').map(x => ({ x, d: Math.hypot(x.x - P.pos.x, x.z - P.pos.z) })).sort((a, b) => a.d - b.d)[0];
@@ -8102,6 +8309,23 @@ function openOrdres(b) {
   return true;
 }
 $('ordresBack').addEventListener('click', closeUI);
+// La même liste cliquable, mais pour le chien.
+function openOrdresChien() {
+  if (!chien.pet) { msg('🐶 Tu n\'as pas encore de chien — approche-toi d\'un chien du parc et écris « adopte »', 3200); return false; }
+  ordresBot = null;
+  $('ordresTitre').textContent = `🐶 Ordres pour ${chienNom()}`;
+  $('ordresSub').innerHTML = 'Clique un ordre, ou écris-le dans le chat (« ' + (chien.nom || 'le chien') + ' assis », « va chercher la balle »…).';
+  let html = '<p class="osec">🎓 Dressage</p>';
+  for (const o of ORDRES_CHIEN) html += `<button class="ocard" data-chien="${o.id}"><span>${o.e}</span>${o.t}<i>${o.dit}</i></button>`;
+  $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-chien]').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.chien; closeUI();
+    chat(myCfg.name, `${chien.nom || 'chien'} ${(ORDRES_CHIEN.find(o => o.id === id) || {}).t || id}`);
+    chienOrdre(id, '');
+  }));
+  openUI('ordres');
+  return true;
+}
 // Encore fallait-il connaître le nom de quelqu'un pour ouvrir sa liste : le bouton 📣
 // affiche d'abord QUI on peut commander (le gang d'abord, puis les amis, puis les gens
 // autour), et un clic ouvre ses ordres.
@@ -8114,6 +8338,7 @@ function openQui() {
     lignes.push({ titre, l }); l.forEach(b => vus.add(b));
   };
   ajoute(gang.membres || [], '😎 Ton gang');
+  const avecChien = !!chien.pet;
   ajoute(bots.filter(b => estAmi(b.name)), '⭐ Tes amis');
   ajoute(bots.filter(b => dist(b) < 40), '🙋 Autour de toi');
   $('ordresTitre').textContent = '📣 À qui donner un ordre ?';
@@ -8121,11 +8346,13 @@ function openQui() {
     ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
     : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.';
   let html = '';
+  if (avecChien) html += `<p class="osec">🐶 Ton chien</p><button class="ocard" data-chienqui="1"><span>🐶</span>${chienNom()}<i>assis, couché, la balle, mords…</i></button>`;
   for (const { titre, l } of lignes) {
     html += `<p class="osec">${titre}</p>`;
     for (const b of l) html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : estAmi(b.name) ? ' · ami' : ''}</i></button>`;
   }
   $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-chienqui]').forEach(btn => btn.addEventListener('click', () => openOrdresChien()));
   $('ordresGrid').querySelectorAll('[data-qui]').forEach(btn => btn.addEventListener('click', () => {
     const b = bots.find(x => x.name === btn.dataset.qui); if (b) openOrdres(b);
   }));
@@ -8348,7 +8575,9 @@ function updateBot(b, dt) {
       if (dr > (b.rdv.suit ? 1.1 : 1.8)) {
         // en ligne droite il restait bloqué contre le premier mur : on suit un itinéraire
         if (!b.rdvRoute || simTime > (b.rdvRouteT || 0)) { b.rdvRouteT = simTime + 3;
-          const pth = navPath(b.pos.x, b.pos.z, b.rdv.x, b.rdv.z);
+          // un bot qui MARCHE se guide sur la grille des piétons : sur celle des voitures il
+          // ne pouvait plus atteindre un comptoir de boutique et faisait des détours par la rue
+          const pth = navEnPieton(() => navPath(b.pos.x, b.pos.z, b.rdv.x, b.rdv.z));
           b.rdvRoute = pth && pth.length ? pth.concat([[b.rdv.x, b.rdv.z]]) : [[b.rdv.x, b.rdv.z]]; }
         while (b.rdvRoute.length > 1 && Math.hypot(b.rdvRoute[0][0] - b.pos.x, b.rdvRoute[0][1] - b.pos.z) < 1.8) b.rdvRoute.shift();
         const w = b.rdvRoute[0];
@@ -9243,7 +9472,7 @@ function cityVie(dt) {
   const plainteNear = !!city.plainteDesk && Math.hypot(P.pos.x - city.plainteDesk.x, P.pos.z - city.plainteDesk.z) < 3 && !drive.car;
   if (plainteNear !== city.plainteNear) { city.plainteNear = plainteNear; if (plainteNear && !isMobile) msg('📝 E : déposer une plainte', 2000); }
   const tuneNear = !!city.tuneDesk && Math.hypot(P.pos.x - city.tuneDesk.x, P.pos.z - city.tuneDesk.z) < 3 && !drive.car;
-  if (tuneNear !== city.tuneNear) { city.tuneNear = tuneNear; if (tuneNear && !isMobile) msg('🎨 E : préparer ta voiture (peinture, kits, moteur, nitro)', 2200); }
+  if (tuneNear !== city.tuneNear) { city.tuneNear = tuneNear; if (tuneNear && !isMobile) msg('🔧 E : garage — réparation, peinture, kits, moteur, nitro', 2200); }
   const vit = city.vitrines.find(v => Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < v.r) || null;
   if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · E pour acheter`, 1500); }
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
@@ -10631,13 +10860,21 @@ const TATOO_ENCRES = [
   { k: 'rouge', n: 'Rouge', c: '#d42b2b' }, { k: 'vert', n: 'Vert', c: '#2fa04a' },
   { k: 'dore', n: 'Doré', c: '#e0a820' }, { k: 'violet', n: 'Violet', c: '#8b4fd0' },
 ];
-const TATOO_TAILLES = [{ k: 'petit', n: 'Petit', s: 0.18, p: 15 }, { k: 'moyen', n: 'Moyen', s: 0.28, p: 30 }, { k: 'gros', n: 'Gros', s: 0.40, p: 55 }];
+const TATOO_TAILLES = [{ k: 'petit', n: 'Petit', s: 0.18, p: 15 }, { k: 'moyen', n: 'Moyen', s: 0.28, p: 30 },
+  { k: 'gros', n: 'Gros', s: 0.40, p: 55 },
+  // deux tailles de plus : de quoi couvrir tout un dos ou tout un bras
+  { k: 'tresgros', n: 'Très gros', s: 0.56, p: 90 }, { k: 'geant', n: 'Géant', s: 0.78, p: 140 }];
+const TATOO_EFFACE = 20;   // prix du détatouage au laser, par motif
 const TATOO_ZONES = [
   { k: 'brasG', n: 'Bras gauche', e: '💪' }, { k: 'brasD', n: 'Bras droit', e: '💪' },
   { k: 'epauleG', n: 'Épaule gauche', e: '🫱' }, { k: 'epauleD', n: 'Épaule droite', e: '🫲' },
   { k: 'cou', n: 'Cou', e: '🧣' }, { k: 'torse', n: 'Torse', e: '🫀' }, { k: 'dos', n: 'Dos', e: '🔙' },
   { k: 'cuisseG', n: 'Cuisse gauche', e: '🦵' }, { k: 'cuisseD', n: 'Cuisse droite', e: '🦵' },
   { k: 'molletG', n: 'Mollet gauche', e: '🦿' }, { k: 'molletD', n: 'Mollet droit', e: '🦿' },
+  // les emplacements « de derrière », qu'on ne pouvait pas choisir
+  { k: 'nuque', n: 'Nuque (arrière du cou)', e: '💈' },
+  { k: 'arriereBrasG', n: 'Arrière du bras gauche', e: '🫱' }, { k: 'arriereBrasD', n: 'Arrière du bras droit', e: '🫲' },
+  { k: 'arriereMolletG', n: 'Arrière du mollet gauche', e: '🦿' }, { k: 'arriereMolletD', n: 'Arrière du mollet droit', e: '🦿' },
 ];
 // dessins : chaque motif reçoit un contexte 2D de 128×128 déjà réglé sur la bonne encre
 const TATOO_MOTIFS = [
@@ -10752,6 +10989,12 @@ function tatooPlace(av, zone) {
     case 'cuisseD': return { p: av.rig.legR, x: D, y: -0.18, z: 0, ry: Math.PI / 2 };
     case 'molletG': return { p: av.rig.legL, x: -D, y: -0.5, z: 0, ry: -Math.PI / 2 };
     case 'molletD': return { p: av.rig.legR, x: D, y: -0.5, z: 0, ry: Math.PI / 2 };
+    // faces arrière : même hauteur, mais l'encre regarde vers l'arrière (-z)
+    case 'nuque': return { p: av.rig.head, x: 0, y: 0.02, z: -0.26, ry: Math.PI };
+    case 'arriereBrasG': return { p: av.rig.armL, x: 0, y: -0.34, z: -0.17, ry: Math.PI };
+    case 'arriereBrasD': return { p: av.rig.armR, x: 0, y: -0.34, z: -0.17, ry: Math.PI };
+    case 'arriereMolletG': return { p: av.rig.legL, x: 0, y: -0.5, z: -0.17, ry: Math.PI };
+    case 'arriereMolletD': return { p: av.rig.legR, x: 0, y: -0.5, z: -0.17, ry: Math.PI };
     default: return null;
   }
 }
@@ -11407,6 +11650,8 @@ function tunePrix(t) {   // ce qu'il reste à payer par rapport à ce qui est d�
 }
 function openAtelier() {
   atelierBrouillon = { couleur: tuning.couleur, finition: tuning.finition, kits: [...tuning.kits], moteur: tuning.moteur, amorti: tuning.amorti };
+  const ab = tuneCible();
+  atelierTab = (ab && ((ab.dmg || 0) > 0 || ab.dead)) ? 'repare' : 'peinture';   // caisse cabossée : on ouvre direct sur la réparation
   openUI('atelier'); majAtelier();
 }
 let atelierBrouillon = null;
@@ -11414,11 +11659,28 @@ function majAtelier() {
   const t = atelierBrouillon, c = tuneCible();
   $('atelierVoiture').textContent = c ? (drive.car === c ? '🚗 Ta voiture (tu es au volant)' : '🚗 Voiture garée à ' + Math.round(Math.hypot(c.x - P.pos.x, c.z - P.pos.z)) + ' m')
     : '⚠️ Gare une voiture devant le comptoir pour la préparer';
-  $('atelierOnglets').innerHTML = [['peinture', '🎨 Peinture'], ['kits', '🧰 Kits'], ['moteur', '⚙️ Moteur'], ['amorti', '🛞 Amortisseurs']]
+  $('atelierOnglets').innerHTML = [['repare', '🔧 Réparation'], ['peinture', '🎨 Peinture'], ['kits', '🧰 Kits'], ['moteur', '⚙️ Moteur'], ['amorti', '🛞 Amortisseurs']]
     .map(([k, n]) => `<b data-t="${k}" class="${atelierTab === k ? 'sel' : ''}">${n}</b>`).join('');
   $('atelierOnglets').querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { atelierTab = b.dataset.t; majAtelier(); }));
   let h = '';
-  if (atelierTab === 'peinture') {
+  if (atelierTab === 'repare') {
+    // Atelier de réparation : on voit l'état de la caisse et ce que coûte la remise à neuf.
+    // Avant, il fallait deviner qu'en se garant pile devant le garage la voiture se réparait
+    // toute seule — personne ne le trouvait.
+    const abime = c ? Math.round(c.dmg || 0) : 0;
+    const px = c ? prixRepare(c) : 0;
+    h += '<div class="tunelist">';
+    if (!c) h += '<button class="tunebtn large" disabled><b>🚗 Aucune voiture au comptoir</b><i>Gare ton véhicule devant l\'atelier, ou viens au volant</i></button>';
+    else {
+      const plein = Math.round(abime / 100 * 12);
+      h += `<button class="tunebtn large" data-etat="1"><b>${c.dead ? '💥 Épave' : abime > 60 ? '🔥 Très abîmée' : abime > 25 ? '🔧 Cabossée' : abime > 0 ? '🩹 Quelques rayures' : '✨ Comme neuve'}</b>`
+        + `<span>${abime} % de dégâts</span><i>${'█'.repeat(plein)}${'░'.repeat(12 - plein)} — au-delà de 50 % elle fume et perd de la vitesse</i></button>`;
+      h += `<button class="tunebtn large ${px ? '' : 'on'}" data-rep="1"><b>🔧 Réparation complète</b><span>${px ? px + ' 🪙' : 'rien à faire'}</span>`
+        + `<i>${px ? 'Carrosserie redressée, vitres remplacées, moteur remis à neuf' : 'Ta voiture est déjà en parfait état'}</i></button>`;
+      h += '<button class="tunebtn large" data-lave="1"><b>🧽 Lavage</b><span>5 🪙</span><i>On enlève la poussière et les traces de pneus</i></button>';
+    }
+    h += '</div>';
+  } else if (atelierTab === 'peinture') {
     h += '<div class="nuancier">' + TUNE_COULEURS.map((c2, i) =>
       `<i data-c="${i}" class="${t.couleur === c2 ? 'sel' : ''}" style="background:#${c2.toString(16).padStart(6, '0')}"></i>`).join('') + '</div>';
     h += '<div class="tunerow">' + TUNE_FINITIONS.map(f =>
@@ -11442,11 +11704,44 @@ function majAtelier() {
     const i = t.kits.indexOf(k); if (i >= 0) t.kits.splice(i, 1); else t.kits.push(k); majAtelier(); apercu(); }));
   box2.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { t.moteur = +b.dataset.m; majAtelier(); apercu(); }));
   box2.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => { t.amorti = +b.dataset.a; majAtelier(); apercu(); }));
+  box2.querySelectorAll('[data-rep]').forEach(b => b.addEventListener('click', () => repareAtelier()));
+  box2.querySelectorAll('[data-lave]').forEach(b => b.addEventListener('click', () => laveAtelier()));
   const prix = tunePrix(t);
-  $('atelierPrix').textContent = prix > 0 ? `Total : ${prix} 🪙 (tu as ${wallet} 🪙)` : `Rien à payer — tu as déjà tout ça (${wallet} 🪙)`;
+  if (atelierTab === 'repare') $('atelierPrix').textContent = `Tu as ${wallet} 🪙 — clique sur la réparation, c'est immédiat`;
+  else $('atelierPrix').textContent = prix > 0 ? `Total : ${prix} 🪙 (tu as ${wallet} 🪙)` : `Rien à payer — tu as déjà tout ça (${wallet} 🪙)`;
   $('atelierOk').disabled = prix > wallet || !tuneCible();
   $('atelierOk').style.opacity = ($('atelierOk').disabled ? 0.5 : 1);
   function apercu() { const c2 = tuneCible(); if (c2) tuneApply(c2, t); }
+}
+// La note dépend des dégâts : 10 🪙 pour trois rayures, jusqu'à 120 🪙 pour une épave.
+function prixRepare(c) {
+  if (!c) return 0;
+  const d = c.dmg || 0;
+  if (!d && !c.dead) return 0;
+  return Math.max(10, Math.round(d * 0.9) + (c.dead ? 30 : 0));
+}
+function repareAtelier() {
+  const c = tuneCible();
+  if (!c) { msg('🚗 Gare d\'abord une voiture devant le comptoir', 2200); return; }
+  const px = prixRepare(c);
+  if (!px) { msg('✨ Ta voiture est déjà comme neuve', 1800); return; }
+  if (px > wallet) { msg(`💰 Il te faut ${px} 🪙 pour la réparation`, 2200); return; }
+  wallet -= px; saveWallet(); updateHud();
+  c.dmg = 0; c.dead = false; repairVisual(c);
+  if (c.hp != null) c.hp = 100;
+  burst(c.x, (c.y || 0) + 1, c.z, 0x3ef2ff, 18); sfx.register(); sfx.win();
+  msg(`🔧 Voiture réparée à neuf ! −${px} 🪙`, 2600);
+  chat(null, `🔧 ${myCfg.name} a fait réparer sa voiture au garage (${px} 🪙)`);
+  majAtelier();
+}
+function laveAtelier() {
+  const c = tuneCible();
+  if (!c) { msg('🚗 Gare d\'abord une voiture devant le comptoir', 2200); return; }
+  if (wallet < 5) { msg('💰 Il te faut 5 🪙 pour le lavage', 2000); return; }
+  wallet -= 5; saveWallet(); updateHud();
+  for (let i = 0; i < 3; i++) setTimeout(() => { try { burst(c.x, (c.y || 0) + 1.2, c.z, 0x9fdcff, 10); sfx.tone(900 + i * 120, 0, .12, 'sine', .03); } catch (e) {} }, i * 220);
+  msg('🧽 Voiture lavée, elle brille ! −5 🪙', 2200);
+  majAtelier();
 }
 function validerAtelier() {
   const t = atelierBrouillon, c = tuneCible(), prix = tunePrix(t);
@@ -11674,16 +11969,26 @@ function majTatoo() {
   try { m.d(g, tatoo.mot); } catch (e) {}
   g.restore();
   const liste = myCfg.tatouages || [];
+  // DÉTATOUAGE : on peut faire retirer un motif au laser (ou tout effacer d'un coup). Avant,
+  // la petite croix effaçait en silence et personne ne la voyait — c'était la seule façon.
   $('tatooListe').innerHTML = liste.length
     ? liste.map((t, i) => { const mm = TATOO_MOTIFS.find(x => x.k === t.motif), zz = TATOO_ZONES.find(x => x.k === t.zone);
-        return `<b>${mm ? mm.e : '🖊️'} ${mm ? mm.n : t.motif} · ${zz ? zz.n : t.zone} <u data-del="${i}">✕</u></b>`; }).join('')
+        const tt = TATOO_TAILLES.find(x => x.k === t.taille);
+        return `<b>${mm ? mm.e : '🖊️'} ${mm ? mm.n : t.motif} · ${zz ? zz.n : t.zone}${tt ? ' · ' + tt.n.toLowerCase() : ''} <u data-del="${i}">🧽 Effacer · ${TATOO_EFFACE} 🪙</u></b>`; }).join('')
+      + (liste.length > 1 ? `<b style="background:#ffe9e9"><u data-tout="1">🧽 Tout effacer · ${TATOO_EFFACE * liste.length} 🪙</u></b>` : '')
     : '<span style="color:#7a86a0;font-weight:600">Aucun tatouage pour l\'instant.</span>';
-  $('tatooListe').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-    myCfg.tatouages.splice(+b.dataset.del, 1); applyMyLook();
-    store.set('superobby.avatar', JSON.stringify(myLook()));
+  const effacer = (n, indices) => {
+    const cout = TATOO_EFFACE * n;
+    if (wallet < cout) { msg(`🧽 Le détatouage au laser coûte ${cout} 🪙 — il t'en manque ${cout - wallet}`, 2600); return; }
+    wallet -= cout; saveWallet(); updateHud();
+    indices.sort((a, b2) => b2 - a).forEach(i => myCfg.tatouages.splice(i, 1));
+    applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook()));
     if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
-    msg('🧽 Tatouage effacé', 1400); majTatoo();
-  }));
+    msg(`🧽 ${n > 1 ? n + ' tatouages effacés' : 'Tatouage effacé'} au laser · −${cout} 🪙`, 2400);
+    sfx.tone(900, 0, .25, 'sine', .04, 1400); sfx.win(); majTatoo();
+  };
+  $('tatooListe').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => effacer(1, [+b.dataset.del])));
+  $('tatooListe').querySelectorAll('[data-tout]').forEach(b => b.addEventListener('click', () => effacer(liste.length, liste.map((x, i) => i))));
   const p = tatooPrix();
   $('tatooPrix').textContent = `${p} 🪙 (tu as ${wallet} 🪙) · ${liste.length} tatouage${liste.length > 1 ? 's' : ''} sur la peau`;
   $('tatooOk').disabled = p > wallet;

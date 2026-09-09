@@ -109,6 +109,7 @@ window.__SHOT = {
     cam.freeUntil = 1e9;                         // fige l'orientation demandée
     if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
     if (v.salonTV && typeof ouvreSalonTV === 'function') { try { ouvreSalonTV(); } catch (e9) {} }
+    if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
@@ -428,6 +429,12 @@ window.__G = {
   appliqueRendu: typeof appliqueRendu === 'function' ? appliqueRendu : null,
   ratioRendu: typeof ratioRendu === 'function' ? ratioRendu : null,
   demarreTV: typeof demarreTV === 'function' ? demarreTV : null,
+  tvPasseLaMain: typeof tvPasseLaMain === 'function' ? tvPasseLaMain : null,
+  tvHeberge: typeof tvHeberge === 'function' ? tvHeberge : null,
+  manetteOuvre: typeof manetteOuvre === 'function' ? manetteOuvre : null,
+  manetteFerme: typeof manetteFerme === 'function' ? manetteFerme : null,
+  man: typeof man !== 'undefined' ? man : null,
+  castLance: typeof castLance === 'function' ? castLance : null,
   MANETTE_HZ: typeof MANETTE_HZ !== 'undefined' ? MANETTE_HZ : 0,
   PLAFOND_TV: typeof PLAFOND_TV !== 'undefined' ? PLAFOND_TV : 0,
   netteteTextures: typeof netteteTextures === 'function' ? netteteTextures : null,

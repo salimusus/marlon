@@ -5948,7 +5948,7 @@ test('on connecte une smart TV et le telephone sert de manette', async p => {
     const badge = document.getElementById('tvBadge');
     const badgeVu = badge && getComputedStyle(badge).display !== 'none' && /manette/i.test(badge.textContent);
     G.modeTV(false); G.closeUI();
-    return { lien, finTV: /#tv$/.test(lien), codeManette, lienManette,
+    return { lien, finTV: /#tv(=[A-Z]{4})?$/.test(lien), codeManette, lienManette,
       qrTV: qr('qrTV'), qrManette: qr('qrManette'), cartes, boutonCast,
       vuAvecApi, vuSansApi, texteApi, texteSansApi, copie,
       castPret: G.castPret(), route, enTV, avant, routeMan, badgeVu };
@@ -6059,4 +6059,73 @@ test('le joystick du telephone repond sans decalage', async p => {
   });
   const ok = r.hz >= 50 && r.periode <= 20;
   return { ok, detail: `la manette n'envoyait la position du pouce que 25 fois par seconde : 40 ms de retard AVANT même le réseau, et le personnage partait toujours un cran après le doigt · elle envoie maintenant ${r.hz} fois par seconde (${r.periode} ms), sur un canal « non fiable » où les paquets ne s'accumulent jamais` };
+});
+
+test('la tele et l\'ordinateur affichent le MÊME code de manette', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.tv.cede = false;
+    G.ouvreSalonTV();
+    const surOrdi = document.getElementById('tvCode').textContent.trim();
+    const lien = G.lienTV();
+    const dansLien = (/#tv=([A-Z]{4})$/.exec(lien) || [])[1];
+    G.tvPasseLaMain();                     // on envoie le jeu sur la télé : cet écran lâche le code
+    const cede = G.tv.cede;
+    G.closeUI();
+    location.hash = '#tv=' + dansLien;     // la télé ouvre le lien
+    const route = G.routeLien();
+    await new Promise(r2 => setTimeout(r2, 700));
+    const surTV = document.getElementById('tvCode').textContent.trim();
+    const enVille = !!G.city.on;
+    location.hash = ''; G.modeTV(false); G.closeUI(); G.tv.cede = false;
+    return { surOrdi, dansLien, surTV, cede, route, enVille };
+  });
+  const ok = /^[A-Z]{4}$/.test(r.surOrdi) && r.dansLien === r.surOrdi && r.surTV === r.surOrdi
+    && r.cede === true && r.route === 'tv' && r.enVille;
+  return { ok, detail: `l'ordinateur affichait un code et la télé en tirait un AUTRE au hasard en ouvrant le lien : on scannait forcément le mauvais · le code voyage maintenant dans le lien (#tv=CODE) et l'écran qui passe la main lâche le sien pour que la télé le reprenne — ${r.surOrdi} sur l'ordinateur, ${r.dansLien} dans le lien, ${r.surTV} sur la télé · si la télé trouve le code encore occupé elle le redemande au lieu d'en inventer un nouveau, et on peut reprendre la main ici d'un bouton` };
+});
+
+test('la manette du telephone a une croix directionnelle, pas un joystick', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.manetteOuvre('');
+    document.getElementById('manette').classList.add('pret');
+    const croix = document.getElementById('telCroix');
+    if (!croix) return { pourquoi: 'pas de croix' };
+    const fl = [...croix.querySelectorAll('[data-d]')];
+    const boite = d => { const e = croix.querySelector('[data-d="' + d + '"]'); const b = e.getBoundingClientRect();
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: Math.round(b.width) }; };
+    const appuie = dirs => {
+      dirs.forEach((d, i) => { const b = boite(d);
+        croix.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 10 + i, clientX: b.x, clientY: b.y, bubbles: true })); });
+      const out = { x: +G.man.x.toFixed(3), y: +G.man.y.toFixed(3), allumees: croix.querySelectorAll('.fl.on').length };
+      dirs.forEach((d, i) => window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 10 + i, bubbles: true })));
+      return out;
+    };
+    const haut = appuie(['u']), bas = appuie(['d']), gauche = appuie(['l']), droite = appuie(['r']);
+    const diag = appuie(['u', 'r']);
+    const repos = { x: G.man.x, y: G.man.y };
+    // on doit pouvoir GLISSER d'une flèche a l'autre sans relever le pouce
+    const b1 = boite('l'), b2 = boite('u');
+    croix.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 30, clientX: b1.x, clientY: b1.y, bubbles: true }));
+    const avant = { x: G.man.x, y: G.man.y };
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 30, clientX: b2.x, clientY: b2.y, bubbles: true }));
+    const apres = { x: G.man.x, y: G.man.y };
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 30, bubbles: true }));
+    const sansJoystick = !document.getElementById('telStick') && !document.getElementById('telKnob') && !document.getElementById('telBase');
+    const taille = boite('u').w;
+    G.manetteFerme();
+    return { n: fl.length, taille, haut, bas, gauche, droite, diag, repos, avant, apres,
+      fin: { x: G.man.x, y: G.man.y }, sansJoystick };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.n === 4 && r.taille >= 44 && r.sansJoystick
+    && r.haut.y === 1 && r.bas.y === -1 && r.gauche.x === -1 && r.droite.x === 1
+    && Math.abs(r.haut.x) < 0.01 && Math.abs(r.gauche.y) < 0.01
+    && r.diag.allumees === 2 && Math.abs(r.diag.x - 0.707) < 0.01 && Math.abs(r.diag.y - 0.707) < 0.01
+    && r.repos.x === 0 && r.repos.y === 0
+    && r.avant.x === -1 && r.apres.y === 1 && r.apres.x === 0 && r.fin.x === 0 && r.fin.y === 0;
+  return { ok, detail: `le joystick tactile demandait de viser un centre invisible puis de doser la poussée : sans relief sous le pouce on partait toujours de travers · c'est maintenant une CROIX de manette de salon — ${r.n} grandes flèches de ${r.taille} px (▲ y=${r.haut.y}, ▼ y=${r.bas.y}, ◀ x=${r.gauche.x}, ▶ x=${r.droite.x}), deux appuis ensemble donnent la diagonale sans aller 41 % plus vite (${r.diag.x} / ${r.diag.y}) · et on GLISSE d'une flèche a l'autre sans relever le pouce (gauche → haut suivi en direct), tout revient a zéro au relâchement` };
 });

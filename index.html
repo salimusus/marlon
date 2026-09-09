@@ -412,11 +412,21 @@ body.tv #tvBadge.on{display:block}
 #telJeu{flex:1;display:none;position:relative}
 #manette.pret #telJeu{display:block}
 #manette.pret #telCo{display:none}
-#telStick{position:absolute;left:0;top:0;width:52%;height:100%}
-#telBase{position:absolute;left:50%;top:52%;width:min(46vw,240px);height:min(46vw,240px);transform:translate(-50%,-50%);
-  border-radius:50%;background:rgba(255,255,255,.09);border:2px solid rgba(255,255,255,.3)}
-#telKnob{position:absolute;left:50%;top:50%;width:38%;height:38%;transform:translate(-50%,-50%);border-radius:50%;
-  background:rgba(255,255,255,.9);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+/* LA CROIX DIRECTIONNELLE, comme sur une manette de salon. Le joystick tactile demandait de
+   viser le centre puis de doser la poussée : sur un téléphone, sans relief sous le pouce, on
+   partait toujours de travers. Quatre grandes flèches, on les sent au coin de l'écran, et
+   deux appuis ensemble donnent la diagonale. */
+#telCroix{position:absolute;left:0;top:0;width:52%;height:100%;display:grid;place-content:center;
+  grid-template-columns:repeat(3,auto);grid-template-rows:repeat(3,auto);
+  gap:8px;padding:10px;touch-action:none}
+#telCroix .fl{width:clamp(58px,15vw,96px);height:clamp(58px,15vw,96px);border-radius:18px;
+  border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.13);color:#fff;
+  font-size:clamp(22px,5.5vw,34px);font-weight:800;display:grid;place-items:center;
+  line-height:1;touch-action:none;user-select:none;-webkit-user-select:none;transition:background .06s,transform .06s}
+#telCroix .fl.on{background:rgba(255,210,63,.6);border-color:#ffd23f;transform:scale(.94)}
+#telCroix .haut{grid-area:1/2}#telCroix .gauche{grid-area:2/1}#telCroix .centre{grid-area:2/2}
+#telCroix .droite{grid-area:2/3}#telCroix .bas{grid-area:3/2}
+#telCroix .centre{background:rgba(255,255,255,.05);border-style:dashed;pointer-events:none}
 #telVise{position:absolute;right:0;top:0;width:48%;height:56%;background:rgba(255,255,255,.03);
   border-left:1px dashed rgba(255,255,255,.14)}
 #telVise span{position:absolute;left:50%;top:16%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.35);font-weight:800;text-align:center;width:88%}
@@ -429,11 +439,11 @@ body.tv #tvBadge.on{display:block}
 #telBar{display:flex;gap:8px;padding:6px 10px calc(env(safe-area-inset-bottom) + 6px)}
 #telBar input{flex:1;border:1px solid rgba(255,255,255,.28);background:rgba(0,0,0,.35);color:#fff;border-radius:10px;padding:9px;font-size:14px;font-weight:700;outline:none}
 #telBar button{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:10px;padding:9px 12px;font-size:16px;font-weight:800}
-/* téléphone tenu à l'horizontale : le pouce gauche sur le stick, le droit sur les boutons,
+/* téléphone tenu à l'horizontale : le pouce gauche sur la croix, le droit sur les boutons,
    et la zone caméra au milieu pour qu'ils ne se marchent plus dessus */
 @media (orientation:landscape){
-  #telStick{width:34%}
-  #telBase{width:min(30vw,190px);height:min(30vw,190px)}
+  #telCroix{width:34%;gap:4px;padding:6px}
+  #telCroix .fl{width:clamp(44px,13vh,74px);height:clamp(44px,13vh,74px);font-size:clamp(17px,4vh,26px);border-radius:14px}
   #telVise{left:34%;right:40%;width:auto;height:100%;border-right:1px dashed rgba(255,255,255,.14)}
   #telBtns{left:auto;right:8px;width:38%;top:50%;bottom:auto;transform:translateY(-50%);gap:6px}
   .tb{height:clamp(36px,13vh,56px);font-size:clamp(11px,1.9vw,15px);border-radius:12px}
@@ -585,7 +595,13 @@ body.tv #tvBadge.on{display:block}
     <p id="telErr" style="color:#ffd23f"></p>
   </div>
   <div id="telJeu">
-    <div id="telStick"><div id="telBase"><div id="telKnob"></div></div></div>
+    <div id="telCroix">
+      <button class="fl haut" data-d="u" aria-label="avancer">▲</button>
+      <button class="fl gauche" data-d="l" aria-label="gauche">◀</button>
+      <button class="fl centre" aria-hidden="true"></button>
+      <button class="fl droite" data-d="r" aria-label="droite">▶</button>
+      <button class="fl bas" data-d="d" aria-label="reculer">▼</button>
+    </div>
     <div id="telVise"><span>glisse ici pour tourner la caméra</span></div>
     <div id="telBtns">
       <button class="tb gros" data-b="saut">SAUT</button>
@@ -13601,7 +13617,16 @@ function tvManettesMaj() {
 // lien #tv et son QR, à ouvrir dans le navigateur de la télé. Dans les deux cas la page
 // s'ouvre directement en affichage géant.
 const cast = { req: null, session: null, dispo: false };
-function lienTV() { return lienBase() + '#tv'; }
+function lienTV() { if (!tv.code) tv.code = makeCode(); return lienBase() + '#tv=' + tv.code; }
+// On passe la main à la télé : on lâche le code pour qu'elle puisse le prendre. Si on rouvre
+// ce salon sans être allé au bout, on le reprend — rien n'est perdu.
+function tvPasseLaMain() {
+  if (!tv.peer) { tv.cede = true; return false; }
+  try { tv.peer.destroy(); } catch (e) {}
+  tv.peer = null; tv.on = false; tv.conns.length = 0; tv.cede = true; tv.essais = 0;
+  tvManettesMaj();
+  return true;
+}
 function castPret() { return typeof PresentationRequest !== 'undefined'; }
 function castPrepare() {
   if (!castPret() || cast.req) return cast.req;
@@ -13623,9 +13648,10 @@ function castMaj() {
   if (!b || !e) return;
   b.style.display = '';
   if (cast.session) { b.textContent = '📴 Arrêter la diffusion'; e.textContent = 'Le jeu tourne sur ta télé. Ton téléphone reste la manette.'; return; }
+  if (tv.cede) { b.textContent = '↩️ Reprendre la main ici'; e.textContent = `Le code ${tv.code} appartient maintenant à la TÉLÉ : c'est elle qui attend ton téléphone. Le lien ci-dessous porte ce même code — les deux écrans afficheront donc le même.`; return; }
   if (!castPret()) {
     b.textContent = '📋 Copier le lien pour la télé';
-    e.textContent = 'Ce navigateur ne sait pas diffuser tout seul (il faut Chrome ou Edge, en https). Copie le lien, ouvre-le dans le navigateur de ta télé — ou scanne le QR avec ton téléphone puis partage-le à la télé. Le jeu démarre directement en grand.';
+    e.textContent = 'Ce navigateur ne sait pas diffuser tout seul (il faut Chrome ou Edge, en https). Copie le lien, ouvre-le dans le navigateur de ta télé — ou scanne le QR avec ton téléphone puis partage-le à la télé. Le lien porte le code, la télé affichera donc le MÊME que celui d\'ici.';
     return;
   }
   b.textContent = cast.dispo ? '📡 Diffuser sur la télé' : '📡 Chercher une télé';
@@ -13647,22 +13673,26 @@ function copieLienTV() {
   return l;
 }
 function castLance() {
+  if (tv.cede && !cast.session) { tv.cede = false; tvHeberge(tv.code); tvSalonMaj(); return; }
   if (cast.session) { try { cast.session.terminate(); } catch (e) {} cast.session = null; castMaj(); return; }
   const r = castPrepare();
-  if (!r) { copieLienTV(); return; }
+  if (!r) { copieLienTV(); tvPasseLaMain(); castMaj(); return; }
   r.start().then(sess => {
-    cast.session = sess; castMaj();
+    cast.session = sess; tvPasseLaMain(); castMaj();
     msg('📺 C\'est parti sur la télé ! Ton téléphone reste la manette', 3200);
     sess.addEventListener('terminate', () => { cast.session = null; castMaj(); });
   }).catch(() => { msg('📺 Aucune télé choisie — tu peux aussi ouvrir le lien sur la télé', 3000); castMaj(); });
 }
-function tvHeberge() {
+// LE MÊME CODE DES DEUX CÔTÉS. L'ordinateur affichait un code, la télé en tirait un autre au
+// hasard en ouvrant le lien : on scannait le mauvais. Le code voyage maintenant DANS le lien
+// (#tv=CODE), et l'écran qui passe la main libère le sien pour que la télé le reprenne.
+function tvHeberge(force) {
   if (typeof Peer === 'undefined') { $('tvManettes').textContent = 'Pas de connexion : la manette a besoin d\'Internet.'; return; }
   if (tv.peer) return;
-  const code = net.on && net.code ? net.code : makeCode();
+  const code = force || tv.code || (net.on && net.code ? net.code : makeCode());
   let peer;
   try { peer = new Peer('superobby-tv-' + code, { debug: 0 }); } catch (e) { return; }
-  tv.peer = peer; tv.code = code;
+  tv.peer = peer; tv.code = code; tv.cede = false;
   peer.on('open', () => { tv.on = true; tvSalonMaj(); });
   peer.on('connection', c => {
     c.on('open', () => { tv.conns.push(c); tel.on = true; tvManettesMaj();
@@ -13672,7 +13702,14 @@ function tvHeberge() {
     const fin = () => { const i = tv.conns.indexOf(c); if (i >= 0) tv.conns.splice(i, 1); tel.x = tel.y = 0; P.run = false; tvManettesMaj(); };
     c.on('close', fin); c.on('error', fin);
   });
-  peer.on('error', e => { if (e.type === 'unavailable-id') { tv.peer = null; setTimeout(tvHeberge, 400); } });
+  // « identifiant déjà pris » : c'est l'autre écran qui n'a pas encore lâché CE code. On le
+  // rappelle, au lieu d'en tirer un nouveau — sinon la télé changeait de code toute seule.
+  peer.on('error', e => {
+    if (e.type !== 'unavailable-id') return;
+    tv.peer = null; tv.essais = (tv.essais || 0) + 1;
+    if (tv.essais <= 8) setTimeout(() => tvHeberge(code), 700);
+    else { tv.essais = 0; tv.code = makeCode(); setTimeout(() => tvHeberge(tv.code), 200); }
+  });
   peer.on('disconnected', () => { try { peer.reconnect(); } catch (_) {} });
 }
 function tvSalonMaj() {
@@ -13756,34 +13793,39 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
 // ---- les gestes sur le téléphone-manette --------------------------------------------
 (() => {
   const el = id => document.getElementById(id);
-  const stick = el('telStick'), base = el('telBase'), knob = el('telKnob'), vise = el('telVise');
-  let sid = null, vid = null, dernier = 0;
-  const R = () => base.getBoundingClientRect().width / 2;
-  stick.addEventListener('pointerdown', e => {
-    e.preventDefault(); sid = e.pointerId;
-    const b = stick.getBoundingClientRect();
-    base.style.left = (e.clientX - b.left) + 'px'; base.style.top = (e.clientY - b.top) + 'px';
-    man.cx = e.clientX; man.cy = e.clientY;
-    try { stick.setPointerCapture(e.pointerId); } catch (_) {}
+  const croix = el('telCroix'), vise = el('telVise');
+  // --- LA CROIX : on suit chaque doigt et on regarde quelle flèche est dessous, pour qu'on
+  // puisse GLISSER d'une flèche à l'autre sans relever le pouce (et en presser deux). ---
+  const doigts = new Map();   // pointerId → flèche sous le doigt
+  const fleches = [...croix.querySelectorAll('[data-d]')];
+  const sousLeDoigt = (x, y) => { const e = document.elementFromPoint(x, y); return e && e.closest ? e.closest('#telCroix [data-d]') : null; };
+  function majCroix() {
+    const on = new Set([...doigts.values()].filter(Boolean).map(f => f.dataset.d));
+    for (const f of fleches) f.classList.toggle('on', on.has(f.dataset.d));
+    let x = (on.has('r') ? 1 : 0) - (on.has('l') ? 1 : 0);
+    let y = (on.has('u') ? 1 : 0) - (on.has('d') ? 1 : 0);
+    if (x && y) { x *= Math.SQRT1_2; y *= Math.SQRT1_2; }   // en diagonale on ne va pas 41 % plus vite
+    man.x = x; man.y = y;
+  }
+  croix.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { e.target.releasePointerCapture && e.target.releasePointerCapture(e.pointerId); } catch (_) {}
+    const f = sousLeDoigt(e.clientX, e.clientY);
+    doigts.set(e.pointerId, f); majCroix();
+    if (f && navigator.vibrate) navigator.vibrate(12);
   });
-  stick.addEventListener('pointermove', e => {
-    if (e.pointerId !== sid) return;
-    let dx = e.clientX - man.cx, dy = e.clientY - man.cy;
-    const d = Math.hypot(dx, dy), r = R();
-    if (d > r) { dx *= r / d; dy *= r / d; }
-    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    // zone morte franche puis réponse progressive : on marche doucement au centre,
-    // on court quand on pousse à fond — c'est ce qui manquait au joystick tactile
-    let mag = Math.min(1, d / r); mag = mag < 0.14 ? 0 : (mag - 0.14) / 0.86;
-    mag = mag * (0.55 + 0.45 * mag);
-    const nx = d > 0.01 ? dx / d : 0, ny = d > 0.01 ? dy / d : 0;
-    man.x = nx * mag; man.y = -ny * mag;
+  window.addEventListener('pointermove', e => {
+    if (!doigts.has(e.pointerId)) return;
+    const av = doigts.get(e.pointerId), f = sousLeDoigt(e.clientX, e.clientY);
+    if (f === av) return;
+    doigts.set(e.pointerId, f); majCroix();
+    if (f && navigator.vibrate) navigator.vibrate(8);
   });
-  const lache = e => {
-    if (e.pointerId === sid) { sid = null; man.x = man.y = 0; knob.style.transform = 'translate(-50%,-50%)'; manEnvoie({ t: 'ax', x: 0, y: 0 }); }
-    if (e.pointerId === vid) vid = null;
-  };
-  stick.addEventListener('pointerup', lache); stick.addEventListener('pointercancel', lache);
+  for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, e => {
+    if (!doigts.has(e.pointerId)) return; doigts.delete(e.pointerId); majCroix();
+  });
+  // --- la moitié droite : glisser pour tourner la caméra ---
+  let vid = null;
   vise.addEventListener('pointerdown', e => { e.preventDefault(); vid = e.pointerId; man.lx = e.clientX; man.ly = e.clientY;
     try { vise.setPointerCapture(e.pointerId); } catch (_) {} });
   vise.addEventListener('pointermove', e => {
@@ -13791,6 +13833,7 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
     manEnvoie({ t: 'look', dx: e.clientX - man.lx, dy: e.clientY - man.ly });
     man.lx = e.clientX; man.ly = e.clientY;
   });
+  const lache = e => { if (e.pointerId === vid) vid = null; };
   vise.addEventListener('pointerup', lache); vise.addEventListener('pointercancel', lache);
   // 25 messages par seconde, c'était 40 ms de retard AVANT même le réseau : le personnage
   // partait toujours un cran après le pouce. On passe à 60 par seconde — le canal est en
@@ -13896,7 +13939,8 @@ function routeLien() {
   if (m) { manetteOuvre(m[1] ? m[1].toUpperCase() : ''); return 'manette'; }
   const j = /^jeu=([A-Za-z]{4})$/.exec(h);
   if (j) { const c = j[1].toUpperCase(); $('codeIn').value = c; setTimeout(() => joinGame(c), 400); return 'jeu'; }
-  if (h === 'tv' || /^tv=/.test(h)) { demarreTV(); return 'tv'; }
+  const t = /^tv(?:=([A-Za-z]{4}))?$/.exec(h);
+  if (t) { demarreTV(t[1] ? t[1].toUpperCase() : ''); return 'tv'; }
   return null;
 }
 // LA TÉLÉ DÉMARRE TOUTE SEULE. En arrivant par le lien #tv, la page s'arrêtait sur l'écran
@@ -13904,8 +13948,9 @@ function routeLien() {
 // d'accueil et rien d'autre. Elle enchaîne maintenant jusqu'à la ville, montre le code de la
 // manette en grand, et referme cet écran dès qu'un téléphone répond.
 let tvAuto = false;
-function demarreTV() {
+function demarreTV(code) {
   modeTV(true); tvAuto = true;
+  if (code) tv.code = code;   // le code vient du lien : la télé affiche EXACTEMENT le même que l'autre écran
   document.body.classList.remove('lobby');
   setTimeout(() => {
     try {

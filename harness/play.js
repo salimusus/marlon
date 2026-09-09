@@ -3589,7 +3589,8 @@ test('les escaliers de la banque ne rasent plus le mur', async p => {
     const G = __G, bk = G.city.bank;
     // pour chaque volée : de quelle épaisseur est la bande de marbre inutile contre le mur ?
     return bk.esc.map(e => {
-      const marches = G.solids.filter(o => Math.abs(o.z - e.z) < 2.5 && o.h < 0.3 && o.y > e.y0 && o.y < e.y1 + 1);
+      // les marches sont des blocs pleins (hauts d'une contremarche) et larges de 3,60 m
+      const marches = G.solids.filter(o => Math.abs(o.z - e.z) < 0.3 && Math.abs(o.d - 3.6) < 0.25 && o.w > 1.3 && o.w < 1.8 && o.y > e.y0 && o.y < e.y1 + 1);
       const prof = marches.length ? Math.max(...marches.map(o => o.d)) : 0;
       const murNord = e.z < bk.z, bordVolee = murNord ? e.z - prof / 2 : e.z + prof / 2;
       // la vraie face intérieure du mur, pas le plan nominal : le mur a une épaisseur

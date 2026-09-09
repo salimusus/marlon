@@ -1555,7 +1555,7 @@ function immeubleZone(x, z, w, d, col, dir) {
     const sens = f % 2 ? -1 : 1, z0 = z - (d / 2 - 1) * sens;
     for (let i = 0; i < n; i++) {
       const zz = z0 + sens * (i * len + len / 2), top = y0 + (i + 1) * rise;
-      box(ex, top - 0.09, zz, 2.4, 0.18, len + 0.06, 0x9a9088, { studs: false, noRoute: true });
+      box(ex, top - rise / 2, zz, 2.4, rise, len + 0.06, 0x9a9088, { studs: false, noRoute: true });   // marche pleine
       box(ex + 1.25, top + 0.5, zz, 0.08, 1, 0.08, 0x6b6157, { deco: true, studs: false });
     }
     plat(ex, y1 + 0.2, z + (d / 2 - 1) * sens, 2.6, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier
@@ -2942,7 +2942,9 @@ function setBeacon(x, z, y = 0) {
 }
 function clearBeacon() { if (beacon.m) beacon.m.visible = false; gpsRoute.hide(); }
 const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suivent le chemin calculé (A*) jusqu'à la cible de mission
-  const pool = [], geo = new THREE.ConeGeometry(0.45, 1.1, 3); geo.rotateX(Math.PI / 2); const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.85 });
+  // Chevrons nettement plus gros : à 0,45 m de rayon ils faisaient trois pixels au sol et on
+  // ne les voyait tout simplement pas en jouant, surtout sur téléphone.
+  const pool = [], geo = new THREE.ConeGeometry(0.85, 2.4, 3); geo.rotateX(Math.PI / 2); const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.92, depthWrite: false });
   let lastT = 0, lastX = 0, lastZ = 0;
   return {
     update() {
@@ -2964,13 +2966,26 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
       // le GPS lâchait le joueur avant la moitié du chemin. On mesure d'abord l'itinéraire et
       // on RÉPARTIT les chevrons dessus — serrés de près où la précision compte, étirés au
       // loin — pour que la traînée aille toujours jusqu'au bout.
-      let total = 0;
-      for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
-      const MAXC = 90, pas = Math.max(3, total / (MAXC - 4));
-      let k = 0;
+      // On parcourt l'itinéraire en avançant d'un pas qui s'élargit avec la distance : serré
+      // devant le joueur, là où il faut savoir quand tourner, plus étalé au loin. Un pas
+      // uniforme sur tout le trajet laissait dix mètres entre deux chevrons dès le départ.
+      const MAXC = 90;
+      let k = 0, versProchain = 2.6, parcouru = 0;
       for (let i = 0; i < pts.length - 1 && k < MAXC; i++) {
-        const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(L / pas));
-        for (let j = 0; j < n && k < MAXC; j++) { const t = (j + 0.5) / n, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.5) continue; if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); scene.add(pool[k]); } const m = pool[k++]; const gy = groundCar(x, z, null, 0); m.position.set(x, gy + 0.35, z); m.lookAt(b[0], gy + 0.35, b[1]); m.visible = true; }
+        const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L < 1e-6) continue;
+        const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+        let t = 0;
+        while (k < MAXC) {
+          if (t + versProchain > L) { versProchain -= (L - t); break; }
+          t += versProchain; parcouru += versProchain;
+          const x = a[0] + ux * t, z = a[1] + uz * t;
+          versProchain = parcouru < 45 ? 3.4 : Math.min(13, 3.4 + (parcouru - 45) * 0.12);
+          if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
+          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; scene.add(pool[k]); }
+          const m = pool[k++], gy = groundCar(x, z, null, 0);
+          m.position.set(x, gy + 0.5, z); m.lookAt(x + ux, gy + 0.5, z + uz); m.visible = true;
+        }
       }
       for (let i = k; i < pool.length; i++) pool[i].visible = false;
     },
@@ -3573,8 +3588,10 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });   // 35 cm : plus près du mur, un agent naissait dedans et ne pouvait plus bouger
     for (let i = 0; i < n; i++) {
       const x = x0 + (dir > 0 ? i : n - 1 - i) * len + len / 2, top = y0 + (i + 1) * rise;
-      box(x, top - 0.09, zc, len + 0.06, 0.18, LARG, marble, { studs: false, noRoute: true });
-      box(x - dir * (len / 2 + 0.03), top - 0.09 - rise / 2, zc, 0.1, rise, LARG, 0xc9c2b4, { deco: true, studs: false });
+      // Une marche = un bloc plein, haut d'une contremarche : la dalle fine de 18 cm avec sa
+      // contremarche de 10 cm collée à l'arrière laissait un vide béant sous chaque marche —
+      // on voyait le mur à travers l'escalier, qui semblait fait de dalles flottantes.
+      box(x, top - rise / 2, zc, len + 0.06, rise, LARG, marble, { studs: false, noRoute: true });
       {   // balustres et main courante côté hall, marche par marche (côté mur : le mur suffit)
         const sz = cote * (LARG / 2 - 0.12);
         box(x, top + 0.5, zc + sz, 0.09, 1, 0.09, trim, { deco: true, studs: false });
@@ -4573,8 +4590,8 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.62, EZ0 = HZ + 6.4;
     for (let i = 0; i < EN; i++) {
       const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
-      box(ESX, top - 0.1, z, EW, 0.2, ERUN + 0.1, 0xe6ded0, { studs: false, noRoute: true });          // marche
-      box(ESX, top - 0.1 - ERISE / 2, z - ERUN / 2 - 0.02, EW, ERISE, 0.1, 0xd8d2c4, { deco: true, studs: false });   // contremarche
+      // marche pleine : plus de vide sous les pieds (voir le même correctif à la banque)
+      box(ESX, top - ERISE / 2, z, EW, ERISE, ERUN + 0.1, 0xe6ded0, { studs: false, noRoute: true });
     }
     {   // garde-corps ajouré côté pièce : balustres et main courante suivent la pente, marche par marche
       for (let i = 0; i < EN; i++) { const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
@@ -6142,8 +6159,8 @@ function nameTag(name) {
   g.font = 'bold 60px Nunito, "Segoe UI", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.lineWidth = 10; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(name, 256, 64);
   g.fillStyle = '#fff'; g.fillText(name, 256, 64);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
-  sp.scale.set(1.8, 0.45, 1); sp.position.y = 2.5; return sp;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
+  sp.renderOrder = 9; sp.scale.set(1.8, 0.45, 1); sp.position.y = 2.5; sp.userData.etiquette = true; return sp;
 }
 function buildAvatar(cfg) {
   const g = new THREE.Group();
@@ -6290,10 +6307,39 @@ function bubble(av, text) {   // bulle de chat au-dessus de la tête
   g.beginPath(); g.moveTo(x + r, 8); g.lineTo(x + w - r, 8); g.quadraticCurveTo(x + w, 8, x + w, 8 + r); g.lineTo(x + w, 108 - r); g.quadraticCurveTo(x + w, 108, x + w - r, 108);
   g.lineTo(276, 108); g.lineTo(256, 138); g.lineTo(236, 108); g.lineTo(x + r, 108); g.quadraticCurveTo(x, 108, x, 108 - r); g.lineTo(x, 8 + r); g.quadraticCurveTo(x, 8, x + r, 8); g.closePath(); g.fill();
   g.fillStyle = '#1b2a4a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 256, 58);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
-  sp.scale.set(3.2, 1, 1); sp.position.y = 3.35; av.group.add(sp); av.bubble = sp; av.bubbleT = simTime + 4.5;
+  // depthTest actif : une bulle derrière un mur ne doit plus flotter par-dessus le décor.
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
+  sp.renderOrder = 10; sp.scale.set(3.2, 1, 1); sp.position.y = 3.35;
+  av.group.add(sp); av.bubble = sp; av.bubbleT = simTime + 4.5;
 }
-function tickBubbles() { for (const av of allAvatars()) if (av.bubble && simTime > av.bubbleT) { av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null; } }
+// Une bulle est un sprite mesuré EN MÈTRES : à trois mètres du personnage, ses 3,2 m de large
+// recouvraient tout l'écran et on ne voyait plus ni le décor, ni les chevrons du GPS, ni où
+// l'on marchait. On la redimensionne donc à chaque image pour qu'elle garde à peu près la
+// même taille à l'écran quelle que soit la distance, et on la fait disparaître au loin.
+const BULLE_K = 0.115;
+function tickBubbles() {
+  const cp = camera.position;
+  for (const av of allAvatars()) {
+    if (!av.bubble) continue;
+    if (simTime > av.bubbleT) { av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null; continue; }
+    const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 3.35 - cp.y, av.group.position.z - cp.z);
+    if (d > 48) { av.bubble.visible = false; continue; }
+    av.bubble.visible = true;
+    const h = clamp(BULLE_K * d, 0.5, 1.6);
+    av.bubble.scale.set(h * 3.2, h, 1);
+  }
+  // Les étiquettes de noms sont des sprites eux aussi mesurés en mètres : de près, un nom
+  // barrait tout l'écran. Même règle, et elles s'effacent au-delà de 60 m.
+  for (const av of allAvatars()) {
+    const tg = av.tag; if (!tg) continue;
+    const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 2.5 - cp.y, av.group.position.z - cp.z);
+    if (d > 60) { tg.visible = false; continue; }
+    if (tg.userData.cache) continue;   // masquée volontairement (mannequins, PNJ muets)
+    tg.visible = true;
+    const h = clamp(0.055 * d, 0.3, 0.85);
+    tg.scale.set(h * 4, h, 1);
+  }
+}
 const allAvatars = () => [me, ...bots.map(b => b.av), ...[...net.remotes.values()].map(r => r.av)];
 function animateRig(rig, mode, speed, dt, t) {
   const ease = Math.min(1, dt * 12);

@@ -544,7 +544,8 @@ body.tv #tvBadge.on{display:block}
     <div class="keys">
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
-      <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer · manette compatible</span>
+      <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer, <b>←/→</b> boutique et missions, <b>Options</b> menu — et elle vibre à chaque coup</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -8027,6 +8028,8 @@ function fxClear() { for (const f of fx) { scene.remove(f.m); f.mat.dispose(); }
 // LA SECOUSSE DE CAMÉRA : un coup qui porte se sent aussi à l'image.
 function camSecousse(amp = 0.18, duree = 0.22) {
   cam.shake = Math.max(cam.shake || 0, amp); cam.shakeT = Math.max(cam.shakeT || 0, simTime + duree);
+  // la manette de salon tremble en même temps que l'image : c'est ce qui fait qu'un coup se SENT
+  try { padVibre(clamp(amp * 2.6, 0.15, 1), Math.round(duree * 900)); } catch (e) {}
 }
 // L'impact complet, réglé par le genre de coup.
 // genre : 'poing' | 'pied' | 'balle' | 'mur' | 'sang' | 'metal'
@@ -12887,48 +12890,104 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 let gamepadOk = true;
 // Manette de salon : toutes les touches du clavier ont leur bouton, et la croix
 // directionnelle promène la bague jaune dans les menus — on joue de son canapé.
-const PAD_MAP = {   // bouton standard → touche du jeu
-  0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 7: 'KeyX',
-  8: 'KeyT', 9: 'Escape', 12: 'ArrowUp', 13: 'ArrowDown',
+// ================= MANETTE DE SALON (PlayStation 5 / DualSense) =================
+// La manette était lue « au hasard » : seule la première prise était regardée, la zone morte
+// était carrée (les diagonales sautaient), les gâchettes étaient traitées comme de simples
+// boutons et rien ne vibrait. Tout est repris pour une DualSense — et ça marche aussi bien
+// avec une manette Xbox ou n'importe quelle manette « standard ».
+const PS_NOMS = { 0: '✕', 1: '◯', 2: '▢', 3: '△', 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2',
+  8: 'Create', 9: 'Options', 10: 'L3', 11: 'R3', 12: '↑', 13: '↓', 14: '←', 15: '→', 16: 'PS' };
+// L'agencement PlayStation : ✕ saute (c'est le réflexe), ◯ agit, ▢ frappe, △ sort l'arme.
+const PAD_MAP = {
+  0: 'Space',    // ✕  sauter
+  1: 'KeyE',     // ◯  action / monter / parler
+  2: 'KeyV',     // ▢  frapper
+  3: 'KeyG',     // △  dégainer
+  5: 'KeyX',     // R1 tirer
+  8: 'KeyT',     // Create : parler
+  9: 'Escape',   // Options : menu
+  12: 'ArrowUp', 13: 'ArrowDown',
+  14: 'KeyB',    // ← boutique
+  15: 'KeyM',    // → missions
 };
+const PAD_SEUIL_GACHETTE = 0.35;   // une gâchette analogique n'est « appuyée » qu'à partir de là
+const manetteSalon = { i: -1, nom: '', vibT: 0 };
+function padActive() {
+  if (!gamepadOk || !navigator.getGamepads) return null;
+  let liste; try { liste = navigator.getGamepads(); } catch (e) { gamepadOk = false; return null; }
+  // on cherche dans TOUTES les prises, et on préfère une DualSense si plusieurs répondent
+  let choix = null;
+  for (let i = 0; i < liste.length; i++) {
+    const g = liste[i]; if (!g || !g.connected) continue;
+    const ps = /dualsense|dualshock|playstation|054c/i.test(g.id || '');
+    if (!choix || (ps && !/dualsense|dualshock|playstation|054c/i.test(choix.id || ''))) choix = g;
+  }
+  if (choix && manetteSalon.i !== choix.index) { manetteSalon.i = choix.index; manetteSalon.nom = choix.id || 'manette'; }
+  return choix;
+}
+// Zone morte RONDE : avec une zone morte carrée, pousser en diagonale coupait un axe et le
+// personnage partait tout droit. Ensuite une courbe douce : précis au centre, franc au bord.
+function padStick(x, y, morte = 0.14) {
+  const d = Math.hypot(x, y);
+  if (d < morte) return [0, 0];
+  const m = Math.min(1, (d - morte) / (1 - morte)), k = m * (0.45 + 0.55 * m) / (d || 1);
+  return [x * k, y * k];
+}
+const padGachette = (g, i) => { const b = g.buttons[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
+// LA VIBRATION : la DualSense la gère nativement dans le navigateur.
+function padVibre(force = 0.6, ms = 120) {
+  const g = padActive(); if (!g || !g.vibrationActuator || simTime < manetteSalon.vibT) return false;
+  manetteSalon.vibT = simTime + 0.05;
+  try { g.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: force, weakMagnitude: force * 0.7 }); return true; }
+  catch (e) { return false; }
+}
 function pollGamepad(dt) {
-  if (!gamepadOk || !navigator.getGamepads) return;
-  let gp = null;
-  try { gp = navigator.getGamepads()[0]; } catch (e) { gamepadOk = false; return; }   // manette interdite (iframe, politique de permissions)
+  const gp = padActive();
   if (!gp) { pad.x = pad.y = 0; if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; } return; }
-  const dz = v => Math.abs(v) < 0.18 ? 0 : v;
   const menu = !!document.querySelector('.overlay:not(.hidden)');
-  pad.x = menu ? 0 : dz(gp.axes[0] || 0); pad.y = menu ? 0 : -dz(gp.axes[1] || 0);
+  const [gx, gy] = padStick(gp.axes[0] || 0, gp.axes[1] || 0);
+  pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
   if (running && !paused && !menu) {
-    cam.yaw -= dz(gp.axes[2] || 0) * dt * 2.6;
-    cam.pitch = clamp(cam.pitch + dz(gp.axes[3] || 0) * dt * 1.6, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+    const [vx, vy] = padStick(gp.axes[2] || 0, gp.axes[3] || 0, 0.12);
+    cam.yaw -= vx * dt * 3.4;
+    cam.pitch = clamp(cam.pitch + vy * dt * 2.1, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+    if (vx || vy) cam.freeUntil = simTime + 2.5;
   }
   const bas = pad.bas || {};
-  const app = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
   const neuf = {};
-  for (let i = 0; i < 17; i++) neuf[i] = app(i);
-  // dans un menu : croix = déplacer la bague, A = valider, B = fermer
+  for (let i = 0; i < 17; i++) neuf[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
+  // les gâchettes sont analogiques : on les convertit avec un seuil, pas en tout ou rien
+  neuf[6] = padGachette(gp, 6) > PAD_SEUIL_GACHETTE;
+  neuf[7] = padGachette(gp, 7) > PAD_SEUIL_GACHETTE;
   if (menu) {
-    if (neuf[12] && !bas[12]) navBouge(-1);
-    if (neuf[13] && !bas[13]) navBouge(1);
-    if (neuf[14] && !bas[14]) navBouge(-1);
-    if (neuf[15] && !bas[15]) navBouge(1);
+    if ((neuf[12] && !bas[12]) || (neuf[14] && !bas[14])) navBouge(-1);
+    if ((neuf[13] && !bas[13]) || (neuf[15] && !bas[15])) navBouge(1);
     if (neuf[0] && !bas[0]) navValide();
-    if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9])) telTouche('Escape', true);
+    if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) telTouche('Escape', true);
   } else {
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
       telTouche(k, neuf[i]);
     }
-    // gâchette gauche ou clic du stick : on court tant qu'on la tient
-    const court = neuf[6] || neuf[10];
+    if (neuf[7] !== bas[7]) telTouche('KeyX', neuf[7]);              // R2 : tirer, comme R1
+    const court = neuf[6] || neuf[10];                                // L2 ou L3 : courir
     if (court !== (bas[6] || bas[10])) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
     if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
+    if (neuf[11] && !bas[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }   // R3 : recentrer la caméra
+    if (neuf[16] && !bas[16]) telTouche('Escape', true);
+    if ((neuf[0] && !bas[0]) || (neuf[5] && !bas[5]) || (neuf[7] && !bas[7])) padVibre(0.35, 60);
   }
   pad.bas = neuf; pad.a = neuf[0];
 }
-window.addEventListener('gamepadconnected', () => { msg('🎮 Manette connectée !', 2200); document.body.classList.add('manette'); });
-window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; });
+window.addEventListener('gamepadconnected', e => {
+  const nom = (e.gamepad && e.gamepad.id) || '';
+  const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
+  msg(ps ? '🎮 Manette PlayStation connectée — ✕ saute, ◯ agit, ▢ frappe, △ arme' : '🎮 Manette connectée !', 3200);
+  document.body.classList.add('manette');
+  padVibre(0.5, 200);
+  try { chat(null, ps ? '🎮 DualSense prête : stick gauche pour marcher, stick droit pour la caméra, L2 pour courir, R2 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
+});
+window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); });
 
 // ---- plein écran, orientation, veille (tablette Android) ----
 function goFullscreen() {

@@ -6392,3 +6392,68 @@ test('la lumiere de la ville est plus chaude', async p => {
   const ok = r.chaud.soleil && r.chaud.ciel && r.chaud.sol && r.ecartCiel > 0.03 && r.ecartBrume > 0.05;
   return { ok, detail: `tout était éclairé d'un blanc bleuté un peu clinique — soleil blanc, ciel froid, rebond du sol gris et lumière d'appoint franchement bleue · la lumière est maintenant celle d'une fin d'après-midi : soleil doré (#${r.lu.soleil}), ciel ambré (#${r.lu.ciel}), rebond du sol couleur sable (#${r.lu.sol}), appoint tiède · et le ciel comme la brume sont décalés vers le chaud (${r.ecartCiel} et ${r.ecartBrume} de bleu en moins) sans que les couleurs franches du jeu y perdent` };
 });
+
+test('une manette PlayStation 5 pilote tout le jeu', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    ferme();
+    // FAUSSE DUALSENSE, branchée sur la prise 2 : l'ancienne version ne regardait que la prise 0
+    const vib = [];
+    const ds = { index: 2, connected: true, id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+      vibrationActuator: { playEffect: (t, o) => { vib.push(o); return Promise.resolve('complete'); } } };
+    const vraiGP = navigator.getGamepads;
+    navigator.getGamepads = () => [null, null, ds];
+    const touches = [];
+    const ecoute = e => { if (e.type === 'keydown') touches.push(e.code); };
+    window.addEventListener('keydown', ecoute);
+    try {
+      const trouvee = !!G.padActive() && G.manetteSalon.i === 2;
+      const nomPS = /dualsense/i.test(G.manetteSalon.nom);
+      // 1) ZONE MORTE RONDE : une diagonale franche passe, un frémissement non
+      const fremis = G.padStick(0.09, 0.09), diag = G.padStick(0.5, 0.5);
+      const carre = Math.abs(diag[0] - diag[1]) < 0.01;   // les deux axes gardent la même part
+      // 2) les deux sticks
+      ds.axes = [0.8, -0.6, 0, 0]; G.pollGamepad(0.05);
+      const marche = { x: +G.pad.x.toFixed(2), y: +G.pad.y.toFixed(2) };
+      ds.axes = [0, 0, 1, 0]; const yaw0 = G.cam.yaw; G.pollGamepad(0.1);
+      const camera = +(G.cam.yaw - yaw0).toFixed(3);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.05);
+      // 3) tous les boutons de la façade PlayStation, un par un
+      const presse = i => { ferme(); touches.length = 0;
+        ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
+        ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+        return touches.slice(); };
+      const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape', 14: 'KeyB', 15: 'KeyM' };
+      const bons = Object.entries(plan).filter(([i, k]) => presse(+i).includes(k)).length;
+      ferme();
+      // 4) les GÂCHETTES sont analogiques, pas des interrupteurs
+      touches.length = 0; ds.buttons[7] = { pressed: false, value: 0.2 }; G.pollGamepad(0.05);
+      const gachetteFaible = touches.length;
+      ds.buttons[7] = { pressed: false, value: 0.9 }; G.pollGamepad(0.05);
+      const gachetteFort = touches.filter(t => t === 'KeyX').length;
+      ds.buttons[7] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+      ds.buttons[6] = { pressed: false, value: 0.8 }; G.pollGamepad(0.05);
+      const court = !!G.P.run;
+      ds.buttons[6] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+      // 5) R3 recentre la caméra
+      G.cam.yaw = 2; G.P.facing = 0;
+      ds.buttons[11] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
+      ds.buttons[11] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+      const recentre = Math.abs(G.cam.yaw - Math.PI) < 0.01;
+      // 6) LA VIBRATION suit les secousses de l'image
+      vib.length = 0; G.simTime += 5; G.camSecousse(0.3, 0.3);
+      const vibre = vib[0] || null;
+      return { trouvee, nomPS, fremis, diag: diag.map(v => +v.toFixed(2)), carre, marche, camera,
+        bons, total: Object.keys(plan).length, gachetteFaible, gachetteFort, court, recentre, vibre,
+        noms: G.PS_NOMS[0] + G.PS_NOMS[1] + G.PS_NOMS[2] + G.PS_NOMS[3] };
+    } finally { window.removeEventListener('keydown', ecoute); navigator.getGamepads = vraiGP; ferme(); }
+  });
+  const ok = r.trouvee && r.nomPS && r.fremis[0] === 0 && r.diag[0] > 0.2 && r.carre
+    && r.marche.x === 0.8 && r.marche.y === 0.6 && r.camera < -0.2
+    && r.bons === r.total && r.gachetteFaible === 0 && r.gachetteFort === 1
+    && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.09 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu, ← boutique, → missions · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+});

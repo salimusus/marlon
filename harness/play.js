@@ -6270,11 +6270,55 @@ test('le telephone se connecte vraiment a l\'ecran de jeu, et n\'attend jamais d
       await attend(120);
       const remonte = !!G.tv.on;
       G.closeUI();
-      return { code, ecoute, msgEcran, pret, etat, cotes, recu, etatMauvais, remonte, essais: G.MAN_ESSAIS };
+      // le chemin réseau : sans relais, deux réseaux différents ne se joignent jamais
+      const ice = (G.RESEAU && G.RESEAU.config && G.RESEAU.config.iceServers) || [];
+      const relais = ice.filter(x => /^turn:/.test(x.urls)).length, stun = ice.filter(x => /^stun:/.test(x.urls)).length;
+      const tcp443 = ice.some(x => /443\?transport=tcp/.test(x.urls));
+      return { code, ecoute, msgEcran, pret, etat, cotes, recu, etatMauvais, remonte, essais: G.MAN_ESSAIS, relais, stun, tcp443 };
     } finally { window.Peer = vrai; }
   });
   const ok = /^[A-Z]{4}$/.test(r.code) && r.ecoute && /Prêt/.test(r.msgEcran)
+    && r.relais >= 2 && r.stun >= 1
     && r.pret && /Connecté/.test(r.etat) && r.cotes === 1 && r.recu.x === 1
     && /essai/i.test(r.etatMauvais) && r.remonte;
-  return { ok, detail: `le téléphone pouvait rester bloqué sans un mot : si la bibliothèque réseau n'était pas encore chargée on abandonnait aussitôt, si l'écran de jeu n'écoutait pas encore on tombait sur « aucune télé » sans retour possible, et si le canal ne s'ouvrait jamais plus rien ne bougeait · l'appairage complet est maintenant rejoué ici de bout en bout : l'écran annonce qu'il écoute (« ${r.msgEcran.trim()} »), le téléphone se connecte (« ${r.etat.trim()} », ${r.cotes} liaison) et une flèche de la croix arrive bien au jeu (x=${r.recu.x}) · avec un mauvais code il réessaie ${r.essais} fois en l'affichant (« ${r.etatMauvais.trim()} ») puis explique quoi vérifier, au lieu de tourner dans le vide · et si la liaison de l'écran tombe, une veille la remonte toute seule (${r.remonte})` };
+  return { ok, detail: `le téléphone pouvait rester bloqué sans un mot : si la bibliothèque réseau n'était pas encore chargée on abandonnait aussitôt, si l'écran de jeu n'écoutait pas encore on tombait sur « aucune télé » sans retour possible, et si le canal ne s'ouvrait jamais plus rien ne bougeait · l'appairage complet est maintenant rejoué ici de bout en bout : l'écran annonce qu'il écoute (« ${r.msgEcran.trim()} »), le téléphone se connecte (« ${r.etat.trim()} », ${r.cotes} liaison) et une flèche de la croix arrive bien au jeu (x=${r.recu.x}) · avec un mauvais code il réessaie ${r.essais} fois en l'affichant (« ${r.etatMauvais.trim()} ») puis explique quoi vérifier, au lieu de tourner dans le vide · et si la liaison de l'écran tombe, une veille la remonte toute seule (${r.remonte}) · la liaison ne tentait que le DIRECT, qui échoue dès qu'un opérateur mobile s'en mêle : elle passe maintenant par ${r.stun} serveurs de découverte et ${r.relais} relais, dont un en TCP sur le port 443 (${r.tcp443}) qui traverse presque tous les réseaux` };
+});
+
+test('quand la manette ne passe pas, elle dit POURQUOI', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const attend = ms => new Promise(r2 => setTimeout(r2, ms));
+    const vrai = window.Peer;
+    // un faux réseau qui joue une panne précise
+    const scene = (panne) => {
+      window.Peer = class { constructor(id) { this.id = id || 'a'; this.h = {}; setTimeout(() => this.emit('open', this.id), 5); }
+        on(e, f) { (this.h[e] = this.h[e] || []).push(f); }
+        emit(e, ...a) { for (const f of (this.h[e] || [])) f(...a); }
+        connect() { const c = { open: false, h: {}, on(e, f) { (this.h[e] = this.h[e] || []).push(f); }, emit() {}, send() {} };
+          if (panne === 'absent') setTimeout(() => this.emit('error', { type: 'peer-unavailable' }), 5);
+          return c; }   // panne « muet » : le canal ne s'ouvre jamais
+        destroy() {} };
+    };
+    try {
+      localStorage.removeItem('superobby.hote');
+      // A) personne n'écoute sous ce code
+      scene('absent'); G.manetteOuvre('AAAA');
+      await attend(31000 / 4);   // les quatre essais s'enchaînent vite quand le serveur répond
+      let absent = '';
+      for (let i = 0; i < 40 && !/inscrit|onglet|liaison directe|service/.test(absent); i++) { await attend(400); absent = document.getElementById('telErr').textContent; }
+      G.manetteFerme();
+      // B) le jeu tourne dans un AUTRE ONGLET du même téléphone
+      localStorage.setItem('superobby.hote', JSON.stringify({ code: 'BBBB', t: Date.now() }));
+      scene('muet'); G.manetteOuvre('BBBB');
+      let meme = '';
+      for (let i = 0; i < 90 && !/onglet/.test(meme); i++) { await attend(400); meme = document.getElementById('telErr').textContent; }
+      const etatB = document.getElementById('telEtat').textContent;
+      G.manetteFerme(); localStorage.removeItem('superobby.hote');
+      return { absent, meme, etatB };
+    } finally { window.Peer = vrai; }
+  });
+  const ok = /inscrit sous le code/.test(r.absent) && /Prêt/.test(r.absent)
+    && /AUTRE ONGLET/.test(r.meme) && /manette prête/i.test(r.etatB);
+  return { ok, detail: `« ça ne marche pas » sans plus d'explication : le message final était le même quelle que soit la panne · il dit maintenant CE QUI a échoué, donc quoi faire · personne sous ce code → « ${r.absent.slice(0, 90)}… » · le jeu ouvert dans un autre onglet du MÊME téléphone (l'onglet s'endort en arrière-plan, donc plus personne ne répond) → « ${r.meme.slice(0, 90)}… » · et le mot d'attente ne ment plus : « ${r.etatB.trim()} » au lieu de « écran trouvé » alors que seule la manette était prête` };
 });

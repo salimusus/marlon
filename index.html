@@ -8239,7 +8239,7 @@ function hostGame() {
   const code = makeCode();
   netStatus('Création de la partie…');
   let peer;
-  try { peer = new Peer('superobby-' + code, { debug: 0 }); } catch (e) { return netStatus('Multijoueur indisponible'); }
+  try { peer = new Peer('superobby-' + code, RESEAU); } catch (e) { return netStatus('Multijoueur indisponible'); }
   net.peer = peer;
   peer.on('open', () => { net.host = true; net.on = true; net.code = code; netStatus(`Code : ${code} · en attente de joueurs`); updateNetPill(); showBotsOrNot(); });
   peer.on('connection', conn => setupConn(conn, false));
@@ -8251,7 +8251,7 @@ function joinGame(code) {
   netTeardown();
   netStatus('Connexion à ' + code + '…');
   let peer;
-  try { peer = new Peer(undefined, { debug: 0 }); } catch (e) { return netStatus('Multijoueur indisponible'); }
+  try { peer = new Peer(undefined, RESEAU); } catch (e) { return netStatus('Multijoueur indisponible'); }
   net.peer = peer; net.code = code;
   peer.on('open', () => setupConn(peer.connect('superobby-' + code), true));
   peer.on('error', e => { if (!net.on) netStatus(e.type === 'peer-unavailable' ? 'Partie introuvable : vérifie le code' : 'Erreur réseau : ' + e.type); });
@@ -13610,8 +13610,12 @@ const lienBase = () => location.href.split('#')[0];
 // tombe (mise en veille, Wi-Fi qui saute), on la remonte toute seule.
 let tvVeilleT = 0;
 function tvVeille() {
-  if (!tv.code || tv.cede || tv.peer || simTime < tvVeilleT) return;
-  tvVeilleT = simTime + 5;
+  if (simTime < tvVeilleT) return;
+  tvVeilleT = simTime + 3;
+  // trace locale : elle permet à l'écran manette, ouvert dans un AUTRE onglet du même
+  // navigateur, de comprendre pourquoi il n'arrivera jamais à se connecter
+  if (tv.on && tv.code && !tv.cede) { try { store.set('superobby.hote', JSON.stringify({ code: tv.code, t: Date.now() })); } catch (e) {} }
+  if (!tv.code || tv.cede || tv.peer) return;
   tvHeberge(tv.code);
 }
 function tvManettesMaj() {
@@ -13723,7 +13727,7 @@ function tvHeberge(force) {
   if (tv.peer) return;
   const code = force || tv.code || (net.on && net.code ? net.code : makeCode());
   let peer;
-  try { peer = new Peer('superobby-tv-' + code, { debug: 0 }); } catch (e) { return; }
+  try { peer = new Peer('superobby-tv-' + code, RESEAU); } catch (e) { return; }
   tv.peer = peer; tv.code = code; tv.cede = false;
   peer.on('open', () => { tv.on = true; tvSalonMaj(); });
   peer.on('connection', c => {
@@ -13784,6 +13788,18 @@ function ouvreSalonTV() {
 }
 
 // ---- côté téléphone : l'écran devient une manette -----------------------------------
+// LE CHEMIN RÉSEAU. Par défaut, deux appareils tentent une liaison DIRECTE : ça marche sur un
+// même Wi-Fi, mais dès qu'un opérateur mobile ou une box un peu fermée s'en mêle, la liaison
+// ne s'établit jamais — et rien ne le dit. On ajoute des serveurs publics : des « STUN » pour
+// se découvrir, et des relais « TURN » (dont un en TCP sur le port 443, qui passe presque
+// partout) pour faire transiter la manette quand le direct est impossible.
+const RESEAU = { debug: 0, config: { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+], sdpSemantics: 'unified-plan' } };
 const MANETTE_HZ = 60;   // 25 par seconde, c'était 40 ms de retard avant même le réseau
 const man = { peer: null, conn: null, id: null, x: 0, y: 0, lx: 0, ly: 0, env: 0 };
 function manetteOuvre(code) {
@@ -13814,7 +13830,7 @@ function manetteEchec(txt, code) {
 function manetteConnecte(code, essai) {
   code = (code || '').toUpperCase();
   if (!/^[A-Z]{4}$/.test(code)) { manetteEchec('Entre le code à 4 lettres affiché sur l\'écran de jeu.'); return; }
-  man.essai = essai || 1; man.code = code;
+  man.essai = essai || 1; man.code = code; man.inscrit = false; if (man.essai === 1) man.raison = '';
   $('telErr').textContent = '';
   clearTimeout(man.chrono);
   // 1) la bibliothèque réseau met parfois deux secondes à arriver : on l'attend au lieu d'abandonner
@@ -13828,7 +13844,7 @@ function manetteConnecte(code, essai) {
   manetteEtat(`Recherche de l'écran ${code}… (essai ${man.essai}/${MAN_ESSAIS})`);
   try { if (man.peer) man.peer.destroy(); } catch (_) {}
   man.peer = null; man.conn = null;
-  let peer; try { peer = new Peer(undefined, { debug: 0 }); } catch (e) { manetteEchec('Manette indisponible sur ce téléphone.', code); return; }
+  let peer; try { peer = new Peer(undefined, RESEAU); } catch (e) { manetteEchec('Manette indisponible sur ce téléphone.', code); return; }
   man.peer = peer;
   // 2) rien ne doit pouvoir « bloquer » : au bout de sept secondes, on recommence
   const relance = (pourquoi) => {
@@ -13836,11 +13852,28 @@ function manetteConnecte(code, essai) {
     if (man.conn && man.conn.open) return;
     try { peer.destroy(); } catch (_) {}
     if (man.essai < MAN_ESSAIS) { manetteEtat(pourquoi + ' — nouvel essai…'); setTimeout(() => manetteConnecte(code, man.essai + 1), 600); }
-    else manetteEchec(`Impossible de joindre l'écran ${code}. Vérifie que la partie est bien ouverte sur la télé (ou l'ordinateur) avec CE code affiché, et que les deux appareils ont Internet.`, code);
+    else {
+      // on dit CE QUI a échoué : ça change complètement ce qu'il y a à faire
+      // CAS TRÈS FRÉQUENT : le jeu et la manette dans deux onglets du MÊME téléphone. L'onglet
+      // du jeu s'endort dès qu'il passe en arrière-plan, donc plus personne ne répond.
+      let memeAppareil = false;
+      try { const h = JSON.parse(store.get('superobby.hote') || 'null');
+        memeAppareil = !!h && h.code === code && Date.now() - h.t < 10 * 60 * 1000; } catch (e) {}
+      const pourquoiFinal = memeAppareil
+        ? `Le jeu tourne dans un AUTRE ONGLET de ce téléphone : dès qu'il passe en arrière-plan, il s'endort et ne répond plus. Ouvre le jeu sur la télé ou l'ordinateur, et garde ce téléphone uniquement pour la manette.`
+        : man.raison === 'absent'
+        ? `Aucun écran n'est inscrit sous le code <b>${code}</b>. Sur l'écran de jeu, ouvre 📺 et vérifie qu'il affiche « 🟢 Prêt » avec CE code — s'il affiche autre chose, personne n'écoute.`
+        : man.inscrit
+          ? `L'écran <b>${code}</b> répond, mais la liaison directe ne s'établit pas. Mets les deux appareils sur le MÊME Wi-Fi (le partage de connexion 4G bloque souvent le passage), et surtout : la manette doit être sur un AUTRE appareil que le jeu — sur un téléphone, l'onglet du jeu s'endort dès qu'il passe en arrière-plan.`
+          : `Impossible de joindre le service de connexion. Vérifie qu'Internet fonctionne sur ce téléphone.`;
+      manetteEchec(pourquoiFinal, code);
+    }
   };
-  man.chrono = setTimeout(() => relance('L\'écran ne répond pas'), MAN_DELAI);
+  man.chrono = setTimeout(() => { if (!man.raison) man.raison = 'canal'; relance('L\'écran ne répond pas'); }, MAN_DELAI);
   peer.on('open', () => {
-    manetteEtat(`Écran ${code} trouvé, on ouvre la manette…`);
+    // attention : « open » veut dire que MA manette est inscrite — pas que l'écran a répondu
+    man.inscrit = true;
+    manetteEtat(`Manette prête, on appelle l'écran ${code}…`);
     const c = peer.connect('superobby-tv-' + code, { reliable: false });
     man.conn = c;
     c.on('open', () => {
@@ -13856,8 +13889,8 @@ function manetteConnecte(code, essai) {
   });
   peer.on('error', e => {
     // « peer-unavailable » = l'écran de jeu n'écoute pas ENCORE : ça vaut la peine d'insister
-    if (e && e.type === 'peer-unavailable') relance(`Aucun écran au code ${code} pour l'instant`);
-    else relance('Réseau capricieux');
+    if (e && e.type === 'peer-unavailable') { man.raison = 'absent'; relance(`Aucun écran au code ${code} pour l'instant`); }
+    else { man.raison = (e && e.type) || 'reseau'; relance('Réseau capricieux'); }
   });
 }
 function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); } catch (_) {} } }

@@ -433,6 +433,7 @@ window.__G = {
   tvPasseLaMain: typeof tvPasseLaMain === 'function' ? tvPasseLaMain : null,
   manetteConnecte: typeof manetteConnecte === 'function' ? manetteConnecte : null,
   tvVeille: typeof tvVeille === 'function' ? tvVeille : null,
+  RESEAU: typeof RESEAU !== 'undefined' ? RESEAU : null,
   MAN_ESSAIS: typeof MAN_ESSAIS !== 'undefined' ? MAN_ESSAIS : 0,
   tel: typeof tel !== 'undefined' ? tel : null,
   tvHeberge: typeof tvHeberge === 'function' ? tvHeberge : null,

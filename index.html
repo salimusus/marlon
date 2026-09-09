@@ -7410,7 +7410,13 @@ function botSay(b, list) { const t = pickOne(list); chat(b.name, t, b.color); bu
 const amis = new Set(store.json('superobby.amis', []));
 const saveAmis = () => store.set('superobby.amis', JSON.stringify([...amis]));
 const estAmi = n => amis.has(String(n));
-const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null, ordre: null, ordreT: 0, poste: null, saut: 0, patte: 0, garde: 0, balle: null, repas: 0 };
+// Le chien a lui aussi sa vie et sa performance — volontairement PLUS FAIBLES que celles
+// d'un homme de gang : il ne gagne pas le combat, il mord, il fait mal et il donne au
+// joueur le temps de filer.
+const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null,
+  ordre: null, ordreT: 0, poste: null, saut: 0, patte: 0, garde: 0, balle: null, repas: 0,
+  hp: 60, hpMax: 60, perf: 22, bond: 0, bondT: 0 };
+const CHIEN_PERF_MAX = 45;   // même bien dressé, il reste sous le niveau d'un gangster
 const coup = { etat: 'aucun', bot: null, car: null, route: null, routeT: 0, t: 0 };
 
 // Un message peut s'adresser à quelqu'un par son nom : « Lucas_2014 rendez-vous au parc ».
@@ -7803,9 +7809,22 @@ const ORDRES_CHIEN = [
   { id: 'dort', e: '🛏️', t: 'Dors', mots: /\bdors|dormir|dodo|niche|au lit\b/, dit: 'il va dormir dans sa niche' },
   { id: 'garde', e: '🛡️', t: 'Défends-moi', mots: /\bdefend|défend|protege|protège|garde moi|garde\b/, dit: 'il mord quiconque t\'attaque' },
   { id: 'mords', e: '🦷', t: 'Mords / Attaque', mots: /\bmords|mord|attaque|mordre\b/, dit: 'il fonce sur la cible' },
+  { id: 'veto', e: '🏥', t: 'Chez le vétérinaire', mots: /\bveto|vétérinaire|veterinaire|soigne|soigner|hopital|hôpital|blesse|blessé\b/, dit: 'on le remet sur pattes' },
   { id: 'nom', e: '🏷️', t: 'Change son nom', mots: /\bnom|nomme|nommer|renomme|renommer|appelle|appeler|baptise|baptiser|prenom\b/, dit: 'écris son nouveau nom dans le chat' },
 ];
 function chienNom() { return chien.nom || 'Le chien'; }
+function prixVeto() { const manque = chien.hpMax - Math.round(chien.hp); return manque ? Math.max(8, Math.round(manque * 0.8)) : 0; }
+function chienVeto() {
+  const px = prixVeto();
+  if (!px) { chienDit('il est en pleine forme, garde ton argent 💪', 2200); return true; }
+  if (wallet < px) { msg(`🏥 Le vétérinaire demande ${px} 🪙 — il t'en manque ${px - wallet}`, 3000); return true; }
+  wallet -= px; saveWallet(); updateHud();
+  chien.hp = chien.hpMax; chien.blesse = 0;
+  const p = chien.pet; if (p) burst(p.x, p.y + 0.8, p.z, 0x5cc453, 12);
+  sfx.win(); aboie(3);
+  msg(`🏥 ${chienNom()} est soigné : ${chien.hpMax}/${chien.hpMax} PV · −${px} 🪙`, 3000);
+  return true;
+}
 // Remet le chien d'aplomb : corps droit, quatre pattes tendues. Chaque pose repart de là.
 function chienPattesDroites(p) {
   if (!p || !p.pattes) return;
@@ -7877,6 +7896,7 @@ function chienOrdre(id, txt) {
   const o = ORDRES_CHIEN.find(x => x.id === id); if (!o) return false;
   if (id === 'mords') { chienAttaque(txt || ''); return true; }
   if (id === 'balle') return chienBalle();
+  if (id === 'veto') return chienVeto();
   if (id === 'nom') {
     // On pouvait nommer son chien à l'adoption, et une seule fois. Maintenant on le renomme
     // quand on veut : on redemande le nom, la médaille au-dessus de sa tête suit.
@@ -7923,14 +7943,44 @@ function chienTick(dt) {
     const c = chien.attaque, b = c.bot;
     if (b && (!b.av.group.visible || b.ko)) { chien.attaque = null; }
     else {
-      const tx = b ? b.pos.x : c.rem ? c.rem.cur.x : c.x, tz = b ? b.pos.z : c.rem ? c.rem.cur.z : c.z;
+      const g3 = c.gangeur;
+      const tx = b ? b.pos.x : g3 ? g3.x : c.rem ? c.rem.cur.x : c.x, tz = b ? b.pos.z : g3 ? g3.z : c.rem ? c.rem.cur.z : c.z;
       const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1;
       if (d > 1.2) { const o = { x: p.x, y: p.y - 0.3, z: p.z }; npcMove(o, dx / d * 7 * dt, dz / d * 7 * dt, 0.3); p.x = o.x; p.z = o.z; }
       p.facing = Math.atan2(dx, dz);
       p.y = groundUnder(p.x, p.z, null, p.y + 0.7);
-      p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 16)) * 0.1, p.z);
+      // LE BOND : à deux mètres il se détend, pattes avant tendues devant lui, et retombe
+      // sur sa cible. On voit vraiment le chien sauter dessus.
+      if (d < 2.4 && d > 1.1 && simTime > chien.bondT) { chien.bondT = simTime + 1.4; chien.bond = simTime + 0.55; aboie(1); }
+      const enVol = chien.bond > simTime;
+      const h = enVol ? Math.sin((1 - (chien.bond - simTime) / 0.55) * Math.PI) * 1.15 : Math.abs(Math.sin(simTime * 16)) * 0.1;
+      if (enVol && p.pattes) {
+        p.g.rotation.x = -0.45;
+        p.pattes.avG.rotation.x = -1.35; p.pattes.avD.rotation.x = -1.35;   // pattes avant en avant
+        p.pattes.arG.rotation.x = 0.9; p.pattes.arD.rotation.x = 0.9;       // arrière repliées
+        if (d > 1.3) { p.x += dx / d * 6 * dt; p.z += dz / d * 6 * dt; }    // il porte son élan
+      } else if (p.pattes) { chienPattesDroites(p); p.g.rotation.x = -0.12; }
+      p.g.position.set(p.x, p.y + h, p.z);
       let dh2 = p.facing - p.g.rotation.y; dh2 = Math.atan2(Math.sin(dh2), Math.cos(dh2)); p.g.rotation.y += dh2 * Math.min(1, dt * 10);
       if (simTime > chien.aboiT) { chien.aboiT = simTime + 0.8; aboie(2); }
+      // il mord un gangster rival : il ne le bat pas, mais il l'occupe et lui fait mal
+      if (g3) {
+        if (g3.ko || simTime > chien.attaqueT) { chien.attaque = null; }
+        else if (d < 1.8 && simTime > (chien.morsT || 0)) {
+          chien.morsT = simTime + 1.1;
+          const mordu = 5 + Math.round(perfDe(chien) / 9);
+          g3.hp -= mordu; burst(g3.x, g3.y + 1.1, g3.z, 0xff5c5c, 6); sfx.hit(); sfx.noise(.08, 500, .07);
+          bubble(g3.av, pickOne(['aïe ! ce chien !', 'dégage sale bête !', 'rappelle ton clebs !']));
+          // il RALENTIT sa proie : le gangster perd du temps sur le joueur, qui peut filer
+          g3.cd = simTime + 1.6; g3.mordu = simTime + 2.2;
+          chien.hp = Math.max(0, chien.hp - (4 + Math.round(perfDe(g3) / 14)));   // il prend des coups en retour
+          if (chien.hp <= 0) { chien.hp = 0; chien.attaque = null; chien.blesse = simTime + 25;
+            msg(`🐶 ${chienNom()} est blessé, il décroche et se met à l'abri !`, 3400); sfx.die(); }
+          else if (g3.hp <= 0) { g3.ko = simTime + 14; g3.hp = 0; chien.attaque = null;
+            perfGagne(chien, 3); msg(`🐶 ${chienNom()} a mis ${g3.nom} au tapis !`, 3200); sfx.win(); }
+        }
+        return;
+      }
       if (d < 1.6 && simTime > (chien.morsT || 0)) {
         chien.morsT = simTime + 1.1;
         if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0;
@@ -7947,12 +7997,26 @@ function chienTick(dt) {
   chien.attaque = null;
   // ---- il exécute l'ordre reçu ----
   // « défends-moi » : dès que quelqu'un s'en prend au maître, le chien lui saute dessus
-  if (chien.garde > simTime && !chien.attaque) {
+  if (chien.garde > simTime && !chien.attaque && chien.hp > 0 && !(chien.blesse > simTime)) {
     for (const b of bots) {
       if (b.ko || !b.av.group.visible) continue;
       if (b.fight && b.fight !== 'flee' && simTime < (b.fightT || 0) && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 9) { chienAttaque(b.name); break; }
     }
+    // et surtout les GANGSTERS qui te tombent dessus : c'est là qu'il sert vraiment
+    if (!chien.attaque) for (const G of gangs) for (const m of G.membres) {
+      if (m.ko || m.captif) continue;
+      const dm = Math.hypot(m.x - P.pos.x, m.z - P.pos.z);
+      if (dm > 10) continue;
+      if (!(m.chasse && m.chasse.joueur) && G.etat !== 'joueur' && dm > 4) continue;
+      chien.attaque = { gangeur: m, x: m.x, z: m.z, nom: m.nom };
+      chien.attaqueT = simTime + 18; chien.couche = false; chien.ordre = 'suit'; chien.poste = null;
+      msg(`🐶 ${chienNom()} bondit sur ${m.nom} — file pendant qu'il le retient !`, 3600); aboie(4);
+      chat(null, `🐶 ${chienNom()} défend ${myCfg.name} contre les ${G.nom}`);
+      break;
+    }
   }
+  // il récupère très lentement de ses morsures ; blessé, il reste en retrait un moment
+  if (chien.hp < chien.hpMax && simTime > (chien.soigneT || 0)) { chien.soigneT = simTime + 6; chien.hp = Math.min(chien.hpMax, chien.hp + 1); }
   const saute = chien.saut > simTime ? Math.abs(Math.sin((chien.saut - simTime) * 7)) * 0.9 : 0;
   if (chien.ordre === 'balle' && chien.balle) {
     const bl = chien.balle;
@@ -8767,7 +8831,15 @@ function openOrdresChien() {
   if (!chien.pet) { msg('🐶 Tu n\'as pas encore de chien — approche-toi d\'un chien du parc et écris « adopte »', 3200); return false; }
   ordresBot = null;
   $('ordresTitre').textContent = `🐶 Ordres pour ${chienNom()}`;
-  $('ordresSub').innerHTML = 'Clique un ordre, ou écris-le dans le chat (« ' + (chien.nom || 'le chien') + ' assis », « va chercher la balle »…).';
+  const cv = perfDe(chien), cpv = Math.round(chien.hp), cmax = chien.hpMax;
+  const pct = Math.round(cpv / cmax * 100);
+  $('ordresSub').innerHTML =
+    `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(cv * 2)}">`
+    + `📈 ${perfBarre(cv / CHIEN_PERF_MAX * 100)} ${cv}/${CHIEN_PERF_MAX} ${perfEtoiles(cv * 2)}</span>`
+    + `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(pct)}">`
+    + `❤️ ${perfBarre(pct)} ${cpv}/${cmax} PV${cpv < cmax ? ` · 🏥 ${prixVeto()} 🪙 chez le vétérinaire` : ' · en pleine forme'}</span>`
+    + `<span style="display:block;font-weight:600;color:#7a86a0">Il est plus faible qu'un homme de gang : il mord, il gêne, et il te laisse le temps de filer.</span>`
+    + 'Clique un ordre, ou écris-le dans le chat (« ' + (chien.nom || 'le chien') + ' assis », « va chercher la balle »…).';
   let html = '<p class="osec">🎓 Dressage</p>';
   for (const o of ORDRES_CHIEN) html += `<button class="ocard" data-chien="${o.id}"><span>${o.e}</span>${o.t}<i>${o.dit}</i></button>`;
   $('ordresGrid').innerHTML = html;
@@ -9009,12 +9081,17 @@ function updateBot(b, dt) {
   if (b.wait > 0 && b.rdv && !b.rdv.arrive) b.wait = 0;   // en route vers un rendez-vous : pas de pause
   if (b.wait > 0) {
     b.wait -= dt;
+    // même en pause, les pieds restent posés sur le sol de la ville
+    if (WORLDS[worldIdx].free) b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.2);
     if (b.dance > 0) { b.dance -= dt; b.facing += dt * 2.5; }
     else if (Math.random() < dt * 0.08) { b.dance = 3; if (Math.random() < 0.3) chat(b.name, '/e dance', b.color); }
     animateRig(av.rig, b.dance > 0 ? 'dance' : 'idle', 0, dt, simTime); sync(); return;
   }
   if (b.ko || (b.fight && simTime < b.fightT)) return;   // KO ou en train de se battre : géré par combatTick
   if (WORLDS[worldIdx].free) {   // ville : balade entre quelques points
+    // Les pieds au sol même à l'arrêt : un habitant planté sur un trottoir restait enfoncé
+    // de quinze centimètres dans le bitume, jambes coupées.
+    b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.2);
     if (b.rdv) {   // rendez-vous fixé par message : le bot s'y rend puis attend sur place
       if (b.rdv.suit) {   // « viens » : le point de rendez-vous, c'est le joueur lui-même
         const ex = b.pos.x - P.pos.x, ez = b.pos.z - P.pos.z, ed = Math.hypot(ex, ez) || 1;
@@ -9073,7 +9150,12 @@ function updateBot(b, dt) {
     if (dist <= stepLen) { b.pos.set(b.target[0], b.target[1], b.target[2]); b.target = null; b.wait = rnd(1.5, 5); }
     else {
       const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; const blocked = npcMove(o, dx / dist * stepLen, dz / dist * stepLen, 0.4); b.pos.x = o.x; b.pos.z = o.z;
-      b.pos.y += (b.target[1] - b.pos.y) * Math.min(1, dt * 10); b.facing = Math.atan2(dx, dz);
+      // EN VILLE, le sol n'est pas plat : trottoirs, perrons, dalles de boutique. Le point de
+      // passage donnait une hauteur figée et les habitants marchaient 15 cm sous le bitume,
+      // jambes coupées. On se cale sur le sol réel sous leurs pieds.
+      if (WORLDS[worldIdx].free) b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.2);
+      else b.pos.y += (b.target[1] - b.pos.y) * Math.min(1, dt * 10);
+      b.facing = Math.atan2(dx, dz);
       // on change de destination APRÈS s'être servi de b.target : l'ordre inverse levait une exception dès qu'un bot restait contre un mur
       // en promenade, un bot bloqué change de but ; en route vers un rendez-vous, il doit
       // au contraire s'obstiner : sinon le compteur retombait à 1,2 s et le déblocage du
@@ -12583,7 +12665,10 @@ function savePerf() { store.set('superobby.perf', String(Math.round(P.perf || 0)
 function perfGagne(o, n, quoi) {
   if (!o || !n) return 0;
   const av = perfDe(o);
-  o.perf = clamp(av + n, 0, 100);
+  // Le chien plafonne volontairement plus bas qu'un homme : même bien dressé, il ne bat
+  // pas un gangster — il mord, il gêne, il te fait gagner du temps.
+  const plafond = (typeof chien !== 'undefined' && o === chien) ? CHIEN_PERF_MAX : 100;
+  o.perf = clamp(av + n, 0, plafond);
   const gain = perfDe(o) - av;
   if (!gain) return 0;
   if (o === P) { savePerf(); if (quoi) msg(`📈 Performance +${gain} (${quoi}) — tu es à ${perfDe(P)}/100 ${perfEtoiles(perfDe(P))}`, 2600); majPerfHud(); }
@@ -13092,6 +13177,9 @@ function gangTick(dt) {
       // EMBUSCADE : cet homme-là a été détaché pour aller chercher le joueur ou l'un de ses
       // hommes. Il marche sur SA cible, sans attendre le reste de son gang.
       if (m.chasse && !m.ko) {
+        // mordu par le chien : il s'arrête pour se défendre, le joueur en profite pour filer
+        if (m.mordu && simTime < m.mordu) { animateRig(m.av.rig, 'idle', 0, dt, simTime);
+          m.y = groundUnder(m.x, m.z, null, m.y + 1.2); m.av.group.position.set(m.x, m.y, m.z); continue; }
         const c = m.chasse;
         const vise = c.joueur ? { x: P.pos.x, z: P.pos.z, vivant: P.hp > 0 && !drive.car }
                               : { x: c.bot.pos.x, z: c.bot.pos.z, vivant: !c.bot.ko && !c.bot.mort && c.bot.av.group.visible };
@@ -13159,6 +13247,10 @@ function gangTick(dt) {
         m.facing = Math.atan2(dx, dz); m.pas += dt * 5;
         animateRig(m.av.rig, 'walk', 3.4, dt, simTime);
       } else animateRig(m.av.rig, 'idle', 0, dt, simTime);
+      // Le pied au sol, toujours : leur hauteur était figée à 0,30 m depuis leur création.
+      // Ils flottaient donc au-dessus du bitume et s'enfonçaient dans les trottoirs et les
+      // planchers — d'où ces silhouettes qui semblaient surgir de nulle part.
+      m.y = groundUnder(m.x, m.z, null, m.y + 1.2);
       m.av.group.position.set(m.x, m.y, m.z);
       let dh = m.facing - m.av.group.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
       m.av.group.rotation.y += dh * Math.min(1, dt * 6);

@@ -4515,6 +4515,80 @@ test('escarmouches : ils viennent te chercher, et on coince leurs isolés', asyn
   return { ok, detail: `les rivaux détachent ${r.embuscade.hommes} homme(s) sur ${r.embuscade.surLeJoueur ? 'le joueur' : 'un de tes hommes'} et marchent vraiment dessus (${r.approche.avant} m → ${r.approche.apres} m), et ils tabassent le membre visé · à l'inverse « coincez un gangster isolé » repère ${r.isole.nom}, seul à ${r.isole.seul} m de ses copains, envoie ${r.mission.n} hommes (${r.mission.chance} % de chances), rapporte ${r.gain.pieces} 🪙 — et le vaincu change de camp (${r.recrue.avant} → ${r.recrue.libres} recrues)` };
 });
 
+
+test('personne ne flotte ni ne s\'enfonce dans le sol', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    // on laisse la ville vivre : c'est la boucle qui recale les pieds
+    for (let i = 0; i < 40; i++) { for (const b of G.bots) G.updateBot(b, 1 / 60); G.gangTick(1 / 60); }
+    const mesure = (nom, x, z, y) => ({ nom, ecart: +(y - G.groundUnder(x, z, null, y + 1.2)).toFixed(2) });
+    const bots = G.bots.map(b => mesure(b.name, b.pos.x, b.pos.z, b.av.group.position.y));
+    const gangeurs = [];
+    for (const Gg of G.gangs) for (const m of Gg.membres) gangeurs.push(mesure(m.nom, m.x, m.z, m.av.group.position.y));
+    const pire = l => l.reduce((a, x) => Math.max(a, Math.abs(x.ecart)), 0);
+    return { nBots: bots.length, nGang: gangeurs.length,
+      pireBot: +pire(bots).toFixed(2), pireGang: +pire(gangeurs).toFixed(2),
+      botsHorsSol: bots.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4),
+      gangHorsSol: gangeurs.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4) };
+  });
+  const ok = r.botsHorsSol.length === 0 && r.gangHorsSol.length === 0 && r.pireBot <= 0.06 && r.pireGang <= 0.06;
+  return { ok, detail: `${r.nBots} habitants et ${r.nGang} gangsters ont les pieds au sol (écart maximal ${r.pireBot} m et ${r.pireGang} m ; les habitants s'enfonçaient de 15 cm dans le trottoir et les gangsters flottaient 24 cm au-dessus)${r.botsHorsSol.length || r.gangHorsSol.length ? ' · hors sol : ' + r.botsHorsSol.concat(r.gangHorsSol).join(', ') : ''}` };
+});
+
+test('le chien défend son maître : il bondit, il mord, il fait gagner du temps', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const pet = G.city.pets.find(x => x.kind === 'dog');
+    G.P.pos.set(pet.x, 0.5, pet.z); G.adopterChien(pet, true); G.chien.nom = 'Rex'; G.chien.attenteNom = false;
+    G.P.pos.set(0, 0.5, 8);
+    res.stats = { hp: G.chien.hp, hpMax: G.chien.hpMax, perf: G.perfDe(G.chien), plafond: G.CHIEN_PERF_MAX };
+    // il est VOLONTAIREMENT plus faible qu'un homme de gang, et il plafonne bas
+    const Gr = G.gangs[0], m = Gr.membres[1];
+    res.plusFaible = G.perfDe(G.chien) < G.perfDe(m);
+    G.perfGagne(G.chien, 500); res.plafond = G.perfDe(G.chien);
+    G.chien.perf = 22;
+    // « défends-moi » : il bondit sur le gangster qui fonce sur toi
+    Gr.etat = 'joueur';
+    m.ko = 0; m.hp = 90; m.x = G.P.pos.x + 5; m.z = G.P.pos.z;
+    m.chasse = { joueur: true, bot: null, fin: G.simTime + 999 };
+    G.chienOrdre('garde', ''); G.chien.attaque = null;
+    for (let i = 0; i < 6; i++) G.chienTick(1 / 60);
+    res.vise = !!(G.chien.attaque && G.chien.attaque.gangeur === m);
+    // le bond se voit : le chien décolle du sol, pattes avant tendues
+    pet.x = m.x - 1.6; pet.z = m.z;
+    const hp0 = m.hp, chp0 = G.chien.hp;
+    let hMax = 0, pattesEnAvant = false;
+    for (let i = 0; i < 150; i++) { G.step(1 / 60); G.chienTick(1 / 60);
+      hMax = Math.max(hMax, pet.g.position.y - pet.y);
+      if (G.chien.bond > G.simTime && pet.pattes.avG.rotation.x < -1) pattesEnAvant = true; }
+    res.bond = { hauteur: +hMax.toFixed(2), pattesEnAvant };
+    res.morsure = { gangster: hp0 - m.hp, chien: chp0 - G.chien.hp, ralenti: m.mordu > G.simTime };
+    // le vétérinaire le remet sur pattes, contre paiement
+    G.chien.hp = 20; G.wallet = 500;
+    const px = G.prixVeto(), w0 = G.wallet;
+    G.chienVeto();
+    res.veto = { prix: px, paye: w0 - G.wallet, vie: G.chien.hp };
+    G.wallet = 1; G.chien.hp = 20; G.chienVeto();
+    res.vetoRefuse = G.chien.hp === 20;
+    // ses jauges sont dans sa liste d'ordres
+    G.chien.hp = 60; G.openOrdresChien();
+    const sub = document.getElementById('ordresSub').innerHTML;
+    res.panneau = { perf: /📈/.test(sub), vie: /❤️/.test(sub),
+      ordres: document.querySelectorAll('#ordresGrid [data-chien]').length,
+      veto: [...document.querySelectorAll('#ordresGrid [data-chien]')].some(b => b.dataset.chien === 'veto') };
+    G.closeUI();
+    return res;
+  });
+  const ok = r.stats.hpMax === 60 && r.plusFaible && r.plafond === r.stats.plafond && r.plafond < 100
+    && r.vise && r.bond.hauteur > 0.8 && r.bond.pattesEnAvant
+    && r.morsure.gangster > 0 && r.morsure.chien > 0 && r.morsure.ralenti
+    && r.veto.paye === r.veto.prix && r.veto.vie === 60 && r.vetoRefuse
+    && r.panneau.perf && r.panneau.vie && r.panneau.veto && r.panneau.ordres >= 14;
+  return { ok, detail: `le chien a ${r.stats.hpMax} PV et plafonne à ${r.plafond} de performance, sous un homme de gang · « défends-moi » le fait bondir sur le gangster qui te fonce dessus : il décolle de ${r.bond.hauteur} m, pattes avant tendues, mord (−${r.morsure.gangster} PV au gangster, −${r.morsure.chien} pour lui) et le CLOUE SUR PLACE le temps que tu files · le vétérinaire le soigne pour ${r.veto.prix} 🪙, et refuse si tu n'as pas de quoi payer · ses deux jauges s'affichent dans sa liste` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

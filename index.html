@@ -12747,7 +12747,7 @@ function ordreGang(txt) {
     if (m2) combien = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, tous: 99, tout: 99, toutes: 99, toute: 99 }[m2[1]] || (+m2[1] || 0); }
   if (!nommes.length && !collectif && !combien) return false;
   // un ordre collectif se reconnaît à son verbe au pluriel ou au mot « gang »
-  if (!collectif && !combien && !/\b(allez|aller|allons|partez|foncez|occupez|faites|volez|braquez|attaquez|cambriolez|piquez|surveillez|rentrez|revenez|envoie|envoies|envoyez|envoi|expedie|expedier)\b/.test(t)) return false;
+  if (!collectif && !combien && !/\b(allez|aller|allons|partez|foncez|occupez|faites|volez|braquez|attaquez|cambriolez|piquez|surveillez|rentrez|revenez|envoie|envoies|envoyez|envoi|expedie|expedier|coince|coincez|coincer|tabasse|tabassez|tabasser|corrige|corrigez)\b/.test(t)) return false;
   let equipe = nommes.length ? nommes : gang.membres.slice();
   if (!nommes.length && combien) {
     // les plus aguerris d'abord, et on laisse tranquilles ceux qui gardent déjà quelque chose

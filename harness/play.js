@@ -5669,3 +5669,103 @@ test('les indicateurs du haut-parleur sont colores et lisibles', async p => {
     && r.jauges.includes('42%') && r.pulse && r.puceReussi && r.fiche;
   return { ok, detail: `le 📣 alignait du texte gris avec un mot coloré · chaque homme a maintenant sa ligne à liseré de couleur (${r.liseres}), une PASTILLE pleine d'état qui clignote tant que l'ordre tourne (${r.puces}) et une jauge de vie colorée (${r.jauges.join(', ')}) — ${r.couleurs} couleurs différentes en tout, et la fiche d'un homme reprend les mêmes pastilles (✅ réussi, ❌ raté, 💀 perte)` };
 });
+
+test('chaque amelioration fait gagner de la vitesse, et le 500 chevaux est une fusee', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const essai = (kits, mot) => {
+      __SHOT.go({ world: 4, x: -90, y: 1, z: -70, hour: 12 });
+      const c = G.city.cars.find(v => v.parts && v.parts.ws && !v.kart);
+      c.busy = 0; c.x = -90; c.z = -70; c.h = Math.PI / 2; c.g.position.set(c.x, 0, c.z); c.g.rotation.y = c.h; G.vehicleSolid(c);
+      G.P.pos.set(-90, 0.3, -70); G.enterCar(c);
+      G.tuneApply(c, { couleur: null, finition: 'mate', kits, moteur: mot, amorti: 2 });
+      G.drive.speed = 0; G.keys.add('KeyW');
+      let vmax = 0;
+      for (let i = 0; i < 300 && G.drive.car; i++) {   // sur place : on mesure la mécanique, pas le trafic
+        G.driveStep(0.05); vmax = Math.max(vmax, G.drive.speed);
+        c.x = -90; c.z = -70; c.h = Math.PI / 2; c.g.position.set(c.x, 0, c.z); G.P.pos.set(-90, 0.3, -70);
+      }
+      G.keys.delete('KeyW');
+      const out = { vmax: +vmax.toFixed(1), bonus: c.bonusKits };
+      G.exitCar(); return out;
+    };
+    const cent = essai([], 0), trois = essai([], 1), cinq = essai([], 2);
+    // chaque kit ajouté doit faire monter la pointe, un par un
+    const KITS = ['echap', 'jantes', 'moteur', 'rabaisse', 'aileron', 'jupes', 'becquet', 'nitro'];
+    const paliers = []; const acc = [];
+    for (const k of KITS) { acc.push(k); paliers.push(essai(acc.slice(), 2).vmax); }
+    let croissant = 0;
+    for (let i = 1; i < paliers.length; i++) if (paliers[i] > paliers[i - 1]) croissant++;
+    return { cent: cent.vmax, trois: trois.vmax, cinq: cinq.vmax, paliers, croissant, kits: KITS.length,
+      tout: paliers[paliers.length - 1] };
+  });
+  const ok = r.trois > r.cent * 1.4 && r.cinq > r.trois * 1.3 && r.croissant === r.kits - 1 && r.tout > r.cinq * 1.2;
+  return { ok, detail: `les kits étaient purement décoratifs : seul le moteur comptait · la pointe passe de ${r.cent} a ${r.trois} m/s au 300 chevaux puis ${r.cinq} au 500, et CHAQUE kit ajoute ensuite sa part — ${r.croissant}/${r.kits - 1} paliers strictement croissants jusqu'a ${r.tout} m/s tout équipé (${Math.round(r.tout * 3.6)} km/h) · le déplacement est découpé en pas de 90 cm pour qu'a cette vitesse la voiture ne traverse plus les murs` };
+});
+
+test('le nitro donne un coup court avec des flammes aux deux pots', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -90, y: 1, z: -70, hour: 12 });
+    const c = G.city.cars.find(v => v.parts && v.parts.ws && !v.kart);
+    c.busy = 0; c.x = -90; c.z = -70; c.h = Math.PI / 2; c.g.position.set(c.x, 0, c.z); G.vehicleSolid(c);
+    G.P.pos.set(-90, 0.3, -70); G.enterCar(c);
+    // sans le kit échappement : le nitro doit quand même poser deux pots
+    G.tuneApply(c, { couleur: null, finition: 'mate', kits: ['nitro'], moteur: 1, amorti: 1 });
+    const buses = c.nitroFlammes ? c.nitroFlammes.length : 0;
+    const cotes = new Set((c.nitroFlammes || []).map(f => Math.sign(f.position.x)));
+    const pots = c.tuneMesh.filter(m => m.geometry && m.geometry.type === 'CylinderGeometry'
+      && Math.abs(m.position.z + 2.3) < 0.2 && Math.abs(Math.abs(m.position.x) - 0.62) < 0.05).length;
+    G.drive.speed = 10;
+    const avant = G.drive.speed;
+    const parti = G.nitroGo();
+    // pendant le coup : la flamme sort et la vitesse grimpe très vite
+    let vues = 0, echelleMax = 0;
+    for (let i = 0; i < 24; i++) { G.nitroTick(0.05); G.simTime += 0.05;
+      if ((c.nitroFlammes || []).every(f => f.visible)) vues++;
+      echelleMax = Math.max(echelleMax, ...(c.nitroFlammes || []).map(f => f.scale.y)); }
+    const apres = G.drive.speed, duree = vues * 0.05;
+    // le coup s'arrête tout seul, et la relance est rapide
+    for (let i = 0; i < 40; i++) { G.nitroTick(0.05); G.simTime += 0.05; }
+    const eteint = (c.nitroFlammes || []).every(f => !f.visible);
+    const attente = Math.max(0, G.drive.nitroCd - G.simTime);
+    G.simTime += attente + 0.05;
+    const relance = G.nitroGo();
+    G.exitCar();
+    return { buses, cotes: cotes.size, pots, parti, avant, apres: +apres.toFixed(1), duree: +duree.toFixed(2),
+      echelleMax: +echelleMax.toFixed(2), eteint, relance, recharge: G.NITRO_RECHARGE, dureeReglee: G.NITRO_DUREE };
+  });
+  const ok = r.parti && r.cotes === 2 && r.buses >= 6 && r.pots === 2 && r.apres > r.avant * 2
+    && r.duree > 0.9 && r.duree < 1.6 && r.eteint && r.relance && r.recharge <= 4 && r.echelleMax > 0.8;
+  return { ok, detail: `le nitro était une longue poussée de 3,2 s suivie de 14 s de recharge : un coup par ligne droite · c'est maintenant un COUP COURT de ${r.dureeReglee} s (mesuré ${r.duree} s de flamme), qui fait bondir la voiture de ${r.avant} a ${r.apres} m/s, s'éteint tout seul et se relance après ${r.recharge} s · ${r.buses} cônes de flamme répartis des DEUX côtés (${r.cotes}), et le kit pose ses deux pots chromés même sans l'échappement sport (${r.pots})` };
+});
+
+test('le moteur change de voix a 300 et a 500 chevaux', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -90, y: 1, z: -70, hour: 12 });
+    const V = G.MOTEUR_VOIX;
+    // trois voix distinctes : plus il y a de chevaux, plus c'est bas, gros et bourdonnant
+    const grave = V[0].base > V[1].base && V[1].base > V[2].base;
+    const gros = V[0].gain < V[1].gain && V[1].gain < V[2].gain;
+    const scie = V[0].sub === 0 && V[1].sub > 0 && V[2].sub > V[1].sub;
+    const bourd = V[0].bourd === 0 && V[1].bourd > 0 && V[2].bourd > V[1].bourd;
+    const coupe = V[0].coupe > V[1].coupe && V[1].coupe > V[2].coupe;
+    // et la voiture branche bien la bonne voix quand on monte dedans
+    const c = G.city.cars.find(v => v.parts && v.parts.ws && !v.kart);
+    c.busy = 0; c.x = -90; c.z = -70; c.g.position.set(c.x, 0, c.z); G.vehicleSolid(c);
+    G.P.pos.set(-90, 0.3, -70);
+    // en jeu, la voiture reprend TOUJOURS le réglage de l'atelier en montant dedans
+    G.tuning.moteur = 2; G.tuning.kits = []; G.tuning.amorti = 0;
+    G.enterCar(c);
+    const lu = G.moteurDe(c), auVolant = G.engine.niveau();
+    G.tuneApply(c, { couleur: null, finition: 'mate', kits: [], moteur: 0, amorti: 0 });
+    const apresRetour = G.engine.niveau();
+    G.tuning.moteur = 0;
+    G.exitCar();
+    return { grave, gros, scie, bourd, coupe, lu, auVolant, apresRetour,
+      base: V.map(v => v.base), gain: V.map(v => v.gain), sub: V.map(v => v.sub), bourdF: V.map(v => v.bourdF) };
+  });
+  const ok = r.grave && r.gros && r.scie && r.bourd && r.coupe && r.lu === 2 && r.auVolant === 2 && r.apresRetour === 0;
+  return { ok, detail: `une 100 chevaux et une 500 chevaux ronronnaient exactement pareil : le régime ne dépendait que du rapport de boîte · chaque niveau a maintenant sa voix — la fondamentale descend (${r.base.join(' → ')} Hz), le volume monte (${r.gain.join(' → ')}), une SCIE vient épaissir le grave (${r.sub.join(' → ')}) et un bourdonnement s'installe (${r.bourdF.join(' → ')} Hz) · le bloc change de voix en montant dedans (niveau ${r.auVolant}) et dès qu'on repasse au moteur d'origine a l'atelier (${r.apresRetour})` };
+});

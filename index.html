@@ -7904,20 +7904,57 @@ function unlockAudio() {
 }
 for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') unlockAudio(); });
-const engine = (() => {   // bruit moteur continu, doux : deux oscillateurs filtrés (passe-bas), vibration légère pour l'hélico
-  let osc = null, osc2 = null, g = null, lfo = null, filt = null, kind = null;
-  const stop = () => { for (const o of [osc, osc2, lfo]) { if (o) { try { o.stop(); } catch (e) {} } } osc = osc2 = g = lfo = filt = null; kind = null; };
+// LE BRUIT DU MOTEUR. Il était le même pour tout le monde : une 100 chevaux et une 500
+// chevaux ronronnaient exactement pareil, parce que le régime ne dépendait que du rapport de
+// boîte. Chaque niveau a maintenant SA voix — et plus il y a de chevaux, plus c'est gros et
+// grave : la fondamentale descend, une scie vient épaissir le grave, et un battement lent
+// (le bourdonnement) s'installe par-dessus.
+const MOTEUR_VOIX = [
+  { n: '100 chevaux', base: 50, pente: 7.0, coupe: 380, coupeV: 30, gain: 0.038, sub: 0, bourd: 0, bourdF: 0 },
+  { n: '300 chevaux', base: 38, pente: 5.6, coupe: 300, coupeV: 26, gain: 0.052, sub: 0.55, bourd: 0.30, bourdF: 8 },
+  { n: '500 chevaux', base: 30, pente: 4.6, coupe: 250, coupeV: 22, gain: 0.066, sub: 0.95, bourd: 0.46, bourdF: 6 },
+];
+function moteurDe(c) { return (c && c.tune && c.tune.moteur) | 0; }   // 0 = 100 ch, 1 = 300 ch, 2 = 500 ch
+const engine = (() => {   // bruit moteur continu : deux oscillateurs filtrés, une scie de grave et un bourdonnement
+  let osc = null, osc2 = null, sub = null, subG = null, g = null, lfo = null, lfoG = null, filt = null, kind = null, niv = 0, dernier = 0;
+  const voix = () => MOTEUR_VOIX[clamp(niv, 0, MOTEUR_VOIX.length - 1)] || MOTEUR_VOIX[0];
+  const stop = () => { for (const o of [osc, osc2, sub, lfo]) { if (o) { try { o.stop(); } catch (e) {} } } osc = osc2 = sub = subG = g = lfo = lfoG = filt = null; kind = null; };
   return {
-    start(k) {
+    start(k, niveau) {
+      // le niveau est retenu AVANT les sorties anticipées : si le son est coupé puis rallumé,
+      // le bloc reprend la bonne voix au lieu de repartir en 100 chevaux
+      if (niveau != null) niv = clamp(niveau | 0, 0, MOTEUR_VOIX.length - 1);
       stop(); if (!settings.sound) return; const c = sfx.unlock(); if (!c) return;
+      const V = voix();
       kind = k; osc = c.createOscillator(); osc2 = c.createOscillator(); g = c.createGain(); filt = c.createBiquadFilter();
-      osc.type = 'triangle'; osc2.type = 'sine'; osc.frequency.value = k === 'heli' ? 70 : 50; osc2.frequency.value = k === 'heli' ? 35 : 25;
-      filt.type = 'lowpass'; filt.frequency.value = k === 'heli' ? 500 : 380; filt.Q.value = 0.6;
+      osc.type = 'triangle'; osc2.type = 'sine';
+      osc.frequency.value = k === 'heli' ? 70 : V.base; osc2.frequency.value = k === 'heli' ? 35 : V.base / 2;
+      filt.type = 'lowpass'; filt.frequency.value = k === 'heli' ? 500 : V.coupe; filt.Q.value = 0.6;
       g.gain.value = 0.0001; osc.connect(filt); osc2.connect(filt); filt.connect(g).connect(c.destination); osc.start(); osc2.start();
-      g.gain.linearRampToValueAtTime(k === 'heli' ? 0.05 : 0.038, c.currentTime + 0.6);
-      if (k === 'heli') { lfo = c.createOscillator(); const lg = c.createGain(); lfo.frequency.value = 9; lg.gain.value = 0.02; lfo.connect(lg).connect(g.gain); lfo.start(); }
+      g.gain.linearRampToValueAtTime(k === 'heli' ? 0.05 : V.gain, c.currentTime + 0.6);
+      if (k !== 'heli' && V.sub > 0) {   // la scie : c'est elle qui fait le GROS son grave
+        sub = c.createOscillator(); subG = c.createGain(); sub.type = 'sawtooth';
+        sub.frequency.value = V.base / 2; subG.gain.value = V.sub; sub.connect(subG).connect(filt); sub.start();
+      }
+      if (k === 'heli' || V.bourd > 0) {   // le bourdonnement : un battement lent sur le volume
+        lfo = c.createOscillator(); lfoG = c.createGain();
+        lfo.frequency.value = k === 'heli' ? 9 : V.bourdF;
+        lfoG.gain.value = k === 'heli' ? 0.02 : V.gain * V.bourd;
+        lfo.connect(lfoG).connect(g.gain); lfo.start();
+      }
     },
-    set(v) { if (!osc) return; const c = sfx.ctx(); const f = kind === 'heli' ? 55 + v * 40 : 40 + Math.abs(v) * 7; osc.frequency.setTargetAtTime(f, c.currentTime, 0.12); osc2.frequency.setTargetAtTime(f / 2, c.currentTime, 0.12); if (filt) filt.frequency.setTargetAtTime(kind === 'heli' ? 500 : 300 + Math.abs(v) * 30, c.currentTime, 0.15); if (lfo) lfo.frequency.setTargetAtTime(6 + v * 9, c.currentTime, 0.1); },
+    // Change de voix sans couper le son : on relance seulement si le moteur tourne déjà.
+    moteur(n) { n = clamp(n | 0, 0, MOTEUR_VOIX.length - 1); if (n === niv) return; niv = n; if (osc && kind) { const k = kind; this.start(k); this.set(dernier); } },
+    niveau() { return niv; },
+    set(v) {
+      if (!osc) return; dernier = v; const c = sfx.ctx(), V = voix();
+      const f = kind === 'heli' ? 55 + v * 40 : V.base * 0.8 + Math.abs(v) * V.pente;
+      osc.frequency.setTargetAtTime(f, c.currentTime, 0.12);
+      osc2.frequency.setTargetAtTime(f / 2, c.currentTime, 0.12);
+      if (sub) sub.frequency.setTargetAtTime(f / 2, c.currentTime, 0.12);
+      if (filt) filt.frequency.setTargetAtTime(kind === 'heli' ? 500 : V.coupe * 0.8 + Math.abs(v) * V.coupeV, c.currentTime, 0.15);
+      if (lfo) lfo.frequency.setTargetAtTime(kind === 'heli' ? 6 + v * 9 : V.bourdF + Math.abs(v) * 0.35, c.currentTime, 0.1);
+    },
     stop,
   };
 })();
@@ -8528,7 +8565,7 @@ function coupMonter() {   // le joueur saute dans la voiture, l'ami conduit
   if (drive.car) exitCar();
   me.group.visible = false; P.vel.set(0, 0, 0);
   if (coup.bot) { coup.bot.av.group.visible = false; botSay(coup.bot, ['accroche-toi, on file à ta villa ! 💨']); }
-  msg('💨 En route vers ta villa : ton ami conduit !', 3000); engine.start('car');
+  msg('💨 En route vers ta villa : ton ami conduit !', 3000); engine.start('car', moteurDe(drive.car));
 }
 function coupFin(ok) {
   const b = coup.bot;
@@ -8640,7 +8677,7 @@ function monterAvecBot(b) {
   if (drive.car) exitCar();
   const moto = !!st.car.rider;
   st.passager = true; city.rideBot = b; me.group.visible = moto; P.vel.set(0, 0, 0);
-  clearBeacon(); engine.start(moto ? 'moto' : 'car');
+  clearBeacon(); engine.start(moto ? 'moto' : 'car', moteurDe(drive.car));
   botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
@@ -10721,7 +10758,7 @@ function enterCar(c) {
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
   else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
-  if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car'); c.vy = 0;
+  if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car', moteurDe(c)); c.vy = 0;
 }
 function exitCar() {
   const c = drive.car; if (!c) return;
@@ -10992,6 +11029,11 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
 function gearOf(ratio) { return ratio < 0.02 ? 0 : ratio < 0.18 ? 1 : ratio < 0.38 ? 2 : ratio < 0.58 ? 3 : ratio < 0.8 ? 4 : 5; }
 function driveStep(dt) {
   if (drive.car.heli) return heliStep(dt);
+  // À 500 chevaux et tous les kits, la voiture avance de plus de trois mètres par image : la
+  // collision se testant à la position d'arrivée, elle TRAVERSAIT les murs fins. On découpe
+  // le déplacement en pas d'au plus 90 cm.
+  const pas = Math.abs(drive.speed) * dt;
+  if (pas > 0.9 && dt > 0.005) { const n = Math.min(6, Math.ceil(pas / 0.9)); for (let i = 0; i < n && drive.car && !drive.car.heli; i++) driveStep(dt / n); return; }
   const c = drive.car, sp = c.spec || { max: 19, rev: -7, accel: 15, turn: 2.1, seat: 0 };
   let { ix, iz } = readInput();
   if (race.state === 'countdown' && c.kart) { iz = 0; drive.speed = 0; if (Math.abs(readInput().iz) > 0.3 && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
@@ -12688,7 +12730,7 @@ $('changeWorld').addEventListener('click', () => { if (net.on && !net.host) { ms
 function setSound(on) {
   settings.sound = on; store.set('superobby.sound', on ? '1' : '0');
   $('sndBtn').textContent = 'Son : ' + (on ? 'activé' : 'coupé'); $('sndTop').textContent = on ? '🔊' : '🔇'; $('sndTop').classList.toggle('on', !on);
-  if (!on) engine.stop(); else { unlockAudio(); if (drive.car) engine.start(drive.car.heli ? 'heli' : 'car'); }
+  if (!on) engine.stop(); else { unlockAudio(); if (drive.car) engine.start(drive.car.heli ? 'heli' : 'car', moteurDe(drive.car)); }
 }
 $('restartBtn').addEventListener('click', () => { toggleMenu(false); chooseWorld(worldIdx); msg('🔄 On recommence !', 1200); });
 $('wipeBtn').addEventListener('click', () => { if (!confirm('Tout effacer ? (pièces, achats, records, muscles, prison) La page va se recharger.')) return; try { for (const k of Object.keys(localStorage)) if (k.startsWith('superobby.')) localStorage.removeItem(k); } catch (e) {} location.reload(); });
@@ -13585,13 +13627,17 @@ const TUNE_KITS = [
   { k: 'echap', n: 'Échappement double sortie', e: '🎺', p: 110, desc: 'Deux gros pots chromés sous le pare-chocs.' },
   { k: 'rabaisse', n: 'Caisse rabaissée', e: '⬇️', p: 90, desc: 'Suspension raccourcie : la caisse frôle le bitume.' },
   { k: 'moteur', n: 'Moteur apparent', e: '🔩', p: 200, desc: 'Bloc rouge et noir qui sort du capot, avec le turbo.' },
-  { k: 'nitro', n: 'Nitro', e: '🔥', p: 250, desc: 'Bouteille de protoxyde : MAJ (ou ⚡ à la manette) crache des flammes et t\'envoie pendant 3 s.' },
+  { k: 'nitro', n: 'Nitro', e: '🔥', p: 250, desc: 'Bouteille de protoxyde : MAJ (ou ⚡ à la manette) donne un coup de pied sec d\'une seconde, flammes aux deux pots — à renvoyer toutes les 3,5 s.' },
 ];
 const TUNE_MOTEURS = [
-  { n: '100 chevaux', e: '🐎', p: 0, max: 26, accel: 19, desc: 'Le moteur d\'origine.' },
-  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 35, accel: 28, desc: 'Reprises franches, vitesse de pointe nettement plus haute.' },
-  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 46, accel: 40, desc: 'Une fusée : à ce niveau, il faut savoir freiner.' },
+  { n: '100 chevaux', e: '🐎', p: 0, max: 26, accel: 19, desc: 'Le moteur d\'origine. Ronronnement tranquille.' },
+  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 40, accel: 31, desc: 'Reprises franches et pointe bien plus haute. Le son descend : gros grave et bourdonnement.' },
+  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 56, accel: 46, desc: 'Une fusée. Le bloc gronde très bas — à ce niveau, il faut savoir freiner.' },
 ];
+// CHAQUE AMÉLIORATION FAIT GAGNER DE LA VITESSE. Avant, seul le moteur comptait : les kits
+// étaient purement décoratifs. Chacun apporte maintenant son petit pourcentage, cumulable.
+const KIT_VITESSE = { echap: 0.06, jantes: 0.05, moteur: 0.05, rabaisse: 0.04, aileron: 0.03, jupes: 0.02, becquet: 0.02, nitro: 0.02, teinte: 0, nom: 0 };
+function bonusKits(t) { return (t.kits || []).reduce((a, k) => a + (KIT_VITESSE[k] || 0), 0); }
 const TUNE_AMORTIS = [
   { n: 'Amortisseurs d\'origine', e: '🔧', p: 0, turn: 2.1, tenue: 1, desc: 'Confortables, mais ça penche dans les virages.' },
   { n: 'Amortisseurs sport', e: '🏁', p: 140, turn: 2.5, tenue: 1.25, desc: 'Plus fermes : la voiture tourne plus court.' },
@@ -13654,16 +13700,23 @@ function tuneApply(c, t) {
       pl.position.set(sx, 0.75, -0.1); pl.rotation.y = ry; add(pl);
     }
   }
-  if (aKitT(t, 'nitro')) {   // bouteilles derrière les sièges + buses aux pots
+  if (aKitT(t, 'nitro')) {   // bouteilles derrière les sièges + DEUX pots qui crachent le feu
     for (const sx of [-0.35, 0.35]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.7, 10), lam(0x3ef2ff));
       b.rotation.x = 0.35; b.position.set(sx, 1.15, -1.35); add(b); }
+    // sans le kit échappement il n'y avait AUCUN pot : les flammes sortaient du vide
+    if (!aKitT(t, 'echap')) for (const sx of [-0.62, 0.62]) {
+      const e2 = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.5, 10), chrome);
+      e2.rotation.x = Math.PI / 2; e2.position.set(sx, 0.36, -2.3); add(e2);
+    }
     c.nitroFlammes = [];
     for (const sx of [-0.62, 0.62]) {
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), neonMat(0xffd23f));
-      f.rotation.x = -Math.PI / 2; f.position.set(sx, 0.36, -2.9); f.visible = false; add(f);
-      const f2 = new THREE.Mesh(new THREE.ConeGeometry(0.1, 1.4, 8), neonMat(0xff4a1a));
-      f2.rotation.x = -Math.PI / 2; f2.position.set(sx, 0.36, -3.2); f2.visible = false; add(f2);
-      c.nitroFlammes.push(f, f2);
+      const coeur = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.7, 8), neonMat(0xffffff));   // cœur blanc
+      coeur.rotation.x = -Math.PI / 2; coeur.position.set(sx, 0.36, -2.78); coeur.visible = false; add(coeur);
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.1, 8), neonMat(0xffd23f));
+      f.rotation.x = -Math.PI / 2; f.position.set(sx, 0.36, -3.0); f.visible = false; add(f);
+      const f2 = new THREE.Mesh(new THREE.ConeGeometry(0.12, 1.7, 8), neonMat(0xff4a1a));
+      f2.rotation.x = -Math.PI / 2; f2.position.set(sx, 0.36, -3.45); f2.visible = false; add(f2);
+      c.nitroFlammes.push(coeur, f, f2);
     }
   } else c.nitroFlammes = null;
   // ---- jantes et hauteur de caisse ----
@@ -13681,36 +13734,56 @@ function tuneApply(c, t) {
   // ---- mécanique ----
   const mot = TUNE_MOTEURS[t.moteur] || TUNE_MOTEURS[0], am = TUNE_AMORTIS[t.amorti] || TUNE_AMORTIS[0];
   if (!c.specOrig) c.specOrig = Object.assign({}, c.spec);
-  c.spec = Object.assign({}, c.specOrig, { max: c.specOrig.max / 26 * mot.max, accel: c.specOrig.accel / 19 * mot.accel, turn: am.turn });
-  c.tune = t; c.nitroPret = aKitT(t, 'nitro');
+  const bonus = 1 + bonusKits(t);
+  c.spec = Object.assign({}, c.specOrig, {
+    max: c.specOrig.max / 26 * mot.max * bonus,
+    accel: c.specOrig.accel / 19 * mot.accel * (1 + bonusKits(t) * 0.6),
+    turn: am.turn });
+  c.tune = t; c.nitroPret = aKitT(t, 'nitro'); c.bonusKits = +(bonus - 1).toFixed(3);
+  if (drive.car === c) engine.moteur(t.moteur | 0);   // le bloc change de voix tout de suite
   return c;
 }
 function aKitT(t, k) { return (t.kits || []).includes(k); }
 
-// Nitro : quelques secondes de poussée, puis il faut laisser refroidir.
+// NITRO : des COUPS COURTS. C'était une longue poussée de 3,2 s suivie de quatorze secondes
+// de recharge ; on en donnait un par ligne droite. C'est maintenant un coup de pied sec de
+// 1,1 s, très violent, qu'on peut renvoyer toutes les 3,5 s — et les deux pots crachent.
+const NITRO_DUREE = 1.1, NITRO_RECHARGE = 3.5;
 function nitroGo() {
   const c = drive.car;
   if (!c || !c.nitroPret) return false;
-  if (simTime < (drive.nitroCd || 0)) { msg(`🔥 Nitro en recharge (${Math.ceil(drive.nitroCd - simTime)} s)`, 900); return false; }
-  drive.nitroT = simTime + 3.2; drive.nitroCd = simTime + 14;
-  msg('🔥 NITRO !', 1200); sfx.boost(); sfx.noise(.6, 240, .08);
+  if (simTime < (drive.nitroCd || 0)) { msg(`🔥 Nitro en recharge (${(drive.nitroCd - simTime).toFixed(1)} s)`, 700); return false; }
+  drive.nitroT = simTime + NITRO_DUREE; drive.nitroCd = simTime + NITRO_RECHARGE; drive.nitroT0 = simTime;
+  msg('🔥 NITRO !', 800); sfx.boost(); sfx.noise(.6, 240, .08);
+  camSecousse(0.2, 0.3);
+  // la détonation aux deux pots
+  for (const sx of [-0.62, 0.62]) {
+    const px = c.x - Math.sin(c.h) * 2.6 + Math.cos(c.h) * sx, pz = c.z - Math.cos(c.h) * 2.6 - Math.sin(c.h) * sx;
+    impact(px, 0.4, pz, { x: -Math.sin(c.h), y: 0.15, z: -Math.cos(c.h) }, 'metal', 1.3);
+  }
   return true;
 }
 function nitroTick(dt) {
   const c = drive.car;
   const actif = !!c && simTime < (drive.nitroT || 0);
   if (c && c.nitroFlammes) {
+    // la flamme grossit d'un coup puis retombe : un vrai « pschitt » court
+    const age = actif ? (simTime - (drive.nitroT0 || simTime)) / NITRO_DUREE : 1;
+    const enveloppe = actif ? clamp(Math.sin(Math.min(1, age) * Math.PI) * 1.5 + 0.35, 0, 1.4) : 0;
     for (let i = 0; i < c.nitroFlammes.length; i++) {
       const f = c.nitroFlammes[i]; f.visible = actif;
-      if (actif) { const v = 0.7 + Math.random() * 0.8; f.scale.set(v, 1 + Math.random() * 0.9, v); }
+      if (actif) { const v = (0.7 + Math.random() * 0.7) * enveloppe; f.scale.set(v, (1 + Math.random() * 1.1) * enveloppe, v); }
     }
   }
   if (actif && c) {
     const sp = c.spec;
-    drive.speed = Math.min(sp.max * 1.55, drive.speed + sp.accel * 1.4 * dt);
+    drive.speed = Math.min(sp.max * 1.6, drive.speed + sp.accel * 3.4 * dt);
     drive.boostT = simTime + 0.2;
-    if (simTime > (drive.nitroSnd || 0)) { drive.nitroSnd = simTime + 0.25; sfx.noise(.25, 300, .05); }
-    burst(c.x - Math.sin(c.h) * 2.6, 0.4, c.z - Math.cos(c.h) * 2.6, Math.random() < 0.5 ? 0xffd23f : 0xff4a1a, 3);
+    if (simTime > (drive.nitroSnd || 0)) { drive.nitroSnd = simTime + 0.12; sfx.noise(.3, 320, .05); }
+    for (const sx of [-0.62, 0.62]) {
+      const px = c.x - Math.sin(c.h) * 2.9 + Math.cos(c.h) * sx, pz = c.z - Math.cos(c.h) * 2.9 - Math.sin(c.h) * sx;
+      burst(px, 0.4, pz, Math.random() < 0.5 ? 0xffd23f : 0xff4a1a, 2);
+    }
   }
 }
 
@@ -13799,8 +13872,11 @@ function openAtelier() {
 let atelierBrouillon = null;
 function majAtelier() {
   const t = atelierBrouillon, c = tuneCible();
-  $('atelierVoiture').textContent = c ? (drive.car === c ? '🚗 Ta voiture (tu es au volant)' : '🚗 Voiture garée à ' + Math.round(Math.hypot(c.x - P.pos.x, c.z - P.pos.z)) + ' m')
-    : '⚠️ Gare une voiture devant le comptoir pour la préparer';
+  const motB = TUNE_MOTEURS[t.moteur] || TUNE_MOTEURS[0], gain = bonusKits(t);
+  const pointe = Math.round(motB.max * (1 + gain) * 3.6);   // en km/h, pour que le gain se VOIE
+  $('atelierVoiture').innerHTML = (c ? (drive.car === c ? '🚗 Ta voiture (tu es au volant)' : '🚗 Voiture garée à ' + Math.round(Math.hypot(c.x - P.pos.x, c.z - P.pos.z)) + ' m')
+    : '⚠️ Gare une voiture devant le comptoir pour la préparer')
+    + ` · <b style="color:#3ef2ff">🏁 ${pointe} km/h</b>` + (gain ? ` <b style="color:#5cc453">(+${Math.round(gain * 100)} % de kits)</b>` : '');
   $('atelierOnglets').innerHTML = [['repare', '🔧 Réparation'], ['peinture', '🎨 Peinture'], ['kits', '🧰 Kits'], ['moteur', '⚙️ Moteur'], ['amorti', '🛞 Amortisseurs']]
     .map(([k, n]) => `<b data-t="${k}" class="${atelierTab === k ? 'sel' : ''}">${n}</b>`).join('');
   $('atelierOnglets').querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { atelierTab = b.dataset.t; majAtelier(); }));
@@ -13829,8 +13905,10 @@ function majAtelier() {
       `<button class="tunebtn ${t.finition === f.k ? 'on' : ''}" data-f="${f.k}">${f.e} ${f.n}<span>${owned.has('tune:fin:' + f.k) || !f.p ? 'acquis' : f.p + ' 🪙'}</span></button>`).join('') + '</div>';
     h += `<p class="tunedesc">${(TUNE_FINITIONS.find(f => f.k === t.finition) || {}).desc || ''}</p>`;
   } else if (atelierTab === 'kits') {
-    h += '<div class="tunelist">' + TUNE_KITS.map(k =>
-      `<button class="tunebtn large ${t.kits.includes(k.k) ? 'on' : ''}" data-k="${k.k}"><b>${k.e} ${k.n}</b><span>${owned.has('tune:kit:' + k.k) ? 'acquis' : k.p + ' 🪙'}</span><i>${k.desc}</i></button>`).join('') + '</div>';
+    h += '<div class="tunelist">' + TUNE_KITS.map(k => {
+      const v = KIT_VITESSE[k.k] || 0;
+      return `<button class="tunebtn large ${t.kits.includes(k.k) ? 'on' : ''}" data-k="${k.k}"><b>${k.e} ${k.n}</b><span>${owned.has('tune:kit:' + k.k) ? 'acquis' : k.p + ' 🪙'}</span><i>${k.desc}${v ? ` · <b style="color:#5cc453">+${Math.round(v * 100)} % de vitesse</b>` : ''}</i></button>`;
+    }).join('') + '</div>';
   } else if (atelierTab === 'moteur') {
     h += '<div class="tunelist">' + TUNE_MOTEURS.map((m, i) =>
       `<button class="tunebtn large ${t.moteur === i ? 'on' : ''}" data-m="${i}"><b>${m.e} ${m.n}</b><span>${owned.has('tune:mot:' + i) || !m.p ? 'acquis' : m.p + ' 🪙'}</span><i>${m.desc} · pointe ${m.max} · reprise ${m.accel}</i></button>`).join('') + '</div>';

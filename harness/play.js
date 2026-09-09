@@ -5992,11 +5992,11 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     return { avant, plafond: G.PLAFOND_TV, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
       paliers, bas, haut, depart, apresPic, cad, majOmbres, autoTV, autoPC, min: G.rendu.min };
   });
-  const ok = r.tvPix < r.avant / 2.5 && r.tvPix < 3 && r.tv4k < 0.6
+  const ok = r.tvPix <= r.avant + 0.01 && r.tv4k <= 1.01
     && r.bas.ech <= r.min + 0.01 && r.bas.ombres === false && r.bas.baisses >= 3
     && r.haut.ech > r.bas.ech + 0.2 && r.haut.ombres === true
     && r.apresPic === 1 && r.majOmbres === 3 && r.autoTV === false && r.autoPC === true;
-  return { ok, detail: `une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en 4K le jeu calculait ${r.avant} mégapixels par image et saccadait · en mode TV le rendu est plafonné (${r.plafond} px de large) — ${r.tvPix} mégapixels, la télé agrandit elle-même le reste, c'est son métier · et la résolution s'ajuste toute seule : a 22 images/s elle descend par paliers ${r.paliers.join(' → ')} jusqu'au plancher ${r.bas.ech} (${r.bas.baisses} baisses) puis les ombres s'éteignent, et dès que ça respire elles se rallument et l'échelle remonte a ${r.haut.ech} · une seule image très lente (900 ms) ne dégrade rien (échelle restée a ${r.apresPic}) · enfin la carte d'ombres, recalculée a chaque image, ne l'est plus qu'une image sur deux sur la télé (${r.majOmbres} mises a jour sur 6) et reste inchangée ailleurs` };
+  return { ok, detail: `une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en 4K le jeu calculait ${r.avant} mégapixels par image et saccadait · le rendu va jusqu'au natif (${r.plafond} px, ${r.tvPix} mégapixels) et c'est la MESURE qui décide, pas un bridage aveugle · et la résolution s'ajuste toute seule : a 22 images/s elle descend par paliers ${r.paliers.join(' → ')} jusqu'au plancher ${r.bas.ech} (${r.bas.baisses} baisses) puis les ombres s'éteignent, et dès que ça respire elles se rallument et l'échelle remonte a ${r.haut.ech} · une seule image très lente (900 ms) ne dégrade rien (échelle restée a ${r.apresPic}) · enfin la carte d'ombres, recalculée a chaque image, ne l'est plus qu'une image sur deux sur la télé (${r.majOmbres} mises a jour sur 6) et reste inchangée ailleurs` };
 });
 
 test('le lien de la tele lance la partie tout seul et affiche le code', async p => {
@@ -6046,10 +6046,10 @@ test('la qualite d\'image sur la tele : plus de pixels, textures nettes, sans fi
     return { pc, tv, filtrePC, filtreTV, plafond, r4k: +r4k.toFixed(3), pix4k: mp(3840, r4k),
       avant1600: mp(3840, 1600 / 3840), maxCap, antialias };
   });
-  const ok = r.plafond >= 2000 && r.pix4k > r.avant1600 * 1.5
-    && r.tv.min >= 8 && r.tv.min === r.tv.max && r.pc.min >= 4 && r.tv.min > r.pc.min
+  const ok = r.plafond >= 3800 && r.pix4k > r.avant1600 * 3
+    && r.tv.min >= 16 && r.tv.min === r.tv.max && r.pc.min >= 8 && r.tv.min > r.pc.min
     && r.filtreTV === 'none' && r.filtrePC !== 'none' && r.antialias;
-  return { ok, detail: `l'image était floue sur la télé : on rendait en 1600 px de large (${r.avant1600} mégapixels en 4K) · le plafond monte a ${r.plafond} px — ${r.pix4k} mégapixels — et c'est la mesure du temps des images qui décide de descendre, au lieu de tout brider a priori · les ${r.tv.n} textures répétées (chaussées, trottoirs, façades) bavaient vues de biais : filtrage anisotrope ${r.pc.min}× partout et ${r.tv.min}× sur la télé (maximum de la machine : ${r.maxCap}×) · le filtre de couleur plein écran, qui coûtait une passe de composition entière pour un gain invisible, est retiré sur la télé (${r.filtreTV}) et gardé ailleurs (${r.filtrePC}) · et l'anticrénelage est forcé, même quand la télé se déclare « mobile » (${r.antialias})` };
+  return { ok, detail: `l'image était floue sur la télé : on rendait en 1600 px de large (${r.avant1600} mégapixels en 4K) · plus aucun bridage a priori : on rend jusqu'au NATIF de l'écran (${r.plafond} px, ${r.pix4k} mégapixels) et c'est uniquement la mesure du temps des images qui fait redescendre si la machine ne suit pas · les ${r.tv.n} textures répétées (chaussées, trottoirs, façades) bavaient vues de biais : filtrage anisotrope ${r.pc.min}× partout et ${r.tv.min}× sur la télé (maximum de la machine : ${r.maxCap}×) · le filtre de couleur plein écran, qui coûtait une passe de composition entière pour un gain invisible, est retiré sur la télé (${r.filtreTV}) et gardé ailleurs (${r.filtrePC}) · et l'anticrénelage est forcé, même quand la télé se déclare « mobile » (${r.antialias})` };
 });
 
 test('le joystick du telephone repond sans decalage', async p => {
@@ -6086,7 +6086,7 @@ test('la tele et l\'ordinateur affichent le MÊME code de manette', async p => {
   return { ok, detail: `l'ordinateur affichait un code et la télé en tirait un AUTRE au hasard en ouvrant le lien : on scannait forcément le mauvais · le code voyage maintenant dans le lien (#tv=CODE) et l'écran qui passe la main lâche le sien pour que la télé le reprenne — ${r.surOrdi} sur l'ordinateur, ${r.dansLien} dans le lien, ${r.surTV} sur la télé · si la télé trouve le code encore occupé elle le redemande au lieu d'en inventer un nouveau, et on peut reprendre la main ici d'un bouton` };
 });
 
-test('la manette du telephone a une croix directionnelle, pas un joystick', async p => {
+test('la manette du telephone propose aussi une croix directionnelle', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
@@ -6094,6 +6094,7 @@ test('la manette du telephone a une croix directionnelle, pas un joystick', asyn
     document.getElementById('manette').classList.add('pret');
     const croix = document.getElementById('telCroix');
     if (!croix) return { pourquoi: 'pas de croix' };
+    if (croix.hidden) document.getElementById('telBascule').click();   // la croix est le mode au CHOIX, le joystick est celui par défaut
     const fl = [...croix.querySelectorAll('[data-d]')];
     const boite = d => { const e = croix.querySelector('[data-d="' + d + '"]'); const b = e.getBoundingClientRect();
       return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: Math.round(b.width) }; };
@@ -6114,7 +6115,7 @@ test('la manette du telephone a une croix directionnelle, pas un joystick', asyn
     window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 30, clientX: b2.x, clientY: b2.y, bubbles: true }));
     const apres = { x: G.man.x, y: G.man.y };
     window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 30, bubbles: true }));
-    const sansJoystick = !document.getElementById('telStick') && !document.getElementById('telKnob') && !document.getElementById('telBase');
+    const sansJoystick = document.getElementById('telStick').hidden;   // en mode croix, le stick s'efface
     const taille = boite('u').w;
     G.manetteFerme();
     return { n: fl.length, taille, haut, bas, gauche, droite, diag, repos, avant, apres,
@@ -6127,7 +6128,7 @@ test('la manette du telephone a une croix directionnelle, pas un joystick', asyn
     && r.diag.allumees === 2 && Math.abs(r.diag.x - 0.707) < 0.01 && Math.abs(r.diag.y - 0.707) < 0.01
     && r.repos.x === 0 && r.repos.y === 0
     && r.avant.x === -1 && r.apres.y === 1 && r.apres.x === 0 && r.fin.x === 0 && r.fin.y === 0;
-  return { ok, detail: `le joystick tactile demandait de viser un centre invisible puis de doser la poussée : sans relief sous le pouce on partait toujours de travers · c'est maintenant une CROIX de manette de salon — ${r.n} grandes flèches de ${r.taille} px (▲ y=${r.haut.y}, ▼ y=${r.bas.y}, ◀ x=${r.gauche.x}, ▶ x=${r.droite.x}), deux appuis ensemble donnent la diagonale sans aller 41 % plus vite (${r.diag.x} / ${r.diag.y}) · et on GLISSE d'une flèche a l'autre sans relever le pouce (gauche → haut suivi en direct), tout revient a zéro au relâchement` };
+  return { ok, detail: `en plus du joystick, une CROIX de manette de salon est disponible d'un bouton — ${r.n} grandes flèches de ${r.taille} px (▲ y=${r.haut.y}, ▼ y=${r.bas.y}, ◀ x=${r.gauche.x}, ▶ x=${r.droite.x}), deux appuis ensemble donnent la diagonale sans aller 41 % plus vite (${r.diag.x} / ${r.diag.y}) · et on GLISSE d'une flèche a l'autre sans relever le pouce (gauche → haut suivi en direct), tout revient a zéro au relâchement` };
 });
 
 test('les QR codes de la manette sont vraiment lisibles', async p => {
@@ -6321,4 +6322,73 @@ test('quand la manette ne passe pas, elle dit POURQUOI', async p => {
   const ok = /inscrit sous le code/.test(r.absent) && /Prêt/.test(r.absent)
     && /AUTRE ONGLET/.test(r.meme) && /manette prête/i.test(r.etatB);
   return { ok, detail: `« ça ne marche pas » sans plus d'explication : le message final était le même quelle que soit la panne · il dit maintenant CE QUI a échoué, donc quoi faire · personne sous ce code → « ${r.absent.slice(0, 90)}… » · le jeu ouvert dans un autre onglet du MÊME téléphone (l'onglet s'endort en arrière-plan, donc plus personne ne répond) → « ${r.meme.slice(0, 90)}… » · et le mot d'attente ne ment plus : « ${r.etatB.trim()} » au lieu de « écran trouvé » alors que seule la manette était prête` };
+});
+
+test('le joystick de la manette est precis, et un seul paquet part par image', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.manetteOuvre(''); document.getElementById('manette').classList.add('pret');
+    const stick = document.getElementById('telStick'), base = document.getElementById('telBase');
+    if (stick.hidden) document.getElementById('telBascule').click();   // le joystick est le mode par défaut
+    const b = stick.getBoundingClientRect(), cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    const rayon = base.getBoundingClientRect().width / 2;
+    const pousse = (fx, fy) => {
+      stick.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 5, clientX: cx, clientY: cy, bubbles: true }));
+      stick.dispatchEvent(new PointerEvent('pointermove', { pointerId: 5, clientX: cx + fx * rayon, clientY: cy + fy * rayon, bubbles: true }));
+      const o = { x: +G.man.x.toFixed(3), y: +G.man.y.toFixed(3) };
+      stick.dispatchEvent(new PointerEvent('pointerup', { pointerId: 5, bubbles: true }));
+      return o;
+    };
+    const mort = pousse(0.06, 0), doux = pousse(0.4, 0), fond = pousse(1, 0), avant = pousse(0, -1);
+    const repos = { x: G.man.x, y: G.man.y };
+    // la base se pose LÀ où le pouce se pose (elle ne part plus d'un centre fixe)
+    stick.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, clientX: b.left + 40, clientY: b.top + 40, bubbles: true }));
+    const flottante = base.style.left !== '50%';
+    stick.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, bubbles: true }));
+    // la croix reste disponible au choix, et le choix est retenu
+    const avantBasc = !stick.hidden;
+    document.getElementById('telBascule').click();
+    const apres = { joy: !document.getElementById('telStick').hidden, croix: !document.getElementById('telCroix').hidden };
+    document.getElementById('telBascule').click();
+    // UN SEUL paquet par image, avec direction ET caméra dedans
+    const envoyes = [];
+    G.man.conn = { open: true, send: o => envoyes.push(o) };
+    G.man.x = 0.5; G.man.y = 0.25; G.man.px = 0; G.man.py = 0;
+    for (let i = 0; i < 60; i++) { G.man.vx = (G.man.vx || 0) + 3; G.man.vy = (G.man.vy || 0) - 1; }   // un doigt qui glisse : 60 événements
+    await new Promise(r2 => setTimeout(r2, 140));
+    G.man.conn = null;
+    const paquets = envoyes.length, p1 = envoyes[0] || {};
+    G.manetteFerme();
+    return { mort, doux, fond, avant, repos, flottante, avantBasc, apres, paquets, p1, hz: G.MANETTE_HZ,
+      rayon: Math.round(rayon) };
+  });
+  const ok = r.mort.x === 0 && r.doux.x > 0.05 && r.doux.x < 0.5 && r.fond.x === 1 && r.avant.y === 1
+    && r.repos.x === 0 && r.flottante && r.avantBasc && r.apres.croix && !r.apres.joy
+    && r.paquets <= 12 && r.p1.t === 'in' && r.p1.x === 0.5 && r.p1.dx === 180 && r.p1.n === 1;
+  return { ok, detail: `le joystick est de retour, mais un VRAI : la base se pose là où le pouce se pose (${r.flottante}), une zone morte franche (6 % de poussée → ${r.mort.x}), une réponse progressive (40 % → ${r.doux.x}) et la pleine puissance au bord (${r.fond.x}) — on marche doucement au centre et on court à fond au bord · la croix reste disponible d'un bouton, et le choix est retenu · surtout, la direction et la caméra partaient dans des messages SÉPARÉS, plus de cent par seconde quand le doigt glissait : le canal saturait et la commande arrivait de plus en plus en retard · tout tient maintenant dans UN paquet par image à ${r.hz} Hz (60 mouvements de caméra → ${r.paquets} paquets, avec direction ${r.p1.x} et caméra ${r.p1.dx} dedans), numéroté pour qu'un paquet en retard ne fasse jamais reculer le personnage` };
+});
+
+test('la lumiere de la ville est plus chaude', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const froid = c => { const x = new THREE.Color(c); return x.b - x.r; };   // > 0 = bleuté, < 0 = chaud
+    const lu = {
+      soleil: G.sun.color.getHexString(), ciel: G.hemi.color.getHexString(),
+      sol: G.hemi.groundColor.getHexString(), fond: G.scene.background.getHexString(),
+      brume: G.scene.fog.color.getHexString(),
+    };
+    const chaud = {
+      soleil: froid(G.sun.color) < -0.05, ciel: froid(G.hemi.color) < 0,
+      sol: froid(G.hemi.groundColor) < -0.05,
+    };
+    // le ciel et la brume ont été réchauffés par rapport au thème d'origine
+    const theme = G.WORLDS.find(w => w.id === 'ville').theme;
+    const ecartCiel = froid(new THREE.Color(theme.sky)) - froid(G.scene.background);
+    const ecartBrume = froid(new THREE.Color(theme.fog[0])) - froid(G.scene.fog.color);
+    return { lu, chaud, ecartCiel: +ecartCiel.toFixed(3), ecartBrume: +ecartBrume.toFixed(3) };
+  });
+  const ok = r.chaud.soleil && r.chaud.ciel && r.chaud.sol && r.ecartCiel > 0.03 && r.ecartBrume > 0.05;
+  return { ok, detail: `tout était éclairé d'un blanc bleuté un peu clinique — soleil blanc, ciel froid, rebond du sol gris et lumière d'appoint franchement bleue · la lumière est maintenant celle d'une fin d'après-midi : soleil doré (#${r.lu.soleil}), ciel ambré (#${r.lu.ciel}), rebond du sol couleur sable (#${r.lu.sol}), appoint tiède · et le ciel comme la brume sont décalés vers le chaud (${r.ecartCiel} et ${r.ecartBrume} de bleu en moins) sans que les couleurs franches du jeu y perdent` };
 });

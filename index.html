@@ -418,9 +418,25 @@ body.tv #tvBadge.on{display:block}
    viser le centre puis de doser la poussée : sur un téléphone, sans relief sous le pouce, on
    partait toujours de travers. Quatre grandes flèches, on les sent au coin de l'écran, et
    deux appuis ensemble donnent la diagonale. */
-#telCroix{position:absolute;left:0;top:0;width:52%;height:100%;display:grid;place-content:center;
+#telGauche{position:absolute;left:0;top:0;width:52%;height:100%;touch-action:none}
+#telBascule{position:absolute;left:10px;bottom:10px;z-index:2;width:44px;height:44px;border-radius:14px;
+  border:2px solid rgba(255,255,255,.28);background:rgba(255,255,255,.14);color:#fff;font-size:20px}
+/* LE JOYSTICK. Il ne part plus d'un centre fixe : la base se pose LÀ où le pouce se pose, la
+   course est lisible (anneau extérieur = poussée maximale), avec une zone morte franche et une
+   réponse progressive — on marche doucement au centre, on court à fond au bord. */
+#telStick{position:absolute;inset:0;touch-action:none}
+#telBase{position:absolute;left:50%;top:52%;width:min(52vw,260px);height:min(52vw,260px);transform:translate(-50%,-50%);
+  border-radius:50%;background:radial-gradient(circle at 50% 45%,rgba(255,255,255,.16),rgba(255,255,255,.05) 70%);
+  border:2px solid rgba(255,255,255,.3);box-shadow:inset 0 0 24px rgba(0,0,0,.35);transition:opacity .15s}
+#telBase .anneau{position:absolute;inset:14%;border-radius:50%;border:2px dashed rgba(255,255,255,.18)}
+#telKnob{position:absolute;left:50%;top:50%;width:38%;height:38%;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#fff,#c9d4e8 60%,#93a2bd);
+  box-shadow:0 8px 20px rgba(0,0,0,.45),inset 0 -4px 8px rgba(0,0,0,.18)}
+#telStick.on #telBase{border-color:#ffd23f}
+#telCroix{position:absolute;inset:0;display:grid;place-content:center;
   grid-template-columns:repeat(3,auto);grid-template-rows:repeat(3,auto);
   gap:8px;padding:10px;touch-action:none}
+#telCroix[hidden]{display:none}
 #telCroix .fl{width:clamp(58px,15vw,96px);height:clamp(58px,15vw,96px);border-radius:18px;
   border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.13);color:#fff;
   font-size:clamp(22px,5.5vw,34px);font-weight:800;display:grid;place-items:center;
@@ -444,7 +460,9 @@ body.tv #tvBadge.on{display:block}
 /* téléphone tenu à l'horizontale : le pouce gauche sur la croix, le droit sur les boutons,
    et la zone caméra au milieu pour qu'ils ne se marchent plus dessus */
 @media (orientation:landscape){
-  #telCroix{width:34%;gap:4px;padding:6px}
+  #telGauche{width:34%}
+  #telBase{width:min(30vw,200px);height:min(30vw,200px)}
+  #telCroix{gap:4px;padding:6px}
   #telCroix .fl{width:clamp(44px,13vh,74px);height:clamp(44px,13vh,74px);font-size:clamp(17px,4vh,26px);border-radius:14px}
   #telVise{left:34%;right:40%;width:auto;height:100%;border-right:1px dashed rgba(255,255,255,.14)}
   #telBtns{left:auto;right:8px;width:38%;top:50%;bottom:auto;transform:translateY(-50%);gap:6px}
@@ -597,12 +615,16 @@ body.tv #tvBadge.on{display:block}
     <p id="telErr" style="color:#ffd23f"></p>
   </div>
   <div id="telJeu">
-    <div id="telCroix">
-      <button class="fl haut" data-d="u" aria-label="avancer">▲</button>
-      <button class="fl gauche" data-d="l" aria-label="gauche">◀</button>
-      <button class="fl centre" aria-hidden="true"></button>
-      <button class="fl droite" data-d="r" aria-label="droite">▶</button>
-      <button class="fl bas" data-d="d" aria-label="reculer">▼</button>
+    <div id="telGauche">
+      <div id="telStick"><div id="telBase"><i class="anneau"></i><div id="telKnob"></div></div></div>
+      <div id="telCroix" hidden>
+        <button class="fl haut" data-d="u" aria-label="avancer">▲</button>
+        <button class="fl gauche" data-d="l" aria-label="gauche">◀</button>
+        <button class="fl centre" aria-hidden="true"></button>
+        <button class="fl droite" data-d="r" aria-label="droite">▶</button>
+        <button class="fl bas" data-d="d" aria-label="reculer">▼</button>
+      </div>
+      <button id="telBascule" title="Joystick ou croix">🕹️</button>
     </div>
     <div id="telVise"><span>glisse ici pour tourner la caméra</span></div>
     <div id="telBtns">
@@ -927,10 +949,10 @@ scene.updateMatrix(); worldGroup.updateMatrix();
 //      descend l'échelle de rendu par paliers ; dès que ça respire, on la remonte. Si ça rame
 //      encore au plus bas, les ombres s'éteignent, et se rallument quand ça va mieux.
 const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0 };
-// On rendait en 1600 px de large : sur une télé 4K l'image était visiblement floue. Le
-// plafond monte à 2160 (au-delà du 1080p) et c'est la mesure du temps des images qui décide
-// de descendre, au lieu de tout brider a priori.
-const PLAFOND_TV = 2160, PLAFOND_PC = 2560;
+// PLUS AUCUN BRIDAGE A PRIORI. On plafonnait d'abord à 1600 px, puis à 2160 : sur une télé 4K
+// l'image restait molle. On rend maintenant jusqu'au NATIF de l'écran, et c'est uniquement la
+// mesure du temps des images qui fait redescendre si la machine ne suit pas.
+const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
 function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : PLAFOND_PC; }
 function ratioQualite() {
   const q = settings.quality;
@@ -988,7 +1010,7 @@ function fluiditeTick(ms) {
 let anisoMax = 0;
 function netteteTextures() {
   if (!anisoMax) { try { anisoMax = renderer.capabilities.getMaxAnisotropy() || 1; } catch (e) { anisoMax = 1; } }
-  const a = Math.max(1, Math.min(anisoMax, document.body.classList.contains('tv') ? 8 : 4));
+  const a = Math.max(1, Math.min(anisoMax, document.body.classList.contains('tv') ? 16 : 8));   // au maximum de la machine sur la télé
   const vus = new Set(); let n = 0;
   scene.traverse(o => {
     if (!o.isMesh || !o.material) return;
@@ -4375,7 +4397,10 @@ function dayTick() {
   const night = 1 - light; day.night = night;
   const a = (h - 5.5) / 13 * Math.PI; sun.position.set(Math.cos(a) * 120, Math.max(45, Math.sin(a) * 130), 60);
   sun.intensity = 0.08 + light * 1.02; hemi.intensity = 0.22 + light * 0.52;   // soleil plus franc, voile d'ambiance plus bas : les ombres portées redeviennent lisibles
-  const sky = new THREE.Color(0x0b1030).lerp(new THREE.Color(0x8fd3ff), light); scene.background = sky; if (scene.fog) scene.fog.color.copy(sky);
+  // le cycle du jour repeignait le ciel et la brume À CHAQUE IMAGE, en bleu froid : il écrasait
+  // la lumière chaude posée au chargement. Il la respecte maintenant.
+  const sky = new THREE.Color(0x1a1428).lerp(new THREE.Color(0x9fd6f5), light);
+  scene.background = tiedis(sky.getHex(), 0.22); if (scene.fog) scene.fog.color.copy(tiedis(sky.getHex(), 0.32));
   stars.visible = light < 0.2; sunSprite.visible = light > 0.15;
   const lamps = night > 0.5;
   if (lamps !== day.last) {
@@ -7330,14 +7355,27 @@ function cityReset() {
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
   city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
+// LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
+// soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
+// couleur sable) et on tiédit le ciel et la brume — la ville prend un ton de fin d'après-midi
+// sans rien perdre de ses couleurs franches.
+const CHAUD = { soleil: 0xffdcae, ciel: 0xfff1e2, sol: 0x8f8264 };
+function tiedis(hex, force) {   // décale une couleur vers l'orangé, sans la délaver
+  const c = new THREE.Color(hex), h = { h: 0, s: 0, l: 0 };
+  c.getHSL(h);
+  let t2 = h.h > 0.5 ? h.h - (h.h - 0.09) * force : h.h + (0.09 - h.h) * force * 0.5;   // on rapproche du doré
+  return new THREE.Color().setHSL((t2 + 1) % 1, Math.min(1, h.s * (1 + force * 0.12)), Math.min(1, h.l * (1 + force * 0.05)));
+}
 function applyTheme(t) {
-  scene.background = new THREE.Color(t.sky);
-  scene.fog = new THREE.Fog(t.fog[0], t.fog[1], t.fog[2]);
+  scene.background = tiedis(t.sky, 0.22);
+  const brume = tiedis(t.fog[0], 0.3);
+  scene.fog = new THREE.Fog(brume, t.fog[1], t.fog[2]);
   waterMat.color.set(t.water[0]); waterMat.emissive.set(t.water[0]); waterMat.emissiveIntensity = t.water[2]; water.position.y = t.water[1];
-  hemi.color.set(t.hemi[0]); hemi.groundColor.set(t.hemi[1]); hemi.intensity = t.hemi[2] * 0.78;
-  sun.color.set(t.sun[0]); sun.intensity = t.sun[1] * 1.15;
+  hemi.color.set(t.stars ? t.hemi[0] : CHAUD.ciel); hemi.groundColor.set(t.stars ? t.hemi[1] : CHAUD.sol); hemi.intensity = t.hemi[2] * 0.8;
+  sun.color.set(t.stars ? t.sun[0] : CHAUD.soleil); sun.intensity = t.sun[1] * 1.2;
+  fill.color.set(t.stars ? 0xa8c8ff : 0xffc48f);   // l'appoint était franchement bleu : il l'est beaucoup moins
   stars.visible = t.stars; sunSprite.visible = !t.stars;
-  document.querySelector('meta[name=theme-color]').content = '#' + t.sky.toString(16).padStart(6, '0');
+  document.querySelector('meta[name=theme-color]').content = '#' + scene.background.getHexString();
 }
 function loadWorld(i) {
   worldIdx = i; const w = WORLDS[i];
@@ -10820,7 +10858,10 @@ function step(dt, active) {
       P.pasT = simTime + (P.court ? 0.26 : 0.42);
       sfx.noise(.09, 950, .022); sfx.tone(120, 0, .05, 'triangle', .012, 90);
     }
-    const a = 1 - Math.exp(-(P.grounded ? (onIce ? 2.2 : 14) : 4) * dt);
+    // À la manette, le retard d'affichage s'ajoute au temps de mise en vitesse : le personnage
+    // semblait partir une demi-seconde après le pouce. On le rend plus vif dès qu'une manette pilote.
+    const vif = tel.on ? 26 : 14;
+    const a = 1 - Math.exp(-(P.grounded ? (onIce ? 2.2 : vif) : 4) * dt);
     P.vel.x += (wantX - P.vel.x) * a; P.vel.z += (wantZ - P.vel.z) * a;
     P.coyote = P.grounded ? 0.12 : P.coyote - dt;
     if (P.jumpBuf > 0) P.jumpBuf -= dt;
@@ -13581,6 +13622,19 @@ const TEL_TOUCHES = { saut: 'Space', action: 'KeyE', tir: 'KeyX', degaine: 'KeyG
 
 function telCommande(d) {   // message reçu d'une manette
   if (!d || typeof d !== 'object') return;
+  // « in » : le paquet unique, direction ET caméra, envoyé une fois par image. On ignore un
+  // paquet arrivé dans le désordre (le canal est non fiable) : une commande périmée ferait
+  // reculer le personnage d'un cran.
+  if (d.t === 'in') {
+    if (d.n != null) { if (tel.n != null && d.n <= tel.n && tel.n - d.n < 1000) return; tel.n = d.n; }
+    if (d.x != null) { tel.x = clamp(+d.x || 0, -1, 1); tel.y = clamp(+d.y || 0, -1, 1); }
+    if (d.dx || d.dy) {
+      cam.yaw -= (+d.dx || 0) * 0.0055;
+      cam.pitch = clamp(cam.pitch + (+d.dy || 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+      cam.freeUntil = simTime + 2.5;
+    }
+    return;
+  }
   if (d.t === 'ax') { tel.x = clamp(+d.x || 0, -1, 1); tel.y = clamp(+d.y || 0, -1, 1); return; }
   if (d.t === 'look') {
     cam.yaw -= (+d.dx || 0) * 0.0055;
@@ -13898,10 +13952,40 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
 // ---- les gestes sur le téléphone-manette --------------------------------------------
 (() => {
   const el = id => document.getElementById(id);
-  const croix = el('telCroix'), vise = el('telVise');
-  // --- LA CROIX : on suit chaque doigt et on regarde quelle flèche est dessous, pour qu'on
-  // puisse GLISSER d'une flèche à l'autre sans relever le pouce (et en presser deux). ---
-  const doigts = new Map();   // pointerId → flèche sous le doigt
+  const croix = el('telCroix'), vise = el('telVise'), stick = el('telStick'),
+        base = el('telBase'), knob = el('telKnob'), gauche = el('telGauche'), bascule = el('telBascule');
+  // ---- LE JOYSTICK : base flottante, zone morte, réponse progressive ----
+  let sid = null;
+  const rayon = () => base.getBoundingClientRect().width / 2;
+  const poseBase = (x, y) => { const b = gauche.getBoundingClientRect();
+    base.style.left = (x - b.left) + 'px'; base.style.top = (y - b.top) + 'px';
+    man.cx = x; man.cy = y; };
+  const bougeKnob = (dx, dy) => { knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; };
+  stick.addEventListener('pointerdown', e => {
+    e.preventDefault(); sid = e.pointerId; stick.classList.add('on');
+    poseBase(e.clientX, e.clientY); bougeKnob(0, 0);
+    try { stick.setPointerCapture(e.pointerId); } catch (_) {}
+    if (navigator.vibrate) navigator.vibrate(10);
+  });
+  stick.addEventListener('pointermove', e => {
+    if (e.pointerId !== sid) return;
+    let dx = e.clientX - man.cx, dy = e.clientY - man.cy;
+    const d = Math.hypot(dx, dy), r = rayon();
+    if (d > r) { dx *= r / d; dy *= r / d; }
+    bougeKnob(dx, dy);
+    // zone morte de 12 %, puis une courbe douce au centre et pleine puissance au bord :
+    // c'est ce qui manquait au premier joystick, où tout partait à fond dès le moindre appui
+    let mag = Math.min(1, d / r); mag = mag < 0.12 ? 0 : (mag - 0.12) / 0.88;
+    mag = mag * (0.45 + 0.55 * mag);
+    const nx = d > 0.01 ? dx / d : 0, ny = d > 0.01 ? dy / d : 0;
+    man.x = nx * mag; man.y = -ny * mag;
+  });
+  const lacheStick = e => { if (e.pointerId !== sid) return;
+    sid = null; stick.classList.remove('on'); man.x = man.y = 0; bougeKnob(0, 0);
+    base.style.left = '50%'; base.style.top = '52%'; };
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) stick.addEventListener(ev, lacheStick);
+  // ---- LA CROIX, en option : on suit chaque doigt pour pouvoir GLISSER d'une flèche a l'autre ----
+  const doigts = new Map();
   const fleches = [...croix.querySelectorAll('[data-d]')];
   const sousLeDoigt = (x, y) => { const e = document.elementFromPoint(x, y); return e && e.closest ? e.closest('#telCroix [data-d]') : null; };
   function majCroix() {
@@ -13909,7 +13993,7 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
     for (const f of fleches) f.classList.toggle('on', on.has(f.dataset.d));
     let x = (on.has('r') ? 1 : 0) - (on.has('l') ? 1 : 0);
     let y = (on.has('u') ? 1 : 0) - (on.has('d') ? 1 : 0);
-    if (x && y) { x *= Math.SQRT1_2; y *= Math.SQRT1_2; }   // en diagonale on ne va pas 41 % plus vite
+    if (x && y) { x *= Math.SQRT1_2; y *= Math.SQRT1_2; }
     man.x = x; man.y = y;
   }
   croix.addEventListener('pointerdown', e => {
@@ -13929,23 +14013,43 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
   for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, e => {
     if (!doigts.has(e.pointerId)) return; doigts.delete(e.pointerId); majCroix();
   });
-  // --- la moitié droite : glisser pour tourner la caméra ---
+  // ---- l'un ou l'autre, au choix, et le choix est retenu ----
+  function modeManette(joy) {
+    man.joy = joy;
+    stick.hidden = !joy; croix.hidden = !!joy;
+    bascule.textContent = joy ? '🕹️' : '✚';
+    man.x = man.y = 0; doigts.clear(); majCroix(); man.x = man.y = 0;
+    try { localStorage.setItem('superobby.manette', joy ? 'joy' : 'croix'); } catch (_) {}
+  }
+  bascule.addEventListener('click', () => modeManette(!man.joy));
+  modeManette((() => { try { return localStorage.getItem('superobby.manette') !== 'croix'; } catch (_) { return true; } })());
+  // ---- la moitié droite : glisser pour tourner la caméra ----
   let vid = null;
   vise.addEventListener('pointerdown', e => { e.preventDefault(); vid = e.pointerId; man.lx = e.clientX; man.ly = e.clientY;
     try { vise.setPointerCapture(e.pointerId); } catch (_) {} });
   vise.addEventListener('pointermove', e => {
     if (e.pointerId !== vid) return;
-    manEnvoie({ t: 'look', dx: e.clientX - man.lx, dy: e.clientY - man.ly });
+    // ON N'ENVOIE RIEN ICI : un doigt qui glisse produit plus de cent événements par seconde,
+    // et chacun partait en message. Le canal saturait et la caméra prenait un demi-tour de
+    // retard. On cumule, et le battement d'envoi expédie le total une fois par image.
+    man.vx = (man.vx || 0) + (e.clientX - man.lx); man.vy = (man.vy || 0) + (e.clientY - man.ly);
     man.lx = e.clientX; man.ly = e.clientY;
   });
   const lache = e => { if (e.pointerId === vid) vid = null; };
-  vise.addEventListener('pointerup', lache); vise.addEventListener('pointercancel', lache);
-  // 25 messages par seconde, c'était 40 ms de retard AVANT même le réseau : le personnage
-  // partait toujours un cran après le pouce. On passe à 60 par seconde — le canal est en
-  // mode « non fiable », les paquets ne s'accumulent donc jamais.
+  // UN SEUL PAQUET PAR IMAGE, avec l'état LE PLUS RÉCENT. Avant, la direction partait dans un
+  // message et chaque glissement de caméra dans un autre — plus de cent par seconde. Le canal
+  // saturait, les paquets faisaient la queue, et la commande arrivait avec un retard qui
+  // grandissait tant qu'on bougeait le doigt. Maintenant tout tient dans un envoi à 60 Hz :
+  // la direction courante et le cumul de la caméra depuis le dernier envoi.
   setInterval(() => {
     if (!man.conn || !man.conn.open) return;
-    if (man.x !== man.px || man.y !== man.py) { manEnvoie({ t: 'ax', x: +man.x.toFixed(3), y: +man.y.toFixed(3) }); man.px = man.x; man.py = man.y; }
+    const bougeAxe = man.x !== man.px || man.y !== man.py;
+    const bougeVue = (man.vx || man.vy);
+    if (!bougeAxe && !bougeVue) return;
+    const p2 = { t: 'in', n: (man.n = (man.n || 0) + 1) };
+    if (bougeAxe) { p2.x = +man.x.toFixed(3); p2.y = +man.y.toFixed(3); man.px = man.x; man.py = man.y; }
+    if (bougeVue) { p2.dx = Math.round(man.vx || 0); p2.dy = Math.round(man.vy || 0); man.vx = man.vy = 0; }
+    manEnvoie(p2);
   }, Math.round(1000 / MANETTE_HZ));
   for (const b of document.querySelectorAll('#telBtns .tb')) {
     const nom = b.dataset.b;

@@ -5859,3 +5859,93 @@ test('au tennis on se deplace aussi de cote', async p => {
     && Math.abs(r.versFilet - 180) < 12 && r.versBalle < 15;
   return { ok, detail: `en mode « rotation » (le réglage par défaut) gauche/droite faisait PIVOTER le joueur : pour rattraper une balle sur le côté il fallait tourner, avancer, se retourner — infaisable dans un échange · raquette en main sur le court, les deux touches le font maintenant GLISSER le long de sa ligne de fond (${r.gauche.dx} m a gauche, ${r.droite.dx} m a droite, ${Math.abs(r.droite.dz)} m d'écart en profondeur) tandis que avancer le porte vers le filet (${r.avant.dz} m) · il se tourne tout seul vers le filet (${r.versFilet}°) puis vers la balle des qu'elle est en jeu (${r.versBalle}° d'écart) · hors du court, rien ne change : la même touche le fait pivoter de ${Math.abs(r.sansRaquette.cap)}° sans le déplacer` };
 });
+
+test('sur la tele, le radar et les jauges sont harmonises et laissent voir le joueur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const baseAvant = G.cam.base;
+    G.modeTV(true);
+    document.getElementById('chat').classList.add('open');
+    const W = innerWidth, H = innerHeight, marge = Math.min(W, H) * 0.04;
+    const box = sel => { const e = sel[0] === '.' ? document.querySelector(sel) : document.getElementById(sel);
+      if (!e) return null; const st = getComputedStyle(e), b = e.getBoundingClientRect();
+      if (st.display === 'none' || st.visibility === 'hidden' || !b.width) return null;
+      return { id: sel, x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; };
+    const panneaux = ['me', 'lb', 'chat', 'gps', 'act'].map(box).filter(Boolean);
+    const cadres = ['.tl', '.tc', '.tr'].map(box).filter(Boolean);
+    // 1) rien ne tombe dans le surbalayage (les télés rognent 3 a 5 % des bords)
+    const dehors = [...panneaux, ...cadres].filter(b => b.x < marge - 2 || b.y < marge - 2
+      || b.x + b.w > W - marge + 2 || b.y + b.h > H - marge + 2).map(b => b.id);
+    // 2) la bande du milieu — la ou se tient le joueur — reste libre
+    const cx1 = W * 0.32, cx2 = W * 0.68, cy1 = H * 0.42, cy2 = H * 0.98;
+    const gene = panneaux.filter(b => b.x < cx2 && b.x + b.w > cx1 && b.y < cy2 && b.y + b.h > cy1).map(b => b.id);
+    // 3) aucun panneau n'en recouvre un autre
+    const chev = [];
+    for (let i = 0; i < panneaux.length; i++) for (let j = i + 1; j < panneaux.length; j++) {
+      const a = panneaux[i], b = panneaux[j];
+      if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) chev.push(a.id + '/' + b.id);
+    }
+    // 4) le radar est bien dans le coin bas droit (il trônait au milieu, devant le joueur)
+    const g = box('gps'), coin = g ? { droite: Math.round(W - (g.x + g.w)), bas: Math.round(H - (g.y + g.h)) } : null;
+    const chatCoin = (() => { const c = box('chat'); return c ? { gauche: c.x, bas: Math.round(H - (c.y + c.h)) } : null; })();
+    // 5) une seule échelle : tout est exprimé en --u et une seule marge en --tvpad
+    const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } })
+      .filter(x => x.selectorText && /body\.tv/.test(x.selectorText));
+    const enU = css.filter(x => /var\(--u\)/.test(x.style.cssText)).length;
+    const enPad = css.filter(x => /var\(--tvpad\)/.test(x.style.cssText)).length;
+    // 6) les commandes tactiles disparaissent (une télé n'a pas d'écran tactile)
+    const tactiles = ['joy', 'joyHome', 'jumpBtn', 'carBtn', 'punchBtn'].filter(id => {
+      const e = document.getElementById(id); return e && getComputedStyle(e).display !== 'none'; });
+    const baseApres = G.cam.base;
+    G.modeTV(false);
+    const gpsNormal = box('gps');
+    const centre = gpsNormal ? Math.abs((gpsNormal.x + gpsNormal.w / 2) - W / 2) < 6 : false;
+    return { W, H, marge: Math.round(marge), panneaux, dehors, gene, chev, coin, chatCoin,
+      enU, enPad, tactiles, baseAvant, baseApres, gpsNormalAuCentre: centre, base3: G.cam.base };
+  });
+  const ok = r.dehors.length === 0 && r.gene.length === 0 && r.chev.length === 0
+    && r.coin && r.coin.droite <= r.marge + 3 && r.coin.bas <= r.marge + 3
+    && r.chatCoin && r.chatCoin.gauche <= r.marge + 3 && r.chatCoin.bas <= r.marge + 3
+    && r.enU >= 12 && r.enPad >= 4 && r.tactiles.length === 0
+    && r.baseApres > r.baseAvant && r.gpsNormalAuCentre;
+  return { ok, detail: `chaque élément avait sa propre formule de taille et sa propre marge, et le radar trônait au MILIEU du bas de l'écran, pile devant le joueur · tout découle maintenant d'une seule unité (--u, ${r.enU} règles) et d'un seul retrait (--tvpad, ${r.enPad} règles) · les quatre coins sont pris — jauges et scores en haut, chat en bas a gauche (${r.chatCoin.gauche} px du bord), RADAR en bas a droite (${r.coin.droite} px du bord, ${r.coin.bas} px du bas) — et la bande du milieu ou se tient le joueur reste libre (${r.gene.length} gêneur, ${r.chev.length} chevauchement) · rien ne tombe dans le surbalayage de ${r.marge} px que rognent les télés (${r.dehors.length} débordement) · les ${5 - r.tactiles.length}/5 boutons tactiles s'effacent et la caméra recule de ${r.baseAvant} a ${r.baseApres} pour qu'on voie son personnage de loin · hors mode TV le radar revient au centre` };
+});
+
+test('on connecte une smart TV et le telephone sert de manette', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.ouvreSalonTV();
+    const lien = G.lienTV();
+    const codeManette = document.getElementById('tvCode').textContent.trim();
+    const lienManette = document.getElementById('lienManette').textContent.trim();
+    const qr = id => { const c = document.getElementById(id); if (!c) return 0;
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let noirs = 0; for (let i = 0; i < d.length; i += 16) if (d[i] < 100) noirs++; return noirs; };
+    const cartes = document.querySelectorAll('#tvsalon .tvcase').length;
+    const boutonCast = !!document.getElementById('tvCast');
+    // le lien de la télé ouvre le jeu directement en affichage géant
+    const avant = document.body.classList.contains('tv');
+    location.hash = '#tv'; const route = G.routeLien();
+    const enTV = document.body.classList.contains('tv');
+    location.hash = '';
+    // le lien de la manette ouvre l'écran manette, pas le jeu
+    const routeMan = (() => { location.hash = '#manette=ABCD'; const x = G.routeLien();
+      const ouvert = document.getElementById('manette').classList.contains('on');
+      G.manetteFerme(); location.hash = ''; return { x, ouvert }; })();
+    // la pastille du bas dit combien de manettes répondent
+    G.modeTV(true); G.tvManettesMaj();
+    const badge = document.getElementById('tvBadge');
+    const badgeVu = badge && getComputedStyle(badge).display !== 'none' && /manette/i.test(badge.textContent);
+    G.modeTV(false); G.closeUI();
+    return { lien, finTV: /#tv$/.test(lien), codeManette, lienManette,
+      qrTV: qr('qrTV'), qrManette: qr('qrManette'), cartes, boutonCast,
+      castPret: G.castPret(), route, enTV, avant, routeMan, badgeVu };
+  });
+  const ok = r.finTV && r.qrTV > 200 && r.qrManette > 200 && r.cartes === 3 && r.boutonCast
+    && /^[A-Z]{4}$/.test(r.codeManette) && /#manette=/.test(r.lienManette)
+    && r.route === 'tv' && r.enTV && !r.avant
+    && r.routeMan.x === 'manette' && r.routeMan.ouvert && r.badgeVu;
+  return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton « Diffuser » utilise l'API Presentation quand l'appareil sait caster (ici ${r.castPret ? 'oui' : 'non, on retombe sur le lien a ouvrir dans le navigateur de la télé'}) · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
+});

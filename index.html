@@ -326,32 +326,55 @@ body.lobby #emoteBtn{display:none}
 .tunedesc{color:#5b6478;font-size:13px;margin-top:8px;text-align:center}
 .tuneprix{font-weight:800;color:#1b2a4a;margin:10px 0 6px;text-align:center}
 /* ================= Mode TV : on joue de loin, tout doit être plus gros ================= */
-body.tv{--k:1}
-body.tv #top{padding:calc(env(safe-area-inset-top) + 3vh) calc(env(safe-area-inset-right) + 3.2vw) 0 calc(env(safe-area-inset-left) + 3.2vw);gap:14px}
-body.tv .pill{font-size:clamp(17px,1.5vw,26px);padding:12px 17px;border-radius:14px;border-width:2px}
-body.tv .ibtn{width:clamp(48px,3.6vw,66px);height:clamp(48px,3.6vw,66px);font-size:clamp(22px,1.8vw,30px);border-radius:14px}
-body.tv #me{font-size:clamp(16px,1.3vw,24px);padding:10px 14px;border-radius:14px}
-body.tv .hp{width:clamp(120px,10vw,190px);height:13px}
-body.tv .hp.st{height:9px}
-body.tv #lb{font-size:clamp(15px,1.2vw,22px);min-width:clamp(230px,17vw,330px);border-radius:14px}
-body.tv .lbh,body.tv .lbr{padding:9px 14px;font-size:clamp(14px,1.1vw,20px)}
-body.tv #chat{left:calc(env(safe-area-inset-left) + 3.2vw);top:calc(env(safe-area-inset-top) + 3vh + 68px);width:clamp(320px,24vw,460px)}
-body.tv #chatLog{font-size:clamp(15px,1.2vw,22px);max-height:22vh}
-body.tv #chatIn{font-size:clamp(15px,1.2vw,22px);padding:11px 13px}
-body.tv #msg{font-size:clamp(38px,4.6vw,86px);top:22%}
-body.tv #msg.long{font-size:clamp(24px,2.6vw,46px)}
-body.tv #gps{width:clamp(150px,11vw,210px);height:clamp(150px,11vw,210px);bottom:calc(env(safe-area-inset-bottom) + 3vh)}
-body.tv #wanted{font-size:clamp(20px,1.8vw,32px);padding:10px 18px}
+/* Chaque élément avait sa propre formule de taille et sa propre marge : les tailles ne se
+   répondaient pas, et le radar trônait au MILIEU du bas de l'écran, pile devant le joueur.
+   Tout découle maintenant d'une seule unité (--u) et d'un seul retrait (--tvpad) — les
+   téléviseurs rognent 3 à 5 % des bords, rien ne doit tomber dedans. Les quatre coins sont
+   occupés, le centre reste libre : on voit le jeu et on voit son personnage. */
+body.tv{--u:clamp(15px,1.15vw,23px);--tvpad:max(4vmin,env(safe-area-inset-top));--tvr:calc(var(--u) * .72)}
+body.tv #top{padding:var(--tvpad) var(--tvpad) 0;gap:calc(var(--u) * .8)}
+body.tv .pill{font-size:calc(var(--u) * 1.05);padding:calc(var(--u) * .5) calc(var(--u) * .75);border-radius:var(--tvr);border-width:2px}
+body.tv .ibtn{width:calc(var(--u) * 2.4);height:calc(var(--u) * 2.4);font-size:calc(var(--u) * 1.25);border-radius:var(--tvr)}
+body.tv #me{font-size:calc(var(--u) * .95);padding:calc(var(--u) * .55) calc(var(--u) * .8);border-radius:var(--tvr);gap:calc(var(--u) * .55)}
+body.tv .hp{width:calc(var(--u) * 5);height:calc(var(--u) * .6)}
+/* la colonne de droite ne mange jamais plus du tiers de l'image */
+body.tv .tr{max-width:34vw}
+body.tv #me{flex-wrap:wrap;max-width:100%}
+body.tv .hp.st{height:calc(var(--u) * .42)}
+body.tv .hp.pf{height:calc(var(--u) * .6)}
+body.tv .pfn{font-size:calc(var(--u) * .8)}
+body.tv #lb{font-size:calc(var(--u) * .9);min-width:calc(var(--u) * 13);border-radius:var(--tvr)}
+body.tv .lbh,body.tv .lbr{padding:calc(var(--u) * .42) calc(var(--u) * .72);font-size:calc(var(--u) * .85)}
+/* le tableau des joueurs s'arrête au-dessus du milieu : il descendait jusque sur le radar */
+/* et il se fond au lieu d'être tranché net : de loin, une ligne coupée fait « écran cassé » */
+body.tv #lbRows{max-height:26vh;overflow-y:auto;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)}
+body.tv #chatLog{-webkit-mask-image:linear-gradient(transparent,#000 16%);mask-image:linear-gradient(transparent,#000 16%)}
+/* le chat descend en bas à gauche : le haut de l'image reste dégagé */
+body.tv #chat{left:var(--tvpad);top:auto;bottom:var(--tvpad);width:calc(var(--u) * 17);border-radius:var(--tvr)}
+body.tv #chatLog{font-size:calc(var(--u) * .9);max-height:calc(var(--u) * 8.5)}
+body.tv #chatIn{font-size:calc(var(--u) * .9);padding:calc(var(--u) * .5)}
+body.tv #msg{font-size:calc(var(--u) * 3.1);top:20%}
+body.tv #msg.long{font-size:calc(var(--u) * 1.65)}
+/* LE RADAR passe dans le coin bas droit : au centre, il masquait le joueur */
+body.tv #gps{left:auto;right:var(--tvpad);bottom:var(--tvpad);transform:none;
+  width:calc(var(--u) * 8.4);height:calc(var(--u) * 8.4);border-width:3px}
+body.tv #wanted{font-size:calc(var(--u) * 1.2);padding:calc(var(--u) * .45) calc(var(--u) * .85);top:calc(var(--tvpad) + var(--u) * 3.6)}
+body.tv #missionHud{font-size:calc(var(--u) * .9);padding:calc(var(--u) * .4) calc(var(--u) * .8);top:calc(var(--tvpad) + var(--u) * 6)}
+body.tv #perfHud{display:none!important}   /* la performance est déjà dans la barre du haut */
 body.tv #cross{transform:translate(-50%,-50%) scale(1.7)}
-body.tv #missionHud{font-size:clamp(15px,1.2vw,22px)}
 /* une TV n'a pas d'écran tactile : les gros boutons du pouce ne servent à rien */
 body.tv #joyHome,body.tv #joy,body.tv #jumpBtn,body.tv #emoteBtn,body.tv #carBtn,body.tv #raceBtn,
 body.tv #racketBtn,body.tv #fireBtn,body.tv #punchBtn,body.tv #drawBtn,body.tv #aimBtn,
 body.tv #aimUp,body.tv #aimDown{display:none!important}
-body.tv .card{max-width:min(940px,86vw);font-size:clamp(15px,1.15vw,21px)}
-body.tv .card h1{font-size:clamp(38px,4vw,72px)}
-body.tv .card h2{font-size:clamp(26px,2.4vw,44px)}
-body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
+body.tv .card{max-width:min(940px,86vw);font-size:calc(var(--u) * .95)}
+body.tv .card h1{font-size:calc(var(--u) * 3)}
+body.tv .card h2{font-size:calc(var(--u) * 1.9)}
+body.tv .btn{font-size:calc(var(--u) * 1.1);padding:calc(var(--u) * .6) calc(var(--u) * .95)}
+/* pastille discrète en bas au centre : combien de manettes sont branchées */
+#tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
+  background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
+  color:#eaf0ff;font-weight:800;padding:calc(var(--u,15px) * .4) calc(var(--u,15px) * .9);font-size:calc(var(--u,15px) * .85)}
+body.tv #tvBadge.on{display:block}
 /* navigation à la manette / télécommande : l'élément visé est entouré */
 .focustv{outline:4px solid #ffd23f!important;outline-offset:3px;box-shadow:0 0 0 8px rgba(255,210,63,.25)!important}
 
@@ -451,6 +474,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
 <div id="msg"></div>
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
+<div id="tvBadge"></div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -515,6 +539,13 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
         <div class="tvcode" id="tvCode">----</div>
         <p>Scanne le code, ou ouvre le jeu sur ton téléphone et entre ce code dans « Manette ».</p>
         <div class="tvlien" id="lienManette"></div>
+      </div>
+      <div class="tvcase">
+        <h3>📺 Ouvrir sur ta smart TV</h3>
+        <canvas id="qrTV" width="180" height="180"></canvas>
+        <p id="tvCastEtat">Scanne ce code avec ton téléphone puis envoie le lien à ta télé, ou tape-le dans le navigateur de la télé — le jeu s'ouvre directement en affichage géant.</p>
+        <button class="btn sec small" id="tvCast">📡 Diffuser sur la télé</button>
+        <div class="tvlien" id="lienTV"></div>
       </div>
       <div class="tvcase">
         <h3>👥 Tes amis jouent avec toi</h3>
@@ -13454,10 +13485,53 @@ const tv = { on: false, code: null, peer: null, conns: [] };
 const lienBase = () => location.href.split('#')[0];
 function tvManettesMaj() {
   const n = tv.conns.filter(c => c.open).length;
-  const el = $('tvManettes'); if (!el) return;
-  el.textContent = n === 0 ? 'Aucune manette connectée pour l\'instant.'
+  const el = $('tvManettes');
+  if (el) el.textContent = n === 0 ? 'Aucune manette connectée pour l\'instant.'
     : `🎮 ${n} manette${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}${tel.nom ? ' · ' + tel.nom : ''}`;
   tel.on = n > 0;
+  // la pastille du bas de l'écran : depuis le canapé on veut savoir d'un coup d'œil si la
+  // manette répond, sans rouvrir le salon
+  const b = $('tvBadge');
+  if (b) { b.textContent = n ? `🎮 ${n} manette${n > 1 ? 's' : ''} · code ${tv.code || '----'}` : `📺 Manette : ouvre 📺 et scanne le code`;
+    b.classList.toggle('on', document.body.classList.contains('tv')); }
+}
+// ================= CONNECTER UNE SMART TV =================
+// Deux chemins, selon ce que sait faire l'appareil : l'API Presentation (Chromecast, télés
+// Google TV / Android TV, écrans compatibles) diffuse la page d'un clic ; sinon on affiche le
+// lien #tv et son QR, à ouvrir dans le navigateur de la télé. Dans les deux cas la page
+// s'ouvre directement en affichage géant.
+const cast = { req: null, session: null, dispo: false };
+function lienTV() { return lienBase() + '#tv'; }
+function castPret() { return typeof PresentationRequest !== 'undefined'; }
+function castPrepare() {
+  if (!castPret() || cast.req) return cast.req;
+  try {
+    cast.req = new PresentationRequest([lienTV()]);
+    cast.req.getAvailability().then(a => {
+      cast.dispo = !!a.value; castMaj();
+      a.addEventListener('change', () => { cast.dispo = !!a.value; castMaj(); });
+    }).catch(() => { cast.dispo = false; castMaj(); });
+  } catch (e) { cast.req = null; }
+  return cast.req;
+}
+function castMaj() {
+  const b = $('tvCast'), e = $('tvCastEtat');
+  if (!b || !e) return;
+  if (cast.session) { b.textContent = '📴 Arrêter la diffusion'; e.textContent = 'Le jeu tourne sur ta télé. Ton téléphone reste la manette.'; return; }
+  if (!castPret()) { b.style.display = 'none'; e.textContent = 'Ce navigateur ne sait pas diffuser tout seul : ouvre le lien ci-dessous dans le navigateur de ta télé (ou scanne le QR avec ton téléphone puis partage-le à la télé). Le jeu démarre directement en grand.'; return; }
+  b.style.display = ''; b.textContent = '📡 Diffuser sur la télé';
+  e.textContent = cast.dispo ? 'Une télé compatible a été trouvée : appuie sur « Diffuser » et choisis-la dans la liste.'
+    : 'Aucune télé détectée pour l\'instant (elle doit être allumée et sur le même Wi-Fi). Tu peux aussi ouvrir le lien ci-dessous directement sur la télé.';
+}
+function castLance() {
+  if (cast.session) { try { cast.session.terminate(); } catch (e) {} cast.session = null; castMaj(); return; }
+  const r = castPrepare();
+  if (!r) { msg('📺 Ce navigateur ne sait pas diffuser : ouvre le lien sur ta télé', 3200); return; }
+  r.start().then(sess => {
+    cast.session = sess; castMaj();
+    msg('📺 C\'est parti sur la télé ! Ton téléphone reste la manette', 3200);
+    sess.addEventListener('terminate', () => { cast.session = null; castMaj(); });
+  }).catch(() => { msg('📺 Aucune télé choisie — tu peux aussi ouvrir le lien sur la télé', 3000); castMaj(); });
 }
 function tvHeberge() {
   if (typeof Peer === 'undefined') { $('tvManettes').textContent = 'Pas de connexion : la manette a besoin d\'Internet.'; return; }
@@ -13486,6 +13560,9 @@ function tvSalonMaj() {
   const lm = lienBase() + '#manette=' + code;
   $('lienManette').textContent = lm;
   QR.dessine($('qrManette'), lm);
+  const lt = lienTV();
+  $('lienTV').textContent = lt; QR.dessine($('qrTV'), lt);
+  castPrepare(); castMaj();
   if (net.on && net.code) {
     const lj = lienBase() + '#jeu=' + net.code;
     $('lienJeu').textContent = lj; QR.dessine($('qrJeu'), lj);
@@ -13501,6 +13578,10 @@ function tvSalonMaj() {
 function modeTV(on) {
   document.body.classList.toggle('tv', on);
   store.set('superobby.tv', on ? '1' : '0');
+  // Depuis le canapé on est loin de l'écran : on recule et on remonte un peu la caméra pour
+  // voir à la fois son personnage et ce qui l'entoure.
+  cam.base = on ? Math.max(cam.base, 9.5) : Math.min(cam.base, 7);
+  try { tvManettesMaj(); } catch (e) {}
   try { resize(); } catch (e) {}
 }
 function ouvreSalonTV() {
@@ -13632,6 +13713,7 @@ $('casinoBack').addEventListener('click', () => closeUI());
 $('tvStart').addEventListener('click', () => { modeTV(true); ouvreSalonTV(); });
 $('manetteStart').addEventListener('click', () => manetteOuvre(''));
 $('tvFerme').addEventListener('click', () => closeUI());
+$('tvCast').addEventListener('click', castLance);
 $('tvGros').addEventListener('click', () => { modeTV(!document.body.classList.contains('tv')); tvSalonMaj(); });
 $('tvCreePartie').addEventListener('click', () => {
   hostGame();
@@ -14463,9 +14545,11 @@ function majPerfHud() {
   if (b) { b.style.width = v + '%'; b.parentNode.title = `Performance ${v}/100 ${perfEtoiles(v)}`; }
   const n = $('perfNote');
   if (n) { n.textContent = perfEtoiles(v); n.style.color = perfCouleur(v); n.title = `Performance ${v}/100`; }
+  // l'ancienne pastille de performance passait SOUS le chat, en haut a gauche : maintenant
+  // que la barre est dans le bandeau du haut, elle ne sert plus qu'a rien encombrer
   const el = $('perfHud'); if (!el) return;
   el.innerHTML = `📈 <b style="color:${perfCouleur(v)}">${perfBarre(v, 8)}</b> ${v} ${perfEtoiles(v)}`;
-  el.style.display = city.on ? '' : 'none';
+  el.style.display = 'none';
 }
 
 // ================= GANGS =================

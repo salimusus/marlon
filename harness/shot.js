@@ -107,6 +107,7 @@ window.__SHOT = {
     if (v.pitch != null) cam.pitch = v.pitch;
     if (v.dist != null) { cam.base = v.dist; cam.dist = v.dist; }
     cam.freeUntil = 1e9;                         // fige l'orientation demandée
+    if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
@@ -421,6 +422,16 @@ window.__G = {
   GRILLE_JOUEUR: typeof GRILLE_JOUEUR !== 'undefined' ? GRILLE_JOUEUR : 0,
   startCountdown: typeof startCountdown === 'function' ? startCountdown : null,
   raceTick: typeof raceTick === 'function' ? raceTick : null,
+  modeTV: typeof modeTV === 'function' ? modeTV : null,
+  ouvreSalonTV: typeof ouvreSalonTV === 'function' ? ouvreSalonTV : null,
+  tvSalonMaj: typeof tvSalonMaj === 'function' ? tvSalonMaj : null,
+  tvManettesMaj: typeof tvManettesMaj === 'function' ? tvManettesMaj : null,
+  lienTV: typeof lienTV === 'function' ? lienTV : null,
+  castPret: typeof castPret === 'function' ? castPret : null,
+  castMaj: typeof castMaj === 'function' ? castMaj : null,
+  cast: typeof cast !== 'undefined' ? cast : null,
+  routeLien: typeof routeLien === 'function' ? routeLien : null,
+  cam: typeof cam !== 'undefined' ? cam : null,
   surLeCourt: typeof surLeCourt === 'function' ? surLeCourt : null,
   makeBall: typeof makeBall === 'function' ? makeBall : null,
   removeBall: typeof removeBall === 'function' ? removeBall : null,

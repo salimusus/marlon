@@ -5571,3 +5571,101 @@ test('les enseignes des boutiques sont grandes et colorees, la banque et la poli
   const ok = okEns && okPl && r.panneaux >= 6;
   return { ok, detail: `chaque boutique avait la même petite plaque crème au texte fin · l'enseigne est maintenant un grand panneau de 768 px aux couleurs du magasin (${Math.round(r.ens.vif * 100)} % de pixels vifs) avec le nom ÉNORME en lettres blanches cerclées de noir (${Math.round(r.ens.blanc * 100)} %) et une guirlande d'ampoules — ${r.panneaux} devantures l'arborent · la banque et la police, elles, ont une plaque OFFICIELLE : marbre bleu nuit (${Math.round(r.pl.sombre * 100)} % de pixels sombres, ${Math.round(r.pl.vif * 100)} % de couleur vive seulement), double filet doré et capitales espacées en serif` };
 });
+
+test('l\'helicoptere va jusqu\'au bout de la carte, et plus haut', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 52, y: 1, z: -13, hour: 12 });
+    const G = __G, M = G.MONDE;
+    const heli = G.city.cars.find(c => c.heli);
+    if (!heli) return { pourquoi: 'pas d\'hélico' };
+    G.enterCar(heli);
+    // on le pousse à fond dans les quatre coins et vers le ciel, sans obstacle : seules les
+    // bornes du monde doivent l'arrêter
+    const pousse = (vx, vz, vy, n) => { for (let i = 0; i < n; i++) { heli.vx = vx; heli.vz = vz; heli.vy = vy; G.heliStep(0.05); } };
+    pousse(0, 0, 12, 300);                    // plafond
+    const plafond = Math.round(heli.y);
+    pousse(-40, 0, 0, 900); const ouest = Math.round(heli.x);
+    pousse(40, 0, 0, 1400); const est = Math.round(heli.x);
+    pousse(0, -40, 0, 900); const nord = Math.round(heli.z);
+    pousse(0, 40, 0, 1600); const sud = Math.round(heli.z);
+    // les quartiers extrêmes sont-ils dans le rayon d'action ?
+    const c = G.city.casino, ci = G.city.circuit, zone = G.city.zones.find(z => z.name === 'La Zone');
+    G.exitCar();
+    return { plafond, ouest, est, nord, sud, monde: [M.x1, M.x2, M.z1, M.z2, M.plafond],
+      casino: sud >= c.z + 20, circuit: nord <= ci.z - ci.r, laZone: ouest <= (zone ? (zone.x1 + zone.x2) / 2 : -145) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.casino && r.circuit && r.laZone && r.plafond >= 70
+    && r.ouest <= r.monde[0] + 4 && r.est >= r.monde[1] - 4 && r.nord <= r.monde[2] + 4 && r.sud >= r.monde[3] - 4;
+  return { ok, detail: `l'hélico butait sur un mur invisible a x = −98 et z = 278, bien avant le bord de la carte : ni La Zone, ni les villas des chefs, ni le casino, ni le circuit n'étaient survolables · les bornes viennent maintenant des limites du monde et il va d'un bout a l'autre (x ${r.ouest} → ${r.est}, z ${r.nord} → ${r.sud}) et monte a ${r.plafond} m au lieu de 45 · casino atteint=${r.casino}, circuit=${r.circuit}, La Zone=${r.laZone}` };
+});
+
+test('tomber d\'un immeuble fait mal, et de tres haut ca tue', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const essai = (haut) => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+      G.P.hp = 100;
+      const v = Math.sqrt(2 * 30 * haut);          // vitesse atteinte après une chute libre de `haut`
+      const deg = G.chuteImpact(-v);
+      return { haut, v: +v.toFixed(1), deg, pv: Math.round(G.P.hp) };
+    };
+    const sansMal = essai(2), petite = essai(5), immeuble = essai(10), gratteCiel = essai(22);
+    // sous une voile on se pose toujours en douceur
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.P.hp = 100; G.P.voile = 'parachute'; const voile = G.chuteImpact(-40); G.P.voile = null;
+    const pvVoile = Math.round(G.P.hp);
+    return { sansMal, petite, immeuble, gratteCiel, voile, pvVoile, seuil: G.CHUTE_SEUIL };
+  });
+  const ok = r.sansMal.deg === 0 && r.petite.deg === 0 && r.immeuble.deg > 10 && r.immeuble.pv < 90
+    && r.gratteCiel.pv === 0 && r.voile === 0 && r.pvVoile === 100;
+  return { ok, detail: `on sautait du toit d'un immeuble de vingt mètres et on repartait en sifflotant · au-delà de ${r.seuil} m/s on s'écrase : 2 m et 5 m ne coûtent rien (${r.sansMal.deg} et ${r.petite.deg} PV), 10 m font −${r.immeuble.deg} PV (il reste ${r.immeuble.pv}), et 22 m tuent (${r.gratteCiel.pv} PV) · sous un parachute, aucune casse même a 40 m/s (${r.pvVoile} PV)` };
+});
+
+test('la barre de performance est en haut a cote de la barre de vie', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const bar = document.getElementById('perfBar'), note = document.getElementById('perfNote');
+    if (!bar || !note) return { pourquoi: 'pas de barre de performance' };
+    const me = document.getElementById('me');
+    const dansLeHaut = me && me.contains(bar) && me.contains(document.getElementById('hpBar'));
+    const lire = () => ({ w: bar.style.width, note: note.textContent, col: note.style.color });
+    G.P.perf = 12; G.majPerfHud(); const bas = lire();
+    G.P.perf = 62; G.majPerfHud(); const moyen = lire();
+    G.P.perf = 95; G.majPerfHud(); const haut = lire();
+    const st = getComputedStyle(bar);
+    return { dansLeHaut, bas, moyen, haut, degrade: st.backgroundImage.includes('gradient'),
+      cote: document.getElementById('hpBar').parentNode.nextElementSibling !== null };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.dansLeHaut && r.bas.w === '12%' && r.moyen.w === '62%' && r.haut.w === '95%'
+    && r.bas.note.length === 1 && r.haut.note.length === 4 && r.bas.col !== r.haut.col && r.degrade;
+  return { ok, detail: `la performance n'apparaissait que dans une pastille perdue sur le côté · elle a maintenant sa barre en haut, juste a côté de la vie et du souffle, avec un dégradé rouge → turquoise et des étoiles colorées : 12 → « ${r.bas.note} » (${r.bas.col}), 62 → « ${r.moyen.note} », 95 → « ${r.haut.note} » (${r.haut.col})` };
+});
+
+test('les indicateurs du haut-parleur sont colores et lisibles', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const eq = G.bots.slice(0, 3);
+    G.gang.membres = eq;
+    eq.forEach(b => { b.journal = null; b.ko = 0; b.hp = 100; });
+    G.noteOrdre(eq[0], '💰', 'braquer la banque');
+    G.noteOrdre(eq[1], '🎾', 'partie au tennis'); G.finirOrdre(eq[1], 'reussi', 'partie au tennis');
+    G.noteOrdre(eq[1], '🚗', 'voler une voiture');
+    eq[2].hp = 42; G.noteOrdre(eq[2], '👊', 'attaquer le gang rival');
+    const page = G.resumeMissions(), fiche = G.journalHtml(eq[1]);
+    const couleurs = new Set((page + fiche).match(/#[0-9a-f]{6}/gi) || []);
+    const d = document.createElement('div'); d.innerHTML = page; document.body.appendChild(d);
+    const lignes = d.querySelectorAll('.oligne').length, puces = d.querySelectorAll('.opuce').length;
+    const jauges = [...d.querySelectorAll('.ojauge i')].map(i => i.style.width);
+    const liseres = [...d.querySelectorAll('.oligne')].map(l => l.style.getPropertyValue('--oc')).filter(Boolean).length;
+    d.remove(); G.gang.membres = [];
+    return { lignes, puces, jauges, liseres, couleurs: couleurs.size,
+      pulse: page.includes('encours'), puceReussi: fiche.includes('✅'), fiche: fiche.includes('opuce') };
+  });
+  const ok = r.lignes >= 3 && r.puces >= 3 && r.liseres >= 3 && r.couleurs >= 3
+    && r.jauges.includes('42%') && r.pulse && r.puceReussi && r.fiche;
+  return { ok, detail: `le 📣 alignait du texte gris avec un mot coloré · chaque homme a maintenant sa ligne à liseré de couleur (${r.liseres}), une PASTILLE pleine d'état qui clignote tant que l'ordre tourne (${r.puces}) et une jauge de vie colorée (${r.jauges.join(', ')}) — ${r.couleurs} couleurs différentes en tout, et la fiche d'un homme reprend les mêmes pastilles (✅ réussi, ❌ raté, 💀 perte)` };
+});

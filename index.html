@@ -38,6 +38,21 @@ body.touch .ibtn.touchonly{display:grid}
 .hp.st{height:6px;margin-top:3px}
 .hp.st i{background:#3ef2ff;transition:width .12s}
 .hp.st.vide i{background:#ff8f3a}
+/* la barre de PERFORMANCE, juste à côté de la vie : un dégradé qui va du rouge au turquoise */
+.hp.pf{height:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.hp.pf i{background:linear-gradient(90deg,#ff5c5c 0%,#ff8f3a 28%,#ffd23f 52%,#5cc453 78%,#3ef2ff 100%);background-size:96px 100%;transition:width .35s}
+.pfn{font-weight:900;font-size:12px;letter-spacing:-1px;text-shadow:0 1px 0 rgba(0,0,0,.5)}
+/* le journal du haut-parleur 📣 : des pastilles de couleur, une jauge de vie et un liseré par état */
+.oligne{display:flex;align-items:center;gap:6px;padding:4px 7px;margin:3px 0;border-radius:9px;background:rgba(255,255,255,.055);border-left:4px solid var(--oc,#ffd23f)}
+.onom{font-weight:900;flex:0 0 auto;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.otxt{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
+.opuce{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:900;font-size:.84em;line-height:1.6;color:#111827;white-space:nowrap;flex:0 0 auto}
+.ojauge{flex:0 0 44px;height:7px;border-radius:4px;background:rgba(0,0,0,.5);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.ojauge i{display:block;height:100%}
+@keyframes opulse{0%,100%{opacity:1}50%{opacity:.55}}
+.opuce.encours{animation:opulse 1.5s ease-in-out infinite}
+.otitre{display:block;margin-top:6px;font-weight:900;letter-spacing:.3px}
+body.tv .hp.pf{height:13px}body.tv .pfn{font-size:clamp(13px,1vw,19px)}
 #lb{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:190px;overflow:hidden;font-size:14px}
 .lbh{display:flex;justify-content:space-between;padding:6px 10px;background:rgba(255,255,255,.1);font-size:12px;letter-spacing:.3px;color:#cfd6e6;cursor:pointer}
 .lbr{display:flex;justify-content:space-between;padding:5px 10px;border-top:1px solid rgba(255,255,255,.06)}
@@ -424,7 +439,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
     <div class="pill" id="clock" style="display:none">🕒 7h</div>
   </div>
   <div class="tr">
-    <div id="me"><span id="meName">Joueur</span><div class="hp"><i id="hpBar"></i></div><div class="hp st"><i id="stBar"></i></div></div>
+    <div id="me"><span id="meName">Joueur</span><div class="hp" title="Vie"><i id="hpBar"></i></div><div class="hp st" title="Souffle"><i id="stBar"></i></div><div class="hp pf" title="Performance"><i id="perfBar"></i></div><span id="perfNote" class="pfn">★</span></div>
     <div id="lb"><div class="lbh" id="lbHead"><span>Joueurs</span><span>Étape</span></div><div id="lbRows"></div></div>
   </div>
 </div>
@@ -1171,6 +1186,14 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // ---- circuit de course (au sud de la ville) ----
 // Tracé lissé (courbes) : ligne droite des stands, épingle, ligne droite, esses, grande courbe
 // Grand circuit : un rectangle aux coins arrondis qui fait le tour de la ville (départ sur la ligne droite sud)
+// ================= LES LIMITES DU MONDE =================
+// Elles étaient recopiées à la main à quatre endroits (le plateau, les murs d'enceinte, la
+// grille de navigation, le rayon d'action de l'hélicoptère) et avaient fini par diverger :
+// l'hélico butait sur un mur invisible à x = −98 et z = 278, bien avant le bord de la carte.
+// Tout part maintenant d'ici, et tout suit quand la ville s'agrandit.
+const MONDE = { x1: -220, x2: 200, z1: -200, z2: 350, plafond: 80 };
+MONDE.cx = (MONDE.x1 + MONDE.x2) / 2; MONDE.cz = (MONDE.z1 + MONDE.z2) / 2;
+MONDE.w = MONDE.x2 - MONDE.x1; MONDE.d = MONDE.z2 - MONDE.z1;
 // LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
 // barrières bloquaient les quartiers et il fallait y percer des ouvertures. C'est maintenant
 // un petit anneau circulaire posé à l'écart, au sud-est, relié à la ville par une route.
@@ -3458,8 +3481,9 @@ const WORLDS = [
       // derrière : le quartier du casino (z 287 → 340) et le circuit (z −192 → −112) étaient
       // bâtis DEHORS, sur du vide — un trou béant devant le casino, et deux quartiers que le
       // mur invisible interdisait d'atteindre. Le plateau va maintenant de z = −200 à z = 350.
-      platTrous(-10, 0, 75, 420, 550, 0x4a4f5c, { studs: false, noRoute: true }, 1, poolTrous());
-      for (const [x, z, w, d] of [[-201.5, 75, 1, 550], [201.5, 75, 1, 550], [0, -199.5, 404, 1], [0, 349.5, 404, 1]]) wall(x, z, w, d);
+      platTrous(MONDE.cx, 0, MONDE.cz, MONDE.w, MONDE.d, 0x4a4f5c, { studs: false, noRoute: true }, 1, poolTrous());
+      for (const [x, z, w, d] of [[MONDE.x1 - 1.5, MONDE.cz, 1, MONDE.d], [MONDE.x2 + 1.5, MONDE.cz, 1, MONDE.d],
+        [MONDE.cx, MONDE.z1 - 1.5, MONDE.w, 1], [MONDE.cx, MONDE.z2 + 1.5, MONDE.w, 1]]) wall(x, z, w, d);
       road(-45, 0, 32, 6); road(45, 0, 32, 6); road(0, -34, 6, 12);
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));
@@ -6248,8 +6272,8 @@ $('missClose').addEventListener('click', closeUI); $('missBtn').addEventListener
 // pelouses ; à 2 m pour les voitures et 1 m pour les piétons, chacun passe où il doit.
 // La grille suit le plateau : elle s'arrêtait à z = 285, donc ni le casino ni le circuit
 // n'étaient navigables (aucun itinéraire, GPS rabattu sur le bord).
-const NAV = { cs: 2, x0: -201, z0: -199, nx: 203, nz: 275, blocked: null, pieton: null, voit: null, cout: null, buf: null, bufV: null, bufP: null,
-  GV: { cs: 2, nx: 203, nz: 275 }, GP: { cs: 1.5, nx: 270, nz: 367 } };
+const NAV = { cs: 2, x0: MONDE.x1 + 1, z0: MONDE.z1 + 1, nx: Math.ceil(MONDE.w / 2), nz: Math.ceil(MONDE.d / 2), blocked: null, pieton: null, voit: null, cout: null, buf: null, bufV: null, bufP: null,
+  GV: { cs: 2, nx: Math.ceil(MONDE.w / 2), nz: Math.ceil(MONDE.d / 2) }, GP: { cs: 1.5, nx: Math.ceil(MONDE.w / 1.5), nz: Math.ceil(MONDE.d / 1.5) } };
 function navGeo(pieton) {
   const g = pieton ? NAV.GP : NAV.GV;
   NAV.cs = g.cs; NAV.nx = g.nx; NAV.nz = g.nz;
@@ -6892,6 +6916,33 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
 }
 function punch() { attack('punch'); }
 function kick() { attack('kick'); }
+// LA CHUTE. On pouvait sauter du toit d'un immeuble de vingt mètres et repartir en
+// sifflotant. Maintenant on s'écrase : au-delà de 21 m/s (une chute d'environ huit mètres)
+// ça fait mal, et de très haut ça tue. Le parachute, le deltaplane et le jetpack bornent la
+// vitesse de descente : sous une voile, on se pose toujours en douceur.
+const CHUTE_SEUIL = 21;
+function majVie() {
+  $('hpBar').style.width = P.hp + '%';
+  $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
+}
+function chuteImpact(vy) {
+  if (dead || P.voile || P.jet || P.swimming || drive.car || P.sit || P.swing || P.ride) return 0;
+  const v = -vy;
+  if (!(v > CHUTE_SEUIL) || P.hp <= 0) return 0;
+  const deg = Math.round((v - CHUTE_SEUIL) * 8), haut = Math.round(v * v / (2 * (G || 30)));
+  if (deg <= 0) return 0;
+  P.hp = Math.max(0, P.hp - deg); P.hurtT = simTime; majVie();
+  P.stunT = simTime + 0.5; P.vel.x *= 0.15; P.vel.z *= 0.15;
+  sfx.hit(); camSecousse(0.16 + Math.min(0.32, deg / 80), 0.36);
+  impact(P.pos.x, P.pos.y + 0.08, P.pos.z, { x: 0, y: 1, z: 0 }, 'mur', Math.min(1.7, 0.8 + deg / 40));
+  if (deg > 35) impact(P.pos.x, P.pos.y + 0.5, P.pos.z, { x: 0, y: 1, z: 0 }, 'sang', 1.2);
+  const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
+  if (P.hp <= 0) {
+    msg(`💀 Chute mortelle ! ${haut} m de haut…`, 2400); chat(null, `💀 ${myCfg.name} s'est écrasé après une chute de ${haut} m`);
+    sfx.die(); die(true); setTimeout(() => { P.hp = 100; majVie(); }, 1300);
+  } else msg(`🤕 Aïe ! Chute de ${haut} m · −${deg} PV`, 1800);
+  return deg;
+}
 function hurt(dmg, by, dx, dz, kb = 2) {   // je prends un coup
   if (P.hp <= 0) return;
   P.hp = Math.max(0, P.hp - dmg); P.hurtT = simTime; $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
@@ -8382,6 +8433,17 @@ function venirAMoi(b, quoi) {
 // ou perte quand il y laisse la vie. La liste s'affiche dans son panneau 📣.
 const ORDRE_ETATS = { cours: ['⏳', 'en cours', '#ffd23f'], reussi: ['✅', 'réussi', '#5cc453'],
   rate: ['❌', 'raté', '#ff8f3a'], perte: ['💀', 'perte', '#ff5c5c'] };
+// Les indicateurs du 📣 étaient du texte gris avec un mot coloré. Ce sont maintenant des
+// PASTILLES pleines, une jauge de vie colorée et un liseré à la couleur de l'état.
+function puceEtat(etat) {
+  const [e, lib, col] = ORDRE_ETATS[etat] || ORDRE_ETATS.cours;
+  return `<span class="opuce${etat === 'cours' ? ' encours' : ''}" style="background:${col}">${e} ${lib}</span>`;
+}
+const couleurEtat = etat => (ORDRE_ETATS[etat] || ORDRE_ETATS.cours)[2];
+function jaugeVie(pv) {
+  const v = clamp(Math.round(pv), 0, 100);
+  return `<span class="ojauge" title="❤️ ${v} PV"><i style="width:${v}%;background:${vieCouleur(v)}"></i></span>`;
+}
 const JOURNAL_MAX = 6;
 function noteOrdre(b, e, t) {
   if (!b || !t) return null;
@@ -8405,10 +8467,8 @@ function ordresEnCours(b) { return ((b && b.journal) || []).filter(o => o.etat =
 function journalHtml(b) {
   const j = (b && b.journal) || [];
   if (!j.length) return '<span style="display:block;color:#7a86a0">📋 aucun ordre donné pour l\'instant</span>';
-  return '<span style="display:block;font-weight:600;color:#7a86a0">📋 Ses ordres</span>' + j.map(o => {
-    const [e, lib, col] = ORDRE_ETATS[o.etat] || ORDRE_ETATS.cours;
-    return `<span style="display:block">${o.e} ${o.t} — <b style="color:${col}">${e} ${lib}</b></span>`;
-  }).join('');
+  return '<span class="otitre" style="color:#8fd0ff">📋 Ses ordres</span>' + j.map(o =>
+    `<span class="oligne" style="--oc:${couleurEtat(o.etat)}"><span class="otxt">${o.e} ${o.t}</span>${puceEtat(o.etat)}</span>`).join('');
 }
 // UN HOMME EN GARDE NE PART JAMAIS. Garde du corps, protecteur, gardien de villa : à chaque
 // image on lui remet une consigne « colle au joueur », qui écrase le rendez-vous de sa
@@ -9755,15 +9815,16 @@ function resumeMissions() {
   const occupes = l.filter(b => ordreEnCoursDe(b) || (b.ko && simTime < b.ko));
   const libres = l.length - occupes.length;
   const lignes = occupes.slice(0, 6).map(b => {
-    const o = ordreEnCoursDe(b), pv = vieDe(b);
-    const etat = b.ko && simTime < b.ko ? '<b style="color:#ff5c5c">😵 à terre</b>' : `<b style="color:#ffd23f">⏳ ${o}</b>`;
-    return `<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.name} — ${etat}`
-      + (pv < 100 ? ` <span style="color:${vieCouleur(pv)}">❤️ ${pv}</span>` : '') + '</span>';
+    const o = ordreEnCoursDe(b), pv = vieDe(b), aTerre = b.ko && simTime < b.ko;
+    const col = aTerre ? '#ff5c5c' : couleurEtat('cours');
+    const puce = aTerre ? '<span class="opuce" style="background:#ff5c5c">😵 à terre</span>' : puceEtat('cours');
+    return `<span class="oligne" style="--oc:${col}"><span class="onom">${b.name}</span>`
+      + `<span class="otxt">${aTerre ? (o || 'hors service') : o}</span>${jaugeVie(pv)}${puce}</span>`;
   });
-  if (occupes.length > 6) lignes.push(`<span style="display:block;opacity:.7">…et ${occupes.length - 6} autre${occupes.length - 6 > 1 ? 's' : ''}</span>`);
-  if (libres) lignes.push(`<span style="display:block;opacity:.7">${libres} homme${libres > 1 ? 's' : ''} libre${libres > 1 ? 's' : ''}</span>`);
-  return '<span style="display:block;margin-top:4px;font-weight:600;color:#7a86a0">📋 Missions en cours</span>'
-    + `<span style="display:block;max-height:19vh;overflow-y:auto;font-size:.92em;line-height:1.35">${lignes.join('')}</span>`;
+  if (occupes.length > 6) lignes.push(`<span class="oligne" style="--oc:#8f98ab"><span class="otxt">…et ${occupes.length - 6} autre${occupes.length - 6 > 1 ? 's' : ''}</span></span>`);
+  if (libres) lignes.push(`<span class="oligne" style="--oc:#3ef2ff"><span class="otxt">😎 ${libres} homme${libres > 1 ? 's' : ''} libre${libres > 1 ? 's' : ''} — prêt${libres > 1 ? 's' : ''} à partir</span></span>`);
+  return '<span class="otitre" style="color:#8fd0ff">📣 Missions en cours</span>'
+    + `<span style="display:block;max-height:22vh;overflow-y:auto;font-size:.92em;line-height:1.35">${lignes.join('')}</span>`;
 }
 function ordresRetourVisible(on) { const e = $('ordresRetour'); if (e) e.style.display = on ? '' : 'none'; }
 // ================= CHOISIR SON ÉQUIPE POUR UNE MISSION =================
@@ -10508,10 +10569,12 @@ function step(dt, active) {
   if (!inWater) P.swimming = false;
   if (P.stunT > simTime) { P.vel.x *= 0.5; P.vel.z *= 0.5; }
   const wasGrounded = P.grounded;
+  const vyChute = P.vel.y;   // vitesse de descente AVANT que le sol ne la remette à zéro
   P.grounded = false; P.standing = null;
   moveAxis('x', P.vel.x * dt, wasGrounded || P.swimming); moveAxis('z', P.vel.z * dt, wasGrounded || P.swimming); moveAxis('y', P.vel.y * dt, false);
   // relief du rallye : posé APRÈS la remise à zéro ci-dessus, qui l'effaçait aussitôt et laissait le joueur « en l'air » sur toute la zone
   if (RALLY.mesh && !drive.car) { const th = terrainH(P.pos.x, P.pos.z); if (th != null && P.pos.y < th) { P.pos.y = th; if (P.vel.y < 0) P.vel.y = 0; P.grounded = true; P.coyote = 0.12; } }
+  if (!wasGrounded && P.grounded) chuteImpact(vyChute);   // on s'écrase en tombant d'un immeuble
 
   for (const s of spinners) {
     const dx = P.pos.x - s.x, dz = P.pos.z - s.z, c = Math.cos(s.angle), sn = Math.sin(s.angle);
@@ -10717,11 +10780,11 @@ function heliStep(dt) {
   c.vx += (Math.sin(c.h) * iz * 16 - c.vx) * k; c.vz += (Math.cos(c.h) * iz * 16 - c.vz) * k;
   c.vy += (up * 7 - c.vy) * (1 - Math.exp(-3 * dt));
   // déplacement axe par axe avec collision contre tout : murs, immeubles, véhicules, portique, barrières
-  const nx = clamp(c.x + c.vx * dt, -98, 198);
+  const nx = clamp(c.x + c.vx * dt, MONDE.x1 + 2, MONDE.x2 - 2);
   if (!heliBlocked(nx, c.y, c.z, c)) c.x = nx; else { c.vx *= -0.25; if (Math.abs(c.vx) > 1.5) { sfx.hit(); vehicleDamage(c, 2); } }
-  const nz = clamp(c.z + c.vz * dt, -78, 278);
+  const nz = clamp(c.z + c.vz * dt, MONDE.z1 + 2, MONDE.z2 - 2);
   if (!heliBlocked(c.x, c.y, nz, c)) c.z = nz; else { c.vz *= -0.25; if (Math.abs(c.vz) > 1.5) { sfx.hit(); vehicleDamage(c, 2); } }
-  const ny = clamp(c.y + c.vy * dt, 0.2, 45);
+  const ny = clamp(c.y + c.vy * dt, 0.2, MONDE.plafond);
   const hitY = heliBlocked(c.x, ny, c.z, c);
   // « posé » = il repose sur quelque chose : le sol du monde OU un toit. Calé 2 cm au-dessus
   // d'un toit, sa boîte ne touchait plus rien et landed retombait à faux — la mission de
@@ -14224,8 +14287,14 @@ function policePerf() {
   return clamp(base - (police.usure || 0), 0, 100);
 }
 function majPerfHud() {
-  const el = $('perfHud'); if (!el) return;
   const v = perfDe(P);
+  // LA BARRE DE PERFORMANCE, en haut à côté de la barre de vie. Avant, la performance
+  // n'apparaissait que dans une pastille perdue sur le côté gauche.
+  const b = $('perfBar');
+  if (b) { b.style.width = v + '%'; b.parentNode.title = `Performance ${v}/100 ${perfEtoiles(v)}`; }
+  const n = $('perfNote');
+  if (n) { n.textContent = perfEtoiles(v); n.style.color = perfCouleur(v); n.title = `Performance ${v}/100`; }
+  const el = $('perfHud'); if (!el) return;
   el.innerHTML = `📈 <b style="color:${perfCouleur(v)}">${perfBarre(v, 8)}</b> ${v} ${perfEtoiles(v)}`;
   el.style.display = city.on ? '' : 'none';
 }

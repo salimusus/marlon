@@ -51,7 +51,15 @@ window.__SHOT = {
         if (b.drive && b.drive.car) { try { libereVoiture(b.drive.car); } catch (e2) {} }
         b.drive = null; b.rdv = null; b.rdvRoute = null; b.ordre = null; b.gangMission = null;
         b.activite = null; b.bagarre = null; b.garde = 0; b.fight = null;
+        // Un bot laisse par le test precedent avec 3 PV, KO au sol, garde du corps ou poste
+        // devant la villa faussait le test suivant sans aucun rapport avec ce qu'il mesurait.
+        b.hp = 100; b.ko = 0; b.mort = 0; b.robbed = false;
+        b.gardeCorps = 0; b.gardeVilla = 0; b.gardeArme = 0; b.protege = null; b.soin = 0;
+        b.arme = false; b.perf = null;
+        if (b.av) { b.av.group.rotation.x = 0; b.av.group.visible = true; }
       }
+      if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; }
+      if (typeof city !== 'undefined' && city.safes) { for (const sf of city.safes) { sf.progress = 0; sf.alerte = false; } city.safeNear = null; }
       if (typeof city !== 'undefined') { city.rideBot = null; city.botCarNear = null; }
       // Une voiture de police laissee au milieu de la rue par le test precedent « voit » le
       // joueur : la clemence sur les petits delits ne s'appliquait plus et le test suivant

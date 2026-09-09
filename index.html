@@ -8143,6 +8143,7 @@ function botStop(b, dire, libre) {
   if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
   if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
   b.ordre = null; b.rdv = null; b.rdvRoute = null; b.bagarre = null; b.garde = 0;
+  b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null;   // il n'est plus garde du corps ni sentinelle
   if (typeof botRangeArme === 'function') botRangeArme(b);
   b.wait = 0.6; b.target = null;
   if (libre) { b.wait = 0.2; resetBot(b, rnd(1, 4)); }   // « annule » : il reprend sa vie
@@ -8181,6 +8182,92 @@ function botProtege(b) {
   b.wait = 0; b.rdvRoute = null;
   botDit(b, pickOne(['je te protège, personne ne t\'approche 💪', 'garde du corps, à ton service !']));
   msg(`🛡️ ${b.name} te protège`, 2400);
+}
+// ================= GARDES DU CORPS ET PROTECTION =================
+// « viens tu es mon garde du corps » : il ne te lâche plus, se place à côté de toi et
+// cogne — ou tire, s'il est armé, même sur la police — dès qu'on s'en prend à toi. On peut
+// en avoir plusieurs : ils se répartissent autour du joueur.
+const GARDES_MAX = 3;
+function gardesDuCorps() { return gang.membres.concat(bots.filter(b => estAmi(b.name) && !estDuGang(b))).filter(b => b.gardeCorps && simTime < b.gardeCorps && !b.ko && !b.mort); }
+function botGardeDuCorps(b) {
+  const deja = gardesDuCorps();
+  if (deja.includes(b)) { botDit(b, 'je suis déjà ton garde du corps 🛡️'); return true; }
+  if (deja.length >= GARDES_MAX) { botDit(b, `tu as déjà ${GARDES_MAX} gardes du corps — dis « stop » à l'un d'eux`); return true; }
+  b.gardeCorps = simTime + 1e9; b.garde = simTime + 1e9; b.ordre = { type: 'gardeCorps' };
+  b.slotGarde = deja.length;
+  // sa place dans la formation : derrière-gauche, derrière-droite, puis pile derrière
+  const ANGLES = [0.9, -0.9, 0];
+  b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true, slot: ANGLES[b.slotGarde] || 0 };
+  b.wait = 0; b.rdvRoute = null; b.target = null;
+  if (b.arme) { b.gardeArme = simTime + 1e9; b.tirT = 0; try { setWeapon(b.av, 'pistol', true); } catch (e) {} }
+  perfGagne(b, 1);
+  botDit(b, b.arme ? pickOne(['je ne te lâche plus, arme au poing 🔫', 'garde du corps armé — même les flics y passeront'])
+                   : pickOne(['je suis ton garde du corps 🛡️', 'personne ne t\'approche, chef']));
+  msg(`🛡️ ${b.name} est ton garde du corps${b.arme ? ' (armé 🔫)' : ' — achète-lui une arme pour qu\'il tire'} · ${deja.length + 1}/${GARDES_MAX}`, 3400);
+  chat(null, `🛡️ ${b.name} devient le garde du corps de ${myCfg.name}`);
+  return true;
+}
+// « va protéger Nathan » : il colle un AUTRE membre du gang et le défend.
+function botProtegeMembre(b, cible) {
+  if (!cible || cible === b) { botDit(b, 'qui ça ? dis-moi son nom'); return false; }
+  b.protege = cible; b.gardeCorps = 0; b.garde = simTime + 600; b.ordre = { type: 'protegeMembre' };
+  b.rdv = { x: cible.pos.x, z: cible.pos.z, y: 0.3, nom: cible.name, arrive: false, suivre: cible };
+  b.wait = 0; b.rdvRoute = null; b.target = null;
+  if (b.arme) { b.gardeArme = simTime + 600; b.tirT = 0; try { setWeapon(b.av, 'pistol', true); } catch (e) {} }
+  botDit(b, pickOne([`ok, je colle ${cible.name} et je le protège 🛡️`, `personne ne touchera à ${cible.name}`]));
+  msg(`🛡️ ${b.name} protège ${cible.name}`, 2800);
+  return true;
+}
+// « va protéger ma villa » : il monte la garde devant chez toi et repousse les intrus.
+function botGardeVilla(b) {
+  const v = city.villaMine; if (!v) { botDit(b, 'je ne sais pas où est ta villa 😕'); return false; }
+  b.gardeVilla = simTime + 1e9; b.gardeCorps = 0; b.protege = null; b.garde = 0; b.ordre = { type: 'gardeVilla' };
+  const a2 = rnd(0, 6.28);
+  b.rdv = { x: v.x + Math.sin(a2) * 7, z: v.z + Math.cos(a2) * 7 + 8, y: 0.3, nom: '🏠 ta villa', arrive: false, libre: true };
+  b.wait = 0; b.rdvRoute = null; b.target = null;
+  if (b.arme) { b.gardeArme = simTime + 1e9; b.tirT = 0; try { setWeapon(b.av, 'pistol', true); } catch (e) {} }
+  botDit(b, pickOne(['je monte la garde devant chez toi 🏠', 'ta villa est sous ma surveillance']));
+  msg(`🏠 ${b.name} garde ta villa${b.arme ? ' (armé 🔫)' : ''}`, 3000);
+  return true;
+}
+// Chaque image : les gardes suivent ce qu'ils protègent et frappent qui s'en prend à lui.
+function protectionTick(dt) {
+  for (const b of bots) {
+    if (b.ko || b.mort) continue;
+    // il colle le membre qu'il protège
+    if (b.protege && b.rdv && b.rdv.suivre) {
+      const c = b.protege;
+      if (c.ko || c.mort) { b.protege = null; b.ordre = null; b.rdv = null; botDit(b, `${c.name} est à terre… 😰`); continue; }
+      b.rdv.x = c.pos.x + 1.6; b.rdv.z = c.pos.z + 1.2;
+      if (Math.hypot(b.pos.x - c.pos.x, b.pos.z - c.pos.z) > 3) b.rdv.arrive = false;
+      if (!b.bagarre) for (const o of bots) {
+        if (o === b || o === c || o.ko) continue;
+        if (o.fight && o.fight !== 'flee' && simTime < o.fightT && Math.hypot(o.pos.x - c.pos.x, o.pos.z - c.pos.z) < 7) { botTape(b, o); break; }
+      }
+      if (!b.bagarre) for (const G of gangs) for (const m of G.membres) {
+        if (m.ko || Math.hypot(m.x - c.pos.x, m.z - c.pos.z) > 6) continue;
+        m.hp -= 9 + Math.round(perfDe(b) / 10); burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 4);
+        if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2); }
+        b.av.rig.swing = 0.3; break;
+      }
+    }
+    // il garde la villa : il repousse les gangsters et les cambrioleurs qui rôdent
+    if (b.gardeVilla && simTime < b.gardeVilla && city.villaMine) {
+      const v = city.villaMine;
+      if (!b.bagarre && simTime > (b.villaCd || 0)) {
+        for (const G of gangs) for (const m of G.membres) {
+          if (m.ko || Math.hypot(m.x - v.x, m.z - v.z) > 18) continue;
+          b.villaCd = simTime + 1.2;
+          b.rdv = { x: m.x + 1, z: m.z + 1, y: 0.3, nom: 'intrus', arrive: false, libre: true }; b.rdvRoute = null; b.wait = 0;
+          if (Math.hypot(b.pos.x - m.x, b.pos.z - m.z) < 2) {
+            m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 5); sfx.hit();
+            if (m.hp <= 0) { m.ko = simTime + 18; m.hp = 0; perfGagne(b, 2, 'il a défendu ta villa'); botSay(b, ['et voilà ! 😤', 'la villa est à nous !']); }
+          }
+          break;
+        }
+      }
+    }
+  }
 }
 function botCache(b) {
   const h = (city.hideouts || []).map(o => ({ o, d: Math.hypot(o.x - b.pos.x, o.z - b.pos.z) })).sort((a, c) => a.d - c.d)[0];
@@ -8223,6 +8310,16 @@ function gardeTick(b) {
   for (const o of bots) {
     if (o === b || o.ko) continue;
     if (o.fight && o.fight !== 'flee' && simTime < o.fightT && Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) < 7) { botTape(b, o); return; }
+  }
+  // Il ne regarde plus seulement les passants : un gangster rival qui te tourne autour se
+  // fait sortir, et un garde du corps ARMÉ ouvre le feu (gardeArmeTick vise aussi la police).
+  if (simTime > (b.gardeCd || 0)) for (const G of gangs) for (const m of G.membres) {
+    if (m.ko || Math.hypot(m.x - P.pos.x, m.z - P.pos.z) > 7) continue;
+    b.gardeCd = simTime + 1.2; b.av.rig.swing = 0.3;
+    b.facing = Math.atan2(m.x - b.pos.x, m.z - b.pos.z);
+    m.hp -= 9 + Math.round(perfDe(b) / 9); burst(m.x, m.y + 1.2, m.z, 0xff5c5c, 5); sfx.hit();
+    if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2, 'il t\'a défendu'); botSay(b, ['personne ne touche au chef ! 😤']); }
+    return;
   }
 }
 function commandeExacte(txt) {
@@ -8281,6 +8378,16 @@ function commandeExacte(txt) {
   if (/\b(suis.?moi|suis moi|viens avec moi|colle.?toi|accompagne.?moi|reste avec moi)\b/.test(t)) { botSuis(cible); return true; }
   if (/\b(attends.?moi ici|attend ici|attends ici|reste ici|bouge pas|ne bouge pas|reste la|reste là|patiente)\b/.test(t) && !/voiture|caisse|bagnole/.test(t)) { botAttendIci(cible); return true; }
   if (/\b(tire|tires|tirer|flingue|fusille|degomme|dégomme|abats|abattre)\b/.test(t) && /\b(protege|protège|proteger|protéger|moi|defends|défends|couvre|couvrir)\b/.test(t)) { botTirePourMoi(cible); return true; }
+  // « viens tu es mon garde du corps » : protection permanente, et on peut en avoir plusieurs
+  if (/\b(garde du corps|gardes du corps|body ?guard|protege.?moi en permanence|colle moi)\b/.test(t)) { botGardeDuCorps(cible); return true; }
+  // « va protéger ma villa »
+  if (/\b(protege|protège|proteger|protéger|defends|défends|garde|gardes|surveille|surveiller)\b/.test(t)
+      && /\b(villa|maison|chez moi|baraque|domicile)\b/.test(t)) { botGardeVilla(cible); return true; }
+  // « va protéger Nathan » : un AUTRE membre est nommé dans la phrase
+  if (/\b(protege|protège|proteger|protéger|defends|défends|surveille|veille sur|garde)\b/.test(t)) {
+    const nommes = trouveBots(txt).filter(x => x !== cible);
+    if (nommes.length) { botProtegeMembre(cible, nommes[0]); return true; }
+  }
   if (/\b(protege|protège|defends|défends|garde du corps|surveille.?moi)\b/.test(t)) { botProtege(cible); return true; }
   if (/\b(cache.?toi|planque.?toi|va te cacher)\b/.test(t)) { botCache(cible); return true; }
   if (/\b(a manger|à manger|un burger|une glace|un sandwich|de la nourriture|un hot.?dog|une pizza|casse.?croute|casse.?croûte)\b/.test(t)) { botAManger(cible); return true; }
@@ -8407,6 +8514,11 @@ const INTENTS = [
     fn: b => botPromeneChien(b) },
   { id: 'defi', cles: [['defi', 'defis', 'challenge', 'pari', 'parie', 'parier', 'duel', 'defie', 'defier']],
     fn: b => botDefi(b) },
+  { id: 'gardeCorps', cles: [['garde', 'gardes', 'bodyguard', 'body'], ['corps', 'guard', 'permanence']],
+    fn: b => botGardeDuCorps(b) },
+  { id: 'gardeVilla', cles: [['protege', 'proteger', 'protegez', 'defends', 'defendre', 'garde', 'garder', 'surveille', 'surveiller'],
+      ['villa', 'maison', 'baraque', 'domicile', 'crib']],
+    fn: b => botGardeVilla(b) },
   { id: 'tennis', cles: [['tennis', 'raquette', 'raquettes']], fn: b => botSport(b, 'tennis') },
   { id: 'foot', cles: [['foot', 'football', 'ballon', 'penalty', 'penaltys']], fn: b => botSport(b, 'foot') },
   { id: 'banque', cles: [V_VOLER.concat(V_TAPER), ['banque', 'coffre', 'coffres', 'magot', 'banques']],
@@ -8499,7 +8611,9 @@ const ORDRES_CAT = [
     { e: '🛑', t: 'Stop', p: 'stop', d: 'il reprend sa vie' },
   ] },
   { n: '🛡️ Te protéger et se battre', l: [
-    { e: '🛡️', t: 'Protège-moi', p: 'protege moi', d: 'garde du corps' },
+    { e: '🛡️', t: 'Protège-moi', p: 'protege moi', d: 'il te défend 3 min' },
+    { e: '🦺', t: 'Sois mon garde du corps', p: 'viens tu es mon garde du corps', d: 'en permanence, jusqu\'à 3 à la fois' },
+    { e: '🏠', t: 'Va garder ma villa', p: 'va proteger ma villa', d: 'il repousse les intrus' },
     { e: '🔫', t: 'Tire pour me protéger', p: 'tire pour me proteger', d: 'il dégaine' },
     { e: '👊', t: 'Tape quelqu\'un', p: 'tape le plus proche', d: 'sur le plus proche' },
     { e: '🔪', t: 'Arme-toi', p: 'arme toi', d: 'il achète un fusil', gang: true },
@@ -8827,7 +8941,12 @@ function updateBot(b, dt) {
         const ex = b.pos.x - P.pos.x, ez = b.pos.z - P.pos.z, ed = Math.hypot(ex, ez) || 1;
         const lim = b.rdv.colle ? 2.6 : 5.5;   // « suis-moi » : il reste collé, « viens » : il se pose à côté
         if (b.rdv.arrive && ed > lim) b.rdv.arrive = false;   // le joueur s'est éloigné : il le suit à nouveau
-        if (!b.rdv.arrive) { b.rdv.x = P.pos.x + ex / ed * 1.6; b.rdv.z = P.pos.z + ez / ed * 1.6; }
+        if (b.rdv.slot != null) {   // garde du corps : chacun sa place autour du joueur
+          const a2 = P.facing + b.rdv.slot;
+          b.rdv.x = P.pos.x - Math.sin(a2) * 1.9; b.rdv.z = P.pos.z - Math.cos(a2) * 1.9;
+          if (Math.hypot(b.pos.x - b.rdv.x, b.pos.z - b.rdv.z) > 1.1) b.rdv.arrive = false;
+        }
+        else if (!b.rdv.arrive) { b.rdv.x = P.pos.x + ex / ed * 1.6; b.rdv.z = P.pos.z + ez / ed * 1.6; }
         // livraison : il a le casse-croûte en main et te le donne en arrivant
         if (b.rdv.livraison && ed < 2.6) { const it = b.rdv.livraison; b.ordre = null; b.wait = 1.5;
           // on garde un rendez-vous « sur place » : le mettre à null plantait la suite du tick
@@ -9687,6 +9806,7 @@ function cityCommon(dt) {
 }
 function cityVie(dt) {
   for (const r of (city.barbierRubans || [])) r.rotation.y += dt * 1.6;   // l'enseigne du coiffeur tourne
+  protectionTick(dt);   // gardes du corps, protection d'un membre, garde de la villa
   // garage : réparation du véhicule conduit
   if (drive.car && city.garage && (drive.car.dmg || 0) > 0 && Math.abs(drive.car.x - city.garage.x) < 4.5 && Math.abs(drive.car.z - city.garage.z) < 3.5 && simTime > (city.repairT || 0)) {
     if (wallet < 10) { if (simTime > (city.repairMsgT || 0)) { city.repairMsgT = simTime + 4; msg('🔧 Réparation : 10 🪙 (il t\'en manque)', 1600); } }
@@ -11344,7 +11464,7 @@ const PLAINTE_MOTIFS = [
 ];
 const plainte = { qui: null, motif: 'coups', chasse: null, faites: 0 };
 
-loadGuerre();
+try { loadGuerre(); } catch (e) { console.error('sauvegarde de la guerre illisible', e); }
 loadWorld(0); running = false;
 if (isMobile) { $('chat').classList.remove('open'); $('chatBtn').classList.remove('on'); }
 showBest(); updateHud(); updateTimer(); updateLeaderboard();
@@ -12363,9 +12483,8 @@ function tatouer() {
 // des dégâts au corps à corps et de la résistance. Elle se gagne à l'entraînement (salle de
 // sport, stand de tir), à l'expérience (missions réussies, exercices de l'école) et se perd
 // quand on se fait démolir.
-const PERF_SEUILS = [30, 55, 80];   // ★ / ★★ / ★★★ / ★★★★
 const perfDe = o => clamp(Math.round((o && o.perf != null) ? o.perf : 0), 0, 100);
-function perfEtoiles(v) { return '★'.repeat(1 + PERF_SEUILS.filter(s => v >= s).length); }
+function perfEtoiles(v) { return '★'.repeat(1 + [30, 55, 80].filter(s => v >= s).length); }   // ★ / ★★ / ★★★ / ★★★★
 function perfCouleur(v) { return v >= 80 ? '#5cc453' : v >= 55 ? '#ffd23f' : v >= 30 ? '#ff8f3a' : '#ff5c5c'; }
 function perfBarre(v, n = 12) { const p = clamp(Math.round(v / 100 * n), 0, n); return '█'.repeat(p) + '░'.repeat(n - p); }
 // une ligne de tableau : nom, jauge colorée, note en étoiles
@@ -12375,7 +12494,9 @@ function perfLigne(nom, v, sous, teinte) {
     + `<span style="display:block;font-family:monospace;color:${c};letter-spacing:-1px">${perfBarre(v)} ${v}/100 ${perfEtoiles(v)}</span>`
     + (sous ? `<span style="display:block;font-weight:600;color:#7a86a0">${sous}</span>` : '') + '</b>';
 }
-const savePerf = () => store.set('superobby.perf', String(Math.round(P.perf || 0)));
+// FONCTION et non `const` : loadGuerre() l'appelle au tout début du chargement, bien avant
+// cette ligne. Avec une const, la partie n'a jamais démarré (écran noir).
+function savePerf() { store.set('superobby.perf', String(Math.round(P.perf || 0))); }
 // Gagner de la performance. `quoi` sert au message : on ne prévient que pour le joueur et
 // pour les hommes du gang, pas pour les rivaux qui progressent dans leur coin.
 function perfGagne(o, n, quoi) {

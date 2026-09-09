@@ -4289,6 +4289,38 @@ test('le coiffeur propose dix coupes et douze couleurs', async p => {
   return { ok, detail: `salon en ville · ${r.coupes} coupes (afro ${r.blocs.afro}, dreadlocks ${r.blocs.dreads} mèches, crête iroquoise ${r.blocs.iroquoise}, punk ${r.blocs.punk}, nattes ${r.blocs.nattes}, mulet ${r.blocs.mulet}, plaquée ${r.blocs.plaquee}) et ${r.couleurs} couleurs · on essaie sans payer et on repart avec son ancienne tête · la coupe payée ${r.achat.paye} 🪙 est mémorisée (gratuite ensuite)` };
 });
 
+// À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
+// du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
+// loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore
+// non initialisée et le jeu ne démarrait plus du tout (écran noir).
+test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
+  await p.evaluate(() => {
+    localStorage.setItem('superobby.guerre', JSON.stringify({ rep: 30, force: 40, magot: 200, armes: 1,
+      terr: { zone: 'rouge' }, saison: 1, gangs: {}, recrues: [{ n: 'Lucas_2014', f: 20, p: 35 }],
+      perf: 42, membres: [{ n: 'Lucas_2014', p: 35 }] }));
+    localStorage.setItem('superobby.perf', '42');
+    localStorage.setItem('superobby.amis', JSON.stringify(['Lucas_2014']));
+    localStorage.setItem('superobby.avatar', JSON.stringify({ hair: 'dreads', hairColor: 7, bijou: 'grosse', taille: 'XXL', couleurHaut: 4 }));
+    localStorage.setItem('superobby.chien', JSON.stringify({ nom: 'Rex' }));
+  });
+  let pret = true, erreur = '';
+  try {
+    await p.reload({ waitUntil: 'load' });
+    await p.waitForFunction(() => window.__SHOT && window.__SHOT.ready, null, { timeout: 60000 });
+  } catch (e) { pret = false; erreur = e.message.slice(0, 120); }
+  if (!pret) return { ok: false, detail: `le jeu ne redémarre pas avec une sauvegarde : ${erreur}` };
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    return { ville: __G.city.on, gangs: __G.gangs.length, bots: __G.bots.length,
+      perf: __G.perfDe(__G.P), rep: __G.gang.rep,
+      look: { coupe: __G.myCfg.hair, bijou: __G.myCfg.bijou, taille: __G.myCfg.taille },
+      chien: __G.chien.nom };
+  });
+  const ok = r.ville && r.gangs === 3 && r.bots >= 10 && r.perf === 42 && r.rep === 30
+    && r.look.coupe === 'dreads' && r.look.bijou === 'grosse' && r.look.taille === 'XXL' && r.chien === 'Rex';
+  return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs, ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

@@ -4784,6 +4784,84 @@ test('les coups ont un vrai impact : onde de choc, éclats orientés, traînée 
   return { ok, detail: `un coup de poing pose ${r.poing.effets} éléments — ${r.poing.anneaux} ondes de choc, ${r.poing.additifs} lumières additives, une traînée sur le trajet du poing — et secoue la caméra (${r.poing.secousse}) · ${r.gerbe.versLeCoup}/${r.gerbe.n} éclats partent dans le sens du coup au lieu de gicler au hasard · tout s'efface en FONDU (plus de cubes qui disparaissent d'un coup) · une balle dans le décor laisse ${r.mur.fumee} bouffées de fumée et une trace d'impact · au-delà de 220 effets on arrête d'en créer (${r.plafond} au pire d'une mêlée générale) et une image lente n'avale plus l'impact` };
 });
 
+
+test('on peut jouer au tennis avec un garde du corps, et les autres s\'écartent', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
+    const G = __G, res = {};
+    const joueur = G.bots[0], g1 = G.bots[1], g2 = G.bots[2];
+    for (const b of [joueur, g1, g2]) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.sport = null; b.rdv = null; b.wait = 0; }
+    G.P.pos.set(13, 0.3, -8);
+    G.botGardeDuCorps(joueur); G.botGardeDuCorps(g1); G.botGardeDuCorps(g2);
+    res.gardes = G.bots.filter(b => b.gardeCorps).length;
+    // on envoie jouer CELUI QUI GARDE : avant, il ne partait jamais
+    G.botSport(joueur, 'tennis');
+    res.ordre = { sport: !!joueur.sport, gardeLachee: !joueur.gardeCorps };
+    for (let i = 0; i < 4000 && !(joueur.sport && joueur.sport.pret); i++) { G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); }
+    res.arrive = !!(joueur.sport && joueur.sport.pret);
+    G.P.racket = false;
+    for (let i = 0; i < 400 && !G.tm.on; i++) { G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); }
+    res.match = { on: G.tm.on, gagnants: G.DUEL_GAGNANTS };
+    for (let i = 0; i < 2500; i++) { G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); }
+    const surLeCourt = b => b.pos.x > 8.6 && b.pos.x < 17.4 && b.pos.z > -21.5 && b.pos.z < -4.5;
+    res.gardesSurLeCourt = [g1, g2].filter(surLeCourt).length;
+    res.surLaTouche = [g1, g2].filter(b => b.rdv && b.rdv.touche).length;
+    // la raquette ne racle plus le sol
+    G.P.pos.set(13, 0.3, -8); G.P.racket = true; G.setRacket(G.me, true);
+    for (let i = 0; i < 4; i++) G.step(1 / 60, true);
+    G.me.group.updateMatrixWorld(true);
+    const bb = new G.THREE.Box3().setFromObject(G.me.racket);
+    res.raquette = { bas: +bb.min.y.toFixed(2), sol: +G.P.pos.y.toFixed(2), longueur: +(bb.max.y - bb.min.y).toFixed(2) };
+    return res;
+  });
+  const garde = r.raquette.bas - r.raquette.sol;
+  const ok = r.gardes === 3 && r.ordre.sport && r.ordre.gardeLachee && r.arrive && r.match.on
+    && r.match.gagnants === 3 && r.gardesSurLeCourt === 0 && r.surLaTouche === 2
+    && garde > 0.1 && r.raquette.longueur < 0.9;
+  return { ok, detail: `un garde du corps envoyé jouer POSE SA GARDE et part vraiment sur le court (avant, sa consigne de garde le ramenait au joueur à chaque image) · la manche se joue en ${r.match.gagnants} jeux gagnants · les ${r.surLaTouche} autres gardes se rangent sur la touche : ${r.gardesSurLeCourt} sur le court · la raquette mesure ${r.raquette.longueur} m et passe ${garde.toFixed(2)} m au-dessus du sol au lieu de s'y enfoncer de 32 cm` };
+});
+
+test('un homme mis au tapis reste COUCHÉ SUR le sol, pas dedans', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const bas = av => { av.group.updateMatrixWorld(true); let m = 1e9;
+      av.group.traverse(o => { if (!o.isMesh || o.isSprite || !o.visible) return;
+        const bb = new G.THREE.Box3().setFromObject(o); if (bb.min.y < m) m = bb.min.y; }); return m; };
+    G.P.facing = Math.PI;
+    // on dégage le terrain : avec douze habitants et dix-huit gangsters autour, les coups
+    // partaient sur le premier venu au lieu de la cible qu'on mesure
+    for (const o of G.bots) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    for (const G2 of G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
+    // un gangster mis au tapis à coups de poing
+    const m = G.gangs[0].membres[0];
+    m.x = G.P.pos.x; m.z = G.P.pos.z - 1.3; m.y = 0.15; m.ko = 0; m.hp = 20; m.captif = false;
+    m.av.group.position.set(m.x, m.y, m.z); m.av.group.rotation.x = 0;
+    // chaque coup le repousse : on le ramène devant nous pour que la série porte
+    for (let i = 0; i < 10 && !m.ko; i++) { m.x = G.P.pos.x; m.z = G.P.pos.z - 1.3; G.P.punchT = 0; G.punch(); }
+    const sol = G.groundUnder(m.x, m.z, null, 2);
+    res.gangster = { ko: m.ko > G.simTime, couche: Math.abs(m.av.group.rotation.x) > 1.4, ecart: +(bas(m.av) - sol).toFixed(2),
+ };
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    res.gangsterApres = +(bas(m.av) - sol).toFixed(2);
+    // un habitant assommé — on éloigne d'abord le gangster à terre, sinon les coups
+    // repartent sur lui au lieu du bot
+    for (const G2 of G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.av.group.position.y, o.z); }
+    const b = G.bots[0];
+    b.pos.set(G.P.pos.x, 0.15, G.P.pos.z - 1.35); b.ko = 0; b.hp = 12; b.dead = 0; b.fight = null;
+    b.av.group.visible = true; b.av.group.position.copy(b.pos); b.av.group.rotation.x = 0;
+    for (let i = 0; i < 10 && !b.ko; i++) { b.pos.set(G.P.pos.x, 0.15, G.P.pos.z - 1.35); G.P.punchT = 0; G.punch(); }
+    const solB = G.groundUnder(b.pos.x, b.pos.z, null, 2);
+    for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+    res.habitant = { ko: b.ko > G.simTime, couche: Math.abs(b.av.group.rotation.x) > 1.4, ecart: +(bas(b.av) - solB).toFixed(2) };
+    return res;
+  });
+  const ok = r.gangster.ko && r.gangster.couche && r.gangster.ecart > -0.06 && r.gangster.ecart < 0.35
+    && r.gangsterApres > -0.06 && r.gangsterApres < 0.35
+    && r.habitant.ko && r.habitant.couche && r.habitant.ecart > -0.06 && r.habitant.ecart < 0.35;
+  return { ok, detail: `un gangster assommé tombe et reste couché ${r.gangsterApres} m au-dessus du bitume (il s'y enfonçait de 39 cm : le pivot de l'avatar est aux pieds, la moitié du corps passait sous la route) · même chose pour un habitant, ${r.habitant.ecart} m` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

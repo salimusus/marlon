@@ -2339,7 +2339,9 @@ function setRacket(av, on) {
   // La raquette se tient VERTICALE, tamis de face, comme on la porte vraiment. Avec
   // l'ancienne inclinaison (−0,9 rad) le tamis était couché à 50° : on avait l'air de
   // porter une poêle à frire.
-  if (!av.racket) { av.racket = racketMesh(); av.racket.position.set(0.05, -0.66, 0.1); av.racket.rotation.set(-0.14, 0, 0.2); av.rig.armR.add(av.racket); }
+  // Elle est aussi RACCOURCIE et REMONTÉE : à taille réelle du râtelier (1,07 m) le tamis
+  // s'enfonçait de 32 cm dans le sol quand le bras pendait le long du corps.
+  if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.position.set(0.05, -0.42, 0.1); av.racket.rotation.set(-0.14, 0, 0.2); av.rig.armR.add(av.racket); }
   av.racket.visible = !!on;
 }
 const WINMASK = (() => {   // fenêtres allumées (masque d'émission pour la nuit)
@@ -5839,7 +5841,7 @@ function agentsTick(dt) {
     const a = police.agents[i];
     if (a.plainte && !a.ko) continue;   // celui-là court après un bot signalé, pas après le joueur
     if (a.ko) {
-      a.av.group.rotation.x = -Math.PI / 2; a.av.group.position.set(a.x, a.y + 0.4, a.z);
+      corpsAuSol(a.av, a.x, a.z, a.y);
       if (simTime > a.ko) { scene.remove(a.av.group); const k = city.mannequins.indexOf(a.av); if (k >= 0) city.mannequins.splice(k, 1); police.agents.splice(i, 1); }
       continue;
     }
@@ -6226,7 +6228,7 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
   for (const b of bots) {
     if (!b.ko) { gardeTick(b); gardeArmeTick(b, dt); if (bagarreTick(b, dt)) continue; }
-    if (b.ko) { if (simTime < b.ko) { b.av.group.rotation.x = -Math.PI / 2; b.av.group.position.y = b.pos.y + 0.4; b.wait = 1; continue; } b.ko = 0; b.robbed = false; b.hp = estDuGang(b) ? 15 : 60; b.av.group.rotation.x = 0; b.av.group.position.y = b.pos.y; botSay(b, ['ouf…', 'tu vas voir la prochaine fois', 'plus jamais ça']); }
+    if (b.ko) { if (simTime < b.ko) { corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y); b.wait = 1; continue; } b.ko = 0; b.robbed = false; b.hp = estDuGang(b) ? 15 : 60; b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.4); corpsDebout(b.av, b.pos.x, b.pos.z, b.pos.y); botSay(b, ['ouf…', 'tu vas voir la prochaine fois', 'plus jamais ça']); }
     // Un passant récupère tout seul après une bagarre. UN HOMME DE TON GANG, NON : ses points
     // de vie restent là où les coups les ont laissés. Il faut l'envoyer à l'hôpital (payant)
     // ou attendre très longtemps — sa jauge de vie compte vraiment.
@@ -6242,6 +6244,19 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
     }
     b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
   }
+}
+// Un corps à terre : le pivot de l'avatar est aux PIEDS. Une fois basculé de 90°, la moitié
+// de l'épaisseur du corps passait sous le bitume — on voyait le mort à moitié enfoncé dans
+// la route. On le repose donc sur le sol réel, relevé de la demi-épaisseur.
+function corpsAuSol(av, x, z, yRef) {
+  if (!av || !av.group) return;
+  const sol = groundUnder(x, z, null, (yRef == null ? av.group.position.y : yRef) + 1.4);
+  av.group.rotation.x = -Math.PI / 2;
+  av.group.position.set(x, sol + 0.45, z);
+}
+function corpsDebout(av, x, z, y) {
+  if (!av || !av.group) return;
+  av.group.rotation.x = 0; av.group.position.set(x, y, z);
 }
 function punched(by, dx, dz, dmg = 8, kb = 2) {
   const lost = Math.min(4, wallet); wallet -= lost; saveWallet(); updateHud(); msg(`👊 ${by} t'a frappé et volé ${lost} 🪙 !`, 1200);
@@ -8180,7 +8195,7 @@ function chienTick(dt) {
           chien.hp = Math.max(0, chien.hp - (4 + Math.round(perfDe(g3) / 14)));   // il prend des coups en retour
           if (chien.hp <= 0) { chien.hp = 0; chien.attaque = null; chien.blesse = simTime + 25;
             msg(`🐶 ${chienNom()} est blessé, il décroche et se met à l'abri !`, 3400); sfx.die(); }
-          else if (g3.hp <= 0) { g3.ko = simTime + 14; g3.hp = 0; chien.attaque = null;
+          else if (g3.hp <= 0) { g3.ko = simTime + 14; g3.hp = 0; corpsAuSol(g3.av, g3.x, g3.z, g3.y); chien.attaque = null;
             perfGagne(chien, 3); msg(`🐶 ${chienNom()} a mis ${g3.nom} au tapis !`, 3200); sfx.win(); }
         }
         return;
@@ -8519,8 +8534,17 @@ function botGardeVilla(b) {
 }
 // Chaque image : les gardes suivent ce qu'ils protègent et frappent qui s'en prend à lui.
 function protectionTick(dt) {
+  const touche = touchePartie();
   for (const b of bots) {
     if (b.ko || b.mort) continue;
+    // une partie est en cours : les gardes se rangent sur la touche et laissent jouer
+    if (touche && (b.gardeCorps || b.protege) && !b.sport) {
+      if (!b.rdv || !b.rdv.touche) {
+        b.rdv = { x: touche.x + rnd(-1, 1), z: touche.z + rnd(-1.4, 1.4), y: 0.3, nom: 'la touche', arrive: false, libre: true, touche: true };
+        b.rdvRoute = null; b.wait = 0; b.target = null;
+      }
+      continue;
+    }
     // il colle le membre qu'il protège
     if (b.protege && b.rdv && b.rdv.suivre) {
       const c = b.protege;
@@ -8534,7 +8558,7 @@ function protectionTick(dt) {
       if (!b.bagarre) for (const G of gangs) for (const m of G.membres) {
         if (m.ko || Math.hypot(m.x - c.pos.x, m.z - c.pos.z) > 6) continue;
         m.hp -= 9 + Math.round(perfDe(b) / 10); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 0.9);
-        if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2); }
+        if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 2); }
         b.av.rig.swing = 0.3; break;
       }
     }
@@ -8548,7 +8572,7 @@ function protectionTick(dt) {
           b.rdv = { x: m.x + 1, z: m.z + 1, y: 0.3, nom: 'intrus', arrive: false, libre: true }; b.rdvRoute = null; b.wait = 0;
           if (Math.hypot(b.pos.x - m.x, b.pos.z - m.z) < 2) {
             m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
-            if (m.hp <= 0) { m.ko = simTime + 18; m.hp = 0; perfGagne(b, 2, 'il a défendu ta villa'); botSay(b, ['et voilà ! 😤', 'la villa est à nous !']); }
+            if (m.hp <= 0) { m.ko = simTime + 18; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 2, 'il a défendu ta villa'); botSay(b, ['et voilà ! 😤', 'la villa est à nous !']); }
           }
           break;
         }
@@ -8646,7 +8670,7 @@ function gardeTick(b) {
     b.gardeCd = simTime + 1.2; b.av.rig.swing = 0.3;
     b.facing = Math.atan2(m.x - b.pos.x, m.z - b.pos.z);
     m.hp -= 9 + Math.round(perfDe(b) / 9); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
-    if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 2, 'il t\'a défendu'); botSay(b, ['personne ne touche au chef ! 😤']); }
+    if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 2, 'il t\'a défendu'); botSay(b, ['personne ne touche au chef ! 😤']); }
     return;
   }
 }
@@ -9125,6 +9149,12 @@ function botSport(b, jeu) {
   const l = lieuDe(foot ? 'foot' : 'tennis');
   if (!l) { botDit(b, 'je ne trouve pas le terrain 😕'); return false; }
   finDuel('tennis'); finDuel('foot');   // une seule partie à la fois
+  // Un garde du corps ne pouvait pas jouer : protectionTick lui remettait un rendez-vous
+  // « colle au joueur » à chaque image, et il ne partait jamais sur le terrain.
+  if (b.gardeCorps || b.protege || b.gardeVilla) {
+    b.gardeCorps = 0; b.gardeVilla = 0; b.protege = null; b.garde = 0; b.gardeArme = 0;
+    botDit(b, 'je pose la garde le temps de la partie 👍');
+  }
   // Il choisit le camp que tu n'occupes pas, et va s'y placer.
   const cote = foot ? (inZone(P.pos, FOOT_ZONE) && P.pos.x < -13 ? 1 : 0)
                     : (inZone(P.pos, TENNIS_ZONE) && P.pos.z < -13 ? 0 : 1);
@@ -9308,6 +9338,9 @@ function updateBot(b, dt) {
     if (b.wait <= 0) resetBot(b, rnd(3, 12));
     return;
   }
+  // À TERRE : on ne touche plus à rien. combatTick le maintient couché sur le sol ; la
+  // pause ci-dessous recopiait b.pos dans l'avatar et le corps replongeait dans le bitume.
+  if (b.ko) return;
   if (b.wait > 0 && b.rdv && !b.rdv.arrive) b.wait = 0;   // en route vers un rendez-vous : pas de pause
   if (b.wait > 0) {
     b.wait -= dt;
@@ -10785,7 +10818,7 @@ function balleExplose(x, y, z) {
   }
   for (const b of bots) if (!b.ko && Math.hypot(b.pos.x - x, b.pos.z - z) < R) { b.hp = (b.hp ?? 100) - 65; if (b.hp <= 0) botKill(b); else { b.fight = 'flee'; b.fightT = simTime + 5; } }
   for (const a of police.agents) if (!a.ko && Math.hypot(a.x - x, a.z - z) < R) { a.hp -= 80; if (a.hp <= 0) agentTue(a); }
-  for (const gd of city.guards) if (!gd.ko && Math.hypot(gd.x - x, gd.z - z) < R) { gd.hp -= 70; if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; } }
+  for (const gd of city.guards) if (!gd.ko && Math.hypot(gd.x - x, gd.z - z) < R) { gd.hp -= 70; if (gd.hp <= 0) { gd.ko = simTime + 12; corpsAuSol(gd.av, gd.x, gd.z, gd.y); } }
   if (!drive.car && Math.hypot(P.pos.x - x, P.pos.z - z) < R * 0.8 && P.hp > 0) hurt(28, 'ton explosif', (P.pos.x - x) / R, (P.pos.z - z) / R, 3);
   if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('faire exploser un quartier', 2, 3); }
 }
@@ -10967,7 +11000,7 @@ function shotsTick(dt) {
       else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
     } else if (quoi === 'garde') {
       const gd = cible; gd.hp -= (s.dmg || 20); impact(gd.x, gd.y + 1.2, gd.z, { x: dx, y: dy, z: dz }, 'balle', 1);
-      if (gd.hp <= 0) { gd.ko = simTime + 12; gd.av.group.rotation.x = -Math.PI / 2; gd.av.group.position.y = gd.y + 0.4; bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
+      if (gd.hp <= 0) { gd.ko = simTime + 12; corpsAuSol(gd.av, gd.x, gd.z, gd.y); bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
       // les gardes ripostent, mais tirer sur l'un d'eux n'est pas un braquage de banque :
       // avant, la moindre balle perdue déclenchait l'alerte maximale et trois voitures.
       gd.alert = true; police.riposte = simTime + 30;
@@ -11009,7 +11042,26 @@ function botSportif(jeu) {
   for (const b of bots) if (b.sport && b.sport.pret && b.sport.jeu === jeu && !b.ko && !b.prison && !b.drive) return b;
   return null;
 }
+// Pendant une partie, les gardes du corps SORTENT du terrain et attendent sur la touche :
+// à quatre autour du joueur dans le court, on ne pouvait plus jouer une balle.
+function touchePartie() {
+  if (tm.on) return { x: 5.2, z: -13 };    // le long du court de tennis, côté ouest
+  if (fm.on) return { x: -13, z: -0.8 };   // la touche du terrain de foot, au sud
+  return null;
+}
+// Il reprend sa place dès la fin de la partie.
+function reprendGarde(b) {
+  if (!b || !b.rdv || !b.rdv.touche) return;
+  b.rdv = null; b.rdvRoute = null; b.wait = 0;
+  if (b.gardeCorps && simTime < b.gardeCorps) {
+    const ANGLES = [0.9, -0.9, 0];
+    b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true, slot: ANGLES[b.slotGarde || 0] || 0 };
+  } else if (b.protege) {
+    b.rdv = { x: b.protege.pos.x, z: b.protege.pos.z, y: 0.3, nom: b.protege.name, arrive: false, suivre: b.protege };
+  }
+}
 function finDuel(jeu, etat) {
+  for (const b of bots) reprendGarde(b);
   for (const b of bots) if (b.sport && b.sport.jeu === jeu) {
     finirOrdre(b, etat || 'rate', `partie ${jeu === 'foot' ? 'au foot' : 'au tennis'}`); if (b.av && b.av.racket) setRacket(b.av, false); b.sport = null; b.rdv = null; b.rdvRoute = null; b.wait = rnd(1, 3); }
   if (jeu === 'tennis') { tm.bot = null; tm.on = false; tm.s = [0, 0]; tm.j = [0, 0]; }
@@ -11100,7 +11152,7 @@ function tennisMatchTick(dt) {   // arbitre : l'hôte en réseau, toi-même hors
     tm.on = true; tm.s = [0, 0]; tm.j = [0, 0]; tm.names = [ps.find(p => p.side === 0).name, ps.find(p => p.side === 1).name]; tm.serve = 0; tm.serveT = simTime + 2;
     tm.bot = (ps.find(p => p.bot) || {}).bot || null;
     city.balls.filter(b => b.kind === 'tennis').forEach(removeBall);
-    const txt = `🎾 Partie : ${tm.names[0]} contre ${tm.names[1]} ! ${DUEL_GAGNANTS} jeux gagnants (jeu en ${JEU_POINTS} points)`; showTennis(txt); netBroadcast({ t: 'tscore', on: true, s: tm.s, names: tm.names, txt });
+    const txt = `🎾 Partie : ${tm.names[0]} contre ${tm.names[1]} ! Manche en ${DUEL_GAGNANTS} jeux gagnants (jeu en ${JEU_POINTS} points)`; showTennis(txt); netBroadcast({ t: 'tscore', on: true, s: tm.s, names: tm.names, txt });
   }
   if (!both && tm.on) { tm.graceT += dt; if (tm.graceT > 6) { tm.graceT = 0; const txt = '🎾 Partie interrompue (le court est vide)'; showTennis(txt); netBroadcast({ t: 'tscore', on: false, s: tm.s, names: tm.names, txt }); finDuel('tennis'); } } else tm.graceT = 0;
   if (tm.on && simTime > tm.serveT && !city.balls.some(b => b.kind === 'tennis')) {
@@ -13360,7 +13412,7 @@ function gangMissionTick(dt) {
     // dominé il peut changer de camp — c'est comme ça qu'on fait grossir son gang.
     if (m.type === 'gangeur' && m.proie && m.proie.m) {
       const v = m.proie.m, G2 = m.proie.gang;
-      v.ko = simTime + 20; v.hp = 0; v.chasse = null;
+      v.ko = simTime + 20; v.hp = 0; v.chasse = null; corpsAuSol(v.av, v.x, v.z, v.y);
       burst(v.x, v.y + 1.2, v.z, 0xffd23f, 12); sfx.hit();
       G2.relation = clamp((G2.relation || 0) - 25, -100, 100);
       chat(G2.chefNom, `vous allez me le payer, ${myCfg.name} !`, G2.couleur);
@@ -13601,7 +13653,7 @@ function gangTick(dt) {
               b2.hp = (b2.hp ?? 100) - Math.max(4, Math.round(9 + (perfDe(m) - perfDe(b2)) / 5));
               impact(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, null, 'sang', 0.9); sfx.hit();
               m.hp -= Math.max(2, Math.round(4 + perfDe(b2) / 8));   // il rend les coups
-              if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; m.chasse = null; perfGagne(b2, 3, 'il a repoussé une embuscade'); }
+              if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; m.chasse = null; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b2, 3, 'il a repoussé une embuscade'); }
               else if (b2.hp <= 0) { b2.hp = 0; m.chasse = null;
                 if (perfDe(m) > perfDe(b2) + 20 && Math.random() < 0.4) tuerMembre(b2, `les ${G.nom}`);
                 else { b2.ko = simTime + 12; perfPerd(b2, 5); msg(`🤕 ${b2.name} s'est fait tabasser par les ${G.nom}`, 3200); } }
@@ -13641,7 +13693,7 @@ function gangTick(dt) {
         m.av.group.rotation.y += dh2 * Math.min(1, dt * 6);
         continue;
       }
-      if (m.ko) { if (simTime < m.ko) { m.av.group.rotation.x = -Math.PI / 2; continue; } m.ko = 0; m.hp = 60; m.av.group.rotation.x = 0; }
+      if (m.ko) { if (simTime < m.ko) { corpsAuSol(m.av, m.x, m.z, m.y); continue; } m.ko = 0; m.hp = 60; m.y = groundUnder(m.x, m.z, null, m.y + 1.4); corpsDebout(m.av, m.x, m.z, m.y); }
       const dx = but[0] - m.x, dz = but[1] - m.z, d = Math.hypot(dx, dz) || 1;
       if (d > 2.2) {
         const o = { x: m.x, y: m.y, z: m.z };
@@ -13670,7 +13722,7 @@ function gangTick(dt) {
         for (const o2 of O.membres) { if (o2.ko) continue;
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
             o2.hp -= 6 + Math.round(perfDe(m) / 6); impact(o2.x, o2.y + 1.2, o2.z, { x: o2.x - m.x, y: 0, z: o2.z - m.z }, 'sang', 0.9); sfx.hit();
-            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; perfGagne(m, 2); perfPerd(o2, 5); } } } }
+            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; corpsAuSol(o2.av, o2.x, o2.z, o2.y); perfGagne(m, 2); perfPerd(o2, 5); } } } }
       // ILS S'EN PRENNENT AUSSI À TES HOMMES — et peuvent les tuer. Un membre bien entraîné
       // encaisse et rend les coups ; un débutant envoyé seul face à un chef y laisse la peau.
       if ((G.etat === 'rival' || G.etat === 'joueur') && gang.membres.length) {
@@ -13683,7 +13735,7 @@ function gangTick(dt) {
           impact(b.pos.x, b.pos.y + 1.2, b.pos.z, null, 'sang', 0.9); sfx.hit();
           // il rend les coups
           m.hp -= Math.max(2, Math.round(4 + defense / 8));
-          if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; perfGagne(b, 3, 'il a mis un rival au tapis'); botSay(b, ['et voilà ! 😤', 'personne ne touche au gang !']); }
+          if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 3, 'il a mis un rival au tapis'); botSay(b, ['et voilà ! 😤', 'personne ne touche au gang !']); }
           else if (b.hp <= 0) {
             b.hp = 0;
             if (attaque > defense + 20 && Math.random() < 0.5) tuerMembre(b, `les ${G.nom}`);
@@ -13913,7 +13965,7 @@ function gagneRep(n, quoi) {
 // ---- un membre de gang tombe ----
 function gangeurKO(m, par) {
   if (m.ko) return;
-  m.ko = simTime + 26; m.hp = 0; m.av.group.rotation.x = -Math.PI / 2;
+  m.ko = simTime + 26; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y);
   burst(m.x, m.y + 1, m.z, 0xff5c5c, 12); sfx.tone(300, 0, .45, 'sawtooth', .07, 60);
   const G = gangDe(m.gang);
   if (!G) return;
@@ -13983,7 +14035,7 @@ function recruesTick(dt) {
   const list = gang.membresLibres || [];
   for (const m of list) {
     if (m.enferme || m === P.otage) continue;
-    if (m.ko) { if (simTime < m.ko) { m.av.group.rotation.x = -Math.PI / 2; continue; } m.ko = 0; m.hp = m.hpMax || 90; m.av.group.rotation.x = 0; }
+    if (m.ko) { if (simTime < m.ko) { corpsAuSol(m.av, m.x, m.z, m.y); continue; } m.ko = 0; m.hp = m.hpMax || 90; m.y = groundUnder(m.x, m.z, null, m.y + 1.4); corpsDebout(m.av, m.x, m.z, m.y); }
     // cible : un ennemi tout proche, sinon le joueur
     let cible = null, bd = 16;
     for (const G of gangs) { if (G.mort) continue; for (const e of G.membres) { if (e.ko || e.captif) continue; const d = Math.hypot(e.x - m.x, e.z - m.z); if (d < bd) { bd = d; cible = e; } } }

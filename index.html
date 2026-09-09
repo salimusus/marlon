@@ -9054,6 +9054,116 @@ function resumeMissions() {
     }).join('');
 }
 function ordresRetourVisible(on) { const e = $('ordresRetour'); if (e) e.style.display = on ? '' : 'none'; }
+// ================= CHOISIR SON ÉQUIPE POUR UNE MISSION =================
+// On pouvait dire « Nathan et Inès allez braquer la banque », encore fallait-il taper les
+// bons noms. Ici on COCHE les hommes qu'on veut, on voit la force de l'équipe et la chance
+// de réussite mission par mission, et on envoie.
+const equipeSel = new Set();
+function equipeChoisie() { return (gang.membres || []).filter(b => b && !b.mort && equipeSel.has(b.name)); }
+// La chance de réussite d'une équipe sur un coup donné : exactement la formule du jeu.
+function chanceMission(equipe, type) {
+  const M = GANG_MISSIONS[type]; if (!M || !equipe.length) return 0;
+  const eq = equipe.reduce((a, b) => a + perfDe(b), 0);
+  const rival = type === 'gangRival' ? (gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4) : 0;
+  const diff = (M.difficulte || 35) + rival;
+  return Math.round(clamp(eq / (eq + diff), 0.1, 0.95) * 100);
+}
+const MISSIONS_EQUIPE = ['argent', 'boutique', 'voiture', 'villa', 'banque', 'gangeur', 'gangRival'];
+function openEquipe() {
+  const l = (gang.membres || []).filter(b => b && !b.mort);
+  if (!l.length) { msg('😎 Recrute d\'abord des hommes dans ton gang (parle à quelqu\'un et invite-le)', 3200); return false; }
+  ordresBot = null;
+  for (const n of [...equipeSel]) if (!l.some(b => b.name === n)) equipeSel.delete(n);   // les morts et les partis sortent
+  const sel = equipeChoisie();
+  const force = sel.reduce((a, b) => a + perfDe(b), 0);
+  $('ordresTitre').textContent = '👥 Choisir les hommes de la mission';
+  ordresRetourVisible(true);
+  $('ordresSub').innerHTML = sel.length
+    ? `<b>${sel.length} homme${sel.length > 1 ? 's' : ''} sélectionné${sel.length > 1 ? 's' : ''}</b> : ${sel.map(b => b.name).join(', ')}`
+      + `<span style="display:block;font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(clamp(force / Math.max(1, sel.length), 0, 100))}">`
+      + `💪 Force de l'équipe : ${force}</span>`
+      + '<span style="display:block;color:#7a86a0">Choisis la mission en bas : le pourcentage tient compte de qui tu envoies.</span>'
+    : 'Coche les hommes que tu veux envoyer, puis choisis la mission. À plusieurs, les chances montent beaucoup.';
+  let html = '<p class="osec">🧑 Tes hommes — clique pour cocher</p>';
+  for (const b of l) {
+    const on = equipeSel.has(b.name), v = perfDe(b), pv = vieDe(b);
+    const occupe = b.gangMission ? `⏳ déjà sur ${b.gangMission.M.n}` : b.ko && simTime < b.ko ? '😵 à terre' : null;
+    html += `<button class="ocard" data-sel="${b.name}"${on ? ' style="outline:3px solid #5cc453"' : ''}>`
+      + `<span>${on ? '✅' : '⬜'}</span>${b.name}`
+      + `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">📈 ${perfBarre(v, 8)} ${v}</i>`
+      + `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(pv)}">❤️ ${perfBarre(pv, 8)} ${pv}</i>`
+      + (occupe ? `<i style="color:#ffd23f">${occupe}</i>` : '') + '</button>';
+  }
+  html += '<p class="osec">⚙️ Sélection</p>'
+    + '<button class="ocard" data-tous="1"><span>👥</span>Tout sélectionner<i>tous les hommes disponibles</i></button>'
+    + '<button class="ocard" data-aucun="1"><span>🚫</span>Tout décocher<i></i></button>';
+  if (sel.length) {
+    html += `<p class="osec">🎯 Envoyer les ${sel.length} sélectionné${sel.length > 1 ? 's' : ''}</p>`;
+    for (const type of MISSIONS_EQUIPE) {
+      const M = GANG_MISSIONS[type]; if (!M) continue;
+      const c = chanceMission(sel, type);
+      html += `<button class="ocard" data-mission="${type}"><span>${M.e}</span>${M.n[0].toUpperCase() + M.n.slice(1)}`
+        + `<i style="color:${c >= 70 ? '#5cc453' : c >= 45 ? '#ffd23f' : '#ff8f3a'}">${c} % de réussite</i>`
+        + `<i>gain ${M.gain[0]}–${M.gain[1]} 🪙</i></button>`;
+    }
+    html += '<p class="osec">💪 Autres ordres groupés</p>'
+      + '<button class="ocard" data-groupe="sport"><span>🏋️</span>Tous à la salle de sport<i>monte leur performance</i></button>'
+      + '<button class="ocard" data-groupe="tir"><span>🎯</span>Tous au stand de tir<i>monte leur performance</i></button>'
+      + '<button class="ocard" data-groupe="hopital"><span>🏥</span>Tous à l\'hôpital<i>payant, selon leurs blessures</i></button>'
+      + '<button class="ocard" data-groupe="garde"><span>🛡️</span>Gardes du corps<i>ils te protègent (3 au plus)</i></button>';
+  }
+  $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-sel]').forEach(btn => btn.addEventListener('click', () => {
+    const n = btn.dataset.sel;
+    if (equipeSel.has(n)) equipeSel.delete(n); else equipeSel.add(n);
+    sfx.tone(equipeSel.has(n) ? 660 : 380, 0, .06, 'square', .04);
+    openEquipe();   // on redessine : les pourcentages suivent la sélection
+  }));
+  $('ordresGrid').querySelectorAll('[data-tous]').forEach(btn => btn.addEventListener('click', () => {
+    for (const b of l) if (!b.gangMission && !(b.ko && simTime < b.ko)) equipeSel.add(b.name);
+    openEquipe();
+  }));
+  $('ordresGrid').querySelectorAll('[data-aucun]').forEach(btn => btn.addEventListener('click', () => { equipeSel.clear(); openEquipe(); }));
+  $('ordresGrid').querySelectorAll('[data-mission]').forEach(btn => btn.addEventListener('click', () => {
+    const type = btn.dataset.mission;
+    const eq = equipeChoisie().filter(b => !b.gangMission && !(b.ko && simTime < b.ko));
+    if (!eq.length) { msg('⏳ Tes hommes cochés sont déjà partis ou à terre', 2600); return; }
+    closeUI();
+    lancerMissionEquipe(eq, type);
+  }));
+  $('ordresGrid').querySelectorAll('[data-groupe]').forEach(btn => btn.addEventListener('click', () => {
+    const quoi = btn.dataset.groupe, eq = equipeChoisie();
+    closeUI();
+    if (quoi === 'sport' || quoi === 'tir') { let n = 0; for (const b of eq) if (entrainerMembre(b, quoi)) n++; msg(`💪 ${n} homme${n > 1 ? 's' : ''} part s'entraîner`, 3000); }
+    else if (quoi === 'hopital') { let n = 0, t = 0; for (const b of eq.slice().sort((a, c) => vieDe(a) - vieDe(c))) { const px = prixSoin(b); if (!px || t + px > wallet) continue; if (botHopital(b)) { n++; t += px; } } msg(n ? `🏥 ${n} homme${n > 1 ? 's' : ''} part se faire soigner (${t} 🪙)` : '💪 Tout le monde est en forme', 3200); }
+    else { let n = 0; for (const b of eq) if (botGardeDuCorps(b)) n++; }
+  }));
+  openUI('ordres');
+  return true;
+}
+// Le lancement, avec la cible quand la mission en demande une.
+function lancerMissionEquipe(eq, type) {
+  if (type === 'gangeur') {
+    let proie = null;
+    for (const G of gangs) { const p = gangeurIsole(G); if (p && (!proie || p.d < proie.d)) proie = p; }
+    if (!proie) { msg('🥊 Aucun gangster isolé en vue en ce moment', 2800); return; }
+    missionGang(eq, 'gangeur', proie);
+    return;
+  }
+  if (type === 'gangRival') {
+    const G = gangs.filter(g => !g.mort).sort((a, b) => (a.relation || 0) - (b.relation || 0))[0];
+    if (!G) { msg('😤 Aucun gang rival en vue', 2400); return; }
+    missionGang(eq, 'gangRival', G);
+    return;
+  }
+  if (type === 'argent') {
+    const cible = bots.filter(b => !estDuGang(b) && !b.ko)
+      .map(b => ({ b, d: Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) })).sort((a, c) => a.d - c.d)[0];
+    missionGang(eq, 'argent', cible ? cible.b : null);
+    return;
+  }
+  missionGang(eq, type);
+}
 function openOrdres(b) {
   if (!b) return false;
   ordresBot = b;
@@ -9151,6 +9261,8 @@ function openQui() {
     ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
     : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.') + resumeMissions();
   let html = '';
+  if ((gang.membres || []).length) html += '<p class="osec">👥 Mission de groupe</p>'
+    + `<button class="ocard" data-equipe="1"><span>👥</span>Choisir plusieurs hommes<i>coche qui tu envoies, vois les chances, et lance le coup</i></button>`;
   if (avecChien) html += `<p class="osec">🐶 Ton chien</p><button class="ocard" data-chienqui="1"><span>🐶</span>${chienNom()}<i>assis, couché, la balle, mords…</i></button>`;
   for (const { titre, l } of lignes) {
     html += `<p class="osec">${titre}</p>`;
@@ -9162,6 +9274,7 @@ function openQui() {
         + `<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : am ? ' · ami' : ''}${b.gardeCorps && simTime < b.gardeCorps ? ' · 🛡️ garde' : ''}</i></button>`; }
   }
   $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-equipe]').forEach(btn => btn.addEventListener('click', () => openEquipe()));
   $('ordresGrid').querySelectorAll('[data-chienqui]').forEach(btn => btn.addEventListener('click', () => openOrdresChien()));
   $('ordresGrid').querySelectorAll('[data-qui]').forEach(btn => btn.addEventListener('click', () => {
     const b = bots.find(x => x.name === btn.dataset.qui); if (b) openOrdres(b);

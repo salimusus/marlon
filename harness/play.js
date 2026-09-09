@@ -5015,6 +5015,50 @@ test('on peut donner plusieurs ordres à plusieurs membres à la fois', async p 
   return { ok, detail: `quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti refuse poliment un second coup sans casser celui des autres, et chaque mission se solde de son côté` };
 });
 
+
+test('on choisit les hommes d\'une mission en les cochant, et on voit les chances monter', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const l = G.bots.slice(0, 4);
+    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.gangMission = null; b.journal = null; b.perf = 40;
+      b.pos.set(G.P.pos.x + 3, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
+    G.equipeSel.clear();
+    G.openQui();
+    res.entree = !!document.querySelector('#ordresGrid [data-equipe]');
+    document.querySelector('#ordresGrid [data-equipe]').click();
+    res.page = { titre: document.getElementById('ordresTitre').textContent,
+      cartes: document.querySelectorAll('#ordresGrid [data-sel]').length,
+      missionsAvant: document.querySelectorAll('#ordresGrid [data-mission]').length,
+      retour: document.getElementById('ordresRetour').style.display !== 'none' };
+    [...document.querySelectorAll('#ordresGrid [data-sel]')][0].click();
+    const chanceUn = G.chanceMission(G.gang.membres.filter(b => G.equipeSel.has(b.name)), 'boutique');
+    const missionsUn = document.querySelectorAll('#ordresGrid [data-mission]').length;
+    [...document.querySelectorAll('#ordresGrid [data-sel]')][1].click();
+    const chanceDeux = G.chanceMission(G.gang.membres.filter(b => G.equipeSel.has(b.name)), 'boutique');
+    res.selection = { coches: G.equipeSel.size, missionsUn, chanceUn, chanceDeux,
+      resume: document.getElementById('ordresSub').innerHTML.includes('2 hommes sélectionnés') };
+    document.querySelector('#ordresGrid [data-tous]').click();
+    res.tous = G.equipeSel.size;
+    [...document.querySelectorAll('#ordresGrid [data-mission]')].find(b => b.dataset.mission === 'boutique').click();
+    res.lancee = { missions: G.gang.missions.length,
+      membres: G.gang.missions[0] ? G.gang.missions[0].membres.length : 0,
+      type: G.gang.missions[0] ? G.gang.missions[0].type : null,
+      chance: G.gang.missions[0] ? G.gang.missions[0].chanceDep : null,
+      journaux: l.filter(b => (b.journal || []).some(o => o.etat === 'cours')).length };
+    G.closeUI();
+    return res;
+  });
+  const ok = r.entree && /Choisir les hommes/.test(r.page.titre) && r.page.cartes === 4
+    && r.page.missionsAvant === 0 && r.page.retour
+    && r.selection.coches === 2 && r.selection.missionsUn >= 6 && r.selection.resume
+    && r.selection.chanceDeux > r.selection.chanceUn + 8
+    && r.tous === 4
+    && r.lancee.missions === 1 && r.lancee.membres === 4 && r.lancee.type === 'boutique'
+    && r.lancee.chance > r.selection.chanceDeux && r.lancee.journaux === 4;
+  return { ok, detail: `le 📣 propose « choisir plusieurs hommes » : on COCHE qui part (${r.page.cartes} cartes, avec performance, vie et « déjà sur un coup ») et les missions n'apparaissent qu'une fois quelqu'un coché · le pourcentage de réussite suit la sélection en direct : ${r.selection.chanceUn} % à un homme, ${r.selection.chanceDeux} % à deux, ${r.lancee.chance} % à quatre sur une boutique · « tout sélectionner » prend les ${r.tous} disponibles, et le coup part avec les ${r.lancee.membres} en une seule mission notée dans les ${r.lancee.journaux} journaux` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

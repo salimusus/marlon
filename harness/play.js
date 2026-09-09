@@ -5336,7 +5336,8 @@ test('un garde du corps envoye en mission part vraiment', async p => {
     // l'entrainement aussi envoie vraiment le garde
     G.entrainerMembre(l[2], 'tir');
     res.entrain = { gardeLachee: !l[2].gardeCorps, rdv: l[2].rdv ? l[2].rdv.entrain : null };
-    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    // le stand de tir est a l'autre bout de la ville : on lui laisse deux minutes
+    for (let i = 0; i < 60 * 120; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
     res.entrainLoin = +Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z).toFixed(0);
     return res;
   });

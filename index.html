@@ -2009,7 +2009,8 @@ function casinoTick(dt) {
     // n'ait AUCUN rendez-vous, le casino restait desert, tout le monde vaquant a quelque
     // chose. En revanche on ne detourne jamais quelqu'un a qui on a donne un ordre, ni un ami.
     const libreDeSonTemps = b => !b.rdv || !(b.rdv.suit || b.rdv.colle || b.rdv.fixe || b.rdv.auto
-      || b.rdv.coup || b.rdv.suivre || b.rdv.jeu || b.rdv.touche);
+      || b.rdv.coup || b.rdv.suivre || b.rdv.jeu || b.rdv.touche || b.rdv.entrain || b.rdv.soin
+      || b.rdv.gang || b.rdv.livre || b.rdv.livraison || b.rdv.sport);
     const dispo = bots.filter(b => !b.ko && !b.drive && !b.bagarre && !b.sport && b.av.group.visible
       && !amis.has(b.name) && !gang.membres.includes(b) && libreDeSonTemps(b)
       && Math.hypot(b.pos.x - c.x, b.pos.z - c.z) < 46);

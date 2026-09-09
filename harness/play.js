@@ -6211,3 +6211,70 @@ test('les QR codes de la manette sont vraiment lisibles', async p => {
   const detail = r.lus.map(x => `v${x.v}${x.err ? ' ⚠ ' + x.err : ''}`).join(', ');
   return { ok, detail: `AUCUN des QR n'était lisible — le dessin avait pourtant l'air parfait · deux erreurs dans l'information de format : les quinze bits étaient écrits a l'envers (poids faible en premier) et la seconde copie débordait d'un module, écrasant le « module toujours noir » · un lecteur écrit dans le banc d'essai relit maintenant chaque code comme le ferait un téléphone — format vérifié par son contrôle BCH, données démasquées, désentrelacées, redécodées — et les ${r.lus.length} cas passent (${detail}) · le dessin est aussi tracé bien plus large (${r.parModule} pixels par module, ${r.largeur} px) : a 2 pixels par module, la réduction de l'image faisait disparaître des lignes entières` };
 });
+
+test('le telephone se connecte vraiment a l\'ecran de jeu, et n\'attend jamais dans le vide', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // FAUX RÉSEAU : deux pages et un annuaire commun, pour jouer l'appairage en entier
+    const annuaire = new Map();
+    class FauxConn {
+      constructor(id) { this.peer = id; this.open = false; this.h = {}; this.autre = null; }
+      on(e, f) { (this.h[e] = this.h[e] || []).push(f); }
+      emit(e, ...a) { for (const f of (this.h[e] || [])) f(...a); }
+      send(d) { if (this.autre) setTimeout(() => this.autre.emit('data', d), 0); }
+    }
+    class FauxPeer {
+      constructor(id) { this.id = id || 'anon' + Math.random(); this.h = {}; this.mort = false;
+        setTimeout(() => { if (this.mort) return;
+          if (id && annuaire.has(id)) return this.emit('error', { type: 'unavailable-id' });
+          if (id) annuaire.set(id, this); this.emit('open', this.id); }, 5); }
+      on(e, f) { (this.h[e] = this.h[e] || []).push(f); }
+      emit(e, ...a) { for (const f of (this.h[e] || [])) f(...a); }
+      connect(cible) { const c = new FauxConn(cible);
+        setTimeout(() => { const hote = annuaire.get(cible);
+          if (!hote) return this.emit('error', { type: 'peer-unavailable' });
+          const cote = new FauxConn(this.id); c.autre = cote; cote.autre = c;
+          hote.emit('connection', cote);
+          setTimeout(() => { c.open = cote.open = true; cote.emit('open'); c.emit('open'); }, 5); }, 5);
+        return c; }
+      destroy() { this.mort = true; if (annuaire.get(this.id) === this) annuaire.delete(this.id); }
+    }
+    const vrai = window.Peer; window.Peer = FauxPeer;
+    const attend = ms => new Promise(r2 => setTimeout(r2, ms));
+    try {
+      // 1) l'écran de jeu ouvre le salon : il doit se mettre à ÉCOUTER, et le dire
+      G.tv.cede = false; G.ouvreSalonTV();
+      await attend(120);
+      const code = document.getElementById('tvCode').textContent.trim();
+      const ecoute = !!G.tv.on, msgEcran = document.getElementById('tvManettes').textContent;
+      // 2) le téléphone scanne le code
+      G.manetteOuvre(code);
+      await attend(250);
+      const pret = document.getElementById('manette').classList.contains('pret');
+      const etat = document.getElementById('telEtat').textContent;
+      const cotes = G.tv.conns.length;
+      // 3) une flèche de la croix arrive-t-elle au jeu ?
+      G.tel.x = 0; G.man.x = 1; G.man.y = 0; G.man.px = 0; G.man.py = 0;
+      await attend(150);
+      const recu = { x: G.tel.x, y: G.tel.y };
+      G.manetteFerme();
+      // 4) MAUVAIS code : ça doit réessayer et le dire, jamais rester figé
+      G.manetteOuvre('ZZZZ');
+      await attend(1200);
+      const etatMauvais = document.getElementById('telEtat').textContent;
+      G.manetteFerme();
+      // 5) l'écran ne doit jamais cesser d'écouter : on coupe, la veille le remonte
+      try { G.tv.peer.destroy(); } catch (e) {} G.tv.peer = null; G.tv.on = false;
+      G.simTime += 10; G.tvVeille();
+      await attend(120);
+      const remonte = !!G.tv.on;
+      G.closeUI();
+      return { code, ecoute, msgEcran, pret, etat, cotes, recu, etatMauvais, remonte, essais: G.MAN_ESSAIS };
+    } finally { window.Peer = vrai; }
+  });
+  const ok = /^[A-Z]{4}$/.test(r.code) && r.ecoute && /Prêt/.test(r.msgEcran)
+    && r.pret && /Connecté/.test(r.etat) && r.cotes === 1 && r.recu.x === 1
+    && /essai/i.test(r.etatMauvais) && r.remonte;
+  return { ok, detail: `le téléphone pouvait rester bloqué sans un mot : si la bibliothèque réseau n'était pas encore chargée on abandonnait aussitôt, si l'écran de jeu n'écoutait pas encore on tombait sur « aucune télé » sans retour possible, et si le canal ne s'ouvrait jamais plus rien ne bougeait · l'appairage complet est maintenant rejoué ici de bout en bout : l'écran annonce qu'il écoute (« ${r.msgEcran.trim()} »), le téléphone se connecte (« ${r.etat.trim()} », ${r.cotes} liaison) et une flèche de la croix arrive bien au jeu (x=${r.recu.x}) · avec un mauvais code il réessaie ${r.essais} fois en l'affichant (« ${r.etatMauvais.trim()} ») puis explique quoi vérifier, au lieu de tourner dans le vide · et si la liaison de l'écran tombe, une veille la remonte toute seule (${r.remonte})` };
+});

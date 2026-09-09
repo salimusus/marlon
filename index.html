@@ -11524,7 +11524,7 @@ function cityVie(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -13606,11 +13606,23 @@ function telCommande(d) {   // message reçu d'une manette
 // ---- côté télé : on héberge un salon de manettes ------------------------------------
 const tv = { on: false, code: null, peer: null, conns: [] };
 const lienBase = () => location.href.split('#')[0];
+// L'écran de jeu ne doit JAMAIS cesser d'écouter tant qu'il affiche un code : si la liaison
+// tombe (mise en veille, Wi-Fi qui saute), on la remonte toute seule.
+let tvVeilleT = 0;
+function tvVeille() {
+  if (!tv.code || tv.cede || tv.peer || simTime < tvVeilleT) return;
+  tvVeilleT = simTime + 5;
+  tvHeberge(tv.code);
+}
 function tvManettesMaj() {
   const n = tv.conns.filter(c => c.open).length;
   const el = $('tvManettes');
-  if (el) el.textContent = n === 0 ? 'Aucune manette connectée pour l\'instant.'
-    : `🎮 ${n} manette${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}${tel.nom ? ' · ' + tel.nom : ''}`;
+  // On dit précisément où on en est : « prêt » veut dire que cet écran ÉCOUTE vraiment. Avant,
+  // le message ne distinguait pas « personne n'a encore scanné » de « rien n'écoute ».
+  if (el) el.textContent = n > 0 ? `🎮 ${n} manette${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}${tel.nom ? ' · ' + tel.nom : ''}`
+    : tv.cede ? `📺 Le code ${tv.code} est passé à la télé : c'est elle qui attend ton téléphone.`
+    : tv.on ? `🟢 Prêt : cet écran attend une manette au code ${tv.code}.`
+    : '⏳ Préparation de la liaison…';
   tel.on = n > 0;
   // la pastille du bas de l'écran : depuis le canapé on veut savoir d'un coup d'œil si la
   // manette répond, sans rouvrir le salon
@@ -13685,7 +13697,10 @@ function castLance() {
   if (tv.cede && !cast.session) { tv.cede = false; tvHeberge(tv.code); tvSalonMaj(); return; }
   if (cast.session) { try { cast.session.terminate(); } catch (e) {} cast.session = null; castMaj(); return; }
   const r = castPrepare();
-  if (!r) { copieLienTV(); tvPasseLaMain(); castMaj(); return; }
+  // ATTENTION : on ne lâche PAS le code ici. Copier un lien ne prouve pas que le jeu est
+  // parti sur la télé — et sans hôte, le téléphone qui scanne ce même écran tourne dans le
+  // vide. On ne cède le code qu'une fois la diffusion vraiment établie.
+  if (!r) { copieLienTV(); castMaj(); return; }
   r.start().then(sess => {
     cast.session = sess; tvPasseLaMain(); castMaj();
     msg('📺 C\'est parti sur la télé ! Ton téléphone reste la manette', 3200);
@@ -13696,7 +13711,15 @@ function castLance() {
 // hasard en ouvrant le lien : on scannait le mauvais. Le code voyage maintenant DANS le lien
 // (#tv=CODE), et l'écran qui passe la main libère le sien pour que la télé le reprenne.
 function tvHeberge(force) {
-  if (typeof Peer === 'undefined') { $('tvManettes').textContent = 'Pas de connexion : la manette a besoin d\'Internet.'; return; }
+  // la bibliothèque réseau arrive parfois APRÈS l'ouverture du salon : on l'attend au lieu de
+  // renoncer, sinon l'écran affiche un code que personne n'écoute et le téléphone tourne dans le vide
+  if (typeof Peer === 'undefined') {
+    $('tvManettes').textContent = '⏳ Préparation de la liaison…';
+    if ((tv.attente = (tv.attente || 0) + 1) < 40) setTimeout(() => tvHeberge(force), 250);
+    else $('tvManettes').textContent = 'Pas de connexion : la manette a besoin d\'Internet.';
+    return;
+  }
+  tv.attente = 0;
   if (tv.peer) return;
   const code = force || tv.code || (net.on && net.code ? net.code : makeCode());
   let peer;
@@ -13776,26 +13799,66 @@ function manetteFerme() {
   if (location.hash) location.hash = '';
 }
 function manetteEtat(t) { $('telEtat').textContent = t; }
-function manetteConnecte(code) {
-  if (typeof Peer === 'undefined') { $('telErr').textContent = 'Pas de connexion Internet.'; return; }
+// LA CONNEXION DE LA MANETTE. Elle pouvait rester bloquée indéfiniment, sans un mot :
+//  · si la bibliothèque réseau n'était pas encore chargée, on abandonnait tout de suite ;
+//  · si l'écran de jeu n'était pas encore prêt, on tombait sur « aucune télé » et c'était fini ;
+//  · et si le canal ne s'ouvrait jamais (deux réseaux différents), plus rien ne bougeait.
+// Maintenant : on attend la bibliothèque, on réessaie plusieurs fois, chaque étape s'affiche,
+// et au bout du compte on explique QUOI faire au lieu de laisser tourner un écran figé.
+const MAN_ESSAIS = 4, MAN_DELAI = 7000;
+function manetteEchec(txt, code) {
+  $('telErr').innerHTML = txt + (code ? ' <b style="text-decoration:underline">Réessayer</b>' : '');
+  const b = $('telErr').querySelector('b');
+  if (b) b.addEventListener('click', () => { man.essai = 0; manetteConnecte(code); });
+}
+function manetteConnecte(code, essai) {
+  code = (code || '').toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) { manetteEchec('Entre le code à 4 lettres affiché sur l\'écran de jeu.'); return; }
+  man.essai = essai || 1; man.code = code;
   $('telErr').textContent = '';
-  manetteEtat('Connexion à ' + code + '…');
+  clearTimeout(man.chrono);
+  // 1) la bibliothèque réseau met parfois deux secondes à arriver : on l'attend au lieu d'abandonner
+  if (typeof Peer === 'undefined') {
+    if ((man.attente = (man.attente || 0) + 1) > 40) { manetteEchec('Pas de connexion Internet : la manette en a besoin pour trouver la télé.', code); return; }
+    manetteEtat('Préparation…');
+    man.chrono = setTimeout(() => manetteConnecte(code, man.essai), 250);
+    return;
+  }
+  man.attente = 0;
+  manetteEtat(`Recherche de l'écran ${code}… (essai ${man.essai}/${MAN_ESSAIS})`);
   try { if (man.peer) man.peer.destroy(); } catch (_) {}
-  let peer; try { peer = new Peer(undefined, { debug: 0 }); } catch (e) { $('telErr').textContent = 'Manette indisponible.'; return; }
+  man.peer = null; man.conn = null;
+  let peer; try { peer = new Peer(undefined, { debug: 0 }); } catch (e) { manetteEchec('Manette indisponible sur ce téléphone.', code); return; }
   man.peer = peer;
+  // 2) rien ne doit pouvoir « bloquer » : au bout de sept secondes, on recommence
+  const relance = (pourquoi) => {
+    clearTimeout(man.chrono);
+    if (man.conn && man.conn.open) return;
+    try { peer.destroy(); } catch (_) {}
+    if (man.essai < MAN_ESSAIS) { manetteEtat(pourquoi + ' — nouvel essai…'); setTimeout(() => manetteConnecte(code, man.essai + 1), 600); }
+    else manetteEchec(`Impossible de joindre l'écran ${code}. Vérifie que la partie est bien ouverte sur la télé (ou l'ordinateur) avec CE code affiché, et que les deux appareils ont Internet.`, code);
+  };
+  man.chrono = setTimeout(() => relance('L\'écran ne répond pas'), MAN_DELAI);
   peer.on('open', () => {
+    manetteEtat(`Écran ${code} trouvé, on ouvre la manette…`);
     const c = peer.connect('superobby-tv-' + code, { reliable: false });
     man.conn = c;
     c.on('open', () => {
+      clearTimeout(man.chrono); man.essai = 0;
       document.getElementById('manette').classList.add('pret');
-      manetteEtat('🎮 Connecté à la télé · code ' + code);
+      manetteEtat('🎮 Connecté · code ' + code);
+      $('telErr').textContent = '';
       try { c.send({ t: 'hello', nom: (localStorage.getItem('superobby.name') || 'Manette') }); } catch (_) {}
       if (navigator.vibrate) navigator.vibrate(60);
     });
-    c.on('close', () => { document.getElementById('manette').classList.remove('pret'); manetteEtat('Déconnecté'); });
-    c.on('error', () => { $('telErr').textContent = 'Connexion impossible : vérifie le code.'; });
+    c.on('close', () => { document.getElementById('manette').classList.remove('pret'); manetteEtat('Déconnecté'); manetteEchec('La liaison s\'est coupée.', code); });
+    c.on('error', () => relance('Liaison refusée'));
   });
-  peer.on('error', e => { $('telErr').textContent = e.type === 'peer-unavailable' ? 'Aucune télé avec ce code.' : 'Erreur réseau.'; });
+  peer.on('error', e => {
+    // « peer-unavailable » = l'écran de jeu n'écoute pas ENCORE : ça vaut la peine d'insister
+    if (e && e.type === 'peer-unavailable') relance(`Aucun écran au code ${code} pour l'instant`);
+    else relance('Réseau capricieux');
+  });
 }
 function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); } catch (_) {} } }
 

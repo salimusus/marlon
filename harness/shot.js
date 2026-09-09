@@ -281,6 +281,7 @@ window.__G = {
   estDuGang: typeof estDuGang === 'function' ? estDuGang : null,
   estAmi: typeof estAmi === 'function' ? estAmi : null,
   openOrdres: typeof openOrdres === 'function' ? openOrdres : null,
+  openQui: typeof openQui === 'function' ? openQui : null,
   npcBlocked: typeof npcBlocked === 'function' ? npcBlocked : null,
   groundUnder: typeof groundUnder === 'function' ? groundUnder : null,
   lancerActivite: typeof lancerActivite === 'function' ? lancerActivite : null,

@@ -3797,6 +3797,64 @@ test('écrire le nom de quelqu\'un ouvre la liste de ses ordres, et chacun s\'ex
   return { ok, detail: `le nom seul ouvre la liste (${r.n} ordres, membre du gang=${r.duGang}) et chacun s'exécute${r.rates.length ? ' · ratés : ' + r.rates.join(', ') : ''}` };
 });
 
+test('le bouton 📣 montre qui commander, puis ses ordres', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    if (G.uiOpen) G.closeUI();
+    document.getElementById('ordresBtn').click();
+    const gens = [...document.querySelectorAll('#ordresGrid [data-qui]')].map(b => b.dataset.qui);
+    const picker = G.uiOpen === 'ordres' && !document.getElementById('ordres').classList.contains('hidden');
+    const btn = document.querySelector('#ordresGrid [data-qui]');
+    if (btn) btn.click();
+    const n = document.querySelectorAll('#ordresGrid [data-p]').length;
+    const titre = document.getElementById('ordresTitre').textContent;
+    G.closeUI();
+    // depuis la liste, deux clics font d'un inconnu un membre du gang
+    const b = G.bots[0]; G.amis.delete(b.name);
+    G.gang.membres.length = 0; b.gang = null;   // un test précédent a pu l'enrôler
+    G.openOrdres(b);
+    const etapes = [];
+    const releve = () => etapes.push({ liens: [...document.querySelectorAll('#ordresGrid [data-lien]')].map(x => x.dataset.lien).join(''), ordres: document.querySelectorAll('#ordresGrid [data-p]').length });
+    releve();
+    const c1 = document.querySelector('#ordresGrid [data-lien]'); if (c1) c1.click(); releve();
+    const c2 = document.querySelector('#ordresGrid [data-lien]'); if (c2) c2.click(); releve();
+    const chaine = G.estAmi(b.name) && G.estDuGang(b) && etapes[0].liens === 'ami' && etapes[1].liens === 'gang' && etapes[2].liens === '' && etapes[2].ordres > etapes[0].ordres;
+    G.closeUI();
+    // « ordres » tout court, sans connaître le moindre nom
+    const motSeul = G.commandeSociale('ordres') && G.uiOpen === 'ordres';
+    if (G.uiOpen) G.closeUI();
+    return { picker, gens: gens.length, n, titre, motSeul, chaine, etapes };
+  });
+  const ok = r.picker && r.gens >= 5 && r.n >= 25 && /Ordres pour/.test(r.titre) && r.motSeul && r.chaine;
+  return { ok, detail: `le bouton 📣 liste ${r.gens} personnes, un clic ouvre ${r.n} ordres (« ${r.titre} ») · deux clics font d'un inconnu un membre du gang (${r.etapes.map(e => e.ordres).join(' → ')} ordres) · « ordres » tout court ouvre aussi la liste` };
+});
+
+test('le repère de mission ne peut plus être effacé par un ami ou un gang', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    G.startMission('livraison');
+    const dep = { vis: G.beacon.m.visible, x: Math.round(G.beacon.x), z: Math.round(G.beacon.z) };
+    const etats = [];
+    const releve = quoi => etats.push({ quoi, vis: !!(G.beacon.m && G.beacon.m.visible), x: Math.round(G.beacon.x), z: Math.round(G.beacon.z) });
+    // tout ce qui, avant, écrasait le repère en pleine mission
+    G.clearBeacon(); releve('un ami arrive au rendez-vous');
+    G.setBeacon(200, 200); releve('un ami part chercher une voiture');
+    G.setBeacon(-150, -150, 0.3); releve('le gang donne un point de ralliement');
+    G.missionTick(0.016); releve('un tour de jeu');
+    const tenu = etats.every(e => e.vis && e.x === dep.x && e.z === dep.z);
+    // la mission finie, le repère redevient libre pour les amis
+    G.endMission(false, true);
+    G.setBeacon(50, 60);
+    const libre = G.beacon.m.visible && Math.round(G.beacon.x) === 50;
+    G.clearBeacon();
+    return { dep, etats, tenu, libre, efface: !G.beacon.m.visible };
+  });
+  const ok = r.dep.vis && r.tenu && r.libre && r.efface;
+  return { ok, detail: `le repère de la mission (${r.dep.x}, ${r.dep.z}) tient bon face à ${r.etats.length} interférences, puis redevient libre une fois la mission terminée` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

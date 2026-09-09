@@ -404,6 +404,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
     <button class="ibtn" id="sndTop" title="Son">🔊</button>
     <button class="ibtn cityonly" id="storeBtn" title="Boutique">🛒</button>
     <button class="ibtn cityonly" id="missBtn" title="Missions">📋</button>
+    <button class="ibtn cityonly" id="ordresBtn" title="Donner un ordre">📣</button>
     <button class="ibtn cityonly" id="guerreBtn" title="Guerre des gangs">🚩</button>
     <button class="ibtn" id="jailBtn" title="Prison" style="display:none">🔒</button>
     <button class="ibtn" id="tvBtn" title="Jouer sur la télé">📺</button>
@@ -2955,12 +2956,24 @@ const MISSIONS = [
   { id: 'requin', n: 'Alerte requin', e: '🦈', r: 90, desc: 'Un requin blanc rôde : préviens les 3 baigneurs (approche-toi d\'eux), puis repousse le requin à coups de fusil depuis un jet-ski ou la plage.' },
 ];
 const mission = { cur: null, step: 0, t0: 0, limit: 0, data: {} };
-const beacon = { m: null };
-function setBeacon(x, z, y = 0) {
+const beacon = { m: null, mission: null };
+// Le repère (colonne de lumière + flèche du radar) était UNIQUE et partagé par tout le
+// monde : la mission, mais aussi les rendez-vous entre amis, les coups de gang, les
+// cambriolages, les plaintes... N'importe lequel pouvait l'effacer en pleine mission, et
+// on se retrouvait sans aucune indication pour aller chercher le colis. Désormais la
+// mission est PRIORITAIRE : tant qu'elle a un objectif, rien d'autre ne peut le remplacer
+// ni l'effacer.
+function setBeacon(x, z, y = 0, src = 'autre') {
+  if (src === 'mission') beacon.mission = { x, z, y };
+  else if (beacon.mission) return;
   if (!beacon.m) { const geo = new THREE.CylinderGeometry(0.7, 0.7, 60, 12, 1, true); beacon.m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); const top = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), neonMat(0x7fe0ff)); top.position.y = 4; beacon.m.add(top); beacon.top = top; scene.add(beacon.m); }
   beacon.m.position.set(x, y + 30, z); beacon.top.position.y = -26 + 2.5; beacon.m.visible = true; beacon.x = x; beacon.z = z; beacon.y = y;
 }
-function clearBeacon() { if (beacon.m) beacon.m.visible = false; gpsRoute.hide(); }
+function clearBeacon(src = 'autre') {
+  if (src === 'mission') beacon.mission = null;
+  else if (beacon.mission) return;
+  if (beacon.m) beacon.m.visible = false; gpsRoute.hide();
+}
 const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suivent le chemin calculé (A*) jusqu'à la cible de mission
   // Chevrons nettement plus gros : à 0,45 m de rayon ils faisaient trois pixels au sol et on
   // ne les voyait tout simplement pas en jouant, surtout sur téléphone.
@@ -3079,11 +3092,11 @@ function startMission(id) {
   if (mission.cur) endMission(false, true);
   const m = MISSIONS.find(x => x.id === id); mission.cur = m; mission.step = 0; mission.t0 = simTime; mission.limit = 0; mission.data = {};
   const d = mission.data;
-  if (id === 'livraison') { setBeacon(city.snack.x, city.snack.z - 1); }
-  if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS.slice(0, 16)); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2]); mission.limit = 120; }
-  if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1]); }
+  if (id === 'livraison') { setBeacon(city.snack.x, city.snack.z - 1, 0, 'mission'); }
+  if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS.slice(0, 16)); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2], 0, 'mission'); mission.limit = 120; }
+  if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1], 0, 'mission'); }
   if (id === 'pieces') { d.coins = []; const spots = [...OPEN_SPOTS].sort(() => Math.random() - 0.5).slice(0, 10); for (const sp of spots) { const c = coin(sp[0], sp[1], sp[2]); c.mesh.material = new THREE.MeshLambertMaterial({ color: 0x3ef2ff, emissive: 0x1e8fa0 }); c.blue = true; d.coins.push(c); } mission.limit = 90; }
-  if (id === 'chrono') { d.armed = false; d.maxIdx = 0; setBeacon(0, 124); }
+  if (id === 'chrono') { d.armed = false; d.maxIdx = 0; setBeacon(0, 124, 0, 'mission'); }
   if (id === 'secours') {
     // On se pose sur un VRAI toit (ceux qui ont un ascenseur et un parachute), pas sur le
     // premier gros bloc venu : avant, le blessé atterrissait sur un pan de mur où l'hélico
@@ -3093,7 +3106,7 @@ function startMission(id) {
     else { const b = pickOne(solids.filter(o => o.h >= 8 && o.w >= 6 && o.h < 30 && Math.abs(o.x) < 66 && o.z > -50 && o.z < 118 && !o.veh));
       if (!b) { msg('🚁 Aucun toit accessible pour l\'instant', 2000); mission.cur = null; return; }
       d.roof = { x: b.x, z: b.z, y: b.y + b.h / 2 }; }
-    setBeacon(d.roof.x, d.roof.z, d.roof.y);
+    setBeacon(d.roof.x, d.roof.z, d.roof.y, 'mission');
     // le blessé : un petit personnage allongé qui fait signe, pas une simple boule rouge
     const mk = new THREE.Group(); mk.position.set(d.roof.x, d.roof.y + 0.1, d.roof.z); worldGroup.add(mk);
     const corps = new THREE.Mesh(unitRound, lam(0xffd23f)); corps.scale.set(0.5, 0.35, 1.1); corps.position.y = 0.2; mk.add(corps);
@@ -3114,12 +3127,12 @@ function startMission(id) {
     cercle.rotation.x = -Math.PI / 2; cercle.position.y = 0.06; mk.add(cercle); mk.userData.cercle = cercle;
     worldGroup.add(mk); d.marker = mk; d.blesse = mk;
   }
-  if (id === 'nettoyage') { d.bags = []; for (let i = 0; i < 6; i++) { const x = rnd(-26, 26), z = rnd(50, 98); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); } d.total = d.bags.length; clearBeacon(); }
-  if (id === 'buteur') { d.goal = city.goals + 3; setBeacon(-13, -8, 0.3); }
-  if (id === 'coquillages') { city.shells.forEach(sh => { sh.taken = false; sh.m.visible = true; }); d.left = city.shells.length; setBeacon(112, 40, 0.15); }
-  if (id === 'sauveteur') { d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; const bz = rnd(-20, 110); d.bot.pos.set(132, 0.4, bz); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; d.bot.av.group.position.y = 0.2; setBeacon(132, bz, 1.6); mission.limit = 150; }
-  if (id === 'jetski') { d.next = 0; setBeacon(city.buoys[0].x, city.buoys[0].z, 0.9); mission.limit = 120; }
-  if (id === 'requin') { d.swim = bots.filter(b => b.av.group.visible).slice(0, 3); d.warned = 0; d.repelled = false; d.swim.forEach((b, i) => { b.pos.set(126 + i * 3, 0.3, 10 + i * 25); b.av.group.position.copy(b.pos); b.wait = 999; b.tgt = null; }); if (d.swim[0]) setBeacon(d.swim[0].pos.x, d.swim[0].pos.z, 1.6); if (city.shark) { city.shark.fled = 0; city.shark.hp = 100; } }
+  if (id === 'nettoyage') { d.bags = []; for (let i = 0; i < 6; i++) { const x = rnd(-26, 26), z = rnd(50, 98); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); } d.total = d.bags.length; clearBeacon('mission'); }
+  if (id === 'buteur') { d.goal = city.goals + 3; setBeacon(-13, -8, 0.3, 'mission'); }
+  if (id === 'coquillages') { city.shells.forEach(sh => { sh.taken = false; sh.m.visible = true; }); d.left = city.shells.length; setBeacon(112, 40, 0.15, 'mission'); }
+  if (id === 'sauveteur') { d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; const bz = rnd(-20, 110); d.bot.pos.set(132, 0.4, bz); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; d.bot.av.group.position.y = 0.2; setBeacon(132, bz, 1.6, 'mission'); mission.limit = 150; }
+  if (id === 'jetski') { d.next = 0; setBeacon(city.buoys[0].x, city.buoys[0].z, 0.9, 'mission'); mission.limit = 120; }
+  if (id === 'requin') { d.swim = bots.filter(b => b.av.group.visible).slice(0, 3); d.warned = 0; d.repelled = false; d.swim.forEach((b, i) => { b.pos.set(126 + i * 3, 0.3, 10 + i * 25); b.av.group.position.copy(b.pos); b.wait = 999; b.tgt = null; }); if (d.swim[0]) setBeacon(d.swim[0].pos.x, d.swim[0].pos.z, 1.6, 'mission'); if (city.shark) { city.shark.fled = 0; city.shark.hp = 100; } }
   sfx.check(); msg(`${m.e} Mission : ${m.n}`, 2000); updateMissionHud(); closeUI();
 }
 function endMission(success, quiet) {
@@ -3129,7 +3142,7 @@ function endMission(success, quiet) {
   if (d.coins) for (const c of d.coins) { worldGroup.remove(c.g); const k = coins.indexOf(c); if (k >= 0) coins.splice(k, 1); }
   if (d.marker) worldGroup.remove(d.marker);
   if (d.bags) for (const b of d.bags) worldGroup.remove(b.m);
-  clearBeacon(); mission.cur = null; mission.data = {};
+  clearBeacon('mission'); mission.cur = null; mission.data = {};
   if (success) { wallet += m.r; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); msg(`✅ Mission réussie : +${m.r} 🪙`, 3000); chat(null, `📋 ${myCfg.name} a réussi la mission « ${m.n} » (+${m.r} 🪙)`); }
   else if (!quiet) { msg('❌ Mission échouée', 1800); sfx.die(); }
   updateMissionHud();
@@ -3155,6 +3168,10 @@ function updateMissionHud() {
 function missionTick(dt) {
   const m = mission.cur; if (!m) return; const d = mission.data;
   if (mission.limit && simTime - mission.t0 > mission.limit) { endMission(false); return; }
+  // Ceinture et bretelles : si quoi que ce soit a bougé ou masqué le repère de la mission,
+  // on le remet en place à chaque image. La flèche du radar ne peut plus disparaître.
+  const bm = beacon.mission;
+  if (bm && (!beacon.m || !beacon.m.visible || beacon.x !== bm.x || beacon.z !== bm.z)) setBeacon(bm.x, bm.z, bm.y, 'mission');
   const near = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
   if (m.id === 'livraison') {
     if (mission.step === 0 && near(city.snack.x, city.snack.z, 3.5)) {
@@ -3174,18 +3191,18 @@ function missionTick(dt) {
         if (pth && pth.length) { let L = 0, a = [P.pos.x, P.pos.z]; for (const b2 of pth) { L += Math.hypot(b2[0] - a[0], b2[1] - a[1]); a = b2; } route = L; }
       } catch (e) {}
       mission.limit = Math.max(75, Math.round(route / 3.2) + 30);   // ~3,2 m/s de moyenne, plus 30 s de marge
-      setBeacon(d.dest[0], d.dest[1]);
+      setBeacon(d.dest[0], d.dest[1], 0, 'mission');
       msg(`📦 Colis récupéré ! Livre-le à ${Math.round(route)} m — ${mission.limit} s`, 2600); sfx.coin();
     }
     else if (mission.step === 1 && near(d.dest[0], d.dest[1], 4)) endMission(true);
   }
   if (m.id === 'taxi') {
     const inCar = drive.car && !drive.car.heli && drive.car.kind !== 'bike';
-    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 4.5) && Math.abs(drive.speed) < 4) { mission.step = 1; d.bot.av.group.visible = false; const sp = pickOne(OPEN_SPOTS.slice(0, 16).filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 30)); d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2]); msg(`🚕 ${d.bot.name} est à bord !`, 1400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']); }
+    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 4.5) && Math.abs(drive.speed) < 4) { mission.step = 1; d.bot.av.group.visible = false; const sp = pickOne(OPEN_SPOTS.slice(0, 16).filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 30)); d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2], 0, 'mission'); msg(`🚕 ${d.bot.name} est à bord !`, 1400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']); }
     else if (mission.step === 1 && inCar && near(d.dest[0], d.dest[1], 4.5) && Math.abs(drive.speed) < 3) { d.bot.pos.set(d.dest[0], d.dest[2], d.dest[1]); d.bot.av.group.position.copy(d.bot.pos); d.bot.av.group.visible = true; botSay(d.bot, ['merci !', 'super chauffeur 🚕']); endMission(true); }
   }
   if (m.id === 'chien') {
-    if (mission.step === 0 && near(d.pet.x, d.pet.z, 3)) { mission.step = 1; d.pet.follow = simTime + 9999; d.pet.wait = 0; setBeacon(0, 74, 0.15); msg('🐶 Il te suit ! Ramène-le à la fontaine', 1500); sfx.coin(); }
+    if (mission.step === 0 && near(d.pet.x, d.pet.z, 3)) { mission.step = 1; d.pet.follow = simTime + 9999; d.pet.wait = 0; setBeacon(0, 74, 0.15, 'mission'); msg('🐶 Il te suit ! Ramène-le à la fontaine', 1500); sfx.coin(); }
     else if (mission.step === 1) { d.pet.follow = simTime + 9999; if (Math.hypot(d.pet.x, d.pet.z - 74) < 8 && near(0, 74, 9)) endMission(true); }
   }
   if (m.id === 'pieces') { if (d.coins.every(c => c.taken)) endMission(true); }
@@ -3193,8 +3210,8 @@ function missionTick(dt) {
     const kart = drive.car && drive.car.kart;
     const inLine = Math.abs(P.pos.x) < 1.6 && P.pos.z > 119 && P.pos.z < 129;
     if (!kart) { /* pas de return : le bandeau continue de s'actualiser */ }
-    else if (mission.step === 0) { if (inLine && drive.speed > 2) { mission.step = 1; mission.t0 = simTime; d.maxIdx = 0; clearBeacon(); msg('⏱️ Tour lancé !', 900); sfx.check(); } }
-    else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(0, 124); } } }
+    else if (mission.step === 0) { if (inLine && drive.speed > 2) { mission.step = 1; mission.t0 = simTime; d.maxIdx = 0; clearBeacon('mission'); msg('⏱️ Tour lancé !', 900); sfx.check(); } }
+    else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(0, 124, 0, 'mission'); } } }
   }
   if (m.id === 'secours') {
     if (d.blesse && mission.step === 0) {
@@ -3206,7 +3223,7 @@ function missionTick(dt) {
     const heli = drive.car && drive.car.heli ? drive.car : null;   // pas de return : le bandeau doit continuer à vivre
     // tolérance élargie : se poser SUR le toit ou juste à côté suffit
     if (heli && mission.step === 0 && heli.landed && Math.hypot(heli.x - d.roof.x, heli.z - d.roof.z) < 8 && heli.y > d.roof.y - 2.5) {
-      mission.step = 1; d.marker.visible = false; setBeacon(51, -13, 0.2);
+      mission.step = 1; d.marker.visible = false; setBeacon(51, -13, 0.2, 'mission');
       msg('🚁 Blessé à bord ! Direction l\'héliport (colonne bleue)', 2200); sfx.coin();
     } else if (heli && mission.step === 1 && heli.landed && Math.hypot(heli.x - 51, heli.z + 13) < 8) endMission(true);
   }
@@ -3214,14 +3231,14 @@ function missionTick(dt) {
   if (m.id === 'buteur') { if (city.goals >= d.goal) endMission(true); }
   if (m.id === 'coquillages') { for (const sh of city.shells) if (!sh.taken && near(sh.x, sh.z, 1.3)) { sh.taken = true; sh.m.visible = false; sfx.coin(); burst(sh.x, 0.6, sh.z, 0xffe6cc, 5); } if (city.shells.every(s => s.taken)) endMission(true); }
   if (m.id === 'sauveteur') {
-    if (mission.step === 0) { if (Math.random() < dt * 0.4) bubble(d.bot.av, pickOne(['au secours !', 'help !', 'je coule !'])); if (near(d.bot.pos.x, d.bot.pos.z, 2.6)) { mission.step = 1; d.bot.wait = 0; d.bot.av.group.position.y = 0.3; setBeacon(112, d.bot.pos.z, 0.15); msg('🛟 Attrapé ! Ramène-le sur la plage', 1500); sfx.coin(); } }
+    if (mission.step === 0) { if (Math.random() < dt * 0.4) bubble(d.bot.av, pickOne(['au secours !', 'help !', 'je coule !'])); if (near(d.bot.pos.x, d.bot.pos.z, 2.6)) { mission.step = 1; d.bot.wait = 0; d.bot.av.group.position.y = 0.3; setBeacon(112, d.bot.pos.z, 0.15, 'mission'); msg('🛟 Attrapé ! Ramène-le sur la plage', 1500); sfx.coin(); } }
     else { const dx = P.pos.x - d.bot.pos.x, dz = P.pos.z - d.bot.pos.z, dd = Math.hypot(dx, dz); if (dd > 1.6) { d.bot.pos.x += dx / dd * 4 * dt; d.bot.pos.z += dz / dd * 4 * dt; } d.bot.pos.y = d.bot.pos.x < 122 ? 0.15 : 0.3; d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 1; if (d.bot.pos.x < 119 && P.pos.x < 119) { botSay(d.bot, ['merci, tu m\'as sauvé !', 'mon héros 🛟']); endMission(true); } }
   }
   if (m.id === 'requin') {
-    if (d.warned < 3) { const b = d.swim[d.warned]; if (b && near(b.pos.x, b.pos.z, 3)) { d.warned++; b.wait = 1; b.tgt = [110, 0.15, b.pos.z]; botSay(b, ['un requin ?! je sors !', 'merci, je file !']); sfx.coin(); const n = d.swim[d.warned]; if (n) setBeacon(n.pos.x, n.pos.z, 1.6); else if (city.shark) setBeacon(city.shark.x, city.shark.z, 1.6); } }
-    else if (city.shark) { setBeacon(city.shark.x, city.shark.z, 1.6); if (d.repelled) endMission(true); }
+    if (d.warned < 3) { const b = d.swim[d.warned]; if (b && near(b.pos.x, b.pos.z, 3)) { d.warned++; b.wait = 1; b.tgt = [110, 0.15, b.pos.z]; botSay(b, ['un requin ?! je sors !', 'merci, je file !']); sfx.coin(); const n = d.swim[d.warned]; if (n) setBeacon(n.pos.x, n.pos.z, 1.6, 'mission'); else if (city.shark) setBeacon(city.shark.x, city.shark.z, 1.6, 'mission'); } }
+    else if (city.shark) { setBeacon(city.shark.x, city.shark.z, 1.6, 'mission'); if (d.repelled) endMission(true); }
   }
-  if (m.id === 'jetski') { const jet = drive.car && drive.car.kind === 'jetski'; if (jet) { const b = city.buoys[d.next]; if (b && Math.hypot(drive.car.x - b.x, drive.car.z - b.z) < 3.2) { d.next++; sfx.coin(); burst(b.x, 1.5, b.z, 0xffd23f, 8); if (d.next >= city.buoys.length) endMission(true); else setBeacon(city.buoys[d.next].x, city.buoys[d.next].z, 0.9); } } }
+  if (m.id === 'jetski') { const jet = drive.car && drive.car.kind === 'jetski'; if (jet) { const b = city.buoys[d.next]; if (b && Math.hypot(drive.car.x - b.x, drive.car.z - b.z) < 3.2) { d.next++; sfx.coin(); burst(b.x, 1.5, b.z, 0xffd23f, 8); if (d.next >= city.buoys.length) endMission(true); else setBeacon(city.buoys[d.next].x, city.buoys[d.next].z, 0.9, 'mission'); } } }
   if (simTime > (mission.hudT || 0)) { mission.hudT = simTime + 0.25; updateMissionHud(); }
 }
 function openMissions(atOffice) {
@@ -7827,6 +7844,9 @@ function interpreteOrdre(txt) {
   return true;
 }
 function commandeSociale(txt) {
+  // « ordres », « liste des ordres », « aide » : on ouvre directement le choix des personnes,
+  // sans avoir à connaître le nom de qui que ce soit.
+  if (/^(ordres?|liste( des ordres)?|aide|help|commandes?|que peut on demander|quoi faire)$/.test(norm(txt).replace(/[^a-z ]/g, '').trim())) { openQui(); return true; }
   // Le nom tout seul ouvre la liste des ordres : on n'a plus à deviner la bonne formule.
   const seul = nomSeul(txt);
   if (seul) return openOrdres(seul);
@@ -7897,8 +7917,12 @@ function openOrdres(b) {
   $('ordresSub').innerHTML = ami
     ? (duGang ? '😎 <b>Membre de ton gang</b> — il fait tout ce que tu demandes. Clique, ou écris-le en toutes lettres.'
               : '⭐ <b>Ton ami</b> — clique un ordre, ou écris-le en toutes lettres dans le chat.')
-    : `Vous n'êtes pas encore amis : écris « ${b.name} tu veux être mon ami ? », puis « ${b.name} veux-tu venir dans le gang ? »`;
+    : 'Vous n\'êtes pas encore amis — il n\'obéira qu\'une fois ami. Un clic suffit :';
   let html = '';
+  // On ne devrait pas avoir à taper la bonne phrase pour se faire un ami : deux boutons
+  // font tout le chemin (ami, puis gang) directement depuis la liste.
+  if (!ami) html += '<p class="osec">⭐ Pour commencer</p><button class="ocard" data-lien="ami"><span>⭐</span>Devenir ami<i>il acceptera tes ordres</i></button>';
+  else if (!duGang) html += '<p class="osec">😎 Pour aller plus loin</p><button class="ocard" data-lien="gang"><span>😎</span>L\'inviter dans le gang<i>débloque les coups et l\'entraînement</i></button>';
   for (const cat of ORDRES_CAT) {
     const dispo = cat.l.filter(o => !o.gang || duGang);
     if (!dispo.length) continue;
@@ -7906,6 +7930,11 @@ function openOrdres(b) {
     for (const o of dispo) html += `<button class="ocard" data-p="${o.p}"><span>${o.e}</span>${o.t}${o.d ? `<i>${o.d}</i>` : ''}</button>`;
   }
   $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-lien]').forEach(btn => btn.addEventListener('click', () => {
+    const b2 = ordresBot; if (!b2) return;
+    if (btn.dataset.lien === 'ami') devenirAmi(b2); else rejoindreGang(b2);
+    openOrdres(b2);   // on rouvre la liste : les ordres débloqués apparaissent aussitôt
+  }));
   $('ordresGrid').querySelectorAll('[data-p]').forEach(btn => btn.addEventListener('click', () => {
     const b2 = ordresBot; closeUI();
     if (!b2) return;
@@ -7916,6 +7945,37 @@ function openOrdres(b) {
   return true;
 }
 $('ordresBack').addEventListener('click', closeUI);
+// Encore fallait-il connaître le nom de quelqu'un pour ouvrir sa liste : le bouton 📣
+// affiche d'abord QUI on peut commander (le gang d'abord, puis les amis, puis les gens
+// autour), et un clic ouvre ses ordres.
+function openQui() {
+  const dist = b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+  const vus = new Set(), lignes = [];
+  const ajoute = (liste, titre) => {
+    const l = liste.filter(b => b && !vus.has(b) && b.av && b.av.group.visible).sort((a, b) => dist(a) - dist(b));
+    if (!l.length) return;
+    lignes.push({ titre, l }); l.forEach(b => vus.add(b));
+  };
+  ajoute(gang.membres || [], '😎 Ton gang');
+  ajoute(bots.filter(b => estAmi(b.name)), '⭐ Tes amis');
+  ajoute(bots.filter(b => dist(b) < 40), '🙋 Autour de toi');
+  $('ordresTitre').textContent = '📣 À qui donner un ordre ?';
+  $('ordresSub').innerHTML = lignes.length
+    ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
+    : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.';
+  let html = '';
+  for (const { titre, l } of lignes) {
+    html += `<p class="osec">${titre}</p>`;
+    for (const b of l) html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : estAmi(b.name) ? ' · ami' : ''}</i></button>`;
+  }
+  $('ordresGrid').innerHTML = html;
+  $('ordresGrid').querySelectorAll('[data-qui]').forEach(btn => btn.addEventListener('click', () => {
+    const b = bots.find(x => x.name === btn.dataset.qui); if (b) openOrdres(b);
+  }));
+  openUI('ordres');
+  return true;
+}
+$('ordresBtn').addEventListener('click', () => { if (running && city.on) openQui(); });
 // Le nom seul (ou le nom suivi de rien qu'on comprenne) ouvre la liste.
 function nomSeul(txt) {
   const b = trouveBot(txt); if (!b) return null;

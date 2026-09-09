@@ -5818,3 +5818,44 @@ test('la sauvegarde garde tout et se recharge toute seule', async p => {
     && r.autoT[0] === true && r.autoT[1] === false;
   return { ok, detail: `l'équipe était bien écrite dans la sauvegarde mais jamais relue (on repartait seul a chaque partie) et la voiture du garage n'était nulle part · tout revient maintenant tout seul en rentrant en ville : ${r.argent} 🪙, ${r.achats} achats, la tenue, les ${r.gang2.length} hommes du gang avec leur niveau (${r.perfGardee}) et TA voiture reposée dans ton garage (couleur #${r.voiture.color.toString(16)}, ${r.voiture.dmg} % de bosses, moteur ${r.voiture.moteur}, pointe ${r.voiture.pointe}) · et ça se sauvegarde tout seul toutes les 20 s (${r.autoT[0]} puis ${r.autoT[1]} juste après) et en fermant l'onglet` };
 });
+
+test('au tennis on se deplace aussi de cote', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const essai = (touche, raquette, images) => {
+      __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12, sansBots: true });
+      G.settings.ctrl = 'rot';   // le réglage par défaut du jeu : gauche/droite fait pivoter
+      G.P.energie = 100; G.P.essouffle = false; G.P.boostT = 0; G.P.court = false;   // même vitesse d'un essai a l'autre
+      G.P.racket = !!raquette; try { G.setRacket(G.me, !!raquette); } catch (e) {}
+      G.P.pos.set(13, 0.3, -8); G.P.vel.set(0, 0, 0); G.P.facing = Math.PI;
+      const x0 = G.P.pos.x, z0 = G.P.pos.z, f0 = G.P.facing;
+      G.keys.add(touche);
+      for (let i = 0; i < (images || 10); i++) G.step(0.05, true);
+      G.keys.delete(touche);
+      let dcap = G.P.facing - f0; dcap = Math.atan2(Math.sin(dcap), Math.cos(dcap));
+      return { dx: +(G.P.pos.x - x0).toFixed(2), dz: +(G.P.pos.z - z0).toFixed(2),
+        cap: Math.round(dcap * 180 / Math.PI), surCourt: G.surLeCourt(), raquette: !!G.P.racket };
+    };
+    const droite = essai('KeyD', true), gauche = essai('KeyA', true), avant = essai('KeyW', true);
+    const sansRaquette = essai('KeyD', false, 20);
+    // la raquette en main, il reste tourné vers le filet ; et vers la balle quand il y en a une
+    __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12, sansBots: true });
+    G.settings.ctrl = 'rot'; G.P.racket = true; G.P.pos.set(13, 0.3, -8); G.P.facing = 0;
+    for (let i = 0; i < 30; i++) G.step(0.05, true);
+    const versFilet = Math.round(((G.P.facing % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) * 180 / Math.PI);
+    // le court fait apparaître sa propre balle des qu'on y tient une raquette : on nettoie
+    for (const vb of G.city.balls.filter(x => x.kind === 'tennis')) G.removeBall(vb);
+    const b = G.makeBall('tennis', 19, 1.2, -10);
+    for (let i = 0; i < 20; i++) { b.pos.set(19, 1.2, -10); b.vel.set(0, 0, 0); b.state = 'play'; G.step(0.05, true); }
+    const attendu = Math.atan2(19 - G.P.pos.x, -10 - G.P.pos.z);
+    let ecart = G.P.facing - attendu; ecart = Math.abs(Math.atan2(Math.sin(ecart), Math.cos(ecart)) * 180 / Math.PI);
+    G.removeBall(b); G.P.racket = false; try { G.setRacket(G.me, false); } catch (e) {}
+    return { droite, gauche, avant, sansRaquette, versFilet, versBalle: Math.round(ecart) };
+  });
+  const lat = (m, sens) => Math.sign(m.dx) === sens && Math.abs(m.dx) > 0.6 && Math.abs(m.dz) < Math.abs(m.dx) / 5;
+  const ok = lat(r.droite, -1) && lat(r.gauche, 1)
+    && r.avant.dz < -0.6 && Math.abs(r.avant.dx) < Math.abs(r.avant.dz) / 5
+    && Math.abs(r.sansRaquette.dx) < 0.3 && Math.abs(r.sansRaquette.cap) > 20
+    && Math.abs(r.versFilet - 180) < 12 && r.versBalle < 15;
+  return { ok, detail: `en mode « rotation » (le réglage par défaut) gauche/droite faisait PIVOTER le joueur : pour rattraper une balle sur le côté il fallait tourner, avancer, se retourner — infaisable dans un échange · raquette en main sur le court, les deux touches le font maintenant GLISSER le long de sa ligne de fond (${r.gauche.dx} m a gauche, ${r.droite.dx} m a droite, ${Math.abs(r.droite.dz)} m d'écart en profondeur) tandis que avancer le porte vers le filet (${r.avant.dz} m) · il se tourne tout seul vers le filet (${r.versFilet}°) puis vers la balle des qu'elle est en jeu (${r.versBalle}° d'écart) · hors du court, rien ne change : la même touche le fait pivoter de ${Math.abs(r.sansRaquette.cap)}° sans le déplacer` };
+});

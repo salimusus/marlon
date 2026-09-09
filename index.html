@@ -7134,6 +7134,18 @@ const TENNIS_ZONE = { x1: 3, x2: 23, z1: -23, z2: -3 };
 // Le court déborde un peu de la zone : on ne range la raquette qu'une fois vraiment sorti,
 // sinon elle disparaissait dès qu'on frôlait la ligne de fond.
 const TENNIS_LARGE = { x1: 1, x2: 25, z1: -25, z2: -1 };
+const TENNIS_FILET = -13;   // le filet barre le court selon x, a z = -13
+// SUR LE COURT, ON SE DÉPLACE AUSSI DE CÔTÉ. En mode « rotation » (le réglage par défaut),
+// gauche/droite faisait PIVOTER le joueur : pour rattraper une balle sur le côté il fallait
+// tourner, avancer, retourner — impossible dans un échange. Raquette en main, les deux
+// touches le font maintenant GLISSER le long de sa ligne de fond, comme un vrai tennisman,
+// pendant qu'il reste tourné vers la balle.
+function surLeCourt() { return !!P.racket && !drive.car && !P.sit && inZone(P.pos, TENNIS_LARGE); }
+function capTennis() {
+  const b = (city.balls || []).find(x => x.kind === 'tennis');
+  if (b) { const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z; if (Math.hypot(dx, dz) > 0.7) return Math.atan2(dx, dz); }
+  return P.pos.z > TENNIS_FILET ? Math.PI : 0;   // face au filet
+}
 const FOOT_ZONE = { x1: -23, x2: -3, z1: -23, z2: -3 };
 // Une partie se joue en TROIS jeux gagnants au tennis, TROIS buts au foot.
 const DUEL_GAGNANTS = 3, JEU_POINTS = 4;
@@ -10603,7 +10615,15 @@ function step(dt, active) {
   let wantX, wantZ, len;
   // arme dégainée : on passe en déplacement relatif à la caméra, sinon Q/D ferait tourner
   // le personnage contre la visée
-  if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
+  const tennisLat = surLeCourt() && !(P.gun && P.drawn);
+  if (tennisLat) {
+    // repère du court : avant/arrière vers le filet, gauche/droite le long de la ligne
+    len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
+    const vers = P.pos.z > TENNIS_FILET ? -1 : 1;
+    wantX = ix * vers * SPEED; wantZ = iz * vers * SPEED;
+    let d = capTennis() - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
+    P.facing += d * Math.min(1, dt * 10);   // il se tourne vers la balle sans qu'on ait à le piloter
+  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
     // mode "rotation" : gauche/droite font pivoter le personnage, avant/arrière le déplacent dans la direction où il regarde
     // (au joystick : poussé presque tout droit = pas de virage ; virage d'autant plus vif qu'on pousse sur le côté)
     const ax = clamp(joy.x + pad.x + tel.x, -1, 1), ay = clamp(joy.y + pad.y + tel.y, -1, 1);

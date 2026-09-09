@@ -359,6 +359,7 @@ window.__G = {
   estAmi: typeof estAmi === 'function' ? estAmi : null,
   openOrdres: typeof openOrdres === 'function' ? openOrdres : null,
   openQui: typeof openQui === 'function' ? openQui : null,
+  openQui: typeof openQui === 'function' ? openQui : null,
   conduire: typeof conduire === 'function' ? conduire : null,
   navCell: typeof navCell === 'function' ? navCell : null,
   mannequin: typeof mannequin === 'function' ? mannequin : null,

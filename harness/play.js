@@ -4862,6 +4862,78 @@ test('un homme mis au tapis reste COUCHÉ SUR le sol, pas dedans', async p => {
   return { ok, detail: `un gangster assommé tombe et reste couché ${r.gangsterApres} m au-dessus du bitume (il s'y enfonçait de 39 cm : le pivot de l'avatar est aux pieds, la moitié du corps passait sous la route) · même chose pour un habitant, ${r.habitant.ecart} m` };
 });
 
+
+test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 20, hour: 12 });
+    const G = __G, res = {};
+    const l = G.bots.slice(0, 6);
+    l.forEach((b, i) => { b.pos.set(30 + i * 0.02, 0.15, 30); b.ko = 0; b.dead = 0; b.wait = 5; b.rdv = null; b.drive = null;
+      b.av.group.visible = true; b.av.group.position.copy(b.pos); });
+    const mini = (t2, x = 'pos') => { let m = 99;
+      for (let i = 0; i < t2.length; i++) for (let j = i + 1; j < t2.length; j++) {
+        const a = x === 'pos' ? t2[i].pos : t2[i], b = x === 'pos' ? t2[j].pos : t2[j];
+        m = Math.min(m, Math.hypot(a.x - b.x, a.z - b.z)); } return +m.toFixed(2); };
+    res.habitants = { avant: mini(l) };
+    for (let i = 0; i < 240; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    res.habitants.apres = mini(l);
+    // les gangsters aussi
+    const gm = G.gangs[0].membres.slice(0, 5);
+    gm.forEach((m, i) => { m.x = 40 + i * 0.03; m.z = 40; m.ko = 0; m.captif = false; m.av.group.position.set(m.x, m.y, m.z); });
+    res.gangsters = { avant: mini(gm, 'xz') };
+    for (let i = 0; i < 240; i++) G.step(1 / 60, true);
+    res.gangsters.apres = mini(gm, 'xz');
+    // le joueur, lui, ne se fait jamais bousculer
+    G.P.pos.set(50, 0.15, 50);
+    const px = G.P.pos.x, pz = G.P.pos.z;
+    l[0].pos.set(50, 0.15, 50); l[0].av.group.position.copy(l[0].pos);
+    for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.updateBot(l[0], 1 / 60); }
+    res.joueur = { pousse: +Math.hypot(G.P.pos.x - px, G.P.pos.z - pz).toFixed(2),
+      ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2) };
+    return res;
+  });
+  const ok = r.habitants.avant < 0.1 && r.habitants.apres > 0.8
+    && r.gangsters.avant < 0.1 && r.gangsters.apres > 0.8
+    && r.joueur.pousse < 0.05 && r.joueur.ecart > 0.8;
+  return { ok, detail: `six habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
+});
+
+test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arrière', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const b1 = G.bots[0], b2 = G.bots[1];
+    for (const b of [b1, b2]) { G.amis.add(b.name); G.gang.membres.push(b); b.journal = null; b.ko = 0; b.hp = 100;
+      b.pos.set(G.P.pos.x + 3, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
+    G.missionGang([b1], 'banque');
+    G.entrainerMembre(b2, 'tir');
+    G.openQui();
+    const sub = document.getElementById('ordresSub').innerHTML;
+    const grid = document.getElementById('ordresGrid').innerHTML;
+    res.page1 = { titre: document.getElementById('ordresTitre').textContent,
+      resume: /Missions en cours/.test(sub),
+      mission1: sub.includes(b1.name) && /braquer la banque/.test(sub),
+      mission2: sub.includes(b2.name) && /stand de tir/.test(sub),
+      surLaCarte: /⏳/.test(grid),
+      retour: document.getElementById('ordresRetour').style.display !== 'none' };
+    const btn = [...document.querySelectorAll('#ordresGrid [data-qui]')].find(x => x.dataset.qui === b1.name);
+    res.clic = !!btn;
+    if (btn) btn.click();
+    res.page2 = { titre: document.getElementById('ordresTitre').textContent,
+      retour: document.getElementById('ordresRetour').style.display !== 'none',
+      ordres: document.querySelectorAll('#ordresGrid [data-p]').length };
+    document.getElementById('ordresRetour').click();
+    res.apresRetour = { titre: document.getElementById('ordresTitre').textContent,
+      retour: document.getElementById('ordresRetour').style.display !== 'none' };
+    G.closeUI();
+    return res;
+  });
+  const ok = r.page1.resume && r.page1.mission1 && r.page1.mission2 && r.page1.surLaCarte && !r.page1.retour
+    && r.clic && /Ordres pour/.test(r.page2.titre) && r.page2.retour && r.page2.ordres > 10
+    && /À qui donner un ordre/.test(r.apresRetour.titre) && !r.apresRetour.retour;
+  return { ok, detail: `la première page du 📣 liste les missions en cours de tout le gang (« braquer la banque », « entraînement au stand de tir ») et chaque carte porte l'ordre du moment · un clic ouvre sa fiche (${r.page2.ordres} ordres) avec un bouton « ← Retour » qui ramène à la liste ; ce bouton n'apparaît pas sur la première page` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

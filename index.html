@@ -624,7 +624,7 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
     <h2 id="ordresTitre">📣 Ordres</h2>
     <p class="sub" id="ordresSub"></p>
     <div id="ordresGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:52vh;overflow-y:auto;padding:2px"></div>
-    <div class="mpr"><button class="btn sec" id="ordresBack">Fermer</button></div>
+    <div class="mpr"><button class="btn sec" id="ordresRetour" style="display:none">← Retour</button><button class="btn sec" id="ordresBack">Fermer</button></div>
   </div>
 </div>
 <div class="overlay hidden" id="reunion">
@@ -9014,6 +9014,25 @@ const ORDRES_CAT = [
   ] },
 ];
 let ordresBot = null;
+// L'ordre en cours d'un homme, en une ligne — c'est ce qu'on veut voir d'un coup d'œil.
+function ordreEnCoursDe(b) {
+  const o = ((b && b.journal) || []).find(x => x.etat === 'cours');
+  return o ? `${o.e} ${o.t}` : null;
+}
+// La première page du haut-parleur : qui fait quoi, en ce moment, dans tout le gang.
+function resumeMissions() {
+  const l = (gang.membres || []).filter(b => b && !b.mort);
+  if (!l.length) return '';
+  return '<span style="display:block;margin-top:5px;font-weight:600;color:#7a86a0">📋 Missions en cours</span>'
+    + l.map(b => {
+      const o = ordreEnCoursDe(b), pv = vieDe(b);
+      const etat = b.ko && simTime < b.ko ? '<b style="color:#ff5c5c">😵 à terre</b>'
+        : o ? `<b style="color:#ffd23f">⏳ ${o}</b>` : '<span style="opacity:.6">libre</span>';
+      return `<span style="display:block">🧑 ${b.name} — ${etat}`
+        + (pv < 100 ? ` <span style="color:${vieCouleur(pv)}">❤️ ${pv}</span>` : '') + '</span>';
+    }).join('');
+}
+function ordresRetourVisible(on) { const e = $('ordresRetour'); if (e) e.style.display = on ? '' : 'none'; }
 function openOrdres(b) {
   if (!b) return false;
   ordresBot = b;
@@ -9053,6 +9072,7 @@ function openOrdres(b) {
     if (btn.dataset.lien === 'ami') devenirAmi(b2); else rejoindreGang(b2);
     openOrdres(b2);   // on rouvre la liste : les ordres débloqués apparaissent aussitôt
   }));
+  ordresRetourVisible(true);
   $('ordresGrid').querySelectorAll('[data-p]').forEach(btn => btn.addEventListener('click', () => {
     const b2 = ordresBot; closeUI();
     if (!b2) return;
@@ -9080,6 +9100,7 @@ function openOrdresChien() {
   let html = '<p class="osec">🎓 Dressage</p>';
   for (const o of ORDRES_CHIEN) html += `<button class="ocard" data-chien="${o.id}"><span>${o.e}</span>${o.t}<i>${o.dit}</i></button>`;
   $('ordresGrid').innerHTML = html;
+  ordresRetourVisible(true);
   $('ordresGrid').querySelectorAll('[data-chien]').forEach(btn => btn.addEventListener('click', () => {
     const id = btn.dataset.chien; closeUI();
     chat(myCfg.name, `${chien.nom || 'chien'} ${(ORDRES_CHIEN.find(o => o.id === id) || {}).t || id}`);
@@ -9104,9 +9125,10 @@ function openQui() {
   ajoute(bots.filter(b => estAmi(b.name)), '⭐ Tes amis');
   ajoute(bots.filter(b => dist(b) < 40), '🙋 Autour de toi');
   $('ordresTitre').textContent = '📣 À qui donner un ordre ?';
-  $('ordresSub').innerHTML = lignes.length
+  ordresRetourVisible(false);
+  $('ordresSub').innerHTML = (lignes.length
     ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
-    : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.';
+    : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.') + resumeMissions();
   let html = '';
   if (avecChien) html += `<p class="osec">🐶 Ton chien</p><button class="ocard" data-chienqui="1"><span>🐶</span>${chienNom()}<i>assis, couché, la balle, mords…</i></button>`;
   for (const { titre, l } of lignes) {
@@ -9115,6 +9137,7 @@ function openQui() {
       html += `<button class="ocard" data-qui="${b.name}"><span>🧑</span>${b.name}`
         + (am ? `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${perfCouleur(v)}">📈 ${perfBarre(v, 8)} ${v}</i>`
               + `<i style="font-family:ui-monospace,monospace;letter-spacing:-1px;color:${vieCouleur(vieDe(b))}">❤️ ${perfBarre(vieDe(b), 8)} ${vieDe(b)}</i>` : '')
+        + (am && ordreEnCoursDe(b) ? `<i style="color:#ffd23f">⏳ ${ordreEnCoursDe(b)}</i>` : '')
         + `<i>${Math.round(dist(b))} m${estDuGang(b) ? ' · gang' : am ? ' · ami' : ''}${b.gardeCorps && simTime < b.gardeCorps ? ' · 🛡️ garde' : ''}</i></button>`; }
   }
   $('ordresGrid').innerHTML = html;
@@ -9126,6 +9149,8 @@ function openQui() {
   return true;
 }
 $('ordresBtn').addEventListener('click', () => { if (running && city.on) openQui(); });
+// « ← Retour » : on repasse de la fiche d'un homme à la liste de tout le monde
+$('ordresRetour').addEventListener('click', () => { openQui(); });
 // Le nom seul (ou le nom suivi de rien qu'on comprenne) ouvre la liste.
 function nomSeul(txt) {
   const b = trouveBot(txt); if (!b) return null;
@@ -9708,6 +9733,61 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
 }
 // Aucun véhicule ne doit en chevaucher un autre : on écarte les paires qui se recouvrent.
 // (La voiture conduite a son propre traitement, resolveVehicleOverlap.)
+// ================= ON NE SE MARCHE PAS DESSUS =================
+// Habitants, gangsters, policiers et vigiles se traversaient : à un rendez-vous, dans une
+// bagarre ou devant une boutique, deux ou trois silhouettes finissaient encastrées l'une
+// dans l'autre. On les écarte doucement dès qu'elles se touchent, en respectant les murs.
+const PERSO_R = 0.46;          // demi-largeur d'un personnage : ils se frôlent à 92 cm
+function separerPersos() {
+  if (!city.on) return;
+  const l = [];
+  const add = (x, y, z, fige, pose) => l.push({ x, y, z, x0: x, z0: z, fige, pose });
+  for (const b of bots) {
+    if (b.prison || b.drive || b.dead || !b.av || !b.av.group.visible) continue;
+    add(b.pos.x, b.pos.y, b.pos.z, !!b.ko || !!b.sit, (x, z) => { b.pos.x = x; b.pos.z = z; b.av.group.position.x = x; b.av.group.position.z = z; });
+  }
+  const gangeur = m => {
+    if (m.captif || m.enferme || !m.av || !m.av.group.visible) return;
+    add(m.x, m.y, m.z, !!m.ko, (x, z) => { m.x = x; m.z = z; m.av.group.position.x = x; m.av.group.position.z = z; });
+  };
+  for (const G of gangs) for (const m of G.membres) gangeur(m);
+  for (const m of (gang.membresLibres || [])) gangeur(m);
+  for (const a of (police.agents || [])) if (a.av && a.av.group.visible) add(a.x, a.y, a.z, !!a.ko, (x, z) => { a.x = x; a.z = z; a.av.group.position.x = x; a.av.group.position.z = z; });
+  for (const gd of (city.guards || [])) if (gd.av && gd.av.group.visible) add(gd.x, gd.y, gd.z, !!gd.ko, (x, z) => { gd.x = x; gd.z = z; gd.av.group.position.x = x; gd.av.group.position.z = z; });
+  // le joueur compte aussi, mais c'est toujours l'AUTRE qui s'écarte : on ne pousse jamais
+  // celui qui tient la manette
+  if (!drive.car && P.hp > 0) l.push({ x: P.pos.x, y: P.pos.y, z: P.pos.z, x0: P.pos.x, z0: P.pos.z, fige: true, pose: null });
+  const D = PERSO_R * 2, D2 = D * D;
+  // trois passes : à six empilés au même point, une seule laissait encore des paires
+  // serrées — chaque poussée en défait une autre.
+  for (let pass = 0; pass < 3; pass++)
+  for (let i = 0; i < l.length; i++) for (let j = i + 1; j < l.length; j++) {
+    const A = l[i], B = l[j];
+    if (A.fige && B.fige) continue;
+    if (Math.abs(A.y - B.y) > 1.6) continue;   // pas le même étage
+    let dx = B.x - A.x, dz = B.z - A.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > D2) continue;
+    let d = Math.sqrt(d2);
+    if (d < 1e-3) { dx = Math.cos(i * 2.399); dz = Math.sin(i * 2.399); d = 1; }   // pile l'un dans l'autre : on choisit un sens
+    const nx = dx / d, nz = dz / d, chevauche = D - d;
+    // celui qui est figé (à terre, assis, le joueur) ne bouge pas : l'autre encaisse tout
+    const pa = A.fige ? 0 : B.fige ? 1 : 0.5, pb = 1 - pa;
+    A.x -= nx * chevauche * pa; A.z -= nz * chevauche * pa;
+    B.x += nx * chevauche * pb; B.z += nz * chevauche * pb;
+  }
+  // on applique le déplacement en respectant les murs : personne n'est poussé dans le décor
+  for (const e of l) {
+    if (!e.pose) continue;
+    const dx = e.x - e.x0, dz = e.z - e.z0;
+    if (Math.abs(dx) < 1e-4 && Math.abs(dz) < 1e-4) continue;
+    const lg = Math.hypot(dx, dz), max = 0.35;   // jamais plus d'un pas par image
+    const k = lg > max ? max / lg : 1;
+    const o = { x: e.x0, y: e.y, z: e.z0 };
+    npcMove(o, dx * k, dz * k, 0.4);
+    e.pose(o.x, o.z);
+  }
+}
 function separerVehicules() {
   const tous = [];
   for (const v of city.cars) tous.push(v);
@@ -10257,6 +10337,7 @@ function cityVie(dt) {
   }
   if (z !== city.zone) { city.zone = z; if (z) msg(z.name === 'Tennis' && !P.racket ? '🎾 Prends une raquette au râtelier !' : z.hint, 2200); updateAct(); }
   const safe = (name, fn) => { try { fn(); } catch (e) { if (!safeSeen[name]) { safeSeen[name] = 1; console.error(name, e); msg('⚠️ Petit souci technique (' + name + ') — le jeu continue', 2500); } } };
+  safe('foule', () => separerPersos());   // personne ne se tient à l'intérieur de quelqu'un d'autre
   safe('tirs', () => shotsTick(dt)); safe('grenades', () => grenadesTick(dt)); safe('sport', () => gymTick(dt)); safe('police', () => policeTick(dt)); safe('combat', () => combatTick(dt)); safe('mission', () => missionTick(dt));
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));

@@ -417,6 +417,8 @@ window.__G = {
   GRILLE_JOUEUR: typeof GRILLE_JOUEUR !== 'undefined' ? GRILLE_JOUEUR : 0,
   startCountdown: typeof startCountdown === 'function' ? startCountdown : null,
   raceTick: typeof raceTick === 'function' ? raceTick : null,
+  enseigneTexture: typeof enseigneTexture === 'function' ? enseigneTexture : null,
+  plaqueTexture: typeof plaqueTexture === 'function' ? plaqueTexture : null,
   RACE_GATES: typeof RACE_GATES !== 'undefined' ? RACE_GATES : null,
   get raceKarts() { return typeof raceKarts !== 'undefined' ? raceKarts : null; },   // réaffecté à chaque construction de ville
   race: typeof race !== 'undefined' ? race : null,

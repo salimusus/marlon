@@ -5354,7 +5354,9 @@ test('le plan routier dessert chaque quartier et les rues sont degagees', async 
     // plus rien ne traîne au milieu d'une chaussée
     const surChaussee = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 - 1.2 && Math.abs(z - rt.z) < rt.d / 2 - 1.2);
     const vehic = new Set(); for (const c of [...G.city.cars, ...G.city.aiCars]) if (c.solid) vehic.add(c.solid);
-    const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar && !(o.w > 14 && o.d > 14) && surChaussee(o.x, o.z)).length;
+    // on ne compte que le MOBILIER : un mur, un vitrage ou un bâtiment n'est jamais effacé
+    const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar
+      && !o.glass && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && surChaussee(o.x, o.z)).length;
     return { axes: G.city.plan.axes.length, dessertes: d.length, quartiers: G.city.zones.length,
       horsRoute, sansDesserte, sansArret, degagees: G.city.degagees, restants,
       pireDistance: Math.max(...d.map(o => o.loin)) };
@@ -5479,3 +5481,93 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   await browser.close(); srv.close();
   process.exit(fail?1:0);
 })().catch(e=>{console.error(e);process.exit(1)});
+
+test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus dehors', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 320, hour: 12 });
+    const G = __G;
+    // une plaque de sol sous chaque point ? (les grands plateaux, dessus vers y = 0)
+    const sol = (x, z) => G.solids.some(o => o.mesh && o.w > 8 && o.d > 8 && o.y + o.h / 2 < 3 && o.y + o.h / 2 > -2
+      && Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2);
+    const trous = [];
+    for (let zz = -196; zz <= 346; zz += 6) for (let xx = -196; xx <= 196; xx += 6) if (!sol(xx, zz)) trous.push([xx, zz]);
+    const c = G.city.casino, ci = G.city.circuit;
+    // les murs invisibles d'enceinte : de longues boîtes de 4 m de haut
+    const murs = G.solids.filter(o => o.h === 4 && (o.w > 300 || o.d > 300));
+    const dedans = (x, z) => !murs.some(m => (m.d > m.w ? (Math.sign(m.x) * x > Math.sign(m.x) * m.x) : (Math.sign(m.z) * z > Math.sign(m.z) * m.z)));
+    // la grille de navigation couvre-t-elle les deux quartiers ?
+    const nav = G.NAV, xMax = nav.x0 + nav.nx * nav.cs, zMax = nav.z0 + nav.nz * nav.cs;
+    const navCouvre = (x, z) => x > nav.x0 && x < xMax && z > nav.z0 && z < zMax;
+    return { trous: trous.length, ex: trous.slice(0, 4),
+      casino: dedans(c.x, c.z + 40) && navCouvre(c.x, c.z + 40),
+      circuit: dedans(ci.x, ci.z - ci.r - 8) && navCouvre(ci.x, ci.z - ci.r - 8),
+      murs: murs.length, navZ: [nav.z0, Math.round(zMax)], parvis: sol(c.x, c.z + 40), parvisBord: sol(c.x - 18, c.z + 26) };
+  });
+  const ok = r.trous === 0 && r.casino && r.circuit && r.murs === 4 && r.parvis && r.parvisBord;
+  return { ok, detail: `le plateau de la ville s'arrêtait a z = 282 et le mur invisible juste derrière : le casino (z 287 → 340) et le circuit étaient bâtis DEHORS, sur du vide — un trou béant devant le casino et deux quartiers interdits · le sol couvre maintenant toute la carte (${r.trous} trou sur 5 500 points testés, parvis et ses bords compris), les ${r.murs} murs d'enceinte sont repoussés au-delà des deux quartiers et la grille de navigation va jusqu'a z = ${r.navZ[1]} (casino navigable=${r.casino}, circuit=${r.circuit})` };
+});
+
+test('le casino a de grandes vitres bleues, un tapis rouge et des haies vertes', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 330, hour: 12 });
+    const G = __G, c = G.city.casino;
+    let vitres = 0, hauteurVitre = 0, haies = 0, tapis = 0, cordons = 0;
+    const dedansCasino = (x, z) => Math.abs(x - c.x) < c.w / 2 + 3 && Math.abs(z - c.z) < c.d / 2 + 3;
+    G.worldGroup.traverse(o => {
+      if (!o.isMesh || !o.material || !o.material.color) return;
+      const b = new THREE.Box3().setFromObject(o), col = o.material.color.getHex();
+      const w = b.max.x - b.min.x, d = b.max.z - b.min.z, h = b.max.y - b.min.y;
+      const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+      // vitres : bleu translucide, hautes et larges, sur le pourtour du bâtiment
+      if (o.material.transparent && o.material.opacity > 0.2 && o.material.opacity < 0.9 && h > 3 && Math.max(w, d) > 8 && dedansCasino(cx, cz)) {
+        const hex = col.toString(16); const bleu = (col & 0xff) > ((col >> 16) & 0xff) + 40;
+        if (bleu) { vitres++; hauteurVitre = Math.max(hauteurVitre, +h.toFixed(1)); }
+      }
+      // haies : vert, longues et basses, sur le parvis
+      if ((col === 0x2f7d3a || col === 0x49a552) && Math.max(w, d) > 8 && h < 1.4 && cz > c.z + c.d / 2) haies++;
+      if (col === 0x7a1220 && w > 8 && d > 12 && cz > c.z + c.d / 2) tapis++;                       // le grand tapis rouge
+      if (col === 0x7a1220 && Math.min(w, d) < 0.5 && Math.max(w, d) > 3 && h < 0.4 && cz > c.z + c.d / 2) cordons++;   // les cordons de velours
+    });
+    // le perron : des marches sur toute la largeur (plus de trou de 70 cm sur les côtés)
+    const sousMarche = x => G.solids.some(o => o.mesh && Math.abs(o.z - (c.z + c.d / 2 + 1.9)) < 2.4 && Math.abs(x - o.x) < o.w / 2 && o.y + o.h / 2 > 0.2);
+    const perron = [-17, -10, 0, 10, 17].filter(dx => sousMarche(c.x + dx)).length;
+    return { vitres, hauteurVitre, haies, tapis, cordons, perron };
+  });
+  const ok = r.vitres >= 4 && r.hauteurVitre >= 4 && r.haies >= 4 && r.tapis >= 1 && r.cordons >= 4 && r.perron === 5;
+  return { ok, detail: `le casino était une boîte de marbre aveugle posée devant un trou · il a maintenant ${r.vitres} grandes baies vitrées bleues translucides tout autour (${r.hauteurVitre} m de haut), une grande entrée avec tapis rouge (${r.tapis}), ${r.cordons} cordons de velours sur poteaux dorés, ${r.haies} haies de plantes vertes autour du parvis, et un perron de marches sur TOUTE la largeur (${r.perron}/5 points portés, avant on tombait de 70 cm de chaque côté)` };
+});
+
+test('les enseignes des boutiques sont grandes et colorees, la banque et la police officielles', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const lire = tex => {
+      const c = tex.image, g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
+      let vif = 0, blanc = 0, sombre = 0, or = 0, n = 0;
+      for (let i = 0; i < d.length; i += 16) {
+        const R = d[i], V = d[i + 1], B = d[i + 2]; n++;
+        const mx = Math.max(R, V, B), mn = Math.min(R, V, B);
+        if (mx > 140 && mx - mn > 60) vif++;              // couleur FRANCHE et lumineuse
+        if (R > 230 && V > 230 && B > 230) blanc++;
+        if (mx < 90) sombre++;
+        if (R > 150 && V > 120 && B < 120 && R - B > 60) or++;
+      }
+      return { vif: +(vif / n).toFixed(2), blanc: +(blanc / n).toFixed(2), sombre: +(sombre / n).toFixed(2), or: +(or / n).toFixed(2), l: c.width };
+    };
+    const ens = lire(G.enseigneTexture('💈 COIFFEUR', 0xff7ad9));
+    const ens2 = lire(G.enseigneTexture('🏋️ Salle de sport', 0x35d0e6));
+    const pl = lire(G.plaqueTexture('🏦 BANQUE DE SUPER OBBY'));
+    const pl2 = lire(G.plaqueTexture('POLICE'));
+    // toutes les devantures de boutique portent bien la nouvelle enseigne
+    let panneaux = 0;
+    G.worldGroup.traverse(o => {
+      if (o.isMesh && o.material && o.material.map && o.material.map.image && o.material.map.image.width === 768
+        && o.scale && o.scale.y > 1.1 && o.scale.x > 5) panneaux++;
+    });
+    return { ens, ens2, pl, pl2, panneaux };
+  });
+  const okEns = r.ens.vif > 0.35 && r.ens.blanc > 0.04 && r.ens2.vif > 0.35 && r.ens2.blanc > 0.04;
+  const okPl = r.pl.sombre > 0.6 && r.pl.or > 0.02 && r.pl.vif < 0.15 && r.pl.vif < r.ens.vif / 3 && r.pl.blanc < 0.01 && r.pl2.sombre > 0.6;
+  const ok = okEns && okPl && r.panneaux >= 6;
+  return { ok, detail: `chaque boutique avait la même petite plaque crème au texte fin · l'enseigne est maintenant un grand panneau de 768 px aux couleurs du magasin (${Math.round(r.ens.vif * 100)} % de pixels vifs) avec le nom ÉNORME en lettres blanches cerclées de noir (${Math.round(r.ens.blanc * 100)} %) et une guirlande d'ampoules — ${r.panneaux} devantures l'arborent · la banque et la police, elles, ont une plaque OFFICIELLE : marbre bleu nuit (${Math.round(r.pl.sombre * 100)} % de pixels sombres, ${Math.round(r.pl.vif * 100)} % de couleur vive seulement), double filet doré et capitales espacées en serif` };
+});

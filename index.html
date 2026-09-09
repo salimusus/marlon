@@ -1046,6 +1046,66 @@ function textTexture(text, encre, fond) {
   g.fillText(text, 256, 118);
   return new THREE.CanvasTexture(c);
 }
+// ===== LES ENSEIGNES =====
+// Toutes les boutiques avaient la même petite plaque crème avec un texte fin : de la rue on
+// ne lisait rien. Une enseigne de boutique, maintenant, c'est un GRAND panneau coloré aux
+// couleurs du magasin, avec le nom écrit énorme en lettres rondes blanches cerclées de noir
+// et une guirlande d'ampoules. La banque et la police, elles, gardent une plaque OFFICIELLE :
+// marbre sombre, double filet doré, capitales espacées.
+function coupeTexte(t) {   // sépare l'emoji de tête du nom
+  const m = String(t).match(/^([^A-Za-zÀ-ÿ0-9]*)\s*([\s\S]*)$/);
+  return m ? [m[1].trim(), m[2].trim() || m[1].trim()] : ['', String(t)];
+}
+function ajusteFonte(g, texte, large, depart, mini, fonte) {
+  let size = depart;
+  do { g.font = `${fonte} ${size}px Nunito, "Arial Rounded MT Bold", Arial, sans-serif`; size -= 3; }
+  while (g.measureText(texte).width > large && size > mini);
+  return size + 3;
+}
+function enseigneTexture(text, teinte = 0x4f8dff) {
+  const c = document.createElement('canvas'); c.width = 768; c.height = 224;
+  const g = c.getContext('2d');
+  const col = new THREE.Color(teinte), hsl = { h: 0, s: 0, l: 0 }; col.getHSL(hsl);
+  const vif = '#' + new THREE.Color().setHSL(hsl.h, Math.max(0.55, hsl.s), 0.52).getHexString();
+  const nuit = '#' + new THREE.Color().setHSL(hsl.h, Math.max(0.55, hsl.s), 0.22).getHexString();
+  const grd = g.createLinearGradient(0, 0, 0, 224); grd.addColorStop(0, vif); grd.addColorStop(1, nuit);
+  g.fillStyle = grd; g.fillRect(0, 0, 768, 224);
+  g.strokeStyle = '#fff6d8'; g.lineWidth = 10; g.strokeRect(14, 14, 740, 196);   // cadre clair
+  for (let i = 0; i < 16; i++) {   // guirlande d'ampoules
+    const bx = 34 + i * 47;
+    for (const by of [22, 202]) { g.beginPath(); g.arc(bx, by, 7, 0, 7); g.fillStyle = i % 2 ? '#ffe98a' : '#ff9ad2'; g.fill(); }
+  }
+  const [emo, nom] = coupeTexte(text);
+  const gauche = emo ? 150 : 60, large = 768 - gauche - 60, cx = gauche + large / 2;
+  if (emo) { g.font = '104px Nunito, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(emo, 92, 116); }
+  const size = ajusteFonte(g, nom.toUpperCase(), large, 108, 34, '900');
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillText(nom.toUpperCase(), cx + 5, 121);   // ombre portée
+  g.lineJoin = 'round'; g.lineWidth = Math.max(8, size * 0.18); g.strokeStyle = '#20263a';
+  g.strokeText(nom.toUpperCase(), cx, 114); g.fillStyle = '#ffffff'; g.fillText(nom.toUpperCase(), cx, 114);
+  return new THREE.CanvasTexture(c);
+}
+function plaqueTexture(text) {   // banque, police : plus strict, plus officiel
+  const c = document.createElement('canvas'); c.width = 768; c.height = 224;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 224); grd.addColorStop(0, '#1e2a48'); grd.addColorStop(1, '#0c1425');
+  g.fillStyle = grd; g.fillRect(0, 0, 768, 224);
+  g.strokeStyle = '#c9a84c'; g.lineWidth = 5; g.strokeRect(18, 18, 732, 188);
+  g.lineWidth = 2; g.strokeRect(30, 30, 708, 164);
+  const nom = coupeTexte(text)[1].toUpperCase();
+  const size = ajusteFonte(g, nom, 600, 74, 26, 'bold');
+  g.font = `bold ${size}px Georgia, "Times New Roman", serif`;
+  const esp = Math.max(3, size * 0.09);
+  let large = 0; for (const ch of nom) large += g.measureText(ch).width + esp;
+  let px = 384 - (large - esp) / 2;
+  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#f4ead2';
+  for (const ch of nom) { g.fillText(ch, px, 112); px += g.measureText(ch).width + esp; }
+  g.strokeStyle = '#c9a84c'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(384 - large / 2, 112 + size * 0.72); g.lineTo(384 + large / 2, 112 + size * 0.72); g.stroke();
+  return new THREE.CanvasTexture(c);
+}
+const matEnseigne = (t, teinte) => new THREE.MeshBasicMaterial({ map: enseigneTexture(t, teinte) });
+const matPlaque = t => new THREE.MeshBasicMaterial({ map: plaqueTexture(t) });
 let noSigns = false;
 function sign(x, top, z, text, big, ry = 0) {
   if (noSigns) return;
@@ -1194,7 +1254,8 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = th; worldGroup.add(g);   // éléments visuels tournés avec le magasin
   const at = AWNING.clone(); at.needsUpdate = true; at.repeat.set(w / 1.5, 1);
   const aw = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: at })); aw.scale.set(w + 0.2, 0.12, 1.4); aw.position.set(0, 3.5, fz - 0.7); aw.rotation.x = 0.35; g.add(aw);
-  const sg = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: textTexture(title) })); sg.scale.set(w * 0.9, 0.9, 0.12); sg.position.set(0, 4.75, fz - 0.1); g.add(sg);
+  const sg = new THREE.Mesh(unitBox, matEnseigne(title, color)); sg.scale.set(w * 0.95, 1.25, 0.14); sg.position.set(0, 4.9, fz - 0.1); g.add(sg);   // grande enseigne colorée, nom écrit en gros
+  { const dos = new THREE.Mesh(unitBox, lam(0x20263a)); dos.scale.set(w * 0.99, 1.45, 0.1); dos.position.set(0, 4.9, fz - 0.02); g.add(dos); }
   for (let i = -1; i <= 1; i++) { const n = new THREE.Mesh(unitBox, neonMat(0xffffcc)); n.scale.set(0.5, 0.12, 0.5); n.position.set(i * w * 0.3, H + 0.2, 0); g.add(n); }
   for (const sx of [-1, 1]) { const fl = new THREE.Mesh(unitBox, lam(pickOne([0xff5c5c, 0xffd23f, 0x4f8dff]))); fl.scale.set(0.7, 0.45, 0.04); fl.position.set(sx * (w / 2 - 0.4), 5.5, fz - 0.4); g.add(fl); const pl = new THREE.Mesh(unitBox, lam(0x3b4252)); pl.scale.set(0.06, 1.4, 0.06); pl.position.set(sx * (w / 2 - 0.05), 5.2, fz - 0.4); g.add(pl); }   // fanions
   floor.M = M; return floor;
@@ -1222,8 +1283,8 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   box(x, 6, z, w + 0.8, 0.4, d + 0.8, 0x3b4252, { deco: true, studs: false });                // toit
   for (const dz of [-d / 2 + 0.3, 0, d / 2 - 0.3]) box(x - w / 2 + 0.25, 3, z + dz, 0.5, 5.6, 0.5, 0x2b3550, { studs: false, noRoute: true });   // piliers de la façade ouest
   box(x, 3, z + d / 2 - 0.15, w, 5.6, 0.3, 0xffd23f, { studs: false, noRoute: true });        // mur sud
-  box(x, 6.9, z - d / 2, 13, 1.5, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🔧 GARAGE CUSTOM') }), deco: true, noEdges: true });
-  box(x - w / 2 - 0.2, 5.4, z, 0.14, 1.2, 13, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('PEINTURE · KITS · MOTEUR · NITRO') }), deco: true, noEdges: true });
+  box(x, 6.9, z - d / 2, 13, 1.5, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🔧 GARAGE CUSTOM', 0xff8f3a) }), deco: true, noEdges: true });
+  box(x - w / 2 - 0.2, 5.4, z, 0.14, 1.2, 13, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('PEINTURE · KITS · MOTEUR · NITRO', 0x35d0e6) }), deco: true, noEdges: true });
   // trois travées : rails de pont élévateur au sol
   for (const bx0 of [-8.5, 0, 8.5]) {
     for (let i = 0; i < 2; i++) box(x + bx0 - 1.4 + i * 2.8, 0.24, z, 0.9, 0.12, 5.4, 0xff5c5c, { deco: true, studs: false });
@@ -1257,7 +1318,7 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   const cx = x - 8.5, cz = z + 5.2;
   box(cx, 0.95, cz, 4.4, 1.1, 1.2, 0xff5c5c, { studs: false, noRoute: true });
   box(cx, 1.56, cz, 4.6, 0.12, 1.4, 0x2b2f3a, { deco: true, studs: false });
-  box(cx, 2.9, cz, 4.2, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎨 ATELIER · E') }), deco: true, noEdges: true });
+  box(cx, 2.9, cz, 4.2, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎨 ATELIER · E', 0xb57cff) }), deco: true, noEdges: true });
   for (const dx of [-1.5, 1.5]) box(cx + dx, 2.1, cz - 0.5, 0.12, 1.2, 0.12, 0x8f98ab, { deco: true, studs: false });
   city.tuneDesk = { x: cx, z: cz + 1.4 };
   city.garage = { x, z };
@@ -1282,7 +1343,7 @@ function buildShops() {
   box(-11.4, 1.95, 19.5, 1.6, 0.55, 0.8, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true, glass: true }); for (let i = 0; i < 4; i++) box(-11.95 + i * 0.36, 1.85, 19.5, 0.28, 0.25, 0.4, [0xff8f3a, 0xffd23f, 0x5cc453, 0xff5c5c][i], { deco: true, studs: false });   // vitrine
   box(-7.2, 2.0, 19.5, 0.9, 0.9, 0.7, 0xf4f6fa, { deco: true, studs: false }); box(-7.2, 2.6, 19.5, 0.35, 0.35, 0.35, 0xff7ad9, { deco: true, studs: false });   // machine à glaces
   box(-6.6, 1.2, 22.4, 1.2, 2.2, 0.9, 0xffffff, { deco: true, studs: false }); box(-6.6, 1.2, 21.9, 0.9, 1.6, 0.05, 0x4f8dff, { deco: true, studs: false });   // frigo
-  box(-9.5, 3.2, 22.6, 5.4, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🍔 🍕 🍟 🥗 🍦 🍩') }), deco: true, noEdges: true });   // menu
+  box(-9.5, 3.2, 22.6, 5.4, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🍔 🍕 🍟 🥗 🍦 🍩', 0xffa040) }), deco: true, noEdges: true });   // menu
   for (const sx of [-11.2, -9.5, -7.8]) { box(sx, 0.7, 17.6, 0.6, 0.12, 0.6, 0xff5c5c, { deco: true, studs: false }); box(sx, 0.35, 17.6, 0.12, 0.6, 0.12, 0x3b4252, { deco: true, studs: false }); }   // tabourets
   bench(-15, 13.5, 0); bench(-4, 13.5, 0); bench(-9.5, 10.5, Math.PI);
   for (const tx of [-12.5, -6.5]) {   // terrasse : tables rondes + parasols + chaises
@@ -1472,7 +1533,7 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
   for (const bx2 of [45.4, 58.6]) box(bx2, 1.1, 3.4, 0.5, 2.2, 0.5, 0x3b4252, { studs: false, noRoute: true });
   box(52, 2.6, 2.6, 13, 0.4, 0.5, 0xffd23f, { deco: true, studs: false });   // portique
   box(52, 0.9, 11.4, 13, 1, 0.5, C.wood, { studs: false, noRoute: true });   // ligne de tir
-  box(52, 1.9, 11.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎯 STAND DE TIR') }), deco: true, noEdges: true });
+  box(52, 1.9, 11.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎯 STAND DE TIR', 0xff5c5c) }), deco: true, noEdges: true });
   city.zones.push({ name: 'Stand de tir', emoji: '🎯', x1: 44, x2: 60, z1: 1, z2: 13, hint: '🎯 Stand de tir : dégaine (G) et vise les cibles — celle du milieu se déplace' });
   for (const x of [45.5, 58.5]) lamp(x, 13.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
   city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: 45, x2: 59, z1: 12, z2: 26, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
@@ -1533,7 +1594,7 @@ function buildCircuit() {
   plat(CX, 0.16, PZ, 34, 8, 0x565b66, { studs: false, noRoute: true }, 0.12);
   box(CX, 2.6, PZ - 4.6, 34, 0.4, 0.4, 0xc9ced8, { deco: true, studs: false });
   for (const dx of [-16, -8, 0, 8, 16]) box(CX + dx, 1.4, PZ - 4.6, 0.3, 2.8, 0.3, 0xc9ced8, { studs: false, noRoute: true });
-  box(CX, 3.2, PZ - 4.6, 8, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏁 STANDS') }), deco: true, noEdges: true });
+  box(CX, 3.2, PZ - 4.6, 8, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏁 STANDS', 0x4f8dff) }), deco: true, noEdges: true });
   sign(CX - 12, 0.05, PZ + 5, '🏁 F : lancer la course'); sign(CX + 12, 0.05, PZ + 5, 'Karts : E pour monter');
   // tribune, à l'extérieur de l'anneau
   box(CX, 1.2, SZ + 8, 34, 2.4, 3, 0x8f98ab, { studs: false, noRoute: true });
@@ -1781,16 +1842,52 @@ function buildCasino(x, z) {
   const OR = 0xf2c14e, ROUGE = 0x7a1220, TAPIS = 0x8b1a2b, MARBRE = 0xf1ece1, NUIT = 0x141a2e;
   const W = 40, D = 30, H = 8.5;
   city.casino = { x, z, w: W, d: D, machines: [], tables: [], joueurs: [] };
-  // --- parvis, marches, tapis rouge ---
+  // --- LE PARVIS ET LA GRANDE ENTRÉE ---
+  // Le parvis flottait au-dessus du vide (le plateau de la ville s'arrêtait bien avant) et
+  // les marches ne faisaient que 14 m : de chaque côté on tombait de 70 cm dans le trou.
   plat(x, 0.16, z + D / 2 + 9, W + 26, 26, 0x2b3550, { studs: false, noRoute: true }, 0.1);
-  plat(x, 0.2, z + D / 2 + 8, 10, 22, ROUGE, { studs: false, noRoute: true, noEdges: true }, 0.04);
-  for (let i = 0; i < 3; i++) plat(x, 0.3 + i * 0.22, z + D / 2 + 1.6 - i * 0.7, 14 - i, 2.2, MARBRE, { studs: false, noRoute: true }, 0.2);
-  // --- le bâtiment : marbre clair, bandeau doré, toit à corniche ---
+  plat(x, 0.2, z + D / 2 + 8, 12, 22, ROUGE, { studs: false, noRoute: true, noEdges: true }, 0.04);   // le grand tapis rouge
+  for (const sx of [-1, 1]) box(x + sx * 6.4, 0.42, z + D / 2 + 8, 0.3, 0.44, 22, OR, { deco: true, studs: false });   // baguettes dorées du tapis
+  // le perron : des marches sur TOUTE la largeur, plus aucun trou sur les côtés
+  for (let i = 0; i < 3; i++) plat(x, 0.3 + i * 0.22, z + D / 2 + 1.9 - i * 0.62, W - 2 - i, 2, MARBRE, { studs: false, noRoute: true }, 0.24);
+  // poteaux de velours et cordon doré, de part et d'autre du tapis
+  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
+    const px = x + sx * 6.9, pz = z + D / 2 + 2.6 + i * 4.4;
+    const po = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.1, 8), lam(OR)); po.position.set(px, 0.76, pz); worldGroup.add(po);
+    const bo = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), lam(OR)); bo.position.set(px, 1.36, pz); worldGroup.add(bo);
+    if (i < 4) box(px, 1.05, pz + 2.2, 0.1, 0.1, 4.2, ROUGE, { deco: true, studs: false });
+  }
+  // --- LA HAIE DE PLANTES VERTES, tout autour du parvis ---
+  const haie = (hx, hz, hw, hd) => {
+    box(hx, 0.55, hz, hw, 0.78, hd, 0x2f7d3a, { studs: false, noRoute: true });
+    box(hx, 0.98, hz, hw - 0.3, 0.24, hd - 0.3, 0x49a552, { deco: true, studs: false, noEdges: true });
+  };
+  for (const sx of [-1, 1]) haie(x + sx * 11.5, z + D / 2 + 10, 1.6, 18);
+  for (const sx of [-1, 1]) haie(x + sx * 20, z + D / 2 + 19.4, 18, 1.6);
+  for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) {   // arbustes en pot le long du tapis
+    const bx2 = x + sx * 9.2, bz2 = z + D / 2 + 3.5 + i * 5.2;
+    box(bx2, 0.5, bz2, 1.5, 0.68, 1.5, 0xc9ced8, { studs: false, noRoute: true });
+    box(bx2, 1.35, bz2, 1.7, 1.1, 1.7, 0x2f7d3a, { deco: true, studs: false });
+    box(bx2, 2.1, bz2, 1.1, 0.7, 1.1, 0x49a552, { deco: true, studs: false });
+  }
+  // --- le bâtiment : soubassement de marbre, GRANDES VITRES BLEUES, bandeau doré ---
   plat(x, 0.85, z, W, D, MARBRE, { studs: false, noRoute: true }, 0.7);
-  box(x, 0.85 + H / 2, z - D / 2 + 0.3, W, H, 0.6, MARBRE, { studs: false, noRoute: true });
-  for (const sx of [-1, 1]) box(x + sx * (W / 2 - 0.3), 0.85 + H / 2, z, 0.6, H, D, MARBRE, { studs: false, noRoute: true });
-  // façade sud : deux pans, l'entrée reste ouverte au milieu
-  for (const sx of [-1, 1]) box(x + sx * (W / 4 + 2.5), 0.85 + H / 2, z + D / 2 - 0.3, W / 2 - 5, H, 0.6, MARBRE, { studs: false, noRoute: true });
+  const BAS = 1.6, HAUT = 1.5, VIT = H - BAS - HAUT;   // plinthe, hauteur vitrée, bandeau
+  const bleu = new THREE.MeshLambertMaterial({ color: 0x2f9fe8, transparent: true, opacity: 0.46, side: THREE.DoubleSide, emissive: 0x0d4c86, emissiveIntensity: 0.55 });
+  // un pan de mur = plinthe + baie vitrée + linteau, avec des meneaux dorés
+  const pan = (px, pz, len, ep, alongX) => {
+    const w2 = alongX ? len : ep, d2 = alongX ? ep : len;
+    box(px, 0.85 + BAS / 2, pz, w2, BAS, d2, MARBRE, { studs: false, noRoute: true });
+    box(px, 0.85 + BAS + VIT / 2, pz, alongX ? len : 0.16, VIT, alongX ? 0.16 : len, 0, { material: bleu, studs: false, noRoute: true, noEdges: true, noShadow: true, glass: true });
+    box(px, 0.85 + BAS + VIT + HAUT / 2, pz, w2, HAUT, d2, MARBRE, { studs: false, noRoute: true });
+    const n = Math.max(1, Math.round(len / 7.5));   // meneaux fins : une forêt de barres dorées cachait les vitres
+    for (let i = 0; i <= n; i++) { const t = -len / 2 + i * len / n;
+      box(px + (alongX ? t : 0), 0.85 + BAS + VIT / 2, pz + (alongX ? 0 : t), alongX ? 0.16 : 0.26, VIT, alongX ? 0.26 : 0.16, OR, { deco: true, studs: false }); }
+  };
+  pan(x, z - D / 2 + 0.3, W, 0.6, true);
+  for (const sx of [-1, 1]) pan(x + sx * (W / 2 - 0.3), z, D, 0.6, false);
+  // façade sud : deux pans vitrés, la grande entrée reste ouverte au milieu
+  for (const sx of [-1, 1]) pan(x + sx * (W / 4 + 2.5), z + D / 2 - 0.3, W / 2 - 5, 0.6, true);
   box(x, 0.85 + H, z, W + 2.4, 0.7, D + 2.4, OR, { deco: true, studs: false });
   box(x, 0.85 + H + 0.7, z, W - 2, 0.5, D - 2, ROUGE, { deco: true, studs: false });
   // colonnes dorées du perron
@@ -1799,7 +1896,7 @@ function buildCasino(x, z) {
     box(x + sx * 9, 0.85 + H - 0.2, z + D / 2 + 1.2, 1.6, 0.4, 1.6, OR, { deco: true, studs: false }); }
   box(x, 0.85 + H + 0.2, z + D / 2 + 1.2, 22, 0.8, 2.6, ROUGE, { deco: true, studs: false });   // auvent
   // --- LA GRANDE ENSEIGNE LUMINEUSE ---
-  const ens = textTexture('WORLD TELIO MARLON');
+  const ens = enseigneTexture('WORLD TELIO MARLON', 0xff3a6a);
   const em = new THREE.MeshBasicMaterial({ map: ens, transparent: true });
   box(x, 0.85 + H + 3.6, z + D / 2 + 1.6, 34, 4.4, 0.4, 0, { material: em, deco: true, noEdges: true });
   box(x, 0.85 + H + 3.6, z + D / 2 + 1.9, 35.6, 5.4, 0.3, 0, { material: neonMat(0xff3a6a), deco: true, noEdges: true, noShadow: true });
@@ -1831,7 +1928,7 @@ function buildCasino(x, z) {
   box(x, 1.55, z - D / 2 + 3.2, 16, 1.3, 1.4, 0x3b2418, { studs: false, noRoute: true });
   box(x, 2.24, z - D / 2 + 3.2, 16.4, 0.14, 1.8, OR, { deco: true, studs: false });
   for (let i = 0; i < 12; i++) box(x - 7 + i * 1.3, 3.4, z - D / 2 + 2.2, 0.3, 1.1, 0.3, [0x5cc453, 0xff5c5c, 0xffd23f][i % 3], { deco: true, studs: false });
-  box(x, 4.6, z - D / 2 + 1.6, 12, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🍸 BAR') }), deco: true, noEdges: true });
+  box(x, 4.6, z - D / 2 + 1.6, 12, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🍸 BAR', 0xff3a6a) }), deco: true, noEdges: true });
   // --- LES MACHINES À SOUS : deux rangées de huit ---
   for (const sz of [-1, 1]) for (let i = 0; i < 8; i++) {
     const mx = x - 15.5 + i * 4.4, mz = z + sz * 9.5;
@@ -1862,7 +1959,7 @@ function machineASous(x, z, ry, idx) {
   const tex = new THREE.CanvasTexture(cv);
   const ecran = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 0.62), new THREE.MeshBasicMaterial({ map: tex }));
   ecran.position.set(0, 1.5, 0.56); g.add(ecran);
-  const fronton = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.42), new THREE.MeshBasicMaterial({ map: textTexture('🎰 JACKPOT'), transparent: true }));
+  const fronton = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.42), new THREE.MeshBasicMaterial({ map: enseigneTexture('🎰 JACKPOT', 0xff3a6a), transparent: true }));
   fronton.position.set(0, 2.42, 0.5); g.add(fronton);
   const halo = new THREE.Mesh(unitBox, neonMat(0xff3a6a)); halo.scale.set(1.56, 0.1, 1.14); halo.position.y = 2.34; g.add(halo);
   // le bras
@@ -2115,7 +2212,7 @@ function buildZone(X, Z) {
     const l2 = new THREE.PointLight(0xff8f3a, 1.1, 12); l2.position.set(X + dx, 1.9, Z + dz); worldGroup.add(l2);
   }
   for (const [dx, dz] of [[-12, -20], [12, 12]]) lamp(X + dx, Z + dz);
-  box(X, 5.4, Z - D / 2 + 1, 12, 1.6, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏚️ LA ZONE') }), deco: true, noEdges: true });
+  box(X, 5.4, Z - D / 2 + 1, 12, 1.6, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏚️ LA ZONE', 0x8f98ab) }), deco: true, noEdges: true });
   for (const sx of [-1, 1]) box(X + sx * 5.6, 2.7, Z - D / 2 + 1, 0.25, 5.4, 0.25, 0x3b4252, { studs: false, noRoute: true });
   city.zone2 = { x: X, z: Z, w: W, d: D };
   city.zones.push({ name: 'La Zone', emoji: '🏚️', x1: X - W / 2, x2: X + W / 2, z1: Z - D / 2, z2: Z + D / 2,
@@ -2467,7 +2564,7 @@ function buildCinema(CX, CZ) {   // grand écran, rangées de bancs face à lui,
   box(CX, 3.5, CZ - 17, 3.8, 0.5, 3, 0x3b4252, { deco: true, studs: false });
   box(CX, 2.4, CZ - 15.6, 0.5, 0.5, 0.5, 0, { material: neonMat(0xfff2b0), deco: true, noEdges: true });
   sign(CX, 0.3, CZ - 20, '🎬 Cinéma en plein air : E sur un banc', false, 0);
-  box(CX, 12.4, CZ + 0.2, 12, 1.2, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎬 CINÉMA') }), deco: true, noEdges: true });
+  box(CX, 12.4, CZ + 0.2, 12, 1.2, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎬 CINÉMA', 0xb57cff) }), deco: true, noEdges: true });
   city.zones.push({ name: 'Cinéma', emoji: '🎬', x1: CX - 10, x2: CX + 10, z1: CZ - 21, z2: CZ + 1, hint: '🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin animé' });
 }
 // Programme mélangé : on tire les films dans un « sac » que l'on vide avant de le
@@ -2882,9 +2979,14 @@ const PLAN_ROUTIER = {
     { n: 'Bretelle du circuit', x: 115, z: -128, w: 8, d: 120 },
     { n: 'Accès circuit', x: 122, z: -176, w: 24, d: 8 },
     { n: 'Route du littoral', x: 100, z: 130, w: 8, d: 70 },
-    { n: 'Avenue du casino', x: 60, z: 300, w: 150, d: 9 },
-    { n: 'Boulevard du casino', x: 60, z: 250, w: 9, d: 112 },
-    { n: 'Desserte du casino', x: 20, z: 282, w: 90, d: 8 },
+    // Ces trois axes traversaient LE CASINO de part en part (l'avenue passait à z = 300, en
+    // plein milieu du bâtiment) : le dégagement des chaussées effaçait ses murs de verre.
+    // Ils le contournent maintenant et viennent se garer devant la grande entrée.
+    { n: 'Boulevard du casino', x: 60, z: 238, w: 9, d: 92 },
+    { n: 'Desserte du casino', x: 54, z: 282, w: 90, d: 8 },
+    { n: 'Contournement ouest du casino', x: 14, z: 315, w: 8, d: 70 },
+    { n: 'Contournement est du casino', x: 102, z: 315, w: 8, d: 70 },
+    { n: 'Avenue du casino', x: 56, z: 345, w: 100, d: 9 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
   ],
@@ -2894,7 +2996,7 @@ const PLAN_ROUTIER = {
     { n: 'Villa', x: 48, z: 190 },
     { n: 'Départ', x: 129, z: -176 },
     { n: 'Rallye', x: 0, z: -50 },
-    { n: 'Casino', x: 60, z: 282 },
+    { n: 'Casino', x: 60, z: 343 },   // devant la grande entrée, au bout du tapis rouge
   ],
 };
 // On construit les axes du plan. Les dessertes, elles, sont calculées À LA FIN, quand tous
@@ -2932,7 +3034,7 @@ function finirPlan() {
 function degageLesRoutes() {
   const surChaussee = (x, z) => (city.routes || []).some(r =>
     Math.abs(x - r.x) < r.w / 2 - 1.2 && Math.abs(z - r.z) < r.d / 2 - 1.2);
-  const garde = o => o.porte || o.ai || o.pol || o.bar || (o.w > 14 && o.d > 14);   // portes, véhicules, barrières, gros bâtiments
+  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.h > 4.6 || (o.w > 14 && o.d > 14);   // portes, véhicules, barrières, vitrages et murs de bâtiment
   const vus = new Set();
   for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
   let n = 0;
@@ -3024,7 +3126,7 @@ function makeCar(color, x, z, h, opt = {}) {
   bx(dark, 0.03, 0.5, 0.03, -0.7, 1.9, -1.2, false);                                           // antenne
   const wheels = [];
   for (const [wx, wz] of [[-1.05, 1.3], [1.05, 1.3], [-1.05, -1.3], [1.05, -1.3]]) { const w = makeWheel(1); w.position.set(wx, 0.34, wz); g.add(w); wheels.push(w); }
-  if (opt.police) { bx(lam(0x1b2a6b), 2.12, 0.28, 4.32, 0, 0.62, 0, false); bx(dark, 1.3, 0.16, 0.5, 0, 1.84, -0.15); g.lampR = bx(neonMat(0xff2020), 0.5, 0.2, 0.34, -0.4, 1.98, -0.15, false); g.lampB = bx(neonMat(0x2060ff), 0.5, 0.2, 0.34, 0.4, 1.98, -0.15, false); const pl = new THREE.MeshBasicMaterial({ map: textTexture('POLICE') }); for (const [px, ry] of [[-1.07, -Math.PI / 2], [1.07, Math.PI / 2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), pl); m.position.set(px, 0.62, 0); m.rotation.y = ry; g.add(m); } }
+  if (opt.police) { bx(lam(0x1b2a6b), 2.12, 0.28, 4.32, 0, 0.62, 0, false); bx(dark, 1.3, 0.16, 0.5, 0, 1.84, -0.15); g.lampR = bx(neonMat(0xff2020), 0.5, 0.2, 0.34, -0.4, 1.98, -0.15, false); g.lampB = bx(neonMat(0x2060ff), 0.5, 0.2, 0.34, 0.4, 1.98, -0.15, false); const pl = new THREE.MeshBasicMaterial({ map: plaqueTexture('POLICE') }); for (const [px, ry] of [[-1.07, -Math.PI / 2], [1.07, Math.PI / 2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), pl); m.position.set(px, 0.62, 0); m.rotation.y = ry; g.add(m); } }
   if (opt.sport) { bx(dark, 2.2, 0.1, 0.5, 0, 1.55, -1.95); bx(dark, 2.3, 0.1, 0.4, 0, 0.3, 2.15); for (const sx of [-0.3, 0.3]) bx(lam(0xff3030), 0.26, 0.02, 3.9, sx, 1.13, 0, false); }   // sportive : becquet, splitter, bandes rouges
   if (kart) {   // voiture de course : aileron, splitter, bandes, numéro, échappements
     const wing = bx(dark, 2.3, 0.12, 0.6, 0, 1.6, -1.95); for (const sx of [-0.8, 0.8]) bx(dark, 0.12, 0.6, 0.35, sx, 1.25, -1.95, false);
@@ -3352,9 +3454,12 @@ const WORLDS = [
     theme: { sky: 0x8fd0ff, fog: [0xa8d8ff, 90, 260], water: [0x3a8fe6, -16, 0], hemi: [0xe8f6ff, 0x6a7a8a, 0.95], sun: [0xfff5e0, 1.0], clouds: 0xffffff, stars: false },
     build: () => {
       city.on = true; noSigns = true;
-      // le plateau s'étend vers l'ouest pour accueillir le quartier de La Zone
-      platTrous(-10, 0, 100, 420, 364, 0x4a4f5c, { studs: false, noRoute: true }, 1, poolTrous());
-      for (const [x, z, w, d] of [[-201.5, 100, 1, 364], [201.5, 100, 1, 364], [0, -81.5, 404, 1], [0, 281.5, 404, 1]]) wall(x, z, w, d);
+      // LE SOL DE TOUTE LA CARTE. Le plateau s'arrêtait à z = 282 et le mur d'enceinte juste
+      // derrière : le quartier du casino (z 287 → 340) et le circuit (z −192 → −112) étaient
+      // bâtis DEHORS, sur du vide — un trou béant devant le casino, et deux quartiers que le
+      // mur invisible interdisait d'atteindre. Le plateau va maintenant de z = −200 à z = 350.
+      platTrous(-10, 0, 75, 420, 550, 0x4a4f5c, { studs: false, noRoute: true }, 1, poolTrous());
+      for (const [x, z, w, d] of [[-201.5, 75, 1, 550], [201.5, 75, 1, 550], [0, -199.5, 404, 1], [0, 349.5, 404, 1]]) wall(x, z, w, d);
       road(-45, 0, 32, 6); road(45, 0, 32, 6); road(0, -34, 6, 12);
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));
@@ -3970,7 +4075,7 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   for (let i = 0; i < 6; i++) bench(48.5, 40 + i * 9, Math.PI / 2);   // bancs le long de la rue
   for (let i = 0; i < 14; i++) box(49 + (i % 2) * 6, 5.4, 34 + i * 4.3, 0.5, 0.5, 0.5, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande de la rue
   for (const z of [36, 92]) { box(52, 6.6, z, 8, 0.08, 0.08, 0x3b4252, { deco: true, noEdges: true, studs: false }); for (const x of [48.1, 55.9]) box(x, 3.3, z, 0.15, 6.6, 0.15, 0x3b4252, { studs: false, noRoute: true }); }
-  box(52, 7.2, 36, 6, 1, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🛍️ RUE COMMERÇANTE') }), deco: true, noEdges: true });
+  box(52, 7.2, 36, 6, 1, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🛍️ RUE COMMERÇANTE', 0xff7ad9) }), deco: true, noEdges: true });
   const duck = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), lam(0xffd23f)); duck.position.set(45, 1.7, 100); worldGroup.add(duck); const dh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), lam(0xffd23f)); dh.position.set(45, 3.6, 101.2); worldGroup.add(dh); const beak = new THREE.Mesh(unitRound, lam(0xff8f3a)); beak.scale.set(0.9, 0.35, 0.9); beak.position.set(45, 3.4, 102.4); worldGroup.add(beak); solids.push({ mesh: duck, x: 45, y: 1.7, z: 100, w: 3.2, h: 3.4, d: 3.2 });   // canard géant sgridSale();
   city.zones.push({ name: 'Rue commerçante', emoji: '🛍️', x1: 45, x2: 68, z1: 34, z2: 94, hint: '🛍️ Rue commerçante : pizzeria, glacier, jouets, arcade, librairie (E devant les vitrines)' });
 }
@@ -3986,7 +4091,7 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; const piv = new THREE.Group(); piv.position.set(0, Math.sin(a) * R, Math.cos(a) * R); wheel.add(piv); const cab = new THREE.Mesh(unitRound, lam([0x4f8dff, 0x5cc453, 0xffd23f, 0xff7ad9][i % 4])); cab.scale.set(2, 1.4, 1.6); cab.position.y = -1.2; piv.add(cab); const roof = new THREE.Mesh(unitRound, lam(0xffffff)); roof.scale.set(2.2, 0.15, 1.8); roof.position.y = -0.4; piv.add(roof); gondolas.push({ piv, a }); }
   for (const sx of [-2.4, 2.4]) for (const sz of [-4, 4]) { const leg = new THREE.Mesh(unitBox, lam(0x3b4252)); leg.scale.set(0.35, 15.5, 0.35); leg.position.set(wx + sx, 7.9, wz + sz); leg.rotation.x = sz > 0 ? -0.3 : 0.3; worldGroup.add(leg); }
   box(wx, 0.6, wz, 6, 0.5, 4, 0x3b4252, { studs: false, noRoute: true });
-  box(wx - 5, 1.8, wz + 1, 1.6, 1.4, 1.6, 0xffd23f, { studs: false, noRoute: true }); box(wx - 5, 4, wz + 1, 3, 0.8, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎡 GRANDE ROUE') }), deco: true, noEdges: true });
+  box(wx - 5, 1.8, wz + 1, 1.6, 1.4, 1.6, 0xffd23f, { studs: false, noRoute: true }); box(wx - 5, 4, wz + 1, 3, 0.8, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎡 GRANDE ROUE', 0x35d0e6) }), deco: true, noEdges: true });
   city.rides.push({ kind: 'wheel', n: 'la grande roue', e: '🎡', group: wheel, gondolas, x: wx, z: wz, R, ang: 0, speed: 0.22, ex: wx - 5, ez: wz - 1, rider: null });
   // carrousel
   const cx = -18, cz = 152;
@@ -3998,7 +4103,7 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3, hx = Math.cos(a) * 4, hz = Math.sin(a) * 4; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4, 6), lam(0xffd23f)); pole.position.set(hx, 2, hz); spin.add(pole); const h = new THREE.Group(); h.position.set(hx, 1.3, hz); h.rotation.y = -a; spin.add(h); const body = new THREE.Mesh(unitRound, lam([0xffffff, 0x8b4a2b, 0x1b1b1b, 0xd8c8a0, 0xff7ad9, 0x4f8dff][i])); body.scale.set(0.5, 0.6, 1.4); h.add(body); const head = new THREE.Mesh(unitRound, lam(0xffffff)); head.scale.set(0.4, 0.5, 0.5); head.position.set(0, 0.55, 0.75); h.add(head); const sad = new THREE.Mesh(unitRound, lam(0xff5c5c)); sad.scale.set(0.55, 0.15, 0.6); sad.position.y = 0.35; h.add(sad); for (const dz of [-0.45, 0.45]) for (const dx of [-0.15, 0.15]) { const leg = new THREE.Mesh(unitBox, lam(0xffffff)); leg.scale.set(0.12, 0.6, 0.12); leg.position.set(dx, -0.55, dz); h.add(leg); } horses.push({ g: h, a }); }
   city.rides.push({ kind: 'carousel', n: 'le carrousel', e: '🎠', group: spin, horses, x: cx, z: cz, ang: 0, speed: 0.6, ex: cx + 6.5, ez: cz, rayon: 5.5, rider: null });
   sign(cx + 7.5, 0.05, cz, '🎠 E : monter sur un cheval', false, -Math.PI / 2);
-  box(cx + 6.5, 3.2, cz - 2, 2.6, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🎠 CARROUSEL') }), deco: true, noEdges: true }); box(cx + 6.5, 1.4, cz - 2, 0.15, 2.8, 0.15, 0x3b4252, { deco: true, studs: false });
+  box(cx + 6.5, 3.2, cz - 2, 2.6, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎠 CARROUSEL', 0xffd23f) }), deco: true, noEdges: true }); box(cx + 6.5, 1.4, cz - 2, 0.15, 2.8, 0.15, 0x3b4252, { deco: true, studs: false });
   // stands : barbe à papa, tir aux canards (déco), ballons, guirlandes lumineuses, lettres SUPER OBBY
   const stand = (x, z, col, title) => { box(x, 1.4, z, 4, 0.1, 3, col, { deco: true, studs: false }); box(x, 0.9, z + 1, 4, 1, 0.8, C.wood, { studs: false, noRoute: true }); for (const dx of [-1.8, 1.8]) box(x + dx, 1.4, z, 0.12, 2.8, 0.12, 0xffffff, { deco: true, studs: false }); const roof = new THREE.Mesh(new THREE.ConeGeometry(3, 1.4, 4), lam(col)); roof.position.set(x, 3.5, z); roof.rotation.y = Math.PI / 4; worldGroup.add(roof); box(x, 2.9, z + 1.6, 3, 0.6, 0.08, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(title) }), deco: true, noEdges: true }); };
   stand(-40, 150, 0xff7ad9, '🍭 Barbe à papa'); stand(-40, 160, 0x4f8dff, '🎯 Tir aux canards'); stand(35, 148, 0xffd23f, '🍿 Pop-corn'); stand(35, 160, 0x5cc453, '🎈 Ballons');
@@ -4319,7 +4424,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   box(ex, (H + 3.6) / 2, bz, 0.4, H - 3.6, 4, wallC, { studs: false, noRoute: true });
   for (const dz of [-2.4, 2.4]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 3.8, 12), lam(0xffffff)); c.position.set(ex + 1.3, 1.9, bz + dz); worldGroup.add(c); solids.push({ mesh: c, x: ex + 1.3, y: 1.9, z: bz + dz, w: 0.8, h: 3.8, d: 0.8 }); } sgridSale();
   box(ex + 1.3, 4.1, bz, 1.6, 0.6, 6.4, trim, { deco: true, studs: false }); const ped = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.5, 3), lam(trim)); ped.rotation.x = Math.PI / 2; ped.rotation.z = Math.PI / 2; ped.position.set(ex + 0.9, 5.5, bz); ped.scale.set(1, 1, 1); worldGroup.add(ped);   // fronton
-  box(ex + 0.45, 7.3, bz, 0.1, 1.3, 10, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏦 BANQUE DE SUPER OBBY') }), deco: true, noEdges: true });
+  box(ex + 0.45, 7.3, bz, 0.1, 1.3, 10, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('🏦 BANQUE DE SUPER OBBY') }), deco: true, noEdges: true });
   for (let f = 0; f < 3; f++) for (const dz of [-7, 7]) { box(ex + 0.25, f * F + 2.7, bz + dz, 0.1, 1.8, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(ex + 0.3, f * F + 3.7, bz + dz, 0.2, 0.15, 2.8, trim, { deco: true, studs: false }); }
   for (let f = 0; f < 3; f++) for (const dx of [-7, -2.5, 2.5, 7]) for (const side of [-1, 1]) { box(bx + dx, f * F + 2.7, bz + side * (D / 2 - 0.25), 2.4, 1.8, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); }   // fenêtres nord / sud
   box(bx, H + 0.3, bz, W + 0.6, 0.6, D + 0.6, trim, { deco: true, studs: false }); const dome = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lam(0x9fdcff)); dome.position.set(bx, H + 0.6, bz); worldGroup.add(dome);   // verrière
@@ -4380,9 +4485,9 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // étage 1 : bureaux vitrés, ordinateurs, photocopieuse, distributeur
   for (const [dx, dz] of [[-6, 6], [0, 7], [6, 6]]) { box(bx + dx, F + 0.85, bz + dz, 2.4, 0.12, 1.2, C.wood, { deco: true, studs: false }); box(bx + dx, F + 1.2, bz + dz - 0.3, 1, 0.55, 0.06, 0x111111, { deco: true, studs: false }); box(bx + dx, F + 0.6, bz + dz + 1.2, 0.6, 0.6, 0.6, 0x3b4252, { deco: true, studs: false }); box(bx + dx, F + 0.9, bz + dz, 0.4, 0.05, 0.3, 0xffffff, { deco: true, noEdges: true, studs: false }); }
   box(bx - 7.5, F + 1.1, bz - 6, 1.2, 1.5, 1.2, 0xd6e4ff, { deco: true, studs: false }); box(bx + 7.5, F + 1.3, bz - 6, 1, 1.9, 0.8, 0x4f8dff, { deco: true, studs: false }); box(bx + 7.5, F + 1.7, bz - 6.42, 0.6, 0.4, 0.05, 0x3ef2ff, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
-  box(bx, F + 2.5, bz + D / 2 - 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('BUREAUX · ACCÈS RÉSERVÉ') }), deco: true, noEdges: true });
+  box(bx, F + 2.5, bz + D / 2 - 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('BUREAUX · ACCÈS RÉSERVÉ') }), deco: true, noEdges: true });
   // étage 2 : salle des coffres — porte blindée, coffres avec lingots, caméras, lampes rouges
-  box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🔐 SALLE DES COFFRES') }), deco: true, noEdges: true });
+  box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('🔐 SALLE DES COFFRES') }), deco: true, noEdges: true });
   const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 24), lam(0x8f98ab)); vd.rotation.x = Math.PI / 2; vd.position.set(bx + 6, 2 * F + 2.1, bz - 6.5); worldGroup.add(vd); const vw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 16), lam(0xffd23f)); vw.position.set(bx + 6, 2 * F + 2.1, bz - 6.22); worldGroup.add(vw);
   city.safes = [];
   for (let i = 0; i < 4; i++) {
@@ -4721,9 +4826,9 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   }
   sk.position.set(170, 0.4, 40); worldGroup.add(sk);
   city.shark = { g: sk, tail: tailG, x: 170, z: 40, y: 0.4, h: 0, sp: 4.5, state: 'patrol', tgt: null, biteT: 0, angry: 0, hp: 100, fled: 0 };
-  box(103, 3.5, -62, 4, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏖️ PLAGE') }), deco: true, noEdges: true }); box(103, 1.5, -62, 0.15, 3, 0.15, 0x3b4252, { studs: false, noRoute: true });
+  box(103, 3.5, -62, 4, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏖️ PLAGE', 0xffd23f) }), deco: true, noEdges: true }); box(103, 1.5, -62, 0.15, 3, 0.15, 0x3b4252, { studs: false, noRoute: true });
   box(112, 4.2, 26, 4.4, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('⚠️ ATTENTION REQUIN') }), deco: true, noEdges: true });
-  box(103, 3.5, -52, 4, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏖️ PLAGE') }), deco: true, noEdges: true }); box(103, 1.5, -52, 0.15, 3, 0.15, 0x3b4252, { studs: false, noRoute: true });
+  box(103, 3.5, -52, 4, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏖️ PLAGE', 0xffd23f) }), deco: true, noEdges: true }); box(103, 1.5, -52, 0.15, 3, 0.15, 0x3b4252, { studs: false, noRoute: true });
   for (let i = 0; i < 4; i++) lamp(102, -30 + i * 50);
   city.zones.push({ name: 'Plage', emoji: '🏖️', x1: 103, x2: 141, z1: BZ1 + 10, z2: BZ2, hint: '🏖️ Plage : nage dans les vagues, jet-skis au bord de l\'eau (E), coquillages et missions de sauveteur' });
 }
@@ -4750,11 +4855,11 @@ function buildRally() {   // terrain de rallye au nord : collines arrondies, tre
     for (let i = 0; i < n; i++) { const xa = r.x0 + (r.x1 - r.x0) * i / n, xb = r.x0 + (r.x1 - r.x0) * (i + 1) / n, ya = terrainH(xa, r.z), yb = terrainH(xb, r.z), L = Math.hypot(xb - xa, yb - ya); for (const sz of [-1, 1]) { const seg = new THREE.Mesh(unitBox, lam(0xe0202a)); seg.scale.set(L + 0.05, 0.5, 0.15); seg.position.set((xa + xb) / 2, (ya + yb) / 2 + 0.2, r.z + sz * r.hw); seg.rotation.z = Math.atan2(yb - ya, xb - xa); worldGroup.add(seg); } }
     const ct = CHECKER.clone(); ct.needsUpdate = true; ct.repeat.set(r.hw, 1); const lip = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: ct })); lip.scale.set(0.5, 0.25, r.hw * 2 + 0.2); lip.position.set(r.x1 - 0.2, terrainH(r.x1 - 0.2, r.z) + 0.05, r.z); worldGroup.add(lip);
     for (const sz of [-1, 1]) { const y0 = terrainH(r.x1, r.z); box(r.x1, y0 + 1.6, r.z + sz * (r.hw + 0.4), 0.1, 3.2, 0.1, 0x3b4252, { deco: true, studs: false }); box(r.x1 + 0.35, y0 + 2.8, r.z + sz * (r.hw + 0.4), 0.7, 0.45, 0.04, 0xffd23f, { deco: true, studs: false }); }
-    box(r.x0 - 1.5, 2.2, r.z - r.hw - 1.5, 2.4, 0.9, 0.08, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚀 TREMPLIN') }), deco: true, noEdges: true }); box(r.x0 - 1.5, 1, r.z - r.hw - 1.5, 0.1, 2, 0.1, 0x3b4252, { deco: true, studs: false });
+    box(r.x0 - 1.5, 2.2, r.z - r.hw - 1.5, 2.4, 0.9, 0.08, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🚀 TREMPLIN', 0x35d0e6) }), deco: true, noEdges: true }); box(r.x0 - 1.5, 1, r.z - r.hw - 1.5, 0.1, 2, 0.1, 0x3b4252, { deco: true, studs: false });
   }
   for (let i = 0; i < 12; i++) { const fx = -75 + i * 14; box(fx, 1.2, -62.5, 0.1, 2.4, 0.1, 0x3b4252, { deco: true, studs: false }); box(fx + 0.35, 2.1, -62.5, 0.7, 0.45, 0.04, i % 2 ? 0xff5c5c : 0xffd23f, { deco: true, studs: false }); box(fx, 1.2, -77.5, 0.1, 2.4, 0.1, 0x3b4252, { deco: true, studs: false }); }   // fanions
   for (const x of [-78, -40, 0, 40, 78]) { tireStack(x, -61.5); tireStack(x, -78.5); }
-  box(-70, 3.5, -77.8, 6, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏜️ RALLYE') }), deco: true, noEdges: true });
+  box(-70, 3.5, -77.8, 6, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏜️ RALLYE', 0xff8f3a) }), deco: true, noEdges: true });
   city.cars.push(makeVehicle('buggy', 0xff8f3a, -70, -67, Math.PI / 2), makeVehicle('buggy', 0x35d0e6, -70, -73, Math.PI / 2));
   city.zones.push({ name: 'Rallye', emoji: '🏜️', x1: -80, x2: 80, z1: -80, z2: -60, hint: '🏜️ Rallye : prends un buggy (E), grimpe les collines, saute les tremplins et évite les trous !' });
 }
@@ -5102,7 +5207,7 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   { const amb = makeVehicle('truck', 0xffffff, hx + 17, hz + 12, Math.PI / 2); amb.solid.ai = true; city.aiCars.push(Object.assign(amb, { spd: 0, half: [1.6, 4.6], s: 0 })); addDriver(amb, { x: 0.62, y: 0.3, z: 2.55 }); box(hx + 17, 3.6, hz + 12, 3.4, 0.6, 0.6, 0xff3030, { deco: true, studs: false }); box(hx + 17, 4, hz + 12, 0.6, 0.5, 0.6, 0, { material: neonMat(0x2060ff), deco: true, noEdges: true }); }   // ambulance devant l'entrée
   for (let f = 0; f < 2; f++) for (const dx of [-8, -3, 3, 8]) for (const side of [-1, 1]) box(hx + dx, 2.6 + f * 3.4, hz + side * (D / 2 - 0.25), 2.2, 1.6, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
   for (const [cx, cz] of [[ex + 0.5, hz], [hx, hz - D / 2 - 0.5]]) { box(cx, 6.6, cz, cx === ex + 0.5 ? 0.15 : 3.4, 3.4, cx === ex + 0.5 ? 3.4 : 0.15, 0xff3030, { deco: true, studs: false }); box(cx + (cx === ex + 0.5 ? 0.02 : 0), 6.6, cz, cx === ex + 0.5 ? 0.16 : 1, 1, cx === ex + 0.5 ? 1 : 0.16, 0xffffff, { deco: true, studs: false }); }   // croix rouges
-  box(ex + 0.45, 4.4, hz, 0.1, 1.3, 9, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏥 HÔPITAL') }), deco: true, noEdges: true });
+  box(ex + 0.45, 4.4, hz, 0.1, 1.3, 9, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏥 HÔPITAL', 0xff5c5c) }), deco: true, noEdges: true });
   // accueil
   // accueil décalé au nord pour dégager la porte
   box(hx + 7, 0.9, hz - 6.5, 1.4, 1.1, 6, 0xd6e4ff, { studs: false, noRoute: true }); box(hx + 7, 1.5, hz - 6.5, 1.6, 0.15, 6.2, 0xffffff, { deco: true, studs: false });
@@ -5283,7 +5388,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   box(GX, 2.8, GZ - 6.7, 13, 5.6, 0.4, wallC, { studs: false, noRoute: true }); box(GX - 6.3, 2.8, GZ, 0.4, 5.6, 13, wallC, { studs: false, noRoute: true }); box(GX + 6.3, 2.8, GZ, 0.4, 5.6, 13, wallC, { studs: false, noRoute: true });
   box(GX, 5.8, GZ, 13.8, 0.5, 13.8, roof, { deco: true, studs: false }); box(GX, 6.3, GZ, 14.2, 0.3, 14.2, 0xc9a84c, { deco: true, studs: false });
   for (const dx of [-4.6, 4.6]) box(GX + dx, 0.51, GZ, 0.25, 0.12, 11, 0xffd23f, { deco: true, noEdges: true, studs: false });   // marquage de la place
-  box(GX, 3.2, GZ - 6.4, 3, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🅿️ ta place') }), deco: true, noEdges: true });
+  box(GX, 3.2, GZ - 6.4, 3, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🅿️ ta place', 0x35d0e6) }), deco: true, noEdges: true });
   const gd = new THREE.Group(); gd.position.set(GX, 0, GZ + 6.5); worldGroup.add(gd);
   const slats = [];
   for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(unitRound, lam(0xc9ced8)); sl.scale.set(12.4, 0.78, 0.22); sl.position.y = 0.5 + i * 0.8; gd.add(sl); slats.push(sl); }
@@ -5292,7 +5397,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   const garageObj = { g: gd, solid: gdSolid, x: GX, z: GZ + 6.5, open: 0, kind: 'garage', slats, lintel: 5.4, y0: 2.8 };
   if (mine) { city.gate = gateObj; city.garageDoor = garageObj; city.autoDoors.push(pedObj); city.villaMine = { x: vx, z: vz };
     city.monGarage = { x: GX, z: GZ, w: 13, d: 13 }; } else { city.autoDoors.push(gateObj, pedObj, garageObj); }
-  box(GX, 6.9, GZ + 6.5, 5, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚗 GARAGE') }), deco: true, noEdges: true });
+  box(GX, 6.9, GZ + 6.5, 5, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🚗 GARAGE', 0x4f8dff) }), deco: true, noEdges: true });
   // maison : murs, baie vitrée et porte au sud
   plat(HX, 0.5, HZ, HW, HD, 0xf0eadc, { studs: false, noRoute: true }, 0.2);
   box(HX, F + 0.5, HZ - HD / 2 + 0.2, HW, F * 2, 0.4, wallC, { studs: false, noRoute: true });
@@ -6052,7 +6157,7 @@ function buildBasket(bx, bz) {   // terrain de basket : panneau, arceau, filet, 
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#e07a2b'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3b2a1a'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 32); g.lineTo(64, 32); g.stroke(); g.beginPath(); g.moveTo(32, 0); g.lineTo(32, 64); g.stroke(); g.beginPath(); g.arc(0, 32, 22, -1.2, 1.2); g.stroke(); g.beginPath(); g.arc(64, 32, 22, Math.PI - 1.2, Math.PI + 1.2); g.stroke(); const t = new THREE.CanvasTexture(c); shared.add(t); return new THREE.MeshLambertMaterial({ map: t }); })());
   ball.castShadow = true; ball.position.set(bx - 6, 0.6, bz); worldGroup.add(ball);
   city.hoop = { x: bx - 0.15, y: 3.05, z: bz, ball, bx: bx - 6, bz, held: false, vel: new THREE.Vector3(), pos: ball.position, score: 0, cd: 0, spawn: [bx - 6, bz] };
-  box(bx - 4, 4.4, bz - 6.5, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏀 E : jouer') }), deco: true, noEdges: true }); box(bx - 4, 2.2, bz - 6.5, 0.15, 4.4, 0.15, 0x3b4252, { studs: false, noRoute: true });
+  box(bx - 4, 4.4, bz - 6.5, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏀 E : jouer', 0xff8f3a) }), deco: true, noEdges: true }); box(bx - 4, 2.2, bz - 6.5, 0.15, 4.4, 0.15, 0x3b4252, { studs: false, noRoute: true });
 }
 function hoopTick(dt) {
   const h = city.hoop; if (!h) return;
@@ -6097,7 +6202,7 @@ function buildSchool(sx, sz) {   // école : cour, préau, 4 classes
   fenceSeg(sx + 23.2, sz - 9.5, 0.5, 11); fenceSeg(sx + 23.2, sz + 9.5, 0.5, 11);                               // ouverture de 8 m au milieu
   for (const dz of [-4, 4]) { box(sx + 23.2, 2.4, sz + dz, 1, 4.8, 1, 0xd8cdb4, { studs: false, noRoute: true }); box(sx + 23.2, 5, sz + dz, 1.2, 0.5, 1.2, 0x4f8dff, { deco: true, studs: false }); }
   box(sx + 23.2, 5.6, sz, 1, 0.8, 9, 0x4f8dff, { deco: true, studs: false });
-  box(sx + 22.6, 6.6, sz, 0.15, 1.4, 8, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏫 ÉCOLE DES BLOCS') }), deco: true, noEdges: true });
+  box(sx + 22.6, 6.6, sz, 0.15, 1.4, 8, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏫 ÉCOLE DES BLOCS', 0x5cc453) }), deco: true, noEdges: true });
   for (let i = 0; i < 12; i++) box(sx - 22 + i * 4, 3.6, sz - 15.2, 1.4, 1.4, 0.5, [0xff5c5c, 0xffd23f, 0x4f8dff, 0x5cc453][i % 4], { deco: true, studs: false });   // guirlande de couleurs
   classroom(sx - 14, sz - 7, 0, 'math', '➕', 'Maths', 0xff8f3a);
   classroom(sx + 2, sz - 7, 0, 'geo', '📐', 'Géométrie', 0x4f8dff);
@@ -6121,7 +6226,7 @@ function buildOffice(x, z) {   // bureau des missions : kiosque ouvert avec gran
   box(x, 2.2, z + 2.2, 6, 2.4, 0.15, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('📋 MISSIONS') }), studs: false, noRoute: true });   // grand tableau (fond)
   box(x, 0.9, z + 0.6, 4, 1, 0.8, C.wood, { studs: false, noRoute: true });   // comptoir
   const agent = mannequin(x, z + 1.5, Math.PI, { hat: 'helmet', jacket: 1, jersey: 5 }); agent.group.position.y = 0.36; agent.tag.visible = true; agent.group.remove(agent.tag); agent.tag = nameTag('Agent Max'); agent.group.add(agent.tag);
-  box(x, 4.6, z, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('💰 DÉFIS & MISSIONS') }), deco: true, noEdges: true });
+  box(x, 4.6, z, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('💰 DÉFIS & MISSIONS', 0xffd23f) }), deco: true, noEdges: true });
   for (const dx of [-2.5, 2.5]) box(x + dx, 4.6, z, 0.3, 0.5, 0.3, 0, { material: neonMat(0xffd23f), deco: true, noEdges: true });
   city.office = { x, z: z - 0.4 }; setTimeout(() => { if (city.on && !mission.cur) { /* colonne lumineuse d'indication */ } }, 0);
   city.zones.push({ name: 'Bureau des missions', emoji: '📋', x1: x - 6, x2: x + 6, z1: z - 5, z2: z + 5, hint: '📋 Bureau des missions : E devant le comptoir pour accepter un défi' });
@@ -6141,8 +6246,10 @@ $('missClose').addEventListener('click', closeUI); $('missBtn').addEventListener
 // libre au milieu de la chaussée), un piéton doit pouvoir franchir une porte de 2 m. À 3 m
 // de côté, les rues étaient entièrement bloquées et les conducteurs traversaient les
 // pelouses ; à 2 m pour les voitures et 1 m pour les piétons, chacun passe où il doit.
-const NAV = { cs: 2, x0: -201, z0: -81, nx: 203, nz: 183, blocked: null, pieton: null, voit: null, cout: null, buf: null, bufV: null, bufP: null,
-  GV: { cs: 2, nx: 203, nz: 183 }, GP: { cs: 1.5, nx: 270, nz: 244 } };
+// La grille suit le plateau : elle s'arrêtait à z = 285, donc ni le casino ni le circuit
+// n'étaient navigables (aucun itinéraire, GPS rabattu sur le bord).
+const NAV = { cs: 2, x0: -201, z0: -199, nx: 203, nz: 275, blocked: null, pieton: null, voit: null, cout: null, buf: null, bufV: null, bufP: null,
+  GV: { cs: 2, nx: 203, nz: 275 }, GP: { cs: 1.5, nx: 270, nz: 367 } };
 function navGeo(pieton) {
   const g = pieton ? NAV.GP : NAV.GV;
   NAV.cs = g.cs; NAV.nx = g.nx; NAV.nz = g.nz;
@@ -6838,7 +6945,7 @@ function punched(by, dx, dz, dmg = 8, kb = 2) {
 function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voitures, prison, 3 planques accessibles sans franchir de barrière
   const sx = police.station.x, sz = police.station.z;
   building(sx, sz, 16, 8, 10, 0xd6e4ff, 2); box(sx, 5, sz, 16.4, 0.6, 10.4, 0x1b2a6b, { deco: true, studs: false });
-  box(sx, 6.6, sz + 5.1, 8, 1.4, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('POLICE') }), deco: true, noEdges: true });
+  box(sx, 6.6, sz + 5.1, 8, 1.4, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('POLICE') }), deco: true, noEdges: true });
   for (const dx of [5, 10]) { const pc = makeCar(0xf4f6fa, sx + dx, 9, 0, { police: true }); pc.home = [sx + dx, 9]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.detourT = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
   // ---- aménagement du commissariat : bureaux, armoire à armes, guichet des plaintes ----
   const bur = (bx, bz, ry) => {   // bureau avec ordinateur, chaise et dossiers
@@ -6870,11 +6977,11 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   box(sx + 6.5, 1.1, sz + 3.4, 0.6, 1.4, 0.6, 0x8f98ab, { studs: false, noRoute: true });
   box(sx + 6.5, 1.86, sz + 3.4, 0.4, 0.12, 0.4, 0x2b2f3a, { deco: true, studs: false });
   box(sx - 2, 2.4, sz - 3.7, 3.4, 2, 0.12, 0x6b4423, { deco: true, studs: false });
-  box(sx - 2, 2.4, sz - 3.62, 3.1, 1.7, 0.02, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('AVIS DE RECHERCHE') }), deco: true, noEdges: true });
+  box(sx - 2, 2.4, sz - 3.62, 3.1, 1.7, 0.02, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('AVIS DE RECHERCHE') }), deco: true, noEdges: true });
   // guichet des plaintes : comptoir, plaque et registre
   box(sx + 2.6, 0.75, sz - 2.6, 3.6, 0.9, 0.9, 0x8b5a2b, { studs: false, noRoute: true });
   box(sx + 2.6, 1.24, sz - 2.6, 3.8, 0.1, 1, 0xc9a84c, { deco: true, studs: false });
-  box(sx + 2.6, 1.45, sz - 2.95, 1.6, 0.32, 0.06, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('📝 PLAINTES') }), deco: true, noEdges: true });
+  box(sx + 2.6, 1.45, sz - 2.95, 1.6, 0.32, 0.06, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('📝 PLAINTES') }), deco: true, noEdges: true });
   box(sx + 3.6, 1.33, sz - 2.5, 0.5, 0.08, 0.36, 0xf4f6fa, { deco: true, studs: false });                        // registre ouvert
   box(sx + 1.7, 1.36, sz - 2.5, 0.14, 0.14, 0.14, 0x2b2f3a, { deco: true, studs: false });                        // sonnette
   city.plainteDesk = { x: sx + 2.6, z: sz - 1.9 };
@@ -6886,7 +6993,7 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   box(cx, ch + 0.2, cz, cw + 0.4, 0.4, cd + 0.4, 0x3b4252, { deco: true, studs: false }); box(cx, 0.02, cz, cw - 0.6, 0.04, cd - 0.6, 0x4a4f5c, { deco: true, noEdges: true, studs: false });
   box(cx - 2.5, 0.5, cz - 2.5, 2.4, 0.5, 1.2, 0x8b4a2b, { studs: false, noRoute: true }); box(cx - 2.5, 0.9, cz - 3, 2.4, 0.3, 0.3, 0x8b4a2b, { deco: true, studs: false });   // banc/lit
   box(cx + 2.5, 0.45, cz - 2.8, 0.8, 0.9, 0.8, 0xf4f6fa, { deco: true, studs: false });   // toilettes
-  box(cx, 3.2, cz + cd / 2 + 0.2, 4, 0.9, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🔒 PRISON') }), deco: true, noEdges: true });
+  box(cx, 3.2, cz + cd / 2 + 0.2, 4, 0.9, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('🔒 PRISON') }), deco: true, noEdges: true });
   box(cx + 12, 3.4, cz, 3, 1, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚔') }), deco: true, noEdges: true });
   police.cell = { x: cx, z: cz, w: cw, d: cd };
   city.hideouts = [];

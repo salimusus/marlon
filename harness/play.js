@@ -3163,14 +3163,25 @@ test('la police laisse une vraie fenêtre de fuite et ferme les yeux sur les bro
     G.infraction('délit grave', 3, 3);
     res.grave = { wanted: G.police.wanted, fenetre: Math.round(G.police.reactT - G.simTime), actives: G.police.cars.filter(c => c.active).length };
     const t0 = G.simTime;
-    for (let i = 0; i < 200; i++) { G.simTime = t0 + i * 0.1; G.policeTick(0.1); }
-    res.apresFenetre = { actives: G.police.cars.filter(c => c.active).length, react: G.police.reactT };
+    // On relève le MAXIMUM de voitures lancées : depuis que les itinéraires suivent les rues,
+    // la police rattrape un joueur immobile en quelques secondes et l'arrête — à la fin de la
+    // boucle la traque est déjà finie et le compteur est retombé à zéro.
+    let maxActives = 0;
+    for (let i = 0; i < 200; i++) { G.simTime = t0 + i * 0.1; G.policeTick(0.1); maxActives = Math.max(maxActives, G.police.cars.filter(c => c.active).length); }
+    res.apresFenetre = { actives: maxActives, react: 0 };
     // pendant la poursuite, pas de faux compte à rebours
+    // traque déjà en cours (la fenêtre est passée) : un nouveau délit ne doit pas rouvrir
+    // de compte à rebours. On repart d'un état net car la police a pu arrêter le joueur.
+    G.police.wanted = 2; G.police.reactT = 0; G.police.avert = 0;
+    G.police.cars.forEach(c => { c.active = true; c.debarque = false; });
     G.infraction('deuxième délit', 1, 2);
     res.pendant = { react: G.police.reactT, hud: document.getElementById('wanted').textContent };
     // un délit vu par la police ne bénéficie d'aucune clémence
+    // la police a eu tout le temps d'arrêter le joueur pendant la boucle : on le ressort de
+    // prison et on le remet en pleine rue avant de tester le flagrant délit
     G.clearWanted(); G.police.avert = 0;
-    const pc = G.police.cars[0]; pc.x = G.P.pos.x + 8; pc.z = G.P.pos.z; pc.active = true;
+    if (G.jail.on) G.jailFree(); G.P.pos.set(0, 0.3, 60);
+    const pc = G.police.cars[0]; pc.x = G.P.pos.x + 8; pc.z = G.P.pos.z; pc.y = G.P.pos.y; pc.active = true; pc.debarque = false; pc.hp = 100; pc.vueT = 0; pc.vue = false;   // on vient de la téléporter : la ligne de vue en cache n'est plus valable
     res.temoin = G.policeTemoin(28);
     G.infraction('vu par la police', 1, 1);
     res.vu = { wanted: G.police.wanted };
@@ -3743,27 +3754,42 @@ test('la livraison du colis se termine dans le temps imparti', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
     const G = __G;
+    // on refait la mission dix fois : retrait et adresse changent à chaque fois, il faut que
+    // le temps accordé tienne la route pour TOUTES les combinaisons, pas seulement la plus courte
+    const essais = [];
+    for (let n = 0; n < 10; n++) {
+      G.wallet = 0; G.startMission('livraison');
+      if (!G.mission.cur) return { erreur: 'mission refusée' };
+      const dep = G.mission.data.dep;
+      G.P.pos.set(dep.x, 0.6, dep.z); G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      const d0 = G.mission.data;
+      if (!d0.dest) return { erreur: 'pas de destination après le colis (' + dep.nom + ')' };
+      const pth0 = G.navEnPieton(() => G.navPath(G.P.pos.x, G.P.pos.z, d0.dest[0], d0.dest[1]));
+      let L = 0, a0 = [G.P.pos.x, G.P.pos.z];
+      for (const b of (pth0 || [])) { L += Math.hypot(b[0] - a0[0], b[1] - a0[1]); a0 = b; }
+      essais.push({ trajet: dep.nom + ' → ' + d0.arr.nom, route: Math.round(L), limite: G.mission.limit, marge: +(G.mission.limit - L / 3.2).toFixed(0) });
+      G.endMission(false, true);
+    }
     G.wallet = 0; G.startMission('livraison');
     if (!G.mission.cur) return { erreur: 'mission refusée' };
-    G.P.pos.set(G.city.snack.x, 0.6, G.city.snack.z); G.P.vel.set(0, 0, 0);
+    G.P.pos.set(G.mission.data.dep.x, 0.6, G.mission.data.dep.z); G.P.vel.set(0, 0, 0);
     for (let i = 0; i < 30; i++) G.step(1 / 60, true);
     const d = G.mission.data, limite = G.mission.limit, etape = G.mission.step;
     if (!d.dest) return { erreur: 'pas de destination après le colis' };
     // on suit l'itinéraire piéton, comme le ferait le joueur
-    if (!G.NAV.pieton) G.buildNav(true);
-    const auto = G.NAV.blocked; G.NAV.blocked = G.NAV.pieton;
-    const pth = G.navPath(G.P.pos.x, G.P.pos.z, d.dest[0], d.dest[1]);
-    G.NAV.blocked = auto;
+    const pth = G.navEnPieton(() => G.navPath(G.P.pos.x, G.P.pos.z, d.dest[0], d.dest[1]));
     let route = 0, a = [G.P.pos.x, G.P.pos.z];
     for (const b of (pth || [])) { route += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
     for (const q of (pth || [])) { G.P.pos.set(q[0], 0.6, q[1]); for (let i = 0; i < 10; i++) G.step(1 / 60, true); if (!G.mission.cur) break; }
     if (G.mission.cur) { G.P.pos.set(d.dest[0], 0.6, d.dest[1]); for (let i = 0; i < 30; i++) G.step(1 / 60, true); }
     return { etape, limite, route: Math.round(route), finie: !G.mission.cur, gain: G.wallet,
-      marge: +(limite - route / 3.2).toFixed(0) };
+      marge: +(limite - route / 3.2).toFixed(0), essais,
+      combinaisons: new Set(essais.map(e => e.trajet)).size, pireMarge: Math.min(...essais.map(e => e.marge)) };
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
-  const ok = r.etape === 1 && r.finie && r.gain > 0 && r.marge >= 25;
-  return { ok, detail: `colis récupéré au snack (étape ${r.etape}), maison la plus proche à ${r.route} m d'itinéraire, ${r.limite} s accordées (${r.marge} s de marge à 3,2 m/s) · livrée : ${r.finie}, +${r.gain} 🪙` };
+  const ok = r.etape === 1 && r.finie && r.gain > 0 && r.marge >= 25 && r.combinaisons >= 6 && r.pireMarge >= 25;
+  return { ok, detail: `colis récupéré au point de retrait (étape ${r.etape}), livré à ${r.route} m d'itinéraire en ${r.limite} s (${r.marge} s de marge à 3,2 m/s) · livrée : ${r.finie}, +${r.gain} 🪙 · ${r.combinaisons} trajets différents sur 10 tirages, la marge la plus juste vaut ${r.pireMarge} s` };
 });
 
 test('écrire le nom de quelqu\'un ouvre la liste de ses ordres, et chacun s\'exécute', async p => {
@@ -3853,6 +3879,61 @@ test('le repère de mission ne peut plus être effacé par un ami ou un gang', a
   });
   const ok = r.dep.vis && r.tenu && r.libre && r.efface;
   return { ok, detail: `le repère de la mission (${r.dep.x}, ${r.dep.z}) tient bon face à ${r.etats.length} interférences, puis redevient libre une fois la mission terminée` };
+});
+
+test('les conducteurs suivent les rues au lieu de couper à travers tout', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const TRAJETS = [[-40, -40, 40, 90], [0, 0, -92, 60], [50, 40, -60, 110], [-16, 6, 46, -8], [0, 110, 40, 200], [-92, -40, 60, 60]];
+    const res = [];
+    for (const [x0, z0, tx, tz] of TRAJETS) {
+      const c = G.city.cars.find(v => !v.heli && !v.busy && v.kind !== 'jetski' && !v.rider);
+      if (!c) break;
+      c.x = x0; c.z = z0; c.h = 0; c.speed = 0; c.y = G.groundUnder(x0, z0, c.solid, 0.5);
+      const st = { saut: true };
+      let plan = 0; { const q = G.navPath(x0, z0, tx, tz) || []; let a = [x0, z0]; for (const b of q) { plan += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } }
+      let t = 0, colle = 0, virages = 0, hPrec = c.h, chemin = 0, px = c.x, pz = c.z, arrive = 0, surRoute = 0, ech = 0;
+      const dt = 1 / 60;
+      for (let i = 0; i < 60 * 240; i++) {
+        G.step(dt); const dd = G.conduire(c, tx, tz, dt, st); t += dt;
+        let dh = c.h - hPrec; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); virages += Math.abs(dh); hPrec = c.h;
+        chemin += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+        if (st.bloqueT > 0.05) colle++;
+        { const [ci, cj] = G.navCell(c.x, c.z); if (G.NAV.cout && G.NAV.cout[cj * G.NAV.nx + ci] === 1) surRoute++; ech++; }
+        if (dd < 8) { arrive = t; break; }
+      }
+      res.push({ arrive: +arrive.toFixed(1), suivi: +(chemin / Math.max(1, plan)).toFixed(2),
+        virages: Math.round(virages * 180 / Math.PI), colle: Math.round(100 * colle / Math.max(1, ech)), surRoute: Math.round(100 * surRoute / Math.max(1, ech)) });
+    }
+    const moy = k => +(res.reduce((a, x) => a + x[k], 0) / res.length).toFixed(2);
+    return { n: res.length, arrivees: res.filter(x => x.arrive > 0).length, suivi: moy('suivi'), virages: moy('virages'), colle: moy('colle'), surRoute: moy('surRoute'), temps: moy('arrive') };
+  });
+  // références mesurées avant la refonte : 53 % sur la route, 1487° de volant, 26 % du temps
+  // à racler un obstacle, 25 s de trajet et 1,26 fois la longueur de l'itinéraire prévu
+  const ok = r.arrivees === r.n && r.surRoute >= 65 && r.virages <= 900 && r.colle <= 23 && r.suivi <= 1.1;
+  return { ok, detail: `${r.arrivees}/${r.n} trajets menés à bien · ${r.surRoute} % du temps sur la chaussée (53 % avant), ${r.virages}° de volant (1487° avant), ${r.colle} % du temps à racler un obstacle (26 % avant), ${r.temps} s de trajet (25 s avant) et ${r.suivi}× la longueur de l'itinéraire prévu (1.26× avant)` };
+});
+
+test('les balançoires sont alignées et centrées sous leur portique', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -12, y: 1, z: 66, hour: 12 });
+    const G = __G, sw = G.city.swings.map(s => +s.x.toFixed(2));
+    const ecarts = []; for (let i = 1; i < sw.length; i++) ecarts.push(+(sw[i] - sw[i - 1]).toFixed(2));
+    const regulier = ecarts.every(e => Math.abs(e - ecarts[0]) < 0.01);
+    const centre = +((sw[0] + sw[sw.length - 1]) / 2).toFixed(2);
+    // les pieds du portique : des poteaux verticaux de 0,2 m autour de z = 62
+    const pieds = G.solids.filter(o => Math.abs(o.z - 62) > 1.2 && Math.abs(o.z - 62) < 1.8 && o.w < 0.5 && o.h > 3 && o.x > -20 && o.x < -4).map(o => +o.x.toFixed(2));
+    const piedsX = [...new Set(pieds)];
+    const colle = sw.filter(x => piedsX.some(px => Math.abs(px - x) < 0.6));
+    // on s'assied bien sur la balançoire la plus proche, pas sur celle d'à côté
+    G.P.pos.set(sw[1], 0.5, 62); G.step(1 / 60, true);
+    const bonne = G.city.swingNear ? +G.city.swingNear.x.toFixed(2) : null;
+    return { sw, ecarts, regulier, centre, piedsX, colle, bonne, attendue: sw[1] };
+  });
+  const ok = r.sw.length === 4 && r.regulier && Math.abs(r.centre + 12) < 0.01 && r.colle.length === 0
+    && r.piedsX.length === 2 && r.bonne === r.attendue;
+  return { ok, detail: `4 sièges régulièrement espacés de ${r.ecarts[0]} m, centrés sur x = ${r.centre} · le portique n'a plus que ${r.piedsX.length} pieds (${r.piedsX.join(' et ')}), aucun siège planté devant un pied · on s'assied bien sur le siège le plus proche (${r.bonne})` };
 });
 
 (async()=>{

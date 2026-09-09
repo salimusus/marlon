@@ -2125,16 +2125,25 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
   const wat = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.2, 24), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); wat.position.set(0, 0.85, 74); worldGroup.add(wat);
   box(0, 1.6, 74, 0.5, 1.6, 0.5, 0xc9ced8, { deco: true, studs: false }); box(0, 2.9, 74, 0.25, 1.2, 0.25, 0, { material: neonMat(0x9fdcff), deco: true, noEdges: true });
   // balançoires
+  // Chaque balançoire avait SES DEUX MONTANTS exactement à son propre x : le siège était
+  // donc toujours aligné sur un poteau, et l'ensemble paraissait de travers. Il n'y a plus
+  // qu'un portique — deux pieds à chaque bout, contreventés — et les quatre sièges sont
+  // répartis régulièrement le long de la poutre, parfaitement centrés entre les pieds.
   city.swings = [];
-  for (const sx of [-16.5, -13.5, -10.5, -7.5]) {   // quatre balançoires au lieu de deux
-    const frame = 0xff8f3a;
-    for (const dz of [-1.4, 1.4]) box(sx, 1.8, 62 + dz, 0.18, 3.6, 0.18, frame, { studs: false, noRoute: true });
-    const piv = new THREE.Group(); piv.position.set(sx, 3.55, 62); worldGroup.add(piv);
-    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, 2.6, 0.06); rope.position.set(dx, -1.3, 0); piv.add(rope); }
-    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(1, 0.1, 0.5); seat.position.set(0, -2.6, 0); piv.add(seat);
-    city.swings.push({ x: sx, z: 62, piv, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
+  const SWX = -12, SWZ = 62, SWL = 10.4, SWH = 3.55, SWC = 0xff8f3a;
+  for (const px of [SWX - SWL / 2, SWX + SWL / 2]) {
+    for (const dz of [-1.5, 1.5]) box(px, SWH / 2, SWZ + dz, 0.2, SWH, 0.2, SWC, { studs: false, noRoute: true });
+    box(px, SWH + 0.04, SWZ, 0.22, 0.2, 3.4, SWC, { deco: true, studs: false });   // traverse haute du portique
+    box(px, 0.6, SWZ, 0.16, 0.16, 2.6, SWC, { deco: true, studs: false });         // barre basse d'écartement
   }
-  box(-12, 3.55, 62, 10.4, 0.2, 0.2, 0xff8f3a, { deco: true, studs: false });   // poutre commune aux quatre balançoires
+  box(SWX, SWH + 0.2, SWZ, SWL + 0.7, 0.22, 0.22, SWC, { deco: true, studs: false });   // poutre commune
+  for (let i = 1; i <= 4; i++) {
+    const sx = SWX - SWL / 2 + SWL * i / 5;   // 4 sièges régulièrement espacés, aucun devant un pied
+    const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
+    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, 2.6, 0.06); rope.position.set(dx, -1.3, 0); piv.add(rope); }
+    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -2.6, 0); piv.add(seat);
+    city.swings.push({ x: sx, z: SWZ, piv, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
+  }
   sign(-12, 0.3, 58, '🎠 Balançoires : E pour s\'asseoir', false, Math.PI);
   // terrain de boules
   plat(12, 0.35, 66, 8, 12, 0xe0c890, { studs: false, noRoute: true }, 0.1); for (const [x, z, w, d] of [[8, 66, 0.3, 12.3], [16, 66, 0.3, 12.3], [12, 60, 8.3, 0.3], [12, 72, 8.3, 0.3]]) box(x, 0.5, z, w, 0.3, d, C.wood, { studs: false, noRoute: true });
@@ -2404,6 +2413,9 @@ function voileAuSol(kind, x, y, z) {
   city.voiles.push(o); return o;
 }
 function road(x, z, w, d, yOff = 0, plain) {
+  // On garde la liste des chaussées : elle sert à faire rouler les conducteurs SUR LA ROUTE
+  // au lieu de couper à travers les pelouses, les terrasses et le parc.
+  if (city.routes) city.routes.push({ x, z, w, d });
   const t = ROAD.clone(); t.needsUpdate = true;
   const alongZ = d >= w; if (alongZ) t.repeat.set(1, d / 4); else { t.rotation = Math.PI / 2; t.center.set(0.5, 0.5); t.repeat.set(w / 4, 1); }
   const top = plain ? lam(0x4a4f5c) : new THREE.MeshLambertMaterial({ map: t });
@@ -2872,7 +2884,7 @@ const WORLDS = [
       city.zones.push({ name: 'Départ', emoji: '🏁', x1: -8, x2: 30, z1: 114, z2: 132, hint: '🏁 Grille de départ : E pour un kart, F pour lancer la course autour de la ville' });
       buildClouds(0xffffff, 10); noSigns = false;
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
-      NAV.blocked = null; NAV.pieton = null; buildNav();
+      navSale(); buildNav();
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
 ];
@@ -2942,13 +2954,13 @@ function clearWanted(reason) {
   if (reason) msg(reason, 2200);
 }
 const MISSIONS = [
-  { id: 'livraison', n: 'Livraison express', e: '📦', r: 35, desc: 'Récupère le colis au snack, puis livre-le à la maison signalée par la colonne de lumière en moins de 90 s.' },
+  { id: 'livraison', n: 'Livraison express', e: '📦', r: 35, desc: 'Va chercher le colis au point de retrait signalé, puis livre-le à l\'adresse indiquée avant la fin du chrono. Retrait et adresse changent à chaque fois.' },
   { id: 'taxi', n: 'Taxi', e: '🚕', r: 45, desc: 'Va chercher le client en voiture et dépose-le à destination en moins de 2 min.' },
   { id: 'chien', n: 'Chien perdu', e: '🐶', r: 30, desc: 'Un chien s\'est perdu loin du parc : retrouve-le et ramène-le à la fontaine.' },
   { id: 'pieces', n: 'Chasse aux pièces bleues', e: '💎', r: 25, desc: '10 pièces bleues sont apparues en ville : ramasse-les toutes en 90 s.' },
   { id: 'chrono', n: 'Tour chrono', e: '⏱️', r: 60, desc: 'En kart, passe la ligne de départ puis fais un tour complet du circuit en moins de 75 s.' },
   { id: 'secours', n: 'Sauvetage en hélico', e: '🚁', r: 70, desc: 'Un blessé attend sur un toit : pose l\'hélico à côté de lui, puis ramène-le à l\'héliport.' },
-  { id: 'nettoyage', n: 'Nettoyage du parc', e: '🧹', r: 25, desc: 'Ramasse les 6 sacs poubelle abandonnés dans le parc.' },
+  { id: 'nettoyage', n: 'Nettoyage du quartier', e: '🧹', r: 25, desc: 'Ramasse les 6 sacs poubelle abandonnés — parc, plage ou La Zone, le quartier change à chaque fois.' },
   { id: 'buteur', n: 'Buteur', e: '⚽', r: 20, desc: 'Marque 3 buts sur le terrain de foot.' },
   { id: 'coquillages', n: 'Coquillages', e: '🐚', r: 25, desc: 'Ramasse les 8 coquillages sur le sable de la plage.' },
   { id: 'sauveteur', n: 'Sauveteur', e: '🛟', r: 40, desc: 'Un baigneur se noie : nage jusqu\'à lui, puis ramène-le sur le sable.' },
@@ -2988,10 +3000,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
       if (simTime - lastT < 0.4 && Math.hypot(P.pos.x - lastX, P.pos.z - lastZ) < 6) return;
       lastT = simTime; lastX = P.pos.x; lastZ = P.pos.z;
       // le piéton passe là où la voiture ne passe pas : on calcule sur la grille fine
-      if (!NAV.pieton) buildNav(true);
-      const grilleAuto = NAV.blocked; NAV.blocked = NAV.pieton;
-      const path = navPath(P.pos.x, P.pos.z, beacon.x, beacon.z);
-      NAV.blocked = grilleAuto;
+      const path = navEnPieton(() => navPath(P.pos.x, P.pos.z, beacon.x, beacon.z));
       // cible hors du réseau (un toit, la pleine mer, une cour fermée) : on s'arrête au plus
       // près au lieu de tracer un trait droit à travers les immeubles
       const fin = path && path.reached === false ? [] : [[beacon.x, beacon.z]];
@@ -3087,14 +3096,37 @@ function gpsTick() {   // radar : joueur au centre, orienté avec la caméra ; c
   if (beacon.m && beacon.m.visible) { g.fillStyle = '#ffd23f'; g.font = 'bold 12px sans-serif'; const d = Math.round(Math.hypot(P.pos.x - beacon.x, P.pos.z - beacon.z)); g.fillText(d + ' m', cx - 12, W - 8); }
 }
 const OPEN_SPOTS = [[0, 0, 3], [-13, 0.15, -8], [13, 0.15, -8], [13, 0.15, 13], [-16, 0.15, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [46, 0, -8], [0, 0.15, 68], [-14, 0.15, 68], [14, 0.15, 76], [-22, 0.15, 84], [20, 0.15, 90], [-50, 0, 30], [50, 0, 40], [-40, 0, -46], [40, 0, -46], [0, 0, -46], [-60, 0, 80], [60, 0, 60], [0, 0, 110], [30, 0, 44], [-30, 0, 44]];
+// La livraison partait TOUJOURS du snack et allait TOUJOURS à la maison la plus proche :
+// au bout de trois fois on la connaissait par cœur. Retrait et adresse sont maintenant
+// tirés au sort dans toute la ville, avec une vraie distance entre les deux.
+const RETRAITS = [
+  { nom: 'au snack', x: -9.3, z: 18.2 }, { nom: 'à la supérette', x: 46, z: 13 },
+  { nom: 'au garage', x: -22, z: -30 }, { nom: 'au bureau des missions', x: 24, z: 22 },
+  { nom: 'à la cabane de la plage', x: 108, z: 44 }, { nom: 'à la salle de sport', x: -1, z: 18 },
+  { nom: 'au commissariat', x: -46, z: 16 }, { nom: 'au fast-food du parc', x: 0, z: 70 },
+];
+const ADRESSES = [
+  { nom: 'la maison bleue', x: -87, z: -46 }, { nom: 'la maison verte', x: -87, z: -32 },
+  { nom: 'la maison jaune', x: -87, z: 44 }, { nom: 'la maison rouge', x: -87, z: 58 },
+  { nom: 'la maison blanche', x: -87, z: 72 }, { nom: 'la maison orange', x: -87, z: 88 },
+  { nom: 'ta villa', x: 60, z: 176 }, { nom: 'l\'école', x: -62, z: 196 }, { nom: 'l\'hôpital', x: 12, z: 196 },
+  { nom: 'un immeuble de La Zone', x: -140, z: 40 }, { nom: 'le poste de secours de la plage', x: 112, z: 20 },
+  { nom: 'le kiosque du parc', x: 0, z: 92 }, { nom: 'le club de tennis', x: 46, z: -30 },
+];
 function startMission(id) {
   if (jail.on) { msg('🔒 Pas de mission en prison', 1000); return; }
   if (mission.cur) endMission(false, true);
   const m = MISSIONS.find(x => x.id === id); mission.cur = m; mission.step = 0; mission.t0 = simTime; mission.limit = 0; mission.data = {};
   const d = mission.data;
-  if (id === 'livraison') { setBeacon(city.snack.x, city.snack.z - 1, 0, 'mission'); }
-  if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS.slice(0, 16)); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2], 0, 'mission'); mission.limit = 120; }
-  if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1], 0, 'mission'); }
+  if (id === 'livraison') {
+    d.dep = pickOne(RETRAITS);
+    const loin = ADRESSES.filter(a => Math.hypot(a.x - d.dep.x, a.z - d.dep.z) > 60);
+    d.arr = pickOne(loin.length ? loin : ADRESSES);
+    setBeacon(d.dep.x, d.dep.z, 0, 'mission');
+    msg(`📦 Va chercher le colis ${d.dep.nom}`, 2600);
+  }
+  if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2], 0, 'mission'); mission.limit = 120; }
+  if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112], [-130, 40], [110, 60], [-40, 130], [46, 130], [-70, -40], [70, -40]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1], 0, 'mission'); }
   if (id === 'pieces') { d.coins = []; const spots = [...OPEN_SPOTS].sort(() => Math.random() - 0.5).slice(0, 10); for (const sp of spots) { const c = coin(sp[0], sp[1], sp[2]); c.mesh.material = new THREE.MeshLambertMaterial({ color: 0x3ef2ff, emissive: 0x1e8fa0 }); c.blue = true; d.coins.push(c); } mission.limit = 90; }
   if (id === 'chrono') { d.armed = false; d.maxIdx = 0; setBeacon(0, 124, 0, 'mission'); }
   if (id === 'secours') {
@@ -3127,7 +3159,14 @@ function startMission(id) {
     cercle.rotation.x = -Math.PI / 2; cercle.position.y = 0.06; mk.add(cercle); mk.userData.cercle = cercle;
     worldGroup.add(mk); d.marker = mk; d.blesse = mk;
   }
-  if (id === 'nettoyage') { d.bags = []; for (let i = 0; i < 6; i++) { const x = rnd(-26, 26), z = rnd(50, 98); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); } d.total = d.bags.length; clearBeacon('mission'); }
+  if (id === 'nettoyage') {
+    // le quartier à nettoyer change : parc, plage ou La Zone
+    d.zone = pickOne([{ nom: 'le parc', x1: -26, x2: 26, z1: 50, z2: 98 }, { nom: 'la plage', x1: 96, x2: 124, z1: 0, z2: 80 }, { nom: 'La Zone', x1: -160, x2: -110, z1: 10, z2: 70 }]);
+    d.bags = [];
+    for (let i = 0; i < 6; i++) { const x = rnd(d.zone.x1, d.zone.x2), z = rnd(d.zone.z1, d.zone.z2); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); }
+    d.total = d.bags.length; if (d.bags[0]) setBeacon(d.bags[0].x, d.bags[0].z, 0.4, 'mission'); else clearBeacon('mission');
+    msg(`🧹 Six sacs à ramasser dans ${d.zone.nom}`, 2600);
+  }
   if (id === 'buteur') { d.goal = city.goals + 3; setBeacon(-13, -8, 0.3, 'mission'); }
   if (id === 'coquillages') { city.shells.forEach(sh => { sh.taken = false; sh.m.visible = true; }); d.left = city.shells.length; setBeacon(112, 40, 0.15, 'mission'); }
   if (id === 'sauveteur') { d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; const bz = rnd(-20, 110); d.bot.pos.set(132, 0.4, bz); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; d.bot.av.group.position.y = 0.2; setBeacon(132, bz, 1.6, 'mission'); mission.limit = 150; }
@@ -3150,13 +3189,13 @@ function endMission(success, quiet) {
 function updateMissionHud() {
   const el = $('missionHud'); if (!mission.cur) { el.classList.remove('on'); return; }
   const m = mission.cur, d = mission.data; let txt = '';
-  if (m.id === 'livraison') txt = mission.step === 0 ? 'Va chercher le colis au snack' : `Livre le colis à la maison · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
+  if (m.id === 'livraison') txt = mission.step === 0 ? `Va chercher le colis ${d.dep ? d.dep.nom : ''}` : `Livre le colis à ${d.arr ? d.arr.nom : 'destination'} · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
   if (m.id === 'taxi') txt = mission.step === 0 ? `Va chercher ${d.bot.name} en voiture` : `Dépose ${d.bot.name} à destination · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
   if (m.id === 'chien') txt = mission.step === 0 ? 'Retrouve le chien (colonne de lumière)' : 'Ramène le chien à la fontaine du parc';
   if (m.id === 'pieces') txt = `Pièces bleues : ${d.coins.filter(c => c.taken).length}/10 · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
   if (m.id === 'chrono') txt = mission.step === 0 ? 'En kart, passe la ligne de départ' : `Tour en cours · ${fmt(simTime - mission.t0)} (< 1:15)`;
   if (m.id === 'secours') txt = mission.step === 0 ? 'En hélico, pose-toi sur le toit signalé' : 'Blessé à bord : pose-toi à l\'héliport';
-  if (m.id === 'nettoyage') txt = `Sacs ramassés : ${d.total - d.bags.length}/${d.total}`;
+  if (m.id === 'nettoyage') txt = `Sacs dans ${d.zone ? d.zone.nom : 'le quartier'} : ${d.total - d.bags.length}/${d.total}`;
   if (m.id === 'buteur') txt = `Buts : ${3 - (d.goal - city.goals)}/3`;
   if (m.id === 'coquillages') txt = `Coquillages : ${city.shells.filter(s => s.taken).length}/${city.shells.length}`;
   if (m.id === 'sauveteur') txt = mission.step === 0 ? `Nage jusqu'à ${d.bot.name} (il se noie !) · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s` : 'Ramène-le sur le sable';
@@ -3174,31 +3213,27 @@ function missionTick(dt) {
   if (bm && (!beacon.m || !beacon.m.visible || beacon.x !== bm.x || beacon.z !== bm.z)) setBeacon(bm.x, bm.z, bm.y, 'mission');
   const near = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
   if (m.id === 'livraison') {
-    if (mission.step === 0 && near(city.snack.x, city.snack.z, 3.5)) {
+    if (mission.step === 0 && near(d.dep.x, d.dep.z, 4)) {
       mission.step = 1; mission.t0 = simTime;
       // On tirait la maison AU HASARD parmi six et on laissait 90 s : certaines sont à
       // 240 m du snack, soit bien plus d'une minute et demie de marche — la mission
       // s'annulait toute seule en chemin. On prend la PLUS PROCHE et on calcule le temps
       // sur la longueur réelle de l'itinéraire, avec de la marge.
-      const maisons = [[-92, -50], [-92, -36], [-92, 40], [-92, 54], [-92, 68], [-92, 84]]
-        .map(h => ({ x: h[0] + 5, z: h[1] + 4 }));
-      let h = maisons[0], dmin = Infinity;
-      for (const m2 of maisons) { const dd = Math.hypot(m2.x - P.pos.x, m2.z - P.pos.z); if (dd < dmin) { dmin = dd; h = m2; } }
+      const h = d.arr;
       d.dest = [h.x, h.z];
-      let route = dmin;
-      try { if (!NAV.pieton) buildNav(true); const auto = NAV.blocked; NAV.blocked = NAV.pieton;
-        const pth = navPath(P.pos.x, P.pos.z, h.x, h.z); NAV.blocked = auto;
+      let route = Math.hypot(h.x - P.pos.x, h.z - P.pos.z);
+      try { const pth = navEnPieton(() => navPath(P.pos.x, P.pos.z, h.x, h.z));
         if (pth && pth.length) { let L = 0, a = [P.pos.x, P.pos.z]; for (const b2 of pth) { L += Math.hypot(b2[0] - a[0], b2[1] - a[1]); a = b2; } route = L; }
       } catch (e) {}
       mission.limit = Math.max(75, Math.round(route / 3.2) + 30);   // ~3,2 m/s de moyenne, plus 30 s de marge
       setBeacon(d.dest[0], d.dest[1], 0, 'mission');
-      msg(`📦 Colis récupéré ! Livre-le à ${Math.round(route)} m — ${mission.limit} s`, 2600); sfx.coin();
+      msg(`📦 Colis récupéré ! Livre-le à ${d.arr.nom} — ${Math.round(route)} m, ${mission.limit} s`, 3000); sfx.coin();
     }
     else if (mission.step === 1 && near(d.dest[0], d.dest[1], 4)) endMission(true);
   }
   if (m.id === 'taxi') {
     const inCar = drive.car && !drive.car.heli && drive.car.kind !== 'bike';
-    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 4.5) && Math.abs(drive.speed) < 4) { mission.step = 1; d.bot.av.group.visible = false; const sp = pickOne(OPEN_SPOTS.slice(0, 16).filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 30)); d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2], 0, 'mission'); msg(`🚕 ${d.bot.name} est à bord !`, 1400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']); }
+    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 4.5) && Math.abs(drive.speed) < 4) { mission.step = 1; d.bot.av.group.visible = false; const sp = pickOne(OPEN_SPOTS.filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 45)) || pickOne(OPEN_SPOTS); d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2], 0, 'mission'); msg(`🚕 ${d.bot.name} est à bord !`, 1400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']); }
     else if (mission.step === 1 && inCar && near(d.dest[0], d.dest[1], 4.5) && Math.abs(drive.speed) < 3) { d.bot.pos.set(d.dest[0], d.dest[2], d.dest[1]); d.bot.av.group.position.copy(d.bot.pos); d.bot.av.group.visible = true; botSay(d.bot, ['merci !', 'super chauffeur 🚕']); endMission(true); }
   }
   if (m.id === 'chien') {
@@ -3851,10 +3886,10 @@ function bankAlarm() {   // alerte de braquage : plus on a forcé de coffres, pl
   police.decayT = simTime + 55 + n * 30; police.renfortT = simTime + retard; police.lastSeen = [P.pos.x, P.pos.z];
   while (police.cars.length < nbVoitures) { const sx = police.station.x + 5 + (police.cars.length - 2) * 3.2, pc = makeCar(0xf4f6fa, sx, 14, 0, { police: true }); pc.home = [sx, 14]; pc.solid.pol = true; vehicleSolid(pc); pc.speed = 0; pc.active = false; { const ic = city.cars.indexOf(pc); if (ic >= 0) city.cars.splice(ic, 1); }   /* indexOf valait -1 : splice(-1,1) supprimait une voiture garée au hasard */ police.cars.push(pc); }
   police.cars.forEach(pc => { pc.active = retard <= 0; pc.goHome = false; });
-  $('wanted').textContent = retard > 0 ? `🚨 BRAQUAGE ! La police arrive dans ${retard} s — prends l'argent et file`
+  $('wanted').textContent = retard > 0 ? `🚨 BRAQUAGE ! Force les coffres (E maintenu, 100 %) — la police arrive dans ${retard} s`
     : '🚨 BRAQUAGE ! Alerte maximale : la police tire — fuis ou cache-toi';
   $('wanted').classList.add('on'); siren.start();
-  msg(retard > 0 ? `🚨 ALARME ! La police met ${retard} s à arriver : file maintenant` : '🚨 ALARME DE LA BANQUE ! Toutes les unités arrivent', 2800); sfx.noise(.8, 900, .12); sfx.tone(900, 0, .4, 'square', .04, 700); sfx.tone(900, .5, .4, 'square', .04, 700);
+  msg(retard > 0 ? `🚨 ALARME ! Tu as ${retard} s : maintiens E sur le coffre jusqu'à 100 %, l'argent tombe dans ta poche, puis file` : '🚨 ALARME DE LA BANQUE ! Toutes les unités arrivent', 3200); sfx.noise(.8, 900, .12); sfx.tone(900, 0, .4, 'square', .04, 700); sfx.tone(900, .5, .4, 'square', .04, 700);
   chat(null, `🚨 ${myCfg.name} braque la banque ! Toutes les unités en route`);
   // au premier coffre, un seul garde bouge ; ensuite tout le monde
   city.guards.forEach((gd, i) => { gd.alert = i < 1 + n; });   // un seul garde au premier coffre, tous ensuite
@@ -3889,13 +3924,14 @@ function safesTick(dt) {
   const held = keys.has('KeyE') || P.handHeld;
   if (held) {
     sf.progress += dt / (sf.planque ? 2.6 : 3.2); sf.dial.rotation.x += dt * 12;
-    $('act').textContent = `🔐 ${sf.planque ? (sf.joueur ? 'Ta cachette' : 'Coffre du gang') : 'Coffre'} ${Math.round(sf.progress * 100)}%`;
+    const pc = Math.round(sf.progress * 100), plein = Math.round(sf.progress * 12);
+    $('act').textContent = `🔐 ${sf.planque ? (sf.joueur ? 'Ta cachette' : 'Coffre du gang') : 'Coffre'} ${'█'.repeat(plein)}${'░'.repeat(12 - plein)} ${pc}% — ne lâche pas !`;
     if (simTime > (sf.tickT || 0)) { sf.tickT = simTime + 0.25; sfx.tone(1200, 0, .03, 'square', .03); }
     // L'alarme ne part qu'une fois le coffre entamé (15 %), et une seule fois : une simple
     // tape sur E devant un coffre déclenchait toute la police sans rien voler.
     if (!sf.planque && sf.progress > 0.15 && !sf.alerte) { sf.alerte = true; bankAlarm(); }
   }
-  else if (sf.progress > 0) { sf.progress = Math.max(0, sf.progress - dt / 6); $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}%`; }
+  else if (sf.progress > 0) { sf.progress = Math.max(0, sf.progress - dt / 6); $('act').textContent = `🔐 Coffre ${Math.round(sf.progress * 100)}% — ${isMobile ? 'maintiens ✋' : 'maintiens E'} jusqu'à 100 % pour l'argent`; }
   if (sf.progress >= 1 && sf.planque) {   // coffre d'une planque : le magot d'un gang, ou le tien
     sf.open = true; sf.progress = 0; sf.door.position.z += 0.5; sf.door.rotation.x = -1.4;
     const pris = sf.amount; sf.amount = 0;
@@ -4611,6 +4647,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
       for (const [yy, cc] of [[2.6, 0xc9a84c], [0.3, 0x2b3550]]) { const t = new THREE.Mesh(unitRound, lam(cc)); t.scale.set(half, 0.16, 0.16); t.position.y = yy; leaf.add(t); }
     }
     const solid = box(cx, 1.3, FZ, width - 0.2, 2.6, 0.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+    solid.porte = true;   // un portail s'ouvre : il ne doit pas couper les itinéraires
     g.children[0].position.x = -width / 4; g.children[1].position.x = width / 4;   // fermé : les deux battants se rejoignent
     return { g, solid, x: cx, z: FZ, open: 0, kind, w: width, y0: 1.3 };
   };
@@ -4632,6 +4669,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   const slats = [];
   for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(unitRound, lam(0xc9ced8)); sl.scale.set(12.4, 0.78, 0.22); sl.position.y = 0.5 + i * 0.8; gd.add(sl); slats.push(sl); }
   const gdSolid = box(GX, 2.8, GZ + 6.5, 12.4, 5.6, 0.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  gdSolid.porte = true;
   const garageObj = { g: gd, solid: gdSolid, x: GX, z: GZ + 6.5, open: 0, kind: 'garage', slats, lintel: 5.4, y0: 2.8 };
   if (mine) { city.gate = gateObj; city.garageDoor = garageObj; city.autoDoors.push(pedObj); city.villaMine = { x: vx, z: vz }; } else { city.autoDoors.push(gateObj, pedObj, garageObj); }
   box(GX, 6.9, GZ + 6.5, 5, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🚗 GARAGE') }), deco: true, noEdges: true });
@@ -5438,11 +5476,36 @@ $('missClose').addEventListener('click', closeUI); $('missBtn').addEventListener
 // La grille couvre TOUTE la ville (murs d'enceinte à x ±201,5 et z −81,5 / 281,5) : avant elle
 // s'arrêtait à x = −99, si bien que tout itinéraire vers l'ouest (La Zone, quartiers, villas des
 // chefs) était rabattu sur le bord de la grille — GPS de travers et police qui n'arrivait jamais.
-const NAV = { cs: 3, x0: -201, z0: -81, nx: 135, nz: 122, blocked: null, pieton: null };
+// Grille de navigation. Elle était à 3 m de côté avec 2,60 m de marge : une rue de 6 m
+// bordée d'immeubles se retrouvait ENTIÈREMENT bloquée, et les conducteurs ne pouvaient
+// donc jamais suivre la chaussée — ils traversaient les pelouses. À 2 m de côté avec
+// 1,60 m de marge (le demi-véhicule fait 1,10 m), il reste un vrai couloir au milieu des
+// rues et les itinéraires suivent enfin le bitume.
+// DEUX résolutions, parce que les besoins sont opposés : une voiture doit tenir dans une
+// rue de 6 m bordée d'immeubles (il faut des cases assez fines pour qu'il reste un couloir
+// libre au milieu de la chaussée), un piéton doit pouvoir franchir une porte de 2 m. À 3 m
+// de côté, les rues étaient entièrement bloquées et les conducteurs traversaient les
+// pelouses ; à 2 m pour les voitures et 1 m pour les piétons, chacun passe où il doit.
+const NAV = { cs: 2, x0: -201, z0: -81, nx: 203, nz: 183, blocked: null, pieton: null, voit: null, cout: null, buf: null, bufV: null, bufP: null,
+  GV: { cs: 2, nx: 203, nz: 183 }, GP: { cs: 1.5, nx: 270, nz: 244 } };
+function navGeo(pieton) {
+  const g = pieton ? NAV.GP : NAV.GV;
+  NAV.cs = g.cs; NAV.nx = g.nx; NAV.nz = g.nz;
+  NAV.blocked = pieton ? NAV.pieton : NAV.voit;
+  NAV.buf = pieton ? NAV.bufP : NAV.bufV; NAV.enPieton = !!pieton;
+}
+// Exécute un calcul sur la grille des piétons, puis remet celle des voitures.
+function navEnPieton(fn) {
+  if (!NAV.pieton) buildNav(true);
+  navGeo(true);
+  try { return fn(); } finally { navGeo(false); }
+}
+function navSale() { NAV.blocked = null; NAV.voit = null; NAV.pieton = null; NAV.cout = null; }
 function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-voiture) et les piétons (marge fine)
+  navGeo(pieton);
   // On parcourt les obstacles et on marque les cases qu'ils couvrent (avant : chaque case testait
   // tous les obstacles, soit des dizaines de millions de tests à chaque reconstruction).
-  const { cs, x0, z0, nx, nz } = NAV, bl = new Uint8Array(nx * nz), m = pieton ? 0.5 : cs / 2 + 1.1;
+  const { cs, x0, z0, nx, nz } = NAV, bl = new Uint8Array(nx * nz), m = pieton ? 0.5 : 1.6;
   const marque = (x1, x2, z1, z2) => {
     const i1 = Math.max(0, Math.ceil((x1 - x0) / cs)), i2 = Math.min(nx - 1, Math.floor((x2 - x0) / cs));
     const j1 = Math.max(0, Math.ceil((z1 - z0) / cs)), j2 = Math.min(nz - 1, Math.floor((z2 - z0) / cs));
@@ -5450,38 +5513,108 @@ function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-v
   };
   for (const o of solids) {
     if ((o.veh && (o.pol || o.ai)) || o.h >= 30 || o.y + o.h / 2 <= 0.45 || o.y - o.h / 2 >= 1.6) continue;
+    // Un portail, une porte de garage ou une porte automatique S'OUVRENT : les traiter comme
+    // des murs enfermait le joueur dans sa villa et le GPS n'y menait plus.
+    if (o.porte) continue;
     marque(o.x - o.w / 2 - m, o.x + o.w / 2 + m, o.z - o.d / 2 - m, o.z + o.d / 2 + m);
   }
   for (const b of city.batiments) marque(b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2);
   if (RALLY.mesh && !pieton) marque(RALLY.x1 - m, RALLY.x2 + m, RALLY.z1 - m, RALLY.z2 + m);   // dunes du rallye : interdites aux voitures
-  if (pieton) NAV.pieton = bl; else NAV.blocked = bl;
+  if (pieton) { NAV.pieton = bl; NAV.blocked = bl; return; }
+  NAV.blocked = bl; NAV.voit = bl;
+  // Carte de COÛT : rouler sur la chaussée coûte 1, couper à travers un jardin coûte 3.
+  // L'itinéraire calculé suit donc les rues, comme un vrai conducteur, au lieu de tracer
+  // tout droit à travers le parc — c'est ce qui rendait la conduite des bots si laide.
+  const co = new Uint8Array(nx * nz).fill(3);
+  for (const r of (city.routes || [])) {
+    const i1 = Math.max(0, Math.floor((r.x - r.w / 2 - NAV.x0) / cs)), i2 = Math.min(nx - 1, Math.ceil((r.x + r.w / 2 - NAV.x0) / cs));
+    const j1 = Math.max(0, Math.floor((r.z - r.d / 2 - z0) / cs)), j2 = Math.min(nz - 1, Math.ceil((r.z + r.d / 2 - z0) / cs));
+    for (let j = j1; j <= j2; j++) { const rw = j * nx; for (let i = i1; i <= i2; i++) co[rw + i] = 1; }
+  }
+  NAV.cout = co;
 }
 function navCell(x, z) { return [clamp(Math.round((x - NAV.x0) / NAV.cs), 0, NAV.nx - 1), clamp(Math.round((z - NAV.z0) / NAV.cs), 0, NAV.nz - 1)]; }
 function navFree(i, j) { return i >= 0 && j >= 0 && i < NAV.nx && j < NAV.nz && !NAV.blocked[j * NAV.nx + i]; }
-function navNearestFree(i, j) { if (navFree(i, j)) return [i, j]; for (let r = 1; r < 6; r++) for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) if (Math.max(Math.abs(a), Math.abs(b)) === r && navFree(i + a, j + b)) return [i + a, j + b]; return null; }
+// La grille est passée de 3 m à 2 m : chercher « 6 cases autour » ne couvrait plus que
+// 12 m et une voiture garée contre un mur ne trouvait plus de case libre — l'itinéraire
+// était alors vide et le conducteur partait tout droit dans le décor. On cherche sur une
+// distance en MÈTRES, pas en cases.
+function navVoisinsLibres(i, j) { let n = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) if (navFree(i + a, j + b)) n++; return n; }
+// On prenait la PREMIÈRE case libre trouvée en tournant autour du point : c'était souvent
+// un recoin isolé (entre deux murs, dans une cour) d'où l'itinéraire ne menait nulle part,
+// et le conducteur repartait tout droit à travers le décor. On garde maintenant, à distance
+// égale, la case la mieux dégagée.
+function navNearestFree(i, j) {
+  if (navFree(i, j)) return [i, j];
+  const R = Math.ceil(22 / NAV.cs);
+  for (let r = 1; r < R; r++) {
+    let best = null, bn = -1;
+    for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) {
+      if (Math.max(Math.abs(a), Math.abs(b)) !== r || !navFree(i + a, j + b)) continue;
+      const n = navVoisinsLibres(i + a, j + b);
+      if (n > bn) { bn = n; best = [i + a, j + b]; }
+    }
+    if (best && bn >= 5) return best;     // case franchement dégagée : on la prend
+    if (best && r > R - 3) return best;   // au pire, mieux vaut un recoin que rien
+  }
+  return null;
+}
 function navPath(x1, z1, x2, z2) {   // A* avec tas binaire ; si la cible est inaccessible, on va au plus près
-  if (!NAV.blocked) buildNav();
+  if (!NAV.blocked) buildNav(NAV.enPieton);
   const s0 = navNearestFree(...navCell(x1, z1)), g0 = navNearestFree(...navCell(x2, z2)); if (!s0 || !g0) return null;
   const { nx, nz } = NAV, key = (i, j) => j * nx + i, start = key(...s0), goal = key(...g0);
-  const g = new Float32Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), closed = new Uint8Array(nx * nz);
+  // la pondération « rue » ne vaut que pour les véhicules : un piéton coupe où il veut
+  const cout = NAV.enPieton ? null : NAV.cout;
+  // tampons réutilisés d'un appel à l'autre : la grille est quatre fois plus fine, on
+  // n'alloue plus 400 ko à chaque calcul d'itinéraire (le GPS en demande un par seconde)
+  const cle = NAV.enPieton ? 'bufP' : 'bufV';
+  if (!NAV[cle] || NAV[cle].g.length !== nx * nz) NAV[cle] = { g: new Float32Array(nx * nz), came: new Int32Array(nx * nz), closed: new Uint8Array(nx * nz) };
+  const { g, came, closed } = NAV[cle]; g.fill(Infinity); came.fill(-1); closed.fill(0);
   const h = k => { const di = Math.abs((k % nx) - g0[0]), dj = Math.abs(Math.floor(k / nx) - g0[1]); return Math.max(di, dj) + 0.414 * Math.min(di, dj); };
   const heap = []; const push = (f, k) => { heap.push([f, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
   const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
   g[start] = 0; push(h(start), start); let bestK = start, bestH = h(start), n = 0, reached = start === goal;
-  while (heap.length && n++ < 30000) {
+  while (heap.length && n++ < 120000) {
     const [, cur] = pop(); if (closed[cur]) continue; closed[cur] = 1;
     const hc = h(cur); if (hc < bestH) { bestH = hc; bestK = cur; }
     if (cur === goal) { reached = true; break; }
     const ci = cur % nx, cj = Math.floor(cur / nx);
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const ni = ci + di, nj = cj + dj; if (!navFree(ni, nj)) continue; if (di && dj && (!navFree(ci + di, cj) || !navFree(ci, cj + dj))) continue;
-      const nk = key(ni, nj), ng = g[cur] + (di && dj ? 1.414 : 1); if (ng < g[nk]) { g[nk] = ng; came[nk] = cur; push(ng + h(nk), nk); }
+      const nk = key(ni, nj), ng = g[cur] + (di && dj ? 1.414 : 1) * (cout ? cout[nk] : 1); if (ng < g[nk]) { g[nk] = ng; came[nk] = cur; push(ng + h(nk), nk); }
     }
   }
   const end = reached ? goal : bestK; const path = []; let k = end; while (k >= 0 && k !== start) { path.push(k); k = came[k]; } path.reverse();
   const pts = path.map(k => [NAV.x0 + (k % nx) * NAV.cs, NAV.z0 + Math.floor(k / nx) * NAV.cs]);
   const simp = []; for (let i = 0; i < pts.length; i++) { if (i > 0 && i < pts.length - 1) { const a = pts[i - 1], b = pts[i], c = pts[i + 1]; if ((b[0] - a[0]) === (c[0] - b[0]) && (b[1] - a[1]) === (c[1] - b[1])) continue; } simp.push(pts[i]); }
-  simp.reached = reached; return simp;
+  // A* sur une grille ne donne que huit directions : le chemin brut monte en marches
+  // d'escalier et un conducteur qui le suit zigzague. On le retend (« string pulling ») :
+  // chaque fois que deux points se voient en ligne droite sans obstacle, on supprime tout
+  // ce qu'il y a entre eux. On obtient de longues lignes droites et de vraies diagonales.
+  const lisse = navLisse([[x1, z1]].concat(simp), cout).slice(1);
+  lisse.reached = reached; return lisse;
+}
+// Vue dégagée entre deux points ? On échantillonne le segment sur la grille de navigation.
+function navLibreLigne(x1, z1, x2, z2, cout) {
+  const d = Math.hypot(x2 - x1, z2 - z1), n = Math.ceil(d / (NAV.cs * 0.5));
+  for (let i = 1; i < n; i++) {
+    const t = i / n; const [ci, cj] = navCell(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t);
+    if (!navFree(ci, cj)) return false;
+    // en voiture, on ne retend pas un raccourci qui quitte la chaussée
+    if (cout && cout[cj * NAV.nx + ci] > 1) return false;
+  }
+  return true;
+}
+function navLisse(pts, cout) {
+  if (!pts || pts.length < 3) return pts || [];
+  const out = [pts[0]];
+  let i = 0;
+  while (i < pts.length - 1) {
+    let j = pts.length - 1;
+    while (j > i + 1 && !navLibreLigne(pts[i][0], pts[i][1], pts[j][0], pts[j][1], cout)) j--;
+    out.push(pts[j]); i = j;
+  }
+  return out;
 }
 function jailNeeds() { return JAIL_NEEDS[jail.level] || [0]; }
 function jailEnter(fresh) {   // enfermé : on est placé dans la cellule, l'écran de la prison s'ouvre
@@ -5889,7 +6022,7 @@ function policeTick(dt) {
     if ((pc.revT || 0) > simTime) { pc.speed += (-6 - pc.speed) * Math.min(1, dt * 3); pc.h -= clamp(dh, -1, 1) * 1.4 * dt; }   // marche arrière en contre-braquant
     else if ((pc.avoidT || 0) > simTime) { let da = pc.avoidH - pc.h; da = Math.atan2(Math.sin(da), Math.cos(da)); pc.h += clamp(da, -1, 1) * 3 * dt; pc.speed += (6 - pc.speed) * Math.min(1, dt * 2); }   // contournement
     else {
-      pc.h += clamp(dh, -1, 1) * 2.4 * dt;
+      pc.h += clamp(dh, -1, 1) * 4 * dt;
       const target = pc.active ? (dist > 4 ? (Math.abs(dh) > 1 ? 5 : 15) : 3) : 9; pc.speed += (target - pc.speed) * Math.min(1, dt * 1.5);
     }
     const nx = pc.x + Math.sin(pc.h) * pc.speed * dt, nz = pc.z + Math.cos(pc.h) * pc.speed * dt;
@@ -6105,7 +6238,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -7209,15 +7342,36 @@ function coupFin(ok) {
 // Sert à la voiture de fuite après un braquage et à l'ami qui vient te chercher.
 function conduire(c, tx, tz, dt, st) {
   const dist = Math.hypot(tx - c.x, tz - c.z);
-  if (!st.route || simTime > (st.routeT || 0)) { st.routeT = simTime + 2.5;
-    const pth = navPath(c.x, c.z, tx, tz); st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]]; }
+  // L'itinéraire complet est calculé À L'AVANCE (A* + lissage) et gardé tel quel : on ne le
+  // refait que si la destination a bougé, si on s'est fait bloquer, ou toutes les 8 s. Avant,
+  // il était rejeté toutes les 2,5 s et le conducteur changeait d'avis en pleine courbe.
+  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || simTime > (st.routeT || 0)) {
+    st.routeT = simTime + 8; st.rtx = tx; st.rtz = tz;
+    const pth = navPath(c.x, c.z, tx, tz);
+    st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
+  }
   while (st.route.length > 1 && Math.hypot(st.route[0][0] - c.x, st.route[0][1] - c.z) < 3) st.route.shift();
   const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
   // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage
   const want = ((st.evT || 0) > simTime) ? st.evH : Math.atan2(dx, dz);
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-  c.h += clamp(dh, -1, 1) * 3 * dt;
-  const vmax = dist < 9 ? 7 : (Math.abs(dh) > 1 ? 9 : 24);
+  // Le braquage dépend de l'allure, comme une vraie voiture : vif à basse vitesse pour se
+  // dégager d'un créneau, plus posé à pleine vitesse pour ne pas partir en zigzag.
+  const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6);
+  c.h += clamp(dh, -1, 1) * braq * dt;
+  // On lève le pied AVANT le virage, pas dedans. Une voiture lancée à 24 m/s a un rayon de
+  // braquage de 8 m : elle ne peut pas prendre un angle droit dans une rue de 6 m, et
+  // finissait par raboter l'immeuble du coin puis repartir de travers. On regarde donc
+  // l'angle que fera le tracé au point de passage suivant et on ralentit à l'approche.
+  let virage = Math.abs(dh);
+  if (st.route.length > 1) {
+    const w2 = st.route[1];
+    let a2 = Math.atan2(w2[0] - wp[0], w2[1] - wp[1]) - Math.atan2(dx, dz);
+    a2 = Math.abs(Math.atan2(Math.sin(a2), Math.cos(a2)));
+    const dwp = Math.hypot(dx, dz);
+    if (dwp < 22) virage = Math.max(virage, a2 * (1 - dwp / 28));
+  }
+  const vmax = dist < 9 ? 7 : virage > 0.85 ? 8 : virage > 0.4 ? 13 : 24;
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * 2.5);
   const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
   const opt = { bar: true, pol: true };
@@ -7239,8 +7393,11 @@ function conduire(c, tx, tz, dt, st) {
   }
   // La fuite après braquage se débloque en sautant au point de passage suivant ; un ami
   // qui te conduit, lui, s'arrête et le dit plutôt que de traverser les murs.
+  // (le tracé étant maintenant fait de longues lignes droites, on ne se téléporte plus au
+  // point de passage — il peut être à 80 m — mais de quelques mètres dans sa direction)
   if (st.saut !== false && st.bloqueT > 3.5) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
-    c.x = w2[0]; c.z = w2[1]; st.route = null; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+    const ex = w2[0] - c.x, ez = w2[1] - c.z, el = Math.hypot(ex, ez) || 1, pas = Math.min(el, 7);
+    c.x += ex / el * pas; c.z += ez / el * pas; st.route = null; st.routeT = 0; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
   return dist;
@@ -8536,7 +8693,7 @@ function enterCar(c) {
   // on se voit désormais au volant, comme les amis bots conducteurs
   drive.car = c; drive.speed = 0; me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
-  if (c.solid) { c.solid.ai = true; NAV.blocked = null; NAV.pieton = null; }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
+  if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
   else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
@@ -8921,7 +9078,7 @@ function stealCar(c) {   // vol à l'arraché : le conducteur est éjecté et pr
   // la voiture quitte le trafic : elle devient une voiture ordinaire que l'on conduit
   const i = city.aiCars.indexOf(c); if (i >= 0) city.aiCars.splice(i, 1);
   if (!city.cars.includes(c)) city.cars.push(c);
-  c.spd = 0; c.stopped = false; c.solid.ai = true; NAV.blocked = null; NAV.pieton = null;
+  c.spd = 0; c.stopped = false; c.solid.ai = true; navSale();
   city.jackNear = null; city.near = null;
   enterCar(c);
   msg('🚗 Voiture volée ! La police te recherche', 2600); sfx.hit();
@@ -9066,7 +9223,10 @@ function cityVie(dt) {
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
   const jetNear = !!city.jetSpot && Math.hypot(P.pos.x - city.jetSpot.x, P.pos.z - city.jetSpot.z) < 2.6; if (jetNear !== city.jetNear) { city.jetNear = jetNear; if (jetNear && !isMobile) msg(P.jet ? '🚀 E : ranger le propulseur' : '🚀 E : enfiler le propulseur', 1200); }
-  const swingNear = city.swings.find(sw => !sw.rider && Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 1.9) || null; if (swingNear !== city.swingNear) { city.swingNear = swingNear; if (swingNear && !isMobile) msg('🎠 E : s\'asseoir sur la balançoire', 1000); }
+  // les sièges ne sont plus qu'à 2,08 m l'un de l'autre : on prend le PLUS PROCHE, pas le
+  // premier de la liste, sinon on s'asseyait sur celui d'à côté
+  let swingNear = null, swingD = 1.6;
+  for (const sw of city.swings) { if (sw.rider) continue; const dd = Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z); if (dd < swingD) { swingD = dd; swingNear = sw; } } if (swingNear !== city.swingNear) { city.swingNear = swingNear; if (swingNear && !isMobile) msg('🎠 E : s\'asseoir sur la balançoire', 1000); }
   const bouleNear = !!city.boules && P.pos.x > 8 && P.pos.x < 16 && P.pos.z > 68 && P.pos.z < 74 && !P.swing; if (bouleNear !== city.bouleNear) { city.bouleNear = bouleNear; if (bouleNear && !isMobile) msg('🎯 E : lancer une boule vers le cochonnet', 1200); }
   if (city.cabin) {   // cabine d'essayage : on y entre, la boutique s'ouvre
     const inCabin = Math.abs(P.pos.x - city.cabin.x) < 1.2 && Math.abs(P.pos.z - city.cabin.z) < 1.3;
@@ -9089,7 +9249,17 @@ function cityVie(dt) {
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
   if (offNear !== city.offNear) { city.offNear = offNear; if (offNear && !isMobile) msg('📋 E : choisir une mission', 1200); }
   const benchNear = (!P.sit && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg('🪑 E : s\'asseoir', 900); }
-  const safeNear = city.safes.find(sf => !sf.open && Math.hypot(P.pos.x - sf.x, P.pos.z - sf.z) < 2 && Math.abs(P.pos.y - sf.y) < 2) || null; if (safeNear !== city.safeNear) { city.safeNear = safeNear; if (safeNear) msg(isMobile ? '🔐 Maintiens ✋ pour forcer le coffre' : '🔐 Maintiens E pour forcer le coffre', 1400); }
+  // Le rayon était de 2 m : un pas de côté et on n'était plus « devant » le coffre, la
+  // progression se figeait et on repartait de la banque les mains vides en croyant l'avoir
+  // braquée. 3 m, et on prévient clairement quand on s'éloigne sans avoir fini.
+  const safeNear = city.safes.find(sf => !sf.open && Math.hypot(P.pos.x - sf.x, P.pos.z - sf.z) < 3 && Math.abs(P.pos.y - sf.y) < 2) || null;
+  if (safeNear !== city.safeNear) {
+    const avant = city.safeNear;
+    city.safeNear = safeNear;
+    if (safeNear) msg(isMobile ? '🔐 Maintiens ✋ SANS BOUGER jusqu\'à 100 %' : '🔐 Maintiens E SANS BOUGER jusqu\'à 100 %', 1600);
+    else if (avant && !avant.open && avant.progress > 0.1)
+      msg(`🔐 Coffre laissé à ${Math.round(avant.progress * 100)} % — tant qu'il n'est pas à 100 %, tu n'as pas un seul 🪙 ! Reviens dessus`, 3400);
+  }
   const fridgeNear = !!city.fridge && Math.hypot(P.pos.x - city.fridge.x, P.pos.z - city.fridge.z) < 2.2; if (fridgeNear !== city.fridgeNear) { city.fridgeNear = fridgeNear; if (fridgeNear && !isMobile) msg('🧊 E : ouvrir le frigo', 1200); }
   const stoveNear = !!city.stove && Math.hypot(P.pos.x - city.stove.x, P.pos.z - city.stove.z) < 2.2; if (stoveNear !== city.stoveNear) { city.stoveNear = stoveNear; if (stoveNear && !isMobile) msg('🍳 E : poser / allumer / manger', 1400); }
   const trampNear = !!city.tramp && Math.hypot(P.pos.x - city.tramp.x, P.pos.z - city.tramp.z) < 3.4 && P.pos.y > 1.2; if (trampNear !== city.trampNear) { city.trampNear = trampNear; if (trampNear && !isMobile) msg('🤸 E : rebondir plus haut !', 1200); }

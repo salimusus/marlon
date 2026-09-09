@@ -42,6 +42,22 @@ window.__SHOT = {
       if (typeof guerre !== 'undefined') { guerre.reunion = null; guerre.prochaineReunion = simTime + 1e6; }
       if (typeof gangs !== 'undefined') for (const g of gangs) g.reunionT = simTime + 1e6;
     } catch (e) {}
+    // Un test precedent peut laisser un bot au volant avec le joueur en passager : la boucle
+    // de rendu replace alors l'avatar SUR LE BOT, a plusieurs metres de la ou il devrait
+    // etre. Idem pour un coup en preparation, une mission de gang ou un defi en cours : tout
+    // cela survit a loadWorld et faussait les tests suivants.
+    try {
+      if (typeof bots !== 'undefined') for (const b of bots) {
+        if (b.drive && b.drive.car) { try { libereVoiture(b.drive.car); } catch (e2) {} }
+        b.drive = null; b.rdv = null; b.rdvRoute = null; b.ordre = null; b.gangMission = null;
+        b.activite = null; b.bagarre = null; b.garde = 0; b.fight = null;
+      }
+      if (typeof city !== 'undefined') { city.rideBot = null; city.botCarNear = null; }
+      if (typeof coup !== 'undefined') { coup.etat = 'aucun'; coup.bot = null; coup.car = null; }
+      if (typeof gang !== 'undefined') gang.mission = null;
+      if (typeof defi !== 'undefined') defi.on = null;
+      if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
+    } catch (e) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
     if (v.hour != null) simTime = ((v.hour - 7 + 24) % 24) / 24 * day.len;   // l'heure se pilote par simTime
     if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); }
@@ -229,6 +245,15 @@ window.__G = {
   bankAlarmBot: typeof bankAlarmBot === 'function' ? bankAlarmBot : null,
   MISSIONS: typeof MISSIONS !== 'undefined' ? MISSIONS : null,
   openMissions: typeof openMissions === 'function' ? openMissions : null,
+  commandeSociale: typeof commandeSociale === 'function' ? commandeSociale : null,
+  interpreteOrdre: typeof interpreteOrdre === 'function' ? interpreteOrdre : null,
+  motsDe: typeof motsDe === 'function' ? motsDe : null,
+  defi: typeof defi !== 'undefined' ? defi : null,
+  chien: typeof chien !== 'undefined' ? chien : null,
+  amis: typeof amis !== 'undefined' ? amis : null,
+  devenirAmi: typeof devenirAmi === 'function' ? devenirAmi : null,
+  adopterChien: typeof adopterChien === 'function' ? adopterChien : null,
+  lancerActivite: typeof lancerActivite === 'function' ? lancerActivite : null,
   gpsRoute: typeof gpsRoute !== 'undefined' ? gpsRoute : null,
   setBeacon: typeof setBeacon === 'function' ? setBeacon : null,
   missionTick: typeof missionTick === 'function' ? missionTick : null,
@@ -251,6 +276,7 @@ window.__G = {
   vieTick: typeof vieTick === 'function' ? vieTick : null,
   vie: typeof vie !== 'undefined' ? vie : null,
   ACTIVITES: typeof ACTIVITES !== 'undefined' ? ACTIVITES : null,
+  libereVoiture: typeof libereVoiture === 'function' ? libereVoiture : null,
   lancerActivite: typeof lancerActivite === 'function' ? lancerActivite : null,
   activiteTick: typeof activiteTick === 'function' ? activiteTick : null,
   BOT_DEFS: typeof BOT_DEFS !== 'undefined' ? BOT_DEFS : null,

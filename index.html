@@ -7264,27 +7264,45 @@ function chienTick(dt) {
     return;
   }
   chien.couche = false; p.g.rotation.x = 0;
-  // en voiture : le chien monte à côté du maître
-  if (drive.car && !drive.car.heli) {
-    // Assis sur le siège passager : trop bas, ses pattes sortaient sous la carrosserie.
-    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h), dessus = !!c.rider;
-    const lx = dessus ? 0 : -0.52, lz = dessus ? -0.8 : (c.kind === 'truck' ? 2.45 : 0.05);
-    const ly = dessus ? ((c.spec && c.spec.seat ? c.spec.seat : 1) - 0.2) : (c.kind === 'truck' ? 1.2 : 0.45);
-    p.x = c.x + lx * cs + lz * sn; p.z = c.z - lx * sn + lz * cs; p.y = c.y + ly;
-    p.g.position.set(p.x, p.y, p.z); p.g.rotation.y = c.h; p.facing = c.h;
-    p.tail.rotation.y = Math.sin(simTime * 8) * 0.4;
-    if (simTime > chien.aboiT && Math.abs(drive.speed) > 12) { chien.aboiT = simTime + rnd(6, 14); aboie(1); }
+  // Sous le parachute ou le deltaplane : le chien voyage serré contre son maître, pattes
+  // pendantes. Avant, il restait planté au sol pendant que le joueur survolait la ville.
+  if (P.voile && P.voileMesh) {
+    const cs = Math.cos(P.facing), sn = Math.sin(P.facing);
+    p.x = P.pos.x + sn * 0.55; p.z = P.pos.z + cs * 0.55; p.y = P.pos.y + 0.45;
+    p.g.position.set(p.x, p.y, p.z); p.g.rotation.y = P.facing; p.g.rotation.x = 0.25; p.facing = P.facing;
+    p.tail.rotation.y = Math.sin(simTime * 10) * 0.5;
+    if (simTime > chien.aboiT) { chien.aboiT = simTime + rnd(4, 9); aboie(1); }
     return;
   }
-  // sinon : il suit le maître partout, et se téléporte s'il est vraiment distancé
-  const dx = P.pos.x - p.x, dz = P.pos.z - p.z, d = Math.hypot(dx, dz);
-  if (d > 25 || Math.abs(P.pos.y - p.y) > 6) { p.x = P.pos.x - Math.sin(P.facing) * 1.4; p.z = P.pos.z - Math.cos(P.facing) * 1.4; p.y = P.pos.y; }
+  // En véhicule : le chien a sa place dans CHACUN d'eux. L'hélicoptère et le jet-ski en
+  // étaient exclus (le chien restait planté sur le tarmac), et le camion n'avait pas de
+  // repère à lui.
+  if (drive.car) {
+    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h), dessus = !!c.rider;
+    let lx, lz, ly;
+    if (c.heli) { lx = -0.6; lz = 0.25; ly = (c.y != null ? 0 : 0) + 0.55; }            // à côté du pilote, dans la bulle
+    else if (c.kind === 'jetski') { lx = 0; lz = -0.85; ly = 0.95; }                     // en croupe, derrière le pilote
+    else if (dessus) { lx = 0; lz = -0.8; ly = ((c.spec && c.spec.seat ? c.spec.seat : 1) - 0.2); }   // vélo, moto, scooter
+    else if (c.kind === 'truck') { lx = -0.52; lz = 2.45; ly = 1.2; }                    // cabine du camion
+    else { lx = -0.52; lz = 0.05; ly = 0.45; }                                           // siège passager
+    p.x = c.x + lx * cs + lz * sn; p.z = c.z - lx * sn + lz * cs; p.y = c.y + ly;
+    p.g.position.set(p.x, p.y, p.z); p.g.rotation.y = c.h; p.g.rotation.x = 0; p.facing = c.h;
+    p.tail.rotation.y = Math.sin(simTime * 8) * 0.4;
+    if (simTime > chien.aboiT && (Math.abs(drive.speed) > 12 || c.heli)) { chien.aboiT = simTime + rnd(6, 14); aboie(1); }
+    return;
+  }
+  // sinon : il suit son maître partout — ou l'ami qui le promène — et se téléporte s'il est
+  // vraiment distancé
+  const mtr = (chien.promeneur && !chien.promeneur.ko && chien.promeneur.av.group.visible) ? chien.promeneur.pos : P.pos;
+  const dx = mtr.x - p.x, dz = mtr.z - p.z, d = Math.hypot(dx, dz);
+  const capM = mtr === P.pos ? P.facing : (chien.promeneur.facing || 0);
+  if (d > 25 || Math.abs((mtr.y != null ? mtr.y : P.pos.y) - p.y) > 6) { p.x = mtr.x - Math.sin(capM) * 1.4; p.z = mtr.z - Math.cos(capM) * 1.4; p.y = mtr.y != null ? mtr.y : P.pos.y; }
   else if (d > 1.9) {
     const spd = Math.min(7.5, 3 + d * 0.5), o = { x: p.x, y: p.y - 0.3, z: p.z };
     const bloque = npcMove(o, dx / d * spd * dt, dz / d * spd * dt, 0.3); p.x = o.x; p.z = o.z;
     p.facing = Math.atan2(dx, dz);
     p.stuckT = bloque ? (p.stuckT || 0) + dt : 0;
-    if (p.stuckT > 1.6) { p.stuckT = 0; p.x = P.pos.x - Math.sin(P.facing) * 1.4; p.z = P.pos.z - Math.cos(P.facing) * 1.4; p.y = P.pos.y; }
+    if (p.stuckT > 1.6) { p.stuckT = 0; p.x = mtr.x - Math.sin(capM) * 1.4; p.z = mtr.z - Math.cos(capM) * 1.4; p.y = mtr.y != null ? mtr.y : P.pos.y; }
     p.tail.rotation.y = Math.sin(simTime * 14) * 0.5;
   } else { p.facing = Math.atan2(dx, dz); p.tail.rotation.y = Math.sin(simTime * 6) * 0.4; }
   p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
@@ -7392,11 +7410,13 @@ function gardeTick(b) {
     if (o.fight && o.fight !== 'flee' && simTime < o.fightT && Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) < 7) { botTape(b, o); return; }
   }
 }
-function commandeSociale(txt) {
+function commandeExacte(txt) {
   const t = norm(txt);
   if (chien.attenteNom && !/^\//.test(txt)) { nommerChien(txt.replace(/[^\p{L}\p{N} '-]/gu, '').trim() || 'Rex'); return true; }
   if (ordreGang(txt)) return true;   // ordres collectifs au gang (avant le chien : « allez attaquer les bleus »)
-  if (/\battaque|mords|mord\b/.test(t)) { chienAttaque(txt); return true; }
+  // « attaque … » ne veut pas dire « chien, mords-le » quand la phrase parle d'un gang :
+  // cette branche avalait « attaque un membre d'un gang adverse » et le chien partait seul.
+  if (/\battaque|mords|mord\b/.test(t) && !/\b(gang|rival|rivaux|adverse|ennemi|rouges|bleus|jaunes)\b/.test(t)) { chienAttaque(txt); return true; }
   if (/\b(adopte|adopter|j.?adopte|je veux ce chien)\b/.test(t)) {
     const p = city.pets.filter(x => x.kind === 'dog').map(x => ({ x, d: Math.hypot(x.x - P.pos.x, x.z - P.pos.z) })).sort((a, b) => a.d - b.d)[0];
     if (!p || p.d > 9) { msg('🐶 Approche-toi d\'un chien du parc pour l\'adopter', 2400); return true; }
@@ -7409,7 +7429,9 @@ function commandeSociale(txt) {
   if (/\b(ami|amie|amis|copain|copine|pote)\b/.test(t) && !/mes amis/.test(t)) { dialog.lastBot = cible; devenirAmi(cible); return true; }
   // « Nathan veux-tu venir dans le gang ? » : le recrutement passe avant le filtre des amis
   // pour que le bot réponde lui-même qu'il faut d'abord devenir son ami.
-  if (/\b(gang|equipe de braqueur|bande|crew|team)\b/.test(t)) {
+  // « attaque un membre d'un gang adverse » parle du gang D'EN FACE : sans ce garde-fou,
+  // le mot « membre » faisait comprendre « rejoins mon gang » et l'ordre se perdait.
+  if (/\b(gang|equipe de braqueur|bande|crew|team)\b/.test(t) && !/\b(rival|rivaux|adverse|ennemi|ennemis|rouges|bleus|jaunes)\b/.test(t)) {
     dialog.lastBot = cible;
     if (/\b(quitte|quitter|sors|sort|degage|vire|exclu|dehors|renvoie|vire.?le)\b/.test(t)) { quitterGang(cible); return true; }
     if (/\b(viens|vient|venir|rejoin\w*|entre|entrer|integre|integrer|membre|recrute|avec nous|dans le gang|du gang)\b/.test(t)) { rejoindreGang(cible); return true; }
@@ -7435,7 +7457,9 @@ function commandeSociale(txt) {
   if (/\b(protege|protège|defends|défends|garde du corps|surveille.?moi)\b/.test(t)) { botProtege(cible); return true; }
   if (/\b(cache.?toi|planque.?toi|va te cacher)\b/.test(t)) { botCache(cible); return true; }
   if (/\b(a manger|à manger|un burger|une glace|un sandwich|de la nourriture|un hot.?dog|une pizza|casse.?croute|casse.?croûte)\b/.test(t)) { botAManger(cible); return true; }
-  if (/\b(tape|frappe|attaque|casse la figure|met.?lui|mets.?lui|bagarre)\b/.test(t)) {
+  // « attaque un membre d'un gang adverse » n'est pas une bagarre de rue : on laisse
+  // l'interprète en faire une vraie mission contre le gang visé.
+  if (/\b(tape|frappe|attaque|casse la figure|met.?lui|mets.?lui|bagarre)\b/.test(t) && !/\b(gang|rival|rivaux|adverse|ennemi|rouges|bleus|jaunes)\b/.test(t)) {
     let vic = null;
     for (const o of bots) { if (o === cible || o.ko) continue; if (norm(txt).includes(norm(o.name)) || norm(txt).includes(norm(o.name.split('_')[0]))) vic = o; }
     if (!vic) vic = bots.filter(o => o !== cible && !o.ko).map(o => ({ o, d: Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) })).sort((a, c) => a.d - c.d)[0]?.o;
@@ -7485,6 +7509,224 @@ function commandeSociale(txt) {
     if (l) { fixerRdv(cible, l, jeu); return true; }
   }
   return false;
+}
+
+// ================= INTERPRÈTE D'ORDRES =================
+// Le joueur écrit comme il parle : fautes de frappe, synonymes, mots dans le désordre, formules
+// de politesse. La chaîne de motifs exacts ci-dessus ne comprend que ce qui est écrit au mot
+// près — « bracer la banke » ou « tu peux aller voler la boutique de tatouage stp » ne
+// déclenchaient rien du tout. On ajoute donc un interprète qui note chaque intention sur les
+// MOTS reconnus. Il ne tourne QUE si la chaîne exacte n'a rien compris : aucun ordre qui
+// marchait déjà ne change de comportement.
+const MOTS_VIDES = new Set(('le la les l un une des du de d a au aux et ou est es suis sommes etes sont ' +
+  'tu te toi vous nous je me moi mon ma mes ton ta tes son sa ses notre nos votre vos leur leurs ' +
+  'ce cet cette ces c ca ça cela pour avec sur dans par chez vers en y il elle on ils elles lui ' +
+  'stp svp s il te plait plait please merci allez allons vas va peux peut pourrais pourrait veux ' +
+  'veut voudrais faut faudrait que qui quoi quand comment pourquoi est ce ne pas plus tres tout ' +
+  'toute tous toutes bien vite maintenant apres avant puis ensuite alors donc mais aussi meme ' +
+  'moi toi hey salut ok dis dit fais fait faire aller').split(/\s+/));
+function motsDe(t) {
+  return norm(t).replace(/[^a-z0-9]+/g, ' ').split(' ').filter(m => m.length > 1 && !MOTS_VIDES.has(m));
+}
+// Distance d'édition (Levenshtein) bornée : au-delà du seuil on s'arrête tout de suite.
+function distance(a, b, max) {
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > max) return max + 1;
+  let prev = new Array(lb + 1), cur = new Array(lb + 1);
+  for (let j = 0; j <= lb; j++) prev[j] = j;
+  for (let i = 1; i <= la; i++) {
+    cur[0] = i; let mini = i;
+    for (let j = 1; j <= lb; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (cur[j] < mini) mini = cur[j];
+    }
+    if (mini > max) return max + 1;
+    const t = prev; prev = cur; cur = t;
+  }
+  return prev[lb];
+}
+// Deux mots se ressemblent-ils à une faute de frappe près ? Une seule faute dès quatre
+// lettres ; deux fautes seulement si les mots font au moins six lettres ET commencent
+// pareil — « banke » pour « banque », « bracer » pour « braquer » — ce qui évite que
+// « danse » attrape « dense » ou « pense ».
+function presque(a, b) {
+  if (a === b) return true;
+  const n = Math.max(a.length, b.length);
+  if (n < 4) return false;
+  if (distance(a, b, 1) <= 1) return true;
+  return n >= 6 && a.slice(0, 3) === b.slice(0, 3) && distance(a, b, 2) <= 2;
+}
+// un groupe est reconnu si l'un de ses synonymes apparaît dans la phrase
+function groupeVu(mots, syn) {
+  for (const m of mots) for (const w of syn) if (m === w || m.startsWith(w) || presque(m, w)) return true;
+  return false;
+}
+const V_VOLER = ['vole', 'voler', 'volez', 'volons', 'braque', 'braquer', 'braquez', 'pique', 'piquer',
+  'piquez', 'devalise', 'devaliser', 'cambriole', 'cambrioler', 'cambriolez', 'chaparde', 'chaparder',
+  'rafle', 'rafler', 'depouille', 'depouiller', 'detrousse', 'rackette', 'racketter', 'derobe', 'subtilise'];
+const V_TAPER = ['attaque', 'attaquer', 'attaquez', 'atake', 'ataque', 'attak', 'atack',
+  'tape', 'taper', 'tapez', 'frappe', 'frapper',
+  'cogne', 'cogner', 'bute', 'buter', 'elimine', 'eliminer', 'affronte', 'affronter', 'demonte',
+  'corrige', 'bagarre', 'bastonne', 'fonce', 'casse'];
+const INTENTS = [
+  // ---- les plus précis d'abord : ils gagnent en cas d'égalité ----
+  { id: 'promeneChien', cles: [['promene', 'promener', 'promenez', 'promenade', 'balade', 'ballade', 'balader',
+      'sortir', 'sors', 'sortez', 'emmene', 'emmener', 'emmenez', 'occupe', 'occuper', 'garde', 'garder'],
+      ['chien', 'chiot', 'clebs', 'toutou', 'cabot', 'medor', 'chienne']],
+    fn: b => botPromeneChien(b) },
+  { id: 'defi', cles: [['defi', 'defis', 'challenge', 'pari', 'parie', 'parier', 'duel', 'defie', 'defier']],
+    fn: b => botDefi(b) },
+  { id: 'tennis', cles: [['tennis', 'raquette', 'raquettes']], fn: b => botSport(b, 'tennis') },
+  { id: 'foot', cles: [['foot', 'football', 'ballon', 'penalty', 'penaltys']], fn: b => botSport(b, 'foot') },
+  { id: 'banque', cles: [V_VOLER.concat(V_TAPER), ['banque', 'coffre', 'coffres', 'magot', 'banques']],
+    fn: b => botMission(b, 'banque') },
+  { id: 'boutique', cles: [V_VOLER, ['boutique', 'magasin', 'commerce', 'tatouage', 'tatoo', 'tattoo',
+      'tatoueur', 'superette', 'epicerie', 'supermarche', 'armurerie', 'vitrine', 'boutiques']],
+    fn: (b, ctx) => botMission(b, 'boutique', null, ctx.boutique) },
+  { id: 'villa', cles: [V_VOLER, ['villa', 'villas', 'maison', 'baraque', 'pavillon', 'demeure']],
+    fn: b => botMission(b, 'villa') },
+  { id: 'gangRival', cles: [V_TAPER, ['gang', 'gangs', 'rival', 'rivaux', 'rivale', 'adverse', 'ennemi',
+      'ennemis', 'rouges', 'bleus', 'jaunes', 'bande', 'concurrent']],
+    fn: (b, ctx) => botMission(b, 'gangRival', ctx.gangRival) },
+  { id: 'volBot', cles: [V_VOLER, ['bot', 'bots', 'passant', 'passants', 'habitant', 'habitants', 'type',
+      'mec', 'gars', 'fille', 'personne', 'quelqu', 'portefeuille', 'poche', 'poches', 'gens']],
+    fn: (b, ctx) => botMission(b, 'argent', ctx.victime) },
+  { id: 'volVoiture', cles: [V_VOLER, ['voiture', 'voitures', 'caisse', 'bagnole', 'auto', 'vehicule', 'tire']],
+    fn: b => botMission(b, 'voiture') },
+  { id: 'manger', cles: [['manger', 'bouffe', 'bouffer', 'nourriture', 'burger', 'pizza', 'sandwich',
+      'glace', 'hotdog', 'frite', 'frites', 'kebab', 'gouter', 'faim', 'miam', 'croute', 'repas', 'boire']],
+    fn: b => { botAManger(b); return true; } },
+  { id: 'danse', cles: [['danse', 'danser', 'dansez', 'guinche', 'ambiance']],
+    fn: b => { b.dance = 6; b.wait = 6; botDit(b, '💃 c\'est parti !'); return true; } },
+  { id: 'suis', cles: [['suis', 'suivre', 'suivez', 'accompagne', 'accompagner', 'colle']],
+    fn: b => { botSuis(b); return true; } },
+  { id: 'protege', cles: [['protege', 'proteger', 'protegez', 'defends', 'defendre', 'garde', 'gardes',
+      'gorille', 'surveille']], fn: b => { botProtege(b); return true; } },
+  { id: 'stop', cles: [['stop', 'arrete', 'arreter', 'arretez', 'annule', 'annuler', 'oublie', 'oublier',
+      'repos', 'tranquille', 'abandonne']], fn: b => { botStop(b, true); return true; } },
+];
+// Ce que la phrase désigne : la victime nommée, le gang visé, la boutique visée.
+function contexteOrdre(txt, cible) {
+  const t = norm(txt), ctx = {};
+  const nommes = trouveBots(txt).filter(x => x !== cible && !x.ko);
+  ctx.victime = nommes[0] || null;
+  const coul = /rouge/.test(t) ? 'rouge' : /bleu/.test(t) ? 'bleu' : /jaune/.test(t) ? 'jaune' : null;
+  ctx.gangRival = (coul && gangs.find(G => G.id === coul && !G.mort)) || pickOne(gangs.filter(G => !G.mort)) || null;
+  if (/tato|tatt/.test(t) && city.tatooDesk) ctx.boutique = { x: city.tatooDesk.x, z: city.tatooDesk.z, nom: 'le salon de tatouage' };
+  else if (/armurerie|arme/.test(t) && city.armory) ctx.boutique = { x: city.armory.x, z: city.armory.z, nom: 'l\'armurerie' };
+  return ctx;
+}
+function interpreteOrdre(txt) {
+  if (!bots.length) return false;
+  const nommes = trouveBots(txt);
+  const cible = nommes.find(b => estAmi(b.name) && !b.ko) || (dialog.lastBot && estAmi(dialog.lastBot.name) && !dialog.lastBot.ko ? dialog.lastBot : null);
+  if (!cible) return false;
+  const mots = motsDe(txt);
+  if (!mots.length) return false;
+  let best = null, score = -1;
+  for (const it of INTENTS) {
+    let ok = true, n = 0;
+    for (const g of it.cles) { if (!groupeVu(mots, g)) { ok = false; break; } n++; }
+    if (!ok) continue;
+    if (n > score) { score = n; best = it; }
+  }
+  if (!best) return false;
+  dialog.lastBot = cible;
+  const ctx = contexteOrdre(txt, cible);
+  let fait = false;
+  try { fait = best.fn(cible, ctx) !== false; } catch (e) { console.error('ordre ' + best.id, e); fait = false; }
+  if (!fait) botDit(cible, pickOne(['je ne peux pas faire ça là 😕', 'pas moyen pour le moment']));
+  return true;
+}
+function commandeSociale(txt) {
+  // d'abord les tournures reconnues au mot près (rapides et sûres), puis l'interprète
+  return commandeExacte(txt) || interpreteOrdre(txt);
+}
+
+// ---- actions nouvelles que l'on peut désormais demander ----
+// Une mission « de gang » confiée à UN ami : la mécanique (trajet, coup, butin rapporté au
+// joueur) est exactement celle du gang, avec un seul homme.
+function botMission(b, type, cible, lieuForce) {
+  if (gang.mission) { botDit(b, 'on est déjà sur un coup, laisse-moi finir ! 😅'); return true; }
+  return missionGang([b], type, cible, lieuForce);
+}
+function botSport(b, jeu) {
+  const l = lieuDe(jeu === 'foot' ? 'foot' : 'tennis');
+  if (!l) { botDit(b, 'je ne trouve pas le terrain 😕'); return false; }
+  fixerRdv(b, l, jeu === 'foot' ? 'au foot' : 'au tennis');
+  botDit(b, jeu === 'foot' ? pickOne(['⚽ ok, on se retrouve au terrain !', '⚽ j\'arrive, prépare-toi à perdre 😄'])
+                           : pickOne(['🎾 go, prends une raquette au râtelier !', '🎾 j\'y vais, à tout de suite']));
+  return true;
+}
+// « va promener mon chien » : l'ami emmène le chien faire un tour et le ramène.
+function botPromeneChien(b) {
+  if (!chien.pet) { botDit(b, 'tu n\'as pas encore de chien 🐶 adopte-en un au parc !'); return true; }
+  if (chien.promeneur) { botDit(b, `${chien.promeneur.name} le promène déjà 🐕`); return true; }
+  const parc = lieuDe('parc') || lieuDe('plage') || { x: P.pos.x + 30, z: P.pos.z + 30, nom: 'le parc' };
+  chien.promeneur = b; chien.promeneT = simTime + 95; chien.promeneRetour = false;
+  b.rdv = { x: parc.x + rnd(-4, 4), z: parc.z + rnd(-4, 4), y: 0.3, nom: '🐕 la promenade', arrive: false, libre: true };
+  b.rdvRoute = null; b.wait = 0; b.activite = null; b.ordre = { type: 'chien' };
+  botDit(b, pickOne([`🐕 viens ${chien.nom || 'le chien'}, on va faire un tour !`, '🐕 allez, en promenade !']));
+  msg(`🐕 ${b.name} emmène ${chien.nom || 'ton chien'} en promenade`, 3200);
+  return true;
+}
+function promenadeTick() {
+  const b = chien.promeneur; if (!b) return;
+  if (!chien.pet || b.ko || drive.car || P.voile) { finPromenade(true); return; }
+  if (!chien.promeneRetour && (simTime > chien.promeneT - 45 || (b.rdv && b.rdv.arrive))) {
+    chien.promeneRetour = true;
+    b.rdv = { x: P.pos.x + rnd(-2, 2), z: P.pos.z + rnd(-2, 2), y: 0.3, nom: '🏠 le retour', arrive: false, libre: true };
+    b.rdvRoute = null; b.wait = 0;
+    botDit(b, pickOne(['🐕 il s\'est bien défoulé, je te le ramène', '🐕 on rentre !']));
+  }
+  if (chien.promeneRetour && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 3.5) {
+    botDit(b, pickOne(['tiens, le voilà tout content 🐶', 'il a bien couru ! 🐕']));
+    msg('🐕 Ton chien revient de promenade', 2600); aboie(2);
+    finPromenade(false);
+  } else if (simTime > chien.promeneT) finPromenade(true);
+}
+function finPromenade(silence) {
+  const b = chien.promeneur; chien.promeneur = null; chien.promeneRetour = false;
+  if (b) { b.ordre = null; if (b.rdv && b.rdv.nom && /promenade|retour/.test(b.rdv.nom)) b.rdv = null; b.wait = rnd(1, 3); }
+  if (!silence) sfx.coin();
+}
+// « fais un défi pour me gagner de l'argent » : course jusqu'à un point, le premier arrivé gagne.
+const defi = { on: null };
+function botDefi(b) {
+  if (defi.on) { botDit(b, 'on a déjà un défi en cours ! 🏁'); return true; }
+  const coins = (city.wander || []).map(w => ({ x: w[0], z: w[2] }))
+    .filter(q => { const d = Math.hypot(q.x - P.pos.x, q.z - P.pos.z); return d > 22 && d < 85; });
+  const but = pickOne(coins) || { x: P.pos.x + 35, z: P.pos.z + 25 };
+  const mise = 20 + Math.floor(Math.random() * 45);
+  defi.on = { bot: b, x: but.x, z: but.z, mise, fin: simTime + 90 };
+  b.rdv = { x: but.x, z: but.z, y: 0.3, nom: '🏁 le défi', arrive: false, libre: true };
+  b.rdvRoute = null; b.activite = null; b.wait = 5;   // cinq secondes d'avance pour le joueur
+  b.ordre = { type: 'defi' };
+  setBeacon(but.x, but.z, 0.3);
+  botDit(b, `🏁 défi : premier arrivé à la balise ! si tu gagnes, ${mise} 🪙 pour toi`);
+  msg(`🏁 Défi de ${b.name} : rejoins la balise avant lui et gagne ${mise} 🪙`, 4600);
+  return true;
+}
+function defiTick() {
+  const d = defi.on; if (!d) return;
+  if (d.bot.ko) { finDefi(); return; }
+  if (Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 5) {
+    wallet += d.mise; saveWallet(); updateHud(); sfx.win(); sfx.coin();
+    msg(`🏁 Gagné ! ${d.bot.name} te donne ${d.mise} 🪙`, 3600);
+    chat(null, `🏁 ${myCfg.name} bat ${d.bot.name} au défi et empoche ${d.mise} 🪙`);
+    botDit(d.bot, pickOne(['t\'es trop rapide 😤 tiens, tes pièces', 'bien joué ! 💰']));
+    finDefi(); return;
+  }
+  if (Math.hypot(d.bot.pos.x - d.x, d.bot.pos.z - d.z) < 3) {
+    botDit(d.bot, pickOne(['gagné ! 😎 on remet ça quand tu veux', 'trop lent 😜']));
+    msg('🏁 Défi perdu — retente ta chance !', 3000); finDefi(); return;
+  }
+  if (simTime > d.fin) { botDit(d.bot, 'bon, on laisse tomber ce défi 😅'); finDefi(); }
+}
+function finDefi() {
+  const d = defi.on; defi.on = null;
+  if (d && d.bot) { d.bot.ordre = null; if (d.bot.rdv && d.bot.rdv.nom === '🏁 le défi') d.bot.rdv = null; d.bot.wait = rnd(1, 3); }
+  clearBeacon();
 }
 
 // ---- grille spatiale des solides ----
@@ -8457,7 +8699,7 @@ function cityVie(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -10754,6 +10996,7 @@ const ACTIVITES = [
   { k: 'foot', e: '⚽', n: 'jouer au foot', poids: 14 },
   { k: 'velo', e: '🚲', n: 'faire du vélo', poids: 12 },
   { k: 'moto', e: '🏍️', n: 'faire un tour en moto', poids: 10 },
+  { k: 'voiture', e: '🚗', n: 'faire un tour en voiture', poids: 12 },   // les habitants conduisent, pas seulement le joueur
   { k: 'plage', e: '🏖️', n: 'aller à la plage', poids: 8 },
   { k: 'cinema', e: '🎬', n: 'aller au cinéma', poids: 8 },
   { k: 'vol', e: '🕵️', n: 'chaparder dans une boutique', poids: 9 },
@@ -10782,12 +11025,13 @@ function lancerActivite(b, a) {
     b.rdv = { x: l.x + rnd(-3, 3), z: l.z + rnd(-3, 3), y: 0.3, nom: a.e + ' ' + nom, arrive: false, jeu: a.n, libre: true };
     b.rdvRoute = null; b.wait = 0; b.target = null;
     dire(pickOne([`je vais ${a.n} ${a.e}`, `direction ${nom} !`, `qui vient ${a.n} ?`]));
-  } else if (a.k === 'velo' || a.k === 'moto') {
+  } else if (a.k === 'velo' || a.k === 'moto' || a.k === 'voiture') {
     const dest = pickOne(city.zones.filter(z => !/Villa|Prison|Commissariat/.test(z.name)));
     if (!dest) { b.activite = null; return false; }
     const l = { x: (dest.x1 + dest.x2) / 2, z: (dest.z1 + dest.z2) / 2, nom: dest.name };
-    dire(pickOne([`je prends ${a.k === 'moto' ? 'la moto' : 'le vélo'} ${a.e}`, `petit tour ${a.k === 'moto' ? 'en moto' : 'à vélo'} !`]));
-    botPrendVoiture(b, l, a.k === 'moto' ? 'moto' : 'bike');
+    const quoi = a.k === 'moto' ? 'la moto' : a.k === 'voiture' ? 'la voiture' : 'le vélo';
+    dire(pickOne([`je prends ${quoi} ${a.e}`, `petit tour ${a.k === 'velo' ? 'à vélo' : 'en ' + quoi.slice(3)} !`, `direction ${dest.name} ${a.e}`]));
+    botPrendVoiture(b, l, a.k === 'moto' ? 'moto' : a.k === 'velo' ? 'bike' : null);
     if (!b.rdv) { b.activite = null; return false; }
     b.rdv.libre = true;
   } else if (a.k === 'vol') {
@@ -10962,9 +11206,11 @@ const GANG_MISSIONS = {
   boutique: { e: '🛍️', n: 'braquer une boutique', duree: 28, gain: [70, 190] },
   guet: { e: '👀', n: 'faire le guet', duree: 60, gain: [0, 0] },
 };
-function missionGang(membres, type, cible) {
+function missionGang(membres, type, cible, lieuForce) {
   const M = GANG_MISSIONS[type]; if (!M || !membres.length) return false;
-  const lieu = type === 'banque' ? (city.bank ? { x: city.bank.x + 8, z: city.bank.z } : null)
+  // `lieuForce` : quand le joueur désigne une boutique précise (« vole la boutique tatoo »),
+  // on y va au lieu d'en tirer une au hasard.
+  const lieu = lieuForce ? lieuForce : type === 'banque' ? (city.bank ? { x: city.bank.x + 8, z: city.bank.z } : null)
     : type === 'villa' ? (VILLAS[1] ? { x: VILLAS[1].x, z: VILLAS[1].z } : null)
     : type === 'boutique' ? pickOne(city.vitrines || [])
     : type === 'gangRival' ? ((cible && cible.base) ? { x: cible.base[0], z: cible.base[1] } : gangs[0] ? { x: gangs[0].base[0], z: gangs[0].base[1] } : null)

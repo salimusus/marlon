@@ -3562,9 +3562,10 @@ test('on se voit assis au volant de la voiture qu\'on prend', async p => {
     __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
     const G = __G;
     const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy) || G.city.cars[0];
-    c.x = 26; c.z = 0; c.h = 0.7; c.g.position.set(c.x, c.y || 0, c.z);
+    c.x = 26; c.z = 0; c.h = 0.7; c.busy = false; c.g.position.set(c.x, c.y || 0, c.z);
     if (G.drive.car) G.exitCar();
     G.enterCar(c);
+    if (!G.drive.car) return { erreur: 'impossible de monter dans la voiture' };
     await new Promise(r2 => setTimeout(r2, 900));   // la boucle de rendu place l'avatar
     const av = G.me.group;
     // écart entre l'avatar et le centre de la voiture, exprimé dans le repère de la voiture
@@ -3601,6 +3602,109 @@ test('les escaliers de la banque ne rasent plus le mur', async p => {
   });
   const ok = r.length === 2 && r.every(v => v.largeur >= 3.4 && v.fenteContreLeMur <= 0.25);
   return { ok, detail: r.map(v => `volée depuis ${v.volee} m : ${v.largeur} m de large, ${v.fenteContreLeMur} m de fente contre le mur (il y en avait 0,45 avec une main courante dedans)`).join(' · ') };
+});
+
+test('l\'ami comprend et exécute ce qu\'on lui demande, fautes comprises', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G, ami = G.bots[0];
+    G.devenirAmi(ami);
+    const chiot = G.city.pets.find(x => x.kind === 'dog');
+    if (chiot) { G.P.pos.set(chiot.x, 0.5, chiot.z); G.adopterChien(chiot); }
+    G.P.pos.set(0, 0.5, 0); G.chien.attenteNom = false;
+    const essais = [
+      ['vole la boutique tatoo', 'boutique'], ['va voler la boutique de tatouage stp', 'boutique'],
+      ['vole un bot', 'argent'], ['depouille un passant', 'argent'],
+      ['attaque un membre d un gang adverse', 'gangRival'], ['atake les rouges', 'gangRival'],
+      ['va me chercher a manger', 'rdv'], ['jai faim ramene un burger', 'rdv'],
+      ['apporte un velo', 'rdv'], ['va promener mon chien', 'chien'], ['sors le chien', 'chien'],
+      ['va braquer la banque et apporte moi l argent', 'rdv'], ['bracer la banke', 'banque'],
+      ['danse', 'danse'], ['viens on joue au tennis', 'rdv'], ['viens on joue au foot', 'rdv'],
+      ['fait des defi pour me gagner de l argent', 'defi'], ['lance un defi', 'defi'],
+      ['cambriole une villa', 'villa'], ['vole une voiture', 'voiture'],
+      ['protege moi', 'rdv'], ['suis moi', 'rdv'],
+    ];
+    const rates = [];
+    for (const [phrase, attendu] of essais) {
+      ami.ordre = null; ami.rdv = null; ami.activite = null; ami.dance = 0; ami.wait = 0; ami.bagarre = null;
+      G.gang.mission = null; G.defi.on = null; G.chien.promeneur = null;
+      const compris = G.commandeSociale(ami.name + ' ' + phrase);
+      const obtenu = G.gang.mission ? G.gang.mission.type : G.defi.on ? 'defi'
+        : G.chien.promeneur ? 'chien' : ami.dance > 0 ? 'danse' : ami.rdv ? 'rdv' : null;
+      if (!compris || !obtenu || (attendu !== 'rdv' && obtenu !== attendu)) rates.push(`${phrase} → ${obtenu || 'rien'}`);
+    }
+    G.gang.mission = null; G.defi.on = null; G.chien.promeneur = null;
+    return { total: essais.length, rates };
+  });
+  return { ok: r.rates.length === 0,
+    detail: `${r.total - r.rates.length}/${r.total} ordres compris ET exécutés, y compris « bracer la banke », « atake les rouges » et « vole la boutique tatoo »${r.rates.length ? ' · ratés : ' + r.rates.join(', ') : ''}` };
+});
+
+test('le chien a sa place dans tous les véhicules, et sous la voile', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G;
+    const chiot = G.city.pets.find(x => x.kind === 'dog');
+    if (!chiot) return { erreur: 'pas de chien dans le parc' };
+    G.P.pos.set(chiot.x, 0.5, chiot.z); G.adopterChien(chiot); G.chien.attenteNom = false;
+    const d = G.chien.pet, out = [];
+    const essai = (nom, c) => {
+      if (!c) { out.push({ nom, aBord: false, absent: true }); return; }
+      c.busy = false; if (G.drive.car) G.exitCar();
+      c.x = 20; c.z = 20; c.h = 0.4; c.g.position.set(c.x, c.y || 0, c.z);
+      G.P.pos.set(20, 1, 20); G.enterCar(c);
+      if (!G.drive.car) { out.push({ nom, aBord: false, refus: true }); return; }
+      for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+      const cs = Math.cos(c.h), sn = Math.sin(c.h), dx = d.x - c.x, dz = d.z - c.z;
+      const lat = dx * cs - dz * sn, lon = dx * sn + dz * cs;
+      out.push({ nom, aBord: Math.abs(lat) < (c.baseW || 2.6) / 2 + 0.6 && Math.abs(lon) < (c.baseD || 4.4) / 2 + 0.6,
+        h: +(d.y - (c.y || 0)).toFixed(2), memeCap: Math.abs((d.g.rotation.y % 6.283) - c.h) < 0.05 });
+      G.exitCar();
+    };
+    const cars = G.city.cars;
+    essai('voiture', cars.find(c => !c.heli && !c.rider && !c.kind));
+    essai('camion', cars.find(c => c.kind === 'truck'));
+    essai('vélo', cars.find(c => c.kind === 'bike'));
+    essai('moto', cars.find(c => c.kind === 'moto' || c.kind === 'scooter'));
+    essai('hélicoptère', cars.find(c => c.heli));
+    essai('jet-ski', cars.find(c => c.kind === 'jetski'));
+    // sous le parachute / le deltaplane
+    G.P.pos.set(40, 30, 40); G.P.facing = 1.1;
+    G.P.voile = 'parachute'; G.P.voileMesh = G.P.voileMesh || { factice: true };
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const dist = Math.hypot(d.x - G.P.pos.x, d.z - G.P.pos.z);
+    out.push({ nom: 'parachute/deltaplane', aBord: dist < 1.2 && Math.abs(d.y - G.P.pos.y) < 1.2, h: +(d.y - G.P.pos.y).toFixed(2), memeCap: true });
+    G.P.voile = null; G.P.voileMesh = null;
+    return { out };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const rates = r.out.filter(v => !v.aBord);
+  return { ok: rates.length === 0,
+    detail: r.out.map(v => `${v.nom} : ${v.aBord ? 'à bord à ' + v.h + ' m' : (v.absent ? 'aucun véhicule' : v.refus ? 'montée refusée' : 'RESTÉ AU SOL')}`).join(' · ') };
+});
+
+test('les habitants prennent aussi la voiture, pas seulement le vélo', async p => {
+  const dep = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const G = __G;
+    const dansListe = G.ACTIVITES ? G.ACTIVITES.some(a => a.k === 'voiture') : false;
+    const b = G.bots.find(x => !x.ko && x.av.group.visible);
+    window.__conducteur = b;
+    b.activite = null; b.rdv = null; b.drive = null; b.ordre = null; b.wait = 0;
+    const lance = G.lancerActivite(b, { k: 'voiture', e: '🚗', n: 'faire un tour en voiture' }) !== false;
+    if (b.activite) b.activite.fin = G.simTime + 600;   // on lui laisse le temps d'arriver
+    return { dansListe, lance, nom: b.name, cible: b.rdv ? [+b.rdv.x.toFixed(1), +b.rdv.z.toFixed(1)] : null };
+  });
+  // les bots avancent dans la boucle de rendu, pas dans step() : on attend pour de vrai
+  const auVolant = await attendre(p, () => !!(window.__conducteur.drive && window.__conducteur.drive.car), 90000);
+  const r = await p.evaluate(() => {
+    const b = window.__conducteur, c = b.drive && b.drive.car;
+    return { quatreRoues: !!(c && !c.rider && !c.heli), nomVoiture: c ? (c.kind || 'voiture') : null,
+      roule: !!(c && Math.abs(b.drive.speed || 0) >= 0), distanceParcourue: +Math.hypot(b.pos.x, b.pos.z).toFixed(1) };
+  });
+  await p.evaluate(() => { const b = window.__conducteur; if (b.drive && b.drive.car) __G.libereVoiture(b.drive.car); b.drive = null; b.activite = null; b.rdv = null; });
+  const ok = dep.dansListe && dep.lance && auVolant && r.quatreRoues;
+  return { ok, detail: `« faire un tour en voiture » fait partie des activités=${dep.dansListe} · ${dep.nom} rejoint la voiture garée en ${dep.cible} et se met au volant=${auVolant} (quatre roues=${r.quatreRoues}, ${r.nomVoiture})` };
 });
 
 (async()=>{

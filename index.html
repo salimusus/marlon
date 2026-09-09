@@ -3021,16 +3021,40 @@ function gpsTick() {   // radar : joueur au centre, orienté avec la caméra ; c
   g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2.5;
   for (const [x1, z1, x2, z2] of [[-26, -26, 26, -26], [26, -26, 26, 26], [26, 26, -26, 26], [-26, 26, -26, -26], [0, -44, 0, 110], [-61, 0, 61, 0], [-26, 29, -26, 48], [52, 25, 52, 95], [-41, -44, -41, 110], [-68, 110, 68, 110], [-68, -44, 68, -44], [-200, 40, -80, 40], [-140, -20, -140, 90], [68, 40, 170, 40], [40, 110, 40, 250], [-60, 200, 170, 200]]) { const [ax, ay] = toXY(x1, z1), [bx2, by2] = toXY(x2, z2); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx2, by2); g.stroke(); }
   const dot = (x, z, col, r, txt) => { const [px, py] = toXY(x, z); const d = Math.hypot(px - cx, py - cx); let qx = px, qy = py; if (d > R - 8) { qx = cx + (px - cx) / d * (R - 8); qy = cx + (py - cx) / d * (R - 8); } g.fillStyle = col; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); if (txt) { g.font = '11px sans-serif'; g.fillText(txt, qx - 6, qy + 4); } };
-  if (city.bank) dot(city.bank.x, city.bank.z, '#c9a84c', 5, '🏦');
-  if (city.hideouts) for (const h of city.hideouts) dot(h.x, h.z, '#8f98ab', 4);
-  if (city.office) dot(city.office.x, city.office.z, '#3ef2ff', 5, '📋');       // bureau des missions
-  if (city.garage) dot(city.garage.x, city.garage.z, '#ff8f3a', 4);
-  if (city.tatooDesk) dot(city.tatooDesk.x, city.tatooDesk.z, '#ff7ad9', 4);
-  if (police.station) dot(police.station.x, police.station.z, '#4f8dff', 5, '🚓');
-  if (city.villaMine) dot(city.villaMine.x, city.villaMine.z, '#5cc453', 5, '🏠');
-  for (const pq of (city.planques || [])) dot(pq.x, pq.z, pq.joueur ? '#5cc453' : '#ff5c5c', 4);
+  // EN MISSION, le radar ne montre QUE la mission. Il désignait la banque, le commissariat,
+  // le garage, le tatoueur, la villa, chaque planque et chaque voiture de police en même
+  // temps : une dizaine de directions à la fois, impossible de repérer la bonne.
+  const enMission = !!(mission.cur && beacon.m && beacon.m.visible);
+  if (!enMission) {
+    if (city.bank) dot(city.bank.x, city.bank.z, '#c9a84c', 5, '🏦');
+    if (city.hideouts) for (const h of city.hideouts) dot(h.x, h.z, '#8f98ab', 4);
+    if (city.office) dot(city.office.x, city.office.z, '#3ef2ff', 5, '📋');       // bureau des missions
+    if (city.garage) dot(city.garage.x, city.garage.z, '#ff8f3a', 4);
+    if (city.tatooDesk) dot(city.tatooDesk.x, city.tatooDesk.z, '#ff7ad9', 4);
+    if (police.station) dot(police.station.x, police.station.z, '#4f8dff', 5, '🚓');
+    if (city.villaMine) dot(city.villaMine.x, city.villaMine.z, '#5cc453', 5, '🏠');
+    for (const pq of (city.planques || [])) dot(pq.x, pq.z, pq.joueur ? '#5cc453' : '#ff5c5c', 4);
+  }
+  // seule exception : quand la police te course, ses voitures restent affichées — c'est
+  // une information vitale, pas un repère de plus.
   if (police.wanted > 0) for (const pc of police.cars) if (pc.active) dot(pc.x, pc.z, '#ff3030', 4);
-  if (beacon.m && beacon.m.visible) { const t = (simTime * 3) % 1; dot(beacon.x, beacon.z, `rgba(255,210,63,${0.6 + 0.4 * Math.sin(t * 6.28)})`, 6); const [px, py] = toXY(beacon.x, beacon.z); const ang = Math.atan2(py - cx, px - cx); g.strokeStyle = '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cx); g.lineTo(cx + Math.cos(ang) * (R - 10), cx + Math.sin(ang) * (R - 10)); g.stroke(); }
+  // La cible de mission passe en dernier et en grand : elle ne doit jamais se perdre parmi
+  // les autres repères. Hors de portée du radar, un gros triangle la désigne au bord.
+  if (beacon.m && beacon.m.visible) {
+    const [px, py] = toXY(beacon.x, beacon.z), ang = Math.atan2(py - cx, px - cx);
+    const hors = Math.hypot(px - cx, py - cx) > R - 10;
+    g.strokeStyle = '#ffd23f'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(cx, cx); g.lineTo(cx + Math.cos(ang) * (R - 12), cx + Math.sin(ang) * (R - 12)); g.stroke();
+    const bat = 0.65 + 0.35 * Math.sin(simTime * 5);
+    if (hors) {   // flèche au bord, tournée vers la cible
+      const qx = cx + Math.cos(ang) * (R - 8), qy = cx + Math.sin(ang) * (R - 8);
+      g.save(); g.translate(qx, qy); g.rotate(ang); g.fillStyle = `rgba(255,210,63,${bat})`;
+      g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, -7); g.lineTo(-6, 7); g.closePath(); g.fill(); g.restore();
+    } else {
+      g.fillStyle = `rgba(255,210,63,${bat})`; g.beginPath(); g.arc(px, py, 8, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#1b2a4a'; g.lineWidth = 2; g.stroke();
+    }
+  }
   g.restore();
   g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(cx, cx - 7); g.lineTo(cx - 5, cx + 5); g.lineTo(cx + 5, cx + 5); g.closePath(); g.fill();   // moi (flèche vers l'avant)
   g.fillStyle = 'rgba(255,255,255,.8)'; g.font = 'bold 10px sans-serif'; g.fillText('N', cx - 3 + Math.sin(-rot) * (R - 12) * 0, 12);
@@ -8303,7 +8327,25 @@ function exitCar() {
     c.g.position.set(c.x, c.y, c.z); vehicleSolid(c);
     msg('🚁 L\'hélicoptère se pose', 1600);
   }
-  P.pos.set(c.x - Math.cos(c.h) * (c.kind === 'truck' ? 3 : 2.2), c.kind === 'jetski' ? 0.3 : c.y + 0.4, c.z + Math.sin(c.h) * (c.kind === 'truck' ? 3 : 2.2)); P.vel.set(0, 0, 0); P.facing = c.h;
+  // On descendait TOUJOURS du même côté, sans regarder s'il y avait la place : contre un mur
+  // ou une autre voiture, le joueur se retrouvait planté dans la carrosserie. On essaie
+  // maintenant les quatre côtés, du plus naturel au moins, et on prend le premier libre.
+  {
+    const cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const R = c.kind === 'truck' ? 3 : 2.2, yv = c.kind === 'jetski' ? 0.3 : (c.y || 0) + 0.4;
+    // gauche, droite, arrière, avant — puis, en dernier recours, la position de la voiture
+    const essais = [[-cs * R, sn * R], [cs * R, -sn * R], [-sn * R, -cs * R], [sn * R, cs * R]];
+    let ox = essais[0][0], oz = essais[0][1], trouve = false;
+    for (const [dx, dz] of essais) {
+      const x = c.x + dx, z = c.z + dz, y = groundUnder(x, z, c.solid, yv + 0.5);
+      if (!npcBlocked(x, y, z, 0.42)) { ox = dx; oz = dz; trouve = true; break; }
+    }
+    const x = c.x + ox, z = c.z + oz;
+    const sol = groundUnder(x, z, c.solid, yv + 0.5);
+    P.pos.set(x, Math.max(sol, c.kind === 'jetski' ? 0.3 : 0), z);
+    if (!trouve) msg('🚗 Pas beaucoup de place pour descendre !', 1400);
+  }
+  P.vel.set(0, 0, 0); P.facing = c.h;
   me.group.visible = true; $('carBtn').textContent = '🚗'; $('jumpBtn').textContent = 'SAUT'; $('emoteBtn').textContent = '🕺'; $('punchBtn').textContent = '👊'; drive.gear = 1;
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)

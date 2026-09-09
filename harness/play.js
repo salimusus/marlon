@@ -3710,6 +3710,35 @@ test('les habitants prennent aussi la voiture, pas seulement le vélo', async p 
   return { ok, detail: `« faire un tour en voiture » fait partie des activités=${dep.dansListe} · ${dep.nom} rejoint la voiture garée en ${dep.cible} et se met au volant=${auVolant} (quatre roues=${r.quatreRoues}, ${r.nomVoiture})` };
 });
 
+test('on descend de voiture à côté, jamais dans la carrosserie ni dans un mur', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 26, y: 1, z: 0, hour: 12 });
+    const G = __G, out = [];
+    const essai = (nom, cx, cz, h) => {
+      const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy) || G.city.cars[0];
+      c.busy = false; if (G.drive.car) G.exitCar();
+      c.x = cx; c.z = cz; c.h = h; c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+      G.P.pos.set(cx, 1, cz); G.enterCar(c);
+      if (!G.drive.car) { out.push({ nom, refus: true }); return; }
+      G.exitCar();
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      const dx = G.P.pos.x - c.x, dz = G.P.pos.z - c.z, cs = Math.cos(c.h), sn = Math.sin(c.h);
+      const lat = dx * cs - dz * sn, lon = dx * sn + dz * cs;
+      out.push({ nom, d: +Math.hypot(dx, dz).toFixed(2),
+        dansLaCaisse: Math.abs(lat) < (c.baseW || 2.4) / 2 && Math.abs(lon) < (c.baseD || 4.4) / 2,
+        dansUnMur: G.npcBlocked(G.P.pos.x, G.P.pos.y, G.P.pos.z, 0.42) });
+    };
+    essai('rue dégagée', 26, 0, 0.9);
+    const b = G.city.batiments.find(x => x.w > 8);
+    essai('collé à un immeuble', b.x + b.w / 2 + 1.4, b.z, Math.PI / 2);
+    essai('coin de bâtiment', b.x + b.w / 2 + 1.3, b.z - b.d / 2 + 1, 0);
+    return out;
+  });
+  const rates = r.filter(v => v.refus || v.dansLaCaisse || v.dansUnMur);
+  return { ok: rates.length === 0 && r.length === 3,
+    detail: r.map(v => `${v.nom} : ${v.refus ? 'montée refusée' : `on ressort à ${v.d} m, hors de la caisse=${!v.dansLaCaisse}, hors des murs=${!v.dansUnMur}`}`).join(' · ') };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

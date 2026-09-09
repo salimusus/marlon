@@ -2131,7 +2131,9 @@ test('le téléphone sert de télécommande : déplacement, caméra, boutons et 
     __G.telCommande({ t: 'hello', nom: 'Téléphone de Marlon' });
     __G.telCommande({ t: 'ax', x: 0, y: 1 });
     const axe = { x: __G.tel.x, y: __G.tel.y };
-    await dodo(1400);
+    // sous rendu logiciel le jeu tourne à ~2 images/s : 1,4 s d'attente ne laissaient parfois
+    // aucune image au joueur pour avancer. On attend qu'il ait BOUGÉ, avec une limite.
+    for (let i = 0; i < 60 && depart.distanceTo(__G.P.pos) < 0.5; i++) await dodo(250);
     const avance = +depart.distanceTo(__G.P.pos).toFixed(2);
     __G.telCommande({ t: 'ax', x: 0, y: 0 });
     const yaw0 = __G.cam.yaw, pitch0 = __G.cam.pitch;
@@ -2709,6 +2711,9 @@ test("le gang du joueur se recrute dans le chat et ramène le butin", async p =>
     res.bandanas = G.gang.membres.map(b => chapeau(b.av));
     // mission : ordre à deux noms, puis butin
     const w0 = G.wallet; G.wallet = 100; G.gang.butin = 0;
+    // Un coup n'est plus une réussite automatique : il se joue sur la performance des hommes
+    // envoyés. On les entraîne à fond pour mesurer le BUTIN, pas la chance.
+    b1.perf = 100; b2.perf = 100;
     res.ordre = G.commandeSociale(b1.name + ' et ' + b2.name + ' allez braquer la banque');
     res.mission = G.gang.mission ? { type: G.gang.mission.type, n: G.gang.mission.membres.length } : null;
     res.enRoute = G.gang.membres.every(b => b.rdv && !b.rdv.arrive);

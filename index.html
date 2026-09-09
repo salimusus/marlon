@@ -12713,7 +12713,9 @@ function gangMissionRatee(m) {
   // plus l'homme était faible, plus il risque gros
   const risque = m.type === 'gangRival' ? 0.45 : m.type === 'banque' ? 0.35 : 0.2;
   const pauvre = m.membres.slice().sort((a, b) => perfDe(a) - perfDe(b))[0];
-  if (pauvre && Math.random() < risque * (1 - perfDe(pauvre) / 140)) {
+  // Le tout premier coup raté ne coûte personne : on apprend d'abord, on meurt ensuite.
+  gang.rates = (gang.rates || 0) + 1;
+  if (gang.rates > 1 && pauvre && Math.random() < risque * (1 - perfDe(pauvre) / 140)) {
     tuerMembre(pauvre, m.type === 'gangRival' ? 'le gang d\'en face' : 'la police');
   } else if (pauvre) {
     botDit(pauvre, pickOne(['on a failli y rester… 😰', 'ils étaient trop forts pour nous', 'faut qu\'on s\'entraîne, chef']));

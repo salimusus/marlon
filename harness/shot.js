@@ -59,6 +59,10 @@ window.__SHOT = {
         if (b.av) { b.av.group.rotation.x = 0; b.av.group.visible = true; }
       }
       if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; if (gang.missions) gang.missions.length = 0; }
+      // les effets d'impact survivent au changement de test (ils vieillissent dans la boucle
+      // de rendu, qui tourne a peine dans le banc d'essai) : on repart d'une scene propre
+      if (typeof fxClear === 'function') { try { fxClear(); } catch (e7) {} }
+      for (const b of bots) b.gangMission = null;
       // une partie de tennis ou de foot laissee en cours faussait le test suivant
       if (typeof finDuel === 'function') { try { finDuel('tennis'); finDuel('foot'); } catch (e4) {} }
       if (typeof P !== 'undefined' && P.racket) { P.racket = false; try { setRacket(me, false); } catch (e5) {} }
@@ -83,7 +87,7 @@ window.__SHOT = {
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
-    if (v.hour != null) simTime = ((v.hour - 7 + 24) % 24) / 24 * day.len;   // l'heure se pilote par simTime
+    if (v.hour != null) simTime = ((v.hour - 7 + 12) % 12) / 12 * day.len;   // l'heure se pilote par simTime (journée de 7 h à 19 h)
     if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); }
     if (v.facing != null) P.facing = v.facing;
     cam.yaw = v.yaw != null ? v.yaw : P.facing;
@@ -374,6 +378,11 @@ window.__G = {
   gangeurIsole: typeof gangeurIsole === 'function' ? gangeurIsole : null,
   prixVeto: typeof prixVeto === 'function' ? prixVeto : null,
   chienVeto: typeof chienVeto === 'function' ? chienVeto : null,
+  day: typeof day !== 'undefined' ? day : null,
+  openAtelier: typeof openAtelier === 'function' ? openAtelier : null,
+  majAtelier: typeof majAtelier === 'function' ? majAtelier : null,
+  tuneCible: typeof tuneCible === 'function' ? tuneCible : null,
+  dayTick: typeof dayTick === 'function' ? dayTick : null,
   openEquipe: typeof openEquipe === 'function' ? openEquipe : null,
   equipeSel: typeof equipeSel !== 'undefined' ? equipeSel : null,
   chanceMission: typeof chanceMission === 'function' ? chanceMission : null,

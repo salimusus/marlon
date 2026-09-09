@@ -4736,6 +4736,10 @@ test('les coups ont un vrai impact : onde de choc, éclats orientés, traînée 
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
     const G = __G, res = {};
+    // on dégage le terrain : sinon le poing part sur un passant de côté et la gerbe
+    // d'éclats n'a plus la direction qu'on mesure
+    for (const o of G.bots) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    for (const G2 of G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
     const b = G.bots[0];
     b.pos.set(G.P.pos.x, G.P.pos.y, G.P.pos.z - 1.5); b.wait = 9; b.ko = 0; b.hp = 100; b.fight = null;
     b.av.group.visible = true; b.av.group.position.copy(b.pos);
@@ -4996,9 +5000,10 @@ test('on peut donner plusieurs ordres à plusieurs membres à la fois', async p 
       sport3: l[3].sport ? l[3].sport.jeu : null,
       enCours: l.map(b => (b.journal || []).filter(o => o.etat === 'cours').length),
     };
-    // un homme déjà parti refuse un deuxième coup — sans casser ceux des autres
-    res.refus = G.commandeSociale(`${l[0].name} vole une voiture`);
-    res.apresRefus = { missions: G.gang.missions.length, type0: l[0].gangMission ? l[0].gangMission.type : null };
+    // un homme déjà parti CHANGE d'ordre quand on lui en donne un autre : c'est ce que le
+    // joueur attend, et refuser bloquait des ordres pour de bon
+    res.change = G.commandeSociale(`${l[0].name} vole une voiture`);
+    res.apresChange = { missions: G.gang.missions.length, type0: l[0].gangMission ? l[0].gangMission.type : null };
     // les deux coups avancent ensemble et se terminent chacun de leur côté
     for (let i = 0; i < 60 * 220 && G.gang.missions.length; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
     res.fin = { missions: G.gang.missions.length,
@@ -5010,9 +5015,9 @@ test('on peut donner plusieurs ordres à plusieurs membres à la fois', async p 
     && r.etat.missions === 2 && r.etat.coup0 === 'banque' && r.etat.coup1 === 'boutique'
     && r.etat.entrain2 === 'sport' && r.etat.sport3 === 'tennis'
     && r.etat.enCours.every(n => n === 1)
-    && r.apresRefus.missions === 2 && r.apresRefus.type0 === 'banque'
+    && r.change && r.apresChange.missions === 2 && r.apresChange.type0 === 'voiture'
     && r.fin.missions === 0 && r.fin.libres && r.fin.soldes.every(n => n >= 1);
-  return { ok, detail: `quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti refuse poliment un second coup sans casser celui des autres, et chaque mission se solde de son côté` };
+  return { ok, detail: `quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti CHANGE d'ordre si on lui en donne un autre (il lâche son coup et part sur le nouveau) sans casser celui des autres, et chaque mission se solde de son côté` };
 });
 
 
@@ -5057,6 +5062,71 @@ test('on choisit les hommes d\'une mission en les cochant, et on voit les chance
     && r.lancee.missions === 1 && r.lancee.membres === 4 && r.lancee.type === 'boutique'
     && r.lancee.chance > r.selection.chanceDeux && r.lancee.journaux === 4;
   return { ok, detail: `le 📣 propose « choisir plusieurs hommes » : on COCHE qui part (${r.page.cartes} cartes, avec performance, vie et « déjà sur un coup ») et les missions n'apparaissent qu'une fois quelqu'un coché · le pourcentage de réussite suit la sélection en direct : ${r.selection.chanceUn} % à un homme, ${r.selection.chanceDeux} % à deux, ${r.lancee.chance} % à quatre sur une boutique · « tout sélectionner » prend les ${r.tous} disponibles, et le coup part avec les ${r.lancee.membres} en une seule mission notée dans les ${r.lancee.journaux} journaux` };
+});
+
+
+test('il fait toujours jour : la nuit ne tombe plus jamais', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    let nuitMax = 0, hMin = 99, hMax = -99, imagesSombres = 0, etoiles = 0, lampes = 0;
+    const t0 = G.simTime;
+    for (let i = 0; i <= 240; i++) {          // deux tours complets d'horloge
+      G.simTime = i / 120 * 360;
+      G.dayTick();
+      nuitMax = Math.max(nuitMax, G.day.night);
+      hMin = Math.min(hMin, G.day.h); hMax = Math.max(hMax, G.day.h);
+      if (G.day.night > 0.5) { imagesSombres++; lampes++; }
+      if (G.day.night > 0.8) etoiles++;
+    }
+    G.simTime = t0;
+    return { nuitMax: +nuitMax.toFixed(2), lumiereMin: +(1 - nuitMax).toFixed(2),
+      heureMin: +hMin.toFixed(1), heureMax: +hMax.toFixed(1),
+      imagesSombres, lampes, etoiles, horloge: document.getElementById('clock').textContent };
+  });
+  const ok = r.nuitMax < 0.35 && r.lumiereMin > 0.65
+    && r.heureMin >= 6.9 && r.heureMax <= 19.1
+    && r.imagesSombres === 0 && r.lampes === 0 && r.etoiles === 0
+    && !/🌙/.test(r.horloge);
+  return { ok, detail: `sur deux tours d'horloge complets, l'obscurité ne dépasse jamais ${r.nuitMax} (la lumière reste au-dessus de ${r.lumiereMin}) · l'heure tourne de ${r.heureMin} h à ${r.heureMax} h, le soleil monte à midi et redescend sans se coucher · ${r.imagesSombres} image sombre, ${r.lampes} allumage de lampadaires, ${r.etoiles} ciel étoilé, et l'horloge affiche « ${r.horloge} »` };
+});
+
+
+test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si besoin', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const d0 = G.city.tuneDesk;
+    for (const v of G.city.cars) { v.x += 300; v.z += 300; v.g.position.set(v.x, v.y, v.z); }
+    G.P.pos.set(d0.x, 0.3, d0.z - 1);
+    G.wallet = 400;
+    G.openAtelier();
+    const ok = document.getElementById('atelierOk');
+    res.sansVoiture = { texte: ok.textContent, grise: ok.disabled,
+      amener: document.getElementById('atelierAmener').style.display !== 'none', cible: !!G.tuneCible() };
+    document.getElementById('atelierAmener').click();
+    res.apres = { texte: ok.textContent, grise: ok.disabled, cible: !!G.tuneCible(),
+      distance: Math.round(Math.hypot(G.tuneCible().x - d0.x, G.tuneCible().z - d0.z)),
+      amener: document.getElementById('atelierAmener').style.display !== 'none' };
+    // sans assez d'argent, il le dit aussi : on choisit un kit payant, puis on vide la poche
+    document.querySelector('#atelierOnglets [data-t="kits"]').click();
+    const kit = [...document.querySelectorAll('#atelierCorps [data-k]')].find(b => /🪙/.test(b.textContent));
+    res.kitChoisi = !!kit; if (kit) kit.click();
+    G.wallet = 5; G.majAtelier();
+    res.sansArgent = { texte: ok.textContent, grise: ok.disabled };
+    // une voiture garée devant le comptoir compte, même si le joueur s'avance à la borne
+    G.wallet = 400;
+    const c = G.tuneCible(); c.x = d0.x + 9; c.z = d0.z + 4; c.g.position.set(c.x, c.y, c.z);
+    G.P.pos.set(d0.x, 0.3, d0.z - 1.2);
+    res.garee = !!G.tuneCible();
+    G.closeUI();
+    return res;
+  });
+  const ok = !r.sansVoiture.cible && r.sansVoiture.grise && /voiture/i.test(r.sansVoiture.texte) && r.sansVoiture.amener
+    && r.apres.cible && !r.apres.grise && r.apres.texte === 'Valider' && r.apres.distance <= 6 && !r.apres.amener
+    && r.kitChoisi && r.sansArgent.grise && /manque/i.test(r.sansArgent.texte)
+    && r.garee;
+  return { ok, detail: `sans voiture au comptoir, « Valider » n'est plus un bouton gris muet : il affiche « ${r.sansVoiture.texte} » et un bouton « 🚗 Amener une voiture » gare une caisse à ${r.apres.distance} m de l'atelier · s'il manque de l'argent, il l'écrit aussi (« ${r.sansArgent.texte} ») · et une voiture garée devant l'atelier compte désormais même quand on s'avance jusqu'à la borne` };
 });
 
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste

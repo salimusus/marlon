@@ -110,7 +110,10 @@ window.__SHOT = {
       const jours = Math.max(0, Math.ceil((simTime - cible) / day.len));
       simTime = cible + jours * day.len;
     }
-    if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); }
+    // La camera suit le joueur en douceur : apres une teleportation elle met plusieurs images
+    // a le rattraper, et une mesure prise entre-temps porte sur une camera encore en route.
+    // On la pose donc d'un coup sur le nouveau point de vue.
+    if (v.x != null) { P.pos.set(v.x, v.y, v.z); P.vel.set(0, 0, 0); cam.target.set(v.x, v.y + 1.5, v.z); }
     if (v.facing != null) P.facing = v.facing;
     cam.yaw = v.yaw != null ? v.yaw : P.facing;
     if (v.pitch != null) cam.pitch = v.pitch;

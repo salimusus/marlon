@@ -5283,6 +5283,110 @@ test('un garde du corps envoye en mission part vraiment', async p => {
   return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur), pendant que le garde NON envoye reste a ${r.trajet.reste2} m · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
 });
 
+
+test('le circuit est un petit anneau a l\'ecart, il ne traverse plus la ville', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, c = G.city.circuit;
+    let dmin = 1e9, coupe = 0, rayonMin = 1e9, rayonMax = 0;
+    for (const pt of G.RACE_PTS) {
+      dmin = Math.min(dmin, Math.hypot(pt[0], pt[1]));
+      const rr = Math.hypot(pt[0] - c.x, pt[1] - c.z);
+      rayonMin = Math.min(rayonMin, rr); rayonMax = Math.max(rayonMax, rr);
+      // on ignore la route d'accès du circuit : elle DOIT toucher l'anneau, c'est son entrée
+      for (const rt of G.city.routes) {
+        if (Math.hypot(rt.x - c.x, rt.z - c.z) < c.r + 30) continue;
+        if (Math.abs(pt[0] - rt.x) < rt.w / 2 + 3 && Math.abs(pt[1] - rt.z) < rt.d / 2 + 3) coupe++;
+      }
+    }
+    const karts = G.city.cars.filter(k => k.kart);
+    return { centre: [c.x, c.z], rayon: c.r, longueur: Math.round(G.RACE_LEN),
+      rond: +(rayonMax - rayonMin).toFixed(1), loinDeLaVille: Math.round(dmin), coupeRoutes: coupe,
+      karts: karts.length, kartsSurGrille: karts.every(k => Math.hypot(k.x - c.depart.x, k.z - c.depart.z) < 24) };
+  });
+  const ok = r.rond < 0.5 && r.loinDeLaVille > 100 && r.coupeRoutes === 0
+    && r.karts >= 4 && r.kartsSurGrille && r.longueur > 150 && r.longueur < 260;
+  return { ok, detail: `la piste faisait tout le tour de la ville et coupait les rues · c'est maintenant un ANNEAU PARFAIT de ${r.rayon} m de rayon (${r.rond} m d'écart entre le point le plus proche et le plus loin du centre), long de ${r.longueur} m, posé a ${r.loinDeLaVille} m du centre-ville · il ne croise ${r.coupeRoutes} route, et les ${r.karts} karts sont sur la grille` };
+});
+
+test('le plan routier dessert chaque quartier et les rues sont degagees', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + 1 && Math.abs(z - rt.z) < rt.d / 2 + 1);
+    const d = G.city.plan.dessertes;
+    const horsRoute = d.filter(o => !surRoute(o.x, o.z)).map(o => o.n);
+    const sansDesserte = G.city.zones.filter(z => !G.desserteDe(z.name)).map(z => z.name);
+    const sansArret = G.city.zones.filter(z => { const l = G.lieuDe(z.name); return l && !l.auto; }).length;
+    // plus rien ne traîne au milieu d'une chaussée
+    const surChaussee = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 - 1.2 && Math.abs(z - rt.z) < rt.d / 2 - 1.2);
+    const vehic = new Set(); for (const c of [...G.city.cars, ...G.city.aiCars]) if (c.solid) vehic.add(c.solid);
+    const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar && !(o.w > 14 && o.d > 14) && surChaussee(o.x, o.z)).length;
+    return { axes: G.city.plan.axes.length, dessertes: d.length, quartiers: G.city.zones.length,
+      horsRoute, sansDesserte, sansArret, degagees: G.city.degagees, restants,
+      pireDistance: Math.max(...d.map(o => o.loin)) };
+  });
+  const ok = r.horsRoute.length === 0 && r.sansDesserte.length === 0 && r.sansArret === 0
+    && r.dessertes === r.quartiers && r.degagees > 20 && r.restants === 0 && r.pireDistance < 40;
+  return { ok, detail: `le plan est ENREGISTRÉ dans le jeu : ${r.axes} axes nommés et ${r.dessertes} dessertes, une par quartier (${r.quartiers} quartiers, ${r.sansDesserte.length} sans desserte) · chaque desserte tombe sur une vraie chaussée (${r.horsRoute.length} hors route), a ${r.pireDistance} m au pire de ce qu'elle dessert · le GPS voiture et les bots s'en servent : ${r.sansArret} quartier sans point d'arrêt · et ${r.degagees} objets qui traînaient au milieu des rues ont été enlevés (${r.restants} restant)` };
+});
+
+test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vraiment', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 302, hour: 12 });
+    const G = __G, c = G.city.casino, res = {};
+    res.batiment = { machines: c.machines.length, tables: c.tables.map(t => t.kind).sort().join(','),
+      neons: c.neons.length, enseigne: c.enseigne.texte, quartier: !!G.city.zones.find(z => z.name === 'Casino') };
+    // on s'approche d'une machine : E l'ouvre
+    const m = c.machines[0];
+    G.P.pos.set(m.x + Math.sin(m.ry) * 1.2, 0.9, m.z + Math.cos(m.ry) * 1.2);
+    for (let i = 0; i < 5; i++) G.step(1 / 60, true);
+    res.proche = !!G.city.slotNear;
+    // la machine paie : mesuré sur 300 000 tirages
+    let mise = 0, rendu = 0, jack = 0;
+    for (let i = 0; i < 300000; i++) { const t = G.tireRouleaux(), g = G.gainMachine(t, 1); mise++; rendu += g.mult; if (g.mult >= 100) jack++; }
+    res.machine = { retour: +(rendu / mise).toFixed(3), jackpots: jack };
+    // la roulette aussi
+    const pr = G.PARIS_ROULETTE.find(x => x.k === 'rouge'), pp = G.PARIS_ROULETTE.find(x => x.k === 'plein');
+    let r1 = 0, r2 = 0;
+    for (let i = 0; i < 200000; i++) { const n = Math.floor(Math.random() * 37); if (pr.gagne(n, 7)) r1 += pr.m; if (pp.gagne(n, 7)) r2 += pp.m; }
+    res.roulette = { rouge: +(r1 / 200000).toFixed(3), plein: +(r2 / 200000).toFixed(3), paris: G.PARIS_ROULETTE.length };
+    // on joue vraiment : les pièces bougent
+    G.wallet = 2000; G.ouvreCasino('machine', m); G.casino.mise = 100;
+    const w0 = G.wallet; G.jouerCasino();
+    res.jeu = { misePrise: w0 - G.wallet + G.casino.gain === 100, ecran: m.rouleaux.length === 3 };
+    // poker : cinq cartes, on garde, on change, la main est jugée
+    G.ouvreCasino('poker', c.tables.find(t => t.kind === 'poker'));
+    G.jouerCasino();
+    res.poker = { cartes: G.casino.cartes.length, etape: G.casino.etape };
+    G.casino.gardees = [true, true, true, true, true]; G.jouerCasino();
+    res.poker.fini = G.casino.etape === 'pret';
+    // le classement des mains est juste
+    const main = n => n.map(x => ({ c: x[0], v: x[1] }));
+    res.rangs = {
+      carre: G.POKER_GAINS[G.pokerRang(main([[0,5],[1,5],[2,5],[3,5],[0,9]]))].n,
+      couleur: G.POKER_GAINS[G.pokerRang(main([[2,1],[2,4],[2,7],[2,9],[2,11]]))].n,
+      quinte: G.POKER_GAINS[G.pokerRang(main([[0,3],[1,4],[2,5],[3,6],[0,7]]))].n,
+      full: G.POKER_GAINS[G.pokerRang(main([[0,5],[1,5],[2,5],[3,8],[0,8]]))].n,
+    };
+    // des bots viennent jouer aux machines
+    for (const x of G.bots.slice(0, 6)) { x.pos.set(c.x + (Math.random() - 0.5) * 20, 0.9, c.z + (Math.random() - 0.5) * 16); x.rdv = null; x.ko = 0; x.wait = 0; x.av.group.visible = true; }
+    G.closeUI();
+    let joueurs = 0;
+    for (let i = 0; i < 60 * 90; i++) { G.step(1 / 60, true); for (const x of G.bots) G.updateBot(x, 1 / 60); joueurs = Math.max(joueurs, c.machines.filter(mm => mm.bot).length); }
+    res.bots = joueurs;
+    return res;
+  });
+  const ok = r.batiment.machines >= 12 && /poker,poker,roulette/.test(r.batiment.tables) && r.batiment.neons > 20
+    && r.batiment.enseigne === 'WORLD TELIO MARLON' && r.batiment.quartier && r.proche
+    && r.machine.retour > 0.85 && r.machine.retour < 1 && r.machine.jackpots > 0
+    && r.roulette.rouge > 0.93 && r.roulette.rouge < 1 && r.roulette.plein > 0.9 && r.roulette.plein < 1 && r.roulette.paris >= 10
+    && r.jeu.ecran && r.poker.cartes === 5 && r.poker.fini
+    && r.rangs.carre === 'Carré' && r.rangs.couleur === 'Couleur' && r.rangs.quinte === 'Quinte' && r.rangs.full === 'Full'
+    && r.bots >= 2;
+  return { ok, detail: `le WORLD TELIO MARLON ouvre au nord de la ville : ${r.batiment.machines} machines à sous, une roulette, deux tables de poker, ${r.batiment.neons} ampoules de façade et la grande enseigne lumineuse · les jeux paient comme un vrai casino, mesuré sur 300 000 tirages : la machine rend ${r.machine.retour} de la mise (${r.machine.jackpots} jackpots à ×100), la roulette ${r.roulette.rouge} sur rouge/noir et ${r.roulette.plein} sur un numéro plein, avec ${r.roulette.paris} types de paris · le poker fermé distribue 5 cartes, on garde ce qu'on veut et la main est jugée juste (carré, couleur, quinte, full) · et ${r.bots} habitants viennent tirer les bras des machines` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

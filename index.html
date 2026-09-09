@@ -569,6 +569,20 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
   </div>
 </div>
 
+<div class="overlay hidden" id="casino">
+  <div class="card wide">
+    <h2 id="casinoTitre">🎰 WORLD TELIO MARLON</h2>
+    <p class="sub" id="casinoSub"></p>
+    <div class="pills" id="casinoMises"></div>
+    <div id="casinoCorps"></div>
+    <p id="casinoResultat" class="tuneprix"></p>
+    <div class="mpr" style="justify-content:center">
+      <button class="btn" id="casinoJouer">Jouer</button>
+      <button class="btn sec" id="casinoBack">Quitter la table</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="coiffeur">
   <div class="card" style="max-width:760px">
     <h2>💈 Salon de coiffure</h2>
@@ -1097,21 +1111,15 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // ---- circuit de course (au sud de la ville) ----
 // Tracé lissé (courbes) : ligne droite des stands, épingle, ligne droite, esses, grande courbe
 // Grand circuit : un rectangle aux coins arrondis qui fait le tour de la ville (départ sur la ligne droite sud)
+// LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
+// barrières bloquaient les quartiers et il fallait y percer des ouvertures. C'est maintenant
+// un petit anneau circulaire posé à l'écart, au sud-est, relié à la ville par une route.
+const RACE_C = { x: 152, z: -98, r: 33 };
 const RACE_PTS = (() => {
-  const cx = 0, cz = 35, hx = 73, hz = 89, r = 20, pts = [];
-  const push = (x, z) => pts.push([x, z]);
-  const arc = (ax, az, a0, a1) => { const n = 10; for (let i = 1; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; push(ax + r * Math.cos(a), az + r * Math.sin(a)); } };
-  // départ (0, cz+hz) puis vers l'ouest (-x), sens horaire vu de dessus
-  const step = 4;
-  for (let x = cx; x >= cx - hx + r; x -= step) push(x, cz + hz);
-  arc(cx - hx + r, cz + hz - r, Math.PI / 2, Math.PI);
-  for (let z = cz + hz - r - step; z >= cz - hz + r; z -= step) push(cx - hx, z);
-  arc(cx - hx + r, cz - hz + r, Math.PI, 1.5 * Math.PI);
-  for (let x = cx - hx + r + step; x <= cx + hx - r; x += step) push(x, cz - hz);
-  arc(cx + hx - r, cz - hz + r, 1.5 * Math.PI, 2 * Math.PI);
-  for (let z = cz - hz + r + step; z <= cz + hz - r; z += step) push(cx + hx, z);
-  arc(cx + hx - r, cz + hz - r, 0, Math.PI / 2);
-  for (let x = cx + hx - r - step; x > cx; x -= step) push(x, cz + hz);
+  const pts = [], n = 56;
+  // départ en bas de l'anneau (z le plus grand), puis vers l'ouest : sens horaire vu de dessus
+  for (let i = 0; i < n; i++) { const a = Math.PI / 2 + i / n * Math.PI * 2;
+    pts.push([RACE_C.x + RACE_C.r * Math.cos(a), RACE_C.z + RACE_C.r * Math.sin(a)]); }
   return pts;
 })();
 const RACE_LEN = (() => { let L = 0; for (let i = 0; i < RACE_PTS.length; i++) { const a = RACE_PTS[i], b = RACE_PTS[(i + 1) % RACE_PTS.length]; L += Math.hypot(b[0] - a[0], b[1] - a[1]); } return L; })();
@@ -1469,34 +1477,41 @@ function buildHelipad() {   // héliport (est, nord)
 }
 let raceKarts = [];
 function buildCircuit() {
+  const CX = RACE_C.x, CZ = RACE_C.z, R = RACE_C.r;
+  const SZ = CZ + R;              // la ligne de départ, en bas de l'anneau
   const asphalt = lam(0x33373f), kerb = new THREE.MeshLambertMaterial({ map: (() => { const t = BARRIER.clone(); t.needsUpdate = true; t.repeat.set(3, 1); return t; })() });
   const bmat = new THREE.MeshLambertMaterial({ map: (() => { const t = BARRIER.clone(); t.needsUpdate = true; t.repeat.set(2, 1); return t; })() });
+  // le sol de l'anneau : une plaque ronde, pour ne pas laisser d'herbe entre les segments
+  plat(CX, 0.02, CZ, (R + 7) * 2, (R + 7) * 2, 0x4d5460, { studs: false, noRoute: true, noEdges: true }, 0.02);
   const N = RACE_PTS.length;
   for (let i = 0; i < N; i++) {
     const a = RACE_PTS[i], b = RACE_PTS[(i + 1) % N], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
     const cx = (a[0] + b[0]) / 2, cz = (a[1] + b[1]) / 2, nx = -dz / L, nz = dx / L;
-    rbox(cx, cz, L + 0.4, 9, 0.06, -ang, asphalt, { y: 0.002 * (i % 2) });
-    rbox(cx + nx * 5, cz + nz * 5, L + 0.3, 0.5, 0.8, -ang, bmat, { solid: true, bar: true });
-    rbox(cx - nx * 5, cz - nz * 5, L + 0.3, 0.5, 0.8, -ang, bmat, { solid: true, bar: true });
-    if (Math.abs(ang % (Math.PI / 2)) > 0.05) { rbox(cx + nx * 4.2, cz + nz * 4.2, L + 0.3, 0.7, 0.09, -ang, kerb); rbox(cx - nx * 4.2, cz - nz * 4.2, L + 0.3, 0.7, 0.09, -ang, kerb); }   // vibreurs dans les virages
+    rbox(cx, cz, L + 0.6, 9, 0.06, -ang, asphalt, { y: 0.002 * (i % 2) });
+    rbox(cx + nx * 5, cz + nz * 5, L + 0.5, 0.5, 0.8, -ang, bmat, { solid: true, bar: true });
+    rbox(cx - nx * 5, cz - nz * 5, L + 0.5, 0.5, 0.8, -ang, bmat, { solid: true, bar: true });
+    if (i % 4 < 2) { rbox(cx + nx * 4.2, cz + nz * 4.2, L + 0.5, 0.7, 0.09, -ang, kerb); rbox(cx - nx * 4.2, cz - nz * 4.2, L + 0.5, 0.7, 0.09, -ang, kerb); }   // vibreurs
   }
-  for (const [x, z] of [[-62, 132], [62, 132], [-64, 50], [64, 50], [-64, -40], [66, -46], [-56, 116], [56, 116]]) tireStack(x, z);
-  // portique départ / arrivée (ligne droite sud, z = 124) avec feux
-  for (const z of [118.6, 129.4]) box(0, 2.2, z, 0.5, 4.4, 0.5, 0xc9ced8, { studs: false, noRoute: true });
+  for (let i = 0; i < 8; i++) { const a = Math.PI / 4 * i + 0.4; tireStack(CX + (R + 7) * Math.cos(a), CZ + (R + 7) * Math.sin(a)); }
+  // portique départ / arrivée, en travers de la ligne (la piste y va selon −x)
+  for (const dx of [-5.4, 5.4]) box(CX + dx, 2.2, SZ, 0.5, 4.4, 0.5, 0xc9ced8, { studs: false, noRoute: true });
   const ct = CHECKER.clone(); ct.needsUpdate = true; ct.repeat.set(9, 1);
-  box(0, 4.6, 124, 0.3, 1.2, 11, 0, { material: new THREE.MeshLambertMaterial({ map: ct }), deco: true, noEdges: true, studs: false });
+  box(CX, 4.6, SZ, 11, 1.2, 0.3, 0, { material: new THREE.MeshLambertMaterial({ map: ct }), deco: true, noEdges: true, studs: false });
   city.lights = [];
-  for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0x333333, emissive: 0x000000 })); l.scale.set(0.35, 0.5, 0.5); l.position.set(0.35, 3.6, 121.5 + i * 1.25); worldGroup.add(l); city.lights.push(l); }
-  const lt = CHECKER.clone(); lt.needsUpdate = true; lt.repeat.set(1, 9);
-  const line = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 9), new THREE.MeshBasicMaterial({ map: lt })); line.rotation.x = -Math.PI / 2; line.position.set(0, 0.1, 124); worldGroup.add(line);
-  sign(-4, 0.05, 116, '🏁 F : lancer la course'); sign(16, 0.05, 116, 'Karts : E pour monter');
-  // tribune (au sud de la piste)
-  box(0, 1.2, 131, 34, 2.4, 3, 0x8f98ab, { studs: false, noRoute: true }); for (let i = 0; i < 12; i++) box(-16 + i * 3, 2.9, 130.5, 1.8, 1, 1.2, [0xff5c5c, 0x4f8dff, 0xffd23f][i % 3], { deco: true, studs: false });
-  // karts pour les joueurs (grille) et karts des bots
-  plat(6, 0.16, 113, 30, 7, 0x565b66, { studs: false, noRoute: true }, 0.12);   // voie des stands (hors piste)
-  box(6, 2.6, 109.4, 30, 0.4, 0.4, 0xc9ced8, { deco: true, studs: false }); for (const dx of [-14, -7, 0, 7, 14]) box(6 + dx, 1.4, 109.4, 0.3, 2.8, 0.3, 0xc9ced8, { studs: false, noRoute: true });
-  box(6, 3.2, 109.4, 8, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏁 STANDS') }), deco: true, noEdges: true });
-  const gridPos = k => [-7 + Math.floor(k / 2) * 5, 113 + (k % 2 ? 1.7 : -1.7)];   // grille en quinconce : un kart fait 4,4 m de long
+  for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0x333333, emissive: 0x000000 })); l.scale.set(0.5, 0.5, 0.35); l.position.set(CX - 2.5 + i * 1.25, 3.6, SZ - 0.35); worldGroup.add(l); city.lights.push(l); }
+  const lt = CHECKER.clone(); lt.needsUpdate = true; lt.repeat.set(9, 1);
+  const line = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.2), new THREE.MeshBasicMaterial({ map: lt })); line.rotation.x = -Math.PI / 2; line.position.set(CX, 0.1, SZ); worldGroup.add(line);
+  // voie des stands et grille : À L'INTÉRIEUR de l'anneau, derrière la ligne
+  const PZ = SZ - 12;
+  plat(CX, 0.16, PZ, 34, 8, 0x565b66, { studs: false, noRoute: true }, 0.12);
+  box(CX, 2.6, PZ - 4.6, 34, 0.4, 0.4, 0xc9ced8, { deco: true, studs: false });
+  for (const dx of [-16, -8, 0, 8, 16]) box(CX + dx, 1.4, PZ - 4.6, 0.3, 2.8, 0.3, 0xc9ced8, { studs: false, noRoute: true });
+  box(CX, 3.2, PZ - 4.6, 8, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🏁 STANDS') }), deco: true, noEdges: true });
+  sign(CX - 12, 0.05, PZ + 5, '🏁 F : lancer la course'); sign(CX + 12, 0.05, PZ + 5, 'Karts : E pour monter');
+  // tribune, à l'extérieur de l'anneau
+  box(CX, 1.2, SZ + 8, 34, 2.4, 3, 0x8f98ab, { studs: false, noRoute: true });
+  for (let i = 0; i < 12; i++) box(CX - 16 + i * 3, 2.9, SZ + 7.5, 1.8, 1, 1.2, [0xff5c5c, 0x4f8dff, 0xffd23f][i % 3], { deco: true, studs: false });
+  const gridPos = k => [CX - 13 + Math.floor(k / 2) * 5, PZ + (k % 2 ? 1.8 : -1.8)];   // grille en quinconce
   for (let i = 0; i < 4; i++) { const [gx2, gz2] = gridPos(i); const c = makeCar([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453][i], gx2, gz2, -Math.PI / 2, { kart: true, num: i + 1 }); city.cars.push(c); }
   raceKarts = [];
   for (let i = 0; i < BOTS_COUREURS; i++) { const [gx2, gz2] = gridPos(4 + i); const c = makeCar([0xb57cff, 0xff8f3a, 0x35d0e6, 0xc9ced8, 0xff7ad9][i], gx2, gz2, -Math.PI / 2, { kart: true, num: 5 + i }); c.tag = nameTag(BOT_DEFS[i].name); c.tag.position.y = 2.2; c.g.add(c.tag); c.solid.ai = true; raceKarts.push(c); }
@@ -1504,9 +1519,374 @@ function buildCircuit() {
   // boosters (flèches lumineuses sur la piste)
   const bt = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#1b2a4a'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3ef2ff'; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round'; for (const ox of [-18, 6]) { g.beginPath(); g.moveTo(24 + ox, 12); g.lineTo(42 + ox, 32); g.lineTo(24 + ox, 52); g.stroke(); } const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; })();
   const bm = new THREE.MeshLambertMaterial({ map: bt, emissive: 0x3ef2ff, emissiveIntensity: 0.35 });
-  for (const sPos of [45, 200, 320, 470]) { const [x, z, h] = pathPos(sPos); rbox(x, z, 4, 3, 0.12, -Math.atan2(Math.cos(h), Math.sin(h)), bm, { y: 0.05 }); city.boosters.push({ x, z, cd: 0 }); }
-  // entrées : ouvertures dans la barrière intérieure au bout des routes est / ouest (z = 0) et au nord
-  for (const o of solids.filter(o => o.mesh && o.bar && ((Math.abs(o.z) < 4 && Math.abs(Math.abs(o.x) - 68) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z - 124) - 5) < 1.5) || (Math.abs(Math.abs(o.x) - 48) < 4 && Math.abs(Math.abs(o.z + 54) - 5) < 1.5)))) { worldGroup.remove(o.mesh); solids.splice(solids.indexOf(o), 1); } sgridSale();
+  for (let k = 0; k < 4; k++) { const [x, z, h] = pathPos(RACE_LEN * (0.14 + k * 0.25)); rbox(x, z, 4, 3, 0.12, -Math.atan2(Math.cos(h), Math.sin(h)), bm, { y: 0.05 }); city.boosters.push({ x, z, cd: 0 }); }
+  // ENTRÉE DU CIRCUIT : une ouverture dans la barrière extérieure, côté ville (nord-ouest),
+  // au bout de la route qui vient du quartier est.
+  const eA = Math.PI * 1.25;
+  const ex = CX + R * Math.cos(eA), ez = CZ + R * Math.sin(eA);
+  for (const o of solids.filter(o => o.mesh && o.bar && Math.hypot(o.x - ex, o.z - ez) < 7)) { worldGroup.remove(o.mesh); solids.splice(solids.indexOf(o), 1); }
+  sgridSale();
+  city.circuit = { x: CX, z: CZ, r: R, depart: { x: CX, z: PZ }, entree: { x: ex, z: ez } };
+}
+// ================= LES JEUX DU CASINO =================
+// Machines à sous, roulette et poker fermé. On mise de VRAIES pièces, on gagne ou on perd,
+// et la banque garde un petit avantage — comme dans un vrai casino.
+const MISES = [10, 25, 50, 100, 250];
+const casino = { mise: 25, jeu: null, machine: null, table: null, cartes: [], gardees: [],
+  etape: 'pret', resultat: '', gain: 0, mises: 0, gains: 0, roulette: null, pari: 'rouge', numero: 7, paquet: [] };
+// --- les machines à sous ---
+// Trois rouleaux. Trois symboles identiques paient gros, deux paient petit.
+// Réglage mesuré sur des dizaines de milliers de tirages : la machine rend environ 93 % de
+// ce qu'on y met. Généreuse, mais elle gagne à la fin — comme une vraie. Le gros lot : les 7.
+const SLOT_GAINS = { '7️⃣': 100, '💎': 40, '⭐': 18, '🔔': 12, '🍋': 8, '🍒': 6 };
+function tireRouleaux() {
+  // le 7 est plus rare : c'est le jackpot
+  const sac = ['🍒', '🍒', '🍒', '🍋', '🍋', '🍋', '🔔', '🔔', '⭐', '⭐', '💎', '7️⃣'];
+  return [0, 1, 2].map(() => pickOne(sac));
+}
+function gainMachine(r, mise) {
+  if (r[0] === r[1] && r[1] === r[2]) return { mult: SLOT_GAINS[r[0]] || 5, quoi: `TROIS ${r[0]}` };
+  if (r[0] === r[1] || r[1] === r[2] || r[0] === r[2]) {
+    const paire = r[0] === r[1] ? r[0] : r[1] === r[2] ? r[1] : r[0];
+    return { mult: paire === '7️⃣' ? 3 : 1, quoi: `deux ${paire}` };   // une paire rend la mise
+  }
+  return { mult: 0, quoi: 'rien' };
+}
+// --- la roulette ---
+const ROUGES = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const PARIS_ROULETTE = [
+  { k: 'rouge', n: '🔴 Rouge', m: 2, gagne: v => v > 0 && ROUGES.has(v) },
+  { k: 'noir', n: '⚫ Noir', m: 2, gagne: v => v > 0 && !ROUGES.has(v) },
+  { k: 'pair', n: '🔢 Pair', m: 2, gagne: v => v > 0 && v % 2 === 0 },
+  { k: 'impair', n: '🔢 Impair', m: 2, gagne: v => v > 0 && v % 2 === 1 },
+  { k: 'manque', n: '⬇️ 1 à 18', m: 2, gagne: v => v >= 1 && v <= 18 },
+  { k: 'passe', n: '⬆️ 19 à 36', m: 2, gagne: v => v >= 19 },
+  { k: 'douze1', n: '1️⃣ 1ʳᵉ douzaine', m: 3, gagne: v => v >= 1 && v <= 12 },
+  { k: 'douze2', n: '2️⃣ 2ᵉ douzaine', m: 3, gagne: v => v >= 13 && v <= 24 },
+  { k: 'douze3', n: '3️⃣ 3ᵉ douzaine', m: 3, gagne: v => v >= 25 },
+  { k: 'plein', n: '🎯 Numéro plein', m: 36, gagne: (v, n) => v === n },
+];
+// --- le poker fermé : cinq cartes, on garde ce qu'on veut, on retire une fois ---
+const POKER_COULEURS = ['♠', '♥', '♦', '♣'];
+const POKER_NOMS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'V', 'D', 'R', 'A'];
+const POKER_GAINS = [
+  { n: 'Quinte flush royale', m: 250 }, { n: 'Quinte flush', m: 80 }, { n: 'Carré', m: 30 },
+  { n: 'Full', m: 14 }, { n: 'Couleur', m: 9 }, { n: 'Quinte', m: 6 },
+  { n: 'Brelan', m: 4 }, { n: 'Deux paires', m: 3 }, { n: 'Paire de valets ou mieux', m: 2 }, { n: 'Rien', m: 0 },
+];
+function pokerPaquet() {
+  const p = [];
+  for (let c = 0; c < 4; c++) for (let v = 0; v < 13; v++) p.push({ c, v });
+  for (let i = p.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = p[i]; p[i] = p[j]; p[j] = t; }
+  return p;
+}
+const carteNom = c => POKER_NOMS[c.v] + POKER_COULEURS[c.c];
+// Le rang de la main : renvoie l'indice dans POKER_GAINS (0 = la meilleure).
+function pokerRang(m) {
+  const vs = m.map(c => c.v).sort((a, b) => a - b), cs = m.map(c => c.c);
+  const compte = {}; for (const v of vs) compte[v] = (compte[v] || 0) + 1;
+  const paquets = Object.values(compte).sort((a, b) => b - a);
+  const couleur = cs.every(c => c === cs[0]);
+  let suite = vs.every((v, i) => i === 0 || v === vs[i - 1] + 1);
+  const roue = vs.join() === [0, 1, 2, 3, 12].join();   // A-2-3-4-5
+  if (roue) suite = true;
+  if (couleur && suite && vs[0] === 8 && !roue) return 0;   // 10-V-D-R-A
+  if (couleur && suite) return 1;
+  if (paquets[0] === 4) return 2;
+  if (paquets[0] === 3 && paquets[1] === 2) return 3;
+  if (couleur) return 4;
+  if (suite) return 5;
+  if (paquets[0] === 3) return 6;
+  if (paquets[0] === 2 && paquets[1] === 2) return 7;
+  // une paire ne paie qu'à partir des valets
+  for (const v in compte) if (compte[v] === 2 && +v >= 9) return 8;
+  return 9;
+}
+// ---- l'ouverture d'un jeu ----
+function ouvreCasino(quoi, obj) {
+  if (!city.casino) return false;
+  casino.jeu = quoi; casino.machine = quoi === 'machine' ? obj : null; casino.table = quoi === 'machine' ? null : obj;
+  casino.etape = 'pret'; casino.resultat = ''; casino.gain = 0; casino.cartes = []; casino.gardees = [];
+  openUI('casino'); majCasino();
+  return true;
+}
+function majCasino() {
+  const j = casino.jeu;
+  $('casinoTitre').textContent = j === 'machine' ? '🎰 Machine à sous' : j === 'roulette' ? '🎡 Roulette' : '🃏 Poker fermé';
+  $('casinoSub').innerHTML = `Tu as <b>${wallet} 🪙</b> · mise : <b>${casino.mise} 🪙</b>`
+    + (casino.mises ? ` · misé ${casino.mises} 🪙, gagné ${casino.gains} 🪙 ce soir` : '');
+  $('casinoMises').innerHTML = MISES.map(m => `<b data-mise="${m}" class="${casino.mise === m ? 'sel' : ''}">${m} 🪙</b>`).join('');
+  $('casinoMises').querySelectorAll('[data-mise]').forEach(b => b.addEventListener('click', () => { casino.mise = +b.dataset.mise; majCasino(); }));
+  let h = '';
+  if (j === 'machine') {
+    const r = (casino.machine && casino.machine.rouleaux) || ['🍒', '🍋', '⭐'];
+    h += `<div style="text-align:center;font-size:clamp(44px,11vw,86px);letter-spacing:10px;margin:6px 0">${r.join(' ')}</div>`;
+    h += '<div class="tunelist">' + Object.entries(SLOT_GAINS).map(([e, m]) =>
+      `<button class="tunebtn"><b>${e} ${e} ${e}</b><span>× ${m}</span><i>deux pareils : la mise (× 3 pour les 7)</i></button>`).join('') + '</div>';
+  } else if (j === 'roulette') {
+    const num = casino.roulette;
+    h += `<div style="text-align:center;margin:6px 0"><span style="font-size:clamp(40px,10vw,74px);font-weight:800;color:${num == null ? '#7a86a0' : num === 0 ? '#5cc453' : ROUGES.has(num) ? '#ff5c5c' : '#2b3550'}">${num == null ? '—' : num}</span></div>`;
+    h += '<div class="tunelist">' + PARIS_ROULETTE.map(p =>
+      `<button class="tunebtn ${casino.pari === p.k ? 'on' : ''}" data-pari="${p.k}"><b>${p.n}</b><span>× ${p.m}</span>`
+      + (p.k === 'plein' ? `<i>numéro choisi : ${casino.numero}</i>` : '<i></i>') + '</button>').join('') + '</div>';
+    h += '<div class="tunerow" style="flex-wrap:wrap">' + Array.from({ length: 37 }, (_, i) =>
+      `<button class="tunebtn ${casino.numero === i ? 'on' : ''}" data-num="${i}" style="min-width:44px">${i}</button>`).join('') + '</div>';
+  } else {
+    const c = casino.cartes;
+    h += '<div class="tunerow" style="justify-content:center">' + (c.length ? c.map((x, i) =>
+      `<button class="tunebtn ${casino.gardees[i] ? 'on' : ''}" data-carte="${i}" style="min-width:74px">`
+      + `<b style="font-size:1.5em;color:${x.c === 1 || x.c === 2 ? '#ff5c5c' : '#1b2030'}">${carteNom(x)}</b>`
+      + `<i>${casino.gardees[i] ? 'gardée' : 'à changer'}</i></button>`).join('')
+      : '<span style="opacity:.7">Mise, puis distribue les cartes.</span>') + '</div>';
+    h += '<div class="tunelist">' + POKER_GAINS.filter(g => g.m).map(g =>
+      `<button class="tunebtn"><b>${g.n}</b><span>× ${g.m}</span><i></i></button>`).join('') + '</div>';
+  }
+  $('casinoCorps').innerHTML = h;
+  const box2 = $('casinoCorps');
+  box2.querySelectorAll('[data-pari]').forEach(b => b.addEventListener('click', () => { casino.pari = b.dataset.pari; majCasino(); }));
+  box2.querySelectorAll('[data-num]').forEach(b => b.addEventListener('click', () => { casino.numero = +b.dataset.num; casino.pari = 'plein'; majCasino(); }));
+  box2.querySelectorAll('[data-carte]').forEach(b => b.addEventListener('click', () => {
+    if (casino.etape !== 'change') return;
+    const i = +b.dataset.carte; casino.gardees[i] = !casino.gardees[i]; majCasino();
+  }));
+  $('casinoResultat').innerHTML = casino.resultat || '&nbsp;';
+  $('casinoJouer').textContent = j === 'poker'
+    ? (casino.etape === 'change' ? '🃏 Changer les cartes' : `🃏 Distribuer (${casino.mise} 🪙)`)
+    : j === 'roulette' ? `🎡 Lancer la bille (${casino.mise} 🪙)` : `🎰 Tirer le bras (${casino.mise} 🪙)`;
+  $('casinoJouer').disabled = casino.etape !== 'change' && wallet < casino.mise;
+  $('casinoJouer').style.opacity = $('casinoJouer').disabled ? 0.5 : 1;
+}
+function jouerCasino() {
+  if (casino.jeu === 'poker' && casino.etape === 'change') return pokerChange();
+  if (wallet < casino.mise) { msg(`🪙 Il te manque ${casino.mise - wallet} 🪙`, 2000); return; }
+  wallet -= casino.mise; casino.mises += casino.mise; saveWallet(); updateHud();
+  if (casino.jeu === 'machine') return tourMachine();
+  if (casino.jeu === 'roulette') return tourRoulette();
+  return pokerDonne();
+}
+function encaisse(gain, texte, gros) {
+  casino.gain = gain;
+  if (gain > 0) { wallet += gain; casino.gains += gain; saveWallet(); updateHud(); sfx.coin(); if (gros) { sfx.win(); sfx.cheer(); } }
+  else sfx.die();
+  casino.resultat = gain > 0 ? `<b style="color:#5cc453">${texte} — tu gagnes ${gain} 🪙 !</b>` : `<span style="color:#ff8f3a">${texte} — perdu</span>`;
+  majCasino();
+}
+function tourMachine() {
+  const m = casino.machine;
+  const r = tireRouleaux();
+  if (m) { m.rouleaux = r; m.anim = simTime + 0.9; dessineMachine(m); }
+  sfx.tone(420, 0, .1, 'square', .05); sfx.noise(.25, 700, .05);
+  const g = gainMachine(r, casino.mise);
+  encaisse(Math.round(casino.mise * g.mult), `${r.join(' ')} · ${g.quoi}`, g.mult >= 16);
+}
+function tourRoulette() {
+  const n = Math.floor(Math.random() * 37);
+  casino.roulette = n;
+  if (casino.table && casino.table.g) casino.table.anim = simTime + 1.6;
+  sfx.noise(.35, 500, .05); sfx.tone(300, 0, .2, 'sine', .04, 120);
+  const p = PARIS_ROULETTE.find(x => x.k === casino.pari) || PARIS_ROULETTE[0];
+  const ok = p.gagne(n, casino.numero);
+  encaisse(ok ? Math.round(casino.mise * p.m) : 0,
+    `${n === 0 ? '🟢' : ROUGES.has(n) ? '🔴' : '⚫'} ${n} · ${p.n}`, ok && p.m >= 12);
+}
+function pokerDonne() {
+  casino.paquet = pokerPaquet();
+  casino.cartes = casino.paquet.splice(0, 5);
+  casino.gardees = [false, false, false, false, false];
+  casino.etape = 'change';
+  casino.resultat = 'Choisis les cartes à GARDER, puis change les autres.';
+  sfx.tone(520, 0, .08, 'triangle', .05);
+  majCasino();
+}
+function pokerChange() {
+  for (let i = 0; i < 5; i++) if (!casino.gardees[i]) casino.cartes[i] = casino.paquet.pop();
+  casino.etape = 'pret';
+  const rang = pokerRang(casino.cartes), g = POKER_GAINS[rang];
+  encaisse(Math.round(casino.mise * g.m), `${casino.cartes.map(carteNom).join(' ')} · ${g.n}`, g.m >= 14);
+}
+// ---- les machines vivent : le bras retombe, les néons clignotent, des bots jouent ----
+function casinoTick(dt) {
+  const c = city.casino; if (!c) return;
+  for (const m of c.machines) {
+    const actif = m.anim > simTime;
+    if (m.bras) m.bras.rotation.x = actif ? -0.9 * Math.min(1, (m.anim - simTime) / 0.9) : 0;
+    if (m.halo) m.halo.material.emissiveIntensity = 0.4 + Math.sin(simTime * 4 + m.idx) * 0.25 + (actif ? 0.5 : 0);
+  }
+  for (let i = 0; i < c.neons.length; i++) c.neons[i].material.emissiveIntensity = 0.45 + Math.sin(simTime * 3 + i * 0.5) * 0.35;
+  for (const t of c.tables) if (t.kind === 'roulette' && t.g.userData.bille) {
+    const b = t.g.userData.bille, v = t.anim > simTime ? 9 : 1.2;
+    const a = simTime * v; b.position.set(Math.cos(a) * 0.95, 1.42, Math.sin(a) * 0.95);
+  }
+  // des habitants viennent jouer : ils se plantent devant une machine et tirent le bras
+  if (simTime > (c.botT || 0)) {
+    c.botT = simTime + rnd(3, 7);
+    const libres = c.machines.filter(m => !m.bot);
+    const dispo = bots.filter(b => !b.ko && !b.drive && !b.rdv && !b.bagarre && !b.sport && b.av.group.visible
+      && Math.hypot(b.pos.x - c.x, b.pos.z - c.z) < 46);
+    if (libres.length && dispo.length && Math.random() < 0.6) {
+      const m = pickOne(libres), b = pickOne(dispo);
+      m.bot = b; b.casino = m;
+      b.rdv = { x: m.x + Math.sin(m.ry) * 1.5, z: m.z + Math.cos(m.ry) * 1.5, y: 0.9, nom: '🎰 le casino', arrive: false, libre: true };
+      b.rdvRoute = null; b.wait = 0;
+    }
+  }
+  for (const m of c.machines) {
+    const b = m.bot; if (!b) continue;
+    if (b.ko || b.mort || !b.rdv) { m.bot = null; b.casino = null; continue; }
+    if (!b.rdv.arrive) continue;
+    if (simTime < (b.casinoT || 0)) continue;
+    b.casinoT = simTime + rnd(2.5, 5);
+    m.rouleaux = tireRouleaux(); m.anim = simTime + 0.9; dessineMachine(m);
+    b.av.rig.swing = 0.35; sfx.tone(380, 0, .07, 'square', .04);
+    const g = gainMachine(m.rouleaux, 10);
+    if (g.mult >= 10) { bubble(b.av, pickOne(['JACKPOT ! 🎉', 'j\'ai gagné ! 🤑', 'incroyable !'])); sfx.coin(); }
+    else if (Math.random() < 0.25) bubble(b.av, pickOne(['encore raté 😩', 'une dernière…', 'ça va tomber']));
+    if (Math.random() < 0.18) { m.bot = null; b.casino = null; b.rdv = null; b.wait = rnd(1, 3); }   // il s'en va
+  }
+}
+// ================= LE QUARTIER DU CASINO =================
+// À l'est de la ville, au bout de l'avenue du casino : un quartier de nuit — enseignes,
+// néons, palmiers, et le WORLD TELIO MARLON, casino de luxe où l'on joue vraiment.
+function buildCasino(x, z) {
+  const OR = 0xf2c14e, ROUGE = 0x7a1220, TAPIS = 0x8b1a2b, MARBRE = 0xf1ece1, NUIT = 0x141a2e;
+  const W = 40, D = 30, H = 8.5;
+  city.casino = { x, z, w: W, d: D, machines: [], tables: [], joueurs: [] };
+  // --- parvis, marches, tapis rouge ---
+  plat(x, 0.16, z + D / 2 + 9, W + 26, 26, 0x2b3550, { studs: false, noRoute: true }, 0.1);
+  plat(x, 0.2, z + D / 2 + 8, 10, 22, ROUGE, { studs: false, noRoute: true, noEdges: true }, 0.04);
+  for (let i = 0; i < 3; i++) plat(x, 0.3 + i * 0.22, z + D / 2 + 1.6 - i * 0.7, 14 - i, 2.2, MARBRE, { studs: false, noRoute: true }, 0.2);
+  // --- le bâtiment : marbre clair, bandeau doré, toit à corniche ---
+  plat(x, 0.85, z, W, D, MARBRE, { studs: false, noRoute: true }, 0.7);
+  box(x, 0.85 + H / 2, z - D / 2 + 0.3, W, H, 0.6, MARBRE, { studs: false, noRoute: true });
+  for (const sx of [-1, 1]) box(x + sx * (W / 2 - 0.3), 0.85 + H / 2, z, 0.6, H, D, MARBRE, { studs: false, noRoute: true });
+  // façade sud : deux pans, l'entrée reste ouverte au milieu
+  for (const sx of [-1, 1]) box(x + sx * (W / 4 + 2.5), 0.85 + H / 2, z + D / 2 - 0.3, W / 2 - 5, H, 0.6, MARBRE, { studs: false, noRoute: true });
+  box(x, 0.85 + H, z, W + 2.4, 0.7, D + 2.4, OR, { deco: true, studs: false });
+  box(x, 0.85 + H + 0.7, z, W - 2, 0.5, D - 2, ROUGE, { deco: true, studs: false });
+  // colonnes dorées du perron
+  for (const sx of [-1, -0.5, 0.5, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, H - 0.6, 12), lam(OR));
+    c.position.set(x + sx * 9, 0.85 + (H - 0.6) / 2, z + D / 2 + 1.2); worldGroup.add(c);
+    box(x + sx * 9, 0.85 + H - 0.2, z + D / 2 + 1.2, 1.6, 0.4, 1.6, OR, { deco: true, studs: false }); }
+  box(x, 0.85 + H + 0.2, z + D / 2 + 1.2, 22, 0.8, 2.6, ROUGE, { deco: true, studs: false });   // auvent
+  // --- LA GRANDE ENSEIGNE LUMINEUSE ---
+  const ens = textTexture('WORLD TELIO MARLON');
+  const em = new THREE.MeshBasicMaterial({ map: ens, transparent: true });
+  box(x, 0.85 + H + 3.6, z + D / 2 + 1.6, 34, 4.4, 0.4, 0, { material: em, deco: true, noEdges: true });
+  box(x, 0.85 + H + 3.6, z + D / 2 + 1.9, 35.6, 5.4, 0.3, 0, { material: neonMat(0xff3a6a), deco: true, noEdges: true, noShadow: true });
+  box(x, 0.85 + H + 3.6, z - D / 2 - 0.6, 30, 4, 0.3, 0, { material: em, deco: true, noEdges: true });
+  city.casino.enseigne = { x, z: z + D / 2 + 1.6, texte: 'WORLD TELIO MARLON' };
+  // guirlandes d'ampoules sur la corniche
+  city.casino.neons = [];
+  for (let i = 0; i < 26; i++) {
+    const a = i / 26 * Math.PI * 2;
+    const nx = x + Math.cos(a) * (W / 2 + 0.9), nz = z + Math.sin(a) * (D / 2 + 0.9);
+    const b2 = new THREE.Mesh(unitRound, neonMat([0xff3a6a, 0xffd23f, 0x3ef2ff, 0xb57cff][i % 4]));
+    b2.scale.setScalar(0.42); b2.position.set(nx, 0.85 + H + 1.2, nz); worldGroup.add(b2);
+    city.casino.neons.push(b2);
+  }
+  // palmiers et bornes du parvis
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) palm(x + sx * 16, z + D / 2 + 4 + i * 7);
+  for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) {
+    const b2 = new THREE.Mesh(unitRound, neonMat(0xffd23f)); b2.scale.set(0.3, 1.1, 0.3);
+    b2.position.set(x + sx * 5.6, 0.9, z + D / 2 + 4 + i * 5); worldGroup.add(b2);
+  }
+  // --- l'intérieur : moquette, lustres, bar ---
+  plat(x, 0.9, z, W - 2, D - 2, TAPIS, { studs: false, noRoute: true, noEdges: true }, 0.05);
+  for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) {
+    const l = new THREE.PointLight(0xffd9a0, 0.9, 26); l.position.set(x + sx * 12, 0.85 + H - 1.4, z + sz * 8); worldGroup.add(l);
+    const lu = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), neonMat(0xfff0c0));
+    lu.position.set(x + sx * 12, 0.85 + H - 1.4, z + sz * 8); worldGroup.add(lu);
+  }
+  // bar du fond
+  box(x, 1.55, z - D / 2 + 3.2, 16, 1.3, 1.4, 0x3b2418, { studs: false, noRoute: true });
+  box(x, 2.24, z - D / 2 + 3.2, 16.4, 0.14, 1.8, OR, { deco: true, studs: false });
+  for (let i = 0; i < 12; i++) box(x - 7 + i * 1.3, 3.4, z - D / 2 + 2.2, 0.3, 1.1, 0.3, [0x5cc453, 0xff5c5c, 0xffd23f][i % 3], { deco: true, studs: false });
+  box(x, 4.6, z - D / 2 + 1.6, 12, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🍸 BAR') }), deco: true, noEdges: true });
+  // --- LES MACHINES À SOUS : deux rangées de huit ---
+  for (const sz of [-1, 1]) for (let i = 0; i < 8; i++) {
+    const mx = x - 15.5 + i * 4.4, mz = z + sz * 9.5;
+    machineASous(mx, mz, sz > 0 ? Math.PI : 0, i + (sz > 0 ? 8 : 0));
+  }
+  // --- LES TABLES : roulette au centre, poker de chaque côté ---
+  tableCasino(x, z + 1, 'roulette');
+  tableCasino(x - 13, z - 2.5, 'poker');
+  tableCasino(x + 13, z - 2.5, 'poker');
+  // --- le quartier autour : immeubles de nuit, hôtel, parking ---
+  const cols = [0x1b2a4a, 0x2b1a3a, 0x1a2b3a, 0x3a1a2a];
+  for (let i = 0; i < 6; i++) building(x - 34 + i * 14, z - 34, 10, 10 + (i % 3) * 6, 10, cols[i % 4]);
+  for (let i = 0; i < 4; i++) building(x + 30, z - 14 + i * 13, 11, 12 + (i % 2) * 8, 11, cols[(i + 1) % 4]);
+  plat(x - 30, 0.16, z + 26, 22, 16, 0x565b66, { studs: false, noRoute: true }, 0.1);
+  sign(x - 30, 0.2, z + 18, '🅿️ Parking du casino');
+  for (let i = 0; i < 3; i++) city.cars.push(makeCar([0x111111, 0xf4f6fa, 0xf2c14e][i], x - 36 + i * 6, z + 26, 0));
+  city.zones.push({ name: 'Casino', emoji: '🎰', x1: x - W / 2 - 12, x2: x + W / 2 + 12, z1: z - D / 2 - 6, z2: z + D / 2 + 22,
+    hint: '🎰 WORLD TELIO MARLON : machines à sous, roulette et poker — E devant une machine ou une table' });
+}
+// Une machine à sous : caisse laquée, écran à trois rouleaux, bras rouge.
+function machineASous(x, z, ry, idx) {
+  const g = new THREE.Group(); g.position.set(x, 0.9, z); g.rotation.y = ry; worldGroup.add(g);
+  const corps = new THREE.Mesh(unitBox, lam(0x7a1220)); corps.scale.set(1.5, 2.1, 1.1); corps.position.y = 1.05; g.add(corps);
+  const socle = new THREE.Mesh(unitBox, lam(0x2b1116)); socle.scale.set(1.7, 0.3, 1.3); socle.position.y = 0.15; g.add(socle);
+  const cadre = new THREE.Mesh(unitBox, lam(0xf2c14e)); cadre.scale.set(1.62, 0.16, 1.16); cadre.position.y = 2.16; g.add(cadre);
+  // l'écran : dessiné sur une toile, on le repeint à chaque tirage
+  const cv = document.createElement('canvas'); cv.width = 192; cv.height = 96;
+  const tex = new THREE.CanvasTexture(cv);
+  const ecran = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 0.62), new THREE.MeshBasicMaterial({ map: tex }));
+  ecran.position.set(0, 1.5, 0.56); g.add(ecran);
+  const fronton = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.42), new THREE.MeshBasicMaterial({ map: textTexture('🎰 JACKPOT'), transparent: true }));
+  fronton.position.set(0, 2.42, 0.5); g.add(fronton);
+  const halo = new THREE.Mesh(unitBox, neonMat(0xff3a6a)); halo.scale.set(1.56, 0.1, 1.14); halo.position.y = 2.34; g.add(halo);
+  // le bras
+  const bras = new THREE.Group(); bras.position.set(0.86, 1.5, 0); g.add(bras);
+  const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8), lam(0xc9ced8)); tige.position.y = 0.4; bras.add(tige);
+  const boule = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), lam(0xff2020)); boule.position.y = 0.82; bras.add(boule);
+  const m = { x, z, ry, g, tex, cv, bras, halo, idx, rouleaux: ['🍒', '🍋', '⭐'], anim: 0, gain: 0, bot: null };
+  dessineMachine(m);
+  city.casino.machines.push(m);
+  box(x, 1.95, z, 1.7, 2.1, 1.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  return m;
+}
+const SLOT_SYMB = ['🍒', '🍋', '🔔', '⭐', '💎', '7️⃣'];
+function dessineMachine(m) {
+  const g = m.cv.getContext('2d');
+  g.fillStyle = '#0d0f18'; g.fillRect(0, 0, 192, 96);
+  g.fillStyle = '#f2c14e'; g.fillRect(2, 2, 188, 92); g.fillStyle = '#12141f'; g.fillRect(6, 6, 180, 84);
+  g.font = '46px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = '#1d2133'; g.fillRect(10 + i * 60, 12, 52, 72);
+    g.fillStyle = '#fff'; g.fillText(m.rouleaux[i], 36 + i * 60, 50);
+  }
+  m.tex.needsUpdate = true;
+}
+// Une table de jeu : tapis, bord de cuir, jetons — roulette ou poker.
+function tableCasino(x, z, kind) {
+  const g = new THREE.Group(); g.position.set(x, 0.9, z); worldGroup.add(g);
+  const R = kind === 'roulette' ? 2.4 : 2.1;
+  const pied = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 0.9, 10), lam(0x3b2418)); pied.position.y = 0.45; g.add(pied);
+  const plateau = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.18, 28), lam(kind === 'roulette' ? 0x0f5132 : 0x123f6b));
+  plateau.position.y = 0.98; g.add(plateau);
+  const bord = new THREE.Mesh(new THREE.TorusGeometry(R, 0.16, 8, 28), lam(0x3b2418));
+  bord.rotation.x = Math.PI / 2; bord.position.y = 1.02; g.add(bord);
+  if (kind === 'roulette') {
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.3, 24), lam(0x2b1116)); cyl.position.y = 1.2; g.add(cyl);
+    for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2;
+      const c2 = new THREE.Mesh(unitBox, lam(i % 2 ? 0xc02030 : 0x14161f)); c2.scale.set(0.34, 0.06, 0.9);
+      c2.position.set(Math.cos(a) * 0.72, 1.36, Math.sin(a) * 0.72); c2.rotation.y = -a; g.add(c2); }
+    const bille = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), lam(0xf4f6fa)); bille.position.set(0.95, 1.42, 0); g.add(bille);
+    g.userData.bille = bille;
+  } else {
+    for (let i = 0; i < 5; i++) { const c2 = new THREE.Mesh(unitBox, lam(0xf4f6fa)); c2.scale.set(0.5, 0.03, 0.72);
+      c2.position.set(-1.1 + i * 0.55, 1.09, 0.3); c2.rotation.y = rnd(-0.1, 0.1); g.add(c2); }
+  }
+  for (let i = 0; i < 10; i++) { const j = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 12), lam([0xff5c5c, 0x4f8dff, 0x5cc453, 0xf2c14e][i % 4]));
+    j.position.set(Math.cos(i) * 1.5, 1.1 + (i % 3) * 0.05, Math.sin(i) * 1.5); g.add(j); }
+  // tabourets
+  for (let i = 0; i < 4; i++) { const a = Math.PI / 2 * i + 0.4;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.75, 10), lam(0x7a1220));
+    t.position.set(Math.cos(a) * (R + 0.9), 0.38, Math.sin(a) * (R + 0.9)); g.add(t); }
+  box(x, 1.5, z, R * 2, 1.2, R * 2, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  const t = { x, z, kind, g, anim: 0 };
+  city.casino.tables.push(t);
+  return t;
 }
 // ================= LA ZONE : le quartier pauvre =================
 // Bidonville à l'ouest de la ville : immeubles de trois étages où l'on entre vraiment
@@ -2456,6 +2836,115 @@ function road(x, z, w, d, yOff = 0, plain) {
   m.scale.set(w, 0.06, d); m.position.set(x, 0.03 + yOff, z); m.receiveShadow = true; worldGroup.add(m);
 }
 function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false }); }
+// ================= LE PLAN ROUTIER =================
+// Le réseau était bricolé morceau par morceau, et plusieurs quartiers n'étaient reliés à
+// rien : les conducteurs coupaient à travers les pelouses. On DÉCLARE ici le plan — chaque
+// axe a un nom, chaque quartier a sa desserte — et on le construit à partir de cette table.
+// `city.plan` la garde en mémoire : le GPS, la conduite des bots et les missions s'en
+// servent pour rejoindre un quartier par la route.
+const PLAN_ROUTIER = {
+  // Les axes AJOUTÉS par le plan : ceux qui manquaient pour que chaque quartier soit
+  // vraiment desservi. Les rues historiques du centre restent où elles sont.
+  axes: [
+    { n: 'Rocade sud-est', x: 121, z: -70, w: 46, d: 8 },
+    { n: 'Bretelle du circuit', x: 140, z: -96, w: 8, d: 60 },
+    { n: 'Accès circuit', x: 133, z: -122, w: 20, d: 8 },
+    { n: 'Route du littoral', x: 100, z: 130, w: 8, d: 70 },
+    { n: 'Avenue du casino', x: 60, z: 300, w: 150, d: 9 },
+    { n: 'Boulevard du casino', x: 60, z: 250, w: 9, d: 112 },
+    { n: 'Desserte du casino', x: 20, z: 282, w: 90, d: 8 },
+    { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
+    { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
+  ],
+  // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
+  // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
+  dessertes: [
+    { n: 'Villa', x: 48, z: 190 },
+    { n: 'Départ', x: 140, z: -70 },
+    { n: 'Rallye', x: 0, z: -50 },
+    { n: 'Casino', x: 60, z: 282 },
+  ],
+};
+// On construit les axes du plan. Les dessertes, elles, sont calculées À LA FIN, quand tous
+// les quartiers existent : chacune est le point de chaussée le plus proche de son quartier.
+function construirePlan() {
+  for (const a of PLAN_ROUTIER.axes) road(a.x, a.z, a.w, a.d);
+  city.plan = { axes: PLAN_ROUTIER.axes.map(a => ({ ...a })), dessertes: [] };
+}
+// LE MAPPING : un point d'arrivée sur la route pour CHAQUE quartier, sans exception. On part
+// du repère vivant du quartier (le comptoir, le guichet…) ou de son centre, et on se colle
+// sur la chaussée la plus proche. Plus aucun conducteur n'a à couper par les pelouses.
+function finirPlan() {
+  if (!city.plan) city.plan = { axes: [], dessertes: [] };
+  const forces = {};
+  for (const d of PLAN_ROUTIER.dessertes) forces[norm(d.n)] = d;
+  const vifs = (typeof ANCRES_VIVES === 'function') ? ANCRES_VIVES() : {};
+  const liste = [];
+  for (const z of city.zones) {
+    const nom = z.name;
+    const f = forces[norm(nom)];
+    const v = vifs[nom];
+    const cx = f ? f.x : v ? v.x : (z.x1 + z.x2) / 2;
+    const cz = f ? f.z : v ? v.z : (z.z1 + z.z2) / 2;
+    const p = pointRouteProche(cx, cz);
+    liste.push(p ? { n: nom, x: +p.x.toFixed(1), z: +p.z.toFixed(1), vise: [+cx.toFixed(1), +cz.toFixed(1)], loin: Math.round(p.d) }
+                 : { n: nom, x: +cx.toFixed(1), z: +cz.toFixed(1), vise: [+cx.toFixed(1), +cz.toFixed(1)], loin: 0 });
+  }
+  city.plan.dessertes = liste;
+  return liste;
+}
+// ON DÉGAGE LES CHAUSSÉES. Bancs, poubelles, caisses, palmiers ou bornes posés au fil des
+// quartiers finissaient parfois AU MILIEU d'une rue : les conducteurs s'y encastraient. On
+// enlève tout ce dont le centre tombe sur une chaussée — sauf les véhicules, les portes et
+// le mobilier de la route lui-même (feux, lampadaires, passages piétons).
+function degageLesRoutes() {
+  const surChaussee = (x, z) => (city.routes || []).some(r =>
+    Math.abs(x - r.x) < r.w / 2 - 1.2 && Math.abs(z - r.z) < r.d / 2 - 1.2);
+  const garde = o => o.porte || o.ai || o.pol || o.bar || (o.w > 14 && o.d > 14);   // portes, véhicules, barrières, gros bâtiments
+  const vus = new Set();
+  for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
+  let n = 0;
+  for (let i = solids.length - 1; i >= 0; i--) {
+    const o = solids[i];
+    if (vus.has(o) || garde(o) || !o.mesh) continue;
+    if (o.feu || o.lampe) continue;
+    if (!surChaussee(o.x, o.z)) continue;
+    worldGroup.remove(o.mesh); solids.splice(i, 1); n++;
+    const bi = breakables.findIndex(b => b.solid === o); if (bi >= 0) breakables.splice(bi, 1);
+  }
+  // les feux et lampadaires plantés en pleine voie sont poussés sur le trottoir
+  for (const t of (city.trafficLights || [])) {
+    if (!surChaussee(t.x, t.z)) continue;
+    const r = (city.routes || []).find(r2 => Math.abs(t.x - r2.x) < r2.w / 2 && Math.abs(t.z - r2.z) < r2.d / 2);
+    if (!r) continue;
+    const long = r.d >= r.w;
+    const nx = long ? (t.x < r.x ? -1 : 1) : 0, nz = long ? 0 : (t.z < r.z ? -1 : 1);
+    const dep = (long ? r.w : r.d) / 2 + 1.2;
+    t.x = r.x + nx * dep; t.z = r.z + nz * dep;
+    if (t.g) t.g.position.set(t.x, t.g.position.y, t.z);
+    if (t.solid) { t.solid.x = t.x; t.solid.z = t.z; }
+    n++;
+  }
+  if (n) sgridSale();
+  return n;
+}
+// La desserte d'un quartier : le point de la route par lequel on y arrive en voiture.
+function desserteDe(nom) {
+  const l = (city.plan && city.plan.dessertes) || [];
+  const n = norm(nom || '');
+  return l.find(d => norm(d.n) === n) || l.find(d => n && norm(d.n).includes(n)) || null;
+}
+// Le point de route le plus proche d'un endroit : sert à garer et à faire rouler les bots.
+function pointRouteProche(x, z) {
+  let best = null, bd = 1e9;
+  for (const r of (city.routes || [])) {
+    const px = clamp(x, r.x - r.w / 2 + 1.5, r.x + r.w / 2 - 1.5);
+    const pz = clamp(z, r.z - r.d / 2 + 1.5, r.z + r.d / 2 - 1.5);
+    const d = Math.hypot(px - x, pz - z);
+    if (d < bd) { bd = d; best = { x: px, z: pz, d }; }
+  }
+  return best;
+}
 function fieldLines(x, top, z, w, d, drawFn) {
   const c = document.createElement('canvas'); c.width = 512; c.height = Math.round(512 * d / w); const g = c.getContext('2d');
   drawFn(g, c.width, c.height);
@@ -2895,6 +3384,8 @@ const WORLDS = [
       for (const x of [-13, -1, 11, 23, 32]) building(x, 35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);   // entrée du parc bien dégagée (x -32 → -17)
       // ---- route vers le parc + grand circuit autour de la ville ----
       road(-26, 38.5, 6, 19); sign(-21.5, 0, 33, '🌳 Parc ↓', false, Math.PI); sign(-30, 0, 44, '🏁 Circuit : tout autour de la ville', false, Math.PI / 2);
+      construirePlan();   // le plan routier : les axes qui desservent chaque quartier
+      buildCasino(60, 302);   // le nouveau quartier, au nord de la ville
       buildCircuit();
       // ---- râtelier de raquettes (à côté du court) ----
       box(8.5, 0.9, -5.2, 1.8, 1.2, 0.3, C.wood, { studs: false, noRoute: true });
@@ -2914,9 +3405,11 @@ const WORLDS = [
       city.zones.push({ name: 'Parking', emoji: '🚗', x1: -23, x2: -3, z1: 3, z2: 14, hint: '🚗 Parking : E (ou 🚗) devant une voiture, une moto ou le camion pour monter' });
       city.zones.push({ name: 'Trampolines', emoji: '🤸', x1: 3, x2: 23, z1: 3, z2: 23, hint: '🤸 Trampolines : saute dessus pour t\'envoler vers les pièces de la tour' });
       city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 42, x2: 62, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
-      city.zones.push({ name: 'Départ', emoji: '🏁', x1: -8, x2: 30, z1: 114, z2: 132, hint: '🏁 Grille de départ : E pour un kart, F pour lancer la course autour de la ville' });
+      city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 19, x2: RACE_C.x + 19, z1: RACE_C.z + RACE_C.r - 18, z2: RACE_C.z + RACE_C.r + 3, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
       buildClouds(0xffffff, 10); noSigns = false;
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
+      city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
+      finirPlan();        // le mapping : une desserte sur la route pour chaque quartier
       navSale(); buildNav();
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -3146,6 +3639,9 @@ const ADRESSES = [
   { nom: 'ta villa', x: 60, z: 176 }, { nom: 'l\'école', x: -62, z: 196 }, { nom: 'l\'hôpital', x: 12, z: 196 },
   { nom: 'un immeuble de La Zone', x: -140, z: 40 }, { nom: 'le poste de secours de la plage', x: 112, z: 20 },
   { nom: 'le kiosque du parc', x: 0, z: 92 }, { nom: 'le club de tennis', x: 46, z: -30 },
+  // le nouveau quartier : le casino et le circuit sont desservis par le plan routier
+  { nom: 'le casino WORLD TELIO MARLON', x: 60, z: 288 }, { nom: 'le parking du casino', x: 30, z: 328 },
+  { nom: 'les stands du circuit', x: 152, z: -77 },
 ];
 function startMission(id) {
   if (jail.on) { msg('🔒 Pas de mission en prison', 1000); return; }
@@ -6416,7 +6912,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -7713,15 +8209,16 @@ function lieuDe(txt) {
   if (!best) return null;
   // Certaines zones ont un point d'arrêt praticable en voiture : le centre de « Villa »
   // tombe au milieu du salon, une voiture ne peut pas s'y garer.
-  const ARRETS = { Villa: [48, 190], Banque: [-39, 72], École: [-62, 202], Hôpital: [26, 214] };
-  const a = ARRETS[best.name];
+  // L'arrêt en voiture vient maintenant du PLAN ROUTIER : une desserte sur la chaussée pour
+  // chaque quartier, au lieu d'une petite table écrite à la main pour quatre endroits.
+  const des = desserteDe(best.name);
   // Le centre géométrique d'une zone n'est pas toujours l'endroit visé : on préfère le VRAI
   // repère quand il existe (le comptoir du garage, le guichet du tatoueur, le poste de
   // police…). Sans cela, « emmène-moi au garage » envoyait au milieu d'un pâté de maisons.
   const vif = ANCRES_VIVES()[best.name];
   const cx = vif ? vif.x : (best.x1 + best.x2) / 2, cz = vif ? vif.z : (best.z1 + best.z2) / 2;
   return { nom: `${best.emoji} ${best.name}`, x: cx, z: cz,
-    auto: a ? { x: a[0], z: a[1] } : null };
+    auto: des ? { x: des.x, z: des.z } : null };
 }
 function devenirAmi(b) {
   if (estAmi(b.name)) { botSay(b, [`on est déjà amis ${myCfg.name} 😄`, 'mais on est déjà potes !']); return; }
@@ -10543,6 +11040,7 @@ function cityVie(dt) {
   if (z !== city.zone) { city.zone = z; if (z) msg(z.name === 'Tennis' && !P.racket ? '🎾 Prends une raquette au râtelier !' : z.hint, 2200); updateAct(); }
   const safe = (name, fn) => { try { fn(); } catch (e) { if (!safeSeen[name]) { safeSeen[name] = 1; console.error(name, e); msg('⚠️ Petit souci technique (' + name + ') — le jeu continue', 2500); } } };
   safe('foule', () => separerPersos());   // personne ne se tient à l'intérieur de quelqu'un d'autre
+  safe('casino', () => casinoTick(dt));
   safe('tirs', () => shotsTick(dt)); safe('grenades', () => grenadesTick(dt)); safe('sport', () => gymTick(dt)); safe('police', () => policeTick(dt)); safe('combat', () => combatTick(dt)); safe('mission', () => missionTick(dt));
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
@@ -10564,7 +11062,7 @@ function cityVie(dt) {
   }
   const near = city.gym && Math.hypot(P.pos.x - city.gym.bench.x, P.pos.z - city.gym.bench.z) < 2.2 ? 'bench' : city.gym && Math.hypot(P.pos.x - city.gym.run.x, P.pos.z - city.gym.run.z) < 2.2 ? 'run' : null;
   if (near !== city.shopNear) { city.shopNear = near; if (near && !isMobile) msg(near === 'bench' ? '🏋️ E : soulever la barre' : '🏃 E : courir sur le tapis', 1300); }
-  document.body.classList.toggle('racknear', !!(city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.coiffeurNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
+  document.body.classList.toggle('racknear', !!(city.slotNear || city.tableNear || city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.coiffeurNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
   const gunNear = !!city.armory && Math.hypot(P.pos.x - city.armory.x, P.pos.z - city.armory.z) < 3.2;
   if (gunNear !== city.gunNear) { city.gunNear = gunNear; document.body.classList.toggle('racknear', gunNear || !!city.rackNear); if (gunNear && !isMobile) msg('🔫 E : voir toutes les armes', 1200); }
   const tatooNear = !!city.tatooDesk && Math.hypot(P.pos.x - city.tatooDesk.x, P.pos.z - city.tatooDesk.z) < 3 && !drive.car;
@@ -10622,8 +11120,22 @@ function cityVie(dt) {
     city.interact = best ? { x: best.x, z: best.z } : null;
   }
   // proximité : râtelier, zone de départ de la course
+  // casino : la machine ou la table la plus proche
+  {
+    const c = city.casino;
+    let sn = null, tn = null;
+    if (c && !drive.car) {
+      let bd = 2.6; for (const m of c.machines) { const d = Math.hypot(P.pos.x - m.x, P.pos.z - m.z); if (d < bd) { bd = d; sn = m; } }
+      let bt = 3.4; for (const t of c.tables) { const d = Math.hypot(P.pos.x - t.x, P.pos.z - t.z); if (d < bt) { bt = d; tn = t; } }
+      if (sn) tn = null;
+    }
+    if (sn !== city.slotNear || tn !== city.tableNear) {
+      city.slotNear = sn; city.tableNear = tn;
+      if ((sn || tn) && !isMobile) msg(sn ? '🎰 E : jouer à la machine' : tn.kind === 'roulette' ? '🎡 E : jouer à la roulette' : '🃏 E : jouer au poker', 1400);
+    }
+  }
   const rackNear = Math.hypot(P.pos.x - 8.5, P.pos.z + 5.2) < 3.2; if (rackNear !== city.rackNear) { city.rackNear = rackNear; document.body.classList.toggle('racknear', rackNear || !!city.gunNear); if (rackNear && !isMobile) msg(P.racket ? '🎾 E : ranger la raquette' : '🎾 E : prendre une raquette', 1200); }
-  const raceNear = (P.pos.x > -8 && P.pos.x < 16 && P.pos.z > 118 && P.pos.z < 130 && race.state === 'idle') || (!!drive.car && !!drive.car.heli && !hrace.on); if (raceNear !== city.raceNear) { city.raceNear = raceNear; document.body.classList.toggle('racenear', raceNear); if (raceNear && !isMobile) msg(drive.car && drive.car.heli ? '🚁 F : course d\'anneaux' : '🏁 F : lancer la course', 1400); }
+  const raceNear = (Math.abs(P.pos.x - RACE_C.x) < 19 && Math.abs(P.pos.z - (RACE_C.z + RACE_C.r - 12)) < 8 && race.state === 'idle') || (!!drive.car && !!drive.car.heli && !hrace.on); if (raceNear !== city.raceNear) { city.raceNear = raceNear; document.body.classList.toggle('racenear', raceNear); if (raceNear && !isMobile) msg(drive.car && drive.car.heli ? '🚁 F : course d\'anneaux' : '🏁 F : lancer la course', 1400); }
   raceTick(dt);
   const guest = net.on && !net.host;
   // La raquette se range TOUTE SEULE quand on quitte le court : on ne se promène plus en
@@ -11563,7 +12075,7 @@ function startCountdown(sec) {
     // Grille : le kart démarrait à x = -1,6, donc DÉJÀ au-delà de la ligne, et les places
     // 2 et 3 tombaient à z = 117, hors de la piste (portique z 118,6 → 129,4).
     // Les roues avant sont à 1,3 m du centre : x = 1,3 les pose pile sur les damiers.
-    if (kart) { const gx = 1.3 + Math.floor(slot / 2) * 6.4, gz = 121.8 + (slot % 2) * 4.4; kart.x = gx; kart.z = gz; kart.h = -Math.PI / 2; kart.g.position.set(gx, 0, gz); kart.g.rotation.y = kart.h; vehicleSolid(kart); drive.speed = 0; P.pos.set(gx, 0.3, gz); P.facing = kart.h; cam.yaw = kart.h + Math.PI; cam.target.set(gx, 1.8, gz); }
+    if (kart) { const gx = RACE_C.x - 13 + Math.floor(slot / 2) * 6.4, gz = RACE_C.z + RACE_C.r - 12 + (slot % 2 ? 1.8 : -1.8); kart.x = gx; kart.z = gz; kart.h = -Math.PI / 2; kart.g.position.set(gx, 0, gz); kart.g.rotation.y = kart.h; vehicleSolid(kart); drive.speed = 0; P.pos.set(gx, 0.3, gz); P.facing = kart.h; cam.yaw = kart.h + Math.PI; cam.target.set(gx, 1.8, gz); }
   }
   msg('🏁 En place sur la grille… départ dans 3 s !', 2200); sfx.check(); chat(null, `🏁 Course lancée : ${race.laps} tours du circuit !`);
 }
@@ -11589,7 +12101,7 @@ function raceTick(dt) {
     if (left <= 0) { race.state = 'running'; race.startT = simTime; msg('🏁 PARTEZ !', 1200); sfx.win(); city.lights.forEach(l => { l.material.color.set(0x30ff60); l.material.emissive.set(0x30ff60); }); setTimeout(() => city.lights.forEach(l => { l.material.color.set(0x333333); l.material.emissive.set(0x000000); }), 3000); }
     return;
   }
-  if (race.state === 'done') { if (simTime > race.endT) { race.state = 'idle'; race.ai.forEach((a, i) => { const [x, z] = [9 + i * 2.6, 113]; a.k.x = x; a.k.z = z; a.k.h = -Math.PI / 2; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = -Math.PI / 2; a.h = -Math.PI / 2; vehicleSolid(a.k); }); race.ai = []; updateAct(); } return; }
+  if (race.state === 'done') { if (simTime > race.endT) { race.state = 'idle'; race.ai.forEach((a, i) => { const [x, z] = [RACE_C.x + 4 + i * 2.6, RACE_C.z + RACE_C.r - 12]; a.k.x = x; a.k.z = z; a.k.h = -Math.PI / 2; a.k.g.position.set(x, 0, z); a.k.g.rotation.y = -Math.PI / 2; a.h = -Math.PI / 2; vehicleSolid(a.k); }); race.ai = []; updateAct(); } return; }
   if (race.state !== 'running') return;
   const m = race.my;
   if (!m.done) {
@@ -11619,7 +12131,7 @@ function raceTick(dt) {
     }
     a.s += a.speed * brake * (1 + 0.07 * Math.sin(simTime * 0.9 + a.s * 0.3)) * ((a.boostT || 0) + 2.2 > simTime ? 1.35 : 1) * dt;
     const lapNow = a.s > 0 ? Math.floor(a.s / RACE_LEN) : 0;
-    if (lapNow > a.lap) { a.lap = lapNow; if (a.lap >= race.laps) { a.done = true; a.t = simTime - race.startT + rnd(0, 0.3); onRaceFinish(a.name, a.t, false); const i = race.ai.indexOf(a); a.k.x = 9 + i * 2.6; a.k.z = 113; a.k.h = -Math.PI / 2; a.h = a.k.h; a.k.g.position.set(a.k.x, 0, a.k.z); a.k.g.rotation.y = a.k.h; vehicleSolid(a.k); continue; } }   // arrivé : direction les stands (hors piste)
+    if (lapNow > a.lap) { a.lap = lapNow; if (a.lap >= race.laps) { a.done = true; a.t = simTime - race.startT + rnd(0, 0.3); onRaceFinish(a.name, a.t, false); const i = race.ai.indexOf(a); a.k.x = RACE_C.x + 4 + i * 2.6; a.k.z = RACE_C.z + RACE_C.r - 12; a.k.h = -Math.PI / 2; a.h = a.k.h; a.k.g.position.set(a.k.x, 0, a.k.z); a.k.g.rotation.y = a.k.h; vehicleSolid(a.k); continue; } }   // arrivé : direction les stands (hors piste)
     const [x, z, h] = pathPos(a.s, a.off); a.k.x = x; a.k.z = z; let dh = h - a.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); a.h += dh * Math.min(1, dt * 7);
     a.k.y = groundUnder(x, z, a.k.solid, a.k.y || 0); a.k.g.position.set(x, a.k.y, z); a.k.g.rotation.y = a.h; a.k.h = a.h; a.k.wheels.forEach(w => w.rotation.x -= a.speed * dt / 0.3); vehicleSolid(a.k);
   }
@@ -11708,7 +12220,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -11837,7 +12349,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -12770,6 +13282,8 @@ $('tatooOk').addEventListener('click', () => tatouer());
 $('tatooMot').addEventListener('input', e => { tatoo.mot = e.target.value.toUpperCase() || 'LOVE'; majTatoo(); });
 $('atelierOk').addEventListener('click', () => validerAtelier());
 $('atelierAmener').addEventListener('click', () => { if (amenerVoitureAtelier()) majAtelier(); });
+$('casinoJouer').addEventListener('click', () => jouerCasino());
+$('casinoBack').addEventListener('click', () => closeUI());
 $('tvStart').addEventListener('click', () => { modeTV(true); ouvreSalonTV(); });
 $('manetteStart').addEventListener('click', () => manetteOuvre(''));
 $('tvFerme').addEventListener('click', () => closeUI());

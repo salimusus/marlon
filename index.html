@@ -113,6 +113,9 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
 #msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
 #vignette{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 45%,rgba(0,0,0,.28) 100%)}
 canvas#c{filter:saturate(1.06) contrast(1.04)}
+/* sur la télé, ce filtre force une passe de composition en plein écran pour un gain
+   invisible : on l'enlève, l'image est plus nette ET moins chère */
+body.tv canvas#c{filter:none;image-rendering:auto}
 #cross{position:fixed;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}
 #cross::before,#cross::after{content:'';position:absolute;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.8)}
 #cross::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%)}#cross::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%)}
@@ -849,7 +852,11 @@ const settings = { sound: store.get('superobby.sound') !== '0', music: store.get
 
 // ================= RENDU =================
 const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: 'high-performance' });
+// Une smart TV Android se déclare parfois « mobile » : l'anticrénelage sautait, et sur un
+// écran de deux mètres chaque bord devenait un escalier. On le force dès que la page est
+// ouverte pour la télé (lien #tv, ou affichage géant retenu).
+const versTV = /(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1';
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile || versTV, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;   // couleurs franches façon briques : ACES délavait toute la palette
@@ -902,7 +909,10 @@ scene.updateMatrix(); worldGroup.updateMatrix();
 //      descend l'échelle de rendu par paliers ; dès que ça respire, on la remonte. Si ça rame
 //      encore au plus bas, les ombres s'éteignent, et se rallument quand ça va mieux.
 const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0 };
-const PLAFOND_TV = 1600, PLAFOND_PC = 2560;
+// On rendait en 1600 px de large : sur une télé 4K l'image était visiblement floue. Le
+// plafond monte à 2160 (au-delà du 1080p) et c'est la mesure du temps des images qui décide
+// de descendre, au lieu de tout brider a priori.
+const PLAFOND_TV = 2160, PLAFOND_PC = 2560;
 function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : PLAFOND_PC; }
 function ratioQualite() {
   const q = settings.quality;
@@ -953,6 +963,24 @@ function fluiditeTick(ms) {
     if (!rendu.ombres && rendu.ech > 0.8) ombresRendu(true);
     else if (rendu.ech < 1) { rendu.ech = Math.min(1, rendu.ech * 1.07); rendu.hausses++; appliqueRendu(); }
   }
+}
+// NETTETÉ DES TEXTURES. Vues de biais — une chaussée, un trottoir, une façade — les textures
+// répétées bavaient en une bouillie grise. Le filtrage anisotrope les redresse : c'est le gain
+// de netteté le plus visible sur un grand écran, et il ne coûte presque rien.
+let anisoMax = 0;
+function netteteTextures() {
+  if (!anisoMax) { try { anisoMax = renderer.capabilities.getMaxAnisotropy() || 1; } catch (e) { anisoMax = 1; } }
+  const a = Math.max(1, Math.min(anisoMax, document.body.classList.contains('tv') ? 8 : 4));
+  const vus = new Set(); let n = 0;
+  scene.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if (!m || !m.map || vus.has(m.map)) continue;
+      vus.add(m.map);
+      if (m.map.anisotropy !== a) { m.map.anisotropy = a; m.map.needsUpdate = true; n++; }
+    }
+  });
+  return n;
 }
 function applyQuality() {
   const q = settings.quality, low = q === 'low', dlss = q === 'dlss';
@@ -7304,6 +7332,7 @@ function loadWorld(i) {
   $('timer').style.display = w.free ? 'none' : ''; $('act').style.display = w.free ? '' : 'none'; $('act').textContent = '🏙️ Balade';
   document.querySelector('#lbHead span:last-child').textContent = w.free ? 'Pts' : 'Étape';
   music.setWorld(w.music);
+  try { netteteTextures(); } catch (e) {}   // les textures reprennent leur netteté sur le nouveau monde
   if (running) chat(null, w.free ? `🏙️ Bienvenue en ville ! Foot, tennis, trampolines, voitures et course.` : `🌍 Monde : ${w.name} (${w.diff})`);
 }
 
@@ -13563,6 +13592,8 @@ function tvManettesMaj() {
   const b = $('tvBadge');
   if (b) { b.textContent = n ? `🎮 ${n} manette${n > 1 ? 's' : ''} · code ${tv.code || '----'}` : `📺 Manette : ouvre 📺 et scanne le code`;
     b.classList.toggle('on', document.body.classList.contains('tv')); }
+  // démarrage automatique sur la télé : dès qu'un téléphone répond, on rend l'écran au jeu
+  if (n > 0 && tvAuto) { tvAuto = false; try { closeUI(); } catch (e) {} msg('🎮 Manette connectée — à toi de jouer !', 2600); sfx.win(); }
 }
 // ================= CONNECTER UNE SMART TV =================
 // Deux chemins, selon ce que sait faire l'appareil : l'API Presentation (Chromecast, télés
@@ -13674,6 +13705,7 @@ function modeTV(on) {
   // voir à la fois son personnage et ce qui l'entoure.
   cam.base = on ? Math.max(cam.base, 9.5) : Math.min(cam.base, 7);
   try { tvManettesMaj(); } catch (e) {}
+  try { netteteTextures(); } catch (e) {}
   try { resize(); } catch (e) {}
 }
 function ouvreSalonTV() {
@@ -13683,6 +13715,7 @@ function ouvreSalonTV() {
 }
 
 // ---- côté téléphone : l'écran devient une manette -----------------------------------
+const MANETTE_HZ = 60;   // 25 par seconde, c'était 40 ms de retard avant même le réseau
 const man = { peer: null, conn: null, id: null, x: 0, y: 0, lx: 0, ly: 0, env: 0 };
 function manetteOuvre(code) {
   document.getElementById('manette').classList.add('on');
@@ -13759,11 +13792,13 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
     man.lx = e.clientX; man.ly = e.clientY;
   });
   vise.addEventListener('pointerup', lache); vise.addEventListener('pointercancel', lache);
-  // 25 messages par seconde suffisent et gardent la liaison fluide
+  // 25 messages par seconde, c'était 40 ms de retard AVANT même le réseau : le personnage
+  // partait toujours un cran après le pouce. On passe à 60 par seconde — le canal est en
+  // mode « non fiable », les paquets ne s'accumulent donc jamais.
   setInterval(() => {
     if (!man.conn || !man.conn.open) return;
     if (man.x !== man.px || man.y !== man.py) { manEnvoie({ t: 'ax', x: +man.x.toFixed(3), y: +man.y.toFixed(3) }); man.px = man.x; man.py = man.y; }
-  }, 40);
+  }, Math.round(1000 / MANETTE_HZ));
   for (const b of document.querySelectorAll('#telBtns .tb')) {
     const nom = b.dataset.b;
     b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('on'); manEnvoie({ t: 'btn', b: nom, down: true });
@@ -13861,8 +13896,27 @@ function routeLien() {
   if (m) { manetteOuvre(m[1] ? m[1].toUpperCase() : ''); return 'manette'; }
   const j = /^jeu=([A-Za-z]{4})$/.exec(h);
   if (j) { const c = j[1].toUpperCase(); $('codeIn').value = c; setTimeout(() => joinGame(c), 400); return 'jeu'; }
-  if (h === 'tv') { modeTV(true); return 'tv'; }
+  if (h === 'tv' || /^tv=/.test(h)) { demarreTV(); return 'tv'; }
   return null;
+}
+// LA TÉLÉ DÉMARRE TOUTE SEULE. En arrivant par le lien #tv, la page s'arrêtait sur l'écran
+// d'accueil — et sur une télé PERSONNE ne peut cliquer « Jouer » : on voyait l'image
+// d'accueil et rien d'autre. Elle enchaîne maintenant jusqu'à la ville, montre le code de la
+// manette en grand, et referme cet écran dès qu'un téléphone répond.
+let tvAuto = false;
+function demarreTV() {
+  modeTV(true); tvAuto = true;
+  document.body.classList.remove('lobby');
+  setTimeout(() => {
+    try {
+      startGame();                                   // on passe l'accueil
+      $('worlds').classList.add('hidden');
+      const i = WORLDS.findIndex(w => w.id === 'ville');
+      chooseWorld(i >= 0 ? i : 0);                   // et on arrive directement en ville
+      ouvreSalonTV();                                // le code et son QR en grand, en attendant la manette
+      msg('📺 Prends ton téléphone et scanne le code pour jouer', 4000);
+    } catch (e) { console.error('démarrage TV', e); }
+  }, 250);
 }
 if (store.get('superobby.tv') === '1') modeTV(true);
 routeLien();

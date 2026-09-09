@@ -5989,12 +5989,74 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     G.modeTV(false); G.ombresCadence(); const autoPC = R.shadowMap.autoUpdate;
     G.applyQuality();
     const majOmbres = cad.filter(Boolean).length;
-    return { avant, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
+    return { avant, plafond: G.PLAFOND_TV, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
       paliers, bas, haut, depart, apresPic, cad, majOmbres, autoTV, autoPC, min: G.rendu.min };
   });
-  const ok = r.tvPix < r.pcPix / 2 && r.tvPix < 1.6 && r.tv4k < 0.45
+  const ok = r.tvPix < r.avant / 2.5 && r.tvPix < 3 && r.tv4k < 0.6
     && r.bas.ech <= r.min + 0.01 && r.bas.ombres === false && r.bas.baisses >= 3
     && r.haut.ech > r.bas.ech + 0.2 && r.haut.ombres === true
     && r.apresPic === 1 && r.majOmbres === 3 && r.autoTV === false && r.autoPC === true;
-  return { ok, detail: `une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en 4K le jeu calculait ${r.avant} mégapixels par image et saccadait · en mode TV le rendu est plafonné a 1600 px de large — ${r.tvPix} mégapixels, la télé agrandit elle-même (c'est son métier) · et la résolution s'ajuste toute seule : a 22 images/s elle descend par paliers ${r.paliers.join(' → ')} jusqu'au plancher ${r.bas.ech} (${r.bas.baisses} baisses) puis les ombres s'éteignent, et dès que ça respire elles se rallument et l'échelle remonte a ${r.haut.ech} · une seule image très lente (900 ms) ne dégrade rien (échelle restée a ${r.apresPic}) · enfin la carte d'ombres, recalculée a chaque image, ne l'est plus qu'une image sur deux sur la télé (${r.majOmbres} mises a jour sur 6) et reste inchangée ailleurs` };
+  return { ok, detail: `une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en 4K le jeu calculait ${r.avant} mégapixels par image et saccadait · en mode TV le rendu est plafonné (${r.plafond} px de large) — ${r.tvPix} mégapixels, la télé agrandit elle-même le reste, c'est son métier · et la résolution s'ajuste toute seule : a 22 images/s elle descend par paliers ${r.paliers.join(' → ')} jusqu'au plancher ${r.bas.ech} (${r.bas.baisses} baisses) puis les ombres s'éteignent, et dès que ça respire elles se rallument et l'échelle remonte a ${r.haut.ech} · une seule image très lente (900 ms) ne dégrade rien (échelle restée a ${r.apresPic}) · enfin la carte d'ombres, recalculée a chaque image, ne l'est plus qu'une image sur deux sur la télé (${r.majOmbres} mises a jour sur 6) et reste inchangée ailleurs` };
+});
+
+test('le lien de la tele lance la partie tout seul et affiche le code', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12 });
+    G.modeTV(false);
+    document.getElementById('start').classList.remove('hidden');   // on repart de l'écran d'accueil
+    location.hash = '#tv';
+    const route = G.routeLien();
+    await new Promise(r2 => setTimeout(r2, 700));
+    const res = { route, tv: document.body.classList.contains('tv'),
+      accueilCache: document.getElementById('start').classList.contains('hidden'),
+      mondesCaches: document.getElementById('worlds').classList.contains('hidden'),
+      enVille: !!G.city.on, running: !!G.running,
+      salon: !document.getElementById('tvsalon').classList.contains('hidden'),
+      code: (document.getElementById('tvCode').textContent || '').trim() };
+    // un téléphone répond : l'écran de code s'efface et rend l'image au jeu
+    G.tv.conns.push({ open: true }); G.tvManettesMaj();
+    res.salonApres = !document.getElementById('tvsalon').classList.contains('hidden');
+    res.badge = (document.getElementById('tvBadge').textContent || '');
+    G.tv.conns.length = 0; location.hash = ''; G.modeTV(false); G.closeUI();
+    return res;
+  });
+  const ok = r.route === 'tv' && r.tv && r.accueilCache && r.mondesCaches && r.enVille && r.running
+    && r.salon && /^[A-Z]{4}$/.test(r.code) && r.salonApres === false && /manette/i.test(r.badge);
+  return { ok, detail: `en arrivant par le lien #tv, la page s'arrêtait sur l'écran d'accueil — et sur une télé PERSONNE ne peut cliquer « Jouer » : on voyait l'image d'accueil et rien d'autre · elle enchaîne maintenant toute seule (accueil passé=${r.accueilCache}, choix des mondes passé=${r.mondesCaches}, arrivée en ville=${r.enVille}, partie lancée=${r.running}), affiche le code ${r.code} et son QR en grand, et referme cet écran des qu'un téléphone répond (${r.salonApres} après connexion) — la pastille du bas prend le relais : « ${r.badge.trim()} »` };
+});
+
+test('la qualite d\'image sur la tele : plus de pixels, textures nettes, sans filtre', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const aniso = () => { const v = [], vus = new Set();
+      G.scene.traverse(o => { if (!o.isMesh || !o.material) return;
+        for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+          if (!m || !m.map || vus.has(m.map)) continue; vus.add(m.map); v.push(m.map.anisotropy); } });
+      return { n: v.length, min: Math.min(...v), max: Math.max(...v) }; };
+    const mp = (L, ratio) => +((L * ratio) * (L * ratio * 9 / 16) / 1e6).toFixed(2);
+    G.modeTV(false); const pc = aniso(), filtrePC = getComputedStyle(document.getElementById('c')).filter;
+    G.modeTV(true); const tv = aniso(), filtreTV = getComputedStyle(document.getElementById('c')).filter;
+    const plafond = G.PLAFOND_TV, r4k = G.ratioRendu(3840);
+    let maxCap = 1; try { maxCap = G.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
+    const aa = !!(G.renderer.capabilities && G.renderer.capabilities.isWebGL2 !== undefined) ? undefined : undefined;
+    const antialias = !!G.renderer.getContext().getContextAttributes().antialias;
+    G.modeTV(false);
+    return { pc, tv, filtrePC, filtreTV, plafond, r4k: +r4k.toFixed(3), pix4k: mp(3840, r4k),
+      avant1600: mp(3840, 1600 / 3840), maxCap, antialias };
+  });
+  const ok = r.plafond >= 2000 && r.pix4k > r.avant1600 * 1.5
+    && r.tv.min >= 8 && r.tv.min === r.tv.max && r.pc.min >= 4 && r.tv.min > r.pc.min
+    && r.filtreTV === 'none' && r.filtrePC !== 'none' && r.antialias;
+  return { ok, detail: `l'image était floue sur la télé : on rendait en 1600 px de large (${r.avant1600} mégapixels en 4K) · le plafond monte a ${r.plafond} px — ${r.pix4k} mégapixels — et c'est la mesure du temps des images qui décide de descendre, au lieu de tout brider a priori · les ${r.tv.n} textures répétées (chaussées, trottoirs, façades) bavaient vues de biais : filtrage anisotrope ${r.pc.min}× partout et ${r.tv.min}× sur la télé (maximum de la machine : ${r.maxCap}×) · le filtre de couleur plein écran, qui coûtait une passe de composition entière pour un gain invisible, est retiré sur la télé (${r.filtreTV}) et gardé ailleurs (${r.filtrePC}) · et l'anticrénelage est forcé, même quand la télé se déclare « mobile » (${r.antialias})` };
+});
+
+test('le joystick du telephone repond sans decalage', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    return { hz: G.MANETTE_HZ, periode: Math.round(1000 / G.MANETTE_HZ) };
+  });
+  const ok = r.hz >= 50 && r.periode <= 20;
+  return { ok, detail: `la manette n'envoyait la position du pouce que 25 fois par seconde : 40 ms de retard AVANT même le réseau, et le personnage partait toujours un cran après le doigt · elle envoie maintenant ${r.hz} fois par seconde (${r.periode} ms), sur un canal « non fiable » où les paquets ne s'accumulent jamais` };
 });

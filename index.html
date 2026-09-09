@@ -568,6 +568,19 @@ body.tv .btn{font-size:clamp(17px,1.4vw,26px);padding:14px 22px}
   </div>
 </div>
 
+<div class="overlay hidden" id="coiffeur">
+  <div class="card" style="max-width:760px">
+    <h2>💈 Salon de coiffure</h2>
+    <p class="sub" id="coifSub"></p>
+    <div class="tatlab">La coupe</div><div id="coifCoupes" class="tatmotifs"></div>
+    <div class="tatlab">La couleur</div><div id="coifCouleurs" class="tatencres"></div>
+    <p id="coifPrix" class="tuneprix"></p>
+    <div class="mpr">
+      <button class="btn" id="coifOk">Me coiffer</button>
+      <button class="btn sec" id="coifBack">Retour</button>
+    </div>
+  </div>
+</div>
 <div class="overlay hidden" id="tatoo">
   <div class="card wide">
     <h2>🖊️ Salon de tatouage</h2>
@@ -2190,14 +2203,23 @@ function makePet(kind, x, z, color) {
   for (const dx of [-0.17, 0.17]) { const ear = bx(dog ? spot : fur, 0.14 * sc, dog ? 0.34 * sc : 0.24 * sc, 0.08 * sc, dx * sc, dog ? 0.78 * sc : 1.06 * sc, 0.45 * sc); ear.rotation.z = dog ? -dx * 1.6 : -dx * 0.6; if (!dog) { const inner = bx(pink, 0.07 * sc, 0.14 * sc, 0.03 * sc, dx * sc, 1.06 * sc, 0.5 * sc); inner.rotation.z = -dx * 0.6; } }
   if (!dog) for (const dx of [-1, 1]) for (let i = 0; i < 2; i++) bx(white, 0.28 * sc, 0.012 * sc, 0.012 * sc, dx * 0.24 * sc, (0.7 + i * 0.05) * sc, 0.8 * sc).rotation.z = dx * (i ? 0.25 : -0.05);   // moustaches
   bx(dog ? M(0xe0202a) : M(0x4f8dff), 0.5 * sc, 0.08 * sc, 0.46 * sc, 0, 0.62 * sc, 0.4 * sc); bx(M(0xffd23f), 0.08 * sc, 0.1 * sc, 0.05 * sc, 0, 0.55 * sc, 0.62 * sc);   // collier + médaille
-  for (const [dx, dz] of [[-0.17, 0.3], [0.17, 0.3], [-0.17, -0.3], [0.17, -0.3]]) { bx(fur, 0.15 * sc, 0.3 * sc, 0.15 * sc, dx * sc, 0.17 * sc, dz * sc); bx(dog ? spot : white, 0.16 * sc, 0.07 * sc, 0.17 * sc, dx * sc, 0.04 * sc, dz * sc); }   // pattes
+  // Pattes ARTICULÉES : chaque patte est un petit groupe posé à la hanche, la cuisse et le
+  // coussinet pendent dessous. On peut donc la lever, la replier ou la tendre — indispensable
+  // pour « assis », « donne la patte » et « couché sur le dos ».
+  const pattes = { avG: null, avD: null, arG: null, arD: null };
+  for (const [cle, dx, dz] of [['avG', -0.17, 0.3], ['avD', 0.17, 0.3], ['arG', -0.17, -0.3], ['arD', 0.17, -0.3]]) {
+    const p = new THREE.Group(); p.position.set(dx * sc, 0.32 * sc, dz * sc); g.add(p);
+    const cuisse = new THREE.Mesh(unitRound, fur); cuisse.scale.set(0.15 * sc, 0.3 * sc, 0.15 * sc); cuisse.position.y = -0.15 * sc; cuisse.castShadow = true; p.add(cuisse);
+    const pied = new THREE.Mesh(unitRound, dog ? spot : white); pied.scale.set(0.16 * sc, 0.07 * sc, 0.17 * sc); pied.position.y = -0.28 * sc; p.add(pied);
+    pattes[cle] = p;
+  }
   if (!dog) for (let i = 0; i < 3; i++) bx(spot, 0.5 * sc, 0.03 * sc, 0.1 * sc, 0, 0.74 * sc, (-0.25 + i * 0.25) * sc);   // rayures
   const tail = new THREE.Group(); tail.position.set(0, (dog ? 0.66 : 0.72) * sc, -0.45 * sc); g.add(tail);
   const t1 = new THREE.Mesh(unitRound, fur); t1.scale.set(0.1 * sc, 0.1 * sc, (dog ? 0.35 : 0.42) * sc); t1.position.z = -(dog ? 0.17 : 0.2) * sc; tail.add(t1);
   if (!dog) { const t2 = new THREE.Mesh(unitRound, fur); t2.scale.set(0.09 * sc, 0.3 * sc, 0.09 * sc); t2.position.set(0, 0.14 * sc, -0.42 * sc); tail.add(t2); }
   tail.rotation.x = dog ? -0.7 : -0.5;
   g.position.set(x, 0.3, z); worldGroup.add(g);
-  return { g, kind, x, z, y: 0.3, home: [x, z], tgt: null, wait: rnd(0, 3), facing: 0, tail, head, follow: 0, soundT: 0, petT: 0 };
+  return { g, kind, x, z, y: 0.3, home: [x, z], tgt: null, wait: rnd(0, 3), facing: 0, tail, head, pattes, corps: g, follow: 0, soundT: 0, petT: 0 };
 }
 function petsTick(dt) {
   for (const p of city.pets) {
@@ -3288,6 +3310,48 @@ function openMissions(atOffice) {
   $('missGrid').querySelectorAll('[data-m]:not([disabled])').forEach(b => b.addEventListener('click', () => { if (mission.cur && mission.cur.id === b.dataset.m) { endMission(false, true); openMissions(here); } else startMission(b.dataset.m); }));
   openUI('missions');
 }
+function buildCoiffeur(SX, SZ) {   // 💈 salon de coiffure : fauteuils, miroirs, lavabo, enseigne tournante
+  const F = 1, th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][F];
+  const M = shop(SX, SZ, 8, 7, 0xff7ad9, '💈 COIFFEUR', 0xffd23f, F).M;
+  const FY = 0.36;
+  const B = (lx, ly, lz, w, h, d, c, o) => { const [px, pz] = M(lx, lz); return box(px, ly, pz, F % 2 ? d : w, h, F % 2 ? w : d, c, o); };
+  // deux fauteuils face aux miroirs
+  for (const dz of [-1.4, 1.4]) {
+    B(-1.4, FY + 0.5, dz, 1.1, 0.34, 1.1, 0x1b1b1b, { studs: false, noRoute: true });          // assise
+    B(-1.9, FY + 1.1, dz, 0.28, 1.2, 1.1, 0x1b1b1b, { studs: false, noRoute: true });          // dossier
+    B(-1.4, FY + 0.16, dz, 0.5, 0.32, 0.5, 0xc9ced8, { deco: true, studs: false });            // pied chromé
+    // miroir en pied et sa tablette
+    const [mx, mz] = M(-3.5, dz);
+    box(mx, 2.1, mz + (F % 2 ? 0 : 0.05), F % 2 ? 0.08 : 1.5, 2.2, F % 2 ? 1.5 : 0.08, 0xdff0ff, { deco: true, noEdges: true, studs: false });
+    box(mx, 2.1, mz, F % 2 ? 0.12 : 1.62, 2.34, F % 2 ? 1.62 : 0.12, 0xffd23f, { deco: true, studs: false });
+    B(-3.1, FY + 0.95, dz, 0.5, 0.1, 1.3, 0xf4f6fa, { deco: true, studs: false });              // tablette
+    for (let i = 0; i < 4; i++) { const [bx2, bz2] = M(-3.05, dz - 0.45 + i * 0.3);
+      const fl = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 8), lam([0xff5c5c, 0x3ef2ff, 0x5cc453, 0xffd23f][i]));
+      fl.position.set(bx2, FY + 1.11, bz2); worldGroup.add(fl); }
+  }
+  // bac à shampoing
+  B(1.2, FY + 0.6, -2, 1.2, 0.7, 1.1, 0xf4f6fa, { studs: false, noRoute: true });
+  B(1.2, FY + 1.0, -2, 1.0, 0.12, 0.9, 0x9fdcff, { deco: true, studs: false });
+  // présentoir des coupes : six têtes de mannequin coiffées
+  const COUPES_VITRINE = ['afro', 'dreads', 'iroquoise', 'nattes', 'mulet', 'punk'];
+  for (let i = 0; i < 6; i++) {
+    const [px, pz] = M(-3 + (i % 3) * 2.2, 3.1 - Math.floor(i / 3) * 0.001);
+    const t = mannequin(px, pz, th + Math.PI, { jersey: 8 + (i % 4), hair: COUPES_VITRINE[i], hairColor: i + 2, jacket: 0 });
+    t.group.position.y = 1.35 + Math.floor(i / 3) * 1.35; t.group.scale.setScalar(0.42);
+    if (t.tag) t.tag.visible = false;
+  }
+  // enseigne de barbier : le cylindre rayé qui tourne
+  { const [px, pz] = M(-4.2, -3.2);
+    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.2, 12), lam(0xf4f6fa));
+    p2.position.set(px, 2.4, pz); worldGroup.add(p2);
+    for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.16, 12), lam(i % 2 ? 0x2f6fe0 : 0xd42b2b));
+      r.position.set(px, 2.0 + i * 0.4, pz); worldGroup.add(r); city.barbierRubans = city.barbierRubans || []; city.barbierRubans.push(r); } }
+  B(0, 4.9, -3.4, 4.4, 0.5, 0.12, 0, { material: neonMat(0xff7ad9), deco: true, noEdges: true });
+  const [dx, dz] = M(-1.4, 0);
+  city.coiffeurDesk = { x: dx, z: dz };
+  city.zones.push({ name: 'Coiffeur', emoji: '💈', x1: SX - 5, x2: SX + 5, z1: SZ - 5, z2: SZ + 5,
+    hint: '💈 Coiffeur : afro, dreadlocks, crête, nattes, mulet… et toutes les couleurs — E devant le fauteuil' });
+}
 function buildTatoo(SX, SZ) {   // 🖊️ salon de tatouage : fauteuil, table, flashs au mur, néon
   const F = 1, th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][F];
   const M = shop(SX, SZ, 8, 7, 0x2b2f3a, '🖊️ TATOUAGE', 0xd42b2b, F).M;
@@ -3367,6 +3431,7 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   { for (let r = 0; r < 2; r++) for (let i = 0; i < 10; i++) { const [px, pz] = M(-3.5 + i * 0.7, 2.6); box(px, 1.2 + r * 1.1, pz, 0.3, 0.9, 0.5, pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xb57cff, 0xffffff]), { deco: true, studs: false }); } const [cx, cz] = M(0, -0.5); box(cx, 0.85, cz, 0.8, 1, 3, C.wood, { studs: false, noRoute: true }); }
   buildDecoShop(43, 58);   // en face, côté ouest de la rue : le magasin de décoration
   buildTatoo(43, 80);      // et le salon de tatouage, un peu plus haut sur le même trottoir
+  buildCoiffeur(43, 92);   // le salon de coiffure ferme la rue au nord
   for (const z of [40, 52, 64, 76, 88]) { lamp(55.5, z + 5.5); flowerBed(55.5, z - 5, 1.2, 3); }
   for (let i = 0; i < 6; i++) bench(48.5, 40 + i * 9, Math.PI / 2);   // bancs le long de la rue
   for (let i = 0; i < 14; i++) box(49 + (i % 2) * 6, 5.4, 34 + i * 4.3, 0.5, 0.5, 0.5, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande de la rue
@@ -6244,6 +6309,12 @@ const SHOP = {
   Vestes: [{ id: 0, n: 'Sans veste', e: '👕', p: 0 }, { id: 1, n: 'Veste marine', e: '🧥', p: 12 }, { id: 2, n: 'Veste rouge', e: '🧥', p: 12 }, { id: 3, n: 'Veste bleue', e: '🧥', p: 12 }, { id: 4, n: 'Veste verte', e: '🧥', p: 12 }, { id: 5, n: 'Veste jaune', e: '🧥', p: 12 }, { id: 6, n: 'Veste noire', e: '🧥', p: 14 }],
   Bas: [{ id: 'pants', n: 'Pantalon', e: '👖', p: 0 }, { id: 'baggy', n: 'Baggy large', e: '👖', p: 11 }, { id: 'shorts', n: 'Short', e: '🩳', p: 6 }, { id: 'skirt', n: 'Jupe', e: '👗', p: 6 }],
   Chaussures: [{ id: 'basket', n: 'Baskets', e: '👟', p: 0 }, { id: 'ville', n: 'Chaussures de ville', e: '👞', p: 8 }, { id: 'bottes', n: 'Bottes', e: '🥾', p: 14 }, { id: 'cowboy', n: 'Bottes de cowboy', e: '🤠', p: 20 }, { id: 'tongs', n: 'Tongs', e: '🩴', p: 4 }],
+  Bijoux: [{ id: 'rien', n: 'Sans bijou', e: '🙂', p: 0 }, { id: 'collier', n: 'Collier fin argent', e: '📿', p: 14 },
+    { id: 'chaine', n: 'Chaîne en or', e: '🔗', p: 28 }, { id: 'grosse', n: 'Grosse chaîne en or', e: '⛓️', p: 55 },
+    { id: 'dollar', n: 'Pendentif dollar', e: '💲', p: 45 }, { id: 'coeur', n: 'Pendentif cœur', e: '❤️', p: 22 },
+    { id: 'perles', n: 'Collier de perles', e: '🤍', p: 20 }, { id: 'medaille', n: 'Médaille de champion', e: '🏅', p: 40 }],
+  Tailles: [{ id: 'L', n: 'Taille L', e: '👕', p: 0 }, { id: 'XL', n: 'Taille XL', e: '👕', p: 6 },
+    { id: 'XXL', n: 'Taille XXL', e: '🧥', p: 10 }, { id: 'XXXL', n: 'Taille XXXL', e: '🧥', p: 16 }],
   Poignets: [{ id: 'rien', n: 'Poignets nus', e: '🙂', p: 0 }, { id: 'bracelet', n: 'Bracelet doré', e: '📿', p: 10 }, { id: 'montre', n: 'Montre', e: '⌚', p: 18 }, { id: 'deux', n: 'Bracelet + montre', e: '✨', p: 26 }],
   Lunettes: [{ id: 0, n: 'Sans lunettes', e: '🙂', p: 0 }, { id: 1, n: 'Lunettes de soleil', e: '🕶️', p: 9 }],
   Sacs: [{ id: 0, n: 'Sans sac', e: '🙂', p: 0 }, { id: 1, n: 'Sac rouge', e: '🎒', p: 10 }, { id: 2, n: 'Sac bleu', e: '🎒', p: 10 }, { id: 3, n: 'Sac vert', e: '🎒', p: 10 }, { id: 4, n: 'Sac violet', e: '🎒', p: 10 }, { id: 5, n: 'Sac jaune', e: '🎒', p: 10 }],
@@ -6260,7 +6331,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -6403,10 +6474,56 @@ function jerseyTexture(name, j, num) {   // dos du maillot : nom + numéro
   jerseyText(g, String(num), 128, 162, 'bold 118px Nunito, Arial, sans-serif', j.txt);
   const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
 }
+// Les coupes du coiffeur. Chaque bloc : [largeur, hauteur, profondeur, x, y, z, rotZ, rotX]
+// ou ['boule', rayon, x, y, z, sx, sy, sz] pour les volumes ronds (afro, crête…).
+const COIFFES_BLOCS = {
+  rase: [],
+  court: [[1.47, 0.5, 1.47, 0, 1.18, 0]],
+  // plaquée : bien lissée sur le crâne, avec la mèche rabattue sur le front
+  plaquee: [[1.5, 0.3, 1.5, 0, 1.12, 0], [1.52, 0.2, 0.42, 0, 1.0, 0.62]],
+  // afro : un gros volume rond tout autour de la tête
+  afro: [['boule', 1.06, 0, 1.02, -0.04, 1, 0.92, 1]],
+  // mulet : court devant, long dans la nuque
+  mulet: [[1.47, 0.42, 1.4, 0, 1.16, 0.04], [1.3, 1.15, 0.32, 0, 0.5, -0.78], [1.05, 0.5, 0.3, 0, -0.15, -0.8]],
+  // dreadlocks : huit mèches épaisses qui pendent
+  dreads: [[1.47, 0.4, 1.47, 0, 1.16, 0],
+    [0.24, 1.5, 0.24, -0.66, 0.42, -0.6], [0.24, 1.7, 0.24, -0.2, 0.32, -0.78], [0.24, 1.6, 0.24, 0.24, 0.37, -0.78], [0.24, 1.45, 0.24, 0.68, 0.45, -0.58],
+    [0.22, 1.25, 0.22, -0.78, 0.55, 0.05], [0.22, 1.25, 0.22, 0.78, 0.55, 0.05],
+    [0.22, 0.9, 0.22, -0.5, 0.75, 0.66], [0.22, 0.9, 0.22, 0.5, 0.75, 0.66]],
+  // nattes : raie au milieu et deux tresses sur les épaules
+  nattes: [[1.47, 0.46, 1.47, 0, 1.16, 0], [1.4, 0.7, 0.3, 0, 0.8, -0.76],
+    [0.34, 1.5, 0.34, -0.82, 0.3, -0.15], [0.34, 1.5, 0.34, 0.82, 0.3, -0.15],
+    [0.42, 0.24, 0.42, -0.82, -0.5, -0.15], [0.42, 0.24, 0.42, 0.82, -0.5, -0.15]],
+  // crête iroquoise : une bande dressée du front à la nuque, les côtés rasés
+  iroquoise: [[0.42, 1.05, 1.6, 0, 1.5, -0.05], [0.3, 0.6, 1.62, 0, 1.15, -0.05],
+    [1.5, 0.14, 1.45, 0, 1.02, 0]],
+  // crête punk : la même en pointes bien écartées
+  punk: [[1.5, 0.16, 1.45, 0, 1.04, 0],
+    [0.26, 1.15, 0.26, 0, 1.55, 0.5, 0, -0.35], [0.26, 1.3, 0.26, 0, 1.62, 0.16], [0.26, 1.3, 0.26, 0, 1.62, -0.2],
+    [0.26, 1.15, 0.26, 0, 1.55, -0.55, 0, 0.35],
+    [0.24, 0.95, 0.24, -0.44, 1.42, 0.1, 0.5], [0.24, 0.95, 0.24, 0.44, 1.42, 0.1, -0.5]],
+  long: [[1.47, 0.5, 1.47, 0, 1.18, 0], [1.47, 1.6, 0.36, 0, 0.62, -0.75],
+    [0.32, 1.25, 1.2, -0.75, 0.7, -0.1], [0.32, 1.25, 1.2, 0.75, 0.7, -0.1], [0.45, 1.2, 0.45, 0, 0.05, -1.1]],
+};
+// Les bijoux de la boutique : rayon du collier, épaisseur, hauteur sur le buste, pendentif.
+// Coefficient d'élargissement du haut selon la taille achetée.
+const TAILLES_COEF = { L: 1, XL: 1.1, XXL: 1.22, XXXL: 1.36 };
+const BIJOUX_DEF = {
+  collier: { r: 0.5, ep: 0.035, y: 0.72, argent: true },
+  chaine: { r: 0.52, ep: 0.055, y: 0.7 },
+  grosse: { r: 0.58, ep: 0.095, y: 0.66, double: true },
+  dollar: { r: 0.52, ep: 0.055, y: 0.7, pendentif: true, pw: 0.42, ph: 0.5, txt: '💲' },
+  coeur: { r: 0.5, ep: 0.04, y: 0.72, argent: true, pendentif: true, pw: 0.36, ph: 0.36, txt: '❤️' },
+  perles: { r: 0.52, ep: 0.075, y: 0.72, argent: true },
+  medaille: { r: 0.55, ep: 0.06, y: 0.68, pendentif: true, pw: 0.44, ph: 0.44, txt: '🏅' },
+};
 const PAL = {
   pants: [0x3a3d8f, 0x2b3550, 0x5cc453, 0xff8f3a, 0xc9ced8, 0x8b4a2b],
   cap: [0xff5c5c, 0x1b2a4a, 0xffd23f, 0x35d0e6, 0xffffff, null],
-  hair: [0x4a2c17, 0x1b1b1b, 0xf2d27a, 0xc4502a, 0xff7ad9],
+  hair: [0x4a2c17, 0x1b1b1b, 0xf2d27a, 0xc4502a, 0xff7ad9, 0xf4f6fa, 0x8b8f96, 0x3ef2ff, 0x5cc453, 0x8b4fd0, 0xff5c5c, 0x2f6fe0],
+  // les teintes proposées à la boutique pour le haut (indépendantes des maillots)
+  teintes: [0xff5c5c, 0x4f8dff, 0x5cc453, 0xffd23f, 0xff7ad9, 0x8b4fd0, 0xff8f3a, 0x3ef2ff,
+    0x1b1b1b, 0xf4f6fa, 0x8b5a2b, 0x2b3550],
   jacket: [null, 0x1b2a4a, 0xff5c5c, 0x4f8dff, 0x5cc453, 0xffd23f, 0x111111],
   bag: [null, 0xff5c5c, 0x4f8dff, 0x5cc453, 0xb57cff, 0xffd23f],
 };
@@ -6448,6 +6565,29 @@ function buildAvatar(cfg) {
   const front = new THREE.MeshLambertMaterial({ map: jerseyFront(j) });
   const back = new THREE.MeshLambertMaterial({ map: jerseyTexture(cfg.name, j, cfg.num || 1) });
   const torso = part(2 * S, 2 * S, S, [shirt, shirt, shirt, shirt, front, back], 0, 3 * S, 0, g);
+  // BIJOUX : la chaîne pend au cou, le pendentif sur le torse. Tout est dans un groupe qu'on
+  // vide et reconstruit quand on change de bijou à la boutique.
+  const bijouMat = M(0xffd23f), bijou2Mat = M(0xf4f6fa);
+  const bijoux = new THREE.Group(); bijoux.position.set(0, 3 * S, 0); g.add(bijoux);
+  const setBijou = kind => {
+    if (bijoux.userData.k === kind) return;
+    bijoux.userData.k = kind;
+    while (bijoux.children.length) bijoux.remove(bijoux.children[0]);
+    const B = BIJOUX_DEF[kind]; if (!B) return;
+    const mat = B.argent ? bijou2Mat : bijouMat;
+    const t = new THREE.Mesh(new THREE.TorusGeometry(B.r * S, B.ep * S, 6, 18), mat);
+    t.rotation.x = Math.PI / 2 - 0.25; t.position.set(0, B.y * S, 0.1 * S); bijoux.add(t);
+    if (B.pendentif) {
+      const p2 = new THREE.Mesh(roundedBoxGeo(B.pw * S, B.ph * S, 0.12 * S, 0.05 * S, 2), mat);
+      p2.position.set(0, (B.y - B.r - B.ph / 2 + 0.1) * S, 0.5 * S); bijoux.add(p2);
+      if (B.txt) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(B.pw * S * 0.9, B.ph * S * 0.9),
+        new THREE.MeshBasicMaterial({ map: textTexture(B.txt), transparent: true }));
+        pl.position.set(0, p2.position.y, 0.58 * S); bijoux.add(pl); }
+    }
+    if (B.double) { const t2 = new THREE.Mesh(new THREE.TorusGeometry((B.r + 0.16) * S, B.ep * 0.8 * S, 6, 18), mat);
+      t2.rotation.x = Math.PI / 2 - 0.3; t2.position.set(0, (B.y - 0.18) * S, 0.12 * S); bijoux.add(t2); }
+  };
+  setBijou(cfg.bijou || null);
   const jacket = new THREE.Group(); jacket.position.y = 3 * S; g.add(jacket);   // veste ouverte : deux pans + dos + épaules
   part(0.62 * S, 2.06 * S, 1.14 * S, jacketM, -0.72 * S, 0, 0, jacket); part(0.62 * S, 2.06 * S, 1.14 * S, jacketM, 0.72 * S, 0, 0, jacket);
   part(2.1 * S, 2.06 * S, 0.3 * S, jacketM, 0, 0, -0.44 * S, jacket); part(2.16 * S, 0.5 * S, 1.14 * S, jacketM, 0, 0.8 * S, 0, jacket);
@@ -6459,10 +6599,21 @@ function buildAvatar(cfg) {
   hm.position.y = 0.72 * S; hm.castShadow = true; head.add(hm);
   const capParts = [part(1.5 * S, 0.45 * S, 1.5 * S, cap, 0, 1.62 * S, 0, head), part(1.2 * S, 0.16 * S, 0.8 * S, cap, 0, 1.47 * S, 1.05 * S, head)];
   const hairMat = M(PAL.hair[cfg.hairColor ?? 0]);
-  const hp = (w, h, d, x, y, z) => part(w, h, d, hairMat, x, y, z, head);
-  const hairTop = hp(1.47 * S, 0.5 * S, 1.47 * S, 0, 1.18 * S, 0);
-  const longParts = [hp(1.47 * S, 1.6 * S, 0.36 * S, 0, 0.62 * S, -0.75 * S), hp(0.32 * S, 1.25 * S, 1.2 * S, -0.75 * S, 0.7 * S, -0.1 * S), hp(0.32 * S, 1.25 * S, 1.2 * S, 0.75 * S, 0.7 * S, -0.1 * S), hp(0.45 * S, 1.2 * S, 0.45 * S, 0, 0.05 * S, -1.1 * S)];
-  const setHair = style => { hairTop.visible = style > 0; longParts.forEach(p => p.visible = style === 2); };
+  // COIFFURES : chaque coupe est une petite liste de blocs, reconstruite à la demande. On ne
+  // garde plus « rien / court / long » : le coiffeur en propose une dizaine.
+  const hairGroup = new THREE.Group(); head.add(hairGroup);
+  const setHair = style => {
+    const k = typeof style === 'number' ? ['rase', 'court', 'long'][style] || 'rase' : (style || 'rase');
+    if (hairGroup.userData.k === k) return;
+    hairGroup.userData.k = k;
+    while (hairGroup.children.length) { const c = hairGroup.children[0]; hairGroup.remove(c); if (c.geometry && c.geometry.dispose && !c.userData.partage) c.geometry.dispose(); }
+    for (const b of (COIFFES_BLOCS[k] || [])) {
+      let m;
+      if (b[0] === 'boule') { m = new THREE.Mesh(new THREE.SphereGeometry(b[1] * S, 10, 8), hairMat); m.position.set(b[2] * S, b[3] * S, b[4] * S); if (b[5]) m.scale.set(b[5], b[6], b[7]); }
+      else { m = new THREE.Mesh(roundedBoxGeo(b[0] * S, b[1] * S, b[2] * S, 0.06 * S, 2), hairMat); m.position.set(b[3] * S, b[4] * S, b[5] * S); if (b[6]) m.rotation.z = b[6]; if (b[7]) m.rotation.x = b[7]; }
+      m.castShadow = true; hairGroup.add(m);
+    }
+  };
   setHair(cfg.hair || 0);
   const glasses = part(1.25 * S, 0.28 * S, 0.24 * S, M(0x111111), 0, 0.84 * S, 0.66 * S, head); glasses.visible = !!cfg.glasses;
   const HATS = {   // chapeaux de la boutique : [w,h,d,x,y,z] en "studs", avec leur couleur
@@ -6514,21 +6665,30 @@ function buildAvatar(cfg) {
   part(1.9 * S, 0.5 * S, 1.06 * S, shirt, 0, -0.72 * S, 0, bretelles);
   const tag = nameTag(cfg.name); g.add(tag);
   scene.add(g);
-  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, bracelet: braceletM, montre: montreM }, capParts, setHair, skirt, jacket, bag, glasses, hatGroups, torso, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 };
+  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, bracelet: braceletM, montre: montreM, bijou: bijouMat, bijou2: bijou2Mat }, capParts, setHair, setBijou, bijoux, skirt, jacket, bag, glasses, hatGroups, torso, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 };
   applyStats(av, cfg.m || 0, cfg.f || 0);
   return av;
 }
-function applyStats(av, m, f) {   // muscles (bras, épaules) et embonpoint (ventre)
+function applyStats(av, m, f) {   // muscles (bras, épaules), embonpoint (ventre) ET TAILLE du vêtement
   av.m = clamp(m || 0, 0, 100); av.f = clamp(f || 0, 0, 100);
-  const sx = 1 + av.m * 0.003 + av.f * 0.004, sz = 1 + av.f * 0.011;
+  // L, XL, XXL, XXXL : le haut tombe de plus en plus large
+  const tl = TAILLES_COEF[av.taille || 'L'] || 1;
+  const sx = (1 + av.m * 0.003 + av.f * 0.004) * tl, sz = (1 + av.f * 0.011) * tl;
   av.torso.scale.set(sx, 1, sz); av.jacket.scale.set(sx, 1, sz); av.skirt.scale.set(1 + av.f * 0.004, 1, 1 + av.f * 0.006);
   av.bag.position.z = -0.8 * S - (sz - 1) * S * 0.5;
   const as = 1 + av.m * 0.008;
   for (const a of [av.rig.armL, av.rig.armR]) a.children.forEach(c => c.scale.set(as, 1, as));
 }
-function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, bas, casquette, chapeau, cheveux, veste, lunettes, sac, nom, stats)
+function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, bas, casquette, chapeau, cheveux, veste, lunettes, sac, bijou, taille, nom, stats)
   const j = jerseyOf(look.jersey ?? look.shirt ?? 0);
   av.mats.shirt.color.set(j.base); av.mats.sleeve.color.set(j.sl); av.mats.pants.color.set(PAL.pants[look.pants] ?? PAL.pants[0]);
+  // COULEUR CHOISIE À LA BOUTIQUE : elle prend le pas sur celle du maillot
+  if (look.couleurHaut != null && PAL.teintes[look.couleurHaut] != null) {
+    av.mats.shirt.color.setHex(PAL.teintes[look.couleurHaut]);
+    av.mats.sleeve.color.setHex(PAL.teintes[look.couleurHaut]);
+  }
+  if (av.setBijou) av.setBijou(look.bijou && look.bijou !== 'rien' ? look.bijou : null);
+  if (av.taille !== undefined || look.taille) av.taille = look.taille || 'L';
   const capColor = PAL.cap[look.cap ?? 0]; if (capColor != null) av.mats.cap.color.set(capColor);
   const hat = look.hat && look.hat !== 'none' ? look.hat : null;
   av.capParts.forEach(p => p.visible = capColor != null && !hat);
@@ -6746,8 +6906,9 @@ const myCfg = { name: store.get('superobby.name') || 'Joueur' + Math.floor(rnd(1
   num: savedAv.num ?? Math.floor(rnd(1, 99)), hair: savedAv.hair ?? 0, hairColor: savedAv.hairColor ?? 0, skirt: !!savedAv.skirt,
   hat: savedAv.hat || 'none', jacket: savedAv.jacket || 0, bag: savedAv.bag || 0, glasses: !!savedAv.glasses, shorts: !!savedAv.shorts,
   haut: savedAv.haut || 'foot', baggy: !!savedAv.baggy, chaussures: savedAv.chaussures || 'basket',
-  bracelet: !!savedAv.bracelet, montre: !!savedAv.montre, tatouages: Array.isArray(savedAv.tatouages) ? savedAv.tatouages : [] };
-const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, haut: myCfg.haut, baggy: myCfg.baggy, chaussures: myCfg.chaussures, bracelet: myCfg.bracelet, montre: myCfg.montre, tatouages: myCfg.tatouages, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim });
+  bracelet: !!savedAv.bracelet, montre: !!savedAv.montre, tatouages: Array.isArray(savedAv.tatouages) ? savedAv.tatouages : [],
+  bijou: savedAv.bijou || 'rien', taille: savedAv.taille || 'L', couleurHaut: savedAv.couleurHaut != null ? savedAv.couleurHaut : null };
+const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, haut: myCfg.haut, baggy: myCfg.baggy, chaussures: myCfg.chaussures, bracelet: myCfg.bracelet, montre: myCfg.montre, tatouages: myCfg.tatouages, bijou: myCfg.bijou, taille: myCfg.taille, couleurHaut: myCfg.couleurHaut, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim });
 const me = buildAvatar({ name: myCfg.name, jersey: myCfg.jersey, pants: PAL.pants[myCfg.pants], cap: PAL.cap[myCfg.cap], num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, m: stats.m, f: stats.f });
 function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
 
@@ -7640,6 +7801,46 @@ const ORDRES_CHIEN = [
   { id: 'mords', e: '🦷', t: 'Mords / Attaque', mots: /\bmords|mord|attaque|mordre\b/, dit: 'il fonce sur la cible' },
 ];
 function chienNom() { return chien.nom || 'Le chien'; }
+// Remet le chien d'aplomb : corps droit, quatre pattes tendues. Chaque pose repart de là.
+function chienPattesDroites(p) {
+  if (!p || !p.pattes) return;
+  for (const k of ['avG', 'avD', 'arG', 'arD']) { const q = p.pattes[k]; if (q) { q.rotation.set(0, 0, 0); q.position.y = 0.32; } }
+  p.g.rotation.x = 0; p.g.rotation.z = 0;
+  if (p.head) p.head.rotation.x = 0;
+}
+// ASSIS : posé sur l'arrière-train, pattes arrière repliées sous lui, pattes avant tendues.
+function chienPoseAssis(p, t) {
+  if (!p || !p.pattes) return;
+  p.g.rotation.z = 0;
+  p.g.rotation.x = -0.5;                                   // le buste se redresse
+  p.pattes.arG.rotation.x = 1.5; p.pattes.arD.rotation.x = 1.5;   // cuisses repliées vers l'avant
+  p.pattes.arG.position.y = 0.2; p.pattes.arD.position.y = 0.2;
+  p.pattes.avG.rotation.x = 0.5; p.pattes.avD.rotation.x = 0.5;   // pattes avant bien droites sous le poitrail
+  p.pattes.avG.position.y = 0.32; p.pattes.avD.position.y = 0.32;
+  if (t) {   // « donne la patte » : la patte avant droite se lève vers le maître
+    p.pattes.avD.rotation.x = -0.9 + Math.sin(t * 6) * 0.25;
+    p.pattes.avD.position.y = 0.4;
+  }
+}
+// COUCHÉ SUR LE DOS : il se retourne, les quatre pattes en l'air, et respire.
+function chienPoseDos(p) {
+  if (!p || !p.pattes) return;
+  p.g.rotation.z = Math.PI;                                 // sur le dos
+  p.g.rotation.x = 0.1 + Math.sin(simTime * 1.5) * 0.04;    // il respire
+  for (const k of ['avG', 'avD', 'arG', 'arD']) { const q = p.pattes[k]; if (!q) continue;
+    q.rotation.x = -0.7 + Math.sin(simTime * 1.1 + (k === 'avD' || k === 'arG' ? 1 : 0)) * 0.12;
+    q.position.y = 0.32; }
+  p.tail.rotation.y = Math.sin(simTime * 1.2) * 0.1;
+  if (p.head) p.head.rotation.x = 0.3;   // la tête bascule en arrière, gueule au ciel
+}
+// COUCHÉ (sur le ventre) : le corps au sol, pattes avant tendues devant.
+function chienPoseCouche(p) {
+  if (!p || !p.pattes) return;
+  p.g.rotation.z = 0; p.g.rotation.x = 0.06 + Math.sin(simTime * 1.6) * 0.02;
+  p.pattes.avG.rotation.x = 1.4; p.pattes.avD.rotation.x = 1.4;
+  p.pattes.arG.rotation.x = 1.5; p.pattes.arD.rotation.x = 1.5;
+  for (const k of ['avG', 'avD', 'arG', 'arD']) p.pattes[k].position.y = 0.15;
+}
 function chienDit(t, ms = 2200) { msg(`🐶 ${chienNom()} : ${t}`, ms); }
 function chienPose(id, duree) {
   const p = chien.pet; if (!p) return false;
@@ -7671,12 +7872,12 @@ function chienOrdre(id, txt) {
   const o = ORDRES_CHIEN.find(x => x.id === id); if (!o) return false;
   if (id === 'mords') { chienAttaque(txt || ''); return true; }
   if (id === 'balle') return chienBalle();
-  if (id === 'aboie') { aboie(3); chienDit('ouaf ouaf ! 📢', 1600); return true; }
+  if (id === 'aboie') { chien.ordre = 'aboie'; chien.aboiFin = simTime + 20; chien.poste = { x: p.x, z: p.z }; aboie(3); chienDit('ouaf ouaf ! il donne de la voix 📢', 2200); return true; }
   if (id === 'saute') { chien.saut = simTime + 0.9; aboie(1); chienDit('hop ! 🦘', 1500); return true; }
   if (id === 'patte') { chien.patte = simTime + 2.2; chienPose('assis'); aboie(1); chienDit('il te donne la patte 🐾', 2000); return true; }
   if (id === 'garde') { chien.garde = simTime + 180; chien.ordre = 'suit'; chien.poste = null; chienDit('en garde ! il mordra quiconque t\'attaque 🛡️', 2800); aboie(2); return true; }
   if (id === 'mange') { chien.ordre = 'mange'; chien.poste = null; chien.repas = 0; chienDit('il file à sa gamelle 🍖', 2200); return true; }
-  if (id === 'dort') { chien.ordre = 'dort'; chien.poste = null; chienDit('il va se coucher dans sa niche 🛏️', 2400); return true; }
+  if (id === 'dort') { chien.ordre = 'dort'; chien.poste = null; chienDit('il va dormir dans sa niche, sur le dos 🛏️', 2600); return true; }
   chienPose(id);
   chienDit(o.dit, 2000); aboie(1);
   return true;
@@ -7761,13 +7962,23 @@ function chienTick(dt) {
     } else if (versBalle && bl.etat === 'sol') {
       bl.etat = 'gueule'; aboie(1);
     } else if (bl.etat === 'gueule') {
-      worldGroup.remove(bl.m); chien.balle = null; chien.ordre = 'suit';
+      // il LÂCHE la balle aux pieds de son maître : elle reste au sol un instant
+      const bx2 = P.pos.x + Math.sin(P.facing) * 0.8, bz2 = P.pos.z + Math.cos(P.facing) * 0.8;
+      bl.m.position.set(bx2, groundUnder(bx2, bz2, null, 3) + 0.22, bz2);
+      const jouet = bl.m; setTimeout(() => { try { worldGroup.remove(jouet); } catch (e) {} }, 4000);
+      chien.balle = null; chien.ordre = 'suit';
       burst(p.x, p.y + 0.6, p.z, 0xd4ff4f, 6); aboie(2);
-      chienDit('il te rapporte la balle ! Relance quand tu veux 🎾', 2400);
+      chienDit('il te rapporte la balle et la lâche à tes pieds ! Relance quand tu veux 🎾', 2600);
     }
     p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+    chienPattesDroites(p);
     p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 14)) * 0.09 + saute, p.z);
-    if (bl.etat === 'gueule' && bl.m) bl.m.position.set(p.x + Math.sin(p.facing) * 0.5, p.y + 0.7, p.z + Math.cos(p.facing) * 0.5);
+    // LA BALLE EST DANS SA GUEULE : elle suit le museau, tête haute et fière
+    if (bl.etat === 'gueule' && bl.m) {
+      bl.m.position.set(p.x + Math.sin(p.facing) * 0.82, p.g.position.y + 0.72, p.z + Math.cos(p.facing) * 0.82);
+      if (p.head) p.head.rotation.x = -0.12;
+      p.tail.rotation.y = Math.sin(simTime * 20) * 0.7;   // il est content de lui
+    }
     let dhb = p.facing - p.g.rotation.y; dhb = Math.atan2(Math.sin(dhb), Math.cos(dhb)); p.g.rotation.y += dhb * Math.min(1, dt * 10);
     return;
   }
@@ -7781,20 +7992,22 @@ function chienTick(dt) {
         else { const o = { x: p.x, y: p.y - 0.3, z: p.z }; npcMove(o, dxm / dm * 5 * dt, dzm / dm * 5 * dt, 0.3); p.x = o.x; p.z = o.z; }
         p.facing = Math.atan2(dxm, dzm);
         p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+        chienPattesDroites(p);
         p.g.position.set(p.x, p.y + Math.abs(Math.sin(simTime * 12)) * 0.08, p.z);
-        p.g.rotation.x = 0;
       } else {
         p.x = but.x; p.z = but.z; p.y = but.y != null ? but.y : groundUnder(p.x, p.z, null, p.y + 0.9);
         if (chien.ordre === 'mange') {
+          chienPattesDroites(p);
           p.g.position.set(p.x, p.y - 0.05, p.z);
           p.g.rotation.x = 0.35 + Math.sin(simTime * 9) * 0.12;   // la tête plonge dans la gamelle
+          if (p.head) p.head.rotation.x = 0.3 + Math.abs(Math.sin(simTime * 12)) * 0.25;   // il mastique
           p.tail.rotation.y = Math.sin(simTime * 10) * 0.5;
           if (!chien.repas) { chien.repas = simTime + 8; chienDit('miam ! il mange ses croquettes 🍖', 2200); sfx.tone(300, 0, .1, 'sine', .04, 200); }
           if (simTime > chien.repas) { chien.repas = 0; chien.ordre = 'suit'; p.g.rotation.x = 0; chienDit('il a fini son repas, ventre plein ! 🐶', 2200); aboie(2); }
         } else {
-          p.g.position.set(p.x, p.y - 0.17, p.z);
-          p.g.rotation.x = 0.06 + Math.sin(simTime * 1.4) * 0.03;   // il dort, il respire
-          p.tail.rotation.y = Math.sin(simTime * 1.2) * 0.12;
+          // il dort SUR LE DOS, les quatre pattes en l'air : c'est un chien heureux
+          chienPoseDos(p);
+          p.g.position.set(p.x, p.y + 0.22, p.z);
           chien.couche = true;
         }
       }
@@ -7802,16 +8015,25 @@ function chienTick(dt) {
       return;
     }
   }
-  if (chien.poste && (chien.ordre === 'assis' || chien.ordre === 'couche' || chien.ordre === 'debout' || chien.ordre === 'reste')) {
+  if (chien.poste && (chien.ordre === 'assis' || chien.ordre === 'couche' || chien.ordre === 'debout' || chien.ordre === 'reste' || chien.ordre === 'aboie')) {
     p.x = chien.poste.x; p.z = chien.poste.z;
     p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
-    const versMaitre = Math.atan2(P.pos.x - p.x, P.pos.z - p.z);
-    p.facing = versMaitre;
+    p.facing = Math.atan2(P.pos.x - p.x, P.pos.z - p.z);   // il garde son maître dans l'œil
     const patte = chien.patte > simTime;
-    if (chien.ordre === 'couche') { p.g.position.set(p.x, p.y - 0.17, p.z); p.g.rotation.x = 0.06 + Math.sin(simTime * 1.6) * 0.02; chien.couche = true; }
-    else if (chien.ordre === 'assis') { p.g.position.set(p.x, p.y - 0.06 + saute, p.z); p.g.rotation.x = -0.42; chien.couche = false; }
-    else { p.g.position.set(p.x, p.y + saute, p.z); p.g.rotation.x = 0; chien.couche = false; }
-    p.tail.rotation.y = Math.sin(simTime * (patte ? 12 : 4)) * (patte ? 0.6 : 0.3);
+    chienPattesDroites(p);
+    if (chien.ordre === 'couche') { chienPoseCouche(p); p.g.position.set(p.x, p.y - 0.14, p.z); chien.couche = true; }
+    else if (chien.ordre === 'assis') { chienPoseAssis(p, patte ? simTime : 0); p.g.position.set(p.x, p.y + 0.02 + saute, p.z); chien.couche = false; }
+    else { p.g.position.set(p.x, p.y + saute, p.z); chien.couche = false; }
+    // ABOIEMENT EN BOUCLE : il jappe sans s'arrêter, gueule ouverte, tant que l'ordre tient
+    if (chien.ordre === 'aboie') {
+      if (simTime > chien.aboiFin) { chien.ordre = 'suit'; chien.poste = null; chienDit('il se calme 🐶', 1600); }
+      else {
+        if (simTime > (chien.aboiT || 0)) { chien.aboiT = simTime + 0.55; aboie(2); }
+        p.g.position.y += Math.abs(Math.sin(simTime * 9)) * 0.05;          // il se soulève à chaque jappement
+        p.head.rotation.x = -0.25 - Math.abs(Math.sin(simTime * 9)) * 0.3;  // la tête part en arrière
+      }
+    } else p.head.rotation.x = 0;
+    p.tail.rotation.y = Math.sin(simTime * (patte ? 12 : chien.ordre === 'aboie' ? 9 : 4)) * (patte ? 0.6 : 0.35);
     if (patte && Math.random() < dt * 2) burst(p.x, p.y + 0.5, p.z, 0xffd23f, 2);
     let dhp = p.facing - p.g.rotation.y; dhp = Math.atan2(Math.sin(dhp), Math.cos(dhp)); p.g.rotation.y += dhp * Math.min(1, dt * 6);
     return;
@@ -7893,6 +8115,11 @@ function chienTick(dt) {
     p.tail.rotation.y = Math.sin(simTime * 14) * 0.5;
   } else { p.facing = Math.atan2(dx, dz); p.tail.rotation.y = Math.sin(simTime * 6) * 0.4; }
   p.y = groundUnder(p.x, p.z, null, p.y + 0.9);
+  chienPattesDroites(p);
+  // les pattes battent la marche
+  if (d > 1.9 && p.pattes) { const c2 = Math.sin(simTime * 12), c3 = Math.sin(simTime * 12 + Math.PI);
+    p.pattes.avG.rotation.x = c2 * 0.5; p.pattes.arD.rotation.x = c2 * 0.5;
+    p.pattes.avD.rotation.x = c3 * 0.5; p.pattes.arG.rotation.x = c3 * 0.5; }
   p.g.position.set(p.x, p.y + (d > 1.9 ? Math.abs(Math.sin(simTime * 12)) * 0.08 : 0) + (chien.saut > simTime ? Math.abs(Math.sin((chien.saut - simTime) * 7)) * 0.9 : 0), p.z);
   let dh = p.facing - p.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); p.g.rotation.y += dh * Math.min(1, dt * 8);
   if (simTime > chien.aboiT) { chien.aboiT = simTime + rnd(7, 16); aboie(1); }
@@ -9459,6 +9686,7 @@ function cityCommon(dt) {
   cityVie(d);
 }
 function cityVie(dt) {
+  for (const r of (city.barbierRubans || [])) r.rotation.y += dt * 1.6;   // l'enseigne du coiffeur tourne
   // garage : réparation du véhicule conduit
   if (drive.car && city.garage && (drive.car.dmg || 0) > 0 && Math.abs(drive.car.x - city.garage.x) < 4.5 && Math.abs(drive.car.z - city.garage.z) < 3.5 && simTime > (city.repairT || 0)) {
     if (wallet < 10) { if (simTime > (city.repairMsgT || 0)) { city.repairMsgT = simTime + 4; msg('🔧 Réparation : 10 🪙 (il t\'en manque)', 1600); } }
@@ -9501,11 +9729,13 @@ function cityVie(dt) {
   }
   const near = city.gym && Math.hypot(P.pos.x - city.gym.bench.x, P.pos.z - city.gym.bench.z) < 2.2 ? 'bench' : city.gym && Math.hypot(P.pos.x - city.gym.run.x, P.pos.z - city.gym.run.z) < 2.2 ? 'run' : null;
   if (near !== city.shopNear) { city.shopNear = near; if (near && !isMobile) msg(near === 'bench' ? '🏋️ E : soulever la barre' : '🏃 E : courir sur le tapis', 1300); }
-  document.body.classList.toggle('racknear', !!(city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
+  document.body.classList.toggle('racknear', !!(city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.coiffeurNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
   const gunNear = !!city.armory && Math.hypot(P.pos.x - city.armory.x, P.pos.z - city.armory.z) < 3.2;
   if (gunNear !== city.gunNear) { city.gunNear = gunNear; document.body.classList.toggle('racknear', gunNear || !!city.rackNear); if (gunNear && !isMobile) msg('🔫 E : voir toutes les armes', 1200); }
   const tatooNear = !!city.tatooDesk && Math.hypot(P.pos.x - city.tatooDesk.x, P.pos.z - city.tatooDesk.z) < 3 && !drive.car;
   if (tatooNear !== city.tatooNear) { city.tatooNear = tatooNear; if (tatooNear && !isMobile) msg('🖊️ E : te faire tatouer', 2000); }
+  const coiffeurNear = !!city.coiffeurDesk && Math.hypot(P.pos.x - city.coiffeurDesk.x, P.pos.z - city.coiffeurDesk.z) < 3 && !drive.car;
+  if (coiffeurNear !== city.coiffeurNear) { city.coiffeurNear = coiffeurNear; if (coiffeurNear && !isMobile) msg('💈 E : te faire coiffer', 2000); }
   const plainteNear = !!city.plainteDesk && Math.hypot(P.pos.x - city.plainteDesk.x, P.pos.z - city.plainteDesk.z) < 3 && !drive.car;
   if (plainteNear !== city.plainteNear) { city.plainteNear = plainteNear; if (plainteNear && !isMobile) msg('📝 E : déposer une plainte', 2000); }
   const tuneNear = !!city.tuneDesk && Math.hypot(P.pos.x - city.tuneDesk.x, P.pos.z - city.tuneDesk.z) < 3 && !drive.car;
@@ -9664,12 +9894,15 @@ function applyShopItem(cat, it) {
   else if (cat === 'Hauts') myCfg.haut = it.id;
   else if (cat === 'Chaussures') myCfg.chaussures = it.id;
   else if (cat === 'Poignets') { myCfg.bracelet = it.id === 'bracelet' || it.id === 'deux'; myCfg.montre = it.id === 'montre' || it.id === 'deux'; }
+  else if (cat === 'Bijoux') myCfg.bijou = it.id;
+  else if (cat === 'Tailles') myCfg.taille = it.id;
   applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
 }
 function currentShopId(cat) {
   return cat === 'Chapeaux' ? myCfg.hat : cat === 'Vestes' ? myCfg.jacket : cat === 'Lunettes' ? (myCfg.glasses ? 1 : 0)
     : cat === 'Sacs' ? myCfg.bag : cat === 'Hauts' ? (myCfg.haut || 'foot') : cat === 'Chaussures' ? (myCfg.chaussures || 'basket')
     : cat === 'Poignets' ? (myCfg.bracelet && myCfg.montre ? 'deux' : myCfg.bracelet ? 'bracelet' : myCfg.montre ? 'montre' : 'rien')
+    : cat === 'Bijoux' ? (myCfg.bijou || 'rien') : cat === 'Tailles' ? (myCfg.taille || 'L')
     : (myCfg.baggy ? 'baggy' : myCfg.shorts ? 'shorts' : myCfg.skirt ? 'skirt' : 'pants');
 }
 function eat(it) {   // on achète, on emporte : E (ou ✋) pour manger où l'on veut, même assis sur un banc dehors
@@ -9687,13 +9920,26 @@ function eatCarried() { if (!P.snack) return; const it = P.snack; P.snack = null
 // ---- Boutique façon Fortnite : cartes colorées par rareté, un clic = sélection, un bouton = acheter / équiper ----
 const RAR = p => p === 0 ? 'c' : p <= 10 ? 'u' : p <= 20 ? 'r' : p <= 35 ? 'e' : 'l';
 const RARN = { c: 'Commun', u: 'Peu commun', r: 'Rare', e: 'Épique', l: 'Légendaire' };
-const STORE_TABS = { vedette: '⭐ En vedette', tenues: '👕 Tenues', accessoires: '🎩 Accessoires', armes: '🔫 Armes', deco: '🖼️ Déco maison' };
-const DESC = { Chapeaux: 'Un couvre-chef pour avoir du style.', Vestes: 'Une veste ouverte portée par-dessus le maillot.', Bas: 'Le bas de la tenue.', Lunettes: 'Pour la classe au soleil.', Sacs: 'Un sac à dos assorti.' };
+const STORE_TABS = { vedette: '⭐ En vedette', tenues: '👕 Tenues', couleurs: '🎨 Couleurs', accessoires: '🎩 Accessoires', armes: '🔫 Armes', deco: '🖼️ Déco maison' };
+const NOM_TEINTES = ['Rouge', 'Bleu', 'Vert', 'Jaune', 'Rose', 'Violet', 'Orange', 'Cyan', 'Noir', 'Blanc', 'Marron', 'Bleu nuit'];
+const DESC = { Bijoux: 'Un collier ou une chaîne qui se voit sur le torse.', Tailles: 'La coupe du haut : de L à XXXL, de plus en plus large.', Chapeaux: 'Un couvre-chef pour avoir du style.', Vestes: 'Une veste ouverte portée par-dessus le maillot.', Bas: 'Le bas de la tenue.', Lunettes: 'Pour la classe au soleil.', Sacs: 'Un sac à dos assorti.' };
 let storeTab = 'vedette', storeSel = null;
 function catalog(tab) {
   const items = [];
   if (tab === 'tenues') JERSEYS.forEach((j, i) => items.push({ key: 'jersey:' + i, cat: 'jersey', id: i, n: j.name, e: '👕', p: 0, desc: 'Maillot ' + j.name + ' — gratuit, avec ton nom et ton numéro dans le dos.', owned: () => true, equipped: () => myCfg.jersey === i, act: () => { myCfg.jersey = i; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); } }));
   if (tab === 'accessoires') for (const [cat, list] of Object.entries(SHOP)) list.forEach(it => items.push({ key: itemKey(cat, it), cat, id: it.id, n: it.n, e: it.e, p: it.p, desc: DESC[cat], owned: () => it.p === 0 || owned.has(itemKey(cat, it)), equipped: () => String(currentShopId(cat)) === String(it.id), buy: () => { owned.add(itemKey(cat, it)); saveOwned(); }, act: () => applyShopItem(cat, it) }));
+  // COULEURS : la teinte choisie repeint le haut, quel que soit le maillot porté.
+  if (tab === 'couleurs') {
+    items.push({ key: 'teinte:-1', cat: 'teinte', id: -1, n: 'Couleur du maillot', e: '👕', p: 0,
+      desc: 'On garde les couleurs d\'origine du maillot.', owned: () => true,
+      equipped: () => myCfg.couleurHaut == null,
+      act: () => { myCfg.couleurHaut = null; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); } });
+    PAL.teintes.forEach((c, i) => items.push({ key: 'teinte:' + i, cat: 'teinte', id: i, n: NOM_TEINTES[i] || 'Teinte ' + i, e: '🎨', p: i < 4 ? 0 : 8,
+      desc: 'Le haut est teint en ' + (NOM_TEINTES[i] || '').toLowerCase() + '.',
+      owned: () => i < 4 || owned.has('teinte:' + i), equipped: () => myCfg.couleurHaut === i,
+      buy: () => { owned.add('teinte:' + i); saveOwned(); },
+      act: () => { myCfg.couleurHaut = i; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); } }));
+  }
   if (tab === 'armes') for (const [k, w] of Object.entries(WEAPONS)) items.push({ key: 'arme:' + k, cat: 'arme', id: k, n: w.n, e: w.e, p: w.p, consumable: !!w.consumable, desc: k === 'pistol' ? 'Pistolet laser précis, 8 balles, rechargement rapide.' : k === 'rifle' ? 'Fusil laser à lunette, 30 balles : un appui = un coup, visée automatique sur la cible la plus proche.' : 'Lot de 5 grenades de choc : elles projettent tout le monde dans un rayon de 6 m.', owned: () => w.consumable ? (P.grenades || 0) > 0 : owned.has('arme:' + k), equipped: () => P.weapon === k, buy: () => { if (w.consumable) P.grenades = (P.grenades || 0) + w.ammo; else { owned.add('arme:' + k); saveOwned(); } store.set('superobby.grenades', String(P.grenades || 0)); }, act: () => equipWeapon(k) });
   if (tab === 'armes') for (const [k, m] of Object.entries(MUNITIONS)) {
     if (k === 'std') continue;
@@ -9723,7 +9969,7 @@ function renderStore() {
     btn.onclick = () => {
       if (sel.eat) { eat(sel); renderStore(); return; }
       if (sel.consumable) { if (wallet < sel.p) { msg(`Il te manque ${sel.p - wallet} 🪙 : fais des missions !`, 1600); return; } wallet -= sel.p; saveWallet(); sel.buy(); sfx.register(); msg(`✅ ${sel.n}`, 1000); sel.act(); renderStore(); updateHud(); return; }
-      if (eq) { if (sel.cat === 'arme') equipWeapon(null); else if (sel.cat !== 'jersey') applyShopItem(sel.cat, SHOP[sel.cat][0]); renderStore(); return; }
+      if (eq) { if (sel.cat === 'arme') equipWeapon(null); else if (sel.cat === 'teinte') { myCfg.couleurHaut = null; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); } else if (sel.cat !== 'jersey' && SHOP[sel.cat]) applyShopItem(sel.cat, SHOP[sel.cat][0]); renderStore(); return; }
       if (!own) { if (wallet < sel.p) { msg(`Il te manque ${sel.p - wallet} 🪙 : fais des missions !`, 1600); return; } wallet -= sel.p; saveWallet(); sel.buy(); sfx.register(); bubble(me, pickOne(['trop stylé !', 'merci !', 'la classe'])); }
       sel.act(); renderStore(); updateHud();
     };
@@ -10402,7 +10648,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -10531,7 +10777,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -11985,6 +12231,69 @@ function tatooPrix() {
   const t = TATOO_TAILLES.find(x => x.k === tatoo.taille) || TATOO_TAILLES[1];
   return t.p + (tatoo.encre === 'noir' ? 0 : 10);
 }
+// ================= LE COIFFEUR =================
+// Neuf coupes et douze couleurs. La coupe se voit tout de suite sur le personnage : on
+// l'essaie, et on ne paie qu'en validant (si on ferme, on retrouve son ancienne tête).
+const COIFFES = [
+  { k: 'rase', n: 'Rasé', e: '🧑‍🦲', p: 0 },
+  { k: 'court', n: 'Coupe courte', e: '💇', p: 0 },
+  { k: 'plaquee', n: 'Coupe plaquée', e: '💼', p: 10 },
+  { k: 'afro', n: 'Afro', e: '🧑‍🦱', p: 20 },
+  { k: 'dreads', n: 'Dreadlocks', e: '🦁', p: 26 },
+  { k: 'nattes', n: 'Nattes', e: '👧', p: 18 },
+  { k: 'mulet', n: 'Mulet', e: '🎸', p: 14 },
+  { k: 'iroquoise', n: 'Crête iroquoise', e: '🪶', p: 24 },
+  { k: 'punk', n: 'Crête punk', e: '🤘', p: 24 },
+  { k: 'long', n: 'Cheveux longs', e: '👩', p: 12 },
+];
+const COIF_COULEURS = ['Châtain', 'Noir', 'Blond', 'Roux', 'Rose', 'Blanc', 'Gris', 'Cyan', 'Vert', 'Violet', 'Rouge', 'Bleu'];
+const coif = { coupe: 'court', couleur: 0, avant: null };
+function openCoiffeur() {
+  coif.avant = { coupe: myCfg.hair, couleur: myCfg.hairColor || 0 };
+  coif.coupe = typeof myCfg.hair === 'string' ? myCfg.hair : (['rase', 'court', 'long'][myCfg.hair || 0] || 'court');
+  coif.couleur = myCfg.hairColor || 0;
+  openUI('coiffeur'); majCoiffeur();
+}
+function coifPrix() {
+  const c = COIFFES.find(x => x.k === coif.coupe) || COIFFES[0];
+  const dejaCoupe = owned.has('coif:' + c.k), dejaCoul = owned.has('coifc:' + coif.couleur);
+  return (dejaCoupe ? 0 : c.p) + (dejaCoul || coif.couleur === 0 ? 0 : 6);
+}
+function coifApercu() {   // on essaie la coupe sur le personnage, sans payer
+  myCfg.hair = coif.coupe; myCfg.hairColor = coif.couleur;
+  try { applyMyLook(); } catch (e) {}
+}
+function majCoiffeur() {
+  $('coifSub').textContent = 'Choisis ta coupe et ta couleur : tu les vois tout de suite sur toi. Tu ne paies qu\'en validant.';
+  $('coifCoupes').innerHTML = COIFFES.map(c => `<button class="tatm ${coif.coupe === c.k ? 'on' : ''}" data-c="${c.k}"><span>${c.e}</span><i>${c.n}${c.p && !owned.has('coif:' + c.k) ? ' · ' + c.p + ' 🪙' : ''}</i></button>`).join('');
+  $('coifCoupes').querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { coif.coupe = b.dataset.c; coifApercu(); majCoiffeur(); }));
+  $('coifCouleurs').innerHTML = PAL.hair.map((c, i) => `<i data-h="${i}" class="${coif.couleur === i ? 'sel' : ''}" style="background:#${c.toString(16).padStart(6, '0')}" title="${COIF_COULEURS[i] || ''}"></i>`).join('');
+  $('coifCouleurs').querySelectorAll('[data-h]').forEach(b => b.addEventListener('click', () => { coif.couleur = +b.dataset.h; coifApercu(); majCoiffeur(); }));
+  const p = coifPrix();
+  const c = COIFFES.find(x => x.k === coif.coupe) || COIFFES[0];
+  $('coifPrix').textContent = `${c.e} ${c.n} · ${COIF_COULEURS[coif.couleur] || ''} — ${p ? p + ' 🪙' : 'gratuit'} (tu as ${wallet} 🪙)`;
+  $('coifOk').disabled = p > wallet;
+  $('coifOk').style.opacity = p > wallet ? 0.5 : 1;
+}
+function validerCoiffure() {
+  const p = coifPrix();
+  if (wallet < p) { msg(`Il te manque ${p - wallet} 🪙`, 1800); return; }
+  wallet -= p; saveWallet(); updateHud();
+  owned.add('coif:' + coif.coupe); owned.add('coifc:' + coif.couleur);
+  store.set('superobby.owned', JSON.stringify([...owned]));
+  myCfg.hair = coif.coupe; myCfg.hairColor = coif.couleur;
+  applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook()));
+  if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
+  const c = COIFFES.find(x => x.k === coif.coupe) || COIFFES[0];
+  msg(`${c.e} ${c.n} ${COIF_COULEURS[coif.couleur] ? '· ' + COIF_COULEURS[coif.couleur].toLowerCase() : ''}${p ? ' · −' + p + ' 🪙' : ''} — ça te va bien !`, 3200);
+  sfx.win(); chat(null, `💈 ${myCfg.name} sort de chez le coiffeur : ${c.n.toLowerCase()}`);
+  coif.avant = null; closeUI();
+}
+$('coifOk').addEventListener('click', validerCoiffure);
+$('coifBack').addEventListener('click', () => {   // on repart sans payer : on remet l'ancienne tête
+  if (coif.avant) { myCfg.hair = coif.avant.coupe; myCfg.hairColor = coif.avant.couleur; applyMyLook(); coif.avant = null; }
+  closeUI();
+});
 function openTatoo() { openUI('tatoo'); majTatoo(); }
 function majTatoo() {
   const gril = TATOO_MOTIFS.map(m => `<button class="tatm ${tatoo.motif === m.k ? 'on' : ''}" data-m="${m.k}"><span>${m.e}</span><i>${m.n}</i></button>`).join('');

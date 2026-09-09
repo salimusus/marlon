@@ -4179,6 +4179,116 @@ test('les lieux visés par les ordres pointent sur les vrais bâtiments', async 
   return { ok, detail: `${r.n} formulations mènent au bon bâtiment (écart maximal ${r.pire} m)${r.rates.length ? ' · ratés : ' + r.rates.join(', ') : ''}` };
 });
 
+test('le chien prend de vraies poses : assis, la patte, sur le dos, la balle en gueule', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 70, hour: 12 });
+    const G = __G;
+    const pet = G.city.pets.find(x => x.kind === 'dog');
+    G.P.pos.set(pet.x, 0.5, pet.z); G.adopterChien(pet, true); G.chien.nom = 'Rex'; G.chien.attenteNom = false;
+    G.P.pos.set(0, 0.5, 70);
+    const res = { articule: !!(pet.pattes && pet.pattes.avG && pet.pattes.arD) };
+    const lire = () => ({ x: +pet.g.rotation.x.toFixed(2), z: +pet.g.rotation.z.toFixed(2),
+      avG: +pet.pattes.avG.rotation.x.toFixed(2), avD: +pet.pattes.avD.rotation.x.toFixed(2), arG: +pet.pattes.arG.rotation.x.toFixed(2) });
+    const tick = n => { for (let i = 0; i < n; i++) G.chienTick(1 / 60); };
+    // ASSIS : arrière-train posé (pattes arrière repliées), pattes avant tendues, buste redressé
+    G.chienOrdre('assis', ''); tick(10); res.assis = lire();
+    // LA PATTE : la patte avant droite se lève
+    G.chienOrdre('patte', ''); tick(10); res.patte = lire();
+    // COUCHÉ : les quatre pattes repliées, corps au sol
+    G.chienOrdre('couche', ''); tick(10); res.couche = lire();
+    // ABOIE : ordre qui dure, aboiements en boucle
+    G.chienOrdre('aboie', ''); tick(10);
+    res.aboie = { ordre: G.chien.ordre, enCours: G.chien.aboiFin > G.simTime, tete: +pet.head.rotation.x.toFixed(2) };
+    // DORT : il se retourne SUR LE DOS dans sa niche, pattes en l'air
+    G.chienOrdre('dort', '');
+    const n = G.city.niche; pet.x = n.x; pet.z = n.z; tick(400);
+    res.dort = Object.assign(lire(), { surLeDos: Math.abs(Math.abs(pet.g.rotation.z) - Math.PI) < 0.1,
+      pattesEnLair: pet.pattes.avG.rotation.x < -0.4 });
+    // LA BALLE : elle est bien dans sa gueule pendant le retour
+    G.chien.ordre = null; G.chienOrdre('balle', '');
+    const bl = G.chien.balle;
+    res.balleLancee = !!bl;
+    bl.etat = 'gueule'; pet.x = 6; pet.z = 76; G.P.pos.set(0, 0.5, 70); tick(3);
+    const d = Math.hypot(bl.m.position.x - pet.g.position.x, bl.m.position.z - pet.g.position.z);
+    res.balle = { dist: +d.toFixed(2), hauteur: +(bl.m.position.y - pet.g.position.y).toFixed(2),
+      enGueule: d < 1.1 && bl.m.position.y > pet.g.position.y + 0.4 };
+    G.chien.ordre = 'suit'; G.chien.balle = null;
+    return res;
+  });
+  const ok = r.articule
+    && r.assis.x < -0.3 && r.assis.arG > 1 && Math.abs(r.assis.avG) < 0.8
+    && r.patte.avD < -0.5 && r.couche.avG > 1 && r.couche.arG > 1
+    && r.aboie.ordre === 'aboie' && r.aboie.enCours
+    && r.dort.surLeDos && r.dort.pattesEnLair
+    && r.balleLancee && r.balle.enGueule;
+  return { ok, detail: `pattes articulées · ASSIS : buste redressé (${r.assis.x}), pattes arrière repliées (${r.assis.arG}) et avant tendues (${r.assis.avG}) · LA PATTE : la droite se lève (${r.patte.avD}) · COUCHÉ : les quatre repliées · ABOIE : ordre qui dure, aboiements en boucle · DORT : sur le dos (${r.dort.z}) les pattes en l'air (${r.dort.avG}) · BALLE : dans la gueule à ${r.balle.dist} m et ${r.balle.hauteur} m de haut` };
+});
+
+test('la boutique habille aussi en bijoux, en tailles et en couleurs', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G; G.wallet = 3000;
+    const res = { bijoux: G.SHOP.Bijoux.length, tailles: G.SHOP.Tailles.map(t => t.id), teintes: G.PAL.teintes.length };
+    const nBijou = () => G.me.bijoux ? G.me.bijoux.children.length : -1;
+    const rates = [];
+    for (const b of G.SHOP.Bijoux) { G.myCfg.bijou = b.id; G.applyMyLook();
+      if (b.id === 'rien' ? nBijou() !== 0 : nBijou() === 0) rates.push(b.id); }
+    res.rates = rates;
+    G.myCfg.bijou = 'grosse'; G.applyMyLook(); res.grosse = nBijou();
+    G.myCfg.bijou = 'dollar'; G.applyMyLook(); res.dollar = nBijou();
+    const l = {};
+    for (const t of G.SHOP.Tailles) { G.myCfg.taille = t.id; G.applyMyLook(); l[t.id] = +G.me.torso.scale.x.toFixed(3); }
+    res.largeurs = l;
+    res.croissant = l.L < l.XL && l.XL < l.XXL && l.XXL < l.XXXL;
+    G.myCfg.taille = 'L';
+    G.myCfg.couleurHaut = 4; G.applyMyLook();
+    res.couleur = { veut: G.PAL.teintes[4].toString(16), a: G.me.mats.shirt.color.getHexString() };
+    G.myCfg.couleurHaut = null; G.myCfg.bijou = 'rien'; G.applyMyLook();
+    G.openStore('couleurs'); res.cartesCouleurs = document.querySelectorAll('#stGrid .fcard').length;
+    G.openStore('accessoires'); res.cartesAcc = document.querySelectorAll('#stGrid .fcard').length;
+    G.closeUI();
+    return res;
+  });
+  const ok = r.bijoux >= 8 && r.rates.length === 0 && r.grosse >= 2 && r.dollar >= 3
+    && r.tailles.join(',') === 'L,XL,XXL,XXXL' && r.croissant
+    && r.couleur.veut === r.couleur.a && r.teintes >= 12 && r.cartesCouleurs >= 13 && r.cartesAcc >= 55;
+  return { ok, detail: `${r.bijoux} bijoux (colliers, chaîne en or, grosse chaîne à ${r.grosse} maillons, pendentif dollar à ${r.dollar} pièces) tous visibles sur le torse · 4 tailles L→XXXL qui élargissent vraiment le haut (${Object.values(r.largeurs).join(' → ')}) · ${r.teintes} couleurs au choix, appliquées au maillot (${r.couleur.a}) · la boutique affiche ${r.cartesCouleurs} couleurs et ${r.cartesAcc} accessoires` };
+});
+
+test('le coiffeur propose dix coupes et douze couleurs', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 43, y: 1, z: 92, hour: 12 });
+    const G = __G; G.wallet = 3000;
+    const res = { salon: !!G.city.coiffeurDesk, coupes: G.COIFFES.length, couleurs: G.PAL.hair.length };
+    G.openCoiffeur();
+    res.ouvert = G.uiOpen === 'coiffeur';
+    res.boutons = { c: document.querySelectorAll('#coifCoupes [data-c]').length, h: document.querySelectorAll('#coifCouleurs [data-h]').length };
+    const blocs = {};
+    for (const c of G.COIFFES) { G.myCfg.hair = c.k; G.myCfg.hairColor = 4; G.applyMyLook();
+      let n = 0; G.me.rig.head.traverse(x => { if (x.isMesh && x.material === G.me.mats.hair) n++; }); blocs[c.k] = n; }
+    res.blocs = blocs;
+    res.vides = Object.entries(blocs).filter(([k, n]) => k !== 'rase' && n === 0).map(([k]) => k);
+    // on essaie sans payer, on repart : l'ancienne tête revient
+    G.myCfg.hair = 'court'; G.myCfg.hairColor = 1; G.applyMyLook();
+    G.openCoiffeur(); G.coif.coupe = 'punk'; G.coif.couleur = 10; G.coifApercu ? G.coifApercu() : (G.myCfg.hair = 'punk');
+    document.getElementById('coifBack').click();
+    res.annule = { coupe: G.myCfg.hair, couleur: G.myCfg.hairColor };
+    // on paie : la coupe est posée et mémorisée, la seconde fois elle est gratuite
+    G.openCoiffeur(); G.coif.coupe = 'dreads'; G.coif.couleur = 7; G.majCoiffeur();
+    const w0 = G.wallet; G.validerCoiffure();
+    res.achat = { paye: w0 - G.wallet, coupe: G.myCfg.hair, couleur: G.myCfg.hairColor };
+    G.openCoiffeur(); G.coif.coupe = 'dreads'; G.coif.couleur = 7; G.majCoiffeur();
+    const w1 = G.wallet; G.validerCoiffure(); res.reprise = w1 - G.wallet;
+    G.myCfg.hair = 1; G.myCfg.hairColor = 0; G.applyMyLook();
+    return res;
+  });
+  const ok = r.salon && r.coupes >= 10 && r.couleurs >= 12 && r.ouvert
+    && r.boutons.c === r.coupes && r.boutons.h === r.couleurs && r.vides.length === 0
+    && r.annule.coupe === 'court' && r.annule.couleur === 1
+    && r.achat.paye > 0 && r.achat.coupe === 'dreads' && r.achat.couleur === 7 && r.reprise === 0;
+  return { ok, detail: `salon en ville · ${r.coupes} coupes (afro ${r.blocs.afro}, dreadlocks ${r.blocs.dreads} mèches, crête iroquoise ${r.blocs.iroquoise}, punk ${r.blocs.punk}, nattes ${r.blocs.nattes}, mulet ${r.blocs.mulet}, plaquée ${r.blocs.plaquee}) et ${r.couleurs} couleurs · on essaie sans payer et on repart avec son ancienne tête · la coupe payée ${r.achat.paye} 🪙 est mémorisée (gratuite ensuite)` };
+});
+
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);

@@ -53,6 +53,19 @@ window.__SHOT = {
         b.activite = null; b.bagarre = null; b.garde = 0; b.fight = null;
       }
       if (typeof city !== 'undefined') { city.rideBot = null; city.botCarNear = null; }
+      // Une voiture de police laissee au milieu de la rue par le test precedent « voit » le
+      // joueur : la clemence sur les petits delits ne s'appliquait plus et le test suivant
+      // echouait sans rapport avec ce qu'il mesurait. On renvoie tout le monde au poste.
+      if (typeof police !== 'undefined') {
+        try { clearWanted(); } catch (e2) {}
+        police.avert = 0; police.avertT = -999; police.usure = 0; police.sait = null; police.lastSeen = null;
+        for (const pc of (police.cars || [])) { if (pc.home) { pc.x = pc.home[0]; pc.z = pc.home[1]; }
+          pc.active = false; pc.debarque = false; pc.speed = 0; pc.route = null; pc.vueT = 0; pc.vue = false;
+          if (pc.g) pc.g.position.set(pc.x, pc.y || 0, pc.z); }
+        for (let k = (police.agents || []).length - 1; k >= 0; k--) { const a = police.agents[k];
+          try { scene.remove(a.av.group); const j = city.mannequins.indexOf(a.av); if (j >= 0) city.mannequins.splice(j, 1); } catch (e3) {}
+          police.agents.splice(k, 1); }
+      }
       if (typeof coup !== 'undefined') { coup.etat = 'aucun'; coup.bot = null; coup.car = null; }
       if (typeof gang !== 'undefined') gang.mission = null;
       if (typeof defi !== 'undefined') defi.on = null;
@@ -284,6 +297,20 @@ window.__G = {
   openQui: typeof openQui === 'function' ? openQui : null,
   conduire: typeof conduire === 'function' ? conduire : null,
   navCell: typeof navCell === 'function' ? navCell : null,
+  mannequin: typeof mannequin === 'function' ? mannequin : null,
+  coifApercu: typeof coifApercu === 'function' ? coifApercu : null,
+  openStore: typeof openStore === 'function' ? openStore : null,
+  buildAvatar: typeof buildAvatar === 'function' ? buildAvatar : null,
+  applyLook: typeof applyLook === 'function' ? applyLook : null,
+  openCoiffeur: typeof openCoiffeur === 'function' ? openCoiffeur : null,
+  majCoiffeur: typeof majCoiffeur === 'function' ? majCoiffeur : null,
+  validerCoiffure: typeof validerCoiffure === 'function' ? validerCoiffure : null,
+  COIFFES: typeof COIFFES !== 'undefined' ? COIFFES : null,
+  COIFFES_BLOCS: typeof COIFFES_BLOCS !== 'undefined' ? COIFFES_BLOCS : null,
+  coif: typeof coif !== 'undefined' ? coif : null,
+  PAL: typeof PAL !== 'undefined' ? PAL : null,
+  SHOP: typeof SHOP !== 'undefined' ? SHOP : null,
+  chienPoseAssis: typeof chienPoseAssis === 'function' ? chienPoseAssis : null,
   perfDe: typeof perfDe === 'function' ? perfDe : null,
   perfGagne: typeof perfGagne === 'function' ? perfGagne : null,
   perfPerd: typeof perfPerd === 'function' ? perfPerd : null,

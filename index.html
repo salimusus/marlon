@@ -9678,6 +9678,16 @@ function protectionTick(dt) {
       }
       continue;
     }
+    // Un garde du corps a qui l'on n'a rien demande d'autre revient TOUJOURS a sa place :
+    // il arrivait qu'il reparte en balade et finisse a vingt metres derriere toi. On ne
+    // touche jamais a un rendez-vous d'ordre (mission, entrainement, hopital) : c'est
+    // exactement ce qui, autrefois, le clouait a cote du joueur au lieu de partir.
+    if (b.gardeCorps && simTime < b.gardeCorps && !b.sport && !b.drive && !b.bagarre
+      && (!b.rdv || (b.rdv.libre && !b.rdv.touche))) {
+      const A2 = [0.9, -0.9, 0];
+      b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true, slot: A2[b.slotGarde || 0] || 0 };
+      b.rdvRoute = null; b.wait = 0; b.target = null;
+    }
     // il colle le membre qu'il protège
     if (b.protege && b.rdv && b.rdv.suivre) {
       const c = b.protege;

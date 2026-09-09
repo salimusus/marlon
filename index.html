@@ -6238,6 +6238,9 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
     // Un passant récupère tout seul après une bagarre. UN HOMME DE TON GANG, NON : ses points
     // de vie restent là où les coups les ont laissés. Il faut l'envoyer à l'hôpital (payant)
     // ou attendre très longtemps — sa jauge de vie compte vraiment.
+    // Un homme tombé à zéro ne marche pas : il reste à terre jusqu'à ce qu'il récupère
+    // (ou qu'on l'envoie à l'hôpital). On en voyait déambuler avec ❤️ 0.
+    if (!b.ko && (b.hp ?? 100) <= 0) { b.hp = 0; b.ko = simTime + 14; b.fight = null; b.bagarre = null; corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y); continue; }
     if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null;
       b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); } continue; }
     const dx = P.pos.x - b.pos.x, dz = P.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
@@ -8488,8 +8491,14 @@ function botAttendIci(b) {
   botDit(b, pickOne(['ok, je t\'attends ici', 'je ne bouge pas 👌', 'compris, je reste planté là']));
   msg(`⏸️ ${b.name} t'attend sur place`, 2000);
 }
+// Ami ou homme du gang : c'est quelqu'un du camp du joueur.
+function estDesNotres(o) { return !!o && !!o.name && (estDuGang(o) || estAmi(o.name)); }
 function botTape(b, cible) {
   if (!cible || cible === b) { botDit(b, 'qui ça ?'); return; }
+  // Ils se tapaient DESSUS entre eux : dès qu'un membre se faisait frapper, il passait en
+  // « bagarre », et les gardes du corps du gang lui sautaient dessus à leur tour. On ne
+  // lève pas la main sur les siens.
+  if (estDesNotres(cible)) { botDit(b, `${cible.name} est des nôtres, je ne le touche pas 😐`); return; }
   b.bagarre = { cible, fin: simTime + 22, cd: 0 }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
   noteOrdre(b, '💥', `s'en prendre à ${cible.name}`);
   botDit(b, pickOne([`ok, je m'occupe de ${cible.name} ! 😤`, `${cible.name} va comprendre 💥`]));
@@ -8574,7 +8583,7 @@ function protectionTick(dt) {
       b.rdv.x = c.pos.x + 1.6; b.rdv.z = c.pos.z + 1.2;
       if (Math.hypot(b.pos.x - c.pos.x, b.pos.z - c.pos.z) > 3) b.rdv.arrive = false;
       if (!b.bagarre) for (const o of bots) {
-        if (o === b || o === c || o.ko) continue;
+        if (o === b || o === c || o.ko || estDesNotres(o)) continue;   // on ne frappe pas les siens
         if (o.fight && o.fight !== 'flee' && simTime < o.fightT && Math.hypot(o.pos.x - c.pos.x, o.pos.z - c.pos.z) < 7) { botTape(b, o); break; }
       }
       if (!b.bagarre) for (const G of gangs) for (const m of G.membres) {
@@ -8673,7 +8682,13 @@ function bagarreTick(b, dt) {
     c.pos.x += dx / d * 0.5; c.pos.z += dz / d * 0.5;
     impact(c.pos.x, c.pos.y + 1.2, c.pos.z, null, 'sang', 1); sfx.hit();
     if (Math.random() < 0.5) botSay(c, ['aïe !', 'arrête !', 'au secours !']);
-    if (c.hp <= 0) { botKill(c); b.bagarre = null; b.ordre = null; }
+    if (c.hp <= 0) {
+      // Un homme du gang (ou un ami) ne « meurt » pas dans une bagarre : il tombe, et on
+      // l'envoie à l'hôpital. Avant, il explosait comme un passant.
+      if (estDesNotres(c)) { c.hp = 0; c.ko = simTime + 14; c.fight = null; corpsAuSol(c.av, c.pos.x, c.pos.z, c.pos.y); }
+      else botKill(c);
+      b.bagarre = null; b.ordre = null;
+    }
   } else animateRig(b.av.rig, 'idle', 0, dt, simTime);
   b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
   return true;
@@ -8682,7 +8697,7 @@ function bagarreTick(b, dt) {
 function gardeTick(b) {
   if (!b.garde || simTime > b.garde || b.bagarre) return;
   for (const o of bots) {
-    if (o === b || o.ko) continue;
+    if (o === b || o.ko || estDesNotres(o)) continue;   // jamais sur un ami ni sur un homme du gang
     if (o.fight && o.fight !== 'flee' && simTime < o.fightT && Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) < 7) { botTape(b, o); return; }
   }
   // Il ne regarde plus seulement les passants : un gangster rival qui te tourne autour se
@@ -9050,14 +9065,20 @@ function ordreEnCoursDe(b) {
 function resumeMissions() {
   const l = (gang.membres || []).filter(b => b && !b.mort);
   if (!l.length) return '';
-  return '<span style="display:block;margin-top:5px;font-weight:600;color:#7a86a0">📋 Missions en cours</span>'
-    + l.map(b => {
-      const o = ordreEnCoursDe(b), pv = vieDe(b);
-      const etat = b.ko && simTime < b.ko ? '<b style="color:#ff5c5c">😵 à terre</b>'
-        : o ? `<b style="color:#ffd23f">⏳ ${o}</b>` : '<span style="opacity:.6">libre</span>';
-      return `<span style="display:block">🧑 ${b.name} — ${etat}`
-        + (pv < 100 ? ` <span style="color:${vieCouleur(pv)}">❤️ ${pv}</span>` : '') + '</span>';
-    }).join('');
+  // Compact et borné en hauteur : la liste poussait les cartes hors de l'écran dès qu'on
+  // avait cinq hommes.
+  const occupes = l.filter(b => ordreEnCoursDe(b) || (b.ko && simTime < b.ko));
+  const libres = l.length - occupes.length;
+  const lignes = occupes.slice(0, 6).map(b => {
+    const o = ordreEnCoursDe(b), pv = vieDe(b);
+    const etat = b.ko && simTime < b.ko ? '<b style="color:#ff5c5c">😵 à terre</b>' : `<b style="color:#ffd23f">⏳ ${o}</b>`;
+    return `<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.name} — ${etat}`
+      + (pv < 100 ? ` <span style="color:${vieCouleur(pv)}">❤️ ${pv}</span>` : '') + '</span>';
+  });
+  if (occupes.length > 6) lignes.push(`<span style="display:block;opacity:.7">…et ${occupes.length - 6} autre${occupes.length - 6 > 1 ? 's' : ''}</span>`);
+  if (libres) lignes.push(`<span style="display:block;opacity:.7">${libres} homme${libres > 1 ? 's' : ''} libre${libres > 1 ? 's' : ''}</span>`);
+  return '<span style="display:block;margin-top:4px;font-weight:600;color:#7a86a0">📋 Missions en cours</span>'
+    + `<span style="display:block;max-height:19vh;overflow-y:auto;font-size:.92em;line-height:1.35">${lignes.join('')}</span>`;
 }
 function ordresRetourVisible(on) { const e = $('ordresRetour'); if (e) e.style.display = on ? '' : 'none'; }
 // ================= CHOISIR SON ÉQUIPE POUR UNE MISSION =================

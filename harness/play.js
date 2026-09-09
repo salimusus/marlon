@@ -5129,6 +5129,35 @@ test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si
   return { ok, detail: `sans voiture au comptoir, « Valider » n'est plus un bouton gris muet : il affiche « ${r.sansVoiture.texte} » et un bouton « 🚗 Amener une voiture » gare une caisse à ${r.apres.distance} m de l'atelier · s'il manque de l'argent, il l'écrit aussi (« ${r.sansArgent.texte} ») · et une voiture garée devant l'atelier compte désormais même quand on s'avance jusqu'à la borne` };
 });
 
+
+test('les hommes du gang ne se tapent plus entre eux', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const l = G.bots.slice(0, 5);
+    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.bagarre = null; b.fight = null;
+      b.gardeCorps = 0; b.pos.set(G.P.pos.x + 2, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
+    G.botGardeDuCorps(l[0]); G.botGardeDuCorps(l[1]); G.botGardeDuCorps(l[2]);
+    const victime = l[3];
+    victime.fight = 'fight'; victime.fightT = G.simTime + 30;
+    victime.pos.set(G.P.pos.x + 1.5, 0.15, G.P.pos.z + 1); victime.av.group.position.copy(victime.pos);
+    for (let i = 0; i < 400; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
+    res.entreEux = { bagarres: l.filter(b => b.bagarre).length,
+      pvVictime: Math.round(victime.hp),
+      ordresTaper: l.reduce((a, b) => a + (b.journal || []).filter(o => /prendre/.test(o.t)).length, 0) };
+    res.ordre = G.commandeSociale(`${l[0].name} tape ${l[4].name}`);
+    res.apresOrdre = { bagarre: !!l[0].bagarre, pv: Math.round(l[4].hp) };
+    l[4].hp = 0; l[4].ko = 0;
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    res.zeroPV = { ko: l[4].ko > G.simTime, couche: Math.abs(l[4].av.group.rotation.x) > 1.4 };
+    return res;
+  });
+  const ok = r.entreEux.bagarres === 0 && r.entreEux.pvVictime === 100 && r.entreEux.ordresTaper === 0
+    && !r.apresOrdre.bagarre && r.apresOrdre.pv === 100
+    && r.zeroPV.ko && r.zeroPV.couche;
+  return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore

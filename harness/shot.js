@@ -108,6 +108,7 @@ window.__SHOT = {
     if (v.dist != null) { cam.base = v.dist; cam.dist = v.dist; }
     cam.freeUntil = 1e9;                         // fige l'orientation demandée
     if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
+    if (v.salonTV && typeof ouvreSalonTV === 'function') { try { ouvreSalonTV(); } catch (e9) {} }
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
@@ -429,6 +430,7 @@ window.__G = {
   lienTV: typeof lienTV === 'function' ? lienTV : null,
   castPret: typeof castPret === 'function' ? castPret : null,
   castMaj: typeof castMaj === 'function' ? castMaj : null,
+  copieLienTV: typeof copieLienTV === 'function' ? copieLienTV : null,
   cast: typeof cast !== 'undefined' ? cast : null,
   routeLien: typeof routeLien === 'function' ? routeLien : null,
   cam: typeof cam !== 'undefined' ? cam : null,

@@ -387,6 +387,10 @@ body.tv #tvBadge.on{display:block}
 .tvcase canvas{width:min(190px,42vw);height:auto;image-rendering:pixelated;background:#fff;border-radius:10px;padding:7px}
 .tvcode{font-size:clamp(30px,3.4vw,58px);font-weight:800;letter-spacing:9px;color:#1b2a4a;margin:6px 0}
 .tvlien{font-size:11px;word-break:break-all;color:#7a86a0;margin-top:6px}
+/* le lien de la télé, on doit pouvoir le lire de loin et le sélectionner d'un seul appui */
+#lienTV{font-size:13px;font-weight:700;color:#1b2a4a;background:#eef2fb;border:1px dashed #b9c6e4;
+  border-radius:8px;padding:6px 8px;margin-top:8px;user-select:all;-webkit-user-select:all}
+#tvCast{margin-top:8px}
 #tvManettes{font-size:clamp(13px,1.1vw,19px);color:#1b2a4a;margin-top:6px;min-height:22px;font-weight:800}
 
 /* ================= Manette : le téléphone devient la télécommande ================= */
@@ -544,7 +548,7 @@ body.tv #tvBadge.on{display:block}
         <h3>📺 Ouvrir sur ta smart TV</h3>
         <canvas id="qrTV" width="180" height="180"></canvas>
         <p id="tvCastEtat">Scanne ce code avec ton téléphone puis envoie le lien à ta télé, ou tape-le dans le navigateur de la télé — le jeu s'ouvre directement en affichage géant.</p>
-        <button class="btn sec small" id="tvCast">📡 Diffuser sur la télé</button>
+        <button class="btn small" id="tvCast">📡 Diffuser sur la télé</button>
         <div class="tvlien" id="lienTV"></div>
       </div>
       <div class="tvcase">
@@ -13514,19 +13518,42 @@ function castPrepare() {
   } catch (e) { cast.req = null; }
   return cast.req;
 }
+// LE BOUTON NE DISPARAÎT JAMAIS. Il était masqué dès que le navigateur ne connaissait pas
+// l'API Presentation (Safari, Firefox, et Chrome hors https) : on cherchait un bouton qui
+// n'était plus là. Il reste toujours affiché et fait, dans ce cas, la seule chose utile —
+// copier le lien à ouvrir sur la télé.
 function castMaj() {
   const b = $('tvCast'), e = $('tvCastEtat');
   if (!b || !e) return;
+  b.style.display = '';
   if (cast.session) { b.textContent = '📴 Arrêter la diffusion'; e.textContent = 'Le jeu tourne sur ta télé. Ton téléphone reste la manette.'; return; }
-  if (!castPret()) { b.style.display = 'none'; e.textContent = 'Ce navigateur ne sait pas diffuser tout seul : ouvre le lien ci-dessous dans le navigateur de ta télé (ou scanne le QR avec ton téléphone puis partage-le à la télé). Le jeu démarre directement en grand.'; return; }
-  b.style.display = ''; b.textContent = '📡 Diffuser sur la télé';
+  if (!castPret()) {
+    b.textContent = '📋 Copier le lien pour la télé';
+    e.textContent = 'Ce navigateur ne sait pas diffuser tout seul (il faut Chrome ou Edge, en https). Copie le lien, ouvre-le dans le navigateur de ta télé — ou scanne le QR avec ton téléphone puis partage-le à la télé. Le jeu démarre directement en grand.';
+    return;
+  }
+  b.textContent = cast.dispo ? '📡 Diffuser sur la télé' : '📡 Chercher une télé';
   e.textContent = cast.dispo ? 'Une télé compatible a été trouvée : appuie sur « Diffuser » et choisis-la dans la liste.'
     : 'Aucune télé détectée pour l\'instant (elle doit être allumée et sur le même Wi-Fi). Tu peux aussi ouvrir le lien ci-dessous directement sur la télé.';
+}
+function copieLienTV() {
+  const l = lienTV();
+  const dit = () => msg('📋 Lien copié — ouvre-le dans le navigateur de ta télé', 3200);
+  const secours = () => {
+    try {
+      const el = $('lienTV'), r = document.createRange(); r.selectNodeContents(el);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      if (document.execCommand('copy')) dit(); else msg('📺 Recopie le lien affiché sous le QR sur ta télé', 3400);
+    } catch (e) { msg('📺 Recopie le lien affiché sous le QR sur ta télé', 3400); }
+  };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(l).then(dit, secours); else secours(); }
+  catch (e) { secours(); }
+  return l;
 }
 function castLance() {
   if (cast.session) { try { cast.session.terminate(); } catch (e) {} cast.session = null; castMaj(); return; }
   const r = castPrepare();
-  if (!r) { msg('📺 Ce navigateur ne sait pas diffuser : ouvre le lien sur ta télé', 3200); return; }
+  if (!r) { copieLienTV(); return; }
   r.start().then(sess => {
     cast.session = sess; castMaj();
     msg('📺 C\'est parti sur la télé ! Ton téléphone reste la manette', 3200);

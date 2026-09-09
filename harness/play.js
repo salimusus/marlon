@@ -5924,7 +5924,16 @@ test('on connecte une smart TV et le telephone sert de manette', async p => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let noirs = 0; for (let i = 0; i < d.length; i += 16) if (d[i] < 100) noirs++; return noirs; };
     const cartes = document.querySelectorAll('#tvsalon .tvcase').length;
-    const boutonCast = !!document.getElementById('tvCast');
+    const bc = document.getElementById('tvCast');
+    const boutonCast = !!bc;
+    // LE BOUTON NE DOIT JAMAIS DISPARAÎTRE, même quand le navigateur ne sait pas diffuser
+    const visible = b => !!b && getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().width > 0;
+    G.castMaj(); const vuAvecApi = visible(bc), texteApi = bc.textContent;
+    const memo = window.PresentationRequest;
+    window.PresentationRequest = undefined; G.castMaj();
+    const vuSansApi = visible(bc), texteSansApi = bc.textContent;
+    const copie = G.copieLienTV();
+    window.PresentationRequest = memo; G.castMaj();
     // le lien de la télé ouvre le jeu directement en affichage géant
     const avant = document.body.classList.contains('tv');
     location.hash = '#tv'; const route = G.routeLien();
@@ -5941,11 +5950,13 @@ test('on connecte une smart TV et le telephone sert de manette', async p => {
     G.modeTV(false); G.closeUI();
     return { lien, finTV: /#tv$/.test(lien), codeManette, lienManette,
       qrTV: qr('qrTV'), qrManette: qr('qrManette'), cartes, boutonCast,
+      vuAvecApi, vuSansApi, texteApi, texteSansApi, copie,
       castPret: G.castPret(), route, enTV, avant, routeMan, badgeVu };
   });
   const ok = r.finTV && r.qrTV > 200 && r.qrManette > 200 && r.cartes === 3 && r.boutonCast
+    && r.vuAvecApi && r.vuSansApi && r.copie === r.lien && /copier/i.test(r.texteSansApi)
     && /^[A-Z]{4}$/.test(r.codeManette) && /#manette=/.test(r.lienManette)
     && r.route === 'tv' && r.enTV && !r.avant
     && r.routeMan.x === 'manette' && r.routeMan.ouvert && r.badgeVu;
-  return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton « Diffuser » utilise l'API Presentation quand l'appareil sait caster (ici ${r.castPret ? 'oui' : 'non, on retombe sur le lien a ouvrir dans le navigateur de la télé'}) · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
+  return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton reste TOUJOURS a l'écran (il disparaissait des que le navigateur ne connaissait pas l'API Presentation — Safari, Firefox, ou Chrome hors https) : « ${r.texteApi} » quand l'appareil sait diffuser, « ${r.texteSansApi} » sinon, et il copie alors le lien tout seul · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
 });

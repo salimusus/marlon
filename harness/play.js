@@ -1215,7 +1215,10 @@ test('un ami prend une voiture, vient te chercher et te conduit', async p => {
     const dest = b.rdv && b.rdv.auto ? [Math.round(b.rdv.auto.tx), Math.round(b.rdv.auto.tz)] : null;
     for (let i = 0; i < 6000 && !b.drive; i++) __G.updateBot(b, 1 / 30);
     const auVolant = !!b.drive;
-    let n = 0; while (b.drive && b.drive.etat === 'route' && n < 120000) { __G.botDriveTick(1 / 60); n++; }
+    // l'horloge doit AVANCER : le contournement d'obstacle a une date de peremption, et
+    // avec un temps fige le conducteur restait a jamais braque dans sa direction d'evitement
+    const rouler = () => { __G.simTime += 1 / 60; __G.botDriveTick(1 / 60); };
+    let n = 0; while (b.drive && b.drive.etat === 'route' && n < 120000) { rouler(); n++; }
     const c = b.drive.car;
     const arrivee = Math.hypot(c.x - (dest ? dest[0] : 0), c.z - (dest ? dest[1] : 0));
     // on monte à côté de lui
@@ -1225,7 +1228,7 @@ test('un ami prend une voiture, vient te chercher et te conduit', async p => {
     const passager = b.drive.passager, cache = !__G.me.group.visible;
     // « va à la villa »
     const ordre2 = __G.commandeSociale('Nathan_pro va à la villa');
-    let m = 0; while (b.drive && b.drive.etat === 'route' && m < 120000) { __G.botDriveTick(1 / 60); m++; }
+    let m = 0; while (b.drive && b.drive.etat === 'route' && m < 120000) { rouler(); m++; }
     const dVilla = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 190);
     const suit = Math.hypot(__G.P.pos.x - b.drive.car.x, __G.P.pos.z - b.drive.car.z);
     __G.botDescendre(b, false);
@@ -4631,6 +4634,9 @@ test('la raquette se tient verticale, et se range dès qu\'on quitte le court', 
     __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
     const G = __G, res = {};
     G.P.racket = true; G.setRacket(G.me, true);
+    // on mesure le MONTAGE de la raquette dans la main, bras au repos : sinon le balancement
+    // du bras (que le test precedent a pu laisser leve) fait pencher le tamis avec lui
+    G.me.rig.armR.rotation.set(0, 0, 0); G.me.rig.armR.updateMatrixWorld(true);
     const rk = G.me.racket;
     // le tamis : sa normale doit rester HORIZONTALE (raquette droite), pas pointer vers le ciel
     const n = new G.THREE.Vector3(0, 0, 1).applyQuaternion(rk.getWorldQuaternion(new G.THREE.Quaternion()));

@@ -7234,6 +7234,15 @@ function corpsAuSol(av, x, z, yRef) {
   const sol = groundUnder(x, z, null, (yRef == null ? av.group.position.y : yRef) + 1.4);
   av.group.rotation.x = -Math.PI / 2;
   av.group.position.set(x, sol + 0.45, z);
+  // Un decalage FIXE ne pouvait pas convenir a tout le monde : selon la tenue (arme dans le
+  // dos, casquette, sac a dos) le corps n'a pas la meme epaisseur et les plus larges avaient
+  // encore le dos sous le bitume. On mesure donc le corps une fois couche, et on le repose.
+  av.group.updateMatrixWorld(true);
+  const bb = new THREE.Box3(); let vu = false, tmp = new THREE.Box3();
+  av.group.traverse(o => { if (!o.isMesh || o.isSprite || !o.visible) return;
+    tmp.setFromObject(o); if (!isFinite(tmp.min.y)) return;
+    if (vu) bb.union(tmp); else { bb.copy(tmp); vu = true; } });
+  if (vu) av.group.position.y += Math.max(0, sol + 0.03 - bb.min.y);
 }
 function corpsDebout(av, x, z, y) {
   if (!av || !av.group) return;

@@ -55,10 +55,13 @@ window.__SHOT = {
         // devant la villa faussait le test suivant sans aucun rapport avec ce qu'il mesurait.
         b.hp = 100; b.ko = 0; b.mort = 0; b.robbed = false;
         b.gardeCorps = 0; b.gardeVilla = 0; b.gardeArme = 0; b.protege = null; b.soin = 0;
-        b.arme = false; b.perf = null;
+        b.arme = false; b.perf = null; b.journal = null; b.sport = null;
         if (b.av) { b.av.group.rotation.x = 0; b.av.group.visible = true; }
       }
       if (typeof gang !== 'undefined') { gang.membres.length = 0; gang.mission = null; gang.rates = 0; }
+      // une partie de tennis ou de foot laissee en cours faussait le test suivant
+      if (typeof finDuel === 'function') { try { finDuel('tennis'); finDuel('foot'); } catch (e4) {} }
+      if (typeof P !== 'undefined' && P.racket) { P.racket = false; try { setRacket(me, false); } catch (e5) {} }
       if (typeof city !== 'undefined' && city.safes) { for (const sf of city.safes) { sf.progress = 0; sf.alerte = false; } city.safeNear = null; }
       if (typeof city !== 'undefined') { city.rideBot = null; city.botCarNear = null; }
       // Une voiture de police laissee au milieu de la rue par le test precedent « voit » le
@@ -92,6 +95,19 @@ window.__SHOT = {
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
+    if (v.raquette) { P.racket = true; setRacket(me, true); }
+    if (v.partie) {   // une partie de sport contre un membre, pour la capture
+      try {
+        const b = bots[0];
+        amis.add(b.name);
+        b.pos.set(v.partie === 'foot' ? -19 : 13, 0.3, v.partie === 'foot' ? -13 : -17.4);
+        b.rdv = null; b.wait = 0; b.ko = 0; b.av.group.visible = true;
+        b.sport = { jeu: v.partie, cote: v.partie === 'foot' ? 0 : 1, pret: true };
+        if (v.partie === 'tennis') { setRacket(b.av, true); P.racket = true; setRacket(me, true); }
+        b.facing = Math.atan2(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
+        b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
+      } catch (e) {}
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -99,6 +115,25 @@ window.__SHOT = {
 window.__G = {
   P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats, owned,
   updateBot, tennisMatchTick, policeTick, worldGroup, THREE,
+  fm: typeof fm !== 'undefined' ? fm : null,
+  TENNIS_ZONE: typeof TENNIS_ZONE !== 'undefined' ? TENNIS_ZONE : null,
+  FOOT_ZONE: typeof FOOT_ZONE !== 'undefined' ? FOOT_ZONE : null,
+  DUEL_GAGNANTS: typeof DUEL_GAGNANTS !== 'undefined' ? DUEL_GAGNANTS : 0,
+  botSport: typeof botSport === 'function' ? botSport : null,
+  botSportif: typeof botSportif === 'function' ? botSportif : null,
+  sportBotTick: typeof sportBotTick === 'function' ? sportBotTick : null,
+  footMatchTick: typeof footMatchTick === 'function' ? footMatchTick : null,
+  courtPlayers: typeof courtPlayers === 'function' ? courtPlayers : null,
+  toggleRacket: typeof toggleRacket === 'function' ? toggleRacket : null,
+  setRacket: typeof setRacket === 'function' ? setRacket : null,
+  finDuel: typeof finDuel === 'function' ? finDuel : null,
+  noteOrdre: typeof noteOrdre === 'function' ? noteOrdre : null,
+  finirOrdre: typeof finirOrdre === 'function' ? finirOrdre : null,
+  journalHtml: typeof journalHtml === 'function' ? journalHtml : null,
+  missionGang: typeof missionGang === 'function' ? missionGang : null,
+  tuerMembre: typeof tuerMembre === 'function' ? tuerMembre : null,
+  entrainerMembre: typeof entrainerMembre === 'function' ? entrainerMembre : null,
+  inZone: typeof inZone === 'function' ? inZone : null,
   loadWorld, cityReset, enterCar, exitCar, openUI, closeUI, takeAway, eatCarried, openFridge,
   respawn, die, msg, chat, infraction, clearWanted, jailEnter, jailFree, startMission, endMission,
   toggleMenu, applyMyLook, buildNav, navPath, throwGrenade, equipWeapon, fire, punch, kick, sitBench,

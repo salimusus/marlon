@@ -4546,6 +4546,9 @@ test('le chien défend son maître : il bondit, il mord, il fait gagner du temps
     res.stats = { hp: G.chien.hp, hpMax: G.chien.hpMax, perf: G.perfDe(G.chien), plafond: G.CHIEN_PERF_MAX };
     // il est VOLONTAIREMENT plus faible qu'un homme de gang, et il plafonne bas
     const Gr = G.gangs[0], m = Gr.membres[1];
+    // On ISOLE la cible : le chien vise le rival le plus proche, et selon les tests joués
+    // avant, un autre gangster pouvait traîner plus près — le chien mordait celui-là.
+    for (const g of G.gangs) for (const o of g.membres) if (o !== m) { o.x += 600; o.z += 600; }
     res.plusFaible = G.perfDe(G.chien) < G.perfDe(m);
     G.perfGagne(G.chien, 500); res.plafond = G.perfDe(G.chien);
     G.chien.perf = 22;
@@ -4587,6 +4590,142 @@ test('le chien défend son maître : il bondit, il mord, il fait gagner du temps
     && r.veto.paye === r.veto.prix && r.veto.vie === 60 && r.vetoRefuse
     && r.panneau.perf && r.panneau.vie && r.panneau.veto && r.panneau.ordres >= 14;
   return { ok, detail: `le chien a ${r.stats.hpMax} PV et plafonne à ${r.plafond} de performance, sous un homme de gang · « défends-moi » le fait bondir sur le gangster qui te fonce dessus : il décolle de ${r.bond.hauteur} m, pattes avant tendues, mord (−${r.morsure.gangster} PV au gangster, −${r.morsure.chien} pour lui) et le CLOUE SUR PLACE le temps que tu files · le vétérinaire le soigne pour ${r.veto.prix} 🪙, et refuse si tu n'as pas de quoi payer · ses deux jauges s'affichent dans sa liste` };
+});
+
+
+test('la raquette se tient verticale, et se range dès qu\'on quitte le court', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
+    const G = __G, res = {};
+    G.P.racket = true; G.setRacket(G.me, true);
+    const rk = G.me.racket;
+    // le tamis : sa normale doit rester HORIZONTALE (raquette droite), pas pointer vers le ciel
+    const n = new G.THREE.Vector3(0, 0, 1).applyQuaternion(rk.getWorldQuaternion(new G.THREE.Quaternion()));
+    res.inclinaisonTamis = +(Math.abs(Math.asin(Math.max(-1, Math.min(1, n.y)))) * 180 / Math.PI).toFixed(0);
+    const axe = new G.THREE.Vector3(0, -1, 0).applyQuaternion(rk.getWorldQuaternion(new G.THREE.Quaternion()));
+    res.inclinaisonManche = +(Math.abs(Math.asin(Math.max(-1, Math.min(1, -axe.y)))) * 180 / Math.PI).toFixed(0);
+    // sur le court elle reste en main, dehors elle se range toute seule
+    G.P.pos.set(13, 0.3, -8); for (let i = 0; i < 8; i++) G.step(1 / 60, true);
+    res.surLeCourt = G.P.racket;
+    G.P.pos.set(13, 0.3, 8); for (let i = 0; i < 8; i++) G.step(1 / 60, true);
+    res.dehors = G.P.racket;
+    return res;
+  });
+  const ok = r.inclinaisonTamis < 25 && r.inclinaisonManche > 60 && r.surLeCourt && !r.dehors;
+  return { ok, detail: `le tamis est vertical (${r.inclinaisonTamis}° d'inclinaison au lieu de 51° avant — il était couché comme une poêle) et le manche pend à ${r.inclinaisonManche}° de l'horizontale · la raquette reste en main sur le court et se range TOUTE SEULE dès qu'on en sort` };
+});
+
+test('un membre joue vraiment au tennis contre toi, en trois jeux gagnants', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
+    const G = __G, res = {};
+    const b = G.bots[0];
+    G.amis.add(b.name);
+    b.pos.set(20, 0.3, 10); b.rdv = null; b.sport = null; b.wait = 0; b.ko = 0;
+    G.botSport(b, 'tennis');
+    res.ordre = { cote: b.sport.cote, journal: (b.journal || []).map(o => o.t + ':' + o.etat) };
+    let tours = 0;
+    for (let i = 0; i < 4000 && !(b.sport && b.sport.pret); i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); tours++; }
+    res.arrivee = { pret: !!(b.sport && b.sport.pret), raquette: !!(b.av.racket && b.av.racket.visible),
+      cote: b.pos.z < -13 ? 1 : 0, secondes: +(tours / 60).toFixed(0) };
+    // le joueur arrive sur le court SANS raquette : le membre lui en prête une
+    G.P.pos.set(13, 0.3, -8); G.P.racket = false;
+    for (let i = 0; i < 300 && !G.tm.on; i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+    res.debut = { match: G.tm.on, raquettePretee: G.P.racket, noms: G.tm.names.slice(), bot: G.tm.bot === b };
+    let echanges = 0, prevHit = 0, dernier = null;
+    for (let i = 0; i < 30000; i++) {
+      G.step(1 / 60, true); G.updateBot(b, 1 / 60);
+      const bal = G.city.balls.find(x => x.kind === 'tennis');
+      if (bal) { if (bal.hitCd > prevHit) echanges++; prevHit = bal.hitCd; }
+      if (G.tm.on) dernier = { j: G.tm.j.slice(), s: G.tm.s.slice() };
+      if (!G.tm.on && i > 400) break;
+    }
+    res.partie = { echanges, dernier, fini: !G.tm.on, sportEfface: !b.sport,
+      raquetteBot: !!(b.av.racket && b.av.racket.visible),
+      journal: (b.journal || []).map(o => o.t + ':' + o.etat) };
+    return res;
+  });
+  const gagnants = r.partie.dernier ? Math.max(r.partie.dernier.j[0], r.partie.dernier.j[1]) : 0;
+  const ok = r.arrivee.pret && r.arrivee.raquette && r.arrivee.cote === 1
+    && r.debut.match && r.debut.raquettePretee && r.debut.bot
+    && r.partie.echanges > 10 && gagnants >= 2 && r.partie.fini && r.partie.sportEfface && !r.partie.raquetteBot
+    && r.partie.journal.some(x => /partie au tennis:reussi/.test(x));
+  return { ok, detail: `« on joue au tennis » : il file au court (${r.arrivee.secondes} s), prend une raquette et se met de l'autre côté du filet · il t'en prête une si tu n'en as pas · la partie se joue en 3 jeux gagnants, ${r.partie.echanges} balles échangées, score final ${r.partie.dernier ? r.partie.dernier.j.join('–') : '?'} en jeux · à la fin chacun range sa raquette et l'ordre passe à « réussi »` };
+});
+
+test('un membre joue au foot contre toi : partie en trois buts', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: -8, y: 1, z: -13, hour: 12 });
+    const G = __G, res = {};
+    const b = G.bots[1];
+    G.amis.add(b.name);
+    b.pos.set(20, 0.3, 10); b.rdv = null; b.sport = null; b.wait = 0; b.ko = 0;
+    G.P.pos.set(-8, 0.3, -13);
+    G.botSport(b, 'foot');
+    res.cote = b.sport.cote;
+    for (let i = 0; i < 4000 && !(b.sport && b.sport.pret); i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+    res.pret = !!(b.sport && b.sport.pret);
+    for (let i = 0; i < 200 && !G.fm.on; i++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+    res.debut = { match: G.fm.on, noms: G.fm.names.slice() };
+    let touches = 0, prevHit = 0, dernier = null;
+    const bal = G.city.balls.find(x => x.kind === 'foot');
+    for (let i = 0; i < 30000; i++) {
+      G.step(1 / 60, true); G.updateBot(b, 1 / 60);
+      if (bal.hitCd > prevHit) touches++; prevHit = bal.hitCd;
+      if (G.fm.on) dernier = G.fm.s.slice();
+      if (!G.fm.on && i > 400) break;
+    }
+    res.partie = { touches, dernier, fini: !G.fm.on, sportEfface: !b.sport,
+      journal: (b.journal || []).map(o => o.t + ':' + o.etat) };
+    return res;
+  });
+  const buts = r.partie.dernier ? Math.max(r.partie.dernier[0], r.partie.dernier[1]) : 0;
+  const ok2 = r.pret && r.debut.match && r.partie.touches > 3 && buts >= 2 && r.partie.fini && r.partie.sportEfface
+    && r.partie.journal.some(x => /partie au foot:reussi/.test(x));
+  return { ok: ok2, detail: `« on joue au foot » : il rejoint le terrain, prend le camp que tu n'occupes pas (côté ${r.cote === 0 ? 'ouest' : 'est'}), vise vraiment la cage adverse (${r.partie.touches} frappes) et la partie s'arrête au 3ᵉ but — score ${r.partie.dernier ? r.partie.dernier.join('–') : '?'}` };
+});
+
+test('la liste des ordres montre ce qu\'on a demandé et où ça en est', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, res = {};
+    const b = G.bots[0], b2 = G.bots[1], b3 = G.bots[2];
+    for (const x of [b, b2, b3]) { G.amis.add(x.name); G.gang.membres.push(x); x.journal = null; x.ko = 0; x.hp = 100; }
+    // 1) un ordre en cours : l'entraînement
+    G.entrainerMembre(b, 'tir');
+    res.enCours = (b.journal || []).map(o => ({ t: o.t, e: o.etat }));
+    // 2) un ordre réussi : la mission du gang
+    G.missionGang([b2], 'argent');
+    const av = (b2.journal || []).map(o => o.etat).join(',');
+    for (let i = 0; i < 40; i++) { G.finirOrdre(b2, 'reussi'); }
+    res.reussi = (b2.journal || []).map(o => ({ t: o.t, e: o.etat }));
+    res.avant = av;
+    // 3) un ordre raté — sur un homme bien vivant, pour le voir dans son panneau
+    G.missionGang([b2], 'banque');
+    G.finirOrdre(b2, 'rate');
+    res.rate = (b2.journal || []).map(o => o.etat);
+    G.missionGang([b3], 'banque'); G.finirOrdre(b3, 'rate');
+    // 4) une perte : il se fait tuer
+    G.missionGang([b3], 'villa');
+    G.tuerMembre(b3, 'la police');
+    res.perte = (b3.journal || []).map(o => ({ t: o.t, e: o.etat }));
+    // 5) tout cela se lit dans le panneau 📣
+    G.openOrdres(b);
+    const sub = document.getElementById('ordresSub').innerHTML;
+    res.panneau = { titre: /Ses ordres/.test(sub), ligne: /stand de tir/.test(sub), etat: /en cours/.test(sub) };
+    G.closeUI();
+    G.openOrdres(b2);
+    const sub2 = document.getElementById('ordresSub').innerHTML;
+    res.panneau2 = { reussi: /réussi/.test(sub2), rate: /raté/.test(sub2) };
+    G.closeUI();
+    return res;
+  });
+  const ok = r.enCours.length === 1 && r.enCours[0].e === 'cours' && /stand de tir/.test(r.enCours[0].t)
+    && r.reussi.length === 1 && r.reussi[0].e === 'reussi'
+    && r.rate[0] === 'rate'
+    && r.perte[0].e === 'perte' && r.perte.every(o => o.e !== 'cours')
+    && r.panneau.titre && r.panneau.ligne && r.panneau.etat && r.panneau2.reussi && r.panneau2.rate;
+  return { ok, detail: `chaque ordre donné est noté avec son avancement : « ${r.enCours[0] ? r.enCours[0].t : '?'} » ⏳ en cours, « ${r.reussi[0] ? r.reussi[0].t : '?'} » ✅ réussi, un coup ❌ raté, et 💀 perte quand l'homme y laisse la vie · le panneau 📣 affiche la liste sous ses jauges` };
 });
 
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste

@@ -2336,7 +2336,10 @@ function racketMesh(color = 0xff5c5c) {   // raquette : tamis ovale, cordage, c�
   return g;
 }
 function setRacket(av, on) {
-  if (!av.racket) { av.racket = racketMesh(); av.racket.position.set(0.02, -0.62, 0.12); av.racket.rotation.set(-0.9, 0, 0.25); av.rig.armR.add(av.racket); }
+  // La raquette se tient VERTICALE, tamis de face, comme on la porte vraiment. Avec
+  // l'ancienne inclinaison (−0,9 rad) le tamis était couché à 50° : on avait l'air de
+  // porter une poêle à frire.
+  if (!av.racket) { av.racket = racketMesh(); av.racket.position.set(0.05, -0.66, 0.1); av.racket.rotation.set(-0.14, 0, 0.2); av.rig.armR.add(av.racket); }
   av.racket.visible = !!on;
 }
 const WINMASK = (() => {   // fenêtres allumées (masque d'émission pour la nuit)
@@ -6302,8 +6305,15 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   city.zones.push({ name: 'Commissariat', emoji: '🚔', x1: sx - 14, x2: sx + 14, z1: sz - 18, z2: sz + 8, hint: '🚔 Commissariat et prison : si tu commets des infractions, la police te poursuit jusqu\'ici' });
 }
 const race = { state: 'idle', laps: 2, goT: 0, startT: 0, cd: 0, results: [], my: { next: 0, lap: 0, t: null, done: false, inLine: false }, ai: [], endT: 0 };
-const tm = { on: false, s: [0, 0], names: ['', ''], serve: 0, serveT: 0, graceT: 0 };
+const tm = { on: false, s: [0, 0], j: [0, 0], names: ['', ''], serve: 0, serveT: 0, graceT: 0, bot: null };
 const TENNIS_ZONE = { x1: 3, x2: 23, z1: -23, z2: -3 };
+// Le court déborde un peu de la zone : on ne range la raquette qu'une fois vraiment sorti,
+// sinon elle disparaissait dès qu'on frôlait la ligne de fond.
+const TENNIS_LARGE = { x1: 1, x2: 25, z1: -25, z2: -1 };
+const FOOT_ZONE = { x1: -23, x2: -3, z1: -23, z2: -3 };
+// Une partie se joue en TROIS jeux gagnants au tennis, TROIS buts au foot.
+const DUEL_GAGNANTS = 3, JEU_POINTS = 4;
+const fm = { on: false, s: [0, 0], names: ['', ''], cote: 0, bot: null, graceT: 0 };
 const shots = [];   // projectiles laser
 const gym = { on: null, reps: 0, end: 0 };
 let uiOpen = null, aimPoint = new THREE.Vector3();
@@ -6335,7 +6345,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; }); city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 function applyTheme(t) {
   scene.background = new THREE.Color(t.sky);
@@ -7500,10 +7510,46 @@ function venirAMoi(b, quoi) {
   b.rdv = { x: P.pos.x + dx / d * 1.6, z: P.pos.z + dz / d * 1.6, y: 0.3, nom: quoi || 'à côté de toi', arrive: false, suit: true };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
   setBeacon(P.pos.x, P.pos.z);
+  noteOrdre(b, '🏃', quoi ? `venir te rejoindre (${quoi})` : 'venir te rejoindre');
   botSay(b, [`j'arrive ${myCfg.name} ! 🏃`, quoi ? `ok, je te rejoins ${quoi} 🏃` : 'ok, je viens vers toi 🏃']);
   msg(`🏃 ${b.name} vient te rejoindre${quoi ? ' (' + quoi + ')' : ''}`, 2400);
 }
+// ================= LE JOURNAL DES ORDRES =================
+// Chaque ordre donné à un homme est noté, avec son avancement : en cours, réussi, raté,
+// ou perte quand il y laisse la vie. La liste s'affiche dans son panneau 📣.
+const ORDRE_ETATS = { cours: ['⏳', 'en cours', '#ffd23f'], reussi: ['✅', 'réussi', '#5cc453'],
+  rate: ['❌', 'raté', '#ff8f3a'], perte: ['💀', 'perte', '#ff5c5c'] };
+const JOURNAL_MAX = 6;
+function noteOrdre(b, e, t) {
+  if (!b || !t) return null;
+  if (!b.journal) b.journal = [];
+  // un même ordre redonné ne s'empile pas : on repart de zéro sur la ligne existante
+  const dejaLa = b.journal.find(o => o.t === t && o.etat === 'cours');
+  if (dejaLa) { dejaLa.quand = simTime; return dejaLa; }
+  const o = { e: e || '📣', t, etat: 'cours', quand: simTime };
+  b.journal.unshift(o);
+  if (b.journal.length > JOURNAL_MAX) b.journal.length = JOURNAL_MAX;
+  return o;
+}
+// Clôt le dernier ordre en cours (celui dont le texte correspond, sinon le plus récent).
+function finirOrdre(b, etat, t) {
+  if (!b || !b.journal) return null;
+  const o = (t && b.journal.find(x => x.etat === 'cours' && x.t === t)) || b.journal.find(x => x.etat === 'cours');
+  if (o) { o.etat = etat; o.quand = simTime; }
+  return o;
+}
+function ordresEnCours(b) { return ((b && b.journal) || []).filter(o => o.etat === 'cours').length; }
+function journalHtml(b) {
+  const j = (b && b.journal) || [];
+  if (!j.length) return '<span style="display:block;color:#7a86a0">📋 aucun ordre donné pour l\'instant</span>';
+  return '<span style="display:block;font-weight:600;color:#7a86a0">📋 Ses ordres</span>' + j.map(o => {
+    const [e, lib, col] = ORDRE_ETATS[o.etat] || ORDRE_ETATS.cours;
+    return `<span style="display:block">${o.e} ${o.t} — <b style="color:${col}">${e} ${lib}</b></span>`;
+  }).join('');
+}
 function fixerRdv(b, lieu, jeu) {
+  noteOrdre(b, jeu ? (jeu === 'au foot' ? '⚽' : jeu === 'au tennis' ? '🎾' : '🎲') : '📍',
+    jeu ? `partie ${jeu}` : `rendez-vous à ${lieu.nom}`);
   b.rdv = { x: lieu.x, z: lieu.z, y: 0.3, nom: lieu.nom, jeu: jeu || null, arrive: false };
   b.wait = 0; b.target = null; b.fight = null;
   setBeacon(lieu.x, lieu.z);
@@ -8237,6 +8283,7 @@ function libereVehiculesOublies() {
 function botSuis(b) {
   b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.ordre = { type: 'suit' };
+  noteOrdre(b, '🏃', 'te suivre');
   botDit(b, pickOne(['je te suis ! 🏃', 'ok, je reste avec toi', 'où tu veux !']));
   msg(`🏃 ${b.name} te suit`, 2000);
 }
@@ -8249,12 +8296,14 @@ function botAttendIci(b) {
 function botTape(b, cible) {
   if (!cible || cible === b) { botDit(b, 'qui ça ?'); return; }
   b.bagarre = { cible, fin: simTime + 22, cd: 0 }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
+  noteOrdre(b, '💥', `s'en prendre à ${cible.name}`);
   botDit(b, pickOne([`ok, je m'occupe de ${cible.name} ! 😤`, `${cible.name} va comprendre 💥`]));
   msg(`💥 ${b.name} s'en prend à ${cible.name}`, 2400);
   chat(null, `💥 ${b.name} attaque ${cible.name} !`);
 }
 function botProtege(b) {
   b.garde = simTime + 180; b.ordre = { type: 'garde' };
+  noteOrdre(b, '🛡️', 'te protéger');
   b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true };
   b.wait = 0; b.rdvRoute = null;
   botDit(b, pickOne(['je te protège, personne ne t\'approche 💪', 'garde du corps, à ton service !']));
@@ -8271,6 +8320,7 @@ function botGardeDuCorps(b) {
   if (deja.includes(b)) { botDit(b, 'je suis déjà ton garde du corps 🛡️'); return true; }
   if (deja.length >= GARDES_MAX) { botDit(b, `tu as déjà ${GARDES_MAX} gardes du corps — dis « stop » à l'un d'eux`); return true; }
   b.gardeCorps = simTime + 1e9; b.garde = simTime + 1e9; b.ordre = { type: 'gardeCorps' };
+  noteOrdre(b, '🛡️', 'être ton garde du corps');
   b.slotGarde = deja.length;
   // sa place dans la formation : derrière-gauche, derrière-droite, puis pile derrière
   const ANGLES = [0.9, -0.9, 0];
@@ -8288,6 +8338,7 @@ function botGardeDuCorps(b) {
 function botProtegeMembre(b, cible) {
   if (!cible || cible === b) { botDit(b, 'qui ça ? dis-moi son nom'); return false; }
   b.protege = cible; b.gardeCorps = 0; b.garde = simTime + 600; b.ordre = { type: 'protegeMembre' };
+  noteOrdre(b, '🛡️', `protéger ${cible.name}`);
   b.rdv = { x: cible.pos.x, z: cible.pos.z, y: 0.3, nom: cible.name, arrive: false, suivre: cible };
   b.wait = 0; b.rdvRoute = null; b.target = null;
   if (b.arme) { b.gardeArme = simTime + 600; b.tirT = 0; try { setWeapon(b.av, 'pistol', true); } catch (e) {} }
@@ -8299,6 +8350,7 @@ function botProtegeMembre(b, cible) {
 function botGardeVilla(b) {
   const v = city.villaMine; if (!v) { botDit(b, 'je ne sais pas où est ta villa 😕'); return false; }
   b.gardeVilla = simTime + 1e9; b.gardeCorps = 0; b.protege = null; b.garde = 0; b.ordre = { type: 'gardeVilla' };
+  noteOrdre(b, '🏠', 'garder ta villa');
   const a2 = rnd(0, 6.28);
   b.rdv = { x: v.x + Math.sin(a2) * 7, z: v.z + Math.cos(a2) * 7 + 8, y: 0.3, nom: '🏠 ta villa', arrive: false, libre: true };
   b.wait = 0; b.rdvRoute = null; b.target = null;
@@ -8365,6 +8417,7 @@ function botHopital(b) {
   b.rdv = { x: city.medDesk.x, z: city.medDesk.z + 1.6, y: 0.3, nom: '🏥 l\'hôpital', arrive: false, libre: true, soin: true };
   b.rdvRoute = null; b.wait = 0; b.target = null; b.bagarre = null; b.fight = null;
   b.ordre = { type: 'soin' };
+  noteOrdre(b, '🏥', 'aller se faire soigner');
   botDit(b, pickOne(['j\'y vais, je me fais recoudre 🏥', 'ok, direction l\'hôpital']));
   msg(`🏥 ${b.name} part se faire soigner (${vieDe(b)}/100 PV · ${px} 🪙 à l'arrivée)`, 3600);
   return true;
@@ -8382,6 +8435,7 @@ function soinTick(dt) {
     botDit(b, pickOne(['me revoilà d\'aplomb ! 💪', 'comme neuf, merci chef', 'les docteurs m\'ont retapé']));
     msg(`🏥 ${b.name} est soigné : 100/100 PV · −${px} 🪙`, 3200);
     chat(null, `🏥 ${b.name} sort de l'hôpital, remis sur pied`);
+    finirOrdre(b, 'reussi', 'aller se faire soigner');
     b.rdv = null; b.ordre = null; b.wait = 1;
   }
 }
@@ -8794,7 +8848,8 @@ function openOrdres(b) {
       + `${b.gardeCorps && simTime < b.gardeCorps ? '🛡️ ton garde du corps · ' : ''}`
       + `${b.gardeVilla && simTime < b.gardeVilla ? '🏠 garde ta villa · ' : ''}`
       + `${b.protege ? '🛡️ protège ' + b.protege.name + ' · ' : ''}`
-      + `entraîne-le au sport et au tir pour le faire monter</span>` : '';
+      + `entraîne-le au sport et au tir pour le faire monter</span>`
+      + `<span style="display:block;margin-top:4px">${journalHtml(b)}</span>` : '';
   $('ordresSub').innerHTML = jauge + (ami
     ? (duGang ? '😎 <b>Membre de ton gang</b> — il fait tout ce que tu demandes. Clique, ou écris-le en toutes lettres.'
               : '⭐ <b>Ton ami</b> — clique un ordre, ou écris-le en toutes lettres dans le chat.')
@@ -8908,12 +8963,28 @@ function botMission(b, type, cible, lieuForce) {
   return missionGang([b], type, cible, lieuForce);
 }
 function botSport(b, jeu) {
-  const l = lieuDe(jeu === 'foot' ? 'foot' : 'tennis');
+  const foot = jeu === 'foot';
+  const l = lieuDe(foot ? 'foot' : 'tennis');
   if (!l) { botDit(b, 'je ne trouve pas le terrain 😕'); return false; }
-  fixerRdv(b, l, jeu === 'foot' ? 'au foot' : 'au tennis');
-  botDit(b, jeu === 'foot' ? pickOne(['⚽ ok, on se retrouve au terrain !', '⚽ j\'arrive, prépare-toi à perdre 😄'])
-                           : pickOne(['🎾 go, prends une raquette au râtelier !', '🎾 j\'y vais, à tout de suite']));
+  finDuel('tennis'); finDuel('foot');   // une seule partie à la fois
+  // Il choisit le camp que tu n'occupes pas, et va s'y placer.
+  const cote = foot ? (inZone(P.pos, FOOT_ZONE) && P.pos.x < -13 ? 1 : 0)
+                    : (inZone(P.pos, TENNIS_ZONE) && P.pos.z < -13 ? 0 : 1);
+  b.sport = { jeu, cote, pret: false };
+  const pt = foot ? { x: cote === 0 ? -19 : -7, z: -13 } : { x: 13, z: cote === 0 ? -8.6 : -17.4 };
+  fixerRdv(b, { nom: l.nom, x: pt.x, z: pt.z }, foot ? 'au foot' : 'au tennis');
+  b.rdv.sport = jeu;
+  botDit(b, foot ? pickOne(['⚽ ok, partie en 3 buts, prépare-toi à perdre 😄', '⚽ j\'y vais, premier à 3 buts !'])
+                 : pickOne(['🎾 je prends une raquette, partie en 3 jeux !', '🎾 j\'y vais, à tout de suite — 3 jeux gagnants']));
   return true;
+}
+// Il est arrivé sur le terrain : raquette en main (ou en place au foot), la partie peut commencer.
+function demarreSport(b) {
+  if (!b.sport) return;
+  b.sport.pret = true; b.wait = 0; b.target = null; b.dance = 0;
+  if (b.sport.jeu === 'tennis') { setRacket(b.av, true); botDit(b, '🎾 raquette en main ! premier à 3 jeux'); }
+  else botDit(b, '⚽ je suis en place, premier à 3 buts !');
+  clearBeacon();
 }
 // « va promener mon chien » : l'ami emmène le chien faire un tour et le ramène.
 function botPromeneChien(b) {
@@ -8923,6 +8994,7 @@ function botPromeneChien(b) {
   chien.promeneur = b; chien.promeneT = simTime + 95; chien.promeneRetour = false;
   b.rdv = { x: parc.x + rnd(-4, 4), z: parc.z + rnd(-4, 4), y: 0.3, nom: '🐕 la promenade', arrive: false, libre: true };
   b.rdvRoute = null; b.wait = 0; b.activite = null; b.ordre = { type: 'chien' };
+  noteOrdre(b, '🐕', 'promener ton chien');
   botDit(b, pickOne([`🐕 viens ${chien.nom || 'le chien'}, on va faire un tour !`, '🐕 allez, en promenade !']));
   msg(`🐕 ${b.name} emmène ${chien.nom || 'ton chien'} en promenade`, 3200);
   return true;
@@ -8944,7 +9016,7 @@ function promenadeTick() {
 }
 function finPromenade(silence) {
   const b = chien.promeneur; chien.promeneur = null; chien.promeneRetour = false;
-  if (b) { b.ordre = null; if (b.rdv && b.rdv.nom && /promenade|retour/.test(b.rdv.nom)) b.rdv = null; b.wait = rnd(1, 3); }
+  if (b) { finirOrdre(b, 'reussi', 'promener ton chien'); b.ordre = null; if (b.rdv && b.rdv.nom && /promenade|retour/.test(b.rdv.nom)) b.rdv = null; b.wait = rnd(1, 3); }
   if (!silence) sfx.coin();
 }
 // « fais un défi pour me gagner de l'argent » : course jusqu'à un point, le premier arrivé gagne.
@@ -9088,6 +9160,8 @@ function updateBot(b, dt) {
     animateRig(av.rig, b.dance > 0 ? 'dance' : 'idle', 0, dt, simTime); sync(); return;
   }
   if (b.ko || (b.fight && simTime < b.fightT)) return;   // KO ou en train de se battre : géré par combatTick
+  // il dispute une partie : il court après la balle au lieu de flâner
+  if (b.sport && b.sport.pret) { const jeu = sportBotTick(b, dt); if (jeu) { animateRig(av.rig, jeu, b.speed, dt, simTime); sync(); return; } }
   if (WORLDS[worldIdx].free) {   // ville : balade entre quelques points
     // Les pieds au sol même à l'arrêt : un habitant planté sur un trottoir restait enfoncé
     // de quinze centimètres dans le bitume, jambes coupées.
@@ -9137,7 +9211,9 @@ function updateBot(b, dt) {
         if (b.rdv.livre) { const it = b.rdv.livre;
           b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true, livraison: it };
           b.rdvRoute = null; b.wait = 0; botDit(b, `j'ai ${it.e} ${it.n}, j'arrive !`); }
-        if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
+        if (!b.rdv.arrive && !b.rdv.gang && !b.rdv.entrain && !b.rdv.soin) finirOrdre(b, 'reussi');
+        if (!b.rdv.arrive && b.rdv.sport) { b.rdv.arrive = true; demarreSport(b); }
+        else if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
         const dp = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
         if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
       }
@@ -10073,7 +10149,10 @@ function cityVie(dt) {
   const raceNear = (P.pos.x > -8 && P.pos.x < 16 && P.pos.z > 118 && P.pos.z < 130 && race.state === 'idle') || (!!drive.car && !!drive.car.heli && !hrace.on); if (raceNear !== city.raceNear) { city.raceNear = raceNear; document.body.classList.toggle('racenear', raceNear); if (raceNear && !isMobile) msg(drive.car && drive.car.heli ? '🚁 F : course d\'anneaux' : '🏁 F : lancer la course', 1400); }
   raceTick(dt);
   const guest = net.on && !net.host;
-  if (net.host) tennisMatchTick(dt);
+  // La raquette se range TOUTE SEULE quand on quitte le court : on ne se promène plus en
+  // ville une raquette à la main.
+  if (P.racket && !inZone(P.pos, TENNIS_LARGE)) { P.racket = false; setRacket(me, false); msg('🎾 Raquette rangée (tu as quitté le court)', 1600); }
+  if (!guest) { tennisMatchTick(dt); footMatchTick(dt); }
   // ballons
   for (const b of city.balls) {
     if (guest) {   // interpolation depuis l'hôte + détection locale des frappes
@@ -10106,11 +10185,18 @@ function cityVie(dt) {
       hitBall(b, P.pos.x, P.pos.z, P.facing, Math.hypot(P.vel.x, P.vel.z), P.pos.z > -13 ? 0 : 1);
       if (b.kind === 'tennis') { me.rig.swing = 0.35; P.swingT = simTime + 0.35; }
     }
+    // frappe du membre qui joue contre toi (raquette ou pied)
+    sportBotFrappe(b);
     // but ?
     if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -21.8 || b.pos.x > -4.2) && b.state !== 'goal') {
-      b.state = 'goal'; city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12);
-      if (net.host) netBroadcast({ t: 'score', goals: city.goals });
-      setTimeout(() => { b.pos.copy(b.home); b.vel.set(0, 0, 0); b.state = 'idle'; }, 1500);
+      b.state = 'goal';
+      if (fm.on) footBut(b);
+      else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12);
+        if (net.host) netBroadcast({ t: 'score', goals: city.goals }); }
+      b.reprise = simTime + 1.5;   // engagement au centre : sur l'horloge du jeu, pas sur un minuteur
+    }
+    if (b.kind === 'foot' && b.state === 'goal' && b.reprise && simTime > b.reprise) {
+      b.reprise = 0; b.pos.copy(b.home); b.vel.set(0, 0, 0); b.state = 'idle';
     }
     if (b.kind === 'tennis' && (b.pos.y < -2 || Math.abs(b.pos.x - 13) > 14 || b.pos.z > 2 || b.pos.z < -30)) removeBall(b);
     b.mesh.position.copy(b.pos); b.mesh.rotation.x += b.vel.z * dt * 2; b.mesh.rotation.z -= b.vel.x * dt * 2;
@@ -10144,9 +10230,12 @@ function tennisBounce(b) {
   if (tm.on) {   // match entre joueurs (arbitré par l'hôte)
     if (b.state === 'serve') { if (b.bounces >= 2) { removeBall(b); tm.serveT = simTime + 1.2; } return; }
     if (b.state !== 'play') return;
-    if (!inCourt) tennisPoint(1 - b.lastHit, 'Dehors !');
+    // L'ordre compte : « dehors » ne juge que le PREMIER rebond. Au deuxième, la balle est
+    // déjà tombée dans le camp adverse — le point est gagné, même si elle finit sa course
+    // hors des lignes. Avant, celui qui frappait bien perdait le point.
+    if (b.bounces >= 2) tennisPoint(b.lastHit, 'Point !');
+    else if (!inCourt) tennisPoint(1 - b.lastHit, 'Dehors !');
     else if (side === b.lastHit) tennisPoint(1 - b.lastHit, 'Dans le filet !');
-    else if (b.bounces >= 2) tennisPoint(b.lastHit, 'Point !');
     return;
   }
   if (b.state === 'returned' && b.bounces === 1) {
@@ -10157,12 +10246,19 @@ function tennisBounce(b) {
 }
 function tennisPoint(side, why) {
   tm.s[side]++;
-  const txt = `🎾 ${why} ${tm.names[0]} ${tm.s[0]} – ${tm.s[1]} ${tm.names[1]}`;
+  let txt = `🎾 ${why} ${tm.names[0]} ${tm.s[0]} – ${tm.s[1]} ${tm.names[1]} (jeux ${tm.j[0]}–${tm.j[1]})`;
   city.balls.filter(b => b.kind === 'tennis').forEach(removeBall);
   tm.serve = side; tm.serveT = simTime + 1.8;
-  let over = null;
-  if (tm.s[side] >= 5) { over = `🏆 ${tm.names[side]} gagne le set ${tm.s[0]}–${tm.s[1]} !`; tm.s = [0, 0]; tm.serveT = simTime + 4; }
+  let over = null, gagne = false;
+  if (tm.s[side] >= JEU_POINTS) {   // jeu gagné : on remet les points à zéro
+    tm.j[side]++; tm.s = [0, 0]; tm.serveT = simTime + 3;
+    txt = `🎾 Jeu ${tm.names[side]} ! Jeux : ${tm.j[0]} – ${tm.j[1]}`;
+    if (tm.j[side] >= DUEL_GAGNANTS) { over = `🏆 ${tm.names[side]} gagne la partie ${tm.j[0]}–${tm.j[1]} !`; gagne = true; }
+  }
   showTennis(txt, over); if (net.host) netBroadcast({ t: 'tscore', on: tm.on, s: tm.s, names: tm.names, txt, over });
+  // partie finie contre un membre : récompense, puis chacun range sa raquette
+  if (gagne) { const sc = `${tm.j[0]}–${tm.j[1]}`, moi = tm.names[side] === myCfg.name;
+    if (tm.bot) duelFini('tennis', moi, sc); else { tm.on = false; tm.s = [0, 0]; tm.j = [0, 0]; } }
 }
 function showTennis(txt, over) { msg(over || txt, over ? 2600 : 1600); sfx.check(); chat(null, txt); if (over) { chat(null, over); sfx.win(); } updateAct(); }
 function startDance(sec) { if (P.dance <= 0) P.danceFace = P.facing; P.dance = sec; cam.freeUntil = simTime + sec + 0.5; }
@@ -10740,16 +10836,113 @@ function courtPlayers() {
   const list = [];
   if (P.racket && inZone(P.pos, TENNIS_ZONE)) list.push({ name: myCfg.name, side: P.pos.z > -13 ? 0 : 1, pos: P.pos });
   for (const r of net.remotes.values()) if (r.rk && !r.dead && inZone(r.cur, TENNIS_ZONE)) list.push({ name: r.name, side: r.cur.z > -13 ? 0 : 1, pos: r.cur });
+  // le membre à qui on a dit « on joue au tennis » : raquette en main, de l'autre côté du filet
+  const bt = botSportif('tennis');
+  if (bt && inZone(bt.pos, TENNIS_ZONE)) list.push({ name: bt.name, side: bt.pos.z > -13 ? 0 : 1, pos: bt.pos, bot: bt });
   return list;
 }
-function tennisMatchTick(dt) {   // hôte seulement
+// ================= PARTIES DE SPORT CONTRE UN MEMBRE =================
+// « On joue au tennis » / « on joue au foot » : le membre ne se contente plus d'aller au
+// terrain, il PREND UNE RAQUETTE, se place de l'autre côté du filet et joue vraiment.
+// La partie se joue en trois jeux gagnants (tennis) ou trois buts (foot).
+function botSportif(jeu) {
+  for (const b of bots) if (b.sport && b.sport.pret && b.sport.jeu === jeu && !b.ko && !b.prison && !b.drive) return b;
+  return null;
+}
+function finDuel(jeu, etat) {
+  for (const b of bots) if (b.sport && b.sport.jeu === jeu) {
+    finirOrdre(b, etat || 'rate', `partie ${jeu === 'foot' ? 'au foot' : 'au tennis'}`); if (b.av && b.av.racket) setRacket(b.av, false); b.sport = null; b.rdv = null; b.rdvRoute = null; b.wait = rnd(1, 3); }
+  if (jeu === 'tennis') { tm.bot = null; tm.on = false; tm.s = [0, 0]; tm.j = [0, 0]; }
+  else { fm.bot = null; fm.on = false; fm.s = [0, 0]; }
+  if (city.on) updateAct();
+}
+// Fin de partie : le vainqueur est annoncé, l'argent tombe, et chacun range son matériel.
+function duelFini(jeu, gagnantJoueur, score) {
+  const b = jeu === 'tennis' ? tm.bot : fm.bot, nom = b ? b.name : 'ton adversaire';
+  const e = jeu === 'tennis' ? '🎾' : '⚽';
+  if (gagnantJoueur) { wallet += 40; saveWallet(); updateHud(); sfx.win(); sfx.cheer();
+    perfGagne(P, 2, 'partie de sport gagnée');
+    msg(`🏆 Tu gagnes la partie ${score} contre ${nom} ! +40 🪙`, 3600);
+    chat(null, `${e} ${myCfg.name} bat ${nom} ${score}`); }
+  else { sfx.die(); if (b) perfGagne(b, 3, 'il a gagné la partie');
+    msg(`${e} ${nom} gagne la partie ${score} — revanche ?`, 3600);
+    chat(null, `${e} ${nom} bat ${myCfg.name} ${score}`); }
+  finDuel(jeu, 'reussi');   // la partie est allée à son terme : l'ordre est rempli
+}
+// Il joue : il court après la balle (ou le ballon) et se place pour la renvoyer.
+// Renvoie 'walk' / 'idle' quand il prend la main sur la balade, false sinon.
+function sportBotTick(b, dt) {
+  const sp = b.sport;
+  if (!sp || !sp.pret || !city.on) return false;
+  const foot = sp.jeu === 'foot';
+  if (!foot && b.av && b.av.racket && !b.av.racket.visible) setRacket(b.av, true);
+  const bal = city.balls.find(x => x.kind === (foot ? 'foot' : 'tennis'));
+  let tx, tz;
+  if (foot) {
+    const gx = sp.cote === 0 ? -4 : -22;   // le but qu'il attaque
+    if (bal) { const ex = bal.pos.x - gx, ez = bal.pos.z + 13, L = Math.hypot(ex, ez) || 1;
+      tx = bal.pos.x + ex / L * 0.7; tz = bal.pos.z + ez / L * 0.7; }
+    else { tx = sp.cote === 0 ? -19 : -7; tz = -13; }
+    tx = clamp(tx, -22.2, -3.8); tz = clamp(tz, -22.2, -3.8);
+  } else {
+    const zc = sp.cote === 0 ? -8.6 : -17.4;   // le milieu de son camp
+    const aLui = bal && (sp.cote === 0 ? bal.pos.z > -13 : bal.pos.z < -13);
+    if (bal && aLui) { tx = clamp(bal.pos.x, 9.2, 16.8); tz = zc + clamp(bal.pos.z - zc, -3.2, 3.2) * 0.7; }
+    else { tx = 13; tz = zc; }
+  }
+  // Un membre performant couvre mieux le terrain : sa jauge se voit dans le jeu. Même un
+  // ami jamais entraîné garde un niveau de base, sinon il perdait 3–0 sans toucher une balle.
+  const vite = b.speed * (0.75 + sportNiveau(b) / 145) * (foot ? 1.05 : 1.15);
+  const dx = tx - b.pos.x, dz = tz - b.pos.z, d = Math.hypot(dx, dz), pas = vite * dt;
+  if (d > 0.22) { b.pos.x += dx / d * Math.min(pas, d); b.pos.z += dz / d * Math.min(pas, d); }
+  b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.2);
+  b.facing = bal ? Math.atan2(bal.pos.x - b.pos.x, bal.pos.z - b.pos.z) : Math.atan2(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
+  return d > 0.22 ? 'walk' : 'idle';
+}
+// Sa frappe : même physique que la tienne, avec une imprécision qui dépend de sa performance.
+const sportNiveau = b => Math.max(perfDe(b), 30);
+function sportBotFrappe(bal) {
+  if (bal.kind !== 'foot' && bal.kind !== 'tennis') return false;
+  if (bal.state === 'goal') return false;   // le ballon est au fond des filets : on attend l'engagement
+  const foot = bal.kind === 'foot';
+  const b = botSportif(foot ? 'foot' : 'tennis');
+  if (!b || bal.hitCd > 0) return false;
+  const dx = bal.pos.x - b.pos.x, dz = bal.pos.z - b.pos.z, dh = Math.hypot(dx, dz);
+  const port = foot ? 1.35 : 1.3;
+  if (dh > port || bal.pos.y > b.pos.y + 2.3) return false;
+  if (foot) {
+    // Il ne tape pas au hasard : il VISE la cage adverse, à ras de terre. Plus il est
+    // performant, plus le tir est droit.
+    const gx = b.sport.cote === 0 ? -4 : -22;
+    const loin = Math.hypot(gx - bal.pos.x, -13 - bal.pos.z);
+    // loin de la cage il fait avancer le ballon, près de la cage il frappe et il vise juste
+    const err = clamp((0.3 - sportNiveau(b) / 430) * (1 + loin / 9), 0.05, 0.7);
+    const a = Math.atan2(gx - bal.pos.x, -13 - bal.pos.z) + rnd(-err, err);
+    const pw = loin > 7 ? 5.5 + sportNiveau(b) / 24 : 9 + sportNiveau(b) / 11;
+    bal.vel.set(Math.sin(a) * pw, 2.1, Math.cos(a) * pw);
+    bal.pos.x += Math.sin(a) * 0.2; bal.pos.z += Math.cos(a) * 0.2;
+    bal.hitCd = 0.4; sfx.kick();
+    if (b.av) { b.av.rig.swing = 0.3; b.av.rig.kick = 0.4; }
+    return true;
+  }
+  // il vise le coin OPPOSÉ au joueur : il te fait courir au lieu de te servir la balle
+  hitBall(bal, b.pos.x, b.pos.z, b.facing, 0, b.pos.z > -13 ? 0 : 1,
+    clamp(2.1 - sportNiveau(b) / 55, 0.5, 2.1), P.pos.x > 13 ? 10.4 : 15.6);
+  if (b.av) b.av.rig.swing = 0.35;
+  return true;
+}
+function tennisMatchTick(dt) {   // arbitre : l'hôte en réseau, toi-même hors ligne
+  // Le membre t'attend sur le court : il te prête une raquette pour que la partie démarre.
+  const bt = botSportif('tennis');
+  if (bt && !tm.on && !P.racket && inZone(P.pos, TENNIS_ZONE)) { P.racket = true; setRacket(me, true); msg(`🎾 ${bt.name} te prête une raquette !`, 2400); sfx.check(); }
   const ps = courtPlayers(), both = ps.some(p => p.side === 0) && ps.some(p => p.side === 1);
   if (both && !tm.on) {
-    tm.on = true; tm.s = [0, 0]; tm.names = [ps.find(p => p.side === 0).name, ps.find(p => p.side === 1).name]; tm.serve = 0; tm.serveT = simTime + 2;
+    tm.on = true; tm.s = [0, 0]; tm.j = [0, 0]; tm.names = [ps.find(p => p.side === 0).name, ps.find(p => p.side === 1).name]; tm.serve = 0; tm.serveT = simTime + 2;
+    tm.bot = (ps.find(p => p.bot) || {}).bot || null;
     city.balls.filter(b => b.kind === 'tennis').forEach(removeBall);
-    const txt = `🎾 Match : ${tm.names[0]} contre ${tm.names[1]} ! Premier à 5`; showTennis(txt); netBroadcast({ t: 'tscore', on: true, s: tm.s, names: tm.names, txt });
+    const txt = `🎾 Partie : ${tm.names[0]} contre ${tm.names[1]} ! ${DUEL_GAGNANTS} jeux gagnants (jeu en ${JEU_POINTS} points)`; showTennis(txt); netBroadcast({ t: 'tscore', on: true, s: tm.s, names: tm.names, txt });
   }
-  if (!both && tm.on) { tm.graceT += dt; if (tm.graceT > 6) { tm.on = false; tm.graceT = 0; const txt = '🎾 Match terminé (un joueur a quitté le court)'; showTennis(txt); netBroadcast({ t: 'tscore', on: false, s: tm.s, names: tm.names, txt }); } } else tm.graceT = 0;
+  if (!both && tm.on) { tm.graceT += dt; if (tm.graceT > 6) { tm.graceT = 0; const txt = '🎾 Partie interrompue (le court est vide)'; showTennis(txt); netBroadcast({ t: 'tscore', on: false, s: tm.s, names: tm.names, txt }); finDuel('tennis'); } } else tm.graceT = 0;
   if (tm.on && simTime > tm.serveT && !city.balls.some(b => b.kind === 'tennis')) {
     const srv = ps.find(p => p.side === tm.serve) || ps[0];
     if (!srv) return;   // pendant les 6 s de grâce le court peut être vide : servir sans serveur plantait la boucle de rendu
@@ -10757,13 +10950,44 @@ function tennisMatchTick(dt) {   // hôte seulement
     msg(`🎾 Service : ${srv.name}`, 1000);
   }
 }
-function hitBall(b, px, pz, facing, speed, side) {
+function footMatchTick(dt) {
+  const b = botSportif('foot'), moi = inZone(P.pos, FOOT_ZONE) && !drive.car;
+  const deux = !!b && inZone(b.pos, FOOT_ZONE) && moi;
+  if (deux && !fm.on) {
+    fm.on = true; fm.s = [0, 0]; fm.bot = b;
+    fm.cote = b.sport.cote === 0 ? 1 : 0;   // le membre a choisi son camp, tu prends l'autre
+    fm.names = fm.cote === 0 ? [myCfg.name, b.name] : [b.name, myCfg.name];
+    const bal = city.balls.find(x => x.kind === 'foot');
+    if (bal) { bal.pos.set(-13, 0.9, -13); bal.vel.set(0, 0, 0); bal.state = 'idle'; }
+    msg(`⚽ Partie : ${myCfg.name} contre ${b.name} — ${DUEL_GAGNANTS} buts gagnants !`, 3600);
+    chat(null, `⚽ ${myCfg.name} contre ${b.name} : premier à ${DUEL_GAGNANTS} buts`); sfx.check(); updateAct();
+  }
+  if (!deux && fm.on) { fm.graceT += dt; if (fm.graceT > 8) { fm.graceT = 0; msg('⚽ Partie interrompue (le terrain est vide)', 2400); finDuel('foot'); } }
+  else fm.graceT = 0;
+}
+// Un but pendant une partie : il compte pour le camp d'en face de la cage.
+function footBut(bal) {
+  const cote = bal.pos.x < -13 ? 1 : 0;   // cage ouest encaissée = point pour l'est
+  fm.s[cote]++;
+  const moi = cote === fm.cote;
+  msg(`⚽ BUT ${fm.names[cote]} ! ${fm.names[0]} ${fm.s[0]} – ${fm.s[1]} ${fm.names[1]}`, 2600);
+  chat(null, `⚽ ${fm.names[0]} ${fm.s[0]} – ${fm.s[1]} ${fm.names[1]}`);
+  sfx.check(); sfx.cheer(); burst(bal.pos.x, bal.pos.y, bal.pos.z, 0xffffff, 12); updateAct();
+  if (fm.s[cote] >= DUEL_GAGNANTS) duelFini('foot', moi, `${fm.s[0]}–${fm.s[1]}`);
+}
+function hitBall(b, px, pz, facing, speed, side, err, visee) {
   const dx = b.pos.x - px, dz = b.pos.z - pz, dh = Math.hypot(dx, dz);
   const nx = dh > 0.01 ? dx / dh : Math.sin(facing), nz = dh > 0.01 ? dz / dh : Math.cos(facing);
   if (b.kind === 'foot') { const pw = 6 + speed * 1.3; b.vel.set(nx * pw, 4 + pw * 0.25, nz * pw); }
   else {
-    const tz = side === 0 ? -19.5 : -6.5, tx = 13 - b.pos.x, dzz = tz - b.pos.z, L = Math.hypot(tx, dzz) || 1;
-    b.vel.set(tx / L * 13 + rnd(-1.5, 1.5), 6.5, dzz / L * 13); b.state = tm.on ? 'play' : 'returned'; b.bounces = 0; b.lastHit = side;
+    const tz = side === 0 ? -19.5 : -6.5, tx = (visee == null ? 13 : visee) - b.pos.x, dzz = tz - b.pos.z, L = Math.hypot(tx, dzz) || 1;
+    const e = err == null ? 1.5 : err;
+    // La balle doit ATTEINDRE la cible : à vitesse fixe elle retombait à sept mètres, donc
+    // toujours dans son propre camp. On calcule la vitesse à partir de la distance à couvrir.
+    const vy = 6.5, sol = b.ground + b.r, y0 = Math.max(b.pos.y, sol);
+    const vol = (vy + Math.sqrt(vy * vy + 2 * 24 * (y0 - sol))) / 24;   // durée réelle du vol, hauteur de frappe comprise
+    const vh = clamp((L - 0.9) / vol, 8, 30);                          // (0,9 m : la balle part déjà devant le joueur)
+    b.vel.set(tx / L * vh + rnd(-e, e), vy, dzz / L * vh); b.state = tm.on ? 'play' : 'returned'; b.bounces = 0; b.lastHit = side;
   }
   b.pos.x = px + nx * (P.hw + b.r + 0.3); b.pos.z = pz + nz * (P.hw + b.r + 0.3); b.hitCd = 0.35; if (b.kind === 'tennis') sfx.pok(); else sfx.kick();
 }
@@ -10864,7 +11088,8 @@ function updateAct() {
   const z = city.zone;
   if (race.state === 'running' || race.state === 'countdown') return;
   if (P.jet) { $('act').textContent = `🚀 Carburant ${Math.round(P.fuel)}%`; return; }
-  if (tm.on) { $('act').textContent = `🎾 ${tm.names[0]} ${tm.s[0]} – ${tm.s[1]} ${tm.names[1]}`; return; }
+  if (tm.on) { $('act').textContent = `🎾 ${tm.names[0]} ${tm.s[0]} – ${tm.s[1]} ${tm.names[1]} · jeux ${tm.j[0]}–${tm.j[1]}`; return; }
+  if (fm.on) { $('act').textContent = `⚽ ${fm.names[0]} ${fm.s[0]} – ${fm.s[1]} ${fm.names[1]} (en ${DUEL_GAGNANTS} buts)`; return; }
   if (P.weapon) { const w = WEAPONS[P.weapon]; $('act').textContent = P.weapon === 'grenade' ? `💣 Grenades : ${P.grenades}` : `${w.e} ${w.n} ${P.ammo}/${w.ammo}${P.aim ? ' · 🎯 visée' : ''}`; return; }
   $('act').textContent = z ? (z.name === 'Foot' ? `⚽ Buts : ${city.goals}` : z.name === 'Tennis' ? `🎾 Points : ${city.tennis}` : z.name === 'Parc' ? `🎯 Boules : ${city.boulesPts} pt` : `${z.emoji} ${z.name}`) : `🏙️ Balade · ${city.goals + city.tennis + city.shots + city.tags + city.boulesPts} pts`;
 }
@@ -12791,6 +13016,7 @@ function missionGang(membres, type, cible, lieuForce) {
     b.rdv = { x: lieu.x + rnd(-2.5, 2.5), z: lieu.z + rnd(-2.5, 2.5), y: 0.3, nom: M.e + ' ' + M.n, arrive: false, libre: true, gang: true };
     b.rdvRoute = null; b.wait = 0; b.target = null; b.activite = null; b.ordre = { type: 'gang' };
   }
+  for (const b of membres) noteOrdre(b, M.e, M.n);
   const eq = membres.reduce((a, b) => a + perfDe(b), 0);
   const diff = (M.difficulte || 35) + (type === 'gangRival' ? gangs.reduce((a, G) => Math.max(a, forceGangRival(G)), 0) * 1.4
     : type === 'gangeur' && cible && cible.m ? perfDe(cible.m) * 1.15 : 0);
@@ -12888,7 +13114,7 @@ function gangMissionRatee(m) {
   const noms = m.membres.map(b => b.name).join(' et ');
   msg(`${m.M.e} Raté ! ${noms} n'y arrivent pas (${m.chance} % de chances)`, 3800); sfx.die();
   chat(null, `${m.M.e} Le coup du gang de ${myCfg.name} a échoué`);
-  for (const b of m.membres) { perfPerd(b, 3); b.gangMission = null; b.ordre = null; b.rdv = null; b.wait = rnd(1, 3); }
+  for (const b of m.membres) { perfPerd(b, 3); finirOrdre(b, 'rate', m.M.n); b.gangMission = null; b.ordre = null; b.rdv = null; b.wait = rnd(1, 3); }
   // plus l'homme était faible, plus il risque gros
   const risque = m.type === 'gangRival' ? 0.45 : m.type === 'banque' ? 0.35 : 0.2;
   const pauvre = m.membres.slice().sort((a, b) => perfDe(a) - perfDe(b))[0];
@@ -12907,6 +13133,10 @@ function tuerMembre(b, par) {
   if (!b) return false;
   const i = gang.membres.indexOf(b);
   if (i >= 0) gang.membres.splice(i, 1);
+  if (!b.journal) b.journal = [];
+  for (const o of b.journal) if (o.etat === 'cours') o.etat = 'perte';
+  b.journal.unshift({ e: '💀', t: `tué par ${par}`, etat: 'perte', quand: simTime });
+  if (b.journal.length > JOURNAL_MAX) b.journal.length = JOURNAL_MAX;
   b.gang = null; b.gangMission = null; b.ordre = null; b.rdv = null; b.drive = null; b.mort = simTime;
   b.ko = simTime + 1e9; b.hp = 0;
   if (b.av) { b.av.group.visible = false; }
@@ -12979,7 +13209,7 @@ function gangMissionTick(dt) {
       if (c) { c.x = P.pos.x + rnd(-6, 6); c.z = P.pos.z + rnd(-6, 6); c.g.position.set(c.x, 0, c.z); vehicleSolid(c);
         msg('🚗 Ils t\'ont ramené une voiture !', 2600); }
     }
-    for (const b of m.membres) { b.gangMission = null; b.ordre = null; b.rdv = null; b.wait = rnd(1, 3); }
+    for (const b of m.membres) { finirOrdre(b, 'reussi', m.M.n); b.gangMission = null; b.ordre = null; b.rdv = null; b.wait = rnd(1, 3); }
     gang.mission = null;
   }
 }
@@ -13718,6 +13948,7 @@ function entrainerMembre(b, lieu) {
   if (!pt) { botDit(b, 'je ne trouve pas la salle…'); return false; }
   b.rdv = { x: pt.x, z: pt.z, y: 0.3, nom: lieu === 'tir' ? '🎯 le stand de tir' : '🏋️ la salle de sport', arrive: false, libre: true, entrain: lieu };
   b.rdvRoute = null; b.wait = 0; b.ordre = { type: 'entrainement' };
+  noteOrdre(b, lieu === 'tir' ? '🎯' : '🏋️', lieu === 'tir' ? 'entraînement au stand de tir' : 'entraînement à la salle de sport');
   botDit(b, lieu === 'tir' ? 'ok, je vais m\'entraîner au tir 🎯' : 'j\'y vais, je me muscle 💪');
   msg(`💪 ${b.name} part s'entraîner — la force de ton gang va monter`, 3000);
   return true;
@@ -13730,6 +13961,7 @@ function entrainementTick(dt) {
       b.entrainT = 0;
       const gainF = b.rdv.entrain === 'tir' ? 5 : 4;
       perfGagne(b, gainF, b.rdv.entrain === 'tir' ? 'stand de tir' : 'salle de sport');
+      finirOrdre(b, 'reussi', b.rdv.entrain === 'tir' ? 'entraînement au stand de tir' : 'entraînement à la salle de sport');
       b.force = perfDe(b); majForceGang();
       botDit(b, b.rdv.entrain === 'tir' ? 'dans le mille ! 🎯' : 'je suis plus costaud ! 💪');
       msg(`💪 ${b.name} : ${perfDe(b)}/100 ${perfEtoiles(perfDe(b))} · force du gang ${gang.force}/100`, 2600);

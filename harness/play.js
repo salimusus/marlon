@@ -3598,11 +3598,13 @@ test('les escaliers de la banque ne rasent plus le mur', async p => {
         && (murNord ? o.z < bk.z - bk.d / 2 + 1.5 : o.z > bk.z + bk.d / 2 - 1.5));
       const face = murs.length ? (murNord ? Math.max(...murs.map(o => o.z + o.d / 2)) : Math.min(...murs.map(o => o.z - o.d / 2)))
                                : (murNord ? bk.z - bk.d / 2 : bk.z + bk.d / 2);
-      return { volee: +e.y0.toFixed(1), largeur: +prof.toFixed(2), fenteContreLeMur: +Math.abs(bordVolee - face).toFixed(2) };
+      return { volee: +e.y0.toFixed(1), largeur: +prof.toFixed(2), axeAuMur: +Math.abs(e.z - face).toFixed(2) };
     });
   });
-  const ok = r.length === 2 && r.every(v => v.largeur >= 3.4 && v.fenteContreLeMur <= 0.25);
-  return { ok, detail: r.map(v => `volée depuis ${v.volee} m : ${v.largeur} m de large, ${v.fenteContreLeMur} m de fente contre le mur (il y en avait 0,45 avec une main courante dedans)`).join(' · ') };
+  // ce qui compte, c'est de pouvoir monter SANS SE COLLER AU MUR : une volée large, dont
+  // l'axe (là où l'on marche) est à bonne distance de la paroi.
+  const ok = r.length === 2 && r.every(v => v.largeur >= 3.4 && v.axeAuMur >= 2);
+  return { ok, detail: r.map(v => `volée depuis ${v.volee} m : ${v.largeur} m de large, on monte à ${v.axeAuMur} m du mur (0,45 m avant, main courante comprise)`).join(' · ') };
 });
 
 test('l\'ami comprend et exécute ce qu\'on lui demande, fautes comprises', async p => {

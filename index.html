@@ -1551,14 +1551,21 @@ function immeubleZone(x, z, w, d, col, dir) {
   // escalier extérieur en béton, côté est, avec palier à chaque étage
   const ex = x + w / 2 + 1.6;
   for (let f = 0; f < N - 1; f++) {
-    const y0 = f * H + 0.2, y1 = (f + 1) * H + 0.2, n = 8, len = 0.62, rise = (y1 - y0) / n;
-    const sens = f % 2 ? -1 : 1, z0 = z - (d / 2 - 1) * sens;
+    // La volée faisait 8 marches de 0,62 m, soit 4,96 m, alors que le palier est posé (d - 2)
+    // mètres plus loin, c'est-à-dire 8 m : l'escalier s'arrêtait à plus de trois mètres dans
+    // le VIDE et ne montait donc nulle part. Le giron se calcule maintenant sur la distance
+    // réelle à parcourir, si bien que la dernière marche arrive au ras du palier.
+    const y0 = f * H + 0.2, y1 = (f + 1) * H + 0.2, n = 8, len = (d - 2) / n, rise = (y1 - y0) / n;
+    // Volées CÔTE À CÔTE et non plus l'une au-dessus de l'autre : en remontant à l'aplomb,
+    // la volée supérieure ne laissait que 1,60 m de hauteur libre et on se cognait la tête
+    // au sixième marche. Chacune a maintenant sa bande, et le palier les relie.
+    const sens = f % 2 ? -1 : 1, z0 = z - (d / 2 - 1) * sens, exf = ex + (f % 2 ? 2.6 : 0);   // vers l'extérieur : décalées vers le bâtiment, elles rentraient dans le mur
     for (let i = 0; i < n; i++) {
       const zz = z0 + sens * (i * len + len / 2), top = y0 + (i + 1) * rise;
-      box(ex, top - rise / 2, zz, 2.4, rise, len + 0.06, 0x9a9088, { studs: false, noRoute: true });   // marche pleine
-      box(ex + 1.25, top + 0.5, zz, 0.08, 1, 0.08, 0x6b6157, { deco: true, studs: false });
+      box(exf, top - rise / 2, zz, 2.4, rise, len + 0.06, 0x9a9088, { studs: false, noRoute: true });   // marche pleine
+      box(exf + (f % 2 ? 1.25 : -1.25), top + 0.5, zz, 0.08, 1, 0.08, 0x6b6157, { deco: true, studs: false });   // rampe côté vide
     }
-    plat(ex, y1 + 0.2, z + (d / 2 - 1) * sens, 2.6, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier
+    plat(ex + 1.3, y1 + 0.2, z + (d / 2 - 1) * sens, 5.4, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier reliant les deux bandes
   }
   // coursive : on passe du palier à l'appartement
   for (let f = 1; f < N; f++) plat(x + w / 4, f * H + 0.4, z + d / 2 + 0.9, w / 2 + 3.4, 1.8, 0x9a9088, { studs: false, noRoute: true }, 0.4);
@@ -2944,7 +2951,9 @@ function clearBeacon() { if (beacon.m) beacon.m.visible = false; gpsRoute.hide()
 const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suivent le chemin calculé (A*) jusqu'à la cible de mission
   // Chevrons nettement plus gros : à 0,45 m de rayon ils faisaient trois pixels au sol et on
   // ne les voyait tout simplement pas en jouant, surtout sur téléphone.
-  const pool = [], geo = new THREE.ConeGeometry(0.85, 2.4, 3); geo.rotateX(Math.PI / 2); const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.92, depthWrite: false });
+  // Tracé discret, en pointillé : de petits repères plats posés au sol, rapprochés pour
+  // former une ligne lisible sans masquer le décor.
+  const pool = [], geo = new THREE.ConeGeometry(0.42, 1.0, 3); geo.rotateX(Math.PI / 2); const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.8, depthWrite: false });
   let lastT = 0, lastX = 0, lastZ = 0;
   return {
     update() {
@@ -2980,11 +2989,11 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           if (t + versProchain > L) { versProchain -= (L - t); break; }
           t += versProchain; parcouru += versProchain;
           const x = a[0] + ux * t, z = a[1] + uz * t;
-          versProchain = parcouru < 45 ? 3.4 : Math.min(13, 3.4 + (parcouru - 45) * 0.12);
+          versProchain = parcouru < 50 ? 2.4 : Math.min(11, 2.4 + (parcouru - 50) * 0.1);
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
           if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; scene.add(pool[k]); }
           const m = pool[k++], gy = groundCar(x, z, null, 0);
-          m.position.set(x, gy + 0.5, z); m.lookAt(x + ux, gy + 0.5, z + uz); m.visible = true;
+          m.position.set(x, gy + 0.16, z); m.lookAt(x + ux, gy + 0.16, z + uz); m.visible = true;
         }
       }
       for (let i = k; i < pool.length; i++) pool[i].visible = false;
@@ -2993,14 +3002,33 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
   };
 })();
 function gpsTick() {   // radar : joueur au centre, orienté avec la caméra ; cible de mission, police, banque, planques
-  const cv = $('gps'); if (!city.on || !running) return; const g = cv.getContext('2d'), W = cv.width, cx = W / 2, R = W / 2 - 4, scale = 0.9;
+  const cv = $('gps'); if (!city.on || !running) return; const g = cv.getContext('2d'), W = cv.width, cx = W / 2, R = W / 2 - 4, scale = 0.42;   // 0,42 px/m : environ 170 m de portée
   g.clearRect(0, 0, W, W);
   const rot = cam.yaw, toXY = (x, z) => { let dx = x - P.pos.x, dz = z - P.pos.z; const s = Math.sin(rot), c = Math.cos(rot); const rx = dx * c - dz * s, rz = dx * s + dz * c; return [cx + rx * scale, cx + rz * scale]; };
+  // portée : 0,9 px/m ne montrait que 79 m autour du joueur, moins qu'un pâté de maisons
   g.save(); g.beginPath(); g.arc(cx, cx, R, 0, Math.PI * 2); g.clip();
-  g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 3;
-  for (const [x1, z1, x2, z2] of [[-26, -26, 26, -26], [26, -26, 26, 26], [26, 26, -26, 26], [-26, 26, -26, -26], [0, -44, 0, 110], [-61, 0, 61, 0], [-26, 29, -26, 48], [52, 25, 52, 95], [-41, -44, -41, 110], [-68, 110, 68, 110], [-68, -44, 68, -44]]) { const [ax, ay] = toXY(x1, z1), [bx, by] = toXY(x2, z2); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); }
+  // Le radar ne montrait qu'onze segments de rue codés en dur autour de l'ancien centre :
+  // dès qu'on s'en éloignait — La Zone, la plage, les villas — il n'affichait plus qu'un
+  // disque noir vide, d'où l'impression qu'il ne marchait pas. Il dessine maintenant les
+  // VRAIS bâtiments de la ville, quel que soit le quartier.
+  g.fillStyle = 'rgba(255,255,255,.16)';
+  for (const b of (city.batiments || [])) {
+    if (Math.abs(b.x - P.pos.x) > 160 || Math.abs(b.z - P.pos.z) > 160) continue;
+    const [px, py] = toXY(b.x, b.z);
+    if (Math.hypot(px - cx, py - cx) > R + 20) continue;
+    g.save(); g.translate(px, py); g.rotate(rot); g.fillRect(-b.w / 2 * scale, -b.d / 2 * scale, b.w * scale, b.d * scale); g.restore();
+  }
+  g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2.5;
+  for (const [x1, z1, x2, z2] of [[-26, -26, 26, -26], [26, -26, 26, 26], [26, 26, -26, 26], [-26, 26, -26, -26], [0, -44, 0, 110], [-61, 0, 61, 0], [-26, 29, -26, 48], [52, 25, 52, 95], [-41, -44, -41, 110], [-68, 110, 68, 110], [-68, -44, 68, -44], [-200, 40, -80, 40], [-140, -20, -140, 90], [68, 40, 170, 40], [40, 110, 40, 250], [-60, 200, 170, 200]]) { const [ax, ay] = toXY(x1, z1), [bx2, by2] = toXY(x2, z2); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx2, by2); g.stroke(); }
   const dot = (x, z, col, r, txt) => { const [px, py] = toXY(x, z); const d = Math.hypot(px - cx, py - cx); let qx = px, qy = py; if (d > R - 8) { qx = cx + (px - cx) / d * (R - 8); qy = cx + (py - cx) / d * (R - 8); } g.fillStyle = col; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); if (txt) { g.font = '11px sans-serif'; g.fillText(txt, qx - 6, qy + 4); } };
-  if (city.bank) dot(city.bank.x, city.bank.z, '#c9a84c', 5, '🏦'); if (city.hideouts) for (const h of city.hideouts) dot(h.x, h.z, '#8f98ab', 4);
+  if (city.bank) dot(city.bank.x, city.bank.z, '#c9a84c', 5, '🏦');
+  if (city.hideouts) for (const h of city.hideouts) dot(h.x, h.z, '#8f98ab', 4);
+  if (city.office) dot(city.office.x, city.office.z, '#3ef2ff', 5, '📋');       // bureau des missions
+  if (city.garage) dot(city.garage.x, city.garage.z, '#ff8f3a', 4);
+  if (city.tatooDesk) dot(city.tatooDesk.x, city.tatooDesk.z, '#ff7ad9', 4);
+  if (police.station) dot(police.station.x, police.station.z, '#4f8dff', 5, '🚓');
+  if (city.villaMine) dot(city.villaMine.x, city.villaMine.z, '#5cc453', 5, '🏠');
+  for (const pq of (city.planques || [])) dot(pq.x, pq.z, pq.joueur ? '#5cc453' : '#ff5c5c', 4);
   if (police.wanted > 0) for (const pc of police.cars) if (pc.active) dot(pc.x, pc.z, '#ff3030', 4);
   if (beacon.m && beacon.m.visible) { const t = (simTime * 3) % 1; dot(beacon.x, beacon.z, `rgba(255,210,63,${0.6 + 0.4 * Math.sin(t * 6.28)})`, 6); const [px, py] = toXY(beacon.x, beacon.z); const ang = Math.atan2(py - cx, px - cx); g.strokeStyle = '#ffd23f'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cx); g.lineTo(cx + Math.cos(ang) * (R - 10), cx + Math.sin(ang) * (R - 10)); g.stroke(); }
   g.restore();
@@ -3037,6 +3065,16 @@ function startMission(id) {
     const croix = new THREE.Mesh(unitRound, lam(0xff2020)); croix.scale.set(0.7, 0.06, 0.24); croix.position.set(0, 0.42, 0.1); mk.add(croix);
     const croix2 = new THREE.Mesh(unitRound, lam(0xff2020)); croix2.scale.set(0.24, 0.06, 0.7); croix2.position.set(0, 0.42, 0.1); mk.add(croix2);
     mk.userData.bras = bras;
+    // Un blessé de 90 cm couché sur un toit de vingt mètres est INTROUVABLE depuis un
+    // hélicoptère : on survolait le bon immeuble sans rien voir. On plante donc au-dessus
+    // de lui un fumigène — une colonne rouge translucide de 14 m qui bat lentement — et on
+    // peint un grand cercle de secours sur le toit.
+    const fum = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.6, 14, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }));
+    fum.position.y = 7.2; mk.add(fum); mk.userData.fumigene = fum;
+    const cercle = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.6, 26),
+      new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+    cercle.rotation.x = -Math.PI / 2; cercle.position.y = 0.06; mk.add(cercle); mk.userData.cercle = cercle;
     worldGroup.add(mk); d.marker = mk; d.blesse = mk;
   }
   if (id === 'nettoyage') { d.bags = []; for (let i = 0; i < 6; i++) { const x = rnd(-26, 26), z = rnd(50, 98); if (Math.hypot(x, z - 74) < 5) continue; const bg = new THREE.Mesh(unitRound, lam(0x2b3550)); bg.scale.set(0.7, 0.8, 0.7); bg.position.set(x, 0.55, z); worldGroup.add(bg); d.bags.push({ m: bg, x, z }); } d.total = d.bags.length; clearBeacon(); }
@@ -3103,7 +3141,12 @@ function missionTick(dt) {
     else { const idx = raceProgress(P.pos.x, P.pos.z); if (idx > d.maxIdx && idx < RACE_PTS.length - 3) d.maxIdx = idx; if (d.maxIdx > RACE_PTS.length * 0.85 && inLine) { const t = simTime - mission.t0; if (t < 75) endMission(true); else { msg(`⏱️ ${fmt(t)} : trop lent, réessaie !`, 2000); mission.step = 0; setBeacon(0, 124); } } }
   }
   if (m.id === 'secours') {
-    if (d.blesse && d.blesse.userData.bras && mission.step === 0) d.blesse.userData.bras.rotation.x = Math.sin(simTime * 4) * 0.7;   // il fait signe
+    if (d.blesse && mission.step === 0) {
+      if (d.blesse.userData.bras) d.blesse.userData.bras.rotation.x = Math.sin(simTime * 4) * 0.7;   // il fait signe
+      const f = d.blesse.userData.fumigene, ce = d.blesse.userData.cercle;
+      if (f) { f.material.opacity = 0.26 + 0.14 * Math.sin(simTime * 2.2); f.rotation.y = simTime * 0.35; }
+      if (ce) { const k = 1 + 0.12 * Math.sin(simTime * 3); ce.scale.set(k, k, 1); ce.material.opacity = 0.6 + 0.3 * Math.sin(simTime * 3); }
+    }
     const heli = drive.car && drive.car.heli ? drive.car : null;   // pas de return : le bandeau doit continuer à vivre
     // tolérance élargie : se poser SUR le toit ou juste à côté suffit
     if (heli && mission.step === 0 && heli.landed && Math.hypot(heli.x - d.roof.x, heli.z - d.roof.z) < 8 && heli.y > d.roof.y - 2.5) {
@@ -3602,14 +3645,16 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // Les deux volées rasaient le mur : 65 cm entre la main courante et la paroi, on montait
   // dans une fente. On les rentre d'1,20 m dans le hall — 1,85 m de dégagement — sans toucher
   // au comptoir (à l'ouest) ni au tapis central.
-  stairs(0.36, F + 0.3, bz - D / 2 + 2.2, 1, 1); stairs(F + 0.3, F * 2 + 0.3, bz + D / 2 - 2.2, -1, -1);   // rampe côté hall : +z pour la volée nord, -z pour la volée sud
+  // Les deux volées sont décollées du mur de 1,40 m : on monte sans se frotter à la paroi,
+  // et il reste 1,40 m de palier au pied pour se placer devant la première marche.
+  stairs(0.36, F + 0.3, bz - D / 2 + 2.6, 1, 1); stairs(F + 0.3, F * 2 + 0.3, bz + D / 2 - 2.6, -1, -1);   // rampe côté hall
   // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
   box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
   box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
   for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.9, 1.9, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; emp.group.remove(emp.tag); emp.tag = nameTag(dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); emp.group.add(emp.tag); }
   city.bankDesk = { x: bx - 4.4, z: bz };
   for (const [dx, dz] of [[8, -8], [8, 8], [-8, 8], [-8, -8]]) { box(bx + dx, 0.7, bz + dz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false }); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), lam(0x3fae4a)); pl.position.set(bx + dx, 1.75, bz + dz); worldGroup.add(pl); }
-  for (const dz of [-5, 5]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);
+  for (const dz of [-3, 3]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);   // rapprochés du centre : les volées déplacées passaient dessus
   const clock = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.1, 20), lam(0xffffff)); clock.rotation.x = Math.PI / 2; clock.position.set(bx, 3.6, bz - D / 2 + 0.5); worldGroup.add(clock); city.bankClock = { c: clock, x: bx, z: bz - D / 2 + 0.44 };
   city.bankHands = [0, 1].map(i => { const h = new THREE.Mesh(unitBox, lam(0x111111)); h.scale.set(0.06, i ? 0.7 : 0.5, 0.02); h.position.set(bx, 3.6, bz - D / 2 + 0.43); worldGroup.add(h); return h; });
   const chand = new THREE.Group(); chand.position.set(bx, H - 0.6, bz); worldGroup.add(chand); const chain = new THREE.Mesh(unitBox, lam(trim)); chain.scale.set(0.06, 1.2, 0.06); chain.position.y = 0.6; chand.add(chain); const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.08, 8, 24), lam(trim)); ring.rotation.x = Math.PI / 2; chand.add(ring); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), neonMat(0xfff2b0)); b.position.set(Math.cos(a) * 1.6, -0.2, Math.sin(a) * 1.6); chand.add(b); }   // lustre dans l'atrium
@@ -4586,8 +4631,11 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     // n'avait pas la place de se planter devant la première marche pour l'escalader. On
     // recule la volée de 70 cm (1,20 m de dégagement au pied) et on reprend le gabarit des
     // escaliers de La Zone, qui eux se montent sans peine : 0,46 m de hauteur, 0,62 m de giron.
-    const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 8, EN = 11;
-    const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.62, EZ0 = HZ + 6.4;
+    // Pied de volée reculé d'un mètre de plus : il y a maintenant 1,86 m entre la première
+    // marche et le mur du fond (0,84 m avant, 0,07 m à l'origine), de quoi se placer face à
+    // l'escalier sans se coller à la paroi. Dix marches de 0,505 m, giron de 0,58.
+    const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 8, EN = 10;
+    const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.58, EZ0 = HZ + 5.4;
     for (let i = 0; i < EN; i++) {
       const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
       // marche pleine : plus de vide sous les pieds (voir le même correctif à la banque)

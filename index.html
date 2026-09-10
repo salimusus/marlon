@@ -15130,7 +15130,12 @@ function boiteMaillage(m) {
   if (/Box/.test(t)) { w = p.width || 1; h = p.height || 1; d = p.depth || 1; }
   else if (/Cylinder|Cone/.test(t)) { const r = Math.max(p.radiusTop != null ? p.radiusTop : (p.radius || 0), p.radiusBottom != null ? p.radiusBottom : (p.radius || 0)); w = d = 2 * r; h = p.height || 0; }
   else if (/Sphere/.test(t)) { w = h = d = 2 * (p.radius || 0); }
-  else if (/Torus/.test(t)) { w = d = 2 * ((p.radius || 0) + (p.tube || 0)); h = 2 * (p.tube || 0); }
+  // TORE : dans Three.js l'anneau est dessiné DEBOUT, dans le plan XY — sa boîte fait donc
+  // 2(R+r) en largeur ET en hauteur, et seulement 2r en profondeur. On donnait ici la boîte
+  // du tore COUCHÉ, et la bascule appliquée juste après la retournait une seconde fois : le
+  // cerceau du trampoline (rotation.x = π/2, donc bien couché) devenait une CLOISON de 6,5 m
+  // de haut et 28 cm d'épaisseur en travers de la toile, qui éjectait le joueur.
+  else if (/Torus/.test(t)) { w = h = 2 * ((p.radius || 0) + (p.tube || 0)); d = 2 * (p.tube || 0); }
   else return null;   // plans, géométries libres : trop plats ou trop imprévisibles
   let sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, n = m;
   while (n && n !== worldGroup) { sx *= n.scale.x; sy *= n.scale.y; sz *= n.scale.z; rx += n.rotation.x; ry += n.rotation.y; rz += n.rotation.z; n = n.parent; }

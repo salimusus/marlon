@@ -189,16 +189,36 @@ test('on monte à l\'étage par l\'escalier d\'une villa voisine', async p => {
   return { ok: r.atteint, detail: `hauteur ${r.y0.toFixed(2)} → ${r.ymax.toFixed(2)} m au plus haut (étage à 5,35 m)` };
 });
 
+// EN TEMPS SIMULÉ. On attendait en temps RÉEL (120 s) que la cabine passe 5 m, puis on
+// tenait la flèche gauche. Seul, le test passait ; dans la suite complète, où le rendu
+// logiciel tombe à une ou deux images par seconde, ces 120 s ne valaient qu'une poignée
+// d'images : la cabine n'était encore qu'à 4,80 m (elle monte en s'approchant doucement de
+// 5,35 m) et l'ascenseur passait pour cassé alors qu'il fonctionne. On avance donc la
+// simulation image par image, comme le fait grimpe().
 test('l\'ascenseur de la villa monte, puis laisse ressortir', async p => {
-  await p.evaluate(() => __SHOT.go({ world: 4, x: 71, y: 0.8, z: 166.4, facing: 0, yaw: 0, pitch: 0.2, dist: 8, hour: 12, hideHud: true }));
-  const monte = await attendre(p, () => __G.city.lift.y > 5);   // on attend que la cabine soit arrivée en haut
-  const haut = await p.evaluate(() => ({ y: __G.P.pos.y, cab: __G.city.lift.y }));
-  // on sort vers l'ouest (le palier est à 2,6 m à gauche de la cabine)
-  await pousser(p, 'ArrowLeft', () => Math.abs(__G.P.pos.x - 71) > 2);
-  const sorti = await p.evaluate(() => ({ x: __G.P.pos.x, y: __G.P.pos.y }));
-  const ecart = Math.abs(sorti.x - 71);
-  return { ok: monte && haut.y > 4.5 && ecart > 1.6 && ecart < 6 && sorti.y > 4.5,
-    detail: `monté à ${haut.y.toFixed(2)} m (cabine ${haut.cab.toFixed(2)}), puis sorti de ${ecart.toFixed(2)} m en restant à ${sorti.y.toFixed(2)} m` };
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 71, y: 0.8, z: 166.4, facing: 0, yaw: 0, pitch: 0.2, dist: 8, hour: 12, hideHud: true });
+    const L = G.city.lift;
+    let haut = null, cabMax = L.y;
+    // la cabine part 1,2 s après qu'on est monté ; on lui laisse 20 s de jeu pour arriver
+    for (let i = 0; i < 20 * 60 && !haut; i++) {
+      G.step(1 / 60, true);
+      if (L.y > cabMax) cabMax = L.y;
+      if (Math.abs(L.y - L.high) < 0.06) haut = { y: G.P.pos.y, cab: L.y };
+    }
+    // on sort vers l'ouest (le palier est à 2,6 m à gauche de la cabine) — avant que la
+    // cabine ne redescende, ce qu'elle fait 1,2 s après l'arrivée si l'on reste dedans
+    let sorti = null;
+    G.keys.add('ArrowLeft');
+    for (let i = 0; i < 60 && !sorti; i++) { G.step(1 / 60, true); if (Math.abs(G.P.pos.x - 71) > 2) sorti = { x: G.P.pos.x, y: G.P.pos.y }; }
+    G.keys.delete('ArrowLeft');
+    return { haut, cabMax: +cabMax.toFixed(2), high: L.high, sorti: sorti || { x: G.P.pos.x, y: G.P.pos.y } };
+  });
+  const ecart = Math.abs(r.sorti.x - 71);
+  const monte = !!r.haut && r.haut.cab > 5;
+  return { ok: monte && r.haut.y > 4.5 && ecart > 1.6 && ecart < 6 && r.sorti.y > 4.5,
+    detail: `cabine montée à ${r.cabMax} m (étage à ${r.high}) avec le joueur à ${r.haut ? r.haut.y.toFixed(2) : '?'} m, puis sorti de ${ecart.toFixed(2)} m en restant à ${r.sorti.y.toFixed(2)} m` };
 });
 
 test('la zone affichée est la plus précise (villa, pas « quartier »)', async p => {
@@ -467,8 +487,13 @@ test('on s\'assoit et on se relève sans sortir de la villa', async p => {
     return { ok: true, assis, av, sx: s2.x, sz: s2.z, sy: s2.y };
   });
   if (!r.ok) return { ok: false, detail: 'aucun canapé trouvé' };
-  await p.waitForTimeout(900);
-  const apres = await p.evaluate(() => ({ x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1), y: +__G.P.pos.y.toFixed(2), sit: !!__G.P.sit }));
+  // EN TEMPS SIMULÉ : on attendait 900 ms de temps RÉEL, ce qui ne fait qu'une ou deux
+  // images quand le banc tourne à deux images par seconde — le joueur n'avait pas eu le
+  // temps de se lever et le test échouait sur « P.sit toujours vrai ».
+  const apres = await p.evaluate(() => {
+    for (let i = 0; i < 60; i++) __G.step(1 / 60, true);
+    return { x: +__G.P.pos.x.toFixed(1), z: +__G.P.pos.z.toFixed(1), y: +__G.P.pos.y.toFixed(2), sit: !!__G.P.sit };
+  });
   // la maison va de x 52,4 à 73,6 et z 154,4 à 169,6 : on doit rester dedans
   const dedans = apres.x > 52 && apres.x < 74 && apres.z > 154 && apres.z < 170;
   const bonneAssise = Math.abs(r.assis.y - r.assis.attendu) < 0.01;
@@ -6787,17 +6812,28 @@ test('en interieur, la camera passe en maison de poupee : plafond efface, mur tr
     const G = __G; const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 }); await dodo(600);
     __SHOT.go({ world: 4, x: -1, y: 0.5, z: 20, hour: 12, yaw: 0, pitch: 0.3 });   // dans la salle de sport
-    for (let i = 0; i < 40 && !(G.interieur.rect && G.cam.dist < 5.2); i++) await dodo(150);
+    // ON COMPTE LES IMAGES, PAS LES SECONDES. La maison de poupée est calculée dans frame()
+    // (camera, fondu des murs), donc il faut de VRAIES images ; mais 40 x 150 ms de temps
+    // réel ne valent qu'une dizaine d'images quand le banc tombe a une image par seconde
+    // sous la charge de la suite complète, et le fondu n'avait pas commencé. On attend donc
+    // que le TEMPS SIMULÉ ait avancé, ce qui garantit les images.
+    const attendsImages = async (cond, secondesSim = 6) => {
+      const t0 = G.simTime;
+      for (let i = 0; i < 400; i++) { if (cond()) return true; if (G.simTime - t0 > secondesSim) return cond(); await dodo(120); }
+      return cond();
+    };
+    await attendsImages(() => G.interieur.rect && G.cam.dist < 5.2, 8);
     const opac = () => G.interieur.murs.map(o => o.mesh && o.mesh.userData.matOpaque ? +[].concat(o.mesh.material)[0].opacity.toFixed(2) : 1);
-    for (let i = 0; i < 40 && !opac().some(o => o < 0.5); i++) await dodo(150);   // le fondu du mur traverse prend quelques images
-    await dodo(300);
+    await attendsImages(() => opac().some(o => o < 0.5), 8);   // le fondu du mur traverse prend quelques images
+    await attendsImages(() => false, 1);
     const I = G.interieur, c = G.camera.position, rect = I.rect;
     const plafonds = I.masques.filter(m => { const b = new G.THREE.Box3().setFromObject(m); return b.min.y > 2.6; }).length;
     const ops = I.murs.map(o => o.mesh && o.mesh.userData.matOpaque ? +[].concat(o.mesh.material)[0].opacity.toFixed(2) : 1);
     const dedans = { rect: !!rect, masques: I.masques.length, plafonds, murs: I.murs.length, dist: +G.cam.dist.toFixed(2), pitch: +G.cam.pitch.toFixed(2),
       camDehors: !!rect && (Math.abs(c.x - rect.x) > rect.w / 2 || Math.abs(c.z - rect.z) > rect.d / 2), transparents: ops.filter(o => o < 0.5).length, opaques: ops.filter(o => o === 1).length,
       perche: !!rect && G.solids.filter(o => o.xray).length };
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 }); await dodo(700);
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 });
+    await attendsImages(() => !G.interieur.rect && G.interieur.masques.length === 0, 3);   // en sortant, tout doit revenir
     let caches = 0; G.worldGroup.traverse(o => { if (o.isMesh && !o.visible && Math.abs(o.position.x + 1) < 6 && Math.abs(o.position.z - 19.5) < 6) caches++; });
     const apres = { rect: G.interieur.rect, masques: G.interieur.masques.length, xray: G.solids.filter(o => o.xray).length, clones: G.solids.filter(o => o.mesh && o.mesh.userData.matOpaque).length, caches };
     return { dedans, apres };
@@ -9307,6 +9343,13 @@ test('entrer au commissariat, a l\'hopital ou a l\'ecole declenche l\'accueil pa
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     G.settings.sound = true; G.sfx.unlock();
     G.simTime += 500;   // on repart d'une ardoise propre (le delai anti-repetition est de 45 s)
+    // ON EFFACE D'ABORD TOUS LES DRAPEAUX DE PROXIMITE. Le salut se declenche sur le FRONT
+    // MONTANT du drapeau : si un test precedent laisse le joueur devant un comptoir (par
+    // exemple city.deskNear a la banque), accueilTick() enregistre « deja present » et le
+    // salut que ce test attend ne part jamais — il echouait donc dans la suite complete
+    // alors qu'il passait tout seul.
+    for (const f of ['plainteNear', 'medNear', 'classNear', 'vitNear', 'tuneNear', 'deskNear',
+      'slotNear', 'tableNear', 'coiffeurNear', 'tatooNear', 'gunNear', 'offNear']) G.city[f] = f === 'classNear' ? null : false;
     for (const k of Object.keys(G.ACCUEILS)) G.accueilTick();
     const dits = [];
     const entre = (drapeau, valeur) => {

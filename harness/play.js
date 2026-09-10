@@ -2995,6 +2995,11 @@ test('La Zone : un quartier pauvre praticable du trottoir au toit', async p => {
     __SHOT.go({ world: 4, x: -145, y: 1, z: 40, hour: 12 });
     await new Promise(r2 => setTimeout(r2, 500));
     const G = __G, res = {};
+    // Les CHANTIERS de voirie sont temporaires (les employes les posent puis les retirent) et
+    // npcBlocked() les voit comme des murs : un chantier tombe au sud du premier immeuble et
+    // « le vide au sud est libre » devenait faux. Ce test mesure le quartier BATI.
+    res.chantiersRetires = (G.city.chantiers || []).length;
+    for (const ch of [...(G.city.chantiers || [])]) G.retireChantier(ch);
     const imm = G.city.zoneImmeubles;
     res.n = imm.length;
     res.etages = imm.map(i => i.etages);
@@ -3049,13 +3054,19 @@ test('La Zone : un quartier pauvre praticable du trottoir au toit', async p => {
     // un mur de la Zone arrête bien le joueur (mêmes règles que le reste de la ville)
     res.mur = G.npcBlocked(b.x, 0.3, b.z - b.d / 2 + 0.15, 0.4);
     res.vide = G.npcBlocked(b.x, 0.3, b.z + b.d / 2 + 6, 0.4);
+    // si le vide n'est PAS vide, on dit ce qui l'occupe : sinon le test echoue sans un mot
+    if (res.vide) {
+      const vx = b.x, vz = b.z + b.d / 2 + 6;
+      res.quiBloque = G.solids.filter(o => !o.veh && !o.bar && !o.decor && Math.abs(o.x - vx) < o.w / 2 + 0.4 && Math.abs(o.z - vz) < o.d / 2 + 0.4)
+        .map(o => `${Object.keys(o).filter(k => k !== 'mesh').join('/')}@${o.x.toFixed(0)},${o.z.toFixed(0)}`).slice(0, 4).join(' ; ');
+    }
     return res;
   });
   const ok = r.n === 5 && r.etages.every(e => e === 3) && r.trous.length === 0 && r.marches === 16
     && r.planchers.every((pp, f) => pp.every(y => Math.abs(y - (f * 3.2 + 0.2)) < 0.05))
     && r.toit > 9.5 && r.meubles.every(m => m >= 6) && r.chevauchements === 0 && r.hauteurLibre > 2
     && r.sol.every(y => y > 0.04) && r.errants >= 4 && r.zone && r.poubelles >= 10 && r.mur && !r.vide;
-  return { ok, detail: `5 immeubles de 3 étages, ${r.marches} marches d'escalier extérieur, ${r.trous.length} trou(s) (${r.montee[0]} m → ${r.montee[1]} m, ${r.hauteurLibre} m de hauteur libre), planchers à ${r.planchers.map(x => x[0]).join('/')} m et toit à ${r.toit} m, ${r.meubles.join('/')} meubles par niveau, ${r.errants} chiens errants, ${r.poubelles} poubelles · aucun chevauchement avec les bâtiments de la ville, sol continu sous tout le quartier, murs bloquants comme ailleurs` };
+  return { ok, detail: `5 immeubles de 3 étages, ${r.marches} marches d'escalier extérieur, ${r.trous.length} trou(s) (${r.montee[0]} m → ${r.montee[1]} m, ${r.hauteurLibre} m de hauteur libre), planchers à ${r.planchers.map(x => x[0]).join('/')} m et toit à ${r.toit} m, ${r.meubles.join('/')} meubles par niveau, ${r.errants} chiens errants, ${r.poubelles} poubelles · aucun chevauchement avec les bâtiments de la ville, sol continu sous tout le quartier, murs bloquants comme ailleurs et le sud du premier immeuble reste libre (${r.chantiersRetires} chantier(s) temporaire(s) retire(s) avant la mesure${r.quiBloque ? ' ; bloque par ' + r.quiBloque : ''})` };
 });
 
 test("la boutique « maison & déco » s'est étoffée, alarme comprise", async p => {
@@ -5465,16 +5476,21 @@ test('le plan routier dessert chaque quartier et les rues sont degagees', async 
     // on ne compte que le MOBILIER : un mur, un vitrage ou un bâtiment n'est jamais effacé
     // ni ce qui est a l'ETAGE ni ce qui est DANS un batiment : ca n'a jamais trainé dans la rue
     const dedans = (x, z) => [...G.city.batiments, ...G.city.interieurs].some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
+    // NI LES CHANTIERS : un chantier de voirie occupe une VOIE, c'est fait pour — la
+    // circulation le contourne et les employes le retirent une fois la reparation finie.
+    // Dans la suite complete, une quinzaine de chantiers en cours etaient comptes comme
+    // « objets qui trainent au milieu de la rue » et ce test echouait sans defaut reel.
     const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar && !o.statue
-      && !o.glass && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && o.y - o.h / 2 <= 0.8 && !dedans(o.x, o.z)
+      && !o.glass && !o.chantier && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && o.y - o.h / 2 <= 0.8 && !dedans(o.x, o.z)
       && surChaussee(o.x, o.z)).length;
     return { axes: G.city.plan.axes.length, dessertes: d.length, quartiers: G.city.zones.length,
       horsRoute, sansDesserte, sansArret, degagees: G.city.degagees, restants,
+      chantiers: (G.city.chantiers || []).length,
       pireDistance: Math.max(...d.map(o => o.loin)) };
   });
   const ok = r.horsRoute.length === 0 && r.sansDesserte.length === 0 && r.sansArret === 0
     && r.dessertes === r.quartiers && r.degagees > 20 && r.restants === 0 && r.pireDistance < 40;
-  return { ok, detail: `le plan est ENREGISTRÉ dans le jeu : ${r.axes} axes nommés et ${r.dessertes} dessertes, une par quartier (${r.quartiers} quartiers, ${r.sansDesserte.length} sans desserte) · chaque desserte tombe sur une vraie chaussée (${r.horsRoute.length} hors route), a ${r.pireDistance} m au pire de ce qu'elle dessert · le GPS voiture et les bots s'en servent : ${r.sansArret} quartier sans point d'arrêt · et ${r.degagees} objets qui traînaient au milieu des rues ont été enlevés (${r.restants} restant)` };
+  return { ok, detail: `le plan est ENREGISTRÉ dans le jeu : ${r.axes} axes nommés et ${r.dessertes} dessertes, une par quartier (${r.quartiers} quartiers, ${r.sansDesserte.length} sans desserte) · chaque desserte tombe sur une vraie chaussée (${r.horsRoute.length} hors route), a ${r.pireDistance} m au pire de ce qu'elle dessert · le GPS voiture et les bots s'en servent : ${r.sansArret} quartier sans point d'arrêt · et ${r.degagees} objets qui traînaient au milieu des rues ont été enlevés (${r.restants} restant, hors ${r.chantiers} chantier(s) de voirie en cours, qui sont temporaires)` };
 });
 
 test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vraiment', async p => {
@@ -7080,6 +7096,14 @@ test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repo
 test('les rues ont des trottoirs, un seul reseau routier, du mobilier public hors des voies, et le radar montre les vraies rues', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // ON RETIRE D'ABORD LES CHANTIERS DE VOIRIE EN COURS. Un chantier occupe une voie, c'est
+    // fait pour : il bloque les cases de la grille de navigation et coupe le reseau en deux.
+    // Ce test mesure le reseau PERMANENT ; dans la suite complete, une quinzaine de chantiers
+    // laisses par les employes municipaux faisaient croire a « 1 desserte hors reseau » et a
+    // « 17 objets en pleine voie » alors que les rues sont bonnes.
+    const chantiersEnCours = (G.city.chantiers || []).length;
+    for (const ch of [...(G.city.chantiers || [])]) G.retireChantier(ch);
+    G.buildNav();
     const N = G.NAV; if (!N.voit) G.buildNav();
     const { nx, nz, cs, x0, z0 } = N; const co = N.cout, bl = N.voit;
     // composantes connexes de la chaussée ouverte aux voitures
@@ -7112,12 +7136,12 @@ test('les rues ont des trottoirs, un seul reseau routier, du mobilier public hor
     // le sol de la ville est pavé (texture), la chaussée marquée (texture avec bords blancs)
     const sol = G.solids.find(o => o.sol); const solTex = !!(sol && sol.mesh.material.map);
     const rouleTexture = G.ROAD.image.width >= 128;
-    return { composantes: nc, part: +(tailles[principal] / total).toFixed(3), dessHors, surRoute, trottoirs: tr.length, trSurRoute, trHaut, longueur, decor: G.city.decorPublic, arbres: arbres.length, mal, ecoleSurAvenue, radarRoutes, solTex, rouleTexture, routes: G.city.routes.length, axes: G.city.plan.axes.length };
+    return { chantiersEnCours, composantes: nc, part: +(tailles[principal] / total).toFixed(3), dessHors, surRoute, trottoirs: tr.length, trSurRoute, trHaut, longueur, decor: G.city.decorPublic, arbres: arbres.length, mal, ecoleSurAvenue, radarRoutes, solTex, rouleTexture, routes: G.city.routes.length, axes: G.city.plan.axes.length };
   });
   const d = r.decor || {};
   const ok = r.part > 0.99 && r.dessHors.length === 0 && r.surRoute === 0 && r.trottoirs > 150 && r.trSurRoute === 0 && r.trHaut === 0 && r.longueur > 3000
     && d.arbres > 60 && d.bancs > 30 && d.buissons > 60 && d.poubelles > 30 && d.glissieres > 30 && r.mal === 0 && !r.ecoleSurAvenue && r.radarRoutes && r.solTex && r.rouleTexture;
-  return { ok, detail: `la ville a maintenant ${r.routes} rues (${r.axes} axes nommés) qui ne font qu'UN SEUL réseau pour les voitures (${(r.part * 100).toFixed(1)} % de la chaussée d'un seul tenant, ${r.composantes} morceau(x) au total, il y en avait 25) et les ${r.dessHors.length === 0 ? '39' : '?'} dessertes y sont toutes reliées (${r.dessHors.length} hors réseau) · ${r.surRoute} objet en pleine voie · ${r.trottoirs} trottoirs (${r.longueur} m, bordure comprise, aucun sur la chaussée, aucun plus haut que 30 cm) · mobilier public le long des rues : ${d.arbres} arbres, ${d.buissons} buissons, ${d.bancs} bancs, ${d.poubelles} poubelles, ${d.glissieres} glissières — ${r.mal} arbre mal placé (sur une rue, dans un bâtiment ou devant une porte) · l'école ne mord plus sur l'avenue · le radar dessine les vraies rues, le sol est pavé et la chaussée porte ses bords blancs et son axe jaune` };
+  return { ok, detail: `la ville a maintenant ${r.routes} rues (${r.axes} axes nommés) qui ne font qu'UN SEUL réseau pour les voitures (${(r.part * 100).toFixed(1)} % de la chaussée d'un seul tenant, ${r.composantes} morceau(x) au total, il y en avait 25) et les ${r.dessHors.length === 0 ? '39' : '?'} dessertes y sont toutes reliées (${r.dessHors.length} hors réseau) · ${r.surRoute} objet en pleine voie (${r.chantiersEnCours} chantier(s) de voirie en cours, retiré(s) avant la mesure : un chantier occupe une voie exprès) · ${r.trottoirs} trottoirs (${r.longueur} m, bordure comprise, aucun sur la chaussée, aucun plus haut que 30 cm) · mobilier public le long des rues : ${d.arbres} arbres, ${d.buissons} buissons, ${d.bancs} bancs, ${d.poubelles} poubelles, ${d.glissieres} glissières — ${r.mal} arbre mal placé (sur une rue, dans un bâtiment ou devant une porte) · l'école ne mord plus sur l'avenue · le radar dessine les vraies rues, le sol est pavé et la chaussée porte ses bords blancs et son axe jaune` };
 });
 
 // ======================= POSTE E : morphologie et boutique =======================

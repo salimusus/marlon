@@ -21873,7 +21873,7 @@ function gesteMetier(rig, nom, dt, t, opt) {
   // d'une animation ; en figeant tout le monde sur une image choisie, on peut photographier
   // six instants successifs du même geste et juger le mouvement sur la série.
   if (ANIM.fige && ANIM.fige.t != null) {
-    if (nom) rig.gNom = nom;
+    if (ANIM.fige.geste) rig.gNom = ANIM.fige.geste; else if (nom) rig.gNom = nom;
     rig.gK = 1;
     const gf = GESTES[rig.gNom];
     if (gf) animPose(rig, gf(ANIM.fige.t, ANIM.fige.t, ANIM.fige.opt || opt || {}), 1);

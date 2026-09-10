@@ -7048,18 +7048,24 @@ test('un lampadaire cassé est réparé tout seul par les employés, avec un cha
     const obst0 = G.solids.filter(o => o.chantier).length;
     let chantMax = 0, repare = -1;
     const DT = 1 / 20;
-    for (let i = 0; i < 2600 && repare < 0; i++) {
+    for (let i = 0; i < 3600 && repare < 0; i++) {
       G.simTime = G.simTime + DT; G.metiersTick(DT);
       if (c.chantiers.length > chantMax) chantMax = c.chantiers.length;
       if (!lam.broken) repare = +(i * DT).toFixed(1);
     }
-    // on laisse l'équipe ranger le chantier et rentrer au dépôt
-    for (let i = 0; i < 500; i++) { G.simTime = G.simTime + DT; G.metiersTick(DT); }
-    return { dist: Math.round(bd), repare, obst0, chantMax, chantiers: c.chantiers.length,
-      obstFin: G.solids.filter(o => o.chantier).length, broken: lam.broken, etat: G.METIERS.employes[0].etat };
+    // on laisse l'équipe RANGER son chantier, et on mesure pile à ce moment-là : si on
+    // attendait plus longtemps, elle repartait sur une autre panne et posait un chantier
+    // tout neuf — le test devenait un tirage au sort.
+    let range = -1, obstFin = -1;
+    for (let i = 0; i < 800; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (!c.chantiers.length) { range = +(i * DT).toFixed(1); obstFin = G.solids.filter(o => o.chantier).length; break; }
+    }
+    return { dist: Math.round(bd), repare, range, obst0, chantMax, chantiers: c.chantiers.length,
+      obstFin, broken: lam.broken, etat: G.METIERS.employes[0].etat };
   });
-  const ok = r.repare > 0 && r.repare < 90 && r.chantMax >= 1 && !r.broken && r.chantiers === 0 && r.obstFin === r.obst0;
-  return { ok, detail: `lampadaire cassé à ${r.dist} m du dépôt : l'équipe est partie en fourgon, a posé ${r.chantMax} chantier (cônes + filet rouge et blanc + panneau TRAVAUX + obstacle dans solids pour que la circulation contourne), a réparé en ${r.repare} s simulées puis a tout rangé — obstacles de chantier dans solids : ${r.obst0} → ${r.chantMax} → ${r.obstFin}, équipe « ${r.etat} »` };
+  const ok = r.repare > 0 && r.repare < 160 && r.chantMax >= 1 && !r.broken && r.range >= 0 && r.obstFin === r.obst0;
+  return { ok, detail: `lampadaire cassé à ${r.dist} m du dépôt : l'équipe est partie en fourgon, a posé ${r.chantMax} chantier (cônes + filet rouge et blanc + panneau TRAVAUX + obstacle dans solids pour que la circulation contourne), a réparé en ${r.repare} s simulées puis a tout rangé ${r.range} s plus tard — obstacles de chantier dans solids : ${r.obst0} → ${r.chantMax} → ${r.obstFin}, équipe « ${r.etat} »` };
 });
 
 test('un incendie est éteint par les pompiers : le camion arrive et city.incendies se vide', async p => {

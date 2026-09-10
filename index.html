@@ -14890,7 +14890,7 @@ function enterCar(c) {
   if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
-  else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon · B = frein à main'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
+  else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
   sonPortiere(c, true);   // on ouvre, on s'installe, la portière claque : on monte VRAIMENT dans la voiture
   if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car', moteurDe(c)); c.vy = 0;
   // LE CHIEN MONTE AVEC SON MAÎTRE. Il restait planté sur le trottoir à regarder la voiture
@@ -15193,7 +15193,11 @@ function commandesManette() {
   // freiner, c'est pousser DANS LE SENS CONTRAIRE de la marche (comme dans un GTA : une
   // seule gâchette pour la marche arrière et le frein). La touche B, elle, tire le frein à main.
   const v = drive.speed, contre = v * iz < -0.4 ? Math.min(1, Math.abs(iz)) : 0;
-  const main = keys.has('KeyB') || !!drive.freinMain;
+  // FREIN À MAIN : la barre d'espace MAINTENUE, comme dans un GTA (l'appui bref, lui,
+  // klaxonne toujours, et dans le buggy il fait bondir la machine). B était déjà pris : il
+  // ouvre la boutique, et on se serait retrouvé au magasin en pleine glissade.
+  const c = drive.car;
+  const main = (keys.has('Space') && !!c && c.kind !== 'buggy' && c.kind !== 'bike' && c.kind !== 'velo') || !!drive.freinMain;
   return { gaz: iz, volant: ix, frein: main ? 1 : contre, main, nitro: false };
 }
 function driveStep(dt) {

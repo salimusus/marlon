@@ -8171,22 +8171,20 @@ test('coincé dans un solide, le joueur en ressort en moins d\'une seconde', asy
       testes++; if (k / 60 > pire) pire = k / 60;
       if (dedans(o) > 0.02) rates++;
     }
-    // 2) le cas dur : EMMURÉ, quatre meubles autour de lui et 30 cm d'espace au milieu.
-    // La résolution axe par axe le renvoyait d'un meuble à l'autre indéfiniment : il
-    // vibrait sur place pour toujours. C'est la désincarcération qui le tire dehors.
-    const x0 = 6, z0 = 8, sol = [];
-    for (const dx of [-0.65, 0.65]) sol.push({ x: x0 + dx, y: 0.8, z: z0, w: 1, h: 1.6, d: 2.4, mesh: { visible: true } });
-    for (const dz of [-0.65, 0.65]) sol.push({ x: x0, y: 0.8, z: z0 + dz, w: 2.4, h: 1.6, d: 1, mesh: { visible: true } });
-    for (const o of sol) G.solids.push(o);
-    P.pos.set(x0, 0, z0); P.vel.set(0, 0, 0); P.coinceT = 0; P.coinceN = 0; P.sit = null;
-    const libreDe = () => sol.every(o => !dedans(o));
-    let k2 = 0; for (; k2 < 180; k2++) { G.step(1 / 60, true); if (libreDe()) break; }
-    const libre = k2 / 60, sorti = libreDe();
-    for (const o of sol) { const i = G.solids.indexOf(o); if (i >= 0) G.solids.splice(i, 1); }
-    return { testes, rates, pire, libre, sorti, x: P.pos.x, z: P.pos.z };
+    // 2) la soupape elle-même : un objet apparaît AUTOUR du joueur (portail qui se referme,
+    // véhicule qui se gare sur lui, décor devenu solide). Elle attend une demi-seconde — un
+    // simple frôlement ne doit rien téléporter — puis le pose dehors.
+    const cage = { x: 6, y: 1.2, z: 8, w: 3, h: 2.4, d: 3, mesh: { visible: true } };
+    G.solids.push(cage);
+    P.pos.set(cage.x, 0.3, cage.z); P.vel.set(0, 0, 0); P.coinceT = 0; P.coinceN = 0; P.sit = null;
+    const enferme = dedans(cage) > 0;
+    G.desincarcere(0.3); const tot = dedans(cage) > 0;    // avant 0,5 s : on ne bouge personne
+    G.desincarcere(0.3); const sorti = dedans(cage) === 0;   // 0,6 s : dehors
+    const i = G.solids.indexOf(cage); if (i >= 0) G.solids.splice(i, 1);
+    return { testes, rates, pire, enferme, tot, sorti, x: P.pos.x, z: P.pos.z };
   });
-  const ok = r.rates === 0 && r.pire < 1 && r.sorti && r.libre < 1;
-  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · EMMURÉ entre quatre meubles avec 30 cm d'espace, il vibrait sur place SANS JAMAIS SORTIR : la désincarcération le pose dehors en ${r.libre.toFixed(2)} s (sorti=${r.sorti}, arrivé en x=${r.x.toFixed(2)}, z=${r.z.toFixed(2)})` };
+  const ok = r.rates === 0 && r.pire < 1 && r.enferme && r.tot && r.sorti;
+  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · et si un objet apparaît AUTOUR de lui (portail qui se referme, voiture qui se gare dessus), la désincarcération attend une demi-seconde — encore dedans à 0,3 s : ${r.tot} — puis le pose dehors à 0,6 s (sorti=${r.sorti}, en x=${r.x.toFixed(2)}, z=${r.z.toFixed(2)})` };
 });
 
 test('la roulette : la caméra passe devant la roue, la roue freine et la bille tombe dans la case', async p => {

@@ -5725,7 +5725,7 @@ function tableauVerdict(q, v, bon, gain) {
   const out = tableauPose(school.room, L, null, 2);   // les deux premieres lignes sont deja au tableau
   tableauRendu(school.room);
   // duree d'ecriture, pour ne pas enchainer sur l'exercice suivant avant la fin du trace
-  return out.filter(o => o.neuve).reduce((a, o) => a + o.t.length, 0) / CRAIE_CPS;
+  return out.filter(o => o.neuve).reduce((a, o) => a + o.g.length, 0) / CRAIE_CPS;
 }
 // La maîtresse lit l'énoncé à voix haute : les enfants qui ne lisent pas encore peuvent jouer.
 // Les symboles mathématiques sont dits en toutes lettres, sinon la synthèse vocale les avale.
@@ -5808,23 +5808,25 @@ function tableauPose(room, lignes, couleur, des) {
     for (const m of mots) { const t = cur ? cur + ' ' + m : m; if (g.measureText(t).width > W - 40) { out.push({ t: cur, c, neuve }); cur = m; } else cur = t; }
     if (cur) out.push({ t: cur, c, neuve });
   }
-  out.forEach(o => { o.n = o.neuve ? 0 : o.t.length; });
-  const aEcrire = out.filter(o => o.neuve).reduce((a, o) => a + o.t.length, 0);
+  // Les reponses peuvent etre des emojis : ecrites avec txt[i], les paires de substitution
+  // UTF-16 se coupaient en deux losanges. On decoupe donc en POINTS DE CODE une fois pour toutes.
+  out.forEach(o => { o.g = Array.from(o.t); o.n = o.neuve ? 0 : o.g.length; });
+  const aEcrire = out.filter(o => o.neuve).reduce((a, o) => a + o.g.length, 0);
   room.tab = { lignes: out, taille, couleur: couleur || '#f4f1e6', t0: performance.now(), aEcrire, faites: 0 };
   // `room.texte` = ce qui sera au tableau une fois la craie posee (etat logique, lu par le jeu
   // et les tests) ; `room.dessine` = ce qui est REELLEMENT trace a cet instant.
   room.texte = out.map(o => o.t).join(' | ');
-  room.dessine = out.map(o => o.t.slice(0, o.n)).join(' | ');
+  room.dessine = out.map(o => o.g.slice(0, o.n).join('')).join(' | ');
   return out;
 }
 // Un mot ecrit a la craie : chaque lettre est posee a sa place finale (le texte ne glisse pas),
 // avec son petit decalage et son inclinaison a elle.
-function craieMot(g, txt, n, cx, cy, couleur, graine) {
-  const total = g.measureText(txt).width;
+function craieMot(g, lettres, n, cx, cy, couleur, graine) {
+  const total = g.measureText(lettres.join('')).width;
   let x = cx - total / 2;
   const align = g.textAlign; g.textAlign = 'left'; g.fillStyle = couleur;
-  for (let i = 0; i < n && i < txt.length; i++) {
-    const ch = txt[i], w = g.measureText(ch).width;
+  for (let i = 0; i < n && i < lettres.length; i++) {
+    const ch = lettres[i], w = g.measureText(ch).width;
     const a = craieBruit(graine * 131 + i * 7), b = craieBruit(graine * 57 + i * 13 + 3);
     g.save();
     g.translate(x + w / 2, cy + b * 2.2);
@@ -5851,7 +5853,7 @@ function tableauRendu(room) {
   T.lignes.forEach((o, k) => {
     if (!o.n) return;
     const col = o.c || T.couleur;
-    if (o.neuve) craieMot(g, o.t, o.n, W / 2, y0 + k * h, col, k + 1);
+    if (o.neuve) craieMot(g, o.g, o.n, W / 2, y0 + k * h, col, k + 1);
     else { g.fillStyle = col; g.fillText(o.t, W / 2, y0 + k * h); }
   });
   room.tex.needsUpdate = true;
@@ -5895,11 +5897,11 @@ function craieTick(dt) {
     if (ecrites <= 0) continue;
     T.faites = cible;
     for (let k = 0; k < ecrites; k++) {
-      const l = T.lignes.find(o => o.neuve && o.n < o.t.length);
+      const l = T.lignes.find(o => o.neuve && o.n < o.g.length);
       if (!l) break;
       l.n++;
     }
-    room.dessine = T.lignes.map(o => o.t.slice(0, o.n)).join(' | ');
+    room.dessine = T.lignes.map(o => o.g.slice(0, o.n).join('')).join(' | ');
     tableauRendu(room);
     if (Math.hypot(P.pos.x - room.x, P.pos.z - room.z) < 18) sonCraie(ecrites);
   }
@@ -13709,7 +13711,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -13838,7 +13840,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });

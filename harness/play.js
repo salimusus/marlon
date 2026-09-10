@@ -7077,12 +7077,19 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
     G.P.sit = null; G.school.chaise = null; G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
     for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
     if (!G.school.q) return { pourquoi: 'la classe ne s\'est pas ouverte' };
-    // l'analyseur au bout de la chaîne audio : le son de craie SORT-IL vraiment ?
+    // ÉCOUTE AU BOUT DE LA CHAÎNE AUDIO : un analyseur ne montre que les 46 dernières
+    // millisecondes à l'instant où on le lit, et sur la machine du banc d'essai (2 images/s)
+    // le crissement, qui dure 150 ms, était toujours déjà passé. On branche donc un nœud qui
+    // ÉCOUTE EN CONTINU et retient la crête sur toute une fenêtre.
     const c = G.sfx.unlock(), chn = G.sfx.chaine();
-    const an = c.createAnalyser(); an.fftSize = 2048; chn.lim.connect(an);
-    const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; return +Math.sqrt(s / d.length).toFixed(4); };
+    let crete = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    chn.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; const t = performance.now(); while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); } return +crete.toFixed(4); };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
-    await dodo(900); const silence = rms();
+    const silence = await ecoute(700);
     const q = G.school.q, w0 = G.wallet;
     const lus = () => (salle.dessine || '').split(' | ').join('').length;
     G.school.craieSons = 0; const v0 = salle.tex.version;
@@ -7097,8 +7104,8 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
     const t1 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
     salle.tab.t0 = performance.now() - 1000; G.craieTick(0.016);
     const t2 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
-    // le son SORT-IL de la chaine ? on rejoue le crissement et on ecoute la sortie du limiteur
-    let pic = 0; for (let i = 0; i < 10; i++) { G.sonCraie(3); await dodo(45); pic = Math.max(pic, rms()); }
+    // le crissement SORT-IL de la chaîne ? on le rejoue et on écoute la sortie du limiteur
+    const pic = await ecoute(700, () => G.sonCraie(3));
     salle.tab.t0 = performance.now() - 20000; G.craieTick(0.016);
     const fin = { lus: lus(), dessine: salle.dessine, texte: salle.texte, versions: salle.tex.version - v0 };
     const viseur = () => { const t = salle.tableau; const d = Math.atan2(-(t.position.x - G.P.pos.x), -(t.position.z - G.P.pos.z)) - G.cam.yaw; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); };
@@ -7111,7 +7118,7 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
     let rouge = null;
     if (G.school.q) { const q2 = G.school.q; G.answer(q2.opts.find(o => o !== q2.a), document.querySelector('#schChoices .item')); G.closeUI();
       const l = salle.tab.lignes.filter(o => o.neuve); rouge = { texte: salle.texte, couleurs: l.map(o => o.c || ''), aEcrire: salle.tab.aEcrire }; }
-    try { chn.lim.disconnect(an); } catch (e) {}
+    try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     G.closeUI(); G.P.sit = null; G.school.chaise = null;
     return { juste, t1, t2, fin, rouge, silence, pic, cps: G.CRAIE_CPS, gain: G.wallet - w0, cam };
   });
@@ -7122,7 +7129,7 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
   const monte = r.t1.lus > q.lus && r.t2.lus > r.t1.lus && r.fin.lus > r.t2.lus;
   const cadence = Math.abs((r.t1.lus - q.lus) - Math.round(0.25 * r.cps)) <= 1 && Math.abs((r.t2.lus - q.lus) - Math.round(1 * r.cps)) <= 1;
   const complet = r.fin.dessine === r.fin.texte && /GAGNÉ/.test(r.fin.texte);
-  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.pic > r.silence + 0.004 && r.pic > 0.004;
+  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.pic > r.silence + 0.008 && r.pic > 0.01;
   const rouge = !!v && /FAUX/.test(v.texte) && v.couleurs.some(c => c === '#ffc2c2') && v.aEcrire > 4;
   const cadre = r.cam.ecart < 0.12 && r.cam.pitch <= 0.24;
   const ok = depart && monte && cadence && complet && r.fin.versions >= 3 && son && rouge && cadre;
@@ -7144,9 +7151,13 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     // 2) la touche E devant une chaise d'école : on s'ASSOIT (l'ordre des actions faisait
     //    gagner « la classe » sur « la chaise », et les exercices s'ouvraient debout)
     G.P.pos.set(ch.x, 0.6, ch.z + 0.8); G.P.sit = null;
-    for (let i = 0; i < 60 && !(G.city.benchNear && G.city.benchNear.ecole === salle); i++) await dodo(80);
+    // on avance la simulation image par image (pas d'attente reelle : la machine du banc
+    // d'essai rend 2 images/s) jusqu'a ce que le reperage de proximite ait tourne
+    for (let i = 0; i < 40 && !(G.city.benchNear && G.city.benchNear.ecole === salle); i++) G.step(1 / 60, true);
     const visee = G.city.benchNear;   // deux chaises voisines sont a moins d'1,80 m : c'est l'une des deux
-    const proche = { bench: !!(visee && visee.ecole === salle), classe: !!G.city.classNear };
+    const proche = { bench: !!(visee && visee.ecole === salle), classe: !!G.city.classNear,
+      pos: [+G.P.pos.x.toFixed(1), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(1)], chaise: [+ch.x.toFixed(1), +ch.z.toFixed(1)] };
+    if (!proche.bench) return { pourquoi: `la chaise d'école n'est pas détectée à portée : joueur ${proche.pos}, chaise ${proche.chaise}, benchNear=${G.city.benchNear ? 'un autre banc' : 'aucun'}` };
     // c'est exactement l'événement que produit la manette (◯ → telTouche('KeyE'))
     const presseE = () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
     presseE();
@@ -7160,7 +7171,7 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     const rouvre = { ui: G.uiOpen, sit: G.P.sit === visee };
     // 4) on se lève : la classe se ferme toute seule
     G.P.sit = null;
-    for (let i = 0; i < 40 && G.uiOpen; i++) await dodo(80);
+    for (let i = 0; i < 40 && G.school.chaise; i++) await dodo(80);   // schoolTick tourne à l'image, même en pause
     const leve = { ui: G.uiOpen, chaise: G.school.chaise, dit: G.school.dit };
     G.school.chaise = null;
     return { debout, proche, assis, classe, ferme, rouvre, leve };

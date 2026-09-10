@@ -10506,7 +10506,9 @@ test('le jeu DÉMARRE : la page se charge, la boucle tourne, les cinq mondes se 
     res.ville = G.city.on; res.solides = G.solids.length; res.zones = G.city.zones.length;
     return res;
   });
-  const ok = depart.pret && images > depart.image && r.mondes.every(m => m.solides > 100)
+  // les quatre mondes de parcours sont petits (une quarantaine de solides chacun) ; seule la
+  // ville en compte des milliers. Le seuil de 100 partout etait faux, pas le jeu.
+  const ok = depart.pret && images > depart.image && r.mondes.every(m => m.solides > 20)
     && r.mondes[4].solides > 2000 && r.pannes.length === 0 && !r.villa && !r.interieur && r.ville && r.zones > 30;
   return { ok, detail: `page prête=${depart.pret}, boucle vivante (image ${depart.image} → ${images}) · les cinq mondes se construisent : ${r.mondes.map(m => m.w + '→' + m.solides + ' solides').join(', ')} · après 10 s de ville simulée : ${r.pannes.length} sous-système en panne${r.pannes.length ? ' (' + r.pannes.join(', ') + ')' : ''}, villa=${r.villa ? 'panne' : 'ok'}, maison de poupée=${r.interieur ? 'panne' : 'ok'}, ${r.zones} quartiers` };
 });
@@ -10754,4 +10756,37 @@ test('la police abandonne les recherches quand le joueur est cache, et repart de
     && /cherche/i.test(r.hud || '') && r.cache10.wanted === 2 && r.revu.wanted === 2 && r.revu.hide < 0.5
     && /voient/i.test(r.revu.hud || '') && r.patrouille > 95 && r.roule > 0;
   return { ok, detail: `caché dans un bâtiment (${r.abri}) et hors de vue : la traque passe par ${r.etapes.map(e => e[1] + '★ à ' + e[0] + ' s').join(' → ')} et s'éteint en ${r.dansLeNoir} s simulées · le HUD dit « ${r.hud} » puis « ${r.hudFin} » · dix secondes cachées ne suffisent pas à deux étoiles (${r.cache10.wanted}★, ${r.cache10.hide} s de compteur) et dès qu'une patrouille le revoit le compteur repart de ${r.revu.hide} s (« ${r.revu.hud} ») · en patrouille, les ${r.voitures} voitures de police sont sur la chaussée ${r.patrouille} % du temps (${r.roule} images en mouvement)` };
+});
+
+// UNE SEULE MARQUE PAR CHOC. Trois postes ont pose leur propre systeme ce round : les marques
+// d'impact de la ville (un maillage partage, zero appel de dessin de plus), les marques de mur
+// du vehicule (un plan par marque, jusqu'a dix appels) et les degats de carrosserie. Les deux
+// premiers se declenchaient AU MEME POINT a chaque choc : deux decalques de fissure superposes.
+test('un choc contre un mur ne laisse QU\'UNE marque, et la carrosserie encaisse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 13 });
+    G.effaceMarques(); G.marques.length = 0;
+    const c = G.city.cars.find(v => !v.heli && !v.kind && !v.travail && !v.kart);
+    // un vrai mur de batiment, pas l'enceinte de la ville : on se place devant sa facade sud
+    const b = G.city.batiments.filter(x => x.w > 6 && x.d > 6).sort((a, x) =>
+      Math.hypot(a.x, a.z) - Math.hypot(x.x, x.z))[0];
+    c.dmg = 0; c.deg = 0; c.accidente = false; c.busy = false; c.hitT = 0;
+    c.x = b.x; c.z = b.z + b.d / 2 + 11; c.h = Math.PI;   // cap PI = vers -z, donc vers la facade
+    c.y = G.groundUnder(c.x, c.z, c.solid, 1); c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
+    G.P.pos.set(c.x, c.y + 0.5, c.z); G.enterCar(c); G.drive.speed = 0;
+    const appels0 = (G.renderer.render(G.scene, G.camera), G.renderer.info.render.calls);
+    G.keys.add('ArrowUp');
+    let touche = 0;
+    for (let i = 0; i < 300 && !touche; i++) { G.step(1 / 60, true); if (c.dmg > 0) touche = i; }
+    G.keys.delete('ArrowUp');
+    for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+    const appels1 = (G.renderer.render(G.scene, G.camera), G.renderer.info.render.calls);
+    const res = { ville: G.city.marques.length, mur: G.marques.length, dmg: +c.dmg.toFixed(1),
+      deg: c.deg || 0, touche, appels: appels1 - appels0, mure: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) } };
+    G.exitCar();
+    return res;
+  });
+  // une marque de la ville, aucune marque de mur en doublon, et le choc a bien abime la voiture
+  const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels <= 2;
+  return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · coût de rendu : ${r.appels} appel(s) de dessin de plus, la marque de la ville vivant dans un maillage partagé` };
 });

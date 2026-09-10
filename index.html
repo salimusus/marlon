@@ -16923,15 +16923,17 @@ function casseBonhomme(b, vx, vz) {
 }
 // LE CHOC COMPLET. Appelé par la conduite quand un véhicule bute sur quelque chose : c'est
 // le seul point d'entrée à connaître. Rend la gravité appliquée (0 = simple frottement).
-function chocVehicule(c, vitesse, nx, nz) {
+function chocVehicule(c, vitesse, nx, nz, dejaMarque) {
   if (!c) return 0;
   const g = graviteChoc(vitesse, c.dmg || 0);
   if (!g) { if (Math.abs(vitesse) > 1.5) burst(c.x + (nx || 0), 0.7, c.z + (nz || 0), 0xffd23f, 3); return 0; }
   const av = (c.half ? c.half[1] : 2.2);
   const fx = Math.sin(c.h || 0), fz = Math.cos(c.h || 0);
   degatsVehicule(c, g, fx * Math.abs(vitesse), fz * Math.abs(vitesse));
-  // la marque sur ce qu'on a tapé, à hauteur de pare-chocs
-  if (nx != null && nz != null && (nx || nz)) marqueMur(c.x + fx * av * 0.95, (c.y || 0) + 0.9, c.z + fz * av * 0.95, -nx, -nz, g);
+  // La marque sur ce qu'on a tapé, à hauteur de pare-chocs — SEULEMENT si la ville n'en a
+  // pas déjà posé une (`dejaMarque`) : sinon deux décalques de fissure différents se
+  // superposaient au même point de mur, et chacun de ceux-ci coûte un appel de dessin.
+  if (!dejaMarque && nx != null && nz != null && (nx || nz)) marqueMur(c.x + fx * av * 0.95, (c.y || 0) + 0.9, c.z + fz * av * 0.95, -nx, -nz, g);
   burst(c.x + fx * av * 0.9, (c.y || 0) + 0.9, c.z + fz * av * 0.9, 0xffd23f, 4 + g * 4);
   return g;
 }
@@ -17120,8 +17122,17 @@ function conduire(c, cmd, dt) {
     if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.abs(vAvant) * 0.6); choc(c, vAvant, null);
       // la normale du mur : l'axe bloque, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
-      chocVehicule(c, Math.abs(vAvant), nx, nz);        // degats visibles sur la carrosserie
-      chocDecor(c, bx ? nx : c.x, bz ? nz : c.z, Math.abs(vAvant));   // et la marque sur le mur, ou la casse de l'objet fragile
+      // UNE SEULE MARQUE SUR LE MUR. Deux postes en posaient une AU MEME ENDROIT a chaque
+      // choc : celle de la ville (marqueImpact, via chocDecor : un quadrilatere dans le
+      // maillage partage, donc zero appel de dessin de plus, quatre intensites, et les
+      // employes municipaux viennent la reparer) et celle du vehicule (marqueMur : un plan
+      // par marque, jusqu'a dix appels de dessin). On garde celle de la ville ; celle du
+      // vehicule ne sert plus que de repli, quand le choc n'a touche aucun decor connu.
+      // Au passage, chocDecor recevait `bx ? nx : c.x` — la NORMALE (±1) a la place de
+      // l'abscisse du choc : le premier point sonde tombait vers x = ±1, a l'autre bout de
+      // la ville. On lui passe le vehicule, il sonde deja son nez et son arriere.
+      const marqueVille = chocDecor(c, c.x, c.z, Math.abs(vAvant));
+      chocVehicule(c, Math.abs(vAvant), nx, nz, !!marqueVille);   // degats visibles sur la carrosserie
     }
   }
   vehicleSolid(c); if (pilote) resolveVehicleOverlap(c);

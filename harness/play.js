@@ -8311,6 +8311,12 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
     v.x = G.P.pos.x; v.z = G.P.pos.z; v.g.position.set(v.x, v.y, v.z);
     G.enterCar(v); res.auVolant = mesure(); G.exitCar();
     G.clearBeacon('mission');
+    // le client du taxi doit être joignable EN VOITURE : plusieurs emplacements sont au
+    // milieu du terrain de foot ou d'une pelouse, la mission y était infaisable
+    const ecart = (x, z) => { const p = G.navPath(G.P.pos.x, G.P.pos.z, x, z); if (!p || !p.length) return 99; const f = p[p.length - 1]; return +Math.hypot(f[0] - x, f[1] - z).toFixed(1); };
+    let pire = 0, tires = 0;
+    for (let i = 0; i < 30; i++) { G.startMission('taxi'); const d = G.mission.data; pire = Math.max(pire, ecart(d.bot.pos.x, d.bot.pos.z)); tires++; res.taxiChrono = G.mission.limit; G.endMission(false, true); }
+    res.taxi = { tirages: tires, pireEcart: pire };
     // On ne laisse pas les véhicules de mission (dépanneuse, patrouille, convoi, barrage)
     // traîner dans city.cars : les tests suivants cherchent « une voiture » et tomberaient
     // dessus.
@@ -8324,6 +8330,7 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
   });
   const avec = r.missions.filter(m => m.repere);
   const perdus = avec.filter(m => !m.atteint || m.ecart > 12);
-  const ok = avec.length >= 14 && perdus.length === 0 && r.auVolant.chevrons > 20 && r.auVolant.pct < r.aPied.pct;
-  return { ok, detail: `${avec.length} missions sur ${r.missions.length} posent un repère, et toutes mènent à un point que l'on rejoint par le réseau (écart maximum ${Math.max(...avec.map(m => m.ecart))} m ; en échec : ${perdus.map(m => m.id + ' ' + m.ecart + ' m').join(', ') || 'aucune'}) · au volant, le tracé de chevrons suit la chaussée : ${r.auVolant.hors}/${r.auVolant.chevrons} hors route (${r.auVolant.pct} %) contre ${r.aPied.hors}/${r.aPied.chevrons} (${r.aPied.pct} %) avec la grille des piétons` };
+  const ok = avec.length >= 14 && perdus.length === 0 && r.auVolant.chevrons > 20 && r.auVolant.pct < r.aPied.pct
+    && r.taxi.pireEcart <= 6 && r.taxiChrono > 60;
+  return { ok, detail: `${avec.length} missions sur ${r.missions.length} posent un repère, et toutes mènent à un point que l'on rejoint par le réseau (écart maximum ${Math.max(...avec.map(m => m.ecart))} m ; en échec : ${perdus.map(m => m.id + ' ' + m.ecart + ' m').join(', ') || 'aucune'}) · au volant, le tracé de chevrons suit la chaussée : ${r.auVolant.hors}/${r.auVolant.chevrons} hors route (${r.auVolant.pct} %) contre ${r.aPied.hors}/${r.aPied.chevrons} (${r.aPied.pct} %) avec la grille des piétons · le client du taxi est toujours joignable en voiture : sur ${r.taxi.tirages} tirages, la voiture s'approche au pire à ${r.taxi.pireEcart} m (4 des 26 emplacements étaient à plus de 6 m, mission impossible) et le chrono suit le trajet (${r.taxiChrono} s au lieu de 120 s fixes)` };
 });

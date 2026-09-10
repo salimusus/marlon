@@ -2241,12 +2241,14 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     const yaw0 = __G.cam.yaw; gp.axes = [0, 0, 1, 0]; __G.pollGamepad(1 / 60);
     const camera = +(yaw0 - __G.cam.yaw).toFixed(3);
     gp.axes = [0, 0, 0, 0]; __G.pollGamepad(1 / 60);
-    // A = saut, B = action, Y = dégainer, L3 = courir (la gâchette L2 recule maintenant)
+    // ◯ = saut, ✕ = braquer / rengainer, L3 = courir (la gâchette L2 recule maintenant)
     __G.P.jumpBuf = 0;
-    const saut = await presse(0);
+    const saut = await presse(1);
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.drawn = false;
-    await presse(3);
+    await presse(0);
     const degaine = !!__G.P.drawn;
+    await presse(0);
+    const rengaine = !__G.P.drawn;   // le MEME bouton range l'arme
     __G.P.energie = 100; __G.P.essouffle = false;
     gp.buttons[10].pressed = true; __G.pollGamepad(1 / 60);
     const court = __G.P.run;
@@ -2277,11 +2279,11 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     // bougeait plus (le salon TV est declare avant la boutique dans la page)
     document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
     delete navigator.getGamepads;
-    return { stick, camera, saut, degaine, court, recule, nav };
+    return { stick, camera, saut, degaine, rengaine, court, recule, nav };
   });
   const ok = r.stick.x > 0.5 && r.stick.y > 0.5 && r.camera > 0.02 && r.saut === 0.15 && r.degaine
-    && r.court && r.recule > 0.7 && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
-  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), L3 fait courir (${r.court}) et la gâchette L2 fait reculer (${r.recule}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
+    && r.rengaine && r.court && r.recule > 0.7 && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
+  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · ◯ saute (${r.saut}), ✕ braque (${r.degaine}) et rengaine (${r.rengaine}), L3 fait courir (${r.court}) et la gâchette L2 fait reculer (${r.recule}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
 });
 
 test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
@@ -6773,11 +6775,13 @@ test('le stick est precis et vif : zone morte de 8 %, courbe douce, camera a 5,5
       ds.axes = [0, 0, 1, 0]; const y0 = G.cam.yaw; for (let i = 0; i < 100; i++) G.pollGamepad(0.01); const vitesse = +Math.abs(G.cam.yaw - y0).toFixed(2);
       G.settings.sensib = 2; const y1 = G.cam.yaw; for (let i = 0; i < 100; i++) G.pollGamepad(0.01); const vitesse2 = +Math.abs(G.cam.yaw - y1).toFixed(2);
       G.settings.sensib = 1; ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
-      // le mode « rotation » du clavier braquait le personnage avec une bande morte de 32 % : au stick on reste relatif a la camera
-      G.settings.ctrl = 'rot'; G.cam.yaw = 0; G.P.facing = 0; G.P.pos.set(0, 0.5, 8); G.P.vel.set(0, 0, 0);
-      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.01); const f0 = G.P.facing, x0 = G.P.pos.x;
-      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.step(1 / 60, true); }
-      const rot = { braque: +Math.abs(G.P.facing - f0).toFixed(2), dx: +(G.P.pos.x - x0).toFixed(2) };
+      // le mode « rotation » ignorait tout virage sous 32 % de la course : c'est corrige, et
+      // le stick y FAIT TOURNER le personnage (le joueur ne voulait pas glisser de cote)
+      G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+      G.settings.ctrl = 'rot'; G.settings.turn = 160; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.01); const f0 = G.P.facing;
+      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      const rot = { braque: +Math.abs(G.P.facing - f0).toFixed(2), vx: +Math.abs(G.P.vel.x).toFixed(2) };
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01); G.settings.ctrl = 'cam';
       const reglage = !!document.getElementById('sensIn');
       return { courbe, vitesse, vitesse2, rot, reglage };
@@ -6785,8 +6789,8 @@ test('le stick est precis et vif : zone morte de 8 %, courbe douce, camera a 5,5
   });
   const c = r.courbe;
   const ok = c.d05 === 0 && c.d30 > 0.15 && c.d30 < 0.3 && c.d50 > 0.35 && c.d80 > 0.7 && c.d100 === 1
-    && r.vitesse >= 5 && r.vitesse2 >= 10 && r.rot.braque < 0.05 && r.rot.dx > 2 && r.reglage;
-  return { ok, detail: `l'ancienne courbe divisait la reponse par deux a mi-course et la zone morte mangeait 14 % : on se trainait, et le mode « rotation » braquait le personnage avec une bande morte de 32 % · maintenant : zone morte 8 % (5 % → ${c.d05}), courbe douce (30 % → ${c.d30}, 50 % → ${c.d50}, 80 % → ${c.d80}, bord → ${c.d100}), la camera tourne a ${r.vitesse} rad/s au bord (${r.vitesse2} avec la sensibilite a 200 % — reglage dans ⚙️), et au stick le deplacement est TOUJOURS relatif a la camera : pousse a droite, le personnage va a droite (${r.rot.dx} m) sans se braquer (${r.rot.braque} rad)` };
+    && r.vitesse >= 5 && r.vitesse2 >= 10 && r.rot.braque > 2.5 && r.rot.vx < 0.2 && r.reglage;
+  return { ok, detail: `l'ancienne courbe divisait la reponse par deux a mi-course et la zone morte mangeait 14 % : on se trainait, et le mode « rotation » braquait le personnage avec une bande morte de 32 % · maintenant : zone morte 8 % (5 % → ${c.d05}), courbe douce (30 % → ${c.d30}, 50 % → ${c.d50}, 80 % → ${c.d80}, bord → ${c.d100}), la camera tourne a ${r.vitesse} rad/s au bord (${r.vitesse2} avec la sensibilite a 200 % — reglage dans ⚙️), et en mode « rotation » le stick FAIT TOURNER le personnage : pousse a droite une seconde, il pivote de ${r.rot.braque} rad (160 °/s) sans glisser de cote (${r.rot.vx} m/s)` };
 });
 
 test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', async p => {
@@ -6916,7 +6920,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
         ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
         ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
         return touches.slice(); };
-      const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' };   // la croix a son propre test
+      const plan = { 0: 'KeyG', 1: 'Space', 2: 'KeyV', 3: 'KeyE', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' };   // la croix a son propre test
       const bons = Object.entries(plan).filter(([i, k]) => presse(+i).includes(k)).length;
       ferme();
       // 4) les GÂCHETTES sont analogiques : R2 avance (R1 tire deja), L2 recule
@@ -6952,7 +6956,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
     && r.bons === r.total && r.gachetteFaible > 0.4 && r.gachetteFaible < 0.55 && r.gachetteFort === 1
     && r.r2NeTirePas === 0 && r.recule > 0.7
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 AVANCE et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans plus tirer (R1 s'en charge : ${r.r2NeTirePas} tir), L2 RECULE (${r.recule}), « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ braquer / rengainer, ◯ sauter, ▢ frapper, △ agir, R1 tirer, Create parler, Options menu · R2 AVANCE et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans plus tirer (R1 s'en charge : ${r.r2NeTirePas} tir), L2 RECULE (${r.recule}), « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
 
 test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {
@@ -7251,6 +7255,7 @@ test('a la manette PS5, R2 avance et L2 recule — a pied comme au volant, et en
     // le joystick tactile et la manette-telephone s'ADDITIONNENT a la manette : un test
     // precedent qui laisse une fleche appuyee bloquerait l'entree a fond dans une direction
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.P.drawn = false; G.settings.ctrl = 'cam';   // arme rangée : R2 avance (braquée, elle tire — c'est son autre test)
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -7325,7 +7330,7 @@ test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', as
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
-    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false;   // rien d'autre ne doit pousser le joueur
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -7363,11 +7368,11 @@ test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', as
       res.cam = { droite: camD, gauche: camG };
       // ---- MODE « rotation » : au stick, x reste un déplacement relatif a la caméra (et non
       // un braquage a bande morte, l'ancien defaut) — le réglage clavier, lui, ne change pas
-      G.settings.ctrl = 'rot'; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      G.settings.ctrl = 'rot'; G.settings.turn = 160; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
       ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.02);
       const f0 = G.P.facing;
       for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
-      res.rot = { dx: +G.P.vel.x.toFixed(2), braque: +Math.abs(G.P.facing - f0).toFixed(2) };
+      res.rot = { dx: +G.P.vel.x.toFixed(2), braque: +(G.P.facing - f0).toFixed(2) };
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); G.settings.ctrl = 'cam';
       // ---- DANS LES MENUS, ← → gardent leur rôle de navigation
       G.openStore(); await dodo(80);
@@ -7384,8 +7389,8 @@ test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', as
     && l.droite > 5 && l.gauche < -5 && Math.abs(l.droite + l.gauche) < 0.2
     && l.demi > 2 && l.demi < l.droite - 2 && Math.abs(l.fremis) < 0.05
     && r.cam.droite < -1 && r.cam.gauche > 1
-    && r.rot.dx > 2 && r.rot.braque < 0.05 && r.menuBouge;
-  return { ok, detail: `« la manette gauche droite ne fonctionne pas » : la croix ← → ouvrait la BOUTIQUE et les MISSIONS — en pleine course le jeu se figeait sur un menu · elle change maintenant d'arme (${r.armes.join(' → ')}, aucun menu ouvert : ${r.menuOuvert}) et boutique/missions restent la, en MAINTENANT ← ou → (${r.longGauche} / ${r.longDroite}) · le stick gauche en x déplace bien de côté et symétriquement (droite ${l.droite} m/s, gauche ${l.gauche} m/s, a mi-course ${l.demi} m/s, un frémissement a 5 % ne bouge rien : ${l.fremis}) · le stick droit en x tourne la caméra dans les deux sens (${r.cam.droite} / ${r.cam.gauche} rad) · en mode « rotation » le stick reste relatif a la caméra (${r.rot.dx} m/s de côté sans braquer : ${r.rot.braque} rad), et dans les menus ← → naviguent toujours` };
+    && Math.abs(r.rot.dx) < 0.2 && r.rot.braque < -2.5 && r.menuBouge;
+  return { ok, detail: `« la manette gauche droite ne fonctionne pas » : la croix ← → ouvrait la BOUTIQUE et les MISSIONS — en pleine course le jeu se figeait sur un menu · elle change maintenant d'arme (${r.armes.join(' → ')}, aucun menu ouvert : ${r.menuOuvert}) et boutique/missions restent la, en MAINTENANT ← ou → (${r.longGauche} / ${r.longDroite}) · le stick gauche en x déplace bien de côté et symétriquement (droite ${l.droite} m/s, gauche ${l.gauche} m/s, a mi-course ${l.demi} m/s, un frémissement a 5 % ne bouge rien : ${l.fremis}) · le stick droit en x tourne la caméra dans les deux sens (${r.cam.droite} / ${r.cam.gauche} rad) · en mode « rotation » le même stick FAIT TOURNER le personnage (${r.rot.braque} rad en une seconde, sans glisser de côté : ${r.rot.dx} m/s), et dans les menus ← → naviguent toujours` };
 });
 
 test('une manette au mapping non standard (navigateur de tele) est remise d\'aplomb', async p => {
@@ -7401,7 +7406,7 @@ test('une manette au mapping non standard (navigateur de tele) est remise d\'apl
       id: 'Sony Interactive Entertainment Wireless Controller (Vendor: 054c Product: 0ce6)',
       axes: REPOS.slice(), buttons: Array.from({ length: 14 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [hid];
-    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false; G.settings.ctrl = 'cam';
     try {
       const res = {};
       res.profil = G.padProfil(hid);
@@ -8378,4 +8383,144 @@ test('l\'ambulancier porte une tenue blanche à croix rouge et un brancard', asy
     && r.glisse === 'glisse' && r.charge.etat === 'charge' && r.charge.ecart < 0.05
     && r.charge.dansLeVehicule && r.charge.blesseSuit < 0.05 && r.charge.roule < 0.05 && !r.sorti;
   return { ok, detail: `il n'y avait personne pour ramasser les blessés · l'AMBULANCIER a maintenant sa tenue (${r.tenue.pieces} pièces : blouse, pantalon et chaussures blanches ${r.tenue.hautBlanc}, liseré et épaulières bleus, casquette blanche, trousse de secours) marquée de ${r.croix.rouges} croix rouges dont ${r.croix.devant} devant et ${r.croix.derriere} dans le dos · et son BRANCARD (${b.pieces} pièces, ${b.long} m sur ${b.larg} m : deux barres, toile, matelas, oreiller, sangles et pieds repliables) qu'il PORTE à ${r.porte.ecart} m de son poing et qui le suit quand il marche (${r.porte.suitLePorteur} m) · on y allonge le blessé (${r.blesse.surLeMatelas} m du matelas, couché à ${r.blesse.couche} rad) et on GLISSE le tout dans le véhicule : ${r.glisse} → ${r.charge.etat}, arrimé à ${r.charge.ecart} m de l'ancrage, il roule avec lui (${r.charge.roule} m) et le blessé ne bouge pas (${r.charge.blesseSuit} m)` };
+});
+
+test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le vehicule', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false; G.P.gun = false;
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const ctrl0 = G.settings.ctrl, turn0 = G.settings.turn;
+    try {
+      const res = {};
+      // le joueur est remis sur sa case de depart a chaque image : la mesure ne depend pas
+      // de ce qu'il pourrait rencontrer en avancant
+      const pivote = v => { ds.axes = [v, 0, 0, 0]; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0); G.pollGamepad(0.02);
+        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+        const o = { angle: +G.P.facing.toFixed(2), vx: +Math.abs(G.P.vel.x).toFixed(2) };
+        ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); return o; };
+      // ---- MODE ROTATION : gauche/droite FONT TOURNER (et non glisser de cote)
+      G.settings.ctrl = 'rot'; G.settings.turn = 160;
+      res.droite = pivote(1); res.gauche = pivote(-1); res.demi = pivote(0.5); res.fremis = pivote(0.04);
+      // la vitesse de rotation suit le reglage de ⚙️
+      G.settings.turn = 240; res.rapide = pivote(1); G.settings.turn = 160;
+      // ---- MODE CAMERA : le deplacement lateral reste possible
+      G.settings.ctrl = 'cam';
+      res.camera = pivote(1);
+      // ---- AU VOLANT : le stick BRAQUE, dans les deux modes
+      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+      res.voiture = !!c;
+      if (c) {
+        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+        // avant CHAQUE essai la voiture revient sur la case degagee du depart : elle roule
+        // pendant la mesure, et une voiture arretee contre un mur ne braque plus
+        const braque = (mode, v) => { G.settings.ctrl = mode; ds.axes = [v, 0, 0, 0];
+          c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+          ds.buttons[7] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+          G.drive.speed = 0; const h0 = G.drive.car.h;
+          for (let i = 0; i < 40; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+          const o = +(G.drive.car.h - h0).toFixed(2);
+          ds.buttons[7] = { pressed: false, value: 0 }; ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); return o; };
+        res.volantRot = braque('rot', 1);
+        res.volantRotG = braque('rot', -1);
+        res.volantCam = braque('cam', 1);
+        G.exitCar();
+      }
+      return res;
+    } finally { navigator.getGamepads = vrai; G.settings.ctrl = ctrl0; G.settings.turn = turn0; ferme(); }
+  });
+  const d = r.droite, g = r.gauche;
+  const ok = d.angle < -2.5 && d.angle > -3.1 && d.vx < 0.2
+    && g.angle > 2.5 && g.angle < 3.1 && g.vx < 0.2
+    && Math.abs(r.demi.angle) > 0.7 && Math.abs(r.demi.angle) < Math.abs(d.angle) - 0.5
+    && Math.abs(r.fremis.angle) < 0.05
+    && Math.abs(r.rapide.angle) > Math.abs(d.angle) + 1
+    && Math.abs(r.camera.angle) < 0.05 && r.camera.vx > 5
+    && r.voiture && r.volantRot < -0.3 && r.volantRotG > 0.3 && r.volantCam < -0.3;
+  return { ok, detail: `« le joystick gauche ne dirige pas le joueur gauche/droite en rotation » : le stick etait EXCLU du mode rotation (il faisait glisser de côté) parce que l'ancienne formule ignorait tout virage sous 32 % de la course puis le dosait au carré · il y est de nouveau, avec une zone morte fine : poussé a droite une seconde le personnage pivote de ${d.angle} rad et a gauche de ${g.angle} rad (160 °/s), sans glisser (${d.vx} m/s), a mi-course il tourne moins (${r.demi.angle} rad), un frémissement a 4 % ne le fait pas bouger (${r.fremis.angle}) et le réglage ⚙️ « vitesse de rotation » agit (240 °/s → ${r.rapide.angle} rad) · en mode « caméra » le déplacement latéral reste entier (${r.camera.vx} m/s de côté, ${r.camera.angle} rad de braquage) · au volant le stick BRAQUE dans les deux modes (rotation : ${r.volantRot} / ${r.volantRotG} rad, caméra : ${r.volantCam} rad)` };
+});
+
+test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ agit', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.settings.ctrl = 'cam';
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.02); G.simTime += 0.1;
+      ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.02); };
+    const gach = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; G.pollGamepad(0.02); };
+    try {
+      const res = { plan: {} };
+      for (const i of [0, 1, 2, 3]) res.plan[i] = G.PAD_MAP[i];
+      // ---- ✕ BRAQUE, puis ✕ RENGAINE (le meme bouton, comme demande)
+      G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.P.drawn = false;
+      tap(0); res.braque = !!G.P.drawn;
+      tap(0); res.rengaine = !G.P.drawn;
+      // ---- R2 : avance quand l'arme est rangee
+      G.P.drawn = false; gach(7, 1);
+      res.gazRange = +G.pad.gaz.toFixed(2); res.braqueeRange = !!G.pad.armeBraquee;
+      gach(7, 0);
+      // ---- R2 accelere TOUJOURS au volant, meme arme sortie (essaye AVANT de tirer : cinq
+      // balles reveillent la police, dont les voitures viennent se coller a la notre)
+      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+      if (c) {
+        // la voiture est ramenee sur la case degagee ou apparait le joueur : un essai
+        // precedent a pu la laisser le nez contre un mur, et elle n'accelererait pas
+        c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c); G.P.drawn = true;
+        gach(7, 1); res.volant = { gaz: +G.pad.gaz.toFixed(2), braquee: !!G.pad.armeBraquee };
+        G.drive.speed = 0;
+        for (let i = 0; i < 20; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+        res.volant.vitesse = +G.drive.speed.toFixed(2);
+        gach(7, 0); G.P.drawn = false; G.exitCar();
+      }
+      // ---- R2 : TIRE quand l'arme est braquee, et n'avance plus
+      G.drawWeapon(true); G.P.fireCd = 0; G.simTime += 1;
+      const n0 = G.shots.length;
+      gach(7, 1);
+      res.tir = { gaz: +G.pad.gaz.toFixed(2), tirs: G.shots.length - n0, braquee: !!G.pad.armeBraquee };
+      // maintenue, la gachette tire en rafale (la cadence est bridee par le jeu)
+      for (let i = 0; i < 8; i++) { G.simTime += 0.25; G.pollGamepad(1 / 60); }
+      res.rafale = G.shots.length - n0;
+      gach(7, 0); G.drawWeapon(false); G.P.drawn = false; G.pollGamepad(0.02);
+      // ---- ◯ SAUTE
+      G.P.pos.set(0, 0.5, 8); G.P.jumpBuf = 0; tap(1); res.saut = G.P.jumpBuf;
+      // ---- △ AGIT : monter dans la voiture
+      if (c) { G.P.pos.set(c.x + 1, 0.6, c.z); G.step(1 / 60, true);
+        res.pres = !!G.city.near; tap(3); res.agit = !!G.drive.car;
+        if (G.drive.car) G.exitCar(); }
+      // ---- ▢ frappe toujours (le poste Personnages en a besoin) : le coup part au relâchement
+      G.P.pos.set(0, 0.5, 8); G.P.punchT = 0; G.P.combo = 0; tap(2); await dodo(30);
+      res.frappe = G.P.punchT > 0;
+      // ---- la legende et l'ecran de test disent le nouveau mappage
+      res.legende = (document.getElementById('padLeg') || {}).textContent || '';
+      G.ouvreTestManette(); ds.buttons[0] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+      res.roles = (document.getElementById('ptBoutons') || {}).textContent || '';
+      res.diag = (document.getElementById('ptDiag') || {}).textContent || '';
+      ds.buttons[0] = { pressed: false, value: 0 }; G.pollGamepad(0.02);
+      ferme();
+      return res;
+    } finally { navigator.getGamepads = vrai; G.P.drawn = false; ferme(); }
+  });
+  const ok = r.plan[0] === 'KeyG' && r.plan[1] === 'Space' && r.plan[2] === 'KeyV' && r.plan[3] === 'KeyE'
+    && r.braque && r.rengaine
+    && r.gazRange === 1 && r.braqueeRange === false
+    && r.tir.gaz === 0 && r.tir.tirs === 1 && r.tir.braquee && r.rafale > 3
+    && r.volant && r.volant.gaz === 1 && r.volant.braquee === false && r.volant.vitesse > 1
+    && r.saut === 0.15 && r.pres && r.agit && r.frappe
+    && /✕/.test(r.legende) && /braquer/.test(r.legende) && /◯/.test(r.legende) && /sauter/.test(r.legende)
+    && /△/.test(r.legende) && /agir/.test(r.legende)
+    && /braquer \/ rengainer/.test(r.roles) && /sauter/.test(r.roles) && /agir/.test(r.roles)
+    && /braquer/.test(r.diag);
+  return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée elle fait avancer (gaz ${r.gazRange}), arme braquée elle TIRE et n'avance plus (gaz ${r.tir.gaz}, ${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
 });

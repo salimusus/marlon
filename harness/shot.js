@@ -808,7 +808,7 @@ window.__G = {
   tactile(on) { document.body.classList.toggle('touch', !!on); },
   hud() { return { jump: document.getElementById('jumpBtn').textContent, car: document.getElementById('carBtn').textContent,
     punch: document.getElementById('punchBtn').textContent, emote: document.getElementById('emoteBtn').textContent }; },
-  // Ce qu'on tient est passe du groupe du bras au noeud `main`, au centre du poing rond :
+  // Ce qu'on tient est passe du groupe du bras au noeud main, au centre du poing rond
   // on compte donc les deux, sinon le test « rien ne reste colle a la main » ne voyait plus rien.
   arm() { return me.rig.armR.children.length + (me.rig.armR.main ? me.rig.armR.main.children.length : 0); },
 };

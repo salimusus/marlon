@@ -17384,12 +17384,17 @@ function tenueMetier(av, metier) {
     av.mats.shirt.color.setHex(MET_C.gris); av.mats.sleeve.color.setHex(MET_C.gris);
     av.mats.pants.color.setHex(MET_C.gris2); av.mats.shoe.color.setHex(0x2b2f3a);
     // le harnais : deux sangles croisées et une ceinture à mousquetons
+    casquette(MET_C.gris2);   // casquette grise, assortie à la combinaison
     P2(g, TW, 1.9 * S, TD, MET_C.gris, 0, 3.05 * S, 0);                                  // la combinaison grise
     P2(g, 0.3 * S, 2.1 * S, 0.12, 0x2b2f3a, 0, 3.05 * S, TD / 2 + 0.02, { rz: 0.5 });     // sangles croisées du harnais
     P2(g, 0.3 * S, 2.1 * S, 0.12, 0x2b2f3a, 0, 3.05 * S, TD / 2 + 0.02, { rz: -0.5 });
     P2(g, TW + 0.05, 0.3 * S, TD + 0.05, 0x2b2f3a, 0, 2.25 * S, 0);                       // la ceinture
     P2(g, 0.3 * S, 0.3 * S, 0.3 * S, MET_C.acier, TW * 0.3, 2.25 * S, TD / 2 + 0.06);      // le mousqueton
     P2(g, TW + 0.05, 0.5 * S, TD * 0.9, MET_C.jaune, 0, 3.85 * S, 0);   // épaulières jaunes : on les voit de loin
+    // LE SEAU : accroché au poing gauche, il suit le bras et le coude
+    P2(rig.armL.coude, 0.38 * S, 0.28 * S, 0.06, 0x2b2f3a, 0, -1.02 * S, 0);
+    P2(rig.armL.coude, 0.9 * S, 0.7 * S, 0.9 * S, MET_C.acier, 0, -1.42 * S, 0);
+    P2(rig.armL.coude, 0.8 * S, 0.08 * S, 0.8 * S, 0x4fb3e8, 0, -1.12 * S, 0);   // l'eau savonneuse
   } else if (metier === 'pompier') {
     // veste rouge à bandes jaunes, casque gris à couvre-nuque, bottes
     av.mats.shirt.color.setHex(MET_C.rouge); av.mats.sleeve.color.setHex(MET_C.rouge);
@@ -18242,6 +18247,7 @@ function laveurTick(m, dt) {
       const v = (city.vitrines && city.vitrines.length) ? pickOne(city.vitrines) : null;
       if (!v) return;
       m.cible = v; m.etat = 'route';
+      donneOutil(w.av, 'perche');   // la perche de lavage pour se déplacer, la raclette une fois là-haut
       metierDit(w, pickOne(['je vais faire briller cette vitrine 🪟', 'au boulot, les carreaux !']));
       return;
     }
@@ -18257,7 +18263,7 @@ function laveurTick(m, dt) {
       const e = w.echelle;
       if (e) { w.pos.set(e.x - Math.sin(e.ang) * 0.35 * w.h2, w.h2 * 3.3, e.z - Math.cos(e.ang) * 0.35 * w.h2); w.facing = e.ang + Math.PI; }
       animateRig(w.av.rig, 'walk', 1.6, dt, simTime); metierSync(w);
-      if (monte && w.h2 >= 1) { m.etat = 'lave'; w.t = simTime + 8; }
+      if (monte && w.h2 >= 1) { m.etat = 'lave'; w.t = simTime + 8; donneOutil(w.av, 'raclette'); }
       if (!monte && w.h2 <= 0) {
         if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
         m.etat = 'repos'; m.cible = null; w.pause = simTime + 6;
@@ -18469,12 +18475,26 @@ function metiersTick(dt) {
 function metierScene(nom) {
   if (!city.on || !city.metiers || !city.metiers.length) return;
   city.horaires = false;
+  // Une capture n'attend pas la suivante : sans ce ménage, le chantier de la photo
+  // précédente restait planté au milieu de la rue et la caméra de la photo suivante
+  // venait s'écraser dedans.
+  for (let i = city.chantiers.length - 1; i >= 0; i--) retireChantier(city.chantiers[i]);
+  for (let i = city.incendies.length - 1; i >= 0; i--) { worldGroup.remove(city.incendies[i].g); city.incendies.splice(i, 1); }
+  for (const n of city.nidsPoule.slice()) boucheNidDePoule(n);
+  for (const d of city.detritus.slice()) worldGroup.remove(d.g);
+  city.detritus.length = 0;
+  for (const m of city.metiers) {
+    if (m.bot.echelle) { worldGroup.remove(m.bot.echelle.g); m.bot.echelle = null; }
+    m.etat = 'repos'; m.cible = null; m.chantier = null;
+  }
   const px = P.pos.x, pz = P.pos.z, a = P.facing;
   const devant = d => [px + Math.sin(a) * d, pz + Math.cos(a) * d];
   const pose = (w, x, z, f) => { w.pos.set(x, groundUnder(x, z, null, 2.5), z); w.facing = f; metierSync(w); };
   const gare = (c, x, z, h) => { if (!c) return; c.x = x; c.z = z; c.h = h; c.g.position.set(x, c.y || 0, z); c.g.rotation.y = h; settleVehicle(c); vehicleSolid(c); };
+  // le joueur se décale d'un pas sur le côté : planté dans l'axe, il bouchait la photo
+  const ecarte = () => { P.pos.x += Math.sin(a - Math.PI / 2) * 2.4; P.pos.z += Math.cos(a - Math.PI / 2) * 2.4; cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z); };
   if (nom === 'chantier') {
-    const [cx, cz] = devant(8);
+    const [cx, cz] = devant(6);
     const eq = METIERS.employes;
     const nid = poseNidDePoule(cx, cz);
     eq[0].chantier = poseChantier(cx, cz, a + Math.PI / 2);
@@ -18485,9 +18505,10 @@ function metierScene(nom) {
       donneOutil(eq[i].bot.av, i === 0 ? 'cle' : i === 1 ? 'pelle' : 'marteau');
     }
     eq[0].bot.t = simTime + 9999;
-    const f = eq[0].bot.veh; if (f) { gare(f, cx + Math.sin(a + 2.2) * 8, cz + Math.cos(a + 2.2) * 8, a + Math.PI); f.gyro = true; f.busy = true; f.metierBusy = true; }
+    const f = eq[0].bot.veh; if (f) { gare(f, cx + Math.sin(a + 2.1) * 8, cz + Math.cos(a + 2.1) * 8, a + Math.PI); f.gyro = true; f.busy = true; f.metierBusy = true; }
+    ecarte();
   } else if (nom === 'incendie') {
-    const [cx, cz] = devant(12);
+    const [cx, cz] = devant(11);
     const f = declencheIncendie(cx, cz, 900); if (f) f.pris = true;
     const eq = METIERS.pompiers;
     for (let i = 0; i < eq.length; i++) {
@@ -18495,25 +18516,29 @@ function metierScene(nom) {
       pose(eq[i].bot, cx + Math.sin(ang) * 6.5, cz + Math.cos(ang) * 6.5, ang + Math.PI);
       eq[i].etat = 'arrose'; eq[i].cible = f; donneOutil(eq[i].bot.av, 'lance');
     }
-    const c = eq[0].bot.veh; if (c) { gare(c, cx + Math.sin(a + Math.PI) * 12, cz + Math.cos(a + Math.PI) * 12, a); c.gyro = true; c.busy = true; c.metierBusy = true; c.outil = 1; c.outilCible = 1; }
+    // le camion se gare EN BIAIS, sur le côté : garé dans l'axe, il bouchait tout le cadre
+    const c = eq[0].bot.veh; if (c) { gare(c, cx + Math.sin(a - 2.1) * 10, cz + Math.cos(a - 2.1) * 10, a + 1.3); c.gyro = true; c.busy = true; c.metierBusy = true; c.outil = 1; c.outilCible = 1; }
+    ecarte();
   } else if (nom === 'facteur') {
     const m = METIERS.facteurs[0]; if (!m) return;
-    const [cx, cz] = devant(6);
+    const [cx, cz] = devant(5);
     const b = boiteAuxLettres(cx, cz, a + Math.PI);
     m.cible = b; m.etat = 'depose'; m.bot.t = simTime + 9999;
     donneOutil(m.bot.av, 'lettre');
     gare(m.bot.veh, cx + Math.sin(a - 1.4) * 1.6, cz + Math.cos(a - 1.4) * 1.6, a + Math.PI / 2);
     if (m.bot.veh) { m.bot.veh.busy = true; m.bot.veh.metierBusy = true; }
     pose(m.bot, cx + Math.sin(a - 2.4) * 1.3, cz + Math.cos(a - 2.4) * 1.3, a + Math.PI);
+    ecarte();
   } else if (nom === 'balayeur') {
-    const [cx, cz] = devant(5);
+    const [cx, cz] = devant(4.5);
     for (let i = 0; i < 5; i++) poseDetritus(cx + rnd(-2.5, 2.5), cz + rnd(-2.5, 2.5));
     const m = METIERS.balayeurs[0]; if (!m) return;
     m.etat = 'balaye'; m.cible = null;
-    pose(m.bot, cx, cz - 1.6, a + Math.PI);
+    pose(m.bot, cx - Math.sin(a) * 1.6, cz - Math.cos(a) * 1.6, a);
+    ecarte();
   } else if (nom === 'laveur') {
     const m = METIERS.laveurs[0]; if (!m) return;
-    const [cx, cz] = devant(7);
+    const [cx, cz] = devant(6);
     m.etat = 'lave'; m.bot.t = simTime + 9999; m.bot.h2 = 1;
     m.bot.echelle = poseEchelle(cx, cz, px, pz);
     const e = m.bot.echelle;

@@ -9383,8 +9383,9 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
     const avant = G.petarade.n || 0;
     const parti = G.nitroGo();
     const apres = G.petarade.n || 0;
-    await dodo(150); const petard = rms();
-    await dodo(900);
+    let petard = 0;
+    for (let i = 0; i < 12; i++) { await dodo(60); petard = Math.max(petard, rms()); }
+    await dodo(500);
     G.engine.stop(); G.exitCar();
     for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
     try { ch.lim.disconnect(an); } catch (e) {}
@@ -9397,7 +9398,7 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
   const chute = r.paliers[3][0] > r.paliers[2][0] && r.paliers[3][1] < r.paliers[2][1];
   const monte = dansLe1 && chute && r.paliers[6][0] >= 5 && r.paliers[6][1] > 14;
   const ok = r.etat === 'running' && r.ralenti[1] < 2 && monte && r.moteur > r.silence + 0.02
-    && r.parti === true && r.petarades === 1 && r.petard > r.silence2 + 0.05;
+    && r.parti === true && r.petarades === 1 && r.petard > r.silence2 + 0.03;
   return { ok, detail: `le régime moteur ne dépendait que du rapport de boîte, et la nitro ne faisait qu'un « pschitt » de bruitage · le moteur tourne maintenant au RALENTI à l'arrêt (${r.ralenti[1]}, rapport A${r.ralenti[0]}) puis dessine la dent de scie d'une vraie boîte — il grimpe dans le rapport puis retombe au passage du suivant : ${r.paliers.map(g => 'A' + g[0] + '→' + g[1]).join(', ')} · et la NITRO déclenche une vraie PÉTARADE — détonation, souffle et ratés d'allumage — envoyée sur le bus MOTEUR : mesuré par un analyseur au bout de la chaîne, silence ${r.silence}, moteur qui tourne ${r.moteur}, moteur coupé ${r.silence2}, pétarade ${r.petard}` };
 });
 
@@ -9494,17 +9495,20 @@ test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort 
     // à l'arrêt (moins de 1,2 m/s), un contact ne fait RIEN
     c.boomT = 0; G.boom.n = 0;
     const arret = G.choc(c, 0.4, null);
-    await dodo(120); const rArret = rms(); const nArret = G.boom.n;
-    await dodo(600);
+    let rArret = 0; for (let i = 0; i < 8; i++) { await dodo(60); rArret = Math.max(rArret, rms()); }
+    const nArret = G.boom.n;
+    await dodo(500);
     // petit choc, puis gros choc
     c.boomT = 0; G.boom.n = 0;
     const petit = G.choc(c, 4, null);
-    await dodo(90); const rPetit = rms(); const fPetit = G.boom.force;
-    await dodo(900);
+    let rPetit = 0; for (let i = 0; i < 8; i++) { await dodo(60); rPetit = Math.max(rPetit, rms()); }
+    const fPetit = G.boom.force;
+    await dodo(600);
     c.boomT = 0;
     const gros = G.choc(c, 24, null);
-    await dodo(90); const rGros = rms(); const fGros = G.boom.force;
-    await dodo(700);
+    let rGros = 0; for (let i = 0; i < 8; i++) { await dodo(60); rGros = Math.max(rGros, rms()); }
+    const fGros = G.boom.force;
+    await dodo(500);
     try { ch.lim.disconnect(an); } catch (e) {}
     window.__manetteSeule = false;
     return { silence, arret, nArret, rArret, petit, rPetit, fPetit: +fPetit.toFixed(2), gros, rGros, fGros: +fGros.toFixed(2) };

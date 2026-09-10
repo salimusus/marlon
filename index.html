@@ -424,7 +424,15 @@ body.tv #tvBadge.on{display:block}
 body.tv #padTest .card{max-width:min(1100px,92vw)}
 #padCase{max-width:560px}#padEtat{font-weight:800;color:#1b2a4a;min-height:22px}#padAide{font-size:clamp(12px,1vw,16px);color:#556;margin-top:8px;text-align:left}
 #padCase.attente #padConnect{background:#ffd23f;color:#1b2a4a}#padCase.ok #padConnect{background:#3ddc5a;color:#0d2a12}
-#volRow{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;font-weight:800}#volRow input{width:min(220px,48vw)}#volRow b{min-width:44px;text-align:right}
+#volRow,.volRow{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;font-weight:800}#volRow input,.volRow input{width:min(220px,48vw)}#volRow b,.volRow b{min-width:44px;text-align:right}
+/* un curseur PAR FAMILLE de sons : le bouton essaie la famille en direct, pour regler d'oreille */
+.volRow{gap:6px;margin:5px 0;font-size:13px;flex-wrap:nowrap}.volRow span{flex:0 0 auto;min-width:82px;text-align:left;white-space:nowrap}.volRow input{flex:1 1 auto;width:auto;min-width:70px;max-width:130px}.volRow b{min-width:36px;font-size:12px}
+.volRow button{flex:0 0 auto;border:0;border-radius:9px;padding:3px 8px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;background:#2b3550;color:#fff}
+/* replie par defaut : cinq curseurs de plus rendaient le menu trop long pour un ecran de tele */
+#mixBloc{margin:8px 0 2px;text-align:left}
+#mixTitre{cursor:pointer;font-weight:900;opacity:.85;font-size:14px;text-align:center;list-style:none;padding:6px;border-radius:12px;background:#eef3ff}
+#mixTitre::-webkit-details-marker{display:none}
+#mixBloc[open] #mixTitre{margin-bottom:4px}
 
 /* ================= Manette : le téléphone devient la télécommande ================= */
 #manette{position:fixed;inset:0;z-index:60;background:linear-gradient(160deg,#12203c,#1b2a4a 45%,#0d1730);
@@ -912,6 +920,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
     <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
     <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
+    <details id="mixBloc"><summary id="mixTitre">🎧 Volume par famille ▾</summary><div id="mixRows"></div></details>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
     <button class="btn sec" id="padTestBtn">🎮 Tester la manette</button>
     <button class="btn sec" id="aideBtn">⌨️ Rappeler les touches</button>
@@ -3266,7 +3275,8 @@ function petsTick(dt) {
     } else { p.tail.rotation.y = Math.sin(simTime * 3) * 0.3; p.g.position.y = 0.3; }
     p.g.position.x = p.x; p.g.position.z = p.z; let dh = p.facing - p.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); p.g.rotation.y += dh * Math.min(1, dt * 8);
     p.head.rotation.y = Math.sin(simTime * 1.3 + p.x) * 0.3;
-    if (dpl < 7 && simTime > p.soundT) { p.soundT = simTime + rnd(4, 9); if (p.kind === 'dog') { sfx.tone(180, 0, .09, 'square', .05, 120); sfx.tone(180, .11, .09, 'square', .05, 120); } else sfx.tone(700, 0, .35, 'sine', .04, 500); }
+    // l'animal aboie/miaule DE LA OU IL EST (avant : au milieu de la tête du joueur)
+    if (dpl < 14 && simTime > p.soundT) { p.soundT = simTime + rnd(4, 9); if (p.kind === 'dog') sonAboiement(p.x, p.y + 0.6, p.z, 1); else sonEn(p.x, p.y + 0.5, p.z, d => sfx.toneVers(d, 700, 0, .35, 'sine', .06, 500), { duree: .4, portee: 26, bus: 'voix' }); }
   }
   const near = city.pets.find(p => !p.adopte && Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < 1.8);
   if (near !== city.petNear) { city.petNear = near; if (near && !isMobile) msg(near.kind === 'dog' ? (chien.pet ? '🐶 E : caresser le chien' : '🐶 E : caresser · écris « adopte » pour l\'adopter') : '🐱 E : caresser le chat', 1600); }
@@ -3274,7 +3284,7 @@ function petsTick(dt) {
 function petAnimal(p) {
   if (simTime < p.petT) return; p.petT = simTime + 1.5; p.follow = simTime + 20;
   burst(p.x, p.y + 0.8, p.z, 0xff7ad9, 8); bubble(me, p.kind === 'dog' ? 'bon chien ! 🐶' : 'gentil chat 🐱'); sfx.coin();
-  if (p.kind === 'dog') { sfx.tone(200, 0, .08, 'square', .06, 140); sfx.tone(220, .1, .08, 'square', .06, 150); } else sfx.tone(600, 0, .4, 'sine', .05, 450);
+  if (p.kind === 'dog') sonAboiement(p.x, p.y + 0.6, p.z, 1.1); else sonEn(p.x, p.y + 0.5, p.z, d => sfx.toneVers(d, 600, 0, .4, 'sine', .07, 450), { duree: .45, portee: 26, bus: 'voix' });
 }
 function swingTick(dt) {
   for (const sw of city.swings) {
@@ -8539,13 +8549,27 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   const finisher = P.combo === 3, dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
   P.punchT = simTime + (kind === 'kick' ? 1.0 : finisher ? 0.8 : 0.42);
   me.rig.swing = kind === 'kick' ? 0.45 : 0.28; if (kind === 'kick') me.rig.kick = 0.45;
-  sfx.noise(.1, 700, .07);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
+  // LE SON DU COMBAT. Avant : un souffle et un « pok » mono, les mêmes pour un direct, un
+  // combo et un coup de pied, et le personnage frappé ne disait rien. Maintenant l'effort
+  // s'entend, le coup qui porte est un impact sourd + un claquement dosés par la force, le
+  // coup manqué n'est plus qu'un souffle, et celui qui encaisse crie « aïe » de SA voix.
+  sonEffort(P.pos.x, P.pos.y + 1.4, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
-  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sfx.tone(140, 0, .06, 'triangle', .04, 90); return; }   // dans le vide
-  sfx.tone(90, 0, .1, 'square', .1, 50); sfx.noise(.08, 300, .1);
+  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return; }   // dans le vide
   // le point de contact, à hauteur de torse, un peu devant le poing
   const ix = P.pos.x + fx * 0.75, iz = P.pos.z + fz * 0.75, iy = P.pos.y + (kind === 'kick' ? 0.85 : 1.25);
+  // LE COMBAT RAPPROCHÉ S'ENTEND EN DÉTAIL. Un direct au visage, un crochet au VENTRE (le
+  // deuxième du combo : sourd, et l'air part des poumons), une PARADE qui claque sur
+  // l'avant-bras, une LAME qui siffle : ce ne sont plus le même bruit.
+  // `parade` et `couteau` sont posés par le poste qui gère l'animation du corps à corps ;
+  // tant qu'ils n'existent pas, on retombe sur l'impact normal.
+  const paree = simTime < ((target.bot && target.bot.parade) || (target.gm && target.gm.parade) || 0);
+  const lame = P.melee === 'couteau' || P.weapon === 'couteau';
+  if (paree) sonParade(ix, iy, iz);
+  else if (lame) sonCouteau(ix, iy, iz, true);
+  else if (kind !== 'kick' && P.combo === 2) sonVentre(ix, iy - 0.4, iz, hauteurVoix((target.bot && target.bot.name) || 'adversaire', !!(target.bot && target.bot.girl)));
+  else sonCoup(ix, iy, iz, kind === 'kick' ? 1.5 : finisher ? 1.35 : 1, kind === 'kick' ? 'pied' : 'poing');
   impact(ix, iy, iz, { x: fx, y: 0, z: fz }, kind === 'kick' ? 'pied' : 'poing', finisher ? 1.45 : 1);
   camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
@@ -8553,6 +8577,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
+    sonAie(b.pos.x, b.pos.y + 1.5, b.pos.z, hauteurVoix(b.name, !!b.girl));   // il crie de SA voix (tirée de son nom)
     if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60); }
     else { bubble(b.av, pickOne([`aïe ! ❤️ ${b.hp}`, 'ça fait mal !', 'arrête !', `❤️ ${b.hp}`])); }
     if (b.hp <= 0 && !b.robbed) { b.robbed = true; const stolen = 6 + Math.floor(Math.random() * 5); wallet += stolen; saveWallet(); updateHud(); msg(`💰 +${stolen} 🪙 volées à ${b.name}`, 1400); sfx.register(); }
@@ -8561,6 +8586,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
     const m = target.gm; m.hp -= dmg;
     m.x += fx * kb * 0.5; m.z += fz * kb * 0.5; m.av.group.position.set(m.x, m.y, m.z);
     const G = gangDe(m.gang);
+    sonAie(m.x, (m.y || 0) + 1.5, m.z, hauteurVoix(m.nom || m.gang || 'gang'));
     if (m.hp <= 0) gangeurKO(m, 'le joueur');
     else { bubble(m.av, pickOne([`aïe ! ❤️ ${Math.max(0, m.hp)}`, 'tu vas voir !', 'le chef va t\'entendre'])); if (G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; } }
   } else if (target.rem) {
@@ -8600,7 +8626,11 @@ function chuteImpact(vy) {
 function hurt(dmg, by, dx, dz, kb = 2) {   // je prends un coup
   if (P.hp <= 0) return;
   P.hp = Math.max(0, P.hp - dmg); P.hurtT = simTime; $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
-  P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5; sfx.hit();
+  P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5;
+  // On encaissait en silence : un simple « pok » sans corps. Impact dosé par les dégâts, et
+  // le joueur crie « aïe » de sa propre voix (hauteur tirée de son pseudo).
+  sonCoup(P.pos.x + dx * 0.4, P.pos.y + 1.2, P.pos.z + dz * 0.4, clamp(0.7 + dmg / 20, 0.6, 2));
+  if (P.hp > 0) sonAie(P.pos.x, P.pos.y + 1.5, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   impact(P.pos.x + dx * 0.4, P.pos.y + 1.2, P.pos.z + dz * 0.4, { x: dx, y: 0, z: dz }, 'sang', Math.min(1.5, 0.7 + dmg / 22));
   camSecousse(0.1 + Math.min(0.24, dmg / 90), 0.28);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
@@ -9432,6 +9462,10 @@ function bubble(av, text) {   // bulle de chat au-dessus de la tête
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
   sp.renderOrder = 10; sp.scale.set(3.2, 1, 1); sp.position.y = 3.35;
   av.group.add(sp); av.bubble = sp; av.bubbleT = simTime + 4.5;
+  // ON L'ENTEND PARLER. Une bulle etait muette : douze habitants discutaient en silence.
+  // Chaque bulle declenche maintenant la petite voix « bruitee » du personnage (spatialisee,
+  // limitee aux plus proches par le budget des sons).
+  try { sonBulle(av, text); } catch (e) {}
 }
 // Une bulle est un sprite mesuré EN MÈTRES : à trois mètres du personnage, ses 3,2 m de large
 // recouvraient tout l'écran et on ne voyait plus ni le décor, ni les chevrons du GPS, ni où
@@ -9867,7 +9901,11 @@ function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
 // musique, quatre fois plus forte que les effets, couvrait tout.
 // Maintenant tout passe par quatre bus (effets, moteur, musique, ambiance), un volume
 // general et un LIMITEUR qui rabote les cretes au lieu de les laisser saturer.
-const MIX = { effets: 1, moteur: 0.85, musique: 0.55, ambiance: 1 };
+// Cinquieme famille : « voix » (les cris, le blabla des bots et les accueils parles). Elle a
+// son propre bus pour qu'on puisse baisser les voix sans etouffer le reste.
+const MIX = { effets: 1, moteur: 0.85, musique: 0.55, ambiance: 1, voix: 1 };
+const MIX_DEF = { effets: 1, moteur: 0.85, musique: 0.55, ambiance: 1, voix: 1 };   // valeurs d'usine, pour le bouton « remettre »
+for (const n of Object.keys(MIX)) { const v = parseFloat(store.get('superobby.mix.' + n)); if (v >= 0 && v <= 2) MIX[n] = v; }
 const sfx = (() => {
   let ctx = null, chaine = null;
   const monte = c => {
@@ -9930,6 +9968,37 @@ const sfx = (() => {
     register: () => { tone(1568, 0, .08, 'square', .05); tone(2093, .09, .14, 'square', .05); },
     bird: () => { const b = 2400 + Math.random() * 900; tone(b, 0, .07, 'sine', .025, b * 1.4); tone(b * 1.2, .09, .06, 'sine', .02, b * 1.6); },
     noise,
+    // LES SONS DU MONDE (poste F). Tous les generateurs ci-dessus ecrivent EN DUR dans le bus
+    // « effets » : impossible de placer un son dans l'espace, puisqu'on ne peut pas glisser un
+    // panoramique entre le son et le bus. Ces deux-la prennent un noeud de destination — celui
+    // que fabrique sonEn() — et sont identiques pour tout le reste.
+    toneVers(dest, f, t = 0, dur = .12, type = 'triangle', vol = .1, slide) {
+      if (!settings.sound || !dest) return;
+      const c = ensure(); if (!c) return;
+      const o = c.createOscillator(), g = c.createGain(), at = c.currentTime + t;
+      o.type = type; o.frequency.setValueAtTime(Math.max(20, f), at);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), at + dur);
+      g.gain.setValueAtTime(.0001, at);
+      g.gain.exponentialRampToValueAtTime(Math.max(.0002, vol), at + Math.min(.02, dur / 3));
+      g.gain.exponentialRampToValueAtTime(.0001, at + dur);
+      o.connect(g).connect(dest); o.start(at); o.stop(at + dur + .05);
+    },
+    bruitVers(dest, dur, freq, vol, q = 0.7, t = 0, type = 'bandpass') {
+      if (!settings.sound || !dest) return;
+      const c = ensure(); if (!c) return;
+      if (!noise.buf) { const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; noise.buf = b; }
+      const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), at = c.currentTime + t;
+      src.buffer = noise.buf; src.loop = true; src.playbackRate.value = 0.85 + Math.random() * 0.3;
+      f.type = type; f.frequency.value = Math.max(30, freq); f.Q.value = q;
+      g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(Math.max(.0002, vol), at + Math.min(0.04, dur / 3)); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
+      src.connect(f).connect(g).connect(dest); src.start(at); src.stop(at + dur + 0.05);
+    },
+    // volume d'UNE famille (curseurs des reglages) : 0 = famille coupee, 1 = niveau d'usine
+    bus(n, v) {
+      if (!(n in MIX)) return 0;
+      if (v != null) { MIX[n] = clamp(v, 0, 2); store.set('superobby.mix.' + n, String(MIX[n])); if (chaine && chaine.bus[n]) chaine.bus[n].gain.setTargetAtTime(MIX[n], ctx.currentTime, 0.04); }
+      return MIX[n];
+    },
   };
   function noise(dur, freq, vol) {   // souffle filtré (foule, frappe, balançoire)
     if (!settings.sound) return; const c = ensure(); if (!c) return;
@@ -9945,6 +10014,578 @@ function horn(kind) {
   else if (kind === 'moto') { sfx.tone(660, 0, .22, 'triangle', .06); }
   else if (kind === 'truck') { sfx.tone(110, 0, .6, 'triangle', .08); sfx.tone(138, 0, .6, 'triangle', .06); }
   else { sfx.tone(440, 0, .35, 'triangle', .06); sfx.tone(554, 0, .35, 'triangle', .05); }
+}
+// ================= LES SONS DU MONDE (spatialisation, pas, coups, voix) =================
+// AVANT : tous les sons partaient dans le bus « effets », en mono et au MEME volume, qu'ils
+// viennent des pieds du joueur ou d'un helicoptere a cinquante metres. On n'entendait pas
+// d'ou venait quoi, et une bagarre de six personnes empilait trente sons d'un coup — la
+// bouillie, et le limiteur qui ecrase tout le reste.
+// MAINTENANT : sonEn() PLACE chaque son dans l'espace (panoramique gauche/droite calcule
+// depuis cam.yaw, attenuation avec la distance) et tient un BUDGET : au plus 16 sons places
+// en meme temps, les plus PROCHES gagnant la place. Pas de PannerNode HRTF (bien trop cher
+// pour une tablette) : un gain + un StereoPanner coutent presque rien et suffisent.
+const SON = {
+  max: 16,          // budget : jamais plus de 16 sons places simultanement
+  portee: 40,       // au-dela, ca s'eteint progressivement...
+  coupure: 60,      // ...et a 60 m on ne cree plus rien du tout
+  vivants: [],      // sons en cours : { fin, d, g }
+  joues: 0, refuses: 0, pic: 0, pas: 0, aies: 0, coups: 0, blabla: 0, accueils: 0, rotor: 0, rotorEmis: 0,
+  rotorF: 0, rotorTaux: 0, dernier: null, dernierAccueil: null,
+  raz() { this.joues = this.refuses = this.pic = this.pas = this.aies = this.coups = this.blabla = this.accueils = this.rotor = this.rotorEmis = 0; },
+};
+function ecouteurSon() {   // l'oreille est celle du PERSONNAGE (la camera n'est qu'un point de vue)
+  return { x: P.pos.x, y: P.pos.y + 1.4, z: P.pos.z, yaw: cam.yaw };
+}
+function sonPurge(now) {
+  for (let i = SON.vivants.length - 1; i >= 0; i--) if (SON.vivants[i].fin <= now) {
+    const v = SON.vivants[i]; SON.vivants.splice(i, 1);
+    setTimeout(() => { try { v.g.disconnect(); } catch (e) {} }, 80);
+  }
+}
+function sonCoupe(v, now) {   // on libere une place : fondu tres court, sinon ca claque
+  try { v.g.gain.cancelScheduledValues(now); v.g.gain.setTargetAtTime(0.0001, now, 0.008); } catch (e) {}
+  const i = SON.vivants.indexOf(v); if (i >= 0) SON.vivants.splice(i, 1);
+  setTimeout(() => { try { v.g.disconnect(); } catch (e) {} }, 120);
+}
+// x, y, z : ou le son se produit. faire(dest, att, d) y branche ses oscillateurs.
+// opt : { portee, coupure, gain, duree, bus }. Renvoie le noeud de destination, ou null si
+// le son a ete refuse (trop loin, ou budget plein avec des sons tous plus proches).
+function sonEn(x, y, z, faire, opt) {
+  opt = opt || {};
+  if (!settings.sound) return null;
+  const c = sfx.unlock(); if (!c) return null;
+  const L = ecouteurSon();
+  const dx = x - L.x, dy = (y == null ? L.y : y) - L.y, dz = z - L.z;
+  const d = Math.hypot(dx, dy, dz);
+  const portee = opt.portee || SON.portee, coupure = opt.coupure || Math.max(portee * 1.5, SON.coupure);
+  if (!(d < coupure)) { SON.refuses++; return null; }
+  const now = c.currentTime;
+  sonPurge(now);
+  if (SON.vivants.length >= SON.max) {
+    let pire = null; for (const v of SON.vivants) if (!pire || v.d > pire.d) pire = v;
+    if (!pire || pire.d <= d) { SON.refuses++; return null; }   // tout ce qui joue est plus proche : tant pis pour celui-la
+    sonCoupe(pire, now);
+  }
+  // attenuation : moitie moins fort tous les « proche » metres, puis fondu jusqu'a la coupure
+  const proche = Math.max(1, portee * 0.12);
+  let att = proche / (proche + d);
+  att *= clamp((coupure - d) / Math.max(1, coupure - portee), 0, 1);
+  att = clamp(att * (opt.gain == null ? 1 : opt.gain), 0, 1);
+  const g = c.createGain(); g.gain.value = Math.max(0.0001, att);
+  const sortie = sfx.sortie(opt.bus || 'effets');
+  if (c.createStereoPanner) {
+    // le vecteur « droite » de la camera : le produit scalaire donne le panoramique
+    const p = c.createStereoPanner();
+    const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+    p.pan.value = clamp((dx * rx + dz * rz) / Math.max(0.8, d), -1, 1) * 0.85;
+    g.connect(p); if (sortie) p.connect(sortie);
+  } else if (sortie) g.connect(sortie);
+  const v = { fin: now + (opt.duree || 0.5), d, g };
+  SON.vivants.push(v); SON.joues++; SON.dernier = { x, y, z, d: +d.toFixed(2), att: +att.toFixed(4) };
+  if (SON.vivants.length > SON.pic) SON.pic = SON.vivants.length;
+  try { faire(g, att, d); } catch (e) {}
+  return g;
+}
+const sT = (d, f, t, dur, type, vol, slide) => sfx.toneVers(d, f, t, dur, type, vol, slide);
+const sB = (d, dur, freq, vol, q, t, type) => sfx.bruitVers(d, dur, freq, vol, q, t, type);
+
+// ---- LE SOL SOUS LES PIEDS : chaque matiere a son timbre ----
+const SOLS = {
+  bitume:    { f: 145, n: 1300, vn: .075, vt: .030, q: 1.0 },
+  trottoir:  { f: 195, n: 2300, vn: .070, vt: .028, q: 1.8 },
+  herbe:     { f: 105, n: 620,  vn: .055, vt: .012, q: 0.6 },
+  sable:     { f: 85,  n: 780,  vn: .062, vt: .008, q: 0.4 },
+  carrelage: { f: 250, n: 3400, vn: .072, vt: .038, q: 4.5 },
+  eau:       { f: 130, n: 480,  vn: .090, vt: .018, q: 0.5 },
+  neige:     { f: 115, n: 950,  vn: .050, vt: .014, q: 0.9 },
+  bois:      { f: 175, n: 1050, vn: .068, vt: .034, q: 1.4 },
+};
+const PLAGE_SABLE = { x1: 103.5, x2: 122.5, z1: -76, z2: 139 };   // le rectangle de sable de buildBeach
+function solSous(x, y, z) {
+  if (!city.on) return 'herbe';
+  for (const w of [city.water, city.sea, city.villaPool]) if (w && x > w.x1 && x < w.x2 && z > w.z1 && z < w.z2 && y < w.top + 0.7) return 'eau';
+  if (city.neigeG && city.neigeG.visible) return 'neige';
+  for (const it of (city.interieurs || [])) if (Math.abs(x - it.x) < it.w / 2 && Math.abs(z - it.z) < it.d / 2) return 'carrelage';
+  if (x > PLAGE_SABLE.x1 && x < PLAGE_SABLE.x2 && z > PLAGE_SABLE.z1 && z < PLAGE_SABLE.z2) return 'sable';
+  for (const t of (city.trottoirs || [])) if (Math.abs(x - t.x) < t.w / 2 && Math.abs(z - t.z) < t.d / 2) return 'trottoir';
+  for (const r of (city.routes || [])) if (Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2) return 'bitume';
+  return 'herbe';
+}
+function sonPas(x, y, z, sol, force) {
+  const S = SOLS[sol] || SOLS.bitume, f = force == null ? 1 : force;
+  const dest = sonEn(x, y, z, d => {
+    sB(d, .08, S.n * rnd(0.88, 1.14), S.vn * f, S.q);
+    if (S.vt > 0) sT(d, S.f * rnd(0.9, 1.12), 0, .07, 'triangle', S.vt * f, S.f * 0.6);
+    if (sol === 'eau') sB(d, .22, 1700, S.vn * f * 0.55, 0.5, .02);   // la gerbe qui retombe
+  }, { duree: 0.3, portee: 24, gain: 0.95 });
+  if (dest) SON.pas++;
+  return !!dest;
+}
+// LA CADENCE. Les jambes avancent de dt × vitesse × 1,7 radian (animateRigCorps) et un pas
+// tombe a chaque demi-periode : on branche donc le son sur EXACTEMENT la meme horloge que
+// l'animation — le pied touche le sol quand on l'entend, jamais a cote. En courant la
+// vitesse est 1,55× plus grande : la cadence suit toute seule, et le pas frappe plus fort.
+function cadencePas(e, vitesse, dt) {
+  if (!e) return 0;
+  if (!(vitesse > 0.6)) { e.phasePas = 0; return 0; }
+  e.phasePas = (e.phasePas || 0) + dt * vitesse * 1.7;
+  const n = Math.floor(e.phasePas / Math.PI);
+  if (n > 0) { e.phasePas -= n * Math.PI; return Math.min(n, 3); }
+  return 0;
+}
+// ---- LES COUPS ----
+function sonCoup(x, y, z, force, quoi) {   // impact SOURD (le corps) + CLAQUEMENT (la peau)
+  const f = clamp(force == null ? 1 : force, 0.4, 2);
+  const dest = sonEn(x, y, z, d => {
+    sT(d, 78 * (quoi === 'pied' ? 0.85 : 1), 0, .13 * f, 'sine', .16 * f, 42);        // le sourd
+    sB(d, .045, 2600, .10 * f, 1.2);                                                  // le claquement
+    sB(d, .11, 320, .085 * f, 0.7, .01);                                              // la masse
+    if (f > 1.2) sT(d, 160, .02, .09, 'square', .05, 70);                             // coup lourd : ca cogne
+  }, { duree: 0.35, portee: 34 });
+  if (dest) SON.coups++;
+  return !!dest;
+}
+function sonRate(x, y, z) {   // le poing passe a cote : juste le souffle dans l'air
+  return !!sonEn(x, y, z, d => { sB(d, .17, 780, .055, 0.5); sB(d, .1, 1900, .022, 0.8, .03); }, { duree: 0.25, portee: 20 });
+}
+// « AIE ! » — une voix de dessin anime : la premiere syllabe monte, la seconde retombe.
+// La hauteur vient du NOM du personnage : le meme bot crie toujours pareil.
+function hauteurVoix(nom, aigu) {
+  let h = 0; const s = String(nom || 'x');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
+  return (aigu ? 1.22 : 0.86) * (0.88 + (h / 997) * 0.36);
+}
+function sonAie(x, y, z, hauteur) {
+  const h = clamp(hauteur || 1, 0.5, 2), base = 210 * h;
+  const dest = sonEn(x, y, z, d => {
+    sT(d, base * 1.05, 0, .13, 'sawtooth', .075, base * 1.6);    // « aï » : la voix monte
+    sT(d, base * 1.6, .12, .22, 'sawtooth', .06, base * 0.72);   // « ïe » : elle retombe
+    sT(d, base * 2.4, 0, .12, 'triangle', .022, base * 3.2);     // le nasillard, par-dessus
+  }, { duree: 0.42, portee: 34, bus: 'voix' });
+  if (dest) SON.aies++;
+  return !!dest;
+}
+function sonEffort(x, y, z, hauteur) {   // le grognement de celui qui frappe
+  const h = clamp(hauteur || 1, 0.5, 2);
+  return !!sonEn(x, y, z, d => { sT(d, 150 * h, 0, .13, 'sawtooth', .045, 96 * h); sB(d, .09, 420, .02, 0.6); }, { duree: 0.25, portee: 22, bus: 'voix' });
+}
+// ---- LES BOTS QUI PARLENT : une voix « bruitee », courte et amusante ----
+// Une suite de sons brefs modules, sans hasard : la meme phrase du meme bot sonne toujours
+// pareil (c'est ce qui donne une VOIX a chacun, et ca rend les tests reproductibles).
+function sonBlabla(x, y, z, texte, hauteur, fort) {
+  const t = String(texte || '').trim(); if (!t) return false;
+  const mots = t.split(/\s+/).length;
+  const n = clamp(Math.round(mots * 1.5) + 1, 2, 7);
+  const h = clamp(hauteur || 1, 0.5, 2), amp = (fort ? 1.4 : 1) * 0.055;
+  const dest = sonEn(x, y, z, d => {
+    for (let i = 0; i < n; i++) {
+      const k = (t.charCodeAt(i % t.length) + i * 7) % 6;
+      const f = 190 * h * (0.82 + k * 0.09);
+      sT(d, f, i * 0.105, 0.085, 'square', amp, f * (i % 2 ? 0.78 : 1.3));
+      sT(d, f * 2, i * 0.105, 0.06, 'triangle', amp * 0.35, f * 2.2);
+    }
+  }, { duree: n * 0.105 + 0.2, portee: 26, bus: 'voix' });
+  if (dest) SON.blabla++;
+  return !!dest;
+}
+// Toute bulle de chat au-dessus d'une tete s'ENTEND : on retrouve le personnage a partir de
+// son avatar pour lui donner sa hauteur de voix (et on ne se double pas soi-meme).
+function sonBulle(av, texte) {
+  if (!av || !av.group || (typeof me !== 'undefined' && av === me)) return false;
+  const p = av.group.position;
+  let nom = av.nom || av.name || '', aigu = !!av.girl;
+  try {
+    const b = (typeof bots !== 'undefined' && bots.find(x => x.av === av)) || null;
+    if (b) { nom = b.name; aigu = !!b.girl; }
+  } catch (e) {}
+  const anime = !!city.on && /centre|commerces/.test(quartierSon().k);   // dans les lieux animes, on parle plus fort
+  return sonBlabla(p.x, p.y + 2.1, p.z, texte, hauteurVoix(nom, aigu), anime);
+}
+// ---- LES VEHICULES (le bruit du moteur reste au poste B : ici, tout le reste) ----
+function sonPortiere(c, ouvre) {   // la portiere qui claque a la montee et a la descente
+  if (!c || c.kind === 'bike' || c.kind === 'jetski') return false;
+  return !!sonEn(c.x, (c.y || 0) + 1, c.z, d => {
+    if (ouvre) { sT(d, 380, 0, .05, 'square', .03, 260); sB(d, .06, 1400, .03, 1.4); }
+    sB(d, .09, 520, .11, 0.9, ouvre ? .12 : 0);                        // le claquement de tole
+    sT(d, 92, ouvre ? .12 : 0, .16, 'sine', .085, 55);                 // le « clonk » grave
+    sT(d, 1500, (ouvre ? .12 : 0) + .03, .05, 'square', .025, 900);    // le pene de la serrure
+  }, { duree: 0.4, portee: 26 });
+}
+function sonPneus(x, z, force) {   // crissement : freinage brutal, derapage
+  const f = clamp(force || 1, 0.3, 2);
+  return !!sonEn(x, 0.4, z, d => {
+    sB(d, .34 * f, 2400, .05 * f, 6, 0);
+    sB(d, .3 * f, 1500, .035 * f, 8, .02);
+    sT(d, 900, 0, .3 * f, 'sawtooth', .012 * f, 1300);
+  }, { duree: 0.5 * f, portee: 38 });
+}
+function sonTole(x, y, z, force) {   // choc de carrosserie
+  const f = clamp(force || 1, 0.3, 2);
+  return !!sonEn(x, y, z, d => {
+    sT(d, 120, 0, .18, 'square', .1 * f, 60);
+    sB(d, .13, 900, .10 * f, 1.1);
+    sT(d, 2100, .01, .12, 'triangle', .035 * f, 1400);   // la tole qui vibre
+  }, { duree: 0.4, portee: 44 });
+}
+// L'HELICOPTERE. Un rotor, c'est une suite d'impulsions graves : quatre pales × le regime.
+// On les emet une par une — leur CADENCE et leur hauteur suivent le regime, c'est ce qui
+// fait qu'on ENTEND l'appareil monter en puissance — et la turbine siffle par-dessus.
+function sonRotor(x, y, z, regime) {
+  const r = clamp(regime, 0, 1);
+  const f = 34 + 30 * r;   // la fondamentale de la pale monte avec le regime
+  SON.rotorF = +f.toFixed(1);   // note AVANT le budget : c'est le regime voulu qu'on mesure
+  const dest = sonEn(x, y, z, d => {
+    sT(d, f, 0, .085, 'sine', .16, f * 0.55);
+    sT(d, f * 2.1, 0, .05, 'triangle', .05, f * 1.2);
+    sB(d, .06, 420 + 500 * r, .035, 1.1);
+    if (r > 0.35) sB(d, .09, 3200 + 2600 * r, .012 * r, 7);   // la turbine
+  }, { duree: 0.18, portee: 70, coupure: 130 });
+  if (dest) SON.rotor++;
+  return !!dest;
+}
+function sonJetski(x, z) {   // la gerbe d'eau du jet-ski
+  return !!sonEn(x, 0.6, z, d => { sB(d, .3, 1500, .05, 0.6); sB(d, .2, 620, .03, 0.5, .05); }, { duree: 0.4, portee: 34 });
+}
+function sonChaine(x, y, z) { return !!sonEn(x, y, z, d => { sT(d, 1900, 0, .035, 'square', .022, 1400); sB(d, .04, 2600, .014, 3); }, { duree: 0.12, portee: 16 }); }
+function sonSonnette(x, y, z) { return !!sonEn(x, y, z, d => { sT(d, 2100, 0, .3, 'sine', .07, 2050); sT(d, 2650, .04, .3, 'sine', .05, 2600); }, { duree: 0.4, portee: 26 }); }
+// Le klaxon accepte maintenant une position : celui d'une voiture qui passe vient de la rue,
+// plus du milieu de la tete du joueur.
+function hornEn(kind, x, z) {
+  if (x == null) return horn(kind);
+  const paires = kind === 'bike' ? [[1760, .18, .07], [2200, .25, .05]] : kind === 'moto' ? [[660, .22, .06]]
+    : kind === 'truck' ? [[110, .6, .09], [138, .6, .07]] : [[440, .35, .07], [554, .35, .06]];
+  return !!sonEn(x, 1.1, z, d => paires.forEach(([f, dur, v], i) => sT(d, f, i * .02, dur, kind === 'bike' ? 'sine' : 'triangle', v)), { duree: 0.7, portee: 45, coupure: 80 });
+}
+// ---- L'AMBIANCE : la rumeur du quartier, un lit de bruit filtre qui ne s'arrete jamais ----
+const ambiance = (() => {
+  let src = null, filt = null, hp = null, g = null, cle = null, volCible = 0, coupeCible = 0;
+  const monte = () => {
+    const c = sfx.unlock(); if (!c) return null;
+    if (src) return c;
+    const b = c.createBuffer(1, Math.floor(c.sampleRate * 2), c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    src = c.createBufferSource(); src.buffer = b; src.loop = true;
+    hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 110;
+    filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700; filt.Q.value = 0.4;
+    g = c.createGain(); g.gain.value = 0.0001;
+    const out = sfx.sortie('ambiance');
+    src.connect(hp).connect(filt).connect(g); if (out) g.connect(out);
+    try { src.start(); } catch (e) {}
+    return c;
+  };
+  return {
+    set(k, vol, coupe) {
+      if (!settings.sound) return;
+      const c = monte(); if (!c) return;
+      cle = k; volCible = Math.max(0.0001, vol); coupeCible = Math.max(80, coupe);
+      // fondu lent (0,9 s) : un quartier ne change pas de rumeur d'un coup quand on passe le coin
+      g.gain.setTargetAtTime(volCible, c.currentTime, 0.9);
+      filt.frequency.setTargetAtTime(coupeCible, c.currentTime, 0.9);
+    },
+    stop() { const c = sfx.ctx(); if (g && c) { volCible = 0.0001; g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4); } },
+    etat: () => ({ cle, gain: g ? +g.gain.value.toFixed(4) : 0, coupe: filt ? Math.round(filt.frequency.value) : 0,
+      volCible: +volCible.toFixed(4), coupeCible: Math.round(coupeCible) }),
+  };
+})();
+// Chaque quartier a sa rumeur : le centre bourdonne, la plage respire, La Zone est sourde.
+const QUARTIERS = {
+  centre:      { n: 'centre animé',         vol: .030, coupe: 1300, foule: 1.0 },
+  commerces:   { n: 'rue commerçante',      vol: .028, coupe: 1400, foule: 1.0 },
+  banque:      { n: 'quartier d\'affaires', vol: .020, coupe: 1000, foule: 0.6 },
+  parc:        { n: 'parc',                 vol: .014, coupe: 900,  foule: 0.3, oiseaux: 1 },
+  plage:       { n: 'plage',                vol: .034, coupe: 620,  foule: 0.4, vagues: 1, mouettes: 1 },
+  zone:        { n: 'La Zone',              vol: .020, coupe: 380,  foule: 0.5 },
+  residentiel: { n: 'quartier résidentiel', vol: .012, coupe: 800,  foule: 0.3, oiseaux: 0.6 },
+  industriel:  { n: 'zone industrielle',    vol: .024, coupe: 520,  foule: 0.3 },
+  campagne:    { n: 'les environs',         vol: .010, coupe: 700,  foule: 0.15, oiseaux: 0.5 },
+};
+function quartierSon() {
+  let k = 'campagne', best = Infinity;
+  try {
+    for (const t of TERRITOIRES) {
+      const d = Math.hypot(P.pos.x - t.x, P.pos.z - t.z);
+      if (d < t.r && d < best) { best = d; k = t.k; }
+    }
+  } catch (e) {}
+  return Object.assign({ k }, QUARTIERS[k] || QUARTIERS.campagne);
+}
+function sonMouette(x, z) { return !!sonEn(x, 14, z, d => { sT(d, 1250, 0, .16, 'sawtooth', .035, 2000); sT(d, 1900, .18, .14, 'sawtooth', .025, 1100); }, { duree: .45, portee: 55, coupure: 90, bus: 'ambiance' }); }
+function sonVague(x, z) { return !!sonEn(x, 0.5, z, d => { sB(d, 1.5, 520, .05, 0.35); sB(d, .9, 1800, .018, 0.5, .35); }, { duree: 1.8, portee: 60, coupure: 95, bus: 'ambiance' }); }
+function sonOiseau(x, z) { const b = 2400 + Math.random() * 900; return !!sonEn(x, 7, z, d => { sT(d, b, 0, .07, 'sine', .03, b * 1.4); sT(d, b * 1.2, .09, .06, 'sine', .024, b * 1.6); }, { duree: .3, portee: 34, bus: 'ambiance' }); }
+function sonCloche(x, z) {   // la cloche de l'ecole : trois coups
+  return !!sonEn(x, 8, z, d => { for (let i = 0; i < 3; i++) { sT(d, 880, i * .55, .7, 'sine', .1, 870); sT(d, 1320, i * .55, .5, 'triangle', .045, 1310); sT(d, 2640, i * .55, .25, 'sine', .02, 2630); } }, { duree: 2.4, portee: 70, coupure: 120, bus: 'ambiance' });
+}
+function sonSireneAmbu(x, z) { return sonSirene(x, z, 'ambulance'); }   // ancien nom, garde-fou pour les appels existants
+function sonVent(x, y, z, force) {   // en hauteur, le vent siffle
+  return !!sonEn(x, y, z, d => { sB(d, 1.7, 480 + 400 * force, .045 * force, 0.4); sB(d, 1.2, 2100, .012 * force, 0.8, .3); }, { duree: 2, portee: 40, bus: 'ambiance' });
+}
+function sonPluie(x, y, z, force) {
+  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .05 * force, 0.35); sB(d, 1.6, 620, .03 * force, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
+}
+function sonAboiement(x, y, z, hauteur) {
+  const h = clamp(hauteur || 1, 0.6, 1.6);
+  return !!sonEn(x, y, z, d => { sT(d, 190 * h, 0, .1, 'square', .07, 120 * h); sT(d, 210 * h, .13, .09, 'square', .06, 140 * h); sB(d, .07, 900, .03, 0.8); }, { duree: .35, portee: 34, bus: 'voix' });
+}
+// ---- LES ACCUEILS PARLES ----
+// « parle » est la voix GENERALE des personnages du monde (accueils des commerces et des
+// services). Elle est independante de schDire / voice, qui restent a l'ecole. Si la synthese
+// vocale du navigateur manque (tele, page muette, voix non chargees), on parle quand meme :
+// on retombe sur la voix « bruitee » des bots, pour que le joueur entende toujours quelqu'un.
+const PARLE = { n: 0, dernier: null, synthese: null, voix: null };
+// On NE REFAIT PAS la synthèse vocale : le poste C l'a réparée (voix chargées en différé,
+// file de Chrome relancée, phrases gardées en vie, repli quand aucune voix n'est installée).
+// `parle` s'y branche — et si rien n'est réellement sorti au bout de 0,8 s, on double d'une
+// voix « bruitée » spatialisée, pour que l'accueil s'entende même sur une télé sans voix.
+function parle(qui, texte, opt) {
+  opt = opt || {};
+  const t = String(texte || '').trim(); if (!t) return false;
+  if (!settings.sound) return false;
+  const h = opt.hauteur || hauteurVoix(qui || 'accueil', !!opt.aigu);
+  const p = opt.pos || P.pos;
+  const px = p.x, py = (p.y || 0) + 1.5, pz = p.z;
+  let synthese = false, avant = 0;
+  try {
+    if (typeof voice !== 'undefined' && voice && voice.say) {
+      avant = voice.etat ? voice.etat().parle : 0;
+      synthese = !!voice.say(t, !!opt.aigu, true);   // « force » : un accueil ne doit jamais sauter son tour
+    }
+  } catch (e) { synthese = false; }
+  if (!synthese) sonBlabla(px, py, pz, t, h, false);
+  else setTimeout(() => {   // rien n'est sorti (aucune voix installée) : on parle quand même
+    try { if (voice.etat().parle <= avant) sonBlabla(px, py, pz, t, h, false); } catch (e) {}
+  }, 800);
+  PARLE.n++; PARLE.dernier = { qui, texte: t, synthese, t: simTime }; PARLE.synthese = synthese;
+  return true;
+}
+// Chaque metier a SA phrase, au vouvoiement et sur un ton chaleureux.
+const ACCUEILS = {
+  police:    { qui: 'L\'agent d\'accueil', t: () => 'Bonjour, que puis-je pour vous ?' },
+  hopital:   { qui: 'L\'infirmière', aigu: true, t: () => 'Bonjour, comment puis-je vous aider ?' },
+  ecole:     { qui: 'La maîtresse', aigu: true, t: () => `Bonjour élève ${(typeof myCfg !== 'undefined' && myCfg.name) || 'du jour'}` },
+  boutique:  { qui: 'La vendeuse', aigu: true, t: () => 'Bonjour et bienvenue ! Essayez ce que vous voulez, la cabine est au fond.' },
+  garage:    { qui: 'Le garagiste', t: () => 'Bonjour ! Réparation, peinture, moteur : dites-moi ce qu\'il vous faut.' },
+  banque:    { qui: 'Le guichetier', t: () => 'Bonjour, bienvenue à la banque. Un dépôt ou un retrait ?' },
+  casino:    { qui: 'Le croupier', t: () => 'Bonsoir et bienvenue au casino. Bonne chance à vous !' },
+  coiffeur:  { qui: 'Le coiffeur', t: () => 'Bonjour ! Installez-vous, je m\'occupe de votre coupe.' },
+  tatoueur:  { qui: 'La tatoueuse', aigu: true, t: () => 'Bonjour ! Choisissez votre motif, je prépare l\'aiguille.' },
+  armurerie: { qui: 'L\'armurier', t: () => 'Bonjour. Regardez le présentoir, je vous conseille si vous voulez.' },
+  missions:  { qui: 'Le chef de bureau', t: () => 'Bonjour ! J\'ai du travail pour vous, servez-vous sur le tableau.' },
+};
+const ACCUEIL_DELAI = 45;   // on ne resalue pas le meme lieu avant 45 s : sinon ca tourne en boucle
+const accueilVu = {};
+function accueil(lieu, opt) {
+  const A = ACCUEILS[lieu]; if (!A) return false;
+  if (simTime - (accueilVu[lieu] == null ? -1e9 : accueilVu[lieu]) < ACCUEIL_DELAI) return false;
+  accueilVu[lieu] = simTime;
+  const texte = A.t();
+  SON.accueils++; SON.dernierAccueil = { lieu, texte, t: simTime };
+  parle(A.qui, texte, { aigu: A.aigu, pos: (opt && opt.pos) || null });
+  try { chat(A.qui, texte, '#ffd23f'); } catch (e) {}   // ecrit aussi dans le chat : on peut le relire
+  return true;
+}
+// On salue au moment ou l'on ARRIVE devant le comptoir (front montant du drapeau de
+// proximite), jamais tant qu'on reste plante devant.
+const accueilPres = {};
+function accueilTick() {
+  if (!city.on) return;
+  const front = (lieu, cond) => { const v = !!cond; if (v && !accueilPres[lieu]) accueil(lieu); accueilPres[lieu] = v; };
+  front('police', city.plainteNear);
+  front('hopital', city.medNear);
+  front('ecole', city.classNear);
+  front('boutique', city.vitNear);
+  front('garage', city.tuneNear);
+  front('banque', city.deskNear);
+  front('casino', city.slotNear || city.tableNear);
+  front('coiffeur', city.coiffeurNear);
+  front('tatoueur', city.tatooNear);
+  front('armurerie', city.gunNear);
+  front('missions', city.offNear);
+}
+// ---- LE FEU, LES URGENCES ET LES CHANTIERS ----
+// LE FEU. Un incendie ne faisait qu'un souffle mono de temps en temps, au meme volume qu'on
+// soit dessus ou a l'autre bout de la ville. Un vrai feu, ca RESPIRE (un souffle grave et
+// continu) et ca CRAQUE (des impulsions seches et aigues, au hasard).
+function sonFeu(x, y, z, force) {
+  const f = clamp(force == null ? 1 : force, 0.15, 1.6);
+  return !!sonEn(x, y, z, d => {
+    sB(d, 1.1, 300 + 260 * f, .06 * f, 0.35);                                        // le souffle
+    for (let i = 0; i < 3; i++) sB(d, .045, 2000 + i * 950, .034 * f, 6, i * 0.27);   // les craquements
+    sT(d, 68, 0, .8, 'sine', .018 * f, 44);                                           // la braise
+  }, { duree: 1.2, portee: 30, coupure: 55, bus: 'ambiance' });
+}
+// L'EXPLOSION d'un vehicule : elle partait a plein volume dans le bus « effets », ou qu'elle
+// soit. Meme « BOOM », mais PLACE — et une explosion a soixante metres ne fait plus sursauter.
+function sonExplosion(x, y, z) {
+  return !!sonEn(x, y, z, d => {
+    sT(d, 70, 0, .6, 'sawtooth', .5, 32);
+    sB(d, .55, 260, .5, 0.4);
+    sB(d, .2, 1700, .16, 0.8);
+    sT(d, 42, .05, .9, 'sine', .28, 22);   // la queue grave qui roule
+  }, { duree: 1.1, portee: 60, coupure: 150 });
+}
+// LES SIRENES DES VEHICULES D'URGENCE. Chacune a son deux-tons : l'ambulance est haute et
+// pressante, le camion de pompiers plus grave, la depanneuse basse et calme.
+const SIRENES = {
+  ambulance:  { a: 900, b: 675, dur: .40, n: 4, harm: 1.5,  vol: .080 },
+  pompier:    { a: 830, b: 620, dur: .46, n: 4, harm: 1.35, vol: .075 },
+  police:     { a: 980, b: 740, dur: .34, n: 5, harm: 1.5,  vol: .065 },
+  depanneuse: { a: 620, b: 470, dur: .55, n: 3, harm: 1.25, vol: .060 },
+};
+function sonSirene(x, z, kind) {
+  const S = SIRENES[kind] || SIRENES.ambulance;
+  return !!sonEn(x, 1.5, z, d => {
+    for (let i = 0; i < S.n; i++) {
+      const f = i % 2 ? S.b : S.a, t = i * S.dur;
+      sT(d, f, t, S.dur * 0.96, 'sine', S.vol);
+      sT(d, f * S.harm, t, S.dur * 0.96, 'triangle', S.vol * 0.4);
+    }
+  }, { duree: S.n * S.dur + 0.2, portee: 65, coupure: 115, bus: 'ambiance' });
+}
+function sonRecul(x, z) {   // le bip de recul de la depanneuse
+  return !!sonEn(x, 1, z, d => { for (let i = 0; i < 3; i++) sT(d, 1100, i * .5, .22, 'square', .05); }, { duree: 1.4, portee: 30, bus: 'ambiance' });
+}
+// ---- LES EMPLOYES MUNICIPAUX AU TRAVAIL ----
+function sonMarteau(x, y, z) {   // le coup sec sur la tole
+  return !!sonEn(x, y, z, d => { sB(d, .05, 2800, .09, 2); sT(d, 320, 0, .12, 'triangle', .05, 180); sT(d, 1600, 0, .07, 'square', .025, 1100); }, { duree: .3, portee: 34 });
+}
+function sonSoudure(x, y, z) {   // le gresillement de l'arc electrique
+  return !!sonEn(x, y, z, d => { sB(d, .3, 3600, .04, 1.2); sB(d, .3, 900, .025, 0.6, .02); sT(d, 110, 0, .28, 'sawtooth', .012, 90); }, { duree: .45, portee: 30 });
+}
+function sonBalai(x, y, z) {   // le frottement des brins sur le trottoir
+  return !!sonEn(x, y, z, d => { sB(d, .3, 1500, .035, 0.5); sB(d, .2, 3800, .014, 0.9, .06); }, { duree: .4, portee: 18 });
+}
+function sonJetEau(x, y, z, force) {   // le jet de la lance a eau
+  const f = clamp(force == null ? 1 : force, 0.3, 1.5);
+  return !!sonEn(x, y, z, d => { sB(d, .6, 2400, .05 * f, 0.45); sB(d, .5, 700, .03 * f, 0.5, .04); }, { duree: .7, portee: 34 });
+}
+function sonRaclette(x, y, z) {   // le couinement du caoutchouc sur la vitre
+  return !!sonEn(x, y, z, d => { sT(d, 1500, 0, .3, 'sine', .022, 2400); sB(d, .25, 2600, .012, 4); }, { duree: .4, portee: 20 });
+}
+// ---- LE COMBAT RAPPROCHE ----
+// Un coup au VENTRE ne sonne pas comme un coup au visage : c'est sourd, ca s'enfonce, et
+// l'air part des poumons. La PARADE, elle, claque sec sur l'avant-bras, sans rien de mou.
+function sonVentre(x, y, z, hauteur) {
+  const h = clamp(hauteur || 1, 0.5, 2);
+  return !!sonEn(x, y, z, d => {
+    sT(d, 62, 0, .2, 'sine', .18, 34);                       // l'impact, tres grave
+    sB(d, .14, 220, .085, 0.5);                              // la masse du corps
+    sB(d, .3, 620 * h, .05, 0.4, .06);                       // « ouf » : l'air expulse
+    sT(d, 180 * h, .07, .18, 'sawtooth', .03, 110 * h);      // le souffle coupe
+  }, { duree: .45, portee: 32 });
+}
+function sonParade(x, y, z) {
+  return !!sonEn(x, y, z, d => { sB(d, .05, 1900, .085, 2.5); sT(d, 420, 0, .07, 'square', .045, 260); sT(d, 2400, .01, .05, 'triangle', .02, 3000); }, { duree: .25, portee: 28 });
+}
+function sonCouteau(x, y, z, touche) {   // la lame siffle ; si elle touche, l'entaille suit
+  return !!sonEn(x, y, z, d => {
+    sB(d, .12, 4200, .045, 3);                                  // le sifflement de la lame
+    sT(d, 3000, 0, .1, 'sine', .02, 5200);
+    if (touche) { sB(d, .09, 900, .07, 0.8, .1); sT(d, 150, .1, .14, 'triangle', .05, 90); }
+  }, { duree: .4, portee: 30 });
+}
+// ---- LE BATTEMENT DE COEUR DES SONS DU MONDE (appele par cityVie) ----
+const SONV = { ambT: 0, mouetteT: 0, vagueT: 0, oiseauT: 0, ventT: 0, pluieT: 0, clocheT: 0, ambuT: 0, vitPrec: 0, pneuT: 0, veloT: 0, jetT: 0, feuVehT: 0 };
+function sonsVille(dt) {
+  if (!settings.sound || !city.on) return;
+  accueilTick();
+  // --- la rumeur du quartier, plus la pluie qui la couvre ---
+  if (simTime > SONV.ambT) {
+    SONV.ambT = simTime + 1.2;
+    const q0 = quartierSon();
+    const nuit = (typeof day !== 'undefined' && day && day.h != null) ? (day.h < 7 || day.h > 20 ? 0.45 : 1) : 1;
+    const pluie = (typeof meteo !== 'undefined' && meteo && meteo.kind !== 'clair') ? clamp(meteo.force || 0, 0, 1) : 0;
+    const haut = clamp((P.pos.y - 18) / 40, 0, 1);   // en hauteur la rumeur s'eloigne, le vent prend le dessus
+    ambiance.set(q0.k, q0.vol * nuit * (1 - haut * 0.7) + pluie * 0.03, q0.coupe * (1 - haut * 0.4) + pluie * 900);
+  }
+  const q = quartierSon();
+  // --- les evenements ponctuels du quartier ---
+  if (q.mouettes && simTime > SONV.mouetteT) { SONV.mouetteT = simTime + rnd(4, 11); sonMouette(P.pos.x + rnd(-25, 25), P.pos.z + rnd(-25, 25)); }
+  if (q.vagues && simTime > SONV.vagueT) { SONV.vagueT = simTime + rnd(3.5, 6); sonVague(clamp(P.pos.x, 118, 132), P.pos.z + rnd(-18, 18)); }
+  if (q.oiseaux && simTime > SONV.oiseauT) { SONV.oiseauT = simTime + rnd(3, 9) / q.oiseaux; sonOiseau(P.pos.x + rnd(-16, 16), P.pos.z + rnd(-16, 16)); }
+  if (P.pos.y > 22 && simTime > SONV.ventT) { SONV.ventT = simTime + rnd(2.2, 3.6); sonVent(P.pos.x, P.pos.y + 2, P.pos.z, clamp((P.pos.y - 18) / 45, 0.2, 1)); }
+  if (typeof meteo !== 'undefined' && meteo && meteo.kind === 'pluie' && (meteo.force || 0) > 0.15 && simTime > SONV.pluieT) { SONV.pluieT = simTime + 1.5; sonPluie(P.pos.x, P.pos.y + 4, P.pos.z, clamp(meteo.force, 0.2, 1)); }
+  // la cloche de l'ecole, quand on approche du groupe scolaire
+  if (city.classes && city.classes.length && simTime > SONV.clocheT) {
+    const c0 = city.classes[0];
+    if (Math.hypot(P.pos.x - c0.x, P.pos.z - c0.z) < 45) { SONV.clocheT = simTime + 95; sonCloche(c0.x, c0.z); }
+  }
+  // --- les pas des bots proches (budget : les huit plus proches, jamais plus) ---
+  if (typeof bots !== 'undefined') {
+    const proches = [];
+    for (const b of bots) {
+      if (!b.av || !b.av.group || !b.av.group.visible) continue;
+      const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+      if (d < 22) proches.push([d, b]);
+    }
+    proches.sort((a, z) => a[0] - z[0]);
+    for (let i = 0; i < proches.length && i < 8; i++) {
+      const b = proches[i][1];
+      const dx = b.pos.x - (b.sonX == null ? b.pos.x : b.sonX), dz = b.pos.z - (b.sonZ == null ? b.pos.z : b.sonZ);
+      b.sonX = b.pos.x; b.sonZ = b.pos.z;
+      const v = Math.hypot(dx, dz) / Math.max(dt, 1e-3);
+      if (v > 14) continue;   // il vient d'etre teleporte : pas de pas fantomes
+      const n = cadencePas(b, v, dt);
+      for (let k = 0; k < n; k++) sonPas(b.pos.x, b.pos.y, b.pos.z, solSous(b.pos.x, b.pos.y, b.pos.z), 0.6);
+    }
+  }
+  // --- l'helicoptere : une impulsion par pale, la cadence suit le regime ---
+  for (const c of (city.cars || [])) {
+    if (!c.heli) continue;
+    const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
+    if (d > 120) { c.rotorAcc = 0; continue; }
+    const r = clamp(c.spin || 0, 0, 1);
+    if (r < 0.05 && !c.busy) { c.rotorAcc = 0; continue; }
+    const taux = 3.5 + 7.5 * r;   // impulsions par seconde : c'est LA mesure du regime
+    SON.rotorTaux = +taux.toFixed(2);
+    c.rotorAcc = (c.rotorAcc || 0) + dt * taux;
+    let n = Math.floor(c.rotorAcc); if (n > 3) n = 3;
+    c.rotorAcc -= n;
+    SON.rotorEmis += n;   // impulsions VOULUES (le budget peut en refuser : c'est la cadence qu'on mesure)
+    for (let k = 0; k < n; k++) sonRotor(c.x, c.y + 1.5, c.z, r);
+  }
+  // --- le vehicule conduit : crissement de pneus, chaine de velo, gerbe du jet-ski ---
+  if (drive.car) {
+    const v = Math.abs(drive.speed || 0), dv = (SONV.vitPrec - v) / Math.max(dt, 1e-3);
+    if (dv > 22 && simTime > SONV.pneuT && !drive.car.heli) { SONV.pneuT = simTime + 0.45; sonPneus(drive.car.x, drive.car.z, clamp(dv / 40, 0.5, 2)); }
+    SONV.vitPrec = v;
+    if (drive.car.kind === 'bike' && v > 1 && simTime > SONV.veloT) { SONV.veloT = simTime + clamp(2.2 / v, 0.14, 0.6); sonChaine(drive.car.x, drive.car.y + 0.7, drive.car.z); }
+    if (drive.car.kind === 'jetski' && v > 2 && simTime > SONV.jetT) { SONV.jetT = simTime + 0.32; sonJetski(drive.car.x, drive.car.z); }
+  } else SONV.vitPrec = 0;
+  // --- LES VÉHICULES D'URGENCE. On reconnaît l'ambulance et la dépanneuse à leur genre ou à
+  // leur drapeau (`urgence`, `sirene`) : quel que soit le poste qui les pose, elles hurlent.
+  if (simTime > SONV.ambuT) {
+    const listes = [city.aiCars || [], city.cars || [], city.urgences || []];
+    for (const liste of listes) {
+      let fini = false;
+      for (const c of liste) {
+        const genre = urgenceDe(c); if (!genre) continue;
+        if (!(c.sirene || c.gyro || c.urgence || Math.abs(c.spd || c.speed || 0) > 0.2)) continue;   // garée et calme : pas de sirène
+        const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
+        if (d < 110) { SONV.ambuT = simTime + 2.6; sonSirene(c.x, c.z, genre); if (c.recule) sonRecul(c.x, c.z); fini = true; break; }
+      }
+      if (fini) break;
+    }
+  }
+  // --- les véhicules en flammes : ils crépitent tant qu'ils brûlent ---
+  if (simTime > SONV.feuVehT) {
+    SONV.feuVehT = simTime + 1.1;
+    for (const c of (city.cars || [])) {
+      if (!c.dead && !c.enFlammes) continue;
+      if (Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > 45) continue;
+      sonFeu(c.x, (c.y || 0) + 1, c.z, 0.75); break;   // un seul à la fois : le budget n'est pas extensible
+    }
+  }
+}
+// Quel genre de véhicule d'urgence ? On accepte plusieurs écritures : chaque poste nomme
+// les siennes à sa façon, et un nom manquant ne doit pas rendre le véhicule muet.
+function urgenceDe(c) {
+  if (!c) return null;
+  const k = String(c.urgence || c.kind || '').toLowerCase();
+  if (c.ambulance || /ambulance|samu|secours/.test(k)) return 'ambulance';
+  if (c.depanneuse || c.remorque || /depann|dépann|remorq|tow/.test(k)) return 'depanneuse';
+  if (c.pompier || /pompier|caserne/.test(k)) return 'pompier';
+  if (c.police || c.pol || /police|gendarm/.test(k)) return 'police';
+  return null;
 }
 // Déverrouillage audio (téléphones) : à la première interaction, on crée/relance le contexte et on joue un buffer silencieux
 function unlockAudio() {
@@ -10937,7 +11578,8 @@ function nommerChien(nom, silencieux) {
 }
 function aboie(n = 1) {
   const p = chien.pet; if (!p) return;
-  for (let i = 0; i < n; i++) { sfx.tone(200 - i * 8, i * 0.16, .08, 'square', .07, 130); sfx.tone(150, i * 0.16 + .06, .07, 'square', .05, 90); }
+  // l'aboiement vient du chien, pas de nulle part : on l'entend à gauche quand il court à gauche
+  sonEn(p.x, (p.y || 0) + 0.6, p.z, d => { for (let i = 0; i < n; i++) { sfx.toneVers(d, 200 - i * 8, i * .16, .08, 'square', .09, 130); sfx.toneVers(d, 150, i * .16 + .06, .07, 'square', .07, 90); } }, { duree: .3 + n * .16, portee: 30, bus: 'voix' });
   p.aboiA = simTime + 0.35;
 }
 function chienAttaque(txt) {
@@ -11727,7 +12369,7 @@ function commandeExacte(txt) {
   if (/\b(danse|bouge|ambiance)\b/.test(t)) { cible.dance = 6; cible.wait = 6; botDit(cible, '💃 c\'est parti !'); return true; }
   if (/\b(saute|un saut)\b/.test(t)) { cible.dance = 1.2; cible.wait = 1.2; botDit(cible, 'hop ! 🦘'); return true; }
   if (/\b(salue|dis bonjour|coucou|fais signe)\b/.test(t)) { cible.dance = 2; cible.wait = 2; botDit(cible, `salut ${myCfg.name} ! 👋`); return true; }
-  if (/\b(klaxonne|klaxon)\b/.test(t)) { if (cible.drive && cible.drive.car) horn(cible.drive.car.kind); botDit(cible, '📯 pouet !'); return true; }
+  if (/\b(klaxonne|klaxon)\b/.test(t)) { if (cible.drive && cible.drive.car) hornEn(cible.drive.car.kind, cible.drive.car.x, cible.drive.car.z); botDit(cible, '📯 pouet !'); return true; }
   // « prends une voiture et viens devant la banque » puis, une fois à bord, « va à la villa »
   const lieuVoit = lieuDe(txt);
   if (/\b(prend?s?|prend|prener|va (me )?chercher|cours (me )?chercher|file (me )?chercher|va me prendre|cherche|trouve|amene|amène|ramene|ramène|apporte)\b.{0,30}\b(voiture|caisse|bagnole|auto|vehicule|véhicule|velo|vélo|bicyclette|moto|scooter|kart|buggy|camion)\b/.test(t)
@@ -12744,11 +13386,18 @@ function step(dt, active) {
     P.vel.y = CLIMB; P.jumpBuf = 0; P.grounded = false;
     P.vel.x += (wantX * 0.5 - P.vel.x) * 0.3; P.vel.z += (wantZ * 0.5 - P.vel.z) * 0.3;
   } else {
-    // bruit de pas : feutré dans la neige, il crisse à chaque foulée
-    if (P.grounded && len > 0.3 && city.neigeG && city.neigeG.visible && !drive.car && simTime > (P.pasT || 0)) {
-      P.pasT = simTime + (P.court ? 0.26 : 0.42);
-      sfx.noise(.09, 950, .022); sfx.tone(120, 0, .05, 'triangle', .012, 90);
-    }
+    // LES PAS. Seule la neige faisait du bruit, et à un rythme fixe qui n'avait rien à voir
+    // avec la foulée : on marchait sur le bitume, le sable ou le carrelage d'une boutique
+    // dans un silence total. Le son est maintenant calé sur la MÊME horloge que les jambes
+    // (cadencePas), et son timbre dépend de la matière sous les pieds (solSous).
+    if (P.grounded && !drive.car && !P.swimming) {
+      const vit = Math.hypot(P.vel.x, P.vel.z);
+      const n = cadencePas(P, len > 0.05 ? vit : 0, dt);
+      if (n) {
+        const sol = solSous(P.pos.x, P.pos.y, P.pos.z);
+        for (let k = 0; k < n; k++) sonPas(P.pos.x, P.pos.y, P.pos.z, sol, P.court ? 1.35 : 1);
+      }
+    } else P.phasePas = 0;
     // À la manette, le retard d'affichage s'ajoute au temps de mise en vitesse : le personnage
     // semblait partir une demi-seconde après le pouce. On le rend plus vif dès qu'une manette pilote.
     const vif = tel.on ? 26 : 14;
@@ -12926,6 +13575,7 @@ function enterCar(c) {
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
   else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
+  sonPortiere(c, true);   // on ouvre, on s'installe, la portière claque : on monte VRAIMENT dans la voiture
   if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car', moteurDe(c)); c.vy = 0;
 }
 function exitCar() {
@@ -12958,6 +13608,7 @@ function exitCar() {
     if (!trouve) msg('🚗 Pas beaucoup de place pour descendre !', 1400);
   }
   P.vel.set(0, 0, 0); P.facing = c.h;
+  sonPortiere(c, false);   // on descend : la portière claque derrière soi
   me.group.visible = true; $('carBtn').textContent = '🚗'; $('jumpBtn').textContent = 'SAUT'; $('emoteBtn').textContent = '🕺'; $('punchBtn').textContent = '👊'; drive.gear = 1;
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)
@@ -13152,7 +13803,7 @@ function explodeVehicle(c) {
   if (c.explosed) return; c.explosed = true;
   const x = c.x, y = (c.y || 0) + 0.9, z = c.z;
   burst(x, y, z, 0xffd23f, 26); burst(x, y + 0.6, z, 0xff8f3a, 20); burst(x, y + 1.2, z, 0x2b2f3a, 16);
-  sfx.noise(.55, 260, .5); sfx.tone(70, 0, .6, 'sawtooth', .18, 32);
+  sonExplosion(x, y, z);   // même « BOOM », mais PLACÉ : à soixante mètres il ne fait plus sursauter
   const p = c.parts;
   if (p) {   // tout ce qui peut se détacher part en l'air
     for (const m of [p.bumpers[0], p.bumpers[1], p.hood, p.doors[0], p.doors[1], p.doors[2], p.doors[3]])
@@ -13172,6 +13823,8 @@ function vehicleDamage(c, amount) {
   c.dmg = clamp((c.dmg || 0) + amount, 0, 100);
   if (c.dmg >= 100 && !c.dead) { c.dead = true; explodeVehicle(c); }
   if (amount > 2) burst(c.x, 1, c.z, 0x8f98ab, Math.min(10, 3 + amount));
+  // ON ENTEND LA TOLE. Un choc ne faisait qu'un nuage de fumée grise, en silence.
+  if (amount > 1 && simTime > (c.toleT || 0)) { c.toleT = simTime + 0.22; sonTole(c.x, (c.y || 0) + 0.8, c.z, clamp(0.5 + amount / 14, 0.4, 2)); }
   applyDamageVisual(c, Math.sin(c.h || 0) * (drive.car === c ? drive.speed : 3), Math.cos(c.h || 0) * (drive.car === c ? drive.speed : 3));
 }
 // sansDelit : la casse n'est pas l'œuvre du joueur (un gang qui saccage une devanture)
@@ -13461,6 +14114,7 @@ function cityVie(dt) {
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
   safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
+  safe('sons du monde', () => sonsVille(dt));   // pas des bots, rotor, ambiance du quartier, accueils parles
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -15297,6 +15951,30 @@ $('volIn').addEventListener('change', () => { unlockAudio(); sfx.coin(); });
 settings.sensib = (v => v >= 0.5 && v <= 2 ? v : 1)(parseFloat(store.get('superobby.sensib')));
 $('sensIn').value = String(Math.round(settings.sensib * 100)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %';
 $('sensIn').addEventListener('input', () => { settings.sensib = clamp((+$('sensIn').value || 100) / 100, 0.5, 2); store.set('superobby.sensib', String(settings.sensib)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %'; });
+// UN CURSEUR PAR FAMILLE. Il n'y avait qu'un volume general : impossible de baisser le
+// moteur sans etouffer les voix, ni de couper la musique sans perdre les pas. Chaque bus a
+// maintenant son curseur (persiste) et son bouton d'essai — on regle d'oreille, en direct.
+const MIX_LIBELLES = { effets: ['💥 Effets', () => { sfx.coin(); setTimeout(() => sonCoup(P.pos.x + 1, P.pos.y + 1.2, P.pos.z, 1.3), 180); setTimeout(() => sonPas(P.pos.x - 1, P.pos.y, P.pos.z, 'trottoir', 1.2), 420); }],
+  moteur: ['🏎️ Moteur', () => { engine.start('car', 2); engine.set(0.7); setTimeout(() => { engine.set(0.2); }, 700); setTimeout(() => { if (!drive.car) engine.stop(); }, 1300); }],
+  musique: ['🎵 Musique', () => { const m = settings.music; settings.music = true; music.start(); setTimeout(() => { settings.music = m; if (!m) music.stop(); }, 2500); }],
+  ambiance: ['🏙️ Ambiance', () => { sonMouette(P.pos.x + 6, P.pos.z + 4); setTimeout(() => sonVague(P.pos.x - 8, P.pos.z), 350); setTimeout(() => sonCloche(P.pos.x, P.pos.z + 10), 900); }],
+  voix: ['🗣️ Voix', () => { sonBlabla(P.pos.x + 3, P.pos.y + 1.6, P.pos.z, 'bonjour, ça va ?', 1.1, false); setTimeout(() => sonAie(P.pos.x - 3, P.pos.y + 1.5, P.pos.z, 0.95), 700); }] };
+function construitMix() {
+  const hote = $('mixRows'); if (!hote) return;
+  hote.innerHTML = '';
+  for (const nom of Object.keys(MIX)) {
+    const [lib, essai] = MIX_LIBELLES[nom] || [nom, () => sfx.coin()];
+    const ligne = document.createElement('div'); ligne.className = 'volRow';
+    ligne.innerHTML = `<span>${lib}</span><input type="range" min="0" max="150" step="5" aria-label="Volume ${lib}"><b></b><button type="button">Tester</button>`;
+    const inp = ligne.querySelector('input'), val = ligne.querySelector('b'), btn = ligne.querySelector('button');
+    const rafraichit = () => { inp.value = String(Math.round(sfx.bus(nom) / (MIX_DEF[nom] || 1) * 100)); val.textContent = inp.value + ' %'; };
+    rafraichit();
+    inp.addEventListener('input', () => { sfx.bus(nom, (+inp.value || 0) / 100 * (MIX_DEF[nom] || 1)); val.textContent = inp.value + ' %'; });
+    btn.addEventListener('click', () => { if (!settings.sound) setSound(true); unlockAudio(); try { essai(); } catch (e) {} });
+    hote.appendChild(ligne);
+  }
+}
+construitMix();
 $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée');
 // La voix est ACTIVE par defaut (la maitresse lit les enonces a voix haute) : le reglage ne
 // sert qu'a la couper. Et « Tester la voix » dit ce qui sort VRAIMENT, au lieu de rester muet.
@@ -19146,7 +19824,7 @@ function declencheIncendie(x, z, force) {
   halo.scale.set(11, 11, 1); halo.position.y = 1.6; g.add(halo);
   const f = { x, z, g, flammes, halo, t: simTime, force: force || 100, cd: 0, aide: false };
   city.incendies.push(f);
-  sfx.noise(.7, 420, .12); sfx.tone(90, 0, .5, 'sawtooth', .05, 40);
+  sonFeu(x, 1.6, z, 1.6); sonEn(x, 1.6, z, dd => sfx.toneVers(dd, 90, 0, .5, 'sawtooth', .07, 40), { duree: .6, portee: 45, coupure: 90 });   // le départ de feu, entendu d'où il part
   msg('🔥 AU FEU ! La caserne envoie le camion', 3000);
   chat(null, '🔥 Un incendie s\'est déclaré en ville — les pompiers arrivent !');
   return f;
@@ -19161,7 +19839,7 @@ function incendiesTick(dt) {
     if (simTime > f.cd) {
       f.cd = simTime + 0.6;
       burst(f.x + rnd(-1.2, 1.2), 2.6 + rnd(0, 1.6), f.z + rnd(-1.2, 1.2), 0x54585f, 2);
-      if (Math.random() < 0.4) sfx.noise(.22, 360, .025);
+      sonFeu(f.x, 1.4, f.z, 0.4 + k);   // le feu respire et craque, et on l'entend d'où il brûle
     }
     // filet de sécurité : un feu que personne n'éteint finit par s'épuiser tout seul
     if (simTime - f.t > 240) f.force -= dt * 10;
@@ -19477,7 +20155,10 @@ function employesTick(dt) {
       if (simTime > (w0.etinT || 0)) {
         w0.etinT = simTime + 0.35;
         burst(cible.x + rnd(-0.6, 0.6), cible.kind === 'nid' ? 0.35 : 1.5, cible.z + rnd(-0.6, 0.6), 0xfff0c4, 4);
-        sfx.tone(900 + Math.random() * 700, 0, .04, 'square', .022);
+        // on les ENTEND travailler : un coup de marteau sur deux, sinon l'arc de soudure
+        w0.coupN = (w0.coupN || 0) + 1;
+        const hy = cible.kind === 'nid' ? 0.4 : 1.5;
+        if (w0.coupN % 2) sonMarteau(cible.x, hy, cible.z); else sonSoudure(cible.x, hy, cible.z);
       }
       if (simTime > w0.t) {
         repareCible(cible);
@@ -19527,7 +20208,8 @@ function pompiersTick(dt) {
     case 'route': {
       if (!vivant) { majEtat('retour'); return; }
       // la sirène : deux notes qui alternent (on ne touche pas à celle de la police)
-      if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 0.95; sfx.tone(830, 0, .44, 'sine', .045); sfx.tone(620, .46, .44, 'sine', .045); }
+      // la sirène vient du CAMION : on l'entend arriver de la rue, et pas de sa propre tête
+      if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 1.9; sonSirene(veh ? veh.x : w0.pos.x, veh ? veh.z : w0.pos.z, 'pompier'); }
       const d = metierRoule(w0, feu.x, feu.z, dt, 11);
       for (let i = 0; i < suite.length; i++) metierPassager(suite[i].bot, veh, i, dt);
       if (d < 12) { majEtat('deploie'); w0.t = simTime + 3; if (veh) veh.outilCible = 1; }
@@ -19558,6 +20240,8 @@ function pompiersTick(dt) {
         const t = 0.35 + Math.random() * 0.6;
         burst(w0.pos.x + (feu.x - w0.pos.x) * t + rnd(-0.6, 0.6), 1.7 + rnd(-0.3, 0.9),
           w0.pos.z + (feu.z - w0.pos.z) * t + rnd(-0.6, 0.6), 0x9fdcff, 3);
+        // le jet d'eau : un souffle continu, entretenu tant que la lance crache
+        if (simTime > (w0.jetSonT || 0)) { w0.jetSonT = simTime + 0.55; sonJetEau(w0.pos.x, 1.7, w0.pos.z, 1.1); }
       }
       return;
     }
@@ -19604,6 +20288,8 @@ function balayeurTick(m, dt) {
     // le balai balaie : le bras oscille (on écrase la pose d'animateRig, appelée juste avant)
     w.av.rig.armR.rotation.x = -0.85 + Math.sin(simTime * 6) * 0.45;
     w.av.rig.armR.rotation.z = -0.28; w.av.rig.armL.rotation.x = -0.55;
+    // un frottement de brins par coup de balai : même cadence que le bras (période 2π/6 s)
+    if (simTime > (w.balaiT || 0)) { w.balaiT = simTime + Math.PI / 6; sonBalai(w.pos.x, 0.2, w.pos.z); }
     if (d < 1.4 && !c.balade) { ramasseDetritus(c); m.cible = null; if (Math.random() < 0.25) metierDit(w, pickOne(['et hop, un papier de moins 🧹', 'la ville, c\'est plus joli propre !', 'allez, au suivant 🧹'])); }
   }
   if (w.poubelle) {
@@ -19652,6 +20338,7 @@ function laveurTick(m, dt) {
       metierSync(w);
       if (simTime > (w.mousseT || 0)) {
         w.mousseT = simTime + 0.4;
+        sonRaclette(w.pos.x, w.pos.y + 1.6, w.pos.z);   // le couinement du caoutchouc sur la vitre
         burst(w.pos.x + Math.sin(w.facing) * 0.9 + rnd(-0.5, 0.5), w.pos.y + 1.6 + rnd(-0.5, 0.5), w.pos.z + Math.cos(w.facing) * 0.9 + rnd(-0.5, 0.5), 0xf4f6fa, 3);
       }
       if (simTime > w.t) { m.etat = 'descend'; metierDit(w, pickOne(['et voilà, on y voit clair ! ✨', 'impeccable, je descends'])); }

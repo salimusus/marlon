@@ -6726,11 +6726,16 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
     const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}   // un test precedent peut laisser tourner musique, moteur, sirene ou pluie
+    // La ville a maintenant une RUMEUR de fond permanente (poste F) : le « silence » n'est
+    // plus silencieux. On la met en pause le temps de la mesure, sinon elle seule depassait
+    // le seuil de silence et faisait echouer un test qui parle d'autre chose.
+    try { G.SONV.ambT = G.simTime + 1e6; G.ambiance.stop(); } catch (e) {}
     await dodo(900); const silence = rms();
     G.engine.start('car', 2); G.engine.set(0.6); await dodo(900); const moteur = rms(); G.engine.stop();
     await dodo(400); G.sfx.tone(440, 0, 0.6, 'sine', 0.3); await dodo(120); const tonal = rms();
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
+    try { G.SONV.ambT = 0; } catch (e) {}   // la rumeur de la ville repart pour les tests suivants
     return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume };
   });
   const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
@@ -8251,4 +8256,284 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
     && /braquer \/ rengainer/.test(r.roles) && /sauter/.test(r.roles) && /agir/.test(r.roles)
     && /braquer/.test(r.diag);
   return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée elle fait avancer (gaz ${r.gazRange}), arme braquée elle TIRE et n'avance plus (gaz ${r.tir.gaz}, ${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
+});
+// ================= POSTE F : LES SONS DU MONDE =================
+test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus faible qu\'un son proche, et le panoramique suit la camera', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, yaw: 0 });
+    G.settings.sound = true;
+    const c = G.sfx.unlock(), ch = G.sfx.chaine();
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
+    G.SONV.ambT = G.simTime + 1e6; try { G.ambiance.stop(); } catch (e) {}   // le lit d'ambiance jouerait par-dessus la mesure
+    G.bots.forEach(b => { b.wait = 1e6; b.dance = 0; });                     // et les pas des voisins aussi
+    const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
+    const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; return +Math.sqrt(s / d.length).toFixed(4); };
+    const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
+    // Un coup de poing dure un dixieme de seconde : sur un rendu logiciel qui hoquette, la
+    // fenetre de mesure le manquait une fois sur trois et le test clignotait. On mesure donc
+    // une NOTE TENUE d'une demi-seconde, jouee trois fois, et on garde la crete.
+    const pic = async (dist) => {
+      let m = 0;
+      for (let k = 0; k < 3; k++) {
+        G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', 0.5), { duree: 0.6, portee: 40 });
+        for (let i = 0; i < 16; i++) { await dodo(30); m = Math.max(m, rms()); }
+        await dodo(220);
+      }
+      return +m.toFixed(4);
+    };
+    await dodo(700); await pic(3); await dodo(500);   // un passage de chauffe : le tout premier revient a zero
+    const silence = rms();
+    const loin = await pic(45);
+    const moyen = await pic(20);
+    const pres = await pic(1.5);
+    const horsPortee = G.sonCoup(X + 300, Y + 1.2, Z, 1.4);
+    // le panoramique : le meme son a droite puis a gauche de la camera (yaw = 0 : +x est a droite)
+    G.cam.yaw = 0;
+    G.sonEn(X + 12, Y, Z, () => {}, { duree: .05 }); const droite = G.SON.dernier;
+    G.sonEn(X - 12, Y, Z, () => {}, { duree: .05 }); const gauche = G.SON.dernier;
+    G.bots.forEach(b => { b.wait = 0; });
+    G.SONV.ambT = 0;
+    try { ch.lim.disconnect(an); } catch (e) {}
+    return { etat: c.state, silence, pres, moyen, loin, horsPortee: !!horsPortee, portee: G.SON.portee, coupure: G.SON.coupure,
+      attDroite: droite.att, attGauche: gauche.att, bus: Object.keys(G.MIX), stereo: !!c.createStereoPanner };
+  });
+  const ok = r.etat === 'running' && r.pres > r.moyen * 1.5 && r.moyen > r.loin && r.pres > r.silence + 0.02
+    && !r.horsPortee && r.stereo && Math.abs(r.attDroite - r.attGauche) < 0.001
+    && r.bus.indexOf('voix') >= 0 && r.portee === 40 && r.coupure === 60;
+  return { ok, detail: `tous les sons partaient en MONO dans le bus « effets », au meme volume qu'on soit dessus ou a cinquante metres · sonEn() les place maintenant : gain + panoramique calcules depuis la position du joueur et cam.yaw · mesure a l'analyseur, au bout de la chaine, sur une meme note tenue — a 1,5 m : ${r.pres} · a 20 m : ${r.moyen} · a 45 m : ${r.loin} · (fond de scene ${r.silence}) · au-dela de ${r.coupure} m plus rien n'est cree (${r.horsPortee ? 'raté' : 'refusé'}) · a gauche et a droite le meme son garde la meme force (${r.attDroite} / ${r.attGauche}), seul le cote change · cinq familles de bus desormais : ${r.bus.join(', ')}` };
+});
+
+test('marcher fait du bruit : les pas suivent la cadence de la foulee, plus vite et plus fort en courant, et le timbre change avec le sol', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock();
+    // on compte les DECLENCHEMENTS sur 3 s simulees, a la vitesse de marche puis de course
+    const compte = v => { G.P.phasePas = 0; let n = 0; for (let i = 0; i < 180; i++) n += G.cadencePas(G.P, v, 1 / 60); return n; };
+    const marche = compte(7), course = compte(7 * 1.55), arret = compte(0);
+    // le sol sous les pieds change bien de matiere selon l'endroit
+    const sols = {
+      route: G.solSous(0, 0, 8), plage: G.solSous(113, 0.2, 40), mer: G.solSous(150, 0.2, 40),
+      timbres: Object.keys(G.SOLS || {}).length,
+    };
+    // et le son sort vraiment : on compte les pas JOUES quand le joueur avance pour de bon
+    // (touche « avancer » maintenue, comme un vrai joueur)
+    G.bots.forEach(b => { b.wait = 1e6; });   // sinon on compterait aussi les pas des voisins
+    G.SON.raz(); G.P.grounded = true; G.P.swimming = false; G.P.phasePas = 0;
+    G.P.pos.set(0, 0, 8); G.P.vel.set(0, 0, 0);
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60; i++) { G.P.vel.y = 0; G.P.grounded = true; G.step(1 / 60, true); }
+    G.keys.delete('KeyW');
+    const joues = G.SON.pas;
+    G.bots.forEach(b => { b.wait = 0; });
+    return { marche, course, arret, sols, joues, timbres: Object.keys(G.SOLS).length };
+  });
+  const ok = r.marche >= 9 && r.marche <= 14 && r.course > r.marche * 1.3 && r.arret === 0
+    && r.sols.route === 'bitume' && r.sols.plage === 'sable' && r.sols.mer === 'eau' && r.timbres >= 7 && r.joues >= 2;
+  return { ok, detail: `on marchait EN SILENCE partout sauf dans la neige, et la neige elle-meme sonnait a un rythme fixe qui n'avait rien a voir avec les jambes · le pas est maintenant cale sur la MEME horloge que l'animation (dt × vitesse × 1,7 rad, un pas par demi-periode) : ${r.marche} pas en 3 s au pas de marche, ${r.course} en courant (×${(r.course / r.marche).toFixed(2)}), 0 a l'arret · et ${r.timbres} timbres de sol selon la matiere sous les pieds (route → ${r.sols.route}, plage → ${r.sols.plage}, mer → ${r.sols.mer}) · ${r.joues} pas reellement joues en avancant pour de vrai dans la ville` };
+});
+
+test('frapper fait mal AUX OREILLES aussi : impact du coup qui porte, cri « aie » de celui qui encaisse, souffle quand on frappe dans le vide', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    const b = G.bots[0];
+    // le coup qui PORTE
+    b.pos.set(G.P.pos.x + 1.2, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0; b.robbed = false;
+    G.P.punchT = 0; G.P.combo = 0; G.SON.raz();
+    G.attack('punch');
+    const porte = { coups: G.SON.coups, aies: G.SON.aies };
+    // le coup dans le VIDE : pas d'impact, pas de cri. On eloigne TOUT LE MONDE, sinon le
+    // poing trouve un autre habitant a portee et le test croit qu'on a frappe dans l'air.
+    const anciennes = G.bots.map(x => x.pos.clone());
+    G.bots.forEach(x => { x.pos.set(G.P.pos.x + 300, x.pos.y, G.P.pos.z + 300); x.av.group.position.copy(x.pos); });
+    const cible = G.nearestFighter(2.6);
+    G.P.punchT = 0; G.P.combo = 0; G.SON.raz();
+    G.attack('punch');
+    const vide = { coups: G.SON.coups, aies: G.SON.aies, joues: G.SON.joues, cible: !!cible };
+    G.bots.forEach((x, i) => { x.pos.copy(anciennes[i]); x.av.group.position.copy(x.pos); });
+    // le joueur qui encaisse crie aussi
+    G.P.hp = 100; G.SON.raz(); G.hurt(9, 'un cogneur', 1, 0, 1);
+    const encaisse = { coups: G.SON.coups, aies: G.SON.aies };
+    // chaque personnage a SA hauteur de voix, tiree de son nom, et elle ne bouge jamais
+    const v1 = G.hauteurVoix('Lucas_2014'), v2 = G.hauteurVoix('Ines_gg', true), v1bis = G.hauteurVoix('Lucas_2014');
+    return { porte, vide, encaisse, v1: +v1.toFixed(3), v2: +v2.toFixed(3), stable: v1 === v1bis };
+  });
+  const ok = r.porte.coups === 1 && r.porte.aies === 1 && !r.vide.cible && r.vide.coups === 0 && r.vide.aies === 0 && r.vide.joues >= 1
+    && r.encaisse.coups === 1 && r.encaisse.aies === 1 && r.stable && Math.abs(r.v1 - r.v2) > 0.1;
+  return { ok, detail: `un coup de poing, un combo et un coup de pied faisaient exactement le meme « pok » mono, et le personnage frappe ne disait rien · desormais : effort + impact sourd + claquement doses par la force quand ca porte (${r.porte.coups} impact, ${r.porte.aies} cri), rien qu'un souffle dans l'air quand on frappe a cote (${r.vide.coups} impact), et le joueur qui encaisse crie aussi (${r.encaisse.aies}) · chaque personnage a SA hauteur de voix, tiree de son nom et toujours la meme : Lucas ${r.v1}, Ines ${r.v2}` };
+});
+
+test('l\'helicoptere bat du rotor : la cadence des impulsions ET leur hauteur suivent le regime, et on l\'entend de loin', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock();
+    const h = G.city.cars.find(c => c.heli);
+    if (!h) return { pas: true };
+    h.x = G.P.pos.x + 12; h.z = G.P.pos.z; h.y = 14; h.busy = true;
+    const mesure = regime => { h.spin = regime; h.rotorAcc = 0; G.SON.raz(); for (let i = 0; i < 120; i++) G.sonsVille(1 / 60); return { n: G.SON.rotorEmis, f: G.SON.rotorF, taux: G.SON.rotorTaux }; };
+    const ralenti = mesure(0.1), plein = mesure(1);
+    // loin, mais pas trop : au-dela de 120 m il se tait
+    h.x = G.P.pos.x + 200; const tresLoin = mesure(1);
+    h.x = G.P.pos.x + 12; h.busy = false; h.spin = 0;
+    return { ralenti, plein, tresLoin: tresLoin.n };
+  });
+  const ok = !r.pas && r.plein.n > r.ralenti.n * 1.8 && r.plein.f > r.ralenti.f * 1.4 && r.plein.taux > r.ralenti.taux * 1.8 && r.tresLoin === 0;
+  return { ok, detail: `l'helicoptere n'avait qu'une note grave toutes les 0,55 s quand l'armee volait, et RIEN le reste du temps · un rotor, ce sont des impulsions : leur cadence et leur hauteur suivent maintenant le regime — au ralenti ${r.ralenti.taux}/s a ${r.ralenti.f} Hz, plein regime ${r.plein.taux}/s a ${r.plein.f} Hz (${r.ralenti.n} contre ${r.plein.n} impulsions en 2 s), avec le sifflement de turbine par-dessus · et il se tait au-dela de 120 m (${r.tresLoin} impulsion)` };
+});
+
+test('entrer au commissariat, a l\'hopital ou a l\'ecole declenche l\'accueil parle — une seule fois, et chaque metier a sa phrase', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock();
+    G.simTime += 500;   // on repart d'une ardoise propre (le delai anti-repetition est de 45 s)
+    for (const k of Object.keys(G.ACCUEILS)) G.accueilTick();
+    const dits = [];
+    const entre = (drapeau, valeur) => {
+      const av = G.SON.accueils;
+      G.city[drapeau] = valeur; G.accueilTick();
+      const phrase = G.SON.dernierAccueil;
+      G.accueilTick(); G.accueilTick(); G.accueilTick();   // on reste plante devant le comptoir
+      const apres = G.SON.accueils - av;
+      G.city[drapeau] = valeur && typeof valeur === 'object' ? null : false; G.accueilTick();
+      dits.push({ drapeau, n: apres, lieu: phrase && phrase.lieu, texte: phrase && phrase.texte });
+      return apres;
+    };
+    const police = entre('plainteNear', true);
+    const hopital = entre('medNear', true);
+    const ecole = entre('classNear', { x: 0, z: 0 });
+    const garage = entre('tuneNear', true);
+    const banque = entre('deskNear', true);
+    const coiffeur = entre('coiffeurNear', true);
+    // on revient tout de suite au commissariat : il ne resalue pas
+    const av = G.SON.accueils; G.city.plainteNear = true; G.accueilTick(); G.city.plainteNear = false; G.accueilTick();
+    const retour = G.SON.accueils - av;
+    // et une fois le delai passe, il resalue
+    G.simTime += G.ACCUEIL_DELAI + 5;
+    const av2 = G.SON.accueils; G.city.plainteNear = true; G.accueilTick(); G.city.plainteNear = false; G.accueilTick();
+    const plusTard = G.SON.accueils - av2;
+    const metiers = Object.keys(G.ACCUEILS).length;
+    return { police, hopital, ecole, garage, banque, coiffeur, retour, plusTard, dits, metiers, parles: G.PARLE.n, pseudo: G.myCfg.name };
+  });
+  const d = k => (r.dits.find(x => x.lieu === k) || {}).texte || '';
+  const ok = r.police === 1 && r.hopital === 1 && r.ecole === 1 && r.garage === 1 && r.banque === 1 && r.coiffeur === 1
+    && r.retour === 0 && r.plusTard === 1 && r.metiers >= 11 && r.parles >= 6
+    && /que puis-je pour vous/i.test(d('police')) && /comment puis-je vous aider/i.test(d('hopital'))
+    && d('ecole').indexOf(r.pseudo) > 0;
+  return { ok, detail: `on entrait au commissariat, a l'hopital, a l'ecole ou dans une boutique et PERSONNE ne disait bonjour · chaque metier a maintenant sa phrase, dite a voix haute au moment ou l'on arrive au comptoir (${r.metiers} lieux) : « ${d('police')} », « ${d('hopital')} », « ${d('ecole')} » · une seule fois par arrivee (${r.police} salut au commissariat, ${r.retour} en revenant tout de suite, ${r.plusTard} apres le delai de ${45} s), et un repli en voix « bruitee » si la synthese vocale du navigateur manque` };
+});
+
+test('le budget de seize sons places en meme temps n\'est jamais depasse : les plus proches gagnent la place', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
+    // quarante sons LOINTAINS d'un coup : le budget doit tenir
+    G.SON.raz();
+    for (let i = 0; i < 40; i++) G.sonCoup(X + 20 + i * 0.3, Y + 1, Z, 1);
+    const plein = { pic: G.SON.pic, vivants: G.SON.vivants.length, refuses: G.SON.refuses, max: G.SON.max };
+    // maintenant un son TOUT PROCHE : il doit passer, en prenant la place du plus lointain
+    const proche = !!G.sonCoup(X + 0.5, Y + 1, Z, 1);
+    const apres = { pic: G.SON.pic, vivants: G.SON.vivants.length };
+    // le plus lointain a bien ete evince
+    const plusLoin = Math.max(...G.SON.vivants.map(v => v.d));
+    // et une pluie de sons pendant plusieurs images de jeu ne fait jamais deborder
+    G.SON.raz();
+    for (let t = 0; t < 30; t++) { for (let i = 0; i < 12; i++) G.sonPas(X + i, Y, Z + (i % 3), 'bitume', 1); await dodo(20); }
+    const rafale = { pic: G.SON.pic, joues: G.SON.joues, refuses: G.SON.refuses };
+    return { plein, proche, apres, plusLoin: +plusLoin.toFixed(1), rafale };
+  });
+  const ok = r.plein.pic <= r.plein.max && r.plein.vivants <= r.plein.max && r.plein.refuses > 0
+    && r.proche && r.apres.vivants <= r.plein.max && r.rafale.pic <= 16 && r.rafale.joues > 20;
+  return { ok, detail: `rien ne bornait le nombre de sons : une bagarre, une rue pleine et un helicoptere empilaient des dizaines de voix en meme temps, le limiteur ecrasait tout et la carte son grognait · le budget est desormais de ${r.plein.max} sons places simultanement, les PLUS PROCHES gagnant la place — 40 sons lointains d'un coup : ${r.plein.pic} retenus, ${r.plein.refuses} refuses ; un son tout pres passe quand meme (${r.proche ? 'oui' : 'non'}) en evincant le plus lointain (le plus eloigne qui reste est a ${r.plusLoin} m) ; et une rafale de 360 pas sur 30 images ne fait jamais depasser ${r.rafale.pic} sons simultanes (${r.rafale.joues} joues, ${r.rafale.refuses} refuses)` };
+});
+
+test('chaque quartier a sa rumeur et les bots qui parlent s\'ENTENDENT : une voix par personnage, tiree de son nom', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    // la rumeur suit le quartier ou l'on se trouve
+    const rumeur = (x, z) => { G.P.pos.set(x, 1, z); G.SONV.ambT = 0; G.sonsVille(1 / 60); const e = G.ambiance.etat(); return { k: e.cle, vol: e.volCible, coupe: e.coupeCible }; };
+    const centre = rumeur(0, 40), plage = rumeur(150, 40), zone = rumeur(-145, 40), parc = rumeur(0, 80);
+    // une bulle de bot fait du bruit, celle du joueur non (on ne se double pas soi-meme)
+    G.P.pos.set(0, 1, 8);
+    const b = G.bots[0];
+    b.pos.set(G.P.pos.x + 4, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    G.SON.raz(); G.bubble(b.av, 'salut, ça va ?'); const bot = G.SON.blabla;
+    G.SON.raz(); G.bubble(G.me, 'moi je parle tout seul'); const joueur = G.SON.blabla;
+    // trop loin, on ne l'entend plus
+    b.pos.set(G.P.pos.x + 120, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos);
+    G.SON.raz(); G.bubble(b.av, 'et de loin ?'); const loin = G.SON.blabla;
+    b.pos.set(G.P.pos.x + 4, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos);
+    return { centre, plage, zone, parc, bot, joueur, loin, familles: Object.keys(G.QUARTIERS).length };
+  });
+  const ok = r.centre.k === 'centre' && r.plage.k === 'plage' && r.zone.k === 'zone' && r.parc.k === 'parc'
+    && r.zone.coupe < r.centre.coupe && r.plage.vol > r.parc.vol && r.familles >= 8
+    && r.bot === 1 && r.joueur === 0 && r.loin === 0;
+  return { ok, detail: `la ville etait MUETTE : pas de rumeur, et douze habitants qui discutaient en bulles sans un son · chaque quartier a maintenant sa rumeur, un lit de bruit filtre qui fond d'un quartier a l'autre (${r.familles} ambiances — centre ${r.centre.vol} a ${r.centre.coupe} Hz, plage ${r.plage.vol} avec vagues et mouettes, La Zone plus sourde ${r.zone.coupe} Hz, parc ${r.parc.vol} avec des oiseaux) · et toute bulle de chat s'entend : une voix « bruitee » spatialisee, une hauteur par personnage tiree de son nom (${r.bot} voix pour le bot d'a cote, ${r.joueur} pour la sienne — on ne se double pas soi-meme, ${r.loin} a 120 m)` };
+});
+
+test('le feu, les sirenes d\'urgence et les chantiers s\'entendent — chacun d\'ou il vient, et jamais plus fort que la scene', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
+    const un = f => { G.SON.raz(); return { ok: !!f(), d: G.SON.dernier && G.SON.dernier.d, att: G.SON.dernier && G.SON.dernier.att }; };
+    const feu = un(() => G.sonFeu(X + 5, 1.4, Z, 1));
+    const boum = un(() => G.sonExplosion(X + 8, 1, Z));
+    const boumLoin = un(() => G.sonExplosion(X + 200, 1, Z));   // trop loin : on ne sursaute plus
+    const sirenes = Object.keys(G.SIRENES).map(k => k + ':' + (G.sonSirene(X + 20, Z, k) ? 'oui' : 'non'));
+    const chantier = ['sonMarteau', 'sonSoudure', 'sonBalai', 'sonJetEau', 'sonRaclette'].map(n => n + ':' + (G[n](X + 3, 1, Z, 1) ? 'oui' : 'non'));
+    // on reconnait un vehicule d'urgence quelle que soit la facon dont son poste l'a nomme
+    const genres = [G.urgenceDe({ kind: 'ambulance' }), G.urgenceDe({ ambulance: true }), G.urgenceDe({ kind: 'depanneuse' }),
+      G.urgenceDe({ urgence: 'dépanneuse' }), G.urgenceDe({ kind: 'pompier' }), G.urgenceDe({ police: true }), G.urgenceDe({ kind: 'kart' })];
+    // un incendie crepite tout seul, depuis l'endroit ou il brule
+    const f = G.declencheIncendie(X + 12, Z + 4, 100);
+    G.SON.raz(); f.cd = 0; G.incendiesTick(1 / 60);
+    const incendie = { sons: G.SON.joues, d: G.SON.dernier && G.SON.dernier.d };
+    f.force = 0; G.incendiesTick(1 / 60);
+    return { feu, boum, boumLoin, sirenes, chantier, genres, incendie, familles: Object.keys(G.SIRENES).length };
+  });
+  const ok = r.feu.ok && r.boum.ok && !r.boumLoin.ok && r.familles === 4
+    && r.sirenes.every(s => /oui$/.test(s)) && r.chantier.every(s => /oui$/.test(s))
+    && r.genres.slice(0, 6).join(',') === 'ambulance,ambulance,depanneuse,depanneuse,pompier,police' && r.genres[6] === null
+    && r.incendie.sons >= 1 && r.incendie.d > 10;
+  return { ok, detail: `le « BOOM » d'un vehicule, le crepitement d'un incendie et la sirene des pompiers partaient tous EN MONO et a plein volume, ou qu'on soit · tout passe maintenant par sonEn : l'explosion a 8 m sort a ${r.boum.att} d'attenuation et a 200 m elle n'est meme plus creee, le feu respire et craque depuis l'endroit ou il brule (${r.incendie.sons} son a ${r.incendie.d} m), ${r.familles} sirenes a deux tons (${r.sirenes.join(' · ')}) et les employes municipaux s'entendent travailler (${r.chantier.join(' · ')}) · et une ambulance ou une depanneuse est reconnue quelle que soit la facon dont son poste l'a nommee (${r.genres.slice(0, 6).join(', ')})` };
+});
+
+test('le corps a corps s\'entend en detail : crochet au ventre, parade qui claque, lame qui siffle', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    const b = G.bots[0];
+    // on eloigne les autres : sinon le poing trouve un voisin et le test mesure le mauvais coup
+    G.bots.forEach((x, i) => { if (i) { x.pos.set(G.P.pos.x + 300, x.pos.y, G.P.pos.z + 300); x.av.group.position.copy(x.pos); } });
+    const pose = () => { b.pos.set(G.P.pos.x + 1.2, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0; b.robbed = false; b.parade = 0; G.P.punchT = 0; };
+    pose(); G.P.combo = 0; G.SON.raz(); G.attack('punch');
+    const direct = { coups: G.SON.coups, aies: G.SON.aies };
+    // deuxieme coup du combo : le crochet au VENTRE (plus d'impact « visage », mais un cri quand meme)
+    pose(); G.P.combo = 1; G.P.lastHitT = G.simTime; G.SON.raz(); G.attack('punch');
+    const ventre = { coups: G.SON.coups, aies: G.SON.aies, joues: G.SON.joues, combo: G.P.combo };
+    // l'adversaire PARE : ca claque sur l'avant-bras, pas sur le corps
+    pose(); b.parade = G.simTime + 5; G.P.combo = 0; G.SON.raz(); G.attack('punch');
+    const parade = { coups: G.SON.coups, joues: G.SON.joues };
+    // une LAME en main : elle siffle
+    pose(); G.P.melee = 'couteau'; G.P.combo = 0; G.SON.raz(); G.attack('punch');
+    const lame = { coups: G.SON.coups, joues: G.SON.joues };
+    G.P.melee = null;
+    return { direct, ventre, parade, lame };
+  });
+  const ok = r.direct.coups === 1 && r.direct.aies === 1
+    && r.ventre.coups === 0 && r.ventre.aies === 1 && r.ventre.joues >= 3 && r.ventre.combo === 2
+    && r.parade.coups === 0 && r.parade.joues >= 2
+    && r.lame.coups === 0 && r.lame.joues >= 2;
+  return { ok, detail: `un direct, un crochet au ventre, une parade et un coup de couteau faisaient tous EXACTEMENT le meme bruit · ils sont maintenant distincts : le direct claque sur le corps (${r.direct.coups} impact), le deuxieme coup du combo s'enfonce dans le VENTRE — sourd, et l'air part des poumons (${r.ventre.joues} sons, plus d'impact « visage »), la parade claque sec sur l'avant-bras (${r.parade.joues} sons, ${r.parade.coups} impact), et la lame siffle avant d'entailler (${r.lame.joues} sons) · les drapeaux « parade » et « couteau » sont poses par le poste qui anime le corps a corps : tant qu'ils n'existent pas, on retombe sur l'impact normal` };
 });

@@ -322,6 +322,15 @@ body.city #gps{display:block}body.lobby #gps{display:none!important}
 .mcard{border:2px solid #dbe3f5;border-radius:12px;padding:10px;background:#f7f9fe;text-align:left;font-size:13px;color:#1b2a4a}
 .mcard b{display:block;font-size:14px}.mcard .mr{color:#ff9f1c;font-weight:900}.mcard .btn{margin:8px 0 0;padding:6px 12px;font-size:13px}
 .mcard.active{border-color:#4f8dff;background:#eef4ff}
+/* Demandé par le poste Activité pour son tableau des missions, qui posait ces deux styles
+   EN LIGNE dans le HTML : une mission verrouillée (grisée, non cliquable, avec son cadenas)
+   et la ligne de difficulté en étoiles. Ils suivent la grille commune. */
+.mcard.locked{border-color:#d8dde8;background:#eef0f5;color:#8d97ab;filter:grayscale(.5);cursor:not-allowed;position:relative}
+.mcard.locked b,.mcard.locked .mr{color:#8d97ab}
+.mcard.locked::after{content:'🔒';position:absolute;top:8px;right:9px;font-size:15px;filter:none;opacity:.75}
+.mcard.locked .btn{opacity:.5;pointer-events:none}
+.mcard .mdif{display:block;margin-top:3px;font-size:12px;font-weight:900;color:#ff9f1c;letter-spacing:1px;line-height:1.2}
+.mcard.locked .mdif{color:#a7b0c2}
 .ocard{border:2px solid #dbe3f5;border-radius:12px;padding:9px 8px;background:#f7f9fe;color:#1b2a4a;font-weight:800;font-size:13px;cursor:pointer;text-align:center;line-height:1.25}
 .ocard:hover{border-color:#4f8dff;background:#eef4ff}
 .ocard span{display:block;font-size:20px;margin-bottom:2px}

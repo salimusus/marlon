@@ -4556,10 +4556,15 @@ test('escarmouches : ils viennent te chercher, et on coince leurs isolés', asyn
     res.mission = G.gang.mission ? { type: G.gang.mission.type, n: G.gang.mission.membres.length,
       chance: G.gang.mission.chanceDep, proie: G.gang.mission.proie ? G.gang.mission.proie.m.nom : null } : null;
     // on mène le coup à son terme, avec des hommes assez forts pour ne pas dépendre du hasard
+    // il faut une PLACE dans le gang (le rang la limite, et les tests precedents ont pu la
+    // remplir) et le vaincu ne rallie qu'avec 85 % de chances au mieux : ici on ne teste pas
+    // le hasard mais le mecanisme, alors on force le tirage
+    G.gang.membresLibres = [];
     const v = G.gang.mission.proie.m, avantLibres = (G.gang.membresLibres || []).length;
     G.gang.mission.membres.forEach(b => { b.perf = 100; b.rdv.arrive = true; });
     G.gang.mission.etape = 'action'; G.gang.mission.fin = G.simTime - 1;
-    G.gangMissionTick(1 / 60);
+    const vraiHasard = Math.random; Math.random = () => 0;
+    try { G.gangMissionTick(1 / 60); } finally { Math.random = vraiHasard; }
     res.gain = { pieces: G.wallet, vaincuKO: v.ko > G.simTime, missionFinie: !G.gang.mission };
     // le ralliement se fait juste après (petit délai pour l'effet)
     await dodo(1500);
@@ -4860,6 +4865,8 @@ test('on peut jouer au tennis avec un garde du corps, et les autres s\'écartent
     __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
     const G = __G, res = {};
     const joueur = G.bots[0], g1 = G.bots[1], g2 = G.bots[2];
+    // trois gardes au maximum : un garde reste d'un test precedent bloquait la troisieme place
+    for (const b of G.bots) { b.gardeCorps = 0; b.garde = 0; b.protege = null; }
     for (const b of [joueur, g1, g2]) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.sport = null; b.rdv = null; b.wait = 0; }
     G.P.pos.set(13, 0.3, -8);
     G.botGardeDuCorps(joueur); G.botGardeDuCorps(g1); G.botGardeDuCorps(g2);
@@ -5993,12 +6000,12 @@ test('on connecte une smart TV et le telephone sert de manette', async p => {
       vuAvecApi, vuSansApi, texteApi, texteSansApi, copie,
       castPret: G.castPret(), route, enTV, avant, routeMan, badgeVu };
   });
-  const ok = r.finTV && r.qrTV > 200 && r.qrManette > 200 && r.cartes === 3 && r.boutonCast
+  const ok = r.finTV && r.qrTV > 200 && r.qrManette > 200 && r.cartes >= 3 && r.boutonCast
     && r.vuAvecApi && r.vuSansApi && r.copie === r.lien && /copier/i.test(r.texteSansApi)
     && /^[A-Z]{4}$/.test(r.codeManette) && /#manette=/.test(r.lienManette)
     && r.route === 'tv' && r.enTV && !r.avant
     && r.routeMan.x === 'manette' && r.routeMan.ouvert && r.badgeVu;
-  return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton reste TOUJOURS a l'écran (il disparaissait des que le navigateur ne connaissait pas l'API Presentation — Safari, Firefox, ou Chrome hors https) : « ${r.texteApi} » quand l'appareil sait diffuser, « ${r.texteSansApi} » sinon, et il copie alors le lien tout seul · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
+  return { ok, detail: `le salon 📺 n'offrait aucun moyen d'envoyer le jeu SUR la télé : il fallait retaper l'adresse a la main · il a maintenant ses ${r.cartes} cartes — la télé, la manette, les amis, la manette PS5 · celle de la télé affiche le lien ${r.lien} et son QR (${r.qrTV} points), et le bouton reste TOUJOURS a l'écran (il disparaissait des que le navigateur ne connaissait pas l'API Presentation — Safari, Firefox, ou Chrome hors https) : « ${r.texteApi} » quand l'appareil sait diffuser, « ${r.texteSansApi} » sinon, et il copie alors le lien tout seul · ouvrir ce lien bascule tout seul en affichage géant (${r.enTV}), et le lien #manette=${r.codeManette} ouvre directement l'écran manette sur le téléphone (${r.routeMan.ouvert}) · depuis le canapé, une pastille en bas de l'image dit si la manette répond` };
 });
 
 test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', async p => {

@@ -22291,6 +22291,12 @@ function animTransArme(av, duree) {
 function animTransApplique(av) {
   const g = av && (av.group || av); if (!g) return;
   const u = g.userData; if (!u.trFin || simTime >= u.trFin) return;
+  // ON NE GLISSE QUE SUR UNE COURTE DISTANCE. Au-delà de quatre mètres, ce n'est pas un pas
+  // vers un siège mais une TÉLÉPORTATION voulue par le jeu (banc d'essai, mission, retour au
+  // garage) : le personnage traversait alors cent quarante mètres en fondu, et on ne se
+  // voyait pas au volant de la voiture qu'on venait de prendre.
+  const dx = u.trX - g.position.x, dy = u.trY - g.position.y, dz = u.trZ - g.position.z;
+  if (dx * dx + dy * dy + dz * dz > 16) { u.trFin = 0; return; }
   const k = animLiss(clamp((u.trFin - simTime) / u.trDur, 0, 1));   // 1 juste après le déclenchement, 0 à la fin
   g.position.x += (u.trX - g.position.x) * k;
   g.position.y += (u.trY - g.position.y) * k;

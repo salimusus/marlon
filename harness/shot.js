@@ -356,6 +356,8 @@ window.__G = {
   appuiDosMonde: typeof appuiDosMonde === 'function' ? appuiDosMonde : null,
   knifeMesh: typeof knifeMesh === 'function' ? knifeMesh : null,
   coupCouteau: typeof coupCouteau === 'function' ? coupCouteau : null,
+  garde: typeof garde === 'function' ? garde : null,
+  esquive: typeof esquive === 'function' ? esquive : null,
   setGarde: typeof setGarde === 'function' ? setGarde : null,
   setAccroupi: typeof setAccroupi === 'function' ? setAccroupi : null,
   defenseJoueur: typeof defenseJoueur === 'function' ? defenseJoueur : null,

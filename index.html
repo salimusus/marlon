@@ -8766,6 +8766,11 @@ function defenseJoueur(dmg, dx, dz, melee) {
   if (P.garde && devant) return { dmg: dmg * 0.25, pare: true };
   return { dmg };
 }
+// ---- LES DEUX GESTES DE DÉFENSE, exposés sous le nom que la manette appelle ----
+// `garde(true/false)` : les deux poings devant le visage (L1 sur la DualSense).
+// `esquive(true/false)` : se baisser (touche C ou Ctrl au clavier, bouton 🙇 au doigt).
+function garde(on) { return setGarde(on); }
+function esquive(on) { return setAccroupi(on); }
 function setGarde(on) {   // point d'entrée manette / tactile / clavier : lever ou baisser la garde
   on = !!on; if (P.garde === on) return;
   P.garde = on; me.rig.garde = on;
@@ -14104,6 +14109,7 @@ function toggleJet() {
   P.jet = !P.jet; P.fuel = 100; setJet(me, P.jet); msg(P.jet ? (isMobile ? '🚀 Propulseur ! Maintiens SAUT pour t\'envoler' : '🚀 Propulseur ! Maintiens Espace pour t\'envoler') : '🚀 Propulseur rangé', 1800); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); updateAct();
 }
 function equipWeapon(kind) {   // équipe une arme (ou range : null)
+  if (kind === 'couteau') kind = 'knife';   // la manette et les commandes parlées disent « couteau »
   P.weapon = kind; P.gun = !!kind; P.aimToggle = false; P.drawn = false; $('drawBtn').textContent = '✊'; document.body.classList.remove('drawn'); $('aimBtn').classList.remove('on'); setWeapon(me, kind, false); document.body.classList.toggle('gun', !!kind);
   majEtuis();
   { const fb = $('fireBtn'); if (fb) fb.textContent = kind === 'knife' ? '🔪' : kind === 'grenade' ? '💣' : '🔫'; }   // le bouton dit ce qu'on va faire

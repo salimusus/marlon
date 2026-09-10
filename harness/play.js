@@ -8210,6 +8210,12 @@ test('la garde encaisse le coup, se baisser l\'esquive', async p => {
     G.setAccroupi(false); for (let i = 0; i < 80; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
     me.group.position.set(0, 0, 0); me.group.updateMatrixWorld(true);
     res.debout = { descente: +rig.baisse.toFixed(3), tete: +wp(me.tete).y.toFixed(2) };
+    // LE CONTRAT AVEC LA MANETTE : les deux gestes s'appellent garde(on) et esquive(on)
+    res.noms = { garde: typeof G.garde === 'function', esquive: typeof G.esquive === 'function' };
+    posePlayer(); G.garde(true); res.noms.gardeMarche = G.P.garde && me.rig.garde; G.garde(false);
+    res.noms.gardeBaissee = !G.P.garde;
+    G.esquive(true); res.noms.esquiveMarche = G.P.accroupi && me.rig.accroupi; G.esquive(false);
+    res.noms.esquiveFinie = !G.P.accroupi;
     // EN FACE AUSSI : un habitant qui se garde encaisse le quart du coup
     posePlayer(); const b = seul(1.3);
     G.P.punchT = 0; G.P.combo = 0; G.P.lastHitT = -99; G.punch(); res.botNu = 100 - b.hp;
@@ -8225,8 +8231,9 @@ test('la garde encaisse le coup, se baisser l\'esquive', async p => {
     && r.gardeOuverte < -1.8
     && ba.descente > 0.15 && ba.tete < r.debout.tete - 0.15 && Math.abs(ba.semelle) < 0.02 && ba.genou > 1.2
     && r.debout.descente < 0.02
-    && r.botNu > 0 && r.botGarde > 0 && r.botGarde <= r.botNu / 2;
-  return { ok, detail: `on encaissait tout sans jamais pouvoir se défendre · LA GARDE, les deux poings serrés devant le visage (à ${po.poingsY} m, la tête va de ${po.teteBas} à ${po.teteHaut} m, poings ${po.devant} m en avant, coudes rentrés à ${po.coudeG} / ${po.coudeD} rad), fait tomber le coup de ${r.nu} à ${r.garde} PV — mais elle ne vaut que de face (${r.dansLeDos} PV dans le dos) et n'arrête pas une balle (${r.balle} PV) · SE BAISSER esquive complètement (${r.baisse} PV) : le bassin descend de ${ba.descente} m, la tête de ${(r.debout.tete - ba.tete).toFixed(2)} m, genoux pliés à ${ba.genou} rad et semelles toujours posées (${ba.semelle} m) · la garde s'ouvre le temps du coup (${r.gardeOuverte} rad) · et EN FACE aussi on se garde : l'habitant encaisse ${r.botGarde} au lieu de ${r.botNu}` };
+    && r.botNu > 0 && r.botGarde > 0 && r.botGarde <= r.botNu / 2
+    && r.noms.garde && r.noms.esquive && r.noms.gardeMarche && r.noms.gardeBaissee && r.noms.esquiveMarche && r.noms.esquiveFinie;
+  return { ok, detail: `on encaissait tout sans jamais pouvoir se défendre · LA GARDE, les deux poings serrés devant le visage (à ${po.poingsY} m, la tête va de ${po.teteBas} à ${po.teteHaut} m, poings ${po.devant} m en avant, coudes rentrés à ${po.coudeG} / ${po.coudeD} rad), fait tomber le coup de ${r.nu} à ${r.garde} PV — mais elle ne vaut que de face (${r.dansLeDos} PV dans le dos) et n'arrête pas une balle (${r.balle} PV) · SE BAISSER esquive complètement (${r.baisse} PV) : le bassin descend de ${ba.descente} m, la tête de ${(r.debout.tete - ba.tete).toFixed(2)} m, genoux pliés à ${ba.genou} rad et semelles toujours posées (${ba.semelle} m) · la garde s'ouvre le temps du coup (${r.gardeOuverte} rad) · et EN FACE aussi on se garde : l'habitant encaisse ${r.botGarde} au lieu de ${r.botNu} · les deux gestes repondent aux noms convenus avec la manette : garde(on) et esquive(on)` };
 });
 
 test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs coups', async p => {
@@ -8239,6 +8246,8 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     const fiche = G.catalog('armes').find(x => x.id === 'knife');
     res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
     G.wallet = 500; G.owned.add('arme:knife'); G.owned.add('arme:pistol'); G.saveOwned && G.saveOwned();
+    G.equipWeapon('couteau'); res.nomFrancais = G.P.weapon;   // la manette dit « couteau »
+    res.tourDesArmes = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 6; i++) { G.armeSuivante(1); vus.push(G.P.weapon); } return vus; })();
     G.majEtuis(); me.group.updateMatrixWorld(true);
     res.boutique.apresAchat = G.catalog('armes').find(x => x.id === 'knife').owned();
     // ---- l'étui, du côté OPPOSÉ au pistolet, visible en permanence ----
@@ -8290,8 +8299,8 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     && c[0].hp === 100 - r.degats && c[1].hp === 100 - 2 * r.degats && !c[1].ko && c[2].ko
     && c.every(x => Math.abs(x.ventre - 0.95) < 0.02 && x.enMain && x.degaine)
     && r.rangement.programme > 0.4 && !r.rangement.enMainApres && r.rangement.retourFourreau < 0.03
-    && r.horsPortee === 100;
-  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV)` };
+    && r.horsPortee === 100 && r.nomFrancais === 'knife' && r.tourDesArmes.includes('knife');
+  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
 });
 
 test('le fusil et le fusil à lunette reposent dans un étui de dos', async p => {

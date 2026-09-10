@@ -303,6 +303,14 @@ window.__G = {
   gangeurKO: typeof gangeurKO === 'function' ? gangeurKO : null,
   verifieElimination: typeof verifieElimination === 'function' ? verifieElimination : null,
   renaitGang: typeof renaitGang === 'function' ? renaitGang : null,
+  GANTS: typeof GANTS !== 'undefined' ? GANTS : null,
+  SAC_BANANE: typeof SAC_BANANE !== 'undefined' ? SAC_BANANE : null,
+  poseChaussures: typeof poseChaussures === 'function' ? poseChaussures : null,
+  poseGants: typeof poseGants === 'function' ? poseGants : null,
+  mainDroite: typeof mainDroite === 'function' ? mainDroite : null,
+  JERSEYS: typeof JERSEYS !== 'undefined' ? JERSEYS : null,
+  jerseyOf: typeof jerseyOf === 'function' ? jerseyOf : null,
+  itemKey: typeof itemKey === 'function' ? itemKey : null,
   peutKidnapper: typeof peutKidnapper === 'function' ? peutKidnapper : null,
   kidnapper: typeof kidnapper === 'function' ? kidnapper : null,
   otageTick: typeof otageTick === 'function' ? otageTick : null,
@@ -800,7 +808,9 @@ window.__G = {
   tactile(on) { document.body.classList.toggle('touch', !!on); },
   hud() { return { jump: document.getElementById('jumpBtn').textContent, car: document.getElementById('carBtn').textContent,
     punch: document.getElementById('punchBtn').textContent, emote: document.getElementById('emoteBtn').textContent }; },
-  arm() { return me.rig.armR.children.length; },
+  // Ce qu'on tient est passe du groupe du bras au noeud `main`, au centre du poing rond :
+  // on compte donc les deux, sinon le test « rien ne reste colle a la main » ne voyait plus rien.
+  arm() { return me.rig.armR.children.length + (me.rig.armR.main ? me.rig.armR.main.children.length : 0); },
 };
 `;
 

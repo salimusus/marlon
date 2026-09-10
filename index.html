@@ -6714,6 +6714,20 @@ function voieProche(x, z, cap) {
   }
   return best;
 }
+// LES CHANTIERS. Les employes municipaux barrent une voie le temps d'une reparation : ils
+// posent un obstacle dans `solids`. Une voiture qui ne le sait pas s'y presente, se fait
+// arreter par le garde-fou de collision et pietine. On marque donc les ARETES barrees et le
+// calcul d'itineraire les paye tres cher : la circulation CONTOURNE le chantier par une autre
+// rue, et ne s'y engage que s'il n'existe vraiment aucun autre chemin.
+let voiesBarreesSig = null;
+function majVoiesBarrees() {
+  const G = city.graphe; if (!G) return;
+  const ch = city.chantiers || [];
+  const sig = ch.map(k => `${k.x.toFixed(1)}:${k.z.toFixed(1)}`).join(',');
+  if (sig === voiesBarreesSig && G.barrees) return;
+  voiesBarreesSig = sig; G.barrees = new Set();
+  for (const k of ch) for (const e of G.aretes) if (projVoie(k.x, k.z, e).d < 3.2) G.barrees.add(e.id);
+}
 // Dijkstra sur les ARETES (et non sur les noeuds) : la manoeuvre depend de la voie d'ou l'on
 // vient, et c'est elle qui coute — tourner a gauche coupe la circulation d'en face.
 function cheminAretes(e0, e1) {
@@ -6738,7 +6752,7 @@ function cheminAretes(e0, e1) {
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0);
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (G.barrees && G.barrees.has(e2.id) ? 400 : 0);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
   }
@@ -6751,6 +6765,7 @@ function cheminAretes(e0, e1) {
 // tous les 6 m environ et arrondie dans les virages. C'est l'interface promise aux autres postes.
 function itineraireVoies(x1, z1, x2, z2, cap) {
   const G = city.graphe; if (!G || !G.aretes.length) return null;
+  majVoiesBarrees();   // un chantier tout neuf ne doit pas se retrouver sur le trace
   const A = voieProche(x1, z1, cap), B = voieProche(x2, z2);
   if (!A || !B) return null;
   const suite = (A.arete.id === B.arete.id && B.t >= A.t - 0.001) ? [A.arete] : cheminAretes(A.arete, B.arete);
@@ -16027,6 +16042,17 @@ function cityStep(dt) {
   if (near !== city.near) { city.near = near; if (near && !isMobile) msg('🚗 Appuie sur E pour conduire', 1200); }
   document.body.classList.toggle('carnear', !!city.near || !!city.jackNear || !!drive.car);
   separerVehicules();
+  // L'ECARTEMENT DES VEHICULES peut pousser une voiture du trafic DANS un mur : deux voitures
+  // qui se chevauchent au ras d'une facade sont separees vers l'exterieur, et l'une des deux
+  // se retrouve le capot dans la pierre. On revalide donc chaque voiture APRES l'ecartement,
+  // et on la remet a sa derniere position verifiee.
+  for (const c of city.aiCars) {
+    if (!c.spd || !c.libre) continue;
+    const [r0, L] = vehHalf(c);
+    if (!carBlocked(c.x, c.z, c.solid, r0, { bar: true, veh: true }, 0, c.h, L)) { c.libre = [c.x, c.z, c.h]; continue; }
+    c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0;
+    c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; vehicleSolid(c);
+  }
   if (!drive.car) cityCommon(dt);
 }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image

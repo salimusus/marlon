@@ -871,7 +871,8 @@ body.tv #tvBadge.on{display:block}
     <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
-    <button class="btn sec" id="voiceBtn">Voix des bots : activées</button>
+    <button class="btn sec" id="voiceBtn">Voix (école et bots) : activées</button>
+    <button class="btn sec" id="voiceTest">🔊 Tester la voix</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
     <button class="btn sec" id="fsBtn2">Plein écran</button>
     <button class="btn sec" id="quit">Retour à l'accueil</button>
@@ -4721,7 +4722,8 @@ function bench(x, z, facing = 0) {   // banc public sur lequel on peut s'asseoir
   city.benches.push({ x, z, facing, y: 0, assise: 0.66 });
 }
 function sitBench(b) { if (P.sit || drive.car) return; if (P.snack && !P.eat) setTimeout(() => eatCarried(), 400); P.sit = b;
-  if (b.ecole) { school.chaise = b; setTimeout(() => { if (P.sit === b) openSchool(b.ecole); }, 250); }   // une chaise d'ecole : la classe commence
+  // une chaise d'ecole : la maitresse accueille l'eleve PAR SON NOM, puis la classe commence
+  if (b.ecole) { school.chaise = b; school.room = b.ecole; schDire(`Bonjour élève ${myCfg.name} ! Installe-toi, on commence les exercices.`); setTimeout(() => { if (P.sit === b) openSchool(b.ecole); }, 900); }
   P.pos.set(b.x, (b.y || 0) + (b.assise != null ? b.assise - 0.51 : 0.15), b.z); P.vel.set(0, 0, 0); P.facing = b.facing; cam.freeUntil = 0; msg(b.cine && city.cinema ? `🎬 ${FILMS[city.cinema.i].n} (${FILMS[city.cinema.i].genre}) — bon film ! (Espace pour se lever)` : P.eat ? '🪑 Bon appétit ! (Espace pour se lever)' : '🪑 Assis (Espace / SAUT pour se lever)', b.cine ? 2600 : 1200); }
 function sitTick(dt) {
   const b = P.sit; P.pos.set(b.x, (b.y || 0) + (b.assise != null ? b.assise - 0.51 : 0.15), b.z);
@@ -5696,24 +5698,41 @@ function schTirage(subj, age) {
   vus.push(q.q); if (vus.length > 14) vus.shift();
   return q;
 }
-const school = { subj: null, age: 'a4', q: null, ok: 0, tot: 0, streak: 0, room: null, doneT: {}, vus: {} };
+const school = { subj: null, age: 'a4', q: null, ok: 0, tot: 0, streak: 0, room: null, doneT: {}, vus: {}, chaise: null, craieSons: 0, dit: '' };
 function openSchool(room) {
+  // ON NE FAIT PAS SES EXERCICES DEBOUT. Le joueur se plaignait d'ouvrir l'interface au milieu
+  // de la classe : la lecon ne commence que quand on est ASSIS sur une chaise de CETTE salle.
+  if (!(P.sit && P.sit.ecole === room)) { msg('🪑 Assieds-toi à une table (E) pour faire les exercices', 1800); return false; }
+  school.chaise = P.sit;
   school.room = room; school.subj = room.subj; school.q = null; school.ok = 0; school.tot = 0;
   $('schTitle').textContent = `${room.e} Classe de ${room.n}`;
-  $('schSub').textContent = 'Choisis ton niveau, réponds aux questions et gagne des pièces (bonne réponse : 3 🪙, série de 3 : bonus). La maîtresse lit tout à voix haute — 🔊 pour réécouter.';
+  $('schSub').textContent = 'Choisis ton niveau, réponds aux questions et gagne des pièces (bonne réponse : 3 🪙, série de 3 : bonus). La maîtresse lit tout à voix haute — 🔊 pour réécouter. Ta réponse s\'écrit à la craie sur le tableau. Espace pour te lever.';
   $('schAge').innerHTML = SCH_AGES.map(a => `<b class="${a.k === school.age ? 'sel' : ''}" data-k="${a.k}">${a.n}</b>`).join('');
   $('schAge').querySelectorAll('b').forEach(b => b.addEventListener('click', () => { school.age = b.dataset.k; $('schAge').querySelectorAll('b').forEach(x => x.classList.toggle('sel', x === b)); nextQuestion(); }));
   $('schGrid').style.display = 'none'; $('schQ').style.display = ''; openUI('schoolUI'); nextQuestion();
+  return true;
 }
 // LE TABLEAU : l'exercice y est ecrit, puis la reponse du joueur, puis le verdict.
 function tableauQuestion(q) { if (school.room) tableauMaj(school.room, [q.q, q.fig || null, '', q.opts.map((o, i) => `${i + 1}) ${o}`).join('   ')]); }
+// La question RESTE en haut du tableau ; en dessous, la reponse du joueur puis le verdict
+// s'ecrivent a la craie lettre par lettre (vert si c'est gagne, rouge sinon).
 function tableauVerdict(q, v, bon, gain) {
-  if (!school.room) return;
-  if (bon) tableauMaj(school.room, [q.q, '', `Réponse : ${v}`, `✅ GAGNÉ ! +${gain} pièces`], '#b8ffc4');
-  else tableauMaj(school.room, [q.q, '', `Réponse : ${v}`, '❌ FAUX', `La bonne réponse : ${q.a}`], '#ffc2c2');
+  if (!school.room) return 0;
+  const c = bon ? '#b8ffc4' : '#ffc2c2';
+  const L = [q.q, '', { t: `Réponse : ${v}` }];
+  if (bon) L.push({ t: `✅ GAGNÉ ! +${gain} pièces`, c });
+  else { L.push({ t: '❌ FAUX', c }); L.push({ t: `La bonne réponse : ${q.a}`, c }); }
+  const out = tableauPose(school.room, L, null, 2);   // les deux premieres lignes sont deja au tableau
+  tableauRendu(school.room);
+  // duree d'ecriture, pour ne pas enchainer sur l'exercice suivant avant la fin du trace
+  return out.filter(o => o.neuve).reduce((a, o) => a + o.t.length, 0) / CRAIE_CPS;
 }
 // La maîtresse lit l'énoncé à voix haute : les enfants qui ne lisent pas encore peuvent jouer.
 // Les symboles mathématiques sont dits en toutes lettres, sinon la synthèse vocale les avale.
+function bulleMaitresse(txt) {   // la maitresse « parle » aussi en bulle : indispensable sans voix
+  const r = school.room || (school.chaise && school.chaise.ecole);
+  if (r && r.maitresse) { try { bubble(r.maitresse, String(txt)); } catch (e) {} }
+}
 function schDire(txt) {
   const dit = String(txt)
     .replace(/(\d)\s*²/g, '$1 au carré').replace(/×/g, ' fois ').replace(/÷/g, ' divisé par ')
@@ -5721,7 +5740,9 @@ function schDire(txt) {
     .replace(/%/g, ' pour cent ').replace(/°/g, ' degrés ').replace(/€/g, ' euros ')
     .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/…/g, ' et ensuite ')
     .replace(/\s+/g, ' ').trim();
+  school.dit = dit; school.ditT = Date.now();
   voice.say(dit, true, true);
+  bulleMaitresse(txt);
   return dit;
 }
 function schLire() {   // relit la question et les réponses
@@ -5741,17 +5762,19 @@ function nextQuestion() {
 }
 function answer(v, el) {
   if (!school.q) return; const q = school.q, good = v === q.a; school.tot++;
-  const w0 = wallet; setTimeout(() => tableauVerdict(q, v, good, Math.max(0, wallet - w0)), 0);
+  const w0 = wallet;
   if (good) { school.ok++; school.streak++; let gain = 3 + (school.age === 'a9' ? 2 : school.age === 'a7' ? 1 : 0); if (school.streak % 3 === 0) { gain += 8; msg(`🎉 Série de ${school.streak} ! +${gain} 🪙`, 1600); } wallet += gain; saveWallet(); updateHud(); sfx.coin(); el.style.background = '#d6ffd6'; el.style.borderColor = '#5cc453';
     perfGagne(P, school.streak % 3 === 0 ? 2 : 1, null);
     msg('🎉 C\'est gagné !', 1200); schDire(school.streak % 3 === 0 ? `C'est gagné ! Bravo, ${school.streak} bonnes réponses de suite !` : 'C\'est gagné !'); }
   else { school.streak = 0; sfx.hit(); el.style.background = '#ffd6d6'; el.style.borderColor = '#ff5c5c';
     // la bonne carte se repérait par son texte : le numéro ajouté devant l'avait cassé
     $('schChoices').querySelectorAll('.item').forEach(x => { if (q.opts[+x.dataset.i] === q.a) { x.style.background = '#d6ffd6'; x.style.borderColor = '#5cc453'; } });
-    schDire(`Non. La bonne réponse était : ${q.a}`); }
-  school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, good ? 1500 : 2800);
+    schDire(`Faux ! La bonne réponse était : ${q.a}`); }
+  const craie = tableauVerdict(q, v, good, Math.max(0, wallet - w0)) || 0;
+  // on laisse la craie finir sa phrase avant de passer a l'exercice suivant
+  school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, Math.max(good ? 1500 : 2800, craie * 1000 + 1200));
 }
-$('schClose').addEventListener('click', () => { voice.stop(); closeUI(); });
+$('schClose').addEventListener('click', () => { voice.stop(); closeUI(); msg('🪑 Toujours assis : E pour reprendre, Espace pour te lever', 2200); });
 $('schRelire').addEventListener('click', () => schLire());
 // ================= L'ECOLE : UNE VRAIE SALLE DE CLASSE =================
 // Un tableau GRIS avec ses craies, des tables d'ecolier et des chaises ou l'on s'assoit pour
@@ -5759,22 +5782,153 @@ $('schRelire').addEventListener('click', () => schLire());
 // compas, formes, globe et carte du monde en geometrie / geographie ; puzzle, dominos, des
 // et echiquier en logique ; globe, carte, bibliotheque et drapeaux en culture generale.
 const glassVert = new THREE.MeshLambertMaterial({ color: 0x5fd09a, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
-function tableauMaj(room, lignes, couleur) {
-  if (!room || !room.cv) return false;
-  const g = room.ctx, W = room.cv.width, H = room.cv.height;
-  g.fillStyle = '#5a6068'; g.fillRect(0, 0, W, H);
-  g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1; for (let i = 0; i < 12; i++) { g.beginPath(); g.moveTo(rnd(0, W), rnd(0, H)); g.lineTo(rnd(0, W), rnd(0, H)); g.stroke(); }   // traces de craie
-  g.fillStyle = couleur || '#f4f1e6'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const L = (lignes || []).filter(l => l != null).map(String);
+// LE TABLEAU EST ANIME : la reponse du joueur ne s'affiche plus d'un bloc, elle s'ECRIT a la
+// craie, lettre apres lettre, d'un trace legerement tremble, avec le crissement de la craie.
+// Trois etages : `tableauPose` calcule la mise en page (lignes coupees a la largeur du
+// panneau) et dit quelles lignes restent A ECRIRE, `tableauRendu` peint le canevas dans
+// l'etat courant, `craieTick` (appele a chaque image, MEME interface ouverte) revele les
+// lettres une a une et joue le son.
+const CRAIE_CPS = 12;          // douze lettres par seconde : la main d'une maitresse au tableau
+const CRAIE_FOND = '#5a6068';  // le gris du tableau
+// tremblement REPRODUCTIBLE : tire de l'indice de la lettre, sinon le texte vibrait a chaque image
+const craieBruit = k => { const v = Math.sin(k * 12.9898) * 43758.5453; return (v - Math.floor(v)) * 2 - 1; };
+// Calcule la mise en page finale. `des` = indice de la premiere ligne a ecrire a la craie
+// (les precedentes sont deja au tableau). Sans `des`, tout est deja ecrit.
+// Une ligne peut etre une chaine ou un objet { t, c } pour lui donner sa couleur (vert / rouge).
+function tableauPose(room, lignes, couleur, des) {
+  const g = room.ctx, W = room.cv.width;
+  const L = (lignes || []).filter(l => l != null).map(l => (typeof l === 'object' ? { t: String(l.t), c: l.c } : { t: String(l), c: null }));
   const taille = L.length > 4 ? 30 : L.length > 2 ? 36 : 44;
   g.font = `bold ${taille}px "Comic Sans MS", "Chalkboard", sans-serif`;
-  // les longues lignes sont coupees en deux
   const out = [];
-  for (const l of L) { if (g.measureText(l).width <= W - 40 || l.indexOf(' ') < 0) { out.push(l); continue; } const mots = l.split(' '); let cur = ''; for (const m of mots) { const t = cur ? cur + ' ' + m : m; if (g.measureText(t).width > W - 40) { out.push(cur); cur = m; } else cur = t; } if (cur) out.push(cur); }
-  const h = taille * 1.25, y0 = H / 2 - (out.length - 1) * h / 2;
-  out.forEach((l, k) => g.fillText(l, W / 2, y0 + k * h));
-  room.tex.needsUpdate = true; room.texte = out.join(' | ');
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i].t, c = L[i].c, neuve = des != null && i >= des;
+    if (g.measureText(l).width <= W - 40 || l.indexOf(' ') < 0) { out.push({ t: l, c, neuve }); continue; }
+    const mots = l.split(' '); let cur = '';
+    for (const m of mots) { const t = cur ? cur + ' ' + m : m; if (g.measureText(t).width > W - 40) { out.push({ t: cur, c, neuve }); cur = m; } else cur = t; }
+    if (cur) out.push({ t: cur, c, neuve });
+  }
+  out.forEach(o => { o.n = o.neuve ? 0 : o.t.length; });
+  const aEcrire = out.filter(o => o.neuve).reduce((a, o) => a + o.t.length, 0);
+  room.tab = { lignes: out, taille, couleur: couleur || '#f4f1e6', t0: performance.now(), aEcrire, faites: 0 };
+  // `room.texte` = ce qui sera au tableau une fois la craie posee (etat logique, lu par le jeu
+  // et les tests) ; `room.dessine` = ce qui est REELLEMENT trace a cet instant.
+  room.texte = out.map(o => o.t).join(' | ');
+  room.dessine = out.map(o => o.t.slice(0, o.n)).join(' | ');
+  return out;
+}
+// Un mot ecrit a la craie : chaque lettre est posee a sa place finale (le texte ne glisse pas),
+// avec son petit decalage et son inclinaison a elle.
+function craieMot(g, txt, n, cx, cy, couleur, graine) {
+  const total = g.measureText(txt).width;
+  let x = cx - total / 2;
+  const align = g.textAlign; g.textAlign = 'left'; g.fillStyle = couleur;
+  for (let i = 0; i < n && i < txt.length; i++) {
+    const ch = txt[i], w = g.measureText(ch).width;
+    const a = craieBruit(graine * 131 + i * 7), b = craieBruit(graine * 57 + i * 13 + 3);
+    g.save();
+    g.translate(x + w / 2, cy + b * 2.2);
+    g.rotate(a * 0.05);
+    g.globalAlpha = 0.78 + Math.abs(b) * 0.22;   // la craie appuie plus ou moins fort
+    g.fillText(ch, -w / 2 + a * 1.4, 0);
+    g.restore();
+    x += w;
+  }
+  g.globalAlpha = 1; g.textAlign = align;
+}
+function tableauRendu(room) {
+  if (!room || !room.cv || !room.tab) return false;
+  const g = room.ctx, W = room.cv.width, H = room.cv.height, T = room.tab;
+  g.fillStyle = CRAIE_FOND; g.fillRect(0, 0, W, H);
+  // les vieilles traces de craie du fond : tirees UNE fois par salle, sinon elles clignotaient
+  // a chaque lettre ecrite
+  if (!room.fond) { room.fond = []; for (let i = 0; i < 12; i++) room.fond.push([rnd(0, W), rnd(0, H), rnd(0, W), rnd(0, H)]); }
+  g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1;
+  for (const [a, b, c, d] of room.fond) { g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.stroke(); }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `bold ${T.taille}px "Comic Sans MS", "Chalkboard", sans-serif`;
+  const h = T.taille * 1.25, y0 = H / 2 - (T.lignes.length - 1) * h / 2;
+  T.lignes.forEach((o, k) => {
+    if (!o.n) return;
+    const col = o.c || T.couleur;
+    if (o.neuve) craieMot(g, o.t, o.n, W / 2, y0 + k * h, col, k + 1);
+    else { g.fillStyle = col; g.fillText(o.t, W / 2, y0 + k * h); }
+  });
+  room.tex.needsUpdate = true;
   return true;
+}
+// Ecriture immediate (l'enonce, le titre de la classe) : tout est deja au tableau.
+function tableauMaj(room, lignes, couleur) {
+  if (!room || !room.cv) return false;
+  tableauPose(room, lignes, couleur, null);
+  return tableauRendu(room);
+}
+// LE SON DE LA CRAIE : un bruit blanc filtre passe-bande entre 2 et 4 kHz, tres court,
+// une bouffee par lettre. C'est exactement le crissement d'un baton de craie sur l'ardoise.
+function sonCraie(n) {
+  if (!settings.sound) return 0;
+  const c = sfx.unlock(); if (!c) return 0;
+  if (!sonCraie.buf) { const b = c.createBuffer(1, Math.ceil(c.sampleRate * 0.3), c.sampleRate), d = b.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; sonCraie.buf = b; }
+  const t0 = c.currentTime; let joues = 0;
+  for (let i = 0; i < Math.min(n, 3); i++) {
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = sonCraie.buf; src.loop = true; src.playbackRate.value = 0.8 + Math.random() * 0.5;
+    f.type = 'bandpass'; f.frequency.value = 2000 + Math.random() * 2000; f.Q.value = 5.5;
+    const at = t0 + i * 0.05, dur = 0.045 + Math.random() * 0.03;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.095, at + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    const sortie = sfx.sortie('effets'); if (!sortie) break;
+    src.connect(f).connect(g).connect(sortie);
+    src.start(at); src.stop(at + dur + 0.03); joues++;
+  }
+  school.craieSons = (school.craieSons || 0) + joues;
+  return joues;
+}
+// Appele a CHAQUE image, meme interface ouverte (le jeu est en pause mais le tableau, lui,
+// doit continuer de s'ecrire sous les yeux du joueur).
+function craieTick(dt) {
+  for (const room of (city.classes || [])) {
+    const T = room.tab; if (!T || T.faites >= T.aEcrire) continue;
+    const cible = Math.min(T.aEcrire, Math.floor((performance.now() - T.t0) / 1000 * CRAIE_CPS));
+    let ecrites = cible - T.faites;
+    if (ecrites <= 0) continue;
+    T.faites = cible;
+    for (let k = 0; k < ecrites; k++) {
+      const l = T.lignes.find(o => o.neuve && o.n < o.t.length);
+      if (!l) break;
+      l.n++;
+    }
+    room.dessine = T.lignes.map(o => o.t.slice(0, o.n)).join(' | ');
+    tableauRendu(room);
+    if (Math.hypot(P.pos.x - room.x, P.pos.z - room.z) < 18) sonCraie(ecrites);
+  }
+}
+// ASSIS EN CLASSE, LA CAMERA CADRE LE TABLEAU : elle se place derriere l'eleve, donc a
+// l'oppose du tableau, et on aplatit la visee pour que le panneau reste entier a l'image.
+// (Le mode maison de poupee, cam.interieur, efface deja le plafond et le mur traverse, et
+// tient la camera entre 3,8 et 4,8 m : a cette distance la tete de l'eleve passe SOUS le
+// texte — verifie en capture.)
+function camTableau(dt) {
+  const b = P.sit; if (!b || !b.ecole || !b.ecole.tableau) return false;
+  const t = b.ecole.tableau;
+  const bx = t.position.x - P.pos.x, bz = t.position.z - P.pos.z;
+  let d = Math.atan2(-bx, -bz) - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  cam.yaw += d * Math.min(1, dt * 4);
+  if (cam.pitch > 0.22) cam.pitch = Math.max(0.22, cam.pitch - dt * 0.8);
+  cam.freeUntil = 0;
+  return true;
+}
+// Le joueur s'est leve : le cours s'arrete, l'interface se ferme et la maitresse dit au revoir.
+function schoolTick(dt) {
+  if (school.chaise && P.sit !== school.chaise) {
+    const enCours = uiOpen === 'schoolUI';
+    if (enCours) closeUI();
+    if (enCours || school.room) { school.q = null; schDire('À bientôt !'); }
+    school.chaise = null; school.room = null;
+  }
+  camTableau(dt);
+  craieTick(dt);
 }
 function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouverte sur la cour au sud
   const B = (lx, ly, lz, lw, lh, ld, c, opt) => box(x + lx, ly, z + lz, lw, lh, ld, c, opt);
@@ -5804,7 +5958,7 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   B(-2.8, 0.85, -2.9, 2.2, 0.12, 0.9, C.wood, { studs: false, noRoute: true }); for (const dx of [-0.95, 0.95]) B(-2.8 + dx, 0.42, -2.9, 0.1, 0.85, 0.1, C.wood, { deco: true, studs: false });
   const teach = mannequin(x - 2.8, z - 3.9, Math.PI, { jersey: 9, jacket: 1, hair: 2, hairColor: 0, skirt: true }); teach.group.position.y = 0.3; teach.group.remove(teach.tag); teach.tag = nameTag('Maîtresse'); teach.group.add(teach.tag);
   // les tables d'ecolier et LES CHAISES ou l'on s'assoit (E) — deux rangees de trois
-  const room = { x, z: z + D / 2 - 0.3, subj, e, n, tableau, cv, ctx, tex, chaises: [], texte: '' };
+  const room = { x, z: z + D / 2 - 0.3, subj, e, n, tableau, cv, ctx, tex, chaises: [], texte: '', dessine: '', maitresse: teach };
   for (let r = 0; r < 2; r++) for (let cI = 0; cI < 3; cI++) {
     const lx = -3 + cI * 3, lz = -0.9 + r * 2.6;
     B(lx, 0.76, lz, 2.3, 0.08, 1.0, 0xd9a066, { studs: false, noRoute: true });
@@ -8867,6 +9021,9 @@ function horn(kind) {
 }
 // Déverrouillage audio (téléphones) : à la première interaction, on crée/relance le contexte et on joue un buffer silencieux
 function unlockAudio() {
+  // la file de la synthese vocale reste parfois en pause tant que l'utilisateur n'a rien
+  // touche : un resume() au premier geste, sinon la maitresse n'ouvre jamais la bouche
+  try { if ('speechSynthesis' in window) window.speechSynthesis.resume(); } catch (e) {}
   const c = sfx.unlock(); if (!c) return;
   try { const b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } catch (e) {}
   // premier reveil de la carte son : un petit carillon, pour qu'on SACHE que le son est la
@@ -9284,22 +9441,96 @@ function botReply(text) {
   if (/\?/.test(t)) return say(pickOne(['bonne question ! je crois que oui', 'je sais pas trop 😅', 'peut-être ! essaie et tu verras', 'demande à Nathan_pro, il sait tout']));
   return say(pickOne(['ah ok', 'trop cool', 'mdr', 'moi je vais à la piscine, tu viens ?', `t\'as combien de pièces ${name} ?`, 'viens voir le circuit !', 'je vais m\'acheter un chapeau 👑', 'tu as vu ma jupe ? 💃']));
 }
-const voice = (() => {   // voix des bots : synthèse vocale du navigateur (français), aiguë pour les filles, grave pour les garçons
-  let voices = [], fr = null, girlV = null, boyV = null, lastT = 0;
-  const load = () => { try { voices = speechSynthesis.getVoices(); const frs = voices.filter(v => /^fr/i.test(v.lang)); fr = frs[0] || null; girlV = frs.find(v => /am[eé]lie|audrey|marie|julie|female|femme|celine|hortense|virginie|google fran/i.test(v.name)) || frs[0] || null; boyV = frs.find(v => /thomas|nicolas|paul|male|homme|henri|jean/i.test(v.name)) || frs[1] || frs[0] || null; } catch (e) {} };
-  if ('speechSynthesis' in window) { load(); speechSynthesis.onvoiceschanged = load; }
+// LA VOIX (maîtresse de l'école et bots). Elle ne sortait JAMAIS pour de vrai : cinq pièges
+// se cumulaient, tous corrigés ici.
+//  1. `speechSynthesis.getVoices()` renvoie une liste VIDE au premier appel (Chrome charge les
+//     voix en différé) : aucune voix française n'était retenue. On écoute maintenant
+//     'voiceschanged', on repasse plusieurs fois, et on REJOUE une fois la phrase muette.
+//  2. l'ancien code ne coupait la file que si `pending && speaking` : quand Chrome laissait la
+//     file en pause (onglet caché, phrase interrompue), `speak()` n'émettait plus jamais rien.
+//     On fait donc systématiquement `cancel()` puis `resume()` AVANT chaque phrase.
+//  3. Chrome coupe net une phrase au bout d'environ 15 s : un `resume()` toutes les 4 s la tient.
+//  4. l'utterance ramassée par le ramasse-miettes coupait le son au milieu : on garde une
+//     référence sur les phrases en cours.
+//  5. aucune voix installée (télévision, Chromium sans paquet de voix) : rien ne démarrait et
+//     personne ne le savait. On le détecte (rien n'a commencé au bout de 0,7 s) et on bascule
+//     sur un REPLI : un petit jingle WebAudio. Le texte, lui, est toujours dans la bulle
+//     au-dessus de la maîtresse et écrit sur le tableau.
+const voice = (() => {
+  const SS = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+  let voices = [], fr = null, girlV = null, boyV = null, lastT = 0, pouls = 0;
+  const vivantes = [];   // références gardées : sans elles le ramasse-miettes coupe la phrase
+  const etat = { moteur: !!SS, voix: 0, fr: 0, charge: false, parle: 0, repli: 0, dites: 0, derniere: '', erreur: '' };
+  const load = () => {
+    if (!SS) return;
+    try { voices = SS.getVoices() || []; } catch (e) { voices = []; }
+    const frs = voices.filter(v => /^fr/i.test(v.lang));
+    fr = frs[0] || null;
+    girlV = frs.find(v => /am[eé]lie|audrey|marie|julie|female|femme|celine|hortense|virginie|google fran/i.test(v.name)) || frs[0] || null;
+    boyV = frs.find(v => /thomas|nicolas|paul|male|homme|henri|jean/i.test(v.name)) || frs[1] || frs[0] || null;
+    etat.voix = voices.length; etat.fr = frs.length; etat.charge = voices.length > 0;
+  };
+  if (SS) {
+    load();
+    try { SS.addEventListener('voiceschanged', load); } catch (e) { SS.onvoiceschanged = load; }
+    for (const ms of [120, 350, 800, 1600, 3000]) setTimeout(load, ms);   // certaines machines n'émettent jamais 'voiceschanged'
+  }
+  // le repli quand la synthèse est muette : trois notes, pour que l'enfant SACHE que la
+  // maîtresse vient de parler et cherche la bulle des yeux
+  const jingle = () => { try { sfx.tone(880, 0, .07, 'sine', .05); sfx.tone(1175, .07, .08, 'sine', .045); sfx.tone(1568, .15, .12, 'sine', .04); } catch (e) {} };
+  const tenir = () => {   // Chrome coupe au bout de ~15 s : on relance la file tant qu'elle parle
+    if (!SS || pouls) return;
+    pouls = setInterval(() => { if (!SS.speaking) { clearInterval(pouls); pouls = 0; return; } try { SS.resume(); } catch (e) {} }, 4000);
+  };
+  function parle(text, girl, essai) {
+    if (!SS) { etat.repli++; jingle(); return false; }
+    let u;
+    try {
+      try { SS.cancel(); } catch (e) {}
+      try { SS.resume(); } catch (e) {}
+      u = new SpeechSynthesisUtterance(text);
+      u.lang = 'fr-FR'; u.rate = 1; u.volume = 1; u.pitch = girl ? 1.35 : 0.9;
+      const v = girl ? girlV : boyV; if (v) u.voice = v; else if (fr) u.voice = fr;
+      u.onstart = () => { u.demarre = true; etat.parle++; tenir(); };
+      const fini = () => { const i = vivantes.indexOf(u); if (i >= 0) vivantes.splice(i, 1); };
+      u.onend = fini; u.onerror = fini;
+      vivantes.push(u); while (vivantes.length > 6) vivantes.shift();
+      etat.dites++; etat.derniere = text;
+      SS.speak(u);
+    } catch (e) { etat.erreur = String((e && e.message) || e); etat.repli++; jingle(); return false; }
+    setTimeout(() => {
+      if (u.demarre || SS.speaking) return;
+      // la liste des voix est arrivée entre-temps : on rejoue UNE fois avec la bonne voix
+      const bonne = girl ? girlV : boyV;
+      if (!essai && bonne && bonne !== u.voice) { parle(text, girl, 1); return; }
+      etat.repli++; jingle();
+    }, 700);
+    return true;
+  }
   return {
     say(text, girl, force) {
-      if (!settings.voices || !('speechSynthesis' in window)) return;
-      if (!force && performance.now() - lastT < 1500) return; lastT = performance.now();
-      try {
-        if (speechSynthesis.pending && speechSynthesis.speaking) speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text.replace(/[^\p{L}\p{N}\s'’,.!?…:-]/gu, '').trim() || text); u.lang = 'fr-FR'; u.rate = 1.05; u.volume = 0.95;
-        u.pitch = girl ? 1.45 : 0.85; const v = girl ? girlV : boyV; if (v) u.voice = v; else if (fr) u.voice = fr;
-        speechSynthesis.speak(u);
-      } catch (e) {}
+      if (!settings.voices) return false;
+      if (!force && performance.now() - lastT < 1500) return false;
+      lastT = performance.now();
+      const t = String(text).replace(/[^\p{L}\p{N}\s'’,.!?…:-]/gu, '').replace(/\s+/g, ' ').trim() || String(text);
+      return parle(t, girl, 0);
     },
-    stop() { try { speechSynthesis.cancel(); } catch (e) {} },
+    stop() { try { if (SS) SS.cancel(); } catch (e) {} if (pouls) { clearInterval(pouls); pouls = 0; } },
+    dispo: () => !!SS,
+    etat: () => Object.assign({}, etat, { actives: settings.voices, noms: voices.slice(0, 6).map(v => v.name + ' (' + v.lang + ')') }),
+    // « Tester la voix » des réglages : on parle, PUIS on dit ce qui s'est réellement passé
+    test() {
+      settings.voices = true; store.set('superobby.voices', '1');
+      try { $('voiceBtn').textContent = 'Voix (école et bots) : activées'; } catch (e) {}
+      const avant = etat.parle;
+      this.say('Bonjour ! Je suis la maîtresse. Si tu m\'entends, la voix fonctionne.', true, true);
+      setTimeout(() => {
+        if (etat.parle > avant) msg(`🔊 Voix OK : ${etat.fr} voix française(s) sur ${etat.voix}`, 2800);
+        else if (!etat.moteur) msg('🔇 Cet appareil n\'a pas de synthèse vocale : jingle + bulles à la place', 3400);
+        else msg(`🔇 Aucune voix installée (${etat.voix} disponible(s)) : jingle + bulles à la place`, 3400);
+      }, 1400);
+      return this.etat();
+    },
   };
 })();
 function botAsk() {   // un bot lance une question au joueur
@@ -12323,7 +12554,7 @@ function cityVie(dt) {
   if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · E pour acheter`, 1500); }
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
   if (offNear !== city.offNear) { city.offNear = offNear; if (offNear && !isMobile) msg('📋 E : choisir une mission', 1200); }
-  const benchNear = (!P.sit && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg('🪑 E : s\'asseoir', 900); }
+  const benchNear = (!P.sit && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg(benchNear.ecole ? '🪑 E : s\'asseoir en classe' : '🪑 E : s\'asseoir', 900); }
   // Le rayon était de 2 m : un pas de côté et on n'était plus « devant » le coffre, la
   // progression se figeait et on repartait de la banque les mains vides en croyant l'avoir
   // braquée. 3 m, et on prévient clairement quand on s'éloigne sans avoir fini.
@@ -12341,7 +12572,7 @@ function cityVie(dt) {
   const bedNear = city.beds.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 2.6 && Math.abs(P.pos.y - (b.y || 0)) < 2.2) || null; if (bedNear !== city.bedNear) { city.bedNear = bedNear; if (bedNear && !isMobile) msg('🛏️ E : dormir et sauvegarder', 1400); }
   const medNear = !!city.medDesk && Math.hypot(P.pos.x - city.medDesk.x, P.pos.z - city.medDesk.z) < 2.8; if (medNear !== city.medNear) { city.medNear = medNear; if (medNear && !isMobile) msg('🏥 E : se faire soigner', 1200); }
   const meterNear = !!city.meter && Math.hypot(P.pos.x - city.meter.x, P.pos.z - city.meter.z) < 2.2 && !drive.car; if (meterNear !== city.meterNear) { city.meterNear = meterNear; if (meterNear && !isMobile) msg('🅿️ E : prendre un ticket (5 🪙)', 1400); }
-  const classNear = city.classes.find(c => Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 2.4) || null; if (classNear !== city.classNear) { city.classNear = classNear; if (classNear && !isMobile) msg(`${classNear.e} E : faire des exercices de ${classNear.n}`, 1400); }
+  const classNear = city.classes.find(c => Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 2.4) || null; if (classNear !== city.classNear) { city.classNear = classNear; if (classNear && !isMobile) msg(`${classNear.e} Classe de ${classNear.n} : assieds-toi à une table (E) pour les exercices`, 1600); }
   const deskNear = !!city.bankDesk && Math.hypot(P.pos.x - city.bankDesk.x, P.pos.z - city.bankDesk.z) < 2.6 && P.pos.y < 2; if (deskNear !== city.deskNear) { city.deskNear = deskNear; if (deskNear && !isMobile) msg('🏦 E : déposer ou retirer de l\'argent', 1200); }
   // On ne pouvait monter qu'en se plaçant à 2,5 m d'un unique point d'entrée invisible.
   // Les manèges qui ont un « rayon » se prennent depuis tout leur pourtour.
@@ -13478,7 +13709,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -13607,7 +13838,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -13942,8 +14173,12 @@ settings.sensib = (v => v >= 0.5 && v <= 2 ? v : 1)(parseFloat(store.get('supero
 $('sensIn').value = String(Math.round(settings.sensib * 100)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %';
 $('sensIn').addEventListener('input', () => { settings.sensib = clamp((+$('sensIn').value || 100) / 100, 0.5, 2); store.set('superobby.sensib', String(settings.sensib)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %'; });
 $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée');
-$('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées');
-$('voiceBtn').addEventListener('click', () => { settings.voices = !settings.voices; store.set('superobby.voices', settings.voices ? '1' : '0'); $('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées'); if (settings.voices) voice.say('Salut ' + myCfg.name + ', on va bien s\'amuser !', Math.random() < 0.5, true); else voice.stop(); });
+// La voix est ACTIVE par defaut (la maitresse lit les enonces a voix haute) : le reglage ne
+// sert qu'a la couper. Et « Tester la voix » dit ce qui sort VRAIMENT, au lieu de rester muet.
+const voixLibelle = () => 'Voix (école et bots) : ' + (settings.voices ? 'activées' : 'coupées');
+$('voiceBtn').textContent = voixLibelle();
+$('voiceBtn').addEventListener('click', () => { settings.voices = !settings.voices; store.set('superobby.voices', settings.voices ? '1' : '0'); $('voiceBtn').textContent = voixLibelle(); if (settings.voices) voice.say('Salut ' + myCfg.name + ', on va bien s\'amuser !', Math.random() < 0.5, true); else voice.stop(); });
+$('voiceTest').addEventListener('click', () => { voice.test(); $('voiceBtn').textContent = voixLibelle(); });
 // Le test du son ECOUTE vraiment ce qui sort : un analyseur mesure le niveau au bout de la
 // chaine. « Ca marche » ne suffisait pas quand rien ne sortait des enceintes.
 async function mesureSon(ms = 500) {
@@ -14034,6 +14269,9 @@ function frame() {
     if (d.t > d.life) { scene.remove(d.m); debris.splice(i, 1); }
   }
   fxTick(dt);
+  // le tableau s'ecrit meme quand l'interface de la classe est ouverte (le jeu est en pause,
+  // mais la craie, elle, doit continuer sous les yeux du joueur)
+  try { schoolTick(dt); } catch (e) { if (loopErr++ < 3) console.error('école', e); }
 
   // joueur
   me.group.position.copy(P.pos);

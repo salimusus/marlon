@@ -8224,7 +8224,7 @@ test('le combat : le coude part replie et se tend a l\'impact, la garde monte au
     G.esquiveBaisse(av, 0.7);
     let bmax = 0, gmax = 0;
     let buste = 0;
-    for (let i = 0; i < 40; i++) { pas(t += 1 / 60); bmax = Math.max(bmax, rig.baisse || 0); gmax = Math.max(gmax, Math.min(rig.legL.genou.rotation.x, rig.legR.genou.rotation.x)); buste = Math.max(buste, rig.head.rotation.x); }
+    for (let i = 0; i < 40; i++) { pas(t += 1 / 60); bmax = Math.max(bmax, rig.baisse || 0); gmax = Math.max(gmax, Math.min(rig.legL.genou.rotation.x, rig.legR.genou.rotation.x)); buste = Math.max(buste, loc(rig.armR.poing).y); }
     const esquive = { baisse: +bmax.toFixed(2), genoux: +gmax.toFixed(2), buste: +buste.toFixed(2) };
     // 5) le couteau : court et sec, le coude ne se tend qu'à moitié
     for (let i = 0; i < 60; i++) pas(t += 1 / 60);
@@ -8235,8 +8235,8 @@ test('le combat : le coude part replie et se tend a l\'impact, la garde monte au
     // 6) encaisser : la tête est rejetée en arrière
     G.encaisseCoup(av, 1);
     const hd = [];
-    for (let i = 0; i < 30; i++) { pas(t += 1 / 60); hd.push(rig.head.rotation.x); }
-    const encaisse = { tete: +Math.min.apply(null, hd).toFixed(2) };
+    for (let i = 0; i < 30; i++) { pas(t += 1 / 60); hd.push(rig.head.rotation.y); }
+    const encaisse = { tete: +Math.max.apply(null, hd.map(v => Math.abs(v))).toFixed(2) };
     if (rig.cbt) { rig.cbt.garde = 0; rig.cbt.gardeK = 0; rig.cbt.coup = 0; rig.cbt.couteau = 0; rig.cbt.esquive = 0; rig.cbt.esqK = 0; rig.cbt.enc = 0; rig.cbt.chute = 0; }
     return { repos, garde, coup, esquive, couteau, encaisse };
   });
@@ -8247,11 +8247,11 @@ test('le combat : le coude part replie et se tend a l\'impact, la garde monte au
   const coupOk = c.replie < -2.2 && c.tendu > -0.35 && c.avance > 0.35 && c.saut < 0.62;
   // 0,198 m d'abaissement : c'est la valeur du poste Personnages (0,55 S), calculee pour que
   // les semelles restent posees. On verifie qu'elle est bien appliquee et que le buste suit.
-  const esqOk = r.esquive.baisse > 0.15 && r.esquive.genoux > 1.3 && r.esquive.buste > 0.2;   // la tete rentre dans les epaules
+  const esqOk = r.esquive.baisse > 0.15 && r.esquive.genoux > 1.3 && r.esquive.buste > 1.4;   // et les poings restent hauts : on passe SOUS le coup sans baisser la garde
   const couteauOk = r.couteau.replie < -2.1 && r.couteau.tendu > -1.2 && r.couteau.tendu < -0.4;
-  const encOk = r.encaisse.tete < -0.2;
+  const encOk = Math.abs(r.encaisse.tete) > 0.15;   // la tete est DETOURNEE par le coup (rotation, pas inclinaison)
   const ok = gardeOk && coupOk && esqOk && couteauOk && encOk;
-  return { ok, detail: `le poste Personnages pose la GARDE et l'ESQUIVE, le poste Animation y ajoute le mouvement · GARDE : les poings passent de ${r.repos.poingD.y} m (le long du corps) à ${g.poingD.y} m, devant le visage (tête à ${g.tete.y} m) et en avant (z = ${g.poingD.z} m), coudes repliés à ${g.coudeD} rad · COUP DE POING : le coude part replié à ${c.replie} rad et se TEND à ${c.tendu} rad, le poing avance de ${c.avance} m, sans à-coup (plus grand pas ${c.saut} rad/image, contre 0,97 avant réglage) · ESQUIVE : le corps descend de ${r.esquive.baisse} m sur des genoux pliés à ${r.esquive.genoux} rad, tête rentrée de ${r.esquive.buste} rad · COUTEAU : court et sec, le coude va de ${r.couteau.replie} à ${r.couteau.tendu} rad seulement (il ne se tend PAS comme un direct) · ENCAISSER : la tête est rejetée à ${r.encaisse.tete} rad` };
+  return { ok, detail: `le poste Personnages pose la GARDE et l'ESQUIVE, le poste Animation y ajoute le mouvement · GARDE : les poings passent de ${r.repos.poingD.y} m (le long du corps) à ${g.poingD.y} m, devant le visage (tête à ${g.tete.y} m) et en avant (z = ${g.poingD.z} m), coudes repliés à ${g.coudeD} rad · COUP DE POING : le coude part replié à ${c.replie} rad et se TEND à ${c.tendu} rad, le poing avance de ${c.avance} m, sans à-coup (plus grand pas ${c.saut} rad/image, contre 0,97 avant réglage) · ESQUIVE : le corps descend de ${r.esquive.baisse} m sur des genoux pliés à ${r.esquive.genoux} rad, poings qui restent hauts, à ${r.esquive.buste} m · COUTEAU : court et sec, le coude va de ${r.couteau.replie} à ${r.couteau.tendu} rad seulement (il ne se tend PAS comme un direct) · ENCAISSER : la tête est DÉTOURNÉE de ${r.encaisse.tete} rad par le coup` };
 });
 
 test('le feu vit et s\'eteint : des flammes de tailles differentes qui ondulent, de la fumee qui monte', async p => {

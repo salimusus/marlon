@@ -21685,6 +21685,7 @@ const ANIM = {
   vue: 62,        // m : au-delà de cette distance à la caméra, un geste ne se lit plus — on ne le calcule pas
   fondu: 4.2,     // vitesse du fondu d'un geste : 0 → 1 en 0,24 s
   feux: [],       // les feux vivants créés par feuAnime()
+  tetes: new Set(),   // les rigs dont le bloc Animation a incliné la tête (voir animTetes)
   feuxMax: 5,     // garde-fou : au-delà, feuAnime() refuse — six brasiers, ça rame sur une petite machine
 };
 const animLiss = u => { const c = clamp(u, 0, 1); return c * c * (3 - 2 * c); };   // 0 → 1 sans à-coup (dérivée nulle aux bouts)
@@ -21718,6 +21719,12 @@ function animPose(rig, p, k) {
   mix(rig.armL.coude, 'x', p.cLx); mix(rig.armR.coude, 'x', p.cRx);
   mix(rig.legL, 'x', p.lLx); mix(rig.legR, 'x', p.lRx);
   mix(rig.legL.genou, 'x', p.gLx); mix(rig.legR.genou, 'x', p.gRx);
+  // L'INCLINAISON DE LA TÊTE N'EST ÉCRITE QUE PAR NOUS : animateRig ne la repose jamais.
+  // On note donc le rig et l'image, et `animTetes` la remet droite dès que plus rien ne la
+  // commande. Sans ce registre, une tête penchée par un encaissement restait penchée POUR
+  // TOUJOURS quand le jeu appelait animateRig sans nous (le banc d'essai le fait) : la boîte
+  // de la tête, inclinée, passait alors devant les poings de la garde.
+  if (p.hx != null) { rig.hxT = simTime; ANIM.tetes.add(rig); }
   mix(rig.head, 'x', p.hx); mix(rig.head, 'y', p.hy);
   // LE PIED RESTE À PLAT. animateRig l'a déjà redressé, mais on vient de changer la hanche
   // et le genou : sans ce rattrapage, la basket plongeait dans le bitume d'une image entière
@@ -21856,6 +21863,7 @@ const GESTES = {
 // le passage se fait par la pose neutre, jamais d'un claquement d'une pose à l'autre.
 function gesteMetier(rig, nom, dt, t, opt) {
   if (!rig) return;
+  animNeutre(rig);   // la tête se remet droite dès que plus aucun geste ne la commande
   // GESTE ABANDONNÉ : si personne ne l'a redemandé depuis un cinquième de seconde, c'est
   // que le travailleur est passé à autre chose (il marche, il range). On repart de zéro,
   // sinon le geste suivant s'appliquait À PLEIN dès sa première image — et ça sautait.
@@ -21907,7 +21915,7 @@ const CBT_POING = 0.40, CBT_COUTEAU = 0.34, CBT_CHUTE = 1.25;
 const CBT_RECUL = 0.35;   // durée de `rig.recul` chez le poste Personnages
 // À GENOUX : le coup de trop. Mêmes angles que `rig.agenou` (0,95 S d'abaissement), pour que
 // les deux poses se ressemblent et que le genou touche vraiment le sol.
-const CBT_CHUTE_POSE = { lRx: -1.5, gRx: 1.55, lLx: 0.2, gLx: 1.8, bs: 0.95 * S, bx: 0.34, hx: 0.42,
+const CBT_CHUTE_POSE = { lRx: -1.5, gRx: 1.55, lLx: 0.2, gLx: 1.8, bs: 0.95 * S, bx: 0.34,
   aLx: -0.45, aRx: -0.40, cLx: -0.80, cRx: -0.75, aLz: 0.30, aRz: -0.30 };
 function animCbt(av) {
   const rig = av && (av.rig || av); if (!rig || !rig.armL) return null;
@@ -21951,10 +21959,23 @@ function encaisseCoup(av, force) {
   c.encF = clamp(force > 0 ? force : 1, 0.4, 3);
   if (c.encF >= 2) c.chute = CBT_CHUTE;
 }
+// LES ARTICULATIONS QUE animateRig NE REPOSE PAS. L'INCLINAISON DE LA TÊTE (`hx`) n'est
+// écrite que par le bloc Animation : quand un geste ou un encaissement s'arrête, personne ne
+// la remet droite et le personnage gardait la tête penchée POUR TOUJOURS — le test de la
+// garde du poste Personnages l'a attrapé, la boîte de la tête inclinée passant devant les
+// poings. On la ramène donc au neutre à chaque image où plus rien ne la commande.
+function animNeutre(rig) {
+  if (!rig || !rig.head) return;
+  // remise à ZÉRO SÈCHE, et non un retour progressif : les couches qui suivent réécrivent la
+  // valeur dans la même image avec leur propre poids (déjà lissé), donc rien ne saute — et
+  // dès que plus rien ne commande la tête, elle est droite à l'image suivante, sans traîner.
+  if (rig.head.rotation.x) rig.head.rotation.x = 0;
+}
 // Le moteur : à appeler une fois par image, APRÈS animateRig. Rend true s'il a posé quelque
 // chose. Il ne coûte presque rien quand personne ne se bat : trois tests et on ressort.
 function animCombat(av, dt) {
   const rig = av && (av.rig || av); if (!rig || !rig.armL) return false;
+  animNeutre(rig);
   const c = rig.cbt;
   const gardeK = rig.gardeK || 0;
   const rien = !(gardeK > 0.02) && !rig.accroupi && !(rig.recul > 0)
@@ -21976,7 +21997,7 @@ function animCombat(av, dt) {
   if (gardeK > 0.02 && cc.esqK < 0.98) {
     const resp = Math.sin(cc.souffle * 2.4);
     animPose(rig, { lLx: -0.22, lRx: 0.14, gLx: 0.46, gRx: 0.28,
-      bx: 0.12 + resp * 0.02, hx: 0.06, bs: 0.012 + resp * 0.008 }, gardeK * (1 - cc.esqK));
+      bx: 0.12 + resp * 0.02, bs: 0.012 + resp * 0.008 }, gardeK * (1 - cc.esqK));
   }
   // 2. LE COUP DE POING. Trois temps : élan (le coude se replie, l'épaule part en arrière,
   //    le poids recule), détente (le coude se TEND, l'épaule vient devant, le poids passe sur
@@ -21992,7 +22013,7 @@ function animCombat(av, dt) {
     const p = {
       lLx: -0.22 - 0.30 * det, gLx: 0.46 + 0.28 * det,
       lRx: 0.14 + 0.22 * det, gRx: 0.28,
-      bx: 0.12 + 0.20 * det - 0.08 * elan, hx: 0.06 + 0.10 * det, bs: 0.02 + 0.03 * det,
+      bx: 0.12 + 0.20 * det - 0.08 * elan, bs: 0.02 + 0.03 * det,
       hy: -cote * 0.22 * det,
     };
     // le bras qui frappe : le coude part REPLIÉ (−2,7 rad) et finit TENDU (−0,1 rad)
@@ -22014,7 +22035,7 @@ function animCombat(av, dt) {
     animPose(rig, {
       aRx: 0.28 * arme - 0.70 * pique, cRx: -2.45 + 0.35 * arme + 1.60 * pique,
       aRz: -0.45 + 0.30 * pique, aLx: -0.85, cLx: -1.90, aLz: 0.50,
-      bx: 0.10 + 0.26 * pique, hx: 0.20 * pique, hy: -0.25 * pique,
+      bx: 0.10 + 0.26 * pique, hy: -0.30 * pique,
       lLx: -0.18 - 0.30 * pique, gLx: 0.40 + 0.28 * pique, lRx: 0.14, gRx: 0.24,
     }, Math.min(1, Math.sin(Math.PI * u) * 3.4));
   }
@@ -22022,7 +22043,11 @@ function animCombat(av, dt) {
   //    ajoute la tête rentrée dans les épaules, le buste qui part en avant, et la garde qui
   //    RESTE HAUTE quand elle était levée (sinon on se baissait bras ballants).
   if (cc.esqK > 0.02) {
-    const p = { bx: 0.34, hx: 0.32, hy: 0 };
+    // L'inclinaison de la tête est volontairement ABSENTE ici : c'est le seul angle du rig
+    // qu'animateRig ne repose jamais, et une valeur laissée derrière nous restait accrochée
+    // à la tête (la boîte de la tête penchée passait devant les poings de la garde). Le
+    // poste Personnages descend déjà le bassin de 20 cm ; nous, on garde les POINGS HAUTS.
+    const p = { bx: 0.34, hy: 0 };
     if (gardeK > 0.4) { p.aLx = -1.15; p.aRx = -1.15; p.cLx = -1.85; p.cRx = -1.85; p.aLz = 0.40; p.aRz = -0.40; }
     animPose(rig, p, cc.esqK * (gardeK > 0.4 ? 1 : 0.7));
   }
@@ -22033,7 +22058,12 @@ function animCombat(av, dt) {
     const w = Math.sin(rig.recul / CBT_RECUL * Math.PI) * Math.min(1, (cc.encF || 1));
     const bloque = gardeK > 0.4;
     const p = {
-      hx: -0.42 * w,
+      // LA TÊTE EST DÉTOURNÉE PAR LE COUP, et cela se joue sur la ROTATION (hy), jamais sur
+      // l'inclinaison (hx). Raison : hx n'est écrite que par le bloc Animation, alors que hy
+      // est réécrite par animateRig à chaque image. Une inclinaison pouvait donc rester
+      // accrochée à la tête quand le jeu appelait animateRig sans nous — et la boîte de la
+      // tête, penchée, passait alors DEVANT les poings de la garde.
+      hy: 0.34 * w,
       aLz: (bloque ? 0.34 : 0.20) + (bloque ? 0.20 : 0.50) * w,
       aRz: (bloque ? -0.34 : -0.20) - (bloque ? 0.20 : 0.50) * w,
       cLx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
@@ -22306,7 +22336,18 @@ function animFige(rig) {
   animCombat(rig, 0);   // dt = 0 : les minuteurs ne bougent pas, la pose reste sur l'image voulue
 }
 // Le tour de piste du bloc animation, appelé une fois par image depuis la boucle principale.
+// Remet droite toute tête que plus aucune couche n'incline. Appelé une fois par image :
+// le registre ne contient au plus qu'une poignée de rigs (ceux qui se battent ou travaillent).
+function animTetes() {
+  if (!ANIM.tetes.size) return;
+  for (const rig of ANIM.tetes) {
+    if (rig.hxT === simTime) continue;      // une couche l'a encore commandée cette image
+    if (rig.head) rig.head.rotation.x = 0;
+    ANIM.tetes.delete(rig);
+  }
+}
 function animMondeTick(dt) {
+  animTetes();
   feuxAnimTick(dt);
   secoursTick(dt);
 }

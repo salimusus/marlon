@@ -4174,7 +4174,11 @@ function degageLesRoutes() {
   // rue : les appartements de La Zone se faisaient vider parce qu'un axe passait par-dessous.
   const dedans = (x, z) => [...(city.batiments || []), ...(city.interieurs || [])].some(b =>
     Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
-  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.statue || o.trottoir || o.h > 4.6 || (o.w > 14 && o.d > 14)
+  // `o.h > 4.6` protegeait les MURS... et aussi n'importe quel poteau de 5 m plante au milieu
+  // de la chaussee. Un mur est LARGE : on ne garde les objets hauts que s'ils font plus d'un
+  // metre dans un sens. Un poteau fin en pleine voie repart avec le reste du mobilier.
+  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.statue || o.trottoir
+    || (o.h > 4.6 && (o.w > 1 || o.d > 1)) || (o.w > 14 && o.d > 14)
     || o.y - o.h / 2 > 0.8 || dedans(o.x, o.z);   // portes, véhicules, barrières, vitrages, murs, étages et intérieurs
   const vus = new Set();
   for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
@@ -4184,8 +4188,15 @@ function degageLesRoutes() {
     if (vus.has(o) || garde(o) || !o.mesh) continue;
     if (o.feu || o.lampe) continue;
     if (!surChaussee(o.x, o.z)) continue;
-    worldGroup.remove(o.mesh); solids.splice(i, 1); n++;
-    const bi = breakables.findIndex(b => b.solid === o); if (bi >= 0) breakables.splice(bi, 1);
+    // Le mobilier cassable (poubelle, cone, panneau) vit dans un GROUPE : enlever son seul
+    // maillage laissait le couvercle et le socle flotter au milieu de la rue. On retire le
+    // groupe entier quand il y en a un.
+    const bi = breakables.findIndex(b => b.solid === o);
+    const br0 = bi >= 0 ? breakables[bi] : null;
+    if (br0 && br0.g && br0.g.parent) br0.g.parent.remove(br0.g);
+    else if (o.mesh.parent) o.mesh.parent.remove(o.mesh); else worldGroup.remove(o.mesh);
+    solids.splice(i, 1); n++;
+    if (bi >= 0) breakables.splice(bi, 1);
   }
   // les feux et lampadaires plantés en pleine voie sont poussés sur le trottoir
   for (const t of (city.trafficLights || [])) {
@@ -4228,6 +4239,30 @@ function degageLesRoutes() {
   }
   for (let i = breakables.length - 1; i >= 0; i--) if (breakables[i].retire) breakables.splice(i, 1);
   if (n) sgridSale();
+  return n;
+}
+// LE DÉCOR SOLIDIFIÉ QUI TOMBE EN PLEINE VOIE. Le poste Collisions rend solide, tout a la fin,
+// tout le décor que le joueur traversait — et quelques-uns de ces objets sont plantés au milieu
+// d'une chaussée (les quatre pieds de la grande roue, un piquet de barrière, un pot de fleurs).
+// On ne touche PAS a leur allure : on leur retire seulement la collision qu'ils viennent de
+// recevoir. La rue reste roulante, et le décor reste exactement ou l'artiste l'a posé.
+function degageDecorSurRoutes() {
+  const surChaussee = (x, z) => (city.routes || []).some(r =>
+    Math.abs(x - r.x) < r.w / 2 - 0.6 && Math.abs(z - r.z) < r.d / 2 - 0.6);
+  let n = 0;
+  for (let i = solids.length - 1; i >= 0; i--) {
+    const o = solids[i];
+    if (o.y - o.h / 2 > 0.8) continue;                       // ce qui pend en hauteur ne gêne personne
+    if (o.veh || o.porte || o.feu || o.trottoir || o.bar || o.ai || o.pol || o.chantier) continue;
+    // le décor solidifié, et les poteaux FINS que le grand nettoyage a laissés (un mât de plage
+    // tiré au hasard tombe parfois pile sur la promenade du littoral)
+    if (!o.decor && !(o.h > 0.3 && Math.max(o.w, o.d) <= 1.2)) continue;
+    if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
+    if (!surChaussee(o.x, o.z)) continue;
+    solids.splice(i, 1); n++;
+  }
+  if (n) { sgridSale(); navSale(); }
+  city.decorRendu = n;
   return n;
 }
 // ================= TROTTOIRS ET MOBILIER PUBLIC =================
@@ -4289,7 +4324,15 @@ function buisson(x, z, big) {
   }
 }
 function poubelle(x, z) {
-  box(x, 0.45, z, 0.55, 0.9, 0.55, 0x2f6f4a, { studs: false, noRoute: true }); box(x, 0.93, z, 0.6, 0.08, 0.6, 0x1f4a30, { deco: true, studs: false });
+  // Elle etait faite de deux boites posees dans le monde : rien ne pouvait la renverser. Elle
+  // vit maintenant dans un groupe, donc `breakThing` la couche et les employes la redressent.
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const corps = new THREE.Mesh(unitRound, lam(0x2f6f4a)); corps.scale.set(0.55, 0.9, 0.55); corps.position.y = 0.45; corps.castShadow = true; g.add(corps);
+  const couv = new THREE.Mesh(unitRound, lam(0x1f4a30)); couv.scale.set(0.6, 0.08, 0.6); couv.position.y = 0.93; g.add(couv);
+  const solid = { mesh: corps, x, y: 0.45, z, w: 0.55, h: 0.9, d: 0.55, noRoute: true };
+  solids.push(solid); sgridSale();
+  fragile(g, solid, x, z, 'poubelle', 0.45);
+  return solid;
 }
 function glissiere(x, z, len, alongZ) {   // glissiere de securite : poteaux et lisse, decor sans collision
   const n = Math.max(2, Math.round(len / 2));
@@ -4349,6 +4392,27 @@ function decorPublic() {
   }
   city.decorPublic = compte; sgridSale();
   return compte;
+}
+// CHAQUE BATIMENT A UN NOM. Le poste Activite tirait ses lieux de sinistre et de panne d'une
+// liste de coordonnees ecrites en dur : les quartiers neufs n'etaient jamais couverts. Chaque
+// entree de `city.batiments` porte maintenant un `nom` — celui du quartier qui la contient (le
+// plus petit, donc le plus precis : « la Villa Azur » plutot que « le Quartier residentiel »),
+// ou un nom explicite pose a la construction (Banque, Ecole des Blocs, Planque). C'est le nom
+// BRUT du lieu, sans article : l'appelant l'habille comme il veut.
+function nommeLesBatiments() {
+  let n = 0;
+  for (const b of (city.batiments || [])) {
+    if (b.nom) continue;
+    let q0 = null, aire = Infinity;
+    for (const q of (city.zones || [])) {
+      if (b.x < q.x1 || b.x > q.x2 || b.z < q.z1 || b.z > q.z2) continue;
+      const a = Math.abs((q.x2 - q.x1) * (q.z2 - q.z1));
+      if (a < aire) { aire = a; q0 = q; }
+    }
+    b.nom = q0 ? q0.name : 'Centre-ville';   // le nom BRUT du quartier : l'appelant l'habille comme il veut
+    n++;
+  }
+  return n;
 }
 // La desserte d'un quartier : le point de la route par lequel on y arrive en voiture.
 function desserteDe(nom) {
@@ -4888,15 +4952,16 @@ const WORLDS = [
       B('métiers', buildMetiers);   // poste J : dépôt, caserne, équipes, véhicules de travail, boîtes aux lettres
       // (poste G) en DERNIER : la règle de collision couvre alors tout ce que les autres
       // postes viennent d'ajouter — panneaux, quartiers neufs, chantiers, boîtes aux lettres
-      B('collisions du décor', solidifieDecor);
+      B('collisions du décor', () => { solidifieDecor(); degageDecorSurRoutes(); });
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
+      nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], marques: [], marquesN: 0, waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
@@ -6114,7 +6179,11 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   plat(0, 0.12, 155, 90, 44, 0x6f5aa8, { studs: false, noRoute: true }, 0.24);
   // La descente est finissait 7 m DANS la parcelle de la villa du joueur (z 148 a 155), pour
   // n'y desservir personne : la villa est desservie par l'avenue nord. On l'arrete a z = 141.
-  road(-48, 140, 6, 30, 0, true); road(48, 133, 6, 16, 0, true);
+  // La descente ouest partait de z = 125 et traversait de part en part la CASERNE DES POMPIERS
+  // (batie depuis, mur est a x = -48,8, z 123 a 136) : les camions s'y encastraient et la
+  // desserte de la caserne tombait sur un troncon coupe du reste du reseau. Elle part
+  // maintenant de l'avenue du nord (z = 137) et descend vers la fete foraine.
+  road(-48, 146, 6, 18, 0, true); road(48, 133, 6, 16, 0, true);
   // grande roue
   const wx = 12, wz = 158, R = 11;
   const wheel = new THREE.Group(); wheel.position.set(wx, R + 2.5, wz); worldGroup.add(wheel);
@@ -6365,6 +6434,7 @@ function panneau(x, z, type, sens, route) {
   const dos = new THREE.Mesh(face.geometry, lam(0x6e7686)); dos.rotation.z = face.rotation.z; dos.position.set(0, 2.25, -0.02); g.add(dos);   // le dos, gris
   const solid = { mesh: post, x, y: 1.2, z, w: 0.36, h: 2.4, d: 0.36, panneau: true }; solids.push(solid); sgridSale();
   const p = { x: +x.toFixed(2), z: +z.toFixed(2), type, sens: +sens.toFixed(3), route: route == null ? -1 : route, g, solid };
+  p.brk = fragile(g, solid, x, z, 'panneau', 0.45);   // un pare-chocs le tord ; les employes le redressent
   city.panneaux.push(p); return p;
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
@@ -6536,6 +6606,7 @@ function buildMarche() {
   for (const [lx, lz] of [[-156, 150], [-156, 175], [-156, 200], [-156, 225], [-129, 150], [-129, 175], [-129, 200], [-129, 225], [-150, 192], [-135, 192]]) lamp(lx, lz);
   for (const [tx, tz] of [[-153, 220], [-147, 226], [-138, 226], [-132, 220], [-152, 143], [-133, 143]]) tree(tx, 0, tz, C.leaf);
   bench(-149, 213, Math.PI / 2); bench(-136, 213, -Math.PI / 2); bench(CX, 220, 0);
+  for (const [cx2, cz2] of [[-147, 204], [-145, 204], [-139, 204], [-137, 204]]) coneRue(cx2, cz2);   // l'aire de livraison, derriere les boutiques
   for (const [px, pz] of [[-150, 208], [-135, 208], [-156, 168], [-129, 168]]) poubelle(px, pz);
   flowerBed(-152, 226, 4, 1.4); flowerBed(-133, 226, 4, 1.4);
   sign(-153, 0, 138, '🧺 Le Marché', true, Math.PI);
@@ -6617,6 +6688,7 @@ function buildTechno() {
   for (const [lx, lz] of [[-26, -108], [-8, -108], [10, -108], [28, -108], [-26, -132], [-8, -132], [10, -132], [28, -132], [-40, -110], [46, -110]]) lamp(lx, lz);
   for (const [tx, tz] of [[-40, -128], [-40, -142], [46, -128], [46, -142], [44, -118], [-38, -136]]) tree(tx, 0, tz, 0x2f8f3a, true);
   bench(-6, -122, 0); bench(6, -122, Math.PI); bench(-21, -128, 0); bench(25, -128, Math.PI);
+  for (const [cx2, cz2] of [[-11, -119], [-9, -119], [15, -119], [17, -119]]) coneRue(cx2, cz2);   // l'aire de livraison des boutiques
   for (const [px, pz] of [[-10, -119], [16, -119], [-24, -120], [28, -120]]) poubelle(px, pz);
   flowerBed(-34, -122, 5, 1.6); flowerBed(40, -122, 5, 1.6);
   sign(-40, 0, -92, '🛰️ Techno-Parc', true, 0);
@@ -6909,22 +6981,8 @@ function buildNeigeDecor() {
       const m = new THREE.Mesh(new THREE.CircleGeometry(rr, 14), glaceM);
       m.rotation.x = -Math.PI / 2; m.position.set(x, 0.045, z); m.renderOrder = 1; G.add(m);
       city.glace.push({ x, z, r: rr });
-    } else {   // bonhomme de neige
-      const g2 = new THREE.Group(); g2.position.set(x, 0, z); G.add(g2);
-      // il est maintenant RECENSÉ : une voiture qui le percute le pulvérise (casseBonhomme).
-      // Avant, un bonhomme de neige était un décor traversé sans que rien ne bouge.
-      city.bonshommes.push({ g: g2, x, z, casse: false });
-      boule(0.62, 0, 0.55, 0, g2); boule(0.44, 0, 1.32, 0, g2); boule(0.3, 0, 1.9, 0, g2);
-      const nez = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.36, 7), new THREE.MeshLambertMaterial({ color: 0xff8f3a }));
-      nez.rotation.x = Math.PI / 2; nez.position.set(0, 1.92, 0.3); g2.add(nez);
-      const noir = new THREE.MeshLambertMaterial({ color: 0x1b1b22 });
-      for (const dx of [-0.11, 0.11]) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.08); o.position.set(dx, 2.02, 0.24); g2.add(o); }
-      for (let k = 0; k < 3; k++) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.09); o.position.set(0, 1.15 - k * 0.22, 0.42); g2.add(o); }
-      const echarpe = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xff5c5c }));
-      echarpe.scale.set(0.68, 0.14, 0.68); echarpe.position.y = 1.66; g2.add(echarpe);
-      const cha = new THREE.Mesh(unitRound, noir); cha.scale.set(0.56, 0.06, 0.56); cha.position.y = 2.16; g2.add(cha);
-      const cha2 = new THREE.Mesh(unitRound, noir); cha2.scale.set(0.36, 0.34, 0.36); cha2.position.y = 2.32; g2.add(cha2);
-      for (const sg of [-1, 1]) { const br = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0x6b4423 })); br.scale.set(0.9, 0.07, 0.07); br.position.set(sg * 0.6, 1.4, 0); br.rotation.z = sg * 0.4; g2.add(br); }
+    } else {   // bonhomme de neige : c'est `bonhommeNeige` qui le batit, donc il est SOLIDE
+      bonhommeNeige(x, z, G);   // et cassable — un vehicule le fait exploser
     }
   }
 }
@@ -6934,6 +6992,15 @@ function neigeDecor(on) {
   if (city.neigeG.visible === on) return;
   city.neigeG.visible = on;
   for (const m of (city.neigeVeh || [])) m.visible = on;
+  // Un bonhomme de neige n'existe QUE quand il neige : sinon on se cognait, en plein soleil,
+  // dans un solide invisible. On ajoute et on retire sa collision avec le decor.
+  for (const bn of breakables) {
+    if (bn.kind !== 'neige' || !bn.solid || !bn.saison) continue;
+    const i = solids.indexOf(bn.solid);
+    if (on && i < 0 && !bn.broken) solids.push(bn.solid);
+    else if (!on && i >= 0) solids.splice(i, 1);
+  }
+  sgridSale();
 }
 // verglas : on glisse sur les plaques quand la neige tient au sol
 function surGlace(x, z) {
@@ -7199,7 +7266,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, or, { deco: true, studs: false });
     for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
   }
-  city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5 });   // plus de voiture de police dans le hall
+  city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5, nom: 'Banque' });   // plus de voiture de police dans le hall
   city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 3.5, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
   city.zones.push({ name: 'Banque', emoji: '🏦', x1: bx - 11, x2: bx + 14, z1: bz - 11, z2: bz + 11, hint: '🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés' });
 }
@@ -9144,7 +9211,7 @@ function buildSchool(sx, sz) {   // l'ecole : un batiment vitre vert, quatre cla
   box(sx + 22.6, 6.6, sz, 0.15, 1.4, 8, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏫 ÉCOLE DES BLOCS', 0x5cc453) }), deco: true, noEdges: true });
   // LE BATIMENT VITRE VERT : quatre classes au rez-de-chaussee, un etage de verre au-dessus
   const bx = sx - 2, bz = sz - 9, BW = 40, BD = 11;
-  city.batiments.push({ x: bx, z: bz, w: BW - 0.5, d: BD - 0.5 });
+  city.batiments.push({ x: bx, z: bz, w: BW - 0.5, d: BD - 0.5, nom: 'École des Blocs' });
   for (let i = 0; i < 4; i++) {
     const [subj, e, n, col] = [['math', '➕', 'Maths', 0xff8f3a], ['geo', '📐', 'Géométrie & Géographie', 0x4f8dff], ['logi', '🧩', 'Logique', 0x5cc453], ['cult', '🌍', 'Culture générale', 0xb57cff]][i];
     classroom(bx - 15 + i * 10, bz, 0, subj, e, n, col);
@@ -10241,7 +10308,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.bonshommes = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {};
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -11239,6 +11306,270 @@ function burst(x, y, z, color, n = 8) {
   // Le vieux nuage de cubes reste appelé de partout : il gagne le fondu et les éclats fins.
   fxEclats(x, y, z, null, color, Math.min(n, 10), 0.9);
   fxAnneau(x, y, z, null, color, 0.55, 0.22);
+}
+
+// ================= LES MARQUES SUR LE DÉCOR =================
+// La ville ne gardait AUCUNE trace des chocs : on encastrait un camion dans un mur, on
+// repartait, et le mur était intact. Règle générale, valable pour N'IMPORTE QUEL solide de
+// la ville (il y en a plus de trois mille, et les autres postes en ajoutent tous les jours) :
+//
+//     marqueImpact(objet, x, y, z, force, sorte)
+//
+// pose un décalque à l'endroit exact du choc, sur la FACE touchée, d'intensité croissante
+// avec la force : trace de pneu ou de frottement → bosse → fissure → petit trou.
+//
+// BUDGET. Un décalque par choc, ce serait un appel de dessin par choc. Toutes les marques
+// vivent donc dans UN SEUL maillage (une géométrie de MARQUES_MAX quadrilatères et une seule
+// texture-atlas de quatre cases) : quel que soit le nombre de marques, la ville coûte
+// exactement UN appel de dessin de plus, et pas un de plus. Le tampon est circulaire : la
+// 97ᵉ marque écrase la plus ancienne. Aucune marque n'est un solide : on ne s'y cogne pas.
+const MARQUES_MAX = 96;
+const MARQUE_SORTES = ['trace', 'bosse', 'fissure', 'trou'];
+// L'atlas : quatre cases de 128 px dans une image de 256. Tout est dessiné en alpha, donc la
+// couleur du mur reste visible dessous — un décalque, pas une gommette.
+const TEX_MARQUES = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 256);
+  const case4 = (col, ligne, dessin) => { g.save(); g.translate(col * 128, ligne * 128); dessin(g); g.restore(); };
+  // 0,0 — TRACE : une bavure noire de gomme, étirée, comme un pneu qui a chassé
+  case4(0, 0, gg => {
+    for (let i = 0; i < 7; i++) {
+      const y = 34 + i * 9;
+      gg.strokeStyle = `rgba(18,18,22,${0.55 - i * 0.05})`; gg.lineWidth = 6 - i * 0.4; gg.lineCap = 'round';
+      gg.beginPath(); gg.moveTo(16 + i * 2, y); gg.bezierCurveTo(48, y - 10, 80, y + 12, 112 - i * 2, y); gg.stroke();
+    }
+  });
+  // 1,0 — BOSSE : un creux sombre avec un bourrelet clair en haut (la tôle enfoncée)
+  case4(1, 0, gg => {
+    const rad = gg.createRadialGradient(64, 70, 4, 64, 70, 52);
+    rad.addColorStop(0, 'rgba(20,22,28,.55)'); rad.addColorStop(0.65, 'rgba(30,33,40,.28)'); rad.addColorStop(1, 'rgba(0,0,0,0)');
+    gg.fillStyle = rad; gg.beginPath(); gg.ellipse(64, 70, 50, 40, 0, 0, 7); gg.fill();
+    gg.strokeStyle = 'rgba(255,255,255,.30)'; gg.lineWidth = 5;
+    gg.beginPath(); gg.ellipse(64, 62, 40, 28, 0, 3.5, 6.0); gg.stroke();
+  });
+  // 0,1 — FISSURE : un réseau de traits qui partent du point de choc
+  case4(0, 1, gg => {
+    gg.lineCap = 'round';
+    for (let i = 0; i < 11; i++) {
+      const a = i / 11 * 6.283 + (i % 3) * 0.2, l = 26 + (i % 4) * 14;
+      gg.strokeStyle = 'rgba(24,26,32,.72)'; gg.lineWidth = 3.4 - (i % 3) * 0.7;
+      gg.beginPath(); gg.moveTo(64, 64);
+      gg.lineTo(64 + Math.cos(a) * l * 0.55, 64 + Math.sin(a) * l * 0.55);
+      gg.lineTo(64 + Math.cos(a + 0.25) * l, 64 + Math.sin(a + 0.25) * l);
+      gg.stroke();
+    }
+    gg.fillStyle = 'rgba(16,18,24,.55)'; gg.beginPath(); gg.arc(64, 64, 7, 0, 7); gg.fill();
+  });
+  // 1,1 — TROU : un petit cratère noir, lèvre grise et gravats autour
+  case4(1, 1, gg => {
+    gg.fillStyle = 'rgba(120,126,138,.55)'; gg.beginPath(); gg.arc(64, 64, 44, 0, 7); gg.fill();
+    gg.fillStyle = 'rgba(10,11,15,.93)'; gg.beginPath();
+    for (let i = 0; i <= 16; i++) { const a = i / 16 * 6.283, r = 30 + (i % 3) * 4; const fn = i ? 'lineTo' : 'moveTo'; gg[fn](64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+    gg.closePath(); gg.fill();
+    gg.fillStyle = 'rgba(70,74,84,.6)';
+    for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283; gg.beginPath(); gg.arc(64 + Math.cos(a) * 50, 64 + Math.sin(a) * 50, 4 + (i % 3), 0, 7); gg.fill(); }
+  });
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+let marquesMesh = null;
+function marquesInit() {
+  if (marquesMesh && marquesMesh.parent) return marquesMesh;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(MARQUES_MAX * 12), uv = new Float32Array(MARQUES_MAX * 8);
+  const idx = new Uint16Array(MARQUES_MAX * 6);
+  for (let i = 0; i < MARQUES_MAX; i++) { const o = i * 4; idx.set([o, o + 1, o + 2, o, o + 2, o + 3], i * 6); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.setDrawRange(0, 0);
+  const mat = new THREE.MeshBasicMaterial({ map: TEX_MARQUES, transparent: true, depthWrite: false,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const m = new THREE.Mesh(geo, mat);
+  m.frustumCulled = false;   // jamais coupé : l'appel de dessin reste le MÊME d'une image a l'autre
+  m.renderOrder = 2; worldGroup.add(m);
+  marquesMesh = m; return m;
+}
+// La face touchée d'une boîte : celle dont on est le plus près en proportion de sa demi-taille.
+// Rend le point RAMENÉ sur cette face et la normale sortante.
+function faceTouchee(o, x, y, z) {
+  const hw = Math.max(o.w, 0.2) / 2, hh = Math.max(o.h, 0.2) / 2, hd = Math.max(o.d, 0.2) / 2;
+  const dx = clamp(x - o.x, -hw, hw), dy = clamp(y - o.y, -hh, hh), dz = clamp(z - o.z, -hd, hd);
+  const rx = Math.abs(dx) / hw, ry = Math.abs(dy) / hh, rz = Math.abs(dz) / hd;
+  let n = { x: 0, y: 0, z: 0 };
+  if (rx >= ry && rx >= rz) n.x = dx >= 0 ? 1 : -1;
+  else if (rz >= ry) n.z = dz >= 0 ? 1 : -1;
+  else n.y = dy >= 0 ? 1 : -1;
+  return { nx: n.x, ny: n.y, nz: n.z,
+    px: n.x ? o.x + n.x * hw : o.x + dx, py: n.y ? o.y + n.y * hh : o.y + dy, pz: n.z ? o.z + n.z * hd : o.z + dz };
+}
+// L'intensité : la vitesse (ou l'énergie) du choc décide de la sorte de marque.
+function sorteSelonForce(f) { return f < 6 ? 'trace' : f < 12 ? 'bosse' : f < 20 ? 'fissure' : 'trou'; }
+// LA RÈGLE GÉNÉRALE. `objet` : n'importe quel solide de `solids` (ou null pour marquer le SOL,
+// une trace de pneu par exemple). Rend la marque posée, ou null si le choc est trop faible.
+function marqueImpact(objet, x, y, z, force = 6, sorte) {
+  if (!city.on) return null;
+  if (force < 1.2) return null;
+  const s = sorte || sorteSelonForce(force);
+  const i = MARQUE_SORTES.indexOf(s); if (i < 0) return null;
+  let px = x, py = y, pz = z, nx = 0, ny = 1, nz = 0;
+  if (objet) {
+    const f = faceTouchee(objet, x, y, z);
+    px = f.px; py = f.py; pz = f.pz; nx = f.nx; ny = f.ny; nz = f.nz;
+  } else { py = 0.08; }
+  // deux marques au même endroit ne servent a rien : on garde la plus forte
+  const dejaLa = city.marques.find(m => Math.abs(m.x - px) < 0.5 && Math.abs(m.y - py) < 0.5 && Math.abs(m.z - pz) < 0.5);
+  if (dejaLa) { if (force <= dejaLa.force + 0.5) return dejaLa; ecritMarque(dejaLa.slot, px, py, pz, nx, ny, nz, i, tailleMarque(force, s)); Object.assign(dejaLa, { sorte: s, force }); return dejaLa; }
+  marquesInit();
+  const slot = (city.marquesN = (city.marquesN || 0) + 1) - 1;
+  const k = slot % MARQUES_MAX;
+  const taille = tailleMarque(force, s);
+  ecritMarque(k, px, py, pz, nx, ny, nz, i, taille);
+  const mq = { x: +px.toFixed(2), y: +py.toFixed(2), z: +pz.toFixed(2), sorte: s, force: +force.toFixed(1), taille: +taille.toFixed(2), slot: k, t: simTime };
+  // tampon circulaire : la plus ANCIENNE marque est écrasée, le plafond n'est jamais dépassé
+  const vieux = city.marques.findIndex(m => m.slot === k);
+  if (vieux >= 0) city.marques.splice(vieux, 1);
+  city.marques.push(mq);
+  marquesMesh.geometry.setDrawRange(0, Math.min(city.marques.length, MARQUES_MAX) * 6);
+  return mq;
+}
+function tailleMarque(force, sorte) {
+  const base = sorte === 'trace' ? 1.1 : sorte === 'bosse' ? 0.85 : sorte === 'fissure' ? 1.0 : 1.2;
+  return clamp(base * (0.45 + force * 0.055), 0.4, 2.4);
+}
+// Écrit un quadrilatère dans le maillage partagé : quatre sommets, quatre coordonnées de
+// texture, rien de plus. Pas de nouvel objet dans la scène, donc pas d'appel de dessin en plus.
+function ecritMarque(k, px, py, pz, nx, ny, nz, tuile, taille) {
+  const g = marquesInit().geometry, P2 = g.attributes.position.array, U = g.attributes.uv.array;
+  // repère de la face : deux tangentes perpendiculaires a la normale
+  const upx = Math.abs(ny) > 0.9 ? 1 : 0, upy = Math.abs(ny) > 0.9 ? 0 : 1, upz = 0;
+  let tx = upy * nz - upz * ny, ty = upz * nx - upx * nz, tz = upx * ny - upy * nx;
+  const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+  const bx2 = ny * tz - nz * ty, by = nz * tx - nx * tz, bz2 = nx * ty - ny * tx;
+  const h = taille / 2, e = 0.035;   // 3,5 cm au-dessus de la face : pas de bagarre de profondeur
+  const cx = px + nx * e, cy = py + ny * e, cz = pz + nz * e;
+  const coins = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const u0 = (tuile % 2) * 0.5, v0 = 0.5 - Math.floor(tuile / 2) * 0.5;
+  for (let i = 0; i < 4; i++) {
+    const [a, b] = coins[i], o = (k * 4 + i) * 3;
+    P2[o] = cx + (tx * a + bx2 * b) * h; P2[o + 1] = cy + (ty * a + by * b) * h; P2[o + 2] = cz + (tz * a + bz2 * b) * h;
+    const uo = (k * 4 + i) * 2;
+    U[uo] = u0 + (a > 0 ? 0.5 : 0); U[uo + 1] = v0 + (b > 0 ? 0.5 : 0);
+  }
+  g.attributes.position.needsUpdate = true; g.attributes.uv.needsUpdate = true;
+}
+function effaceMarques() {   // la ville repeinte a neuf (changement de monde, ou les employés)
+  city.marques = []; city.marquesN = 0;
+  if (marquesMesh) { marquesMesh.geometry.setDrawRange(0, 0); }
+}
+// Le solide vraiment touché a cet endroit : le plus proche du point de choc, en excluant le
+// sol, les trottoirs, les véhicules et les volumes invisibles (murs d'enceinte, repères).
+function solideTouche(x, y, z, r = 2.4) {
+  let best = null, bd = Infinity;
+  for (const o of solidsAutour(x, z, r + 2.6, false)) {
+    if (o.veh || o.sol || o.trottoir || o.h > 30 || !o.mesh) continue;
+    if (o.mesh.material === invisibleMat) continue;
+    if (o.y + o.h / 2 < 0.45) continue;
+    const dx = Math.max(0, Math.abs(x - o.x) - o.w / 2), dz = Math.max(0, Math.abs(z - o.z) - o.d / 2);
+    const d = Math.hypot(dx, dz);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return bd <= r ? best : null;
+}
+// Le mur d'un BÂTIMENT : ses façades ne sont pas toujours des solides (le rez-de-chaussée est
+// creux, le volume est déclaré dans `city.batiments`). On en fabrique une boîte de 4 m de haut
+// pour que `faceTouchee` sache sur quelle façade coller la marque.
+function batimentTouche(x, z, r) {
+  let best = null, bd = Infinity;
+  for (const b of (city.batiments || [])) {
+    const dx = Math.max(0, Math.abs(x - b.x) - b.w / 2), dz = Math.max(0, Math.abs(z - b.z) - b.d / 2);
+    const d = Math.hypot(dx, dz);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best && bd <= r ? { x: best.x, z: best.z, w: best.w, d: best.d, y: 2, h: 4, batiment: true } : null;
+}
+// LE RACCORD VÉHICULE → VILLE. Le poste Véhicules appelle ceci a chaque choc : on cherche ce
+// qui a été touché, et soit l'objet est FRAGILE (il casse), soit la ville garde la marque.
+// `force` : la vitesse du choc en m/s. Rend la marque posée, ou null.
+// On essaie DEUX points : celui que donne l'appelant (souvent le centre du véhicule) puis le
+// NEZ du véhicule — c'est le pare-chocs qui touche, pas le milieu du capot.
+function chocDecor(c, x, z, force, sorte) {
+  if (!city.on || force < 1.2) return null;
+  const y = (c && c.y != null ? c.y : 0) + 0.8;
+  const r = c && c.kind === 'truck' ? 3.4 : 2.6;
+  // On sonde le point donné, puis le NEZ et l'ARRIÈRE du véhicule : au moment ou l'on regarde,
+  // la vitesse a deja rebondi, son signe ne dit plus de quel cote on a tape.
+  const essais = [[x, z]];
+  if (c && c.h != null) {
+    const L = (c.baseD || 4.4) / 2 + 0.4;
+    for (const av of [1, -1]) essais.push([c.x + Math.sin(c.h) * L * av, c.z + Math.cos(c.h) * L * av]);
+  }
+  for (const [ex, ez] of essais) {
+    const o = solideTouche(ex, y, ez, r); if (!o) continue;
+    // un objet fragile ne se marque pas : il casse (et les employés viendront le remettre)
+    const br = o.brk || breakables.find(b2 => b2.solid === o);
+    if (br && !br.broken) { breakThing(br, c || { x: ex, z: ez }); return null; }
+    return marqueImpact(o, ex, y, ez, force, sorte);
+  }
+  for (const [ex, ez] of essais) {
+    const b = batimentTouche(ex, ez, r);
+    if (b) return marqueImpact(b, ex, y, ez, force, sorte);
+  }
+  return null;
+}
+// ================= LES OBJETS FRAGILES =================
+// Tout ce qui se renverse, se plie ou s'effondre passe par ici : l'objet rejoint `breakables`,
+// donc `breakThing` le casse, `remiseTick` le remet en état et — surtout — `chercheCasse()`
+// le donne aux EMPLOYÉS MUNICIPAUX, qui viennent le réparer sur place.
+function fragile(g, solid, x, z, kind, r) {
+  const b = { kind, g, solid, x, z, r: r || 0.6, broken: false };
+  if (solid) solid.brk = b;
+  breakables.push(b); return b;
+}
+// Ce que devient chaque sorte d'objet quand un véhicule l'emboutit. `angle` : de combien il
+// bascule (un panneau se tord, un cône se couche a plat). Les lampadaires et les feux gardent
+// exactement le comportement d'avant (aucune entrée ici : on retombe sur les valeurs par défaut).
+const CASSE_DEF = {
+  panneau: { angle: 0.55, msg: '🚧 Panneau tordu !', couleur: 0xc9ced8, hauteur: 2.2 },
+  poubelle: { angle: 1.5, msg: '🗑️ Poubelle renversée !', couleur: 0x2f6f4a, hauteur: 0.8,
+    effet: b => { for (let i = 0; i < 3; i++) if (typeof poseDetritus === 'function' && city.detritus) poseDetritus(b.x + rnd(-1.6, 1.6), b.z + rnd(-1.6, 1.6)); } },
+  cone: { angle: 1.55, msg: '🚧 Cône renversé !', couleur: 0xff8f3a, hauteur: 0.5 },
+  neige: { angle: 0.9, msg: '⛄ Bonhomme de neige explosé !', couleur: 0xf4f8ff, hauteur: 1.4,
+    effet: b => { if (b.boules) b.boules.forEach((m, i) => { m.position.x += rnd(-1.2, 1.2); m.position.y = 0.2 + i * 0.05; m.position.z += rnd(-1.2, 1.2); m.scale.multiplyScalar(0.85); }); } },
+};
+// Un bonhomme de neige qu'on peut faire exploser : trois boules, un nez, un chapeau.
+function bonhommeNeige(x, z, parent) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); (parent || worldGroup).add(g);
+  const blanc = new THREE.MeshLambertMaterial({ color: 0xf4f8ff });
+  const boules = [];
+  for (const [r, y] of [[0.62, 0.55], [0.44, 1.32], [0.3, 1.9]]) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), blanc); m.position.y = y; m.castShadow = true; g.add(m); boules.push(m);
+  }
+  const nez = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.36, 7), new THREE.MeshLambertMaterial({ color: 0xff8f3a }));
+  nez.rotation.x = Math.PI / 2; nez.position.set(0, 1.92, 0.3); g.add(nez);
+  const noir = new THREE.MeshLambertMaterial({ color: 0x1b1b22 });
+  for (const dx of [-0.11, 0.11]) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.08); o.position.set(dx, 2.02, 0.24); g.add(o); }
+  for (let k = 0; k < 3; k++) { const o = new THREE.Mesh(unitRound, noir); o.scale.setScalar(0.09); o.position.set(0, 1.15 - k * 0.22, 0.42); g.add(o); }
+  const echarpe = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xff5c5c }));
+  echarpe.scale.set(0.68, 0.14, 0.68); echarpe.position.y = 1.66; g.add(echarpe);
+  const cha = new THREE.Mesh(unitRound, noir); cha.scale.set(0.56, 0.06, 0.56); cha.position.y = 2.16; g.add(cha);
+  const cha2 = new THREE.Mesh(unitRound, noir); cha2.scale.set(0.36, 0.34, 0.36); cha2.position.y = 2.32; g.add(cha2);
+  for (const sg of [-1, 1]) { const br2 = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0x6b4423 })); br2.scale.set(0.9, 0.07, 0.07); br2.position.set(sg * 0.6, 1.4, 0); br2.rotation.z = sg * 0.4; g.add(br2); }
+  const solid = { mesh: boules[0], x, y: 0.8, z, w: 1.24, h: 1.6, d: 1.24, noRoute: true };
+  solids.push(solid); sgridSale();
+  const b = fragile(g, solid, x, z, 'neige', 0.9); b.boules = boules;
+  b.saison = !!parent;   // batí par le décor de neige : il ne dure que le temps de l'hiver
+  return b;
+}
+// Un cône de rue : il se couche au premier coup de pare-chocs. (Le poste Métiers a son propre
+// `coneChantier(parent, x, y, z)`, purement décoratif, planté dans le groupe d'un chantier.)
+function coneRue(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const socle = new THREE.Mesh(unitRound, lam(0x2b2f3a)); socle.scale.set(0.56, 0.07, 0.56); socle.position.y = 0.04; g.add(socle);
+  const co = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.72, 12), lam(0xff8f3a)); co.position.y = 0.4; co.castShadow = true; g.add(co);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.22, 0.12, 12), lam(0xf4f6fa)); band.position.y = 0.42; g.add(band);
+  const solid = { mesh: co, x, y: 0.4, z, w: 0.56, h: 0.8, d: 0.56, noRoute: true };
+  solids.push(solid); sgridSale();
+  return fragile(g, solid, x, z, 'cone', 0.5);
 }
 
 // ================= JOUEUR =================
@@ -15378,6 +15709,8 @@ function repareChose(b) {
     if (b.mat0) b.m.material = b.mat0;
   } else {
     if (b.quat0) b.g.quaternion.copy(b.quat0); else b.g.quaternion.identity();
+    // les morceaux qui se sont eparpilles (les boules du bonhomme de neige) reprennent leur place
+    if (b.pos0) b.pos0.forEach((p, i) => { const m = b.boules && b.boules[i]; if (m) { m.position.set(p[0], p[1], p[2]); m.scale.set(p[3], p[3], p[3]); } });
     if (b.solid && solids.indexOf(b.solid) < 0) solids.push(b.solid); sgridSale();
     if (b.bulb && b.mat0) b.bulb.material = b.mat0;
     if (b.lamps && b.mats0) b.lamps.forEach((l, i) => { if (b.mats0[i]) l.material = b.mats0[i]; });
@@ -15631,12 +15964,12 @@ const MARQUE_TEX = [1, 2, 3].map(niveau => {
 const MARQUE_MAT = MARQUE_TEX.map(t => { const m = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, fog: true }); shared.add(m); return m; });
 const MARQUE_GEO = new THREE.PlaneGeometry(1, 1); shared.add(MARQUE_GEO);
 const marques = [];
-const MARQUES_MAX = 10;
+const MARQUES_MUR_MAX = 10;   // le poste Infrastructure a son propre plafond (96 marques en un seul appel de dessin) : on renomme celui-ci
 function marqueMur(x, y, z, nx, nz, gravite) {
   gravite = clamp(gravite | 0, 1, 3);
   const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
   let m;
-  if (marques.length >= MARQUES_MAX) { m = marques.shift(); m.material = MARQUE_MAT[gravite - 1]; }
+  if (marques.length >= MARQUES_MUR_MAX) { m = marques.shift(); m.material = MARQUE_MAT[gravite - 1]; }
   else { m = new THREE.Mesh(MARQUE_GEO, MARQUE_MAT[gravite - 1]); m.renderOrder = 2; worldGroup.add(m); }
   const t = 1.1 + gravite * 0.5;
   m.scale.set(t, t, 1);
@@ -15723,6 +16056,7 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.broken) return;
   b.casseT = simTime;   // heure de la casse : la ville remet tout en état au bout d'un moment
   if (!b.quat0 && b.g) b.quat0 = b.g.quaternion.clone();   // orientation d'origine, pour le redressement
+  if (!b.pos0 && b.boules) b.pos0 = b.boules.map(m => [m.position.x, m.position.y, m.position.z, m.scale.x]);
   if (!b.mat0 && b.m) b.mat0 = b.m.material;
   if (!b.mat0 && b.bulb) b.mat0 = b.bulb.material;
   if (!b.mats0 && b.lamps) b.mats0 = b.lamps.map(l => l.material);
@@ -15732,10 +16066,16 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
     b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900); sgridSale();
     if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
   } else {
+    // Chaque sorte d'objet se casse a sa maniere (CASSE_DEF) : le panneau se tord, le cone se
+    // couche, la poubelle se vide sur le trottoir, le bonhomme de neige eclate. Sans entree
+    // dans la table, on retombe sur le comportement d'origine (lampadaire, feu tricolore).
+    const def = CASSE_DEF[b.kind] || {};
     b.broken = true; const dx = b.x - c.x, dz = b.z - c.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
-    b.g.quaternion.setFromAxisAngle(ax, 1.35); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); sgridSale();
+    b.g.quaternion.setFromAxisAngle(ax, def.angle == null ? 1.35 : def.angle); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); sgridSale();
     if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
-    burst(b.x, 3, b.z, 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1); msg(b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !', 900);
+    if (def.effet) { try { def.effet(b); } catch (e7) {} }
+    burst(b.x, def.hauteur == null ? 3 : def.hauteur, b.z, def.couleur || 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1);
+    msg(def.msg || (b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !'), 900);
   }
   if (!sansDelit && c && c.parts) vehicleDamage(c, Math.min(25, spd * 0.8));   // c peut être un simple point d'impact (une balle)
 }
@@ -15776,7 +16116,8 @@ function driveStep(dt) {
       const over = Math.abs(ti.lat) - lim, sg = Math.sign(ti.lat), nxN = -ti.tz * sg, nzN = ti.tx * sg;
       nx -= nxN * over; nz -= nzN * over;
       const along = Math.sin(c.h) * ti.tx + Math.cos(c.h) * ti.tz;   // 1 = dans le sens de la piste
-      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(drive.speed) * (1 - Math.abs(along)); vehicleDamage(c, impact * 0.5 + 0.3); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit(); }
+      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(drive.speed) * (1 - Math.abs(along)); vehicleDamage(c, impact * 0.5 + 0.3); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit();
+        marqueImpact(null, c.x, 0.08, c.z, Math.max(2, impact), 'trace'); }   // la gomme laissee sur la piste
       drive.speed -= drive.speed * (3 * (1 - Math.abs(along)) + 0.25) * dt;
       let dh = Math.atan2(ti.tx, ti.tz) - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); c.h += dh * Math.min(1, dt * 3);   // aide à réaligner
     }
@@ -15797,6 +16138,9 @@ function driveStep(dt) {
       // la normale du mur : l'axe bloqué, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
       chocVehicule(c, impact, nx, nz);
+      // ... et LA VILLE garde la trace : le mur touche recoit sa marque a l'endroit exact,
+      // et s'il s'agit d'un objet fragile (panneau, poubelle, cone), il casse.
+      chocDecor(c, bx ? nx : c.x, bz ? nz : c.z, impact);
     }
   }
   // UN BONHOMME DE NEIGE PERCUTÉ SE CASSE ET TOMBE PAR TERRE (il ne faisait rien du tout)
@@ -20364,7 +20708,7 @@ function buildPlanque(x, z, opt = {}) {
   const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), lam(0xffd23f)); dial.position.set(sx2, y + 1.05, sz2 + 0.93); dial.rotation.x = Math.PI / 2; worldGroup.add(dial);
   const coffre = { x: sx2, z: sz2 + 1.6, y, door, dial, open: false, progress: 0, amount: 0, planque: true };
   city.safes.push(coffre);
-  city.batiments.push({ x, z, w: w - 0.6, d: d - 0.6 });
+  city.batiments.push({ x, z, w: w - 0.6, d: d - 0.6, nom: joueur ? 'Ta planque' : 'Planque de gang' });
   const P2 = { x, z, w, d, coffre, joueur };
   city.planques.push(P2);
   return P2;

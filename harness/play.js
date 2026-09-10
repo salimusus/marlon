@@ -9481,3 +9481,126 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
     && r.taxi.pireEcart <= 6 && r.taxiChrono > 60;
   return { ok, detail: `${avec.length} missions sur ${r.missions.length} posent un repère, et toutes mènent à un point que l'on rejoint par le réseau (écart maximum ${Math.max(...avec.map(m => m.ecart))} m ; en échec : ${perdus.map(m => m.id + ' ' + m.ecart + ' m').join(', ') || 'aucune'}) · au volant, le tracé de chevrons suit la chaussée : ${r.auVolant.hors}/${r.auVolant.chevrons} hors route (${r.auVolant.pct} %) contre ${r.aPied.hors}/${r.aPied.chevrons} (${r.aPied.pct} %) avec la grille des piétons · le client du taxi est toujours joignable en voiture : sur ${r.taxi.tirages} tirages, la voiture s'approche au pire à ${r.taxi.pireEcart} m (4 des 26 emplacements étaient à plus de 6 m, mission impossible) et le chrono suit le trajet (${r.taxiChrono} s au lieu de 120 s fixes)` };
 });
+
+test('un vehicule lance dans un mur y laisse une marque dont l\'intensite suit la vitesse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, c0 = G.city;
+    // la tour ouest du Techno-Parc : une avenue droite devant, une façade dégagée derrière
+    const lance = vitesse => {
+      __SHOT.go({ world: 4, x: -16, y: 1, z: -128, hour: 12 });
+      G.effaceMarques();
+      const c = G.city.cars.find(v => !v.heli && !v.rider && (v.baseD || 4.4) > 4);
+      c.x = -16; c.z = -134; c.y = 0; c.h = Math.PI; c.dmg = 0; c.dead = false;
+      c.hitT = 0; c.bumpT = 0; c.scrapeT = 0;   // les essais s'enchaînent dans la même page
+      c.g.position.set(c.x, 0, c.z); G.settleVehicle(c); G.vehicleSolid(c); G.enterCar(c); G.drive.speed = vitesse;
+      for (let i = 0; i < 240 && !c0.marques.length; i++) {
+        if (Math.abs(G.drive.speed) > 0.5) G.drive.speed = Math.max(G.drive.speed, vitesse);
+        G.driveStep(1 / 60);
+      }
+      const m = c0.marques[0] || null, avance = +(c.z - (-134)).toFixed(1);
+      G.exitCar();
+      return { vitesse, avance, marques: c0.marques.length, dmg: Math.round(c.dmg || 0),
+        m: m && { sorte: m.sorte, force: m.force, taille: m.taille, x: m.x, y: m.y, z: m.z } };
+    };
+    const lent = lance(4), moyen = lance(11), fort = lance(26);
+    // la marque est bien COLLÉE sur la façade, pas posée en l'air au milieu de la rue
+    const surFacade = fort.m && Math.abs(fort.m.z + 141.25) < 0.6 && fort.m.y > 0.2 && fort.m.y < 4.2;
+    // la règle générale marche sur N'IMPORTE quel solide, pas seulement sur les murs
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.effaceMarques();
+    const nImporte = G.solids.filter(o => o.mesh && o.h > 1 && o.h < 20 && o.w > 1).slice(0, 12);
+    let poses = 0;
+    for (const o of nImporte) if (G.marqueImpact(o, o.x - o.w / 2, o.y, o.z, 14)) poses++;
+    const sortes = [3, 8, 15, 30].map(f => G.sorteSelonForce(f));
+    // aucune marque n'est un obstacle : rien n'entre dans `solids`
+    const solidesAvant = G.solids.length;
+    for (let i = 0; i < 20; i++) G.marqueImpact(nImporte[0], nImporte[0].x - nImporte[0].w / 2, 1 + i * 0.1, nImporte[0].z - 4 + i * 0.5, 9);
+    const sansCollision = G.solids.length === solidesAvant;
+    return { lent, moyen, fort, surFacade, poses, testes: nImporte.length, sortes, sansCollision };
+  });
+  const ok = r.lent.marques === 1 && r.moyen.marques === 1 && r.fort.marques === 1
+    && r.lent.m.sorte === 'trace' && r.moyen.m.sorte === 'bosse' && r.fort.m.sorte === 'trou'
+    && r.fort.m.taille > r.moyen.m.taille && r.moyen.m.taille > r.lent.m.taille
+    && r.surFacade && r.poses === r.testes && r.sansCollision
+    && r.sortes.join() === 'trace,bosse,fissure,trou';
+  return { ok, detail: `on encastre la même voiture dans la même façade a trois vitesses : a ${r.lent.vitesse} m/s la ville garde une ${r.lent.m.sorte} de ${r.lent.m.taille} m, a ${r.moyen.vitesse} m/s une ${r.moyen.m.sorte} de ${r.moyen.m.taille} m, a ${r.fort.vitesse} m/s un ${r.fort.m.sorte} de ${r.fort.m.taille} m — l'intensité suit la vitesse et la marque est collée sur la façade (y = ${r.fort.m.y} m, z = ${r.fort.m.z}) · la règle est GÉNÉRALE : ${r.poses}/${r.testes} solides pris au hasard dans la ville acceptent une marque, l'échelle est ${r.sortes.join(' → ')}, et aucune marque n'ajoute d'obstacle (${r.sansCollision})` };
+});
+
+test('les marques du decor sont plafonnees et ne coutent qu\'un seul appel de dessin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, c0 = G.city;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.effaceMarques();
+    const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const avant = dessine();
+    // 300 traces de pneu au sol (`objet` = null : c'est la chaussée qui prend la marque),
+    // bien espacées — deux marques a moins de 50 cm fusionnent, c'est voulu
+    for (let i = 0; i < 300; i++) G.marqueImpact(null, -60 + (i % 20) * 1.5, 0, -20 + Math.floor(i / 20) * 1.5, 4 + (i % 22));
+    const apres = dessine();
+    const nb = c0.marques.length;
+    // le tampon est circulaire : chaque case du maillage n'est occupée qu'une fois
+    const cases = new Set(c0.marques.map(m => m.slot));
+    const range = G.marquesMesh.geometry.drawRange.count;
+    // un seul maillage pour toutes les marques
+    let maillages = 0; G.worldGroup.traverse(o => { if (o.isMesh && o.geometry === G.marquesMesh.geometry) maillages++; });
+    // et on peut tout effacer
+    G.effaceMarques();
+    const apresEffacement = { marques: c0.marques.length, range: G.marquesMesh.geometry.drawRange.count, calls: dessine() };
+    return { avant, apres, nb, max: G.MARQUES_MAX, cases: cases.size, range, maillages, apresEffacement, sortes: G.MARQUE_SORTES };
+  });
+  const ok = r.nb === r.max && r.cases === r.max && r.range === r.max * 6 && r.maillages === 1
+    && r.apres - r.avant === 1 && r.apresEffacement.marques === 0 && r.apresEffacement.range === 0
+    && r.sortes.length === 4;
+  return { ok, detail: `300 traces posées au sol : la ville n'en garde que ${r.nb} (plafond ${r.max}), les plus anciennes sont écrasées — ${r.cases} cases distinctes dans le maillage, plage de dessin ${r.range} indices · toutes les marques tiennent dans UN SEUL maillage (${r.maillages}) et une seule texture a quatre cases (${r.sortes.join(', ')}) : les appels de dessin passent de ${r.avant} a ${r.apres}, soit +${r.apres - r.avant} · effaceMarques() remet tout a zéro (${r.apresEffacement.marques} marques, ${r.apresEffacement.calls} appels)` };
+});
+
+test('le mobilier fragile casse au choc et les employes municipaux viennent le remettre', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, c0 = G.city;
+    __SHOT.go({ world: 4, x: 48, y: 1, z: -100, hour: 12 });
+    c0.horaires = false; G.metiersRepos();
+    // ---- le bonhomme de neige : posé sur le boulevard du Nord, emboutí a 14 m/s
+    const bn = G.bonhommeNeige(60, -100);
+    const solideAvant = G.solids.indexOf(bn.solid) >= 0;
+    const haut0 = bn.boules[2].position.y;
+    const c = G.city.cars.find(v => !v.heli && !v.rider && (v.baseD || 4.4) > 4);
+    c.x = 48; c.z = -100; c.y = 0; c.h = Math.PI / 2; c.dmg = 0; c.dead = false; c.hitT = 0;
+    c.g.position.set(c.x, 0, c.z); G.settleVehicle(c); G.vehicleSolid(c); G.enterCar(c); G.drive.speed = 14;
+    for (let i = 0; i < 240 && !bn.broken; i++) { G.drive.speed = Math.max(G.drive.speed, 14); G.driveStep(1 / 60); }
+    const neige = { casse: bn.broken, penche: +bn.g.quaternion.angleTo(new G.THREE.Quaternion()).toFixed(2),
+      tombe: +(haut0 - bn.boules[2].position.y).toFixed(2), solideAvant, solideApres: G.solids.indexOf(bn.solid) >= 0 };
+    G.exitCar(); G.repareChose(bn);
+    const neigeRemis = !bn.broken && Math.abs(bn.boules[2].position.y - haut0) < 0.01;
+    // ---- l'inventaire du mobilier fragile de la ville
+    const inv = G.breakables.reduce((a, b) => (a[b.kind] = (a[b.kind] || 0) + 1, a), {});
+    // ---- chaque sorte se casse a sa manière
+    const essai = k => {
+      const b = G.breakables.find(x => x.kind === k && !x.broken); if (!b) return null;
+      G.breakThing(b, { x: b.x + 1, z: b.z }, true);
+      return { kind: k, casse: b.broken, penche: +b.g.quaternion.angleTo(new G.THREE.Quaternion()).toFixed(2), horsSolides: G.solids.indexOf(b.solid) < 0 };
+    };
+    const formes = ['panneau', 'poubelle', 'cone'].map(essai);
+    // ---- LE POTEAU CASSÉ EST RÉPARÉ PAR LES EMPLOYÉS : on prend le panneau le plus proche du dépôt
+    for (const b of G.breakables) if (b.broken || b.cracked) { G.repareChose(b); b.enCours = false; }
+    const dep = c0.depot;
+    let pan = null, bd = 1e9;
+    for (const b of G.breakables) { if (b.kind !== 'panneau') continue; const d = Math.hypot(b.x - dep.x, b.z - dep.z); if (d < bd) { bd = d; pan = b; } }
+    G.breakThing(pan, { x: pan.x + 1, z: pan.z }, true);
+    const vu = (() => { const t = G.chercheCasse(); return !!t; })();
+    let repare = -1, chantiers = 0;
+    const DT = 1 / 20;
+    for (let i = 0; i < 3600 && repare < 0; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (c0.chantiers.length > chantiers) chantiers = c0.chantiers.length;
+      if (!pan.broken) repare = +(i * DT).toFixed(1);
+    }
+    return { neige, neigeRemis, inv, formes, vu, repare, chantiers, dist: Math.round(bd), etat: G.METIERS.employes[0].etat };
+  });
+  const f = Object.fromEntries(r.formes.filter(Boolean).map(o => [o.kind, o]));
+  const ok = r.neige.casse && r.neige.tombe > 0.5 && r.neige.solideAvant && !r.neige.solideApres && r.neigeRemis
+    && r.inv.panneau > 30 && r.inv.poubelle > 20 && r.inv.cone >= 8 && r.inv.lamp > 50 && r.inv.light > 20
+    && r.formes.every(o => o && o.casse && o.penche > 0.3 && o.horsSolides)
+    && f.cone.penche > f.panneau.penche
+    && r.vu && r.repare > 0 && r.repare < 170;
+  return { ok, detail: `un bonhomme de neige emboutí a 14 m/s s'effondre : il bascule de ${r.neige.penche} rad, sa boule du haut tombe de ${r.neige.tombe} m, il sort des solides — et il se redresse intact après réparation · la ville compte maintenant ${r.inv.panneau} panneaux, ${r.inv.poubelle} poubelles, ${r.inv.cone} cônes, ${r.inv.lamp} lampadaires, ${r.inv.light} feux et ${r.inv.glass} vitrines cassables ; chacun se casse a sa manière (panneau tordu ${f.panneau.penche} rad, poubelle renversée ${f.poubelle.penche}, cône couché ${f.cone.penche}) · un poteau de panneau cassé a ${r.dist} m du dépôt est VU par les employés (${r.vu}), ils posent ${r.chantiers} chantier et l'ont redressé en ${r.repare} s simulées (équipe « ${r.etat} »)` };
+});

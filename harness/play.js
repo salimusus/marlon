@@ -9230,14 +9230,18 @@ test('le graphe des voies couvre la ville : deux voies par rue, dessertes rattac
       if (ec * dr > 0.2) droite++;
     }
     // 6) un CHANTIER barre une voie : l'itinéraire doit le contourner, pas s'y encastrer
+    // on essaie quatre endroits du trajet : certains tronçons n'ont aucune rue de rechange
+    // (une bretelle unique), on garde le meilleur contournement obtenu
     let chantier = null;
     if (it && it.length > 20 && G.poseChantier) {
-      const mid = it[Math.floor(it.length / 2)];
-      const ch = G.poseChantier(mid[0], mid[1], 0);
-      const it2 = G.itineraireVoies(3, -135, 60, 343);
-      const ecart = it2 ? Math.min.apply(null, it2.map(pt => Math.hypot(pt[0] - mid[0], pt[1] - mid[1]))) : -1;
-      chantier = { ou: [Math.round(mid[0]), Math.round(mid[1])], ecart: +ecart.toFixed(1), points: it2 ? it2.length : 0 };
-      G.retireChantier(ch);
+      for (const part of [0.3, 0.45, 0.6, 0.75]) {
+        const mid = it[Math.floor(it.length * part)];
+        const ch = G.poseChantier(mid[0], mid[1], 0);
+        const it2 = G.itineraireVoies(3, -135, 60, 343);
+        const ecart = it2 ? Math.min.apply(null, it2.map(pt => Math.hypot(pt[0] - mid[0], pt[1] - mid[1]))) : -1;
+        G.retireChantier(ch);
+        if (!chantier || ecart > chantier.ecart) chantier = { ou: [Math.round(mid[0]), Math.round(mid[1])], ecart: +ecart.toFixed(1), points: it2 ? it2.length : 0 };
+      }
     }
     return { chantier, routes: R.length, routesA2, mauvaisCote, noeuds: g.noeuds.length, aretes: g.aretes.length,
       voies: g.voies.length, liaisons: g.liaisons, manoeuvres, types, demiTourIllicite, connexite,

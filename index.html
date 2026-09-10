@@ -6753,7 +6753,7 @@ function cheminAretes(e0, e1) {
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (G.barrees && G.barrees.has(e2.id) ? 400 : 0);
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
   }
@@ -6905,13 +6905,28 @@ function codeRoute(c, dt, opt) {
     if (simTime - c.stopDep < 1.2 || !croisementLibre(c, 16, false)) { cap(0, 'stop'); continue; }
     c.stopOK = q; c.stopDep = 0;
   }
-  // ---- 3) les passages pietons
+  // ---- 3) les passages pietons. On s'arrete des qu'un pieton est engage — MAIS PAS POUR
+  // L'ETERNITE : un habitant qui s'arrete pour danser au milieu du passage bloquait la rue
+  // indefiniment (l'ami qui conduisait le joueur a la villa n'arrivait jamais). Au bout de
+  // 6 s d'attente, on klaxonne et on repart au pas.
+  let alP = -1, margeP = 0;
   for (const p of (city.passages || [])) {
     if (Math.abs(p.x - c.x) > 28 || Math.abs(p.z - c.z) > 28) continue;
     const prof = Math.abs(fx) * p.w + Math.abs(fz) * p.d;
     const al = devant(p.x, p.z, frein + prof, 6);
-    if (al > 0 && pietonSurPassage(p)) cap(approche(al, prof / 2 + 0.9), 'passage');
+    if (al > 0 && pietonSurPassage(p)) { alP = al; margeP = prof / 2 + 0.9; break; }
   }
+  if (alP > 0) {
+    c.passT = (c.passT || 0) + (dt || 0);
+    if (c.passT < 6) cap(approche(alP, margeP), 'passage');
+    else { cap(1.5, 'passage'); klaxonne(c); }
+  } else c.passT = 0;
+  // ---- 3 ter) quelqu'un A PIED juste devant le capot : on freine et on klaxonne (meme regle,
+  // meme garde-fou : au bout de 6 s on avance au pas plutot que de rester plante la)
+  if (pietonDevant(c)) {
+    c.pietT = (c.pietT || 0) + (dt || 0); klaxonne(c);
+    cap(c.pietT < 6 ? 0 : 1.5, 'pieton');
+  } else c.pietT = 0;
   // ---- 3 bis) ON SE RANGE POUR LA SIRENE. Un vehicule prioritaire (police en poursuite,
   // pompiers, ambulance) porte `urgence` : celui qui l'entend arriver derriere lui leve le pied
   // et le laisse passer au lieu de lui boucher la rue.
@@ -7115,7 +7130,6 @@ function traficRoule(c, dt, opt) {
   c.raison = co.raison;
   const [gap, mini] = gapDevant(c);
   if (gap < mini) { cible = 0; c.raison = 'file'; } else if (gap < mini + 4) { cible = Math.min(cible, (gap - mini) * 2.6); if (cible < 2) c.raison = 'file'; }
-  if (pietonDevant(c)) { cible = 0; klaxonne(c); c.raison = 'pieton'; }
   // arrivee : on se choisit une nouvelle destination (sauf si un autre poste pilote)
   if (st.i >= R.length - 1 && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
   const acc = cible < (c.speed || 0) ? 5.5 : 2.2;   // on freine plus vite qu'on n'accelere
@@ -10162,7 +10176,6 @@ function policeTick(dt) {
       pc.urgence = urgence;   // les autres conducteurs se rangent quand la sirene arrive
       const loi = codeRoute(pc, dt, { urgence });
       target = Math.min(target, loi.v); pc.raison = loi.raison;
-      if (pietonDevant(pc)) { target = 0; klaxonne(pc); pc.raison = 'pieton'; }
       pc.speed += (target - pc.speed) * Math.min(1, dt * (target < pc.speed ? 4 : 1.5));
     }
     const nx = pc.x + Math.sin(pc.h) * pc.speed * dt, nz = pc.z + Math.cos(pc.h) * pc.speed * dt;
@@ -13261,7 +13274,6 @@ function conduire(c, tx, tz, dt, st) {
     if (gapB < miniB) { vmax = 0; c.raison = c.raison || 'file'; }
     else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
   }
-  if (pietonDevant(c)) { vmax = 0; klaxonne(c); c.raison = 'pieton'; }
   if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
   if (st.filT > 5) { st.filT = 0; st.oubliFile = simTime + 4; st.route = null; st.routeT = 0; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere

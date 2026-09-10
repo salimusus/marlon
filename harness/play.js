@@ -6648,7 +6648,10 @@ test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseur
       const suivi = [];
       ds.axes = [0, 1, 0, 0]; const T0 = performance.now();
       let images = 0;
-      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); await dodo(8); }   // 1,1 s : sur une machine chargee, chaque image peut prendre 200 ms
+      // 1,1 s de lecture SERREE (sans rendre la main) : la repetition est reglee sur l'horloge,
+      // pas sur le nombre d'images. Avec une pause de 8 ms entre deux lectures, une machine
+      // chargee ne faisait qu'un ou deux tours en 1,1 s et le test croyait la repetition morte.
+      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); }
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
       res.repet = { pas: suivi.length, images: Math.max(images, 6) };
       // ✕ valide un onglet, et le curseur reste visible apres

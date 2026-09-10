@@ -5093,7 +5093,7 @@ test('on peut donner plusieurs ordres à plusieurs membres à la fois', async p 
     && r.etat.enCours.every(n => n === 1)
     && r.change && r.apresChange.missions === 2 && r.apresChange.type0 === 'voiture'
     && r.fin.missions === 0 && r.fin.libres && r.fin.soldes.every(n => n >= 1);
-  return { ok, detail: `quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti CHANGE d'ordre si on lui en donne un autre (il lâche son coup et part sur le nouveau) sans casser celui des autres, et chaque mission se solde de son côté` };
+  return { ok, detail: `[pris=${r.pris.join('/')} coups=${r.etat.coup0}/${r.etat.coup1} entrain=${r.etat.entrain2} sport=${r.etat.sport3} enCours=${r.etat.enCours.join('/')} change=${r.change} apres=${r.apresChange.missions}/${r.apresChange.type0} fin=${r.fin.missions} libres=${r.fin.libres} soldes=${r.fin.soldes.join('/')}] quatre ordres à quatre hommes passent d'affilée : deux coups tournent EN MÊME TEMPS (${r.etat.missions} missions), un troisième part s'entraîner, un quatrième joue au tennis · avant, un seul créneau existait et le gang répondait « on est déjà sur un coup » dès le deuxième ordre · un homme déjà parti CHANGE d'ordre si on lui en donne un autre (il lâche son coup et part sur le nouveau) sans casser celui des autres, et chaque mission se solde de son côté` };
 });
 
 
@@ -5360,8 +5360,9 @@ test('un garde du corps envoye en mission part vraiment', async p => {
     G.entrainerMembre(l[2], 'tir');
     res.entrain = { gardeLachee: !l[2].gardeCorps, rdv: l[2].rdv ? l[2].rdv.entrain : null };
     // le stand de tir est a l'autre bout de la ville : on lui laisse deux minutes
-    for (let i = 0; i < 60 * 120; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); }
-    res.entrainLoin = +Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z).toFixed(0);
+    let entrainMax = 0;
+    for (let i = 0; i < 60 * 120; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); entrainMax = Math.max(entrainMax, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
+    res.entrainLoin = +entrainMax.toFixed(0);   // le plus loin qu'il soit alle : une fois entraine, il revient garder le joueur
     return res;
   });
   const ok = r.gardes === 3 && r.envoi.missions === 1 && r.envoi.gardeLachee && r.envoi.gardeGardee && r.envoi.journal
@@ -6722,7 +6723,9 @@ test('en interieur, la camera passe en maison de poupee : plafond efface, mur tr
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 }); await dodo(600);
     __SHOT.go({ world: 4, x: -1, y: 0.5, z: 20, hour: 12, yaw: 0, pitch: 0.3 });   // dans la salle de sport
     for (let i = 0; i < 40 && !(G.interieur.rect && G.cam.dist < 5.2); i++) await dodo(150);
-    await dodo(600);
+    const opac = () => G.interieur.murs.map(o => o.mesh && o.mesh.userData.matOpaque ? +[].concat(o.mesh.material)[0].opacity.toFixed(2) : 1);
+    for (let i = 0; i < 40 && !opac().some(o => o < 0.5); i++) await dodo(150);   // le fondu du mur traverse prend quelques images
+    await dodo(300);
     const I = G.interieur, c = G.camera.position, rect = I.rect;
     const plafonds = I.masques.filter(m => { const b = new G.THREE.Box3().setFromObject(m); return b.min.y > 2.6; }).length;
     const ops = I.murs.map(o => o.mesh && o.mesh.userData.matOpaque ? +[].concat(o.mesh.material)[0].opacity.toFixed(2) : 1);

@@ -903,6 +903,8 @@ window.__G = {
   animTransArme: typeof animTransArme === 'function' ? animTransArme : null,
   animTransApplique: typeof animTransApplique === 'function' ? animTransApplique : null,
   animFige: typeof animFige === 'function' ? animFige : null,
+  brancardAnime: typeof brancardAnime === 'function' ? brancardAnime : null,
+  animReception: typeof animReception === 'function' ? animReception : null,
   animMondeTick: typeof animMondeTick === 'function' ? animMondeTick : null,
   botGardeDuCorps: typeof botGardeDuCorps === 'function' ? botGardeDuCorps : null,
   botProtegeMembre: typeof botProtegeMembre === 'function' ? botProtegeMembre : null,

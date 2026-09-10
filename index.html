@@ -9542,6 +9542,9 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // tend à l'impact, et le poing qui frappe est celui qui n'a pas servi au coup précédent.
   if (kind === 'kick') { me.rig.swing = 0.45; me.rig.kick = 0.45; }
   else { P.poing = P.poing === 'D' ? 'G' : 'D'; if (P.poing === 'D') me.rig.swing = 0.28; else me.rig.swingG = 0.28; }
+  // poste Animation : le MOUVEMENT du coup (elan, coude qui se tend, transfert du poids,
+  // rotation des epaules) est joue par animCombat ; on lui donne la meme duree.
+  if (kind !== 'kick') coupDePoing(me, P.poing, 0.28);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
   // LE SON DU COMBAT. Avant : un souffle et un « pok » mono, les mêmes pour un direct, un
   // combo et un coup de pied, et le personnage frappé ne disait rien. Maintenant l'effort
@@ -9613,6 +9616,7 @@ function coupCouteau() {
   P.fireCd = simTime + w.cd; P.punchT = simTime + w.cd;
   P.holsterT = simTime + 0.9;               // rengainage automatique après le coup, comme le pistolet
   me.rig.swing = 0.26; P.poing = 'D';       // le couteau est dans le poing droit
+  coupCouteau(me, 0.26);   // poste Animation : coup COURT et sec au ventre, pas un direct du droit
   P.dernierCouteau = simTime;
   sfx.noise(.05, 2400, .05); sfx.tone(1400, 0, .05, 'triangle', .03, 700);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
@@ -9753,6 +9757,7 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
       else if (simTime > (b.hitCd || 0) && !drive.car && P.hp > 0) { b.hitCd = simTime + 1.1; b.garde = false;
         // il frappe des deux poings lui aussi, en alternant
         b.poing = b.poing === 'D' ? 'G' : 'D'; if (b.poing === 'D') b.av.rig.swing = 0.3; else b.av.rig.swingG = 0.3;
+        coupDePoing(b.av, b.poing, 0.3);   // poste Animation : le meme mouvement complet que pour le joueur
         hurt(7, b.name, dx / d, dz / d, 1.5, 'poing'); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
       b.facing = Math.atan2(dx, dz);
     }
@@ -21034,7 +21039,27 @@ function mainDeAvatar(av, cote) {
   return n.getWorldPosition(new THREE.Vector3());
 }
 function brancardTick(dt) {
-  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); } catch (e) {} }
+  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); brancardAnime(br, dt); } catch (e) {} }
+}
+// LE BRANCARD BOUGE COMME UN VRAI (poste Animation). Le poste Personnages le PLACE — aux
+// poignees des porteurs, ou en glissant dans l'ambulance. Il manquait le mouvement :
+//   • on le SOULEVE du sol au lieu de l'y arracher d'un coup, et on le repose en douceur
+//     (le meme fondu que pour monter en voiture) ;
+//   • il TANGUE au rythme du pas des porteurs — amorti, parce qu'un brancard bien tenu bouge
+//     peu, mais il bouge : sans ca, il avait l'air soude aux poings.
+function brancardAnime(br, dt) {
+  if (!br || !br.g) return;
+  if (br.etatPrec !== br.etat) {
+    if (br.etatPrec != null && (br.etat === 'porte' || br.etat === 'pose')) animTransArme(br.g, 0.45);
+    br.etatPrec = br.etat;
+  }
+  if (br.etat === 'porte' && br.avant && animPres(br.g.position.x, br.g.position.z)) {
+    const w = (br.avant.rig && br.avant.rig.walk) || 0;
+    br.g.position.y += Math.sin(w) * 0.035;          // il monte et descend avec la foulee
+    br.g.rotation.z = Math.sin(w) * 0.03;            // et roule tres legerement d'un cote a l'autre
+    br.g.rotation.x = Math.sin(w * 2 + 0.6) * 0.018;
+  }
+  animTransApplique(br.g);
 }
 // ---- L'AMBULANCIER ----
 // LE point d'entrée pour le poste B (l'ambulance) et le poste Animation (le brancardage) :
@@ -21723,7 +21748,7 @@ const GESTES = {
       aRx: -0.30 - 2.05 * haut, cRx: -0.35 - 1.75 * haut, aRz: -0.22,
       aLx: -1.05, cLx: -1.30, aLz: 0.34,
       lLx: -0.16, lRx: -0.08, gLx: 0.30, gRx: 0.22,
-      bx: 0.16 + 0.18 * choc - 0.06 * haut, hx: 0.34 + 0.10 * choc, bs: 0.03,
+      bx: 0.16 + 0.18 * choc - 0.06 * haut, hx: 0.34 + 0.10 * choc, bs: 0,
     };
   },
   // LA SOUDURE : accroupi, les deux mains rapprochées au ras de la pièce, la tête baissée
@@ -21744,7 +21769,7 @@ const GESTES = {
     return {
       aRx: -1.15 + s * 0.42, cRx: -0.85 - s * 0.35, aRz: -0.34 + s * 0.20,
       aLx: -1.00, cLx: -1.05, aLz: 0.40,
-      lLx: -1.05, lRx: -0.55, gLx: 1.70, gRx: 1.35,
+      lLx: -1.05, lRx: -0.90, gLx: 1.70, gRx: 1.75,
       bx: 0.36, hx: 0.58, bs: 0.22,
     };
   },
@@ -21791,7 +21816,7 @@ const GESTES = {
       aRx: -1.42 + r * 0.13 + sw * 0.20, cRx: -0.38 + r * 0.11, aRz: -0.22 + sw * 0.16,
       aLx: -1.20 + r * 0.13 + sw * 0.20, cLx: -0.82 + r * 0.11, aLz: 0.62 + sw * 0.16,
       lLx: -0.34, lRx: 0.30, gLx: 0.52, gRx: 0.18,
-      bx: -0.15 - r * 0.06, hx: -0.10 + r * 0.05 + sw * 0.10, bs: 0.05,
+      bx: -0.15 - r * 0.06, hx: -0.10 + r * 0.05 + sw * 0.10, bs: 0.02,
     };
   },
   // LE FACTEUR QUI PÉDALE. Le GENOU est en retard d'un peu plus d'un radian sur la hanche :
@@ -21857,125 +21882,171 @@ function gesteMetier(rig, nom, dt, t, opt) {
 }
 
 // ---------- LE COMBAT ----------
-// L'état de combat vit dans `rig.cbt`, créé à la demande. Le poste Personnages n'a QUE ces
-// six fonctions à appeler ; `animCombat(av, dt)`, lancé juste après animateRig, fait tout
-// le mouvement — élan, transfert du poids, rotation des épaules, encaissement.
-const CBT_POING = 0.44, CBT_COUTEAU = 0.30, CBT_ENC = 0.45, CBT_CHUTE = 1.25;
-// La GARDE : poings devant le VISAGE, coudes bas devant les côtes, appui sur la jambe
-// arrière. C'est la pose de repos du combat : le coup et l'esquive partent de là.
-const CBT_GARDE = { aLx: -0.92, aRx: -0.92, aLz: 0.44, aRz: -0.44, cLx: -2.18, cRx: -2.18,
-  lLx: -0.20, lRx: 0.12, gLx: 0.42, gRx: 0.26, bx: 0.12, hx: 0.06, bs: 0.05 };
-// À GENOUX : le corps qui a pris le coup de trop se plie et pose un genou à terre.
-const CBT_CHUTE_POSE = { lRx: -1.45, gRx: 1.60, lLx: 0.22, gLx: 1.85, bs: 0.60, bx: 0.42, hx: 0.40,
-  aLx: -0.35, aRx: -0.30, cLx: -0.70, cRx: -0.65, aLz: 0.30, aRz: -0.30 };
+// PARTAGE DES RÔLES AVEC LE POSTE PERSONNAGES. C'est LUI qui décide et qui pose la GARDE
+// (`rig.garde` / `rig.gardeK`), l'ESQUIVE accroupie (`rig.accroupi`, avec l'abaissement du
+// bassin déjà calculé pour que les semelles restent au sol), le PORTAGE (`rig.porte` /
+// `rig.porteK`), l'accusé de coup (`rig.recul`) et le genou à terre (`rig.agenou`).
+// Je ne refais RIEN de tout ça : j'ajoute ce qui manquait au mouvement —
+//   • l'APPUI des jambes en garde (il gardait les poings hauts mais les jambes de quelqu'un
+//     qui attend le bus) et une respiration lente, pour que la garde ne soit pas une statue ;
+//   • le COUP DE POING complet : élan avec le coude qui se replie et l'épaule qui part en
+//     arrière, détente où le coude se TEND, transfert du poids sur la jambe avant, rotation
+//     des épaules et du bassin, retour à la garde (le poste Personnages faisait un balayage
+//     linéaire du bras, sans anticipation ni poids) ;
+//   • le COUP DE COUTEAU : court et sec, au ventre, coude à demi tendu seulement ;
+//   • l'ENCAISSEMENT : la tête rejetée, les genoux qui fléchissent, et la garde qui SE
+//     RESSERRE et RECULE au lieu de s'ouvrir — c'est ce qui distingue à l'œil un coup bloqué
+//     d'un coup reçu ;
+//   • la CHUTE : le coup de trop, un genou à terre, sur la même géométrie que `rig.agenou`.
+// Les déclencheurs sont posés par les fonctions ci-dessous, appelées depuis le code de combat
+// du poste Personnages (`punch`, le couteau, la riposte des habitants).
+// Durees MESUREES a la sonde : ce sont les plus courtes ou le bras ne saute pas d'une image
+// a l'autre. A 0,28 s, la detente du coude balayait 55 degres en 1/60 s — le poing se
+// teleportait. A 0,40 s la detente prend 0,12 s : c'est vif et on la SUIT des yeux.
+const CBT_POING = 0.40, CBT_COUTEAU = 0.34, CBT_CHUTE = 1.25;
+const CBT_RECUL = 0.35;   // durée de `rig.recul` chez le poste Personnages
+// À GENOUX : le coup de trop. Mêmes angles que `rig.agenou` (0,95 S d'abaissement), pour que
+// les deux poses se ressemblent et que le genou touche vraiment le sol.
+const CBT_CHUTE_POSE = { lRx: -1.5, gRx: 1.55, lLx: 0.2, gLx: 1.8, bs: 0.95 * S, bx: 0.34, hx: 0.42,
+  aLx: -0.45, aRx: -0.40, cLx: -0.80, cRx: -0.75, aLz: 0.30, aRz: -0.30 };
 function animCbt(av) {
   const rig = av && (av.rig || av); if (!rig || !rig.armL) return null;
-  if (!rig.cbt) rig.cbt = { coup: 0, main: 1, garde: 0, gardeK: 0, esquive: 0, esqK: 0, couteau: 0, enc: 0, encF: 1, chute: 0 };
+  if (!rig.cbt) rig.cbt = { coup: 0, coupD: CBT_POING, main: 1, couteau: 0, chute: 0, esqK: 0, souffle: 0 };
   return rig.cbt;
 }
-// UN COUP DE POING. `main` : 'D' (défaut) ou 'G'. Rend false si un coup est déjà en vol —
-// c'est ce qui empêche le bras de repartir en arrière au milieu de sa détente.
-function coupDePoing(av, main) {
+// UN COUP DE POING. `main` : 'D' (défaut) ou 'G' ; `duree` pour coller à la durée que le
+// poste Personnages a mise dans `rig.swing` / `rig.swingG`. Rend false si un coup est déjà
+// en vol — c'est ce qui empêche le bras de repartir en arrière au milieu de sa détente.
+function coupDePoing(av, main, duree) {
   const c = animCbt(av); if (!c || c.coup > 0) return false;
-  c.coup = CBT_POING; c.main = (main === 'G' || main === -1) ? -1 : 1; return true;
+  // on ne descend JAMAIS sous CBT_POING, meme si le poste Personnages a mis une duree plus
+  // courte dans rig.swing : en dessous, le mouvement n'est plus lisible a l'oeil.
+  c.coupD = Math.max(duree > 0 ? duree : 0, CBT_POING); c.coup = c.coupD;
+  c.main = (main === 'G' || main === -1) ? -1 : 1; return true;
 }
-// LA GARDE : les deux poings montent devant le visage et y restent.
-function gardePoings(av, on) { const c = animCbt(av); if (c) c.garde = on === false ? 0 : 1; }
-// L'ESQUIVE : il se BAISSE sur ses jambes, garde haute, pendant `duree` secondes.
-function esquiveBaisse(av, duree) { const c = animCbt(av); if (c) c.esquive = Math.max(c.esquive, duree > 0 ? duree : 0.55); }
-// LE COUTEAU : court et sec, au ventre. Le coude ne se tend qu'à moitié — un coup de
-// couteau n'est pas un direct du droit, il ne part pas de l'épaule.
-function coupCouteau(av) { const c = animCbt(av); if (!c || c.couteau > 0) return false; c.couteau = CBT_COUTEAU; return true; }
-// ENCAISSER : `force` 1 = un direct, 2 et plus = le coup de trop, il tombe à genoux.
-function encaisseCoup(av, force) {
+// LA GARDE et L'ESQUIVE appartiennent au poste Personnages : on ne fait que relayer, pour
+// que les autres postes puissent appeler l'animation sans connaître deux jeux de noms.
+function gardePoings(av, on) {
+  const rig = av && (av.rig || av); if (!rig) return;
+  rig.garde = on !== false;
+  if (av === me && typeof P !== 'undefined') P.garde = rig.garde;
+}
+function esquiveBaisse(av, duree) {
   const c = animCbt(av); if (!c) return;
-  c.enc = CBT_ENC; c.encF = clamp(force > 0 ? force : 1, 0.4, 3);
+  const rig = av.rig || av;
+  rig.accroupi = true; c.esqFin = simTime + (duree > 0 ? duree : 0.55);
+  if (av === me && typeof P !== 'undefined') P.accroupi = true;
+}
+// LE COUTEAU : court et sec, au ventre.
+function coupCouteau(av, duree) {
+  const c = animCbt(av); if (!c || c.couteau > 0) return false;
+  c.couteau = Math.max(duree > 0 ? duree : 0, CBT_COUTEAU); return true;
+}
+// ENCAISSER : `force` 1 = un direct, 2 et plus = le coup de trop, il tombe à genoux.
+// On réutilise `rig.recul` du poste Personnages pour le tronc, et on y ajoute la chute.
+function encaisseCoup(av, force) {
+  const rig = av && (av.rig || av); if (!rig) return;
+  const c = animCbt(av); if (!c) return;
+  rig.recul = CBT_RECUL;
+  c.encF = clamp(force > 0 ? force : 1, 0.4, 3);
   if (c.encF >= 2) c.chute = CBT_CHUTE;
 }
-// Le moteur : à appeler une fois par image, APRÈS animateRig. Rend true s'il a posé
-// quelque chose (le combat est en cours), false s'il n'y a rien à faire.
+// Le moteur : à appeler une fois par image, APRÈS animateRig. Rend true s'il a posé quelque
+// chose. Il ne coûte presque rien quand personne ne se bat : trois tests et on ressort.
 function animCombat(av, dt) {
-  const rig = av && (av.rig || av); if (!rig || !rig.cbt) return false;
+  const rig = av && (av.rig || av); if (!rig || !rig.armL) return false;
   const c = rig.cbt;
-  c.coup = Math.max(0, c.coup - dt); c.couteau = Math.max(0, c.couteau - dt);
-  c.esquive = Math.max(0, c.esquive - dt); c.enc = Math.max(0, c.enc - dt); c.chute = Math.max(0, c.chute - dt);
-  c.gardeK += ((c.garde ? 1 : 0) - c.gardeK) * Math.min(1, dt * 9);
-  c.esqK += ((c.esquive > 0 ? 1 : 0) - c.esqK) * Math.min(1, dt * 14);
-  const actif = c.gardeK > 0.02 || c.esqK > 0.02 || c.coup > 0 || c.couteau > 0 || c.enc > 0 || c.chute > 0;
-  if (!actif) { c.gardeK = 0; c.esqK = 0; return false; }
+  const gardeK = rig.gardeK || 0;
+  const rien = !(gardeK > 0.02) && !rig.accroupi && !(rig.recul > 0)
+    && !(c && (c.coup > 0 || c.couteau > 0 || c.chute > 0 || c.esqK > 0.02));
+  if (rien) { if (c) c.esqK = 0; return false; }
+  const cc = c || animCbt(rig); if (!cc) return false;
+  // l'esquive armée par esquiveBaisse() se relâche toute seule au bout de sa durée
+  if (cc.esqFin && simTime > cc.esqFin) { cc.esqFin = 0; rig.accroupi = false; if (rig === me.rig && typeof P !== 'undefined') P.accroupi = false; }
+  cc.coup = Math.max(0, cc.coup - dt); cc.couteau = Math.max(0, cc.couteau - dt); cc.chute = Math.max(0, cc.chute - dt);
+  cc.esqK += ((rig.accroupi ? 1 : 0) - cc.esqK) * Math.min(1, dt * 14);
+  cc.souffle += dt;
   if (rig.groupe && !animPres(rig.groupe.position.x, rig.groupe.position.z)) return false;
-  // 1. la garde, socle de tout
-  animPose(rig, CBT_GARDE, c.gardeK);
-  // 2. LE COUP DE POING. Trois temps : l'élan (le coude se replie, l'épaule part en
-  //    arrière, le poids recule), la détente (le coude se TEND, l'épaule vient devant, le
-  //    poids passe sur la jambe avant, les épaules tournent), le retour à la garde.
-  //    Le poids de la pose s'ouvre et se referme en cloche : le coup ne fait donc jamais
-  //    « claquer » le personnage dans la garde au moment où il part.
-  if (c.coup > 0) {
-    const u = 1 - c.coup / CBT_POING;
-    // la détente s'étale sur 0,10 s : plus court, le bras faisait un BOND d'une image à
-    // l'autre (55° en 1/60 s) et le coup ressemblait à une téléportation du poing.
-    const elan = animSeg(u, 0, 0.28) - animSeg(u, 0.28, 0.52);
-    const det = animSeg(u, 0.28, 0.52) - animSeg(u, 0.60, 1);
-    const D = c.main > 0, cote = D ? 1 : -1;
+  // 1. L'APPUI DE GARDE : jambe arrière chargée, genoux souples, buste de trois quarts, et
+  //    une respiration lente (le corps monte et descend d'un centimètre) pour que la garde
+  //    ne soit pas une statue. On ne touche PAS aux bras : ils sont au poste Personnages.
+  if (gardeK > 0.02) {
+    const resp = Math.sin(cc.souffle * 2.4);
+    animPose(rig, { lLx: -0.22, lRx: 0.14, gLx: 0.46, gRx: 0.28,
+      bx: 0.12 + resp * 0.02, hx: 0.06, bs: 0.012 + resp * 0.008 }, gardeK);
+  }
+  // 2. LE COUP DE POING. Trois temps : élan (le coude se replie, l'épaule part en arrière,
+  //    le poids recule), détente (le coude se TEND, l'épaule vient devant, le poids passe sur
+  //    la jambe avant, les épaules et la tête tournent), retour à la garde. Le poids de la
+  //    pose s'ouvre et se referme en cloche : le personnage ne « claque » jamais dans la pose.
+  if (cc.coup > 0) {
+    const u = 1 - cc.coup / (cc.coupD || CBT_POING);
+    // la détente s'étale sur un quart de la durée : plus court, le bras faisait un BOND
+    // d'une image à l'autre (55° en 1/60 s) et le coup ressemblait à une téléportation.
+    const elan = animSeg(u, 0, 0.28) - animSeg(u, 0.28, 0.58);
+    const det = animSeg(u, 0.28, 0.58) - animSeg(u, 0.66, 1);
+    const D = cc.main > 0, cote = D ? 1 : -1;
     const p = {
-      lLx: -0.20 - 0.30 * det, gLx: 0.42 + 0.28 * det,
-      lRx: 0.12 + 0.22 * det, gRx: 0.26,
-      bx: 0.12 + 0.20 * det - 0.08 * elan, hx: 0.06 + 0.10 * det, bs: 0.05,
+      lLx: -0.22 - 0.30 * det, gLx: 0.46 + 0.28 * det,
+      lRx: 0.14 + 0.22 * det, gRx: 0.28,
+      bx: 0.12 + 0.20 * det - 0.08 * elan, hx: 0.06 + 0.10 * det, bs: 0.02 + 0.03 * det,
       hy: -cote * 0.22 * det,
     };
-    // le bras qui frappe
-    p[D ? 'aRx' : 'aLx'] = -0.92 + 0.55 * elan - 0.62 * det;
-    p[D ? 'cRx' : 'cLx'] = -2.18 - 0.55 * elan + 2.10 * det;
-    p[D ? 'aRz' : 'aLz'] = cote * (-0.56 + 0.42 * det);
+    // le bras qui frappe : le coude part REPLIÉ (−2,7 rad) et finit TENDU (−0,1 rad)
+    p[D ? 'aRx' : 'aLx'] = -1.05 + 0.55 * elan - 0.55 * det;
+    p[D ? 'cRx' : 'cLx'] = -2.10 - 0.60 * elan + 2.00 * det;
+    p[D ? 'aRz' : 'aLz'] = cote * (-0.40 + 0.30 * det);
     // l'autre bras se resserre sur le visage : l'épaule opposée recule, c'est la vrille du buste
-    p[D ? 'aLx' : 'aRx'] = -0.92 + 0.30 * det;
-    p[D ? 'cLx' : 'cRx'] = -2.18 - 0.20 * det;
-    p[D ? 'aLz' : 'aRz'] = -cote * (0.56 + 0.18 * det);
+    p[D ? 'aLx' : 'aRx'] = -1.30 + 0.25 * det;
+    p[D ? 'cLx' : 'cRx'] = -1.60 - 0.30 * det;
+    p[D ? 'aLz' : 'aRz'] = -cote * (0.34 + 0.16 * det);
     animPose(rig, p, Math.min(1, Math.sin(Math.PI * u) * 3));
   }
   // 3. LE COUTEAU : armé contre la hanche, un coup COURT vers le ventre, retour immédiat.
-  if (c.couteau > 0) {
-    const u = 1 - c.couteau / CBT_COUTEAU;
+  //    Le coude ne se tend qu'à moitié : un coup de couteau ne part pas de l'épaule.
+  if (cc.couteau > 0) {
+    const u = 1 - cc.couteau / CBT_COUTEAU;
     const arme = animSeg(u, 0, 0.30) - animSeg(u, 0.30, 0.44);
     const pique = animSeg(u, 0.30, 0.44) - animSeg(u, 0.52, 1);
     animPose(rig, {
       aRx: 0.28 * arme - 0.70 * pique, cRx: -2.45 + 0.35 * arme + 1.60 * pique,
       aRz: -0.45 + 0.30 * pique, aLx: -0.85, cLx: -1.90, aLz: 0.50,
       bx: 0.10 + 0.26 * pique, hx: 0.20 * pique, hy: -0.25 * pique,
-      lLx: -0.18 - 0.34 * pique, gLx: 0.40 + 0.30 * pique, lRx: 0.14, gRx: 0.24,
+      lLx: -0.18 - 0.30 * pique, gLx: 0.40 + 0.28 * pique, lRx: 0.14, gRx: 0.24,
     }, Math.min(1, Math.sin(Math.PI * u) * 3.4));
   }
-  // 4. L'ESQUIVE : il plie les jambes et passe SOUS le coup, garde haute, tête rentrée.
-  if (c.esqK > 0.02) {
-    animPose(rig, { bs: 0.33, lLx: -1.20, lRx: -0.95, gLx: 1.72, gRx: 1.62,
-      bx: 0.36, hx: 0.34, aLx: -0.75, aRx: -0.75, cLx: -2.30, cRx: -2.30, aLz: 0.50, aRz: -0.50 }, c.esqK);
+  // 4. L'ESQUIVE : le poste Personnages plie déjà les jambes et descend le bassin — on
+  //    ajoute la tête rentrée dans les épaules, le buste qui part en avant, et la garde qui
+  //    RESTE HAUTE quand elle était levée (sinon on se baissait bras ballants).
+  if (cc.esqK > 0.02) {
+    const p = { bx: 0.34, hx: 0.32, hy: 0 };
+    if (gardeK > 0.4) { p.aLx = -1.15; p.aRx = -1.15; p.cLx = -1.85; p.cRx = -1.85; p.aLz = 0.40; p.aRz = -0.40; }
+    animPose(rig, p, cc.esqK * (gardeK > 0.4 ? 1 : 0.7));
   }
-  // 5. ENCAISSER : le buste part en arrière, la tête est rejetée, les genoux fléchissent —
-  //    et si le personnage tenait sa garde, elle se RESSERRE et RECULE au lieu de s'ouvrir :
-  //    c'est ce qui fait la différence visible entre un coup bloqué et un coup encaissé.
-  if (c.enc > 0) {
-    const w = Math.sin(c.enc / CBT_ENC * Math.PI) * Math.min(1, c.encF);
-    const bloque = c.gardeK > 0.4;
+  // 5. ENCAISSER : la tête est rejetée, les genoux fléchissent — et la garde SE RESSERRE et
+  //    RECULE au lieu de s'ouvrir. C'est ce qui fait qu'on voit la différence entre un coup
+  //    bloqué et un coup reçu.
+  if (rig.recul > 0) {
+    const w = Math.sin(rig.recul / CBT_RECUL * Math.PI) * Math.min(1, (cc.encF || 1));
+    const bloque = gardeK > 0.4;
     animPose(rig, {
-      bx: (bloque ? 0.12 : 0) - 0.34 * w, hx: -0.42 * w, bs: 0.05 + 0.12 * w,
-      lLx: -0.20 - 0.28 * w, gLx: 0.42 + 0.50 * w, lRx: 0.12 + 0.18 * w, gRx: 0.26 + 0.30 * w,
-      aLz: (bloque ? 0.56 : 0.30) + (bloque ? 0.18 : 0.55) * w,
-      aRz: (bloque ? -0.56 : -0.30) - (bloque ? 0.18 : 0.55) * w,
-      cLx: bloque ? -2.18 - 0.30 * w : -0.45 - 0.30 * w,
-      cRx: bloque ? -2.18 - 0.30 * w : -0.45 - 0.30 * w,
-      aLx: bloque ? -0.92 + 0.28 * w : -0.30 - 0.55 * w,
-      aRx: bloque ? -0.92 + 0.28 * w : -0.30 - 0.55 * w,
+      hx: -0.42 * w, bs: (bloque ? 0.012 : 0) + 0.10 * w,
+      lLx: -0.22 - 0.26 * w, gLx: 0.46 + 0.50 * w, lRx: 0.14 + 0.18 * w, gRx: 0.28 + 0.30 * w,
+      aLz: (bloque ? 0.34 : 0.20) + (bloque ? 0.20 : 0.50) * w,
+      aRz: (bloque ? -0.34 : -0.20) - (bloque ? 0.20 : 0.50) * w,
+      cLx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
+      cRx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
+      aLx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
+      aRx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
     }, w);
   }
-  // 6. LA CHUTE : un genou à terre, le corps replié. Elle monte vite et se relève lentement.
-  if (c.chute > 0) {
-    const ck = Math.min(animLiss((CBT_CHUTE - c.chute) / 0.22), animLiss(c.chute / 0.30));
+  // 6. LA CHUTE : un genou à terre, le corps replié. Elle tombe vite et se relève lentement.
+  if (cc.chute > 0) {
+    const ck = Math.min(animLiss((CBT_CHUTE - cc.chute) / 0.22), animLiss(cc.chute / 0.30));
     animPose(rig, CBT_CHUTE_POSE, ck);
   }
   return true;
 }
-
 // ---------- LE FEU ----------
 // UNE SEULE implémentation de feu dans tout le jeu (accord passé avec le poste Graphisme,
 // qui fait brûler les véhicules accidentés) :
@@ -22200,7 +22271,7 @@ function animReception(rig, enAir, vy, dt) {
   if (!(rig.receptT > 0)) return;
   rig.receptT = Math.max(0, rig.receptT - dt);
   const w = Math.sin((1 - rig.receptT / RECEPT_DUREE) * Math.PI) * rig.recept;   // on encaisse puis on se redéplie
-  animPose(rig, { lLx: -0.60, lRx: -0.60, gLx: 1.10, gRx: 1.10, bs: 0.26, bx: 0.28,
+  animPose(rig, { lLx: -0.75, lRx: -0.75, gLx: 1.60, gRx: 1.60, bs: 0.18, bx: 0.28,
     aLx: -0.55, aRx: -0.55, cLx: -0.75, cRx: -0.75 }, w);
 }
 

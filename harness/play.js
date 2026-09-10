@@ -6550,12 +6550,12 @@ test('le son ne sature plus : quatre bus, un limiteur et un vrai reglage de volu
       // la page passe en arriere-plan : sourdine, puis retour
       G.sfx.sourdine(true); await dodo(400); res.cache = +ch.master.gain.value.toFixed(3);
       G.sfx.sourdine(false); await dodo(400); res.retour = +ch.master.gain.value.toFixed(2);
-      vol.value = '80'; vol.dispatchEvent(new Event('input'));
+      vol.value = '100'; vol.dispatchEvent(new Event('input'));
       return res;
     } finally { AudioNode.prototype.connect = vraiConnect; try { G.music.stop && G.music.stop(); } catch (e) {} }
   });
   const ok = r.comp === 'DynamicsCompressorNode' && r.seuil <= -6 && r.ratio >= 4
-    && r.bus.effets === 1 && r.bus.musique < 0.6 && r.bus.moteur < 1 && r.connexions >= 12
+    && r.bus.effets === 1 && r.bus.musique <= 0.6 && r.bus.moteur < 1 && r.connexions >= 12
     && r.versSortie.every(n => n === 'DynamicsCompressorNode')
     && r.v35.reglage === 0.35 && r.v35.master === 0.35 && r.v35.stocke === '0.35' && /35/.test(r.v35.etiquette)
     && r.cache < 0.01 && r.retour === 0.35;
@@ -6689,6 +6689,107 @@ test('Ultra HD : surechantillonnage, anticrenelage multi-echantillon et passe de
     && r.ultra.contours > r.sansNettete.contours * 1.02
     && r.tv.ratio <= 1.001 && r.tv.plafond === 3840 && r.defaut.cycle;
   return { ok, detail: `« haute » rendait l'image a la finesse de l'ecran, point · Ultra HD la calcule a ${r.reglages.ratio}× (${r.ultra.w}×${r.ultra.h} au lieu de ${r.haute.w}×${r.haute.h} : chaque pixel affiche est la moyenne de quatre pixels calcules, plus aucun bord en escalier), avec l'anticrenelage multi-echantillon (${r.reglages.msaa ? r.reglages.samples + ' echantillons' : 'WebGL 1 : sans'}), le filtrage des textures a ${r.reglages.aniso}×, et une passe de NETTETE adaptative qui accentue les contours (+${Math.round((r.ultra.contours / r.sansNettete.contours - 1) * 100)} % de contraste de contour mesure sur les vrais pixels, luminosite conservee : ${r.ultra.lum} contre ${r.haute.lum}) · sur une tele 4K on calcule au natif (ratio ${r.tv.ratio}, plafond ${r.tv.plafond}) et la nettete fait le reste · c'est le reglage par defaut sur ordinateur et tele (« ${r.libelle} » dans les reglages, quatre niveaux), et la mesure des images fait toujours redescendre si la machine ne suit pas` };
+});
+
+test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au bout de la chaine', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const c = G.sfx.unlock(), ch = G.sfx.chaine();
+    const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
+    const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
+    await dodo(80); const silence = rms();
+    G.engine.start('car', 2); G.engine.set(0.6); await dodo(900); const moteur = rms(); G.engine.stop();
+    await dodo(400); G.sfx.tone(440, 0, 0.6, 'sine', 0.3); await dodo(120); const tonal = rms();
+    G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
+    try { ch.lim.disconnect(an); } catch (e) {}
+    return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume };
+  });
+  const ok = r.etat === 'running' && r.silence < 0.002 && r.moteur > 0.12 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
+  return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau})` };
+});
+
+test('en interieur, la camera passe en maison de poupee : plafond efface, mur traverse transparent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 }); await dodo(600);
+    __SHOT.go({ world: 4, x: -1, y: 0.5, z: 20, hour: 12, yaw: 0, pitch: 0.3 });   // dans la salle de sport
+    for (let i = 0; i < 40 && !(G.interieur.rect && G.cam.dist < 5.2); i++) await dodo(150);
+    await dodo(600);
+    const I = G.interieur, c = G.camera.position, rect = I.rect;
+    const plafonds = I.masques.filter(m => { const b = new G.THREE.Box3().setFromObject(m); return b.min.y > 2.6; }).length;
+    const ops = I.murs.map(o => o.mesh && o.mesh.userData.matOpaque ? +[].concat(o.mesh.material)[0].opacity.toFixed(2) : 1);
+    const dedans = { rect: !!rect, masques: I.masques.length, plafonds, murs: I.murs.length, dist: +G.cam.dist.toFixed(2), pitch: +G.cam.pitch.toFixed(2),
+      camDehors: !!rect && (Math.abs(c.x - rect.x) > rect.w / 2 || Math.abs(c.z - rect.z) > rect.d / 2), transparents: ops.filter(o => o < 0.5).length, opaques: ops.filter(o => o === 1).length,
+      perche: !!rect && G.solids.filter(o => o.xray).length };
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, yaw: 0, pitch: 0.3 }); await dodo(700);
+    let caches = 0; G.worldGroup.traverse(o => { if (o.isMesh && !o.visible && Math.abs(o.position.x + 1) < 6 && Math.abs(o.position.z - 19.5) < 6) caches++; });
+    const apres = { rect: G.interieur.rect, masques: G.interieur.masques.length, xray: G.solids.filter(o => o.xray).length, clones: G.solids.filter(o => o.mesh && o.mesh.userData.matOpaque).length, caches };
+    return { dedans, apres };
+  });
+  const d = r.dedans, a = r.apres;
+  const ok = d.rect && d.plafonds >= 3 && d.murs >= 3 && d.dist >= 3.6 && d.dist <= 5.2 && d.pitch <= 0.43 && d.camDehors && d.transparents >= 1 && d.opaques >= 1 && d.perche >= 3
+    && !a.rect && a.masques === 0 && a.xray === 0 && a.clones === 0 && a.caches === 0;
+  return { ok, detail: `dans une boutique, la camera se cognait aux murs et venait se coller au joueur, ou passait sous le plafond et l'image etait bouchee · elle fait maintenant ce que font les jeux professionnels — la MAISON DE POUPEE : des qu'on entre (salle de sport), le plafond et tout ce qui est au-dessus de la tete s'effacent (${d.plafonds} elements masques sur ${d.masques}), la perche traverse les ${d.murs} murs de la piece (${d.perche} rendus « transparents » a la collision), se pose a ${d.dist} m dehors (camera hors de la piece=${d.camDehors}) sans monter au-dessus du toit (inclinaison ${d.pitch}), et le mur traverse devient transparent (${d.transparents} transparent, ${d.opaques} pleins) · en sortant tout revient (${a.masques} masque, ${a.xray} mur traversable, ${a.clones} materiau clone, ${a.caches} element cache)` };
+});
+
+test('le stick est precis et vif : zone morte de 8 %, courbe douce, camera a 5,5 rad/s, sensibilite reglable', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const s = v => +G.padStick(v, 0)[0].toFixed(3);
+    const courbe = { d05: s(0.05), d30: s(0.3), d50: s(0.5), d80: s(0.8), d100: s(1) };
+    const ds = { index: 0, connected: true, id: 'DualSense', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      G.settings.sensib = 1; G.P.aim = false; G.P.drawn = false;
+      ds.axes = [0, 0, 1, 0]; const y0 = G.cam.yaw; for (let i = 0; i < 100; i++) G.pollGamepad(0.01); const vitesse = +Math.abs(G.cam.yaw - y0).toFixed(2);
+      G.settings.sensib = 2; const y1 = G.cam.yaw; for (let i = 0; i < 100; i++) G.pollGamepad(0.01); const vitesse2 = +Math.abs(G.cam.yaw - y1).toFixed(2);
+      G.settings.sensib = 1; ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
+      // le mode « rotation » du clavier braquait le personnage avec une bande morte de 32 % : au stick on reste relatif a la camera
+      G.settings.ctrl = 'rot'; G.cam.yaw = 0; G.P.facing = 0; G.P.pos.set(0, 0.5, 8); G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.01); const f0 = G.P.facing, x0 = G.P.pos.x;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      const rot = { braque: +Math.abs(G.P.facing - f0).toFixed(2), dx: +(G.P.pos.x - x0).toFixed(2) };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01); G.settings.ctrl = 'cam';
+      const reglage = !!document.getElementById('sensIn');
+      return { courbe, vitesse, vitesse2, rot, reglage };
+    } finally { navigator.getGamepads = vrai; G.settings.ctrl = 'cam'; }
+  });
+  const c = r.courbe;
+  const ok = c.d05 === 0 && c.d30 > 0.15 && c.d30 < 0.3 && c.d50 > 0.35 && c.d80 > 0.7 && c.d100 === 1
+    && r.vitesse >= 5 && r.vitesse2 >= 10 && r.rot.braque < 0.05 && r.rot.dx > 2 && r.reglage;
+  return { ok, detail: `l'ancienne courbe divisait la reponse par deux a mi-course et la zone morte mangeait 14 % : on se trainait, et le mode « rotation » braquait le personnage avec une bande morte de 32 % · maintenant : zone morte 8 % (5 % → ${c.d05}), courbe douce (30 % → ${c.d30}, 50 % → ${c.d50}, 80 % → ${c.d80}, bord → ${c.d100}), la camera tourne a ${r.vitesse} rad/s au bord (${r.vitesse2} avec la sensibilite a 200 % — reglage dans ⚙️), et au stick le deplacement est TOUJOURS relatif a la camera : pousse a droite, le personnage va a droite (${r.rot.dx} m) sans se braquer (${r.rot.braque} rad)` };
+});
+
+test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 60, y: 1, z: 302, hour: 12 });
+    const c = G.city.casino, roul = c.tables.find(t => t.kind === 'roulette'), pok = c.tables.find(t => t.kind === 'poker');
+    G.wallet = 5000; G.ouvreCasino('roulette', roul); G.casino.mise = 10; G.casino.pari = 'rouge';
+    const u = roul.g.userData, r0 = u.roue.rotation.y;
+    G.jouerCasino();
+    const vitesses = []; let prev = u.roue.rotation.y;
+    for (let s2 = 0; s2 < 6; s2++) { for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.casinoTick(1 / 60); } vitesses.push(+(u.roue.rotation.y - prev).toFixed(2)); prev = u.roue.rotation.y; }
+    const cible = ((G.casino.roulette % 18) / 18) * Math.PI * 2 - u.roue.rotation.y;
+    let d = cible - u.angB; d = Math.atan2(Math.sin(d), Math.cos(d));
+    const roulette = { num: G.casino.roulette, tours: +((u.roue.rotation.y - r0) / (2 * Math.PI)).toFixed(2), vitesses, ecartCase: +Math.abs(d).toFixed(3), rayon: +u.rB.toFixed(2), cases: u.roue.children.length };
+    G.closeUI();
+    G.ouvreCasino('poker', pok); G.casino.mise = 10; G.jouerCasino();
+    const cartes = pok.g.userData.cartes;
+    const p1 = { n: cartes.length, faces: cartes.map(m => m.userData.carte), attendu: G.casino.cartes.map(G.carteNom), etape: G.casino.etape, dos: cartes.every(m => m.material.map && m.material.map.image) };
+    G.casino.gardees[0] = true; G.pokerCartes3D(); for (let i = 0; i < 40; i++) { G.simTime += 1 / 60; G.casinoTick(1 / 60); }
+    const p2 = { y0: +cartes[0].position.y.toFixed(2), y1: +cartes[1].position.y.toFixed(2), rx0: +cartes[0].rotation.x.toFixed(2) };
+    G.jouerCasino();
+    const p3 = { faces: cartes.map(m => m.userData.carte), attendu: G.casino.cartes.map(G.carteNom), etape: G.casino.etape };
+    G.closeUI();
+    return { roulette, p1, p2, p3 };
+  });
+  const v = r.roulette.vitesses;
+  const ok = r.roulette.tours > 2 && v[0] > v[2] && v[2] > v[4] && v[5] < 0.6 && r.roulette.ecartCase < 0.05 && r.roulette.rayon < 0.8 && r.roulette.cases >= 36
+    && r.p1.n === 5 && r.p1.faces.join() === r.p1.attendu.join() && r.p1.etape === 'change' && r.p1.dos
+    && r.p2.y0 > r.p2.y1 + 0.1 && r.p2.rx0 > -1.4
+    && r.p3.faces.join() === r.p3.attendu.join() && r.p3.etape === 'pret';
+  return { ok, detail: `la roulette etait une bille qui tournait toute seule au-dessus d'un cylindre immobile, et le poker cinq rectangles blancs · maintenant la ROUE tourne quand on joue (${r.roulette.tours} tours, en ralentissant : ${v.join(' → ')} rad/s), et la bille file en sens inverse puis vient se poser DANS la case du ${r.roulette.num} (${r.roulette.ecartCase} rad d'ecart, rayon ${r.roulette.rayon}) · au poker, cinq VRAIES cartes sont posees sur le tapis, dos visible, et la donne les retourne : ${r.p1.faces.join(' ')} ; celle qu'on garde se souleve et s'incline (${r.p2.y0} m contre ${r.p2.y1}), et le change les remplace : ${r.p3.faces.join(' ')}` };
 });
 
 test('une manette PlayStation 5 pilote tout le jeu', async p => {

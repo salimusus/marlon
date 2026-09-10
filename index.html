@@ -867,7 +867,8 @@ body.tv #tvBadge.on{display:block}
     <button class="btn sec" id="leaveNet" style="display:none">Quitter la partie en ligne</button>
     <button class="btn sec" id="sndBtn">Son : activé</button>
     <button class="btn sec" id="musBtn">Musique : activée</button>
-    <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">80 %</b></div>
+    <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
+    <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
     <button class="btn sec" id="voiceBtn">Voix des bots : activées</button>
@@ -910,7 +911,7 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
   json: (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch (e) { return d; } },
 };
-const settings = { volume: (v => v >= 0 && v <= 1 ? v : 0.8)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || (/(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1' || !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1) ? 'ultra' : 'high'),
+const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || (/(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1' || !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1) ? 'ultra' : 'high'),
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160 };
 
 // ================= RENDU =================
@@ -1994,6 +1995,39 @@ function pokerPaquet() {
   return p;
 }
 const carteNom = c => POKER_NOMS[c.v] + POKER_COULEURS[c.c];
+// La face d'une carte, dessinee une fois par carte (et le dos, une fois pour toutes).
+const CARTES_TEX = new Map();
+function carteTexture(c) {
+  const k = c ? carteNom(c) : 'dos';
+  if (CARTES_TEX.has(k)) return CARTES_TEX.get(k);
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 184; const g = cv.getContext('2d');
+  const arrondi = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  g.fillStyle = '#fdfdfd'; arrondi(2, 2, 124, 180, 12); g.fill(); g.strokeStyle = '#c9ced8'; g.lineWidth = 3; g.stroke();
+  if (!c) {
+    g.fillStyle = '#1d3f8f'; arrondi(12, 12, 104, 160, 8); g.fill();
+    g.strokeStyle = '#7aa2ff'; g.lineWidth = 2; for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(12, 12 + i * 32); g.lineTo(116, 44 + i * 32); g.stroke(); g.beginPath(); g.moveTo(116, 12 + i * 32); g.lineTo(12, 44 + i * 32); g.stroke(); }
+  } else {
+    const rouge = c.c === 1 || c.c === 2, coul = rouge ? '#d42b2b' : '#141821', nom = POKER_NOMS[c.v], sym = POKER_COULEURS[c.c];
+    g.fillStyle = coul; g.font = 'bold 30px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillText(nom, 10, 8); g.font = '24px sans-serif'; g.fillText(sym, 10, 40);
+    g.save(); g.translate(118, 176); g.rotate(Math.PI); g.font = 'bold 30px sans-serif'; g.fillText(nom, 0, 0); g.font = '24px sans-serif'; g.fillText(sym, 0, 32); g.restore();
+    g.font = '64px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(sym, 64, 96);
+  }
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = 8; CARTES_TEX.set(k, t); return t;
+}
+// Les cartes 3D suivent la partie : dos avant la donne, faces ensuite, cartes gardees soulevees.
+function pokerCartes3D() {
+  const t = casino.table; if (!t || !t.g || !t.g.userData.cartes) return 0;
+  const cartes = t.g.userData.cartes; let n = 0;
+  for (let i = 0; i < 5; i++) {
+    const m = cartes[i], c = casino.jeu === 'poker' && casino.cartes && casino.cartes[i] ? casino.cartes[i] : null;
+    const k = c ? carteNom(c) : '';
+    if (m.userData.carte !== k) { m.material.map = carteTexture(c); m.material.needsUpdate = true; m.userData.carte = k; m.userData.retourneT = simTime; n++; }
+    const gardee = !!(c && casino.gardees && casino.gardees[i] && casino.etape === 'change');
+    m.userData.veutY = gardee ? 1.24 : 1.1; m.userData.veutRx = gardee ? -Math.PI / 2 + 0.35 : -Math.PI / 2;
+  }
+  return n;
+}
 // Le rang de la main : renvoie l'indice dans POKER_GAINS (0 = la meilleure).
 function pokerRang(m) {
   const vs = m.map(c => c.v).sort((a, b) => a - b), cs = m.map(c => c.c);
@@ -2060,7 +2094,7 @@ function majCasino() {
   box2.querySelectorAll('[data-num]').forEach(b => b.addEventListener('click', () => { casino.numero = +b.dataset.num; casino.pari = 'plein'; majCasino(); }));
   box2.querySelectorAll('[data-carte]').forEach(b => b.addEventListener('click', () => {
     if (casino.etape !== 'change') return;
-    const i = +b.dataset.carte; casino.gardees[i] = !casino.gardees[i]; majCasino();
+    const i = +b.dataset.carte; casino.gardees[i] = !casino.gardees[i]; majCasino(); pokerCartes3D();
   }));
   $('casinoResultat').innerHTML = casino.resultat || '&nbsp;';
   $('casinoJouer').textContent = j === 'poker'
@@ -2095,7 +2129,7 @@ function tourMachine() {
 function tourRoulette() {
   const n = Math.floor(Math.random() * 37);
   casino.roulette = n;
-  if (casino.table && casino.table.g) casino.table.anim = simTime + 1.6;
+  if (casino.table && casino.table.g) { casino.table.anim = simTime + 4.5; casino.table.g.userData.lance = simTime; }
   sfx.noise(.35, 500, .05); sfx.tone(300, 0, .2, 'sine', .04, 120);
   const p = PARIS_ROULETTE.find(x => x.k === casino.pari) || PARIS_ROULETTE[0];
   const ok = p.gagne(n, casino.numero);
@@ -2109,13 +2143,14 @@ function pokerDonne() {
   casino.etape = 'change';
   casino.resultat = 'Choisis les cartes à GARDER, puis change les autres.';
   sfx.tone(520, 0, .08, 'triangle', .05);
-  majCasino();
+  majCasino(); pokerCartes3D();
 }
 function pokerChange() {
   for (let i = 0; i < 5; i++) if (!casino.gardees[i]) casino.cartes[i] = casino.paquet.pop();
   casino.etape = 'pret';
   const rang = pokerRang(casino.cartes), g = POKER_GAINS[rang];
   encaisse(Math.round(casino.mise * g.m), `${casino.cartes.map(carteNom).join(' ')} · ${g.n}`, g.m >= 14);
+  pokerCartes3D();
 }
 // ---- les machines vivent : le bras retombe, les néons clignotent, des bots jouent ----
 function casinoTick(dt) {
@@ -2126,9 +2161,24 @@ function casinoTick(dt) {
     if (m.halo) m.halo.material.emissiveIntensity = 0.4 + Math.sin(simTime * 4 + m.idx) * 0.25 + (actif ? 0.5 : 0);
   }
   for (let i = 0; i < c.neons.length; i++) c.neons[i].material.emissiveIntensity = 0.45 + Math.sin(simTime * 3 + i * 0.5) * 0.35;
-  for (const t of c.tables) if (t.kind === 'roulette' && t.g.userData.bille) {
-    const b = t.g.userData.bille, v = t.anim > simTime ? 9 : 1.2;
-    const a = simTime * v; b.position.set(Math.cos(a) * 0.95, 1.42, Math.sin(a) * 0.95);
+  for (const t of c.tables) {
+    const u = t.g.userData;
+    if (t.kind === 'roulette' && u.roue) {
+      // la roue tourne vite puis ralentit ; la bille file en sens inverse et finit dans la case
+      const reste = Math.max(0, (t.anim || 0) - simTime);
+      u.roue.rotation.y += (reste > 0 ? 1.5 + reste * 2.2 : 0.3) * dt;
+      if (reste > 1.2) { u.angB -= (5 + reste * 3) * dt; u.rB += (0.95 - u.rB) * Math.min(1, dt * 4); }
+      else {   // elle s'installe dans la case du numero sorti, et tourne avec la roue
+        const cible = ((casino.roulette || 0) % 18) / 18 * Math.PI * 2 - u.roue.rotation.y;
+        let d = cible - u.angB; d = Math.atan2(Math.sin(d), Math.cos(d));
+        u.angB += d * Math.min(1, dt * (reste > 0 ? 5 : 30)); u.rB += (0.72 - u.rB) * Math.min(1, dt * 4);
+      }
+      u.bille.position.set(Math.cos(u.angB) * u.rB, 1.42, Math.sin(u.angB) * u.rB);
+    }
+    if (u.cartes) for (const m of u.cartes) {   // les cartes se soulevent / se reposent en douceur
+      if (m.userData.veutY != null) { m.position.y += (m.userData.veutY - m.position.y) * Math.min(1, dt * 8); m.rotation.x += (m.userData.veutRx - m.rotation.x) * Math.min(1, dt * 8); }
+      const r = simTime - (m.userData.retourneT || -9); if (r >= 0 && r < 0.3) m.scale.x = Math.abs(Math.cos(r / 0.3 * Math.PI)); else m.scale.x = 1;   // la carte se retourne
+    }
   }
   // des habitants viennent jouer : ils se plantent devant une machine et tirent le bras
   if (simTime > (c.botT || 0)) {
@@ -2323,15 +2373,25 @@ function tableCasino(x, z, kind) {
   const bord = new THREE.Mesh(new THREE.TorusGeometry(R, 0.16, 8, 28), lam(0x3b2418));
   bord.rotation.x = Math.PI / 2; bord.position.y = 1.02; g.add(bord);
   if (kind === 'roulette') {
-    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.3, 24), lam(0x2b1116)); cyl.position.y = 1.2; g.add(cyl);
+    // LA ROUE TOURNE : le cylindre et ses cases sont dans un groupe qu'on fait pivoter ; la
+    // bille file en sens inverse et vient se poser dans la case du numero sorti.
+    const roue = new THREE.Group(); roue.position.y = 0; g.add(roue);
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.3, 24), lam(0x2b1116)); cyl.position.y = 1.2; roue.add(cyl);
     for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2;
       const c2 = new THREE.Mesh(unitBox, lam(i % 2 ? 0xc02030 : 0x14161f)); c2.scale.set(0.34, 0.06, 0.9);
-      c2.position.set(Math.cos(a) * 0.72, 1.36, Math.sin(a) * 0.72); c2.rotation.y = -a; g.add(c2); }
-    const bille = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), lam(0xf4f6fa)); bille.position.set(0.95, 1.42, 0); g.add(bille);
-    g.userData.bille = bille;
+      c2.position.set(Math.cos(a) * 0.72, 1.36, Math.sin(a) * 0.72); c2.rotation.y = -a; roue.add(c2);
+      const sep = new THREE.Mesh(unitBox, lam(0xd8b25a)); sep.scale.set(0.03, 0.08, 0.9); const a2 = (i + 0.5) / 18 * Math.PI * 2;
+      sep.position.set(Math.cos(a2) * 0.72, 1.37, Math.sin(a2) * 0.72); sep.rotation.y = -a2; roue.add(sep); }
+    const moyeu = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12), lam(0xd8b25a)); moyeu.position.y = 1.5; roue.add(moyeu);
+    for (let i = 0; i < 4; i++) { const br = new THREE.Mesh(unitBox, lam(0xd8b25a)); br.scale.set(0.5, 0.04, 0.05); br.position.set(Math.cos(i * Math.PI / 2) * 0.2, 1.52, Math.sin(i * Math.PI / 2) * 0.2); br.rotation.y = -i * Math.PI / 2; roue.add(br); }
+    const bille = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lam(0xf4f6fa)); bille.position.set(0.95, 1.42, 0); g.add(bille);
+    g.userData.bille = bille; g.userData.roue = roue; g.userData.angB = 0; g.userData.rB = 0.95;
   } else {
-    for (let i = 0; i < 5; i++) { const c2 = new THREE.Mesh(unitBox, lam(0xf4f6fa)); c2.scale.set(0.5, 0.03, 0.72);
-      c2.position.set(-1.1 + i * 0.55, 1.09, 0.3); c2.rotation.y = rnd(-0.1, 0.1); g.add(c2); }
+    // UN VRAI JEU DE CARTES : cinq cartes posees sur le tapis, dos visible ; la donne les
+    // retourne, et celles qu'on garde se soulevent
+    g.userData.cartes = [];
+    for (let i = 0; i < 5; i++) { const c2 = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.66), new THREE.MeshLambertMaterial({ map: carteTexture(null) }));
+      c2.rotation.x = -Math.PI / 2; c2.position.set(-1.1 + i * 0.55, 1.1, 0.3); c2.userData.carte = ''; g.add(c2); g.userData.cartes.push(c2); }
   }
   for (let i = 0; i < 10; i++) { const j = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 12), lam([0xff5c5c, 0x4f8dff, 0x5cc453, 0xf2c14e][i % 4]));
     j.position.set(Math.cos(i) * 1.5, 1.1 + (i % 3) * 0.05, Math.sin(i) * 1.5); g.add(j); }
@@ -8271,6 +8331,65 @@ function sousToit() {
   return cam.dedans;
 }
 const CAM_PITCH_ARME = -0.9;   // arme dégainée, la caméra peut descendre plus bas pour viser vers le haut
+// ================= LA CAMERA EN INTERIEUR : LA MAISON DE POUPEE =================
+// Dans une boutique, un garage, une piece, la camera se cognait aux murs et venait se coller
+// au joueur, ou passait sous le plafond et l'image etait bouchee. Ce que font les jeux
+// professionnels : des qu'on entre quelque part, le PLAFOND et tout ce qui est au-dessus de
+// la tete s'effacent, la camera peut traverser les murs de la piece, et le mur qu'elle a
+// traverse devient transparent. On voit la piece entiere, comme une maison de poupee.
+const interieur = { rect: null, masques: [], murs: [] };
+function interieurDe(x, z) {
+  for (const b of (city.interieurs || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
+  for (const b of (city.batiments || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
+  return null;
+}
+function interieurQuitte() {
+  for (const m of interieur.masques) m.visible = true;
+  for (const o of interieur.murs) { o.xray = false; const m = o.mesh; if (m && m.userData.matOpaque) { m.material = m.userData.matOpaque; m.userData.matOpaque = null; } }
+  interieur.masques = []; interieur.murs = []; interieur.rect = null; cam.interieur = null;
+}
+const _wp = new THREE.Vector3(), _bb = new THREE.Box3();
+function interieurEntre(r) {
+  interieurQuitte(); interieur.rect = r; cam.interieur = r;
+  const yTete = P.pos.y + 2.25, marge = 0.6;
+  worldGroup.traverse(o => {
+    if (!o.isMesh || !o.visible) return;
+    o.getWorldPosition(_wp);
+    if (Math.abs(_wp.x - r.x) > r.w / 2 + marge + 4 || Math.abs(_wp.z - r.z) > r.d / 2 + marge + 4) return;   // tri grossier, pas cher
+    _bb.setFromObject(o); if (!isFinite(_bb.min.y)) return;
+    const cx = (_bb.min.x + _bb.max.x) / 2, cz = (_bb.min.z + _bb.max.z) / 2;
+    if (Math.abs(cx - r.x) > r.w / 2 + marge || Math.abs(cz - r.z) > r.d / 2 + marge) return;
+    if (_bb.min.y > yTete && _bb.min.y < yTete + 30) { o.visible = false; interieur.masques.push(o); }
+  });
+  for (const o of solids) {
+    if (!o.mesh || o.h < 2.2 || o.h > 30 || o.veh) continue;
+    if (Math.abs(o.x - r.x) > r.w / 2 + marge || Math.abs(o.z - r.z) > r.d / 2 + marge) continue;
+    if (o.y - o.h / 2 > yTete) continue;
+    o.xray = true; interieur.murs.push(o);
+  }
+}
+function interieurTick() {
+  const r = city.on && running && !drive.car && !P.voile ? interieurDe(P.pos.x, P.pos.z) : null;
+  if (r !== interieur.rect) { if (r) interieurEntre(r); else interieurQuitte(); }
+  if (!interieur.rect) return;
+  // le mur que la camera a traverse s'efface (les autres restent pleins)
+  const r2 = interieur.rect, c = camera.position;
+  const dehors = Math.abs(c.x - r2.x) > r2.w / 2 - 0.3 || Math.abs(c.z - r2.z) > r2.d / 2 - 0.3;
+  for (const o of interieur.murs) {
+    const m = o.mesh; if (!m || !m.material) continue;
+    const cote = (o.x - r2.x) * (c.x - r2.x) + (o.z - r2.z) * (c.z - r2.z) > 0;
+    const veut = dehors && cote ? 0.22 : 1;
+    if (veut < 1 && !m.userData.matOpaque) {
+      m.userData.matOpaque = m.material;
+      m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone();
+      for (const x of [].concat(m.material)) { x.transparent = true; x.depthWrite = false; }
+    }
+    if (!m.userData.matOpaque) continue;
+    let fini = true;
+    for (const x of [].concat(m.material)) { x.opacity += (veut - x.opacity) * 0.25; if (x.opacity < 0.985) fini = false; }
+    if (veut === 1 && fini) { m.material = m.userData.matOpaque; m.userData.matOpaque = null; }
+  }
+}
 const keys = new Set();
 const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
 const pad = { x: 0, y: 0, a: false };
@@ -8297,17 +8416,24 @@ function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
 // musique, quatre fois plus forte que les effets, couvrait tout.
 // Maintenant tout passe par quatre bus (effets, moteur, musique, ambiance), un volume
 // general et un LIMITEUR qui rabote les cretes au lieu de les laisser saturer.
-const MIX = { effets: 1, moteur: 0.8, musique: 0.45, ambiance: 1 };
+const MIX = { effets: 1, moteur: 0.85, musique: 0.55, ambiance: 1 };
 const sfx = (() => {
   let ctx = null, chaine = null;
   const monte = c => {
+    // Le limiteur seul rendait tout TROP FAIBLE (il rabotait sans rien rendre) : sur des
+    // enceintes de tele on n'entendait plus rien. La chaine est maintenant celle d'un vrai
+    // mixage : compresseur doux → gain de rattrapage (+4,6 dB) → limiteur brique qui
+    // empeche de depasser 0 dB. Fort, et sans saturer.
     const master = c.createGain(); master.gain.value = clamp(settings.volume, 0, 1);
     const comp = c.createDynamicsCompressor();
-    comp.threshold.value = -12; comp.knee.value = 18; comp.ratio.value = 6; comp.attack.value = 0.004; comp.release.value = 0.18;
+    comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.16;
+    const makeup = c.createGain(); makeup.gain.value = 1.7;
+    const lim = c.createDynamicsCompressor();
+    lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
     const bus = {};
     for (const [n, v] of Object.entries(MIX)) { const g = c.createGain(); g.gain.value = v; g.connect(master); bus[n] = g; }
-    master.connect(comp); comp.connect(c.destination);
-    chaine = { master, comp, bus, sourdine: false };
+    master.connect(comp); comp.connect(makeup); makeup.connect(lim); lim.connect(c.destination);
+    chaine = { master, comp, makeup, lim, bus, sourdine: false };
   };
   const ensure = () => {
     if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
@@ -8373,6 +8499,8 @@ function horn(kind) {
 function unlockAudio() {
   const c = sfx.unlock(); if (!c) return;
   try { const b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } catch (e) {}
+  // premier reveil de la carte son : un petit carillon, pour qu'on SACHE que le son est la
+  if (!unlockAudio.fait && c.state === 'running' && settings.sound && running) { unlockAudio.fait = true; setTimeout(() => { try { sfx.coin(); } catch (e) {} }, 150); }
 }
 for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') unlockAudio(); });
@@ -11029,7 +11157,7 @@ function step(dt, active) {
     wantX = ix * vers * SPEED; wantZ = iz * vers * SPEED;
     let d = capTennis() - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
     P.facing += d * Math.min(1, dt * 10);   // il se tourne vers la balle sans qu'on ait à le piloter
-  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
+  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn) && !padActif()) {   // au stick, toujours relatif a la camera : le mode « rotation » braquait le personnage avec une bande morte de 32 %
     // mode "rotation" : gauche/droite font pivoter le personnage, avant/arrière le déplacent dans la direction où il regarde
     // (au joystick : poussé presque tout droit = pas de virage ; virage d'autant plus vif qu'on pousse sur le côté)
     const ax = clamp(joy.x + pad.x + tel.x, -1, 1), ay = clamp(joy.y + pad.y + tel.y, -1, 1);
@@ -12301,7 +12429,7 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const R = 0.3, out = dirs.map(() => maxD);
   for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || o.glass || o.h > 30 || o.veh) continue;
+    if (o === skip || o.glass || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
     if (o.y + hy < oy - 1.4) continue;   // sol et petits meubles : la caméra passe au-dessus
     // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
@@ -13172,12 +13300,16 @@ function padActive() {
 }
 // Zone morte RONDE : avec une zone morte carrée, pousser en diagonale coupait un axe et le
 // personnage partait tout droit. Ensuite une courbe douce : précis au centre, franc au bord.
-function padStick(x, y, morte = 0.14) {
+// Zone morte de 8 % (une DualSense neuve ne derive pas au-dela de 5 %) et une courbe
+// LEGEREMENT progressive (exposant 1,2) : precis pres du centre, pleine vitesse au bord.
+// L'ancienne courbe divisait la reponse par deux a mi-course : on se trainait.
+function padStick(x, y, morte = 0.08) {
   const d = Math.hypot(x, y);
   if (d < morte) return [0, 0];
-  const m = Math.min(1, (d - morte) / (1 - morte)), k = m * (0.45 + 0.55 * m) / (d || 1);
+  const m = Math.min(1, (d - morte) / (1 - morte)), k = Math.pow(m, 1.2) / (d || 1);
   return [x * k, y * k];
 }
+const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) > 0.02;
 const padGachette = (g, i) => { const b = g.buttons[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
 // LA VIBRATION : la DualSense la gère nativement dans le navigateur.
 function padVibre(force = 0.6, ms = 120) {
@@ -13193,9 +13325,12 @@ function pollGamepad(dt) {
   const [gx, gy] = padStick(gp.axes[0] || 0, gp.axes[1] || 0);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
   if (running && !paused && !menu) {
-    const [vx, vy] = padStick(gp.axes[2] || 0, gp.axes[3] || 0, 0.12);
-    cam.yaw -= vx * dt * 3.4;
-    cam.pitch = clamp(cam.pitch + vy * dt * 2.1, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
+    const [vx, vy] = padStick(gp.axes[2] || 0, gp.axes[3] || 0, 0.08);
+    // la camera tournait a 3,4 rad/s : trop lent pour se retourner. 5,5 rad/s au bord, et le
+    // reglage « sensibilite manette » (0,5 a 2) multiplie le tout ; en visee, deux fois plus fin
+    const sens = (settings.sensib || 1) * (P.aim ? 0.5 : 1);
+    cam.yaw -= vx * dt * 5.5 * sens;
+    cam.pitch = clamp(cam.pitch + vy * dt * 3.2 * sens, P.drawn ? CAM_PITCH_ARME : -0.15, 1.25);
     if (vx || vy) cam.freeUntil = simTime + 2.5;
   }
   const bas = pad.bas || {};
@@ -13431,15 +13566,31 @@ $('sndBtn').addEventListener('click', () => setSound(!settings.sound));
 $('volIn').value = String(Math.round(settings.volume * 100)); $('volVal').textContent = Math.round(settings.volume * 100) + ' %';
 $('volIn').addEventListener('input', () => { const v = sfx.volume((+$('volIn').value || 0) / 100); $('volVal').textContent = Math.round(v * 100) + ' %'; if (v > 0 && !settings.sound) setSound(true); });
 $('volIn').addEventListener('change', () => { unlockAudio(); sfx.coin(); });
+settings.sensib = (v => v >= 0.5 && v <= 2 ? v : 1)(parseFloat(store.get('superobby.sensib')));
+$('sensIn').value = String(Math.round(settings.sensib * 100)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %';
+$('sensIn').addEventListener('input', () => { settings.sensib = clamp((+$('sensIn').value || 100) / 100, 0.5, 2); store.set('superobby.sensib', String(settings.sensib)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %'; });
 $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée');
 $('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées');
 $('voiceBtn').addEventListener('click', () => { settings.voices = !settings.voices; store.set('superobby.voices', settings.voices ? '1' : '0'); $('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées'); if (settings.voices) voice.say('Salut ' + myCfg.name + ', on va bien s\'amuser !', Math.random() < 0.5, true); else voice.stop(); });
+// Le test du son ECOUTE vraiment ce qui sort : un analyseur mesure le niveau au bout de la
+// chaine. « Ca marche » ne suffisait pas quand rien ne sortait des enceintes.
+async function mesureSon(ms = 500) {
+  const c = sfx.unlock(), ch = sfx.chaine(); if (!c || !ch) return { etat: 'absent', niveau: 0 };
+  const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
+  const d = new Float32Array(an.fftSize); let pic = 0;
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) { await new Promise(r => setTimeout(r, 40)); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; pic = Math.max(pic, Math.sqrt(s2 / d.length)); }
+  try { ch.lim.disconnect(an); } catch (e) {}
+  return { etat: c.state, niveau: +pic.toFixed(3) };
+}
 $('sndTest').addEventListener('click', async () => {
   settings.sound = true; setSound(true); unlockAudio(); const c = sfx.ctx();
   try { if (c && c.state !== 'running') await c.resume(); } catch (e) {}
   sfx.win(); setTimeout(() => sfx.cheer(), 200);
-  const st = c ? c.state : 'absent';
-  msg(st === 'running' ? '🔔 Le son fonctionne ! (vérifie le volume média de l\'appareil)' : `🔇 Son bloqué par le navigateur (${st}) : retouche l\'écran`, 3000);
+  const m = await mesureSon(700);
+  msg(m.etat !== 'running' ? `🔇 Son bloqué par le navigateur (${m.etat}) : touche l\'écran ou appuie sur une touche, puis réessaie`
+    : m.niveau > 0.01 ? `🔔 Le son sort bien (niveau ${Math.round(m.niveau * 100)}) — si tu n\'entends rien, c\'est le volume ou la sortie de l\'appareil`
+    : '🔇 La chaîne est muette : volume du jeu a zéro ? (curseur ci-dessus)', 3600);
 });
 $('musBtn').addEventListener('click', () => { settings.music = !settings.music; store.set('superobby.music', settings.music ? '1' : '0'); $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée'); });
 $('sndTop').addEventListener('click', () => { setSound(!settings.sound); if (settings.sound) sfx.coin(); });
@@ -13600,7 +13751,7 @@ function frame() {
     const dedans = running && !veh && sousToit();
     const inter = !veh && city.on ? city.interact : null;
     let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4) : 0);
-    if (dedans) want = Math.min(want, 3.5);
+    if (dedans && !cam.interieur) want = Math.min(want, 3.5);
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Plus la pièce est étroite, plus la caméra se rapproche ; plus le
     // plafond est bas, plus elle s'abaisse — sinon elle passait au-dessus et on ne voyait rien.
@@ -13609,7 +13760,7 @@ function frame() {
       const m = camLibres(P.pos.x, P.pos.y + 1.5, P.pos.z, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]], 9, veh ? veh.solid : null);
       cam.salle = Math.min(m[0], m[1], m[2], m[3]); cam.plafond = m[4];
     }
-    if (!veh && cam.plafond != null && cam.plafond < 3) {
+    if (!veh && !cam.interieur && cam.plafond != null && cam.plafond < 3) {
       // plafond bas : on aplatit la visée et on raccourcit la perche, sinon la caméra
       // monte dans la dalle du dessus et l'image est bouchée
       const pmax = clamp((cam.plafond - 1.1) * 0.22, 0.04, 0.9);
@@ -13617,8 +13768,11 @@ function frame() {
       want = Math.min(want, 1.6 + cam.plafond);
     }
     if (!veh) want = Math.max(want, 2.2);
+    // MAISON DE POUPEE : dans une piece, la camera recule a une distance confortable (elle
+    // traverse les murs, qui s'effacent) et reste basse pour ne pas regarder par le toit
+    if (cam.interieur && !aiming) { want = clamp(want, 3.8, 4.8); if (cam.pitch > 0.42) cam.pitch = 0.42; }
     if (P.zoom) want = 2.4;   // œil dans la lunette : on colle au joueur et on grossit l'image
-    if (inter && !aiming) { want = Math.min(want, dedans ? 3.1 : 4.3);
+    if (inter && !aiming && !cam.interieur) { want = Math.min(want, dedans ? 3.1 : 4.3);
       tmpV.x += clamp(inter.x - P.pos.x, -1.2, 1.2) * 0.45; tmpV.z += clamp(inter.z - P.pos.z, -1.2, 1.2) * 0.45; }
     if (Math.abs(cam.dist - want) > 0.05) cam.dist += (want - cam.dist) * Math.min(1, dt * (want < cam.dist ? 8 : 4));
   }
@@ -13653,7 +13807,7 @@ function frame() {
     if (running) for (let k = 0; k < 8 && d > 0.4; k++) {
       const c = camera.position; let coince = false;
       for (const o of solidsAutour(c.x, c.z, 2)) {
-        if (o.glass || o.h > 30 || o.veh) continue;
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
         if (Math.abs(c.x - o.x) < o.w / 2 + 0.15 && Math.abs(c.y - o.y) < o.h / 2 + 0.15
           && Math.abs(c.z - o.z) < o.d / 2 + 0.15) { coince = true; break; }
       }
@@ -13680,6 +13834,7 @@ function frame() {
     if (Math.abs(camera.fov - fovVoulu) > 0.2) { camera.fov += (fovVoulu - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
   }
   camera.lookAt(cam.target);
+  try { interieurTick(); } catch (e) { if (!interieurTick.err) { interieurTick.err = 1; console.error('interieur', e); } }
   if (city.on && running) { try { gpsTick(); } catch (e) {} }
   sun.position.set(P.pos.x + 30, P.pos.y + 50, P.pos.z + 20);
   sun.target.position.copy(P.pos);

@@ -10469,3 +10469,37 @@ test('un véhicule qui percute un piéton l\'écrase : il tombe, perd des points
   const ok = r.touche > 0 && r.hpApres < r.hp0 - 20 && r.auSol && r.ko && r.arret === 100;
   return { ok, detail: `un piéton renversé était simplement POUSSÉ de deux mètres, en pleine forme · il est maintenant écrasé pour de bon : touché à l'image ${r.touche}, il passe de ${r.hp0} à ${r.hpApres} points de vie, tombe au sol (${r.auSol}), reste KO (${r.ko}) et crie — et un véhicule à l'arrêt ne fait rien à personne (${r.arret} PV)` };
 });
+
+// ======================= POSTE H : CONTRÔLE QUALITÉ =======================
+// LE PREMIER TEST DE TOUS : LE JEU DÉMARRE-T-IL ? Au round 67, une variable des marques
+// d'impact déclarée avec `let` mais lue par la remise à zéro de la ville a fait tomber la
+// page dans la zone morte temporelle : écran noir, une seule ligne dans la console, et les
+// 300 tests du banc en échec d'un coup sans que rien ne dise pourquoi. On exige donc
+// explicitement : la page démarre, la boucle tourne, les cinq mondes se construisent, et
+// AUCUN sous-système n'a avalé d'exception (le jeu enrobe ses ticks dans safe(), qui note la
+// panne dans safeSeen et continue — sans ce test, une panne silencieuse passait inaperçue).
+test('le jeu DÉMARRE : la page se charge, la boucle tourne, les cinq mondes se construisent, aucun sous-système en panne', async p => {
+  const depart = await p.evaluate(() => ({ pret: !!(window.__SHOT && window.__SHOT.ready), image: __G.renderer.info.render.frame }));
+  // la boucle d'animation tourne vraiment : le compteur d'images doit avancer tout seul.
+  // (le rendu logiciel donne une a deux images par seconde : on laisse 30 s)
+  let images = depart.image;
+  for (let i = 0; i < 60 && images <= depart.image; i++) {
+    await p.waitForTimeout(500);
+    images = await p.evaluate(() => __G.renderer.info.render.frame);
+  }
+  const r = await p.evaluate(() => {
+    const G = __G, res = { mondes: [] };
+    for (const w of [0, 1, 2, 3, 4]) { G.loadWorld(w); res.mondes.push({ w, solides: G.solids.length }); }
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // on fait vivre la ville 10 s : chaque sous-système passe au moins une fois
+    for (let i = 0; i < 600; i++) G.step(1 / 60, true);
+    res.pannes = Object.keys(G.safeSeen || {});
+    res.villa = !!(G.villaTick && G.villaTick.warned);
+    res.interieur = !!(G.interieurTick && G.interieurTick.err);
+    res.ville = G.city.on; res.solides = G.solids.length; res.zones = G.city.zones.length;
+    return res;
+  });
+  const ok = depart.pret && images > depart.image && r.mondes.every(m => m.solides > 100)
+    && r.mondes[4].solides > 2000 && r.pannes.length === 0 && !r.villa && !r.interieur && r.ville && r.zones > 30;
+  return { ok, detail: `page prête=${depart.pret}, boucle vivante (image ${depart.image} → ${images}) · les cinq mondes se construisent : ${r.mondes.map(m => m.w + '→' + m.solides + ' solides').join(', ')} · après 10 s de ville simulée : ${r.pannes.length} sous-système en panne${r.pannes.length ? ' (' + r.pannes.join(', ') + ')' : ''}, villa=${r.villa ? 'panne' : 'ok'}, maison de poupée=${r.interieur ? 'panne' : 'ok'}, ${r.zones} quartiers` };
+});

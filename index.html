@@ -5116,7 +5116,16 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
   // ne les voyait tout simplement pas en jouant, surtout sur téléphone.
   // Tracé discret, en pointillé : de petits repères plats posés au sol, rapprochés pour
   // former une ligne lisible sans masquer le décor.
-  const pool = [], geo = new THREE.ConeGeometry(0.42, 1.0, 3); geo.rotateX(Math.PI / 2); const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.8, depthWrite: false });
+  // CHEVRONS PLATS, COMME DE LA PEINTURE AU SOL. Le cône à trois pans était posé à 16 cm du
+  // bitume avec un rayon de 42 cm : il dépassait de 58 cm en l'air et s'enfonçait de 26 cm
+  // dans la chaussée. Sur les captures du centre-ville, ces gros triangles cyan à demi
+  // enterrés au milieu de la route se lisaient comme un bug d'affichage (le contrôle qualité
+  // les a d'abord pris pour des deltaplanes tombés du décor). Aplatis à 10 cm et posés à 5 cm
+  // du sol, ils redeviennent ce qu'ils sont : des flèches peintes qui montrent le chemin.
+  const pool = [], geo = new THREE.ConeGeometry(0.42, 1.0, 3);
+  geo.rotateX(Math.PI / 2); geo.scale(1, 0.1, 1);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.8, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });   // pas de bagarre de profondeur avec la chaussée
   let lastT = 0, lastX = 0, lastZ = 0;
   return {
     update() {
@@ -5160,7 +5169,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
           if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; scene.add(pool[k]); }
           const m = pool[k++], gy = groundCar(x, z, null, 0);
-          m.position.set(x, gy + 0.16, z); m.lookAt(x + ux, gy + 0.16, z + uz); m.visible = true;
+          m.position.set(x, gy + 0.05, z); m.lookAt(x + ux, gy + 0.05, z + uz); m.visible = true;
         }
       }
       for (let i = k; i < pool.length; i++) pool[i].visible = false;

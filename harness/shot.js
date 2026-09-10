@@ -1098,6 +1098,8 @@ window.__G = {
   chienTick: typeof chienTick === 'function' ? chienTick : null,
   repareAtelier: typeof repareAtelier === 'function' ? repareAtelier : null,
   prixRepare: typeof prixRepare === 'function' ? prixRepare : null,
+  safeSeen: typeof safeSeen !== 'undefined' ? safeSeen : null,
+  villaTick: typeof villaTick === 'function' ? villaTick : null,
   openAtelier: typeof openAtelier === 'function' ? openAtelier : null,
   vehicleDamage: typeof vehicleDamage === 'function' ? vehicleDamage : null,
   navEnPieton: typeof navEnPieton === 'function' ? navEnPieton : null,

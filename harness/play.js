@@ -7051,7 +7051,11 @@ test('la maîtresse PARLE pour de vrai à l\'école : bonjour à l\'élève, l\'
     document.getElementById('voiceTest').click();
     out.test = { actives: G.settings.voices, dits: dits.join(' | ') };
     // 4) « À bientôt » quand on se lève
-    dits.length = 0; G.P.sit = null; await dodo(600);
+    // on attend des IMAGES, pas des minuteries : c'est schoolTick, appele a l'image, qui
+    // referme la classe quand on se leve (sur une machine chargee les minuteries s'accumulent
+    // toutes entre deux images et rien n'a encore tourne)
+    dits.length = 0; G.P.sit = null;
+    for (let i = 0; i < 60 && G.school.chaise; i++) await new Promise(rr => requestAnimationFrame(rr));
     out.aurevoir = dits.join(' | '); out.uiApres = G.uiOpen;
     G.school.chaise = null;
     return out;

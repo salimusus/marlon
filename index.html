@@ -374,6 +374,14 @@ body.tv .card h1{font-size:calc(var(--u) * 3)}
 body.tv .card h2{font-size:calc(var(--u) * 1.9)}
 body.tv .btn{font-size:calc(var(--u) * 1.1);padding:calc(var(--u) * .6) calc(var(--u) * .95)}
 /* pastille discrète en bas au centre : combien de manettes sont branchées */
+/* la legende de la manette : ce que fait chaque bouton, en un coup d'oeil, tant qu'aucune fenetre n'est ouverte */
+#padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;gap:6px;flex-wrap:wrap;justify-content:center;
+  max-width:96vw;padding:5px 9px;border-radius:12px;background:rgba(10,16,36,.62);color:#fff;font-size:12px;line-height:1.4;pointer-events:none}
+#padLeg b{display:inline-block;min-width:16px;padding:0 5px;margin-right:3px;border-radius:6px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center}
+#padLeg i{font-style:normal;opacity:.75;margin-left:2px}
+body.manette.city #padLeg{display:flex}
+body.manette.city.uiopen #padLeg,body.manette.city.manetteTel #padLeg{display:none}
+body.tv #padLeg{font-size:calc(var(--u) * .95);top:calc(var(--tvpad) + var(--u) * 3.4);padding:calc(var(--u) * .35) calc(var(--u) * .7)}
 #tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
   color:#eaf0ff;font-weight:800;padding:calc(var(--u,15px) * .4) calc(var(--u,15px) * .9);font-size:calc(var(--u,15px) * .85)}
@@ -397,6 +405,9 @@ body.tv #tvBadge.on{display:block}
   border-radius:8px;padding:6px 8px;margin-top:8px;user-select:all;-webkit-user-select:all}
 #tvCast{margin-top:8px}
 #tvManettes{font-size:clamp(13px,1.1vw,19px);color:#1b2a4a;margin-top:6px;min-height:22px;font-weight:800}
+#padCase{max-width:560px}#padEtat{font-weight:800;color:#1b2a4a;min-height:22px}#padAide{font-size:clamp(12px,1vw,16px);color:#556;margin-top:8px;text-align:left}
+#padCase.attente #padConnect{background:#ffd23f;color:#1b2a4a}#padCase.ok #padConnect{background:#3ddc5a;color:#0d2a12}
+#volRow{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;font-weight:800}#volRow input{width:min(220px,48vw)}#volRow b{min-width:44px;text-align:right}
 
 /* ================= Manette : le téléphone devient la télécommande ================= */
 #manette{position:fixed;inset:0;z-index:60;background:linear-gradient(160deg,#12203c,#1b2a4a 45%,#0d1730);
@@ -512,6 +523,7 @@ body.tv #tvBadge.on{display:block}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
+<div id="padLeg"><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>←</b>🛍️<b>→</b>🎯<b>Pavé</b>🔫 arme<b>△</b>dégainer<b>▢</b>frapper<b>◯</b>agir<b>✕</b>sauter<b>L1</b>viser<b>R2</b>tirer<b>L2</b>courir</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -545,7 +557,7 @@ body.tv #tvBadge.on{display:block}
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
-      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer, <b>←/→</b> boutique et missions, <b>Options</b> menu — et elle vibre à chaque coup</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer · la croix : <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner, <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions · <b>pavé tactile</b> : arme suivante · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -592,6 +604,14 @@ body.tv #tvBadge.on{display:block}
         <p>Chacun scanne avec son téléphone et arrive directement dans ta ville.</p>
         <button class="btn sec small" id="tvCreePartie">Ouvrir la partie aux amis</button>
         <div class="tvlien" id="lienJeu"></div>
+      </div>
+    </div>
+    <div class="tvgrid">
+      <div class="tvcase" id="padCase">
+        <h3>🎮 Manette PS5 en Bluetooth</h3>
+        <p id="padEtat">Aucune manette détectée pour l'instant.</p>
+        <button class="btn small" id="padConnect">🔵 Connecter une manette PS5</button>
+        <p id="padAide"></p>
       </div>
     </div>
     <div id="tvManettes">Aucune manette connectée pour l'instant.</div>
@@ -847,7 +867,9 @@ body.tv #tvBadge.on{display:block}
     <button class="btn sec" id="leaveNet" style="display:none">Quitter la partie en ligne</button>
     <button class="btn sec" id="sndBtn">Son : activé</button>
     <button class="btn sec" id="musBtn">Musique : activée</button>
+    <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">80 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
+    <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
     <button class="btn sec" id="voiceBtn">Voix des bots : activées</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
     <button class="btn sec" id="fsBtn2">Plein écran</button>
@@ -888,7 +910,7 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
   json: (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch (e) { return d; } },
 };
-const settings = { sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
+const settings = { volume: (v => v >= 0 && v <= 1 ? v : 0.8)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160 };
 
 // ================= RENDU =================
@@ -899,7 +921,6 @@ const canvas = $('c');
 const versTV = /(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1';
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile || versTV, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;   // couleurs franches façon briques : ACES délavait toute la palette
 renderer.physicallyCorrectLights = false;
 const scene = new THREE.Scene();
@@ -908,10 +929,21 @@ const hemi = new THREE.HemisphereLight(0xdbeeff, 0x6f8f52, 0.72); scene.add(hemi
 const fill = new THREE.DirectionalLight(0xa8c8ff, 0.16); fill.position.set(-70, 60, -50); scene.add(fill);   // lumière d'appoint froide (ombres moins plates)
 const sun = new THREE.DirectionalLight(0xfff3d6, 1.15);
 sun.castShadow = true;
-const SM = isMobile ? 1024 : 2048;
+// LES OMBRES EN HAUTE DEFINITION. La carte d'ombres faisait 2048 points pour un cadre de
+// 72 m : 28 points par metre, et chaque bord d'ombre etait un escalier visible sur un grand
+// ecran. On monte a 4096 des que la carte graphique le permet (43 points par metre sur un
+// cadre elargi a 96 m), avec un biais de NORMALE : fini l'acne (les rayures sur les murs
+// eclaires de biais) sans decoller l'ombre de l'objet qui la porte.
+const OMBRE_MAX = (() => { try { return renderer.capabilities.maxTextureSize || 4096; } catch (e) { return 4096; } })();
+const OMBRE_PC = Math.min(4096, OMBRE_MAX), OMBRE_TEL = 1024;
+const SM = isMobile && !versTV ? OMBRE_TEL : OMBRE_PC;
 sun.shadow.mapSize.set(SM, SM);
-Object.assign(sun.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 1, far: 160 });
-sun.shadow.bias = -0.0006;
+const OMBRE_CADRE = SM >= 4096 ? 48 : 36;
+Object.assign(sun.shadow.camera, { left: -OMBRE_CADRE, right: OMBRE_CADRE, top: OMBRE_CADRE, bottom: -OMBRE_CADRE, near: 1, far: 160 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.02;
+// la tele merite les ombres douces de l'ordinateur, pas celles, dures, du telephone
+renderer.shadowMap.type = isMobile && !versTV ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(30, 50, 20).normalize();
 const sunSprite = (() => {
@@ -949,7 +981,7 @@ scene.updateMatrix(); worldGroup.updateMatrix();
 //   2. une résolution DYNAMIQUE : on mesure le temps de chaque image et, si ça rame, on
 //      descend l'échelle de rendu par paliers ; dès que ça respire, on la remonte. Si ça rame
 //      encore au plus bas, les ombres s'éteignent, et se rallument quand ça va mieux.
-const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0 };
+const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0, palier: 0 };
 // PLUS AUCUN BRIDAGE A PRIORI. On plafonnait d'abord à 1600 px, puis à 2160 : sur une télé 4K
 // l'image restait molle. On rend maintenant jusqu'au NATIF de l'écran, et c'est uniquement la
 // mesure du temps des images qui fait redescendre si la machine ne suit pas.
@@ -959,7 +991,8 @@ function ratioQualite() {
   const q = settings.quality;
   if (q === 'low') return 1;
   if (q === 'dlss') return Math.min(window.devicePixelRatio, 2) * 0.62;
-  return Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2);
+  // une smart TV se declare « mobile » : elle etait bridee a 1,5 comme un telephone
+  return Math.min(window.devicePixelRatio, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2);
 }
 // le ratio réellement envoyé au moteur : qualité × échelle adaptative, borné par le plafond
 function ratioRendu(largeur) {
@@ -976,6 +1009,41 @@ function ombresRendu(on) {
   rendu.ombres = on;
   const low = settings.quality === 'low';
   sun.castShadow = on && !low; renderer.shadowMap.enabled = on && !low;
+}
+// la taille de la carte d'ombres, sans jamais reconstruire ce qui n'a pas change
+function ombresTaille(px) {
+  px = Math.max(512, px | 0);
+  if (sun.shadow.mapSize.x === px) return false;
+  sun.shadow.mapSize.set(px, px);
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  return true;
+}
+// L'ECHELLE DE FLUIDITE. Avant, des que ca ramait, c'etait la RESOLUTION qui baissait la
+// premiere : l'image devenait floue alors que le vrai gouffre, ce sont les ombres (en 4096, la
+// carte d'ombres pese autant qu'une image entiere). On descend maintenant des marches, de la
+// moins visible a la plus visible : d'abord la carte d'ombres est divisee par deux, puis par
+// quatre, et SEULEMENT ENSUITE la resolution — et tout en bas, les ombres s'eteignent.
+// Dans l'autre sens on remonte une marche a la fois, des que ca respire.
+const PALIERS = [
+  { ech: 1, ombre: 1 },
+  { ech: 1, ombre: 0.5 },
+  { ech: 1, ombre: 0.25 },
+  { ech: 0.86, ombre: 0.25 },
+  { ech: 0.74, ombre: 0.25 },
+  { ech: 0.64, ombre: 0.25 },
+  { ech: 0.5, ombre: 0.25 },
+  { ech: 0.5, ombre: 0 },
+];
+// la carte de depart : celle de la machine, ou 1024 en mode « DLSS » (rendu reduit puis agrandi)
+function ombreBase() { return settings.quality === 'dlss' ? 1024 : SM; }
+function ombresQualite(n) {
+  n = clamp(n | 0, 0, PALIERS.length - 1);
+  const P2 = PALIERS[n];
+  rendu.palier = n; rendu.ech = P2.ech;
+  ombresRendu(P2.ombre > 0);
+  if (P2.ombre > 0) ombresTaille(ombreBase() * P2.ombre);
+  appliqueRendu();
+  return P2;
 }
 // LA CARTE D'OMBRES : elle était entièrement recalculée à CHAQUE image. Sur une télé c'est
 // la deuxième dépense après les pixels. On la rafraîchit une image sur deux : à 60 images
@@ -997,12 +1065,10 @@ function fluiditeTick(ms) {
   rendu.majT = 0;
   const med = [...t].sort((a, b) => a - b)[t.length >> 1];
   rendu.med = Math.round(med * 10) / 10;
-  if (med > 1000 / 42) {          // moins de 42 images/s : on allège
-    if (rendu.ech > rendu.min) { rendu.ech = Math.max(rendu.min, rendu.ech * 0.86); rendu.baisses++; appliqueRendu(); }
-    else if (rendu.ombres) ombresRendu(false);   // au plancher, on coupe les ombres
-  } else if (med < 1000 / 57) {   // ça respire : on remonte doucement
-    if (!rendu.ombres && rendu.ech > 0.8) ombresRendu(true);
-    else if (rendu.ech < 1) { rendu.ech = Math.min(1, rendu.ech * 1.07); rendu.hausses++; appliqueRendu(); }
+  if (med > 1000 / 42) {          // moins de 42 images/s : on descend une marche
+    if (rendu.palier < PALIERS.length - 1) { ombresQualite(rendu.palier + 1); rendu.baisses++; }
+  } else if (med < 1000 / 57) {   // ça respire : on remonte une marche
+    if (rendu.palier > 0) { ombresQualite(rendu.palier - 1); rendu.hausses++; }
   }
 }
 // NETTETÉ DES TEXTURES. Vues de biais — une chaussée, un trottoir, une façade — les textures
@@ -1029,7 +1095,7 @@ function applyQuality() {
   rendu.ech = 1; rendu.tps.length = 0; ombresRendu(!low);
   appliqueRendu();
   sun.castShadow = !low && rendu.ombres; renderer.shadowMap.enabled = !low && rendu.ombres;
-  const sm = dlss ? 1024 : (isMobile ? 1024 : 2048); if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  ombresQualite(0);   // carte d'ombres de depart (1024 en DLSS), echelle 1, ombres allumees
   worldGroup.traverse(o => { if (o.isMesh) o.material && (o.material.needsUpdate = true); });
   $('qualBtn').textContent = 'Qualité : ' + (low ? 'basse' : dlss ? 'DLSS 5 (upscaling)' : 'haute');
 }
@@ -3768,7 +3834,7 @@ const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
 let jailPasses = 2;   // deux pass « sortie de prison » offerts à chaque début de partie
 const siren = (() => { let o1 = null, o2 = null, g = null, timer = null; return {   // sirène douce : deux sinus qui glissent lentement entre deux notes
-  start() { if (timer || !settings.sound) return; const c = sfx.unlock(); if (!c) return; g = c.createGain(); g.gain.value = 0.0001; g.connect(c.destination); g.gain.linearRampToValueAtTime(0.022, c.currentTime + 0.8);
+  start() { if (timer || !settings.sound) return; const c = sfx.unlock(); if (!c) return; g = c.createGain(); g.gain.value = 0.0001; g.connect(sfx.sortie('ambiance')); g.gain.linearRampToValueAtTime(0.022, c.currentTime + 0.8);
     o1 = c.createOscillator(); o1.type = 'sine'; o1.frequency.value = 600; o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = 1200; const g2 = c.createGain(); g2.gain.value = 0.25; o1.connect(g); o2.connect(g2).connect(g); o1.start(); o2.start();
     let hi = false; timer = setInterval(() => { hi = !hi; const t = c.currentTime; o1.frequency.linearRampToValueAtTime(hi ? 800 : 600, t + 0.6); o2.frequency.linearRampToValueAtTime(hi ? 1600 : 1200, t + 0.6); }, 700); },
   stop() { clearInterval(timer); timer = null; const c = sfx.ctx(); if (g && c) { g.gain.setTargetAtTime(0.0001, c.currentTime, 0.2); } const a = o1, b = o2; setTimeout(() => { try { a && a.stop(); b && b.stop(); } catch (e) {} }, 600); o1 = o2 = null; g = null; },
@@ -8161,13 +8227,32 @@ const me = buildAvatar({ name: myCfg.name, jersey: myCfg.jersey, pants: PAL.pant
 function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
 
 // ================= SONS & MUSIQUE =================
+// LA CHAINE DE SORTIE. Chaque son se branchait DIRECTEMENT sur la sortie de la carte son :
+// musique a 0,9, moteur 500 chevaux avec sa scie a 0,95, tirs, pieces, sirene... tout
+// s'additionnait sans garde-fou. Des qu'on roulait en musique avec un tir ou deux, la
+// somme depassait 1 et la sortie ECRETAIT : c'est le grésillement qu'on entendait. Et la
+// musique, quatre fois plus forte que les effets, couvrait tout.
+// Maintenant tout passe par quatre bus (effets, moteur, musique, ambiance), un volume
+// general et un LIMITEUR qui rabote les cretes au lieu de les laisser saturer.
+const MIX = { effets: 1, moteur: 0.8, musique: 0.45, ambiance: 1 };
 const sfx = (() => {
-  let ctx = null;
+  let ctx = null, chaine = null;
+  const monte = c => {
+    const master = c.createGain(); master.gain.value = clamp(settings.volume, 0, 1);
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.knee.value = 18; comp.ratio.value = 6; comp.attack.value = 0.004; comp.release.value = 0.18;
+    const bus = {};
+    for (const [n, v] of Object.entries(MIX)) { const g = c.createGain(); g.gain.value = v; g.connect(master); bus[n] = g; }
+    master.connect(comp); comp.connect(c.destination);
+    chaine = { master, comp, bus, sourdine: false };
+  };
   const ensure = () => {
     if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
-    if (ctx.state === 'suspended') ctx.resume();
+    if (!chaine) monte(ctx);
+    if (ctx.state === 'suspended') { try { ctx.resume().catch(() => {}); } catch (e) {} }
     return ctx;
   };
+  const sortie = n => { const c = ensure(); if (!c) return null; return chaine.bus[n] || chaine.bus.effets; };
   const tone = (f, t = 0, dur = .12, type = 'triangle', vol = .1, slide) => {
     if (!settings.sound) return;
     const c = ensure(); if (!c) return;
@@ -8177,10 +8262,13 @@ const sfx = (() => {
     g.gain.setValueAtTime(.0001, at);
     g.gain.exponentialRampToValueAtTime(vol, at + .015);
     g.gain.exponentialRampToValueAtTime(.0001, at + dur);
-    o.connect(g).connect(c.destination); o.start(at); o.stop(at + dur + .05);
+    o.connect(g).connect(sortie('effets')); o.start(at); o.stop(at + dur + .05);
   };
   return {
-    unlock: ensure, ctx: () => ctx, tone,
+    unlock: ensure, ctx: () => ctx, tone, sortie, chaine: () => chaine,
+    // le volume general, et la sourdine quand la page passe en arriere-plan
+    volume(v) { settings.volume = clamp(v, 0, 1); store.set('superobby.volume', String(settings.volume)); if (chaine && !chaine.sourdine) chaine.master.gain.setTargetAtTime(settings.volume, ctx.currentTime, 0.05); return settings.volume; },
+    sourdine(on) { if (!chaine) return; chaine.sourdine = !!on; chaine.master.gain.setTargetAtTime(on ? 0.0001 : settings.volume, ctx.currentTime, 0.08); },
     jump: () => tone(300, 0, .14, 'sine', .09, 620),
     coin: () => { tone(1320, 0, .08, 'square', .045); tone(1760, .07, .16, 'square', .045); },
     check: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .08, .22, 'triangle', .1)),
@@ -8209,7 +8297,7 @@ const sfx = (() => {
     const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); src.buffer = noise.buf; src.loop = true;
     f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.7;
     g.gain.setValueAtTime(.0001, c.currentTime); g.gain.exponentialRampToValueAtTime(vol, c.currentTime + Math.min(0.05, dur / 3)); g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + dur);
-    src.connect(f).connect(g).connect(c.destination); src.start(); src.stop(c.currentTime + dur + 0.05);
+    src.connect(f).connect(g).connect(sortie('effets')); src.start(); src.stop(c.currentTime + dur + 0.05);
   }
 })();
 function horn(kind) {
@@ -8225,6 +8313,9 @@ function unlockAudio() {
 }
 for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') unlockAudio(); });
+// Onglet en arriere-plan : le moteur continuait de tourner et la musique de jouer dans le
+// vide (et sur une tele, par-dessus la chaine qu'on venait de lancer). Sourdine, puis retour.
+document.addEventListener('visibilitychange', () => { try { sfx.sourdine(document.hidden); } catch (e) {} });
 // LE BRUIT DU MOTEUR. Il était le même pour tout le monde : une 100 chevaux et une 500
 // chevaux ronronnaient exactement pareil, parce que le régime ne dépendait que du rapport de
 // boîte. Chaque niveau a maintenant SA voix — et plus il y a de chevaux, plus c'est gros et
@@ -8251,7 +8342,7 @@ const engine = (() => {   // bruit moteur continu : deux oscillateurs filtrés, 
       osc.type = 'triangle'; osc2.type = 'sine';
       osc.frequency.value = k === 'heli' ? 70 : V.base; osc2.frequency.value = k === 'heli' ? 35 : V.base / 2;
       filt.type = 'lowpass'; filt.frequency.value = k === 'heli' ? 500 : V.coupe; filt.Q.value = 0.6;
-      g.gain.value = 0.0001; osc.connect(filt); osc2.connect(filt); filt.connect(g).connect(c.destination); osc.start(); osc2.start();
+      g.gain.value = 0.0001; osc.connect(filt); osc2.connect(filt); filt.connect(g).connect(sfx.sortie('moteur')); osc.start(); osc2.start();
       g.gain.linearRampToValueAtTime(k === 'heli' ? 0.05 : V.gain, c.currentTime + 0.6);
       if (k !== 'heli' && V.sub > 0) {   // la scie : c'est elle qui fait le GROS son grave
         sub = c.createOscillator(); subG = c.createGain(); sub.type = 'sawtooth';
@@ -8284,7 +8375,7 @@ const music = (() => {   // musique de fond générée : batterie, basse, accord
   const SC = { major: [0, 2, 4, 7, 9, 12, 14, 16, 19], minor: [0, 3, 5, 7, 10, 12, 15, 17, 19] };
   const PROG = { major: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [5, 9, 12]], minor: [[0, 3, 7], [5, 8, 12], [3, 7, 10], [7, 10, 14]] };
   const f = (root, semi) => root * Math.pow(2, semi / 12);
-  const out = () => { const c = sfx.ctx(); if (!c) return null; if (!gainNode) { gainNode = c.createGain(); gainNode.gain.value = 0.9; gainNode.connect(c.destination); } return gainNode; };
+  const out = () => { const c = sfx.ctx(); if (!c) return null; if (!gainNode) { gainNode = c.createGain(); gainNode.gain.value = 0.9; gainNode.connect(sfx.sortie('musique')); } return gainNode; };
   function note(fr, t, dur, type, vol, slide) {
     const c = sfx.ctx(), g0 = out(); if (!c || !g0) return;
     const o = c.createOscillator(), g = c.createGain(), at = c.currentTime + t;
@@ -11840,8 +11931,8 @@ function tennisPoint(side, why) {
 function showTennis(txt, over) { msg(over || txt, over ? 2600 : 1600); sfx.check(); chat(null, txt); if (over) { chat(null, over); sfx.win(); } updateAct(); }
 function startDance(sec) { if (P.dance <= 0) P.danceFace = P.facing; P.dance = sec; cam.freeUntil = simTime + sec + 0.5; }
 function stopDance() { P.dance = 0; if (P.danceFace != null) { P.facing = P.danceFace; P.danceFace = null; } cam.freeUntil = 0; }
-function openUI(id) { if (uiOpen && uiOpen !== id) $(uiOpen).classList.add('hidden'); uiOpen = id; paused = true; keys.clear(); jumpHeld = downHeld = false; $(id).classList.remove('hidden'); }
-function closeUI() { if (!uiOpen) return; $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; }
+function openUI(id) { if (uiOpen && uiOpen !== id) $(uiOpen).classList.add('hidden'); uiOpen = id; paused = true; keys.clear(); jumpHeld = downHeld = false; $(id).classList.remove('hidden'); document.body.classList.add('uiopen'); }
+function closeUI() { if (!uiOpen) return; $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
 const itemKey = (cat, it) => `${cat}:${it.id}`;
 function applyShopItem(cat, it) {
   if (cat === 'Chapeaux') myCfg.hat = it.id; else if (cat === 'Vestes') myCfg.jacket = it.id; else if (cat === 'Lunettes') myCfg.glasses = !!it.id; else if (cat === 'Sacs') myCfg.bag = it.id;
@@ -12961,7 +13052,8 @@ let gamepadOk = true;
 // boutons et rien ne vibrait. Tout est repris pour une DualSense — et ça marche aussi bien
 // avec une manette Xbox ou n'importe quelle manette « standard ».
 const PS_NOMS = { 0: '✕', 1: '◯', 2: '▢', 3: '△', 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2',
-  8: 'Create', 9: 'Options', 10: 'L3', 11: 'R3', 12: '↑', 13: '↓', 14: '←', 15: '→', 16: 'PS' };
+  8: 'Create', 9: 'Options', 10: 'L3', 11: 'R3', 12: '↑', 13: '↓', 14: '←', 15: '→', 16: 'PS', 17: 'Pavé' };
+const PAD_BOUTONS = 18;   // 17 boutons standard + le pavé tactile de la DualSense (index 17)
 // L'agencement PlayStation : ✕ saute (c'est le réflexe), ◯ agit, ▢ frappe, △ sort l'arme.
 const PAD_MAP = {
   0: 'Space',    // ✕  sauter
@@ -12971,10 +13063,29 @@ const PAD_MAP = {
   5: 'KeyX',     // R1 tirer
   8: 'KeyT',     // Create : parler
   9: 'Escape',   // Options : menu
-  12: 'ArrowUp', 13: 'ArrowDown',
-  14: 'KeyB',    // ← boutique
-  15: 'KeyM',    // → missions
 };
+// LA CROIX ET LE PAVE TACTILE ouvrent ce qui n'etait accessible qu'a la souris : le 📣 des
+// ordres, la boutique, les missions, la guerre des gangs, les emotes, le changement d'arme.
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'boutique', 15: 'missions', 17: 'arme' };
+const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
+const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', grenade: 'Grenade' };
+function armeSuivante() {
+  const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', P.grenades > 0 && 'grenade'].filter(Boolean);
+  if (!dispo.length) { msg('🔫 Aucune arme : passe à l\'armurerie', 1500); return false; }
+  const i = dispo.indexOf(P.weapon), suiv = i < 0 ? dispo[0] : (i + 1 < dispo.length ? dispo[i + 1] : null);
+  equipWeapon(suiv); msg(suiv ? `🔫 ${NOMS_ARMES[suiv]}` : '🤚 Mains nues', 1200); return true;
+}
+function padAction(quoi) {
+  if (!running) return false;
+  const libre = city.on && !uiOpen;
+  if (quoi === 'ordres') { if (!libre) return false; openQui(); return true; }
+  if (quoi === 'guerre') { if (!libre) return false; openGuerre(); return true; }
+  if (quoi === 'boutique') { if (!libre) return false; openStore(); return true; }
+  if (quoi === 'missions') { if (!libre) return false; openMissions(city.offNear); return true; }
+  if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else startDance(3); return true; }
+  if (quoi === 'arme') { if (paused) return false; return armeSuivante(); }
+  return false;
+}
 const PAD_SEUIL_GACHETTE = 0.35;   // une gâchette analogique n'est « appuyée » qu'à partir de là
 const manetteSalon = { i: -1, nom: '', vibT: 0 };
 function padActive() {
@@ -12987,7 +13098,7 @@ function padActive() {
     const ps = /dualsense|dualshock|playstation|054c/i.test(g.id || '');
     if (!choix || (ps && !/dualsense|dualshock|playstation|054c/i.test(choix.id || ''))) choix = g;
   }
-  if (choix && manetteSalon.i !== (choix.index | 0)) { manetteSalon.i = choix.index | 0; manetteSalon.nom = choix.id || 'manette'; }
+  if (choix && manetteSalon.i !== (choix.index | 0)) { manetteSalon.i = choix.index | 0; manetteSalon.nom = choix.id || 'manette'; document.body.classList.add('manette'); }
   return choix;
 }
 // Zone morte RONDE : avec une zone morte carrée, pousser en diagonale coupait un axe et le
@@ -13020,7 +13131,11 @@ function pollGamepad(dt) {
   }
   const bas = pad.bas || {};
   const neuf = {};
-  for (let i = 0; i < 17; i++) neuf[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
+  for (let i = 0; i < PAD_BOUTONS; i++) neuf[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
+  // Le son : une manette ne compte pas comme un « geste » pour le navigateur. On tente
+  // quand meme de reveiller la carte son au premier bouton, et on dit quoi faire si elle
+  // reste muette (touche OK de la telecommande, ou un doigt sur l'ecran).
+  if (Object.keys(neuf).some(i => neuf[i] && !bas[i])) padSon();
   // les gâchettes sont analogiques : on les convertit avec un seuil, pas en tout ou rien
   neuf[6] = padGachette(gp, 6) > PAD_SEUIL_GACHETTE;
   neuf[7] = padGachette(gp, 7) > PAD_SEUIL_GACHETTE;
@@ -13040,19 +13155,96 @@ function pollGamepad(dt) {
     if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
     if (neuf[11] && !bas[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }   // R3 : recentrer la caméra
     if (neuf[16] && !bas[16]) telTouche('Escape', true);
+    // la croix : appui court = l'action ; ↑ tenu 0,7 s = la guerre des gangs
+    for (const [i, quoi] of Object.entries(PAD_CROIX)) {
+      if (+i === 12) continue;
+      if (neuf[i] && !bas[i]) padAction(quoi);
+    }
+    if (neuf[12] && !bas[12]) { pad.hautT = simTime; pad.hautFait = false; }
+    if (neuf[12] && bas[12] && !pad.hautFait && simTime - (pad.hautT || 0) >= PAD_LONG) { pad.hautFait = true; padAction('guerre'); }
+    if (!neuf[12] && bas[12] && !pad.hautFait) padAction('ordres');
     if ((neuf[0] && !bas[0]) || (neuf[5] && !bas[5]) || (neuf[7] && !bas[7])) padVibre(0.35, 60);
   }
   pad.bas = neuf; pad.a = neuf[0];
 }
+// LE SON A LA MANETTE. Sans geste « humain » (clic, touche, doigt) le navigateur garde la
+// carte son endormie ; une manette n'en est pas un. On essaie, et sinon on explique — une
+// seule fois par quart de minute, pas a chaque bouton.
+function padSon() {
+  const c = sfx.ctx();
+  if (c && c.state === 'running') return true;
+  unlockAudio();
+  const c2 = sfx.ctx();
+  if (c2 && c2.state === 'running') return true;
+  if (settings.sound && simTime > (pad.sonT || 0)) { pad.sonT = simTime + 15; msg('🔇 Pour le son : appuie sur OK de la télécommande, ou touche l\'écran une fois', 3200); }
+  return false;
+}
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
-  msg(ps ? '🎮 Manette PlayStation connectée — ✕ saute, ◯ agit, ▢ frappe, △ arme' : '🎮 Manette connectée !', 3200);
+  msg(ps ? '🎮 Manette PlayStation connectée — ↑ 📣 ordres · ↓ 🎭 · ← 🛍️ · → 🎯 · pavé 🔫' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
-  padVibre(0.5, 200);
+  unlockAudio(); padVibre(0.5, 200);
+  try { manetteBTSonde(); } catch (_) {}
   try { chat(null, ps ? '🎮 DualSense prête : stick gauche pour marcher, stick droit pour la caméra, L2 pour courir, R2 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
 });
-window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); });
+window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
+// ================= « CONNECTER UNE MANETTE PS5 » =================
+// Ce qu'une page web PEUT faire, honnetement : elle ne peut pas appairer une manette en
+// Bluetooth a la place de l'appareil (le navigateur l'interdit pour les manettes). Mais elle
+// peut : ouvrir la fenetre de choix du navigateur quand il la propose (WebHID, sur ordinateur
+// et Android), guider l'appairage pas a pas, GUETTER la manette et le dire — avec une
+// vibration — a la seconde ou elle repond. C'est ce que fait ce bouton.
+const manetteBT = { etat: 'repos', fin: 0, timer: null, hid: null, essais: 0 };
+const BT_ETAPES = ['1. Maintiens PS + Create (le petit bouton a gauche du pave) 3 secondes : la barre lumineuse clignote en bleu.',
+  '2. Dans les reglages Bluetooth de l\'appareil (tele, telephone ou ordinateur), choisis « DualSense Wireless Controller ».',
+  '3. Reviens ici et appuie sur ✕ : la manette vibre des qu\'elle est reconnue.'];
+function manetteBTEtat(etat, texte) {
+  manetteBT.etat = etat;
+  const e = $('padEtat'), b = $('padConnect'), b2 = $('padConnect2'), a = $('padAide'), c = $('padCase');
+  if (e) e.textContent = texte;
+  const lib = etat === 'attente' ? '⏳ Recherche… appuie sur ✕ de la manette' : etat === 'ok' ? '✅ Manette connectée — réessayer ?' : '🔵 Connecter une manette PS5';
+  if (b) b.textContent = lib; if (b2) b2.textContent = etat === 'ok' ? '🎮 Manette PS5 : connectée' : '🎮 Connecter une manette PS5';
+  if (a) a.innerHTML = etat === 'attente' ? BT_ETAPES.map(t => `<div>${t}</div>`).join('') : '';
+  if (c) { c.classList.toggle('attente', etat === 'attente'); c.classList.toggle('ok', etat === 'ok'); }
+}
+function manetteBTSonde(silencieux) {
+  const g = padActive();
+  if (g) {
+    const nom = (g.id || 'Manette').split('(')[0].trim() || 'Manette';
+    if (manetteBT.etat !== 'ok') { manetteBTEtat('ok', `✅ ${nom} connectée (prise ${(g.index | 0) + 1})`); if (!silencieux) padVibre(0.6, 250); }
+    if (manetteBT.timer) { clearInterval(manetteBT.timer); manetteBT.timer = null; }
+    return true;
+  }
+  if (manetteBT.etat === 'ok') manetteBTEtat('repos', 'La manette s\'est déconnectée. Appuie sur PS pour la rallumer, ou relance la recherche.');
+  else if (manetteBT.etat === 'attente' && Date.now() > manetteBT.fin) {
+    manetteBTEtat('repos', 'Toujours rien au bout d\'une minute. Vérifie que la manette est bien appairée dans les réglages Bluetooth, puis réessaie.');
+    if (manetteBT.timer) { clearInterval(manetteBT.timer); manetteBT.timer = null; }
+  }
+  return false;
+}
+async function manetteConnecter() {
+  unlockAudio();
+  manetteBT.essais++;
+  if (manetteBTSonde()) return { deja: true, hid: false };
+  // on guette TOUT DE SUITE : la fenetre de choix du navigateur, quand il y en a une, peut
+  // rester ouverte longtemps, et la manette doit etre reconnue des qu'elle repond
+  manetteBT.fin = Date.now() + 60000;
+  manetteBTEtat('attente', 'Recherche en cours (une minute) — suis les trois étapes ci-dessous.');
+  if (!manetteBT.timer) manetteBT.timer = setInterval(() => manetteBTSonde(), 500);
+  let choisie = null;
+  // le navigateur propose sa propre fenetre de choix : c'est le seul « vrai » branchement
+  // qu'une page puisse declencher, et il ne liste que les manettes deja appairees
+  if (navigator.hid && typeof navigator.hid.requestDevice === 'function') {
+    try {
+      const l = await navigator.hid.requestDevice({ filters: [{ vendorId: 0x054c }] });
+      if (l && l.length) { choisie = l[0].productName || 'DualSense'; manetteBT.hid = l[0]; }
+    } catch (e) { /* fenetre refermee sans choisir : on guide quand meme */ }
+    if (choisie && manetteBT.etat === 'attente') manetteBTEtat('attente', `${choisie} autorisée — appuie sur ✕ pour la réveiller.`);
+  }
+  return { deja: false, hid: !!choisie };
+}
+for (const id of ['padConnect', 'padConnect2']) { const b = $(id); if (b) b.addEventListener('click', () => { manetteConnecter(); }); }
 
 // ---- plein écran, orientation, veille (tablette Android) ----
 function goFullscreen() {
@@ -13135,6 +13327,9 @@ function setSound(on) {
 $('restartBtn').addEventListener('click', () => { toggleMenu(false); chooseWorld(worldIdx); msg('🔄 On recommence !', 1200); });
 $('wipeBtn').addEventListener('click', () => { if (!confirm('Tout effacer ? (pièces, achats, records, muscles, prison) La page va se recharger.')) return; try { for (const k of Object.keys(localStorage)) if (k.startsWith('superobby.')) localStorage.removeItem(k); } catch (e) {} location.reload(); });
 $('sndBtn').addEventListener('click', () => setSound(!settings.sound));
+$('volIn').value = String(Math.round(settings.volume * 100)); $('volVal').textContent = Math.round(settings.volume * 100) + ' %';
+$('volIn').addEventListener('input', () => { const v = sfx.volume((+$('volIn').value || 0) / 100); $('volVal').textContent = Math.round(v * 100) + ' %'; if (v > 0 && !settings.sound) setSound(true); });
+$('volIn').addEventListener('change', () => { unlockAudio(); sfx.coin(); });
 $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée');
 $('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées');
 $('voiceBtn').addEventListener('click', () => { settings.voices = !settings.voices; store.set('superobby.voices', settings.voices ? '1' : '0'); $('voiceBtn').textContent = 'Voix des bots : ' + (settings.voices ? 'activées' : 'coupées'); if (settings.voices) voice.say('Salut ' + myCfg.name + ', on va bien s\'amuser !', Math.random() < 0.5, true); else voice.stop(); });
@@ -13982,6 +14177,7 @@ function ouvreSalonTV() {
   openUI('tvsalon');
   tvHeberge();
   tvSalonMaj();
+  try { manetteBTSonde(true); } catch (e) {}
 }
 
 // ---- côté téléphone : l'écran devient une manette -----------------------------------

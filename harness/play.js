@@ -6433,6 +6433,147 @@ test('la lumiere de la ville est plus chaude', async p => {
   return { ok, detail: `tout était éclairé d'un blanc bleuté un peu clinique — soleil blanc, ciel froid, rebond du sol gris et lumière d'appoint franchement bleue · la lumière est maintenant celle d'une fin d'après-midi : soleil doré (#${r.lu.soleil}), ciel ambré (#${r.lu.ciel}), rebond du sol couleur sable (#${r.lu.sol}), appoint tiède · et le ciel comme la brume sont décalés vers le chaud (${r.ecartCiel} et ${r.ecartBrume} de bleu en moins) sans que les couleurs franches du jeu y perdent` };
 });
 
+test('la croix et le pave de la DualSense ouvrent le 📣, la boutique, les missions et la guerre', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { G.closeUI(); document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    const ds = { index: 0, connected: true, id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })), vibrationActuator: { playEffect: () => Promise.resolve('complete') } };
+    const vraiGP = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = (i, tenir = 0.05) => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05); G.simTime += tenir; G.pollGamepad(0.05); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); };
+    const aff = () => getComputedStyle(document.getElementById('padLeg')).display;
+    try {
+      G.pollGamepad(0.05);
+      const res = {};
+      tap(12); res.haut = G.uiOpen; ferme();
+      tap(12, 0.9); res.hautLong = G.uiOpen; ferme();
+      tap(14); res.gauche = G.uiOpen; ferme();
+      tap(15); res.droite = G.uiOpen; ferme();
+      G.P.dance = 0; tap(13); res.bas = G.P.dance;
+      G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.equipWeapon(null);
+      res.armes = []; for (let k = 0; k < 3; k++) { tap(17); res.armes.push(G.P.weapon); }
+      G.equipWeapon(null);
+      // la legende : visible en jeu, effacee des qu'une fenetre s'ouvre
+      res.legende = aff(); G.openQui(); res.legendeMenu = aff(); ferme(); res.legendeApres = aff();
+      res.legendeTexte = document.getElementById('padLeg').textContent;
+      res.aide = (document.querySelector('.keys') || {}).textContent || '';
+      res.pave = G.PS_NOMS[17];
+      return res;
+    } finally { navigator.getGamepads = vraiGP; ferme(); }
+  });
+  const ok = r.haut === 'ordres' && r.hautLong === 'guerre' && r.gauche === 'store' && r.droite === 'missions' && r.bas > 0
+    && r.armes.join() === 'pistol,rifle,' && r.legende === 'flex' && r.legendeMenu === 'none' && r.legendeApres === 'flex'
+    && /📣/.test(r.legendeTexte) && /📣/.test(r.aide) && /pavé tactile/i.test(r.aide) && r.pave === 'Pavé';
+  return { ok, detail: `a la manette on n'avait acces ni au 📣 des ordres, ni a la boutique, ni aux missions, ni a la guerre des gangs, ni aux emotes, ni au changement d'arme : tout ca n'existait qu'a la souris · la croix fait tout : ↑ ouvre « ${r.haut} », ↑ tenu 0,7 s ouvre « ${r.hautLong} », ← « ${r.gauche} », → « ${r.droite} », ↓ danse (${r.bas} s) · le pavé tactile fait defiler les armes (${r.armes.map(a => a || 'mains nues').join(' → ')}) · une legende a l'ecran rappelle chaque bouton (affichée=${r.legende}, effacée dans un menu=${r.legendeMenu === 'none'}) et la carte d'aide est a jour` };
+});
+
+test('un bouton connecte la manette PS5 et la reconnait a la seconde ou elle repond', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const vraiGP = navigator.getGamepads, vraiHid = navigator.hid;
+    const vib = [];
+    const ds = { index: 0, connected: true, id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })), vibrationActuator: { playEffect: (t, o) => { vib.push(o); return Promise.resolve('complete'); } } };
+    const raz = () => { G.manetteBT.etat = 'repos'; if (G.manetteBT.timer) { clearInterval(G.manetteBT.timer); G.manetteBT.timer = null; } };
+    try {
+      const res = { boutons: ['padConnect', 'padConnect2'].filter(id => document.getElementById(id)).length };
+      // 1) sans WebHID (une smart TV) : le guide en trois etapes, puis la manette « apparait »
+      Object.defineProperty(navigator, 'hid', { configurable: true, value: undefined });
+      navigator.getGamepads = () => [null]; raz();
+      G.ouvreSalonTV(); res.salonEtat = document.getElementById('padEtat').textContent;
+      document.getElementById('padConnect').click(); await dodo(50);
+      res.attente = { etat: G.manetteBT.etat, etapes: document.querySelectorAll('#padAide div').length, bouton: document.getElementById('padConnect').textContent,
+        classe: document.getElementById('padCase').className };
+      navigator.getGamepads = () => [ds]; await dodo(750);
+      res.ok = { etat: G.manetteBT.etat, texte: document.getElementById('padEtat').textContent, bouton2: document.getElementById('padConnect2').textContent, vibre: vib.length, timer: !!G.manetteBT.timer };
+      // 2) elle se deconnecte : on le dit
+      navigator.getGamepads = () => [null]; G.manetteBTSonde();
+      res.perdue = document.getElementById('padEtat').textContent;
+      // 3) avec WebHID (ordinateur, Android) : la fenetre de choix du navigateur, puis la meme veille
+      Object.defineProperty(navigator, 'hid', { configurable: true, value: { requestDevice: async f => [{ productName: 'DualSense Wireless Controller', vendorId: f.filters[0].vendorId }] } });
+      raz(); const r3 = await G.manetteConnecter();
+      res.hid = { r: r3, texte: document.getElementById('padEtat').textContent, timer: !!G.manetteBT.timer };
+      G.closeUI();
+      return res;
+    } finally { navigator.getGamepads = vraiGP; Object.defineProperty(navigator, 'hid', { configurable: true, value: vraiHid }); raz(); G.closeUI(); }
+  });
+  const ok = r.boutons === 2 && r.attente.etat === 'attente' && r.attente.etapes === 3 && /Recherche/.test(r.attente.bouton) && /attente/.test(r.attente.classe)
+    && r.ok.etat === 'ok' && /DualSense.*connectée \(prise 1\)/.test(r.ok.texte) && /connectée/.test(r.ok.bouton2) && r.ok.vibre >= 1 && !r.ok.timer
+    && /déconnectée/.test(r.perdue) && r.hid.r.hid === true && /autorisée/.test(r.hid.texte) && r.hid.timer;
+  return { ok, detail: `un navigateur ne peut pas appairer une manette Bluetooth a la place de l'appareil — mais il peut tout le reste, et ce bouton le fait : dans le salon 📺 comme dans les réglages (${r.boutons} boutons), il lance une recherche d'une minute avec le guide en ${r.attente.etapes} étapes (PS + Create, réglages Bluetooth, ✕), ouvre la fenêtre de choix du navigateur quand elle existe (WebHID : « ${r.hid.texte.slice(0, 44)}… »), et reconnaît la manette a la seconde ou elle répond : « ${r.ok.texte} », avec une vibration (${r.ok.vibre}) · si elle se déconnecte, il le dit (« ${r.perdue.slice(0, 40)}… »)` };
+});
+
+test('le son ne sature plus : quatre bus, un limiteur et un vrai reglage de volume', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true;
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const cibles = [], vraiConnect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (t) { cibles.push([this.constructor.name, t && t.constructor.name]); return vraiConnect.apply(this, arguments); };
+    try {
+      G.sfx.unlock(); const ch = G.sfx.chaine();
+      // on fait jouer TOUT le monde : effets, souffle, moteur 500 chevaux, sirene, musique
+      G.sfx.coin(); G.sfx.noise(0.1, 500, 0.05);
+      G.engine.start('car', 2); G.engine.set(0.5); G.engine.stop();
+      G.siren.start(); G.siren.stop();
+      G.music.start(); await dodo(300);
+      const versSortie = cibles.filter(([, b]) => b === 'AudioDestinationNode').map(([a]) => a);
+      const res = { comp: ch.comp.constructor.name, seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value,
+        bus: Object.fromEntries(Object.entries(ch.bus).map(([k, g]) => [k, +g.gain.value.toFixed(2)])),
+        connexions: cibles.length, versSortie: [...new Set(versSortie)] };
+      // le volume : le curseur des reglages pilote le bus general, et c'est retenu
+      const vol = document.getElementById('volIn'); vol.value = '35'; vol.dispatchEvent(new Event('input'));
+      await dodo(250); res.v35 = { reglage: G.settings.volume, master: +ch.master.gain.value.toFixed(2), stocke: localStorage.getItem('superobby.volume'), etiquette: document.getElementById('volVal').textContent };
+      // la page passe en arriere-plan : sourdine, puis retour
+      G.sfx.sourdine(true); await dodo(400); res.cache = +ch.master.gain.value.toFixed(3);
+      G.sfx.sourdine(false); await dodo(400); res.retour = +ch.master.gain.value.toFixed(2);
+      vol.value = '80'; vol.dispatchEvent(new Event('input'));
+      return res;
+    } finally { AudioNode.prototype.connect = vraiConnect; try { G.music.stop && G.music.stop(); } catch (e) {} }
+  });
+  const ok = r.comp === 'DynamicsCompressorNode' && r.seuil <= -6 && r.ratio >= 4
+    && r.bus.effets === 1 && r.bus.musique < 0.6 && r.bus.moteur < 1 && r.connexions >= 12
+    && r.versSortie.every(n => n === 'DynamicsCompressorNode')
+    && r.v35.reglage === 0.35 && r.v35.master === 0.35 && r.v35.stocke === '0.35' && /35/.test(r.v35.etiquette)
+    && r.cache < 0.01 && r.retour === 0.35;
+  return { ok, detail: `chaque son se branchait DIRECTEMENT sur la carte son : musique a 0,9, moteur 500 chevaux et sa scie, tirs, sirène… la somme dépassait 1 et la sortie écrêtait — c'était ce grésillement — et la musique, quatre fois plus forte que les effets, couvrait tout · maintenant ${r.connexions} branchements testés et pas un seul vers la sortie sinon le LIMITEUR (${r.comp}, seuil ${r.seuil} dB, ratio ${r.ratio}:1) · quatre bus équilibrés : effets ${r.bus.effets}, moteur ${r.bus.moteur}, musique ${r.bus.musique}, ambiance ${r.bus.ambiance} · un curseur de volume dans les réglages (35 % → bus général a ${r.v35.master}, retenu « ${r.v35.stocke} ») · et la page en arrière-plan passe en sourdine (${r.cache}) puis revient (${r.retour})` };
+});
+
+test('les ombres passent en haute definition, et la tele sacrifie les ombres avant la nettete', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, R = G.renderer, sun = G.sun;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.modeTV(false); G.applyQuality();
+    const base = { carte: sun.shadow.mapSize.x, max: R.capabilities.maxTextureSize, cadre: sun.shadow.camera.right, ppm: +(sun.shadow.mapSize.x / (2 * sun.shadow.camera.right)).toFixed(1),
+      bias: sun.shadow.bias, nbias: sun.shadow.normalBias, doux: R.shadowMap.type === G.THREE.PCFSoftShadowMap, avant: +(2048 / 72).toFixed(1) };
+    // l'echelle : ca rame → on descend marche par marche, les ombres d'abord
+    const marches = [];
+    for (let i = 0; i < 260; i++) { G.fluiditeTick(45); if (i % 14 === 13) marches.push({ p: G.rendu.palier, ech: +G.rendu.ech.toFixed(2), carte: sun.shadow.mapSize.x, ombres: G.rendu.ombres }); }
+    const uniques = marches.filter((m, i) => !i || m.p !== marches[i - 1].p);
+    const bas = { p: G.rendu.palier, ech: G.rendu.ech, ombres: G.rendu.ombres };
+    // ca respire → on remonte jusqu'en haut, carte d'ombres comprise
+    for (let i = 0; i < 500; i++) G.fluiditeTick(15);
+    const haut = { p: G.rendu.palier, ech: G.rendu.ech, carte: sun.shadow.mapSize.x, ombres: G.rendu.ombres };
+    G.applyQuality();
+    // sur la tele : le ratio de pixels n'est plus bride a 1,5 comme sur un telephone
+    const pc = G.ratioQualite(); G.modeTV(true); const tv = G.ratioQualite(); G.modeTV(false);
+    return { base, uniques, bas, haut, pc, tv, paliers: G.PALIERS.length };
+  });
+  const attendu = Math.min(4096, r.base.max);
+  const u = r.uniques;
+  const ok = r.base.carte === attendu && r.base.carte >= 4096 && r.base.cadre === 48 && r.base.ppm > r.base.avant
+    && r.base.nbias > 0 && r.base.doux
+    && u.length >= 8 && u[0].carte === attendu && u[1].carte === attendu / 2 && u[1].ech === 1 && u[2].carte === attendu / 4 && u[2].ech === 1
+    && u[3].ech < 1 && u[3].carte === attendu / 4 && r.bas.ombres === false && r.bas.ech === 0.5
+    && r.haut.p === 0 && r.haut.ech === 1 && r.haut.carte === attendu && r.haut.ombres === true && r.tv >= r.pc;
+  return { ok, detail: `la carte d'ombres faisait 2048 points pour 72 m (${r.base.avant} points par mètre) : chaque bord d'ombre était un escalier sur un grand écran · elle fait maintenant ${r.base.carte} points (maximum de la machine : ${r.base.max}) sur un cadre de ${2 * r.base.cadre} m, soit ${r.base.ppm} points par mètre, avec un biais de normale (${r.base.nbias}) contre l'acné et des ombres douces même sur la télé (${r.base.doux}) · et quand la télé rame, ce sont les OMBRES qui s'allègent en premier, pas la netteté : ${u.map(m => `${m.carte}${m.ombres ? '' : '✕'}@${m.ech}`).join(' → ')} (${r.paliers} paliers, la résolution ne bouge qu'a partir du 4e) · dès que ça respire tout remonte (palier ${r.haut.p}, ${r.haut.carte} points) · et la télé n'est plus bridée a 1,5 pixel comme un téléphone (${r.tv} ≥ ${r.pc})` };
+});
+
 test('une manette PlayStation 5 pilote tout le jeu', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
@@ -6466,7 +6607,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
         ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
         ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
         return touches.slice(); };
-      const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape', 14: 'KeyB', 15: 'KeyM' };
+      const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' };   // la croix a son propre test
       const bons = Object.entries(plan).filter(([i, k]) => presse(+i).includes(k)).length;
       ferme();
       // 4) les GÂCHETTES sont analogiques, pas des interrupteurs
@@ -6495,5 +6636,5 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
     && r.marche.x === 0.8 && r.marche.y === 0.6 && r.camera < -0.2
     && r.bons === r.total && r.gachetteFaible === 0 && r.gachetteFort === 1
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.09 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu, ← boutique, → missions · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.09 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });

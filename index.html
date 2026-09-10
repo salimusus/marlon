@@ -12635,11 +12635,13 @@ function obstacleDecor(m, b, zones) {
   if (bas >= sol + SOLIDIFIE.tete) return false;      // on passe dessous (auvent, branche, enseigne)
   // dans la boîte d'un véhicule ou d'un portail : ces objets ont déjà leur collision, qui SUIT
   for (const o of zones) if (Math.abs(b.x - o.x) < o.w / 2 + 1 && Math.abs(b.z - o.z) < o.d / 2 + 1 && Math.abs(b.y - o.y) < o.h / 2 + 1.2) return false;
-  // déjà couvert par un solide existant ? (neuf points du plan de l'objet, à hauteur de torse)
+  // Déjà couvert par un solide existant ? Neuf points du plan de l'objet, à hauteur de
+  // torse, RENTRÉS de 20 % : pris pile sur les arêtes, ils tombaient juste à côté du solide
+  // (qu'on rétrécit de 4 cm) et la passe se croyait à refaire à chaque appel.
   let couvert = 0;
   const y = Math.max(bas + 0.12, Math.min(haut - 0.05, sol + 0.9));
   for (let a = 0; a <= 2 && couvert < 2; a++) for (let c = 0; c <= 2; c++) {
-    const x = b.x - b.w / 2 + b.w * a / 2, z = b.z - b.d / 2 + b.d * c / 2;
+    const x = b.x + b.w * (a / 2 - 0.5) * 0.6, z = b.z + b.d * (c / 2 - 0.5) * 0.6;
     for (const o of solidsAutour(x, z, 0.5)) {
       if (Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2) { couvert++; break; }
     }

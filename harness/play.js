@@ -7181,16 +7181,19 @@ test('on peut parler aux gens de métier et leur donner un coup de main contre d
     const repond = G.metierParle('bonjour, tu fais quoi comme travail ?');
     const auHasard = G.metierParle('vive les dinosaures');
     G.metiersTick(1 / 60);
-    const propose = c.boulotNear === bal;
+    // au dépôt, les travailleurs sont à deux mètres les uns des autres : ce qui compte, c'est
+    // que le jeu propose bien UN coup de main à celui d'à côté, pas lequel des deux balayeurs
+    const propose = !!c.boulotNear;
+    const proposeQui = c.boulotNear ? c.boulotNear.metier : null;
     G.prendreBoulot(bal);
     const boulot = c.boulot && c.boulot.metier;
     const sous0 = G.wallet;
     // le joueur ramasse les cinq détritus demandés (ils apparaissent sous ses pieds)
     for (let i = 0; i < 8 && c.boulot; i++) { G.poseDetritus(G.P.pos.x + 0.4, G.P.pos.z); G.boulotTick(1 / 60); }
-    return { phrases, repond, auHasard, propose, boulot, sous0, sous1: G.wallet, reste: !!c.boulot };
+    return { phrases, repond, auHasard, propose, proposeQui, boulot, sous0, sous1: G.wallet, reste: !!c.boulot };
   });
   const dit = Object.fromEntries(r.phrases);
-  const ok = r.repond && !r.auHasard && r.propose && r.boulot === 'balayeur' && r.sous1 === r.sous0 + 15 && !r.reste
+  const ok = r.repond && !r.auHasard && r.propose && !!r.proposeQui && r.boulot === 'balayeur' && r.sous1 === r.sous0 + 15 && !r.reste
     && /répare le lampadaire/.test(dit.employe) && /vitres/.test(dit.laveur) && /camion|feu/.test(dit.pompier) && /tournée|lettre|boîte/.test(dit.facteur);
-  return { ok, detail: `l'employé au travail répond « ${dit.employe} », le pompier « ${dit.pompier} », le facteur « ${dit.facteur} » ; une phrase hors sujet ne déclenche rien (${r.auHasard}) ; à côté d'un balayeur, E propose un petit boulot — 5 détritus ramassés = ${r.sous1 - r.sous0} 🪙 (${r.sous0} → ${r.sous1})` };
+  return { ok, detail: `l'employé au travail répond « ${dit.employe} », le pompier « ${dit.pompier} », le facteur « ${dit.facteur} » ; une phrase hors sujet ne déclenche rien (${r.auHasard}) ; à côté d'un travailleur (${r.proposeQui}), E propose un petit boulot — les 5 détritus du balayeur ramassés = ${r.sous1 - r.sous0} 🪙 (${r.sous0} → ${r.sous1})` };
 });

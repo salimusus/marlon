@@ -159,6 +159,25 @@ body.joyon #joyHome{opacity:0}
 body.touch #jumpBtn{display:block}
 #jumpBtn:active{background:rgba(255,255,255,.5)}
 
+/* ---------- la roulette en gros plan ---------- */
+/* Rien ne doit gêner la vue : pas de fond, pas de carte — juste la mise en haut,
+   puis le numéro sorti en très grand quand la bille est tombée. */
+#rouletteCine{position:fixed;inset:0;z-index:9;pointer-events:none;display:grid;place-items:center}
+#rouletteCine.hidden{display:none}
+/* pendant le tour, l'écran de jeu s'efface : plus de radar ni de bandeau devant la roue */
+body.roulette #top,body.roulette #chat,body.roulette #missionHud,body.roulette #gps,body.roulette #msg,body.roulette #perfHud,body.roulette #padLeg,
+body.roulette #joy,body.roulette #joyHome,body.roulette #cross,body.roulette #wanted,body.roulette button#jumpBtn,body.roulette button#emoteBtn,
+body.roulette button#carBtn,body.roulette button#punchBtn,body.roulette button#racketBtn,body.roulette button#raceBtn{display:none!important}
+#rouletteMise{position:absolute;top:18px;left:50%;transform:translateX(-50%);background:rgba(12,18,36,.72);color:#fff;
+  font-size:19px;font-weight:900;padding:9px 20px;border-radius:999px;border:2px solid rgba(255,255,255,.28);white-space:nowrap}
+#rouletteNum{display:none;flex-direction:column;align-items:center;gap:6px;margin-top:34vh}
+#rouletteNum.on{display:flex;animation:rouleTombe .45s cubic-bezier(.2,1.5,.4,1)}
+#rouletteNumV{font-size:110px;line-height:.95;font-weight:900;color:#fff;width:170px;height:170px;border-radius:50%;
+  display:grid;place-items:center;border:7px solid rgba(255,255,255,.9);box-shadow:0 18px 40px rgba(0,0,0,.55)}
+#rouletteNumT{font-size:24px;font-weight:900;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.8)}
+@keyframes rouleTombe{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+@media (max-width:700px){#rouletteNumV{font-size:74px;width:120px;height:120px;border-width:5px}}
+
 /* ---------- écrans ---------- */
 .overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(12,24,60,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:10;padding:16px;overflow-y:auto}
 .overlay.hidden{display:none}
@@ -745,6 +764,13 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
       <button class="btn sec" id="casinoBack">Quitter la table</button>
     </div>
   </div>
+</div>
+
+<!-- Le tour de roulette EN GROS PLAN : pendant que la bille tourne, l'interface d'achat
+     s'efface et il ne reste que ce bandeau (la mise) puis le numéro sorti, en grand. -->
+<div id="rouletteCine" class="hidden">
+  <div id="rouletteMise"></div>
+  <div id="rouletteNum"><b id="rouletteNumV">0</b><span id="rouletteNumT"></span></div>
 </div>
 
 <div class="overlay hidden" id="coiffeur">
@@ -1373,7 +1399,8 @@ function box(x, y, z, w, h, d, color, opt = {}) {
 }
 function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un véhicule (dalles, parking, parc…)
   let top = 0;
-  for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
+  // `decor` (mobilier solidifié pour le joueur) : on ne pose pas une voiture sur un banc
+  for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.decor || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
   return top;
 }
 function settleVehicle(c) { c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.y = c.y; if (c.solid) c.solid.y = c.y + 0.7; }
@@ -2100,6 +2127,36 @@ function gainMachine(r, mise) {
 }
 // --- la roulette ---
 const ROUGES = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+// L'ordre des numéros SUR LE CYLINDRE (roulette européenne) : rouge et noir alternent
+// vraiment, les petits et les grands sont mélangés, et le zéro vert ouvre le tour.
+const ROULETTE_ORDRE = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+const CASE_ANG = Math.PI * 2 / 37;   // une case = un peu moins de 10°
+const R_PISTE = 1.32, R_CASE = 1.02;   // rayon de la piste de lancement, rayon du fond des cases
+const couleurCase = n => n === 0 ? '#1f8f4a' : ROUGES.has(n) ? '#c0202f' : '#15171f';
+const nomCouleur = n => n === 0 ? 'VERT' : ROUGES.has(n) ? 'ROUGE' : 'NOIR';
+// Le disque des numéros, peint une fois pour toutes. La toile est posée à plat sous la
+// roue et tournée de -90° : un point (x, z) du repère de la roue tombe exactement en
+// (centre + x·k, centre + z·k) sur la toile — l'angle de la toile EST donc l'angle de la
+// roue, et la case peinte est bien celle où la bille s'arrête.
+let ROUE_TEX = null;
+function roueTexture() {
+  if (ROUE_TEX) return ROUE_TEX;
+  const T = 512, cv = document.createElement('canvas'); cv.width = cv.height = T;
+  const g = cv.getContext('2d'), c0 = T / 2, Rx = T / 2 - 2;
+  g.clearRect(0, 0, T, T);
+  for (let i = 0; i < ROULETTE_ORDRE.length; i++) {
+    const n = ROULETTE_ORDRE[i], a = i * CASE_ANG;
+    g.beginPath(); g.moveTo(c0, c0); g.arc(c0, c0, Rx, a - CASE_ANG / 2, a + CASE_ANG / 2); g.closePath();
+    g.fillStyle = couleurCase(n); g.fill();
+    g.strokeStyle = '#e8c86a'; g.lineWidth = 3; g.stroke();
+    g.save(); g.translate(c0 + Math.cos(a) * Rx * 0.74, c0 + Math.sin(a) * Rx * 0.74); g.rotate(a);
+    g.fillStyle = '#ffffff'; g.font = 'bold 34px Nunito, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(n), 0, 0); g.restore();
+  }
+  g.beginPath(); g.arc(c0, c0, Rx * 0.5, 0, Math.PI * 2); g.fillStyle = '#2b1116'; g.fill();
+  g.strokeStyle = '#e8c86a'; g.lineWidth = 7; g.stroke();
+  ROUE_TEX = new THREE.CanvasTexture(cv); ROUE_TEX.anisotropy = 8; shared.add(ROUE_TEX); return ROUE_TEX;
+}
 const PARIS_ROULETTE = [
   { k: 'rouge', n: '🔴 Rouge', m: 2, gagne: v => v > 0 && ROUGES.has(v) },
   { k: 'noir', n: '⚫ Noir', m: 2, gagne: v => v > 0 && !ROUGES.has(v) },
@@ -2236,6 +2293,7 @@ function majCasino() {
   $('casinoJouer').style.opacity = $('casinoJouer').disabled ? 0.5 : 1;
 }
 function jouerCasino() {
+  if (casino.cine) return;   // la bille tourne encore : on ne relance pas par-dessus
   if (casino.jeu === 'poker' && casino.etape === 'change') return pokerChange();
   if (wallet < casino.mise) { msg(`🪙 Il te manque ${casino.mise - wallet} 🪙`, 2000); return; }
   wallet -= casino.mise; casino.mises += casino.mise; saveWallet(); updateHud();
@@ -2258,15 +2316,153 @@ function tourMachine() {
   const g = gainMachine(r, casino.mise);
   encaisse(Math.round(casino.mise * g.mult), `${r.join(' ')} · ${g.quoi}`, g.mult >= 16);
 }
+// ---- LE TOUR DE ROULETTE, EN GROS PLAN ----
+// Avant, tout se jouait DERRIÈRE l'interface d'achat : la roue tournait, la bille se
+// posait, et le joueur ne voyait rien d'autre qu'une ligne de texte. Le tour est
+// maintenant une petite scène : la caméra passe devant la roue (vue de face, un peu en
+// plongée), l'interface s'efface, la roue freine progressivement, la bille court sur la
+// piste, claque sur les séparateurs, tombe dans sa case, le numéro s'affiche en grand,
+// puis l'interface revient avec le gain ou la perte. Rien à lire pour suivre.
+const CINE_DUR = 6.4, CINE_FIN = 2.1;   // durée du lancer, puis du gros plan sur le résultat
 function tourRoulette() {
   const n = Math.floor(Math.random() * 37);
   casino.roulette = n;
-  if (casino.table && casino.table.g) { casino.table.anim = simTime + 4.5; casino.table.g.userData.lance = simTime; }
-  sfx.noise(.35, 500, .05); sfx.tone(300, 0, .2, 'sine', .04, 120);
   const p = PARIS_ROULETTE.find(x => x.k === casino.pari) || PARIS_ROULETTE[0];
   const ok = p.gagne(n, casino.numero);
-  encaisse(ok ? Math.round(casino.mise * p.m) : 0,
-    `${n === 0 ? '🟢' : ROUGES.has(n) ? '🔴' : '⚫'} ${n} · ${p.n}`, ok && p.m >= 12);
+  const gain = ok ? Math.round(casino.mise * p.m) : 0;
+  const texte = `${n === 0 ? '🟢' : ROUGES.has(n) ? '🔴' : '⚫'} ${n} · ${p.n}`;
+  const t = casino.table, u = t && t.g ? t.g.userData : null;
+  if (!u || !u.roue) return encaisse(gain, texte, ok && p.m >= 12);   // pas de roue sous la main : on paie tout de suite
+  const k = ROULETTE_ORDRE.indexOf(n);
+  // Position de la bille DANS LE REPÈRE DE LA ROUE : c'est elle qui décide de la case.
+  const phi0 = u.angB + u.roue.rotation.y, phiCase = k * CASE_ANG;
+  // On vise la même case six tours plus loin (dans le sens du recul) : la bille peut alors
+  // freiner jusqu'à zéro sans jamais sauter d'un coup à l'arrivée.
+  const phiFin = phiCase + Math.PI * 2 * Math.floor((phi0 - Math.PI * 2 * 6 - phiCase) / (Math.PI * 2));
+  casino.cine = { t: 0, n, gain, texte, gros: ok && p.m >= 12, table: t, phi0, phiFin,
+    theta0: u.roue.rotation.y, omega0: 5.2, sep: Math.floor(phi0 / CASE_ANG), clicT: 0, vue: null, cam0: null, montre: false };
+  // la caméra se place du côté où se tient le joueur : c'est « sa » vue de face
+  const dx = P.pos.x - t.x, dz = P.pos.z - t.z, d = Math.hypot(dx, dz) || 1;
+  casino.cine.vue = d > 0.4 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
+  u.rB = R_PISTE;
+  $('casino').classList.add('hidden');        // l'interface d'achat s'efface : on regarde la roue
+  document.body.classList.add('roulette');    // et l'écran de jeu aussi (radar, bandeau, boutons)
+  $('rouletteCine').classList.remove('hidden');
+  $('rouletteNum').classList.remove('on');
+  $('rouletteMise').textContent = `🎡 Rien ne va plus — ${casino.mise} 🪙 sur ${p.n}${p.k === 'plein' ? ' ' + casino.numero : ''}`;
+  $('rouletteMise').style.display = '';
+  billeSon.start();
+  sfx.tone(300, 0, .2, 'sine', .04, 120);
+}
+// Le bruit de la bille : un souffle filtré qui suit sa vitesse (aigu et fort quand elle
+// file sur la piste, sourd quand elle roule dans les cases), et un clic à chaque séparateur.
+const billeSon = (() => {
+  let src = null, filt = null, g = null;
+  return {
+    start() {
+      this.stop(); if (!settings.sound) return; const c = sfx.unlock(); if (!c) return;
+      if (!billeSon.buf) { const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; billeSon.buf = b; }
+      src = c.createBufferSource(); src.buffer = billeSon.buf; src.loop = true;
+      filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 1800; filt.Q.value = 3.5;
+      g = c.createGain(); g.gain.value = 0.0001;
+      src.connect(filt).connect(g).connect(sfx.sortie('effets')); src.start();
+    },
+    set(v) {   // v : 0 (arrêtée) à 1 (lancée à fond)
+      if (!g) return; const c = sfx.ctx(); if (!c) return;
+      g.gain.setTargetAtTime(0.0001 + 0.05 * v, c.currentTime, 0.05);
+      filt.frequency.setTargetAtTime(600 + 2200 * v, c.currentTime, 0.08);
+    },
+    stop() { if (src) { try { src.stop(); } catch (e) {} } src = filt = g = null; },
+  };
+})();
+// Un tour de roulette, image par image. Appelée depuis frame() : elle tourne MÊME quand
+// l'interface du casino est ouverte (le jeu est en pause), sinon rien ne bougerait.
+function rouletteCine(dt) {
+  const c = casino.cine; if (!c) return false;
+  const u = c.table.g.userData;
+  // le joueur a quitté la table pendant le tour (touche Échap) : on solde et on rend la main
+  if (uiOpen !== 'casino') {
+    casino.cine = null; billeSon.stop();
+    $('rouletteCine').classList.add('hidden'); $('rouletteNum').classList.remove('on'); document.body.classList.remove('roulette');
+    encaisse(c.gain, c.texte, c.gros); return false;
+  }
+  c.t += dt;
+  const p = clamp(c.t / CINE_DUR, 0, 1), reste = (1 - p) * (1 - p);
+  // freinage : la vitesse décroît comme (1-p)², donc de façon strictement décroissante
+  // jusqu'à zéro — un vrai ralentissement, pas un arrêt sec.
+  const theta = c.theta0 + c.omega0 * CINE_DUR * (1 - (1 - p) * reste) / 3;
+  const phi = c.phiFin + (c.phi0 - c.phiFin) * (1 - p) * reste;
+  u.roue.rotation.y = theta;
+  u.angB = phi - theta;
+  // la bille quitte la piste et retombe vers les cases sur la fin, avec deux rebonds
+  const chute = clamp((p - 0.62) / 0.34, 0, 1);
+  const reb = chute > 0 && chute < 1 ? Math.abs(Math.sin(chute * Math.PI * 2.2)) * (1 - chute) * 0.08 : 0;
+  u.rB = R_PISTE + (R_CASE - R_PISTE) * chute + reb;
+  u.bille.position.set(Math.cos(u.angB) * u.rB, 1.46 - 0.06 * chute + reb * 0.5, Math.sin(u.angB) * u.rB);
+  // clics sur les séparateurs : seulement quand la bille est descendue dans les cases,
+  // sinon elle claquerait cent fois par seconde
+  const sep = Math.floor(phi / CASE_ANG);
+  if (sep !== c.sep) {
+    if (chute > 0 && p < 1 && c.t - c.clicT > 0.04) { c.clicT = c.t; sfx.tone(2100 + Math.random() * 600, 0, .03, 'square', .035, 900); }
+    c.sep = sep;
+  }
+  billeSon.set(p >= 1 ? 0 : Math.max(0, 1 - p) * (1 - chute * 0.6));
+  // ---- la caméra : devant la roue, un peu en plongée ----
+  const cx = c.table.x, cy = c.table.g.position.y + 1.36, cz = c.table.z;
+  const fin = clamp((c.t - CINE_DUR) / 0.5, 0, 1);   // gros plan sur le résultat
+  const dist = 3.1 - 0.85 * fin, haut = 1.75 - 0.35 * fin;
+  const vx = cx + c.vue.x * dist, vy = cy + haut, vz = cz + c.vue.z * dist;
+  if (!c.cam0) { c.cam0 = 1; camera.position.set(vx, vy, vz); }
+  else camera.position.lerp(tmpV.set(vx, vy, vz), 1 - Math.exp(-7 * dt));
+  // on vise le centre de la roue, puis on glisse vers la case gagnante
+  const bx = cx + u.bille.position.x, bz = cz + u.bille.position.z;
+  camera.lookAt(cx + (bx - cx) * fin * 0.75, cy + 0.02, cz + (bz - cz) * fin * 0.75);
+  if (camera.fov !== 55) { camera.fov = 55; camera.updateProjectionMatrix(); }
+  // ---- le résultat, en grand ----
+  if (p >= 1 && !c.montre) {
+    c.montre = true; billeSon.stop();
+    $('rouletteNumV').textContent = String(c.n);
+    $('rouletteNumV').style.background = couleurCase(c.n);
+    $('rouletteNumT').textContent = `${c.n} ${nomCouleur(c.n)} — ${c.gain > 0 ? 'GAGNÉ ' + c.gain + ' 🪙 !' : 'perdu'}`;
+    $('rouletteNum').classList.add('on');
+    $('rouletteMise').style.display = 'none';
+    sfx.clack(); if (c.gain > 0) { sfx.coin(); if (c.gros) sfx.cheer(); }
+  }
+  if (c.t > CINE_DUR + CINE_FIN) {   // fin : l'interface revient avec le gain ou la perte
+    casino.cine = null; billeSon.stop();
+    $('rouletteCine').classList.add('hidden'); $('rouletteNum').classList.remove('on'); document.body.classList.remove('roulette');
+    if (uiOpen === 'casino') $('casino').classList.remove('hidden');
+    encaisse(c.gain, c.texte, c.gros);
+    return false;
+  }
+  return true;
+}
+// Ce que la scène montre, pour le banc d'essai (angles mesurés, vitesse de la roue).
+function rouletteEtat() {
+  const c = casino.cine, t = c ? c.table : (casino.table || (city.casino && city.casino.tables.find(x => x.kind === 'roulette')));
+  if (!t || !t.g.userData.roue) return null;
+  const u = t.g.userData;
+  const bx = t.x + u.bille.position.x, bz = t.z + u.bille.position.z;
+  const cx = t.x, cz = t.z, cy = t.g.position.y + 1.36;
+  // angle entre la direction où regarde la caméra et le centre de la roue
+  const vue = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const versRoue = new THREE.Vector3(cx - camera.position.x, cy - camera.position.y, cz - camera.position.z).normalize();
+  const dh = Math.hypot(cx - camera.position.x, cz - camera.position.z);
+  return {
+    cine: !!c, t: c ? c.t : -1, n: casino.roulette, montre: c ? c.montre : false,
+    roueY: u.roue.rotation.y, angB: u.angB, rB: u.rB,
+    // écart entre la bille et le centre de sa case, dans le repère de la roue
+    ecart: (() => { const k = ROULETTE_ORDRE.indexOf(casino.roulette); if (k < 0) return 9;
+      let d = (u.angB + u.roue.rotation.y) - k * CASE_ANG; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d); })(),
+    viseRoue: Math.acos(clamp(vue.dot(versRoue), -1, 1)),          // ~0 si la caméra regarde la roue
+    plongee: Math.atan2(camera.position.y - cy, dh),               // > 0 : vue en plongée
+    devant: c ? (c.vue.x * (camera.position.x - cx) + c.vue.z * (camera.position.z - cz)) / (Math.hypot(camera.position.x - cx, camera.position.z - cz) || 1) : 0,
+    distance: Math.hypot(camera.position.x - cx, camera.position.z - cz, camera.position.y - cy),
+    bille: [bx, u.bille.position.y, bz],
+    affiche: !$('rouletteCine').classList.contains('hidden'),
+    numero: $('rouletteNum').classList.contains('on') ? $('rouletteNumV').textContent : '',
+    interface: !$('casino').classList.contains('hidden'),
+  };
 }
 function pokerDonne() {
   casino.paquet = pokerPaquet();
@@ -2295,17 +2491,12 @@ function casinoTick(dt) {
   for (let i = 0; i < c.neons.length; i++) c.neons[i].material.emissiveIntensity = 0.45 + Math.sin(simTime * 3 + i * 0.5) * 0.35;
   for (const t of c.tables) {
     const u = t.g.userData;
-    if (t.kind === 'roulette' && u.roue) {
-      // la roue tourne vite puis ralentit ; la bille file en sens inverse et finit dans la case
-      const reste = Math.max(0, (t.anim || 0) - simTime);
-      u.roue.rotation.y += (reste > 0 ? 1.5 + reste * 2.2 : 0.3) * dt;
-      if (reste > 1.2) { u.angB -= (5 + reste * 3) * dt; u.rB += (0.95 - u.rB) * Math.min(1, dt * 4); }
-      else {   // elle s'installe dans la case du numero sorti, et tourne avec la roue
-        const cible = ((casino.roulette || 0) % 18) / 18 * Math.PI * 2 - u.roue.rotation.y;
-        let d = cible - u.angB; d = Math.atan2(Math.sin(d), Math.cos(d));
-        u.angB += d * Math.min(1, dt * (reste > 0 ? 5 : 30)); u.rB += (0.72 - u.rB) * Math.min(1, dt * 4);
-      }
-      u.bille.position.set(Math.cos(u.angB) * u.rB, 1.42, Math.sin(u.angB) * u.rB);
+    if (t.kind === 'roulette' && u.roue && !(casino.cine && casino.cine.table === t)) {
+      // au repos, la roue tourne doucement et la bille reste posée dans sa case ; le tour
+      // lui-même est joué par rouletteCine(), qui vit même quand le jeu est en pause
+      u.roue.rotation.y += 0.28 * dt;
+      u.angB -= 0.28 * dt;
+      u.bille.position.set(Math.cos(u.angB) * u.rB, 1.4, Math.sin(u.angB) * u.rB);
     }
     if (u.cartes) for (const m of u.cartes) {   // les cartes se soulevent / se reposent en douceur
       if (m.userData.veutY != null) { m.position.y += (m.userData.veutY - m.position.y) * Math.min(1, dt * 8); m.rotation.x += (m.userData.veutRx - m.rotation.x) * Math.min(1, dt * 8); }
@@ -2509,19 +2700,27 @@ function tableCasino(x, z, kind) {
   const bord = new THREE.Mesh(new THREE.TorusGeometry(R, 0.16, 8, 28), lam(0x3b2418));
   bord.rotation.x = Math.PI / 2; bord.position.y = 1.02; g.add(bord);
   if (kind === 'roulette') {
-    // LA ROUE TOURNE : le cylindre et ses cases sont dans un groupe qu'on fait pivoter ; la
-    // bille file en sens inverse et vient se poser dans la case du numero sorti.
+    // UNE VRAIE ROUE DE ROULETTE. Avant : dix-huit cases rouges et noires alternées, sans
+    // aucun numéro — on tirait un nombre de 0 à 36 et la bille se posait « quelque part ».
+    // Maintenant : les 37 cases dans l'ordre du cylindre européen, numéros lisibles peints
+    // sur une toile, le zéro en vert, des séparateurs entre chaque case, une cuvette et un
+    // rebord. Le groupe `roue` tourne ; la bille (hors du groupe) file en sens inverse.
     const roue = new THREE.Group(); roue.position.y = 0; g.add(roue);
-    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.3, 24), lam(0x2b1116)); cyl.position.y = 1.2; roue.add(cyl);
-    for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2;
-      const c2 = new THREE.Mesh(unitBox, lam(i % 2 ? 0xc02030 : 0x14161f)); c2.scale.set(0.34, 0.06, 0.9);
-      c2.position.set(Math.cos(a) * 0.72, 1.36, Math.sin(a) * 0.72); c2.rotation.y = -a; roue.add(c2);
-      const sep = new THREE.Mesh(unitBox, lam(0xd8b25a)); sep.scale.set(0.03, 0.08, 0.9); const a2 = (i + 0.5) / 18 * Math.PI * 2;
-      sep.position.set(Math.cos(a2) * 0.72, 1.37, Math.sin(a2) * 0.72); sep.rotation.y = -a2; roue.add(sep); }
-    const moyeu = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12), lam(0xd8b25a)); moyeu.position.y = 1.5; roue.add(moyeu);
-    for (let i = 0; i < 4; i++) { const br = new THREE.Mesh(unitBox, lam(0xd8b25a)); br.scale.set(0.5, 0.04, 0.05); br.position.set(Math.cos(i * Math.PI / 2) * 0.2, 1.52, Math.sin(i * Math.PI / 2) * 0.2); br.rotation.y = -i * Math.PI / 2; roue.add(br); }
-    const bille = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lam(0xf4f6fa)); bille.position.set(0.95, 1.42, 0); g.add(bille);
-    g.userData.bille = bille; g.userData.roue = roue; g.userData.angB = 0; g.userData.rB = 0.95;
+    const cuve = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.35, 0.34, 36), lam(0x3b2418)); cuve.position.y = 1.17; g.add(cuve);   // la cuvette ne tourne pas
+    const rebord = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.1, 8, 32), lam(0x8a5a2b)); rebord.rotation.x = Math.PI / 2; rebord.position.y = 1.33; g.add(rebord);
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.2, 0.3, 36), lam(0x2b1116)); cyl.position.y = 1.2; roue.add(cyl);
+    // le disque des numéros : une toile posée à plat, u = x, v = z (voir rouetteTexture)
+    const disque = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), new THREE.MeshBasicMaterial({ map: roueTexture(), transparent: true }));
+    disque.rotation.x = -Math.PI / 2; disque.position.y = 1.36; roue.add(disque);
+    for (let i = 0; i < ROULETTE_ORDRE.length; i++) {   // un séparateur doré entre deux cases
+      const a = (i + 0.5) * CASE_ANG;
+      const sep = new THREE.Mesh(unitBox, lam(0xe8c86a)); sep.scale.set(0.04, 0.08, 0.34);
+      sep.position.set(Math.cos(a) * 1.13, 1.4, Math.sin(a) * 1.13); sep.rotation.y = -a; roue.add(sep);
+    }
+    const moyeu = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.4, 14), lam(0xe8c86a)); moyeu.position.y = 1.56; roue.add(moyeu);
+    for (let i = 0; i < 4; i++) { const br = new THREE.Mesh(unitBox, lam(0xe8c86a)); br.scale.set(0.62, 0.05, 0.06); br.position.set(Math.cos(i * Math.PI / 2) * 0.28, 1.55, Math.sin(i * Math.PI / 2) * 0.28); br.rotation.y = -i * Math.PI / 2; roue.add(br); }
+    const bille = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), lam(0xfdfdfd)); bille.position.set(1.32, 1.46, 0); g.add(bille);
+    g.userData.bille = bille; g.userData.roue = roue; g.userData.angB = 0; g.userData.rB = R_PISTE;
   } else {
     // UN VRAI JEU DE CARTES : cinq cartes posees sur le tapis, dos visible ; la donne les
     // retourne, et celles qu'on garde se soulevent
@@ -4347,6 +4546,9 @@ const WORLDS = [
       B('signalisation', () => { city.signal = signalisation(); });
       B('mobilier public', decorPublic);
       B('métiers', buildMetiers);   // poste J : dépôt, caserne, équipes, véhicules de travail, boîtes aux lettres
+      // (poste G) en DERNIER : la règle de collision couvre alors tout ce que les autres
+      // postes viennent d'ajouter — panneaux, quartiers neufs, chantiers, boîtes aux lettres
+      B('collisions du décor', solidifieDecor);
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
@@ -7934,6 +8136,9 @@ function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-v
     for (let j = j1; j <= j2; j++) { const r = j * nx; for (let i = i1; i <= i2; i++) bl[r + i] = 1; }
   };
   for (const o of solids) {
+    // le mobilier rendu solide pour le joueur (solidifieDecor) ne barre pas les itinéraires :
+    // un banc ou un tronc se contourne, et le marquer bouchait des rues entières
+    if (o.decor) continue;
     if ((o.veh && (o.pol || o.ai)) || o.h >= 30 || o.y + o.h / 2 <= 0.45 || o.y - o.h / 2 >= 1.6) continue;
     // Un portail, une porte de garage ou une porte automatique S'OUVRENT : les traiter comme
     // des murs enfermait le joueur dans sa villa et le GPS n'y menait plus.
@@ -9079,6 +9284,7 @@ function nameTag(name) {
 }
 function buildAvatar(cfg) {
   const g = new THREE.Group();
+  g.userData.perso = true;   // (poste G) marque tout avatar : solidifieDecor ne fige jamais un personnage qui marche
   const M = c => new THREE.MeshLambertMaterial({ color: c });
   const j = jerseyOf(cfg.jersey || 0);
   const skin = M(0xf5c39a), shirt = M(j.base), sleeve = M(j.sl), pants = M(cfg.pants), cap = M(cfg.cap == null ? 0xffffff : cfg.cap), shoe = M(0x2b3550);
@@ -13041,8 +13247,10 @@ function solidsAutour(x, z, r, avecVeh) {
   for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
   return out;
 }
+// (`decor` : le mobilier solidifié pour le joueur est ignoré ici — les habitants gardent
+// exactement les trajets qu'ils avaient, sans se coincer contre un banc ou un tronc.)
 function npcBlocked(x, y, z, hw = 0.4) {   // un personnage (bot, garde, animal) heurte-t-il un obstacle ?
-  for (const o of solidsPres(x, z)) { if (o.veh || o.bar) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
+  for (const o of solidsPres(x, z)) { if (o.veh || o.bar || o.decor) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
   return false;
 }
 function npcMove(obj, dx, dz, hw) {   // déplacement axe par axe avec blocage ; renvoie vrai si bloqué
@@ -13217,6 +13425,110 @@ function updateBot(b, dt) {
   }
 }
 
+// ================= COLLISION DU DÉCOR : UNE RÈGLE, PAS UNE LISTE =================
+// Le joueur traversait des centaines d'objets de la ville : troncs d'arbres, colonnes,
+// bancs, étals du marché, caisses, poteaux, murets, tables. Tous étaient posés en décor
+// (`deco: true`) ou dessinés directement en THREE.Mesh, sans jamais entrer dans `solids`.
+// Reprendre les quatre cents appels un par un aurait laissé passer tout ce que les autres
+// postes ajoutent (panneaux, quartiers, chantiers) : on passe donc UNE fois sur la scène à
+// la fin de la construction et on applique une RÈGLE — tout maillage qui est un vrai
+// obstacle à hauteur de corps reçoit sa boîte de collision.
+// Reste traversable : le feuillage et les buissons (verts), ce qui commence au-dessus de la
+// tête (auvents, guirlandes, branches), les marches basses, ce qui est trop fin (grillages,
+// câbles, panneaux de porte) et TOUT CE QUI BOUGE (véhicules, personnages, portes,
+// ascenseurs, manèges) — un solide fixe posé dessus resterait en place une fois parti.
+const SOLIDIFIE = { marche: 0.56, tete: 1.15, fin: 0.16, immense: 14 };
+// Boîte englobante d'un maillage dans le repère du monde, SANS THREE.Box3 (le banc d'essai
+// en Node n'en a pas) : dimensions de la géométrie × échelle cumulée, tournées autour de Y.
+function boiteMaillage(m) {
+  const p = m.geometry && m.geometry.parameters, t = (m.geometry && m.geometry.type) || '';
+  if (!p) return null;
+  let w, h, d;
+  if (/Box/.test(t)) { w = p.width || 1; h = p.height || 1; d = p.depth || 1; }
+  else if (/Cylinder|Cone/.test(t)) { const r = Math.max(p.radiusTop != null ? p.radiusTop : (p.radius || 0), p.radiusBottom != null ? p.radiusBottom : (p.radius || 0)); w = d = 2 * r; h = p.height || 0; }
+  else if (/Sphere/.test(t)) { w = h = d = 2 * (p.radius || 0); }
+  else if (/Torus/.test(t)) { w = d = 2 * ((p.radius || 0) + (p.tube || 0)); h = 2 * (p.tube || 0); }
+  else return null;   // plans, géométries libres : trop plats ou trop imprévisibles
+  let sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, n = m;
+  while (n && n !== worldGroup) { sx *= n.scale.x; sy *= n.scale.y; sz *= n.scale.z; rx += n.rotation.x; ry += n.rotation.y; rz += n.rotation.z; n = n.parent; }
+  w *= Math.abs(sx); h *= Math.abs(sy); d *= Math.abs(sz);
+  const bascule = a => Math.abs(Math.sin(a)) > 0.35;   // couché sur le flanc : on échange les axes
+  if (bascule(rx)) { const q = h; h = d; d = q; }
+  if (bascule(rz)) { const q = h; h = w; w = q; }
+  const c = Math.abs(Math.cos(ry)), s = Math.abs(Math.sin(ry));
+  const pos = m.getWorldPosition(new THREE.Vector3());
+  return { x: pos.x, y: pos.y, z: pos.z, w: w * c + d * s, h, d: w * s + d * c };
+}
+// Vert de plante : le canal vert domine nettement. Sert à laisser passer le feuillage et
+// les buissons — le joueur doit pouvoir traverser un massif, pas un tronc.
+function estFeuillage(mat) {
+  const c = mat && mat.color; if (!c || !c.getHex) return false;
+  const v = c.getHex(), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
+  const max = Math.max(r, g, b);
+  if (max - Math.min(r, g, b) < 0.12 || max < 0.12) return false;   // gris, noir, blanc : pas une plante
+  return g === max && g - Math.max(r, b) > 0.06 && b <= r + 0.25;
+}
+function obstacleDecor(m, b, zones) {
+  if (b.h < 0.35 || Math.min(b.w, b.d) < SOLIDIFIE.fin) return false;
+  if (b.w > SOLIDIFIE.immense || b.d > SOLIDIFIE.immense) return false;
+  const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+  if (!mat || mat.visible === false) return false;
+  if (mat.transparent && mat.opacity != null && mat.opacity < 0.6) return false;
+  if (estFeuillage(mat)) return false;
+  const bas = b.y - b.h / 2, haut = b.y + b.h / 2, sol = groundUnder(b.x, b.z, null, bas + 0.05);
+  if (haut <= sol + SOLIDIFIE.marche) return false;   // marche franchissable : on monte dessus
+  if (bas >= sol + SOLIDIFIE.tete) return false;      // on passe dessous (auvent, branche, enseigne)
+  // dans la boîte d'un véhicule ou d'un portail : ces objets ont déjà leur collision, qui SUIT
+  for (const o of zones) if (Math.abs(b.x - o.x) < o.w / 2 + 1 && Math.abs(b.z - o.z) < o.d / 2 + 1 && Math.abs(b.y - o.y) < o.h / 2 + 1.2) return false;
+  // Déjà couvert par un solide existant ? Neuf points du plan de l'objet, à hauteur de
+  // torse, RENTRÉS de 20 % : pris pile sur les arêtes, ils tombaient juste à côté du solide
+  // (qu'on rétrécit de 4 cm) et la passe se croyait à refaire à chaque appel.
+  let couvert = 0;
+  const y = Math.max(bas + 0.12, Math.min(haut - 0.05, sol + 0.9));
+  for (let a = 0; a <= 2 && couvert < 2; a++) for (let c = 0; c <= 2; c++) {
+    const x = b.x + b.w * (a / 2 - 0.5) * 0.6, z = b.z + b.d * (c / 2 - 0.5) * 0.6;
+    for (const o of solidsAutour(x, z, 0.5)) {
+      if (Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2) { couvert++; break; }
+    }
+  }
+  return couvert < 2;
+}
+function solidifieDecor() {
+  if (!city.on) return 0;
+  worldGroup.updateMatrixWorld(true);
+  const mobiles = new Set(), pose = o => { if (o) mobiles.add(o); };
+  const veh = [...city.cars, ...city.aiCars, ...police.cars, ...(typeof raceKarts !== 'undefined' ? raceKarts : [])];
+  if (typeof armee !== 'undefined' && armee && armee.heli) veh.push(armee.heli);
+  for (const c of veh) pose(c && c.g);
+  for (const b of bots) pose(b.av && b.av.group);
+  for (const a of police.agents) pose(a.av && a.av.group);
+  for (const p of city.pets) pose(p.g || p.group);
+  for (const r of city.rides) pose(r.g);
+  for (const L of city.lifts) pose(L.g);
+  for (const d of [city.gate, city.garageDoor, ...city.autoDoors]) pose(d && d.g);
+  for (const t of ((city.casino && city.casino.tables) || [])) pose(t.g);
+  for (const s of ((city.casino && city.casino.machines) || [])) pose(s.g);
+  for (const b of (typeof breakables !== 'undefined' ? breakables : [])) { pose(b.g); pose(b.m); }
+  for (const o of [...movers, ...spinners, ...crumbles, ...conveyors, ...blinkers, ...decoSpin, ...pads]) pose(o.mesh || o.g || o);
+  for (const d of (city.placed || [])) pose(d.g);
+  const zones = solids.filter(o => o.veh || o.porte);
+  const trouves = [];
+  const voir = n => {
+    if (!n || mobiles.has(n) || (n.userData && (n.userData.perso || n.userData.mobile))) return;
+    if (n.isMesh && n.visible) {
+      const b = boiteMaillage(n);
+      if (b && obstacleDecor(n, b, zones)) trouves.push({ mesh: n, x: b.x, y: b.y, z: b.z, w: Math.max(0.2, b.w - 0.08), h: b.h, d: Math.max(0.2, b.d - 0.08), decor: true });
+    }
+    for (const c of n.children) voir(c);
+  };
+  voir(worldGroup);
+  // on ne pousse qu'à la fin : sinon les solides fraîchement ajoutés faisaient croire à
+  // leurs voisins qu'ils étaient « déjà couverts » et la moitié du décor restait fantôme
+  for (const o of trouves) solids.push(o);
+  city.decorSolide = trouves.length; sgridSale();
+  return trouves.length;
+}
+
 // ================= PHYSIQUE DU JOUEUR =================
 const overlaps = (o, px, py, pz) =>
   px + P.hw > o.x - o.w / 2 && px - P.hw < o.x + o.w / 2 &&
@@ -13258,6 +13570,46 @@ function moveAxis(axis, amount, canStep) {
       P.vel[axis] = 0;
     }
   }
+}
+
+// DÉSINCARCÉRATION. Une résolution axe par axe suffit tant que rien n'apparaît AUTOUR du
+// joueur ; mais un portail qui se referme, un véhicule qui se gare, un ascenseur qui
+// remonte ou un décor devenu solide peuvent l'enfermer dans une boîte — et là, chaque
+// image le repoussait d'un côté puis de l'autre, il ne sortait jamais. On mesure donc la
+// pénétration réelle : au bout d'une demi-seconde on le pousse vers la sortie la PLUS
+// PROCHE, et s'il est toujours dedans après trois secondes on le pose sur le dessus.
+function penetration(x, y, z) {
+  let pire = null, prof = 0;
+  for (const o of solidsAutour(x, z, 2, true)) {
+    if (!isSolid(o) || o.porte || !overlaps(o, x, y + 0.02, z)) continue;
+    const gx = (o.x + o.w / 2) - (x - P.hw), dx = (x + P.hw) - (o.x - o.w / 2);
+    const gz = (o.z + o.d / 2) - (z - P.hw), dz = (z + P.hw) - (o.z - o.d / 2);
+    const m = Math.min(gx, dx, gz, dz);
+    if (m > prof) { prof = m; pire = o; }
+  }
+  return { o: pire, prof };
+}
+function desincarcere(dt) {
+  const p = penetration(P.pos.x, P.pos.y, P.pos.z);
+  if (!p.o) { P.coinceT = 0; P.coinceN = 0; return; }
+  P.coinceT = (P.coinceT || 0) + dt;
+  if (P.coinceT < 0.5) return;
+  const o = p.o;
+  const sorties = [
+    { a: 'x', v: o.x - o.w / 2 - P.hw - 0.02, d: (P.pos.x + P.hw) - (o.x - o.w / 2) },
+    { a: 'x', v: o.x + o.w / 2 + P.hw + 0.02, d: (o.x + o.w / 2) - (P.pos.x - P.hw) },
+    { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
+    { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
+  ].sort((u, v) => u.d - v.d)[0];
+  // On le pose dehors D'UN COUP. Le pousser doucement ne servait à rien : la résolution
+  // axe par axe de l'image suivante le renvoyait aussitôt au milieu, et il vibrait sur
+  // place indéfiniment. Un saut d'un mètre et demi, une fois, et il est libre.
+  P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
+  P.coinceN = (P.coinceN || 0) + 1;
+  // enfermé de tous les côtés (quatre meubles autour de lui) : on le pose sur le dessus
+  if (P.coinceN > 3) { P.coinceN = 0; P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.grounded = true; }
+  // dernier garde-fou : jamais éjecté hors de la carte
+  if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }
 }
 
 // L'horloge de simulation peut reculer d'un coup (synchro avec l'hôte en multijoueur).
@@ -13425,6 +13777,7 @@ function step(dt, active) {
   const vyChute = P.vel.y;   // vitesse de descente AVANT que le sol ne la remette à zéro
   P.grounded = false; P.standing = null;
   moveAxis('x', P.vel.x * dt, wasGrounded || P.swimming); moveAxis('z', P.vel.z * dt, wasGrounded || P.swimming); moveAxis('y', P.vel.y * dt, false);
+  desincarcere(dt);   // enfermé dans un solide : on le pousse dehors au lieu de le laisser vibrer contre les parois
   // relief du rallye : posé APRÈS la remise à zéro ci-dessus, qui l'effaçait aussitôt et laissait le joueur « en l'air » sur toute la zone
   if (RALLY.mesh && !drive.car) { const th = terrainH(P.pos.x, P.pos.z); if (th != null && P.pos.y < th) { P.pos.y = th; if (P.vel.y < 0) P.vel.y = 0; P.grounded = true; P.coyote = 0.12; } }
   if (!wasGrounded && P.grounded) chuteImpact(vyChute);   // on s'écrase en tombant d'un immeuble
@@ -13473,6 +13826,7 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
   for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
+    if (o.decor) continue;   // mobilier solidifié pour le joueur : la conduite reste exactement celle d'avant
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
     if (o.veh && !opt.veh) continue; if (o.bar && !opt.bar) continue;   // par défaut : véhicules gérés à part, barrières par le couloir de piste
     if (o.pol && opt.pol) continue;   // les voitures de police ne se bloquent pas entre elles
@@ -16261,6 +16615,17 @@ function frame() {
   sunSprite.position.copy(camera.position).addScaledVector(SUN_DIR, 400);
   stars.position.copy(camera.position);
   water.position.x = P.pos.x; water.position.z = P.pos.z;
+  // LE TOUR DE ROULETTE passe par-dessus tout le reste : il reprend la caméra pour la
+  // poser devant la roue. Il vit sur le temps RÉEL (et non sur les pas de simulation, qui
+  // sont figés quand l'interface du casino est ouverte) — sinon la bille resterait en l'air.
+  if (casino.cine) {
+    try { rouletteCine(Math.min(brut, 0.25)); }
+    catch (e) {   // en cas de pépin on rend l'écran au joueur : sinon il resterait sans interface
+      casino.cine = null; billeSon.stop(); console.error('roulette', e);
+      $('rouletteCine').classList.add('hidden'); document.body.classList.remove('roulette');
+      if (uiOpen === 'casino') $('casino').classList.remove('hidden');
+    }
+  }
 
   rendreImage();
 }

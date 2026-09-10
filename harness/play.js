@@ -6805,9 +6805,14 @@ test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', 
     G.wallet = 5000; G.ouvreCasino('roulette', roul); G.casino.mise = 10; G.casino.pari = 'rouge';
     const u = roul.g.userData, r0 = u.roue.rotation.y;
     G.jouerCasino();
+    // le tour est joué par rouletteCine (temps réel), et non plus par casinoTick : c'est lui
+    // qui fait tourner la roue, freiner, et poser la bille dans la case du numéro sorti
     const vitesses = []; let prev = u.roue.rotation.y;
-    for (let s2 = 0; s2 < 6; s2++) { for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.casinoTick(1 / 60); } vitesses.push(+(u.roue.rotation.y - prev).toFixed(2)); prev = u.roue.rotation.y; }
-    const cible = ((G.casino.roulette % 18) / 18) * Math.PI * 2 - u.roue.rotation.y;
+    for (let s2 = 0; s2 < 6; s2++) { for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; if (G.casino.cine) G.rouletteCine(1 / 60); else G.casinoTick(1 / 60); } vitesses.push(+(u.roue.rotation.y - prev).toFixed(2)); prev = u.roue.rotation.y; }
+    // on laisse le tour se terminer (gros plan sur le résultat, retour de l'interface) :
+    // sinon la partie de poker qui suit se heurterait au tour de roulette encore en cours
+    for (let i = 0; i < 400 && G.casino.cine; i++) { G.simTime += 1 / 60; G.rouletteCine(1 / 60); }
+    const cible = G.ROULETTE_ORDRE.indexOf(G.casino.roulette) * (Math.PI * 2 / 37) - u.roue.rotation.y;
     let d = cible - u.angB; d = Math.atan2(Math.sin(d), Math.cos(d));
     const roulette = { num: G.casino.roulette, tours: +((u.roue.rotation.y - r0) / (2 * Math.PI)).toFixed(2), vitesses, ecartCase: +Math.abs(d).toFixed(3), rayon: +u.rB.toFixed(2), cases: u.roue.children.length };
     G.closeUI();
@@ -6822,7 +6827,7 @@ test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', 
     return { roulette, p1, p2, p3 };
   });
   const v = r.roulette.vitesses;
-  const ok = r.roulette.tours > 2 && v[0] > v[2] && v[2] > v[4] && v[5] < 0.6 && r.roulette.ecartCase < 0.05 && r.roulette.rayon < 0.8 && r.roulette.cases >= 36
+  const ok = r.roulette.tours > 1 && v[0] > v[2] && v[2] > v[4] && v[5] < 0.6 && r.roulette.ecartCase < 0.05 && r.roulette.rayon < 1.1 && r.roulette.cases >= 36
     && r.p1.n === 5 && r.p1.faces.join() === r.p1.attendu.join() && r.p1.etape === 'change' && r.p1.dos
     && r.p2.y0 > r.p2.y1 + 0.1 && r.p2.rx0 > -1.4
     && r.p3.faces.join() === r.p3.attendu.join() && r.p3.etape === 'pret';
@@ -8536,4 +8541,106 @@ test('le corps a corps s\'entend en detail : crochet au ventre, parade qui claqu
     && r.parade.coups === 0 && r.parade.joues >= 2
     && r.lame.coups === 0 && r.lame.joues >= 2;
   return { ok, detail: `un direct, un crochet au ventre, une parade et un coup de couteau faisaient tous EXACTEMENT le meme bruit · ils sont maintenant distincts : le direct claque sur le corps (${r.direct.coups} impact), le deuxieme coup du combo s'enfonce dans le VENTRE — sourd, et l'air part des poumons (${r.ventre.joues} sons, plus d'impact « visage »), la parade claque sec sur l'avant-bras (${r.parade.joues} sons, ${r.parade.coups} impact), et la lame siffle avant d'entailler (${r.lame.joues} sons) · les drapeaux « parade » et « couteau » sont poses par le poste qui anime le corps a corps : tant qu'ils n'existent pas, on retombe sur l'impact normal` };
+});
+// ---------------- POSTE G : collisions du joueur et roulette du casino ----------------
+
+test('balayage de collision : poussé contre un objet de la ville, le joueur ne rentre pas dedans', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const P = G.P;
+    // tout ce qui doit VRAIMENT arrêter le joueur : ni marche basse, ni linteau, ni
+    // véhicule (qui bouge), ni portail (qui s'ouvre), ni vitre (qui casse)
+    const cand = G.solids.filter(o => !(o.h > 30 || o.veh || o.porte || o.glass || o.bar || o.blink)
+      && o.y + o.h / 2 > 0.62 && o.y - o.h / 2 < 1.6 && !(o.w > 14 && o.d > 14) && o.w > 0.25 && o.d > 0.25
+      && o.y - o.h / 2 < 3 && Math.abs(o.x) < 210 && o.z > -195 && o.z < 345);
+    const pas = Math.max(1, Math.floor(cand.length / 260));
+    const ech = cand.filter((o, i) => i % pas === 0);
+    const pires = []; let n = 0, testes = 0, maxProf = 0, decor = 0;
+    for (const o of ech) {
+      const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][n++ % 4];
+      const marge = (d[0] ? o.w / 2 : o.d / 2) + P.hw + 0.45;
+      const x0 = o.x + d[0] * marge, z0 = o.z + d[1] * marge;
+      const solY = G.groundUnder(x0, z0, null, o.y + o.h / 2 + 0.5);
+      if (solY > o.y + o.h / 2 - 0.4) continue;   // on arriverait par le dessus : ce n'est pas un mur
+      P.pos.set(x0, solY, z0); P.vel.set(0, 0, 0); P.sit = null; P.grounded = true; P.coinceT = 0;
+      for (let k = 0; k < 22; k++) { P.vel.x = -d[0] * 8; P.vel.z = -d[1] * 8; G.step(1 / 60, true); }
+      const ox = Math.min(P.pos.x + P.hw, o.x + o.w / 2) - Math.max(P.pos.x - P.hw, o.x - o.w / 2);
+      const oz = Math.min(P.pos.z + P.hw, o.z + o.d / 2) - Math.max(P.pos.z - P.hw, o.z - o.d / 2);
+      const oy = Math.min(P.pos.y + P.h, o.y + o.h / 2) - Math.max(P.pos.y, o.y - o.h / 2);
+      const prof = Math.min(ox, oz, oy) > 0 ? Math.min(ox, oz) : 0;
+      testes++; if (o.decor) decor++;
+      if (prof > maxProf) maxProf = prof;
+      if (prof > 0.1) pires.push(`${prof.toFixed(2)} m en (${o.x.toFixed(0)}, ${o.z.toFixed(0)})`);
+    }
+    return { total: G.solids.length, decorSolide: G.city.decorSolide, candidats: cand.length, testes, decor, maxProf, pires: pires.slice(0, 4) };
+  });
+  const ok = r.testes > 150 && r.maxProf < 0.1 && r.pires.length === 0 && r.decorSolide > 300;
+  return { ok, detail: `la ville laissait traverser des centaines d'objets (troncs, colonnes, bancs, étals, caisses, poteaux, panneaux) : une règle générale en solidifie ${r.decorSolide} de plus (${r.total} solides au total) · ${r.testes} solides testés sur ${r.candidats}, dont ${r.decor} de ce décor : pénétration maximale ${r.maxProf.toFixed(3)} m (limite 0,10) ${r.pires.length ? '· fautifs : ' + r.pires.join(', ') : '· aucun objet traversé'}` };
+});
+
+test('coincé dans un solide, le joueur en ressort en moins d\'une seconde', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const P = G.P;
+    const dedans = o => {
+      const ox = Math.min(P.pos.x + P.hw, o.x + o.w / 2) - Math.max(P.pos.x - P.hw, o.x - o.w / 2);
+      const oz = Math.min(P.pos.z + P.hw, o.z + o.d / 2) - Math.max(P.pos.z - P.hw, o.z - o.d / 2);
+      const oy = Math.min(P.pos.y + P.h, o.y + o.h / 2) - Math.max(P.pos.y, o.y - o.h / 2);
+      return Math.min(ox, oz, oy) > 0 ? Math.min(ox, oz) : 0;
+    };
+    // 1) au centre d'objets réels de la ville
+    const cand = G.solids.filter(o => !(o.h > 30 || o.veh || o.porte || o.glass || o.bar)
+      && o.y + o.h / 2 > 1.2 && o.y - o.h / 2 < 1.2 && o.w > 0.8 && o.d > 0.8 && !(o.w > 14 && o.d > 14)
+      && Math.abs(o.x) < 200 && o.z > -190 && o.z < 340);
+    const pas = Math.max(1, Math.floor(cand.length / 60));
+    let pire = 0, rates = 0, testes = 0;
+    for (const o of cand.filter((x, i) => i % pas === 0)) {
+      P.pos.set(o.x, Math.max(0, o.y - o.h / 2), o.z); P.vel.set(0, 0, 0); P.sit = null; P.coinceT = 0;
+      let k = 0; for (; k < 90; k++) { G.step(1 / 60, true); if (!dedans(o)) break; }
+      testes++; if (k / 60 > pire) pire = k / 60;
+      if (dedans(o) > 0.02) rates++;
+    }
+    // 2) la soupape elle-même : un objet apparaît AUTOUR du joueur (portail qui se referme,
+    // véhicule qui se gare sur lui, décor devenu solide). Elle attend une demi-seconde — un
+    // simple frôlement ne doit rien téléporter — puis le pose dehors.
+    const cage = { x: 6, y: 1.2, z: 8, w: 3, h: 2.4, d: 3, mesh: { visible: true } };
+    G.solids.push(cage);
+    P.pos.set(cage.x, 0.3, cage.z); P.vel.set(0, 0, 0); P.coinceT = 0; P.coinceN = 0; P.sit = null;
+    const enferme = dedans(cage) > 0;
+    G.desincarcere(0.3); const tot = dedans(cage) > 0;    // avant 0,5 s : on ne bouge personne
+    G.desincarcere(0.3); const sorti = dedans(cage) === 0;   // 0,6 s : dehors
+    const i = G.solids.indexOf(cage); if (i >= 0) G.solids.splice(i, 1);
+    return { testes, rates, pire, enferme, tot, sorti, x: P.pos.x, z: P.pos.z };
+  });
+  const ok = r.rates === 0 && r.pire < 1 && r.enferme && r.tot && r.sorti;
+  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · et si un objet apparaît AUTOUR de lui (portail qui se referme, voiture qui se gare dessus), la désincarcération attend une demi-seconde — encore dedans à 0,3 s : ${r.tot} — puis le pose dehors à 0,6 s (sorti=${r.sorti}, en x=${r.x.toFixed(2)}, z=${r.z.toFixed(2)})` };
+});
+
+test('la roulette : la caméra passe devant la roue, la roue freine et la bille tombe dans la case', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 21 });
+    const t = G.city.casino.tables.find(x => x.kind === 'roulette');
+    __SHOT.go({ world: 4, x: t.x, y: 1, z: t.z + 3.4, hour: 21 });
+    const alea = Math.random; Math.random = () => 0.5;   // tirage figé : le 18, rouge
+    G.wallet = 500;
+    G.ouvreCasino('roulette', t); G.casino.mise = 25; G.casino.pari = 'rouge';
+    G.jouerCasino();
+    let precedent = t.g.userData.roue.rotation.y; const vits = [], mesures = []; let accelere = 0;
+    for (let k = 0; k < 400 && G.casino.cine; k++) {
+      G.rouletteCine(1 / 30);
+      const y = t.g.userData.roue.rotation.y, v = (y - precedent) * 30; precedent = y;
+      if (k > 1) { if (vits.length && v > vits[vits.length - 1] + 1e-9) accelere++; vits.push(v); }
+      if (k === 40 || k === 150 || k === 200) mesures.push(G.rouletteEtat());
+    }
+    const fin = G.rouletteEtat();
+    Math.random = alea;
+    return { n: G.casino.roulette, vitDebut: vits[0], vitFin: vits[vits.length - 1], accelere,
+      mesures: mesures.map(m => ({ vise: m.viseRoue, plongee: m.plongee, devant: m.devant, dist: m.distance, aff: m.affiche, ui: m.interface, num: m.numero })),
+      ecart: fin.ecart, rB: fin.rB, ui: fin.interface, aff: fin.affiche, resultat: G.casino.resultat, gain: G.casino.gain, porte: G.wallet };
+  });
+  const m = r.mesures[0], f = r.mesures[2];
+  const ok = r.n === 18 && r.accelere === 0 && r.vitDebut > 3 && r.vitFin < 0.05
+    && m.vise < 0.15 && m.plongee > 0.15 && m.plongee < 0.7 && m.devant > 0.9 && !m.ui && m.aff
+    && r.ecart < 0.05 && f.num === '18' && r.ui && !r.aff && r.gain === 50 && r.porte === 525;
+  return { ok, detail: `la roue tournait DERRIÈRE l'interface d'achat : on ne voyait rien du tour · maintenant la caméra se pose devant la roue (écart de visée ${m.vise.toFixed(3)} rad, plongée ${(m.plongee * 57).toFixed(0)}°, du côté du joueur ${m.devant.toFixed(2)}, à ${m.dist.toFixed(1)} m), l'interface d'achat s'efface (${m.ui}) · la roue freine sans jamais réaccélérer (${r.vitDebut.toFixed(2)} → ${r.vitFin.toFixed(3)} rad/s, ${r.accelere} reprise(s)) · la bille se loge dans la case du ${r.n} à ${r.ecart.toFixed(4)} rad (limite 0,05), rayon ${r.rB.toFixed(2)} m · le numéro s'affiche en grand (« ${f.num} ») puis l'interface revient (${r.ui}) avec le gain : ${r.gain} 🪙, porte-monnaie 500 → ${r.porte}` };
 });

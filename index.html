@@ -373,6 +373,20 @@ body.tv .card{max-width:min(940px,86vw);font-size:calc(var(--u) * .95)}
 body.tv .card h1{font-size:calc(var(--u) * 3)}
 body.tv .card h2{font-size:calc(var(--u) * 1.9)}
 body.tv .btn{font-size:calc(var(--u) * 1.1);padding:calc(var(--u) * .6) calc(var(--u) * .95)}
+/* la bande de l'ecole sur une television : lisible a trois metres, et toujours moins d'un
+   tiers de la hauteur pour laisser voir le tableau */
+body.tv #schoolUI{padding:var(--tvpad) var(--tvpad) 0}
+body.tv #schoolUI .card{max-width:min(1180px,90vw);padding:calc(var(--u) * .55) calc(var(--u) * 1.1) calc(var(--u) * .75);
+  border-radius:var(--tvr);max-height:27vh}
+body.tv #schoolUI h2{font-size:calc(var(--u) * 1.35)}
+body.tv #schoolUI .sub{font-size:calc(var(--u) * .85)}
+body.tv #schoolUI .tabs b{font-size:calc(var(--u) * .85);padding:calc(var(--u) * .3) calc(var(--u) * .6)}
+body.tv #schQuestion{font-size:calc(var(--u) * 1.75);margin:calc(var(--u) * .25) 0 calc(var(--u) * .35)}
+body.tv #schFig{font-size:calc(var(--u) * 1.4)}
+body.tv #schChoices{gap:calc(var(--u) * .45)}
+body.tv #schChoices .item{font-size:calc(var(--u) * 1.05);padding:calc(var(--u) * .4) calc(var(--u) * .7);border-radius:var(--tvr)}
+body.tv #schChoices .item .e{font-size:calc(var(--u) * 1.05)}
+body.tv #schoolUI .row .btn{font-size:calc(var(--u) * .95);padding:calc(var(--u) * .38) calc(var(--u) * .85)}
 /* pastille discrète en bas au centre : combien de manettes sont branchées */
 /* la legende de la manette : ce que fait chaque bouton, en un coup d'oeil, tant qu'aucune fenetre n'est ouverte */
 #padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;gap:6px;flex-wrap:wrap;justify-content:center;
@@ -387,6 +401,32 @@ body.tv #padLeg{font-size:calc(var(--u) * .95);top:calc(var(--tvpad) + var(--u) 
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
   color:#eaf0ff;font-weight:800;padding:calc(var(--u,15px) * .4) calc(var(--u,15px) * .9);font-size:calc(var(--u,15px) * .85)}
 body.tv #tvBadge.on{display:block}
+/* ================= L'ECOLE : UNE BANDE D'EXERCICES EN HAUT ==================
+   La fenetre des exercices s'ouvrait au MILIEU de l'ecran, par-dessus un fond assombri et
+   floute : elle cachait le tableau gris — c'est-a-dire l'endroit meme ou la reponse et le
+   verdict s'ecrivent a la craie. Elle tient maintenant en HAUT, sur moins d'un tiers de la
+   hauteur, sans voile ni flou, et laisse tout le bas de l'ecran au tableau. */
+#schoolUI{place-items:start center;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;
+  padding:6px 10px 0;overflow:visible}
+#schoolUI .card{max-width:min(900px,96vw);width:auto;padding:7px 14px 9px;border-radius:16px;
+  max-height:30vh;overflow-y:auto;background:rgba(255,255,255,.95);box-shadow:0 14px 34px -14px rgba(0,0,0,.65)}
+.schbarre{display:flex;align-items:baseline;justify-content:center;gap:10px;flex-wrap:wrap}
+#schoolUI h2{font-size:16px;margin:0;line-height:1.1}
+#schoolUI .sub{font-size:11px;margin:0;line-height:1.25}
+#schoolUI .tabs{margin:4px 0 3px}
+#schoolUI .tabs b{padding:3px 8px;font-size:11px;border-radius:8px}
+#schQuestion{font-size:clamp(15px,2.4vw,23px);font-weight:900;color:#1b2a4a;margin:4px 0 5px;line-height:1.15}
+#schFig{font-size:18px;line-height:1.1;margin:0 0 3px}
+/* les quatre reponses : UNE rangee de boutons, jamais une grille qui deroule */
+#schChoices{display:flex;gap:6px;justify-content:center;align-items:stretch;flex-wrap:wrap;padding:0}
+#schChoices .item{flex:1 1 0;min-width:66px;max-width:200px;padding:6px 8px;font-size:13px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;gap:5px}
+#schChoices .item .e{font-size:14px;display:inline;margin:0}
+#schoolUI .row{margin-top:5px;gap:6px}
+#schoolUI .row .btn{font-size:12px;padding:5px 11px;border-radius:9px}
+/* ecran bas de plafond (telephone couche) : on rogne encore */
+@media (max-height:520px){#schQuestion{font-size:15px;margin:2px 0 3px}#schoolUI .card{max-height:34vh;padding:5px 10px 7px}}
+
 /* navigation à la manette / télécommande : l'élément visé est entouré */
 .focustv{outline:4px solid #ffd23f!important;outline-offset:3px;box-shadow:0 0 0 8px rgba(255,210,63,.25)!important}
 
@@ -857,17 +897,16 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 </div>
 <div class="overlay hidden" id="schoolUI">
   <div class="card wide">
-    <h2 id="schTitle">🏫 Classe</h2>
+    <div class="schbarre"><h2 id="schTitle">🏫 Classe</h2><b class="sub" id="schScore"></b></div>
     <p class="sub" id="schSub"></p>
     <div class="tabs" id="schAge"></div>
     <div class="shopgrid" id="schGrid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
     <div id="schQ" style="display:none">
-      <div style="font-size:clamp(20px,4vw,30px);font-weight:900;margin:10px 0;color:#1b2a4a" id="schQuestion"></div>
-      <div id="schFig" style="margin:6px 0"></div>
-      <div class="shopgrid" id="schChoices" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr))"></div>
-      <p class="sub" id="schScore"></p>
+      <div id="schQuestion"></div>
+      <div id="schFig"></div>
+      <div id="schChoices"></div>
     </div>
-    <div class="row"><button class="btn" id="schRelire">🔊 Relire la question</button><button class="btn sec" id="schClose">Sortir de la classe</button></div>
+    <div class="row"><button class="btn" id="schRelire">🔊 Relire</button><button class="btn sec" id="schClose">Sortir</button></div>
   </div>
 </div>
 <div class="overlay hidden" id="bankUI">
@@ -6431,7 +6470,8 @@ function openSchool(room) {
   school.chaise = P.sit;
   school.room = room; school.subj = room.subj; school.q = null; school.ok = 0; school.tot = 0;
   $('schTitle').textContent = `${room.e} Classe de ${room.n}`;
-  $('schSub').textContent = 'Choisis ton niveau, réponds aux questions et gagne des pièces (bonne réponse : 3 🪙, série de 3 : bonus). La maîtresse lit tout à voix haute — 🔊 pour réécouter. Ta réponse s\'écrit à la craie sur le tableau. Espace pour te lever.';
+  // une seule ligne : la bande doit rester haute d'un tiers d'ecran au plus
+  $('schSub').textContent = 'La maîtresse lit et écrit ta réponse à la craie sur le tableau · bonne réponse 3 🪙 · 🔊 relire · Espace pour te lever';
   $('schAge').innerHTML = SCH_AGES.map(a => `<b class="${a.k === school.age ? 'sel' : ''}" data-k="${a.k}">${a.n}</b>`).join('');
   $('schAge').querySelectorAll('b').forEach(b => b.addEventListener('click', () => { school.age = b.dataset.k; $('schAge').querySelectorAll('b').forEach(x => x.classList.toggle('sel', x === b)); nextQuestion(); }));
   $('schGrid').style.display = 'none'; $('schQ').style.display = ''; openUI('schoolUI'); nextQuestion();
@@ -6456,7 +6496,19 @@ function tableauVerdict(q, v, bon, gain) {
 // Les symboles mathématiques sont dits en toutes lettres, sinon la synthèse vocale les avale.
 function bulleMaitresse(txt) {   // la maitresse « parle » aussi en bulle : indispensable sans voix
   const r = school.room || (school.chaise && school.chaise.ecole);
-  if (r && r.maitresse) { try { bubble(r.maitresse, String(txt)); } catch (e) {} }
+  if (r && r.maitresse) { try { bubble(r.maitresse, String(txt)); school.bulleT = performance.now(); } catch (e) {} }
+}
+// Les bulles s'effacent sur l'horloge du JEU, or la lecon met le jeu en pause : celle de la
+// maitresse restait donc affichee pour toujours, en travers du tableau. On la retire nous-memes,
+// a l'horloge reelle.
+function bulleMaitresseFin() {
+  if (!school.bulleT || performance.now() - school.bulleT < 4500) return;
+  school.bulleT = 0;
+  const r = school.room || (school.chaise && school.chaise.ecole), av = r && r.maitresse;
+  if (!av || !av.bubble) return;
+  av.group.remove(av.bubble);
+  try { av.bubble.material.map.dispose(); av.bubble.material.dispose(); } catch (e) {}
+  av.bubble = null;
 }
 function schDire(txt) {
   const dit = String(txt)
@@ -6657,6 +6709,12 @@ function schoolTick(dt) {
     if (enCours || school.room) { school.q = null; schDire('À bientôt !'); }
     school.chaise = null; school.room = null;
   }
+  bulleMaitresseFin();
+  // Le pseudo du joueur, sprite au-dessus de sa tete, se posait en plein milieu du tableau.
+  // On le range pendant la lecon — par `userData.cache`, car tickBubbles rallume sinon
+  // toutes les etiquettes a chaque image.
+  const enClasse = !!(P.sit && P.sit.ecole);
+  if (me.tag && !!me.tag.userData.cache !== enClasse) { me.tag.userData.cache = enClasse; me.tag.visible = !enClasse; }
   camTableau(dt);
   craieTick(dt);
 }
@@ -15446,7 +15504,7 @@ function frame() {
     // ECOLE : assis a sa table, le mur du fond empeche la camera de reculer et la tete de
     // l'eleve se retrouvait PILE devant le texte. On vise donc a hauteur du tableau : la
     // camera monte avec la cible et la tete passe dessous (verifie en capture).
-    if (P.sit && P.sit.ecole && !aiming) tmpV.y += 0.8;
+    if (P.sit && P.sit.ecole && !aiming) tmpV.y += 1.05;
     if (aiming) { tmpV.x += Math.cos(cam.yaw) * 0.9; tmpV.z -= Math.sin(cam.yaw) * 0.9; }
     // Dans une pièce, la caméra reculait dans le mur ou par-dessus le plafond : on la ramène
     // près du joueur. Et devant un objet à manipuler, on se rapproche encore et on le cadre.

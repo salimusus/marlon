@@ -6431,10 +6431,12 @@ function ligneFeu(tl) {
     if (d < larg / 2 + 8 && d < best) { best = d; axe = { c: travC, larg }; }
   }
   if (!axe) return null;
-  // Le cote de la file, tel que le poste I l'a pose (a moins de 8 m du feu : c'est ce que
-  // verifie son banc d'essai). La conduite, elle, ne lit que la POSITION LE LONG DE LA RUE de
-  // cette ligne — la moitie de chaussee sur laquelle elle tombe ne change rien a l'arret.
-  const cote = alongZ ? Math.cos(s) : -Math.sin(s);
+  // LE COTE DE LA FILE : la VOIE DE DROITE, celle ou roulent les voitures que ce feu arrete.
+  // Le cap `s` donne la direction de marche (sin s, cos s) dans un repere ou +x est l'est et
+  // +z le sud ; sa DROITE est donc (−cos s, +sin s). Les deux signes etaient inverses : la
+  // ligne d'arret se posait sur la moitie GAUCHE de la chaussee, celle d'en face, et un
+  // conducteur qui respectait le feu s'arretait sur la voie des voitures qui arrivent.
+  const cote = alongZ ? -Math.cos(s) : Math.sin(s);
   const v = axe.c + cote * axe.larg / 4;
   const p = alongZ ? { x: +v.toFixed(2), z: +tl.z.toFixed(2) } : { x: +tl.x.toFixed(2), z: +v.toFixed(2) };
   // la ligne DOIT tomber sur une vraie chaussee : sinon ce feu arrete une file qui n'existe pas
@@ -17935,9 +17937,12 @@ function cityStep(dt) {
       if (c.ia) traficRoule(c, dt);
       else { c.speed = Math.max(0, (c.speed || 0) - dt * 6); c.stopped = true; avanceVehicule(c, dt, c.speed, {}); }
     }
-    if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // véhicule à l'arrêt (ambulance) : loopPos(0) le téléportait sur l'anneau
-    if (c.accidente) { spd = 0; c.spd0 = c.spd0 == null ? c.spd : c.spd0; }   /* accidenté : il ne repart pas */
-    c.s += spd * dt; const [x, z, h] = loopPos(c.s); c.x = x; c.z = z; c.h = h; c.y = solSousRoues(c); c.g.position.set(x, c.y, z); c.g.rotation.y = h; c.cmd = { v: spd, volant: 0, ratio: 0.3, accLong: 0 }; rouesTick(c, dt, spd, c.cmd); vehicleSolid(c);
+    // LES TROIS LIGNES DE L'ANCIEN ANNEAU ONT ETE RETIREES ICI. La circulation ne suit plus
+    // une boucle parametree (`c.s += spd * dt`, `loopPos(c.s)`) mais le GRAPHE DE VOIES, et
+    // traficRoule() ci-dessus a deja avance le vehicule, tourne ses roues et remis sa boite de
+    // collision. Le vieux bloc avait survecu a la fusion : il lisait une variable `spd` qui
+    // n'existe plus (« spd is not defined » a CHAQUE image, cityStep entier en panne) et,
+    // s'il avait tourne, il aurait reteleporte toutes les voitures sur l'anneau disparu.
     if (c.driver) placeDriver(c);
     if (!drive.car) {   // bousculade si le joueur est sur la route
       const dx = P.pos.x - c.x, dz = P.pos.z - c.z, cs = Math.cos(c.h), sn = Math.sin(c.h);

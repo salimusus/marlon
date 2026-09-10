@@ -7694,12 +7694,19 @@ test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux
     const surChaussee = (x, z, m = 0) => c.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + m && Math.abs(z - rt.z) < rt.d / 2 + m);
     const feuxSansEtat = c.trafficLights.filter(t => !t.etat || !t.ligne || typeof t.sens !== 'number').length;
     const lignesHorsRoute = c.trafficLights.filter(t => t.ligne && !surChaussee(t.ligne.x, t.ligne.z, 0.6)).length;
-    // la ligne d'arrêt est au droit du feu (même coordonnée le long de la voie), décalée
-    // vers l'axe de la rue : jamais plus de 8 m, et jamais en avant ni en arrière du feu
+    // la ligne d'arrêt est au droit du feu (même coordonnée le long de la voie), et décalée
+    // de côté jusqu'au milieu de la VOIE DE DROITE. La borne dépend de la LARGEUR DE LA RUE :
+    // le mât est planté au bord opposé, la ligne se pose à un quart de largeur de l'axe, soit
+    // jusqu'aux trois quarts de la largeur plus le retrait du mât. La borne fixe de 8 m
+    // convenait aux rues de 7 m mais refusait les boulevards — elle empêchait de corriger le
+    // côté de la ligne, qui tombait sur la moitié GAUCHE, celle des voitures d'en face.
     const lignesMalPlacees = c.trafficLights.filter(t => {
       const alongZ = Math.abs(Math.cos(t.sens)) > 0.5;
       const long = alongZ ? Math.abs(t.ligne.z - t.z) : Math.abs(t.ligne.x - t.x);
-      return long > 0.2 || Math.hypot(t.ligne.x - t.x, t.ligne.z - t.z) > 8;
+      const rt = c.routes.filter(r => Math.abs(t.ligne.x - r.x) < r.w / 2 + 0.6 && Math.abs(t.ligne.z - r.z) < r.d / 2 + 0.6)
+        .sort((a, b) => Math.min(a.w, a.d) - Math.min(b.w, b.d))[0];
+      const larg = rt ? Math.min(rt.w, rt.d) : 7;
+      return long > 0.2 || Math.hypot(t.ligne.x - t.x, t.ligne.z - t.z) > larg * 0.75 + 3;
     }).length;
     // 2. le cycle tourne, et les deux groupes ne sont JAMAIS verts ensemble
     const vus = { A: {}, B: {} }; let deuxVerts = 0;

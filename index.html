@@ -4927,6 +4927,7 @@ function bench(x, z, facing = 0) {   // banc public sur lequel on peut s'asseoir
   city.benches.push({ x, z, facing, y: 0, assise: 0.66 });
 }
 function sitBench(b) { if (P.sit || drive.car) return; if (P.snack && !P.eat) setTimeout(() => eatCarried(), 400); P.sit = b;
+  animTransArme(me);   // on ne se téléporte plus sur le banc : le corps y glisse (poste Animation)
   // une chaise d'ecole : la maitresse accueille l'eleve PAR SON NOM, puis la classe commence
   if (b.ecole) { school.chaise = b; school.room = b.ecole; schDire(`Bonjour élève ${myCfg.name} ! Installe-toi, on commence les exercices.`); setTimeout(() => { if (P.sit === b) openSchool(b.ecole); }, 900); }
   P.pos.set(b.x, (b.y || 0) + (b.assise != null ? b.assise - 0.51 : 0.15), b.z); P.vel.set(0, 0, 0); P.facing = b.facing; cam.freeUntil = 0; msg(b.cine && city.cinema ? `🎬 ${FILMS[city.cinema.i].n} (${FILMS[city.cinema.i].genre}) — bon film ! (Espace pour se lever)` : P.eat ? '🪑 Bon appétit ! (Espace pour se lever)' : '🪑 Assis (Espace / SAUT pour se lever)', b.cine ? 2600 : 1200); }
@@ -4935,6 +4936,7 @@ function sitTick(dt) {
   P.vel.set(0, 0, 0); P.facing = b.facing;
   if (P.jumpBuf > 0) {
     P.jumpBuf = 0; P.sit = null;
+    animTransArme(me);   // et se relever se voit aussi : le corps quitte le banc en fondu
     // On se relève du premier côté libre. Avant, le joueur était poussé de 0,90 m sans
     // aucun test : il traversait le dossier puis le mur et se retrouvait dehors.
     const y = (b.y || 0) + 0.6;
@@ -15402,8 +15404,13 @@ function frame() {
   // POSTE ANIMATION : le combat du joueur se joue APRÈS la pose de base — garde, élan et
   // détente du coup de poing, coup de couteau, esquive, encaissement, chute. Sans cet appel,
   // les déclencheurs (coupDePoing, gardePoings…) n'auraient aucun effet visible.
-  if (ANIM.fige) animFige(me.rig); else animCombat(me, dt);
+  if (ANIM.fige) animFige(me.rig); else { animCombat(me, dt); animReception(me.rig, myAnim === 'air', P.vel.y, dt); }
   if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
+  // LE JOUEUR SE BAISSE VRAIMENT. `rig.baisse` n'était appliqué qu'aux bots et aux
+  // travailleurs : le joueur à bout de forces, ou qui esquive un coup, pliait les jambes
+  // mais gardait la tête exactement à la même hauteur — l'esquive ne passait pas sous le
+  // poing. On descend maintenant le groupe de la même quantité, comme pour tout le monde.
+  else if (!drive.car && !couche) me.group.position.y -= (me.rig.baisse || 0);
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
   const armed = !!(P.gun && P.drawn && !drive.car && running && !gym.on && !P.sit && !P.swing && !P.ride);
@@ -19926,6 +19933,25 @@ function animTransApplique(av) {
   g.position.y += (u.trY - g.position.y) * k;
   g.position.z += (u.trZ - g.position.z) * k;
 }
+// ---------- LA RÉCEPTION ----------
+// EN RETOMBANT, LES JAMBES ENCAISSENT. Le personnage passait de la pose en l'air à la pose
+// debout en une image : il atterrissait raide comme un piquet, quelle que soit la hauteur.
+// On mémorise la vitesse de chute, et à l'arrivée les genoux plient d'autant plus qu'on
+// tombait vite, puis le corps se redéplie. Rien ne se déclenche sous 4 m/s : un petit saut
+// de trottoir ne doit pas faire s'accroupir le joueur.
+const RECEPT_DUREE = 0.34;
+function animReception(rig, enAir, vy, dt) {
+  if (!rig) return;
+  if (enAir) { rig.chuteV = Math.min(rig.chuteV == null ? 0 : rig.chuteV, vy || 0); rig.receptT = 0; return; }
+  if (rig.chuteV != null && rig.chuteV < -4) { rig.recept = clamp(-rig.chuteV / 22, 0.28, 1); rig.receptT = RECEPT_DUREE; }
+  rig.chuteV = 0;
+  if (!(rig.receptT > 0)) return;
+  rig.receptT = Math.max(0, rig.receptT - dt);
+  const w = Math.sin((1 - rig.receptT / RECEPT_DUREE) * Math.PI) * rig.recept;   // on encaisse puis on se redéplie
+  animPose(rig, { lLx: -0.60, lRx: -0.60, gLx: 1.10, gRx: 1.10, bs: 0.26, bx: 0.28,
+    aLx: -0.55, aRx: -0.55, cLx: -0.75, cRx: -0.75 }, w);
+}
+
 // BANC D'ESSAI SEULEMENT. `ANIM.fige` fige le rig du joueur sur une image PRÉCISE d'un
 // mouvement : { combat: 'coup' | 'couteau' | 'esquive' | 'encaisse' | 'chute', u: 0…1,
 // garde: true, main: 'D' | 'G' } ou { geste: 'marteau', t: 0.4 }. Sans ça, impossible de

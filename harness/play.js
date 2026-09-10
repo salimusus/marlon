@@ -7171,8 +7171,9 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     const rouvre = { ui: G.uiOpen, sit: G.P.sit === visee };
     // 4) on se lève : la classe se ferme toute seule
     G.P.sit = null;
-    for (let i = 0; i < 40 && G.school.chaise; i++) await dodo(80);   // schoolTick tourne à l'image, même en pause
-    const leve = { ui: G.uiOpen, chaise: G.school.chaise, dit: G.school.dit };
+    let images = 0;
+    for (let i = 0; i < 60 && G.school.chaise; i++) { await new Promise(rr => requestAnimationFrame(rr)); images++; }
+    const leve = { ui: G.uiOpen, chaise: !!G.school.chaise, dit: G.school.dit, images };
     G.school.chaise = null;
     return { debout, proche, assis, classe, ferme, rouvre, leve };
   });
@@ -7181,6 +7182,6 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     && r.proche.bench && r.assis.sit && r.assis.ui !== 'schoolUI'
     && r.classe.ui === 'schoolUI' && r.classe.q && r.classe.chaise
     && r.ferme.ui === null && r.rouvre.ui === 'schoolUI' && r.rouvre.sit
-    && r.leve.ui === null && r.leve.chaise === null && /bientôt/i.test(r.leve.dit || '');
-  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout : interface ${r.leve.ui}, chaise oubliée (${r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
+    && r.leve.ui === null && r.leve.chaise === false && /bientôt/i.test(r.leve.dit || '');
+  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
 });

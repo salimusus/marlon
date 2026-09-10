@@ -4128,6 +4128,27 @@ function decorPublic() {
   city.decorPublic = compte; sgridSale();
   return compte;
 }
+// CHAQUE BATIMENT A UN NOM. Le poste Activite tirait ses lieux de sinistre et de panne d'une
+// liste de coordonnees ecrites en dur : les quartiers neufs n'etaient jamais couverts. Chaque
+// entree de `city.batiments` porte maintenant un `nom` — celui du quartier qui la contient (le
+// plus petit, donc le plus precis : « la Villa Azur » plutot que « le Quartier residentiel »),
+// ou un nom explicite pose a la construction (Banque, Ecole des Blocs, Planque). C'est le nom
+// BRUT du lieu, sans article : l'appelant l'habille comme il veut.
+function nommeLesBatiments() {
+  let n = 0;
+  for (const b of (city.batiments || [])) {
+    if (b.nom) continue;
+    let q0 = null, aire = Infinity;
+    for (const q of (city.zones || [])) {
+      if (b.x < q.x1 || b.x > q.x2 || b.z < q.z1 || b.z > q.z2) continue;
+      const a = Math.abs((q.x2 - q.x1) * (q.z2 - q.z1));
+      if (a < aire) { aire = a; q0 = q; }
+    }
+    b.nom = q0 ? q0.name : 'Centre-ville';   // le nom BRUT du quartier : l'appelant l'habille comme il veut
+    n++;
+  }
+  return n;
+}
 // La desserte d'un quartier : le point de la route par lequel on y arrive en voiture.
 function desserteDe(nom) {
   const l = (city.plan && city.plan.dessertes) || [];
@@ -4669,6 +4690,7 @@ const WORLDS = [
       B('collisions du décor', solidifieDecor);
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
+      nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -6912,7 +6934,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, or, { deco: true, studs: false });
     for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
   }
-  city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5 });   // plus de voiture de police dans le hall
+  city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5, nom: 'Banque' });   // plus de voiture de police dans le hall
   city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 3.5, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
   city.zones.push({ name: 'Banque', emoji: '🏦', x1: bx - 11, x2: bx + 14, z1: bz - 11, z2: bz + 11, hint: '🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés' });
 }
@@ -8857,7 +8879,7 @@ function buildSchool(sx, sz) {   // l'ecole : un batiment vitre vert, quatre cla
   box(sx + 22.6, 6.6, sz, 0.15, 1.4, 8, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏫 ÉCOLE DES BLOCS', 0x5cc453) }), deco: true, noEdges: true });
   // LE BATIMENT VITRE VERT : quatre classes au rez-de-chaussee, un etage de verre au-dessus
   const bx = sx - 2, bz = sz - 9, BW = 40, BD = 11;
-  city.batiments.push({ x: bx, z: bz, w: BW - 0.5, d: BD - 0.5 });
+  city.batiments.push({ x: bx, z: bz, w: BW - 0.5, d: BD - 0.5, nom: 'École des Blocs' });
   for (let i = 0; i < 4; i++) {
     const [subj, e, n, col] = [['math', '➕', 'Maths', 0xff8f3a], ['geo', '📐', 'Géométrie & Géographie', 0x4f8dff], ['logi', '🧩', 'Logique', 0x5cc453], ['cult', '🌍', 'Culture générale', 0xb57cff]][i];
     classroom(bx - 15 + i * 10, bz, 0, subj, e, n, col);
@@ -20024,7 +20046,7 @@ function buildPlanque(x, z, opt = {}) {
   const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), lam(0xffd23f)); dial.position.set(sx2, y + 1.05, sz2 + 0.93); dial.rotation.x = Math.PI / 2; worldGroup.add(dial);
   const coffre = { x: sx2, z: sz2 + 1.6, y, door, dial, open: false, progress: 0, amount: 0, planque: true };
   city.safes.push(coffre);
-  city.batiments.push({ x, z, w: w - 0.6, d: d - 0.6 });
+  city.batiments.push({ x, z, w: w - 0.6, d: d - 0.6, nom: joueur ? 'Ta planque' : 'Planque de gang' });
   const P2 = { x, z, w, d, coffre, joueur };
   city.planques.push(P2);
   return P2;

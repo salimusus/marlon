@@ -404,6 +404,7 @@ window.__G = {
   attack: typeof attack === 'function' ? attack : null,
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   marqueImpact: typeof marqueImpact === 'function' ? marqueImpact : null,
+  nommeLesBatiments: typeof nommeLesBatiments === 'function' ? nommeLesBatiments : null,
   chocDecor: typeof chocDecor === 'function' ? chocDecor : null,
   solideTouche: typeof solideTouche === 'function' ? solideTouche : null,
   batimentTouche: typeof batimentTouche === 'function' ? batimentTouche : null,

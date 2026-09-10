@@ -13815,7 +13815,8 @@ function padLu(gp) {
   let lx = a[0] || 0, ly = a[1] || 0, rx = a[2] || 0, ry = a[3] || 0, l2 = 0, r2 = 0;
   if (profil === 'ps-hid') {
     ry = a[5] || 0;
-    l2 = clamp(((a[3] || -1) + 1) / 2, 0, 1); r2 = clamp(((a[4] || -1) + 1) / 2, 0, 1);   // -1 = relachee, +1 = a fond
+    const ax = i => (typeof a[i] === 'number' ? a[i] : -1);   // a MI-COURSE une gachette rend 0 : `a[i] || -1` la croyait relachee
+    l2 = clamp((ax(3) + 1) / 2, 0, 1); r2 = clamp((ax(4) + 1) / 2, 0, 1);   // -1 = relachee, +1 = a fond
     for (let i = 0; i < PAD_HID_PS.length; i++) { const s = PAD_HID_PS[i]; b[s] = app(i); v[s] = val(i); }
     v[6] = Math.max(v[6], l2); v[7] = Math.max(v[7], r2);
   } else {

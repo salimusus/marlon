@@ -8223,11 +8223,12 @@ test('le combat : le coude part replie et se tend a l\'impact, la garde monte au
     // 4) l'esquive : le corps descend et les deux genoux plient
     G.esquiveBaisse(av, 0.7);
     let bmax = 0, gmax = 0;
-    for (let i = 0; i < 30; i++) { pas(t += 1 / 60); bmax = Math.max(bmax, rig.baisse || 0); gmax = Math.max(gmax, Math.min(rig.legL.genou.rotation.x, rig.legR.genou.rotation.x)); }
-    const esquive = { baisse: +bmax.toFixed(2), genoux: +gmax.toFixed(2) };
+    let buste = 0;
+    for (let i = 0; i < 40; i++) { pas(t += 1 / 60); bmax = Math.max(bmax, rig.baisse || 0); gmax = Math.max(gmax, Math.min(rig.legL.genou.rotation.x, rig.legR.genou.rotation.x)); buste = Math.max(buste, rig.head.rotation.x); }
+    const esquive = { baisse: +bmax.toFixed(2), genoux: +gmax.toFixed(2), buste: +buste.toFixed(2) };
     // 5) le couteau : court et sec, le coude ne se tend qu'à moitié
     for (let i = 0; i < 60; i++) pas(t += 1 / 60);
-    G.gardePoings(av, false); G.coupCouteau(av);
+    G.gardePoings(av, false); for (let i = 0; i < 20; i++) pas(t += 1 / 60); G.coupCouteau(av);
     const kd = [];
     for (let i = 0; i < 26; i++) { pas(t += 1 / 60); kd.push(rig.armR.coude.rotation.x); }
     const couteau = { replie: +Math.min.apply(null, kd).toFixed(2), tendu: +Math.max.apply(null, kd).toFixed(2) };
@@ -8243,12 +8244,14 @@ test('le combat : le coude part replie et se tend a l\'impact, la garde monte au
   const gardeOk = g.poingD.y > g.tete.y - 0.05 && g.poingG.y > g.tete.y - 0.05
     && g.poingD.z > 0.12 && g.poingG.z > 0.12 && Math.abs(g.poingD.x) < 0.7
     && g.poingD.y - r.repos.poingD.y > 0.5;
-  const coupOk = c.replie < -2.2 && c.tendu > -0.35 && c.avance > 0.35 && c.saut < 0.75;
-  const esqOk = r.esquive.baisse > 0.25 && r.esquive.genoux > 1.3;
+  const coupOk = c.replie < -2.2 && c.tendu > -0.35 && c.avance > 0.35 && c.saut < 0.62;
+  // 0,198 m d'abaissement : c'est la valeur du poste Personnages (0,55 S), calculee pour que
+  // les semelles restent posees. On verifie qu'elle est bien appliquee et que le buste suit.
+  const esqOk = r.esquive.baisse > 0.15 && r.esquive.genoux > 1.3 && r.esquive.buste > 0.2;   // la tete rentre dans les epaules
   const couteauOk = r.couteau.replie < -2.1 && r.couteau.tendu > -1.2 && r.couteau.tendu < -0.4;
   const encOk = r.encaisse.tete < -0.2;
   const ok = gardeOk && coupOk && esqOk && couteauOk && encOk;
-  return { ok, detail: `GARDE : les poings passent de ${r.repos.poingD.y} m (le long du corps) à ${g.poingD.y} m, devant le visage (tête à ${g.tete.y} m) et en avant (z = ${g.poingD.z} m), coudes repliés à ${g.coudeD} rad · COUP DE POING : le coude part replié à ${c.replie} rad et se TEND à ${c.tendu} rad, le poing avance de ${c.avance} m, sans à-coup (plus grand pas ${c.saut} rad/image) · ESQUIVE : le corps descend de ${r.esquive.baisse} m sur des genoux pliés à ${r.esquive.genoux} rad · COUTEAU : court et sec, le coude va de ${r.couteau.replie} à ${r.couteau.tendu} rad seulement (il ne se tend PAS comme un direct) · ENCAISSER : la tête est rejetée à ${r.encaisse.tete} rad` };
+  return { ok, detail: `le poste Personnages pose la GARDE et l'ESQUIVE, le poste Animation y ajoute le mouvement · GARDE : les poings passent de ${r.repos.poingD.y} m (le long du corps) à ${g.poingD.y} m, devant le visage (tête à ${g.tete.y} m) et en avant (z = ${g.poingD.z} m), coudes repliés à ${g.coudeD} rad · COUP DE POING : le coude part replié à ${c.replie} rad et se TEND à ${c.tendu} rad, le poing avance de ${c.avance} m, sans à-coup (plus grand pas ${c.saut} rad/image, contre 0,97 avant réglage) · ESQUIVE : le corps descend de ${r.esquive.baisse} m sur des genoux pliés à ${r.esquive.genoux} rad, tête rentrée de ${r.esquive.buste} rad · COUTEAU : court et sec, le coude va de ${r.couteau.replie} à ${r.couteau.tendu} rad seulement (il ne se tend PAS comme un direct) · ENCAISSER : la tête est rejetée à ${r.encaisse.tete} rad` };
 });
 
 test('le feu vit et s\'eteint : des flammes de tailles differentes qui ondulent, de la fumee qui monte', async p => {

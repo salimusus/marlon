@@ -21970,10 +21970,13 @@ function animCombat(av, dt) {
   // 1. L'APPUI DE GARDE : jambe arrière chargée, genoux souples, buste de trois quarts, et
   //    une respiration lente (le corps monte et descend d'un centimètre) pour que la garde
   //    ne soit pas une statue. On ne touche PAS aux bras : ils sont au poste Personnages.
-  if (gardeK > 0.02) {
+  // L'APPUI S'EFFACE PENDANT L'ESQUIVE : sans le facteur (1 − esqK), cette pose ECRASAIT les
+  // jambes pliees et l'abaissement du bassin que le poste Personnages venait de poser — on se
+  // baissait de un centimetre au lieu de vingt, et le coup ne passait plus au-dessus.
+  if (gardeK > 0.02 && cc.esqK < 0.98) {
     const resp = Math.sin(cc.souffle * 2.4);
     animPose(rig, { lLx: -0.22, lRx: 0.14, gLx: 0.46, gRx: 0.28,
-      bx: 0.12 + resp * 0.02, hx: 0.06, bs: 0.012 + resp * 0.008 }, gardeK);
+      bx: 0.12 + resp * 0.02, hx: 0.06, bs: 0.012 + resp * 0.008 }, gardeK * (1 - cc.esqK));
   }
   // 2. LE COUP DE POING. Trois temps : élan (le coude se replie, l'épaule part en arrière,
   //    le poids recule), détente (le coude se TEND, l'épaule vient devant, le poids passe sur
@@ -22029,16 +22032,23 @@ function animCombat(av, dt) {
   if (rig.recul > 0) {
     const w = Math.sin(rig.recul / CBT_RECUL * Math.PI) * Math.min(1, (cc.encF || 1));
     const bloque = gardeK > 0.4;
-    animPose(rig, {
-      hx: -0.42 * w, bs: (bloque ? 0.012 : 0) + 0.10 * w,
-      lLx: -0.22 - 0.26 * w, gLx: 0.46 + 0.50 * w, lRx: 0.14 + 0.18 * w, gRx: 0.28 + 0.30 * w,
+    const p = {
+      hx: -0.42 * w,
       aLz: (bloque ? 0.34 : 0.20) + (bloque ? 0.20 : 0.50) * w,
       aRz: (bloque ? -0.34 : -0.20) - (bloque ? 0.20 : 0.50) * w,
       cLx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
       cRx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
       aLx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
       aRx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
-    }, w);
+    };
+    // les jambes n'encaissent que DEBOUT : accroupi, elles appartiennent a l'esquive du poste
+    // Personnages et on lui laisserait un genou a demi tendu en pleine esquive.
+    if (cc.esqK < 0.5) {
+      p.bs = (bloque ? 0.012 : 0) + 0.10 * w;
+      p.lLx = -0.22 - 0.26 * w; p.gLx = 0.46 + 0.50 * w;
+      p.lRx = 0.14 + 0.18 * w; p.gRx = 0.28 + 0.30 * w;
+    }
+    animPose(rig, p, w);
   }
   // 6. LA CHUTE : un genou à terre, le corps replié. Elle tombe vite et se relève lentement.
   if (cc.chute > 0) {

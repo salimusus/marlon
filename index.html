@@ -13149,6 +13149,7 @@ function separerVehicules() {
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
+  setGarde(false); setAccroupi(false);   // on ne conduit pas accroupi les poings devant le visage
   // on se voit désormais au volant, comme les amis bots conducteurs
   drive.car = c; drive.speed = 0; me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier

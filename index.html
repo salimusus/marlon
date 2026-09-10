@@ -15232,6 +15232,7 @@ function conduire(c, cmd, dt) {
   // l'état de conduite : c'est lui que lisent les roues, la fumée, la caméra et le moteur
   const derape = glisse || (Math.abs(ix) > 0.6 && ratio > 0.72), freine = frein > 0.25 && Math.abs(V.speed) > 3;
   c.cmd = { gaz: iz, volant: ix, frein, main, v: V.speed, ratio, gear, freine, derape, glisse, accLong, gFrac };
+  c.recule = V.speed < -0.5;   // drapeau du bip de marche arrière, lu par le poste Sons
   if (pilote) moteurRegime(c, ratio, gFrac, iz, freine);
   let nx = c.x + Math.sin(c.h) * V.speed * dt, nz = c.z + Math.cos(c.h) * V.speed * dt;
   const rr = c.kind === 'truck' ? 2.2 : c.rider ? 0.7 : 1.4;
@@ -15673,47 +15674,90 @@ function placeOccupants(c, dt) {
 // réparé sur place contre un petit paiement, sinon le véhicule est treuillé et remorqué au
 // garage, plus cher. Elle se conduit comme les autres (E) : elle est dans city.cars.
 const PRIX_DEPANNAGE = 30, PRIX_REMORQUAGE = 90, DEGATS_SUR_PLACE = 45;
-function makeDepanneuse(x, z, h) {
-  const g = new THREE.Group(), bleu = lam(0x1e56c8), blanc = lam(0xf4f6fa);
+// LA DÉPANNEUSE — bleu et blanc, gyrophare ROND bleu, plateau inclinable et treuil.
+// Elle sert à deux postes : la mienne (accidents) et celle des MISSIONS (poste Activité),
+// qui la construit par makeVehiculeTravail('depanneuse', …) et actionne son treuil avec la
+// mécanique commune des véhicules de travail. D'où `travail: true` et des outils nommés
+// comme les leurs : `outils.crochet` (+ `outils.cable`) descendent quand `c.outil` va de 0
+// à 1, et le plateau s'incline. Le plateau est rangé sous DEUX noms — `benne`, celui que
+// connaît l'animation commune, et `plateau`, celui qu'attend le poste Activité.
+function makeDepanneuse(x, z, h, couleur) {
+  const g = new THREE.Group(), bleu = lam(couleur != null ? couleur : 0x1e56c8), blanc = lam(0xf4f6fa);
   const bx = (mat, sx, sy, sz, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
-  bx(darkM, 2.2, 0.4, 5.4, 0, 0.55, 0);                                  // châssis
-  bx(blanc, 2.2, 1.25, 2.0, 0, 1.35, 1.5);                               // cabine blanche
-  bx(bleu, 2.24, 0.45, 2.04, 0, 0.95, 1.5, null);                        // bas de caisse bleu
-  bx(glassCar, 2.0, 0.66, 0.06, 0, 1.6, 2.5);                            // pare-brise
-  for (const sx of [-1.09, 1.09]) bx(glassCar, 0.06, 0.55, 1.1, sx, 1.6, 1.5);
-  for (const sx of [-0.72, 0.72]) bx(neonMat(0xffffcc), 0.36, 0.2, 0.08, sx, 0.9, 2.52);
-  bx(neonMat(0xff3030), 1.9, 0.16, 0.08, 0, 0.9, -2.72);
-  bx(darkM, 2.3, 0.26, 0.18, 0, 0.55, 2.55); bx(darkM, 2.3, 0.26, 0.18, 0, 0.55, -2.7);   // pare-chocs
-  bx(blanc, 2.1, 0.18, 3.2, 0, 0.85, -0.9);                              // le plateau
-  for (const sx of [-1.0, 1.0]) bx(bleu, 0.12, 0.34, 3.2, sx, 1.05, -0.9);
-  for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) bx(lam(i % 2 ? 0x1e56c8 : 0xf4f6fa), 0.06, 0.2, 0.5, sx * 1.12, 1.0, -2.2 + i * 0.62);   // damier bleu et blanc
+  bx(darkM, 2.3, 0.4, 6.2, 0, 0.55, 0);                                  // châssis
+  bx(blanc, 2.3, 1.25, 2.1, 0, 1.35, 1.9);                               // cabine blanche
+  bx(bleu, 2.34, 0.45, 2.14, 0, 0.95, 1.9);                              // bas de caisse bleu
+  bx(glassCar, 2.1, 0.66, 0.06, 0, 1.6, 2.95);                           // pare-brise
+  for (const sx of [-1.14, 1.14]) bx(glassCar, 0.06, 0.55, 1.1, sx, 1.6, 1.9);
+  for (const sx of [-0.75, 0.75]) bx(neonMat(0xffffcc), 0.36, 0.2, 0.08, sx, 0.9, 2.97);
+  bx(neonMat(0xff3030), 2.0, 0.16, 0.08, 0, 0.9, -3.12);
+  bx(darkM, 2.4, 0.26, 0.18, 0, 0.55, 3.0); bx(darkM, 2.4, 0.26, 0.18, 0, 0.55, -3.1);   // pare-chocs
+  // LE PLATEAU, qui bascule vers l'arrière pour charger une épave
+  const plateau = new THREE.Group(); plateau.position.set(0, 0.85, -3.0); g.add(plateau);
+  bx(blanc, 2.2, 0.18, 3.9, 0, 0, 1.95, plateau);
+  for (const sx of [-1.05, 1.05]) bx(bleu, 0.12, 0.34, 3.9, sx, 0.2, 1.95, plateau);
+  for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) bx(lam(i % 2 ? 0x1e56c8 : 0xf4f6fa), 0.06, 0.2, 0.6, sx * 1.17, 0.15, 0.3 + i * 0.64, plateau);   // damier bleu et blanc
   // LE TREUIL : la potence, le tambour, le câble et le crochet
-  const potence = new THREE.Group(); potence.position.set(0, 1.0, -0.4); g.add(potence);
-  bx(lam(0xffd23f), 0.34, 1.5, 0.34, 0, 0.75, 0, potence);
-  const fleche = new THREE.Group(); fleche.position.set(0, 1.45, 0); potence.add(fleche);
-  bx(lam(0xffd23f), 0.3, 0.3, 2.6, 0, 0, -1.2, fleche);
+  const potence = new THREE.Group(); potence.position.set(0, 1.0, 0.2); g.add(potence);
+  bx(lam(0xffd23f), 0.36, 1.6, 0.36, 0, 0.8, 0, potence);
+  const fleche = new THREE.Group(); fleche.position.set(0, 1.6, 0); potence.add(fleche);
+  bx(lam(0xffd23f), 0.3, 0.3, 2.4, 0, 0, -1.1, fleche);
   const tambour = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 10), chrome);
-  tambour.rotation.z = Math.PI / 2; tambour.position.set(0, 0.2, 0.35); potence.add(tambour);
-  const crochet = new THREE.Group(); crochet.position.set(0, -0.3, -2.3); fleche.add(crochet);
+  tambour.rotation.z = Math.PI / 2; tambour.position.set(0, 0.2, 0.4); potence.add(tambour);
+  // le crochet pend à 3,4 m du sol : à c.outil = 1, l'animation commune le descend de
+  // 3,2 m — il arrive donc pile au niveau du pare-chocs d'une épave
+  const crochet = new THREE.Group(); crochet.position.set(0, -0.2, -2.2); fleche.add(crochet);
   const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 6), lam(0x2b2f3a));
-  cable.position.set(0, 0.45, 0); crochet.add(cable);
-  bx(chrome, 0.26, 0.3, 0.26, 0, -0.2, 0, crochet);
-  bx(chrome, 0.1, 0.34, 0.1, 0, -0.5, 0.1, crochet);
+  cable.position.set(0, -0.5, 0); crochet.add(cable);
+  bx(chrome, 0.26, 0.3, 0.26, 0, -1.05, 0, crochet);
+  bx(chrome, 0.1, 0.34, 0.1, 0, -1.3, 0.1, crochet);
   // LE GYROPHARE ROND BLEU
   const gyro = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.22, 12), neonMat(0x2060ff));
-  gyro.position.set(0, 2.1, 1.5); g.add(gyro);
+  gyro.position.set(0, 2.1, 1.9); g.add(gyro);
   const enseigne = new THREE.MeshBasicMaterial({ map: textTexture('DÉPANNAGE') });
-  for (const [sx, ry] of [[-1.11, -Math.PI / 2], [1.11, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.44), enseigne); pl.position.set(sx, 1.3, 1.5); pl.rotation.y = ry; g.add(pl); }
+  for (const [sx, ry] of [[-1.16, -Math.PI / 2], [1.16, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.44), enseigne); pl.position.set(sx, 1.3, 1.9); pl.rotation.y = ry; g.add(pl); }
   const wheels = [];
-  for (const [wx, wz] of [[-0.95, 1.7], [0.95, 1.7], [-0.95, -1.5], [0.95, -1.5]]) { const w = makeWheel(1.15); w.position.set(wx, 0.4, wz); g.add(w); wheels.push(w); }
+  for (const [wx, wz] of [[-1.0, 2.0], [1.0, 2.0], [-1.0, -1.8], [1.0, -1.8]]) { const w = makeWheel(1.2); w.position.set(wx, 0.4, wz); g.add(w); wheels.push(w); }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
-  const W = 2.3, D = 5.6;
+  const W = 2.4, D = 6.5;
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  const c = { g, wheels, x, y: 0, z, h, color: 0x1e56c8, busy: false, solid, kind: 'depanneuse',
-    spec: { max: 22, rev: -6, accel: 15, turn: 1.6, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
-    gyro, potence, fleche, crochet, cable, etat: null, remorque: null, tarif: 0, mission: null };
+  const outils = { crochet, cable, treuil: crochet, benne: plateau, plateau, gyros: [gyro] };
+  const c = { g, wheels, x, y: 0, z, h, color: couleur != null ? couleur : 0x1e56c8, busy: false, solid, kind: 'depanneuse',
+    spec: { max: 20, rev: -6, accel: 14, turn: 1.6, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
+    outils, outil: 0, outilCible: 0, travail: true, depanneuse: true, urgence: true, gyro: false, sirene: false, recule: false,
+    siege: { x: 0.5, y: -0.5, z: 1.5 }, potence, fleche, crochet, cable, plateau,
+    etat: null, remorque: null, tarif: 0, mission: null };
   solid.ai = true;
   prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
+  return c;
+}
+// UNE SCÈNE D'ACCIDENT toute faite (demandée par le poste Activité pour ses missions) :
+// une épave SUR LE TOIT, des débris de tôle autour et un cône de signalisation.
+// Renvoie le véhicule accidenté.
+function poseAccident(x, z) {
+  const c = makeCar(pickOne([0x4f8dff, 0xff5c5c, 0xffd23f, 0x5cc453]), x, z, rnd(0, 6.28));
+  city.cars.push(c);
+  c.dmg = 88; c.accidente = true; c.surLeToit = true; c.busy = true;   // busy : on ne conduit pas une épave sur le toit
+  try { applyDamageVisual(c, 0, 0); } catch (e) {}
+  settleVehicle(c);
+  // SUR LE TOIT : la caisse est retournée, les roues en l'air. C'est le groupe entier qui
+  // bascule (roues comprises) : une épave ne roule plus.
+  c.g.rotation.set(Math.PI, c.h, 0, 'YXZ');
+  c.g.position.y = (c.y || 0) + 1.7;
+  c.solid.y = (c.y || 0) + 0.8;
+  // les débris de tôle, éparpillés autour
+  for (let i = 0; i < 7; i++) {
+    const a = rnd(0, 6.28), d = rnd(2.2, 4.4);
+    const m = new THREE.Mesh(unitRound, lam(i % 2 ? 0x8f98ab : 0x2b2f3a));
+    m.scale.set(rnd(0.2, 0.5), 0.08, rnd(0.2, 0.6));
+    m.position.set(x + Math.cos(a) * d, (c.y || 0) + 0.06, z + Math.sin(a) * d);
+    m.rotation.y = a; worldGroup.add(m);
+  }
+  // le cône de signalisation
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.7, 10), lam(0xff7a1a));
+  cone.position.set(x + 3, (c.y || 0) + 0.35, z + 1.4); worldGroup.add(cone);
+  const socle = new THREE.Mesh(unitRound, lam(0x2b2f3a));
+  socle.scale.set(0.55, 0.08, 0.55); socle.position.set(x + 3, (c.y || 0) + 0.04, z + 1.4); worldGroup.add(socle);
   return c;
 }
 function depanneuseAppel(acc) {
@@ -15729,7 +15773,8 @@ function depanneuseAppel(acc) {
 }
 function depanneusesTick(dt) {
   for (const d of (city.depanneuses || [])) {
-    if (d.gyro) d.gyro.visible = !!d.mission && (simTime % 0.7) < 0.35;
+    d.gyro = !!d.mission;          // le gyrophare et la sirène sont des DRAPEAUX : le poste
+    d.sirene = !!d.mission;        // Sons les lit pour brancher le son tout seul
     const m = d.mission; if (!m || drive.car === d) continue;
     const c = m.cible;
     if (m.phase === 'route') {
@@ -15749,7 +15794,9 @@ function depanneusesTick(dt) {
       m.phase = 'fini'; m.fini = true; d.mission = null; d.remorque = null;
       msg('🔧 Réparé sur place, tu peux repartir', 2400); sfx.pok();
     } else if (m.phase === 'treuil') {
-      if (simTime < m.t) { if (d.crochet) d.crochet.position.y = -0.3 - Math.sin((m.t - simTime) * 2) * 0.5; continue; }
+      d.outilCible = 1;   // le treuil descend : c'est l'animation commune des outils qui le joue
+      if (simTime < m.t) continue;
+      d.outilCible = 0;
       d.remorque = c; c.remorque = d; m.phase = 'garage';
       msg('⛓️ Véhicule accroché : direction le garage', 2400);
     } else if (m.phase === 'garage') {
@@ -15824,7 +15871,7 @@ function makeAmbulance(x, z, h) {
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   const c = { g, wheels, x, y: 0, z, h, color: 0xf4f6fa, busy: false, solid, kind: 'ambulance',
     spec: { max: 30, rev: -7, accel: 22, turn: 1.9, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
-    gyros, brancard, etat: null, victime: null, sirene: false };
+    gyros, brancard, etat: null, victime: null, ambulance: true, urgence: true, sirene: false, gyro: false, recule: false };
   solid.ai = true;
   prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
   return c;
@@ -15842,7 +15889,8 @@ function ambulanceAppel(x, z, victime) {
 }
 function ambulancesTick(dt) {
   for (const a of (city.ambulances || [])) {
-    if (a.gyros) { const on = !!a.etat && (simTime % 0.6) < 0.3; for (const m of a.gyros) m.visible = on; }
+    a.gyro = !!a.etat; a.sirene = !!a.etat;   // drapeaux lus par le poste Sons
+    if (a.gyros) { const on = a.gyro && (simTime % 0.6) < 0.3; for (const m of a.gyros) m.visible = on; }
     if (!a.etat || drive.car === a) continue;
     const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
     if (a.etat === 'route') {
@@ -21742,6 +21790,9 @@ function embarqueBlesse(m, avBlesse, ambulance) {
 // `c.outils` regroupe les parties mobiles (benne, flèche, godet, échelle, lance à eau),
 // `c.outil` est l'avancement 0→1 de l'animation et `c.outilCible` ce qu'on lui demande.
 function makeVehiculeTravail(kind, couleur, x, z, h) {
+  // La DÉPANNEUSE est construite par le poste Véhicules (plateau, treuil, gyrophare rond) :
+  // on la sert ici aussi, pour que les missions puissent la demander comme les autres.
+  if (kind === 'depanneuse') return makeDepanneuse(x, z, h, couleur);
   const g = new THREE.Group(), body = lam(couleur);
   const bx = (mat, sx, sy, sz, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
   const cyl = (mat, r, len, px, py, pz, rx, rz, parent) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 9), mat); m.position.set(px, py, pz); if (rx) m.rotation.x = rx; if (rz) m.rotation.z = rz; m.castShadow = true; (parent || g).add(m); return m; };

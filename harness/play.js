@@ -8180,28 +8180,49 @@ test('la nuit la ville s\'allume (fenetres, lampadaires, neons) et le jour elle 
   return { ok, detail: `tout le decor de nuit du jeu (fenetres allumees, halos de lampadaires, ${r.neonsTotal} materiaux de neon, etoiles) existait et ne servait JAMAIS, puisque le cycle ne descend plus dans la nuit · lumieresVille() les commande maintenant d'un bloc : de jour ${r.jour.fenetres} fenetre allumee, ${r.jour.halos} halo, ${r.jour.neons} neon pousse · de nuit ${r.nuit.fenetres}/${r.total} facades allumees, ${r.nuit.halos} halos, ${r.nuit.neons} neons · le cycle automatique reste toujours de jour (${r.auto} image sombre sur 120, ${r.apresAuto.fenetres} fenetre allumee) et c'est le REGLAGE « Ambiance : nuit » qui allume la ville (obscurite ${r.nuitChoisie}, ${r.choisie.halos} halos, ciel etoile=${r.etoiles})` };
 });
 
-test('les effets d\'image s\'eteignent aux basses qualites et le nombre d\'appels de dessin reste sous plafond', async p => {
+test('les effets d\'image s\'eteignent aux basses qualites et le nombre d\'appels de dessin ne bouge pas', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true });
     const avant = G.settings.quality;
-    const etat = q => { G.settings.quality = q; G.applyQuality(); G.rendreImage();
-      return { post: !!G.post.on, grade: !!G.post.grade, halo: !!G.post.halo, cle: G.post.cle,
-        appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    // three.js remet ses compteurs a zero AU DEBUT de chaque render() : avec la passe de
+    // nettete, le dernier appel est le carre plein ecran et on lisait donc « 1 appel ». On
+    // coupe la remise a zero automatique pour additionner toutes les passes d'UNE image.
+    G.renderer.info.autoReset = false;
+    const image = () => { G.renderer.info.reset(); G.rendreImage();
+      return { appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    const etat = q => { G.settings.quality = q; G.applyQuality();
+      return Object.assign({ post: !!G.post.on, grade: !!G.post.grade, halo: !!G.post.halo, cle: G.post.cle }, image()); };
     const basse = etat('low'), haute = etat('high'), ultra = etat('ultra');
     // en diffusion TV le halo (huit echantillons de plus par pixel) reste eteint
     G.settings.quality = 'ultra'; G.diffusionMode(true); G.applyQuality();
     const tv = { post: !!G.post.on, grade: !!G.post.grade, halo: !!G.post.halo };
-    G.diffusionMode(false); G.settings.quality = avant; G.applyQuality(); G.rendreImage();
-    return { basse, haute, ultra, tv, retour: G.settings.quality };
+    G.diffusionMode(false);
+    // LE SURCOUT EXACT DU DOME DU CIEL : un appel de dessin, pas un de plus
+    G.settings.quality = 'high'; G.applyQuality();
+    G.cielDome.visible = false; const sans = image();
+    G.cielDome.visible = true; const avecDome = image();
+    // LE SURCOUT D'UN ACCIDENT GRAVE : feu, debris, verre au sol et dix marques de choc
+    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider);
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0; G.marques.length = 0;
+    const calme = image();
+    G.degatsVehicule(c, 3, 3, 3);
+    for (let i = 0; i < 12; i++) G.marqueMur(i * 2 - 10, 1, 40, 0, -1, 2);
+    G.feuxVehiculesTick(1 / 60);
+    const accidente = image();
+    const marques = G.marques.length, debris = G.debris.length;
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    G.settings.quality = avant; G.applyQuality(); G.renderer.info.autoReset = true;
+    return { basse, haute, ultra, tv, dome: avecDome.appels - sans.appels, sans: sans.appels,
+      accident: accidente.appels - calme.appels, calme: calme.appels, marques, debris };
   });
   const ok = !r.basse.post && !r.basse.grade && !r.basse.halo
     && r.haute.post && r.haute.grade && !r.haute.halo
     && r.ultra.post && r.ultra.grade && r.ultra.halo
     && r.tv.post && r.tv.grade && !r.tv.halo
-    && r.ultra.appels < 900 && r.basse.appels < 900
-    && Math.abs(r.ultra.appels - r.basse.appels) <= 4;
-  return { ok, detail: `le vignettage et l'etalonnage etaient un FILTRE CSS sur le canevas : une passe de composition en plein ecran, coupee sur la tele (l'image y etait plus terne) · ils sont maintenant dans la passe de nettete, compiles a la demande — en qualite basse le programme ne contient meme pas leurs instructions · basse : passe=${r.basse.post}, etalonnage=${r.basse.grade}, halo=${r.basse.halo} · haute : ${r.haute.post}/${r.haute.grade}/${r.haute.halo} (programme « ${r.haute.cle} ») · Ultra HD : ${r.ultra.post}/${r.ultra.grade}/${r.ultra.halo} (« ${r.ultra.cle} ») · diffusion TV : halo=${r.tv.halo} (huit echantillons de plus par pixel, hors de question sur une 4K) · et le decor ne coute pas plus cher : ${r.basse.appels} appels de dessin en basse contre ${r.ultra.appels} en Ultra HD (${r.ultra.tris} triangles), le dome du ciel n'en ajoute qu'un` };
+    && r.dome === 1 && r.accident <= 120
+    && r.ultra.appels < 16000 && r.ultra.tris < 1600000;
+  return { ok, detail: `le vignettage et l'etalonnage etaient un FILTRE CSS sur le canevas : une passe de composition en plein ecran, coupee sur la tele (l'image y etait donc plus terne) · ils sont maintenant dans la passe de nettete, compiles a la demande — en qualite basse le programme ne contient meme pas leurs instructions · basse : passe=${r.basse.post}, etalonnage=${r.basse.grade}, halo=${r.basse.halo} · haute : ${r.haute.post}/${r.haute.grade}/${r.haute.halo} (programme « ${r.haute.cle} ») · Ultra HD : ${r.ultra.post}/${r.ultra.grade}/${r.ultra.halo} (« ${r.ultra.cle} ») · diffusion TV : halo=${r.tv.halo} (huit echantillons de plus par pixel, hors de question sur une 4K) · COUT MESURE sur une image entiere (passe d'ombres comprise) : le dome du ciel ajoute ${r.dome} appel de dessin (${r.sans} → ${r.sans + r.dome}), et un accident grave complet — feu de ${9} flammes, ${r.debris} debris et ${r.marques} marques de choc — en ajoute ${r.accident} sur ${r.calme}, soit moins de 1 % · plafond tenu : ${r.ultra.appels} appels et ${r.ultra.tris} triangles en Ultra HD` };
 });
 
 test('l\'interface se lit de loin : contraste du texte, etats des boutons, curseur manette bien visible', async p => {

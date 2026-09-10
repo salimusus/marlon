@@ -5000,6 +5000,10 @@ const WORLDS = [
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls
+      // LE GRAPHE DES VOIES : deux voies par rue, un noeud par carrefour, les manoeuvres
+      // possibles. Il vient APRES la signalisation (il retient ou sont les feux et les
+      // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
+      B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -5012,7 +5016,15 @@ const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, ac
 const MARGE_ROUE = 0.004;      // la gomme affleure le sol : 4 mm, jamais dedans
 const BRAQUAGE_MAX = 0.52;     // ~30° aux roues avant, comme une vraie direction
 const FREIN_MAIN = 0.85;       // au-delà, la pédale devient le frein à main
-const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
+// LES RECHERCHES S'ARRETENT QUAND PLUS PERSONNE NE TE VOIT. Avant, il fallait etre SOUS UN
+// TOIT pour que la traque s'essouffle, et meme la, elle durait 21 s par etoile : caché a
+// l'autre bout de la ville, la police te suivait au GPS jusqu'a l'oubli au bout de 45 s.
+// Desormais des que le joueur sort du champ de vision de TOUTES les patrouilles (cache dans
+// un batiment, dans une planque, dans sa villa, ou simplement sans ligne de vue), un compte a
+// rebours demarre : 12 s a une etoile, 25 s a trois. A zero l'etoile tombe, puis les suivantes
+// toutes les 6 s, et la traque s'eteint. S'il est revu, tout repart de zero.
+const PERTE_DELAI = w => 5.5 + 6.5 * clamp(w, 1, 3), PERTE_PALIER = 6;
+const police = { cars: [], agents: [], wanted: 0, perdu: false, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
 const JAIL_NEEDS = { 1: [0], 2: [0, 1], 3: [0, 1, 2, 3] }, JAIL_FINE = { 1: 50, 2: 100, 3: 200 };
@@ -5069,7 +5081,7 @@ function infraction(what, level, sev = 1, sansPitie) {   // sev : 1 petit délit
 function clearWanted(reason) {
   police.usure = 0;   // ils repartent frais pour la prochaine fois
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  police.wanted = 0; police.hideT = 0; police.perdu = false; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
   police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
@@ -6419,7 +6431,10 @@ function ligneFeu(tl) {
     if (d < larg / 2 + 8 && d < best) { best = d; axe = { c: travC, larg }; }
   }
   if (!axe) return null;
-  const cote = alongZ ? Math.cos(s) : -Math.sin(s);   // le cote droit de la file
+  // Le cote de la file, tel que le poste I l'a pose (a moins de 8 m du feu : c'est ce que
+  // verifie son banc d'essai). La conduite, elle, ne lit que la POSITION LE LONG DE LA RUE de
+  // cette ligne — la moitie de chaussee sur laquelle elle tombe ne change rien a l'arret.
+  const cote = alongZ ? Math.cos(s) : -Math.sin(s);
   const v = axe.c + cote * axe.larg / 4;
   const p = alongZ ? { x: +v.toFixed(2), z: +tl.z.toFixed(2) } : { x: +tl.x.toFixed(2), z: +v.toFixed(2) };
   // la ligne DOIT tomber sur une vraie chaussee : sinon ce feu arrete une file qui n'existe pas
@@ -6879,6 +6894,648 @@ function signalisation() {
     places++;
   }
   return { panneaux: city.panneaux.length, passages: city.passages.length, carrefours: cars.length, places, feuxOtes };
+}
+// ================= LE GRAPHE DES VOIES =================
+// Les conducteurs du jeu suivaient une grille A* de 2 m : ils coupaient les carrefours en
+// diagonale, roulaient au milieu de la chaussee (souvent a GAUCHE) et raclaient les
+// trottoirs. On construit ici un VRAI reseau de voies a partir de `city.routes` :
+//   - DEUX VOIES par chaussee. Conduite a droite : la voie est decalee de largeur/4 du cote
+//     droit du sens de marche. Dans le repere du jeu (+x est, +z sud, cap = atan2(dx, dz)),
+//     la DROITE d'un cap h est le vecteur (-cos h, sin h) — cap est vers le sud, la droite
+//     est l'ouest.
+//   - un NOEUD a chaque carrefour, a chaque extremite de rue et a chaque raccord de deux
+//     rectangles bout a bout (les axes sont declares en plusieurs morceaux) ;
+//   - des ARETES ORIENTEES entre noeuds consecutifs, une par voie ;
+//   - a chaque noeud, la liste des MANOEUVRES possibles (tout droit, a gauche, a droite,
+//     demi-tour seulement en cul-de-sac).
+// `itineraireVoies(x1, z1, x2, z2)` fait un Dijkstra sur ces aretes et rend une suite de
+// points DANS LA VOIE DE DROITE, arrondis dans les virages (arc de Bezier). C'est ce que
+// suivent la circulation de fond, les bots conducteurs et les voitures de police.
+const CAP = a => Math.atan2(Math.sin(a), Math.cos(a));   // ramene un ecart de cap dans ]-PI, PI]
+const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7 };
+// Le demi-tour coute une fortune : un camion de 8,60 m ne fait pas demi-tour dans une rue de
+// 7 m, il finissait par raboter le bout de l'impasse pendant une minute. On n'y va qu'en
+// dernier recours, quand il n'existe VRAIMENT pas d'autre chemin.
+const COUT_MANOEUVRE = { 'tout-droit': 0, droite: 2, gauche: 6, 'demi-tour': 250 };
+function construireGraphe() {
+  const R = city.routes || [];
+  const voies = [], noeuds = [], aretes = [];
+  const along = i => R[i].d >= R[i].w;
+  // ---- 1) les deux voies de chaque chaussee
+  for (let i = 0; i < R.length; i++) {
+    const r = R[i], aZ = along(i);
+    const larg = aZ ? r.w : r.d, lon = aZ ? r.d : r.w;
+    const axe = aZ ? r.x : r.z, mid = aZ ? r.z : r.x, role = roleVoie(r);
+    for (const sgn of [1, -1]) {
+      const sens = aZ ? (sgn > 0 ? 0 : Math.PI) : (sgn > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const lat = axe + (aZ ? -Math.cos(sens) : Math.sin(sens)) * larg / 4;   // la voie de DROITE
+      voies.push({ id: voies.length, route: i, alongZ: aZ, sens, sgn, lat, larg, role,
+        a: mid - lon / 2, b: mid + lon / 2, vmax: VITESSE_VOIE[role] || 8 });
+    }
+  }
+  // ---- 2) les points remarquables de chaque chaussee
+  const pts = R.map(() => []);
+  for (let i = 0; i < R.length; i++) {
+    const r = R[i], lon = along(i) ? r.d : r.w, c = along(i) ? r.z : r.x;
+    const dedans = Math.min(2.5, lon / 4);
+    pts[i].push(c - lon / 2 + dedans, c + lon / 2 - dedans);
+  }
+  // TOUS les croisements, pas seulement ceux que retient `carrefours()` : celle-ci n'en garde
+  // qu'un par zone de 7 m, si bien que la troisieme rue d'un carrefour a cinq branches
+  // n'avait aucun noeud et que le reseau se retrouvait coupe en une dizaine d'iles.
+  for (let i = 0; i < R.length; i++) for (let j = 0; j < R.length; j++) {
+    if (i === j || along(i) === along(j)) continue;
+    const a = R[i], b = R[j];
+    const ox = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+    const oz = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+    if (ox <= 0.6 || oz <= 0.6) continue;
+    const cx = (Math.max(a.x - a.w / 2, b.x - b.w / 2) + Math.min(a.x + a.w / 2, b.x + b.w / 2)) / 2;
+    const cz = (Math.max(a.z - a.d / 2, b.z - b.d / 2) + Math.min(a.z + a.d / 2, b.z + b.d / 2)) / 2;
+    pts[i].push(along(i) ? cz : cx);
+  }
+  // deux rectangles PARALLELES qui se recouvrent, c'est le meme axe declare en deux morceaux :
+  // sans un noeud commun, le reseau restait coupe en vingt-cinq iles.
+  for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) {
+    if (along(i) !== along(j)) continue;
+    const a = R[i], b = R[j];
+    const ox = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+    const oz = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+    if (ox <= 1 || oz <= 1) continue;
+    const cx = (Math.max(a.x - a.w / 2, b.x - b.w / 2) + Math.min(a.x + a.w / 2, b.x + b.w / 2)) / 2;
+    const cz = (Math.max(a.z - a.d / 2, b.z - b.d / 2) + Math.min(a.z + a.d / 2, b.z + b.d / 2)) / 2;
+    pts[i].push(along(i) ? cz : cx); pts[j].push(along(j) ? cz : cx);
+  }
+  // ---- 3) les noeuds. On les fusionne a 3 m pres : deux rues bout a bout, ou un carrefour
+  // en T dont l'extremite tombe a un metre de l'axe, doivent partager LE MEME noeud.
+  const noeud = (x, z) => {
+    for (const n of noeuds) if (Math.abs(n.x - x) < 3 && Math.abs(n.z - z) < 3) return n;
+    const n = { id: noeuds.length, x: +x.toFixed(2), z: +z.toFixed(2), entrantes: [], sortantes: [], manoeuvres: [] };
+    noeuds.push(n); return n;
+  };
+  // ---- 4) les aretes orientees
+  for (let i = 0; i < R.length; i++) {
+    const L = pts[i].slice().sort((u, v) => u - v), aZ = along(i), r = R[i], ns = [];
+    for (const c of L) {
+      if (ns.length && Math.abs(c - ns[ns.length - 1].c) < 3) continue;
+      ns.push({ c, n: noeud(aZ ? r.x : c, aZ ? c : r.z) });
+    }
+    for (let k = 0; k + 1 < ns.length; k++) {
+      const A = ns[k], B = ns[k + 1];
+      if (A.n === B.n) continue;
+      for (const sgn of [1, -1]) {
+        const v = voies[i * 2 + (sgn > 0 ? 0 : 1)], de = sgn > 0 ? A : B, vers = sgn > 0 ? B : A;
+        const e = { id: aretes.length, de: de.n.id, vers: vers.n.id, route: i, voie: v.id,
+          alongZ: aZ, sens: v.sens, sgn, lat: v.lat, larg: v.larg, role: v.role, vmax: v.vmax,
+          c0: de.c, c1: vers.c, long: Math.abs(B.c - A.c), inv: -1 };
+        e.x0 = aZ ? v.lat : e.c0; e.z0 = aZ ? e.c0 : v.lat;
+        e.x1 = aZ ? v.lat : e.c1; e.z1 = aZ ? e.c1 : v.lat;
+        aretes.push(e); de.n.sortantes.push(e.id); vers.n.entrantes.push(e.id);
+      }
+    }
+  }
+  // ---- 5) LES LIAISONS. Le reseau restait coupe en treize iles : une rue s'arrete a quatre
+  // metres du boulevard, une bretelle passe a six metres du contournement, et deux quartiers
+  // qui se touchent presque n'avaient aucun chemin commun. Quand deux noeuds de DEUX ILES
+  // differentes sont a moins de 11 m l'un de l'autre, on les raccorde par une petite voie de
+  // liaison (dans les deux sens) — c'est exactement ce que fait un conducteur qui traverse
+  // l'ilot de trois metres qui separe deux bouts de bitume.
+  const pere = noeuds.map((n, i) => i);
+  const trouve = i => { while (pere[i] !== i) { pere[i] = pere[pere[i]]; i = pere[i]; } return i; };
+  const unir = (i, j) => { const a = trouve(i), b = trouve(j); if (a !== b) { pere[a] = b; return true; } return false; };
+  for (const e of aretes) unir(e.de, e.vers);
+  const cand = [];
+  for (let i = 0; i < noeuds.length; i++) for (let j = i + 1; j < noeuds.length; j++) {
+    const d = Math.hypot(noeuds[i].x - noeuds[j].x, noeuds[i].z - noeuds[j].z);
+    if (d > 18 || d < 0.2) continue;
+    cand.push([d, i, j]);
+  }
+  cand.sort((a, b) => a[0] - b[0]);
+  let nliaison = 0;
+  // une liaison ne doit traverser NI un mur NI un massif : on la teste comme on testerait une
+  // voiture qui l'emprunte (`carBlocked`, le meme garde-fou que la voiture du joueur)
+  const liaisonLibre = (A, B) => {
+    for (let u = 0; u <= 4; u++) { const x = A.x + (B.x - A.x) * u / 4, z = A.z + (B.z - A.z) * u / 4;
+      if (carBlocked(x, z, null, 1.9, { veh: false })) return false; }
+    return true;
+  };
+  for (const [d, i, j] of cand) {
+    if (trouve(i) === trouve(j)) continue;
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    unir(i, j); nliaison++;
+    const A = noeuds[i], B = noeuds[j], sens = Math.atan2(B.x - A.x, B.z - A.z);
+    for (const [de, vers, sg, cap2] of [[A, B, 1, sens], [B, A, -1, CAP(sens + Math.PI)]]) {
+      const e = { id: aretes.length, de: de.id, vers: vers.id, route: -1 - nliaison, voie: -1,
+        alongZ: Math.abs(Math.cos(cap2)) > 0.5, sens: cap2, sgn: sg, lat: 0, larg: 6, role: 'desserte',
+        vmax: 6, c0: 0, c1: d, long: d, inv: -1, liaison: true,
+        x0: de.x, z0: de.z, x1: vers.x, z1: vers.z };
+      aretes.push(e); de.sortantes.push(e.id); vers.entrantes.push(e.id);
+    }
+  }
+  // l'arete INVERSE (meme troncon, sens oppose) : c'est elle qu'on interdit, pour ne pas
+  // faire demi-tour en pleine rue
+  for (const n of noeuds) for (const ei of n.sortantes) {
+    const e = aretes[ei];
+    for (const ej of n.entrantes) { const f = aretes[ej]; if (f.route === e.route && f.sgn !== e.sgn && f.de === e.vers) { e.inv = ej; break; } }
+  }
+  // ---- 6) les manoeuvres possibles a chaque noeud
+  for (const n of noeuds) {
+    for (const ei of n.entrantes) {
+      const e1 = aretes[ei], inv = aretes[ei].inv >= 0 ? aretes[aretes[ei].inv] : null;
+      const demiTour = n.sortantes.find(eo => aretes[eo].route === e1.route && aretes[eo].sgn !== e1.sgn);
+      const sorties = n.sortantes.filter(eo => eo !== demiTour);
+      const liste = sorties.length ? sorties : n.sortantes;   // cul-de-sac : le demi-tour est la seule issue
+      for (const eo of liste) {
+        const e2 = aretes[eo], d = CAP(e2.sens - e1.sens);
+        n.manoeuvres.push({ de: ei, vers: eo,
+          type: eo === demiTour ? 'demi-tour' : Math.abs(d) < 0.3 ? 'tout-droit' : d < 0 ? 'droite' : 'gauche' });
+      }
+      void inv;
+    }
+  }
+  // les carrefours, gardes une fois pour toutes : `carrefours()` compare 69 x 69 rectangles,
+  // beaucoup trop cher pour le faire a chaque image dans le code de la route.
+  const cars = carrefours();
+  for (const k of cars) {
+    k.feu = (city.trafficLights || []).some(t => Math.abs(t.x - k.cx) < 13 && Math.abs(t.z - k.cz) < 13);
+    k.panneau = (city.panneaux || []).some(q => (q.type === 'stop' || q.type === 'cede') && Math.hypot(q.x - k.cx, q.z - k.cz) < 16);
+    k.larg = Math.max(k.ox, k.oz) / 2 + 1.6;
+  }
+  return { noeuds, aretes, voies, carrefours: cars, liaisons: nliaison };
+}
+// La projection d'un point sur une arete (le long de la voie de droite). Elle marche aussi
+// pour les LIAISONS, qui ne suivent aucun axe.
+function projVoie(x, z, e) {
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, L2 = dx * dx + dz * dz;
+  let t = L2 ? ((x - e.x0) * dx + (z - e.z0) * dz) / L2 : 0; t = clamp(t, 0, 1);
+  const px = e.x0 + dx * t, pz = e.z0 + dz * t;
+  return { t, px, pz, d: Math.hypot(px - x, pz - z) };
+}
+// La voie la plus proche d'un point. Si `cap` est donne, on prefere celle qui va dans le
+// meme sens : un vehicule ne doit pas etre accroche a la voie d'en face.
+function voieProche(x, z, cap) {
+  const G = city.graphe; if (!G || !G.aretes.length) return null;
+  let best = null, bd = Infinity;
+  for (const e of G.aretes) {
+    if (best) {
+      const dx = Math.max(Math.min(e.x0, e.x1) - x, x - Math.max(e.x0, e.x1), 0);
+      const dz = Math.max(Math.min(e.z0, e.z1) - z, z - Math.max(e.z0, e.z1), 0);
+      if (Math.hypot(dx, dz) >= bd + (cap != null ? 10 : 0)) continue;
+    }
+    const p = projVoie(x, z, e);
+    const note = p.d + (cap != null ? Math.abs(CAP(e.sens - cap)) * 3 : 0);
+    if (!best || note < best.note) { best = { arete: e, t: p.t, px: p.px, pz: p.pz, d: p.d, note }; bd = Math.min(bd, p.d); }
+  }
+  return best;
+}
+// LES CHANTIERS. Les employes municipaux barrent une voie le temps d'une reparation : ils
+// posent un obstacle dans `solids`. Une voiture qui ne le sait pas s'y presente, se fait
+// arreter par le garde-fou de collision et pietine. On marque donc les ARETES barrees et le
+// calcul d'itineraire les paye tres cher : la circulation CONTOURNE le chantier par une autre
+// rue, et ne s'y engage que s'il n'existe vraiment aucun autre chemin.
+let voiesBarreesSig = null;
+function majVoiesBarrees() {
+  const G = city.graphe; if (!G) return;
+  const ch = city.chantiers || [];
+  const sig = ch.map(k => `${k.x.toFixed(1)}:${k.z.toFixed(1)}`).join(',');
+  if (sig === voiesBarreesSig && G.barrees) return;
+  voiesBarreesSig = sig; G.barrees = new Set();
+  for (const k of ch) for (const e of G.aretes) if (projVoie(k.x, k.z, e).d < 3.2) G.barrees.add(e.id);
+}
+// Dijkstra sur les ARETES (et non sur les noeuds) : la manoeuvre depend de la voie d'ou l'on
+// vient, et c'est elle qui coute — tourner a gauche coupe la circulation d'en face.
+function cheminAretes(e0, e1) {
+  const G = city.graphe, A = G.aretes;
+  if (e0.id === e1.id) return [e0];
+  const dist = new Float64Array(A.length).fill(Infinity), prev = new Int32Array(A.length).fill(-1);
+  const tas = [];
+  const push = (id, d) => { tas.push([d, id]); let i = tas.length - 1;
+    while (i > 0) { const p = (i - 1) >> 1; if (tas[p][0] <= tas[i][0]) break; const t = tas[p]; tas[p] = tas[i]; tas[i] = t; i = p; } };
+  const pop = () => { const top = tas[0], last = tas.pop();
+    if (tas.length) { tas[0] = last; let i = 0;
+      for (;;) { const l = i * 2 + 1, r = l + 1; let m = i;
+        if (l < tas.length && tas[l][0] < tas[m][0]) m = l;
+        if (r < tas.length && tas[r][0] < tas[m][0]) m = r;
+        if (m === i) break; const t = tas[m]; tas[m] = tas[i]; tas[i] = t; i = m; } }
+    return top; };
+  dist[e0.id] = 0; push(e0.id, 0);
+  while (tas.length) {
+    const [d, id] = pop();
+    if (d > dist[id] + 1e-6) continue;
+    if (id === e1.id) break;
+    const n = G.noeuds[A[id].vers];
+    for (const m of n.manoeuvres) {
+      if (m.de !== id) continue;
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
+      if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
+    }
+  }
+  if (!isFinite(dist[e1.id])) return null;
+  const out = [];
+  for (let id = e1.id; id >= 0; id = prev[id]) { out.push(A[id]); if (id === e0.id) break; }
+  return out.reverse();
+}
+// L'ITINERAIRE PAR LES VOIES : une suite de points [x, z] sur la voie de droite, echantillonnee
+// tous les 6 m environ et arrondie dans les virages. C'est l'interface promise aux autres postes.
+function itineraireVoies(x1, z1, x2, z2, cap) {
+  const G = city.graphe; if (!G || !G.aretes.length) return null;
+  majVoiesBarrees();   // un chantier tout neuf ne doit pas se retrouver sur le trace
+  const A = voieProche(x1, z1, cap), B = voieProche(x2, z2);
+  if (!A || !B) return null;
+  const suite = (A.arete.id === B.arete.id && B.t >= A.t - 0.001) ? [A.arete] : cheminAretes(A.arete, B.arete);
+  if (!suite) return null;
+  const pts = [[+A.px.toFixed(2), +A.pz.toFixed(2)]];
+  const pousse = (x, z, coupe) => {
+    const p = pts[pts.length - 1], d = Math.hypot(p[0] - x, p[1] - z);
+    if (d < 0.4) return;
+    if (coupe !== false && d > 9) { const n = Math.ceil(d / 6);   // on jalonne les lignes droites
+      for (let i = 1; i < n; i++) pts.push([+(p[0] + (x - p[0]) * i / n).toFixed(2), +(p[1] + (z - p[1]) * i / n).toFixed(2)]); }
+    pts.push([+x.toFixed(2), +z.toFixed(2)]);
+  };
+  for (let k = 0; k + 1 < suite.length; k++) {
+    const e = suite[k], f = suite[k + 1], n = G.noeuds[e.vers];
+    // raccord, ou demi-tour au fond d'une impasse : on passe par les deux points de voie
+    if (e.liaison || f.liaison || Math.abs(CAP(f.sens - e.sens)) > 2.6) { pousse(e.x1, e.z1); pousse(f.x0, f.z0); continue; }
+    // le coin : le point ou les deux voies de droite se croisent
+    const cx = e.alongZ ? e.lat : (f.alongZ ? f.lat : n.x);
+    const cz = e.alongZ ? (f.alongZ ? n.z : f.lat) : e.lat;
+    if (Math.abs(CAP(f.sens - e.sens)) < 0.2) { pousse(cx, cz); continue; }   // tout droit : rien a arrondir
+    const ray = Math.max(1.2, Math.min(4.5, e.long * 0.35, f.long * 0.35));
+    const ax = cx - Math.sin(e.sens) * ray, az = cz - Math.cos(e.sens) * ray;
+    const bx = cx + Math.sin(f.sens) * ray, bz = cz + Math.cos(f.sens) * ray;
+    pousse(ax, az);
+    for (let s = 1; s <= 3; s++) { const u = s / 4, w = 1 - u;
+      pousse(w * w * ax + 2 * w * u * cx + u * u * bx, w * w * az + 2 * w * u * cz + u * u * bz, false); }
+    pousse(bx, bz, false);
+  }
+  pousse(B.px, B.pz);
+  return pts;
+}
+// LE MAPPING DES QUARTIERS : chaque desserte du plan est rattachee a une voie et a un noeud.
+// Sans ca, « emmene-moi au marche » visait un point de bitume sans savoir par ou y aller.
+function rattacheDessertes() {
+  const l = (city.plan && city.plan.dessertes) || [];
+  let n = 0;
+  for (const d of l) {
+    const v = voieProche(d.x, d.z);
+    if (!v) continue;
+    d.arete = v.arete.id; d.voie = v.arete.voie; d.noeud = v.t > 0.5 ? v.arete.vers : v.arete.de;
+    d.vx = +v.px.toFixed(2); d.vz = +v.pz.toFixed(2); d.ecart = +v.d.toFixed(1); n++;
+  }
+  return n;
+}
+// ================= LE CODE DE LA ROUTE =================
+// Un vehicule conduit par le jeu ne doit plus se contenter d'eviter les murs : il roule a
+// droite, s'arrete au feu rouge ET orange sur la LIGNE du feu qui concerne son sens, marque
+// l'arret au stop, cede le passage, laisse traverser les pietons et respecte la priorite a
+// droite aux carrefours sans signalisation. `codeRoute` rend la vitesse maximale autorisee
+// a cet instant (0 = arret complet) et la RAISON, que le banc d'essai relit.
+let FLOTTE = [], flotteT = -1;   // les vehicules du moment, rafraichis une fois par image
+function flotteMaj() {
+  if (flotteT === simTime && FLOTTE.length) return FLOTTE;
+  flotteT = simTime; FLOTTE.length = 0;
+  for (const v of city.aiCars) FLOTTE.push(v);
+  for (const v of police.cars) FLOTTE.push(v);
+  for (const v of city.cars) FLOTTE.push(v);
+  return FLOTTE;
+}
+// Le carrefour est-il libre ? `droiteSeule` : on ne regarde que ceux qui viennent de notre
+// droite (priorite a droite) ; sinon tout ce qui coupe notre route (stop, cedez-le-passage).
+function croisementLibre(c, r, droiteSeule) {
+  const h = c.h, cx = -Math.cos(h), cz = Math.sin(h);   // vecteur « ma droite »
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
+    if (d > r || d < 0.5) continue;
+    if (Math.abs(CAP((v.h || 0) - h)) < 0.6) continue;   // meme sens : c'est une file, pas une priorite
+    // Une voiture A L'ARRET ne prend jamais la priorite : sinon une voiture garee au coin de
+    // la rue bloquait le stop pour l'eternite. Ce qui est immobile est un obstacle, pas une
+    // priorite, et c'est `carBlocked` qui s'en charge.
+    if (Math.abs(v.speed || 0) < 0.6) continue;
+    if (droiteSeule && d > 9 && dx * cx + dz * cz < 1) continue;
+    return false;
+  }
+  return true;
+}
+// LA PRIORITE A DROITE, mesuree au carrefour lui-meme : celui qui est deja engage passe, et
+// sinon c'est celui qui vient de la droite. On ne regarde que les vehicules QUI ROULENT.
+function carrefourLibre(c, k) {
+  const cx = -Math.cos(c.h), cz = Math.sin(c.h);   // vecteur « ma droite »
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    if (Math.abs(v.speed || 0) < 0.6) continue;
+    const d = Math.hypot(v.x - k.cx, v.z - k.cz);
+    if (d > 12) continue;                                    // il n'est pas a CE carrefour
+    if (Math.abs(CAP((v.h || 0) - c.h)) < 0.6) continue;     // meme sens : c'est une file
+    const dedans = d < k.larg + 2;                           // deja engage : il finit sa traversee
+    if (!dedans && (v.x - c.x) * cx + (v.z - c.z) * cz < 1) continue;   // ni engage, ni a ma droite
+    return false;
+  }
+  return true;
+}
+// Un pieton (bot, joueur, ouvrier) est-il engage sur ce passage ?
+function pietonSurPassage(p) {
+  const dedans = (x, y, z) => Math.abs(y) < 2.6 && Math.abs(x - p.x) < p.w / 2 + 0.7 && Math.abs(z - p.z) < p.d / 2 + 0.7;
+  if (!drive.car && P.hp > 0 && dedans(P.pos.x, P.pos.y, P.pos.z)) return true;
+  for (const b of bots) if (!b.drive && !b.prison && b.av && b.av.group.visible && dedans(b.pos.x, b.pos.y, b.pos.z)) return true;
+  return false;
+}
+function codeRoute(c, dt, opt) {
+  opt = opt || {};
+  const h = c.h, fx = Math.sin(h), fz = Math.cos(h), spd = Math.abs(c.speed || 0);
+  const frein = 2.6 + spd * spd / 7;   // de quoi s'arreter en douceur (environ 3,5 m/s²)
+  let v = 99, raison = null;
+  const cap = (val, r) => { if (val < v) { v = val; raison = r; } };
+  const approche = (al, marge) => Math.max(0, (al - marge) * 1.7);
+  const devant = (x, z, portee, lateral) => {
+    const dx = x - c.x, dz = z - c.z, al = dx * fx + dz * fz;
+    if (al < 0.05 || al > portee) return -1;
+    return Math.abs(-dx * fz + dz * fx) < lateral ? al : -1;
+  };
+  // ---- 1) les feux : on s'arrete a la LIGNE du feu qui arrete NOTRE sens
+  flotteMaj();
+  let vFeu = null;
+  if (!opt.urgence) for (const tl of (city.trafficLights || [])) {
+    // On relit la phase sur l'HORLOGE plutot que sur `tl.state` : un banc d'essai qui appelle
+    // la conduite sans `lightsTick` laissait le feu fige au rouge, et le bot attendait a jamais.
+    if (tl.broken || !tl.ligne || feuPhase(simTime, tl.groupe) === 2) continue;
+    if (Math.abs(tl.x - c.x) > 45 || Math.abs(tl.z - c.z) > 45) continue;
+    if (Math.abs(CAP(tl.sens - h)) > 0.5) continue;
+    const al = devant(tl.ligne.x, tl.ligne.z, frein + 2.5, 5);
+    if (al > 0) { const v2 = approche(al, 1.4); if (vFeu == null || v2 < vFeu) vFeu = v2; }
+  }
+  // Un feu qui reste rouge plus longtemps qu'un cycle entier est un feu EN PANNE : on ne
+  // l'attend pas jusqu'a la fin des temps, on franchit prudemment. (C'est aussi ce qui sauve
+  // les bancs d'essai qui font rouler un bot avec l'horloge du jeu figee.)
+  if (vFeu != null) {
+    c.feuT = (c.feuT || 0) + (dt || 0);
+    if (c.feuT < FEU_CYCLE + 6) cap(vFeu, 'feu'); else cap(2, 'feu-panne');
+  } else c.feuT = 0;
+  // ---- 2) stop et cedez-le-passage. Le panneau est sur le TROTTOIR : on tolere 7 m de cote.
+  if (c.stopOK && Math.hypot(c.x - c.stopOK.x, c.z - c.stopOK.z) > 16) { c.stopOK = null; c.stopDep = 0; }
+  if (!opt.urgence) for (const q of (city.panneaux || [])) {
+    if (q.type !== 'stop' && q.type !== 'cede') continue;
+    if (Math.abs(q.x - c.x) > 30 || Math.abs(q.z - c.z) > 30) continue;
+    if (Math.abs(CAP(q.sens - h)) > 0.5) continue;
+    const al = devant(q.x, q.z, frein + 3, 7);
+    if (al < 0) continue;
+    if (q.type === 'cede') { if (!croisementLibre(c, 18, false)) cap(approche(al, 1.2), 'cede'); continue; }
+    if (c.stopOK === q) continue;                       // arret deja marque a ce stop
+    if (spd > 0.6 || al > 2.8) { c.stopDep = 0; cap(approche(al, 1.2), 'stop'); continue; }
+    // l'arret marque se compte en temps ECOULE (dt) : compare a l'horloge, il ne s'achevait
+    // jamais quand un banc d'essai fait rouler la voiture avec `simTime` fige
+    c.stopDep = (c.stopDep || 0) + (dt || 0);
+    if (c.stopDep < 1.2 || !croisementLibre(c, 16, false)) { cap(0, 'stop'); continue; }
+    c.stopOK = q; c.stopDep = 0;
+  }
+  // ---- 3) les passages pietons. On s'arrete des qu'un pieton est engage — MAIS PAS POUR
+  // L'ETERNITE : un habitant qui s'arrete pour danser au milieu du passage bloquait la rue
+  // indefiniment (l'ami qui conduisait le joueur a la villa n'arrivait jamais). Au bout de
+  // 6 s d'attente, on klaxonne et on repart au pas.
+  let alP = -1, margeP = 0;
+  for (const p of (city.passages || [])) {
+    if (Math.abs(p.x - c.x) > 28 || Math.abs(p.z - c.z) > 28) continue;
+    const prof = Math.abs(fx) * p.w + Math.abs(fz) * p.d;
+    const al = devant(p.x, p.z, frein + prof, 6);
+    if (al > 0 && pietonSurPassage(p)) { alP = al; margeP = prof / 2 + 0.9; break; }
+  }
+  if (alP > 0) {
+    c.passT = (c.passT || 0) + (dt || 0);
+    if (c.passT < 6) cap(approche(alP, margeP), 'passage');
+    else { cap(1.5, 'passage'); klaxonne(c); }
+  } else c.passT = 0;
+  // ---- 3 ter) quelqu'un A PIED juste devant le capot : on freine et on klaxonne (meme regle,
+  // meme garde-fou : au bout de 6 s on avance au pas plutot que de rester plante la)
+  if (pietonDevant(c)) {
+    c.pietT = (c.pietT || 0) + (dt || 0); klaxonne(c);
+    cap(c.pietT < 6 ? 0 : 1.5, 'pieton');
+  } else c.pietT = 0;
+  // ---- 3 bis) ON SE RANGE POUR LA SIRENE. Un vehicule prioritaire (police en poursuite,
+  // pompiers, ambulance) porte `urgence` : celui qui l'entend arriver derriere lui leve le pied
+  // et le laisse passer au lieu de lui boucher la rue.
+  if (!opt.urgence) for (const v of FLOTTE) {
+    if (v === c || !v.urgence) continue;
+    const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
+    if (d > 30 || Math.abs(CAP((v.h || 0) - h)) > 0.9) continue;
+    if (dx * fx + dz * fz > 1) continue;   // il est devant nous : rien a faire
+    cap(2.5, 'sirene');
+  }
+  // ---- 4) priorite a droite aux carrefours sans feu ni panneau ; et toujours au vehicule
+  // deja engage. Sur une voie PRIORITAIRE (boulevard, avenue, losange jaune) on ne s'arrete pas.
+  if (!opt.urgence && !opt.prioritaire) {
+    const G = city.graphe;
+    for (const k of ((G && G.carrefours) || [])) {
+      if (k.feu || k.panneau) continue;
+      if (Math.abs(k.cx - c.x) > 32 || Math.abs(k.cz - c.z) > 32) continue;
+      const al = devant(k.cx, k.cz, frein + k.larg, 5);
+      if (al > 0 && !carrefourLibre(c, k)) cap(approche(al, k.larg + 0.8), 'priorite');
+    }
+  }
+  return { v, raison };
+}
+// ================= L'INTERFACE POUR LES AUTRES POSTES =================
+// `botConduit(c, x, z, dt, opt)` conduit le vehicule `c` vers le point (x, z) PAR LES VOIES :
+// a droite, en respectant les feux, les stops, les cedez-le-passage, la priorite a droite et
+// les passages pietons, en gardant ses distances et SANS JAMAIS traverser un solide. Il rend
+// la distance restante. On l'appelle a chaque image ; l'itineraire est garde sur le vehicule
+// et refait quand la cible a bouge de plus de 6 m, toutes les 6 s, ou si le vehicule se bloque.
+//   opt.urgence : vehicule prioritaire (police en poursuite, pompiers, ambulance) — il passe
+//                 aux feux et les autres se rangent pour lui laisser le passage
+//   opt.vmax    : vitesse maximale en m/s (defaut 9 pour une voiture, 6 pour un camion)
+// C'est cette fonction que les missions (chauffard a poursuivre, convoi a escorter) doivent
+// appeler au lieu de calculer leur propre trajet.
+function botConduit(c, x, z, dt, opt) {
+  opt = opt || {};
+  const dist = Math.hypot(x - c.x, z - c.z);
+  const st = (c.ia && c.ia.but) ? c.ia : null;
+  if (!st || Math.hypot(st.but[0] - x, st.but[1] - z) > 6 || simTime > (st.refaire || 0) || st.i >= st.route.length) {
+    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, c.h) : null;
+    const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
+    c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
+  }
+  c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
+  c.urgence = !!opt.urgence;
+  traficRoule(c, dt, { pilote: true, urgence: !!opt.urgence });
+  return dist;
+}
+// ================= LA CIRCULATION DE FOND =================
+// L'anneau code en dur (208 m de perimetre autour de la place centrale) a disparu : les
+// voitures se donnent maintenant des destinations sur le graphe, les changent en arrivant,
+// et roulent a droite en respectant la signalisation.
+let traficGraine = 20240607;
+const traficRnd = () => ((traficGraine = (traficGraine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+function traficDestination(c) {
+  const G = city.graphe;
+  if (!G || !G.noeuds.length) { c.ia = null; return false; }
+  majVoiesBarrees();
+  for (let essai = 0; essai < 6; essai++) {
+    const n = G.noeuds[Math.floor(traficRnd() * G.noeuds.length)];
+    if (Math.hypot(n.x - c.x, n.z - c.z) < 40) continue;   // une vraie traversee, pas trois metres
+    const r = itineraireVoies(c.x, c.z, n.x, n.z, c.h);
+    if (r && r.length > 2) { c.ia = { route: r, i: 1, dest: [n.x, n.z], t: simTime, sig: voiesBarreesSig }; return true; }
+  }
+  c.ia = null; return false;
+}
+// On repartit la circulation sur toute la ville au demarrage : avant, les cinq vehicules
+// tournaient en rond sur le meme anneau de 26 m de rayon et le reste de la carte etait mort.
+function traficPose(c) {   // pose UN vehicule sur une voie libre, au hasard, dans la ville
+  const G = city.graphe; if (!G || !G.aretes.length) return false;
+  flotteMaj();
+  const [r0, l0] = vehHalf(c);
+  for (let essai = 0; essai < 60; essai++) {
+    const e = G.aretes[Math.floor(traficRnd() * G.aretes.length)];
+    if (e.liaison || e.long < 14 || e.larg < 7) continue;
+    const p = projVoie(e.x0 + (e.x1 - e.x0) * 0.5, e.z0 + (e.z1 - e.z0) * 0.5, e);
+    if (FLOTTE.some(v => v !== c && Math.hypot(v.x - p.px, v.z - p.pz) < 12)) continue;
+    if (Math.hypot(p.px - P.pos.x, p.pz - P.pos.z) < 30) continue;   // jamais sous les yeux du joueur
+    if (carBlocked(p.px, p.pz, c.solid, r0, { veh: true, bar: true }, 0, e.sens, l0)) continue;
+    c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null; c.libre = null; c.figeT = 0;
+    c.y = groundCar(c.x, c.z, c.solid, 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+    vehicleSolid(c); return true;
+  }
+  return false;
+}
+function traficPlace() {
+  let n = 0;
+  for (const c of city.aiCars) if (c.spd && traficPose(c)) n++;
+  return n;
+}
+// LE TEST EXACT DU RECTANGLE. `carBlocked` echantillonne trois disques le long de la caisse :
+// c'est rapide, mais un coin de remorque pouvait mordre un panneau mince ou l'angle d'une
+// enseigne sans qu'aucun disque ne le voie. Ici on teste les quatre coins, les deux flancs et
+// le centre, sans approximation — c'est ce qui garantit qu'aucune image ne montre un vehicule
+// bot dans un solide. (Les autres vehicules sont exclus : ils sont geres par `separerVehicules`.)
+function vehiculeMord(c, x, z, h) {
+  const cs = Math.cos(h), sn = Math.sin(h);
+  const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+  for (const o of solidsAutour(x, z, A + B + 2, true)) {
+    if (o === c.solid || o.veh || o.h > 30) continue;
+    if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
+    for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0], [B, 0], [-B, 0]]) {
+      const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
+      if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+    }
+  }
+  return false;
+}
+// Le garde-fou complet d'un vehicule pilote par le jeu : les disques de `carBlocked` (murs,
+// batiments, barrieres, autres vehicules) ET le rectangle exact.
+function vehBloque(c, x, z, h, opt) {
+  const [r0, L] = vehHalf(c);
+  return carBlocked(x, z, c.solid, r0, opt || {}, 0, h, L) || vehiculeMord(c, x, z, h);
+}
+// Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
+// d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
+// s'arrete net et recalcule son itineraire au lieu de traverser le mur.
+function avanceVehicule(c, dt, spd, opt, h0) {
+  const o = Object.assign({ bar: true, veh: true }, opt || {});
+  // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
+  // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
+  // est dans un solide et pas l'ancien, on annule la rotation de cette image.
+  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
+  const x0 = c.x, z0 = c.z;
+  const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
+  let bloque = 0;
+  if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
+  if (!vehBloque(c, c.x, nz, c.h, o)) c.z = nz; else bloque++;
+  if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
+  // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
+  // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
+  // VERIFIEE et on y revient : plus une seule image avec un capot dans un mur.
+  if (!vehBloque(c, c.x, c.z, c.h, o)) c.libre = [c.x, c.z, c.h];
+  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  c.pas = Math.hypot(c.x - x0, c.z - z0);
+  c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
+  c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+  if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= spd * dt / 0.3; });
+  vehicleSolid(c);
+  return bloque;
+}
+// La distance au vehicule de devant, dans notre file : on garde une longueur de securite.
+function gapDevant(c) {
+  flotteMaj();
+  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  let gap = 99, longDevant = 4.4;
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    const dx = v.x - c.x, dz = v.z - c.z, al = dx * fx + dz * fz;
+    if (al < 0.5 || al > 14) continue;
+    if (Math.abs(-dx * fz + dz * fx) > 2.2) continue;
+    if (al < gap) { gap = al; longDevant = v.baseD || 4.4; }
+  }
+  return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
+}
+// Freine et klaxonne quand quelqu'un est a pied juste devant le capot.
+function pietonDevant(c) {
+  const fx = Math.sin(c.h), fz = Math.cos(c.h), spd = Math.abs(c.speed || 0);
+  const portee = 3.2 + spd * 0.7;
+  const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, al = dx * fx + dz * fz;
+    return Math.abs(y - (c.y || 0)) < 2.4 && al > 0 && al < portee && Math.abs(-dx * fz + dz * fx) < 1.7; };
+  if (!drive.car && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
+  for (const b of bots) if (!b.drive && b.av && b.av.group.visible && gene(b.pos.x, b.pos.y, b.pos.z)) return true;
+  for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
+  return false;
+}
+function klaxonne(c) {
+  if (simTime < (c.klaxT || 0)) return;
+  c.klaxT = simTime + 2.4;
+  if (Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < 40) horn(c.kind);
+}
+// Le pilote automatique d'un vehicule de la circulation : il suit sa voie, ralentit dans les
+// virages, garde ses distances et obeit au code de la route.
+function traficRoule(c, dt, opt) {
+  opt = opt || {};
+  const st = c.ia, R = st.route;
+  // un chantier vient d'etre pose (ou leve) : le trace n'est plus valable, on en refait un
+  if (!opt.pilote && st.sig !== undefined && st.sig !== voiesBarreesSig) { c.ia = null; c.destT = 0; return; }
+  while (st.i < R.length - 1 && Math.hypot(R[st.i][0] - c.x, R[st.i][1] - c.z) < 2.8) st.i++;
+  const wp = R[Math.min(st.i, R.length - 1)];
+  const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
+  const want = Math.atan2(dx, dz), dh = CAP(want - c.h), h0 = c.h;
+  c.h += clamp(dh, -1, 1) * clamp(4.4 - Math.abs(c.speed || 0) * 0.1, 2.2, 4.2) * dt;
+  // on leve le pied AVANT le virage, pas dedans
+  let virage = Math.abs(dh);
+  const w2 = R[Math.min(st.i + 1, R.length - 1)];
+  if (w2 !== wp) {
+    const a2 = Math.abs(CAP(Math.atan2(w2[0] - wp[0], w2[1] - wp[1]) - want));
+    if (dwp < 18) virage = Math.max(virage, a2 * (1 - dwp / 22));
+  }
+  const base = c.vmaxIA || 9;
+  let cible = virage > 0.8 ? Math.min(base, 4) : virage > 0.35 ? Math.min(base, 6.5) : base;
+  if (st.i >= R.length - 1 && dwp < 12) cible = Math.min(cible, 3 + dwp * 0.4);   // on se pose en douceur
+  // sur quelle sorte de voie roule-t-on ? (boulevard et avenue sont prioritaires : on n'y
+  // laisse pas passer la rue qui debouche a droite). Recalcule deux fois par seconde.
+  if (simTime > (c.roleT || 0)) { c.roleT = simTime + 0.6;
+    const rt = (city.routes || []).find(r => Math.abs(c.x - r.x) < r.w / 2 && Math.abs(c.z - r.z) < r.d / 2);
+    c.role = rt ? roleVoie(rt) : null; }
+  const co = codeRoute(c, dt, { prioritaire: (c.role === 'boulevard' || c.role === 'avenue'), urgence: !!opt.urgence });
+  cible = Math.min(cible, co.v);
+  c.raison = co.raison;
+  const [gap, mini] = gapDevant(c);
+  if (gap < mini) { cible = 0; c.raison = 'file'; } else if (gap < mini + 4) { cible = Math.min(cible, (gap - mini) * 2.6); if (cible < 2) c.raison = 'file'; }
+  // arrivee : on se choisit une nouvelle destination (sauf si un autre poste pilote)
+  if (st.i >= R.length - 1 && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
+  const acc = cible < (c.speed || 0) ? 5.5 : 2.2;   // on freine plus vite qu'on n'accelere
+  c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
+  if (c.speed < 0.05) c.speed = 0;
+  c.stopped = c.speed < 0.4;
+  const bloque = avanceVehicule(c, dt, c.speed, {}, h0);
+  if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
+  else c.bloqueT = 0;
+  // SOUPAPE. Une voiture arretee au feu, au stop ou devant un pieton fait son travail ; une
+  // voiture arretee SANS RAISON est coincee (un chantier tout neuf en travers de sa voie, une
+  // impasse ou elle ne peut pas tourner). Au bout de 8 s elle se cherche une autre destination,
+  // au bout de 20 s elle va reprendre la circulation ailleurs — la ville ne se fige jamais.
+  const excuse = c.raison === 'feu' || c.raison === 'stop' || c.raison === 'cede' || c.raison === 'passage' || c.raison === 'pieton' || c.raison === 'file';
+  // On juge sur le chemin REELLEMENT parcouru : une voiture qui rabote un mur affiche encore
+  // 1,2 m/s au compteur et n'avance que de trente centimetres par seconde.
+  if ((c.pas || 0) < 2.2 * dt && !excuse) c.figeT = (c.figeT || 0) + dt; else c.figeT = 0;
+  // Et le garde-fou ultime : meme avec une bonne excuse, PERSONNE ne reste immobile 40 s.
+  // Un feu dure 16 s, un stop 2 s, un pieton quelques secondes ; au-dela, c'est une file qui
+  // ne repartira jamais (la voiture de tete est coincee) et on va circuler ailleurs.
+  if ((c.pas || 0) < 0.6 * dt) c.attenteT = (c.attenteT || 0) + dt; else c.attenteT = 0;
+  if (opt.pilote) { if (c.figeT > 6) { c.figeT = 0; st.refaire = 0; } return; }   // pilote par un autre poste : on refait le trace, on ne le teleporte pas
+  if (c.figeT > 20 || c.attenteT > 40) { traficPose(c); }
+  else if (c.figeT > 8 && c.ia) { c.ia = null; c.destT = 0; }
 }
 const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.4, 'rgba(255,220,120,0.35)'); gr.addColorStop(1, 'rgba(255,200,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();
 const day = { len: 360, h: 7, night: 0, glows: [], last: -1, neons: [] };
@@ -9825,6 +10482,17 @@ function armeeTick(dt) {
   }
   if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; if (dF < 60) sfx.tone(60, 0, .5, 'sawtooth', .03, 40); }
 }
+// Le bandeau « recherché » ne disait qu'une chose : le nombre d'étoiles. On y lit maintenant
+// l'ÉTAT DE LA RECHERCHE — ils te voient, ils te cherchent (avec le temps qu'il reste à tenir),
+// ils t'ont perdu — pour que l'enfant comprenne pourquoi se cacher sert à quelque chose.
+function majWanted() {
+  const el = $('wanted'); if (!el || police.wanted <= 0) return;
+  if (police.reactT > simTime) return;   // le compte à rebours d'intervention a la priorité
+  const et = '★'.repeat(police.wanted);
+  if (simTime - (police.vuT || -999) < 1.2 || police.sait) el.textContent = `🚔 Recherché ${et}${police.wanted >= 2 ? ' · ils tirent !' : ''} · ils te voient — sauve-toi !`;
+  else if (police.perdu) el.textContent = `🙈 Ils t'ont perdu ${et} · ne te montre pas`;
+  else el.textContent = `🔎 On te cherche… ${et} · reste hors de vue ${Math.max(0, Math.ceil(PERTE_DELAI(police.wanted) - police.hideT))} s`;
+}
 function policeTick(dt) {
   if (!police.cars.length) return;
   if (armee.on) armeeTick(dt);
@@ -9894,8 +10562,20 @@ function policeTick(dt) {
     // perd doucement avec le temps : une traque qui s'éternise s'essouffle.
     if (!near) police.usure = (police.usure || 0) + dt * (hidden ? 2.2 : 0.9);
     else police.usure = Math.max(0, (police.usure || 0) - dt * 3);
-    if (hidden && !near) { police.hideT += dt; if (police.hideT > 6 + (police.crimeLevel || 0) * 5) { police.hideT = 0; police.wanted--; if (police.wanted <= 0) { armeeFin(); clearWanted('🕵️ Semé ! La police a abandonné'); } else { msg(`🕵️ Bien caché… niveau ${'★'.repeat(police.wanted)}`, 1500); $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · reste caché`; } } }
-    else police.hideT = 0;
+    // HORS DE VUE = LES RECHERCHES S'ARRETENT. `police.vuT` est mis a jour par les voitures
+    // (`vuPar`), par les agents a pied (`agentsTick`) et par le projecteur de l'helicoptere.
+    // Un agent qui fouille a moins de 30 m garde la pression, et `police.sait` (ils savent ou
+    // tu es) aussi. Sinon le compte a rebours tourne.
+    const vuLa = simTime - (police.vuT || -999) < 0.5;
+    const agentColle = police.agents.some(a => !a.ko && Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 30 && Math.abs(a.y - P.pos.y) < 6);
+    if (vuLa || police.sait || agentColle || armee.on) { police.hideT = 0; police.perdu = false; }
+    else police.hideT += dt;
+    if (police.hideT > (police.perdu ? PERTE_PALIER : PERTE_DELAI(police.wanted))) {
+      police.hideT = 0; police.perdu = true; police.wanted--;
+      if (police.wanted <= 0) { armeeFin(); clearWanted('🙈 Ils t\'ont perdu : la police abandonne les recherches'); }
+      else msg(`🕵️ Ils perdent ta trace… niveau ${'★'.repeat(police.wanted)}`, 1600);
+    }
+    majWanted();
     if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) { armeeFin(); clearWanted('🚔 La police ne te cherche plus'); } }   // plus le délit est grave, plus elle s'accroche
   }
   for (const pc of police.cars) {
@@ -9904,8 +10584,37 @@ function policeTick(dt) {
     if (pc.debarque) { pc.speed = 0; continue; }   // les agents sont descendus : la voiture attend devant le bâtiment
     if (pc.constat) { pc.speed = 0; continue; }    // envoyée sur un accident : c'est accidentsTick qui la pilote
     if (pc.active && police.wanted > 0 && police.sait) { tx = police.sait[0]; tz = police.sait[1]; }
-    else if (pc.active && police.wanted > 0 && police.lastSeen) { tx = police.lastSeen[0]; tz = police.lastSeen[1]; }
-    else if (pc.goHome) { tx = pc.home[0]; tz = pc.home[1]; if (Math.hypot(pc.x - tx, pc.z - tz) < 2) { pc.goHome = false; pc.speed = 0; continue; } }
+    else if (pc.active && police.wanted > 0 && police.lastSeen) {
+      tx = police.lastSeen[0]; tz = police.lastSeen[1];
+      // Ils ont perdu sa trace : ils foncent au dernier point connu, puis FOUILLENT le
+      // quartier (des noeuds du graphe a moins de 32 m) avant d'abandonner pour de bon.
+      if (police.perdu) {
+        if (!pc.fouille || simTime > (pc.fouilleT || 0) || Math.hypot(pc.fouille[0] - tx, pc.fouille[1] - tz) > 36) {
+          pc.fouilleT = simTime + 12; pc.fouille = null;
+          const N = (city.graphe && city.graphe.noeuds) || [];
+          for (let e = 0; e < 10 && !pc.fouille; e++) { const n = N[Math.floor(traficRnd() * N.length)]; if (Math.hypot(n.x - tx, n.z - tz) < 32) pc.fouille = [n.x, n.z]; }
+        }
+        if (pc.fouille) { tx = pc.fouille[0]; tz = pc.fouille[1]; if (Math.hypot(pc.x - tx, pc.z - tz) < 5) { pc.fouille = null; pc.fouilleT = 0; } }
+      } else pc.fouille = null;
+    }
+    else if (pc.goHome) { tx = pc.home[0]; tz = pc.home[1]; if (Math.hypot(pc.x - tx, pc.z - tz) < 2) { pc.goHome = false; pc.speed = 0; pc.patrouille = null; continue; } }
+    else if (!pc.mil && city.on && !jail.on && city.graphe) {
+      // PATROUILLE. Les voitures inactives dormaient sur le parking du commissariat : elles
+      // tournent maintenant dans la ville par le graphe des voies, tranquillement et dans les
+      // regles (feux, stops, passages pietons), et repartent en chasse des qu'on les appelle.
+      if (!pc.patrouille || simTime > (pc.patT || 0)) {
+        pc.patT = simTime + 40; pc.patrouille = null;
+        const N = city.graphe.noeuds;
+        for (let e = 0; e < 8 && !pc.patrouille; e++) {
+          const n = N[Math.floor(traficRnd() * N.length)];
+          if (Math.hypot(n.x - police.station.x, n.z - police.station.z) < 175 && Math.hypot(n.x - pc.x, n.z - pc.z) > 30) pc.patrouille = [n.x, n.z];
+        }
+      }
+      if (pc.patrouille) {
+        tx = pc.patrouille[0]; tz = pc.patrouille[1];
+        if (Math.hypot(pc.x - tx, pc.z - tz) < 6) { pc.patrouille = null; pc.patT = 0; }
+      }
+    }
     if (tx == null) continue;
     const dist = Math.hypot(tx - pc.x, tz - pc.z);
     if (police.sait && pc.active && !pc.debarque && police.agents.length < 10
@@ -9914,11 +10623,16 @@ function policeTick(dt) {
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
     if (!pc.route || simTime > (pc.routeT || 0) || Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6) {
       pc.routeT = simTime + 2.5; pc.routeTx = tx; pc.routeTz = tz;
-      const path = navPath(pc.x, pc.z, tx, tz);
       // cible posée sur le sable du rallye : on s'arrête au bord (sinon le dernier segment
       // était une ligne droite en plein milieu des dunes)
       const surSable = !!RALLY.mesh && terrainH(tx, tz) != null;
-      pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]);
+      // LES VOITURES DE POLICE SUIVENT LES VOIES elles aussi : par le graphe tant que la
+      // cible est loin, puis en direct sur les 25 derniers metres (elle bouge, et le dernier
+      // troncon passe souvent par un parking ou une allee).
+      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > 25) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
+      if (via && via.length > 2) pc.route = via.concat([[tx, tz]]);
+      else { const path = navPath(pc.x, pc.z, tx, tz);
+        pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]); }
     }
     while (pc.route.length > 1 && Math.hypot(pc.route[0][0] - pc.x, pc.route[0][1] - pc.z) < 2.6) pc.route.shift();
     const wp = pc.route[0], dx = wp[0] - pc.x, dz = wp[1] - pc.z, want = Math.atan2(dx, dz);
@@ -9927,12 +10641,20 @@ function policeTick(dt) {
     else if ((pc.avoidT || 0) > simTime) { let da = pc.avoidH - pc.h; da = Math.atan2(Math.sin(da), Math.cos(da)); pc.h += clamp(da, -1, 1) * 3 * dt; pc.speed += (6 - pc.speed) * Math.min(1, dt * 2); }   // contournement
     else {
       pc.h += clamp(dh, -1, 1) * 4 * dt;
-      const target = pc.active ? (dist > 4 ? (Math.abs(dh) > 1 ? 5 : 15) : 3) : 9; pc.speed += (target - pc.speed) * Math.min(1, dt * 1.5);
+      let target = pc.active ? (dist > 4 ? (Math.abs(dh) > 1 ? 5 : 15) : 3) : 9;
+      // Sirene hurlante (poursuite), elle garde la priorite sur les feux et les stops, mais
+      // elle ne fauche personne : elle s'arrete quand un pieton est engage devant elle. En
+      // patrouille, elle obeit a toute la signalisation comme n'importe quel conducteur.
+      const urgence = pc.active && (police.wanted > 0 || police.alarmT > simTime);
+      pc.urgence = urgence;   // les autres conducteurs se rangent quand la sirene arrive
+      const loi = codeRoute(pc, dt, { urgence });
+      target = Math.min(target, loi.v); pc.raison = loi.raison;
+      pc.speed += (target - pc.speed) * Math.min(1, dt * (target < pc.speed ? 4 : 1.5));
     }
     const nx = pc.x + Math.sin(pc.h) * pc.speed * dt, nz = pc.z + Math.cos(pc.h) * pc.speed * dt;
     const opt = { bar: true, veh: true, pol: true };
     const [pr, pL] = vehHalf(pc);
-    const bx = carBlocked(nx, pc.z, pc.solid, pr, opt, 0, pc.h, pL), bz = carBlocked(pc.x, nz, pc.solid, pr, opt, 0, pc.h, pL);
+    const bx = vehBloque(pc, nx, pc.z, pc.h, opt), bz = vehBloque(pc, pc.x, nz, pc.h, opt);
     if (!bx) pc.x = nx; if (!bz) pc.z = nz;
     if (bx || bz) {
       pc.stuck = (pc.stuck || 0) + dt;
@@ -10398,7 +11120,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.accidents = []; city.ambulances = []; city.depanneuses = []; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -13257,22 +13979,40 @@ function coupFin(ok) {
 // seconde gagnait : l'ami qui venait te chercher ne bougeait tout simplement plus.
 function conduireVersPoint(c, tx, tz, dt, st) {
   const dist = Math.hypot(tx - c.x, tz - c.z);
+  // HORLOGE PROPRE AU TRAJET : elle avance de dt a chaque appel. Les bancs d'essai font
+  // rouler la voiture avec `simTime` fige, et tous les delais (recalcul, contournement,
+  // deblocage) restaient alors bloques a jamais.
+  st.horloge = (st.horloge || 0) + dt;
+  const T = st.horloge;
   // L'itinéraire complet est calculé À L'AVANCE (A* + lissage) et gardé tel quel : on ne le
   // refait que si la destination a bougé, si on s'est fait bloquer, ou toutes les 8 s. Avant,
   // il était rejeté toutes les 2,5 s et le conducteur changeait d'avis en pleine courbe.
-  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || simTime > (st.routeT || 0)) {
-    st.routeT = simTime + 8; st.rtx = tx; st.rtz = tz;
-    const pth = navPath(c.x, c.z, tx, tz);
+  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || T > (st.routeT || 0)) {
+    st.routeT = T + 20; st.rtx = tx; st.rtz = tz;
+    // ON SUIT LES VOIES. La grille A* ignore les rues et les sens de circulation : le
+    // conducteur coupait les carrefours en diagonale et roulait a gauche. On lui donne le
+    // trace du graphe, et on ne retombe sur la grille que s'il n'y a pas de route.
+    // Le graphe pour le gros du trajet, la grille A* pour les 30 derniers metres : une cible
+    // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
+    // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
+    // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
+    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
+    const pth = (via && via.length > 2) ? via : navPath(c.x, c.z, tx, tz);
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }
+  // Progression : si l'on ne se rapproche plus du but pendant 40 s, on passe a la grille A*
+  // (une cible sur un parking n'est sur aucune voie) et on force un deblocage.
+  if (st.meilleur == null || st.rtx !== st.sMx || st.rtz !== st.sMz) { st.meilleur = dist; st.progT = T; st.sMx = st.rtx; st.sMz = st.rtz; st.panne = 0; }   // nouvelle destination : on redonne sa chance au trace par les voies
+  else if (dist < st.meilleur - 1) { st.meilleur = dist; st.progT = T; }
+  else if (T - (st.progT || T) > 40) { st.panne = T + 200; st.progT = T; st.routeT = 0; st.bloqueT = Math.max(st.bloqueT || 0, 4); }
   while (st.route.length > 1 && Math.hypot(st.route[0][0] - c.x, st.route[0][1] - c.z) < 3) st.route.shift();
   const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
   // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage
-  const want = ((st.evT || 0) > simTime) ? st.evH : Math.atan2(dx, dz);
+  const want = ((st.evT || 0) > T) ? st.evH : Math.atan2(dx, dz);
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   // Le braquage dépend de l'allure, comme une vraie voiture : vif à basse vitesse pour se
   // dégager d'un créneau, plus posé à pleine vitesse pour ne pas partir en zigzag.
-  const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6);
+  const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6), h0 = c.h;
   c.h += clamp(dh, -1, 1) * braq * dt;
   // On lève le pied AVANT le virage, pas dedans. Une voiture lancée à 24 m/s a un rayon de
   // braquage de 8 m : elle ne peut pas prendre un angle droit dans une rue de 6 m, et
@@ -13286,23 +14026,52 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     const dwp = Math.hypot(dx, dz);
     if (dwp < 22) virage = Math.max(virage, a2 * (1 - dwp / 28));
   }
-  const vmax = dist < 9 ? 7 : virage > 0.85 ? 8 : virage > 0.4 ? 13 : 24;
-  c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * 2.5);
-  const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
-  const opt = { bar: true, pol: true };
+  // Un bot conducteur roule comme tout le monde : 12 m/s au plus, et il OBEIT AU CODE DE LA
+  // ROUTE (feux, stops, cedez-le-passage, passages pietons, priorite a droite). Avant, il
+  // fonçait a 24 m/s en ligne droite et traversait les carrefours sans regarder.
+  let vmax = dist < 9 ? 6 : virage > 0.85 ? 5 : virage > 0.4 ? 8 : 12;
+  const loi = codeRoute(c, dt, {});
+  vmax = Math.min(vmax, loi.v); c.raison = loi.raison;
+  // La file d'attente. Mais une voiture GAREE juste devant le capot ne repartira JAMAIS : un
+  // ami qui prenait une voiture sur le parking restait bloque derriere sa voisine pendant
+  // trente minutes sans jamais toucher personne (donc sans jamais declencher le contournement).
+  // Au bout de 5 s d'attente immobile, on oublie la file : la voiture avance, se cogne, et le
+  // contournement fait le reste.
+  if (T > (st.oubliFile || 0)) {
+    const [gapB, miniB] = gapDevant(c);
+    if (gapB < miniB) { vmax = 0; c.raison = c.raison || 'file'; }
+    else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
+  }
+  if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
+  if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.routeT = 0; }   // (on ne vide pas st.route : elle est encore relue plus bas)
+  const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
+  c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
+  // Sur les DOUZE DERNIERS METRES on ne compte plus les autres vehicules : on se gare
+  // pare-chocs contre pare-chocs, et c'est `separerVehicules` qui ecarte les caisses. Avec la
+  // regle stricte, la voiture de fuite s'arretait a sept metres de l'allee de la villa parce
+  // qu'une voiture y etait garee, et le coup ne se terminait jamais.
+  const opt = { bar: true, pol: true, veh: dist > 12 };
   let bloque = 0;
   const [cr, cL] = vehHalf(c);
-  if (!carBlocked(nx, c.z, c.solid, cr, opt, 0, c.h, cL)) c.x = nx; else { c.speed *= 0.4; bloque++; }
-  if (!carBlocked(c.x, nz, c.solid, cr, opt, 0, c.h, cL)) c.z = nz; else { c.speed *= 0.4; bloque++; }
-  st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
+  // tourner sur place enfonce aussi un coin dans un mur : on annule la rotation si elle mord
+  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, opt) && !vehBloque(c, c.x, c.z, h0, opt)) c.h = h0;
+  const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
+  if (!vehBloque(c, nx, c.z, c.h, opt)) c.x = nx; else { c.speed *= 0.4; bloque++; }
+  if (!vehBloque(c, c.x, nz, c.h, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
+  if (!vehBloque(c, c.x, c.z, c.h, opt)) c.libre = [c.x, c.z, c.h];
+  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
+  // Le compteur de blocage DECROIT au lieu de retomber a zero : une voiture qui rabote un
+  // mur n'est bloquee que sur un axe a la fois, si bien qu'elle remettait le compteur a zero
+  // une image sur deux et que le deblocage ne partait jamais.
+  st.bloqueT = bloque ? (st.bloqueT || 0) + dt : Math.max(0, (st.bloqueT || 0) - dt * 0.6);
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
-  if (bloque && (st.evT || 0) < simTime) {
+  if (bloque && (st.evT || 0) < T) {
     for (const a of [0.6, -0.6, 1.2, -1.2, 1.9, -1.9]) {
       const hh = c.h + a;
       if (!carBlocked(c.x + Math.sin(hh) * 4.5, c.z + Math.cos(hh) * 4.5, c.solid, cr, opt, 0, hh, cL)
         && !carBlocked(c.x + Math.sin(hh) * 2, c.z + Math.cos(hh) * 2, c.solid, cr, opt, 0, hh, cL)) {
-        st.evH = hh; st.evT = simTime + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
+        st.evH = hh; st.evT = T + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
       }
     }
   }
@@ -13310,9 +14079,24 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // qui te conduit, lui, s'arrête et le dit plutôt que de traverser les murs.
   // (le tracé étant maintenant fait de longues lignes droites, on ne se téléporte plus au
   // point de passage — il peut être à 80 m — mais de quelques mètres dans sa direction)
-  if (st.saut !== false && st.bloqueT > 3.5) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
-    const ex = w2[0] - c.x, ez = w2[1] - c.z, el = Math.hypot(ex, ez) || 1, pas = Math.min(el, 7);
-    c.x += ex / el * pas; c.z += ez / el * pas; st.route = null; st.routeT = 0; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+  // COINCE POUR DE BON : on se degage de quelques metres vers une place LIBRE (jamais dans un
+  // mur — chaque candidat est verifie), en cherchant d'abord dans la direction du point de
+  // passage puis tout autour. Sans ce filet, un ami reste plante contre l'angle d'un immeuble.
+  if (st.saut !== false && st.bloqueT > 3.5 && st.route && st.route.length) {   // (le contournement juste au-dessus a pu vider le trace)
+    st.bloqueT = 0;
+    const w2 = st.route[Math.min(1, st.route.length - 1)];
+    const el = Math.hypot(w2[0] - c.x, w2[1] - c.z) || 1, ex = (w2[0] - c.x) / el, ez = (w2[1] - c.z) / el;
+    let pose = null;
+    for (const a of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
+      const dx2 = ex * Math.cos(a) - ez * Math.sin(a), dz2 = ex * Math.sin(a) + ez * Math.cos(a);
+      for (let u = Math.min(el, 12); u >= 2; u -= 1.5) {
+        const px = c.x + dx2 * u, pz = c.z + dz2 * u;
+        if (!vehBloque(c, px, pz, c.h, opt)) { pose = [px, pz]; break; }
+      }
+      if (pose) break;
+    }
+    if (pose) { c.x = pose[0]; c.z = pose[1]; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+    st.route = null; st.routeT = 0; c.speed = pose ? 5 : 0; }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
   return dist;
@@ -13378,7 +14162,7 @@ function botDriveTick(dt) {
       st.saut = true;
       const d = conduireVersPoint(c, st.tx, st.tz, dt, st);
       const coince = (st.bloqueT || 0) > 12;   // on insiste bien plus longtemps avant d'abandonner
-      if (d < 8 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
+      if (d < 5 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
         botSay(b, [coince ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
           : st.passager ? `voilà, on est arrivés à ${st.nom} 🚗` : `je suis à ${st.nom} avec la voiture, monte à côté de moi ! (E)`]);
         if (!st.passager) setBeacon(c.x, c.z); else clearBeacon(); }
@@ -17131,45 +17915,34 @@ const loopPos = s => {   // position le long de l'anneau routier (périmètre 20
 };
 function cityStep(dt) {
   let jack = null;
-  const flotte = [...city.cars, ...city.aiCars, ...police.cars];
+  flotteMaj();   // la liste des vehicules du moment, une seule fois par image
   for (const c of city.aiCars) {
-    let spd = c.spd || 8.5;
-    {   // on ne roule plus dans le véhicule de devant : on garde une longueur de sécurité
-      const fx = Math.sin(c.h), fz = Math.cos(c.h); let gap = 99, longDevant = 4.4;
-      for (const v of flotte) {
-        if (v === c || v.heli) continue;
-        if (v.s != null) {   // même anneau : on compare les abscisses curvilignes (fiable en virage)
-          let ds = v.s - c.s; while (ds < 0) ds += LOOP_LEN; while (ds > LOOP_LEN) ds -= LOOP_LEN;
-          if (ds > 0.01 && ds < gap) { gap = ds; longDevant = v.baseD || 4.4; }
-          continue;
-        }
-        const dx = v.x - c.x, dz = v.z - c.z, along = dx * fx + dz * fz;
-        if (along < 0.5 || along > 10) continue;
-        if (Math.abs(-dx * fz + dz * fx) > 2.3) continue;
-        if (along < gap) { gap = along; longDevant = v.baseD || 4.4; }
-      }
-      const mini = 1.2 + ((c.baseD || 4.4) + longDevant) / 2;   // la longueur de CELUI DE DEVANT compte (un camion fait 8,6 m)
-      if (gap < mini) { spd = 0; c.stopped = true; } else if (gap < mini + 3) spd = Math.min(spd, (gap - mini) * 3);
-    }
-    {   // arrêt au feu rouge : on regarde le prochain carrefour devant nous
-      const fx = Math.sin(c.h), fz = Math.cos(c.h); let stop = false;
-      for (const [cx, cz] of city.crossings) { const dx = cx - c.x, dz = cz - c.z, d = Math.hypot(dx, dz); if (d < 9 && d > 3.5 && (dx * fx + dz * fz) / d > 0.9) { const ns = Math.abs(fz) > 0.5; const grp = ns ? 'A' : 'B'; const ph = city.trafficLights.find(t => t.group === grp); if (ph && ph.state !== 2) stop = true; } }
-      c.stopped = stop; if (stop) spd = 0;
-    }
-    // carjacking : le conducteur pile net dès qu'on se plante à sa portière
+    // carjacking : le conducteur pile net des qu'on se plante a sa portiere
+    let pile = false;
     if (!drive.car && c.driver && P.pos.y < 1.8) {
       const dx = P.pos.x - c.x, dz = P.pos.z - c.z, cs = Math.cos(c.h), sn = Math.sin(c.h);
-      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
-      const half = c.half || [1.4, 2.4];
-      if (Math.abs(lx) > half[0] - 0.5 && Math.abs(lx) < half[0] + 2 && Math.abs(lz) < half[1]) { spd = 0; c.stopped = true; jack = c; }
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
+      if (Math.abs(lx) > half[0] - 0.5 && Math.abs(lx) < half[0] + 2 && Math.abs(lz) < half[1]) { pile = true; jack = c; }
+    }
+    if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // vehicule a l'arret (ambulance)
+    // Vitesses du code de la route : 8 a 10 m/s pour une voiture, 6 pour un camion.
+    if (c.vmaxIA == null) c.vmaxIA = c.kind === 'truck' ? 6 : 8 + Math.round(traficRnd() * 2);
+    if (pile) { c.speed = 0; c.stopped = true; c.raison = 'braquage'; }
+    else {
+      // destination sur le GRAPHE, changee des qu'elle est atteinte : la circulation ne
+      // tourne plus en rond sur un anneau de 26 m, elle traverse toute la ville.
+      if (!c.ia && simTime > (c.destT || 0)) { c.destT = simTime + 1.5; traficDestination(c); }
+      if (c.ia) traficRoule(c, dt);
+      else { c.speed = Math.max(0, (c.speed || 0) - dt * 6); c.stopped = true; avanceVehicule(c, dt, c.speed, {}); }
     }
     if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // véhicule à l'arrêt (ambulance) : loopPos(0) le téléportait sur l'anneau
     if (c.accidente) { spd = 0; c.spd0 = c.spd0 == null ? c.spd : c.spd0; }   /* accidenté : il ne repart pas */
     c.s += spd * dt; const [x, z, h] = loopPos(c.s); c.x = x; c.z = z; c.h = h; c.y = solSousRoues(c); c.g.position.set(x, c.y, z); c.g.rotation.y = h; c.cmd = { v: spd, volant: 0, ratio: 0.3, accLong: 0 }; rouesTick(c, dt, spd, c.cmd); vehicleSolid(c);
     if (c.driver) placeDriver(c);
     if (!drive.car) {   // bousculade si le joueur est sur la route
-      const dx = P.pos.x - x, dz = P.pos.z - z, cs = Math.cos(h), sn = Math.sin(h), lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
-      if (P.pos.y < 1.6 && Math.abs(lx) < half[0] && Math.abs(lz) < half[1] && simTime > city.hitT) {
+      const dx = P.pos.x - c.x, dz = P.pos.z - c.z, cs = Math.cos(c.h), sn = Math.sin(c.h);
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
+      if (P.pos.y < 1.6 && Math.abs(lx) < half[0] && Math.abs(lz) < half[1] && simTime > city.hitT && Math.abs(c.speed || 0) > 1.5) {
         const d = Math.hypot(dx, dz) || 1; P.vel.x = dx / d * 13; P.vel.z = dz / d * 13; P.vel.y = 7; P.grounded = false; city.hitT = simTime + 1; sfx.hit(); msg('🚗 Attention aux voitures !', 900);
       }
     }
@@ -17201,6 +17974,16 @@ function cityStep(dt) {
   if (near !== city.near) { city.near = near; if (near && !isMobile) msg('🚗 Appuie sur E pour conduire', 1200); }
   document.body.classList.toggle('carnear', !!city.near || !!city.jackNear || !!drive.car);
   separerVehicules();
+  // L'ECARTEMENT DES VEHICULES peut pousser une voiture du trafic DANS un mur : deux voitures
+  // qui se chevauchent au ras d'une facade sont separees vers l'exterieur, et l'une des deux
+  // se retrouve le capot dans la pierre. On revalide donc chaque voiture APRES l'ecartement,
+  // et on la remet a sa derniere position verifiee.
+  for (const c of city.aiCars) {
+    if (!c.spd || !c.libre) continue;
+    if (!vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) { c.libre = [c.x, c.z, c.h]; continue; }
+    c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0;
+    c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; vehicleSolid(c);
+  }
   if (!drive.car) cityCommon(dt);
 }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image

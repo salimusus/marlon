@@ -379,8 +379,9 @@ body.tv .btn{font-size:calc(var(--u) * 1.1);padding:calc(var(--u) * .6) calc(var
   max-width:96vw;padding:5px 9px;border-radius:12px;background:rgba(10,16,36,.62);color:#fff;font-size:12px;line-height:1.4;pointer-events:none}
 #padLeg b{display:inline-block;min-width:16px;padding:0 5px;margin-right:3px;border-radius:6px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center}
 #padLeg i{font-style:normal;opacity:.75;margin-left:2px}
-body.manette.city #padLeg{display:flex}
+body.manette.city.aide #padLeg{display:flex}   /* le bandeau ne sort plus qu'a la demande : il barrait le haut de l'ecran en permanence */
 body.manette.city.uiopen #padLeg,body.manette.city.manetteTel #padLeg{display:none}
+#padLeg{transition:opacity .35s} body:not(.aide) #padLeg{opacity:0}
 body.tv #padLeg{font-size:calc(var(--u) * .95);top:calc(var(--tvpad) + var(--u) * 3.4);padding:calc(var(--u) * .35) calc(var(--u) * .7)}
 #tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
@@ -911,6 +912,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
     <button class="btn sec" id="padTestBtn">🎮 Tester la manette</button>
+    <button class="btn sec" id="aideBtn">⌨️ Rappeler les touches</button>
     <button class="btn sec" id="voiceBtn">Voix (école et bots) : activées</button>
     <button class="btn sec" id="voiceTest">🔊 Tester la voix</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
@@ -14796,7 +14798,8 @@ const PAD_MAP = {
 // fonctionne pas ». La croix gauche/droite fait maintenant quelque chose d'UTILE EN JEU :
 // elle change d'arme (comme la molette d'un jeu de tir). La boutique et les missions restent
 // a portee de pouce, en MAINTENANT ← ou → (0,7 s), comme la guerre des gangs sur ↑.
-const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'arme' };
+const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cache le bandeau d'aide
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △)
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
 const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', grenade: 'Grenade' };
@@ -14809,8 +14812,21 @@ function armeSuivante(sens = 1) {
   const suiv = liste[(i + (sens < 0 ? -1 : 1) + liste.length) % liste.length];
   equipWeapon(suiv); msg(suiv ? `🔫 ${NOMS_ARMES[suiv]}` : '🤚 Mains nues', 1200); return true;
 }
+// LE BANDEAU D'AIDE, A LA DEMANDE. Il restait affiche en permanence des qu'une manette
+// etait branchee : trois lignes de touches en travers du haut de l'ecran, par-dessus le jeu.
+// Il ne sort plus que quelques secondes, quand on branche la manette ou quand on le demande
+// (bouton des reglages, ou le pave tactile de la DualSense).
+let aideT = 0;
+function montreAide(secondes = 7) {
+  if (!document.body.classList.contains('manette')) return false;
+  document.body.classList.add('aide'); aideT = performance.now() + secondes * 1000;
+  return true;
+}
+function cacheAide() { document.body.classList.remove('aide'); aideT = 0; }
+function aideTick() { if (aideT && performance.now() > aideT) cacheAide(); }
 function padAction(quoi) {
   if (!running) return false;
+  if (quoi === 'aide') { if (document.body.classList.contains('aide')) { cacheAide(); return true; } return montreAide(9); }
   const libre = city.on && !uiOpen;
   if (quoi === 'ordres') { if (!libre) return false; openQui(); return true; }
   if (quoi === 'guerre') { if (!libre) return false; openGuerre(); return true; }
@@ -15093,6 +15109,7 @@ window.addEventListener('gamepadconnected', e => {
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
   msg(ps ? '🎮 Manette PlayStation connectée — R2 avancer · L2 reculer · L3 courir · ← → changer d\'arme' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
+  try { montreAide(7); } catch (e) {}
   unlockAudio(); padVibre(0.5, 200);
   try { manetteBTSonde(); } catch (_) {}
   try { chat(null, ps ? '🎮 DualSense prête : R2 pour avancer, L2 pour reculer, stick gauche pour la direction, stick droit pour la caméra, L3 pour courir, R1 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
@@ -15155,6 +15172,7 @@ async function manetteConnecter() {
 }
 for (const id of ['padConnect', 'padConnect2']) { const b = $(id); if (b) b.addEventListener('click', () => { manetteConnecter(); }); }
 for (const id of ['padTestBtn', 'padTestBtn2']) { const b = $(id); if (b) b.addEventListener('click', () => ouvreTestManette()); }
+{ const b = $('aideBtn'); if (b) b.addEventListener('click', () => { closeUI(); montreAide(9); }); }
 { const f = $('ptFerme'); if (f) f.addEventListener('click', () => closeUI()); }
 
 // ---- plein écran, orientation, veille (tablette Android) ----
@@ -15304,7 +15322,7 @@ function loop() {
 function frame() {
   const brut = clock.getDelta();
   const dt = Math.min(brut, 0.05);
-  try { fluiditeTick(brut * 1000); ombresCadence(); diffusionMesure(brut * 1000); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images, et la diffusion se mesure
+  try { fluiditeTick(brut * 1000); ombresCadence(); diffusionMesure(brut * 1000); aideTick(); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images, et la diffusion se mesure
   // (la manette n'est plus lue ici : elle a sa propre cadence de 120 Hz, voir plus bas)
   const active = running && !paused && !dead && !won;
   acc += dt; let n = 0;

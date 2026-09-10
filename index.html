@@ -16070,7 +16070,12 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
     // couche, la poubelle se vide sur le trottoir, le bonhomme de neige eclate. Sans entree
     // dans la table, on retombe sur le comportement d'origine (lampadaire, feu tricolore).
     const def = CASSE_DEF[b.kind] || {};
-    b.broken = true; const dx = b.x - c.x, dz = b.z - c.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
+    // `c` est le coupable (vehicule ou joueur). Il peut manquer — un objet casse par une
+    // explosion, par un script ou par le banc d'essai — et la fonction plantait alors sur
+    // `c.x`. Sans coupable, on fait tomber l'objet dans une direction quelconque mais stable.
+    b.broken = true;
+    const src = c || P.pos || { x: b.x - 1, z: b.z };
+    const dx = b.x - src.x, dz = b.z - src.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
     b.g.quaternion.setFromAxisAngle(ax, def.angle == null ? 1.35 : def.angle); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); sgridSale();
     if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
     if (def.effet) { try { def.effet(b); } catch (e7) {} }

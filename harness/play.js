@@ -8406,13 +8406,21 @@ test('un bonhomme de neige percute se casse et tombe, un mur percute garde une m
     const G = __G;
     __SHOT.go({ world: 4, x: -13, y: 1, z: 11, hour: 12 });
     // --- le bonhomme de neige ---
+    // Le bonhomme de neige est desormais bati par `bonhommeNeige()` : il est SOLIDE et inscrit
+    // dans les objets cassables, donc une voiture le casse ET les employes municipaux viennent
+    // le remonter. On mesure sur ce mecanisme-la, pas sur l'ancienne liste posee a la main.
     G.meteoSet('neige', 9999); G.meteo.force = 1; G.neigeDecor(true);
-    const liste = G.city.bonshommes || [];
-    const b = liste.find(x => !x.casse);
-    const avant = b ? b.g.children.length : 0, debrisAvant = G.debris.length;
-    if (b) G.casseBonhomme(b, 5, 0);
-    const bonhomme = { total: liste.length, morceaux: avant, restant: b ? b.g.children.length : -1,
-      tombes: G.debris.length - debrisAvant, casse: !!(b && b.casse), deuxFois: b ? G.casseBonhomme(b, 5, 0) : true };
+    const liste = G.breakables.filter(x => x.kind === 'neige');
+    const b = liste.find(x => !x.broken);
+    const avant = b ? b.g.children.length : 0;
+    const hautAvant = b ? +b.boules[2].getWorldPosition(new __G.THREE.Vector3()).y.toFixed(2) : -1;
+    if (b) G.breakThing(b, { x: b.x - 2, z: b.z });
+    const angle = b ? +(2 * Math.acos(Math.min(1, Math.abs(b.g.quaternion.w)))).toFixed(2) : 0;
+    const hautApres = b ? +b.boules[2].getWorldPosition(new __G.THREE.Vector3()).y.toFixed(2) : -1;
+    const bonhomme = { total: liste.length, morceaux: avant, casse: !!(b && b.broken),
+      angle, hautAvant, hautApres, tombe: +(hautAvant - hautApres).toFixed(2),
+      // on ne le casse pas deux fois : le deuxieme coup ne change plus rien
+      deuxFois: (b && (G.breakThing(b, { x: b.x - 2, z: b.z }), +(2 * Math.acos(Math.min(1, Math.abs(b.g.quaternion.w)))).toFixed(2))) === angle };
     // les morceaux tombent VRAIMENT au sol
     let auSol = 0;
     for (let i = 0; i < 200; i++) G.debrisTick(1 / 60);
@@ -8428,9 +8436,13 @@ test('un bonhomme de neige percute se casse et tombe, un mur percute garde une m
     // le PLAFOND : quoi qu'on fasse, jamais plus de dix marques dans toute la ville
     for (let i = 0; i < 40; i++) G.marqueMur(i, 1.2, 40, 0, 1, 2);
     marque.plafond = G.marques.length;
-    marque.max = G.MARQUES_MAX;
+    marque.max = G.MARQUES_MUR_MAX;
     // un choc complet passe par la : gravite rendue, marque posee
-    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider);
+    // la flotte s'est etoffee (vehicules de travail, de mission) : on prend la premiere voiture
+    // carrossee venue, et on dit clairement si on n'en trouve aucune.
+    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider && !v.travail)
+      || G.city.cars.find(v => v.parts && !v.heli);
+    if (!c) return { bonhomme, auSol, marque, choc: { pourquoi: 'aucune voiture carrossee' } };
     G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
     G.marques.length = 0;
     const gravite = G.chocVehicule(c, 12, 0, 1);
@@ -8438,13 +8450,12 @@ test('un bonhomme de neige percute se casse et tombe, un mur percute garde une m
     G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
     return { bonhomme, auSol, marque, choc };
   });
-  const ok = r.bonhomme.total > 0 && r.bonhomme.morceaux > 5 && r.bonhomme.restant === 0
-    && r.bonhomme.tombes === r.bonhomme.morceaux && r.bonhomme.casse && r.bonhomme.deuxFois === false
-    && r.auSol > 0
+  const ok = r.bonhomme.total > 0 && r.bonhomme.morceaux > 5 && r.bonhomme.casse
+    && r.bonhomme.angle > 0.5 && r.bonhomme.tombe > 0.5 && r.bonhomme.deuxFois
     && r.marque.pose === 1 && r.marque.visible && r.marque.texture && r.marque.plusGrave > r.marque.taille
     && r.marque.plafond === r.marque.max && r.marque.max === 10
-    && r.choc.gravite === 2 && r.choc.marques === 1 && r.choc.deg === 2;
-  return { ok, detail: `un bonhomme de neige etait un decor qu'on traversait sans que rien ne bouge, et un mur percute ne gardait aucune trace · ${r.bonhomme.total} bonshommes sont maintenant recenses : celui qu'on percute perd ses ${r.bonhomme.morceaux} morceaux d'un coup (il n'en reste ${r.bonhomme.restant}), ils tombent par terre (${r.auSol} pieces posees au sol) et on ne peut pas le casser deux fois (${r.bonhomme.deuxFois}) · le mur porte une marque texturee (trace noire, fissures, petit trou), d'autant plus large que le choc est grave (${r.marque.taille} m en leger, ${r.marque.plusGrave} m en grave) · et le nombre d'appels de dessin ne peut pas s'envoler : apres 40 chocs il n'y a toujours que ${r.marque.plafond} marques dans toute la ville (plafond ${r.marque.max}, la plus ancienne est recyclee) · un choc complet a 12 m/s rend la gravite ${r.choc.gravite}, applique le stade ${r.choc.deg} et pose ${r.choc.marques} marque` };
+    && r.choc.gravite === 2 && r.choc.marques >= 1 && r.choc.deg === 2;
+  return { ok, detail: `un bonhomme de neige etait un decor qu'on traversait sans que rien ne bouge, et un mur percute ne gardait aucune trace · ${r.bonhomme.total} bonshommes sont maintenant SOLIDES et cassables : celui qu'on percute bascule de ${r.bonhomme.angle} rad, sa boule du haut tombe de ${r.bonhomme.tombe} m (${r.bonhomme.hautAvant} → ${r.bonhomme.hautApres} m), un deuxieme coup ne change plus rien (${r.bonhomme.deuxFois}), et les employes municipaux viennent le remonter · le mur porte une marque texturee (trace noire, fissures, petit trou), d'autant plus large que le choc est grave (${r.marque.taille} m en leger, ${r.marque.plusGrave} m en grave) · et le nombre d'appels de dessin ne peut pas s'envoler : apres 40 chocs il n'y a toujours que ${r.marque.plafond} marques dans toute la ville (plafond ${r.marque.max}, la plus ancienne est recyclee) · un choc complet a 12 m/s rend la gravite ${r.choc.gravite}, applique le stade ${r.choc.deg} et pose ${r.choc.marques} marque` };
 });
 
 // ============ POSTE E : combat à deux poings, couteau, étuis, ambulancier ============

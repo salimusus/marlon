@@ -413,6 +413,7 @@ window.__G = {
   sorteSelonForce: typeof sorteSelonForce === 'function' ? sorteSelonForce : null,
   effaceMarques: typeof effaceMarques === 'function' ? effaceMarques : null,
   MARQUES_MAX: typeof MARQUES_MAX !== 'undefined' ? MARQUES_MAX : null,
+  MARQUES_MUR_MAX: typeof MARQUES_MUR_MAX !== 'undefined' ? MARQUES_MUR_MAX : null,
   MARQUE_SORTES: typeof MARQUE_SORTES !== 'undefined' ? MARQUE_SORTES : null,
   get marquesMesh() { return typeof marquesMesh !== 'undefined' ? marquesMesh : null; },
   fragile: typeof fragile === 'function' ? fragile : null,

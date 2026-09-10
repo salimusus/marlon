@@ -12524,7 +12524,10 @@ function coupFin(ok) {
 }
 // Pilotage automatique d'un véhicule vers un point : itinéraire, virages, obstacles.
 // Sert à la voiture de fuite après un braquage et à l'ami qui vient te chercher.
-function conduire(c, tx, tz, dt, st) {
+// RENOMMÉE : elle s'appelait conduire(), comme la nouvelle API de conduite du joueur
+// conduire(c, { gaz, volant, frein, nitro }, dt). Les deux déclarations se recouvraient et la
+// seconde gagnait : l'ami qui venait te chercher ne bougeait tout simplement plus.
+function conduireVersPoint(c, tx, tz, dt, st) {
   const dist = Math.hypot(tx - c.x, tz - c.z);
   // L'itinéraire complet est calculé À L'AVANCE (A* + lissage) et gardé tel quel : on ne le
   // refait que si la destination a bougé, si on s'est fait bloquer, ou toutes les 8 s. Avant,
@@ -12645,7 +12648,7 @@ function botDriveTick(dt) {
       // L'ami ne renonce plus au premier obstacle : comme la voiture de fuite, il saute au
       // point de passage suivant s'il reste coincé — ainsi aucun véhicule ne reste bloqué.
       st.saut = true;
-      const d = conduire(c, st.tx, st.tz, dt, st);
+      const d = conduireVersPoint(c, st.tx, st.tz, dt, st);
       const coince = (st.bloqueT || 0) > 12;   // on insiste bien plus longtemps avant d'abandonner
       if (d < 8 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
         botSay(b, [coince ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
@@ -12710,7 +12713,7 @@ function coupTick(dt) {
   }
   // fuite : l'ami conduit jusqu'à l'allée de la villa
   const TX = 48, TZ = 184;
-  const dist = conduire(c, TX, TZ, dt, coup);
+  const dist = conduireVersPoint(c, TX, TZ, dt, coup);
   if (dist < 5) { coupFin(true); return; }
   P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h;
   cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));

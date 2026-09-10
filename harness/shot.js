@@ -187,6 +187,7 @@ window.__G = {
   P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats, owned,
   updateBot, tennisMatchTick, policeTick, worldGroup, THREE,
   fm: typeof fm !== 'undefined' ? fm : null,
+  joy: typeof joy !== 'undefined' ? joy : null,
   padLu: typeof padLu === 'function' ? padLu : null,
   padProfil: typeof padProfil === 'function' ? padProfil : null,
   padChapeau: typeof padChapeau === 'function' ? padChapeau : null,

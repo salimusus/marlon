@@ -7026,6 +7026,9 @@ test('a la manette PS5, R2 avance et L2 recule — a pied comme au volant, et en
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
+    // le joystick tactile et la manette-telephone s'ADDITIONNENT a la manette : un test
+    // precedent qui laisse une fleche appuyee bloquerait l'entree a fond dans une direction
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -7100,6 +7103,7 @@ test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', as
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -7175,6 +7179,7 @@ test('une manette au mapping non standard (navigateur de tele) est remise d\'apl
       id: 'Sony Interactive Entertainment Wireless Controller (Vendor: 054c Product: 0ce6)',
       axes: REPOS.slice(), buttons: Array.from({ length: 14 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [hid];
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
     try {
       const res = {};
       res.profil = G.padProfil(hid);

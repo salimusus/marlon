@@ -7104,12 +7104,20 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
     const juste = { texte: salle.texte, dessine: salle.dessine, lus: lus(), aEcrire: salle.tab.aEcrire, sons: G.school.craieSons };
     // avancement DÉTERMINISTE : on recule l'horloge de départ du tracé, la cadence ne dépend
     // donc ni de la vitesse de la machine ni du nombre d'images rendues
+    // espion sur le bus audio : on note SUR QUELLE SORTIE la craie branche son bruit
+    const bus = [], sortieOrig = G.sfx.sortie;
+    G.sfx.sortie = n => { bus.push(n); return sortieOrig(n); };
     salle.tab.t0 = performance.now() - 250; G.craieTick(0.016);
     const t1 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
     salle.tab.t0 = performance.now() - 1000; G.craieTick(0.016);
     const t2 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
-    // le crissement SORT-IL de la chaîne ? on le rejoue et on écoute la sortie du limiteur
+    G.sfx.sortie = sortieOrig;
+    // le crissement SORT-IL de la chaîne ? on le rejoue et on écoute la sortie du limiteur.
+    // (La mesure est indicative : le nœud d'écoute tourne sur le fil principal, et sur une
+    // machine chargée il perd des paquets. La garantie, elle, est l'espion du bus ci-dessus.)
+    const horloge0 = c.currentTime;
     const pic = await ecoute(700, () => G.sonCraie(3));
+    const horloge = +(c.currentTime - horloge0).toFixed(2);
     salle.tab.t0 = performance.now() - 20000; G.craieTick(0.016);
     const fin = { lus: lus(), dessine: salle.dessine, texte: salle.texte, versions: salle.tex.version - v0 };
     const viseur = () => { const t = salle.tableau; const d = Math.atan2(-(t.position.x - G.P.pos.x), -(t.position.z - G.P.pos.z)) - G.cam.yaw; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); };
@@ -7124,7 +7132,8 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
       const l = salle.tab.lignes.filter(o => o.neuve); rouge = { texte: salle.texte, couleurs: l.map(o => o.c || ''), aEcrire: salle.tab.aEcrire }; }
     try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     G.closeUI(); G.P.sit = null; G.school.chaise = null;
-    return { juste, t1, t2, fin, rouge, silence, pic, cps: G.CRAIE_CPS, gain: G.wallet - w0, cam };
+    return { juste, t1, t2, fin, rouge, silence, pic, cps: G.CRAIE_CPS, gain: G.wallet - w0, cam,
+      bus, etatAudio: c.state, horloge, son: G.settings.sound };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const q = r.juste, v = r.rouge;
@@ -7133,11 +7142,16 @@ test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, ave
   const monte = r.t1.lus > q.lus && r.t2.lus > r.t1.lus && r.fin.lus > r.t2.lus;
   const cadence = Math.abs((r.t1.lus - q.lus) - Math.round(0.25 * r.cps)) <= 1 && Math.abs((r.t2.lus - q.lus) - Math.round(1 * r.cps)) <= 1;
   const complet = r.fin.dessine === r.fin.texte && /GAGNÉ/.test(r.fin.texte);
-  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.pic > r.silence + 0.008 && r.pic > 0.01;
+  // GARANTIE DÉTERMINISTE : pendant l'écriture, la craie branche bien son bruit sur le bus
+  // « effets » d'un moteur audio qui tourne (l'horloge du contexte avance). Le niveau mesuré
+  // au bout de la chaîne est reporté en plus, mais il dépend de la charge de la machine.
+  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.bus.length >= 3
+    && r.bus.every(b => b === 'effets') && r.etatAudio === 'running' && r.horloge > 0.3 && r.son
+    && r.pic >= r.silence;
   const rouge = !!v && /FAUX/.test(v.texte) && v.couleurs.some(c => c === '#ffc2c2') && v.aEcrire > 4;
   const cadre = r.cam.ecart < 0.12 && r.cam.pitch <= 0.24;
   const ok = depart && monte && cadence && complet && r.fin.versions >= 3 && son && rouge && cadre;
-  return { ok, detail: `la réponse tombait d'un bloc sur le tableau : elle s'ÉCRIT maintenant à la craie, ${r.cps} lettres/s · juste après la réponse le tableau ne porte que l'énoncé (${q.lus} caractères tracés, ${q.aEcrire} restent à écrire), puis ${r.t1.lus} à 250 ms, ${r.t2.lus} à 1 s (« ${String(r.t2.dessine).split(' | ').slice(2).join(' ').trim().slice(0, 30)} ») et enfin « ${String(r.fin.texte).split(' | ').slice(2).join(' · ')} » (${r.fin.lus}) · la texture du tableau est repeinte ${r.fin.versions} fois · le crissement de la craie (bruit passe-bande 2–4 kHz) est joué ${r.t2.sons} fois et se MESURE au bout de la chaîne audio : silence ${r.silence}, craie ${r.pic} · un verdict faux s'écrit pareil, en rouge (${v ? v.couleurs.filter(Boolean).join(' ') : '—'}) · assis en classe la caméra cadre le tableau : l'écart de visée tombe de ${r.cam.avant} à ${r.cam.ecart} radian et la visée s'aplatit à ${r.cam.pitch} (maison de poupée ${r.cam.interieur}, caméra à ${r.cam.dist} m : la tête de l'élève passe sous le texte)` };
+  return { ok, detail: `la réponse tombait d'un bloc sur le tableau : elle s'ÉCRIT maintenant à la craie, ${r.cps} lettres/s · juste après la réponse le tableau ne porte que l'énoncé (${q.lus} caractères tracés, ${q.aEcrire} restent à écrire), puis ${r.t1.lus} à 250 ms, ${r.t2.lus} à 1 s (« ${String(r.t2.dessine).split(' | ').slice(2).join(' ').trim().slice(0, 30)} ») et enfin « ${String(r.fin.texte).split(' | ').slice(2).join(' · ')} » (${r.fin.lus}) · la texture du tableau est repeinte ${r.fin.versions} fois · le crissement de la craie (bruit passe-bande 2–4 kHz) est joué ${r.t2.sons} fois pendant le tracé et branché ${r.bus.length} fois sur le bus « ${[...new Set(r.bus)].join(', ')} » d'un moteur audio qui tourne (${r.etatAudio}, horloge +${r.horloge} s) ; niveau mesuré au bout de la chaîne : silence ${r.silence}, craie ${r.pic} · un verdict faux s'écrit pareil, en rouge (${v ? v.couleurs.filter(Boolean).join(' ') : '—'}) · assis en classe la caméra cadre le tableau : l'écart de visée tombe de ${r.cam.avant} à ${r.cam.ecart} radian et la visée s'aplatit à ${r.cam.pitch} (maison de poupée ${r.cam.interieur}, caméra à ${r.cam.dist} m : la tête de l'élève passe sous le texte)` };
 });
 
 test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lever ferme la classe', async p => {

@@ -310,7 +310,6 @@ window.__G = {
   mainDroite: typeof mainDroite === 'function' ? mainDroite : null,
   JERSEYS: typeof JERSEYS !== 'undefined' ? JERSEYS : null,
   jerseyOf: typeof jerseyOf === 'function' ? jerseyOf : null,
-  buildAvatar: typeof buildAvatar === 'function' ? buildAvatar : null,
   itemKey: typeof itemKey === 'function' ? itemKey : null,
   peutKidnapper: typeof peutKidnapper === 'function' ? peutKidnapper : null,
   kidnapper: typeof kidnapper === 'function' ? kidnapper : null,

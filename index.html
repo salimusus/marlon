@@ -4408,18 +4408,22 @@ function clearWanted(reason) {
   if (reason) msg(reason, 2200);
 }
 const MISSIONS = [
-  { id: 'livraison', n: 'Livraison express', e: '📦', r: 35, desc: 'Va chercher le colis au point de retrait signalé, puis livre-le à l\'adresse indiquée avant la fin du chrono. Retrait et adresse changent à chaque fois.' },
-  { id: 'taxi', n: 'Taxi', e: '🚕', r: 45, desc: 'Va chercher le client en voiture et dépose-le à destination en moins de 2 min.' },
-  { id: 'chien', n: 'Chien perdu', e: '🐶', r: 30, desc: 'Un chien s\'est perdu loin du parc : retrouve-le et ramène-le à la fontaine.' },
-  { id: 'pieces', n: 'Chasse aux pièces bleues', e: '💎', r: 25, desc: '10 pièces bleues sont apparues en ville : ramasse-les toutes en 90 s.' },
-  { id: 'chrono', n: 'Tour chrono', e: '⏱️', r: 60, desc: 'En kart, passe la ligne de départ puis fais un tour complet du circuit en moins de 75 s.' },
-  { id: 'secours', n: 'Sauvetage en hélico', e: '🚁', r: 70, desc: 'Un blessé attend sur un toit : pose l\'hélico à côté de lui, puis ramène-le à l\'héliport.' },
-  { id: 'nettoyage', n: 'Nettoyage du quartier', e: '🧹', r: 25, desc: 'Ramasse les 6 sacs poubelle abandonnés — parc, plage ou La Zone, le quartier change à chaque fois.' },
-  { id: 'buteur', n: 'Buteur', e: '⚽', r: 20, desc: 'Marque 3 buts sur le terrain de foot.' },
-  { id: 'coquillages', n: 'Coquillages', e: '🐚', r: 25, desc: 'Ramasse les 8 coquillages sur le sable de la plage.' },
-  { id: 'sauveteur', n: 'Sauveteur', e: '🛟', r: 40, desc: 'Un baigneur se noie : nage jusqu\'à lui, puis ramène-le sur le sable.' },
-  { id: 'jetski', n: 'Slalom en jet-ski', e: '🚤', r: 50, desc: 'En jet-ski, passe les 5 bouées dans l\'ordre (du sud au nord) en moins de 2 min.' },
-  { id: 'requin', n: 'Alerte requin', e: '🦈', r: 90, desc: 'Un requin blanc rôde : préviens les 3 baigneurs (approche-toi d\'eux), puis repousse le requin à coups de fusil depuis un jet-ski ou la plage.' },
+  { id: 'livraison', n: 'Livraison express', e: '📦', r: 35, dif: 1, desc: 'Va chercher le colis au point de retrait signalé, puis livre-le à l\'adresse indiquée avant la fin du chrono. Retrait et adresse changent à chaque fois.' },
+  { id: 'taxi', n: 'Taxi', e: '🚕', r: 45, dif: 2, desc: 'Va chercher le client en voiture et dépose-le à destination en moins de 2 min.' },
+  { id: 'chien', n: 'Chien perdu', e: '🐶', r: 30, dif: 1, desc: 'Un chien s\'est perdu loin du parc : retrouve-le et ramène-le à la fontaine.' },
+  { id: 'pieces', n: 'Chasse aux pièces bleues', e: '💎', r: 25, dif: 1, desc: '10 pièces bleues sont apparues en ville : ramasse-les toutes en 90 s.' },
+  { id: 'chrono', n: 'Tour chrono', e: '⏱️', r: 60, dif: 3, desc: 'En kart, passe la ligne de départ puis fais un tour complet du circuit en moins de 75 s.' },
+  { id: 'secours', n: 'Sauvetage en hélico', e: '🚁', r: 70, dif: 3, desc: 'Un blessé attend sur un toit : pose l\'hélico à côté de lui, puis ramène-le à l\'héliport.' },
+  { id: 'nettoyage', n: 'Nettoyage du quartier', e: '🧹', r: 25, dif: 1, desc: 'Ramasse les 6 sacs poubelle abandonnés — parc, plage ou La Zone, le quartier change à chaque fois.' },
+  { id: 'buteur', n: 'Buteur', e: '⚽', r: 20, dif: 1, desc: 'Marque 3 buts sur le terrain de foot.' },
+  { id: 'coquillages', n: 'Coquillages', e: '🐚', r: 25, dif: 1, desc: 'Ramasse les 8 coquillages sur le sable de la plage.' },
+  { id: 'sauveteur', n: 'Sauveteur', e: '🛟', r: 40, dif: 2, desc: 'Un baigneur se noie : nage jusqu\'à lui, puis ramène-le sur le sable.' },
+  { id: 'jetski', n: 'Slalom en jet-ski', e: '🚤', r: 50, dif: 2, desc: 'En jet-ski, passe les 5 bouées dans l\'ordre (du sud au nord) en moins de 2 min.' },
+  { id: 'requin', n: 'Alerte requin', e: '🦈', r: 90, dif: 4, desc: 'Un requin blanc rôde : préviens les 3 baigneurs (approche-toi d\'eux), puis repousse le requin à coups de fusil depuis un jet-ski ou la plage.' },
+  // ---- LES TROIS MÉTIERS (poste ACTIVITÉ) : elles se débloquent au fil de la carrière ----
+  { id: 'depannage', n: 'Dépannage', e: '🛻', r: 70, dif: 2, req: 1, act: true, desc: 'Un véhicule est en panne quelque part en ville. Prends la dépanneuse au garage, accroche le treuil (O) et remorque-le jusqu\'au garage — chaque choc en route est retenu sur la paie.' },
+  { id: 'pompier', n: 'Intervention pompier', e: '🚒', r: 90, dif: 3, req: 2, act: true, desc: 'Un incendie vient de se déclarer ! Cours à la caserne, prends le camion, fonce sirène allumée, déploie la lance (O) et éteins tout avant que le feu ne gagne. Blessé à sortir, chat sur un toit ou deux foyers : ça change à chaque fois.' },
+  { id: 'police', n: 'Patrouille de police', e: '🚓', r: 85, dif: 3, req: 3, act: true, desc: 'Tu es du bon côté : prends la voiture de patrouille au commissariat, gyrophare et sirène. Interception d\'un chauffard, poursuite d\'un voleur, escorte d\'un convoi ou contrôle au barrage — l\'appel radio change à chaque mission.' },
 ];
 const mission = { cur: null, step: 0, t0: 0, limit: 0, data: {} };
 const beacon = { m: null, mission: null };
@@ -4576,13 +4580,546 @@ const ADRESSES = [
   { nom: 'le casino WORLD TELIO MARLON', x: 60, z: 288 }, { nom: 'le parking du casino', x: 30, z: 328 },
   { nom: 'les stands du circuit', x: 152, z: -77 },
 ];
+// ================= MISSIONS DE MÉTIER : POMPIER, DÉPANNEUSE, POLICE =================
+// (poste ACTIVITÉ) Trois familles de missions qui se prennent au bureau des missions et se
+// jouent avec les VRAIS véhicules de la ville : le camion de la caserne, une dépanneuse au
+// garage, une voiture de patrouille au commissariat. Chacune a des étapes affichées dans le
+// bandeau, un repère GPS qui change à chaque étape, un chrono, et une fin nette : payée ou
+// ratée. Tout est regroupé ici pour ne pas éparpiller la logique dans le reste du fichier.
+
+// ---- LA CARRIÈRE : ce que le joueur débloque en jouant ----
+// Le bureau proposait douze défis en vrac, tous ouverts dès la première seconde et payés
+// pareil : aucune raison d'y revenir. On compte maintenant les missions réussies, on en
+// tire un GRADE, et les missions de métier s'ouvrent au fur et à mesure. Le grade donne
+// une prime (10 % par grade) — mais uniquement sur les missions de métier, pour ne pas
+// changer le prix des anciennes missions.
+const carriere = store.json('superobby.carriere', { total: 0, parId: {} });
+const GRADES = [
+  { s: 0, e: '🔰', n: 'Stagiaire' }, { s: 3, e: '🥉', n: 'Agent de la ville' },
+  { s: 8, e: '🥈', n: 'Agent confirmé' }, { s: 15, e: '🥇', n: 'Vétéran' },
+  { s: 25, e: '🏅', n: 'Héros de la ville' },
+];
+function gradeCarriere() { let g = GRADES[0]; for (const x of GRADES) if (carriere.total >= x.s) g = x; return g; }
+function primeGrade(m) { return (m && m.act) ? Math.round(m.r * 0.1 * GRADES.indexOf(gradeCarriere())) : 0; }
+function missionDebloquee(m) { return !m || !m.req || carriere.total >= m.req; }
+function sauveCarriere() { store.set('superobby.carriere', JSON.stringify(carriere)); }
+function carriereReussie(m) {
+  const avant = gradeCarriere();
+  carriere.total++; carriere.parId[m.id] = (carriere.parId[m.id] || 0) + 1;
+  sauveCarriere();
+  const apres = gradeCarriere();
+  if (apres !== avant) { msg(`${apres.e} Promotion : te voilà ${apres.n} !`, 3400); chat(null, `${apres.e} ${myCfg.name} passe ${apres.n}`); }
+  for (const s of MISSIONS) if (s.req && carriere.total === s.req) msg(`🔓 Nouvelle mission au bureau : ${s.e} ${s.n}`, 3600);
+}
+
+// ---- OUTILS COMMUNS AUX TROIS FAMILLES ----
+// Un repère GPS qui ne mène nulle part, c'est la plainte n°1 du joueur. Avant de poser le
+// point d'une mission on VÉRIFIE qu'un véhicule peut vraiment y aller par la route ; sinon
+// on prend le candidat suivant de la liste.
+function lieuRoutier(candidats, dep) {
+  const dx = dep ? dep.x : P.pos.x, dz = dep ? dep.z : P.pos.z;
+  const liste = [...candidats].sort(() => Math.random() - 0.5);
+  for (const c of liste) {
+    let p = null;
+    try { p = navPath(dx, dz, c.x, c.z); } catch (e) { p = null; }
+    if (!p || p.reached === false) continue;
+    const fin = p.length ? p[p.length - 1] : [dx, dz];
+    if (Math.hypot(fin[0] - c.x, fin[1] - c.z) < 14) return c;
+  }
+  return liste[0] || { nom: 'en ville', x: dx, z: dz };
+}
+// Longueur réelle de l'itinéraire (et pas la distance à vol d'oiseau) : c'est elle qui
+// donne un chrono honnête. Un chrono calculé à vol d'oiseau condamnait toute mission qui
+// devait contourner un pâté de maisons.
+function longueurRoute(x1, z1, x2, z2) {
+  let L = Math.hypot(x2 - x1, z2 - z1);
+  try { const p = navPath(x1, z1, x2, z2); if (p && p.length) { L = 0; let a = [x1, z1]; for (const b of p) { L += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } L += Math.hypot(x2 - a[0], z2 - a[1]); } } catch (e) {}
+  return L;
+}
+// Le véhicule d'une mission est construit UNE fois par ville puis remis à sa place : en
+// refabriquer un à chaque mission empilait les carcasses dans city.cars et dans solids.
+function vehiculeMission(cle, fabrique, x, z, h) {
+  city.vehMission = city.vehMission || {};
+  let c = city.vehMission[cle];
+  if (!c || !city.cars.includes(c)) { c = fabrique(x, z, h); if (!c) return null; city.cars.push(c); city.vehMission[cle] = c; }
+  c.x = x; c.z = z; c.h = h; c.speed = 0; c.vx = 0; c.vz = 0; c.busy = false; c.dead = false; c.dmg = 0;
+  c.home0 = [x, z, h]; c.route = null; c.outil = 0; c.outilCible = 0;
+  c.g.position.set(x, c.y || 0, z); c.g.rotation.y = h;
+  settleVehicle(c); vehicleSolid(c);
+  return c;
+}
+// LA DÉPANNEUSE. Le poste Véhicules doit livrer la vraie (genre « depanneuse » avec son
+// treuil) : dès qu'elle existe on la prend. En attendant, la grue mobile du dépôt fait
+// office de dépanneuse — elle a déjà un câble et un crochet qui descendent avec O.
+function fabriqueDepanneuse(x, z, h) {
+  if (typeof makeDepanneuse === 'function') return makeDepanneuse(x, z, h);
+  let c = null;
+  try { c = makeVehiculeTravail('depanneuse', 0xffd23f, x, z, h); } catch (e) { c = null; }
+  if (c && c.outils && (c.outils.crochet || c.outils.treuil || c.outils.plateau)) return c;
+  if (c) {   // genre inconnu : la carrosserie est vide, on défait proprement ce qu'on vient de créer
+    worldGroup.remove(c.g); const i = solids.indexOf(c.solid); if (i >= 0) solids.splice(i, 1); sgridSale();
+  }
+  const g = makeVehiculeTravail('grue', 0xffd23f, x, z, h);
+  g.depanneuse = true; return g;
+}
+// Conduite d'un véhicule de mission (chauffard, convoi) le long d'un itinéraire routier.
+// Rien à voir avec la physique du joueur : on avance simplement le long des points, mais
+// EN SUIVANT LA ROUTE calculée par A*, pour ne pas traverser les immeubles.
+function traceRouteMission(c, tx, tz) {
+  let p = null;
+  try { p = navPath(c.x, c.z, tx, tz); } catch (e) { p = null; }
+  c.route = (p && p.length ? p.map(q => [q[0], q[1]]) : []).concat([[tx, tz]]);
+}
+function suitRouteMission(c, dt, vitesse) {
+  if (!c.route || !c.route.length) { c.speed = 0; return true; }
+  const [tx, tz] = c.route[0], dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
+  if (d < 3.4) { c.route.shift(); return !c.route.length; }
+  const cap = Math.atan2(dx, dz);
+  let dh = cap - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  c.h += clamp(dh, -2.4 * dt, 2.4 * dt);
+  c.x += Math.sin(c.h) * vitesse * dt; c.z += Math.cos(c.h) * vitesse * dt;
+  c.speed = vitesse;
+  c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
+  if (c.wheels) for (const w of c.wheels) w.rotation.x -= vitesse * dt * 1.5;
+  settleVehicle(c); vehicleSolid(c);
+  return false;
+}
+// Sirène + gyrophare : ils s'allument TOUT SEULS dès que le joueur roule en intervention.
+// Demander une touche de plus à un enfant qui conduit déjà, c'est la garantie qu'il roule
+// sans sirène et croit que le véhicule est cassé.
+function sireneMission(c, on) {
+  if (!c) return;
+  if (on && !c.sireneOn) { c.sireneOn = true; c.gyro = true; siren.start(); msg('🚨 Sirène enclenchée — dégage le passage !', 1600); }
+  else if (!on && c.sireneOn) { c.sireneOn = false; c.gyro = false; siren.stop(); }
+  if (c.sireneOn && (c.lampR || c.lampB)) {   // le gyrophare bleu/rouge d'une voiture de patrouille
+    const t = (simTime % 0.5) < 0.25;
+    if (c.lampR) c.lampR.visible = t; if (c.lampB) c.lampB.visible = !t;
+  } else { if (c.lampR) c.lampR.visible = true; if (c.lampB) c.lampB.visible = true; }
+}
+const enVoiture = c => !!(c && drive.car === c);
+const prochePlan = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
+
+// ---- 1. POMPIER ----
+// Un incendie se déclare, le joueur court à la caserne, prend le camion, fonce sirène
+// allumée, déploie la lance (O) et arrose. Le feu GROSSIT tant qu'on ne l'arrose pas : si
+// on traîne, il gagne et la mission est perdue.
+const FEU_PERDU = 235;            // au-delà, le feu a gagné
+const SINISTRES = [
+  { nom: 'la maison jaune', x: -83, z: 44 }, { nom: 'la maison rouge', x: -83, z: 58 },
+  { nom: 'la maison blanche', x: -83, z: 72 }, { nom: 'la maison bleue', x: -83, z: -46 },
+  { nom: 'le kiosque du parc', x: 0, z: 92 }, { nom: 'la supérette', x: 46, z: 13 },
+  { nom: 'le snack', x: -9, z: 18 }, { nom: 'le club de tennis', x: 46, z: -30 },
+  { nom: 'un immeuble de La Zone', x: -136, z: 40 }, { nom: 'le garage', x: -22, z: -30 },
+  { nom: 'la cabane de la plage', x: 106, z: 44 }, { nom: 'l\'école', x: -62, z: 192 },
+];
+function pompierDemarre(d) {
+  const k = city.caserne || { x: -40, z: 130 };
+  const camion = (city.cars || []).find(c => c.kind === 'pompier');
+  if (!camion) { msg('🚒 Le camion de la caserne est introuvable', 2400); return false; }
+  d.camion = camion; camion.busy = false; camion.metierBusy = false;
+  d.caserne = k;
+  d.variante = pickOne(['foyers', 'blesse', 'chat']);
+  d.lieu = lieuRoutier(SINISTRES, k);
+  // on repart d'une ville sans incendie : le jeu n'en accepte que deux à la fois et les
+  // feux spontanés du poste J auraient mangé la place de la mission
+  for (let i = city.incendies.length - 1; i >= 0; i--) { worldGroup.remove(city.incendies[i].g); city.incendies.splice(i, 1); }
+  d.feux = [];
+  const pose = (dx, dz) => { const f = declencheIncendie(d.lieu.x + dx, d.lieu.z + dz, 110); if (f) { f.pris = true; f.mission = true; d.feux.push(f); } };
+  pose(0, 0);
+  if (d.variante === 'foyers') pose(rnd(6, 9) * (Math.random() < 0.5 ? -1 : 1), rnd(6, 9) * (Math.random() < 0.5 ? -1 : 1));
+  if (!d.feux.length) { msg('🚒 Impossible d\'allumer le sinistre', 2200); return false; }
+  if (d.variante === 'blesse') {
+    d.blesse = repereSecours(d.lieu.x + 3.5, d.lieu.z + 3.5, 0.1, 0xffd23f);
+    d.blesseSauve = false;
+  }
+  if (d.variante === 'chat') {
+    const toits = (city.toits || []).filter(t => Math.hypot(t.x - d.lieu.x, t.z - d.lieu.z) < 70);
+    const t = toits.sort((a, b) => Math.hypot(a.x - d.lieu.x, a.z - d.lieu.z) - Math.hypot(b.x - d.lieu.x, b.z - d.lieu.z))[0];
+    d.toit = t ? { x: t.x, z: t.z, y: t.y } : { x: d.lieu.x, z: d.lieu.z, y: 8 };
+    d.chat = repereSecours(d.toit.x, d.toit.z, d.toit.y + 0.1, 0xffa23f);
+    d.chatSauve = false;
+  }
+  // chrono : le temps d'aller à pied jusqu'au camion, puis de rouler jusqu'au feu, plus
+  // 90 s pour arroser. Calculé sur la VRAIE longueur des itinéraires.
+  const aPied = longueurRoute(P.pos.x, P.pos.z, camion.x, camion.z);
+  const enCamion = longueurRoute(camion.x, camion.z, d.lieu.x, d.lieu.z);
+  mission.limit = Math.round(aPied / 3.4 + enCamion / 9 + 100);
+  mission.t0 = simTime;
+  setBeacon(camion.x, camion.z, 0, 'mission');
+  msg(`🔥 AU FEU ${d.lieu.nom} ! Cours à la caserne prendre le camion (${Math.round(aPied)} m)`, 3600);
+  return true;
+}
+// Un petit repère (une forme colorée + sa colonne de lumière) pour signaler un blessé ou
+// un chat : sans lui on tourne autour du bon bâtiment sans jamais rien voir.
+function repereSecours(x, z, y, couleur) {
+  const g = new THREE.Group(); g.position.set(x, y, z); worldGroup.add(g);
+  const corps = new THREE.Mesh(unitRound, lam(couleur)); corps.scale.set(0.5, 0.45, 0.8); corps.position.y = 0.3; g.add(corps);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.8, 10, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: couleur, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false }));
+  col.position.y = 5; g.add(col); g.userData.col = col;
+  return g;
+}
+function pompierTick(dt, d) {
+  const camion = d.camion;
+  if (camion && camion.metierBusy) { camion.metierBusy = false; camion.busy = drive.car === camion; }   // les pompiers PNJ ne réquisitionnent pas le camion du joueur
+  // le feu grandit tant que personne ne l'arrose
+  let feuMax = 0, restants = 0;
+  for (const f of d.feux) {
+    if (!city.incendies.includes(f)) continue;
+    restants++;
+    const arrose = f.derniere != null && f.force < f.derniere - 1e-4;
+    if (!arrose) f.force = Math.min(FEU_PERDU + 1, f.force + dt * 1.7);
+    f.derniere = f.force; feuMax = Math.max(feuMax, f.force);
+  }
+  d.restants = restants; d.feuMax = Math.round(feuMax);
+  if (feuMax > FEU_PERDU) { msg('🔥 Trop tard : le feu a gagné le bâtiment', 3000); endMission(false); return; }
+  if (mission.step === 0) {
+    if (enVoiture(camion)) {
+      mission.step = 1; setBeacon(d.lieu.x, d.lieu.z, 0, 'mission');
+      msg(`🚒 En route vers ${d.lieu.nom} !`, 2400); sfx.check();
+    } else setBeacon(camion.x, camion.z, 0, 'mission');
+    return;
+  }
+  sireneMission(camion, enVoiture(camion) && restants > 0);
+  if (mission.step === 1) {
+    if (enVoiture(camion) && Math.hypot(camion.x - d.lieu.x, camion.z - d.lieu.z) < 16) {
+      mission.step = 2; msg('🚒 Sur place ! Appuie sur O pour déployer la lance, puis arrose le feu', 3600); sfx.check();
+    }
+    return;
+  }
+  if (mission.step === 2) {
+    if (!restants) {
+      burst(d.lieu.x, 2, d.lieu.z, 0xf4f6fa, 16); sfx.check();
+      if (d.variante === 'blesse') { mission.step = 3; setBeacon(d.lieu.x + 3.5, d.lieu.z + 3.5, 0.2, 'mission'); msg('🚑 Feu éteint ! Sors le blessé : approche-toi de lui à pied', 3400); }
+      else if (d.variante === 'chat') { mission.step = 3; setBeacon(d.toit.x, d.toit.z, d.toit.y, 'mission'); msg('🐱 Feu éteint ! Un chat est bloqué sur le toit : approche le camion et déploie l\'échelle (O)', 4000); }
+      else endMission(true);
+    }
+    return;
+  }
+  if (mission.step === 3 && d.variante === 'blesse') {
+    if (!d.blesseSauve) {
+      if (!drive.car && prochePlan(d.lieu.x + 3.5, d.lieu.z + 3.5, 3.2)) {
+        d.blesseSauve = true; if (d.blesse) d.blesse.visible = false;
+        setBeacon(camion.x, camion.z, 0, 'mission');
+        msg('🚑 Tu le portes ! Ramène-le jusqu\'au camion', 3000); sfx.coin();
+      }
+    } else {
+      setBeacon(camion.x, camion.z, 0, 'mission');
+      if (prochePlan(camion.x, camion.z, 6)) endMission(true);
+    }
+    return;
+  }
+  if (mission.step === 3 && d.variante === 'chat') {
+    const pres = camion && Math.hypot(camion.x - d.toit.x, camion.z - d.toit.z) < 18;
+    if (pres && camion.outil > 0.5) {
+      if (d.chat) { d.chat.position.y = Math.max(0.2, d.chat.position.y - dt * 2.4); if (d.chat.userData.col) d.chat.userData.col.visible = d.chat.position.y > 1; }
+      if (!d.chatSauve && d.chat && d.chat.position.y <= 0.35) { d.chatSauve = true; msg('🐱 Le chat est redescendu par l\'échelle !', 2600); sfx.coin(); endMission(true); }
+    }
+  }
+}
+function pompierBandeau(d) {
+  const chrono = ` · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
+  if (mission.step === 0) return `Cours à la caserne et prends le camion${chrono}`;
+  if (mission.step === 1) return `Fonce sur l'incendie ${d.lieu ? d.lieu.nom : ''}${chrono}`;
+  if (mission.step === 2) return `Déploie la lance (O) et arrose : ${d.restants || 0} foyer(s), force ${d.feuMax || 0}${chrono}`;
+  if (mission.step === 3 && d.variante === 'blesse') return d.blesseSauve ? 'Ramène le blessé au camion' : 'Sors le blessé (à pied, près du bâtiment)';
+  if (mission.step === 3) return 'Déploie l\'échelle (O) près du toit pour le chat';
+  return 'Intervention en cours';
+}
+function pompierNettoie(d) {
+  for (const f of (d.feux || [])) { const i = city.incendies.indexOf(f); if (i >= 0) { worldGroup.remove(f.g); city.incendies.splice(i, 1); } }
+  if (d.blesse) worldGroup.remove(d.blesse);
+  if (d.chat) worldGroup.remove(d.chat);
+  if (d.camion) { sireneMission(d.camion, false); d.camion.outilCible = 0; }
+}
+
+// ---- 2. DÉPANNEUSE ----
+// Un véhicule est en panne quelque part en ville. Le joueur prend la dépanneuse au garage,
+// va sur place, accroche le treuil (O) et remorque l'épave jusqu'au garage. Il est payé au
+// véhicule ramené, MOINS les dégâts qu'il a faits en chemin.
+const PANNES = [
+  { nom: 'sur la rocade nord', x: 0, z: -46 }, { nom: 'devant le commissariat', x: -46, z: 16 },
+  { nom: 'près du parc', x: 0, z: 70 }, { nom: 'sur le front de mer', x: 106, z: 44 },
+  { nom: 'à l\'entrée de La Zone', x: -120, z: 40 }, { nom: 'devant la supérette', x: 46, z: 13 },
+  { nom: 'sur l\'avenue des villas', x: -83, z: 30 }, { nom: 'près de l\'hôpital', x: 12, z: 190 },
+  { nom: 'devant le casino', x: 60, z: 282 }, { nom: 'au rond-point du centre', x: 20, z: 0 },
+];
+function depannageDemarre(d) {
+  const gar = city.garage || { x: -45, z: 90 };
+  d.garage = { x: gar.x, z: gar.z };
+  const dep = vehiculeMission('depanneuse', fabriqueDepanneuse, gar.x + 8, gar.z + 8, Math.PI);
+  if (!dep) { msg('🛻 Pas de dépanneuse disponible', 2400); return false; }
+  d.veh = dep;
+  d.lieu = lieuRoutier(PANNES, d.garage);
+  // le véhicule en panne : une voiture ordinaire de la ville, cabossée et posée sur place
+  const cand = (city.cars || []).filter(c => c !== dep && !c.heli && !c.kart && !c.travail && !c.busy && c !== drive.car && c.kind == null);
+  const ep = cand.sort((a, b) => Math.hypot(b.x - gar.x, b.z - gar.z) - Math.hypot(a.x - gar.x, a.z - gar.z))[0];
+  if (!ep) { msg('🛻 Aucun véhicule en panne pour l\'instant', 2400); return false; }
+  d.epave = ep; ep.busy = true; ep.speed = 0; ep.vx = 0; ep.vz = 0;
+  ep.x = d.lieu.x; ep.z = d.lieu.z; ep.h = rnd(0, 6.28);
+  ep.g.position.set(ep.x, ep.y || 0, ep.z); ep.g.rotation.y = ep.h;
+  settleVehicle(ep); vehicleSolid(ep);
+  ep.dmg = 0; ep.dead = false; vehicleDamage(ep, Math.round(rnd(25, 52)));   // vraiment cabossé : capot soulevé, phare cassé
+  d.dmg0 = ep.dmg; d.accroche = false;
+  const aPied = longueurRoute(P.pos.x, P.pos.z, dep.x, dep.z);
+  const trajet = longueurRoute(dep.x, dep.z, d.lieu.x, d.lieu.z) + longueurRoute(d.lieu.x, d.lieu.z, gar.x, gar.z);
+  mission.limit = Math.round(aPied / 3.4 + trajet / 8 + 110);
+  mission.t0 = simTime;
+  setBeacon(dep.x, dep.z, 0, 'mission');
+  msg(`🛻 Panne ${d.lieu.nom} — prends la dépanneuse au garage`, 3400);
+  return true;
+}
+function depannageTick(dt, d) {
+  const dep = d.veh, ep = d.epave;
+  if (!dep || !ep) { endMission(false); return; }
+  if (mission.step === 0) {
+    setBeacon(dep.x, dep.z, 0, 'mission');
+    if (enVoiture(dep)) { mission.step = 1; setBeacon(d.lieu.x, d.lieu.z, 0, 'mission'); msg(`🛻 En route ${d.lieu.nom}`, 2400); sfx.check(); }
+    return;
+  }
+  sireneMission(dep, false);
+  if (mission.step === 1) {
+    setBeacon(ep.x, ep.z, 0, 'mission');
+    if (enVoiture(dep) && Math.hypot(dep.x - ep.x, dep.z - ep.z) < 9) {
+      mission.step = 2; msg('🛻 Sur place ! Appuie sur O pour descendre le treuil et accrocher la voiture', 3800); sfx.check();
+    }
+    return;
+  }
+  if (mission.step === 2) {
+    setBeacon(ep.x, ep.z, 0, 'mission');
+    const pres = enVoiture(dep) && Math.hypot(dep.x - ep.x, dep.z - ep.z) < 10;
+    if (pres && dep.outil > 0.5) {
+      mission.step = 3; d.accroche = true; d.dmg0 = ep.dmg || 0;
+      setBeacon(d.garage.x, d.garage.z, 0, 'mission');
+      msg('⛓️ Treuil accroché ! Remorque doucement jusqu\'au garage — chaque choc coûte cher', 4000); sfx.coin();
+    }
+    return;
+  }
+  if (mission.step === 3) {
+    // l'épave suit la dépanneuse, roue avant levée : on la place derrière, dans son axe
+    const recul = 6.2;
+    ep.x = dep.x - Math.sin(dep.h) * recul; ep.z = dep.z - Math.cos(dep.h) * recul; ep.h = dep.h;
+    ep.g.position.set(ep.x, (dep.y || 0) + 0.18, ep.z); ep.g.rotation.y = ep.h; ep.g.rotation.x = -0.12;
+    ep.y = dep.y || 0; settleVehicle(ep); ep.g.rotation.x = -0.12; vehicleSolid(ep);
+    setBeacon(d.garage.x, d.garage.z, 0, 'mission');
+    if (Math.hypot(dep.x - d.garage.x, dep.z - d.garage.z) < 11) {
+      const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
+      mission.prime = -Math.min(45, degats);
+      d.degats = degats;
+      ep.g.rotation.x = 0; endMission(true);
+    }
+  }
+}
+function depannageBandeau(d) {
+  const chrono = ` · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
+  if (mission.step === 0) return `Prends la dépanneuse au garage${chrono}`;
+  if (mission.step === 1) return `Rejoins le véhicule en panne ${d.lieu ? d.lieu.nom : ''}${chrono}`;
+  if (mission.step === 2) return `Accroche le treuil (O), tout près du véhicule${chrono}`;
+  return `Remorque jusqu'au garage, sans rien casser${chrono}`;
+}
+function depannageNettoie(d) {
+  const ep = d.epave;
+  if (ep) { ep.busy = false; ep.g.rotation.x = 0; settleVehicle(ep); vehicleSolid(ep); }
+  if (d.veh) { d.veh.outilCible = 0; sireneMission(d.veh, false); }
+}
+
+// ---- 3. POLICE (du bon côté) ----
+// Le joueur prend la voiture de patrouille au commissariat, gyrophare et sirène, puis :
+// interception d'un chauffard, poursuite d'un voleur en fuite, escorte d'un convoi ou
+// contrôle à un barrage. Le tirage change à chaque mission.
+const POLICE_VARIANTES = ['chauffard', 'voleur', 'escorte', 'barrage'];
+function fabriquePatrouille(x, z, h) { const c = makeCar(0xf4f6fa, x, z, h, { police: true }); const i = city.cars.indexOf(c); if (i >= 0) city.cars.splice(i, 1); return c; }
+function policeDemarre(d) {
+  if (police.wanted > 0) { msg('🚓 Tu es recherché : impossible d\'entrer en patrouille. Sème d\'abord la police.', 3400); return false; }
+  const st = police.station || { x: -54, z: 28 };
+  const veh = vehiculeMission('patrouille', fabriquePatrouille, st.x + 12, st.z - 6, Math.PI / 2);
+  if (!veh) { msg('🚓 Aucune voiture de patrouille disponible', 2400); return false; }
+  d.veh = veh; d.station = { x: st.x, z: st.z };
+  d.variante = pickOne(POLICE_VARIANTES);
+  d.appel = lieuRoutier(PANNES, d.station);
+  if (d.variante === 'chauffard') {
+    const b = pickOne(bots.filter(x => x.av.group.visible && !x.prison)) || bots[0];
+    d.bot = b; if (b) { b.wait = 999; b.tgt = null; b.av.group.visible = false; }
+    const ch = vehiculeMission('chauffard', (x, z, h) => { const c = makeCar(0xff5c5c, x, z, h, { sport: true }); const i = city.cars.indexOf(c); if (i >= 0) city.cars.splice(i, 1); return c; }, d.appel.x, d.appel.z, 0);
+    d.cible = ch; ch.busy = true;
+    d.tour = 0; d.colle = 0;
+    d.circuit = [...PANNES].sort(() => Math.random() - 0.5).slice(0, 4);
+    traceRouteMission(ch, d.circuit[0].x, d.circuit[0].z);
+  }
+  if (d.variante === 'voleur') {
+    const b = pickOne(bots.filter(x => x.av.group.visible && !x.prison)) || bots[0];
+    if (!b) { msg('🚓 Personne à poursuivre pour l\'instant', 2400); return false; }
+    // On le fait fuir NOUS-MÊMES plutôt qu'en passant par le mode « flee » de la bagarre :
+    // là-bas il court à 5,5 m/s, soit presque la vitesse du joueur (7 m/s), et la poursuite
+    // durait une éternité. À 4,4 m/s on le rattrape en courant, sans que ce soit donné.
+    d.bot = b; b.wait = 999; b.tgt = null; b.fight = null; b.ordre = null; b.activite = null;
+    b.pos.set(d.appel.x, 0.15, d.appel.z); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+  }
+  if (d.variante === 'escorte') {
+    const dep2 = city.bank ? { x: city.bank.x, z: city.bank.z } : { x: 0, z: 0 };
+    d.appel = { nom: 'à la banque', x: dep2.x, z: dep2.z };
+    const cv = vehiculeMission('convoi', (x, z, h) => { const c = makeCar(0x2b3550, x, z, h); const i = city.cars.indexOf(c); if (i >= 0) city.cars.splice(i, 1); return c; }, dep2.x + 4, dep2.z + 4, 0);
+    d.convoi = cv; cv.busy = true; d.loinT = 0; d.parti = false;
+  }
+  if (d.variante === 'barrage') {
+    d.controles = 0; d.files = [];
+    for (let i = 0; i < 3; i++) {
+      const c = vehiculeMission('barrage' + i, (x, z, h) => { const c2 = makeCar([0x4f8dff, 0x5cc453, 0xffd23f][i], x, z, h); const k = city.cars.indexOf(c2); if (k >= 0) city.cars.splice(k, 1); return c2; },
+        d.appel.x + Math.sin(i * 1.1) * 2, d.appel.z - 7 - i * 6, 0);
+      c.busy = true; c.controle = false; d.files.push(c);
+    }
+  }
+  const aPied = longueurRoute(P.pos.x, P.pos.z, veh.x, veh.z);
+  const trajet = longueurRoute(veh.x, veh.z, d.appel.x, d.appel.z);
+  mission.limit = Math.round(aPied / 3.4 + trajet / 9 + 140);
+  mission.t0 = simTime;
+  setBeacon(veh.x, veh.z, 0, 'mission');
+  msg('🚓 Prends la voiture de patrouille au commissariat', 3200);
+  return true;
+}
+function policeTickAct(dt, d) {
+  const veh = d.veh;
+  if (!veh) { endMission(false); return; }
+  if (mission.step === 0) {
+    setBeacon(veh.x, veh.z, 0, 'mission');
+    if (enVoiture(veh)) {
+      mission.step = 1; setBeacon(d.appel.x, d.appel.z, 0, 'mission');
+      msg(`🚓 Appel radio : rejoins le lieu de l'intervention ${d.appel.nom}`, 3400); sfx.check();
+    }
+    return;
+  }
+  sireneMission(veh, enVoiture(veh));
+  if (mission.step === 1) {
+    if (prochePlan(d.appel.x, d.appel.z, 22)) {
+      mission.step = 2;
+      if (d.variante === 'chauffard') msg('🚗💨 Le chauffard file ! Colle-toi à lui, sirène allumée', 3600);
+      if (d.variante === 'voleur') msg('🏃 Le voleur détale ! Rattrape-le à pied', 3400);
+      if (d.variante === 'escorte') msg('🚚 Le convoi part vers le commissariat — reste à moins de 45 m', 3800);
+      if (d.variante === 'barrage') msg('🚧 Barrage : contrôle les trois véhicules arrêtés, à pied', 3800);
+      sfx.check();
+    } else setBeacon(d.appel.x, d.appel.z, 0, 'mission');
+    return;
+  }
+  if (d.variante === 'chauffard') {
+    const ch = d.cible; if (!ch) { endMission(false); return; }
+    setBeacon(ch.x, ch.z, 0, 'mission');
+    if (mission.step === 2) {
+      if (suitRouteMission(ch, dt, 15)) { d.tour = (d.tour + 1) % d.circuit.length; traceRouteMission(ch, d.circuit[d.tour].x, d.circuit[d.tour].z); }
+      const colle = enVoiture(veh) && veh.sireneOn && Math.hypot(veh.x - ch.x, veh.z - ch.z) < 9;
+      d.colle = colle ? (d.colle || 0) + dt : Math.max(0, (d.colle || 0) - dt * 0.5);
+      if (d.colle > 3) {
+        mission.step = 3; ch.route = null; ch.speed = 0;
+        const b = d.bot;
+        if (b) { b.pos.set(ch.x + 2.4, 0.15, ch.z); b.av.group.position.copy(b.pos); b.av.group.visible = true; b.wait = 999; b.tgt = null; botSay(b, ['c\'est bon, je me range…', 'j\'allais pas si vite !']); }
+        msg('🚓 Il se range ! Descends et contrôle le conducteur', 3400); sfx.check();
+      }
+      return;
+    }
+    if (mission.step === 3) {
+      const b = d.bot;
+      if (b) setBeacon(b.pos.x, b.pos.z, 0.3, 'mission');
+      if (!drive.car && b && prochePlan(b.pos.x, b.pos.z, 3.2)) { arreteSuspect(b, 'excès de vitesse', 100); endMission(true); }
+      return;
+    }
+  }
+  if (d.variante === 'voleur') {
+    const b = d.bot; if (!b) { endMission(false); return; }
+    setBeacon(b.pos.x, b.pos.z, 0.3, 'mission');
+    b.wait = 999; b.tgt = null;
+    const fx = b.pos.x - P.pos.x, fz = b.pos.z - P.pos.z, fd = Math.hypot(fx, fz) || 1;
+    const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z };
+    npcMove(o, fx / fd * 4.4 * dt, fz / fd * 4.4 * dt, 0.4);
+    b.pos.x = o.x; b.pos.z = o.z; b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y);
+    b.facing = Math.atan2(fx, fz);
+    b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
+    animateRig(b.av.rig, 'walk', 4.4, dt, simTime);
+    if (simTime > (d.sayT || 0)) { d.sayT = simTime + 6; botSay(b, pickOne(['tu m\'auras pas !', 'cours toujours !', 'lâche-moi !'])); }
+    if (prochePlan(b.pos.x, b.pos.z, 2.8) && !drive.car) { arreteSuspect(b, 'vol à l\'arraché', 140); endMission(true); }
+    return;
+  }
+  if (d.variante === 'escorte') {
+    const cv = d.convoi; if (!cv) { endMission(false); return; }
+    if (!d.parti) { d.parti = true; traceRouteMission(cv, d.station.x, d.station.z + 8); }
+    const arrive = suitRouteMission(cv, dt, 7.5);
+    setBeacon(cv.x, cv.z, 0, 'mission');
+    const dist = Math.hypot(P.pos.x - cv.x, P.pos.z - cv.z);
+    d.dist = Math.round(dist);
+    if (dist > 45) { d.loinT = (d.loinT || 0) + dt; if (simTime > (d.avertT || 0)) { d.avertT = simTime + 3; msg(`⚠️ Tu lâches le convoi (${Math.round(dist)} m) — reviens !`, 2200); } }
+    else d.loinT = Math.max(0, (d.loinT || 0) - dt * 0.6);
+    if (d.loinT > 12) { msg('🚚 Le convoi a été laissé sans escorte', 2800); endMission(false); return; }
+    if (arrive) endMission(true);
+    return;
+  }
+  if (d.variante === 'barrage') {
+    const reste = d.files.filter(c => !c.controle);
+    if (reste[0]) setBeacon(reste[0].x, reste[0].z, 0, 'mission');
+    for (const c of d.files) {
+      if (c.controle) continue;
+      if (!drive.car && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 4.2) {
+        c.controle = true; d.controles++; sfx.coin(); burst(c.x, 1.2, c.z, 0x3ef2ff, 8);
+        msg(`🚧 Contrôle ${d.controles}/3 : papiers en règle`, 2000);
+      }
+    }
+    if (d.controles >= 3) endMission(true);
+  }
+}
+// L'arrestation : le suspect part en cellule. On réutilise la mise en cellule du guichet
+// des plaintes, c'est la même prison et le même compte à rebours.
+function arreteSuspect(b, motif, peine) {
+  if (!b) return;
+  b.fight = null; b.fightT = 0; b.wait = 1;
+  sfx.win(); burst(b.pos.x, 1.2, b.pos.z, 0x4f8dff, 12);
+  msg(`🚓 Arrestation : ${b.name} (${motif})`, 3000);
+  try { emprisonneBot(b, { peine: peine || 120, n: motif }); } catch (e) { b.prison = simTime + (peine || 120); }
+}
+function policeBandeauAct(d) {
+  const chrono = ` · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
+  if (mission.step === 0) return `Prends la voiture de patrouille au commissariat${chrono}`;
+  if (mission.step === 1) return `Rejoins l'intervention ${d.appel ? d.appel.nom : ''}${chrono}`;
+  if (d.variante === 'chauffard') return mission.step === 2 ? `Colle-toi au chauffard, sirène : ${(d.colle || 0).toFixed(1)}/3 s${chrono}` : `Descends et contrôle le conducteur${chrono}`;
+  if (d.variante === 'voleur') return `Rattrape le voleur à pied${chrono}`;
+  if (d.variante === 'escorte') return `Escorte le convoi · ${d.dist || 0} m (max 45)${chrono}`;
+  if (d.variante === 'barrage') return `Contrôle au barrage : ${d.controles || 0}/3${chrono}`;
+  return 'Patrouille en cours';
+}
+function policeNettoieAct(d) {
+  if (d.veh) sireneMission(d.veh, false);
+  if (d.cible) { d.cible.route = null; d.cible.speed = 0; d.cible.busy = false; }
+  if (d.convoi) { d.convoi.route = null; d.convoi.speed = 0; d.convoi.busy = false; }
+  for (const c of (d.files || [])) c.busy = false;
+  const b = d.bot; if (b && !b.prison) { b.wait = 1; b.fight = null; b.av.group.visible = true; }
+}
+
+// Le registre des trois familles : startMission, missionTick, updateMissionHud et
+// endMission passent par lui. Une seule entrée à ajouter pour une nouvelle mission.
+const ACT_MISSIONS = {
+  pompier: { demarre: pompierDemarre, tick: pompierTick, bandeau: pompierBandeau, nettoie: pompierNettoie },
+  depannage: { demarre: depannageDemarre, tick: depannageTick, bandeau: depannageBandeau, nettoie: depannageNettoie },
+  police: { demarre: policeDemarre, tick: policeTickAct, bandeau: policeBandeauAct, nettoie: policeNettoieAct },
+};
 function startMission(id) {
   if (jail.on) { msg('🔒 Pas de mission en prison', 1000); return; }
+  // On cherche la mission AVANT d'abandonner celle en cours : sur un identifiant inconnu ou
+  // une mission encore verrouillée, on perdait celle qu'on était en train de jouer.
+  const m = MISSIONS.find(x => x.id === id);
+  if (!m) { msg('❓ Cette mission n\'existe pas', 1600); return; }
+  if (!missionDebloquee(m)) { msg(`🔒 ${m.e} ${m.n} : il faut ${m.req} missions réussies pour l'ouvrir (tu en as ${carriere.total})`, 3600); return; }
   if (mission.cur) endMission(false, true);
-  const m = MISSIONS.find(x => x.id === id); mission.cur = m; mission.step = 0; mission.t0 = simTime; mission.limit = 0; mission.data = {};
+  mission.cur = m; mission.step = 0; mission.t0 = simTime; mission.limit = 0; mission.prime = 0; mission.data = {};
   const d = mission.data;
+  if (ACT_MISSIONS[id]) {
+    // les missions de métier préparent tout elles-mêmes ; si le décor manque (pas de camion,
+    // pas de véhicule à dépanner), elles refusent proprement au lieu de laisser le joueur
+    // avec un bandeau qui ne mène nulle part
+    let ok = false;
+    try { ok = ACT_MISSIONS[id].demarre(d); } catch (e) { ok = false; console.error(e); }
+    if (!ok) { mission.cur = null; mission.data = {}; clearBeacon('mission'); updateMissionHud(); return; }
+    sfx.check(); updateMissionHud(); closeUI(); return;
+  }
   if (id === 'livraison') {
     d.dep = pickOne(RETRAITS);
+    // le bureau des missions n'est pas a une adresse fixe : on lit sa VRAIE position
+    if (d.dep.nom === 'au bureau des missions' && city.office) d.dep = { nom: d.dep.nom, x: city.office.x, z: city.office.z + 2 };
     const loin = ADRESSES.filter(a => Math.hypot(a.x - d.dep.x, a.z - d.dep.z) > 60);
     d.arr = pickOne(loin.length ? loin : ADRESSES);
     setBeacon(d.dep.x, d.dep.z, 0, 'mission');
@@ -4639,19 +5176,32 @@ function startMission(id) {
 }
 function endMission(success, quiet) {
   const m = mission.cur; if (!m) return; const d = mission.data;
+  if (ACT_MISSIONS[m.id] && ACT_MISSIONS[m.id].nettoie) { try { ACT_MISSIONS[m.id].nettoie(d, success); } catch (e) { console.error(e); } }
   if (d.bot) { d.bot.wait = 1; d.bot.av.group.visible = true; d.bot.av.group.position.y = d.bot.pos.y; }
   if (d.pet) { d.pet.wait = 1; d.pet.home = [rnd(-20, 20), rnd(76, 96)]; d.pet.follow = 0; }
   if (d.coins) for (const c of d.coins) { worldGroup.remove(c.g); const k = coins.indexOf(c); if (k >= 0) coins.splice(k, 1); }
   if (d.marker) worldGroup.remove(d.marker);
   if (d.bags) for (const b of d.bags) worldGroup.remove(b.m);
   clearBeacon('mission'); mission.cur = null; mission.data = {};
-  if (success) { wallet += m.r; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); perfGagne(P, 4, 'mission du bureau réussie'); msg(`✅ Mission réussie : +${m.r} 🪙`, 3000); chat(null, `📋 ${myCfg.name} a réussi la mission « ${m.n} » (+${m.r} 🪙)`); }
+  if (success) {
+    // Le gain n'est plus un chiffre fixe : la prime de grade récompense la carrière et le
+    // malus des dégâts (dépannage) rend la conduite propre payante.
+    const prime = mission.prime || 0, grade = primeGrade(m);
+    const gain = Math.max(5, m.r + prime + grade);
+    wallet += gain; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); perfGagne(P, 4, 'mission du bureau réussie');
+    const detail = (prime ? (prime > 0 ? ` (+${prime} de bonus)` : ` (${prime} de dégâts)`) : '') + (grade ? ` (+${grade} de grade)` : '');
+    msg(`✅ Mission réussie : +${gain} 🪙${detail}`, 3200);
+    chat(null, `📋 ${myCfg.name} a réussi la mission « ${m.n} » (+${gain} 🪙)`);
+    carriereReussie(m);
+  }
   else if (!quiet) { msg('❌ Mission échouée', 1800); sfx.die(); }
+  mission.prime = 0;
   updateMissionHud();
 }
 function updateMissionHud() {
   const el = $('missionHud'); if (!mission.cur) { el.classList.remove('on'); return; }
   const m = mission.cur, d = mission.data; let txt = '';
+  if (ACT_MISSIONS[m.id]) { try { txt = ACT_MISSIONS[m.id].bandeau(d); } catch (e) { txt = 'Mission en cours'; } }
   if (m.id === 'livraison') txt = mission.step === 0 ? `Va chercher le colis ${d.dep ? d.dep.nom : ''}` : `Livre le colis à ${d.arr ? d.arr.nom : 'destination'} · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
   if (m.id === 'taxi') txt = mission.step === 0 ? `Va chercher ${d.bot.name} en voiture` : `Dépose ${d.bot.name} à destination · ${Math.max(0, Math.ceil(mission.limit - (simTime - mission.t0)))} s`;
   if (m.id === 'chien') txt = mission.step === 0 ? 'Retrouve le chien (colonne de lumière)' : 'Ramène le chien à la fontaine du parc';
@@ -4675,6 +5225,11 @@ function missionTick(dt) {
   const bm = beacon.mission;
   if (bm && (!beacon.m || !beacon.m.visible || beacon.x !== bm.x || beacon.z !== bm.z)) setBeacon(bm.x, bm.z, bm.y, 'mission');
   const near = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
+  if (ACT_MISSIONS[m.id]) {
+    try { ACT_MISSIONS[m.id].tick(dt, d); } catch (e) { console.error(e); }
+    if (simTime > (mission.hudT || 0)) { mission.hudT = simTime + 0.25; updateMissionHud(); }
+    return;
+  }
   if (m.id === 'livraison') {
     if (mission.step === 0 && near(d.dep.x, d.dep.z, 4)) {
       mission.step = 1; mission.t0 = simTime;
@@ -4740,9 +5295,22 @@ function missionTick(dt) {
   if (simTime > (mission.hudT || 0)) { mission.hudT = simTime + 0.25; updateMissionHud(); }
 }
 function openMissions(atOffice) {
-  const here = true;
-  $('missGrid').innerHTML = (here ? '' : `<p class="sub" style="grid-column:1/-1">📍 On accepte les missions au <b>bureau des missions</b> (kiosque à l'est du centre, colonne de lumière)</p>`) + MISSIONS.map(m => { const act = mission.cur && mission.cur.id === m.id; return `<div class="mcard ${act ? 'active' : ''}"><b>${m.e} ${m.n} <span class="mr">+${m.r} 🪙</span></b>${m.desc}<br><button class="btn" data-m="${m.id}" ${!act && !here ? 'disabled style="opacity:.45"' : ''}>${act ? 'Abandonner' : 'Accepter'}</button></div>`; }).join('');
-  $('missGrid').querySelectorAll('[data-m]:not([disabled])').forEach(b => b.addEventListener('click', () => { if (mission.cur && mission.cur.id === b.dataset.m) { endMission(false, true); openMissions(here); } else startMission(b.dataset.m); }));
+  // Le tableau ne disait ni la difficulté, ni où on en est : douze lignes identiques dans
+  // lesquelles un enfant ne pouvait pas choisir. Il annonce maintenant le GRADE, le nombre
+  // de missions réussies, la difficulté en étoiles, et il montre les missions encore
+  // verrouillées avec ce qu'il faut faire pour les ouvrir (une carte grise, pas un trou).
+  const g = gradeCarriere(), prochaine = MISSIONS.filter(m => !missionDebloquee(m)).sort((a, b) => a.req - b.req)[0];
+  const entete = `<p class="sub" style="grid-column:1/-1">${g.e} Grade : <b>${g.n}</b> · ${carriere.total} mission${carriere.total > 1 ? 's' : ''} réussie${carriere.total > 1 ? 's' : ''}`
+    + (prochaine ? ` · encore ${prochaine.req - carriere.total} pour ouvrir ${prochaine.e} ${prochaine.n}` : ' · toutes les missions sont ouvertes !') + '</p>';
+  $('missGrid').innerHTML = entete + MISSIONS.map(m => {
+    const act = mission.cur && mission.cur.id === m.id, libre = missionDebloquee(m);
+    const etoiles = '★'.repeat(m.dif || 1) + '☆'.repeat(Math.max(0, 4 - (m.dif || 1)));
+    const bonus = primeGrade(m);
+    return `<div class="mcard ${act ? 'active' : ''}" ${libre ? '' : 'style="opacity:.55"'}><b>${libre ? m.e : '🔒'} ${m.n} <span class="mr">+${m.r + bonus} 🪙</span></b>`
+      + `<span class="sub" style="display:block;margin:2px 0">Difficulté ${etoiles}${bonus ? ` · prime de grade +${bonus}` : ''}</span>${m.desc}<br>`
+      + `<button class="btn" data-m="${m.id}" ${libre ? '' : 'disabled style="opacity:.45"'}>${act ? 'Abandonner' : (libre ? 'Accepter' : `Verrouillé (${m.req} missions)`)}</button></div>`;
+  }).join('');
+  $('missGrid').querySelectorAll('[data-m]:not([disabled])').forEach(b => b.addEventListener('click', () => { if (mission.cur && mission.cur.id === b.dataset.m) { endMission(false, true); openMissions(atOffice); } else startMission(b.dataset.m); }));
   openUI('missions');
 }
 function buildCoiffeur(SX, SZ) {   // 💈 salon de coiffure : fauteuils, miroirs, lavabo, enseigne tournante

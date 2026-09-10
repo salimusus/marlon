@@ -2607,7 +2607,7 @@ function buildZone(X, Z) {
   city.zones.push({ name: 'La Zone', emoji: '🏚️', x1: X - W / 2, x2: X + W / 2, z1: Z - D / 2, z2: Z + D / 2,
     hint: '🏚️ La Zone : immeubles ouverts, escaliers et appartements — attention aux gangs' });
   // piste de terre qui relie le quartier au reste de la ville
-  road(X + W / 2 + 20, Z, 44, 8, 0, true);
+  road(X + W / 2 + 19, Z - 18, 42, 8, 0, true);   // dans l'axe de la rue de La Zone, entre les maisons (a Z elle traversait la maison jaune)
   road(X + W / 2 + 20, Z - 30, 44, 8, 0, true);
 }
 function buildOuterDistricts() {   // nouveaux quartiers : entrepôts à l'est, maisons à l'ouest, zone nord
@@ -2641,7 +2641,7 @@ function buildOuterDistricts() {   // nouveaux quartiers : entrepôts à l'est, 
     box(x - 2, 0.5, z + 2.8, 1.2, 1, 1.2, 0xc08b4a, { studs: false, noRoute: true });   // palette hors de l'allée d'entrée
     box(x, 7.4, z, 3, 0.12, 3, 0, { material: neonMat(0xfff2b0), deco: true, noEdges: true, noShadow: true });
   }
-  road(80, 35, 6, 190, 0, true); road(-80, 35, 6, 190, 0, true); road(0, -70, 200, 6, 0, true); road(0, 140, 200, 6, 0, true);
+  road(80, 35, 6, 190, 0, true); road(-80, 33.5, 6, 213, 0, true); road(-90, -70, 20, 6, 0, true); road(90, -70, 20, 6, 0, true); road(0, 140, 200, 6, 0, true);   // la rue ouest monte jusqu'a l'avenue du nord ; la route du nord ne passe plus sous le sable du rallye
   city.zones.push({ name: 'Quartier ouest', emoji: '🏘️', x1: -100, x2: -84, z1: -60, z2: 95, hint: '🏘️ Quartier des maisons' });
   city.zones.push({ name: 'Zone industrielle', emoji: '🏭', x1: 84, x2: 100, z1: -30, z2: 100, hint: '🏭 Entrepôts… et une planque pour semer la police' });
 }
@@ -3201,9 +3201,30 @@ const WINDOWS = (() => {
   for (let y = 8; y < 64; y += 28) for (let x = 6; x < 64; x += 20) { g.fillStyle = Math.random() < 0.7 ? '#fff4b8' : '#6f8fb8'; g.fillRect(x, y, 12, 16); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y + 14, 12, 2); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
 })();
+// LA CHAUSSEE : un vrai bitume (grain), une ligne blanche continue sur chaque bord et la
+// ligne jaune discontinue au milieu. Une tuile = 4 m de route, dans la largeur de la voie.
 const ROAD = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#464b57'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) { const v = 60 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 4},${v + 12},0.5)`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+  g.fillStyle = '#e8ebf0'; g.fillRect(3, 0, 4, 128); g.fillRect(121, 0, 4, 128);           // bords blancs
+  g.fillStyle = '#ffd23f'; g.fillRect(61, 8, 6, 56);                                        // axe jaune discontinu
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+})();
+// LE SOL DE LA VILLE : des dalles de beton clair, avec leurs joints, au lieu d'une plaque
+// du meme gris que les routes (on ne distinguait plus la chaussee du trottoir).
+const PAVE = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#a4aab3'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 700; i++) { const v = 150 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 3},${v + 8},0.55)`; g.fillRect(Math.random() * 128, Math.random() * 128, 3, 3); }
+  g.strokeStyle = '#7f8691'; g.lineWidth = 2; for (let k = 0; k <= 128; k += 64) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 128); g.moveTo(0, k); g.lineTo(128, k); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+})();
+const TROTTOIR = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#4a4f5c'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#ffd23f'; g.fillRect(29, 4, 6, 28);
+  g.fillStyle = '#c9ced8'; g.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 200; i++) { const v = 180 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 2},${v + 8},0.6)`; g.fillRect(Math.random() * 64, Math.random() * 64, 2, 2); }
+  g.strokeStyle = '#a3aab5'; g.lineWidth = 2; for (let k = 0; k <= 64; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 64); g.moveTo(0, k); g.lineTo(64, k); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
 })();
 const invisibleMat = new THREE.MeshBasicMaterial({ visible: false }); shared.add(invisibleMat);
@@ -3346,8 +3367,12 @@ function road(x, z, w, d, yOff = 0, plain) {
   // au lieu de couper à travers les pelouses, les terrasses et le parc.
   if (city.routes) city.routes.push({ x, z, w, d });
   const t = ROAD.clone(); t.needsUpdate = true;
-  const alongZ = d >= w; if (alongZ) t.repeat.set(1, d / 4); else { t.rotation = Math.PI / 2; t.center.set(0.5, 0.5); t.repeat.set(w / 4, 1); }
-  const top = plain ? lam(0x4a4f5c) : new THREE.MeshLambertMaterial({ map: t });
+  // Une fois la texture tournee d'un quart de tour, la repetition s'applique dans SES axes :
+  // (w/4, 1) rayait la chaussee de huit axes jaunes en travers au lieu d'un seul au milieu.
+  const alongZ = d >= w; if (alongZ) t.repeat.set(1, d / 4); else { t.rotation = Math.PI / 2; t.center.set(0.5, 0.5); t.repeat.set(1, w / 4); }
+  // `plain` dessinait une dalle grise sans aucun marquage : toutes les rues ont maintenant
+  // leur bitume, leurs bords blancs et leur axe jaune.
+  const top = new THREE.MeshLambertMaterial({ map: t });
   const m = new THREE.Mesh(unitBox, [lam(0x4a4f5c), lam(0x4a4f5c), top, lam(0x4a4f5c), lam(0x4a4f5c), lam(0x4a4f5c)]);
   m.scale.set(w, 0.06, d); m.position.set(x, 0.03 + yOff, z); m.receiveShadow = true; worldGroup.add(m);
 }
@@ -3365,9 +3390,9 @@ const PLAN_ROUTIER = {
     // La route du circuit passait DANS LA MER (elle filait vers x = 144 à z = -70, en plein
     // dedans). Elle longe maintenant la plage par l'ouest, puis remonte au nord du rivage.
     { n: 'Rocade du nord-est', x: 109, z: -70, w: 22, d: 8 },
-    { n: 'Bretelle du circuit', x: 115, z: -128, w: 8, d: 120 },
+    { n: 'Bretelle du circuit', x: 109, z: -128, w: 8, d: 120 },   // a 115 elle passait sous les barrieres de l'anneau
     { n: 'Accès circuit', x: 122, z: -176, w: 24, d: 8 },
-    { n: 'Route du littoral', x: 100, z: 130, w: 8, d: 70 },
+    { n: 'Route du littoral', x: 100, z: 120, w: 8, d: 50 },   // elle s'arrete a l'avenue des villas au lieu d'entrer dans la villa Azur
     // Ces trois axes traversaient LE CASINO de part en part (l'avenue passait à z = 300, en
     // plein milieu du bâtiment) : le dégagement des chaussées effaçait ses murs de verre.
     // Ils le contournent maintenant et viennent se garer devant la grande entrée.
@@ -3378,6 +3403,12 @@ const PLAN_ROUTIER = {
     { n: 'Avenue du casino', x: 56, z: 345, w: 100, d: 9 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
+    // Le reseau etait coupe en 25 morceaux pour les voitures : la statue bouchait le carrefour
+    // nord, la rue de l'ouest s'arretait a 3 m de l'avenue et les descentes vers l'ecole et
+    // l'hopital partaient 4 m apres la fin de l'avenue. Un rond-point, une jonction, et les
+    // descentes prolongees : tout ne fait plus qu'un seul reseau.
+    { n: 'Rond-point de la statue', x: 0, z: -27, w: 16, d: 8, y: 0.004 },
+    { n: 'Jonction de l\'ouest', x: -100, z: 135, w: 8, d: 12, y: 0.004 },
   ],
   // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
@@ -3391,7 +3422,7 @@ const PLAN_ROUTIER = {
 // On construit les axes du plan. Les dessertes, elles, sont calculées À LA FIN, quand tous
 // les quartiers existent : chacune est le point de chaussée le plus proche de son quartier.
 function construirePlan() {
-  for (const a of PLAN_ROUTIER.axes) road(a.x, a.z, a.w, a.d);
+  for (const a of PLAN_ROUTIER.axes) road(a.x, a.z, a.w, a.d, a.y || 0);
   city.plan = { axes: PLAN_ROUTIER.axes.map(a => ({ ...a })), dessertes: [] };
 }
 // LE MAPPING : un point d'arrivée sur la route pour CHAQUE quartier, sans exception. On part
@@ -3409,7 +3440,7 @@ function finirPlan() {
     const v = vifs[nom];
     const cx = f ? f.x : v ? v.x : (z.x1 + z.x2) / 2;
     const cz = f ? f.z : v ? v.z : (z.z1 + z.z2) / 2;
-    const p = pointRouteProche(cx, cz);
+    const p = pointRouteLibre(cx, cz);
     liste.push(p ? { n: nom, x: +p.x.toFixed(1), z: +p.z.toFixed(1), vise: [+cx.toFixed(1), +cz.toFixed(1)], loin: Math.round(p.d) }
                  : { n: nom, x: +cx.toFixed(1), z: +cz.toFixed(1), vise: [+cx.toFixed(1), +cz.toFixed(1)], loin: 0 });
   }
@@ -3422,12 +3453,12 @@ function finirPlan() {
 // le mobilier de la route lui-même (feux, lampadaires, passages piétons).
 function degageLesRoutes() {
   const surChaussee = (x, z) => (city.routes || []).some(r =>
-    Math.abs(x - r.x) < r.w / 2 - 1.2 && Math.abs(z - r.z) < r.d / 2 - 1.2);
+    Math.abs(x - r.x) < r.w / 2 - 0.8 && Math.abs(z - r.z) < r.d / 2 - 0.8);
   // Un meuble posé a l'ETAGE, ou a l'abri DANS un batiment, n'a jamais trainé au milieu de la
   // rue : les appartements de La Zone se faisaient vider parce qu'un axe passait par-dessous.
   const dedans = (x, z) => [...(city.batiments || []), ...(city.interieurs || [])].some(b =>
     Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
-  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.h > 4.6 || (o.w > 14 && o.d > 14)
+  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.statue || o.trottoir || o.h > 4.6 || (o.w > 14 && o.d > 14)
     || o.y - o.h / 2 > 0.8 || dedans(o.x, o.z);   // portes, véhicules, barrières, vitrages, murs, étages et intérieurs
   const vus = new Set();
   for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
@@ -3453,14 +3484,171 @@ function degageLesRoutes() {
     if (t.solid) { t.solid.x = t.x; t.solid.z = t.z; }
     n++;
   }
+  // ... et les lampadaires aussi : ceux de l'avenue des Chefs etaient plantes en plein milieu
+  // de la voie et coupaient l'avenue en cinq troncons pour les conducteurs.
+  const surBord = (x, z) => (city.routes || []).some(r => Math.abs(x - r.x) < r.w / 2 - 0.3 && Math.abs(z - r.z) < r.d / 2 - 0.3);
+  for (const br of breakables) {
+    if (br.kind !== 'lamp' || !surBord(br.x, br.z)) continue;
+    const r = (city.routes || []).find(r2 => Math.abs(br.x - r2.x) < r2.w / 2 && Math.abs(br.z - r2.z) < r2.d / 2);
+    if (!r) continue;
+    const long = r.d >= r.w;
+    const s1 = long ? (br.x <= r.x ? -1 : 1) : (br.z <= r.z ? -1 : 1);
+    const dep = (long ? r.w : r.d) / 2 + 1.0;
+    const essais = long ? [[r.x + s1 * dep, br.z], [r.x - s1 * dep, br.z]] : [[br.x, r.z + s1 * dep], [br.x, r.z - s1 * dep]];
+    const ok = essais.find(([x, z]) => !surBord(x, z));
+    if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; } }
+    else {   // en plein carrefour : aucun trottoir n'est libre, on retire le lampadaire
+      if (br.g) worldGroup.remove(br.g);
+      const si = solids.indexOf(br.solid); if (si >= 0) solids.splice(si, 1);
+      br.retire = true;
+    }
+    n++;
+  }
+  for (let i = breakables.length - 1; i >= 0; i--) if (breakables[i].retire) breakables.splice(i, 1);
   if (n) sgridSale();
   return n;
+}
+// ================= TROTTOIRS ET MOBILIER PUBLIC =================
+// Chaque rue recoit ses deux trottoirs (dalle claire et bordure), coupes aux carrefours ; puis
+// une passe de mobilier le long des rues — arbres, buissons, bancs, poubelles, glissieres —
+// toujours SUR LE TROTTOIR OU DERRIERE, jamais sur la chaussee, jamais devant une porte, un
+// portail, un passage pieton ou dans un quartier deja amenage.
+const TROTTOIR_L = 1.8;
+function trottoirs() {
+  city.trottoirs = [];
+  const routes = city.routes || [];
+  const dedans = (x, z, m) => [...(city.batiments || []), ...(city.interieurs || [])].some(b => Math.abs(x - b.x) < b.w / 2 + m && Math.abs(z - b.z) < b.d / 2 + m);
+  let n = 0;
+  for (const r of routes) {
+    const alongZ = r.d >= r.w, L = alongZ ? r.d : r.w, W = alongZ ? r.w : r.d;
+    for (const side of [-1, 1]) {
+      const off = W / 2 + TROTTOIR_L / 2;
+      const cx = alongZ ? r.x + side * off : r.x, cz = alongZ ? r.z : r.z + side * off;
+      // les intervalles (le long de la rue) a retirer : les autres chaussees qui coupent ce trottoir
+      const a0 = (alongZ ? r.z : r.x) - L / 2, a1 = (alongZ ? r.z : r.x) + L / 2;
+      const coupes = [];
+      for (const q of routes) {
+        if (q === r) continue;
+        const qx0 = q.x - q.w / 2 - 0.4, qx1 = q.x + q.w / 2 + 0.4, qz0 = q.z - q.d / 2 - 0.4, qz1 = q.z + q.d / 2 + 0.4;
+        const tx0 = alongZ ? cx - TROTTOIR_L / 2 : a0, tx1 = alongZ ? cx + TROTTOIR_L / 2 : a1;
+        const tz0 = alongZ ? a0 : cz - TROTTOIR_L / 2, tz1 = alongZ ? a1 : cz + TROTTOIR_L / 2;
+        if (qx1 <= tx0 || qx0 >= tx1 || qz1 <= tz0 || qz0 >= tz1) continue;
+        coupes.push(alongZ ? [qz0, qz1] : [qx0, qx1]);
+      }
+      coupes.sort((p, q) => p[0] - q[0]);
+      let cur = a0; const segs = [];
+      for (const [c0, c1] of coupes) { if (c0 > cur) segs.push([cur, Math.min(c0, a1)]); cur = Math.max(cur, c1); }
+      if (cur < a1) segs.push([cur, a1]);
+      for (const [s0, s1] of segs) {
+        const len = s1 - s0; if (len < 1.2) continue;
+        const mx = alongZ ? cx : (s0 + s1) / 2, mz = alongZ ? (s0 + s1) / 2 : cz;
+        if (dedans(mx, mz, -1)) continue;   // un trottoir ne traverse pas un batiment
+        if (RALLY.mesh && mx > RALLY.x1 - 2 && mx < RALLY.x2 + 2 && mz > RALLY.z1 - 2 && mz < RALLY.z2 + 2) continue;
+        if (Math.hypot(mx - RACE_C.x, mz - RACE_C.z) < RACE_C.r + 9) continue;   // pas sous les barrieres de l'anneau
+        if (city.sea && mx > city.sea.x1 - 1 && mx < city.sea.x2 + 1 && mz > city.sea.z1 - 1 && mz < city.sea.z2 + 1) continue;
+        const t = TROTTOIR.clone(); t.needsUpdate = true; t.repeat.set(alongZ ? 1 : len / 2, alongZ ? len / 2 : 1);
+        const mat = new THREE.MeshLambertMaterial({ map: t });
+        const o = box(mx, 0.07, mz, alongZ ? TROTTOIR_L : len, 0.14, alongZ ? len : TROTTOIR_L, 0, { material: mat, noEdges: true, noShadow: true, studs: false, noRoute: true, trottoir: true });
+        // la bordure, cote chaussee
+        const bx = alongZ ? cx - side * (TROTTOIR_L / 2 - 0.12) : mx, bz = alongZ ? mz : cz - side * (TROTTOIR_L / 2 - 0.12);
+        box(bx, 0.09, bz, alongZ ? 0.24 : len, 0.18, alongZ ? len : 0.24, 0x8f98ab, { deco: true, noEdges: true, noShadow: true, studs: false });
+        city.trottoirs.push({ x: mx, z: mz, w: alongZ ? TROTTOIR_L : len, d: alongZ ? len : TROTTOIR_L, alongZ, side, route: r, o });
+        n++;
+      }
+    }
+  }
+  return n;
+}
+function buisson(x, z, big) {
+  const c = pickOne([0x3fae4a, 0x2f8f3a, 0x5cc453, 0x4caf50]);
+  const s = big ? 1.3 : 1;
+  for (const [dx, dy, dz, w] of [[0, 0.45, 0, 1.1], [0.45, 0.5, 0.2, 0.8], [-0.4, 0.4, 0.3, 0.75], [0.1, 0.85, -0.2, 0.7]]) {
+    const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(w * s, w * 0.85 * s, w * s); m.position.set(x + dx * s, dy * s, z + dz * s); m.castShadow = true; worldGroup.add(m);
+  }
+}
+function poubelle(x, z) {
+  box(x, 0.45, z, 0.55, 0.9, 0.55, 0x2f6f4a, { studs: false, noRoute: true }); box(x, 0.93, z, 0.6, 0.08, 0.6, 0x1f4a30, { deco: true, studs: false });
+}
+function glissiere(x, z, len, alongZ) {   // glissiere de securite : poteaux et lisse, decor sans collision
+  const n = Math.max(2, Math.round(len / 2));
+  for (let i = 0; i < n; i++) { const t = -len / 2 + i * (len / (n - 1)); box(alongZ ? x : x + t, 0.35, alongZ ? z + t : z, 0.12, 0.7, 0.12, 0x5b6270, { deco: true, studs: false }); }
+  box(x, 0.62, z, alongZ ? 0.12 : len, 0.22, alongZ ? len : 0.12, 0xc9ced8, { deco: true, studs: false, noEdges: true });
+}
+function decorPublic() {
+  const routes = city.routes || [], bats = [...(city.batiments || []), ...(city.interieurs || [])];
+  const parcelles = [];
+  for (const v of (typeof VILLAS !== 'undefined' ? VILLAS : [])) parcelles.push({ x: v.x, z: v.z, w: VILLA_HALF * 2 + 2, d: VILLA_HALF * 2 + 2 });
+  for (const G2 of (typeof GANG_DEFS !== 'undefined' ? GANG_DEFS : [])) if (G2.villa) parcelles.push({ x: G2.villa[0], z: G2.villa[1], w: 44, d: 30 });
+  const interdits = new Set(['Départ', 'Rallye', 'Plage', 'Héliport', 'Parking', 'Foot', 'Tennis', 'Trampolines', 'Piscine']);
+  const zonesInterdites = (city.zones || []).filter(z => interdits.has(z.name));
+  const portes = solids.filter(o => o.porte);
+  const libre = (x, z) => {
+    if (x < MONDE.x1 + 3 || x > MONDE.x2 - 3 || z < MONDE.z1 + 3 || z > MONDE.z2 - 3) return false;
+    if (routes.some(r => Math.abs(x - r.x) < r.w / 2 + 0.6 && Math.abs(z - r.z) < r.d / 2 + 0.6)) return false;
+    if (bats.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1)) return false;
+    if (parcelles.some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2)) return false;
+    if (zonesInterdites.some(zz => x > zz.x1 - 1 && x < zz.x2 + 1 && z > zz.z1 - 1 && z < zz.z2 + 1)) return false;
+    if (RALLY.mesh && x > RALLY.x1 - 3 && x < RALLY.x2 + 3 && z > RALLY.z1 - 3 && z < RALLY.z2 + 3) return false;
+    if (city.sea && x > city.sea.x1 - 3 && x < city.sea.x2 + 3 && z > city.sea.z1 - 3 && z < city.sea.z2 + 3) return false;
+    if (Math.hypot(x - RACE_C.x, z - RACE_C.z) < RACE_C.r + 10) return false;
+    if ((city.crossings || []).some(([cx, cz]) => Math.abs(x - cx) < 6 && Math.abs(z - cz) < 6)) return false;
+    if (portes.some(o => Math.abs(x - o.x) < o.w / 2 + 4 && Math.abs(z - o.z) < o.d / 2 + 4)) return false;
+    if (typeof terrainH === 'function') { const th = terrainH(x, z); if (th != null && th > 0.05) return false; }
+    for (const o of solidsAutour(x, z, 3, true)) {
+      if (o.h >= 30 || o.veh) continue;
+      if (o.trottoir || o.sol) continue;   // le sol de la ville et les trottoirs ne comptent pas
+      const top = o.y + o.h / 2;
+      // un sol amenage (terrain, terrasse, dalle de quartier) : on n'y plante rien
+      if (o.w > 5 && o.d > 5 && top < 1.2 && Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2) return false;
+      if (top < 0.3) continue;
+      if (Math.abs(x - o.x) < o.w / 2 + 1.2 && Math.abs(z - o.z) < o.d / 2 + 1.2) return false;
+    }
+    return true;
+  };
+  const compte = { arbres: 0, buissons: 0, bancs: 0, poubelles: 0, glissieres: 0 };
+  let k = 0;
+  for (const t of (city.trottoirs || [])) {
+    const len = t.alongZ ? t.d : t.w; if (len < 6) continue;
+    const r = t.route, W = t.alongZ ? r.w : r.d;
+    const derriere = W / 2 + TROTTOIR_L + 0.9;   // juste derriere le trottoir
+    const nb = Math.floor((len - 3) / 9);
+    for (let i = 0; i < nb; i++) {
+      const s = -len / 2 + 3 + i * 9 + (len - 3 - nb * 9) / 2;
+      const px = t.alongZ ? r.x + t.side * derriere : t.x + s, pz = t.alongZ ? t.z + s : r.z + t.side * derriere;
+      if (!libre(px, pz)) continue;
+      const quoi = k++ % 7;
+      const vers = t.alongZ ? (t.side > 0 ? -Math.PI / 2 : Math.PI / 2) : (t.side > 0 ? Math.PI : 0);   // le banc regarde la rue
+      if (quoi === 0 || quoi === 4) { tree(px, 0, pz, pickOne([C.leaf, 0x3fae4a, 0x2f8f3a, 0x8fbf3a])); solids[solids.length - 1].mobilier = 'arbre'; compte.arbres++; }
+      else if (quoi === 1 || quoi === 5) { buisson(px, pz, quoi === 5); compte.buissons++; }
+      else if (quoi === 2) { bench(px, pz, vers); solids[solids.length - 1].mobilier = 'banc'; compte.bancs++; }
+      else if (quoi === 3) { poubelle(px, pz); solids[solids.length - 1].mobilier = 'poubelle'; compte.poubelles++; }
+      else { glissiere(px, pz, 4, t.alongZ); compte.glissieres++; }
+    }
+  }
+  city.decorPublic = compte; sgridSale();
+  return compte;
 }
 // La desserte d'un quartier : le point de la route par lequel on y arrive en voiture.
 function desserteDe(nom) {
   const l = (city.plan && city.plan.dessertes) || [];
   const n = norm(nom || '');
   return l.find(d => norm(d.n) === n) || l.find(d => n && norm(d.n).includes(n)) || null;
+}
+// La desserte doit etre une case OUVERTE aux voitures : le point de chaussee le plus proche
+// tombait souvent contre un lampadaire ou un mur (l'ecole, la banque, les villas, le parking
+// et l'heliport avaient tous une desserte que le GPS ne pouvait pas atteindre).
+function pointRouteLibre(x, z) {
+  const p = pointRouteProche(x, z); if (!p) return p;
+  if (!NAV.voit) { try { buildNav(); } catch (e) { return p; } }
+  navGeo(false); const [ci, cj] = navCell(p.x, p.z);
+  if (navFree(ci, cj) && NAV.cout && NAV.cout[cj * NAV.nx + ci] === 1) return p;
+  let best = null, bd = 1e9;
+  for (let dj = -6; dj <= 6; dj++) for (let di = -6; di <= 6; di++) {
+    const i = ci + di, j = cj + dj; if (!navFree(i, j) || (NAV.cout && NAV.cout[j * NAV.nx + i] !== 1)) continue;
+    const px = NAV.x0 + i * NAV.cs, pz = NAV.z0 + j * NAV.cs, d = Math.hypot(px - x, pz - z);
+    if (d < bd) { bd = d; best = { x: px, z: pz, d }; }
+  }
+  return best || p;
 }
 // Le point de route le plus proche d'un endroit : sert à garer et à faire rouler les bots.
 function pointRouteProche(x, z) {
@@ -3852,21 +4040,22 @@ const WORLDS = [
       // derrière : le quartier du casino (z 287 → 340) et le circuit (z −192 → −112) étaient
       // bâtis DEHORS, sur du vide — un trou béant devant le casino, et deux quartiers que le
       // mur invisible interdisait d'atteindre. Le plateau va maintenant de z = −200 à z = 350.
-      platTrous(MONDE.cx, 0, MONDE.cz, MONDE.w, MONDE.d, 0x4a4f5c, { studs: false, noRoute: true }, 1, poolTrous());
+      platTrous(MONDE.cx, 0, MONDE.cz, MONDE.w, MONDE.d, 0x4a4f5c, { studs: false, noRoute: true, sol: true }, 1, poolTrous());
+      for (const o of solids) if (o.sol && o.mesh) { const t = PAVE.clone(); t.needsUpdate = true; t.repeat.set(o.w / 4, o.d / 4); o.mesh.material = new THREE.MeshLambertMaterial({ map: t }); }
       for (const [x, z, w, d] of [[MONDE.x1 - 1.5, MONDE.cz, 1, MONDE.d], [MONDE.x2 + 1.5, MONDE.cz, 1, MONDE.d],
         [MONDE.cx, MONDE.z1 - 1.5, MONDE.w, 1], [MONDE.cx, MONDE.z2 + 1.5, MONDE.w, 1]]) wall(x, z, w, d);
-      road(-45, 0, 32, 6); road(45, 0, 32, 6); road(0, -34, 6, 12);
+      road(-45, 0, 32, 6); road(52, 0, 46, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m)
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));
       B('bureau', () => buildOffice(38, 9)); B('rue commerçante', buildMall); B('fête foraine', buildFair); B('déco', buildDeco); B('rues', buildStreets); B('banque', () => buildBank(-52, 70));
-      B('plage', buildBeach); B('rallye', buildRally); B('école', () => buildSchool(-62, 212)); B('hôpital', () => buildHospital(12, 212));
+      B('plage', buildBeach); B('rallye', buildRally); B('école', () => buildSchool(-62, 218)); B('hôpital', () => buildHospital(12, 212));
       VILLAS.forEach((v, i) => B(v.mine ? 'ma villa' : 'villa ' + (i + 1), () => buildVilla(v.x, v.z, v)));
       B('routes de l\'ouest', routesOuest); B('gangs', buildGangs);
       B('quartier', buildResidential);
       // sécurité : aucun feu tricolore ne doit se retrouver dans un jardin ou une maison
       for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
       // routes : anneau + croix
-      road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, 0, 6, 46); road(0, 0, 46, 6);
+      road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, -4, 6, 38); road(0, 0, 46, 6);   // l'axe nord-sud s'arrete devant la salle de sport au lieu de la traverser
       // quartiers (trottoirs / pelouses)
       plat(-13, 0.15, -13, 20, 20, 0x5cc453, { studs: false, noRoute: true }, 0.3);   // NO : foot
       plat(13, 0.15, -13, 20, 20, 0xb9c2cf, { studs: false, noRoute: true }, 0.3);    // NE : tennis
@@ -3941,8 +4130,9 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
-      finirPlan();        // le mapping : une desserte sur la route pour chaque quartier
+      B('trottoirs', trottoirs); B('mobilier public', decorPublic);
       navSale(); buildNav();
+      finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -4113,8 +4303,14 @@ function gpsTick() {   // radar : joueur au centre, orienté avec la caméra ; c
     if (Math.hypot(px - cx, py - cx) > R + 20) continue;
     g.save(); g.translate(px, py); g.rotate(rot); g.fillRect(-b.w / 2 * scale, -b.d / 2 * scale, b.w * scale, b.d * scale); g.restore();
   }
-  g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2.5;
-  for (const [x1, z1, x2, z2] of [[-26, -26, 26, -26], [26, -26, 26, 26], [26, 26, -26, 26], [-26, 26, -26, -26], [0, -44, 0, 110], [-61, 0, 61, 0], [-26, 29, -26, 48], [52, 25, 52, 95], [-41, -44, -41, 110], [-68, 110, 68, 110], [-68, -44, 68, -44], [-200, 40, -80, 40], [-140, -20, -140, 90], [68, 40, 170, 40], [40, 110, 40, 250], [-60, 200, 170, 200]]) { const [ax, ay] = toXY(x1, z1), [bx2, by2] = toXY(x2, z2); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx2, by2); g.stroke(); }
+  // Les rues du radar etaient onze segments codes en dur : il dessine maintenant LES VRAIES
+  // chaussees de la ville (rond-point, rocades, avenues des villas, rues de l'ouest...).
+  g.fillStyle = 'rgba(255,255,255,.26)';
+  for (const r of (city.routes || [])) {
+    if (Math.abs(r.x - P.pos.x) > 200 + r.w || Math.abs(r.z - P.pos.z) > 200 + r.d) continue;
+    const [px, py] = toXY(r.x, r.z);
+    g.save(); g.translate(px, py); g.rotate(rot); g.fillRect(-r.w / 2 * scale, -r.d / 2 * scale, r.w * scale, r.d * scale); g.restore();
+  }
   const dot = (x, z, col, r, txt) => { const [px, py] = toXY(x, z); const d = Math.hypot(px - cx, py - cx); let qx = px, qy = py; if (d > R - 8) { qx = cx + (px - cx) / d * (R - 8); qy = cx + (py - cx) / d * (R - 8); } g.fillStyle = col; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); if (txt) { g.font = '11px sans-serif'; g.fillText(txt, qx - 6, qy + 4); } };
   // EN MISSION, le radar ne montre QUE la mission. Il désignait la banque, le commissariat,
   // le garage, le tatoueur, la villa, chaque planque et chaque voiture de police en même
@@ -4450,7 +4646,7 @@ function buildDecoShop(SX, SZ) {   // 🛋️ Maison & Déco : on y achète les 
     hint: '🛋️ Maison & Déco : E devant un modèle pour l\'acheter — il est livré devant ta villa, tu le rapportes et tu le poses (E) sur un emplacement lumineux' });
 }
 function buildMall() {   // rue commerçante (est) : les magasins font face à la rue (x = 52), côté ouest de chaque boutique
-  road(52, 60, 6, 70, 0, true);
+  road(52, 69, 6, 88, 0, true);   // la rue commerçante monte jusqu'a l'avenue du parc : elle n'etait reliee a rien
   const F = 3;   // devanture à l'ouest
   const sh = (z, col, title) => { const s = shop(60, z, 8, 7, col, title, col, F); return s.M; };
   let M = sh(40, 0xff5c5c, '🍕 Pizzeria');
@@ -4507,7 +4703,10 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   for (let i = 0; i < 12; i++) { const bx = rnd(-42, 42), bz = rnd(138, 172), col = pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xff7ad9]); const b = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), lam(col)); b.position.set(bx, 4 + rnd(0, 3), bz); worldGroup.add(b); const str = new THREE.Mesh(unitBox, lam(0xffffff)); str.scale.set(0.03, b.position.y - 1, 0.03); str.position.set(bx, b.position.y / 2 + 0.5, bz); worldGroup.add(str); b.userData.balloon = { y0: b.position.y, ph: rnd(0, 6) }; city.balloons.push(b); }
   for (let i = 0; i < 14; i++) box(-45 + i * 7, 5.2, 134, 0.35, 0.35, 0.35, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande
   for (const x of [-45, 45]) { box(x, 2.6, 134, 0.2, 5.2, 0.2, 0x3b4252, { studs: false, noRoute: true }); } box(0, 5.3, 134, 91, 0.06, 0.06, 0x3b4252, { deco: true, noEdges: true, studs: false });
-  box(0, 3, 176, 60, 6, 6, 0x5cc453, { studs: false, noRoute: true }); 'SUPER OBBY'.split('').forEach((ch, i) => { if (ch !== ' ') box(-27 + i * 5.4, 8.2, 176, 4.6, 4.4, 0.6, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(ch) }), deco: true, noEdges: true }); });   // lettres sur la colline
+  // La colline aux lettres barrait la descente vers l'hopital : c'est maintenant une ARCHE
+  // au-dessus de la route, deux piliers et une poutre verte, les lettres par-dessus.
+  for (const x of [-28, 28]) box(x, 3, 176, 4, 6, 6, 0x5cc453, { studs: false, noRoute: true }); box(0, 7.5, 176, 60, 3, 6, 0x5cc453, { studs: false, noRoute: true });
+  'SUPER OBBY'.split('').forEach((ch, i) => { if (ch !== ' ') box(-27 + i * 5.4, 11.2, 176, 4.6, 4.4, 0.6, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(ch) }), deco: true, noEdges: true }); });   // lettres sur la colline
   for (let i = 0; i < 6; i++) lamp(-40 + i * 16, 170);   // devant la colline aux lettres, plus dedans
   city.zones.push({ name: 'Fête foraine', emoji: '🎡', x1: -46, x2: 46, z1: 132, z2: 178, hint: '🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons' });
 }
@@ -4582,7 +4781,7 @@ function lightsTick() {
   for (const tl of city.trafficLights) { const ph = tl.group === 'A' ? phaseA : phaseB; tl.state = ph; tl.lamps.forEach((l, i) => { const on = i === ph && !tl.broken; l.material.color.set(on ? l.userData.col : 0x222222); l.material.emissive.set(on ? l.userData.col : 0x000000); }); }
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
-  road(0, -44, 136, 6, 0, true); road(0, 110, 130, 6, 0, true); road(-41, 33, 5, 154, 0, true); road(52, -10, 6, 70, 0, true);
+  road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -16, 6, 58, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport s'arrete avant l'armurerie   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
   for (const [x, z] of [[-26, -8], [-26, 8], [26, -8], [26, 8]]) crosswalk(x, z, true); for (const [x, z] of [[-8, -26], [8, -26], [-8, 26], [8, 26]]) crosswalk(x, z, false);
   crosswalk(-26, 38, true); crosswalk(-41, 0, true); crosswalk(52, 20, true); crosswalk(0, -44, false, 6);
   // feux : 2 groupes alternés (A pour la circulation nord-sud, B pour est-ouest)
@@ -4771,7 +4970,7 @@ function buildDeco() {   // lampadaires et fleurs le long des grands axes, statu
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
   for (const x of [-34, -20, 20, 34]) for (const z of [-4.2, 4.2]) lamp(x, z);
   for (const [x, z] of [[-30, -4.5], [30, -4.5], [-30, 4.5], [30, 4.5]]) flowerBed(x, z, 3, 1);
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3 }); sgridSale();
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3, statue: true }); sgridSale();
   const statue = mannequin(0, -28, 0, { jersey: 0, hat: 'crown', jacket: 5 }); statue.group.position.y = 1.2; statue.group.scale.setScalar(1.6); statue.group.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = lam(0xd4a017); }); statue.rig.armR.rotation.x = -2.6;
 }
 function rideEnter(r) {
@@ -5112,7 +5311,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f9be6, transparent: true, opacity: 0.72, side: THREE.DoubleSide })); sea.position.set(164, 1.55, BZC); worldGroup.add(sea);
   city.seaMesh = sea; city.sea = { x1: sea1, x2: sea2, z1: BZ1, z2: BZ2, top: 1.6 };
   const foam = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); foam.scale.set(1.2, 0.05, BZD); foam.position.set(sea1 + 0.3, 1.62, BZC); worldGroup.add(foam); city.foam = foam;
-  road(102, BZC, 4, BZD - 16, 0, true); road(90, 0, 30, 6, 0, true);
+  road(103.5, BZC, 4, BZD - 16, 0, true);   // decalee de 1,5 m : elle frottait les murs des entrepots road(90, 0, 30, 6, 0, true);
   for (let i = 0; i < 12; i++) {   // parasols + serviettes
     const px = rnd(106, 115), pz = BZ1 + 10 + i * ((BZD - 22) / 11) + rnd(-3, 3), col = pickOne([0xff5c5c, 0xffd23f, 0x4f8dff, 0xff7ad9, 0x5cc453]);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), lam(0xf4f6fa)); pole.position.set(px, 1.4, pz); worldGroup.add(pole);
@@ -6089,7 +6288,7 @@ function buildResidential() {   // avenues du quartier sud : les villas donnent 
   road(40, AV_N, 300, 9, 0, true);      // avenue nord (devant la rangée nord de villas)
   road(70, AV_S, 280, 9, 0, true);      // avenue sud (devant la rangée sud)
   for (const x of VILLA_STREETS) road(x, (AV_N + AV_S) / 2, 7, AV_S - AV_N + 18, 0, true);   // rues transversales, entre les plots
-  road(-62, 172, 9, 50, 0, true); road(12, 172, 9, 50, 0, true);      // descentes depuis la ville vers l'école et l'hôpital
+  road(-62, 170, 9, 54, 0, true); road(12, 170, 9, 54, 0, true);      // descentes depuis la ville vers l'école et l'hôpital
   const onPlot = (x, z) => VILLAS.some(v => Math.abs(x - v.x) < VILLA_HALF + 1.5 && Math.abs(z - v.z) < VILLA_HALF + 1.5);
   const onStreet = x => VILLA_STREETS.some(sx => Math.abs(x - sx) < 9) || Math.abs(x + 62) < 9 || Math.abs(x - 12) < 9;
   for (const av of [AV_N, AV_S]) for (const x of VILLA_STREETS.concat(av === AV_N ? [-62, 12] : [])) {
@@ -7692,7 +7891,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = [];   city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) me.rig.armR.remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -14186,9 +14385,9 @@ function poseTatouages(av, list) {
 // une planque secrète où il cache son magot. Quand un gang tombe, un nouveau se forme avec
 // un autre chef, un autre nom et plus de moyens : la guerre ne s'arrête jamais.
 const GANG_DEFS = [
-  { id: 'rouge', nom: 'Les Requins Rouges', hat: 'bandana', couleur: 0xd42b2b, teinte: '#d42b2b', voiture: 0xd42b2b, villa: [-175, -50], toit: 0xd42b2b },
-  { id: 'bleu', nom: 'Les Loups Bleus', hat: 'bandanaB', couleur: 0x2f6fe0, teinte: '#2f6fe0', voiture: 0x2f6fe0, villa: [-175, 130], toit: 0x2f6fe0 },
-  { id: 'jaune', nom: 'Les Frelons Jaunes', hat: 'bandanaJ', couleur: 0xf2c21a, teinte: '#f2c21a', voiture: 0xf2c21a, villa: [-175, 240], toit: 0xd8a017 },
+  { id: 'rouge', nom: 'Les Requins Rouges', hat: 'bandana', couleur: 0xd42b2b, teinte: '#d42b2b', voiture: 0xd42b2b, villa: [-200, -50], toit: 0xd42b2b },
+  { id: 'bleu', nom: 'Les Loups Bleus', hat: 'bandanaB', couleur: 0x2f6fe0, teinte: '#2f6fe0', voiture: 0x2f6fe0, villa: [-200, 130], toit: 0x2f6fe0 },
+  { id: 'jaune', nom: 'Les Frelons Jaunes', hat: 'bandanaJ', couleur: 0xf2c21a, teinte: '#f2c21a', voiture: 0xf2c21a, villa: [-200, 240], toit: 0xd8a017 },
 ];
 const GANG_NOMS_RELEVE = {
   rouge: ['Les Requins Rouges', 'Les Braises', 'Les Coquelicots', 'Le Clan Cerise', 'Les Fusées Rouges'],
@@ -16157,13 +16356,18 @@ const TERRITOIRES = [
 // L'ouest s'urbanise : une avenue longe les villas des chefs et des chemins de terre la
 // relient à La Zone, au rallye et à l'école.
 function routesOuest() {
-  road(-175, 95, 9, 330, 0, true);                    // avenue des Chefs, du nord au sud
+  // L'avenue des Chefs traversait LA ZONE de part en part (ses immeubles etaient plantes
+  // dans la voie) : elle la contourne maintenant par l'ouest, avec deux raccords.
+  road(-175, -34, 9, 72, 0, true);                    // avenue des Chefs, tronçon nord
+  road(-184, -1.5, 27, 7, 0, true);                   // raccord nord vers le contournement
+  road(-193, 38, 9, 86, 0, true);                     // contournement ouest de La Zone
+  road(-184, 77.5, 27, 7, 0, true);                   // raccord sud
+  road(-175, 169, 9, 182, 0, true);                   // avenue des Chefs, tronçon sud
   road(-150, -50, 46, 7, 0, true);                    // vers le rallye et le nord de la ville
   road(-138, 130, 70, 7, 0, true);                    // vers le centre
   road(-140, 240, 66, 7, 0, true);                    // vers l'école
-  road(-175, 20, 9, 60, 0, true);                     // desserte de La Zone par l'ouest
-  road(-160, 40, 30, 7, 0, true);
-  for (const [x, z] of [[-175, -20], [-175, 40], [-175, 100], [-175, 160], [-175, 220], [-140, 130], [-140, 240]]) lamp(x, z);
+  road(-166, 40, 44, 7, 0, true);                     // desserte de La Zone par l'ouest, entre ses immeubles
+  for (const [x, z] of [[-169, -20], [-169, 40], [-169, 100], [-169, 160], [-169, 220], [-140, 125], [-140, 235]]) lamp(x, z);   // sur le trottoir, plus au milieu de l'avenue
   for (const [x, z] of [[-183, -12], [-167, 62], [-183, 152], [-167, 208]]) {   // quelques arbres le long de l'avenue
     const tr = new THREE.Mesh(unitBox, lam(0x6b4423)); tr.scale.set(0.5, 3.2, 0.5); tr.position.set(x, 1.6, z); worldGroup.add(tr);
     const fe = new THREE.Mesh(new THREE.SphereGeometry(1.9, 10, 8), lam(0x3fae4a)); fe.position.set(x, 4, z); worldGroup.add(fe);

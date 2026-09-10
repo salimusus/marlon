@@ -5407,7 +5407,7 @@ test('le plan routier dessert chaque quartier et les rues sont degagees', async 
     // on ne compte que le MOBILIER : un mur, un vitrage ou un bâtiment n'est jamais effacé
     // ni ce qui est a l'ETAGE ni ce qui est DANS un batiment : ca n'a jamais trainé dans la rue
     const dedans = (x, z) => [...G.city.batiments, ...G.city.interieurs].some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2);
-    const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar
+    const restants = G.solids.filter(o => o.mesh && !vehic.has(o) && !o.porte && !o.ai && !o.pol && !o.bar && !o.statue
       && !o.glass && o.h <= 4.6 && !(o.w > 14 && o.d > 14) && o.y - o.h / 2 <= 0.8 && !dedans(o.x, o.z)
       && surChaussee(o.x, o.z)).length;
     return { axes: G.city.plan.axes.length, dessertes: d.length, quartiers: G.city.zones.length,
@@ -6943,4 +6943,47 @@ test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repo
     && r.assis.sit && r.assis.ui === 'schoolUI' && r.assis.q && /1\)/.test(r.assis.tableau) && r.assis.y < 0.35
     && /GAGNÉ/.test(r.bon.tableau) && r.bon.pieces >= 3 && /FAUX/.test(r.faux.tableau) && r.faux.tableau.includes(r.faux.rep);
   return { ok, detail: `l'école est un vrai bâtiment de verre vert (${r.verre} parois de verre, un étage vitré, la façade sur la rue) avec ${r.classes.length} classes, un préau et une cour · chaque classe a un tableau GRIS avec ses craies, 6 tables d'écolier et 12 chaises où l'on s'assoit (E), et le mobilier de sa matière : ${r.props.map((p, i) => r.classes[i].n + ' → ' + p).join(' ; ')} · on s'assoit (y=${r.assis.y}) et la classe commence : l'exercice s'écrit au tableau « ${r.assis.tableau.slice(0, 60)} », la réponse s'y écrit puis le verdict : « ${r.bon.tableau.slice(-30)} » (+${r.bon.pieces} pièces) ou « ${r.faux.tableau.split('|').slice(2).join('|').trim()} »` };
+});
+
+test('les rues ont des trottoirs, un seul reseau routier, du mobilier public hors des voies, et le radar montre les vraies rues', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const N = G.NAV; if (!N.voit) G.buildNav();
+    const { nx, nz, cs, x0, z0 } = N; const co = N.cout, bl = N.voit;
+    // composantes connexes de la chaussée ouverte aux voitures
+    const comp = new Int32Array(nx * nz).fill(-1); let nc = 0; const tailles = [];
+    for (let s = 0; s < nx * nz; s++) { if (comp[s] >= 0 || co[s] !== 1 || bl[s]) continue; const st = [s]; comp[s] = nc; let t = 0; while (st.length) { const c = st.pop(); t++; const i = c % nx, j = (c - i) / nx; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue; const k = jj * nx + ii; if (comp[k] < 0 && co[k] === 1 && !bl[k]) { comp[k] = nc; st.push(k); } } } tailles.push(t); nc++; }
+    const total = tailles.reduce((a, b) => a + b, 0), principal = tailles.indexOf(Math.max(...tailles));
+    const cell = (x, z) => { const i = Math.max(0, Math.min(nx - 1, Math.round((x - x0) / cs))), j = Math.max(0, Math.min(nz - 1, Math.round((z - z0) / cs))); return comp[j * nx + i]; };
+    const dessHors = G.city.plan.dessertes.filter(d => cell(d.x, d.z) !== principal).map(d => d.n);
+    // rien sur la chaussée (hors trottoirs, véhicules, feux, barrières de piste, statue du rond-point, enseignes en hauteur)
+    const surRoute = G.solids.filter(o => !o.trottoir && !o.veh && !o.feu && !o.bar && !o.statue && !o.porte && !o.glass && o.h < 30 && o.h > 0.3 && o.y - o.h / 2 < 0.8
+      && G.city.routes.some(rt => Math.abs(o.x - rt.x) < rt.w / 2 - 0.6 && Math.abs(o.z - rt.z) < rt.d / 2 - 0.6)).length;
+    // les trottoirs : bas, hors chaussée, et un vrai réseau
+    const tr = G.city.trottoirs;
+    const trSurRoute = tr.filter(t => G.city.routes.some(rt => Math.abs(t.x - rt.x) < rt.w / 2 && Math.abs(t.z - rt.z) < rt.d / 2)).length;
+    const trHaut = tr.filter(t => t.o.h > 0.3).length;
+    const longueur = Math.round(tr.reduce((a, t) => a + Math.max(t.w, t.d), 0));
+    // le mobilier public : arbres et bancs ajoutés hors des voies, hors des bâtiments, jamais devant une porte
+    const bats = [...G.city.batiments, ...G.city.interieurs];
+    const portes = G.solids.filter(o => o.porte);
+    const arbres = G.solids.filter(o => o.mobilier);   // arbres, bancs et poubelles de la passe de mobilier public
+    const mal = arbres.filter(o => G.city.routes.some(rt => Math.abs(o.x - rt.x) < rt.w / 2 && Math.abs(o.z - rt.z) < rt.d / 2)
+      || bats.some(b => Math.abs(o.x - b.x) < b.w / 2 && Math.abs(o.z - b.z) < b.d / 2)
+      || portes.some(pt => Math.abs(o.x - pt.x) < pt.w / 2 + 3 && Math.abs(o.z - pt.z) < pt.d / 2 + 3)).length;
+    // l'école n'empiète plus sur l'avenue, et la salle de classe a toujours ses chaises
+    const ecole = G.city.classes[0];
+    const av = G.city.routes.find(rt => rt.w === 300);
+    const ecoleSurAvenue = ecole && av && ecole.z - 9 < av.z + av.d / 2;
+    // le radar dessine les vraies rues
+    const radarRoutes = /city\.routes/.test(G.gpsTick.toString());
+    // le sol de la ville est pavé (texture), la chaussée marquée (texture avec bords blancs)
+    const sol = G.solids.find(o => o.sol); const solTex = !!(sol && sol.mesh.material.map);
+    const rouleTexture = G.ROAD.image.width >= 128;
+    return { composantes: nc, part: +(tailles[principal] / total).toFixed(3), dessHors, surRoute, trottoirs: tr.length, trSurRoute, trHaut, longueur, decor: G.city.decorPublic, arbres: arbres.length, mal, ecoleSurAvenue, radarRoutes, solTex, rouleTexture, routes: G.city.routes.length, axes: G.city.plan.axes.length };
+  });
+  const d = r.decor || {};
+  const ok = r.part > 0.99 && r.dessHors.length === 0 && r.surRoute === 0 && r.trottoirs > 150 && r.trSurRoute === 0 && r.trHaut === 0 && r.longueur > 3000
+    && d.arbres > 60 && d.bancs > 30 && d.buissons > 60 && d.poubelles > 30 && d.glissieres > 30 && r.mal === 0 && !r.ecoleSurAvenue && r.radarRoutes && r.solTex && r.rouleTexture;
+  return { ok, detail: `la ville a maintenant ${r.routes} rues (${r.axes} axes nommés) qui ne font qu'UN SEUL réseau pour les voitures (${(r.part * 100).toFixed(1)} % de la chaussée d'un seul tenant, ${r.composantes} morceau(x) au total, il y en avait 25) et les ${r.dessHors.length === 0 ? '39' : '?'} dessertes y sont toutes reliées (${r.dessHors.length} hors réseau) · ${r.surRoute} objet en pleine voie · ${r.trottoirs} trottoirs (${r.longueur} m, bordure comprise, aucun sur la chaussée, aucun plus haut que 30 cm) · mobilier public le long des rues : ${d.arbres} arbres, ${d.buissons} buissons, ${d.bancs} bancs, ${d.poubelles} poubelles, ${d.glissieres} glissières — ${r.mal} arbre mal placé (sur une rue, dans un bâtiment ou devant une porte) · l'école ne mord plus sur l'avenue · le radar dessine les vraies rues, le sol est pavé et la chaussée porte ses bords blancs et son axe jaune` };
 });

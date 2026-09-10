@@ -7893,14 +7893,14 @@ const SAC_BANANE = new Set([6, 7]);
 // latérale et les lacets, `ep` l'épaisseur de semelle (×1 = 8,6 cm), `tige` la hauteur de
 // tige (bottes), `lacets` leur nombre, `lum` la lueur des baskets lumineuses.
 const CHAUSSURES = {
-  basket:    { c: 0x2b3550, s: 0xf4f6fa, b: 0xffffff, ep: 1,    tige: 0,    eperon: false, lacets: 3 },
-  running:   { c: 0xff5c5c, s: 0xf4f6fa, b: 0x3ef2ff, ep: 1.1,  tige: 0,    eperon: false, lacets: 3 },
-  montante:  { c: 0x1b1b1b, s: 0xf4f6fa, b: 0xff5c5c, ep: 1,    tige: 0.55, eperon: false, lacets: 3 },
-  lumineuse: { c: 0x2b2f3a, s: 0xf4f6fa, b: 0x3ef2ff, ep: 1.15, tige: 0,    eperon: false, lacets: 3, lum: 0x3ef2ff },
-  ville:     { c: 0x3b2a1a, s: 0x2b1a10, b: 0x5a3a1e, ep: 0.62, tige: 0,    eperon: false, lacets: 2 },
-  bottes:    { c: 0x4a3418, s: 0x2b1a10, b: 0x3b2a1a, ep: 0.95, tige: 0.9,  eperon: false, lacets: 2 },
-  cowboy:    { c: 0x8b5a2b, s: 0x4a3418, b: 0xd8c26a, ep: 0.85, tige: 1.1,  eperon: true,  lacets: 0 },
-  tongs:     { c: 0xff8f3a, s: 0xffd23f, b: 0xff8f3a, ep: 0.5,  tige: 0,    eperon: false, lacets: 0, tong: true },
+  basket:    { c: 0x2b3550, s: 0xf4f6fa, b: 0xffffff, ep: 1,    tige: 0,    eperon: false, lacets: 3, bande: true },
+  running:   { c: 0xff5c5c, s: 0xf4f6fa, b: 0x3ef2ff, ep: 1.1,  tige: 0,    eperon: false, lacets: 3, bande: true },
+  montante:  { c: 0x1b1b1b, s: 0xf4f6fa, b: 0xff5c5c, ep: 1,    tige: 0.55, eperon: false, lacets: 3, bande: true },
+  lumineuse: { c: 0x2b2f3a, s: 0xf4f6fa, b: 0x3ef2ff, ep: 1.15, tige: 0,    eperon: false, lacets: 3, bande: true, lum: 0x3ef2ff },
+  ville:     { c: 0x3b2a1a, s: 0x2b1a10, b: 0x5a3a1e, ep: 0.62, tige: 0,    eperon: false, lacets: 2, bande: false },
+  bottes:    { c: 0x4a3418, s: 0x2b1a10, b: 0x3b2a1a, ep: 0.95, tige: 0.9,  eperon: false, lacets: 2, bande: false },
+  cowboy:    { c: 0x8b5a2b, s: 0x4a3418, b: 0x6b4a20, ep: 0.85, tige: 1.1,  eperon: true,  lacets: 0, bande: false },
+  tongs:     { c: 0xff8f3a, s: 0xffd23f, b: 0xff8f3a, ep: 0.5,  tige: 0,    eperon: false, lacets: 0, bande: false, tong: true },
 };
 // LES GANTS se posent sur le POING ROND : une sphère un peu plus large, un revers au poignet.
 const GANTS = {
@@ -8389,7 +8389,9 @@ function buildAvatar(cfg) {
     brasG: rig.armL, brasD: rig.armR, avantBrasG: rig.armL.coude, avantBrasD: rig.armR.coude,
     poingG: rig.armL.poing, poingD: rig.armR.poing, mainG: rig.armL.main, mainD: rig.armR.main,
     cuisseG: rig.legL, cuisseD: rig.legR, jambeG: rig.legL.genou, jambeD: rig.legR.genou };
-  poseChaussures(av, 'basket'); poseGants(av, 'rien');
+  // un mannequin de vitrine est construit sans passer par applyLook : il faut donc lui
+  // monter ses chaussures et ses gants ici, sinon il restait pieds en baskets par defaut
+  poseChaussures(av, cfg.chaussures || 'basket'); poseGants(av, cfg.gants || 'rien');
   applyStats(av, cfg.m || 0, cfg.f || 0);
   return av;
 }
@@ -8411,7 +8413,7 @@ function poseChaussures(av, id) {
     lg.shoe.scale.set(1, ch.tong ? 0.28 : 1, 1);
     lg.talon.visible = lg.languette.visible = !ch.tong;
     lg.lacets.forEach((l, i) => l.visible = i < (ch.lacets || 0));
-    lg.bandes.forEach(b => b.visible = !ch.tong);
+    lg.bandes.forEach(b => b.visible = ch.bande !== false && !ch.tong);   // la bande laterale, c'est une basket : pas de swoosh sur une botte
     lg.tige.visible = ch.tige > 0; lg.tige.scale.set(1, ch.tige, 1); lg.tige.position.y = -0.62 * S + ch.tige * 0.4 * S;
     lg.tige.material = av.mats.shoe;
     lg.eperon.visible = !!ch.eperon;

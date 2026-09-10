@@ -6881,6 +6881,7 @@ function codeRoute(c, dt, opt) {
   };
   // ---- 1) les feux : on s'arrete a la LIGNE du feu qui arrete NOTRE sens
   flotteMaj();
+  let vFeu = null;
   if (!opt.urgence) for (const tl of (city.trafficLights || [])) {
     // On relit la phase sur l'HORLOGE plutot que sur `tl.state` : un banc d'essai qui appelle
     // la conduite sans `lightsTick` laissait le feu fige au rouge, et le bot attendait a jamais.
@@ -6888,8 +6889,15 @@ function codeRoute(c, dt, opt) {
     if (Math.abs(tl.x - c.x) > 45 || Math.abs(tl.z - c.z) > 45) continue;
     if (Math.abs(CAP(tl.sens - h)) > 0.5) continue;
     const al = devant(tl.ligne.x, tl.ligne.z, frein + 2.5, 5);
-    if (al > 0) cap(approche(al, 1.4), 'feu');
+    if (al > 0) { const v2 = approche(al, 1.4); if (vFeu == null || v2 < vFeu) vFeu = v2; }
   }
+  // Un feu qui reste rouge plus longtemps qu'un cycle entier est un feu EN PANNE : on ne
+  // l'attend pas jusqu'a la fin des temps, on franchit prudemment. (C'est aussi ce qui sauve
+  // les bancs d'essai qui font rouler un bot avec l'horloge du jeu figee.)
+  if (vFeu != null) {
+    c.feuT = (c.feuT || 0) + (dt || 0);
+    if (c.feuT < FEU_CYCLE + 6) cap(vFeu, 'feu'); else cap(2, 'feu-panne');
+  } else c.feuT = 0;
   // ---- 2) stop et cedez-le-passage. Le panneau est sur le TROTTOIR : on tolere 7 m de cote.
   if (c.stopOK && Math.hypot(c.x - c.stopOK.x, c.z - c.stopOK.z) > 16) { c.stopOK = null; c.stopDep = 0; }
   if (!opt.urgence) for (const q of (city.panneaux || [])) {
@@ -6900,9 +6908,11 @@ function codeRoute(c, dt, opt) {
     if (al < 0) continue;
     if (q.type === 'cede') { if (!croisementLibre(c, 18, false)) cap(approche(al, 1.2), 'cede'); continue; }
     if (c.stopOK === q) continue;                       // arret deja marque a ce stop
-    if (spd > 0.6 || al > 2.8) { cap(approche(al, 1.2), 'stop'); continue; }
-    if (!c.stopDep) c.stopDep = simTime;
-    if (simTime - c.stopDep < 1.2 || !croisementLibre(c, 16, false)) { cap(0, 'stop'); continue; }
+    if (spd > 0.6 || al > 2.8) { c.stopDep = 0; cap(approche(al, 1.2), 'stop'); continue; }
+    // l'arret marque se compte en temps ECOULE (dt) : compare a l'horloge, il ne s'achevait
+    // jamais quand un banc d'essai fait rouler la voiture avec `simTime` fige
+    c.stopDep = (c.stopDep || 0) + (dt || 0);
+    if (c.stopDep < 1.2 || !croisementLibre(c, 16, false)) { cap(0, 'stop'); continue; }
     c.stopOK = q; c.stopDep = 0;
   }
   // ---- 3) les passages pietons. On s'arrete des qu'un pieton est engage — MAIS PAS POUR
@@ -13377,7 +13387,7 @@ function botDriveTick(dt) {
       st.saut = true;
       const d = conduire(c, st.tx, st.tz, dt, st);
       const coince = (st.bloqueT || 0) > 12;   // on insiste bien plus longtemps avant d'abandonner
-      if (d < 8 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
+      if (d < 5 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
         botSay(b, [coince ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
           : st.passager ? `voilà, on est arrivés à ${st.nom} 🚗` : `je suis à ${st.nom} avec la voiture, monte à côté de moi ! (E)`]);
         if (!st.passager) setBeacon(c.x, c.z); else clearBeacon(); }

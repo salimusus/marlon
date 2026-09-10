@@ -44,7 +44,13 @@ button,input{font-family:inherit}
   padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 10px) 0 calc(env(safe-area-inset-left) + 10px);pointer-events:none;color:#fff;font-weight:800;z-index:3}
 #top>*{pointer-events:auto}
 .tl,.tc{display:flex;gap:6px;align-items:center}
-.tc{justify-content:center;flex-wrap:wrap}
+.tc{justify-content:center;flex-wrap:wrap;row-gap:4px}
+/* Les pastilles du centre debordaient sur une DEUXIEME LIGNE des que l'horloge apparaissait,
+   et cette deuxieme ligne tombait pile dans la zone du grand message. Elles sont un peu plus
+   serrees au centre : tout tient sur une seule ligne, meme avec l'heure affichee. */
+.tc .pill{padding:7px 9px;font-size:14px}
+body.tv .tc{flex-wrap:nowrap}
+body.tv .tc .pill{padding:calc(var(--u) * .42) calc(var(--u) * .6);font-size:calc(var(--u) * .95)}
 .tr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 /* Les boutons du haut n'avaient AUCUN état visible : ni survol, ni appui, ni focus manette.
    On ne savait jamais lequel on visait. Trois états, tous nets, et une transition très
@@ -1084,13 +1090,13 @@ const DA = {
   // automatique (il fait toujours jour) mais servent à l'ambiance « nuit » choisie au menu.
   heures: [
     { h: 0,    haut: 0x060a1c, bas: 0x101733, halo: 0x22315a, sol: 0x8098dc, force: 0.10, amb: 0x7f98e0, rebond: 0x151a30, nuit: 1 },
-    { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.32, amb: 0xc0b2d2, rebond: 0x3e3849, nuit: 0.62 },
-    { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.72, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
-    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 0.92, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
-    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 1.02, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
-    { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 0.92, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
-    { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.70, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
-    { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.34, amb: 0xb9a3c2, rebond: 0x40384c, nuit: 0.66 },
+    { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.28, amb: 0xc0b2d2, rebond: 0x3e3849, nuit: 0.62 },
+    { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.60, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
+    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 0.78, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
+    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 0.84, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
+    { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 0.78, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
+    { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.58, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
+    { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.30, amb: 0xb9a3c2, rebond: 0x40384c, nuit: 0.66 },
     { h: 24,   haut: 0x060a1c, bas: 0x101733, halo: 0x22315a, sol: 0x8098dc, force: 0.10, amb: 0x7f98e0, rebond: 0x151a30, nuit: 1 },
   ],
 };
@@ -1496,7 +1502,10 @@ function applyQuality() {
 }
 
 // ================= MATÉRIAUX "BRIQUES" =================
-const C = { base: 0xa3a2a5, grass: 0x5cc453, stone: 0xc9ced8, stone2: 0x8f98ab, wood: 0x9c6a3c, leaf: 0x3fae4a, red: 0xff5c5c, blue: 0x4f8dff,
+// La PELOUSE était un vert fluo (0x5cc453) : sous une lumière de plein midi, ses deux canaux
+// clairs saturaient et le parc entier virait au blanc verdâtre sur les captures. Un vert de
+// gazon un cran plus profond garde toute sa franchise sans jamais brûler.
+const C = { base: 0xa3a2a5, grass: 0x4fae46, stone: 0xc9ced8, stone2: 0x8f98ab, wood: 0x9c6a3c, leaf: 0x3fae4a, red: 0xff5c5c, blue: 0x4f8dff,
   purple: 0xb57cff, orange: 0xffa040, teal: 0x35d0e6, yellow: 0xffd23f, lava: 0xff3b1f, dark: 0x2b3550, pink: 0xff5cd6, neon: 0x3dff7a,
   rock: 0x4a4550, rock2: 0x625c66, snow: 0xe6eef7, ice: 0x9fdcff, pine: 0x2f7a4a, space: 0x2a2a44, cyan: 0x3ef2ff, magenta: 0xff4fd8, lime: 0x9dff3a };
 // ---- grille spatiale des solides (déclarée ici, au plus près de `solids`, pour qu'elle
@@ -5796,7 +5805,7 @@ function dayTick() {
   // restait d'un vert de plein midi et le decor entier refusait de s'assombrir. Il descend
   // maintenant avec la lumiere, sans jamais tomber a zero (les faces a l'ombre ne doivent
   // jamais devenir des trous noirs).
-  hemi.intensity = 0.26 + C2.force * 0.22;
+  hemi.intensity = 0.30 + C2.force * 0.18;
   fill.color.copy(C2.amb); fill.intensity = 0.10 + night * 0.16;
   // le ciel : dôme dégradé (zénith, horizon, halo autour du soleil) et couleur de secours
   const u = cielDome.material.uniforms;

@@ -7689,3 +7689,198 @@ test('les deux nouveaux quartiers sont relies a la ville et on y achete vraiment
     && b.length === 6 && b.every(o => o.entre && o.comptoir && o.ouvre && o.debit === o.prix && o.articles >= 2) && r.etals >= 9;
   return { ok, detail: `deux quartiers neufs : ${q.map(z => `${z.emoji} ${z.nom} (${z.rues} rues, ${z.trottoirs} trottoirs, ${z.lampadaires} lampadaires, desserte ${JSON.stringify(z.desserte)} ${z.surReseau ? 'reliée au réseau' : 'HORS RÉSEAU'}, GPS ${z.gps ? 'ok' : 'absent'})`).join(' · ')} · ${r.etals} comptoirs en tout, et les ${b.length} boutiques où l'on entre marchent de bout en bout : ${b.map(o => `${o.id} (porte franchie, comptoir ouvert, −${o.debit} 🪙 pour ${o.prix})`).join(', ')}` };
 });
+// ================= POSTE J — LA VIE DE LA VILLE (métiers) =================
+test('les cinq tenues de métier sont visibles et n\'entrent pas dans le corps', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const boite = o => { o.updateWorldMatrix(true, true); return new G.THREE.Box3().setFromObject(o); };
+    const out = {};
+    for (const m of G.city.metiers) {
+      if (out[m.metier]) continue;
+      const av = m.bot.av; av.group.updateWorldMatrix(true, true);
+      const t = av.tenue;
+      // le vêtement principal : la plus grosse pièce posée sur le torse
+      let veste = null, vol = 0;
+      for (const pc of t.pieces) { if (pc.parent !== av.group) continue; const v = pc.scale.x * pc.scale.y * pc.scale.z; if (v > vol) { vol = v; veste = pc; } }
+      const bt = boite(av.torso), bv = boite(veste), bg = boite(av.group);
+      out[m.metier] = {
+        pieces: t.pieces.length, visibles: t.pieces.filter(pc => pc.visible).length,
+        // « enveloppe » : le vêtement déborde du torse de tous les côtés — il ne s'y enfonce pas
+        enveloppe: bv.min.x < bt.min.x && bv.max.x > bt.max.x && bv.min.z < bt.min.z && bv.max.z > bt.max.z,
+        marge: +Math.min(bt.min.x - bv.min.x, bt.min.z - bv.min.z).toFixed(3),
+        largeur: +(bg.max.x - bg.min.x).toFixed(2), hauteur: +(bg.max.y - bg.min.y).toFixed(2),
+        haut: '#' + av.mats.shirt.color.getHexString(), bas: '#' + av.mats.pants.color.getHexString(),
+      };
+    }
+    const emp = G.city.metiers.find(m => m.metier === 'employe').bot.av;
+    const bandes = emp.tenue.pieces.filter(pc => pc.material.color.getHexString() === 'c9ced8').length;
+    const gilet = emp.tenue.pieces.some(pc => pc.material.color.getHexString() === 'e4f52a');
+    return { out, bandes, gilet, nb: Object.keys(out).length, travailleurs: G.city.metiers.length };
+  });
+  const A = ['employe', 'balayeur', 'laveur', 'pompier', 'facteur'];
+  const couleurs = { employe: '#2f4f9e', balayeur: '#2f8f4a', laveur: '#8f98ab', pompier: '#d42b2b', facteur: '#f2c21a' };
+  const ok = r.nb === 5 && r.travailleurs >= 8 && r.travailleurs <= 12 && r.gilet && r.bandes >= 4
+    && A.every(k => { const t = r.out[k]; return t && t.pieces >= 3 && t.visibles === t.pieces && t.enveloppe && t.marge >= 0.03 && t.haut === couleurs[k]; });
+  return { ok, detail: `${r.travailleurs} travailleurs (au plus 12), ${r.nb} tenues : ` + A.map(k => `${k} ${r.out[k].pieces} pièces, jeu ${Math.round(r.out[k].marge * 100)} cm autour du torse, haut ${r.out[k].haut}`).join(' · ') + ` — le gilet fluo de l'employé porte ${r.bandes} bandes réfléchissantes grises` };
+});
+
+test('un lampadaire cassé est réparé tout seul par les employés, avec un chantier posé puis retiré', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos   // on ne dépend pas de la phase du cycle jour/nuit
+    const dep = c.depot;
+    let lam = null, bd = 1e9;
+    for (const b of G.breakables) { if (b.kind !== 'lamp') continue; const d = Math.hypot(b.x - dep.x, b.z - dep.z); if (d < bd) { bd = d; lam = b; } }
+    G.breakThing(lam, { x: lam.x + 1, z: lam.z }, true);
+    const obst0 = G.solids.filter(o => o.chantier).length;
+    let chantMax = 0, repare = -1;
+    const DT = 1 / 20;
+    for (let i = 0; i < 3600 && repare < 0; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (c.chantiers.length > chantMax) chantMax = c.chantiers.length;
+      if (!lam.broken) repare = +(i * DT).toFixed(1);
+    }
+    // on laisse l'équipe RANGER son chantier, et on mesure pile à ce moment-là : si on
+    // attendait plus longtemps, elle repartait sur une autre panne et posait un chantier
+    // tout neuf — le test devenait un tirage au sort.
+    let range = -1, obstFin = -1;
+    for (let i = 0; i < 800; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (!c.chantiers.length) { range = +(i * DT).toFixed(1); obstFin = G.solids.filter(o => o.chantier).length; break; }
+    }
+    return { dist: Math.round(bd), repare, range, obst0, chantMax, chantiers: c.chantiers.length,
+      obstFin, broken: lam.broken, etat: G.METIERS.employes[0].etat };
+  });
+  const ok = r.repare > 0 && r.repare < 160 && r.chantMax >= 1 && !r.broken && r.range >= 0 && r.obstFin === r.obst0;
+  return { ok, detail: `lampadaire cassé à ${r.dist} m du dépôt : l'équipe est partie en fourgon, a posé ${r.chantMax} chantier (cônes + filet rouge et blanc + panneau TRAVAUX + obstacle dans solids pour que la circulation contourne), a réparé en ${r.repare} s simulées puis a tout rangé ${r.range} s plus tard — obstacles de chantier dans solids : ${r.obst0} → ${r.chantMax} → ${r.obstFin}, équipe « ${r.etat} »` };
+});
+
+test('un incendie est éteint par les pompiers : le camion arrive et city.incendies se vide', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    const f = G.declencheIncendie(0, 20, 100);
+    const cam = G.METIERS.pompiers[0].bot.veh;
+    const d0 = Math.round(Math.hypot(cam.x, cam.z - 20));
+    let arrive = -1, eteint = -1, dmin = 1e9;
+    const force0 = f.force;
+    const DT = 1 / 20;
+    for (let i = 0; i < 3200; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      const d = Math.hypot(cam.x, cam.z - 20); if (d < dmin) dmin = d;
+      if (arrive < 0 && d < 15) arrive = +(i * DT).toFixed(1);
+      if (eteint < 0 && !c.incendies.length) { eteint = +(i * DT).toFixed(1); break; }
+    }
+    return { caserne: c.caserne, d0, arrive, eteint, dmin: Math.round(dmin), force0,
+      incendies: c.incendies.length, etat: G.METIERS.pompiers[0].etat };
+  });
+  const ok = r.arrive > 0 && r.eteint > 0 && r.eteint < 120 && r.dmin < 15 && r.incendies === 0;
+  return { ok, detail: `incendie déclenché en (0, 20), caserne à ${r.d0} m : le camion est parti sirène allumée et est arrivé à ${r.dmin} m du feu en ${r.arrive} s simulées, les pompiers ont déployé la lance à eau et le feu (force ${r.force0}) était éteint à ${r.eteint} s — city.incendies = ${r.incendies}` };
+});
+
+test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte aux lettres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    for (const b of c.boites) b.lettres = 0;
+    const m = G.METIERS.facteurs[0], velo = m.bot.veh;
+    let livre = -1, aVelo = false;
+    const DT = 1 / 20;
+    for (let i = 0; i < 2400; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      // il est vraiment SUR son vélo : l'avatar colle à la selle pendant la tournée
+      if (m.etat === 'tournee' && Math.hypot(m.bot.pos.x - velo.x, m.bot.pos.z - velo.z) < 1.4) aVelo = true;
+      if (livre < 0 && c.boites.some(b => b.lettres > 0)) { livre = +(i * DT).toFixed(1); break; }
+    }
+    const sacoches = velo.g.children.filter(o => o.material && o.material.color && o.material.color.getHexString() === '8b5a2b').length;
+    return { boites: c.boites.length, livre, aVelo, sacoches,
+      total: c.boites.reduce((a, b) => a + b.lettres, 0), etat: m.etat };
+  });
+  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1 && r.sacoches >= 2;
+  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches, une de chaque côté de la roue arrière) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
+});
+
+test('les véhicules de travail sont conduisibles par le joueur et leurs outils s\'actionnent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    const res = {};
+    for (const v of c.cars.filter(x => x.travail)) {
+      // on remet TOUT le parc à sa place avant chaque véhicule : celui qu'on vient d'essayer
+      // s'était garé n'importe où et venait brouiller la détection du suivant
+      G.metiersRepos();
+      v.busy = false;                                     // l'employé qui s'en servait laisse la place
+      G.P.pos.set(v.x + 1.4, v.y || 0, v.z + 1.4);
+      G.cityStep(1 / 60);
+      const detecte = c.near === v;                       // « E : conduire » s'affiche bien
+      v.busy = false;                                     // (la vie de la ville vient peut-être de le reprendre)
+      G.enterCar(v);
+      const auVolant = G.drive.car === v;
+      let roule = 0;
+      if (auVolant) {
+        const x0 = v.x, z0 = v.z;
+        G.keys.add('KeyW');
+        for (let i = 0; i < 90; i++) { G.simTime = G.simTime + 1 / 60; G.driveStep(1 / 60); }
+        G.keys.delete('KeyW');
+        roule = +Math.hypot(v.x - x0, v.z - z0).toFixed(2);
+      }
+      G.actionneOutil(v);
+      for (let i = 0; i < 200; i++) { G.simTime = G.simTime + 1 / 30; G.outilsVehiculesTick(1 / 30); }
+      const o = v.outils || {};
+      res[v.kind] = { detecte, auVolant, roule, outil: +v.outil.toFixed(2),
+        benne: o.benne ? +o.benne.rotation.x.toFixed(2) : null,
+        echelle: o.echelle ? +o.echelle.rotation.x.toFixed(2) : null,
+        jet: o.jet ? o.jet.visible : null,
+        crochet: o.crochet ? +o.crochet.position.y.toFixed(2) : null,
+        godet: o.godet ? +o.godet.rotation.x.toFixed(2) : null };
+      if (G.drive.car) G.exitCar();
+    }
+    // la lance à eau fait bien baisser un feu : c'est ainsi que le joueur aide les pompiers
+    const f = G.declencheIncendie(G.P.pos.x + 8, G.P.pos.z, 100);
+    const cam = c.cars.find(x => x.kind === 'pompier');
+    cam.x = G.P.pos.x; cam.z = G.P.pos.z; cam.h = Math.PI / 2; cam.outil = 1; cam.outilCible = 1;
+    const av = f ? f.force : 0;
+    for (let i = 0; i < 60; i++) { G.simTime = G.simTime + 1 / 30; G.arroseAutour(cam, 1 / 30); }
+    const ap = f ? f.force : 0;
+    if (f && c.incendies.includes(f)) { G.worldGroup.remove(f.g); c.incendies.length = 0; }
+    return { res, kinds: Object.keys(res), eau: [Math.round(av), Math.round(ap)] };
+  });
+  const K = ['benne', 'grue', 'pelle', 'tracteur', 'pompier', 'fourgon', 'velo'];
+  const tous = K.every(k => r.res[k] && r.res[k].detecte && r.res[k].auVolant);
+  const roulent = K.filter(k => r.res[k] && r.res[k].roule > 0.5).length;
+  const b = r.res.benne || {}, pk = r.res.pompier || {}, g = r.res.grue || {}, pe = r.res.pelle || {};
+  const outils = b.benne < -0.4 && pk.echelle < -0.5 && pk.jet === true && g.crochet < -2 && pe.godet > 0.4;
+  const ok = tous && roulent >= 6 && outils && r.eau[1] < r.eau[0] - 10;
+  const vus = K.filter(k => r.res[k] && r.res[k].detecte).length, pris = K.filter(k => r.res[k] && r.res[k].auVolant).length;
+  return { ok, detail: `sept véhicules de travail dans city.cars (${r.kinds.join(', ')}) : ${vus}/7 annoncés par « E : conduire », ${pris}/7 conduisibles, ${roulent}/7 avancent vraiment en une seconde et demie de gaz ; la benne se lève (${b.benne} rad), l'échelle du camion de pompiers se déploie (${pk.echelle} rad) et la lance à eau s'ouvre, le crochet de la grue descend de ${-g.crochet} m, le godet de la pelleteuse creuse (${pe.godet} rad) ; la lance fait tomber la force du feu de ${r.eau[0]} à ${r.eau[1]}` };
+});
+
+test('on peut parler aux gens de métier et leur donner un coup de main contre des pièces', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos c.boulot = null;
+    // toute l'équipe est au travail : la phrase de métier doit parler de la réparation en cours
+    for (const m of c.metiers) if (m.metier === 'employe') m.etat = 'repare';
+    const phrases = c.metiers.map(m => [m.metier, G.phraseMetier(m, false)]);
+    // on se plante devant un balayeur : il répond, et il propose son petit boulot
+    const bal = c.metiers.find(m => m.metier === 'balayeur');
+    G.P.pos.set(bal.bot.pos.x + 1.5, bal.bot.pos.y, bal.bot.pos.z);
+    const repond = G.metierParle('bonjour, tu fais quoi comme travail ?');
+    const auHasard = G.metierParle('vive les dinosaures');
+    G.metiersTick(1 / 60);
+    // au dépôt, les travailleurs sont à deux mètres les uns des autres : ce qui compte, c'est
+    // que le jeu propose bien UN coup de main à celui d'à côté, pas lequel des deux balayeurs
+    const propose = !!c.boulotNear;
+    const proposeQui = c.boulotNear ? c.boulotNear.metier : null;
+    G.prendreBoulot(bal);
+    const boulot = c.boulot && c.boulot.metier;
+    const sous0 = G.wallet;
+    // le joueur ramasse les cinq détritus demandés (ils apparaissent sous ses pieds)
+    for (let i = 0; i < 8 && c.boulot; i++) { G.poseDetritus(G.P.pos.x + 0.4, G.P.pos.z); G.boulotTick(1 / 60); }
+    return { phrases, repond, auHasard, propose, proposeQui, boulot, sous0, sous1: G.wallet, reste: !!c.boulot };
+  });
+  const dit = Object.fromEntries(r.phrases);
+  const ok = r.repond && !r.auHasard && r.propose && !!r.proposeQui && r.boulot === 'balayeur' && r.sous1 === r.sous0 + 15 && !r.reste
+    && /répare le lampadaire/.test(dit.employe) && /vitres/.test(dit.laveur) && /camion|feu/.test(dit.pompier) && /tournée|lettre|boîte/.test(dit.facteur);
+  return { ok, detail: `l'employé au travail répond « ${dit.employe} », le pompier « ${dit.pompier} », le facteur « ${dit.facteur} » ; une phrase hors sujet ne déclenche rien (${r.auHasard}) ; à côté d'un travailleur (${r.proposeQui}), E propose un petit boulot — les 5 détritus du balayeur ramassés = ${r.sous1 - r.sous0} 🪙 (${r.sous0} → ${r.sous1})` };
+});

@@ -4131,6 +4131,7 @@ const WORLDS = [
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs); B('mobilier public', decorPublic);
+      B('métiers', buildMetiers);   // poste J : dépôt, caserne, équipes, véhicules de travail, boîtes aux lettres
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
@@ -7885,6 +7886,7 @@ const CHAUSSURES = { basket: { c: 0x2b3550, h: 0.3, tige: 0, eperon: false }, vi
 const FOOD = [{ e: '🍔', n: 'Burger', p: 3, f: 9 }, { e: '🍕', n: 'Pizza', p: 3, f: 11 }, { e: '🍟', n: 'Frites', p: 2, f: 6 }, { e: '🥤', n: 'Soda', p: 2, f: 5 }, { e: '🍦', n: 'Glace', p: 2, f: 7 }, { e: '🍩', n: 'Donut', p: 2, f: 8 }, { e: '🥗', n: 'Salade', p: 2, f: -5 }, { e: '🍎', n: 'Pomme', p: 1, f: -3 }, { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3 }];
 let jumpHeld = false, downHeld = false;
 function cityReset() {
+  try { metiersReset(); } catch (e) {}   // poste J : travailleurs, chantiers, incendies, boîtes aux lettres (try : cityReset tourne aussi au chargement, avant l'initialisation du bloc des métiers)
   // aucun de ces indicateurs de proximité n'était remis à zéro : hors de la ville, un appui sur E
   // agissait encore sur un objet détruit (gazinière, manège, balançoire…)
   city.bedNear = city.benchNear = city.bouleNear = city.classNear = city.deskNear = city.fridgeNear = city.gunNear =
@@ -10235,7 +10237,8 @@ function libereVehiculesOublies() {
   if (drive.car) pris.add(drive.car);
   if (coup.car) pris.add(coup.car);
   for (const b of bots) { if (b.drive && b.drive.car) pris.add(b.drive.car); if (b.rdv && b.rdv.auto) pris.add(b.rdv.auto.car); }
-  for (const c of city.cars) if (c.busy && !pris.has(c)) { c.busy = false; c.speed = 0; }
+  // un vehicule de travail conduit par un employe (poste J) n'est pas un vehicule oublie
+  for (const c of city.cars) if (c.busy && !pris.has(c) && !c.metierBusy) { c.busy = false; c.speed = 0; }
 }
 function botSuis(b) {
   b.rdv = { x: P.pos.x, z: P.pos.z, y: 0.3, nom: 'toi', arrive: false, suit: true, colle: true };
@@ -10754,6 +10757,8 @@ function interpreteOrdre(txt) {
   return true;
 }
 function commandeSociale(txt) {
+  // poste J : si on parle a un employe, un pompier, un facteur... c'est LUI qui repond
+  try { if (metierParle(txt)) return true; } catch (e) {}
   // « ordres », « liste des ordres », « aide » : on ouvre directement le choix des personnes,
   // sans avoir à connaître le nom de qui que ce soit.
   if (/^(ordres?|liste( des ordres)?|aide|help|commandes?|que peut on demander|quoi faire)$/.test(norm(txt).replace(/[^a-z ]/g, '').trim())) { openQui(); return true; }
@@ -12291,7 +12296,7 @@ function cityVie(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -13478,7 +13483,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (city.boulotNear && !city.near) prendreBoulot(city.boulotNear); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -13607,7 +13612,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (city.boulotNear && !city.near) prendreBoulot(city.boulotNear); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -17279,6 +17284,1181 @@ $('reunionAllie').addEventListener('click', () => choixReunion('allie'));
 $('reunionTribut').addEventListener('click', () => choixReunion('tribut'));
 $('reunionGuerre').addEventListener('click', () => choixReunion('guerre'));
 $('reunionBack').addEventListener('click', () => { guerre.reunion = null; closeUI(); });
+
+// ================= POSTE J — LA VIE DE LA VILLE : LES MÉTIERS =================
+// Employés municipaux, balayeurs, laveurs de vitres, pompiers et facteurs : ils ont leur
+// tenue, leurs outils, leurs véhicules (que le joueur peut prendre) et surtout ILS
+// TRAVAILLENT tout seuls. Tout est regroupé ici, à la fin du fichier, pour ne pas marcher
+// sur les plates-bandes des autres postes : on n'entre JAMAIS dans mannequin(), limb(),
+// leg() ni animateRig() — les tenues se posent PAR-DESSUS un avatar déjà construit.
+
+// ---- couleurs des tenues ----
+const MET_C = {
+  fluo: 0xe4f52a,          // le jaune fluo du gilet de chantier
+  bande: 0xc9ced8,         // les bandes réfléchissantes grises
+  bleuTravail: 0x2f4f9e,
+  casqueBlanc: 0xf4f6fa, casqueOrange: 0xff8f3a,
+  vert: 0x2f8f4a, gris: 0x8f98ab, gris2: 0x6b7280,
+  rouge: 0xd42b2b, jaune: 0xffd23f, casquePompier: 0xb9c2cf,
+  poste: 0xf2c21a, marron: 0x8b5a2b, cuir: 0x3b2a16, acier: 0x8f98ab,
+};
+// Les cinq métiers, avec ce qui les identifie dans le jeu (émoji, nom, outil de base).
+const METIERS_DEF = {
+  employe: { e: '🦺', n: 'employé municipal', outil: 'cle' },
+  balayeur: { e: '🧹', n: 'balayeur', outil: 'balai' },
+  laveur: { e: '🪟', n: 'laveur de vitres', outil: 'raclette' },
+  pompier: { e: '🚒', n: 'pompier', outil: 'lance' },
+  facteur: { e: '📮', n: 'facteur', outil: 'lettre' },
+};
+
+// ---- une pièce de tenue : une boîte arrondie accrochée à un segment du rig ----
+// On réutilise la géométrie partagée `unitRound` (mise à l'échelle) : douze travailleurs
+// habillés, ça fait vite cent pièces — une géométrie neuve par pièce aurait coûté cher.
+function tenuePiece(parent, w, h, d, couleur, x, y, z, opt = {}) {
+  const m = new THREE.Mesh(unitRound, opt.mat || lam(couleur));
+  m.scale.set(w, h, d); m.position.set(x, y, z);
+  if (opt.rx) m.rotation.x = opt.rx;
+  if (opt.ry) m.rotation.y = opt.ry;
+  if (opt.rz) m.rotation.z = opt.rz;
+  m.castShadow = true; parent.add(m); return m;
+}
+// HABILLE un avatar existant. `metier` : 'employe' | 'balayeur' | 'laveur' | 'pompier' | 'facteur'.
+// Règle de dessin : chaque pièce est un peu PLUS GROSSE que le membre qu'elle recouvre
+// (le torse fait 2S × 2S × S, le gilet 2,34S × 1,8S × 1,42S) — sinon le vêtement
+// disparaissait dans le corps dès qu'on regardait le personnage de côté.
+function tenueMetier(av, metier) {
+  if (!av || !av.group || !av.rig) return null;
+  // on enlève la tenue précédente : un balayeur promu pompier ne garde pas son bandeau
+  if (av.tenue) { for (const p of av.tenue.pieces) if (p.parent) p.parent.remove(p); av.tenue = null; }
+  if (!metier || !METIERS_DEF[metier]) return null;
+  const g = av.group, rig = av.rig, tete = rig.head, pieces = [];
+  // Le torse et les bras sont MIS À L'ÉCHELLE par applyStats (muscles, embonpoint, taille du
+  // vêtement) : un gilet de dimensions fixes finissait à l'intérieur d'un torse un peu large.
+  // On mesure donc le corps AVANT de tailler la tenue, et on ajoute 8 cm de jeu.
+  const tsx = av.torso.scale.x || 1, tsz = av.torso.scale.z || 1;
+  const TW = 2 * S * tsx + 0.16, TD = S * tsz + 0.16;                    // torse habillé
+  const asx = (rig.armL.manche && rig.armL.manche.scale.x) || 1;
+  const BW = S * asx + 0.1, BD = S * asx + 0.1;                          // manche habillée
+  const P2 = (parent, w, h, d, c, x, y, z, opt) => { const m = tenuePiece(parent, w, h, d, c, x, y, z, opt); pieces.push(m); return m; };
+  // le casque et le bandeau remplacent la casquette et les chapeaux de la boutique
+  const sansChapeau = () => { av.capParts.forEach(p => p.visible = false); for (const grp of Object.values(av.hatGroups)) grp.visible = false; };
+  const casquette = coul => { av.capParts.forEach(p => p.visible = true); av.mats.cap.color.setHex(coul); for (const grp of Object.values(av.hatGroups)) grp.visible = false; };
+  // un casque de chantier : calotte + visière, accroché à la TÊTE (il suit donc les regards)
+  const casque = (coul, visiere) => {
+    P2(tete, 1.66 * S, 0.95 * S, 1.7 * S, coul, 0, 1.16 * S, 0);
+    if (visiere) P2(tete, 1.82 * S, 0.16 * S, 0.62 * S, coul, 0, 0.8 * S, 0.72 * S);
+    P2(tete, 0.3 * S, 0.42 * S, 1.7 * S, coul, 0, 1.5 * S, 0);   // la nervure du dessus
+  };
+  // une bande réfléchissante autour d'un membre : elle est accrochée AU SEGMENT, elle plie
+  // donc avec le coude
+  const bandeBras = () => {
+    for (const br of [rig.armL, rig.armR]) {
+      P2(br, BW + 0.06, 0.22 * S, BD + 0.06, MET_C.bande, 0, -0.62 * S, 0);
+      P2(br.coude, BW + 0.04, 0.2 * S, BD + 0.04, MET_C.bande, 0, -0.5 * S, 0);
+    }
+  };
+  if (metier === 'employe') {
+    // gilet jaune fluo, deux bandes grises sur le torse et deux par bras
+    P2(g, TW, 1.8 * S, TD, MET_C.fluo, 0, 3.05 * S, 0);
+    P2(g, TW + 0.05, 0.24 * S, TD + 0.05, MET_C.bande, 0, 3.44 * S, 0);
+    P2(g, TW + 0.05, 0.24 * S, TD + 0.05, MET_C.bande, 0, 2.76 * S, 0);
+    P2(g, 0.34 * S, 1.84 * S, 0.1, MET_C.bande, -TW * 0.3, 3.05 * S, TD / 2 + 0.02);   // les deux bretelles de devant
+    P2(g, 0.34 * S, 1.84 * S, 0.1, MET_C.bande, TW * 0.3, 3.05 * S, TD / 2 + 0.02);
+    bandeBras();
+    av.mats.shirt.color.setHex(MET_C.bleuTravail); av.mats.sleeve.color.setHex(MET_C.bleuTravail);
+    av.mats.pants.color.setHex(MET_C.bleuTravail);
+    av.mats.shoe.color.setHex(MET_C.cuir);
+    for (const lg of [rig.legL, rig.legR]) P2(lg.genou, 1.14 * S, 0.16 * S, 0.5 * S, MET_C.acier, 0, -0.92 * S, 0.5 * S);   // coques de sécurité
+    sansChapeau(); casque(av.casqueOrange ? MET_C.casqueOrange : MET_C.casqueBlanc, true);
+  } else if (metier === 'balayeur') {
+    av.mats.shirt.color.setHex(MET_C.vert); av.mats.sleeve.color.setHex(MET_C.vert);
+    av.mats.pants.color.setHex(MET_C.vert); av.mats.shoe.color.setHex(0x1f3a24);
+    // gilet jaune court + bandeau jaune autour de la casquette verte
+    P2(g, TW, 1.5 * S, TD, MET_C.jaune, 0, 3.15 * S, 0);
+    P2(g, TW + 0.05, 0.2 * S, TD + 0.05, MET_C.bande, 0, 3.2 * S, 0);
+    for (const br of [rig.armL, rig.armR]) P2(br, BW + 0.06, 0.22 * S, BD + 0.06, MET_C.jaune, 0, -0.62 * S, 0);   // brassards jaunes : on le voit de loin
+    P2(g, 0.5 * S, 0.4 * S, 0.14, MET_C.bande, TW * 0.28, 2.55 * S, TD / 2 + 0.02);   // la poche a sacs-poubelle
+    casquette(MET_C.vert);
+    P2(tete, 1.58 * S, 0.3 * S, 1.6 * S, MET_C.jaune, 0, 1.44 * S, 0);   // le bandeau jaune
+  } else if (metier === 'laveur') {
+    av.mats.shirt.color.setHex(MET_C.gris); av.mats.sleeve.color.setHex(MET_C.gris);
+    av.mats.pants.color.setHex(MET_C.gris2); av.mats.shoe.color.setHex(0x2b2f3a);
+    // le harnais : deux sangles croisées et une ceinture à mousquetons
+    P2(g, TW, 1.9 * S, TD, MET_C.gris, 0, 3.05 * S, 0);                                  // la combinaison grise
+    P2(g, 0.3 * S, 2.1 * S, 0.12, 0x2b2f3a, 0, 3.05 * S, TD / 2 + 0.02, { rz: 0.5 });     // sangles croisées du harnais
+    P2(g, 0.3 * S, 2.1 * S, 0.12, 0x2b2f3a, 0, 3.05 * S, TD / 2 + 0.02, { rz: -0.5 });
+    P2(g, TW + 0.05, 0.3 * S, TD + 0.05, 0x2b2f3a, 0, 2.25 * S, 0);                       // la ceinture
+    P2(g, 0.3 * S, 0.3 * S, 0.3 * S, MET_C.acier, TW * 0.3, 2.25 * S, TD / 2 + 0.06);      // le mousqueton
+    P2(g, TW + 0.05, 0.5 * S, TD * 0.9, MET_C.jaune, 0, 3.85 * S, 0);   // épaulières jaunes : on les voit de loin
+  } else if (metier === 'pompier') {
+    // veste rouge à bandes jaunes, casque gris à couvre-nuque, bottes
+    av.mats.shirt.color.setHex(MET_C.rouge); av.mats.sleeve.color.setHex(MET_C.rouge);
+    av.mats.pants.color.setHex(0x2b3550); av.mats.shoe.color.setHex(0x14161c);
+    P2(g, TW, 1.9 * S, TD, MET_C.rouge, 0, 3.05 * S, 0);
+    P2(g, TW + 0.05, 0.24 * S, TD + 0.05, MET_C.jaune, 0, 3.5 * S, 0);
+    P2(g, TW + 0.05, 0.24 * S, TD + 0.05, MET_C.jaune, 0, 2.7 * S, 0);
+    for (const br of [rig.armL, rig.armR]) {
+      P2(br, BW + 0.05, 0.94 * S, BD + 0.05, MET_C.rouge, 0, -0.45 * S, 0);
+      P2(br.coude, BW + 0.07, 0.22 * S, BD + 0.07, MET_C.jaune, 0, -0.52 * S, 0);
+    }
+    sansChapeau(); casque(MET_C.casquePompier, true);
+    P2(tete, 1.5 * S, 0.5 * S, 0.34 * S, MET_C.casquePompier, 0, 0.9 * S, -0.86 * S);   // le couvre-nuque
+    for (const lg of [rig.legL, rig.legR]) { lg.tige.visible = true; P2(lg.genou, 1.12 * S, 0.2 * S, 1.12 * S, MET_C.jaune, 0, -0.12 * S, 0); }
+  } else if (metier === 'facteur') {
+    // veste jaune et marron, casquette verte, sacoche en bandoulière
+    av.mats.shirt.color.setHex(MET_C.poste); av.mats.sleeve.color.setHex(MET_C.poste);
+    av.mats.pants.color.setHex(MET_C.marron); av.mats.shoe.color.setHex(MET_C.cuir);
+    P2(g, TW, 1.1 * S, TD, MET_C.poste, 0, 3.42 * S, 0);
+    P2(g, TW, 0.9 * S, TD, MET_C.marron, 0, 2.62 * S, 0);
+    for (const br of [rig.armL, rig.armR]) P2(br.coude, BW + 0.05, 0.6 * S, BD + 0.05, MET_C.marron, 0, -0.36 * S, 0);
+    casquette(MET_C.vert);
+    // la bandoulière traverse la poitrine, la sacoche pend sur la hanche gauche
+    P2(g, 0.34 * S, 2.4 * S, 0.12, MET_C.marron, 0, 3.0 * S, TD / 2 + 0.02, { rz: 0.62 });
+    P2(g, 1.1 * S, 1.0 * S, 0.6 * S, MET_C.marron, -TW / 2 - 0.14, 2.3 * S, 0.2 * S);
+    P2(g, 1.16 * S, 0.24 * S, 0.66 * S, MET_C.poste, -TW / 2 - 0.14, 2.72 * S, 0.2 * S);
+  }
+  av.tenue = { metier, pieces };
+  return av.tenue;
+}
+
+// ---- LES OUTILS PORTÉS À LA MAIN ----
+// Chaque outil est un petit groupe qu'on accroche au POING DROIT (rig.armR.coude) : il
+// suit donc le bras et le coude sans qu'on touche à animateRig.
+function outilMesh(nom) {
+  const g = new THREE.Group();
+  const bx = (w, h, d, c, x, y, z, rx, rz) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(w, h, d); m.position.set(x, y, z); if (rx) m.rotation.x = rx; if (rz) m.rotation.z = rz; m.castShadow = true; g.add(m); return m; };
+  const cyl = (r, len, c, x, y, z, rx, rz) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), lam(c)); m.position.set(x, y, z); if (rx) m.rotation.x = rx; if (rz) m.rotation.z = rz; m.castShadow = true; g.add(m); return m; };
+  if (nom === 'balai') { cyl(0.035, 1.5, MET_C.marron, 0, 0.45, 0, 0.25); bx(0.52, 0.1, 0.18, 0x6b4423, 0, -0.28, 0.19); bx(0.5, 0.22, 0.16, 0xd9a441, 0, -0.4, 0.22); }
+  else if (nom === 'pelle') { cyl(0.035, 1.25, MET_C.marron, 0, 0.4, 0, 0.2); bx(0.34, 0.42, 0.06, MET_C.acier, 0, -0.28, 0.14, 0.2); }
+  else if (nom === 'cle') { bx(0.09, 0.62, 0.06, MET_C.acier, 0, 0.1, 0); bx(0.24, 0.16, 0.08, MET_C.acier, 0, 0.42, 0); bx(0.09, 0.12, 0.09, 0x2b2f3a, 0, 0.24, 0); }
+  else if (nom === 'marteau') { cyl(0.035, 0.7, MET_C.marron, 0, 0.16, 0); bx(0.3, 0.14, 0.14, 0x4a5162, 0, 0.5, 0, 0, Math.PI / 2); }
+  else if (nom === 'raclette') { cyl(0.03, 0.5, 0x2b2f3a, 0, 0.1, 0); bx(0.46, 0.06, 0.05, MET_C.acier, 0, 0.36, 0); bx(0.46, 0.05, 0.03, 0x1b1b1b, 0, 0.31, 0); }
+  else if (nom === 'perche') { cyl(0.035, 2.6, MET_C.acier, 0, 0.9, 0, 0.3); bx(0.5, 0.07, 0.06, 0x1b1b1b, 0, 2.1, 0.55); }
+  else if (nom === 'seau') { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.14, 0.3, 10), lam(MET_C.acier)); s.position.y = -0.22; g.add(s); const eau = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.03, 10), lam(0x4fb3e8)); eau.position.y = -0.11; g.add(eau); const anse = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.018, 5, 12), lam(0x2b2f3a)); anse.position.y = -0.08; anse.rotation.y = Math.PI / 2; g.add(anse); }
+  else if (nom === 'lance') { cyl(0.06, 0.5, MET_C.rouge, 0, 0.14, 0.1, 1.2); cyl(0.04, 0.24, MET_C.jaune, 0, 0.2, 0.42, 1.35); bx(0.07, 0.16, 0.07, 0x2b2f3a, 0, 0.02, -0.05); }
+  else if (nom === 'lettre') { bx(0.26, 0.02, 0.19, 0xf4f6fa, 0, -0.05, 0.14, 1.2); bx(0.1, 0.021, 0.07, MET_C.rouge, 0.06, -0.045, 0.14, 1.2); }
+  else if (nom === 'cone') { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 10), lam(MET_C.casqueOrange)); c2.position.y = -0.1; g.add(c2); bx(0.5, 0.05, 0.5, MET_C.casqueOrange, 0, -0.38, 0); }
+  else return null;
+  return g;
+}
+// Donne (ou retire) l'outil que tient un travailleur.
+function donneOutil(av, nom) {
+  if (!av) return null;
+  if (av.outilMesh) { if (av.outilMesh.parent) av.outilMesh.parent.remove(av.outilMesh); av.outilMesh = null; av.outilNom = null; }
+  if (!nom) return null;
+  const g = outilMesh(nom); if (!g) return null;
+  g.position.set(0, -0.95 * S, 0.22 * S);
+  av.rig.armR.coude.add(g); av.outilMesh = g; av.outilNom = nom;
+  return g;
+}
+
+// ---- LES VÉHICULES DE TRAVAIL ----
+// Ils sont construits ici plutôt que dans makeVehicle() (poste B) : on ne touche pas à la
+// physique de conduite, on se contente de rendre l'objet AU MÊME FORMAT — le joueur les
+// prend avec E comme n'importe quelle voiture, puisqu'ils entrent dans city.cars.
+// `c.outils` regroupe les parties mobiles (benne, flèche, godet, échelle, lance à eau),
+// `c.outil` est l'avancement 0→1 de l'animation et `c.outilCible` ce qu'on lui demande.
+function makeVehiculeTravail(kind, couleur, x, z, h) {
+  const g = new THREE.Group(), body = lam(couleur);
+  const bx = (mat, sx, sy, sz, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
+  const cyl = (mat, r, len, px, py, pz, rx, rz, parent) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 9), mat); m.position.set(px, py, pz); if (rx) m.rotation.x = rx; if (rz) m.rotation.z = rz; m.castShadow = true; (parent || g).add(m); return m; };
+  const wheels = [], outils = {};
+  let spec = { max: 17, rev: -5, accel: 11, turn: 1.5, seat: 0 }, W = 2.4, D = 6, rider = false, siege = { x: 0.55, y: 1.35, z: 1.7 };
+  const cabine = (zc, larg = 2.2, haut = 1.5) => {   // cabine commune aux poids lourds
+    bx(body, larg, haut, 1.9, 0, 1.55, zc);
+    bx(glassCar, larg - 0.16, haut * 0.5, 0.06, 0, 1.85, zc + 0.98);
+    for (const sx of [-larg / 2 + 0.05, larg / 2 - 0.05]) bx(glassCar, 0.06, haut * 0.42, 1.2, sx, 1.85, zc);
+    for (const sx of [-0.7, 0.7]) bx(neonMat(0xffffcc), 0.34, 0.22, 0.08, sx, 0.95, zc + 1.0);
+    bx(darkM, larg + 0.2, 0.34, 0.3, 0, 0.62, zc + 1.02);
+  };
+  const roues = (paires, r = 1.25) => { for (const [wx, wz] of paires) { const w = makeWheel(r); w.position.set(wx, 0.42, wz); g.add(w); wheels.push(w); } };
+  const rayures = (sy, sz, len) => { for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) bx(lam(i % 2 ? MET_C.bande : 0xff5c5c), 0.06, 0.22, len / 6 - 0.06, sx * (W / 2 + 0.01), sy, sz - len / 2 + len / 12 + i * len / 6); };
+
+  if (kind === 'benne') {   // CAMION BENNE : la benne bascule vers l'arrière et vide ses gravats
+    W = 2.5; D = 7; spec = { max: 18, rev: -5, accel: 11, turn: 1.35, seat: 0 };
+    bx(darkM, 2.3, 0.42, 6.4, 0, 0.72, 0);
+    cabine(2.3);
+    const benne = new THREE.Group(); benne.position.set(0, 1.05, -2.9); g.add(benne); outils.benne = benne;
+    bx(body, 2.4, 0.2, 4.4, 0, 0, 2.2, benne);                       // le plancher
+    for (const sx of [-1.15, 1.15]) bx(body, 0.14, 1.0, 4.4, sx, 0.5, 2.2, benne);
+    bx(body, 2.4, 1.0, 0.16, 0, 0.5, 0.05, benne);                   // la ridelle arrière
+    for (let i = 0; i < 7; i++) bx(lam(0x8b7355), 0.5, 0.34, 0.5, rnd(-0.9, 0.9), 0.28, 0.7 + i * 0.5, benne);   // les gravats
+    cyl(chrome, 0.07, 1.2, 0, 1.0, -1.4, 0, 0.5);                    // le vérin
+    roues([[-1.15, 2.3], [1.15, 2.3], [-1.15, -1.4], [1.15, -1.4], [-1.15, -3.0], [1.15, -3.0]]);
+    siege = { x: 0.55, y: 1.35, z: 2.5 };
+  } else if (kind === 'grue') {   // GRUE MOBILE : la tourelle pivote, le crochet descend
+    W = 2.5; D = 7.5; spec = { max: 14, rev: -4, accel: 9, turn: 1.15, seat: 0 };
+    bx(darkM, 2.3, 0.5, 7, 0, 0.7, 0);
+    cabine(2.6);
+    bx(lam(MET_C.jaune), 2.5, 0.3, 3.4, 0, 1.0, -1.2);
+    const tour = new THREE.Group(); tour.position.set(0, 1.5, -1.6); g.add(tour); outils.tourelle = tour;
+    bx(lam(MET_C.jaune), 1.8, 1.2, 2.2, 0, 0.5, 0, tour);
+    bx(glassCar, 1.2, 0.6, 0.06, 0, 0.7, 1.12, tour);
+    const fleche = new THREE.Group(); fleche.position.set(0, 0.9, 0.8); fleche.rotation.x = -0.55; tour.add(fleche); outils.fleche = fleche;
+    bx(lam(MET_C.casqueOrange), 0.45, 0.45, 6.4, 0, 0, 3.1, fleche);
+    for (let i = 0; i < 5; i++) bx(lam(0x3b4252), 0.5, 0.06, 0.06, 0, 0.24, 0.6 + i * 1.2, fleche);
+    const crochet = new THREE.Group(); crochet.position.set(0, -0.2, 6.1); fleche.add(crochet); outils.crochet = crochet;
+    const cable = cyl(lam(0x2b2f3a), 0.035, 1, 0, -0.5, 0, 0, 0, crochet); outils.cable = cable;
+    bx(chrome, 0.24, 0.34, 0.24, 0, -1.05, 0, crochet);
+    for (const sx of [-1.25, 1.25]) for (const sz of [1.6, -2.4]) cyl(lam(0x3b4252), 0.16, 0.7, sx, 0.35, sz);   // les stabilisateurs
+    roues([[-1.15, 2.6], [1.15, 2.6], [-1.15, -1.2], [1.15, -1.2], [-1.15, -2.9], [1.15, -2.9]]);
+    siege = { x: 0.55, y: 1.35, z: 2.8 };
+  } else if (kind === 'pelle') {   // PELLETEUSE : bras articulé, godet qui creuse
+    W = 2.4; D = 5.6; spec = { max: 11, rev: -4, accel: 8, turn: 1.5, seat: 0 };
+    bx(darkM, 2.4, 0.7, 4.6, 0, 0.6, 0);
+    for (const sx of [-1.05, 1.05]) { bx(lam(0x3b4252), 0.5, 0.9, 4.8, sx, 0.5, 0); for (let i = 0; i < 8; i++) bx(darkM, 0.56, 0.12, 0.4, sx, 0.06, -2.1 + i * 0.6); }   // chenilles
+    const tour = new THREE.Group(); tour.position.set(0, 1.0, -0.3); g.add(tour); outils.tourelle = tour;
+    bx(lam(MET_C.casqueOrange), 2.0, 1.1, 2.6, 0, 0.55, 0, tour);
+    bx(glassCar, 1.3, 0.7, 0.06, 0, 0.75, 1.32, tour);
+    bx(darkM, 1.6, 0.5, 1.0, 0, 0.5, -1.6, tour);   // le contrepoids
+    const bras = new THREE.Group(); bras.position.set(0.7, 0.7, 1.2); bras.rotation.x = -0.9; tour.add(bras); outils.bras = bras;
+    bx(lam(MET_C.casqueOrange), 0.34, 0.4, 2.6, 0, 0, 1.2, bras);
+    const avant = new THREE.Group(); avant.position.set(0, 0, 2.4); avant.rotation.x = 1.5; bras.add(avant); outils.avantBras = avant;
+    bx(lam(MET_C.casqueOrange), 0.3, 0.34, 2.0, 0, 0, 0.95, avant);
+    const godet = new THREE.Group(); godet.position.set(0, 0, 1.9); avant.add(godet); outils.godet = godet;
+    bx(lam(0x8f98ab), 0.9, 0.7, 0.7, 0, -0.2, 0.3, godet);
+    for (let i = 0; i < 4; i++) bx(chrome, 0.1, 0.1, 0.28, -0.3 + i * 0.2, -0.45, 0.66, godet);   // les dents
+    roues([]);
+    siege = { x: 0, y: 1.5, z: 0.5 };
+  } else if (kind === 'tracteur') {   // TRACTEUR + REMORQUE
+    W = 2.2; D = 6.4; spec = { max: 15, rev: -4, accel: 9, turn: 1.6, seat: 0 };
+    bx(body, 1.5, 0.9, 2.6, 0, 1.0, 1.2);
+    bx(body, 1.9, 1.3, 1.5, 0, 1.5, -0.4);
+    bx(glassCar, 1.7, 0.8, 0.06, 0, 1.9, 0.34);
+    cyl(darkM, 0.09, 0.9, 0, 2.2, 1.2);   // le pot d'échappement vertical
+    const rem = new THREE.Group(); rem.position.set(0, 0, -3.0); g.add(rem); outils.remorque = rem;
+    bx(lam(0x8b5a2b), 2.0, 0.2, 3.2, 0, 0.95, -0.8, rem);
+    for (const sx of [-0.95, 0.95]) bx(lam(0x8b5a2b), 0.12, 0.7, 3.2, sx, 1.35, -0.8, rem);
+    bx(lam(0x8b5a2b), 2.0, 0.7, 0.12, 0, 1.35, -2.35, rem);
+    bx(darkM, 0.16, 0.16, 1.2, 0, 0.85, 0.7, rem);   // le timon
+    for (const [wx, wz] of [[-0.95, -1.2], [0.95, -1.2]]) { const w = makeWheel(1.0); w.position.set(wx, 0.35, wz); rem.add(w); wheels.push(w); }
+    roues([[-0.85, 1.7], [0.85, 1.7]], 0.9); roues([[-1.0, -0.8], [1.0, -0.8]], 1.5);
+    siege = { x: 0, y: 1.9, z: -0.3 };
+  } else if (kind === 'pompier') {   // CAMION DE POMPIERS : échelle, gyrophares, lance à eau
+    W = 2.6; D = 8; spec = { max: 22, rev: -6, accel: 14, turn: 1.3, seat: 0 };
+    bx(lam(MET_C.rouge), 2.5, 0.5, 7.4, 0, 0.75, 0);
+    cabine(2.9, 2.5, 1.7);
+    bx(lam(MET_C.rouge), 2.5, 1.5, 4.4, 0, 1.5, -1.5);
+    for (let i = 0; i < 3; i++) for (const sx of [-1.27, 1.27]) bx(lam(MET_C.bande), 0.06, 0.7, 1.1, sx, 1.4, -3.0 + i * 1.5);   // les volets à outils
+    rayures(0.95, -1.5, 4.4);
+    const gyros = [];
+    for (const sx of [-0.8, 0.8]) gyros.push(bx(neonMat(0x3b7bff), 0.34, 0.16, 0.3, sx, 2.5, 2.6));
+    for (const sx of [-1.1, 1.1]) gyros.push(bx(neonMat(0xff3030), 0.24, 0.14, 0.24, sx, 2.35, -3.5));
+    outils.gyros = gyros;
+    // l'échelle : un socle qui bascule et une section qui coulisse
+    const ech = new THREE.Group(); ech.position.set(0, 2.35, -2.4); g.add(ech); outils.echelle = ech;
+    bx(lam(MET_C.bande), 0.9, 0.18, 4.6, 0, 0, 1.8, ech);
+    for (let i = 0; i < 9; i++) bx(chrome, 0.85, 0.06, 0.08, 0, 0.1, 0.1 + i * 0.5, ech);
+    const ech2 = new THREE.Group(); ech.add(ech2); outils.echelle2 = ech2;
+    bx(chrome, 0.7, 0.14, 4.2, 0, 0.2, 2.0, ech2);
+    for (let i = 0; i < 8; i++) bx(lam(MET_C.bande), 0.66, 0.05, 0.07, 0, 0.28, 0.3 + i * 0.5, ech2);
+    // la lance à eau, sur la plage avant du toit
+    const lance = new THREE.Group(); lance.position.set(0, 2.45, 1.2); g.add(lance); outils.lance = lance;
+    cyl(lam(MET_C.jaune), 0.11, 0.8, 0, 0.15, 0.2, 1.15, 0, lance);
+    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.42, 7, 10, 1, true), new THREE.MeshLambertMaterial({ color: 0x9fdcff, emissive: 0x3a7fbf, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+    jet.rotation.x = Math.PI / 2; jet.position.set(0, 0.3, 4.0); jet.visible = false; lance.add(jet); outils.jet = jet;
+    roues([[-1.2, 2.9], [1.2, 2.9], [-1.2, -1.6], [1.2, -1.6], [-1.2, -3.3], [1.2, -3.3]], 1.3);
+    siege = { x: 0.6, y: 1.45, z: 3.1 };
+  } else if (kind === 'fourgon') {   // FOURGON DE LA MAIRIE : le petit utilitaire des employés
+    W = 2.2; D = 5.4; spec = { max: 21, rev: -6, accel: 14, turn: 1.8, seat: 0 };
+    bx(body, 2.1, 1.3, 5.0, 0, 1.1, 0);
+    bx(body, 2.05, 0.9, 1.6, 0, 1.95, -0.9);
+    bx(glassCar, 1.9, 0.75, 0.06, 0, 1.75, 2.52);
+    for (const sx of [-1.03, 1.03]) bx(glassCar, 0.06, 0.6, 1.3, sx, 1.75, 1.4);
+    for (const sx of [-0.7, 0.7]) bx(neonMat(0xffffcc), 0.32, 0.2, 0.08, sx, 0.95, 2.55);
+    bx(darkM, 2.2, 0.3, 0.3, 0, 0.6, 2.56);
+    for (const sx of [-1.06, 1.06]) bx(lam(MET_C.fluo), 0.05, 0.26, 3.2, sx, 1.1, -0.4);   // la bande fluo de la mairie
+    outils.gyros = [bx(neonMat(MET_C.casqueOrange), 0.8, 0.16, 0.3, 0, 2.5, 0.4)];   // le gyrophare orange
+    // la galerie de toit avec les cônes et le filet de chantier
+    bx(chrome, 1.9, 0.06, 3.0, 0, 2.42, -0.6);
+    for (let i = 0; i < 3; i++) { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 8), lam(MET_C.casqueOrange)); c2.position.set(-0.6 + i * 0.6, 2.7, -0.6); g.add(c2); }
+    roues([[-0.95, 1.7], [0.95, 1.7], [-0.95, -1.7], [0.95, -1.7]], 1.0);
+    siege = { x: 0.5, y: 1.3, z: 1.4 };
+  } else if (kind === 'velo') {   // LE VÉLO DU FACTEUR : une sacoche de chaque côté de la roue arrière
+    W = 0.9; D = 2; rider = true; spec = { max: 15, rev: -4, accel: 12, turn: 2.4, seat: 1.08, lean: 0.2 };
+    const t1 = bx(body, 0.06, 0.06, 1.15, 0, 0.78, 0.05); t1.rotation.x = 0.25;
+    const t2 = bx(body, 0.06, 0.06, 0.9, 0, 0.62, -0.1); t2.rotation.x = -0.6;
+    bx(body, 0.06, 0.62, 0.06, 0, 0.72, 0.5); bx(body, 0.06, 0.55, 0.06, 0, 0.78, -0.42);
+    bx(chrome, 0.85, 0.05, 0.05, 0, 1.12, 0.52); for (const sx of [-0.4, 0.4]) bx(darkM, 0.1, 0.07, 0.07, sx, 1.12, 0.52);
+    bx(darkM, 0.32, 0.08, 0.42, 0, 1.12, -0.45); bx(chrome, 0.03, 0.25, 0.03, 0, 1.0, -0.45);
+    bx(lam(MET_C.poste), 0.5, 0.32, 0.42, 0, 1.02, 0.85);   // la caisse à courrier du guidon
+    bx(chrome, 0.6, 0.05, 0.5, 0, 0.9, -0.6);              // le porte-bagages
+    // LES DEUX SACOCHES, de part et d'autre de la roue arrière
+    for (const sx of [-0.3, 0.3]) {
+      bx(lam(MET_C.marron), 0.16, 0.46, 0.6, sx, 0.62, -0.65);
+      bx(lam(MET_C.poste), 0.17, 0.12, 0.62, sx, 0.83, -0.65);
+    }
+    for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.x = 0.35; w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz); }
+    siege = { x: 0, y: 1.08, z: -0.2 };
+  }
+  g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
+  const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
+  const c = { g, wheels, x, y: 0, z, h, color: couleur, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h], outils, outil: 0, outilCible: 0, siege, travail: true };
+  // Un véhicule de travail passe sa vie à rouler : s'il restait un obstacle FIXE de la grille
+  // de navigation, la police et les bots recalculaient leurs itinéraires à chaque fois qu'il
+  // bougeait. Comme les voitures de la circulation, il est marqué « ai ».
+  solid.ai = true;
+  vehicleSolid(c); settleVehicle(c);
+  return c;
+}
+// L'animation des parties mobiles : elle tourne pour TOUS les véhicules de travail, qu'ils
+// soient conduits par un employé ou par le joueur.
+function outilsVehiculesTick(dt) {
+  for (const c of city.cars) {
+    if (!c || !c.travail) continue;
+    const o = c.outils || {};
+    // le gyrophare ne clignote que quand le véhicule SERT (en intervention ou conduit) ;
+    // à l'arrêt il reste éteint, sinon toute la ville clignotait en permanence
+    if (o.gyros) { const on = (c.gyro || drive.car === c) ? (simTime % 0.7) < 0.35 : false; for (const m of o.gyros) m.visible = on; }
+    if (Math.abs(c.outil - c.outilCible) < 0.002) { c.outil = c.outilCible; }
+    else c.outil += clamp(c.outilCible - c.outil, -dt * 0.5, dt * 0.5);
+    const u = c.outil;
+    if (o.benne) o.benne.rotation.x = -0.62 * u;
+    if (o.tourelle && c.kind === 'grue') o.tourelle.rotation.y = 1.5 * u;
+    if (o.crochet) { o.crochet.position.y = -0.2 - 3.2 * u; if (o.cable) { o.cable.scale.y = 1 + 6.4 * u; o.cable.position.y = -0.5 - 3.2 * u; } }
+    if (o.bras) { o.bras.rotation.x = -0.9 + 0.75 * u; if (o.avantBras) o.avantBras.rotation.x = 1.5 - 0.95 * u; if (o.godet) o.godet.rotation.x = -0.7 + 1.5 * u; }
+    if (o.echelle) { o.echelle.rotation.x = -0.95 * u; if (o.echelle2) o.echelle2.position.z = 3.6 * u; }
+    if (o.jet) {
+      // la lance à eau : le jet ne sort que quand la lance est déployée
+      const mouille = c.kind === 'pompier' && u > 0.55;
+      o.jet.visible = mouille;
+      if (mouille) {
+        o.jet.scale.set(1, 0.8 + Math.sin(simTime * 12) * 0.12, 1);
+        if (o.lance) o.lance.rotation.y = Math.sin(simTime * 1.2) * 0.35;
+        arroseAutour(c, dt);
+      }
+    }
+  }
+}
+// Le jet d'eau éteint ce qu'il touche : on cherche l'incendie devant la lance et on fait
+// baisser sa force. C'est ce qui permet AU JOUEUR d'aider les pompiers en prenant le camion.
+function arroseAutour(c, dt) {
+  const bout = 8.5, cs = Math.cos(c.h), sn = Math.sin(c.h);
+  const jx = c.x + sn * bout, jz = c.z + cs * bout;
+  if (simTime > (c.gouttesT || 0)) { c.gouttesT = simTime + 0.14; burst(jx + rnd(-1, 1), (c.y || 0) + 1.6 + rnd(-0.4, 0.6), jz + rnd(-1, 1), 0x9fdcff, 3); }
+  for (const f of city.incendies) {
+    if (Math.hypot(f.x - jx, f.z - jz) > 6) continue;
+    f.force = Math.max(0, f.force - dt * 16);
+    if (drive.car === c && !f.aide) { f.aide = true; msg('💧 Continue d\'arroser, le feu baisse !', 1800); }
+  }
+}
+// Actionne l'outil du véhicule : benne, flèche, godet, échelle, lance à eau.
+function actionneOutil(c) {
+  if (!c || !c.travail) return false;
+  c.outilCible = c.outilCible > 0.5 ? 0 : 1;
+  const quoi = c.kind === 'benne' ? (c.outilCible ? '🚛 La benne se lève' : '🚛 La benne se baisse')
+    : c.kind === 'grue' ? (c.outilCible ? '🏗️ La flèche pivote, le crochet descend' : '🏗️ On remonte le crochet')
+    : c.kind === 'pelle' ? (c.outilCible ? '🚜 Le godet creuse' : '🚜 Le bras se replie')
+    : c.kind === 'pompier' ? (c.outilCible ? '🚒 Échelle déployée, LANCE À EAU ouverte !' : '🚒 On range la lance et l\'échelle')
+    : c.kind === 'tracteur' ? '🚜 La remorque suit !' : '🔧 Outil actionné';
+  msg(quoi, 1800); sfx.pok();
+  return true;
+}
+
+// ---- LE MOBILIER DU TRAVAIL : chantier, nids-de-poule, détritus, boîtes aux lettres, feux ----
+const METIERS = { prochainFeu: 0, prochainNid: 0, prochainDetritus: 0, scanT: 0 };
+let FILET_TEX = null;
+// Le filet de chantier rouge et blanc : des bandes larges, et de VRAIES mailles (des trous
+// découpés dans la texture) — un filet plein ressemblait à une palissade peinte.
+function filetTexture() {
+  if (FILET_TEX) return FILET_TEX;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? '#e02020' : '#f4f6fa'; g.fillRect(i * 16, 0, 16, 64); }
+  g.globalCompositeOperation = 'destination-out';
+  for (let y = 0; y < 64; y += 8) for (let x = 0; x < 64; x += 8) g.fillRect(x + 2, y + 2, 5, 5);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 1); shared.add(t);
+  FILET_TEX = t; return t;
+}
+function coneChantier(parent, x, y, z) {
+  const g2 = new THREE.Group(); g2.position.set(x, y, z); parent.add(g2);
+  const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.66, 10), lam(MET_C.casqueOrange)); c2.position.y = 0.4; c2.castShadow = true; g2.add(c2);
+  const b2 = new THREE.Mesh(unitRound, lam(0xf4f6fa)); b2.scale.set(0.34, 0.12, 0.34); b2.position.y = 0.44; g2.add(b2);
+  const s2 = new THREE.Mesh(unitRound, lam(MET_C.casqueOrange)); s2.scale.set(0.56, 0.07, 0.56); s2.position.y = 0.05; g2.add(s2);
+  return g2;
+}
+// POSE UN CHANTIER : cônes, filet rouge et blanc qui barre une voie, panneau « TRAVAUX »,
+// rubalise. Le chantier dépose AUSSI un obstacle dans `solids` : la circulation le voit et
+// le contourne. retireChantier() rend tout, et `solids` retrouve exactement son compte.
+function poseChantier(x, z, ang = 0) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ang; worldGroup.add(g);
+  for (const dx of [-2.5, -1.2, 1.2, 2.5]) coneChantier(g, dx, 0, 1.3);
+  for (const dx of [-2.5, 2.5]) coneChantier(g, dx, 0, -1.3);
+  // le filet : deux lés tendus entre trois piquets, du côté de la chaussée
+  const mat = new THREE.MeshLambertMaterial({ map: filetTexture(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+  for (const dz of [1.55, -1.55]) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 1.1), mat);
+    p.position.set(0, 0.72, dz); g.add(p);
+  }
+  for (const dx of [-2.8, 0, 2.8]) for (const dz of [1.55, -1.55]) {
+    const pi = new THREE.Mesh(unitRound, lam(0x2b2f3a)); pi.scale.set(0.1, 1.3, 0.1); pi.position.set(dx, 0.65, dz); g.add(pi);
+  }
+  // la rubalise, tendue plus haut en travers
+  const rub = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.16), new THREE.MeshBasicMaterial({ map: filetTexture(), transparent: true, side: THREE.DoubleSide }));
+  rub.position.set(0, 1.35, 1.55); g.add(rub);
+  // le panneau « TRAVAUX » : un losange orange sur un pied
+  const pied = new THREE.Mesh(unitRound, lam(0x8f98ab)); pied.scale.set(0.09, 1.6, 0.09); pied.position.set(2.9, 0.8, 0); g.add(pied);
+  const los = new THREE.Mesh(unitRound, lam(MET_C.casqueOrange)); los.scale.set(0.9, 0.9, 0.08); los.position.set(2.9, 1.85, 0); los.rotation.z = Math.PI / 4; g.add(los);
+  const txt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.42), new THREE.MeshBasicMaterial({ map: textTexture('TRAVAUX'), transparent: true }));
+  txt.position.set(2.9, 2.75, 0.06); g.add(txt);
+  // L'OBSTACLE VU PAR LA CIRCULATION : sans lui, les voitures traversaient le chantier.
+  const large = Math.abs(Math.sin(ang)) > 0.5;
+  const solid = box(x, 0.6, z, large ? 3.4 : 6, 1.2, large ? 6 : 3.4, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, chantier: true });
+  navSale();
+  const ch = { g, solid, x, z, t: simTime };
+  city.chantiers.push(ch);
+  return ch;
+}
+function retireChantier(ch) {
+  if (!ch) return;
+  worldGroup.remove(ch.g);
+  if (ch.solid) { worldGroup.remove(ch.solid.mesh); const k = solids.indexOf(ch.solid); if (k >= 0) solids.splice(k, 1); }
+  const i = city.chantiers.indexOf(ch); if (i >= 0) city.chantiers.splice(i, 1);
+  sgridSale(); navSale();
+}
+// Un nid-de-poule : un trou noir dans la chaussée et quelques gravats. C'est une « casse »
+// comme une autre : les employés viennent le reboucher.
+function poseNidDePoule(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const trou = new THREE.Mesh(new THREE.CircleGeometry(0.95, 14), lam(0x14161c));
+  trou.rotation.x = -Math.PI / 2; trou.position.y = 0.055; g.add(trou);
+  const bord = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 14), lam(0x4a4f58));
+  bord.rotation.x = -Math.PI / 2; bord.position.y = 0.05; g.add(bord);
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(unitRound, lam(0x6b7280)); const a = i / 6 * 6.28; m.scale.setScalar(rnd(0.12, 0.24)); m.position.set(Math.cos(a) * rnd(1.0, 1.4), 0.1, Math.sin(a) * rnd(1.0, 1.4)); g.add(m); }
+  const n = { x, z, g, kind: 'nid', broken: true, t: simTime };
+  city.nidsPoule.push(n); return n;
+}
+function boucheNidDePoule(n) {
+  const i = city.nidsPoule.indexOf(n); if (i >= 0) city.nidsPoule.splice(i, 1);
+  if (n.g) worldGroup.remove(n.g);
+}
+// Un détritus sur le trottoir : c'est le gagne-pain des balayeurs.
+function poseDetritus(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0.16, z); worldGroup.add(g);
+  const c = pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0xf4f6fa, 0x5cc453]);
+  const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(rnd(0.16, 0.3), rnd(0.1, 0.2), rnd(0.16, 0.3));
+  m.rotation.y = rnd(0, 3); m.castShadow = true; g.add(m);
+  const d = { x, z, g };
+  city.detritus.push(d); return d;
+}
+// Une boîte aux lettres devant une maison : le facteur y glisse une lettre, le volet bat.
+function boiteAuxLettres(x, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g);
+  const bx = (w, h, d, c, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(w, h, d); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
+  bx(0.1, 1.0, 0.1, 0x6b7280, 0, 0.5, 0);
+  bx(0.46, 0.42, 0.34, MET_C.poste, 0, 1.2, 0);
+  bx(0.5, 0.06, 0.38, 0x8b6f14, 0, 1.44, 0);
+  const volet = new THREE.Group(); volet.position.set(0, 1.24, 0.17); g.add(volet);
+  bx(0.34, 0.16, 0.04, 0x3b2a16, 0, 0, 0.01, volet);
+  const b = { x, z, ry, g, volet, lettres: 0 };
+  city.boites.push(b); return b;
+}
+// ---- L'INCENDIE ----
+function declencheIncendie(x, z, force) {
+  if (!city.on) return null;
+  if (city.incendies.length >= 2) return null;   // deux feux au plus : au-delà, ça rame et ça n'apporte rien
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const flammes = [];
+  for (let i = 0; i < 6; i++) {
+    const f2 = new THREE.Mesh(new THREE.ConeGeometry(rnd(0.35, 0.7), rnd(1.2, 2.4), 7),
+      new THREE.MeshLambertMaterial({ color: i % 2 ? 0xff8a20 : 0xffd23f, emissive: 0xff5a00, emissiveIntensity: 1, transparent: true, opacity: 0.88 }));
+    f2.position.set(rnd(-1.3, 1.3), rnd(0.6, 1.2), rnd(-1.3, 1.3)); g.add(f2); flammes.push(f2);
+  }
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.6, depthWrite: false }));
+  halo.scale.set(11, 11, 1); halo.position.y = 1.6; g.add(halo);
+  const f = { x, z, g, flammes, halo, t: simTime, force: force || 100, cd: 0, aide: false };
+  city.incendies.push(f);
+  sfx.noise(.7, 420, .12); sfx.tone(90, 0, .5, 'sawtooth', .05, 40);
+  msg('🔥 AU FEU ! La caserne envoie le camion', 3000);
+  chat(null, '🔥 Un incendie s\'est déclaré en ville — les pompiers arrivent !');
+  return f;
+}
+function incendiesTick(dt) {
+  for (let i = city.incendies.length - 1; i >= 0; i--) {
+    const f = city.incendies[i];
+    const k = clamp(f.force / 100, 0, 1);
+    for (let j = 0; j < f.flammes.length; j++) f.flammes[j].scale.setScalar((0.65 + Math.sin(simTime * 8 + j * 1.7) * 0.25) * (0.2 + k));
+    if (f.halo) f.halo.material.opacity = 0.12 + 0.5 * k;
+    // fumée et crépitement : au rythme lent, sinon on noie l'image de particules
+    if (simTime > f.cd) {
+      f.cd = simTime + 0.6;
+      burst(f.x + rnd(-1.2, 1.2), 2.6 + rnd(0, 1.6), f.z + rnd(-1.2, 1.2), 0x54585f, 2);
+      if (Math.random() < 0.4) sfx.noise(.22, 360, .025);
+    }
+    // filet de sécurité : un feu que personne n'éteint finit par s'épuiser tout seul
+    if (simTime - f.t > 240) f.force -= dt * 10;
+    if (f.force <= 0) {
+      worldGroup.remove(f.g); city.incendies.splice(i, 1);
+      burst(f.x, 1.4, f.z, 0xf4f6fa, 12); sfx.check();
+      msg('💧 Feu éteint ! Merci les pompiers 🚒', 2600);
+      // le joueur a arrosé avec le camion : son petit boulot de pompier est rempli
+      if (f.aide && city.boulot && city.boulot.metier === 'pompier') boulotAvance(1);
+    }
+  }
+}
+
+// ---- CONSTRUCTION : le dépôt, la caserne, les équipes, les boîtes aux lettres ----
+// Le dépôt et la caserne se posent sur le premier emplacement LIBRE de leur liste : la ville
+// bouge d'un round à l'autre (le poste I ajoute des quartiers), coder les coordonnées en dur
+// aurait fini par planter un hangar au milieu d'un immeuble.
+function placeLibre(cands, r) {
+  // On ne regarde que les GROS obstacles (murs, immeubles) : un lampadaire ou un arbre isolé
+  // ne doit pas disqualifier un terrain, sinon plus aucun emplacement ne passait le filtre.
+  // Et on refuse de bâtir sur la chaussée : le hangar aurait bouché une rue.
+  for (const [x, z] of cands) {
+    const gene = solidsAutour(x, z, r + 2).some(o => !o.deco && !o.trottoir && !o.veh && !o.sol && o.h > 0.5
+      && (o.w > 2.5 || o.d > 2.5)
+      && Math.abs(o.x - x) < o.w / 2 + r && Math.abs(o.z - z) < o.d / 2 + r);
+    const surRoute = (city.routes || []).some(rt => Math.abs(x - rt.x) < rt.w / 2 + 4 && Math.abs(z - rt.z) < rt.d / 2 + 4);
+    if (!gene && !surRoute) return [x, z];
+  }
+  return cands[cands.length - 1];
+}
+function creerTravailleur(metier, nom, x, z, opt = {}) {
+  const av = buildAvatar({ name: nom, jersey: 0, pants: PAL.pants[0], cap: PAL.cap[0], num: 1,
+    hair: opt.hair ?? 1, hairColor: opt.hairColor ?? 0, m: 25, f: 12 });
+  av.casqueOrange = !!opt.orange;
+  tenueMetier(av, metier);
+  const w = { name: nom, av, metier, pos: new THREE.Vector3(x, 0, z), facing: opt.face || 0,
+    speed: opt.speed || 3.2, t: 0, veh: null, base: [x, z], route: null, vroute: null, bloqueT: 0 };
+  av.group.position.copy(w.pos);
+  const m = { bot: w, metier, etat: 'repos', cible: null };
+  w.m = m; city.metiers.push(m);
+  return m;
+}
+function metiersReset() {
+  for (const m of (city.metiers || [])) if (m.bot && m.bot.av) scene.remove(m.bot.av.group);
+  city.metiers = []; city.chantiers = []; city.incendies = []; city.detritus = []; city.boites = [];
+  city.nidsPoule = []; city.depot = null; city.caserne = null;
+  city.boulot = null; city.boulotNear = null; city.horaires = true;
+  METIERS.employes = []; METIERS.pompiers = []; METIERS.balayeurs = []; METIERS.laveurs = []; METIERS.facteurs = [];
+  METIERS.prochainFeu = 0; METIERS.prochainNid = 0; METIERS.prochainDetritus = 0; METIERS.repos = 0;
+}
+function buildMetiers() {
+  metiersReset();
+  const hangar = (x, z, w, d, coul, titre, sous) => {
+    plat(x, 0.16, z, w, d, 0x4a5162, { studs: false, noRoute: true }, 0.06);
+    box(x, 2.4, z - d / 2 + 0.2, w, 4.6, 0.4, coul, { studs: false, noRoute: true });
+    box(x - w / 2 + 0.2, 2.4, z, 0.4, 4.6, d, coul, { studs: false, noRoute: true });
+    box(x + w / 2 - 0.2, 2.4, z, 0.4, 4.6, d, coul, { studs: false, noRoute: true });
+    box(x, 4.9, z, w + 0.8, 0.4, d + 0.8, 0x3b4252, { deco: true, studs: false });
+    box(x, 5.7, z - d / 2, w * 0.7, 1.2, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, coul) }), deco: true, noEdges: true });
+    sign(x, 0.2, z + d / 2 + 1.6, sous);
+  };
+  // ---- LE DÉPÔT MUNICIPAL : le garage des employés, balayeurs, laveurs et facteurs ----
+  const [dx, dz] = placeLibre([[40, 130], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
+  city.depot = { x: dx, z: dz };
+  hangar(dx, dz, 22, 14, 0xffa62b, '🏗️ DÉPÔT MUNICIPAL', '🏗️ Dépôt municipal · les véhicules de travail se prennent avec E');
+  for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 5.4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
+  for (let i = 0; i < 6; i++) { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 9), lam(MET_C.casqueOrange)); c2.position.set(dx + 5 + (i % 3) * 0.8, 0.5, dz - 5.4 + Math.floor(i / 3) * 0.8); worldGroup.add(c2); }
+  city.zones.push({ name: 'Dépôt municipal', emoji: '🏗️', x1: dx - 14, x2: dx + 14, z1: dz - 12, z2: dz + 12,
+    hint: '🏗️ Dépôt municipal : camion benne, grue, pelleteuse, tracteur, fourgon — E pour monter, O pour l\'outil' });
+  // ---- LA CASERNE DES POMPIERS ----
+  const [kx, kz] = placeLibre([[-40, 130], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
+  city.caserne = { x: kx, z: kz };
+  hangar(kx, kz, 18, 13, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose avec O');
+  box(kx, 3.4, kz + 5, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
+  for (const sx of [-6, 6]) box(kx + sx, 1.2, kz + 4.4, 1.6, 2.4, 0.3, MET_C.rouge, { deco: true, studs: false });
+  city.zones.push({ name: 'Caserne', emoji: '🚒', x1: kx - 12, x2: kx + 12, z1: kz - 11, z2: kz + 11,
+    hint: '🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau' });
+  // ---- LES VÉHICULES DE TRAVAIL (tous conduisibles : ils entrent dans city.cars) ----
+  const fourgon = makeVehiculeTravail('fourgon', 0xf4f6fa, dx - 7, dz + 9, 0);
+  const benne = makeVehiculeTravail('benne', MET_C.casqueOrange, dx - 1, dz + 10, 0);
+  const grue = makeVehiculeTravail('grue', MET_C.jaune, dx + 6, dz + 10, 0);
+  const pelle = makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 12, dz + 4, Math.PI / 2);
+  const tracteur = makeVehiculeTravail('tracteur', 0x2f8f4a, dx - 12, dz + 3, Math.PI / 2);
+  const velo = makeVehiculeTravail('velo', MET_C.poste, dx - 9, dz + 5, 0);
+  const camion = makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 9, 0);
+  city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion);
+  // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
+  const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 4, { orange: true });
+  const E2 = creerTravailleur('employe', 'Gaston', dx - 3, dz + 4, {});
+  const E3 = creerTravailleur('employe', 'Rachid', dx - 1, dz + 4, { orange: true, hair: 0 });
+  METIERS.employes = [E1, E2, E3]; E1.bot.veh = fourgon;
+  const P1 = creerTravailleur('pompier', 'Capitaine Léo', kx - 3, kz + 4, {});
+  const P2 = creerTravailleur('pompier', 'Sam', kx, kz + 4, { hair: 0 });
+  const P3 = creerTravailleur('pompier', 'Nina', kx + 3, kz + 4, { hair: 2, hairColor: 2 });
+  METIERS.pompiers = [P1, P2, P3]; P1.bot.veh = camion;
+  METIERS.balayeurs = [creerTravailleur('balayeur', 'Fatou', dx + 3, dz + 4, { hair: 2, speed: 2.4 }),
+    creerTravailleur('balayeur', 'Jules', dx + 5, dz + 4, { speed: 2.4 })];
+  METIERS.laveurs = [creerTravailleur('laveur', 'Yanis', dx + 7, dz + 4, { hair: 0 })];
+  const F1 = creerTravailleur('facteur', 'Paulette', dx - 9, dz + 4, { hair: 2, hairColor: 1, speed: 3.0 });
+  METIERS.facteurs = [F1]; F1.bot.veh = velo;
+  // les outils : chacun part avec le sien à la main
+  for (const m of city.metiers) if (m.metier !== 'employe' && m.metier !== 'pompier') donneOutil(m.bot.av, METIERS_DEF[m.metier].outil);
+  for (const m of METIERS.balayeurs) m.bot.poubelle = poubelleRoulante();
+  // ---- LES BOÎTES AUX LETTRES devant les maisons ----
+  poseBoites(9);
+  // ---- le premier rendez-vous de chaque événement ----
+  METIERS.prochainDetritus = simTime + 6;
+  METIERS.prochainNid = simTime + 55;
+  METIERS.prochainFeu = simTime + 100;
+}
+// La poubelle roulante que pousse le balayeur.
+function poubelleRoulante() {
+  const g = new THREE.Group(); worldGroup.add(g);
+  const m = new THREE.Mesh(unitRound, lam(0x2f6f4a)); m.scale.set(0.7, 0.9, 0.6); m.position.y = 0.55; m.castShadow = true; g.add(m);
+  const cv = new THREE.Mesh(unitRound, lam(0x1f4a30)); cv.scale.set(0.76, 0.1, 0.66); cv.position.y = 1.05; g.add(cv);
+  for (const sx of [-0.3, 0.3]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.08, 9), lam(0x1b1b1b)); r.rotation.z = Math.PI / 2; r.position.set(sx, 0.13, -0.2); g.add(r); }
+  const b = new THREE.Mesh(unitRound, lam(0x8f98ab)); b.scale.set(0.06, 0.5, 0.06); b.position.set(0, 1.2, -0.3); g.add(b);
+  return g;
+}
+// Les boîtes aux lettres se posent sur les trottoirs, du côté des maisons et bien espacées.
+function poseBoites(n) {
+  const tr = (city.trottoirs || []).filter(t => Math.max(t.w, t.d) > 7);
+  const pris = [];
+  for (const t of tr) {
+    if (city.boites.length >= n) break;
+    const ox = t.alongZ ? t.side * 1.1 : 0, oz = t.alongZ ? 0 : t.side * 1.1;
+    const x = t.x + ox, z = t.z + oz;
+    if (pris.some(p => Math.hypot(p[0] - x, p[1] - z) < 34)) continue;
+    if (npcBlocked(x, 0.3, z, 0.6)) continue;
+    pris.push([x, z]);
+    boiteAuxLettres(x, z, Math.atan2(-ox, -oz));
+  }
+}
+
+// ---- DÉPLACEMENTS DES TRAVAILLEURS ----
+function metierSync(w) {
+  const av = w.av;
+  av.group.position.copy(w.pos); av.group.position.y -= (av.rig.baisse || 0);
+  av.group.rotation.y = w.facing;
+}
+function metierDit(w, txt) {
+  bubble(w.av, txt);
+  if (Math.hypot(P.pos.x - w.pos.x, P.pos.z - w.pos.z) < 30) chat(w.name, txt, '#ffd23f');
+}
+// Heures ouvrables : de 8 h à 18 h (l'horloge du jeu fait 7 h → 19 h en six minutes). La nuit,
+// tout le monde rentre au dépôt. `city.horaires = false` débranche l'horaire — c'est ce que
+// font les tests, sinon ils dépendaient de la phase du cycle jour/nuit.
+function metierOuvert() { return city.horaires === false || (day.h >= 8 && day.h <= 18); }
+// Marche vers un point en suivant la grille des PIÉTONS. L'A* coûte cher : on ne recalcule
+// l'itinéraire que toutes les 4 à 6 s, et le décalage aléatoire évite que les dix
+// travailleurs le refassent tous sur la même image.
+function metierMarche(w, tx, tz, dt, seuil = 1.2) {
+  const dist = Math.hypot(tx - w.pos.x, tz - w.pos.z);
+  if (dist < seuil) { w.route = null; animateRig(w.av.rig, 'idle', 0, dt, simTime); metierSync(w); return dist; }
+  if (!w.route || !w.route.length || simTime > (w.routeT || 0)
+    || !w.routeCible || Math.hypot(w.routeCible[0] - tx, w.routeCible[1] - tz) > 3) {
+    w.routeT = simTime + 4 + Math.random() * 2; w.routeCible = [tx, tz];
+    const p = navEnPieton(() => navPath(w.pos.x, w.pos.z, tx, tz));
+    w.route = (p && p.length) ? p.concat([[tx, tz]]) : [[tx, tz]];
+  }
+  while (w.route.length > 1 && Math.hypot(w.route[0][0] - w.pos.x, w.route[0][1] - w.pos.z) < 1.6) w.route.shift();
+  const wp = w.route[0], dx = wp[0] - w.pos.x, dz = wp[1] - w.pos.z, dd = Math.hypot(dx, dz) || 1;
+  const pas = w.speed * dt;
+  const o = { x: w.pos.x, y: w.pos.y, z: w.pos.z };
+  const bloque = npcMove(o, dx / dd * pas, dz / dd * pas, 0.4);
+  w.pos.x = o.x; w.pos.z = o.z;
+  w.pos.y = groundUnder(w.pos.x, w.pos.z, null, w.pos.y + 1.2);
+  w.facing = Math.atan2(dx, dz);
+  // Coincé contre une bordure : au bout de 3 s on le pose sur son point de passage. Sans ça,
+  // un employé restait planté au bord du trottoir et le chantier n'était jamais posé.
+  w.bloqueT = bloque ? (w.bloqueT || 0) + dt : 0;
+  if (w.bloqueT > 3) { w.bloqueT = 0; w.pos.x = wp[0]; w.pos.z = wp[1]; if (w.route.length > 1) w.route.shift(); }
+  animateRig(w.av.rig, 'walk', w.speed, dt, simTime);
+  metierSync(w);
+  return dist;
+}
+// Assied le travailleur à la place du conducteur (repère local du véhicule → monde).
+function metierAuVolant(w, c, v, dt) {
+  const s = c.siege || { x: 0.55, y: 1.3, z: 1.5 }, cs = Math.cos(c.h), sn = Math.sin(c.h);
+  w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
+  w.facing = c.h;
+  animateRig(w.av.rig, c.kind === 'velo' ? 'ride' : 'sit', v, dt, simTime);
+  metierSync(w);
+}
+function metierPassager(w, c, i, dt) {
+  if (!c) return;
+  const s = c.siege || { x: 0.55, y: 1.3, z: 1.5 };
+  const lx = i % 2 ? -s.x : s.x, lz = s.z - 1.3 - Math.floor(i / 2) * 1.1;
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  w.pos.set(c.x + lx * cs + lz * sn, (c.y || 0) + s.y, c.z - lx * sn + lz * cs);
+  w.facing = c.h;
+  animateRig(w.av.rig, 'sit', 0, dt, simTime);
+  metierSync(w);
+}
+// Conduit le véhicule de travail vers un point, en suivant la grille des VOITURES.
+function metierRoule(w, tx, tz, dt, seuil = 6) {
+  const c = w.veh; if (!c) return metierMarche(w, tx, tz, dt);
+  const dist = Math.hypot(tx - c.x, tz - c.z);
+  if (dist < seuil) { w.vroute = null; metierAuVolant(w, c, 0, dt); return dist; }
+  if (!w.vroute || !w.vroute.length || simTime > (w.vrouteT || 0)
+    || !w.vrouteCible || Math.hypot(w.vrouteCible[0] - tx, w.vrouteCible[1] - tz) > 4) {
+    w.vrouteT = simTime + 4 + Math.random() * 2; w.vrouteCible = [tx, tz];
+    const p = navPath(c.x, c.z, tx, tz);
+    w.vroute = (p && p.length) ? p.concat([[tx, tz]]) : [[tx, tz]];
+  }
+  while (w.vroute.length > 1 && Math.hypot(w.vroute[0][0] - c.x, w.vroute[0][1] - c.z) < 3.6) w.vroute.shift();
+  const wp = w.vroute[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
+  const v = Math.min((c.spec ? c.spec.max : 16) * 0.6, 13);
+  const vise = Math.atan2(dx, dz);
+  const da = ((vise - c.h + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  c.h += clamp(da, -2.4 * dt, 2.4 * dt);
+  c.x += Math.sin(c.h) * v * dt; c.z += Math.cos(c.h) * v * dt;
+  c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
+  settleVehicle(c); vehicleSolid(c);
+  for (const wh of c.wheels) wh.rotation.x -= v * dt / 0.45;
+  metierAuVolant(w, c, v, dt);
+  return dist;
+}
+// ---- CE QU'IL Y A À RÉPARER ----
+function chercheCasse() {
+  const dep = city.depot || { x: 0, z: 0 };
+  let best = null, bd = Infinity;
+  for (const b of breakables) {
+    if ((!b.broken && !b.cracked) || b.enCours) continue;
+    const d = Math.hypot(b.x - dep.x, b.z - dep.z); if (d < bd) { bd = d; best = b; }
+  }
+  for (const n of city.nidsPoule) {
+    if (n.enCours) continue;
+    const d = Math.hypot(n.x - dep.x, n.z - dep.z); if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function repareCible(c) {
+  if (!c) return;
+  if (c.kind === 'nid') boucheNidDePoule(c); else repareChose(c);
+  c.enCours = false;
+}
+function ramasseDetritus(d) {
+  const i = city.detritus.indexOf(d); if (i >= 0) city.detritus.splice(i, 1);
+  if (d.g) worldGroup.remove(d.g);
+  sfx.pok(); burst(d.x, 0.4, d.z, 0xc9ced8, 3);
+}
+// L'échelle du laveur de vitres : deux montants et des barreaux, appuyés sur la façade.
+function poseEchelle(vx, vz, fromX, fromZ) {
+  const ang = Math.atan2(fromX - vx, fromZ - vz);
+  const g = new THREE.Group();
+  g.position.set(vx + Math.sin(ang) * 1.5, 0, vz + Math.cos(ang) * 1.5);
+  g.rotation.y = ang; g.rotation.x = -0.18; worldGroup.add(g);
+  for (const sx of [-0.4, 0.4]) { const m = new THREE.Mesh(unitRound, lam(MET_C.acier)); m.scale.set(0.09, 4.6, 0.09); m.position.set(sx, 2.3, 0); m.castShadow = true; g.add(m); }
+  for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(unitRound, lam(MET_C.acier)); m.scale.set(0.86, 0.07, 0.07); m.position.set(0, 0.5 + i * 0.5, 0); g.add(m); }
+  return { g, x: g.position.x, z: g.position.z, ang };
+}
+
+// ================= LES ACTIONS AUTOMATIQUES =================
+// ---- LES EMPLOYÉS MUNICIPAUX : détecter, poser un chantier, réparer, ranger ----
+function employesTick(dt) {
+  const eq = METIERS.employes; if (!eq.length) return;
+  const chef = eq[0], w0 = chef.bot, suite = eq.slice(1);
+  // si le JOUEUR est au volant du fourgon, l'équipe part à pied : sinon on se disputait le volant
+  const veh = (w0.veh && drive.car !== w0.veh) ? w0.veh : null;
+  const cible = chef.cible;
+  const majEtat = e => { for (const m of eq) m.etat = e; };
+  const suiteEnRoute = (tx, tz) => { for (let i = 0; i < suite.length; i++) { if (veh) metierPassager(suite[i].bot, veh, i, dt); else metierMarche(suite[i].bot, tx + 1.6 + i * 1.3, tz + 1.4, dt); } };
+  switch (chef.etat) {
+    case 'repos': {
+      if (w0.veh) { w0.veh.gyro = false; if (drive.car !== w0.veh) { w0.veh.busy = false; w0.veh.metierBusy = false; } }
+      for (const m of eq) metierMarche(m.bot, m.bot.base[0], m.bot.base[1], dt);
+      if (!metierOuvert() || simTime < (METIERS.repos || 0)) return;
+      const c = chercheCasse(); if (!c) return;
+      c.enCours = true;
+      for (const m of eq) m.cible = c;
+      majEtat('route');
+      if (veh) { veh.busy = true; veh.metierBusy = true; veh.gyro = true; veh.outilCible = 0; }
+      donneOutil(w0.av, 'cle'); donneOutil(eq[1] && eq[1].bot.av, 'pelle');
+      metierDit(w0, pickOne(['appel reçu, on file réparer ça 🔧', 'il y a du travail, on embarque ! 🦺', 'allez, en route les gars 🚧']));
+      return;
+    }
+    case 'route': {
+      if (!cible) { majEtat('repos'); return; }
+      const d = veh ? metierRoule(w0, cible.x, cible.z, dt, 10) : metierMarche(w0, cible.x, cible.z, dt, 3);
+      suiteEnRoute(cible.x, cible.z);
+      if (d < (veh ? 11 : 3.4)) majEtat('approche');
+      return;
+    }
+    case 'approche': {
+      if (!cible) { majEtat('repos'); return; }
+      const d = metierMarche(w0, cible.x + 1.7, cible.z + 1.3, dt, 1.4);
+      for (let i = 0; i < suite.length; i++) metierMarche(suite[i].bot, cible.x - 1.7 - i * 1.2, cible.z - 1.5, dt, 1.4);
+      if (d < 2.8) {
+        chef.chantier = poseChantier(cible.x, cible.z, cible.kind === 'nid' ? 0 : Math.PI / 2);
+        majEtat('repare'); w0.t = simTime + 9;
+        metierDit(w0, pickOne(['attention, chantier ! 🚧', 'on pose le filet, ne passez pas 🚧', 'voie barrée, on répare 🚧']));
+        sfx.pok();
+      }
+      return;
+    }
+    case 'repare': {
+      if (!cible) { majEtat('range'); w0.t = simTime + 1; return; }
+      for (let i = 0; i < eq.length; i++) {
+        const w = eq[i].bot; animateRig(w.av.rig, 'idle', 0, dt, simTime);
+        w.facing = Math.atan2(cible.x - w.pos.x, cible.z - w.pos.z);
+        w.av.rig.armR.rotation.x = -1.15 + Math.sin(simTime * 7 + i * 1.4) * 0.7;
+        if (w.av.rig.armR.coude) w.av.rig.armR.coude.rotation.x = -0.5;
+        metierSync(w);
+      }
+      // les étincelles de soudure et les coups de marteau
+      if (simTime > (w0.etinT || 0)) {
+        w0.etinT = simTime + 0.35;
+        burst(cible.x + rnd(-0.6, 0.6), cible.kind === 'nid' ? 0.35 : 1.5, cible.z + rnd(-0.6, 0.6), 0xfff0c4, 4);
+        sfx.tone(900 + Math.random() * 700, 0, .04, 'square', .022);
+      }
+      if (simTime > w0.t) {
+        repareCible(cible);
+        majEtat('range'); w0.t = simTime + 2.5;
+        metierDit(w0, pickOne(['et voilà, réparé ! ✅', 'c\'est réparé, bonne journée ✅', 'nickel, on range le chantier 🧰']));
+        sfx.check();
+      }
+      return;
+    }
+    case 'range': {
+      for (const m of eq) { animateRig(m.bot.av.rig, 'idle', 0, dt, simTime); metierSync(m.bot); }
+      if (simTime > w0.t) { retireChantier(chef.chantier); chef.chantier = null; majEtat('retour'); }
+      return;
+    }
+    case 'retour': {
+      const dep = city.depot || { x: 0, z: 0 };
+      const d = veh ? metierRoule(w0, dep.x, dep.z + 9, dt, 8) : metierMarche(w0, w0.base[0], w0.base[1], dt);
+      suiteEnRoute(dep.x, dep.z + 9);
+      if (d < (veh ? 9 : 1.6)) {
+        majEtat('repos'); for (const m of eq) m.cible = null;
+        METIERS.repos = simTime + 8;
+        donneOutil(w0.av, null); if (eq[1]) donneOutil(eq[1].bot.av, null);
+      }
+      return;
+    }
+  }
+}
+// ---- LES POMPIERS : sirène, lance à eau, le feu baisse puis s'éteint ----
+function pompiersTick(dt) {
+  const eq = METIERS.pompiers; if (!eq.length) return;
+  const chef = eq[0], w0 = chef.bot, suite = eq.slice(1);
+  const veh = (w0.veh && drive.car !== w0.veh) ? w0.veh : null;
+  const feu = chef.cible, vivant = feu && city.incendies.includes(feu);
+  const majEtat = e => { for (const m of eq) m.etat = e; };
+  switch (chef.etat) {
+    case 'repos': {
+      if (w0.veh) { w0.veh.gyro = false; w0.veh.outilCible = 0; if (drive.car !== w0.veh) { w0.veh.busy = false; w0.veh.metierBusy = false; } }
+      for (const m of eq) metierMarche(m.bot, m.bot.base[0], m.bot.base[1], dt);
+      const f = city.incendies.find(x => !x.pris);
+      if (!f || !veh) return;
+      f.pris = true; for (const m of eq) m.cible = f;
+      majEtat('route'); veh.busy = true; veh.metierBusy = true; veh.gyro = true;
+      for (const m of eq) donneOutil(m.bot.av, 'lance');
+      metierDit(w0, 'au feu ! Tout le monde à bord, sirène ! 🚒');
+      return;
+    }
+    case 'route': {
+      if (!vivant) { majEtat('retour'); return; }
+      // la sirène : deux notes qui alternent (on ne touche pas à celle de la police)
+      if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 0.95; sfx.tone(830, 0, .44, 'sine', .045); sfx.tone(620, .46, .44, 'sine', .045); }
+      const d = metierRoule(w0, feu.x, feu.z, dt, 11);
+      for (let i = 0; i < suite.length; i++) metierPassager(suite[i].bot, veh, i, dt);
+      if (d < 12) { majEtat('deploie'); w0.t = simTime + 3; if (veh) veh.outilCible = 1; }
+      return;
+    }
+    case 'deploie': {
+      if (!vivant) { majEtat('range'); w0.t = simTime + 1.5; return; }
+      const ang = Math.atan2(w0.pos.x - feu.x, w0.pos.z - feu.z);
+      for (let i = 0; i < eq.length; i++) {
+        const a = ang + (i - 1) * 0.6;
+        metierMarche(eq[i].bot, feu.x + Math.sin(a) * 6.5, feu.z + Math.cos(a) * 6.5, dt, 1.4);
+      }
+      if (simTime > w0.t) { majEtat('arrose'); metierDit(w0, 'lance en batterie — on arrose ! 💧'); }
+      return;
+    }
+    case 'arrose': {
+      if (!vivant) { majEtat('range'); w0.t = simTime + 2; metierDit(w0, pickOne(['feu éteint, beau travail ✅', 'c\'est fini, on remballe 🚒'])); return; }
+      for (const m of eq) {
+        const w = m.bot; animateRig(w.av.rig, 'idle', 0, dt, simTime);
+        w.facing = Math.atan2(feu.x - w.pos.x, feu.z - w.pos.z);
+        w.av.rig.armR.rotation.x = -1.35; w.av.rig.armL.rotation.x = -1.15;
+        if (w.av.rig.armR.coude) w.av.rig.armR.coude.rotation.x = -0.2;
+        metierSync(w);
+      }
+      feu.force -= dt * 20;
+      if (simTime > (w0.eauT || 0)) {
+        w0.eauT = simTime + 0.16;
+        const t = 0.35 + Math.random() * 0.6;
+        burst(w0.pos.x + (feu.x - w0.pos.x) * t + rnd(-0.6, 0.6), 1.7 + rnd(-0.3, 0.9),
+          w0.pos.z + (feu.z - w0.pos.z) * t + rnd(-0.6, 0.6), 0x9fdcff, 3);
+      }
+      return;
+    }
+    case 'range': {
+      if (veh) veh.outilCible = 0;
+      for (const m of eq) { animateRig(m.bot.av.rig, 'idle', 0, dt, simTime); metierSync(m.bot); }
+      if (simTime > w0.t) { majEtat('retour'); for (const m of eq) m.cible = null; }
+      return;
+    }
+    case 'retour': {
+      const k = city.caserne || { x: 0, z: 0 };
+      const d = veh ? metierRoule(w0, k.x, k.z + 9, dt, 8) : metierMarche(w0, w0.base[0], w0.base[1], dt);
+      for (let i = 0; i < suite.length; i++) { if (veh) metierPassager(suite[i].bot, veh, i, dt); else metierMarche(suite[i].bot, k.x + i * 1.6, k.z + 5, dt); }
+      if (d < (veh ? 9 : 1.6)) { majEtat('repos'); for (const m of eq) { m.cible = null; donneOutil(m.bot.av, null); } }
+      return;
+    }
+  }
+}
+// ---- LES BALAYEURS : le trottoir, le balai, les détritus et la poubelle roulante ----
+function balayeurTick(m, dt) {
+  const w = m.bot;
+  if (m.etat === 'repos') {
+    metierMarche(w, w.base[0], w.base[1], dt);
+    if (metierOuvert()) m.etat = 'balaye';
+  } else if (m.etat === 'retour') {
+    if (metierMarche(w, w.base[0], w.base[1], dt) < 1.5) m.etat = 'repos';
+  } else {
+    if (!metierOuvert()) { m.etat = 'retour'; return; }
+    // il vise le détritus le plus proche ; s'il n'y en a pas, il descend un trottoir
+    if (!m.cible || (!m.cible.balade && !city.detritus.includes(m.cible))) {
+      let best = null, bd = 110;
+      for (const d2 of city.detritus) {
+        if (d2.pris && d2.pris !== w) continue;
+        const dd = Math.hypot(d2.x - w.pos.x, d2.z - w.pos.z); if (dd < bd) { bd = dd; best = d2; }
+      }
+      if (best) { best.pris = w; m.cible = best; }
+      else if (!m.cible || !m.cible.balade || Math.hypot(m.cible.x - w.pos.x, m.cible.z - w.pos.z) < 2.5) {
+        const t = city.trottoirs.length ? pickOne(city.trottoirs) : null;
+        m.cible = t ? { x: t.x, z: t.z, balade: true } : { x: w.base[0], z: w.base[1], balade: true };
+      }
+    }
+    const c = m.cible;
+    const d = metierMarche(w, c.x, c.z, dt, 1.1);
+    // le balai balaie : le bras oscille (on écrase la pose d'animateRig, appelée juste avant)
+    w.av.rig.armR.rotation.x = -0.85 + Math.sin(simTime * 6) * 0.45;
+    w.av.rig.armR.rotation.z = -0.28; w.av.rig.armL.rotation.x = -0.55;
+    if (d < 1.4 && !c.balade) { ramasseDetritus(c); m.cible = null; if (Math.random() < 0.25) metierDit(w, pickOne(['et hop, un papier de moins 🧹', 'la ville, c\'est plus joli propre !', 'allez, au suivant 🧹'])); }
+  }
+  if (w.poubelle) {
+    w.poubelle.position.set(w.pos.x - Math.sin(w.facing) * 1.15, w.pos.y, w.pos.z - Math.cos(w.facing) * 1.15);
+    w.poubelle.rotation.y = w.facing;
+  }
+}
+// ---- LE LAVEUR DE VITRES : l'échelle contre la façade, la mousse, on redescend ----
+function laveurTick(m, dt) {
+  const w = m.bot;
+  switch (m.etat) {
+    case 'repos': {
+      metierMarche(w, w.base[0], w.base[1], dt);
+      if (!metierOuvert() || simTime < (w.pause || 0)) return;
+      const v = (city.vitrines && city.vitrines.length) ? pickOne(city.vitrines) : null;
+      if (!v) return;
+      m.cible = v; m.etat = 'route';
+      metierDit(w, pickOne(['je vais faire briller cette vitrine 🪟', 'au boulot, les carreaux !']));
+      return;
+    }
+    case 'route': {
+      const v = m.cible; if (!v) { m.etat = 'repos'; return; }
+      const d = metierMarche(w, v.x, v.z, dt, 1.8);
+      if (d < 2.6) { m.etat = 'monte'; w.h2 = 0; w.echelle = poseEchelle(v.x, v.z, w.pos.x, w.pos.z); }
+      return;
+    }
+    case 'monte': case 'descend': {
+      const monte = m.etat === 'monte';
+      w.h2 = clamp((w.h2 || 0) + (monte ? dt * 0.32 : -dt * 0.4), 0, 1);
+      const e = w.echelle;
+      if (e) { w.pos.set(e.x - Math.sin(e.ang) * 0.35 * w.h2, w.h2 * 3.3, e.z - Math.cos(e.ang) * 0.35 * w.h2); w.facing = e.ang + Math.PI; }
+      animateRig(w.av.rig, 'walk', 1.6, dt, simTime); metierSync(w);
+      if (monte && w.h2 >= 1) { m.etat = 'lave'; w.t = simTime + 8; }
+      if (!monte && w.h2 <= 0) {
+        if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
+        m.etat = 'repos'; m.cible = null; w.pause = simTime + 6;
+      }
+      return;
+    }
+    case 'lave': {
+      animateRig(w.av.rig, 'idle', 0, dt, simTime);
+      // le grand geste de la raclette : le bras balaie la vitre de haut en bas
+      w.av.rig.armR.rotation.x = -1.9 + Math.sin(simTime * 3.4) * 0.6;
+      w.av.rig.armR.rotation.z = -0.35 + Math.sin(simTime * 3.4) * 0.5;
+      metierSync(w);
+      if (simTime > (w.mousseT || 0)) {
+        w.mousseT = simTime + 0.4;
+        burst(w.pos.x + Math.sin(w.facing) * 0.9 + rnd(-0.5, 0.5), w.pos.y + 1.6 + rnd(-0.5, 0.5), w.pos.z + Math.cos(w.facing) * 0.9 + rnd(-0.5, 0.5), 0xf4f6fa, 3);
+      }
+      if (simTime > w.t) { m.etat = 'descend'; metierDit(w, pickOne(['et voilà, on y voit clair ! ✨', 'impeccable, je descends'])); }
+      return;
+    }
+  }
+}
+// ---- LE FACTEUR : à vélo, de boîte en boîte, une lettre dans chaque ----
+function facteurTick(m, dt) {
+  const w = m.bot;
+  const veh = (w.veh && drive.car !== w.veh) ? w.veh : null;
+  switch (m.etat) {
+    case 'repos': {
+      if (w.veh && drive.car !== w.veh) { w.veh.busy = false; w.veh.metierBusy = false; }
+      metierMarche(w, w.base[0], w.base[1], dt);
+      if (!metierOuvert() || !city.boites.length || simTime < (w.pause || 0)) return;
+      // la tournée : la boîte la moins servie d'abord, la plus proche à égalité
+      let best = null, bd = Infinity;
+      for (const b of city.boites) { const s = b.lettres * 500 + Math.hypot(b.x - w.pos.x, b.z - w.pos.z); if (s < bd) { bd = s; best = b; } }
+      m.cible = best; m.etat = 'tournee';
+      if (veh) { veh.busy = true; veh.metierBusy = true; }
+      metierDit(w, pickOne(['le courrier, c\'est parti ! 📮', 'ma tournée m\'attend 🚲', 'du courrier pour tout le monde !']));
+      return;
+    }
+    case 'tournee': {
+      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
+      const d = veh ? metierRoule(w, b.x, b.z, dt, 3.4) : metierMarche(w, b.x, b.z, dt, 1.5);
+      if (d < (veh ? 4.2 : 1.9)) { m.etat = 'depose'; w.t = simTime + 2.6; donneOutil(w.av, 'lettre'); }
+      return;
+    }
+    case 'depose': {
+      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
+      // il met pied à terre à côté du vélo, sort la lettre de la sacoche et la glisse
+      if (veh) { w.pos.set(veh.x - Math.cos(veh.h) * 1.1, groundUnder(veh.x, veh.z, null, 2), veh.z + Math.sin(veh.h) * 1.1); }
+      w.facing = Math.atan2(b.x - w.pos.x, b.z - w.pos.z);
+      animateRig(w.av.rig, 'idle', 0, dt, simTime);
+      w.av.rig.armR.rotation.x = -1.45 + Math.sin(simTime * 4) * 0.25;
+      metierSync(w);
+      if (b.volet) b.volet.rotation.x = -Math.abs(Math.sin(simTime * 5)) * 0.9;
+      if (simTime > w.t) {
+        b.lettres++; if (b.volet) b.volet.rotation.x = 0;
+        sfx.pok(); burst(b.x, 1.35, b.z, 0xf4f6fa, 4);
+        metierDit(w, pickOne(['et une lettre de plus ! 📬', 'voilà le courrier 📬', 'bonne lecture !']));
+        m.cible = null; m.etat = 'repos'; w.pause = simTime + 3;
+      }
+      return;
+    }
+  }
+}
+// ---- LES ÉVÉNEMENTS DE LA VILLE : détritus, nids-de-poule, incendies ----
+function metiersEvenements(dt) {
+  if (simTime > METIERS.prochainDetritus) {
+    METIERS.prochainDetritus = simTime + rnd(15, 28);
+    if (city.detritus.length < 12 && city.trottoirs.length) {
+      const t = pickOne(city.trottoirs);
+      poseDetritus(t.x + rnd(-t.w / 2 + 0.5, t.w / 2 - 0.5), t.z + rnd(-t.d / 2 + 0.5, t.d / 2 - 0.5));
+    }
+  }
+  if (simTime > METIERS.prochainNid) {
+    METIERS.prochainNid = simTime + rnd(80, 150);
+    if (city.nidsPoule.length < 3 && city.routes.length) {
+      const r = pickOne(city.routes);
+      if (Math.min(r.w, r.d) > 6) poseNidDePoule(r.x + rnd(-r.w / 2 + 2.5, r.w / 2 - 2.5), r.z + rnd(-r.d / 2 + 2.5, r.d / 2 - 2.5));
+    }
+  }
+  if (simTime > METIERS.prochainFeu) {
+    METIERS.prochainFeu = simTime + rnd(180, 300);
+    if (!city.incendies.length && city.wander.length) { const p = pickOne(city.wander); declencheIncendie(p[0], p[2]); }
+  }
+}
+// Filet de sécurité : un chantier oublié (l'équipe téléportée par un test, par exemple)
+// laisserait son obstacle en pleine rue pour toujours.
+function chantiersUsure() {
+  for (let i = city.chantiers.length - 1; i >= 0; i--) if (simTime - city.chantiers[i].t > 180) retireChantier(city.chantiers[i]);
+}
+
+// ---- PARLER AUX TRAVAILLEURS ET LEUR DONNER UN COUP DE MAIN ----
+// Les petits boulots : de vraies pièces à gagner, avec un but simple à comprendre.
+const BOULOTS = {
+  balayeur: { e: '🧹', n: 'ramasser 5 détritus', but: 5, gain: 15 },
+  laveur: { e: '🪟', n: 'ramasser 4 détritus devant les vitrines', but: 4, gain: 15 },
+  facteur: { e: '📮', n: 'glisser 3 lettres dans les boîtes aux lettres', but: 3, gain: 20 },
+  employe: { e: '🔧', n: 'réparer 2 objets cassés (reste à côté avec la clé)', but: 2, gain: 25 },
+  pompier: { e: '🚒', n: 'éteindre un incendie avec le camion (O = lance à eau)', but: 1, gain: 35 },
+};
+function prendreBoulot(m) {
+  if (!m) return;
+  if (city.boulot) { msg(`${city.boulot.e} Termine d'abord : ${city.boulot.n} (${city.boulot.fait}/${city.boulot.but})`, 2800); return; }
+  const d = BOULOTS[m.metier]; if (!d) return;
+  city.boulot = { metier: m.metier, e: d.e, n: d.n, but: d.but, gain: d.gain, fait: 0, cd: 0 };
+  metierDit(m.bot, pickOne([`un coup de main ? ${d.n} !`, `d'accord : ${d.n}, et je te donne ${d.gain} 🪙 !`]));
+  msg(`${d.e} Petit boulot : ${d.n} — ${d.gain} 🪙 à la clé`, 3600);
+}
+function boulotAvance(n) {
+  const b = city.boulot; if (!b) return;
+  b.fait += n;
+  if (b.fait < b.but) { msg(`${b.e} ${b.fait}/${b.but} — continue !`, 1600); sfx.pok(); return; }
+  wallet += b.gain; saveWallet(); updateHud(); sfx.coin(); sfx.cheer();
+  msg(`${b.e} Petit boulot terminé : +${b.gain} 🪙 !`, 3400);
+  chat(null, `${b.e} ${myCfg.name} a donné un coup de main à la ville (+${b.gain} 🪙)`);
+  city.boulot = null;
+}
+function boulotTick(dt) {
+  const b = city.boulot; if (!b) return;
+  if (b.metier === 'balayeur' || b.metier === 'laveur') {
+    if (!drive.car) for (const d of city.detritus) if (Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 1.5) { ramasseDetritus(d); boulotAvance(1); break; }
+  } else if (b.metier === 'facteur') {
+    if (!drive.car) for (const bo of city.boites) if (!bo.joueur && Math.hypot(P.pos.x - bo.x, P.pos.z - bo.z) < 1.9) {
+      bo.joueur = true; bo.lettres++;
+      burst(bo.x, 1.35, bo.z, 0xf4f6fa, 5); boulotAvance(1); break;
+    }
+  } else if (b.metier === 'employe') {
+    // deux secondes à côté d'un objet cassé et il est réparé : à sept ans, on n'a pas envie
+    // de chercher la bonne touche au bon moment
+    const c = breakables.find(x => (x.broken || x.cracked) && Math.hypot(P.pos.x - x.x, P.pos.z - x.z) < 3.2)
+      || city.nidsPoule.find(x => Math.hypot(P.pos.x - x.x, P.pos.z - x.z) < 3.2);
+    if (c && !drive.car) {
+      b.cd += dt;
+      if (simTime > (b.fxT || 0)) { b.fxT = simTime + 0.3; burst(c.x + rnd(-0.4, 0.4), c.kind === 'nid' ? 0.35 : 1.3, c.z + rnd(-0.4, 0.4), 0xfff0c4, 3); }
+      if (b.cd > 2.2) { b.cd = 0; repareCible(c); sfx.check(); boulotAvance(1); }
+    } else b.cd = 0;
+  }
+  // le pompier : c'est incendiesTick() qui valide, quand le feu que le joueur arrosait s'éteint
+}
+// Le travailleur le plus proche : c'est à lui qu'on parle, et c'est lui qui propose un boulot.
+function metierProche() {
+  let best = null, bd = 6;
+  for (const m of city.metiers) { const d = Math.hypot(P.pos.x - m.bot.pos.x, P.pos.z - m.bot.pos.z); if (d < bd) { bd = d; best = m; } }
+  if (best !== city.boulotNear) {
+    city.boulotNear = best;
+    if (best && !city.boulot && !isMobile) msg(`${METIERS_DEF[best.metier].e} E : donner un coup de main à ${best.bot.name}`, 2200);
+  }
+}
+function phraseMetier(m, salut) {
+  const e = m.etat;
+  if (salut) return pickOne([`salut ${myCfg.name} ! 👋`, 'bonjour ! Belle journée pour travailler', 'salut, je suis en service !']);
+  if (m.metier === 'employe') return e === 'repare' ? 'je répare le lampadaire, deux minutes ! 🔧'
+    : (e === 'approche' || e === 'route') ? 'attention, chantier ! On va barrer la voie 🚧'
+    : e === 'range' ? 'on range le chantier, la voie va rouvrir 🚧'
+    : 'employé municipal : je répare tout ce qui casse en ville 🔧';
+  if (m.metier === 'balayeur') return e === 'balaye' ? 'je ramasse les papiers, la ville doit rester propre 🧹' : 'balayeur de la ville, à ton service ! 🧹';
+  if (m.metier === 'laveur') return e === 'lave' ? 'je lave les vitres, ça brille hein ? 🪟' : 'laveur de vitres : je monte à l\'échelle et je fais briller les devantures 🪟';
+  if (m.metier === 'pompier') return city.incendies.length ? 'attention, il y a le feu ! Reste derrière nous 🚒'
+    : 'pompier ! Prends le camion pour nous aider — O ouvre la lance à eau 🚒';
+  if (m.metier === 'facteur') return e === 'depose' ? 'je glisse la lettre dans la boîte 📬' : 'facteur : je fais ma tournée à vélo, tu peux me suivre ! 🚲';
+  return 'bonjour !';
+}
+// Branchée en tête de commandeSociale() : si on parle à un travailleur (par son nom, par son
+// métier, ou simplement parce qu'on est à côté de lui), c'est LUI qui répond.
+function metierParle(txt) {
+  if (!city.on || !city.metiers || !city.metiers.length) return false;
+  const t = norm(txt);
+  let best = null, bd = 14;
+  for (const m of city.metiers) { const d = Math.hypot(P.pos.x - m.bot.pos.x, P.pos.z - m.bot.pos.z); if (d < bd) { bd = d; best = m; } }
+  const parNom = city.metiers.find(m => t.includes(norm(m.bot.name)));
+  if (parNom) best = parNom;
+  if (!best) {
+    const parMetier = [['employe', /employe|cantonnier|reparateur|travaux|chantier|repare/],
+      ['balayeur', /balayeur|eboueur|balai|poubelle|proprete/], ['laveur', /laveur|vitre|carreau|raclette/],
+      ['pompier', /pompier|incendie|caserne|au feu/], ['facteur', /facteur|courrier|poste|lettre|boite aux lettres/]];
+    for (const [k, re] of parMetier) if (re.test(t)) { best = city.metiers.find(m => m.metier === k); break; }
+  }
+  if (!best) return false;
+  const salut = /salut|bonjour|coucou|hello|ca va|bonsoir|hey/.test(t);
+  const sujet = /travail|metier|fais|fait|quoi|repare|chantier|feu|courrier|lettre|balai|vitre|aide|boulot|job|pourquoi|camion|velo|outil/.test(t);
+  if (!salut && !sujet && !parNom) return false;
+  metierDit(best.bot, phraseMetier(best, salut && !sujet));
+  return true;
+}
+// ---- LE TOUR DE VIE DES MÉTIERS (appelé par cityVie, une fois par image) ----
+function metiersTick(dt) {
+  if (!city.on || !city.metiers || !city.metiers.length) return;
+  metiersEvenements(dt);
+  employesTick(dt);
+  pompiersTick(dt);
+  for (const m of METIERS.balayeurs) balayeurTick(m, dt);
+  for (const m of METIERS.laveurs) laveurTick(m, dt);
+  for (const m of METIERS.facteurs) facteurTick(m, dt);
+  chantiersUsure();
+  incendiesTick(dt);
+  outilsVehiculesTick(dt);
+  boulotTick(dt);
+  metierProche();
+}
+// O comme OUTIL : benne, flèche de grue, godet, échelle et LANCE À EAU. On ajoute notre
+// propre écouteur plutôt que d'aller modifier driveStep (c'est la zone du poste B).
+window.addEventListener('keydown', e => {
+  if (e.code !== 'KeyO' || !running || paused) return;
+  const el = document.activeElement;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+  if (drive.car && drive.car.travail) { actionneOutil(drive.car); e.preventDefault(); }
+  else if (drive.car) msg('🔧 O n\'actionne un outil que sur un véhicule de travail (dépôt municipal, caserne)', 2200);
+});
 
 loop();
 })();

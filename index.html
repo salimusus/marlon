@@ -1083,15 +1083,15 @@ const DA = {
   // d'être des trous noirs. Les heures de nuit ne sont jamais atteintes par le cycle
   // automatique (il fait toujours jour) mais servent à l'ambiance « nuit » choisie au menu.
   heures: [
-    { h: 0,    haut: 0x070c22, bas: 0x121a38, halo: 0x27365f, sol: 0x7f95d8, force: 0.16, amb: 0x8ea6e8, rebond: 0x1e2440, nuit: 1 },
-    { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.42, amb: 0xc9bcd8, rebond: 0x4a4258, nuit: 0.62 },
-    { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.92, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
-    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 1.12, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
-    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 1.26, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
-    { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 1.10, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
-    { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.86, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
-    { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.44, amb: 0xc3aac9, rebond: 0x4e4258, nuit: 0.66 },
-    { h: 24,   haut: 0x070c22, bas: 0x121a38, halo: 0x27365f, sol: 0x7f95d8, force: 0.16, amb: 0x8ea6e8, rebond: 0x1e2440, nuit: 1 },
+    { h: 0,    haut: 0x060a1c, bas: 0x101733, halo: 0x22315a, sol: 0x8098dc, force: 0.10, amb: 0x7f98e0, rebond: 0x151a30, nuit: 1 },
+    { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.32, amb: 0xc0b2d2, rebond: 0x3e3849, nuit: 0.62 },
+    { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.72, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
+    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 0.92, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
+    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 1.02, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
+    { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 0.92, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
+    { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.70, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
+    { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.34, amb: 0xb9a3c2, rebond: 0x40384c, nuit: 0.66 },
+    { h: 24,   haut: 0x060a1c, bas: 0x101733, halo: 0x22315a, sol: 0x8098dc, force: 0.10, amb: 0x7f98e0, rebond: 0x151a30, nuit: 1 },
   ],
 };
 // Les couleurs du ciel à une heure donnée, interpolées entre deux repères de DA.heures.
@@ -5787,12 +5787,16 @@ function dayTick() {
   // de rendu, qui le replaçait à un cap fixe : les ombres tombaient dans le même sens à toute
   // heure. On ne pose plus qu'une DIRECTION, que la boucle de rendu applique autour du joueur.
   const a = clamp((h - 6) / 12, -0.25, 1.25) * Math.PI;
-  SOLEIL_DIR.set(Math.cos(a) * 0.92, Math.max(0.22, Math.sin(a)), 0.34).normalize();
+  // le soleil ne monte jamais tout a fait a la verticale : a midi pile, une ombre parfaitement
+  // sous les pieds ne dit plus rien du volume des objets. On plafonne son elevation.
+  SOLEIL_DIR.set(Math.cos(a) * 0.95, Math.max(0.28, Math.sin(a) * 0.85), 0.42).normalize();
   sun.color.copy(C2.sol); sun.intensity = C2.force;
   hemi.color.copy(C2.amb); hemi.groundColor.copy(C2.rebond);
-  // l'appoint hémisphérique monte quand le soleil baisse : sans lui, les faces à l'ombre
-  // devenaient des trous noirs au couchant et de nuit
-  hemi.intensity = 0.34 + (1 - C2.force / 1.3) * 0.30;
+  // L'APPOINT HEMISPHERIQUE SUIT LE SOLEIL. Il etait FIXE, tres haut : de nuit, une pelouse
+  // restait d'un vert de plein midi et le decor entier refusait de s'assombrir. Il descend
+  // maintenant avec la lumiere, sans jamais tomber a zero (les faces a l'ombre ne doivent
+  // jamais devenir des trous noirs).
+  hemi.intensity = 0.26 + C2.force * 0.22;
   fill.color.copy(C2.amb); fill.intensity = 0.10 + night * 0.16;
   // le ciel : dôme dégradé (zénith, horizon, halo autour du soleil) et couleur de secours
   const u = cielDome.material.uniforms;
@@ -5801,7 +5805,10 @@ function dayTick() {
   scene.background.copy(C2.bas);
   // LA BRUME accordée au ciel : c'est elle qui donne la profondeur. Elle prend la couleur de
   // l'horizon, un peu plus claire, et recule un peu la nuit (sinon la ville disparaît).
-  if (scene.fog) { scene.fog.color.copy(C2.bas).lerp(C2.haut, 0.28); scene.fog.near = 60 + night * 20; scene.fog.far = 250 + night * 60; }
+  // LA BRUME ETAIT SI LOINTAINE (90 → 260 m) qu'elle ne se voyait nulle part : un immeuble a
+  // 130 m avait exactement la couleur de celui d'a cote. Elle se resserre : c'est elle qui
+  // donne la profondeur et qui separe enfin les plans.
+  if (scene.fog) { scene.fog.color.copy(C2.bas).lerp(C2.haut, 0.28); scene.fog.near = 45 + night * 25; scene.fog.far = 195 + night * 65; }
   stars.visible = night > 0.55; sunSprite.visible = night < 0.45;
   if (stars.material) stars.material.opacity = 1;
   const lamps = night > 0.5;

@@ -8107,3 +8107,268 @@ test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demand
     && r.avant === 'flex' && r.apres === 'none' && r.bouton && r.pave === 'aide';
   return { ok, detail: `le bandeau des touches (« R2 avancer · L2 reculer · Stick G direction… ») restait affiché EN PERMANENCE dès qu'une manette était branchée : trois lignes en travers du haut de l'écran, par-dessus le jeu · il est maintenant masqué au repos (${r.repos.leg}), sort quelques secondes a la connexion, se rappelle par le PAVÉ TACTILE de la DualSense (${r.pave}) ou par le bouton « ⌨️ Rappeler les touches » des réglages (${r.bouton}), et se referme au deuxième appui (${r.referme.leg}) ou tout seul après son délai (${r.avant} → ${r.apres})` };
 });
+
+// ================= POSTE K : DESIGN ET GRAPHISME =================
+
+test('le ciel et la lumiere changent VRAIMENT avec l\'heure (palette, soleil, brume, ombres)', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12 });
+    const avant = G.settings.ambiance;
+    const lire = () => ({
+      soleil: '#' + G.sun.color.getHexString(), force: +G.sun.intensity.toFixed(2),
+      haut: '#' + G.cielDome.material.uniforms.haut.value.getHexString(),
+      bas: '#' + G.cielDome.material.uniforms.bas.value.getHexString(),
+      brume: G.scene.fog ? '#' + G.scene.fog.color.getHexString() : null,
+      dir: [+G.SOLEIL_DIR.x.toFixed(2), +G.SOLEIL_DIR.y.toFixed(2)],
+      h: +G.day.h.toFixed(1),
+    });
+    const m = {};
+    for (const a of ['matin', 'midi', 'couchant', 'nuit']) { G.ambianceSet(a); m[a] = lire(); }
+    G.ambianceSet(avant || 'auto');
+    m.palette = { bornes: !!(G.DA && G.DA.heures && G.DA.heures.length >= 6), reperes: G.DA ? G.DA.heures.length : 0 };
+    // la palette RAMENE une couleur qui detonne dans ses bornes, sans toucher a sa teinte
+    const crie = G.accorde(0x00ff00), hsl = { h: 0, s: 0, l: 0 }; crie.getHSL(hsl);
+    m.accorde = { sat: +hsl.s.toFixed(2), teinte: +hsl.h.toFixed(2) };
+    // le dome du ciel ne coute qu'UN maillage
+    m.dome = { unSeulMaillage: !!(G.cielDome && G.cielDome.isMesh), triangles: G.cielDome.geometry.index ? G.cielDome.geometry.index.count / 3 : 0 };
+    return m;
+  });
+  const diff = (a, b) => a.soleil !== b.soleil && a.haut !== b.haut && a.bas !== b.bas;
+  const tourne = Math.abs(r.matin.dir[0] - r.couchant.dir[0]) > 0.5;
+  const ok = r.palette.bornes && r.palette.reperes >= 6
+    && diff(r.matin, r.midi) && diff(r.midi, r.couchant) && diff(r.couchant, r.nuit)
+    && r.midi.force > r.couchant.force && r.couchant.force > r.nuit.force
+    && r.midi.brume !== r.couchant.brume
+    && tourne && r.dome.unSeulMaillage && r.dome.triangles < 900
+    && r.accorde.sat <= 0.83 && Math.abs(r.accorde.teinte - 1 / 3) < 0.01;
+  return { ok, detail: `le ciel etait un APLAT (une seule couleur du zenith a l'horizon, la MEME a 7 h et a 19 h) et le soleil ne bougeait jamais (la boucle de rendu le replacait a un cap fixe, ce qui annulait la course calculee par dayTick : les ombres tombaient toujours dans le meme sens) · palette de reference DA a ${r.palette.reperes} reperes horaires, et accorde() ramene un vert criard a ${r.accorde.sat} de saturation sans toucher sa teinte (${r.accorde.teinte}) · matin ${r.matin.soleil}/${r.matin.force} ciel ${r.matin.haut}→${r.matin.bas} · midi ${r.midi.soleil}/${r.midi.force} ciel ${r.midi.haut}→${r.midi.bas} · couchant ${r.couchant.soleil}/${r.couchant.force} ciel ${r.couchant.haut}→${r.couchant.bas} · nuit ${r.nuit.soleil}/${r.nuit.force} ciel ${r.nuit.haut}→${r.nuit.bas} · la brume suit (${r.midi.brume} → ${r.couchant.brume}) et le soleil TOURNE (x ${r.matin.dir[0]} le matin, ${r.couchant.dir[0]} au couchant) · le degrade coute UN maillage de ${r.dome.triangles} triangles` };
+});
+
+test('la nuit la ville s\'allume (fenetres, lampadaires, neons) et le jour elle s\'eteint', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12 });
+    const avant = G.settings.ambiance;
+    const compte = () => {
+      let fenetres = 0, neons = 0;
+      for (const m of G.city.buildings) if (m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0.1) fenetres++;
+      for (const m of G.NEONS) if (m.emissiveIntensity > 1) neons++;
+      const halos = G.day.glows.filter(s => s.visible).length;
+      return { fenetres, neons, halos };
+    };
+    G.lumieresVille(false); const jour = compte();
+    G.lumieresVille(true); const nuit = compte();
+    // et le CYCLE AUTOMATIQUE, lui, ne les allume jamais : il fait toujours jour
+    G.ambianceSet('auto');
+    let auto = 0;
+    const t0 = G.simTime;
+    for (let i = 0; i <= 120; i++) { G.simTime = i / 60 * 360; G.dayTick(); if (G.day.night > 0.5) auto++; }
+    G.simTime = t0;
+    const apresAuto = compte();
+    // l'ambiance « nuit » choisie au menu, elle, allume tout
+    G.ambianceSet('nuit'); G.dayTick();
+    const choisie = compte(); const nuitChoisie = G.day.night;
+    const etoiles = G.stars.visible;
+    G.ambianceSet(avant || 'auto'); G.dayTick();
+    return { jour, nuit, auto, apresAuto, choisie, nuitChoisie: +nuitChoisie.toFixed(2), etoiles, total: G.city.buildings.length, neonsTotal: G.NEONS.length };
+  });
+  const ok = r.jour.fenetres === 0 && r.jour.halos === 0 && r.jour.neons === 0
+    && r.nuit.fenetres === r.total && r.nuit.fenetres > 20 && r.nuit.halos > 10 && r.nuit.neons > 20
+    && r.auto === 0 && r.apresAuto.fenetres === 0
+    && r.choisie.fenetres === r.total && r.choisie.halos > 10 && r.nuitChoisie > 0.7 && r.etoiles;
+  return { ok, detail: `tout le decor de nuit du jeu (fenetres allumees, halos de lampadaires, ${r.neonsTotal} materiaux de neon, etoiles) existait et ne servait JAMAIS, puisque le cycle ne descend plus dans la nuit · lumieresVille() les commande maintenant d'un bloc : de jour ${r.jour.fenetres} fenetre allumee, ${r.jour.halos} halo, ${r.jour.neons} neon pousse · de nuit ${r.nuit.fenetres}/${r.total} facades allumees, ${r.nuit.halos} halos, ${r.nuit.neons} neons · le cycle automatique reste toujours de jour (${r.auto} image sombre sur 120, ${r.apresAuto.fenetres} fenetre allumee) et c'est le REGLAGE « Ambiance : nuit » qui allume la ville (obscurite ${r.nuitChoisie}, ${r.choisie.halos} halos, ciel etoile=${r.etoiles})` };
+});
+
+test('les effets d\'image s\'eteignent aux basses qualites et le nombre d\'appels de dessin reste sous plafond', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true });
+    const avant = G.settings.quality;
+    const etat = q => { G.settings.quality = q; G.applyQuality(); G.rendreImage();
+      return { post: !!G.post.on, grade: !!G.post.grade, halo: !!G.post.halo, cle: G.post.cle,
+        appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    const basse = etat('low'), haute = etat('high'), ultra = etat('ultra');
+    // en diffusion TV le halo (huit echantillons de plus par pixel) reste eteint
+    G.settings.quality = 'ultra'; G.diffusionMode(true); G.applyQuality();
+    const tv = { post: !!G.post.on, grade: !!G.post.grade, halo: !!G.post.halo };
+    G.diffusionMode(false); G.settings.quality = avant; G.applyQuality(); G.rendreImage();
+    return { basse, haute, ultra, tv, retour: G.settings.quality };
+  });
+  const ok = !r.basse.post && !r.basse.grade && !r.basse.halo
+    && r.haute.post && r.haute.grade && !r.haute.halo
+    && r.ultra.post && r.ultra.grade && r.ultra.halo
+    && r.tv.post && r.tv.grade && !r.tv.halo
+    && r.ultra.appels < 900 && r.basse.appels < 900
+    && Math.abs(r.ultra.appels - r.basse.appels) <= 4;
+  return { ok, detail: `le vignettage et l'etalonnage etaient un FILTRE CSS sur le canevas : une passe de composition en plein ecran, coupee sur la tele (l'image y etait plus terne) · ils sont maintenant dans la passe de nettete, compiles a la demande — en qualite basse le programme ne contient meme pas leurs instructions · basse : passe=${r.basse.post}, etalonnage=${r.basse.grade}, halo=${r.basse.halo} · haute : ${r.haute.post}/${r.haute.grade}/${r.haute.halo} (programme « ${r.haute.cle} ») · Ultra HD : ${r.ultra.post}/${r.ultra.grade}/${r.ultra.halo} (« ${r.ultra.cle} ») · diffusion TV : halo=${r.tv.halo} (huit echantillons de plus par pixel, hors de question sur une 4K) · et le decor ne coute pas plus cher : ${r.basse.appels} appels de dessin en basse contre ${r.ultra.appels} en Ultra HD (${r.ultra.tris} triangles), le dome du ciel n'en ajoute qu'un` };
+});
+
+test('l\'interface se lit de loin : contraste du texte, etats des boutons, curseur manette bien visible', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12 });
+    document.querySelectorAll('#top,#chat,#act,#missionHud').forEach(e => { e.style.display = ''; });
+    const lum = c => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(c);
+      if (!m) return null; const v = [1, 2, 3].map(i => { const x = +m[i] / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      return { L: 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2], a: m[4] == null ? 1 : +m[4] }; };
+    // le texte des pastilles sur son panneau : rapport de contraste (norme WCAG)
+    const pastille = document.getElementById('coins');
+    const st = getComputedStyle(pastille);
+    const fond = lum(st.backgroundColor), encre = lum(st.color);
+    // le panneau est translucide : on le compose sur un ciel de midi, le pire des cas
+    const ciel = 0.62;
+    const Lf = fond.L * fond.a + ciel * (1 - fond.a);
+    const contraste = (Math.max(encre.L, Lf) + 0.05) / (Math.min(encre.L, Lf) + 0.05);
+    // les boutons ont des etats visibles, et l'interface une grille commune
+    const rac = getComputedStyle(document.documentElement);
+    const grille = { r: rac.getPropertyValue('--r').trim(), vif: rac.getPropertyValue('--vif').trim(), panneau: rac.getPropertyValue('--panel').trim() };
+    const css = [...document.styleSheets].flatMap(s => { try { return [...s.cssRules].map(x => x.cssText); } catch (e) { return []; } }).join('\n');
+    const etats = { survol: /\.ibtn:hover/.test(css), appui: /\.ibtn:active/.test(css), focus: /\.ibtn:focus-visible/.test(css),
+      btnSurvol: /\.btn:hover/.test(css), btnFocus: /\.btn:focus-visible/.test(css) };
+    // le curseur de navigation manette
+    const b = document.getElementById('menuBtn');
+    b.classList.add('focustv');
+    const cs = getComputedStyle(b);
+    const curseur = { epaisseur: parseFloat(cs.outlineWidth), couleur: cs.outlineColor, halo: cs.boxShadow.length > 20, anime: cs.animationName !== 'none' };
+    b.classList.remove('focustv');
+    // le grand message ne tombe plus sur la tete du personnage
+    const msg = getComputedStyle(document.getElementById('msg'));
+    return { contraste: +contraste.toFixed(2), grille, etats, curseur, msgTop: msg.top, msgFond: msg.backgroundColor,
+      alpha: fond.a, taillePastille: st.fontSize };
+  });
+  const ok = r.contraste >= 4.5
+    && r.grille.r && r.grille.vif && r.grille.panneau
+    && r.etats.survol && r.etats.appui && r.etats.focus && r.etats.btnSurvol && r.etats.btnFocus
+    && r.curseur.epaisseur >= 4 && r.curseur.halo && r.curseur.anime
+    && parseFloat(r.msgTop) > 0;
+  return { ok, detail: `les pastilles du haut posaient un texte blanc sur un panneau trop clair et sans ombre, et AUCUN bouton n'avait d'etat visible : on ne savait jamais lequel on visait · contraste du texte principal sur un ciel de midi : ${r.contraste}:1 (norme WCAG AA : 4,5) · une seule grille pour toute l'interface (rayon ${r.grille.r}, curseur ${r.grille.vif}, panneau ${r.grille.panneau}) · etats : survol=${r.etats.survol}, appui=${r.etats.appui}, focus manette=${r.etats.focus}, memes etats sur les gros boutons (${r.etats.btnSurvol}/${r.etats.btnFocus}) · curseur manette : contour de ${r.curseur.epaisseur} px ${r.curseur.couleur}, double halo (${r.curseur.halo}) qui respire (${r.curseur.anime}) · le grand message remonte a ${r.msgTop} sur un bandeau (${r.msgFond}) : il tombait pile sur la tete du personnage et sur son etiquette de nom` };
+});
+
+test('les degats d\'un accident suivent la vitesse du choc et s\'accumulent stade par stade', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -13, y: 1, z: 11, hour: 12 });
+    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider);
+    if (!c) return { pourquoi: 'aucune voiture a carrosserie dans la ville' };
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    // l'echelle : la meme voiture, quatre vitesses d'impact
+    const echelle = [2, 6, 12, 20].map(v => G.graviteChoc(v, 0));
+    // le cumul compte aussi : sans un seul gros choc, a force de frotter, ca s'abime
+    const cumul = [10, 30, 60, 90].map(d => G.graviteChoc(0, d));
+    const p2 = c.parts;
+    const etat = () => ({
+      pareBrise: p2.ws ? (!p2.ws.visible ? 'brise' : p2.ws.material === G.crackedGlass ? 'fissure' : 'intact') : 'aucun',
+      pharesCasses: p2.lights.filter(l => l.material && l.material.emissive && l.material.emissive.getHex() === 0).length,
+      capot: p2.hood ? +p2.hood.rotation.x.toFixed(2) : 0,
+      portiereDecalee: p2.doors[0] ? Math.abs(p2.doors[0].rotation.y) > 0.1 : false,
+      pieces: (c.wheels || []).filter(w => w.parent !== c.g).length,
+      debris: G.debris.length, fumee: c.fumee || 'aucune', feu: !!c.feu, deg: c.deg || 0,
+    });
+    const suite = [];
+    suite.push(Object.assign({ stade: 0 }, etat()));
+    for (const g of [1, 2, 3]) { G.degatsVehicule(c, g, 3, 3); suite.push(Object.assign({ stade: g }, etat())); }
+    // on ne repasse JAMAIS en arriere : redemander un stade plus leger ne repare rien
+    G.degatsVehicule(c, 1, 0, 0);
+    const apresRetour = c.deg;
+    // le garage, lui, remet tout d'aplomb
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    const repare = Object.assign({}, etat(), { roues: (c.wheels || []).filter(w => w.parent === c.g).length });
+    return { echelle, cumul, suite, apresRetour, repare };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const [s0, s1, s2, s3] = r.suite;
+  const ok = JSON.stringify(r.echelle) === JSON.stringify([0, 1, 2, 3])
+    && JSON.stringify(r.cumul) === JSON.stringify([0, 1, 2, 3])
+    && s0.deg === 0 && s0.pareBrise === 'intact' && s0.pharesCasses === 0
+    && s1.deg === 1 && s1.pharesCasses === 1 && s1.debris > s0.debris && s1.fumee === 'blanche' && !s1.feu
+    && s2.deg === 2 && s2.pareBrise === 'fissure' && s2.pharesCasses === 2 && s2.capot < -0.4 && s2.portiereDecalee && s2.debris > s1.debris
+    && s3.deg === 3 && s3.pareBrise === 'brise' && s3.pieces === 1 && s3.fumee === 'noire' && s3.feu && s3.debris > s2.debris
+    && r.apresRetour === 3
+    && r.repare.deg === 0 && r.repare.pareBrise === 'intact' && r.repare.roues === 4 && !r.repare.feu;
+  return { ok, detail: `un choc n'augmentait qu'un pourcentage INVISIBLE : deux etincelles, et la voiture repartait comme neuve a l'oeil · l'echelle suit maintenant la vitesse d'impact (2, 6, 12, 20 m/s → gravites ${r.echelle.join(', ')}) ET le cumul des chocs precedents (10, 30, 60, 90 % → ${r.cumul.join(', ')}) · stade LEGER : ${s1.pharesCasses} phare pete avec ${s1.debris - s0.debris} eclats de verre au sol, pare-chocs tordu, tole froissee, fumee ${s1.fumee} · stade MOYEN : pare-brise ${s2.pareBrise}, capot souleve (${s2.capot} rad), portiere enfoncee (${s2.portiereDecalee}), pare-chocs qui tombe, ${s2.debris - s1.debris} morceaux de plus · stade GRAVE : pare-brise ${s3.pareBrise}, ${s3.pieces} pneu arrache qui roule, ${s3.debris - s2.debris} morceaux de plus, fumee ${s3.fumee}, et ca prend feu (${s3.feu}) · on ne repasse jamais en arriere (redemande du stade 1 : reste a ${r.apresRetour}) et le garage remet tout d'aplomb (${r.repare.roues} roues, pare-brise ${r.repare.pareBrise}, feu ${r.repare.feu})` };
+});
+
+test('un vehicule gravement accidente brule une dizaine de secondes puis reste une carcasse noircie', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -13, y: 1, z: 11, hour: 12 });
+    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider);
+    if (!c) return { pourquoi: 'aucune voiture a carrosserie' };
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    G.feuVehicule(c, 10);
+    const f = c.feu;
+    const depart = { flammes: f.flammes.length, lueur: !!f.lueur, duree: f.duree, noirci: !!c.noirci };
+    // les flammes ONDULENT : on releve la taille de chacune sur une seconde
+    const tailles = f.flammes.map(() => []);
+    for (let i = 0; i < 60; i++) { G.feuxVehiculesTick(1 / 60); f.flammes.forEach((fl, k) => tailles[k].push(fl.s.scale.y)); }
+    const bougent = tailles.filter(t => Math.max(...t) - Math.min(...t) > 0.05).length;
+    const grandes = f.flammes.filter(fl => fl.base > 1.4).length, petites = f.flammes.filter(fl => fl.base <= 1.4).length;
+    // a mi-parcours ca brule toujours
+    for (let i = 0; i < 240; i++) G.feuxVehiculesTick(1 / 60);
+    const a5s = { feu: !!c.feu, t: c.feu ? +c.feu.t.toFixed(1) : null };
+    // a 9 s aussi
+    for (let i = 0; i < 240; i++) G.feuxVehiculesTick(1 / 60);
+    const a9s = !!c.feu;
+    // et a 11 s, plus rien : une carcasse
+    for (let i = 0; i < 150; i++) G.feuxVehiculesTick(1 / 60);
+    const apres = { feu: !!c.feu, noirci: !!c.noirci, enfants: c.g.children.length };
+    const noir = [];
+    c.g.traverse(o => { if (o.isMesh && o.material && o.material.color) noir.push(o.material.color.getHex()); });
+    const tousNoirs = noir.length ? noir.filter(h => h === 0x2a2622 || h === 0x2f2b28).length / noir.length : 0;
+    G.repairVisual(c); c.dmg = 0;
+    const repeint = c.g.children.length > 0 && !c.noirci;
+    return { depart, bougent, grandes, petites, a5s, a9s, apres, tousNoirs: +tousNoirs.toFixed(2), repeint };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.depart.flammes >= 6 && r.depart.lueur && r.depart.duree === 10
+    && r.bougent === r.depart.flammes && r.grandes >= 2 && r.petites >= 4
+    && r.a5s.feu && r.a9s && !r.apres.feu && r.apres.noirci && r.tousNoirs > 0.5 && r.repeint;
+  return { ok, detail: `une epave restait un tas parfaitement froid · feuVehicule(c, 10) : ${r.depart.flammes} flammes (${r.grandes} grandes, ${r.petites} petites) qui ONDULENT toutes (${r.bougent}/${r.depart.flammes} changent de taille sur une seconde), une lueur qui bat et une fumee noire qui monte · ca brule encore a 5 s (t=${r.a5s.t}) et a 9 s (${r.a9s}), c'est eteint apres 11 s (${r.apres.feu}) et il ne reste qu'une CARCASSE noircie (${Math.round(r.tousNoirs * 100)} % des pieces repeintes en noir) · le garage rend sa peinture au vehicule (${r.repeint})` };
+});
+
+test('un bonhomme de neige percute se casse et tombe, un mur percute garde une marque', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -13, y: 1, z: 11, hour: 12 });
+    // --- le bonhomme de neige ---
+    G.meteoSet('neige', 9999); G.meteo.force = 1; G.neigeDecor(true);
+    const liste = G.city.bonshommes || [];
+    const b = liste.find(x => !x.casse);
+    const avant = b ? b.g.children.length : 0, debrisAvant = G.debris.length;
+    if (b) G.casseBonhomme(b, 5, 0);
+    const bonhomme = { total: liste.length, morceaux: avant, restant: b ? b.g.children.length : -1,
+      tombes: G.debris.length - debrisAvant, casse: !!(b && b.casse), deuxFois: b ? G.casseBonhomme(b, 5, 0) : true };
+    // les morceaux tombent VRAIMENT au sol
+    let auSol = 0;
+    for (let i = 0; i < 200; i++) G.debrisTick(1 / 60);
+    for (const d of G.debris) if (d.m.position.y <= 0.4) auSol++;
+    G.meteoSet('clair', 9999); G.meteo.force = 0; G.neigeDecor(false);
+    // --- la marque sur le mur ---
+    G.marques.length = 0;
+    const m1 = G.marqueMur(0, 1.2, 40, 0, 1, 1);
+    const un = G.marques[0];
+    const marque = { pose: m1, taille: +un.scale.x.toFixed(2), visible: un.visible, texture: !!(un.material && un.material.map) };
+    G.marqueMur(2, 1.2, 40, 0, 1, 3);
+    marque.plusGrave = +G.marques[G.marques.length - 1].scale.x.toFixed(2);
+    // le PLAFOND : quoi qu'on fasse, jamais plus de dix marques dans toute la ville
+    for (let i = 0; i < 40; i++) G.marqueMur(i, 1.2, 40, 0, 1, 2);
+    marque.plafond = G.marques.length;
+    marque.max = G.MARQUES_MAX;
+    // un choc complet passe par la : gravite rendue, marque posee
+    const c = G.city.cars.find(v => v.parts && !v.heli && !v.rider);
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    G.marques.length = 0;
+    const gravite = G.chocVehicule(c, 12, 0, 1);
+    const choc = { gravite, marques: G.marques.length, deg: c.deg };
+    G.eteintFeu(c); G.repairVisual(c); c.dmg = 0;
+    return { bonhomme, auSol, marque, choc };
+  });
+  const ok = r.bonhomme.total > 0 && r.bonhomme.morceaux > 5 && r.bonhomme.restant === 0
+    && r.bonhomme.tombes === r.bonhomme.morceaux && r.bonhomme.casse && r.bonhomme.deuxFois === false
+    && r.auSol > 0
+    && r.marque.pose === 1 && r.marque.visible && r.marque.texture && r.marque.plusGrave > r.marque.taille
+    && r.marque.plafond === r.marque.max && r.marque.max === 10
+    && r.choc.gravite === 2 && r.choc.marques === 1 && r.choc.deg === 2;
+  return { ok, detail: `un bonhomme de neige etait un decor qu'on traversait sans que rien ne bouge, et un mur percute ne gardait aucune trace · ${r.bonhomme.total} bonshommes sont maintenant recenses : celui qu'on percute perd ses ${r.bonhomme.morceaux} morceaux d'un coup (il n'en reste ${r.bonhomme.restant}), ils tombent par terre (${r.auSol} pieces posees au sol) et on ne peut pas le casser deux fois (${r.bonhomme.deuxFois}) · le mur porte une marque texturee (trace noire, fissures, petit trou), d'autant plus large que le choc est grave (${r.marque.taille} m en leger, ${r.marque.plusGrave} m en grave) · et le nombre d'appels de dessin ne peut pas s'envoler : apres 40 chocs il n'y a toujours que ${r.marque.plafond} marques dans toute la ville (plafond ${r.marque.max}, la plus ancienne est recyclee) · un choc complet a 12 m/s rend la gravite ${r.choc.gravite}, applique le stade ${r.choc.deg} et pose ${r.choc.marques} marque` };
+});

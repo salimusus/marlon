@@ -13251,9 +13251,19 @@ function conduire(c, tx, tz, dt, st) {
   let vmax = dist < 9 ? 6 : virage > 0.85 ? 5 : virage > 0.4 ? 8 : 12;
   const loi = codeRoute(c, dt, {});
   vmax = Math.min(vmax, loi.v); c.raison = loi.raison;
-  const [gapB, miniB] = gapDevant(c);
-  if (gapB < miniB) vmax = 0; else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
+  // La file d'attente. Mais une voiture GAREE juste devant le capot ne repartira JAMAIS : un
+  // ami qui prenait une voiture sur le parking restait bloque derriere sa voisine pendant
+  // trente minutes sans jamais toucher personne (donc sans jamais declencher le contournement).
+  // Au bout de 5 s d'attente immobile, on oublie la file : la voiture avance, se cogne, et le
+  // contournement fait le reste.
+  if (simTime > (st.oubliFile || 0)) {
+    const [gapB, miniB] = gapDevant(c);
+    if (gapB < miniB) { vmax = 0; c.raison = c.raison || 'file'; }
+    else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
+  }
   if (pietonDevant(c)) { vmax = 0; klaxonne(c); c.raison = 'pieton'; }
+  if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
+  if (st.filT > 5) { st.filT = 0; st.oubliFile = simTime + 4; st.route = null; st.routeT = 0; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
   const opt = { bar: true, pol: true, veh: true };

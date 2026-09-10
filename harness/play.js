@@ -9223,8 +9223,8 @@ test('les roues de CHAQUE type de véhicule sont posées sur le sol, à l\'arrê
       const g0 = [c.x, c.z, c.h, c.y], par = {};
       for (const [nom, pt] of Object.entries(sols)) {
         if (!pt || !plat(pt[0], pt[1], c)) { par[nom] = null; continue; }
-        c.x = pt[0]; c.z = pt[1]; c.h = 0; c.y = G.groundUnder(c.x, c.z, c.solid, 2); G.settleVehicle(c);
-        c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(0, 0, 0, 'YXZ'); if (c.caisse) c.caisse.position.y = 0;
+        c.x = pt[0]; c.z = pt[1]; c.h = 0; c.y = G.groundUnder(c.x, c.z, c.solid, 2); c.tiltX = 0; c.tilt = 0; c.susp = 0; c.suspV = 0; c.tangage = 0; c.roulis = 0; G.settleVehicle(c);
+        c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(0, 0, 0, 'YXZ'); if (c.caisse) { c.caisse.position.y = 0; c.caisse.rotation.set(0, 0, 0); }
         par[nom] = mesure(c).map(v => +v.toFixed(3));
       }
       res[k] = par;
@@ -9366,11 +9366,12 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
       if (a === c || Math.hypot(a.x - 26, a.z) > 80) continue;
       remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
     }
-    c.busy = false; c.dmg = 0; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
+    c.busy = false; c.dmg = 0; c.accidente = false; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
     G.enterCar(c);
-    const tour = (v, n) => { G.drive.speed = v; c.x = 26; c.z = 24; c.h = Math.PI; for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: v > 0 ? 1 : 0, volant: 0, frein: 0 }, 1 / 60); G.drive.speed = v; } return [G.drive.gear, +c.regime.toFixed(1)]; };
+    const tour = (v, n) => { G.drive.speed = v; c.x = 26; c.z = 24; c.h = Math.PI; for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: v > 0 ? 1 : 0, volant: 0, frein: 0 }, 1 / 60); G.drive.speed = v; } return [G.drive.gear, +(c.regime || 0).toFixed(1)]; };
     // RALENTI : à l'arrêt, pied levé
     c.regime = null; const ralenti = tour(0, 40);
+    const boite = c.caisse;   // la caisse peut avoir ete laissee de travers par un test precedent
     // Le régime d'une VRAIE boîte fait une dent de scie : il grimpe dans chaque rapport,
     // retombe au passage du suivant. On échantillonne donc finement le premier rapport, puis
     // le tout début du deuxième, puis la prise maxi.

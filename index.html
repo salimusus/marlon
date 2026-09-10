@@ -14872,7 +14872,10 @@ function separerVehicules() {
     const a = tous[i], b = tous[j];
     if (a === drive.car || b === drive.car || a.heli || b.heli || !a.solid || !b.solid) continue;
     if (Math.abs((a.y || 0) - (b.y || 0)) > 2.5) continue;   // pas le même niveau (parking en terrasse)
-    const ox = (a.solid.w + b.solid.w) / 2 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 - Math.abs(a.z - b.z);
+    // DEUX CENTIMÈTRES DE JEU. On séparait pile jusqu'au contact : deux véhicules de même
+    // gabarit finissaient collés au millimètre (et, au chouïa d'arrondi près, encore
+    // considérés comme se chevauchant). On laisse un vrai filet d'air entre les tôles.
+    const ox = (a.solid.w + b.solid.w) / 2 + 0.02 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 + 0.02 - Math.abs(a.z - b.z);
     if (ox <= 0 || oz <= 0) continue;
     // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte
     const ra = a.s != null || a.busy, rb = b.s != null || b.busy;
@@ -15227,7 +15230,7 @@ function conduire(c, cmd, dt) {
     V.speed = 0; c.v = 0;
     c.cmd = { gaz: 0, volant: 0, frein: 1, main: true, v: 0, ratio: 0, gear: 1, freine: false, derape: false, glisse: false, accLong: 0, gFrac: 0 };
     poseVehicule(c, dt);
-    if (pilote) { drive.speed = 0; P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(0, 0, 0); P.grounded = true; cityCommon(dt); }
+    if (pilote) { drive.speed = 0; moteurRegime(c, 0, 0, 0, false); P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(0, 0, 0); P.grounded = true; cityCommon(dt); }
     return c.cmd;
   }
   let ix = clamp(cmd.volant || 0, -1, 1), iz = clamp(cmd.gaz || 0, -1, 1);
@@ -15356,7 +15359,15 @@ function separeCaisse(c) {
   if (!c || !c.g || c.caisse) return;
   const roues = new Set(c.wheels || []);
   const k = new THREE.Group();
-  for (const o of c.g.children.slice()) if (!roues.has(o)) k.add(o);
+  for (const o of c.g.children.slice()) {
+    if (roues.has(o)) continue;
+    // La REMORQUE du tracteur porte ses propres roues : rangée dans la caisse, elle plongeait
+    // avec elle et ses roues s'enfonçaient de 15 cm dans le sol. Tout sous-groupe qui contient
+    // une roue reste donc au niveau du véhicule.
+    let porteRoue = false; o.traverse(m => { if (roues.has(m)) porteRoue = true; });
+    if (porteRoue) continue;
+    k.add(o);
+  }
   c.g.add(k); c.caisse = k;
 }
 function prepareVehicule(c) { calerRoues(c); separeCaisse(c); return c; }
@@ -15455,7 +15466,7 @@ function camConduite(dt) {
 // Le RÉGIME MOTEUR suit le rapport : il grimpe dans chaque rapport, retombe au passage du
 // suivant, et redescend au RALENTI à l'arrêt. Le freinage ajoute son crissement.
 function moteurRegime(c, ratio, gFrac, gaz, freine) {
-  if (c.kind === 'bike' || c.kind === 'velo') { engine.set(Math.abs(drive.speed)); return; }
+  if (c.kind === 'bike' || c.kind === 'velo') { c.regime = Math.abs(drive.speed); engine.set(c.regime); return; }
   const cible = ratio < 0.01 ? 1.6 : 2.5 + gFrac * 15 + (gaz > 0.1 ? 2.2 : 0);
   c.regime = c.regime == null ? cible : c.regime + (cible - c.regime) * 0.25;
   engine.set(c.regime);

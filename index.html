@@ -557,7 +557,7 @@ body.tv #tvBadge.on{display:block}
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
-      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer · la croix : <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner, <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions · <b>pavé tactile</b> : arme suivante · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer · la croix : <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner, <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions · <b>pavé tactile</b> : arme suivante · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -910,7 +910,7 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
   json: (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch (e) { return d; } },
 };
-const settings = { volume: (v => v >= 0 && v <= 1 ? v : 0.8)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
+const settings = { volume: (v => v >= 0 && v <= 1 ? v : 0.8)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || (/(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1' || !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1) ? 'ultra' : 'high'),
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160 };
 
 // ================= RENDU =================
@@ -986,14 +986,23 @@ const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, ha
 // l'image restait molle. On rend maintenant jusqu'au NATIF de l'écran, et c'est uniquement la
 // mesure du temps des images qui fait redescendre si la machine ne suit pas.
 const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
-function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : PLAFOND_PC; }
-function ratioQualite() {
-  const q = settings.quality;
-  if (q === 'low') return 1;
-  if (q === 'dlss') return Math.min(window.devicePixelRatio, 2) * 0.62;
-  // une smart TV se declare « mobile » : elle etait bridee a 1,5 comme un telephone
-  return Math.min(window.devicePixelRatio, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2);
-}
+// ULTRA HD. Quatre niveaux, et le plus haut fait ce que la carte graphique sait faire de
+// mieux : SURECHANTILLONNAGE (l'image est calculee a deux fois la finesse de l'ecran puis
+// reduite — chaque pixel affiche est la moyenne de quatre pixels calcules : plus aucun bord
+// en escalier, des details fins qui ne scintillent plus), anticrenelage multi-echantillon
+// sur l'image, puis une passe de NETTETE adaptative (celle des consoles : elle accentue les
+// contours sans faire baver ni les zones plates ni les zones deja tranchees), filtrage des
+// textures au maximum. Sur une tele 4K on calcule au natif et la passe de nettete fait le
+// reste. Et comme toujours, c'est la mesure des images qui decide de descendre si ca rame.
+const QUALITES = {
+  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16 },
+  high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8 },
+  dlss: { n: 'DLSS 5 (upscaling)', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8 },
+  low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4 },
+};
+function qualite() { return QUALITES[settings.quality] || QUALITES.high; }
+function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : Math.max(PLAFOND_PC, qualite().plafond); }
+function ratioQualite() { return qualite().ratio(window.devicePixelRatio || 1); }
 // le ratio réellement envoyé au moteur : qualité × échelle adaptative, borné par le plafond
 function ratioRendu(largeur) {
   const L = Math.max(320, largeur || window.innerWidth);
@@ -1077,7 +1086,7 @@ function fluiditeTick(ms) {
 let anisoMax = 0;
 function netteteTextures() {
   if (!anisoMax) { try { anisoMax = renderer.capabilities.getMaxAnisotropy() || 1; } catch (e) { anisoMax = 1; } }
-  const a = Math.max(1, Math.min(anisoMax, document.body.classList.contains('tv') ? 16 : 8));   // au maximum de la machine sur la télé
+  const a = Math.max(1, Math.min(anisoMax, document.body.classList.contains('tv') ? 16 : qualite().aniso));   // au maximum de la machine sur la télé et en Ultra HD
   const vus = new Set(); let n = 0;
   scene.traverse(o => {
     if (!o.isMesh || !o.material) return;
@@ -1089,15 +1098,69 @@ function netteteTextures() {
   });
   return n;
 }
+// ---- LA PASSE DE NETTETE (et l'anticrenelage multi-echantillon qui va avec) ----
+// L'image est d'abord calculee dans une texture (avec 4 echantillons par pixel quand
+// WebGL 2 le permet), puis recopiee a l'ecran par un petit programme qui accentue les
+// contours. Cout : une passe plein ecran, negligeable a cote de la ville.
+const post = { on: false, force: 0.3, rt: null, w: 0, h: 0, msaa: false, scene: null, cam: null, mat: null, images: 0 };
+function postMonte() {
+  if (post.mat) return;
+  post.mat = new THREE.ShaderMaterial({
+    uniforms: { t: { value: null }, px: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, force: { value: 0.3 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `varying vec2 vUv; uniform sampler2D t; uniform vec2 px; uniform float force;
+      void main(){
+        vec3 c = texture2D(t, vUv).rgb;
+        vec3 n = texture2D(t, vUv + vec2(0.0, px.y)).rgb, s = texture2D(t, vUv - vec2(0.0, px.y)).rgb;
+        vec3 e = texture2D(t, vUv + vec2(px.x, 0.0)).rgb, w = texture2D(t, vUv - vec2(px.x, 0.0)).rgb;
+        vec3 mn = min(min(min(n, s), min(e, w)), c), mx = max(max(max(n, s), max(e, w)), c);
+        vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));
+        vec3 wgt = -amp * mix(0.0, 0.2, force);
+        vec3 o = (c + (n + s + e + w) * wgt) / (1.0 + 4.0 * wgt);
+        gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+      }`, depthTest: false, depthWrite: false });
+  post.scene = new THREE.Scene(); post.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat));
+  post.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+}
+function postCible() {
+  const taille = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const w = Math.max(2, taille.x | 0), h = Math.max(2, taille.y | 0);
+  if (post.rt && post.w === w && post.h === h) return post.rt;
+  if (post.rt) post.rt.dispose();
+  const gl2 = !!(renderer.capabilities && renderer.capabilities.isWebGL2);
+  post.msaa = gl2 && typeof THREE.WebGLMultisampleRenderTarget === 'function';
+  const opt = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, stencilBuffer: false };
+  post.rt = post.msaa ? new THREE.WebGLMultisampleRenderTarget(w, h, opt) : new THREE.WebGLRenderTarget(w, h, opt);
+  if (post.msaa) post.rt.samples = 4;
+  post.w = w; post.h = h;
+  return post.rt;
+}
+function rendreImage() {
+  if (!post.on) { renderer.render(scene, camera); return false; }
+  try {
+    postMonte();
+    const rt = postCible();
+    renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null);
+    post.mat.uniforms.t.value = rt.texture; post.mat.uniforms.px.value.set(1 / post.w, 1 / post.h); post.mat.uniforms.force.value = post.force;
+    renderer.render(post.scene, post.cam); post.images++;
+    return true;
+  } catch (e) {
+    post.on = false; try { renderer.setRenderTarget(null); } catch (_) {}
+    if (!post.err) { post.err = 1; console.error('nettete', e); }
+    renderer.render(scene, camera); return false;
+  }
+}
 function applyQuality() {
-  const q = settings.quality, low = q === 'low', dlss = q === 'dlss';
+  const q = settings.quality, low = q === 'low', dlss = q === 'dlss', Q = qualite();
+  post.on = !!Q.post; post.force = Q.nettete;
   // "DLSS" : rendu en résolution réduite puis agrandi à l'écran (upscaling), ombres conservées
   rendu.ech = 1; rendu.tps.length = 0; ombresRendu(!low);
   appliqueRendu();
   sun.castShadow = !low && rendu.ombres; renderer.shadowMap.enabled = !low && rendu.ombres;
   ombresQualite(0);   // carte d'ombres de depart (1024 en DLSS), echelle 1, ombres allumees
   worldGroup.traverse(o => { if (o.isMesh) o.material && (o.material.needsUpdate = true); });
-  $('qualBtn').textContent = 'Qualité : ' + (low ? 'basse' : dlss ? 'DLSS 5 (upscaling)' : 'haute');
+  try { netteteTextures(); } catch (e) {}
+  $('qualBtn').textContent = 'Qualité : ' + Q.n;
 }
 
 // ================= MATÉRIAUX "BRIQUES" =================
@@ -11931,7 +11994,9 @@ function tennisPoint(side, why) {
 function showTennis(txt, over) { msg(over || txt, over ? 2600 : 1600); sfx.check(); chat(null, txt); if (over) { chat(null, over); sfx.win(); } updateAct(); }
 function startDance(sec) { if (P.dance <= 0) P.danceFace = P.facing; P.dance = sec; cam.freeUntil = simTime + sec + 0.5; }
 function stopDance() { P.dance = 0; if (P.danceFace != null) { P.facing = P.danceFace; P.danceFace = null; } cam.freeUntil = 0; }
-function openUI(id) { if (uiOpen && uiOpen !== id) $(uiOpen).classList.add('hidden'); uiOpen = id; paused = true; keys.clear(); jumpHeld = downHeld = false; $(id).classList.remove('hidden'); document.body.classList.add('uiopen'); }
+function openUI(id) { if (uiOpen && uiOpen !== id) $(uiOpen).classList.add('hidden'); uiOpen = id; paused = true; keys.clear(); jumpHeld = downHeld = false; $(id).classList.remove('hidden'); document.body.classList.add('uiopen');
+  // a la manette, un curseur des l'ouverture : sinon il fallait deviner qu'il faut d'abord appuyer sur une fleche
+  if (manetteSalon.i >= 0 || document.body.classList.contains('tv')) setTimeout(() => { if (uiOpen === id && !document.querySelector('.focustv')) navBouge(1); }, 30); }
 function closeUI() { if (!uiOpen) return; $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
 const itemKey = (cat, it) => `${cat}:${it.id}`;
 function applyShopItem(cat, it) {
@@ -13140,10 +13205,7 @@ function pollGamepad(dt) {
   neuf[6] = padGachette(gp, 6) > PAD_SEUIL_GACHETTE;
   neuf[7] = padGachette(gp, 7) > PAD_SEUIL_GACHETTE;
   if (menu) {
-    if ((neuf[12] && !bas[12]) || (neuf[14] && !bas[14])) navBouge(-1);
-    if ((neuf[13] && !bas[13]) || (neuf[15] && !bas[15])) navBouge(1);
-    if (neuf[0] && !bas[0]) navValide();
-    if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) telTouche('Escape', true);
+    padMenu(gp, neuf, bas);
   } else {
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
@@ -13167,6 +13229,31 @@ function pollGamepad(dt) {
   }
   pad.bas = neuf; pad.a = neuf[0];
 }
+// LA MANETTE DANS LES MENUS. Avant : ↑ et ← faisaient « precedent », ↓ et → « suivant », dans
+// l'ordre du code — dans une grille on atterrissait a cote ; il fallait relacher et rappuyer
+// a chaque case ; le stick ne faisait rien ; les onglets et les cartes d'articles etaient
+// hors d'atteinte. Maintenant : quatre vraies directions (croix OU stick gauche), repetition
+// quand on maintient, R1/L1 pour changer d'onglet, ✕ valide, ◯ revient, et les curseurs
+// (volume...) glissent avec ← →.
+const PAD_REPET = { avant: 380, puis: 130 };
+function padMenu(gp, neuf, bas) {
+  const t = performance.now();
+  const sx = gp.axes[0] || 0, sy = gp.axes[1] || 0;
+  const dir = neuf[12] || sy < -0.55 ? 'haut' : neuf[13] || sy > 0.55 ? 'bas' : neuf[14] || sx < -0.55 ? 'gauche' : neuf[15] || sx > 0.55 ? 'droite' : null;
+  if (dir) {
+    const meme = pad.menuDir === dir;
+    if (!meme || t >= (pad.menuT || 0)) {
+      if ((dir === 'gauche' || dir === 'droite') && navGlisse(dir === 'droite' ? 1 : -1)) { /* un curseur : on l'a fait glisser */ }
+      else navVers(dir);
+      pad.menuT = t + (meme ? PAD_REPET.puis : PAD_REPET.avant);
+    }
+    pad.menuDir = dir;
+  } else pad.menuDir = null;
+  if (neuf[0] && !bas[0]) navValide();
+  if (neuf[5] && !bas[5]) navOnglet(1);
+  if (neuf[4] && !bas[4]) navOnglet(-1);
+  if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) telTouche('Escape', true);
+}
 // LE SON A LA MANETTE. Sans geste « humain » (clic, touche, doigt) le navigateur garde la
 // carte son endormie ; une manette n'en est pas un. On essaie, et sinon on explique — une
 // seule fois par quart de minute, pas a chaque bouton.
@@ -13179,6 +13266,16 @@ function padSon() {
   if (settings.sound && simTime > (pad.sonT || 0)) { pad.sonT = simTime + 15; msg('🔇 Pour le son : appuie sur OK de la télécommande, ou touche l\'écran une fois', 3200); }
   return false;
 }
+// LA CADENCE. La manette etait lue une fois par image : sur une tele a 25 images par
+// seconde, un appui pouvait attendre 40 ms avant d'etre vu, et un appui bref entre deux
+// images etait PERDU. Elle est maintenant lue 120 fois par seconde, independamment de
+// l'affichage : un menu reste vif meme quand l'image, elle, peine.
+const PAD_HZ = 120;
+let padDernierT = performance.now();
+setInterval(() => {
+  const t = performance.now(), dt = Math.min(0.05, (t - padDernierT) / 1000); padDernierT = t;
+  try { pollGamepad(dt); } catch (e) { if (!pollGamepad.err) { pollGamepad.err = 1; console.error('manette', e); } }
+}, Math.round(1000 / PAD_HZ));
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
@@ -13342,7 +13439,7 @@ $('sndTest').addEventListener('click', async () => {
 });
 $('musBtn').addEventListener('click', () => { settings.music = !settings.music; store.set('superobby.music', settings.music ? '1' : '0'); $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée'); });
 $('sndTop').addEventListener('click', () => { setSound(!settings.sound); if (settings.sound) sfx.coin(); });
-$('qualBtn').addEventListener('click', () => { settings.quality = { high: 'dlss', dlss: 'low', low: 'high' }[settings.quality] || 'high'; store.set('superobby.quality', settings.quality); applyQuality(); });
+$('qualBtn').addEventListener('click', () => { settings.quality = { ultra: 'high', high: 'dlss', dlss: 'low', low: 'ultra' }[settings.quality] || 'ultra'; store.set('superobby.quality', settings.quality); applyQuality(); msg(`🖼️ Qualité : ${qualite().n}`, 1400); });
 $('quit').addEventListener('click', () => { toggleMenu(false); running = false; resetGame(); $('start').classList.remove('hidden'); document.body.classList.add('lobby'); showBest(); });
 setSound(settings.sound);
 const ctrlLabel = () => { $('ctrlBtn').textContent = 'Contrôles : ' + (settings.ctrl === 'rot' ? 'rotation' : 'caméra'); $('turnBtn').textContent = `Vitesse de rotation : ${settings.turn}°/s`; $('turnBtn').style.display = settings.ctrl === 'rot' ? '' : 'none'; };
@@ -13374,7 +13471,7 @@ function frame() {
   const brut = clock.getDelta();
   const dt = Math.min(brut, 0.05);
   try { fluiditeTick(brut * 1000); ombresCadence(); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images
-  pollGamepad(dt);
+  // (la manette n'est plus lue ici : elle a sa propre cadence de 120 Hz, voir plus bas)
   const active = running && !paused && !dead && !won;
   acc += dt; let n = 0;
   while (acc >= FIXED && n < 8) { step(FIXED, active); acc -= FIXED; n++; }
@@ -13586,7 +13683,7 @@ function frame() {
   stars.position.copy(camera.position);
   water.position.x = P.pos.x; water.position.z = P.pos.z;
 
-  renderer.render(scene, camera);
+  rendreImage();
 }
 
 // hook
@@ -14449,34 +14546,84 @@ $('tvPleinEcran').addEventListener('click', () => {
 // Les flèches (ou la croix directionnelle d'une manette) déplacent une bague jaune d'un
 // bouton à l'autre, Entrée ou A valide : plus besoin de souris devant la télé.
 const NAVTV = { i: 0 };
+// TOUT ce qui se clique dans une fenetre : les boutons, mais aussi les onglets de la
+// boutique (des <b data-k>), les pastilles, les cartes d'articles (.item), les vignettes
+// des mondes... La moitie des menus etait hors d'atteinte a la manette.
 function navCibles() {
   const ouvert = document.querySelector('.overlay:not(.hidden)');
   const racine = ouvert || document.body;
-  return [...racine.querySelectorAll('button:not([disabled]), input, .sw i, .pills b, .wcard')]
-    .filter(e => e.offsetParent !== null);
+  const vus = new Set();
+  return [...racine.querySelectorAll('button:not([disabled]), input, select, .sw i, .pills b, [data-k], [data-v], [data-i], .item, .fcard, .wcard, .ocard, [data-nav]')]
+    .filter(e => { if (vus.has(e) || e.offsetParent === null) return false; vus.add(e); const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; });
+}
+function navChoisit(e) {
+  document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
+  if (!e) return false;
+  e.classList.add('focustv');
+  try { e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+  return true;
 }
 function navBouge(d) {
   const c = navCibles(); if (!c.length) return false;
   const actuel = c.findIndex(e => e.classList.contains('focustv'));
-  c.forEach(e => e.classList.remove('focustv'));
   let i = actuel < 0 ? 0 : (actuel + d + c.length) % c.length;
-  c[i].classList.add('focustv');
-  try { c[i].scrollIntoView({ block: 'nearest' }); } catch (_) {}
-  NAVTV.i = i; return true;
+  NAVTV.i = i; return navChoisit(c[i]);
+}
+// EN DEUX DIMENSIONS. « Bas » suivait l'ordre du code, pas celui de l'ecran : dans une grille
+// d'articles, la fleche du bas passait a la case D'A COTE et « droite » sautait a la ligne.
+// On cherche maintenant la cible la plus proche DANS la direction demandee, alignement compris.
+function navVers(dir) {
+  const c = navCibles(); if (!c.length) return false;
+  const cur = c.find(e => e.classList.contains('focustv'));
+  if (!cur) return navChoisit(c[0]);
+  const a = cur.getBoundingClientRect(), ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2;
+  let best = null, bd = Infinity;
+  for (const e of c) {
+    if (e === cur) continue;
+    const b = e.getBoundingClientRect(), dx = (b.left + b.right) / 2 - ax, dy = (b.top + b.bottom) / 2 - ay;
+    const prim = dir === 'bas' ? dy : dir === 'haut' ? -dy : dir === 'droite' ? dx : -dx;
+    const sec = (dir === 'bas' || dir === 'haut') ? Math.abs(dx) : Math.abs(dy);
+    if (prim < 4) continue;                       // pas dans cette direction
+    const score = prim + sec * 2.2;               // le mieux aligne l'emporte sur le plus proche
+    if (score < bd) { bd = score; best = e; }
+  }
+  if (!best) return navBouge(dir === 'bas' || dir === 'droite' ? 1 : -1);   // au bout : on reboucle
+  NAVTV.i = c.indexOf(best); return navChoisit(best);
+}
+// les « bandeaux » d'onglets : on passe a l'onglet voisin (R1 / L1, ou depuis la touche Tab)
+function navOnglet(d) {
+  const ouvert = document.querySelector('.overlay:not(.hidden)'); if (!ouvert) return false;
+  const grp = ouvert.querySelector('#stTabs, .tabs, .pills');
+  if (!grp) return false;
+  const t = [...grp.querySelectorAll('b, button')].filter(e => e.offsetParent !== null);
+  if (!t.length) return false;
+  let i = t.findIndex(e => e.classList.contains('sel') || e.classList.contains('on') || e.classList.contains('focustv'));
+  i = ((i < 0 ? 0 : i + d) + t.length) % t.length;
+  t[i].click(); navChoisit(t[i]); return true;
 }
 function navValide() {
   const e = document.querySelector('.focustv'); if (!e) return false;
-  if (e.tagName === 'INPUT') { e.focus(); return true; }
-  e.click(); setTimeout(() => { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); }, 60);
+  if (e.tagName === 'INPUT' && e.type !== 'range' && e.type !== 'checkbox') { e.focus(); return true; }
+  if (e.tagName === 'INPUT' && e.type === 'checkbox') { e.click(); return true; }
+  if (e.tagName === 'INPUT') return true;
+  e.click();
+  // apres un clic la fenetre a pu changer : on garde un curseur visible dans la nouvelle
+  setTimeout(() => { if (!document.contains(e) || e.offsetParent === null || !document.querySelector('.overlay:not(.hidden)')) { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); if (manetteSalon.i >= 0) navBouge(1); } }, 60);
   return true;
+}
+// un curseur (input range) sous le doigt : gauche / droite le font glisser
+function navGlisse(d) {
+  const e = document.querySelector('.focustv'); if (!e || e.tagName !== 'INPUT' || e.type !== 'range') return false;
+  const pas = +e.step || 1; e.value = String(clamp((+e.value || 0) + d * pas, +e.min || 0, +e.max || 100));
+  e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); return true;
 }
 window.addEventListener('keydown', e => {
   if (!document.body.classList.contains('tv')) return;
   if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   const ouvert = document.querySelector('.overlay:not(.hidden)');
   if (!ouvert) return;
-  if (e.code === 'ArrowDown' || e.code === 'ArrowRight') { if (navBouge(1)) e.preventDefault(); }
-  else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') { if (navBouge(-1)) e.preventDefault(); }
+  const dir = { ArrowDown: 'bas', ArrowUp: 'haut', ArrowLeft: 'gauche', ArrowRight: 'droite' }[e.code];
+  if (dir) { if ((dir === 'gauche' || dir === 'droite') && navGlisse(dir === 'droite' ? 1 : -1)) { e.preventDefault(); return; } if (navVers(dir)) e.preventDefault(); }
   else if (e.code === 'Enter' || e.code === 'NumpadEnter') { if (navValide()) e.preventDefault(); }
 });
 

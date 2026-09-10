@@ -4865,8 +4865,10 @@ test('on peut jouer au tennis avec un garde du corps, et les autres s\'écartent
     __SHOT.go({ world: 4, x: 13, y: 1, z: -8, hour: 12 });
     const G = __G, res = {};
     const joueur = G.bots[0], g1 = G.bots[1], g2 = G.bots[2];
-    // trois gardes au maximum : un garde reste d'un test precedent bloquait la troisieme place
-    for (const b of G.bots) { b.gardeCorps = 0; b.garde = 0; b.protege = null; }
+    // trois gardes au maximum : un garde reste d'un test precedent bloquait la troisieme place ;
+    // et une partie de tennis ou de foot restee « en cours » faussait la touche
+    for (const b of G.bots) { b.gardeCorps = 0; b.garde = 0; b.protege = null; b.sport = null; }
+    G.tm.on = false; G.tm.bot = null; G.fm.on = false; G.fm.bot = null; G.clearWanted(); G.police.agents.length = 0;
     for (const b of [joueur, g1, g2]) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.sport = null; b.rdv = null; b.wait = 0; }
     G.P.pos.set(13, 0.3, -8);
     G.botGardeDuCorps(joueur); G.botGardeDuCorps(g1); G.botGardeDuCorps(g2);
@@ -5206,7 +5208,13 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G, res = {};
     const l = G.bots.slice(0, 5);
-    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.bagarre = null; b.fight = null;
+    // personne d'autre ne doit pouvoir toucher la victime : ni la police d'un test precedent,
+    // ni un gangster rival, ni un habitant en bagarre — on ne mesure que les coups ENTRE EUX
+    G.clearWanted(); G.police.agents.length = 0;
+    for (const o of G.bots) if (!l.includes(o)) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); o.fight = null; }
+    for (const G2 of G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.chasse = null; if (o.av) o.av.group.position.set(o.x, o.y, o.z); }
+    for (const b of G.bots) { b.gardeCorps = 0; b.garde = 0; b.protege = null; }
+    for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.bagarre = null; b.fight = null; b.sport = null; b.rdv = null;
       b.gardeCorps = 0; b.pos.set(G.P.pos.x + 2, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
     G.botGardeDuCorps(l[0]); G.botGardeDuCorps(l[1]); G.botGardeDuCorps(l[2]);
     const victime = l[3];
@@ -6579,6 +6587,105 @@ test('les ombres passent en haute definition, et la tele sacrifie les ombres ava
     && u[3].ech < 1 && u[3].carte === attendu / 4 && r.bas.ombres === false && r.bas.ech === 0.5
     && r.haut.p === 0 && r.haut.ech === 1 && r.haut.carte === attendu && r.haut.ombres === true && r.tv >= r.pc;
   return { ok, detail: `la carte d'ombres faisait 2048 points pour 72 m (${r.base.avant} points par mètre) : chaque bord d'ombre était un escalier sur un grand écran · elle fait maintenant ${r.base.carte} points (maximum de la machine : ${r.base.max}) sur un cadre de ${2 * r.base.cadre} m, soit ${r.base.ppm} points par mètre, avec un biais de normale (${r.base.nbias}) contre l'acné et des ombres douces même sur la télé (${r.base.doux}) · et quand la télé rame, ce sont les OMBRES qui s'allègent en premier, pas la netteté : ${u.map(m => `${m.carte}${m.ombres ? '' : '✕'}@${m.ech}`).join(' → ')} (${r.paliers} paliers, la résolution ne bouge qu'a partir du 4e) · dès que ça respire tout remonte (palier ${r.haut.p}, ${r.haut.carte} points) · et la télé n'est plus bridée a 1,5 pixel comme un téléphone (${r.tv} ≥ ${r.pc})` };
+});
+
+test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseurs, repetition', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { G.closeUI(); document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const ds = { index: 0, connected: true, id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })), vibrationActuator: { playEffect: () => Promise.resolve('complete') } };
+    const vraiGP = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.01); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.01); };
+    const foc = () => document.querySelector('.focustv');
+    try {
+      G.pollGamepad(0.01);   // la manette est vue : un curseur apparaitra a l'ouverture
+      const res = {};
+      G.openStore(); await dodo(80);
+      res.curseurAuto = !!foc();
+      const c = G.navCibles();
+      res.cibles = { total: c.length, onglets: c.filter(e => e.closest('#stTabs')).length, articles: c.filter(e => e.classList.contains('fcard')).length };
+      // R1 / L1 : le bandeau d'onglets
+      const sel = () => (document.querySelector('#stTabs b.sel') || {}).dataset && document.querySelector('#stTabs b.sel').dataset.k;
+      const t0 = sel(); tap(5); const t1 = sel(); tap(4); const t2 = sel();
+      res.onglets = { t0, t1, t2 };
+      // la grille en 2D : droite = meme ligne, bas = la carte du dessous (pas le voisin)
+      document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
+      // un onglet dont les cartes tiennent sur AU MOINS deux lignes (sinon « bas » n'a rien a viser)
+      let cartes = [];
+      for (const tb of document.querySelectorAll('#stTabs b')) { tb.click(); await dodo(30);
+        cartes = [...document.querySelectorAll('#stGrid .fcard')].filter(e => e.offsetParent !== null);
+        if (new Set(cartes.map(e => Math.round(e.getBoundingClientRect().top))).size >= 2) break; }
+      cartes[0].classList.add('focustv');
+      const ra = cartes[0].getBoundingClientRect();
+      G.navVers('droite'); const b = foc(), rb = b.getBoundingClientRect();
+      G.navVers('bas'); const cc = foc(), rc = cc.getBoundingClientRect();
+      res.grille = { n: cartes.length, droiteMemeLigne: Math.abs(rb.top - ra.top) < 4 && rb.left > ra.left + 10, basDessous: rc.top > rb.top + 10 && Math.abs(rc.left - rb.left) < 40 };
+      // le stick maintenu REPETE : plusieurs pas en 0,7 s, et pas un pas par image
+      const suivi = [];
+      ds.axes = [0, 1, 0, 0]; const T0 = performance.now();
+      while (performance.now() - T0 < 700) { G.pollGamepad(0.01); const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); await dodo(8); }
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
+      res.repet = { pas: suivi.length, images: Math.round(700 / 8) };
+      // ✕ valide un onglet, et le curseur reste visible apres
+      document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
+      const tabs = [...document.querySelectorAll('#stTabs b')]; tabs[2].classList.add('focustv'); tap(0); await dodo(90);
+      res.valide = { voulu: tabs[2].dataset.k, obtenu: sel(), curseur: !!foc() };
+      // ◯ referme
+      tap(1); await dodo(40); res.ferme = G.uiOpen;
+      // le curseur de volume glisse avec ← → (pas de « sortie » du menu)
+      G.toggleMenu(true); await dodo(60);
+      document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); document.getElementById('volIn').classList.add('focustv');
+      const v0 = +document.getElementById('volIn').value; tap(15); tap(15); const v1 = +document.getElementById('volIn').value; tap(14); const v2 = +document.getElementById('volIn').value;
+      res.curseur = { v0, v1, v2, reglage: G.settings.volume, encoreOuvert: !!document.querySelector('#menu:not(.hidden)') };
+      document.getElementById('volIn').value = '80'; document.getElementById('volIn').dispatchEvent(new Event('input'));
+      G.toggleMenu(false); ferme();
+      res.cadence = G.PAD_HZ;
+      res.aide = (document.querySelector('.keys') || {}).textContent || '';
+      return res;
+    } finally { navigator.getGamepads = vraiGP; ferme(); }
+  });
+  const ok = r.curseurAuto && r.cibles.onglets >= 5 && r.cibles.articles >= 4 && r.onglets.t1 !== r.onglets.t0 && r.onglets.t2 === r.onglets.t0
+    && r.grille.droiteMemeLigne && r.grille.basDessous && r.repet.pas >= 3 && r.repet.pas < r.repet.images / 3
+    && r.valide.obtenu === r.valide.voulu && r.valide.curseur && r.ferme === null
+    && r.curseur.v1 === r.curseur.v0 + 10 && r.curseur.v2 === r.curseur.v0 + 5 && r.curseur.reglage === (r.curseur.v0 + 5) / 100 && r.curseur.encoreOuvert
+    && r.cadence >= 100 && /R1\/L1/.test(r.aide);
+  return { ok, detail: `dans les menus, la manette etait a moitie sourde : les onglets de la boutique et ses cartes d'articles etaient hors d'atteinte (${r.cibles.onglets} onglets et ${r.cibles.articles} articles maintenant selectionnables sur ${r.cibles.total} cibles), « bas » suivait l'ordre du code et atterrissait a cote (maintenant : droite reste sur la ligne=${r.grille.droiteMemeLigne}, bas descend=${r.grille.basDessous}), il fallait relacher et rappuyer a chaque case (stick maintenu 0,7 s : ${r.repet.pas} pas, avec repetition mesuree et non un pas par image), et elle etait lue une fois par image — ${r.cadence} fois par seconde maintenant · un curseur apparait des l'ouverture (${r.curseurAuto}), R1/L1 changent d'onglet (${r.onglets.t0} → ${r.onglets.t1} → ${r.onglets.t2}), ✕ valide (${r.valide.obtenu}) en gardant le curseur, ◯ referme, et le volume glisse avec ← → (${r.curseur.v0} → ${r.curseur.v1} → ${r.curseur.v2} %)` };
+});
+
+test('Ultra HD : surechantillonnage, anticrenelage multi-echantillon et passe de nettete', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, R = G.renderer, gl = R.getContext();
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // on lit les VRAIS pixels de la sortie, juste apres le rendu
+    const lis = () => { const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const buf = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      let lum = 0, n = 0, contours = 0;
+      for (let y = 0; y < h; y += 4) for (let x = 0; x + 4 < w; x += 4) { const i = (y * w + x) * 4, j = (y * w + x + 4) * 4; const l = (buf[i] + buf[i + 1] + buf[i + 2]) / 3; lum += l; n++; contours += Math.abs(l - (buf[j] + buf[j + 1] + buf[j + 2]) / 3); }
+      return { w, h, lum: +(lum / n).toFixed(1), contours: +(contours / n).toFixed(2) }; };
+    const dpr = window.devicePixelRatio || 1;
+    G.settings.quality = 'high'; G.applyQuality(); G.post.on = false; G.rendreImage(); const haute = lis();
+    G.settings.quality = 'ultra'; G.applyQuality();
+    const ultraOK = G.rendreImage(); const ultra = lis();
+    const q = G.qualite(), libelle = document.getElementById('qualBtn').textContent;
+    const reglages = { ratio: G.ratioQualite(), plafond: G.plafondPixels(), post: G.post.on, force: G.post.force, aniso: q.aniso, msaa: G.post.msaa, samples: G.post.rt ? G.post.rt.samples : 0, gl2: !!R.capabilities.isWebGL2, err: !!G.post.err, images: G.post.images };
+    G.post.force = 0; G.rendreImage(); const sansNettete = lis();
+    // sur une tele 4K : au natif (pas de surechantillonnage a 8 K), et la nettete fait le reste
+    G.modeTV(true); const tv = { ratio: G.ratioRendu(3840), plafond: G.plafondPixels() }; G.modeTV(false);
+    // le defaut : Ultra HD sur ordinateur et tele, « haute » sur telephone
+    const defaut = { ordi: G.QUALITES.ultra.n, cycle: ['ultra', 'high', 'dlss', 'low'].every(k => G.QUALITES[k]) };
+    G.settings.quality = 'high'; G.applyQuality();
+    return { dpr, haute, ultra, ultraOK, reglages, sansNettete, tv, defaut, libelle };
+  });
+  const ok = r.ultraOK && r.reglages.ratio === Math.min(r.dpr * 2, 3) && r.ultra.w === r.haute.w * 2 && r.ultra.h === r.haute.h * 2
+    && r.ultra.lum > 40 && Math.abs(r.ultra.lum - r.haute.lum) < 12 && !r.reglages.err
+    && r.reglages.post && r.reglages.force > 0.4 && r.reglages.aniso === 16 && r.reglages.plafond >= 5120
+    && (!r.reglages.gl2 || (r.reglages.msaa && r.reglages.samples === 4))
+    && r.ultra.contours > r.sansNettete.contours * 1.02
+    && r.tv.ratio <= 1.001 && r.tv.plafond === 3840 && r.defaut.cycle;
+  return { ok, detail: `« haute » rendait l'image a la finesse de l'ecran, point · Ultra HD la calcule a ${r.reglages.ratio}× (${r.ultra.w}×${r.ultra.h} au lieu de ${r.haute.w}×${r.haute.h} : chaque pixel affiche est la moyenne de quatre pixels calcules, plus aucun bord en escalier), avec l'anticrenelage multi-echantillon (${r.reglages.msaa ? r.reglages.samples + ' echantillons' : 'WebGL 1 : sans'}), le filtrage des textures a ${r.reglages.aniso}×, et une passe de NETTETE adaptative qui accentue les contours (+${Math.round((r.ultra.contours / r.sansNettete.contours - 1) * 100)} % de contraste de contour mesure sur les vrais pixels, luminosite conservee : ${r.ultra.lum} contre ${r.haute.lum}) · sur une tele 4K on calcule au natif (ratio ${r.tv.ratio}, plafond ${r.tv.plafond}) et la nettete fait le reste · c'est le reglage par defaut sur ordinateur et tele (« ${r.libelle} » dans les reglages, quatre niveaux), et la mesure des images fait toujours redescendre si la machine ne suit pas` };
 });
 
 test('une manette PlayStation 5 pilote tout le jeu', async p => {

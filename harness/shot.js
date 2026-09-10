@@ -112,6 +112,7 @@ window.__SHOT = {
         m.x -= 400; m.z -= 400; if (m.av) m.av.group.position.set(m.x, m.y, m.z);
       }
     } catch (e11) {}
+    if (!v.garderQualite && settings.quality !== 'high') { settings.quality = 'high'; try { applyQuality(); } catch (e12) {} }   // l'Ultra HD doublerait le temps du banc d'essai
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
     // L'heure se pilote par simTime (journee de 7 h a 19 h). Mais l'horloge ne doit JAMAIS
     // reculer : des minuteries posees par un test precedent (le prochain habitant qui va au
@@ -450,6 +451,18 @@ window.__G = {
   startCountdown: typeof startCountdown === 'function' ? startCountdown : null,
   raceTick: typeof raceTick === 'function' ? raceTick : null,
   padAction: typeof padAction === 'function' ? padAction : null,
+  post: typeof post !== 'undefined' ? post : null,
+  rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
+  QUALITES: typeof QUALITES !== 'undefined' ? QUALITES : null,
+  qualite: typeof qualite === 'function' ? qualite : null,
+  plafondPixels: typeof plafondPixels === 'function' ? plafondPixels : null,
+  navVers: typeof navVers === 'function' ? navVers : null,
+  navCibles: typeof navCibles === 'function' ? navCibles : null,
+  navOnglet: typeof navOnglet === 'function' ? navOnglet : null,
+  navGlisse: typeof navGlisse === 'function' ? navGlisse : null,
+  padMenu: typeof padMenu === 'function' ? padMenu : null,
+  PAD_HZ: typeof PAD_HZ !== 'undefined' ? PAD_HZ : null,
+  PAD_REPET: typeof PAD_REPET !== 'undefined' ? PAD_REPET : null,
   armeSuivante: typeof armeSuivante === 'function' ? armeSuivante : null,
   PAD_CROIX: typeof PAD_CROIX !== 'undefined' ? PAD_CROIX : null,
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : null,

@@ -129,9 +129,19 @@ window.__SHOT = {
     // se retrouvaient alors dans un futur inatteignable. On avance donc d'un nombre entier de
     // journees : meme heure affichee, horloge toujours croissante.
     if (v.hour != null) {
-      const cible = ((v.hour - 7 + 12) % 12) / 12 * day.len;
+      // LA NUIT N'EXISTE PAS DANS LE CYCLE AUTOMATIQUE : l'horloge du jeu ne va que de 7 h a
+      // 19 h, et l'obscurite y est plafonnee (AMBIANCES.auto). Une vue demandee a « 23 h »
+      // retombait donc, sans un mot, sur 11 h du matin : toutes les captures et toutes les
+      // mesures dites « de nuit » etaient prises en plein jour. Hors de la plage du cycle, on
+      // FIGE donc l'ambiance sur le moment demande (matin, couchant, nuit) ; dedans, on remet
+      // le cycle automatique pour ne pas laisser la nuit collee au test suivant.
+      var ambVoulue = (v.hour >= 21 || v.hour < 5) ? 'nuit' : v.hour >= 19 ? 'couchant' : v.hour < 7 ? 'matin' : null;
+      try { settings.ambiance = ambVoulue || 'auto'; } catch (e) {}
+      var hVoulue = ambVoulue && typeof AMBIANCES !== 'undefined' && AMBIANCES[ambVoulue] ? AMBIANCES[ambVoulue].h : v.hour;
+      const cible = ((hVoulue - 7 + 12) % 12) / 12 * day.len;
       const jours = Math.max(0, Math.ceil((simTime - cible) / day.len));
       simTime = cible + jours * day.len;
+      try { day.last = -1; dayTick(); } catch (e) {}   // la lumiere prend tout de suite, sans attendre une image
     }
     // La camera suit le joueur en douceur : apres une teleportation elle met plusieurs images
     // a le rattraper, et une mesure prise entre-temps porte sur une camera encore en route.

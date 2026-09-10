@@ -12944,7 +12944,7 @@ function penetration(x, y, z) {
 }
 function desincarcere(dt) {
   const p = penetration(P.pos.x, P.pos.y, P.pos.z);
-  if (!p.o) { P.coinceT = 0; return; }
+  if (!p.o) { P.coinceT = 0; P.coinceN = 0; return; }
   P.coinceT = (P.coinceT || 0) + dt;
   if (P.coinceT < 0.5) return;
   const o = p.o;
@@ -12954,10 +12954,13 @@ function desincarcere(dt) {
     { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
     { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
   ].sort((u, v) => u.d - v.d)[0];
-  // on le fait glisser dehors (au plus 6 m/s) : brutal mais visible, il n'est jamais figé
-  const pas = Math.min(Math.abs(sorties.v - P.pos[sorties.a]), 6 * dt) * Math.sign(sorties.v - P.pos[sorties.a]);
-  P.pos[sorties.a] += pas;
-  if (P.coinceT > 3) { P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.coinceT = 0; }
+  // On le pose dehors D'UN COUP. Le pousser doucement ne servait à rien : la résolution
+  // axe par axe de l'image suivante le renvoyait aussitôt au milieu, et il vibrait sur
+  // place indéfiniment. Un saut d'un mètre et demi, une fois, et il est libre.
+  P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
+  P.coinceN = (P.coinceN || 0) + 1;
+  // enfermé de tous les côtés (quatre meubles autour de lui) : on le pose sur le dessus
+  if (P.coinceN > 3) { P.coinceN = 0; P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.grounded = true; }
   // dernier garde-fou : jamais éjecté hors de la carte
   if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }
 }
@@ -15902,7 +15905,14 @@ function frame() {
   // LE TOUR DE ROULETTE passe par-dessus tout le reste : il reprend la caméra pour la
   // poser devant la roue. Il vit sur le temps RÉEL (et non sur les pas de simulation, qui
   // sont figés quand l'interface du casino est ouverte) — sinon la bille resterait en l'air.
-  if (casino.cine) { try { rouletteCine(Math.min(brut, 0.25)); } catch (e) { casino.cine = null; console.error('roulette', e); } }
+  if (casino.cine) {
+    try { rouletteCine(Math.min(brut, 0.25)); }
+    catch (e) {   // en cas de pépin on rend l'écran au joueur : sinon il resterait sans interface
+      casino.cine = null; billeSon.stop(); console.error('roulette', e);
+      $('rouletteCine').classList.add('hidden'); document.body.classList.remove('roulette');
+      if (uiOpen === 'casino') $('casino').classList.remove('hidden');
+    }
+  }
 
   rendreImage();
 }

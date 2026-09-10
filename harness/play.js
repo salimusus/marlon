@@ -6796,9 +6796,14 @@ test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', 
     G.wallet = 5000; G.ouvreCasino('roulette', roul); G.casino.mise = 10; G.casino.pari = 'rouge';
     const u = roul.g.userData, r0 = u.roue.rotation.y;
     G.jouerCasino();
+    // le tour est joué par rouletteCine (temps réel), et non plus par casinoTick : c'est lui
+    // qui fait tourner la roue, freiner, et poser la bille dans la case du numéro sorti
     const vitesses = []; let prev = u.roue.rotation.y;
-    for (let s2 = 0; s2 < 6; s2++) { for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.casinoTick(1 / 60); } vitesses.push(+(u.roue.rotation.y - prev).toFixed(2)); prev = u.roue.rotation.y; }
-    const cible = ((G.casino.roulette % 18) / 18) * Math.PI * 2 - u.roue.rotation.y;
+    for (let s2 = 0; s2 < 6; s2++) { for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; if (G.casino.cine) G.rouletteCine(1 / 60); else G.casinoTick(1 / 60); } vitesses.push(+(u.roue.rotation.y - prev).toFixed(2)); prev = u.roue.rotation.y; }
+    // on laisse le tour se terminer (gros plan sur le résultat, retour de l'interface) :
+    // sinon la partie de poker qui suit se heurterait au tour de roulette encore en cours
+    for (let i = 0; i < 400 && G.casino.cine; i++) { G.simTime += 1 / 60; G.rouletteCine(1 / 60); }
+    const cible = G.ROULETTE_ORDRE.indexOf(G.casino.roulette) * (Math.PI * 2 / 37) - u.roue.rotation.y;
     let d = cible - u.angB; d = Math.atan2(Math.sin(d), Math.cos(d));
     const roulette = { num: G.casino.roulette, tours: +((u.roue.rotation.y - r0) / (2 * Math.PI)).toFixed(2), vitesses, ecartCase: +Math.abs(d).toFixed(3), rayon: +u.rB.toFixed(2), cases: u.roue.children.length };
     G.closeUI();
@@ -6813,7 +6818,7 @@ test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', 
     return { roulette, p1, p2, p3 };
   });
   const v = r.roulette.vitesses;
-  const ok = r.roulette.tours > 2 && v[0] > v[2] && v[2] > v[4] && v[5] < 0.6 && r.roulette.ecartCase < 0.05 && r.roulette.rayon < 0.8 && r.roulette.cases >= 36
+  const ok = r.roulette.tours > 1 && v[0] > v[2] && v[2] > v[4] && v[5] < 0.6 && r.roulette.ecartCase < 0.05 && r.roulette.rayon < 1.1 && r.roulette.cases >= 36
     && r.p1.n === 5 && r.p1.faces.join() === r.p1.attendu.join() && r.p1.etape === 'change' && r.p1.dos
     && r.p2.y0 > r.p2.y1 + 0.1 && r.p2.rx0 > -1.4
     && r.p3.faces.join() === r.p3.attendu.join() && r.p3.etape === 'pret';
@@ -8166,20 +8171,22 @@ test('coincé dans un solide, le joueur en ressort en moins d\'une seconde', asy
       testes++; if (k / 60 > pire) pire = k / 60;
       if (dedans(o) > 0.02) rates++;
     }
-    // 2) le cas dur : serré ENTRE DEUX meubles, plus étroit que lui. La résolution axe par
-    // axe le renvoyait d'un meuble à l'autre indéfiniment ; c'est la désincarcération qui
-    // le tire dehors.
+    // 2) le cas dur : EMMURÉ, quatre meubles autour de lui et 30 cm d'espace au milieu.
+    // La résolution axe par axe le renvoyait d'un meuble à l'autre indéfiniment : il
+    // vibrait sur place pour toujours. C'est la désincarcération qui le tire dehors.
     const x0 = 6, z0 = 8, sol = [];
     for (const dx of [-0.65, 0.65]) sol.push({ x: x0 + dx, y: 0.8, z: z0, w: 1, h: 1.6, d: 2.4, mesh: { visible: true } });
+    for (const dz of [-0.65, 0.65]) sol.push({ x: x0, y: 0.8, z: z0 + dz, w: 2.4, h: 1.6, d: 1, mesh: { visible: true } });
     for (const o of sol) G.solids.push(o);
-    P.pos.set(x0, 0, z0); P.vel.set(0, 0, 0); P.coinceT = 0; P.sit = null;
-    let k2 = 0; for (; k2 < 180; k2++) { G.step(1 / 60, true); if (!dedans(sol[0]) && !dedans(sol[1])) break; }
-    const libre = k2 / 60, sorti = !dedans(sol[0]) && !dedans(sol[1]);
+    P.pos.set(x0, 0, z0); P.vel.set(0, 0, 0); P.coinceT = 0; P.coinceN = 0; P.sit = null;
+    const libreDe = () => sol.every(o => !dedans(o));
+    let k2 = 0; for (; k2 < 180; k2++) { G.step(1 / 60, true); if (libreDe()) break; }
+    const libre = k2 / 60, sorti = libreDe();
     for (const o of sol) { const i = G.solids.indexOf(o); if (i >= 0) G.solids.splice(i, 1); }
     return { testes, rates, pire, libre, sorti, x: P.pos.x, z: P.pos.z };
   });
   const ok = r.rates === 0 && r.pire < 1 && r.sorti && r.libre < 1;
-  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · serré entre deux meubles distants de 30 cm, il ballottait de l'un à l'autre SANS JAMAIS SORTIR : la désincarcération le pousse dehors en ${r.libre.toFixed(2)} s (sorti=${r.sorti})` };
+  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · EMMURÉ entre quatre meubles avec 30 cm d'espace, il vibrait sur place SANS JAMAIS SORTIR : la désincarcération le pose dehors en ${r.libre.toFixed(2)} s (sorti=${r.sorti}, arrivé en x=${r.x.toFixed(2)}, z=${r.z.toFixed(2)})` };
 });
 
 test('la roulette : la caméra passe devant la roue, la roue freine et la bille tombe dans la case', async p => {

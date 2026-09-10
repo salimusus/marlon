@@ -5570,9 +5570,18 @@ function construireGraphe() {
     const dedans = Math.min(2.5, lon / 4);
     pts[i].push(c - lon / 2 + dedans, c + lon / 2 - dedans);
   }
-  for (const k of carrefours()) {
-    pts[k.ia].push(along(k.ia) ? k.cz : k.cx);
-    pts[k.ib].push(along(k.ib) ? k.cz : k.cx);
+  // TOUS les croisements, pas seulement ceux que retient `carrefours()` : celle-ci n'en garde
+  // qu'un par zone de 7 m, si bien que la troisieme rue d'un carrefour a cinq branches
+  // n'avait aucun noeud et que le reseau se retrouvait coupe en une dizaine d'iles.
+  for (let i = 0; i < R.length; i++) for (let j = 0; j < R.length; j++) {
+    if (i === j || along(i) === along(j)) continue;
+    const a = R[i], b = R[j];
+    const ox = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+    const oz = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+    if (ox <= 0.6 || oz <= 0.6) continue;
+    const cx = (Math.max(a.x - a.w / 2, b.x - b.w / 2) + Math.min(a.x + a.w / 2, b.x + b.w / 2)) / 2;
+    const cz = (Math.max(a.z - a.d / 2, b.z - b.d / 2) + Math.min(a.z + a.d / 2, b.z + b.d / 2)) / 2;
+    pts[i].push(along(i) ? cz : cx);
   }
   // deux rectangles PARALLELES qui se recouvrent, c'est le meme axe declare en deux morceaux :
   // sans un noeud commun, le reseau restait coupe en vingt-cinq iles.
@@ -5614,13 +5623,51 @@ function construireGraphe() {
       }
     }
   }
+  // ---- 5) LES LIAISONS. Le reseau restait coupe en treize iles : une rue s'arrete a quatre
+  // metres du boulevard, une bretelle passe a six metres du contournement, et deux quartiers
+  // qui se touchent presque n'avaient aucun chemin commun. Quand deux noeuds de DEUX ILES
+  // differentes sont a moins de 11 m l'un de l'autre, on les raccorde par une petite voie de
+  // liaison (dans les deux sens) — c'est exactement ce que fait un conducteur qui traverse
+  // l'ilot de trois metres qui separe deux bouts de bitume.
+  const pere = noeuds.map((n, i) => i);
+  const trouve = i => { while (pere[i] !== i) { pere[i] = pere[pere[i]]; i = pere[i]; } return i; };
+  const unir = (i, j) => { const a = trouve(i), b = trouve(j); if (a !== b) { pere[a] = b; return true; } return false; };
+  for (const e of aretes) unir(e.de, e.vers);
+  const cand = [];
+  for (let i = 0; i < noeuds.length; i++) for (let j = i + 1; j < noeuds.length; j++) {
+    const d = Math.hypot(noeuds[i].x - noeuds[j].x, noeuds[i].z - noeuds[j].z);
+    if (d > 18 || d < 0.2) continue;
+    cand.push([d, i, j]);
+  }
+  cand.sort((a, b) => a[0] - b[0]);
+  let nliaison = 0;
+  // une liaison ne doit traverser NI un mur NI un massif : on la teste comme on testerait une
+  // voiture qui l'emprunte (`carBlocked`, le meme garde-fou que la voiture du joueur)
+  const liaisonLibre = (A, B) => {
+    for (let u = 0; u <= 4; u++) { const x = A.x + (B.x - A.x) * u / 4, z = A.z + (B.z - A.z) * u / 4;
+      if (carBlocked(x, z, null, 1.5, { veh: false })) return false; }
+    return true;
+  };
+  for (const [d, i, j] of cand) {
+    if (trouve(i) === trouve(j)) continue;
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    unir(i, j); nliaison++;
+    const A = noeuds[i], B = noeuds[j], sens = Math.atan2(B.x - A.x, B.z - A.z);
+    for (const [de, vers, sg, cap2] of [[A, B, 1, sens], [B, A, -1, CAP(sens + Math.PI)]]) {
+      const e = { id: aretes.length, de: de.id, vers: vers.id, route: -1 - nliaison, voie: -1,
+        alongZ: Math.abs(Math.cos(cap2)) > 0.5, sens: cap2, sgn: sg, lat: 0, larg: 6, role: 'desserte',
+        vmax: 6, c0: 0, c1: d, long: d, inv: -1, liaison: true,
+        x0: de.x, z0: de.z, x1: vers.x, z1: vers.z };
+      aretes.push(e); de.sortantes.push(e.id); vers.entrantes.push(e.id);
+    }
+  }
   // l'arete INVERSE (meme troncon, sens oppose) : c'est elle qu'on interdit, pour ne pas
   // faire demi-tour en pleine rue
   for (const n of noeuds) for (const ei of n.sortantes) {
     const e = aretes[ei];
     for (const ej of n.entrantes) { const f = aretes[ej]; if (f.route === e.route && f.sgn !== e.sgn && f.de === e.vers) { e.inv = ej; break; } }
   }
-  // ---- 5) les manoeuvres possibles a chaque noeud
+  // ---- 6) les manoeuvres possibles a chaque noeud
   for (const n of noeuds) {
     for (const ei of n.entrantes) {
       const e1 = aretes[ei], inv = aretes[ei].inv >= 0 ? aretes[aretes[ei].inv] : null;
@@ -5643,13 +5690,14 @@ function construireGraphe() {
     k.panneau = (city.panneaux || []).some(q => (q.type === 'stop' || q.type === 'cede') && Math.hypot(q.x - k.cx, q.z - k.cz) < 16);
     k.larg = Math.max(k.ox, k.oz) / 2 + 1.6;
   }
-  return { noeuds, aretes, voies, carrefours: cars };
+  return { noeuds, aretes, voies, carrefours: cars, liaisons: nliaison };
 }
-// La projection d'un point sur une arete (le long de la voie de droite).
+// La projection d'un point sur une arete (le long de la voie de droite). Elle marche aussi
+// pour les LIAISONS, qui ne suivent aucun axe.
 function projVoie(x, z, e) {
-  const l = e.c1 - e.c0, cc = e.alongZ ? z : x;
-  let t = l === 0 ? 0 : (cc - e.c0) / l; t = clamp(t, 0, 1);
-  const c = e.c0 + l * t, px = e.alongZ ? e.lat : c, pz = e.alongZ ? c : e.lat;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, L2 = dx * dx + dz * dz;
+  let t = L2 ? ((x - e.x0) * dx + (z - e.z0) * dz) / L2 : 0; t = clamp(t, 0, 1);
+  const px = e.x0 + dx * t, pz = e.z0 + dz * t;
   return { t, px, pz, d: Math.hypot(px - x, pz - z) };
 }
 // La voie la plus proche d'un point. Si `cap` est donne, on prefere celle qui va dans le
@@ -5720,6 +5768,7 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
   };
   for (let k = 0; k + 1 < suite.length; k++) {
     const e = suite[k], f = suite[k + 1], n = G.noeuds[e.vers];
+    if (e.liaison || f.liaison) { pousse(e.x1, e.z1); pousse(f.x0, f.z0); continue; }   // raccord : on passe par le noeud
     // le coin : le point ou les deux voies de droite se croisent
     const cx = e.alongZ ? e.lat : (f.alongZ ? f.lat : n.x);
     const cz = e.alongZ ? (f.alongZ ? n.z : f.lat) : e.lat;

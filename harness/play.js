@@ -8134,6 +8134,7 @@ test('le joueur se bat des DEUX poings, gauche puis droite', async p => {
     G.equipWeapon(null); G.P.drawn = false; G.setGarde(false); G.setAccroupi(false);
     posePlayer(); const b = seul(1.3);
     // quatre coups d'affilée : le poing doit changer à chaque fois
+    G.P.poing = 'G';   // point de départ fixe : sinon le test hérite du poing du test précédent
     const suite = [];
     for (let i = 0; i < 4; i++) {
       b.pos.set(0, 0.3, 1.3); b.av.group.position.copy(b.pos); b.hp = 100;
@@ -8160,8 +8161,9 @@ test('le joueur se bat des DEUX poings, gauche puis droite', async p => {
     return res;
   `));
   const s = r.suite;
-  const ok = r.alterne === 'DGDG' && s.every(x => x.degats > 0)
-    && s[0].droit === 1 && s[0].gauche === 0 && s[1].gauche === 1 && s[1].droit === 0
+  const alterne = s.every((x, i) => i === 0 || x.poing !== s[i - 1].poing);
+  const bonBras = s.every(x => (x.poing === 'D' ? x.droit === 1 && x.gauche === 0 : x.gauche === 1 && x.droit === 0));
+  const ok = alterne && bonBras && s.every(x => x.degats > 0)
     && r.droit.debutCoude < -0.8 && r.droit.finCoude > -0.2 && r.gauche.debutCoude < -0.8 && r.gauche.finCoude > -0.2
     && r.gauche.epauleMin < -2 && r.gauche.epauleMax > -1 && r.enMarchant < -1;
   return { ok, detail: `le joueur ne frappait QUE du bras droit · l'enchaînement alterne maintenant les deux poings (${r.alterne}), chacun portant vraiment (${s.map(x => x.degats + ' PV').join(', ')}) · le geste est le même des deux côtés : le coude part replié (${r.gauche.debutCoude} rad à gauche, ${r.droit.debutCoude} à droite) et se tend à l'impact (${r.gauche.finCoude} / ${r.droit.finCoude}), l'épaule balaie de ${r.gauche.epauleMin} à ${r.gauche.epauleMax} · et le balancement de la marche n'écrase plus le bras qui frappe (${r.enMarchant} rad)` };

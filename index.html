@@ -4000,6 +4000,30 @@ function degageLesRoutes() {
   if (n) sgridSale();
   return n;
 }
+// LE DÉCOR SOLIDIFIÉ QUI TOMBE EN PLEINE VOIE. Le poste Collisions rend solide, tout a la fin,
+// tout le décor que le joueur traversait — et quelques-uns de ces objets sont plantés au milieu
+// d'une chaussée (les quatre pieds de la grande roue, un piquet de barrière, un pot de fleurs).
+// On ne touche PAS a leur allure : on leur retire seulement la collision qu'ils viennent de
+// recevoir. La rue reste roulante, et le décor reste exactement ou l'artiste l'a posé.
+function degageDecorSurRoutes() {
+  const surChaussee = (x, z) => (city.routes || []).some(r =>
+    Math.abs(x - r.x) < r.w / 2 - 0.6 && Math.abs(z - r.z) < r.d / 2 - 0.6);
+  let n = 0;
+  for (let i = solids.length - 1; i >= 0; i--) {
+    const o = solids[i];
+    if (o.y - o.h / 2 > 0.8) continue;                       // ce qui pend en hauteur ne gêne personne
+    if (o.veh || o.porte || o.feu || o.trottoir || o.bar || o.ai || o.pol || o.chantier) continue;
+    // le décor solidifié, et les poteaux FINS que le grand nettoyage a laissés (un mât de plage
+    // tiré au hasard tombe parfois pile sur la promenade du littoral)
+    if (!o.decor && !(o.h > 0.3 && Math.max(o.w, o.d) <= 1.2)) continue;
+    if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
+    if (!surChaussee(o.x, o.z)) continue;
+    solids.splice(i, 1); n++;
+  }
+  if (n) { sgridSale(); navSale(); }
+  city.decorRendu = n;
+  return n;
+}
 // ================= TROTTOIRS ET MOBILIER PUBLIC =================
 // Chaque rue recoit ses deux trottoirs (dalle claire et bordure), coupes aux carrefours ; puis
 // une passe de mobilier le long des rues — arbres, buissons, bancs, poubelles, glissieres —
@@ -4687,7 +4711,7 @@ const WORLDS = [
       B('métiers', buildMetiers);   // poste J : dépôt, caserne, équipes, véhicules de travail, boîtes aux lettres
       // (poste G) en DERNIER : la règle de collision couvre alors tout ce que les autres
       // postes viennent d'ajouter — panneaux, quartiers neufs, chantiers, boîtes aux lettres
-      B('collisions du décor', solidifieDecor);
+      B('collisions du décor', () => { solidifieDecor(); degageDecorSurRoutes(); });
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls

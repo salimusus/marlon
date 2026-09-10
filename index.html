@@ -13295,7 +13295,11 @@ function conduire(c, tx, tz, dt, st) {
   if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.route = null; st.routeT = 0; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
-  const opt = { bar: true, pol: true, veh: true };
+  // Sur les DOUZE DERNIERS METRES on ne compte plus les autres vehicules : on se gare
+  // pare-chocs contre pare-chocs, et c'est `separerVehicules` qui ecarte les caisses. Avec la
+  // regle stricte, la voiture de fuite s'arretait a sept metres de l'allee de la villa parce
+  // qu'une voiture y etait garee, et le coup ne se terminait jamais.
+  const opt = { bar: true, pol: true, veh: dist > 12 };
   let bloque = 0;
   const [cr, cL] = vehHalf(c);
   // tourner sur place enfonce aussi un coin dans un mur : on annule la rotation si elle mord
@@ -13305,7 +13309,10 @@ function conduire(c, tx, tz, dt, st) {
   if (!vehBloque(c, c.x, nz, c.h, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
   if (!vehBloque(c, c.x, c.z, c.h, opt)) c.libre = [c.x, c.z, c.h];
   else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
-  st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
+  // Le compteur de blocage DECROIT au lieu de retomber a zero : une voiture qui rabote un
+  // mur n'est bloquee que sur un axe a la fois, si bien qu'elle remettait le compteur a zero
+  // une image sur deux et que le deblocage ne partait jamais.
+  st.bloqueT = bloque ? (st.bloqueT || 0) + dt : Math.max(0, (st.bloqueT || 0) - dt * 0.6);
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {
@@ -13321,14 +13328,24 @@ function conduire(c, tx, tz, dt, st) {
   // qui te conduit, lui, s'arrête et le dit plutôt que de traverser les murs.
   // (le tracé étant maintenant fait de longues lignes droites, on ne se téléporte plus au
   // point de passage — il peut être à 80 m — mais de quelques mètres dans sa direction)
-  if (st.saut !== false && st.bloqueT > 3.5) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
-    const ex = w2[0] - c.x, ez = w2[1] - c.z, el = Math.hypot(ex, ez) || 1;
-    // on ne saute que sur un metre de bitume LIBRE : avant, le deblocage pouvait deposer la
-    // voiture en plein dans une facade
-    let pas = 0;
-    for (let u = Math.min(el, 7); u >= 1.5; u -= 1) { if (!vehBloque(c, c.x + ex / el * u, c.z + ez / el * u, c.h, opt)) { pas = u; break; } }
-    if (pas) { c.x += ex / el * pas; c.z += ez / el * pas; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
-    st.route = null; st.routeT = 0; c.speed = pas ? 6 : 0; }
+  // COINCE POUR DE BON : on se degage de quelques metres vers une place LIBRE (jamais dans un
+  // mur — chaque candidat est verifie), en cherchant d'abord dans la direction du point de
+  // passage puis tout autour. Sans ce filet, un ami reste plante contre l'angle d'un immeuble.
+  if (st.saut !== false && st.bloqueT > 3.5) {
+    st.bloqueT = 0;
+    const w2 = st.route[Math.min(1, st.route.length - 1)];
+    const el = Math.hypot(w2[0] - c.x, w2[1] - c.z) || 1, ex = (w2[0] - c.x) / el, ez = (w2[1] - c.z) / el;
+    let pose = null;
+    for (const a of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
+      const dx2 = ex * Math.cos(a) - ez * Math.sin(a), dz2 = ex * Math.sin(a) + ez * Math.cos(a);
+      for (let u = Math.min(el, 12); u >= 2; u -= 1.5) {
+        const px = c.x + dx2 * u, pz = c.z + dz2 * u;
+        if (!vehBloque(c, px, pz, c.h, opt)) { pose = [px, pz]; break; }
+      }
+      if (pose) break;
+    }
+    if (pose) { c.x = pose[0]; c.z = pose[1]; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+    st.route = null; st.routeT = 0; c.speed = pose ? 5 : 0; }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
   return dist;

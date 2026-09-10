@@ -7403,3 +7403,29 @@ test('le budget de seize sons places en meme temps n\'est jamais depasse : les p
     && r.proche && r.apres.vivants <= r.plein.max && r.rafale.pic <= 16 && r.rafale.joues > 20;
   return { ok, detail: `rien ne bornait le nombre de sons : une bagarre, une rue pleine et un helicoptere empilaient des dizaines de voix en meme temps, le limiteur ecrasait tout et la carte son grognait · le budget est desormais de ${r.plein.max} sons places simultanement, les PLUS PROCHES gagnant la place — 40 sons lointains d'un coup : ${r.plein.pic} retenus, ${r.plein.refuses} refuses ; un son tout pres passe quand meme (${r.proche ? 'oui' : 'non'}) en evincant le plus lointain (le plus eloigne qui reste est a ${r.plusLoin} m) ; et une rafale de 360 pas sur 30 images ne fait jamais depasser ${r.rafale.pic} sons simultanes (${r.rafale.joues} joues, ${r.rafale.refuses} refuses)` };
 });
+
+test('chaque quartier a sa rumeur et les bots qui parlent s\'ENTENDENT : une voix par personnage, tiree de son nom', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true; G.sfx.unlock(); await dodo(300);
+    // la rumeur suit le quartier ou l'on se trouve
+    const rumeur = (x, z) => { G.P.pos.set(x, 1, z); G.SONV.ambT = 0; G.sonsVille(1 / 60); const e = G.ambiance.etat(); return { k: e.cle, vol: e.volCible, coupe: e.coupeCible }; };
+    const centre = rumeur(0, 40), plage = rumeur(150, 40), zone = rumeur(-145, 40), parc = rumeur(0, 80);
+    // une bulle de bot fait du bruit, celle du joueur non (on ne se double pas soi-meme)
+    G.P.pos.set(0, 1, 8);
+    const b = G.bots[0];
+    b.pos.set(G.P.pos.x + 4, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    G.SON.raz(); G.bubble(b.av, 'salut, ça va ?'); const bot = G.SON.blabla;
+    G.SON.raz(); G.bubble(G.me, 'moi je parle tout seul'); const joueur = G.SON.blabla;
+    // trop loin, on ne l'entend plus
+    b.pos.set(G.P.pos.x + 120, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos);
+    G.SON.raz(); G.bubble(b.av, 'et de loin ?'); const loin = G.SON.blabla;
+    b.pos.set(G.P.pos.x + 4, G.P.pos.y, G.P.pos.z); b.av.group.position.copy(b.pos);
+    return { centre, plage, zone, parc, bot, joueur, loin, familles: Object.keys(G.QUARTIERS).length };
+  });
+  const ok = r.centre.k === 'centre' && r.plage.k === 'plage' && r.zone.k === 'zone' && r.parc.k === 'parc'
+    && r.zone.coupe < r.centre.coupe && r.plage.vol > r.parc.vol && r.familles >= 8
+    && r.bot === 1 && r.joueur === 0 && r.loin === 0;
+  return { ok, detail: `la ville etait MUETTE : pas de rumeur, et douze habitants qui discutaient en bulles sans un son · chaque quartier a maintenant sa rumeur, un lit de bruit filtre qui fond d'un quartier a l'autre (${r.familles} ambiances — centre ${r.centre.vol} a ${r.centre.coupe} Hz, plage ${r.plage.vol} avec vagues et mouettes, La Zone plus sourde ${r.zone.coupe} Hz, parc ${r.parc.vol} avec des oiseaux) · et toute bulle de chat s'entend : une voix « bruitee » spatialisee, une hauteur par personnage tiree de son nom (${r.bot} voix pour le bot d'a cote, ${r.joueur} pour la sienne — on ne se double pas soi-meme, ${r.loin} a 120 m)` };
+});

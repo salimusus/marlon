@@ -409,8 +409,13 @@ body.tv #tvBadge.on{display:block}
 #padCase.attente #padConnect{background:#ffd23f;color:#1b2a4a}#padCase.ok #padConnect{background:#3ddc5a;color:#0d2a12}
 #volRow,.volRow{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;font-weight:800}#volRow input,.volRow input{width:min(220px,48vw)}#volRow b,.volRow b{min-width:44px;text-align:right}
 /* un curseur PAR FAMILLE de sons : le bouton essaie la famille en direct, pour regler d'oreille */
-.volRow{gap:8px}.volRow span{min-width:104px;text-align:left}.volRow input{width:min(150px,34vw)}.volRow button{border:0;border-radius:10px;padding:4px 9px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;background:#2b3550;color:#fff}
-#mixTitre{margin:10px 0 2px;font-weight:900;opacity:.8}
+.volRow{gap:6px;margin:5px 0;font-size:13px;flex-wrap:nowrap}.volRow span{flex:0 0 auto;min-width:82px;text-align:left;white-space:nowrap}.volRow input{flex:1 1 auto;width:auto;min-width:70px;max-width:130px}.volRow b{min-width:36px;font-size:12px}
+.volRow button{flex:0 0 auto;border:0;border-radius:9px;padding:3px 8px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;background:#2b3550;color:#fff}
+/* replie par defaut : cinq curseurs de plus rendaient le menu trop long pour un ecran de tele */
+#mixBloc{margin:8px 0 2px;text-align:left}
+#mixTitre{cursor:pointer;font-weight:900;opacity:.85;font-size:14px;text-align:center;list-style:none;padding:6px;border-radius:12px;background:#eef3ff}
+#mixTitre::-webkit-details-marker{display:none}
+#mixBloc[open] #mixTitre{margin-bottom:4px}
 
 /* ================= Manette : le téléphone devient la télécommande ================= */
 #manette{position:fixed;inset:0;z-index:60;background:linear-gradient(160deg,#12203c,#1b2a4a 45%,#0d1730);
@@ -873,8 +878,7 @@ body.tv #tvBadge.on{display:block}
     <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
     <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
-    <div id="mixTitre">🎚️ Volume par famille</div>
-    <div id="mixRows"></div>
+    <details id="mixBloc"><summary id="mixTitre">🎧 Volume par famille ▾</summary><div id="mixRows"></div></details>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
     <button class="btn sec" id="voiceBtn">Voix des bots : activées</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
@@ -9358,7 +9362,7 @@ function hornEn(kind, x, z) {
 }
 // ---- L'AMBIANCE : la rumeur du quartier, un lit de bruit filtre qui ne s'arrete jamais ----
 const ambiance = (() => {
-  let src = null, filt = null, hp = null, g = null, cle = null;
+  let src = null, filt = null, hp = null, g = null, cle = null, volCible = 0, coupeCible = 0;
   const monte = () => {
     const c = sfx.unlock(); if (!c) return null;
     if (src) return c;
@@ -9377,12 +9381,14 @@ const ambiance = (() => {
     set(k, vol, coupe) {
       if (!settings.sound) return;
       const c = monte(); if (!c) return;
-      cle = k;
-      g.gain.setTargetAtTime(Math.max(0.0001, vol), c.currentTime, 0.9);
-      filt.frequency.setTargetAtTime(Math.max(80, coupe), c.currentTime, 0.9);
+      cle = k; volCible = Math.max(0.0001, vol); coupeCible = Math.max(80, coupe);
+      // fondu lent (0,9 s) : un quartier ne change pas de rumeur d'un coup quand on passe le coin
+      g.gain.setTargetAtTime(volCible, c.currentTime, 0.9);
+      filt.frequency.setTargetAtTime(coupeCible, c.currentTime, 0.9);
     },
-    stop() { const c = sfx.ctx(); if (g && c) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4); },
-    etat: () => ({ cle, gain: g ? +g.gain.value.toFixed(4) : 0, coupe: filt ? Math.round(filt.frequency.value) : 0 }),
+    stop() { const c = sfx.ctx(); if (g && c) { volCible = 0.0001; g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4); } },
+    etat: () => ({ cle, gain: g ? +g.gain.value.toFixed(4) : 0, coupe: filt ? Math.round(filt.frequency.value) : 0,
+      volCible: +volCible.toFixed(4), coupeCible: Math.round(coupeCible) }),
   };
 })();
 // Chaque quartier a sa rumeur : le centre bourdonne, la plage respire, La Zone est sourde.

@@ -144,6 +144,8 @@ window.__SHOT = {
     cam.freeUntil = 1e9;                         // fige l'orientation demandée
     if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
     if (v.salonTV && typeof ouvreSalonTV === 'function') { try { ouvreSalonTV(); } catch (e9) {} }
+    if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
+    if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
     if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
@@ -413,6 +415,7 @@ window.__G = {
   cityVie: typeof cityVie === 'function' ? cityVie : null,
   SON: typeof SON !== 'undefined' ? SON : null,
   SOLS: typeof SOLS !== 'undefined' ? SOLS : null,
+  bubble: typeof bubble === 'function' ? bubble : null,
   QUARTIERS: typeof QUARTIERS !== 'undefined' ? QUARTIERS : null,
   ACCUEIL_DELAI: typeof ACCUEIL_DELAI !== 'undefined' ? ACCUEIL_DELAI : null,
   hornEn: typeof hornEn === 'function' ? hornEn : null,
@@ -841,7 +844,9 @@ window.__G = {
   tactile(on) { document.body.classList.toggle('touch', !!on); },
   hud() { return { jump: document.getElementById('jumpBtn').textContent, car: document.getElementById('carBtn').textContent,
     punch: document.getElementById('punchBtn').textContent, emote: document.getElementById('emoteBtn').textContent }; },
-  // Ce qu'on tient est passe du groupe du bras au noeud `main`, au centre du poing rond :
+  // Ce qu'on tient est passe du groupe du bras au noeud « main », au centre du poing rond :
+  // (les accents graves autour de « main » FERMAIENT le gabarit HOOK : node harness/shot.js
+  //  ne se chargeait plus du tout et aucune capture d'ecran n'etait possible)
   // on compte donc les deux, sinon le test « rien ne reste colle a la main » ne voyait plus rien.
   arm() { return me.rig.armR.children.length + (me.rig.armR.main ? me.rig.armR.main.children.length : 0); },
 };

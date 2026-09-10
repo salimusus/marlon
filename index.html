@@ -3309,7 +3309,7 @@ function boulesTick(dt) {
     if (!moving) {
       const d = Math.min(...b.balls.map(x => Math.hypot(x.pos.x - b.jack.position.x, x.pos.z - b.jack.position.z)));
       const pts = d < 0.6 ? 3 : d < 1.2 ? 2 : d < 2 ? 1 : 0; city.boulesPts = (city.boulesPts || 0) + pts;
-      msg(`🎯 ${d.toFixed(1)} m du cochonnet${pts ? ` · +${pts} pt` : ' · raté'}`, 2200); if (pts) sfx.check(); b.resetT = simTime + 3.5; updateAct();
+      msg(`🎯 ${d.toFixed(1)} m du cochonnet${pts ? ` · +${pts} pt` : ' · raté'}`, 2200); if (pts) sfx.check(); primeSport('boules', city.boulesPts); b.resetT = simTime + 3.5; updateAct();
     }
   }
   if (b.resetT && simTime > b.resetT) { b.balls.forEach(removeBall); b.balls = []; b.thrown = 0; b.resetT = 0; placeJack(); }
@@ -4710,6 +4710,39 @@ function varianteMission(liste) {
   const f = mission.forcer; mission.forcer = null;
   return (f && liste.indexOf(f) >= 0) ? f : pickOne(liste);
 }
+// Les mini-jeux de la ville comptaient les points… et c'est tout. Un enfant qui met dix
+// buts, gagne dix points au tennis ou fait un carton aux boules ne recevait pas une pièce
+// et n'avait donc aucune raison de continuer. Les paliers versent maintenant une prime,
+// annoncée à l'écran : c'est la petite boucle de récompense qui manquait au terrain de
+// sport, et elle reste indépendante de la carrière du bureau des missions.
+const PALIERS_SPORT = { foot: { pas: 3, gain: 12, e: '⚽', n: 'buts' }, tennis: { pas: 5, gain: 12, e: '🎾', n: 'points' }, boules: { pas: 9, gain: 10, e: '🎯', n: 'points' } };
+function primeSport(quoi, total) {
+  const p = PALIERS_SPORT[quoi]; if (!p || !total) return 0;
+  const atteints = Math.floor(total / p.pas), avant = Math.floor((city.primesSport && city.primesSport[quoi]) || 0);
+  if (atteints <= avant) return 0;
+  city.primesSport = city.primesSport || {};
+  city.primesSport[quoi] = atteints;
+  const gain = (atteints - avant) * p.gain;
+  wallet += gain; saveWallet(); updateHud(); sfx.coin();
+  msg(`${p.e} ${total} ${p.n} — prime de ${gain} 🪙 !`, 2600);
+  return gain;
+}
+// Un emplacement où un TAXI peut vraiment se garer. Plusieurs OPEN_SPOTS sont au milieu du
+// terrain de foot ou d'une pelouse : aucune voiture ne s'en approche à moins de 4,5 m, et la
+// mission « Taxi » était alors impossible à terminer — le client restait planté là pendant
+// que le chrono tournait. C'est une des raisons du fameux « le bureau des missions ne
+// fonctionne pas ». On ne garde que les emplacements desservis par la route.
+function spotVoiture(spots, rayon = 3.5) {
+  const liste = [...spots].sort(() => Math.random() - 0.5);
+  for (const sp of liste) {
+    let p = null;
+    try { p = navPath(P.pos.x, P.pos.z, sp[0], sp[2]); } catch (e) { p = null; }
+    if (!p || p.reached === false || !p.length) continue;
+    const f = p[p.length - 1];
+    if (Math.hypot(f[0] - sp[0], f[1] - sp[2]) <= rayon) return sp;
+  }
+  return liste[0];
+}
 const enVoiture = c => !!(c && drive.car === c);
 const prochePlan = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
 
@@ -5139,7 +5172,15 @@ function startMission(id) {
     setBeacon(d.dep.x, d.dep.z, 0, 'mission');
     msg(`📦 Va chercher le colis ${d.dep.nom}`, 2600);
   }
-  if (id === 'taxi') { const spot = pickOne(OPEN_SPOTS); d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0]; d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null; setBeacon(spot[0], spot[2], 0, 'mission'); mission.limit = 120; }
+  if (id === 'taxi') {
+    const spot = spotVoiture(OPEN_SPOTS);
+    d.bot = pickOne(bots.filter(b => b.av.group.visible)) || bots[0];
+    d.bot.pos.set(spot[0], spot[1], spot[2]); d.bot.av.group.position.copy(d.bot.pos); d.bot.wait = 999; d.bot.tgt = null;
+    setBeacon(spot[0], spot[2], 0, 'mission');
+    // 120 s pour TOUT (trouver une voiture, aller chercher le client, puis le déposer) : sur
+    // un client à 200 m, c'était perdu d'avance. Le chrono suit la longueur du trajet.
+    mission.limit = Math.round(longueurRoute(P.pos.x, P.pos.z, spot[0], spot[2]) / 6 + 80);
+  }
   if (id === 'chien') { d.pet = city.pets.find(p => p.kind === 'dog'); const far = pickOne([[92, 30], [-92, 60], [92, 92], [-92, -40], [58, -42], [-62, 112], [-130, 40], [110, 60], [-40, 130], [46, 130], [-70, -40], [70, -40]]); d.pet.x = far[0]; d.pet.z = far[1]; d.pet.tgt = null; d.pet.wait = 999; d.pet.g.position.set(far[0], 0.3, far[1]); d.pet.home = [far[0], far[1]]; d.pet.follow = 0; setBeacon(far[0], far[1], 0, 'mission'); }
   if (id === 'pieces') { d.coins = []; const spots = [...OPEN_SPOTS].sort(() => Math.random() - 0.5).slice(0, 10); for (const sp of spots) { const c = coin(sp[0], sp[1], sp[2]); c.mesh.material = new THREE.MeshLambertMaterial({ color: 0x3ef2ff, emissive: 0x1e8fa0 }); c.blue = true; d.coins.push(c); } mission.limit = 90; }
   if (id === 'chrono') { const l0 = ligneDepart(); d.armed = false; d.maxIdx = 0; setBeacon(l0.x, l0.z, 0, 'mission'); }
@@ -5271,8 +5312,17 @@ function missionTick(dt) {
   }
   if (m.id === 'taxi') {
     const inCar = drive.car && !drive.car.heli && drive.car.kind !== 'bike';
-    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 4.5) && Math.abs(drive.speed) < 4) { mission.step = 1; d.bot.av.group.visible = false; const sp = pickOne(OPEN_SPOTS.filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 45)) || pickOne(OPEN_SPOTS); d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2], 0, 'mission'); msg(`🚕 ${d.bot.name} est à bord !`, 1400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']); }
-    else if (mission.step === 1 && inCar && near(d.dest[0], d.dest[1], 4.5) && Math.abs(drive.speed) < 3) { d.bot.pos.set(d.dest[0], d.dest[2], d.dest[1]); d.bot.av.group.position.copy(d.bot.pos); d.bot.av.group.visible = true; botSay(d.bot, ['merci !', 'super chauffeur 🚕']); endMission(true); }
+    // 4,5 m au volant d'une voiture de 4,4 m de long, c'est se garer au centimètre : on
+    // tolère 6 m, comme pour la livraison.
+    if (mission.step === 0 && inCar && near(d.bot.pos.x, d.bot.pos.z, 6) && Math.abs(drive.speed) < 4) {
+      mission.step = 1; d.bot.av.group.visible = false;
+      const loin = OPEN_SPOTS.filter(s => Math.hypot(s[0] - d.bot.pos.x, s[2] - d.bot.pos.z) > 45);
+      const sp = spotVoiture(loin.length ? loin : OPEN_SPOTS);
+      d.dest = [sp[0], sp[2], sp[1]]; setBeacon(sp[0], sp[2], 0, 'mission');
+      mission.t0 = simTime; mission.limit = Math.round(longueurRoute(P.pos.x, P.pos.z, sp[0], sp[2]) / 8 + 50);
+      msg(`🚕 ${d.bot.name} est à bord ! Direction la course — ${mission.limit} s`, 2400); botSay(d.bot, ['à la fontaine, chauffeur !', 'vite vite !']);
+    }
+    else if (mission.step === 1 && inCar && near(d.dest[0], d.dest[1], 6) && Math.abs(drive.speed) < 3) { d.bot.pos.set(d.dest[0], d.dest[2], d.dest[1]); d.bot.av.group.position.copy(d.bot.pos); d.bot.av.group.visible = true; botSay(d.bot, ['merci !', 'super chauffeur 🚕']); endMission(true); }
   }
   if (m.id === 'chien') {
     if (mission.step === 0 && near(d.pet.x, d.pet.z, 3)) { mission.step = 1; d.pet.follow = simTime + 9999; d.pet.wait = 0; setBeacon(0, 74, 0.15, 'mission'); msg('🐶 Il te suit ! Ramène-le à la fontaine', 1500); sfx.coin(); }
@@ -9388,7 +9438,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.primesSport = {}; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -14173,7 +14223,7 @@ function cityVie(dt) {
     if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -21.8 || b.pos.x > -4.2) && b.state !== 'goal') {
       b.state = 'goal';
       if (fm.on) footBut(b);
-      else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12);
+      else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);
         if (net.host) netBroadcast({ t: 'score', goals: city.goals }); }
       b.reprise = simTime + 1.5;   // engagement au centre : sur l'horloge du jeu, pas sur un minuteur
     }
@@ -14222,7 +14272,7 @@ function tennisBounce(b) {
   }
   if (b.state === 'returned' && b.bounces === 1) {
     const inFar = inCourt && b.pos.z < -13;
-    if (inFar) { city.tennis++; msg(`🎾 Point ! ${city.tennis}`, 1200); sfx.check(); updateAct(); if (net.host) netBroadcast({ t: 'score', tennis: city.tennis }); } else msg('🎾 Dehors !', 900);
+    if (inFar) { city.tennis++; msg(`🎾 Point ! ${city.tennis}`, 1200); sfx.check(); updateAct(); primeSport('tennis', city.tennis); if (net.host) netBroadcast({ t: 'score', tennis: city.tennis }); } else msg('🎾 Dehors !', 900);
     b.state = 'done'; setTimeout(() => removeBall(b), 900);
   } else if (b.state === 'launched' && b.bounces >= 2) { b.state = 'done'; msg('🎾 Raté…', 800); setTimeout(() => removeBall(b), 600); }
 }
@@ -15202,7 +15252,7 @@ function resetGame() {
   coins.forEach(c => { c.taken = false; c.g.visible = true; c.g.scale.set(1, 1, 1); });
   checkpoints.forEach(k => { k.material.color.set(C.blue); k.material.emissive.set(C.blue); });
   cp = checkpoints[0]; coinCount = 0; deaths = 0; elapsed = 0; timerOn = false; won = false; dead = false;
-  if (drive.car) exitCar(); city.goals = 0; city.tennis = 0; city.race.on = false; city.zone = null; P.racket = false; setRacket(me, false); if (city.on) updateAct();
+  if (drive.car) exitCar(); city.goals = 0; city.tennis = 0; city.primesSport = {}; city.race.on = false; city.zone = null; P.racket = false; setRacket(me, false); if (city.on) updateAct();
   cam.yaw = 0; cam.pitch = 0.32;
   respawn(); updateHud(); updateTimer(); updateLeaderboard();
 }

@@ -9278,6 +9278,24 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
       }
       return null;
     };
+    // deux caisses se chevauchent-elles VRAIMENT ? (rectangles orientés, théorème des axes
+    // séparateurs : deux voitures qui se croisent dans une ruelle étroite passent à 10 cm et
+    // ne doivent pas compter pour une collision)
+    const coins = c => { const cs = Math.cos(c.h), sn = Math.sin(c.h), A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [c.x + lx * cs + lz * sn, c.z - lx * sn + lz * cs]); };
+    const seChevauchent = (u, v) => {
+      const P1 = coins(u), P2 = coins(v);
+      for (const [A, B] of [[P1, P2], [P2, P1]]) {
+        for (let i = 0; i < 4; i++) {
+          const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0];
+          let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+          for (const q of A) { const d = q[0] * nx + q[1] * nz; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+          for (const q of B) { const d = q[0] * nx + q[1] * nz; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+          if (a2 < b1 || b2 < a1) return false;
+        }
+      }
+      return true;
+    };
     let solide = 0, collisions = 0, vmax = 0, images = 0;
     const raisons = {};
     for (let i = 0; i < 60 * 180; i++) {
@@ -9287,11 +9305,7 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
         vmax = Math.max(vmax, Math.abs(c.speed || 0));
         if (c.raison) raisons[c.raison] = (raisons[c.raison] || 0) + 1;
       }
-      for (let a = 0; a < ai.length; a++) for (let b = a + 1; b < ai.length; b++) {
-        const u = ai[a], v = ai[b];
-        if (Math.abs(u.x - v.x) < ((u.baseW || 2.4) + (v.baseD || 4.4)) / 2 - 1.2
-          && Math.abs(u.z - v.z) < ((u.baseD || 4.4) + (v.baseW || 2.4)) / 2 - 1.2) collisions++;
-      }
+      for (let a = 0; a < ai.length; a++) for (let b = a + 1; b < ai.length; b++) if (seChevauchent(ai[a], ai[b])) collisions++;
     }
     const res = { images, solide, collisions, vmax: +vmax.toFixed(1), raisons };
     // ---- l'ARRÊT AU FEU ROUGE, mesuré : on pose une voiture 24 m avant la ligne d'un feu

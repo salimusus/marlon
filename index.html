@@ -13228,11 +13228,16 @@ function coupFin(ok) {
 // Sert à la voiture de fuite après un braquage et à l'ami qui vient te chercher.
 function conduire(c, tx, tz, dt, st) {
   const dist = Math.hypot(tx - c.x, tz - c.z);
+  // HORLOGE PROPRE AU TRAJET : elle avance de dt a chaque appel. Les bancs d'essai font
+  // rouler la voiture avec `simTime` fige, et tous les delais (recalcul, contournement,
+  // deblocage) restaient alors bloques a jamais.
+  st.horloge = (st.horloge || 0) + dt;
+  const T = st.horloge;
   // L'itinéraire complet est calculé À L'AVANCE (A* + lissage) et gardé tel quel : on ne le
   // refait que si la destination a bougé, si on s'est fait bloquer, ou toutes les 8 s. Avant,
   // il était rejeté toutes les 2,5 s et le conducteur changeait d'avis en pleine courbe.
-  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || simTime > (st.routeT || 0)) {
-    st.routeT = simTime + 8; st.rtx = tx; st.rtz = tz;
+  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || T > (st.routeT || 0)) {
+    st.routeT = T + 20; st.rtx = tx; st.rtz = tz;
     // ON SUIT LES VOIES. La grille A* ignore les rues et les sens de circulation : le
     // conducteur coupait les carrefours en diagonale et roulait a gauche. On lui donne le
     // trace du graphe, et on ne retombe sur la grille que s'il n'y a pas de route.
@@ -13240,17 +13245,19 @@ function conduire(c, tx, tz, dt, st) {
     // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
     // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
     // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
-    const via = (dist > 30 && simTime > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
+    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
     const pth = (via && via.length > 2) ? via : navPath(c.x, c.z, tx, tz);
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }
-  if (st.meilleur == null || st.rtx !== st.sMx || st.rtz !== st.sMz) { st.meilleur = dist; st.progT = simTime; st.sMx = st.rtx; st.sMz = st.rtz; }
-  else if (dist < st.meilleur - 1) { st.meilleur = dist; st.progT = simTime; }
-  else if (simTime - (st.progT || simTime) > 45) { st.panne = simTime + 60; st.progT = simTime; st.routeT = 0; }   // (on ne vide pas st.route ici : elle est relue juste en dessous)
+  // Progression : si l'on ne se rapproche plus du but pendant 40 s, on passe a la grille A*
+  // (une cible sur un parking n'est sur aucune voie) et on force un deblocage.
+  if (st.meilleur == null || st.rtx !== st.sMx || st.rtz !== st.sMz) { st.meilleur = dist; st.progT = T; st.sMx = st.rtx; st.sMz = st.rtz; st.panne = 0; }   // nouvelle destination : on redonne sa chance au trace par les voies
+  else if (dist < st.meilleur - 1) { st.meilleur = dist; st.progT = T; }
+  else if (T - (st.progT || T) > 40) { st.panne = T + 200; st.progT = T; st.routeT = 0; st.bloqueT = Math.max(st.bloqueT || 0, 4); }
   while (st.route.length > 1 && Math.hypot(st.route[0][0] - c.x, st.route[0][1] - c.z) < 3) st.route.shift();
   const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
   // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage
-  const want = ((st.evT || 0) > simTime) ? st.evH : Math.atan2(dx, dz);
+  const want = ((st.evT || 0) > T) ? st.evH : Math.atan2(dx, dz);
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   // Le braquage dépend de l'allure, comme une vraie voiture : vif à basse vitesse pour se
   // dégager d'un créneau, plus posé à pleine vitesse pour ne pas partir en zigzag.
@@ -13279,13 +13286,13 @@ function conduire(c, tx, tz, dt, st) {
   // trente minutes sans jamais toucher personne (donc sans jamais declencher le contournement).
   // Au bout de 5 s d'attente immobile, on oublie la file : la voiture avance, se cogne, et le
   // contournement fait le reste.
-  if (simTime > (st.oubliFile || 0)) {
+  if (T > (st.oubliFile || 0)) {
     const [gapB, miniB] = gapDevant(c);
     if (gapB < miniB) { vmax = 0; c.raison = c.raison || 'file'; }
     else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
   }
   if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
-  if (st.filT > 5) { st.filT = 0; st.oubliFile = simTime + 4; st.route = null; st.routeT = 0; }
+  if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.route = null; st.routeT = 0; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
   const opt = { bar: true, pol: true, veh: true };
@@ -13301,12 +13308,12 @@ function conduire(c, tx, tz, dt, st) {
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
-  if (bloque && (st.evT || 0) < simTime) {
+  if (bloque && (st.evT || 0) < T) {
     for (const a of [0.6, -0.6, 1.2, -1.2, 1.9, -1.9]) {
       const hh = c.h + a;
       if (!carBlocked(c.x + Math.sin(hh) * 4.5, c.z + Math.cos(hh) * 4.5, c.solid, cr, opt, 0, hh, cL)
         && !carBlocked(c.x + Math.sin(hh) * 2, c.z + Math.cos(hh) * 2, c.solid, cr, opt, 0, hh, cL)) {
-        st.evH = hh; st.evT = simTime + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
+        st.evH = hh; st.evT = T + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
       }
     }
   }

@@ -3553,9 +3553,15 @@ function degageLesRoutes() {
     const r = (city.routes || []).find(r2 => Math.abs(t.x - r2.x) < r2.w / 2 && Math.abs(t.z - r2.z) < r2.d / 2);
     if (!r) continue;
     const long = r.d >= r.w;
-    const nx = long ? (t.x < r.x ? -1 : 1) : 0, nz = long ? 0 : (t.z < r.z ? -1 : 1);
     const dep = (long ? r.w : r.d) / 2 + 1.2;
-    t.x = r.x + nx * dep; t.z = r.z + nz * dep;
+    // On ramenait le feu sur l'AXE de la rue qu'on lui faisait quitter : deux feux du rond-point
+    // atterrissaient ainsi en plein milieu de la rue perpendiculaire. On garde sa position LE
+    // LONG de la rue, on ne le decale que de cote, et on verifie que le nouveau coin est libre.
+    const s1 = long ? (t.x >= r.x ? 1 : -1) : (t.z >= r.z ? 1 : -1);
+    const essais = long ? [[r.x + s1 * dep, t.z], [r.x - s1 * dep, t.z]] : [[t.x, r.z + s1 * dep], [t.x, r.z - s1 * dep]];
+    const ok = essais.find(([x, z]) => !surChaussee(x, z));
+    if (!ok) continue;
+    t.x = ok[0]; t.z = ok[1];
     if (t.g) t.g.position.set(t.x, t.g.position.y, t.z);
     if (t.solid) { t.solid.x = t.x; t.solid.z = t.z; }
     n++;

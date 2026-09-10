@@ -9371,8 +9371,10 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
     const tour = (v, n) => { G.drive.speed = v; c.x = 26; c.z = 24; c.h = Math.PI; for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: v > 0 ? 1 : 0, volant: 0, frein: 0 }, 1 / 60); G.drive.speed = v; } return [G.drive.gear, +c.regime.toFixed(1)]; };
     // RALENTI : à l'arrêt, pied levé
     c.regime = null; const ralenti = tour(0, 40);
-    // puis chaque rapport, à vitesse imposée : le régime doit monter avec la vitesse
-    const paliers = [0.15, 0.32, 0.5, 0.7, 0.95].map(f => tour(c.spec.max * f, 20));
+    // Le régime d'une VRAIE boîte fait une dent de scie : il grimpe dans chaque rapport,
+    // retombe au passage du suivant. On échantillonne donc finement le premier rapport, puis
+    // le tout début du deuxième, puis la prise maxi.
+    const paliers = [0.05, 0.12, 0.22, 0.28, 0.42, 0.62, 0.95].map(f => tour(c.spec.max * f, 20));
     await dodo(600); const moteur = rms();
     // LA NITRO. Moteur coupé, pour que la pétarade s'entende seule.
     G.engine.stop(); await dodo(600); const silence2 = rms();
@@ -9388,10 +9390,14 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
     window.__manetteSeule = false;
     return { etat: ctx.state, silence, silence2, ralenti, paliers, moteur, parti, petarades: apres - avant, petard };
   });
-  const monte = r.paliers.every((g, i) => i === 0 || g[1] >= r.paliers[i - 1][1] - 0.1) && r.paliers[4][0] > r.paliers[0][0];
+  // dans le RAPPORT 1 le régime grimpe (3 mesures), il RETOMBE au passage du 2e, et la
+  // prise maxi tourne haut : c'est exactement la signature d'une boîte de vitesses
+  const dansLe1 = r.paliers[0][1] < r.paliers[1][1] && r.paliers[1][1] < r.paliers[2][1];
+  const chute = r.paliers[3][0] > r.paliers[2][0] && r.paliers[3][1] < r.paliers[2][1];
+  const monte = dansLe1 && chute && r.paliers[6][0] >= 5 && r.paliers[6][1] > 14;
   const ok = r.etat === 'running' && r.ralenti[1] < 2 && monte && r.moteur > r.silence + 0.02
     && r.parti === true && r.petarades === 1 && r.petard > r.silence2 + 0.05;
-  return { ok, detail: `le régime moteur ne dépendait que du rapport de boîte, et la nitro ne faisait qu'un « pschitt » de bruitage · le moteur tourne maintenant au RALENTI à l'arrêt (${r.ralenti[1]}, rapport A${r.ralenti[0]}) puis monte vitesse après vitesse : ${r.paliers.map(g => 'A' + g[0] + '→' + g[1]).join(', ')} · et la NITRO déclenche une vraie PÉTARADE — détonation, souffle et ratés d'allumage — envoyée sur le bus MOTEUR : mesuré par un analyseur au bout de la chaîne, silence ${r.silence}, moteur qui tourne ${r.moteur}, moteur coupé ${r.silence2}, pétarade ${r.petard}` };
+  return { ok, detail: `le régime moteur ne dépendait que du rapport de boîte, et la nitro ne faisait qu'un « pschitt » de bruitage · le moteur tourne maintenant au RALENTI à l'arrêt (${r.ralenti[1]}, rapport A${r.ralenti[0]}) puis dessine la dent de scie d'une vraie boîte — il grimpe dans le rapport puis retombe au passage du suivant : ${r.paliers.map(g => 'A' + g[0] + '→' + g[1]).join(', ')} · et la NITRO déclenche une vraie PÉTARADE — détonation, souffle et ratés d'allumage — envoyée sur le bus MOTEUR : mesuré par un analyseur au bout de la chaîne, silence ${r.silence}, moteur qui tourne ${r.moteur}, moteur coupé ${r.silence2}, pétarade ${r.petard}` };
 });
 
 test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et le chien — sans rien qui dépasse', async p => {
@@ -9409,6 +9415,9 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       // la caisse et le repère logique doivent coïncider : un test précédent a pu déplacer
       // le véhicule sans bouger son groupe
       c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ');
+      // caisse a plat : un test precedent a pu la laisser en plein tangage ou en plein roulis
+      if (c.caisse) { c.caisse.position.y = 0; c.caisse.rotation.set(0, 0, 0); }
+      c.tangage = 0; c.roulis = 0; c.susp = 0; c.suspV = 0;
       const TT = G.placesDe(c), noms = G.PLACES_ORDRE.filter(n => TT[n]);
       const ferme = !!G.caisseFermee(c);
       const bc = boite(c.caisse || c.g);
@@ -9435,7 +9444,9 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
     }
     // LE JOUEUR QUI MONTE APPARAÎT ASSIS : dès la première image, sans transition
     const v = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    v.busy = false; v.g.position.set(v.x, v.y || 0, v.z);
+    v.busy = false; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ');
+    if (v.caisse) { v.caisse.position.y = 0; v.caisse.rotation.set(0, 0, 0); }
+    v.tangage = 0; v.roulis = 0; v.susp = 0; v.suspV = 0;
     G.me.rig.legL.rotation.x = 0; G.me.rig.legR.rotation.x = 0; G.me.rig.armL.rotation.x = 0;
     G.enterCar(v);
     G.poseJoueurAuVolant(1 / 60);

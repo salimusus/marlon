@@ -6947,12 +6947,12 @@ test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repo
     out.assis = { sit: !!G.P.sit, ui: G.uiOpen, tableau: r.texte, q: !!G.school.q, y: +G.P.pos.y.toFixed(2) };
     if (!G.school.q) return { ...out, pourquoi: `pas de question apres 4 s (assis=${!!G.P.sit}, ui=${G.uiOpen})` };
     const q = G.school.q; G.wallet = 0;
-    G.answer(q.a, document.querySelector('#schChoices .item')); await dodo(80);
-    out.bon = { tableau: r.texte, pieces: G.wallet };
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    out.bon = { tableau: r.texte, pieces: G.wallet };   // lu tout de suite : la craie met 2 s a tracer, mais le verdict est deja pose
     for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);   // la craie finit d'ecrire avant l'exercice suivant
     const q2 = G.school.q; if (!q2) return { ...out, pourquoi: 'aucun exercice suivant apres le verdict' };
     const faux = q2.opts.find(o => o !== q2.a);
-    G.answer(faux, document.querySelector('#schChoices .item')); await dodo(80);
+    G.answer(faux, document.querySelector('#schChoices .item'));
     out.faux = { tableau: r.texte, rep: faux };
     G.closeUI(); G.P.sit = null; G.school.chaise = null; G.P.pos.set(-62, 1, 235);
     return out;

@@ -418,6 +418,8 @@ body.tv #tvBadge.on{display:block}
 #ptBoutons{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
 #ptBoutons u{text-decoration:none;display:inline-block;min-width:44px;padding:5px 8px;border-radius:9px;background:#dfe6f5;color:#556;font-weight:800;font-size:clamp(11px,.9vw,16px)}
 #ptBoutons u.on{background:#3ddc5a;color:#0d2a12;box-shadow:0 0 0 2px #2aa544}
+#ptBoutons u em{display:block;font-style:normal;font-weight:600;font-size:.78em;opacity:.7}
+#ptBoutons u.on em{opacity:.9}
 #ptDiag{margin-top:8px;min-height:2.4em}
 body.tv #padTest .card{max-width:min(1100px,92vw)}
 #padCase{max-width:560px}#padEtat{font-weight:800;color:#1b2a4a;min-height:22px}#padAide{font-size:clamp(12px,1vw,16px);color:#556;margin-top:8px;text-align:left}
@@ -538,7 +540,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>R2</b>avancer / accélérer<b>L2</b>reculer<b>Stick G</b>direction<b>L3</b>courir<b>R1</b>tirer<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>△</b>dégainer<b>▢</b>frapper<b>◯</b>agir<b>✕</b>sauter<b>L1</b>viser</div>
+<div id="padLeg"><b>R2</b>avancer / accélérer<i>(arme braquée : tirer)</i><b>L2</b>reculer<b>Stick G</b>direction / tourner<b>L3</b>courir<b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>L1</b>viser<b>Pavé</b>cette aide</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -572,7 +574,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
-      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : <b>R2</b> avancer / accélérer et <b>L2</b> reculer (gâchettes ANALOGIQUES : à moitié enfoncée = demi-vitesse), stick gauche pour la direction (il déplace aussi le personnage et braque en voiture), stick droit pour la caméra, <b>L3</b> courir, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> dégainer, <b>L1</b> viser, <b>R1</b> tirer, <b>R3</b> recentrer · la croix : <b>←</b> <b>→</b> 🔫 arme précédente / suivante (maintenu : <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions), <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner · <b>pavé tactile</b> : arme suivante · si quelque chose répond de travers, ⚙️ → « 🎮 Tester la manette » montre en direct axes et boutons · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : <b>R2</b> avancer / accélérer et <b>L2</b> reculer (gâchettes ANALOGIQUES : à moitié enfoncée = demi-vitesse), stick gauche pour la direction (en mode « rotation » il FAIT TOURNER le personnage et braque le véhicule ; en mode « caméra » il déplace dans la direction regardée), stick droit pour la caméra, <b>L3</b> courir, <b>✕</b> braquer et rengainer l'arme, <b>R2</b> tirer quand elle est braquée, <b>◯</b> sauter, <b>△</b> agir (monter en voiture, parler, s'asseoir, ouvrir), <b>▢</b> frapper, <b>L1</b> viser, <b>R3</b> recentrer · la croix : <b>←</b> <b>→</b> 🔫 arme précédente / suivante (maintenu : <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions), <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner · <b>pavé tactile</b> : rappeler cette liste de touches à l'écran · si quelque chose répond de travers, ⚙️ → « 🎮 Tester la manette » montre en direct axes et boutons · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -9749,6 +9751,9 @@ function burst(x, y, z, color, n = 8) {
 
 // ================= JOUEUR =================
 const JUMP = 12, SPEED = 7, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
+// Mode « rotation » : zone morte du stick pour le braquage. Fine (6 %) — une DualSense neuve
+// ne derive pas au-dela de 5 % — la ou l'ancienne formule ignorait tout virage sous 32 %.
+const ROT_MORTE = 0.06;
 // Cartouches : la qualité change les dégâts et l'effet à l'impact.
 const MUNITIONS = {
   std: { n: 'Cartouches standard', e: '🔸', p: 0, mul: 1, desc: 'Les munitions de base, fournies avec l\'arme.' },
@@ -12685,12 +12690,17 @@ function step(dt, active) {
     wantX = ix * vers * SPEED; wantZ = iz * vers * SPEED;
     let d = capTennis() - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
     P.facing += d * Math.min(1, dt * 10);   // il se tourne vers la balle sans qu'on ait à le piloter
-  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn) && !padActif()) {   // au stick, toujours relatif a la camera : le mode « rotation » braquait le personnage avec une bande morte de 32 %
-    // mode "rotation" : gauche/droite font pivoter le personnage, avant/arrière le déplacent dans la direction où il regarde
-    // (au joystick : poussé presque tout droit = pas de virage ; virage d'autant plus vif qu'on pousse sur le côté)
-    const ax = clamp(joy.x + pad.x + tel.x, -1, 1), ay = clamp(joy.y + pad.y + tel.y, -1, 1);
+  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
+    // MODE ROTATION AU STICK. Le stick etait exclu de ce mode (`!padActif()`) : pousse a
+    // gauche, le personnage GLISSAIT de cote au lieu de TOURNER — « le joystick gauche ne
+    // dirige pas le joueur gauche/droite en rotation ». Il y est de nouveau, et sans le
+    // defaut qui avait motive l'exclusion : la vieille formule annulait le virage tant qu'on
+    // poussait presque tout droit (bande morte de 32 % !) puis le dosait au carre, donc rien
+    // ne se passait avant la moitie de la course. Desormais : zone morte FINE de 6 %, reponse
+    // proportionnelle, et la vitesse de rotation reglable de ⚙️ (100 / 160 / 240 °/s).
+    const ax = clamp(joy.x + pad.x + tel.x, -1, 1);
     let turnIn = kr;
-    if (Math.abs(ax) > 0.02) { const straight = Math.abs(ay) > 0.55 && Math.abs(ax) < 0.32; turnIn += straight ? 0 : ax * Math.abs(ax); }
+    if (Math.abs(ax) > ROT_MORTE) turnIn += Math.sign(ax) * (Math.abs(ax) - ROT_MORTE) / (1 - ROT_MORTE);
     if (Math.abs(turnIn) > 0.02) P.facing -= clamp(turnIn, -1, 1) * settings.turn * Math.PI / 180 * dt;
     len = Math.abs(iz) + Math.abs(ix) * 0.01;
     if (Math.abs(iz) < 0.05) { wantX = 0; wantZ = 0; }
@@ -14783,13 +14793,16 @@ let gamepadOk = true;
 const PS_NOMS = { 0: '✕', 1: '◯', 2: '▢', 3: '△', 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2',
   8: 'Create', 9: 'Options', 10: 'L3', 11: 'R3', 12: '↑', 13: '↓', 14: '←', 15: '→', 16: 'PS', 17: 'Pavé' };
 const PAD_BOUTONS = 18;   // 17 boutons standard + le pavé tactile de la DualSense (index 17)
-// L'agencement PlayStation : ✕ saute (c'est le réflexe), ◯ agit, ▢ frappe, △ sort l'arme.
+// L'AGENCEMENT DEMANDE PAR LE JOUEUR : « ✕ pour braquer, gachette droite pour tirer, ✕ pour
+// rengainer », « le rond ◯ pour sauter, le triangle △ pour agir ». On y est : ✕ bascule l'arme
+// (KeyG degaine ET rengaine), ◯ saute, △ agit (monter en voiture, parler, s'asseoir, ouvrir),
+// ▢ frappe. Le tir passe sur la gachette R2 (voir pollGamepad) ; R1 le garde en second.
 const PAD_MAP = {
-  0: 'Space',    // ✕  sauter
-  1: 'KeyE',     // ◯  action / monter / parler
+  0: 'KeyG',     // ✕  braquer / rengainer l'arme (bascule)
+  1: 'Space',    // ◯  sauter
   2: 'KeyV',     // ▢  frapper
-  3: 'KeyG',     // △  dégainer
-  5: 'KeyX',     // R1 tirer
+  3: 'KeyE',     // △  agir / monter / parler
+  5: 'KeyX',     // R1 tirer (second, la gâchette R2 est la principale)
   8: 'KeyT',     // Create : parler
   9: 'Escape',   // Options : menu
 };
@@ -14955,7 +14968,12 @@ function pollGamepad(dt) {
   const [gx, gy] = padStick(L.lx, L.ly);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
   // LES GACHETTES ANALOGIQUES : R2 avance/accelere, L2 recule. A moitie enfoncee = demi-vitesse.
-  pad.gaz = menu ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
+  // MAIS quand l'arme est BRAQUEE et qu'on est a pied, R2 devient la gachette de TIR : les deux
+  // usages ne se marchent jamais dessus, c'est l'etat de l'arme qui tranche (au volant, R2
+  // accelere toujours — on ne tire pas au jugé en conduisant).
+  const armeBraquee = !!P.drawn && !drive.car;
+  pad.armeBraquee = armeBraquee;
+  pad.gaz = (menu || armeBraquee) ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
   if (running && !paused && !menu) {
     const [vx, vy] = padStick(L.rx, L.ry, 0.08);
     // la camera tournait a 3,4 rad/s : trop lent pour se retourner. 5,5 rad/s au bord, et le
@@ -14979,8 +14997,17 @@ function pollGamepad(dt) {
       if (neuf[i] === bas[i]) continue;
       telTouche(k, neuf[i]);
     }
-    // R1 tire deja : R2 sert donc a AVANCER (voir readInput) et « courir » passe sur L3,
-    // comme dans les grands jeux de ville. L2 recule.
+    // LA GACHETTE DE TIR. Arme braquee (✕), a pied : R2 tire — maintenue, elle tire en
+    // rafale, la cadence etant deja bridee par `P.fireCd` (sauf la grenade, qu'on ne lance
+    // qu'au premier appui). Arme rangee ou au volant, la meme gachette fait avancer.
+    const tireR2 = armeBraquee && neuf[7];
+    if (tireR2 && running && !paused) {
+      const debut = !pad.tirR2;
+      if (debut || P.weapon !== 'grenade') fire();
+      if (debut) padVibre(0.3, 50);
+    }
+    pad.tirR2 = tireR2;
+    // « courir » est sur L3, comme dans les grands jeux de ville. L2 recule.
     const court = neuf[10];                                           // L3 : courir
     if (court !== !!bas[10]) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
     if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
@@ -15000,9 +15027,9 @@ function pollGamepad(dt) {
     if (neuf[12] && !bas[12]) { pad.hautT = simTime; pad.hautFait = false; }
     if (neuf[12] && bas[12] && !pad.hautFait && simTime - (pad.hautT || 0) >= PAD_LONG) { pad.hautFait = true; padAction('guerre'); }
     if (!neuf[12] && bas[12] && !pad.hautFait) padAction('ordres');
-    if ((neuf[0] && !bas[0]) || (neuf[5] && !bas[5])) padVibre(0.35, 60);
+    if ((neuf[1] && !bas[1]) || (neuf[5] && !bas[5])) padVibre(0.35, 60);   // ◯ saute, R1 tire
   }
-  pad.bas = neuf; pad.a = neuf[0];
+  pad.bas = neuf; pad.a = neuf[1];   // ◯ maintenu = monter (jetpack, hélico)
 }
 // LA MANETTE DANS LES MENUS. Avant : ↑ et ← faisaient « precedent », ↓ et → « suivant », dans
 // l'ordre du code — dans une grille on atterrissait a cote ; il fallait relacher et rappuyer
@@ -15035,14 +15062,19 @@ function padMenu(L, neuf, bas) {
 // puisse savoir si le stick etait mort, mal branche, inverse, ou simplement mappe sur autre
 // chose. Ici on voit les axes bruts, les axes apres zone morte, les gachettes et les 18
 // boutons s'allumer — et une phrase de diagnostic dit ce qui est detecte.
-const PT_AXES = [['Stick G ←→', 'lx'], ['Stick G ↑↓', 'ly'], ['Stick D ←→', 'rx'], ['Stick D ↑↓', 'ry'], ['L2 (reculer)', 'l2'], ['R2 (avancer)', 'r2']];
+const PT_AXES = [['Stick G ←→', 'lx'], ['Stick G ↑↓', 'ly'], ['Stick D ←→', 'rx'], ['Stick D ↑↓', 'ry'], ['L2 (reculer)', 'l2'], ['R2 (avancer / tir)', 'r2']];
+// A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
+// bon bouton fait la bonne chose (c'est la question que posait le joueur).
+const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter', 2: 'frapper', 3: 'agir', 4: 'viser', 5: 'tirer',
+  6: 'reculer', 7: 'avancer / tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
+  12: 'ordres', 13: 'danser', 14: 'arme préc.', 15: 'arme suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
   if (padEssai.fait) return;
   const a = $('ptAxes'); if (!a) return;
   a.innerHTML = PT_AXES.map(([n, k]) => `<div class="ptrow"><span>${n}</span><div class="ptbar${k === 'l2' || k === 'r2' ? '' : ' ctr'}"><i id="pt_${k}"></i></div><b id="ptv_${k}">0.00</b></div>`).join('');
   const b = $('ptBoutons');
-  if (b) b.innerHTML = Array.from({ length: PAD_BOUTONS }, (_, i) => `<u id="ptb_${i}">${PS_NOMS[i] || i}</u>`).join('');
+  if (b) b.innerHTML = Array.from({ length: PAD_BOUTONS }, (_, i) => `<u id="ptb_${i}">${PS_NOMS[i] || i}<em>${PT_ROLES[i] || ''}</em></u>`).join('');
   padEssai.fait = true;
 }
 function padEssaiTick(L, neuf, bas) {
@@ -15072,9 +15104,12 @@ function padEssaiTick(L, neuf, bas) {
   if (d) {
     const p = [];
     if (L.profil !== 'standard') p.push(`agencement non standard corrigé (${L.profil}${L.chapeau >= 0 ? `, croix sur l'axe ${L.chapeau}` : ''})`);
-    if (Math.abs(nx) > 0.15) p.push(`gauche/droite lu : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)})`);
+    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${settings.ctrl === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
     if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
-    if (vals.r2 > 0.05) p.push(`R2 = avancer à ${Math.round(vals.r2 * 100)} %`);
+    if (L.b[0]) p.push('✕ : braquer / rengainer l\'arme');
+    if (L.b[1]) p.push('◯ : sauter');
+    if (L.b[3]) p.push('△ : agir');
+    if (vals.r2 > 0.05) p.push(`R2 = ${pad.armeBraquee ? 'TIRER' : 'avancer'} à ${Math.round(vals.r2 * 100)} %`);
     if (vals.l2 > 0.05) p.push(`L2 = reculer à ${Math.round(vals.l2 * 100)} %`);
     d.textContent = p.length ? p.join(' · ') : 'Bouge les sticks, appuie sur les gâchettes et sur la croix : tout doit s\'allumer ici.';
   }
@@ -15107,12 +15142,12 @@ setInterval(() => {
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
-  msg(ps ? '🎮 Manette PlayStation connectée — R2 avancer · L2 reculer · L3 courir · ← → changer d\'arme' : '🎮 Manette connectée !', 3200);
+  msg(ps ? '🎮 Manette PlayStation connectée — R2 avancer (tirer arme braquée) · ✕ braquer · ◯ sauter · △ agir' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
   try { montreAide(7); } catch (e) {}
   unlockAudio(); padVibre(0.5, 200);
   try { manetteBTSonde(); } catch (_) {}
-  try { chat(null, ps ? '🎮 DualSense prête : R2 pour avancer, L2 pour reculer, stick gauche pour la direction, stick droit pour la caméra, L3 pour courir, R1 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
+  try { chat(null, ps ? '🎮 DualSense prête : R2 pour avancer (et pour tirer une fois l\'arme braquée avec ✕), L2 pour reculer, stick gauche pour tourner, ◯ pour sauter, △ pour agir.' : '🎮 Manette prête.'); } catch (_) {}
 });
 window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
 // ================= « CONNECTER UNE MANETTE PS5 » =================

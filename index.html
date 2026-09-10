@@ -18,7 +18,26 @@ html,body{height:100%;overflow:hidden;background:#1b2a4a;font-family:'Nunito','S
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
 canvas{display:block;width:100%;height:100%}
 button,input{font-family:inherit}
-:root{--panel:rgba(20,25,38,.72);--line:rgba(255,255,255,.12)}
+/* ================= LA GRILLE DE L'INTERFACE =================
+   Chaque fenêtre avait sa propre couleur de fond, son propre rayon d'angle et ses propres
+   marges : la boutique n'avait rien à voir avec le salon TV, ni le menu avec le casino, et
+   sur un grand écran les pastilles du haut se lisaient mal (fond trop clair, texte sans
+   ombre). Tout part maintenant de ces variables : un seul rayon, une seule marge, une seule
+   couleur de panneau, une seule couleur de curseur. */
+:root{
+  --panel:rgba(14,19,32,.80);      /* fond des pastilles et panneaux posés sur le jeu */
+  --panel2:rgba(10,14,26,.92);     /* fond appuyé : en-têtes, barres */
+  --line:rgba(255,255,255,.18);    /* filet de contour, assez clair pour se détacher du ciel */
+  --r:12px;                        /* rayon commun */
+  --r-sm:9px;
+  --gap:8px;
+  --encre:#eaf0ff;                 /* texte clair sur panneau sombre */
+  --encre2:#aebbd6;                /* texte secondaire */
+  --sombre:#16203a;                /* texte sombre sur carte claire */
+  --vif:#ffd23f;                   /* couleur du curseur manette et des états actifs */
+  --ombre:0 6px 18px rgba(0,0,0,.34);
+  --ombre-txt:0 1px 2px rgba(0,0,0,.85);
+}
 
 /* ---------- barre du haut ---------- */
 #top{position:fixed;top:0;left:0;right:0;display:grid;grid-template-columns:auto 1fr auto;align-items:start;gap:8px;
@@ -27,13 +46,23 @@ button,input{font-family:inherit}
 .tl,.tc{display:flex;gap:6px;align-items:center}
 .tc{justify-content:center;flex-wrap:wrap}
 .tr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.ibtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
-.ibtn.on{background:rgba(255,255,255,.28)}
+/* Les boutons du haut n'avaient AUCUN état visible : ni survol, ni appui, ni focus manette.
+   On ne savait jamais lequel on visait. Trois états, tous nets, et une transition très
+   courte (0,12 s) — assez pour se voir, trop courte pour gêner. */
+.ibtn{width:40px;height:40px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);color:var(--encre);font-size:18px;cursor:pointer;
+  display:grid;place-items:center;box-shadow:var(--ombre);text-shadow:var(--ombre-txt);transition:background .12s,transform .12s,border-color .12s}
+.ibtn:hover{background:rgba(46,60,92,.88);border-color:rgba(255,255,255,.36)}
+.ibtn:active{transform:translateY(1px) scale(.96);background:rgba(70,90,135,.92)}
+.ibtn:focus-visible{outline:3px solid var(--vif);outline-offset:2px}
+.ibtn.on{background:rgba(255,255,255,.30);border-color:rgba(255,255,255,.42)}
 .ibtn.touchonly{display:none}
 body.touch .ibtn.touchonly{display:grid}
-.pill{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:15px;white-space:nowrap;line-height:1}
-#me{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:14px}
-.hp{width:96px;height:9px;border-radius:5px;background:rgba(0,0,0,.45);overflow:hidden}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 11px;font-size:15px;white-space:nowrap;line-height:1;
+  color:var(--encre);box-shadow:var(--ombre);text-shadow:var(--ombre-txt)}
+#me{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;display:flex;align-items:center;gap:var(--gap);font-size:14px;
+  box-shadow:var(--ombre);text-shadow:var(--ombre-txt)}
+/* les jauges : un liseré clair les détache du panneau, sinon la barre vide était invisible */
+.hp{width:96px;height:9px;border-radius:5px;background:rgba(0,0,0,.55);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
 .hp i{display:block;height:100%;width:100%;background:#3ddc5a;transition:width .3s}
 .hp.st{height:6px;margin-top:3px}
 .hp.st i{background:#3ef2ff;transition:width .12s}
@@ -53,7 +82,7 @@ body.touch .ibtn.touchonly{display:grid}
 .opuce.encours{animation:opulse 1.5s ease-in-out infinite}
 .otitre{display:block;margin-top:6px;font-weight:900;letter-spacing:.3px}
 body.tv .hp.pf{height:13px}body.tv .pfn{font-size:clamp(13px,1vw,19px)}
-#lb{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:190px;overflow:hidden;font-size:14px}
+#lb{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);min-width:190px;overflow:hidden;font-size:14px;box-shadow:var(--ombre);color:var(--encre)}
 .lbh{display:flex;justify-content:space-between;padding:6px 10px;background:rgba(255,255,255,.1);font-size:12px;letter-spacing:.3px;color:#cfd6e6;cursor:pointer}
 .lbr{display:flex;justify-content:space-between;padding:5px 10px;border-top:1px solid rgba(255,255,255,.06)}
 .lbr.me{background:rgba(255,255,255,.14)}
@@ -107,15 +136,23 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
 #chatIn:focus{border-color:rgba(255,255,255,.5)}
 #chatIn::placeholder{color:#9aa4b8}
 
-#msg{position:fixed;left:50%;top:26%;transform:translate(-50%,-50%) scale(.6);font-size:clamp(28px,7vw,56px);font-weight:800;color:#fff;
-  text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 24px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
+/* LE GRAND MESSAGE tombait pile sur la tête du personnage et sur son étiquette de nom : on
+   lisait « Bravo, mission accomplie ! » par-dessus « Joueur23 ». Il remonte au cinquième de
+   l'écran, sur un bandeau assombri qui garantit sa lisibilité même sur un ciel de midi. */
+#msg{position:fixed;left:50%;top:17%;transform:translate(-50%,-50%) scale(.6);font-size:clamp(26px,6.2vw,50px);font-weight:800;color:#fff;
+  padding:10px 22px;border-radius:16px;background:rgba(10,14,26,.42);
+  text-shadow:0 3px 0 rgba(0,0,0,.5),0 0 22px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
 #msg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
-#vignette{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 45%,rgba(0,0,0,.28) 100%)}
+/* Le VIGNETTAGE et l'ÉTALONNAGE se faisaient ici, en CSS : le navigateur devait recomposer
+   toute l'image par-dessus le jeu, et sur la télé on les coupait donc — l'image y était plus
+   terne et le coin sombre disparaissait. Ils sont maintenant DANS la passe de netteté
+   (aucune image de plus à calculer). Le voile CSS ne sert plus que de repli quand cette
+   passe est éteinte : en qualité « basse », sur une très vieille machine. */
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 52%,rgba(0,0,0,.22) 100%)}
+body.etalonne #vignette{display:none}
 canvas#c{filter:saturate(1.06) contrast(1.04)}
-/* sur la télé, ce filtre force une passe de composition en plein écran pour un gain
-   invisible : on l'enlève, l'image est plus nette ET moins chère */
-body.tv canvas#c{filter:none;image-rendering:auto}
+body.etalonne canvas#c,body.tv canvas#c{filter:none;image-rendering:auto}
 #cross{position:fixed;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}
 #cross::before,#cross::after{content:'';position:absolute;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.8)}
 #cross::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%)}#cross::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%)}
@@ -218,7 +255,10 @@ body.lobby #punchBtn{display:none!important}
 body.tv #perfHud{font-size:clamp(15px,1.3vw,22px)}
 #missionHud{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 92px);transform:translateX(-50%);background:rgba(20,30,60,.75);color:#fff;font-weight:800;padding:6px 14px;border-radius:10px;display:none;z-index:4;font-size:14px;max-width:80vw;text-align:center}
 #missionHud.on{display:block}
-#gps{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);width:130px;height:130px;border-radius:50%;background:rgba(10,16,36,.72);border:3px solid rgba(255,255,255,.55);display:none;z-index:4;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+/* LE RADAR : son fond etait presque transparent, les rues s'y confondaient avec le decor
+   qui defilait dessous. Fond plus dense, contour plus franc, et une ombre interieure qui le
+   detache du jeu — la carte redevient lisible en un coup d'oeil. */
+#gps{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);width:130px;height:130px;border-radius:50%;background:rgba(8,12,24,.88);border:3px solid rgba(255,255,255,.72);display:none;z-index:4;box-shadow:0 6px 18px rgba(0,0,0,.45),inset 0 0 22px rgba(0,0,0,.55)}
 body.city #gps{display:block}body.lobby #gps{display:none!important}
 .cityonly{display:none}body.city .cityonly{display:inline-flex}body.lobby .cityonly{display:none!important}
 .store{width:min(96vw,980px);max-height:92vh;background:#141a2e;border-radius:18px;color:#fff;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);font-family:Nunito,system-ui,sans-serif}
@@ -262,7 +302,12 @@ body.lobby #carBtn{display:none!important}
 .keys{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;text-align:left;font-size:13px;margin:10px auto 0;align-items:center;color:#5b6b8c;font-weight:600}
 body.touch .keys{display:none}
 kbd{display:inline-block;background:#eef2fb;border:1px solid #c9d3ea;border-bottom-width:3px;border-radius:7px;padding:1px 7px;font-family:inherit;font-weight:800;font-size:12px;color:#1b2a4a;margin:1px}
-.btn{margin-top:12px;padding:13px 32px;border:none;border-radius:14px;background:#ff5c5c;color:#fff;font-weight:800;font-size:19px;cursor:pointer;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18)}
+/* Les gros boutons des fenetres : eux non plus n'avaient ni survol ni appui ni focus. */
+.btn{margin-top:12px;padding:13px 32px;border:none;border-radius:14px;background:#ff5c5c;color:#fff;font-weight:800;font-size:19px;cursor:pointer;box-shadow:inset 0 -5px 0 rgba(0,0,0,.18);transition:filter .12s,transform .1s,box-shadow .1s}
+.btn:hover{filter:brightness(1.09)}
+.btn:active{transform:translateY(3px);box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.btn:focus-visible{outline:3px solid var(--vif);outline-offset:3px}
+.btn[disabled]{filter:grayscale(.55) brightness(.85);cursor:default}
 .btn.sec{background:#eef2fb;color:#1b2a4a;font-size:16px;padding:11px 22px;margin-top:8px}
 .btn:active{transform:translateY(2px);box-shadow:none}
 .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
@@ -387,8 +432,15 @@ body.tv #padLeg{font-size:calc(var(--u) * .95);top:calc(var(--tvpad) + var(--u) 
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
   color:#eaf0ff;font-weight:800;padding:calc(var(--u,15px) * .4) calc(var(--u,15px) * .9);font-size:calc(var(--u,15px) * .85)}
 body.tv #tvBadge.on{display:block}
-/* navigation à la manette / télécommande : l'élément visé est entouré */
-.focustv{outline:4px solid #ffd23f!important;outline-offset:3px;box-shadow:0 0 0 8px rgba(255,210,63,.25)!important}
+/* NAVIGATION À LA MANETTE : le curseur. À trois mètres d'une télé, un simple contour jaune
+   se perdait dans une carte claire ou une vignette déjà bordée. Il est maintenant DOUBLE
+   (jaune vif cerclé de noir) et il RESPIRE lentement : impossible de perdre où on est. */
+.focustv{outline:4px solid var(--vif)!important;outline-offset:3px;
+  box-shadow:0 0 0 8px rgba(255,210,63,.30),0 0 0 11px rgba(0,0,0,.55),0 0 26px rgba(255,210,63,.55)!important;
+  animation:curseurtv 1.5s ease-in-out infinite;position:relative;z-index:1}
+@keyframes curseurtv{50%{box-shadow:0 0 0 10px rgba(255,210,63,.42),0 0 0 13px rgba(0,0,0,.6),0 0 34px rgba(255,210,63,.75)!important}}
+body.tv .focustv{outline-width:6px;outline-offset:4px}
+@media (prefers-reduced-motion:reduce){.focustv{animation:none}}
 
 /* ================= Salon TV : code, QR et manettes connectées ================= */
 #tvsalon .card{max-width:min(1000px,92vw)}
@@ -916,6 +968,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
     <button class="btn sec" id="voiceBtn">Voix (école et bots) : activées</button>
     <button class="btn sec" id="voiceTest">🔊 Tester la voix</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
+    <button class="btn sec" id="ambBtn">Ambiance : Cycle du jour</button>
     <button class="btn sec" id="fsBtn2">Plein écran</button>
     <button class="btn sec" id="quit">Retour à l'accueil</button>
   </div>
@@ -1068,6 +1121,19 @@ function accorde(hex, force = 1) {
   const l = Math.min(DA.lumMax, Math.max(DA.lumMin, hsl.l));
   return c.setHSL(hsl.h, hsl.s + (s - hsl.s) * force, hsl.l + (l - hsl.l) * force);
 }
+// TOUS LES IMMEUBLES D'UNE MÊME COULEUR ÉTAIENT RIGOUREUSEMENT IDENTIQUES : trois aplats
+// bleus côte à côte, sans une nuance, et le quartier ressemblait à un tableur. On décale
+// très légèrement la teinte, la saturation et la clarté de chaque bâtiment selon SA POSITION
+// (donc toujours la même d'une partie à l'autre : rien ne scintille au rechargement).
+function varieTeinte(hex, x, z) {
+  const n = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  const r = n - Math.floor(n);
+  const c = accorde(hex, 0.6), hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  return c.setHSL((hsl.h + (r - 0.5) * 0.036 + 1) % 1,
+    clamp(hsl.s * (0.88 + r * 0.26), 0, 1),
+    clamp(hsl.l * (0.90 + r * 0.22), 0.07, 0.93)).getHex();
+}
 // ---- LE CIEL : un dôme dégradé, un seul appel de dessin ----
 // Avant : `scene.background` = une couleur unie. Le ciel était donc un mur de peinture, sans
 // horizon, sans halo autour du soleil, identique à toute heure. Le dôme coûte UN appel de
@@ -1147,10 +1213,12 @@ const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
 // textures au maximum. Sur une tele 4K on calcule au natif et la passe de nettete fait le
 // reste. Et comme toujours, c'est la mesure des images qui decide de descendre si ca rame.
 const QUALITES = {
-  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16 },
-  high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8 },
-  dlss: { n: 'DLSS 5 (upscaling)', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8 },
-  low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4 },
+  // grade : etalonnage (contraste, saturation, vignettage) — quelques instructions par pixel
+  // halo  : la lumiere des sources vives qui deborde — huit echantillons de plus, Ultra HD seul
+  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },
+  high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8, grade: true, halo: false },
+  dlss: { n: 'DLSS 5 (upscaling)', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8, grade: true, halo: false },
+  low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4, grade: false, halo: false },
 };
 function qualite() { return QUALITES[settings.quality] || QUALITES.high; }
 function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : Math.max(PLAFOND_PC, qualite().plafond); }
@@ -1308,13 +1376,24 @@ function netteteTextures() {
 // L'image est d'abord calculee dans une texture (avec 4 echantillons par pixel quand
 // WebGL 2 le permet), puis recopiee a l'ecran par un petit programme qui accentue les
 // contours. Cout : une passe plein ecran, negligeable a cote de la ville.
-const post = { on: false, force: 0.3, rt: null, w: 0, h: 0, msaa: false, scene: null, cam: null, mat: null, images: 0 };
+// ETALONNAGE (grade) et HALO viennent s'ajouter DANS LA MEME PASSE : pas une image de plus
+// a calculer. Ils sont compiles a la demande (#ifdef) et non branches a l'execution : en
+// qualite basse le programme ne contient meme pas leurs instructions, elles ne coutent RIEN.
+//   grade : un poil de contraste, un poil de saturation, un vignettage tres leger — c'est ce
+//           que faisait le filtre CSS du canevas, qui forçait une passe de composition en
+//           plus et etait desactive sur la tele (l'image y etait donc plus terne).
+//   halo  : les sources vives (neons, soleil, phares, feu) bavent un peu de lumiere autour
+//           d'elles. Huit echantillons de plus : reserve a l'Ultra HD.
+const post = { on: false, force: 0.3, rt: null, w: 0, h: 0, msaa: false, scene: null, cam: null, mat: null, images: 0, grade: true, halo: false, cle: '' };
 function postMonte() {
   if (post.mat) return;
   post.mat = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, px: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, force: { value: 0.3 } },
+    defines: { GRADE: '', },
+    uniforms: { t: { value: null }, px: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, force: { value: 0.3 },
+      contraste: { value: 1.05 }, satur: { value: 1.08 }, vign: { value: 0.18 }, halo: { value: 0.42 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `varying vec2 vUv; uniform sampler2D t; uniform vec2 px; uniform float force;
+      uniform float contraste, satur, vign, halo;
       void main(){
         vec3 c = texture2D(t, vUv).rgb;
         vec3 n = texture2D(t, vUv + vec2(0.0, px.y)).rgb, s = texture2D(t, vUv - vec2(0.0, px.y)).rgb;
@@ -1323,10 +1402,45 @@ function postMonte() {
         vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));
         vec3 wgt = -amp * mix(0.0, 0.2, force);
         vec3 o = (c + (n + s + e + w) * wgt) / (1.0 + 4.0 * wgt);
+        #ifdef HALO
+          // on ne garde que ce qui est DEJA tres clair, et on l'etale : le neon deborde,
+          // le reste de l'image n'est pas touche
+          vec3 b = vec3(0.0);
+          for (int i = 0; i < 8; i++) {
+            float a = float(i) * 0.7853981;
+            vec2 d = vec2(cos(a), sin(a)) * px * 5.0;
+            vec3 sm = texture2D(t, vUv + d).rgb;
+            b += max(sm - 0.72, 0.0);
+          }
+          o += b * (halo * 0.125);
+        #endif
+        #ifdef GRADE
+          o = clamp((o - 0.5) * contraste + 0.5, 0.0, 1.0);
+          float g = dot(o, vec3(0.299, 0.587, 0.114));
+          o = clamp(mix(vec3(g), o, satur), 0.0, 1.0);
+          vec2 q = vUv - 0.5;
+          o *= 1.0 - vign * dot(q, q) * 1.6;
+        #endif
         gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
       }`, depthTest: false, depthWrite: false });
   post.scene = new THREE.Scene(); post.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat));
   post.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  postDefines();
+}
+// Recompile le programme SEULEMENT si l'un des deux effets change d'état : recompiler à
+// chaque image ferait tomber la fluidité à genoux.
+function postDefines() {
+  if (!post.mat) return false;
+  const cle = (post.grade ? 'G' : '') + (post.halo ? 'H' : '');
+  if (cle === post.cle) return false;
+  post.cle = cle;
+  const d = {};
+  if (post.grade) d.GRADE = '';
+  if (post.halo) d.HALO = '';
+  post.mat.defines = d; post.mat.needsUpdate = true;
+  // sans passe d'étalonnage, c'est le filtre CSS du canevas qui reprend le travail
+  try { document.body.classList.toggle('etalonne', !!post.grade && !!post.on); } catch (e) {}
+  return true;
 }
 function postCible() {
   const taille = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -1349,6 +1463,7 @@ function rendreImage() {
     postMonte();
     const rt = postCible();
     renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null);
+    postDefines();
     post.mat.uniforms.t.value = rt.texture; post.mat.uniforms.px.value.set(1 / post.w, 1 / post.h); post.mat.uniforms.force.value = post.force;
     renderer.render(post.scene, post.cam); post.images++;
     return true;
@@ -1364,6 +1479,12 @@ function applyQuality() {
   // CAS, qu'on pousse : c'est ce qui rend l'image « piquee » sur un grand ecran sans la ralentir
   post.on = diffusion.on ? true : !!Q.post;
   post.force = diffusion.on ? Math.max(Q.nettete, diffusion.nettete) : Q.nettete;
+  // l'étalonnage est presque gratuit : il suit la passe. Le HALO, lui, coûte huit
+  // échantillons de plus par pixel : réservé à l'Ultra HD, et jamais en diffusion (sur une
+  // télé 4K, ces huit échantillons se paient en images par seconde).
+  post.grade = post.on && Q.grade !== false;
+  post.halo = post.on && !diffusion.on && !!Q.halo;
+  postDefines();
   // "DLSS" : rendu en résolution réduite puis agrandi à l'écran (upscaling), ombres conservées
   rendu.ech = 1; rendu.tps.length = 0; ombresRendu(!low);
   appliqueRendu();
@@ -3530,6 +3651,7 @@ function coque(x, z, w, d, h, col, dir, dw = 2, dh = 2.6, T = 0.35, matX, matZ) 
   return dir;
 }
 function building(x, z, w, h, d, color, dir) {
+  color = varieTeinte(color, x, z);   // deux immeubles voisins ne sont plus jamais du même bleu exact
   const GF = 3.8, hh = Math.max(h - GF, 2.2);   // rez-de-chaussée creux : on entre dans le hall
   const tx = WINDOWS.clone(); tx.needsUpdate = true; tx.repeat.set(w / 2.2, hh / 2.2);
   const tz = WINDOWS.clone(); tz.needsUpdate = true; tz.repeat.set(d / 2.2, hh / 2.2);
@@ -15752,6 +15874,31 @@ $('sndTest').addEventListener('click', async () => {
 });
 $('musBtn').addEventListener('click', () => { settings.music = !settings.music; store.set('superobby.music', settings.music ? '1' : '0'); $('musBtn').textContent = 'Musique : ' + (settings.music ? 'activée' : 'coupée'); });
 $('sndTop').addEventListener('click', () => { setSound(!settings.sound); if (settings.sound) sfx.coin(); });
+// L'AMBIANCE LUMINEUSE. Tout le decor de nuit du jeu (fenetres allumees, halos des
+// lampadaires, neons des enseignes, etoiles) existait et ne servait JAMAIS, puisque le cycle
+// automatique ne descend plus dans la nuit. Le joueur peut maintenant choisir son moment —
+// et le cycle, lui, reste toujours de jour tant qu'il ne demande rien.
+const AMB_ORDRE = ['auto', 'matin', 'midi', 'couchant', 'nuit'];
+function ambianceLibelle() {
+  const a = AMBIANCES[settings.ambiance] || AMBIANCES.auto;
+  const el = typeof document !== 'undefined' && document.getElementById('ambBtn');
+  if (el) el.textContent = `Ambiance : ${a.e} ${a.n}`;
+  return a;
+}
+function ambianceSet(cle) {
+  settings.ambiance = AMBIANCES[cle] ? cle : 'auto';
+  store.set('superobby.ambiance', settings.ambiance);
+  const a = ambianceLibelle();
+  day.last = -1;                    // on force le reglage des lumieres a la prochaine image
+  try { dayTick(); } catch (e) {}
+  return a;
+}
+$('ambBtn').addEventListener('click', () => {
+  const i = AMB_ORDRE.indexOf(settings.ambiance);
+  const a = ambianceSet(AMB_ORDRE[(i + 1) % AMB_ORDRE.length]);
+  msg(`${a.e} Ambiance : ${a.n}`, 1400);
+});
+ambianceLibelle();
 $('qualBtn').addEventListener('click', () => { settings.quality = { ultra: 'high', high: 'dlss', dlss: 'low', low: 'ultra' }[settings.quality] || 'ultra'; store.set('superobby.quality', settings.quality); applyQuality(); msg(`🖼️ Qualité : ${qualite().n}`, 1400); });
 $('quit').addEventListener('click', () => { toggleMenu(false); running = false; resetGame(); $('start').classList.remove('hidden'); document.body.classList.add('lobby'); showBest(); });
 setSound(settings.sound);

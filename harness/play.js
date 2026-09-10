@@ -9340,7 +9340,9 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
       if (tl.broken || !tl.ligne) continue;
       G.simTime = Math.ceil(G.simTime / cycle) * cycle + (tl.groupe === 'A' ? 14.3 : 0.3);   // son groupe vient de passer au rouge
       const e = essai(tl.ligne, tl.sens, 8);
-      if (e && e.arrete > 30) { feu = { ...e, x: Math.round(tl.x), z: Math.round(tl.z), groupe: tl.groupe }; break; }
+      // il faut que l'arrêt soit bien DEVANT LA LIGNE : sinon on retiendrait une voiture
+      // arrêtée vingt mètres plus tôt pour une autre raison
+      if (e && e.arrete > 30 && e.avant > 0 && e.avant < 6) { feu = { ...e, x: Math.round(tl.x), z: Math.round(tl.z), groupe: tl.groupe }; break; }
       if (e && !feu) feu = { ...e, x: Math.round(tl.x), z: Math.round(tl.z), groupe: tl.groupe };
     }
     // ---- l'ARRÊT AU STOP : arrêt complet, puis on repart

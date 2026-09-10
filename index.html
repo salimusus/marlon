@@ -13292,7 +13292,7 @@ function conduire(c, tx, tz, dt, st) {
     else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
   }
   if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
-  if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.route = null; st.routeT = 0; }
+  if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.routeT = 0; }   // (on ne vide pas st.route : elle est encore relue plus bas)
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
   // Sur les DOUZE DERNIERS METRES on ne compte plus les autres vehicules : on se gare

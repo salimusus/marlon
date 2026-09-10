@@ -183,6 +183,19 @@ window.__SHOT = {
     }
     // poste J : plante une scene de metier (chantier, incendie, facteur, balayeur, laveur)
     if (v.metier && typeof metierScene === 'function') { try { metierScene(v.metier); } catch (e14) {} }
+    // poste Animation : fige un mouvement sur une image PRECISE, pour photographier une
+    // serie d'instants successifs du meme geste (v.anim = { combat, u, garde, geste, t, opt }).
+    if (typeof ANIM !== 'undefined' && ANIM) {
+      ANIM.fige = v.anim || null;
+      if (v.anim && v.anim.adversaire) {   // un adversaire plante devant le joueur, pour le combat
+        try {
+          const b = bots[0];
+          b.pos.set(P.pos.x + Math.sin(P.facing) * 1.35, P.pos.y, P.pos.z + Math.cos(P.facing) * 1.35);
+          b.rdv = null; b.wait = 99; b.ko = 0; b.hp = 100; b.fight = null; b.av.group.visible = true;
+          b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
+        } catch (e15) {}
+      }
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -978,6 +991,30 @@ window.__G = {
   prixSoin: typeof prixSoin === 'function' ? prixSoin : null,
   botHopital: typeof botHopital === 'function' ? botHopital : null,
   soinTick: typeof soinTick === 'function' ? soinTick : null,
+  ANIM: typeof ANIM !== 'undefined' ? ANIM : null,
+  animPose: typeof animPose === 'function' ? animPose : null,
+  animPres: typeof animPres === 'function' ? animPres : null,
+  GESTES: typeof GESTES !== 'undefined' ? GESTES : null,
+  gesteMetier: typeof gesteMetier === 'function' ? gesteMetier : null,
+  animCombat: typeof animCombat === 'function' ? animCombat : null,
+  coupDePoing: typeof coupDePoing === 'function' ? coupDePoing : null,
+  gardePoings: typeof gardePoings === 'function' ? gardePoings : null,
+  esquiveBaisse: typeof esquiveBaisse === 'function' ? esquiveBaisse : null,
+  coupCouteau: typeof coupCouteau === 'function' ? coupCouteau : null,
+  encaisseCoup: typeof encaisseCoup === 'function' ? encaisseCoup : null,
+  feuAnime: typeof feuAnime === 'function' ? feuAnime : null,
+  feuEteint: typeof feuEteint === 'function' ? feuEteint : null,
+  feuDetruit: typeof feuDetruit === 'function' ? feuDetruit : null,
+  feuVehicule: typeof feuVehicule === 'function' ? feuVehicule : null,
+  feuxAnimTick: typeof feuxAnimTick === 'function' ? feuxAnimTick : null,
+  depanneuseAnime: typeof depanneuseAnime === 'function' ? depanneuseAnime : null,
+  ambulanceAnime: typeof ambulanceAnime === 'function' ? ambulanceAnime : null,
+  animTransArme: typeof animTransArme === 'function' ? animTransArme : null,
+  animTransApplique: typeof animTransApplique === 'function' ? animTransApplique : null,
+  animFige: typeof animFige === 'function' ? animFige : null,
+  brancardAnime: typeof brancardAnime === 'function' ? brancardAnime : null,
+  animReception: typeof animReception === 'function' ? animReception : null,
+  animMondeTick: typeof animMondeTick === 'function' ? animMondeTick : null,
   botGardeDuCorps: typeof botGardeDuCorps === 'function' ? botGardeDuCorps : null,
   botProtegeMembre: typeof botProtegeMembre === 'function' ? botProtegeMembre : null,
   botGardeVilla: typeof botGardeVilla === 'function' ? botGardeVilla : null,

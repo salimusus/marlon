@@ -8526,6 +8526,225 @@ test('à l\'école, la fenêtre des exercices tient en haut de l\'écran et lais
   const ok = compact && enHaut && degage && lisible && r.rangee && r.atteintes === 4 && tv;
   return { ok, detail: `la fenêtre des exercices s'ouvrait au MILIEU de l'écran, sur fond assombri et flouté : elle cachait le tableau, c'est-à-dire l'endroit même où la réponse s'écrit à la craie · c'est maintenant une bande en haut de ${Math.round(r.panneau.h)} px sur ${H} (${r.panneau.hPct} %, bas à ${r.panneau.basPct} %), énoncé sur une ligne et les ${r.nCartes} réponses sur UNE rangée de boutons de ${r.hCarte} px (${r.atteintes}/4 atteintes à la manette) · le tableau occupe ${r.tabL}×${r.tabH} px entre ${r.tabHautPct} % et ${r.tabBasPct} % de la hauteur, recouvert à ${r.recouvre} % par le panneau · en mode télévision : bande à ${r.tv.hPct} % (bas ${r.tv.basPct} %), énoncé à ${r.tv.police} px, réponses sur une rangée, tableau recouvert à ${r.tv.recouvre} %` };
 });
+test('chaque geste de metier decrit un vrai cycle : amplitude suffisante, sans a-coup', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const rig = G.me.rig;
+    // pour chaque geste : l'articulation qui doit VRAIMENT travailler, et l'amplitude
+    // minimale attendue en radians (un geste de moins d'un tiers de radian ne se lit pas)
+    const cible = {
+      marteau: ['armR.coude', 1.2], soudure: ['armR', 0.35], accroupi: ['armR', 0.5],
+      balai: ['armR', 0.6], raclette: ['armR', 0.7], lance: ['armR', 0.3],
+      pedale: ['legR', 0.6], echelle: ['armR', 0.8], lettre: ['armR.coude', 1.2],
+    };
+    const lire = ch => ch.split('.').reduce((o, k) => o[k], rig).rotation.x;
+    const out = {};
+    for (const nom of Object.keys(cible)) {
+      const [ch, mini] = cible[nom];
+      rig.gK = 0; rig.gNom = null; rig.gVu = null;
+      const n = 260, base = G.simTime + 500, v = [];
+      for (let i = 0; i < n; i++) {
+        const t = base + i / 60;
+        G.animateRig(rig, 'idle', 0, 1 / 60, t);
+        const o = nom === 'echelle' ? { h: Math.max(0, i - 40) / (n - 40) }
+          : nom === 'lettre' ? { p: Math.max(0, i - 40) / (n - 40) } : { v: 8 };
+        G.gesteMetier(rig, nom, 1 / 60, t, o);
+        if (i > 40) v.push(lire(ch));
+      }
+      const mn = Math.min.apply(null, v), mx = Math.max.apply(null, v);
+      let d = 0; for (let i = 1; i < v.length; i++) d = Math.max(d, Math.abs(v[i] - v[i - 1]));
+      const moy = (mn + mx) / 2; let cr = 0;
+      for (let i = 1; i < v.length; i++) if ((v[i - 1] - moy) * (v[i] - moy) < 0) cr++;
+      out[nom] = { art: ch, amp: +(mx - mn).toFixed(2), mini, saut: +d.toFixed(3), passages: cr };
+    }
+    rig.gK = 0; rig.gNom = null; rig.gVu = null;
+    // et les travailleurs s'en servent VRAIMENT : sur un nid-de-poule, l'équipe s'accroupit
+    G.city.horaires = false;
+    G.metierScene('chantier');
+    for (let i = 0; i < 90; i++) G.step(1 / 60, true);
+    const eq = G.METIERS.employes;
+    out.chantier = { geste: eq[0].bot.av.rig.gNom, poids: +(eq[0].bot.av.rig.gK || 0).toFixed(2),
+      baisse: +(eq[0].bot.av.rig.baisse || 0).toFixed(2) };
+    G.metiersRepos();
+    return out;
+  });
+  const noms = Object.keys(r).filter(n => n !== 'chantier');
+  const faibles = noms.filter(n => r[n].amp < r[n].mini);
+  const brusques = noms.filter(n => r[n].saut > 0.45);
+  const morts = noms.filter(n => r[n].passages < 1);
+  const ch = r.chantier;
+  const ok = !faibles.length && !brusques.length && !morts.length
+    && ch.geste === 'accroupi' && ch.poids > 0.9 && ch.baisse > 0.15;
+  return { ok, detail: `les neuf gestes de métier passent : ${noms.map(n => `${n} ${r[n].art} ${r[n].amp} rad (min ${r[n].mini}, plus grand pas ${r[n].saut} rad/image, ${r[n].passages} passages)`).join(' · ')} — aucun trop faible (${faibles.length}), aucun à-coup au-dessus de 0,45 rad par image (${brusques.length}), aucun figé (${morts.length}) · et sur un nid-de-poule l'équipe joue bien « ${ch.geste} » à plein (poids ${ch.poids}, corps abaissé de ${ch.baisse} m) au lieu d'agiter un bras` };
+});
+
+test('le combat : le coude part replie et se tend a l\'impact, la garde monte au visage, l\'esquive baisse le corps', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const av = G.me, rig = av.rig;
+    const loc = o => { av.group.updateMatrixWorld(true); const v = new G.THREE.Vector3(); v.setFromMatrixPosition(o.matrixWorld); av.group.worldToLocal(v); return { x: +v.x.toFixed(3), y: +v.y.toFixed(3), z: +v.z.toFixed(3) }; };
+    const pas = t => { G.animateRig(rig, 'idle', 0, 1 / 60, t); G.animCombat(av, 1 / 60); };
+    let t = G.simTime + 500;
+    // 1) au repos : les poings pendent le long du corps
+    for (let i = 0; i < 40; i++) pas(t += 1 / 60);
+    const repos = { poingD: loc(rig.armR.poing), tete: loc(rig.head) };
+    // 2) la garde : les deux poings montent DEVANT LE VISAGE
+    G.gardePoings(av, true);
+    for (let i = 0; i < 40; i++) pas(t += 1 / 60);
+    const garde = { poingD: loc(rig.armR.poing), poingG: loc(rig.armL.poing), tete: loc(rig.head),
+      coudeD: +rig.armR.coude.rotation.x.toFixed(2) };
+    // 3) le coup de poing : coude replié à l'élan, tendu à l'impact, poing qui part devant
+    G.coupDePoing(av, 'D');
+    const cd = [], pz = [];
+    for (let i = 0; i < 40; i++) { pas(t += 1 / 60); cd.push(rig.armR.coude.rotation.x); pz.push(loc(rig.armR.poing).z); }
+    let saut = 0; for (let i = 1; i < cd.length; i++) saut = Math.max(saut, Math.abs(cd[i] - cd[i - 1]));
+    const coup = { replie: +Math.min.apply(null, cd).toFixed(2), tendu: +Math.max.apply(null, cd).toFixed(2),
+      avance: +(Math.max.apply(null, pz) - Math.min.apply(null, pz)).toFixed(2), saut: +saut.toFixed(2) };
+    // 4) l'esquive : le corps descend et les deux genoux plient
+    G.esquiveBaisse(av, 0.7);
+    let bmax = 0, gmax = 0;
+    let buste = 0;
+    for (let i = 0; i < 40; i++) { pas(t += 1 / 60); bmax = Math.max(bmax, rig.baisse || 0); gmax = Math.max(gmax, Math.min(rig.legL.genou.rotation.x, rig.legR.genou.rotation.x)); buste = Math.max(buste, loc(rig.armR.poing).y); }
+    const esquive = { baisse: +bmax.toFixed(2), genoux: +gmax.toFixed(2), buste: +buste.toFixed(2) };
+    // 5) le couteau : court et sec, le coude ne se tend qu'à moitié
+    for (let i = 0; i < 60; i++) pas(t += 1 / 60);
+    G.gardePoings(av, false); for (let i = 0; i < 20; i++) pas(t += 1 / 60); G.coupCouteau(av);
+    const kd = [];
+    for (let i = 0; i < 26; i++) { pas(t += 1 / 60); kd.push(rig.armR.coude.rotation.x); }
+    const couteau = { replie: +Math.min.apply(null, kd).toFixed(2), tendu: +Math.max.apply(null, kd).toFixed(2) };
+    // 6) encaisser : la tête est rejetée en arrière
+    G.encaisseCoup(av, 1);
+    const hd = [];
+    for (let i = 0; i < 30; i++) { pas(t += 1 / 60); hd.push(rig.head.rotation.y); }
+    const encaisse = { tete: +Math.max.apply(null, hd.map(v => Math.abs(v))).toFixed(2) };
+    if (rig.cbt) { rig.cbt.garde = 0; rig.cbt.gardeK = 0; rig.cbt.coup = 0; rig.cbt.couteau = 0; rig.cbt.esquive = 0; rig.cbt.esqK = 0; rig.cbt.enc = 0; rig.cbt.chute = 0; }
+    return { repos, garde, coup, esquive, couteau, encaisse };
+  });
+  const g = r.garde, c = r.coup;
+  const gardeOk = g.poingD.y > g.tete.y - 0.05 && g.poingG.y > g.tete.y - 0.05
+    && g.poingD.z > 0.12 && g.poingG.z > 0.12 && Math.abs(g.poingD.x) < 0.7
+    && g.poingD.y - r.repos.poingD.y > 0.5;
+  const coupOk = c.replie < -2.2 && c.tendu > -0.35 && c.avance > 0.35 && c.saut < 0.62;
+  // 0,198 m d'abaissement : c'est la valeur du poste Personnages (0,55 S), calculee pour que
+  // les semelles restent posees. On verifie qu'elle est bien appliquee et que le buste suit.
+  const esqOk = r.esquive.baisse > 0.15 && r.esquive.genoux > 1.3 && r.esquive.buste > 1.4;   // et les poings restent hauts : on passe SOUS le coup sans baisser la garde
+  const couteauOk = r.couteau.replie < -2.1 && r.couteau.tendu > -1.2 && r.couteau.tendu < -0.4;
+  const encOk = Math.abs(r.encaisse.tete) > 0.15;   // la tete est DETOURNEE par le coup (rotation, pas inclinaison)
+  const ok = gardeOk && coupOk && esqOk && couteauOk && encOk;
+  return { ok, detail: `le poste Personnages pose la GARDE et l'ESQUIVE, le poste Animation y ajoute le mouvement · GARDE : les poings passent de ${r.repos.poingD.y} m (le long du corps) à ${g.poingD.y} m, devant le visage (tête à ${g.tete.y} m) et en avant (z = ${g.poingD.z} m), coudes repliés à ${g.coudeD} rad · COUP DE POING : le coude part replié à ${c.replie} rad et se TEND à ${c.tendu} rad, le poing avance de ${c.avance} m, sans à-coup (plus grand pas ${c.saut} rad/image, contre 0,97 avant réglage) · ESQUIVE : le corps descend de ${r.esquive.baisse} m sur des genoux pliés à ${r.esquive.genoux} rad, poings qui restent hauts, à ${r.esquive.buste} m · COUTEAU : court et sec, le coude va de ${r.couteau.replie} à ${r.couteau.tendu} rad seulement (il ne se tend PAS comme un direct) · ENCAISSER : la tête est DÉTOURNÉE de ${r.encaisse.tete} rad par le coup` };
+});
+
+test('le feu vit et s\'eteint : des flammes de tailles differentes qui ondulent, de la fumee qui monte', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const avant = G.ANIM.feux.length;
+    const f = G.feuAnime(G.P.pos.x + 3, 0, G.P.pos.z, 1.5, 6);   // six secondes de feu, puis il doit s'éteindre tout seul
+    if (!f) return { pourquoi: 'feuAnime n\'a rien rendu' };
+    // `step` fait avancer l'horloge du jeu ; `feuxAnimTick` est appelé par la boucle de
+    // rendu (frame), pas par step — on le déroule donc nous-mêmes, image par image, ce qui
+    // rend la mesure DÉTERMINISTE au lieu de dépendre de la vitesse de la machine.
+    const image = () => { G.step(1 / 60, true); G.feuxAnimTick(1 / 60); };
+    for (let i = 0; i < 30; i++) image();   // le temps qu'il prenne toute sa force
+    // 1) les flammes n'ont pas toutes la même taille au même instant
+    const tailles = f.flammes.map(m => +m.scale.y.toFixed(2));
+    const distinctes = new Set(tailles).size;
+    // 2) chaque flamme change de taille dans le temps, et la fumée monte en se diluant
+    const suivi = f.flammes.map(() => []), fumeeY = [], fumeeOp = [], braiseY = [], halo = [];
+    for (let i = 0; i < 240; i++) {   // quatre secondes : un cycle complet de la bouffée de fumée
+      image();
+      f.flammes.forEach((m, j) => suivi[j].push(m.scale.y));
+      fumeeY.push(f.fumees[0].position.y); fumeeOp.push(f.fumees[0].material.opacity);
+      braiseY.push(f.braises[0].position.y); halo.push(f.halo.material.opacity);
+    }
+    const amp = suivi.map(v => +(Math.max.apply(null, v) - Math.min.apply(null, v)).toFixed(3));
+    // la fumée monte : la hauteur augmente bien plus souvent qu'elle ne baisse (elle ne
+    // redescend qu'une fois par cycle, quand la bouffée repart du foyer)
+    let monte = 0; for (let i = 1; i < fumeeY.length; i++) if (fumeeY[i] > fumeeY[i - 1]) monte++;
+    let braiseMonte = 0; for (let i = 1; i < braiseY.length; i++) if (braiseY[i] > braiseY[i - 1]) braiseMonte++;
+    // …et elle SE DILUE en montant : on compare l'opacité tout en haut de la colonne à celle
+    // du bas. Comparer simplement le min au max ne prouvait rien (la bouffée réapparaît).
+    const yMin = Math.min.apply(null, fumeeY), yMax = Math.max.apply(null, fumeeY);
+    const moy = t => t.length ? t.reduce((a, b) => a + b, 0) / t.length : 0;
+    const opHaut = [], opBas = [];
+    for (let i = 0; i < fumeeY.length; i++) {
+      const u = (fumeeY[i] - yMin) / (yMax - yMin || 1);
+      if (u > 0.8) opHaut.push(fumeeOp[i]); else if (u > 0.15 && u < 0.4) opBas.push(fumeeOp[i]);
+    }
+    const dilue = opHaut.length > 3 && opBas.length > 3 && moy(opHaut) < moy(opBas) * 0.6;
+    const haloBat = +(Math.max.apply(null, halo) - Math.min.apply(null, halo)).toFixed(3);
+    // 3) au bout de sa durée, il s'éteint EN FONDU puis disparaît complètement
+    const kAvant = +f.k.toFixed(2);
+    for (let i = 0; i < 330; i++) image();
+    const reste = G.ANIM.feux.indexOf(f) >= 0, dansScene = !!(f.g && f.g.parent);
+    return { avant, apres: G.ANIM.feux.length, distinctes, tailles, amp, monte, total: fumeeY.length - 1,
+      braiseMonte, dilue, opHaut: +moy(opHaut).toFixed(3), opBas: +moy(opBas).toFixed(3), haloBat, kAvant, reste, dansScene };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const bougent = r.amp.filter(a => a > 0.08).length;
+  const ok = r.distinctes >= 3 && bougent >= 5 && r.monte > r.total * 0.7 && r.braiseMonte > r.total * 0.7
+    && r.dilue && r.haloBat > 0.03 && r.kAvant > 0.9 && !r.reste && !r.dansScene;
+  return { ok, detail: `feuAnime est la SEULE recette de feu du jeu (incendie des pompiers, cartouche incendiaire, véhicule accidenté) : au même instant les sept langues ont ${r.distinctes} tailles différentes (${r.tailles.join(', ')}) · ${bougent} d'entre elles ondulent sur quatre secondes (amplitudes ${r.amp.join(', ')}) · la fumée monte sur ${r.monte}/${r.total} images et se DILUE en montant (opacité ${r.opBas} en bas de la colonne, ${r.opHaut} en haut), les braises montent sur ${r.braiseMonte}/${r.total}, la lueur bat de ${r.haloBat} d'opacité · et au bout de sa durée le feu retombe en fondu (force ${r.kAvant} avant) puis disparaît vraiment : plus dans ANIM.feux (${!r.reste}), plus dans la scène (${!r.dansScene})` };
+});
+
+test('les changements d\'etat ne sautent plus : on monte en voiture et on en descend en fondu', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city.cars.find(v => !v.busy && !v.heli && !v.rider);
+    if (!c) return { pourquoi: 'aucune voiture libre en ville' };
+    // On rejoue exactement ce que fait la boucle de rendu : `enterCar` ARME le fondu, puis
+    // chaque image pose la position du siège et `animTransApplique` ramène le corps depuis
+    // sa position d'avant. (La boucle de rendu, elle, n'est pas déterministe : on la déroule
+    // à la main, sinon la mesure dépendrait de la charge de la machine.)
+    const trajetVers = (depart, cible, n) => {
+      const pas = []; let prec = Object.assign({}, depart);
+      for (let i = 0; i < n; i++) {
+        G.step(1 / 60, true);
+        G.me.group.position.set(cible.x, cible.y, cible.z);   // ce que fait la boucle : on pose la place d'arrivée
+        G.animTransApplique(G.me);                            // …et le fondu ramène le corps d'où il venait
+        const q = G.me.group.position;
+        pas.push(Math.hypot(q.x - prec.x, q.y - prec.y, q.z - prec.z));
+        prec = { x: q.x, y: q.y, z: q.z };
+      }
+      return { plusGrandPas: +Math.max.apply(null, pas).toFixed(3), images: pas.filter(v => v > 0.004).length,
+        parcouru: +pas.reduce((a, b) => a + b, 0).toFixed(2) };
+    };
+    // 1) le sol : trois mètres et demi à côté de la portière
+    G.P.pos.set(c.x + 3.2, 0, c.z + 1.2); G.P.vel.set(0, 0, 0);
+    G.me.group.position.copy(G.P.pos);
+    const depart = { x: G.me.group.position.x, y: G.me.group.position.y, z: G.me.group.position.z };
+    const siege = { x: c.x + 0.5, y: (c.y || 0) + 0.9, z: c.z + 0.3 };
+    const droit = Math.hypot(siege.x - depart.x, siege.y - depart.y, siege.z - depart.z);
+    // 2) on monte : enterCar ARME le fondu (c'est ce qu'on vérifie d'abord)
+    G.enterCar(c);
+    const arme = (G.me.group.userData.trFin || 0) > G.simTime;
+    const monte = Object.assign({ trajet: +droit.toFixed(2), arme }, trajetVers(depart, siege, 40));
+    // 3) on descend : même mécanique, dans l'autre sens, vers la place que choisit exitCar
+    const seat = { x: G.me.group.position.x, y: G.me.group.position.y, z: G.me.group.position.z };
+    G.exitCar();
+    const armeSortie = (G.me.group.userData.trFin || 0) > G.simTime;
+    const sol = { x: G.P.pos.x, y: G.P.pos.y, z: G.P.pos.z };
+    const descend = Object.assign({ arme: armeSortie, trajet: +Math.hypot(sol.x - seat.x, sol.y - seat.y, sol.z - seat.z).toFixed(2) },
+      trajetVers(seat, sol, 40));
+    // un geste de métier monte lui aussi en fondu : jamais d'un coup
+    const rig = G.me.rig; rig.gK = 0; rig.gNom = null; rig.gVu = null;
+    const ks = []; let t = G.simTime + 800;
+    for (let i = 0; i < 30; i++) { t += 1 / 60; G.animateRig(rig, 'idle', 0, 1 / 60, t); G.gesteMetier(rig, 'marteau', 1 / 60, t); ks.push(rig.gK); }
+    let dk = 0; for (let i = 1; i < ks.length; i++) dk = Math.max(dk, ks[i] - ks[i - 1]);
+    rig.gK = 0; rig.gNom = null; rig.gVu = null;
+    return { monte, descend, fondu: { plusGrandPas: +dk.toFixed(3), images: ks.filter(v => v < 0.999).length } };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.monte.arme && r.descend.arme
+    && r.monte.trajet > 1.5 && r.monte.plusGrandPas < r.monte.trajet * 0.32 && r.monte.images >= 8
+    && r.descend.plusGrandPas < r.descend.trajet * 0.4 && r.descend.images >= 8
+    && r.fondu.plusGrandPas < 0.12 && r.fondu.images >= 8;
+  return { ok, detail: `monter en voiture TÉLÉPORTAIT le personnage sur le siège en une seule image : enterCar arme maintenant le fondu (${r.monte.arme}) et le corps traverse les ${r.monte.trajet} m en ${r.monte.images} images, sans jamais faire plus de ${r.monte.plusGrandPas} m d'un coup · descendre pareil (fondu armé ${r.descend.arme}, ${r.descend.trajet} m en ${r.descend.images} images, plus grand pas ${r.descend.plusGrandPas} m) · et un geste de métier monte en ${r.fondu.images} images, sans jamais gagner plus de ${r.fondu.plusGrandPas} de poids par image` };
+});
+
 // ============ POSTE E : combat à deux poings, couteau, étuis, ambulancier ============
 // Un décor de bagarre déterministe : le joueur au centre, UN habitant devant lui à la
 // distance voulue, tous les autres poussés à 500 m — sinon `nearestFighter` attrape un

@@ -6279,6 +6279,7 @@ function bench(x, z, facing = 0) {   // banc public sur lequel on peut s'asseoir
   city.benches.push({ x, z, facing, y: 0, assise: 0.66 });
 }
 function sitBench(b) { if (P.sit || drive.car) return; if (P.snack && !P.eat) setTimeout(() => eatCarried(), 400); P.sit = b;
+  animTransArme(me);   // on ne se téléporte plus sur le banc : le corps y glisse (poste Animation)
   // une chaise d'ecole : la maitresse accueille l'eleve PAR SON NOM, puis la classe commence
   if (b.ecole) { school.chaise = b; school.room = b.ecole; schDire(`Bonjour élève ${myCfg.name} ! Installe-toi, on commence les exercices.`); setTimeout(() => { if (P.sit === b) openSchool(b.ecole); }, 900); }
   P.pos.set(b.x, (b.y || 0) + (b.assise != null ? b.assise - 0.51 : 0.15), b.z); P.vel.set(0, 0, 0); P.facing = b.facing; cam.freeUntil = 0; msg(b.cine && city.cinema ? `🎬 ${FILMS[city.cinema.i].n} (${FILMS[city.cinema.i].genre}) — bon film ! (Espace pour se lever)` : P.eat ? '🪑 Bon appétit ! (Espace pour se lever)' : '🪑 Assis (Espace / SAUT pour se lever)', b.cine ? 2600 : 1200); }
@@ -6287,6 +6288,7 @@ function sitTick(dt) {
   P.vel.set(0, 0, 0); P.facing = b.facing;
   if (P.jumpBuf > 0) {
     P.jumpBuf = 0; P.sit = null;
+    animTransArme(me);   // et se relever se voit aussi : le corps quitte le banc en fondu
     // On se relève du premier côté libre. Avant, le joueur était poussé de 0,90 m sans
     // aucun test : il traversait le dossier puis le mur et se retrouvait dehors.
     const y = (b.y || 0) + 0.6;
@@ -9992,6 +9994,9 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // tend à l'impact, et le poing qui frappe est celui qui n'a pas servi au coup précédent.
   if (kind === 'kick') { me.rig.swing = 0.45; me.rig.kick = 0.45; }
   else { P.poing = P.poing === 'D' ? 'G' : 'D'; if (P.poing === 'D') me.rig.swing = 0.28; else me.rig.swingG = 0.28; }
+  // poste Animation : le MOUVEMENT du coup (elan, coude qui se tend, transfert du poids,
+  // rotation des epaules) est joue par animCombat ; on lui donne la meme duree.
+  if (kind !== 'kick') coupDePoing(me, P.poing, 0.28);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
   // LE SON DU COMBAT. Avant : un souffle et un « pok » mono, les mêmes pour un direct, un
   // combo et un coup de pied, et le personnage frappé ne disait rien. Maintenant l'effort
@@ -10063,6 +10068,7 @@ function coupCouteau() {
   P.fireCd = simTime + w.cd; P.punchT = simTime + w.cd;
   P.holsterT = simTime + 0.9;               // rengainage automatique après le coup, comme le pistolet
   me.rig.swing = 0.26; P.poing = 'D';       // le couteau est dans le poing droit
+  coupCouteau(me, 0.26);   // poste Animation : coup COURT et sec au ventre, pas un direct du droit
   P.dernierCouteau = simTime;
   sfx.noise(.05, 2400, .05); sfx.tone(1400, 0, .05, 'triangle', .03, 700);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
@@ -10203,6 +10209,7 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
       else if (simTime > (b.hitCd || 0) && !drive.car && P.hp > 0) { b.hitCd = simTime + 1.1; b.garde = false;
         // il frappe des deux poings lui aussi, en alternant
         b.poing = b.poing === 'D' ? 'G' : 'D'; if (b.poing === 'D') b.av.rig.swing = 0.3; else b.av.rig.swingG = 0.3;
+        coupDePoing(b.av, b.poing, 0.3);   // poste Animation : le meme mouvement complet que pour le joueur
         hurt(7, b.name, dx / d, dz / d, 1.5, 'poing'); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
       b.facing = Math.atan2(dx, dz);
     }
@@ -14957,7 +14964,10 @@ function updateBot(b, dt) {
   if (b.prison) return;  // en cellule : plainteTick le garde derrière les barreaux
   if (b.drive) return;   // au volant : botDriveTick s'en occupe
   const av = b.av;
-  const sync = () => { av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
+  // POSTE ANIMATION : le combat d'un PNJ passe ici, entre la pose de base d'animateRig et la
+  // mise en place du groupe — il faut que `rig.baisse` (l'esquive, la chute) soit déjà à
+  // jour quand on descend l'avatar. Sans rig.cbt, animCombat rend la main immédiatement.
+  const sync = () => { animCombat(av, dt); av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
   if (b.state === 'fall') {
     b.vel.y -= G * dt; b.pos.addScaledVector(b.vel, dt); sync();
     animateRig(av.rig, 'air', 0, dt, simTime);
@@ -15601,6 +15611,7 @@ function enterCar(c) {
   // on se voit désormais au volant, comme les amis bots conducteurs
   drive.car = c; drive.speed = 0; drive.assis = false;   /* la pose assise sera figée dès la première image : on APPARAÎT assis */
   me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
+  animTransArme(me);   // ON NE SE TÉLÉPORTE PLUS SUR LE SIÈGE : le corps y glisse en un tiers de seconde
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
   if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
@@ -15616,6 +15627,7 @@ function enterCar(c) {
 function exitCar() {
   const c = drive.car; if (!c) return;
   drive.car = null; drive.speed = 0; engine.stop(); if (hrace.on) { hrace.on = false; updateAct(); }
+  animTransArme(me);   // et pareil pour descendre : on sort du siège en glissant, pas d'un claquement de doigts
   if (c.rider) c.g.rotation.z = 0;
   // on ne descend pas d'un hélico en vol : il se pose d'abord sur ce qu'il y a dessous
   if (c.heli && !c.landed) {
@@ -17800,24 +17812,17 @@ function muniActive() {   // la cartouche utilisée pour le prochain tir (on ret
 }
 // ---- feu au sol laissé par une cartouche incendiaire ----
 function feuAuSol(x, y, z) {
-  const g = new THREE.Group(); g.position.set(x, y, z); worldGroup.add(g);
-  const flammes = [];
-  for (let i = 0; i < 5; i++) {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(rnd(0.3, 0.6), rnd(0.9, 1.7), 7),
-      new THREE.MeshLambertMaterial({ color: i % 2 ? 0xff8a20 : 0xffd23f, emissive: 0xff5a00, emissiveIntensity: 1, transparent: true, opacity: 0.85 }));
-    f.position.set(rnd(-1.1, 1.1), rnd(0.4, 0.8), rnd(-1.1, 1.1)); g.add(f); flammes.push(f);
-  }
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.6, depthWrite: false }));
-  halo.scale.set(8, 8, 1); halo.position.y = 1; g.add(halo);
-  city.feux.push({ g, flammes, x, y, z, r: 2.8, fin: simTime + 12, cd: 0 });
+  // MÊME FEU QUE PARTOUT AILLEURS. Il avait sa propre recette (cinq cônes tirés au sort,
+  // mis à l'échelle en bloc) : deux feux différents dans le même jeu, ça se voyait. Il passe
+  // par `feuAnime`, l'unique implémentation du bloc Animation, et s'éteint tout seul en 12 s.
+  const anim = feuAnime(x, y, z, 1.1, 12);
+  city.feux.push({ anim, g: anim && anim.g, x, y, z, r: 2.8, fin: simTime + 12, cd: 0 });
   sfx.noise(.5, 500, .08);
 }
 function feuxTick(dt) {
   for (let i = city.feux.length - 1; i >= 0; i--) {
     const f = city.feux[i];
-    if (simTime > f.fin) { worldGroup.remove(f.g); city.feux.splice(i, 1); continue; }
-    const reste = (f.fin - simTime) / 12;
-    f.flammes.forEach((m, k) => { m.scale.setScalar((0.7 + Math.sin(simTime * 9 + k * 2) * 0.25) * (0.4 + reste * 0.8)); });
+    if (simTime > f.fin) { feuEteint(f.anim); city.feux.splice(i, 1); continue; }   // le fondu de sortie est dans feuxAnimTick
     if (simTime < f.cd) continue;
     f.cd = simTime + 0.5;
     for (const b of bots) if (!b.ko && Math.hypot(b.pos.x - f.x, b.pos.z - f.z) < f.r) {
@@ -19211,6 +19216,7 @@ function frame() {
     if (d.t > d.life) { scene.remove(d.m); debris.splice(i, 1); }
   }
   fxTick(dt);
+  animMondeTick(dt);   // poste Animation : les feux qui brûlent, la dépanneuse et l'ambulance qui manœuvrent
   // le tableau s'ecrit meme quand l'interface de la classe est ouverte (le jeu est en pause,
   // mais la craie, elle, doit continuer sous les yeux du joueur)
   try { schoolTick(dt); } catch (e) { if (loopErr++ < 3) console.error('école', e); }
@@ -19237,7 +19243,16 @@ function frame() {
   const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
+  // POSTE ANIMATION : le combat du joueur se joue APRÈS la pose de base — garde, élan et
+  // détente du coup de poing, coup de couteau, esquive, encaissement, chute. Sans cet appel,
+  // les déclencheurs (coupDePoing, gardePoings…) n'auraient aucun effet visible.
+  if (ANIM.fige) animFige(me.rig); else { animCombat(me, dt); animReception(me.rig, myAnim === 'air', P.vel.y, dt); }
   if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
+  // LE JOUEUR SE BAISSE VRAIMENT. `rig.baisse` n'était appliqué qu'aux bots et aux
+  // travailleurs : le joueur à bout de forces, ou qui esquive un coup, pliait les jambes
+  // mais gardait la tête exactement à la même hauteur — l'esquive ne passait pas sous le
+  // poing. On descend maintenant le groupe de la même quantité, comme pour tout le monde.
+  else if (!drive.car && !couche) me.group.position.y -= (me.rig.baisse || 0);
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
   const armed = !!(P.gun && P.drawn && !drive.car && running && !gym.on && !P.sit && !P.swing && !P.ride);
@@ -22860,7 +22875,27 @@ function mainDeAvatar(av, cote) {
   return n.getWorldPosition(new THREE.Vector3());
 }
 function brancardTick(dt) {
-  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); } catch (e) {} }
+  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); brancardAnime(br, dt); } catch (e) {} }
+}
+// LE BRANCARD BOUGE COMME UN VRAI (poste Animation). Le poste Personnages le PLACE — aux
+// poignees des porteurs, ou en glissant dans l'ambulance. Il manquait le mouvement :
+//   • on le SOULEVE du sol au lieu de l'y arracher d'un coup, et on le repose en douceur
+//     (le meme fondu que pour monter en voiture) ;
+//   • il TANGUE au rythme du pas des porteurs — amorti, parce qu'un brancard bien tenu bouge
+//     peu, mais il bouge : sans ca, il avait l'air soude aux poings.
+function brancardAnime(br, dt) {
+  if (!br || !br.g) return;
+  if (br.etatPrec !== br.etat) {
+    if (br.etatPrec != null && (br.etat === 'porte' || br.etat === 'pose')) animTransArme(br.g, 0.45);
+    br.etatPrec = br.etat;
+  }
+  if (br.etat === 'porte' && br.avant && animPres(br.g.position.x, br.g.position.z)) {
+    const w = (br.avant.rig && br.avant.rig.walk) || 0;
+    br.g.position.y += Math.sin(w) * 0.035;          // il monte et descend avec la foulee
+    br.g.rotation.z = Math.sin(w) * 0.03;            // et roule tres legerement d'un cote a l'autre
+    br.g.rotation.x = Math.sin(w * 2 + 0.6) * 0.018;
+  }
+  animTransApplique(br.g);
 }
 // ---- L'AMBULANCIER ----
 // LE point d'entrée pour le poste B (l'ambulance) et le poste Animation (le brancardage) :
@@ -23190,16 +23225,13 @@ function boiteAuxLettres(x, z, ry) {
 function declencheIncendie(x, z, force) {
   if (!city.on) return null;
   if (city.incendies.length >= 2) return null;   // deux feux au plus : au-delà, ça rame et ça n'apporte rien
-  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
-  const flammes = [];
-  for (let i = 0; i < 6; i++) {
-    const f2 = new THREE.Mesh(new THREE.ConeGeometry(rnd(0.35, 0.7), rnd(1.2, 2.4), 7),
-      new THREE.MeshLambertMaterial({ color: i % 2 ? 0xff8a20 : 0xffd23f, emissive: 0xff5a00, emissiveIntensity: 1, transparent: true, opacity: 0.88 }));
-    f2.position.set(rnd(-1.3, 1.3), rnd(0.6, 1.2), rnd(-1.3, 1.3)); g.add(f2); flammes.push(f2);
-  }
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.6, depthWrite: false }));
-  halo.scale.set(11, 11, 1); halo.position.y = 1.6; g.add(halo);
-  const f = { x, z, g, flammes, halo, t: simTime, force: force || 100, cd: 0, aide: false };
+  // LE FEU N'EST PLUS DESSINÉ ICI. Six cônes tirés au sort qui changeaient d'échelle en
+  // bloc, ça ne ressemblait pas à un incendie et ça n'était pas reproductible d'une capture
+  // à l'autre. On appelle maintenant `feuAnime` du bloc Animation — la SEULE implémentation
+  // de feu du jeu, partagée avec les véhicules qui brûlent après un accident.
+  const anim = feuAnime(x, 0, z, 1.7, 0);
+  if (!anim) return null;   // déjà cinq brasiers : on n'en allume pas un sixième
+  const f = { x, z, g: anim.g, anim, t: simTime, force: force || 100, cd: 0, aide: false };
   city.incendies.push(f);
   sonFeu(x, 1.6, z, 1.6); sonEn(x, 1.6, z, dd => sfx.toneVers(dd, 90, 0, .5, 'sawtooth', .07, 40), { duree: .6, portee: 45, coupure: 90 });   // le départ de feu, entendu d'où il part
   msg('🔥 AU FEU ! La caserne envoie le camion', 3000);
@@ -23210,18 +23242,17 @@ function incendiesTick(dt) {
   for (let i = city.incendies.length - 1; i >= 0; i--) {
     const f = city.incendies[i];
     const k = clamp(f.force / 100, 0, 1);
-    for (let j = 0; j < f.flammes.length; j++) f.flammes[j].scale.setScalar((0.65 + Math.sin(simTime * 8 + j * 1.7) * 0.25) * (0.2 + k));
-    if (f.halo) f.halo.material.opacity = 0.12 + 0.5 * k;
-    // fumée et crépitement : au rythme lent, sinon on noie l'image de particules
+    // le feu qui BAISSE sous la lance : une seule valeur à pousser, `feuxAnimTick` fait le reste
+    if (f.anim) f.anim.intensite = 0.18 + 0.82 * k;
+    // le crépitement : au rythme lent, sinon on noie l'oreille (la fumée, elle, est dans feuAnime)
     if (simTime > f.cd) {
       f.cd = simTime + 0.6;
-      burst(f.x + rnd(-1.2, 1.2), 2.6 + rnd(0, 1.6), f.z + rnd(-1.2, 1.2), 0x54585f, 2);
       sonFeu(f.x, 1.4, f.z, 0.4 + k);   // le feu respire et craque, et on l'entend d'où il brûle
     }
     // filet de sécurité : un feu que personne n'éteint finit par s'épuiser tout seul
     if (simTime - f.t > 240) f.force -= dt * 10;
     if (f.force <= 0) {
-      worldGroup.remove(f.g); city.incendies.splice(i, 1);
+      feuEteint(f.anim); city.incendies.splice(i, 1);   // il retombe en fondu au lieu de disparaître d'un coup
       burst(f.x, 1.4, f.z, 0xf4f6fa, 12); sfx.check();
       msg('💧 Feu éteint ! Merci les pompiers 🚒', 2600);
       // le joueur a arrosé avec le camion : son petit boulot de pompier est rempli
@@ -23403,6 +23434,10 @@ function metierAuVolant(w, c, v, dt) {
   w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
   w.facing = c.h;
   animateRig(w.av.rig, c.kind === 'velo' ? 'ride' : 'sit', v, dt, simTime);
+  // À VÉLO, IL PÉDALE POUR DE BON : le genou est en retard sur la hanche, donc le pied
+  // décrit un CERCLE au lieu de faire un aller-retour, et le buste se penche sur le guidon.
+  // Le mode 'ride' d'animateRig ne faisait qu'osciller les deux cuisses en opposition.
+  if (c.kind === 'velo') gesteMetier(w.av.rig, 'pedale', dt, simTime, { v });
   metierSync(w);
 }
 function metierPassager(w, c, i, dt) {
@@ -23474,6 +23509,693 @@ function poseEchelle(vx, vz, fromX, fromZ) {
   return { g, x: g.position.x, z: g.position.z, ang };
 }
 
+// ================= LE BLOC ANIMATION (poste Animation) =================
+// TOUT LE MOUVEMENT VIVANT DE LA VILLE PASSE PAR ICI : les gestes des métiers, le combat,
+// le feu, les véhicules de secours, les transitions d'état. Trois règles, tenues à la lettre,
+// parce que les rounds précédents s'y sont cassé les dents :
+//   1. DÉTERMINISTE — tout est fonction de `simTime` et de l'état, JAMAIS de `Math.random()`.
+//      Une animation tirée au sort rendait les tests du banc d'essai instables d'une image
+//      à l'autre : impossible de garantir quoi que ce soit.
+//   2. ÉCONOME — on ne calcule le détail d'un geste que pour un personnage VISIBLE
+//      (`animPres`), et RIEN n'est alloué par image (ni géométrie, ni matériau, ni tableau).
+//   3. FONDU — un geste monte et redescend en un quart de seconde (`rig.gK`). Avant, changer
+//      d'état faisait SAUTER les membres d'une pose à l'autre : on voyait la coupure.
+const ANIM = {
+  vue: 62,        // m : au-delà de cette distance à la caméra, un geste ne se lit plus — on ne le calcule pas
+  fondu: 4.2,     // vitesse du fondu d'un geste : 0 → 1 en 0,24 s
+  feux: [],       // les feux vivants créés par feuAnime()
+  tetes: new Set(),   // les rigs dont le bloc Animation a incliné la tête (voir animTetes)
+  feuxMax: 5,     // garde-fou : au-delà, feuAnime() refuse — six brasiers, ça rame sur une petite machine
+};
+const animLiss = u => { const c = clamp(u, 0, 1); return c * c * (3 - 2 * c); };   // 0 → 1 sans à-coup (dérivée nulle aux bouts)
+const animSeg = (u, a, b) => animLiss((u - a) / (b - a || 1));                     // 0 avant a, 1 après b, adouci entre les deux
+function animPres(x, z) {   // ce point mérite-t-il qu'on calcule son geste ?
+  const c = (typeof camera !== 'undefined' && camera) ? camera.position : null; if (!c) return true;
+  const dx = x - c.x, dz = z - c.z;
+  return dx * dx + dz * dz < ANIM.vue * ANIM.vue;
+}
+
+// ---------- APPLIQUER UNE POSE ----------
+// `animPose` mélange une POSE dans ce qu'`animateRig` vient de laisser sur le rig, avec un
+// poids `k` : 0 = on garde la pose de base, 1 = la pose demandée, exactement. C'est CE
+// mélange qui rend les transitions douces, et c'est lui qui permet d'empiler les couches
+// (garde, puis coup, puis encaissement) sans jamais écrire deux fois la même articulation.
+// Champs, tous facultatifs, en radians :
+//   aLx / aRx  épaules  (négatif = le bras part vers l'avant, puis vers le haut)
+//   aLz / aRz  écartement des épaules (aRz négatif = le bras droit rentre vers le corps)
+//   cLx / cRx  coudes   (négatif = replié ; 0 = bras tendu)
+//   lLx / lRx  hanches  (négatif = la cuisse monte devant)
+//   gLx / gRx  genoux   (positif = le talon part en arrière)
+//   hx / hy    tête (inclinaison, rotation)
+//   bx         buste penché en avant (radians, positif = vers l'avant)
+//   bs         abaissement du corps en mètres (accroupi) — lu par metierSync et par le joueur
+function animPose(rig, p, k) {
+  if (!rig || !p || !(k > 0)) return;
+  const kk = Math.min(1, k);
+  const mix = (o, ch, v) => { if (v != null && o) o.rotation[ch] += (v - o.rotation[ch]) * kk; };
+  mix(rig.armL, 'x', p.aLx); mix(rig.armR, 'x', p.aRx);
+  mix(rig.armL, 'z', p.aLz); mix(rig.armR, 'z', p.aRz);
+  mix(rig.armL.coude, 'x', p.cLx); mix(rig.armR.coude, 'x', p.cRx);
+  mix(rig.legL, 'x', p.lLx); mix(rig.legR, 'x', p.lRx);
+  mix(rig.legL.genou, 'x', p.gLx); mix(rig.legR.genou, 'x', p.gRx);
+  // L'INCLINAISON DE LA TÊTE N'EST ÉCRITE QUE PAR NOUS : animateRig ne la repose jamais.
+  // On note donc le rig et l'image, et `animTetes` la remet droite dès que plus rien ne la
+  // commande. Sans ce registre, une tête penchée par un encaissement restait penchée POUR
+  // TOUJOURS quand le jeu appelait animateRig sans nous (le banc d'essai le fait) : la boîte
+  // de la tête, inclinée, passait alors devant les poings de la garde.
+  if (p.hx != null) { rig.hxT = simTime; ANIM.tetes.add(rig); }
+  mix(rig.head, 'x', p.hx); mix(rig.head, 'y', p.hy);
+  // LE PIED RESTE À PLAT. animateRig l'a déjà redressé, mais on vient de changer la hanche
+  // et le genou : sans ce rattrapage, la basket plongeait dans le bitume d'une image entière
+  // (c'est exactement le bug qu'avait corrigé animateRig, il faut le refaire après lui).
+  if (p.lLx != null || p.gLx != null || p.lRx != null || p.gRx != null) {
+    for (const lg of [rig.legL, rig.legR]) if (lg && lg.pied) lg.pied.rotation.x = clamp(-(lg.rotation.x + lg.genou.rotation.x), -2, 0.8);
+  }
+  // LE BUSTE : on incline le GROUPE de l'avatar (rotation.x positive = il se penche vers +z,
+  // c'est-à-dire vers l'avant). Le JOUEUR en est exclu : chez lui cette rotation sert déjà
+  // à la balançoire et au lit, on lui écraserait sa pose.
+  if (p.bx != null && rig.groupe && rig.groupe !== me.group) rig.groupe.rotation.x += (p.bx - rig.groupe.rotation.x) * kk;
+  if (p.bs != null) rig.baisse = (rig.baisse || 0) + (p.bs - (rig.baisse || 0)) * kk;
+}
+
+// ---------- LES GESTES DE MÉTIER ----------
+// Chaque geste est un CYCLE lisible de loin : on doit reconnaître le marteau, le balai ou
+// la lance sans lire l'étiquette du personnage. Une fonction par geste ; elle reçoit
+// (t = simTime, tp = temps écoulé depuis le début du geste, o = options) et rend une pose.
+const GESTES = {
+  // L'EMPLOYÉ AU MARTEAU : le bras s'arme haut (le coude se replie), puis TOUT redescend
+  // d'un coup sur la pièce. Le buste plonge sur l'impact : sans ça le bras semblait détaché
+  // du corps, comme un essuie-glace.
+  marteau(t) {
+    const u = (t / 1.05) % 1;
+    const haut = animSeg(u, 0, 0.52) - animSeg(u, 0.52, 0.64);    // 1 = bras armé en l'air
+    const choc = animSeg(u, 0.52, 0.64) - animSeg(u, 0.64, 1);    // 1 = juste à l'impact
+    return {
+      aRx: -0.30 - 2.05 * haut, cRx: -0.35 - 1.75 * haut, aRz: -0.22,
+      aLx: -1.05, cLx: -1.30, aLz: 0.34,
+      lLx: -0.16, lRx: -0.08, gLx: 0.30, gRx: 0.22,
+      bx: 0.16 + 0.18 * choc - 0.06 * haut, hx: 0.34 + 0.10 * choc, bs: 0,
+    };
+  },
+  // LA SOUDURE : accroupi, les deux mains rapprochées au ras de la pièce, la tête baissée
+  // derrière le masque. Un tremblement rapide (l'arc) et un lent balayage (le cordon).
+  soudure(t) {
+    const arc = Math.sin(t * 17) * 0.05, cordon = Math.sin(t * 2.3) * 0.30;
+    return {
+      aRx: -1.42 + cordon, cRx: -1.00 + arc - cordon * 0.5, aRz: -0.30 + cordon * 0.7,
+      aLx: -1.30 + cordon * 0.6, cLx: -1.20 + arc, aLz: 0.42,
+      lLx: -0.95, lRx: -0.95, gLx: 1.55, gRx: 1.55,
+      bx: 0.30, hx: 0.52, bs: 0.20,
+    };
+  },
+  // LE NID-DE-POULE : il s'ACCROUPIT vraiment (une jambe pliée plus que l'autre) et étale
+  // l'enrobé par grands allers-retours au ras du sol.
+  accroupi(t) {
+    const s = Math.sin(t * 3.1);
+    return {
+      aRx: -1.15 + s * 0.42, cRx: -0.85 - s * 0.35, aRz: -0.34 + s * 0.20,
+      aLx: -1.00, cLx: -1.05, aLz: 0.40,
+      lLx: -1.05, lRx: -0.90, gLx: 1.70, gRx: 1.75,
+      bx: 0.36, hx: 0.58, bs: 0.22,
+    };
+  },
+  // LE BALAI : un vrai balancier. Les deux mains tiennent le manche, les ÉPAULES partent
+  // avec (aLz et aRz du même signe : le buste vrille), et le tronc pousse à chaque passe.
+  // Aucune consigne pour les jambes : le balayeur marche en balayant, on lui laisse sa foulée.
+  balai(t) {
+    const s = Math.sin(t * 3.9);   // ~0,8 s l'aller-retour
+    return {
+      aRx: -0.72 + s * 0.46, cRx: -0.52 - s * 0.30, aRz: -0.30 + s * 0.20,
+      aLx: -1.06 + s * 0.34, cLx: -0.86 + s * 0.22, aLz: 0.36 + s * 0.20,
+      bx: 0.18 + s * 0.10, hx: 0.30,
+    };
+  },
+  // L'ÉCHELLE, BARREAU PAR BARREAU. La phase est prise sur la HAUTEUR (o.h, de 0 à 1) et
+  // non sur le temps : le bras et la jambe opposés montent ensemble, et quand le laveur
+  // redescend, tout se joue à l'envers tout seul.
+  echelle(t, tp, o) {
+    const s = Math.sin((o.h || 0) * 26);   // ~4 barreaux sur les 3,3 m de l'échelle : le rythme d'un vrai grimpeur
+    return {
+      aLx: -2.50 - s * 0.55, aRx: -2.50 + s * 0.55, aLz: 0.14, aRz: -0.14,
+      cLx: -0.75 + s * 0.55, cRx: -0.75 - s * 0.55,
+      lLx: -0.55 + s * 0.55, lRx: -0.55 - s * 0.55,
+      gLx: 1.05 - s * 0.50, gRx: 1.05 + s * 0.50,
+      bx: 0.06, hx: -0.18,
+    };
+  },
+  // LA RACLETTE : de GRANDS ARCS sur la vitre. L'épaule tourne en rond (inclinaison en
+  // cosinus, écartement en sinus) : c'est ce déphasage d'un quart de tour qui dessine le cercle.
+  raclette(t) {
+    const u = t * 2.7, s = Math.sin(u), c = Math.cos(u);
+    return {
+      aRx: -1.92 + c * 0.52, aRz: -0.26 + s * 0.78, cRx: -0.48 + c * 0.34,
+      aLx: -2.35, cLx: -1.35, aLz: 0.22,
+      bx: -0.05 + c * 0.06, hx: -0.12 + c * 0.10,
+    };
+  },
+  // LA LANCE À EAU, À DEUX MAINS. Le pompier se cale, une jambe devant, et ENCAISSE LE
+  // RECUL : une secousse rapide dans les bras, le buste rejeté en arrière, plus un lent
+  // balayage du jet. La main gauche vient sur le tuyau (aLz fort) au lieu de pendre.
+  lance(t) {
+    const r = Math.sin(t * 12.5), sw = Math.sin(t * 0.8);
+    return {
+      aRx: -1.42 + r * 0.13 + sw * 0.20, cRx: -0.38 + r * 0.11, aRz: -0.22 + sw * 0.16,
+      aLx: -1.20 + r * 0.13 + sw * 0.20, cLx: -0.82 + r * 0.11, aLz: 0.62 + sw * 0.16,
+      lLx: -0.34, lRx: 0.30, gLx: 0.52, gRx: 0.18,
+      bx: -0.15 - r * 0.06, hx: -0.10 + r * 0.05 + sw * 0.10, bs: 0.02,
+    };
+  },
+  // LE FACTEUR QUI PÉDALE. Le GENOU est en retard d'un peu plus d'un radian sur la hanche :
+  // c'est ce retard qui transforme deux balanciers en un vrai pédalage rond. Le buste est
+  // penché sur le guidon, la tête relevée pour voir la route.
+  pedale(t, tp, o) {
+    const ph = t * (o.v != null ? clamp(1.6 + o.v * 0.55, 2.6, 11) : 7);
+    const s = Math.sin(ph), s2 = Math.sin(ph - 1.15);
+    return {
+      lLx: -1.22 + s * 0.44, lRx: -1.22 - s * 0.44,
+      gLx: 1.12 + s2 * 0.55, gRx: 1.12 - s2 * 0.55,
+      aLx: -1.02, aRx: -1.02, cLx: -0.34, cRx: -0.34, aLz: 0.24, aRz: -0.24,
+      bx: 0.34, hx: -0.30,
+    };
+  },
+  // LA LETTRE : il fouille la sacoche (coude replié à la hanche), sort l'enveloppe, TEND le
+  // bras vers la boîte, la glisse, puis revient. Geste à sens unique : la progression `o.p`
+  // (0 → 1) vient du code du facteur, pas d'une horloge — la photo est donc reproductible.
+  lettre(t, tp, o) {
+    const u = clamp(o.p != null ? o.p : tp / 2.4, 0, 1);
+    const fouille = animSeg(u, 0, 0.26) - animSeg(u, 0.26, 0.44);
+    const sort = animSeg(u, 0.30, 0.52) - animSeg(u, 0.86, 1);
+    const tend = animSeg(u, 0.52, 0.74) - animSeg(u, 0.86, 1);
+    return {
+      aRx: 0.45 * fouille - 1.30 * tend, cRx: -0.55 - 1.55 * fouille - 0.30 * sort + 0.80 * tend,
+      aRz: -0.30 + 0.26 * fouille,
+      aLx: -0.20, cLx: -0.30, aLz: 0.16,
+      bx: 0.16 * fouille + 0.10 * tend, hx: 0.26 * fouille + 0.12 * tend,
+    };
+  },
+};
+// LE PILOTE DES GESTES. À appeler JUSTE APRÈS animateRig, une fois par image :
+//     gesteMetier(w.av.rig, 'marteau', dt, simTime);
+//     gesteMetier(w.av.rig, 'lettre', dt, simTime, { p: 0.4 });
+// `nom` à null — ou un personnage trop loin — fait REDESCENDRE le geste en douceur au lieu
+// de le couper net. On ne change de geste qu'une fois l'ancien complètement redescendu :
+// le passage se fait par la pose neutre, jamais d'un claquement d'une pose à l'autre.
+function gesteMetier(rig, nom, dt, t, opt) {
+  if (!rig) return;
+  animNeutre(rig);   // la tête se remet droite dès que plus aucun geste ne la commande
+  // GESTE ABANDONNÉ : si personne ne l'a redemandé depuis un cinquième de seconde, c'est
+  // que le travailleur est passé à autre chose (il marche, il range). On repart de zéro,
+  // sinon le geste suivant s'appliquait À PLEIN dès sa première image — et ça sautait.
+  if (rig.gVu != null && t - rig.gVu > 0.2) { rig.gK = 0; rig.gNom = null; }
+  rig.gVu = t;
+  // BANC D'ESSAI : `ANIM.fige.t` remplace l'horloge. Une capture d'écran isolée ne dit RIEN
+  // d'une animation ; en figeant tout le monde sur une image choisie, on peut photographier
+  // six instants successifs du même geste et juger le mouvement sur la série.
+  if (ANIM.fige && ANIM.fige.t != null) {
+    if (ANIM.fige.geste) rig.gNom = ANIM.fige.geste; else if (nom) rig.gNom = nom;
+    rig.gK = 1;
+    const gf = GESTES[rig.gNom];
+    if (gf) animPose(rig, gf(ANIM.fige.t, ANIM.fige.t, ANIM.fige.opt || opt || {}), 1);
+    return;
+  }
+  const pres = rig.groupe ? animPres(rig.groupe.position.x, rig.groupe.position.z) : true;
+  const veut = pres ? nom : null;
+  if (veut && veut !== rig.gNom && (rig.gK || 0) <= 0.03) { rig.gNom = veut; rig.gT = t; }
+  const meme = !!veut && veut === rig.gNom;
+  rig.gK = clamp((rig.gK || 0) + (meme ? dt : -dt) * ANIM.fondu, 0, 1);
+  if (!rig.gNom || rig.gK <= 0.002) { rig.gK = 0; if (!meme) rig.gNom = null; return; }
+  const f = GESTES[rig.gNom]; if (!f) { rig.gNom = null; rig.gK = 0; return; }
+  animPose(rig, f(t, t - (rig.gT || 0), opt || {}), rig.gK);
+}
+
+// ---------- LE COMBAT ----------
+// PARTAGE DES RÔLES AVEC LE POSTE PERSONNAGES. C'est LUI qui décide et qui pose la GARDE
+// (`rig.garde` / `rig.gardeK`), l'ESQUIVE accroupie (`rig.accroupi`, avec l'abaissement du
+// bassin déjà calculé pour que les semelles restent au sol), le PORTAGE (`rig.porte` /
+// `rig.porteK`), l'accusé de coup (`rig.recul`) et le genou à terre (`rig.agenou`).
+// Je ne refais RIEN de tout ça : j'ajoute ce qui manquait au mouvement —
+//   • l'APPUI des jambes en garde (il gardait les poings hauts mais les jambes de quelqu'un
+//     qui attend le bus) et une respiration lente, pour que la garde ne soit pas une statue ;
+//   • le COUP DE POING complet : élan avec le coude qui se replie et l'épaule qui part en
+//     arrière, détente où le coude se TEND, transfert du poids sur la jambe avant, rotation
+//     des épaules et du bassin, retour à la garde (le poste Personnages faisait un balayage
+//     linéaire du bras, sans anticipation ni poids) ;
+//   • le COUP DE COUTEAU : court et sec, au ventre, coude à demi tendu seulement ;
+//   • l'ENCAISSEMENT : la tête rejetée, les genoux qui fléchissent, et la garde qui SE
+//     RESSERRE et RECULE au lieu de s'ouvrir — c'est ce qui distingue à l'œil un coup bloqué
+//     d'un coup reçu ;
+//   • la CHUTE : le coup de trop, un genou à terre, sur la même géométrie que `rig.agenou`.
+// Les déclencheurs sont posés par les fonctions ci-dessous, appelées depuis le code de combat
+// du poste Personnages (`punch`, le couteau, la riposte des habitants).
+// Durees MESUREES a la sonde : ce sont les plus courtes ou le bras ne saute pas d'une image
+// a l'autre. A 0,28 s, la detente du coude balayait 55 degres en 1/60 s — le poing se
+// teleportait. A 0,40 s la detente prend 0,12 s : c'est vif et on la SUIT des yeux.
+const CBT_POING = 0.40, CBT_COUTEAU = 0.34, CBT_CHUTE = 1.25;
+const CBT_RECUL = 0.35;   // durée de `rig.recul` chez le poste Personnages
+// À GENOUX : le coup de trop. Mêmes angles que `rig.agenou` (0,95 S d'abaissement), pour que
+// les deux poses se ressemblent et que le genou touche vraiment le sol.
+const CBT_CHUTE_POSE = { lRx: -1.5, gRx: 1.55, lLx: 0.2, gLx: 1.8, bs: 0.95 * S, bx: 0.34,
+  aLx: -0.45, aRx: -0.40, cLx: -0.80, cRx: -0.75, aLz: 0.30, aRz: -0.30 };
+function animCbt(av) {
+  const rig = av && (av.rig || av); if (!rig || !rig.armL) return null;
+  if (!rig.cbt) rig.cbt = { coup: 0, coupD: CBT_POING, main: 1, couteau: 0, chute: 0, esqK: 0, souffle: 0 };
+  return rig.cbt;
+}
+// UN COUP DE POING. `main` : 'D' (défaut) ou 'G' ; `duree` pour coller à la durée que le
+// poste Personnages a mise dans `rig.swing` / `rig.swingG`. Rend false si un coup est déjà
+// en vol — c'est ce qui empêche le bras de repartir en arrière au milieu de sa détente.
+function coupDePoing(av, main, duree) {
+  const c = animCbt(av); if (!c || c.coup > 0) return false;
+  // on ne descend JAMAIS sous CBT_POING, meme si le poste Personnages a mis une duree plus
+  // courte dans rig.swing : en dessous, le mouvement n'est plus lisible a l'oeil.
+  c.coupD = Math.max(duree > 0 ? duree : 0, CBT_POING); c.coup = c.coupD;
+  c.main = (main === 'G' || main === -1) ? -1 : 1; return true;
+}
+// LA GARDE et L'ESQUIVE appartiennent au poste Personnages : on ne fait que relayer, pour
+// que les autres postes puissent appeler l'animation sans connaître deux jeux de noms.
+function gardePoings(av, on) {
+  const rig = av && (av.rig || av); if (!rig) return;
+  rig.garde = on !== false;
+  if (av === me && typeof P !== 'undefined') P.garde = rig.garde;
+}
+function esquiveBaisse(av, duree) {
+  const c = animCbt(av); if (!c) return;
+  const rig = av.rig || av;
+  rig.accroupi = true; c.esqFin = simTime + (duree > 0 ? duree : 0.55);
+  if (av === me && typeof P !== 'undefined') P.accroupi = true;
+}
+// LE COUTEAU : court et sec, au ventre.
+function coupCouteau(av, duree) {
+  const c = animCbt(av); if (!c || c.couteau > 0) return false;
+  c.couteau = Math.max(duree > 0 ? duree : 0, CBT_COUTEAU); return true;
+}
+// ENCAISSER : `force` 1 = un direct, 2 et plus = le coup de trop, il tombe à genoux.
+// On réutilise `rig.recul` du poste Personnages pour le tronc, et on y ajoute la chute.
+function encaisseCoup(av, force) {
+  const rig = av && (av.rig || av); if (!rig) return;
+  const c = animCbt(av); if (!c) return;
+  rig.recul = CBT_RECUL;
+  c.encF = clamp(force > 0 ? force : 1, 0.4, 3);
+  if (c.encF >= 2) c.chute = CBT_CHUTE;
+}
+// LES ARTICULATIONS QUE animateRig NE REPOSE PAS. L'INCLINAISON DE LA TÊTE (`hx`) n'est
+// écrite que par le bloc Animation : quand un geste ou un encaissement s'arrête, personne ne
+// la remet droite et le personnage gardait la tête penchée POUR TOUJOURS — le test de la
+// garde du poste Personnages l'a attrapé, la boîte de la tête inclinée passant devant les
+// poings. On la ramène donc au neutre à chaque image où plus rien ne la commande.
+function animNeutre(rig) {
+  if (!rig || !rig.head) return;
+  // remise à ZÉRO SÈCHE, et non un retour progressif : les couches qui suivent réécrivent la
+  // valeur dans la même image avec leur propre poids (déjà lissé), donc rien ne saute — et
+  // dès que plus rien ne commande la tête, elle est droite à l'image suivante, sans traîner.
+  if (rig.head.rotation.x) rig.head.rotation.x = 0;
+}
+// Le moteur : à appeler une fois par image, APRÈS animateRig. Rend true s'il a posé quelque
+// chose. Il ne coûte presque rien quand personne ne se bat : trois tests et on ressort.
+function animCombat(av, dt) {
+  const rig = av && (av.rig || av); if (!rig || !rig.armL) return false;
+  animNeutre(rig);
+  const c = rig.cbt;
+  const gardeK = rig.gardeK || 0;
+  const rien = !(gardeK > 0.02) && !rig.accroupi && !(rig.recul > 0)
+    && !(c && (c.coup > 0 || c.couteau > 0 || c.chute > 0 || c.esqK > 0.02));
+  if (rien) { if (c) c.esqK = 0; return false; }
+  const cc = c || animCbt(rig); if (!cc) return false;
+  // l'esquive armée par esquiveBaisse() se relâche toute seule au bout de sa durée
+  if (cc.esqFin && simTime > cc.esqFin) { cc.esqFin = 0; rig.accroupi = false; if (rig === me.rig && typeof P !== 'undefined') P.accroupi = false; }
+  cc.coup = Math.max(0, cc.coup - dt); cc.couteau = Math.max(0, cc.couteau - dt); cc.chute = Math.max(0, cc.chute - dt);
+  cc.esqK += ((rig.accroupi ? 1 : 0) - cc.esqK) * Math.min(1, dt * 14);
+  cc.souffle += dt;
+  if (rig.groupe && !animPres(rig.groupe.position.x, rig.groupe.position.z)) return false;
+  // 1. L'APPUI DE GARDE : jambe arrière chargée, genoux souples, buste de trois quarts, et
+  //    une respiration lente (le corps monte et descend d'un centimètre) pour que la garde
+  //    ne soit pas une statue. On ne touche PAS aux bras : ils sont au poste Personnages.
+  // L'APPUI S'EFFACE PENDANT L'ESQUIVE : sans le facteur (1 − esqK), cette pose ECRASAIT les
+  // jambes pliees et l'abaissement du bassin que le poste Personnages venait de poser — on se
+  // baissait de un centimetre au lieu de vingt, et le coup ne passait plus au-dessus.
+  if (gardeK > 0.02 && cc.esqK < 0.98) {
+    const resp = Math.sin(cc.souffle * 2.4);
+    animPose(rig, { lLx: -0.22, lRx: 0.14, gLx: 0.46, gRx: 0.28,
+      bx: 0.12 + resp * 0.02, bs: 0.012 + resp * 0.008 }, gardeK * (1 - cc.esqK));
+  }
+  // 2. LE COUP DE POING. Trois temps : élan (le coude se replie, l'épaule part en arrière,
+  //    le poids recule), détente (le coude se TEND, l'épaule vient devant, le poids passe sur
+  //    la jambe avant, les épaules et la tête tournent), retour à la garde. Le poids de la
+  //    pose s'ouvre et se referme en cloche : le personnage ne « claque » jamais dans la pose.
+  if (cc.coup > 0) {
+    const u = 1 - cc.coup / (cc.coupD || CBT_POING);
+    // la détente s'étale sur un quart de la durée : plus court, le bras faisait un BOND
+    // d'une image à l'autre (55° en 1/60 s) et le coup ressemblait à une téléportation.
+    const elan = animSeg(u, 0, 0.28) - animSeg(u, 0.28, 0.58);
+    const det = animSeg(u, 0.28, 0.58) - animSeg(u, 0.66, 1);
+    const D = cc.main > 0, cote = D ? 1 : -1;
+    const p = {
+      lLx: -0.22 - 0.30 * det, gLx: 0.46 + 0.28 * det,
+      lRx: 0.14 + 0.22 * det, gRx: 0.28,
+      bx: 0.12 + 0.20 * det - 0.08 * elan, bs: 0.02 + 0.03 * det,
+      hy: -cote * 0.22 * det,
+    };
+    // le bras qui frappe : le coude part REPLIÉ (−2,7 rad) et finit TENDU (−0,1 rad)
+    p[D ? 'aRx' : 'aLx'] = -1.05 + 0.55 * elan - 0.55 * det;
+    p[D ? 'cRx' : 'cLx'] = -2.10 - 0.60 * elan + 2.00 * det;
+    p[D ? 'aRz' : 'aLz'] = cote * (-0.40 + 0.30 * det);
+    // l'autre bras se resserre sur le visage : l'épaule opposée recule, c'est la vrille du buste
+    p[D ? 'aLx' : 'aRx'] = -1.30 + 0.25 * det;
+    p[D ? 'cLx' : 'cRx'] = -1.60 - 0.30 * det;
+    p[D ? 'aLz' : 'aRz'] = -cote * (0.34 + 0.16 * det);
+    animPose(rig, p, Math.min(1, Math.sin(Math.PI * u) * 3));
+  }
+  // 3. LE COUTEAU : armé contre la hanche, un coup COURT vers le ventre, retour immédiat.
+  //    Le coude ne se tend qu'à moitié : un coup de couteau ne part pas de l'épaule.
+  if (cc.couteau > 0) {
+    const u = 1 - cc.couteau / CBT_COUTEAU;
+    const arme = animSeg(u, 0, 0.30) - animSeg(u, 0.30, 0.44);
+    const pique = animSeg(u, 0.30, 0.44) - animSeg(u, 0.52, 1);
+    animPose(rig, {
+      aRx: 0.28 * arme - 0.70 * pique, cRx: -2.45 + 0.35 * arme + 1.60 * pique,
+      aRz: -0.45 + 0.30 * pique, aLx: -0.85, cLx: -1.90, aLz: 0.50,
+      bx: 0.10 + 0.26 * pique, hy: -0.30 * pique,
+      lLx: -0.18 - 0.30 * pique, gLx: 0.40 + 0.28 * pique, lRx: 0.14, gRx: 0.24,
+    }, Math.min(1, Math.sin(Math.PI * u) * 3.4));
+  }
+  // 4. L'ESQUIVE : le poste Personnages plie déjà les jambes et descend le bassin — on
+  //    ajoute la tête rentrée dans les épaules, le buste qui part en avant, et la garde qui
+  //    RESTE HAUTE quand elle était levée (sinon on se baissait bras ballants).
+  if (cc.esqK > 0.02) {
+    // L'inclinaison de la tête est volontairement ABSENTE ici : c'est le seul angle du rig
+    // qu'animateRig ne repose jamais, et une valeur laissée derrière nous restait accrochée
+    // à la tête (la boîte de la tête penchée passait devant les poings de la garde). Le
+    // poste Personnages descend déjà le bassin de 20 cm ; nous, on garde les POINGS HAUTS.
+    const p = { bx: 0.34, hy: 0 };
+    if (gardeK > 0.4) { p.aLx = -1.15; p.aRx = -1.15; p.cLx = -1.85; p.cRx = -1.85; p.aLz = 0.40; p.aRz = -0.40; }
+    animPose(rig, p, cc.esqK * (gardeK > 0.4 ? 1 : 0.7));
+  }
+  // 5. ENCAISSER : la tête est rejetée, les genoux fléchissent — et la garde SE RESSERRE et
+  //    RECULE au lieu de s'ouvrir. C'est ce qui fait qu'on voit la différence entre un coup
+  //    bloqué et un coup reçu.
+  if (rig.recul > 0) {
+    const w = Math.sin(rig.recul / CBT_RECUL * Math.PI) * Math.min(1, (cc.encF || 1));
+    const bloque = gardeK > 0.4;
+    const p = {
+      // LA TÊTE EST DÉTOURNÉE PAR LE COUP, et cela se joue sur la ROTATION (hy), jamais sur
+      // l'inclinaison (hx). Raison : hx n'est écrite que par le bloc Animation, alors que hy
+      // est réécrite par animateRig à chaque image. Une inclinaison pouvait donc rester
+      // accrochée à la tête quand le jeu appelait animateRig sans nous — et la boîte de la
+      // tête, penchée, passait alors DEVANT les poings de la garde.
+      hy: 0.34 * w,
+      aLz: (bloque ? 0.34 : 0.20) + (bloque ? 0.20 : 0.50) * w,
+      aRz: (bloque ? -0.34 : -0.20) - (bloque ? 0.20 : 0.50) * w,
+      cLx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
+      cRx: bloque ? -1.55 - 0.45 * w : -0.45 - 0.30 * w,
+      aLx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
+      aRx: bloque ? -1.35 + 0.30 * w : -0.30 - 0.55 * w,
+    };
+    // les jambes n'encaissent que DEBOUT : accroupi, elles appartiennent a l'esquive du poste
+    // Personnages et on lui laisserait un genou a demi tendu en pleine esquive.
+    if (cc.esqK < 0.5) {
+      p.bs = (bloque ? 0.012 : 0) + 0.10 * w;
+      p.lLx = -0.22 - 0.26 * w; p.gLx = 0.46 + 0.50 * w;
+      p.lRx = 0.14 + 0.18 * w; p.gRx = 0.28 + 0.30 * w;
+    }
+    animPose(rig, p, w);
+  }
+  // 6. LA CHUTE : un genou à terre, le corps replié. Elle tombe vite et se relève lentement.
+  if (cc.chute > 0) {
+    const ck = Math.min(animLiss((CBT_CHUTE - cc.chute) / 0.22), animLiss(cc.chute / 0.30));
+    animPose(rig, CBT_CHUTE_POSE, ck);
+  }
+  return true;
+}
+// ---------- LE FEU ----------
+// UNE SEULE implémentation de feu dans tout le jeu (accord passé avec le poste Graphisme,
+// qui fait brûler les véhicules accidentés) :
+//     const f = feuAnime(x, y, z, taille, duree);   // duree = 0 : il brûle jusqu'à feuEteint(f)
+//     f.intensite = 0.4;                            // 0 → 1 : le feu qui baisse sous la lance
+//     feuEteint(f);                                 // fondu de sortie puis disparition
+//     const f = feuVehicule(voiture, 10);           // le même feu, accroché à la carrosserie
+// `feuxAnimTick(dt)` (une fois par image, depuis la boucle principale) fait tout bouger.
+// Le feu est un empilement de quatre couches : des LANGUES de tailles variées qui ondulent
+// et montent, un CŒUR clair au milieu, une LUEUR qui bat, de la FUMÉE qui s'élève en se
+// diluant et des BRAISES qui montent. Tout est fonction de simTime : deux captures au même
+// instant donnent la même image.
+const FEU_CONE = new THREE.ConeGeometry(0.5, 1, 7);
+const FEU_BRAISE = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+function feuAnime(x, y, z, taille, duree) {
+  if (typeof worldGroup === 'undefined' || !worldGroup) return null;
+  if (ANIM.feux.length >= ANIM.feuxMax) return null;
+  const T = clamp(taille > 0 ? taille : 1, 0.3, 4);
+  const g = new THREE.Group(); g.position.set(x || 0, y || 0, z || 0); worldGroup.add(g);
+  const flammes = [], fumees = [], braises = [], mats = [];
+  // sept langues : cinq grandes orangées pour la silhouette, deux petites jaune pâle au
+  // centre pour le cœur clair. Le mélange additif fait le reste : là où elles se croisent,
+  // ça devient blanc, exactement comme un vrai foyer.
+  for (let i = 0; i < 7; i++) {
+    const coeur = i >= 5;
+    const mat = new THREE.MeshBasicMaterial({ color: coeur ? 0xfff3c4 : (i % 2 ? 0xff6a10 : 0xffab2b),
+      transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+    const m = new THREE.Mesh(FEU_CONE, mat);
+    m.userData = { coeur, a: i * 2.399, r: coeur ? 0.16 : 0.42 + (i % 3) * 0.3, h: coeur ? 0.75 : 1.05 + (i % 3) * 0.55, l: coeur ? 0.4 : 0.5 + (i % 2) * 0.24, ph: i * 1.73 };
+    g.add(m); flammes.push(m); mats.push(mat);
+  }
+  const haloM = new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.5, depthWrite: false });
+  const halo = new THREE.Sprite(haloM); halo.scale.set(9 * T, 9 * T, 1); halo.position.y = 1.2 * T; g.add(halo); mats.push(haloM);
+  for (let i = 0; i < 4; i++) {   // la fumée : quatre bouffées décalées d'un quart de cycle
+    const mat = new THREE.SpriteMaterial({ map: GLOW, color: 0x5a5f68, transparent: true, opacity: 0.3, depthWrite: false });
+    const s = new THREE.Sprite(mat); s.userData = { ph: i / 4 }; g.add(s); fumees.push(s); mats.push(mat);
+  }
+  for (let i = 0; i < 5; i++) {   // les braises : elles montent et s'éteignent en l'air
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffc04a, transparent: true, opacity: 1, depthWrite: false });
+    const b = new THREE.Mesh(FEU_BRAISE, mat); b.scale.setScalar(T); g.add(b); braises.push(b); mats.push(mat);
+  }
+  const f = { g, flammes, halo, fumees, braises, mats, T, t0: simTime, duree: duree > 0 ? duree : 0,
+    k: 0, fin: false, intensite: 1, suivi: null, x: x || 0, z: z || 0 };
+  ANIM.feux.push(f);
+  return f;
+}
+// Éteindre : le feu ne disparaît pas d'un coup, il retombe en une seconde et demie.
+function feuEteint(f) { if (f) f.fin = true; }
+// Le retirer SANS fondu (remise à zéro du banc d'essai, ville démontée).
+function feuDetruit(f) {
+  if (!f) return;
+  const i = ANIM.feux.indexOf(f); if (i >= 0) ANIM.feux.splice(i, 1);
+  if (f.g && f.g.parent) f.g.parent.remove(f.g);
+  if (f.suivi && f.suivi.feu === f) f.suivi.feu = null;
+  for (const m of f.mats) { if (m && m.dispose) m.dispose(); }
+  f.mats.length = 0;
+}
+// LE FEU D'UN VÉHICULE : le même feu, mais accroché au groupe de la carrosserie — il suit
+// donc la voiture qui roule encore, et il se range tout seul au bout de `duree`.
+function feuVehicule(c, duree) {
+  if (!c || !c.g) return null;
+  if (c.feu && ANIM.feux.indexOf(c.feu) >= 0) { c.feu.duree = Math.max(c.feu.duree, duree > 0 ? duree : 10); c.feu.t0 = simTime; c.feu.fin = false; return c.feu; }
+  const f = feuAnime(0, 0.9, 0, 1.1, duree > 0 ? duree : 10); if (!f) return null;
+  if (f.g.parent) f.g.parent.remove(f.g);
+  c.g.add(f.g); f.suivi = c; c.feu = f;
+  return f;
+}
+function feuxAnimTick(dt) {
+  if (!ANIM.feux.length) return;
+  const t = simTime;
+  for (let i = ANIM.feux.length - 1; i >= 0; i--) {
+    const f = ANIM.feux[i];
+    // FILET DE SÉCURITÉ : la ville démontée (changement de monde, banc d'essai) emporte le
+    // groupe du feu sans nous prévenir. Sans ce test, on animait des flammes fantômes pour
+    // toujours et les matériaux n'étaient jamais rendus.
+    if (!f.g || !f.g.parent) { feuDetruit(f); continue; }
+    if (f.suivi) { f.x = f.suivi.x; f.z = f.suivi.z; if (!f.suivi.g || !f.suivi.g.parent) { feuDetruit(f); continue; } }
+    if (f.duree > 0 && t - f.t0 > f.duree) f.fin = true;
+    // la force monte en un tiers de seconde et redescend en une seconde et demie
+    f.k += ((f.fin ? 0 : 1) - f.k) * Math.min(1, dt * (f.fin ? 1.6 : 3.2));
+    if (f.fin && f.k < 0.02) { feuDetruit(f); continue; }
+    const k = f.k * clamp(f.intensite == null ? 1 : f.intensite, 0.12, 1);
+    // ÉCONOMIE : un brasier à l'autre bout de la ville n'a pas besoin de ses sept langues
+    // recalculées ; on ne garde que la lueur, qui est ce qu'on voit de loin.
+    const pres = animPres(f.x, f.z);
+    f.halo.material.opacity = (0.14 + 0.34 * (0.6 + 0.4 * Math.sin(t * 3.7 + f.t0))) * k;
+    f.halo.scale.setScalar((8 + 1.6 * Math.sin(t * 2.3 + f.t0)) * f.T * (0.4 + 0.6 * k));
+    for (const s of f.fumees) s.visible = pres;
+    for (const b of f.braises) b.visible = pres && k > 0.15;
+    for (const m of f.flammes) m.visible = pres;
+    if (!pres) continue;
+    for (const m of f.flammes) {
+      const u = m.userData, ph = t * 2.9 + u.ph;
+      const monte = 0.55 + 0.45 * Math.sin(ph);
+      const h = Math.max(0.02, u.h * f.T * (0.5 + 0.65 * monte) * k);
+      const l = u.l * f.T * (0.8 + 0.22 * Math.sin(ph * 1.7 + 1.1)) * (0.4 + 0.6 * k);
+      m.scale.set(l, h, l);
+      const derive = Math.sin(ph * 0.7) * 0.35;
+      m.position.set(Math.sin(u.a + derive) * u.r * f.T, h * 0.5 + 0.05 * f.T, Math.cos(u.a + derive) * u.r * f.T);
+      m.rotation.z = Math.sin(ph * 1.3) * 0.17; m.rotation.x = Math.cos(ph * 1.1) * 0.13;
+      m.material.opacity = (u.coeur ? 0.95 : 0.74) * clamp(k * 1.3, 0, 1);
+    }
+    for (let j = 0; j < f.fumees.length; j++) {
+      const s = f.fumees[j], u = (t * 0.26 + s.userData.ph) % 1;
+      const r = (0.35 + u * 1.7) * f.T;
+      s.position.set(Math.sin(t * 0.5 + j * 2.1) * r, (1.0 + u * 5.2) * f.T, Math.cos(t * 0.42 + j * 2.1) * r);
+      const e = (1.1 + u * 4.4) * f.T; s.scale.set(e, e, 1);
+      s.material.opacity = 0.34 * Math.min(1, u * 5) * (1 - u) * k;   // elle se dilue en montant
+    }
+    for (let j = 0; j < f.braises.length; j++) {
+      const b = f.braises[j], u = (t * 0.55 + j / f.braises.length) % 1;
+      const r = (0.25 + u * 0.9) * f.T;
+      b.position.set(Math.sin(j * 2.399 + u * 3) * r, u * 3.4 * f.T, Math.cos(j * 2.399 + u * 3) * r);
+      b.material.opacity = (1 - u) * k;
+    }
+  }
+}
+
+// ---------- LES VÉHICULES DE SECOURS ----------
+// La DÉPANNEUSE et l'AMBULANCE sont construites par les postes Véhicules et Personnages ;
+// ICI il n'y a que le mouvement. Il suffit que le véhicule expose ses pièces dans
+// `c.outils` et que le jeu pousse une cible de 0 à 1 :
+//   dépanneuse — `c.depCible` ; pièces : bras, avantBras, treuil, cable, crochet, plateau,
+//                et `c.remorque` = le véhicule ramassé (on le fait glisser sur le plateau).
+//   ambulance  — `c.ambCible` ; pièces : porteG, porteD, brancard (groupe), pieds, et
+//                `c.blesse` = l'avatar posé dessus.
+// Rien de tout cela n'est obligatoire : chaque pièce absente est simplement ignorée, ce qui
+// permet aux deux postes d'avancer sans m'attendre.
+const DEP_VITESSE = 0.42, AMB_VITESSE = 0.55;   // un bras de dépanneuse est LENT : c'est ce qui fait lourd
+function depanneuseAnime(c, dt) {
+  if (!c || c.depCible == null) return;
+  const o = c.outils || {};
+  c.dep = clamp((c.dep || 0) + clamp(c.depCible - (c.dep || 0), -dt * DEP_VITESSE, dt * DEP_VITESSE), 0, 1);
+  const u = c.dep;
+  const deploie = animSeg(u, 0, 0.30);      // le bras se lève et sort vers l'arrière
+  const deroule = animSeg(u, 0.22, 0.62);   // le treuil déroule, le crochet descend
+  const tend = animSeg(u, 0.58, 0.80);      // le câble se tend : le bras encaisse la charge
+  const monte = animSeg(u, 0.70, 1);        // le véhicule monte sur le plateau
+  if (o.bras) o.bras.rotation.x = -0.12 - 0.72 * deploie + 0.10 * tend;
+  if (o.avantBras) o.avantBras.rotation.x = 0.10 + 0.55 * deploie - 0.18 * tend;
+  if (o.plateau) o.plateau.rotation.x = 0.26 * deploie - 0.24 * monte;   // le plateau bascule puis se remet à plat
+  if (o.treuil) o.treuil.rotation.x = -deroule * 9 + tend * 2.2;         // la bobine tourne dans les deux sens
+  const desc = 3.0 * deroule - 0.5 * tend - 2.2 * monte;
+  if (o.crochet) {
+    if (o.crochet.userData.y0 == null) o.crochet.userData.y0 = o.crochet.position.y;
+    o.crochet.position.y = o.crochet.userData.y0 - desc;
+  }
+  if (o.cable) {   // le câble suit exactement le crochet : il s'allonge et son milieu descend
+    if (o.cable.userData.y0 == null) o.cable.userData.y0 = o.cable.position.y;
+    o.cable.scale.y = 1 + desc * 2; o.cable.position.y = o.cable.userData.y0 - desc / 2;
+  }
+  if (c.remorque && c.remorque.g && o.plateau) {   // le véhicule ramassé glisse sur le plateau
+    const r = c.remorque, cs = Math.cos(c.h), sn = Math.sin(c.h), rec = 6.2 - 3.4 * monte;
+    r.x = c.x - sn * rec; r.z = c.z - cs * rec; r.y = (c.y || 0) + 0.35 + 0.85 * monte;
+    r.h = c.h; r.g.position.set(r.x, r.y, r.z); r.g.rotation.set(-0.22 * (1 - monte), c.h, 0);
+  }
+}
+function ambulanceAnime(c, dt) {
+  if (!c || c.ambCible == null) return;
+  const o = c.outils || {};
+  c.amb = clamp((c.amb || 0) + clamp(c.ambCible - (c.amb || 0), -dt * AMB_VITESSE, dt * AMB_VITESSE), 0, 1);
+  const u = c.amb;
+  const portes = animSeg(u, 0, 0.26);     // les deux portes arrière s'ouvrent en grand
+  const sort = animSeg(u, 0.20, 0.62);    // le brancard sort sur ses rails
+  const deplie = animSeg(u, 0.55, 0.82);  // les pieds se déplient et il descend au sol
+  if (o.porteG) o.porteG.rotation.y = -2.25 * portes;
+  if (o.porteD) o.porteD.rotation.y = 2.25 * portes;
+  if (o.brancard) {
+    const b = o.brancard;
+    if (b.userData.z0 == null) { b.userData.z0 = b.position.z; b.userData.y0 = b.position.y; }
+    b.position.z = b.userData.z0 - 2.4 * sort;     // il sort par l'ARRIÈRE du fourgon (−z du repère véhicule)
+    b.position.y = b.userData.y0 - 0.55 * deplie;
+  }
+  if (o.pieds) o.pieds.scale.y = 0.08 + 0.92 * deplie;
+  if (c.blesse && c.blesse.group && o.brancard) {   // le blessé reste solidaire du brancard
+    o.brancard.updateMatrixWorld(true);
+    c.blesse.group.position.setFromMatrixPosition(o.brancard.matrixWorld);
+    c.blesse.group.rotation.set(-Math.PI / 2, c.h + Math.PI, 0, 'YXZ');
+  }
+}
+// Le tour de piste des véhicules de secours : appelé une fois par image, il ne coûte rien
+// tant qu'aucun véhicule n'a de cible en cours.
+function secoursTick(dt) {
+  const liste = (typeof city !== 'undefined' && city.cars) ? city.cars : null;
+  if (liste) for (const c of liste) { if (c.depCible != null) depanneuseAnime(c, dt); if (c.ambCible != null) ambulanceAnime(c, dt); }
+  const amb = (typeof city !== 'undefined' && city.ambulances) ? city.ambulances : null;
+  if (amb) for (const c of amb) { if (c.ambCible != null) ambulanceAnime(c, dt); }
+}
+
+// ---------- LES TRANSITIONS ----------
+// MONTER EN VOITURE, EN DESCENDRE, S'ASSEOIR : c'était INSTANTANÉ — le personnage se
+// téléportait du trottoir au siège en une image. On garde maintenant sa position d'avant
+// et on l'y ramène en fondu pendant un tiers de seconde : le corps GLISSE jusqu'au siège.
+// Deux appels suffisent : `animTransArme(av)` au moment du changement d'état, et
+// `animTransApplique(av)` juste après que le reste du code a posé la position finale.
+function animTransArme(av, duree) {
+  const g = av && (av.group || av); if (!g) return;
+  const d = duree > 0 ? duree : 0.32;
+  g.userData.trFin = simTime + d; g.userData.trDur = d;
+  g.userData.trX = g.position.x; g.userData.trY = g.position.y; g.userData.trZ = g.position.z;
+}
+function animTransApplique(av) {
+  const g = av && (av.group || av); if (!g) return;
+  const u = g.userData; if (!u.trFin || simTime >= u.trFin) return;
+  // ON NE GLISSE QUE SUR UNE COURTE DISTANCE. Au-delà de quatre mètres, ce n'est pas un pas
+  // vers un siège mais une TÉLÉPORTATION voulue par le jeu (banc d'essai, mission, retour au
+  // garage) : le personnage traversait alors cent quarante mètres en fondu, et on ne se
+  // voyait pas au volant de la voiture qu'on venait de prendre.
+  const dx = u.trX - g.position.x, dy = u.trY - g.position.y, dz = u.trZ - g.position.z;
+  if (dx * dx + dy * dy + dz * dz > 16) { u.trFin = 0; return; }
+  const k = animLiss(clamp((u.trFin - simTime) / u.trDur, 0, 1));   // 1 juste après le déclenchement, 0 à la fin
+  g.position.x += (u.trX - g.position.x) * k;
+  g.position.y += (u.trY - g.position.y) * k;
+  g.position.z += (u.trZ - g.position.z) * k;
+}
+// ---------- LA RÉCEPTION ----------
+// EN RETOMBANT, LES JAMBES ENCAISSENT. Le personnage passait de la pose en l'air à la pose
+// debout en une image : il atterrissait raide comme un piquet, quelle que soit la hauteur.
+// On mémorise la vitesse de chute, et à l'arrivée les genoux plient d'autant plus qu'on
+// tombait vite, puis le corps se redéplie. Rien ne se déclenche sous 4 m/s : un petit saut
+// de trottoir ne doit pas faire s'accroupir le joueur.
+const RECEPT_DUREE = 0.34;
+function animReception(rig, enAir, vy, dt) {
+  if (!rig) return;
+  if (enAir) { rig.chuteV = Math.min(rig.chuteV == null ? 0 : rig.chuteV, vy || 0); rig.receptT = 0; return; }
+  if (rig.chuteV != null && rig.chuteV < -4) { rig.recept = clamp(-rig.chuteV / 22, 0.28, 1); rig.receptT = RECEPT_DUREE; }
+  rig.chuteV = 0;
+  if (!(rig.receptT > 0)) return;
+  rig.receptT = Math.max(0, rig.receptT - dt);
+  const w = Math.sin((1 - rig.receptT / RECEPT_DUREE) * Math.PI) * rig.recept;   // on encaisse puis on se redéplie
+  animPose(rig, { lLx: -0.75, lRx: -0.75, gLx: 1.60, gRx: 1.60, bs: 0.18, bx: 0.28,
+    aLx: -0.55, aRx: -0.55, cLx: -0.75, cRx: -0.75 }, w);
+}
+
+// BANC D'ESSAI SEULEMENT. `ANIM.fige` fige le rig du joueur sur une image PRÉCISE d'un
+// mouvement : { combat: 'coup' | 'couteau' | 'esquive' | 'encaisse' | 'chute', u: 0…1,
+// garde: true, main: 'D' | 'G' } ou { geste: 'marteau', t: 0.4 }. Sans ça, impossible de
+// photographier six instants successifs d'un coup de poing : l'horloge du rendu logiciel
+// n'avance pas deux fois pareil.
+function animFige(rig) {
+  const f = ANIM.fige; if (!f || !rig) return;
+  if (f.geste && GESTES[f.geste]) { rig.gNom = f.geste; rig.gK = 1; animPose(rig, GESTES[f.geste](f.t || 0, f.t || 0, f.opt || {}), 1); }
+  if (!f.combat && !f.garde) return;
+  const c = animCbt(rig); if (!c) return;
+  const u = clamp(f.u || 0, 0, 1);
+  c.garde = f.garde ? 1 : 0; c.gardeK = f.garde ? 1 : 0;
+  c.main = f.main === 'G' ? -1 : 1;
+  c.coup = f.combat === 'coup' ? CBT_POING * (1 - u) : 0;
+  c.couteau = f.combat === 'couteau' ? CBT_COUTEAU * (1 - u) : 0;
+  c.esquive = f.combat === 'esquive' ? 1 : 0; c.esqK = f.combat === 'esquive' ? clamp(u * 2, 0, 1) : 0;
+  c.enc = f.combat === 'encaisse' ? CBT_ENC * (1 - u) : 0; c.encF = f.force || 1;
+  c.chute = f.combat === 'chute' ? CBT_CHUTE * (1 - u) : 0;
+  animCombat(rig, 0);   // dt = 0 : les minuteurs ne bougent pas, la pose reste sur l'image voulue
+}
+// Le tour de piste du bloc animation, appelé une fois par image depuis la boucle principale.
+// Remet droite toute tête que plus aucune couche n'incline. Appelé une fois par image :
+// le registre ne contient au plus qu'une poignée de rigs (ceux qui se battent ou travaillent).
+function animTetes() {
+  if (!ANIM.tetes.size) return;
+  for (const rig of ANIM.tetes) {
+    if (rig.hxT === simTime) continue;      // une couche l'a encore commandée cette image
+    if (rig.head) rig.head.rotation.x = 0;
+    ANIM.tetes.delete(rig);
+  }
+}
+function animMondeTick(dt) {
+  animTetes();
+  feuxAnimTick(dt);
+  secoursTick(dt);
+}
 // ================= LES ACTIONS AUTOMATIQUES =================
 // ---- LES EMPLOYÉS MUNICIPAUX : détecter, poser un chantier, réparer, ranger ----
 function employesTick(dt) {
@@ -23523,11 +24245,15 @@ function employesTick(dt) {
     }
     case 'repare': {
       if (!cible) { majEtat('range'); w0.t = simTime + 1; return; }
+      // LES VRAIS GESTES DU CHANTIER (poste Animation). Avant, les trois employés agitaient
+      // le même bras droit en sinusoïde, coude bloqué : on ne voyait pas ce qu'ils faisaient.
+      // Maintenant le chef frappe au MARTEAU (le corps accompagne le coup), le deuxième
+      // SOUDE accroupi, le troisième étale l'enrobé — et devant un nid-de-poule, tout le
+      // monde s'ACCROUPIT, parce qu'un trou dans la chaussée se répare à genoux.
       for (let i = 0; i < eq.length; i++) {
         const w = eq[i].bot; animateRig(w.av.rig, 'idle', 0, dt, simTime);
         w.facing = Math.atan2(cible.x - w.pos.x, cible.z - w.pos.z);
-        w.av.rig.armR.rotation.x = -1.15 + Math.sin(simTime * 7 + i * 1.4) * 0.7;
-        if (w.av.rig.armR.coude) w.av.rig.armR.coude.rotation.x = -0.5;
+        gesteMetier(w.av.rig, cible.kind === 'nid' ? 'accroupi' : (i === 1 ? 'soudure' : 'marteau'), dt, simTime);
         metierSync(w);
       }
       // les étincelles de soudure et les coups de marteau
@@ -23607,10 +24333,11 @@ function pompiersTick(dt) {
     case 'arrose': {
       if (!vivant) { majEtat('range'); w0.t = simTime + 2; metierDit(w0, pickOne(['feu éteint, beau travail ✅', 'c\'est fini, on remballe 🚒'])); return; }
       for (const m of eq) {
+        // LA LANCE SE TIENT À DEUX MAINS et le jet POUSSE : le pompier se cale une jambe
+        // devant et encaisse le recul. Avant, les deux bras restaient figés en l'air.
         const w = m.bot; animateRig(w.av.rig, 'idle', 0, dt, simTime);
         w.facing = Math.atan2(feu.x - w.pos.x, feu.z - w.pos.z);
-        w.av.rig.armR.rotation.x = -1.35; w.av.rig.armL.rotation.x = -1.15;
-        if (w.av.rig.armR.coude) w.av.rig.armR.coude.rotation.x = -0.2;
+        gesteMetier(w.av.rig, 'lance', dt, simTime);
         metierSync(w);
       }
       feu.force -= dt * 20;
@@ -23664,11 +24391,15 @@ function balayeurTick(m, dt) {
     }
     const c = m.cible;
     const d = metierMarche(w, c.x, c.z, dt, 1.1);
-    // le balai balaie : le bras oscille (on écrase la pose d'animateRig, appelée juste avant)
-    w.av.rig.armR.rotation.x = -0.85 + Math.sin(simTime * 6) * 0.45;
-    w.av.rig.armR.rotation.z = -0.28; w.av.rig.armL.rotation.x = -0.55;
-    // un frottement de brins par coup de balai : même cadence que le bras (période 2π/6 s)
-    if (simTime > (w.balaiT || 0)) { w.balaiT = simTime + Math.PI / 6; sonBalai(w.pos.x, 0.2, w.pos.z); }
+    // LE BALAI EST UN BALANCIER : les deux mains sur le manche, les épaules qui partent avec,
+    // le tronc qui pousse à chaque passe. Avant, seul le bras droit oscillait tout seul —
+    // le manche traversait le corps et on ne voyait pas d'où venait l'effort. Les jambes
+    // restent à la foulée d'animateRig : le balayeur balaie EN MARCHANT.
+    gesteMetier(w.av.rig, 'balai', dt, simTime);
+    // un frottement de brins par coup de balai. La cadence suit maintenant celle du GESTE
+    // (période 2π/3,9 s, celle de GESTES.balai) : avec l'ancienne, le son et le bras
+    // partaient chacun de leur côté au bout de quelques secondes.
+    if (simTime > (w.balaiT || 0)) { w.balaiT = simTime + Math.PI / 3.9; sonBalai(w.pos.x, 0.2, w.pos.z); }
     if (d < 1.4 && !c.balade) { ramasseDetritus(c); m.cible = null; if (Math.random() < 0.25) metierDit(w, pickOne(['et hop, un papier de moins 🧹', 'la ville, c\'est plus joli propre !', 'allez, au suivant 🧹'])); }
   }
   if (w.poubelle) {
@@ -23701,7 +24432,11 @@ function laveurTick(m, dt) {
       w.h2 = clamp((w.h2 || 0) + (monte ? dt * 0.32 : -dt * 0.4), 0, 1);
       const e = w.echelle;
       if (e) { w.pos.set(e.x - Math.sin(e.ang) * 0.35 * w.h2, w.h2 * 3.3, e.z - Math.cos(e.ang) * 0.35 * w.h2); w.facing = e.ang + Math.PI; }
-      animateRig(w.av.rig, 'walk', 1.6, dt, simTime); metierSync(w);
+      // BARREAU PAR BARREAU : le bras et la jambe OPPOSÉS montent ensemble, et la phase se
+      // prend sur la hauteur, pas sur l'horloge — il ne pédalait plus dans le vide en l'air
+      // comme avec la marche d'animateRig, et la descente se joue à l'envers toute seule.
+      animateRig(w.av.rig, 'idle', 0, dt, simTime);
+      gesteMetier(w.av.rig, 'echelle', dt, simTime, { h: w.h2 }); metierSync(w);
       if (monte && w.h2 >= 1) { m.etat = 'lave'; w.t = simTime + 8; donneOutil(w.av, 'raclette'); }
       if (!monte && w.h2 <= 0) {
         if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
@@ -23711,9 +24446,11 @@ function laveurTick(m, dt) {
     }
     case 'lave': {
       animateRig(w.av.rig, 'idle', 0, dt, simTime);
-      // le grand geste de la raclette : le bras balaie la vitre de haut en bas
-      w.av.rig.armR.rotation.x = -1.9 + Math.sin(simTime * 3.4) * 0.6;
-      w.av.rig.armR.rotation.z = -0.35 + Math.sin(simTime * 3.4) * 0.5;
+      // LES GRANDS ARCS DE LA RACLETTE : l'épaule décrit un CERCLE sur la vitre (inclinaison
+      // et écartement déphasés d'un quart de tour). Avant, les deux allaient ensemble : le
+      // bras faisait un aller-retour en diagonale, jamais un vrai passage de raclette.
+      // La main gauche, elle, ne lâche pas l'échelle.
+      gesteMetier(w.av.rig, 'raclette', dt, simTime);
       metierSync(w);
       if (simTime > (w.mousseT || 0)) {
         w.mousseT = simTime + 0.4;
@@ -23754,7 +24491,13 @@ function facteurTick(m, dt) {
       if (veh) { w.pos.set(veh.x - Math.cos(veh.h) * 1.1, groundUnder(veh.x, veh.z, null, 2), veh.z + Math.sin(veh.h) * 1.1); }
       w.facing = Math.atan2(b.x - w.pos.x, b.z - w.pos.z);
       animateRig(w.av.rig, 'idle', 0, dt, simTime);
-      w.av.rig.armR.rotation.x = -1.45 + Math.sin(simTime * 4) * 0.25;
+      // IL FOUILLE LA SACOCHE, SORT LA LETTRE, TEND LE BRAS ET LA GLISSE. La progression
+      // vient du minuteur du dépôt (2,6 s) : le geste va donc au bout à coup sûr, et il est
+      // le même à chaque capture d'écran — avant, le bras battait l'air en sinusoïde.
+      // (scène figée du banc d'essai : w.t est repoussé de 9999 s — on reboucle alors le
+      //  geste pour que la photo montre autre chose qu'un bras plongé dans la sacoche)
+      const reste = w.t - simTime;
+      gesteMetier(w.av.rig, 'lettre', dt, simTime, { p: reste > 5 ? (simTime * 0.4) % 1 : clamp(1 - reste / 2.6, 0, 1) });
       metierSync(w);
       if (b.volet) b.volet.rotation.x = -Math.abs(Math.sin(simTime * 5)) * 0.9;
       if (simTime > w.t) {
@@ -23900,7 +24643,7 @@ function metierParle(txt) {
 function metiersRepos() {
   if (!city.metiers) return;
   for (let i = city.chantiers.length - 1; i >= 0; i--) retireChantier(city.chantiers[i]);
-  for (let i = city.incendies.length - 1; i >= 0; i--) { worldGroup.remove(city.incendies[i].g); city.incendies.splice(i, 1); }
+  for (let i = city.incendies.length - 1; i >= 0; i--) { feuDetruit(city.incendies[i].anim); city.incendies.splice(i, 1); }   // sans fondu : le banc d'essai veut une ville propre TOUT DE SUITE
   for (const n of (city.nidsPoule || []).slice()) boucheNidDePoule(n);
   for (const d of (city.detritus || []).slice()) worldGroup.remove(d.g);
   if (city.detritus) city.detritus.length = 0;

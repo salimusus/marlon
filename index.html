@@ -13331,7 +13331,7 @@ function conduire(c, tx, tz, dt, st) {
   // COINCE POUR DE BON : on se degage de quelques metres vers une place LIBRE (jamais dans un
   // mur — chaque candidat est verifie), en cherchant d'abord dans la direction du point de
   // passage puis tout autour. Sans ce filet, un ami reste plante contre l'angle d'un immeuble.
-  if (st.saut !== false && st.bloqueT > 3.5) {
+  if (st.saut !== false && st.bloqueT > 3.5 && st.route && st.route.length) {   // (le contournement juste au-dessus a pu vider le trace)
     st.bloqueT = 0;
     const w2 = st.route[Math.min(1, st.route.length - 1)];
     const el = Math.hypot(w2[0] - c.x, w2[1] - c.z) || 1, ex = (w2[0] - c.x) / el, ez = (w2[1] - c.z) / el;

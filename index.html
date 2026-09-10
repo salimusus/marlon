@@ -1348,7 +1348,8 @@ function box(x, y, z, w, h, d, color, opt = {}) {
 }
 function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un véhicule (dalles, parking, parc…)
   let top = 0;
-  for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
+  // `decor` (mobilier solidifié pour le joueur) : on ne pose pas une voiture sur un banc
+  for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.decor || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
   return top;
 }
 function settleVehicle(c) { c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.y = c.y; if (c.solid) c.solid.y = c.y + 0.7; }
@@ -4240,6 +4241,7 @@ const WORLDS = [
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs); B('mobilier public', decorPublic);
+      B('collisions du décor', solidifieDecor);   // (poste G) plus rien de massif ne se traverse
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
@@ -7147,6 +7149,9 @@ function buildNav(pieton) {   // deux grilles : les voitures (marge d'une demi-v
     for (let j = j1; j <= j2; j++) { const r = j * nx; for (let i = i1; i <= i2; i++) bl[r + i] = 1; }
   };
   for (const o of solids) {
+    // le mobilier rendu solide pour le joueur (solidifieDecor) ne barre pas les itinéraires :
+    // un banc ou un tronc se contourne, et le marquer bouchait des rues entières
+    if (o.decor) continue;
     if ((o.veh && (o.pol || o.ai)) || o.h >= 30 || o.y + o.h / 2 <= 0.45 || o.y - o.h / 2 >= 1.6) continue;
     // Un portail, une porte de garage ou une porte automatique S'OUVRENT : les traiter comme
     // des murs enfermait le joueur dans sa villa et le GPS n'y menait plus.
@@ -8271,6 +8276,7 @@ function nameTag(name) {
 }
 function buildAvatar(cfg) {
   const g = new THREE.Group();
+  g.userData.perso = true;   // (poste G) marque tout avatar : solidifieDecor ne fige jamais un personnage qui marche
   const M = c => new THREE.MeshLambertMaterial({ color: c });
   const j = jerseyOf(cfg.jersey || 0);
   const skin = M(0xf5c39a), shirt = M(j.base), sleeve = M(j.sl), pants = M(cfg.pants), cap = M(cfg.cap == null ? 0xffffff : cfg.cap), shoe = M(0x2b3550);
@@ -11538,8 +11544,10 @@ function solidsAutour(x, z, r, avecVeh) {
   for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
   return out;
 }
+// (`decor` : le mobilier solidifié pour le joueur est ignoré ici — les habitants gardent
+// exactement les trajets qu'ils avaient, sans se coincer contre un banc ou un tronc.)
 function npcBlocked(x, y, z, hw = 0.4) {   // un personnage (bot, garde, animal) heurte-t-il un obstacle ?
-  for (const o of solidsPres(x, z)) { if (o.veh || o.bar) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
+  for (const o of solidsPres(x, z)) { if (o.veh || o.bar || o.decor) continue; const top = o.y + o.h / 2, bot = o.y - o.h / 2; if (top <= y + 0.6 || bot >= y + 1.8) continue; if (x + hw > o.x - o.w / 2 && x - hw < o.x + o.w / 2 && z + hw > o.z - o.d / 2 && z - hw < o.z + o.d / 2) return true; }
   return false;
 }
 function npcMove(obj, dx, dz, hw) {   // déplacement axe par axe avec blocage ; renvoie vrai si bloqué
@@ -11714,6 +11722,108 @@ function updateBot(b, dt) {
   }
 }
 
+// ================= COLLISION DU DÉCOR : UNE RÈGLE, PAS UNE LISTE =================
+// Le joueur traversait des centaines d'objets de la ville : troncs d'arbres, colonnes,
+// bancs, étals du marché, caisses, poteaux, murets, tables. Tous étaient posés en décor
+// (`deco: true`) ou dessinés directement en THREE.Mesh, sans jamais entrer dans `solids`.
+// Reprendre les quatre cents appels un par un aurait laissé passer tout ce que les autres
+// postes ajoutent (panneaux, quartiers, chantiers) : on passe donc UNE fois sur la scène à
+// la fin de la construction et on applique une RÈGLE — tout maillage qui est un vrai
+// obstacle à hauteur de corps reçoit sa boîte de collision.
+// Reste traversable : le feuillage et les buissons (verts), ce qui commence au-dessus de la
+// tête (auvents, guirlandes, branches), les marches basses, ce qui est trop fin (grillages,
+// câbles, panneaux de porte) et TOUT CE QUI BOUGE (véhicules, personnages, portes,
+// ascenseurs, manèges) — un solide fixe posé dessus resterait en place une fois parti.
+const SOLIDIFIE = { marche: 0.56, tete: 1.15, fin: 0.16, immense: 14 };
+// Boîte englobante d'un maillage dans le repère du monde, SANS THREE.Box3 (le banc d'essai
+// en Node n'en a pas) : dimensions de la géométrie × échelle cumulée, tournées autour de Y.
+function boiteMaillage(m) {
+  const p = m.geometry && m.geometry.parameters, t = (m.geometry && m.geometry.type) || '';
+  if (!p) return null;
+  let w, h, d;
+  if (/Box/.test(t)) { w = p.width || 1; h = p.height || 1; d = p.depth || 1; }
+  else if (/Cylinder|Cone/.test(t)) { const r = Math.max(p.radiusTop != null ? p.radiusTop : (p.radius || 0), p.radiusBottom != null ? p.radiusBottom : (p.radius || 0)); w = d = 2 * r; h = p.height || 0; }
+  else if (/Sphere/.test(t)) { w = h = d = 2 * (p.radius || 0); }
+  else if (/Torus/.test(t)) { w = d = 2 * ((p.radius || 0) + (p.tube || 0)); h = 2 * (p.tube || 0); }
+  else return null;   // plans, géométries libres : trop plats ou trop imprévisibles
+  let sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, n = m;
+  while (n && n !== worldGroup) { sx *= n.scale.x; sy *= n.scale.y; sz *= n.scale.z; rx += n.rotation.x; ry += n.rotation.y; rz += n.rotation.z; n = n.parent; }
+  w *= Math.abs(sx); h *= Math.abs(sy); d *= Math.abs(sz);
+  const bascule = a => Math.abs(Math.sin(a)) > 0.35;   // couché sur le flanc : on échange les axes
+  if (bascule(rx)) { const q = h; h = d; d = q; }
+  if (bascule(rz)) { const q = h; h = w; w = q; }
+  const c = Math.abs(Math.cos(ry)), s = Math.abs(Math.sin(ry));
+  const pos = m.getWorldPosition(new THREE.Vector3());
+  return { x: pos.x, y: pos.y, z: pos.z, w: w * c + d * s, h, d: w * s + d * c };
+}
+// Vert de plante : le canal vert domine nettement. Sert à laisser passer le feuillage et
+// les buissons — le joueur doit pouvoir traverser un massif, pas un tronc.
+function estFeuillage(mat) {
+  const c = mat && mat.color; if (!c || !c.getHex) return false;
+  const v = c.getHex(), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
+  const max = Math.max(r, g, b);
+  if (max - Math.min(r, g, b) < 0.12 || max < 0.12) return false;   // gris, noir, blanc : pas une plante
+  return g === max && g - Math.max(r, b) > 0.06 && b <= r + 0.25;
+}
+function obstacleDecor(m, b, zones) {
+  if (b.h < 0.35 || Math.min(b.w, b.d) < SOLIDIFIE.fin) return false;
+  if (b.w > SOLIDIFIE.immense || b.d > SOLIDIFIE.immense) return false;
+  const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+  if (!mat || mat.visible === false) return false;
+  if (mat.transparent && mat.opacity != null && mat.opacity < 0.6) return false;
+  if (estFeuillage(mat)) return false;
+  const bas = b.y - b.h / 2, haut = b.y + b.h / 2, sol = groundUnder(b.x, b.z, null, bas + 0.05);
+  if (haut <= sol + SOLIDIFIE.marche) return false;   // marche franchissable : on monte dessus
+  if (bas >= sol + SOLIDIFIE.tete) return false;      // on passe dessous (auvent, branche, enseigne)
+  // dans la boîte d'un véhicule ou d'un portail : ces objets ont déjà leur collision, qui SUIT
+  for (const o of zones) if (Math.abs(b.x - o.x) < o.w / 2 + 1 && Math.abs(b.z - o.z) < o.d / 2 + 1 && Math.abs(b.y - o.y) < o.h / 2 + 1.2) return false;
+  // déjà couvert par un solide existant ? (neuf points du plan de l'objet, à hauteur de torse)
+  let couvert = 0;
+  const y = Math.max(bas + 0.12, Math.min(haut - 0.05, sol + 0.9));
+  for (let a = 0; a <= 2 && couvert < 2; a++) for (let c = 0; c <= 2; c++) {
+    const x = b.x - b.w / 2 + b.w * a / 2, z = b.z - b.d / 2 + b.d * c / 2;
+    for (const o of solidsAutour(x, z, 0.5)) {
+      if (Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2) { couvert++; break; }
+    }
+  }
+  return couvert < 2;
+}
+function solidifieDecor() {
+  if (!city.on) return 0;
+  worldGroup.updateMatrixWorld(true);
+  const mobiles = new Set(), pose = o => { if (o) mobiles.add(o); };
+  const veh = [...city.cars, ...city.aiCars, ...police.cars, ...(typeof raceKarts !== 'undefined' ? raceKarts : [])];
+  if (typeof armee !== 'undefined' && armee && armee.heli) veh.push(armee.heli);
+  for (const c of veh) pose(c && c.g);
+  for (const b of bots) pose(b.av && b.av.group);
+  for (const a of police.agents) pose(a.av && a.av.group);
+  for (const p of city.pets) pose(p.g || p.group);
+  for (const r of city.rides) pose(r.g);
+  for (const L of city.lifts) pose(L.g);
+  for (const d of [city.gate, city.garageDoor, ...city.autoDoors]) pose(d && d.g);
+  for (const t of ((city.casino && city.casino.tables) || [])) pose(t.g);
+  for (const s of ((city.casino && city.casino.machines) || [])) pose(s.g);
+  for (const b of (typeof breakables !== 'undefined' ? breakables : [])) { pose(b.g); pose(b.m); }
+  for (const o of [...movers, ...spinners, ...crumbles, ...conveyors, ...blinkers, ...decoSpin, ...pads]) pose(o.mesh || o.g || o);
+  for (const d of (city.placed || [])) pose(d.g);
+  const zones = solids.filter(o => o.veh || o.porte);
+  const trouves = [];
+  const voir = n => {
+    if (!n || mobiles.has(n) || (n.userData && (n.userData.perso || n.userData.mobile))) return;
+    if (n.isMesh && n.visible) {
+      const b = boiteMaillage(n);
+      if (b && obstacleDecor(n, b, zones)) trouves.push({ mesh: n, x: b.x, y: b.y, z: b.z, w: Math.max(0.2, b.w - 0.08), h: b.h, d: Math.max(0.2, b.d - 0.08), decor: true });
+    }
+    for (const c of n.children) voir(c);
+  };
+  voir(worldGroup);
+  // on ne pousse qu'à la fin : sinon les solides fraîchement ajoutés faisaient croire à
+  // leurs voisins qu'ils étaient « déjà couverts » et la moitié du décor restait fantôme
+  for (const o of trouves) solids.push(o);
+  city.decorSolide = trouves.length; sgridSale();
+  return trouves.length;
+}
+
 // ================= PHYSIQUE DU JOUEUR =================
 const overlaps = (o, px, py, pz) =>
   px + P.hw > o.x - o.w / 2 && px - P.hw < o.x + o.w / 2 &&
@@ -11755,6 +11865,43 @@ function moveAxis(axis, amount, canStep) {
       P.vel[axis] = 0;
     }
   }
+}
+
+// DÉSINCARCÉRATION. Une résolution axe par axe suffit tant que rien n'apparaît AUTOUR du
+// joueur ; mais un portail qui se referme, un véhicule qui se gare, un ascenseur qui
+// remonte ou un décor devenu solide peuvent l'enfermer dans une boîte — et là, chaque
+// image le repoussait d'un côté puis de l'autre, il ne sortait jamais. On mesure donc la
+// pénétration réelle : au bout d'une demi-seconde on le pousse vers la sortie la PLUS
+// PROCHE, et s'il est toujours dedans après trois secondes on le pose sur le dessus.
+function penetration(x, y, z) {
+  let pire = null, prof = 0;
+  for (const o of solidsAutour(x, z, 2, true)) {
+    if (!isSolid(o) || o.porte || !overlaps(o, x, y + 0.02, z)) continue;
+    const gx = (o.x + o.w / 2) - (x - P.hw), dx = (x + P.hw) - (o.x - o.w / 2);
+    const gz = (o.z + o.d / 2) - (z - P.hw), dz = (z + P.hw) - (o.z - o.d / 2);
+    const m = Math.min(gx, dx, gz, dz);
+    if (m > prof) { prof = m; pire = o; }
+  }
+  return { o: pire, prof };
+}
+function desincarcere(dt) {
+  const p = penetration(P.pos.x, P.pos.y, P.pos.z);
+  if (!p.o) { P.coinceT = 0; return; }
+  P.coinceT = (P.coinceT || 0) + dt;
+  if (P.coinceT < 0.5) return;
+  const o = p.o;
+  const sorties = [
+    { a: 'x', v: o.x - o.w / 2 - P.hw - 0.02, d: (P.pos.x + P.hw) - (o.x - o.w / 2) },
+    { a: 'x', v: o.x + o.w / 2 + P.hw + 0.02, d: (o.x + o.w / 2) - (P.pos.x - P.hw) },
+    { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
+    { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
+  ].sort((u, v) => u.d - v.d)[0];
+  // on le fait glisser dehors (au plus 6 m/s) : brutal mais visible, il n'est jamais figé
+  const pas = Math.min(Math.abs(sorties.v - P.pos[sorties.a]), 6 * dt) * Math.sign(sorties.v - P.pos[sorties.a]);
+  P.pos[sorties.a] += pas;
+  if (P.coinceT > 3) { P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.coinceT = 0; }
+  // dernier garde-fou : jamais éjecté hors de la carte
+  if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }
 }
 
 // L'horloge de simulation peut reculer d'un coup (synchro avec l'hôte en multijoueur).
@@ -11910,6 +12057,7 @@ function step(dt, active) {
   const vyChute = P.vel.y;   // vitesse de descente AVANT que le sol ne la remette à zéro
   P.grounded = false; P.standing = null;
   moveAxis('x', P.vel.x * dt, wasGrounded || P.swimming); moveAxis('z', P.vel.z * dt, wasGrounded || P.swimming); moveAxis('y', P.vel.y * dt, false);
+  desincarcere(dt);   // enfermé dans un solide : on le pousse dehors au lieu de le laisser vibrer contre les parois
   // relief du rallye : posé APRÈS la remise à zéro ci-dessus, qui l'effaçait aussitôt et laissait le joueur « en l'air » sur toute la zone
   if (RALLY.mesh && !drive.car) { const th = terrainH(P.pos.x, P.pos.z); if (th != null && P.pos.y < th) { P.pos.y = th; if (P.vel.y < 0) P.vel.y = 0; P.grounded = true; P.coyote = 0.12; } }
   if (!wasGrounded && P.grounded) chuteImpact(vyChute);   // on s'écrase en tombant d'un immeuble
@@ -11958,6 +12106,7 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
   for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
+    if (o.decor) continue;   // mobilier solidifié pour le joueur : la conduite reste exactement celle d'avant
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
     if (o.veh && !opt.veh) continue; if (o.bar && !opt.bar) continue;   // par défaut : véhicules gérés à part, barrières par le couloir de piste
     if (o.pol && opt.pol) continue;   // les voitures de police ne se bloquent pas entre elles

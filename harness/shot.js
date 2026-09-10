@@ -809,6 +809,8 @@ window.__G = {
   depanneuseAnime: typeof depanneuseAnime === 'function' ? depanneuseAnime : null,
   ambulanceAnime: typeof ambulanceAnime === 'function' ? ambulanceAnime : null,
   animTransArme: typeof animTransArme === 'function' ? animTransArme : null,
+  animTransApplique: typeof animTransApplique === 'function' ? animTransApplique : null,
+  animFige: typeof animFige === 'function' ? animFige : null,
   animMondeTick: typeof animMondeTick === 'function' ? animMondeTick : null,
   botGardeDuCorps: typeof botGardeDuCorps === 'function' ? botGardeDuCorps : null,
   botProtegeMembre: typeof botProtegeMembre === 'function' ? botProtegeMembre : null,

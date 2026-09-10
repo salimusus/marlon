@@ -179,6 +179,8 @@ window.__SHOT = {
         b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
       } catch (e) {}
     }
+    // poste J : plante une scene de metier (chantier, incendie, facteur, balayeur, laveur)
+    if (v.metier && typeof metierScene === 'function') { try { metierScene(v.metier); } catch (e14) {} }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -393,6 +395,17 @@ window.__G = {
   creerTravailleur: typeof creerTravailleur !== 'undefined' ? creerTravailleur : null,
   poseBoites: typeof poseBoites !== 'undefined' ? poseBoites : null,
   filetTexture: typeof filetTexture !== 'undefined' ? filetTexture : null,
+  boulotTick: typeof boulotTick !== 'undefined' ? boulotTick : null,
+  metierProche: typeof metierProche !== 'undefined' ? metierProche : null,
+  poseEchelle: typeof poseEchelle !== 'undefined' ? poseEchelle : null,
+  metierScene: typeof metierScene !== 'undefined' ? metierScene : null,
+  metierSync: typeof metierSync !== 'undefined' ? metierSync : null,
+  metierDit: typeof metierDit !== 'undefined' ? metierDit : null,
+  metiersEvenements: typeof metiersEvenements !== 'undefined' ? metiersEvenements : null,
+  chantiersUsure: typeof chantiersUsure !== 'undefined' ? chantiersUsure : null,
+  poubelleRoulante: typeof poubelleRoulante !== 'undefined' ? poubelleRoulante : null,
+  placeLibre: typeof placeLibre !== 'undefined' ? placeLibre : null,
+  tenuePiece: typeof tenuePiece !== 'undefined' ? tenuePiece : null,
   buildZone: typeof buildZone === 'function' ? buildZone : null,
   immeubleZone: typeof immeubleZone === 'function' ? immeubleZone : null,
   devenirAmi: typeof devenirAmi === 'function' ? devenirAmi : null,

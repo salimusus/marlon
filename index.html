@@ -13483,7 +13483,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (city.boulotNear && !city.near) prendreBoulot(city.boulotNear); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -13612,7 +13612,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (city.boulotNear && !city.near) prendreBoulot(city.boulotNear); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.classNear) openSchool(city.classNear); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (city.benchNear) sitBench(city.benchNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -13656,7 +13656,7 @@ function padAction(quoi) {
   if (quoi === 'guerre') { if (!libre) return false; openGuerre(); return true; }
   if (quoi === 'boutique') { if (!libre) return false; openStore(); return true; }
   if (quoi === 'missions') { if (!libre) return false; openMissions(city.offNear); return true; }
-  if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else startDance(3); return true; }
+  if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return true; }
   if (quoi === 'arme') { if (paused) return false; return armeSuivante(); }
   return false;
 }
@@ -17831,7 +17831,7 @@ function metiersReset() {
   city.nidsPoule = []; city.depot = null; city.caserne = null;
   city.boulot = null; city.boulotNear = null; city.horaires = true;
   METIERS.employes = []; METIERS.pompiers = []; METIERS.balayeurs = []; METIERS.laveurs = []; METIERS.facteurs = [];
-  METIERS.prochainFeu = 0; METIERS.prochainNid = 0; METIERS.prochainDetritus = 0; METIERS.repos = 0;
+  METIERS.prochainFeu = 0; METIERS.prochainNid = 0; METIERS.prochainDetritus = 0; METIERS.repos = 0; METIERS.derniere = null; METIERS.scanT = 0;
 }
 function buildMetiers() {
   metiersReset();
@@ -17842,7 +17842,7 @@ function buildMetiers() {
     box(x + w / 2 - 0.2, 2.4, z, 0.4, 4.6, d, coul, { studs: false, noRoute: true });
     box(x, 4.9, z, w + 0.8, 0.4, d + 0.8, 0x3b4252, { deco: true, studs: false });
     box(x, 5.7, z - d / 2, w * 0.7, 1.2, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, coul) }), deco: true, noEdges: true });
-    sign(x, 0.2, z + d / 2 + 1.6, sous);
+    sign(x + w / 2 + 2.5, 0.2, z + d / 2 + 1.2, sous);   // sur le côté : au milieu, il gênait le parc de véhicules
   };
   // ---- LE DÉPÔT MUNICIPAL : le garage des employés, balayeurs, laveurs et facteurs ----
   const [dx, dz] = placeLibre([[40, 130], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
@@ -17861,12 +17861,14 @@ function buildMetiers() {
   city.zones.push({ name: 'Caserne', emoji: '🚒', x1: kx - 12, x2: kx + 12, z1: kz - 11, z2: kz + 11,
     hint: '🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau' });
   // ---- LES VÉHICULES DE TRAVAIL (tous conduisibles : ils entrent dans city.cars) ----
-  const fourgon = makeVehiculeTravail('fourgon', 0xf4f6fa, dx - 7, dz + 9, 0);
-  const benne = makeVehiculeTravail('benne', MET_C.casqueOrange, dx - 1, dz + 10, 0);
-  const grue = makeVehiculeTravail('grue', MET_C.jaune, dx + 6, dz + 10, 0);
-  const pelle = makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 12, dz + 4, Math.PI / 2);
-  const tracteur = makeVehiculeTravail('tracteur', 0x2f8f4a, dx - 12, dz + 3, Math.PI / 2);
-  const velo = makeVehiculeTravail('velo', MET_C.poste, dx - 9, dz + 5, 0);
+  // Tout se gare AU SUD du hangar, du côté ouvert : garée le long d'un mur, la pelleteuse
+  // démarrait ENCASTRÉE dedans et ne pouvait plus bouger d'un centimètre.
+  const fourgon = makeVehiculeTravail('fourgon', 0xf4f6fa, dx - 9, dz + 11, 0);
+  const benne = makeVehiculeTravail('benne', MET_C.casqueOrange, dx - 3, dz + 11, 0);
+  const grue = makeVehiculeTravail('grue', MET_C.jaune, dx + 4, dz + 11, 0);
+  const pelle = makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 11, dz + 11, 0);
+  const tracteur = makeVehiculeTravail('tracteur', 0x2f8f4a, dx - 9, dz + 18, 0);
+  const velo = makeVehiculeTravail('velo', MET_C.poste, dx - 14, dz + 11, 0);
   const camion = makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 9, 0);
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
@@ -18051,6 +18053,10 @@ function employesTick(dt) {
       if (w0.veh) { w0.veh.gyro = false; if (drive.car !== w0.veh) { w0.veh.busy = false; w0.veh.metierBusy = false; } }
       for (const m of eq) metierMarche(m.bot, m.bot.base[0], m.bot.base[1], dt);
       if (!metierOuvert() || simTime < (METIERS.repos || 0)) return;
+      // la ronde ne se fait que toutes les 2 s : parcourir les 150 objets cassables de la
+      // ville À CHAQUE IMAGE ne servait à rien et coûtait cher
+      if (simTime < (METIERS.scanT || 0)) return;
+      METIERS.scanT = simTime + 2;
       const c = chercheCasse(); if (!c) return;
       c.enCours = true;
       for (const m of eq) m.cible = c;
@@ -18317,6 +18323,13 @@ function facteurTick(m, dt) {
 }
 // ---- LES ÉVÉNEMENTS DE LA VILLE : détritus, nids-de-poule, incendies ----
 function metiersEvenements(dt) {
+  // L'horloge du jeu peut faire un BOND (le banc d'essai règle l'heure, un test avance
+  // simTime) : sans ce recalage, tous les rendez-vous en retard se déclenchaient d'un coup
+  // et la ville prenait feu à la première image.
+  if (METIERS.derniere == null || simTime < METIERS.derniere || simTime - METIERS.derniere > 5) {
+    METIERS.prochainDetritus = simTime + 6; METIERS.prochainNid = simTime + 55; METIERS.prochainFeu = simTime + 100;
+  }
+  METIERS.derniere = simTime;
   if (simTime > METIERS.prochainDetritus) {
     METIERS.prochainDetritus = simTime + rnd(15, 28);
     if (city.detritus.length < 12 && city.trottoirs.length) {
@@ -18449,6 +18462,67 @@ function metiersTick(dt) {
   outilsVehiculesTick(dt);
   boulotTick(dt);
   metierProche();
+}
+// ---- MISE EN PLACE D'UNE SCÈNE DE MÉTIER (captures d'écran du banc d'essai) ----
+// Le banc d'essai ne peut pas attendre qu'un incendie se déclare tout seul : cette fonction
+// plante le décor autour du joueur et fige l'action assez longtemps pour la photo.
+function metierScene(nom) {
+  if (!city.on || !city.metiers || !city.metiers.length) return;
+  city.horaires = false;
+  const px = P.pos.x, pz = P.pos.z, a = P.facing;
+  const devant = d => [px + Math.sin(a) * d, pz + Math.cos(a) * d];
+  const pose = (w, x, z, f) => { w.pos.set(x, groundUnder(x, z, null, 2.5), z); w.facing = f; metierSync(w); };
+  const gare = (c, x, z, h) => { if (!c) return; c.x = x; c.z = z; c.h = h; c.g.position.set(x, c.y || 0, z); c.g.rotation.y = h; settleVehicle(c); vehicleSolid(c); };
+  if (nom === 'chantier') {
+    const [cx, cz] = devant(8);
+    const eq = METIERS.employes;
+    const nid = poseNidDePoule(cx, cz);
+    eq[0].chantier = poseChantier(cx, cz, a + Math.PI / 2);
+    for (let i = 0; i < eq.length; i++) {
+      const ang = a + Math.PI + (i - 1) * 0.8;
+      pose(eq[i].bot, cx - Math.sin(ang) * 2.4, cz - Math.cos(ang) * 2.4, ang + Math.PI);
+      eq[i].etat = 'repare'; eq[i].cible = nid;
+      donneOutil(eq[i].bot.av, i === 0 ? 'cle' : i === 1 ? 'pelle' : 'marteau');
+    }
+    eq[0].bot.t = simTime + 9999;
+    const f = eq[0].bot.veh; if (f) { gare(f, cx + Math.sin(a + 2.2) * 8, cz + Math.cos(a + 2.2) * 8, a + Math.PI); f.gyro = true; f.busy = true; f.metierBusy = true; }
+  } else if (nom === 'incendie') {
+    const [cx, cz] = devant(12);
+    const f = declencheIncendie(cx, cz, 900); if (f) f.pris = true;
+    const eq = METIERS.pompiers;
+    for (let i = 0; i < eq.length; i++) {
+      const ang = a + Math.PI + (i - 1) * 0.5;
+      pose(eq[i].bot, cx + Math.sin(ang) * 6.5, cz + Math.cos(ang) * 6.5, ang + Math.PI);
+      eq[i].etat = 'arrose'; eq[i].cible = f; donneOutil(eq[i].bot.av, 'lance');
+    }
+    const c = eq[0].bot.veh; if (c) { gare(c, cx + Math.sin(a + Math.PI) * 12, cz + Math.cos(a + Math.PI) * 12, a); c.gyro = true; c.busy = true; c.metierBusy = true; c.outil = 1; c.outilCible = 1; }
+  } else if (nom === 'facteur') {
+    const m = METIERS.facteurs[0]; if (!m) return;
+    const [cx, cz] = devant(6);
+    const b = boiteAuxLettres(cx, cz, a + Math.PI);
+    m.cible = b; m.etat = 'depose'; m.bot.t = simTime + 9999;
+    donneOutil(m.bot.av, 'lettre');
+    gare(m.bot.veh, cx + Math.sin(a - 1.4) * 1.6, cz + Math.cos(a - 1.4) * 1.6, a + Math.PI / 2);
+    if (m.bot.veh) { m.bot.veh.busy = true; m.bot.veh.metierBusy = true; }
+    pose(m.bot, cx + Math.sin(a - 2.4) * 1.3, cz + Math.cos(a - 2.4) * 1.3, a + Math.PI);
+  } else if (nom === 'balayeur') {
+    const [cx, cz] = devant(5);
+    for (let i = 0; i < 5; i++) poseDetritus(cx + rnd(-2.5, 2.5), cz + rnd(-2.5, 2.5));
+    const m = METIERS.balayeurs[0]; if (!m) return;
+    m.etat = 'balaye'; m.cible = null;
+    pose(m.bot, cx, cz - 1.6, a + Math.PI);
+  } else if (nom === 'laveur') {
+    const m = METIERS.laveurs[0]; if (!m) return;
+    const [cx, cz] = devant(7);
+    m.etat = 'lave'; m.bot.t = simTime + 9999; m.bot.h2 = 1;
+    m.bot.echelle = poseEchelle(cx, cz, px, pz);
+    const e = m.bot.echelle;
+    pose(m.bot, e.x - Math.sin(e.ang) * 0.35, e.z - Math.cos(e.ang) * 0.35, e.ang + Math.PI);
+    m.bot.pos.y = 3.3; metierSync(m.bot);
+  } else if (nom === 'depot' || nom === 'caserne') {
+    const p2 = nom === 'depot' ? city.depot : city.caserne;
+    if (p2) { P.pos.set(p2.x, groundUnder(p2.x, p2.z + 22, null, 2), p2.z + 22); cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z); }
+  }
 }
 // O comme OUTIL : benne, flèche de grue, godet, échelle et LANCE À EAU. On ajoute notre
 // propre écouteur plutôt que d'aller modifier driveStep (c'est la zone du poste B).

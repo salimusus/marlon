@@ -8555,9 +8555,19 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   sonEffort(P.pos.x, P.pos.y + 1.4, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
   if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return; }   // dans le vide
-  sonCoup(P.pos.x + fx * 0.75, P.pos.y + 1.25, P.pos.z + fz * 0.75, kind === 'kick' ? 1.5 : finisher ? 1.35 : 1, kind === 'kick' ? 'pied' : 'poing');
   // le point de contact, à hauteur de torse, un peu devant le poing
   const ix = P.pos.x + fx * 0.75, iz = P.pos.z + fz * 0.75, iy = P.pos.y + (kind === 'kick' ? 0.85 : 1.25);
+  // LE COMBAT RAPPROCHÉ S'ENTEND EN DÉTAIL. Un direct au visage, un crochet au VENTRE (le
+  // deuxième du combo : sourd, et l'air part des poumons), une PARADE qui claque sur
+  // l'avant-bras, une LAME qui siffle : ce ne sont plus le même bruit.
+  // `parade` et `couteau` sont posés par le poste qui gère l'animation du corps à corps ;
+  // tant qu'ils n'existent pas, on retombe sur l'impact normal.
+  const paree = simTime < ((target.bot && target.bot.parade) || (target.gm && target.gm.parade) || 0);
+  const lame = P.melee === 'couteau' || P.weapon === 'couteau';
+  if (paree) sonParade(ix, iy, iz);
+  else if (lame) sonCouteau(ix, iy, iz, true);
+  else if (kind !== 'kick' && P.combo === 2) sonVentre(ix, iy - 0.4, iz, hauteurVoix((target.bot && target.bot.name) || 'adversaire', !!(target.bot && target.bot.girl)));
+  else sonCoup(ix, iy, iz, kind === 'kick' ? 1.5 : finisher ? 1.35 : 1, kind === 'kick' ? 'pied' : 'poing');
   impact(ix, iy, iz, { x: fx, y: 0, z: fz }, kind === 'kick' ? 'pied' : 'poing', finisher ? 1.45 : 1);
   camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
@@ -10300,9 +10310,7 @@ function sonOiseau(x, z) { const b = 2400 + Math.random() * 900; return !!sonEn(
 function sonCloche(x, z) {   // la cloche de l'ecole : trois coups
   return !!sonEn(x, 8, z, d => { for (let i = 0; i < 3; i++) { sT(d, 880, i * .55, .7, 'sine', .1, 870); sT(d, 1320, i * .55, .5, 'triangle', .045, 1310); sT(d, 2640, i * .55, .25, 'sine', .02, 2630); } }, { duree: 2.4, portee: 70, coupure: 120, bus: 'ambiance' });
 }
-function sonSireneAmbu(x, z) {   // le deux-tons de l'ambulance, entendu de loin
-  return !!sonEn(x, 1.4, z, d => { for (let i = 0; i < 4; i++) { sT(d, i % 2 ? 660 : 880, i * .42, .4, 'sine', .07); sT(d, i % 2 ? 990 : 1320, i * .42, .4, 'triangle', .03); } }, { duree: 1.9, portee: 65, coupure: 110, bus: 'ambiance' });
-}
+function sonSireneAmbu(x, z) { return sonSirene(x, z, 'ambulance'); }   // ancien nom, garde-fou pour les appels existants
 function sonVent(x, y, z, force) {   // en hauteur, le vent siffle
   return !!sonEn(x, y, z, d => { sB(d, 1.7, 480 + 400 * force, .045 * force, 0.4); sB(d, 1.2, 2100, .012 * force, 0.8, .3); }, { duree: 2, portee: 40, bus: 'ambiance' });
 }
@@ -10319,32 +10327,28 @@ function sonAboiement(x, y, z, hauteur) {
 // vocale du navigateur manque (tele, page muette, voix non chargees), on parle quand meme :
 // on retombe sur la voix « bruitee » des bots, pour que le joueur entende toujours quelqu'un.
 const PARLE = { n: 0, dernier: null, synthese: null, voix: null };
-function voixFr() {
-  if (PARLE.voix) return PARLE.voix;
-  try {
-    const vs = speechSynthesis.getVoices() || [];
-    if (!vs.length) return null;   // pas encore chargees : on retentera au prochain accueil
-    PARLE.voix = vs.filter(v => /^fr/i.test(v.lang))[0] || null;
-    return PARLE.voix;
-  } catch (e) { return null; }
-}
+// On NE REFAIT PAS la synthèse vocale : le poste C l'a réparée (voix chargées en différé,
+// file de Chrome relancée, phrases gardées en vie, repli quand aucune voix n'est installée).
+// `parle` s'y branche — et si rien n'est réellement sorti au bout de 0,8 s, on double d'une
+// voix « bruitée » spatialisée, pour que l'accueil s'entende même sur une télé sans voix.
 function parle(qui, texte, opt) {
   opt = opt || {};
   const t = String(texte || '').trim(); if (!t) return false;
   if (!settings.sound) return false;
   const h = opt.hauteur || hauteurVoix(qui || 'accueil', !!opt.aigu);
   const p = opt.pos || P.pos;
-  let synthese = false;
-  if (settings.voices !== false && typeof speechSynthesis !== 'undefined' && speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
-    try {
-      const u = new SpeechSynthesisUtterance(t);
-      u.lang = 'fr-FR'; u.rate = 1; u.pitch = clamp(h, 0.4, 2);
-      u.volume = clamp(settings.volume * (MIX.voix == null ? 1 : MIX.voix), 0, 1);
-      const v = voixFr(); if (v) u.voice = v;
-      speechSynthesis.speak(u); synthese = true;
-    } catch (e) { synthese = false; }
-  }
-  if (!synthese) sonBlabla(p.x, (p.y || 0) + 1.5, p.z, t, h, false);
+  const px = p.x, py = (p.y || 0) + 1.5, pz = p.z;
+  let synthese = false, avant = 0;
+  try {
+    if (typeof voice !== 'undefined' && voice && voice.say) {
+      avant = voice.etat ? voice.etat().parle : 0;
+      synthese = !!voice.say(t, !!opt.aigu, true);   // « force » : un accueil ne doit jamais sauter son tour
+    }
+  } catch (e) { synthese = false; }
+  if (!synthese) sonBlabla(px, py, pz, t, h, false);
+  else setTimeout(() => {   // rien n'est sorti (aucune voix installée) : on parle quand même
+    try { if (voice.etat().parle <= avant) sonBlabla(px, py, pz, t, h, false); } catch (e) {}
+  }, 800);
   PARLE.n++; PARLE.dernier = { qui, texte: t, synthese, t: simTime }; PARLE.synthese = synthese;
   return true;
 }
@@ -10392,8 +10396,90 @@ function accueilTick() {
   front('armurerie', city.gunNear);
   front('missions', city.offNear);
 }
+// ---- LE FEU, LES URGENCES ET LES CHANTIERS ----
+// LE FEU. Un incendie ne faisait qu'un souffle mono de temps en temps, au meme volume qu'on
+// soit dessus ou a l'autre bout de la ville. Un vrai feu, ca RESPIRE (un souffle grave et
+// continu) et ca CRAQUE (des impulsions seches et aigues, au hasard).
+function sonFeu(x, y, z, force) {
+  const f = clamp(force == null ? 1 : force, 0.15, 1.6);
+  return !!sonEn(x, y, z, d => {
+    sB(d, 1.1, 300 + 260 * f, .06 * f, 0.35);                                        // le souffle
+    for (let i = 0; i < 3; i++) sB(d, .045, 2000 + i * 950, .034 * f, 6, i * 0.27);   // les craquements
+    sT(d, 68, 0, .8, 'sine', .018 * f, 44);                                           // la braise
+  }, { duree: 1.2, portee: 30, coupure: 55, bus: 'ambiance' });
+}
+// L'EXPLOSION d'un vehicule : elle partait a plein volume dans le bus « effets », ou qu'elle
+// soit. Meme « BOOM », mais PLACE — et une explosion a soixante metres ne fait plus sursauter.
+function sonExplosion(x, y, z) {
+  return !!sonEn(x, y, z, d => {
+    sT(d, 70, 0, .6, 'sawtooth', .5, 32);
+    sB(d, .55, 260, .5, 0.4);
+    sB(d, .2, 1700, .16, 0.8);
+    sT(d, 42, .05, .9, 'sine', .28, 22);   // la queue grave qui roule
+  }, { duree: 1.1, portee: 60, coupure: 150 });
+}
+// LES SIRENES DES VEHICULES D'URGENCE. Chacune a son deux-tons : l'ambulance est haute et
+// pressante, le camion de pompiers plus grave, la depanneuse basse et calme.
+const SIRENES = {
+  ambulance:  { a: 900, b: 675, dur: .40, n: 4, harm: 1.5,  vol: .080 },
+  pompier:    { a: 830, b: 620, dur: .46, n: 4, harm: 1.35, vol: .075 },
+  police:     { a: 980, b: 740, dur: .34, n: 5, harm: 1.5,  vol: .065 },
+  depanneuse: { a: 620, b: 470, dur: .55, n: 3, harm: 1.25, vol: .060 },
+};
+function sonSirene(x, z, kind) {
+  const S = SIRENES[kind] || SIRENES.ambulance;
+  return !!sonEn(x, 1.5, z, d => {
+    for (let i = 0; i < S.n; i++) {
+      const f = i % 2 ? S.b : S.a, t = i * S.dur;
+      sT(d, f, t, S.dur * 0.96, 'sine', S.vol);
+      sT(d, f * S.harm, t, S.dur * 0.96, 'triangle', S.vol * 0.4);
+    }
+  }, { duree: S.n * S.dur + 0.2, portee: 65, coupure: 115, bus: 'ambiance' });
+}
+function sonRecul(x, z) {   // le bip de recul de la depanneuse
+  return !!sonEn(x, 1, z, d => { for (let i = 0; i < 3; i++) sT(d, 1100, i * .5, .22, 'square', .05); }, { duree: 1.4, portee: 30, bus: 'ambiance' });
+}
+// ---- LES EMPLOYES MUNICIPAUX AU TRAVAIL ----
+function sonMarteau(x, y, z) {   // le coup sec sur la tole
+  return !!sonEn(x, y, z, d => { sB(d, .05, 2800, .09, 2); sT(d, 320, 0, .12, 'triangle', .05, 180); sT(d, 1600, 0, .07, 'square', .025, 1100); }, { duree: .3, portee: 34 });
+}
+function sonSoudure(x, y, z) {   // le gresillement de l'arc electrique
+  return !!sonEn(x, y, z, d => { sB(d, .3, 3600, .04, 1.2); sB(d, .3, 900, .025, 0.6, .02); sT(d, 110, 0, .28, 'sawtooth', .012, 90); }, { duree: .45, portee: 30 });
+}
+function sonBalai(x, y, z) {   // le frottement des brins sur le trottoir
+  return !!sonEn(x, y, z, d => { sB(d, .3, 1500, .035, 0.5); sB(d, .2, 3800, .014, 0.9, .06); }, { duree: .4, portee: 18 });
+}
+function sonJetEau(x, y, z, force) {   // le jet de la lance a eau
+  const f = clamp(force == null ? 1 : force, 0.3, 1.5);
+  return !!sonEn(x, y, z, d => { sB(d, .6, 2400, .05 * f, 0.45); sB(d, .5, 700, .03 * f, 0.5, .04); }, { duree: .7, portee: 34 });
+}
+function sonRaclette(x, y, z) {   // le couinement du caoutchouc sur la vitre
+  return !!sonEn(x, y, z, d => { sT(d, 1500, 0, .3, 'sine', .022, 2400); sB(d, .25, 2600, .012, 4); }, { duree: .4, portee: 20 });
+}
+// ---- LE COMBAT RAPPROCHE ----
+// Un coup au VENTRE ne sonne pas comme un coup au visage : c'est sourd, ca s'enfonce, et
+// l'air part des poumons. La PARADE, elle, claque sec sur l'avant-bras, sans rien de mou.
+function sonVentre(x, y, z, hauteur) {
+  const h = clamp(hauteur || 1, 0.5, 2);
+  return !!sonEn(x, y, z, d => {
+    sT(d, 62, 0, .2, 'sine', .18, 34);                       // l'impact, tres grave
+    sB(d, .14, 220, .085, 0.5);                              // la masse du corps
+    sB(d, .3, 620 * h, .05, 0.4, .06);                       // « ouf » : l'air expulse
+    sT(d, 180 * h, .07, .18, 'sawtooth', .03, 110 * h);      // le souffle coupe
+  }, { duree: .45, portee: 32 });
+}
+function sonParade(x, y, z) {
+  return !!sonEn(x, y, z, d => { sB(d, .05, 1900, .085, 2.5); sT(d, 420, 0, .07, 'square', .045, 260); sT(d, 2400, .01, .05, 'triangle', .02, 3000); }, { duree: .25, portee: 28 });
+}
+function sonCouteau(x, y, z, touche) {   // la lame siffle ; si elle touche, l'entaille suit
+  return !!sonEn(x, y, z, d => {
+    sB(d, .12, 4200, .045, 3);                                  // le sifflement de la lame
+    sT(d, 3000, 0, .1, 'sine', .02, 5200);
+    if (touche) { sB(d, .09, 900, .07, 0.8, .1); sT(d, 150, .1, .14, 'triangle', .05, 90); }
+  }, { duree: .4, portee: 30 });
+}
 // ---- LE BATTEMENT DE COEUR DES SONS DU MONDE (appele par cityVie) ----
-const SONV = { ambT: 0, mouetteT: 0, vagueT: 0, oiseauT: 0, ventT: 0, pluieT: 0, clocheT: 0, ambuT: 0, vitPrec: 0, pneuT: 0, veloT: 0, jetT: 0 };
+const SONV = { ambT: 0, mouetteT: 0, vagueT: 0, oiseauT: 0, ventT: 0, pluieT: 0, clocheT: 0, ambuT: 0, vitPrec: 0, pneuT: 0, veloT: 0, jetT: 0, feuVehT: 0 };
 function sonsVille(dt) {
   if (!settings.sound || !city.on) return;
   accueilTick();
@@ -10460,13 +10546,41 @@ function sonsVille(dt) {
     if (drive.car.kind === 'bike' && v > 1 && simTime > SONV.veloT) { SONV.veloT = simTime + clamp(2.2 / v, 0.14, 0.6); sonChaine(drive.car.x, drive.car.y + 0.7, drive.car.z); }
     if (drive.car.kind === 'jetski' && v > 2 && simTime > SONV.jetT) { SONV.jetT = simTime + 0.32; sonJetski(drive.car.x, drive.car.z); }
   } else SONV.vitPrec = 0;
-  // --- l'ambulance en intervention ---
-  if (city.aiCars && simTime > SONV.ambuT) {
-    for (const c of city.aiCars) if (c.ambulance || c.kind === 'ambulance') {
-      const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
-      if (d < 70) { SONV.ambuT = simTime + 4.5; sonSireneAmbu(c.x, c.z); break; }
+  // --- LES VÉHICULES D'URGENCE. On reconnaît l'ambulance et la dépanneuse à leur genre ou à
+  // leur drapeau (`urgence`, `sirene`) : quel que soit le poste qui les pose, elles hurlent.
+  if (simTime > SONV.ambuT) {
+    const listes = [city.aiCars || [], city.cars || [], city.urgences || []];
+    for (const liste of listes) {
+      let fini = false;
+      for (const c of liste) {
+        const genre = urgenceDe(c); if (!genre) continue;
+        if (!(c.sirene || c.gyro || c.urgence || Math.abs(c.spd || c.speed || 0) > 0.2)) continue;   // garée et calme : pas de sirène
+        const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
+        if (d < 110) { SONV.ambuT = simTime + 2.6; sonSirene(c.x, c.z, genre); if (c.recule) sonRecul(c.x, c.z); fini = true; break; }
+      }
+      if (fini) break;
     }
   }
+  // --- les véhicules en flammes : ils crépitent tant qu'ils brûlent ---
+  if (simTime > SONV.feuVehT) {
+    SONV.feuVehT = simTime + 1.1;
+    for (const c of (city.cars || [])) {
+      if (!c.dead && !c.enFlammes) continue;
+      if (Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > 45) continue;
+      sonFeu(c.x, (c.y || 0) + 1, c.z, 0.75); break;   // un seul à la fois : le budget n'est pas extensible
+    }
+  }
+}
+// Quel genre de véhicule d'urgence ? On accepte plusieurs écritures : chaque poste nomme
+// les siennes à sa façon, et un nom manquant ne doit pas rendre le véhicule muet.
+function urgenceDe(c) {
+  if (!c) return null;
+  const k = String(c.urgence || c.kind || '').toLowerCase();
+  if (c.ambulance || /ambulance|samu|secours/.test(k)) return 'ambulance';
+  if (c.depanneuse || c.remorque || /depann|dépann|remorq|tow/.test(k)) return 'depanneuse';
+  if (c.pompier || /pompier|caserne/.test(k)) return 'pompier';
+  if (c.police || c.pol || /police|gendarm/.test(k)) return 'police';
+  return null;
 }
 // Déverrouillage audio (téléphones) : à la première interaction, on crée/relance le contexte et on joue un buffer silencieux
 function unlockAudio() {
@@ -13679,7 +13793,7 @@ function explodeVehicle(c) {
   if (c.explosed) return; c.explosed = true;
   const x = c.x, y = (c.y || 0) + 0.9, z = c.z;
   burst(x, y, z, 0xffd23f, 26); burst(x, y + 0.6, z, 0xff8f3a, 20); burst(x, y + 1.2, z, 0x2b2f3a, 16);
-  sfx.noise(.55, 260, .5); sfx.tone(70, 0, .6, 'sawtooth', .18, 32);
+  sonExplosion(x, y, z);   // même « BOOM », mais PLACÉ : à soixante mètres il ne fait plus sursauter
   const p = c.parts;
   if (p) {   // tout ce qui peut se détacher part en l'air
     for (const m of [p.bumpers[0], p.bumpers[1], p.hood, p.doors[0], p.doors[1], p.doors[2], p.doors[3]])
@@ -19675,7 +19789,7 @@ function declencheIncendie(x, z, force) {
   halo.scale.set(11, 11, 1); halo.position.y = 1.6; g.add(halo);
   const f = { x, z, g, flammes, halo, t: simTime, force: force || 100, cd: 0, aide: false };
   city.incendies.push(f);
-  sfx.noise(.7, 420, .12); sfx.tone(90, 0, .5, 'sawtooth', .05, 40);
+  sonFeu(x, 1.6, z, 1.6); sonEn(x, 1.6, z, dd => sfx.toneVers(dd, 90, 0, .5, 'sawtooth', .07, 40), { duree: .6, portee: 45, coupure: 90 });   // le départ de feu, entendu d'où il part
   msg('🔥 AU FEU ! La caserne envoie le camion', 3000);
   chat(null, '🔥 Un incendie s\'est déclaré en ville — les pompiers arrivent !');
   return f;
@@ -19690,7 +19804,7 @@ function incendiesTick(dt) {
     if (simTime > f.cd) {
       f.cd = simTime + 0.6;
       burst(f.x + rnd(-1.2, 1.2), 2.6 + rnd(0, 1.6), f.z + rnd(-1.2, 1.2), 0x54585f, 2);
-      if (Math.random() < 0.4) sfx.noise(.22, 360, .025);
+      sonFeu(f.x, 1.4, f.z, 0.4 + k);   // le feu respire et craque, et on l'entend d'où il brûle
     }
     // filet de sécurité : un feu que personne n'éteint finit par s'épuiser tout seul
     if (simTime - f.t > 240) f.force -= dt * 10;
@@ -20006,7 +20120,10 @@ function employesTick(dt) {
       if (simTime > (w0.etinT || 0)) {
         w0.etinT = simTime + 0.35;
         burst(cible.x + rnd(-0.6, 0.6), cible.kind === 'nid' ? 0.35 : 1.5, cible.z + rnd(-0.6, 0.6), 0xfff0c4, 4);
-        sfx.tone(900 + Math.random() * 700, 0, .04, 'square', .022);
+        // on les ENTEND travailler : un coup de marteau sur deux, sinon l'arc de soudure
+        w0.coupN = (w0.coupN || 0) + 1;
+        const hy = cible.kind === 'nid' ? 0.4 : 1.5;
+        if (w0.coupN % 2) sonMarteau(cible.x, hy, cible.z); else sonSoudure(cible.x, hy, cible.z);
       }
       if (simTime > w0.t) {
         repareCible(cible);
@@ -20056,7 +20173,8 @@ function pompiersTick(dt) {
     case 'route': {
       if (!vivant) { majEtat('retour'); return; }
       // la sirène : deux notes qui alternent (on ne touche pas à celle de la police)
-      if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 0.95; sfx.tone(830, 0, .44, 'sine', .045); sfx.tone(620, .46, .44, 'sine', .045); }
+      // la sirène vient du CAMION : on l'entend arriver de la rue, et pas de sa propre tête
+      if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 1.9; sonSirene(veh ? veh.x : w0.pos.x, veh ? veh.z : w0.pos.z, 'pompier'); }
       const d = metierRoule(w0, feu.x, feu.z, dt, 11);
       for (let i = 0; i < suite.length; i++) metierPassager(suite[i].bot, veh, i, dt);
       if (d < 12) { majEtat('deploie'); w0.t = simTime + 3; if (veh) veh.outilCible = 1; }
@@ -20087,6 +20205,8 @@ function pompiersTick(dt) {
         const t = 0.35 + Math.random() * 0.6;
         burst(w0.pos.x + (feu.x - w0.pos.x) * t + rnd(-0.6, 0.6), 1.7 + rnd(-0.3, 0.9),
           w0.pos.z + (feu.z - w0.pos.z) * t + rnd(-0.6, 0.6), 0x9fdcff, 3);
+        // le jet d'eau : un souffle continu, entretenu tant que la lance crache
+        if (simTime > (w0.jetSonT || 0)) { w0.jetSonT = simTime + 0.55; sonJetEau(w0.pos.x, 1.7, w0.pos.z, 1.1); }
       }
       return;
     }
@@ -20133,6 +20253,8 @@ function balayeurTick(m, dt) {
     // le balai balaie : le bras oscille (on écrase la pose d'animateRig, appelée juste avant)
     w.av.rig.armR.rotation.x = -0.85 + Math.sin(simTime * 6) * 0.45;
     w.av.rig.armR.rotation.z = -0.28; w.av.rig.armL.rotation.x = -0.55;
+    // un frottement de brins par coup de balai : même cadence que le bras (période 2π/6 s)
+    if (simTime > (w.balaiT || 0)) { w.balaiT = simTime + Math.PI / 6; sonBalai(w.pos.x, 0.2, w.pos.z); }
     if (d < 1.4 && !c.balade) { ramasseDetritus(c); m.cible = null; if (Math.random() < 0.25) metierDit(w, pickOne(['et hop, un papier de moins 🧹', 'la ville, c\'est plus joli propre !', 'allez, au suivant 🧹'])); }
   }
   if (w.poubelle) {
@@ -20181,6 +20303,7 @@ function laveurTick(m, dt) {
       metierSync(w);
       if (simTime > (w.mousseT || 0)) {
         w.mousseT = simTime + 0.4;
+        sonRaclette(w.pos.x, w.pos.y + 1.6, w.pos.z);   // le couinement du caoutchouc sur la vitre
         burst(w.pos.x + Math.sin(w.facing) * 0.9 + rnd(-0.5, 0.5), w.pos.y + 1.6 + rnd(-0.5, 0.5), w.pos.z + Math.cos(w.facing) * 0.9 + rnd(-0.5, 0.5), 0xf4f6fa, 3);
       }
       if (simTime > w.t) { m.etat = 'descend'; metierDit(w, pickOne(['et voilà, on y voit clair ! ✨', 'impeccable, je descends'])); }

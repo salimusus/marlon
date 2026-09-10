@@ -377,6 +377,7 @@ window.__G = {
   buildMetiers: typeof buildMetiers !== 'undefined' ? buildMetiers : null,
   metiersReset: typeof metiersReset !== 'undefined' ? metiersReset : null,
   metiersTick: typeof metiersTick !== 'undefined' ? metiersTick : null,
+  metiersRepos: typeof metiersRepos !== 'undefined' ? metiersRepos : null,
   employesTick: typeof employesTick !== 'undefined' ? employesTick : null,
   pompiersTick: typeof pompiersTick !== 'undefined' ? pompiersTick : null,
   balayeurTick: typeof balayeurTick !== 'undefined' ? balayeurTick : null,

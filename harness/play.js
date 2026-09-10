@@ -7040,7 +7040,7 @@ test('les cinq tenues de métier sont visibles et n\'entrent pas dans le corps',
 test('un lampadaire cassé est réparé tout seul par les employés, avec un chantier posé puis retiré', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const c = G.city; c.horaires = false;   // on ne dépend pas de la phase du cycle jour/nuit
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos   // on ne dépend pas de la phase du cycle jour/nuit
     const dep = c.depot;
     let lam = null, bd = 1e9;
     for (const b of G.breakables) { if (b.kind !== 'lamp') continue; const d = Math.hypot(b.x - dep.x, b.z - dep.z); if (d < bd) { bd = d; lam = b; } }
@@ -7071,7 +7071,7 @@ test('un lampadaire cassé est réparé tout seul par les employés, avec un cha
 test('un incendie est éteint par les pompiers : le camion arrive et city.incendies se vide', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const c = G.city; c.horaires = false;
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
     const f = G.declencheIncendie(0, 20, 100);
     const cam = G.METIERS.pompiers[0].bot.veh;
     const d0 = Math.round(Math.hypot(cam.x, cam.z - 20));
@@ -7094,7 +7094,7 @@ test('un incendie est éteint par les pompiers : le camion arrive et city.incend
 test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte aux lettres', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const c = G.city; c.horaires = false;
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
     for (const b of c.boites) b.lettres = 0;
     const m = G.METIERS.facteurs[0], velo = m.bot.veh;
     let livre = -1, aVelo = false;
@@ -7116,9 +7116,12 @@ test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte
 test('les véhicules de travail sont conduisibles par le joueur et leurs outils s\'actionnent', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const c = G.city; c.horaires = false;
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
     const res = {};
     for (const v of c.cars.filter(x => x.travail)) {
+      // on remet TOUT le parc à sa place avant chaque véhicule : celui qu'on vient d'essayer
+      // s'était garé n'importe où et venait brouiller la détection du suivant
+      G.metiersRepos();
       v.busy = false;                                     // l'employé qui s'en servait laisse la place
       G.P.pos.set(v.x + 1.4, v.y || 0, v.z + 1.4);
       G.cityStep(1 / 60);
@@ -7168,7 +7171,7 @@ test('les véhicules de travail sont conduisibles par le joueur et leurs outils 
 test('on peut parler aux gens de métier et leur donner un coup de main contre des pièces', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const c = G.city; c.horaires = false; c.boulot = null;
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos c.boulot = null;
     // toute l'équipe est au travail : la phrase de métier doit parler de la réparation en cours
     for (const m of c.metiers) if (m.metier === 'employe') m.etat = 'repare';
     const phrases = c.metiers.map(m => [m.metier, G.phraseMetier(m, false)]);

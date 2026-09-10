@@ -18454,6 +18454,35 @@ function metierParle(txt) {
   metierDit(best.bot, phraseMetier(best, salut && !sujet));
   return true;
 }
+// REMET TOUTE LA VIE DES MÉTIERS AU REPOS : chacun à sa place devant son hangar, les
+// véhicules à leur emplacement, plus un chantier ni un incendie en cours. C'est la soupape
+// de sûreté quand la ville doit repartir d'un état propre (banc d'essai, captures).
+function metiersRepos() {
+  if (!city.metiers) return;
+  for (let i = city.chantiers.length - 1; i >= 0; i--) retireChantier(city.chantiers[i]);
+  for (let i = city.incendies.length - 1; i >= 0; i--) { worldGroup.remove(city.incendies[i].g); city.incendies.splice(i, 1); }
+  for (const n of (city.nidsPoule || []).slice()) boucheNidDePoule(n);
+  for (const d of (city.detritus || []).slice()) worldGroup.remove(d.g);
+  if (city.detritus) city.detritus.length = 0;
+  for (const m of city.metiers) {
+    const w = m.bot;
+    m.etat = 'repos'; m.cible = null; m.chantier = null;
+    w.route = null; w.vroute = null; w.pause = 0; w.t = 0; w.bloqueT = 0; w.h2 = 0;
+    if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
+    w.pos.set(w.base[0], groundUnder(w.base[0], w.base[1], null, 2.5), w.base[1]);
+    metierSync(w);
+    donneOutil(w.av, m.metier === 'employe' || m.metier === 'pompier' ? null : METIERS_DEF[m.metier].outil);
+  }
+  for (const v of city.cars) {
+    if (!v.travail || drive.car === v) continue;
+    const [hx, hz, hh] = v.home0;
+    v.x = hx; v.z = hz; v.h = hh; v.busy = false; v.metierBusy = false; v.gyro = false;
+    v.outil = 0; v.outilCible = 0;
+    v.g.position.set(hx, v.y || 0, hz); v.g.rotation.y = hh;
+    settleVehicle(v); vehicleSolid(v);
+  }
+  METIERS.repos = 0; METIERS.scanT = 0;
+}
 // ---- LE TOUR DE VIE DES MÉTIERS (appelé par cityVie, une fois par image) ----
 function metiersTick(dt) {
   if (!city.on || !city.metiers || !city.metiers.length) return;
@@ -18478,15 +18507,7 @@ function metierScene(nom) {
   // Une capture n'attend pas la suivante : sans ce ménage, le chantier de la photo
   // précédente restait planté au milieu de la rue et la caméra de la photo suivante
   // venait s'écraser dedans.
-  for (let i = city.chantiers.length - 1; i >= 0; i--) retireChantier(city.chantiers[i]);
-  for (let i = city.incendies.length - 1; i >= 0; i--) { worldGroup.remove(city.incendies[i].g); city.incendies.splice(i, 1); }
-  for (const n of city.nidsPoule.slice()) boucheNidDePoule(n);
-  for (const d of city.detritus.slice()) worldGroup.remove(d.g);
-  city.detritus.length = 0;
-  for (const m of city.metiers) {
-    if (m.bot.echelle) { worldGroup.remove(m.bot.echelle.g); m.bot.echelle = null; }
-    m.etat = 'repos'; m.cible = null; m.chantier = null;
-  }
+  metiersRepos();
   const px = P.pos.x, pz = P.pos.z, a = P.facing;
   const devant = d => [px + Math.sin(a) * d, pz + Math.cos(a) * d];
   const pose = (w, x, z, f) => { w.pos.set(x, groundUnder(x, z, null, 2.5), z); w.facing = f; metierSync(w); };

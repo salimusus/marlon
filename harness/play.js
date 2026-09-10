@@ -6917,3 +6917,30 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
   return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.09 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
+
+test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(r => setTimeout(r, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    const out = {};
+    out.classes = G.city.classes.map(r => ({ n: r.n, subj: r.subj, chaises: r.chaises.length, props: r.props.length, tableau: !!r.tableau }));
+    let verre = 0; G.worldGroup.traverse(o => { if (o.isMesh && o.material === G.glassVert) verre++; }); out.verre = verre;
+    out.props = G.city.classes.map(r => r.props.join(', '));
+    out.batiment = !!G.city.batiments.find(b => G.city.classes.every(r => Math.abs(r.x - b.x) < b.w / 2 + 1));
+    const r = G.city.classes[0], ch = r.chaises[0];
+    G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch); await dodo(500);
+    out.assis = { sit: !!G.P.sit, ui: G.uiOpen, tableau: r.texte, q: !!G.school.q, y: +G.P.pos.y.toFixed(2) };
+    const q = G.school.q; G.wallet = 0;
+    G.answer(q.a, document.querySelector('#schChoices .item')); await dodo(80);
+    out.bon = { tableau: r.texte, pieces: G.wallet };
+    await dodo(1700); const q2 = G.school.q; const faux = q2.opts.find(o => o !== q2.a);
+    G.answer(faux, document.querySelector('#schChoices .item')); await dodo(80);
+    out.faux = { tableau: r.texte, rep: faux };
+    G.closeUI(); G.P.sit = null; G.P.pos.set(-62, 1, 235);
+    return out;
+  });
+  const ok = r.classes.length === 4 && r.classes.every(c => c.chaises === 12 && c.props >= 4 && c.tableau) && r.verre >= 8 && r.batiment
+    && r.assis.sit && r.assis.ui === 'schoolUI' && r.assis.q && /1\)/.test(r.assis.tableau) && r.assis.y < 0.35
+    && /GAGNÉ/.test(r.bon.tableau) && r.bon.pieces >= 3 && /FAUX/.test(r.faux.tableau) && r.faux.tableau.includes(r.faux.rep);
+  return { ok, detail: `l'école est un vrai bâtiment de verre vert (${r.verre} parois de verre, un étage vitré, la façade sur la rue) avec ${r.classes.length} classes, un préau et une cour · chaque classe a un tableau GRIS avec ses craies, 6 tables d'écolier et 12 chaises où l'on s'assoit (E), et le mobilier de sa matière : ${r.props.map((p, i) => r.classes[i].n + ' → ' + p).join(' ; ')} · on s'assoit (y=${r.assis.y}) et la classe commence : l'exercice s'écrit au tableau « ${r.assis.tableau.slice(0, 60)} », la réponse s'y écrit puis le verdict : « ${r.bon.tableau.slice(-30)} » (+${r.bon.pieces} pièces) ou « ${r.faux.tableau.split('|').slice(2).join('|').trim()} »` };
+});

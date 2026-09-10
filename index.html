@@ -1792,8 +1792,8 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
     // Nœud « main droite » au bout du bras, tourné pour que le +z de l'arme descende le long
     // du bras : quand le bras se lève pour viser, le canon pointe droit devant. Avant, l'arme
     // était posée 0,16 m au-delà du poing et son canon partait vers le ciel.
-    const hand = new THREE.Group(); hand.position.set(0, -2 * S, 0); hand.rotation.x = Math.PI / 2;
-    av.rig.armR.add(hand); av.rig.handR = hand;
+    const hand = new THREE.Group(); hand.position.set(0, -1.0 * S, 0.02 * S); hand.rotation.x = Math.PI / 2;
+    av.rig.armR.coude.add(hand); av.rig.handR = hand;   // dans le POING, au bout de l'avant-bras
     const h = new THREE.Group(); av.group.add(h);
     const belt = new THREE.Mesh(unitRound, lam(0x5a3a1e)); belt.scale.set(2.2 * S, 0.24 * S, 1.16 * S); belt.position.y = 1.95 * S; h.add(belt);
     const buckle = new THREE.Mesh(unitRound, lam(0xffd23f)); buckle.scale.set(0.34 * S, 0.24 * S, 0.12 * S); buckle.position.set(0, 1.95 * S, 0.58 * S); h.add(buckle);
@@ -3238,7 +3238,7 @@ function setRacket(av, on) {
   // porter une poêle à frire.
   // Elle est aussi RACCOURCIE et REMONTÉE : à taille réelle du râtelier (1,07 m) le tamis
   // s'enfonçait de 32 cm dans le sol quand le bras pendait le long du corps.
-  if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.position.set(0.05, -0.42, 0.1); av.racket.rotation.set(-0.14, 0, 0.2); av.rig.armR.add(av.racket); }
+  if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.position.set(0.05, -0.42 + 0.9 * S, 0.1); av.racket.rotation.set(-0.14, 0, 0.2); av.rig.armR.coude.add(av.racket); }
   av.racket.visible = !!on;
 }
 const WINMASK = (() => {   // fenêtres allumées (masque d'émission pour la nuit)
@@ -6488,8 +6488,8 @@ function voilePose(dt) {
   const g = P.voileMesh;
   const vx = P.vel.x, vz = P.vel.z, v = Math.hypot(vx, vz);
   if (P.voile === 'parachute') {
-    me.group.position.set(P.pos.x, P.pos.y, P.pos.z);
-    me.group.rotation.set(0, P.facing, 0, 'YXZ');
+    me.group.position.set(P.pos.x, P.pos.y - (me.rig.baisse || 0), P.pos.z);
+    me.group.rotation.set(-(me.rig.penche || 0), P.facing, 0, 'YXZ');
     me.rig.armL.rotation.set(-2.5, 0, 0.5); me.rig.armR.rotation.set(-2.5, 0, -0.5);
     me.rig.legL.rotation.set(0.35, 0, 0); me.rig.legR.rotation.set(0.2, 0, 0);
     g.position.set(P.pos.x, P.pos.y, P.pos.z);
@@ -6514,7 +6514,7 @@ function voilePose(dt) {
 }
 function rangeVoile(atterri) {
   if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; }
-  me.group.rotation.set(0, P.facing, 0, 'YXZ'); P.roulis = 0;
+  me.group.rotation.set(-(me.rig.penche || 0), P.facing, 0, 'YXZ'); P.roulis = 0;
   me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
   me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
   if (P.voile) msg(atterri ? '🪂 Bien posé ! La voile se replie toute seule' : '🪂 Voile rangée', 1800);
@@ -7368,6 +7368,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   const ix = P.pos.x + fx * 0.75, iz = P.pos.z + fz * 0.75, iy = P.pos.y + (kind === 'kick' ? 0.85 : 1.25);
   impact(ix, iy, iz, { x: fx, y: 0, z: fz }, kind === 'kick' ? 'pied' : 'poing', finisher ? 1.45 : 1);
   camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
+  cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
   msg(kind === 'kick' ? '🦵 Coup de pied !' : finisher ? '👊 Combo x3 !' : '👊', 500);
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
@@ -7920,26 +7921,44 @@ function buildAvatar(cfg) {
   const hatGroups = {};
   for (const [k, h] of Object.entries(HATS)) { const grp = new THREE.Group(); head.add(grp); const mat = M(h.c); h.parts.forEach(([w, hh, d, x, y, z]) => part(w * S, hh * S, d * S, mat, x * S, y * S, z * S, grp)); grp.visible = cfg.hat === k; hatGroups[k] = grp; }
   capParts.forEach(p => p.visible = cfg.cap != null && !(cfg.hat && cfg.hat !== 'none'));
+  // DES ARTICULATIONS. Le bras etait un baton, la jambe aussi : pas de coude, pas de genou,
+  // un pied plat. Chaque membre a maintenant deux segments — bras / avant-bras + POING,
+  // cuisse / tibia + une VRAIE CHAUSSURE (semelle qui depasse devant, tige, languette) —
+  // et les animations plient les coudes et les genoux.
   const limb = (x, w, top, bottom, topH) => {
     const p = new THREE.Group(); p.position.set(x, 4 * S, 0); g.add(p);
     p.manche = part(w, topH, S, top, 0, -topH / 2, 0, p);      // la manche : elle disparaît en débardeur
-    p.avantBras = part(w * 0.96, 2 * S - topH, S * 0.96, bottom, 0, -topH - (2 * S - topH) / 2, 0, p);
+    p.coude = new THREE.Group(); p.coude.position.y = -topH; p.add(p.coude);
+    const lb = 2 * S - topH - 0.42 * S;
+    p.avantBras = part(w * 0.92, lb, S * 0.92, bottom, 0, -lb / 2, 0, p.coude);
+    p.poing = part(w * 1.04, 0.5 * S, S * 1.06, bottom, 0, -lb - 0.22 * S, 0.02 * S, p.coude);
     return p;
   };
   const leg = x => {
     const p = new THREE.Group(); p.position.set(x, 2 * S, 0); g.add(p);
     p.cuisse = part(S, 1.0 * S, S, pants, 0, -0.5 * S, 0, p);
-    p.low = part(0.96 * S, 0.72 * S, 0.96 * S, cfg.shorts ? skin : pants, 0, -1.36 * S, 0, p);
-    p.shoe = part(0.98 * S, 0.3 * S, 0.98 * S, shoe, 0, -1.87 * S, 0, p);
-    p.tige = part(1.02 * S, 0.8 * S, 1.02 * S, shoe, 0, -1.42 * S, 0, p); p.tige.visible = false;   // tige de botte
-    p.eperon = part(0.5 * S, 0.12 * S, 0.5 * S, M(0xd8c26a), 0, -1.85 * S, -0.55 * S, p); p.eperon.visible = false;
+    p.genou = new THREE.Group(); p.genou.position.y = -1.0 * S; p.add(p.genou);
+    p.low = part(0.94 * S, 0.7 * S, 0.94 * S, cfg.shorts ? skin : pants, 0, -0.35 * S, 0, p.genou); p.mollet = p.low;
+    p.shoe = part(1.0 * S, 0.34 * S, 1.02 * S, shoe, 0, -0.83 * S, 0.02 * S, p.genou);
+    p.semelle = part(1.08 * S, 0.14 * S, 1.3 * S, M(0xf4f6fa), 0, -0.93 * S, 0.12 * S, p.genou);
+    p.languette = part(0.6 * S, 0.16 * S, 0.3 * S, shoe, 0, -0.62 * S, 0.5 * S, p.genou);
+    p.tige = part(1.02 * S, 0.8 * S, 1.02 * S, shoe, 0, -0.42 * S, 0, p.genou); p.tige.visible = false;   // tige de botte
+    p.eperon = part(0.5 * S, 0.12 * S, 0.5 * S, M(0xd8c26a), 0, -0.85 * S, -0.55 * S, p.genou); p.eperon.visible = false;
     return p;
   };
-  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, walk: 0, swing: 0, kick: 0 };
+  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false };
+  // MUSCLES : pectoraux, trapezes, deltoides — ils apparaissent et grossissent avec l'entrainement
+  const pecs = [-0.45, 0.45].map(sx => part(0.72 * S, 0.5 * S, 0.22 * S, shirt, sx * S, 3.3 * S, 0.52 * S, g));
+  const trap = part(1.7 * S, 0.34 * S, 0.8 * S, shirt, 0, 4.05 * S, -0.1 * S, g);
+  const delts = [-1.5, 1.5].map(sx => { const d = new THREE.Mesh(new THREE.SphereGeometry(0.62 * S, 10, 8), sleeve); d.position.set(sx * S, 3.85 * S, 0); d.castShadow = true; g.add(d); return d; });
+  for (const m of [...pecs, trap, ...delts]) m.visible = false;
+  // LE VISAGE MARQUE : bleus, sang, oeil au beurre noir — un calque devant la tete, selon la vie qui reste
+  const visage = new THREE.Mesh(new THREE.PlaneGeometry(1.2 * S, 1.2 * S), new THREE.MeshBasicMaterial({ map: degatsTexture(1), transparent: true, depthWrite: false }));
+  visage.position.set(0, 0.72 * S, 0.69 * S); visage.visible = false; visage.renderOrder = 2; head.add(visage);
   // ---- poignets : bracelet à gauche, montre à droite (celle qui prévient des cambriolages) ----
   const braceletM = M(0xffd23f), montreM = M(0x2b2f3a);
-  const bracelet = part(1.16 * S, 0.2 * S, 1.16 * S, braceletM, 0, -1.72 * S, 0, rig.armL); bracelet.visible = false;
-  const montre = new THREE.Group(); montre.position.set(0, -1.68 * S, 0); rig.armR.add(montre); montre.visible = false;
+  const bracelet = part(1.16 * S, 0.2 * S, 1.16 * S, braceletM, 0, -0.82 * S, 0, rig.armL.coude); bracelet.visible = false;
+  const montre = new THREE.Group(); montre.position.set(0, -0.78 * S, 0); rig.armR.coude.add(montre); montre.visible = false;
   part(1.14 * S, 0.16 * S, 1.14 * S, montreM, 0, 0, 0, montre);
   const cadran = part(0.62 * S, 0.14 * S, 0.4 * S, M(0x9fdcff), 0, 0.06 * S, 0.52 * S, montre);
   const skirt = part(2.3 * S, 0.75 * S, 1.25 * S, pants, 0, 1.75 * S, 0, g); skirt.visible = !!cfg.skirt;
@@ -7949,7 +7968,7 @@ function buildAvatar(cfg) {
   part(1.9 * S, 0.5 * S, 1.06 * S, shirt, 0, -0.72 * S, 0, bretelles);
   const tag = nameTag(cfg.name); g.add(tag);
   scene.add(g);
-  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, bracelet: braceletM, montre: montreM, bijou: bijouMat, bijou2: bijou2Mat }, capParts, setHair, setBijou, bijoux, skirt, jacket, bag, glasses, hatGroups, torso, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 };
+  const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, bracelet: braceletM, montre: montreM, bijou: bijouMat, bijou2: bijou2Mat }, capParts, setHair, setBijou, bijoux, skirt, jacket, bag, glasses, hatGroups, torso, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 , muscles: { pecs, trap, delts }, visage, degats: 0, hpPrec: 100 };
   applyStats(av, cfg.m || 0, cfg.f || 0);
   return av;
 }
@@ -7962,6 +7981,43 @@ function applyStats(av, m, f) {   // muscles (bras, épaules), embonpoint (ventr
   av.bag.position.z = -0.8 * S - (sz - 1) * S * 0.5;
   const as = 1 + av.m * 0.008;
   for (const a of [av.rig.armL, av.rig.armR]) a.children.forEach(c => c.scale.set(as, 1, as));
+  // biceps, pectoraux, trapezes, deltoides, mollets : tout grossit avec l'entrainement
+  if (av.muscles) {
+    const mu = av.m / 100;
+    for (const p2 of av.muscles.pecs) { p2.visible = av.m > 10; p2.scale.set(1 + mu * 0.5, 1 + mu * 0.4, 1 + mu * 1.6); }
+    av.muscles.trap.visible = av.m > 15; av.muscles.trap.scale.set(1 + mu * 0.3, 1 + mu * 1.4, 1);
+    for (const d of av.muscles.delts) { d.visible = av.m > 8; d.scale.setScalar(0.55 + mu * 0.75); }
+    for (const l of [av.rig.legL, av.rig.legR]) if (l.mollet) l.mollet.scale.set(1 + mu * 0.35, 1, 1 + mu * 0.35);
+  }
+}
+// ---- le visage marque ----
+const DEGATS_TEX = {};
+function degatsTexture(n) {
+  if (DEGATS_TEX[n]) return DEGATS_TEX[n];
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const tache = (x, y, r, col, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+  if (n >= 1) { tache(18, 40, 11, 'rgba(96,40,120,A)', 0.55); tache(46, 22, 8, 'rgba(110,50,90,A)', 0.45); }   // les bleus : la joue et l'arcade
+  if (n >= 2) { g.strokeStyle = 'rgba(180,20,20,0.85)'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(32, 34); g.lineTo(30, 52); g.stroke(); g.beginPath(); g.moveTo(24, 47); g.lineTo(40, 47); g.stroke(); tache(32, 50, 5, 'rgba(170,20,20,A)', 0.6); }   // le nez et la levre saignent
+  if (n >= 3) { tache(44, 26, 12, 'rgba(40,20,60,A)', 0.8); g.strokeStyle = 'rgba(160,15,15,0.9)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(45, 14); g.lineTo(48, 40); g.stroke(); g.beginPath(); g.moveTo(14, 30); g.lineTo(12, 46); g.stroke(); }   // l'oeil au beurre noir, l'arcade ouverte
+  const t = new THREE.CanvasTexture(c); DEGATS_TEX[n] = t; return t;
+}
+const niveauDegats = hp => hp > 70 ? 0 : hp > 40 ? 1 : hp > 15 ? 2 : 3;
+function avDegats(av, n, hp) {
+  if (!av || !av.visage) return false;
+  // un coup encaisse (la vie a baisse) : le personnage accuse le coup, il se penche
+  if (hp != null) { if (hp < av.hpPrec - 0.5 && av.rig) av.rig.recul = 0.35; av.hpPrec = hp; }
+  if (av.degats === n) return false;
+  av.degats = n; av.visage.visible = n > 0;
+  if (n > 0) { av.visage.material.map = degatsTexture(n); av.visage.material.needsUpdate = true; }
+  return true;
+}
+// Chaque tour de vie de la ville : les visages suivent la vie qui reste, et les hommes a bout
+// de forces mettent un genou a terre (joueur, habitants, gangsters).
+function degatsTick() {
+  avDegats(me, niveauDegats(P.hp), P.hp);
+  me.rig.agenou = P.hp > 0 && P.hp < 20 && !dead && !drive.car && !P.sit && !P.swing && !P.ride && !P.swimming && !gym.on;
+  for (const b of bots) { if (!b.av) continue; const hp = b.hp == null ? 100 : b.hp; avDegats(b.av, niveauDegats(hp), hp); b.av.rig.agenou = hp > 0 && hp < 20 && !b.ko && !b.drive; }
+  for (const G2 of gangs) for (const m of G2.membres) { if (!m.av) continue; avDegats(m.av, niveauDegats(m.hp), m.hp); m.av.rig.agenou = m.hp > 0 && m.hp < 20 && !m.ko; }
 }
 function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, bas, casquette, chapeau, cheveux, veste, lunettes, sac, bijou, taille, nom, stats)
   const j = jerseyOf(look.jersey ?? look.shirt ?? 0);
@@ -8092,41 +8148,61 @@ const allAvatars = () => [me, ...bots.map(b => b.av), ...[...net.remotes.values(
 function animateRig(rig, mode, speed, dt, t) {
   const ease = Math.min(1, dt * 12);
   const to = (p, v) => { p.rotation.x += (v - p.rotation.x) * ease; };
+  const gL = rig.legL.genou, gR = rig.legR.genou, cL = rig.armL.coude, cR = rig.armR.coude;
+  const toK = (p, v) => { if (p) p.rotation.x += (v - p.rotation.x) * ease; };
+  // ACCUSER LE COUP : on se penche brievement vers l'avant ; A BOUT DE FORCES : un genou a terre
+  if (rig.recul > 0) rig.recul = Math.max(0, rig.recul - dt);
+  rig.penche = rig.recul > 0 ? Math.sin(rig.recul / 0.35 * Math.PI) * 0.45 : 0;
+  if (rig.groupe && rig.groupe !== me.group && Math.abs(rig.groupe.rotation.x) < 1) rig.groupe.rotation.x = -rig.penche;
+  const baisseVoulue = rig.agenou && mode !== 'sleep' && mode !== 'sit' && mode !== 'ride' ? 0.95 * S : 0;
+  rig.baisse = (rig.baisse || 0) + (baisseVoulue - (rig.baisse || 0)) * Math.min(1, dt * 6);
+  if (baisseVoulue > 0) {
+    to(rig.legR, -1.5); toK(gR, 1.55); to(rig.legL, 0.2); toK(gL, 1.8);
+    to(rig.armL, -0.5); to(rig.armR, -0.3); toK(cL, -0.9); toK(cR, -0.6);
+    rig.armL.rotation.z = 0.25; rig.armR.rotation.z = -0.25; rig.head.rotation.y = 0; return;
+  }
   if (mode === 'sleep') {   // allongé sur le dos : membres à plat, bras le long du corps
-    to(rig.legL, 0); to(rig.legR, 0); to(rig.armL, 0.1); to(rig.armR, 0.1);
+    to(rig.legL, 0); to(rig.legR, 0); to(rig.armL, 0.1); to(rig.armR, 0.1); toK(gL, 0); toK(gR, 0); toK(cL, 0); toK(cR, 0);
     rig.armL.rotation.z = 0.22; rig.armR.rotation.z = -0.22; rig.head.rotation.y = 0; return;
   }
   if (mode === 'ride' || mode === 'sit') {
     const ped = mode === 'ride' && speed > 0.5 ? Math.sin(t * 9) * 0.45 : 0;
     to(rig.legL, -1.35 + ped); to(rig.legR, -1.35 - ped); to(rig.armL, mode === 'ride' ? -1.1 : -0.4); to(rig.armR, mode === 'ride' ? -1.1 : -0.4);
+    toK(gL, 1.35 + ped * 0.6); toK(gR, 1.35 - ped * 0.6); toK(cL, mode === 'ride' ? -0.5 : -0.9); toK(cR, mode === 'ride' ? -0.5 : -0.9);
     rig.armL.rotation.z = 0.15; rig.armR.rotation.z = -0.15; rig.head.rotation.y = 0; return;
   }
   if (mode === 'lift') {
     // Le corps est à l'horizontale : les bras doivent pousser vers le CIEL (−π/2 dans le repère
     // couché), pas s'étendre au-delà de la tête comme debout, et les jambes pendent du banc.
     const s = Math.sin(t * 10);
-    to(rig.armL, -1.55 + s * 0.4); to(rig.armR, -1.55 + s * 0.4);
-    to(rig.legL, 1.25); to(rig.legR, 1.25);
+    to(rig.armL, -1.55 + s * 0.4); to(rig.armR, -1.55 + s * 0.4); toK(cL, -0.6 + s * 0.5); toK(cR, -0.6 + s * 0.5);
+    to(rig.legL, 1.25); to(rig.legR, 1.25); toK(gL, 1.2); toK(gR, 1.2);
     rig.armL.rotation.z = 0.2; rig.armR.rotation.z = -0.2; return;
   }
   if (mode === 'swim') {
     const s = Math.sin(t * 7);
-    to(rig.armL, -1.6 + s * 1.4); to(rig.armR, -1.6 - s * 1.4); to(rig.legL, 0.6 + s * 0.5); to(rig.legR, 0.6 - s * 0.5);
+    to(rig.armL, -1.6 + s * 1.4); to(rig.armR, -1.6 - s * 1.4); to(rig.legL, 0.6 + s * 0.5); to(rig.legR, 0.6 - s * 0.5); toK(gL, 0.4 - s * 0.3); toK(gR, 0.4 + s * 0.3); toK(cL, -0.4); toK(cR, -0.4);
     rig.armL.rotation.z = 0.4; rig.armR.rotation.z = -0.4; rig.head.rotation.y = 0; return;
   }
   if (mode === 'dance') {
     const s = Math.sin(t * 9);
-    to(rig.armL, -2.6 + s * 0.6); to(rig.armR, -2.6 - s * 0.6); to(rig.legL, s * 0.5); to(rig.legR, -s * 0.5);
+    to(rig.armL, -2.6 + s * 0.6); to(rig.armR, -2.6 - s * 0.6); to(rig.legL, s * 0.5); to(rig.legR, -s * 0.5); toK(gL, 0.35 + s * 0.3); toK(gR, 0.35 - s * 0.3); toK(cL, -0.8 - s * 0.4); toK(cR, -0.8 + s * 0.4);
     rig.armL.rotation.z = 0.9 + s * 0.3; rig.armR.rotation.z = -0.9 - s * 0.3; rig.head.rotation.y = Math.sin(t * 4.5) * 0.4; return;
   }
-  if (rig.kick > 0) { rig.kick -= dt; rig.legR.rotation.x = -1.9 + (0.45 - rig.kick) * 3; rig.armL.rotation.x = -0.8; if (rig.kick <= 0) rig.legR.rotation.x = 0; }
-  if (rig.swing > 0) { rig.swing -= dt; rig.armR.rotation.x = -2.4 + (0.35 - rig.swing) * 4.5; rig.armR.rotation.z = -0.6; if (rig.swing <= 0) rig.armR.rotation.z = 0; }
-  if (mode === 'air') { to(rig.armL, -2.8); if (!(rig.swing > 0)) to(rig.armR, -2.8); to(rig.legL, 0.45); to(rig.legR, -0.35); }
+  // le coup de pied arme le genou puis le detend ; le coup de poing part du coude replie
+  if (rig.kick > 0) { rig.kick -= dt; rig.legR.rotation.x = -1.9 + (0.45 - rig.kick) * 3; rig.armL.rotation.x = -0.8; if (gR) gR.rotation.x = Math.max(0, 1.7 * (rig.kick / 0.45) - 0.2); if (rig.kick <= 0) { rig.legR.rotation.x = 0; if (gR) gR.rotation.x = 0; } }
+  if (rig.swing > 0) { rig.swing -= dt; rig.armR.rotation.x = -2.4 + (0.35 - rig.swing) * 4.5; rig.armR.rotation.z = -0.6; if (cR) cR.rotation.x = -1.5 * Math.max(0, rig.swing / 0.35 - 0.15); if (rig.swing <= 0) { rig.armR.rotation.z = 0; if (cR) cR.rotation.x = 0; } }
+  if (mode === 'air') { to(rig.armL, -2.8); if (!(rig.swing > 0)) to(rig.armR, -2.8); to(rig.legL, 0.45); to(rig.legR, -0.35); toK(gL, 0.9); toK(gR, 0.5); toK(cL, -0.4); if (!(rig.swing > 0)) toK(cR, -0.4); }
   else if (speed > 0.6) {
     rig.walk += dt * speed * 1.7;
-    const s = Math.sin(rig.walk) * 0.85;
+    const s = Math.sin(rig.walk) * 0.85, course = speed > 1.3;
     to(rig.legL, s); if (!(rig.kick > 0)) to(rig.legR, -s); to(rig.armL, -s * 0.8); if (!(rig.swing > 0)) to(rig.armR, s * 0.8);
-  } else { to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); }
+    // LES GENOUX plient quand la jambe revient vers l'avant et se tendent quand elle pousse ;
+    // en course les talons montent bien plus haut et les coudes se replient
+    const k = course ? 1.6 : 1.2;
+    toK(gL, Math.max(0, -Math.sin(rig.walk + 0.9)) * k); if (!(rig.kick > 0)) toK(gR, Math.max(0, Math.sin(rig.walk + 0.9)) * k);
+    toK(cL, course ? -1.3 : -0.4); if (!(rig.swing > 0)) toK(cR, course ? -1.3 : -0.4);
+  } else { to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); }
   rig.armL.rotation.z += ((mode === 'air' ? 0.15 : 0.05 * Math.sin(t * 2)) - rig.armL.rotation.z) * ease; rig.armR.rotation.z = -rig.armL.rotation.z;
   rig.head.rotation.y += (Math.sin(t * 0.9) * 0.12 - rig.head.rotation.y) * ease;
 }
@@ -10906,7 +10982,7 @@ function updateBot(b, dt) {
   if (b.prison) return;  // en cellule : plainteTick le garde derrière les barreaux
   if (b.drive) return;   // au volant : botDriveTick s'en occupe
   const av = b.av;
-  const sync = () => { av.group.position.copy(b.pos); av.group.rotation.y = b.facing; };
+  const sync = () => { av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
   if (b.state === 'fall') {
     b.vel.y -= G * dt; b.pos.addScaledVector(b.vel, dt); sync();
     animateRig(av.rig, 'air', 0, dt, simTime);
@@ -11186,6 +11262,7 @@ function step(dt, active) {
   }
   if (P.boostT > simTime) { wantX *= 1.8; wantZ *= 1.8; }
   { const sm = statMul().speed; wantX *= sm; wantZ *= sm; }
+  if (me.rig.agenou) { wantX *= 0.35; wantZ *= 0.35; }   // un genou a terre : on se traine
   if (city.on && !drive.car) for (const bo of city.boosters) if (Math.hypot(P.pos.x - bo.x, P.pos.z - bo.z) < 2.4 && simTime > bo.cd) { bo.cd = simTime + 1; P.boostT = simTime + 2; sfx.boost(); msg('🚀 BOOST !', 700); burst(P.pos.x, P.pos.y + 0.5, P.pos.z, 0x3ef2ff, 10); }
 
   const tr = trusses.find(t => overlaps(t, P.pos.x, P.pos.y, P.pos.z));
@@ -11914,6 +11991,7 @@ function cityVie(dt) {
   if (z !== city.zone) { city.zone = z; if (z) msg(z.name === 'Tennis' && !P.racket ? '🎾 Prends une raquette au râtelier !' : z.hint, 2200); updateAct(); }
   const safe = (name, fn) => { try { fn(); } catch (e) { if (!safeSeen[name]) { safeSeen[name] = 1; console.error(name, e); msg('⚠️ Petit souci technique (' + name + ') — le jeu continue', 2500); } } };
   safe('foule', () => separerPersos());   // personne ne se tient à l'intérieur de quelqu'un d'autre
+  safe('visages', () => degatsTick());
   safe('casino', () => casinoTick(dt));
   safe('tirs', () => shotsTick(dt)); safe('grenades', () => grenadesTick(dt)); safe('sport', () => gymTick(dt)); safe('police', () => policeTick(dt)); safe('combat', () => combatTick(dt)); safe('mission', () => missionTick(dt));
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
@@ -13728,7 +13806,7 @@ function frame() {
   if (aiming || P.lock) aimTick();
   if (P.gun && P.weapon !== 'grenade') { const wantHand = armed; if (wantHand !== !!me.inHand) setWeapon(me, P.weapon, wantHand); }
   document.body.classList.toggle('drawn', !!P.drawn);
-  if (armed && me.gun && me.inHand) { me.rig.armR.rotation.x = -1.55 - P.aimPitch; me.rig.armR.rotation.z = -0.12; }   // le bras suit la hauteur de visée
+  if (armed && me.gun && me.inHand) { me.rig.armR.rotation.x = -1.55 - P.aimPitch; me.rig.armR.rotation.z = -0.12; me.rig.armR.coude.rotation.x = 0; }   // le bras suit la hauteur de visée, coude tendu
   if (cam.kick) { cam.kick *= Math.exp(-10 * dt); if (cam.kick < 0.0005) cam.kick = 0; }
   // caméra qui se replace derrière le personnage (mode rotation)
   if (settings.ctrl === 'rot' && running && !aiming && look.id === null && simTime > cam.freeUntil) {

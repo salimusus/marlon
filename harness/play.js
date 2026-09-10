@@ -826,6 +826,7 @@ test('le fusil tire comme le pistolet : un coup, cible verrouillée, touchée', 
     __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
     const b = __G.bots[0];
     __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
+    __G.cam.yaw = Math.PI; __G.P.facing = 0;   // on regarde vers le bot : le verrouillage part de la camera
     b.pos.set(112, 0.4, 78); b.ko = 0; b.dead = 0; b.hp = 100; b.wait = 9999; b.target = null; b.av.group.visible = true;
     __G.bots.slice(1).forEach(o => { o.av.group.visible = false; });
     __G.owned.add('arme:rifle'); __G.equipWeapon('rifle');
@@ -6790,6 +6791,66 @@ test('au casino, la roulette TOURNE et le poker se joue avec de vraies cartes', 
     && r.p2.y0 > r.p2.y1 + 0.1 && r.p2.rx0 > -1.4
     && r.p3.faces.join() === r.p3.attendu.join() && r.p3.etape === 'pret';
   return { ok, detail: `la roulette etait une bille qui tournait toute seule au-dessus d'un cylindre immobile, et le poker cinq rectangles blancs · maintenant la ROUE tourne quand on joue (${r.roulette.tours} tours, en ralentissant : ${v.join(' → ')} rad/s), et la bille file en sens inverse puis vient se poser DANS la case du ${r.roulette.num} (${r.roulette.ecartCase} rad d'ecart, rayon ${r.roulette.rayon}) · au poker, cinq VRAIES cartes sont posees sur le tapis, dos visible, et la donne les retourne : ${r.p1.faces.join(' ')} ; celle qu'on garde se souleve et s'incline (${r.p2.y0} m contre ${r.p2.y1}), et le change les remplace : ${r.p3.faces.join(' ')}` };
+});
+
+test('les personnages ont des genoux, des coudes, des poings et de vraies chaussures, et les muscles se voient', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const rig = G.me.rig, res = {};
+    res.rig = { genou: !!rig.legL.genou, coude: !!rig.armR.coude, poing: !!rig.armR.poing, semelle: !!rig.legL.semelle, languette: !!rig.legL.languette, muscles: !!G.me.muscles, visage: !!G.me.visage };
+    const kn = []; for (let i = 0; i < 120; i++) { G.animateRig(rig, 'walk', 1, 1 / 60, i / 60); kn.push(rig.legL.genou.rotation.x); }
+    res.marche = { genouMax: +Math.max(...kn).toFixed(2), genouMin: +Math.min(...kn).toFixed(2) };
+    const kr = []; for (let i = 0; i < 90; i++) { G.animateRig(rig, 'walk', 1.6, 1 / 60, i / 60); kr.push(rig.legL.genou.rotation.x); }
+    res.course = { genouMax: +Math.max(...kr).toFixed(2), coude: +rig.armL.coude.rotation.x.toFixed(2) };
+    rig.swing = 0.35; const cs = []; for (let i = 0; i < 25; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); cs.push(+rig.armR.coude.rotation.x.toFixed(2)); }
+    res.poing = { debut: cs[0], fin: cs[cs.length - 1] };
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.setWeapon(G.me, 'pistol', true);
+    for (let i = 0; i < 10; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); rig.armR.coude.rotation.x = 0; G.me.group.updateMatrixWorld(true);
+    res.arme = { ecart: +rig.armR.poing.getWorldPosition(new T.Vector3()).distanceTo(rig.handR.getWorldPosition(new T.Vector3())).toFixed(3), auCoude: rig.handR.parent === rig.armR.coude };
+    G.equipWeapon(null); G.P.drawn = false;
+    for (let i = 0; i < 10; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); rig.legL.genou.rotation.x = 0; rig.legL.rotation.x = 0; G.me.group.updateMatrixWorld(true);
+    const bb = new T.Box3().setFromObject(rig.legL.semelle);
+    res.pied = { basSemelle: +(bb.min.y - G.me.group.position.y).toFixed(3), avancee: +(bb.max.z - G.me.group.position.z).toFixed(2), couleurSemelle: rig.legL.semelle.material.color.getHexString() };
+    G.applyStats(G.me, 80, 0); res.muscles = { pecs: G.me.muscles.pecs[0].visible, pecsZ: +G.me.muscles.pecs[0].scale.z.toFixed(2), delt: +G.me.muscles.delts[0].scale.x.toFixed(2), mollet: +rig.legL.mollet.scale.x.toFixed(2), trap: G.me.muscles.trap.visible };
+    G.applyStats(G.me, 0, 0); res.zero = { pecs: G.me.muscles.pecs[0].visible, delt: G.me.muscles.delts[0].visible, mollet: +rig.legL.mollet.scale.x.toFixed(2) };
+    return res;
+  });
+  const ok = Object.values(r.rig).every(Boolean) && r.marche.genouMax > 0.3 && r.marche.genouMin >= 0 && r.course.genouMax > 1.2 && r.course.coude < -1
+    && r.poing.debut < -1 && r.poing.fin > -0.2 && r.arme.ecart < 0.08 && r.arme.auCoude
+    && Math.abs(r.pied.basSemelle) < 0.02 && r.pied.avancee > 0.2
+    && r.muscles.pecs && r.muscles.pecsZ > 1.8 && r.muscles.delt > 1 && r.muscles.mollet > 1.2 && r.muscles.trap && !r.zero.pecs && !r.zero.delt && r.zero.mollet === 1;
+  return { ok, detail: `le bras etait un baton, la jambe aussi : pas de coude, pas de genou, un pied plat · chaque membre a maintenant deux segments — un coude et un POING, un genou et une VRAIE CHAUSSURE (semelle blanche qui depasse de ${r.pied.avancee} m devant, tige, languette ; la semelle touche le sol a ${r.pied.basSemelle} m) · en marchant les genoux plient (jusqu'a ${r.marche.genouMax} rad), en courant bien plus (${r.course.genouMax}) et les coudes se replient (${r.course.coude}) · un coup de poing part du coude replie (${r.poing.debut}) et se tend a l'impact (${r.poing.fin}) · l'arme est dans le poing, a ${r.arme.ecart} m de son centre · et les muscles se VOIENT : a 80 d'entrainement, pectoraux (×${r.muscles.pecsZ} d'epaisseur), trapezes, deltoides (×${r.muscles.delt}) et mollets (×${r.muscles.mollet}) ; a zero, rien de tout ca` };
+});
+
+test('un coup se voit : visage marque, recul, genou a terre, et l\'image plonge', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const rig = G.me.rig, res = {};
+    G.P.hp = 100; G.degatsTick(); res.sain = { visage: G.me.visage.visible, niveau: G.me.degats };
+    G.P.hp = 60; G.degatsTick(); res.bleu = { visage: G.me.visage.visible, niveau: G.me.degats, recul: +rig.recul.toFixed(2) };
+    G.animateRig(rig, 'idle', 0, 0.12, 0.12); res.penche = +rig.penche.toFixed(2);
+    G.P.hp = 30; G.degatsTick(); res.sang = G.me.degats;
+    G.P.hp = 10; G.degatsTick(); for (let i = 0; i < 40; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    res.genou = { niveau: G.me.degats, agenou: rig.agenou, baisse: +rig.baisse.toFixed(2), hancheR: +rig.legR.rotation.x.toFixed(2), genouR: +rig.legR.genou.rotation.x.toFixed(2), genouL: +rig.legL.genou.rotation.x.toFixed(2) };
+    G.P.hp = 100; G.degatsTick(); for (let i = 0; i < 60; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    res.retour = { agenou: rig.agenou, baisse: +rig.baisse.toFixed(2), visage: G.me.visage.visible };
+    // un habitant frappe : meme chose pour lui, et l'image de la camera plonge sur le coup
+    const b = G.bots[0]; b.pos.set(G.P.pos.x, 0.15, G.P.pos.z - 1.3); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0; b.av.group.visible = true;
+    for (const o of G.bots) if (o !== b) { o.pos.x += 400; o.pos.z += 400; o.av.group.position.copy(o.pos); }
+    G.P.facing = Math.PI; G.P.punchT = 0; G.cam.kick = 0; G.punch();
+    res.bot = { hp: b.hp, kick: +G.cam.kick.toFixed(3), secousse: +(G.cam.shake || 0).toFixed(2) };
+    G.degatsTick(); res.bot.recul = +b.av.rig.recul.toFixed(2);
+    b.hp = 12; G.degatsTick(); res.bot.agenou = b.av.rig.agenou; res.bot.niveau = b.av.degats;
+    b.hp = 100; G.degatsTick();
+    const tex = [1, 2, 3].map(n => G.degatsTexture(n).image.width);
+    return Object.assign(res, { tex });
+  });
+  const g = r.genou;
+  const ok = !r.sain.visage && r.bleu.visage && r.bleu.niveau === 1 && r.bleu.recul > 0.3 && r.penche > 0.2 && r.sang === 2
+    && g.niveau === 3 && g.agenou && g.baisse > 0.25 && g.hancheR < -1.2 && g.genouR > 1.2 && g.genouL > 1.4
+    && !r.retour.agenou && r.retour.baisse < 0.05 && !r.retour.visage
+    && r.bot.hp < 100 && r.bot.kick > 0.02 && r.bot.secousse > 0.05 && r.bot.recul > 0.3 && r.bot.agenou && r.bot.niveau === 3 && r.tex.every(w => w === 64);
+  return { ok, detail: `on ne voyait pas les coups porter : rien sur le visage, personne ne bronchait, la camera restait de marbre · maintenant le VISAGE se marque avec la vie qui reste (bleus a 60 PV, sang a 30, oeil au beurre noir a 10 : niveaux ${r.bleu.niveau} → ${r.sang} → ${g.niveau}), celui qui encaisse SE PENCHE (${r.penche} rad), a bout de forces il met UN GENOU A TERRE (hanche ${g.hancheR}, genoux ${g.genouR} / ${g.genouL}, corps abaisse de ${g.baisse} m) et se traine, et tout s'efface quand la vie revient · l'habitant frappe accuse le coup pareil (recul ${r.bot.recul}, a genoux a 12 PV=${r.bot.agenou}) et l'image de la camera PLONGE sur le coup (${r.bot.kick}) en plus de la secousse (${r.bot.secousse})` };
 });
 
 test('une manette PlayStation 5 pilote tout le jeu', async p => {

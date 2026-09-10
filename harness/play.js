@@ -135,20 +135,24 @@ async function attendreSim(p, secondes, maxMs = 120000) {
 
 // maintient « avancer » jusqu'à atteindre la hauteur visée ; renvoie la hauteur maximale atteinte.
 // On relève le maximum et non la hauteur finale : sinon le joueur dépasse la plateforme et retombe.
-async function grimpe(p, v, cible, maxMs = 45000) {
+// MONTER UN ESCALIER, EN TEMPS SIMULE. On tenait la fleche du haut pendant 45 s de temps
+// REEL : sous charge (le rendu logiciel tombe a deux images par seconde), ces 45 s ne valent
+// que deux secondes de jeu et le joueur n'avait pas fini de monter — l'escalier semblait
+// casse alors qu'il marchait. On avance maintenant la simulation image par image.
+async function grimpe(p, v, cible, secondes = 14) {
   await p.evaluate(vv => __SHOT.go(vv), v);
   await p.waitForTimeout(200);
-  const y0 = await p.evaluate(() => __G.P.pos.y);
-  let ymax = y0; const debut = Date.now();
-  await p.keyboard.down('ArrowUp');
-  while (Date.now() - debut < maxMs) {
-    await p.waitForTimeout(200);
-    const y = await p.evaluate(() => __G.P.pos.y);
-    if (y > ymax) ymax = y;
-    if (ymax >= cible - 0.05) break;
-  }
-  await p.keyboard.up('ArrowUp');
-  return { y0, ymax, atteint: ymax >= cible - 0.05 };
+  return p.evaluate(([cible, secondes]) => {
+    const G = __G, y0 = G.P.pos.y; let ymax = y0;
+    G.keys.add('ArrowUp');
+    for (let i = 0; i < secondes * 60; i++) {
+      G.step(1 / 60, true);   // `active` vrai : sans lui, step() sort avant de bouger le joueur
+      if (G.P.pos.y > ymax) ymax = G.P.pos.y;
+      if (ymax >= cible - 0.05) break;
+    }
+    G.keys.delete('ArrowUp');
+    return { y0, ymax, atteint: ymax >= cible - 0.05 };
+  }, [cible, secondes]);
 }
 
 // attend qu'une condition devienne vraie dans la page
@@ -6473,7 +6477,7 @@ test('la lumiere de la ville est plus chaude', async p => {
   return { ok, detail: `tout était éclairé d'un blanc bleuté un peu clinique — soleil blanc, ciel froid, rebond du sol gris et lumière d'appoint franchement bleue · la lumière est maintenant celle d'une fin d'après-midi : soleil doré (#${r.lu.soleil}), ciel ambré (#${r.lu.ciel}), rebond du sol couleur sable (#${r.lu.sol}), appoint tiède · et le ciel comme la brume sont décalés vers le chaud (${r.ecartCiel} et ${r.ecartBrume} de bleu en moins) sans que les couleurs franches du jeu y perdent` };
 });
 
-test('la croix et le pave de la DualSense ouvrent le 📣, la boutique, les missions et la guerre', async p => {
+test('la croix de la DualSense : ordres, guerre, emote, changement d\'arme, et boutique/missions en maintenant', async p => {
   const r = await p.evaluate(async () => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
@@ -6489,13 +6493,18 @@ test('la croix et le pave de la DualSense ouvrent le 📣, la boutique, les miss
       const res = {};
       tap(12); res.haut = G.uiOpen; ferme();
       tap(12, 0.9); res.hautLong = G.uiOpen; ferme();
-      tap(14); res.gauche = G.uiOpen; ferme();
-      tap(15); res.droite = G.uiOpen; ferme();
-      G.P.dance = 0; tap(13); res.bas = G.P.dance;
+      // ← et → font maintenant DEFILER LES ARMES ; la boutique et les missions s'ouvrent en
+      // les MAINTENANT (le joueur se retrouvait sur un ecran en pleine course).
       G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.equipWeapon(null);
-      res.armes = []; for (let k = 0; k < 3; k++) { tap(17); res.armes.push(G.P.weapon); }
+      res.armes = []; for (let k = 0; k < 3; k++) { tap(15); res.armes.push(G.P.weapon); }
       G.equipWeapon(null);
-      // la legende : visible en jeu, effacee des qu'une fenetre s'ouvre
+      tap(14, 0.9); res.gaucheLong = G.uiOpen; ferme();
+      tap(15, 0.9); res.droiteLong = G.uiOpen; ferme();
+      G.P.dance = 0; tap(13); res.bas = G.P.dance;
+      // le bandeau d'aide ne sort plus tout seul : le pave tactile le montre puis le cache
+      document.body.classList.remove('aide'); document.body.classList.add('manette');
+      res.legendeRepos = aff(); tap(17); res.legendeDemandee = aff(); tap(17); res.legendeRefermee = aff();
+      document.body.classList.add('aide');
       res.legende = aff(); G.openQui(); res.legendeMenu = aff(); ferme(); res.legendeApres = aff();
       res.legendeTexte = document.getElementById('padLeg').textContent;
       res.aide = (document.querySelector('.keys') || {}).textContent || '';
@@ -6503,10 +6512,11 @@ test('la croix et le pave de la DualSense ouvrent le 📣, la boutique, les miss
       return res;
     } finally { navigator.getGamepads = vraiGP; ferme(); }
   });
-  const ok = r.haut === 'ordres' && r.hautLong === 'guerre' && r.gauche === 'store' && r.droite === 'missions' && r.bas > 0
-    && r.armes.join() === 'pistol,rifle,' && r.legende === 'flex' && r.legendeMenu === 'none' && r.legendeApres === 'flex'
-    && /📣/.test(r.legendeTexte) && /📣/.test(r.aide) && /pavé tactile/i.test(r.aide) && r.pave === 'Pavé';
-  return { ok, detail: `a la manette on n'avait acces ni au 📣 des ordres, ni a la boutique, ni aux missions, ni a la guerre des gangs, ni aux emotes, ni au changement d'arme : tout ca n'existait qu'a la souris · la croix fait tout : ↑ ouvre « ${r.haut} », ↑ tenu 0,7 s ouvre « ${r.hautLong} », ← « ${r.gauche} », → « ${r.droite} », ↓ danse (${r.bas} s) · le pavé tactile fait defiler les armes (${r.armes.map(a => a || 'mains nues').join(' → ')}) · une legende a l'ecran rappelle chaque bouton (affichée=${r.legende}, effacée dans un menu=${r.legendeMenu === 'none'}) et la carte d'aide est a jour` };
+  const ok = r.haut === 'ordres' && r.hautLong === 'guerre' && r.gaucheLong === 'store' && r.droiteLong === 'missions' && r.bas > 0
+    && r.armes.join() === 'pistol,rifle,' && r.legendeRepos === 'none' && r.legendeDemandee === 'flex' && r.legendeRefermee === 'none'
+    && r.legende === 'flex' && r.legendeMenu === 'none' && r.legendeApres === 'flex'
+    && /📣/.test(r.legendeTexte) && /📣/.test(r.aide) && r.pave === 'Pavé';
+  return { ok, detail: `[ordres=${r.haut} guerre=${r.hautLong} armes=${r.armes.join('/')} boutique(←tenu)=${r.gaucheLong} missions(→tenu)=${r.droiteLong} emote=${r.bas} bandeau ${r.legendeRepos}→${r.legendeDemandee}→${r.legendeRefermee}] a la manette on n'avait acces ni au 📣 des ordres, ni a la boutique, ni aux missions, ni a la guerre des gangs, ni aux emotes, ni au changement d'arme : tout ca n'existait qu'a la souris · la croix fait tout : ↑ ouvre « ${r.haut} », ↑ tenu 0,7 s ouvre « ${r.hautLong} », ← « ${r.gauche} », → « ${r.droite} », ↓ danse (${r.bas} s) · le pavé tactile fait defiler les armes (${r.armes.map(a => a || 'mains nues').join(' → ')}) · une legende a l'ecran rappelle chaque bouton (affichée=${r.legende}, effacée dans un menu=${r.legendeMenu === 'none'}) et la carte d'aide est a jour` };
 });
 
 test('un bouton connecte la manette PS5 et la reconnait a la seconde ou elle repond', async p => {

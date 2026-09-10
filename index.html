@@ -12432,7 +12432,10 @@ function updateBot(b, dt) {
   if (b.prison) return;  // en cellule : plainteTick le garde derrière les barreaux
   if (b.drive) return;   // au volant : botDriveTick s'en occupe
   const av = b.av;
-  const sync = () => { av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
+  // POSTE ANIMATION : le combat d'un PNJ passe ici, entre la pose de base d'animateRig et la
+  // mise en place du groupe — il faut que `rig.baisse` (l'esquive, la chute) soit déjà à
+  // jour quand on descend l'avatar. Sans rig.cbt, animCombat rend la main immédiatement.
+  const sync = () => { animCombat(av, dt); av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
   if (b.state === 'fall') {
     b.vel.y -= G * dt; b.pos.addScaledVector(b.vel, dt); sync();
     animateRig(av.rig, 'air', 0, dt, simTime);
@@ -15396,6 +15399,10 @@ function frame() {
   const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
+  // POSTE ANIMATION : le combat du joueur se joue APRÈS la pose de base — garde, élan et
+  // détente du coup de poing, coup de couteau, esquive, encaissement, chute. Sans cet appel,
+  // les déclencheurs (coupDePoing, gardePoings…) n'auraient aucun effet visible.
+  if (ANIM.fige) animFige(me.rig); else animCombat(me, dt);
   if (sousVoile) voilePose(dt);   // suspendu sous le parachute ou à plat ventre sous l'aile
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
@@ -19463,9 +19470,9 @@ const GESTES = {
   // LA SOUDURE : accroupi, les deux mains rapprochées au ras de la pièce, la tête baissée
   // derrière le masque. Un tremblement rapide (l'arc) et un lent balayage (le cordon).
   soudure(t) {
-    const arc = Math.sin(t * 17) * 0.05, cordon = Math.sin(t * 2.3) * 0.13;
+    const arc = Math.sin(t * 17) * 0.05, cordon = Math.sin(t * 2.3) * 0.30;
     return {
-      aRx: -1.42 + cordon, cRx: -1.00 + arc, aRz: -0.30,
+      aRx: -1.42 + cordon, cRx: -1.00 + arc - cordon * 0.5, aRz: -0.30 + cordon * 0.7,
       aLx: -1.30 + cordon * 0.6, cLx: -1.20 + arc, aLz: 0.42,
       lLx: -0.95, lRx: -0.95, gLx: 1.55, gRx: 1.55,
       bx: 0.30, hx: 0.52, bs: 0.20,
@@ -19497,7 +19504,7 @@ const GESTES = {
   // non sur le temps : le bras et la jambe opposés montent ensemble, et quand le laveur
   // redescend, tout se joue à l'envers tout seul.
   echelle(t, tp, o) {
-    const s = Math.sin((o.h || 0) * 44);
+    const s = Math.sin((o.h || 0) * 26);   // ~4 barreaux sur les 3,3 m de l'échelle : le rythme d'un vrai grimpeur
     return {
       aLx: -2.50 - s * 0.55, aRx: -2.50 + s * 0.55, aLz: 0.14, aRz: -0.14,
       cLx: -0.75 + s * 0.55, cRx: -0.75 - s * 0.55,
@@ -19522,10 +19529,10 @@ const GESTES = {
   lance(t) {
     const r = Math.sin(t * 12.5), sw = Math.sin(t * 0.8);
     return {
-      aRx: -1.42 + r * 0.09 + sw * 0.05, cRx: -0.38 + r * 0.08, aRz: -0.22,
-      aLx: -1.20 + r * 0.09 + sw * 0.05, cLx: -0.82 + r * 0.08, aLz: 0.62,
+      aRx: -1.42 + r * 0.13 + sw * 0.20, cRx: -0.38 + r * 0.11, aRz: -0.22 + sw * 0.16,
+      aLx: -1.20 + r * 0.13 + sw * 0.20, cLx: -0.82 + r * 0.11, aLz: 0.62 + sw * 0.16,
       lLx: -0.34, lRx: 0.30, gLx: 0.52, gRx: 0.18,
-      bx: -0.15 - r * 0.05, hx: -0.10 + r * 0.04, bs: 0.05,
+      bx: -0.15 - r * 0.06, hx: -0.10 + r * 0.05 + sw * 0.10, bs: 0.05,
     };
   },
   // LE FACTEUR QUI PÉDALE. Le GENOU est en retard d'un peu plus d'un radian sur la hanche :
@@ -19570,6 +19577,16 @@ function gesteMetier(rig, nom, dt, t, opt) {
   // sinon le geste suivant s'appliquait À PLEIN dès sa première image — et ça sautait.
   if (rig.gVu != null && t - rig.gVu > 0.2) { rig.gK = 0; rig.gNom = null; }
   rig.gVu = t;
+  // BANC D'ESSAI : `ANIM.fige.t` remplace l'horloge. Une capture d'écran isolée ne dit RIEN
+  // d'une animation ; en figeant tout le monde sur une image choisie, on peut photographier
+  // six instants successifs du même geste et juger le mouvement sur la série.
+  if (ANIM.fige && ANIM.fige.t != null) {
+    if (nom) rig.gNom = nom;
+    rig.gK = 1;
+    const gf = GESTES[rig.gNom];
+    if (gf) animPose(rig, gf(ANIM.fige.t, ANIM.fige.t, ANIM.fige.opt || opt || {}), 1);
+    return;
+  }
   const pres = rig.groupe ? animPres(rig.groupe.position.x, rig.groupe.position.z) : true;
   const veut = pres ? nom : null;
   if (veut && veut !== rig.gNom && (rig.gK || 0) <= 0.03) { rig.gNom = veut; rig.gT = t; }
@@ -19584,10 +19601,10 @@ function gesteMetier(rig, nom, dt, t, opt) {
 // L'état de combat vit dans `rig.cbt`, créé à la demande. Le poste Personnages n'a QUE ces
 // six fonctions à appeler ; `animCombat(av, dt)`, lancé juste après animateRig, fait tout
 // le mouvement — élan, transfert du poids, rotation des épaules, encaissement.
-const CBT_POING = 0.40, CBT_COUTEAU = 0.28, CBT_ENC = 0.45, CBT_CHUTE = 1.25;
+const CBT_POING = 0.44, CBT_COUTEAU = 0.30, CBT_ENC = 0.45, CBT_CHUTE = 1.25;
 // La GARDE : poings devant le VISAGE, coudes bas devant les côtes, appui sur la jambe
 // arrière. C'est la pose de repos du combat : le coup et l'esquive partent de là.
-const CBT_GARDE = { aLx: -0.92, aRx: -0.92, aLz: 0.56, aRz: -0.56, cLx: -2.18, cRx: -2.18,
+const CBT_GARDE = { aLx: -0.92, aRx: -0.92, aLz: 0.44, aRz: -0.44, cLx: -2.18, cRx: -2.18,
   lLx: -0.20, lRx: 0.12, gLx: 0.42, gRx: 0.26, bx: 0.12, hx: 0.06, bs: 0.05 };
 // À GENOUX : le corps qui a pris le coup de trop se plie et pose un genou à terre.
 const CBT_CHUTE_POSE = { lRx: -1.45, gRx: 1.60, lLx: 0.22, gLx: 1.85, bs: 0.60, bx: 0.42, hx: 0.40,
@@ -19637,8 +19654,10 @@ function animCombat(av, dt) {
   //    « claquer » le personnage dans la garde au moment où il part.
   if (c.coup > 0) {
     const u = 1 - c.coup / CBT_POING;
-    const elan = animSeg(u, 0, 0.30) - animSeg(u, 0.30, 0.46);
-    const det = animSeg(u, 0.30, 0.46) - animSeg(u, 0.55, 1);
+    // la détente s'étale sur 0,10 s : plus court, le bras faisait un BOND d'une image à
+    // l'autre (55° en 1/60 s) et le coup ressemblait à une téléportation du poing.
+    const elan = animSeg(u, 0, 0.28) - animSeg(u, 0.28, 0.52);
+    const det = animSeg(u, 0.28, 0.52) - animSeg(u, 0.60, 1);
     const D = c.main > 0, cote = D ? 1 : -1;
     const p = {
       lLx: -0.20 - 0.30 * det, gLx: 0.42 + 0.28 * det,
@@ -19906,6 +19925,26 @@ function animTransApplique(av) {
   g.position.x += (u.trX - g.position.x) * k;
   g.position.y += (u.trY - g.position.y) * k;
   g.position.z += (u.trZ - g.position.z) * k;
+}
+// BANC D'ESSAI SEULEMENT. `ANIM.fige` fige le rig du joueur sur une image PRÉCISE d'un
+// mouvement : { combat: 'coup' | 'couteau' | 'esquive' | 'encaisse' | 'chute', u: 0…1,
+// garde: true, main: 'D' | 'G' } ou { geste: 'marteau', t: 0.4 }. Sans ça, impossible de
+// photographier six instants successifs d'un coup de poing : l'horloge du rendu logiciel
+// n'avance pas deux fois pareil.
+function animFige(rig) {
+  const f = ANIM.fige; if (!f || !rig) return;
+  if (f.geste && GESTES[f.geste]) { rig.gNom = f.geste; rig.gK = 1; animPose(rig, GESTES[f.geste](f.t || 0, f.t || 0, f.opt || {}), 1); }
+  if (!f.combat && !f.garde) return;
+  const c = animCbt(rig); if (!c) return;
+  const u = clamp(f.u || 0, 0, 1);
+  c.garde = f.garde ? 1 : 0; c.gardeK = f.garde ? 1 : 0;
+  c.main = f.main === 'G' ? -1 : 1;
+  c.coup = f.combat === 'coup' ? CBT_POING * (1 - u) : 0;
+  c.couteau = f.combat === 'couteau' ? CBT_COUTEAU * (1 - u) : 0;
+  c.esquive = f.combat === 'esquive' ? 1 : 0; c.esqK = f.combat === 'esquive' ? clamp(u * 2, 0, 1) : 0;
+  c.enc = f.combat === 'encaisse' ? CBT_ENC * (1 - u) : 0; c.encF = f.force || 1;
+  c.chute = f.combat === 'chute' ? CBT_CHUTE * (1 - u) : 0;
+  animCombat(rig, 0);   // dt = 0 : les minuteurs ne bougent pas, la pose reste sur l'image voulue
 }
 // Le tour de piste du bloc animation, appelé une fois par image depuis la boucle principale.
 function animMondeTick(dt) {

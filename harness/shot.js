@@ -181,6 +181,19 @@ window.__SHOT = {
     }
     // poste J : plante une scene de metier (chantier, incendie, facteur, balayeur, laveur)
     if (v.metier && typeof metierScene === 'function') { try { metierScene(v.metier); } catch (e14) {} }
+    // poste Animation : fige un mouvement sur une image PRECISE, pour photographier une
+    // serie d'instants successifs du meme geste (v.anim = { combat, u, garde, geste, t, opt }).
+    if (typeof ANIM !== 'undefined' && ANIM) {
+      ANIM.fige = v.anim || null;
+      if (v.anim && v.anim.adversaire) {   // un adversaire plante devant le joueur, pour le combat
+        try {
+          const b = bots[0];
+          b.pos.set(P.pos.x + Math.sin(P.facing) * 1.35, P.pos.y, P.pos.z + Math.cos(P.facing) * 1.35);
+          b.rdv = null; b.wait = 99; b.ko = 0; b.hp = 100; b.fight = null; b.av.group.visible = true;
+          b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
+        } catch (e15) {}
+      }
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }

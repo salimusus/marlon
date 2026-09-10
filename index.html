@@ -1365,7 +1365,7 @@ function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un 
   for (const o of (typeof solidsPres === 'function' ? solidsPres(x, z) : solids)) { if (o === self || o.veh || o.bar || o.h > 30) continue; const t = o.y + o.h / 2; if (t > yNow + 0.9 || t <= top) continue; if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && o.y - o.h / 2 < yNow + 0.5) top = t; }
   return top;
 }
-function settleVehicle(c) { c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.y = c.y; if (c.solid) c.solid.y = c.y + 0.7; }
+function settleVehicle(c) { c.y = (c.roues && c.roues.length && typeof solSousRoues === 'function') ? solSousRoues(c) : groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.y = c.y; if (c.solid) c.solid.y = c.y + 0.7; }
 function groundCar(x, z, self, yNow) { const t = RALLY.mesh ? terrainH(x, z) : null; if (t == null) return groundUnder(x, z, self, yNow); const g = groundUnder(x, z, self, yNow); return g > 0.05 ? Math.max(t, g) : t; }
 function vehicleSolid(c) {   // boîte englobante d'un véhicule selon son orientation
   const o = c.solid; if (!o) return;
@@ -1764,6 +1764,9 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   for (const dx of [-1.5, 1.5]) box(cx + dx, 2.1, cz - 0.5, 0.12, 1.2, 0.12, 0x8f98ab, { deco: true, studs: false });
   city.tuneDesk = { x: cx, z: cz + 1.4 };
   city.garage = { x, z };
+  // LA DÉPANNEUSE du garage : bleu et blanc, gyrophare rond bleu, treuil et crochet. Elle
+  // est dans city.cars, donc le joueur peut la prendre (E) comme n'importe quel véhicule.
+  { const dep = makeDepanneuse(x - 13, z + 6, 0); city.depanneuses.push(dep); city.cars.push(dep); }
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
@@ -3918,7 +3921,7 @@ function makeCar(color, x, z, h, opt = {}) {
   for (const w of wheels) w.position.y = 0.36;
   const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kart, baseW: 2.4, baseD: 4.4, dmg: 0, home0: [x, z, h], lampR: g.lampR, lampB: g.lampB, bodyMat: body, tuneMesh: [], parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors: [] } };
   if (kart) c.spec = { max: 32, rev: -9, accel: 26, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 38, rev: -9, accel: 32, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 26, rev: -8, accel: 19, turn: 2.1, seat: 0 };
-  vehicleSolid(c); return c;
+  prepareVehicule(c); vehicleSolid(c); return c;
 }
 function makeVehicle(kind, color, x, z, h) {
   const g = new THREE.Group(), body = lam(color);
@@ -3948,7 +3951,7 @@ function makeVehicle(kind, color, x, z, h) {
     bx(darkM, 0.32, 0.08, 0.42, 0, 1.12, -0.45, false); bx(chrome, 0.03, 0.25, 0.03, 0, 1.0, -0.45, false);   // selle
     cyl(darkM, 0.16, 0.16, 0.04, 0, 0.5, 0, 0, Math.PI / 2); bx(chrome, 0.4, 0.04, 0.04, 0, 0.5, 0, false); for (const sx of [-0.2, 0.2]) bx(darkM, 0.12, 0.04, 0.08, sx, 0.5 + sx * 0.5, 0.05, false);   // plateau + manivelles
     bx(lam(0x8b4a2b), 0.55, 0.3, 0.45, 0, 1.0, 0.85, false); bx(chrome, 0.1, 0.1, 0.1, 0.32, 1.16, 0.4, false);   // panier + sonnette
-    for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.x = 0.35; w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz, false); }
+    for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.y = 0.35;   /* pneu FIN : on amincit la hauteur du cylindre, pas son rayon */ w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz, false); }
     spec = { max: 17, rev: -4, accel: 13, turn: 2.4, seat: 1.08, lean: 0.2 }; W = 0.9; D = 2; rider = true;
   } else if (kind === 'buggy') {   // buggy de rallye : grosses roues, arceau, suspension haute, très rapide
     bx(body, 1.5, 0.45, 2.6, 0, 0.95, 0.1); bx(body, 1.3, 0.35, 1.0, 0, 1.2, 0.9); bx(darkM, 1.1, 0.3, 0.9, 0, 1.15, -0.5);
@@ -3981,7 +3984,7 @@ function makeVehicle(kind, color, x, z, h) {
   }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h] }; vehicleSolid(c); return c;
+  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h] }; prepareVehicule(c); vehicleSolid(c); return c;
 }
 let ROTOR_FLOU = null;
 function rotorFlou() {   // disque translucide avec quelques stries : l'illusion des pales en rotation
@@ -4342,9 +4345,13 @@ const WORLDS = [
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
+// Les trois réglages des SENSATIONS DE CONDUITE (voir la grande section « conduire »).
+const MARGE_ROUE = 0.004;      // la gomme affleure le sol : 4 mm, jamais dedans
+const BRAQUAGE_MAX = 0.52;     // ~30° aux roues avant, comme une vraie direction
+const FREIN_MAIN = 0.85;       // au-delà, la pédale devient le frein à main
 const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
 const jail = store.json('superobby.jail', { on: false, level: 0, done: [] });
 const saveJail = () => store.set('superobby.jail', JSON.stringify(jail));
@@ -6767,7 +6774,13 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   box(hx, H + 0.75, hz, W - 3, 0.5, D - 3, 0xc3d8ee, { deco: true, studs: false });
   for (let i = 0; i < 5; i++) box(hx - 8 + i * 4, 5.6, hz, 3.4, 0.12, 3.4, 0, { material: neonMat(0xf2fbff), deco: true, noEdges: true });   // plafonniers du hall
   for (const dz of [-8, -3, 3, 8]) { box(hx - 1, 5.6, hz + dz, 2.4, 0.1, 0.7, 0, { material: neonMat(0xf2fbff), deco: true, noEdges: true }); }
-  { const amb = makeVehicle('truck', 0xffffff, hx + 17, hz + 12, Math.PI / 2); amb.solid.ai = true; city.aiCars.push(Object.assign(amb, { spd: 0, half: [1.6, 4.6], s: 0 })); addDriver(amb, { x: 0.62, y: 0.3, z: 2.55 }); box(hx + 17, 3.6, hz + 12, 3.4, 0.6, 0.6, 0xff3030, { deco: true, studs: false }); box(hx + 17, 4, hz + 12, 0.6, 0.5, 0.6, 0, { material: neonMat(0x2060ff), deco: true, noEdges: true }); }   // ambulance devant l'entrée
+  // LES AMBULANCES, garées devant l'entrée : un vrai break blanc à croix rouge, gyrophare et
+  // sirène, qui part TOUT SEUL chercher les blessés (voir ambulanceAppel). Avant, c'était un
+  // camion de déménagement repeint en blanc, posé là pour le décor.
+  for (const dz of [-6, 15]) {   /* deux emplacements PLATS mesurés à la sonde : sur une bordure, une roue restait en l'air */
+    const amb = makeAmbulance(hx + 17, hz + dz, Math.PI / 2);
+    city.ambulances.push(amb); city.cars.push(amb);
+  }
   for (let f = 0; f < 2; f++) for (const dx of [-8, -3, 3, 8]) for (const side of [-1, 1]) box(hx + dx, 2.6 + f * 3.4, hz + side * (D / 2 - 0.25), 2.2, 1.6, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
   for (const [cx, cz] of [[ex + 0.5, hz], [hx, hz - D / 2 - 0.5]]) { box(cx, 6.6, cz, cx === ex + 0.5 ? 0.15 : 3.4, 3.4, cx === ex + 0.5 ? 3.4 : 0.15, 0xff3030, { deco: true, studs: false }); box(cx + (cx === ex + 0.5 ? 0.02 : 0), 6.6, cz, cx === ex + 0.5 ? 0.16 : 1, 1, cx === ex + 0.5 ? 1 : 0.16, 0xffffff, { deco: true, studs: false }); }   // croix rouges
   box(ex + 0.45, 4.4, hz, 0.1, 1.3, 9, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏥 HÔPITAL', 0xff5c5c) }), deco: true, noEdges: true });
@@ -8800,7 +8813,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.accidents = []; city.ambulances = []; city.depanneuses = []; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -12910,7 +12923,8 @@ function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
   // on se voit désormais au volant, comme les amis bots conducteurs
-  drive.car = c; drive.speed = 0; me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
+  drive.car = c; drive.speed = 0; drive.assis = false;   /* la pose assise sera figée dès la première image : on APPARAÎT assis */
+  me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
   if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
@@ -13187,33 +13201,74 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (!sansDelit && c && c.parts) vehicleDamage(c, Math.min(25, spd * 0.8));   // c peut être un simple point d'impact (une balle)
 }
 function gearOf(ratio) { return ratio < 0.02 ? 0 : ratio < 0.18 ? 1 : ratio < 0.38 ? 2 : ratio < 0.58 ? 3 : ratio < 0.8 ? 4 : 5; }
+// ================= CONDUIRE : UNE SEULE PORTE D'ENTRÉE =================
+// Le joueur : « les mouvements sont trop simples, inspire-toi de GTA ». Toute la conduite
+// passe désormais par UNE fonction, que la manette comme les bots peuvent appeler :
+//     conduire(c, { gaz, volant, frein, nitro }, dt)
+//   gaz    : −1 (marche arrière) … +1 (plein gaz)
+//   volant : −1 (à gauche) … +1 (à droite)
+//   frein  : 0 … 1  — au-delà de FREIN_MAIN c'est le frein à main, l'arrière décroche
+//   nitro  : true = un coup de nitro (si la bouteille est montée et rechargée)
+// Elle range dans c.cmd tout ce dont dépendent les roues, la fumée, la caméra et le son :
+//   { gaz, volant, frein, v, ratio, gear, braquage, freine, derape, glisse }
+// et renvoie ce même objet.
+function commandesManette() {
+  const { ix, iz } = readInput();
+  // freiner, c'est pousser DANS LE SENS CONTRAIRE de la marche (comme dans un GTA : une
+  // seule gâchette pour la marche arrière et le frein). La touche B, elle, tire le frein à main.
+  const v = drive.speed, contre = v * iz < -0.4 ? Math.min(1, Math.abs(iz)) : 0;
+  const main = keys.has('KeyB') || !!drive.freinMain;
+  return { gaz: iz, volant: ix, frein: main ? 1 : contre, main, nitro: false };
+}
 function driveStep(dt) {
-  if (drive.car.heli) return heliStep(dt);
+  const c = drive.car; if (!c) return;
+  if (c.heli) return heliStep(dt);
+  conduire(c, commandesManette(), dt);
+}
+function conduire(c, cmd, dt) {
+  if (!c || c.heli) return null;
+  cmd = cmd || {};
+  const pilote = drive.car === c;
+  // Un véhicule qui n'est pas celui du joueur garde SA vitesse dans c.v : les bots peuvent
+  // appeler conduire() sur n'importe quel véhicule sans écraser celle du joueur.
+  const V = pilote ? drive : (c.etat || (c.etat = { speed: c.v || 0, boostT: 0, gear: 1 }));
   // À 500 chevaux et tous les kits, la voiture avance de plus de trois mètres par image : la
   // collision se testant à la position d'arrivée, elle TRAVERSAIT les murs fins. On découpe
   // le déplacement en pas d'au plus 90 cm.
-  const pas = Math.abs(drive.speed) * dt;
-  if (pas > 0.9 && dt > 0.005) { const n = Math.min(6, Math.ceil(pas / 0.9)); for (let i = 0; i < n && drive.car && !drive.car.heli; i++) driveStep(dt / n); return; }
-  const c = drive.car, sp = c.spec || { max: 19, rev: -7, accel: 15, turn: 2.1, seat: 0 };
-  let { ix, iz } = readInput();
-  if (race.state === 'countdown' && c.kart) { iz = 0; drive.speed = 0; if (Math.abs(readInput().iz) > 0.3 && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
-  const boosted = drive.boostT > simTime, dmgMul = 1 - (c.dmg || 0) / 100 * 0.6, vmax = (boosted ? sp.max * 1.55 : sp.max) * (c.dead ? 0.25 : dmgMul);
+  const pas = Math.abs(V.speed) * dt;
+  if (pas > 0.9 && dt > 0.005) { const n = Math.min(6, Math.ceil(pas / 0.9)); let r = null; for (let i = 0; i < n && !c.heli; i++) r = conduire(c, cmd, dt / n); return r; }
+  const sp = c.spec || { max: 19, rev: -7, accel: 15, turn: 2.1, seat: 0 };
+  let ix = clamp(cmd.volant || 0, -1, 1), iz = clamp(cmd.gaz || 0, -1, 1);
+  const frein = clamp(cmd.frein || 0, 0, 1), main = !!cmd.main || frein > FREIN_MAIN;
+  if (cmd.nitro && pilote) nitroGo();
+  if (pilote && race.state === 'countdown' && c.kart) { iz = 0; V.speed = 0; if (Math.abs(readInput().iz) > 0.3 && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
+  const boosted = V.boostT > simTime, dmgMul = 1 - (c.dmg || 0) / 100 * 0.6, vmax = (boosted ? sp.max * 1.55 : sp.max) * (c.dead ? 0.25 : dmgMul);
   // boîte automatique : le rapport suit la vitesse (affiché dans le HUD), l'accélération et le régime moteur en dépendent
-  const ratio = clamp(Math.abs(drive.speed) / sp.max, 0, 1), manual = false;
+  const ratio = clamp(Math.abs(V.speed) / sp.max, 0, 1);
   const wantGear = c.kind === 'bike' ? 1 : gearOf(ratio) || 1;
-  if (wantGear !== drive.gear && simTime > (drive.shiftT || 0)) { drive.shiftT = simTime + 0.35; if (wantGear > drive.gear) sfx.tone(260 + wantGear * 50, 0, .07, 'triangle', .035, 200 + wantGear * 50); drive.gear = wantGear; }
-  const gsp = c.kind === 'bike' ? { max: 1, acc: 1 } : GEARS[drive.gear - 1], over = false;
+  if (wantGear !== V.gear && simTime > (V.shiftT || 0)) { V.shiftT = simTime + 0.35; if (pilote && wantGear > V.gear) sfx.tone(260 + wantGear * 50, 0, .07, 'triangle', .035, 200 + wantGear * 50); V.gear = wantGear; }
+  const gsp = c.kind === 'bike' ? { max: 1, acc: 1 } : GEARS[V.gear - 1];
   const acc = sp.accel * (0.7 + gsp.acc * 0.5) * (boosted ? 1.5 : 1) * dmgMul;
-  drive.speed += iz * acc * dt; drive.speed -= drive.speed * (Math.abs(iz) > 0.1 ? 0.5 : 1.3) * dt; drive.speed = clamp(drive.speed, sp.rev, vmax);
-  if (P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent
-  if (c.rider) { c.tilt += ((-ix * (sp.lean || 0.3) * Math.min(1, Math.abs(drive.speed) / 8)) - c.tilt) * Math.min(1, dt * 6); c.g.rotation.z = c.tilt; }
-  for (const bo of city.boosters) if (Math.hypot(c.x - bo.x, c.z - bo.z) < 2.6 && simTime > bo.cd) { bo.cd = simTime + 1; drive.boostT = simTime + 2.2; drive.speed = Math.max(drive.speed, sp.max * 1.25); sfx.boost(); msg('🚀 BOOST !', 700); burst(c.x, 0.6, c.z, 0x3ef2ff, 12); }
-  const gear = drive.gear, gLow = gear > 1 ? GEARS[gear - 2].max : 0, gFrac = clamp((ratio - gLow) / (gsp.max - gLow), 0, 1);
-  engine.set(c.kind === 'bike' ? Math.abs(drive.speed) : 3 + gFrac * 15);
+  const v0 = V.speed;
+  V.speed += iz * acc * dt;
+  // le frein mord bien plus fort que le simple lever de pied, et le frein à main bloque tout
+  const trainee = (Math.abs(iz) > 0.1 ? 0.5 : 1.3) + frein * (main ? 5.5 : 3.2);
+  V.speed -= V.speed * trainee * dt; V.speed = clamp(V.speed, sp.rev, vmax);
+  const accLong = (V.speed - v0) / Math.max(dt, 1e-3);
+  if (pilote && P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent
+  if (c.rider) { c.tilt += ((-ix * (sp.lean || 0.3) * Math.min(1, Math.abs(V.speed) / 8)) - c.tilt) * Math.min(1, dt * 6); }
+  if (pilote) for (const bo of city.boosters) if (Math.hypot(c.x - bo.x, c.z - bo.z) < 2.6 && simTime > bo.cd) { bo.cd = simTime + 1; V.boostT = simTime + 2.2; V.speed = Math.max(V.speed, sp.max * 1.25); sfx.boost(); msg('🚀 BOOST !', 700); burst(c.x, 0.6, c.z, 0x3ef2ff, 12); }
+  const gear = V.gear, gLow = gear > 1 ? GEARS[gear - 2].max : 0, gFrac = clamp((ratio - gLow) / (gsp.max - gLow), 0, 1);
   // direction progressive (moins vive à grande vitesse)
   const steer = sp.turn * (1 - 0.35 * ratio);
-  if (Math.abs(drive.speed) > 0.3) c.h -= ix * steer * dt * Math.min(1, Math.abs(drive.speed) / 6) * Math.sign(drive.speed);
-  let nx = c.x + Math.sin(c.h) * drive.speed * dt, nz = c.z + Math.cos(c.h) * drive.speed * dt;
+  // le frein à main fait pivoter la caisse bien plus vite : c'est le tête-à-queue
+  const glisse = main && Math.abs(V.speed) > 4 && Math.abs(ix) > 0.2;
+  if (Math.abs(V.speed) > 0.3) c.h -= ix * steer * (glisse ? 1.7 : 1) * dt * Math.min(1, Math.abs(V.speed) / 6) * Math.sign(V.speed);
+  // l'état de conduite : c'est lui que lisent les roues, la fumée, la caméra et le moteur
+  const derape = glisse || (Math.abs(ix) > 0.6 && ratio > 0.72), freine = frein > 0.25 && Math.abs(V.speed) > 3;
+  c.cmd = { gaz: iz, volant: ix, frein, main, v: V.speed, ratio, gear, freine, derape, glisse, accLong, gFrac };
+  if (pilote) moteurRegime(c, ratio, gFrac, iz, freine);
+  let nx = c.x + Math.sin(c.h) * V.speed * dt, nz = c.z + Math.cos(c.h) * V.speed * dt;
   const rr = c.kind === 'truck' ? 2.2 : c.rider ? 0.7 : 1.4;
   // couloir de piste : on glisse le long des barrières du circuit au lieu de s'arrêter
   const ti = trackInfo(nx, nz);
@@ -13223,51 +13278,652 @@ function driveStep(dt) {
       const over = Math.abs(ti.lat) - lim, sg = Math.sign(ti.lat), nxN = -ti.tz * sg, nzN = ti.tx * sg;
       nx -= nxN * over; nz -= nzN * over;
       const along = Math.sin(c.h) * ti.tx + Math.cos(c.h) * ti.tz;   // 1 = dans le sens de la piste
-      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(drive.speed) * (1 - Math.abs(along)); vehicleDamage(c, impact * 0.5 + 0.3); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit(); }
-      drive.speed -= drive.speed * (3 * (1 - Math.abs(along)) + 0.25) * dt;
+      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(V.speed) * (1 - Math.abs(along)); vehicleDamage(c, impact * 0.5 + 0.3); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit(); }
+      V.speed -= V.speed * (3 * (1 - Math.abs(along)) + 0.25) * dt;
       let dh = Math.atan2(ti.tx, ti.tz) - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); c.h += dh * Math.min(1, dt * 3);   // aide à réaligner
     }
   }
   // autres obstacles : on glisse sur l'axe libre, on ne rebondit que si tout est bloqué
-  if (Math.abs(drive.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(tl.x - c.x) < 4.5 && Math.abs(tl.z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
-  if (Math.abs(drive.speed) > 5) for (const b of breakables) if (!b.broken && Math.abs(b.x - nx) < b.r + rr + 0.5 && Math.abs(b.z - nz) < b.r + rr + 0.5) { breakThing(b, c); }
+  if (pilote && Math.abs(V.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(tl.x - c.x) < 4.5 && Math.abs(tl.z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
+  if (Math.abs(V.speed) > 5) for (const b of breakables) if (!b.broken && Math.abs(b.x - nx) < b.r + rr + 0.5 && Math.abs(b.z - nz) < b.r + rr + 0.5) { breakThing(b, c, !pilote); }
   const [vr, vL] = vehHalf(c);
   const bx = carBlocked(nx, c.z, c.solid, vr, {}, c.y, c.h, vL), bz = carBlocked(c.x, nz, c.solid, vr, {}, c.y, c.h, vL);
   if (!bx) c.x = nx; if (!bz) c.z = nz;
   if (bx || bz) {
-    if (bx && bz) { drive.speed *= -0.3; } else drive.speed *= 0.9;
-    if (Math.abs(drive.speed) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.abs(drive.speed) * 0.6); sfx.hit(); }
+    const vAvant = V.speed;
+    if (bx && bz) { V.speed *= -0.3; } else V.speed *= 0.9;
+    if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.abs(vAvant) * 0.6); choc(c, vAvant, null); }
   }
-  vehicleSolid(c); resolveVehicleOverlap(c);
+  vehicleSolid(c); if (pilote) resolveVehicleOverlap(c);
+  ecraseAuSol(c, V);
   if (c.kind === 'jetski') { c.y = 1.35 + Math.sin(simTime * 2.2 + c.x * 0.3) * 0.08; c.vy = 0; }
   else {
-    const gy = groundCar(c.x, c.z, c.solid, c.y), onTerrain = RALLY.mesh && terrainH(c.x, c.z) != null;
-    if (!c.airborne && onTerrain && c.y > gy + 0.06 && Math.abs(drive.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; c.airborne = true; }   // le sol se dérobe (bout du tremplin, crête) : on garde l'élan
+    const gy = solSousRoues(c), onTerrain = RALLY.mesh && terrainH(c.x, c.z) != null;
+    if (!c.airborne && onTerrain && c.y > gy + 0.06 && Math.abs(V.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; c.airborne = true; }   // le sol se dérobe (bout du tremplin, crête) : on garde l'élan
     if ((c.vy || 0) > 0.5 || c.y > gy + 0.06) { c.airborne = true; c.vy = (c.vy || 0) - 30 * dt; c.y += c.vy * dt; if (c.y <= gy) { c.airborne = false; c.y = gy; if (c.vy < -3.5) { sfx.hit(); c.susp = -0.28; if (c.kind === 'buggy') { c.vy = -c.vy * 0.32; if (c.vy < 1.2) c.vy = 0; } else { const imp = -c.vy; c.vy = 0; vehicleDamage(c, Math.min(12, imp * 0.4)); } } else c.vy = 0; } }   // en l'air : on retombe (saut sur une bosse)
     else if (onTerrain) {   // relief lissé : on suit la pente ; si le sol s'effondre sous les roues (bout d'un tremplin), on garde l'élan vertical
       const prev = c.prevGy == null ? gy : c.prevGy; const slopeV = (gy - prev) / dt;
-      if (gy < c.y - 0.08 && Math.abs(drive.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; } else { c.y = gy; c.vy = 0; c.slopeV = slopeV; }
+      if (gy < c.y - 0.08 && Math.abs(V.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; } else { c.y = gy; c.vy = 0; c.slopeV = slopeV; }
     }
-    else { if (gy - c.y > 0.3 && Math.abs(drive.speed) > 12) { c.vy = 3 + Math.abs(drive.speed) * 0.22; c.y = gy + 0.02; } else { c.y += (gy - c.y) * Math.min(1, dt * 14); c.vy = 0; } }   // marche abordée vite : on décolle
+    else { if (gy - c.y > 0.3 && Math.abs(V.speed) > 12) { c.vy = 3 + Math.abs(V.speed) * 0.22; c.y = gy + 0.02; } else { c.y += (gy - c.y) * Math.min(1, dt * 14); c.vy = 0; } }   // marche abordée vite : on décolle
     c.prevGy = gy;
     if (onTerrain) { const fx = Math.sin(c.h), fz = Math.cos(c.h), hA = terrainH(c.x - fx * 1.2, c.z - fz * 1.2) ?? gy, hB = terrainH(c.x + fx * 1.2, c.z + fz * 1.2) ?? gy; c.tiltX = c.tiltX == null ? 0 : c.tiltX; const want = (c.vy || 0) > 0.5 || c.y > gy + 0.1 ? -0.15 : -Math.atan2(hB - hA, 2.4); c.tiltX += (want - c.tiltX) * Math.min(1, dt * 8); } else c.tiltX = (c.tiltX || 0) * (1 - Math.min(1, dt * 6));
   }
-  c.susp = c.susp || 0; c.suspV = c.suspV || 0; c.suspV += (-c.susp * 70 - c.suspV * 9) * dt; c.susp += c.suspV * dt; if (!isFinite(c.susp)) { c.susp = 0; c.suspV = 0; }   // suspension (ressort amorti)
-  c.g.position.set(c.x, c.y + (c.kind === 'buggy' ? c.susp : c.susp * 0.4), c.z); c.g.rotation.set(c.tiltX || 0, c.h, c.rider ? c.tilt || 0 : 0, 'YXZ'); c.wheels.forEach(w => w.rotation.x -= drive.speed * dt / 0.3);
-  if (c.kind === 'jetski' && Math.abs(drive.speed) > 4 && simTime > (c.sprayT || 0)) { c.sprayT = simTime + 0.08; burst(c.x - Math.sin(c.h) * 1.2, 1.6, c.z - Math.cos(c.h) * 1.2, 0xbfe6ff, 2); }
-  if (c.kind === 'jetski') { const w = city.sea; if (w) { if (c.x < w.x1 + 1) { c.x = w.x1 + 1; drive.speed *= -0.3; } if (c.x > w.x2 - 1) { c.x = w.x2 - 1; drive.speed *= -0.3; } if (c.z < w.z1 + 1) { c.z = w.z1 + 1; drive.speed *= -0.3; } if (c.z > w.z2 - 1) { c.z = w.z2 - 1; drive.speed *= -0.3; } } }
+  poseVehicule(c, dt);
+  if (c.kind === 'jetski' && Math.abs(V.speed) > 4 && simTime > (c.sprayT || 0)) { c.sprayT = simTime + 0.08; burst(c.x - Math.sin(c.h) * 1.2, 1.6, c.z - Math.cos(c.h) * 1.2, 0xbfe6ff, 2); }
+  if (c.kind === 'jetski') { const w = city.sea; if (w) { if (c.x < w.x1 + 1) { c.x = w.x1 + 1; V.speed *= -0.3; } if (c.x > w.x2 - 1) { c.x = w.x2 - 1; V.speed *= -0.3; } if (c.z < w.z1 + 1) { c.z = w.z1 + 1; V.speed *= -0.3; } if (c.z > w.z2 - 1) { c.z = w.z2 - 1; V.speed *= -0.3; } } }
   vehicleSolid(c);
 
   if ((c.dmg || 0) > 50 && simTime > (c.smokeT || 0)) { c.smokeT = simTime + (c.dmg > 85 ? 0.12 : 0.3); burst(c.x + Math.sin(c.h) * 1.5, 1.1, c.z + Math.cos(c.h) * 1.5, c.dmg > 85 ? 0x333333 : 0x9aa4b8, 2); }
-  P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(Math.sin(c.h) * drive.speed, 0, Math.cos(c.h) * drive.speed); P.grounded = true;
-  if (Math.abs(drive.speed) > 1 && !timerOn) timerOn = true;
-  // écraser un bot ou un joueur = infraction
-  if (Math.abs(drive.speed) > 4) {
-    for (const b of bots) if (b.av.group.visible && simTime > (b.hitT || 0) && Math.abs(b.pos.x - c.x) < rr + 0.6 && Math.abs(b.pos.z - c.z) < (c.baseD || 4) / 2 + 0.6 && Math.abs(b.pos.y - c.y) < 2) { b.hitT = simTime + 3; b.wait = 3; b.dance = 0; b.pos.x += Math.sin(c.h + 1.2) * 2; b.pos.z += Math.cos(c.h + 1.2) * 2; botSay(b, ['aïe !!', 'police !', 'tu m\'as écrasé !', 'chauffard !']); infraction('écraser ' + b.name, 1, 1); vehicleDamage(c, 4); }
-    for (const r of net.remotes.values()) if (!r.dead && !r.car && simTime > (r.hitT || 0) && Math.abs(r.cur.x - c.x) < rr + 0.6 && Math.abs(r.cur.z - c.z) < (c.baseD || 4) / 2 + 0.6) { r.hitT = simTime + 3; netSend({ t: 'tag', id: r.id, by: myCfg.name, car: 1 }); infraction('renverser ' + r.name, 1, 1); }
-  }
-  if (race.state !== 'running' && !hrace.on) $('act').textContent = `⚙️ ${c.kind === 'bike' ? '🚲' : 'A' + gear} · ${Math.round(Math.abs(drive.speed) * 3.6)} km/h${c.dmg ? ` · 🔧 ${Math.round(c.dmg)}%` : ''}`;
+  c.v = V.speed;
+  if (!pilote) return c.cmd;
+  P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(Math.sin(c.h) * V.speed, 0, Math.cos(c.h) * V.speed); P.grounded = true;
+  if (Math.abs(V.speed) > 1 && !timerOn) timerOn = true;
+  for (const r of net.remotes.values()) if (Math.abs(V.speed) > 4 && !r.dead && !r.car && simTime > (r.hitT || 0) && Math.abs(r.cur.x - c.x) < rr + 0.6 && Math.abs(r.cur.z - c.z) < (c.baseD || 4) / 2 + 0.6) { r.hitT = simTime + 3; netSend({ t: 'tag', id: r.id, by: myCfg.name, car: 1 }); infraction('renverser ' + r.name, 1, 1); }
+  if (race.state !== 'running' && !hrace.on) $('act').textContent = `⚙️ ${c.kind === 'bike' ? '🚲' : 'A' + gear} · ${Math.round(Math.abs(V.speed) * 3.6)} km/h${c.dmg ? ` · 🔧 ${Math.round(c.dmg)}%` : ''}`;
   cityCommon(dt);
+  return c.cmd;
+}
+// ================= LES ROUES POSÉES SUR LE SOL =================
+// Le joueur : « les roues des véhicules entrent dans le sol ». La hauteur de chaque roue
+// était écrite à la main (0,36 pour une voiture, 0,42 pour un camion, 0,52 pour le buggy…)
+// alors que son rayon dépend de l'échelle passée à makeWheel() : le tracteur roulait avec
+// les roues arrière enfoncées de 7,7 cm dans le bitume et le vélo flottait 9,7 cm au-dessus.
+// On MESURE maintenant chaque roue (Box3, échelles et parents compris) et on la repose sur
+// le sol du véhicule. Au passage on retient son rayon réel (pour la vitesse de rotation),
+// sa position dans la caisse et si elle est à l'avant (ce sont elles qui braquent).
+function calerRoues(c) {
+  if (!c || !c.g || !c.wheels || !c.wheels.length) return;
+  const g = c.g, rx = g.rotation.x, ry = g.rotation.y, rz = g.rotation.z, py = g.position.y;
+  g.rotation.set(0, 0, 0); g.position.y = 0; g.updateMatrixWorld(true);
+  const base = new THREE.Vector3(); g.getWorldPosition(base);
+  const b = new THREE.Box3(), ctr = new THREE.Vector3();
+  c.roues = [];
+  for (const w of c.wheels) {
+    b.setFromObject(w); b.getCenter(ctr);
+    const bas = b.min.y - base.y, r = Math.max(0.12, (b.max.y - b.min.y) / 2);
+    w.position.y += MARGE_ROUE - bas;
+    w.rotation.order = 'YXZ';   // le braquage (Y) enveloppe le roulement (X), jamais l'inverse
+    c.roues.push({ m: w, r, x: ctr.x - base.x, z: ctr.z - base.z, avant: false });
+  }
+  const zs = c.roues.map(r => r.z), zmax = Math.max(...zs);
+  for (const r of c.roues) r.avant = r.z > zmax - 0.6;   // seul l'essieu le plus avancé braque
+  g.rotation.set(rx, ry, rz); g.position.y = py; g.updateMatrixWorld(true);
+}
+// La CAISSE à part des roues. Le tangage, le roulis et la suspension déplaçaient tout le
+// véhicule, roues comprises : à chaque coup de frein la gomme rentrait dans le bitume. On
+// range donc tout ce qui n'est pas une roue dans un sous-groupe : la caisse plonge, se
+// cabre et penche, les roues restent posées par terre.
+function separeCaisse(c) {
+  if (!c || !c.g || c.caisse) return;
+  const roues = new Set(c.wheels || []);
+  const k = new THREE.Group();
+  for (const o of c.g.children.slice()) if (!roues.has(o)) k.add(o);
+  c.g.add(k); c.caisse = k;
+}
+function prepareVehicule(c) { calerRoues(c); separeCaisse(c); return c; }
+// La hauteur du sol SOUS LES ROUES. Un véhicule repose sur la plus HAUTE de ses roues : en
+// ne regardant que son centre, il s'enfonçait de 4 cm dès qu'un train montait sur une dalle
+// (dépôt municipal, caserne, parking de l'hôpital) — la gomme rentrait dans le béton.
+function solSousRoues(c) {
+  let top = groundCar(c.x, c.z, c.solid, c.y || 0);
+  if (!c.roues || !c.roues.length) return top;
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  for (const r of c.roues) {
+    const x = c.x + r.x * cs + r.z * sn, z = c.z - r.x * sn + r.z * cs;
+    const g = groundCar(x, z, c.solid, (c.y || 0) + 0.35);
+    if (g > top) top = g;
+  }
+  return top;
+}
+// Les roues TOURNENT à la vitesse réelle (rayon de CHAQUE roue) et les roues avant BRAQUENT.
+function rouesTick(c, dt, v, cm) {
+  cm = cm || {};
+  const braq = -clamp(cm.volant || 0, -1, 1) * BRAQUAGE_MAX * (1 - 0.35 * clamp(cm.ratio || 0, 0, 1));
+  c.braquage = (c.braquage || 0) + (braq - (c.braquage || 0)) * Math.min(1, dt * 9);
+  if (c.roues && c.roues.length) {
+    for (const r of c.roues) {
+      r.m.rotation.x -= v * dt / r.r;
+      if (r.avant && !c.rider) r.m.rotation.y = c.braquage;
+    }
+  } else if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= v * dt / 0.3; });
+  if ((cm.freine && Math.abs(v) > 6) || (cm.derape && Math.abs(v) > 4)) fumeeRoues(c, cm.derape ? 1 : 0.7);
+}
+// La FUMÉE BLANCHE : de la gomme brûlée aux roues, au freinage appuyé et au dérapage, avec
+// le crissement qui va avec. c.fumee compte les bouffées : c'est ce que mesure le test.
+function fumeeRoues(c, force) {
+  if (simTime < (c.fumeeT || 0)) return 0;
+  c.fumeeT = simTime + 0.06; c.fumee = (c.fumee || 0) + 1;
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  const pts = (c.roues && c.roues.length) ? c.roues.filter(r => force > 0.9 || !r.avant) : [{ x: 0, z: -1.2 }];
+  for (const r of pts) {
+    const px = c.x + r.x * cs + r.z * sn, pz = c.z - r.x * sn + r.z * cs;
+    burst(px, (c.y || 0) + 0.14, pz, 0xeef1f6, 2);
+  }
+  if (simTime > (c.crisT || 0)) { c.crisT = simTime + 0.45; sfx.noise(0.32, 2400, 0.045 * force); }
+  return pts.length;
+}
+// La pose du véhicule à l'image : la caisse plonge sur le nez au freinage, se cabre à
+// l'accélération, penche vers l'extérieur du virage — les roues, elles, restent au sol.
+function poseVehicule(c, dt) {
+  const cm = c.cmd || {}, v = cm.v != null ? cm.v : (c.v || 0);
+  c.susp = c.susp || 0; c.suspV = c.suspV || 0;
+  c.suspV += (-c.susp * 70 - c.suspV * 9) * dt; c.susp += c.suspV * dt;
+  if (!isFinite(c.susp)) { c.susp = 0; c.suspV = 0; }
+  const plonge = c.kind === 'buggy' ? c.susp : c.susp * 0.4;
+  const tangCible = clamp(-(cm.accLong || 0) * 0.0075, -0.09, 0.13);
+  const roulCible = clamp((cm.volant || 0) * Math.abs(v) * 0.010, -0.15, 0.15);
+  c.tangage = (c.tangage || 0) + (tangCible - (c.tangage || 0)) * Math.min(1, dt * 7);
+  c.roulis = (c.roulis || 0) + (roulCible - (c.roulis || 0)) * Math.min(1, dt * 6);
+  c.g.position.set(c.x, c.y || 0, c.z);
+  c.g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
+  if (c.caisse) { c.caisse.position.y = plonge; c.caisse.rotation.set(c.tangage, 0, c.rider ? 0 : c.roulis); }
+  else c.g.position.y = (c.y || 0) + plonge;
+  rouesTick(c, dt, v, cm);
+}
+// Le RÉGIME MOTEUR suit le rapport : il grimpe dans chaque rapport, retombe au passage du
+// suivant, et redescend au RALENTI à l'arrêt. Le freinage ajoute son crissement.
+function moteurRegime(c, ratio, gFrac, gaz, freine) {
+  if (c.kind === 'bike' || c.kind === 'velo') { engine.set(Math.abs(drive.speed)); return; }
+  const cible = ratio < 0.01 ? 1.6 : 2.5 + gFrac * 15 + (gaz > 0.1 ? 2.2 : 0);
+  c.regime = c.regime == null ? cible : c.regime + (cible - c.regime) * 0.25;
+  engine.set(c.regime);
+  if (freine && simTime > (c.crisT2 || 0)) { c.crisT2 = simTime + 0.42; sfx.noise(0.3, 3200, 0.035); }
+}
+// La PÉTARADE de la nitro : une détonation qui part du bus MOTEUR (c'est le moteur qui
+// explose, pas un bruitage d'interface) — un coup de grave, une gerbe de souffle, et le
+// crépitement des ratés d'allumage dans l'échappement.
+function petarade(force = 1) {
+  const ctx = sfx.unlock(); if (!ctx || !settings.sound) return 0;
+  const sortie = sfx.sortie('moteur'); if (!sortie) return 0;
+  const t0 = ctx.currentTime;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(190 * force, t0);
+  o.frequency.exponentialRampToValueAtTime(28, t0 + 0.5);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.34 * force, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+  o.connect(g).connect(sortie); o.start(t0); o.stop(t0 + 0.65);
+  // le SOUFFLE : un bruit large qui s'ouvre et retombe
+  if (!petarade.buf) { const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; petarade.buf = b; }
+  const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), gg = ctx.createGain();
+  src.buffer = petarade.buf; src.loop = true;
+  f.type = 'bandpass'; f.frequency.setValueAtTime(2400, t0); f.frequency.exponentialRampToValueAtTime(160, t0 + 0.55); f.Q.value = 0.6;
+  gg.gain.setValueAtTime(0.0001, t0); gg.gain.exponentialRampToValueAtTime(0.30 * force, t0 + 0.02); gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7);
+  src.connect(f).connect(gg).connect(sortie); src.start(t0); src.stop(t0 + 0.75);
+  // les RATÉS : trois claquements secs dans l'échappement
+  for (let i = 0; i < 3; i++) sfx.tone(90 + i * 40, 0.09 + i * 0.09, 0.07, 'square', 0.09 * force, 40);
+  petarade.n = (petarade.n || 0) + 1;
+  return 1;
+}
+// ================= LE BOOM DU CHOC =================
+// Un choc, c'est une MASSE qui s'arrête (une sinusoïde très grave qui plonge) plus de la
+// TÔLE qui plie (un fracas court et clair). L'intensité suit la vitesse : à 10 km/h un
+// « toc », à 90 km/h un vrai BOOM. Tout part du bus « effets ».
+function boom(x, z, vitesse) {
+  const f = clamp(Math.abs(vitesse) / 24, 0.1, 1.4);
+  boom.n = (boom.n || 0) + 1; boom.force = f;
+  const ctx = sfx.unlock(), sortie = settings.sound ? sfx.sortie('effets') : null;
+  if (ctx && sortie) {
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(150 * (0.6 + f * 0.6), t0);
+    o.frequency.exponentialRampToValueAtTime(34, t0 + 0.3);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.10 + 0.34 * f, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.44);
+    o.connect(g).connect(sortie); o.start(t0); o.stop(t0 + 0.5);
+  }
+  sfx.noise(0.22, 900 + 600 * f, 0.035 + 0.075 * f);   // la tôle qui plie
+  sfx.noise(0.5, 170, 0.03 + 0.09 * f);                // le grondement qui traîne
+  return f;
+}
+// Un choc : le BOOM, la poussière, la secousse — et si c'est un autre véhicule, l'ACCIDENT.
+function choc(c, vitesse, autre) {
+  const f = Math.abs(vitesse);
+  if (f < 1.2) return 0;                       // en se garant au pas, RIEN : pas de BOOM à l'arrêt
+  if (simTime < (c.boomT || 0)) return 0;
+  c.boomT = simTime + 0.3;
+  boom(c.x, c.z, f);
+  burst(c.x, (c.y || 0) + 0.9, c.z, 0x8f98ab, Math.min(10, 3 + f * 0.4));
+  if (drive.car === c) camSecousse(clamp(f * 0.012, 0.05, 0.3), 0.28);
+  if (autre) ouvreAccident(c, autre, f);
+  return f;
+}
+// Un véhicule qui percute un piéton l'ÉCRASE : il tombe, il perd des points de vie, il crie
+// — et s'il ne se relève pas, l'ambulance part le chercher.
+function ecraseAuSol(c, V) {
+  const v = Math.abs(V ? V.speed : (c.v || 0));
+  if (v < 3 || !city.on) return 0;
+  const rr = (c.baseW || 2.4) / 2 + 0.5, rl = (c.baseD || 4.4) / 2 + 0.5, cs = Math.cos(c.h), sn = Math.sin(c.h);
+  let n = 0;
+  for (const b of bots) {
+    if (!b.av || !b.av.group.visible || b.prison || b.drive || simTime < (b.hitT || 0)) continue;
+    if (Math.abs(b.pos.y - (c.y || 0)) > 2) continue;
+    const dx = b.pos.x - c.x, dz = b.pos.z - c.z;
+    const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+    if (Math.abs(lx) > rr || Math.abs(lz) > rl) continue;
+    b.hitT = simTime + 3.5; n++;
+    b.hp = Math.max(0, (b.hp == null ? 100 : b.hp) - Math.min(70, 12 + v * 2.2));
+    b.wait = 3; b.dance = 0; b.fight = null; b.bagarre = null;
+    b.ko = simTime + (b.hp <= 0 ? 16 : 4.5);
+    b.pos.x += Math.sin(c.h) * 1.3 + dx * 0.3; b.pos.z += Math.cos(c.h) * 1.3 + dz * 0.3;
+    b.pos.y = groundUnder(b.pos.x, b.pos.z, null, b.pos.y + 1.4);
+    corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
+    botSay(b, ['aïïïe !!', 'au secours !', 'tu m\'as écrasé !', 'chauffard !!']);
+    boom(c.x, c.z, v * 0.6);
+    if (drive.car === c) { infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
+    if (b.hp <= 0) ambulanceAppel(b.pos.x, b.pos.z, b);
+  }
+  return n;
+}
+// ================= LES ACCIDENTS =================
+// Deux véhicules qui se percutent, c'est un ACCIDENT : les deux s'immobilisent et ne
+// repartent PAS, la police vient faire le constat, le responsable paie l'amende — et s'il
+// n'a pas de quoi, il finit en cellule. La dépanneuse est appelée dans la foulée.
+const ACCIDENT_CONSTAT = 5;      // secondes de constat, une fois la police sur place
+const AMENDE_ACCIDENT = 60;
+function ouvreAccident(a, b, v) {
+  if (!a || !b || a === b || !city.on) return null;
+  if (!city.accidents) city.accidents = [];
+  if (a.accidente || b.accidente) return null;
+  const joueur = drive.car === a || drive.car === b;
+  for (const c of [a, b]) {
+    c.accidente = true; c.v = 0; c.spd = 0; c.stopped = true;
+    if (c.etat) c.etat.speed = 0;
+    c.cmd = null;
+  }
+  if (joueur) drive.speed = 0;
+  const acc = { a, b, x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, t0: simTime, etat: 'police',
+    responsable: drive.car === a ? a : drive.car === b ? b : a, joueur, force: v,
+    constatT: 0, regle: false, amende: 0, paye: null, prison: false, pc: null, dep: null };
+  city.accidents.push(acc);
+  msg('💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive', 2800);
+  const pc = (police.cars || []).find(p => !p.constat);
+  if (pc) { pc.constat = acc; pc.active = true; acc.pc = pc; }
+  depanneuseAppel(acc);
+  return acc;
+}
+function accidentsTick(dt) {
+  const L = city.accidents; if (!L || !L.length) return;
+  for (let i = L.length - 1; i >= 0; i--) {
+    const acc = L[i];
+    // « les deux s'immobilisent et ne repartent pas » : on remet la vitesse à zéro à CHAQUE
+    // image, sinon la circulation redémarrait toute seule deux secondes plus tard
+    for (const c of [acc.a, acc.b]) if (c) { c.v = 0; c.spd = 0; c.stopped = true; if (c.etat) c.etat.speed = 0; }
+    if (acc.joueur && (drive.car === acc.a || drive.car === acc.b)) drive.speed = 0;
+    if (acc.etat === 'police') {
+      const pc = acc.pc;
+      if (pc && Math.hypot(pc.x - acc.x, pc.z - acc.z) > 7) { rouleVers(pc, acc.x, acc.z, dt, 18); continue; }
+      acc.etat = 'constat'; acc.constatT = simTime + ACCIDENT_CONSTAT;
+      msg('🚓 Constat en cours…', 2200);
+    } else if (acc.etat === 'constat') {
+      if (simTime < acc.constatT) continue;
+      regleAccident(acc);
+    } else if (acc.etat === 'fini' && simTime > acc.finT) {
+      for (const c of [acc.a, acc.b]) if (c) { c.accidente = false; c.stopped = false; }
+      if (acc.pc) acc.pc.constat = null;
+      L.splice(i, 1);
+    }
+  }
+}
+function regleAccident(acc) {
+  acc.etat = 'fini'; acc.finT = simTime + 2.5; acc.regle = true;
+  acc.amende = AMENDE_ACCIDENT + Math.round(clamp(acc.force, 0, 40));
+  if (!acc.joueur) { acc.paye = true; msg('🚓 Constat terminé : le responsable a payé', 2400); return; }
+  if (wallet >= acc.amende) {
+    wallet -= acc.amende; saveWallet(); updateHud(); acc.paye = true;
+    msg(`🚓 Constat : ${acc.amende} 🪙 d'amende — payé`, 3000); sfx.register();
+  } else {
+    acc.paye = false; acc.prison = true;
+    msg('🚓 Pas de quoi payer l\'amende : direction la prison !', 3200);
+    jail.on = true; jail.level = Math.max(jail.level || 0, 1);
+    try { saveJail(); } catch (e) {}
+    jailEnter(true);
+  }
+}
+// Un déplacement simple « en ligne droite vers un point » : il sert à la police qui vient
+// constater, à la dépanneuse et à l'ambulance. Les bots conducteurs du poste ROUTE ont, eux,
+// le graphe de voies : rouleVers() n'est là que pour les véhicules de service.
+function rouleVers(c, tx, tz, dt, vmax = 14) {
+  if (!c) return 0;
+  const d = Math.hypot(tx - c.x, tz - c.z);
+  if (d < 0.05) return 0;
+  const pas = Math.min(d, vmax * dt);
+  c.x += (tx - c.x) / d * pas; c.z += (tz - c.z) / d * pas;
+  c.h = Math.atan2(tx - c.x, tz - c.z);
+  c.y = groundUnder(c.x, c.z, c.solid, c.y || 0);
+  c.v = vmax;
+  c.cmd = { v: vmax, volant: 0, ratio: 0.5, freine: false, derape: false, accLong: 0 };
+  poseVehicule(c, dt);
+  vehicleSolid(c);
+  return d - pas;
+}
+// ================= LES PLACES ASSISES =================
+// « Mets les bonnes positions du joueur, des bots et du chien dans les véhicules (tout seul,
+// à deux, à trois), assis, rien ne dépasse à l'extérieur du véhicule, et chacun sa place. »
+// Repère LOCAL du véhicule : +z vers l'AVANT, +x vers la GAUCHE, y compté depuis le sol.
+// L'origine d'un avatar est aux PIEDS : dans une berline les y sont donc négatifs — le
+// bassin descend sous le niveau du seuil, les jambes se replient sous la planche de bord.
+// Trois règles tenues par le test : la TÊTE passe sous le pavillon, les épaules restent
+// dans la largeur de la caisse, et deux occupants sont toujours à plus de 92 cm l'un de
+// l'autre (le diamètre d'un personnage).
+const PLACES = {
+  voiture: { conducteur: { x: 0.46, y: -0.2, z: 0.5 }, avant: { x: -0.46, y: -0.2, z: 0.5 },
+    arriereG: { x: 0.48, y: -0.2, z: -0.85 }, arriereD: { x: -0.48, y: -0.2, z: -0.85 },
+    chien: { x: 0, y: 0.28, z: -0.85 } },
+  truck: { conducteur: { x: 0.6, y: 0.34, z: 2.6 }, avant: { x: -0.6, y: 0.34, z: 2.6 },
+    chien: { x: 0, y: 0.8, z: 2.1 } },
+  moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
+  bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
+  velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
+  buggy: { conducteur: { x: 0.42, y: 0.58, z: 0.25 }, avant: { x: -0.42, y: 0.58, z: 0.25 },
+    chien: { x: 0, y: 0.95, z: -0.55 } },
+  jetski: { conducteur: { x: 0, y: 0.4, z: -0.15 }, arriereG: { x: 0, y: 0.4, z: -0.9 } },
+  heli: { conducteur: { x: 0.55, y: 0.05, z: 0.6 }, avant: { x: -0.55, y: 0.05, z: 0.6 },
+    arriereG: { x: 0.55, y: 0.05, z: -0.7 }, arriereD: { x: -0.55, y: 0.05, z: -0.7 },
+    chien: { x: 0, y: 0.55, z: -0.75 } },
+  ambulance: { conducteur: { x: 0.46, y: -0.06, z: 1.45 }, avant: { x: -0.46, y: -0.06, z: 1.45 },
+    arriereG: { x: 0.52, y: 0.0, z: -0.8 }, arriereD: { x: -0.52, y: 0.0, z: -0.8 },
+    chien: { x: 0, y: 0.5, z: -1.6 } },
+  depanneuse: { conducteur: { x: 0.46, y: 0.0, z: 1.5 }, avant: { x: -0.46, y: 0.0, z: 1.5 },
+    chien: { x: 0, y: 0.62, z: 1.1 } },
+  benne: { conducteur: { x: 0.55, y: 0.34, z: 2.3 }, avant: { x: -0.55, y: 0.34, z: 2.3 }, chien: { x: 0, y: 0.8, z: 1.9 } },
+  grue: { conducteur: { x: 0.55, y: 0.34, z: 2.6 }, avant: { x: -0.55, y: 0.34, z: 2.6 }, chien: { x: 0, y: 0.8, z: 2.2 } },
+  pelle: { conducteur: { x: 0, y: 0.24, z: 0.3 } },
+  tracteur: { conducteur: { x: 0, y: 0.3, z: -0.35 } },
+  pompier: { conducteur: { x: 0.6, y: 0.44, z: 2.9 }, avant: { x: -0.6, y: 0.44, z: 2.9 }, chien: { x: 0, y: 0.9, z: 2.4 } },
+  fourgon: { conducteur: { x: 0.46, y: -0.06, z: 1.4 }, avant: { x: -0.46, y: -0.06, z: 1.4 }, chien: { x: 0, y: 0.6, z: 0.9 } },
+};
+const PLACES_ORDRE = ['conducteur', 'avant', 'arriereG', 'arriereD'];
+function placesDe(c) {
+  if (!c) return PLACES.voiture;
+  if (c.places) return c.places;
+  return PLACES[c.kind || (c.heli ? 'heli' : 'voiture')] || PLACES.voiture;
+}
+function placeMonde(c, p) {   // repère local du véhicule → monde
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  return { x: c.x + p.x * cs + p.z * sn, y: (c.y || 0) + p.y, z: c.z - p.x * sn + p.z * cs };
+}
+// Asseoir POUR DE VRAI : bassin sur le siège, cuisses à l'horizontale, genoux pliés, mains
+// sur le volant pour le conducteur. Avec dt = 1 la pose est FIGÉE dans l'image : le joueur
+// qui monte APPARAÎT assis, au lieu de rester planté debout une demi-seconde — une plainte
+// restée ouverte depuis des mois.
+function assiedAvatar(av, c, p, dt, volant) {
+  if (!av || !c || !p) return null;
+  const g = av.group || av; if (!g) return null;
+  const w = placeMonde(c, p);
+  g.position.set(w.x, w.y, w.z);
+  g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
+  const r = av.rig;
+  animateRig(r, c.rider ? 'ride' : 'sit', 0, dt, simTime);
+  if (!c.rider && r) {
+    r.legL.rotation.x = r.legR.rotation.x = -1.45;                       // cuisses à l'horizontale
+    if (r.legL.genou) r.legL.genou.rotation.x = 1.5;                     // genoux pliés, tibias vers le bas
+    if (r.legR.genou) r.legR.genou.rotation.x = 1.5;
+    r.armL.rotation.x = r.armR.rotation.x = volant ? -1.15 : -0.45;      // les mains sur le volant
+    if (r.armL.coude) r.armL.coude.rotation.x = volant ? -0.5 : -0.9;
+    if (r.armR.coude) r.armR.coude.rotation.x = volant ? -0.5 : -0.9;
+    r.armL.rotation.z = 0.12; r.armR.rotation.z = -0.12;
+  }
+  jambesEnCabine(av, caisseFermee(c));
+  return w;
+}
+// Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un.
+function assiedChien(c, dt) {
+  const p = chien.pet, pl = placesDe(c).chien;
+  if (!p || !p.g || !pl) return null;
+  const w = placeMonde(c, pl);
+  p.g.position.set(w.x, w.y, w.z); p.g.rotation.y = c.h;
+  chienPoseAssis(p, 0);
+  p.g.rotation.y = c.h;
+  return w;
+}
+// Les occupants d'un véhicule : c.occupants = [{ av, place }]. Le conducteur d'abord, puis
+// le passager avant, puis les deux places arrière — chacun la sienne, jamais deux au même
+// endroit.
+function placeOccupants(c, dt) {
+  if (!c || !c.occupants || !c.occupants.length) return 0;
+  const T = placesDe(c); let n = 0;
+  c.occupants.forEach((o, i) => {
+    const nom = o.place || PLACES_ORDRE[i] || 'arriereD';
+    const p = T[nom]; if (!p || !o.av) return;
+    assiedAvatar(o.av, c, p, dt, nom === 'conducteur'); n++;
+  });
+  if (c.chien) assiedChien(c, dt);
+  return n;
+}
+// ================= LA DÉPANNEUSE =================
+// Bleu et blanc, gyrophare rond bleu, treuil et crochet — et PAYANTE : un petit accident est
+// réparé sur place contre un petit paiement, sinon le véhicule est treuillé et remorqué au
+// garage, plus cher. Elle se conduit comme les autres (E) : elle est dans city.cars.
+const PRIX_DEPANNAGE = 30, PRIX_REMORQUAGE = 90, DEGATS_SUR_PLACE = 45;
+function makeDepanneuse(x, z, h) {
+  const g = new THREE.Group(), bleu = lam(0x1e56c8), blanc = lam(0xf4f6fa);
+  const bx = (mat, sx, sy, sz, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
+  bx(darkM, 2.2, 0.4, 5.4, 0, 0.55, 0);                                  // châssis
+  bx(blanc, 2.2, 1.25, 2.0, 0, 1.35, 1.5);                               // cabine blanche
+  bx(bleu, 2.24, 0.45, 2.04, 0, 0.95, 1.5, null);                        // bas de caisse bleu
+  bx(glassCar, 2.0, 0.66, 0.06, 0, 1.6, 2.5);                            // pare-brise
+  for (const sx of [-1.09, 1.09]) bx(glassCar, 0.06, 0.55, 1.1, sx, 1.6, 1.5);
+  for (const sx of [-0.72, 0.72]) bx(neonMat(0xffffcc), 0.36, 0.2, 0.08, sx, 0.9, 2.52);
+  bx(neonMat(0xff3030), 1.9, 0.16, 0.08, 0, 0.9, -2.72);
+  bx(darkM, 2.3, 0.26, 0.18, 0, 0.55, 2.55); bx(darkM, 2.3, 0.26, 0.18, 0, 0.55, -2.7);   // pare-chocs
+  bx(blanc, 2.1, 0.18, 3.2, 0, 0.85, -0.9);                              // le plateau
+  for (const sx of [-1.0, 1.0]) bx(bleu, 0.12, 0.34, 3.2, sx, 1.05, -0.9);
+  for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) bx(lam(i % 2 ? 0x1e56c8 : 0xf4f6fa), 0.06, 0.2, 0.5, sx * 1.12, 1.0, -2.2 + i * 0.62);   // damier bleu et blanc
+  // LE TREUIL : la potence, le tambour, le câble et le crochet
+  const potence = new THREE.Group(); potence.position.set(0, 1.0, -0.4); g.add(potence);
+  bx(lam(0xffd23f), 0.34, 1.5, 0.34, 0, 0.75, 0, potence);
+  const fleche = new THREE.Group(); fleche.position.set(0, 1.45, 0); potence.add(fleche);
+  bx(lam(0xffd23f), 0.3, 0.3, 2.6, 0, 0, -1.2, fleche);
+  const tambour = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 10), chrome);
+  tambour.rotation.z = Math.PI / 2; tambour.position.set(0, 0.2, 0.35); potence.add(tambour);
+  const crochet = new THREE.Group(); crochet.position.set(0, -0.3, -2.3); fleche.add(crochet);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 6), lam(0x2b2f3a));
+  cable.position.set(0, 0.45, 0); crochet.add(cable);
+  bx(chrome, 0.26, 0.3, 0.26, 0, -0.2, 0, crochet);
+  bx(chrome, 0.1, 0.34, 0.1, 0, -0.5, 0.1, crochet);
+  // LE GYROPHARE ROND BLEU
+  const gyro = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.22, 12), neonMat(0x2060ff));
+  gyro.position.set(0, 2.1, 1.5); g.add(gyro);
+  const enseigne = new THREE.MeshBasicMaterial({ map: textTexture('DÉPANNAGE') });
+  for (const [sx, ry] of [[-1.11, -Math.PI / 2], [1.11, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.44), enseigne); pl.position.set(sx, 1.3, 1.5); pl.rotation.y = ry; g.add(pl); }
+  const wheels = [];
+  for (const [wx, wz] of [[-0.95, 1.7], [0.95, 1.7], [-0.95, -1.5], [0.95, -1.5]]) { const w = makeWheel(1.15); w.position.set(wx, 0.4, wz); g.add(w); wheels.push(w); }
+  g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
+  const W = 2.3, D = 5.6;
+  const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
+  const c = { g, wheels, x, y: 0, z, h, color: 0x1e56c8, busy: false, solid, kind: 'depanneuse',
+    spec: { max: 22, rev: -6, accel: 15, turn: 1.6, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
+    gyro, potence, fleche, crochet, cable, etat: null, remorque: null, tarif: 0, mission: null };
+  solid.ai = true;
+  prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
+  return c;
+}
+function depanneuseAppel(acc) {
+  const L = city.depanneuses || [];
+  const d = L.find(x => !x.mission && drive.car !== x);
+  if (!d || !acc) return null;
+  // le véhicule à dépanner : le plus abîmé des deux
+  const cible = ((acc.a.dmg || 0) >= (acc.b.dmg || 0)) ? acc.a : acc.b;
+  d.mission = { acc, cible, phase: 'route', mode: null, tarif: 0, fini: false };
+  acc.dep = d.mission;
+  msg('🚚 Une dépanneuse a été appelée (service payant)', 2400);
+  return d.mission;
+}
+function depanneusesTick(dt) {
+  for (const d of (city.depanneuses || [])) {
+    if (d.gyro) d.gyro.visible = !!d.mission && (simTime % 0.7) < 0.35;
+    const m = d.mission; if (!m || drive.car === d) continue;
+    const c = m.cible;
+    if (m.phase === 'route') {
+      const cs = Math.cos(c.h), sn = Math.sin(c.h);
+      const tx = c.x - sn * ((c.baseD || 4.4) / 2 + 3), tz = c.z - cs * ((c.baseD || 4.4) / 2 + 3);
+      if (rouleVers(d, tx, tz, dt, 16) > 1.2) continue;
+      // petit accident = réparation SUR PLACE ; gros = treuillage et remorquage au garage
+      m.mode = (c.dmg || 0) < DEGATS_SUR_PLACE ? 'place' : 'remorque';
+      m.tarif = m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE;
+      m.phase = m.mode === 'place' ? 'repare' : 'treuil';
+      m.t = simTime + 2.5;
+      msg(m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`, 2600);
+    } else if (m.phase === 'repare') {
+      if (simTime < m.t) { burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
+      c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
+      facturerDepannage(m);
+      m.phase = 'fini'; m.fini = true; d.mission = null; d.remorque = null;
+      msg('🔧 Réparé sur place, tu peux repartir', 2400); sfx.pok();
+    } else if (m.phase === 'treuil') {
+      if (simTime < m.t) { if (d.crochet) d.crochet.position.y = -0.3 - Math.sin((m.t - simTime) * 2) * 0.5; continue; }
+      d.remorque = c; c.remorque = d; m.phase = 'garage';
+      msg('⛓️ Véhicule accroché : direction le garage', 2400);
+    } else if (m.phase === 'garage') {
+      const g = city.garage || { x: d.home0[0], z: d.home0[1] };
+      if (rouleVers(d, g.x, g.z, dt, 14) > 4) { traineVehicule(d, c, dt); continue; }
+      traineVehicule(d, c, dt);
+      c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
+      c.remorque = null; d.remorque = null;
+      facturerDepannage(m);
+      m.phase = 'fini'; m.fini = true; d.mission = null;
+      msg('🚚 Véhicule remorqué au garage et réparé', 2800); sfx.register();
+    }
+  }
+}
+function facturerDepannage(m) {
+  m.paye = false;
+  if (!m.acc || !m.acc.joueur) { m.paye = true; return; }
+  if (wallet >= m.tarif) { wallet -= m.tarif; saveWallet(); updateHud(); m.paye = true; msg(`🚚 Dépannage : ${m.tarif} 🪙 prélevés`, 2400); }
+  else msg('🚚 Dépannage impayé : le garage garde ton véhicule', 2600);
+}
+function traineVehicule(d, c, dt) {   // le véhicule remorqué suit le crochet, l'avant levé
+  if (!c) return;
+  const cs = Math.cos(d.h), sn = Math.sin(d.h);
+  c.x = d.x - sn * ((d.baseD || 5.6) / 2 + (c.baseD || 4.4) / 2 + 0.4);
+  c.z = d.z - cs * ((d.baseD || 5.6) / 2 + (c.baseD || 4.4) / 2 + 0.4);
+  c.h = d.h; c.y = groundUnder(c.x, c.z, c.solid, c.y || 0);
+  c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ');
+  if (c.caisse) c.caisse.rotation.x = -0.18;   // l'avant relevé sur le crochet
+  vehicleSolid(c);
+}
+// ================= LES AMBULANCES =================
+// Un break blanc à croix rouge, gyrophare et sirène, qui vient chercher AUTOMATIQUEMENT les
+// blessés — joueur ou bot à terre — et les emmène à l'hôpital.
+// POUR LES AUTRES POSTES : `city.ambulances` est la flotte, `ambulanceAppel(x, z, victime)`
+// déclenche la sortie, et chaque ambulance porte un point d'ancrage `amb.brancard`
+// (Object3D dans le repère de la caisse) où le poste ANIMATION vient poser le brancard et
+// jouer le brancardage ; `amb.etat` vaut 'route' | 'charge' | 'transport' | 'depose' | 'retour'.
+const AMBULANCE_CHARGE = 3;   // secondes de brancardage sur place
+function makeAmbulance(x, z, h) {
+  const g = new THREE.Group(), blanc = lam(0xf4f6fa), rouge = lam(0xe02020);
+  const bx = (mat, sx, sy, sz, px, py, pz, parent) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; (parent || g).add(m); return m; };
+  bx(blanc, 2.2, 0.6, 5.0, 0, 0.62, 0);                                   // caisse basse
+  bx(blanc, 2.15, 1.05, 2.0, 0, 1.42, 1.35);                              // capot / cabine
+  bx(blanc, 2.2, 1.45, 2.9, 0, 1.62, -1.1);                               // la cellule sanitaire (break)
+  bx(glassCar, 1.95, 0.62, 0.06, 0, 1.62, 2.36).rotation.x = 0.38;        // pare-brise
+  for (const sx of [-1.06, 1.06]) bx(glassCar, 0.06, 0.5, 1.1, sx, 1.62, 1.35);
+  for (const sx of [-1.11, 1.11]) bx(glassCar, 0.06, 0.5, 1.0, sx, 1.95, -0.6);
+  bx(glassCar, 1.7, 0.6, 0.06, 0, 1.95, -2.56);
+  for (const sx of [-0.7, 0.7]) bx(neonMat(0xffffcc), 0.36, 0.2, 0.08, sx, 0.85, 2.5);
+  bx(neonMat(0xff3030), 1.9, 0.16, 0.08, 0, 0.9, -2.56);
+  bx(darkM, 2.3, 0.24, 0.16, 0, 0.5, 2.5); bx(darkM, 2.3, 0.24, 0.16, 0, 0.5, -2.54);
+  // LA CROIX ROUGE, sur les deux flancs et sur le capot
+  for (const [sx, ry] of [[-1.12, -Math.PI / 2], [1.12, Math.PI / 2]]) {
+    bx(rouge, 0.03, 0.28, 1.0, sx, 1.62, -1.1); bx(rouge, 0.03, 0.95, 0.3, sx, 1.62, -1.1);
+    const b1 = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1), new THREE.MeshBasicMaterial({ visible: false })); b1.rotation.y = ry; g.add(b1);
+  }
+  bx(rouge, 0.85, 0.03, 0.26, 0, 1.96, 1.35); bx(rouge, 0.26, 0.03, 0.85, 0, 1.96, 1.35);
+  for (const sx of [-1, 1]) bx(rouge, 0.06, 0.16, 5.0, sx * 1.11, 1.02, 0);   // le liseré rouge
+  // GYROPHARES : une rampe bleue sur le pavillon
+  const gyros = [];
+  for (const sx of [-0.55, 0.55]) gyros.push(bx(neonMat(0x2060ff), 0.5, 0.2, 0.32, sx, 2.5, 1.3));
+  bx(darkM, 1.5, 0.1, 0.36, 0, 2.38, 1.3);
+  const enseigne = new THREE.MeshBasicMaterial({ map: textTexture('AMBULANCE') });
+  for (const [sx, ry] of [[-1.13, -Math.PI / 2], [1.13, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.42), enseigne); pl.position.set(sx, 1.12, 0.4); pl.rotation.y = ry; g.add(pl); }
+  // LE POINT D'ANCRAGE DU BRANCARD, dans la cellule : c'est là que le poste ANIMATION
+  // viendra poser la civière et jouer le brancardage.
+  const brancard = new THREE.Group(); brancard.position.set(0, 1.05, -1.2); g.add(brancard);
+  const wheels = [];
+  for (const [wx, wz] of [[-0.95, 1.55], [0.95, 1.55], [-0.95, -1.65], [0.95, -1.65]]) { const w = makeWheel(1.05); w.position.set(wx, 0.36, wz); g.add(w); wheels.push(w); }
+  g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
+  const W = 2.3, D = 5.2;
+  const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
+  const c = { g, wheels, x, y: 0, z, h, color: 0xf4f6fa, busy: false, solid, kind: 'ambulance',
+    spec: { max: 30, rev: -7, accel: 22, turn: 1.9, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
+    gyros, brancard, etat: null, victime: null, sirene: false };
+  solid.ai = true;
+  prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
+  return c;
+}
+// L'APPEL : un blessé au sol (bot ou joueur). Renvoie l'ambulance envoyée, ou null.
+function ambulanceAppel(x, z, victime) {
+  const L = city.ambulances || [];
+  if (!L.length) return null;
+  if (victime && L.some(a => a.victime === victime)) return null;
+  const amb = L.find(a => !a.etat && drive.car !== a);
+  if (!amb) return null;
+  amb.etat = 'route'; amb.victime = victime || null; amb.cible = { x, z }; amb.sirene = true; amb.t = 0;
+  msg('🚑 Une ambulance a été appelée', 2200);
+  return amb;
+}
+function ambulancesTick(dt) {
+  for (const a of (city.ambulances || [])) {
+    if (a.gyros) { const on = !!a.etat && (simTime % 0.6) < 0.3; for (const m of a.gyros) m.visible = on; }
+    if (!a.etat || drive.car === a) continue;
+    const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
+    if (a.etat === 'route') {
+      if (rouleVers(a, a.cible.x, a.cible.z, dt, 20) > 3.5) continue;
+      a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE;
+      msg('🚑 Les secours embarquent le blessé', 2400);
+    } else if (a.etat === 'charge') {
+      if (simTime < a.t) continue;
+      a.etat = 'transport';
+    } else if (a.etat === 'transport') {
+      porteVictime(a);
+      if (rouleVers(a, hop.x, hop.z + 3, dt, 20) > 4) continue;
+      a.etat = 'depose'; a.t = simTime + 1.5;
+    } else if (a.etat === 'depose') {
+      porteVictime(a);
+      if (simTime < a.t) continue;
+      soigneVictime(a);
+      a.etat = 'retour'; a.victime = null;
+    } else if (a.etat === 'retour') {
+      if (rouleVers(a, a.home0[0], a.home0[1], dt, 16) > 2) continue;
+      a.etat = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
+    }
+  }
+}
+function porteVictime(a) {   // le blessé voyage SUR LE BRANCARD, dans la cellule
+  const v = a.victime; if (!v) return;
+  a.brancard.updateMatrixWorld(true);
+  const p = new THREE.Vector3(); a.brancard.getWorldPosition(p);
+  if (v === 'joueur') { P.pos.set(p.x, p.y - 0.55, p.z); return; }
+  if (v.pos && v.av) { v.pos.set(p.x, p.y - 0.55, p.z); corpsAuSol(v.av, p.x, p.z, p.y - 0.55); v.wait = 2; v.ko = simTime + 2; }
+}
+function soigneVictime(a) {
+  const v = a.victime; if (!v) return;
+  if (v === 'joueur') { P.hp = 100; if (city.medDesk) P.pos.set(city.medDesk.x, 0.3, city.medDesk.z + 2); msg('🏥 Soigné à l\'hôpital', 2600); sfx.check(); return; }
+  v.hp = 100; v.ko = 0; v.soin = 0; v.fight = null;
+  if (city.medDesk) { v.pos.set(city.medDesk.x, groundUnder(city.medDesk.x, city.medDesk.z + 2, null, 1), city.medDesk.z + 2); corpsDebout(v.av, v.pos.x, v.pos.z, v.pos.y); }
+  chat(null, `🏥 ${v.name} a été soigné à l'hôpital`);
+}
+// Le SCRUTIN AUTOMATIQUE : un blessé à terre depuis plus de deux secondes et personne pour
+// l'aider — l'ambulance part toute seule. C'est ce qui rend le service « automatique ».
+function urgencesTick(dt) {
+  if (!city.on || !(city.ambulances || []).length) return;
+  if (simTime < (city.urgT || 0)) return;
+  city.urgT = simTime + 1.5;
+  if (P.hp <= 12 && !jail.on && !drive.car && !(city.ambulances || []).some(a => a.victime === 'joueur')) { ambulanceAppel(P.pos.x, P.pos.z, 'joueur'); return; }
+  for (const b of bots) {
+    if (!b.av || !b.av.group.visible || b.prison || b.drive) continue;
+    if ((b.hp == null ? 100 : b.hp) > 0 || !b.ko) continue;
+    if (ambulanceAppel(b.pos.x, b.pos.z, b)) return;
+  }
+}
+function servicesTick(dt) {
+  try { accidentsTick(dt); } catch (e) {}
+  try { depanneusesTick(dt); } catch (e) {}
+  try { ambulancesTick(dt); } catch (e) {}
+  try { urgencesTick(dt); } catch (e) {}
 }
 // ---- conducteurs du trafic : on peut les éjecter et voler leur voiture ----
 const DRIVER_NAMES = ['Karim', 'Sophie', 'Marco', 'Léa', 'Hugo', 'Nadia', 'Tom', 'Chloé'];
@@ -13282,12 +13938,9 @@ function addDriver(c, seat) {   // un conducteur assis au volant, visible par le
 }
 function placeDriver(c) {
   const d = c.driver; if (!d) return;
-  const s2 = d.seat, cs = Math.cos(c.h), sn = Math.sin(c.h);
-  // repère du véhicule : +z vers l'avant, +x vers la gauche
-  d.av.group.position.set(c.x + s2.x * cs + s2.z * sn, c.y + s2.y, c.z - s2.x * sn + s2.z * cs);
-  d.av.group.rotation.y = c.h;
-  animateRig(d.av.rig, 'idle', 0, 0.016, simTime);
-  d.av.rig.armL.rotation.x = d.av.rig.armR.rotation.x = -1.2;   // les mains sur le volant
+  // Le conducteur du trafic prend la MÊME place que le joueur : une seule table de places
+  // (PLACES) pour tout le monde, sinon les uns étaient assis et les autres debout.
+  assiedAvatar(d.av, c, placesDe(c).conducteur || d.seat, 0.016, true);
 }
 function stealCar(c) {   // vol à l'arraché : le conducteur est éjecté et prend la fuite
   if (drive.car || jail.on || !c) return;
@@ -13365,7 +14018,8 @@ function cityStep(dt) {
       if (Math.abs(lx) > half[0] - 0.5 && Math.abs(lx) < half[0] + 2 && Math.abs(lz) < half[1]) { spd = 0; c.stopped = true; jack = c; }
     }
     if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // véhicule à l'arrêt (ambulance) : loopPos(0) le téléportait sur l'anneau
-    c.s += spd * dt; const [x, z, h] = loopPos(c.s); c.x = x; c.z = z; c.h = h; c.y = groundUnder(x, z, c.solid, c.y); c.g.position.set(x, c.y, z); c.g.rotation.y = h; c.wheels.forEach(w => w.rotation.x -= spd * dt / 0.3); vehicleSolid(c);
+    if (c.accidente) { spd = 0; c.spd0 = c.spd0 == null ? c.spd : c.spd0; }   /* accidenté : il ne repart pas */
+    c.s += spd * dt; const [x, z, h] = loopPos(c.s); c.x = x; c.z = z; c.h = h; c.y = solSousRoues(c); c.g.position.set(x, c.y, z); c.g.rotation.y = h; c.cmd = { v: spd, volant: 0, ratio: 0.3, accLong: 0 }; rouesTick(c, dt, spd, c.cmd); vehicleSolid(c);
     if (c.driver) placeDriver(c);
     if (!drive.car) {   // bousculade si le joueur est sur la route
       const dx = P.pos.x - x, dz = P.pos.z - z, cs = Math.cos(h), sn = Math.sin(h), lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
@@ -13450,7 +14104,7 @@ function cityVie(dt) {
   if (city.rides.length || city.seaMesh) safe('manèges', () => ridesTick(dt));
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
-  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
+  safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('services', () => servicesTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
@@ -15387,14 +16041,13 @@ function frame() {
     // on conduisait un véhicule vide. On l'assied maintenant à la place du conducteur — mêmes
     // décalages que ceux déjà utilisés pour un ami bot qui conduit : à droite du milieu, un
     // peu en avant, et assez bas pour que la tête ne traverse pas le toit.
-    const c = drive.car, cs = Math.cos(c.h), sn = Math.sin(c.h);
-    const ferme = caisseFermee(c);
-    jambesEnCabine(me, ferme);
-    const sx = c.kind === 'truck' ? 0.55 : 0.5, sz = c.kind === 'truck' ? 2.55 : 0.3;
-    // jambes masquées : on remonte de 45 cm pour que le buste arrive à hauteur de vitre
-    const sy = c.heli ? 0.05 : c.kind === 'truck' ? 0.3 : (ferme ? -0.2 : -0.35);   // buste remonté : plus rien ne dépasse sous la caisse
-    me.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
-    me.group.rotation.set(c.tiltX || 0, c.h, 0, 'YXZ');
+    // Le joueur s'assied à la place du CONDUCTEUR de la table PLACES : mêmes repères pour
+    // lui, pour les bots et pour le chien. drive.assis reste faux pendant la première image
+    // qui suit la montée : on fige alors la pose (dt = 1) pour qu'il APPARAISSE assis.
+    const c = drive.car;
+    assiedAvatar(me, c, placesDe(c).conducteur, drive.assis ? dt : 1, true);
+    drive.assis = true;
+    if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
   } else { jambesEnCabine(me, false); me.group.rotation.z = 0; }
   const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
@@ -15454,7 +16107,10 @@ function frame() {
     const veh = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null);
     const dedans = running && !veh && sousToit();
     const inter = !veh && city.on ? city.interact : null;
-    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4) : 0);
+    // la caméra RECULE avec la vitesse (jusqu'à 2,6 m de plus) : le capot rentre dans le
+    // cadre et l'on voit venir la route
+    const vitesse = veh && !veh.heli ? clamp(Math.abs(drive.speed) / ((veh.spec && veh.spec.max) || 26), 0, 1.2) : 0;
+    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4 + vitesse * 2.6) : 0);
     if (dedans && !cam.interieur) want = Math.min(want, 3.5);
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Plus la pièce est étroite, plus la caméra se rapproche ; plus le
@@ -15534,10 +16190,24 @@ function frame() {
         cam.shake -= cam.shake * Math.min(1, dt * 6);
       }
     }
+    // LA VIBRATION : au-delà des trois quarts de la vitesse maxi, l'image tremble un peu —
+    // c'est le châssis qui vit. Rien à l'arrêt, rien à pied.
+    if (drive.car && !drive.car.heli) {
+      const r = clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.3);
+      const a2 = Math.max(0, r - 0.72) * 0.09;
+      if (a2 > 0.0005) {
+        cam.vibr = a2;
+        camera.position.x += Math.sin(simTime * 97) * a2;
+        camera.position.y += Math.sin(simTime * 131 + 1.1) * a2 * 0.9;
+      } else cam.vibr = 0;
+    } else cam.vibr = 0;
     if (camera.position.y < 0.4) camera.position.y = 0.4;
   }
   {   // champ de vision : resserré dans la lunette du fusil (effet de grossissement ×3)
-    const fovVoulu = P.zoom ? 20 : 55;
+    // LA SENSATION DE VITESSE : le champ de vision s'ouvre quand on accélère (55° à l'arrêt,
+    // jusqu'à 72° à fond) — c'est ce qui donne l'impression que le décor défile.
+    const vv = drive.car && !drive.car.heli ? clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.2) : 0;
+    const fovVoulu = P.zoom ? 20 : 55 + vv * 14;
     if (Math.abs(camera.fov - fovVoulu) > 0.2) { camera.fov += (fovVoulu - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
   }
   camera.lookAt(cam.target);
@@ -16590,7 +17260,7 @@ function tuneApply(c, t) {
   t = t || tuning;
   for (const m of (c.tuneMesh || [])) { if (m.parent) m.parent.remove(m); }
   c.tuneMesh = [];
-  const g = c.g, add = m => { g.add(m); c.tuneMesh.push(m); return m; };
+  const g = c.caisse || c.g, add = m => { g.add(m); c.tuneMesh.push(m); return m; };
   const bxm = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; return add(m); };
   // ---- peinture ----
   if (t.couleur != null && c.bodyMat) {
@@ -16689,6 +17359,8 @@ function nitroGo() {
   if (simTime < (drive.nitroCd || 0)) { msg(`🔥 Nitro en recharge (${(drive.nitroCd - simTime).toFixed(1)} s)`, 700); return false; }
   drive.nitroT = simTime + NITRO_DUREE; drive.nitroCd = simTime + NITRO_RECHARGE; drive.nitroT0 = simTime;
   msg('🔥 NITRO !', 800); sfx.boost(); sfx.noise(.6, 240, .08);
+  petarade(1);       // LA GROSSE PÉTARADE : détonation + souffle, sur le bus MOTEUR
+  if (drive.car) drive.car.susp = -0.22;   // le coup de pied dans la suspension
   camSecousse(0.2, 0.3);
   // la détonation aux deux pots
   for (const sx of [-0.62, 0.62]) {
@@ -18932,7 +19604,7 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
       bx(lam(MET_C.marron), 0.16, 0.46, 0.6, sx, 0.62, -0.65);
       bx(lam(MET_C.poste), 0.17, 0.12, 0.62, sx, 0.83, -0.65);
     }
-    for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.x = 0.35; w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz); }
+    for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.y = 0.35;   /* pneu FIN : on amincit la hauteur du cylindre, pas son rayon */ w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz); }
     siege = { x: 0, y: 1.08, z: -0.2 };
   }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -18942,7 +19614,7 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
   // de navigation, la police et les bots recalculaient leurs itinéraires à chaque fois qu'il
   // bougeait. Comme les voitures de la circulation, il est marqué « ai ».
   solid.ai = true;
-  vehicleSolid(c); settleVehicle(c);
+  prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
   return c;
 }
 // L'animation des parties mobiles : elle tourne pour TOUS les véhicules de travail, qu'ils

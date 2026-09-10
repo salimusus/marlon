@@ -8123,6 +8123,293 @@ test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demand
   return { ok, detail: `le bandeau des touches (« R2 avancer · L2 reculer · Stick G direction… ») restait affiché EN PERMANENCE dès qu'une manette était branchée : trois lignes en travers du haut de l'écran, par-dessus le jeu · il est maintenant masqué au repos (${r.repos.leg}), sort quelques secondes a la connexion, se rappelle par le PAVÉ TACTILE de la DualSense (${r.pave}) ou par le bouton « ⌨️ Rappeler les touches » des réglages (${r.bouton}), et se referme au deuxième appui (${r.referme.leg}) ou tout seul après son délai (${r.avant} → ${r.apres})` };
 });
 
+// ============ POSTE E : combat à deux poings, couteau, étuis, ambulancier ============
+// Un décor de bagarre déterministe : le joueur au centre, UN habitant devant lui à la
+// distance voulue, tous les autres poussés à 500 m — sinon `nearestFighter` attrape un
+// passant qui traînait là et la mesure change d'un lancement à l'autre.
+const E_BAGARRE = `
+  const posePlayer = (z) => { __G.P.pos.set(0, 0.3, 0); __G.P.facing = 0; __G.P.hp = 100; __G.P.stunT = 0; };
+  const seul = (d) => { const G = __G, b = G.bots[0];
+    for (const o of G.bots) if (o !== b) { o.pos.set(500, 0.3, 500); o.av.group.position.copy(o.pos); o.fight = null; o.ko = 0; }
+    for (const gg of (G.gangs || [])) for (const mm of gg.membres) { mm.x = 500; mm.z = 500; if (mm.av) mm.av.group.position.set(500, 0, 500); }
+    b.pos.set(0, 0.3, d); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0; b.dead = 0; b.fight = null;
+    b.garde = false; b.robbed = false; b.av.group.visible = true; b.av.group.rotation.x = 0;
+    return b; };
+`;
+
+test('le joueur se bat des DEUX poings, gauche puis droite', async p => {
+  const r = await p.evaluate(posteE(E_BAGARRE + `
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = {};
+    G.equipWeapon(null); G.P.drawn = false; G.setGarde(false); G.setAccroupi(false);
+    posePlayer(); const b = seul(1.3);
+    // quatre coups d'affilée : le poing doit changer à chaque fois
+    G.P.poing = 'G';   // point de départ fixe : sinon le test hérite du poing du test précédent
+    const suite = [];
+    for (let i = 0; i < 4; i++) {
+      b.pos.set(0, 0.3, 1.3); b.av.group.position.copy(b.pos); b.hp = 100;
+      G.P.punchT = 0; G.P.lastHitT = -99; G.P.combo = 0; rig.swing = 0; rig.swingG = 0;
+      G.punch();
+      suite.push({ poing: G.P.poing, droit: +(rig.swing > 0), gauche: +(rig.swingG > 0), degats: 100 - b.hp });
+    }
+    res.suite = suite;
+    res.alterne = suite.map(x => x.poing).join('');
+    // le bras GAUCHE part vraiment du coude replié et se tend : c'est le même geste qu'à droite
+    const geste = (cle) => { rig.swing = 0; rig.swingG = 0; rig[cle] = 0.28;
+      const br = cle === 'swing' ? rig.armR : rig.armL, co = br.coude;
+      br.rotation.x = 0; co.rotation.x = 0;
+      const suivi = [];
+      for (let i = 0; i < 26; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); suivi.push([+br.rotation.x.toFixed(2), +co.rotation.x.toFixed(2)]); }
+      return { debutCoude: suivi[0][1], finCoude: suivi[suivi.length - 1][1],
+        epauleMin: +Math.min(...suivi.map(v => v[0])).toFixed(2), epauleMax: +Math.max(...suivi.map(v => v[0])).toFixed(2) }; };
+    res.droit = geste('swing'); res.gauche = geste('swingG');
+    // en marchant, le bras qui frappe n'est plus écrasé par le balancement
+    rig.swingG = 0.28; rig.armL.rotation.x = 0;
+    for (let i = 0; i < 8; i++) G.animateRig(rig, 'walk', 1.4, 1 / 60, i / 60);
+    res.enMarchant = +rig.armL.rotation.x.toFixed(2);
+    rig.swingG = 0; rig.swing = 0;
+    return res;
+  `));
+  const s = r.suite;
+  const alterne = s.every((x, i) => i === 0 || x.poing !== s[i - 1].poing);
+  const bonBras = s.every(x => (x.poing === 'D' ? x.droit === 1 && x.gauche === 0 : x.gauche === 1 && x.droit === 0));
+  const ok = alterne && bonBras && s.every(x => x.degats > 0)
+    && r.droit.debutCoude < -0.8 && r.droit.finCoude > -0.2 && r.gauche.debutCoude < -0.8 && r.gauche.finCoude > -0.2
+    && r.gauche.epauleMin < -2 && r.gauche.epauleMax > -1 && r.enMarchant < -1;
+  return { ok, detail: `le joueur ne frappait QUE du bras droit · l'enchaînement alterne maintenant les deux poings (${r.alterne}), chacun portant vraiment (${s.map(x => x.degats + ' PV').join(', ')}) · le geste est le même des deux côtés : le coude part replié (${r.gauche.debutCoude} rad à gauche, ${r.droit.debutCoude} à droite) et se tend à l'impact (${r.gauche.finCoude} / ${r.droit.finCoude}), l'épaule balaie de ${r.gauche.epauleMin} à ${r.gauche.epauleMax} · et le balancement de la marche n'écrase plus le bras qui frappe (${r.enMarchant} rad)` };
+});
+
+test('la garde encaisse le coup, se baisser l\'esquive', async p => {
+  const r = await p.evaluate(posteE(E_BAGARRE + `
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = {};
+    const T2 = G.THREE;
+    G.equipWeapon(null); G.P.drawn = false;
+    // un coup de poing venu de DEVANT, dans les trois situations
+    const encaisse = (garde, baisse, dz) => { posePlayer(); G.setGarde(garde); G.setAccroupi(baisse);
+      G.P.hp = 100; G.hurt(20, 'un cogneur', 0, dz == null ? -1 : dz, 1.5, 'poing');
+      const perdu = +(100 - G.P.hp).toFixed(1); G.setGarde(false); G.setAccroupi(false); G.P.hp = 100; return perdu; };
+    res.nu = encaisse(false, false);
+    res.garde = encaisse(true, false);
+    res.baisse = encaisse(false, true);
+    // dans le dos, la garde ne sert à rien : on ne pare pas ce qu'on ne voit pas
+    res.dansLeDos = encaisse(true, false, 1);
+    // une balle traverse la garde
+    posePlayer(); G.setGarde(true); G.P.hp = 100; G.hurt(20, 'une balle', 0, -1, 1.2); res.balle = +(100 - G.P.hp).toFixed(1);
+    G.setGarde(false); G.P.hp = 100;
+    // LA POSE : les deux poings serrés devant le visage, coudes rentrés
+    G.setGarde(true); rig.swing = 0; rig.swingG = 0;
+    for (let i = 0; i < 50; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    me.group.rotation.set(0, 0, 0); me.group.position.set(0, 0, 0); me.group.updateMatrixWorld(true);
+    const wp = o => o.getWorldPosition(new T2.Vector3());
+    const pg = wp(rig.armL.poing), pd = wp(rig.armR.poing), tete = wp(me.tete);
+    const bt = new T2.Box3().setFromObject(me.tete);
+    res.pose = { poingsY: +((pg.y + pd.y) / 2).toFixed(2), teteBas: +bt.min.y.toFixed(2), teteHaut: +bt.max.y.toFixed(2),
+      devant: +(((pg.z + pd.z) / 2) - bt.max.z).toFixed(2), ecart: +Math.abs(pg.x - pd.x).toFixed(2),
+      coudeG: +rig.armL.coude.rotation.x.toFixed(2), coudeD: +rig.armR.coude.rotation.x.toFixed(2),
+      rentreG: +rig.armL.rotation.z.toFixed(2), rentreD: +rig.armR.rotation.z.toFixed(2) };
+    // pendant un coup, la garde s'ouvre : sinon le poing n'irait jamais au bout
+    rig.swing = 0.28; let mn = 9;
+    for (let i = 0; i < 14; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); mn = Math.min(mn, rig.armR.rotation.x); }
+    res.gardeOuverte = +mn.toFixed(2); rig.swing = 0;
+    G.setGarde(false); for (let i = 0; i < 40; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    // SE BAISSER : le bassin descend, la tête passe sous le coup, les semelles restent au sol
+    G.setAccroupi(true); for (let i = 0; i < 80; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    me.group.position.set(0, -(rig.baisse || 0), 0); me.group.updateMatrixWorld(true);
+    const bb = new T2.Box3(); for (const m of rig.legL.piedParts) if (m.visible) bb.expandByObject(m);
+    res.baisseP = { descente: +rig.baisse.toFixed(3), tete: +wp(me.tete).y.toFixed(2), semelle: +bb.min.y.toFixed(3),
+      hanche: +rig.legL.rotation.x.toFixed(2), genou: +rig.legL.genou.rotation.x.toFixed(2) };
+    G.setAccroupi(false); for (let i = 0; i < 80; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    me.group.position.set(0, 0, 0); me.group.updateMatrixWorld(true);
+    res.debout = { descente: +rig.baisse.toFixed(3), tete: +wp(me.tete).y.toFixed(2) };
+    // LE CONTRAT AVEC LA MANETTE : les deux gestes s'appellent garde(on) et esquive(on)
+    res.noms = { garde: typeof G.garde === 'function', esquive: typeof G.esquive === 'function' };
+    posePlayer(); G.garde(true); res.noms.gardeMarche = G.P.garde && me.rig.garde; G.garde(false);
+    res.noms.gardeBaissee = !G.P.garde;
+    G.esquive(true); res.noms.esquiveMarche = G.P.accroupi && me.rig.accroupi; G.esquive(false);
+    res.noms.esquiveFinie = !G.P.accroupi;
+    // EN FACE AUSSI : un habitant qui se garde encaisse le quart du coup
+    posePlayer(); const b = seul(1.3);
+    G.P.punchT = 0; G.P.combo = 0; G.P.lastHitT = -99; G.punch(); res.botNu = 100 - b.hp;
+    b.pos.set(0, 0.3, 1.3); b.av.group.position.copy(b.pos); b.hp = 100; b.garde = true;
+    G.P.punchT = 0; G.P.combo = 0; G.P.lastHitT = -99; G.punch(); res.botGarde = 100 - b.hp;
+    b.garde = false; b.hp = 100;
+    return res;
+  `));
+  const po = r.pose, ba = r.baisseP;
+  const ok = r.nu === 20 && r.garde <= r.nu / 2 && r.garde > 0 && r.baisse === 0 && r.dansLeDos === r.nu && r.balle === r.nu
+    && po.poingsY > po.teteBas - 0.05 && po.poingsY < po.teteHaut && po.devant > 0.05 && po.ecart < 1
+    && po.coudeG < -1.4 && po.coudeD < -1.4 && po.rentreG > 0.2 && po.rentreD < -0.2
+    && r.gardeOuverte < -1.8
+    && ba.descente > 0.15 && ba.tete < r.debout.tete - 0.15 && Math.abs(ba.semelle) < 0.02 && ba.genou > 1.2
+    && r.debout.descente < 0.02
+    && r.botNu > 0 && r.botGarde > 0 && r.botGarde <= r.botNu / 2
+    && r.noms.garde && r.noms.esquive && r.noms.gardeMarche && r.noms.gardeBaissee && r.noms.esquiveMarche && r.noms.esquiveFinie;
+  return { ok, detail: `on encaissait tout sans jamais pouvoir se défendre · LA GARDE, les deux poings serrés devant le visage (à ${po.poingsY} m, la tête va de ${po.teteBas} à ${po.teteHaut} m, poings ${po.devant} m en avant, coudes rentrés à ${po.coudeG} / ${po.coudeD} rad), fait tomber le coup de ${r.nu} à ${r.garde} PV — mais elle ne vaut que de face (${r.dansLeDos} PV dans le dos) et n'arrête pas une balle (${r.balle} PV) · SE BAISSER esquive complètement (${r.baisse} PV) : le bassin descend de ${ba.descente} m, la tête de ${(r.debout.tete - ba.tete).toFixed(2)} m, genoux pliés à ${ba.genou} rad et semelles toujours posées (${ba.semelle} m) · la garde s'ouvre le temps du coup (${r.gardeOuverte} rad) · et EN FACE aussi on se garde : l'habitant encaisse ${r.botGarde} au lieu de ${r.botNu} · les deux gestes repondent aux noms convenus avec la manette : garde(on) et esquive(on)` };
+});
+
+test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs coups', async p => {
+  const r = await p.evaluate(posteE(E_BAGARRE + `
+    const G = __G, T2 = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = {};
+    const wp = o => o.getWorldPosition(new T2.Vector3());
+    const bte = o => { me.group.updateMatrixWorld(true); return new T2.Box3().setFromObject(o); };
+    // ---- la boutique ----
+    const fiche = G.catalog('armes').find(x => x.id === 'knife');
+    res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
+    G.wallet = 500; G.owned.add('arme:knife'); G.owned.add('arme:pistol'); G.saveOwned && G.saveOwned();
+    G.equipWeapon('couteau'); res.nomFrancais = G.P.weapon;   // la manette dit « couteau »
+    res.tourDesArmes = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 6; i++) { G.armeSuivante(1); vus.push(G.P.weapon); } return vus; })();
+    G.majEtuis(); me.group.updateMatrixWorld(true);
+    res.boutique.apresAchat = G.catalog('armes').find(x => x.id === 'knife').owned();
+    // ---- l'étui, du côté OPPOSÉ au pistolet, visible en permanence ----
+    const E = me.etuis;
+    const local = o => me.group.worldToLocal(wp(o).clone());
+    res.etui = { couteau: E.couteau.visible, pistolet: E.pistolet.visible, ceinture: E.ceinture.visible,
+      xCouteau: +local(E.couteau.children[0]).x.toFixed(2), xPistolet: +local(E.pistolet.children[0]).x.toFixed(2) };
+    // sans couteau acheté, pas de fourreau
+    G.owned.delete('arme:knife'); G.majEtuis(); res.etui.sansAchat = E.couteau.visible;
+    G.owned.add('arme:knife'); G.majEtuis();
+    // ---- rangé dans son fourreau, dégainé dans le poing ----
+    G.equipWeapon('knife'); G.setWeapon(me, 'knife', false); me.group.updateMatrixWorld(true);
+    const k = me.weapons.knife;
+    res.range = { visible: k.visible, dansLeFourreau: +ecartBoites(bte(k), bte(E.couteau)).toFixed(3),
+      cote: +local(k).x.toFixed(2), pieces: G.knifeMesh().children.length };
+    G.setWeapon(me, 'knife', true); me.group.updateMatrixWorld(true);
+    res.enMain = +wp(k).distanceTo(wp(rig.armR.poing)).toFixed(3);
+    // ---- le coup au ventre, puis le rangement tout seul ----
+    posePlayer(); const b = seul(1.3);
+    G.setWeapon(me, 'knife', false); G.P.drawn = false;
+    const coups = [];
+    for (let i = 0; i < 4; i++) {
+      b.pos.set(0, 0.3, 1.3); b.av.group.position.copy(b.pos);
+      G.P.punchT = 0; G.P.fireCd = 0; G.P.pos.set(0, 0.3, 0); G.P.facing = 0;
+      G.coupCouteau();
+      coups.push({ hp: Math.max(0, b.hp), ko: !!b.ko, ventre: +(G.P.dernierCoupY || 0).toFixed(2), enMain: me.inHand, degaine: G.P.drawn });
+    }
+    res.coups = coups;
+    res.degats = G.WEAPONS.knife.dmg;
+    // il se range TOUT SEUL, sans qu'on touche à rien
+    res.rangement = { programme: +(G.P.holsterT - G.simTime).toFixed(2) };
+    G.simTime = G.P.holsterT + 0.05; G.rangementAuto();
+    me.group.updateMatrixWorld(true);
+    res.rangement.enMainApres = me.inHand;
+    res.rangement.retourFourreau = +ecartBoites(bte(me.weapons.knife), bte(E.couteau)).toFixed(3);
+    // hors de portée, le couteau ne touche personne
+    b.pos.set(0, 0.3, 4); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0;
+    G.P.punchT = 0; G.P.fireCd = 0; G.coupCouteau(); res.horsPortee = b.hp;
+    b.hp = 100; b.ko = 0; G.equipWeapon(null);
+    return res;
+  `));
+  const c = r.coups;
+  const ok = r.boutique.existe && r.boutique.prix >= 20 && !r.boutique.possede && r.boutique.apresAchat
+    && r.etui.couteau && r.etui.pistolet && r.etui.ceinture && !r.etui.sansAchat
+    && r.etui.xCouteau < -0.1 && r.etui.xPistolet > 0.1
+    && r.range.visible && r.range.dansLeFourreau < 0.03 && r.range.cote < -0.1 && r.range.pieces >= 8
+    && r.enMain < 0.05
+    && r.degats >= 25 && r.degats <= 40
+    && c[0].hp === 100 - r.degats && c[1].hp === 100 - 2 * r.degats && !c[1].ko && c[2].ko
+    && c.every(x => Math.abs(x.ventre - 0.95) < 0.02 && x.enMain && x.degaine)
+    && r.rangement.programme > 0.4 && !r.rangement.enMainApres && r.rangement.retourFourreau < 0.03
+    && r.horsPortee === 100 && r.nomFrancais === 'knife' && r.tourDesArmes.includes('knife');
+  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
+});
+
+test('le fusil et le fusil à lunette reposent dans un étui de dos', async p => {
+  const r = await p.evaluate(posteE(`
+    const G = __G, T2 = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = { armes: {} };
+    const wp = o => o.getWorldPosition(new T2.Vector3());
+    poseNeutre(me);
+    G.owned.add('arme:rifle'); G.owned.add('arme:sniper'); G.majEtuis();
+    res.etuiVisible = me.etuis.dos.visible;
+    res.pieces = me.etuis.dos.children.length;
+    for (const arme of ['rifle', 'sniper']) {
+      G.equipWeapon(arme); G.setWeapon(me, arme, false); poseNeutre(me);
+      const m = me.weapons[arme];
+      const range = +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3);
+      const derriere = +me.group.worldToLocal(wp(m).clone()).z.toFixed(2);
+      G.setWeapon(me, arme, true); poseNeutre(me);
+      res.armes[arme] = { range, derriere, visible: m.visible,
+        enMain: +wp(m).distanceTo(wp(rig.armR.poing)).toFixed(3),
+        quitteLeDos: +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3) };
+      G.setWeapon(me, arme, false);
+    }
+    // sans fusil acheté, pas de harnais
+    G.owned.delete('arme:rifle'); G.owned.delete('arme:sniper'); G.equipWeapon(null); G.majEtuis();
+    res.sansFusil = me.etuis.dos.visible;
+    G.owned.add('arme:rifle'); G.majEtuis();
+    return res;
+  `));
+  const a = r.armes;
+  const ok = r.etuiVisible && !r.sansFusil && r.pieces >= 4
+    && ['rifle', 'sniper'].every(k => a[k].range < 0.12 && a[k].derriere < -0.1 && a[k].enMain < 0.05 && a[k].quitteLeDos > 0.5);
+  return { ok, detail: `le fusil flottait derrière les omoplates sans rien pour le tenir · il y a maintenant un HARNAIS DE DOS (${r.pieces} pièces : bandoulière en diagonale, sangle de taille, deux appuis et une boucle), visible dès qu'on possède un fusil et absent sinon · le fusil d'assaut y repose à ${a.rifle.range} m de son appui (${a.rifle.derriere} m derrière le dos) et le fusil à lunette à ${a.sniper.range} m · à la prise en main ils quittent le dos (${a.rifle.quitteLeDos} / ${a.sniper.quitteLeDos} m) pour venir dans le poing (${a.rifle.enMain} / ${a.sniper.enMain} m)` };
+});
+
+test('l\'ambulancier porte une tenue blanche à croix rouge et un brancard', async p => {
+  const r = await p.evaluate(posteE(`
+    const G = __G, T2 = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const res = {};
+    res.metier = !!(G.METIERS_DEF && G.METIERS_DEF.ambulancier);
+    const m = G.creerAmbulancier('Secours', 8, 14);
+    const av = m.bot.av;
+    res.tenue = { metier: av.tenue && av.tenue.metier, pieces: av.tenue ? av.tenue.pieces.length : 0,
+      hautBlanc: av.mats.shirt.color.getHexString(), basBlanc: av.mats.pants.color.getHexString() };
+    // le rouge de la croix doit vraiment être sur lui, devant ET derrière
+    let rouges = 0, devant = 0, derriere = 0;
+    for (const pc of av.tenue.pieces) { const c = pc.material.color.getHexString();
+      if (c === 'd8202a') { rouges++; const z = pc.getWorldPosition(new T2.Vector3()).z - av.group.position.z; if (z > 0.05) devant++; if (z < -0.05) derriere++; } }
+    res.croix = { rouges, devant, derriere };
+    // ---- le brancard ----
+    const br = m.brancard;
+    G.brancardTick(1 / 60);
+    const t = new T2.Box3().setFromObject(br.g).getSize(new T2.Vector3());
+    res.brancard = { existe: !!br, etat: G.brancardEtat(br).etat, long: +t.z.toFixed(2), larg: +t.x.toFixed(2),
+      reperes: !!(br.g.userData.avant && br.g.userData.arriere && br.g.userData.couche), pieces: br.g.children.length };
+    // porté : il suit le poing de l'ambulancier
+    for (let i = 0; i < 60; i++) { G.animateRig(av.rig, 'idle', 0, 1 / 60, i / 60); G.brancardTick(1 / 60); }
+    const main = av.rig.armR.main.getWorldPosition(new T2.Vector3());
+    const bcorps = new T2.Box3().setFromObject(av.torso), bbr = new T2.Box3().setFromObject(br.g);
+    res.porte = { ecart: +br.g.getWorldPosition(new T2.Vector3()).distanceTo(main).toFixed(2), porteurs: G.brancardEtat(br).porteurs,
+      traverse: +(bcorps.max.z - bbr.min.z).toFixed(2), poseBras: +av.rig.armR.rotation.x.toFixed(2) };
+    m.bot.pos.x += 6; av.group.position.copy(m.bot.pos); av.group.updateMatrixWorld(true); G.brancardTick(1 / 60);
+    const main2 = av.rig.armR.main.getWorldPosition(new T2.Vector3());
+    res.porte.suitLePorteur = +br.g.getWorldPosition(new T2.Vector3()).distanceTo(main2).toFixed(2);
+    // on y allonge un blessé
+    const bl = G.bots[0];
+    G.allongerSurBrancard(br, bl.av); G.brancardTick(1 / 60);
+    const couche = br.g.userData.couche.getWorldPosition(new T2.Vector3());
+    res.blesse = { surLeMatelas: +bl.av.group.position.distanceTo(couche).toFixed(3),
+      couche: +bl.av.group.rotation.x.toFixed(2), nom: G.brancardEtat(br).blesse };
+    // on le glisse dans le véhicule (le poste B fournira l'ambulance et son ancrage)
+    const c = G.city.cars[0];
+    G.chargerBrancard(br, c);
+    res.glisse = G.brancardEtat(br).etat;
+    for (let i = 0; i < 120; i++) G.brancardTick(1 / 60);
+    const anc = c.brancard.getWorldPosition(new T2.Vector3());
+    res.charge = { etat: G.brancardEtat(br).etat, ecart: +br.g.getWorldPosition(new T2.Vector3()).distanceTo(anc).toFixed(3),
+      dansLeVehicule: G.brancardEtat(br).dansVehicule, blesseSuit: +bl.av.group.position.distanceTo(br.g.userData.couche.getWorldPosition(new T2.Vector3())).toFixed(3) };
+    // le véhicule roule : le brancard part avec lui
+    c.g.position.x += 20; c.g.updateMatrixWorld(true);
+    res.charge.roule = +br.g.getWorldPosition(new T2.Vector3()).distanceTo(c.brancard.getWorldPosition(new T2.Vector3())).toFixed(3);
+    G.descendreDuBrancard(br); G.sortirBrancard(br);
+    res.sorti = G.brancardEtat(br).dansVehicule;
+    return res;
+  `));
+  const b = r.brancard;
+  const ok = r.metier && r.tenue.metier === 'ambulancier' && r.tenue.pieces >= 12
+    && r.tenue.hautBlanc === 'f7f9fc' && r.tenue.basBlanc === 'f7f9fc'
+    && r.croix.rouges >= 6 && r.croix.devant >= 2 && r.croix.derriere >= 2
+    && b.existe && b.etat === 'porte' && b.long > 1.8 && b.larg > 0.4 && b.reperes && b.pieces >= 14
+    && r.porte.ecart < 1.8 && r.porte.suitLePorteur < 1.8 && r.porte.porteurs === 1
+    && r.porte.traverse < 0.05 && r.porte.poseBras < -0.4
+    && r.blesse.surLeMatelas < 0.05 && Math.abs(r.blesse.couche + 1.57) < 0.05 && r.blesse.nom
+    && r.glisse === 'glisse' && r.charge.etat === 'charge' && r.charge.ecart < 0.05
+    && r.charge.dansLeVehicule && r.charge.blesseSuit < 0.05 && r.charge.roule < 0.05 && !r.sorti;
+  return { ok, detail: `il n'y avait personne pour ramasser les blessés · l'AMBULANCIER a maintenant sa tenue (${r.tenue.pieces} pièces : blouse, pantalon et chaussures blanches ${r.tenue.hautBlanc}, liseré et épaulières bleus, casquette blanche, trousse de secours) marquée de ${r.croix.rouges} croix rouges dont ${r.croix.devant} devant et ${r.croix.derriere} dans le dos · et son BRANCARD (${b.pieces} pièces, ${b.long} m sur ${b.larg} m : deux barres, toile, matelas, oreiller, sangles et pieds repliables) qu'il PORTE devant lui, bras tendus (épaules à ${r.porte.poseBras} rad), à ${r.porte.ecart} m de son poing, sans plus lui traverser le corps (${r.porte.traverse} m de recouvrement) et en le suivant quand il marche (${r.porte.suitLePorteur} m) · on y allonge le blessé (${r.blesse.surLeMatelas} m du matelas, couché à ${r.blesse.couche} rad) et on GLISSE le tout dans le véhicule : ${r.glisse} → ${r.charge.etat}, arrimé à ${r.charge.ecart} m de l'ancrage, il roule avec lui (${r.charge.roule} m) et le blessé ne bouge pas (${r.charge.blesseSuit} m)` };
+});
+
 test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le vehicule', async p => {
   const r = await p.evaluate(() => {
     const G = __G;

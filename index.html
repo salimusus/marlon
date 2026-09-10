@@ -229,6 +229,16 @@ body.lobby #aimBtn{display:none!important}
   border:2px solid rgba(255,255,255,.6);background:rgba(255,80,80,.3);font-size:26px;display:none;touch-action:none;z-index:5}
 body.touch.city #punchBtn{display:block}
 body.lobby #punchBtn{display:none!important}
+/* LE COMBAT AU POUCE : se baisser et lever la garde, deux boutons de la meme famille que
+   « frapper », posés juste à sa gauche. Ils s'allument tant qu'on les maintient. */
+#gardeBtn,#duckBtn{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 28px + clamp(84px,13vw,116px) + 14px);
+  width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,255,255,.6);background:rgba(90,140,255,.28);
+  font-size:24px;display:none;touch-action:none;z-index:5}
+#gardeBtn{right:calc(env(safe-area-inset-right) + 24px + clamp(84px,13vw,116px) + 14px + 64px)}
+#duckBtn{right:calc(env(safe-area-inset-right) + 24px + clamp(84px,13vw,116px) + 14px + 128px);background:rgba(90,200,140,.28)}
+body.touch.city #gardeBtn,body.touch.city #duckBtn{display:block}
+#gardeBtn.on{background:rgba(120,180,255,.62)}#duckBtn.on{background:rgba(110,230,160,.62)}
+body.lobby #gardeBtn,body.lobby #duckBtn{display:none!important}
 #wanted{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 56px);transform:translateX(-50%);background:rgba(200,30,30,.8);color:#fff;font-weight:800;padding:6px 14px;border-radius:10px;display:none;z-index:4;font-size:15px;animation:wblink 1s infinite}
 #wanted.on{display:block}
 /* jauge de performance du joueur, sous le bandeau du haut */
@@ -386,7 +396,7 @@ body.tv #perfHud{display:none!important}   /* la performance est déjà dans la 
 body.tv #cross{transform:translate(-50%,-50%) scale(1.7)}
 /* une TV n'a pas d'écran tactile : les gros boutons du pouce ne servent à rien */
 body.tv #joyHome,body.tv #joy,body.tv #jumpBtn,body.tv #emoteBtn,body.tv #carBtn,body.tv #raceBtn,
-body.tv #racketBtn,body.tv #fireBtn,body.tv #punchBtn,body.tv #drawBtn,body.tv #aimBtn,
+body.tv #racketBtn,body.tv #fireBtn,body.tv #punchBtn,body.tv #drawBtn,body.tv #aimBtn,body.tv #gardeBtn,body.tv #duckBtn,
 body.tv #aimUp,body.tv #aimDown{display:none!important}
 body.tv .card{max-width:min(940px,86vw);font-size:calc(var(--u) * .95)}
 body.tv .card h1{font-size:calc(var(--u) * 3)}
@@ -582,6 +592,8 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <button id="racketBtn" title="Prendre">✋</button>
 <button id="fireBtn" title="Tirer">🔫</button>
 <button id="punchBtn" title="Frapper">👊</button>
+<button id="gardeBtn" title="Garde (maintenir)">🛡️</button>
+<button id="duckBtn" title="Se baisser (maintenir)">🙇</button>
 <button id="drawBtn" title="Dégainer">✊</button>
 <button id="aimBtn" title="Viser">🎯</button>
 <button id="aimUp" title="Viser plus haut">⬆</button>
@@ -1944,6 +1956,7 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
     av.weapons = { pistol: wrapWeapon(gunMesh(), -0.84, -0.02, 0, -0.62, 0.66),
                    rifle: wrapWeapon(rifleMesh(), -0.82, -0.14, 0, -0.64, 1.0),
                    sniper: wrapWeapon(sniperMesh(), -0.82, -0.14, 0, -0.64, 1.28),
+                   knife: wrapWeapon(knifeMesh(), -0.84, 0, 0, -0.84, 0.52),
                    grenade: wrapWeapon(grenadeMesh(), -0.75, 0, 0, -0.75, 0.16) };
     for (const m of Object.values(av.weapons)) { m.visible = false; av.group.add(m); }
     // Nœud « main droite » au bout du bras, tourné pour que le +z de l'arme descende le long
@@ -1953,12 +1966,7 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
     // centre du poing (3 cm devant, pour que la crosse depasse des doigts). L'arme ne flotte plus.
     const hand = new THREE.Group(); hand.rotation.x = Math.PI / 2;
     (av.rig.armR.main || av.rig.armR.coude).add(hand); av.rig.handR = hand;   // dans le POING, au bout de l'avant-bras
-    const h = new THREE.Group(); av.group.add(h);
-    const belt = new THREE.Mesh(unitRound, lam(0x5a3a1e)); belt.scale.set(2.2 * S, 0.24 * S, 1.16 * S); belt.position.y = 1.95 * S; h.add(belt);
-    const buckle = new THREE.Mesh(unitRound, lam(0xffd23f)); buckle.scale.set(0.34 * S, 0.24 * S, 0.12 * S); buckle.position.set(0, 1.95 * S, 0.58 * S); h.add(buckle);
-    const pouch = new THREE.Mesh(unitRound, lam(0x6b4423)); pouch.scale.set(0.42, 0.62, 0.3); pouch.position.set(1.02 * S, 1.5 * S, 0); h.add(pouch);
-    const strap = new THREE.Mesh(unitRound, lam(0x3b2a1a)); strap.scale.set(0.16, 0.5, 0.34); strap.position.set(1.02 * S, 1.85 * S, 0); h.add(strap);
-    av.holster = h;
+    construitEtuis(av);
   }
   for (const [k, m] of Object.entries(av.weapons)) {
     m.visible = k === kind; if (k !== kind) continue;
@@ -1967,13 +1975,76 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
       m.position.set(0, 0, 0.02); m.rotation.set(0, 0, 0); m.scale.setScalar(1);
     } else {   // rangée : pistolet dans l'étui à la hanche droite (canon vers le bas), fusil en bandoulière dans le dos
       if (m.parent !== av.group) { m.parent && m.parent.remove(m); av.group.add(m); }
-      // rangée : poignée sur l'étui, canon vers le bas pour le pistolet ; fusil en bandoulière
+      // rangée : poignée sur l'étui, canon vers le bas pour le pistolet ; le couteau glisse
+      // dans son fourreau de hanche GAUCHE, lame vers le bas ; les fusils reposent sur le
+      // harnais de dos, entre les deux appuis
       if (k === 'pistol') { m.position.set(1.02 * S, 1.9 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.25, 0, 0.12); m.scale.setScalar(0.95); }
+      else if (k === 'knife') { m.position.set(-1.02 * S, 1.92 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.22, 0, -0.1); m.scale.setScalar(0.95); }
       else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(Math.PI / 2, 0.12, 1.15); m.scale.setScalar(k === 'sniper' ? 0.9 : 0.95); }
     }
   }
-  av.holster.visible = kind === 'pistol' && !inHand;
   av.gun = av.weapons[kind] ? av.weapons[kind].userData.inner : null; av.inHand = !!inHand;
+}
+// ================= LES ÉTUIS =================
+// Avant, le ceinturon n'apparaissait QUE quand le pistolet était rangé : on ne voyait jamais
+// ce que le personnage porte. Maintenant l'étui appartient à l'ARME ACHETÉE et reste en
+// place en permanence — ceinturon et étui de hanche DROITE pour le pistolet, fourreau de
+// hanche GAUCHE (l'autre côté, façon cowboy) pour le couteau, harnais de DOS pour les fusils.
+function construitEtuis(av) {
+  if (av.etuis) return av.etuis;
+  const g = new THREE.Group(); av.group.add(g);
+  const cuir = lam(0x5a3a1e), cuirF = lam(0x3b2a1a), laiton = lam(0xc9a84c), sangle = lam(0x2b2f3a);
+  const bx = (parent, mat, sx, sy, sz, px, py, pz, rx = 0, rz = 0) => {
+    const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz);
+    m.rotation.x = rx; m.rotation.z = rz; m.castShadow = true; parent.add(m); return m; };
+  // le ceinturon : il porte le pistolet ET le couteau, on le montre dès qu'on a l'un des deux
+  const ceinture = new THREE.Group(); g.add(ceinture);
+  bx(ceinture, cuir, 2.2 * S, 0.24 * S, 1.16 * S, 0, 1.95 * S, 0);
+  bx(ceinture, laiton, 0.34 * S, 0.26 * S, 0.12 * S, 0, 1.95 * S, 0.58 * S);
+  // l'étui du pistolet, hanche droite
+  const pistolet = new THREE.Group(); g.add(pistolet);
+  bx(pistolet, lam(0x6b4423), 0.42, 0.62, 0.3, 1.02 * S, 1.5 * S, 0);
+  bx(pistolet, cuirF, 0.16, 0.5, 0.34, 1.02 * S, 1.85 * S, 0);
+  // LE FOURREAU DU COUTEAU, hanche gauche : corps effilé, rabat à bouton-pression, passant
+  // de ceinture et deux surpiqûres — c'est un vrai fourreau de chasse, pas une poche
+  const couteau = new THREE.Group(); g.add(couteau);
+  const fx = -1.02 * S;
+  bx(couteau, cuir, 0.2 * S, 1.05 * S, 0.42 * S, fx, 1.42 * S, 0, 0, 0.1);        // le corps du fourreau
+  bx(couteau, cuir, 0.17 * S, 0.34 * S, 0.34 * S, fx - 0.02 * S, 0.92 * S, 0);    // la pointe, plus étroite
+  bx(couteau, cuirF, 0.23 * S, 0.28 * S, 0.46 * S, fx, 1.9 * S, 0);               // le rabat par-dessus la garde
+  bx(couteau, laiton, 0.08 * S, 0.1 * S, 0.1 * S, fx, 1.86 * S, 0.24 * S);        // le bouton-pression
+  bx(couteau, cuirF, 0.24 * S, 0.3 * S, 0.2 * S, fx, 2.02 * S, 0);                // le passant de ceinture
+  for (const dz of [-0.19 * S, 0.19 * S]) bx(couteau, cuirF, 0.21 * S, 0.9 * S, 0.03 * S, fx, 1.42 * S, dz, 0, 0.1);   // les surpiqûres
+  // LE HARNAIS DE DOS : une bandoulière en travers du dos et deux appuis sur lesquels le
+  // fusil repose vraiment, au lieu de flotter derrière les omoplates
+  const dos = new THREE.Group(); g.add(dos);
+  bx(dos, sangle, 0.3 * S, 2.6 * S, 0.14 * S, 0.1 * S, 3.1 * S, -0.62 * S, 0, 1.15);   // la bandoulière, en diagonale
+  bx(dos, sangle, 1.5 * S, 0.24 * S, 0.14 * S, 0, 2.15 * S, -0.6 * S);                  // la sangle de taille
+  const appuiH = bx(dos, cuirF, 0.56 * S, 0.4 * S, 0.28 * S, -0.28 * S, 2.55 * S, -0.66 * S);   // l'appui du haut : le fusil s'y pose
+  const appuiB = bx(dos, cuirF, 0.46 * S, 0.32 * S, 0.26 * S, 0.16 * S, 3.35 * S, -0.66 * S);   // l'appui du haut de la bandouliere
+  bx(dos, laiton, 0.2 * S, 0.12 * S, 0.1 * S, 0.1 * S, 3.1 * S, -0.5 * S);                    // la boucle
+  av.etuis = { g, ceinture, pistolet, couteau, dos, appuiDos: appuiH, appuiDosBas: appuiB };
+  av.holster = pistolet;   // ancien nom, conservé : du code plus ancien le manipule encore
+  setEtuis(av, av.etuisPortes || {});
+  return av.etuis;
+}
+// Montre ou cache les étuis. `e` = { pistolet, couteau, dos } — trois booléens qui disent ce
+// que le personnage POSSÈDE (et non ce qu'il tient en main).
+function setEtuis(av, e) {
+  if (!av || !av.rig) return;
+  e = e || {};
+  av.etuisPortes = { pistolet: !!e.pistolet, couteau: !!e.couteau, dos: !!e.dos };
+  if (!av.etuis) { if (av.weapons) construitEtuis(av); else return; }
+  const E = av.etuis;
+  E.pistolet.visible = !!e.pistolet; E.couteau.visible = !!e.couteau; E.dos.visible = !!e.dos;
+  E.ceinture.visible = !!e.pistolet || !!e.couteau;
+}
+// Le point d'appui du dos, en coordonnées MONDE : le poste Graphisme et les tests s'en
+// servent pour vérifier qu'un fusil rangé repose bien sur son harnais.
+function appuiDosMonde(av) {
+  if (!av || !av.etuis) return null;
+  av.group.updateMatrixWorld(true);
+  return av.etuis.appuiDos.getWorldPosition(new THREE.Vector3());
 }
 const WEAPONS = {
   pistol: { n: 'Pistolet', e: '🔫', p: 20, ammo: 8, reload: 1.2, cd: 0.28, speed: 95, spread: 0.006, dmg: 24, muzzle: [0.34, 1.3, 0.62] },
@@ -1981,6 +2052,10 @@ const WEAPONS = {
   // 0,028 rad (1,6°) faisait manquer la cible verrouillée à 20 m ; la lunette la ramène sous celle du pistolet.
   rifle: { n: 'Fusil d\'assaut', e: '🎯', p: 45, ammo: 30, reload: 2.0, cd: 0.22, speed: 110, spread: 0.004, dmg: 12, muzzle: [0.3, 1.28, 1.05] },
   sniper: { n: 'Fusil à lunette', e: '🔭', p: 90, ammo: 5, reload: 2.6, cd: 0.9, speed: 190, spread: 0.0006, dmg: 80, muzzle: [0.3, 1.3, 1.25], lunette: true },
+  // LE COUTEAU : arme blanche, pas d'arme à feu. Il ne tire pas, il PLANTE — trois coups
+  // dans le ventre pour mettre un homme à terre — et il retourne seul dans son fourreau.
+  knife: { n: 'Couteau de chasse', e: '🔪', p: 35, blanche: true, dmg: 34, portee: 2.2, cd: 0.55,
+    desc: 'Couteau de chasse à lame pleine soie. Il se porte dans un fourreau à la hanche gauche, de l\'autre côté du pistolet : un appui et on frappe au ventre, puis il retourne seul dans son étui. Trois coups suffisent à mettre un homme à terre.' },
   grenade: { n: 'Grenades de choc ×5', e: '💣', p: 15, ammo: 5, consumable: true },
 };
 function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E devant le présentoir = achat direct), comptoir, râtelier, munitions
@@ -2001,6 +2076,7 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
   stand(47.9, 17.2, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
   stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
   stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
+  stand(56.1, 20.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
   for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
   // Râtelier : les fusils étaient posés à x = 57,4 en travers — leur canon traversait le mur
   // est (57,7 → 58). On les rentre de 90 cm et on réduit un peu l'échelle.
@@ -4259,6 +4335,29 @@ function makeTarget(x, z, y, mx) {
   const m = new THREE.Mesh(unitBox, [cote, cote, cote, cote, face, face]); m.scale.set(1.3, 1.3, 0.16); m.position.set(x, y + 0.65, z); m.castShadow = true; worldGroup.add(m);
   const tg = { m, post, x, y: y + 0.65, z, mx, phase: rnd(0, 6), hidden: 0 }; city.targets.push(tg); return tg;
 }
+// LE COUTEAU DE CHASSE. Lame pleine soie a dos droit, gouttiere creusee, garde en laiton,
+// manche en bois cercle de deux viroles — et un REFLET blanc qui court sur le tranchant,
+// pour qu'on voie l'acier meme dans l'ombre d'une ruelle. Comme les autres armes, le modele
+// est dessine autour de sa POIGNEE (0, -0.84, 0), pointe vers +z.
+const LAME_MAT = new THREE.MeshPhongMaterial({ color: 0xdfe5ee, specular: 0xffffff, shininess: 120 });
+function knifeMesh() {
+  const g = new THREE.Group(), bois = lam(0x6b4423), laiton = lam(0xc9a84c), cuirM = lam(0x3b2a16), creux = lam(0x9aa4b2);
+  const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; m.castShadow = true; g.add(m); return m; };
+  const Y = -0.84;
+  bx(bois, 0.062, 0.088, 0.26, 0, Y, -0.16);                 // le manche
+  bx(cuirM, 0.066, 0.052, 0.07, 0, Y - 0.022, -0.12);        // le gaufrage antiderapant sous les doigts
+  bx(laiton, 0.072, 0.095, 0.032, 0, Y, -0.288);             // le pommeau
+  bx(laiton, 0.062, 0.092, 0.022, 0, Y, -0.048);             // la virole
+  bx(laiton, 0.2, 0.048, 0.036, 0, Y, -0.012);               // la garde (croisiere)
+  bx(LAME_MAT, 0.026, 0.115, 0.34, 0, Y + 0.006, 0.17);      // le corps de lame
+  bx(LAME_MAT, 0.021, 0.078, 0.11, 0, Y + 0.022, 0.385);     // la montee vers la pointe
+  const pointe = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.13, 4), LAME_MAT);
+  pointe.rotation.x = Math.PI / 2; pointe.rotation.z = Math.PI / 4; pointe.position.set(0, Y + 0.03, 0.475); pointe.castShadow = true; g.add(pointe);
+  bx(creux, 0.015, 0.024, 0.3, 0, Y + 0.03, 0.18);           // la gouttiere
+  bx(lam(0xffffff), 0.031, 0.013, 0.33, 0, Y - 0.05, 0.18);  // LE REFLET, sur le tranchant
+  g.userData.pointe = pointe;
+  return g;
+}
 function gunMesh() {   // pistolet (jouet laser) : culasse, canon, carcasse, pontet, crosse, chargeur, mire, bout orange
   const g = new THREE.Group(), dark = lam(0x2b2f3a), grey = lam(0x6b7280), orange = lam(0xff8f3a);
   const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
@@ -6229,7 +6328,7 @@ function guardsTick(dt) {
     const sameFloor = Math.abs(P.pos.y - gd.y) < 2.2, dP = Math.hypot(P.pos.x - gd.x, P.pos.z - gd.z);
     const alert = (police.alarmT > simTime || gd.alert) && sameFloor && dP < 14 && !drive.car;
     let tx, tz, spd;
-    if (alert) { tx = P.pos.x; tz = P.pos.z; spd = 4.6; if (dP < 1.7 && simTime > gd.hitCd && P.hp > 0) { gd.hitCd = simTime + 1.2; gd.av.rig.swing = 0.3; const dx = (P.pos.x - gd.x) / (dP || 1), dz = (P.pos.z - gd.z) / (dP || 1); hurt(9, gd.name, dx, dz, 1.6); if (Math.random() < 0.5) bubble(gd.av, pickOne(['stop !', 'les mains en l\'air !', 'tu ne sortiras pas d\'ici'])); } }
+    if (alert) { tx = P.pos.x; tz = P.pos.z; spd = 4.6; if (dP < 1.7 && simTime > gd.hitCd && P.hp > 0) { gd.hitCd = simTime + 1.2; gd.av.rig.swing = 0.3; const dx = (P.pos.x - gd.x) / (dP || 1), dz = (P.pos.z - gd.z) / (dP || 1); hurt(9, gd.name, dx, dz, 1.6, 'poing'); if (Math.random() < 0.5) bubble(gd.av, pickOne(['stop !', 'les mains en l\'air !', 'tu ne sortiras pas d\'ici'])); } }
     else { const pt = gd.pts[gd.i]; tx = pt[0]; tz = pt[1]; spd = 2.2; if (Math.hypot(tx - gd.x, tz - gd.z) < 0.5) { gd.wait -= dt; if (gd.wait <= 0) { gd.i = (gd.i + 1) % gd.pts.length; gd.wait = rnd(1, 3); } } if (gd.wait > 0 && Math.hypot(tx - gd.x, tz - gd.z) < 0.5) spd = 0; }
     const dx = tx - gd.x, dz = tz - gd.z, d = Math.hypot(dx, dz);
     if (d > (alert ? 1.4 : 0.3) && spd > 0) { const o = { x: gd.x, y: gd.y, z: gd.z }; npcMove(o, dx / d * spd * dt, dz / d * spd * dt, 0.4); gd.x = o.x; gd.z = o.z; gd.facing = Math.atan2(dx, dz); animateRig(gd.av.rig, 'walk', spd, dt, simTime); } else animateRig(gd.av.rig, 'idle', 0, dt, simTime);
@@ -8506,7 +8605,7 @@ function agentsTick(dt) {
     const tire = a.mil || armee.on || simTime < (police.riposte || 0) || police.wanted >= 2 || police.alarmT > simTime;
     if (tire && voit && dP > 2 && dP < 26 && simTime > a.shotT && P.hp > 0) agentTire(a, a.mil ? 16 : 5 + police.wanted, a.mil ? 0.02 : 0.05);
     if (dP < 1.9 && meme && P.hp > 0) {
-      if (a.mil || armee.on) { if (simTime > a.coupT) { a.coupT = simTime + 1.3; a.av.rig.swing = 0.3; hurt(15, a.name, (P.pos.x - a.x) / (dP || 1), (P.pos.z - a.z) / (dP || 1), 1.8); } }
+      if (a.mil || armee.on) { if (simTime > a.coupT) { a.coupT = simTime + 1.3; a.av.rig.swing = 0.3; hurt(15, a.name, (P.pos.x - a.x) / (dP || 1), (P.pos.z - a.z) / (dP || 1), 1.8, 'poing'); } }
       else if (police.wanted > 0 && simTime > police.arrestT && !jail.on) { arrestation('Un agent t\'a rattrapé à pied'); return; }
     }
   }
@@ -8751,9 +8850,15 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   if (target) { P.facing = Math.atan2(target.x - P.pos.x, target.z - P.pos.z); }   // on se tourne vers la cible
   if (simTime - (P.lastHitT || 0) > 1.2) P.combo = 0;
   P.combo = kind === 'kick' ? 0 : (P.combo || 0) + 1; P.lastHitT = simTime;
-  const finisher = P.combo === 3, dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
+  // `dmg` et `kb` ne sont plus constants : la garde de l'adversaire les fait baisser plus bas
+  const finisher = P.combo === 3;
+  let dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
   P.punchT = simTime + (kind === 'kick' ? 1.0 : finisher ? 0.8 : 0.42);
-  me.rig.swing = kind === 'kick' ? 0.45 : 0.28; if (kind === 'kick') me.rig.kick = 0.45;
+  // LES DEUX POINGS. Le joueur ne frappait que du bras droit, encore et encore. Maintenant
+  // l'enchaînement ALTERNE : droite, gauche, droite… chaque coup part du coude replié et se
+  // tend à l'impact, et le poing qui frappe est celui qui n'a pas servi au coup précédent.
+  if (kind === 'kick') { me.rig.swing = 0.45; me.rig.kick = 0.45; }
+  else { P.poing = P.poing === 'D' ? 'G' : 'D'; if (P.poing === 'D') me.rig.swing = 0.28; else me.rig.swingG = 0.28; }
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
   // LE SON DU COMBAT. Avant : un souffle et un « pok » mono, les mêmes pour un direct, un
   // combo et un coup de pied, et le personnage frappé ne disait rien. Maintenant l'effort
@@ -8779,6 +8884,9 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
   msg(kind === 'kick' ? '🦵 Coup de pied !' : finisher ? '👊 Combo x3 !' : '👊', 500);
+  // EN FACE AUSSI ON SE GARDE : un habitant qui a levé les poings encaisse le quart du coup
+  const pare = !!(target.bot && target.bot.garde) || !!(target.gm && target.gm.garde);
+  if (pare) { dmg = Math.max(1, Math.round(dmg * 0.25)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
@@ -8801,6 +8909,57 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
 }
 function punch() { attack('punch'); }
 function kick() { attack('kick'); }
+// ================= LE COUP DE COUTEAU =================
+// Même principe que le pistolet : un seul appui. On dégaine, on se tourne vers la victime,
+// on plante DANS LE VENTRE (à hauteur du nombril, pas du torse), et le couteau retourne
+// tout seul dans son fourreau. Trois coups mettent un homme à terre.
+// Le rengainage automatique : après un tir ou un coup de couteau, l'arme retourne toute
+// seule dans son étui. Sorti de la boucle d'image pour que le banc d'essai puisse le
+// déclencher sans attendre soixante images.
+function rangementAuto() {
+  if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); fermeLunette(); }
+}
+function coupCouteau() {
+  const w = WEAPONS.knife;
+  if (!city.on || !running || paused || drive.car || P.swing || gym.on || P.hp <= 0) return false;
+  if (simTime < P.punchT || simTime < P.fireCd) return false;
+  const target = nearestFighter(w.portee + 0.6);
+  if (target) P.facing = Math.atan2(target.x - P.pos.x, target.z - P.pos.z);
+  if (!P.drawn) { P.drawn = true; document.body.classList.add('drawn'); $('drawBtn').textContent = '🔻'; }
+  setWeapon(me, 'knife', true);
+  P.fireCd = simTime + w.cd; P.punchT = simTime + w.cd;
+  P.holsterT = simTime + 0.9;               // rengainage automatique après le coup, comme le pistolet
+  me.rig.swing = 0.26; P.poing = 'D';       // le couteau est dans le poing droit
+  P.dernierCouteau = simTime;
+  sfx.noise(.05, 2400, .05); sfx.tone(1400, 0, .05, 'triangle', .03, 700);
+  const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
+  const d = target ? Math.hypot(target.x - P.pos.x, target.z - P.pos.z) : 99;
+  if (!target || d > w.portee) { msg('🔪 Dans le vide…', 600); return false; }
+  // LE VENTRE : le torse va de 0,72 m à 1,44 m, le nombril est à 0,95 m au-dessus des pieds
+  const ix = P.pos.x + fx * 0.7, iy = P.pos.y + 0.95, iz = P.pos.z + fz * 0.7;
+  P.dernierCoupY = iy - P.pos.y;   // hauteur du coup au-dessus des pieds : le banc d'essai vérifie que c'est bien le ventre
+  impact(ix, iy, iz, { x: fx, y: 0, z: fz }, 'sang', 1.35);
+  camSecousse(0.2, 0.24); cam.kick = (cam.kick || 0) + 0.05;
+  sfx.tone(120, 0, .14, 'sawtooth', .09, 60);
+  let dmg = w.dmg;
+  if ((target.bot && target.bot.garde) || (target.gm && target.gm.garde)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
+  if (target.bot) {
+    const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
+    b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
+    b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
+    avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
+    if (b.hp <= 0) { b.ko = simTime + 6; b.hp = 0; b.fight = null; botSay(b, ['aaah…', 'au secours…']); msg(`🔪 ${b.name} est à terre`, 1600); infraction('coup de couteau sur ' + b.name, 2, 4); }
+    else { bubble(b.av, pickOne([`au couteau ?! ❤️ ${b.hp}`, 'il est fou !', `❤️ ${b.hp}`])); msg(`🔪 ${b.name} · ❤️ ${b.hp}`, 900); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('agression au couteau sur ' + b.name, 2, 3); } }
+  } else if (target.gm) {
+    const m = target.gm; m.hp -= dmg;
+    m.x += fx * 0.5; m.z += fz * 0.5; m.av.group.position.set(m.x, m.y, m.z);
+    if (m.hp <= 0) gangeurKO(m, 'le joueur'); else bubble(m.av, pickOne([`ahh ! ❤️ ${Math.max(0, m.hp)}`, 'il a une lame !']));
+  } else if (target.rem) {
+    netSend({ t: 'punch', id: target.rem.id, by: myCfg.name, dx: fx, dz: fz, dmg, kb: 0.8 });
+    if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('agression au couteau sur ' + target.rem.name, 2, 3); }
+  }
+  return true;
+}
 // LA CHUTE. On pouvait sauter du toit d'un immeuble de vingt mètres et repartir en
 // sifflotant. Maintenant on s'écrase : au-delà de 21 m/s (une chute d'environ huit mètres)
 // ça fait mal, et de très haut ça tue. Le parachute, le deltaplane et le jetpack bornent la
@@ -8828,8 +8987,53 @@ function chuteImpact(vy) {
   } else msg(`🤕 Aïe ! Chute de ${haut} m · −${deg} PV`, 1800);
   return deg;
 }
-function hurt(dmg, by, dx, dz, kb = 2) {   // je prends un coup
+// ================= SE DÉFENDRE =================
+// Se baisser ESQUIVE le coup, la garde l'AMORTIT. Les deux ne valent que si l'assaillant est
+// devant : on ne pare pas un coup qu'on ne voit pas venir.
+function defenseJoueur(dmg, dx, dz, melee) {
+  if (!melee) return { dmg };
+  const devant = Math.sin(P.facing) * -dx + Math.cos(P.facing) * -dz > -0.15;
+  if (P.accroupi && devant) { P.esquiveT = simTime; return { dmg: 0, esquive: true }; }
+  if (P.garde && devant) return { dmg: dmg * 0.25, pare: true };
+  return { dmg };
+}
+// ---- LES DEUX GESTES DE DÉFENSE, exposés sous le nom que la manette appelle ----
+// `garde(true/false)` : les deux poings devant le visage (L1 sur la DualSense).
+// `esquive(true/false)` : se baisser (touche C ou Ctrl au clavier, bouton 🙇 au doigt).
+function garde(on) { return setGarde(on); }
+function esquive(on) { return setAccroupi(on); }
+function setGarde(on) {   // point d'entrée manette / tactile / clavier : lever ou baisser la garde
+  // ON NE SE MET PAS EN GARDE UNE ARME AU POING : la visée place déjà les bras, les deux
+  // poses se seraient battues et le canon serait parti de travers.
+  on = !!on && !P.drawn;
+  if (P.garde === on) return;
+  P.garde = on; me.rig.garde = on;
+  document.body.classList.toggle('garde', on);
+  const b = $('gardeBtn'); if (b) b.classList.toggle('on', on);
+  if (on) sfx.tone(300, 0, .06, 'triangle', .04, 240);
+}
+function setAccroupi(on) {   // point d'entrée manette / tactile / clavier : se baisser
+  on = !!on;
+  if (on && (drive.car || P.sit || P.swing || P.ride || gym.on || P.swimming)) on = false;
+  if (P.accroupi === on) return;
+  P.accroupi = on; me.rig.accroupi = on;
+  document.body.classList.toggle('accroupi', on);
+  const b = $('duckBtn'); if (b) b.classList.toggle('on', on);
+}
+function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp <= 0) return;
+  const def = defenseJoueur(dmg, dx, dz, melee);
+  if (def.esquive) {   // baissé au bon moment : le coup passe au-dessus
+    msg('💨 Esquive !', 700); sfx.noise(.06, 900, .05);
+    fxAnneau(P.pos.x + dx * 0.4, P.pos.y + 1.5, P.pos.z + dz * 0.4, { x: dx, y: 0, z: dz }, 0x9fdcff, 0.7, 0.2);
+    return 0;
+  }
+  if (def.pare) {   // les deux poings devant le visage : ça cogne, mais ça ne passe pas
+    dmg = def.dmg; kb *= 0.25;
+    msg('🛡️ Paré !', 700); sfx.tone(520, 0, .1, 'square', .07, 360); sfx.noise(.07, 1500, .05);
+    impact(P.pos.x + dx * 0.5, P.pos.y + 1.45, P.pos.z + dz * 0.5, { x: dx, y: 0, z: dz }, 'poing', 0.8);
+    camSecousse(0.08, 0.16);
+  }
   P.hp = Math.max(0, P.hp - dmg); P.hurtT = simTime; $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
   P.vel.x = dx * kb * 3; P.vel.z = dz * kb * 3; P.vel.y = Math.max(P.vel.y, 3); P.stunT = simTime + 0.5;
   // On encaissait en silence : un simple « pok » sans corps. Impact dosé par les dégâts, et
@@ -8853,15 +9057,23 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
     // (ou qu'on l'envoie à l'hôpital). On en voyait déambuler avec ❤️ 0.
     if (!b.ko && (b.hp ?? 100) <= 0) { b.hp = 0; b.ko = simTime + 14; b.fight = null; b.bagarre = null; corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y); continue; }
     if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null;
-      b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); } continue; }
+      b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); }
+      if (b.garde) { b.garde = false; if (b.av && b.av.rig) b.av.rig.garde = false; } continue; }
     const dx = P.pos.x - b.pos.x, dz = P.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
     b.wait = 0.3; b.dance = 0;
-    if (b.fight === 'flee') { const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -dx / d * 5.5 * dt, -dz / d * 5.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-dx, -dz); animateRig(b.av.rig, 'walk', 5.5, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
+    if (b.fight === 'flee') { b.garde = false; const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -dx / d * 5.5 * dt, -dz / d * 5.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-dx, -dz); animateRig(b.av.rig, 'walk', 5.5, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
     else {
+      // EN FACE AUSSI ON SE GARDE : entre deux coups, l'habitant lève les deux poings devant
+      // son visage. Un coup qui arrive à ce moment-là ne passe qu'au quart (voir `attack`).
+      b.garde = d < 2.8 && simTime < (b.hitCd || 0) - 0.3;
       if (d > 1.6) { const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, dx / d * 4.5 * dt, dz / d * 4.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; animateRig(b.av.rig, 'walk', 4.5, dt, simTime); }
-      else if (simTime > (b.hitCd || 0) && !drive.car && P.hp > 0) { b.hitCd = simTime + 1.1; b.av.rig.swing = 0.3; hurt(7, b.name, dx / d, dz / d, 1.5); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
+      else if (simTime > (b.hitCd || 0) && !drive.car && P.hp > 0) { b.hitCd = simTime + 1.1; b.garde = false;
+        // il frappe des deux poings lui aussi, en alternant
+        b.poing = b.poing === 'D' ? 'G' : 'D'; if (b.poing === 'D') b.av.rig.swing = 0.3; else b.av.rig.swingG = 0.3;
+        hurt(7, b.name, dx / d, dz / d, 1.5, 'poing'); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
       b.facing = Math.atan2(dx, dz);
     }
+    b.av.rig.garde = !!b.garde;
     b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
   }
 }
@@ -8889,7 +9101,7 @@ function corpsDebout(av, x, z, y) {
 }
 function punched(by, dx, dz, dmg = 8, kb = 2) {
   const lost = Math.min(4, wallet); wallet -= lost; saveWallet(); updateHud(); msg(`👊 ${by} t'a frappé et volé ${lost} 🪙 !`, 1200);
-  hurt(dmg, by, dx, dz, kb);
+  hurt(dmg, by, dx, dz, kb, 'poing');
 }
 function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voitures, prison, 3 planques accessibles sans franchir de barrière
   const sx = police.station.x, sz = police.station.z;
@@ -9037,7 +9249,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -9470,7 +9682,7 @@ function buildAvatar(cfg) {
     for (const m of p.piedParts) m.userData.y0 = m.position.y;   // hauteur de référence : la boutique amincit la semelle à partir de là
     return p;
   };
-  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false };
+  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, gardeK: 0, accroupi: false, porte: false, porteK: 0 };
   // MUSCLES : pectoraux, trapezes, deltoides — ils apparaissent et grossissent avec l'entrainement
   const pecs = [-0.45, 0.45].map(sx => part(0.72 * S, 0.5 * S, 0.22 * S, shirt, sx * S, 3.3 * S, 0.52 * S, g));
   const trap = part(1.7 * S, 0.34 * S, 0.8 * S, shirt, 0, 4.05 * S, -0.1 * S, g);
@@ -9651,7 +9863,7 @@ function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, 
   av.mats.back.map = jerseyTexture(name, j, av.num); av.mats.back.needsUpdate = true;
   if (name !== av.name) { av.group.remove(av.tag); av.tag.material.map.dispose(); av.tag = nameTag(name); av.group.add(av.tag); av.name = name; }
   applyStats(av, look.m || 0, look.f || 0);
-  if (av !== me) { setJet(av, !!look.jet); setWeapon(av, look.weapon || null, !!look.aim); }
+  if (av !== me) { setJet(av, !!look.jet); setWeapon(av, look.weapon || null, !!look.aim); setEtuis(av, look.etuis || {}); }
 }
 function bubble(av, text) {   // bulle de chat au-dessus de la tête
   if (av.bubble) { av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null; }
@@ -9741,6 +9953,33 @@ function animateRig(rig, mode, speed, dt, t) {
     if (!lg.pied) continue;
     lg.pied.rotation.x = Math.max(-2, Math.min(0.8, -(lg.rotation.x + lg.genou.rotation.x)));
   }
+  // LA GARDE : les deux poings serres devant le visage, coudes rentres. On la pose APRES le
+  // reste pour qu'elle tienne quel que soit ce que font les jambes (on recule en gardant) —
+  // sauf pendant un coup, sinon le poing n'irait jamais au bout de son geste.
+  // La passe du corps repose les bras a chaque image : si on se contentait de tirer vers la
+  // garde, les deux forces s'equilibraient a mi-chemin et les poings restaient sous le
+  // menton. On MELANGE donc les deux poses avec un poids `gardeK` qui monte a 1 : a 1, la
+  // garde est exacte, et elle se defait en douceur quand on relache.
+  rig.gardeK = rig.garde ? Math.min(1, (rig.gardeK || 0) + dt * 7) : Math.max(0, (rig.gardeK || 0) - dt * 9);
+  if (rig.gardeK > 0 && !(rig.swing > 0) && !(rig.swingG > 0)) {
+    const k = rig.gardeK;
+    for (const [br, sz] of [[rig.armL, 0.34], [rig.armR, -0.34]]) {
+      br.rotation.x = br.rotation.x * (1 - k) + -1.35 * k;
+      br.coude.rotation.x = br.coude.rotation.x * (1 - k) + -1.55 * k;
+      br.rotation.z = br.rotation.z * (1 - k) + sz * k;
+    }
+  }
+  // PORTER UN BRANCARD : les deux bras tendus vers l'avant, poings a hauteur de hanche.
+  // Meme melange que la garde, pour que la passe du corps ne repose pas les bras.
+  rig.porteK = rig.porte ? Math.min(1, (rig.porteK || 0) + dt * 6) : Math.max(0, (rig.porteK || 0) - dt * 8);
+  if (rig.porteK > 0) {
+    const kp = rig.porteK;
+    for (const [br, sz] of [[rig.armL, 0.12], [rig.armR, -0.12]]) {
+      br.rotation.x = br.rotation.x * (1 - kp) + -0.55 * kp;
+      br.coude.rotation.x = br.coude.rotation.x * (1 - kp) + -0.55 * kp;
+      br.rotation.z = br.rotation.z * (1 - kp) + sz * kp;
+    }
+  }
   // LA JUPE SE SOULEVE SUR LA CUISSE. Rigide, elle se faisait traverser de part en part des
   // qu'un genou montait (marche, coup de pied, genou a terre, position assise). Passe 0,25 rad
   // de cuisse levee, elle bascule vers l'avant comme un vrai tissu qui glisse sur la jambe —
@@ -9762,12 +10001,24 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   if (rig.recul > 0) rig.recul = Math.max(0, rig.recul - dt);
   rig.penche = rig.recul > 0 ? Math.sin(rig.recul / 0.35 * Math.PI) * 0.45 : 0;
   if (rig.groupe && rig.groupe !== me.group && Math.abs(rig.groupe.rotation.x) < 1) rig.groupe.rotation.x = -rig.penche;
-  const baisseVoulue = rig.agenou && mode !== 'sleep' && mode !== 'sit' && mode !== 'ride' ? 0.95 * S : 0;
+  const debout = mode !== 'sleep' && mode !== 'sit' && mode !== 'ride' && mode !== 'swim' && mode !== 'lift';
+  // 0,95 S a genoux, 0,55 S accroupi : c'est la hauteur dont le bassin descend, et les
+  // jambes se plient pile de ce qu'il faut pour que les semelles restent au sol.
+  const baisseVoulue = debout ? (rig.agenou ? 0.95 * S : rig.accroupi ? 0.55 * S : 0) : 0;
   rig.baisse = (rig.baisse || 0) + (baisseVoulue - (rig.baisse || 0)) * Math.min(1, dt * 6);
-  if (baisseVoulue > 0) {
+  if (rig.agenou && debout) {
     to(rig.legR, -1.5); toK(gR, 1.55); to(rig.legL, 0.2); toK(gL, 1.8);
     to(rig.armL, -0.5); to(rig.armR, -0.3); toK(cL, -0.9); toK(cR, -0.6);
     rig.armL.rotation.z = 0.25; rig.armR.rotation.z = -0.25; rig.head.rotation.y = 0; return;
+  }
+  // SE BAISSER POUR ESQUIVER : hanches et genoux plies de 0,83 et 1,66 rad — le bassin
+  // descend de 20 cm, juste ce qu'il faut pour qu'un coup de poing passe au-dessus, et les
+  // semelles restent posees (la cheville rattrape l'angle dans la passe suivante).
+  if (rig.accroupi && debout) {
+    to(rig.legL, -0.83); to(rig.legR, -0.83); toK(gL, 1.66); toK(gR, 1.66);
+    if (!(rig.swingG > 0)) { to(rig.armL, -0.7); toK(cL, -1.3); rig.armL.rotation.z += (0.34 - rig.armL.rotation.z) * ease; }
+    if (!(rig.swing > 0)) { to(rig.armR, -0.7); toK(cR, -1.3); rig.armR.rotation.z += (-0.34 - rig.armR.rotation.z) * ease; }
+    rig.head.rotation.y += (0 - rig.head.rotation.y) * ease; return;
   }
   if (mode === 'sleep') {   // allongé sur le dos : membres à plat, bras le long du corps
     to(rig.legL, 0); to(rig.legR, 0); to(rig.armL, 0.1); to(rig.armR, 0.1); toK(gL, 0); toK(gR, 0); toK(cL, 0); toK(cR, 0);
@@ -9800,18 +10051,20 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   // le coup de pied arme le genou puis le detend ; le coup de poing part du coude replie
   if (rig.kick > 0) { rig.kick -= dt; rig.legR.rotation.x = -1.9 + (0.45 - rig.kick) * 3; rig.armL.rotation.x = -0.8; if (gR) gR.rotation.x = Math.max(0, 1.7 * (rig.kick / 0.45) - 0.2); if (rig.kick <= 0) { rig.legR.rotation.x = 0; if (gR) gR.rotation.x = 0; } }
   if (rig.swing > 0) { rig.swing -= dt; rig.armR.rotation.x = -2.4 + (0.35 - rig.swing) * 4.5; rig.armR.rotation.z = -0.6; if (cR) cR.rotation.x = -1.5 * Math.max(0, rig.swing / 0.35 - 0.15); if (rig.swing <= 0) { rig.armR.rotation.z = 0; if (cR) cR.rotation.x = 0; } }
-  if (mode === 'air') { to(rig.armL, -2.8); if (!(rig.swing > 0)) to(rig.armR, -2.8); to(rig.legL, 0.45); to(rig.legR, -0.35); toK(gL, 0.9); toK(gR, 0.5); toK(cL, -0.4); if (!(rig.swing > 0)) toK(cR, -0.4); }
+  // LE POING GAUCHE, exactement symetrique du droit : c'est lui qui donne l'enchainement
+  if (rig.swingG > 0) { rig.swingG -= dt; rig.armL.rotation.x = -2.4 + (0.35 - rig.swingG) * 4.5; rig.armL.rotation.z = 0.6; if (cL) cL.rotation.x = -1.5 * Math.max(0, rig.swingG / 0.35 - 0.15); if (rig.swingG <= 0) { rig.armL.rotation.z = 0; if (cL) cL.rotation.x = 0; } }
+  if (mode === 'air') { if (!(rig.swingG > 0)) to(rig.armL, -2.8); if (!(rig.swing > 0)) to(rig.armR, -2.8); to(rig.legL, 0.45); to(rig.legR, -0.35); toK(gL, 0.9); toK(gR, 0.5); if (!(rig.swingG > 0)) toK(cL, -0.4); if (!(rig.swing > 0)) toK(cR, -0.4); }
   else if (speed > 0.6) {
     rig.walk += dt * speed * 1.7;
     const s = Math.sin(rig.walk) * 0.85, course = speed > 1.3;
-    to(rig.legL, s); if (!(rig.kick > 0)) to(rig.legR, -s); to(rig.armL, -s * 0.8); if (!(rig.swing > 0)) to(rig.armR, s * 0.8);
+    to(rig.legL, s); if (!(rig.kick > 0)) to(rig.legR, -s); if (!(rig.swingG > 0)) to(rig.armL, -s * 0.8); if (!(rig.swing > 0)) to(rig.armR, s * 0.8);
     // LES GENOUX plient quand la jambe revient vers l'avant et se tendent quand elle pousse ;
     // en course les talons montent bien plus haut et les coudes se replient
     const k = course ? 1.6 : 1.2;
     toK(gL, Math.max(0, -Math.sin(rig.walk + 0.9)) * k); if (!(rig.kick > 0)) toK(gR, Math.max(0, Math.sin(rig.walk + 0.9)) * k);
-    toK(cL, course ? -1.3 : -0.4); if (!(rig.swing > 0)) toK(cR, course ? -1.3 : -0.4);
-  } else { to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); }
-  rig.armL.rotation.z += ((mode === 'air' ? 0.15 : 0.05 * Math.sin(t * 2)) - rig.armL.rotation.z) * ease; rig.armR.rotation.z = -rig.armL.rotation.z;
+    if (!(rig.swingG > 0)) toK(cL, course ? -1.3 : -0.4); if (!(rig.swing > 0)) toK(cR, course ? -1.3 : -0.4);
+  } else { if (!(rig.swingG > 0)) to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); if (!(rig.swingG > 0)) toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); }
+  if (!(rig.swingG > 0) && !(rig.swing > 0)) { rig.armL.rotation.z += ((mode === 'air' ? 0.15 : 0.05 * Math.sin(t * 2)) - rig.armL.rotation.z) * ease; rig.armR.rotation.z = -rig.armL.rotation.z; }
   rig.head.rotation.y += (Math.sin(t * 0.9) * 0.12 - rig.head.rotation.y) * ease;
 }
 const debris = [];
@@ -10001,7 +10254,7 @@ const MUNITIONS = {
   inc: { n: 'Cartouches incendiaires ×20', e: '🔥', p: 55, mul: 1.4, nb: 20, feu: true, desc: 'À l\'impact, une flaque de feu brûle tout ce qui passe pendant 12 s.' },
   exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
 };
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, perf: +store.get('superobby.perf') || 10 };
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, garde: false, accroupi: false, poing: 'G', esquiveT: 0, perf: +store.get('superobby.perf') || 10 };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0, shake: 0, shakeT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -10091,13 +10344,17 @@ const myCfg = { name: store.get('superobby.name') || 'Joueur' + Math.floor(rnd(1
   haut: savedAv.haut || 'foot', baggy: !!savedAv.baggy, chaussures: savedAv.chaussures || 'basket',
   bracelet: !!savedAv.bracelet, montre: !!savedAv.montre, tatouages: Array.isArray(savedAv.tatouages) ? savedAv.tatouages : [],
   bijou: savedAv.bijou || 'rien', taille: savedAv.taille || 'L', couleurHaut: savedAv.couleurHaut != null ? savedAv.couleurHaut : null };
-const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, gants: myCfg.gants, glasses: myCfg.glasses, shorts: myCfg.shorts, haut: myCfg.haut, baggy: myCfg.baggy, chaussures: myCfg.chaussures, bracelet: myCfg.bracelet, montre: myCfg.montre, tatouages: myCfg.tatouages, bijou: myCfg.bijou, taille: myCfg.taille, couleurHaut: myCfg.couleurHaut, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim });
+const myLook = () => ({ jersey: myCfg.jersey, pants: myCfg.pants, cap: myCfg.cap, num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, gants: myCfg.gants, glasses: myCfg.glasses, shorts: myCfg.shorts, haut: myCfg.haut, baggy: myCfg.baggy, chaussures: myCfg.chaussures, bracelet: myCfg.bracelet, montre: myCfg.montre, tatouages: myCfg.tatouages, bijou: myCfg.bijou, taille: myCfg.taille, couleurHaut: myCfg.couleurHaut, m: stats.m, f: stats.f, jet: P.jet, weapon: P.weapon, aim: !!P.aim, etuis: mesEtuis() });
 // Tout ce que le joueur TIENT (arme, raquette, sandwich, objet a poser) s'accroche ici : le
 // noeud `main` au centre du poing rond. Avant, c'etait le groupe du bras entier et l'objet
 // pendait 13 cm sous la main sans suivre le coude.
 function mainDroite() { return me.rig.armR.main || me.rig.armR; }
 const me = buildAvatar({ name: myCfg.name, jersey: myCfg.jersey, pants: PAL.pants[myCfg.pants], cap: PAL.cap[myCfg.cap], num: myCfg.num, hair: myCfg.hair, hairColor: myCfg.hairColor, skirt: myCfg.skirt, hat: myCfg.hat, jacket: myCfg.jacket, bag: myCfg.bag, glasses: myCfg.glasses, shorts: myCfg.shorts, m: stats.m, f: stats.f });
-function applyMyLook() { applyLook(me, myCfg.name, myLook()); }
+function applyMyLook() { applyLook(me, myCfg.name, myLook()); majEtuis(); }
+// Ce que le joueur PORTE : l'étui reste visible même arme rangée, dès qu'elle est achetée.
+const mesEtuis = () => ({ pistolet: owned.has('arme:pistol'), couteau: owned.has('arme:knife'),
+  dos: owned.has('arme:rifle') || owned.has('arme:sniper') });
+function majEtuis() { if (typeof me !== 'undefined' && me) setEtuis(me, mesEtuis()); }
 
 // ================= SONS & MUSIQUE =================
 // LA CHAINE DE SORTIE. Chaque son se branchait DIRECTEMENT sur la sortie de la carte son :
@@ -13705,6 +13962,8 @@ function step(dt, active) {
     wantX = (fx * iz + rx * ix) * SPEED; wantZ = (fz * iz + rz * ix) * SPEED;
   }
   if (len > 0.05) { if (!timerOn) timerOn = true; if (P.dance > 0) stopDance(); }
+  // BAISSÉ, ON AVANCE MOINS VITE. Sinon on esquivait tous les coups en sprintant accroupi.
+  if (P.accroupi && !P.swimming) { wantX *= 0.42; wantZ *= 0.42; len *= 0.42; P.run = false; }
   if (P.court) len = Math.min(1.6, len * 1.55);   // les jambes suivent la cadence de course
   // Course : double appui sur « avancer ». On s'épuise en quelques secondes, puis il faut
   // récupérer avant de repartir.
@@ -13922,6 +14181,7 @@ function separerVehicules() {
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
+  setGarde(false); setAccroupi(false);   // on ne conduit pas accroupi les poings devant le visage
   // on se voit désormais au volant, comme les amis bots conducteurs
   drive.car = c; drive.speed = 0; me.group.visible = true; P.vel.set(0, 0, 0); P.swimming = false; if (P.swing) P.swing = null;
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
@@ -14732,7 +14992,7 @@ function catalog(tab) {
       buy: () => { owned.add('teinte:' + i); saveOwned(); },
       act: () => { myCfg.couleurHaut = i; applyMyLook(); store.set('superobby.avatar', JSON.stringify(myLook())); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); } }));
   }
-  if (tab === 'armes') for (const [k, w] of Object.entries(WEAPONS)) items.push({ key: 'arme:' + k, cat: 'arme', id: k, n: w.n, e: w.e, p: w.p, consumable: !!w.consumable, desc: k === 'pistol' ? 'Pistolet laser précis, 8 balles, rechargement rapide.' : k === 'rifle' ? 'Fusil laser à lunette, 30 balles : un appui = un coup, visée automatique sur la cible la plus proche.' : 'Lot de 5 grenades de choc : elles projettent tout le monde dans un rayon de 6 m.', owned: () => w.consumable ? (P.grenades || 0) > 0 : owned.has('arme:' + k), equipped: () => P.weapon === k, buy: () => { if (w.consumable) P.grenades = (P.grenades || 0) + w.ammo; else { owned.add('arme:' + k); saveOwned(); } store.set('superobby.grenades', String(P.grenades || 0)); }, act: () => equipWeapon(k) });
+  if (tab === 'armes') for (const [k, w] of Object.entries(WEAPONS)) items.push({ key: 'arme:' + k, cat: 'arme', id: k, n: w.n, e: w.e, p: w.p, consumable: !!w.consumable, desc: w.desc || (k === 'pistol' ? 'Pistolet laser précis, 8 balles, rechargement rapide. Il se porte dans un étui à la hanche droite.' : k === 'rifle' ? 'Fusil laser à lunette, 30 balles : un appui = un coup, visée automatique sur la cible la plus proche. Il repose dans un harnais de dos.' : 'Lot de 5 grenades de choc : elles projettent tout le monde dans un rayon de 6 m.'), owned: () => w.consumable ? (P.grenades || 0) > 0 : owned.has('arme:' + k), equipped: () => P.weapon === k, buy: () => { if (w.consumable) P.grenades = (P.grenades || 0) + w.ammo; else { owned.add('arme:' + k); saveOwned(); } store.set('superobby.grenades', String(P.grenades || 0)); }, act: () => equipWeapon(k) });
   if (tab === 'armes') for (const [k, m] of Object.entries(MUNITIONS)) {
     if (k === 'std') continue;
     items.push({ key: 'muni:' + k, cat: 'muni', id: k, n: m.n, e: m.e, p: m.p, consumable: true, desc: m.desc,
@@ -14871,8 +15131,14 @@ function toggleJet() {
   P.jet = !P.jet; P.fuel = 100; setJet(me, P.jet); msg(P.jet ? (isMobile ? '🚀 Propulseur ! Maintiens SAUT pour t\'envoler' : '🚀 Propulseur ! Maintiens Espace pour t\'envoler') : '🚀 Propulseur rangé', 1800); if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() }); updateAct();
 }
 function equipWeapon(kind) {   // équipe une arme (ou range : null)
+  if (kind === 'couteau') kind = 'knife';   // la manette et les commandes parlées disent « couteau »
   P.weapon = kind; P.gun = !!kind; P.aimToggle = false; P.drawn = false; $('drawBtn').textContent = '✊'; document.body.classList.remove('drawn'); $('aimBtn').classList.remove('on'); setWeapon(me, kind, false); document.body.classList.toggle('gun', !!kind);
-  if (kind) { const w = WEAPONS[kind]; if (kind !== 'grenade') { P.ammo = w.ammo; P.ammoMax = w.ammo; } msg(`${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic'} pour tirer : le personnage vise tout seul la cible la plus proche`, 2600); if (kind === 'grenade' && !P.grenades) { P.weapon = null; P.gun = false; setWeapon(me, null); document.body.classList.remove('gun'); } }
+  majEtuis();
+  { const fb = $('fireBtn'); if (fb) fb.textContent = kind === 'knife' ? '🔪' : kind === 'grenade' ? '💣' : '🔫'; }   // le bouton dit ce qu'on va faire
+  if (kind) { const w = WEAPONS[kind]; if (kind !== 'grenade' && !w.blanche) { P.ammo = w.ammo; P.ammoMax = w.ammo; }
+    msg(w.blanche ? `${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic ou X'} pour planter : le personnage frappe au ventre, puis range le couteau tout seul`
+                  : `${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic'} pour tirer : le personnage vise tout seul la cible la plus proche`, 2600);
+    if (kind === 'grenade' && !P.grenades) { P.weapon = null; P.gun = false; setWeapon(me, null); document.body.classList.remove('gun'); } }
   else msg('🔫 Arme rangée', 900);
   if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   updateAct();
@@ -14882,6 +15148,7 @@ function fermeLunette() { if (P.zoom) { P.zoom = false; document.body.classList.
 function drawWeapon(on) {   // dégainer / rengainer
   if (!P.weapon) { msg('🔫 Achète une arme à l\'armurerie', 1400); return; }
   P.drawn = on == null ? !P.drawn : on;
+  if (P.drawn) setGarde(false);   // l'arme sort : la garde tombe
   if (P.weapon !== 'grenade') setWeapon(me, P.weapon, P.drawn);
   document.body.classList.toggle('drawn', !!P.drawn);
   $('drawBtn').textContent = P.drawn ? '🔻' : '✊';
@@ -15105,6 +15372,7 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
   if (!remote) {
     if (!P.weapon || drive.car || P.sit || P.swing || P.ride || gym.on || P.fireCd > simTime) return;   // assis / sur un manège : on ne tire pas au jugé
     if (P.weapon === 'grenade') return throwGrenade();
+    if (WEAPONS[P.weapon].blanche) return coupCouteau();   // une arme blanche ne tire pas
     // Fusil à lunette : un premier appui met l'œil dans la lunette (image grossie), le
     // second tire. On garde le tir unique suivi du rengainage.
     if (WEAPONS[P.weapon].lunette && !P.zoom) {
@@ -15670,13 +15938,19 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Digit1' && running) { if (owned.has('arme:pistol')) equipWeapon(P.weapon === 'pistol' ? null : 'pistol'); return; }
   if (e.code === 'Digit2' && running) { if (owned.has('arme:rifle')) equipWeapon(P.weapon === 'rifle' ? null : 'rifle'); return; }
   if (e.code === 'Digit3' && running) { if (P.grenades > 0) equipWeapon(P.weapon === 'grenade' ? null : 'grenade'); return; }
+  if (e.code === 'Digit4' && running) { if (owned.has('arme:knife')) equipWeapon(P.weapon === 'knife' ? null : 'knife'); return; }
   if (e.code === 'KeyG' && running && !paused) { drawWeapon(); return; }
   if (e.code === 'KeyV' && running && !paused) { if (!keys.has('KeyV')) { keys.add('KeyV'); P.vDown = simTime; } return; }
+  // LE COMBAT : C (ou Ctrl gauche) pour se baisser et esquiver, H pour lever la garde.
+  if ((e.code === 'KeyC' || e.code === 'ControlLeft') && running && !paused && !drive.car) { keys.add(e.code); setAccroupi(true); return; }
+  if (e.code === 'KeyH' && running && !paused && !drive.car) { keys.add(e.code); setGarde(true); return; }
   keys.add(e.code);
   if (e.code === 'Space') P.jumpBuf = 0.15;
 });
-window.addEventListener('keyup', e => { if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') P.run = false; if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') P.aimHeld = false; if (e.code === 'KeyV' && keys.has('KeyV')) { keys.delete('KeyV'); if (simTime - (P.vDown || 0) > 0.4) kick(); else punch(); return; } keys.delete(e.code); });
-window.addEventListener('blur', () => keys.clear());
+window.addEventListener('keyup', e => { if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') P.run = false;
+  if (e.code === 'KeyC' || e.code === 'ControlLeft') { keys.delete(e.code); if (!keys.has('KeyC') && !keys.has('ControlLeft')) setAccroupi(false); return; }
+  if (e.code === 'KeyH') { keys.delete(e.code); setGarde(false); return; } if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') P.aimHeld = false; if (e.code === 'KeyV' && keys.has('KeyV')) { keys.delete('KeyV'); if (simTime - (P.vDown || 0) > 0.4) kick(); else punch(); return; } keys.delete(e.code); });
+window.addEventListener('blur', () => { keys.clear(); setGarde(false); setAccroupi(false); });
 chatIn.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const t = chatIn.value.trim(); chatIn.value = '';
@@ -15789,6 +16063,11 @@ $('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.hand
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
+// Garde et esquive : deux boutons qu'on MAINTIENT, comme sur une manette.
+$('gardeBtn').addEventListener('pointerdown', e => { e.preventDefault(); setGarde(true); });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('gardeBtn').addEventListener(ev, e => { e.preventDefault(); setGarde(false); });
+$('duckBtn').addEventListener('pointerdown', e => { e.preventDefault(); setAccroupi(true); });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('duckBtn').addEventListener(ev, e => { e.preventDefault(); setAccroupi(false); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 let gamepadOk = true;
 // Manette de salon : toutes les touches du clavier ont leur bouton, et la croix
@@ -15823,9 +16102,9 @@ const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cach
 const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △)
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
-const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', grenade: 'Grenade' };
+const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', sniper: 'Fusil à lunette', knife: 'Couteau', grenade: 'Grenade' };
 function armeSuivante(sens = 1) {
-  const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', P.grenades > 0 && 'grenade'].filter(Boolean);
+  const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', owned.has('arme:sniper') && 'sniper', owned.has('arme:knife') && 'knife', P.grenades > 0 && 'grenade'].filter(Boolean);
   if (!dispo.length) { msg('🔫 Aucune arme : passe à l\'armurerie', 1500); return false; }
   // « mains nues » fait partie du tour : on peut donc revenir en arriere sans rester coince
   const liste = [null, ...dispo];
@@ -16486,7 +16765,7 @@ function frame() {
   } else if (P.aimPitch) P.aimPitch *= 1 - Math.min(1, dt * 3);
   // verrouillage automatique : visible dès qu'une arme est équipée, pour qu'on sache sur quoi on tirera
   P.lock = (P.weapon && P.weapon !== 'grenade' && running && !paused && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on) ? cibleAuto() : null;
-  if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); fermeLunette(); }
+  rangementAuto();
   if (P.zoom && (simTime > (P.zoomT || 0) || !P.drawn || drive.car || P.sit)) fermeLunette();
   P.aim = armed && !!(P.aimHeld || P.aimToggle);   // visée « épaule » (zoom) en plus
   const aiming = armed;
@@ -18924,7 +19203,7 @@ function gangTick(dt) {
             animateRig(m.av.rig, 'walk', 4.4, dt, simTime);
           } else if (simTime > m.cd) {
             m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
-            if (c.joueur) hurt(Math.max(3, Math.round(5 + perfDe(m) / 8 - perfDe(P) / 16)), G.nom, dx3 / d3, dz3 / d3, 1.4);
+            if (c.joueur) hurt(Math.max(3, Math.round(5 + perfDe(m) / 8 - perfDe(P) / 16)), G.nom, dx3 / d3, dz3 / d3, 1.4, 'poing');
             else {
               const b2 = c.bot;
               b2.hp = (b2.hp ?? 100) - Math.max(4, Math.round(9 + (perfDe(m) - perfDe(b2)) / 5));
@@ -18959,7 +19238,7 @@ function gangTick(dt) {
           animateRig(m.av.rig, 'idle', 0, dt, simTime);
           if (dP < 2 && simTime > m.cd && P.hp > 0 && !drive.car) {
             m.cd = simTime + 1.4; m.av.rig.swing = 0.3;
-            hurt(9, 'un garde des ' + G.nom, (P.pos.x - m.x) / (dP || 1), (P.pos.z - m.z) / (dP || 1), 1.5);
+            hurt(9, 'un garde des ' + G.nom, (P.pos.x - m.x) / (dP || 1), (P.pos.z - m.z) / (dP || 1), 1.5, 'poing');
             if (simTime > (m.sayT || 0)) { m.sayT = simTime + 8; bubble(m.av, pickOne(['dégage de notre planque !', 'personne ne touche au magot !'])); }
           }
         }
@@ -18992,7 +19271,7 @@ function gangTick(dt) {
         const l = Math.hypot(P.pos.x - m.x, P.pos.z - m.z) || 1;
         // un gangster performant tape plus fort ; le joueur entraîné encaisse mieux
         const coupF = Math.max(3, Math.round(5 + perfDe(m) / 8 - perfDe(P) / 16));
-        hurt(coupF, G.nom, (P.pos.x - m.x) / l, (P.pos.z - m.z) / l, 1.4);
+        hurt(coupF, G.nom, (P.pos.x - m.x) / l, (P.pos.z - m.z) / l, 1.4, 'poing');
       }
       // bagarre entre gangs : les coups portent selon la PERFORMANCE de celui qui frappe
       if (G.etat === 'rival') for (const O of gangs) { if (O === G) continue;
@@ -19718,6 +19997,7 @@ const MET_C = {
   vert: 0x2f8f4a, gris: 0x8f98ab, gris2: 0x6b7280,
   rouge: 0xd42b2b, jaune: 0xffd23f, casquePompier: 0x9aa4b2,
   poste: 0xf2c21a, marron: 0x8b5a2b, cuir: 0x3b2a16, acier: 0x8f98ab,
+  blanc: 0xf7f9fc, croix: 0xd8202a, bleuSecours: 0x2f6fe0, toile: 0xdfe6f0, matelas: 0x2b6fb0,
 };
 // Les cinq métiers, avec ce qui les identifie dans le jeu (émoji, nom, outil de base).
 const METIERS_DEF = {
@@ -19726,6 +20006,7 @@ const METIERS_DEF = {
   laveur: { e: '🪟', n: 'laveur de vitres', outil: 'raclette' },
   pompier: { e: '🚒', n: 'pompier', outil: 'lance' },
   facteur: { e: '📮', n: 'facteur', outil: 'lettre' },
+  ambulancier: { e: '🚑', n: 'ambulancier', outil: null },
 };
 
 // ---- une pièce de tenue : une boîte arrondie accrochée à un segment du rig ----
@@ -19826,6 +20107,25 @@ function tenueMetier(av, metier) {
     sansChapeau(); casque(MET_C.casquePompier, true);
     P2(tete, 1.5 * S, 0.5 * S, 0.34 * S, MET_C.casquePompier, 0, 0.9 * S, -0.86 * S);   // le couvre-nuque
     for (const lg of [rig.legL, rig.legR]) { lg.tige.visible = true; P2(lg.genou, 1.12 * S, 0.2 * S, 1.12 * S, MET_C.jaune, 0, -0.12 * S, 0); }
+  } else if (metier === 'ambulancier') {
+    // BLOUSE BLANCHE À CROIX ROUGE. Le rouge est sur la poitrine, dans le dos et sur les deux
+    // épaules : quel que soit le côté d'où on le voit, on reconnaît le secouriste.
+    av.mats.shirt.color.setHex(MET_C.blanc); av.mats.sleeve.color.setHex(MET_C.blanc);
+    av.mats.pants.color.setHex(MET_C.blanc); av.mats.shoe.color.setHex(MET_C.blanc);
+    P2(g, TW, 1.9 * S, TD, MET_C.blanc, 0, 3.05 * S, 0);                                   // la blouse
+    P2(g, TW + 0.05, 0.22 * S, TD + 0.05, MET_C.bleuSecours, 0, 2.3 * S, 0);                // le liseré bleu du bas
+    const croix = (parent, x, y, z, k, prof) => {   // une croix rouge : deux barres croisées
+      P2(parent, 0.7 * S * k, 0.22 * S * k, prof, MET_C.croix, x, y, z);
+      P2(parent, 0.22 * S * k, 0.7 * S * k, prof, MET_C.croix, x, y, z);
+    };
+    croix(g, 0, 3.2 * S, TD / 2 + 0.03, 1, 0.08);                                           // devant
+    croix(g, 0, 3.2 * S, -TD / 2 - 0.03, 1, 0.08);                                          // dans le dos
+    for (const br of [rig.armL, rig.armR]) { P2(br, BW + 0.05, 0.8 * S, BD + 0.05, MET_C.blanc, 0, -0.48 * S, 0); croix(br, 0, -0.5 * S, BD / 2 + 0.04, 0.5, 0.06); }
+    P2(g, TW + 0.06, 0.3 * S, TD * 0.9, MET_C.bleuSecours, 0, 3.9 * S, 0);                  // les épaulières bleues
+    casquette(MET_C.blanc); croix(tete, 0, 1.62 * S, 0.66 * S, 0.55, 0.06);                 // la casquette blanche et sa croix
+    P2(g, 0.9 * S, 0.6 * S, 0.42 * S, MET_C.blanc, TW / 2 + 0.1, 2.45 * S, 0);              // la trousse de secours à la ceinture
+    croix(g, TW / 2 + 0.1, 2.45 * S, 0.24 * S, 0.42, 0.06);
+    for (const lg of [rig.legL, rig.legR]) P2(lg.genou, 1.06 * S, 0.16 * S, 0.5 * S, MET_C.bleuSecours, 0, -0.36 * S, 0.22 * S);   // liserés sur les chaussures
   } else if (metier === 'facteur') {
     // veste jaune et marron, casquette verte, sacoche en bandoulière
     av.mats.shirt.color.setHex(MET_C.poste); av.mats.sleeve.color.setHex(MET_C.poste);
@@ -19872,6 +20172,197 @@ function donneOutil(av, nom) {
   g.position.set(0, -0.95 * S, 0.22 * S);
   av.rig.armR.coude.add(g); av.outilMesh = g; av.outilNom = nom;
   return g;
+}
+
+// ================= LE BRANCARD =================
+// Un vrai brancard de secours : deux barres d'aluminium, une toile tendue, un matelas bleu,
+// deux sangles et quatre pieds repliables. Il vit en quatre états :
+//   'pose'   — posé au sol (ou sur un lit) ;
+//   'porte'  — porté par un ou deux ambulanciers, accroché à leurs POINGS ;
+//   'glisse' — en train d'entrer dans l'ambulance ;
+//   'charge' — arrimé dans l'ambulance, il roule avec elle.
+// Trois repères sont posés dans le modèle pour que le poste Animation s'y accroche :
+// `userData.avant` (poignées avant), `userData.arriere` (poignées arrière), `userData.couche`
+// (le point où repose le blessé).
+const BRANCARD_L = 2.2, BRANCARD_W = 0.62;
+function brancardMesh() {
+  const g = new THREE.Group();
+  const alu = lam(0xc9ced8), toile = lam(MET_C.toile), matelas = lam(MET_C.matelas), sangle = lam(0x2b2f3a);
+  const bx = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  for (const sx of [-1, 1]) {
+    bx(alu, 0.07, 0.07, BRANCARD_L, sx * (BRANCARD_W / 2), 0.3, 0);                    // les deux barres
+    for (const sz of [-1, 1]) bx(alu, 0.06, 0.06, 0.34, sx * (BRANCARD_W / 2), 0.3, sz * (BRANCARD_L / 2 + 0.12));   // les poignées
+    for (const sz of [-0.72, 0.72]) { bx(alu, 0.05, 0.3, 0.05, sx * (BRANCARD_W / 2 - 0.02), 0.15, sz);              // les pieds
+      bx(alu, 0.09, 0.05, 0.09, sx * (BRANCARD_W / 2 - 0.02), 0.03, sz); }
+  }
+  bx(toile, BRANCARD_W - 0.02, 0.05, BRANCARD_L - 0.12, 0, 0.31, 0);                   // la toile tendue
+  bx(matelas, BRANCARD_W - 0.1, 0.09, BRANCARD_L - 0.3, 0, 0.37, 0);                   // le matelas
+  bx(lam(0xf4f6fa), BRANCARD_W - 0.16, 0.07, 0.34, 0, 0.44, BRANCARD_L / 2 - 0.32);    // l'oreiller
+  for (const sz of [-0.5, 0.35]) bx(sangle, BRANCARD_W + 0.04, 0.05, 0.09, 0, 0.42, sz);   // les deux sangles
+  bx(lam(MET_C.croix), 0.26, 0.02, 0.08, 0, 0.42, -0.85); bx(lam(MET_C.croix), 0.08, 0.02, 0.26, 0, 0.42, -0.85);   // la croix rouge au pied
+  const rep = (nom, z, y) => { const o = new THREE.Object3D(); o.position.set(0, y, z); g.add(o); g.userData[nom] = o; return o; };
+  rep('avant', BRANCARD_L / 2 + 0.12, 0.3); rep('arriere', -BRANCARD_L / 2 - 0.12, 0.3); rep('couche', 0.1, 0.42);
+  return g;
+}
+// Crée un brancard posé au sol et le renvoie. `city.brancards` les regroupe tous.
+function creerBrancard(x, z, y) {
+  const g = brancardMesh(); worldGroup.add(g);
+  const br = { g, etat: 'pose', x, y: y == null ? groundUnder(x, z, null, (y || 0) + 2) : y, z, cap: 0,
+    blesse: null, avant: null, arriere: null, vehicule: null, glisse: 0 };
+  g.position.set(br.x, br.y, br.z);
+  if (!city.brancards) city.brancards = [];
+  city.brancards.push(br);
+  return br;
+}
+// Le fait porter : `avAvant` tient les poignées avant, `avArriere` (facultatif) celles de
+// derrière. Avec un seul porteur, le brancard suit devant lui, à hauteur de poing.
+function porterBrancard(br, avAvant, avArriere) {
+  if (!br) return null;
+  if (br.avant && br.avant.rig) br.avant.rig.porte = false;
+  if (br.arriere && br.arriere.rig) br.arriere.rig.porte = false;
+  br.avant = avAvant || null; br.arriere = avArriere || null;
+  // `rig.porte` dit à l'animation « ce personnage tient un brancard » : les deux bras
+  // partent devant, poings à hauteur de hanche. Le poste Animation peut le remplacer.
+  for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = true;
+  br.etat = br.avant ? 'porte' : 'pose';
+  br.vehicule = null; br.glisse = 0;
+  if (br.g.parent !== worldGroup) { br.g.parent && br.g.parent.remove(br.g); worldGroup.add(br.g); }
+  return br;
+}
+// Le repose au sol (ou à la hauteur donnée).
+function poserBrancard(br, x, z, y) {
+  if (!br) return null;
+  for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = false;
+  br.avant = br.arriere = null; br.vehicule = null; br.etat = 'pose'; br.glisse = 0;
+  if (x != null) br.x = x; if (z != null) br.z = z;
+  br.y = y == null ? groundUnder(br.x, br.z, null, br.y + 2) : y;
+  if (br.g.parent !== worldGroup) { br.g.parent && br.g.parent.remove(br.g); worldGroup.add(br.g); }
+  br.g.position.set(br.x, br.y, br.z);
+  return br;
+}
+// Allonge un avatar (joueur, habitant, membre de gang) sur le brancard. Le corps pivote de
+// 90° comme un corps à terre : le pivot d'un avatar est aux PIEDS.
+function allongerSurBrancard(br, av) {
+  if (!br || !av || !av.group) return null;
+  br.blesse = av;
+  av.group.rotation.set(-Math.PI / 2, 0, 0);
+  if (av.rig) { av.rig.agenou = false; av.rig.garde = false; av.rig.accroupi = false; }
+  majBrancard(br, 0);
+  return br;
+}
+function descendreDuBrancard(br) {
+  if (!br || !br.blesse) return null;
+  const av = br.blesse; br.blesse = null;
+  av.group.rotation.set(0, 0, 0);
+  return av;
+}
+// GLISSE LE BRANCARD DANS L'AMBULANCE. `vehicule` est un véhicule du poste B ; son point
+// d'ancrage est `vehicule.brancard` — soit un Object3D placé dans `vehicule.g`, soit un
+// simple { x, y, z } exprimé dans le repère du véhicule. Sans ancrage, on se rabat sur
+// l'arrière de la caisse. Le glissement dure `BRANCARD_GLISSE` secondes.
+const BRANCARD_GLISSE = 1.2;
+function ancrageBrancard(c) {
+  if (!c) return null;
+  const a = c.brancard;
+  if (a && a.isObject3D) return a;
+  const o = new THREE.Object3D();
+  o.position.set(a ? (a.x || 0) : 0, a ? (a.y != null ? a.y : 1.0) : 1.0, a ? (a.z || 0) : -1.1);
+  (c.g || worldGroup).add(o);
+  if (c) c.brancard = o;   // on le mémorise : le poste B peut le remplacer par le sien
+  return o;
+}
+function chargerBrancard(br, vehicule) {
+  if (!br || !vehicule) return null;
+  br.vehicule = vehicule; br.ancrage = ancrageBrancard(vehicule);
+  br.etat = 'glisse'; br.glisse = 0;
+  br.depart = br.g.getWorldPosition(new THREE.Vector3());
+  return br;
+}
+function sortirBrancard(br) {
+  if (!br) return null;
+  if (br.g.parent && br.g.parent !== worldGroup) { const p = br.g.getWorldPosition(new THREE.Vector3()); br.g.parent.remove(br.g); worldGroup.add(br.g); br.g.position.copy(p); br.x = p.x; br.y = p.y; br.z = p.z; }
+  br.vehicule = null; br.ancrage = null; br.glisse = 0; br.etat = br.avant ? 'porte' : 'pose';
+  return br;
+}
+// Un résumé lisible, pour le poste Animation et pour les tests.
+function brancardEtat(br) {
+  if (!br) return null;
+  const p = br.g.getWorldPosition(new THREE.Vector3());
+  return { etat: br.etat, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2),
+    blesse: br.blesse ? (br.blesse.name || '?') : null, porteurs: (br.avant ? 1 : 0) + (br.arriere ? 1 : 0),
+    dansVehicule: br.g.parent !== worldGroup, glisse: +br.glisse.toFixed(2) };
+}
+// Place le brancard pour l'image courante, selon son état, et emmène le blessé avec lui.
+function majBrancard(br, dt) {
+  const g = br.g;
+  if (br.etat === 'porte' && br.avant) {
+    const a = mainDeAvatar(br.avant), b = br.arriere ? mainDeAvatar(br.arriere) : null;
+    if (b) {   // à deux : le brancard tient entre les deux paires de mains
+      g.position.set((a.x + b.x) / 2, (a.y + b.y) / 2 - 0.28, (a.z + b.z) / 2);
+      g.rotation.set(0, Math.atan2(a.x - b.x, a.z - b.z), 0);
+    } else {
+      // À UN SEUL PORTEUR : il tient les deux poignées du même bout, et le brancard part
+      // DEVANT lui. Centré sur un seul poing, il lui traversait le corps de part en part ;
+      // on le centre donc entre les deux poings et on l'avance d'une demi-longueur.
+      const gche = mainDeAvatar(br.avant, 'G');
+      const mid = a.clone().add(gche).multiplyScalar(0.5);
+      const cap = br.avant.group.rotation.y, avance = BRANCARD_L / 2 + 0.15;
+      g.rotation.set(0, cap, 0);
+      g.position.set(mid.x + Math.sin(cap) * avance, mid.y - 0.3, mid.z + Math.cos(cap) * avance);
+    }
+  } else if (br.etat === 'glisse' && br.ancrage) {
+    br.glisse = Math.min(1, br.glisse + dt / BRANCARD_GLISSE);
+    const cible = br.ancrage.getWorldPosition(new THREE.Vector3());
+    const k = br.glisse * br.glisse * (3 - 2 * br.glisse);   // départ et arrivée en douceur
+    g.position.lerpVectors(br.depart, cible, k);
+    br.ancrage.getWorldQuaternion(g.quaternion);
+    if (br.glisse >= 1) {   // arrimé : il devient un enfant du véhicule et roule avec lui
+      br.etat = 'charge';
+      for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = false;
+      br.avant = br.arriere = null;
+      const p = br.ancrage.parent || worldGroup;
+      p.add(g); g.position.copy(br.ancrage.position); g.quaternion.copy(br.ancrage.quaternion);
+    }
+  } else if (br.etat === 'pose') {
+    g.position.set(br.x, br.y, br.z); g.rotation.set(0, br.cap || 0, 0);
+  }
+  if (br.blesse && br.blesse.group) {   // le blessé suit le matelas, couché sur le dos
+    g.updateMatrixWorld(true);
+    const c = g.userData.couche.getWorldPosition(new THREE.Vector3());
+    br.blesse.group.position.set(c.x, c.y, c.z);
+    br.blesse.group.rotation.set(-Math.PI / 2, g.rotation.y, 0);
+  }
+}
+// Le point d'un POING, en coordonnées monde : c'est là qu'on accroche le brancard.
+// `cote` : 'G' pour le poing gauche, n'importe quoi d'autre pour le droit.
+function mainDeAvatar(av, cote) {
+  av.group.updateMatrixWorld(true);
+  const br = av.rig && (cote === 'G' ? av.rig.armL : av.rig.armR);
+  const n = (br && (br.main || br.poing)) || av.group;
+  return n.getWorldPosition(new THREE.Vector3());
+}
+function brancardTick(dt) {
+  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); } catch (e) {} }
+}
+// ---- L'AMBULANCIER ----
+// LE point d'entrée pour le poste B (l'ambulance) et le poste Animation (le brancardage) :
+// il crée un travailleur en blouse blanche à croix rouge, avec son brancard entre les mains.
+// `opt.sansBrancard` pour un secouriste les mains libres (celui qui conduit, par exemple).
+function creerAmbulancier(nom, x, z, opt = {}) {
+  const m = creerTravailleur('ambulancier', nom, x, z, opt);
+  const br = opt.sansBrancard ? null : creerBrancard(x, z, opt.y);
+  if (br) porterBrancard(br, m.bot.av, opt.equipier ? opt.equipier.av : null);
+  m.brancard = br; m.bot.brancard = br;
+  return m;
+}
+// Le geste complet, en un appel : on ramasse le blessé, on le sangle, on glisse le brancard
+// dans l'ambulance. Le poste Animation peut l'appeler étape par étape à la place.
+function embarqueBlesse(m, avBlesse, ambulance) {
+  if (!m || !m.brancard) return null;
+  if (avBlesse) allongerSurBrancard(m.brancard, avBlesse);
+  if (ambulance) chargerBrancard(m.brancard, ambulance);
+  m.etat = 'secours';
+  return m.brancard;
 }
 
 // ---- LES VÉHICULES DE TRAVAIL ----
@@ -20249,6 +20740,8 @@ function creerTravailleur(metier, nom, x, z, opt = {}) {
 }
 function metiersReset() {
   for (const m of (city.metiers || [])) if (m.bot && m.bot.av) scene.remove(m.bot.av.group);
+  for (const br of (city.brancards || [])) { if (br.g && br.g.parent) br.g.parent.remove(br.g); }
+  city.brancards = [];
   city.metiers = []; city.chantiers = []; city.incendies = []; city.detritus = []; city.boites = [];
   city.nidsPoule = []; city.depot = null; city.caserne = null;
   city.boulot = null; city.boulotNear = null; city.horaires = true;
@@ -20911,6 +21404,7 @@ function metiersRepos() {
 }
 // ---- LE TOUR DE VIE DES MÉTIERS (appelé par cityVie, une fois par image) ----
 function metiersTick(dt) {
+  brancardTick(dt);   // un brancard vit meme sans equipe de metiers en service (secours isole, test)
   if (!city.on || !city.metiers || !city.metiers.length) return;
   metiersEvenements(dt);
   employesTick(dt);

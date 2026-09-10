@@ -243,6 +243,7 @@ window.__G = {
   tuerMembre: typeof tuerMembre === 'function' ? tuerMembre : null,
   conduire: typeof conduire === 'function' ? conduire : null,
   commandesManette: typeof commandesManette === 'function' ? commandesManette : null,
+  conduireVersPoint: typeof conduireVersPoint === 'function' ? conduireVersPoint : null,
   calerRoues: typeof calerRoues === 'function' ? calerRoues : null,
   prepareVehicule: typeof prepareVehicule === 'function' ? prepareVehicule : null,
   rouesTick: typeof rouesTick === 'function' ? rouesTick : null,

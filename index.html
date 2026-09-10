@@ -8456,6 +8456,7 @@ function policeTick(dt) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
     if (pc.debarque) { pc.speed = 0; continue; }   // les agents sont descendus : la voiture attend devant le bâtiment
+    if (pc.constat) { pc.speed = 0; continue; }    // envoyée sur un accident : c'est accidentsTick qui la pilote
     if (pc.active && police.wanted > 0 && police.sait) { tx = police.sait[0]; tz = police.sait[1]; }
     else if (pc.active && police.wanted > 0 && police.lastSeen) { tx = police.lastSeen[0]; tz = police.lastSeen[1]; }
     else if (pc.goHome) { tx = pc.home[0]; tz = pc.home[1]; if (Math.hypot(pc.x - tx, pc.z - tz) < 2) { pc.goHome = false; pc.speed = 0; continue; } }
@@ -9454,10 +9455,16 @@ const BULLE_K = 0.115;
 // fermée on masque donc les jambes — invisibles derrière la portière de toute façon — et on
 // remonte le buste à hauteur de vitre. Sur un deux-roues, un jet-ski ou dans l'hélico, où
 // les jambes se voient vraiment, on les garde.
-function jambesEnCabine(av, cacher) {
+function jambesEnCabine(av, cacher, seuil) {
   const g = av && (av.group || av); if (!g || !g.traverse) return;
-  if (!!g.userData.jambesCachees === !!cacher) return;
-  g.userData.jambesCachees = !!cacher;
+  // Le seuil dépend maintenant du VÉHICULE : dans une berline le personnage est assis très
+  // bas (sinon sa tête passait AU TRAVERS du toit, 40 cm au-dessus) et il faut masquer tout
+  // ce qui descend sous le bas de caisse, pas seulement les jambes. Par défaut : 0,85 m,
+  // c'est-à-dire les jambes, comme avant.
+  seuil = seuil == null ? 0.85 : seuil;
+  if (!!g.userData.jambesCachees === !!cacher && (!cacher || g.userData.seuilCabine === seuil)) return;
+  if (g.userData.jambesCachees) { for (const o of (g.userData.cachesCabine || [])) o.visible = true; g.userData.cachesCabine = null; }
+  g.userData.jambesCachees = !!cacher; g.userData.seuilCabine = seuil;
   if (cacher) {
     // On masque TOUT ce qui se trouve sous le bassin — jambes, chaussures, et le reste :
     // ce n'était pas que les jambes qui dépassaient sous la carrosserie.
@@ -9468,7 +9475,7 @@ function jambesEnCabine(av, cacher) {
       const bb = o.geometry.boundingBox; if (!bb) return;
       let y = bb.max.y, n = o;
       while (n && n !== g) { y = y * (n.scale ? n.scale.y : 1) + (n.position ? n.position.y : 0); n = n.parent; }
-      if (y < 0.85) { o.visible = false; caches.push(o); }
+      if (y < seuil) { o.visible = false; caches.push(o); }
     });
     g.userData.cachesCabine = caches;
   } else {
@@ -13305,7 +13312,12 @@ function conduire(c, cmd, dt) {
       const prev = c.prevGy == null ? gy : c.prevGy; const slopeV = (gy - prev) / dt;
       if (gy < c.y - 0.08 && Math.abs(V.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; } else { c.y = gy; c.vy = 0; c.slopeV = slopeV; }
     }
-    else { if (gy - c.y > 0.3 && Math.abs(V.speed) > 12) { c.vy = 3 + Math.abs(V.speed) * 0.22; c.y = gy + 0.02; } else { c.y += (gy - c.y) * Math.min(1, dt * 14); c.vy = 0; } }   // marche abordée vite : on décolle
+    else if (gy - c.y > 0.3 && Math.abs(V.speed) > 12) { c.vy = 3 + Math.abs(V.speed) * 0.22; c.y = gy + 0.02; }   // marche abordée vite : on décolle
+    // Le sol qui MONTE (bordure, dalle du dépôt, entrée de parking) était rattrapé en douceur :
+    // le temps que le véhicule remonte, la gomme était DANS le béton, jusqu'à 15 cm. Une roue
+    // ne rentre jamais dans le sol : on monte d'un coup, et c'est la SUSPENSION qui encaisse.
+    else if (gy > c.y) { const monte = gy - c.y; c.y = gy; c.vy = 0; if (monte > 0.02) c.susp = Math.min(c.susp || 0, -Math.min(0.26, monte * 1.6)); }
+    else { c.y += (gy - c.y) * Math.min(1, dt * 14); c.vy = 0; }
     c.prevGy = gy;
     if (onTerrain) { const fx = Math.sin(c.h), fz = Math.cos(c.h), hA = terrainH(c.x - fx * 1.2, c.z - fz * 1.2) ?? gy, hB = terrainH(c.x + fx * 1.2, c.z + fz * 1.2) ?? gy; c.tiltX = c.tiltX == null ? 0 : c.tiltX; const want = (c.vy || 0) > 0.5 || c.y > gy + 0.1 ? -0.15 : -Math.atan2(hB - hA, 2.4); c.tiltX += (want - c.tiltX) * Math.min(1, dt * 8); } else c.tiltX = (c.tiltX || 0) * (1 - Math.min(1, dt * 6));
   }
@@ -13608,32 +13620,37 @@ function rouleVers(c, tx, tz, dt, vmax = 14) {
 // Trois règles tenues par le test : la TÊTE passe sous le pavillon, les épaules restent
 // dans la largeur de la caisse, et deux occupants sont toujours à plus de 92 cm l'un de
 // l'autre (le diamètre d'un personnage).
+// Un personnage mesure 2,36 m debout et l'habitacle d'une berline 1,60 m : ASSIS TRÈS BAS,
+// la tête arrive juste dans la bande vitrée (1,05 – 1,67 m) et passe SOUS le pavillon.
+// Avant, elle en sortait de 40 cm — on voyait un crâne posé sur le toit. `seuil` dit à
+// partir de quelle hauteur (dans le repère de l'avatar) les morceaux restent visibles :
+// tout ce qui descend sous le bas de caisse est masqué, comme les jambes l'étaient déjà.
 const PLACES = {
-  voiture: { conducteur: { x: 0.46, y: -0.2, z: 0.5 }, avant: { x: -0.46, y: -0.2, z: 0.5 },
-    arriereG: { x: 0.48, y: -0.2, z: -0.85 }, arriereD: { x: -0.48, y: -0.2, z: -0.85 },
-    chien: { x: 0, y: 0.28, z: -0.85 } },
-  truck: { conducteur: { x: 0.6, y: 0.34, z: 2.6 }, avant: { x: -0.6, y: 0.34, z: 2.6 },
-    chien: { x: 0, y: 0.8, z: 2.1 } },
+  voiture: { seuil: 1.62, conducteur: { x: 0.5, y: -0.8, z: 0.5 }, avant: { x: -0.5, y: -0.8, z: 0.5 },
+    arriereG: { x: 0.5, y: -0.8, z: -0.85 }, arriereD: { x: -0.5, y: -0.8, z: -0.85 },
+    chien: { x: 0, y: -0.42, z: -0.85 } },
+  truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
+    chien: { x: 0, y: 0.5, z: 2.1 } },
   moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
   bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
   velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
-  buggy: { conducteur: { x: 0.42, y: 0.58, z: 0.25 }, avant: { x: -0.42, y: 0.58, z: 0.25 },
+  buggy: { conducteur: { x: 0.48, y: 0.58, z: 0.25 }, avant: { x: -0.48, y: 0.58, z: 0.25 },
     chien: { x: 0, y: 0.95, z: -0.55 } },
-  jetski: { conducteur: { x: 0, y: 0.4, z: -0.15 }, arriereG: { x: 0, y: 0.4, z: -0.9 } },
+  jetski: { conducteur: { x: 0, y: 0.4, z: -0.05 }, arriereG: { x: 0, y: 0.4, z: -1.0 } },
   heli: { conducteur: { x: 0.55, y: 0.05, z: 0.6 }, avant: { x: -0.55, y: 0.05, z: 0.6 },
     arriereG: { x: 0.55, y: 0.05, z: -0.7 }, arriereD: { x: -0.55, y: 0.05, z: -0.7 },
     chien: { x: 0, y: 0.55, z: -0.75 } },
-  ambulance: { conducteur: { x: 0.46, y: -0.06, z: 1.45 }, avant: { x: -0.46, y: -0.06, z: 1.45 },
-    arriereG: { x: 0.52, y: 0.0, z: -0.8 }, arriereD: { x: -0.52, y: 0.0, z: -0.8 },
-    chien: { x: 0, y: 0.5, z: -1.6 } },
-  depanneuse: { conducteur: { x: 0.46, y: 0.0, z: 1.5 }, avant: { x: -0.46, y: 0.0, z: 1.5 },
-    chien: { x: 0, y: 0.62, z: 1.1 } },
-  benne: { conducteur: { x: 0.55, y: 0.34, z: 2.3 }, avant: { x: -0.55, y: 0.34, z: 2.3 }, chien: { x: 0, y: 0.8, z: 1.9 } },
-  grue: { conducteur: { x: 0.55, y: 0.34, z: 2.6 }, avant: { x: -0.55, y: 0.34, z: 2.6 }, chien: { x: 0, y: 0.8, z: 2.2 } },
-  pelle: { conducteur: { x: 0, y: 0.24, z: 0.3 } },
-  tracteur: { conducteur: { x: 0, y: 0.3, z: -0.35 } },
-  pompier: { conducteur: { x: 0.6, y: 0.44, z: 2.9 }, avant: { x: -0.6, y: 0.44, z: 2.9 }, chien: { x: 0, y: 0.9, z: 2.4 } },
-  fourgon: { conducteur: { x: 0.46, y: -0.06, z: 1.4 }, avant: { x: -0.46, y: -0.06, z: 1.4 }, chien: { x: 0, y: 0.6, z: 0.9 } },
+  ambulance: { seuil: 1.5, conducteur: { x: 0.5, y: -0.45, z: 1.45 }, avant: { x: -0.5, y: -0.45, z: 1.45 },
+    arriereG: { x: 0.55, y: -0.45, z: -0.8 }, arriereD: { x: -0.55, y: -0.45, z: -0.8 },
+    chien: { x: 0, y: -0.05, z: -1.7 } },
+  depanneuse: { seuil: 1.5, conducteur: { x: 0.5, y: -0.5, z: 1.5 }, avant: { x: -0.5, y: -0.5, z: 1.5 },
+    chien: { x: 0, y: -0.1, z: 1.1 } },
+  benne: { seuil: 1.5, conducteur: { x: 0.55, y: -0.1, z: 2.3 }, avant: { x: -0.55, y: -0.1, z: 2.3 }, chien: { x: 0, y: 0.3, z: 1.9 } },
+  grue: { seuil: 1.6, conducteur: { x: 0.55, y: -0.1, z: 2.6 }, avant: { x: -0.55, y: -0.1, z: 2.6 }, chien: { x: 0, y: 0.3, z: 2.2 } },
+  pelle: { seuil: 1.5, conducteur: { x: 0, y: -0.35, z: 0.3 } },
+  tracteur: { seuil: 1.45, conducteur: { x: 0, y: -0.3, z: -0.35 } },
+  pompier: { seuil: 1.5, conducteur: { x: 0.6, y: 0, z: 2.9 }, avant: { x: -0.6, y: 0, z: 2.9 }, chien: { x: 0, y: 0.4, z: 2.4 } },
+  fourgon: { seuil: 1.6, conducteur: { x: 0.5, y: -0.68, z: 1.4 }, avant: { x: -0.5, y: -0.68, z: 1.4 }, chien: { x: 0, y: -0.28, z: 0.9 } },
 };
 const PLACES_ORDRE = ['conducteur', 'avant', 'arriereG', 'arriereD'];
 function placesDe(c) {
@@ -13666,7 +13683,7 @@ function assiedAvatar(av, c, p, dt, volant) {
     if (r.armR.coude) r.armR.coude.rotation.x = volant ? -0.5 : -0.9;
     r.armL.rotation.z = 0.12; r.armR.rotation.z = -0.12;
   }
-  jambesEnCabine(av, caisseFermee(c));
+  jambesEnCabine(av, caisseFermee(c), placesDe(c).seuil);
   return w;
 }
 // Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un.

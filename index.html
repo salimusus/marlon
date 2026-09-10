@@ -15006,7 +15006,13 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
     if (ox < oz) c.x += (Math.sign(a.x - b.x) || 1) * ox; else c.z += (Math.sign(a.z - b.z) || 1) * oz;
     a.x = c.x; a.z = c.z;
     if (race.state === 'running' || race.state === 'countdown') continue;   // pendant une course, aucun véhicule ne bloque : on se frôle
-    if (simTime > (c.bumpT || 0)) { c.bumpT = simTime + 0.4; const imp = Math.abs(drive.speed); if (imp > 3) { vehicleDamage(c, imp * 0.35); v.dmg = clamp((v.dmg || 0) + imp * 0.5, 0, 100); applyDamageVisual(v, Math.sin(c.h) * imp, Math.cos(c.h) * imp); sfx.hit(); sfx.noise(.2, 400, .08); } else sfx.tone(120, 0, .06, 'square', .04, 80); }
+    if (simTime > (c.bumpT || 0)) { c.bumpT = simTime + 0.4; const imp = Math.abs(drive.speed);
+      if (imp > 3) {
+        vehicleDamage(c, imp * 0.35); v.dmg = clamp((v.dmg || 0) + imp * 0.5, 0, 100); applyDamageVisual(v, Math.sin(c.h) * imp, Math.cos(c.h) * imp);
+        // Au-delà de 25 km/h, taper une autre voiture n'est plus un frottement : c'est un
+        // ACCIDENT. Les deux s'immobilisent, la police vient, la dépanneuse aussi.
+        choc(c, imp, imp > 7 ? v : null);
+      } else sfx.tone(120, 0, .06, 'square', .04, 80); }
     drive.speed *= 0.75;
     if (!v.busy && !v.spd && !v.kart && !v.active) { const push = 0.5; if (ox < oz) v.x -= (Math.sign(a.x - b.x) || 1) * push; else v.z -= (Math.sign(a.z - b.z) || 1) * push; v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }   // une voiture garée se déplace un peu
   }
@@ -15543,6 +15549,9 @@ const ACCIDENT_CONSTAT = 5;      // secondes de constat, une fois la police sur 
 const AMENDE_ACCIDENT = 60;
 function ouvreAccident(a, b, v) {
   if (!a || !b || a === b || !city.on) return null;
+  // En COURSE, on se frôle et on se tape : ce n'est pas un accident de la circulation, et
+  // immobiliser les concurrents au premier contact aurait tué la course.
+  if (race.state === 'running' || race.state === 'countdown' || hrace.on) return null;
   if (!city.accidents) city.accidents = [];
   if (a.accidente || b.accidente) return null;
   const joueur = drive.car === a || drive.car === b;

@@ -330,6 +330,7 @@ window.__G = {
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   lightsTick: typeof lightsTick === 'function' ? lightsTick : null,
   feuPhase: typeof feuPhase === 'function' ? feuPhase : null,
+  ligneFeu: typeof ligneFeu === 'function' ? ligneFeu : null,
   trafficLight: typeof trafficLight === 'function' ? trafficLight : null,
   signalisation: typeof signalisation === 'function' ? signalisation : null,
   carrefours: typeof carrefours === 'function' ? carrefours : null,

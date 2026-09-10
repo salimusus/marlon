@@ -4911,10 +4911,53 @@ function trafficLight(x, z, ry, group) {
   // le cap de la circulation arretee : le boitier regarde les voitures qui arrivent, donc
   // elles roulent dans le sens oppose a celui vers lequel pointe le feu.
   const sens = Math.atan2(Math.sin(ry - Math.PI), Math.cos(ry - Math.PI));
-  // la ligne d'arret : le feu est plante 2,7 m a DROITE de l'axe de la file
+  // la ligne d'arret : valeur d'attente (2,7 m a gauche du feu). Elle est RECALCULEE sur la
+  // vraie largeur de la rue par `ligneFeu` dans la passe de signalisation — a la construction,
+  // la moitie des chaussees n'existe pas encore.
   const ligne = { x: +(x - Math.cos(sens) * 2.7).toFixed(2), z: +(z + Math.sin(sens) * 2.7).toFixed(2) };
   const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, groupe: group, sens, ligne, etat: 'rouge', state: 0, broken: false };
   solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
+}
+// OU s'arrete-t-on a ce feu ? Sur l'axe de la file qu'il arrete, au droit du feu. On cherche
+// la chaussee qui porte cette file (celle dont l'orientation suit `sens` et qui passe sous le
+// feu), et la ligne se pose au milieu de la voie de DROITE : axe + largeur / 4.
+// Avant, on reculait le feu de 2,7 m en dur : sur les avenues de 9 m du quartier residentiel,
+// ou les feux sont a 6,2 m du carrefour, la ligne tombait a cote de la chaussee.
+function ligneFeu(tl) {
+  const s = tl.sens, alongZ = Math.abs(Math.cos(s)) > 0.5;
+  let axe = null, best = 1e9;
+  for (const r of (city.routes || [])) {
+    if ((r.d >= r.w) !== alongZ) continue;
+    const larg = alongZ ? r.w : r.d, long = alongZ ? r.d : r.w;
+    const trav = alongZ ? tl.x : tl.z, travC = alongZ ? r.x : r.z;
+    const lon = alongZ ? tl.z : tl.x, lonC = alongZ ? r.z : r.x;
+    if (Math.abs(lon - lonC) > long / 2 + 8) continue;
+    const d = Math.abs(trav - travC);
+    if (d < larg / 2 + 8 && d < best) { best = d; axe = { c: travC, larg }; }
+  }
+  if (!axe) return null;
+  const cote = alongZ ? Math.cos(s) : -Math.sin(s);   // le cote droit de la file
+  const v = axe.c + cote * axe.larg / 4;
+  const p = alongZ ? { x: +v.toFixed(2), z: +tl.z.toFixed(2) } : { x: +tl.x.toFixed(2), z: +v.toFixed(2) };
+  // la ligne DOIT tomber sur une vraie chaussee : sinon ce feu arrete une file qui n'existe pas
+  return (city.routes || []).some(r => Math.abs(p.x - r.x) < r.w / 2 + 0.5 && Math.abs(p.z - r.z) < r.d / 2 + 0.5) ? p : null;
+}
+// Un feu tourne vers une rue qui N'EXISTE PAS (les carrefours en T du quartier residentiel et
+// le carrefour sud de l'anneau en avaient quatre) ne fait que clignoter dans le vide : on le
+// retire. Un feu doit toujours pouvoir dire OU s'arreter.
+function elagueLesFeux() {
+  let n = 0;
+  for (let i = city.trafficLights.length - 1; i >= 0; i--) {
+    const tl = city.trafficLights[i];
+    const l = ligneFeu(tl);
+    if (l) { tl.ligne = l; continue; }
+    worldGroup.remove(tl.g);
+    const si = solids.indexOf(tl.solid); if (si >= 0) solids.splice(si, 1);
+    const bi = breakables.indexOf(tl); if (bi >= 0) breakables.splice(bi, 1);
+    city.trafficLights.splice(i, 1); n++;
+  }
+  if (n) sgridSale();
+  return n;
 }
 const FEU_NOMS = ['rouge', 'orange', 'vert'];
 function feuPhase(T, groupe) {   // 0 = rouge, 1 = orange, 2 = vert (l'index de la lampe allumee)
@@ -5242,6 +5285,7 @@ function signalisation() {
       && Math.abs(x - o.x) < o.w / 2 + 0.7 && Math.abs(z - o.z) < o.d / 2 + 0.7);
 
   // ---- 1. lignes d'arret et fleches devant les feux ----
+  const feuxOtes = elagueLesFeux();   // maintenant que TOUTES les chaussees existent
   for (const tl of (city.trafficLights || [])) {
     ligneArret(tl.ligne.x, tl.ligne.z, tl.sens, 3);
     flecheSol(tl.ligne.x - Math.sin(tl.sens) * 5.5, tl.ligne.z - Math.cos(tl.sens) * 5.5, tl.sens);
@@ -5348,7 +5392,7 @@ function signalisation() {
     for (const cote of [-1, 1]) placesStationnement(r.x, r.z, alongZ, long, cote, alongZ ? r.w : r.d);
     places++;
   }
-  return { panneaux: city.panneaux.length, passages: city.passages.length, carrefours: cars.length, places };
+  return { panneaux: city.panneaux.length, passages: city.passages.length, carrefours: cars.length, places, feuxOtes };
 }
 const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.4, 'rgba(255,220,120,0.35)'); gr.addColorStop(1, 'rgba(255,200,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();
 const day = { len: 360, h: 7, night: 0, glows: [], last: -1 };

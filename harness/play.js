@@ -7001,3 +7001,174 @@ test('les rues ont des trottoirs, un seul reseau routier, du mobilier public hor
     && d.arbres > 60 && d.bancs > 30 && d.buissons > 60 && d.poubelles > 30 && d.glissieres > 30 && r.mal === 0 && !r.ecoleSurAvenue && r.radarRoutes && r.solTex && r.rouleTexture;
   return { ok, detail: `la ville a maintenant ${r.routes} rues (${r.axes} axes nommés) qui ne font qu'UN SEUL réseau pour les voitures (${(r.part * 100).toFixed(1)} % de la chaussée d'un seul tenant, ${r.composantes} morceau(x) au total, il y en avait 25) et les ${r.dessHors.length === 0 ? '39' : '?'} dessertes y sont toutes reliées (${r.dessHors.length} hors réseau) · ${r.surRoute} objet en pleine voie · ${r.trottoirs} trottoirs (${r.longueur} m, bordure comprise, aucun sur la chaussée, aucun plus haut que 30 cm) · mobilier public le long des rues : ${d.arbres} arbres, ${d.buissons} buissons, ${d.bancs} bancs, ${d.poubelles} poubelles, ${d.glissieres} glissières — ${r.mal} arbre mal placé (sur une rue, dans un bâtiment ou devant une porte) · l'école ne mord plus sur l'avenue · le radar dessine les vraies rues, le sol est pavé et la chaussée porte ses bords blancs et son axe jaune` };
 });
+
+test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un batiment, l\'eau, le sable ou une parcelle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city;
+    // 1. la hiérarchie annoncée : toute chaussée mesure 5, 6, 7, 8 ou 9 m de large
+    const largeurs = {}, horsHierarchie = [];
+    for (const rt of c.routes) {
+      const l = +Math.min(rt.w, rt.d).toFixed(2);
+      largeurs[l] = (largeurs[l] || 0) + 1;
+      if (!Object.values(G.VOIES).includes(l)) horsHierarchie.push([l, rt.x, rt.z]);
+    }
+    const roles = {}; for (const rt of c.routes) { const k = G.roleVoie(rt); roles[k] = (roles[k] || 0) + 1; }
+    // 2. aucune rue ne traverse un bâtiment, la mer, le sable du rallye, l'anneau, une parcelle
+    const chev = (a, b, m) => Math.abs(a.x - b.x) < a.w / 2 + b.w / 2 - m && Math.abs(a.z - b.z) < a.d / 2 + b.d / 2 - m;
+    const parcelles = G.VILLAS.map(v => ({ x: v.x, z: v.z, w: G.VILLA_HALF * 2, d: G.VILLA_HALF * 2 }));
+    for (const gd of G.GANG_DEFS) if (gd.villa) parcelles.push({ x: gd.villa[0], z: gd.villa[1], w: 42, d: 42 });
+    const dansBat = [], dansEau = [], dansSable = [], dansAnneau = [], dansParcelle = [], minus = [];
+    for (const rt of c.routes) {
+      for (const b of c.batiments) if (chev(rt, b, 1)) dansBat.push([rt.x, rt.z, Math.round(b.x), Math.round(b.z)]);
+      for (const q of parcelles) if (chev(rt, q, 1)) dansParcelle.push([rt.x, rt.z]);
+      const dedans = (x1, x2, z1, z2) => rt.x - rt.w / 2 < x2 - 1 && rt.x + rt.w / 2 > x1 + 1 && rt.z - rt.d / 2 < z2 - 1 && rt.z + rt.d / 2 > z1 + 1;
+      if (c.sea && dedans(c.sea.x1, c.sea.x2, c.sea.z1, c.sea.z2)) dansEau.push([rt.x, rt.z]);
+      if (G.RALLY.mesh && dedans(G.RALLY.x1, G.RALLY.x2, G.RALLY.z1, G.RALLY.z2)) dansSable.push([rt.x, rt.z]);
+      if (Math.hypot(rt.x - G.RACE_C.x, rt.z - G.RACE_C.z) < G.RACE_C.r - 6) dansAnneau.push([rt.x, rt.z]);
+      if (Math.max(rt.w, rt.d) < 6) minus.push([rt.x, rt.z]);   // pas de bout de rue de 2 m : le poste D construit ses voies dessus
+    }
+    // 3. un seul réseau pour les voitures (composantes connexes de la chaussée ouverte)
+    const N = G.NAV; if (!N.voit) G.buildNav();
+    const { nx, nz } = N, co = N.cout, bl = N.voit;
+    const comp = new Int32Array(nx * nz).fill(-1); let nc = 0; const tailles = [];
+    for (let s = 0; s < nx * nz; s++) {
+      if (comp[s] >= 0 || co[s] !== 1 || bl[s]) continue;
+      const st = [s]; comp[s] = nc; let t = 0;
+      while (st.length) { const q = st.pop(); t++; const i = q % nx, j = (q - i) / nx;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue; const k = jj * nx + ii; if (comp[k] < 0 && co[k] === 1 && !bl[k]) { comp[k] = nc; st.push(k); } } }
+      tailles.push(t); nc++;
+    }
+    const total = tailles.reduce((a, b) => a + b, 0), part = Math.max(...tailles) / total;
+    return { routes: c.routes.length, axes: c.plan.axes.length, largeurs, horsHierarchie, roles,
+      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4) };
+  });
+  const ok = r.horsHierarchie.length === 0 && r.dansBat.length === 0 && r.dansEau.length === 0 && r.dansSable.length === 0
+    && r.dansAnneau.length === 0 && r.dansParcelle.length === 0 && r.minus.length === 0 && r.part >= 0.99
+    && r.roles.boulevard >= 8 && r.routes >= 65;
+  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard} boulevards, ${r.roles.avenue} avenues, ${r.roles.rue} rues, ${r.roles.ruelle} ruelles, ${r.roles.desserte} dessertes), ${r.horsHierarchie.length} hors hiérarchie · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) — il y en avait 7 · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
+});
+
+test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux sur le trottoir, passages pietons devant les equipements', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city;
+    // 1. chaque feu a son état, son sens et sa ligne d'arrêt, et la ligne est SUR la chaussée
+    const surChaussee = (x, z, m = 0) => c.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + m && Math.abs(z - rt.z) < rt.d / 2 + m);
+    const feuxSansEtat = c.trafficLights.filter(t => !t.etat || !t.ligne || typeof t.sens !== 'number').length;
+    const lignesHorsRoute = c.trafficLights.filter(t => t.ligne && !surChaussee(t.ligne.x, t.ligne.z, 0.6)).length;
+    // la ligne d'arrêt est au droit du feu (même coordonnée le long de la voie), décalée
+    // vers l'axe de la rue : jamais plus de 8 m, et jamais en avant ni en arrière du feu
+    const lignesMalPlacees = c.trafficLights.filter(t => {
+      const alongZ = Math.abs(Math.cos(t.sens)) > 0.5;
+      const long = alongZ ? Math.abs(t.ligne.z - t.z) : Math.abs(t.ligne.x - t.x);
+      return long > 0.2 || Math.hypot(t.ligne.x - t.x, t.ligne.z - t.z) > 8;
+    }).length;
+    // 2. le cycle tourne, et les deux groupes ne sont JAMAIS verts ensemble
+    const vus = { A: {}, B: {} }; let deuxVerts = 0;
+    const t0 = G.simTime;
+    for (let i = 0; i < 120; i++) {
+      G.simTime = i * 0.5; G.lightsTick();
+      const a = c.trafficLights.find(t => t.groupe === 'A'), b = c.trafficLights.find(t => t.groupe === 'B');
+      vus.A[a.etat] = (vus.A[a.etat] || 0) + 1; vus.B[b.etat] = (vus.B[b.etat] || 0) + 1;
+      if (a.etat === 'vert' && b.etat === 'vert') deuxVerts++;
+    }
+    G.simTime = t0; G.lightsTick();
+    // la lampe allumée est bien la bonne (matériau vif, les deux autres éteintes)
+    const f = c.trafficLights[0]; G.simTime = 0; G.lightsTick();
+    const lampes = f.lamps.map(l => '#' + l.material.color.getHexString());
+    // 3. les panneaux : sur un trottoir, jamais sur la chaussée, jamais devant une porte
+    const surTrottoir = (x, z) => c.trottoirs.some(t => Math.abs(x - t.x) <= t.w / 2 + 0.5 && Math.abs(z - t.z) <= t.d / 2 + 0.5);
+    const portes = G.solids.filter(o => o.porte);
+    const panSurRoute = c.panneaux.filter(q => surChaussee(q.x, q.z, -0.2)).length;
+    const panHorsTrottoir = c.panneaux.filter(q => !surTrottoir(q.x, q.z)).length;
+    const panDevantPorte = c.panneaux.filter(q => portes.some(o => Math.abs(q.x - o.x) < o.w / 2 + 1.6 && Math.abs(q.z - o.z) < o.d / 2 + 1.6)).length;
+    const types = c.panneaux.reduce((a, q) => (a[q.type] = (a[q.type] || 0) + 1, a), {});
+    // 4. toute rue secondaire qui débouche sur un boulevard a un stop ou un cédez-le-passage
+    //    (sauf aux carrefours à feux, où le feu suffit)
+    const manquants = [];
+    for (const k of G.carrefours()) {
+      const la = Math.min(k.a.w, k.a.d), lb = Math.min(k.b.w, k.b.d);
+      if (Math.max(la, lb) < 9 || la === lb) continue;
+      if (c.crossings.some(([x, z]) => Math.abs(x - k.cx) < 14 && Math.abs(z - k.cz) < 14)) continue;
+      if (!c.panneaux.some(q => (q.type === 'stop' || q.type === 'cede') && Math.hypot(q.x - k.cx, q.z - k.cz) < 22)) manquants.push([Math.round(k.cx), Math.round(k.cz)]);
+    }
+    // 5. un passage piéton devant l'école, l'hôpital et le commissariat
+    const devant = ['École', 'Hôpital', 'Commissariat'].map(nom => {
+      const z0 = c.zones.find(q => q.name === nom);
+      if (!z0) return [nom, -1];
+      const cx = (z0.x1 + z0.x2) / 2, cz = (z0.z1 + z0.z2) / 2;
+      const d = Math.min(...c.passages.map(q => Math.hypot(q.x - cx, q.z - cz)));
+      return [nom, Math.round(d)];
+    });
+    return { feux: c.trafficLights.length, feuxSansEtat, lignesHorsRoute, lignesMalPlacees, vus, deuxVerts, lampes,
+      panneaux: c.panneaux.length, types, panSurRoute, panHorsTrottoir, panDevantPorte, manquants,
+      passages: c.passages.length, devant, exemple: { x: f.x, z: f.z, sens: +f.sens.toFixed(2), etat: f.etat, ligne: f.ligne, groupe: f.groupe } };
+  });
+  const ok = r.feux >= 36 && r.feuxSansEtat === 0 && r.lignesHorsRoute === 0 && r.lignesMalPlacees === 0
+    && r.deuxVerts === 0 && r.vus.A.vert > 0 && r.vus.A.orange > 0 && r.vus.A.rouge > 0
+    && r.vus.B.vert > 0 && r.vus.B.orange > 0 && r.vus.B.rouge > 0
+    && r.panneaux >= 50 && r.panSurRoute === 0 && r.panHorsTrottoir === 0 && r.panDevantPorte === 0
+    && r.types.stop > 0 && r.types.cede > 0 && r.types.prioritaire > 0 && r.types['fin-prioritaire'] > 0
+    && r.manquants.length === 0 && r.devant.every(([, d]) => d >= 0 && d < 45);
+  return { ok, detail: `${r.feux} feux, tous avec leur état lisible et leur ligne d'arrêt sur la chaussée (${r.feuxSansEtat} sans état, ${r.lignesHorsRoute} lignes hors route) — exemple : ${JSON.stringify(r.exemple)} · le cycle tourne vert 12 s / orange 2 s / rouge et les deux axes ne sont JAMAIS verts ensemble (${r.deuxVerts} fois sur 120 relevés) · ${r.panneaux} panneaux (${JSON.stringify(r.types)}), ${r.panSurRoute} sur la chaussée, ${r.panHorsTrottoir} hors trottoir, ${r.panDevantPorte} devant une porte · ${r.manquants.length} rue secondaire débouchant sur un boulevard sans stop ni cédez-le-passage · ${r.passages} passages piétons, dont un à ${r.devant.map(d => d[0] + ' ' + d[1] + ' m').join(', ')}` };
+});
+
+test('les deux nouveaux quartiers sont relies a la ville et on y achete vraiment', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city, res = { quartiers: [], boutiques: [] };
+    // 1. les deux zones sont déclarées, et leur desserte tombe sur le réseau principal
+    const N = G.NAV; if (!N.voit) G.buildNav();
+    const { nx, nz, cs, x0, z0 } = N, co = N.cout, bl = N.voit;
+    const comp = new Int32Array(nx * nz).fill(-1); let nc = 0; const tailles = [];
+    for (let s = 0; s < nx * nz; s++) {
+      if (comp[s] >= 0 || co[s] !== 1 || bl[s]) continue;
+      const st = [s]; comp[s] = nc; let t = 0;
+      while (st.length) { const q = st.pop(); t++; const i = q % nx, j = (q - i) / nx;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue; const k = jj * nx + ii; if (comp[k] < 0 && co[k] === 1 && !bl[k]) { comp[k] = nc; st.push(k); } } }
+      tailles.push(t); nc++;
+    }
+    const pr = tailles.indexOf(Math.max(...tailles));
+    const cell = (x, z) => comp[Math.max(0, Math.min(nz - 1, Math.round((z - z0) / cs))) * nx + Math.max(0, Math.min(nx - 1, Math.round((x - x0) / cs)))];
+    for (const nom of ['Le Marché', 'Techno-Parc']) {
+      const z1 = c.zones.find(q => q.name === nom);
+      const d = c.plan.dessertes.find(q => q.n === nom);
+      const rues = c.routes.filter(rt => z1 && rt.x > z1.x1 - 6 && rt.x < z1.x2 + 6 && rt.z > z1.z1 - 6 && rt.z < z1.z2 + 6).length;
+      const lam = G.solids.filter(o => o.mesh && z1 && o.x > z1.x1 && o.x < z1.x2 && o.z > z1.z1 && o.z < z1.z2 && Math.abs(o.h - 4.4) < 0.01).length;
+      const trot = c.trottoirs.filter(t => z1 && t.x > z1.x1 && t.x < z1.x2 && t.z > z1.z1 && t.z < z1.z2).length;
+      res.quartiers.push({ nom, declare: !!z1, emoji: z1 && z1.emoji, hint: !!(z1 && z1.hint),
+        desserte: d ? [d.x, d.z, d.loin] : null, surReseau: !!d && cell(d.x, d.z) === pr, rues, lampadaires: lam, trottoirs: trot,
+        gps: !!G.lieuDe(nom) });
+    }
+    // 2. les boutiques où l'on ENTRE : on franchit la porte, le comptoir ouvre l'interface,
+    //    l'achat débite exactement le prix
+    const essai = async (id, px, pz) => {
+      __SHOT.go({ world: 4, x: px, y: 1, z: pz, hour: 12 });
+      const e = c.etals.find(o => o.id === id);
+      for (let i = 0; i < 300; i++) {
+        const dx = e.vx - G.P.pos.x, dz = e.vz - G.P.pos.z, d = Math.hypot(dx, dz);
+        if (d < 0.7) break;
+        G.P.pos.x += dx / d * 0.09; G.P.pos.z += dz / d * 0.09; G.step(1 / 60, true);
+      }
+      G.step(1 / 60, true);
+      // le porte-monnaie est rempli JUSTE avant l'achat : pendant les cinq secondes de marche,
+      // la vie de la ville (police, gangs) peut le vider et le test mesurait alors n'importe quoi
+      G.wallet = 80; const avant = G.wallet;
+      const entre = Math.hypot(e.vx - G.P.pos.x, e.vz - G.P.pos.z) < 1.2;
+      const vit = c.vitNear;
+      let ouvre = false, debit = -1;
+      if (vit && vit.tab === 'etal') { G.openStore(vit.tab, vit.key); ouvre = G.uiOpen === 'etal'; }
+      if (ouvre) { G.acheterArticle(e.articles[0]); debit = avant - G.wallet; G.closeUI(); }
+      res.boutiques.push({ id, entre, comptoir: !!vit, ouvre, debit, prix: e.articles[0].p, articles: e.articles.length });
+    };
+    await essai('pain', -150.5, 193); await essai('bonbon', -142.5, 193); await essai('cafe', -134.5, 193);
+    await essai('info', -17, -105); await essai('drone', -2, -105); await essai('jeux', 13, -105);
+    res.etals = c.etals.length;
+    return res;
+  });
+  const q = r.quartiers, b = r.boutiques;
+  const ok = q.length === 2 && q.every(z => z.declare && z.hint && z.gps && z.surReseau && z.rues >= 3 && z.lampadaires >= 6 && z.trottoirs >= 8)
+    && b.length === 6 && b.every(o => o.entre && o.comptoir && o.ouvre && o.debit === o.prix && o.articles >= 2) && r.etals >= 9;
+  return { ok, detail: `deux quartiers neufs : ${q.map(z => `${z.emoji} ${z.nom} (${z.rues} rues, ${z.trottoirs} trottoirs, ${z.lampadaires} lampadaires, desserte ${JSON.stringify(z.desserte)} ${z.surReseau ? 'reliée au réseau' : 'HORS RÉSEAU'}, GPS ${z.gps ? 'ok' : 'absent'})`).join(' · ')} · ${r.etals} comptoirs en tout, et les ${b.length} boutiques où l'on entre marchent de bout en bout : ${b.map(o => `${o.id} (porte franchie, comptoir ouvert, −${o.debit} 🪙 pour ${o.prix})`).join(', ')}` };
+});

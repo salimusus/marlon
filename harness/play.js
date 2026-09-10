@@ -9374,7 +9374,7 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
     // Le régime d'une VRAIE boîte fait une dent de scie : il grimpe dans chaque rapport,
     // retombe au passage du suivant. On échantillonne donc finement le premier rapport, puis
     // le tout début du deuxième, puis la prise maxi.
-    const paliers = [0.05, 0.12, 0.22, 0.28, 0.42, 0.62, 0.95].map(f => tour(c.spec.max * f, 20));
+    const paliers = [0.03, 0.08, 0.15, 0.22, 0.45, 0.7, 0.95].map(f => tour(c.spec.max * f, 30));
     await dodo(600); const moteur = rms();
     // LA NITRO. Moteur coupé, pour que la pétarade s'entende seule.
     G.engine.stop(); await dodo(600); const silence2 = rms();
@@ -9417,10 +9417,19 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ');
       // caisse a plat : un test precedent a pu la laisser en plein tangage ou en plein roulis
       if (c.caisse) { c.caisse.position.y = 0; c.caisse.rotation.set(0, 0, 0); }
-      c.tangage = 0; c.roulis = 0; c.susp = 0; c.suspV = 0;
+      c.tangage = 0; c.roulis = 0; c.susp = 0; c.suspV = 0; c.tiltX = 0; c.tilt = 0;   // la pente du terrain, elle, ne retombe jamais tout a fait a zero
       const TT = G.placesDe(c), noms = G.PLACES_ORDRE.filter(n => TT[n]);
       const ferme = !!G.caisseFermee(c);
       const bc = boite(c.caisse || c.g);
+      // ENVELOPPE DE RÉFÉRENCE : la boîte des morceaux visibles, élargie au gabarit officiel
+      // (baseW × baseD) et jusqu'au bas de caisse. Un pare-chocs arraché par un test
+      // précédent ne doit pas rétrécir la carrosserie contre laquelle on mesure — c'est ce
+      // qui faisait « sortir » un conducteur pourtant bien assis.
+      { const W = (c.baseW || 2.4) / 2, D = (c.baseD || 4.4) / 2, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h));
+        const ex = W * cs + D * sn, ez = W * sn + D * cs;
+        bc.min.x = Math.min(bc.min.x, c.x - ex); bc.max.x = Math.max(bc.max.x, c.x + ex);
+        bc.min.z = Math.min(bc.min.z, c.z - ez); bc.max.z = Math.max(bc.max.z, c.z + ez);
+        bc.min.y = Math.min(bc.min.y, (c.y || 0) + 0.2); }
       const e = { places: noms.length, chien: !!TT.chien, ferme, dehors: [], ecart: 99, ecartChien: 99 };
       // chacun sa place : deux personnes ne sont jamais à moins de 92 cm (le diamètre d'un
       // personnage, la règle que la ville applique déjà aux piétons) et le chien, plus petit,
@@ -9433,9 +9442,10 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
         for (let i = 0; i < n; i++) G.assiedAvatar(figs[i], c, TT[noms[i]], 1, noms[i] === 'conducteur');
         for (let i = 0; i < n; i++) {
           const b = boite(figs[i].group), m = 0.03;
-          const sort = b.min.x < bc.min.x - m || b.max.x > bc.max.x + m || b.max.y > bc.max.y + m
-            || b.min.y < bc.min.y - m || b.min.z < bc.min.z - m || b.max.z > bc.max.z + m;
-          if (sort && ferme) e.dehors.push(n + ':' + noms[i]);
+          const deb = { g: bc.min.x - b.min.x, d: b.max.x - bc.max.x, bas: bc.min.y - b.min.y,
+            haut: b.max.y - bc.max.y, ar: bc.min.z - b.min.z, av: b.max.z - bc.max.z };
+          const pire = Object.entries(deb).filter(([, q]) => q > m);
+          if (pire.length && ferme) e.dehors.push(n + ':' + noms[i] + ' ' + pire.map(([q, w]) => q + '=' + w.toFixed(2)).join(' '));
         }
       }
       if (TT.chien && G.chien.pet) e.chienPose = !!G.assiedChien(c, 1);
@@ -9446,12 +9456,15 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
     const v = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
     v.busy = false; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ');
     if (v.caisse) { v.caisse.position.y = 0; v.caisse.rotation.set(0, 0, 0); }
-    v.tangage = 0; v.roulis = 0; v.susp = 0; v.suspV = 0;
+    v.tangage = 0; v.roulis = 0; v.susp = 0; v.suspV = 0; v.tiltX = 0; v.tilt = 0;
     G.me.rig.legL.rotation.x = 0; G.me.rig.legR.rotation.x = 0; G.me.rig.armL.rotation.x = 0;
     G.enterCar(v);
     G.poseJoueurAuVolant(1 / 60);
     const pose = { cuisse: +G.me.rig.legL.rotation.x.toFixed(2), genou: +(G.me.rig.legL.genou ? G.me.rig.legL.genou.rotation.x : 0).toFixed(2), bras: +G.me.rig.armL.rotation.x.toFixed(2) };
     const bJ = boite(G.me.group), bV = boite(v.caisse || v.g);
+    { const W = (v.baseW || 2.4) / 2, D = (v.baseD || 4.4) / 2, cs = Math.abs(Math.cos(v.h)), sn = Math.abs(Math.sin(v.h));
+      bV.min.x = Math.min(bV.min.x, v.x - (W * cs + D * sn)); bV.max.x = Math.max(bV.max.x, v.x + (W * cs + D * sn));
+      bV.min.y = Math.min(bV.min.y, (v.y || 0) + 0.2); }
     pose.dedans = bJ.min.x > bV.min.x - 0.03 && bJ.max.x < bV.max.x + 0.03 && bJ.max.y < bV.max.y + 0.03 && bJ.min.y > bV.min.y - 0.03;
     G.exitCar();
     return { res, pose, genres: Object.keys(res).length };

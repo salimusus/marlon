@@ -8458,6 +8458,74 @@ test('un bonhomme de neige percute se casse et tombe, un mur percute garde une m
   return { ok, detail: `un bonhomme de neige etait un decor qu'on traversait sans que rien ne bouge, et un mur percute ne gardait aucune trace · ${r.bonhomme.total} bonshommes sont maintenant SOLIDES et cassables : celui qu'on percute bascule de ${r.bonhomme.angle} rad, sa boule du haut tombe de ${r.bonhomme.tombe} m (${r.bonhomme.hautAvant} → ${r.bonhomme.hautApres} m), un deuxieme coup ne change plus rien (${r.bonhomme.deuxFois}), et les employes municipaux viennent le remonter · le mur porte une marque texturee (trace noire, fissures, petit trou), d'autant plus large que le choc est grave (${r.marque.taille} m en leger, ${r.marque.plusGrave} m en grave) · et le nombre d'appels de dessin ne peut pas s'envoler : apres 40 chocs il n'y a toujours que ${r.marque.plafond} marques dans toute la ville (plafond ${r.marque.max}, la plus ancienne est recyclee) · un choc complet a 12 m/s rend la gravite ${r.choc.gravite}, applique le stade ${r.choc.deg} et pose ${r.choc.marques} marque` };
 });
 
+test('à l\'école, la fenêtre des exercices tient en haut de l\'écran et laisse le tableau visible', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    G.settings.voices = false;
+    const ch = salle.chaises[1];
+    G.P.sit = null; G.school.chaise = null; if (G.uiOpen) G.closeUI();
+    G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    if (!G.school.q) return { pourquoi: 'la classe ne s\'est pas ouverte' };
+    for (let i = 0; i < 40; i++) await new Promise(rr => requestAnimationFrame(rr));   // la caméra se cale
+    const T = G.THREE, W = window.innerWidth, H = window.innerHeight;
+    // le rectangle du TABLEAU tel qu'il apparaît à l'écran (les quatre coins du panneau projetés)
+    const rectTableau = () => {
+      const t = salle.tableau, xs = [], ys = [];
+      for (const [dx, dy] of [[-2.7, -1.22], [2.7, -1.22], [-2.7, 1.22], [2.7, 1.22]]) {
+        const v = new T.Vector3(t.position.x + dx, t.position.y + dy, t.position.z).project(G.camera);
+        xs.push((v.x + 1) / 2 * W); ys.push((1 - v.y) / 2 * H);
+      }
+      return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    };
+    const mesure = () => {
+      const c = document.querySelector('#schoolUI .card').getBoundingClientRect();
+      return { haut: c.top, bas: c.bottom, g: c.left, d: c.right, h: c.height,
+        hPct: +(c.height / window.innerHeight * 100).toFixed(1), basPct: +(c.bottom / window.innerHeight * 100).toFixed(1) };
+    };
+    const panneau = mesure(), tab = rectTableau();
+    // recouvrement du tableau par le panneau, en pourcentage de la surface du tableau
+    const recouvre = (a, b) => {
+      const w = Math.min(a.x1, b.d) - Math.max(a.x0, b.g), h = Math.min(a.y1, b.bas) - Math.max(a.y0, b.haut);
+      if (w <= 0 || h <= 0) return 0;
+      return +(w * h / ((a.x1 - a.x0) * (a.y1 - a.y0)) * 100).toFixed(1);
+    };
+    // les quatre réponses : UNE seule rangée de boutons
+    const cartes = [...document.querySelectorAll('#schChoices .item')].map(e => e.getBoundingClientRect());
+    const rangee = cartes.length === 4 && cartes.every(c => Math.abs(c.top - cartes[0].top) < 4) && cartes.every(c => c.height > 12);
+    // manette : le curseur doit pouvoir atteindre les quatre réponses
+    const vus = new Set();
+    for (let i = 0; i < 30; i++) { G.navBouge(1); const f = document.querySelector('.focustv'); if (f && f.classList.contains('item')) vus.add(f.dataset.i); }
+    document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+    // et la même chose en mode télévision (tailles en --u)
+    G.modeTV(true); await dodo(120);
+    for (let i = 0; i < 10; i++) await new Promise(rr => requestAnimationFrame(rr));
+    const tv = mesure(), tvTab = rectTableau();
+    const tvCartes = [...document.querySelectorAll('#schChoices .item')].map(e => e.getBoundingClientRect());
+    const tvRangee = tvCartes.length === 4 && tvCartes.every(c => Math.abs(c.top - tvCartes[0].top) < 4);
+    const tvPolice = parseFloat(getComputedStyle(document.getElementById('schQuestion')).fontSize);
+    const tvRecouvre = recouvre(tvTab, tv);
+    G.modeTV(false); await dodo(120);
+    G.closeUI(); G.P.sit = null; G.school.chaise = null;
+    return { ecran: [W, H], panneau, tableau: { x0: Math.round(tab.x0), x1: Math.round(tab.x1), y0: Math.round(tab.y0), y1: Math.round(tab.y1) },
+      recouvre: recouvre(tab, panneau), rangee, nCartes: cartes.length, hCarte: Math.round(cartes[0] ? cartes[0].height : 0),
+      atteintes: vus.size, tv: { hPct: tv.hPct, basPct: tv.basPct, rangee: tvRangee, police: Math.round(tvPolice), recouvre: tvRecouvre },
+      tabHautPct: +(tab.y0 / H * 100).toFixed(1), tabBasPct: +(tab.y1 / H * 100).toFixed(1),
+      tabH: Math.round(tab.y1 - tab.y0), tabL: Math.round(tab.x1 - tab.x0) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const H = r.ecran[1];
+  const compact = r.panneau.h < H / 3;                       // moins d'un tiers de la hauteur
+  const enHaut = r.panneau.haut < H * 0.12 && r.panneau.bas <= H / 3 + 2;   // et dans le tiers supérieur
+  const degage = r.recouvre === 0 && r.tableau.y0 > r.panneau.bas;
+  const lisible = r.tabH > H * 0.2 && r.tabL > r.ecran[0] * 0.2;
+  const tv = r.tv.hPct < 33.3 && r.tv.basPct <= 33.4 && r.tv.rangee && r.tv.police >= 20 && r.tv.recouvre === 0;
+  const ok = compact && enHaut && degage && lisible && r.rangee && r.atteintes === 4 && tv;
+  return { ok, detail: `la fenêtre des exercices s'ouvrait au MILIEU de l'écran, sur fond assombri et flouté : elle cachait le tableau, c'est-à-dire l'endroit même où la réponse s'écrit à la craie · c'est maintenant une bande en haut de ${Math.round(r.panneau.h)} px sur ${H} (${r.panneau.hPct} %, bas à ${r.panneau.basPct} %), énoncé sur une ligne et les ${r.nCartes} réponses sur UNE rangée de boutons de ${r.hCarte} px (${r.atteintes}/4 atteintes à la manette) · le tableau occupe ${r.tabL}×${r.tabH} px entre ${r.tabHautPct} % et ${r.tabBasPct} % de la hauteur, recouvert à ${r.recouvre} % par le panneau · en mode télévision : bande à ${r.tv.hPct} % (bas ${r.tv.basPct} %), énoncé à ${r.tv.police} px, réponses sur une rangée, tableau recouvert à ${r.tv.recouvre} %` };
+});
 // ============ POSTE E : combat à deux poings, couteau, étuis, ambulancier ============
 // Un décor de bagarre déterministe : le joueur au centre, UN habitant devant lui à la
 // distance voulue, tous les autres poussés à 500 m — sinon `nearestFighter` attrape un

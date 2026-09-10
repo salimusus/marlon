@@ -953,7 +953,9 @@ const store = {
   json: (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch (e) { return d; } },
 };
 const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || (/(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1' || !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1) ? 'ultra' : 'high'),
-  ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160 };
+  ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160,
+  // l'ambiance lumineuse : 'auto' = le cycle du jour (il fait toujours jour), ou un moment figé
+  ambiance: store.get('superobby.ambiance') || 'auto' };
 
 // ================= RENDU =================
 const canvas = $('c');
@@ -1006,6 +1008,92 @@ const stars = (() => {
   const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, fog: false }));
   p.visible = false; scene.add(p); return p;
 })();
+// ================= DIRECTION ARTISTIQUE : LA PALETTE DE RÉFÉRENCE =================
+// Le jeu est fait de gros blocs colorés, façon jouet : on l'assume. Mais l'image manquait de
+// tenue. Trois défauts revenaient sur toutes les captures : (1) le ciel était UN APLAT — une
+// seule couleur du zénith à l'horizon, la même à 7 h et à 19 h, si bien que le cycle du jour
+// ne se voyait pas ; (2) le soleil ne bougeait JAMAIS (la boucle de rendu le replaçait à
+// (30, 50, 20) par rapport au joueur, ce qui annulait la course calculée par dayTick) : les
+// ombres tombaient toujours dans le même sens ; (3) les couleurs de chaque quartier étaient
+// choisies dans leur coin, sans borne commune, d'où des verts fluo à côté de bleus délavés.
+// Tout ce qui touche à l'IMAGE part maintenant d'ICI.
+const DA = {
+  // Bornes de la palette. accorde() y ramène une couleur qui détonne : les rouges restent
+  // rouges et les verts verts (la TEINTE n'est jamais touchée), mais plus rien n'est ni
+  // criard ni délavé, et tout appartient au même monde.
+  satMin: 0.30, satMax: 0.82, lumMin: 0.22, lumMax: 0.80,
+  // Le ciel heure par heure. haut = zénith, bas = horizon, halo = auréole autour du soleil,
+  // sol = couleur de la lumière DIRECTE, force = son intensité, amb/rebond = l'appoint
+  // hémisphérique (ciel au-dessus, rebond du sol en dessous) qui empêche les faces à l'ombre
+  // d'être des trous noirs. Les heures de nuit ne sont jamais atteintes par le cycle
+  // automatique (il fait toujours jour) mais servent à l'ambiance « nuit » choisie au menu.
+  heures: [
+    { h: 0,    haut: 0x070c22, bas: 0x121a38, halo: 0x27365f, sol: 0x7f95d8, force: 0.16, amb: 0x8ea6e8, rebond: 0x1e2440, nuit: 1 },
+    { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.42, amb: 0xc9bcd8, rebond: 0x4a4258, nuit: 0.62 },
+    { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.92, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
+    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 1.12, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
+    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 1.26, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
+    { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 1.10, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
+    { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.86, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
+    { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.44, amb: 0xc3aac9, rebond: 0x4e4258, nuit: 0.66 },
+    { h: 24,   haut: 0x070c22, bas: 0x121a38, halo: 0x27365f, sol: 0x7f95d8, force: 0.16, amb: 0x8ea6e8, rebond: 0x1e2440, nuit: 1 },
+  ],
+};
+// Les couleurs du ciel à une heure donnée, interpolées entre deux repères de DA.heures.
+// On réutilise TOUJOURS les mêmes objets Color : appelée à chaque image, cette fonction ne
+// doit rien allouer, sinon le ramasse-miettes se réveille toutes les deux secondes.
+const CIEL_ETAT = { haut: new THREE.Color(), bas: new THREE.Color(), halo: new THREE.Color(), sol: new THREE.Color(),
+  amb: new THREE.Color(), rebond: new THREE.Color(), force: 1, nuit: 0 };
+const TEINTE_TMP = new THREE.Color();
+function cielA(h) {
+  const K = DA.heures;
+  h = ((h % 24) + 24) % 24;
+  let i = 0; while (i < K.length - 2 && K[i + 1].h <= h) i++;
+  const a = K[i], b = K[i + 1], t = b.h === a.h ? 0 : (h - a.h) / (b.h - a.h);
+  const E = CIEL_ETAT;
+  for (const k of ['haut', 'bas', 'halo', 'sol', 'amb', 'rebond']) E[k].setHex(a[k]).lerp(TEINTE_TMP.setHex(b[k]), t);
+  E.force = a.force + (b.force - a.force) * t;
+  E.nuit = a.nuit + (b.nuit - a.nuit) * t;
+  return E;
+}
+// Ramène une couleur dans la palette sans changer sa teinte : c'est ce qui fait qu'un vert
+// de pelouse « fluo » et un bleu de façade délavé finissent par appartenir au même dessin.
+function accorde(hex, force = 1) {
+  const c = new THREE.Color(hex), hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  if (hsl.s < 0.06) return c;                       // les gris (béton, bitume, verre) restent gris
+  const s = Math.min(DA.satMax, Math.max(DA.satMin, hsl.s));
+  const l = Math.min(DA.lumMax, Math.max(DA.lumMin, hsl.l));
+  return c.setHSL(hsl.h, hsl.s + (s - hsl.s) * force, hsl.l + (l - hsl.l) * force);
+}
+// ---- LE CIEL : un dôme dégradé, un seul appel de dessin ----
+// Avant : `scene.background` = une couleur unie. Le ciel était donc un mur de peinture, sans
+// horizon, sans halo autour du soleil, identique à toute heure. Le dôme coûte UN appel de
+// dessin et 600 triangles (mesuré : 0 image/s de moins) et donne l'aube rosée, le midi clair,
+// le couchant orangé et la nuit bleutée. Il ne s'écrit pas dans le tampon de profondeur et se
+// dessine en premier : rien ne peut passer devant lui.
+const cielDome = (() => {
+  const g = new THREE.SphereGeometry(1, 24, 14);
+  const m = new THREE.ShaderMaterial({
+    uniforms: { haut: { value: new THREE.Color(0x3d90e8) }, bas: { value: new THREE.Color(0xdaeeff) },
+      halo: { value: new THREE.Color(0xfffdf0) }, dir: { value: new THREE.Vector3(0.5, 0.7, 0.3) }, force: { value: 1 } },
+    vertexShader: 'varying vec3 vd; void main(){ vd = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vd; uniform vec3 haut, bas, halo, dir; uniform float force;
+      void main(){
+        vec3 n = normalize(vd);
+        float t = clamp(n.y * 1.45 + 0.10, 0.0, 1.0);
+        vec3 c = mix(bas, haut, pow(t, 0.62));
+        float d = clamp(dot(n, normalize(dir)), 0.0, 1.0);
+        c = mix(c, halo, clamp(pow(d, 8.0) * 0.85 + pow(d, 2.2) * 0.18, 0.0, 1.0) * force);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+    side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
+  const s = new THREE.Mesh(g, m); s.scale.setScalar(320); s.frustumCulled = false; s.renderOrder = -1000;
+  scene.add(s); return s;
+})();
+// La direction du soleil, partagée par la lumière directe, le halo du dôme et le sprite.
+// Elle REMPLACE la constante figée SUN_DIR : c'est elle qui fait tourner les ombres.
+const SOLEIL_DIR = new THREE.Vector3().copy(SUN_DIR);
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
 // Ni la scène ni le monde ne bougent jamais : inutile de recomposer leur matrice à chaque
 // image, et surtout de forcer par ricochet celle de leurs 22 000 descendants (three.js r128
@@ -5513,33 +5601,85 @@ function signalisation() {
   return { panneaux: city.panneaux.length, passages: city.passages.length, carrefours: cars.length, places, feuxOtes };
 }
 const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.4, 'rgba(255,220,120,0.35)'); gr.addColorStop(1, 'rgba(255,200,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();
-const day = { len: 360, h: 7, night: 0, glows: [], last: -1 };
-// IL FAIT TOUJOURS JOUR. L'horloge tourne encore — elle fait le tour de 7 h à 19 h en six
-// minutes — mais elle ne descend plus dans la nuit : le soleil monte jusqu'à midi puis
-// redescend sans jamais se coucher. Lampadaires, fenêtres allumées et étoiles restent donc
-// éteints, et le message « la nuit tombe » ne vient plus.
+const day = { len: 360, h: 7, night: 0, glows: [], last: -1, neons: [] };
+// LES AMBIANCES. « Il fait toujours jour » reste la règle du cycle automatique : l'horloge
+// tourne de 7 h à 19 h et l'obscurité ne dépasse jamais un tiers. Mais tout le décor de nuit
+// existait (fenêtres allumées, halos de lampadaires, néons) et ne servait JAMAIS. Le joueur
+// peut donc, s'il le veut, figer la lumière sur un moment choisi — dont la nuit. Le réglage
+// est explicite, il ne tombe jamais tout seul.
+const AMBIANCES = {
+  auto: { n: 'Cycle du jour', e: '🕒' },
+  matin: { n: 'Matin', e: '🌅', h: 7.2 },
+  midi: { n: 'Plein midi', e: '☀️', h: 13 },
+  couchant: { n: 'Coucher de soleil', e: '🌇', h: 18.9 },
+  nuit: { n: 'Nuit', e: '🌙', h: 22.2 },
+};
+// ALLUMER OU ÉTEINDRE LA VILLE. Une seule fonction, appelée quand on passe la barre de la
+// nuit : fenêtres des immeubles, halos des lampadaires et des feux, enseignes au néon. Avant,
+// tout cela était enfoui dans dayTick et personne ne pouvait ni le mesurer ni l'appeler.
+function lumieresVille(on) {
+  on = !!on;
+  for (const m of city.buildings) { m.emissive.set(on ? 0xffd27a : 0x000000); m.emissiveIntensity = on ? 0.95 : 0; }
+  if (on && !day.glows.length) for (const b of breakables) {
+    if (b.kind !== 'lamp' && b.kind !== 'light') continue;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, transparent: true, depthWrite: false, opacity: 0.85, fog: false }));
+    sp.scale.set(4.5, 4.5, 1); sp.position.y = b.kind === 'lamp' ? 4.6 : 3.9;
+    if (b.kind === 'light') sp.position.z = 1.6;
+    b.g.add(sp); day.glows.push(sp);
+  }
+  for (const sp of day.glows) sp.visible = on;
+  // les enseignes et néons du décor : le jour ils restent une couleur franche, la nuit ils
+  // rayonnent vraiment (c'est ce qui fait la beauté du casino et de la rue commerçante)
+  for (const m of day.neons) m.emissiveIntensity = on ? 1.35 : 0.55;
+  return day.glows.length;
+}
 function dayTick() {
   if (!city.on) return;
-  const t = (simTime % day.len) / day.len, h = 7 + t * 12; day.h = h;
+  const t = (simTime % day.len) / day.len;
+  const amb = AMBIANCES[settings.ambiance];
+  // l'heure AFFICHÉE et l'heure de la LUMIÈRE : identiques en cycle automatique, figées sur
+  // le moment choisi sinon (l'horloge, elle, continue de tourner pour le reste du jeu)
+  const hCycle = 7 + t * 12;
+  const h = amb && amb.h != null ? amb.h : hCycle;
+  day.h = h;
   // la lumière suit la course du soleil, mais son plancher est en plein jour
-  const light = clamp(0.72 + Math.sin((h - 7) / 12 * Math.PI) * 0.28, 0, 1);
-  const night = 1 - light; day.night = night;
-  const a = (h - 5.5) / 13 * Math.PI; sun.position.set(Math.cos(a) * 120, Math.max(45, Math.sin(a) * 130), 60);
-  sun.intensity = 0.08 + light * 1.02; hemi.intensity = 0.22 + light * 0.52;   // soleil plus franc, voile d'ambiance plus bas : les ombres portées redeviennent lisibles
-  // le cycle du jour repeignait le ciel et la brume À CHAQUE IMAGE, en bleu froid : il écrasait
-  // la lumière chaude posée au chargement. Il la respecte maintenant.
-  const sky = new THREE.Color(0x1a1428).lerp(new THREE.Color(0x9fd6f5), light);
-  scene.background = tiedis(sky.getHex(), 0.22); if (scene.fog) scene.fog.color.copy(tiedis(sky.getHex(), 0.32));
-  stars.visible = light < 0.2; sunSprite.visible = light > 0.15;
+  const light = clamp(0.72 + Math.sin((hCycle - 7) / 12 * Math.PI) * 0.28, 0, 1);
+  const C2 = cielA(h);
+  // en cycle automatique la nuit ne tombe jamais : on garde l'ancien calcul, borné en plein
+  // jour. Sur une ambiance choisie, c'est la table du ciel qui décide (et elle peut être noire).
+  const night = amb && amb.h != null ? C2.nuit : 1 - light;
+  day.night = night;
+  // LE SOLEIL TOURNE POUR DE BON. Sa position était recalculée ici puis ÉCRASÉE par la boucle
+  // de rendu, qui le replaçait à un cap fixe : les ombres tombaient dans le même sens à toute
+  // heure. On ne pose plus qu'une DIRECTION, que la boucle de rendu applique autour du joueur.
+  const a = clamp((h - 6) / 12, -0.25, 1.25) * Math.PI;
+  SOLEIL_DIR.set(Math.cos(a) * 0.92, Math.max(0.22, Math.sin(a)), 0.34).normalize();
+  sun.color.copy(C2.sol); sun.intensity = C2.force;
+  hemi.color.copy(C2.amb); hemi.groundColor.copy(C2.rebond);
+  // l'appoint hémisphérique monte quand le soleil baisse : sans lui, les faces à l'ombre
+  // devenaient des trous noirs au couchant et de nuit
+  hemi.intensity = 0.34 + (1 - C2.force / 1.3) * 0.30;
+  fill.color.copy(C2.amb); fill.intensity = 0.10 + night * 0.16;
+  // le ciel : dôme dégradé (zénith, horizon, halo autour du soleil) et couleur de secours
+  const u = cielDome.material.uniforms;
+  u.haut.value.copy(C2.haut); u.bas.value.copy(C2.bas); u.halo.value.copy(C2.halo);
+  u.dir.value.copy(SOLEIL_DIR); u.force.value = 0.55 + C2.force * 0.45;
+  scene.background.copy(C2.bas);
+  // LA BRUME accordée au ciel : c'est elle qui donne la profondeur. Elle prend la couleur de
+  // l'horizon, un peu plus claire, et recule un peu la nuit (sinon la ville disparaît).
+  if (scene.fog) { scene.fog.color.copy(C2.bas).lerp(C2.haut, 0.28); scene.fog.near = 60 + night * 20; scene.fog.far = 250 + night * 60; }
+  stars.visible = night > 0.55; sunSprite.visible = night < 0.45;
+  if (stars.material) stars.material.opacity = 1;
   const lamps = night > 0.5;
   if (lamps !== day.last) {
+    const premier = day.last === -1;
     day.last = lamps;
-    for (const m of city.buildings) m.emissive.set(lamps ? 0xffd27a : 0x000000);
-    if (lamps && !day.glows.length) for (const b of breakables) { if (b.kind !== 'lamp' && b.kind !== 'light') continue; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, transparent: true, depthWrite: false, opacity: 0.85 })); sp.scale.set(4.5, 4.5, 1); sp.position.y = b.kind === 'lamp' ? 4.6 : 3.9; if (b.kind === 'light') sp.position.z = 1.6; b.g.add(sp); day.glows.push(sp); }
-    for (const sp of day.glows) sp.visible = lamps;
-    msg(lamps ? '🌙 La nuit tombe sur la ville' : '☀️ Le jour se lève', 1500);
+    lumieresVille(lamps);
+    if (!premier) msg(lamps ? '🌙 La nuit tombe sur la ville' : '☀️ Le jour se lève', 1500);
   }
-  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); $('clock').textContent = `☀️ ${hh}h${mm < 10 ? '0' : ''}${mm}`; $('clock').style.display = '';
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  $('clock').textContent = `${lamps ? '🌙' : night > 0.18 ? '🌇' : '☀️'} ${hh}h${mm < 10 ? '0' : ''}${mm}`;
+  $('clock').style.display = '';
 }
 // ================= MÉTÉO : pluie et neige =================
 // Un seul nuage de segments sert aux deux : longs et rapides pour la pluie,
@@ -5679,6 +5819,13 @@ function meteoTick(dt) {
     const voile = new THREE.Color(neige ? 0xdfe8f2 : 0x5a6a80);
     scene.background.lerp(voile, f * 0.55); if (scene.fog) { scene.fog.color.copy(scene.background); }
     sun.intensity *= 1 - f * 0.45; hemi.intensity *= 1 - f * (neige ? 0.1 : 0.3);
+    // le DÔME du ciel se voile lui aussi : sinon l'averse assombrissait la brume et la lumière
+    // pendant qu'au-dessus le ciel restait d'un bleu radieux — le pire des deux mondes.
+    { const u = cielDome.material.uniforms;
+      u.haut.value.lerp(voile, f * 0.62); u.bas.value.lerp(voile, f * 0.72);
+      u.halo.value.lerp(voile, f * 0.8); u.force.value *= 1 - f * 0.7;
+      // la brume se resserre sous l'averse : c'est ce qui fait « il pleut » plus que les gouttes
+      if (scene.fog) { scene.fog.near *= 1 - f * 0.45; scene.fog.far *= 1 - f * 0.42; } }
   }
   // bruit d'averse et coups de tonnerre
   if (f > 0.35 && !meteo.abri && simTime > meteo.tonnerre) {
@@ -8820,6 +8967,13 @@ function applyTheme(t) {
   sun.color.set(t.stars ? t.sun[0] : CHAUD.soleil); sun.intensity = t.sun[1] * 1.2;
   fill.color.set(t.stars ? 0xa8c8ff : 0xffc48f);   // l'appoint était franchement bleu : il l'est beaucoup moins
   stars.visible = t.stars; sunSprite.visible = !t.stars;
+  // le dôme du ciel prend les couleurs du monde : zénith = ciel du thème, horizon = brume,
+  // halo = couleur du soleil. Sans cela, la prairie, la lave et l'espace auraient tous eu le
+  // dégradé de la ville.
+  { const u = cielDome.material.uniforms;
+    u.haut.value.copy(scene.background); u.bas.value.copy(brume).lerp(new THREE.Color(0xffffff), 0.10);
+    u.halo.value.set(t.stars ? t.sun[0] : CHAUD.soleil); u.force.value = t.stars ? 0.25 : 0.9;
+    u.dir.value.copy(SOLEIL_DIR); }
   document.querySelector('meta[name=theme-color]').content = '#' + scene.background.getHexString();
 }
 function loadWorld(i) {
@@ -15525,9 +15679,13 @@ function frame() {
   camera.lookAt(cam.target);
   try { interieurTick(); } catch (e) { if (!interieurTick.err) { interieurTick.err = 1; console.error('interieur', e); } }
   if (city.on && running) { try { gpsTick(); } catch (e) {} }
-  sun.position.set(P.pos.x + 30, P.pos.y + 50, P.pos.z + 20);
+  // Le soleil suit le joueur (la carte d'ombres ne couvre qu'une centaine de mètres) mais sa
+  // DIRECTION vient maintenant de l'heure : les ombres tournent du matin au soir au lieu de
+  // tomber éternellement vers le sud-ouest.
+  sun.position.copy(P.pos).addScaledVector(SOLEIL_DIR, 95);
   sun.target.position.copy(P.pos);
-  sunSprite.position.copy(camera.position).addScaledVector(SUN_DIR, 400);
+  sunSprite.position.copy(camera.position).addScaledVector(SOLEIL_DIR, 400);
+  cielDome.position.copy(camera.position);
   stars.position.copy(camera.position);
   water.position.x = P.pos.x; water.position.z = P.pos.z;
 

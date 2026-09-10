@@ -7478,10 +7478,10 @@ function tableauQuestion(q) { if (school.room) tableauMaj(school.room, [q.q, q.f
 function tableauVerdict(q, v, bon, gain) {
   if (!school.room) return 0;
   const c = bon ? '#b8ffc4' : '#ffc2c2';
-  const L = [q.q, '', { t: `Réponse : ${v}` }];
+  const L = [q.q, { t: `Réponse : ${v}` }];
   if (bon) L.push({ t: `✅ GAGNÉ ! +${gain} pièces`, c });
   else { L.push({ t: '❌ FAUX', c }); L.push({ t: `La bonne réponse : ${q.a}`, c }); }
-  const out = tableauPose(school.room, L, null, 2);   // les deux premieres lignes sont deja au tableau
+  const out = tableauPose(school.room, L, null, 1);   // l'enonce est deja au tableau, la suite s'ecrit
   tableauRendu(school.room);
   // duree d'ecriture, pour ne pas enchainer sur l'exercice suivant avant la fin du trace
   return out.filter(o => o.neuve).reduce((a, o) => a + o.g.length, 0) / CRAIE_CPS;
@@ -17531,7 +17531,7 @@ function frame() {
     // ECOLE : assis a sa table, le mur du fond empeche la camera de reculer et la tete de
     // l'eleve se retrouvait PILE devant le texte. On vise donc a hauteur du tableau : la
     // camera monte avec la cible et la tete passe dessous (verifie en capture).
-    if (P.sit && P.sit.ecole && !aiming) tmpV.y += 1.05;
+    if (P.sit && P.sit.ecole && !aiming) tmpV.y += 1.25;
     if (aiming) { tmpV.x += Math.cos(cam.yaw) * 0.9; tmpV.z -= Math.sin(cam.yaw) * 0.9; }
     // Dans une pièce, la caméra reculait dans le mur ou par-dessus le plafond : on la ramène
     // près du joueur. Et devant un objet à manipuler, on se rapproche encore et on le cadre.

@@ -3383,7 +3383,18 @@ test('la police ne roule plus sous le sable du terrain de rallye', async p => {
     G.NAV.blocked = null; G.buildNav();
     const dans = (x, z) => x > G.RALLY.x1 && x < G.RALLY.x2 && z > G.RALLY.z1 && z < G.RALLY.z2;
     const ch = G.navPath(-90, -70, 90, -70) || [];
-    res.itineraire = { points: ch.length, dansLesDunes: ch.filter(pt => dans(pt[0], pt[1])).length };
+    // On echantillonne le TRAJET tous les 2 m, pas seulement ses sommets : depuis que les rues
+    // du nord ont ete refaites, le lissage rend un trajet propre en trois points — compter les
+    // sommets ne disait plus rien, et un segment pouvait traverser les dunes sans qu'aucun
+    // sommet n'y tombe.
+    let dedans = 0, echant = 0;
+    for (let i = 0; i + 1 < ch.length; i++) {
+      const [x1, z1] = ch[i], [x2, z2] = ch[i + 1];
+      const L = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.round(L / 2));
+      for (let k = 0; k <= n; k++) { const t = k / n; echant++; if (dans(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t)) dedans++; }
+    }
+    const fin = ch[ch.length - 1] || [0, 0];
+    res.itineraire = { points: ch.length, echant, dansLesDunes: dedans, arrive: +Math.hypot(fin[0] - 90, fin[1] + 70).toFixed(1) };
     // un agent à pied suit lui aussi le relief
     const a = G.creerAgent(-20, -70, 0.3, false);
     a.x = -20; a.z = -70;
@@ -3395,9 +3406,9 @@ test('la police ne roule plus sous le sable du terrain de rallye', async p => {
     return res;
   });
   const ok = !r.surLeSable.sousLeSable && Math.abs(r.surLeSable.y - r.surLeSable.relief) < 0.4
-    && r.itineraire.points > 3 && r.itineraire.dansLesDunes === 0
+    && r.itineraire.echant > 40 && r.itineraire.dansLesDunes === 0 && r.itineraire.arrive < 6
     && r.agent.aMarche && Math.abs(r.agent.y - r.agent.relief) < 0.6;
-  return { ok, detail: `la voiture de police roule à ${r.surLeSable.y} m sur un relief à ${r.surLeSable.relief} m (elle passait dessous) · les itinéraires contournent les dunes (${r.itineraire.dansLesDunes} point sur ${r.itineraire.points} dans le terrain) · un agent à pied traverse le sable à ${r.agent.y} m pour un relief de ${r.agent.relief} m` };
+  return { ok, detail: `la voiture de police roule à ${r.surLeSable.y} m sur un relief à ${r.surLeSable.relief} m (elle passait dessous) · les itinéraires contournent les dunes (${r.itineraire.dansLesDunes} point sur ${r.itineraire.echant} échantillonnés tous les 2 m, arrivée à ${r.itineraire.arrive} m du but) · un agent à pied traverse le sable à ${r.agent.y} m pour un relief de ${r.agent.relief} m` };
 });
 
 test('la guerre des gangs : chefs, planques, kidnapping, braquage, élimination et renaissance', async p => {

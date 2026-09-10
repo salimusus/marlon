@@ -7000,27 +7000,49 @@ function traficPlace() {
   for (const c of city.aiCars) if (c.spd && traficPose(c)) n++;
   return n;
 }
+// LE TEST EXACT DU RECTANGLE. `carBlocked` echantillonne trois disques le long de la caisse :
+// c'est rapide, mais un coin de remorque pouvait mordre un panneau mince ou l'angle d'une
+// enseigne sans qu'aucun disque ne le voie. Ici on teste les quatre coins, les deux flancs et
+// le centre, sans approximation — c'est ce qui garantit qu'aucune image ne montre un vehicule
+// bot dans un solide. (Les autres vehicules sont exclus : ils sont geres par `separerVehicules`.)
+function vehiculeMord(c, x, z, h) {
+  const cs = Math.cos(h), sn = Math.sin(h);
+  const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+  for (const o of solidsAutour(x, z, A + B + 2, true)) {
+    if (o === c.solid || o.veh || o.h > 30) continue;
+    if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
+    for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0], [B, 0], [-B, 0]]) {
+      const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
+      if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+    }
+  }
+  return false;
+}
+// Le garde-fou complet d'un vehicule pilote par le jeu : les disques de `carBlocked` (murs,
+// batiments, barrieres, autres vehicules) ET le rectangle exact.
+function vehBloque(c, x, z, h, opt) {
+  const [r0, L] = vehHalf(c);
+  return carBlocked(x, z, c.solid, r0, opt || {}, 0, h, L) || vehiculeMord(c, x, z, h);
+}
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
 function avanceVehicule(c, dt, spd, opt, h0) {
-  const [r0, L] = vehHalf(c);
   const o = Object.assign({ bar: true, veh: true }, opt || {});
   // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
   // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
   // est dans un solide et pas l'ancien, on annule la rotation de cette image.
-  if (h0 != null && h0 !== c.h && carBlocked(c.x, c.z, c.solid, r0, o, 0, c.h, L)
-    && !carBlocked(c.x, c.z, c.solid, r0, o, 0, h0, L)) c.h = h0;
+  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
   const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
   let bloque = 0;
-  if (!carBlocked(nx, c.z, c.solid, r0, o, 0, c.h, L)) c.x = nx; else bloque++;
-  if (!carBlocked(c.x, nz, c.solid, r0, o, 0, c.h, L)) c.z = nz; else bloque++;
+  if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
+  if (!vehBloque(c, c.x, nz, c.h, o)) c.z = nz; else bloque++;
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
   // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
   // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
   // VERIFIEE et on y revient : plus une seule image avec un capot dans un mur.
-  if (!carBlocked(c.x, c.z, c.solid, r0, o, 0, c.h, L)) c.libre = [c.x, c.z, c.h];
+  if (!vehBloque(c, c.x, c.z, c.h, o)) c.libre = [c.x, c.z, c.h];
   else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
@@ -10142,7 +10164,7 @@ function policeTick(dt) {
     const nx = pc.x + Math.sin(pc.h) * pc.speed * dt, nz = pc.z + Math.cos(pc.h) * pc.speed * dt;
     const opt = { bar: true, veh: true, pol: true };
     const [pr, pL] = vehHalf(pc);
-    const bx = carBlocked(nx, pc.z, pc.solid, pr, opt, 0, pc.h, pL), bz = carBlocked(pc.x, nz, pc.solid, pr, opt, 0, pc.h, pL);
+    const bx = vehBloque(pc, nx, pc.z, pc.h, opt), bz = vehBloque(pc, pc.x, nz, pc.h, opt);
     if (!bx) pc.x = nx; if (!bz) pc.z = nz;
     if (bx || bz) {
       pc.stuck = (pc.stuck || 0) + dt;
@@ -13227,12 +13249,11 @@ function conduire(c, tx, tz, dt, st) {
   let bloque = 0;
   const [cr, cL] = vehHalf(c);
   // tourner sur place enfonce aussi un coin dans un mur : on annule la rotation si elle mord
-  if (h0 != null && h0 !== c.h && carBlocked(c.x, c.z, c.solid, cr, opt, 0, c.h, cL)
-    && !carBlocked(c.x, c.z, c.solid, cr, opt, 0, h0, cL)) c.h = h0;
+  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, opt) && !vehBloque(c, c.x, c.z, h0, opt)) c.h = h0;
   const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
-  if (!carBlocked(nx, c.z, c.solid, cr, opt, 0, c.h, cL)) c.x = nx; else { c.speed *= 0.4; bloque++; }
-  if (!carBlocked(c.x, nz, c.solid, cr, opt, 0, c.h, cL)) c.z = nz; else { c.speed *= 0.4; bloque++; }
-  if (!carBlocked(c.x, c.z, c.solid, cr, opt, 0, c.h, cL)) c.libre = [c.x, c.z, c.h];
+  if (!vehBloque(c, nx, c.z, c.h, opt)) c.x = nx; else { c.speed *= 0.4; bloque++; }
+  if (!vehBloque(c, c.x, nz, c.h, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
+  if (!vehBloque(c, c.x, c.z, c.h, opt)) c.libre = [c.x, c.z, c.h];
   else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
@@ -13255,7 +13276,7 @@ function conduire(c, tx, tz, dt, st) {
     // on ne saute que sur un metre de bitume LIBRE : avant, le deblocage pouvait deposer la
     // voiture en plein dans une facade
     let pas = 0;
-    for (let u = Math.min(el, 7); u >= 1.5; u -= 1) { if (!carBlocked(c.x + ex / el * u, c.z + ez / el * u, c.solid, cr, opt, 0, c.h, cL)) { pas = u; break; } }
+    for (let u = Math.min(el, 7); u >= 1.5; u -= 1) { if (!vehBloque(c, c.x + ex / el * u, c.z + ez / el * u, c.h, opt)) { pas = u; break; } }
     if (pas) { c.x += ex / el * pas; c.z += ez / el * pas; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
     st.route = null; st.routeT = 0; c.speed = pas ? 6 : 0; }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
@@ -16048,8 +16069,7 @@ function cityStep(dt) {
   // et on la remet a sa derniere position verifiee.
   for (const c of city.aiCars) {
     if (!c.spd || !c.libre) continue;
-    const [r0, L] = vehHalf(c);
-    if (!carBlocked(c.x, c.z, c.solid, r0, { bar: true, veh: true }, 0, c.h, L)) { c.libre = [c.x, c.z, c.h]; continue; }
+    if (!vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) { c.libre = [c.x, c.z, c.h]; continue; }
     c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; vehicleSolid(c);
   }

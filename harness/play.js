@@ -8247,7 +8247,7 @@ test('une mission de métier ratée est comptée comme un échec, et la carrièr
     G.enterCar(d2.veh); G.missionTick(0.1);
     d2.veh.x = d2.appel.x; d2.veh.z = d2.appel.z; G.P.pos.set(d2.appel.x, 0.3, d2.appel.z); G.missionTick(0.1);
     let n2 = 0; while (G.mission.cur && n2++ < 2000) { G.P.pos.set(d2.convoi.x + 120, 0.3, d2.convoi.z); G.missionTick(0.05); }
-    res.convoiPerdu = { fini: !G.mission.cur, gain: G.wallet, loin: Math.round(d2.loinT || 0) };
+    res.convoiPerdu = { fini: !G.mission.cur, gain: G.wallet, loin: Math.round(d2.loinT || 0), arrive: !(d2.convoi.route && d2.convoi.route.length) };
     // 5. le chrono qui expire fait perdre la mission
     G.wallet = 0; G.startMission('depannage');
     G.mission.t0 = G.simTime - G.mission.limit - 1; G.missionTick(0.1);
@@ -8269,7 +8269,7 @@ test('une mission de métier ratée est comptée comme un échec, et la carrièr
     && r.feuGagne.fini && r.feuGagne.gain === 0 && r.feuGagne.feuxRestants === 0
     && r.convoiPerdu.fini && r.convoiPerdu.gain === 0
     && r.chrono.fini && r.chrono.gain === 0;
-  return { ok, detail: `carrière vierge : les 3 missions de métier refusent de démarrer et s'affichent verrouillées (${r.cartesVerrouillees} cartes grisées) · à 2 missions réussies le dépannage s'ouvre mais pas la police · à 30 le grade est « ${r.grade} » · le feu laissé libre gagne au bout de ${r.feuGagne.secondes} s et la mission est perdue sans un sou (${r.feuGagne.gain} 🪙, plus aucun foyer laissé en ville) · le convoi lâché ${r.convoiPerdu.loin} s de trop fait échouer l'escorte (${r.convoiPerdu.gain} 🪙) · le chrono dépassé fait échouer le dépannage (${r.chrono.gain} 🪙)` };
+  return { ok, detail: `carrière vierge : les 3 missions de métier refusent de démarrer et s'affichent verrouillées (${r.cartesVerrouillees} cartes grisées) · à 2 missions réussies le dépannage s'ouvre mais pas la police · à 30 le grade est « ${r.grade} » · le feu laissé libre gagne au bout de ${r.feuGagne.secondes} s et la mission est perdue sans un sou (${r.feuGagne.gain} 🪙, plus aucun foyer laissé en ville) · le convoi lâché fait échouer l'escorte, qu'on l'abandonne trop longtemps (${r.convoiPerdu.loin} s) ou qu'il arrive tout seul au poste (arrivé : ${r.convoiPerdu.arrive}) — ${r.convoiPerdu.gain} 🪙 · le chrono dépassé fait échouer le dépannage (${r.chrono.gain} 🪙)` };
 });
 
 test('le repère GPS de chaque mission du bureau mène à un point que l\'on peut vraiment rejoindre', async p => {

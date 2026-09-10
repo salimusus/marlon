@@ -5130,7 +5130,12 @@ function policeTickAct(dt, d) {
     if (dist > 45) { d.loinT = (d.loinT || 0) + dt; if (simTime > (d.avertT || 0)) { d.avertT = simTime + 3; msg(`⚠️ Tu lâches le convoi (${Math.round(dist)} m) — reviens !`, 2200); } }
     else d.loinT = Math.max(0, (d.loinT || 0) - dt * 0.6);
     if (d.loinT > 12) { msg('🚚 Le convoi a été laissé sans escorte', 2800); endMission(false); return; }
-    if (arrive) endMission(true);
+    // Escorter, c'est être là À L'ARRIVÉE. Le convoi finissait son trajet tout seul pendant
+    // que le joueur était à l'autre bout de la ville, et la mission était quand même payée.
+    if (arrive) {
+      if (dist > 45) { msg('🚚 Le convoi est arrivé sans toi : ce n\'était pas une escorte', 3200); endMission(false); }
+      else endMission(true);
+    }
     return;
   }
   if (d.variante === 'barrage') {

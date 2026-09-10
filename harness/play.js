@@ -8107,3 +8107,106 @@ test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demand
     && r.avant === 'flex' && r.apres === 'none' && r.bouton && r.pave === 'aide';
   return { ok, detail: `le bandeau des touches (« R2 avancer · L2 reculer · Stick G direction… ») restait affiché EN PERMANENCE dès qu'une manette était branchée : trois lignes en travers du haut de l'écran, par-dessus le jeu · il est maintenant masqué au repos (${r.repos.leg}), sort quelques secondes a la connexion, se rappelle par le PAVÉ TACTILE de la DualSense (${r.pave}) ou par le bouton « ⌨️ Rappeler les touches » des réglages (${r.bouton}), et se referme au deuxième appui (${r.referme.leg}) ou tout seul après son délai (${r.avant} → ${r.apres})` };
 });
+
+// ---------------- POSTE G : collisions du joueur et roulette du casino ----------------
+
+test('balayage de collision : poussé contre un objet de la ville, le joueur ne rentre pas dedans', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const P = G.P;
+    // tout ce qui doit VRAIMENT arrêter le joueur : ni marche basse, ni linteau, ni
+    // véhicule (qui bouge), ni portail (qui s'ouvre), ni vitre (qui casse)
+    const cand = G.solids.filter(o => !(o.h > 30 || o.veh || o.porte || o.glass || o.bar || o.blink)
+      && o.y + o.h / 2 > 0.62 && o.y - o.h / 2 < 1.6 && !(o.w > 14 && o.d > 14) && o.w > 0.25 && o.d > 0.25
+      && o.y - o.h / 2 < 3 && Math.abs(o.x) < 210 && o.z > -195 && o.z < 345);
+    const pas = Math.max(1, Math.floor(cand.length / 260));
+    const ech = cand.filter((o, i) => i % pas === 0);
+    const pires = []; let n = 0, testes = 0, maxProf = 0, decor = 0;
+    for (const o of ech) {
+      const d = [[1, 0], [-1, 0], [0, 1], [0, -1]][n++ % 4];
+      const marge = (d[0] ? o.w / 2 : o.d / 2) + P.hw + 0.45;
+      const x0 = o.x + d[0] * marge, z0 = o.z + d[1] * marge;
+      const solY = G.groundUnder(x0, z0, null, o.y + o.h / 2 + 0.5);
+      if (solY > o.y + o.h / 2 - 0.4) continue;   // on arriverait par le dessus : ce n'est pas un mur
+      P.pos.set(x0, solY, z0); P.vel.set(0, 0, 0); P.sit = null; P.grounded = true; P.coinceT = 0;
+      for (let k = 0; k < 22; k++) { P.vel.x = -d[0] * 8; P.vel.z = -d[1] * 8; G.step(1 / 60, true); }
+      const ox = Math.min(P.pos.x + P.hw, o.x + o.w / 2) - Math.max(P.pos.x - P.hw, o.x - o.w / 2);
+      const oz = Math.min(P.pos.z + P.hw, o.z + o.d / 2) - Math.max(P.pos.z - P.hw, o.z - o.d / 2);
+      const oy = Math.min(P.pos.y + P.h, o.y + o.h / 2) - Math.max(P.pos.y, o.y - o.h / 2);
+      const prof = Math.min(ox, oz, oy) > 0 ? Math.min(ox, oz) : 0;
+      testes++; if (o.decor) decor++;
+      if (prof > maxProf) maxProf = prof;
+      if (prof > 0.1) pires.push(`${prof.toFixed(2)} m en (${o.x.toFixed(0)}, ${o.z.toFixed(0)})`);
+    }
+    return { total: G.solids.length, decorSolide: G.city.decorSolide, candidats: cand.length, testes, decor, maxProf, pires: pires.slice(0, 4) };
+  });
+  const ok = r.testes > 150 && r.maxProf < 0.1 && r.pires.length === 0 && r.decorSolide > 300;
+  return { ok, detail: `la ville laissait traverser des centaines d'objets (troncs, colonnes, bancs, étals, caisses, poteaux, panneaux) : une règle générale en solidifie ${r.decorSolide} de plus (${r.total} solides au total) · ${r.testes} solides testés sur ${r.candidats}, dont ${r.decor} de ce décor : pénétration maximale ${r.maxProf.toFixed(3)} m (limite 0,10) ${r.pires.length ? '· fautifs : ' + r.pires.join(', ') : '· aucun objet traversé'}` };
+});
+
+test('coincé dans un solide, le joueur en ressort en moins d\'une seconde', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const P = G.P;
+    const dedans = o => {
+      const ox = Math.min(P.pos.x + P.hw, o.x + o.w / 2) - Math.max(P.pos.x - P.hw, o.x - o.w / 2);
+      const oz = Math.min(P.pos.z + P.hw, o.z + o.d / 2) - Math.max(P.pos.z - P.hw, o.z - o.d / 2);
+      const oy = Math.min(P.pos.y + P.h, o.y + o.h / 2) - Math.max(P.pos.y, o.y - o.h / 2);
+      return Math.min(ox, oz, oy) > 0 ? Math.min(ox, oz) : 0;
+    };
+    // 1) au centre d'objets réels de la ville
+    const cand = G.solids.filter(o => !(o.h > 30 || o.veh || o.porte || o.glass || o.bar)
+      && o.y + o.h / 2 > 1.2 && o.y - o.h / 2 < 1.2 && o.w > 0.8 && o.d > 0.8 && !(o.w > 14 && o.d > 14)
+      && Math.abs(o.x) < 200 && o.z > -190 && o.z < 340);
+    const pas = Math.max(1, Math.floor(cand.length / 60));
+    let pire = 0, rates = 0, testes = 0;
+    for (const o of cand.filter((x, i) => i % pas === 0)) {
+      P.pos.set(o.x, Math.max(0, o.y - o.h / 2), o.z); P.vel.set(0, 0, 0); P.sit = null; P.coinceT = 0;
+      let k = 0; for (; k < 90; k++) { G.step(1 / 60, true); if (!dedans(o)) break; }
+      testes++; if (k / 60 > pire) pire = k / 60;
+      if (dedans(o) > 0.02) rates++;
+    }
+    // 2) le cas dur : serré ENTRE DEUX meubles, plus étroit que lui. La résolution axe par
+    // axe le renvoyait d'un meuble à l'autre indéfiniment ; c'est la désincarcération qui
+    // le tire dehors.
+    const x0 = 6, z0 = 8, sol = [];
+    for (const dx of [-0.65, 0.65]) sol.push({ x: x0 + dx, y: 0.8, z: z0, w: 1, h: 1.6, d: 2.4, mesh: { visible: true } });
+    for (const o of sol) G.solids.push(o);
+    P.pos.set(x0, 0, z0); P.vel.set(0, 0, 0); P.coinceT = 0; P.sit = null;
+    let k2 = 0; for (; k2 < 180; k2++) { G.step(1 / 60, true); if (!dedans(sol[0]) && !dedans(sol[1])) break; }
+    const libre = k2 / 60, sorti = !dedans(sol[0]) && !dedans(sol[1]);
+    for (const o of sol) { const i = G.solids.indexOf(o); if (i >= 0) G.solids.splice(i, 1); }
+    return { testes, rates, pire, libre, sorti, x: P.pos.x, z: P.pos.z };
+  });
+  const ok = r.rates === 0 && r.pire < 1 && r.sorti && r.libre < 1;
+  return { ok, detail: `posé au centre de ${r.testes} solides de la ville, le joueur en sort toujours (le pire : ${r.pire.toFixed(2)} s, ${r.rates} échec(s)) · serré entre deux meubles distants de 30 cm, il ballottait de l'un à l'autre SANS JAMAIS SORTIR : la désincarcération le pousse dehors en ${r.libre.toFixed(2)} s (sorti=${r.sorti})` };
+});
+
+test('la roulette : la caméra passe devant la roue, la roue freine et la bille tombe dans la case', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 21 });
+    const t = G.city.casino.tables.find(x => x.kind === 'roulette');
+    __SHOT.go({ world: 4, x: t.x, y: 1, z: t.z + 3.4, hour: 21 });
+    const alea = Math.random; Math.random = () => 0.5;   // tirage figé : le 18, rouge
+    G.wallet = 500;
+    G.ouvreCasino('roulette', t); G.casino.mise = 25; G.casino.pari = 'rouge';
+    G.jouerCasino();
+    let precedent = t.g.userData.roue.rotation.y; const vits = [], mesures = []; let accelere = 0;
+    for (let k = 0; k < 400 && G.casino.cine; k++) {
+      G.rouletteCine(1 / 30);
+      const y = t.g.userData.roue.rotation.y, v = (y - precedent) * 30; precedent = y;
+      if (k > 1) { if (vits.length && v > vits[vits.length - 1] + 1e-9) accelere++; vits.push(v); }
+      if (k === 40 || k === 150 || k === 200) mesures.push(G.rouletteEtat());
+    }
+    const fin = G.rouletteEtat();
+    Math.random = alea;
+    return { n: G.casino.roulette, vitDebut: vits[0], vitFin: vits[vits.length - 1], accelere,
+      mesures: mesures.map(m => ({ vise: m.viseRoue, plongee: m.plongee, devant: m.devant, dist: m.distance, aff: m.affiche, ui: m.interface, num: m.numero })),
+      ecart: fin.ecart, rB: fin.rB, ui: fin.interface, aff: fin.affiche, resultat: G.casino.resultat, gain: G.casino.gain, porte: G.wallet };
+  });
+  const m = r.mesures[0], f = r.mesures[2];
+  const ok = r.n === 18 && r.accelere === 0 && r.vitDebut > 3 && r.vitFin < 0.05
+    && m.vise < 0.15 && m.plongee > 0.15 && m.plongee < 0.7 && m.devant > 0.9 && !m.ui && m.aff
+    && r.ecart < 0.05 && f.num === '18' && r.ui && !r.aff && r.gain === 50 && r.porte === 525;
+  return { ok, detail: `la roue tournait DERRIÈRE l'interface d'achat : on ne voyait rien du tour · maintenant la caméra se pose devant la roue (écart de visée ${m.vise.toFixed(3)} rad, plongée ${(m.plongee * 57).toFixed(0)}°, du côté du joueur ${m.devant.toFixed(2)}, à ${m.dist.toFixed(1)} m), l'interface d'achat s'efface (${m.ui}) · la roue freine sans jamais réaccélérer (${r.vitDebut.toFixed(2)} → ${r.vitFin.toFixed(3)} rad/s, ${r.accelere} reprise(s)) · la bille se loge dans la case du ${r.n} à ${r.ecart.toFixed(4)} rad (limite 0,05), rayon ${r.rB.toFixed(2)} m · le numéro s'affiche en grand (« ${f.num} ») puis l'interface revient (${r.ui}) avec le gain : ${r.gain} 🪙, porte-monnaie 500 → ${r.porte}` };
+});

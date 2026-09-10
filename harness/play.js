@@ -935,8 +935,11 @@ test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »
     // symboles dits en toutes lettres
     const maths = __G.schDire('7 × 8 = ? puis 50 % de 80, 4² et 12 ÷ 3');
     const salle = __G.city.classes[0]; if (!salle) return { ok: false, pourquoi: 'aucune salle de classe' };
+    // la classe ne s'ouvre que si le joueur est ASSIS sur une chaise de cette salle
+    const ch = salle.chaises[0]; __G.P.sit = null; __G.P.pos.set(ch.x, 0.6, ch.z); __G.sitBench(ch);
     dits.length = 0;
-    __G.openSchool(salle);
+    const ouvert = __G.openSchool(salle);
+    if (!ouvert) return { ok: false, pourquoi: 'la classe ne s\'est pas ouverte alors que le joueur est assis' };
     const q = __G.school.q, lu = dits.join(' | ');
     const cartes = [...document.querySelectorAll('#schChoices .item')];
     const bonne = cartes[q.opts.indexOf(q.a)];
@@ -950,7 +953,7 @@ test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »
     const mauvaise = c2[(q2.opts.indexOf(q2.a) + 1) % 4];
     mauvaise.click();
     const bonneVerte = c2[q2.opts.indexOf(q2.a)].style.background;
-    __G.closeUI();
+    __G.closeUI(); __G.P.sit = null; __G.school.chaise = null;
     return { ok: true, maths, question: q.q, lu, gagne, marquee, bonneVerte, nCartes: cartes.length };
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
@@ -6967,12 +6970,14 @@ test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repo
     out.assis = { sit: !!G.P.sit, ui: G.uiOpen, tableau: r.texte, q: !!G.school.q, y: +G.P.pos.y.toFixed(2) };
     if (!G.school.q) return { ...out, pourquoi: `pas de question apres 4 s (assis=${!!G.P.sit}, ui=${G.uiOpen})` };
     const q = G.school.q; G.wallet = 0;
-    G.answer(q.a, document.querySelector('#schChoices .item')); await dodo(80);
-    out.bon = { tableau: r.texte, pieces: G.wallet };
-    await dodo(1700); const q2 = G.school.q; const faux = q2.opts.find(o => o !== q2.a);
-    G.answer(faux, document.querySelector('#schChoices .item')); await dodo(80);
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    out.bon = { tableau: r.texte, pieces: G.wallet };   // lu tout de suite : la craie met 2 s a tracer, mais le verdict est deja pose
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);   // la craie finit d'ecrire avant l'exercice suivant
+    const q2 = G.school.q; if (!q2) return { ...out, pourquoi: 'aucun exercice suivant apres le verdict' };
+    const faux = q2.opts.find(o => o !== q2.a);
+    G.answer(faux, document.querySelector('#schChoices .item'));
     out.faux = { tableau: r.texte, rep: faux };
-    G.closeUI(); G.P.sit = null; G.P.pos.set(-62, 1, 235);
+    G.closeUI(); G.P.sit = null; G.school.chaise = null; G.P.pos.set(-62, 1, 235);
     return out;
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
@@ -7883,4 +7888,200 @@ test('on peut parler aux gens de métier et leur donner un coup de main contre d
   const ok = r.repond && !r.auHasard && r.propose && !!r.proposeQui && r.boulot === 'balayeur' && r.sous1 === r.sous0 + 15 && !r.reste
     && /répare le lampadaire/.test(dit.employe) && /vitres/.test(dit.laveur) && /camion|feu/.test(dit.pompier) && /tournée|lettre|boîte/.test(dit.facteur);
   return { ok, detail: `l'employé au travail répond « ${dit.employe} », le pompier « ${dit.pompier} », le facteur « ${dit.facteur} » ; une phrase hors sujet ne déclenche rien (${r.auHasard}) ; à côté d'un travailleur (${r.proposeQui}), E propose un petit boulot — les 5 détritus du balayeur ramassés = ${r.sous1 - r.sous0} 🪙 (${r.sous0} → ${r.sous1})` };
+});
+test('la maîtresse PARLE pour de vrai à l\'école : bonjour à l\'élève, l\'énoncé, le verdict, une bulle, et un repli quand l\'appareil n\'a aucune voix', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    const out = { defaut: G.settings.voices, reglage: G.store.get('superobby.voices'), bouton: !!document.getElementById('voiceTest'),
+      libelle: document.getElementById('voiceBtn').textContent, maitresse: !!salle.maitresse };
+    // 1) LE REPLI : sans espion, avec la vraie synthèse. Chromium n'a aucune voix installée :
+    // rien ne démarre, et le jeu doit s'en apercevoir et jouer le jingle.
+    G.settings.voices = true; const av = G.voice.etat();
+    G.voice.say('Essai de la voix de la maîtresse', true, true);
+    await dodo(1100);
+    const ap = G.voice.etat();
+    out.moteur = ap.moteur; out.voix = ap.voix; out.fr = ap.fr;
+    out.parleOuRepli = (ap.parle > av.parle) || (ap.repli > av.repli);
+    out.envoyees = ap.dites - av.dites;
+    // 2) l'espion : que DIT la maîtresse, exactement ?
+    const dits = [];
+    try { window.speechSynthesis.speak = u => dits.push(String(u.text)); } catch (e) { return Object.assign(out, { pourquoi: 'synthèse vocale non remplaçable' }); }
+    const ch = salle.chaises[0];
+    G.P.sit = null; G.school.chaise = null; G.P.pos.set(ch.x, 0.6, ch.z + 0.3);
+    dits.length = 0; G.sitBench(ch);
+    out.bonjour = dits.join(' | ');
+    out.nom = G.myCfg.name;
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    if (!G.school.q) return Object.assign(out, { pourquoi: 'la classe ne s\'est pas ouverte en s\'asseyant' });
+    out.enonce = dits.join(' | ');
+    out.bulle = !!(salle.maitresse && salle.maitresse.bubble);
+    // bonne réponse
+    let q = G.school.q; dits.length = 0;
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    out.gagne = dits.join(' | ');
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);
+    // mauvaise réponse
+    q = G.school.q; dits.length = 0;
+    if (q) G.answer(q.opts.find(o => o !== q.a), document.querySelector('#schChoices .item'));
+    out.faux = dits.join(' | ');
+    out.bonneReponse = q ? String(q.a) : '';
+    // 3) le bouton « Tester la voix » des réglages
+    G.settings.voices = false; dits.length = 0;
+    document.getElementById('voiceTest').click();
+    out.test = { actives: G.settings.voices, dits: dits.join(' | ') };
+    // 4) « À bientôt » quand on se lève
+    // on attend des IMAGES, pas des minuteries : c'est schoolTick, appele a l'image, qui
+    // referme la classe quand on se leve (sur une machine chargee les minuteries s'accumulent
+    // toutes entre deux images et rien n'a encore tourne)
+    dits.length = 0; G.P.sit = null;
+    for (let i = 0; i < 60 && G.school.chaise; i++) await new Promise(rr => requestAnimationFrame(rr));
+    out.aurevoir = dits.join(' | '); out.uiApres = G.uiOpen;
+    G.school.chaise = null;
+    return out;
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const bonjour = new RegExp('Bonjour élève ' + String(r.nom).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(r.bonjour);
+  const enonce = /Réponse un/.test(r.enonce) && /Réponse quatre/.test(r.enonce);
+  const gagne = /gagn/i.test(r.gagne), faux = /faux/i.test(r.faux) && r.faux.includes(r.bonneReponse);
+  const testBouton = r.bouton && r.test.actives === true && /maîtresse/i.test(r.test.dits);
+  const ok = r.defaut === true && !r.reglage && r.moteur && r.parleOuRepli && r.envoyees >= 1
+    && bonjour && enonce && gagne && faux && r.bulle && testBouton && /bientôt/i.test(r.aurevoir) && r.uiApres === null;
+  return { ok, detail: `la voix ne sortait jamais (liste des voix vide au premier appel, file laissée en pause par Chrome, utterance ramassée par le ramasse-miettes, aucun repli quand la machine est muette) · elle est ACTIVE par défaut (settings.voices=${r.defaut}, réglage enregistré : ${r.reglage}) et le bouton « Tester la voix » existe (« ${r.libelle} ») et la réactive (${r.test.actives}) · sur cette machine : moteur=${r.moteur}, ${r.voix} voix dont ${r.fr} française(s) → ${r.parleOuRepli ? 'la phrase part et, faute de voix, le jingle de repli la remplace' : 'RIEN'} · à l'assise elle dit « ${String(r.bonjour).slice(0, 46)} », lit l'énoncé et les 4 réponses (${enonce}), dit « ${String(r.gagne).slice(0, 24)} » ou « ${String(r.faux).slice(0, 40)} », affiche une bulle au-dessus d'elle (${r.bulle}) et « ${String(r.aurevoir).slice(0, 20)} » quand on se lève (interface refermée : ${r.uiApres === null})` };
+});
+
+test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, avec le crissement de la craie', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    G.settings.voices = false; G.settings.sound = true;   // le jingle de la voix polluerait la mesure
+    const ch = salle.chaises[0];
+    G.P.sit = null; G.school.chaise = null; G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    if (!G.school.q) return { pourquoi: 'la classe ne s\'est pas ouverte' };
+    // ÉCOUTE AU BOUT DE LA CHAÎNE AUDIO : un analyseur ne montre que les 46 dernières
+    // millisecondes à l'instant où on le lit, et sur la machine du banc d'essai (2 images/s)
+    // le crissement, qui dure 150 ms, était toujours déjà passé. On branche donc un nœud qui
+    // ÉCOUTE EN CONTINU et retient la crête sur toute une fenêtre.
+    const c = G.sfx.unlock(), chn = G.sfx.chaine();
+    let crete = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    chn.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; const t = performance.now(); while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); } return +crete.toFixed(4); };
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
+    const silence = await ecoute(700);
+    const q = G.school.q, w0 = G.wallet;
+    const lus = () => (salle.dessine || '').split(' | ').join('').length;
+    G.school.craieSons = 0; const v0 = salle.tex.version;
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    // on referme tout de suite : sinon l'exercice suivant, programme apres le verdict, vient
+    // effacer le tableau au milieu de la mesure (la machine du banc d'essai rend 2 images/s)
+    G.closeUI();
+    const juste = { texte: salle.texte, dessine: salle.dessine, lus: lus(), aEcrire: salle.tab.aEcrire, sons: G.school.craieSons };
+    // avancement DÉTERMINISTE : on recule l'horloge de départ du tracé, la cadence ne dépend
+    // donc ni de la vitesse de la machine ni du nombre d'images rendues
+    // espion sur le bus audio : on note SUR QUELLE SORTIE la craie branche son bruit
+    const bus = [], sortieOrig = G.sfx.sortie;
+    G.sfx.sortie = n => { bus.push(n); return sortieOrig(n); };
+    salle.tab.t0 = performance.now() - 250; G.craieTick(0.016);
+    const t1 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
+    salle.tab.t0 = performance.now() - 1000; G.craieTick(0.016);
+    const t2 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
+    G.sfx.sortie = sortieOrig;
+    // le crissement SORT-IL de la chaîne ? on le rejoue et on écoute la sortie du limiteur.
+    // (La mesure est indicative : le nœud d'écoute tourne sur le fil principal, et sur une
+    // machine chargée il perd des paquets. La garantie, elle, est l'espion du bus ci-dessus.)
+    const horloge0 = c.currentTime;
+    const pic = await ecoute(700, () => G.sonCraie(3));
+    const horloge = +(c.currentTime - horloge0).toFixed(2);
+    salle.tab.t0 = performance.now() - 20000; G.craieTick(0.016);
+    const fin = { lus: lus(), dessine: salle.dessine, texte: salle.texte, versions: salle.tex.version - v0 };
+    const viseur = () => { const t = salle.tableau; const d = Math.atan2(-(t.position.x - G.P.pos.x), -(t.position.z - G.P.pos.z)) - G.cam.yaw; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); };
+    const camAvant = +viseur().toFixed(2);
+    for (let i = 0; i < 60; i++) G.camTableau(0.05);   // la caméra se cale sur le tableau en une seconde
+    const cam = { avant: camAvant, ecart: +viseur().toFixed(3), pitch: +G.cam.pitch.toFixed(2), interieur: !!G.cam.interieur, dist: +G.cam.dist.toFixed(1) };
+    // et sur une mauvaise réponse : le verdict rouge s'écrit pareil
+    G.openSchool(salle);   // toujours assis : la classe se rouvre
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);
+    let rouge = null;
+    if (G.school.q) { const q2 = G.school.q; G.answer(q2.opts.find(o => o !== q2.a), document.querySelector('#schChoices .item')); G.closeUI();
+      const l = salle.tab.lignes.filter(o => o.neuve); rouge = { texte: salle.texte, couleurs: l.map(o => o.c || ''), aEcrire: salle.tab.aEcrire }; }
+    try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    G.closeUI(); G.P.sit = null; G.school.chaise = null;
+    return { juste, t1, t2, fin, rouge, silence, pic, cps: G.CRAIE_CPS, gain: G.wallet - w0, cam,
+      bus, etatAudio: c.state, horloge, son: G.settings.sound };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const q = r.juste, v = r.rouge;
+  // au départ le verdict n'est PAS encore tracé, puis il grandit lettre par lettre
+  const depart = q.lus < q.texte.split(' | ').join('').length && q.aEcrire > 8;
+  const monte = r.t1.lus > q.lus && r.t2.lus > r.t1.lus && r.fin.lus > r.t2.lus;
+  const cadence = Math.abs((r.t1.lus - q.lus) - Math.round(0.25 * r.cps)) <= 1 && Math.abs((r.t2.lus - q.lus) - Math.round(1 * r.cps)) <= 1;
+  const complet = r.fin.dessine === r.fin.texte && /GAGNÉ/.test(r.fin.texte);
+  // GARANTIE DÉTERMINISTE : pendant l'écriture, la craie branche bien son bruit sur le bus
+  // « effets » d'un moteur audio qui tourne (l'horloge du contexte avance). Le niveau mesuré
+  // au bout de la chaîne est reporté en plus, mais il dépend de la charge de la machine.
+  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.bus.length >= 3
+    && r.bus.every(b => b === 'effets') && r.etatAudio === 'running' && r.horloge > 0.3 && r.son
+    && r.pic >= r.silence;
+  const rouge = !!v && /FAUX/.test(v.texte) && v.couleurs.some(c => c === '#ffc2c2') && v.aEcrire > 4;
+  const cadre = r.cam.ecart < 0.12 && r.cam.pitch <= 0.24;
+  const ok = depart && monte && cadence && complet && r.fin.versions >= 3 && son && rouge && cadre;
+  return { ok, detail: `la réponse tombait d'un bloc sur le tableau : elle s'ÉCRIT maintenant à la craie, ${r.cps} lettres/s · juste après la réponse le tableau ne porte que l'énoncé (${q.lus} caractères tracés, ${q.aEcrire} restent à écrire), puis ${r.t1.lus} à 250 ms, ${r.t2.lus} à 1 s (« ${String(r.t2.dessine).split(' | ').slice(2).join(' ').trim().slice(0, 30)} ») et enfin « ${String(r.fin.texte).split(' | ').slice(2).join(' · ')} » (${r.fin.lus}) · la texture du tableau est repeinte ${r.fin.versions} fois · le crissement de la craie (bruit passe-bande 2–4 kHz) est joué ${r.t2.sons} fois pendant le tracé et branché ${r.bus.length} fois sur le bus « ${[...new Set(r.bus)].join(', ')} » d'un moteur audio qui tourne (${r.etatAudio}, horloge +${r.horloge} s) ; niveau mesuré au bout de la chaîne : silence ${r.silence}, craie ${r.pic} · un verdict faux s'écrit pareil, en rouge (${v ? v.couleurs.filter(Boolean).join(' ') : '—'}) · assis en classe la caméra cadre le tableau : l'écart de visée tombe de ${r.cam.avant} à ${r.cam.ecart} radian et la visée s'aplatit à ${r.cam.pitch} (maison de poupée ${r.cam.interieur}, caméra à ${r.cam.dist} m : la tête de l'élève passe sous le texte)` };
+});
+
+test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lever ferme la classe', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    G.settings.voices = false;
+    const ch = salle.chaises[0];
+    // 1) DEBOUT au milieu de la classe : l'interface ne doit pas s'ouvrir
+    G.P.sit = null; G.school.chaise = null; if (G.uiOpen) G.closeUI();
+    G.P.pos.set(salle.x, 0.6, salle.z);
+    const debout = { retour: G.openSchool(salle), ui: G.uiOpen };
+    // 2) la touche E devant une chaise d'école : on s'ASSOIT (l'ordre des actions faisait
+    //    gagner « la classe » sur « la chaise », et les exercices s'ouvraient debout)
+    G.P.pos.set(ch.x, 0.6, ch.z + 0.8); G.P.sit = null;
+    // on avance la simulation image par image (pas d'attente reelle : la machine du banc
+    // d'essai rend 2 images/s) jusqu'a ce que le reperage de proximite ait tourne
+    for (let i = 0; i < 40 && !(G.city.benchNear && G.city.benchNear.ecole === salle); i++) G.step(1 / 60, true);
+    const visee = G.city.benchNear;   // deux chaises voisines sont a moins d'1,80 m : c'est l'une des deux
+    const proche = { bench: !!(visee && visee.ecole === salle), classe: !!G.city.classNear,
+      pos: [+G.P.pos.x.toFixed(1), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(1)], chaise: [+ch.x.toFixed(1), +ch.z.toFixed(1)] };
+    if (!proche.bench) return { pourquoi: `la chaise d'école n'est pas détectée à portée : joueur ${proche.pos}, chaise ${proche.chaise}, benchNear=${G.city.benchNear ? 'un autre banc' : 'aucun'}` };
+    // c'est exactement l'événement que produit la manette (◯ → telTouche('KeyE'))
+    const presseE = () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+    presseE();
+    const assis = { sit: G.P.sit === visee, ui: G.uiOpen };
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    const classe = { ui: G.uiOpen, q: !!G.school.q, chaise: G.school.chaise === visee };
+    // 3) on ferme la classe mais on reste assis : E la rouvre
+    document.getElementById('schClose').click(); await dodo(80);
+    const ferme = { ui: G.uiOpen, sit: G.P.sit === visee };
+    presseE(); await dodo(80);
+    const rouvre = { ui: G.uiOpen, sit: G.P.sit === visee };
+    // 4) on se lève : la classe se ferme toute seule
+    G.P.sit = null;
+    let images = 0;
+    for (let i = 0; i < 60 && G.school.chaise; i++) { await new Promise(rr => requestAnimationFrame(rr)); images++; }
+    const leve = { ui: G.uiOpen, chaise: !!G.school.chaise, dit: G.school.dit, images };
+    G.school.chaise = null;
+    return { debout, proche, assis, classe, ferme, rouvre, leve };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.debout.retour === false && r.debout.ui === null
+    && r.proche.bench && r.assis.sit && r.assis.ui !== 'schoolUI'
+    && r.classe.ui === 'schoolUI' && r.classe.q && r.classe.chaise
+    && r.ferme.ui === null && r.rouvre.ui === 'schoolUI' && r.rouvre.sit
+    && r.leve.ui === null && r.leve.chaise === false && /bientôt/i.test(r.leve.dit || '');
+  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
 });

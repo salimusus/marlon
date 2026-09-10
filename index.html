@@ -711,6 +711,17 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   </div>
 </div>
 
+<div class="overlay hidden" id="etal">
+  <div class="card wide">
+    <h2 id="etalTitre">🛒 Comptoir</h2>
+    <p class="sub" id="etalSub"></p>
+    <div id="etalCorps"></div>
+    <div class="mpr" style="justify-content:center">
+      <button class="btn sec" id="etalBack">Retour</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="casino">
   <div class="card wide">
     <h2 id="casinoTitre">🎰 WORLD TELIO MARLON</h2>
@@ -2426,8 +2437,12 @@ function buildCasino(x, z) {
   tableCasino(x + 13, z - 2.5, 'poker');
   // --- le quartier autour : immeubles de nuit, hôtel, parking ---
   const cols = [0x1b2a4a, 0x2b1a3a, 0x1a2b3a, 0x3a1a2a];
-  for (let i = 0; i < 6; i++) building(x - 34 + i * 14, z - 34, 10, 10 + (i % 3) * 6, 10, cols[i % 4]);
-  for (let i = 0; i < 4; i++) building(x + 30, z - 14 + i * 13, 11, 12 + (i % 2) * 8, 11, cols[(i + 1) % 4]);
+  // Le Boulevard du casino (9 m, x = 60) passait DANS les deux immeubles du milieu de cette
+  // rangee : on laisse un trou de 26 m en son centre, la ou il descend vers la ville.
+  for (const [i, dx] of [[0, -46], [1, -32], [2, -18], [3, 18], [4, 32], [5, 46]]) building(x + dx, z - 34, 10, 10 + (i % 3) * 6, 10, cols[i % 4]);
+  // la Desserte du casino (z = 282) traversait le premier immeuble de cette colonne : elle
+  // commence maintenant 8 m plus au sud, et la colonne s'arrete avant l'Avenue du casino.
+  for (let i = 0; i < 4; i++) building(x + 30, z - 8 + i * 12, 11, 12 + (i % 2) * 8, 11, cols[(i + 1) % 4]);
   plat(x - 30, 0.16, z + 26, 22, 16, 0x565b66, { studs: false, noRoute: true }, 0.1);
   sign(x - 30, 0.2, z + 18, '🅿️ Parking du casino');
   for (let i = 0; i < 3; i++) city.cars.push(makeCar([0x111111, 0xf4f6fa, 0xf2c14e][i], x - 36 + i * 6, z + 26, 0));
@@ -2748,7 +2763,11 @@ function buildOuterDistricts() {   // nouveaux quartiers : entrepôts à l'est, 
     box(x - 2, 0.5, z + 2.8, 1.2, 1, 1.2, 0xc08b4a, { studs: false, noRoute: true });   // palette hors de l'allée d'entrée
     box(x, 7.4, z, 3, 0.12, 3, 0, { material: neonMat(0xfff2b0), deco: true, noEdges: true, noShadow: true });
   }
-  road(80, 35, 6, 190, 0, true); road(-80, 33.5, 6, 213, 0, true); road(-90, -70, 20, 6, 0, true); road(90, -70, 20, 6, 0, true); road(0, 140, 200, 6, 0, true);   // la rue ouest monte jusqu'a l'avenue du nord ; la route du nord ne passe plus sous le sable du rallye
+  // le ring ouest descendait jusqu'a z = -73, DANS le sable du rallye : il s'arrete a z = -62,
+  // et deux troncons du plan (Contournement du sable, Raccord du rallye ouest) le raccordent
+  // au contournement nord en passant a l'ouest des dunes.
+  // la rue ouest monte jusqu'a l'avenue du nord ; la route du nord ne passe plus sous le sable du rallye
+  road(80, 35, 6, 190, 0, true); road(-80, 39, 6, 202, 0, true); road(-90, -70, 20, 6, 0, true); road(90, -70, 20, 6, 0, true); road(0, 140, 200, 6, 0, true);
   city.zones.push({ name: 'Quartier ouest', emoji: '🏘️', x1: -100, x2: -84, z1: -60, z2: 95, hint: '🏘️ Quartier des maisons' });
   city.zones.push({ name: 'Zone industrielle', emoji: '🏭', x1: 84, x2: 100, z1: -30, z2: 100, hint: '🏭 Entrepôts… et une planque pour semer la police' });
 }
@@ -3492,6 +3511,43 @@ function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, n
 // axe a un nom, chaque quartier a sa desserte — et on le construit à partir de cette table.
 // `city.plan` la garde en mémoire : le GPS, la conduite des bots et les missions s'en
 // servent pour rejoindre un quartier par la route.
+//
+// ---- HIÉRARCHIE DES VOIES (la largeur DIT le rôle, partout dans la ville) ----
+//   9 m = BOULEVARD    double sens large, prioritaire, stationnement marqué sur les bas-côtés
+//   8 m = AVENUE       double sens, prioritaire elle aussi
+//   7 m = RUE          double sens étroit, cède le passage aux boulevards
+//   6 m = RUELLE       le maillage historique du centre-ville
+//   5 m = DESSERTE     voie de service (promenade du littoral, sortie du commissariat…)
+// `VOIES` ci-dessous nomme ces paliers ; `roleVoie(r)` rend le rôle d'un rectangle de
+// `city.routes`. Aucune chaussée de la ville ne sort de ces cinq largeurs.
+//
+// ---- LES AXES DÉCLARÉS ICI (du nord au sud), avec leur rôle ----
+//   Boulevard du Nord ............ 9 m · la grande transversale du nord, du ring ouest
+//                                  (x −80) à la bretelle du circuit (x 109) ; c'est elle qui
+//                                  dessert le TECHNO-PARC et rend le nord de la carte vivant
+//   Montée de l'ouest / de l'est . 8 m · relient le Boulevard du Nord aux contournements du
+//                                  rallye (z −70), donc au centre-ville
+//   Raccord nord-est ............. 8 m · bouchait le trou de 7 m entre la rue de l'est
+//                                  (x 80) et le contournement est du rallye
+//   Avenue des Sciences .......... 7 m · l'axe est-ouest du Techno-Parc
+//   Rue du Code / Rue des Circuits 7 m · les deux rues nord-sud du Techno-Parc
+//   Rocade du nord-est ........... 8 m · longe la plage par l'ouest (elle passait dans la mer)
+//   Bretelle du circuit .......... 8 m · remonte au circuit sans passer sous les barrières
+//   Accès circuit ................ 8 m · entre sur la ligne de départ
+//   Rond-point de la statue ...... 8 m · débouche le carrefour nord du centre
+//   Jonction de l'ouest .......... 8 m · raccorde la rue de l'ouest à l'avenue (il manquait 3 m)
+//   Route du littoral ............ 8 m · s'arrête à l'avenue des villas
+//   Liaison nord du parc ......... 8 m · du parc à la fête foraine
+//   Route de la fête foraine ..... 8 m
+//   Rue des Primeurs / Rue de la Halle 7 m · les deux rues nord-sud du MARCHÉ, tendues entre
+//                                  la traverse de l'ouest (z 130) et la route de l'école (z 240)
+//   Cours du Marché .............. 9 m · le boulevard du Marché, de l'avenue des Chefs
+//                                  (x −175) jusqu'à la Rue de la Halle
+//   Boulevard du casino .......... 9 m, Desserte du casino 8 m, Contournements 8 m,
+//                                  Avenue du casino 9 m · ils contournent le casino au lieu
+//                                  de le traverser, et se garent devant la grande entrée
+const VOIES = { boulevard: 9, avenue: 8, rue: 7, ruelle: 6, desserte: 5 };
+const roleVoie = r => { const l = Math.min(r.w, r.d); return l >= 9 ? 'boulevard' : l >= 8 ? 'avenue' : l >= 7 ? 'rue' : l >= 6 ? 'ruelle' : 'desserte'; };
 const PLAN_ROUTIER = {
   // Les axes AJOUTÉS par le plan : ceux qui manquaient pour que chaque quartier soit
   // vraiment desservi. Les rues historiques du centre restent où elles sont.
@@ -3518,6 +3574,26 @@ const PLAN_ROUTIER = {
     // descentes prolongees : tout ne fait plus qu'un seul reseau.
     { n: 'Rond-point de la statue', x: 0, z: -27, w: 16, d: 8, y: 0.004 },
     { n: 'Jonction de l\'ouest', x: -100, z: 135, w: 8, d: 12, y: 0.004 },
+    // ---- LE NORD : tout le haut de la carte était un désert sans une seule route. Le
+    // Boulevard du Nord le traverse d'un bout à l'autre et accroche le TECHNO-PARC au reste
+    // de la ville par deux montées qui rejoignent les contournements du rallye.
+    { n: 'Raccord nord-est', x: 84, z: -66, w: 8, d: 18 },   // il manquait 7 m entre la rue de l'est et le contournement (a x = 82 il mordait le sable du rallye)
+    { n: 'Boulevard du Nord', x: 3, z: -100, w: 214, d: 9 },
+    { n: 'Montée de l\'ouest', x: -90, z: -85, w: 8, d: 38 },
+    { n: 'Montée de l\'est', x: 90, z: -85, w: 8, d: 38 },
+    { n: 'Avenue des Sciences', x: 3, z: -135, w: 73, d: 7 },
+    { n: 'Rue du Code', x: -30, z: -120, w: 7, d: 42 },
+    { n: 'Rue des Circuits', x: 36, z: -120, w: 7, d: 42 },
+    // Le ring ouest longeait le sable du rallye sur 11 m : il s'arrete avant, et ces deux
+    // troncons le raccordent au contournement nord du rallye en passant a l'ouest des dunes.
+    { n: 'Contournement du sable', x: -85, z: -66, w: 6, d: 24 },
+    { n: 'Raccord du rallye ouest', x: -82.5, z: -57, w: 11, d: 6 },
+    // ---- L'OUEST : entre La Zone et l'école s'étendait une friche de 80 m sur 50. Deux rues
+    // nord-sud tendues entre la traverse (z 130) et la route de l'école (z 240), plus un cours
+    // est-ouest depuis l'avenue des Chefs : le quartier du MARCHÉ tient dans ce damier.
+    { n: 'Rue des Primeurs', x: -160, z: 185, w: 7, d: 116 },
+    { n: 'Rue de la Halle', x: -125, z: 185, w: 7, d: 116 },
+    { n: 'Cours du Marché', x: -149, z: 185, w: 56, d: 9 },
   ],
   // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
@@ -3586,9 +3662,15 @@ function degageLesRoutes() {
     const r = (city.routes || []).find(r2 => Math.abs(t.x - r2.x) < r2.w / 2 && Math.abs(t.z - r2.z) < r2.d / 2);
     if (!r) continue;
     const long = r.d >= r.w;
-    const nx = long ? (t.x < r.x ? -1 : 1) : 0, nz = long ? 0 : (t.z < r.z ? -1 : 1);
     const dep = (long ? r.w : r.d) / 2 + 1.2;
-    t.x = r.x + nx * dep; t.z = r.z + nz * dep;
+    // On ramenait le feu sur l'AXE de la rue qu'on lui faisait quitter : deux feux du rond-point
+    // atterrissaient ainsi en plein milieu de la rue perpendiculaire. On garde sa position LE
+    // LONG de la rue, on ne le decale que de cote, et on verifie que le nouveau coin est libre.
+    const s1 = long ? (t.x >= r.x ? 1 : -1) : (t.z >= r.z ? 1 : -1);
+    const essais = long ? [[r.x + s1 * dep, t.z], [r.x - s1 * dep, t.z]] : [[t.x, r.z + s1 * dep], [t.x, r.z - s1 * dep]];
+    const ok = essais.find(([x, z]) => !surChaussee(x, z));
+    if (!ok) continue;
+    t.x = ok[0]; t.z = ok[1];
     if (t.g) t.g.position.set(t.x, t.g.position.y, t.z);
     if (t.solid) { t.solid.x = t.x; t.solid.z = t.z; }
     n++;
@@ -4210,7 +4292,9 @@ const WORLDS = [
       const cols = [0xff8f3a, 0x4f8dff, 0xb57cff, 0x35d0e6, 0xff5c5c, 0xffd23f, 0x5cc453, 0xc9ced8];
       let k = 0;
       for (const z of [-27, -16, 16, 27]) for (const x of [-35.5, 35.5]) building(x, z, 7, 6 + (k * 7) % 14, 9, cols[k++ % cols.length]);   // décalés : les angles ne s'encastrent plus dans les rangées nord/sud
-      for (const x of [-30, -18, -6, 6, 18, 30]) building(x, -35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);
+      // les deux immeubles du milieu etaient a x = ±6 : la rue qui descend du rond-point (6 m
+      // de large) leur passait DANS le hall. Ils reculent a ±8, la rue tient dans le trou.
+      for (const x of [-30, -18, -8, 8, 18, 30]) building(x, -35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);
       for (const x of [-13, -1, 11, 23, 32]) building(x, 35.5, 9, 6 + (k * 5) % 14, 7, cols[k++ % cols.length]);   // entrée du parc bien dégagée (x -32 → -17)
       // ---- route vers le parc + grand circuit autour de la ville ----
       road(-26, 38.5, 6, 19); sign(-21.5, 0, 33, '🌳 Parc ↓', false, Math.PI); sign(-30, 0, 44, '🏁 Circuit : tout autour de la ville', false, Math.PI / 2);
@@ -4237,9 +4321,16 @@ const WORLDS = [
       city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 42, x2: 62, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
       city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 20, x2: RACE_C.x + 34, z1: RACE_C.z + RACE_C.r - 20, z2: RACE_C.z + RACE_C.r + 4, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
       buildClouds(0xffffff, 10); noSigns = false;
+      // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
+      // points de balade) et AVANT le degagement des chaussees et les trottoirs.
+      B('le marché', buildMarche); B('techno-parc', buildTechno);
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
-      B('trottoirs', trottoirs); B('mobilier public', decorPublic);
+      B('trottoirs', trottoirs);
+      // la signalisation vient APRES les trottoirs (elle a besoin de savoir ou ils sont) et
+      // AVANT le mobilier public (arbres et bancs contournent alors les panneaux deja plantes)
+      B('signalisation', () => { city.signal = signalisation(); });
+      B('mobilier public', decorPublic);
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
@@ -4247,7 +4338,7 @@ const WORLDS = [
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 const police = { cars: [], agents: [], wanted: 0, decayT: 0, reactT: 0, avert: 0, avertT: -999, alarmeBot: 0, lastSeen: null, hideT: 0, arrestT: 0, station: { x: -54, z: 28 }, crimeLevel: 0, alarmT: 0, sait: null, vuT: -99, riposte: 0, coffres: 0, villaT: 0, renfortT: 0, butin: 0, usure: 0 };
@@ -4782,7 +4873,9 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
 }
 function buildFair() {   // fête foraine au sud du circuit : grande roue, carrousel, stands, ballons, guirlandes
   plat(0, 0.12, 155, 90, 44, 0x6f5aa8, { studs: false, noRoute: true }, 0.24);
-  road(-48, 140, 6, 30, 0, true); road(48, 140, 6, 30, 0, true);
+  // La descente est finissait 7 m DANS la parcelle de la villa du joueur (z 148 a 155), pour
+  // n'y desservir personne : la villa est desservie par l'avenue nord. On l'arrete a z = 141.
+  road(-48, 140, 6, 30, 0, true); road(48, 133, 6, 16, 0, true);
   // grande roue
   const wx = 12, wz = 158, R = 11;
   const wheel = new THREE.Group(); wheel.position.set(wx, R + 2.5, wz); worldGroup.add(wheel);
@@ -4875,19 +4968,164 @@ function eatTick(dt) {
   if (e.t > e.dur) stopEating(true);
 }
 function crosswalk(x, z, alongX, w = 6) { for (let i = -2; i <= 2; i++) box(x + (alongX ? 0 : i * 1.1), 0.075, z + (alongX ? i * 1.1 : 0), alongX ? w : 0.6, 0.02, alongX ? 0.6 : w, 0xffffff, { deco: true, noEdges: true, studs: false }); }
-function trafficLight(x, z, ry, group) {   // feu tricolore : poteau + boîtier, rouge 5 s → vert 5 s → orange 1,5 s
+// ================= MARQUAGE AU SOL =================
+// Tout est PLAT (2 cm) et sans collision : on roule et on marche dessus sans rien accrocher.
+// `degageLesRoutes` ne les emporte pas non plus, puisqu'ils ne sont pas des solides.
+function ligneArret(x, z, sens, larg = 3) {   // la ligne blanche ou l'on s'arrete au feu
+  const barreX = Math.abs(Math.cos(sens)) > 0.5;   // circulation nord-sud : la ligne barre l'axe x
+  box(x, 0.075, z, barreX ? larg : 0.45, 0.02, barreX ? 0.45 : larg, 0xffffff, { deco: true, noEdges: true, noShadow: true, studs: false });
+}
+// Fleche de direction peinte sur la voie : elle dit aux conducteurs ou va la file.
+const TEX_FLECHE = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.clearRect(0, 0, 128, 128); g.fillStyle = '#ffffff';
+  g.beginPath(); g.moveTo(64, 10); g.lineTo(104, 62); g.lineTo(80, 62); g.lineTo(80, 118); g.lineTo(48, 118); g.lineTo(48, 62); g.lineTo(24, 62); g.closePath(); g.fill();
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+function flecheSol(x, z, sens) {   // sens = cap de la file (atan2(dx, dz))
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.6), new THREE.MeshBasicMaterial({ map: TEX_FLECHE, transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.rotation.z = Math.PI - sens;   // la pointe du canevas suit le cap
+  m.position.set(x, 0.075, z); m.renderOrder = 1; worldGroup.add(m); return m;
+}
+function placesStationnement(x, z, alongZ, long, cote, larg) {   // marquage des places le long d'un boulevard
+  // Les places etaient dessinees a 1,1 m de l'AXE de la chaussee : elles tombaient au milieu
+  // de la route. Elles se rangent contre le trottoir : centre a (largeur/2 - 1,15) m de l'axe.
+  const hw = larg / 2, mid = hw - 1.15, rive = hw - 2.3;
+  const n = Math.max(1, Math.floor(long / 5.5));
+  for (let i = 0; i <= n; i++) {
+    const t = -long / 2 + i * (long / n);
+    if (alongZ) box(x + cote * mid, 0.075, z + t, 2.2, 0.02, 0.16, 0xffffff, { deco: true, noEdges: true, noShadow: true, studs: false });
+    else box(x + t, 0.075, z + cote * mid, 0.16, 0.02, 2.2, 0xffffff, { deco: true, noEdges: true, noShadow: true, studs: false });
+  }
+  // le trait de rive, entre les places et la voie de circulation
+  if (alongZ) box(x + cote * rive, 0.075, z, 0.14, 0.02, long, 0xffffff, { deco: true, noEdges: true, noShadow: true, studs: false });
+  else box(x, 0.075, z + cote * rive, long, 0.02, 0.14, 0xffffff, { deco: true, noEdges: true, noShadow: true, studs: false });
+}
+// ================= FEUX TRICOLORES =================
+// Un feu ne disait rien a personne : ni QUELLE circulation il arrete, ni OU s'arreter, et son
+// cycle changeait toutes les 5 s (impossible de traverser). Chaque feu porte maintenant
+//   { x, z, sens, etat: 'vert'|'orange'|'rouge', ligne: {x, z}, groupe }
+// `sens` = cap (atan2(dx, dz)) de la circulation qu'il ARRETE, `ligne` = le point de la
+// chaussee ou cette circulation doit s'immobiliser. Cycle : vert 12 s, orange 2 s, rouge le
+// reste — et les deux groupes sont en opposition, jamais verts ensemble.
+const FEU_VERT = 12, FEU_ORANGE = 2, FEU_CYCLE = (FEU_VERT + FEU_ORANGE) * 2;
+function trafficLight(x, z, ry, group) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g);
   const post = new THREE.Mesh(unitBox, lam(0x3b4252)); post.scale.set(0.2, 4.4, 0.2); post.position.y = 2.2; post.castShadow = true; g.add(post);
   const arm = new THREE.Mesh(unitBox, lam(0x3b4252)); arm.scale.set(0.15, 0.15, 1.6); arm.position.set(0, 4.3, 0.8); g.add(arm);
-  const head = new THREE.Mesh(unitRound, lam(0x1b1b1b)); head.scale.set(0.55, 1.5, 0.45); head.position.set(0, 3.7, 1.55); g.add(head);
-  const lamps = [0xff2020, 0xffa020, 0x30ff60].map((col, i) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0x000000 })); l.position.set(0, 4.2 - i * 0.5, 1.8); l.userData.col = col; g.add(l); return l; });
-  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid); sgridSale();
-  const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, broken: false }; solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
+  const head = new THREE.Mesh(unitRound, lam(0x1b1b1b)); head.scale.set(0.62, 1.7, 0.5); head.position.set(0, 3.7, 1.55); g.add(head);
+  const capot = new THREE.Mesh(unitRound, lam(0x11141c)); capot.scale.set(0.72, 0.1, 0.62); capot.position.set(0, 4.64, 1.6); g.add(capot);   // casquette
+  // Les lampes etaient trois billes de 16 cm en Lambert : de 20 m on ne voyait pas laquelle
+  // etait allumee. Verres plus gros, matiere NON eclairee (MeshBasicMaterial) : la couleur
+  // allumee est pleine et se voit de loin, l'eteinte reste un verre sombre.
+  const lamps = [0xff2020, 0xffa020, 0x30ff60].map((col, i) => {
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: 0x1a1a1a }));
+    l.position.set(0, 4.22 - i * 0.52, 1.86); l.userData.col = col; g.add(l); return l;
+  });
+  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36, feu: true }; solids.push(solid); sgridSale();
+  // le cap de la circulation arretee : le boitier regarde les voitures qui arrivent, donc
+  // elles roulent dans le sens oppose a celui vers lequel pointe le feu.
+  const sens = Math.atan2(Math.sin(ry - Math.PI), Math.cos(ry - Math.PI));
+  // la ligne d'arret : valeur d'attente (2,7 m a gauche du feu). Elle est RECALCULEE sur la
+  // vraie largeur de la rue par `ligneFeu` dans la passe de signalisation — a la construction,
+  // la moitie des chaussees n'existe pas encore.
+  const ligne = { x: +(x - Math.cos(sens) * 2.7).toFixed(2), z: +(z + Math.sin(sens) * 2.7).toFixed(2) };
+  const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, groupe: group, sens, ligne, etat: 'rouge', state: 0, broken: false };
+  solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
+}
+// OU s'arrete-t-on a ce feu ? Sur l'axe de la file qu'il arrete, au droit du feu. On cherche
+// la chaussee qui porte cette file (celle dont l'orientation suit `sens` et qui passe sous le
+// feu), et la ligne se pose au milieu de la voie de DROITE : axe + largeur / 4.
+// Avant, on reculait le feu de 2,7 m en dur : sur les avenues de 9 m du quartier residentiel,
+// ou les feux sont a 6,2 m du carrefour, la ligne tombait a cote de la chaussee.
+function ligneFeu(tl) {
+  const s = tl.sens, alongZ = Math.abs(Math.cos(s)) > 0.5;
+  let axe = null, best = 1e9;
+  for (const r of (city.routes || [])) {
+    if ((r.d >= r.w) !== alongZ) continue;
+    const larg = alongZ ? r.w : r.d, long = alongZ ? r.d : r.w;
+    const trav = alongZ ? tl.x : tl.z, travC = alongZ ? r.x : r.z;
+    const lon = alongZ ? tl.z : tl.x, lonC = alongZ ? r.z : r.x;
+    if (Math.abs(lon - lonC) > long / 2 + 8) continue;
+    const d = Math.abs(trav - travC);
+    if (d < larg / 2 + 8 && d < best) { best = d; axe = { c: travC, larg }; }
+  }
+  if (!axe) return null;
+  const cote = alongZ ? Math.cos(s) : -Math.sin(s);   // le cote droit de la file
+  const v = axe.c + cote * axe.larg / 4;
+  const p = alongZ ? { x: +v.toFixed(2), z: +tl.z.toFixed(2) } : { x: +tl.x.toFixed(2), z: +v.toFixed(2) };
+  // la ligne DOIT tomber sur une vraie chaussee : sinon ce feu arrete une file qui n'existe pas
+  return (city.routes || []).some(r => Math.abs(p.x - r.x) < r.w / 2 + 0.5 && Math.abs(p.z - r.z) < r.d / 2 + 0.5) ? p : null;
+}
+// Un feu tourne vers une rue qui N'EXISTE PAS (les carrefours en T du quartier residentiel et
+// le carrefour sud de l'anneau en avaient quatre) ne fait que clignoter dans le vide : on le
+// retire. Un feu doit toujours pouvoir dire OU s'arreter.
+function elagueLesFeux() {
+  let n = 0;
+  for (let i = city.trafficLights.length - 1; i >= 0; i--) {
+    const tl = city.trafficLights[i];
+    const l = ligneFeu(tl);
+    if (l) { tl.ligne = l; continue; }
+    worldGroup.remove(tl.g);
+    const si = solids.indexOf(tl.solid); if (si >= 0) solids.splice(si, 1);
+    const bi = breakables.indexOf(tl); if (bi >= 0) breakables.splice(bi, 1);
+    city.trafficLights.splice(i, 1); n++;
+  }
+  if (n) sgridSale();
+  return n;
+}
+const FEU_NOMS = ['rouge', 'orange', 'vert'];
+function feuPhase(T, groupe) {   // 0 = rouge, 1 = orange, 2 = vert (l'index de la lampe allumee)
+  const t = groupe === 'A' ? T % FEU_CYCLE : (T + FEU_VERT + FEU_ORANGE) % FEU_CYCLE;
+  return t < FEU_VERT ? 2 : t < FEU_VERT + FEU_ORANGE ? 1 : 0;
 }
 function lightsTick() {
-  const T = simTime % 23, ns = T < 5 ? 0 : T < 10 ? 2 : T < 11.5 ? 1 : T < 16.5 ? 0 : T < 21.5 ? 0 : 0;   // groupe A
-  const phaseA = T < 5 ? 0 : T < 10 ? 2 : T < 11.5 ? 1 : 0, phaseB = T < 11.5 ? 0 : T < 16.5 ? 0 : T < 21.5 ? 2 : 1;
-  for (const tl of city.trafficLights) { const ph = tl.group === 'A' ? phaseA : phaseB; tl.state = ph; tl.lamps.forEach((l, i) => { const on = i === ph && !tl.broken; l.material.color.set(on ? l.userData.col : 0x222222); l.material.emissive.set(on ? l.userData.col : 0x000000); }); }
+  const T = simTime % FEU_CYCLE;
+  const phA = feuPhase(T, 'A'), phB = feuPhase(T, 'B');
+  for (const tl of city.trafficLights) {
+    const ph = tl.group === 'A' ? phA : phB;
+    tl.state = ph; tl.etat = FEU_NOMS[ph];
+    tl.lamps.forEach((l, i) => l.material.color.set(i === ph && !tl.broken ? l.userData.col : 0x1a1a1a));
+  }
+}
+// ================= PANNEAUX DE SIGNALISATION =================
+// La ville n'avait AUCUN panneau : aucune priorite lisible, les conducteurs se rentraient
+// dedans aux carrefours sans feu. `panneau()` pose un vrai panneau 3D (poteau gris + face
+// a la bonne forme) et l'inscrit dans `city.panneaux` pour la conduite des bots :
+//   { x, z, type: 'stop' | 'cede' | 'prioritaire' | 'fin-prioritaire', sens, route }
+// `sens` = cap (atan2(dx, dz)) de la circulation concernee ; `route` = index dans city.routes.
+const TEX_PANNEAU = {};
+function texPanneau(type) {
+  if (TEX_PANNEAU[type]) return TEX_PANNEAU[type];
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  if (type === 'stop') {
+    g.fillStyle = '#cc1622'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#ffffff'; g.lineWidth = 7; g.strokeRect(12, 12, 104, 104);
+    g.fillStyle = '#ffffff'; g.font = '900 44px Nunito, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('STOP', 64, 66);
+  } else if (type === 'cede') {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#cc1622'; g.lineWidth = 22; g.strokeRect(11, 11, 106, 106);
+  } else {   // losange jaune borde de blanc (route prioritaire) ; barre = fin de priorite
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#f6c821'; g.fillRect(16, 16, 96, 96);
+    if (type === 'fin-prioritaire') { g.strokeStyle = '#2b2b2b'; g.lineWidth = 9; g.beginPath(); g.moveTo(14, 114); g.lineTo(114, 14); g.stroke(); }
+  }
+  const t = new THREE.CanvasTexture(c); shared.add(t); return (TEX_PANNEAU[type] = t);
+}
+function panneau(x, z, type, sens, route) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = sens + Math.PI; worldGroup.add(g);   // la face regarde les voitures qui arrivent
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 8), lam(0x9aa2b1)); post.position.y = 1.2; post.castShadow = true; g.add(post);
+  const mat = new THREE.MeshBasicMaterial({ map: texPanneau(type), side: THREE.DoubleSide });
+  let face;
+  if (type === 'stop') { face = new THREE.Mesh(new THREE.CircleGeometry(0.46, 8), mat); face.rotation.z = Math.PI / 8; }        // octogone
+  else if (type === 'cede') { face = new THREE.Mesh(new THREE.CircleGeometry(0.58, 3), mat); face.rotation.z = -Math.PI / 2; }  // triangle pointe en bas
+  else { face = new THREE.Mesh(new THREE.CircleGeometry(0.42, 4), mat); face.rotation.z = Math.PI / 4; }                        // losange
+  face.position.set(0, 2.25, 0.05); g.add(face);
+  const dos = new THREE.Mesh(face.geometry, lam(0x6e7686)); dos.rotation.z = face.rotation.z; dos.position.set(0, 2.25, -0.02); g.add(dos);   // le dos, gris
+  const solid = { mesh: post, x, y: 1.2, z, w: 0.36, h: 2.4, d: 0.36, panneau: true }; solids.push(solid); sgridSale();
+  const p = { x: +x.toFixed(2), z: +z.toFixed(2), type, sens: +sens.toFixed(3), route: route == null ? -1 : route, g, solid };
+  city.panneaux.push(p); return p;
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
   road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -16, 6, 58, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport s'arrete avant l'armurerie   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
@@ -4898,6 +5136,378 @@ function buildStreets() {   // nouvelles rues, passages piétons, feux tricolore
   const cross = (x, z) => { trafficLight(x + 4.2, z - 4.2, Math.PI, 'A'); trafficLight(x - 4.2, z + 4.2, 0, 'A'); trafficLight(x - 4.2, z - 4.2, -Math.PI / 2, 'B'); trafficLight(x + 4.2, z + 4.2, Math.PI / 2, 'B'); city.crossings.push([x, z]); };
   cross(-26, 0); cross(26, 0); cross(0, -26); cross(0, 26);
   // (quatre feux isolés se dressaient au milieu de nulle part, hors de tout croisement : supprimés)
+}
+// ================= LA PASSE DE SIGNALISATION =================
+// Elle tourne APRES les trottoirs : c'est le seul moment ou l'on sait ou est le trottoir, donc
+// ou l'on peut planter un panneau sans le mettre en pleine voie. Elle pose, dans l'ordre :
+//   1. les lignes d'arret et les fleches de direction devant chaque feu,
+//   2. les passages pietons des carrefours importants et des equipements publics,
+//   3. les panneaux : losange jaune sur les axes prioritaires, stop ou cedez-le-passage
+//      au debouche des rues secondaires (jamais aux carrefours a feux),
+//   4. les places de stationnement marquees le long des boulevards.
+function carrefours() {   // tous les croisements de deux chaussees perpendiculaires
+  const R = city.routes || [], out = [];
+  for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) {
+    const a = R[i], b = R[j];
+    const aZ = a.d >= a.w, bZ = b.d >= b.w;
+    if (aZ === bZ) continue;   // deux rues paralleles qui se recouvrent : ce n'est pas un carrefour
+    const ox = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+    const oz = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+    if (ox <= 1.5 || oz <= 1.5) continue;
+    const cx = (Math.max(a.x - a.w / 2, b.x - b.w / 2) + Math.min(a.x + a.w / 2, b.x + b.w / 2)) / 2;
+    const cz = (Math.max(a.z - a.d / 2, b.z - b.d / 2) + Math.min(a.z + a.d / 2, b.z + b.d / 2)) / 2;
+    if (out.some(o => Math.abs(o.cx - cx) < 7 && Math.abs(o.cz - cz) < 7)) continue;   // un seul carrefour par croisement
+    out.push({ cx, cz, ox, oz, a, b, ia: i, ib: j, aZ, bZ });
+  }
+  return out;
+}
+// ================= LES COMPTOIRS DE QUARTIER (on entre, on achete) =================
+// Les nouveaux commerces avaient besoin d'une VRAIE caisse : on se met devant le comptoir,
+// E ouvre la liste des articles, on clique, le portefeuille est debite. On reutilise le
+// mecanisme des vitrines (`city.vitrines` + touche E) : l'onglet special 'etal' est detourne
+// par `openStore` vers cette interface-ci.
+function comptoir(x, z, ry, id, emoji, nom, hint, articles, couleur) {
+  const cs = Math.cos(ry), sn = Math.sin(ry);
+  box(x, 0.55, z, 2.8 * Math.abs(cs) + 0.9 * Math.abs(sn), 1.1, 0.9 * Math.abs(cs) + 2.8 * Math.abs(sn), couleur, { studs: false, noRoute: true });
+  box(x, 1.14, z, 3 * Math.abs(cs) + 1 * Math.abs(sn), 0.1, 1 * Math.abs(cs) + 3 * Math.abs(sn), 0x2b2f3a, { deco: true, studs: false });
+  box(x + sn * 0.25, 1.36, z + cs * 0.25, 0.42, 0.34, 0.32, 0xf4f6fa, { deco: true, studs: false });   // la caisse enregistreuse, cote client
+  box(x - sn * 1.6, 2.5, z - cs * 1.6, Math.abs(cs) * 2.6 + 0.12, 0.8, Math.abs(sn) * 2.6 + 0.12, 0xffffff,
+    { material: new THREE.MeshBasicMaterial({ map: enseigneTexture(`${emoji} ${nom}`, couleur) }), deco: true, noEdges: true });
+  // `vx, vz` : la place du CLIENT, devant le comptoir — c'est la qu'on appuie sur E
+  const e = { id, emoji, nom, hint, articles, x, z, vx: +(x + sn * 1.5).toFixed(2), vz: +(z + cs * 1.5).toFixed(2) };
+  city.etals.push(e);
+  vitrine(e.vx, e.vz, 'etal', id, `${emoji} ${nom}`, 2.4);
+  return e;
+}
+function acheterArticle(it) {
+  if (wallet < it.p) { msg(`Il te manque ${it.p - wallet} 🪙 : fais des missions !`, 1800); return false; }
+  if (it.f !== undefined) { eat(it); return true; }   // ca se mange : on l'emporte en main
+  wallet -= it.p; saveWallet(); sfx.register(); updateHud(); closeUI();
+  msg(`${it.e} ${it.n} acheté ! (−${it.p} 🪙)`, 2200); bubble(me, pickOne(['merci !', 'trop bien 😃', 'la classe']));
+  return true;
+}
+let etalOuvert = null;
+function openEtal(id) {
+  const e = (city.etals || []).find(o => o.id === id); if (!e) return;
+  etalOuvert = e; openUI('etal'); majEtal();
+}
+function majEtal() {
+  const e = etalOuvert; if (!e) return;
+  $('etalTitre').textContent = `${e.emoji} ${e.nom}`;
+  $('etalSub').innerHTML = `${e.hint} · dans ton porte-monnaie : <b style="color:#ffd23f">🪙 ${wallet}</b>`;
+  $('etalCorps').innerHTML = '<div class="tunelist">' + e.articles.map((a, i) =>
+    `<button class="tunebtn large ${wallet < a.p ? '' : 'on'}" data-a="${i}"><b>${a.e} ${a.n}</b><span>${a.p} 🪙</span><i>${a.d}</i></button>`).join('') + '</div>';
+  $('etalCorps').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => {
+    acheterArticle(e.articles[+b.dataset.a]); if (uiOpen === 'etal') majEtal();
+  }));
+}
+// ================= QUARTIER : LE MARCHÉ (ouest) =================
+// Entre La Zone et l'école s'étendait une friche de 80 m sur 50 : pas une route, pas une
+// maison, rien. On y installe le marché de la ville, tenu par un damier de deux rues
+// nord-sud (Primeurs, Halle) et d'un cours est-ouest greffé sur l'avenue des Chefs.
+const MARCHE = { x: -142.5, z: 185, x1: -168, x2: -116, z1: 136, z2: 236 };
+function buildMarche() {
+  const CX = MARCHE.x;
+  // ---- la halle couverte, au nord du cours ----
+  const HX = CX, HZ = 159, HW = 18, HD = 32;
+  plat(HX, 0.22, HZ, HW + 6, HD + 6, 0xd8cfbc, { studs: false, noRoute: true }, 0.12);   // le parvis dallé
+  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++)   // les piliers de fonte
+    box(HX + sx * (HW / 2 - 0.6), 3.1, HZ - HD / 2 + 2 + i * (HD - 4) / 4, 0.6, 5.8, 0.6, 0x3b4252, { studs: false, noRoute: true });
+  box(HX, 6.2, HZ, HW + 1.6, 0.45, HD + 1.6, 0x8f98ab, { deco: true, studs: false });                     // la charpente
+  for (let i = 0; i < 6; i++) box(HX, 6.9, HZ - HD / 2 + 3 + i * (HD - 6) / 5, HW + 1.2, 0.9, 1.6, i % 2 ? 0xff5c5c : 0xffd23f, { deco: true, studs: false, noEdges: true });   // la verrière rayée
+  box(HX, 7.9, HZ - HD / 2 - 0.2, 14, 1.5, 0.16, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🧺 LA GRANDE HALLE', 0xff8f3a) }), deco: true, noEdges: true });
+  for (const dx of [-7, 7]) for (const dz of [-11, 0, 11]) { const l = new THREE.Mesh(unitBox, neonMat(0xfff2b0)); l.scale.set(1.6, 0.16, 1.6); l.position.set(HX + dx, 5.7, HZ + dz); worldGroup.add(l); }
+  city.interieurs.push({ x: HX, z: HZ, w: HW + 6, d: HD + 6 });   // sous la halle : le mobilier n'est pas « au milieu de la rue »
+  // les étals de la halle : un auvent, une planche, des cageots de couleur, un vendeur
+  const etal = (ex, ez, ry, col, id, emoji, nom, hint, articles) => {
+    const cs = Math.cos(ry), sn = Math.sin(ry);
+    box(ex + sn * 0.9, 2.7, ez + cs * 0.9, Math.abs(cs) * 3.6 + 0.2, 0.16, Math.abs(sn) * 3.6 + 0.2, col, { deco: true, studs: false });   // l'auvent
+    for (const s of [-1, 1]) box(ex + s * cs * 1.7 + sn * 0.9, 1.4, ez - s * sn * 1.7 + cs * 0.9, 0.12, 2.6, 0.12, 0x8f98ab, { deco: true, studs: false });
+    for (let i = 0; i < 4; i++) box(ex + (i - 1.5) * cs * 0.8, 1.35, ez - (i - 1.5) * sn * 0.8, 0.6, 0.32, 0.5, pickOne([0xff5c5c, 0xffd23f, 0x5cc453, 0xff8f3a, 0xb57cff]), { deco: true, studs: false });
+    comptoir(ex, ez, ry, id, emoji, nom, hint, articles, col);
+    mannequin(ex - sn * 1.3, ez - cs * 1.3, ry, { jersey: 4, hat: 'cap' });
+  };
+  etal(HX - 6.5, HZ - 8, 0, 0x5cc453, 'primeur', '🥕', 'Primeur de la Halle',
+    'Fruits et légumes du jour — sains, et ils font maigrir', [
+      { e: '🍎', n: 'Pomme', p: 1, f: -3, d: 'Croquante. Elle enlève un peu de ventre.' },
+      { e: '🥗', n: 'Salade composée', p: 2, f: -5, d: 'La plus saine du marché.' },
+      { e: '🍓', n: 'Barquette de fraises', p: 3, f: -2, d: 'Sucrées, mais légères.' }]);
+  etal(HX + 6.5, HZ - 8, 0, 0x35d0e6, 'poisson', '🐟', 'Poissonnerie du Port',
+    'Arrivage du matin, sur lit de glace', [
+      { e: '🐟', n: 'Filet de poisson', p: 3, f: -1, d: 'Grillé, c\'est un plat de champion.' },
+      { e: '🦐', n: 'Barquette de crevettes', p: 4, f: -1, d: 'À manger avec les doigts.' }]);
+  etal(HX - 6.5, HZ + 8, Math.PI, 0xffd23f, 'fromage', '🧀', 'Crèmerie',
+    'Fromages, beurre et yaourts de la ferme', [
+      { e: '🧀', n: 'Part de fromage', p: 2, f: 4, d: 'Ça sent fort, c\'est bon signe.' },
+      { e: '🥛', n: 'Bouteille de lait', p: 2, f: 1, d: 'Pour la croissance.' }]);
+  etal(HX + 6.5, HZ + 8, Math.PI, 0xff7ad9, 'fleurs', '💐', 'Fleuriste de la Halle',
+    'Un bouquet pour la villa', [
+      { e: '💐', n: 'Bouquet du marché', p: 6, d: 'Un grand bouquet coloré.' },
+      { e: '🌹', n: 'Rose unique', p: 3, d: 'La classe absolue.' },
+      { e: '🪴', n: 'Petite plante verte', p: 8, d: 'Elle tient dans une main.' }]);
+  // ---- les trois boutiques du cours, au sud : on y ENTRE par la devanture ----
+  const boutique = (bx, bz, w, d, col, titre, id, emoji, nom, hint, articles, look) => {
+    shop(bx, bz, w, d, col, titre, col, 0);   // devanture au nord, face au Cours du Marché
+    // repere de PORTE : sans lui, la passe de mobilier public plantait un arbre en plein
+    // devant la vitrine. Volume de 10 cm de haut, invisible, que l'on enjambe sans le sentir.
+    box(bx, 0.05, bz - d / 2, 2.6, 0.1, 0.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, porte: true });
+    box(bx, 0.45, bz + 0.6, w - 2.4, 0.05, d - 3, 0xc23b5a, { deco: true, noEdges: true, studs: false });   // le tapis
+    for (const s of [-1, 1]) { box(bx + s * (w / 2 - 1.1), 1.9, bz + d / 2 - 1.2, 1.4, 2.6, 0.5, 0xe8e2d4, { deco: true, studs: false });   // les rayonnages du fond
+      for (let i = 0; i < 3; i++) box(bx + s * (w / 2 - 1.1), 1.1 + i * 0.8, bz + d / 2 - 1.35, 1.2, 0.1, 0.5, 0x8f98ab, { deco: true, studs: false }); }
+    comptoir(bx, bz + 1.1, Math.PI, id, emoji, nom, hint, articles, col);
+    mannequin(bx, bz + 2.4, Math.PI, look);
+    for (const s of [-1, 1]) box(bx + s * 2.2, 0.9, bz - d / 2 + 1.5, 1.4, 0.9, 0.8, 0xf4f6fa, { deco: true, studs: false });   // les présentoirs de la vitrine, de part et d'autre de la porte
+    // l'ARRIERE donne sur la place du marché : porte de service, applique, cageots et caisses
+    const az = bz + d / 2 + 0.2;
+    box(bx, 1.4, az, 1.6, 2.6, 0.16, 0x2b3550, { deco: true, studs: false });
+    box(bx, 1.4, az + 0.1, 1.2, 2.2, 0.06, 0x8b5a2b, { deco: true, studs: false });
+    box(bx + 1.6, 3.1, az + 0.1, 0.5, 0.22, 0.5, 0, { material: neonMat(0xfff2b0), deco: true, noEdges: true });
+    for (let i = 0; i < 3; i++) box(bx - 1.9 - (i % 2) * 0.2, 0.4 + (i > 1 ? 0.75 : 0), az + 0.7, 1, 0.75, 0.8, i % 2 ? 0x9c6a3c : 0xb08050, { deco: true, studs: false });
+  };
+  boutique(-150.5, 199, 6.8, 8, 0xffd23f, '🥖 Boulangerie', 'pain', '🥖', 'Boulangerie du Cours',
+    'Pain chaud, viennoiseries et gâteaux', [
+      { e: '🥖', n: 'Baguette', p: 1, f: 3, d: 'Encore tiède, elle croustille.' },
+      { e: '🥐', n: 'Croissant', p: 2, f: 5, d: 'Le petit-déjeuner des champions.' },
+      { e: '🎂', n: 'Part de gâteau', p: 4, f: 9, d: 'Énorme. À partager… ou pas.' }], { jersey: 9, hat: 'cap', jacket: 1 });
+  boutique(-142.5, 199, 6.8, 8, 0xb57cff, '🍬 Confiserie', 'bonbon', '🍬', 'Confiserie du Marché',
+    'Bonbons, chocolats et glaces à l\'ancienne', [
+      { e: '🍬', n: 'Cornet de bonbons', p: 2, f: 6, d: 'De toutes les couleurs.' },
+      { e: '🍫', n: 'Tablette de chocolat', p: 3, f: 8, d: 'Noir, au lait, ou les deux.' },
+      { e: '🍦', n: 'Glace deux boules', p: 2, f: 7, d: 'Fond vite : mange-la dehors !' }], { jersey: 6, hat: 'top' });
+  boutique(-134.5, 199, 6.8, 8, 0x35d0e6, '☕ Café du Marché', 'cafe', '☕', 'Café du Marché',
+    'On commande au comptoir et on s\'installe en terrasse', [
+      { e: '🥤', n: 'Grand soda', p: 2, f: 5, d: 'Bien frais.' },
+      { e: '🍩', n: 'Donut glacé', p: 2, f: 8, d: 'Le classique du comptoir.' },
+      { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3, d: 'Pour repartir en forme.' }], { jersey: 2, glasses: true });
+  // ---- la terrasse du café, sur le cours ----
+  for (const tx of [-139, -133]) {
+    const tb = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 14), lam(0xf4f6fa)); tb.position.set(tx, 0.9, 207); worldGroup.add(tb);
+    box(tx, 0.45, 207, 0.12, 0.85, 0.12, 0x3b4252, { deco: true, studs: false });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6), lam(0x3b4252)); pole.position.set(tx, 2.2, 207); worldGroup.add(pole);
+    const par = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 10), lam(tx < -134 ? 0x35d0e6 : 0xff8f3a)); par.position.set(tx, 3.4, 207); worldGroup.add(par);
+    for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 1.1]]) { box(tx + dx, 0.45, 207 + dz, 0.5, 0.08, 0.5, 0xffd23f, { deco: true, studs: false }); box(tx + dx, 0.25, 207 + dz, 0.08, 0.45, 0.08, 0x3b4252, { deco: true, studs: false }); }
+  }
+  // ---- la place du marché, l'éclairage, le décor ----
+  const FX = CX, FZ = 213;
+  const bassin = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.4, 0.9, 18), lam(0xc9ced8)); bassin.position.set(FX, 0.45, FZ); worldGroup.add(bassin);
+  solids.push({ mesh: bassin, x: FX, y: 0.45, z: FZ, w: 6.8, h: 0.9, d: 6.8 }); sgridSale();
+  const eau = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.12, 18), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); eau.position.set(FX, 0.92, FZ); worldGroup.add(eau);
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.3, 2.4, 10), new THREE.MeshLambertMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.55 })); jet.position.set(FX, 2.1, FZ); worldGroup.add(jet);
+  for (const [lx, lz] of [[-156, 150], [-156, 175], [-156, 200], [-156, 225], [-129, 150], [-129, 175], [-129, 200], [-129, 225], [-150, 192], [-135, 192]]) lamp(lx, lz);
+  for (const [tx, tz] of [[-153, 220], [-147, 226], [-138, 226], [-132, 220], [-152, 143], [-133, 143]]) tree(tx, 0, tz, C.leaf);
+  bench(-149, 213, Math.PI / 2); bench(-136, 213, -Math.PI / 2); bench(CX, 220, 0);
+  for (const [px, pz] of [[-150, 208], [-135, 208], [-156, 168], [-129, 168]]) poubelle(px, pz);
+  flowerBed(-152, 226, 4, 1.4); flowerBed(-133, 226, 4, 1.4);
+  sign(-153, 0, 138, '🧺 Le Marché', true, Math.PI);
+  city.zones.push({ name: 'Le Marché', emoji: '🧺', x1: MARCHE.x1, x2: MARCHE.x2, z1: MARCHE.z1, z2: MARCHE.z2,
+    hint: '🧺 Le Marché : la grande halle (primeur, poissonnerie, crèmerie, fleuriste) et le cours avec boulangerie, confiserie et café — E devant un comptoir pour acheter' });
+  city.wander.push([CX, 0, 172], [-150, 0, 213], [-135, 0, 196], [-156, 0, 160]);
+}
+// ================= QUARTIER : LE TECHNO-PARC (nord) =================
+// Tout le nord de la carte (z < −90) était un désert : pas une route, pas un bâtiment. Le
+// Boulevard du Nord le traverse maintenant d'un bout à l'autre, et le Techno-Parc s'y accroche :
+// trois tours de bureaux vitrées, trois boutiques, une place à food-trucks.
+const TECHNO = { x: 3, z: -122, x1: -48, x2: 54, z1: -152, z2: -92 };
+function buildTechno() {
+  // ---- la place centrale, entre l'avenue des Sciences et le boulevard ----
+  // La place passait SOUS les boutiques et sa dalle claire virait au blanc en plein soleil :
+  // elle recule au NORD des boutiques, en dalle sombre, et le circuit imprimé y ressort.
+  plat(3, 0.2, -125, 54, 14, 0x39414f, { studs: false, noRoute: true }, 0.1);
+  fieldLines(3, 0.3, -125, 54, 14, (g, W, H) => {   // un circuit imprimé géant peint sur la dalle
+    g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(62,242,255,.75)'; g.lineWidth = 4;
+    for (let i = 0; i < 9; i++) { const y = 12 + i * (H - 24) / 8; g.beginPath(); g.moveTo(10, y); g.lineTo(W * 0.36, y); g.lineTo(W * 0.44, y + 18); g.lineTo(W - 10, y + 18); g.stroke(); }
+    g.fillStyle = 'rgba(62,242,255,.55)';
+    for (let i = 0; i < 22; i++) g.beginPath(), g.arc(30 + i * (W - 60) / 21, H / 2, 6, 0, 7), g.fill();
+  });
+  // ---- les trois tours de bureaux vitrées, au nord de l'avenue des Sciences ----
+  building(-16, -146, 13, 17, 10, 0x35d0e6); building(4, -146, 13, 22, 10, 0x4f8dff); building(24, -146, 11, 14, 10, 0xb57cff);
+  box(3, 12, -151.6, 18, 1.6, 0.2, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🛰️ TECHNO-PARC', 0x3ef2ff) }), deco: true, noEdges: true });
+  // ---- les trois boutiques, le long du Boulevard du Nord (devanture au sud) ----
+  const boutique = (bx, bz, w, d, col, titre, id, emoji, nom, hint, articles, look) => {
+    shop(bx, bz, w, d, col, titre, col, 2);
+    box(bx, 0.05, bz + d / 2, 2.6, 0.1, 0.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, porte: true });   // repère de porte : rien ne se plante devant la vitrine
+    box(bx, 0.45, bz - 0.6, w - 2.4, 0.05, d - 3, 0x2b3550, { deco: true, noEdges: true, studs: false });
+    for (const s of [-1, 1]) { box(bx + s * (w / 2 - 1.2), 1.9, bz - d / 2 + 1.2, 1.6, 2.6, 0.5, 0xe8e2d4, { deco: true, studs: false });
+      for (let i = 0; i < 3; i++) box(bx + s * (w / 2 - 1.2), 1.1 + i * 0.8, bz - d / 2 + 1.35, 1.4, 0.1, 0.5, 0x8f98ab, { deco: true, studs: false });
+      for (let i = 0; i < 3; i++) box(bx + s * (w / 2 - 1.2), 1.35 + i * 0.8, bz - d / 2 + 1.35, 0.5, 0.36, 0.36, pickOne([0x3ef2ff, 0xff5c5c, 0xffd23f, 0x5cc453]), { deco: true, studs: false }); }
+    comptoir(bx, bz - 1.1, 0, id, emoji, nom, hint, articles, col);
+    mannequin(bx, bz - 2.4, 0, look);
+    for (let i = 0; i < 3; i++) { const n = new THREE.Mesh(unitBox, neonMat(0x3ef2ff)); n.scale.set(w * 0.24, 0.12, 0.4); n.position.set(bx + (i - 1) * w * 0.3, 4.2, bz); worldGroup.add(n); }
+    // l'ARRIERE de la boutique donne sur la place : une facade nue de 4 m gachait la vue.
+    // Porte de service, applique lumineuse, caisses de livraison et conteneur a cartons.
+    const ax = bx, az = bz - d / 2 - 0.2;
+    box(ax, 1.4, az, 1.6, 2.6, 0.16, 0x2b3550, { deco: true, studs: false });
+    box(ax, 1.4, az - 0.1, 1.2, 2.2, 0.06, 0x4a5162, { deco: true, studs: false });
+    box(ax + 1.9, 3.1, az - 0.1, 0.5, 0.22, 0.5, 0, { material: neonMat(0xfff2b0), deco: true, noEdges: true });
+    for (let i = 0; i < 3; i++) box(ax - 2.2 - (i % 2) * 0.2, 0.5 + (i > 1 ? 0.9 : 0), az - 0.6, 1.1, 0.9, 0.9, i % 2 ? 0x8b5a2b : 0x9c6a3c, { deco: true, studs: false });
+    box(ax + 3.1, 0.75, az - 0.7, 1.6, 1.4, 1.2, 0x3f6b3a, { deco: true, studs: false });
+    box(ax + 3.1, 1.5, az - 0.7, 1.7, 0.12, 1.3, 0x2f5a2a, { deco: true, studs: false });
+  };
+  boutique(-17, -112, 11, 8, 0x4f8dff, '💻 Informatique', 'info', '💻', 'Boutique Informatique',
+    'Claviers, casques, manettes : tout pour jouer', [
+      { e: '🎧', n: 'Casque audio', p: 12, d: 'Le son de la ville dans les oreilles.' },
+      { e: '🎮', n: 'Manette pro', p: 18, d: 'Gâchettes souples, sticks précis.' },
+      { e: '💻', n: 'Ordinateur portable', p: 40, d: 'Le plus rapide du Techno-Parc.' }], { jersey: 11, glasses: true });
+  boutique(-2, -112, 11, 8, 0x5cc453, '🤖 Drones & Robots', 'drone', '🤖', 'Drones & Robots',
+    'Ça vole, ça roule, ça clignote', [
+      { e: '🚁', n: 'Mini-drone', p: 15, d: 'Il tient dans la paume de la main.' },
+      { e: '🤖', n: 'Robot compagnon', p: 30, d: 'Il te suit partout… en théorie.' },
+      { e: '🔋', n: 'Pack de batteries', p: 5, d: 'Pour que ça ne s\'arrête jamais.' }], { jersey: 5, hat: 'cap' });
+  boutique(13, -112, 11, 8, 0xff7ad9, '🕹️ Jeux vidéo', 'jeux', '🕹️', 'Jeux Vidéo du Parc',
+    'Les nouveautés et les vieux classiques', [
+      { e: '🕹️', n: 'Borne d\'arcade miniature', p: 25, d: 'Avec le vrai bruit des pièces.' },
+      { e: '💿', n: 'Jeu du mois', p: 9, d: 'Tout le monde en parle.' },
+      { e: '🧃', n: 'Boisson énergisante', p: 2, f: 4, d: 'Pour tenir jusqu\'au bout du niveau.' }], { jersey: 8, jacket: 3 });
+  // ---- les food-trucks de la place ----
+  const foodTruck = (fx, fz, col, txt) => {
+    box(fx, 1.5, fz, 6.2, 2.4, 2.6, col, { studs: false, noRoute: true });
+    box(fx - 3.6, 1.2, fz, 1.6, 1.8, 2.4, col, { studs: false, noRoute: true });                       // la cabine
+    box(fx + 0.6, 2.5, fz - 1.9, 4.6, 0.14, 1.6, 0xffffff, { deco: true, studs: false });              // l'auvent
+    box(fx + 0.6, 1.7, fz - 1.35, 4.4, 0.9, 0.12, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
+    box(fx + 0.6, 3.1, fz, 4.6, 0.9, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture(txt, col) }), deco: true, noEdges: true });
+    for (const dx of [-2.4, 2.2]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12), lam(0x1e1e1e)); w.rotation.z = Math.PI / 2; w.position.set(fx + dx, 0.5, fz + 1.4); worldGroup.add(w); }
+  };
+  foodTruck(-14, -125, 0xff8f3a, '🌮 TACOS DU PARC'); foodTruck(20, -125, 0x35d0e6, '🍕 PIZZA BYTE');
+  comptoir(-14, -127.6, Math.PI, 'truck', '🌮', 'Food-truck du Parc', 'On commande à la fenêtre, on mange sur la place', [
+    { e: '🌮', n: 'Tacos', p: 3, f: 9, d: 'Généreux, un peu gras, très bon.' },
+    { e: '🍕', n: 'Part de pizza', p: 3, f: 11, d: 'Fromage filant garanti.' },
+    { e: '🍟', n: 'Cornet de frites', p: 2, f: 6, d: 'À partager (ou pas).' }], 0xff8f3a);
+  mannequin(-14, -126.3, Math.PI, { jersey: 7, hat: 'cap' });
+  // ---- éclairage, décor, mobilier ----
+  for (const [lx, lz] of [[-26, -108], [-8, -108], [10, -108], [28, -108], [-26, -132], [-8, -132], [10, -132], [28, -132], [-40, -110], [46, -110]]) lamp(lx, lz);
+  for (const [tx, tz] of [[-40, -128], [-40, -142], [46, -128], [46, -142], [44, -118], [-38, -136]]) tree(tx, 0, tz, 0x2f8f3a, true);
+  bench(-6, -122, 0); bench(6, -122, Math.PI); bench(-21, -128, 0); bench(25, -128, Math.PI);
+  for (const [px, pz] of [[-10, -119], [16, -119], [-24, -120], [28, -120]]) poubelle(px, pz);
+  flowerBed(-34, -122, 5, 1.6); flowerBed(40, -122, 5, 1.6);
+  sign(-40, 0, -92, '🛰️ Techno-Parc', true, 0);
+  city.zones.push({ name: 'Techno-Parc', emoji: '🛰️', x1: TECHNO.x1, x2: TECHNO.x2, z1: TECHNO.z1, z2: TECHNO.z2,
+    hint: '🛰️ Techno-Parc : bureaux vitrés, informatique, drones, jeux vidéo et food-trucks — E devant un comptoir pour acheter' });
+  city.wander.push([3, 0.3, -118], [-17, 0.3, -108], [13, 0.3, -108], [3, 0.3, -140]);
+}
+function signalisation() {
+  const R = city.routes || [];
+  city.panneaux = []; city.passages = [];
+  const surChaussee = (x, z, m = 0) => R.some(r => Math.abs(x - r.x) < r.w / 2 + m && Math.abs(z - r.z) < r.d / 2 + m);
+  const surTrottoir = (x, z) => (city.trottoirs || []).some(t => Math.abs(x - t.x) <= t.w / 2 + 0.4 && Math.abs(z - t.z) <= t.d / 2 + 0.4);
+  const portes = solids.filter(o => o.porte);
+  const bats = [...(city.batiments || []), ...(city.interieurs || [])];
+  // un emplacement de panneau valable : sur le trottoir, hors de la chaussee, jamais devant
+  // une porte ni dans un batiment, et rien d'autre a moins de 1 m
+  const posLibre = (x, z) => surTrottoir(x, z) && !surChaussee(x, z, -0.15)
+    && !portes.some(o => Math.abs(x - o.x) < o.w / 2 + 2.6 && Math.abs(z - o.z) < o.d / 2 + 2.6)
+    && !bats.some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2)
+    && !solidsAutour(x, z, 1.6, true).some(o => !o.trottoir && !o.sol && o.h > 0.5 && o.h < 30
+      && Math.abs(x - o.x) < o.w / 2 + 0.7 && Math.abs(z - o.z) < o.d / 2 + 0.7);
+
+  // ---- 1. lignes d'arret et fleches devant les feux ----
+  const feuxOtes = elagueLesFeux();   // maintenant que TOUTES les chaussees existent
+  for (const tl of (city.trafficLights || [])) {
+    ligneArret(tl.ligne.x, tl.ligne.z, tl.sens, 3);
+    flecheSol(tl.ligne.x - Math.sin(tl.sens) * 5.5, tl.ligne.z - Math.cos(tl.sens) * 5.5, tl.sens);
+  }
+
+  // ---- 2. passages pietons ----
+  const passage = (x, z, r) => {   // un passage qui barre la chaussee `r`, en (x, z)
+    const alongZ = r.d >= r.w, larg = alongZ ? r.w : r.d;
+    crosswalk(alongZ ? r.x : x, alongZ ? z : r.z, alongZ, larg);
+    city.passages.push({ x: +(alongZ ? r.x : x).toFixed(1), z: +(alongZ ? z : r.z).toFixed(1),
+      w: alongZ ? larg : 4.6, d: alongZ ? 4.6 : larg, sens: alongZ ? Math.PI / 2 : 0 });
+  };
+  const routeLaPlusProche = (cx, cz) => {
+    let best = null, bd = 1e9;
+    for (const r of R) {
+      const px = Math.max(r.x - r.w / 2, Math.min(cx, r.x + r.w / 2));
+      const pz = Math.max(r.z - r.d / 2, Math.min(cz, r.z + r.d / 2));
+      const d = Math.hypot(px - cx, pz - cz);
+      if (d < bd) { bd = d; best = { r, px, pz, d }; }
+    }
+    return best;
+  };
+  // devant les equipements publics : ecole, hopital, commissariat, commerces, marche, techno-parc
+  const devant = ['École', 'Hôpital', 'Commissariat', 'Commerces', 'Rue commerçante', 'Banque', 'Le Marché', 'Techno-Parc'];
+  for (const nom of devant) {
+    const z0 = (city.zones || []).find(q => q.name === nom); if (!z0) continue;
+    const cx = (z0.x1 + z0.x2) / 2, cz = (z0.z1 + z0.z2) / 2;
+    const b = routeLaPlusProche(cx, cz); if (!b || b.d > 45) continue;
+    passage(b.px, b.pz, b.r);
+  }
+  // a chaque carrefour important sans feu : on traverse la plus petite des deux rues
+  const feuPres = (x, z) => (city.crossings || []).some(([a, b]) => Math.abs(x - a) < 14 && Math.abs(z - b) < 14);
+  const cars = carrefours();
+  for (const k of cars) {
+    const la = Math.min(k.a.w, k.a.d), lb = Math.min(k.b.w, k.b.d);
+    if (Math.min(la, lb) < 6 || Math.max(la, lb) < 7) continue;
+    if (feuPres(k.cx, k.cz)) continue;
+    const min = la <= lb ? k.a : k.b, maj = la <= lb ? k.b : k.a;
+    const alongZ = min.d >= min.w, ecart = (alongZ ? k.oz : k.ox) / 2 + 3.4;
+    for (const s of [-1, 1]) {
+      const x = alongZ ? min.x : k.cx + s * ecart, z = alongZ ? k.cz + s * ecart : min.z;
+      if (Math.abs(alongZ ? z - min.z : x - min.x) > (alongZ ? min.d : min.w) / 2 - 2.6) continue;   // le passage doit tenir dans la rue
+      passage(x, z, min);
+    }
+    void maj;
+  }
+
+  // ---- 3. les panneaux ----
+  // Regle : la voie la plus large est PRIORITAIRE (losange jaune a chaque entree). La rue qui
+  // debouche dessus a un STOP si elle est etroite (<= 6 m), un CEDEZ LE PASSAGE sinon.
+  // Un carrefour a feux n'a aucun panneau : le feu suffit.
+  const pose = (r, ir, k, type) => {
+    const alongZ = r.d >= r.w;
+    const recul = (alongZ ? k.oz : k.ox) / 2 + 2.6, lat = (alongZ ? r.w : r.d) / 2 + 1.0;
+    const caps = alongZ ? [0, Math.PI] : [Math.PI / 2, -Math.PI / 2];
+    for (const s of caps) {
+      const ux = Math.sin(s), uz = Math.cos(s), rx = Math.cos(s), rz = -Math.sin(s);
+      let mis = false;
+      for (const dep of [0, 2, 4, -1.6]) {
+        const x = k.cx - ux * (recul + dep) + rx * lat, z = k.cz - uz * (recul + dep) + rz * lat;
+        if (!posLibre(x, z)) continue;
+        if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
+        panneau(x, z, type, s, ir); mis = true; break;
+      }
+      void mis;
+    }
+  };
+  for (const k of cars) {
+    if (feuPres(k.cx, k.cz)) continue;
+    const la = Math.min(k.a.w, k.a.d), lb = Math.min(k.b.w, k.b.d);
+    if (la === lb) continue;                       // deux voies de meme rang : priorite a droite, pas de panneau
+    if (Math.max(la, lb) < 8) continue;            // ni boulevard ni avenue : rien a signaler
+    const maj = la > lb ? k.a : k.b, imaj = la > lb ? k.ia : k.ib;
+    const min = la > lb ? k.b : k.a, imin = la > lb ? k.ib : k.ia;
+    pose(maj, imaj, k, 'prioritaire');
+    pose(min, imin, k, Math.min(min.w, min.d) <= 6 ? 'stop' : 'cede');
+  }
+  // fin de priorite : au tout dernier carrefour de chaque boulevard, la priorite s'arrete
+  for (let i = 0; i < R.length; i++) {
+    const r = R[i]; if (roleVoie(r) !== 'boulevard') continue;
+    const mien = cars.filter(k => k.a === r || k.b === r); if (mien.length < 2) continue;
+    const alongZ = r.d >= r.w;
+    const trie = mien.slice().sort((p, q) => (alongZ ? p.cz - q.cz : p.cx - q.cx));
+    const lat = (alongZ ? r.w : r.d) / 2 + 1.0;
+    // aux DEUX bouts : le dernier carrefour dans un sens, le premier dans l'autre
+    for (const [k, s] of [[trie[trie.length - 1], alongZ ? 0 : Math.PI / 2], [trie[0], alongZ ? Math.PI : -Math.PI / 2]]) {
+      if (!k || feuPres(k.cx, k.cz)) continue;
+      const ux = Math.sin(s), uz = Math.cos(s), rx = Math.cos(s), rz = -Math.sin(s);
+      for (const dep of [6, 9, 12]) {
+        const x = k.cx + ux * dep + rx * lat, z = k.cz + uz * dep + rz * lat;
+        if (!posLibre(x, z)) continue;
+        if (city.panneaux.some(p => Math.hypot(p.x - x, p.z - z) < 3)) break;
+        panneau(x, z, 'fin-prioritaire', s, i); break;
+      }
+    }
+  }
+
+  // ---- 4. stationnement marque le long des boulevards ----
+  let places = 0;
+  for (const r of R) {
+    if (roleVoie(r) !== 'boulevard' || places >= 10) continue;
+    const alongZ = r.d >= r.w, long = Math.min(44, (alongZ ? r.d : r.w) - 24);
+    if (long < 16) continue;
+    for (const cote of [-1, 1]) placesStationnement(r.x, r.z, alongZ, long, cote, alongZ ? r.w : r.d);
+    places++;
+  }
+  return { panneaux: city.panneaux.length, passages: city.passages.length, carrefours: cars.length, places, feuxOtes };
 }
 const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.4, 'rgba(255,220,120,0.35)'); gr.addColorStop(1, 'rgba(255,200,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();
 const day = { len: 360, h: 7, night: 0, glows: [], last: -1 };
@@ -5420,7 +6030,10 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f9be6, transparent: true, opacity: 0.72, side: THREE.DoubleSide })); sea.position.set(164, 1.55, BZC); worldGroup.add(sea);
   city.seaMesh = sea; city.sea = { x1: sea1, x2: sea2, z1: BZ1, z2: BZ2, top: 1.6 };
   const foam = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); foam.scale.set(1.2, 0.05, BZD); foam.position.set(sea1 + 0.3, 1.62, BZC); worldGroup.add(foam); city.foam = foam;
-  road(103.5, BZC, 4, BZD - 16, 0, true);   // decalee de 1,5 m : elle frottait les murs des entrepots road(90, 0, 30, 6, 0, true);
+  // Promenade du littoral : 5 m, la largeur des DESSERTES du plan (elle faisait 4 m, une
+  // largeur qui n'existait nulle part ailleurs). On l'élargit vers l'EST, côté plage :
+  // son bord ouest reste à 101,5 m, là où il ne frotte pas les murs des entrepôts.
+  road(104, BZC, 5, BZD - 16, 0, true);
   for (let i = 0; i < 12; i++) {   // parasols + serviettes
     const px = rnd(106, 115), pz = BZ1 + 10 + i * ((BZD - 22) / 11) + rnd(-3, 3), col = pickOne([0xff5c5c, 0xffd23f, 0x4f8dff, 0xff7ad9, 0x5cc453]);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), lam(0xf4f6fa)); pole.position.set(px, 1.4, pz); worldGroup.add(pole);
@@ -8024,7 +8637,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
+  city.routes = []; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); }
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -12894,6 +13507,7 @@ function renderStore() {
   }
 }
 function openStore(tab, sel) {
+  if (tab === 'etal') { openEtal(sel); return; }   // comptoir de quartier : il a sa propre interface d'achat
   if (uiOpen && uiOpen !== 'store') closeUI();
   if (tab) storeTab = tab; storeSel = sel || null;
   try { renderStore(); } catch (e) { console.error('store', e); storeSel = null; storeTab = 'vedette'; renderStore(); }
@@ -14846,7 +15460,9 @@ const CHEFS_NOMS = ['Rocco le Rouge', 'Bruno Bulldozer', 'Sonia Sirocco', 'Nina 
   'Vito le Vif', 'Tonio Turbo', 'Gina Grelot', 'Karim Klaxon', 'Milo Moustache', 'Zoé Zigzag', 'Bebel le Malin',
   'Carla Caramba', 'Sacha Silence', 'Momo Mistral', 'Lila Lumière'];
 // six cachettes possibles : le joueur doit découvrir laquelle abrite le magot de chaque gang
-const PLANQUES_SPOTS = [[-150, -55], [92, -48], [-96, 236], [176, 96], [-40, 258], [122, 244]];
+// Trois de ces planques etaient posees AU MILIEU d'une chaussee (la route du rallye, l'avenue
+// sud, la parcelle de la villa Corail) : les conducteurs s'y encastraient. Elles reculent.
+const PLANQUES_SPOTS = [[-150, -62], [92, -48], [-96, 236], [176, 96], [-40, 264], [62, -152]];
 const RANGS = [
   { r: 0, n: 'Débutant', max: 4 }, { r: 120, n: 'Petite frappe', max: 6 }, { r: 400, n: 'Caïd', max: 9 },
   { r: 1000, n: 'Baron de la ville', max: 13 }, { r: 2500, n: 'Parrain', max: 20 },
@@ -15502,6 +16118,7 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
 // ---- boutons du salon TV -------------------------------------------------------------
 $('tvBtn').addEventListener('click', () => ouvreSalonTV());
 $('atelierBack').addEventListener('click', () => closeUI());
+$('etalBack').addEventListener('click', () => closeUI());   // comptoir de quartier
 $('tatooBack').addEventListener('click', () => closeUI());
 $('tatooOk').addEventListener('click', () => tatouer());
 $('tatooMot').addEventListener('input', e => { tatoo.mot = e.target.value.toUpperCase() || 'LOVE'; majTatoo(); });

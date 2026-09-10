@@ -6896,6 +6896,16 @@ function codeRoute(c, dt, opt) {
     const al = devant(p.x, p.z, frein + prof, 6);
     if (al > 0 && pietonSurPassage(p)) cap(approche(al, prof / 2 + 0.9), 'passage');
   }
+  // ---- 3 bis) ON SE RANGE POUR LA SIRENE. Un vehicule prioritaire (police en poursuite,
+  // pompiers, ambulance) porte `urgence` : celui qui l'entend arriver derriere lui leve le pied
+  // et le laisse passer au lieu de lui boucher la rue.
+  if (!opt.urgence) for (const v of FLOTTE) {
+    if (v === c || !v.urgence) continue;
+    const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
+    if (d > 30 || Math.abs(CAP((v.h || 0) - h)) > 0.9) continue;
+    if (dx * fx + dz * fz > 1) continue;   // il est devant nous : rien a faire
+    cap(2.5, 'sirene');
+  }
   // ---- 4) priorite a droite aux carrefours sans feu ni panneau ; et toujours au vehicule
   // deja engage. Sur une voie PRIORITAIRE (boulevard, avenue, losange jaune) on ne s'arrete pas.
   if (!opt.urgence && !opt.prioritaire) {
@@ -6908,6 +6918,31 @@ function codeRoute(c, dt, opt) {
     }
   }
   return { v, raison };
+}
+// ================= L'INTERFACE POUR LES AUTRES POSTES =================
+// `botConduit(c, x, z, dt, opt)` conduit le vehicule `c` vers le point (x, z) PAR LES VOIES :
+// a droite, en respectant les feux, les stops, les cedez-le-passage, la priorite a droite et
+// les passages pietons, en gardant ses distances et SANS JAMAIS traverser un solide. Il rend
+// la distance restante. On l'appelle a chaque image ; l'itineraire est garde sur le vehicule
+// et refait quand la cible a bouge de plus de 6 m, toutes les 6 s, ou si le vehicule se bloque.
+//   opt.urgence : vehicule prioritaire (police en poursuite, pompiers, ambulance) — il passe
+//                 aux feux et les autres se rangent pour lui laisser le passage
+//   opt.vmax    : vitesse maximale en m/s (defaut 9 pour une voiture, 6 pour un camion)
+// C'est cette fonction que les missions (chauffard a poursuivre, convoi a escorter) doivent
+// appeler au lieu de calculer leur propre trajet.
+function botConduit(c, x, z, dt, opt) {
+  opt = opt || {};
+  const dist = Math.hypot(x - c.x, z - c.z);
+  const st = (c.ia && c.ia.but) ? c.ia : null;
+  if (!st || Math.hypot(st.but[0] - x, st.but[1] - z) > 6 || simTime > (st.refaire || 0) || st.i >= st.route.length) {
+    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, c.h) : null;
+    const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
+    c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
+  }
+  c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
+  c.urgence = !!opt.urgence;
+  traficRoule(c, dt, { pilote: true, urgence: !!opt.urgence });
+  return dist;
 }
 // ================= LA CIRCULATION DE FOND =================
 // L'anneau code en dur (208 m de perimetre autour de la place centrale) a disparu : les
@@ -7011,7 +7046,8 @@ function klaxonne(c) {
 }
 // Le pilote automatique d'un vehicule de la circulation : il suit sa voie, ralentit dans les
 // virages, garde ses distances et obeit au code de la route.
-function traficRoule(c, dt) {
+function traficRoule(c, dt, opt) {
+  opt = opt || {};
   const st = c.ia, R = st.route;
   while (st.i < R.length - 1 && Math.hypot(R[st.i][0] - c.x, R[st.i][1] - c.z) < 2.8) st.i++;
   const wp = R[Math.min(st.i, R.length - 1)];
@@ -7027,19 +7063,20 @@ function traficRoule(c, dt) {
   }
   const base = c.vmaxIA || 9;
   let cible = virage > 0.8 ? Math.min(base, 4) : virage > 0.35 ? Math.min(base, 6.5) : base;
+  if (st.i >= R.length - 1 && dwp < 12) cible = Math.min(cible, 3 + dwp * 0.4);   // on se pose en douceur
   // sur quelle sorte de voie roule-t-on ? (boulevard et avenue sont prioritaires : on n'y
   // laisse pas passer la rue qui debouche a droite). Recalcule deux fois par seconde.
   if (simTime > (c.roleT || 0)) { c.roleT = simTime + 0.6;
     const rt = (city.routes || []).find(r => Math.abs(c.x - r.x) < r.w / 2 && Math.abs(c.z - r.z) < r.d / 2);
     c.role = rt ? roleVoie(rt) : null; }
-  const co = codeRoute(c, dt, { prioritaire: (c.role === 'boulevard' || c.role === 'avenue') });
+  const co = codeRoute(c, dt, { prioritaire: (c.role === 'boulevard' || c.role === 'avenue'), urgence: !!opt.urgence });
   cible = Math.min(cible, co.v);
   c.raison = co.raison;
   const [gap, mini] = gapDevant(c);
   if (gap < mini) { cible = 0; c.raison = 'file'; } else if (gap < mini + 4) { cible = Math.min(cible, (gap - mini) * 2.6); if (cible < 2) c.raison = 'file'; }
   if (pietonDevant(c)) { cible = 0; klaxonne(c); c.raison = 'pieton'; }
-  // arrivee : on se choisit une nouvelle destination
-  if (st.i >= R.length - 1 && dwp < 5) { c.ia = null; return; }
+  // arrivee : on se choisit une nouvelle destination (sauf si un autre poste pilote)
+  if (st.i >= R.length - 1 && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
   const acc = cible < (c.speed || 0) ? 5.5 : 2.2;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
   if (c.speed < 0.05) c.speed = 0;
@@ -7059,6 +7096,7 @@ function traficRoule(c, dt) {
   // Un feu dure 16 s, un stop 2 s, un pieton quelques secondes ; au-dela, c'est une file qui
   // ne repartira jamais (la voiture de tete est coincee) et on va circuler ailleurs.
   if ((c.pas || 0) < 0.6 * dt) c.attenteT = (c.attenteT || 0) + dt; else c.attenteT = 0;
+  if (opt.pilote) { if (c.figeT > 6) { c.figeT = 0; st.refaire = 0; } return; }   // pilote par un autre poste : on refait le trace, on ne le teleporte pas
   if (c.figeT > 20 || c.attenteT > 40) { traficPose(c); }
   else if (c.figeT > 8 && c.ia) { c.ia = null; c.destT = 0; }
 }
@@ -10080,6 +10118,7 @@ function policeTick(dt) {
       // elle ne fauche personne : elle s'arrete quand un pieton est engage devant elle. En
       // patrouille, elle obeit a toute la signalisation comme n'importe quel conducteur.
       const urgence = pc.active && (police.wanted > 0 || police.alarmT > simTime);
+      pc.urgence = urgence;   // les autres conducteurs se rangent quand la sirene arrive
       const loi = codeRoute(pc, dt, { urgence });
       target = Math.min(target, loi.v); pc.raison = loi.raison;
       if (pietonDevant(pc)) { target = 0; klaxonne(pc); pc.raison = 'pieton'; }

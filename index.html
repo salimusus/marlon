@@ -11458,7 +11458,10 @@ const TEX_MARQUES = (() => {
   });
   const t = new THREE.CanvasTexture(c); shared.add(t); return t;
 })();
-let marquesMesh = null;
+// `var` et non `let` : la remise a zero de la ville touche cette variable et elle est appelee
+// AVANT que cette ligne ne s'execute — avec `let`, on tombait dans la zone morte temporelle
+// et le jeu ne demarrait plus du tout (« Cannot access 'marquesMesh' before initialization »).
+var marquesMesh = null;
 function marquesInit() {
   if (marquesMesh && marquesMesh.parent) return marquesMesh;
   const geo = new THREE.BufferGeometry();

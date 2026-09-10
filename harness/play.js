@@ -6524,7 +6524,9 @@ test('la croix de la DualSense : ordres, guerre, emote, changement d\'arme, et b
       // ← et → font maintenant DEFILER LES ARMES ; la boutique et les missions s'ouvrent en
       // les MAINTENANT (le joueur se retrouvait sur un ecran en pleine course).
       G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.equipWeapon(null);
-      res.armes = []; for (let k = 0; k < 3; k++) { tap(15); res.armes.push(G.P.weapon); }
+      // le tour des armes s'est allonge (fusil a lunette, couteau...) : on en fait le TOUR
+      // COMPLET jusqu'a revenir aux mains nues, au lieu de compter trois appuis.
+      res.armes = []; for (let k = 0; k < 8 && (k === 0 || G.P.weapon); k++) { tap(15); res.armes.push(G.P.weapon); }
       G.equipWeapon(null);
       tap(14, 0.9); res.gaucheLong = G.uiOpen; ferme();
       tap(15, 0.9); res.droiteLong = G.uiOpen; ferme();
@@ -6541,7 +6543,7 @@ test('la croix de la DualSense : ordres, guerre, emote, changement d\'arme, et b
     } finally { navigator.getGamepads = vraiGP; ferme(); }
   });
   const ok = r.haut === 'ordres' && r.hautLong === 'guerre' && r.gaucheLong === 'store' && r.droiteLong === 'missions' && r.bas > 0
-    && r.armes.join() === 'pistol,rifle,' && r.legendeRepos === 'none' && r.legendeDemandee === 'flex' && r.legendeRefermee === 'none'
+    && r.armes[0] === 'pistol' && r.armes.length >= 3 && r.armes[r.armes.length - 1] === null && r.legendeRepos === 'none' && r.legendeDemandee === 'flex' && r.legendeRefermee === 'none'
     && r.legende === 'flex' && r.legendeMenu === 'none' && r.legendeApres === 'flex'
     && /📣/.test(r.legendeTexte) && /📣/.test(r.aide) && r.pave === 'Pavé';
   return { ok, detail: `[ordres=${r.haut} guerre=${r.hautLong} armes=${r.armes.join('/')} boutique(←tenu)=${r.gaucheLong} missions(→tenu)=${r.droiteLong} emote=${r.bas} bandeau ${r.legendeRepos}→${r.legendeDemandee}→${r.legendeRefermee}] a la manette on n'avait acces ni au 📣 des ordres, ni a la boutique, ni aux missions, ni a la guerre des gangs, ni aux emotes, ni au changement d'arme : tout ca n'existait qu'a la souris · la croix fait tout : ↑ ouvre « ${r.haut} », ↑ tenu 0,7 s ouvre « ${r.hautLong} », ← « ${r.gauche} », → « ${r.droite} », ↓ danse (${r.bas} s) · le pavé tactile fait defiler les armes (${r.armes.map(a => a || 'mains nues').join(' → ')}) · une legende a l'ecran rappelle chaque bouton (affichée=${r.legende}, effacée dans un menu=${r.legendeMenu === 'none'}) et la carte d'aide est a jour` };

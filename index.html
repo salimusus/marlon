@@ -8772,7 +8772,10 @@ function defenseJoueur(dmg, dx, dz, melee) {
 function garde(on) { return setGarde(on); }
 function esquive(on) { return setAccroupi(on); }
 function setGarde(on) {   // point d'entrée manette / tactile / clavier : lever ou baisser la garde
-  on = !!on; if (P.garde === on) return;
+  // ON NE SE MET PAS EN GARDE UNE ARME AU POING : la visée place déjà les bras, les deux
+  // poses se seraient battues et le canon serait parti de travers.
+  on = !!on && !P.drawn;
+  if (P.garde === on) return;
   P.garde = on; me.rig.garde = on;
   document.body.classList.toggle('garde', on);
   const b = $('gardeBtn'); if (b) b.classList.toggle('on', on);
@@ -14137,6 +14140,7 @@ function fermeLunette() { if (P.zoom) { P.zoom = false; document.body.classList.
 function drawWeapon(on) {   // dégainer / rengainer
   if (!P.weapon) { msg('🔫 Achète une arme à l\'armurerie', 1400); return; }
   P.drawn = on == null ? !P.drawn : on;
+  if (P.drawn) setGarde(false);   // l'arme sort : la garde tombe
   if (P.weapon !== 'grenade') setWeapon(me, P.weapon, P.drawn);
   document.body.classList.toggle('drawn', !!P.drawn);
   $('drawBtn').textContent = P.drawn ? '🔻' : '✊';

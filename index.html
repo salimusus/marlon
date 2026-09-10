@@ -15157,6 +15157,19 @@ function obstacleDecor(m, b, zones) {
   const mat = Array.isArray(m.material) ? m.material[0] : m.material;
   if (!mat || mat.visible === false) return false;
   if (mat.transparent && mat.opacity != null && mat.opacity < 0.6) return false;
+  // GRILLAGES ET FILETS. Une texture découpée (alphaTest) dessine un maillage ajouré :
+  // le filet du trampoline, celui du panier de basket, les grilles de jardin. Leur boîte
+  // englobante est un CUBE PLEIN — le filet du trampoline (6 m x 6 m x 3,2 m au-dessus de
+  // la toile) devenait un bloc solide, et la désincarcération éjectait le joueur sur la
+  // pelouse dès qu'il montait rebondir. Ce qui doit vraiment arrêter, comme la clôture du
+  // chantier, a déjà son propre solide déclaré avec box().
+  if (mat.alphaTest > 0) return false;
+  // CYLINDRES OUVERTS (openEnded) : ce sont des coques, pas des volumes — colonnes de
+  // fumée, faisceaux de balise, filets. Une boîte pleine à leur place bouche le passage.
+  {
+    const p = m.geometry && m.geometry.parameters;
+    if (p && p.openEnded) return false;
+  }
   if (estFeuillage(mat)) return false;
   const bas = b.y - b.h / 2, haut = b.y + b.h / 2, sol = groundUnder(b.x, b.z, null, bas + 0.05);
   if (haut <= sol + SOLIDIFIE.marche) return false;   // marche franchissable : on monte dessus

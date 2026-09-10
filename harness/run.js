@@ -6,7 +6,9 @@ const path = require('path');
 const vm = require('vm');
 const stubs = require('./stubs.js');
 
-const HTML = (process.argv[2] && /\.html$/.test(process.argv[2]) ? process.argv[2] : null) || path.join(__dirname, '..', 'index.html');
+// JEU=... permet au vérificateur (lint.js) de pointer un autre fichier sans passer par argv
+const HTML = (process.argv[2] && /\.html$/.test(process.argv[2]) ? process.argv[2] : null)
+  || process.env.JEU || path.join(__dirname, '..', 'index.html');
 
 function extractScript(html) {
   // le gros script du jeu est le dernier bloc <script> sans attribut src
@@ -42,12 +44,14 @@ function run() {
   const html = fs.readFileSync(HTML, 'utf8');
   let src = extractScript(html);
 
-  // on remplace l'amorçage (boucle d'animation, plein écran…) par notre propre hook
-  const hookAt = src.lastIndexOf('// hook');
-  if (hookAt < 0) throw new Error('amorçage introuvable');
-  const tail = src.slice(hookAt);
-  if (!/loop\(\);/.test(tail)) throw new Error('boucle introuvable dans l\'amorçage');
-  src = src.slice(0, hookAt) + EXPORT + 'applyQuality();\n})();\n';
+  // On remplace le DERNIER amorçage (la boucle d'animation) par notre propre hook.
+  // Avant, on coupait au repère « // hook », qui n'est plus en fin de fichier depuis que
+  // les rounds suivants ont ajouté du code derrière lui : cinq mille lignes — dont les
+  // déclarations des gangs, de la guerre et des plaintes — étaient purement jetées, et
+  // le chargement en Node échouait sur « gangs is not defined ».
+  const bootAt = src.lastIndexOf('\nloop();');
+  if (bootAt < 0) throw new Error('amorçage introuvable (loop();)');
+  src = src.slice(0, bootAt) + '\n' + EXPORT + 'applyQuality();\n})();\n';
 
   const sandbox = Object.assign(Object.create(null), {
     THREE: stubs.THREE, document: stubs.document, window: stubs.window,

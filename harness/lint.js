@@ -50,6 +50,31 @@ lignes.forEach((l, k) => {
   if (dur) process.exit(1);
   console.log('✅ le banc d\'essai se charge');
 }
+// LE JEU DOIT DÉMARRER. Une variable déclarée avec `let` ou `const` en milieu de fichier mais
+// lue par une fonction appelée AU CHARGEMENT tombe dans la « zone morte temporelle » : la
+// syntaxe est parfaite, et pourtant la page reste NOIRE (« Cannot access 'x' before
+// initialization »). C'est arrivé au round 67 avec `marquesMesh` et tout le banc d'essai a
+// échoué d'un coup, sans que rien ne dise pourquoi. On exécute donc pour de vrai le script du
+// jeu dans Node, avec les bouchons de THREE.js et du DOM, puis on construit la ville : toute
+// zone morte, tout appel à une fonction inexistante au chargement, se voit immédiatement.
+// LINT_RAPIDE=1 saute cette étape (utile en boucle serrée) ; ne la saute pas avant un commit.
+if (!process.env.LINT_RAPIDE) {
+  const { execFileSync } = require('child_process');
+  const runner = path.join(__dirname, 'run.js');
+  const code = 'const { run } = require(' + JSON.stringify(runner) + ');'
+    + 'const G = run(); G.loadWorld(4);'
+    + 'if (!G.solids.length) { console.error("aucun solide apres loadWorld(4)"); process.exit(3); }';
+  try {
+    execFileSync(process.execPath, ['-e', code], { stdio: 'pipe', env: Object.assign({}, process.env, { JEU: fichier }), timeout: 180000 });
+    console.log('✅ le jeu démarre et la ville se construit (aucune zone morte au chargement)');
+  } catch (e) {
+    const sortie = String(e.stdout || '') + String(e.stderr || '');
+    console.log('❌ le jeu NE DÉMARRE PAS :');
+    // les lignes du jeu font parfois 5 000 caracteres : on les coupe pour rester lisible
+    console.log(sortie.split('\n').filter(l => l.trim()).slice(0, 12).map(l => l.length > 200 ? l.slice(0, 200) + ' …' : l).join('\n'));
+    process.exit(1);
+  }
+}
 if (!suspects.length) { console.log('✅ aucun code avalé par un commentaire'); process.exit(0); }
 console.log(`❌ ${suspects.length} ligne(s) où un commentaire semble avaler du code :`);
 for (const [n, l] of suspects) console.log(`  ${n} : ${l.slice(0, 180)}`);

@@ -49,6 +49,32 @@ class Col {
   getHex() { return this.value; }
   setHex(h) { this.value = h; return this; }
   lerp() { return this; }
+  // le ciel et les materiaux du jeu passent par la teinte (HSL) : sans ces methodes le
+  // chargement en Node s'arretait sur « c.getHSL is not a function »
+  get r() { return (this.value >> 16 & 255) / 255; }
+  get g() { return (this.value >> 8 & 255) / 255; }
+  get b() { return (this.value & 255) / 255; }
+  getHSL(t) { const r = this.r, g = this.g, b = this.b, mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const l = (mx + mn) / 2; let h = 0, sa = 0;
+    if (mx !== mn) { const d = mx - mn; sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+    const o = t || {}; o.h = h; o.s = sa; o.l = l; return o; }
+  setHSL(h, s2, l) { const f = (p2, q, t2) => { if (t2 < 0) t2 += 1; if (t2 > 1) t2 -= 1;
+      return t2 < 1 / 6 ? p2 + (q - p2) * 6 * t2 : t2 < 1 / 2 ? q : t2 < 2 / 3 ? p2 + (q - p2) * (2 / 3 - t2) * 6 : p2; };
+    let r, g, b;
+    if (s2 === 0) { r = g = b = l; }
+    else { const q = l < 0.5 ? l * (1 + s2) : l + s2 - l * s2, p2 = 2 * l - q;
+      r = f(p2, q, h + 1 / 3); g = f(p2, q, h); b = f(p2, q, h - 1 / 3); }
+    this.value = (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255); return this; }
+  setRGB(r, g, b) { this.value = (Math.round(Math.max(0, Math.min(1, r)) * 255) << 16) | (Math.round(Math.max(0, Math.min(1, g)) * 255) << 8) | Math.round(Math.max(0, Math.min(1, b)) * 255); return this; }
+  setScalar(v) { return this.setRGB(v, v, v); }
+  offsetHSL(dh, ds, dl) { const o = this.getHSL({}); return this.setHSL(o.h + (dh || 0), Math.max(0, Math.min(1, o.s + (ds || 0))), Math.max(0, Math.min(1, o.l + (dl || 0)))); }
+  multiplyScalar(v) { return this.setRGB(this.r * v, this.g * v, this.b * v); }
+  addScalar(v) { return this.setRGB(this.r + v, this.g + v, this.b + v); }
+  convertSRGBToLinear() { return this; }
+  getHexString() { return (this.value >>> 0).toString(16).padStart(6, '0'); }
+  getStyle() { return '#' + this.getHexString(); }
+  equals(c) { return !!c && c.value === this.value; }
   toString() { return '#' + (this.value >>> 0).toString(16).padStart(6, '0'); }
 }
 
@@ -69,6 +95,7 @@ class Obj3D {
   lookAt() { return this; }
   getWorldPosition(t) { let x = 0, y = 0, z = 0, n = this; while (n) { x += n.position.x; y += n.position.y; z += n.position.z; n = n.parent; } return (t || new V3()).set(x, y, z); }
   getWorldQuaternion(t) { return t || new Quat(); }
+  updateMatrix() {}
   updateMatrixWorld() {}
   localToWorld(v) { return v; }
   worldToLocal(v) { return v; }
@@ -153,6 +180,24 @@ const THREE = {
   Fog: class { constructor(c, n, f) { this.color = new Col(c); this.near = n; this.far = f; } },
   FogExp2: class { constructor(c, d) { this.color = new Col(c); this.density = d; } },
   Clock: class { constructor() { this.t = 0; } getDelta() { return 1 / 60; } getElapsedTime() { this.t += 1 / 60; return this.t; } },
+  // Box3 : le jeu s'en sert pour mesurer un maillage (masques de la maison de poupee,
+  // portee des gestes). Version minimale, suffisante pour que le chargement aboutisse.
+  Box3: class {
+    constructor(min, max) { this.min = min || new V3(Infinity, Infinity, Infinity); this.max = max || new V3(-Infinity, -Infinity, -Infinity); }
+    set(min, max) { this.min = min; this.max = max; return this; }
+    makeEmpty() { this.min.set(Infinity, Infinity, Infinity); this.max.set(-Infinity, -Infinity, -Infinity); return this; }
+    isEmpty() { return this.max.x < this.min.x; }
+    expandByPoint(p) { this.min.min(p); this.max.max(p); return this; }
+    expandByObject(o) { const p = o.getWorldPosition(new V3()); return this.expandByPoint(p); }
+    setFromObject(o) { this.makeEmpty(); o.traverse(c => { if (c.visible !== false) this.expandByPoint(c.getWorldPosition(new V3())); }); return this; }
+    setFromPoints(ps) { this.makeEmpty(); for (const p of ps) this.expandByPoint(p); return this; }
+    getCenter(t) { return (t || new V3()).set((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, (this.min.z + this.max.z) / 2); }
+    getSize(t) { return (t || new V3()).set(this.max.x - this.min.x, this.max.y - this.min.y, this.max.z - this.min.z); }
+    containsPoint(p) { return p.x >= this.min.x && p.x <= this.max.x && p.y >= this.min.y && p.y <= this.max.y && p.z >= this.min.z && p.z <= this.max.z; }
+    intersectsBox(b) { return b.max.x >= this.min.x && b.min.x <= this.max.x && b.max.y >= this.min.y && b.min.y <= this.max.y && b.max.z >= this.min.z && b.min.z <= this.max.z; }
+    union(b) { this.min.min(b.min); this.max.max(b.max); return this; }
+    clone() { return new THREE.Box3(this.min.clone(), this.max.clone()); }
+  },
   Raycaster: class { constructor() { this.ray = { origin: new V3(), direction: new V3() }; } set() {} setFromCamera() {} intersectObject() { return []; } intersectObjects() { return []; } },
   WebGLRenderer: class { constructor(p) { Object.assign(this, p); this.shadowMap = { enabled: false, type: 0 }; this.domElement = p && p.canvas; this.capabilities = { getMaxAnisotropy: () => 8 }; this.info = { render: { calls: 0, triangles: 0 }, memory: { geometries: 0, textures: 0 } }; }
     setSize() {} setPixelRatio() {} render() {} dispose() {} getPixelRatio() { return 1; } setClearColor() {} compile() {} },
@@ -228,7 +273,21 @@ class FakeAudioNode {
   constructor(kind) { this.kind = kind; this.started = false; this.stopped = false;
     this.frequency = new FakeAudioParam(440); this.gain = new FakeAudioParam(1); this.detune = new FakeAudioParam(0);
     this.Q = new FakeAudioParam(1); this.type = 'sine'; this.buffer = null; this.loop = false;
-    this.playbackRate = new FakeAudioParam(1); this.onended = null; }
+    this.playbackRate = new FakeAudioParam(1); this.onended = null;
+    // compresseur / limiteur du bus de mixage, et son spatialise : les reglages du jeu
+    // ecrivent directement dans ces parametres, il faut donc qu'ils existent.
+    this.threshold = new FakeAudioParam(-24); this.knee = new FakeAudioParam(30);
+    this.ratio = new FakeAudioParam(12); this.attack = new FakeAudioParam(0.003);
+    this.release = new FakeAudioParam(0.25); this.reduction = 0;
+    this.pan = new FakeAudioParam(0); this.delayTime = new FakeAudioParam(0);
+    this.positionX = new FakeAudioParam(0); this.positionY = new FakeAudioParam(0); this.positionZ = new FakeAudioParam(0);
+    this.orientationX = new FakeAudioParam(1); this.orientationY = new FakeAudioParam(0); this.orientationZ = new FakeAudioParam(0);
+    this.panningModel = 'HRTF'; this.distanceModel = 'inverse'; this.refDistance = 1; this.maxDistance = 10000;
+    this.rolloffFactor = 1; this.coneInnerAngle = 360; this.coneOuterAngle = 0; this.coneOuterGain = 0;
+    this.fftSize = 2048; this.frequencyBinCount = 1024; this.curve = null; this.oversample = 'none'; }
+  setPosition() {} setOrientation() {} setValueCurveAtTime() { return this; }
+  getFloatFrequencyData(a) { if (a && a.fill) a.fill(-100); } getByteFrequencyData(a) { if (a && a.fill) a.fill(0); }
+  getFloatTimeDomainData(a) { if (a && a.fill) a.fill(0); } getByteTimeDomainData(a) { if (a && a.fill) a.fill(128); }
   connect(n) { return n; } disconnect() {} start() { this.started = true; } stop() { this.stopped = true; }
 }
 class FakeAudioContext {
@@ -238,6 +297,9 @@ class FakeAudioContext {
   createDynamicsCompressor() { return new FakeAudioNode('comp'); } createStereoPanner() { return new FakeAudioNode('pan'); }
   createDelay() { return new FakeAudioNode('delay'); } createWaveShaper() { return new FakeAudioNode('shaper'); }
   createConvolver() { return new FakeAudioNode('conv'); } createAnalyser() { return new FakeAudioNode('analyser'); }
+  createPanner() { return new FakeAudioNode('panner'); } createChannelMerger() { return new FakeAudioNode('merger'); }
+  createChannelSplitter() { return new FakeAudioNode('splitter'); } createConstantSource() { return new FakeAudioNode('const'); }
+  createPeriodicWave() { return {}; } decodeAudioData() { return Promise.resolve(this.createBuffer(1, 1, 44100)); }
   createBuffer(ch, len, rate) { return { getChannelData: () => new Float32Array(len), length: len, sampleRate: rate, numberOfChannels: ch }; }
   resume() { this.state = 'running'; return Promise.resolve(); } suspend() { return Promise.resolve(); } close() { return Promise.resolve(); }
 }

@@ -8931,3 +8931,229 @@ test('la roulette : la caméra passe devant la roue, la roue freine et la bille 
     && r.ecart < 0.05 && f.num === '18' && r.ui && !r.aff && r.gain === 50 && r.porte === 525;
   return { ok, detail: `la roue tournait DERRIÈRE l'interface d'achat : on ne voyait rien du tour · maintenant la caméra se pose devant la roue (écart de visée ${m.vise.toFixed(3)} rad, plongée ${(m.plongee * 57).toFixed(0)}°, du côté du joueur ${m.devant.toFixed(2)}, à ${m.dist.toFixed(1)} m), l'interface d'achat s'efface (${m.ui}) · la roue freine sans jamais réaccélérer (${r.vitDebut.toFixed(2)} → ${r.vitFin.toFixed(3)} rad/s, ${r.accelere} reprise(s)) · la bille se loge dans la case du ${r.n} à ${r.ecart.toFixed(4)} rad (limite 0,05), rayon ${r.rB.toFixed(2)} m · le numéro s'affiche en grand (« ${f.num} ») puis l'interface revient (${r.ui}) avec le gain : ${r.gain} 🪙, porte-monnaie 500 → ${r.porte}` };
 });
+// ---- poste ACTIVITÉ : les trois familles de missions de métier du bureau ----
+test('les trois missions de métier (pompier, dépanneuse, police) se jouent du bureau jusqu\'à la paie', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 38, y: 1, z: 12, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 700));
+    const G = __G, res = {};
+    if (!G.NAV.blocked) G.buildNav();
+    G.clearWanted(); G.carriere.total = 30; G.carriere.parId = {};
+    // 1. le tableau du bureau les annonce toutes, avec difficulté et récompense
+    G.openMissions(true);
+    const grid = document.getElementById('missGrid');
+    res.bureau = { cartes: grid.querySelectorAll('.mcard').length, ouvertes: grid.querySelectorAll('[data-m]:not([disabled])').length,
+      ids: [...grid.querySelectorAll('[data-m]')].map(b => b.dataset.m),
+      difficultes: G.MISSIONS.filter(m => m.dif >= 1 && m.dif <= 4).length, total: G.MISSIONS.length };
+    G.closeUI();
+    // 2. DÉPANNAGE : dépanneuse, treuil, remorquage jusqu'au garage
+    G.wallet = 0; G.startMission('depannage');
+    const d1 = G.mission.data;
+    res.dep = { lance: !!G.mission.cur, veh: !!d1.veh, epave: !!d1.epave, chrono: G.mission.limit > 60, etapes: [] };
+    G.enterCar(d1.veh); G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
+    d1.veh.x = d1.epave.x + 4; d1.veh.z = d1.epave.z; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
+    res.dep.bandeau = document.getElementById('missionHud').textContent;
+    d1.veh.outil = 1; d1.veh.outilCible = 1; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
+    // l'épave suit vraiment la dépanneuse
+    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    res.dep.remorque = Math.round(Math.hypot(d1.epave.x - d1.veh.x, d1.epave.z - d1.veh.z));
+    d1.veh.x = d1.garage.x; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    res.dep.fin = { finie: !G.mission.cur, gain: G.wallet };
+    // 3. POMPIER : caserne, camion, sirène, lance à eau, blessé à sortir
+    G.wallet = 0; G.mission.forcer = 'blesse'; G.startMission('pompier');
+    const d2 = G.mission.data;
+    res.pomp = { lance: !!G.mission.cur, variante: d2.variante, feux: (d2.feux || []).length, chrono: G.mission.limit > 60, etapes: [] };
+    G.enterCar(d2.camion); G.missionTick(0.1); res.pomp.etapes.push(G.mission.step);
+    d2.camion.x = d2.lieu.x + 6; d2.camion.z = d2.lieu.z; G.missionTick(0.1); res.pomp.etapes.push(G.mission.step);
+    res.pomp.sirene = !!d2.camion.sireneOn;
+    // le feu grossit tant qu'on ne l'arrose pas
+    const f0 = d2.feux[0].force; for (let i = 0; i < 40; i++) G.missionTick(0.25);
+    res.pomp.feuMonte = d2.feux[0].force > f0 + 5;
+    // la lance à eau du camion fait bien baisser le feu
+    d2.camion.x = d2.feux[0].x - Math.sin(d2.camion.h) * 8.5; d2.camion.z = d2.feux[0].z - Math.cos(d2.camion.h) * 8.5;
+    const f1 = d2.feux[0].force; for (let i = 0; i < 30; i++) { G.arroseAutour(d2.camion, 0.1); G.missionTick(0.1); }
+    res.pomp.arrosage = { avant: Math.round(f1), apres: Math.round(d2.feux[0].force) };
+    for (const f of d2.feux) f.force = 0; G.incendiesTick(0.1); G.missionTick(0.1);
+    res.pomp.etapes.push(G.mission.step);
+    G.exitCar(); G.P.pos.set(d2.lieu.x + 3.5, 0.3, d2.lieu.z + 3.5); G.missionTick(0.1);
+    res.pomp.blesse = !!d2.blesseSauve;
+    G.P.pos.set(d2.camion.x, 0.3, d2.camion.z); G.missionTick(0.1);
+    res.pomp.fin = { finie: !G.mission.cur, gain: G.wallet };
+    if (G.mission.cur) G.endMission(false, true);
+    // 4. POLICE : les quatre appels radio, chacun jusqu'à la réussite payée
+    res.pol = {};
+    const patrouille = (variante, joue) => {
+      G.wallet = 0; G.clearWanted(); G.mission.forcer = variante; G.startMission('police');
+      const d = G.mission.data, o = { lance: !!G.mission.cur, variante: d.variante, etapes: [] };
+      if (!G.mission.cur) return o;
+      G.enterCar(d.veh); G.missionTick(0.1); o.etapes.push(G.mission.step);
+      d.veh.x = d.appel.x; d.veh.z = d.appel.z; d.veh.g.position.set(d.veh.x, d.veh.y, d.veh.z);
+      G.P.pos.set(d.appel.x, 0.3, d.appel.z); G.missionTick(0.1); o.etapes.push(G.mission.step);
+      o.sirene = !!d.veh.sireneOn;
+      joue(d, o);
+      o.fin = { finie: !G.mission.cur, gain: G.wallet };
+      if (G.mission.cur) G.endMission(false, true);
+      return o;
+    };
+    res.pol.chauffard = patrouille('chauffard', (d, o) => {
+      for (let i = 0; i < 400 && G.mission.step === 2; i++) { d.cible.x = d.veh.x + 3; d.cible.z = d.veh.z; d.veh.sireneOn = true; G.missionTick(0.05); }
+      o.range = G.mission.step === 3;
+      G.exitCar(); G.P.pos.set(d.bot.pos.x, 0.3, d.bot.pos.z); G.missionTick(0.1);
+      o.cellule = !!(d.bot && d.bot.prison);
+    });
+    res.pol.voleur = patrouille('voleur', (d, o) => {
+      G.exitCar(); o.depart = Math.round(Math.hypot(d.bot.pos.x - G.P.pos.x, d.bot.pos.z - G.P.pos.z));
+      for (let i = 0; i < 600 && G.mission.cur; i++) {
+        const dx = d.bot.pos.x - G.P.pos.x, dz = d.bot.pos.z - G.P.pos.z, dd = Math.hypot(dx, dz) || 1;
+        G.P.pos.x += dx / dd * 7 * 0.05; G.P.pos.z += dz / dd * 7 * 0.05; G.missionTick(0.05);
+      }
+      o.cellule = !!(d.bot && d.bot.prison);
+    });
+    res.pol.escorte = patrouille('escorte', (d, o) => {
+      for (let i = 0; i < 2500 && G.mission.cur; i++) { G.P.pos.set(d.convoi.x, 0.3, d.convoi.z + 4); G.missionTick(0.05); }
+      o.auPoste = Math.round(Math.hypot(d.convoi.x - d.station.x, d.convoi.z - d.station.z));
+    });
+    res.pol.barrage = patrouille('barrage', (d, o) => {
+      G.exitCar();
+      for (const c of d.files) { G.P.pos.set(c.x + 2, 0.3, c.z); G.missionTick(0.1); }
+      o.controles = d.controles;
+    });
+    // On ne laisse pas les véhicules de mission (dépanneuse, patrouille, convoi, barrage)
+    // traîner dans city.cars : les tests suivants cherchent « une voiture » et tomberaient
+    // dessus.
+    for (const k in (G.city.vehMission || {})) { const c = G.city.vehMission[k]; if (!c) continue;
+      const i = G.city.cars.indexOf(c); if (i >= 0) G.city.cars.splice(i, 1);
+      const j = G.solids.indexOf(c.solid); if (j >= 0) G.solids.splice(j, 1);
+      c.g.visible = false; }
+    G.city.vehMission = {}; G.sgridSale();
+    G.carriere.total = 0; G.sauveCarriere();
+    return res;
+  });
+  const b = r.bureau, dp = r.dep, pm = r.pomp, po = r.pol;
+  const ok = b.cartes === b.total && b.ouvertes === b.total && b.difficultes === b.total
+    && ['depannage', 'pompier', 'police'].every(id => b.ids.includes(id))
+    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3' && dp.remorque <= 8 && dp.fin.finie && dp.fin.gain >= 70
+    && pm.lance && pm.variante === 'blesse' && pm.feux >= 1 && pm.chrono && pm.sirene && pm.feuMonte
+    && pm.arrosage.apres < pm.arrosage.avant - 20 && pm.etapes.join(',') === '1,2,3' && pm.blesse && pm.fin.finie && pm.fin.gain >= 90
+    && ['chauffard', 'voleur', 'escorte', 'barrage'].every(v => po[v].lance && po[v].variante === v && po[v].etapes.join(',') === '1,2' && po[v].sirene && po[v].fin.finie && po[v].fin.gain >= 85)
+    && po.chauffard.range && po.chauffard.cellule && po.voleur.cellule && po.escorte.auPoste < 20 && po.barrage.controles === 3;
+  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
+});
+
+test('une mission de métier ratée est comptée comme un échec, et la carrière verrouille ce qui n\'est pas mérité', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: -40, y: 1, z: 136, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 700));
+    const G = __G, res = {};
+    if (!G.NAV.blocked) G.buildNav();
+    G.clearWanted();
+    // 1. carrière vierge : les trois missions de métier sont verrouillées
+    G.carriere.total = 0; G.carriere.parId = {};
+    res.verrous = {};
+    for (const id of ['depannage', 'pompier', 'police']) { G.startMission(id); res.verrous[id] = !!G.mission.cur; if (G.mission.cur) G.endMission(false, true); }
+    G.openMissions(true);
+    res.cartesVerrouillees = document.getElementById('missGrid').querySelectorAll('[data-m][disabled]').length;
+    G.closeUI();
+    // 2. une mission réussie fait monter la carrière et finit par tout ouvrir
+    G.carriere.total = 2; G.startMission('depannage'); res.ouvertA2 = !!G.mission.cur; if (G.mission.cur) G.endMission(false, true);
+    G.startMission('police'); res.policeA2 = !!G.mission.cur; if (G.mission.cur) G.endMission(false, true);
+    G.carriere.total = 30;
+    res.grade = G.gradeCarriere().n;
+    // 3. le feu qu'on laisse brûler fait PERDRE la mission (et ne paie rien)
+    G.wallet = 0; G.mission.forcer = 'foyers'; G.startMission('pompier');
+    const d = G.mission.data, f0 = d.feux[0].force;
+    let n = 0; while (G.mission.cur && n++ < 8000) G.missionTick(0.1);
+    res.feuGagne = { fini: !G.mission.cur, secondes: Math.round(n * 0.1), force0: Math.round(f0), gain: G.wallet, feuxRestants: G.city.incendies.length };
+    // 4. le convoi laissé sans escorte fait perdre la mission
+    G.wallet = 0; G.mission.forcer = 'escorte'; G.startMission('police');
+    const d2 = G.mission.data;
+    G.enterCar(d2.veh); G.missionTick(0.1);
+    d2.veh.x = d2.appel.x; d2.veh.z = d2.appel.z; G.P.pos.set(d2.appel.x, 0.3, d2.appel.z); G.missionTick(0.1);
+    let n2 = 0; while (G.mission.cur && n2++ < 2000) { G.P.pos.set(d2.convoi.x + 120, 0.3, d2.convoi.z); G.missionTick(0.05); }
+    res.convoiPerdu = { fini: !G.mission.cur, gain: G.wallet, loin: Math.round(d2.loinT || 0), arrive: !(d2.convoi.route && d2.convoi.route.length) };
+    // 5. le chrono qui expire fait perdre la mission
+    G.wallet = 0; G.startMission('depannage');
+    G.mission.t0 = G.simTime - G.mission.limit - 1; G.missionTick(0.1);
+    res.chrono = { fini: !G.mission.cur, gain: G.wallet };
+    if (G.mission.cur) G.endMission(false, true);
+    // On ne laisse pas les véhicules de mission (dépanneuse, patrouille, convoi, barrage)
+    // traîner dans city.cars : les tests suivants cherchent « une voiture » et tomberaient
+    // dessus.
+    for (const k in (G.city.vehMission || {})) { const c = G.city.vehMission[k]; if (!c) continue;
+      const i = G.city.cars.indexOf(c); if (i >= 0) G.city.cars.splice(i, 1);
+      const j = G.solids.indexOf(c.solid); if (j >= 0) G.solids.splice(j, 1);
+      c.g.visible = false; }
+    G.city.vehMission = {}; G.sgridSale();
+    G.carriere.total = 0; G.sauveCarriere();
+    return res;
+  });
+  const ok = !r.verrous.depannage && !r.verrous.pompier && !r.verrous.police && r.cartesVerrouillees === 3
+    && r.ouvertA2 && !r.policeA2 && r.grade === 'Héros de la ville'
+    && r.feuGagne.fini && r.feuGagne.gain === 0 && r.feuGagne.feuxRestants === 0
+    && r.convoiPerdu.fini && r.convoiPerdu.gain === 0
+    && r.chrono.fini && r.chrono.gain === 0;
+  return { ok, detail: `carrière vierge : les 3 missions de métier refusent de démarrer et s'affichent verrouillées (${r.cartesVerrouillees} cartes grisées) · à 2 missions réussies le dépannage s'ouvre mais pas la police · à 30 le grade est « ${r.grade} » · le feu laissé libre gagne au bout de ${r.feuGagne.secondes} s et la mission est perdue sans un sou (${r.feuGagne.gain} 🪙, plus aucun foyer laissé en ville) · le convoi lâché fait échouer l'escorte, qu'on l'abandonne trop longtemps (${r.convoiPerdu.loin} s) ou qu'il arrive tout seul au poste (arrivé : ${r.convoiPerdu.arrive}) — ${r.convoiPerdu.gain} 🪙 · le chrono dépassé fait échouer le dépannage (${r.chrono.gain} 🪙)` };
+});
+
+test('le repère GPS de chaque mission du bureau mène à un point que l\'on peut vraiment rejoindre', async p => {
+  const r = await p.evaluate(async () => {
+    __SHOT.go({ world: 4, x: 38, y: 1, z: 12, hour: 12 });
+    await new Promise(r2 => setTimeout(r2, 700));
+    const G = __G, res = { missions: [] };
+    if (!G.NAV.blocked) G.buildNav();
+    G.clearWanted(); G.carriere.total = 30;
+    for (const m of G.MISSIONS) {
+      G.startMission(m.id);
+      const b = G.beacon.mission, o = { id: m.id, repere: !!b };
+      if (b) {
+        const ch = G.navEnPieton(() => G.navPath(G.P.pos.x, G.P.pos.z, b.x, b.z));
+        const fin = ch && ch.length ? ch[ch.length - 1] : null;
+        o.atteint = !!(ch && ch.reached !== false);
+        o.ecart = fin ? Math.round(Math.hypot(fin[0] - b.x, fin[1] - b.z)) : 999;
+        o.pos = [Math.round(b.x), Math.round(b.z)];
+      }
+      res.missions.push(o);
+      G.endMission(false, true);
+    }
+    // le tracé de chevrons suit la CHAUSSÉE quand on conduit (avant : la grille des piétons,
+    // qui coupait par les parcs là où la voiture ne passe pas)
+    const surRoute = (x, z) => (G.city.routes || []).some(rt => Math.abs(x - rt.x) <= rt.w / 2 + 2.5 && Math.abs(z - rt.z) <= rt.d / 2 + 2.5);
+    const mesure = () => {
+      G.gpsRoute.hide(); G.gpsRoute.update();
+      let n = 0, hors = 0;
+      G.scene.traverse(o => {
+        if (!o.isMesh || !o.visible || !o.geometry || o.geometry.type !== 'ConeGeometry') return;
+        if (Math.abs(o.geometry.parameters.radius - 0.42) > 0.01) return;
+        n++; if (!surRoute(o.position.x, o.position.z)) hors++;
+      });
+      return { chevrons: n, hors, pct: n ? Math.round(hors / n * 100) : 0 };
+    };
+    G.setBeacon(-83, 72, 0, 'mission');
+    res.aPied = mesure();
+    const v = G.city.cars.find(c => !c.heli && !c.kart && c.kind == null && !c.busy);
+    v.x = G.P.pos.x; v.z = G.P.pos.z; v.g.position.set(v.x, v.y, v.z);
+    G.enterCar(v); res.auVolant = mesure(); G.exitCar();
+    G.clearBeacon('mission');
+    // le client du taxi doit être joignable EN VOITURE : plusieurs emplacements sont au
+    // milieu du terrain de foot ou d'une pelouse, la mission y était infaisable
+    const ecart = (x, z) => { const p = G.navPath(G.P.pos.x, G.P.pos.z, x, z); if (!p || !p.length) return 99; const f = p[p.length - 1]; return +Math.hypot(f[0] - x, f[1] - z).toFixed(1); };
+    let pire = 0, tires = 0;
+    for (let i = 0; i < 30; i++) { G.startMission('taxi'); const d = G.mission.data; pire = Math.max(pire, ecart(d.bot.pos.x, d.bot.pos.z)); tires++; res.taxiChrono = G.mission.limit; G.endMission(false, true); }
+    res.taxi = { tirages: tires, pireEcart: pire };
+    // On ne laisse pas les véhicules de mission (dépanneuse, patrouille, convoi, barrage)
+    // traîner dans city.cars : les tests suivants cherchent « une voiture » et tomberaient
+    // dessus.
+    for (const k in (G.city.vehMission || {})) { const c = G.city.vehMission[k]; if (!c) continue;
+      const i = G.city.cars.indexOf(c); if (i >= 0) G.city.cars.splice(i, 1);
+      const j = G.solids.indexOf(c.solid); if (j >= 0) G.solids.splice(j, 1);
+      c.g.visible = false; }
+    G.city.vehMission = {}; G.sgridSale();
+    G.carriere.total = 0; G.sauveCarriere();
+    return res;
+  });
+  const avec = r.missions.filter(m => m.repere);
+  const perdus = avec.filter(m => !m.atteint || m.ecart > 12);
+  const ok = avec.length >= 14 && perdus.length === 0 && r.auVolant.chevrons > 20 && r.auVolant.pct < r.aPied.pct
+    && r.taxi.pireEcart <= 6 && r.taxiChrono > 60;
+  return { ok, detail: `${avec.length} missions sur ${r.missions.length} posent un repère, et toutes mènent à un point que l'on rejoint par le réseau (écart maximum ${Math.max(...avec.map(m => m.ecart))} m ; en échec : ${perdus.map(m => m.id + ' ' + m.ecart + ' m').join(', ') || 'aucune'}) · au volant, le tracé de chevrons suit la chaussée : ${r.auVolant.hors}/${r.auVolant.chevrons} hors route (${r.auVolant.pct} %) contre ${r.aPied.hors}/${r.aPied.chevrons} (${r.aPied.pct} %) avec la grille des piétons · le client du taxi est toujours joignable en voiture : sur ${r.taxi.tirages} tirages, la voiture s'approche au pire à ${r.taxi.pireEcart} m (4 des 26 emplacements étaient à plus de 6 m, mission impossible) et le chrono suit le trajet (${r.taxiChrono} s au lieu de 120 s fixes)` };
+});

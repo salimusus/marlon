@@ -2495,8 +2495,11 @@ test('le requin blanc a un vrai corps fuselé et le ventre blanc', async p => {
       dos = [col.getX(ih), col.getY(ih), col.getZ(ih)].map(v => +v.toFixed(2));
       ventre = [col.getX(ib), col.getY(ib), col.getZ(ib)].map(v => +v.toFixed(2));
     }
-    // longueur du poisson
+    // longueur du poisson — dans SON repere : de biais, l'etendue en z d'un requin qui nage
+    // en rond tombait a 5 m et le test le trouvait trop court
+    const rot = sk.rotation.clone(); sk.rotation.set(0, 0, 0); sk.updateMatrixWorld(true);
     const bb = new __G.THREE.Box3().setFromObject(sk);
+    sk.rotation.copy(rot); sk.updateMatrixWorld(true);
     return { morceaux, triangles, aCorps: !!corps, sommets: corps ? corps.attributes.position.count : 0,
       dos, ventre, longueur: +(bb.max.z - bb.min.z).toFixed(1), hauteur: +(bb.max.y - bb.min.y).toFixed(1) };
   });

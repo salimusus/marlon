@@ -113,6 +113,15 @@ window.__SHOT = {
       }
     } catch (e11) {}
     if (!v.garderQualite && settings.quality !== 'high') { settings.quality = 'high'; try { applyQuality(); } catch (e12) {} }   // l'Ultra HD doublerait le temps du banc d'essai
+    // Les ORDRES ne survivent pas d'un test a l'autre : un garde du corps, un protege, une
+    // partie de tennis ou un rendez-vous laisses par le test precedent changeaient le
+    // comportement de tout le monde dans le suivant (le garde revenait « a sa place »...).
+    try {
+      if (typeof bots !== 'undefined') for (const b of bots) { b.gardeCorps = 0; b.garde = 0; b.gardeVilla = 0; b.protege = null; b.gardeArme = 0; b.sport = null; b.rdv = null; b.rdvRoute = null; b.drive = null; b.bagarre = null; b.fight = null; b.ordre = null; b.slotGarde = 0; b.activite = null; }
+      if (typeof tm !== 'undefined') { tm.on = false; tm.bot = null; }
+      if (typeof fm !== 'undefined') { fm.on = false; fm.bot = null; }
+      if (typeof gang !== 'undefined') { gang.mission = null; if (gang.missions) gang.missions.length = 0; }
+    } catch (e13) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
     // L'heure se pilote par simTime (journee de 7 h a 19 h). Mais l'horloge ne doit JAMAIS
     // reculer : des minuteries posees par un test precedent (le prochain habitant qui va au

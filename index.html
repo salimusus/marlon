@@ -8959,6 +8959,10 @@ function jaugeVie(pv) {
 const JOURNAL_MAX = 6;
 function noteOrdre(b, e, t) {
   if (!b || !t) return null;
+  // Un ORDRE annule le loisir en cours. Sinon, quand sa partie de foot (commencee avant
+  // l'ordre) arrivait a son terme, la fin de l'activite effacait le rendez-vous de la
+  // mission — et l'homme envoye braquer une boutique repartait taper dans le ballon.
+  b.activite = null;
   if (!b.journal) b.journal = [];
   // un même ordre redonné ne s'empile pas : on repart de zéro sur la ligne existante
   const dejaLa = b.journal.find(o => o.t === t && o.etat === 'cours');
@@ -15186,7 +15190,8 @@ function lancerActivite(b, a) {
 function activiteTick(b, dt) {
   const a = b.activite; if (!a) return;
   if (simTime > a.fin) {   // fin de l'activité : il retourne à sa vie
-    if (b.rdv && b.rdv.libre) { if (b.rdv.auto) libereVoiture(b.rdv.auto.car); b.rdv = null; }
+    // on n'efface que le rendez-vous DU LOISIR : jamais celui d'un ordre (mission, entrainement, hopital, garde)
+    if (b.rdv && b.rdv.libre && !b.ordre && !(b.rdv.gang || b.rdv.entrain || b.rdv.soin || b.rdv.suit)) { if (b.rdv.auto) libereVoiture(b.rdv.auto.car); b.rdv = null; }
     if (b.drive && b.drive.car) { libereVoiture(b.drive.car); b.drive = null; }
     b.activite = null; b.wait = rnd(1, 4); return;
   }

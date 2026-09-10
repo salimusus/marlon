@@ -47,10 +47,11 @@ button,input{font-family:inherit}
 .tc{justify-content:center;flex-wrap:wrap;row-gap:4px}
 /* Les pastilles du centre debordaient sur une DEUXIEME LIGNE des que l'horloge apparaissait,
    et cette deuxieme ligne tombait pile dans la zone du grand message. Elles sont un peu plus
-   serrees au centre : tout tient sur une seule ligne, meme avec l'heure affichee. */
+   serrees au centre : tout tient sur une seule ligne, meme avec l'heure affichee. On ne FIGE
+   surtout pas le retour a la ligne (flex-wrap:nowrap) : sur la tele la rangee deborderait
+   alors de son cadre et tomberait dans le surbalayage que les televiseurs rognent. */
 .tc .pill{padding:7px 9px;font-size:14px}
-body.tv .tc{flex-wrap:nowrap}
-body.tv .tc .pill{padding:calc(var(--u) * .42) calc(var(--u) * .6);font-size:calc(var(--u) * .95)}
+body.tv .tc .pill{padding:calc(var(--u) * .42) calc(var(--u) * .58);font-size:calc(var(--u) * .92)}
 .tr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 /* Les boutons du haut n'avaient AUCUN état visible : ni survol, ni appui, ni focus manette.
    On ne savait jamais lequel on visait. Trois états, tous nets, et une transition très

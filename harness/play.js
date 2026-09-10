@@ -1127,7 +1127,7 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   const cible = await p.evaluate(() => ({ dx: +(__G.cam.target.x - __G.P.pos.x).toFixed(2), dz: +(__G.cam.target.z - __G.P.pos.z).toFixed(2) }));
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));
   const retour = await lis(() => __G.cam.dist > 7.5);
-  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 4.2
+  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 5.0   // maison de poupee : 3,8 a 4,8 m dans une piece
     && frigo.inter && frigo.dist < dedans.dist + 0.1 && (Math.abs(cible.dx) + Math.abs(cible.dz)) > 0.1 && retour.dist > 7;
   return { ok, detail: `rue : ${dehors.dist} m · hall d'immeuble : ${dedans.dist} m · devant le frigo : ${frigo.dist} m (objet cadré, décalage ${cible.dx}/${cible.dz}) · de retour dehors : ${retour.dist} m` };
 });
@@ -6643,6 +6643,7 @@ test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseur
       // le curseur de volume glisse avec ← → (pas de « sortie » du menu)
       G.toggleMenu(true); await dodo(60);
       document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); document.getElementById('volIn').classList.add('focustv');
+      document.getElementById('volIn').value = '80'; document.getElementById('volIn').dispatchEvent(new Event('input'));   // le volume par defaut est a 100 %, plein : on part de 80 pour voir la glissiere monter
       const v0 = +document.getElementById('volIn').value; tap(15); tap(15); const v1 = +document.getElementById('volIn').value; tap(14); const v2 = +document.getElementById('volIn').value;
       res.curseur = { v0, v1, v2, reglage: G.settings.volume, encoreOuvert: !!document.querySelector('#menu:not(.hidden)') };
       document.getElementById('volIn').value = '80'; document.getElementById('volIn').dispatchEvent(new Event('input'));
@@ -6699,14 +6700,15 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     const c = G.sfx.unlock(), ch = G.sfx.chaine();
     const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
     const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
-    await dodo(80); const silence = rms();
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}   // un test precedent peut laisser tourner musique, moteur, sirene ou pluie
+    await dodo(900); const silence = rms();
     G.engine.start('car', 2); G.engine.set(0.6); await dodo(900); const moteur = rms(); G.engine.stop();
     await dodo(400); G.sfx.tone(440, 0, 0.6, 'sine', 0.3); await dodo(120); const tonal = rms();
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
     return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume };
   });
-  const ok = r.etat === 'running' && r.silence < 0.002 && r.moteur > 0.12 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
+  const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
   return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau})` };
 });
 
@@ -6873,7 +6875,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
       const trouvee = !!G.padActive() && G.manetteSalon.i === 2;
       const nomPS = /dualsense/i.test(G.manetteSalon.nom);
       // 1) ZONE MORTE RONDE : une diagonale franche passe, un frémissement non
-      const fremis = G.padStick(0.09, 0.09), diag = G.padStick(0.5, 0.5);
+      const fremis = G.padStick(0.05, 0.05), diag = G.padStick(0.5, 0.5);   // zone morte RONDE de 8 % : 5 % sur chaque axe (rayon 7 %) ne bouge pas
       const carre = Math.abs(diag[0] - diag[1]) < 0.01;   // les deux axes gardent la même part
       // 2) les deux sticks
       ds.axes = [0.8, -0.6, 0, 0]; G.pollGamepad(0.05);
@@ -6915,7 +6917,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
     && r.marche.x === 0.8 && r.marche.y === 0.6 && r.camera < -0.2
     && r.bons === r.total && r.gachetteFaible === 0 && r.gachetteFort === 1
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.09 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
 
 test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {

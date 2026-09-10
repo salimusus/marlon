@@ -404,7 +404,7 @@ window.__G = {
   metiersEvenements: typeof metiersEvenements !== 'undefined' ? metiersEvenements : null,
   chantiersUsure: typeof chantiersUsure !== 'undefined' ? chantiersUsure : null,
   poubelleRoulante: typeof poubelleRoulante !== 'undefined' ? poubelleRoulante : null,
-  placeLibre: typeof placeLibre !== 'undefined' ? placeLibre : null,
+  terrainLibre: typeof terrainLibre !== 'undefined' ? terrainLibre : null,
   tenuePiece: typeof tenuePiece !== 'undefined' ? tenuePiece : null,
   buildZone: typeof buildZone === 'function' ? buildZone : null,
   immeubleZone: typeof immeubleZone === 'function' ? immeubleZone : null,

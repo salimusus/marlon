@@ -17805,7 +17805,7 @@ function incendiesTick(dt) {
 // Le dépôt et la caserne se posent sur le premier emplacement LIBRE de leur liste : la ville
 // bouge d'un round à l'autre (le poste I ajoute des quartiers), coder les coordonnées en dur
 // aurait fini par planter un hangar au milieu d'un immeuble.
-function placeLibre(cands, r) {
+function terrainLibre(cands, r) {
   // On ne regarde que les GROS obstacles (murs, immeubles) : un lampadaire ou un arbre isolé
   // ne doit pas disqualifier un terrain, sinon plus aucun emplacement ne passait le filtre.
   // Et on refuse de bâtir sur la chaussée : le hangar aurait bouché une rue.
@@ -17850,7 +17850,7 @@ function buildMetiers() {
     sign(x + w / 2 + 2.5, 0.2, z + d / 2 + 1.2, sous);   // sur le côté : au milieu, il gênait le parc de véhicules
   };
   // ---- LE DÉPÔT MUNICIPAL : le garage des employés, balayeurs, laveurs et facteurs ----
-  const [dx, dz] = placeLibre([[40, 130], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
+  const [dx, dz] = terrainLibre([[40, 130], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
   city.depot = { x: dx, z: dz };
   hangar(dx, dz, 22, 14, 0xffa62b, '🏗️ DÉPÔT MUNICIPAL', '🏗️ Dépôt municipal · les véhicules de travail se prennent avec E');
   for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 5.4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
@@ -17858,7 +17858,7 @@ function buildMetiers() {
   city.zones.push({ name: 'Dépôt municipal', emoji: '🏗️', x1: dx - 14, x2: dx + 14, z1: dz - 12, z2: dz + 12,
     hint: '🏗️ Dépôt municipal : camion benne, grue, pelleteuse, tracteur, fourgon — E pour monter, O pour l\'outil' });
   // ---- LA CASERNE DES POMPIERS ----
-  const [kx, kz] = placeLibre([[-40, 130], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
+  const [kx, kz] = terrainLibre([[-40, 130], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
   city.caserne = { x: kx, z: kz };
   hangar(kx, kz, 18, 13, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose avec O');
   box(kx, 3.4, kz + 5, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente

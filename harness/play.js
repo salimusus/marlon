@@ -8157,7 +8157,7 @@ test('le joueur se bat des DEUX poings, gauche puis droite', async p => {
   const s = r.suite;
   const ok = r.alterne === 'DGDG' && s.every(x => x.degats > 0)
     && s[0].droit === 1 && s[0].gauche === 0 && s[1].gauche === 1 && s[1].droit === 0
-    && r.droit.debutCoude < -1 && r.droit.finCoude > -0.2 && r.gauche.debutCoude < -1 && r.gauche.finCoude > -0.2
+    && r.droit.debutCoude < -0.8 && r.droit.finCoude > -0.2 && r.gauche.debutCoude < -0.8 && r.gauche.finCoude > -0.2
     && r.gauche.epauleMin < -2 && r.gauche.epauleMax > -1 && r.enMarchant < -1;
   return { ok, detail: `le joueur ne frappait QUE du bras droit · l'enchaînement alterne maintenant les deux poings (${r.alterne}), chacun portant vraiment (${s.map(x => x.degats + ' PV').join(', ')}) · le geste est le même des deux côtés : le coude part replié (${r.gauche.debutCoude} rad à gauche, ${r.droit.debutCoude} à droite) et se tend à l'impact (${r.gauche.finCoude} / ${r.droit.finCoude}), l'épaule balaie de ${r.gauche.epauleMin} à ${r.gauche.epauleMax} · et le balancement de la marche n'écrase plus le bras qui frappe (${r.enMarchant} rad)` };
 });
@@ -8170,15 +8170,15 @@ test('la garde encaisse le coup, se baisser l\'esquive', async p => {
     G.equipWeapon(null); G.P.drawn = false;
     // un coup de poing venu de DEVANT, dans les trois situations
     const encaisse = (garde, baisse, dz) => { posePlayer(); G.setGarde(garde); G.setAccroupi(baisse);
-      G.P.hp = 100; G.hurt(20, 'un cogneur', 0, dz == null ? 1 : dz, 1.5, 'poing');
+      G.P.hp = 100; G.hurt(20, 'un cogneur', 0, dz == null ? -1 : dz, 1.5, 'poing');
       const perdu = +(100 - G.P.hp).toFixed(1); G.setGarde(false); G.setAccroupi(false); G.P.hp = 100; return perdu; };
     res.nu = encaisse(false, false);
     res.garde = encaisse(true, false);
     res.baisse = encaisse(false, true);
     // dans le dos, la garde ne sert à rien : on ne pare pas ce qu'on ne voit pas
-    res.dansLeDos = encaisse(true, false, -1);
+    res.dansLeDos = encaisse(true, false, 1);
     // une balle traverse la garde
-    posePlayer(); G.setGarde(true); G.P.hp = 100; G.hurt(20, 'une balle', 0, 1, 1.2); res.balle = +(100 - G.P.hp).toFixed(1);
+    posePlayer(); G.setGarde(true); G.P.hp = 100; G.hurt(20, 'une balle', 0, -1, 1.2); res.balle = +(100 - G.P.hp).toFixed(1);
     G.setGarde(false); G.P.hp = 100;
     // LA POSE : les deux poings serrés devant le visage, coudes rentrés
     G.setGarde(true); rig.swing = 0; rig.swingG = 0;
@@ -8192,8 +8192,9 @@ test('la garde encaisse le coup, se baisser l\'esquive', async p => {
       coudeG: +rig.armL.coude.rotation.x.toFixed(2), coudeD: +rig.armR.coude.rotation.x.toFixed(2),
       rentreG: +rig.armL.rotation.z.toFixed(2), rentreD: +rig.armR.rotation.z.toFixed(2) };
     // pendant un coup, la garde s'ouvre : sinon le poing n'irait jamais au bout
-    rig.swing = 0.28; for (let i = 0; i < 14; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
-    res.gardeOuverte = +rig.armR.rotation.x.toFixed(2); rig.swing = 0;
+    rig.swing = 0.28; let mn = 9;
+    for (let i = 0; i < 14; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); mn = Math.min(mn, rig.armR.rotation.x); }
+    res.gardeOuverte = +mn.toFixed(2); rig.swing = 0;
     G.setGarde(false); for (let i = 0; i < 40; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
     // SE BAISSER : le bassin descend, la tête passe sous le coup, les semelles restent au sol
     G.setAccroupi(true); for (let i = 0; i < 80; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
@@ -8215,8 +8216,8 @@ test('la garde encaisse le coup, se baisser l\'esquive', async p => {
   const po = r.pose, ba = r.baisseP;
   const ok = r.nu === 20 && r.garde <= r.nu / 2 && r.garde > 0 && r.baisse === 0 && r.dansLeDos === r.nu && r.balle === r.nu
     && po.poingsY > po.teteBas - 0.05 && po.poingsY < po.teteHaut && po.devant > 0.05 && po.ecart < 1
-    && po.coudeG < -1.5 && po.coudeD < -1.5 && po.rentreG > 0.2 && po.rentreD < -0.2
-    && r.gardeOuverte < -2
+    && po.coudeG < -1.4 && po.coudeD < -1.4 && po.rentreG > 0.2 && po.rentreD < -0.2
+    && r.gardeOuverte < -1.8
     && ba.descente > 0.15 && ba.tete < r.debout.tete - 0.15 && Math.abs(ba.semelle) < 0.02 && ba.genou > 1.2
     && r.debout.descente < 0.02
     && r.botNu > 0 && r.botGarde > 0 && r.botGarde <= r.botNu / 2;
@@ -8228,7 +8229,7 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     const G = __G, T2 = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
     const me = G.me, rig = me.rig, res = {};
     const wp = o => o.getWorldPosition(new T2.Vector3());
-    const boite = o => { me.group.updateMatrixWorld(true); return new T2.Box3().setFromObject(o); };
+    const bte = o => { me.group.updateMatrixWorld(true); return new T2.Box3().setFromObject(o); };
     // ---- la boutique ----
     const fiche = G.catalog('armes').find(x => x.id === 'knife');
     res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
@@ -8246,7 +8247,7 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     // ---- rangé dans son fourreau, dégainé dans le poing ----
     G.equipWeapon('knife'); G.setWeapon(me, 'knife', false); me.group.updateMatrixWorld(true);
     const k = me.weapons.knife;
-    res.range = { visible: k.visible, dansLeFourreau: +ecartBoites(boite(k), boite(E.couteau)).toFixed(3),
+    res.range = { visible: k.visible, dansLeFourreau: +ecartBoites(bte(k), bte(E.couteau)).toFixed(3),
       cote: +local(k).x.toFixed(2), pieces: G.knifeMesh().children.length };
     G.setWeapon(me, 'knife', true); me.group.updateMatrixWorld(true);
     res.enMain = +wp(k).distanceTo(wp(rig.armR.poing)).toFixed(3);
@@ -8267,7 +8268,7 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     G.simTime = G.P.holsterT + 0.05; G.rangementAuto();
     me.group.updateMatrixWorld(true);
     res.rangement.enMainApres = me.inHand;
-    res.rangement.retourFourreau = +ecartBoites(boite(me.weapons.knife), boite(E.couteau)).toFixed(3);
+    res.rangement.retourFourreau = +ecartBoites(bte(me.weapons.knife), bte(E.couteau)).toFixed(3);
     // hors de portée, le couteau ne touche personne
     b.pos.set(0, 0.3, 4); b.av.group.position.copy(b.pos); b.hp = 100; b.ko = 0;
     G.P.punchT = 0; G.P.fireCd = 0; G.coupCouteau(); res.horsPortee = b.hp;

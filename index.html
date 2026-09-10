@@ -2038,6 +2038,7 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
   stand(47.9, 17.2, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
   stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
   stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
+  stand(56.1, 20.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
   for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
   // Râtelier : les fusils étaient posés à x = 57,4 en travers — leur canon traversait le mur
   // est (57,7 → 58). On les rentre de 90 cm et on réduit un peu l'échelle.
@@ -8632,7 +8633,9 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   if (target) { P.facing = Math.atan2(target.x - P.pos.x, target.z - P.pos.z); }   // on se tourne vers la cible
   if (simTime - (P.lastHitT || 0) > 1.2) P.combo = 0;
   P.combo = kind === 'kick' ? 0 : (P.combo || 0) + 1; P.lastHitT = simTime;
-  const finisher = P.combo === 3, dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
+  // `dmg` et `kb` ne sont plus constants : la garde de l'adversaire les fait baisser plus bas
+  const finisher = P.combo === 3;
+  let dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
   P.punchT = simTime + (kind === 'kick' ? 1.0 : finisher ? 0.8 : 0.42);
   // LES DEUX POINGS. Le joueur ne frappait que du bras droit, encore et encore. Maintenant
   // l'enchaînement ALTERNE : droite, gauche, droite… chaque coup part du coude replié et se
@@ -9433,7 +9436,7 @@ function buildAvatar(cfg) {
     for (const m of p.piedParts) m.userData.y0 = m.position.y;   // hauteur de référence : la boutique amincit la semelle à partir de là
     return p;
   };
-  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, accroupi: false };
+  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, gardeK: 0, accroupi: false };
   // MUSCLES : pectoraux, trapezes, deltoides — ils apparaissent et grossissent avec l'entrainement
   const pecs = [-0.45, 0.45].map(sx => part(0.72 * S, 0.5 * S, 0.22 * S, shirt, sx * S, 3.3 * S, 0.52 * S, g));
   const trap = part(1.7 * S, 0.34 * S, 0.8 * S, shirt, 0, 4.05 * S, -0.1 * S, g);
@@ -9703,12 +9706,17 @@ function animateRig(rig, mode, speed, dt, t) {
   // LA GARDE : les deux poings serres devant le visage, coudes rentres. On la pose APRES le
   // reste pour qu'elle tienne quel que soit ce que font les jambes (on recule en gardant) —
   // sauf pendant un coup, sinon le poing n'irait jamais au bout de son geste.
-  if (rig.garde && !(rig.swing > 0) && !(rig.swingG > 0)) {
-    const eg = Math.min(1, dt * 14);
-    for (const [br, sz] of [[rig.armL, 0.45], [rig.armR, -0.45]]) {
-      br.rotation.x += (-1.22 - br.rotation.x) * eg;
-      br.coude.rotation.x += (-1.95 - br.coude.rotation.x) * eg;
-      br.rotation.z += (sz - br.rotation.z) * eg;
+  // La passe du corps repose les bras a chaque image : si on se contentait de tirer vers la
+  // garde, les deux forces s'equilibraient a mi-chemin et les poings restaient sous le
+  // menton. On MELANGE donc les deux poses avec un poids `gardeK` qui monte a 1 : a 1, la
+  // garde est exacte, et elle se defait en douceur quand on relache.
+  rig.gardeK = rig.garde ? Math.min(1, (rig.gardeK || 0) + dt * 7) : Math.max(0, (rig.gardeK || 0) - dt * 9);
+  if (rig.gardeK > 0 && !(rig.swing > 0) && !(rig.swingG > 0)) {
+    const k = rig.gardeK;
+    for (const [br, sz] of [[rig.armL, 0.34], [rig.armR, -0.34]]) {
+      br.rotation.x = br.rotation.x * (1 - k) + -1.35 * k;
+      br.coude.rotation.x = br.coude.rotation.x * (1 - k) + -1.55 * k;
+      br.rotation.z = br.rotation.z * (1 - k) + sz * k;
     }
   }
   // LA JUPE SE SOULEVE SUR LA CUISSE. Rigide, elle se faisait traverser de part en part des
@@ -14087,6 +14095,7 @@ function toggleJet() {
 function equipWeapon(kind) {   // équipe une arme (ou range : null)
   P.weapon = kind; P.gun = !!kind; P.aimToggle = false; P.drawn = false; $('drawBtn').textContent = '✊'; document.body.classList.remove('drawn'); $('aimBtn').classList.remove('on'); setWeapon(me, kind, false); document.body.classList.toggle('gun', !!kind);
   majEtuis();
+  { const fb = $('fireBtn'); if (fb) fb.textContent = kind === 'knife' ? '🔪' : kind === 'grenade' ? '💣' : '🔫'; }   // le bouton dit ce qu'on va faire
   if (kind) { const w = WEAPONS[kind]; if (kind !== 'grenade' && !w.blanche) { P.ammo = w.ammo; P.ammoMax = w.ammo; }
     msg(w.blanche ? `${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic ou X'} pour planter : le personnage frappe au ventre, puis range le couteau tout seul`
                   : `${w.e} ${w.n} · ${isMobile ? '🔫' : 'clic'} pour tirer : le personnage vise tout seul la cible la plus proche`, 2600);
@@ -15050,9 +15059,9 @@ const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cach
 const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △)
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
-const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', grenade: 'Grenade' };
+const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', sniper: 'Fusil à lunette', knife: 'Couteau', grenade: 'Grenade' };
 function armeSuivante(sens = 1) {
-  const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', P.grenades > 0 && 'grenade'].filter(Boolean);
+  const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', owned.has('arme:sniper') && 'sniper', owned.has('arme:knife') && 'knife', P.grenades > 0 && 'grenade'].filter(Boolean);
   if (!dispo.length) { msg('🔫 Aucune arme : passe à l\'armurerie', 1500); return false; }
   // « mains nues » fait partie du tour : on peut donc revenir en arriere sans rester coince
   const liste = [null, ...dispo];
@@ -19006,8 +19015,8 @@ function tenueMetier(av, metier) {
     P2(g, TW, 1.9 * S, TD, MET_C.blanc, 0, 3.05 * S, 0);                                   // la blouse
     P2(g, TW + 0.05, 0.22 * S, TD + 0.05, MET_C.bleuSecours, 0, 2.3 * S, 0);                // le liseré bleu du bas
     const croix = (parent, x, y, z, k, prof) => {   // une croix rouge : deux barres croisées
-      P2(parent, 0.7 * S * k, 0.22 * S * k, prof, x, y, z);
-      P2(parent, 0.22 * S * k, 0.7 * S * k, prof, x, y, z);
+      P2(parent, 0.7 * S * k, 0.22 * S * k, prof, MET_C.croix, x, y, z);
+      P2(parent, 0.22 * S * k, 0.7 * S * k, prof, MET_C.croix, x, y, z);
     };
     croix(g, 0, 3.2 * S, TD / 2 + 0.03, 1, 0.08);                                           // devant
     croix(g, 0, 3.2 * S, -TD / 2 - 0.03, 1, 0.08);                                          // dans le dos

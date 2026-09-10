@@ -3263,7 +3263,7 @@ function setRacket(av, on) {
   // s'enfonçait de 32 cm dans le sol quand le bras pendait le long du corps.
   // Le manche se tient DANS LE POING : accrochee au noeud `main`, la poignee (y = -0,16 dans
   // le modele, soit -0,115 une fois a l'echelle 0,72) est ramenee pile au centre de la main.
-  if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.position.set(0.02, 0.115, 0.02); av.racket.rotation.set(-0.14, 0, 0.2); (av.rig.armR.main || av.rig.armR.coude).add(av.racket); }
+  if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.rotation.set(-0.14, 0, 0.2); av.racket.position.set(-0.023, 0.112, -0.016); (av.rig.armR.main || av.rig.armR.coude).add(av.racket); }
   av.racket.visible = !!on;
 }
 const WINMASK = (() => {   // fenêtres allumées (masque d'émission pour la nuit)
@@ -6547,7 +6547,7 @@ function openFridge() {
   $('fridgeGrid').innerHTML = RAW.map((it, i) => `<div class="item" data-i="${i}"><span class="e">${it.e}</span>${it.n}<span class="pr">${it.cook ? 'à cuire' : 'à boire / manger'}</span></div>`).join('');
   $('fridgeGrid').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => {
     const it = RAW[+el.dataset.i]; closeUI();
-    if (it.cook) { if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = it; msg(`${it.e} ${it.n} en main : pose-le sur la gazinière (E)`, 2000); const m = foodRawMesh(it); m.position.set(0, -0.02, 0.06); mainDroite().add(m); P.carryMesh = m; }
+    if (it.cook) { if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = it; msg(`${it.e} ${it.n} en main : pose-le sur la gazinière (E)`, 2000); const m = foodRawMesh(it); m.position.set(0, -0.09, 0.05); mainDroite().add(m); P.carryMesh = m; }
     else { stats.f = clamp(stats.f + it.f, 0, 100); stats.m = clamp(stats.m + (it.m || 0), 0, 100); saveStats(); applyStats(me, stats.m, stats.f); sfx.chomp(); bubble(me, pickOne(['miam !', 'trop bon 😋'])); updateHud(); closeUI(); }
   }));
   openUI('fridgeUI'); sfx.tone(300, 0, .12, 'sine', .05, 200);
@@ -8331,18 +8331,22 @@ function buildAvatar(cfg) {
     const basM = cfg.shorts ? skin : pants;
     p.low = cyl(0.47 * S, 0.4 * S, 0.62 * S, basM, -0.31 * S, p.genou); p.mollet = p.low;
     p.cheville = cyl(0.3 * S, 0.28 * S, 0.2 * S, basM, -0.72 * S, p.genou, 10);
-    // la chaussure : tout est groupé pour pouvoir l'épaissir ou l'aplatir d'un seul geste
-    p.semelle = part(1.02 * S, 0.24 * S, 1.28 * S, soleM, 0, -0.88 * S, 0.14 * S, p.genou);
+    // LA CHAUSSURE PIVOTE A LA CHEVILLE. Soudee au tibia, elle plongeait de 10 cm SOUS le
+    // bitume a chaque foulee : la pointe de la basket, plus longue que l'ancien pied plat,
+    // decrivait un arc plus large que la jambe. Elle est maintenant dans un groupe articule
+    // que `animateRig` garde a plat, comme un vrai pied qui se pose bien a plat.
+    p.pied = new THREE.Group(); p.pied.position.y = -0.7 * S; p.genou.add(p.pied);
+    p.semelle = part(1.02 * S, 0.24 * S, 1.28 * S, soleM, 0, -0.18 * S, 0.14 * S, p.pied);
     p.bout = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * S, 0.12 * S, 1.02 * S, 14), soleM);
-    p.bout.rotation.z = Math.PI / 2; p.bout.position.set(0, -0.88 * S, 0.78 * S); p.bout.castShadow = true; p.genou.add(p.bout);
-    p.gomme = part(1.04 * S, 0.07 * S, 1.26 * S, bandeM, 0, -0.955 * S, 0.14 * S, p.genou);   // liseré de gomme au ras du sol
-    p.shoe = part(0.92 * S, 0.42 * S, 1.1 * S, shoe, 0, -0.58 * S, 0.16 * S, p.genou);        // empeigne (couleur achetée)
-    p.talon = part(0.96 * S, 0.34 * S, 0.32 * S, shoe, 0, -0.68 * S, -0.32 * S, p.genou);     // talon renforcé
-    p.languette = part(0.56 * S, 0.3 * S, 0.14 * S, shoe, 0, -0.44 * S, 0.52 * S, p.genou); p.languette.rotation.x = -0.3;
-    p.lacets = [0, 1, 2].map(i => part(0.66 * S, 0.055 * S, 0.09 * S, bandeM, 0, (-0.4 - i * 0.025) * S, (0.3 + i * 0.14) * S, p.genou));
-    p.bandes = [-1, 1].map(sx => { const b = part(0.06 * S, 0.13 * S, 0.74 * S, bandeM, sx * 0.46 * S, -0.6 * S, 0.16 * S, p.genou); b.rotation.x = 0.12; return b; });
+    p.bout.rotation.z = Math.PI / 2; p.bout.position.set(0, -0.18 * S, 0.78 * S); p.bout.castShadow = true; p.pied.add(p.bout);
+    p.gomme = part(1.04 * S, 0.07 * S, 1.26 * S, bandeM, 0, -0.265 * S, 0.14 * S, p.pied);   // liseré de gomme au ras du sol
+    p.shoe = part(0.92 * S, 0.42 * S, 1.1 * S, shoe, 0, 0.12 * S, 0.16 * S, p.pied);         // empeigne (couleur achetée)
+    p.talon = part(0.96 * S, 0.34 * S, 0.32 * S, shoe, 0, 0.02 * S, -0.32 * S, p.pied);      // talon renforcé
+    p.languette = part(0.56 * S, 0.3 * S, 0.14 * S, shoe, 0, 0.26 * S, 0.52 * S, p.pied); p.languette.rotation.x = -0.3;
+    p.lacets = [0, 1, 2].map(i => part(0.66 * S, 0.055 * S, 0.09 * S, bandeM, 0, (0.3 - i * 0.025) * S, (0.3 + i * 0.14) * S, p.pied));
+    p.bandes = [-1, 1].map(sx => { const b = part(0.06 * S, 0.13 * S, 0.74 * S, bandeM, sx * 0.46 * S, 0.1 * S, 0.16 * S, p.pied); b.rotation.x = 0.12; return b; });
     p.tige = cyl(0.52 * S, 0.5 * S, 0.8 * S, shoe, -0.4 * S, p.genou); p.tige.visible = false;   // tige de botte
-    p.eperon = part(0.5 * S, 0.12 * S, 0.5 * S, M(0xd8c26a), 0, -0.7 * S, -0.6 * S, p.genou); p.eperon.visible = false;
+    p.eperon = part(0.5 * S, 0.12 * S, 0.5 * S, M(0xd8c26a), 0, 0, -0.6 * S, p.pied); p.eperon.visible = false;
     p.piedParts = [p.semelle, p.bout, p.gomme, p.shoe, p.talon, p.languette, ...p.lacets, ...p.bandes];
     for (const m of p.piedParts) m.userData.y0 = m.position.y;   // hauteur de référence : la boutique amincit la semelle à partir de là
     return p;
@@ -8369,8 +8373,8 @@ function buildAvatar(cfg) {
   // LA JUPE ÉTAIT UNE BOÎTE : dès que la cuisse montait, elle la traversait de part en part.
   // C'est maintenant un TRONC DE CÔNE évasé, et `animateRig` la soulève quand un genou monte,
   // exactement comme un vrai tissu qui se relève sur la cuisse.
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.62 * S, 1.18 * S, 0.85 * S, 18), pants);
-  skirt.position.y = 1.72 * S; skirt.castShadow = true; g.add(skirt); skirt.visible = !!cfg.skirt;
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.62 * S, 1.45 * S, 0.55 * S, 18), pants);
+  skirt.position.y = 1.85 * S; skirt.castShadow = true; g.add(skirt); skirt.visible = !!cfg.skirt;
   rig.jupe = skirt;
   // débardeur : deux bretelles posées par-dessus le torse nu
   const bretelles = new THREE.Group(); bretelles.position.y = 3 * S; g.add(bretelles); bretelles.visible = false;
@@ -8381,7 +8385,7 @@ function buildAvatar(cfg) {
   const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, sole: soleM, bande: bandeM, bracelet: braceletM, montre: montreM, bijou: bijouMat, bijou2: bijou2Mat }, capParts, setHair, setBijou, bijoux, skirt, jacket, bag, glasses, hatGroups, torso, tete: teteMesh, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 , muscles: { pecs, trap, delts }, visage, degats: 0, hpPrec: 100 };
   // POINTS D'ATTACHE pour tout ce qui s'ajoute par-dessus (tenues de métier du poste J,
   // articles de la boutique, objets portés). Chaque nœud suit son articulation.
-  av.attaches = { bassin: g, torse: g, tete: head,
+  av.attaches = { corps: g, bassin: g, torse: torso, tete: head,
     brasG: rig.armL, brasD: rig.armR, avantBrasG: rig.armL.coude, avantBrasD: rig.armR.coude,
     poingG: rig.armL.poing, poingD: rig.armR.poing, mainG: rig.armL.main, mainD: rig.armR.main,
     cuisseG: rig.legL, cuisseD: rig.legR, jambeG: rig.legL.genou, jambeD: rig.legR.genou };
@@ -8400,15 +8404,16 @@ function poseChaussures(av, id) {
   for (const lg of [av.rig.legL, av.rig.legR]) {
     if (!lg.semelle) continue;
     const ep = ch.ep, dy = -0.24 * S * (1 - ep) * 0.5;   // la semelle s'amincit : tout le dessus descend d'autant
-    lg.semelle.scale.set(1, ep, 1); lg.semelle.position.y = -1.0 * S + 0.12 * S * ep;
+    lg.semelle.scale.set(1, ep, 1); lg.semelle.position.y = -0.3 * S + 0.12 * S * ep;   // dessous toujours au ras du sol
     lg.bout.scale.set(ep, 1, ep); lg.bout.position.y = lg.semelle.position.y;
-    lg.gomme.position.y = -1.0 * S + 0.035 * S;
+    lg.gomme.position.y = -0.3 * S + 0.035 * S;
     for (const m of [lg.shoe, lg.talon, lg.languette, ...lg.lacets, ...lg.bandes]) m.position.y = m.userData.y0 + 2 * dy;
     lg.shoe.scale.set(1, ch.tong ? 0.28 : 1, 1);
     lg.talon.visible = lg.languette.visible = !ch.tong;
     lg.lacets.forEach((l, i) => l.visible = i < (ch.lacets || 0));
     lg.bandes.forEach(b => b.visible = !ch.tong);
     lg.tige.visible = ch.tige > 0; lg.tige.scale.set(1, ch.tige, 1); lg.tige.position.y = -0.62 * S + ch.tige * 0.4 * S;
+    lg.tige.material = av.mats.shoe;
     lg.eperon.visible = !!ch.eperon;
   }
 }
@@ -8601,18 +8606,33 @@ function tickBubbles() {
 }
 const allAvatars = () => [me, ...bots.map(b => b.av), ...[...net.remotes.values()].map(r => r.av)];
 function animateRig(rig, mode, speed, dt, t) {
+  animateRigCorps(rig, mode, speed, dt, t);
+  const ease2 = Math.min(1, dt * 12);
+  // LE PIED RESTE A PLAT. La basket est plus longue que l'ancien pied carre : soudee au tibia,
+  // sa pointe s'enfoncait de 10 cm dans le bitume au milieu de la foulee. La CHEVILLE compense
+  // donc l'angle de la hanche et du genou, et la semelle reste parallele au sol. C'est calcule
+  // APRES le corps : en le faisant avant, le pied avait une image de retard et replongeait.
+  for (const lg of [rig.legL, rig.legR]) {
+    if (!lg.pied) continue;
+    lg.pied.rotation.x = Math.max(-2, Math.min(0.8, -(lg.rotation.x + lg.genou.rotation.x)));
+  }
+  // LA JUPE SE SOULEVE SUR LA CUISSE. Rigide, elle se faisait traverser de part en part des
+  // qu'un genou montait (marche, coup de pied, genou a terre, position assise). Passe 0,25 rad
+  // de cuisse levee, elle bascule vers l'avant comme un vrai tissu qui glisse sur la jambe —
+  // au plus 0,7 rad, sinon elle se coucherait a l'horizontale sur un coup de pied haut.
+  if (rig.jupe && rig.jupe.visible) {
+    const leve = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
+    const cible = -Math.min(0.7, Math.max(0, leve - 0.25) * 0.85);
+    // elle se souleve D'UN COUP sous la cuisse qui monte (sinon, le temps qu'elle reagisse,
+    // un coup de pied la traversait) et elle retombe doucement, comme un vrai tissu
+    rig.jupe.rotation.x = cible < rig.jupe.rotation.x ? cible : rig.jupe.rotation.x + (cible - rig.jupe.rotation.x) * ease2;
+  }
+}
+function animateRigCorps(rig, mode, speed, dt, t) {
   const ease = Math.min(1, dt * 12);
   const to = (p, v) => { p.rotation.x += (v - p.rotation.x) * ease; };
   const gL = rig.legL.genou, gR = rig.legR.genou, cL = rig.armL.coude, cR = rig.armR.coude;
   const toK = (p, v) => { if (p) p.rotation.x += (v - p.rotation.x) * ease; };
-  // LA JUPE SE SOULÈVE SUR LA CUISSE. Rigide, elle se faisait traverser de part en part dès
-  // qu'un genou montait (coup de pied, genou à terre, position assise). Passé 0,45 rad de
-  // cuisse levée, elle bascule vers l'avant comme un vrai tissu qui glisse sur la jambe.
-  if (rig.jupe && rig.jupe.visible) {
-    const leve = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
-    const cible = -Math.max(0, leve - 0.45) * 0.6;
-    rig.jupe.rotation.x += (cible - rig.jupe.rotation.x) * ease;
-  }
   // ACCUSER LE COUP : on se penche brievement vers l'avant ; A BOUT DE FORCES : un genou a terre
   if (rig.recul > 0) rig.recul = Math.max(0, rig.recul - dt);
   rig.penche = rig.recul > 0 ? Math.sin(rig.recul / 0.35 * Math.PI) * 0.45 : 0;
@@ -12700,7 +12720,7 @@ function eat(it) {   // on achète, on emporte : E (ou ✋) pour manger où l'on
 }
 function takeAway(it) {
   if (P.carryMesh) { mainDroite().remove(P.carryMesh); P.carryMesh = null; }
-  P.snack = it; const idx = FOOD.indexOf(it); const m = foodMesh(idx >= 0 ? idx : 0); m.position.set(0, -0.02, 0.06); mainDroite().add(m); P.carryMesh = m;
+  P.snack = it; const idx = FOOD.indexOf(it); const m = foodMesh(idx >= 0 ? idx : 0); m.position.set(0, -0.09, 0.05); mainDroite().add(m); P.carryMesh = m;
   document.body.classList.add('carry');
   msg(`${it.e} ${it.n} à emporter ! E pour le manger (tu peux sortir et t\'asseoir sur un banc)`, 2600);
 }

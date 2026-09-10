@@ -7015,6 +7015,7 @@ const E_OUTILS = `
     rg.armL.rotation.set(0, 0, 0); rg.armR.rotation.set(0, 0, 0); rg.armL.coude.rotation.set(0, 0, 0); rg.armR.coude.rotation.set(0, 0, 0);
     rg.legL.rotation.set(0, 0, 0); rg.legR.rotation.set(0, 0, 0); rg.legL.genou.rotation.set(0, 0, 0); rg.legR.genou.rotation.set(0, 0, 0);
     rg.baisse = 0; rg.agenou = false; rg.kick = 0; rg.swing = 0; if (rg.jupe) rg.jupe.rotation.set(0, 0, 0);
+    rg.legL.pied.rotation.set(0, 0, 0); rg.legR.pied.rotation.set(0, 0, 0);
     av.group.rotation.set(0, 0, 0); av.group.position.set(0, 0, 0); av.group.updateMatrixWorld(true); };
 `;
 const posteE = corps => '(() => {' + E_OUTILS + corps + '})()';
@@ -7043,7 +7044,8 @@ test('le poing du joueur est rond, et arme, raquette ou casse-croute y restent t
     // un casse-croute emporte
     G.takeAway({ id: 'burger', n: 'Burger', e: '🍔', p: 3, f: 6 });
     me.group.updateMatrixWorld(true);
-    res.casseCroute = +boite(G.P.carryMesh).getCenter(new T.Vector3()).distanceTo(wp(poing)).toFixed(3);
+    res.casseCroute = +ecartBoites(boite(G.P.carryMesh), boite(poing)).toFixed(3);
+    res.casseCrouteCentre = +boite(G.P.carryMesh).getCenter(new T.Vector3()).distanceTo(wp(poing)).toFixed(3);
     res.casseCrouteSuitLeCoude = (() => { let n = G.P.carryMesh; while (n && n !== rig.armR.coude) n = n.parent; return n === rig.armR.coude; })();
     G.mainDroite().remove(G.P.carryMesh); G.P.carryMesh = null; G.P.snack = null; document.body.classList.remove('carry');
     // les habitants et les mannequins ont la MEME morphologie
@@ -7056,10 +7058,10 @@ test('le poing du joueur est rond, et arme, raquette ou casse-croute y restent t
   const f = r.forme;
   const ok = f.geo === 'SphereGeometry' && f.rayon > 0.15 && f.rapport > 1.1 && f.avantBras === 'CylinderGeometry'
     && f.pouce && f.couleurPeau
-    && r.arme < 0.05 && r.raquette < 0.05 && r.raquetteSol > 0.05 && r.casseCroute < 0.08 && r.casseCrouteSuitLeCoude
+    && r.arme < 0.05 && r.raquette < 0.05 && r.raquetteSol > 0.05 && r.casseCroute < 0.03 && r.casseCrouteCentre < 0.25 && r.casseCrouteSuitLeCoude
     && r.bot.geo === 'SphereGeometry' && r.bot.mollet === 'CylinderGeometry' && r.bot.semelle && r.bot.main
     && r.mannequin.geo === 'SphereGeometry' && r.mannequin.mollet === 'CylinderGeometry' && r.mannequin.semelle && r.mannequin.main;
-  return { ok, detail: `le poing etait une boite plate au bout d'un avant-bras carre · c'est maintenant une SPHERE couleur peau de ${f.rayon} m de rayon, ${f.rapport} fois plus large que l'avant-bras (devenu cylindrique, rayon ${f.rayonAvantBras}), avec un pouce esquisse · tout ce qu'on tient est accroche au centre du poing : l'arme a ${r.arme} m, la poignee de la raquette a ${r.raquette} m (tamis a ${r.raquetteSol} m du sol), le casse-croute a ${r.casseCroute} m, et il suit le coude quand le bras se plie · habitants et mannequins ont exactement la meme morphologie (${r.bot.geo} / ${r.mannequin.geo})` };
+  return { ok, detail: `le poing etait une boite plate au bout d'un avant-bras carre · c'est maintenant une SPHERE couleur peau de ${f.rayon} m de rayon, ${f.rapport} fois plus large que l'avant-bras (devenu cylindrique, rayon ${f.rayonAvantBras}), avec un pouce esquisse · tout ce qu'on tient est accroche au centre du poing : l'arme a ${r.arme} m, la poignee de la raquette a ${r.raquette} m (tamis a ${r.raquetteSol} m du sol), le casse-croute pose dans la paume (${r.casseCroute} m d'ecart de boite, centre a ${r.casseCrouteCentre} m), et il suit le coude quand le bras se plie · habitants et mannequins ont exactement la meme morphologie (${r.bot.geo} / ${r.mannequin.geo})` };
 });
 
 test('la basket se voit a six metres, quel que soit le modele achete, et sa semelle touche le sol', async p => {
@@ -7089,11 +7091,20 @@ test('la basket se voit a six metres, quel que soit le modele achete, et sa seme
     G.myCfg.chaussures = 'basket'; G.applyMyLook(); poseNeutre(me);
     res.course = solPour(2.2, 200);
     poseNeutre(me);
-    // genou a terre : le corps s'abaisse, le genou doit toucher le sol sans s'y enfoncer
+    for (let i = 0; i < 60; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    res.cheville = { pivot: !!rig.legL.pied, repos: +rig.legL.pied.rotation.x.toFixed(3) };
+    // genou a terre : le corps s'abaisse, les semelles restent posees et le genou touche le sol
     rig.agenou = true;
     for (let i = 0; i < 150; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
     me.group.position.set(0, -(rig.baisse || 0), 0); me.group.updateMatrixWorld(true);
-    res.agenou = +Math.min(boite([rig.legL.genou]).min.y, boite([rig.legR.genou]).min.y).toFixed(3);
+    res.agenou = { pieds: +Math.min(boite(rig.legL.piedParts).min.y, boite(rig.legR.piedParts).min.y).toFixed(3),
+      genou: +Math.min(rig.legL.genou.getWorldPosition(new T.Vector3()).y, rig.legR.genou.getWorldPosition(new T.Vector3()).y).toFixed(3) };
+    // le coup de pied ne doit pas non plus planter la basket dans le bitume
+    rig.agenou = false; for (let i = 0; i < 90; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+    poseNeutre(me); rig.kick = 0.45; let mnk = 9;
+    for (let i = 0; i < 40; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
+      me.group.position.set(0, 0, 0); me.group.updateMatrixWorld(true); mnk = Math.min(mnk, boite(rig.legR.piedParts).min.y); }
+    res.coupDePied = +mnk.toFixed(3); rig.kick = 0;
     rig.agenou = false; for (let i = 0; i < 90; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60);
     poseNeutre(me);
     return res;
@@ -7104,9 +7115,11 @@ test('la basket se voit a six metres, quel que soit le modele achete, et sa seme
     && Object.values(m).every(v => v.longueur >= 0.3 && Math.abs(v.sol) < 0.02 && v.large && Math.abs(v.marche) < 0.02)
     && base.every(k => m[k] && m[k].semelle >= 0.08)
     && m.bottes.tige && m.cowboy.tige && m.cowboy.eperon && m.montante.tige && !m.basket.tige
-    && Math.abs(r.course) < 0.02 && r.agenou > -0.03 && r.agenou < 0.09;
+    && Math.abs(r.course) < 0.02 && Math.abs(r.coupDePied) < 0.02
+    && r.agenou.pieds > -0.03 && r.agenou.pieds < 0.04 && r.agenou.genou < 0.06 && r.agenou.genou > -0.03
+    && r.cheville.pivot && Math.abs(r.cheville.repos) < 0.01;
   const liste = Object.entries(m).map(([k, v]) => `${k} ${v.longueur} m / semelle ${v.semelle} m / ${v.prix} pieces`).join(', ');
-  return { ok, detail: `le pied etait une boite plate de 5 cm de semelle : a six metres on ne voyait aucune chaussure · le mollet est maintenant un CYLINDRE avec une cheville, et la chaussure une VRAIE BASKET (semelle epaisse debordante et arrondie a l'avant, empeigne coloree, languette, ${r.rig.lacets} lacets, bande laterale, talon renforce) · ${Object.keys(m).length} modeles vendus : ${liste} · toutes plus larges que le mollet, semelle posee au sol a ${Object.values(m).map(v => v.sol).join(' / ')} m debout, jamais plus de 2 cm d'ecart en marchant (${Object.values(m).map(v => v.marche).join(' / ')}) ni en courant (${r.course}) · genou a terre, le point bas est a ${r.agenou} m` };
+  return { ok, detail: `le pied etait une boite plate de 5 cm de semelle : a six metres on ne voyait aucune chaussure · le mollet est maintenant un CYLINDRE avec une cheville, et la chaussure une VRAIE BASKET (semelle epaisse debordante et arrondie a l'avant, empeigne coloree, languette, ${r.rig.lacets} lacets, bande laterale, talon renforce) · ${Object.keys(m).length} modeles vendus : ${liste} · toutes plus larges que le mollet, semelle posee au sol a ${Object.values(m).map(v => v.sol).join(' / ')} m debout, jamais plus de 2 cm d'ecart en marchant (${Object.values(m).map(v => v.marche).join(' / ')}) ni en courant (${r.course}) ni au coup de pied (${r.coupDePied}) — c'est la CHEVILLE qui pivote pour garder la semelle a plat · genou a terre, les semelles sont a ${r.agenou.pieds} m et le genou pose a ${r.agenou.genou} m` };
 });
 
 test('chaque article de la boutique tient sur le bon segment, sans flotter ni traverser', async p => {
@@ -7144,9 +7157,9 @@ test('chaque article de la boutique tient sur le bon segment, sans flotter ni tr
     // qu'il a suivi (sinon il resterait plante dans le vide)
     cfg.montre = true; cfg.gants = 'boxe'; cfg.jacket = 3; G.applyMyLook(); poseNeutre(me);
     const c = o => boite(o).getCenter(new T.Vector3());
-    const avant = { montre: c(me.montre), gant: c(rig.armR.gant.g), pied: c(rig.legL.piedParts), manche: c(rig.armR.manchesVeste) };
+    const avant = { montre: c(me.montre), gant: c(rig.armR.gant.g), pied: c(rig.legL.piedParts), manche: c(rig.armR.manchesVeste[1]) };
     rig.armR.coude.rotation.x = -1.4; rig.legL.genou.rotation.x = 1.4; me.group.updateMatrixWorld(true);
-    const apres = { montre: c(me.montre), gant: c(rig.armR.gant.g), pied: c(rig.legL.piedParts), manche: c(rig.armR.manchesVeste) };
+    const apres = { montre: c(me.montre), gant: c(rig.armR.gant.g), pied: c(rig.legL.piedParts), manche: c(rig.armR.manchesVeste[1]) };
     res.suit = { montre: +avant.montre.distanceTo(apres.montre).toFixed(3), gant: +avant.gant.distanceTo(apres.gant).toFixed(3),
       pied: +avant.pied.distanceTo(apres.pied).toFixed(3), manche: +avant.manche.distanceTo(apres.manche).toFixed(3) };
     raz();
@@ -7199,7 +7212,7 @@ test('la jupe se souleve sur la cuisse au lieu de se faire traverser', async p =
     return res;
   `));
   const ok = r.forme === 'CylinderGeometry' && r.basJupe > r.hautJupe
-    && r.debout < 0 && r.marche < 0 && r.course < 0 && r.coupDePied < 0 && r.agenou < 0
+    && r.debout < -0.005 && r.marche < -0.005 && r.course < -0.005 && r.coupDePied < -0.005 && r.agenou < -0.005
     && r.souleve < -0.2 && Math.abs(r.repos) < 0.05 && r.ourlet > r.genou;
   return { ok, detail: `la jupe etait une BOITE rigide autour du bassin : des qu'une cuisse montait, elle la traversait de part en part · c'est maintenant un tronc de cone evase (rayon ${r.hautJupe} m a la taille, ${r.basJupe} m a l'ourlet) qui SE SOULEVE quand un genou monte (${r.souleve} rad genou a terre, retour a ${r.repos} au repos) · le genou reste toujours hors du tissu : marge de ${-r.debout} m debout, ${-r.marche} en marchant, ${-r.course} en courant, ${-r.coupDePied} au coup de pied, ${-r.agenou} genou a terre · et l'ourlet (${r.ourlet} m) reste au-dessus du genou (${r.genou} m)` };
 });

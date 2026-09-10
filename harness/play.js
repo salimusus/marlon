@@ -9229,7 +9229,17 @@ test('le graphe des voies couvre la ville : deux voies par rue, dessertes rattac
       const aZ = rt.d >= rt.w, dr = aZ ? -Math.cos(h) : Math.sin(h), ec = aZ ? it[i][0] - rt.x : it[i][1] - rt.z;
       if (ec * dr > 0.2) droite++;
     }
-    return { routes: R.length, routesA2, mauvaisCote, noeuds: g.noeuds.length, aretes: g.aretes.length,
+    // 6) un CHANTIER barre une voie : l'itinéraire doit le contourner, pas s'y encastrer
+    let chantier = null;
+    if (it && it.length > 20 && G.poseChantier) {
+      const mid = it[Math.floor(it.length / 2)];
+      const ch = G.poseChantier(mid[0], mid[1], 0);
+      const it2 = G.itineraireVoies(3, -135, 60, 343);
+      const ecart = it2 ? Math.min.apply(null, it2.map(pt => Math.hypot(pt[0] - mid[0], pt[1] - mid[1]))) : -1;
+      chantier = { ou: [Math.round(mid[0]), Math.round(mid[1])], ecart: +ecart.toFixed(1), points: it2 ? it2.length : 0 };
+      G.retireChantier(ch);
+    }
+    return { chantier, routes: R.length, routesA2, mauvaisCote, noeuds: g.noeuds.length, aretes: g.aretes.length,
       voies: g.voies.length, liaisons: g.liaisons, manoeuvres, types, demiTourIllicite, connexite,
       dessertes: des.length, sansVoie, loin,
       it: it ? it.length : 0, tauxRoute: it ? +(dedans / it.length * 100).toFixed(1) : 0,
@@ -9238,8 +9248,9 @@ test('le graphe des voies couvre la ville : deux voies par rue, dessertes rattac
   if (r.absent) return { ok: false, detail: 'city.graphe n\'existe pas' };
   const ok = r.routesA2 === r.routes && r.mauvaisCote === 0 && r.demiTourIllicite === 0
     && r.sansVoie.length === 0 && r.connexite > 90 && r.it > 40 && r.tauxRoute > 98 && r.tauxDroite > 90
-    && r.types['tout-droit'] > 0 && r.types.droite > 0 && r.types.gauche > 0;
-  return { ok, detail: `${r.routes} chaussées → ${r.voies} voies (deux par rue pour ${r.routesA2} d'entre elles, ${r.mauvaisCote} du mauvais côté de l'axe), ${r.noeuds} nœuds, ${r.aretes} arêtes orientées dont ${r.liaisons} raccords, ${r.manoeuvres} manœuvres (${JSON.stringify(r.types)}, ${r.demiTourIllicite} demi-tour là où il y avait une autre issue) · ${r.connexite} % du réseau atteignable depuis la place centrale · les ${r.dessertes} dessertes de quartier sont toutes rattachées à une voie (${r.loin.length} à plus de 6 m) · itinéraire Techno-Parc → Casino : ${r.longueur} m en ${r.it} points, ${r.tauxRoute} % sur la chaussée et ${r.tauxDroite} % à droite de l'axe (sur ${r.testes} points de ligne droite)` };
+    && r.types['tout-droit'] > 0 && r.types.droite > 0 && r.types.gauche > 0
+    && !!r.chantier && r.chantier.ecart > 3;
+  return { ok, detail: `${r.routes} chaussées → ${r.voies} voies (deux par rue pour ${r.routesA2} d'entre elles, ${r.mauvaisCote} du mauvais côté de l'axe), ${r.noeuds} nœuds, ${r.aretes} arêtes orientées dont ${r.liaisons} raccords, ${r.manoeuvres} manœuvres (${JSON.stringify(r.types)}, ${r.demiTourIllicite} demi-tour là où il y avait une autre issue) · ${r.connexite} % du réseau atteignable depuis la place centrale · les ${r.dessertes} dessertes de quartier sont toutes rattachées à une voie (${r.loin.length} à plus de 6 m) · itinéraire Techno-Parc → Casino : ${r.longueur} m en ${r.it} points, ${r.tauxRoute} % sur la chaussée et ${r.tauxDroite} % à droite de l'axe (sur ${r.testes} points de ligne droite) · un chantier posé en (${r.chantier ? r.chantier.ou.join(',') : '?'}) en pleine voie : le nouvel itinéraire passe à ${r.chantier ? r.chantier.ecart : '?'} m de là, il le contourne` };
 });
 
 test('la circulation respecte le code de la route : trois minutes sans rien chevaucher, arret au feu rouge et au stop', async p => {
@@ -9247,6 +9258,9 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
     const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12 });
     G.P.pos.set(300, 0.3, 300); G.clearWanted();   // le joueur loin de tout : il ne gêne personne
     const ai = G.city.aiCars.filter(c => c.spd);
+    // on repart d'une circulation PROPRE : un test précédent a pu empiler deux voitures au
+    // même endroit ou en téléporter une hors de la ville
+    ai.forEach(c => { c.ia = null; c.libre = null; c.figeT = 0; c.attenteT = 0; c.speed = 0; c.stopOK = null; c.stopDep = 0; G.traficPose(c); });
     // un coin d'un véhicule est-il DANS un solide non franchissable ?
     const dansUnSolide = c => {
       const cs = Math.cos(c.h), sn = Math.sin(c.h), A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;

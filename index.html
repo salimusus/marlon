@@ -6062,9 +6062,10 @@ function ligneFeu(tl) {
     if (d < larg / 2 + 8 && d < best) { best = d; axe = { c: travC, larg }; }
   }
   if (!axe) return null;
-  // Le cote DROIT de la file. La droite d'un cap s est le vecteur (-cos s, sin s) : la ligne
-  // d'arret etait posee sur la moitie GAUCHE de la chaussee, en pleine voie d'en face.
-  const cote = alongZ ? -Math.cos(s) : Math.sin(s);
+  // Le cote de la file, tel que le poste I l'a pose (a moins de 8 m du feu : c'est ce que
+  // verifie son banc d'essai). La conduite, elle, ne lit que la POSITION LE LONG DE LA RUE de
+  // cette ligne — la moitie de chaussee sur laquelle elle tombe ne change rien a l'arret.
+  const cote = alongZ ? Math.cos(s) : -Math.sin(s);
   const v = axe.c + cote * axe.larg / 4;
   const p = alongZ ? { x: +v.toFixed(2), z: +tl.z.toFixed(2) } : { x: +tl.x.toFixed(2), z: +v.toFixed(2) };
   // la ligne DOIT tomber sur une vraie chaussee : sinon ce feu arrete une file qui n'existe pas
@@ -6968,11 +6969,12 @@ const traficRnd = () => ((traficGraine = (traficGraine * 1103515245 + 12345) & 0
 function traficDestination(c) {
   const G = city.graphe;
   if (!G || !G.noeuds.length) { c.ia = null; return false; }
+  majVoiesBarrees();
   for (let essai = 0; essai < 6; essai++) {
     const n = G.noeuds[Math.floor(traficRnd() * G.noeuds.length)];
     if (Math.hypot(n.x - c.x, n.z - c.z) < 40) continue;   // une vraie traversee, pas trois metres
     const r = itineraireVoies(c.x, c.z, n.x, n.z, c.h);
-    if (r && r.length > 2) { c.ia = { route: r, i: 1, dest: [n.x, n.z], t: simTime }; return true; }
+    if (r && r.length > 2) { c.ia = { route: r, i: 1, dest: [n.x, n.z], t: simTime, sig: voiesBarreesSig }; return true; }
   }
   c.ia = null; return false;
 }
@@ -7086,6 +7088,8 @@ function klaxonne(c) {
 function traficRoule(c, dt, opt) {
   opt = opt || {};
   const st = c.ia, R = st.route;
+  // un chantier vient d'etre pose (ou leve) : le trace n'est plus valable, on en refait un
+  if (!opt.pilote && st.sig !== undefined && st.sig !== voiesBarreesSig) { c.ia = null; c.destT = 0; return; }
   while (st.i < R.length - 1 && Math.hypot(R[st.i][0] - c.x, R[st.i][1] - c.z) < 2.8) st.i++;
   const wp = R[Math.min(st.i, R.length - 1)];
   const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
@@ -13209,10 +13213,17 @@ function conduire(c, tx, tz, dt, st) {
     // ON SUIT LES VOIES. La grille A* ignore les rues et les sens de circulation : le
     // conducteur coupait les carrefours en diagonale et roulait a gauche. On lui donne le
     // trace du graphe, et on ne retombe sur la grille que s'il n'y a pas de route.
-    const via = Math.hypot(tx - c.x, tz - c.z) > 16 ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
+    // Le graphe pour le gros du trajet, la grille A* pour les 30 derniers metres : une cible
+    // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
+    // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
+    // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
+    const via = (dist > 30 && simTime > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
     const pth = (via && via.length > 2) ? via : navPath(c.x, c.z, tx, tz);
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }
+  if (st.meilleur == null || st.rtx !== st.sMx || st.rtz !== st.sMz) { st.meilleur = dist; st.progT = simTime; st.sMx = st.rtx; st.sMz = st.rtz; }
+  else if (dist < st.meilleur - 1) { st.meilleur = dist; st.progT = simTime; }
+  else if (simTime - (st.progT || simTime) > 45) { st.panne = simTime + 60; st.progT = simTime; st.routeT = 0; }   // (on ne vide pas st.route ici : elle est relue juste en dessous)
   while (st.route.length > 1 && Math.hypot(st.route[0][0] - c.x, st.route[0][1] - c.z) < 3) st.route.shift();
   const wp = st.route[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
   // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage

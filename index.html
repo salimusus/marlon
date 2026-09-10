@@ -9443,7 +9443,7 @@ function buildAvatar(cfg) {
     for (const m of p.piedParts) m.userData.y0 = m.position.y;   // hauteur de référence : la boutique amincit la semelle à partir de là
     return p;
   };
-  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, gardeK: 0, accroupi: false };
+  const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, gardeK: 0, accroupi: false, porte: false, porteK: 0 };
   // MUSCLES : pectoraux, trapezes, deltoides — ils apparaissent et grossissent avec l'entrainement
   const pecs = [-0.45, 0.45].map(sx => part(0.72 * S, 0.5 * S, 0.22 * S, shirt, sx * S, 3.3 * S, 0.52 * S, g));
   const trap = part(1.7 * S, 0.34 * S, 0.8 * S, shirt, 0, 4.05 * S, -0.1 * S, g);
@@ -9724,6 +9724,17 @@ function animateRig(rig, mode, speed, dt, t) {
       br.rotation.x = br.rotation.x * (1 - k) + -1.35 * k;
       br.coude.rotation.x = br.coude.rotation.x * (1 - k) + -1.55 * k;
       br.rotation.z = br.rotation.z * (1 - k) + sz * k;
+    }
+  }
+  // PORTER UN BRANCARD : les deux bras tendus vers l'avant, poings a hauteur de hanche.
+  // Meme melange que la garde, pour que la passe du corps ne repose pas les bras.
+  rig.porteK = rig.porte ? Math.min(1, (rig.porteK || 0) + dt * 6) : Math.max(0, (rig.porteK || 0) - dt * 8);
+  if (rig.porteK > 0) {
+    const kp = rig.porteK;
+    for (const [br, sz] of [[rig.armL, 0.12], [rig.armR, -0.12]]) {
+      br.rotation.x = br.rotation.x * (1 - kp) + -0.55 * kp;
+      br.coude.rotation.x = br.coude.rotation.x * (1 - kp) + -0.55 * kp;
+      br.rotation.z = br.rotation.z * (1 - kp) + sz * kp;
     }
   }
   // LA JUPE SE SOULEVE SUR LA CUISSE. Rigide, elle se faisait traverser de part en part des
@@ -19160,7 +19171,12 @@ function creerBrancard(x, z, y) {
 // derrière. Avec un seul porteur, le brancard suit devant lui, à hauteur de poing.
 function porterBrancard(br, avAvant, avArriere) {
   if (!br) return null;
+  if (br.avant && br.avant.rig) br.avant.rig.porte = false;
+  if (br.arriere && br.arriere.rig) br.arriere.rig.porte = false;
   br.avant = avAvant || null; br.arriere = avArriere || null;
+  // `rig.porte` dit à l'animation « ce personnage tient un brancard » : les deux bras
+  // partent devant, poings à hauteur de hanche. Le poste Animation peut le remplacer.
+  for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = true;
   br.etat = br.avant ? 'porte' : 'pose';
   br.vehicule = null; br.glisse = 0;
   if (br.g.parent !== worldGroup) { br.g.parent && br.g.parent.remove(br.g); worldGroup.add(br.g); }
@@ -19169,6 +19185,7 @@ function porterBrancard(br, avAvant, avArriere) {
 // Le repose au sol (ou à la hauteur donnée).
 function poserBrancard(br, x, z, y) {
   if (!br) return null;
+  for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = false;
   br.avant = br.arriere = null; br.vehicule = null; br.etat = 'pose'; br.glisse = 0;
   if (x != null) br.x = x; if (z != null) br.z = z;
   br.y = y == null ? groundUnder(br.x, br.z, null, br.y + 2) : y;
@@ -19236,10 +19253,15 @@ function majBrancard(br, dt) {
     if (b) {   // à deux : le brancard tient entre les deux paires de mains
       g.position.set((a.x + b.x) / 2, (a.y + b.y) / 2 - 0.28, (a.z + b.z) / 2);
       g.rotation.set(0, Math.atan2(a.x - b.x, a.z - b.z), 0);
-    } else {   // à un seul : il pend devant le porteur, dans l'axe où il regarde
-      const cap = br.avant.group.rotation.y;
+    } else {
+      // À UN SEUL PORTEUR : il tient les deux poignées du même bout, et le brancard part
+      // DEVANT lui. Centré sur un seul poing, il lui traversait le corps de part en part ;
+      // on le centre donc entre les deux poings et on l'avance d'une demi-longueur.
+      const gche = mainDeAvatar(br.avant, 'G');
+      const mid = a.clone().add(gche).multiplyScalar(0.5);
+      const cap = br.avant.group.rotation.y, avance = BRANCARD_L / 2 + 0.15;
       g.rotation.set(0, cap, 0);
-      g.position.set(a.x + Math.sin(cap) * (BRANCARD_L / 2 - 0.1), a.y - 0.28, a.z + Math.cos(cap) * (BRANCARD_L / 2 - 0.1));
+      g.position.set(mid.x + Math.sin(cap) * avance, mid.y - 0.3, mid.z + Math.cos(cap) * avance);
     }
   } else if (br.etat === 'glisse' && br.ancrage) {
     br.glisse = Math.min(1, br.glisse + dt / BRANCARD_GLISSE);
@@ -19248,7 +19270,9 @@ function majBrancard(br, dt) {
     g.position.lerpVectors(br.depart, cible, k);
     br.ancrage.getWorldQuaternion(g.quaternion);
     if (br.glisse >= 1) {   // arrimé : il devient un enfant du véhicule et roule avec lui
-      br.etat = 'charge'; br.avant = br.arriere = null;
+      br.etat = 'charge';
+      for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = false;
+      br.avant = br.arriere = null;
       const p = br.ancrage.parent || worldGroup;
       p.add(g); g.position.copy(br.ancrage.position); g.quaternion.copy(br.ancrage.quaternion);
     }
@@ -19262,10 +19286,12 @@ function majBrancard(br, dt) {
     br.blesse.group.rotation.set(-Math.PI / 2, g.rotation.y, 0);
   }
 }
-// Le point du POING d'un avatar, en coordonnées monde : c'est là qu'on accroche le brancard.
-function mainDeAvatar(av) {
+// Le point d'un POING, en coordonnées monde : c'est là qu'on accroche le brancard.
+// `cote` : 'G' pour le poing gauche, n'importe quoi d'autre pour le droit.
+function mainDeAvatar(av, cote) {
   av.group.updateMatrixWorld(true);
-  const n = (av.rig && (av.rig.armR.main || av.rig.armR.poing)) || av.group;
+  const br = av.rig && (cote === 'G' ? av.rig.armL : av.rig.armR);
+  const n = (br && (br.main || br.poing)) || av.group;
   return n.getWorldPosition(new THREE.Vector3());
 }
 function brancardTick(dt) {

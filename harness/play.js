@@ -8356,9 +8356,12 @@ test('l\'ambulancier porte une tenue blanche à croix rouge et un brancard', asy
     res.brancard = { existe: !!br, etat: G.brancardEtat(br).etat, long: +t.z.toFixed(2), larg: +t.x.toFixed(2),
       reperes: !!(br.g.userData.avant && br.g.userData.arriere && br.g.userData.couche), pieces: br.g.children.length };
     // porté : il suit le poing de l'ambulancier
+    for (let i = 0; i < 60; i++) { G.animateRig(av.rig, 'idle', 0, 1 / 60, i / 60); G.brancardTick(1 / 60); }
     const main = av.rig.armR.main.getWorldPosition(new T2.Vector3());
-    res.porte = { ecart: +br.g.getWorldPosition(new T2.Vector3()).distanceTo(main).toFixed(2), porteurs: G.brancardEtat(br).porteurs };
-    m.bot.pos.x += 6; av.group.position.copy(m.bot.pos); G.brancardTick(1 / 60);
+    const bcorps = new T2.Box3().setFromObject(av.torso), bbr = new T2.Box3().setFromObject(br.g);
+    res.porte = { ecart: +br.g.getWorldPosition(new T2.Vector3()).distanceTo(main).toFixed(2), porteurs: G.brancardEtat(br).porteurs,
+      traverse: +(bcorps.max.z - bbr.min.z).toFixed(2), poseBras: +av.rig.armR.rotation.x.toFixed(2) };
+    m.bot.pos.x += 6; av.group.position.copy(m.bot.pos); av.group.updateMatrixWorld(true); G.brancardTick(1 / 60);
     const main2 = av.rig.armR.main.getWorldPosition(new T2.Vector3());
     res.porte.suitLePorteur = +br.g.getWorldPosition(new T2.Vector3()).distanceTo(main2).toFixed(2);
     // on y allonge un blessé
@@ -8387,11 +8390,12 @@ test('l\'ambulancier porte une tenue blanche à croix rouge et un brancard', asy
     && r.tenue.hautBlanc === 'f7f9fc' && r.tenue.basBlanc === 'f7f9fc'
     && r.croix.rouges >= 6 && r.croix.devant >= 2 && r.croix.derriere >= 2
     && b.existe && b.etat === 'porte' && b.long > 1.8 && b.larg > 0.4 && b.reperes && b.pieces >= 14
-    && r.porte.ecart < 1.6 && r.porte.suitLePorteur < 1.6 && r.porte.porteurs === 1
+    && r.porte.ecart < 1.8 && r.porte.suitLePorteur < 1.8 && r.porte.porteurs === 1
+    && r.porte.traverse < 0.05 && r.porte.poseBras < -0.4
     && r.blesse.surLeMatelas < 0.05 && Math.abs(r.blesse.couche + 1.57) < 0.05 && r.blesse.nom
     && r.glisse === 'glisse' && r.charge.etat === 'charge' && r.charge.ecart < 0.05
     && r.charge.dansLeVehicule && r.charge.blesseSuit < 0.05 && r.charge.roule < 0.05 && !r.sorti;
-  return { ok, detail: `il n'y avait personne pour ramasser les blessés · l'AMBULANCIER a maintenant sa tenue (${r.tenue.pieces} pièces : blouse, pantalon et chaussures blanches ${r.tenue.hautBlanc}, liseré et épaulières bleus, casquette blanche, trousse de secours) marquée de ${r.croix.rouges} croix rouges dont ${r.croix.devant} devant et ${r.croix.derriere} dans le dos · et son BRANCARD (${b.pieces} pièces, ${b.long} m sur ${b.larg} m : deux barres, toile, matelas, oreiller, sangles et pieds repliables) qu'il PORTE à ${r.porte.ecart} m de son poing et qui le suit quand il marche (${r.porte.suitLePorteur} m) · on y allonge le blessé (${r.blesse.surLeMatelas} m du matelas, couché à ${r.blesse.couche} rad) et on GLISSE le tout dans le véhicule : ${r.glisse} → ${r.charge.etat}, arrimé à ${r.charge.ecart} m de l'ancrage, il roule avec lui (${r.charge.roule} m) et le blessé ne bouge pas (${r.charge.blesseSuit} m)` };
+  return { ok, detail: `il n'y avait personne pour ramasser les blessés · l'AMBULANCIER a maintenant sa tenue (${r.tenue.pieces} pièces : blouse, pantalon et chaussures blanches ${r.tenue.hautBlanc}, liseré et épaulières bleus, casquette blanche, trousse de secours) marquée de ${r.croix.rouges} croix rouges dont ${r.croix.devant} devant et ${r.croix.derriere} dans le dos · et son BRANCARD (${b.pieces} pièces, ${b.long} m sur ${b.larg} m : deux barres, toile, matelas, oreiller, sangles et pieds repliables) qu'il PORTE devant lui, bras tendus (épaules à ${r.porte.poseBras} rad), à ${r.porte.ecart} m de son poing, sans plus lui traverser le corps (${r.porte.traverse} m de recouvrement) et en le suivant quand il marche (${r.porte.suitLePorteur} m) · on y allonge le blessé (${r.blesse.surLeMatelas} m du matelas, couché à ${r.blesse.couche} rad) et on GLISSE le tout dans le véhicule : ${r.glisse} → ${r.charge.etat}, arrimé à ${r.charge.ecart} m de l'ancrage, il roule avec lui (${r.charge.roule} m) et le blessé ne bouge pas (${r.charge.blesseSuit} m)` };
 });
 
 test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le vehicule', async p => {

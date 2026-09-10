@@ -1160,7 +1160,7 @@ function diffusionMesure(ms) {
   }
   d.n = 0; d.acc = 0;
   const el = typeof document !== 'undefined' && document.getElementById('tvDebit');
-  if (el) el.textContent = `⚡ ${d.ips} images/s (cible ${d.cible}) · ${d.mpx} Mpx/s · rendu ${tailleRendu.x | 0}×${tailleRendu.y | 0} · netteté ${Math.round((post.on ? post.force : 0) * 100)} %${d.on ? '' : ' · accélérateur éteint'}`;
+  if (el) el.textContent = d.ips ? `⚡ ${d.ips} images/s (cible ${d.cible}) · ${d.mpx} Mpx/s · rendu ${tailleRendu.x | 0}×${tailleRendu.y | 0} · netteté ${Math.round((post.on ? post.force : 0) * 100)} %${d.on ? '' : ' · accélérateur éteint'}` : '⚡ mesure en cours…';
 }
 // Allumer/eteindre l'accelerateur. Le nombre d'echantillons de l'anticrenelage change : on
 // jette la cible de rendu pour qu'elle soit reconstruite avec le bon reglage.
@@ -13795,9 +13795,11 @@ function padChapeau(v) {
 }
 // L'axe du chapeau : le premier axe au-dela des sticks dont la valeur ne ressemble pas a un
 // stick au repos. On ne le cherche que si la croix n'a pas de boutons a elle.
-function padAxeChapeau(gp) {
+// `depart` = premier axe qui PEUT etre un chapeau : sur une DualSense brute les axes 0 a 5
+// sont deja pris (sticks et gachettes), et une gachette a fond ressemble a un cran de chapeau.
+function padAxeChapeau(gp, depart) {
   const a = gp.axes || [];
-  for (let i = Math.min(a.length - 1, 9); i >= 4; i--) {
+  for (let i = Math.min(a.length - 1, 9); i >= (depart || 4); i--) {
     const v = a[i];
     if (typeof v !== 'number') continue;
     if (v > 1.001 || v < -1.001) return i;                       // repos « hors bornes » : c'est un chapeau
@@ -13826,7 +13828,7 @@ function padLu(gp) {
   // la croix : soit de vrais boutons, soit un chapeau sur un axe
   let chapeau = -1;
   if (!b[12] && !b[13] && !b[14] && !b[15] && profil !== 'standard') {
-    chapeau = padAxeChapeau(gp);
+    chapeau = padAxeChapeau(gp, profil === 'ps-hid' ? 6 : 4);
     if (chapeau >= 0) {
       const [hx, hy] = padChapeau(a[chapeau]);
       b[12] = hy > 0.5; b[13] = hy < -0.5; b[14] = hx < -0.5; b[15] = hx > 0.5;

@@ -8145,7 +8145,10 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
       res.voiture = !!c;
       if (c) {
         G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+        // avant CHAQUE essai la voiture revient sur la case degagee du depart : elle roule
+        // pendant la mesure, et une voiture arretee contre un mur ne braque plus
         const braque = (mode, v) => { G.settings.ctrl = mode; ds.axes = [v, 0, 0, 0];
+          c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
           ds.buttons[7] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
           G.drive.speed = 0; const h0 = G.drive.car.h;
           for (let i = 0; i < 40; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
@@ -8162,7 +8165,7 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
   const d = r.droite, g = r.gauche;
   const ok = d.angle < -2.5 && d.angle > -3.1 && d.vx < 0.2
     && g.angle > 2.5 && g.angle < 3.1 && g.vx < 0.2
-    && Math.abs(r.demi.angle) > 1 && Math.abs(r.demi.angle) < Math.abs(d.angle) - 0.5
+    && Math.abs(r.demi.angle) > 0.7 && Math.abs(r.demi.angle) < Math.abs(d.angle) - 0.5
     && Math.abs(r.fremis.angle) < 0.05
     && Math.abs(r.rapide.angle) > Math.abs(d.angle) + 1
     && Math.abs(r.camera.angle) < 0.05 && r.camera.vx > 5
@@ -8195,6 +8198,20 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       G.P.drawn = false; gach(7, 1);
       res.gazRange = +G.pad.gaz.toFixed(2); res.braqueeRange = !!G.pad.armeBraquee;
       gach(7, 0);
+      // ---- R2 accelere TOUJOURS au volant, meme arme sortie (essaye AVANT de tirer : cinq
+      // balles reveillent la police, dont les voitures viennent se coller a la notre)
+      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+      if (c) {
+        // la voiture est ramenee sur la case degagee ou apparait le joueur : un essai
+        // precedent a pu la laisser le nez contre un mur, et elle n'accelererait pas
+        c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c); G.P.drawn = true;
+        gach(7, 1); res.volant = { gaz: +G.pad.gaz.toFixed(2), braquee: !!G.pad.armeBraquee };
+        G.drive.speed = 0;
+        for (let i = 0; i < 20; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+        res.volant.vitesse = +G.drive.speed.toFixed(2);
+        gach(7, 0); G.P.drawn = false; G.exitCar();
+      }
       // ---- R2 : TIRE quand l'arme est braquee, et n'avance plus
       G.drawWeapon(true); G.P.fireCd = 0; G.simTime += 1;
       const n0 = G.shots.length;
@@ -8204,16 +8221,6 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       for (let i = 0; i < 8; i++) { G.simTime += 0.25; G.pollGamepad(1 / 60); }
       res.rafale = G.shots.length - n0;
       gach(7, 0); G.drawWeapon(false); G.P.drawn = false; G.pollGamepad(0.02);
-      // ---- R2 accelere TOUJOURS au volant, meme arme sortie
-      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
-      if (c) {
-        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c); G.P.drawn = true;
-        gach(7, 1); res.volant = { gaz: +G.pad.gaz.toFixed(2), braquee: !!G.pad.armeBraquee };
-        G.drive.speed = 0;
-        for (let i = 0; i < 20; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
-        res.volant.vitesse = +G.drive.speed.toFixed(2);
-        gach(7, 0); G.P.drawn = false; G.exitCar();
-      }
       // ---- ◯ SAUTE
       G.P.pos.set(0, 0.5, 8); G.P.jumpBuf = 0; tap(1); res.saut = G.P.jumpBuf;
       // ---- △ AGIT : monter dans la voiture

@@ -1571,7 +1571,10 @@ function clearWorld() {
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   // les marques de choc et les véhicules en feu vivaient dans l'ancien monde : sans cette
   // remise à zéro, on gardait des références vers des objets retirés de la scène
-  try { marques.length = 0; feuxVehicules.length = 0; } catch (e) {}
+  // (NEONS aussi : les matériaux de néon appartiennent au monde qu'on vient de jeter ; sans
+  // cette remise à zéro la liste grossissait à chaque changement de monde et retenait des
+  // matériaux déjà libérés)
+  try { marques.length = 0; feuxVehicules.length = 0; NEONS.length = 0; } catch (e) {}
   solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; sgridSale();
   goal = null; cityReset();
 }

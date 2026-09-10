@@ -6117,7 +6117,20 @@ test('la qualite d\'image sur la tele : plus de pixels, textures nettes, sans fi
           if (!m || !m.map || vus.has(m.map)) continue; vus.add(m.map); v.push(m.map.anisotropy); } });
       return { n: v.length, min: Math.min(...v), max: Math.max(...v) }; };
     const mp = (L, ratio) => +((L * ratio) * (L * ratio * 9 / 16) / 1e6).toFixed(2);
+    const qual0 = G.settings.quality;
+    // L'ETALONNAGE A DEMENAGE. Il etait fait par un filtre CSS sur le canevas (une passe de
+    // composition plein ecran) qu'on coupait sur la tele : l'image y etait donc plus terne
+    // que sur l'ordinateur. Il est maintenant DANS la passe de nettete, donc le filtre CSS
+    // n'a plus lieu d'etre nulle part — sauf en qualite « basse », ou cette passe est
+    // eteinte : le filtre CSS reprend alors son role de repli.
+    G.settings.quality = 'high'; G.applyQuality(); try { G.rendreImage(); } catch (e) {}
     G.modeTV(false); const pc = aniso(), filtrePC = getComputedStyle(document.getElementById('c')).filter;
+    const etalonne = document.body.classList.contains('etalonne');
+    const vignetteDOM = getComputedStyle(document.getElementById('vignette')).display;
+    G.settings.quality = 'low'; G.applyQuality(); try { G.rendreImage(); } catch (e) {}
+    const filtreBasse = getComputedStyle(document.getElementById('c')).filter;
+    const vignetteBasse = getComputedStyle(document.getElementById('vignette')).display;
+    G.settings.quality = qual0; G.applyQuality(); try { G.rendreImage(); } catch (e) {}
     G.modeTV(true); const tv = aniso(), filtreTV = getComputedStyle(document.getElementById('c')).filter;
     const plafond = G.PLAFOND_TV, r4k = G.ratioRendu(3840);
     let maxCap = 1; try { maxCap = G.renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
@@ -6125,12 +6138,13 @@ test('la qualite d\'image sur la tele : plus de pixels, textures nettes, sans fi
     const antialias = !!G.renderer.getContext().getContextAttributes().antialias;
     G.modeTV(false);
     return { pc, tv, filtrePC, filtreTV, plafond, r4k: +r4k.toFixed(3), pix4k: mp(3840, r4k),
-      avant1600: mp(3840, 1600 / 3840), maxCap, antialias };
+      avant1600: mp(3840, 1600 / 3840), maxCap, antialias, etalonne, vignetteDOM, filtreBasse, vignetteBasse };
   });
   const ok = r.plafond >= 3800 && r.pix4k > r.avant1600 * 3
     && r.tv.min >= 16 && r.tv.min === r.tv.max && r.pc.min >= 8 && r.tv.min > r.pc.min
-    && r.filtreTV === 'none' && r.filtrePC !== 'none' && r.antialias;
-  return { ok, detail: `l'image était floue sur la télé : on rendait en 1600 px de large (${r.avant1600} mégapixels en 4K) · plus aucun bridage a priori : on rend jusqu'au NATIF de l'écran (${r.plafond} px, ${r.pix4k} mégapixels) et c'est uniquement la mesure du temps des images qui fait redescendre si la machine ne suit pas · les ${r.tv.n} textures répétées (chaussées, trottoirs, façades) bavaient vues de biais : filtrage anisotrope ${r.pc.min}× partout et ${r.tv.min}× sur la télé (maximum de la machine : ${r.maxCap}×) · le filtre de couleur plein écran, qui coûtait une passe de composition entière pour un gain invisible, est retiré sur la télé (${r.filtreTV}) et gardé ailleurs (${r.filtrePC}) · et l'anticrénelage est forcé, même quand la télé se déclare « mobile » (${r.antialias})` };
+    && r.filtreTV === 'none' && r.filtrePC === 'none' && r.etalonne && r.vignetteDOM === 'none'
+    && r.filtreBasse !== 'none' && r.vignetteBasse !== 'none' && r.antialias;
+  return { ok, detail: `l'image était floue sur la télé : on rendait en 1600 px de large (${r.avant1600} mégapixels en 4K) · plus aucun bridage a priori : on rend jusqu'au NATIF de l'écran (${r.plafond} px, ${r.pix4k} mégapixels) et c'est uniquement la mesure du temps des images qui fait redescendre si la machine ne suit pas · les ${r.tv.n} textures répétées (chaussées, trottoirs, façades) bavaient vues de biais : filtrage anisotrope ${r.pc.min}× partout et ${r.tv.min}× sur la télé (maximum de la machine : ${r.maxCap}×) · le filtre de couleur plein écran, qui coûtait une passe de composition entière, est retiré PARTOUT (télé ${r.filtreTV}, ordinateur ${r.filtrePC}) : l'étalonnage et le vignettage se font maintenant DANS la passe de netteté (body.etalonne=${r.etalonne}, voile CSS ${r.vignetteDOM}), donc sans une image de plus a calculer et sans que la télé soit la seule a perdre les couleurs · en qualité « basse » cette passe est éteinte et le filtre CSS reprend son rôle de repli (${r.filtreBasse}, voile ${r.vignetteBasse}) · et l'anticrénelage est forcé, même quand la télé se déclare « mobile » (${r.antialias})` };
 });
 
 test('le joystick du telephone repond sans decalage', async p => {

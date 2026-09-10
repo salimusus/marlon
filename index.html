@@ -5546,7 +5546,10 @@ function signalisation() {
 // suivent la circulation de fond, les bots conducteurs et les voitures de police.
 const CAP = a => Math.atan2(Math.sin(a), Math.cos(a));   // ramene un ecart de cap dans ]-PI, PI]
 const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7 };
-const COUT_MANOEUVRE = { 'tout-droit': 0, droite: 2, gauche: 6, 'demi-tour': 16 };
+// Le demi-tour coute une fortune : un camion de 8,60 m ne fait pas demi-tour dans une rue de
+// 7 m, il finissait par raboter le bout de l'impasse pendant une minute. On n'y va qu'en
+// dernier recours, quand il n'existe VRAIMENT pas d'autre chemin.
+const COUT_MANOEUVRE = { 'tout-droit': 0, droite: 2, gauche: 6, 'demi-tour': 250 };
 function construireGraphe() {
   const R = city.routes || [];
   const voies = [], noeuds = [], aretes = [];
@@ -5645,7 +5648,7 @@ function construireGraphe() {
   // voiture qui l'emprunte (`carBlocked`, le meme garde-fou que la voiture du joueur)
   const liaisonLibre = (A, B) => {
     for (let u = 0; u <= 4; u++) { const x = A.x + (B.x - A.x) * u / 4, z = A.z + (B.z - A.z) * u / 4;
-      if (carBlocked(x, z, null, 1.5, { veh: false })) return false; }
+      if (carBlocked(x, z, null, 1.9, { veh: false })) return false; }
     return true;
   };
   for (const [d, i, j] of cand) {
@@ -5741,7 +5744,7 @@ function cheminAretes(e0, e1) {
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0);
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
   }
@@ -5768,7 +5771,8 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
   };
   for (let k = 0; k + 1 < suite.length; k++) {
     const e = suite[k], f = suite[k + 1], n = G.noeuds[e.vers];
-    if (e.liaison || f.liaison) { pousse(e.x1, e.z1); pousse(f.x0, f.z0); continue; }   // raccord : on passe par le noeud
+    // raccord, ou demi-tour au fond d'une impasse : on passe par les deux points de voie
+    if (e.liaison || f.liaison || Math.abs(CAP(f.sens - e.sens)) > 2.6) { pousse(e.x1, e.z1); pousse(f.x0, f.z0); continue; }
     // le coin : le point ou les deux voies de droite se croisent
     const cx = e.alongZ ? e.lat : (f.alongZ ? f.lat : n.x);
     const cz = e.alongZ ? (f.alongZ ? n.z : f.lat) : e.lat;
@@ -5821,9 +5825,27 @@ function croisementLibre(c, r, droiteSeule) {
     const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
     if (d > r || d < 0.5) continue;
     if (Math.abs(CAP((v.h || 0) - h)) < 0.6) continue;   // meme sens : c'est une file, pas une priorite
-    const vs = Math.abs(v.speed || 0), engage = d < 9;
-    if (!engage && vs < 0.6) continue;                   // gare au loin : il ne coupe rien
-    if (droiteSeule && !engage && dx * cx + dz * cz < 1) continue;
+    // Une voiture A L'ARRET ne prend jamais la priorite : sinon une voiture garee au coin de
+    // la rue bloquait le stop pour l'eternite. Ce qui est immobile est un obstacle, pas une
+    // priorite, et c'est `carBlocked` qui s'en charge.
+    if (Math.abs(v.speed || 0) < 0.6) continue;
+    if (droiteSeule && d > 9 && dx * cx + dz * cz < 1) continue;
+    return false;
+  }
+  return true;
+}
+// LA PRIORITE A DROITE, mesuree au carrefour lui-meme : celui qui est deja engage passe, et
+// sinon c'est celui qui vient de la droite. On ne regarde que les vehicules QUI ROULENT.
+function carrefourLibre(c, k) {
+  const cx = -Math.cos(c.h), cz = Math.sin(c.h);   // vecteur « ma droite »
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    if (Math.abs(v.speed || 0) < 0.6) continue;
+    const d = Math.hypot(v.x - k.cx, v.z - k.cz);
+    if (d > 12) continue;                                    // il n'est pas a CE carrefour
+    if (Math.abs(CAP((v.h || 0) - c.h)) < 0.6) continue;     // meme sens : c'est une file
+    const dedans = d < k.larg + 2;                           // deja engage : il finit sa traversee
+    if (!dedans && (v.x - c.x) * cx + (v.z - c.z) * cz < 1) continue;   // ni engage, ni a ma droite
     return false;
   }
   return true;
@@ -5888,7 +5910,7 @@ function codeRoute(c, dt, opt) {
       if (k.feu || k.panneau) continue;
       if (Math.abs(k.cx - c.x) > 32 || Math.abs(k.cz - c.z) > 32) continue;
       const al = devant(k.cx, k.cz, frein + k.larg, 5);
-      if (al > 0 && !croisementLibre(c, 15, true)) cap(approche(al, k.larg + 0.8), 'priorite');
+      if (al > 0 && !carrefourLibre(c, k)) cap(approche(al, k.larg + 0.8), 'priorite');
     }
   }
   return { v, raison };
@@ -5912,36 +5934,51 @@ function traficDestination(c) {
 }
 // On repartit la circulation sur toute la ville au demarrage : avant, les cinq vehicules
 // tournaient en rond sur le meme anneau de 26 m de rayon et le reste de la carte etait mort.
-function traficPlace() {
-  const G = city.graphe; if (!G || !G.noeuds.length) return 0;
-  let n = 0; flotteMaj();
-  for (const c of city.aiCars) {
-    if (!c.spd) continue;
-    for (let essai = 0; essai < 40; essai++) {
-      const e = G.aretes[Math.floor(traficRnd() * G.aretes.length)];
-      if (e.long < 14 || e.larg < 7) continue;
-      const p = projVoie(e.x0 + (e.x1 - e.x0) * 0.5, e.z0 + (e.z1 - e.z0) * 0.5, e);
-      if (FLOTTE.some(v => v !== c && Math.hypot(v.x - p.px, v.z - p.pz) < 12)) continue;
-      const [r0, l0] = vehHalf(c);
-      if (carBlocked(p.px, p.pz, c.solid, r0, { veh: true }, 0, e.sens, l0)) continue;
-      c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null;
-      c.y = groundCar(c.x, c.z, c.solid, 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
-      vehicleSolid(c); n++; break;
-    }
+function traficPose(c) {   // pose UN vehicule sur une voie libre, au hasard, dans la ville
+  const G = city.graphe; if (!G || !G.aretes.length) return false;
+  flotteMaj();
+  const [r0, l0] = vehHalf(c);
+  for (let essai = 0; essai < 60; essai++) {
+    const e = G.aretes[Math.floor(traficRnd() * G.aretes.length)];
+    if (e.liaison || e.long < 14 || e.larg < 7) continue;
+    const p = projVoie(e.x0 + (e.x1 - e.x0) * 0.5, e.z0 + (e.z1 - e.z0) * 0.5, e);
+    if (FLOTTE.some(v => v !== c && Math.hypot(v.x - p.px, v.z - p.pz) < 12)) continue;
+    if (Math.hypot(p.px - P.pos.x, p.pz - P.pos.z) < 30) continue;   // jamais sous les yeux du joueur
+    if (carBlocked(p.px, p.pz, c.solid, r0, { veh: true, bar: true }, 0, e.sens, l0)) continue;
+    c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null; c.libre = null; c.figeT = 0;
+    c.y = groundCar(c.x, c.z, c.solid, 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+    vehicleSolid(c); return true;
   }
+  return false;
+}
+function traficPlace() {
+  let n = 0;
+  for (const c of city.aiCars) if (c.spd && traficPose(c)) n++;
   return n;
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
-function avanceVehicule(c, dt, spd, opt) {
+function avanceVehicule(c, dt, spd, opt, h0) {
   const [r0, L] = vehHalf(c);
   const o = Object.assign({ bar: true, veh: true }, opt || {});
+  // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
+  // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
+  // est dans un solide et pas l'ancien, on annule la rotation de cette image.
+  if (h0 != null && h0 !== c.h && carBlocked(c.x, c.z, c.solid, r0, o, 0, c.h, L)
+    && !carBlocked(c.x, c.z, c.solid, r0, o, 0, h0, L)) c.h = h0;
+  const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
   let bloque = 0;
   if (!carBlocked(nx, c.z, c.solid, r0, o, 0, c.h, L)) c.x = nx; else bloque++;
   if (!carBlocked(c.x, nz, c.solid, r0, o, 0, c.h, L)) c.z = nz; else bloque++;
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
+  // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
+  // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
+  // VERIFIEE et on y revient : plus une seule image avec un capot dans un mur.
+  if (!carBlocked(c.x, c.z, c.solid, r0, o, 0, c.h, L)) c.libre = [c.x, c.z, c.h];
+  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= spd * dt / 0.3; });
@@ -5985,7 +6022,7 @@ function traficRoule(c, dt) {
   while (st.i < R.length - 1 && Math.hypot(R[st.i][0] - c.x, R[st.i][1] - c.z) < 2.8) st.i++;
   const wp = R[Math.min(st.i, R.length - 1)];
   const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
-  const want = Math.atan2(dx, dz), dh = CAP(want - c.h);
+  const want = Math.atan2(dx, dz), dh = CAP(want - c.h), h0 = c.h;
   c.h += clamp(dh, -1, 1) * clamp(4.4 - Math.abs(c.speed || 0) * 0.1, 2.2, 4.2) * dt;
   // on leve le pied AVANT le virage, pas dedans
   let virage = Math.abs(dh);
@@ -6005,7 +6042,7 @@ function traficRoule(c, dt) {
   cible = Math.min(cible, co.v);
   c.raison = co.raison;
   const [gap, mini] = gapDevant(c);
-  if (gap < mini) cible = 0; else if (gap < mini + 4) cible = Math.min(cible, (gap - mini) * 2.6);
+  if (gap < mini) { cible = 0; c.raison = 'file'; } else if (gap < mini + 4) { cible = Math.min(cible, (gap - mini) * 2.6); if (cible < 2) c.raison = 'file'; }
   if (pietonDevant(c)) { cible = 0; klaxonne(c); c.raison = 'pieton'; }
   // arrivee : on se choisit une nouvelle destination
   if (st.i >= R.length - 1 && dwp < 5) { c.ia = null; return; }
@@ -6013,9 +6050,23 @@ function traficRoule(c, dt) {
   c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
   if (c.speed < 0.05) c.speed = 0;
   c.stopped = c.speed < 0.4;
-  const bloque = avanceVehicule(c, dt, c.speed, {});
+  const bloque = avanceVehicule(c, dt, c.speed, {}, h0);
   if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
   else c.bloqueT = 0;
+  // SOUPAPE. Une voiture arretee au feu, au stop ou devant un pieton fait son travail ; une
+  // voiture arretee SANS RAISON est coincee (un chantier tout neuf en travers de sa voie, une
+  // impasse ou elle ne peut pas tourner). Au bout de 8 s elle se cherche une autre destination,
+  // au bout de 20 s elle va reprendre la circulation ailleurs — la ville ne se fige jamais.
+  const excuse = c.raison === 'feu' || c.raison === 'stop' || c.raison === 'cede' || c.raison === 'passage' || c.raison === 'pieton' || c.raison === 'file';
+  // On juge sur le chemin REELLEMENT parcouru : une voiture qui rabote un mur affiche encore
+  // 1,2 m/s au compteur et n'avance que de trente centimetres par seconde.
+  if ((c.pas || 0) < 2.2 * dt && !excuse) c.figeT = (c.figeT || 0) + dt; else c.figeT = 0;
+  // Et le garde-fou ultime : meme avec une bonne excuse, PERSONNE ne reste immobile 40 s.
+  // Un feu dure 16 s, un stop 2 s, un pieton quelques secondes ; au-dela, c'est une file qui
+  // ne repartira jamais (la voiture de tete est coincee) et on va circuler ailleurs.
+  if ((c.pas || 0) < 0.6 * dt) c.attenteT = (c.attenteT || 0) + dt; else c.attenteT = 0;
+  if (c.figeT > 20 || c.attenteT > 40) { traficPose(c); }
+  else if (c.figeT > 8 && c.ia) { c.ia = null; c.destT = 0; }
 }
 const GLOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.4, 'rgba(255,220,120,0.35)'); gr.addColorStop(1, 'rgba(255,200,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();
 const day = { len: 360, h: 7, night: 0, glows: [], last: -1 };
@@ -11303,7 +11354,7 @@ function conduire(c, tx, tz, dt, st) {
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   // Le braquage dépend de l'allure, comme une vraie voiture : vif à basse vitesse pour se
   // dégager d'un créneau, plus posé à pleine vitesse pour ne pas partir en zigzag.
-  const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6);
+  const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6), h0 = c.h;
   c.h += clamp(dh, -1, 1) * braq * dt;
   // On lève le pied AVANT le virage, pas dedans. Une voiture lancée à 24 m/s a un rayon de
   // braquage de 8 m : elle ne peut pas prendre un angle droit dans une rue de 6 m, et
@@ -11328,12 +11379,17 @@ function conduire(c, tx, tz, dt, st) {
   if (pietonDevant(c)) { vmax = 0; klaxonne(c); c.raison = 'pieton'; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
-  const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
-  const opt = { bar: true, pol: true };
+  const opt = { bar: true, pol: true, veh: true };
   let bloque = 0;
   const [cr, cL] = vehHalf(c);
+  // tourner sur place enfonce aussi un coin dans un mur : on annule la rotation si elle mord
+  if (h0 != null && h0 !== c.h && carBlocked(c.x, c.z, c.solid, cr, opt, 0, c.h, cL)
+    && !carBlocked(c.x, c.z, c.solid, cr, opt, 0, h0, cL)) c.h = h0;
+  const nx = c.x + Math.sin(c.h) * c.speed * dt, nz = c.z + Math.cos(c.h) * c.speed * dt;
   if (!carBlocked(nx, c.z, c.solid, cr, opt, 0, c.h, cL)) c.x = nx; else { c.speed *= 0.4; bloque++; }
   if (!carBlocked(c.x, nz, c.solid, cr, opt, 0, c.h, cL)) c.z = nz; else { c.speed *= 0.4; bloque++; }
+  if (!carBlocked(c.x, c.z, c.solid, cr, opt, 0, c.h, cL)) c.libre = [c.x, c.z, c.h];
+  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : 0;
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
@@ -11351,8 +11407,13 @@ function conduire(c, tx, tz, dt, st) {
   // (le tracé étant maintenant fait de longues lignes droites, on ne se téléporte plus au
   // point de passage — il peut être à 80 m — mais de quelques mètres dans sa direction)
   if (st.saut !== false && st.bloqueT > 3.5) { st.bloqueT = 0; const w2 = st.route[Math.min(1, st.route.length - 1)];
-    const ex = w2[0] - c.x, ez = w2[1] - c.z, el = Math.hypot(ex, ez) || 1, pas = Math.min(el, 7);
-    c.x += ex / el * pas; c.z += ez / el * pas; st.route = null; st.routeT = 0; c.speed = 6; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+    const ex = w2[0] - c.x, ez = w2[1] - c.z, el = Math.hypot(ex, ez) || 1;
+    // on ne saute que sur un metre de bitume LIBRE : avant, le deblocage pouvait deposer la
+    // voiture en plein dans une facade
+    let pas = 0;
+    for (let u = Math.min(el, 7); u >= 1.5; u -= 1) { if (!carBlocked(c.x + ex / el * u, c.z + ez / el * u, c.solid, cr, opt, 0, c.h, cL)) { pas = u; break; } }
+    if (pas) { c.x += ex / el * pas; c.z += ez / el * pas; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
+    st.route = null; st.routeT = 0; c.speed = pas ? 6 : 0; }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
   return dist;

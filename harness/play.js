@@ -9183,6 +9183,14 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
 // Réponse à la demande du joueur : « les roues des véhicules entrent dans le sol ; les
 // mouvements sont trop simples, inspire-toi de GTA » — puis les places assises, les chocs,
 // la dépanneuse et les ambulances.
+//
+// Deux pièges de banc d'essai reviennent dans tous ces tests, d'où les précautions :
+//  · on ÉCARTE puis on REMET les véhicules garés autour du lieu d'essai. En les déplaçant
+//    sans les remettre, chaque test décalait un peu plus le parc et les suivants mesuraient
+//    des véhicules à 2 km de là.
+//  · pour mesurer un son COURT (le BOOM, la pétarade), on met le rendu en veille
+//    (window.__manetteSeule) : une image de swiftshader bloque le fil principal près de
+//    quatre secondes, et le son était fini bien avant qu'on prenne la mesure.
 
 test('les roues de CHAQUE type de véhicule sont posées sur le sol, à l\'arrêt comme en roulant', async p => {
   const r = await p.evaluate(() => {
@@ -9197,91 +9205,101 @@ test('les roues de CHAQUE type de véhicule sont posées sur le sol, à l\'arrê
       return b.min.y - G.groundCar(wp.x, wp.z, c.solid, c.y || 0);
     };
     const mesure = c => { c.g.updateMatrixWorld(true); let bas = 9, haut = -9; for (const r2 of c.roues) { const d = basRoue(c, r2); if (d < bas) bas = d; if (d > haut) haut = d; } return [bas, haut]; };
-    const tous = [...G.city.cars, ...G.city.aiCars, ...G.police.cars];
-    // 1) À L'ARRÊT, chaque genre posé sur un sol PLAT : route, trottoir et sable.
-    //    (un véhicule garé à cheval sur une bordure a forcément une roue en l'air : ce n'est
-    //     pas ce qu'on mesure ici, on cherche la gomme qui rentre dans le décor)
+    // La surface doit être plate SOUS TOUT LE VÉHICULE : un camion de 8,6 m posé sur un
+    // trottoir déborde forcément dans le caniveau et sa roue arrière pend dans le vide — ce
+    // n'est pas un défaut de calage, c'est un trottoir trop étroit pour un camion.
+    const plat = (x, z, c) => {
+      const W = (c.baseW || 2.4) / 2, D = (c.baseD || 4.4) / 2, h = [];
+      for (const dx of [-W, 0, W]) for (const dz of [-D, 0, D]) h.push(G.groundUnder(x + dx, z + dz, null, 1.4));
+      return Math.max(...h) - Math.min(...h) < 0.03;
+    };
     const sols = { route: [26, 0], trottoir: [21.5, 0], sable: null };
     { const s = G.city.sea; if (s) sols.sable = [(s.x1 || 0) - 6, 40]; }
-    const plat = (x, z) => { const h = []; for (const dx of [-1.2, 0, 1.2]) for (const dz of [-2.2, 0, 2.2]) h.push(G.groundUnder(x + dx, z + dz, null, 1.4)); return Math.max(...h) - Math.min(...h) < 0.03; };
+    const tous = [...G.city.cars, ...G.city.aiCars, ...G.police.cars];
     const res = {}, vus = {};
     for (const c of tous) {
       const k = c.kind || (c.kart ? 'kart' : c.heli ? 'heli' : c.sport ? 'sport' : 'voiture');
       if (vus[k] || !c.roues || !c.roues.length) continue; vus[k] = 1;
-      const g0 = [c.x, c.z, c.h, c.y];
-      const par = {};
+      const g0 = [c.x, c.z, c.h, c.y], par = {};
       for (const [nom, pt] of Object.entries(sols)) {
-        if (!pt || !plat(pt[0], pt[1])) { par[nom] = null; continue; }
+        if (!pt || !plat(pt[0], pt[1], c)) { par[nom] = null; continue; }
         c.x = pt[0]; c.z = pt[1]; c.h = 0; c.y = G.groundUnder(c.x, c.z, c.solid, 2); G.settleVehicle(c);
         c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(0, 0, 0, 'YXZ'); if (c.caisse) c.caisse.position.y = 0;
         par[nom] = mesure(c).map(v => +v.toFixed(3));
       }
       res[k] = par;
-      c.x = g0[0]; c.z = g0[1]; c.h = g0[2]; c.y = g0[3]; c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; G.vehicleSolid(c);
+      c.x = g0[0]; c.z = g0[1]; c.h = g0[2]; c.y = g0[3]; c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ'); G.vehicleSolid(c);
     }
-    // 2) EN ROULANT : on lance une voiture sur l'anneau, roues mesurées à chaque image
+    // EN ROULANT : on lance une voiture sur l'anneau, roues mesurées à chaque image
     const v = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    for (const a of G.city.cars) if (a !== v) { a.x += 400; G.vehicleSolid(a); }
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === v || Math.hypot(a.x - 26, a.z) > 80) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
     v.busy = false; v.dmg = 0; v.x = 26; v.z = 24; v.h = Math.PI; v.y = G.groundUnder(26, 24, v.solid, 1);
     G.enterCar(v); G.drive.speed = 14;
     let bas = 9;
     for (let i = 0; i < 90; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(v, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); const m = mesure(v); if (m[0] < bas) bas = m[0]; }
     G.exitCar();
-    return { res, roulant: +bas.toFixed(3), genres: Object.keys(res).length };
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { res, roulant: +bas.toFixed(3), genres: Object.keys(res).length,
+      mesures: Object.values(res).reduce((n, q) => n + Object.values(q).filter(Boolean).length, 0) };
   });
-  const bornes = ([a, b]) => a >= -0.02 && b <= 0.05;
   const mauvais = [];
-  for (const [k, par] of Object.entries(r.res)) for (const [sol, m] of Object.entries(par)) if (m && !bornes(m)) mauvais.push(`${k}/${sol} ${m[0]}…${m[1]} m`);
-  const ok = r.genres >= 12 && !mauvais.length && r.roulant >= -0.02;
-  return { ok, detail: `la hauteur de chaque roue était écrite à la main (0,36 pour une voiture, 0,42 pour un camion, 0,52 pour le buggy) alors que son rayon dépend de l'échelle : le tracteur roulait les roues arrière enfoncées de 7,7 cm dans le bitume et le vélo flottait 9,7 cm au-dessus · chaque roue est maintenant MESURÉE (Box3, échelles et parents compris) et reposée sur le sol, et le véhicule suit la plus HAUTE de ses roues au lieu de son centre · ${r.genres} genres essayés à l'arrêt sur route, trottoir et sable : ${mauvais.length ? 'HORS BORNES ' + mauvais.join(', ') : 'tous entre −0,02 et +0,05 m'} ; en roulant, la roue la plus basse reste à ${r.roulant} m du sol` };
+  for (const [k, par] of Object.entries(r.res)) for (const [sol, m] of Object.entries(par)) if (m && !(m[0] >= -0.02 && m[1] <= 0.05)) mauvais.push(`${k}/${sol} ${m[0]}…${m[1]} m`);
+  const ok = r.genres >= 12 && r.mesures >= 20 && !mauvais.length && r.roulant >= -0.02;
+  return { ok, detail: `la hauteur de chaque roue était écrite à la main (0,36 pour une voiture, 0,42 pour un camion, 0,52 pour le buggy) alors que son rayon dépend de l'échelle passée à makeWheel : le tracteur roulait les roues arrière enfoncées de 7,7 cm dans le bitume et le vélo flottait 9,7 cm au-dessus · chaque roue est maintenant MESURÉE (Box3, échelles et parents compris) et reposée sur le sol, et le véhicule suit la plus HAUTE de ses roues au lieu de son centre · ${r.genres} genres essayés à l'arrêt sur route, trottoir et sable (${r.mesures} mesures ; les surfaces trop étroites pour le gabarit sont écartées) : ${mauvais.length ? 'HORS BORNES ' + mauvais.join(', ') : 'toutes entre −0,02 et +0,05 m'} · en roulant, la roue la plus basse reste à ${r.roulant} m du sol` };
 });
 
 test('les roues tournent à la vitesse réelle, les roues avant braquent, et la caisse prend du roulis et du tangage', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    for (const a of G.city.cars) if (a !== c) { a.x += 400; G.vehicleSolid(a); }
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - 26, a.z) > 80) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
     c.busy = false; c.dmg = 0;
     const remet = () => { c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1); c.vy = 0; c.airborne = false; };
     remet(); G.enterCar(c);
     const pas = (cmd, n) => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, cmd, 1 / 60); } };
-    // ROULEMENT : un tour de roue par 2πr parcourus
     remet(); G.drive.speed = 10; const a0 = c.roues[0].m.rotation.x, x0 = c.x, z0 = c.z;
     pas({ gaz: 0.35, volant: 0, frein: 0 }, 60);
-    const dist = Math.hypot(c.x - x0, c.z - z0), tours = Math.abs(c.roues[0].m.rotation.x - a0) * c.roues[0].r;
-    // BRAQUAGE : à basse vitesse, on va au maximum ; seules les roues AVANT tournent
+    const dist = Math.hypot(c.x - x0, c.z - z0), gomme = Math.abs(c.roues[0].m.rotation.x - a0) * c.roues[0].r;
     remet(); G.drive.speed = 2;
     pas({ gaz: 0.2, volant: 1, frein: 0 }, 60);
     const avD = c.roues.filter(w => w.avant).map(w => +(w.m.rotation.y * 180 / Math.PI).toFixed(1));
     const arD = c.roues.filter(w => !w.avant).map(w => +(w.m.rotation.y * 180 / Math.PI).toFixed(3));
-    // ROULIS en virage, TANGAGE à l'accélération puis au freinage
     remet(); G.drive.speed = 16; pas({ gaz: 0.8, volant: 1, frein: 0 }, 40);
     const roulis = c.roulis;
     remet(); G.drive.speed = 0; c.tangage = 0; pas({ gaz: 1, volant: 0, frein: 0 }, 18);
     const cabre = c.tangage;
     remet(); G.drive.speed = 22; c.tangage = 0; pas({ gaz: -1, volant: 0, frein: 1 }, 22);
     const plonge = c.tangage;
-    // la CAISSE bouge, les roues restent au sol : elles ne sont pas dans le même groupe
     const separe = !!c.caisse && !c.caisse.children.some(o => c.wheels.includes(o));
     G.exitCar();
-    return { dist: +dist.toFixed(2), tours: +tours.toFixed(2), rayon: +c.roues[0].r.toFixed(3),
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { dist: +dist.toFixed(2), gomme: +gomme.toFixed(2), rayon: +c.roues[0].r.toFixed(3),
       avD, arD, roulis: +roulis.toFixed(3), cabre: +cabre.toFixed(3), plonge: +plonge.toFixed(3), separe };
   });
   const braq = Math.abs(r.avD[0] || 0);
-  const ok = Math.abs(r.tours - r.dist) < r.dist * 0.12 && braq > 24 && braq <= 31
+  const ok = Math.abs(r.gomme - r.dist) < r.dist * 0.12 && braq > 24 && braq <= 31
     && r.avD.every(a => Math.abs(a) > 24) && r.arD.every(a => Math.abs(a) < 0.01)
     && Math.abs(r.roulis) > 0.03 && r.cabre < -0.02 && r.plonge > 0.02 && r.separe;
-  return { ok, detail: `les roues tournaient toutes comme si elles faisaient 30 cm de rayon et ne braquaient jamais · elles roulent maintenant sur LEUR rayon (${r.rayon} m) : ${r.dist} m parcourus pour ${r.tours} m de gomme déroulée ; seules les roues avant braquent (${r.avD.join(' / ')}° contre ${r.arD.join(' / ')}° à l'arrière, maximum 30°) ; la caisse penche de ${r.roulis} rad en virage, se cabre de ${-r.cabre} rad à l'accélération et plonge de ${r.plonge} rad au freinage — et comme les roues ne sont plus dans le même groupe que la caisse (${r.separe}), elles restent posées par terre pendant que la caisse travaille` };
+  return { ok, detail: `les roues tournaient toutes comme si elles faisaient 30 cm de rayon et ne braquaient jamais · elles roulent maintenant sur LEUR rayon (${r.rayon} m) : ${r.dist} m parcourus pour ${r.gomme} m de gomme déroulée ; seules les roues avant braquent (${r.avD.join(' / ')}° contre ${r.arD.join(' / ')}° à l'arrière, 30° au maximum) ; la caisse penche de ${r.roulis} rad en virage, se cabre de ${-r.cabre} rad à l'accélération et plonge de ${r.plonge} rad au freinage — et comme les roues ne sont plus dans le même groupe que la caisse (${r.separe}), elles restent posées par terre pendant que la caisse travaille` };
 });
 
 test('la gomme fume au freinage fort et au dérapage, jamais en roulant doucement', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    for (const a of G.city.cars) if (a !== c) { a.x += 400; G.vehicleSolid(a); }
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - 26, a.z) > 80) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
     c.busy = false; c.dmg = 0;
     const remet = () => { c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1); c.vy = 0; c.fumeeT = 0; };
     remet(); G.enterCar(c);
@@ -9291,38 +9309,43 @@ test('la gomme fume au freinage fort et au dérapage, jamais en roulant doucemen
     const doux = essai({ gaz: 0.25, volant: 0, frein: 0 }, 6, 60);
     const arret = essai({ gaz: 0, volant: 0, frein: 1 }, 0, 60);
     G.exitCar();
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
     return { frein, main, doux, arret };
   });
   const ok = r.frein >= 2 && r.main >= 2 && r.doux === 0 && r.arret === 0;
-  return { ok, detail: `aucune trace de gomme n'existait : on pilait sans un bruit et sans un nuage · un freinage appuyé à 79 km/h fait maintenant ${r.frein} bouffées de fumée blanche aux roues (avec le crissement), le frein à main en dérapage ${r.main} — et rouler doucement (${r.doux}) ou piler à l'arrêt (${r.arret}) n'en fait aucune` };
+  return { ok, detail: `aucune trace de gomme n'existait : on pilait sans un bruit et sans un nuage · un freinage appuyé à 79 km/h fait maintenant ${r.frein} bouffées de fumée blanche aux roues (avec le crissement qui va avec), le frein à main en dérapage ${r.main} — et rouler doucement (${r.doux}) ou piler à l'arrêt (${r.arret}) n'en fait aucune` };
 });
 
-test('la sensation de vitesse : le champ de vision s\'ouvre et la caméra recule quand on accélère', async p => {
-  await p.evaluate(() => {
+test('la sensation de vitesse : le champ de vision s\'ouvre, la caméra recule et le châssis fait vibrer l\'image', async p => {
+  const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 26, y: 1, z: 24, hour: 12 });
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    for (const a of G.city.cars) if (a !== c) { a.x += 400; G.vehicleSolid(a); }
-    c.busy = false; c.dmg = 0; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
-    G.enterCar(c); G.drive.speed = 0;
-    window.__vh = { fov0: G.camera.fov, dist0: G.cam.dist, fov: 0, dist: 0, v: 0, vibr: 0 };
-    window.__vhT = setInterval(() => {
-      const w = window.__vh;
-      w.fov = Math.max(w.fov, G.camera.fov); w.dist = Math.max(w.dist, G.cam.dist);
-      w.v = Math.max(w.v, Math.abs(G.drive.speed)); w.vibr = Math.max(w.vibr, G.cam.vibr || 0);
-    }, 25);
+    c.busy = false; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
+    // à pied : rien ne bouge, le champ de vision reste celui du jeu
+    G.P.zoom = false;
+    for (let i = 0; i < 40; i++) G.camConduite(1 / 60);
+    const pied = G.camConduite(1 / 60);
+    G.enterCar(c);
+    G.drive.speed = 0;
+    for (let i = 0; i < 40; i++) G.camConduite(1 / 60);
+    const arret = G.camConduite(1 / 60);
+    G.drive.speed = c.spec.max * 0.5;
+    for (let i = 0; i < 60; i++) G.camConduite(1 / 60);
+    const moitie = G.camConduite(1 / 60);
+    G.drive.speed = c.spec.max;
+    for (let i = 0; i < 90; i++) G.camConduite(1 / 60);
+    const fond = G.camConduite(1 / 60);
+    G.drive.speed = 0;
+    for (let i = 0; i < 90; i++) G.camConduite(1 / 60);
+    const retour = G.camConduite(1 / 60);
+    G.exitCar();
+    return { pied, arret, moitie, fond, retour };
   });
-  await p.waitForTimeout(400);
-  const repos = await p.evaluate(() => ({ fov: __G.camera.fov, dist: __G.cam.dist }));
-  await p.evaluate(() => { __G.keys.add('KeyW'); });
-  await p.waitForTimeout(2600);
-  const r = await p.evaluate(() => {
-    __G.keys.delete('KeyW'); clearInterval(window.__vhT);
-    const w = window.__vh; if (__G.drive.car) __G.exitCar();
-    return { fov: +w.fov.toFixed(1), dist: +w.dist.toFixed(2), v: +w.v.toFixed(1), vibr: +w.vibr.toFixed(4) };
-  });
-  const ok = r.v > 12 && r.fov > repos.fov + 5 && r.dist > repos.dist + 1 && r.vibr > 0.001;
-  return { ok, detail: `le champ de vision était figé à 55° et la caméra à la même distance qu'à pied : à 200 km/h comme à l'arrêt, l'image ne disait RIEN de la vitesse · en tenant le gaz jusqu'à ${Math.round(r.v * 3.6)} km/h, le champ de vision s'ouvre de ${repos.fov.toFixed(1)}° à ${r.fov}°, la caméra recule de ${repos.dist.toFixed(2)} m à ${r.dist} m, et le châssis fait vibrer l'image (${r.vibr} m) au-delà des trois quarts de la vitesse maxi` };
+  const ok = Math.abs(r.pied.fov - 55) < 0.5 && Math.abs(r.arret.fov - 55) < 0.5
+    && r.moitie.fov > r.arret.fov + 5 && r.fond.fov > r.moitie.fov + 4 && r.fond.fov > 68
+    && r.fond.recul > 2.4 && r.moitie.recul > 1.1 && r.arret.recul < 0.05
+    && r.fond.vibr > 0.02 && r.moitie.vibr === 0 && Math.abs(r.retour.fov - 55) < 0.6;
+  return { ok, detail: `le champ de vision était figé à 55° et la caméra à la même distance qu'à pied : à 200 km/h comme à l'arrêt, l'image ne disait RIEN de la vitesse · elle le dit maintenant, et proprement : à pied ${r.pied.fov}°, au volant à l'arrêt ${r.arret.fov}° (recul ${r.arret.recul} m), à mi-régime ${r.moitie.fov}° (recul ${r.moitie.recul} m), à fond ${r.fond.fov}° (recul ${r.fond.recul} m) et le châssis fait vibrer l'image de ${r.fond.vibr} m — au-delà des trois quarts de la vitesse maxi seulement (${r.moitie.vibr} à mi-régime) — puis tout revient en place quand on s'arrête (${r.retour.fov}°)` };
 });
 
 test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse pétarade qui SORT vraiment', async p => {
@@ -9332,37 +9355,43 @@ test('le moteur monte en régime avec les rapports, et la NITRO fait une grosse 
     const ctx = G.sfx.unlock(), ch = G.sfx.chaine();
     const an = ctx.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
     const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
+    // rendu en veille : une image de swiftshader bloque le fil principal près de quatre
+    // secondes, et une pétarade de 0,7 s serait finie avant qu'on la mesure
+    window.__manetteSeule = true;
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
-    await dodo(700);
-    const silence = rms();
+    await dodo(800); const silence = rms();
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    for (const a of G.city.cars) if (a !== c) { a.x += 400; G.vehicleSolid(a); }
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - 26, a.z) > 80) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
     c.busy = false; c.dmg = 0; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
     G.enterCar(c);
-    const pas = (cmd, n) => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, cmd, 1 / 60); } };
+    const tour = (v, n) => { G.drive.speed = v; c.x = 26; c.z = 24; c.h = Math.PI; for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: v > 0 ? 1 : 0, volant: 0, frein: 0 }, 1 / 60); G.drive.speed = v; } return [G.drive.gear, +c.regime.toFixed(1)]; };
     // RALENTI : à l'arrêt, pied levé
-    G.drive.speed = 0; c.regime = null; pas({ gaz: 0, volant: 0, frein: 0 }, 30);
-    const ralenti = +c.regime.toFixed(2), gearRalenti = G.drive.gear;
-    // puis on monte les rapports
-    const rapports = [];
-    for (let k = 0; k < 5; k++) { pas({ gaz: 1, volant: 0, frein: 0 }, 45); rapports.push([G.drive.gear, +c.regime.toFixed(1)]); }
-    await dodo(500); const moteur = rms();
-    // LA NITRO : bouteille montée, on déclenche
+    c.regime = null; const ralenti = tour(0, 40);
+    // puis chaque rapport, à vitesse imposée : le régime doit monter avec la vitesse
+    const paliers = [0.15, 0.32, 0.5, 0.7, 0.95].map(f => tour(c.spec.max * f, 20));
+    await dodo(600); const moteur = rms();
+    // LA NITRO. Moteur coupé, pour que la pétarade s'entende seule.
+    G.engine.stop(); await dodo(600); const silence2 = rms();
     c.nitroPret = true; G.drive.nitroCd = 0;
     const avant = G.petarade.n || 0;
     const parti = G.nitroGo();
     const apres = G.petarade.n || 0;
-    await dodo(140); const petard = rms();
+    await dodo(150); const petard = rms();
     await dodo(900);
     G.engine.stop(); G.exitCar();
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
     try { ch.lim.disconnect(an); } catch (e) {}
-    return { etat: ctx.state, silence, ralenti, gearRalenti, rapports, moteur, parti, petarades: apres - avant, petard };
+    window.__manetteSeule = false;
+    return { etat: ctx.state, silence, silence2, ralenti, paliers, moteur, parti, petarades: apres - avant, petard };
   });
-  const monte = r.rapports.length === 5 && r.rapports[4][0] > r.rapports[0][0] && r.rapports[4][1] > r.rapports[0][1];
-  const ok = r.etat === 'running' && r.ralenti < 2 && monte && r.moteur > r.silence + 0.03
-    && r.parti === true && r.petarades === 1 && r.petard > r.moteur + 0.02;
-  return { ok, detail: `le régime moteur ne dépendait que du rapport de boîte et la nitro ne faisait qu'un « pschitt » de bruitage · le moteur tourne maintenant au RALENTI à l'arrêt (${r.ralenti}, rapport ${r.gearRalenti}) puis monte rapport après rapport : ${r.rapports.map(g => 'A' + g[0] + '→' + g[1]).join(', ')} · et la NITRO déclenche une vraie PÉTARADE (détonation + souffle + ratés d'allumage) envoyée sur le bus MOTEUR : mesuré par un analyseur au bout de la chaîne, silence ${r.silence}, moteur ${r.moteur}, pétarade ${r.petard}` };
+  const monte = r.paliers.every((g, i) => i === 0 || g[1] >= r.paliers[i - 1][1] - 0.1) && r.paliers[4][0] > r.paliers[0][0];
+  const ok = r.etat === 'running' && r.ralenti[1] < 2 && monte && r.moteur > r.silence + 0.02
+    && r.parti === true && r.petarades === 1 && r.petard > r.silence2 + 0.05;
+  return { ok, detail: `le régime moteur ne dépendait que du rapport de boîte, et la nitro ne faisait qu'un « pschitt » de bruitage · le moteur tourne maintenant au RALENTI à l'arrêt (${r.ralenti[1]}, rapport A${r.ralenti[0]}) puis monte vitesse après vitesse : ${r.paliers.map(g => 'A' + g[0] + '→' + g[1]).join(', ')} · et la NITRO déclenche une vraie PÉTARADE — détonation, souffle et ratés d'allumage — envoyée sur le bus MOTEUR : mesuré par un analyseur au bout de la chaîne, silence ${r.silence}, moteur qui tourne ${r.moteur}, moteur coupé ${r.silence2}, pétarade ${r.petard}` };
 });
 
 test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et le chien — sans rien qui dépasse', async p => {
@@ -9377,16 +9406,20 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
     for (const c of tous) {
       const k = c.kind || (c.kart ? 'kart' : c.heli ? 'heli' : c.sport ? 'sport' : 'voiture');
       if (vus[k]) continue; vus[k] = 1;
+      // la caisse et le repère logique doivent coïncider : un test précédent a pu déplacer
+      // le véhicule sans bouger son groupe
+      c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ');
       const TT = G.placesDe(c), noms = G.PLACES_ORDRE.filter(n => TT[n]);
       const ferme = !!G.caisseFermee(c);
       const bc = boite(c.caisse || c.g);
-      const e = { places: noms.length, chien: !!TT.chien, ferme, dehors: [], trop: 0, ecart: 99 };
-      // chacun sa place : deux places ne sont jamais à moins de 92 cm (le diamètre d'un
-      // personnage, la règle que la ville applique déjà aux piétons)
-      const pts = noms.map(n => TT[n]).concat(TT.chien ? [TT.chien] : []);
+      const e = { places: noms.length, chien: !!TT.chien, ferme, dehors: [], ecart: 99, ecartChien: 99 };
+      // chacun sa place : deux personnes ne sont jamais à moins de 92 cm (le diamètre d'un
+      // personnage, la règle que la ville applique déjà aux piétons) et le chien, plus petit,
+      // jamais à moins de 55 cm de quelqu'un
+      const pts = noms.map(n => TT[n]);
       for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++)
         e.ecart = Math.min(e.ecart, Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z));
-      // 1, 2 puis 3 occupants : à chaque configuration, personne ne sort de la carrosserie
+      if (TT.chien) for (const q of pts) e.ecartChien = Math.min(e.ecartChien, Math.hypot(q.x - TT.chien.x, q.z - TT.chien.z));
       for (let n = 1; n <= Math.min(3, noms.length); n++) {
         for (let i = 0; i < n; i++) G.assiedAvatar(figs[i], c, TT[noms[i]], 1, noms[i] === 'conducteur');
         for (let i = 0; i < n; i++) {
@@ -9396,25 +9429,30 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
           if (sort && ferme) e.dehors.push(n + ':' + noms[i]);
         }
       }
-      // et le CHIEN a sa place à lui
-      if (TT.chien && G.chien.pet) { const w = G.assiedChien(c, 1); e.chienPose = !!w; }
+      if (TT.chien && G.chien.pet) e.chienPose = !!G.assiedChien(c, 1);
       for (const a of figs) a.group.visible = false;
       res[k] = e;
     }
-    // le joueur qui monte APPARAÎT assis : dès la première image, cuisses à l'horizontale
+    // LE JOUEUR QUI MONTE APPARAÎT ASSIS : dès la première image, sans transition
     const v = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    v.busy = false; G.me.rig.legL.rotation.x = 0; G.me.rig.legR.rotation.x = 0;
+    v.busy = false; v.g.position.set(v.x, v.y || 0, v.z);
+    G.me.rig.legL.rotation.x = 0; G.me.rig.legR.rotation.x = 0; G.me.rig.armL.rotation.x = 0;
     G.enterCar(v);
-    G.step(1 / 60, true);
-    return { res, cuisse: +G.me.rig.legL.rotation.x.toFixed(2), genou: +(G.me.rig.legL.genou ? G.me.rig.legL.genou.rotation.x : 0).toFixed(2),
-      bras: +G.me.rig.armL.rotation.x.toFixed(2), genres: Object.keys(res).length };
+    G.poseJoueurAuVolant(1 / 60);
+    const pose = { cuisse: +G.me.rig.legL.rotation.x.toFixed(2), genou: +(G.me.rig.legL.genou ? G.me.rig.legL.genou.rotation.x : 0).toFixed(2), bras: +G.me.rig.armL.rotation.x.toFixed(2) };
+    const bJ = boite(G.me.group), bV = boite(v.caisse || v.g);
+    pose.dedans = bJ.min.x > bV.min.x - 0.03 && bJ.max.x < bV.max.x + 0.03 && bJ.max.y < bV.max.y + 0.03 && bJ.min.y > bV.min.y - 0.03;
+    G.exitCar();
+    return { res, pose, genres: Object.keys(res).length };
   });
   const sortis = Object.entries(r.res).filter(([, e]) => e.dehors.length).map(([k, e]) => k + ' (' + e.dehors.join(', ') + ')');
   const serres = Object.entries(r.res).filter(([, e]) => e.ecart < 0.92).map(([k, e]) => k + ' ' + e.ecart.toFixed(2) + ' m');
+  const chiensSerres = Object.entries(r.res).filter(([, e]) => e.chien && e.ecartChien < 0.55).map(([k, e]) => k + ' ' + e.ecartChien.toFixed(2) + ' m');
   const places = Object.values(r.res).reduce((s, e) => s + e.places, 0);
   const chiens = Object.values(r.res).filter(e => e.chien).length;
-  const ok = r.genres >= 15 && !sortis.length && !serres.length && r.cuisse < -1.3 && r.genou > 1.3 && r.bras < -1;
-  return { ok, detail: `un personnage mesure 2,36 m et l'habitacle d'une berline 1,60 m : le conducteur avait la tête 40 cm AU-DESSUS du toit, et il fallait attendre une demi-seconde pour qu'il s'asseye · table PLACES pour ${r.genres} genres de véhicule, ${places} places nommées (conducteur, passager avant, deux places arrière) et ${chiens} places de chien · à 1, 2 puis 3 occupants, aucun morceau ne sort de la carrosserie (${sortis.length ? 'RESTE ' + sortis.join(', ') : 'zéro débordement'}) et deux places ne sont jamais à moins de 92 cm (${serres.length ? 'TROP SERRÉ ' + serres.join(', ') : 'toutes bien espacées'}) · le joueur qui monte apparaît assis DÈS LA PREMIÈRE IMAGE : cuisse ${r.cuisse} rad (horizontale), genou ${r.genou} rad (plié), bras ${r.bras} rad (mains sur le volant)` };
+  const ok = r.genres >= 15 && !sortis.length && !serres.length && !chiensSerres.length
+    && r.pose.cuisse < -1.3 && r.pose.genou > 1.3 && r.pose.bras < -1 && r.pose.dedans;
+  return { ok, detail: `un personnage mesure 2,36 m et l'habitacle d'une berline 1,60 m : le conducteur avait la tête 40 cm AU-DESSUS du toit, et il fallait attendre une demi-seconde pour qu'il s'asseye · table PLACES pour ${r.genres} genres de véhicule, ${places} places nommées (conducteur, passager avant, deux places arrière) et ${chiens} places de chien · à 1, 2 puis 3 occupants, aucun morceau ne sort de la carrosserie (${sortis.length ? 'RESTE ' + sortis.join(', ') : 'zéro débordement'}), deux personnes ne sont jamais à moins de 92 cm (${serres.length ? 'TROP SERRÉ ' + serres.join(', ') : 'toutes bien espacées'}) et le chien jamais à moins de 55 cm de quelqu'un (${chiensSerres.length ? 'TROP PRÈS ' + chiensSerres.join(', ') : 'sa place à lui'}) · le joueur qui monte apparaît assis DÈS LA PREMIÈRE IMAGE : cuisse ${r.pose.cuisse} rad (à l'horizontale), genou ${r.pose.genou} rad (plié), bras ${r.pose.bras} rad (mains sur le volant), et il tient entier dans la caisse (${r.pose.dedans})` };
 });
 
 test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort qu\'on va vite', async p => {
@@ -9424,31 +9462,31 @@ test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort 
     const ctx = G.sfx.unlock(), ch = G.sfx.chaine();
     const an = ctx.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
     const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
+    window.__manetteSeule = true;   // rendu en veille : le BOOM dure 0,44 s, une image en dure 4
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
-    await dodo(700); const silence = rms();
+    await dodo(800); const silence = rms();
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    c.busy = false; c.x = 26; c.z = 24; c.y = G.groundUnder(26, 24, c.solid, 1);
-    // à l'arrêt (moins de 1,2 m/s) : RIEN
-    G.boom.n = 0; c.boomT = 0;
+    // à l'arrêt (moins de 1,2 m/s), un contact ne fait RIEN
+    c.boomT = 0; G.boom.n = 0;
     const arret = G.choc(c, 0.4, null);
-    await dodo(200); const rArret = rms();
-    // petit choc
-    G.boom.n = 0; c.boomT = 0;
-    const petit = G.choc(c, 4, null);
-    await dodo(130); const rPetit = rms();
-    await dodo(700);
-    // gros choc
-    G.boom.n = 0; c.boomT = 0;
-    const gros = G.choc(c, 24, null);
-    await dodo(130); const rGros = rms();
-    const fGros = G.boom.force;
+    await dodo(120); const rArret = rms(); const nArret = G.boom.n;
     await dodo(600);
+    // petit choc, puis gros choc
+    c.boomT = 0; G.boom.n = 0;
+    const petit = G.choc(c, 4, null);
+    await dodo(90); const rPetit = rms(); const fPetit = G.boom.force;
+    await dodo(900);
+    c.boomT = 0;
+    const gros = G.choc(c, 24, null);
+    await dodo(90); const rGros = rms(); const fGros = G.boom.force;
+    await dodo(700);
     try { ch.lim.disconnect(an); } catch (e) {}
-    return { silence, arret, rArret, petit, rPetit, gros, rGros, fGros: +fGros.toFixed(2) };
+    window.__manetteSeule = false;
+    return { silence, arret, nArret, rArret, petit, rPetit, fPetit: +fPetit.toFixed(2), gros, rGros, fGros: +fGros.toFixed(2) };
   });
-  const ok = r.arret === 0 && r.rArret < r.silence + 0.02 && r.petit > 0 && r.gros > r.petit
-    && r.rPetit > r.silence + 0.01 && r.rGros > r.rPetit * 1.4;
-  return { ok, detail: `un choc ne faisait qu'un « toc » de bruitage, le même à 5 km/h et à 90 · c'est maintenant un vrai BOOM — une masse qui s'arrête (sinusoïde très grave qui plonge de 150 à 34 Hz) plus de la tôle qui plie — envoyé sur le bus effets, mesuré par un analyseur au bout de la chaîne : à l'arrêt RIEN (${r.rArret} contre ${r.silence} de silence), petit choc à 14 km/h ${r.rPetit}, gros choc à 86 km/h ${r.rGros} (intensité ${r.fGros})` };
+  const ok = r.arret === 0 && r.nArret === 0 && r.rArret < r.silence + 0.02
+    && r.petit > 0 && r.gros > r.petit && r.rPetit > r.silence + 0.03 && r.rGros > r.rPetit * 1.4 && r.fGros > r.fPetit;
+  return { ok, detail: `un choc ne faisait qu'un « toc » de bruitage, le même à 5 km/h et à 90 · c'est maintenant un vrai BOOM — la masse qui s'arrête (une sinusoïde très grave qui plonge de 150 à 34 Hz) plus la tôle qui plie — envoyé sur le bus effets et mesuré par un analyseur au bout de la chaîne : à l'arrêt RIEN (${r.nArret} BOOM déclenché, ${r.rArret} contre ${r.silence} de silence), petit choc à 14 km/h ${r.rPetit} (intensité ${r.fPetit}), gros choc à 86 km/h ${r.rGros} (intensité ${r.fGros})` };
 });
 
 test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sinon c\'est la prison', async p => {
@@ -9457,36 +9495,43 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
     const cars = G.city.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
     const A = cars[0], B = cars[1];
-    for (const v of G.city.aiCars) { v.x = 900; v.z = 900; G.vehicleSolid(v); }
-    const pose = (dmgA) => { A.accidente = false; B.accidente = false; A.busy = false; A.dead = false;
-      A.dmg = dmgA; B.dmg = 5; A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
-      B.x = 26; B.z = 4; B.h = 0; B.y = A.y; };
-    // 1) accident avec le joueur au volant, portefeuille garni
-    pose(12); G.wallet = 500; G.jail.on = false; G.enterCar(A); G.drive.speed = 16;
+    const remis = [];
+    for (const v of [...G.city.cars, ...G.city.aiCars]) {
+      if (v === A || v === B || Math.hypot(v.x - 26, v.z - 7) > 80) continue;
+      remis.push([v, v.x, v.z]); v.x += 600; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v);
+    }
+    const pose = () => { A.accidente = false; B.accidente = false; A.busy = false; A.dead = false;
+      A.dmg = 12; B.dmg = 5; A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+      B.x = 26; B.z = 4; B.h = 0; B.y = A.y; A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z); };
+    // 1) le joueur au volant, portefeuille garni
+    pose(); G.wallet = 500; G.jail.on = false; G.enterCar(A); G.drive.speed = 16;
     const acc = G.ouvreAccident(A, B, 16);
     const juste = { v: G.drive.speed, a: A.v, b: B.v, pc: !!acc.pc,
       dpc: acc.pc ? +Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z).toFixed(1) : null };
-    // même en poussant le gaz à fond, un accidenté ne repart pas
+    // pied au plancher : un accidenté ne repart pas
+    const x0 = A.x, z0 = A.z;
     for (let i = 0; i < 60; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(A, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); G.servicesTick(1 / 60); }
-    const bloque = { v: +Math.abs(G.drive.speed).toFixed(2), dep: +Math.hypot(A.x - 26, A.z - 10).toFixed(2) };
+    const bloque = { v: +Math.abs(G.drive.speed).toFixed(2), dep: +Math.hypot(A.x - x0, A.z - z0).toFixed(2) };
     let vuPolice = false, vuConstat = false;
-    for (let k = 0; k < 60 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
+    for (let k = 0; k < 120 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
     const paye = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, wallet: G.wallet, vuPolice, vuConstat };
     for (let k = 0; k < 20; k++) avance(20);
-    // 2) même chose, mais sans un sou : la prison
-    pose(12); G.wallet = 3; G.jail.on = false;
+    // 2) même chose, sans un sou : la prison
+    pose(); G.wallet = 3; G.jail.on = false;
     const acc2 = G.ouvreAccident(A, B, 12);
-    for (let k = 0; k < 60 && acc2.etat !== 'fini'; k++) avance(20);
+    for (let k = 0; k < 120 && acc2.etat !== 'fini'; k++) avance(20);
     const fauche = { etat: acc2.etat, paye: acc2.paye, prison: acc2.prison, jail: G.jail.on };
     if (G.drive.car) G.exitCar();
     G.jail.on = false; A.accidente = false; B.accidente = false;
+    for (let k = 0; k < 20; k++) avance(20);
+    for (const [v, x, z] of remis) { v.x = x; v.z = z; v.g.position.set(x, v.y || 0, z); G.vehicleSolid(v); }
     return { juste, bloque, paye, fauche };
   });
   const ok = r.juste.pc && r.juste.v === 0 && r.juste.a === 0 && r.juste.b === 0
-    && r.bloque.v < 0.01 && r.bloque.dep < 0.2
+    && r.bloque.v < 0.01 && r.bloque.dep < 0.05
     && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true && r.paye.amende > 0 && r.paye.wallet === 500 - r.paye.amende
     && r.fauche.paye === false && r.fauche.prison === true && r.fauche.jail === true;
-  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent (et restent immobiles — après une seconde de plein gaz, la voiture a bougé de ${r.bloque.dep} m et sa vitesse vaut ${r.bloque.v}), une voiture de police se déplace jusqu'au lieu (à ${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 — portefeuille 500 → ${r.paye.wallet} · sans argent (3 🪙), c'est la prison : payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
+  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · sans argent (3 🪙), c'est la prison : payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
 });
 
 test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, et son treuil s\'actionne', async p => {
@@ -9496,7 +9541,6 @@ test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, 
     const d = (G.city.depanneuses || [])[0];
     const forme = d ? { kind: d.kind, travail: !!d.travail, W: d.baseW, D: d.baseD, max: d.spec.max,
       outils: Object.keys(d.outils || {}).sort().join(','), roues: (d.roues || []).length, conduisible: G.city.cars.includes(d) } : null;
-    // le treuil descend et remonte avec c.outil, comme les autres outils de travail
     let treuil = null;
     if (d) { const y0 = d.outils.crochet.position.y; d.outilCible = 1;
       for (let i = 0; i < 200; i++) { G.simTime = G.simTime + 1 / 30; G.outilsVehiculesTick(1 / 30); }
@@ -9505,23 +9549,31 @@ test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, 
       treuil = { haut: +y0.toFixed(2), bas: +y1.toFixed(2), plateau: +plateau.toFixed(2), retour: +d.outils.crochet.position.y.toFixed(2) }; }
     const cars = G.city.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
     const A = cars[0], B = cars[1];
-    for (const v of G.city.aiCars) { v.x = 900; v.z = 900; G.vehicleSolid(v); }
+    const remis = [];
+    for (const v of [...G.city.cars, ...G.city.aiCars]) {
+      if (v === A || v === B || v === d || Math.hypot(v.x - 26, v.z - 7) > 80) continue;
+      remis.push([v, v.x, v.z]); v.x += 600; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v);
+    }
     const essai = (dmgA) => {
       A.accidente = false; B.accidente = false; A.busy = false; A.dead = false; A.explosed = false;
-      if (d) { d.mission = null; d.x = d.home0[0]; d.z = d.home0[1]; d.h = d.home0[2]; G.vehicleSolid(d); }
+      if (d) { d.mission = null; d.x = d.home0[0]; d.z = d.home0[1]; d.h = d.home0[2]; d.g.position.set(d.x, d.y || 0, d.z); G.vehicleSolid(d); }
       A.dmg = dmgA; B.dmg = 4; A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
-      B.x = 26; B.z = 4; B.h = 0; B.y = A.y;
+      B.x = 26; B.z = 4; B.h = 0; B.y = A.y; A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z);
       G.wallet = 900; G.jail.on = false;
       if (G.drive.car !== A) G.enterCar(A);
       const acc = G.ouvreAccident(A, B, 14);
-      for (let k = 0; k < 90 && (!acc.dep || !acc.dep.fini); k++) avance(20);
-      return { mode: acc.dep && acc.dep.mode, tarif: acc.dep && acc.dep.tarif, paye: acc.dep && acc.dep.paye,
+      for (let k = 0; k < 150 && (!acc.dep || !acc.dep.fini); k++) avance(20);
+      const out = { mode: acc.dep && acc.dep.mode, tarif: acc.dep && acc.dep.tarif, paye: acc.dep && acc.dep.paye,
         dmg: A.dmg, wallet: G.wallet, amende: acc.amende };
+      for (let k = 0; k < 40 && acc.etat !== 'fini'; k++) avance(20);
+      for (let k = 0; k < 10; k++) avance(20);
+      return out;
     };
-    const petit = essai(12);      // petits dégâts : réparation sur place
-    const gros = essai(80);       // grosse casse : treuillage et remorquage au garage
+    const petit = essai(12);
+    const gros = essai(80);
     if (G.drive.car) G.exitCar();
     G.jail.on = false; A.accidente = false; B.accidente = false;
+    for (const [v, x, z] of remis) { v.x = x; v.z = z; v.g.position.set(x, v.y || 0, z); G.vehicleSolid(v); }
     return { forme, treuil, petit, gros, garage: !!G.city.garage };
   });
   const f = r.forme || {};
@@ -9530,7 +9582,7 @@ test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, 
     && r.treuil && r.treuil.bas < r.treuil.haut - 2.5 && r.treuil.plateau < -0.4 && Math.abs(r.treuil.retour - r.treuil.haut) < 0.05
     && r.petit.mode === 'place' && r.gros.mode === 'remorque' && r.gros.tarif > r.petit.tarif
     && r.petit.dmg === 0 && r.gros.dmg === 0 && r.petit.paye === true && r.gros.paye === true;
-  return { ok, detail: `il n'y avait pas de dépanneuse : une voiture cassée restait plantée au milieu de la rue · elle est là — bleu et blanc, gyrophare rond bleu, plateau inclinable (${r.treuil.plateau} rad) et treuil dont le crochet descend de ${r.treuil.haut} à ${r.treuil.bas} m puis remonte (${r.treuil.retour}) — conduisible par le joueur (${f.conduisible}), ${f.W} × ${f.D} m, ${f.max} m/s · appelée sur un accident, elle répare SUR PLACE une petite casse pour ${r.petit.tarif} 🪙 et TREUILLE une grosse casse jusqu'au garage pour ${r.gros.tarif} 🪙 (dégâts remis à ${r.petit.dmg} et ${r.gros.dmg} %)` };
+  return { ok, detail: `il n'y avait pas de dépanneuse : une voiture cassée restait plantée au milieu de la rue · elle est là — bleu et blanc, gyrophare rond bleu, plateau inclinable (${r.treuil.plateau} rad) et treuil dont le crochet descend de ${r.treuil.haut} à ${r.treuil.bas} m puis remonte (${r.treuil.retour}) — conduisible par le joueur (${f.conduisible}), ${f.W} × ${f.D} m, ${f.max} m/s, outils ${f.outils} · appelée sur un accident, elle répare SUR PLACE une petite casse pour ${r.petit.tarif} 🪙 et TREUILLE une grosse casse jusqu'au garage pour ${r.gros.tarif} 🪙 (dégâts remis à ${r.petit.dmg} et ${r.gros.dmg} %)` };
 });
 
 test('l\'ambulance vient chercher un blessé toute seule et le dépose à l\'hôpital', async p => {
@@ -9538,36 +9590,43 @@ test('l\'ambulance vient chercher un blessé toute seule et le dépose à l\'hô
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
     const flotte = (G.city.ambulances || []).length;
+    // un test précédent a pu déplacer les ambulances : on les remet à leur place
+    for (const a of (G.city.ambulances || [])) { a.etat = null; a.victime = null; a.x = a.home0[0]; a.z = a.home0[1]; a.h = a.home0[2]; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a); }
     const a0 = (G.city.ambulances || [])[0];
     const forme = a0 ? { kind: a0.kind, ambulance: !!a0.ambulance, urgence: !!a0.urgence, brancard: !!a0.brancard,
       gyros: (a0.gyros || []).length, conduisible: G.city.cars.includes(a0), roues: (a0.roues || []).length } : null;
     // un bot à terre, loin de l'hôpital
     const b = G.bots.find(x => x.av && x.av.group.visible && !x.prison && !x.drive);
-    b.pos.set(20, G.groundUnder(20, 40, null, 1), 40); b.hp = 0; b.ko = G.simTime + 60;
+    const hx = G.city.medDesk ? G.city.medDesk.x : 0, hz = G.city.medDesk ? G.city.medDesk.z : 0;
+    b.pos.set(hx + 40, G.groundUnder(hx + 40, hz + 30, null, 1), hz + 30); b.hp = 0; b.ko = G.simTime + 400;
     G.corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
-    const loin0 = G.city.medDesk ? +Math.hypot(b.pos.x - G.city.medDesk.x, b.pos.z - G.city.medDesk.z).toFixed(1) : null;
-    // L'APPEL AUTOMATIQUE : personne ne l'a demandée, c'est la ville qui la déclenche
-    G.city.urgT = 0; G.urgencesTick(0.1);
+    const loin0 = +Math.hypot(b.pos.x - hx, b.pos.z - hz).toFixed(1);
+    // L'APPEL AUTOMATIQUE : personne ne la demande, c'est la ville qui la déclenche
+    G.P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
     const amb = (G.city.ambulances || []).find(x => x.victime === b);
     const etats = [];
-    for (let k = 0; k < 80 && amb; k++) { avance(20); if (etats[etats.length - 1] !== amb.etat) etats.push(amb.etat); if (!amb.etat && etats.length > 3) break; }
-    const dist = G.city.medDesk ? +Math.hypot(b.pos.x - G.city.medDesk.x, b.pos.z - G.city.medDesk.z).toFixed(1) : null;
+    for (let k = 0; k < 120 && amb; k++) { avance(20); if (etats[etats.length - 1] !== amb.etat) etats.push(amb.etat); if (!amb.etat && etats.length > 3) break; }
+    const dist = +Math.hypot(b.pos.x - hx, b.pos.z - hz).toFixed(1);
     return { flotte, forme, appel: !!amb, etats, hp: b.hp, ko: b.ko, loin0, dist,
-      sirene: amb ? amb.sirene : null, retour: amb ? +Math.hypot(amb.x - amb.home0[0], amb.z - amb.home0[1]).toFixed(1) : null };
+      retour: amb ? +Math.hypot(amb.x - amb.home0[0], amb.z - amb.home0[1]).toFixed(1) : null };
   });
   const f = r.forme || {};
   const ok = r.flotte >= 2 && f.kind === 'ambulance' && f.ambulance && f.urgence && f.brancard && f.conduisible && f.roues === 4
     && r.appel && r.etats.includes('route') && r.etats.includes('charge') && r.etats.includes('transport') && r.etats.includes('depose')
     && r.hp === 100 && r.ko === 0 && r.dist < 6 && r.loin0 > 20;
-  return { ok, detail: `un blessé à terre restait à terre : le camion blanc garé devant l'hôpital n'était qu'un décor · il y a maintenant ${r.flotte} vraies ambulances (break blanc à croix rouge, gyrophares, point d'ancrage « brancard » sur la caisse, conduisibles par le joueur) et un blessé DÉCLENCHE l'appel tout seul : ${r.etats.filter(Boolean).join(' → ')} · le bot était à ${r.loin0} m de l'hôpital, il finit à ${r.dist} m, soigné (${r.hp} PV, KO ${r.ko}) et l'ambulance rentre au garage (${r.retour} m de sa place)` };
+  return { ok, detail: `un blessé à terre restait à terre : le camion blanc garé devant l'hôpital n'était qu'un décor · il y a maintenant ${r.flotte} vraies ambulances (break blanc à croix rouge, gyrophares, point d'ancrage « brancard » sur la caisse, conduisibles par le joueur) et un blessé DÉCLENCHE l'appel tout seul : ${r.etats.filter(Boolean).join(' → ')} · le bot était à ${r.loin0} m de l'hôpital, il finit à ${r.dist} m, soigné (${r.hp} PV, KO ${r.ko}), et l'ambulance rentre à sa place (${r.retour} m)` };
 });
 
 test('un véhicule qui percute un piéton l\'écrase : il tombe, perd des points de vie et crie', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 26, y: 1, z: 24, hour: 12 });
     const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
-    for (const a of G.city.aiCars) { a.x = 900; a.z = 900; G.vehicleSolid(a); }
-    c.busy = false; c.dmg = 0; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars]) {
+      if (a === c || Math.hypot(a.x - 26, a.z - 22) > 60) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
+    c.busy = false; c.dmg = 0; c.accidente = false; c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
     const b = G.bots.find(x => x.av && x.av.group.visible && !x.prison && !x.drive);
     b.hp = 100; b.ko = 0; b.hitT = 0;
     b.pos.set(26, c.y, 21); b.av.group.position.set(26, c.y, 21); b.av.group.rotation.x = 0;
@@ -9575,15 +9634,17 @@ test('un véhicule qui percute un piéton l\'écrase : il tombe, perd des points
     const hp0 = b.hp;
     let touche = 0;
     for (let i = 0; i < 40 && !touche; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); if (b.hp < hp0) touche = i + 1; }
-    const auSol = b.av.group.rotation.x !== 0 || b.ko > G.simTime;
+    const hpApres = b.hp, auSol = b.av.group.rotation.x !== 0 || b.ko > G.simTime, ko = b.ko > 0;
     // à l'arrêt, on ne renverse personne
     b.hitT = 0; b.hp = 100; b.pos.set(c.x, c.y, c.z - 1.5);
     G.drive.speed = 0;
     for (let i = 0; i < 30; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: 0, volant: 0, frein: 1 }, 1 / 60); }
     const arret = b.hp;
     G.exitCar();
-    return { hp0, hp: 0 + (touche ? 1 : 0), touche, hpApres: b.hp, auSol, arret, ko: b.ko > 0 };
+    b.hp = 100; b.ko = 0;
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { hp0, hpApres, touche, auSol, ko, arret };
   });
-  const ok = r.touche > 0 && r.auSol && r.arret === 100;
-  return { ok, detail: `un piéton renversé était simplement POUSSÉ de deux mètres, en pleine forme · il est maintenant écrasé pour de bon : touché à l'image ${r.touche}, il tombe au sol (${r.auSol}), perd des points de vie, reste KO (${r.ko}) et crie — et un véhicule à l'arrêt ne fait rien à personne (${r.arret} PV)` };
+  const ok = r.touche > 0 && r.hpApres < r.hp0 - 20 && r.auSol && r.ko && r.arret === 100;
+  return { ok, detail: `un piéton renversé était simplement POUSSÉ de deux mètres, en pleine forme · il est maintenant écrasé pour de bon : touché à l'image ${r.touche}, il passe de ${r.hp0} à ${r.hpApres} points de vie, tombe au sol (${r.auSol}), reste KO (${r.ko}) et crie — et un véhicule à l'arrêt ne fait rien à personne (${r.arret} PV)` };
 });

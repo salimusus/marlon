@@ -14890,9 +14890,13 @@ function enterCar(c) {
   if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
-  else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
+  else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · Espace ou V = klaxon · B = frein à main'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
   sonPortiere(c, true);   // on ouvre, on s'installe, la portière claque : on monte VRAIMENT dans la voiture
   if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car', moteurDe(c)); c.vy = 0;
+  // LE CHIEN MONTE AVEC SON MAÎTRE. Il restait planté sur le trottoir à regarder la voiture
+  // partir. S'il est à moins de 6 m et que le véhicule a une place pour lui, il grimpe.
+  if (chien.pet && placesDe(c).chien && Math.hypot(chien.pet.g.position.x - c.x, chien.pet.g.position.z - c.z) < 6) { c.chien = true; chien.enVoiture = c; }
+  else { c.chien = false; chien.enVoiture = null; }
 }
 function exitCar() {
   const c = drive.car; if (!c) return;
@@ -14924,6 +14928,7 @@ function exitCar() {
     if (!trouve) msg('🚗 Pas beaucoup de place pour descendre !', 1400);
   }
   P.vel.set(0, 0, 0); P.facing = c.h;
+  if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) { chien.pet.g.position.set(P.pos.x + 1.2, groundUnder(P.pos.x + 1.2, P.pos.z, null, 1), P.pos.z); chien.pet.g.rotation.set(0, c.h, 0); } }
   sonPortiere(c, false);   // on descend : la portière claque derrière soi
   me.group.visible = true; $('carBtn').textContent = '🚗'; $('jumpBtn').textContent = 'SAUT'; $('emoteBtn').textContent = '🕺'; $('punchBtn').textContent = '👊'; drive.gear = 1;
 }
@@ -15203,6 +15208,15 @@ function conduire(c, cmd, dt) {
   const pas = Math.abs(V.speed) * dt;
   if (pas > 0.9 && dt > 0.005) { const n = Math.min(6, Math.ceil(pas / 0.9)); let r = null; for (let i = 0; i < n && !c.heli; i++) r = conduire(c, cmd, dt / n); return r; }
   const sp = c.spec || { max: 19, rev: -7, accel: 15, turn: 2.1, seat: 0 };
+  // ACCIDENTÉ : il ne repart pas. Le pied au plancher ne change rien tant que le constat
+  // n'est pas fait — sinon on redémarrait tranquillement en laissant la police derrière.
+  if (c.accidente) {
+    V.speed = 0; c.v = 0;
+    c.cmd = { gaz: 0, volant: 0, frein: 1, main: true, v: 0, ratio: 0, gear: 1, freine: false, derape: false, glisse: false, accLong: 0, gFrac: 0 };
+    poseVehicule(c, dt);
+    if (pilote) { drive.speed = 0; P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(0, 0, 0); P.grounded = true; cityCommon(dt); }
+    return c.cmd;
+  }
   let ix = clamp(cmd.volant || 0, -1, 1), iz = clamp(cmd.gaz || 0, -1, 1);
   const frein = clamp(cmd.frein || 0, 0, 1), main = !!cmd.main || frein > FREIN_MAIN;
   if (cmd.nitro && pilote) nitroGo();
@@ -15391,6 +15405,39 @@ function poseVehicule(c, dt) {
   if (c.caisse) { c.caisse.position.y = plonge; c.caisse.rotation.set(c.tangage, 0, c.rider ? 0 : c.roulis); }
   else c.g.position.y = (c.y || 0) + plonge;
   rouesTick(c, dt, v, cm);
+}
+// LE JOUEUR AU VOLANT. Au volant d'une voiture fermée il était purement et simplement RENDU
+// INVISIBLE : on conduisait un véhicule vide. Il s'assied maintenant à la place du CONDUCTEUR
+// de la table PLACES — mêmes repères pour lui, pour les bots et pour le chien. Et pendant la
+// première image qui suit la montée (drive.assis encore faux) la pose est FIGÉE, dt = 1 : on
+// APPARAÎT assis au lieu de rester planté debout une demi-seconde. C'est une fonction à part
+// pour que le banc d'essai puisse la jouer sans dépendre de la cadence d'affichage.
+function poseJoueurAuVolant(dt) {
+  const c = drive.car;
+  if (!c) { jambesEnCabine(me, false); me.group.rotation.z = 0; return null; }
+  if (c.rider) { me.group.position.set(c.x, c.y + c.spec.seat - 0.55, c.z); me.group.rotation.z = c.tilt || 0; return 'rider'; }
+  assiedAvatar(me, c, placesDe(c).conducteur, drive.assis ? dt : 1, true);
+  drive.assis = true;
+  if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
+  return 'assis';
+}
+// LA SENSATION DE VITESSE, en UN SEUL endroit : le champ de vision qui s'ouvre, la caméra
+// qui recule et la vibration du châssis. frame() l'appelle à chaque image ; le banc d'essai
+// peut l'appeler seul, sans dépendre de la cadence d'affichage (2 images/s en rendu logiciel).
+function vitesseRel() {
+  const c = drive.car;
+  if (!c || c.heli) return 0;
+  return clamp(Math.abs(drive.speed) / ((c.spec && c.spec.max) || 26), 0, 1.2);
+}
+function reculConduite() { return vitesseRel() * 2.6; }   // la caméra recule jusqu'à 3,1 m de plus
+function camConduite(dt) {
+  const r = vitesseRel();
+  // 55° à l'arrêt, jusqu'à 72° à fond : c'est ce qui donne l'impression que le décor défile
+  const voulu = P.zoom ? 20 : 55 + r * 14;
+  if (Math.abs(camera.fov - voulu) > 0.2) { camera.fov += (voulu - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
+  // au-delà des trois quarts de la vitesse maxi, l'image tremble : le châssis vit
+  cam.vibr = Math.max(0, r - 0.72) * 0.09;
+  return { r: +r.toFixed(3), voulu: +voulu.toFixed(2), fov: +camera.fov.toFixed(2), vibr: +cam.vibr.toFixed(4), recul: +reculConduite().toFixed(2) };
 }
 // Le RÉGIME MOTEUR suit le rapport : il grimpe dans chaque rapport, retombe au passage du
 // suivant, et redescend au RALENTI à l'arrêt. Le freinage ajoute son crissement.
@@ -15587,29 +15634,29 @@ function rouleVers(c, tx, tz, dt, vmax = 14) {
 const PLACES = {
   voiture: { seuil: 1.62, conducteur: { x: 0.5, y: -0.8, z: 0.5 }, avant: { x: -0.5, y: -0.8, z: 0.5 },
     arriereG: { x: 0.5, y: -0.8, z: -0.85 }, arriereD: { x: -0.5, y: -0.8, z: -0.85 },
-    chien: { x: 0, y: -0.42, z: -0.85 } },
+    chien: { x: 0, y: -0.42, z: -1.6 } },
   truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
-    chien: { x: 0, y: 0.5, z: 2.1 } },
+    chien: { x: 0, y: 0.5, z: 1.55 } },
   moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
   bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
   velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
   buggy: { conducteur: { x: 0.48, y: 0.58, z: 0.25 }, avant: { x: -0.48, y: 0.58, z: 0.25 },
-    chien: { x: 0, y: 0.95, z: -0.55 } },
+    chien: { x: 0, y: 0.95, z: -0.8 } },
   jetski: { conducteur: { x: 0, y: 0.4, z: -0.05 }, arriereG: { x: 0, y: 0.4, z: -1.0 } },
   heli: { conducteur: { x: 0.55, y: 0.05, z: 0.6 }, avant: { x: -0.55, y: 0.05, z: 0.6 },
     arriereG: { x: 0.55, y: 0.05, z: -0.7 }, arriereD: { x: -0.55, y: 0.05, z: -0.7 },
-    chien: { x: 0, y: 0.55, z: -0.75 } },
+    chien: { x: 0, y: 0.55, z: -1.45 } },
   ambulance: { seuil: 1.5, conducteur: { x: 0.5, y: -0.45, z: 1.45 }, avant: { x: -0.5, y: -0.45, z: 1.45 },
     arriereG: { x: 0.55, y: -0.45, z: -0.8 }, arriereD: { x: -0.55, y: -0.45, z: -0.8 },
-    chien: { x: 0, y: -0.05, z: -1.7 } },
+    chien: { x: 0, y: -0.05, z: -1.9 } },
   depanneuse: { seuil: 1.5, conducteur: { x: 0.5, y: -0.5, z: 1.5 }, avant: { x: -0.5, y: -0.5, z: 1.5 },
-    chien: { x: 0, y: -0.1, z: 1.1 } },
-  benne: { seuil: 1.5, conducteur: { x: 0.55, y: -0.1, z: 2.3 }, avant: { x: -0.55, y: -0.1, z: 2.3 }, chien: { x: 0, y: 0.3, z: 1.9 } },
-  grue: { seuil: 1.6, conducteur: { x: 0.55, y: -0.1, z: 2.6 }, avant: { x: -0.55, y: -0.1, z: 2.6 }, chien: { x: 0, y: 0.3, z: 2.2 } },
+    chien: { x: 0, y: -0.1, z: 0.55 } },
+  benne: { seuil: 1.5, conducteur: { x: 0.55, y: -0.1, z: 2.3 }, avant: { x: -0.55, y: -0.1, z: 2.3 }, chien: { x: 0, y: 0.3, z: 1.45 } },
+  grue: { seuil: 1.6, conducteur: { x: 0.55, y: -0.1, z: 2.6 }, avant: { x: -0.55, y: -0.1, z: 2.6 }, chien: { x: 0, y: 0.3, z: 1.75 } },
   pelle: { seuil: 1.5, conducteur: { x: 0, y: -0.35, z: 0.3 } },
   tracteur: { seuil: 1.45, conducteur: { x: 0, y: -0.3, z: -0.35 } },
-  pompier: { seuil: 1.5, conducteur: { x: 0.6, y: 0, z: 2.9 }, avant: { x: -0.6, y: 0, z: 2.9 }, chien: { x: 0, y: 0.4, z: 2.4 } },
-  fourgon: { seuil: 1.6, conducteur: { x: 0.5, y: -0.68, z: 1.4 }, avant: { x: -0.5, y: -0.68, z: 1.4 }, chien: { x: 0, y: -0.28, z: 0.9 } },
+  pompier: { seuil: 1.5, conducteur: { x: 0.6, y: 0, z: 2.9 }, avant: { x: -0.6, y: 0, z: 2.9 }, chien: { x: 0, y: 0.4, z: 2.05 } },
+  fourgon: { seuil: 1.6, conducteur: { x: 0.5, y: -0.68, z: 1.4 }, avant: { x: -0.5, y: -0.68, z: 1.4 }, chien: { x: 0, y: -0.28, z: 0.45 } },
 };
 const PLACES_ORDRE = ['conducteur', 'avant', 'arriereG', 'arriereD'];
 function placesDe(c) {
@@ -18127,20 +18174,7 @@ function frame() {
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
   else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
   const riding = drive.car && drive.car.rider;
-  if (riding) { me.group.position.set(drive.car.x, drive.car.y + drive.car.spec.seat - 0.55, drive.car.z); me.group.rotation.z = drive.car.tilt || 0; }
-  else if (drive.car) {
-    // Au volant d'une voiture fermée, le joueur était purement et simplement RENDU INVISIBLE :
-    // on conduisait un véhicule vide. On l'assied maintenant à la place du conducteur — mêmes
-    // décalages que ceux déjà utilisés pour un ami bot qui conduit : à droite du milieu, un
-    // peu en avant, et assez bas pour que la tête ne traverse pas le toit.
-    // Le joueur s'assied à la place du CONDUCTEUR de la table PLACES : mêmes repères pour
-    // lui, pour les bots et pour le chien. drive.assis reste faux pendant la première image
-    // qui suit la montée : on fige alors la pose (dt = 1) pour qu'il APPARAISSE assis.
-    const c = drive.car;
-    assiedAvatar(me, c, placesDe(c).conducteur, drive.assis ? dt : 1, true);
-    drive.assis = true;
-    if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
-  } else { jambesEnCabine(me, false); me.group.rotation.z = 0; }
+  poseJoueurAuVolant(dt);
   const sousVoile = !!(P.voile && P.voileMesh);
   const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
   animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
@@ -18201,8 +18235,7 @@ function frame() {
     const inter = !veh && city.on ? city.interact : null;
     // la caméra RECULE avec la vitesse (jusqu'à 2,6 m de plus) : le capot rentre dans le
     // cadre et l'on voit venir la route
-    const vitesse = veh && !veh.heli ? clamp(Math.abs(drive.speed) / ((veh.spec && veh.spec.max) || 26), 0, 1.2) : 0;
-    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4 + vitesse * 2.6) : 0);
+    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4 + reculConduite()) : 0);
     if (dedans && !cam.interieur) want = Math.min(want, 3.5);
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Plus la pièce est étroite, plus la caméra se rapproche ; plus le
@@ -18231,7 +18264,12 @@ function frame() {
       tmpV.x += clamp(inter.x - P.pos.x, -1.2, 1.2) * 0.45; tmpV.z += clamp(inter.z - P.pos.z, -1.2, 1.2) * 0.45; }
     if (Math.abs(cam.dist - want) > 0.05) cam.dist += (want - cam.dist) * Math.min(1, dt * (want < cam.dist ? 8 : 4));
   }
-  cam.target.lerp(tmpV, 1 - Math.exp(-14 * dt));
+  // LE LÉGER RETARD. À pied la caméra colle au joueur ; au volant, plus on va vite, plus
+  // elle traîne derrière la voiture — c'est ce décalage qui donne le poids d'un GTA.
+  {
+    const vv = drive.car && !drive.car.heli ? clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.2) : 0;
+    cam.target.lerp(tmpV, 1 - Math.exp(-(14 - vv * 7) * dt));
+  }
   const cpch = Math.cos(cam.pitch);
   {
     const dir = new THREE.Vector3(Math.sin(cam.yaw) * cpch, Math.sin(cam.pitch), Math.cos(cam.yaw) * cpch);
@@ -18284,24 +18322,13 @@ function frame() {
     }
     // LA VIBRATION : au-delà des trois quarts de la vitesse maxi, l'image tremble un peu —
     // c'est le châssis qui vit. Rien à l'arrêt, rien à pied.
-    if (drive.car && !drive.car.heli) {
-      const r = clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.3);
-      const a2 = Math.max(0, r - 0.72) * 0.09;
-      if (a2 > 0.0005) {
-        cam.vibr = a2;
-        camera.position.x += Math.sin(simTime * 97) * a2;
-        camera.position.y += Math.sin(simTime * 131 + 1.1) * a2 * 0.9;
-      } else cam.vibr = 0;
-    } else cam.vibr = 0;
+    if (cam.vibr > 0.0005) {
+      camera.position.x += Math.sin(simTime * 97) * cam.vibr;
+      camera.position.y += Math.sin(simTime * 131 + 1.1) * cam.vibr * 0.9;
+    }
     if (camera.position.y < 0.4) camera.position.y = 0.4;
   }
-  {   // champ de vision : resserré dans la lunette du fusil (effet de grossissement ×3)
-    // LA SENSATION DE VITESSE : le champ de vision s'ouvre quand on accélère (55° à l'arrêt,
-    // jusqu'à 72° à fond) — c'est ce qui donne l'impression que le décor défile.
-    const vv = drive.car && !drive.car.heli ? clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.2) : 0;
-    const fovVoulu = P.zoom ? 20 : 55 + vv * 14;
-    if (Math.abs(camera.fov - fovVoulu) > 0.2) { camera.fov += (fovVoulu - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
-  }
+  camConduite(dt);   // champ de vision, vibration : la sensation de vitesse, en un seul endroit
   camera.lookAt(cam.target);
   try { interieurTick(); } catch (e) { if (!interieurTick.err) { interieurTick.err = 1; console.error('interieur', e); } }
   if (city.on && running) { try { gpsTick(); } catch (e) {} }
@@ -19492,6 +19519,16 @@ function nitroTick(dt) {
     for (const sx of [-0.62, 0.62]) {
       const px = c.x - Math.sin(c.h) * 2.9 + Math.cos(c.h) * sx, pz = c.z - Math.cos(c.h) * 2.9 - Math.sin(c.h) * sx;
       burst(px, 0.4, pz, Math.random() < 0.5 ? 0xffd23f : 0xff4a1a, 2);
+    }
+    // LE VENT : des traits blancs qui filent le long de la caisse. On ne voyait la nitro
+    // que par-derrière ; c'est ce souffle latéral qui fait « ça décolle ».
+    if (simTime > (drive.ventT || 0)) {
+      drive.ventT = simTime + 0.04;
+      for (const sx of [-1.5, 1.5]) {
+        const a2 = rnd(-1, 3.5);
+        const px = c.x - Math.sin(c.h) * a2 + Math.cos(c.h) * sx, pz = c.z - Math.cos(c.h) * a2 - Math.sin(c.h) * sx;
+        burst(px, (c.y || 0) + rnd(0.5, 1.6), pz, 0xf2f6ff, 1);
+      }
     }
   }
 }

@@ -4457,8 +4457,15 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
       // rafraîchi dès qu'on a bougé de 6 m (avant : une fois toutes les 1,5 s, le tracé traînait derrière)
       if (simTime - lastT < 0.4 && Math.hypot(P.pos.x - lastX, P.pos.z - lastZ) < 6) return;
       lastT = simTime; lastX = P.pos.x; lastZ = P.pos.z;
-      // le piéton passe là où la voiture ne passe pas : on calcule sur la grille fine
-      const path = navEnPieton(() => navPath(P.pos.x, P.pos.z, beacon.x, beacon.z));
+      // le piéton passe là où la voiture ne passe pas : on calcule sur la grille fine.
+      // MAIS au volant, c'est l'inverse : le tracé était TOUJOURS calculé sur la grille des
+      // piétons, si bien qu'en voiture il coupait par une allée du parc, se faufilait entre
+      // deux immeubles… et le joueur, coincé sur la chaussée, voyait la ligne de chevrons
+      // partir là où il ne pouvait pas la suivre. D'où « le GPS ne guide que partiellement ».
+      // On prend maintenant la grille du véhicule conduit.
+      const auVolant = !!(drive.car && !drive.car.heli && drive.car.kind !== 'jetski' && drive.car.kind !== 'bike' && drive.car.kind !== 'velo');
+      const path = auVolant ? navPath(P.pos.x, P.pos.z, beacon.x, beacon.z)
+        : navEnPieton(() => navPath(P.pos.x, P.pos.z, beacon.x, beacon.z));
       // cible hors du réseau (un toit, la pleine mer, une cour fermée) : on s'arrête au plus
       // près au lieu de tracer un trait droit à travers les immeubles
       const fin = path && path.reached === false ? [] : [[beacon.x, beacon.z]];
@@ -4696,6 +4703,13 @@ function sireneMission(c, on) {
     if (c.lampR) c.lampR.visible = t; if (c.lampB) c.lampB.visible = !t;
   } else { if (c.lampR) c.lampR.visible = true; if (c.lampB) c.lampB.visible = true; }
 }
+// Le tirage de la variante passe par ici : `mission.forcer` permet de rejouer une variante
+// precise (c'est ce dont les tests ont besoin pour verifier les quatre appels radio, et ce
+// qui servira le jour ou on voudra un bouton « rejouer cette mission »).
+function varianteMission(liste) {
+  const f = mission.forcer; mission.forcer = null;
+  return (f && liste.indexOf(f) >= 0) ? f : pickOne(liste);
+}
 const enVoiture = c => !!(c && drive.car === c);
 const prochePlan = (x, z, r) => Math.hypot(P.pos.x - x, P.pos.z - z) < r;
 
@@ -4718,7 +4732,7 @@ function pompierDemarre(d) {
   if (!camion) { msg('🚒 Le camion de la caserne est introuvable', 2400); return false; }
   d.camion = camion; camion.busy = false; camion.metierBusy = false;
   d.caserne = k;
-  d.variante = pickOne(['foyers', 'blesse', 'chat']);
+  d.variante = varianteMission(['foyers', 'blesse', 'chat']);
   d.lieu = lieuRoutier(SINISTRES, k);
   // on repart d'une ville sans incendie : le jeu n'en accepte que deux à la fois et les
   // feux spontanés du poste J auraient mangé la place de la mission
@@ -4935,7 +4949,7 @@ function policeDemarre(d) {
   const veh = vehiculeMission('patrouille', fabriquePatrouille, st.x + 12, st.z - 6, Math.PI / 2);
   if (!veh) { msg('🚓 Aucune voiture de patrouille disponible', 2400); return false; }
   d.veh = veh; d.station = { x: st.x, z: st.z };
-  d.variante = pickOne(POLICE_VARIANTES);
+  d.variante = varianteMission(POLICE_VARIANTES);
   d.appel = lieuRoutier(PANNES, d.station);
   if (d.variante === 'chauffard') {
     const b = pickOne(bots.filter(x => x.av.group.visible && !x.prison)) || bots[0];
@@ -5133,7 +5147,13 @@ function startMission(id) {
     // On se pose sur un VRAI toit (ceux qui ont un ascenseur et un parachute), pas sur le
     // premier gros bloc venu : avant, le blessé atterrissait sur un pan de mur où l'hélico
     // ne pouvait pas se poser, et la mission était infaisable.
-    const t = pickOne((city.toits || []).filter(o => Math.hypot(o.x - 51, o.z + 13) > 25));
+    // On prenait N'IMPORTE quel toit de la carte : avec les nouveaux quartiers, le blessé
+    // se retrouvait à 400 m de l'héliport, soit plus de trois minutes de vol aller-retour
+    // pour une mission qui n'a pas de chrono — increvable et interminable. On reste dans un
+    // rayon de 190 m (et on élargit seulement si aucun toit ne convient).
+    const toits = (city.toits || []).filter(o => Math.hypot(o.x - 51, o.z + 13) > 25);
+    const proches = toits.filter(o => Math.hypot(o.x - 51, o.z + 13) < 190);
+    const t = pickOne(proches.length ? proches : toits);
     if (t) d.roof = { x: t.x, z: t.z, y: t.y };
     else { const b = pickOne(solids.filter(o => o.h >= 8 && o.w >= 6 && o.h < 30 && Math.abs(o.x) < 66 && o.z > -50 && o.z < 118 && !o.veh));
       if (!b) { msg('🚁 Aucun toit accessible pour l\'instant', 2000); mission.cur = null; return; }

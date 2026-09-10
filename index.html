@@ -1154,13 +1154,18 @@ function diffusionMesure(ms) {
   d.n++; d.acc += ms;
   if (d.acc < 500) return;
   try { renderer.getDrawingBufferSize(tailleRendu); d.px = (tailleRendu.x | 0) * (tailleRendu.y | 0); } catch (e) {}
-  if (d.n > 0) {   // sur un rafraichissement force (ouverture du salon) on garde la derniere mesure
-    d.ips = Math.round(d.n * 1000 / d.acc);
-    d.mpx = Math.round(d.ips * d.px / 1e5) / 10;   // megapixels calcules par seconde
-  }
+  d.ips = Math.round(d.n * 1000 / d.acc);
+  d.mpx = Math.round(d.ips * d.px / 1e5) / 10;   // megapixels calcules par seconde
   d.n = 0; d.acc = 0;
+  diffusionAffiche();
+}
+// L'affichage seul : a l'ouverture du salon on montre la DERNIERE mesure au lieu d'en
+// bricoler une fausse sur une poignee d'images.
+function diffusionAffiche() {
   const el = typeof document !== 'undefined' && document.getElementById('tvDebit');
-  if (el) el.textContent = d.ips ? `⚡ ${d.ips} images/s (cible ${d.cible}) · ${d.mpx} Mpx/s · rendu ${tailleRendu.x | 0}×${tailleRendu.y | 0} · netteté ${Math.round((post.on ? post.force : 0) * 100)} %${d.on ? '' : ' · accélérateur éteint'}` : '⚡ mesure en cours…';
+  if (!el) return;
+  const d = diffusion;
+  el.textContent = d.ips ? `⚡ ${d.ips} images/s (cible ${d.cible}) · ${d.mpx} Mpx/s · rendu ${tailleRendu.x | 0}×${tailleRendu.y | 0} · netteté ${Math.round((post.on ? post.force : 0) * 100)} %${d.on ? '' : ' · accélérateur éteint'}` : '⚡ mesure en cours…';
 }
 // Allumer/eteindre l'accelerateur. Le nombre d'echantillons de l'anticrenelage change : on
 // jette la cible de rendu pour qu'elle soit reconstruite avec le bon reglage.
@@ -13867,7 +13872,6 @@ function padStick(x, y, morte = 0.08) {
   return [x * k, y * k];
 }
 const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) + (pad.gaz || 0) + (pad.frein || 0) > 0.02;
-const padGachette = (g, i) => { const b = g.buttons[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
 // LA VIBRATION : la DualSense la gère nativement dans le navigateur.
 function padVibre(force = 0.6, ms = 120) {
   const g = padActive(); if (!g || !g.vibrationActuator || simTime < manetteSalon.vibT) return false;
@@ -15040,7 +15044,7 @@ function tvSalonMaj() {
   tvManettesMaj();
   $('tvGros').textContent = 'Affichage géant : ' + (document.body.classList.contains('tv') ? 'oui' : 'non');
   $('tvTurbo').textContent = '⚡ Accélérateur d\'image : ' + (diffusion.on ? 'oui' : 'non');
-  try { diffusion.acc = 500; diffusionMesure(0); } catch (e) {}   // la mesure s'affiche tout de suite, sans attendre une demi-seconde
+  try { diffusionAffiche(); } catch (e) {}   // la derniere mesure s'affiche tout de suite
 }
 function modeTV(on) {
   document.body.classList.toggle('tv', on);

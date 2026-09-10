@@ -35,6 +35,21 @@ lignes.forEach((l, k) => {
   if (dur) process.exit(1);
   console.log(`✅ syntaxe JavaScript valide (${blocs.length} bloc${blocs.length > 1 ? 's' : ''})`);
 }
+// Le BANC D'ESSAI lui-même doit se charger. Le HOOK de shot.js est un littéral de gabarit :
+// un commentaire écrit avec des accents graves autour d'un mot y ferme la chaîne, et plus
+// rien ne démarre. On vérifie donc aussi la syntaxe des deux fichiers du banc.
+{
+  const { execFileSync } = require('child_process');
+  let dur = false;
+  for (const f of ['shot.js', 'play.js', 'sonde.js']) {
+    const chemin = path.join(__dirname, f);
+    if (!fs.existsSync(chemin)) continue;
+    try { execFileSync(process.execPath, ['--check', chemin], { stdio: 'pipe' }); }
+    catch (e) { dur = true; console.log(`❌ erreur de syntaxe dans harness/${f} : ${String(e.stderr || e.message).split('\n').slice(0, 3).join(' ').trim()}`); }
+  }
+  if (dur) process.exit(1);
+  console.log('✅ le banc d\'essai se charge');
+}
 if (!suspects.length) { console.log('✅ aucun code avalé par un commentaire'); process.exit(0); }
 console.log(`❌ ${suspects.length} ligne(s) où un commentaire semble avaler du code :`);
 for (const [n, l] of suspects) console.log(`  ${n} : ${l.slice(0, 180)}`);

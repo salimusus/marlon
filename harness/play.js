@@ -935,8 +935,11 @@ test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »
     // symboles dits en toutes lettres
     const maths = __G.schDire('7 × 8 = ? puis 50 % de 80, 4² et 12 ÷ 3');
     const salle = __G.city.classes[0]; if (!salle) return { ok: false, pourquoi: 'aucune salle de classe' };
+    // la classe ne s'ouvre que si le joueur est ASSIS sur une chaise de cette salle
+    const ch = salle.chaises[0]; __G.P.sit = null; __G.P.pos.set(ch.x, 0.6, ch.z); __G.sitBench(ch);
     dits.length = 0;
-    __G.openSchool(salle);
+    const ouvert = __G.openSchool(salle);
+    if (!ouvert) return { ok: false, pourquoi: 'la classe ne s\'est pas ouverte alors que le joueur est assis' };
     const q = __G.school.q, lu = dits.join(' | ');
     const cartes = [...document.querySelectorAll('#schChoices .item')];
     const bonne = cartes[q.opts.indexOf(q.a)];
@@ -950,7 +953,7 @@ test('la maîtresse lit l\'énoncé à voix haute et annonce « c\'est gagné »
     const mauvaise = c2[(q2.opts.indexOf(q2.a) + 1) % 4];
     mauvaise.click();
     const bonneVerte = c2[q2.opts.indexOf(q2.a)].style.background;
-    __G.closeUI();
+    __G.closeUI(); __G.P.sit = null; __G.school.chaise = null;
     return { ok: true, maths, question: q.q, lu, gagne, marquee, bonneVerte, nCartes: cartes.length };
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
@@ -2238,16 +2241,20 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     const yaw0 = __G.cam.yaw; gp.axes = [0, 0, 1, 0]; __G.pollGamepad(1 / 60);
     const camera = +(yaw0 - __G.cam.yaw).toFixed(3);
     gp.axes = [0, 0, 0, 0]; __G.pollGamepad(1 / 60);
-    // A = saut, B = action, Y = dégainer, gâchette = courir
+    // A = saut, B = action, Y = dégainer, L3 = courir (la gâchette L2 recule maintenant)
     __G.P.jumpBuf = 0;
     const saut = await presse(0);
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.drawn = false;
     await presse(3);
     const degaine = !!__G.P.drawn;
     __G.P.energie = 100; __G.P.essouffle = false;
-    gp.buttons[6].pressed = true; __G.pollGamepad(1 / 60);
+    gp.buttons[10].pressed = true; __G.pollGamepad(1 / 60);
     const court = __G.P.run;
-    gp.buttons[6].pressed = false; __G.pollGamepad(1 / 60);
+    gp.buttons[10].pressed = false; __G.pollGamepad(1 / 60);
+    // et L2 fait bien RECULER au lieu de courir
+    gp.buttons[6] = { pressed: true, value: 1 }; __G.pollGamepad(1 / 60);
+    const recule = +__G.pad.frein.toFixed(2);
+    gp.buttons[6] = { pressed: false, value: 0 }; __G.pollGamepad(1 / 60);
     // dans un menu : la croix promène la bague jaune, A valide
     __G.openUI('tvsalon');
     __G.pollGamepad(1 / 60);
@@ -2265,12 +2272,16 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     nav.valide = !__G.uiOpen;
     if (__G.uiOpen) __G.closeUI();
     __G.equipWeapon(null); __G.P.drawn = false; __G.P.run = false;
+    // on enleve la bague jaune posee a la main sur « Fermer » : laissee la, elle restait la
+    // PREMIERE `.focustv` du document et les tests suivants croyaient que le curseur ne
+    // bougeait plus (le salon TV est declare avant la boutique dans la page)
+    document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
     delete navigator.getGamepads;
-    return { stick, camera, saut, degaine, court, nav };
+    return { stick, camera, saut, degaine, court, recule, nav };
   });
   const ok = r.stick.x > 0.5 && r.stick.y > 0.5 && r.camera > 0.02 && r.saut === 0.15 && r.degaine
-    && r.court && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
-  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), gâchette fait courir (${r.court}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
+    && r.court && r.recule > 0.7 && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
+  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), L3 fait courir (${r.court}) et la gâchette L2 fait reculer (${r.recule}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
 });
 
 test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
@@ -6038,6 +6049,9 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     const tv4k = G.ratioRendu(3840), tvPix = mp(3840, tv4k);
     const tv1080 = G.ratioRendu(1920);
     // 2) LA RÉSOLUTION DYNAMIQUE : ça rame, on descend ; ça respire, on remonte
+    // (l'accélérateur d'image a sa PROPRE échelle, qui ne descend jamais sous 78 % : elle a
+    // son test a elle. Ici on vérifie l'échelle classique, accélérateur éteint.)
+    G.diffusionMode(false);
     const paliers = [];
     for (let i = 0; i < 200; i++) { G.fluiditeTick(45); if (i % 50 === 0) paliers.push(+G.rendu.ech.toFixed(2)); }
     const bas = { ech: +G.rendu.ech.toFixed(3), ombres: G.rendu.ombres, baisses: G.rendu.baisses };
@@ -6051,7 +6065,7 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     G.modeTV(true); const cad = []; for (let i = 0; i < 6; i++) { G.ombresCadence(); cad.push(R.shadowMap.needsUpdate); }
     const autoTV = R.shadowMap.autoUpdate;
     G.modeTV(false); G.ombresCadence(); const autoPC = R.shadowMap.autoUpdate;
-    G.applyQuality();
+    G.diffusionMode(false); G.applyQuality();
     const majOmbres = cad.filter(Boolean).length;
     return { avant, plafond: G.PLAFOND_TV, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
       paliers, bas, haut, depart, apresPic, cad, majOmbres, autoTV, autoPC, min: G.rendu.min };
@@ -6637,7 +6651,10 @@ test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseur
       const suivi = [];
       ds.axes = [0, 1, 0, 0]; const T0 = performance.now();
       let images = 0;
-      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); await dodo(8); }   // 1,1 s : sur une machine chargee, chaque image peut prendre 200 ms
+      // 1,1 s de lecture SERREE (sans rendre la main) : la repetition est reglee sur l'horloge,
+      // pas sur le nombre d'images. Avec une pause de 8 ms entre deux lectures, une machine
+      // chargee ne faisait qu'un ou deux tours en 1,1 s et le test croyait la repetition morte.
+      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); }
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
       res.repet = { pas: suivi.length, images: Math.max(images, 6) };
       // ✕ valide un onglet, et le curseur reste visible apres
@@ -6902,15 +6919,21 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
       const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' };   // la croix a son propre test
       const bons = Object.entries(plan).filter(([i, k]) => presse(+i).includes(k)).length;
       ferme();
-      // 4) les GÂCHETTES sont analogiques, pas des interrupteurs
-      touches.length = 0; ds.buttons[7] = { pressed: false, value: 0.2 }; G.pollGamepad(0.05);
-      const gachetteFaible = touches.length;
-      ds.buttons[7] = { pressed: false, value: 0.9 }; G.pollGamepad(0.05);
-      const gachetteFort = touches.filter(t => t === 'KeyX').length;
+      // 4) les GÂCHETTES sont analogiques : R2 avance (R1 tire deja), L2 recule
+      touches.length = 0; ds.buttons[7] = { pressed: false, value: 0.5 }; G.pollGamepad(0.05);
+      const gachetteFaible = +G.pad.gaz.toFixed(2);
+      ds.buttons[7] = { pressed: false, value: 1 }; G.pollGamepad(0.05);
+      const gachetteFort = +G.pad.gaz.toFixed(2);
+      const r2NeTirePas = touches.filter(t => t === 'KeyX').length;
       ds.buttons[7] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
       ds.buttons[6] = { pressed: false, value: 0.8 }; G.pollGamepad(0.05);
-      const court = !!G.P.run;
+      const recule = +G.pad.frein.toFixed(2);
       ds.buttons[6] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+      // « courir » a demenage sur L3, comme dans les grands jeux de ville
+      G.P.energie = 100; G.P.essouffle = false;
+      ds.buttons[10] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
+      const court = !!G.P.run;
+      ds.buttons[10] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
       // 5) R3 recentre la caméra
       G.cam.yaw = 2; G.P.facing = 0;
       ds.buttons[11] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
@@ -6920,15 +6943,16 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
       vib.length = 0; G.simTime += 5; G.camSecousse(0.3, 0.3);
       const vibre = vib[0] || null;
       return { trouvee, nomPS, fremis, diag: diag.map(v => +v.toFixed(2)), carre, marche, camera,
-        bons, total: Object.keys(plan).length, gachetteFaible, gachetteFort, court, recentre, vibre,
+        bons, total: Object.keys(plan).length, gachetteFaible, gachetteFort, r2NeTirePas, recule, court, recentre, vibre,
         noms: G.PS_NOMS[0] + G.PS_NOMS[1] + G.PS_NOMS[2] + G.PS_NOMS[3] };
     } finally { window.removeEventListener('keydown', ecoute); navigator.getGamepads = vraiGP; ferme(); }
   });
   const ok = r.trouvee && r.nomPS && r.fremis[0] === 0 && r.diag[0] > 0.2 && r.carre
     && r.marche.x === 0.8 && r.marche.y === 0.6 && r.camera < -0.2
-    && r.bons === r.total && r.gachetteFaible === 0 && r.gachetteFort === 1
+    && r.bons === r.total && r.gachetteFaible > 0.4 && r.gachetteFaible < 0.55 && r.gachetteFort === 1
+    && r.r2NeTirePas === 0 && r.recule > 0.7
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 AVANCE et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans plus tirer (R1 s'en charge : ${r.r2NeTirePas} tir), L2 RECULE (${r.recule}), « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
 
 test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {
@@ -6946,12 +6970,14 @@ test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repo
     out.assis = { sit: !!G.P.sit, ui: G.uiOpen, tableau: r.texte, q: !!G.school.q, y: +G.P.pos.y.toFixed(2) };
     if (!G.school.q) return { ...out, pourquoi: `pas de question apres 4 s (assis=${!!G.P.sit}, ui=${G.uiOpen})` };
     const q = G.school.q; G.wallet = 0;
-    G.answer(q.a, document.querySelector('#schChoices .item')); await dodo(80);
-    out.bon = { tableau: r.texte, pieces: G.wallet };
-    await dodo(1700); const q2 = G.school.q; const faux = q2.opts.find(o => o !== q2.a);
-    G.answer(faux, document.querySelector('#schChoices .item')); await dodo(80);
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    out.bon = { tableau: r.texte, pieces: G.wallet };   // lu tout de suite : la craie met 2 s a tracer, mais le verdict est deja pose
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);   // la craie finit d'ecrire avant l'exercice suivant
+    const q2 = G.school.q; if (!q2) return { ...out, pourquoi: 'aucun exercice suivant apres le verdict' };
+    const faux = q2.opts.find(o => o !== q2.a);
+    G.answer(faux, document.querySelector('#schChoices .item'));
     out.faux = { tableau: r.texte, rep: faux };
-    G.closeUI(); G.P.sit = null; G.P.pos.set(-62, 1, 235);
+    G.closeUI(); G.P.sit = null; G.school.chaise = null; G.P.pos.set(-62, 1, 235);
     return out;
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
@@ -7215,6 +7241,871 @@ test('la jupe se souleve sur la cuisse au lieu de se faire traverser', async p =
     && r.debout < -0.005 && r.marche < -0.005 && r.course < -0.005 && r.coupDePied < -0.005 && r.agenou < -0.005
     && r.souleve < -0.2 && Math.abs(r.repos) < 0.05 && r.ourlet > r.genou;
   return { ok, detail: `la jupe etait une BOITE rigide autour du bassin : des qu'une cuisse montait, elle la traversait de part en part · c'est maintenant un tronc de cone evase (rayon ${r.hautJupe} m a la taille, ${r.basJupe} m a l'ourlet) qui SE SOULEVE quand un genou monte (${r.souleve} rad genou a terre, retour a ${r.repos} au repos) · le genou reste toujours hors du tissu : marge de ${-r.debout} m debout, ${-r.marche} en marchant, ${-r.course} en courant, ${-r.coupDePied} au coup de pied, ${-r.agenou} genou a terre · et l'ourlet (${r.ourlet} m) reste au-dessus du genou (${r.genou} m)` };
+});
+test('a la manette PS5, R2 avance et L2 recule — a pied comme au volant, et en analogique', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    // le joystick tactile et la manette-telephone s'ADDITIONNENT a la manette : un test
+    // precedent qui laisse une fleche appuyee bloquerait l'entree a fond dans une direction
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const gachette = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; G.pollGamepad(0.02); };
+    try {
+      const res = {};
+      // ---- A PIED. On mesure la VITESSE atteinte, pas la distance : le joueur est remis a
+      // son point de depart a chaque image (une case degagee, connue), sinon un habitant ou
+      // une voiture qui passe par la fausserait la mesure une fois sur deux.
+      const marche = v => {
+        gachette(7, v > 0 ? v : 0); gachette(6, v < 0 ? -v : 0);
+        G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0); G.P.run = false;
+        let dz = 0;
+        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); dz = G.P.pos.z - 8; }
+        const r2 = { v: +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2), sens: Math.sign(+dz.toFixed(3)) };
+        gachette(7, 0); gachette(6, 0);
+        return r2;
+      };
+      res.pied = { plein: marche(1), demi: marche(0.5), arriere: marche(-1), rien: marche(0) };
+      res.gazAFond = (gachette(7, 1), +G.pad.gaz.toFixed(2)); gachette(7, 0);
+      res.gazDemi = (gachette(7, 0.5), +G.pad.gaz.toFixed(2)); gachette(7, 0);
+      res.freinAFond = (gachette(6, 1), +G.pad.frein.toFixed(2)); gachette(6, 0);
+      // le stick gauche DEPLACE toujours : les deux commandes coexistent (meme mesure pinnee)
+      G.cam.yaw = 0; G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; gachette(7, 1);
+      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.ensemble = { vx: +G.P.vel.x.toFixed(2), vz: +G.P.vel.z.toFixed(2) };
+      ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
+      // ---- AU VOLANT : on mesure la montee en vitesse sur un tiers de seconde, avant
+      // d'avoir parcouru assez de route pour rencontrer quoi que ce soit
+      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+      res.voiture = c ? (c.kind || 'voiture') : null;
+      if (c) {
+        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+        res.dedans = !!G.drive.car;
+        const pousse = (i, v, n) => { gachette(7, i === 7 ? v : 0); gachette(6, i === 6 ? v : 0);
+          G.drive.speed = 0; for (let k = 0; k < (n || 20); k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+          const s = +G.drive.speed.toFixed(2); gachette(7, 0); gachette(6, 0); return s; };
+        res.volant = { plein: pousse(7, 1), demi: pousse(7, 0.5), arriere: pousse(6, 1) };
+        // braquer au stick PENDANT qu'on accelere a la gachette
+        gachette(7, 1); ds.axes = [1, 0, 0, 0]; G.drive.speed = 0;
+        const h0 = G.drive.car.h;
+        for (let k = 0; k < 40; k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+        res.braque = { dh: +Math.abs(G.drive.car.h - h0).toFixed(2), vitesse: +G.drive.speed.toFixed(2) };
+        ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
+        G.exitCar();
+      }
+      res.legende = (document.getElementById('padLeg') || {}).textContent || '';
+      res.aide = ([...document.querySelectorAll('.keys span')].map(e => e.textContent).join(' ') || '');
+      return res;
+    } finally { navigator.getGamepads = vrai; ferme(); }
+  });
+  const pd = r.pied, vl = r.volant || {};
+  const ratioPied = pd.demi.v ? +(pd.plein.v / pd.demi.v).toFixed(2) : 0;
+  const ratioVolant = vl.demi ? +(vl.plein / vl.demi).toFixed(2) : 0;
+  const ok = pd.plein.v > 5 && pd.plein.sens === -1 && pd.demi.v > 2 && pd.demi.sens === -1
+    && pd.arriere.v > 5 && pd.arriere.sens === 1 && pd.rien.v === 0
+    && ratioPied > 1.8 && ratioPied < 2.4
+    && r.gazAFond === 1 && r.gazDemi > 0.4 && r.gazDemi < 0.55 && r.freinAFond === 1
+    && r.ensemble.vx > 2 && r.ensemble.vz < -2
+    && r.dedans && vl.plein > 1 && vl.arriere < -1 && ratioVolant > 1.7 && ratioVolant < 2.4
+    && r.braque.dh > 0.3 && r.braque.vitesse > 1
+    && /R2/.test(r.legende) && /avancer/.test(r.legende) && /L2/.test(r.legende) && /reculer/.test(r.legende)
+    && /R2<\/b> avancer/.test(r.aide) === false && /avancer \/ accélérer/.test(r.aide);
+  return { ok, detail: `le joueur demandait des GACHETTES : R2 pour accélérer et avancer, L2 pour reculer · a pied, R2 a fond amène a ${pd.plein.v} m/s vers l'avant, a moitié a ${pd.demi.v} m/s (rapport ${ratioPied} : c'est bien analogique), L2 ramène a ${pd.arriere.v} m/s vers l'ARRIÈRE et rien ne bouge gâchettes lâchées (${pd.rien.v} m/s) · au volant (${r.voiture}) la vitesse monte a ${vl.plein} m/s a fond contre ${vl.demi} a mi-course (rapport ${ratioVolant}) et la marche arrière descend a ${vl.arriere} · le stick gauche COEXISTE : poussé a droite pendant que R2 accélère, le personnage part en diagonale (${r.ensemble.vx} m/s de côté, ${r.ensemble.vz} m/s devant) et la voiture braque de ${r.braque.dh} rad tout en prenant ${r.braque.vitesse} m/s · la légende et l'aide sont a jour` };
+});
+
+test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      const res = {};
+      // ---- LA CROIX ← → : elle change d'ARME et n'ouvre plus de menu en pleine course
+      G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.P.weapon = null;
+      const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.02); G.simTime += 0.1;
+        ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.02); };
+      const suite = [];
+      tap(15); suite.push(G.P.weapon); tap(15); suite.push(G.P.weapon); tap(15); suite.push(G.P.weapon);
+      tap(14); suite.push(G.P.weapon);
+      res.armes = suite; res.menuOuvert = G.uiOpen;
+      res.role = { g: G.PAD_CROIX[14], d: G.PAD_CROIX[15], gLong: G.PAD_CROIX_LONG[14], dLong: G.PAD_CROIX_LONG[15] };
+      // ---- ← MAINTENUE : la boutique reste a portee de pouce
+      ds.buttons[14] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+      G.simTime += G.PAD_LONG + 0.1; G.pollGamepad(0.02);
+      res.longGauche = G.uiOpen;
+      ds.buttons[14] = { pressed: false, value: 0 }; G.pollGamepad(0.02); ferme();
+      ds.buttons[15] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+      G.simTime += G.PAD_LONG + 0.1; G.pollGamepad(0.02);
+      res.longDroite = G.uiOpen;
+      ds.buttons[15] = { pressed: false, value: 0 }; G.pollGamepad(0.02); ferme();
+      // ---- LE STICK GAUCHE EN X : déplacement latéral, dans les deux sens, symétrique
+      const lateral = v => { ds.axes = [v, 0, 0, 0]; G.cam.yaw = 0; G.P.vel.set(0, 0, 0); G.pollGamepad(0.02);
+        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+        const d = +G.P.vel.x.toFixed(2); ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); return d; };
+      res.lat = { droite: lateral(1), gauche: lateral(-1), demi: lateral(0.5), fremis: lateral(0.05) };
+      // ---- LE STICK DROIT EN X : la caméra, dans le bon sens
+      ds.axes = [0, 0, 1, 0]; const y0 = G.cam.yaw; for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      const camD = +(G.cam.yaw - y0).toFixed(2);
+      ds.axes = [0, 0, -1, 0]; const y1 = G.cam.yaw; for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      const camG = +(G.cam.yaw - y1).toFixed(2);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02);
+      res.cam = { droite: camD, gauche: camG };
+      // ---- MODE « rotation » : au stick, x reste un déplacement relatif a la caméra (et non
+      // un braquage a bande morte, l'ancien defaut) — le réglage clavier, lui, ne change pas
+      G.settings.ctrl = 'rot'; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.02);
+      const f0 = G.P.facing;
+      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.rot = { dx: +G.P.vel.x.toFixed(2), braque: +Math.abs(G.P.facing - f0).toFixed(2) };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); G.settings.ctrl = 'cam';
+      // ---- DANS LES MENUS, ← → gardent leur rôle de navigation
+      G.openStore(); await dodo(80);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.02);
+      res.menuBouge = !!document.querySelector('.focustv');
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); ferme();
+      return res;
+    } finally { navigator.getGamepads = vrai; G.settings.ctrl = 'cam'; ferme(); }
+  });
+  const l = r.lat;
+  const ok = r.armes[0] === 'pistol' && r.armes[1] === 'rifle' && r.armes[2] === null && r.armes[3] === 'rifle'
+    && r.menuOuvert === null && r.role.g === 'armePrec' && r.role.d === 'armeSuiv'
+    && r.longGauche === 'store' && r.longDroite === 'missions'
+    && l.droite > 5 && l.gauche < -5 && Math.abs(l.droite + l.gauche) < 0.2
+    && l.demi > 2 && l.demi < l.droite - 2 && Math.abs(l.fremis) < 0.05
+    && r.cam.droite < -1 && r.cam.gauche > 1
+    && r.rot.dx > 2 && r.rot.braque < 0.05 && r.menuBouge;
+  return { ok, detail: `« la manette gauche droite ne fonctionne pas » : la croix ← → ouvrait la BOUTIQUE et les MISSIONS — en pleine course le jeu se figeait sur un menu · elle change maintenant d'arme (${r.armes.join(' → ')}, aucun menu ouvert : ${r.menuOuvert}) et boutique/missions restent la, en MAINTENANT ← ou → (${r.longGauche} / ${r.longDroite}) · le stick gauche en x déplace bien de côté et symétriquement (droite ${l.droite} m/s, gauche ${l.gauche} m/s, a mi-course ${l.demi} m/s, un frémissement a 5 % ne bouge rien : ${l.fremis}) · le stick droit en x tourne la caméra dans les deux sens (${r.cam.droite} / ${r.cam.gauche} rad) · en mode « rotation » le stick reste relatif a la caméra (${r.rot.dx} m/s de côté sans braquer : ${r.rot.braque} rad), et dans les menus ← → naviguent toujours` };
+});
+
+test('une manette au mapping non standard (navigateur de tele) est remise d\'aplomb', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    // LA MEME DualSense, vue par le navigateur d'une tele (ou Firefox) : mapping vide,
+    // axes = [LX, LY, RX, L2, R2, RY, chapeau], faces dans l'ordre HID, pas de croix.
+    const REPOS = [0, 0, 0, -1, -1, 0, 1.2857142857142856];
+    const hid = { index: 0, connected: true, mapping: '',
+      id: 'Sony Interactive Entertainment Wireless Controller (Vendor: 054c Product: 0ce6)',
+      axes: REPOS.slice(), buttons: Array.from({ length: 14 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [hid];
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    try {
+      const res = {};
+      res.profil = G.padProfil(hid);
+      // 1) AU REPOS : l'ancienne lecture prenait l'axe 3 (= L2 relâchée, a -1) pour le stick
+      // droit vertical — la caméra plongeait toute seule, sans que personne ne touche rien
+      res.avant = { rxLu: hid.axes[2], ryLu: hid.axes[3] };
+      G.cam.yaw = 0; G.cam.pitch = 0.3;
+      for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      res.derive = { yaw: +G.cam.yaw.toFixed(3), pitch: +(G.cam.pitch - 0.3).toFixed(3) };
+      let L = G.padLu(hid);
+      res.repos = { l2: +L.l2.toFixed(2), r2: +L.r2.toFixed(2), rx: L.rx, ry: L.ry, chapeau: L.chapeau };
+      // 2) LE STICK DROIT est sur les axes 2 et 5, pas 2 et 3
+      hid.axes[2] = 0.8; hid.axes[5] = -0.6; L = G.padLu(hid);
+      res.stickD = { rx: L.rx, ry: L.ry };
+      hid.axes[2] = 0; hid.axes[5] = 0;
+      // 3) LA CROIX est un « chapeau » sur un axe : sans traduction, ← et → ne font RIEN
+      hid.axes[6] = 0.7142857142857142; L = G.padLu(hid); res.chapGauche = [L.b[14], L.b[15]];
+      hid.axes[6] = -0.42857142857142855; L = G.padLu(hid); res.chapDroite = [L.b[14], L.b[15]];
+      hid.axes[6] = -1; L = G.padLu(hid); res.chapHaut = L.b[12];
+      hid.axes[6] = 1.2857142857142856;
+      // ... et elle change vraiment d'arme en jeu
+      G.owned.add('arme:pistol'); G.P.weapon = null;
+      hid.axes[6] = -0.42857142857142855; G.pollGamepad(0.02); G.simTime += 0.1;
+      hid.axes[6] = 1.2857142857142856; G.pollGamepad(0.02);
+      res.armeParChapeau = G.P.weapon;
+      // 4) LES GACHETTES sont sur les axes 3 et 4, et restent analogiques
+      hid.axes[4] = 0; L = G.padLu(hid); res.r2Demi = +L.r2.toFixed(2);
+      hid.axes[4] = 1; G.pollGamepad(0.02); res.gazPlein = +G.pad.gaz.toFixed(2);
+      G.cam.yaw = 0; G.P.pos.set(0, 0.5, 8); G.P.vel.set(0, 0, 0);
+      const z0 = G.P.pos.z;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.avance = +(G.P.pos.z - z0).toFixed(2);
+      hid.axes[4] = -1; G.pollGamepad(0.02);
+      // 5) LES FACES sont dans l'ordre HID : le bouton 1 est ✕ (index 0 en standard)
+      hid.buttons[1] = { pressed: true, value: 1 }; L = G.padLu(hid);
+      res.faces = { hid1EstCroix: L.b[0], hid0EstCarre: G.padLu(hid).b[2] };
+      hid.buttons[1] = { pressed: false, value: 0 };
+      hid.buttons[0] = { pressed: true, value: 1 }; res.faces.hid0EstCarre = G.padLu(hid).b[2];
+      hid.buttons[0] = { pressed: false, value: 0 }; G.pollGamepad(0.02);
+      // 6) L'ECRAN « TESTER LA MANETTE » dit ce qu'il a corrigé
+      hid.axes[0] = -0.62; hid.axes[4] = 0.4;
+      G.ouvreTestManette(); G.pollGamepad(0.02);
+      res.ecran = { ui: G.uiOpen, nom: (document.getElementById('ptNom') || {}).textContent || '',
+        diag: (document.getElementById('ptDiag') || {}).textContent || '',
+        barres: document.querySelectorAll('#ptAxes .ptrow').length,
+        boutons: document.querySelectorAll('#ptBoutons u').length,
+        allumes: document.querySelectorAll('#ptBoutons u.on').length };
+      hid.axes = REPOS.slice(); G.pollGamepad(0.02);
+      ferme();
+      return res;
+    } finally { navigator.getGamepads = vrai; ferme(); }
+  });
+  const ok = r.profil === 'ps-hid' && r.repos.l2 === 0 && r.repos.r2 === 0 && r.repos.rx === 0 && r.repos.ry === 0
+    && r.repos.chapeau === 6 && Math.abs(r.derive.yaw) < 0.01 && Math.abs(r.derive.pitch) < 0.01
+    && r.stickD.rx === 0.8 && r.stickD.ry === -0.6
+    && r.chapGauche[0] && !r.chapGauche[1] && !r.chapDroite[0] && r.chapDroite[1] && r.chapHaut
+    && r.armeParChapeau === 'pistol'
+    && r.r2Demi > 0.45 && r.r2Demi < 0.55 && r.gazPlein === 1 && r.avance < -4
+    && r.faces.hid1EstCroix && r.faces.hid0EstCarre
+    && r.ecran.ui === 'padTest' && r.ecran.barres === 6 && r.ecran.boutons === 18 && r.ecran.allumes >= 1
+    && /ps-hid/.test(r.ecran.nom) && /non standard corrigé/.test(r.ecran.diag);
+  return { ok, detail: `sur le navigateur d'une télé (ou Firefox), la MEME DualSense arrive avec « mapping » vide et un tout autre agencement : le jeu lisait l'axe 3 (= L2 relâchée, a ${r.avant.ryLu}) comme le stick droit vertical — la caméra plongeait toute seule — le stick droit était introuvable, et la croix, qui n'a alors AUCUN bouton mais un « chapeau » sur un axe, ne faisait RIEN : c'est le « gauche/droite ne fonctionne pas » du joueur · tout est normalisé (profil ${r.profil}) : plus aucune dérive (${r.derive.yaw} rad de lacet, ${r.derive.pitch} d'inclinaison en une seconde), le stick droit est retrouvé sur les axes 2 et 5 (${r.stickD.rx} / ${r.stickD.ry}), le chapeau redevient une croix (← ${r.chapGauche[0]}, → ${r.chapDroite[1]}, ↑ ${r.chapHaut}) qui change d'arme (${r.armeParChapeau}), les gâchettes des axes 3/4 restent analogiques (mi-course ${r.r2Demi}, a fond ${r.gazPlein} → ${Math.abs(r.avance)} m parcourus) et les faces HID reprennent leur place (✕ et ▢) · l'écran « Tester la manette » montre les ${r.ecran.barres} axes et les ${r.ecran.boutons} boutons en direct et affiche : « ${r.ecran.diag} »` };
+});
+
+test('le mode diffusion vise 60 images par seconde NETTES sur la tele', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dpr = window.devicePixelRatio || 1;
+    const res = {};
+    // ---- CE QUI SE PASSAIT. En arrivant par le lien #tv la qualité passait en « Ultra HD »,
+    // dont le principe est le SURÉCHANTILLONNAGE : deux fois la finesse de l'écran, soit
+    // quatre fois trop de pixels pour le processeur d'une télé.
+    G.modeTV(false); G.diffusionMode(false);
+    G.settings.quality = 'ultra'; G.applyQuality();
+    res.avant = { ratio: +G.ratioQualite().toFixed(2), nettete: +G.post.force.toFixed(2) };
+    // ... et l'échelle adaptative tombait alors au PLANCHER : rendu a 50 %, ombres éteintes
+    for (let i = 0; i < 300; i++) G.fluiditeTick(1000 / 30);
+    res.avantPlancher = { ech: +G.rendu.ech.toFixed(2), ombres: G.rendu.ombres };
+    // ... et n'en remontait jamais : sur une télé qui tient 50 images/s, il en fallait 57
+    for (let i = 0; i < 400; i++) G.fluiditeTick(1000 / 50);
+    res.avantRemonte = +G.rendu.ech.toFixed(2);
+    // ---- L'ACCÉLÉRATEUR D'IMAGE : il s'allume avec le mode télé
+    G.modeTV(true);
+    res.auto = G.diffusion.on;
+    res.apres = { cible: G.diffusion.cible, ratio: +G.ratioQualite().toFixed(2), natif: +Math.min(dpr, 2).toFixed(2),
+      nettete: +G.post.force.toFixed(2), passe: G.post.on, msaa: G.diffusion.msaa,
+      paliers: G.paliersActifs().length, memeQuePALIERS: G.paliersActifs() === G.PALIERS };
+    // l'échelle de l'accélérateur lâche les OMBRES d'abord, et ne descend jamais sous 78 %
+    const marches = [];
+    for (let i = 0; i < 300; i++) { G.fluiditeTick(1000 / 30); if (i % 40 === 0) marches.push({ ech: +G.rendu.ech.toFixed(2), o: G.rendu.ombres }); }
+    res.marches = marches;
+    res.plancher = { ech: +G.rendu.ech.toFixed(2), ombres: G.rendu.ombres, mini: Math.min(...G.PALIERS_TV.map(x => x.ech)) };
+    // a 50 images/s on remonte déja (avant, il fallait 57 : on restait flou pour toujours)
+    for (let i = 0; i < 400; i++) G.fluiditeTick(1000 / 59);
+    res.remonte = { ech: +G.rendu.ech.toFixed(2), palier: G.rendu.palier };
+    // ---- LA MESURE, visible dans le salon TV
+    G.diffusion.n = 0; G.diffusion.acc = 0;
+    for (let i = 0; i < 30; i++) G.diffusionMesure(1000 / 60);   // 30 images en une demi-seconde = 60 images/s
+    res.mesure = { ips: G.diffusion.ips, mpx: G.diffusion.mpx, px: G.diffusion.px };
+    G.ouvreSalonTV();
+    res.salon = { debit: (document.getElementById('tvDebit') || {}).textContent || '',
+      bouton: (document.getElementById('tvTurbo') || {}).textContent || '' };
+    G.closeUI();
+    // ---- on peut l'éteindre, et le mode télé le rallume
+    G.diffusionMode(false, true); res.eteint = G.diffusion.on;
+    G.diffusionMode(true, true);
+    G.modeTV(false); res.horsTV = G.diffusion.on;
+    G.diffusionMode(false); G.settings.quality = 'high'; G.applyQuality();
+    return res;
+  });
+  const m = r.marches;
+  const ok = r.avant.ratio >= 2 && r.avantPlancher.ech <= 0.5 && r.avantPlancher.ombres === false && r.avantRemonte <= 0.5
+    && r.auto && r.apres.cible === 60 && r.apres.ratio === r.apres.natif && r.apres.passe
+    && r.apres.nettete >= 0.6 && r.apres.msaa === 2 && !r.apres.memeQuePALIERS
+    && m[1] && m[1].o === false && m[1].ech === 1
+    && r.plancher.ech >= 0.78 && r.plancher.ech === r.plancher.mini
+    && r.remonte.ech === 1 && r.remonte.palier === 0
+    && r.mesure.ips === 60 && r.mesure.mpx > 0 && /images\/s/.test(r.salon.debit) && /Mpx\/s/.test(r.salon.debit)
+    && /oui/.test(r.salon.bouton) && r.eteint === false && r.horsTV === false;
+  return { ok, detail: `« le rendu TV n'est pas bon, image pas nette, pas assez fluide » : « diffuser » n'envoie AUCUNE vidéo — la télé ouvre le lien #tv et calcule le jeu elle-même — et en arrivant par ce lien la qualité passait en Ultra HD, c'est-a-dire en SURÉCHANTILLONNAGE (ratio ${r.avant.ratio}, quatre fois trop de pixels) · a 30 images/s l'échelle adaptative tombait alors au plancher (rendu a ${r.avantPlancher.ech}, ombres ${r.avantPlancher.ombres ? 'encore la' : 'éteintes'}) et n'en remontait JAMAIS, puisqu'il fallait repasser 57 images/s (a 50 : encore ${r.avantRemonte}) : image molle ET saccadée · l'accélérateur d'image s'allume avec le mode télé (${r.auto}) et retourne la logique — rendu au NATIF (${r.apres.ratio} = ${r.apres.natif}), netteté par passe CAS poussée a ${r.apres.nettete} au lieu du suréchantillonnage, anticrénelage a ${r.apres.msaa} échantillons, et une échelle de ${r.apres.paliers} paliers qui lâche les OMBRES d'abord (${m.map(x => x.ech + (x.o ? '' : '✕')).join(' → ')}) et ne descend jamais sous ${r.plancher.ech} · a 59 images/s tout remonte (palier ${r.remonte.palier}) · la mesure est visible dans le salon : « ${r.salon.debit} »` };
+});
+test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un batiment, l\'eau, le sable ou une parcelle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city;
+    // 1. la hiérarchie annoncée : toute chaussée mesure 5, 6, 7, 8 ou 9 m de large
+    const largeurs = {}, horsHierarchie = [];
+    for (const rt of c.routes) {
+      const l = +Math.min(rt.w, rt.d).toFixed(2);
+      largeurs[l] = (largeurs[l] || 0) + 1;
+      if (!Object.values(G.VOIES).includes(l)) horsHierarchie.push([l, rt.x, rt.z]);
+    }
+    const roles = {}; for (const rt of c.routes) { const k = G.roleVoie(rt); roles[k] = (roles[k] || 0) + 1; }
+    // 2. aucune rue ne traverse un bâtiment, la mer, le sable du rallye, l'anneau, une parcelle
+    const chev = (a, b, m) => Math.abs(a.x - b.x) < a.w / 2 + b.w / 2 - m && Math.abs(a.z - b.z) < a.d / 2 + b.d / 2 - m;
+    const parcelles = G.VILLAS.map(v => ({ x: v.x, z: v.z, w: G.VILLA_HALF * 2, d: G.VILLA_HALF * 2 }));
+    for (const gd of G.GANG_DEFS) if (gd.villa) parcelles.push({ x: gd.villa[0], z: gd.villa[1], w: 42, d: 42 });
+    const dansBat = [], dansEau = [], dansSable = [], dansAnneau = [], dansParcelle = [], minus = [];
+    for (const rt of c.routes) {
+      for (const b of c.batiments) if (chev(rt, b, 1)) dansBat.push([rt.x, rt.z, Math.round(b.x), Math.round(b.z)]);
+      for (const q of parcelles) if (chev(rt, q, 1)) dansParcelle.push([rt.x, rt.z]);
+      const dedans = (x1, x2, z1, z2) => rt.x - rt.w / 2 < x2 - 1 && rt.x + rt.w / 2 > x1 + 1 && rt.z - rt.d / 2 < z2 - 1 && rt.z + rt.d / 2 > z1 + 1;
+      if (c.sea && dedans(c.sea.x1, c.sea.x2, c.sea.z1, c.sea.z2)) dansEau.push([rt.x, rt.z]);
+      if (G.RALLY.mesh && dedans(G.RALLY.x1, G.RALLY.x2, G.RALLY.z1, G.RALLY.z2)) dansSable.push([rt.x, rt.z]);
+      if (Math.hypot(rt.x - G.RACE_C.x, rt.z - G.RACE_C.z) < G.RACE_C.r - 6) dansAnneau.push([rt.x, rt.z]);
+      if (Math.max(rt.w, rt.d) < 6) minus.push([rt.x, rt.z]);   // pas de bout de rue de 2 m : le poste D construit ses voies dessus
+    }
+    // 3. un seul réseau pour les voitures (composantes connexes de la chaussée ouverte)
+    const N = G.NAV; if (!N.voit) G.buildNav();
+    const { nx, nz } = N, co = N.cout, bl = N.voit;
+    const comp = new Int32Array(nx * nz).fill(-1); let nc = 0; const tailles = [];
+    for (let s = 0; s < nx * nz; s++) {
+      if (comp[s] >= 0 || co[s] !== 1 || bl[s]) continue;
+      const st = [s]; comp[s] = nc; let t = 0;
+      while (st.length) { const q = st.pop(); t++; const i = q % nx, j = (q - i) / nx;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue; const k = jj * nx + ii; if (comp[k] < 0 && co[k] === 1 && !bl[k]) { comp[k] = nc; st.push(k); } } }
+      tailles.push(t); nc++;
+    }
+    const total = tailles.reduce((a, b) => a + b, 0), part = Math.max(...tailles) / total;
+    return { routes: c.routes.length, axes: c.plan.axes.length, largeurs, horsHierarchie, roles,
+      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4) };
+  });
+  const ok = r.horsHierarchie.length === 0 && r.dansBat.length === 0 && r.dansEau.length === 0 && r.dansSable.length === 0
+    && r.dansAnneau.length === 0 && r.dansParcelle.length === 0 && r.minus.length === 0 && r.part >= 0.99
+    && r.roles.boulevard >= 8 && r.routes >= 65;
+  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard} boulevards, ${r.roles.avenue} avenues, ${r.roles.rue} rues, ${r.roles.ruelle} ruelles, ${r.roles.desserte} dessertes), ${r.horsHierarchie.length} hors hiérarchie · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) — il y en avait 7 · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
+});
+
+test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux sur le trottoir, passages pietons devant les equipements', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city;
+    // 1. chaque feu a son état, son sens et sa ligne d'arrêt, et la ligne est SUR la chaussée
+    const surChaussee = (x, z, m = 0) => c.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + m && Math.abs(z - rt.z) < rt.d / 2 + m);
+    const feuxSansEtat = c.trafficLights.filter(t => !t.etat || !t.ligne || typeof t.sens !== 'number').length;
+    const lignesHorsRoute = c.trafficLights.filter(t => t.ligne && !surChaussee(t.ligne.x, t.ligne.z, 0.6)).length;
+    // la ligne d'arrêt est au droit du feu (même coordonnée le long de la voie), décalée
+    // vers l'axe de la rue : jamais plus de 8 m, et jamais en avant ni en arrière du feu
+    const lignesMalPlacees = c.trafficLights.filter(t => {
+      const alongZ = Math.abs(Math.cos(t.sens)) > 0.5;
+      const long = alongZ ? Math.abs(t.ligne.z - t.z) : Math.abs(t.ligne.x - t.x);
+      return long > 0.2 || Math.hypot(t.ligne.x - t.x, t.ligne.z - t.z) > 8;
+    }).length;
+    // 2. le cycle tourne, et les deux groupes ne sont JAMAIS verts ensemble
+    const vus = { A: {}, B: {} }; let deuxVerts = 0;
+    const t0 = G.simTime;
+    for (let i = 0; i < 120; i++) {
+      G.simTime = i * 0.5; G.lightsTick();
+      const a = c.trafficLights.find(t => t.groupe === 'A'), b = c.trafficLights.find(t => t.groupe === 'B');
+      vus.A[a.etat] = (vus.A[a.etat] || 0) + 1; vus.B[b.etat] = (vus.B[b.etat] || 0) + 1;
+      if (a.etat === 'vert' && b.etat === 'vert') deuxVerts++;
+    }
+    G.simTime = t0; G.lightsTick();
+    // la lampe allumée est bien la bonne (matériau vif, les deux autres éteintes)
+    const f = c.trafficLights[0]; G.simTime = 0; G.lightsTick();
+    const lampes = f.lamps.map(l => '#' + l.material.color.getHexString());
+    // 3. les panneaux : sur un trottoir, jamais sur la chaussée, jamais devant une porte
+    const surTrottoir = (x, z) => c.trottoirs.some(t => Math.abs(x - t.x) <= t.w / 2 + 0.5 && Math.abs(z - t.z) <= t.d / 2 + 0.5);
+    const portes = G.solids.filter(o => o.porte);
+    const panSurRoute = c.panneaux.filter(q => surChaussee(q.x, q.z, -0.2)).length;
+    const panHorsTrottoir = c.panneaux.filter(q => !surTrottoir(q.x, q.z)).length;
+    const panDevantPorte = c.panneaux.filter(q => portes.some(o => Math.abs(q.x - o.x) < o.w / 2 + 1.6 && Math.abs(q.z - o.z) < o.d / 2 + 1.6)).length;
+    const types = c.panneaux.reduce((a, q) => (a[q.type] = (a[q.type] || 0) + 1, a), {});
+    // 4. toute rue secondaire qui débouche sur un boulevard a un stop ou un cédez-le-passage
+    //    (sauf aux carrefours à feux, où le feu suffit)
+    const manquants = [];
+    for (const k of G.carrefours()) {
+      const la = Math.min(k.a.w, k.a.d), lb = Math.min(k.b.w, k.b.d);
+      if (Math.max(la, lb) < 9 || la === lb) continue;
+      if (c.crossings.some(([x, z]) => Math.abs(x - k.cx) < 14 && Math.abs(z - k.cz) < 14)) continue;
+      if (!c.panneaux.some(q => (q.type === 'stop' || q.type === 'cede') && Math.hypot(q.x - k.cx, q.z - k.cz) < 22)) manquants.push([Math.round(k.cx), Math.round(k.cz)]);
+    }
+    // 5. un passage piéton devant l'école, l'hôpital et le commissariat
+    const devant = ['École', 'Hôpital', 'Commissariat'].map(nom => {
+      const z0 = c.zones.find(q => q.name === nom);
+      if (!z0) return [nom, -1];
+      const cx = (z0.x1 + z0.x2) / 2, cz = (z0.z1 + z0.z2) / 2;
+      const d = Math.min(...c.passages.map(q => Math.hypot(q.x - cx, q.z - cz)));
+      return [nom, Math.round(d)];
+    });
+    return { feux: c.trafficLights.length, feuxSansEtat, lignesHorsRoute, lignesMalPlacees, vus, deuxVerts, lampes,
+      panneaux: c.panneaux.length, types, panSurRoute, panHorsTrottoir, panDevantPorte, manquants,
+      passages: c.passages.length, devant, exemple: { x: f.x, z: f.z, sens: +f.sens.toFixed(2), etat: f.etat, ligne: f.ligne, groupe: f.groupe } };
+  });
+  const ok = r.feux >= 36 && r.feuxSansEtat === 0 && r.lignesHorsRoute === 0 && r.lignesMalPlacees === 0
+    && r.deuxVerts === 0 && r.vus.A.vert > 0 && r.vus.A.orange > 0 && r.vus.A.rouge > 0
+    && r.vus.B.vert > 0 && r.vus.B.orange > 0 && r.vus.B.rouge > 0
+    && r.panneaux >= 50 && r.panSurRoute === 0 && r.panHorsTrottoir === 0 && r.panDevantPorte === 0
+    && r.types.stop > 0 && r.types.cede > 0 && r.types.prioritaire > 0 && r.types['fin-prioritaire'] > 0
+    && r.manquants.length === 0 && r.devant.every(([, d]) => d >= 0 && d < 45);
+  return { ok, detail: `${r.feux} feux, tous avec leur état lisible et leur ligne d'arrêt sur la chaussée (${r.feuxSansEtat} sans état, ${r.lignesHorsRoute} lignes hors route) — exemple : ${JSON.stringify(r.exemple)} · le cycle tourne vert 12 s / orange 2 s / rouge et les deux axes ne sont JAMAIS verts ensemble (${r.deuxVerts} fois sur 120 relevés) · ${r.panneaux} panneaux (${JSON.stringify(r.types)}), ${r.panSurRoute} sur la chaussée, ${r.panHorsTrottoir} hors trottoir, ${r.panDevantPorte} devant une porte · ${r.manquants.length} rue secondaire débouchant sur un boulevard sans stop ni cédez-le-passage · ${r.passages} passages piétons, dont un à ${r.devant.map(d => d[0] + ' ' + d[1] + ' m').join(', ')}` };
+});
+
+test('les deux nouveaux quartiers sont relies a la ville et on y achete vraiment', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city, res = { quartiers: [], boutiques: [] };
+    // 1. les deux zones sont déclarées, et leur desserte tombe sur le réseau principal
+    const N = G.NAV; if (!N.voit) G.buildNav();
+    const { nx, nz, cs, x0, z0 } = N, co = N.cout, bl = N.voit;
+    const comp = new Int32Array(nx * nz).fill(-1); let nc = 0; const tailles = [];
+    for (let s = 0; s < nx * nz; s++) {
+      if (comp[s] >= 0 || co[s] !== 1 || bl[s]) continue;
+      const st = [s]; comp[s] = nc; let t = 0;
+      while (st.length) { const q = st.pop(); t++; const i = q % nx, j = (q - i) / nx;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue; const k = jj * nx + ii; if (comp[k] < 0 && co[k] === 1 && !bl[k]) { comp[k] = nc; st.push(k); } } }
+      tailles.push(t); nc++;
+    }
+    const pr = tailles.indexOf(Math.max(...tailles));
+    const cell = (x, z) => comp[Math.max(0, Math.min(nz - 1, Math.round((z - z0) / cs))) * nx + Math.max(0, Math.min(nx - 1, Math.round((x - x0) / cs)))];
+    for (const nom of ['Le Marché', 'Techno-Parc']) {
+      const z1 = c.zones.find(q => q.name === nom);
+      const d = c.plan.dessertes.find(q => q.n === nom);
+      const rues = c.routes.filter(rt => z1 && rt.x > z1.x1 - 6 && rt.x < z1.x2 + 6 && rt.z > z1.z1 - 6 && rt.z < z1.z2 + 6).length;
+      const lam = G.solids.filter(o => o.mesh && z1 && o.x > z1.x1 && o.x < z1.x2 && o.z > z1.z1 && o.z < z1.z2 && Math.abs(o.h - 4.4) < 0.01).length;
+      const trot = c.trottoirs.filter(t => z1 && t.x > z1.x1 && t.x < z1.x2 && t.z > z1.z1 && t.z < z1.z2).length;
+      res.quartiers.push({ nom, declare: !!z1, emoji: z1 && z1.emoji, hint: !!(z1 && z1.hint),
+        desserte: d ? [d.x, d.z, d.loin] : null, surReseau: !!d && cell(d.x, d.z) === pr, rues, lampadaires: lam, trottoirs: trot,
+        gps: !!G.lieuDe(nom) });
+    }
+    // 2. les boutiques où l'on ENTRE : on franchit la porte, le comptoir ouvre l'interface,
+    //    l'achat débite exactement le prix
+    const essai = async (id, px, pz) => {
+      __SHOT.go({ world: 4, x: px, y: 1, z: pz, hour: 12 });
+      const e = c.etals.find(o => o.id === id);
+      for (let i = 0; i < 300; i++) {
+        const dx = e.vx - G.P.pos.x, dz = e.vz - G.P.pos.z, d = Math.hypot(dx, dz);
+        if (d < 0.7) break;
+        G.P.pos.x += dx / d * 0.09; G.P.pos.z += dz / d * 0.09; G.step(1 / 60, true);
+      }
+      G.step(1 / 60, true);
+      // le porte-monnaie est rempli JUSTE avant l'achat : pendant les cinq secondes de marche,
+      // la vie de la ville (police, gangs) peut le vider et le test mesurait alors n'importe quoi
+      G.wallet = 80; const avant = G.wallet;
+      const entre = Math.hypot(e.vx - G.P.pos.x, e.vz - G.P.pos.z) < 1.2;
+      const vit = c.vitNear;
+      let ouvre = false, debit = -1;
+      if (vit && vit.tab === 'etal') { G.openStore(vit.tab, vit.key); ouvre = G.uiOpen === 'etal'; }
+      if (ouvre) { G.acheterArticle(e.articles[0]); debit = avant - G.wallet; G.closeUI(); }
+      res.boutiques.push({ id, entre, comptoir: !!vit, ouvre, debit, prix: e.articles[0].p, articles: e.articles.length });
+    };
+    await essai('pain', -150.5, 193); await essai('bonbon', -142.5, 193); await essai('cafe', -134.5, 193);
+    await essai('info', -17, -105); await essai('drone', -2, -105); await essai('jeux', 13, -105);
+    res.etals = c.etals.length;
+    return res;
+  });
+  const q = r.quartiers, b = r.boutiques;
+  const ok = q.length === 2 && q.every(z => z.declare && z.hint && z.gps && z.surReseau && z.rues >= 3 && z.lampadaires >= 6 && z.trottoirs >= 8)
+    && b.length === 6 && b.every(o => o.entre && o.comptoir && o.ouvre && o.debit === o.prix && o.articles >= 2) && r.etals >= 9;
+  return { ok, detail: `deux quartiers neufs : ${q.map(z => `${z.emoji} ${z.nom} (${z.rues} rues, ${z.trottoirs} trottoirs, ${z.lampadaires} lampadaires, desserte ${JSON.stringify(z.desserte)} ${z.surReseau ? 'reliée au réseau' : 'HORS RÉSEAU'}, GPS ${z.gps ? 'ok' : 'absent'})`).join(' · ')} · ${r.etals} comptoirs en tout, et les ${b.length} boutiques où l'on entre marchent de bout en bout : ${b.map(o => `${o.id} (porte franchie, comptoir ouvert, −${o.debit} 🪙 pour ${o.prix})`).join(', ')}` };
+});
+// ================= POSTE J — LA VIE DE LA VILLE (métiers) =================
+test('les cinq tenues de métier sont visibles et n\'entrent pas dans le corps', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const boite = o => { o.updateWorldMatrix(true, true); return new G.THREE.Box3().setFromObject(o); };
+    const out = {};
+    for (const m of G.city.metiers) {
+      if (out[m.metier]) continue;
+      const av = m.bot.av; av.group.updateWorldMatrix(true, true);
+      const t = av.tenue;
+      // le vêtement principal : la plus grosse pièce posée sur le torse
+      let veste = null, vol = 0;
+      for (const pc of t.pieces) { if (pc.parent !== av.group) continue; const v = pc.scale.x * pc.scale.y * pc.scale.z; if (v > vol) { vol = v; veste = pc; } }
+      const bt = boite(av.torso), bv = boite(veste), bg = boite(av.group);
+      out[m.metier] = {
+        pieces: t.pieces.length, visibles: t.pieces.filter(pc => pc.visible).length,
+        // « enveloppe » : le vêtement déborde du torse de tous les côtés — il ne s'y enfonce pas
+        enveloppe: bv.min.x < bt.min.x && bv.max.x > bt.max.x && bv.min.z < bt.min.z && bv.max.z > bt.max.z,
+        marge: +Math.min(bt.min.x - bv.min.x, bt.min.z - bv.min.z).toFixed(3),
+        largeur: +(bg.max.x - bg.min.x).toFixed(2), hauteur: +(bg.max.y - bg.min.y).toFixed(2),
+        haut: '#' + av.mats.shirt.color.getHexString(), bas: '#' + av.mats.pants.color.getHexString(),
+      };
+    }
+    const emp = G.city.metiers.find(m => m.metier === 'employe').bot.av;
+    const bandes = emp.tenue.pieces.filter(pc => pc.material.color.getHexString() === 'c9ced8').length;
+    const gilet = emp.tenue.pieces.some(pc => pc.material.color.getHexString() === 'e4f52a');
+    return { out, bandes, gilet, nb: Object.keys(out).length, travailleurs: G.city.metiers.length };
+  });
+  const A = ['employe', 'balayeur', 'laveur', 'pompier', 'facteur'];
+  const couleurs = { employe: '#2f4f9e', balayeur: '#2f8f4a', laveur: '#8f98ab', pompier: '#d42b2b', facteur: '#f2c21a' };
+  const ok = r.nb === 5 && r.travailleurs >= 8 && r.travailleurs <= 12 && r.gilet && r.bandes >= 4
+    && A.every(k => { const t = r.out[k]; return t && t.pieces >= 3 && t.visibles === t.pieces && t.enveloppe && t.marge >= 0.03 && t.haut === couleurs[k]; });
+  return { ok, detail: `${r.travailleurs} travailleurs (au plus 12), ${r.nb} tenues : ` + A.map(k => `${k} ${r.out[k].pieces} pièces, jeu ${Math.round(r.out[k].marge * 100)} cm autour du torse, haut ${r.out[k].haut}`).join(' · ') + ` — le gilet fluo de l'employé porte ${r.bandes} bandes réfléchissantes grises` };
+});
+
+test('un lampadaire cassé est réparé tout seul par les employés, avec un chantier posé puis retiré', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos   // on ne dépend pas de la phase du cycle jour/nuit
+    const dep = c.depot;
+    let lam = null, bd = 1e9;
+    for (const b of G.breakables) { if (b.kind !== 'lamp') continue; const d = Math.hypot(b.x - dep.x, b.z - dep.z); if (d < bd) { bd = d; lam = b; } }
+    G.breakThing(lam, { x: lam.x + 1, z: lam.z }, true);
+    const obst0 = G.solids.filter(o => o.chantier).length;
+    let chantMax = 0, repare = -1;
+    const DT = 1 / 20;
+    for (let i = 0; i < 3600 && repare < 0; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (c.chantiers.length > chantMax) chantMax = c.chantiers.length;
+      if (!lam.broken) repare = +(i * DT).toFixed(1);
+    }
+    // on laisse l'équipe RANGER son chantier, et on mesure pile à ce moment-là : si on
+    // attendait plus longtemps, elle repartait sur une autre panne et posait un chantier
+    // tout neuf — le test devenait un tirage au sort.
+    let range = -1, obstFin = -1;
+    for (let i = 0; i < 800; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (!c.chantiers.length) { range = +(i * DT).toFixed(1); obstFin = G.solids.filter(o => o.chantier).length; break; }
+    }
+    return { dist: Math.round(bd), repare, range, obst0, chantMax, chantiers: c.chantiers.length,
+      obstFin, broken: lam.broken, etat: G.METIERS.employes[0].etat };
+  });
+  const ok = r.repare > 0 && r.repare < 160 && r.chantMax >= 1 && !r.broken && r.range >= 0 && r.obstFin === r.obst0;
+  return { ok, detail: `lampadaire cassé à ${r.dist} m du dépôt : l'équipe est partie en fourgon, a posé ${r.chantMax} chantier (cônes + filet rouge et blanc + panneau TRAVAUX + obstacle dans solids pour que la circulation contourne), a réparé en ${r.repare} s simulées puis a tout rangé ${r.range} s plus tard — obstacles de chantier dans solids : ${r.obst0} → ${r.chantMax} → ${r.obstFin}, équipe « ${r.etat} »` };
+});
+
+test('un incendie est éteint par les pompiers : le camion arrive et city.incendies se vide', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    const f = G.declencheIncendie(0, 20, 100);
+    const cam = G.METIERS.pompiers[0].bot.veh;
+    const d0 = Math.round(Math.hypot(cam.x, cam.z - 20));
+    let arrive = -1, eteint = -1, dmin = 1e9;
+    const force0 = f.force;
+    const DT = 1 / 20;
+    for (let i = 0; i < 3200; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      const d = Math.hypot(cam.x, cam.z - 20); if (d < dmin) dmin = d;
+      if (arrive < 0 && d < 15) arrive = +(i * DT).toFixed(1);
+      if (eteint < 0 && !c.incendies.length) { eteint = +(i * DT).toFixed(1); break; }
+    }
+    return { caserne: c.caserne, d0, arrive, eteint, dmin: Math.round(dmin), force0,
+      incendies: c.incendies.length, etat: G.METIERS.pompiers[0].etat };
+  });
+  const ok = r.arrive > 0 && r.eteint > 0 && r.eteint < 120 && r.dmin < 15 && r.incendies === 0;
+  return { ok, detail: `incendie déclenché en (0, 20), caserne à ${r.d0} m : le camion est parti sirène allumée et est arrivé à ${r.dmin} m du feu en ${r.arrive} s simulées, les pompiers ont déployé la lance à eau et le feu (force ${r.force0}) était éteint à ${r.eteint} s — city.incendies = ${r.incendies}` };
+});
+
+test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte aux lettres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    for (const b of c.boites) b.lettres = 0;
+    const m = G.METIERS.facteurs[0], velo = m.bot.veh;
+    let livre = -1, aVelo = false;
+    const DT = 1 / 20;
+    for (let i = 0; i < 2400; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      // il est vraiment SUR son vélo : l'avatar colle à la selle pendant la tournée
+      if (m.etat === 'tournee' && Math.hypot(m.bot.pos.x - velo.x, m.bot.pos.z - velo.z) < 1.4) aVelo = true;
+      if (livre < 0 && c.boites.some(b => b.lettres > 0)) { livre = +(i * DT).toFixed(1); break; }
+    }
+    const sacoches = velo.g.children.filter(o => o.material && o.material.color && o.material.color.getHexString() === '8b5a2b').length;
+    return { boites: c.boites.length, livre, aVelo, sacoches,
+      total: c.boites.reduce((a, b) => a + b.lettres, 0), etat: m.etat };
+  });
+  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1 && r.sacoches >= 2;
+  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches, une de chaque côté de la roue arrière) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
+});
+
+test('les véhicules de travail sont conduisibles par le joueur et leurs outils s\'actionnent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos
+    const res = {};
+    for (const v of c.cars.filter(x => x.travail)) {
+      // on remet TOUT le parc à sa place avant chaque véhicule : celui qu'on vient d'essayer
+      // s'était garé n'importe où et venait brouiller la détection du suivant
+      G.metiersRepos();
+      v.busy = false;                                     // l'employé qui s'en servait laisse la place
+      G.P.pos.set(v.x + 1.4, v.y || 0, v.z + 1.4);
+      G.cityStep(1 / 60);
+      const detecte = c.near === v;                       // « E : conduire » s'affiche bien
+      v.busy = false;                                     // (la vie de la ville vient peut-être de le reprendre)
+      G.enterCar(v);
+      const auVolant = G.drive.car === v;
+      let roule = 0;
+      if (auVolant) {
+        const x0 = v.x, z0 = v.z;
+        G.keys.add('KeyW');
+        for (let i = 0; i < 90; i++) { G.simTime = G.simTime + 1 / 60; G.driveStep(1 / 60); }
+        G.keys.delete('KeyW');
+        roule = +Math.hypot(v.x - x0, v.z - z0).toFixed(2);
+      }
+      G.actionneOutil(v);
+      for (let i = 0; i < 200; i++) { G.simTime = G.simTime + 1 / 30; G.outilsVehiculesTick(1 / 30); }
+      const o = v.outils || {};
+      res[v.kind] = { detecte, auVolant, roule, outil: +v.outil.toFixed(2),
+        benne: o.benne ? +o.benne.rotation.x.toFixed(2) : null,
+        echelle: o.echelle ? +o.echelle.rotation.x.toFixed(2) : null,
+        jet: o.jet ? o.jet.visible : null,
+        crochet: o.crochet ? +o.crochet.position.y.toFixed(2) : null,
+        godet: o.godet ? +o.godet.rotation.x.toFixed(2) : null };
+      if (G.drive.car) G.exitCar();
+    }
+    // la lance à eau fait bien baisser un feu : c'est ainsi que le joueur aide les pompiers
+    const f = G.declencheIncendie(G.P.pos.x + 8, G.P.pos.z, 100);
+    const cam = c.cars.find(x => x.kind === 'pompier');
+    cam.x = G.P.pos.x; cam.z = G.P.pos.z; cam.h = Math.PI / 2; cam.outil = 1; cam.outilCible = 1;
+    const av = f ? f.force : 0;
+    for (let i = 0; i < 60; i++) { G.simTime = G.simTime + 1 / 30; G.arroseAutour(cam, 1 / 30); }
+    const ap = f ? f.force : 0;
+    if (f && c.incendies.includes(f)) { G.worldGroup.remove(f.g); c.incendies.length = 0; }
+    return { res, kinds: Object.keys(res), eau: [Math.round(av), Math.round(ap)] };
+  });
+  const K = ['benne', 'grue', 'pelle', 'tracteur', 'pompier', 'fourgon', 'velo'];
+  const tous = K.every(k => r.res[k] && r.res[k].detecte && r.res[k].auVolant);
+  const roulent = K.filter(k => r.res[k] && r.res[k].roule > 0.5).length;
+  const b = r.res.benne || {}, pk = r.res.pompier || {}, g = r.res.grue || {}, pe = r.res.pelle || {};
+  const outils = b.benne < -0.4 && pk.echelle < -0.5 && pk.jet === true && g.crochet < -2 && pe.godet > 0.4;
+  const ok = tous && roulent >= 6 && outils && r.eau[1] < r.eau[0] - 10;
+  const vus = K.filter(k => r.res[k] && r.res[k].detecte).length, pris = K.filter(k => r.res[k] && r.res[k].auVolant).length;
+  return { ok, detail: `sept véhicules de travail dans city.cars (${r.kinds.join(', ')}) : ${vus}/7 annoncés par « E : conduire », ${pris}/7 conduisibles, ${roulent}/7 avancent vraiment en une seconde et demie de gaz ; la benne se lève (${b.benne} rad), l'échelle du camion de pompiers se déploie (${pk.echelle} rad) et la lance à eau s'ouvre, le crochet de la grue descend de ${-g.crochet} m, le godet de la pelleteuse creuse (${pe.godet} rad) ; la lance fait tomber la force du feu de ${r.eau[0]} à ${r.eau[1]}` };
+});
+
+test('on peut parler aux gens de métier et leur donner un coup de main contre des pièces', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // les tests s'enchaînent dans la même page : on repart d'une ville au repos c.boulot = null;
+    // toute l'équipe est au travail : la phrase de métier doit parler de la réparation en cours
+    for (const m of c.metiers) if (m.metier === 'employe') m.etat = 'repare';
+    const phrases = c.metiers.map(m => [m.metier, G.phraseMetier(m, false)]);
+    // on se plante devant un balayeur : il répond, et il propose son petit boulot
+    const bal = c.metiers.find(m => m.metier === 'balayeur');
+    G.P.pos.set(bal.bot.pos.x + 1.5, bal.bot.pos.y, bal.bot.pos.z);
+    const repond = G.metierParle('bonjour, tu fais quoi comme travail ?');
+    const auHasard = G.metierParle('vive les dinosaures');
+    G.metiersTick(1 / 60);
+    // au dépôt, les travailleurs sont à deux mètres les uns des autres : ce qui compte, c'est
+    // que le jeu propose bien UN coup de main à celui d'à côté, pas lequel des deux balayeurs
+    const propose = !!c.boulotNear;
+    const proposeQui = c.boulotNear ? c.boulotNear.metier : null;
+    G.prendreBoulot(bal);
+    const boulot = c.boulot && c.boulot.metier;
+    const sous0 = G.wallet;
+    // le joueur ramasse les cinq détritus demandés (ils apparaissent sous ses pieds)
+    for (let i = 0; i < 8 && c.boulot; i++) { G.poseDetritus(G.P.pos.x + 0.4, G.P.pos.z); G.boulotTick(1 / 60); }
+    return { phrases, repond, auHasard, propose, proposeQui, boulot, sous0, sous1: G.wallet, reste: !!c.boulot };
+  });
+  const dit = Object.fromEntries(r.phrases);
+  const ok = r.repond && !r.auHasard && r.propose && !!r.proposeQui && r.boulot === 'balayeur' && r.sous1 === r.sous0 + 15 && !r.reste
+    && /répare le lampadaire/.test(dit.employe) && /vitres/.test(dit.laveur) && /camion|feu/.test(dit.pompier) && /tournée|lettre|boîte/.test(dit.facteur);
+  return { ok, detail: `l'employé au travail répond « ${dit.employe} », le pompier « ${dit.pompier} », le facteur « ${dit.facteur} » ; une phrase hors sujet ne déclenche rien (${r.auHasard}) ; à côté d'un travailleur (${r.proposeQui}), E propose un petit boulot — les 5 détritus du balayeur ramassés = ${r.sous1 - r.sous0} 🪙 (${r.sous0} → ${r.sous1})` };
+});
+test('la maîtresse PARLE pour de vrai à l\'école : bonjour à l\'élève, l\'énoncé, le verdict, une bulle, et un repli quand l\'appareil n\'a aucune voix', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    const out = { defaut: G.settings.voices, reglage: G.store.get('superobby.voices'), bouton: !!document.getElementById('voiceTest'),
+      libelle: document.getElementById('voiceBtn').textContent, maitresse: !!salle.maitresse };
+    // 1) LE REPLI : sans espion, avec la vraie synthèse. Chromium n'a aucune voix installée :
+    // rien ne démarre, et le jeu doit s'en apercevoir et jouer le jingle.
+    G.settings.voices = true; const av = G.voice.etat();
+    G.voice.say('Essai de la voix de la maîtresse', true, true);
+    await dodo(1100);
+    const ap = G.voice.etat();
+    out.moteur = ap.moteur; out.voix = ap.voix; out.fr = ap.fr;
+    out.parleOuRepli = (ap.parle > av.parle) || (ap.repli > av.repli);
+    out.envoyees = ap.dites - av.dites;
+    // 2) l'espion : que DIT la maîtresse, exactement ?
+    const dits = [];
+    try { window.speechSynthesis.speak = u => dits.push(String(u.text)); } catch (e) { return Object.assign(out, { pourquoi: 'synthèse vocale non remplaçable' }); }
+    const ch = salle.chaises[0];
+    G.P.sit = null; G.school.chaise = null; G.P.pos.set(ch.x, 0.6, ch.z + 0.3);
+    dits.length = 0; G.sitBench(ch);
+    out.bonjour = dits.join(' | ');
+    out.nom = G.myCfg.name;
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    if (!G.school.q) return Object.assign(out, { pourquoi: 'la classe ne s\'est pas ouverte en s\'asseyant' });
+    out.enonce = dits.join(' | ');
+    out.bulle = !!(salle.maitresse && salle.maitresse.bubble);
+    // bonne réponse
+    let q = G.school.q; dits.length = 0;
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    out.gagne = dits.join(' | ');
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);
+    // mauvaise réponse
+    q = G.school.q; dits.length = 0;
+    if (q) G.answer(q.opts.find(o => o !== q.a), document.querySelector('#schChoices .item'));
+    out.faux = dits.join(' | ');
+    out.bonneReponse = q ? String(q.a) : '';
+    // 3) le bouton « Tester la voix » des réglages
+    G.settings.voices = false; dits.length = 0;
+    document.getElementById('voiceTest').click();
+    out.test = { actives: G.settings.voices, dits: dits.join(' | ') };
+    // 4) « À bientôt » quand on se lève
+    // on attend des IMAGES, pas des minuteries : c'est schoolTick, appele a l'image, qui
+    // referme la classe quand on se leve (sur une machine chargee les minuteries s'accumulent
+    // toutes entre deux images et rien n'a encore tourne)
+    dits.length = 0; G.P.sit = null;
+    for (let i = 0; i < 60 && G.school.chaise; i++) await new Promise(rr => requestAnimationFrame(rr));
+    out.aurevoir = dits.join(' | '); out.uiApres = G.uiOpen;
+    G.school.chaise = null;
+    return out;
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const bonjour = new RegExp('Bonjour élève ' + String(r.nom).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(r.bonjour);
+  const enonce = /Réponse un/.test(r.enonce) && /Réponse quatre/.test(r.enonce);
+  const gagne = /gagn/i.test(r.gagne), faux = /faux/i.test(r.faux) && r.faux.includes(r.bonneReponse);
+  const testBouton = r.bouton && r.test.actives === true && /maîtresse/i.test(r.test.dits);
+  const ok = r.defaut === true && !r.reglage && r.moteur && r.parleOuRepli && r.envoyees >= 1
+    && bonjour && enonce && gagne && faux && r.bulle && testBouton && /bientôt/i.test(r.aurevoir) && r.uiApres === null;
+  return { ok, detail: `la voix ne sortait jamais (liste des voix vide au premier appel, file laissée en pause par Chrome, utterance ramassée par le ramasse-miettes, aucun repli quand la machine est muette) · elle est ACTIVE par défaut (settings.voices=${r.defaut}, réglage enregistré : ${r.reglage}) et le bouton « Tester la voix » existe (« ${r.libelle} ») et la réactive (${r.test.actives}) · sur cette machine : moteur=${r.moteur}, ${r.voix} voix dont ${r.fr} française(s) → ${r.parleOuRepli ? 'la phrase part et, faute de voix, le jingle de repli la remplace' : 'RIEN'} · à l'assise elle dit « ${String(r.bonjour).slice(0, 46)} », lit l'énoncé et les 4 réponses (${enonce}), dit « ${String(r.gagne).slice(0, 24)} » ou « ${String(r.faux).slice(0, 40)} », affiche une bulle au-dessus d'elle (${r.bulle}) et « ${String(r.aurevoir).slice(0, 20)} » quand on se lève (interface refermée : ${r.uiApres === null})` };
+});
+
+test('le tableau gris de l\'école s\'écrit à la craie, lettre par lettre, avec le crissement de la craie', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    G.settings.voices = false; G.settings.sound = true;   // le jingle de la voix polluerait la mesure
+    const ch = salle.chaises[0];
+    G.P.sit = null; G.school.chaise = null; G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    if (!G.school.q) return { pourquoi: 'la classe ne s\'est pas ouverte' };
+    // ÉCOUTE AU BOUT DE LA CHAÎNE AUDIO : un analyseur ne montre que les 46 dernières
+    // millisecondes à l'instant où on le lit, et sur la machine du banc d'essai (2 images/s)
+    // le crissement, qui dure 150 ms, était toujours déjà passé. On branche donc un nœud qui
+    // ÉCOUTE EN CONTINU et retient la crête sur toute une fenêtre.
+    const c = G.sfx.unlock(), chn = G.sfx.chaine();
+    let crete = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    chn.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; const t = performance.now(); while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); } return +crete.toFixed(4); };
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
+    const silence = await ecoute(700);
+    const q = G.school.q, w0 = G.wallet;
+    const lus = () => (salle.dessine || '').split(' | ').join('').length;
+    G.school.craieSons = 0; const v0 = salle.tex.version;
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    // on referme tout de suite : sinon l'exercice suivant, programme apres le verdict, vient
+    // effacer le tableau au milieu de la mesure (la machine du banc d'essai rend 2 images/s)
+    G.closeUI();
+    const juste = { texte: salle.texte, dessine: salle.dessine, lus: lus(), aEcrire: salle.tab.aEcrire, sons: G.school.craieSons };
+    // avancement DÉTERMINISTE : on recule l'horloge de départ du tracé, la cadence ne dépend
+    // donc ni de la vitesse de la machine ni du nombre d'images rendues
+    // espion sur le bus audio : on note SUR QUELLE SORTIE la craie branche son bruit
+    const bus = [], sortieOrig = G.sfx.sortie;
+    G.sfx.sortie = n => { bus.push(n); return sortieOrig(n); };
+    salle.tab.t0 = performance.now() - 250; G.craieTick(0.016);
+    const t1 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
+    salle.tab.t0 = performance.now() - 1000; G.craieTick(0.016);
+    const t2 = { lus: lus(), sons: G.school.craieSons, dessine: salle.dessine };
+    G.sfx.sortie = sortieOrig;
+    // le crissement SORT-IL de la chaîne ? on le rejoue et on écoute la sortie du limiteur.
+    // (La mesure est indicative : le nœud d'écoute tourne sur le fil principal, et sur une
+    // machine chargée il perd des paquets. La garantie, elle, est l'espion du bus ci-dessus.)
+    const horloge0 = c.currentTime;
+    const pic = await ecoute(700, () => G.sonCraie(3));
+    const horloge = +(c.currentTime - horloge0).toFixed(2);
+    salle.tab.t0 = performance.now() - 20000; G.craieTick(0.016);
+    const fin = { lus: lus(), dessine: salle.dessine, texte: salle.texte, versions: salle.tex.version - v0 };
+    const viseur = () => { const t = salle.tableau; const d = Math.atan2(-(t.position.x - G.P.pos.x), -(t.position.z - G.P.pos.z)) - G.cam.yaw; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); };
+    const camAvant = +viseur().toFixed(2);
+    for (let i = 0; i < 60; i++) G.camTableau(0.05);   // la caméra se cale sur le tableau en une seconde
+    const cam = { avant: camAvant, ecart: +viseur().toFixed(3), pitch: +G.cam.pitch.toFixed(2), interieur: !!G.cam.interieur, dist: +G.cam.dist.toFixed(1) };
+    // et sur une mauvaise réponse : le verdict rouge s'écrit pareil
+    G.openSchool(salle);   // toujours assis : la classe se rouvre
+    for (let i = 0; i < 60 && !G.school.q; i++) await dodo(150);
+    let rouge = null;
+    if (G.school.q) { const q2 = G.school.q; G.answer(q2.opts.find(o => o !== q2.a), document.querySelector('#schChoices .item')); G.closeUI();
+      const l = salle.tab.lignes.filter(o => o.neuve); rouge = { texte: salle.texte, couleurs: l.map(o => o.c || ''), aEcrire: salle.tab.aEcrire }; }
+    try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    G.closeUI(); G.P.sit = null; G.school.chaise = null;
+    return { juste, t1, t2, fin, rouge, silence, pic, cps: G.CRAIE_CPS, gain: G.wallet - w0, cam,
+      bus, etatAudio: c.state, horloge, son: G.settings.sound };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const q = r.juste, v = r.rouge;
+  // au départ le verdict n'est PAS encore tracé, puis il grandit lettre par lettre
+  const depart = q.lus < q.texte.split(' | ').join('').length && q.aEcrire > 8;
+  const monte = r.t1.lus > q.lus && r.t2.lus > r.t1.lus && r.fin.lus > r.t2.lus;
+  const cadence = Math.abs((r.t1.lus - q.lus) - Math.round(0.25 * r.cps)) <= 1 && Math.abs((r.t2.lus - q.lus) - Math.round(1 * r.cps)) <= 1;
+  const complet = r.fin.dessine === r.fin.texte && /GAGNÉ/.test(r.fin.texte);
+  // GARANTIE DÉTERMINISTE : pendant l'écriture, la craie branche bien son bruit sur le bus
+  // « effets » d'un moteur audio qui tourne (l'horloge du contexte avance). Le niveau mesuré
+  // au bout de la chaîne est reporté en plus, mais il dépend de la charge de la machine.
+  const son = r.t2.sons > r.t1.sons && r.t1.sons > 0 && r.bus.length >= 3
+    && r.bus.every(b => b === 'effets') && r.etatAudio === 'running' && r.horloge > 0.3 && r.son
+    && r.pic >= r.silence;
+  const rouge = !!v && /FAUX/.test(v.texte) && v.couleurs.some(c => c === '#ffc2c2') && v.aEcrire > 4;
+  const cadre = r.cam.ecart < 0.12 && r.cam.pitch <= 0.24;
+  const ok = depart && monte && cadence && complet && r.fin.versions >= 3 && son && rouge && cadre;
+  return { ok, detail: `la réponse tombait d'un bloc sur le tableau : elle s'ÉCRIT maintenant à la craie, ${r.cps} lettres/s · juste après la réponse le tableau ne porte que l'énoncé (${q.lus} caractères tracés, ${q.aEcrire} restent à écrire), puis ${r.t1.lus} à 250 ms, ${r.t2.lus} à 1 s (« ${String(r.t2.dessine).split(' | ').slice(2).join(' ').trim().slice(0, 30)} ») et enfin « ${String(r.fin.texte).split(' | ').slice(2).join(' · ')} » (${r.fin.lus}) · la texture du tableau est repeinte ${r.fin.versions} fois · le crissement de la craie (bruit passe-bande 2–4 kHz) est joué ${r.t2.sons} fois pendant le tracé et branché ${r.bus.length} fois sur le bus « ${[...new Set(r.bus)].join(', ')} » d'un moteur audio qui tourne (${r.etatAudio}, horloge +${r.horloge} s) ; niveau mesuré au bout de la chaîne : silence ${r.silence}, craie ${r.pic} · un verdict faux s'écrit pareil, en rouge (${v ? v.couleurs.filter(Boolean).join(' ') : '—'}) · assis en classe la caméra cadre le tableau : l'écart de visée tombe de ${r.cam.avant} à ${r.cam.ecart} radian et la visée s'aplatit à ${r.cam.pitch} (maison de poupée ${r.cam.interieur}, caméra à ${r.cam.dist} m : la tête de l'élève passe sous le texte)` };
+});
+
+test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lever ferme la classe', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    const salle = G.city.classes[0]; if (!salle) return { pourquoi: 'aucune salle de classe' };
+    G.settings.voices = false;
+    const ch = salle.chaises[0];
+    // 1) DEBOUT au milieu de la classe : l'interface ne doit pas s'ouvrir
+    G.P.sit = null; G.school.chaise = null; if (G.uiOpen) G.closeUI();
+    G.P.pos.set(salle.x, 0.6, salle.z);
+    const debout = { retour: G.openSchool(salle), ui: G.uiOpen };
+    // 2) la touche E devant une chaise d'école : on s'ASSOIT (l'ordre des actions faisait
+    //    gagner « la classe » sur « la chaise », et les exercices s'ouvraient debout)
+    G.P.pos.set(ch.x, 0.6, ch.z + 0.8); G.P.sit = null;
+    // on avance la simulation image par image (pas d'attente reelle : la machine du banc
+    // d'essai rend 2 images/s) jusqu'a ce que le reperage de proximite ait tourne
+    for (let i = 0; i < 40 && !(G.city.benchNear && G.city.benchNear.ecole === salle); i++) G.step(1 / 60, true);
+    const visee = G.city.benchNear;   // deux chaises voisines sont a moins d'1,80 m : c'est l'une des deux
+    const proche = { bench: !!(visee && visee.ecole === salle), classe: !!G.city.classNear,
+      pos: [+G.P.pos.x.toFixed(1), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(1)], chaise: [+ch.x.toFixed(1), +ch.z.toFixed(1)] };
+    if (!proche.bench) return { pourquoi: `la chaise d'école n'est pas détectée à portée : joueur ${proche.pos}, chaise ${proche.chaise}, benchNear=${G.city.benchNear ? 'un autre banc' : 'aucun'}` };
+    // c'est exactement l'événement que produit la manette (◯ → telTouche('KeyE'))
+    const presseE = () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+    presseE();
+    const assis = { sit: G.P.sit === visee, ui: G.uiOpen };
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
+    const classe = { ui: G.uiOpen, q: !!G.school.q, chaise: G.school.chaise === visee };
+    // 3) on ferme la classe mais on reste assis : E la rouvre
+    document.getElementById('schClose').click(); await dodo(80);
+    const ferme = { ui: G.uiOpen, sit: G.P.sit === visee };
+    presseE(); await dodo(80);
+    const rouvre = { ui: G.uiOpen, sit: G.P.sit === visee };
+    // 4) on se lève : la classe se ferme toute seule
+    G.P.sit = null;
+    let images = 0;
+    for (let i = 0; i < 60 && G.school.chaise; i++) { await new Promise(rr => requestAnimationFrame(rr)); images++; }
+    const leve = { ui: G.uiOpen, chaise: !!G.school.chaise, dit: G.school.dit, images };
+    G.school.chaise = null;
+    return { debout, proche, assis, classe, ferme, rouvre, leve };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.debout.retour === false && r.debout.ui === null
+    && r.proche.bench && r.assis.sit && r.assis.ui !== 'schoolUI'
+    && r.classe.ui === 'schoolUI' && r.classe.q && r.classe.chaise
+    && r.ferme.ui === null && r.rouvre.ui === 'schoolUI' && r.rouvre.sit
+    && r.leve.ui === null && r.leve.chaise === false && /bientôt/i.test(r.leve.dit || '');
+  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
+});
+
+test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demande', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const vu = () => getComputedStyle(document.getElementById('padLeg')).display;
+    document.body.classList.remove('aide');
+    document.body.classList.add('manette');
+    const repos = { aide: document.body.classList.contains('aide'), leg: vu() };
+    G.padAction('aide'); const ouvert = { aide: document.body.classList.contains('aide'), leg: vu() };
+    G.padAction('aide'); const referme = { aide: document.body.classList.contains('aide'), leg: vu() };
+    // il s'efface aussi tout seul au bout de son delai
+    G.montreAide(0.2); const avant = vu(); await dodo(400); G.aideTick(); const apres = vu();
+    // et le bouton des reglages le rappelle
+    const bouton = !!document.getElementById('aideBtn');
+    document.body.classList.remove('manette', 'aide');
+    return { repos, ouvert, referme, avant, apres, bouton, pave: G.PAD_CROIX[17] };
+  });
+  const ok = r.repos.leg === 'none' && !r.repos.aide && r.ouvert.leg === 'flex' && r.referme.leg === 'none'
+    && r.avant === 'flex' && r.apres === 'none' && r.bouton && r.pave === 'aide';
+  return { ok, detail: `le bandeau des touches (« R2 avancer · L2 reculer · Stick G direction… ») restait affiché EN PERMANENCE dès qu'une manette était branchée : trois lignes en travers du haut de l'écran, par-dessus le jeu · il est maintenant masqué au repos (${r.repos.leg}), sort quelques secondes a la connexion, se rappelle par le PAVÉ TACTILE de la DualSense (${r.pave}) ou par le bouton « ⌨️ Rappeler les touches » des réglages (${r.bouton}), et se referme au deuxième appui (${r.referme.leg}) ou tout seul après son délai (${r.avant} → ${r.apres})` };
 });
 
 // ================= POSTE F : LES SONS DU MONDE =================

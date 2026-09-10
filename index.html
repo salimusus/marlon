@@ -16491,7 +16491,10 @@ function libereOtage(o, recrute) {
 }
 // ---- entraînement et armement des membres ----
 function entrainerMembre(b, lieu) {
-  const pt = lieu === 'tir' ? (city.targets && city.targets[0] ? { x: city.targets[0].x, z: city.targets[0].z + 6 } : null)
+  // le stand de tir se repere par son QUARTIER, pas par sa premiere cible : une cible
+  // abattue (elles se cassent) laissait l'homme « ne pas trouver la salle » et rester la
+  const stand = lieuZone('Stand de tir');
+  const pt = lieu === 'tir' ? (city.targets && city.targets[0] ? { x: city.targets[0].x, z: city.targets[0].z + 6 } : stand ? { x: stand.x, z: stand.z + 4 } : null)
     : (city.gym ? { x: city.gym.run.x + 2, z: city.gym.run.z + 2 } : null);
   if (!pt) { botDit(b, 'je ne trouve pas la salle…'); return false; }
   b.rdv = { x: pt.x, z: pt.z, y: 0.3, nom: lieu === 'tir' ? '🎯 le stand de tir' : '🏋️ la salle de sport', arrive: false, libre: true, entrain: lieu };

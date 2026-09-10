@@ -2238,16 +2238,20 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     const yaw0 = __G.cam.yaw; gp.axes = [0, 0, 1, 0]; __G.pollGamepad(1 / 60);
     const camera = +(yaw0 - __G.cam.yaw).toFixed(3);
     gp.axes = [0, 0, 0, 0]; __G.pollGamepad(1 / 60);
-    // A = saut, B = action, Y = dégainer, gâchette = courir
+    // A = saut, B = action, Y = dégainer, L3 = courir (la gâchette L2 recule maintenant)
     __G.P.jumpBuf = 0;
     const saut = await presse(0);
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.P.drawn = false;
     await presse(3);
     const degaine = !!__G.P.drawn;
     __G.P.energie = 100; __G.P.essouffle = false;
-    gp.buttons[6].pressed = true; __G.pollGamepad(1 / 60);
+    gp.buttons[10].pressed = true; __G.pollGamepad(1 / 60);
     const court = __G.P.run;
-    gp.buttons[6].pressed = false; __G.pollGamepad(1 / 60);
+    gp.buttons[10].pressed = false; __G.pollGamepad(1 / 60);
+    // et L2 fait bien RECULER au lieu de courir
+    gp.buttons[6] = { pressed: true, value: 1 }; __G.pollGamepad(1 / 60);
+    const recule = +__G.pad.frein.toFixed(2);
+    gp.buttons[6] = { pressed: false, value: 0 }; __G.pollGamepad(1 / 60);
     // dans un menu : la croix promène la bague jaune, A valide
     __G.openUI('tvsalon');
     __G.pollGamepad(1 / 60);
@@ -2265,12 +2269,16 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
     nav.valide = !__G.uiOpen;
     if (__G.uiOpen) __G.closeUI();
     __G.equipWeapon(null); __G.P.drawn = false; __G.P.run = false;
+    // on enleve la bague jaune posee a la main sur « Fermer » : laissee la, elle restait la
+    // PREMIERE `.focustv` du document et les tests suivants croyaient que le curseur ne
+    // bougeait plus (le salon TV est declare avant la boutique dans la page)
+    document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
     delete navigator.getGamepads;
-    return { stick, camera, saut, degaine, court, nav };
+    return { stick, camera, saut, degaine, court, recule, nav };
   });
   const ok = r.stick.x > 0.5 && r.stick.y > 0.5 && r.camera > 0.02 && r.saut === 0.15 && r.degaine
-    && r.court && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
-  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), gâchette fait courir (${r.court}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
+    && r.court && r.recule > 0.7 && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
+  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · A saute (${r.saut}), Y dégaine (${r.degaine}), L3 fait courir (${r.court}) et la gâchette L2 fait reculer (${r.recule}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
 });
 
 test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
@@ -6038,6 +6046,9 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     const tv4k = G.ratioRendu(3840), tvPix = mp(3840, tv4k);
     const tv1080 = G.ratioRendu(1920);
     // 2) LA RÉSOLUTION DYNAMIQUE : ça rame, on descend ; ça respire, on remonte
+    // (l'accélérateur d'image a sa PROPRE échelle, qui ne descend jamais sous 78 % : elle a
+    // son test a elle. Ici on vérifie l'échelle classique, accélérateur éteint.)
+    G.diffusionMode(false);
     const paliers = [];
     for (let i = 0; i < 200; i++) { G.fluiditeTick(45); if (i % 50 === 0) paliers.push(+G.rendu.ech.toFixed(2)); }
     const bas = { ech: +G.rendu.ech.toFixed(3), ombres: G.rendu.ombres, baisses: G.rendu.baisses };
@@ -6051,7 +6062,7 @@ test('sur la tele, la resolution s\'adapte toute seule et le jeu reste fluide', 
     G.modeTV(true); const cad = []; for (let i = 0; i < 6; i++) { G.ombresCadence(); cad.push(R.shadowMap.needsUpdate); }
     const autoTV = R.shadowMap.autoUpdate;
     G.modeTV(false); G.ombresCadence(); const autoPC = R.shadowMap.autoUpdate;
-    G.applyQuality();
+    G.diffusionMode(false); G.applyQuality();
     const majOmbres = cad.filter(Boolean).length;
     return { avant, plafond: G.PLAFOND_TV, pc4k: +pc4k.toFixed(3), pcPix, tv4k: +tv4k.toFixed(3), tvPix, tv1080: +tv1080.toFixed(3),
       paliers, bas, haut, depart, apresPic, cad, majOmbres, autoTV, autoPC, min: G.rendu.min };
@@ -6637,7 +6648,10 @@ test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseur
       const suivi = [];
       ds.axes = [0, 1, 0, 0]; const T0 = performance.now();
       let images = 0;
-      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); await dodo(8); }   // 1,1 s : sur une machine chargee, chaque image peut prendre 200 ms
+      // 1,1 s de lecture SERREE (sans rendre la main) : la repetition est reglee sur l'horloge,
+      // pas sur le nombre d'images. Avec une pause de 8 ms entre deux lectures, une machine
+      // chargee ne faisait qu'un ou deux tours en 1,1 s et le test croyait la repetition morte.
+      while (performance.now() - T0 < 1100) { G.pollGamepad(0.01); images++; const f = foc(); if (f && suivi[suivi.length - 1] !== f) suivi.push(f); }
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.01);
       res.repet = { pas: suivi.length, images: Math.max(images, 6) };
       // ✕ valide un onglet, et le curseur reste visible apres
@@ -6902,15 +6916,21 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
       const plan = { 0: 'Space', 1: 'KeyE', 2: 'KeyV', 3: 'KeyG', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' };   // la croix a son propre test
       const bons = Object.entries(plan).filter(([i, k]) => presse(+i).includes(k)).length;
       ferme();
-      // 4) les GÂCHETTES sont analogiques, pas des interrupteurs
-      touches.length = 0; ds.buttons[7] = { pressed: false, value: 0.2 }; G.pollGamepad(0.05);
-      const gachetteFaible = touches.length;
-      ds.buttons[7] = { pressed: false, value: 0.9 }; G.pollGamepad(0.05);
-      const gachetteFort = touches.filter(t => t === 'KeyX').length;
+      // 4) les GÂCHETTES sont analogiques : R2 avance (R1 tire deja), L2 recule
+      touches.length = 0; ds.buttons[7] = { pressed: false, value: 0.5 }; G.pollGamepad(0.05);
+      const gachetteFaible = +G.pad.gaz.toFixed(2);
+      ds.buttons[7] = { pressed: false, value: 1 }; G.pollGamepad(0.05);
+      const gachetteFort = +G.pad.gaz.toFixed(2);
+      const r2NeTirePas = touches.filter(t => t === 'KeyX').length;
       ds.buttons[7] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
       ds.buttons[6] = { pressed: false, value: 0.8 }; G.pollGamepad(0.05);
-      const court = !!G.P.run;
+      const recule = +G.pad.frein.toFixed(2);
       ds.buttons[6] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
+      // « courir » a demenage sur L3, comme dans les grands jeux de ville
+      G.P.energie = 100; G.P.essouffle = false;
+      ds.buttons[10] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
+      const court = !!G.P.run;
+      ds.buttons[10] = { pressed: false, value: 0 }; G.pollGamepad(0.05);
       // 5) R3 recentre la caméra
       G.cam.yaw = 2; G.P.facing = 0;
       ds.buttons[11] = { pressed: true, value: 1 }; G.pollGamepad(0.05);
@@ -6920,15 +6940,16 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
       vib.length = 0; G.simTime += 5; G.camSecousse(0.3, 0.3);
       const vibre = vib[0] || null;
       return { trouvee, nomPS, fremis, diag: diag.map(v => +v.toFixed(2)), carre, marche, camera,
-        bons, total: Object.keys(plan).length, gachetteFaible, gachetteFort, court, recentre, vibre,
+        bons, total: Object.keys(plan).length, gachetteFaible, gachetteFort, r2NeTirePas, recule, court, recentre, vibre,
         noms: G.PS_NOMS[0] + G.PS_NOMS[1] + G.PS_NOMS[2] + G.PS_NOMS[3] };
     } finally { window.removeEventListener('keydown', ecoute); navigator.getGamepads = vraiGP; ferme(); }
   });
   const ok = r.trouvee && r.nomPS && r.fremis[0] === 0 && r.diag[0] > 0.2 && r.carre
     && r.marche.x === 0.8 && r.marche.y === 0.6 && r.camera < -0.2
-    && r.bons === r.total && r.gachetteFaible === 0 && r.gachetteFort === 1
+    && r.bons === r.total && r.gachetteFaible > 0.4 && r.gachetteFaible < 0.55 && r.gachetteFort === 1
+    && r.r2NeTirePas === 0 && r.recule > 0.7
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 est ANALOGIQUE (0.2 ne tire pas, 0.9 tire), L2 fait courir, R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ sauter, ◯ agir, ▢ frapper, △ arme, R1 tirer, Create parler, Options menu · R2 AVANCE et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans plus tirer (R1 s'en charge : ${r.r2NeTirePas} tir), L2 RECULE (${r.recule}), « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
 
 test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {
@@ -7215,4 +7236,286 @@ test('la jupe se souleve sur la cuisse au lieu de se faire traverser', async p =
     && r.debout < -0.005 && r.marche < -0.005 && r.course < -0.005 && r.coupDePied < -0.005 && r.agenou < -0.005
     && r.souleve < -0.2 && Math.abs(r.repos) < 0.05 && r.ourlet > r.genou;
   return { ok, detail: `la jupe etait une BOITE rigide autour du bassin : des qu'une cuisse montait, elle la traversait de part en part · c'est maintenant un tronc de cone evase (rayon ${r.hautJupe} m a la taille, ${r.basJupe} m a l'ourlet) qui SE SOULEVE quand un genou monte (${r.souleve} rad genou a terre, retour a ${r.repos} au repos) · le genou reste toujours hors du tissu : marge de ${-r.debout} m debout, ${-r.marche} en marchant, ${-r.course} en courant, ${-r.coupDePied} au coup de pied, ${-r.agenou} genou a terre · et l'ourlet (${r.ourlet} m) reste au-dessus du genou (${r.genou} m)` };
+});
+test('a la manette PS5, R2 avance et L2 recule — a pied comme au volant, et en analogique', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    // le joystick tactile et la manette-telephone s'ADDITIONNENT a la manette : un test
+    // precedent qui laisse une fleche appuyee bloquerait l'entree a fond dans une direction
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const gachette = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; G.pollGamepad(0.02); };
+    try {
+      const res = {};
+      // ---- A PIED. On mesure la VITESSE atteinte, pas la distance : le joueur est remis a
+      // son point de depart a chaque image (une case degagee, connue), sinon un habitant ou
+      // une voiture qui passe par la fausserait la mesure une fois sur deux.
+      const marche = v => {
+        gachette(7, v > 0 ? v : 0); gachette(6, v < 0 ? -v : 0);
+        G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0); G.P.run = false;
+        let dz = 0;
+        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); dz = G.P.pos.z - 8; }
+        const r2 = { v: +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2), sens: Math.sign(+dz.toFixed(3)) };
+        gachette(7, 0); gachette(6, 0);
+        return r2;
+      };
+      res.pied = { plein: marche(1), demi: marche(0.5), arriere: marche(-1), rien: marche(0) };
+      res.gazAFond = (gachette(7, 1), +G.pad.gaz.toFixed(2)); gachette(7, 0);
+      res.gazDemi = (gachette(7, 0.5), +G.pad.gaz.toFixed(2)); gachette(7, 0);
+      res.freinAFond = (gachette(6, 1), +G.pad.frein.toFixed(2)); gachette(6, 0);
+      // le stick gauche DEPLACE toujours : les deux commandes coexistent (meme mesure pinnee)
+      G.cam.yaw = 0; G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; gachette(7, 1);
+      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.ensemble = { vx: +G.P.vel.x.toFixed(2), vz: +G.P.vel.z.toFixed(2) };
+      ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
+      // ---- AU VOLANT : on mesure la montee en vitesse sur un tiers de seconde, avant
+      // d'avoir parcouru assez de route pour rencontrer quoi que ce soit
+      const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+      res.voiture = c ? (c.kind || 'voiture') : null;
+      if (c) {
+        G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+        res.dedans = !!G.drive.car;
+        const pousse = (i, v, n) => { gachette(7, i === 7 ? v : 0); gachette(6, i === 6 ? v : 0);
+          G.drive.speed = 0; for (let k = 0; k < (n || 20); k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+          const s = +G.drive.speed.toFixed(2); gachette(7, 0); gachette(6, 0); return s; };
+        res.volant = { plein: pousse(7, 1), demi: pousse(7, 0.5), arriere: pousse(6, 1) };
+        // braquer au stick PENDANT qu'on accelere a la gachette
+        gachette(7, 1); ds.axes = [1, 0, 0, 0]; G.drive.speed = 0;
+        const h0 = G.drive.car.h;
+        for (let k = 0; k < 40; k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+        res.braque = { dh: +Math.abs(G.drive.car.h - h0).toFixed(2), vitesse: +G.drive.speed.toFixed(2) };
+        ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
+        G.exitCar();
+      }
+      res.legende = (document.getElementById('padLeg') || {}).textContent || '';
+      res.aide = ([...document.querySelectorAll('.keys span')].map(e => e.textContent).join(' ') || '');
+      return res;
+    } finally { navigator.getGamepads = vrai; ferme(); }
+  });
+  const pd = r.pied, vl = r.volant || {};
+  const ratioPied = pd.demi.v ? +(pd.plein.v / pd.demi.v).toFixed(2) : 0;
+  const ratioVolant = vl.demi ? +(vl.plein / vl.demi).toFixed(2) : 0;
+  const ok = pd.plein.v > 5 && pd.plein.sens === -1 && pd.demi.v > 2 && pd.demi.sens === -1
+    && pd.arriere.v > 5 && pd.arriere.sens === 1 && pd.rien.v === 0
+    && ratioPied > 1.8 && ratioPied < 2.4
+    && r.gazAFond === 1 && r.gazDemi > 0.4 && r.gazDemi < 0.55 && r.freinAFond === 1
+    && r.ensemble.vx > 2 && r.ensemble.vz < -2
+    && r.dedans && vl.plein > 1 && vl.arriere < -1 && ratioVolant > 1.7 && ratioVolant < 2.4
+    && r.braque.dh > 0.3 && r.braque.vitesse > 1
+    && /R2/.test(r.legende) && /avancer/.test(r.legende) && /L2/.test(r.legende) && /reculer/.test(r.legende)
+    && /R2<\/b> avancer/.test(r.aide) === false && /avancer \/ accélérer/.test(r.aide);
+  return { ok, detail: `le joueur demandait des GACHETTES : R2 pour accélérer et avancer, L2 pour reculer · a pied, R2 a fond amène a ${pd.plein.v} m/s vers l'avant, a moitié a ${pd.demi.v} m/s (rapport ${ratioPied} : c'est bien analogique), L2 ramène a ${pd.arriere.v} m/s vers l'ARRIÈRE et rien ne bouge gâchettes lâchées (${pd.rien.v} m/s) · au volant (${r.voiture}) la vitesse monte a ${vl.plein} m/s a fond contre ${vl.demi} a mi-course (rapport ${ratioVolant}) et la marche arrière descend a ${vl.arriere} · le stick gauche COEXISTE : poussé a droite pendant que R2 accélère, le personnage part en diagonale (${r.ensemble.vx} m/s de côté, ${r.ensemble.vz} m/s devant) et la voiture braque de ${r.braque.dh} rad tout en prenant ${r.braque.vitesse} m/s · la légende et l'aide sont a jour` };
+});
+
+test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      const res = {};
+      // ---- LA CROIX ← → : elle change d'ARME et n'ouvre plus de menu en pleine course
+      G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.P.weapon = null;
+      const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.02); G.simTime += 0.1;
+        ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.02); };
+      const suite = [];
+      tap(15); suite.push(G.P.weapon); tap(15); suite.push(G.P.weapon); tap(15); suite.push(G.P.weapon);
+      tap(14); suite.push(G.P.weapon);
+      res.armes = suite; res.menuOuvert = G.uiOpen;
+      res.role = { g: G.PAD_CROIX[14], d: G.PAD_CROIX[15], gLong: G.PAD_CROIX_LONG[14], dLong: G.PAD_CROIX_LONG[15] };
+      // ---- ← MAINTENUE : la boutique reste a portee de pouce
+      ds.buttons[14] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+      G.simTime += G.PAD_LONG + 0.1; G.pollGamepad(0.02);
+      res.longGauche = G.uiOpen;
+      ds.buttons[14] = { pressed: false, value: 0 }; G.pollGamepad(0.02); ferme();
+      ds.buttons[15] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
+      G.simTime += G.PAD_LONG + 0.1; G.pollGamepad(0.02);
+      res.longDroite = G.uiOpen;
+      ds.buttons[15] = { pressed: false, value: 0 }; G.pollGamepad(0.02); ferme();
+      // ---- LE STICK GAUCHE EN X : déplacement latéral, dans les deux sens, symétrique
+      const lateral = v => { ds.axes = [v, 0, 0, 0]; G.cam.yaw = 0; G.P.vel.set(0, 0, 0); G.pollGamepad(0.02);
+        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+        const d = +G.P.vel.x.toFixed(2); ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); return d; };
+      res.lat = { droite: lateral(1), gauche: lateral(-1), demi: lateral(0.5), fremis: lateral(0.05) };
+      // ---- LE STICK DROIT EN X : la caméra, dans le bon sens
+      ds.axes = [0, 0, 1, 0]; const y0 = G.cam.yaw; for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      const camD = +(G.cam.yaw - y0).toFixed(2);
+      ds.axes = [0, 0, -1, 0]; const y1 = G.cam.yaw; for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      const camG = +(G.cam.yaw - y1).toFixed(2);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02);
+      res.cam = { droite: camD, gauche: camG };
+      // ---- MODE « rotation » : au stick, x reste un déplacement relatif a la caméra (et non
+      // un braquage a bande morte, l'ancien defaut) — le réglage clavier, lui, ne change pas
+      G.settings.ctrl = 'rot'; G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.02);
+      const f0 = G.P.facing;
+      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.rot = { dx: +G.P.vel.x.toFixed(2), braque: +Math.abs(G.P.facing - f0).toFixed(2) };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); G.settings.ctrl = 'cam';
+      // ---- DANS LES MENUS, ← → gardent leur rôle de navigation
+      G.openStore(); await dodo(80);
+      ds.axes = [1, 0, 0, 0]; G.pollGamepad(0.02);
+      res.menuBouge = !!document.querySelector('.focustv');
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02); ferme();
+      return res;
+    } finally { navigator.getGamepads = vrai; G.settings.ctrl = 'cam'; ferme(); }
+  });
+  const l = r.lat;
+  const ok = r.armes[0] === 'pistol' && r.armes[1] === 'rifle' && r.armes[2] === null && r.armes[3] === 'rifle'
+    && r.menuOuvert === null && r.role.g === 'armePrec' && r.role.d === 'armeSuiv'
+    && r.longGauche === 'store' && r.longDroite === 'missions'
+    && l.droite > 5 && l.gauche < -5 && Math.abs(l.droite + l.gauche) < 0.2
+    && l.demi > 2 && l.demi < l.droite - 2 && Math.abs(l.fremis) < 0.05
+    && r.cam.droite < -1 && r.cam.gauche > 1
+    && r.rot.dx > 2 && r.rot.braque < 0.05 && r.menuBouge;
+  return { ok, detail: `« la manette gauche droite ne fonctionne pas » : la croix ← → ouvrait la BOUTIQUE et les MISSIONS — en pleine course le jeu se figeait sur un menu · elle change maintenant d'arme (${r.armes.join(' → ')}, aucun menu ouvert : ${r.menuOuvert}) et boutique/missions restent la, en MAINTENANT ← ou → (${r.longGauche} / ${r.longDroite}) · le stick gauche en x déplace bien de côté et symétriquement (droite ${l.droite} m/s, gauche ${l.gauche} m/s, a mi-course ${l.demi} m/s, un frémissement a 5 % ne bouge rien : ${l.fremis}) · le stick droit en x tourne la caméra dans les deux sens (${r.cam.droite} / ${r.cam.gauche} rad) · en mode « rotation » le stick reste relatif a la caméra (${r.rot.dx} m/s de côté sans braquer : ${r.rot.braque} rad), et dans les menus ← → naviguent toujours` };
+});
+
+test('une manette au mapping non standard (navigateur de tele) est remise d\'aplomb', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    // LA MEME DualSense, vue par le navigateur d'une tele (ou Firefox) : mapping vide,
+    // axes = [LX, LY, RX, L2, R2, RY, chapeau], faces dans l'ordre HID, pas de croix.
+    const REPOS = [0, 0, 0, -1, -1, 0, 1.2857142857142856];
+    const hid = { index: 0, connected: true, mapping: '',
+      id: 'Sony Interactive Entertainment Wireless Controller (Vendor: 054c Product: 0ce6)',
+      axes: REPOS.slice(), buttons: Array.from({ length: 14 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [hid];
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();   // rien d'autre ne doit pousser le joueur
+    try {
+      const res = {};
+      res.profil = G.padProfil(hid);
+      // 1) AU REPOS : l'ancienne lecture prenait l'axe 3 (= L2 relâchée, a -1) pour le stick
+      // droit vertical — la caméra plongeait toute seule, sans que personne ne touche rien
+      res.avant = { rxLu: hid.axes[2], ryLu: hid.axes[3] };
+      G.cam.yaw = 0; G.cam.pitch = 0.3;
+      for (let i = 0; i < 60; i++) G.pollGamepad(1 / 60);
+      res.derive = { yaw: +G.cam.yaw.toFixed(3), pitch: +(G.cam.pitch - 0.3).toFixed(3) };
+      let L = G.padLu(hid);
+      res.repos = { l2: +L.l2.toFixed(2), r2: +L.r2.toFixed(2), rx: L.rx, ry: L.ry, chapeau: L.chapeau };
+      // 2) LE STICK DROIT est sur les axes 2 et 5, pas 2 et 3
+      hid.axes[2] = 0.8; hid.axes[5] = -0.6; L = G.padLu(hid);
+      res.stickD = { rx: L.rx, ry: L.ry };
+      hid.axes[2] = 0; hid.axes[5] = 0;
+      // 3) LA CROIX est un « chapeau » sur un axe : sans traduction, ← et → ne font RIEN
+      hid.axes[6] = 0.7142857142857142; L = G.padLu(hid); res.chapGauche = [L.b[14], L.b[15]];
+      hid.axes[6] = -0.42857142857142855; L = G.padLu(hid); res.chapDroite = [L.b[14], L.b[15]];
+      hid.axes[6] = -1; L = G.padLu(hid); res.chapHaut = L.b[12];
+      hid.axes[6] = 1.2857142857142856;
+      // ... et elle change vraiment d'arme en jeu
+      G.owned.add('arme:pistol'); G.P.weapon = null;
+      hid.axes[6] = -0.42857142857142855; G.pollGamepad(0.02); G.simTime += 0.1;
+      hid.axes[6] = 1.2857142857142856; G.pollGamepad(0.02);
+      res.armeParChapeau = G.P.weapon;
+      // 4) LES GACHETTES sont sur les axes 3 et 4, et restent analogiques
+      hid.axes[4] = 0; L = G.padLu(hid); res.r2Demi = +L.r2.toFixed(2);
+      hid.axes[4] = 1; G.pollGamepad(0.02); res.gazPlein = +G.pad.gaz.toFixed(2);
+      G.cam.yaw = 0; G.P.pos.set(0, 0.5, 8); G.P.vel.set(0, 0, 0);
+      const z0 = G.P.pos.z;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.avance = +(G.P.pos.z - z0).toFixed(2);
+      hid.axes[4] = -1; G.pollGamepad(0.02);
+      // 5) LES FACES sont dans l'ordre HID : le bouton 1 est ✕ (index 0 en standard)
+      hid.buttons[1] = { pressed: true, value: 1 }; L = G.padLu(hid);
+      res.faces = { hid1EstCroix: L.b[0], hid0EstCarre: G.padLu(hid).b[2] };
+      hid.buttons[1] = { pressed: false, value: 0 };
+      hid.buttons[0] = { pressed: true, value: 1 }; res.faces.hid0EstCarre = G.padLu(hid).b[2];
+      hid.buttons[0] = { pressed: false, value: 0 }; G.pollGamepad(0.02);
+      // 6) L'ECRAN « TESTER LA MANETTE » dit ce qu'il a corrigé
+      hid.axes[0] = -0.62; hid.axes[4] = 0.4;
+      G.ouvreTestManette(); G.pollGamepad(0.02);
+      res.ecran = { ui: G.uiOpen, nom: (document.getElementById('ptNom') || {}).textContent || '',
+        diag: (document.getElementById('ptDiag') || {}).textContent || '',
+        barres: document.querySelectorAll('#ptAxes .ptrow').length,
+        boutons: document.querySelectorAll('#ptBoutons u').length,
+        allumes: document.querySelectorAll('#ptBoutons u.on').length };
+      hid.axes = REPOS.slice(); G.pollGamepad(0.02);
+      ferme();
+      return res;
+    } finally { navigator.getGamepads = vrai; ferme(); }
+  });
+  const ok = r.profil === 'ps-hid' && r.repos.l2 === 0 && r.repos.r2 === 0 && r.repos.rx === 0 && r.repos.ry === 0
+    && r.repos.chapeau === 6 && Math.abs(r.derive.yaw) < 0.01 && Math.abs(r.derive.pitch) < 0.01
+    && r.stickD.rx === 0.8 && r.stickD.ry === -0.6
+    && r.chapGauche[0] && !r.chapGauche[1] && !r.chapDroite[0] && r.chapDroite[1] && r.chapHaut
+    && r.armeParChapeau === 'pistol'
+    && r.r2Demi > 0.45 && r.r2Demi < 0.55 && r.gazPlein === 1 && r.avance < -4
+    && r.faces.hid1EstCroix && r.faces.hid0EstCarre
+    && r.ecran.ui === 'padTest' && r.ecran.barres === 6 && r.ecran.boutons === 18 && r.ecran.allumes >= 1
+    && /ps-hid/.test(r.ecran.nom) && /non standard corrigé/.test(r.ecran.diag);
+  return { ok, detail: `sur le navigateur d'une télé (ou Firefox), la MEME DualSense arrive avec « mapping » vide et un tout autre agencement : le jeu lisait l'axe 3 (= L2 relâchée, a ${r.avant.ryLu}) comme le stick droit vertical — la caméra plongeait toute seule — le stick droit était introuvable, et la croix, qui n'a alors AUCUN bouton mais un « chapeau » sur un axe, ne faisait RIEN : c'est le « gauche/droite ne fonctionne pas » du joueur · tout est normalisé (profil ${r.profil}) : plus aucune dérive (${r.derive.yaw} rad de lacet, ${r.derive.pitch} d'inclinaison en une seconde), le stick droit est retrouvé sur les axes 2 et 5 (${r.stickD.rx} / ${r.stickD.ry}), le chapeau redevient une croix (← ${r.chapGauche[0]}, → ${r.chapDroite[1]}, ↑ ${r.chapHaut}) qui change d'arme (${r.armeParChapeau}), les gâchettes des axes 3/4 restent analogiques (mi-course ${r.r2Demi}, a fond ${r.gazPlein} → ${Math.abs(r.avance)} m parcourus) et les faces HID reprennent leur place (✕ et ▢) · l'écran « Tester la manette » montre les ${r.ecran.barres} axes et les ${r.ecran.boutons} boutons en direct et affiche : « ${r.ecran.diag} »` };
+});
+
+test('le mode diffusion vise 60 images par seconde NETTES sur la tele', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const dpr = window.devicePixelRatio || 1;
+    const res = {};
+    // ---- CE QUI SE PASSAIT. En arrivant par le lien #tv la qualité passait en « Ultra HD »,
+    // dont le principe est le SURÉCHANTILLONNAGE : deux fois la finesse de l'écran, soit
+    // quatre fois trop de pixels pour le processeur d'une télé.
+    G.modeTV(false); G.diffusionMode(false);
+    G.settings.quality = 'ultra'; G.applyQuality();
+    res.avant = { ratio: +G.ratioQualite().toFixed(2), nettete: +G.post.force.toFixed(2) };
+    // ... et l'échelle adaptative tombait alors au PLANCHER : rendu a 50 %, ombres éteintes
+    for (let i = 0; i < 300; i++) G.fluiditeTick(1000 / 30);
+    res.avantPlancher = { ech: +G.rendu.ech.toFixed(2), ombres: G.rendu.ombres };
+    // ... et n'en remontait jamais : sur une télé qui tient 50 images/s, il en fallait 57
+    for (let i = 0; i < 400; i++) G.fluiditeTick(1000 / 50);
+    res.avantRemonte = +G.rendu.ech.toFixed(2);
+    // ---- L'ACCÉLÉRATEUR D'IMAGE : il s'allume avec le mode télé
+    G.modeTV(true);
+    res.auto = G.diffusion.on;
+    res.apres = { cible: G.diffusion.cible, ratio: +G.ratioQualite().toFixed(2), natif: +Math.min(dpr, 2).toFixed(2),
+      nettete: +G.post.force.toFixed(2), passe: G.post.on, msaa: G.diffusion.msaa,
+      paliers: G.paliersActifs().length, memeQuePALIERS: G.paliersActifs() === G.PALIERS };
+    // l'échelle de l'accélérateur lâche les OMBRES d'abord, et ne descend jamais sous 78 %
+    const marches = [];
+    for (let i = 0; i < 300; i++) { G.fluiditeTick(1000 / 30); if (i % 40 === 0) marches.push({ ech: +G.rendu.ech.toFixed(2), o: G.rendu.ombres }); }
+    res.marches = marches;
+    res.plancher = { ech: +G.rendu.ech.toFixed(2), ombres: G.rendu.ombres, mini: Math.min(...G.PALIERS_TV.map(x => x.ech)) };
+    // a 50 images/s on remonte déja (avant, il fallait 57 : on restait flou pour toujours)
+    for (let i = 0; i < 400; i++) G.fluiditeTick(1000 / 59);
+    res.remonte = { ech: +G.rendu.ech.toFixed(2), palier: G.rendu.palier };
+    // ---- LA MESURE, visible dans le salon TV
+    G.diffusion.n = 0; G.diffusion.acc = 0;
+    for (let i = 0; i < 30; i++) G.diffusionMesure(1000 / 60);   // 30 images en une demi-seconde = 60 images/s
+    res.mesure = { ips: G.diffusion.ips, mpx: G.diffusion.mpx, px: G.diffusion.px };
+    G.ouvreSalonTV();
+    res.salon = { debit: (document.getElementById('tvDebit') || {}).textContent || '',
+      bouton: (document.getElementById('tvTurbo') || {}).textContent || '' };
+    G.closeUI();
+    // ---- on peut l'éteindre, et le mode télé le rallume
+    G.diffusionMode(false, true); res.eteint = G.diffusion.on;
+    G.diffusionMode(true, true);
+    G.modeTV(false); res.horsTV = G.diffusion.on;
+    G.diffusionMode(false); G.settings.quality = 'high'; G.applyQuality();
+    return res;
+  });
+  const m = r.marches;
+  const ok = r.avant.ratio >= 2 && r.avantPlancher.ech <= 0.5 && r.avantPlancher.ombres === false && r.avantRemonte <= 0.5
+    && r.auto && r.apres.cible === 60 && r.apres.ratio === r.apres.natif && r.apres.passe
+    && r.apres.nettete >= 0.6 && r.apres.msaa === 2 && !r.apres.memeQuePALIERS
+    && m[1] && m[1].o === false && m[1].ech === 1
+    && r.plancher.ech >= 0.78 && r.plancher.ech === r.plancher.mini
+    && r.remonte.ech === 1 && r.remonte.palier === 0
+    && r.mesure.ips === 60 && r.mesure.mpx > 0 && /images\/s/.test(r.salon.debit) && /Mpx\/s/.test(r.salon.debit)
+    && /oui/.test(r.salon.bouton) && r.eteint === false && r.horsTV === false;
+  return { ok, detail: `« le rendu TV n'est pas bon, image pas nette, pas assez fluide » : « diffuser » n'envoie AUCUNE vidéo — la télé ouvre le lien #tv et calcule le jeu elle-même — et en arrivant par ce lien la qualité passait en Ultra HD, c'est-a-dire en SURÉCHANTILLONNAGE (ratio ${r.avant.ratio}, quatre fois trop de pixels) · a 30 images/s l'échelle adaptative tombait alors au plancher (rendu a ${r.avantPlancher.ech}, ombres ${r.avantPlancher.ombres ? 'encore la' : 'éteintes'}) et n'en remontait JAMAIS, puisqu'il fallait repasser 57 images/s (a 50 : encore ${r.avantRemonte}) : image molle ET saccadée · l'accélérateur d'image s'allume avec le mode télé (${r.auto}) et retourne la logique — rendu au NATIF (${r.apres.ratio} = ${r.apres.natif}), netteté par passe CAS poussée a ${r.apres.nettete} au lieu du suréchantillonnage, anticrénelage a ${r.apres.msaa} échantillons, et une échelle de ${r.apres.paliers} paliers qui lâche les OMBRES d'abord (${m.map(x => x.ech + (x.o ? '' : '✕')).join(' → ')}) et ne descend jamais sous ${r.plancher.ech} · a 59 images/s tout remonte (palier ${r.remonte.palier}) · la mesure est visible dans le salon : « ${r.salon.debit} »` };
 });

@@ -405,6 +405,20 @@ body.tv #tvBadge.on{display:block}
   border-radius:8px;padding:6px 8px;margin-top:8px;user-select:all;-webkit-user-select:all}
 #tvCast{margin-top:8px}
 #tvManettes{font-size:clamp(13px,1.1vw,19px);color:#1b2a4a;margin-top:6px;min-height:22px;font-weight:800}
+#tvDebit{font-size:clamp(12px,1vw,17px);color:#1b2a4a;margin-top:4px;min-height:20px;font-weight:800;font-family:ui-monospace,monospace;letter-spacing:-.5px}
+/* ================= Ecran « Tester la manette » ================= */
+#padTest .card{max-width:min(760px,94vw)}
+.ptrow{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:clamp(12px,1vw,17px);color:#1b2a4a;font-weight:800}
+.ptrow span{min-width:96px;text-align:right}
+.ptbar{position:relative;flex:1;height:14px;border-radius:8px;background:#dfe6f5;overflow:hidden}
+.ptbar i{position:absolute;top:0;bottom:0;background:#4f8dff;border-radius:8px}
+.ptbar.ctr i{background:#3ddc5a}
+.ptrow b{min-width:58px;font-family:ui-monospace,monospace;text-align:left}
+#ptBoutons{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
+#ptBoutons u{text-decoration:none;display:inline-block;min-width:44px;padding:5px 8px;border-radius:9px;background:#dfe6f5;color:#556;font-weight:800;font-size:clamp(11px,.9vw,16px)}
+#ptBoutons u.on{background:#3ddc5a;color:#0d2a12;box-shadow:0 0 0 2px #2aa544}
+#ptDiag{margin-top:8px;min-height:2.4em}
+body.tv #padTest .card{max-width:min(1100px,92vw)}
 #padCase{max-width:560px}#padEtat{font-weight:800;color:#1b2a4a;min-height:22px}#padAide{font-size:clamp(12px,1vw,16px);color:#556;margin-top:8px;text-align:left}
 #padCase.attente #padConnect{background:#ffd23f;color:#1b2a4a}#padCase.ok #padConnect{background:#3ddc5a;color:#0d2a12}
 #volRow{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;font-weight:800}#volRow input{width:min(220px,48vw)}#volRow b{min-width:44px;text-align:right}
@@ -523,7 +537,7 @@ body.tv #tvBadge.on{display:block}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>←</b>🛍️<b>→</b>🎯<b>Pavé</b>🔫 arme<b>△</b>dégainer<b>▢</b>frapper<b>◯</b>agir<b>✕</b>sauter<b>L1</b>viser<b>R2</b>tirer<b>L2</b>courir</div>
+<div id="padLeg"><b>R2</b>avancer / accélérer<b>L2</b>reculer<b>Stick G</b>direction<b>L3</b>courir<b>R1</b>tirer<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>△</b>dégainer<b>▢</b>frapper<b>◯</b>agir<b>✕</b>sauter<b>L1</b>viser</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -557,7 +571,7 @@ body.tv #tvBadge.on{display:block}
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
-      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : stick gauche pour marcher, stick droit pour la caméra, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> arme, <b>L1</b> viser, <b>R1/R2</b> tirer, <b>L2</b> courir, <b>R3</b> recentrer · la croix : <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner, <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions · <b>pavé tactile</b> : arme suivante · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : <b>R2</b> avancer / accélérer et <b>L2</b> reculer (gâchettes ANALOGIQUES : à moitié enfoncée = demi-vitesse), stick gauche pour la direction (il déplace aussi le personnage et braque en voiture), stick droit pour la caméra, <b>L3</b> courir, <b>✕</b> sauter, <b>◯</b> agir, <b>▢</b> frapper, <b>△</b> dégainer, <b>L1</b> viser, <b>R1</b> tirer, <b>R3</b> recentrer · la croix : <b>←</b> <b>→</b> 🔫 arme précédente / suivante (maintenu : <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions), <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner · <b>pavé tactile</b> : arme suivante · si quelque chose répond de travers, ⚙️ → « 🎮 Tester la manette » montre en direct axes et boutons · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -611,15 +625,29 @@ body.tv #tvBadge.on{display:block}
         <h3>🎮 Manette PS5 en Bluetooth</h3>
         <p id="padEtat">Aucune manette détectée pour l'instant.</p>
         <button class="btn small" id="padConnect">🔵 Connecter une manette PS5</button>
+        <button class="btn sec small" id="padTestBtn2">🎮 Tester la manette</button>
         <p id="padAide"></p>
       </div>
     </div>
     <div id="tvManettes">Aucune manette connectée pour l'instant.</div>
+    <div id="tvDebit">⚡ mesure en cours…</div>
     <div class="mpr" style="justify-content:center;margin-top:10px">
       <button class="btn sec small" id="tvGros">Affichage géant : oui</button>
+      <button class="btn sec small" id="tvTurbo">⚡ Accélérateur d'image : oui</button>
       <button class="btn sec small" id="tvPleinEcran">Plein écran</button>
     </div>
     <button class="btn" id="tvFerme">Fermer</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="padTest">
+  <div class="card">
+    <h2>🎮 Tester la manette</h2>
+    <p class="sub" id="ptNom">Aucune manette détectée. Appuie sur une touche de la manette.</p>
+    <div id="ptAxes"></div>
+    <div id="ptBoutons"></div>
+    <p id="ptDiag" class="sub"></p>
+    <button class="btn" id="ptFerme">Fermer</button>
   </div>
 </div>
 
@@ -871,6 +899,7 @@ body.tv #tvBadge.on{display:block}
     <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
+    <button class="btn sec" id="padTestBtn">🎮 Tester la manette</button>
     <button class="btn sec" id="voiceBtn">Voix des bots : activées</button>
     <button class="btn sec" id="qualBtn">Qualité : haute</button>
     <button class="btn sec" id="fsBtn2">Plein écran</button>
@@ -983,6 +1012,23 @@ scene.updateMatrix(); worldGroup.updateMatrix();
 //      descend l'échelle de rendu par paliers ; dès que ça respire, on la remonte. Si ça rame
 //      encore au plus bas, les ombres s'éteignent, et se rallument quand ça va mieux.
 const rendu = { ech: 1, min: 0.5, tps: [], majT: 0, ombres: true, baisses: 0, hausses: 0, palier: 0 };
+// ================= L'ACCELERATEUR D'IMAGE (mode diffusion / tele) =================
+// Le retour du joueur : « le rendu TV n'est pas bon, image pas nette, pas assez fluide, trop
+// lent ». Voici ce qui se passait VRAIMENT. « Diffuser » n'envoie AUCUNE video : l'API
+// Presentation (ou le QR) fait ouvrir le lien #tv=CODE par le navigateur DE LA TELE, qui
+// calcule le jeu lui-meme. Or en arrivant par ce lien, la qualite se mettait d'office sur
+// « Ultra HD », dont le principe est le SURECHANTILLONNAGE : rendre a deux fois la finesse de
+// l'ecran puis reduire. Sur le petit processeur d'une tele 4K, cela fait quatre fois trop de
+// pixels : 20 images/s. L'echelle adaptative descendait alors ses paliers jusqu'au PLANCHER
+// (rendu a 50 % de la resolution, ombres eteintes) — d'ou le flou — et n'en remontait jamais,
+// puisqu'il faut repasser 57 images/s pour gagner une marche. Image molle ET saccadee.
+// L'accelerateur retourne la logique : jamais de surechantillonnage, on rend au NATIF de la
+// tele, la nettete vient d'une passe CAS (quelques instructions par pixel, pas quatre fois
+// plus de pixels), l'anticrenelage passe de 4 a 2 echantillons, et l'echelle adaptative suit
+// une AUTRE echelle de paliers qui sacrifie les ombres d'abord et ne descend jamais sous 78 %
+// de la resolution : ca vise 60 images/s NETTES. La mesure (images/s, debit) est affichee.
+const DIFFUSION_CIBLE = 60;
+const diffusion = { on: false, cible: DIFFUSION_CIBLE, ips: 0, mpx: 0, px: 0, n: 0, acc: 0, msaa: 2, nettete: 0.62, plancher: 0.78 };
 // PLUS AUCUN BRIDAGE A PRIORI. On plafonnait d'abord à 1600 px, puis à 2160 : sur une télé 4K
 // l'image restait molle. On rend maintenant jusqu'au NATIF de l'écran, et c'est uniquement la
 // mesure du temps des images qui fait redescendre si la machine ne suit pas.
@@ -1003,7 +1049,9 @@ const QUALITES = {
 };
 function qualite() { return QUALITES[settings.quality] || QUALITES.high; }
 function plafondPixels() { return document.body.classList.contains('tv') ? PLAFOND_TV : Math.max(PLAFOND_PC, qualite().plafond); }
-function ratioQualite() { return qualite().ratio(window.devicePixelRatio || 1); }
+// EN DIFFUSION : la resolution NATIVE de la tele, ni plus (le surechantillonnage Ultra HD
+// coutait quatre fois trop cher) ni moins (c'est ce qui rendait l'image molle).
+function ratioQualite() { const d = window.devicePixelRatio || 1; return diffusion.on ? Math.min(d, 2) : qualite().ratio(d); }
 // le ratio réellement envoyé au moteur : qualité × échelle adaptative, borné par le plafond
 function ratioRendu(largeur) {
   const L = Math.max(320, largeur || window.innerWidth);
@@ -1044,11 +1092,24 @@ const PALIERS = [
   { ech: 0.5, ombre: 0.25 },
   { ech: 0.5, ombre: 0 },
 ];
+// L'ECHELLE DE L'ACCELERATEUR : sur une tele, une image NETTE a 60 vaut mieux qu'une belle
+// ombre a 30. On lache donc les ombres tout de suite, et la resolution ne descend qu'ensuite,
+// jamais sous 78 % (au-dela ca se voit de loin, c'est exactement ce dont le joueur se plaint).
+const PALIERS_TV = [
+  { ech: 1, ombre: 0.5 },
+  { ech: 1, ombre: 0.25 },
+  { ech: 1, ombre: 0 },
+  { ech: 0.92, ombre: 0 },
+  { ech: 0.84, ombre: 0 },
+  { ech: 0.78, ombre: 0 },
+];
+const paliersActifs = () => (diffusion.on ? PALIERS_TV : PALIERS);
 // la carte de depart : celle de la machine, ou 1024 en mode « DLSS » (rendu reduit puis agrandi)
 function ombreBase() { return settings.quality === 'dlss' ? 1024 : SM; }
 function ombresQualite(n) {
-  n = clamp(n | 0, 0, PALIERS.length - 1);
-  const P2 = PALIERS[n];
+  const ech = paliersActifs();
+  n = clamp(n | 0, 0, ech.length - 1);
+  const P2 = ech[n];
   rendu.palier = n; rendu.ech = P2.ech;
   ombresRendu(P2.ombre > 0);
   if (P2.ombre > 0) ombresTaille(ombreBase() * P2.ombre);
@@ -1075,11 +1136,50 @@ function fluiditeTick(ms) {
   rendu.majT = 0;
   const med = [...t].sort((a, b) => a - b)[t.length >> 1];
   rendu.med = Math.round(med * 10) / 10;
-  if (med > 1000 / 42) {          // moins de 42 images/s : on descend une marche
-    if (rendu.palier < PALIERS.length - 1) { ombresQualite(rendu.palier + 1); rendu.baisses++; }
-  } else if (med < 1000 / 57) {   // ça respire : on remonte une marche
+  // en diffusion la cible est 60 images/s (et non 42) : on reagit plus tot et plus fin
+  const bas = diffusion.on ? 1000 / (DIFFUSION_CIBLE - 6) : 1000 / 42;
+  const haut = diffusion.on ? 1000 / (DIFFUSION_CIBLE - 2) : 1000 / 57;
+  const ech = paliersActifs();
+  if (med > bas) {                // trop lent : on descend une marche
+    if (rendu.palier < ech.length - 1) { ombresQualite(rendu.palier + 1); rendu.baisses++; }
+  } else if (med < haut) {        // ça respire : on remonte une marche
     if (rendu.palier > 0) { ombresQualite(rendu.palier - 1); rendu.hausses++; }
   }
+}
+// LA MESURE VISIBLE : images par seconde et debit de pixels reellement calcules. Sans elle,
+// « c'est pas fluide » restait invisible ; on l'affiche dans le salon TV, pres du QR.
+const tailleRendu = new THREE.Vector2();
+function diffusionMesure(ms) {
+  const d = diffusion;
+  d.n++; d.acc += ms;
+  if (d.acc < 500) return;
+  try { renderer.getDrawingBufferSize(tailleRendu); d.px = (tailleRendu.x | 0) * (tailleRendu.y | 0); } catch (e) {}
+  d.ips = Math.round(d.n * 1000 / d.acc);
+  d.mpx = Math.round(d.ips * d.px / 1e5) / 10;   // megapixels calcules par seconde
+  d.n = 0; d.acc = 0;
+  diffusionAffiche();
+}
+// L'affichage seul : a l'ouverture du salon on montre la DERNIERE mesure au lieu d'en
+// bricoler une fausse sur une poignee d'images.
+function diffusionAffiche() {
+  const el = typeof document !== 'undefined' && document.getElementById('tvDebit');
+  if (!el) return;
+  const d = diffusion;
+  el.textContent = d.ips ? `⚡ ${d.ips} images/s (cible ${d.cible}) · ${d.mpx} Mpx/s · rendu ${tailleRendu.x | 0}×${tailleRendu.y | 0} · netteté ${Math.round((post.on ? post.force : 0) * 100)} %${d.on ? '' : ' · accélérateur éteint'}` : '⚡ mesure en cours…';
+}
+// Allumer/eteindre l'accelerateur. Le nombre d'echantillons de l'anticrenelage change : on
+// jette la cible de rendu pour qu'elle soit reconstruite avec le bon reglage.
+function diffusionMode(on, memorise) {
+  on = !!on;
+  diffusion.on = on;
+  // on ne retient le choix que s'il vient du JOUEUR : sinon quitter le mode tele effacerait
+  // son reglage et l'accelerateur ne reviendrait plus jamais tout seul
+  if (memorise) { try { store.set('superobby.turbo', on ? '1' : '0'); } catch (e) {} }
+  if (post.rt) { try { post.rt.dispose(); } catch (e) {} post.rt = null; post.w = post.h = 0; }
+  try { applyQuality(); } catch (e) {}
+  const b = typeof document !== 'undefined' && document.getElementById('tvTurbo');
+  if (b) b.textContent = '⚡ Accélérateur d\'image : ' + (on ? 'oui' : 'non');
+  return on;
 }
 // NETTETÉ DES TEXTURES. Vues de biais — une chaussée, un trottoir, une façade — les textures
 // répétées bavaient en une bouillie grise. Le filtrage anisotrope les redresse : c'est le gain
@@ -1132,7 +1232,9 @@ function postCible() {
   post.msaa = gl2 && typeof THREE.WebGLMultisampleRenderTarget === 'function';
   const opt = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, stencilBuffer: false };
   post.rt = post.msaa ? new THREE.WebGLMultisampleRenderTarget(w, h, opt) : new THREE.WebGLRenderTarget(w, h, opt);
-  if (post.msaa) post.rt.samples = 4;
+  // 4 echantillons par pixel en 4K, c'est le double du cout d'une image entiere sur une tele :
+  // en diffusion on passe a 2 et on laisse la passe de nettete faire le reste du travail.
+  if (post.msaa) post.rt.samples = diffusion.on ? diffusion.msaa : 4;
   post.w = w; post.h = h;
   return post.rt;
 }
@@ -1153,7 +1255,10 @@ function rendreImage() {
 }
 function applyQuality() {
   const q = settings.quality, low = q === 'low', dlss = q === 'dlss', Q = qualite();
-  post.on = !!Q.post; post.force = Q.nettete;
+  // en diffusion la nettete ne vient PLUS du surechantillonnage (trop lourd) mais de la passe
+  // CAS, qu'on pousse : c'est ce qui rend l'image « piquee » sur un grand ecran sans la ralentir
+  post.on = diffusion.on ? true : !!Q.post;
+  post.force = diffusion.on ? Math.max(Q.nettete, diffusion.nettete) : Q.nettete;
   // "DLSS" : rendu en résolution réduite puis agrandi à l'écran (upscaling), ombres conservées
   rendu.ech = 1; rendu.tps.length = 0; ombresRendu(!low);
   appliqueRendu();
@@ -8953,7 +9058,7 @@ function interieurTick() {
 }
 const keys = new Set();
 const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
-const pad = { x: 0, y: 0, a: false };
+const pad = { x: 0, y: 0, a: false, gaz: 0, frein: 0, lu: null };   // gaz = R2, frein = L2 (analogiques)
 const look = { id: null, lx: 0, ly: 0 };
 let running = false, paused = false, dead = false, won = false, timerOn = false, elapsed = 0, deaths = 0, coinCount = 0, simTime = 0;
 let cp = null;
@@ -11710,7 +11815,9 @@ function step(dt, active) {
 
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y, -1, 1);
+  // R2 = avancer, L2 = reculer : les gachettes s'ajoutent au stick gauche, qui garde la
+  // direction. Les deux coexistent — on peut avancer a la gachette et se decaler au stick.
+  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y + (pad.gaz || 0) - (pad.frein || 0), -1, 1);
   let wantX, wantZ, len;
   // arme dégainée : on passe en déplacement relatif à la caméra, sinon Q/D ferait tourner
   // le personnage contre la visée
@@ -11834,7 +11941,8 @@ function step(dt, active) {
 function readInput() {
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  return { ix: clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz: clamp(kf + joy.y + pad.y + tel.y, -1, 1) };
+  // au volant : R2 accelere, L2 recule, et le stick gauche continue de braquer ET d'avancer
+  return { ix: clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz: clamp(kf + joy.y + pad.y + tel.y + (pad.gaz || 0) - (pad.frein || 0), -1, 1) };
 }
 // Rayon et demi-longueur d'échantillonnage d'un véhicule : trois disques répartis sur sa
 // longueur couvrent tout le rectangle, coins compris.
@@ -13828,15 +13936,22 @@ const PAD_MAP = {
   8: 'KeyT',     // Create : parler
   9: 'Escape',   // Options : menu
 };
-// LA CROIX ET LE PAVE TACTILE ouvrent ce qui n'etait accessible qu'a la souris : le 📣 des
-// ordres, la boutique, les missions, la guerre des gangs, les emotes, le changement d'arme.
-const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'boutique', 15: 'missions', 17: 'arme' };
+// LA CROIX. Avant, ← et → ouvraient la boutique et les missions : en pleine course le joueur
+// appuyait a gauche et le jeu se figeait sur un menu — d'ou le « la manette gauche droite ne
+// fonctionne pas ». La croix gauche/droite fait maintenant quelque chose d'UTILE EN JEU :
+// elle change d'arme (comme la molette d'un jeu de tir). La boutique et les missions restent
+// a portee de pouce, en MAINTENANT ← ou → (0,7 s), comme la guerre des gangs sur ↑.
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'arme' };
+const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
 const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', grenade: 'Grenade' };
-function armeSuivante() {
+function armeSuivante(sens = 1) {
   const dispo = [owned.has('arme:pistol') && 'pistol', owned.has('arme:rifle') && 'rifle', P.grenades > 0 && 'grenade'].filter(Boolean);
   if (!dispo.length) { msg('🔫 Aucune arme : passe à l\'armurerie', 1500); return false; }
-  const i = dispo.indexOf(P.weapon), suiv = i < 0 ? dispo[0] : (i + 1 < dispo.length ? dispo[i + 1] : null);
+  // « mains nues » fait partie du tour : on peut donc revenir en arriere sans rester coince
+  const liste = [null, ...dispo];
+  let i = liste.indexOf(P.weapon || null); if (i < 0) i = 0;
+  const suiv = liste[(i + (sens < 0 ? -1 : 1) + liste.length) % liste.length];
   equipWeapon(suiv); msg(suiv ? `🔫 ${NOMS_ARMES[suiv]}` : '🤚 Mains nues', 1200); return true;
 }
 function padAction(quoi) {
@@ -13847,11 +13962,86 @@ function padAction(quoi) {
   if (quoi === 'boutique') { if (!libre) return false; openStore(); return true; }
   if (quoi === 'missions') { if (!libre) return false; openMissions(city.offNear); return true; }
   if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else startDance(3); return true; }
-  if (quoi === 'arme') { if (paused) return false; return armeSuivante(); }
+  if (quoi === 'arme' || quoi === 'armeSuiv') { if (paused) return false; return armeSuivante(1); }
+  if (quoi === 'armePrec') { if (paused) return false; return armeSuivante(-1); }
   return false;
 }
 const PAD_SEUIL_GACHETTE = 0.35;   // une gâchette analogique n'est « appuyée » qu'à partir de là
-const manetteSalon = { i: -1, nom: '', vibT: 0 };
+const PAD_GACHETTE_MORTE = 0.06;   // une gâchette au repos rend rarement exactement 0
+// ================= LIRE N'IMPORTE QUELLE MANETTE (le vrai bug du « gauche/droite ») =======
+// Le jeu lisait `gp.axes[0..3]` et `gp.buttons[0..17]` en supposant l'agencement « standard »
+// du navigateur. Sur un ORDINATEUR en Chrome, c'est vrai. Sur le NAVIGATEUR D'UNE TELE (et
+// dans Firefox), la meme DualSense arrive avec `gp.mapping !== 'standard'` et un tout autre
+// agencement : les gachettes L2/R2 occupent les AXES 3 et 4 (donc « axes echanges » : ce que
+// le jeu prenait pour le stick droit etait en fait une gachette au repos a -1, la camera
+// partait toute seule), le stick droit vertical est sur l'axe 5, la CROIX n'a pas de boutons
+// du tout mais un « chapeau » (hat) code sur un axe — d'ou « la croix gauche/droite ne fait
+// rien » — et les faces sont dans l'ordre HID ▢ ✕ ◯ △ au lieu de ✕ ◯ ▢ △.
+// On normalise donc TOUT ici, une fois pour toutes : le reste du jeu ne voit qu'un agencement.
+const PAD_HID_PS = [2, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17];   // ordre HID DualShock/DualSense → index standard
+function padProfil(gp) {
+  if (!gp) return 'aucun';
+  if (gp.mapping === 'standard') return 'standard';
+  const nb = (gp.buttons || []).length, na = (gp.axes || []).length;
+  if (nb <= 15 && na >= 6) return 'ps-hid';   // DualSense/DualShock brut : gachettes sur les axes, croix sur un chapeau
+  return 'brut';
+}
+// Le « chapeau » : un seul axe code les huit directions de la croix (et le repos hors de
+// [-1, 1]). Retourne [x, y] avec y = +1 vers le HAUT, comme un stick.
+function padChapeau(v) {
+  if (!(v >= -1.001 && v <= 1.001)) return [0, 0];   // repos : 1,28 chez Firefox, NaN ailleurs
+  const d = Math.round((v + 1) * 3.5) % 8;           // 0 = haut, puis dans le sens des aiguilles
+  return [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]][d];
+}
+// L'axe du chapeau : le premier axe au-dela des sticks dont la valeur ne ressemble pas a un
+// stick au repos. On ne le cherche que si la croix n'a pas de boutons a elle.
+// `depart` = premier axe qui PEUT etre un chapeau : sur une DualSense brute les axes 0 a 5
+// sont deja pris (sticks et gachettes), et une gachette a fond ressemble a un cran de chapeau.
+function padAxeChapeau(gp, depart) {
+  const a = gp.axes || [];
+  for (let i = Math.min(a.length - 1, 9); i >= (depart || 4); i--) {
+    const v = a[i];
+    if (typeof v !== 'number') continue;
+    if (v > 1.001 || v < -1.001) return i;                       // repos « hors bornes » : c'est un chapeau
+    if (Math.abs(Math.round((v + 1) * 3.5) - (v + 1) * 3.5) < 0.02 && Math.abs(v) > 0.05) return i;   // pile sur un cran
+  }
+  return -1;
+}
+// Lecture normalisee d'une manette : sticks, gachettes analogiques et 18 boutons standard.
+function padLu(gp) {
+  const profil = padProfil(gp);
+  const a = (gp && gp.axes) || [], bt = (gp && gp.buttons) || [];
+  const val = i => { const b = bt[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
+  const app = i => !!(bt[i] && bt[i].pressed);
+  const b = new Array(PAD_BOUTONS).fill(false), v = new Array(PAD_BOUTONS).fill(0);
+  let lx = a[0] || 0, ly = a[1] || 0, rx = a[2] || 0, ry = a[3] || 0, l2 = 0, r2 = 0;
+  if (profil === 'ps-hid') {
+    ry = a[5] || 0;
+    const ax = i => (typeof a[i] === 'number' ? a[i] : -1);   // a MI-COURSE une gachette rend 0 : `a[i] || -1` la croyait relachee
+    l2 = clamp((ax(3) + 1) / 2, 0, 1); r2 = clamp((ax(4) + 1) / 2, 0, 1);   // -1 = relachee, +1 = a fond
+    for (let i = 0; i < PAD_HID_PS.length; i++) { const s = PAD_HID_PS[i]; b[s] = app(i); v[s] = val(i); }
+    v[6] = Math.max(v[6], l2); v[7] = Math.max(v[7], r2);
+  } else {
+    for (let i = 0; i < PAD_BOUTONS; i++) { b[i] = app(i); v[i] = val(i); }
+    l2 = v[6]; r2 = v[7];
+  }
+  // la croix : soit de vrais boutons, soit un chapeau sur un axe
+  let chapeau = -1;
+  if (!b[12] && !b[13] && !b[14] && !b[15] && profil !== 'standard') {
+    chapeau = padAxeChapeau(gp, profil === 'ps-hid' ? 6 : 4);
+    if (chapeau >= 0) {
+      const [hx, hy] = padChapeau(a[chapeau]);
+      b[12] = hy > 0.5; b[13] = hy < -0.5; b[14] = hx < -0.5; b[15] = hx > 0.5;
+      for (const i of [12, 13, 14, 15]) v[i] = b[i] ? 1 : 0;
+    }
+  }
+  // les gachettes commandent aussi les boutons 6/7 : le reste du jeu peut les traiter en tout ou rien
+  b[6] = b[6] || l2 > PAD_SEUIL_GACHETTE; b[7] = b[7] || r2 > PAD_SEUIL_GACHETTE;
+  return { profil, lx, ly, rx, ry, l2, r2, b, v, chapeau, brut: a };
+}
+// une gachette au repos ne rend pas toujours 0 : petite zone morte, puis pleine course
+const padCourse = t => (t > PAD_GACHETTE_MORTE ? (t - PAD_GACHETTE_MORTE) / (1 - PAD_GACHETTE_MORTE) : 0);
+const manetteSalon = { i: -1, nom: '', vibT: 0, profil: 'aucun' };
 function padActive() {
   if (!gamepadOk || !navigator.getGamepads) return null;
   let liste; try { liste = navigator.getGamepads(); } catch (e) { gamepadOk = false; return null; }
@@ -13876,8 +14066,7 @@ function padStick(x, y, morte = 0.08) {
   const m = Math.min(1, (d - morte) / (1 - morte)), k = Math.pow(m, 1.2) / (d || 1);
   return [x * k, y * k];
 }
-const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) > 0.02;
-const padGachette = (g, i) => { const b = g.buttons[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
+const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) + (pad.gaz || 0) + (pad.frein || 0) > 0.02;
 // LA VIBRATION : la DualSense la gère nativement dans le navigateur.
 function padVibre(force = 0.6, ms = 120) {
   const g = padActive(); if (!g || !g.vibrationActuator || simTime < manetteSalon.vibT) return false;
@@ -13887,12 +14076,17 @@ function padVibre(force = 0.6, ms = 120) {
 }
 function pollGamepad(dt) {
   const gp = padActive();
-  if (!gp) { pad.x = pad.y = 0; if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; } return; }
+  if (!gp) { pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.lu = null; if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; }
+    if (uiOpen === 'padTest') padEssaiTick(null); return; }
+  const L = padLu(gp);                       // agencement normalise : voir padLu
+  pad.lu = L; manetteSalon.profil = L.profil;
   const menu = !!document.querySelector('.overlay:not(.hidden)');
-  const [gx, gy] = padStick(gp.axes[0] || 0, gp.axes[1] || 0);
+  const [gx, gy] = padStick(L.lx, L.ly);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
+  // LES GACHETTES ANALOGIQUES : R2 avance/accelere, L2 recule. A moitie enfoncee = demi-vitesse.
+  pad.gaz = menu ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
   if (running && !paused && !menu) {
-    const [vx, vy] = padStick(gp.axes[2] || 0, gp.axes[3] || 0, 0.08);
+    const [vx, vy] = padStick(L.rx, L.ry, 0.08);
     // la camera tournait a 3,4 rad/s : trop lent pour se retourner. 5,5 rad/s au bord, et le
     // reglage « sensibilite manette » (0,5 a 2) multiplie le tout ; en visee, deux fois plus fin
     const sens = (settings.sensib || 1) * (P.aim ? 0.5 : 1);
@@ -13902,36 +14096,40 @@ function pollGamepad(dt) {
   }
   const bas = pad.bas || {};
   const neuf = {};
-  for (let i = 0; i < PAD_BOUTONS; i++) neuf[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
+  for (let i = 0; i < PAD_BOUTONS; i++) neuf[i] = L.b[i];
   // Le son : une manette ne compte pas comme un « geste » pour le navigateur. On tente
   // quand meme de reveiller la carte son au premier bouton, et on dit quoi faire si elle
   // reste muette (touche OK de la telecommande, ou un doigt sur l'ecran).
   if (Object.keys(neuf).some(i => neuf[i] && !bas[i])) padSon();
-  // les gâchettes sont analogiques : on les convertit avec un seuil, pas en tout ou rien
-  neuf[6] = padGachette(gp, 6) > PAD_SEUIL_GACHETTE;
-  neuf[7] = padGachette(gp, 7) > PAD_SEUIL_GACHETTE;
   if (menu) {
-    padMenu(gp, neuf, bas);
+    if (uiOpen === 'padTest') padEssaiTick(L, neuf, bas); else padMenu(L, neuf, bas);
   } else {
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
       telTouche(k, neuf[i]);
     }
-    if (neuf[7] !== bas[7]) telTouche('KeyX', neuf[7]);              // R2 : tirer, comme R1
-    const court = neuf[6] || neuf[10];                                // L2 ou L3 : courir
-    if (court !== (bas[6] || bas[10])) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
+    // R1 tire deja : R2 sert donc a AVANCER (voir readInput) et « courir » passe sur L3,
+    // comme dans les grands jeux de ville. L2 recule.
+    const court = neuf[10];                                           // L3 : courir
+    if (court !== !!bas[10]) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
     if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
     if (neuf[11] && !bas[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }   // R3 : recentrer la caméra
     if (neuf[16] && !bas[16]) telTouche('Escape', true);
-    // la croix : appui court = l'action ; ↑ tenu 0,7 s = la guerre des gangs
+    // la croix : appui court = l'action ; ↑ ← → tenus 0,7 s = guerre des gangs / boutique / missions
     for (const [i, quoi] of Object.entries(PAD_CROIX)) {
-      if (+i === 12) continue;
+      if (PAD_CROIX_LONG[i]) continue;
       if (neuf[i] && !bas[i]) padAction(quoi);
+    }
+    for (const i of Object.keys(PAD_CROIX_LONG)) {
+      if (+i === 12) continue;   // ↑ garde sa mecanique historique juste en dessous
+      if (neuf[i] && !bas[i]) { pad.longT = pad.longT || {}; pad.longT[i] = simTime; pad.longFait = pad.longFait || {}; pad.longFait[i] = false; }
+      else if (neuf[i] && bas[i] && pad.longT && !pad.longFait[i] && simTime - pad.longT[i] >= PAD_LONG) { pad.longFait[i] = true; padAction(PAD_CROIX_LONG[i]); }
+      else if (!neuf[i] && bas[i] && pad.longT && !pad.longFait[i]) padAction(PAD_CROIX[i]);
     }
     if (neuf[12] && !bas[12]) { pad.hautT = simTime; pad.hautFait = false; }
     if (neuf[12] && bas[12] && !pad.hautFait && simTime - (pad.hautT || 0) >= PAD_LONG) { pad.hautFait = true; padAction('guerre'); }
     if (!neuf[12] && bas[12] && !pad.hautFait) padAction('ordres');
-    if ((neuf[0] && !bas[0]) || (neuf[5] && !bas[5]) || (neuf[7] && !bas[7])) padVibre(0.35, 60);
+    if ((neuf[0] && !bas[0]) || (neuf[5] && !bas[5])) padVibre(0.35, 60);
   }
   pad.bas = neuf; pad.a = neuf[0];
 }
@@ -13942,9 +14140,9 @@ function pollGamepad(dt) {
 // quand on maintient, R1/L1 pour changer d'onglet, ✕ valide, ◯ revient, et les curseurs
 // (volume...) glissent avec ← →.
 const PAD_REPET = { avant: 380, puis: 130 };
-function padMenu(gp, neuf, bas) {
+function padMenu(L, neuf, bas) {
   const t = performance.now();
-  const sx = gp.axes[0] || 0, sy = gp.axes[1] || 0;
+  const sx = L.lx || 0, sy = L.ly || 0;   // agencement deja normalise (voir padLu)
   const dir = neuf[12] || sy < -0.55 ? 'haut' : neuf[13] || sy > 0.55 ? 'bas' : neuf[14] || sx < -0.55 ? 'gauche' : neuf[15] || sx > 0.55 ? 'droite' : null;
   if (dir) {
     const meme = pad.menuDir === dir;
@@ -13960,6 +14158,59 @@ function padMenu(gp, neuf, bas) {
   if (neuf[4] && !bas[4]) navOnglet(-1);
   if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) telTouche('Escape', true);
 }
+// ================= « TESTER LA MANETTE » =================
+// Ce que fait tout jeu du commerce, et qui manquait : un ecran qui montre EN DIRECT ce que le
+// jeu recoit. Le joueur disait « la manette gauche droite ne fonctionne pas » sans qu'on
+// puisse savoir si le stick etait mort, mal branche, inverse, ou simplement mappe sur autre
+// chose. Ici on voit les axes bruts, les axes apres zone morte, les gachettes et les 18
+// boutons s'allumer — et une phrase de diagnostic dit ce qui est detecte.
+const PT_AXES = [['Stick G ←→', 'lx'], ['Stick G ↑↓', 'ly'], ['Stick D ←→', 'rx'], ['Stick D ↑↓', 'ry'], ['L2 (reculer)', 'l2'], ['R2 (avancer)', 'r2']];
+const padEssai = { fait: false };
+function padEssaiMonte() {
+  if (padEssai.fait) return;
+  const a = $('ptAxes'); if (!a) return;
+  a.innerHTML = PT_AXES.map(([n, k]) => `<div class="ptrow"><span>${n}</span><div class="ptbar${k === 'l2' || k === 'r2' ? '' : ' ctr'}"><i id="pt_${k}"></i></div><b id="ptv_${k}">0.00</b></div>`).join('');
+  const b = $('ptBoutons');
+  if (b) b.innerHTML = Array.from({ length: PAD_BOUTONS }, (_, i) => `<u id="ptb_${i}">${PS_NOMS[i] || i}</u>`).join('');
+  padEssai.fait = true;
+}
+function padEssaiTick(L, neuf, bas) {
+  padEssaiMonte();
+  const nom = $('ptNom');
+  if (!L) {
+    if (nom) nom.textContent = 'Aucune manette détectée. Appuie sur ✕ ou PS, ou rebranche le câble.';
+    for (const [, k] of PT_AXES) { const e = $('pt_' + k); if (e) e.style.width = '0%'; const v = $('ptv_' + k); if (v) v.textContent = '0.00'; }
+    for (let i = 0; i < PAD_BOUTONS; i++) { const e = $('ptb_' + i); if (e) e.classList.remove('on'); }
+    const d = $('ptDiag'); if (d) d.textContent = '';
+    return;
+  }
+  const g = padActive();
+  if (nom) nom.textContent = `${(manetteSalon.nom || 'Manette').split('(')[0].trim()} · prise ${(manetteSalon.i | 0) + 1} · agencement « ${L.profil} » · ${(L.brut || []).length} axes, ${((g && g.buttons) || []).length} boutons`;
+  // les sticks passent par la MEME zone morte que le jeu : ce qu'on voit est ce qui est joue
+  const [nx, ny] = padStick(L.lx, L.ly), [dx, dy] = padStick(L.rx, L.ry);
+  // vertical : on montre ce que voit le JEU (pousser vers le haut = valeur positive)
+  const vals = { lx: nx, ly: -ny, rx: dx, ry: -dy, l2: padCourse(L.l2), r2: padCourse(L.r2) };
+  for (const [, k] of PT_AXES) {
+    const v = vals[k], centre = k !== 'l2' && k !== 'r2';
+    const e = $('pt_' + k);
+    if (e) { if (centre) { e.style.left = (50 + Math.min(0, v) * 50) + '%'; e.style.width = Math.abs(v) * 50 + '%'; } else { e.style.left = '0'; e.style.width = Math.max(0, v) * 100 + '%'; } }
+    const t = $('ptv_' + k); if (t) t.textContent = v.toFixed(2);
+  }
+  for (let i = 0; i < PAD_BOUTONS; i++) { const e = $('ptb_' + i); if (e) e.classList.toggle('on', !!L.b[i]); }
+  const d = $('ptDiag');
+  if (d) {
+    const p = [];
+    if (L.profil !== 'standard') p.push(`agencement non standard corrigé (${L.profil}${L.chapeau >= 0 ? `, croix sur l'axe ${L.chapeau}` : ''})`);
+    if (Math.abs(nx) > 0.15) p.push(`gauche/droite lu : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)})`);
+    if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
+    if (vals.r2 > 0.05) p.push(`R2 = avancer à ${Math.round(vals.r2 * 100)} %`);
+    if (vals.l2 > 0.05) p.push(`L2 = reculer à ${Math.round(vals.l2 * 100)} %`);
+    d.textContent = p.length ? p.join(' · ') : 'Bouge les sticks, appuie sur les gâchettes et sur la croix : tout doit s\'allumer ici.';
+  }
+  padEssai.diag = d ? d.textContent : '';
+  if (neuf && bas && ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16]))) closeUI();
+}
+function ouvreTestManette() { padEssai.fait = false; openUI('padTest'); padEssaiTick(pad.lu || (padActive() ? padLu(padActive()) : null)); }
 // LE SON A LA MANETTE. Sans geste « humain » (clic, touche, doigt) le navigateur garde la
 // carte son endormie ; une manette n'en est pas un. On essaie, et sinon on explique — une
 // seule fois par quart de minute, pas a chaque bouton.
@@ -13985,11 +14236,11 @@ setInterval(() => {
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
-  msg(ps ? '🎮 Manette PlayStation connectée — ↑ 📣 ordres · ↓ 🎭 · ← 🛍️ · → 🎯 · pavé 🔫' : '🎮 Manette connectée !', 3200);
+  msg(ps ? '🎮 Manette PlayStation connectée — R2 avancer · L2 reculer · L3 courir · ← → changer d\'arme' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
   unlockAudio(); padVibre(0.5, 200);
   try { manetteBTSonde(); } catch (_) {}
-  try { chat(null, ps ? '🎮 DualSense prête : stick gauche pour marcher, stick droit pour la caméra, L2 pour courir, R2 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
+  try { chat(null, ps ? '🎮 DualSense prête : R2 pour avancer, L2 pour reculer, stick gauche pour la direction, stick droit pour la caméra, L3 pour courir, R1 pour tirer.' : '🎮 Manette prête.'); } catch (_) {}
 });
 window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
 // ================= « CONNECTER UNE MANETTE PS5 » =================
@@ -14048,6 +14299,8 @@ async function manetteConnecter() {
   return { deja: false, hid: !!choisie };
 }
 for (const id of ['padConnect', 'padConnect2']) { const b = $(id); if (b) b.addEventListener('click', () => { manetteConnecter(); }); }
+for (const id of ['padTestBtn', 'padTestBtn2']) { const b = $(id); if (b) b.addEventListener('click', () => ouvreTestManette()); }
+{ const f = $('ptFerme'); if (f) f.addEventListener('click', () => closeUI()); }
 
 // ---- plein écran, orientation, veille (tablette Android) ----
 function goFullscreen() {
@@ -14192,7 +14445,7 @@ function loop() {
 function frame() {
   const brut = clock.getDelta();
   const dt = Math.min(brut, 0.05);
-  try { fluiditeTick(brut * 1000); ombresCadence(); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images
+  try { fluiditeTick(brut * 1000); ombresCadence(); diffusionMesure(brut * 1000); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images, et la diffusion se mesure
   // (la manette n'est plus lue ici : elle a sa propre cadence de 120 Hz, voir plus bas)
   const active = running && !paused && !dead && !won;
   acc += dt; let n = 0;
@@ -14985,10 +15238,15 @@ function tvSalonMaj() {
   $('tvCreePartie').style.display = net.on && net.code ? 'none' : '';
   tvManettesMaj();
   $('tvGros').textContent = 'Affichage géant : ' + (document.body.classList.contains('tv') ? 'oui' : 'non');
+  $('tvTurbo').textContent = '⚡ Accélérateur d\'image : ' + (diffusion.on ? 'oui' : 'non');
+  try { diffusionAffiche(); } catch (e) {}   // la derniere mesure s'affiche tout de suite
 }
 function modeTV(on) {
   document.body.classList.toggle('tv', on);
   store.set('superobby.tv', on ? '1' : '0');
+  // L'ACCELERATEUR D'IMAGE s'allume avec le mode tele (c'est la que le probleme se pose), sauf
+  // si le joueur l'a expressement eteint. Il s'eteint en revenant sur l'ordinateur.
+  try { diffusionMode(on && store.get('superobby.turbo') !== '0'); } catch (e) {}
   // Depuis le canapé on est loin de l'écran : on recule et on remonte un peu la caméra pour
   // voir à la fois son personnage et ce qui l'entoure.
   cam.base = on ? Math.max(cam.base, 9.5) : Math.min(cam.base, 7);
@@ -15256,6 +15514,7 @@ $('manetteStart').addEventListener('click', () => manetteOuvre(''));
 $('tvFerme').addEventListener('click', () => closeUI());
 $('tvCast').addEventListener('click', castLance);
 $('tvGros').addEventListener('click', () => { modeTV(!document.body.classList.contains('tv')); tvSalonMaj(); });
+$('tvTurbo').addEventListener('click', () => { diffusionMode(!diffusion.on, true); tvSalonMaj(); msg(diffusion.on ? '⚡ Accélérateur d\'image : 60 images/s nettes' : '⚡ Accélérateur d\'image éteint', 1600); });
 $('tvCreePartie').addEventListener('click', () => {
   hostGame();
   $('tvCreePartie').textContent = 'Ouverture…';

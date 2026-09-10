@@ -6724,11 +6724,16 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
     const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s2 = 0; for (const v of d) s2 += v * v; return +Math.sqrt(s2 / d.length).toFixed(4); };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}   // un test precedent peut laisser tourner musique, moteur, sirene ou pluie
+    // La ville a maintenant une RUMEUR de fond permanente (poste F) : le « silence » n'est
+    // plus silencieux. On la met en pause le temps de la mesure, sinon elle seule depassait
+    // le seuil de silence et faisait echouer un test qui parle d'autre chose.
+    try { G.SONV.ambT = G.simTime + 1e6; G.ambiance.stop(); } catch (e) {}
     await dodo(900); const silence = rms();
     G.engine.start('car', 2); G.engine.set(0.6); await dodo(900); const moteur = rms(); G.engine.stop();
     await dodo(400); G.sfx.tone(440, 0, 0.6, 'sine', 0.3); await dodo(120); const tonal = rms();
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
+    try { G.SONV.ambT = 0; } catch (e) {}   // la rumeur de la ville repart pour les tests suivants
     return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume };
   });
   const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;

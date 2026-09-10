@@ -5538,7 +5538,10 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   const errors=[];
   page.on('console',m=>{ if(m.type()==='error') errors.push(m.text()); });
   page.on('pageerror',e=>errors.push('PAGEERROR: '+e.message));
-  await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'load'});
+  // Quand plusieurs bancs d'essai tournent en meme temps sur la meme machine, le chargement
+  // de la page depasse les 30 secondes par defaut et TOUTE la serie echouait avant le premier
+  // test, sans aucun rapport avec ce qu'elle mesure. On laisse trois minutes.
+  await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'load',timeout:180000});
   await page.waitForFunction(()=>window.__SHOT&&window.__SHOT.ready,null,{timeout:60000});
   let pass=0, fail=0;
   const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;

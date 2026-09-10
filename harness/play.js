@@ -8085,3 +8085,25 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     && r.leve.ui === null && r.leve.chaise === false && /bientôt/i.test(r.leve.dit || '');
   return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
 });
+
+test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demande', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const vu = () => getComputedStyle(document.getElementById('padLeg')).display;
+    document.body.classList.remove('aide');
+    document.body.classList.add('manette');
+    const repos = { aide: document.body.classList.contains('aide'), leg: vu() };
+    G.padAction('aide'); const ouvert = { aide: document.body.classList.contains('aide'), leg: vu() };
+    G.padAction('aide'); const referme = { aide: document.body.classList.contains('aide'), leg: vu() };
+    // il s'efface aussi tout seul au bout de son delai
+    G.montreAide(0.2); const avant = vu(); await dodo(400); G.aideTick(); const apres = vu();
+    // et le bouton des reglages le rappelle
+    const bouton = !!document.getElementById('aideBtn');
+    document.body.classList.remove('manette', 'aide');
+    return { repos, ouvert, referme, avant, apres, bouton, pave: G.PAD_CROIX[17] };
+  });
+  const ok = r.repos.leg === 'none' && !r.repos.aide && r.ouvert.leg === 'flex' && r.referme.leg === 'none'
+    && r.avant === 'flex' && r.apres === 'none' && r.bouton && r.pave === 'aide';
+  return { ok, detail: `le bandeau des touches (« R2 avancer · L2 reculer · Stick G direction… ») restait affiché EN PERMANENCE dès qu'une manette était branchée : trois lignes en travers du haut de l'écran, par-dessus le jeu · il est maintenant masqué au repos (${r.repos.leg}), sort quelques secondes a la connexion, se rappelle par le PAVÉ TACTILE de la DualSense (${r.pave}) ou par le bouton « ⌨️ Rappeler les touches » des réglages (${r.bouton}), et se referme au deuxième appui (${r.referme.leg}) ou tout seul après son délai (${r.avant} → ${r.apres})` };
+});

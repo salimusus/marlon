@@ -8719,31 +8719,81 @@ function tableauMaj(room, lignes, couleur) {
   tableauPose(room, lignes, couleur, null);
   return tableauRendu(room);
 }
-// LE SON DE LA CRAIE : un bruit blanc filtre passe-bande entre 2 et 4 kHz, tres court,
-// une bouffee par lettre. C'est exactement le crissement d'un baton de craie sur l'ardoise.
+// LE SON DE LA CRAIE : un LIT de bruit CONTINU, large bande (1,6 a 6 kHz), qu'on tient
+// ouvert tant que le tableau s'ecrit, plus une bouffee d'attaque sur chaque lettre.
+// POURQUOI UN LIT CONTINU, ET PLUS SEULEMENT DES BOUFFEES : le crissement etait fait de
+// bouffees de 45 ms derriere un passe-bande TRES etroit (Q 5,5). Deux malheurs d'un coup.
+// 1) Une bande de 550 Hz ne laisse passer que quelques pour cent de l'energie d'un bruit
+// blanc : il n'en sortait presque rien. 2) Une source dont le `stop()` est deja passe quand
+// le fil audio la regarde ne joue pas DU TOUT — et une bouffee de 45 ms programmee a
+// `currentTime` est toujours en retard d'une bouffee. Resultat mesure au bout de la chaine :
+// la craie plafonnait a 0,07 alors que la rumeur de la ville, elle, monte a 0,09 — la craie
+// passait SOUS l'ambiance, on ne l'entendait pas. Une source bouclee permanente dont on ne
+// touche QUE le gain sort toujours, quelle que soit la machine, et la bande large donne le
+// vrai grain du baton sur l'ardoise.
+const CRAIE_NIV = 0.07;     // niveau du lit de craie sur le bus « effets ». MESURE au bout de la chaine, la
+                            // rumeur la plus forte d'un quartier donne une crete de 0,08 ; ce lit-la donne 0,28 (RMS
+                            // 0,07 contre 0,022) : on l'entend nettement sans jamais coller le limiteur (0,34 tapait 0,93).
+const CRAIE_TENUE = 0.18;   // s : on garde le crissement ouvert apres la derniere lettre, sinon il hachait
+const craieLit = { src: null, bp: null, g: null, jusqu: 0 };
+// Monte le lit une seule fois, puis rebranche sa sortie sur le bus « effets » a chaque
+// lettre (deux fois le meme lien ne compte qu'une fois en Web Audio : c'est sans risque, et
+// ca laisse le reglage du bus reprendre la main si le joueur l'a change).
+function craieLitOuvre() {
+  const c = sfx.unlock(); if (!c) return null;
+  if (!craieLit.buf) { const b = c.createBuffer(1, Math.ceil(c.sampleRate * 0.5), c.sampleRate), d = b.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; craieLit.buf = b; }
+  if (!craieLit.g) {
+    const src = c.createBufferSource(); src.buffer = craieLit.buf; src.loop = true;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1600;   // rien sous 1,6 kHz : la craie n'a pas de grave
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3100; bp.Q.value = 0.9;
+    const g = c.createGain(); g.gain.value = 0.0001;
+    src.connect(hp).connect(bp).connect(g);
+    try { src.start(); } catch (e) {}
+    craieLit.src = src; craieLit.bp = bp; craieLit.g = g;
+  }
+  const out = sfx.sortie('effets'); if (out) craieLit.g.connect(out);
+  return c;
+}
 function sonCraie(n) {
   if (!settings.sound) return 0;
-  const c = sfx.unlock(); if (!c) return 0;
-  if (!sonCraie.buf) { const b = c.createBuffer(1, Math.ceil(c.sampleRate * 0.3), c.sampleRate), d = b.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; sonCraie.buf = b; }
-  const t0 = c.currentTime; let joues = 0;
-  for (let i = 0; i < Math.min(n, 3); i++) {
+  if (!(n > 0)) return 0;   // aucune lettre tracee : on ne rouvre pas le lit pour rien
+  const c = craieLitOuvre(); if (!c) return 0;
+  const joues = Math.min(n, 3);
+  // LE GRAIN CHANGE A CHAQUE LETTRE : une craie ne crisse jamais deux fois pareil, et sans
+  // ce glissement de bande le lit continu sonnait comme un souffle de radio.
+  craieLit.bp.frequency.setTargetAtTime(2400 + Math.random() * 1600, c.currentTime, 0.012);
+  craieLit.g.gain.setTargetAtTime(CRAIE_NIV, c.currentTime, 0.006);
+  craieLit.jusqu = simTime + CRAIE_TENUE;
+  // et par-dessus le lit, l'attaque seche de chaque lettre (elle ne sort que sur une machine
+  // au temps reel, mais c'est elle qui donne le « tac-tac » de la main de la maitresse)
+  const t0 = c.currentTime;
+  for (let i = 0; i < joues; i++) {
     const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-    src.buffer = sonCraie.buf; src.loop = true; src.playbackRate.value = 0.8 + Math.random() * 0.5;
-    f.type = 'bandpass'; f.frequency.value = 2000 + Math.random() * 2000; f.Q.value = 5.5;
-    const at = t0 + i * 0.05, dur = 0.045 + Math.random() * 0.03;
+    src.buffer = craieLit.buf; src.loop = true; src.playbackRate.value = 0.8 + Math.random() * 0.5;
+    f.type = 'bandpass'; f.frequency.value = 2600 + Math.random() * 2200; f.Q.value = 1.4;
+    const at = t0 + i * 0.05, dur = 0.05 + Math.random() * 0.03;
     g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(0.095, at + 0.008);
+    g.gain.exponentialRampToValueAtTime(CRAIE_NIV * 1.7, at + 0.008);   // l'attaque tape un peu au-dessus du lit
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     const sortie = sfx.sortie('effets'); if (!sortie) break;
     src.connect(f).connect(g).connect(sortie);
-    src.start(at); src.stop(at + dur + 0.03); joues++;
+    src.start(at); src.stop(at + dur + 0.03);
   }
   school.craieSons = (school.craieSons || 0) + joues;
   return joues;
 }
+// LA RETOMBEE DU CRISSEMENT, appelee a chaque image depuis craieTick MEME quand aucune
+// lettre ne s'ecrit : sans elle le lit restait ouvert en boucle des que le tableau
+// s'arretait (et aussi quand le joueur coupait le son en pleine phrase).
+function craieLitFerme() {
+  const g = craieLit.g; if (!g || g.gain.value <= 0.0002) return;
+  if (settings.sound && simTime <= craieLit.jusqu) return;
+  const c = sfx.ctx(); if (c) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
+}
 // Appele a CHAQUE image, meme interface ouverte (le jeu est en pause mais le tableau, lui,
 // doit continuer de s'ecrire sous les yeux du joueur).
 function craieTick(dt) {
+  craieLitFerme();
   for (const room of (city.classes || [])) {
     const T = room.tab; if (!T || T.faites >= T.aEcrire) continue;
     const cible = Math.min(T.aEcrire, Math.floor((performance.now() - T.t0) / 1000 * CRAIE_CPS));

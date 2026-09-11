@@ -7923,12 +7923,25 @@ test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte
       if (m.etat === 'tournee' && Math.hypot(m.bot.pos.x - velo.x, m.bot.pos.z - velo.z) < 1.4) aVelo = true;
       if (livre < 0 && c.boites.some(b => b.lettres > 0)) { livre = +(i * DT).toFixed(1); break; }
     }
-    const sacoches = velo.g.children.filter(o => o.material && o.material.color && o.material.color.getHexString() === '8b5a2b').length;
-    return { boites: c.boites.length, livre, aVelo, sacoches,
+    // LES DEUX SACOCHES. On cherchait dans `velo.g.children` : elles n'y sont plus, parce que
+    // le poste Véhicules range désormais tout ce qui n'est pas une roue dans un sous-groupe
+    // (`c.caisse`, la caisse qui s'enfonce sur la suspension). On fouille donc TOUT le vélo,
+    // et on exige mieux qu'un compte : une sacoche à GAUCHE et une à DROITE, au niveau de la
+    // roue ARRIÈRE (z < −0,3, le vélo est cap +z), à peu près à la hauteur de l'essieu.
+    const roueAr = -0.65, cotes = [];
+    velo.g.traverse(o => {
+      if (!o.material || !o.material.color || o.material.color.getHexString() !== '8b5a2b') return;
+      if (!o.scale || o.scale.y < 0.2 || Math.abs(o.position.z - roueAr) > 0.45) return;
+      cotes.push(+o.position.x.toFixed(2));
+    });
+    const sacoches = cotes.length;
+    const gauche = cotes.filter(x => x < -0.1).length, droite = cotes.filter(x => x > 0.1).length;
+    return { boites: c.boites.length, livre, aVelo, sacoches, cotes, gauche, droite,
       total: c.boites.reduce((a, b) => a + b.lettres, 0), etat: m.etat };
   });
-  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1 && r.sacoches >= 2;
-  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches, une de chaque côté de la roue arrière) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
+  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1
+    && r.sacoches >= 2 && r.gauche >= 1 && r.droite >= 1;
+  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches de cuir, ${r.gauche} à gauche et ${r.droite} à droite de la roue arrière, en x = ${r.cotes.join(' / ')} m) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
 });
 
 test('les véhicules de travail sont conduisibles par le joueur et leurs outils s\'actionnent', async p => {
@@ -10925,4 +10938,44 @@ test('les captures sans interface cachent vraiment le radar, et l\'interface rev
   const ok = r.normal.radar && r.normal.haut && !r.nu.radar && !r.nu.haut && !r.nu.chat
     && r.retour.radar && r.retour.haut && r.retour.chat;
   return { ok, detail: `hideHud visait « #radar », un identifiant qui n'existe pas — le radar (#gps) restait allumé sur toutes les captures « sans interface », et rien ne rallumait l'interface ensuite · avec interface radar=${r.normal.radar}/bandeau=${r.normal.haut} · sans interface radar=${r.nu.radar}/bandeau=${r.nu.haut}/chat=${r.nu.chat} · et tout revient après : radar=${r.retour.radar}/bandeau=${r.retour.haut}/chat=${r.retour.chat}` };
+});
+
+test('le crissement de la craie se tait dès que le tableau a fini de s\'écrire', async p => {
+  // GARDE-FOU DU LIT DE CRAIE. Le crissement n'est plus une suite de bouffées mais une
+  // SOURCE BOUCLÉE permanente dont on ouvre et ferme le gain : elle ne s'arrête jamais
+  // d'elle-même. Si `craieLitFerme` cessait d'être appelée, la classe sifflerait en
+  // continu pour le reste de la partie. Ce test l'attrape.
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    G.settings.sound = true; G.settings.voices = false;
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
+    const c = G.sfx.unlock(), chn = G.sfx.chaine(); if (!c || !chn) return { pourquoi: 'pas de moteur audio' };
+    // on écoute EN CONTINU le bout de la chaîne : sur la machine du banc d'essai un
+    // analyseur ne montre que les 46 dernières millisecondes, toujours trop tard
+    let crete = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    chn.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; const t = performance.now(); while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); } return +crete.toFixed(4); };
+    const fond = await ecoute(600);
+    const pendant = await ecoute(700, () => G.sonCraie(3));
+    const ouvert = +(G.craieLit.g ? G.craieLit.g.gain.value : 0).toFixed(3);
+    // plus une seule lettre : l'horloge dépasse la tenue, et craieTick doit refermer le lit
+    G.simTime = G.simTime + 5;
+    for (let i = 0; i < 4; i++) { G.craieTick(1 / 60); await dodo(120); }
+    await dodo(500);
+    const apres = await ecoute(700);
+    const ferme = +(G.craieLit.g ? G.craieLit.g.gain.value : 0).toFixed(4);
+    try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    return { fond, pendant, apres, ouvert, ferme, niv: G.CRAIE_NIV, tenue: G.craieLit.jusqu > 0 };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const sort = r.pendant > r.fond * 1.6 && r.pendant > 0.1;       // on l'ENTEND, très au-dessus de la rumeur
+  const ouvre = r.ouvert > r.niv * 0.6;                            // le lit est bien monté au niveau voulu
+  const tait = r.ferme < 0.01 && r.apres < r.pendant * 0.45;       // et il est bien retombé
+  const ok = sort && ouvre && tait;
+  return { ok, detail: `le lit de craie est une source bouclée permanente : il s'ouvre à ${r.ouvert} (niveau voulu ${r.niv}) pendant le tracé et se referme à ${r.ferme} dès que plus aucune lettre ne s'écrit · mesuré au bout de la chaîne : rumeur seule ${r.fond}, craie ${r.pendant}, puis retour à ${r.apres}` };
 });

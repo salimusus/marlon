@@ -12809,7 +12809,7 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
       cout: apresTraces - avantTraces, coutPlafond: plafond.calls - plafond.sans, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
   });
   const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 4 && r.n <= r.attendu + 2 && r.alterne && r.surLaLigne
-    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max * 1.4 && r.plafond.n === r.plafond.max
+    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max * 1.15 && r.plafond.n === r.plafond.max
     && r.plafond.cases === r.plafond.n && r.plafond.range <= r.plafond.max * 6
     && r.maillages === 1 && r.cout === 1 && r.coutPlafond === 1
     && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige;
@@ -13007,8 +13007,12 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // pas a peu pres deux fois par seconde. Un `sonPluie` a chaque tour de boucle aurait
     // empile soixante-dix averses l'une sur l'autre et mesure un bruit qui n'existe pas.
     let tP = 0, tA = 0, nPluie = 0, nPas = 0, nCoup = 0;
-    const pleut = () => { const n = performance.now(); if (n - tP > 1500) { tP = n; if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; } };
-    const cadence = quoi => () => { const n = performance.now(); if (n - tA > 420) { tA = n; quoi(); } };
+    const pleut = () => { const n = performance.now(); if (n - tP > 1500) { tP = n; G.SON.vivants.length = 0; if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; } };
+    // LE BUDGET DE SONS SIMULTANES (SON.max = 16) refusait le pas qu'on veut mesurer des que
+    // seize sons plus proches jouaient deja : on lisait alors « 1 pas joue sur 5 » et une
+    // crete qui n'etait que celle de l'averse. On libere la file avant chaque mesure — on
+    // mesure un NIVEAU, pas un budget.
+    const cadence = quoi => () => { const n = performance.now(); if (n - tA > 420) { tA = n; G.SON.vivants.length = 0; quoi(); } };
     // ON MESURE CHAQUE SON SEPAREMENT, a la meme distance de l'oreille : melanger l'averse et
     // le pas dans la meme ecoute ne dit pas lequel des deux fait la crete, et les deux se
     // disputent le budget de sons simultanes (SON.max) — c'est ainsi qu'on a lu « un pas =

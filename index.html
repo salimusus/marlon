@@ -4790,13 +4790,96 @@ function fieldLines(x, top, z, w, d, drawFn) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
   m.rotation.x = -Math.PI / 2; m.position.set(x, top + 0.02, z); worldGroup.add(m);
 }
-const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 14); shared.add(wheelGeo);
-const hubGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.32, 10); shared.add(hubGeo);
+// ================= LA ROUE =================
+// « pneus mieux detailles ». Une roue, c'etait SIX MAILLAGES : un cylindre noir, un moyeu et
+// quatre barres croisees en guise de rayons. Soit vingt-quatre appels de dessin par voiture
+// rien que pour les roues — et a l'ecran, un galet noir avec une croix grise dessus : ni
+// sculpture de bande de roulement, ni vraie jante, ni ecrous, ni valve.
+//
+// LA ROUE EST MAINTENANT UNE SEULE PIECE, et elle est BEAUCOUP plus detaillee. Tout le detail
+// est PEINT dans une texture partagee par toutes les roues du jeu : la bande de roulement sur
+// le flanc du cylindre, et la jante complete (cinq rayons, ecrous, cache-moyeu, valve, flanc
+// grave) sur ses deux faces. Le tour de force est dans les coordonnees de texture : three.js
+// donne au TOUR du cylindre et a ses DEUX DISQUES le meme carre [0,1], donc un seul dessin
+// pour les deux. On replie donc le tour dans la moitie GAUCHE de l'image et les disques dans
+// la moitie DROITE — et une seule matiere suffit.
+//   Six maillages -> UN. Vingt-quatre appels de dessin par voiture -> quatre.
+const TEX_ROUE = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
+  // ---- moitie gauche (0..255) : LA BANDE DE ROULEMENT, vue a plat. u = le tour de la roue,
+  // v = la largeur du pneu. Le motif se raccorde d'un bord a l'autre : il tourne sans couture.
+  g.fillStyle = '#191a1d'; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = '#0e0f11';
+  for (let i = 0; i < 16; i++) {   // les pains de gomme, en chevron
+    const x = i * 16;
+    g.beginPath(); g.moveTo(x + 2, 0); g.lineTo(x + 11, 0); g.lineTo(x + 6, 128); g.lineTo(x - 3, 128); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(x + 6, 128); g.lineTo(x + 15, 128); g.lineTo(x + 10, 256); g.lineTo(x + 1, 256); g.closePath(); g.fill();
+  }
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, 118, 256, 8); g.fillRect(0, 60, 256, 4); g.fillRect(0, 190, 256, 4);   // rainures longitudinales
+  g.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 16; i++) g.fillRect(i * 16 + 12, 0, 2, 256);   // arete brillante des pains
+  g.fillStyle = '#242629'; g.fillRect(0, 0, 256, 10); g.fillRect(0, 246, 256, 10);   // epaules du pneu
+  // ---- moitie droite (256..511) : LA FACE DE LA ROUE, vue de cote. Le disque du cylindre est
+  // inscrit dans ce carre : centre en (384, 128), rayon 128.
+  const CX = 384, CY = 128;
+  const disque = (r, style) => { g.fillStyle = style; g.beginPath(); g.arc(CX, CY, r, 0, 6.2832); g.fill(); };
+  disque(128, '#1b1c1f');                                     // le flanc du pneu
+  g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 3;   // les lettres gravees dans la gomme
+  g.beginPath(); g.arc(CX, CY, 112, 0, 6.2832); g.stroke();
+  g.beginPath(); g.arc(CX, CY, 100, 0, 6.2832); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.22)';
+  for (let i = 0; i < 28; i++) { const a = i / 28 * 6.2832; g.fillRect(CX + Math.cos(a) * 120 - 2, CY + Math.sin(a) * 120 - 2, 4, 4); }
+  disque(92, '#2a2d33');                                      // le creux de jante
+  // la jante : un bandeau chrome, cinq rayons larges, un cache-moyeu et cinq ecrous
+  const jante = g.createRadialGradient(CX - 30, CY - 34, 6, CX, CY, 92);
+  jante.addColorStop(0, '#ffffff'); jante.addColorStop(0.45, '#d3d9e3'); jante.addColorStop(1, '#8d95a3');
+  disque(88, jante);
+  disque(80, '#2f333a');
+  g.fillStyle = jante;
+  for (let i = 0; i < 5; i++) {   // les rayons : des trapezes qui s'elargissent vers le bord
+    const a = i / 5 * 6.2832 - 1.2;
+    g.save(); g.translate(CX, CY); g.rotate(a);
+    g.beginPath(); g.moveTo(-13, -20); g.lineTo(13, -20); g.lineTo(26, -84); g.lineTo(-26, -84); g.closePath(); g.fill();
+    g.restore();
+  }
+  disque(34, jante); disque(26, '#eef1f6');                   // cache-moyeu
+  g.fillStyle = '#6f7684'; g.beginPath(); g.arc(CX, CY, 11, 0, 6.2832); g.fill();
+  g.fillStyle = '#5a616e';
+  for (let i = 0; i < 5; i++) { const a = i / 5 * 6.2832 + 0.6; g.beginPath(); g.arc(CX + Math.cos(a) * 20, CY + Math.sin(a) * 20, 5, 0, 6.2832); g.fill(); }
+  g.fillStyle = '#3b3f47'; g.beginPath(); g.arc(CX + 62, CY + 46, 7, 0, 6.2832); g.fill();   // la valve
+  g.fillStyle = '#9aa2b0'; g.beginPath(); g.arc(CX + 62, CY + 46, 3.5, 0, 6.2832); g.fill();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; shared.add(t); return t;
+})();
+// La geometrie de la roue : un cylindre dont on REPLIE les coordonnees de texture — le tour
+// a gauche de l'image, les deux disques a droite — puis on efface les groupes de matiere,
+// pour qu'il ne reste qu'UN SEUL appel de dessin.
+const wheelGeo = (() => {
+  const g = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 20, 1, false);
+  // Le verificateur de syntaxe fait tourner le jeu sur des maquettes de three.js qui n'ont ni
+  // attributs ni groupes : sans ce garde-fou, `node harness/lint.js` disait « le jeu ne
+  // demarre pas » alors que tout va bien dans un vrai navigateur.
+  try {
+    const uv = g.attributes.uv.array, idx = g.index ? g.index.array : null;
+    const faits = new Uint8Array(g.attributes.uv.count);
+    const plie = (deb, nb, droite) => {
+      for (let k = deb; k < deb + nb; k++) {
+        const v = idx ? idx[k] : k;
+        if (faits[v]) continue; faits[v] = 1;
+        uv[v * 2] = uv[v * 2] * 0.5 + (droite ? 0.5 : 0);
+      }
+    };
+    for (const grp of g.groups) plie(grp.start, grp.count, grp.materialIndex > 0);
+    g.attributes.uv.needsUpdate = true;
+    g.clearGroups();
+  } catch (eUV) {}
+  return g;
+})();
+shared.add(wheelGeo);
+const wheelMat = new THREE.MeshLambertMaterial({ map: TEX_ROUE }); shared.add(wheelMat);
 function makeWheel(r = 1) {
   const w = new THREE.Group();
-  const tire = new THREE.Mesh(wheelGeo, lam(0x222222)); tire.rotation.z = Math.PI / 2; tire.castShadow = true; w.add(tire);
-  const hub = new THREE.Mesh(hubGeo, lam(0xd0d4dc)); hub.rotation.z = Math.PI / 2; w.add(hub);
-  for (let i = 0; i < 4; i++) { const spoke = new THREE.Mesh(unitRound, lam(0xd0d4dc)); spoke.scale.set(0.34, 0.06, 0.5); spoke.rotation.x = i * Math.PI / 4; w.add(spoke); }
+  // `children[0]` reste LE PNEU : plusieurs vehicules l'amincissent (le velo, la remorque)
+  // en ecrasant sa hauteur de cylindre, et comptaient sur cet ordre.
+  const tire = new THREE.Mesh(wheelGeo, wheelMat); tire.rotation.z = Math.PI / 2; tire.castShadow = true; w.add(tire);
   w.scale.setScalar(r); return w;
 }
 function numberDecal(n, color) {
@@ -8474,7 +8557,10 @@ function empreinteMarcheur(e, x, z, cap) {
   if (d > 1.5 || d < 1e-4) return false;   // teleporte (changement de monde, mission) ou immobile
   e.empD = (e.empD || 0) + d;
   if (e.empD < EMPREINTE_PAS) return false;
-  e.empD = 0; e.empG = !e.empG;
+  // On REPORTE le trop-plein au lieu de le jeter : sinon la longueur reelle de la foulee
+  // dependait de la cadence d'affichage (a 60 images par seconde en courant, on posait un pas
+  // tous les 77 cm au lieu de 62), et la piste se raccourcissait quand la machine ramait.
+  e.empD -= EMPREINTE_PAS; e.empG = !e.empG;
   return !!empreinte(x, z, cap, e.empG);
 }
 // LE TOUR DE PISTE, appele une fois par image depuis la boucle de ville. Il ne coute RIEN

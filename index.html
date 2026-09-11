@@ -11177,6 +11177,9 @@ function jailEnter(fresh) {   // enfermé : on est placé dans la cellule, l'éc
   if (drive.car) exitCar(); P.swing = null; gym.on = null; equipWeapon(null); if (P.jet) toggleJet();
   P.pos.set(police.cell.x, 0.15, police.cell.z); P.vel.set(0, 0, 0); P.facing = 0; cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);
   $('jailBtn').style.display = ''; msg(fresh ? '🔒 Arrêté ! Tu es en prison' : '🔒 Tu es toujours en prison', 2200);
+  // se faire coffrer, ça se sait dans la rue : le respect en prend un coup (mais jamais
+  // assez pour faire redescendre d'un rang, voir le plancher dans perdRep)
+  if (fresh && typeof perdRep === 'function') perdRep(20, 'arrêté par la police');
   setTimeout(() => { if (jail.on) openJail(); }, fresh ? 1500 : 800);
 }
 function jailFree(reason) {

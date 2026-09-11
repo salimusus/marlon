@@ -24533,7 +24533,7 @@ function poseEchelle(vx, vz, fromX, fromZ) {
 //   3. FONDU — un geste monte et redescend en un quart de seconde (`rig.gK`). Avant, changer
 //      d'état faisait SAUTER les membres d'une pose à l'autre : on voyait la coupure.
 const ANIM = {
-  vue: 62,        // m : au-delà de cette distance à la caméra, un geste ne se lit plus — on ne le calcule pas
+  vue: 62,        // m : au-delà de cette distance au spectateur, un geste ne se lit plus — on ne le calcule pas
   fondu: 4.2,     // vitesse du fondu d'un geste : 0 → 1 en 0,24 s
   feux: [],       // les feux vivants créés par feuAnime()
   tetes: new Set(),   // les rigs dont le bloc Animation a incliné la tête (voir animTetes)
@@ -24541,10 +24541,25 @@ const ANIM = {
 };
 const animLiss = u => { const c = clamp(u, 0, 1); return c * c * (3 - 2 * c); };   // 0 → 1 sans à-coup (dérivée nulle aux bouts)
 const animSeg = (u, a, b) => animLiss((u - a) / (b - a || 1));                     // 0 avant a, 1 après b, adouci entre les deux
+// ON MESURE LA DISTANCE AU JOUEUR AUTANT QU'À LA CAMÉRA, et on garde la plus COURTE.
+// POURQUOI : `camera.position` n'est écrite qu'au RENDU. Dès qu'on téléporte le joueur
+// (changement de monde, mission, banc d'essai), la caméra reste une image entière — ou
+// beaucoup plus si aucune image n'est rendue entre-temps — à son ANCIEN endroit. Pendant
+// ce temps animPres répondait « non » pour tout ce qui entoure le joueur, et PLUS AUCUN
+// geste de métier, de combat ni de feu ne se calculait : l'équipe d'employés restait bras
+// ballants devant un nid-de-poule, à sept mètres du joueur. Le défaut ne se voyait qu'à
+// l'ordre des tests (lancé seul, la caméra se trouvait déjà au bon endroit), ce qui rendait
+// le banc d'essai peu fiable. Le joueur, lui, est à jour dès `step()`. En jeu la caméra ne
+// s'éloigne jamais de plus d'une douzaine de mètres de lui : prendre le plus proche des deux
+// ne change rien à ce qu'on économise, et supprime le trou.
 function animPres(x, z) {   // ce point mérite-t-il qu'on calcule son geste ?
-  const c = (typeof camera !== 'undefined' && camera) ? camera.position : null; if (!c) return true;
-  const dx = x - c.x, dz = z - c.z;
-  return dx * dx + dz * dz < ANIM.vue * ANIM.vue;
+  let d2 = Infinity;
+  const c = (typeof camera !== 'undefined' && camera) ? camera.position : null;
+  if (c) { const dx = x - c.x, dz = z - c.z; d2 = dx * dx + dz * dz; }
+  const p = (typeof P !== 'undefined' && P) ? P.pos : null;
+  if (p) { const dx = x - p.x, dz = z - p.z; const d = dx * dx + dz * dz; if (d < d2) d2 = d; }
+  if (d2 === Infinity) return true;   // ni caméra ni joueur (chargement) : on ne coupe rien
+  return d2 < ANIM.vue * ANIM.vue;
 }
 
 // ---------- APPLIQUER UNE POSE ----------

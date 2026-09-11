@@ -8670,6 +8670,13 @@ test('chaque geste de metier decrit un vrai cycle : amplitude suffisante, sans a
     // et les travailleurs s'en servent VRAIMENT : sur un nid-de-poule, l'équipe s'accroupit
     G.city.horaires = false;
     G.metierScene('chantier');
+    // LE REPIT DE QUATRE SECONDES. metierScene() passe par metiersRepos(), qui pose
+    // METIERS.reposT = simTime + 4 : pendant ce delai metiersTick() sort AVANT employesTick()
+    // et personne ne joue son geste. Comme on ne simule ici qu'une seconde et demie, l'equipe
+    // restait les bras ballants et le test lisait « geste undefined, poids 0 » — alors que le
+    // geste, lui, n'avait aucun defaut. Le repit sert a empecher un travailleur de REPRENDRE
+    // son vehicule dans la meme image ; la scene est deja posee a la main, on le leve donc.
+    G.METIERS.reposT = 0;
     for (let i = 0; i < 90; i++) G.step(1 / 60, true);
     const eq = G.METIERS.employes;
     out.chantier = { geste: eq[0].bot.av.rig.gNom, poids: +(eq[0].bot.av.rig.gK || 0).toFixed(2),
@@ -9864,9 +9871,13 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
     const mesure = () => {
       G.gpsRoute.hide(); G.gpsRoute.update();
       let n = 0, hors = 0;
+      // ON RECONNAIT UN CHEVRON A SA MARQUE, PLUS A SA FORME. Le test cherchait un cone de
+      // 42 cm de rayon ; depuis que les chevrons sont de la PEINTURE AU SOL (un quadrilatere
+      // plat texture), il n'en trouvait plus AUCUN — 0 chevron sur 0, et le test tombait en
+      // rouge meme lance seul, sans que le GPS ait le moindre defaut. gpsRoute pose
+      // userData.chevron sur chacun de ses reperes justement pour ca.
       G.scene.traverse(o => {
-        if (!o.isMesh || !o.visible || !o.geometry || o.geometry.type !== 'ConeGeometry') return;
-        if (Math.abs(o.geometry.parameters.radius - 0.42) > 0.01) return;
+        if (!o.isMesh || !o.visible || !o.userData || !o.userData.chevron) return;
         n++; if (!surRoute(o.position.x, o.position.z)) hors++;
       });
       return { chevrons: n, hors, pct: n ? Math.round(hors / n * 100) : 0 };

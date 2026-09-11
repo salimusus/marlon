@@ -107,6 +107,127 @@ window.__SHOT = {
       if (typeof defi !== 'undefined') defi.on = null;
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
+    // ================= LES SERVICES DE LA VILLE : ON REND LA VILLE AU REPOS =================
+    // Tout ce qui suit repare un DRAPEAU PERSISTANT. Les services municipaux (accidents,
+    // police en constat, depanneuse, ambulance, pompiers, equipes de metier) posent des
+    // drapeaux sur des objets qui, eux, survivent a loadWorld et meme a frais: true :
+    // ils restaient donc allumes d'un test a l'autre. Dix tests de la suite tombaient ainsi
+    // en rouge alors qu'ils etaient verts lances seuls. Chaque remise a zero dit ci-dessous
+    // QUEL symptome elle evite : ne l'enleve pas sans avoir relu la phrase.
+    // NOTE : on assainit LES TESTS, pas le jeu. Aucune de ces lignes ne doit avoir d'equivalent
+    // dans index.html ; si un etat n'est pas rattrapable en jouant, c'est un defaut de jeu a
+    // signaler, pas a contourner ici.
+    try {
+      // --- 1. LES ACCIDENTS. ouvreAccident pose c.accidente = true sur les deux vehicules
+      // et accidentsTick remet leur vitesse a zero A CHAQUE IMAGE tant que l'accident est
+      // dans city.accidents. Symptomes evites : une voiture qui refuse de demarrer (« les
+      // roues tournent a la vitesse reelle » mesurait 0 m parcouru, la boite restait sur A1),
+      // et une amende de plus prelevee au test suivant (le portefeuille tombait a 318 au lieu
+      // de 424 parce qu'un vieux constat se reglait pendant la mesure).
+      if (typeof city !== 'undefined' && city.accidents) {
+        for (const acc of city.accidents) for (const c of [acc.a, acc.b]) if (c) { c.accidente = false; c.stopped = false; c.v = 0; c.spd = 0; if (c.etat) c.etat.speed = 0; }
+        city.accidents.length = 0;
+      }
+      // --- 2. LA POLICE EN CONSTAT. pc.constat et pc.debarque figent DEFINITIVEMENT une
+      // voiture de patrouille (if (pc.constat) { pc.speed = 0; continue; }). Symptome evite :
+      // plus aucune voiture libre pour le constat suivant, donc un accident qui ne se regle
+      // jamais et un test de police qui attend une patrouille immobile jusqu'au delai.
+      if (typeof police !== 'undefined') for (const pc of (police.cars || [])) {
+        pc.constat = null; pc.debarque = false; pc.mission = null; pc.gyro = false; pc.sireneOn = false;
+        pc.accidente = false; pc.stopped = false; if (pc.etat) pc.etat.speed = 0;
+      }
+      // --- 3. LA DEPANNEUSE. d.mission reste accroche a l'accident precedent : la flotte est
+      // vue comme OCCUPEE (L.find(x => !x.mission) ne trouve plus rien), elle ne repart pas,
+      // et son treuil garde la position ou le test d'avant l'a laisse. Symptome exact releve
+      // dans la suite : « plateau inclinable (0 rad) et crochet qui descend de -0,2 a -0,2 ».
+      if (typeof city !== 'undefined') for (const d of (city.depanneuses || [])) {
+        if (d.remorque) { d.remorque.remorque = null; if (d.remorque.caisse) d.remorque.caisse.rotation.x = 0; }
+        d.mission = null; d.remorque = null; d.etat = null; d.tarif = 0;
+        d.gyro = false; d.sirene = false; d.sireneOn = false; d.recule = false;
+        d.busy = false; d.metierBusy = false; d.outil = 0; d.outilCible = 0;
+        d.accidente = false; d.stopped = false; d.dmg = 0; d.dead = false;
+      }
+      // --- 4. LES AMBULANCES. a.etat et a.victime survivent : une ambulance restee en
+      // « transport » repose le blesse SUR SON BRANCARD a chaque image — et si la victime est
+      // le joueur, porteVictime le TELEPORTE dans la cellule sanitaire a chaque image. Les
+      // tests de personnage, de manette et d'arme mesuraient alors un joueur qui n'etait pas
+      // la ou ils venaient de le poser. En prime, la flotte etait vue comme occupee et le
+      // blesse suivant restait a terre.
+      if (typeof city !== 'undefined') for (const a of (city.ambulances || [])) {
+        a.etat = null; a.victime = null; a.cible = null; a.t = 0;
+        a.gyro = false; a.sirene = false; a.sireneOn = false; a.recule = false;
+        a.busy = false; a.metierBusy = false; a.accidente = false; a.stopped = false;
+      }
+      if (typeof city !== 'undefined') city.urgT = 0;   // le scrutin des urgences reprend tout de suite
+      // --- 5. LE JOUEUR BLESSE. P.hp n'etait pas remis a neuf : sous 12 points de vie,
+      // urgencesTick appelle une ambulance POUR LE JOUEUR tout seul, et le test suivant se
+      // faisait enlever son personnage au milieu de la mesure.
+      if (typeof P !== 'undefined') P.hp = 100;
+      // --- 6. LA PRISON. Un test qui finit sans un sou part en cellule ; le joueur restait
+      // enferme et tous les tests suivants mesuraient un personnage bloque au commissariat.
+      if (typeof jail !== 'undefined' && jail.on) { jail.on = false; try { jailFree('banc'); } catch (e20) {} }
+      // --- 7. LES VEHICULES D'URGENCE ET DE TRAVAIL RENTRENT CHEZ EUX, LIBRES ET CONDUISIBLES.
+      // Deux symptomes : (a) une ambulance ou une depanneuse garee a cote du joueur HURLE en
+      // permanence (la sirene du monde reconnait le vehicule a son drapeau urgence, qui ne
+      // s'eteint jamais) et les deux tests audio ne mesuraient plus aucun « silence » ;
+      // (b) un engin laisse busy refusait le « E : conduire » du test suivant.
+      if (typeof city !== 'undefined') for (const v of [].concat(city.depanneuses || [], city.ambulances || [])) {
+        if (!v || drive.car === v || !v.home0) continue;
+        v.x = v.home0[0]; v.z = v.home0[1]; v.h = v.home0[2];
+        v.speed = 0; v.spd = 0; v.v = 0; v.route = null;
+        if (v.g) { v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ'); v.g.visible = true; }
+        try { settleVehicle(v); vehicleSolid(v); } catch (e21) {}
+      }
+      // --- 8. UN VEHICULE DE SERVICE SORTI DE LA FLOTTE CONDUISIBLE. Les outils (treuil,
+      // plateau, gyrophare) ne sont animes que pour les vehicules presents dans city.cars :
+      // un test qui en retire un laissait la depanneuse muette et immobile, et le test suivant
+      // la declarait « non conduisible par le joueur (false) ». On la remet dans la flotte.
+      if (typeof city !== 'undefined' && city.cars) for (const v of [].concat(city.depanneuses || [], city.ambulances || [])) {
+        if (v && city.cars.indexOf(v) < 0) city.cars.push(v);
+        if (v && v.solid && typeof solids !== 'undefined' && solids.indexOf(v.solid) < 0) { solids.push(v.solid); try { sgridSale(); } catch (e22) {} }
+      }
+      // --- 9. LES EQUIPES DE METIER AU REPOS. metiersRepos() referme les chantiers, eteint
+      // les incendies, rebouche les nids-de-poule, ramasse les detritus, renvoie chaque
+      // travailleur devant son hangar et rend tous les vehicules de travail a leur place, non
+      // occupes. Sans cela, un chantier plante au milieu de la rue et une equipe en pleine
+      // reparation faussaient la scene du test suivant. Il pose aussi METIERS.reposT
+      // (quatre secondes de calme) : c'est VOULU — sans ce repit, le facteur reprenait son velo
+      // dans la meme image et le joueur se retrouvait recherche pour vol de vehicule.
+      // (on n'appelle metiersRepos que si la vie des metiers est bien en place : dans les mondes
+      // d'obstacles il n'y a ni equipe ni chantier, et la fonction partirait sur un tableau absent)
+      if (typeof metiersRepos === 'function' && typeof city !== 'undefined' && city.metiers && city.metiers.length && city.chantiers) { try { metiersRepos(); } catch (e23) {} }
+      if (typeof city !== 'undefined') { city.boulot = null; city.boulotNear = null; }   // un petit boulot en cours refusait le suivant
+      // Et on rend chaque engin de travail VISIBLE et SOLIDE : un test qui masque un vehicule
+      // de mission le laissait invisible et sans collision, et le test suivant croyait le
+      // depot vide (« 6/7 vehicules de travail conduisibles »).
+      if (typeof city !== 'undefined') for (const v of (city.cars || [])) {
+        if (!v || !v.travail) continue;
+        v.busy = false; v.metierBusy = false; v.gyro = false; v.sireneOn = false;
+        if (v.g) v.g.visible = true;
+        if (v.solid && typeof solids !== 'undefined' && solids.indexOf(v.solid) < 0) { solids.push(v.solid); try { sgridSale(); } catch (e28) {} }
+      }
+      // --- 10. LES VEHICULES EN FLAMMES ET LES EPAVES. c.dead divise la vitesse maximale par
+      // quatre et c.dmg la rabote : le test des rapports de boite ne montait plus au
+      // cinquieme, et la carcasse continuait de crepiter dans la mesure de silence.
+      if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [])) {
+        if (!c) continue;
+        if (c.feu || c.enFlammes || c.dead) { try { eteintFeu(c); } catch (e24) {} }
+        if (c.dmg || c.dead || c.explosed) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
+        c.accidente = false; c.stopped = false;
+      }
+      // --- 11. LA BOITE DE VITESSES. Le rapport, le verrou anti-va-et-vient (shiftT) et le
+      // turbo (boostT) vivent sur drive et sur c.etat, qui survivent au test. Symptome
+      // exact : « les rapports montent A1 -> A2 -> A3 -> A4 -> A4 » — le dernier passage etait
+      // refuse parce que le verrou avait ete pose a une heure de simulation plus tardive.
+      if (typeof drive !== 'undefined') { drive.gear = 1; drive.shiftT = 0; drive.boostT = 0; }
+      if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [], (typeof police !== 'undefined' ? police.cars : []) || [])) {
+        if (c && c.etat) { c.etat.gear = 1; c.etat.shiftT = 0; c.etat.boostT = 0; }
+      }
+      // --- 12. LA SIRENE ET LE GYROPHARE DU JOUEUR. sireneMission laisse c.sireneOn et un
+      // son de sirene en boucle : la mesure de silence des deux tests audio partait deja a
+      // pleine puissance.
+      if (typeof siren !== 'undefined') { try { siren.stop(); } catch (e26) {} }
+    } catch (e27) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
     // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.
     try {

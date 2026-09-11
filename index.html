@@ -17136,7 +17136,11 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
 // Habitants, gangsters, policiers et vigiles se traversaient : à un rendez-vous, dans une
 // bagarre ou devant une boutique, deux ou trois silhouettes finissaient encastrées l'une
 // dans l'autre. On les écarte doucement dès qu'elles se touchent, en respectant les murs.
-const PERSO_R = 0.46;          // demi-largeur d'un personnage : ils se frôlent à 92 cm
+// 0,46 ne tenait compte que du TORSE : deux habitants démêlés restaient à 92 cm l'un de
+// l'autre alors qu'un avatar mesure 1,53 m d'un bout de bras à l'autre — bras et épaules
+// se traversaient encore, bien visibles à l'écran. 0,58 les écarte de 1,16 m : les corps
+// ne se touchent plus du tout, et la foule reste assez serrée pour tenir dans une boutique.
+const PERSO_R = 0.58;          // demi-largeur d'un personnage : ils se frôlent à 1,16 m
 function separerPersos() {
   if (!city.on) return;
   const l = [];
@@ -17184,6 +17188,19 @@ function separerPersos() {
     const k = lg > max ? max / lg : 1;
     const o = { x: e.x0, y: e.y, z: e.z0 };
     npcMove(o, dx * k, dz * k, 0.4);
+    if (Math.abs(o.x - e.x0) < 1e-4 && Math.abs(o.z - e.z0) < 1e-4) {
+      // ACCULÉ CONTRE UN OBSTACLE. La poussée directe butait sur un banc, une jardinière ou
+      // une bordure et ne servait alors À RIEN : les deux silhouettes restaient encastrées
+      // l'une dans l'autre (mesuré : un bot planté dans le joueur ne s'écartait que de 35 cm,
+      // bloqué par un muret de 66 cm). On se dégage alors DE CÔTÉ, le long de l'obstacle,
+      // jusqu'à pouvoir reculer pour de bon.
+      const lg2 = Math.hypot(dx, dz) || 1, ux = dx / lg2 * max, uz = dz / lg2 * max;
+      for (const s of [1, -1]) {
+        const o2 = { x: e.x0, y: e.y, z: e.z0 };
+        npcMove(o2, -uz * s, ux * s, 0.4);
+        if (Math.abs(o2.x - e.x0) > 1e-4 || Math.abs(o2.z - e.z0) > 1e-4) { o.x = o2.x; o.z = o2.z; break; }
+      }
+    }
     e.pose(o.x, o.z);
   }
 }

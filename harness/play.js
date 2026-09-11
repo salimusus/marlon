@@ -5036,7 +5036,7 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 20, hour: 12 });
     const G = __G, res = {};
-    const l = G.bots.slice(0, 6);
+    const l = G.bots.slice(0, 10);
     l.forEach((b, i) => { b.pos.set(30 + i * 0.02, 0.15, 30); b.ko = 0; b.dead = 0; b.wait = 5; b.rdv = null; b.drive = null;
       b.av.group.visible = true; b.av.group.position.copy(b.pos); });
     const mini = (t2, x = 'pos') => { let m = 99;
@@ -5061,10 +5061,12 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
       ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2) };
     return res;
   });
-  const ok = r.habitants.avant < 0.1 && r.habitants.apres > 0.8
-    && r.gangsters.avant < 0.1 && r.gangsters.apres > 0.8
-    && r.joueur.pousse < 0.05 && r.joueur.ecart > 0.8;
-  return { ok, detail: `six habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
+  // 1,00 m et non 0,80 : un avatar mesure 1,53 m d'un bout de bras à l'autre, deux
+  // silhouettes à 92 cm se traversaient encore, bien visibles à l'écran.
+  const ok = r.habitants.avant < 0.1 && r.habitants.apres > 1
+    && r.gangsters.avant < 0.1 && r.gangsters.apres > 1
+    && r.joueur.pousse < 0.05 && r.joueur.ecart > 1;
+  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
 });
 
 test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arrière', async p => {

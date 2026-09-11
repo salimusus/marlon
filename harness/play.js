@@ -13027,9 +13027,14 @@ const SON_ARME_BANC = `
   const c = G.sfx.unlock(), ch = G.sfx.chaine();
   if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
   const hasard = Math.random; Math.random = () => 0.5;
-  const volAv = ch.master.gain.value, busAv = ch.bus.effets.gain.value;
-  try { ch.master.gain.cancelScheduledValues(c.currentTime); ch.master.gain.value = 1; } catch (e) {}
-  try { ch.bus.effets.gain.cancelScheduledValues(c.currentTime); ch.bus.effets.gain.value = 1; } catch (e) {}
+  // On RAMENE la chaine a ses valeurs d'usine le temps de la mesure. Attention : le volume
+  // general et les bus sont pilotes par setTargetAtTime (fondus), et cancelScheduledValues
+  // n'annule PAS une courbe deja commencee — ecrire .value = 1 ne servait a rien, la
+  // courbe reprenait la main et tout mesurait trois fois trop bas. On repasse donc par une
+  // courbe, tres courte, et on remet exactement l'ancienne valeur a la fin.
+  const cale = (p, v) => { try { p.cancelScheduledValues(c.currentTime); p.setTargetAtTime(v, c.currentTime, 0.005); } catch (e) {} };
+  const gAv = { master: +ch.master.gain.value.toFixed(3), effets: +ch.bus.effets.gain.value.toFixed(3), ambiance: +ch.bus.ambiance.gain.value.toFixed(3) };
+  cale(ch.master.gain, 1); cale(ch.bus.effets.gain, 1); cale(ch.bus.ambiance.gain, 1);
   window.__manetteSeule = true;   // le jeu se met en veille : le fil principal est libre pour l'ecoute
   const serie = []; let crete = 0, somme = 0, nEch = 0;
   const sp = c.createScriptProcessor(1024, 1, 1);
@@ -13040,7 +13045,7 @@ const SON_ARME_BANC = `
   ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
   const rendre = () => {
     try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
-    try { ch.master.gain.value = volAv; ch.bus.effets.gain.value = busAv; } catch (e) {}
+    cale(ch.master.gain, gAv.master); cale(ch.bus.effets.gain, gAv.effets); cale(ch.bus.ambiance.gain, gAv.ambiance);
     window.__manetteSeule = false; Math.random = hasard;
   };
   // on fait taire tout ce qu'un test precedent a pu laisser tourner, puis on REMET la rumeur
@@ -13049,7 +13054,7 @@ const SON_ARME_BANC = `
   try { G.meteoSet('clair', 9999); } catch (e) {} try { G.craieLitFerme(); } catch (e) {}
   let quartier = null;
   try { G.SONV.ambT = 0; quartier = G.quartierSon(); G.ambiance.set(quartier.k, quartier.vol, quartier.coupe); } catch (e) {}
-  await dodo(1100);
+  await dodo(2800);   // la rumeur monte en fondu de 0,9 s : il lui faut trois constantes pour etre au niveau
   // ecoute(ms, quoi) : declenche le son puis enregistre ms millisecondes reelles.
   // pic = crete, rms = valeur efficace, duree = nombre de blocs de 23 ms avant de retomber
   // sous un dixieme de la crete (la « longueur » du coup), couverture = fiabilite du banc.
@@ -13095,12 +13100,13 @@ test('le coup de feu CLAQUE : une detonation mesuree au bout de la chaine, et un
       await dodo(250);
     }
     rendre();
-    return { lit, ancien, armes, parFire, voix: G.armVoix.liste.length, quartier: quartier && quartier.k, volAv: +volAv.toFixed(2) };
+    return { lit, ancien, armes, parFire, voix: G.armVoix.liste.length, quartier: quartier && quartier.k, gAv,
+      etat: { volume: G.settings.volume, mix: JSON.parse(JSON.stringify(G.MIX || {})) } };
   `));
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const A = r.armes, F = r.parFire, sur = a => +(A[a].pic / Math.max(0.002, r.lit.pic)).toFixed(1);
   // chaque arme claque fort, sans jamais coller le limiteur (au-dessus de 0,92 tout le reste est ecrase)
-  const fort = ['pistol', 'rifle', 'sniper'].every(a => A[a].pic > 0.6 && A[a].pic < 0.92 && A[a].pic > Math.max(0.05, r.lit.pic) * 12);
+  const fort = ['pistol', 'rifle', 'sniper'].every(a => A[a].pic > 0.6 && A[a].pic < 0.92 && A[a].pic > r.lit.pic * 12);
   // le caractere : le pistolet est le plus court et le plus maigre, le fusil a lunette le plus
   // long et le plus gras — c'est la valeur efficace et la duree qui le disent
   const caractere = A.pistol.rms < A.rifle.rms && A.rifle.rms < A.sniper.rms

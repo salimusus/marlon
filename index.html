@@ -11479,7 +11479,7 @@ function armeeTick(dt) {
     dir.x += rnd(-0.03, 0.03); dir.y += rnd(-0.02, 0.02); dir.z += rnd(-0.03, 0.03);
     dir.normalize().multiplyScalar(95);
     const sh = { m: null, p: o, v: dir, t: 0, mine: false, police: true, byName: 'l\'hélicoptère', dmg: 14 };
-    shots.push(sh); spawnShot(sh); sfx.noise(.05, 1500, .05);
+    shots.push(sh); spawnShot(sh); sonDetonation('rifle', o.x, o.y, o.z, 0.9);   // poste SON : la mitrailleuse de l'helicoptere, placee la-haut
     if (simTime > (armee.avertT || 0)) { armee.avertT = simTime + 6; msg('🚁 L\'hélicoptère te tire dessus sur le toit !', 2200); }
   }
   if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; if (dF < 60) sfx.tone(60, 0, .5, 'sawtooth', .03, 40); }
@@ -20701,6 +20701,9 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
   }
   const s = { m: null, p: new THREE.Vector3(remote.p[0], remote.p[1], remote.p[2]), v: new THREE.Vector3(remote.v[0], remote.v[1], remote.v[2]), t: 0, mine: false, by: remote.id, byName: remote.name, dmg: remote.dmg || 20, police: !!remote.police };
   shots.push(s); spawnShot(s);
+  // POSTE SON : le tir d'un autre joueur ne faisait AUCUN bruit — on voyait la balle passer
+  // en silence. Il claque maintenant comme le notre, place la ou il part.
+  sonDetonation('pistol', s.p.x, s.p.y, s.p.z, 1);
 }
 const shotGeo = new THREE.BoxGeometry(0.045, 0.045, 0.7); shared.add(shotGeo);
 const shotMat = neonMat(0xffcc55); shared.add(shotMat);
@@ -23820,7 +23823,7 @@ function gardeArmeTick(b, dt) {
   dir.normalize().multiplyScalar(95);
   const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22 };
   shots.push(sh); spawnShot(sh);
-  sfx.noise(.05, 1250, .05); sfx.tone(190, 0, .06, 'triangle', .04, 60);
+  sonDetonation('pistol', origin.x, origin.y, origin.z, 0.9);   // poste SON : le coequipier tire la meme detonation, placee a SON canon
   // touche directe : la balle de l'ami compte tout de suite (le rayon générique ne vise que le joueur)
   if (c.agent) { c.agent.hp -= 22; impact(c.agent.x, c.agent.y + 1.3, c.agent.z, null, 'sang', 1);
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }

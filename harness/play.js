@@ -13501,6 +13501,8 @@ test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l
       ['la salle de sport', -1, 0.5, 20],
       ['une classe de l\'ecole', -69, 0.5, 209],
       ['la Villa Azur', 108, 0.8, 168],
+      ['le show-room du concessionnaire', -140, 0.5, 103],
+      ['le fond du show-room', -150, 0.5, 97],
     ];
     const out = [];
     for (const [nom, x, y, z] of lieux) {

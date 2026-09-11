@@ -1621,39 +1621,54 @@ test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecte
 test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
-    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    if (__G.P.voile) __G.rangeVoile(false);   // rien qui traîne d'un test précédent
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    if (G.P.voile) G.rangeVoile(false);   // rien qui traîne d'un test précédent
     await dodo(300);
-    const t = __G.city.toits[0], L = t.lift;
-    const nb = { lifts: __G.city.lifts.length, toits: __G.city.toits.length, voiles: __G.city.voiles.length };
-    __G.P.pos.set(L.x, L.low + 0.3, L.z); __G.P.vel.set(0, 0, 0);
-    const t0 = Date.now(); let haut = 0;
-    while (Date.now() - t0 < 55000) { await dodo(250); haut = Math.max(haut, __G.P.pos.y); if (__G.P.pos.y > L.high - 0.4) break; }
+    const t = G.city.toits[0], L = t.lift;
+    const nb = { lifts: G.city.lifts.length, toits: G.city.toits.length, voiles: G.city.voiles.length };
+    // LA MONTÉE SE MESURE EN TEMPS SIMULÉ, PAS À LA MONTRE. On attendait 55 secondes de
+    // montre ; sous la charge du banc d'essai le rendu logiciel tombe à UN CINQUIÈME d'image
+    // par seconde, et comme chaque image n'avance l'horloge du jeu que de 0,05 s au plus,
+    // ces 55 s ne valaient plus que 0,3 s de jeu — moins que la seconde d'attente de la
+    // cabine avant de démarrer. Le test criait « monté à 0,65 m » alors que l'ascenseur
+    // marchait très bien. On avance donc la simulation image par image, comme grimpe() le
+    // fait pour l'escalier de la banque.
+    G.P.pos.set(L.x, L.low + 0.3, L.z); G.P.vel.set(0, 0, 0);
+    let haut = G.P.pos.y, ecart = 0;
+    for (let i = 0; i < 1500 && G.P.pos.y < L.high - 0.4; i++) {
+      G.step(1 / 60, true);
+      haut = Math.max(haut, G.P.pos.y);
+      ecart = Math.max(ecart, Math.hypot(G.P.pos.x - L.x, G.P.pos.z - L.z));
+    }
     const monte = haut;
     // parachute posé sur le toit
-    const para = __G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
-    __G.P.pos.set(para.x, para.y + 0.4, para.z); await dodo(1200);
-    const detecte = !!__G.city.voileNear;
-    __G.prendreVoile(para);
-    // saut depuis 7 m plutôt que depuis le toit : en rendu logiciel le temps simulé avance
-    // 8 fois moins vite que la montre, et une descente de 14 m à 3,2 m/s ne tenait pas
-    // dans le temps imparti — le parachute était accusé de ne pas se replier
-    __G.P.pos.set(t.x + t.w / 2 + 3, 7, t.z); __G.P.vel.set(0, 0, 0);
-    const y0 = __G.P.pos.y, s0 = __G.simTime;
-    let vmin = 0, aVole = false, rangee = false; const t1 = Date.now();
-    while (Date.now() - t1 < 45000) {
-      await dodo(200); vmin = Math.min(vmin, __G.P.vel.y);
-      aVole = aVole || __G.P.voileVol;
-      if (aVole && !__G.P.voile) { rangee = true; break; }   // posé : le parachute se replie
+    const para = G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
+    G.P.pos.set(para.x, para.y + 0.4, para.z); G.P.vel.set(0, 0, 0);
+    for (let i = 0; i < 90; i++) G.step(1 / 60, true);
+    const detecte = !!G.city.voileNear;
+    G.prendreVoile(para);
+    // saut depuis 7 m plutôt que depuis le toit : la descente entière tiendrait mal dans le
+    // budget d'images du test, et ce qu'on vérifie ici c'est le plafonnement de la chute
+    G.P.pos.set(t.x + t.w / 2 + 3, 7, t.z); G.P.vel.set(0, 0, 0);
+    const y0 = G.P.pos.y, s0 = G.simTime;
+    let vmin = 0, aVole = false, rangee = false;
+    for (let i = 0; i < 2400; i++) {
+      G.step(1 / 60, true);
+      vmin = Math.min(vmin, G.P.vel.y);
+      aVole = aVole || G.P.voileVol;
+      if (aVole && !G.P.voile) { rangee = true; break; }   // posé : le parachute se replie
     }
     return { nb, monte: +monte.toFixed(2), high: +L.high.toFixed(2), toit: +t.y.toFixed(1), detecte,
-      chute: { de: +y0.toFixed(1), a: +__G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(__G.simTime - s0).toFixed(1) },
-      rangee, voileApres: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !para.pris };
+      ecart: +ecart.toFixed(2),
+      chute: { de: +y0.toFixed(1), a: +G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(G.simTime - s0).toFixed(1) },
+      rangee, voileApres: G.P.voile, mesh: !!G.P.voileMesh, remise: !para.pris };
   });
-  const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.chute.vMin > -7 && r.chute.vMin < -1
+  const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.ecart < 1.4
+    && r.chute.vMin > -7 && r.chute.vMin < -1
     && r.rangee && !r.voileApres && !r.mesh && r.remise;
-  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${r.rangee} et remise sur le toit=${r.remise}` };
+  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}), jamais éjecté de la cabine (${r.ecart} m du centre) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${r.rangee} et remise sur le toit=${r.remise}` };
 });
 
 test('le deltaplane plane loin devant au lieu de tomber', async p => {
@@ -13004,4 +13019,279 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.pas.pic > r.pluieSeule.pic * 2.5 && r.coups.pic > r.pluieSeule.pic * 2.5;
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+});
+
+test('les 22 ascenseurs ont une cabine libre et emmènent le joueur sur le toit', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G, city = G.city, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, frais: true });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    if (P.voile) G.rangeVoile(false);
+    await dodo(300);
+    const res = [];
+    for (let i = 0; i < city.lifts.length; i++) {
+      const L = city.lifts[i];
+      // LE MUR DU VOISIN DANS LE PLANCHER DE LA CABINE. C'est ce qui rendait cinq toits
+      // inaccessibles : le joueur posé au milieu chevauchait la paroi de l'immeuble d'à côté
+      // et les collisions le rejetaient jusqu'à 3,70 m de là, hors de la cabine.
+      let genant = null;
+      for (const o of G.solidsAutour(L.x, L.z, 3)) {
+        if (o === L.solid || o.deco || !o.mesh) continue;
+        if (Math.abs(o.x - L.x) < o.w / 2 + P.hw && Math.abs(o.z - L.z) < o.d / 2 + P.hw
+          && o.y + o.h / 2 > L.low + 0.5 && o.y - o.h / 2 < L.low + 2) { genant = o; break; }
+      }
+      // montée réelle, en temps simulé. On arme l'attente de la cabine (1,2 s) pour ne pas
+      // payer 72 images par ascenseur : ce qui est testé ici, c'est que la cabine VOIT le
+      // joueur dessus et qu'elle l'emmène en haut sans le perdre en route.
+      L.y = L.low; L.target = L.low; L.cd = 0; L.msgT = 0;
+      L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
+      P.pos.set(L.x, L.low + 0.3, L.z); P.vel.set(0, 0, 0); P.sit = null; P.ride = null; P.swing = null;
+      L.since = G.simTime - 1.25;
+      let haut = P.pos.y, ecart = 0;
+      for (let k = 0; k < 400 && P.pos.y < L.high - 0.3; k++) {
+        G.step(1 / 60, true);
+        haut = Math.max(haut, P.pos.y);
+        ecart = Math.max(ecart, Math.hypot(P.pos.x - L.x, P.pos.z - L.z));
+      }
+      res.push({ i, x: +L.x.toFixed(1), z: +L.z.toFixed(1), high: +L.high.toFixed(1),
+        monte: +haut.toFixed(2), ecart: +ecart.toFixed(2), genant: !!genant,
+        ok: haut > L.high - 0.5 && ecart < 1.4 });
+    }
+    return { n: res.length, toits: city.toits.length, bougees: city.cabinesBougees,
+      ko: res.filter(e => !e.ok), genants: res.filter(e => e.genant).length,
+      bas: Math.min(...res.map(e => e.monte)), ecartMax: Math.max(...res.map(e => e.ecart)) };
+  });
+  const ok = r.n >= 22 && r.toits >= 21 && r.ko.length === 0 && r.genants === 0;
+  return { ok, detail: `${r.n} ascenseurs et ${r.toits} toits équipés · ${r.bougees} cabines déménagées à la construction (le mur du voisin traversait leur plancher) · aucune cabine encombrée (${r.genants}) · tous montent jusqu'en haut (le plus bas arrive à ${r.bas} m) et personne n'est éjecté en route (écart max du centre ${r.ecartMax} m) · en échec : ${r.ko.length ? JSON.stringify(r.ko) : 'aucun'}` };
+});
+
+test('les plateformes mobiles, les tapis roulants et les manèges emmènent toujours le joueur', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G, P = G.P;
+    const mondes = [];
+    for (const w of [0, 1, 2, 3]) {
+      __SHOT.go({ world: w, x: 0, y: 1, z: 3, frais: true });
+      await dodo(250);
+      const e = { monde: w, movers: G.movers.length, spinners: G.spinners.length, conveyors: G.conveyors.length };
+      if (G.movers.length) {
+        // ON PREND UNE PLATEFORME SUR LAQUELLE LE JOUEUR TIENT DEBOUT. Toutes ne sont pas
+        // accessibles d'un simple lâcher (celle du monde 2 surplombe le vide : posé dessus
+        // d'en haut, on passe à côté et on tombe — c'était déjà le cas avant ce round), et
+        // le test accusait alors la plateforme de ne pas porter le joueur.
+        // On l'observe ensuite sur une PÉRIODE ENTIÈRE (2π/vitesse) : en n'en regardant
+        // qu'un bout on tombait parfois sur le demi-tour, et 7 cm de course faisaient
+        // croire qu'elle ne bougeait plus.
+        const tries = G.movers.slice().sort((a, b) =>
+          Math.hypot(b.ax, b.ay, b.az) - Math.hypot(a.ax, a.ay, a.az));
+        let m = null;
+        for (const c of tries) {
+          P.pos.set(c.x, c.y + c.h / 2 + 0.02, c.z); P.vel.set(0, 0, 0); P.sit = null; P.ride = null;
+          for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+          if (P.standing === c) { m = c; break; }
+        }
+        e.debout = !!m;
+        if (m) {
+          let dessus = 0, derive = 0;
+          for (let i = 0; i < 180; i++) {
+            G.step(1 / 60, true);
+            if (P.standing === m) dessus++;
+            derive = Math.max(derive, Math.hypot(P.pos.x - m.x, P.pos.z - m.z));
+          }
+          e.dessus = dessus; e.derive = +derive.toFixed(2);
+          e.rayon = +(Math.hypot(m.w, m.d) / 2).toFixed(2);
+          // « emporté » = il reste posé dessus TOUTES les images et ne sort jamais du plateau.
+          // Un peu de glissement relatif est normal quand la plateforme accélère ; ce qui
+          // compte pour l'enfant, c'est de ne pas se retrouver dans le vide.
+          e.porte = dessus >= 178 && derive < e.rayon;
+          // course complète de la plateforme, sur une période entière
+          const periode = Math.ceil(2 * Math.PI / Math.max(0.05, m.speed) * 60);
+          let x1 = m.x, x2 = m.x, y1 = m.y, y2 = m.y, z1 = m.z, z2 = m.z;
+          for (let i = 0; i < periode; i++) {
+            G.step(1 / 60, true);
+            x1 = Math.min(x1, m.x); x2 = Math.max(x2, m.x); y1 = Math.min(y1, m.y);
+            y2 = Math.max(y2, m.y); z1 = Math.min(z1, m.z); z2 = Math.max(z2, m.z);
+          }
+          e.bouge = +Math.hypot(x2 - x1, y2 - y1, z2 - z1).toFixed(2);
+        }
+      }
+      if (G.spinners.length) { const s = G.spinners[0], a0 = s.angle; for (let i = 0; i < 120; i++) G.step(1 / 60, true); e.tourne = +(s.angle - a0).toFixed(2); }
+      if (G.conveyors.length) {
+        const c = G.conveyors[0], o0 = c.tex.offset.x, q0 = c.tex.offset.y;
+        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+        e.defile = +(Math.abs(c.tex.offset.x - o0) + Math.abs(c.tex.offset.y - q0)).toFixed(3);
+        P.pos.set(c.x, c.y + c.h / 2 + 0.02, c.z); P.vel.set(0, 0, 0);
+        for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+        const x0 = P.pos.x, z0 = P.pos.z;
+        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+        e.emporte = +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2);
+      }
+      mondes.push(e);
+    }
+    // les manèges de la fête foraine
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    await dodo(250);
+    const manages = G.city.rides.map(rr => { const a0 = rr.ang; for (let i = 0; i < 120; i++) G.step(1 / 60, true); return { kind: rr.kind, tourne: +(rr.ang - a0).toFixed(2) }; });
+    const car = G.city.rides.find(rr => rr.kind === 'carousel');
+    let carrousel = null;
+    if (car) {
+      P.pos.set(car.ex, 0.4, car.ez); P.vel.set(0, 0, 0); P.sit = null; P.ride = null;
+      G.rideEnter(car);
+      const x0 = P.pos.x, z0 = P.pos.z;
+      for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+      carrousel = { monte: !!P.ride, deplace: +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2) };
+      P.ride = null;
+    }
+    return { mondes, manages, carrousel };
+  });
+  const avec = r.mondes.filter(m => m.debout);
+  const moversOk = avec.length >= 3 && avec.every(m => m.bouge > 0.5 && m.porte);
+  // (m.bouge = la course complète de la plateforme la plus ample du monde, m.porte = le
+  //  joueur reste posé dessus et ne dérive jamais de plus d'un mètre et demi)
+  const spinOk = r.mondes.filter(m => m.spinners).every(m => Math.abs(m.tourne) > 0.3);
+  const tapisOk = r.mondes.filter(m => m.conveyors).every(m => m.defile > 0.001 && m.emporte > 0.5);
+  const manOk = r.manages.length >= 2 && r.manages.every(m => Math.abs(m.tourne) > 0.3);
+  const carOk = !!(r.carrousel && r.carrousel.monte && r.carrousel.deplace > 2);
+  const ok = moversOk && spinOk && tapisOk && manOk && carOk;
+  return { ok, detail: `plateformes va-et-vient : ${r.mondes.map(m => `monde ${m.monde} ${m.movers} mobiles${m.debout ? ` (${m.bouge} m de course, posé dessus ${m.dessus}/180 images, glissement ${m.derive} m sur un plateau de rayon ${m.rayon} m, emporté=${m.porte})` : ' (aucune où l\'on tienne debout d\'un simple lâcher)'}`).join(' · ')} · tournantes ${r.mondes.filter(m => m.spinners).map(m => `${m.spinners} en ${m.tourne} rad/2 s`).join(', ') || 'aucune'} · tapis ${r.mondes.filter(m => m.conveyors).map(m => `${m.conveyors} (texture ${m.defile}, joueur emporté de ${m.emporte} m)`).join(', ') || 'aucun'} · manèges ${r.manages.map(m => `${m.kind} ${m.tourne} rad/2 s`).join(', ')} · carrousel : monté=${r.carrousel && r.carrousel.monte}, tourné avec lui sur ${r.carrousel && r.carrousel.deplace} m` };
+});
+
+test('au volant d\'un engin de chantier, le carré de la manette actionne l\'outil — creuser, lever, baisser la lame', async p => {
+  // Demande du joueur, mot pour mot : « Dans conduite engin, quand le joueur prend par ex la
+  // pelleteuse pour faire un trou, aucune touche de la manette n'est affectée à cette action,
+  // corrige. » C'était vrai : le cycle de fouille n'existait que sur la touche O du CLAVIER,
+  // et l'enfant joue à la manette. ▢ est le bouton « geste du véhicule » : il frappe à pied,
+  // pose l'hélicoptère en vol, et actionne l'outil au volant d'un engin — la SITUATION
+  // tranche, exactement comme pour l'hélicoptère, donc aucun bouton ne gagne un second rôle.
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -114, y: 1, z: -114, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.keys.clear(); G.P.drawn = false; G.P.hp = 100;
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
+    const carre = () => { bt(2, 1); G.pollGamepad(1 / 60); bt(2, 0); G.pollGamepad(1 / 60); };
+    const res = {};
+    try {
+      // ---- 1. LA PELLETEUSE : ▢ lance un vrai cycle de fouille ----
+      G.ANIM.trous.length = 0; G.ANIM.chutes.length = 0;   // un test precedent a pu creuser : on repart de zero
+      const pelle = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 5, G.P.pos.z, 0);
+      G.city.cars.push(pelle);
+      G.enterCar(pelle);
+      res.auVolant = G.drive.car === pelle;
+      res.avant = !!pelle.creuse;
+      carre();
+      res.apres = !!pelle.creuse;
+      // le cycle tourne vraiment : le godet bouge et un trou apparaît
+      let bouge = 0; const g0 = pelle.outils.godet.rotation.x;
+      for (let i = 0; i < 300 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.terreChutesTick(1 / 60);
+        bouge = Math.max(bouge, Math.abs(pelle.outils.godet.rotation.x - g0)); }
+      for (let i = 0; i < 90; i++) G.terreChutesTick(1 / 60);
+      const t = G.ANIM.trous[G.ANIM.trous.length - 1];
+      res.fouille = { godetBouge: +bouge.toFixed(2), trous: G.ANIM.trous.length,
+        prof: t ? +t.prof.toFixed(2) : 0, verse: t ? +(t.vide || 0).toFixed(2) : 0 };
+      G.exitCar();
+      // ---- 2. LE BULLDOZER : ▢ baisse la lame, ▢ la relève ----
+      const bull = G.makeVehiculeTravail('bulldozer', 0xffd23f, G.P.pos.x + 22, G.P.pos.z, 0);
+      G.city.cars.push(bull);
+      G.enterCar(bull);
+      carre(); res.lameBaisse = bull.lameCible;
+      carre(); res.lameLeve = bull.lameCible;
+      G.exitCar();
+      // ---- 3. LA GRUE : ▢ lance le levage ----
+      const grue = G.makeVehiculeTravail('grue', 0xffd23f, G.P.pos.x + 40, G.P.pos.z, 0);
+      G.city.cars.push(grue);
+      G.enterCar(grue);
+      carre(); res.grueLeve = !!grue.leve;
+      G.exitCar();
+      // ---- 4. À PIED, ▢ FRAPPE TOUJOURS : la touche clavier du carré est bien renvoyée ----
+      G.P.pos.set(G.P.pos.x, 0.3, G.P.pos.z);
+      bt(2, 1); G.pollGamepad(1 / 60);
+      res.aPiedTouche = G.keys.has(G.PAD_MAP[2]);
+      bt(2, 0); G.pollGamepad(1 / 60);
+      // ---- 5. DANS UNE VOITURE ORDINAIRE, ▢ garde son rôle d'avant (klaxon par la touche) --
+      const voiture = G.city.cars.find(c => !c.travail && !c.heli && !c.kart && c.kind == null);
+      if (voiture) {
+        G.enterCar(voiture);
+        bt(2, 1); G.pollGamepad(1 / 60);
+        res.voitureTouche = G.keys.has(G.PAD_MAP[2]);
+        bt(2, 0); G.pollGamepad(1 / 60);
+        G.exitCar();
+      }
+      // ---- 6. LE PLAN DE COMMANDES : aucun des 18 boutons n'a deux rôles ----
+      const doubles = [], pris = {};
+      for (const [i, k] of Object.entries(G.PAD_MAP)) { if (pris[i]) doubles.push(i); pris[i] = 'touche ' + k; }
+      for (const i of Object.keys(G.PAD_CROIX)) { if (pris[i]) doubles.push(i); pris[i] = 'croix'; }
+      res.doubles = doubles.length;
+      res.role2 = G.PT_ROLES[2];
+      res.legende = (document.getElementById('padLeg') || {}).textContent || '';
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; if (G.drive.car) G.exitCar(); ferme(); }
+    return res;
+  });
+  const ok = r.auVolant && r.avant === false && r.apres === true
+    && r.fouille.trous === 1 && r.fouille.godetBouge > 0.7 && r.fouille.prof > 0.1 && r.fouille.verse > 0.9
+    && r.lameBaisse === 1 && r.lameLeve === 0 && r.grueLeve === true
+    && r.aPiedTouche === true && r.voitureTouche === true
+    && r.doubles === 0 && /creuser/.test(r.role2) && /atterrir/.test(r.role2)
+    && /creuser/.test(r.legende) && /atterrir/.test(r.legende);
+  return { ok, detail: `le cycle de fouille n'était branché que sur la touche O du CLAVIER : à la manette — et l'enfant joue à la manette sur sa télévision — AUCUN bouton ne creusait · ▢ au volant d'un engin actionne maintenant l'outil : pelleteuse, un appui lance la fouille (${r.avant} → ${r.apres}), le godet balaie ${r.fouille.godetBouge} rad, creuse ${r.fouille.trous} trou de ${r.fouille.prof} m et verse ${r.fouille.verse} godet sur le tas · bulldozer : ▢ baisse la lame (${r.lameBaisse}) puis la relève (${r.lameLeve}) · grue : ▢ lance le levage (${r.grueLeve}) · et ▢ garde tous ses anciens rôles — à pied il frappe (${r.aPiedTouche}), dans une voiture ordinaire il klaxonne (${r.voitureTouche}) · aucun des 18 boutons n'a deux rôles (${r.doubles} collision), le rôle affiché est « ${r.role2} »` };
+});
+
+test('la terre sort du godet quand il bascule : le trou se creuse au raclage, le tas grossit quand la terre TOUCHE', async p => {
+  // Demande du joueur, mot pour mot : « le trou : la terre retirée doit apparaître quand le
+  // godet vide la terre ». Avant, `creuseGodet` agrandissait le trou ET le tas d'un seul coup,
+  // au RELEVAGE du bras — donc le tas montait une seconde et demie AVANT que le godet ne
+  // bascule : on voyait l'effet avant la cause, et la terre n'allait nulle part.
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -114, y: 1, z: -114, hour: 12 });
+    G.ANIM.trous.length = 0; G.ANIM.chutes.length = 0;
+    // hors de city.cars : la boucle de rendu du jeu ferait avancer le cycle une deuxième fois
+    const c = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 30, G.P.pos.z, 0);
+    if (!G.enginCreuse(c)) return { manque: true };
+    const t = c.creuse.trou, o = c.outils;
+    const ech = [];
+    G.enginCreuseTick(c, 0);
+    for (let i = 0; i < 320; i++) {
+      if (c.creuse) G.enginCreuseTick(c, 1 / 60);
+      G.terreChutesTick(1 / 60);
+      let vol = 0; for (const ch of G.ANIM.chutes) if (ch.actif) vol++;
+      ech.push({ i, u: c.creuse ? c.creuse.t / G.CREUSE_DUREE : 1, godet: o.godet.rotation.x,
+        terre: o.terre && o.terre.visible ? 1 : 0, prof: t.prof, verse: t.vide || 0,
+        tas: t.tas ? t.tas.h : 0, tasVu: !!(t.tas && t.tas.g.visible), vol });
+    }
+    const prem = f => { for (const e of ech) if (f(e)) return e; return null; };
+    const eTerre = prem(e => e.terre === 1), eTrou = prem(e => e.prof > 0);
+    const eVol = prem(e => e.vol > 0), eVerse = prem(e => e.verse > 0), eVu = prem(e => e.tasVu);
+    // le tas ne bouge JAMAIS entre le creusement et le versement
+    let tasAvantVersement = 0;
+    for (const e of ech) { if (eVerse && e.i < eVerse.i && e.tasVu) tasAvantVersement++; }
+    let volMax = 0; for (const e of ech) volMax = Math.max(volMax, e.vol);
+    const fin = ech[ech.length - 1];
+    return {
+      terre: eTerre && { i: eTerre.i, u: +eTerre.u.toFixed(3) },
+      trou: eTrou && { i: eTrou.i, u: +eTrou.u.toFixed(3), prof: +eTrou.prof.toFixed(2) },
+      vol: eVol && { i: eVol.i, u: +eVol.u.toFixed(3), godet: +eVol.godet.toFixed(2) },
+      verse: eVerse && { i: eVerse.i, u: +eVerse.u.toFixed(3), tas: +eVerse.tas.toFixed(2) },
+      vu: eVu && { i: eVu.i },
+      volMax, tasAvantVersement,
+      fin: { prof: +fin.prof.toFixed(2), verse: +fin.verse.toFixed(2), tas: +fin.tas.toFixed(2), vu: fin.tasVu },
+      secondesDeChute: eVol && eVerse ? +((eVerse.i - eVol.i) / 60).toFixed(3) : null,
+      secondesEntreTrouEtTas: eTrou && eVerse ? +((eVerse.i - eTrou.i) / 60).toFixed(2) : null,
+    };
+  });
+  const ok = !r.manque
+    && r.terre && r.trou && r.vol && r.verse
+    // l'ORDRE : terre dans le godet → trou creusé → mottes en vol → tas qui grossit
+    && r.terre.i < r.trou.i && r.trou.i < r.vol.i && r.vol.i < r.verse.i
+    // le trou se creuse au RACLAGE (avant le tiers du cycle), le tas au VIDAGE (après 70 %)
+    && r.trou.u < 0.36 && r.vol.u > 0.70 && r.verse.u > 0.72
+    && r.volMax === 4 && r.secondesDeChute > 0.05 && r.secondesDeChute < 0.6
+    && r.tasAvantVersement === 0
+    && r.fin.prof > 0.1 && r.fin.verse > 0.9 && r.fin.tas > 0.4 && r.fin.vu;
+  return { ok, detail: `le tas montait au RELEVAGE du bras, ${r.secondesEntreTrouEtTas} s avant que le godet ne bascule : l'effet arrivait avant la cause et la terre ne faisait aucun trajet · séquence mesurée image par image (60 images/s) : la terre apparaît dans le godet à l'image ${r.terre.i} (u=${r.terre.u}) · le TROU se creuse au raclage à l'image ${r.trou.i} (u=${r.trou.u}, profondeur ${r.trou.prof} m) · le godet bascule et lâche ${r.volMax} mottes à l'image ${r.vol.i} (u=${r.vol.u}, godet à ${r.vol.godet} rad) · elles tombent ${r.secondesDeChute} s en parabole et c'est en TOUCHANT que le tas grossit, image ${r.verse.i} (u=${r.verse.u}) — et pas une image avant (${r.tasAvantVersement} image de tas visible avant le versement) · à la fin : trou ${r.fin.prof} m, ${r.fin.verse} godet versé, tas ${r.fin.tas} m` };
 });

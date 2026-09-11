@@ -8127,15 +8127,31 @@ test('les véhicules de travail sont conduisibles par le joueur et leurs outils 
         G.keys.delete('KeyW');
         roule = +Math.hypot(v.x - x0, v.z - z0).toFixed(2);
       }
+      // ON PASSE PAR LE MÊME CHEMIN QUE LE JOUEUR. Trois engins ne répondent plus au simple
+      // curseur 0 → 1 : la grue lance un CYCLE DE LEVAGE, la pelleteuse un cycle de fouille et
+      // le bulldozer baisse sa lame — et `outilsVehiculesTick` s'efface pendant ces cycles
+      // (sinon les deux écriraient les mêmes pièces). En ne faisant tourner que ce tick, le
+      // test mesurait une grue au repos : « le crochet descend de 0,2 m » au lieu de 3,40 m.
+      // On fait donc tourner LES DEUX horloges et on retient les EXTRÊMES de la manœuvre.
       G.actionneOutil(v);
-      for (let i = 0; i < 200; i++) { G.simTime = G.simTime + 1 / 30; G.outilsVehiculesTick(1 / 30); }
       const o = v.outils || {};
+      const ext = { benneMin: 9, echelleMin: 9, crochetMin: 9, godetMax: -9, lameMin: 9, jet: false };
+      for (let i = 0; i < 340; i++) {
+        G.simTime = G.simTime + 1 / 30; G.outilsVehiculesTick(1 / 30); G.animMondeTick(1 / 30);
+        if (o.benne) ext.benneMin = Math.min(ext.benneMin, o.benne.rotation.x);
+        if (o.echelle) ext.echelleMin = Math.min(ext.echelleMin, o.echelle.rotation.x);
+        if (o.crochet) ext.crochetMin = Math.min(ext.crochetMin, o.crochet.position.y);
+        if (o.godet) ext.godetMax = Math.max(ext.godetMax, o.godet.rotation.x);
+        if (o.lame) ext.lameMin = Math.min(ext.lameMin, o.lame.position.y);
+        if (o.jet && o.jet.visible) ext.jet = true;
+      }
       res[v.kind] = { detecte, auVolant, roule, outil: +v.outil.toFixed(2),
-        benne: o.benne ? +o.benne.rotation.x.toFixed(2) : null,
-        echelle: o.echelle ? +o.echelle.rotation.x.toFixed(2) : null,
-        jet: o.jet ? o.jet.visible : null,
-        crochet: o.crochet ? +o.crochet.position.y.toFixed(2) : null,
-        godet: o.godet ? +o.godet.rotation.x.toFixed(2) : null };
+        benne: o.benne ? +ext.benneMin.toFixed(2) : null,
+        echelle: o.echelle ? +ext.echelleMin.toFixed(2) : null,
+        jet: o.jet ? ext.jet : null,
+        crochet: o.crochet ? +ext.crochetMin.toFixed(2) : null,
+        godet: o.godet ? +ext.godetMax.toFixed(2) : null,
+        lame: o.lame ? +ext.lameMin.toFixed(2) : null };
       if (G.drive.car) G.exitCar();
     }
     // la lance à eau fait bien baisser un feu : c'est ainsi que le joueur aide les pompiers
@@ -8148,14 +8164,20 @@ test('les véhicules de travail sont conduisibles par le joueur et leurs outils 
     if (f && c.incendies.includes(f)) { G.worldGroup.remove(f.g); c.incendies.length = 0; }
     return { res, kinds: Object.keys(res), eau: [Math.round(av), Math.round(ap)] };
   });
-  const K = ['benne', 'grue', 'pelle', 'tracteur', 'pompier', 'fourgon', 'velo'];
+  // LE COMPTE ÉTAIT FAUX : le titre annonçait sept véhicules de travail, la phrase de bilan en
+  // listait neuf (le bulldozer et la dépanneuse ont rejoint la flotte) et la vérification n'en
+  // mesurait que sept — le BULLDOZER n'était contrôlé par personne. On vérifie les NEUF.
+  const K = ['benne', 'grue', 'pelle', 'tracteur', 'pompier', 'fourgon', 'velo', 'bulldozer', 'depanneuse'];
+  const N = K.length;
   const tous = K.every(k => r.res[k] && r.res[k].detecte && r.res[k].auVolant);
   const roulent = K.filter(k => r.res[k] && r.res[k].roule > 0.5).length;
   const b = r.res.benne || {}, pk = r.res.pompier || {}, g = r.res.grue || {}, pe = r.res.pelle || {};
-  const outils = b.benne < -0.4 && pk.echelle < -0.5 && pk.jet === true && g.crochet < -2 && pe.godet > 0.4;
-  const ok = tous && roulent >= 6 && outils && r.eau[1] < r.eau[0] - 10;
+  const bu = r.res.bulldozer || {}, dp = r.res.depanneuse || {};
+  const outils = b.benne < -0.4 && pk.echelle < -0.5 && pk.jet === true && g.crochet < -2 && pe.godet > 0.4
+    && bu.lame != null && bu.lame < 0.6 && dp.crochet < -2;
+  const ok = tous && roulent >= N - 1 && outils && r.eau[1] < r.eau[0] - 10;
   const vus = K.filter(k => r.res[k] && r.res[k].detecte).length, pris = K.filter(k => r.res[k] && r.res[k].auVolant).length;
-  return { ok, detail: `sept véhicules de travail dans city.cars (${r.kinds.join(', ')}) : ${vus}/7 annoncés par « E : conduire », ${pris}/7 conduisibles, ${roulent}/7 avancent vraiment en une seconde et demie de gaz ; la benne se lève (${b.benne} rad), l'échelle du camion de pompiers se déploie (${pk.echelle} rad) et la lance à eau s'ouvre, le crochet de la grue descend de ${-g.crochet} m, le godet de la pelleteuse creuse (${pe.godet} rad) ; la lance fait tomber la force du feu de ${r.eau[0]} à ${r.eau[1]}` };
+  return { ok, detail: `neuf véhicules de travail dans city.cars (${r.kinds.join(', ')}) : ${vus}/${N} annoncés par « E : conduire », ${pris}/${N} conduisibles, ${roulent}/${N} avancent vraiment en une seconde et demie de gaz ; la benne se lève (${b.benne} rad), l'échelle du camion de pompiers se déploie (${pk.echelle} rad) et la lance à eau s'ouvre, le crochet de la grue descend de ${-g.crochet} m au creux de son cycle de levage, celui de la dépanneuse de ${-dp.crochet} m, le godet de la pelleteuse creuse (${pe.godet} rad) et la lame du bulldozer descend à ${bu.lame} m ; la lance fait tomber la force du feu de ${r.eau[0]} à ${r.eau[1]}` };
 });
 
 test('on peut parler aux gens de métier et leur donner un coup de main contre des pièces', async p => {

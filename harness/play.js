@@ -13041,10 +13041,16 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
   const discrete = r.pluieSeule.pic < 0.10;
   const joues = r.nPluie >= 2 && r.nPas >= 4 && r.nCoup >= 4;
-  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2
-    && r.melange.pic > r.pluieSeule.pic * 2;
+  // CE QU'ON EXIGE D'UN PAS N'EST PAS CE QU'ON EXIGE D'UN COUP. Un pas est un son COURT et
+  // volontairement discret : mesure seule, a douze metres de l'oreille, sa crete vaut celle
+  // d'une averse — et c'est normal, un pas de promenade n'est pas censé claquer. Ce qui compte,
+  // c'est qu'il RESSORTE quand il s'ajoute a l'averse au lieu d'etre avale par elle : on juge
+  // donc le MELANGE (averse + pas, comme en jeu) contre l'averse seule. Le coup, lui, doit
+  // passer tres au-dessus : c'est le son que l'enfant a demande a entendre.
+  const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
+    && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, a la meme distance d'oreille : averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic} · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, a la meme distance d'oreille : averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 

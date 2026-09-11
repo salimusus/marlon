@@ -65,6 +65,17 @@ window.__SHOT = {
         dit(cond, cond + ' habitant(s) au volant');
         dit(ordre, ordre + ' habitant(s) avec un ordre en cours');
       }
+      // L'INVENTAIRE ET LES FANTOMES : les deux residus qui ont fait tomber le plus de tests.
+      if (typeof owned !== 'undefined') {
+        var enTrop = 0; owned.forEach(function (x) { if (__SHOT.achats0.indexOf(x) < 0) enTrop++; });
+        dit(enTrop, enTrop + ' achat(s) de plus qu\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
+      }
+      if (typeof wallet !== 'undefined' && wallet !== __SHOT.argent0) dit(true, 'portefeuille a ' + wallet + ' au lieu de ' + __SHOT.argent0);
+      if (typeof solids !== 'undefined') {
+        var auMonde = function (m) { var n = m, q = 0; while (n && q++ < 64) { if (n === scene) return true; n = n.parent; } return false; };
+        var fant = 0; for (var q2 = 0; q2 < solids.length; q2++) { var o2 = solids[q2]; if (o2 && o2.mesh && !auMonde(o2.mesh)) fant++; }
+        dit(fant, fant + ' boite(s) de collision fantomes laissees par une reconstruction du monde');
+      }
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
       dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');

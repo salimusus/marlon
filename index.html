@@ -29451,7 +29451,11 @@ function enginCreuse(c) {
   // chenilles et la cabine, et le châssis la cachait à la caméra. On vide à bout de flèche,
   // 1,8 m plus loin : le tas est alors dégagé de la machine et à 7 m de la fosse.
   const aTas = (c.h || 0) + 1.30, rTas = CREUSE_PORTEE + 1.8;
-  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
+  const tr = creuseTrou(tx, tz, y);
+  c.creuse = { t: 0, trou: tr, creuse: false, lache: false,
+    // COMBIEN DE TERRE LE TAS AVAIT DÉJÀ AU DÉBUT DU CYCLE : à la fin, on vérifie qu'un godet
+    // entier y est bien arrivé (voir la fin de `enginCreuseTick`).
+    videAvant: tr ? (tr.vide || 0) : 0,
     tasX: c.x + Math.sin(aTas) * rTas, tasZ: c.z + Math.cos(aTas) * rTas };
   godetTerre(c);
   return true;
@@ -29465,15 +29469,19 @@ function enginCreuseTick(c, dt) {
   const plonge = animSeg(u, 0, 0.20);                            // le bras s'avance et descend
   const racle = animSeg(u, 0.20, 0.32);                          // le godet se referme sur la terre
   const leve = animSeg(u, 0.32, 0.50);                           // il ressort, CHARGÉ
-  const pivot = animSeg(u, 0.50, 0.72) - animSeg(u, 0.88, 1);    // la tourelle se tourne vers le tas
-  const vide = animSeg(u, 0.72, 0.88);                           // le godet se retourne et lâche tout
+  const pivot = animSeg(u, 0.50, 0.72) - animSeg(u, 0.84, 1);    // la tourelle se tourne vers le tas
+  const vide = animSeg(u, 0.70, 0.84);                           // le godet se retourne et lâche tout
   // LE REPLI, et POURQUOI IL EXISTE. À la fin du cycle, `c.creuse` repasse à null et
   // `outilsVehiculesTick` reprend la main : il repose instantanément le bras, l'avant-bras et
   // le godet sur la pose de repos (celle de `c.outil` = 0). Mesuré : le godet SAUTAIT de
   // 0,70 radian en une seule image — 40 degrés, une téléportation. Les quatre dernières
   // dixièmes du cycle ramènent donc tout exactement sur cette pose de repos, et le relais se
   // fait sans qu'on voie la couture.
-  const repli = 1 - animSeg(u, 0.88, 1);
+  // LE RETOUR DURE PLUS LONGTEMPS QU'AVANT (0,84 → 1 au lieu de 0,88 → 1). Mesuré image par
+  // image : la tourelle revenait de 1,30 rad en une demi-seconde, soit 0,064 rad par image —
+  // un À-COUP bien visible, l'engin faisait un bond de 75°/s en fin de cycle. Sur 0,67 s le
+  // même retour ne coûte plus que 0,048 rad par image, et le geste redevient une manœuvre.
+  const repli = 1 - animSeg(u, 0.84, 1);
   // 1,30 rad DE PIVOT, ET POURQUOI PAS MOINS. À 0,95 rad le tas de terre retombait au bord
   // même du trou : sur la capture, la butte et la cuvette se touchaient et on ne distinguait
   // plus l'une de l'autre. À 1,30 rad ils sont écartés de 6,3 m — la fosse d'un côté, la
@@ -29518,7 +29526,22 @@ function enginCreuseTick(c, dt) {
       if (typeof sonTole === 'function') { try { sonTole(tas.g.position.x, tas.g.position.y + 0.6, tas.g.position.z, 0.5); } catch (e) {} }
     }
   }
-  if (u >= 1) { c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0; }
+  // 3. LE FILET — UN GODET RACLÉ FINIT TOUJOURS SUR LE TAS. Le tas ne grossissait que par les
+  //    mottes en vol : dès que `terreChutesTick` ne tournait pas (engin hors de `city.cars`,
+  //    banc d'essai qui n'anime que la fouille, pool de mottes plein, motte perdue au loin),
+  //    le trou se creusait pendant que le tas restait figé — la terre disparaissait. À la fin
+  //    du cycle on solde donc le compte : ce qui manque d'un godet entier est versé d'un coup,
+  //    et les mottes encore en l'air sont désamorcées (`part = 0`) pour ne pas compter double.
+  if (u >= 1) {
+    if (k.trou && k.lache) {
+      const manque = 1 - ((k.trou.vide || 0) - (k.videAvant || 0));
+      if (manque > 0.01) {
+        for (const ch of ANIM.chutes) if (ch.actif && ch.trou === k.trou) ch.part = 0;
+        creuseVerse(k.trou, manque);
+      }
+    }
+    c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0;
+  }
 }
 // LA GRUE : la flèche pivote d'un quart de tour, le crochet descend chercher la charge, la
 // remonte, la repose de l'autre côté, puis revient. La CHARGE est une caisse accrochée au

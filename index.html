@@ -748,7 +748,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
+<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -21383,9 +21383,21 @@ function pollGamepad(dt) {
     // Aucune collision : c'est l'un OU l'autre selon qu'on vole ou non.
     const enHelico = !!drive.car && !!drive.car.heli;
     if (enHelico && neuf[2] && !bas[2]) { heliPoser(); padVibre(0.25, 60); }
+    // ▢ AU VOLANT D'UN ENGIN DE CHANTIER = ACTIONNER L'OUTIL (poste Animation).
+    // Le joueur : « quand le joueur prend par ex la pelleteuse pour faire un trou, aucune
+    // touche de la manette n'est affectee a cette action ». C'etait vrai : le cycle de fouille
+    // n'etait branche que sur la touche O du CLAVIER, et l'enfant joue a la manette sur sa
+    // television — le travail etait inutilisable pour lui.
+    // Pourquoi ▢ et pas un bouton neuf : les dix-huit boutons sont deja pris, et ▢ a
+    // exactement le bon profil. A pied il FRAPPE ; dans un vehicule ordinaire il ne fait que
+    // klaxonner (ce que fait deja ↓ de la croix, c'etait donc un doublon) ; en helicoptere il
+    // POSE l'appareil. C'est le bouton « geste du vehicule ». La situation tranche, comme pour
+    // l'helicoptere : aucun des dix-huit boutons ne gagne un second role.
+    const enEngin = !!drive.car && !!drive.car.travail && !drive.car.heli;
+    if (enEngin && neuf[2] && !bas[2]) { if (actionneOutil(drive.car)) padVibre(0.35, 70); }
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
-      if (+i === 2 && enHelico) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne frappe pas en vol : il fait atterrir
+      if (+i === 2 && (enHelico || enEngin)) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne klaxonne pas dans un engin : il actionne l'outil
       telTouche(k, neuf[i]);
     }
     // LA GACHETTE DE TIR. Arme braquee (✕), a pied : R2 tire — maintenue, elle tire en
@@ -21462,7 +21474,7 @@ function padMenu(L, neuf, bas) {
 const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
 // A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
-const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
+const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
   6: 'freiner · se baisser', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
   12: 'ordres', 13: 'danser', 14: 'arme préc.', 15: 'arme suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };

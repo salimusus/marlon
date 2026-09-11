@@ -771,7 +771,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
+<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(arme braquée : 🎯 changer de cible · tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -21423,28 +21423,90 @@ function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
 }
 const AIM_MAX = 120, aimDir = new THREE.Vector3(0, 0, 1);
 const LOCK_PORTEE = 45, LOCK_CONE = 1.15;   // portée du verrouillage et demi-angle du cône devant le joueur
-// Cible la plus proche devant le joueur, en vue directe : bots, joueurs distants,
-// gardes et cibles du stand de tir. Sert au tir automatique.
-function cibleAuto() {
+// ============ LA VISEE VERROUILLEE (demande du joueur, round 70) ============
+// Mot pour mot : « tu degaines et braques avec gachette gauche et tu rengaines avec gachette
+// gauche. La visee se met DIRECTEMENT sur le bot ou le VEHICULE le plus proche (gang ou pas),
+// et les FLECHES de la manette permettent de selectionner un autre bot. Pour tirer : gachette
+// droite. » Il manquait deux choses : les vehicules et les membres de gang n'etaient pas
+// verrouillables, et aucun bouton ne permettait de CHANGER de cible.
+// `ciblesVerrouillables` dresse la liste triee de tout ce qu'on peut prendre pour cible ;
+// `P.lockRef` retient l'objet choisi a la main pour que le verrouillage automatique de chaque
+// image ne le reprenne pas au joueur.
+const LOCK_VEHIC_CONE = 1000;   // en verrouillage automatique, un vehicule ne passe JAMAIS devant un etre vivant
+const LOCK_VEHIC_TOUR = 8;      // quand on braque ou qu'on change de cible a la fleche, il compte 8 m de plus qu'un homme
+const NOMS_CIBLE_VEH = { moto: 'une moto', bike: 'un vélo', truck: 'un camion', bus: 'un bus', jetski: 'un jet-ski',
+  ambulance: 'une ambulance', depanneuse: 'une dépanneuse', pompier: 'un camion de pompiers', taxi: 'un taxi',
+  police: 'une voiture de police', kart: 'un kart' };
+const nomCible = c => c.heli ? 'un hélicoptère' : c.travail ? 'un engin de chantier' : (NOMS_CIBLE_VEH[c.kind] || 'une voiture');
+function ciblesVerrouillables(tout) {   // `tout` : sans le cone de vue, pour braquer ou changer de cible
   const ox = P.pos.x, oy = P.pos.y + 1.35, oz = P.pos.z, vue = cam.yaw + Math.PI;
   const cand = [];
-  if (!net.on) for (const b of bots) { if (b.av.group.visible && !b.ko && !b.dead) cand.push({ x: b.pos.x, y: b.pos.y, z: b.pos.z, nom: b.name }); }
-  for (const r of net.remotes.values()) if (!r.dead && !r.car) cand.push({ x: r.cur.x, y: r.cur.y, z: r.cur.z, nom: r.name });
-  for (const g of city.guards) if (!g.ko) cand.push({ x: g.x, y: g.y, z: g.z, nom: 'un garde' });
-  for (const t of city.targets) if (!t.hidden) cand.push({ x: t.m.position.x, y: t.y - 1, z: t.z, nom: 'une cible' });
-  let best = null, meilleur = Infinity;
-  for (const c of cand) {
-    const dx = c.x - ox, dz = c.z - oz, dh = Math.hypot(dx, dz);
-    if (dh > LOCK_PORTEE || dh < 0.6) continue;
+  const ajoute = (ref, x, y, z, nom, malus) => {
+    const dx = x - ox, dz = z - oz, dh = Math.hypot(dx, dz);
+    if (dh > LOCK_PORTEE || dh < 0.6) return;
     let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
-    if (ec > LOCK_CONE) continue;
+    if (!tout && ec > LOCK_CONE) return;
+    // le plus proche et le plus en face l'emporte ; a la fleche, seule la distance compte
+    cand.push({ ref, x, y, z, nom, dh, note: dh + (tout ? 0 : ec * 14) + (malus || 0) });
+  };
+  if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko && !b.dead) ajoute(b, b.pos.x, b.pos.y, b.pos.z, b.name);
+  for (const r of net.remotes.values()) if (!r.dead && !r.car) ajoute(r, r.cur.x, r.cur.y, r.cur.z, r.name);
+  // « gang ou pas » : les hommes des gangs ne vivent pas dans `bots`, ils n'etaient donc
+  // jamais verrouillables — on ne pouvait pas braquer celui qui vous tirait dessus.
+  for (const G of (gangs || [])) for (const m of (G.membres || []))
+    if (!m.ko && !m.captif && !m.mort && m.av && m.av.group.visible) ajoute(m, m.x, m.y || 0, m.z, m.nom || 'un homme de gang');
+  for (const m of (gang.membres || [])) if (!m.ko && !m.mort && m.av && m.av.group.visible) ajoute(m, m.x, m.y || 0, m.z, m.nom || 'ton homme');
+  for (const g of city.guards) if (!g.ko) ajoute(g, g.x, g.y, g.z, 'un garde');
+  for (const t of city.targets) if (!t.hidden) ajoute(t, t.m.position.x, t.y - 1, t.z, 'une cible');
+  const malusVeh = tout ? LOCK_VEHIC_TOUR : LOCK_VEHIC_CONE;
+  for (const lot of [city.cars, city.aiCars, police.cars]) for (const c of (lot || []))
+    if (c && c !== drive.car && c.g && c.g.visible) ajoute(c, c.x, (c.y || 0) + 0.3, c.z, nomCible(c), malusVeh);
+  cand.sort((a, b) => a.note - b.note);
+  // Le rayon vers le decor coute cher : on ne le tire QUE sur les mieux classes, et on
+  // s'arrete des qu'on a de quoi remplir le tour des fleches.
+  const vus = [];
+  for (const c of cand) {
     const ty = c.y + 1, ddx = c.x - ox, ddy = ty - oy, ddz = c.z - oz, L = Math.hypot(ddx, ddy, ddz) || 1;
-    const h = castSolids(ox, oy, oz, ddx / L, ddy / L, ddz / L, L - 0.6, true);
-    if (h.o) continue;                       // un mur s'interpose
-    const note = dh + ec * 14;               // le plus proche et le plus en face l'emporte
-    if (note < meilleur) { meilleur = note; best = c; }
+    if (castSolids(ox, oy, oz, ddx / L, ddy / L, ddz / L, L - 0.6, true).o) continue;   // un mur s'interpose
+    vus.push(c);
+    if (vus.length >= 8) break;
   }
-  return best;
+  return vus;
+}
+// Cible la plus proche devant le joueur, en vue directe. Sert au tir automatique : appelee a
+// chaque image, elle RESPECTE le choix fait a la fleche tant que cette cible reste visible.
+function cibleAuto() {
+  const l = ciblesVerrouillables(false);
+  if (!l.length) { P.lockRef = null; return null; }
+  if (P.lockRef) { const c = l.find(x => x.ref === P.lockRef); if (c) return c; P.lockRef = null; }
+  return l[0];
+}
+function viseCible(c) {   // on se tourne vers la cible choisie et la camera se replace derriere
+  if (!c) return null;
+  P.lockRef = c.ref; P.lock = c;
+  P.facing = Math.atan2(c.x - P.pos.x, c.z - P.pos.z);
+  cam.yaw = P.facing - Math.PI; cam.freeUntil = simTime + 0.8;
+  msg(`🎯 ${c.nom} · ${c.dh.toFixed(0)} m`, 1100);
+  return c;
+}
+function cibleSuivante(sens = 1) {   // ← / → de la croix, arme braquee : passer au bot suivant
+  const l = ciblesVerrouillables(true);
+  if (!l.length) { msg('🎯 Personne en vue', 900); return false; }
+  let i = l.findIndex(c => c.ref === P.lockRef);
+  i = i < 0 ? 0 : (i + (sens < 0 ? -1 : 1) + l.length) % l.length;
+  return !!viseCible(l[i]);
+}
+// GACHETTE GAUCHE A PIED, ARME EQUIPEE : on degaine ET on braque d'un coup. Deuxieme appui :
+// on rengaine. Sans arme equipee, L2 garde son ancien role (se baisser) : la situation tranche,
+// aucun bouton ne gagne deux roles.
+function braquerVerrouille() {
+  if (!P.weapon) return false;
+  if (P.drawn) { drawWeapon(false); P.lockRef = null; return true; }
+  drawWeapon(true);
+  P.lockRef = null;
+  const c = ciblesVerrouillables(true)[0];
+  if (c) viseCible(c); else msg('🎯 Personne en vue · R2 pour tirer', 1100);
+  return true;
 }
 function aimTick() {   // la visée part du joueur : direction = son orientation (gauche/droite), hauteur = flèches haut/bas
   // Visée automatique : si une cible est verrouillée, on vise droit dessus ; sinon on suit
@@ -22308,8 +22370,12 @@ function padAction(quoi) {
   if (quoi === 'boutique') { if (!libre) return false; openStore(); return true; }
   if (quoi === 'missions') { if (!libre) return false; openMissions(city.offNear); return true; }
   if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return true; }
-  if (quoi === 'arme' || quoi === 'armeSuiv') { if (paused) return false; return armeSuivante(1); }
-  if (quoi === 'armePrec') { if (paused) return false; return armeSuivante(-1); }
+  // LES FLECHES ONT DEUX EMPLOIS QUE LA SITUATION SEPARE (round 70) : arme RANGEE, elles font
+  // tourner le tour des armes ; arme BRAQUEE, elles choisissent la cible verrouillee — « les
+  // fleches de la manette permettent de selectionner un autre bot ». Dans un menu, elles
+  // deroulent les listes : padMenu() s'en charge avant d'arriver ici.
+  if (quoi === 'arme' || quoi === 'armeSuiv') { if (paused) return false; return (P.drawn && !drive.car) ? cibleSuivante(1) : armeSuivante(1); }
+  if (quoi === 'armePrec') { if (paused) return false; return (P.drawn && !drive.car) ? cibleSuivante(-1) : armeSuivante(-1); }
   return false;
 }
 const PAD_SEUIL_GACHETTE = 0.35;   // une gâchette analogique n'est « appuyée » qu'à partir de là
@@ -22445,9 +22511,16 @@ function pollGamepad(dt) {
   // manette — seulement C ou Ctrl au clavier. Il tient maintenant dans la gachette gauche,
   // libree par le changement ci-dessus, et coherente avec le reste : a gauche on ralentit
   // (frein), on descend (helico) ou on se baisse (a pied).
+  // L2 A PIED, ARME EQUIPEE : DEGAINER ET BRAQUER (round 70, demande du joueur). Un appui sort
+  // l'arme et POSE la visee sur la cible la plus proche ; le suivant la rengaine. Sans arme
+  // equipee, L2 fait toujours se baisser : c'est la SITUATION qui tranche, pas un second role.
   {
-    const baisse = pad.l2 && !drive.car && running && !paused;
+    const aPied = !drive.car && running && !paused;
+    const braque = aPied && !!P.weapon;
+    if (braque && pad.l2 && !pad.l2Bas) braquerVerrouille();
+    const baisse = pad.l2 && aPied && !braque;
     if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
+    pad.l2Bas = pad.l2;
   }
   if (running && !paused && !menu) {
     const [vx, vy] = padStick(L.rx, L.ry, 0.08);
@@ -22562,12 +22635,12 @@ function padMenu(L, neuf, bas) {
 // puisse savoir si le stick etait mort, mal branche, inverse, ou simplement mappe sur autre
 // chose. Ici on voit les axes bruts, les axes apres zone morte, les gachettes et les 18
 // boutons s'allumer — et une phrase de diagnostic dit ce qui est detecte.
-const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
+const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser / braquer)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
 // A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
 const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
-  6: 'freiner · se baisser', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
-  12: 'ordres', 13: 'danser', 14: 'arme préc.', 15: 'arme suiv.', 16: 'menu', 17: 'aide' };
+  6: 'freiner · se baisser · braquer', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
+  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
   if (padEssai.fait) return;

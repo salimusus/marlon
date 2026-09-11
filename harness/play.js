@@ -11921,6 +11921,10 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     // Le coup arrivait donc DANS LE DOS, ou l'esquive ne vaut rien (c'est la regle du jeu), et le
     // test criait « se baisser n'esquive plus » alors que le geste marchait. On fixe le cap.
     G.P.facing = 0;
+    // ARME RANGEE : depuis le round 70, L2 sert a DEGAINER quand une arme est equipee, et a se
+    // baisser sinon (la situation tranche, aucun bouton n'a deux roles). Un test precedent peut
+    // laisser une arme equipee : on remet les mains nues pour mesurer bien le geste de L2.
+    G.equipWeapon(null);
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -14367,4 +14371,92 @@ test('aucun véhicule n\'est garé au départ ailleurs que sur une place prévue
   const ok = r.hors.length === 0 && r.parkings.length >= 10 && q.n >= 12
     && q.libres === q.n && q.sorties === q.n && q.allee >= 6 && q.bord != null && q.bord < 5 && q.via > 2 && q.surRue === 0;
   return { ok, detail: `« ne gare plus de véhicules ici — crée un nouveau parking » · la règle est maintenant tenue pour TOUTE la ville : les ${r.cars} véhicules posés à la construction sont sur une place prévue, gabarit compris — ${r.hors.length} hors d'une place${r.hors.length ? ' → ' + JSON.stringify(r.hors.slice(0, 6)) : ''} · ${r.parkings.length} emplacements déclarés dans city.parkings (${r.parkings.join(', ')}) · le NOUVEAU « ${q.nom} » en (${q.x}, ${q.z}) fait ${q.w} × ${q.d} m : ${q.n} places marquées, toutes libres (${q.libres}) et toutes accessibles en marche arrière (${q.sorties}), une allée de ${q.allee} m pour manœuvrer, une bande d'accès pavée jusqu'au boulevard (${q.bord} m entre le bord de la dalle et la voie, ${q.voie} m depuis son centre) et un itinéraire de ${q.via} points jusqu'au centre — et ${q.surRue} mètre carré sur une chaussée` };
+});
+
+// ===================== POSTE COMBAT & ARMES (round 70) =====================
+// Demande du joueur, mot pour mot : « tu dégaines et braques avec gâchette gauche et tu
+// rengaines avec gâchette gauche. La visée se met directement sur le bot ou le véhicule le
+// plus proche (gang ou pas), et les flèches de la manette permettent de sélectionner un autre
+// bot. Pour tirer : gâchette droite. » Rien de tout cela n'existait : L2 ne faisait que baisser
+// le joueur, les véhicules et les hommes de gang n'étaient pas verrouillables, et aucun bouton
+// ne permettait de CHANGER de cible. Ce test joue la séquence entière à la manette.
+test('la gâchette gauche dégaine et braque la cible la plus proche, les flèches en changent, la droite tire', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
+    const clic = i => { bt(i, 1); G.pollGamepad(1 / 60); bt(i, 0); G.pollGamepad(1 / 60); };
+    const res = {};
+    try {
+      G.keys.clear(); G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0;
+      G.P.pos.set(110, 0.4, 60); G.P.vel.set(0, 0, 0); G.P.hp = 100; G.cam.yaw = 0; G.P.facing = 0;
+      G.P.drawn = false; G.P.lockRef = null; G.P.lock = null;
+      // trois habitants autour du joueur, dont un DANS SON DOS : le braquage doit aller au plus
+      // proche même s'il n'est pas dans le champ de la caméra
+      const trois = G.bots.slice(0, 3);
+      G.bots.forEach(o => { o.av.group.visible = false; o.ko = 0; o.dead = 0; o.fight = null; });
+      const poses = [[110, 54], [117, 62], [104, 56]];   // le premier est le plus proche ET dans le dos (caméra tournée vers +z)
+      trois.forEach((o, i) => { o.pos.set(poses[i][0], 0.4, poses[i][1]); o.av.group.position.copy(o.pos);
+        o.av.group.visible = true; o.hp = 100; o.wait = 9999; o.target = null; });
+      const dist = o => Math.hypot(o.pos.x - 110, o.pos.z - 60);
+      res.distances = trois.map(o => +dist(o).toFixed(1));
+      G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+      res.avant = { degaine: !!G.P.drawn, verrou: G.P.lock ? G.P.lock.nom : null };
+      // ---- L2 : DÉGAINER ET BRAQUER ----
+      clic(6);
+      const cible = trois.slice().sort((a, b2) => dist(a) - dist(b2))[0];   // le plus proche, quel qu'il soit
+      res.braque = { degaine: !!G.P.drawn, nom: G.P.lock && G.P.lock.nom, attendu: cible.name,
+        ecartCap: +Math.abs(Math.atan2(Math.sin(G.P.facing - Math.atan2(cible.pos.x - 110, cible.pos.z - 60)),
+                                       Math.cos(G.P.facing - Math.atan2(cible.pos.x - 110, cible.pos.z - 60)))).toFixed(3),
+        cameraDerriere: +Math.abs(Math.atan2(Math.sin(G.cam.yaw + Math.PI - G.P.facing), Math.cos(G.cam.yaw + Math.PI - G.P.facing))).toFixed(3),
+        distance: +Math.hypot(G.P.lock.x - 110, G.P.lock.z - 60).toFixed(1) };
+      // ---- LA LISTE DES CIBLES : gens ET véhicules ----
+      const liste = G.ciblesVerrouillables(true);
+      res.liste = liste.map(c => c.nom);
+      res.vehicules = liste.filter(c => !G.bots.some(b => b.name === c.nom)).length;
+      // ---- LES FLÈCHES CHANGENT DE CIBLE, SANS TOUCHER À L'ARME ----
+      const arme0 = G.P.weapon;
+      G.padAction('armeSuiv'); res.fleche1 = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      G.padAction('armeSuiv'); res.fleche2 = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      G.padAction('armePrec'); res.flechePrec = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      res.armeInchangee = G.P.weapon === arme0;
+      res.troisCibles = new Set([res.braque.nom, res.fleche1.nom, res.fleche2.nom]).size;
+      // ---- R2 TIRE ----
+      const n0 = G.shots.length; G.P.fireCd = 0;
+      bt(7, 1); G.pollGamepad(1 / 60); res.tirs = G.shots.length - n0; bt(7, 0); G.pollGamepad(1 / 60);
+      // ---- L2 À NOUVEAU : RENGAINER (et surtout pas se baisser) ----
+      clic(6);
+      res.rengaine = { degaine: !!G.P.drawn, accroupi: !!G.P.accroupi };
+      // ---- MAINS NUES : L2 GARDE SON ANCIEN RÔLE, SE BAISSER ----
+      G.equipWeapon(null);
+      bt(6, 1); G.pollGamepad(1 / 60); res.mainsNues = { accroupi: !!G.P.accroupi, degaine: !!G.P.drawn };
+      bt(6, 0); G.pollGamepad(1 / 60); res.mainsNuesLache = !!G.P.accroupi;
+      // ---- ARME RANGÉE : LES FLÈCHES REDEVIENNENT LE TOUR DES ARMES ----
+      G.owned.add('arme:knife'); G.equipWeapon('pistol'); G.P.drawn = false;
+      G.padAction('armeSuiv'); res.flecheArmeRangee = G.P.weapon;
+      // ---- UN VÉHICULE SE VERROUILLE AUSSI (personne en vue) ----
+      G.bots.forEach(o => { o.av.group.visible = false; });
+      G.P.drawn = false; G.P.lockRef = null; G.equipWeapon('pistol');
+      clic(6);
+      res.surVehicule = G.P.lock ? G.P.lock.nom : null;
+      G.bots.forEach(o => { o.av.group.visible = true; o.hp = 100; });
+      G.owned.delete('arme:knife'); G.P.drawn = false; G.P.lockRef = null; G.equipWeapon(null);
+      return res;
+    } finally { navigator.getGamepads = vrai; }
+  });
+  const b = r.braque;
+  const ok = !r.avant.degaine && !r.avant.verrou
+    && b.degaine && b.nom === b.attendu && b.ecartCap < 0.02 && b.cameraDerriere < 0.02
+    && Math.abs(b.distance - Math.min(...r.distances)) < 0.15
+    && r.vehicules >= 1
+    && r.troisCibles === 3 && r.armeInchangee && r.flechePrec.nom === r.fleche1.nom
+    && r.tirs === 1
+    && !r.rengaine.degaine && !r.rengaine.accroupi
+    && r.mainsNues.accroupi && !r.mainsNues.degaine && !r.mainsNuesLache
+    && r.flecheArmeRangee === 'knife'
+    && !!r.surVehicule;
+  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 rengaine (${!r.rengaine.degaine}) sans baisser le joueur · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
 });

@@ -1869,6 +1869,13 @@ window.__G = {
   get concesSel() { return typeof concesSel !== 'undefined' ? concesSel : null; },
   set concesSel(v) { if (typeof concesSel !== 'undefined') concesSel = v; },
   saveWallet: typeof saveWallet === 'function' ? saveWallet : null,
+  // ---- poste COMBAT & ARMES (visee verrouillee, gestes de poing) : ajoute tes exports SOUS cette ligne ----
+  ciblesVerrouillables: typeof ciblesVerrouillables === 'function' ? ciblesVerrouillables : null,
+  cibleAuto: typeof cibleAuto === 'function' ? cibleAuto : null,
+  cibleSuivante: typeof cibleSuivante === 'function' ? cibleSuivante : null,
+  viseCible: typeof viseCible === 'function' ? viseCible : null,
+  braquerVerrouille: typeof braquerVerrouille === 'function' ? braquerVerrouille : null,
+  punch: typeof punch === 'function' ? punch : null,
 };
 `;
 

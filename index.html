@@ -25405,22 +25405,24 @@ function palierDuRang() {
 }
 function paliersTick() {
   if (guerre.gagne) return;
-  const p = palierDuRang();
-  // l'annonce tombe d'abord, le gang arrive dix secondes plus tard : jamais par surprise
-  if (p > (guerre.palier || 1) && !guerre.arrivee) {
-    const def = GANG_DEFS.find(G => (G.palier || 1) === p && !gangDe(G.id) && (guerre.morts || []).indexOf(G.id) < 0);
-    guerre.palier = p;
-    if (!def) return;
-    guerre.arrivee = { id: def.id, t: simTime + 10 };
-    msg(`🚨 Un nouveau gang arrive en ville : ${def.nom} — force ${def.f0}, ${def.nb + 1} hommes`, 6000);
-    chat(null, `🚨 ${def.nom} débarquent en ville. Ils sont plus forts que les autres.`);
-    sfx.tone(160, 0, .8, 'sawtooth', .09, 70);
+  // un gang annoncé débarque dix secondes plus tard, et rien d'autre ne bouge d'ici là
+  if (guerre.arrivee) {
+    if (simTime > guerre.arrivee.t) { const a = guerre.arrivee; guerre.arrivee = null; arriveGang(a.id); }
     return;
   }
-  if (guerre.arrivee && simTime > guerre.arrivee.t) {
-    const a = guerre.arrivee; guerre.arrivee = null;
-    arriveGang(a.id);
-  }
+  // ON NE MONTE QU'UNE MARCHE À LA FOIS. Un gros coup (un gang détruit, +120 points) pouvait
+  // faire sauter deux rangs d'un coup : le gang du palier intermédiaire n'arrivait jamais et
+  // l'enfant se retrouvait devant un adversaire deux fois trop fort sans avoir vu l'autre.
+  if (palierDuRang() <= (guerre.palier || 1)) return;
+  const suivant = (guerre.palier || 1) + 1;
+  guerre.palier = suivant;
+  const def = GANG_DEFS.find(G => (G.palier || 1) === suivant && !gangDe(G.id) && (guerre.morts || []).indexOf(G.id) < 0);
+  if (!def) return;
+  // l'annonce tombe d'abord : jamais par surprise
+  guerre.arrivee = { id: def.id, t: simTime + 10 };
+  msg(`🚨 Un nouveau gang arrive en ville : ${def.nom} — force ${def.f0}, ${def.nb + 1} hommes`, 6000);
+  chat(null, `🚨 ${def.nom} débarquent en ville. Ils sont plus forts que les autres.`);
+  sfx.tone(160, 0, .8, 'sawtooth', .09, 70);
 }
 function arriveGang(id) {
   const i = GANG_DEFS.findIndex(G => G.id === id);
@@ -25495,9 +25497,13 @@ function acheterRecrue(m) {
 }
 // l'étiquette du prix au-dessus de sa tête, tant qu'on est à portée
 function recrueArgentTick() {
+  // un homme qui doute passe avant tout : il ne reste que trente secondes pour le retenir
+  const d = membreQuiDoute();
+  if (d) { $('act').textContent = `💔 ${d.nom} veut partir — ${d.prixGarde || 60} 🪙 pour le garder (🅴)`; city.recrueNear = null; return; }
   const m = recrueAchetable();
   city.recrueNear = m;
   if (!m) return;
+  if (gang.capture && gang.capture.p > 0) return;   // une prise de quartier en cours garde la ligne du bas
   const px = prixRecrue(m);
   $('act').textContent = `💰 ${m.nom} : ${px} 🪙 pour qu'il rejoigne ton gang (🅴)`;
   if (simTime > (m.offreT || 0)) { m.offreT = simTime + 6; bubble(m.av, `${px} 🪙 et je viens avec toi…`); }
@@ -25677,6 +25683,7 @@ function guerreTick(dt) {
   entrainementTick(dt);
   reunionTick(dt);
   sacreTick(dt);
+  recrueArgentTick();
   if (simTime > (guerre.tick || 0)) {
     guerre.tick = simTime + 1;
     captureTick(1);
@@ -25685,7 +25692,6 @@ function guerreTick(dt) {
     paliersTick();
     allianceTick();
     fideliteTick();
-    recrueArgentTick();
     for (const G of gangs) {
       // renaitGang() n'est PLUS appelé ici : un gang détruit reste détruit. Il est conservé
       // pour le mode « la ville ne se rend jamais » (guerre.sansFin), une fois le jeu gagné.

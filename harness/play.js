@@ -13094,15 +13094,28 @@ test('la difficulte monte etape par etape : deux petits gangs au depart, et un g
     G.paliersTick();
     const apres = G.nbTerritoires('joueur');
     const nouveau = G.gangDe(annonce);
-    return { table, auPalier1, annonce, attendu: def.id, arrive: !!nouveau,
+    // ON NE SAUTE JAMAIS UNE MARCHE : meme en passant d'un coup au dernier rang, les gangs
+    // arrivent un par un, dans l'ordre de la table, sans qu'aucun soit oublie
+    G.gang.rep = 5000;
+    const ordre = [];
+    for (let k = 0; k < 14; k++) {
+      G.paliersTick();
+      if (G.guerre.arrivee) { const id = G.guerre.arrivee.id; G.guerre.arrivee.t = G.simTime - 1; G.paliersTick(); ordre.push(id); }
+    }
+    const tous = G.gangs.map(g => g.id);
+    return { table, auPalier1, annonce, attendu: def.id, arrive: !!nouveau, ordre, tous,
+      palierFinal: G.guerre.palier, planques: G.city.planques.length,
       membres: nouveau ? nouveau.membres.length : 0, force: nouveau ? nouveau.force : 0,
       f0: def.f0, nb: def.nb, perdus: avant - apres, palier: G.guerre.palier, attenduPalier: def.palier };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const croissante = r.table.every((d, i) => i === 0 || (d.palier >= r.table[i - 1].palier && d.f0 > r.table[i - 1].f0));
+  const ordreTable = r.table.map(d => d.id).join(',');
+  const sansSaut = r.tous.join(',') === ordreTable && r.palierFinal === 5 && r.planques === 7;
   const ok = r.table.length === 6 && croissante && r.auPalier1 === 2 && r.annonce === r.attendu
-    && r.arrive && r.force === r.f0 && r.membres === r.nb + 3 && r.perdus <= 2 && r.palier === r.attenduPalier;
-  return { ok, detail: `avant : les trois gangs arrivaient tous a la premiere seconde, tous pareils, et renaissaient sans fin · maintenant la table compte ${r.table.length} gangs echelonnes sur 5 paliers, de force ${r.table.map(d => d.f0).join(' → ')} (croissante : ${croissante}) et seuls ${r.auPalier1} d'entre eux sont la au depart ; franchir le seuil de respect du palier ${r.attenduPalier} fait debarquer « ${r.annonce} » — annonce d'abord, arrivee 10 s plus tard, ${r.membres} hommes (le chef, ${r.nb} hommes et 2 gardes de planque), force ${r.force} — et il ne prend que ${r.perdus} quartier(s) au joueur (plafond : 2, pour ne jamais tout perdre d'un coup)` };
+    && r.arrive && r.force === r.f0 && r.membres === r.nb + 3 && r.perdus <= 2 && r.palier === r.attenduPalier
+    && sansSaut;
+  return { ok, detail: `avant : les trois gangs arrivaient tous a la premiere seconde, tous pareils, et renaissaient sans fin · maintenant la table compte ${r.table.length} gangs echelonnes sur 5 paliers, de force ${r.table.map(d => d.f0).join(' → ')} (croissante : ${croissante}) et seuls ${r.auPalier1} d'entre eux sont la au depart ; franchir le seuil de respect du palier ${r.attenduPalier} fait debarquer « ${r.annonce} » — annonce d'abord, arrivee 10 s plus tard, ${r.membres} hommes (le chef, ${r.nb} hommes et 2 gardes de planque), force ${r.force} — et il ne prend que ${r.perdus} quartier(s) au joueur (plafond : 2, pour ne jamais tout perdre d'un coup) · et on ne saute JAMAIS une marche : en passant d'un coup au dernier rang, les gangs debarquent un par un dans l'ordre (${r.tous.join(' → ')}, palier ${r.palierFinal}/5, ${r.planques} planques) au lieu de sauter directement au plus fort` };
 });
 
 test('le respect descend aussi, mais jamais sous le seuil du rang atteint : un enfant ne perd jamais un rang ni les places de gang qui vont avec', async p => {

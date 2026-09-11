@@ -5295,7 +5295,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           const x = a[0] + ux * t, z = a[1] + uz * t;
           versProchain = parcouru < 50 ? 2.4 : Math.min(11, 2.4 + (parcouru - 50) * 0.1);
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
-          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; scene.add(pool[k]); }
+          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; scene.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme
           const m = pool[k++], gy = groundCar(x, z, null, 0);
           m.position.set(x, gy + 0.05, z); m.lookAt(x + ux, gy + 0.05, z + uz); m.visible = true;
         }
@@ -13191,7 +13191,7 @@ function hornEn(kind, x, z) {
 // ---- L'AMBIANCE : la rumeur du quartier, un lit de bruit filtre qui ne s'arrete jamais ----
 const DUCK_TENUE = 0.32;   // duree pendant laquelle la rumeur reste en retrait apres un son de jeu
 const ambiance = (() => {
-  let src = null, filt = null, hp = null, g = null, cle = null, volCible = 0, coupeCible = 0, duckT = 0, duckN = 0, duckNiveau = 0;
+  let src = null, filt = null, hp = null, g = null, duckG = null, cle = null, volCible = 0, coupeCible = 0, duckT = 0, duckN = 0, duckNiveau = 0, duckDernier = -9;
   const monte = () => {
     const c = sfx.unlock(); if (!c) return null;
     if (src) return c;
@@ -13201,8 +13201,17 @@ const ambiance = (() => {
     hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 110;
     filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700; filt.Q.value = 0.4;
     g = c.createGain(); g.gain.value = 0.0001;
+    // LE RECUL A SON PROPRE ROBINET, en serie derriere le niveau du quartier. Il vaut 1 au
+    // repos et descend a 0,34 le temps d'un son de jeu. C'est VOLONTAIREMENT un deuxieme
+    // noeud : piloter `g` directement revenait a empiler des courbes sur le gain d'une source
+    // de BRUIT BLANC a pleine echelle qui tourne en boucle — au moindre sursaut d'automation,
+    // une bouffee de souffle a 0,23 au bout de la chaine, aussi fort qu'un son a 1,5 m (elle
+    // faisait echouer la mesure de spatialisation et noyait la rumeur qu'on voulait discrete).
+    // Avec un robinet separe, le pire cas possible est « pas de recul du tout » : jamais plus
+    // fort que la rumeur normale.
+    duckG = c.createGain(); duckG.gain.value = 1;
     const out = sfx.sortie('ambiance');
-    src.connect(hp).connect(filt).connect(g); if (out) g.connect(out);
+    src.connect(hp).connect(filt).connect(g).connect(duckG); if (out) duckG.connect(out);
     try { src.start(); } catch (e) {}
     return c;
   };
@@ -13221,20 +13230,24 @@ const ambiance = (() => {
     // seconde puis revient tout seul. C'est le geste d'un vrai mixage — on garde la presence
     // du quartier sans qu'elle mange les sons courts, ceux que l'enfant a demande a entendre.
     duck(force) {
-      const c = sfx.ctx(); if (!g || !c) return 0;
+      const c = sfx.ctx(); if (!g || !duckG || !c) return 0;
       const bas = Math.max(0.0001, volCible * (force == null ? 0.34 : force));
       // On compte les reculs et on retient le niveau vise : sur le banc d'essai l'horloge
       // audio tourne dix fois plus vite que le temps reel, le creux est deja remonte quand on
       // regarde la valeur du gain. Ces deux chiffres, eux, se mesurent a coup sur.
       duckN++; duckNiveau = bas;
+      // On ne reprogramme pas plus de douze fois par seconde : les pas d'une course
+      // enfilaient sinon des dizaines de courbes sur le meme parametre.
+      if (c.currentTime < duckDernier + 0.08) { duckT = Math.max(duckT, c.currentTime + DUCK_TENUE); return bas; }
+      duckDernier = c.currentTime;
       duckT = c.currentTime + DUCK_TENUE;
-      g.gain.cancelScheduledValues(c.currentTime);
-      g.gain.setTargetAtTime(bas, c.currentTime, 0.03);        // elle se baisse vite…
-      g.gain.setTargetAtTime(volCible, duckT, 0.35);           // …et remonte doucement
+      const k = bas / Math.max(1e-9, volCible);
+      duckG.gain.setTargetAtTime(k, c.currentTime, 0.03);      // elle se baisse vite…
+      duckG.gain.setTargetAtTime(1, duckT, 0.35);              // …et remonte doucement
       return bas;
     },
     duckActif: () => { const c = sfx.ctx(); return !!(c && c.currentTime < duckT); },
-    duckInfo: () => ({ n: duckN, niveau: +duckNiveau.toFixed(5), cible: +volCible.toFixed(5) }),
+    duckInfo: () => ({ n: duckN, niveau: +duckNiveau.toFixed(5), cible: +volCible.toFixed(5), robinet: duckG ? +duckG.gain.value.toFixed(3) : 1 }),
     etat: () => ({ cle, gain: g ? +g.gain.value.toFixed(4) : 0, coupe: filt ? Math.round(filt.frequency.value) : 0,
       volCible: +volCible.toFixed(4), coupeCible: Math.round(coupeCible), duck: +duckT.toFixed(2) }),
   };

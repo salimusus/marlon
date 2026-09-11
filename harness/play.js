@@ -3697,8 +3697,12 @@ test('le GPS trace le chemin jusqu\'au bout, même à l\'autre bout de la ville'
       G.P.pos.set(px, 1, pz); G.P.vel.set(0, 0, 0);
       G.setBeacon(x, z, 0.3); G.gpsRoute.hide(); G.gpsRoute.update();
       const cones = [];
-      G.scene.traverse(o => { if (o.isMesh && o.visible && o.geometry && o.geometry.type === 'ConeGeometry'
-        && o.material && o.material.color && o.material.color.getHex() === 0x3ef2ff) cones.push(o); });
+      // les chevrons se reconnaissent a leur marque `userData.chevron` : ils etaient identifies
+      // par leur FORME (un cone cyan), et le jour ou le poste Finition en a fait de vraies
+      // fleches peintes (une facette texturee, pour qu'elles cessent de ressembler a des
+      // triangles egares), ce test ne trouvait plus rien. L'ancienne forme reste acceptee.
+      G.scene.traverse(o => { if (o.isMesh && o.visible && ((o.userData && o.userData.chevron)
+        || (o.geometry && o.geometry.type === 'ConeGeometry' && o.material && o.material.color && o.material.color.getHex() === 0x3ef2ff))) cones.push(o); });
       let reste = 1e9;
       for (const c of cones) reste = Math.min(reste, Math.hypot(c.position.x - x, c.position.z - z));
       out.push({ trajet: nomD + ' → ' + nom, loin: Math.round(Math.hypot(px - x, pz - z)),

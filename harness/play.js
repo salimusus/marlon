@@ -14567,3 +14567,71 @@ test('le direct part droit, le crochet arrive de côté, l\'uppercut monte — e
   const ok = directOk && crochetOk && upOk && fluide && enchaine && teteOk;
   return { ok, detail: `il n'y avait qu'UN seul geste, rejoué à l'identique, et son point d'impact restait à 1,25 m — hauteur de torse : le poing passait sous le visage · TROIS GESTES maintenant, des deux bras un par un (${s.map(x => x.geste + ' ' + x.poing).join(' → ')}) · le DIRECT part droit (le poing avance de ${g.directD.avance} m pour ${g.directD.rentre} de côté et ${g.directD.monte} de haut, coude ${g.directD.coudeArme} → ${g.directD.coudeImpact} rad : il se TEND) · le CROCHET arrive DE CÔTÉ (le bras s'ouvre de ${g.crochetD.ecarte} m à l'élan puis le poing rentre de ${g.crochetD.rentre} m vers l'axe pour ${g.crochetD.avance} m d'avance seulement, coude bloqué à ${g.crochetD.coudeImpact} rad : il ne se tend jamais) · l'UPPERCUT MONTE (${g.uppercutD.monte} m de haut pour ${g.uppercutD.avance} d'avance, coude fermé à ${g.uppercutD.coudeImpact} rad) · aucun à-coup (plus grand pas ${Math.max(...Object.values(g).map(x => x.saut))} m/image) · ET LE POING ATTEINT LA TÊTE : le personnage fait le pas qu'il faut (cible à 1,5 m, il frappe à ${s[0].distance} m), le direct arrive à ${c.direct.d} m de la boîte de la tête, à ${c.direct.y} m de haut (la tête va de ${c.direct.teteBas} à ${c.direct.teteHaut} m) et l'uppercut à ${c.uppercut.d} m (${c.uppercut.y} m) ; le crochet, lui, reste au corps (${s[1].hauteur} m)` };
 });
+
+// Demande du joueur : « les policiers tirent sans qu'on voie leur pistolet ». C'était exact,
+// et pour deux raisons : aucun agent ne portait la moindre arme (agentTire posait une balle
+// dans la scène et levait le bras), et animateRig rabaissait ce bras à l'image SUIVANTE. Les
+// balles sortaient donc du plexus d'un homme aux mains vides.
+test('le policier sort son arme de service avant de tirer, et la balle part du canon', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    const wp = o => o.getWorldPosition(new T.Vector3());
+    const res = {};
+    const essai = (mil) => {
+      const a = G.creerAgent(G.P.pos.x + 5, G.P.pos.z, G.P.pos.y, mil);
+      const ax = a.x, az = a.z, ay = a.y;
+      G.police.wanted = 3; G.police.riposte = G.simTime + 30;
+      a.vueT = 0; a.vue = false;
+      // ON LE CLOUE SUR PLACE, à 5 m. Sans cela il court sur le joueur, l'attrape et
+      // l'ARRÊTE : le joueur part en cellule à 170 m, la traque s'arrête, et le test ne
+      // mesure plus rien du tout. On repousse aussi l'arrestation.
+      const tourne = n => { for (let i = 0; i < n; i++) {
+        a.x = ax; a.z = az; a.y = ay; a.av.group.position.set(ax, ay, az);
+        G.police.sait = [ax, az]; G.police.arrestT = G.simTime + 1e6; G.jail.on = false;
+        G.agentsTick(1 / 60); G.simTime += 1 / 60; } };
+      const avant = { arme: !!a.av.weapons, enMain: !!a.enMain };
+      const n0 = G.shots.length;
+      tourne(200);
+      a.av.group.updateMatrixWorld(true);
+      const arme = a.av.weapons && a.av.weapons[mil ? 'rifle' : 'pistol'];
+      const enMain = { enMain: !!a.enMain, inHand: !!a.av.inHand, tirs: G.shots.length - n0,
+        visible: !!(arme && arme.visible), voit: !!a.vue,
+        dansLePoing: arme ? +wp(arme).distanceTo(wp(a.av.rig.armR.poing)).toFixed(3) : null,
+        hauteur: arme ? +wp(arme).y.toFixed(2) : null,
+        bras: +a.av.rig.armR.rotation.x.toFixed(2),
+        etui: a.av.etuis ? (mil ? a.av.etuis.dos.visible : a.av.etuis.pistolet.visible) : null };
+      // d'où part la balle ?
+      a.shotT = 0; G.agentTire(a, 6, 0);
+      const sh = G.shots[G.shots.length - 1];
+      const muz = arme && arme.userData.muzzle ? wp(arme.userData.muzzle) : null;
+      const balle = { auCanon: muz ? +sh.p.distanceTo(muz).toFixed(3) : null,
+        duPlexus: +sh.p.distanceTo(new T.Vector3(a.x, a.y + 1.45, a.z)).toFixed(2),
+        versLeJoueur: +new T.Vector3(sh.v.x, 0, sh.v.z).normalize()
+          .dot(new T.Vector3(G.P.pos.x - sh.p.x, 0, G.P.pos.z - sh.p.z).normalize()).toFixed(3) };
+      // le joueur disparaît : l'arme retourne dans son étui
+      const ou = G.P.pos.clone();
+      G.P.pos.set(ou.x + 400, ou.y, ou.z + 400); G.police.lastSeen = null; G.police.sait = null;
+      tourne(500);
+      a.av.group.updateMatrixWorld(true);
+      const rangee = { enMain: !!a.enMain, inHand: !!a.av.inHand,
+        surLeCorps: arme ? +wp(arme).distanceTo(wp(a.av.group)) .toFixed(2) : null };
+      G.P.pos.copy(ou);
+      return { avant, enMain, balle, rangee };
+    };
+    res.police = essai(false);
+    G.policeRepli();
+    res.soldat = essai(true);
+    G.policeRepli(); G.clearWanted(); G.police.riposte = 0;
+    return res;
+  });
+  const bon = o => !o.avant.arme && !o.avant.enMain
+    && o.enMain.voit && o.enMain.enMain && o.enMain.inHand && o.enMain.visible && o.enMain.etui
+    && o.enMain.dansLePoing < 0.06 && o.enMain.hauteur > 1.2 && o.enMain.bras < -1.0
+    && o.enMain.tirs >= 1
+    && o.balle.auCanon < 0.05 && o.balle.duPlexus > 0.3 && o.balle.versLeJoueur > 0.99
+    && !o.rangee.enMain && !o.rangee.inHand;
+  const pl = r.police, so = r.soldat;
+  const ok = bon(pl) && bon(so);
+  return { ok, detail: `les agents tiraient LES MAINS VIDES : ils n'avaient aucune arme, et le bras qu'agentTire levait était rabaissé par animateRig à l'image suivante · chaque agent porte maintenant une arme de service — PISTOLET pour la police, FUSIL pour l'armée — dans un étui visible sur l'uniforme, qu'il DÉGAINE dès qu'il voit le fuyard (policier : arme au poing à ${pl.enMain.dansLePoing} m du poing, à ${pl.enMain.hauteur} m de haut, bras pointé à ${pl.enMain.bras} rad, ${pl.enMain.tirs} tir ; soldat : ${so.enMain.dansLePoing} m, ${so.enMain.hauteur} m, ${so.enMain.bras} rad, ${so.enMain.tirs} tir) et qu'il RANGE cinq secondes après avoir perdu sa cible de vue (en main : ${pl.rangee.enMain}) · et la balle ne sort plus du plexus : elle part de la BOUCHE DU CANON (${pl.balle.auCanon} m du canon, ${pl.balle.duPlexus} m de l'ancien point de départ) et file droit sur le joueur (${pl.balle.versLeJoueur})` };
+});

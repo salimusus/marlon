@@ -564,6 +564,20 @@ window.__SHOT = {
       if (v.facing != null) P.facing = v.facing;
       // (le radar qui masquait les etuis est desormais eteint par hideHud lui-meme, plus haut)
     } catch (e16) {} }
+    // POSTE COMBAT : v.agents = nombre de policiers (ou v.soldats de militaires) postes devant
+    // le joueur, arme de service DEGAINEE et pointee sur lui — pour photographier ce que le
+    // joueur reprochait au jeu : « les policiers tirent sans qu'on voie leur pistolet ».
+    if (v.agents || v.soldats) { try {
+      const mil = !v.agents, n = v.agents || v.soldats;
+      police.wanted = 3; police.riposte = simTime + 60; police.arrestT = simTime + 1e6;
+      for (let k = 0; k < n; k++) {
+        const ang = P.facing + (k - (n - 1) / 2) * 0.5;
+        const ag = creerAgent(P.pos.x + Math.sin(ang) * 4.5, P.pos.z + Math.cos(ang) * 4.5, P.pos.y, mil);
+        ag.facing = ang + Math.PI; ag.av.group.rotation.y = ag.facing;
+        armeAgent(ag, true); viseAgent(ag);
+        setTimeout(function () { try { ag.shotT = 0; agentTire(ag, 1, 0.01); } catch (e) {} }, Math.max(200, (v.wait || 1200) - 120));
+      }
+    } catch (eAg) {} }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
@@ -1887,6 +1901,10 @@ window.__G = {
   cibleSuivante: typeof cibleSuivante === 'function' ? cibleSuivante : null,
   viseCible: typeof viseCible === 'function' ? viseCible : null,
   braquerVerrouille: typeof braquerVerrouille === 'function' ? braquerVerrouille : null,
+  armeAgent: typeof armeAgent === 'function' ? armeAgent : null,
+  viseAgent: typeof viseAgent === 'function' ? viseAgent : null,
+  agentTire: typeof agentTire === 'function' ? agentTire : null,
+  policeRepli: typeof policeRepli === 'function' ? policeRepli : null,
   punch: typeof punch === 'function' ? punch : null,
 };
 `;

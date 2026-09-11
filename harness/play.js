@@ -551,7 +551,7 @@ test('on est bien assis sur la balançoire', async p => {
   await p.waitForTimeout(900);
   const a = await p.evaluate(() => ({ y: +__G.P.pos.y.toFixed(2), rot: +__G.me.group.rotation.x.toFixed(2), ang: +__G.P.swing.ang.toFixed(2) }));
   await p.evaluate(() => { const sw = __G.P.swing; if (sw) sw.rider = null; __G.P.swing = null; });
-  // planche à 0,95 m, dessus 1,00 m : le joueur s'assoit à 0,49 m
+  // planche à 0,90 m, dessus 0,95 m : le joueur s'assoit à 0,49 m
   const ok = Math.abs(a.y - 0.49) < 0.12 && Math.abs(a.rot + a.ang) < 0.02;
   return { ok, detail: `assis à y=${a.y} (attendu ≈0,49), corps incliné de ${a.rot} pour une nacelle à ${a.ang}` };
 });
@@ -1879,7 +1879,10 @@ test('quand il neige : congères, bonshommes, capots blancs et verglas', async p
     const capots = (__G.city.neigeVeh || []).filter(m => m.visible).length;
     const sol = __G.meteo.sol ? +__G.meteo.sol.material.opacity.toFixed(2) : 0;
     __G.meteoSet('clair', 600); __G.meteo.force = 0;
-    await dodo(1500);
+    // ON ATTEND LE DEGEL, ON NE COMPTE PAS LES MILLISECONDES. C'est la boucle de rendu qui
+    // range le decor de neige (meteoTick → neigeDecor) ; quand le banc d'essai peine, une
+    // image met plusieurs secondes et le delai fixe de 1,5 s tombait AVANT la premiere.
+    for (let k = 0; k < 60 && G.visible; k++) await dodo(100);
     const apres = { visible: G.visible, capots: (__G.city.neigeVeh || []).filter(m => m.visible).length, glisse: __G.surGlace(g0.x, g0.z) };
     return { decor: !!G, bonshommes, congeres, glace: __G.city.glace.length, capots, sol, glisse, sec, apres };
   });
@@ -2354,7 +2357,15 @@ test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
     const vraiPeer = window.Peer;
     window.Peer = function () { this.on = () => {}; this.connect = () => ({ on: () => {}, open: false }); this.destroy = () => {}; };
     location.hash = '#jeu=KLMN';
-    await dodo(700);
+    // ON ATTEND LA CONNEXION, ON NE COMPTE PAS LES MILLISECONDES. Le lien pose un rendez-vous
+    // (`routeLien` appelle `joinGame` 400 ms plus tard, le temps que l'ecran se range) ; or le
+    // rendu logiciel du banc met plusieurs SECONDES par image, et l'evenement `hashchange`
+    // n'etait distribue qu'a la fin de l'image en cours — apres le delai fixe de 700 ms du
+    // test. On lisait donc « Solo (avec des bots) » et on croyait le lien casse, alors que la
+    // connexion demarrait une seconde plus tard. Mesure : la premiere lecture tombait a
+    // 6,4 s de temps reel, la connexion a 8,2 s.
+    let attente = 0;
+    while (attente < 60 && !/KLMN/.test(document.getElementById('mpStatus').textContent)) { await dodo(100); attente++; }
     const rempli = document.getElementById('codeIn').value;
     const statut = document.getElementById('mpStatus').textContent;
     __G.netTeardown && __G.netTeardown();
@@ -2363,7 +2374,9 @@ test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
     await dodo(200);
     // et le lien manette ouvre la télécommande
     location.hash = '#manette=WXYZ';
-    await dodo(400);
+    // meme raison : on attend que la telecommande s'ouvre, sans compter sur une duree
+    let att2 = 0;
+    while (att2 < 60 && !document.getElementById('manette').classList.contains('on')) { await dodo(100); att2++; }
     const man = { on: document.getElementById('manette').classList.contains('on'),
       code: document.getElementById('telCode').value };
     __G.manetteFerme();
@@ -2912,16 +2925,47 @@ test('chaque ordre du gang lance la bonne mission', async p => {
   return { ok, detail: `7 ordres reconnus (${Object.values(attendus).join(', ')})${rates.length ? ' — ratés : ' + JSON.stringify(rates) : ''}, le gang reçoit un point de rendez-vous, « rentrez à la maison » annule tout, et une phrase anodine ne déclenche rien` };
 });
 
-test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", async p => {
+test("six gangs arrivent en ville l'un apres l'autre, au rythme du joueur, et s'en prennent a tout le monde", async p => {
   const r = await p.evaluate(async () => {
-    __SHOT.go({ world: 4, x: -145, y: 1, z: 40, hour: 12 });
-    await new Promise(r2 => setTimeout(r2, 500));
+    __SHOT.go({ world: 4, x: -145, y: 1, z: 40, hour: 12, frais: true });
+    await new Promise(r2 => setTimeout(r2, 600));
     const G = __G, res = {};
+    // ---- 1. LA TABLE : six gangs, cinq paliers, de plus en plus forts ----
+    res.defs = G.GANG_DEFS.map(d => ({ id: d.id, palier: d.palier || 1, f0: d.f0 }));
+    res.paliers = G.PALIERS_GUERRE.slice();
+    res.auDepart = res.defs.filter(d => d.palier === 1).length;
+    res.forces = res.defs.map(d => d.f0);
+    res.croissantes = res.forces.every((f, i) => i === 0 || f > res.forces[i - 1]);
+    // ---- 2. LE DEBUT DE PARTIE : deux gangs seulement ----
+    // on repart d'une guerre neuve : aucun respect, aucun gang detruit, aucun quartier pris
+    G.gang.rep = 0; G.guerre.palier = 1; G.guerre.morts = []; G.guerre.territoires = {}; G.guerre.arrivee = null;
+    G.buildGangs();
     const chapeau = av => Object.entries(av.hatGroups).filter(([, g]) => g.visible).map(([k]) => k)[0] || null;
-    res.gangs = G.gangs.map(g => ({ id: g.id, n: g.membres.length, hat: chapeau(g.membres[0].av),
-      kits: g.voit && g.voit.tune ? g.voit.tune.kits.length : 0,
-      peinture: g.voit && g.voit.bodyMat ? g.voit.bodyMat.color.getHex() : 0, couleur: g.couleur }));
-    const g0 = G.gangs[0];
+    const photo = () => G.gangs.map(g => ({ id: g.id, n: g.membres.length, f: Math.round(g.force || 0),
+      hat: chapeau(g.membres[0].av), kits: g.voit && g.voit.tune ? g.voit.tune.kits.length : 0,
+      peinture: g.voit && g.voit.bodyMat ? g.voit.bodyMat.color.getHex() : 0 }));
+    res.depart = photo();
+    // ---- 3. LA DIFFICULTE SUIT LE JOUEUR : un rang gagne = un gang de plus ----
+    // 120 points de respect = le rang « Petite frappe » = le palier 2
+    G.gang.rep = G.PALIERS_GUERRE[1]; G.paliersTick();
+    res.annonce = G.guerre.arrivee ? G.guerre.arrivee.id : null;   // annonce d'abord, jamais par surprise
+    res.pendantAnnonce = G.gangs.length;
+    G.simTime += 11; G.paliersTick();
+    res.apresArrivee = photo();
+    // ---- 4. ON NE SAUTE JAMAIS UNE MARCHE, ET ON NE PERD JAMAIS PLUS DE DEUX QUARTIERS ----
+    // le joueur tient TOUTE la ville, puis son respect explose d'un coup : les trois derniers
+    // gangs doivent debarquer un par un, et aucun ne doit lui prendre plus de deux drapeaux.
+    for (const t of G.TERRITOIRES) G.guerre.territoires[t.k] = 'joueur';
+    G.gang.rep = 5000;
+    const suite = [], drapeaux = [G.nbTerritoires('joueur')];
+    for (let k = 0; k < 60; k++) { G.simTime += 2; G.paliersTick(); suite.push(G.gangs.length); drapeaux.push(G.nbTerritoires('joueur')); }
+    res.suite = suite;
+    res.parUn = suite.every((n, i) => i === 0 ? n - res.apresArrivee.length <= 1 : n - suite[i - 1] <= 1);
+    res.piresPertes = Math.max.apply(null, drapeaux.map((d, i) => i === 0 ? 0 : drapeaux[i - 1] - d));
+    res.fin = photo();
+    res.palierFinal = G.guerre.palier;
+    // ---- 5. CE QU'ILS FONT EN VILLE (inchange depuis toujours) ----
+    const g0 = G.gangs[0], g1 = G.gangs[1];
     const etats = new Set();
     for (let k = 0; k < 40; k++) { g0.t = -1; G.gangTick(0.05); etats.add(g0.etat); }
     res.etats = [...etats];
@@ -2936,12 +2980,12 @@ test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", asyn
     G.gangTick(0.05);
     res.degats = hp0 - G.P.hp;
     // bagarre entre gangs
-    const g1 = G.gangs[1], vic = g1.membres[0];
+    const vic = g1.membres[0];
     vic.hp = 100; vic.ko = 0; g0.etat = 'rival'; g0.cible = [g1.base[0], g1.base[1]];
     for (const m of g0.membres) { m.x = vic.x + 1; m.z = vic.z; m.cd = -1; m.ko = 0; }
     G.gangTick(0.05);
     res.hpRival = vic.hp;
-    // vitrine cassée
+    // vitrine cassee
     const vit = G.breakables.find(b => b.kind === 'glass' && !b.broken);
     G.clearWanted(); G.P.crime = 0;
     g0.etat = 'boutique'; g0.cible = [vit.x, vit.z];
@@ -2949,18 +2993,32 @@ test("trois gangs rivaux vivent dans La Zone et s'en prennent à la ville", asyn
     G.gangTick(0.05); vit.cracked = true; for (const m of g0.membres) m.cd = -1;
     G.gangTick(0.05);
     res.vitrine = !!(vit.broken || vit.cracked);
-    // la casse du gang ne doit pas être mise sur le dos du joueur
+    // la casse du gang ne doit pas etre mise sur le dos du joueur
     res.recherche = G.police.wanted || 0;
     G.P.hp = 100; g0.etat = 'repos'; g0.cible = null; G.clearWanted();
+    // ON REND LA GUERRE COMME ON L'A TROUVEE. Ce test amene les six gangs en ville, donne les
+    // huit quartiers au joueur (ce qui LANCE LE SACRE et peut le faire gagner) et le pousse au
+    // dernier rang : sans ce rangement, les tests de guerre qui suivent trouvaient une partie
+    // deja gagnee et tous les gangs deja arrives — ils etaient verts seuls et rouges en lot.
+    G.gang.rep = 0; G.guerre.palier = 1; G.guerre.morts = []; G.guerre.territoires = {};
+    G.guerre.arrivee = null; G.guerre.sacre = 0; G.guerre.sacrePause = false; G.guerre.gagne = false;
+    G.buildGangs();
+    res.range = { gangs: G.gangs.length, gagne: !!G.guerre.gagne, palier: G.guerre.palier };
     return res;
   });
-  const hats = r.gangs.map(g => g.hat);
-  const ok = r.gangs.length === 3 && new Set(hats).size === 3 && hats.every(h => /^bandana/.test(h))
-    // depuis la guerre des gangs, un gang rival compte un chef et cinq hommes, pas trois
-    && r.gangs.every(g => g.n >= 3 && g.kits >= 6 && g.peinture !== 0)
-    && ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
+  const couleurs = new Set(r.fin.map(g => g.peinture));
+  const table = r.defs.length === 6 && r.paliers.length === 5 && r.auDepart === 2 && r.croissantes
+    && r.defs.every(d => d.palier >= 1 && d.palier <= 5);
+  const montee = r.depart.length === 2 && r.annonce === 'bleu' && r.pendantAnnonce === 2
+    && r.apresArrivee.length === 3 && r.apresArrivee[2].f > r.apresArrivee[1].f
+    && r.parUn && r.piresPertes <= 2 && r.fin.length === 6 && r.palierFinal === 5;
+  const allure = r.fin.every(g => g.n >= 3 && g.kits >= 6 && g.peinture !== 0 && /^bandana/.test(g.hat))
+    && couleurs.size === 6;
+  const vie = ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
     && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine && r.recherche === 0;
-  return { ok, detail: `${r.gangs.length} gangs de ${r.gangs.map(g => g.n).join('/')} membres, bandanas ${hats.join('/')}, voitures customisées (${r.gangs[0].kits} kits, peinture propre à chaque gang) · états observés : ${r.etats.join(', ')} · ils fondent sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherché ${r.recherche})` };
+  const ok = table && montee && allure && vie
+    && r.range.gangs === 2 && !r.range.gagne && r.range.palier === 1;
+  return { ok, detail: `ce test decrivait l'ancien monde — « trois gangs, tous les trois des la premiere seconde » · la ville en a maintenant SIX, repartis sur ${r.paliers.length} paliers de respect (${r.paliers.join('/')} ⭐), de force ${r.forces.join(' → ')}, et ils n'arrivent pas ensemble : ${r.depart.length} au depart (${r.depart.map(g => g.id).join(', ')}), un de plus a chaque rang gagne · a ${r.paliers[1]} ⭐ le jeu ANNONCE « ${r.annonce} » et rien ne bouge (${r.pendantAnnonce} gangs), dix secondes plus tard ils debarquent (${r.apresArrivee.length} gangs, le nouveau a ${r.apresArrivee[2].f} de force contre ${r.apresArrivee[1].f}) · et meme avec 5000 ⭐ d'un coup on ne saute aucune marche : ${r.suite.filter((n, i) => i === 0 || n !== r.suite[i - 1]).join(' → ')} gangs un par un (${r.parUn}) jusqu'au palier ${r.palierFinal}, sans jamais prendre plus de ${r.piresPertes} quartiers au joueur d'un coup · les ${r.fin.length} gangs ont ${r.fin.map(g => g.n).join('/')} hommes, un bandana, une voiture customisee (${r.fin[0].kits} kits) et ${couleurs.size} peintures differentes · ils fondent toujours sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherche ${r.recherche}) · guerre rangee derriere soi : ${r.range.gangs} gangs, palier ${r.range.palier}, partie gagnee=${r.range.gagne}` };
 });
 
 test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en échec", async p => {
@@ -5626,6 +5684,38 @@ test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vrai
   return { ok, detail: `le WORLD TELIO MARLON ouvre au nord de la ville : ${r.batiment.machines} machines à sous, une roulette, deux tables de poker, ${r.batiment.neons} ampoules de façade et la grande enseigne lumineuse · les jeux paient comme un vrai casino, mesuré sur 300 000 tirages : la machine rend ${r.machine.retour} de la mise (${r.machine.jackpots} jackpots à ×100), la roulette ${r.roulette.rouge} sur rouge/noir et ${r.roulette.plein} sur un numéro plein, avec ${r.roulette.paris} types de paris · le poker fermé distribue 5 cartes, on garde ce qu'on veut et la main est jugée juste (carré, couleur, quinte, full) · et ${r.bots} habitants viennent tirer les bras des machines` };
 });
 
+test('le facteur fait une VRAIE tournee : toutes les boites d\'affilee, puis il rentre au depot', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // ville au repos : les tests s'enchainent dans la meme page
+    for (const b of c.boites) b.lettres = 0;
+    const m = G.METIERS.facteurs[0], velo = m.bot.veh;
+    const DT = 1 / 20;
+    const etats = []; let prev = null; let premiere = -1;
+    // on avance jusqu'a ce que la tournee soit FINIE (m.faites monte), au plus 900 s simulees
+    for (let i = 0; i < 14000; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (m.etat !== prev) { prev = m.etat; etats.push(m.etat); }
+      if (premiere < 0 && c.boites.some(b => b.lettres > 0)) premiere = +(i * DT).toFixed(1);
+      if ((m.faites || 0) >= 1) break;
+    }
+    const lettres = c.boites.map(b => b.lettres);
+    return { boites: c.boites.length, sacoche: G.FACTEUR_SACOCHE, lettres, faites: m.faites || 0, premiere,
+      repos: etats.filter(e => e === 'repos').length, depose: etats.filter(e => e === 'depose').length,
+      rentre: etats.indexOf('rentre'), nEtats: etats.length, trois: etats.slice(-3).join('→'),
+      suite: etats.slice(0, 6).join('→') + ' … ' + etats.slice(-3).join('→'),
+      veloRange: +Math.hypot(velo.x - velo.home0[0], velo.z - velo.home0[1]).toFixed(1), libre: !velo.busy };
+  });
+  // une tournee, c'est : UN depart, toutes les boites a la suite, puis le retour.
+  // « repos » ne doit apparaitre qu'au depart et a l'arrivee — s'il y repasse entre deux
+  // boites, c'est une navette, pas une tournee.
+  const servies = r.lettres.filter(n => n > 0).length;
+  const ok = r.boites >= 5 && r.faites === 1 && r.repos === 2 && r.depose === r.sacoche
+    && servies === r.sacoche && r.lettres.every(n => n <= 1) && r.trois === 'depose→rentre→repos'
+    && r.premiere > 0 && r.premiere < 150 && r.libre;
+  return { ok, detail: `le facteur choisissait UNE boite, y glissait une lettre et repassait par le depot : la suite d'etats etait repos→tournee→depose→repos→tournee→depose… a l'infini, sans jamais rien achever · il charge maintenant sa sacoche une fois pour toutes et enchaine les ${r.sacoche} boites de sa sacoche de proche en proche (${r.suite}), choisies parmi les ${r.boites} de la ville : ${r.depose} depots, ${r.lettres.join('/')} lettre(s) par boite, premiere lettre a ${r.premiere} s, « repos » traverse ${r.repos} fois seulement (le depart et l'arrivee), et la tournee se TERMINE : ${r.trois} — il rentre au depot et rend le velo (libre=${r.libre}, a ${r.veloRange} m de sa place) — ${r.faites} tournee achevee` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore
@@ -5659,10 +5749,15 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
       look: { coupe: __G.myCfg.hair, bijou: __G.myCfg.bijou, taille: __G.myCfg.taille },
       chien: __G.chien.nom };
   });
-  const ok = r.ville && r.gangs === 3 && r.bots >= 10 && r.perf === 42 && r.rep === 30
+  // DEUX GANGS, PAS TROIS. La ville n'a plus trois gangs tous presents des la premiere
+  // seconde : elle a six gangs repartis sur cinq paliers, et seuls ceux du palier atteint
+  // sont en ville. La sauvegarde rechargee porte 30 points de respect, donc le palier 1,
+  // donc les deux petits gangs du debut (Frelons Jaunes et Requins Rouges).
+  const ok = r.ville && r.gangs === 2 && r.bots >= 10 && r.perf === 42 && r.rep === 30
     && r.look.coupe === 'dreads' && r.look.bijou === 'grosse' && r.look.taille === 'XXL' && r.chien === 'Rex';
-  return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs, ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
+  return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs en ville (le palier 1, celui des 30 points de respect sauvegardés), ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
 });
+
 
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');

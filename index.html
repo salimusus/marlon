@@ -4168,11 +4168,17 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
   for (let i = 1; i <= 4; i++) {
     const sx = SWX - SWL / 2 + SWL * i / 5;   // 4 sièges régulièrement espacés, aucun devant un pied
     const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
-    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, 2.6, 0.06); rope.position.set(dx, -1.3, 0); piv.add(rope); }
-    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -2.6, 0); piv.add(seat);
+    // LA LONGUEUR DES CORDES SUIT LA POUTRE. Elles mesuraient 2,60 m, la longueur qu'il
+    // fallait quand la poutre etait a 3,55 m : depuis qu'elle est a 3,75 m (elle repose SUR
+    // les pieds), la planche etait remontee a 1,15 m et le joueur s'y asseyait a 0,74 m au
+    // lieu de 0,49 — perche a hauteur de hanche d'adulte, les pieds dans le vide. On rallonge
+    // les cordes de 25 cm : la planche retrouve sa hauteur de dessus de 0,95 m.
+    const SWCORDE = 2.85;
+    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, SWCORDE, 0.06); rope.position.set(dx, -SWCORDE / 2, 0); piv.add(rope); }
+    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -SWCORDE, 0); piv.add(seat);
     // `siege` : le maillage lui-meme. swingTick s'en sert pour COLLER le joueur a la planche
     // au lieu de recalculer sa place avec une formule (voir swingTick).
-    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null });
   }
   sign(-12, 0.3, 58, '🎠 Balançoires : E pour s\'asseoir', false, Math.PI);
   // terrain de boules
@@ -4288,7 +4294,8 @@ function swingTick(dt) {
       const seatX = sp.x, seatY = sp.y, seatZ = sp.z;
       const dAng = sw.amp * w * Math.cos(sw.t * w);
       const vz = -dAng * sw.L * Math.cos(sw.ang), vy = dAng * sw.L * Math.sin(sw.ang);
-      // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,51 m plus bas, comme sur un banc
+      // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,46 m plus bas (0,05 m de
+      // demi-planche + 0,41 m d'assise) : la planche est a 0,90 m, ses pieds a 0,49 m
       P.pos.set(seatX, seatY - 0.41, seatZ); P.vel.set(0, vy, vz); P.facing = 0;   // 0,05 m de demi-planche + 0,36 m d'assise
       if (P.jumpBuf > 0) { P.jumpBuf = 0; sw.rider = null; P.swing = null; P.vel.set(0, vy * 1.3 + 6, vz * 1.5); P.grounded = false; msg('🎠 Wouhou !', 700); sfx.jump(); }
     }
@@ -8707,6 +8714,14 @@ function buildMeteo() {
 //   METEO_DUREE : combien de temps un episode tient avant que le ciel ne se decide a autre
 //     chose. De 70-150 s a 180-330 s : une averse dure maintenant plusieurs minutes.
 const METEO_FONDU = 0.085;
+//   METEO_FIN : LA MARCHE MINIMALE, en force par seconde. Une approche purement
+//     exponentielle n'ARRIVE jamais : mesure, vingt secondes apres « ☀️ Le ciel se degage »
+//     il restait 0,16 de force — la pluie tombait encore, le ciel restait voile, et une
+//     bruine reglee a 20 % s'installait a 16 % pendant qu'une neige a 100 % plafonnait a
+//     88 %. On garde le fondu doux tant qu'on est loin du compte, et on termine le trajet a
+//     vitesse constante : le temps demande FINIT toujours par s'installer pour de bon
+//     (0 → plein en 18 s, plein → beau temps en 17 s).
+const METEO_FIN = 0.05;
 const METEO_DUREE = [180, 330];
 function meteoSet(kind, duree, force) {
   meteo.kind = kind; meteo.next = simTime + (duree || rnd(METEO_DUREE[0], METEO_DUREE[1]));
@@ -9004,7 +9019,10 @@ function meteoTick(dt) {
   buildMeteo();
   if (simTime > meteo.next) meteoSet(pickOne(['clair', 'clair', 'clair', 'pluie', 'pluie', 'neige']));
   const veut = meteo.kind === 'clair' ? 0 : clamp(meteo.cible == null ? 1 : meteo.cible, 0, 1);
-  meteo.force += (veut - meteo.force) * Math.min(1, dt * METEO_FONDU);   // l'averse monte et retombe TRES doucement (voir METEO_FONDU)
+  // l'averse monte et retombe TRES doucement (METEO_FONDU), mais elle ARRIVE (METEO_FIN)
+  const ecart = veut - meteo.force;
+  const bond = Math.max(Math.abs(ecart) * Math.min(1, dt * METEO_FONDU), dt * METEO_FIN);
+  meteo.force = Math.abs(ecart) <= bond ? veut : meteo.force + Math.sign(ecart) * bond;
   meteo.abri = sousToit();   // sous un toit : on coupe les gouttes, sinon il pleuvait dans les maisons
   const f = meteo.force * (meteo.abri ? 0.05 : 1);
   const seg = meteo.seg, flocons = meteo.flocons, neige = meteo.kind === 'neige', actif = f > 0.02;
@@ -24711,8 +24729,7 @@ function tuneApply(c, t) {
   const ref = TUNE_MOTEURS[0];
   c.spec = Object.assign({}, c.specOrig, {
     max: (c.specOrig.max + (mot.max - ref.max)) * bonus,
-    accel: (c.specOrig.accel + (mot.accel - ref.accel)) * (1 + bonusKits(t) * 0.6),
-    // La tenue de route des amortisseurs est RELATIVE à celle de la voiture : monter des
+    accel: (c.specOrig.accel + (mot.accel - ref.accel)) * (1 + bonusKits(t) * 0.6),    // La tenue de route des amortisseurs est RELATIVE à celle de la voiture : monter des
     // amortisseurs d'origine sur une sportive du concessionnaire lui remettait le train
     // avant d'une citadine, et l'étoile « tenue » promise sur son podium devenait fausse.
     turn: am.turn * ((c.specOrig.turn || 2.1) / 2.1) });
@@ -29767,7 +29784,11 @@ function enginCreuse(c) {
   // chenilles et la cabine, et le châssis la cachait à la caméra. On vide à bout de flèche,
   // 1,8 m plus loin : le tas est alors dégagé de la machine et à 7 m de la fosse.
   const aTas = (c.h || 0) + 1.30, rTas = CREUSE_PORTEE + 1.8;
-  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
+  const tr = creuseTrou(tx, tz, y);
+  c.creuse = { t: 0, trou: tr, creuse: false, lache: false,
+    // COMBIEN DE TERRE LE TAS AVAIT DÉJÀ AU DÉBUT DU CYCLE : à la fin, on vérifie qu'un godet
+    // entier y est bien arrivé (voir la fin de `enginCreuseTick`).
+    videAvant: tr ? (tr.vide || 0) : 0,
     tasX: c.x + Math.sin(aTas) * rTas, tasZ: c.z + Math.cos(aTas) * rTas };
   godetTerre(c);
   return true;
@@ -29781,15 +29802,19 @@ function enginCreuseTick(c, dt) {
   const plonge = animSeg(u, 0, 0.20);                            // le bras s'avance et descend
   const racle = animSeg(u, 0.20, 0.32);                          // le godet se referme sur la terre
   const leve = animSeg(u, 0.32, 0.50);                           // il ressort, CHARGÉ
-  const pivot = animSeg(u, 0.50, 0.72) - animSeg(u, 0.88, 1);    // la tourelle se tourne vers le tas
-  const vide = animSeg(u, 0.72, 0.88);                           // le godet se retourne et lâche tout
+  const pivot = animSeg(u, 0.50, 0.72) - animSeg(u, 0.84, 1);    // la tourelle se tourne vers le tas
+  const vide = animSeg(u, 0.70, 0.84);                           // le godet se retourne et lâche tout
   // LE REPLI, et POURQUOI IL EXISTE. À la fin du cycle, `c.creuse` repasse à null et
   // `outilsVehiculesTick` reprend la main : il repose instantanément le bras, l'avant-bras et
   // le godet sur la pose de repos (celle de `c.outil` = 0). Mesuré : le godet SAUTAIT de
   // 0,70 radian en une seule image — 40 degrés, une téléportation. Les quatre dernières
   // dixièmes du cycle ramènent donc tout exactement sur cette pose de repos, et le relais se
   // fait sans qu'on voie la couture.
-  const repli = 1 - animSeg(u, 0.88, 1);
+  // LE RETOUR DURE PLUS LONGTEMPS QU'AVANT (0,84 → 1 au lieu de 0,88 → 1). Mesuré image par
+  // image : la tourelle revenait de 1,30 rad en une demi-seconde, soit 0,064 rad par image —
+  // un À-COUP bien visible, l'engin faisait un bond de 75°/s en fin de cycle. Sur 0,67 s le
+  // même retour ne coûte plus que 0,048 rad par image, et le geste redevient une manœuvre.
+  const repli = 1 - animSeg(u, 0.84, 1);
   // 1,30 rad DE PIVOT, ET POURQUOI PAS MOINS. À 0,95 rad le tas de terre retombait au bord
   // même du trou : sur la capture, la butte et la cuvette se touchaient et on ne distinguait
   // plus l'une de l'autre. À 1,30 rad ils sont écartés de 6,3 m — la fosse d'un côté, la
@@ -29834,7 +29859,22 @@ function enginCreuseTick(c, dt) {
       if (typeof sonTole === 'function') { try { sonTole(tas.g.position.x, tas.g.position.y + 0.6, tas.g.position.z, 0.5); } catch (e) {} }
     }
   }
-  if (u >= 1) { c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0; }
+  // 3. LE FILET — UN GODET RACLÉ FINIT TOUJOURS SUR LE TAS. Le tas ne grossissait que par les
+  //    mottes en vol : dès que `terreChutesTick` ne tournait pas (engin hors de `city.cars`,
+  //    banc d'essai qui n'anime que la fouille, pool de mottes plein, motte perdue au loin),
+  //    le trou se creusait pendant que le tas restait figé — la terre disparaissait. À la fin
+  //    du cycle on solde donc le compte : ce qui manque d'un godet entier est versé d'un coup,
+  //    et les mottes encore en l'air sont désamorcées (`part = 0`) pour ne pas compter double.
+  if (u >= 1) {
+    if (k.trou && k.lache) {
+      const manque = 1 - ((k.trou.vide || 0) - (k.videAvant || 0));
+      if (manque > 0.01) {
+        for (const ch of ANIM.chutes) if (ch.actif && ch.trou === k.trou) ch.part = 0;
+        creuseVerse(k.trou, manque);
+      }
+    }
+    c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0;
+  }
 }
 // LA GRUE : la flèche pivote d'un quart de tour, le crochet descend chercher la charge, la
 // remonte, la repose de l'autre côté, puis revient. La CHARGE est une caisse accrochée au
@@ -30442,6 +30482,35 @@ function laveurTick(m, dt) {
   }
 }
 // ---- LE FACTEUR : à vélo, de boîte en boîte, une lettre dans chaque ----
+// UNE VRAIE TOURNÉE, QUI SE TERMINE. Avant, il choisissait UNE boîte, allait y glisser une
+// lettre, puis repassait par « repos » et recommençait : mesurée, la suite d'états était
+// repos → tournee → depose → repos → tournee → depose… à l'infini, sans jamais rien achever.
+// Ce n'était pas une tournée, c'était une navette. Il prépare maintenant sa sacoche au dépôt
+// (`m.tournee` : TOUTES les boîtes, rangées de proche en proche depuis le dépôt), les fait
+// l'une après l'autre sans repasser par la case départ, et quand la sacoche est vide il
+// RENTRE au dépôt, range le vélo et prend sa pause. `m.faites` compte les tournées finies.
+const FACTEUR_PAUSE = 12;    // s : la pause au dépôt entre deux tournées (il vide sa sacoche)
+// COMBIEN DE LETTRES TIENNENT DANS LA SACOCHE. Une tournée qui passe par les neuf boîtes de
+// la ville dure sept minutes : mesurée, l'enfant ne la voit jamais finir. Le facteur charge
+// donc QUATRE lettres, fait ses quatre boîtes et rentre en chercher d'autres — une tournée
+// dure deux à trois minutes, on la suit du début à la fin, et les boîtes les moins servies
+// passant toujours en premier, tout le monde finit par avoir son courrier.
+const FACTEUR_SACOCHE = 4;
+// Choisit les boîtes de la prochaine tournée (les moins servies d'abord) et les range de
+// proche en proche à partir du dépôt : le plus court chemin exact serait un casse-tête,
+// « la plus proche d'abord » suffit et donne un itinéraire qui a l'air sensé.
+function tourneeFacteur(x0, z0) {
+  const reste = (city.boites || []).slice()
+    .sort((a, b) => (a.lettres || 0) - (b.lettres || 0)).slice(0, FACTEUR_SACOCHE);
+  const ordre = [];
+  let cx = x0, cz = z0;
+  while (reste.length) {
+    let k = 0, bd = Infinity;
+    for (let i = 0; i < reste.length; i++) { const d = Math.hypot(reste[i].x - cx, reste[i].z - cz); if (d < bd) { bd = d; k = i; } }
+    const b = reste.splice(k, 1)[0]; ordre.push(b); cx = b.x; cz = b.z;
+  }
+  return ordre;
+}
 function facteurTick(m, dt) {
   const w = m.bot;
   const veh = (w.veh && drive.car !== w.veh) ? w.veh : null;
@@ -30450,22 +30519,21 @@ function facteurTick(m, dt) {
       if (w.veh && drive.car !== w.veh) { w.veh.busy = false; w.veh.metierBusy = false; }
       metierMarche(w, w.base[0], w.base[1], dt);
       if (!metierOuvert() || !city.boites.length || simTime < (w.pause || 0)) return;
-      // la tournée : la boîte la moins servie d'abord, la plus proche à égalité
-      let best = null, bd = Infinity;
-      for (const b of city.boites) { const s = b.lettres * 500 + Math.hypot(b.x - w.pos.x, b.z - w.pos.z); if (s < bd) { bd = s; best = b; } }
-      m.cible = best; m.etat = 'tournee';
+      // il charge sa sacoche : toutes les boîtes de la ville, dans l'ordre du trajet
+      m.tournee = tourneeFacteur(w.base[0], w.base[1]); m.i = 0;
+      m.cible = m.tournee[0]; m.etat = 'tournee';
       if (veh) { veh.busy = true; veh.metierBusy = true; }
       metierDit(w, pickOne(['le courrier, c\'est parti ! 📮', 'ma tournée m\'attend 🚲', 'du courrier pour tout le monde !']));
       return;
     }
     case 'tournee': {
-      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
-      const d = veh ? metierRoule(w, b.x, b.z, dt, 3.4) : metierMarche(w, b.x, b.z, dt, 1.5);
+      const b = m.cible; if (!b) { m.etat = 'rentre'; return; }
+      const d = veh ? metierRoule(w, b.x, b.z, dt, 4.2) : metierMarche(w, b.x, b.z, dt, 1.5);
       if (d < (veh ? 4.2 : 1.9)) { m.etat = 'depose'; w.t = simTime + 2.6; donneOutil(w.av, 'lettre'); }
       return;
     }
     case 'depose': {
-      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
+      const b = m.cible; if (!b) { m.etat = 'rentre'; return; }
       // il met pied à terre à côté du vélo, sort la lettre de la sacoche et la glisse
       if (veh) { w.pos.set(veh.x - Math.cos(veh.h) * 1.1, groundUnder(veh.x, veh.z, null, 2), veh.z + Math.sin(veh.h) * 1.1); }
       w.facing = Math.atan2(b.x - w.pos.x, b.z - w.pos.z);
@@ -30482,8 +30550,27 @@ function facteurTick(m, dt) {
       if (simTime > w.t) {
         b.lettres++; if (b.volet) b.volet.rotation.x = 0;
         sfx.pok(); burst(b.x, 1.35, b.z, 0xf4f6fa, 4);
-        metierDit(w, pickOne(['et une lettre de plus ! 📬', 'voilà le courrier 📬', 'bonne lecture !']));
-        m.cible = null; m.etat = 'repos'; w.pause = simTime + 3;
+        // BOÎTE SUIVANTE, SANS REPASSER PAR LE DÉPÔT. C'est toute la différence entre une
+        // tournée et une navette : il enchaîne, et ce n'est qu'une fois la sacoche vide
+        // qu'il rentre.
+        m.i = (m.i || 0) + 1;
+        const suite = m.tournee && m.tournee[m.i];
+        if (suite) { m.cible = suite; m.etat = 'tournee'; metierDit(w, pickOne(['et une lettre de plus ! 📬', 'voilà le courrier 📬', 'bonne lecture !'])); }
+        else { m.cible = null; m.tournee = null; m.etat = 'rentre';
+          metierDit(w, pickOne(['sacoche vide, je rentre au dépôt ! 🚲', 'tournée terminée, tout le monde a son courrier 📬'])); }
+      }
+      return;
+    }
+    case 'rentre': {
+      // LA FIN DE LA TOURNÉE. Il rapporte le vélo au dépôt : sans cette étape, le vélo
+      // restait garé devant la dernière maison et la tournée suivante partait de nulle part.
+      const d = veh ? metierRoule(w, w.base[0], w.base[1], dt, 4.2) : metierMarche(w, w.base[0], w.base[1], dt);
+      if (d < (veh ? 4.2 : 1.4)) {
+        if (veh) { veh.busy = false; veh.metierBusy = false; }
+        donneOutil(w.av, METIERS_DEF.facteur.outil);
+        m.faites = (m.faites || 0) + 1;
+        w.pause = simTime + FACTEUR_PAUSE;
+        m.etat = 'repos';
       }
       return;
     }
@@ -30591,7 +30678,10 @@ function phraseMetier(m, salut) {
   if (m.metier === 'laveur') return e === 'lave' ? 'je lave les vitres, ça brille hein ? 🪟' : 'laveur de vitres : je monte à l\'échelle et je fais briller les devantures 🪟';
   if (m.metier === 'pompier') return city.incendies.length ? 'attention, il y a le feu ! Reste derrière nous 🚒'
     : 'pompier ! Prends le camion pour nous aider — O ouvre la lance à eau 🚒';
-  if (m.metier === 'facteur') return e === 'depose' ? 'je glisse la lettre dans la boîte 📬' : 'facteur : je fais ma tournée à vélo, tu peux me suivre ! 🚲';
+  if (m.metier === 'facteur') return e === 'depose' ? 'je glisse la lettre dans la boîte 📬'
+    : e === 'rentre' ? 'sacoche vide ! Je rapporte le vélo au dépôt 🚲'
+    : e === 'tournee' ? `ma tournée : encore ${Math.max(0, (m.tournee ? m.tournee.length : 0) - (m.i || 0))} boîtes à faire 📮`
+    : 'facteur : je fais ma tournée à vélo, tu peux me suivre ! 🚲';
   return 'bonjour !';
 }
 // Branchée en tête de commandeSociale() : si on parle à un travailleur (par son nom, par son
@@ -30628,7 +30718,7 @@ function metiersRepos() {
   if (city.detritus) city.detritus.length = 0;
   for (const m of city.metiers) {
     const w = m.bot;
-    m.etat = 'repos'; m.cible = null; m.chantier = null;
+    m.etat = 'repos'; m.cible = null; m.chantier = null; m.tournee = null; m.i = 0;
     w.route = null; w.vroute = null; w.pause = 0; w.t = 0; w.bloqueT = 0; w.h2 = 0;
     if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
     w.pos.set(w.base[0], groundUnder(w.base[0], w.base[1], null, 2.5), w.base[1]);

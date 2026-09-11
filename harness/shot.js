@@ -621,6 +621,15 @@ window.__SHOT = {
     }
     // poste J : plante une scene de metier (chantier, incendie, facteur, balayeur, laveur)
     if (v.metier && typeof metierScene === 'function') { try { metierScene(v.metier); } catch (e14) {} }
+    // poste J : v.balancoire = numero du siege (0 a 3). ASSOIT vraiment le joueur sur la
+    // planche : c'est la seule facon de photographier a quelle hauteur il est assis.
+    if (v.balancoire != null) {
+      try {
+        var sw0 = (city.swings || [])[v.balancoire] || (city.swings || [])[0];
+        if (sw0) { P.pos.set(sw0.x, 1.2, sw0.z); city.swingNear = sw0; sitSwing(sw0);
+          sw0.t = 0; sw0.ang = 0; sw0.amp = 0; if (v.swingAmp != null) { sw0.amp = v.swingAmp; sw0.t = 1.5708 / Math.sqrt(9.8 / sw0.L); } }
+      } catch (e18) {}
+    }
     // poste Animation : fige un mouvement sur une image PRECISE, pour photographier une
     // serie d'instants successifs du meme geste (v.anim = { combat, u, garde, geste, t, opt }).
     if (typeof ANIM !== 'undefined' && ANIM) {
@@ -1068,6 +1077,7 @@ window.__G = {
   tenueMetier: typeof tenueMetier !== 'undefined' ? tenueMetier : null,
   METIERS_DEF: typeof METIERS_DEF !== 'undefined' ? METIERS_DEF : null,
   METIERS: typeof METIERS !== 'undefined' ? METIERS : null,
+  FACTEUR_SACOCHE: typeof FACTEUR_SACOCHE !== 'undefined' ? FACTEUR_SACOCHE : null,
   MET_C: typeof MET_C !== 'undefined' ? MET_C : null,
   outilMesh: typeof outilMesh !== 'undefined' ? outilMesh : null,
   donneOutil: typeof donneOutil !== 'undefined' ? donneOutil : null,

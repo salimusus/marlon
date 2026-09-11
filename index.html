@@ -13875,167 +13875,185 @@ const sB = (d, dur, freq, vol, q, t, type) => sfx.bruitVers(d, dur, freq, vol, q
 //                   medium grave, un peu plus lent. C'est lui qui donne le poids.
 //   3. LE BOUM    — l'onde grave qui part de la bouche, un glissando qui plonge. Le ventre.
 //   4. LA QUEUE   — le renvoi des immeubles d'en face, discret et plus long. La ville.
-// Chaque arme dose ces quatre-la autrement : le pistolet claque sec et aigu, le fusil
-// d'assaut tape plus gras (plus de corps, moins de claque), le fusil a lunette donne un coup
-// lourd et grave avec une longue queue.
 //
-// POURQUOI DES VOIX PERMANENTES. Deux lecons de l'equipe, payees cher :
-//   a) Une source dont la vie entiere (start/stop) est deja passee quand le fil audio la
-//      regarde ne joue PAS DU TOUT. Sur une machine chargee, une bouffee de 45 ms programmee
-//      a `currentTime` mesure zero. Ici les sources de bruit et les oscillateurs tournent en
-//      PERMANENCE et on ne touche QUE leur gain : ca sort toujours, sur n'importe quelle machine.
-//   b) Les rampes lineaires et exponentielles, elles, s'ecroulent si le fil audio est en
-//      retard (l'evenement est saute et le parametre saute a la valeur finale). On n'utilise
-//      donc que `setTargetAtTime`, qui est ANALYTIQUE : meme lu en retard il rend la bonne
-//      valeur sur la bonne courbe. C'est ce qui a sauve le crissement de la craie.
-// Enfin, six VOIX en rotation : une rafale ne se stomp pas elle-meme, chaque balle garde sa
-// propre queue, et trois coups font bien trois pics distincts au lieu d'un plateau.
-const TIR_VOIX = 6;                 // six voix en rotation : de quoi tenir une rafale entiere
-const TIR_ATTAQUE = 0.0009;         // s : constante de montee de la claque (95 % en 2,7 ms — franc, sans clic numerique)
-const TIR_PLANCHER = 0.00004;       // la cible « silence » : setTargetAtTime n'atteint jamais zero
-// UNE AVANCE DE 12 ms SUR L'HORLOGE AUDIO. Le fil audio rend TOUJOURS un peu en avance sur
-// `currentTime` (la latence de sortie de la carte son), et beaucoup plus quand le fil
-// principal vient de caler sur une image lourde : il rattrape alors son retard d'un coup.
-// Une enveloppe programmee pile a `currentTime` tombe dans ce passe-la et ne sort pas du
-// tout — c'est ce qui faisait mesurer 0,0002 a l'impact dans le mur un coup sur trois.
-// Douze millisecondes, on ne les entend pas, et l'enveloppe part toujours du bon endroit.
-const TIR_AVANCE = 0.012;
+// Chaque arme dose ces quatre-la autrement, et c'est le TABLEAU ci-dessous qui le dit — un
+// reglage par couche, pas une ligne de code : le pistolet claque sec et aigu, le fusil
+// d'assaut tape plus gras (plus de corps, moins de claque), le fusil a lunette donne un coup
+// lourd et grave avec une longue queue qui roule dans le quartier.
 // f : coupure du passe-haut de la claque · q/f du corps (cloche) et de la queue (bande) ·
 // tau : constante de retombee en secondes · n : niveau relatif au niveau general du son.
 const SONS_ARME = {
   // LE PISTOLET : sec, aigu, court. Presque tout est dans la claque, le boum est bref.
-  'tir-pistol': { niv: 0.26, portee: 55,
+  'tir-pistol': { niv: 0.40, portee: 55,
     claque: { f: 3100, tau: 0.021, n: 1.00 },
     corps:  { f: 950,  q: 6.5, tau: 0.042, n: 0.55 },
     boom:   { type: 'triangle', f0: 160, f1: 58, chute: 0.020, tau: 0.048, n: 0.45 },
     queue:  { f: 1500, q: 0.9, tau: 0.065, n: 0.10 } },
   // LE FUSIL D'ASSAUT : plus gras. Moins de claque aigue, beaucoup plus de corps, un boum
   // plus bas et plus tenu — c'est ce qui fait la difference a l'oreille en rafale.
-  'tir-rifle': { niv: 0.24, portee: 70,
+  'tir-rifle': { niv: 0.36, portee: 70,
     claque: { f: 2100, tau: 0.028, n: 0.82 },
     corps:  { f: 620,  q: 4.5, tau: 0.092, n: 1.15 },
     boom:   { type: 'sawtooth', f0: 120, f1: 44, chute: 0.030, tau: 0.098, n: 0.60 },
     queue:  { f: 950,  q: 0.8, tau: 0.155, n: 0.30 } },
   // LE FUSIL A LUNETTE : un seul coup, lourd et grave, qui roule dans tout le quartier.
-  'tir-sniper': { niv: 0.27, portee: 100,
+  'tir-sniper': { niv: 0.38, portee: 100,
     claque: { f: 1500, tau: 0.040, n: 0.80 },
     corps:  { f: 380,  q: 3.2, tau: 0.115, n: 1.05 },
     boom:   { type: 'sawtooth', f0: 92,  f1: 33, chute: 0.050, tau: 0.135, n: 0.75 },
     queue:  { f: 600,  q: 0.7, tau: 0.290, n: 0.26 } },
   // ---- le reste de l'armement ----
   // DEGAINER : le frottement du cuir de l'etui, puis le clic de l'arme qui se presente.
-  'degaine': { niv: 0.10, portee: 16,
+  'degaine': { niv: 0.13, portee: 16,
     claque: { f: 4200, tau: 0.012, n: 0.55 },
     corps:  { f: 1400, q: 1.2, tau: 0.060, n: 0.70 },
     boom:   { type: 'square', f0: 520, f1: 900, chute: 0.045, tau: 0.035, n: 0.18 },
     queue:  { f: 2600, q: 0.8, tau: 0.045, n: 0.20 } },
   // RENGAINER : le meme frottement, mais qui DESCEND, et le petit choc de l'arme au fond de l'etui.
-  'rengaine': { niv: 0.11, portee: 16,
+  'rengaine': { niv: 0.15, portee: 16,
     claque: { f: 3000, tau: 0.018, n: 0.45 },
     corps:  { f: 700,  q: 1.4, tau: 0.085, n: 0.85 },
     boom:   { type: 'square', f0: 420, f1: 190, chute: 0.060, tau: 0.055, n: 0.22 },
     queue:  { f: 1600, q: 0.8, tau: 0.070, n: 0.18 } },
   // LE CLIC A VIDE : le percuteur sur une chambre vide. Rien que du metal, aucun grave.
   // Avant, un chargeur vide ne faisait AUCUN bruit : on appuyait dans le silence.
-  'vide': { niv: 0.13, portee: 12,
+  'vide': { niv: 0.17, portee: 12,
     claque: { f: 5200, tau: 0.007, n: 1.00 },
     corps:  { f: 2400, q: 9, tau: 0.016, n: 0.55 },
     boom:   { type: 'square', f0: 1500, f1: 900, chute: 0.012, tau: 0.014, n: 0.30 },
     queue:  { f: 3400, q: 1.6, tau: 0.030, n: 0.10 } },
   // LA BALLE DANS LA TOLE : le « tonk » creux d'une carrosserie, avec la resonance du panneau.
-  'tole': { niv: 0.17, portee: 45,
+  'tole': { niv: 0.22, portee: 45,
     claque: { f: 3600, tau: 0.010, n: 0.70 },
     corps:  { f: 480,  q: 11, tau: 0.090, n: 1.00 },
     boom:   { type: 'sine', f0: 300, f1: 175, chute: 0.055, tau: 0.075, n: 0.40 },
     queue:  { f: 1800, q: 1.1, tau: 0.055, n: 0.16 } },
   // LA BALLE DANS LE MUR : sec, mat, plein de poussiere de beton. Pas de resonance.
-  'mur': { niv: 0.145, portee: 45,
+  'mur': { niv: 0.21, portee: 45,
     claque: { f: 2600, tau: 0.014, n: 0.90 },
     corps:  { f: 700,  q: 2.0, tau: 0.045, n: 0.60 },
     boom:   { type: 'triangle', f0: 190, f1: 95, chute: 0.030, tau: 0.040, n: 0.25 },
     queue:  { f: 1200, q: 0.7, tau: 0.075, n: 0.18 } },
   // LE RICOCHET : le sifflement de la balle qui repart de travers. Un glissando qui MONTE
   // puis file, presque pas de bruit — c'est le son le plus reconnaissable d'un tir rate.
-  'ricochet': { niv: 0.13, portee: 50,
+  'ricochet': { niv: 0.16, portee: 50,
     claque: { f: 6000, tau: 0.008, n: 0.35 },
     corps:  { f: 2600, q: 12, tau: 0.030, n: 0.30 },
     boom:   { type: 'sine', f0: 1150, f1: 3300, chute: 0.130, tau: 0.115, n: 1.00 },
     queue:  { f: 4200, q: 2.2, tau: 0.090, n: 0.10 } },
 };
-const armVoix = { liste: [], i: 0, buf: null, joues: 0, dernier: null };
-// Monte (une seule fois) les six voix. Chacune est un petit orgue a quatre tuyaux branches
-// sur la MEME source de bruit permanente, plus un oscillateur permanent pour le grave.
-function voixTir() {
-  const c = sfx.unlock(); if (!c) return null;
-  if (!armVoix.buf) {
-    // deux secondes de bruit blanc : assez long pour qu'on n'entende pas la boucle
-    const b = c.createBuffer(1, Math.ceil(c.sampleRate * 2), c.sampleRate), d = b.getChannelData(0);
-    for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
-    armVoix.buf = b;
-  }
-  if (!armVoix.liste.length) {
-    for (let k = 0; k < TIR_VOIX; k++) {
-      const src = c.createBufferSource(); src.buffer = armVoix.buf; src.loop = true;
-      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
-      const gClaque = c.createGain(); gClaque.gain.value = 0.0001;
-      const pk = c.createBiquadFilter(); pk.type = 'bandpass'; pk.frequency.value = 800; pk.Q.value = 5;
-      const gCorps = c.createGain(); gCorps.gain.value = 0.0001;
-      const bq = c.createBiquadFilter(); bq.type = 'bandpass'; bq.frequency.value = 1400; bq.Q.value = 0.9;
-      const gQueue = c.createGain(); gQueue.gain.value = 0.0001;
-      const osc = c.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 150;
-      const gBoom = c.createGain(); gBoom.gain.value = 0.0001;
-      const mix = c.createGain(); mix.gain.value = 1;
-      src.connect(hp).connect(gClaque).connect(mix);
-      src.connect(pk).connect(gCorps).connect(mix);
-      src.connect(bq).connect(gQueue).connect(mix);
-      osc.connect(gBoom).connect(mix);
-      try { src.start(); } catch (e) {}
-      try { osc.start(); } catch (e) {}
-      armVoix.liste.push({ src, hp, pk, bq, osc, gClaque, gCorps, gQueue, gBoom, mix, dest: null });
-    }
-  }
-  const v = armVoix.liste[armVoix.i]; armVoix.i = (armVoix.i + 1) % armVoix.liste.length;
-  return v;
+// POURQUOI LE SON EST CUIT A L'AVANCE, ET PAS JOUE PAR DES NŒUDS. Premiere version : six
+// « voix » permanentes (bruit boucle + filtres + oscillateur) dont on ouvrait et fermait les
+// gains. Ca sonnait tres bien... au casque. Sur le banc d'essai, un coup sur trois mesurait
+// 0,0002. La raison : le fil audio rend TOUJOURS un peu en avance sur `currentTime`, et
+// beaucoup plus quand le fil principal vient de caler sur une image lourde (il rattrape alors
+// son retard d'un coup, l'horloge audio « saute »). Une enveloppe programmee a `currentTime`
+// tombe dans ce passe-la : le fil audio ne voit plus que la fin de la retombee, et la
+// detonation est deja eteinte quand elle sort. Aucun reglage d'avance ne rattrape ca, parce
+// que l'avance varie d'une image a l'autre.
+// LA SOLUTION, qui est aussi la meilleure pour le son : on FABRIQUE la forme d'onde complete
+// une fois pour toutes, echantillon par echantillon, et chaque coup n'est plus qu'une lecture
+// d'echantillon lancee par `start()` SANS argument — « des que possible ». Une lecture sans
+// date ne peut pas etre ratee : il n'y a pas de passe ou tomber. C'est exactement ce qui fait
+// que `sfx.noise` sortait, lui, sur toutes les machines.
+// Trois bonus : c'est bien moins cher (plus aucun filtre ni oscillateur permanent qui tourne
+// pour rien sur une tablette), la crete de chaque son est NORMALISEE au chiffre du tableau
+// (le niveau d'une arme devient un reglage, plus le hasard d'une somme), et trois variantes
+// par son evitent l'effet « mitraillette de photocopieuse » quand on tire en rafale.
+const ARM_VARIANTES = 3;            // trois grains differents par son, tires au sort a chaque coup
+// Un generateur de hasard A NOUS pour fabriquer le bruit. Math.random est FIGE par le banc
+// d'essai (c'est ce qui rend les mesures reproductibles) et un bruit blanc tire de Math.random
+// serait alors un SILENCE parfait. Xorshift 32 bits : deux lignes, et toujours la meme
+// detonation d'une partie a l'autre.
+function hasardArme(graine) {
+  let x = (graine | 0) || 1;
+  return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 2147483648 - 1; };
 }
-// L'ENVELOPPE, uniquement en setTargetAtTime (voir le pourquoi plus haut) : on ouvre vers
-// `niv` en `montee`, puis on referme vers le plancher en `tau`. Deux evenements, pas un de plus.
-function enveloppeTir(param, t, niv, montee, tau) {
-  try { param.cancelScheduledValues(t); } catch (e) {}
-  param.setTargetAtTime(Math.max(TIR_PLANCHER, niv), t, Math.max(0.0002, montee));
-  param.setTargetAtTime(TIR_PLANCHER, t + montee * 3.2, Math.max(0.002, tau));
+// La longueur du son : six fois la plus longue des quatre retombees (au-dela il ne reste
+// rien d'audible), au plus 1,2 s pour le coup de fusil a lunette qui roule dans le quartier.
+function dureeArme(A) { return Math.min(1.2, Math.max(0.08, Math.max(A.claque.tau, A.corps.tau, A.queue.tau, A.boom.tau) * 6)); }
+// LA CUISSON. Quatre couches ecrites a la main, echantillon par echantillon :
+//  - la claque : bruit blanc passe-haut (un pole) + attaque de 1,2 ms, retombee tres courte ;
+//  - le corps  : le meme bruit dans un filtre resonant (Chamberlin, deux poles) — la cloche
+//                du canon ; c'est le Q qui fait la difference entre un « tonk » de tole (Q 11)
+//                et le medium large d'un fusil (Q 4,5) ;
+//  - la queue  : le meme bruit dans un second resonant, large et lent — le renvoi des murs ;
+//  - le boum   : un glissando (l'onde grave qui plonge), ou qui MONTE pour le ricochet.
+function cuisArme(nom, k) {
+  const c = sfx.unlock(); if (!c) return null;
+  const A = SONS_ARME[nom]; if (!A) return null;
+  const sr = c.sampleRate, n = Math.max(64, Math.ceil(sr * dureeArme(A)));
+  const buf = c.createBuffer(1, n, sr), d = buf.getChannelData(0);
+  const bruit = hasardArme(0x9e3779b1 + k * 7919 + nom.length * 104729 + nom.charCodeAt(0) * 31);
+  const rc = 1 / (2 * Math.PI * A.claque.f), aHP = rc / (rc + 1 / sr);   // passe-haut a un pole
+  let xPrec = 0, yPrec = 0;
+  const fC = 2 * Math.sin(Math.PI * Math.min(0.45, A.corps.f / sr)), qC = 1 / Math.max(0.5, A.corps.q);
+  let lowC = 0, bandC = 0;
+  const fQ = 2 * Math.sin(Math.PI * Math.min(0.45, A.queue.f / sr)), qQ = 1 / Math.max(0.3, A.queue.q);
+  let lowQ = 0, bandQ = 0;
+  const tauF = Math.max(0.002, A.boom.chute / 3);
+  const deuxPi = Math.PI * 2;
+  let phase = 0, pic = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, br = bruit();
+    const yHP = aHP * (yPrec + br - xPrec); xPrec = br; yPrec = yHP;
+    const eC = (1 - Math.exp(-t / 0.0012)) * Math.exp(-t / A.claque.tau);
+    const hiC = br - lowC - qC * bandC; bandC += fC * hiC; lowC += fC * bandC;
+    const eB = (1 - Math.exp(-t / 0.0030)) * Math.exp(-t / A.corps.tau);
+    const hiQ = br - lowQ - qQ * bandQ; bandQ += fQ * hiQ; lowQ += fQ * bandQ;
+    const eQ = (1 - Math.exp(-t / 0.0090)) * Math.exp(-t / A.queue.tau);
+    const f = A.boom.f1 + (A.boom.f0 - A.boom.f1) * Math.exp(-t / tauF);
+    phase += deuxPi * f / sr; if (phase >= deuxPi) phase -= deuxPi;
+    const o = A.boom.type === 'sine' ? Math.sin(phase)
+      : A.boom.type === 'square' ? (phase < Math.PI ? 1 : -1)
+      : A.boom.type === 'sawtooth' ? (phase / Math.PI - 1)
+      : (2 / Math.PI) * Math.asin(Math.sin(phase));   // triangle
+    const eO = (1 - Math.exp(-t / 0.0020)) * Math.exp(-t / A.boom.tau);
+    const v = yHP * eC * A.claque.n + bandC * eB * A.corps.n + bandQ * eQ * A.queue.n * 0.8 + o * eO * A.boom.n;
+    d[i] = v; const a = v < 0 ? -v : v; if (a > pic) pic = a;
+  }
+  // NORMALISATION : la crete du son vaut EXACTEMENT le `niv` du tableau. Le niveau d'une arme
+  // devient un reglage qu'on lit, et non le resultat hasardeux d'une somme de quatre couches.
+  const ech = A.niv / Math.max(1e-6, pic);
+  for (let i = 0; i < n; i++) d[i] *= ech;
+  // les vingt dernieres millisecondes en fondu : sinon la fin du tampon fait un « clic »
+  const fondu = Math.min(n, Math.ceil(sr * 0.02));
+  for (let i = 0; i < fondu; i++) d[n - 1 - i] *= i / fondu;
+  return buf;
+}
+const armVoix = { table: {}, joues: 0, cuits: 0, dernier: null };
+function bufArme(nom) {
+  const t = armVoix.table[nom] || (armVoix.table[nom] = []);
+  const k = Math.min(ARM_VARIANTES - 1, Math.floor(Math.random() * ARM_VARIANTES));
+  if (!t[k]) { t[k] = cuisArme(nom, k); if (t[k]) armVoix.cuits++; }
+  return t[k];
 }
 // LE SON D'ARMEMENT, place dans l'espace. `nom` est une entree de SONS_ARME.
-// Renvoie le niveau effectivement ouvert (0 si le son a ete refuse : trop loin, budget plein).
+// Renvoie le niveau effectivement joue (0 si le son a ete refuse : trop loin, ou budget plein
+// avec des sons tous plus proches).
 function sonArme(nom, x, y, z, force) {
   if (!settings.sound) return 0;
   const A = SONS_ARME[nom]; if (!A) return 0;
   const f = force == null ? 1 : clamp(force, 0.15, 1.6);
-  let ouvert = 0;
+  let joue = 0;
   sonEn(x, y, z, (dest, att) => {
     const c = sfx.ctx(); if (!c) return;
-    const V = voixTir(); if (!V) return;
-    // on rebranche la voix sur la destination de CE coup (panoramique + distance)
-    if (V.dest !== dest) { try { V.mix.disconnect(); } catch (e) {} V.mix.connect(dest); V.dest = dest; }
-    const t = c.currentTime + TIR_AVANCE, niv = A.niv * f;
-    // le grain change a chaque balle : deux coups ne claquent jamais exactement pareil
-    const j = 0.93 + Math.random() * 0.14;
-    try { V.src.playbackRate.setValueAtTime(j, t); } catch (e) {}
-    V.hp.frequency.setValueAtTime(Math.max(40, A.claque.f * j), t);
-    enveloppeTir(V.gClaque.gain, t, niv * A.claque.n, TIR_ATTAQUE, A.claque.tau);
-    V.pk.frequency.setValueAtTime(Math.max(40, A.corps.f * j), t); V.pk.Q.setValueAtTime(A.corps.q, t);
-    enveloppeTir(V.gCorps.gain, t, niv * A.corps.n, TIR_ATTAQUE * 2.5, A.corps.tau);
-    V.bq.frequency.setValueAtTime(Math.max(40, A.queue.f), t); V.bq.Q.setValueAtTime(A.queue.q, t);
-    enveloppeTir(V.gQueue.gain, t, niv * A.queue.n, TIR_ATTAQUE * 8, A.queue.tau);
-    // le boum : un glissando qui plonge (ou qui monte, pour le sifflement du ricochet)
-    V.osc.type = A.boom.type;
-    try { V.osc.frequency.cancelScheduledValues(t); } catch (e) {}
-    V.osc.frequency.setValueAtTime(Math.max(20, A.boom.f0 * j), t);
-    V.osc.frequency.setTargetAtTime(Math.max(20, A.boom.f1), t, Math.max(0.002, A.boom.chute / 3));
-    enveloppeTir(V.gBoom.gain, t, niv * A.boom.n, TIR_ATTAQUE * 2, A.boom.tau);
-    ouvert = niv * att;
-    armVoix.joues++; armVoix.dernier = { nom, niv: +niv.toFixed(3), att: +att.toFixed(3) };
-  }, { duree: 0.55, portee: A.portee, bus: 'effets' });
-  return ouvert;
+    const buf = bufArme(nom); if (!buf) return;
+    const src = c.createBufferSource(); src.buffer = buf;
+    // le grain change a chaque balle : variante tiree au sort plus un leger ecart de lecture.
+    // Deux coups de suite ne sonnent jamais exactement pareil — c'est ce qui separe une vraie
+    // rafale d'une boucle d'echantillon.
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const g = c.createGain(); g.gain.value = f;
+    src.connect(g).connect(dest);
+    try { src.start(); } catch (e) { return; }   // SANS argument : « des que possible », jamais rate
+    src.onended = () => { try { src.disconnect(); g.disconnect(); } catch (e) {} };
+    joue = A.niv * f * att;
+    armVoix.joues++; armVoix.dernier = { nom, niv: +(A.niv * f).toFixed(3), att: +att.toFixed(3) };
+    // la place prise dans le budget des sons places colle a la vraie longueur du son : un clic
+    // a vide de 30 ms gardait une place une demi-seconde, et volait celle d'une detonation.
+  }, { duree: dureeArme(A) + 0.05, portee: A.portee, bus: 'effets' });
+  return joue;
 }
 // LA DETONATION du joueur ou d'un tireur : `arme` est la cle de WEAPONS ('pistol', 'rifle',
 // 'sniper'), tout le reste retombe sur le pistolet.

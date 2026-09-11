@@ -27717,11 +27717,18 @@ function creuseTrouMaj(t) {
 }
 // LE TAS DE TERRE, à côté du trou : un cône qui grandit à chaque godet vidé, plus quelques
 // mottes à son pied pour qu'il ne ressemble pas à un chapeau chinois.
-function creuseTas(t) {
+// LE TAS SE FORME EXACTEMENT SOUS LE GODET QUI BASCULE. Il était posé « du côté opposé au
+// joueur », ce qui n'a aucun rapport avec le geste : vu en capture, la pelleteuse vidait son
+// godet AU-DESSUS DU TROU et la terre apparaissait trois mètres plus loin. `x`/`z` sont
+// maintenant le point que vise la flèche une fois la tourelle pivotée.
+function creuseTas(t, x, z) {
   if (t.tas) return t.tas;
   const g = new THREE.Group();
-  const a = Math.atan2(t.x - (P ? P.pos.x : 0), t.z - (P ? P.pos.z : 0));   // du côté opposé au joueur : on ne lui bouche pas la vue
-  g.position.set(t.x + Math.sin(a) * 3.4, t.y + 0.02, t.z + Math.cos(a) * 3.4);
+  if (x == null) {   // secours : personne ne nous a dit où — on se met à côté, hors du trou
+    const a = Math.atan2(t.x - (P ? P.pos.x : 0), t.z - (P ? P.pos.z : 0));
+    x = t.x + Math.sin(a) * 3.4; z = t.z + Math.cos(a) * 3.4;
+  }
+  g.position.set(x, t.y + 0.02, z);
   worldGroup.add(g);
   const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 12), lam(TERRE_TAS));
   cone.position.y = 0.5; cone.castShadow = true; g.add(cone);
@@ -27750,8 +27757,11 @@ function creuseTasMaj(t) {
   // n'alloue rien pendant le vidage) mais il reste invisible : sinon une butte apparaissait
   // toute seule à côté du trou avant même que le godet n'ait basculé.
   s.g.visible = n > 0.01;
-  s.h = clamp(0.35 + n * 0.16, 0.30, 2.2);
-  const r = clamp(0.8 + n * 0.18, 0.7, 2.6);
+  // MESURÉ EN CAPTURE : à 0,16 m par godet, deux godets faisaient une galette de 67 cm qu'on
+  // prenait pour une flaque de boue. Un godet de pelleteuse, c'est un gros seau : on monte de
+  // 26 cm et on élargit de 20 cm à chaque fois.
+  s.h = clamp(0.40 + n * 0.26, 0.34, 2.6);
+  const r = clamp(0.75 + n * 0.20, 0.7, 2.8);
   s.cone.scale.set(r, s.h, r); s.cone.position.y = s.h / 2;
   for (let i = 0; i < s.mottes.length; i++) {
     const m = s.mottes[i], b = i * 2.399, u = (i % 4) / 4;         // u : à quelle hauteur du cône elle s'accroche
@@ -27778,6 +27788,7 @@ function creuseVerse(t, part) {
   t.vide = (t.vide || 0) + (part > 0 ? part : 1);
   creuseTas(t); creuseTasMaj(t);
 }
+
 // ---------- LA TERRE QUI TOMBE DU GODET ----------
 // « la terre retirée doit apparaître quand le godet vide la terre ». Il ne suffisait pas de
 // déplacer l'instant où le tas grandit : il fallait qu'on VOIE la terre faire le trajet. Des
@@ -27785,7 +27796,11 @@ function creuseVerse(t, part) {
 // gravité) et, en touchant le tas, le font grossir d'un quart de godet chacune. Cause, trajet,
 // effet : les trois sont à l'écran, dans cet ordre.
 // Économe : un POOL de `CHUTE_MAX` maillages réutilisés, rien n'est alloué en vol.
-const CHUTE_MAX = 16, CHUTE_G = 16;   // gravité un peu forte : une motte de terre ne plane pas
+// MESURÉ : à 16 m/s² et sans élan vers le haut, une motte touchait le tas en 0,117 s — sept
+// images, invisibles à l'œil comme à la capture. Elle est maintenant LANCÉE vers le haut par
+// la bascule du godet et retombe plus mollement : la parabole dure environ quatre dixièmes de
+// seconde, et on SUIT la terre des yeux du godet jusqu'au tas.
+const CHUTE_MAX = 16, CHUTE_G = 9.5, CHUTE_ELAN = 1.9;
 ANIM.chutes = [];
 function terreChute(x, y, z, vx, vy, vz, trou, part, taille) {
   if (typeof worldGroup === 'undefined' || !worldGroup) return null;
@@ -27817,7 +27832,7 @@ function terreChutesTick(dt) {
     ch.m.rotation.x += dt * 5.5; ch.m.rotation.z += dt * 3.7;
     // elle a touché le tas (ou le sol, si le tas a disparu entre-temps) ou elle traîne
     const hauteurTas = ch.trou && ch.trou.tas ? ch.trou.tas.h : 0;
-    if (ch.y <= ch.sol + hauteurTas * 0.55 || ch.t > 3) {
+    if (ch.vy < 0 && (ch.y <= ch.sol + hauteurTas * 0.5 || ch.t > 3)) {
       ch.actif = false; ch.m.visible = false;
       if (ch.part > 0) creuseVerse(ch.trou, ch.part);
       if (typeof burst === 'function' && ch.t <= 3 && animPres(ch.x, ch.z)) burst(ch.x, ch.y + 0.15, ch.z, TERRE_TAS, 3);
@@ -27850,7 +27865,11 @@ function enginCreuse(c) {
   const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0);
   const tx = c.x + sn * CREUSE_PORTEE, tz = c.z + cs * CREUSE_PORTEE;
   const y = (typeof groundUnder === 'function') ? groundUnder(tx, tz, c.solid, c.y || 0) : (c.y || 0);
-  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false };
+  // LE POINT DE VIDAGE : la tourelle pivote de 0,95 rad pendant le cycle, donc le godet
+  // bascule sur ce cap-là, à la même portée. C'est LÀ que le tas doit se former.
+  const aTas = (c.h || 0) + 0.95;
+  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
+    tasX: c.x + Math.sin(aTas) * CREUSE_PORTEE, tasZ: c.z + Math.cos(aTas) * CREUSE_PORTEE };
   godetTerre(c);
   return true;
 }
@@ -27895,7 +27914,7 @@ function enginCreuseTick(c, dt) {
   //    qu'elles le font grossir d'un quart de godet chacune.
   if (k.trou && !k.lache && vide > 0.42) {
     k.lache = true;
-    creuseTas(k.trou);
+    creuseTas(k.trou, k.tasX, k.tasZ);
     const tas = k.trou.tas;
     if (o.godet && tas) {
       o.godet.updateMatrixWorld(true);
@@ -27905,7 +27924,7 @@ function enginCreuseTick(c, dt) {
         // une pincée de vitesse VERS le tas : les mottes ne tombent pas toutes au même point
         const vers = Math.atan2(tas.g.position.x - p.x, tas.g.position.z - p.z);
         terreChute(p.x + Math.sin(a) * 0.16, p.y, p.z + Math.cos(a) * 0.16,
-          Math.sin(vers) * (0.7 + i * 0.25) + Math.sin(a) * 0.4, 0.6,
+          Math.sin(vers) * (0.7 + i * 0.25) + Math.sin(a) * 0.4, CHUTE_ELAN - i * 0.16,
           Math.cos(vers) * (0.7 + i * 0.25) + Math.cos(a) * 0.4,
           k.trou, 0.25, 0.26 + (i % 3) * 0.08);
       }

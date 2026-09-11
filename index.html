@@ -8213,8 +8213,19 @@ function buildMeteo() {
   meteo.sol = nappe(0.09, 460, 480, 30, 60);
   meteo.solParc = nappe(0.315, 60, 52, 0, 74);
 }
+// LA DUREE DES CHANGEMENTS DE TEMPS. « prolonge la duree des changements de temps » : le
+// ciel basculait en une dizaine de secondes du grand soleil au deluge, et un episode ne
+// durait qu'une a deux minutes — on passait son temps a voir la meteo changer au lieu de la
+// VIVRE. Deux reglages, et deux seulement, commandent tout :
+//   METEO_FONDU : la vitesse a laquelle la force rejoint ce qu'on veut. 0,35 mettait dix
+//     secondes a installer une averse ; 0,085 met environ quarante secondes, le temps qu'il
+//     faut pour voir le ciel se couvrir, les premieres gouttes tomber, puis l'averse s'ouvrir.
+//   METEO_DUREE : combien de temps un episode tient avant que le ciel ne se decide a autre
+//     chose. De 70-150 s a 180-330 s : une averse dure maintenant plusieurs minutes.
+const METEO_FONDU = 0.085;
+const METEO_DUREE = [180, 330];
 function meteoSet(kind, duree, force) {
-  meteo.kind = kind; meteo.next = simTime + (duree || rnd(70, 150));
+  meteo.kind = kind; meteo.next = simTime + (duree || rnd(METEO_DUREE[0], METEO_DUREE[1]));
   // une averse n'a pas toujours la meme force : le troisieme argument la choisit (1 par defaut)
   meteo.cible = force == null ? 1 : clamp(force, 0, 1);
   if (kind !== 'clair') msg(kind === 'pluie' ? '🌧️ La pluie arrive…' : '❄️ Il commence à neiger !', 2200);
@@ -8281,6 +8292,220 @@ function neigeDecor(on) {
   }
   sgridSale();
 }
+// ================= LES TRACES DE PAS DANS LA NEIGE =================
+// « rajoute des traces de pas sur le sol quand il neige ». Le manteau blanc existait deja
+// (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la
+// moindre marque : on marchait sur de la neige peinte. Le joueur ET les habitants creusent
+// maintenant une empreinte a chaque foulee, elle se comble toute seule en une vingtaine de
+// secondes, et le degel emporte la piste entiere en meme temps que le reste du decor d'hiver.
+//
+// LE BUDGET DECIDE DE TOUT. Un maillage par pas, ce serait UN APPEL DE DESSIN PAR PAS : a
+// une foulee et demie par seconde, une minute de promenade a deux personnages en ajoutait
+// des centaines a une image qui en compte deja plus de six mille. Toutes les empreintes
+// vivent donc dans UN SEUL maillage, exactement comme les marques de choc du decor : une
+// geometrie de EMPREINTES_MAX quadrilateres, UNE texture, un tampon circulaire ou la plus
+// vieille empreinte est ecrasee. Quel que soit le nombre de pas, la ville coute UN appel de
+// dessin de plus, et pas un de plus.
+//
+// L'EFFACEMENT SE FAIT PAR SOMMET. Chaque empreinte doit palir a SON rythme alors qu'elles
+// partagent un materiau : impossible de piloter cela par `material.opacity`, qui vaut pour
+// tout le maillage. On ecrit donc la transparence dans l'attribut `color` a QUATRE
+// composantes (rouge, vert, bleu, alpha) : three.js r128 sait lire l'alpha du sommet
+// (`vertexAlphas` / USE_COLOR_ALPHA) des que l'attribut a quatre composantes et que le
+// materiau declare `vertexColors`. Un pas qui s'efface ne coute donc rien de plus qu'une
+// ecriture de quatre nombres.
+const EMPREINTES_MAX = 140;     // pas gardes en meme temps : au-dela, le plus ancien disparait
+const EMPREINTE_VIE = 22;       // s : le temps que la neige met a combler un pas
+const EMPREINTE_PAS = 0.62;     // m entre deux empreintes : la longueur d'une foulee
+const EMPREINTE_ECART = 0.19;   // m : un pied a droite, un pied a gauche de l'axe de marche
+const EMPREINTE_L = 0.44, EMPREINTE_W = 0.27;   // m : longueur et largeur d'une semelle
+// LE MANTEAU BLANC EST UNE NAPPE POSEE AU-DESSUS DU SOL (`meteo.sol` a 9 cm, `meteo.solParc`
+// a 31 cm au-dessus de la pelouse du parc). Les premieres empreintes etaient ecrites a 4 cm
+// du sol : elles etaient donc DESSOUS, et on ne voyait rien du tout. On creuse dans la NEIGE,
+// pas dans le bitume : la hauteur d'une empreinte est celle de la nappe qui la porte.
+function neigeNappeY(x, z) {
+  let y = 0;
+  for (const n of [meteo.sol, meteo.solParc]) {
+    if (!n || !n.visible || !n.geometry || !n.geometry.parameters) continue;
+    const g = n.geometry.parameters;
+    if (Math.abs(x - n.position.x) < g.width / 2 && Math.abs(z - n.position.z) < g.height / 2) y = Math.max(y, n.position.y);
+  }
+  return y;
+}
+// La semelle vue de dessus : un creux bleute (la neige tassee est dans l'ombre), un bourrelet
+// blanc sur le pourtour (la neige repoussee par le pied — c'est lui qui donne le relief) et
+// trois crampons. Dessinee une fois, partagee par toutes les empreintes du jeu.
+const TEX_EMPREINTE = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  // LA SEMELLE OCCUPE TOUT LE CADRE, ET C'EST UNE SEULE FORME. Premieres versions : un petit
+  // pied dessine au milieu d'un carre de 64 px, puis deux ovales separes. Le premier ne
+  // laissait a l'ecran qu'un trait bleu pale de quelques pixels, le second deux pastilles
+  // rondes — ni l'un ni l'autre ne se lisait comme un PAS. On dessine donc le contour complet
+  // d'une semelle (avant large, voute resserree, talon), remplie d'un creux bleute, barree de
+  // crampons et cernee d'un bourrelet blanc : la neige repoussee sur le pourtour, qui est ce
+  // qui donne le relief.
+  const semelle = () => { g.beginPath();
+    g.moveTo(6, 26);
+    g.quadraticCurveTo(4, 3, 32, 2);
+    g.quadraticCurveTo(60, 3, 58, 26);
+    g.quadraticCurveTo(56, 34, 47, 40);
+    g.quadraticCurveTo(51, 45, 51, 52);
+    g.quadraticCurveTo(51, 62, 32, 62);
+    g.quadraticCurveTo(13, 62, 13, 52);
+    g.quadraticCurveTo(13, 45, 17, 40);
+    g.quadraticCurveTo(8, 34, 6, 26);
+    g.closePath(); };
+  const creux = g.createRadialGradient(32, 26, 2, 32, 30, 36);
+  creux.addColorStop(0, 'rgba(70,98,138,.95)'); creux.addColorStop(0.65, 'rgba(94,124,166,.86)'); creux.addColorStop(1, 'rgba(120,150,190,.66)');
+  g.fillStyle = creux; semelle(); g.fill();
+  g.save(); semelle(); g.clip();          // les crampons ne debordent pas de la semelle
+  g.fillStyle = 'rgba(44,70,106,.55)';
+  for (let i = 0; i < 5; i++) g.fillRect(2, 6 + i * 8, 60, 4);
+  g.fillRect(2, 50, 60, 4);
+  g.restore();
+  g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 2.8;
+  semelle(); g.stroke();
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+// `var` et non `let`, pour la meme raison que `marquesMesh` : la remise a zero de la ville
+// touche cette variable et peut s'executer AVANT cette ligne — avec `let` on tombait dans la
+// zone morte temporelle et le jeu ne demarrait plus du tout.
+var empreintesMesh = null;
+function empreintesInit() {
+  if (empreintesMesh && empreintesMesh.parent) return empreintesMesh;
+  if (empreintesMesh) {   // la ville a ete demontee : le maillage a perdu son parent, on repart de zero
+    worldGroup.add(empreintesMesh);
+    empreintesMesh.geometry.setDrawRange(0, 0);
+    city.empreintes = []; city.empreintesN = 0;
+    return empreintesMesh;
+  }
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(EMPREINTES_MAX * 12), uv = new Float32Array(EMPREINTES_MAX * 8);
+  const col = new Float32Array(EMPREINTES_MAX * 16), idx = new Uint16Array(EMPREINTES_MAX * 6);
+  for (let i = 0; i < EMPREINTES_MAX * 4; i++) { col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = 0; }
+  for (let i = 0; i < EMPREINTES_MAX; i++) { const o = i * 4; idx.set([o, o + 1, o + 2, o, o + 2, o + 3], i * 6); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 4));   // 4 composantes : c'est l'ALPHA du sommet qui efface
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.setDrawRange(0, 0);
+  // `DoubleSide` n'est pas un detail : l'ordre des quatre sommets d'une empreinte donne une
+  // normale qui pointe VERS LE BAS, et en face avant seule on ne voyait donc rigoureusement
+  // rien depuis le ciel — quarante-huit empreintes bien posees, et une rue vierge a l'ecran.
+  // (Les marques de choc du decor ont la meme precaution, pour la meme raison.)
+  const mat = new THREE.MeshBasicMaterial({ map: TEX_EMPREINTE, transparent: true, depthWrite: false, vertexColors: true,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  // `shared` : ce maillage est UNIQUE pour toute la partie et se range simplement d'un monde a
+  // l'autre. Sans cette inscription, `libereBranche` (qui vide le monde) detruirait sa
+  // geometrie et son materiau, et toutes les empreintes du monde suivant seraient ecrites
+  // dans un tampon deja rendu a la carte graphique. C'est aussi ce qui dit au controle des
+  // fuites que ces deux ressources-la sont voulues permanentes.
+  shared.add(geo); shared.add(mat);
+  const m = new THREE.Mesh(geo, mat);
+  m.frustumCulled = false;   // jamais coupe : l'appel de dessin reste le MEME d'une image a l'autre
+  m.renderOrder = 2; worldGroup.add(m);
+  empreintesMesh = m; return m;
+}
+// Ecrit le quadrilatere d'une empreinte : quatre sommets a plat sur le sol, orientes dans le
+// sens de la marche. `gauche` retourne la texture pour que le pied gauche ne soit pas la
+// copie conforme du droit.
+function ecritEmpreinte(k, x, y, z, cap, gauche) {
+  const g = empreintesInit().geometry, P2 = g.attributes.position.array, U = g.attributes.uv.array;
+  const sn = Math.sin(cap), cs = Math.cos(cap);          // l'avant de la marche
+  const rx = cs, rz = -sn;                                // la droite du marcheur
+  const cx = x + rx * EMPREINTE_ECART * (gauche ? -1 : 1);
+  const cz = z + rz * EMPREINTE_ECART * (gauche ? -1 : 1);
+  const hl = EMPREINTE_L / 2, hw = EMPREINTE_W / 2;
+  const coins = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (let i = 0; i < 4; i++) {
+    const a = coins[i][0], b = coins[i][1], o = (k * 4 + i) * 3;
+    P2[o] = cx + rx * a * hw + sn * b * hl; P2[o + 1] = y; P2[o + 2] = cz + rz * a * hw + cs * b * hl;
+    const uo = (k * 4 + i) * 2;
+    U[uo] = gauche ? (a > 0 ? 0 : 1) : (a > 0 ? 1 : 0); U[uo + 1] = b > 0 ? 1 : 0;
+  }
+  g.attributes.position.needsUpdate = true; g.attributes.uv.needsUpdate = true;
+}
+function empreinteAlpha(k, a) {
+  const g = empreintesInit().geometry, C = g.attributes.color.array;
+  for (let i = 0; i < 4; i++) C[(k * 4 + i) * 4 + 3] = a;
+  g.attributes.color.needsUpdate = true;
+}
+// POSE UNE EMPREINTE. Rend l'empreinte posee, ou null si le sol ne peut pas en porter.
+function empreinte(x, z, cap, gauche) {
+  if (!city.on) return null;
+  // On ne creuse que dans la neige POSEE AU SOL. Au-dessus de 60 cm on est sur un plancher,
+  // un toit ou une dalle couverte : la nappe blanche ne va pas jusque-la (c'est deja le test
+  // que le decor d'hiver utilise pour placer ses congeres).
+  const sol = groundUnder(x, z, null, 1.2);
+  if (sol > 0.6) return null;
+  // ORDRE IMPORTANT : `empreintesInit` peut REMPLACER city.empreintes par un tableau neuf
+  // (quand le maillage revient d'un monde demonte). On l'appelle donc AVANT de prendre la
+  // liste, sinon on ajoutait les nouvelles empreintes dans l'ancien tableau, abandonne.
+  empreintesInit();
+  const liste = city.empreintes || (city.empreintes = []);
+  const slot = (city.empreintesN = (city.empreintesN || 0) + 1) - 1;
+  const k = slot % EMPREINTES_MAX;
+  const vieux = liste.findIndex(e => e.slot === k);   // tampon circulaire : la plus ancienne cede sa case
+  if (vieux >= 0) liste.splice(vieux, 1);
+  ecritEmpreinte(k, x, Math.max(sol, neigeNappeY(x, z), 0) + 0.03, z, cap, gauche);
+  empreinteAlpha(k, 1);
+  const e = { x: +x.toFixed(2), z: +z.toFixed(2), cap: +cap.toFixed(2), gauche: !!gauche, slot: k, age: 0, a: 1 };
+  liste.push(e);
+  empreintesMesh.geometry.setDrawRange(0, Math.min(city.empreintesN, EMPREINTES_MAX) * 6);
+  return e;
+}
+// Toute la piste d'un coup (degel, changement de monde, remise a zero du banc d'essai).
+function effaceEmpreintes() {
+  city.empreintes = []; city.empreintesN = 0;
+  if (empreintesMesh) {
+    const g = empreintesMesh.geometry, C = g.attributes.color.array;
+    for (let i = 3; i < C.length; i += 4) C[i] = 0;
+    g.attributes.color.needsUpdate = true; g.setDrawRange(0, 0);
+  }
+}
+// UN MARCHEUR AVANCE. On mesure la distance reellement parcourue depuis la derniere image et
+// on pose un pied chaque fois qu'elle atteint une foulee : la piste suit donc la vraie
+// vitesse de marche, a pied comme en courant, et personne ne seme d'empreintes sur place.
+function empreinteMarcheur(e, x, z, cap) {
+  const ax = e.empX, az = e.empZ;
+  e.empX = x; e.empZ = z;
+  if (ax == null) return false;
+  const d = Math.hypot(x - ax, z - az);
+  if (d > 1.5 || d < 1e-4) return false;   // teleporte (changement de monde, mission) ou immobile
+  e.empD = (e.empD || 0) + d;
+  if (e.empD < EMPREINTE_PAS) return false;
+  e.empD = 0; e.empG = !e.empG;
+  return !!empreinte(x, z, cap, e.empG);
+}
+// LE TOUR DE PISTE, appele une fois par image depuis la boucle de ville. Il ne coute RIEN
+// quand il ne neige pas : un test et on ressort.
+function empreintesTick(dt) {
+  const neige = !!(city.neigeG && city.neigeG.visible);
+  if (!neige) { if ((city.empreintes || []).length) effaceEmpreintes(); return; }
+  // 1. on pose : le joueur d'abord (pas au volant, pas a la nage, pas assis)
+  if (!drive.car && !P.swimming && !P.sit) empreinteMarcheur(P, P.pos.x, P.pos.z, P.facing);
+  else { P.empX = null; P.empD = 0; }
+  // 2. puis les habitants qu'on voit : au-dela de la portee d'animation, un pas ne se lit pas
+  if (typeof bots !== 'undefined') {
+    const R = (typeof ANIM !== 'undefined' && ANIM ? ANIM.vue : 62);
+    for (const b of bots) {
+      if (!b.av || !b.av.group || !b.av.group.visible || b.drive) { if (b) b.empX = null; continue; }
+      const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z;
+      if (dx * dx + dz * dz > R * R) { b.empX = null; continue; }
+      empreinteMarcheur(b, b.pos.x, b.pos.z, b.facing == null ? b.av.group.rotation.y : b.facing);
+    }
+  }
+  // 3. la neige comble : chaque pas garde sa forme les deux tiers de sa vie, puis s'efface.
+  const liste = city.empreintes || [];
+  for (let i = liste.length - 1; i >= 0; i--) {
+    const e = liste[i];
+    e.age += dt;
+    const u = e.age / EMPREINTE_VIE;
+    const a = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.4);
+    if (Math.abs(a - e.a) > 0.004 || (a === 0 && e.a !== 0)) { e.a = a; empreinteAlpha(e.slot, a); }
+    if (a <= 0) liste.splice(i, 1);
+  }
+}
 // verglas : on glisse sur les plaques quand la neige tient au sol
 function surGlace(x, z) {
   if (!city.neigeG || !city.neigeG.visible) return false;
@@ -8292,7 +8517,7 @@ function meteoTick(dt) {
   buildMeteo();
   if (simTime > meteo.next) meteoSet(pickOne(['clair', 'clair', 'clair', 'pluie', 'pluie', 'neige']));
   const veut = meteo.kind === 'clair' ? 0 : clamp(meteo.cible == null ? 1 : meteo.cible, 0, 1);
-  meteo.force += (veut - meteo.force) * Math.min(1, dt * 0.35);   // l'averse monte et retombe doucement
+  meteo.force += (veut - meteo.force) * Math.min(1, dt * METEO_FONDU);   // l'averse monte et retombe TRES doucement (voir METEO_FONDU)
   meteo.abri = sousToit();   // sous un toit : on coupe les gouttes, sinon il pleuvait dans les maisons
   const f = meteo.force * (meteo.abri ? 0.05 : 1);
   const seg = meteo.seg, flocons = meteo.flocons, neige = meteo.kind === 'neige', actif = f > 0.02;
@@ -8344,7 +8569,16 @@ function meteoTick(dt) {
     if (!neige) { sfx.noise(1.1, 260, .06); sfx.tone(48, 0, 1.3, 'sine', .07, 32); meteo.ecl = simTime + 0.12; }
   }
   if (city.on && meteo.ecl > simTime) { hemi.intensity += 1.6; if (scene.background && scene.background.isColor) scene.background.lerp(new THREE.Color(0xffffff), 0.5); }
-  if (f > 0.2 && !meteo.abri && simTime > (meteo.sonT || 0)) { meteo.sonT = simTime + (neige ? 3.5 : 0.55); sfx.noise(neige ? .5 : .5, neige ? 900 : 2600, neige ? .012 : .05 * f); }
+  // LE BRUIT DE LA PLUIE SORTAIT DEUX FOIS. Ici, un souffle du bus « effets » a 0,05 de
+  // volume TOUTES LES 0,55 s — c'est-a-dire un souffle presque continu, aussi fort qu'un coup
+  // de poing — et, en plus, la nappe spatialisee de `sonPluie` depuis sonsVille. La premiere
+  // couvrait tout le reste : les pas, les coups, les « aie », les voix des habitants. C'est
+  // exactement le defaut que le lit de bruit de la ville avait deja, et le remede est le
+  // meme : on SUPPRIME la source du bus effets et on ne garde que `sonPluie`, sur le bus
+  // ambiance, a un tiers du volume, avec un recul automatique des qu'un son de jeu arrive.
+  // Il ne reste ici que le CHUINTEMENT DE LA NEIGE, qui n'a pas d'autre source — au quart de
+  // son volume d'avant et deux fois moins souvent.
+  if (neige && f > 0.2 && !meteo.abri && simTime > (meteo.sonT || 0)) { meteo.sonT = simTime + 4.2; sfx.noise(.5, 900, .004); }
 }
 function buildDeco() {   // lampadaires et fleurs le long des grands axes, statue au centre
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
@@ -13897,8 +14131,20 @@ function sonSireneAmbu(x, z) { return sonSirene(x, z, 'ambulance'); }   // ancie
 function sonVent(x, y, z, force) {   // en hauteur, le vent siffle
   return !!sonEn(x, y, z, d => { sB(d, 1.7, 480 + 400 * force, .045 * force, 0.4); sB(d, 1.2, 2100, .012 * force, 0.8, .3); }, { duree: 2, portee: 40, bus: 'ambiance' });
 }
+// LA PLUIE : la SEULE source de bruit d'averse du jeu (voir meteoTick, qui en avait une
+// deuxieme, trois fois plus forte, sur le bus des effets). Deux corrections dans l'esprit de
+// ce qui a ete fait pour la rumeur de la ville :
+//   1. les niveaux sont divises par trois (0,05 / 0,03 → 0,016 / 0,010) : on entend l'averse,
+//      elle ne masque plus les pas, les coups ni les voix ;
+//   2. elle RECULE d'un cran pendant un tiers de seconde des qu'un son de jeu vient de
+//      sortir — c'est le meme recul que celui du lit de la ville (`ambiance.duckActif`), et
+//      il suffit a degager completement un pas ou un « aie ».
+const PLUIE_RECUL = 0.4;
 function sonPluie(x, y, z, force) {
-  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .05 * force, 0.35); sB(d, 1.6, 620, .03 * force, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
+  let recul = 1;
+  try { if (ambiance.duckActif()) recul = PLUIE_RECUL; } catch (e) {}
+  const v = force * recul;
+  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .016 * v, 0.35); sB(d, 1.6, 620, .010 * v, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
 }
 function sonAboiement(x, y, z, hauteur) {
   const h = clamp(hauteur || 1, 0.6, 1.6);
@@ -17179,6 +17425,9 @@ function step(dt, active) {
   }
   for (const s of spinners) { s.angle += s.omega * dt; s.g.rotation.y = s.angle; }
   for (const o of conveyors) { o.tex.offset.x -= o.conv.x * dt / 2; o.tex.offset.y += o.conv.z * dt / 2; }
+  // les traces de pas dans la neige : posees ici, dans la simulation, pour qu'elles suivent
+  // exactement la distance parcourue (et non la cadence d'affichage). Cout nul hors hiver.
+  if (city.on) { try { empreintesTick(dt); } catch (eEmp) {} }
   if (!active) return;
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
@@ -25565,8 +25814,14 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
     // la lance à eau, sur la plage avant du toit
     const lance = new THREE.Group(); lance.position.set(0, 2.45, 1.2); g.add(lance); outils.lance = lance;
     cyl(lam(MET_C.jaune), 0.11, 0.8, 0, 0.15, 0.2, 1.15, 0, lance);
-    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.42, 7, 10, 1, true), new THREE.MeshLambertMaterial({ color: 0x9fdcff, emissive: 0x3a7fbf, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
-    jet.rotation.x = Math.PI / 2; jet.position.set(0, 0.3, 4.0); jet.visible = false; lance.add(jet); outils.jet = jet;
+    // LE JET D'EAU. C'etait UN CONE BLEU TRANSPARENT, raide, de largeur constante, qui
+    // apparaissait et disparaissait d'un coup : le parent pauvre de l'incendie. C'est
+    // maintenant une vraie lance, construite par `construitJetEau` : une gerbe qui S'OUVRE en
+    // s'eloignant de la lance, des gouttes qui filent dedans, une eclaboussure a l'impact et
+    // de la vapeur quand l'eau touche les flammes. Quatre objets au total (la gerbe, et trois
+    // nuages de points qui tiennent chacun en UN appel de dessin), visibles seulement quand
+    // la lance est ouverte.
+    outils.jet = construitJetEau(lance);
     roues([[-1.2, 2.9], [1.2, 2.9], [-1.2, -1.6], [1.2, -1.6], [-1.2, -3.3], [1.2, -3.3]], 1.3);
     siege = { x: 0.6, y: 1.45, z: 3.1 };
   } else if (kind === 'fourgon') {   // FOURGON DE LA MAIRIE : le petit utilitaire des employés
@@ -25611,6 +25866,143 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
   prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
   return c;
 }
+// ================= LA LANCE A EAU DES POMPIERS =================
+// LE JET ETAIT UN CONE BLEU TRANSPARENT, raide, de largeur constante, qui apparaissait et
+// disparaissait d'un coup. A cote d'un incendie qui ondule, c'etait le parent pauvre de la
+// scene, et rien ne montrait que l'eau TOUCHE quelque chose. Une vraie lance, c'est quatre
+// choses a la fois :
+//   1. une GERBE qui S'OUVRE : serree a la sortie de la lance, large et dissoute au bout ;
+//   2. des GOUTTES qui filent dedans, plus dispersees a mesure qu'elles s'eloignent ;
+//   3. une ECLABOUSSURE a l'impact : l'eau rejaillit et retombe ;
+//   4. de la VAPEUR quand elle touche les flammes — et le feu qui RECULE la ou elle arrive.
+// BUDGET : la gerbe est un cone, les trois autres sont des NUAGES DE POINTS. Un nuage de
+// points, quel que soit le nombre de gouttes qu'il contient, coute UN appel de dessin. La
+// lance ouverte coute donc quatre appels au lieu d'un, et zero quand elle est fermee (tout
+// le groupe est invisible). Il n'y a qu'un camion de pompiers dans la ville.
+const JET_PORTEE = 7.3;     // m de gerbe (la lance est deja a 1,2 m de l'axe du camion : 8,5 m au total)
+const JET_GOUTTES = 64, JET_ECLATS = 40, JET_VAPEUR = 20;
+// La texture de l'eau : des filets verticaux d'epaisseurs et d'opacites differentes, qui se
+// raccordent en haut et en bas pour pouvoir DEFILER en boucle le long du jet — c'est ce
+// defilement qui donne le sentiment que l'eau coule au lieu d'etre un tuyau de verre.
+const TEX_EAU = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+  g.clearRect(0, 0, 64, 64);
+  g.fillStyle = 'rgba(196,232,255,.62)'; g.fillRect(0, 0, 64, 64);   // le voile d'ensemble : l'eau pulverisee
+  for (let i = 0; i < 16; i++) {
+    const x = i * 4 + (i % 3), w = 1 + (i % 3), a = 0.3 + (i % 4) * 0.22;
+    g.fillStyle = `rgba(255,255,255,${a})`; g.fillRect(x, 0, w, 64);
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 3); shared.add(t);
+  return t;
+})();
+// Construit la lance : la gerbe et ses trois nuages de points, tous ranges dans un groupe
+// qu'on rend visible d'un seul coup. Rendu : le groupe (c'est lui que `outils.jet` designe).
+function construitJetEau(lance) {
+  const g = new THREE.Group(); g.position.set(0, 0.34, 0.3); g.rotation.x = 0.2; g.visible = false; lance.add(g);
+  // 1. LA GERBE. Un cone ouvert dont la POINTE est a la lance et la base au loin : il
+  // s'elargit donc en s'eloignant, comme un vrai jet. Sa transparence est ecrite SOMMET PAR
+  // SOMMET (alpha du sommet) : dense a la sortie, presque rien au bout — sans cela le jet
+  // s'arretait net dans le vide, ce qui etait exactement le defaut d'avant.
+  const geo = new THREE.ConeGeometry(0.92, JET_PORTEE, 14, 1, true);
+  const pos = geo.attributes.position.array, col = new Float32Array(pos.length / 3 * 4);
+  for (let i = 0; i < pos.length / 3; i++) {
+    const u = clamp((pos[i * 3 + 1] + JET_PORTEE / 2) / JET_PORTEE, 0, 1);   // 0 = base (loin), 1 = pointe (lance)
+    // bleu pale a la sortie, presque blanc au bout (l'eau se pulverise) — et surtout ASSEZ
+    // OPAQUE : un jet a peine teinte disparaissait completement sur une place ensoleillee
+    col[i * 4] = 0.66 + 0.3 * (1 - u); col[i * 4 + 1] = 0.87 + 0.11 * (1 - u); col[i * 4 + 2] = 1;
+    col[i * 4 + 3] = 0.18 + 0.8 * u * u;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+  const gerbe = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: TEX_EAU, transparent: true, opacity: 0.85,
+    depthWrite: false, vertexColors: true, side: THREE.DoubleSide }));
+  gerbe.rotation.x = -Math.PI / 2;            // l'axe du cone passe de la verticale a l'axe du camion
+  gerbe.position.z = JET_PORTEE / 2; g.add(gerbe);
+  const nuage = (n, taille, couleur, opacite) => {
+    const p = new Float32Array(n * 3);
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    const m = new THREE.Points(gg, new THREE.PointsMaterial({ map: TEX_POINT, color: couleur, size: taille,
+      transparent: true, opacity: opacite, depthWrite: false, sizeAttenuation: true }));
+    m.frustumCulled = false; g.add(m); return { m, p };
+  };
+  const gouttes = nuage(JET_GOUTTES, 0.22, 0xdcf2ff, 0.95);
+  const eclats = nuage(JET_ECLATS, 0.26, 0xf2fbff, 0.95);
+  const vapeur = nuage(JET_VAPEUR, 1.5, 0xf2f6fa, 0.0);
+  g.userData = { jet: true, gerbe, gouttes, eclats, vapeur, k: 0, t: 0, vap: 0 };
+  return g;
+}
+// Fait vivre la lance. `ouverte` : la lance est deployee et crache. Tout est fonction du
+// temps propre de la lance, donc deux mesures au meme instant donnent la meme image.
+function jetEauAnime(c, dt, ouverte) {
+  const J = c && c.outils ? c.outils.jet : null;
+  if (!J || !J.userData || !J.userData.jet) return null;
+  const u = J.userData;
+  // la pression monte en un quart de seconde et retombe en un sixieme : l'eau ne s'arrete
+  // pas net quand on ferme la lance
+  u.k += ((ouverte ? 1 : 0) - u.k) * Math.min(1, dt * (ouverte ? 4.5 : 6.5));
+  J.visible = u.k > 0.02;
+  if (!J.visible) { u.vap = 0; return null; }
+  u.t += dt;
+  const t = u.t, k = u.k;
+  // LA GERBE : elle defile (l'eau coule), elle bat (la pompe pulse) et elle s'ouvre d'autant
+  // plus que la pression est forte.
+  u.gerbe.material.map.offset.y = (u.gerbe.material.map.offset.y - dt * 2.4) % 1;
+  u.gerbe.material.opacity = 0.95 * k;
+  const pulse = 1 + 0.07 * Math.sin(t * 17) + 0.04 * Math.sin(t * 29);
+  u.gerbe.scale.set((0.55 + 0.45 * k) * pulse, 1, (0.55 + 0.45 * k) * pulse);
+  // LES GOUTTES : chacune part de la lance et file jusqu'au bout, en s'ecartant de l'axe a
+  // mesure qu'elle s'eloigne (c'est ce qui fait la gerbe, plutot qu'un tuyau).
+  const G1 = u.gouttes.p;
+  for (let i = 0; i < JET_GOUTTES; i++) {
+    const ph = (t * 1.5 + i / JET_GOUTTES) % 1;
+    const z = ph * JET_PORTEE;
+    const r = (0.06 + ph * 0.95) * (0.6 + 0.4 * k);
+    const a = i * 2.399 + ph * 1.6;
+    G1[i * 3] = Math.cos(a) * r * (0.6 + 0.6 * ((i * 7) % 5) / 5);
+    G1[i * 3 + 1] = Math.sin(a) * r * 0.8 - ph * ph * 0.55;   // elles retombent un peu : l'eau est lourde
+    G1[i * 3 + 2] = z;
+  }
+  u.gouttes.m.geometry.attributes.position.needsUpdate = true;
+  u.gouttes.m.material.opacity = 0.95 * k;
+  u.gouttes.m.material.size = 0.16 + 0.11 * k;
+  // L'ECLABOUSSURE : au bout du jet, l'eau rejaillit en couronne et retombe.
+  const E = u.eclats.p;
+  for (let i = 0; i < JET_ECLATS; i++) {
+    const ph = (t * 2.2 + i / JET_ECLATS) % 1;
+    const a = i * 2.399, vr = 0.9 + ((i * 13) % 7) / 7 * 1.5;
+    const r = ph * vr;
+    E[i * 3] = Math.cos(a) * r;
+    E[i * 3 + 1] = Math.sin(a) * r * 0.55 + ph * 1.25 - ph * ph * 2.6;   // elle monte puis retombe
+    E[i * 3 + 2] = JET_PORTEE - 0.2 + Math.cos(a) * r * 0.3;
+  }
+  u.eclats.m.geometry.attributes.position.needsUpdate = true;
+  u.eclats.m.material.opacity = 0.9 * k * (0.75 + 0.25 * Math.sin(t * 13));
+  // LA VAPEUR : elle ne sort QUE quand l'eau touche vraiment des flammes (`c.jetTouche`,
+  // ecrit par arroseAutour). Elle monte, grossit et se dissout.
+  const cible = clamp(c.jetTouche || 0, 0, 1);
+  u.vap += (cible - u.vap) * Math.min(1, dt * 2.2);
+  const V = u.vapeur.p;
+  for (let i = 0; i < JET_VAPEUR; i++) {
+    const ph = (t * 0.45 + i / JET_VAPEUR) % 1;
+    const a = i * 2.399;
+    V[i * 3] = Math.cos(a) * (0.3 + ph * 1.5);
+    V[i * 3 + 1] = ph * 3.4;
+    V[i * 3 + 2] = JET_PORTEE - 0.4 + Math.sin(a) * (0.3 + ph * 1.2);
+  }
+  u.vapeur.m.geometry.attributes.position.needsUpdate = true;
+  u.vapeur.m.material.opacity = 0.55 * u.vap * k;
+  u.vapeur.m.material.size = 1.1 + 1.3 * u.vap;
+  u.vapeur.m.visible = u.vap > 0.02;
+  return u;
+}
+// L'etat de la lance, pour le banc d'essai : ce qu'on voit et ce que ca coute.
+function jetEauEtat(c) {
+  const J = c && c.outils ? c.outils.jet : null;
+  if (!J || !J.userData || !J.userData.jet) return null;
+  const u = J.userData;
+  return { ouvert: !!J.visible, pression: +u.k.toFixed(3), vapeur: +u.vap.toFixed(3),
+    gouttes: JET_GOUTTES, eclats: JET_ECLATS, portee: JET_PORTEE,
+    objets: J.children.length, touche: +(c.jetTouche || 0).toFixed(2) };
+}
 // L'animation des parties mobiles : elle tourne pour TOUS les véhicules de travail, qu'ils
 // soient conduits par un employé ou par le joueur.
 function outilsVehiculesTick(dt) {
@@ -25635,14 +26027,15 @@ function outilsVehiculesTick(dt) {
     if (o.bras) { o.bras.rotation.x = -0.9 + 0.75 * u; if (o.avantBras) o.avantBras.rotation.x = 1.5 - 0.95 * u; if (o.godet) o.godet.rotation.x = -0.7 + 1.5 * u; }
     if (o.echelle) { o.echelle.rotation.x = -0.95 * u; if (o.echelle2) o.echelle2.position.z = 3.6 * u; }
     if (o.jet) {
-      // la lance à eau : le jet ne sort que quand la lance est déployée
+      // la lance a eau : le jet ne sort que quand la lance est deployee. L'apparence est
+      // entierement dans `jetEauAnime` (gerbe, gouttes, eclaboussure, vapeur) ; ici on ne
+      // decide que d'une chose : la lance crache, ou non.
       const mouille = c.kind === 'pompier' && u > 0.55;
-      o.jet.visible = mouille;
       if (mouille) {
-        o.jet.scale.set(1, 0.8 + Math.sin(simTime * 12) * 0.12, 1);
-        if (o.lance) o.lance.rotation.y = Math.sin(simTime * 1.2) * 0.35;
+        if (o.lance) o.lance.rotation.y = Math.sin(simTime * 1.2) * 0.35;   // elle balaie lentement
         arroseAutour(c, dt);
-      }
+      } else c.jetTouche = 0;
+      jetEauAnime(c, dt, mouille);
     }
   }
 }
@@ -25651,12 +26044,31 @@ function outilsVehiculesTick(dt) {
 function arroseAutour(c, dt) {
   const bout = 8.5, cs = Math.cos(c.h), sn = Math.sin(c.h);
   const jx = c.x + sn * bout, jz = c.z + cs * bout;
-  if (simTime > (c.gouttesT || 0)) { c.gouttesT = simTime + 0.14; burst(jx + rnd(-1, 1), (c.y || 0) + 1.6 + rnd(-0.4, 0.6), jz + rnd(-1, 1), 0x9fdcff, 3); }
+  c.jetX = jx; c.jetZ = jz;
+  // Le nuage d'eclats `burst` qui pleuvait ici toutes les 0,14 s creait de VRAIS petits
+  // cubes dans la scene — un appel de dessin chacun, quatre fois par seconde, pour un effet
+  // qu'on ne voyait pas. L'eclaboussure est maintenant dans le nuage de points de la lance
+  // (`jetEauAnime`), qui ne coute rien de plus quel que soit le nombre de gouttes.
+  let touche = 0;
   for (const f of city.incendies) {
-    if (Math.hypot(f.x - jx, f.z - jz) > 6) continue;
+    const d = Math.hypot(f.x - jx, f.z - jz);
+    if (d > 6) continue;
     f.force = Math.max(0, f.force - dt * 16);
+    touche = Math.max(touche, 1 - d / 6);
+    // LE FEU RECULE LA OU L'EAU ARRIVE : on donne au brasier le point que la gerbe frappe,
+    // et le bloc Animation couche les flammes dans le sens oppose (voir `f.souffle`).
+    if (f.anim) {
+      const k0 = f.anim.souffle ? f.anim.souffle.k : 0;
+      // On donne AUSSI la direction du jet (dx, dz). Sans elle, un brasier touche en plein
+      // centre donnait un vecteur de poussee nul (le point d'impact et le foyer au meme
+      // endroit) et les flammes ne se couchaient pas du tout — c'est-a-dire exactement dans
+      // le cas ou l'on arrose le mieux.
+      f.anim.souffle = { x: jx, z: jz, dx: sn, dz: cs, k: Math.min(1, k0 + dt * 3.5) };
+    }
     if (drive.car === c && !f.aide) { f.aide = true; msg('💧 Continue d\'arroser, le feu baisse !', 1800); }
   }
+  c.jetTouche = touche;   // 0 = l'eau tombe a cote, 1 = elle arrive en plein dans le brasier
+  return touche;
 }
 // Actionne l'outil du véhicule : benne, flèche, godet, échelle, lance à eau.
 function actionneOutil(c) {
@@ -26678,8 +27090,109 @@ function ralentiTick() {
 // et montent, un CŒUR clair au milieu, une LUEUR qui bat, de la FUMÉE qui s'élève en se
 // diluant et des BRAISES qui montent. Tout est fonction de simTime : deux captures au même
 // instant donnent la même image.
-const FEU_CONE = new THREE.ConeGeometry(0.5, 1, 7);
-const FEU_BRAISE = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+// LES TEXTURES DU FEU, dessinees une fois et partagees par tous les brasiers du jeu : elles
+// ne coutent donc AUCUN appel de dessin de plus.
+// Pourquoi elles existent : le feu etait sept CONES ORANGE PLEINS. A l'ecran, sept triangles
+// plats et opaques poses les uns sur les autres — le joueur l'a dit sans detour, c'etait laid.
+// Il lui manquait ce qui fait qu'un feu est un feu : un coeur blanc-jaune qui vire a l'orange
+// puis au rouge en montant, et une pointe qui se dissout dans l'air au lieu de s'arreter net.
+// `TEX_FLAMME` EST CE DEGRADE : blanc opaque en bas de la langue, jaune, orange, puis rouge
+// transparent en haut. La coordonnee verticale de la texture (v) suit la hauteur du cone :
+// v = 0 au pied de la flamme, v = 1 a la pointe. Quelques stries verticales cassent
+// l'aplat — sans elles, la langue restait une surface unie meme en degrade.
+const TEX_FLAMME = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128; const g = c.getContext('2d');
+  const d = g.createLinearGradient(0, 128, 0, 0);   // y = 128 (bas de l'image) = pied de la flamme
+  d.addColorStop(0.00, 'rgba(255,238,176,1)');
+  d.addColorStop(0.12, 'rgba(255,211,104,1)');
+  d.addColorStop(0.30, 'rgba(255,158,40,0.96)');
+  d.addColorStop(0.52, 'rgba(250,102,16,0.82)');
+  d.addColorStop(0.74, 'rgba(210,46,8,0.46)');
+  d.addColorStop(0.90, 'rgba(148,20,4,0.16)');
+  d.addColorStop(1.00, 'rgba(110,14,2,0)');
+  g.fillStyle = d; g.fillRect(0, 0, 64, 128);
+  // les stries : de fines langues plus vives, reparties sur le tour du cone
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 7; i++) {
+    const x = 3 + i * 9;
+    const st = g.createLinearGradient(0, 128, 0, 18 + (i % 3) * 22);
+    st.addColorStop(0, 'rgba(255,220,140,0.30)'); st.addColorStop(1, 'rgba(255,120,30,0)');
+    g.fillStyle = st; g.fillRect(x, 0, 4 + (i % 2) * 2, 128);
+  }
+  // LA CRETE DECHIQUETEE. Un cone, meme en degrade, garde la silhouette d'un TRIANGLE : deux
+  // aretes droites qui se rejoignent en pointe. On gomme donc, colonne par colonne, une
+  // hauteur differente en haut de la texture : chaque pan du cone s'arrete a son propre
+  // niveau, et la crete du feu devient irreguliere quel que soit l'angle de vue.
+  g.globalCompositeOperation = 'destination-out';
+  for (let x = 0; x < 64; x += 2) {
+    const h = 16 + 26 * (0.5 + 0.5 * Math.sin(x * 0.51)) * (0.4 + 0.6 * (((x * 7) % 5) / 5));
+    g.fillRect(x, 0, 2, h);
+  }
+  for (let i = 0; i < 11; i++) { g.beginPath(); g.arc(3 + i * 6, 34 + (i % 5) * 13, 4 + (i % 3) * 3, 0, 6.2832); g.fill(); }
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+// LA FUMEE etait une bouffee de GLOW — le meme halo doux et JAUNE que la lueur du foyer,
+// simplement teinte en gris : une bille floue, jamais un nuage. Celle-ci est un vrai paquet
+// de fumee : cinq boursouflures inegales qui se chevauchent, bord dechiquete, coeur plus
+// dense que le pourtour.
+const TEX_FUMEE = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 96; const g = c.getContext('2d');
+  const bouffee = (x, y, r, o) => { const d = g.createRadialGradient(x, y, 0, x, y, r);
+    d.addColorStop(0, `rgba(232,232,236,${o})`); d.addColorStop(0.55, `rgba(206,206,212,${o * 0.55})`); d.addColorStop(1, 'rgba(180,180,188,0)');
+    g.fillStyle = d; g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill(); };
+  bouffee(48, 50, 40, 0.62); bouffee(33, 38, 26, 0.5); bouffee(62, 40, 24, 0.46);
+  bouffee(60, 62, 22, 0.42); bouffee(35, 63, 20, 0.38);
+  g.globalCompositeOperation = 'destination-out';   // des trous : la fumee n'est pas pleine
+  for (let i = 0; i < 7; i++) { const a = i * 0.897; g.beginPath(); g.arc(48 + Math.cos(a) * 30, 48 + Math.sin(a) * 30, 9 + (i % 3) * 4, 0, 6.2832); g.fill(); }
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+// Une braise : un point rond incandescent, qui sert aussi aux gouttes d'eau et a la vapeur
+// (la meme image, une couleur differente).
+const TEX_POINT = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d');
+  const d = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  d.addColorStop(0, 'rgba(255,255,255,1)'); d.addColorStop(0.45, 'rgba(255,255,255,0.75)'); d.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = d; g.fillRect(0, 0, 32, 32);
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+// Le cone est OUVERT (pas de disque au pied) et a neuf pans au lieu de sept : la langue est
+// plus ronde, et on voit a travers — c'est ce qui donne la transparence du feu.
+// `shared` pour les deux : elles servent a TOUS les foyers du jeu et doivent survivre au
+// demontage d'un monde (sinon `libereBranche` les detruisait avec le brasier qui brulait
+// encore, et le feu suivant n'avait plus de geometrie).
+const FEU_CONE = new THREE.ConeGeometry(0.5, 1, 9, 1, true); shared.add(FEU_CONE);
+const FEU_PLAN = new THREE.PlaneGeometry(1, 1); shared.add(FEU_PLAN);   // la flaque de lumiere au sol
+const FEU_BRAISES_N = 9;   // braises par foyer : elles tiennent toutes dans UN nuage de points
+// LA LUMIERE DU FEU SUR CE QUI L'ENTOURE. Elle est UNIQUE pour tout le jeu et se deplace sur
+// le brasier le plus proche du joueur : ajouter une lampe par foyer aurait fait recompiler
+// les nuances de toute la ville a chaque depart de feu (et jusqu'a cinq foyers a la fois).
+// Elle nait a la premiere flamme et ne repart plus : elle se contente de tomber a zero quand
+// il n'y a plus rien qui brule.
+const FEU_LUM = { l: null, cible: null };
+function feuLumiere(dt) {
+  let best = null, bd = Infinity;
+  for (const f of ANIM.feux) {
+    if (!f.g || !f.g.parent || f.k < 0.05) continue;
+    const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z);
+    if (d < bd) { bd = d; best = f; }
+  }
+  if (!best) { if (FEU_LUM.l) FEU_LUM.l.intensity = Math.max(0, FEU_LUM.l.intensity - dt * 4); FEU_LUM.cible = null; return null; }
+  if (!FEU_LUM.l) {
+    // 26 m de portee : la facade d'en face et les personnages autour sont eclaires, pas la ville
+    FEU_LUM.l = new THREE.PointLight(0xff7a22, 0, 26, 2);
+    scene.add(FEU_LUM.l);   // dans la scene et non dans le monde : elle survit aux changements de monde
+  }
+  FEU_LUM.cible = best;
+  const p = best.g.getWorldPosition(FEU_LUM.l.position);
+  p.y += 1.1 * best.T;
+  // LE VACILLEMENT : deux sinus qui ne tombent jamais en phase, donc une lueur qui bat sans
+  // jamais se repeter. C'est ce battement, projete sur les murs, qui fait « il y a un feu la ».
+  const t = best.t;
+  const bat = 0.62 + 0.26 * Math.sin(t * 8.3) + 0.12 * Math.sin(t * 19.7 + 1.3);
+  FEU_LUM.l.intensity = 2.6 * best.T * best.k * clamp(bat, 0.15, 1.2);
+  FEU_LUM.l.distance = 16 + 10 * best.T;
+  return best;
+}
 function feuAnime(x, y, z, taille, duree) {
   if (typeof worldGroup === 'undefined' || !worldGroup) return null;
   if (ANIM.feux.length >= ANIM.feuxMax) return null;
@@ -26698,29 +27211,52 @@ function feuAnime(x, y, z, taille, duree) {
   // deux ecritures, et plus personne ne se trompe.
   for (let i = 0; i < 7; i++) {
     const coeur = i >= 5;
-    const mat = new THREE.MeshBasicMaterial({ color: coeur ? 0xfff3c4 : (i % 2 ? 0xff6a10 : 0xffab2b),
-      transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+    // LE DEGRADE EST DANS LA TEXTURE (voir TEX_FLAMME) : la couleur du materiau n'est plus
+    // qu'une teinte par-dessus. Les langues du coeur tirent sur le blanc, celles du pourtour
+    // sur l'orange. Le melange additif fait le reste : la ou elles se croisent, ca devient
+    // blanc, exactement comme dans un vrai foyer.
+    // DEUX MELANGES, ET C'EST VOULU. En plein jour, un feu ENTIEREMENT additif se delave sur
+    // un fond clair : c'est ce qui donnait des cones blafards au-dessus d'une place ensoleillee.
+    // Les cinq langues du pourtour sont donc en melange NORMAL — elles gardent leur couleur
+    // sur n'importe quel fond — et les deux du coeur restent ADDITIVES : ce sont elles qui
+    // font le blanc incandescent au milieu, de jour comme de nuit.
+    const mat = new THREE.MeshBasicMaterial({ map: TEX_FLAMME, color: coeur ? 0xfff0d2 : (i % 2 ? 0xffa860 : 0xffc98a),
+      transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide,
+      blending: coeur ? THREE.AdditiveBlending : THREE.NormalBlending });
     const m = new THREE.Mesh(FEU_CONE, mat);
     const base = coeur ? 0.75 : 1.05 + (i % 3) * 0.55;
     m.userData = { coeur, a: i * 2.399, r: coeur ? 0.16 : 0.42 + (i % 3) * 0.3, h: base, l: coeur ? 0.4 : 0.5 + (i % 2) * 0.24, ph: i * 1.73 };
     m.s = m; m.base = base;
+    m.rotation.y = i * 0.9;   // chaque langue montre un autre pan de sa texture
     g.add(m); flammes.push(m); mats.push(mat);
   }
   const haloM = new THREE.SpriteMaterial({ map: GLOW, color: 0xff9a30, transparent: true, opacity: 0.5, depthWrite: false });
   const halo = new THREE.Sprite(haloM); halo.scale.set(9 * T, 9 * T, 1); halo.position.y = 1.2 * T; g.add(halo); mats.push(haloM);
-  for (let i = 0; i < 4; i++) {   // la fumée : quatre bouffées décalées d'un quart de cycle
-    const mat = new THREE.SpriteMaterial({ map: GLOW, color: 0x5a5f68, transparent: true, opacity: 0.3, depthWrite: false });
-    const s = new THREE.Sprite(mat); s.userData = { ph: i / 4 }; g.add(s); fumees.push(s); mats.push(mat);
+  // LA FLAQUE DE LUMIERE AU SOL : un disque additif qui bat avec les flammes. C'est ce qu'on
+  // voit d'un feu de pres — le sol autour de lui est ECLAIRE. Un seul quadrilatere a plat,
+  // pose a la hauteur du sol meme quand le foyer est accroche a une carrosserie.
+  const flaqueM = new THREE.MeshBasicMaterial({ map: GLOW, color: 0xff8420, transparent: true, opacity: 0.4,
+    depthWrite: false, blending: THREE.AdditiveBlending });
+  const flaque = new THREE.Mesh(FEU_PLAN, flaqueM);
+  flaque.rotation.x = -Math.PI / 2; flaque.position.y = 0.05 - (y || 0); flaque.renderOrder = 2;
+  g.add(flaque); mats.push(flaqueM);
+  for (let i = 0; i < 5; i++) {   // la fumee : cinq bouffees decalees d'un cinquieme de cycle
+    const mat = new THREE.SpriteMaterial({ map: TEX_FUMEE, color: 0x6a6e78, transparent: true, opacity: 0.3, depthWrite: false });
+    const s = new THREE.Sprite(mat); s.userData = { ph: i / 5 }; g.add(s); fumees.push(s); mats.push(mat);
   }
-  for (let i = 0; i < 5; i++) {   // les braises : elles montent et s'éteignent en l'air
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffc04a, transparent: true, opacity: 1, depthWrite: false });
-    const b = new THREE.Mesh(FEU_BRAISE, mat); b.scale.setScalar(T); g.add(b); braises.push(b); mats.push(mat);
-  }
+  // LES BRAISES : cinq petits cubes, donc CINQ APPELS DE DESSIN par foyer. Elles tiennent
+  // maintenant dans UN SEUL nuage de points — neuf braises pour un appel au lieu de cinq.
+  const brPos = new Float32Array(FEU_BRAISES_N * 3);
+  const brGeo = new THREE.BufferGeometry(); brGeo.setAttribute('position', new THREE.BufferAttribute(brPos, 3));
+  const brMat = new THREE.PointsMaterial({ map: TEX_POINT, color: 0xffc04a, size: 0.17 * T, transparent: true,
+    opacity: 1, depthWrite: false, sizeAttenuation: true, blending: THREE.AdditiveBlending });
+  const braisesPts = new THREE.Points(brGeo, brMat); braisesPts.frustumCulled = false; g.add(braisesPts); mats.push(brMat);
+  braises.push(braisesPts);
   // `lueur` est l'autre nom du halo (c'est ainsi que le reste du jeu l'appelle) et `t` est
   // l'horloge PROPRE du feu : elle avance avec le tic qui l'anime, pas avec `simTime`, sinon
   // un feu ne bougeait plus dès qu'on faisait avancer la simulation autrement.
-  const f = { g, flammes, halo, lueur: halo, fumees, braises, mats, T, t: 0, t0: simTime,
-    duree: duree > 0 ? duree : 0, k: 0, fin: false, intensite: 1, suivi: null, x: x || 0, z: z || 0 };
+  const f = { g, flammes, halo, lueur: halo, flaque, fumees, braises, braisesPts, brPos, mats, T, t: 0, t0: simTime,
+    duree: duree > 0 ? duree : 0, k: 0, fin: false, intensite: 1, suivi: null, x: x || 0, z: z || 0, souffle: null };
   ANIM.feux.push(f);
   return f;
 }
@@ -26734,6 +27270,10 @@ function feuDetruit(f) {
   if (f.suivi && f.suivi.feu === f) f.suivi.feu = null;
   for (const m of f.mats) { if (m && m.dispose) m.dispose(); }
   f.mats.length = 0;
+  // le nuage de braises a sa PROPRE geometrie (les langues partagent FEU_CONE et la flaque
+  // FEU_PLAN) : sans cette ligne elle restait sur la carte graphique
+  if (f.braisesPts && f.braisesPts.geometry) f.braisesPts.geometry.dispose();
+  if (FEU_LUM.cible === f) { FEU_LUM.cible = null; if (FEU_LUM.l) FEU_LUM.l.intensity = 0; }
 }
 // LE FEU D'UN VÉHICULE : le même feu, mais accroché au groupe de la carrosserie — il suit
 // donc la voiture qui roule encore, et il se range tout seul au bout de `duree`.
@@ -26789,35 +27329,82 @@ function feuAnimeUne(f, dt) {
   // cela les flammes d'une épave garée au loin restaient figées à la taille qu'elles
   // avaient au moment où on s'en est éloigné.
   const pres = animPres(f.x, f.z);
+  // LE SOUFFLE DE LA LANCE A EAU : la ou la gerbe arrive, le feu RECULE. `f.souffle` est un
+  // point du sol (celui que l'eau frappe) et une force qui retombe toute seule des qu'on
+  // arrete d'arroser ; les langues se couchent dans la direction opposee et perdent un quart
+  // de leur hauteur. Sans cela, arroser ne se voyait que dans un chiffre.
+  let px = 0, pz = 0, sk = 0;
+  if (f.souffle) {
+    f.souffle.k = Math.max(0, f.souffle.k - dt * 1.5);
+    sk = f.souffle.k;
+    if (sk > 0.01) {
+      // le sens de la poussee : celui du JET (l'eau pousse devant elle). A defaut, le
+      // vecteur qui va du point d'impact vers le foyer.
+      let dx = f.souffle.dx, dz = f.souffle.dz;
+      if (dx == null || (dx === 0 && dz === 0)) { dx = f.x - f.souffle.x; dz = f.z - f.souffle.z; }
+      const d = Math.hypot(dx, dz) || 1;
+      px = dx / d * sk; pz = dz / d * sk;
+    } else f.souffle = null;
+  }
   f.halo.material.opacity = (0.14 + 0.34 * (0.6 + 0.4 * Math.sin(t * 3.7 + f.t0))) * k;
   f.halo.scale.setScalar((8 + 1.6 * Math.sin(t * 2.3 + f.t0)) * f.T * (0.4 + 0.6 * k));
+  // la flaque au sol bat au meme rythme que la lueur, mais plus vite et plus court : c'est
+  // elle qui donne l'impression que le sol lui-meme est chauffe
+  if (f.flaque) {
+    const bat = 0.72 + 0.28 * Math.sin(t * 7.1 + f.t0) + 0.1 * Math.sin(t * 13.3);
+    f.flaque.visible = pres && k > 0.03;
+    f.flaque.scale.setScalar((5.2 + 0.8 * Math.sin(t * 3.1)) * f.T);
+    f.flaque.material.opacity = 0.30 * k * clamp(bat, 0.2, 1.1);
+  }
   for (const s of f.fumees) s.visible = pres;
   for (const b of f.braises) b.visible = pres && k > 0.15;
   for (const m of f.flammes) {
     const u = m.userData; m.visible = pres;
     const ph = t * 2.9 + u.ph;
     const monte = 0.55 + 0.45 * Math.sin(ph);
-    const h = Math.max(0.02, u.h * f.T * (0.5 + 0.65 * monte) * k);
-    const l = u.l * f.T * (0.8 + 0.22 * Math.sin(ph * 1.7 + 1.1)) * (0.4 + 0.6 * k);
-    m.scale.set(l, h, l);
+    const h = Math.max(0.02, u.h * f.T * (0.5 + 0.65 * monte) * k * (1 - 0.28 * sk));
+    // LA LANGUE SE DEFORME : elle est plus mince a mi-hauteur qu'a son pied, et son
+    // epaisseur respire avec deux sinus de periodes differentes — un cone dont on changeait
+    // l'echelle en bloc gardait toujours la meme silhouette.
+    const l = u.l * f.T * (0.78 + 0.2 * Math.sin(ph * 1.7 + 1.1) + 0.1 * Math.sin(ph * 3.1)) * (0.4 + 0.6 * k);
+    m.scale.set(l, h, l * (0.82 + 0.3 * Math.sin(ph * 2.3 + u.ph)));
     const derive = Math.sin(ph * 0.7) * 0.35;
-    m.position.set(Math.sin(u.a + derive) * u.r * f.T, h * 0.5 + 0.05 * f.T, Math.cos(u.a + derive) * u.r * f.T);
-    m.rotation.z = Math.sin(ph * 1.3) * 0.17; m.rotation.x = Math.cos(ph * 1.1) * 0.13;
-    m.material.opacity = (u.coeur ? 0.95 : 0.74) * clamp(k * 1.3, 0, 1);
+    m.position.set(Math.sin(u.a + derive) * u.r * f.T + px * 0.8 * h, h * 0.5 + 0.05 * f.T,
+      Math.cos(u.a + derive) * u.r * f.T + pz * 0.8 * h);
+    // le vacillement : la langue s'incline, et l'eau la couche dans le sens du jet
+    m.rotation.z = Math.sin(ph * 1.3) * 0.19 - px * 0.9; m.rotation.x = Math.cos(ph * 1.1) * 0.15 + pz * 0.9;
+    m.rotation.y += dt * (u.coeur ? 1.1 : 0.42);   // elle tourne lentement sur elle-meme : la texture ne se fige jamais
+    m.material.opacity = (u.coeur ? 0.98 : 0.8) * clamp(k * 1.3, 0, 1);
   }
   if (!pres) return true;
   for (let j = 0; j < f.fumees.length; j++) {
-    const s = f.fumees[j], u = (t * 0.26 + s.userData.ph) % 1;
-    const r = (0.35 + u * 1.7) * f.T;
-    s.position.set(Math.sin(t * 0.5 + j * 2.1) * r, (1.0 + u * 5.2) * f.T, Math.cos(t * 0.42 + j * 2.1) * r);
-    const e = (1.1 + u * 4.4) * f.T; s.scale.set(e, e, 1);
-    s.material.opacity = 0.34 * Math.min(1, u * 5) * (1 - u) * k;   // elle se dilue en montant
+    const s = f.fumees[j], u = (t * 0.22 + s.userData.ph) % 1;
+    // la bouffee part du HAUT des flammes (et non du sol), s'ecarte en montant et derive
+    // lentement dans un sens : une colonne de fumee ne monte jamais tout droit
+    const r = (0.3 + u * 2.3) * f.T;
+    s.position.set(Math.sin(t * 0.42 + j * 2.1) * r + u * u * 1.5 * f.T, (1.5 + u * 6.4) * f.T, Math.cos(t * 0.35 + j * 2.1) * r);
+    const e = (1.3 + u * 5.6) * f.T; s.scale.set(e, e, 1);
+    s.material.rotation = (j * 1.7 + t * 0.25) * (j % 2 ? 1 : -1);   // elle roule sur elle-meme
+    // ELLE SE DILUE ET ELLE PALIT : noire au sortir des flammes, grise a mi-hauteur, presque
+    // blanche en haut. Avant, la bouffee gardait la meme couleur du bas jusqu'en haut.
+    const gris = Math.round(46 + 150 * u);
+    s.material.color.setRGB(gris / 255, (gris + 3) / 255, (gris + 9) / 255);
+    s.material.opacity = 0.42 * Math.min(1, u * 4) * (1 - u) * (1 - u) * k;
   }
-  for (let j = 0; j < f.braises.length; j++) {
-    const b = f.braises[j], u = (t * 0.55 + j / f.braises.length) % 1;
-    const r = (0.25 + u * 0.9) * f.T;
-    b.position.set(Math.sin(j * 2.399 + u * 3) * r, u * 3.4 * f.T, Math.cos(j * 2.399 + u * 3) * r);
-    b.material.opacity = (1 - u) * k;
+  // LES BRAISES, toutes dans le meme nuage de points : on ecrit leurs positions, une seule
+  // fois, dans le tampon partage.
+  if (f.braisesPts && f.brPos) {
+    const A = f.brPos, n = A.length / 3;
+    for (let j = 0; j < n; j++) {
+      const u = (t * 0.5 + j / n) % 1;
+      const r = (0.22 + u * 1.1) * f.T;
+      A[j * 3] = Math.sin(j * 2.399 + u * 3.4) * r + px * u * 2;
+      A[j * 3 + 1] = u * 3.8 * f.T;
+      A[j * 3 + 2] = Math.cos(j * 2.399 + u * 3.4) * r + pz * u * 2;
+    }
+    f.braisesPts.geometry.attributes.position.needsUpdate = true;
+    f.braisesPts.material.opacity = (0.55 + 0.45 * Math.sin(t * 6.1)) * k;
+    f.braisesPts.material.size = (0.13 + 0.05 * Math.sin(t * 5.3)) * f.T;
   }
   return true;
 }
@@ -27522,6 +28109,9 @@ function animTetes() {
 function animMondeTick(dt) {
   animTetes();
   feuxAnimTick(dt);
+  // la lumiere du feu sur ce qui l'entoure : elle vaut pour TOUS les foyers, y compris ceux
+  // des vehicules (que feuxAnimTick laisse a feuxVehiculesTick), donc elle est appelee ici
+  try { feuLumiere(dt); } catch (eLum) {}
   secoursTick(dt);
   reparateursTick(dt);   // le réparateur penché sur le capot (sur place ou au garage)
   enginsTick(dt);        // les engins de chantier : godet qui creuse, lame, grue

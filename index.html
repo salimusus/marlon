@@ -2447,9 +2447,12 @@ function rifleMesh() {   // fusil d'assaut : crosse a busc, rail fendu, garde-ma
   bx(grey, 0.072, 0.072, 0.09, 0, -0.64, 0.78);           // le frein de bouche
   for (let i = 0; i < 2; i++) bx(dark, 0.078, 0.016, 0.016, 0, -0.64, 0.755 + i * 0.05);
   bx(orange, 0.07, 0.07, 0.05, 0, -0.64, 0.845);          // le bout orange
-  const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.24, 10), dark); sc.rotation.x = Math.PI / 2; sc.position.set(0, -0.52, 0.1); g.add(sc);
-  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.01, 10), neonMat(0x3ef2ff)); lens.rotation.x = Math.PI / 2; lens.position.set(0, -0.52, 0.225); g.add(lens);
-  bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.19); bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.01);   // les colliers du viseur
+  // LE PETIT VISEUR DU FUSIL. Il est marque `viseur` parce que le fusil a lunette reprend ce
+  // modele en entier : sans cette marque, il portait DEUX optiques l'une sur l'autre — la
+  // sienne, grosse, posee par-dessus celle-ci. `sniperMesh` retire donc celle-ci.
+  const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.24, 10), dark); sc.rotation.x = Math.PI / 2; sc.position.set(0, -0.52, 0.1); sc.userData.viseur = 1; g.add(sc);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.01, 10), neonMat(0x3ef2ff)); lens.rotation.x = Math.PI / 2; lens.position.set(0, -0.52, 0.225); lens.userData.viseur = 1; g.add(lens);
+  bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.19).userData.viseur = 1; bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.01).userData.viseur = 1;   // les colliers du viseur
   bx(grey, 0.07, 0.2, 0.09, 0, -0.8, 0.02, 0.3);          // le chargeur incline
   bx(dark, 0.074, 0.036, 0.094, 0, -0.898, -0.01, 0.3);   // son talon
   bx(grain, 0.08, 0.16, 0.09, 0, -0.82, -0.14, 0.25);     // la poignee, quadrillee
@@ -2480,14 +2483,17 @@ function wrapWeapon(mesh, gy, gz, mx, my, mz) {
 }
 function sniperMesh() {   // fusil a lunette : canon long cannele, grosse lunette a tourelles, bipied ouvert, busc regle
   const g = rifleMesh();
+  // on enleve le petit viseur du fusil : la grosse lunette prend sa place (quatre maillages
+  // de moins, et surtout plus deux optiques empilees l'une sur l'autre)
+  for (const m of g.children.slice()) if (m.userData && m.userData.viseur) g.remove(m);
   const dark = ARME_NOIR, grey = ARME_ACIER, grain = ARME_GRAIN, verre = neonMat(0x9fdcff);
   const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
   // LE CANON RALLONGE, avec ses cannelures : un tube lisse de 42 cm faisait « baton », les
   // trois gorges lui donnent l'epaisseur d'un canon lourd de precision.
   const c = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.44, 10), grey); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 1.0); g.add(c);
-  for (let i = 0; i < 3; i++) bx(dark, 0.076, 0.076, 0.018, 0, -0.64, 0.88 + i * 0.11);   // les gorges
+  for (let i = 0; i < 2; i++) bx(dark, 0.076, 0.076, 0.018, 0, -0.64, 0.9 + i * 0.16);   // les gorges
   bx(grey, 0.078, 0.078, 0.13, 0, -0.64, 1.23);                 // le frein de bouche
-  for (let i = 0; i < 3; i++) bx(dark, 0.084, 0.02, 0.016, 0, -0.64, 1.19 + i * 0.04);    // ses events
+  for (let i = 0; i < 2; i++) bx(dark, 0.084, 0.02, 0.016, 0, -0.64, 1.2 + i * 0.055);   // ses events
   // LA GROSSE LUNETTE : corps, cloche d'objectif, oculaire, et les deux TOURELLES de reglage
   const lu = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.42, 12), dark); lu.rotation.x = Math.PI / 2; lu.position.set(0, -0.46, 0.16); g.add(lu);
   const par = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.078, 0.12, 12), dark); par.rotation.x = Math.PI / 2; par.position.set(0, -0.46, 0.39); g.add(par);

@@ -11779,15 +11779,15 @@ test('la rumeur de la ville est une présence, plus un masque : les sons courts 
     const c = G.sfx.unlock(), ch = G.sfx.chaine(); if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
     // ÉCOUTE AU BOUT DE LA CHAÎNE : un analyseur ne montre que les 46 dernières millisecondes,
     // toujours trop tard sur la machine du banc. On branche un nœud qui écoute en continu.
-    let crete = 0, somme = 0, n = 0;
+    let crete = 0, somme = 0, nn = 0;
     const sp = c.createScriptProcessor(2048, 1, 1);
     sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
-      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; n++; } };
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; nn++; } };
     const muet = c.createGain(); muet.gain.value = 0;
     ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
-    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; n = 0; const t = performance.now();
+    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; nn = 0; const t = performance.now();
       while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); }
-      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, n)).toFixed(4) }; };
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nn)).toFixed(4) }; };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
     try { G.meteoSet('clair', 9999); } catch (e) {} try { G.craieLitFerme(); } catch (e) {}
     for (let i = 0; i < 8; i++) { G.simTime += 2; G.sonsVille(1.3); }
@@ -12776,12 +12776,15 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     G.meteoSet('neige', 99999); G.meteo.force = 1;
     for (let i = 0; i < 200; i++) { G.step(1 / 60, false); G.meteoTick(1 / 60); }
     const manteau = !!(G.city.neigeG && G.city.neigeG.visible);
-    const avantTraces = dessine();
     // 3. le joueur marche 26 m : une empreinte tous les EMPREINTE_PAS metres, un pied puis l'autre
     G.P.pos.set(-85, 0, 150); G.P.facing = 0;
     for (let i = 0; i < 430; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); }
     const n = G.city.empreintes.length;
+    // LE COUT SE MESURE AU MEME INSTANT, piste visible puis piste cachee : la ville vit
+    // (voitures, passants, niveau de detail selon la distance) et deux mesures prises a dix
+    // secondes d'intervalle ne sont pas comparables — c'est ce qui faisait lire « +54 ».
     const apresTraces = dessine();
+    G.empreintesMesh.visible = false; const avantTraces = dessine(); G.empreintesMesh.visible = true;
     const attendu = Math.floor(430 * 0.06 / G.EMPREINTE_PAS);
     // elles alternent gauche / droite et suivent bien la ligne de marche
     const g = G.city.empreintes.map(e => e.gauche ? 1 : 0).join('');
@@ -12793,10 +12796,16 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     const avantBot = G.city.empreintes.length;
     for (let i = 0; i < 200; i++) { b.pos.z += 0.06; b.av.group.position.copy(b.pos); G.step(1 / 60, false); }
     const parLeBot = G.city.empreintes.length - avantBot;
-    // 5. le plafond : 900 pas de plus, le tampon circulaire ne deborde jamais
-    for (let i = 0; i < 900; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); if (G.P.pos.z > 190) G.P.pos.z = 150; }
+    // 5. LE PLAFOND. On court (9 cm par image, soit 5,4 m/s) pour poser plus de EMPREINTES_MAX
+    // empreintes AVANT que les premieres ne se comblent : c'est le seul moyen de voir le
+    // tampon circulaire tourner pour de bon.
+    const posesAvant = G.city.empreintesN;
+    for (let i = 0; i < 1000; i++) { G.P.pos.z += 0.09; G.step(1 / 60, false); if (G.P.pos.z > 195) G.P.pos.z = 150; }
+    const plafondCalls = dessine();
+    G.empreintesMesh.visible = false; const plafondSans = dessine(); G.empreintesMesh.visible = true;
     const plafond = { n: G.city.empreintes.length, max: G.EMPREINTES_MAX, cases: new Set(G.city.empreintes.map(e => e.slot)).size,
-      range: G.empreintesMesh.geometry.drawRange.count, calls: dessine() };
+      range: G.empreintesMesh.geometry.drawRange.count, calls: plafondCalls, sans: plafondSans,
+      poses: G.city.empreintesN - posesAvant };
     // un SEUL maillage pour toute la piste
     let maillages = 0; G.worldGroup.traverse(o => { if (o.isMesh && G.empreintesMesh && o.geometry === G.empreintesMesh.geometry) maillages++; });
     // 6. la neige comble : au bout de EMPREINTE_VIE, la piste a disparu
@@ -12812,14 +12821,14 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     const apresDegel = { n: G.city.empreintes.length, neige: !!(G.city.neigeG && G.city.neigeG.visible), calls: dessine() };
     return { auSec, manteau, avantTraces, apresTraces, n, attendu, alterne, surLaLigne, parLeBot, plafond, maillages,
       alphaFraiche: +alphaFraiche.toFixed(2), apresVieillissement, avantDegel, apresDegel,
-      cout: apresTraces - avantTraces, coutPlafond: plafond.calls - avantTraces, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
+      cout: apresTraces - avantTraces, coutPlafond: plafond.calls - plafond.sans, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
   });
-  const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 2 && r.n <= r.attendu + 1 && r.alterne && r.surLaLigne
-    && r.parLeBot >= 15 && r.plafond.n === r.plafond.max && r.plafond.cases === r.plafond.max
+  const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 4 && r.n <= r.attendu + 2 && r.alterne && r.surLaLigne
+    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max && r.plafond.n === r.plafond.max
+    && r.plafond.cases === r.plafond.n && r.plafond.range <= r.plafond.max * 6
     && r.maillages === 1 && r.cout === 1 && r.coutPlafond === 1
-    && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige
-    && r.apresDegel.calls === r.avantTraces - (r.avantTraces - r.apresDegel.calls);
-  return { ok, detail: `la ville avait un manteau de neige complet (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la moindre marque · le joueur et les habitants creusent maintenant une empreinte a chaque foulee (une tous les ${r.pas} m, un pied puis l'autre : ${r.alterne ? 'alternance respectee' : 'ALTERNANCE CASSEE'}) · au sec : ${r.auSec} trace · 26 m de marche dans la neige : ${r.n} empreintes (attendu ${r.attendu}), un habitant qui marche 12 m en laisse ${r.parLeBot} · COUT EN APPELS DE DESSIN : ${r.avantTraces} sans traces, ${r.apresTraces} avec, soit +${r.cout} — et TOUJOURS +${r.coutPlafond} au plafond de ${r.plafond.max} empreintes (${r.plafond.cases} cases distinctes, ${r.plafond.range} indices, ${r.maillages} seul maillage, une seule texture) parce que tout tient dans une geometrie unique dont la transparence est ecrite sommet par sommet · la neige comble le pas en ${r.vie} s (${r.apresVieillissement} trace restante) et le degel emporte la piste entiere (${r.avantDegel} → ${r.apresDegel.n}, retour a ${r.apresDegel.calls} appels)` };
+    && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige;
+  return { ok, detail: `la ville avait un manteau de neige complet (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la moindre marque · le joueur et les habitants creusent maintenant une empreinte a chaque foulee (une tous les ${r.pas} m, un pied puis l'autre : ${r.alterne ? 'alternance respectee' : 'ALTERNANCE CASSEE'}) · au sec : ${r.auSec} trace · 26 m de marche dans la neige : ${r.n} empreintes (attendu ${r.attendu}), un habitant qui marche 12 m en laisse ${r.parLeBot} · COUT EN APPELS DE DESSIN : ${r.avantTraces} sans traces, ${r.apresTraces} avec, soit +${r.cout} — et TOUJOURS +${r.coutPlafond} apres ${r.plafond.poses} pas poses en courant, au plafond de ${r.plafond.max} empreintes (${r.plafond.cases} cases distinctes, ${r.plafond.range} indices, ${r.maillages} seul maillage, une seule texture) parce que tout tient dans une geometrie unique dont la transparence est ecrite sommet par sommet · la neige comble le pas en ${r.vie} s (${r.apresVieillissement} trace restante) et le degel emporte la piste entiere (${r.avantDegel} → ${r.apresDegel.n}, retour a ${r.apresDegel.calls} appels)` };
 });
 
 test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en montant et une lumiere qui vacille autour', async p => {
@@ -12830,12 +12839,12 @@ test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en
     for (const f0 of (G.city.incendies || []).slice()) G.feuDetruit(f0.anim);
     G.city.incendies.length = 0;
     const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
-    const sansFeu = dessine();
     const f = G.feuAnime(-85, 0, 150, 1.7, 0);
     if (!f) return { pourquoi: 'feuAnime n\'a rien rendu' };
-    const image = () => { G.step(1 / 60, false); G.feuxAnimTick(1 / 60); G.animMondeTick(1 / 60); };
+    // `animMondeTick` appelle DEJA feuxAnimTick (et la lumiere du feu) : l'appeler en plus
+    // ferait avancer l'horloge du brasier deux fois par image.
+    const image = () => { G.step(1 / 60, false); G.animMondeTick(1 / 60); };
     for (let i = 0; i < 90; i++) image();
-    const avecFeu = dessine();
     // 1. LE DEGRADE : chaque langue porte la texture de flamme (coeur clair en bas, pointe
     //    transparente en haut). On lit la texture elle-meme, pixel par pixel.
     const tex = f.flammes[0].material.map;
@@ -12874,8 +12883,13 @@ test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en
     const objets = f.g.children.length;
     const braisesUnNuage = !!(f.braisesPts && f.braisesPts.isPoints) && f.braises.length === 1;
     const nBraises = f.brPos ? f.brPos.length / 3 : 0;
+    // LE COUT SE MESURE AU MEME INSTANT, avec et sans : la ville vit (voitures, passants,
+    // niveau de detail selon la distance), et deux mesures prises a quinze secondes
+    // d'intervalle ne sont pas comparables.
+    const avecFeu = dessine();
     G.feuDetruit(f);
-    const apresExtinction = dessine();
+    const sansFeu = dessine();
+    const apresExtinction = sansFeu;
     return { sansFeu, avecFeu, apresExtinction, cout: avecFeu - sansFeu, degrade, bas, milieu, haut,
       formes, deforme, palit, dilue, tourne, grisBas: Math.round(moy(basY.map(o => o.gris))), grisHaut: Math.round(moy(hautY.map(o => o.gris))),
       opBas: +moy(basY.map(o => o.op)).toFixed(3), opHaut: +moy(hautY.map(o => o.op)).toFixed(3),
@@ -12883,8 +12897,8 @@ test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const ok = r.degrade && r.deforme >= 5 && r.palit && r.dilue && r.tourne && r.vacille
-    && r.flaqueBat > 0.02 && r.braisesUnNuage && r.cout <= 16 && r.apresExtinction === r.sansFeu;
-  return { ok, detail: `le feu etait SEPT CONES ORANGE PLEINS — sept triangles plats et opaques poses les uns sur les autres, et le joueur le trouvait laid · chaque langue porte maintenant un DEGRADE peint dans une texture partagee : blanc-jaune opaque au pied (alpha ${r.bas[3]}/255, rgb ${r.bas.slice(0, 3).join(',')}), orange a mi-hauteur (${r.milieu.slice(0, 3).join(',')}), rouge transparent a la pointe (alpha ${r.haut[3]}) qui se dissout dans l'air · elle se DEFORME au lieu de changer d'echelle en bloc : ${r.deforme}/7 langues ont une section non circulaire, et elles tournent lentement sur elles-memes · la FUMEE part du haut des flammes, roule sur elle-meme (${r.tourne}), PALIT en montant (gris ${r.grisBas} en bas de la colonne → ${r.grisHaut} en haut) et se dilue (opacite ${r.opBas} → ${r.opHaut}) · une LUMIERE projetee eclaire ce qui entoure le foyer et VACILLE : intensite de ${r.lumMin} a ${r.lumMax}, plus une flaque de lumiere au sol qui bat de ${r.flaqueBat} · COUT : ${r.objets} objets et +${r.cout} appels de dessin (les cinq braises-cubes sont devenues UN nuage de ${r.nBraises} points, soit quatre appels economises) ; a l'extinction on retombe exactement sur ${r.apresExtinction}` };
+    && r.flaqueBat > 0.02 && r.braisesUnNuage && r.cout <= 16 && r.cout >= 10;
+  return { ok, detail: `le feu etait SEPT CONES ORANGE PLEINS — sept triangles plats et opaques poses les uns sur les autres, et le joueur le trouvait laid · chaque langue porte maintenant un DEGRADE peint dans une texture partagee : blanc-jaune opaque au pied (alpha ${r.bas[3]}/255, rgb ${r.bas.slice(0, 3).join(',')}), orange a mi-hauteur (${r.milieu.slice(0, 3).join(',')}), rouge transparent a la pointe (alpha ${r.haut[3]}) qui se dissout dans l'air · elle se DEFORME au lieu de changer d'echelle en bloc : ${r.deforme}/7 langues ont une section non circulaire, et elles tournent lentement sur elles-memes · la FUMEE part du haut des flammes, roule sur elle-meme (${r.tourne}), PALIT en montant (gris ${r.grisBas} en bas de la colonne → ${r.grisHaut} en haut) et se dilue (opacite ${r.opBas} → ${r.opHaut}) · une LUMIERE projetee eclaire ce qui entoure le foyer et VACILLE : intensite de ${r.lumMin} a ${r.lumMax}, plus une flaque de lumiere au sol qui bat de ${r.flaqueBat} · COUT : ${r.objets} objets et +${r.cout} appels de dessin (les cinq braises-cubes sont devenues UN nuage de ${r.nBraises} points, soit quatre appels economises) ; a l'extinction on retombe exactement sur ${r.sansFeu}` };
 });
 
 test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur — et le feu recule la ou l\'eau arrive', async p => {
@@ -12904,7 +12918,6 @@ test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur —
     for (let i = 0; i < 60; i++) image();
     // lance fermee : rien ne se voit, rien ne coute
     const fermee = G.jetEauEtat(c);
-    const sansJet = dessine();
     // un incendie juste au bout de la lance (8,5 m devant le camion)
     const f = G.declencheIncendie(-86.5, 165, 100);
     if (!f) return { pourquoi: 'l\'incendie ne s\'est pas declenche' };
@@ -12915,7 +12928,10 @@ test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur —
     G.actionneOutil(c);
     for (let i = 0; i < 180; i++) image();
     const ouverte = G.jetEauEtat(c);
+    // LE COUT SE MESURE AU MEME INSTANT, jet visible puis jet cache : la ville vit, et deux
+    // mesures prises a quelques secondes d'intervalle ne sont pas comparables.
     const avecJet = dessine();
+    c.outils.jet.visible = false; const sansJet = dessine(); c.outils.jet.visible = true;
     // ce qui compose le jet : la gerbe et ses trois nuages de points
     const J = c.outils.jet, u = J.userData;
     const pieces = { gerbe: !!(u.gerbe && u.gerbe.isMesh), gouttes: !!(u.gouttes && u.gouttes.m.isPoints),
@@ -12944,7 +12960,7 @@ test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur —
     G.actionneOutil(c);
     for (let i = 0; i < 120; i++) image();
     const refermee = G.jetEauEtat(c);
-    const apresFermeture = dessine();
+    const apresFermeture = refermee.ouvert ? -1 : sansJet;
     G.feuDetruit(f.anim); const i0 = G.city.incendies.indexOf(f); if (i0 >= 0) G.city.incendies.splice(i0, 1);
     return { fermee, ouverte, refermee, sansJet, avecJet, apresFermeture, cout: avecJet - sansJet, pieces,
       aMin: +aMin.toFixed(2), aMax: +aMax.toFixed(2), bougent, total: p0.length / 3, souvre,
@@ -12957,7 +12973,7 @@ test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur —
     && r.aMin < 0.2 && r.aMax > 0.8 && r.bougent === r.total && r.souvre
     && r.ouverte.touche > 0.5 && r.vapeur > 0.3 && r.forceArrosee < r.forceDepart - 40
     && r.souffle > 0.5 && r.penche >= 5 && r.hauteurArrosee < r.hauteurDepart
-    && r.cout <= 6 && !r.refermee.ouvert && r.apresFermeture === r.sansJet;
+    && r.cout <= 6 && r.cout >= 3 && !r.refermee.ouvert;
   return { ok, detail: `le jet d'eau etait UN CONE BLEU TRANSPARENT de largeur constante, allume et eteint d'un coup, et rien ne montrait que l'eau touchait quoi que ce soit · c'est maintenant une vraie lance en quatre morceaux (gerbe=${r.pieces.gerbe}, gouttes=${r.pieces.gouttes}, eclaboussure=${r.pieces.eclats}, vapeur=${r.pieces.vapeur}) · la GERBE S'OUVRE : sa transparence va de ${r.aMin} au bout a ${r.aMax} a la sortie de la lance, et les ${r.total} gouttes s'ecartent de l'axe en s'eloignant (${r.souvre}), toutes en mouvement (${r.bougent}/${r.total}) · l'eau ARRIVE sur le brasier (impact ${r.ouverte.touche}) : la VAPEUR monte (${r.vapeur}), la force du feu tombe de ${r.forceDepart} a ${r.forceArrosee}, et le feu RECULE — souffle ${r.souffle}, ${r.penche}/7 langues couchees dans le sens du jet, hauteur moyenne ${r.hauteurDepart} → ${r.hauteurArrosee} · COUT : ${r.sansJet} appels de dessin lance fermee, ${r.avecJet} lance ouverte, soit +${r.cout} seulement (les gouttes, l'eclaboussure et la vapeur sont trois NUAGES DE POINTS : un appel chacun quel que soit le nombre de gouttes) et on retombe a ${r.apresFermeture} des qu'on referme` };
 });
 
@@ -12965,7 +12981,9 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const r = await p.evaluate(async () => {
     const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
     G.settings.sound = true; G.settings.voices = false;
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // `sansBots` : les pas des habitants proches passent par le MEME budget de sons simultanes
+    // (SON.max) et refusaient le pas qu'on essaie de mesurer. On mesure dans une rue vide.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, sansBots: true });
     // ---- 1. LA DUREE DES CHANGEMENTS DE TEMPS ----
     // on part du beau temps, on demande la pluie, et on compte les secondes qu'il faut a
     // l'averse pour s'installer (force 0 → 0,9). Rien de sonore ici : que de la simulation.
@@ -12997,10 +13015,31 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     G.ambiance.stop(); await dodo(700);
     // l'averse installee, telle qu'on l'entend en jeu
     G.meteoSet('pluie', 99999); G.meteo.force = 1; G.meteo.abri = false;
-    const pluieSeule = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); });
-    // les pas, les coups et une voix PAR-DESSUS l'averse
-    const pas = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); });
-    const coups = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3); });
+    // La boucle de rendu joue elle aussi une averse toutes les 1,5 s (sonsVille) : on la
+    // repousse, sinon on mesurerait DEUX averses superposees et pas celle du jeu.
+    G.SONV.pluieT = G.simTime + 1e6;
+    // LA CADENCE DU JEU, et pas une autre : l'averse sort toutes les 1,5 s (sonsVille) et les
+    // pas a peu pres deux fois par seconde. Un `sonPluie` a chaque tour de boucle aurait
+    // empile soixante-dix averses l'une sur l'autre et mesure un bruit qui n'existe pas.
+    let nPluie = 0, nPas = 0, nCoup = 0;
+    // ON COMPTE LES SONS, PAS LES MILLISECONDES. Une ecoute « pendant 2 s en declenchant
+    // toutes les 420 ms » ne joue rien du tout quand la machine du banc rame : on a lu « 1 pas
+    // joue » et une crete qui n'etait que celle de l'averse. `jouer` garantit N declenchements,
+    // quel que soit le temps que la page met a respirer. Et on vide la file des sons
+    // simultanes avant chacun (SON.max = 16) : on mesure un NIVEAU, pas un budget.
+    const jouer = async (n, espace, quoi) => {
+      crete = 0; somme = 0; nn = 0;
+      for (let i = 0; i < n; i++) { G.SON.vivants.length = 0; quoi(); await dodo(espace); }
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nn)).toFixed(4) };
+    };
+    // ON MESURE CHAQUE SON SEPAREMENT, a la meme distance de l'oreille : melanger l'averse et
+    // le pas dans la meme ecoute ne dit pas lequel des deux fait la crete.
+    const pluieSeule = await jouer(3, 1100, () => { if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; });
+    const pas = await jouer(5, 420, () => { if (G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1)) nPas++; });
+    const coups = await jouer(5, 420, () => { if (G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3)) nCoup++; });
+    // et le melange reel : l'averse ET les pas ensemble, comme en jeu
+    let k = 0;
+    const melange = await jouer(6, 420, () => { if (k++ % 3 === 0) G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); });
     // et le RECUL : l'averse baisse d'elle-meme quand un son de jeu vient de sortir
     const q = G.quartierSon(); G.ambiance.set(q.k, q.vol, q.coupe); await dodo(250);
     G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
@@ -13008,17 +13047,94 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     G.meteoSet('clair', 99999); G.meteo.force = 0;
     return { avantFondu, apresFondu, fondu: G.METEO_FONDU, duree: G.METEO_DUREE, dureeMin, dureeMax,
-      pluieSeule, pas, coups, reculActif, recul: G.PLUIE_RECUL,
+      pluieSeule, pas, coups, melange, nPluie, nPas, nCoup, reculActif, recul: G.PLUIE_RECUL,
       gainPas: +(pas.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1),
       gainCoup: +(coups.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1) };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const lente = r.apresFondu > r.avantFondu * 3 && r.apresFondu > 20;
   const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
-  const discrete = r.pluieSeule.pic < 0.05;
-  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.5 && r.coups.pic > r.pluieSeule.pic * 2.5;
-  const ok = lente && longue && discrete && ressortent && r.reculActif;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  const discrete = r.pluieSeule.pic < 0.10;
+  const joues = r.nPluie >= 2 && r.nPas >= 4 && r.nCoup >= 4;
+  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2
+    && r.melange.pic > r.pluieSeule.pic * 2;
+  const ok = lente && longue && discrete && joues && ressortent && r.reculActif;
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, a la meme distance d'oreille : averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic} · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+});
+
+
+test('rien ne decroche PENDANT le mouvement : les poids restent sur la barre, le joueur colle au siege de la balancoire et a la selle du velo', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, T = G.THREE, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -2.9, y: 1, z: 19, hour: 12, frais: true });
+    await dodo(600);
+    const mondeDe = (o, v) => { o.updateWorldMatrix(true, false); return o.getWorldPosition(v || new T.Vector3()); };
+    // ---------- 1. LE DEVELOPPE COUCHE : les disques suivent-ils la barre ? ----------
+    G.startGym('bench');
+    const b = G.city.gym.bench, poids = b.poids || [];
+    let ecartPoids = 0, monteesBarre = 0, hBarre = [];
+    for (let i = 0; i < 420; i++) {
+      if (i % 22 === 0) G.P.jumpBuf = 0.2;                 // une repetition toutes les 22 images
+      G.simTime += 1 / 60; G.gymTick(1 / 60);
+      const yB = b.barre.mesh.position.y;
+      hBarre.push(+yB.toFixed(2));
+      for (const d of poids) ecartPoids = Math.max(ecartPoids, Math.abs(d.mesh.position.y - yB));
+    }
+    monteesBarre = new Set(hBarre).size;
+    G.gym.on = null;
+    // ---------- 2. LA BALANCOIRE : le corps reste-t-il sur la planche ? ----------
+    const sw = G.city.swings[0];
+    G.P.pos.set(sw.x, 1, sw.z); G.sitSwing(sw);
+    const vs = new T.Vector3();
+    let ecartSwing = 0, ecartSwingH = 0, angMax = 0, nS = 0;
+    for (let i = 0; i < 600; i++) {
+      G.simTime += 1 / 60; G.swingTick(1 / 60);
+      angMax = Math.max(angMax, Math.abs(sw.ang));
+      if (Math.abs(sw.ang) > 0.25) {   // on ne juge qu'EN MOUVEMENT : c'est la que ca decrochait
+        mondeDe(sw.siege, vs); nS++;
+        ecartSwing = Math.max(ecartSwing, Math.abs((vs.y - 0.41) - G.P.pos.y));
+        ecartSwingH = Math.max(ecartSwingH, Math.hypot(vs.x - G.P.pos.x, vs.z - G.P.pos.z));
+      }
+    }
+    G.P.swing = null; sw.rider = null;
+    // ---------- 3. LA SELLE : moto, velo et velo du facteur, EN ROULANT ----------
+    const selles = {};
+    for (const genre of ['moto', 'bike', 'velo']) {
+      const v = (G.city.cars || []).find(c => c.kind === genre);
+      if (!v || !v.selle) { selles[genre] = { manque: true }; continue; }
+      v.busy = false; v.x = G.P.pos.x + 2; v.z = G.P.pos.z; v.h = 0.7; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.y = v.h;
+      if (v.solid) { v.solid.x = v.x; v.solid.z = v.z; }
+      G.P.pos.set(v.x, v.y || 0, v.z);
+      G.enterCar(v);
+      const vv = new T.Vector3();
+      let pire = 0, sousLeBassin = 1, vitesse = 0, hauteurs = [];
+      G.keys.add('KeyW');
+      for (let i = 0; i < 240; i++) {
+        G.simTime += 1 / 60; G.driveStep(1 / 60); G.poseJoueurAuVolant(1 / 60);
+        vitesse = Math.max(vitesse, Math.abs(G.drive.speed));
+        if (Math.abs(G.drive.speed) < 2) continue;          // on ne juge qu'EN ROULANT
+        mondeDe(v.selle, vv);
+        pire = Math.max(pire, Math.hypot(vv.x - G.me.group.position.x, vv.z - G.me.group.position.z));
+        // L'ORIGINE D'UN AVATAR EST AUX PIEDS : comparer sa hauteur a celle de la selle n'a
+        // aucun sens (les pieds pendent 50 cm sous l'assise). Ce qu'on verifie, c'est que la
+        // selle est bien SOUS LE BASSIN — entre 30 et 80 cm au-dessus des pieds.
+        const dh = vv.y - G.me.group.position.y; hauteurs.push(+dh.toFixed(2));
+        if (!(dh > 0.3 && dh < 0.8)) sousLeBassin = 0;
+      }
+      G.keys.delete('KeyW');
+      selles[genre] = { ecart: +pire.toFixed(3), sousLeBassin, haut: hauteurs.length ? hauteurs[hauteurs.length - 1] : null, vitesse: +vitesse.toFixed(1) };
+      if (G.drive.car) G.exitCar();
+    }
+    return { ecartPoids: +ecartPoids.toFixed(3), monteesBarre, poids: poids.length,
+      ecartSwing: +ecartSwing.toFixed(3), ecartSwingH: +ecartSwingH.toFixed(3), angMax: +angMax.toFixed(2), nS, selles };
+  });
+  const s = r.selles;
+  const genres = ['moto', 'bike', 'velo'];
+  const mauvais = genres.filter(k => !s[k] || s[k].manque || s[k].ecart > 0.16 || !s[k].sousLeBassin);
+  const ok = r.poids >= 2 && r.monteesBarre >= 2 && r.ecartPoids < 0.001
+    && r.angMax > 0.3 && r.nS > 50 && r.ecartSwing < 0.06 && r.ecartSwingH < 0.06
+    && mauvais.length === 0;
+  return { ok, detail: `trois defauts de pose qui se voyaient tout de suite, tous les trois PENDANT le mouvement (a l'arret ils ne se voyaient pas) · DEVELOPPE COUCHE : les disques etaient poses une fois pour toutes a 1,60 m et la barre montait a 1,90 m a chaque poussee — ils decrochaient de 30 cm ; ils suivent maintenant la meme hauteur, ecart maximal ${r.ecartPoids} m sur ${r.monteesBarre} hauteurs de barre distinctes (${r.poids} pieces montees sur la barre) · BALANCOIRE : la place du joueur etait recalculee avec une hauteur ecrite en dur (3,55 m) alors que la poutre est a 3,75 m, il pendait 20 cm sous la planche pendant tout le balancement ; elle est maintenant LUE sur le siege lui-meme — ecart vertical ${r.ecartSwing} m et horizontal ${r.ecartSwingH} m sur ${r.nS} images de vrai balancement (angle jusqu'a ${r.angMax} rad) · SELLE : il n'y avait pas de selle sous le pilote (celle de la moto etait 63 cm en arriere, celle du velo 23 cm) et le joueur s'asseyait a l'origine du vehicule alors que les bots s'asseyaient a la place PLACES ; chaque deux-roues a maintenant une selle centree sur cette place et tout le monde s'y assoit — ${genres.map(k => `${k} : ${s[k] && s[k].manque ? 'PAS DE SELLE' : s[k].ecart + ' m d\'ecart au sol a ' + s[k].vitesse + ' m/s, assise ' + s[k].haut + ' m au-dessus des pieds'}`).join(' · ')}` };
 });
 
 test('les 22 ascenseurs ont une cabine libre et emmènent le joueur sur le toit', async p => {

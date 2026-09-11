@@ -2381,7 +2381,15 @@ function buildShops() {
   box(-2.9, 0.35, 18.2, 0.9, 0.7, 0.35, 0x3b4252, { deco: true, studs: false });                        // pied central
   for (const sx of [-0.62, 0.62]) box(-2.9 + sx, 0.85, 16.75, 0.12, 1.7, 0.12, 0x8f98ab, { deco: true, studs: false });   // montants, derrière la tête
   const barre = box(-2.9, 1.6, 17.95, 2.6, 0.09, 0.09, 0xcfd6e4, { deco: true, studs: false });          // barre pile au-dessus de la poitrine
-  for (const sx of [-1.05, 1.05]) box(-2.9 + sx, 1.6, 17.95, 0.16, 0.62, 0.62, 0x111111, { deco: true, studs: false });   // disques
+  // LES DISQUES SUIVENT LA BARRE. Ils etaient poses une fois pour toutes a 1,60 m, alors que
+  // la barre, elle, MONTE de 30 cm a chaque repetition : pendant tout le mouvement les poids
+  // restaient accroches en l'air, decroches de la barre. On les garde dans une liste
+  // (`city.gym.bench.poids`) et gymTick les remonte AVEC elle, a la meme hauteur, toujours.
+  const poids = [];
+  for (const sx of [-1.05, 1.05]) {
+    poids.push(box(-2.9 + sx, 1.6, 17.95, 0.16, 0.62, 0.62, 0x111111, { deco: true, studs: false }));     // disque
+    poids.push(box(-2.9 + sx * 0.82, 1.6, 17.95, 0.1, 0.2, 0.2, 0xcfd6e4, { deco: true, studs: false })); // le collier de serrage
+  }
   // ---- tapis de course : le joueur court DEBOUT sur la bande, face à la console
   box(0.7, 0.55, 18.4, 1.4, 0.35, 3, 0x3b4252, { studs: false, noRoute: true });                        // châssis
   const bande = box(0.7, 0.74, 18.4, 1.05, 0.06, 2.6, 0x1b1f2a, { deco: true, studs: false, noEdges: true });   // bande roulante
@@ -2397,7 +2405,7 @@ function buildShops() {
   // Couché, le personnage pivote autour de SES PIEDS : le point d'accroche du banc est donc au
   // bout du banc (le corps remonte vers la tête) et 18 cm au-dessus de la mousse. Sur le tapis,
   // on se cale entre les poignées et le milieu de la bande.
-  city.gym = { bench: { x: -2.9, z: 19, y: 1.13, barre }, run: { x: 0.7, z: 17.9, y: 0.77, rayures } };
+  city.gym = { bench: { x: -2.9, z: 19, y: 1.13, barre, poids }, run: { x: 0.7, z: 17.9, y: 0.77, rayures } };
   for (const x of [-23.5, -14, -5]) lamp(x, 14.8); flowerBed(-19, 11.5, 4, 1.2); flowerBed(-1, 11.5, 4, 1.2);
   city.zones.push({ name: 'Commerces', emoji: '🛍️', x1: -25, x2: 4, z1: 10, z2: 24, hint: '🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir' });
 }
@@ -4002,7 +4010,9 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
     const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
     for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, 2.6, 0.06); rope.position.set(dx, -1.3, 0); piv.add(rope); }
     const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -2.6, 0); piv.add(seat);
-    city.swings.push({ x: sx, z: SWZ, piv, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
+    // `siege` : le maillage lui-meme. swingTick s'en sert pour COLLER le joueur a la planche
+    // au lieu de recalculer sa place avec une formule (voir swingTick).
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
   }
   sign(-12, 0.3, 58, '🎠 Balançoires : E pour s\'asseoir', false, Math.PI);
   // terrain de boules
@@ -4099,6 +4109,7 @@ function petAnimal(p) {
   burst(p.x, p.y + 0.8, p.z, 0xff7ad9, 8); bubble(me, p.kind === 'dog' ? 'bon chien ! 🐶' : 'gentil chat 🐱'); sfx.coin();
   if (p.kind === 'dog') sonAboiement(p.x, p.y + 0.6, p.z, 1.1); else sonEn(p.x, p.y + 0.5, p.z, d => sfx.toneVers(d, 600, 0, .4, 'sine', .07, 450), { duree: .45, portee: 26, bus: 'voix' });
 }
+const SWING_P = new THREE.Vector3();   // reutilise a chaque image : on n'alloue rien dans la boucle
 function swingTick(dt) {
   for (const sw of city.swings) {
     if (sw.rider === 'me') { sw.amp = Math.min(1.05, sw.amp + dt * 0.25); }
@@ -4107,13 +4118,18 @@ function swingTick(dt) {
     if (sw.rider === 'me' && sw.amp > 0.3 && Math.sign(prev) !== Math.sign(sw.ang)) sfx.whoosh();
     sw.piv.rotation.x = sw.ang;
     if (sw.rider === 'me') {
-      // Le pivot tourne autour de x : la planche, en (0, −L, 0), part vers z − L·sin(ang).
-      // Le signe était inversé, le joueur oscillait donc du côté opposé au siège (jusqu'à 4,5 m d'écart).
-      const seatX = sw.x, seatY = 3.55 - sw.L * Math.cos(sw.ang), seatZ = sw.z - sw.L * Math.sin(sw.ang);
+      // ON NE CALCULE PLUS LA PLACE DU SIEGE : ON LA LIT. La formule refaisait a la main le
+      // mouvement du pivot avec une hauteur ecrite en dur (3,55 m) alors que la poutre est a
+      // 3,75 m : le joueur pendait 20 cm SOUS la planche pendant tout le balancement, et la
+      // moindre retouche du portique aurait creuse l'ecart. On demande sa position au siege
+      // lui-meme — il est impossible de se tromper, et ca reste juste quoi qu'on change.
+      sw.piv.updateMatrixWorld(true);
+      const sp = sw.siege ? sw.siege.getWorldPosition(SWING_P) : SWING_P.set(sw.x, 3.75 - sw.L * Math.cos(sw.ang), sw.z - sw.L * Math.sin(sw.ang));
+      const seatX = sp.x, seatY = sp.y, seatZ = sp.z;
       const dAng = sw.amp * w * Math.cos(sw.t * w);
       const vz = -dAng * sw.L * Math.cos(sw.ang), vy = dAng * sw.L * Math.sin(sw.ang);
       // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,51 m plus bas, comme sur un banc
-      P.pos.set(seatX, seatY - 0.46, seatZ); P.vel.set(0, vy, vz); P.facing = 0;
+      P.pos.set(seatX, seatY - 0.41, seatZ); P.vel.set(0, vy, vz); P.facing = 0;   // 0,05 m de demi-planche + 0,36 m d'assise
       if (P.jumpBuf > 0) { P.jumpBuf = 0; sw.rider = null; P.swing = null; P.vel.set(0, vy * 1.3 + 6, vz * 1.5); P.grounded = false; msg('🎠 Wouhou !', 700); sfx.jump(); }
     }
   }
@@ -4847,13 +4863,96 @@ function fieldLines(x, top, z, w, d, drawFn) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
   m.rotation.x = -Math.PI / 2; m.position.set(x, top + 0.02, z); worldGroup.add(m);
 }
-const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 14); shared.add(wheelGeo);
-const hubGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.32, 10); shared.add(hubGeo);
+// ================= LA ROUE =================
+// « pneus mieux detailles ». Une roue, c'etait SIX MAILLAGES : un cylindre noir, un moyeu et
+// quatre barres croisees en guise de rayons. Soit vingt-quatre appels de dessin par voiture
+// rien que pour les roues — et a l'ecran, un galet noir avec une croix grise dessus : ni
+// sculpture de bande de roulement, ni vraie jante, ni ecrous, ni valve.
+//
+// LA ROUE EST MAINTENANT UNE SEULE PIECE, et elle est BEAUCOUP plus detaillee. Tout le detail
+// est PEINT dans une texture partagee par toutes les roues du jeu : la bande de roulement sur
+// le flanc du cylindre, et la jante complete (cinq rayons, ecrous, cache-moyeu, valve, flanc
+// grave) sur ses deux faces. Le tour de force est dans les coordonnees de texture : three.js
+// donne au TOUR du cylindre et a ses DEUX DISQUES le meme carre [0,1], donc un seul dessin
+// pour les deux. On replie donc le tour dans la moitie GAUCHE de l'image et les disques dans
+// la moitie DROITE — et une seule matiere suffit.
+//   Six maillages -> UN. Vingt-quatre appels de dessin par voiture -> quatre.
+const TEX_ROUE = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
+  // ---- moitie gauche (0..255) : LA BANDE DE ROULEMENT, vue a plat. u = le tour de la roue,
+  // v = la largeur du pneu. Le motif se raccorde d'un bord a l'autre : il tourne sans couture.
+  g.fillStyle = '#191a1d'; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = '#0e0f11';
+  for (let i = 0; i < 16; i++) {   // les pains de gomme, en chevron
+    const x = i * 16;
+    g.beginPath(); g.moveTo(x + 2, 0); g.lineTo(x + 11, 0); g.lineTo(x + 6, 128); g.lineTo(x - 3, 128); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(x + 6, 128); g.lineTo(x + 15, 128); g.lineTo(x + 10, 256); g.lineTo(x + 1, 256); g.closePath(); g.fill();
+  }
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, 118, 256, 8); g.fillRect(0, 60, 256, 4); g.fillRect(0, 190, 256, 4);   // rainures longitudinales
+  g.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 16; i++) g.fillRect(i * 16 + 12, 0, 2, 256);   // arete brillante des pains
+  g.fillStyle = '#242629'; g.fillRect(0, 0, 256, 10); g.fillRect(0, 246, 256, 10);   // epaules du pneu
+  // ---- moitie droite (256..511) : LA FACE DE LA ROUE, vue de cote. Le disque du cylindre est
+  // inscrit dans ce carre : centre en (384, 128), rayon 128.
+  const CX = 384, CY = 128;
+  const disque = (r, style) => { g.fillStyle = style; g.beginPath(); g.arc(CX, CY, r, 0, 6.2832); g.fill(); };
+  disque(128, '#1b1c1f');                                     // le flanc du pneu
+  g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 3;   // les lettres gravees dans la gomme
+  g.beginPath(); g.arc(CX, CY, 112, 0, 6.2832); g.stroke();
+  g.beginPath(); g.arc(CX, CY, 100, 0, 6.2832); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.22)';
+  for (let i = 0; i < 28; i++) { const a = i / 28 * 6.2832; g.fillRect(CX + Math.cos(a) * 120 - 2, CY + Math.sin(a) * 120 - 2, 4, 4); }
+  disque(92, '#2a2d33');                                      // le creux de jante
+  // la jante : un bandeau chrome, cinq rayons larges, un cache-moyeu et cinq ecrous
+  const jante = g.createRadialGradient(CX - 30, CY - 34, 6, CX, CY, 92);
+  jante.addColorStop(0, '#ffffff'); jante.addColorStop(0.45, '#d3d9e3'); jante.addColorStop(1, '#8d95a3');
+  disque(88, jante);
+  disque(80, '#2f333a');
+  g.fillStyle = jante;
+  for (let i = 0; i < 5; i++) {   // les rayons : des trapezes qui s'elargissent vers le bord
+    const a = i / 5 * 6.2832 - 1.2;
+    g.save(); g.translate(CX, CY); g.rotate(a);
+    g.beginPath(); g.moveTo(-13, -20); g.lineTo(13, -20); g.lineTo(26, -84); g.lineTo(-26, -84); g.closePath(); g.fill();
+    g.restore();
+  }
+  disque(34, jante); disque(26, '#eef1f6');                   // cache-moyeu
+  g.fillStyle = '#6f7684'; g.beginPath(); g.arc(CX, CY, 11, 0, 6.2832); g.fill();
+  g.fillStyle = '#5a616e';
+  for (let i = 0; i < 5; i++) { const a = i / 5 * 6.2832 + 0.6; g.beginPath(); g.arc(CX + Math.cos(a) * 20, CY + Math.sin(a) * 20, 5, 0, 6.2832); g.fill(); }
+  g.fillStyle = '#3b3f47'; g.beginPath(); g.arc(CX + 62, CY + 46, 7, 0, 6.2832); g.fill();   // la valve
+  g.fillStyle = '#9aa2b0'; g.beginPath(); g.arc(CX + 62, CY + 46, 3.5, 0, 6.2832); g.fill();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; shared.add(t); return t;
+})();
+// La geometrie de la roue : un cylindre dont on REPLIE les coordonnees de texture — le tour
+// a gauche de l'image, les deux disques a droite — puis on efface les groupes de matiere,
+// pour qu'il ne reste qu'UN SEUL appel de dessin.
+const wheelGeo = (() => {
+  const g = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 20, 1, false);
+  // Le verificateur de syntaxe fait tourner le jeu sur des maquettes de three.js qui n'ont ni
+  // attributs ni groupes : sans ce garde-fou, `node harness/lint.js` disait « le jeu ne
+  // demarre pas » alors que tout va bien dans un vrai navigateur.
+  try {
+    const uv = g.attributes.uv.array, idx = g.index ? g.index.array : null;
+    const faits = new Uint8Array(g.attributes.uv.count);
+    const plie = (deb, nb, droite) => {
+      for (let k = deb; k < deb + nb; k++) {
+        const v = idx ? idx[k] : k;
+        if (faits[v]) continue; faits[v] = 1;
+        uv[v * 2] = uv[v * 2] * 0.5 + (droite ? 0.5 : 0);
+      }
+    };
+    for (const grp of g.groups) plie(grp.start, grp.count, grp.materialIndex > 0);
+    g.attributes.uv.needsUpdate = true;
+    g.clearGroups();
+  } catch (eUV) {}
+  return g;
+})();
+shared.add(wheelGeo);
+const wheelMat = new THREE.MeshLambertMaterial({ map: TEX_ROUE }); shared.add(wheelMat);
 function makeWheel(r = 1) {
   const w = new THREE.Group();
-  const tire = new THREE.Mesh(wheelGeo, lam(0x222222)); tire.rotation.z = Math.PI / 2; tire.castShadow = true; w.add(tire);
-  const hub = new THREE.Mesh(hubGeo, lam(0xd0d4dc)); hub.rotation.z = Math.PI / 2; w.add(hub);
-  for (let i = 0; i < 4; i++) { const spoke = new THREE.Mesh(unitRound, lam(0xd0d4dc)); spoke.scale.set(0.34, 0.06, 0.5); spoke.rotation.x = i * Math.PI / 4; w.add(spoke); }
+  // `children[0]` reste LE PNEU : plusieurs vehicules l'amincissent (le velo, la remorque)
+  // en ecrasant sa hauteur de cylindre, et comptaient sur cet ordre.
+  const tire = new THREE.Mesh(wheelGeo, wheelMat); tire.rotation.z = Math.PI / 2; tire.castShadow = true; w.add(tire);
   w.scale.setScalar(r); return w;
 }
 function numberDecal(n, color) {
@@ -4864,10 +4963,25 @@ function numberDecal(n, color) {
 }
 const glassCar = new THREE.MeshLambertMaterial({ color: 0x7ec8ff, transparent: true, opacity: 0.72 }); shared.add(glassCar);
 const chrome = lam(0xd8dde6), darkM = lam(0x23262e), tireM = lam(0x1e1e1e);
+// L'AILE AU-DESSUS DE LA ROUE. C'etait une planche noire de 20 cm collee sur le flanc, qui
+// depassait comme une equerre : rien a voir avec un passage de roue. C'est maintenant un
+// DEMI-TORE, couleur carrosserie, qui epouse le pneu — la silhouette d'une voiture, ce sont
+// d'abord ses ailes. Geometrie partagee par tous les vehicules : elle ne coute rien de plus.
+const AILE_GEO = new THREE.TorusGeometry(0.44, 0.075, 6, 14, Math.PI); shared.add(AILE_GEO);
+function aileRoue(parent, mat, x, y, z, ech = 1) {
+  const m = new THREE.Mesh(AILE_GEO, mat);
+  m.rotation.y = Math.PI / 2;   // le tore passe du plan de face au plan de la roue
+  m.position.set(x, y, z); m.scale.setScalar(ech); m.castShadow = true;
+  parent.add(m); return m;
+}
 function makeCar(color, x, z, h, opt = {}) {
   // carrosserie : matériau propre à cette voiture (lam() met les couleurs en cache, et
   // repeindre sa caisse à l'atelier repeignait alors tout ce qui partageait la teinte)
-  const g = new THREE.Group(), body = new THREE.MeshLambertMaterial({ color }), dark = lam(0x2b3550);
+  // LA PEINTURE EST MAINTENANT BRILLANTE. En Lambert, une carrosserie est un aplat mat : sous
+  // le soleil, une voiture rouge et un mur rouge rendaient exactement la meme couleur. Un
+  // materiau Phong lui donne le reflet allonge d'une tole vernie — c'est ce qui fait « une
+  // voiture » avant meme qu'on en distingue les pieces, et ca ne coute pas un appel de plus.
+  const g = new THREE.Group(), body = new THREE.MeshPhongMaterial({ color, shininess: 62, specular: 0x4a525e }), dark = lam(0x2b3550);
   const bx = (mat, sx, sy, sz, px, py, pz, edges = true) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const kart = !!opt.kart;
   bx(body, 2.1, 0.55, 4.3, 0, 0.6, 0);                          // caisse
@@ -4882,7 +4996,7 @@ function makeCar(color, x, z, h, opt = {}) {
   bx(darkM, 1.1, 0.22, 0.06, 0, 0.62, 2.2, false); for (let i = 0; i < 3; i++) bx(chrome, 1.0, 0.03, 0.02, 0, 0.55 + i * 0.07, 2.24, false);   // calandre
   bx(lam(0xffffff), 0.5, 0.16, 0.03, 0, 0.5, -2.24, false);                                   // plaque
   for (const sx of [-1.12, 1.12]) { bx(body, 0.16, 0.12, 0.28, sx, 1.22, 0.62, false); bx(chrome, 0.14, 0.1, 0.04, sx, 1.22, 0.62, false); }   // rétros
-  for (const [sx, sz] of [[-1.05, 1.3], [1.05, 1.3], [-1.05, -1.3], [1.05, -1.3]]) bx(dark, 0.2, 0.3, 0.95, sx, 0.72, sz, false);   // passages de roue
+  for (const [sx, sz] of [[-1.05, 1.3], [1.05, 1.3], [-1.05, -1.3], [1.05, -1.3]]) aileRoue(g, body, sx * 1.02, 0.36, sz, 1.06);   // ailes : un demi-tore qui epouse la roue
   const doors = []; for (const sx of [-1.06, 1.06]) { doors.push(bx(dark, 0.03, 0.42, 1.2, sx, 0.8, 0.5, false), bx(dark, 0.03, 0.42, 1.2, sx, 0.8, -0.8, false)); bx(chrome, 0.05, 0.05, 0.22, sx, 0.98, 0.35, false); bx(chrome, 0.05, 0.05, 0.22, sx, 0.98, -0.95, false); }   // portières + poignées
   const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), chrome); ex.rotation.x = Math.PI / 2; ex.position.set(0.6, 0.35, -2.25); g.add(ex);
   bx(dark, 0.03, 0.5, 0.03, -0.7, 1.9, -1.2, false);                                           // antenne
@@ -4903,18 +5017,34 @@ function makeCar(color, x, z, h, opt = {}) {
   const solid = box(x, 0.7, z, 2.6, 1.4, 4.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   for (const w of wheels) w.position.y = 0.36;
   const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kart, baseW: 2.4, baseD: 4.4, dmg: 0, home0: [x, z, h], lampR: g.lampR, lampB: g.lampB, bodyMat: body, tuneMesh: [], parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors: [] } };
-  if (kart) c.spec = { max: 32, rev: -9, accel: 26, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 38, rev: -9, accel: 32, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 26, rev: -8, accel: 19, turn: 2.1, seat: 0 };
+  // LES TROIS PALIERS DE PUISSANCE. « Reduis la vitesse de base des vehicules, et augmente a
+  // partir de 300 chevaux, et a 500 chevaux vitesse max puissante. » Une voiture de serie
+  // filait a 26 m/s (94 km/h) des la premiere pression : trop vif et trop peu rassurant pour
+  // debuter, et surtout les trois moteurs du garage ne se sentaient presque pas (26 → 40 → 56).
+  // L'origine descend a 21 m/s (75 km/h), et l'ecart entre les paliers se creuse nettement :
+  // voir TUNE_MOTEURS, ou le 300 chevaux passe a 38 et le 500 a 60.
+  if (kart) c.spec = { max: 28, rev: -8, accel: 23, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 31, rev: -8, accel: 26, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 21, rev: -7, accel: 16, turn: 2.1, seat: 0 };
   prepareVehicule(c); vehicleSolid(c); return c;
 }
 function makeVehicle(kind, color, x, z, h) {
   const g = new THREE.Group(), body = lam(color);
   const bx = (mat, sx, sy, sz, px, py, pz, edges = true) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const cyl = (mat, r1, r2, len, px, py, pz, rx = Math.PI / 2, rz = 0) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 10), mat); m.rotation.set(rx, 0, rz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
-  const wheels = []; let spec, W = 2.6, D = 3, rider = false;
+  const wheels = []; let spec, W = 2.6, D = 3, rider = false, outilsSelle = null;
   if (kind === 'moto') {
     bx(body, 0.44, 0.42, 1.5, 0, 0.66, 0.05);                                  // cadre
     bx(body, 0.58, 0.38, 0.72, 0, 0.94, 0.28); bx(body, 0.5, 0.2, 0.3, 0, 1.1, 0.34, false);   // réservoir
-    bx(darkM, 0.52, 0.16, 0.8, 0, 0.94, -0.48); bx(darkM, 0.42, 0.14, 0.4, 0, 1.0, -0.98, false);   // selle + selle passager
+    // LA SELLE. Il y avait bien un coussin noir, mais 63 cm DERRIERE la place ou le jeu assoit
+    // le conducteur (PLACES.moto.conducteur, z = 0,15) : le pilote etait donc assis dans le
+    // vide, au-dessus du reservoir, et la selle roulait vide derriere lui. Elle est maintenant
+    // EXACTEMENT sous la place du conducteur, large et creusee, avec un dosseret et la selle
+    // du passager derriere.
+    const selleM = bx(darkM, 0.56, 0.17, 1.0, 0, 0.94, 0.15);                                    // l'assise du pilote, pile sous PLACES.moto.conducteur
+    bx(darkM, 0.5, 0.1, 0.34, 0, 1.0, 0.52, false);                                              // le bourrelet avant
+    bx(darkM, 0.5, 0.2, 0.16, 0, 1.02, -0.36, false);                                            // le dosseret
+    bx(darkM, 0.46, 0.15, 0.5, 0, 0.99, -0.76, false);                                           // la selle du passager
+    for (const sx of [-0.26, 0.26]) bx(chrome, 0.03, 0.04, 0.9, sx, 1.02, 0.15, false);          // les surpiqures
+    outilsSelle = selleM;
     bx(body, 0.5, 0.5, 0.45, 0, 0.7, 0.75); const fair = bx(body, 0.55, 0.3, 0.35, 0, 1.03, 0.78); fair.rotation.x = 0.4;   // carénage
     bx(glassCar, 0.5, 0.35, 0.04, 0, 1.25, 0.95, false).rotation.x = 0.5;      // bulle
     cyl(neonMat(0xffffcc), 0.13, 0.13, 0.08, 0, 0.85, 1.02);                   // phare rond
@@ -4925,17 +5055,23 @@ function makeVehicle(kind, color, x, z, h) {
     cyl(darkM, 0.08, 0.08, 0.5, 0, 0.55, 0.05, 0, 0); bx(darkM, 0.1, 0.35, 0.05, -0.25, 0.45, -0.75, false);   // moteur + béquille
     bx(lam(0xffffff), 0.3, 0.14, 0.02, 0, 0.75, -1.22, false);
     for (const wz of [0.85, -0.85]) { const w = makeWheel(1.15); w.position.set(0, 0.4, wz); g.add(w); wheels.push(w); }
-    spec = { max: 36, rev: -7, accel: 31, turn: 2.6, seat: 1.02, lean: 0.35 }; W = 1.1; D = 2.5; rider = true;
+    spec = { max: 29, rev: -6, accel: 25, turn: 2.6, seat: 1.02, lean: 0.35 }; W = 1.1; D = 2.5; rider = true;
   } else if (kind === 'bike') {
     const t1 = bx(body, 0.06, 0.06, 1.15, 0, 0.78, 0.05, false); t1.rotation.x = 0.25;
     const t2 = bx(body, 0.06, 0.06, 0.9, 0, 0.62, -0.1, false); t2.rotation.x = -0.6;
     bx(body, 0.06, 0.62, 0.06, 0, 0.72, 0.5, false); bx(body, 0.06, 0.55, 0.06, 0, 0.78, -0.42, false);
     bx(chrome, 0.85, 0.05, 0.05, 0, 1.12, 0.52, false); for (const sx of [-0.4, 0.4]) bx(darkM, 0.1, 0.07, 0.07, sx, 1.12, 0.52, false);
-    bx(darkM, 0.32, 0.08, 0.42, 0, 1.12, -0.45, false); bx(chrome, 0.03, 0.25, 0.03, 0, 1.0, -0.45, false);   // selle
+    // LA SELLE DU VELO, elle aussi, etait 23 cm derriere la place du cycliste (PLACES.bike,
+    // z = −0,22) : on pedalait assis sur rien. Sa pointe, son assise et sa tige de selle sont
+    // maintenant centrees sur cette place.
+    const selleM = bx(darkM, 0.2, 0.07, 0.34, 0, 1.12, -0.22, false);                            // l'assise
+    bx(darkM, 0.1, 0.06, 0.2, 0, 1.12, -0.03, false);                                            // le bec de selle
+    bx(chrome, 0.035, 0.3, 0.035, 0, 0.97, -0.24, false);                                        // la tige de selle
+    outilsSelle = selleM;
     cyl(darkM, 0.16, 0.16, 0.04, 0, 0.5, 0, 0, Math.PI / 2); bx(chrome, 0.4, 0.04, 0.04, 0, 0.5, 0, false); for (const sx of [-0.2, 0.2]) bx(darkM, 0.12, 0.04, 0.08, sx, 0.5 + sx * 0.5, 0.05, false);   // plateau + manivelles
     bx(lam(0x8b4a2b), 0.55, 0.3, 0.45, 0, 1.0, 0.85, false); bx(chrome, 0.1, 0.1, 0.1, 0.32, 1.16, 0.4, false);   // panier + sonnette
     for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.y = 0.35;   /* pneu FIN : on amincit la hauteur du cylindre, pas son rayon */ w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz, false); }
-    spec = { max: 17, rev: -4, accel: 13, turn: 2.4, seat: 1.08, lean: 0.2 }; W = 0.9; D = 2; rider = true;
+    spec = { max: 14, rev: -4, accel: 11, turn: 2.4, seat: 1.08, lean: 0.2 }; W = 0.9; D = 2; rider = true;
   } else if (kind === 'buggy') {   // buggy de rallye : grosses roues, arceau, suspension haute, très rapide
     bx(body, 1.5, 0.45, 2.6, 0, 0.95, 0.1); bx(body, 1.3, 0.35, 1.0, 0, 1.2, 0.9); bx(darkM, 1.1, 0.3, 0.9, 0, 1.15, -0.5);
     for (const sx of [-0.6, 0.6]) { bx(darkM, 0.08, 1.1, 0.08, sx, 1.7, -0.2, false); bx(darkM, 0.08, 1.1, 0.08, sx, 1.7, 0.7, false); bx(darkM, 0.08, 0.08, 1.0, sx, 2.25, 0.25, false); }   // arceau
@@ -4943,11 +5079,11 @@ function makeVehicle(kind, color, x, z, h) {
     bx(chrome, 0.9, 0.06, 0.06, 0, 1.45, 0.75, false); bx(neonMat(0xffffcc), 0.5, 0.2, 0.1, 0, 1.25, 1.42, false); for (const sx of [-0.4, 0.4]) bx(neonMat(0xffffcc), 0.2, 0.2, 0.08, sx, 2.3, 0.8, false);   // rampe de phares
     bx(darkM, 1.6, 0.12, 0.3, 0, 0.55, 1.45); bx(darkM, 1.6, 0.12, 0.3, 0, 0.55, -1.35);
     for (const [wx, wz] of [[-0.95, 1.05], [0.95, 1.05], [-0.95, -1.0], [0.95, -1.0]]) { const w = makeWheel(1.55); w.position.set(wx, 0.52, wz); g.add(w); wheels.push(w); }
-    spec = { max: 40, rev: -10, accel: 36, turn: 2.6, seat: 1.15, lean: 0 }; W = 2.2; D = 3; rider = true;
+    spec = { max: 33, rev: -8, accel: 29, turn: 2.6, seat: 1.15, lean: 0 }; W = 2.2; D = 3; rider = true;
   } else if (kind === 'jetski') {   // scooter des mers
     bx(body, 1.0, 0.5, 2.6, 0, 0.45, 0); bx(body, 0.8, 0.3, 0.9, 0, 0.75, 0.8); bx(darkM, 0.7, 0.2, 1.1, 0, 0.75, -0.4);
     bx(chrome, 0.8, 0.06, 0.06, 0, 1.05, 0.85, false); bx(chrome, 0.06, 0.4, 0.06, 0, 0.95, 0.85, false); bx(lam(0xffffff), 1.02, 0.12, 2.62, 0, 0.2, 0, false);
-    spec = { max: 30, rev: -6, accel: 20, turn: 3.0, seat: 0.95, lean: 0.4 }; W = 1.1; D = 2.6; rider = true;
+    spec = { max: 25, rev: -5, accel: 17, turn: 3.0, seat: 0.95, lean: 0.4 }; W = 1.1; D = 2.6; rider = true;
   } else {   // camion
     bx(body, 2.4, 2.1, 2.6, 0, 1.55, 2.8); bx(body, 2.4, 0.5, 0.6, 0, 2.85, 2.2);              // cabine + déflecteur
     bx(glassCar, 2.2, 0.9, 0.06, 0, 2.05, 4.13, false); for (const sx of [-1.21, 1.21]) bx(glassCar, 0.06, 0.7, 1.0, sx, 2.05, 3.1, false);   // vitres
@@ -4967,7 +5103,9 @@ function makeVehicle(kind, color, x, z, h) {
   }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h] }; prepareVehicule(c); vehicleSolid(c); return c;
+  // `selle` : le maillage de l'assise, quand le vehicule en a une. Le banc d'essai s'en sert
+  // pour mesurer, EN ROULANT, l'ecart entre le corps du pilote et son siege.
+  const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h], selle: outilsSelle }; prepareVehicule(c); vehicleSolid(c); return c;
 }
 let ROTOR_FLOU = null;
 function rotorFlou() {   // disque translucide avec quelques stries : l'illusion des pales en rotation
@@ -8534,7 +8672,10 @@ function empreinteMarcheur(e, x, z, cap) {
   if (d > 1.5 || d < 1e-4) return false;   // teleporte (changement de monde, mission) ou immobile
   e.empD = (e.empD || 0) + d;
   if (e.empD < EMPREINTE_PAS) return false;
-  e.empD = 0; e.empG = !e.empG;
+  // On REPORTE le trop-plein au lieu de le jeter : sinon la longueur reelle de la foulee
+  // dependait de la cadence d'affichage (a 60 images par seconde en courant, on posait un pas
+  // tous les 77 cm au lieu de 62), et la piste se raccourcissait quand la machine ramait.
+  e.empD -= EMPREINTE_PAS; e.empG = !e.empG;
   return !!empreinte(x, z, cap, e.empG);
 }
 // LE TOUR DE PISTE, appele une fois par image depuis la boucle de ville. Il ne coute RIEN
@@ -14204,7 +14345,12 @@ function sonPluie(x, y, z, force) {
   let recul = 1;
   try { if (ambiance.duckActif()) recul = PLUIE_RECUL; } catch (e) {}
   const v = force * recul;
-  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .016 * v, 0.35); sB(d, 1.6, 620, .010 * v, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
+  // MESURE AU BOUT DE LA CHAINE AUDIO : a 0,05 / 0,03, l'averse atteignait une crete de 0,50 —
+  // sept fois le lit de bruit de la ville dont le joueur se plaignait deja. Meme divisee par
+  // trois elle restait a 0,17 et un pas ne sortait qu'a 1,3 fois son niveau : on l'entendait
+  // a peine. A 0,006 / 0,0035 elle plafonne vers 0,06, on l'entend parfaitement quand rien ne
+  // se passe, et un pas ou un coup passent trois fois au-dessus.
+  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .006 * v, 0.35); sB(d, 1.6, 620, .0035 * v, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
 }
 function sonAboiement(x, y, z, hauteur) {
   const h = clamp(hauteur || 1, 0.6, 1.6);
@@ -18852,7 +18998,16 @@ function poseVehicule(c, dt) {
 function poseJoueurAuVolant(dt) {
   const c = drive.car;
   if (!c) { jambesEnCabine(me, false); me.group.rotation.z = 0; return null; }
-  if (c.rider) { me.group.position.set(c.x, c.y + c.spec.seat - 0.55, c.z); me.group.rotation.z = c.tilt || 0; return 'rider'; }
+  if (c.rider) {
+    // LE PILOTE ETAIT ASSIS A L'ORIGINE DU VEHICULE (z local = 0), c'est-a-dire au-dessus du
+    // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
+    // et que c'est LA qu'est la selle. Sur une moto, ca fait 15 cm devant la selle ; sur un
+    // velo, 22 cm derriere le pilote. On applique donc le meme deport a tout le monde.
+    const pl = (typeof placesDe === 'function' ? (placesDe(c) || {}).conducteur : null) || { x: 0, z: 0 };
+    const sn = Math.sin(c.h), cs = Math.cos(c.h);
+    me.group.position.set(c.x + pl.x * cs + pl.z * sn, c.y + c.spec.seat - 0.55, c.z - pl.x * sn + pl.z * cs);
+    me.group.rotation.z = c.tilt || 0; return 'rider';
+  }
   assiedAvatar(me, c, placesDe(c).conducteur, drive.assis ? dt : 1, true);
   drive.assis = true;
   if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
@@ -20138,8 +20293,12 @@ function gymTick(dt) {
       if (simTime > (gym.repT || 0)) { gym.repT = simTime + 0.3; gym.reps++; gym.pousse = simTime + 0.32; me.rig.swing = 0.3;
         gym.end = Math.min(gym.debut + GYM_MAX, gym.end + 0.5);   // il force : la série continue
         sfx.tone(220 + gym.reps * 5, 0, .08, 'square', .05); } }
-    const b = city.gym.bench.barre;   // la barre monte à chaque répétition
-    if (b && b.mesh) b.mesh.position.y = 1.6 + (simTime < (gym.pousse || 0) ? 0.3 : 0);   // elle monte quand il pousse
+    // LA BARRE ET SES DISQUES NE FONT QU'UN. On calcule UNE hauteur et on la donne a tout le
+    // monde : sans cela les poids restaient a 1,60 m pendant que la barre montait a 1,90 m.
+    const yB = 1.6 + (simTime < (gym.pousse || 0) ? 0.3 : 0);
+    const b = city.gym.bench.barre;
+    if (b && b.mesh) { b.mesh.position.y = yB; b.y = yB; }
+    for (const d of (city.gym.bench.poids || [])) if (d && d.mesh) { d.mesh.position.y = yB; d.y = yB; }
   } else {
     gym.reps += dt * 1.2;   // il trotte tout seul…
     if (P.jumpBuf > 0) {    // …et chaque appui est une foulée : la bande accélère
@@ -23256,10 +23415,16 @@ const TUNE_KITS = [
   { k: 'moteur', n: 'Moteur apparent', e: '🔩', p: 200, desc: 'Bloc rouge et noir qui sort du capot, avec le turbo.' },
   { k: 'nitro', n: 'Nitro', e: '🔥', p: 250, desc: 'Bouteille de protoxyde : MAJ (ou ⚡ à la manette) donne un coup de pied sec d\'une seconde, flammes aux deux pots — à renvoyer toutes les 3,5 s.' },
 ];
+// LES TROIS MOTEURS DU GARAGE, et c'est LA que se joue la sensation de puissance. Avant :
+// 26 → 40 → 56 m/s, c'est-a-dire une voiture de serie deja rapide et deux paliers qui ne se
+// sentaient qu'a peine. Maintenant : une origine SAGE (21 m/s, 75 km/h — le meme chiffre que
+// `makeCar`, pour qu'une voiture ramassee dans la rue et une voiture d'origine au garage
+// aillent exactement pareil), un 300 chevaux qui fait presque le double (38 m/s, 137 km/h) et
+// un 500 chevaux qui decolle vraiment (60 m/s, 216 km/h).
 const TUNE_MOTEURS = [
-  { n: '100 chevaux', e: '🐎', p: 0, max: 26, accel: 19, desc: 'Le moteur d\'origine. Ronronnement tranquille.' },
-  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 40, accel: 31, desc: 'Reprises franches et pointe bien plus haute. Le son descend : gros grave et bourdonnement.' },
-  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 56, accel: 46, desc: 'Une fusée. Le bloc gronde très bas — à ce niveau, il faut savoir freiner.' },
+  { n: '100 chevaux', e: '🐎', p: 0, max: 21, accel: 16, desc: 'Le moteur d\'origine. Ronronnement tranquille, vitesse rassurante.' },
+  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 38, accel: 33, desc: 'Presque le double de la pointe d\'origine, et des reprises franches. Le son descend : gros grave et bourdonnement.' },
+  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 60, accel: 52, desc: 'Une fusée : trois fois la vitesse d\'origine. Le bloc gronde très bas — à ce niveau, il faut savoir freiner.' },
 ];
 // CHAQUE AMÉLIORATION FAIT GAGNER DE LA VITESSE. Avant, seul le moteur comptait : les kits
 // étaient purement décoratifs. Chacun apporte maintenant son petit pourcentage, cumulable.
@@ -25775,6 +25940,7 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
   const cyl = (mat, r, len, px, py, pz, rx, rz, parent) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 9), mat); m.position.set(px, py, pz); if (rx) m.rotation.x = rx; if (rz) m.rotation.z = rz; m.castShadow = true; (parent || g).add(m); return m; };
   const wheels = [], outils = {};
   let spec = { max: 17, rev: -5, accel: 11, turn: 1.5, seat: 0 }, W = 2.4, D = 6, rider = false, siege = { x: 0.55, y: 1.35, z: 1.7 };
+  let selleVelo = null;   // le maillage de la selle, quand le vehicule en a une (le velo du facteur)
   const cabine = (zc, larg = 2.2, haut = 1.5) => {   // cabine commune aux poids lourds
     bx(body, larg, haut, 1.9, 0, 1.55, zc);
     bx(glassCar, larg - 0.16, haut * 0.5, 0.06, 0, 1.85, zc + 0.98);
@@ -25925,7 +26091,11 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
     const t2 = bx(body, 0.06, 0.06, 0.9, 0, 0.62, -0.1); t2.rotation.x = -0.6;
     bx(body, 0.06, 0.62, 0.06, 0, 0.72, 0.5); bx(body, 0.06, 0.55, 0.06, 0, 0.78, -0.42);
     bx(chrome, 0.85, 0.05, 0.05, 0, 1.12, 0.52); for (const sx of [-0.4, 0.4]) bx(darkM, 0.1, 0.07, 0.07, sx, 1.12, 0.52);
-    bx(darkM, 0.32, 0.08, 0.42, 0, 1.12, -0.45); bx(chrome, 0.03, 0.25, 0.03, 0, 1.0, -0.45);
+    // LA SELLE DU FACTEUR, centree sur SA place assise (`siege`, z = −0,2) : elle etait 25 cm
+    // plus loin et il pedalait donc assis a cote de son velo pendant toute la tournee.
+    selleVelo = bx(darkM, 0.2, 0.07, 0.34, 0, 1.12, -0.2);
+    bx(darkM, 0.1, 0.06, 0.2, 0, 1.12, -0.01);              // le bec de selle
+    bx(chrome, 0.035, 0.3, 0.035, 0, 0.97, -0.22);          // la tige de selle
     bx(lam(MET_C.poste), 0.5, 0.32, 0.42, 0, 1.02, 0.85);   // la caisse à courrier du guidon
     bx(chrome, 0.6, 0.05, 0.5, 0, 0.9, -0.6);              // le porte-bagages
     // LES DEUX SACOCHES, de part et d'autre de la roue arrière
@@ -25938,7 +26108,7 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
   }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
-  const c = { g, wheels, x, y: 0, z, h, color: couleur, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h], outils, outil: 0, outilCible: 0, siege, travail: true };
+  const c = { g, wheels, x, y: 0, z, h, color: couleur, busy: false, solid, kind, spec, rider, tilt: 0, baseW: W, baseD: D, home0: [x, z, h], outils, outil: 0, outilCible: 0, siege, selle: selleVelo, travail: true };
   // Un véhicule de travail passe sa vie à rouler : s'il restait un obstacle FIXE de la grille
   // de navigation, la police et les bots recalculaient leurs itinéraires à chaque fois qu'il
   // bougeait. Comme les voitures de la circulation, il est marqué « ai ».

@@ -27867,7 +27867,7 @@ function enginCreuse(c) {
   const y = (typeof groundUnder === 'function') ? groundUnder(tx, tz, c.solid, c.y || 0) : (c.y || 0);
   // LE POINT DE VIDAGE : la tourelle pivote de 0,95 rad pendant le cycle, donc le godet
   // bascule sur ce cap-là, à la même portée. C'est LÀ que le tas doit se former.
-  const aTas = (c.h || 0) + 0.95;
+  const aTas = (c.h || 0) + 1.30;
   c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
     tasX: c.x + Math.sin(aTas) * CREUSE_PORTEE, tasZ: c.z + Math.cos(aTas) * CREUSE_PORTEE };
   godetTerre(c);
@@ -27891,7 +27891,11 @@ function enginCreuseTick(c, dt) {
   // dixièmes du cycle ramènent donc tout exactement sur cette pose de repos, et le relais se
   // fait sans qu'on voie la couture.
   const repli = 1 - animSeg(u, 0.88, 1);
-  if (o.tourelle) o.tourelle.rotation.y = 0.95 * pivot;
+  // 1,30 rad DE PIVOT, ET POURQUOI PAS MOINS. À 0,95 rad le tas de terre retombait au bord
+  // même du trou : sur la capture, la butte et la cuvette se touchaient et on ne distinguait
+  // plus l'une de l'autre. À 1,30 rad ils sont écartés de 6,3 m — la fosse d'un côté, la
+  // terre de l'autre, comme sur un vrai chantier.
+  if (o.tourelle) o.tourelle.rotation.y = 1.30 * pivot;
   if (o.bras) o.bras.rotation.x = -0.9 + (0.86 * plonge - 0.52 * leve) * repli;
   if (o.avantBras) o.avantBras.rotation.x = 1.5 + (-1.02 * plonge + 0.22 * racle + 0.44 * leve) * repli;
   if (o.godet) o.godet.rotation.x = -0.7 + (0.62 * plonge - 1.05 * racle - 0.30 * leve + 1.85 * vide) * repli;

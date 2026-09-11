@@ -10787,7 +10787,10 @@ test('la police abandonne les recherches quand le joueur est cache, et repart de
 // premiers se declenchaient AU MEME POINT a chaque choc : deux decalques de fissure superposes.
 test('un choc contre un mur ne laisse QU\'UNE marque, et la carrosserie encaisse', async p => {
   const r = await p.evaluate(() => {
-    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 13 });
+    // MONDE NEUF : ce test COMPTE des appels de dessin. Sans `frais`, il héritait du feu, des
+    // débris et des épaves laissés par les tests précédents, et l'accident semblait coûter
+    // 201 appels au lieu d'une quarantaine.
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 13, frais: true });
     G.effaceMarques(); G.marques.length = 0;
     const c = G.city.cars.find(v => !v.heli && !v.kind && !v.travail && !v.kart);
     // un vrai mur de batiment, pas l'enceinte de la ville : on se place devant sa facade sud
@@ -10798,28 +10801,47 @@ test('un choc contre un mur ne laisse QU\'UNE marque, et la carrosserie encaisse
     c.y = G.groundUnder(c.x, c.z, c.solid, 1); c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
     G.P.pos.set(c.x, c.y + 0.5, c.z); G.enterCar(c); G.drive.speed = 0;
     const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
-    const appels0 = dessine();
     G.keys.add('ArrowUp');
     let touche = 0;
     for (let i = 0; i < 300 && !touche; i++) { G.step(1 / 60, true); if (c.dmg > 0) touche = i; }
     G.keys.delete('ArrowUp');
     for (let i = 0; i < 60; i++) G.step(1 / 60, true);
-    const appels1 = dessine();
-    // LE PRIX DE LA MARQUE, ET DE RIEN D'AUTRE. On comparait les appels de dessin AVANT et
-    // APRÈS le choc : on facturait donc aussi à la marque le feu, les débris, le verre au sol
-    // et la fumée de l'accident (82 appels), alors que la question posée est celle de LA
-    // MARQUE. On l'éteint, on la rallume : la différence, c'est son prix exact.
-    const mm = G.marquesMesh;
-    const sans = (mm.visible = false, dessine()), avec = (mm.visible = true, dessine());
+    // ON REGARDE L'EPAVE. `step` fait avancer la simulation mais PAS la camera (elle est
+    // recalculee par la boucle de rendu) : elle etait restee au point de depart, a trente
+    // metres, et l'epave n'etait meme pas dans le champ — on mesurait le prix d'objets que
+    // personne ne dessinait, d'ou un « cout de l'accident » tantot +82, tantot -9.
+    G.camera.position.set(c.x + 8, (c.y || 0) + 4, c.z + 10);
+    G.camera.lookAt(c.x, (c.y || 0) + 1, c.z);
+    G.camera.updateMatrixWorld(true);
+    const total = dessine();   // le prix de l'image entiere, epave et debris compris
+    // ON MESURE CE QU'UNE CHOSE COUTE EN L'ETEIGNANT, PUIS EN LA RALLUMANT, depuis le MEME
+    // point de vue. Comparer « avant le choc » et « apres le choc » ne voulait rien dire : la
+    // voiture a roule entre les deux, la camera a suivi, et la difference mesurait surtout le
+    // changement de decor a l'ecran (elle tombait parfois NEGATIVE).
+    const bascule = objs => {
+      const vus = objs.map(o => o.visible);
+      objs.forEach(o => { o.visible = false; });
+      const sans = dessine();
+      objs.forEach((o, i) => { o.visible = vus[i]; });
+      return dessine() - sans;
+    };
+    // 1) la marque : elle vit dans le maillage partage des marques, donc UN appel, pas plus
+    const appels = bascule([G.marquesMesh]);
+    // 2) tout ce que l'accident a ajoute a la scene : les flammes et les debris au sol
+    const ajouts = [];
+    if (c.feu && c.feu.g) ajouts.push(c.feu.g);
+    for (const d of G.debris) if (d.m) ajouts.push(d.m);
+    const accident = bascule(ajouts);
     const res = { ville: G.city.marques.length, mur: G.marques.length, dmg: +c.dmg.toFixed(1),
-      deg: c.deg || 0, touche, appels: avec - sans, accident: appels1 - appels0,
-      mure: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) } };
+      deg: c.deg || 0, touche, appels, accident, debris: G.debris.length, feu: !!c.feu,
+      total, mure: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) } };
     G.exitCar();
     return res;
   });
   // une marque de la ville, aucune marque de mur en doublon, et le choc a bien abime la voiture
-  const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels === 1 && r.accident <= 120;
-  return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · et elle ne coûte QU'${r.appels === 1 ? 'UN SEUL' : r.appels} appel de dessin (mesuré en éteignant puis rallumant le maillage partagé des marques), l'accident complet — feu, débris, verre, fumée — en ajoutant ${r.accident}` };
+  const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels === 1
+    && r.accident > 0 && r.accident <= 80;
+  return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · et elle ne coûte QU'${r.appels === 1 ? 'UN SEUL' : r.appels} appel de dessin — mesuré en l'éteignant puis en la rallumant, le seul moyen honnête de connaître le prix d'une chose · tout ce que l'accident ajoute par-dessus (les flammes du véhicule et ${r.debris} débris au sol) coûte ${r.accident} appels sur les ${r.total} de l'image` };
 });
 
 // ---- POSTE VÉHICULES : l'horloge de simulation cassée ----
@@ -10995,7 +11017,10 @@ test('le crissement de la craie se tait dès que le tableau a fini de s\'écrire
 test('le decor lointain ne coute plus rien : contours, details et ombres s\'effacent quand ils ne se voient plus', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true });
+    // MONDE NEUF : ce test COMPTE les objets de la scène. Lancé après d'autres tests, il
+    // héritait de tout ce qu'ils avaient laissé et la ville demandait 2 246 appels dans un
+    // run et 7 264 dans un autre — un seuil chiffré ne pouvait pas tenir.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
     const avantQ = G.settings.quality;
     G.settings.quality = 'ultra'; G.applyQuality();
     // three.js remet ses compteurs a zero au DEBUT de chaque render() : avec la passe de
@@ -11034,8 +11059,12 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     G.settings.quality = avantQ; G.applyQuality();
     return res;
   });
-  const gain = r.sans.appels - r.avec.appels;
-  const ok = gain > 900 && r.avec.appels < 6000 && r.avec.tris < 1000000 && r.fautes === 0
-    && r.repris.appels === r.avec.appels && r.aretes > 200 && r.ombres > 1500;
-  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(gain / r.sans.appels * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
+  const gain = r.sans.appels - r.avec.appels, pc = gain / r.sans.appels;
+  // TOUT EST EN PROPORTION, sauf le plafond final. Un seuil en nombre d'appels ne veut rien
+  // dire : il dépend de la taille de la ville, qui grossit à chaque round. Ce qui doit rester
+  // vrai, c'est la PART du décor qu'on n'a plus à dessiner.
+  const ok = pc > 0.15 && r.avec.appels < 8000 && r.avec.tris < 1000000 && r.fautes === 0
+    && r.repris.appels === r.avec.appels
+    && r.aretes > r.nA * 0.5 && r.coupes > r.nD * 0.5 && r.ombres > r.nO * 0.4;
+  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
 });

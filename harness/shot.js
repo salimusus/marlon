@@ -1362,6 +1362,7 @@ window.__G = {
   gapDevant: typeof gapDevant === 'function' ? gapDevant : null,
   carBlocked: typeof carBlocked === 'function' ? carBlocked : null,
   vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
+  degageVehicule: typeof degageVehicule === 'function' ? degageVehicule : null,
   roleVoie: typeof roleVoie === 'function' ? roleVoie : null,
   feuPhase: typeof feuPhase === 'function' ? feuPhase : null,
   FEU_CYCLE: typeof FEU_CYCLE !== 'undefined' ? FEU_CYCLE : null,

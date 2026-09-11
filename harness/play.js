@@ -2426,12 +2426,19 @@ test('le garage a déménagé et il est bien plus grand, avec son atelier', asyn
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    // au volant, le comptoir d'atelier ne se signale pas (il faut se garer et y aller à pied) :
+    // si un test précédent nous a laissés dans une voiture, on en descend d'abord.
+    if (__G.drive.car) __G.exitCar();
     await dodo(600);
     const g = __G.city.garage, d = __G.city.tuneDesk;
     const z = __G.city.zones.find(x => x.name === 'Garage custom');
     // aucun mur d'un autre bâtiment ne doit traverser le garage ni son parvis
     const sien = o => Math.abs(o.x - g.x) < 15.5 && Math.abs(o.z - g.z) < 10.5;
-    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && o.y + o.h / 2 > 0.6 && !sien(o)
+    // UNE VOITURE GARÉE N'EST PAS UN MUR. On comptait les boîtes de collision des VÉHICULES
+    // (`o.veh`) comme des murs : la dépanneuse du garage poussée de deux mètres, ou n'importe
+    // quelle voiture laissée sur le parvis par un test précédent, comptait pour un « conflit
+    // de murs » — d'où un défaut qui n'apparaissait que dans la suite complète, jamais seul.
+    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && !o.veh && o.y + o.h / 2 > 0.6 && !sien(o)
       && Math.abs(o.x - cx) < (o.w + W) / 2 && Math.abs(o.z - g.z) < (o.d + D) / 2).length;
     const chevauche = [];
     if (dedans(g.x, 28, 18)) chevauche.push('bâtiment');
@@ -12225,4 +12232,85 @@ test('le coup qui met à terre passe au ralenti pendant trois secondes de temps 
     && r.pasMax < 0.06 && r.camImages > 150 && r.balayage > 0.8
     && r.apresEchelle === 1 && r.apresRepos === false;
   return { ok, detail: `« mets des ralentis (3 secondes) au dernier coup vainqueur » : hors ralenti le temps tourne à ${r.normal}× · le coup qui met à terre le ralentit jusqu'à ${r.mini}× et rend la main après ${r.fin} s de TEMPS RÉEL (le décompte se fait sur l'horloge du rendu, pas sur celle du jeu, sinon le ralenti se ralentissait lui-même), avec une entrée et une sortie en fondu (${r.pasMax} d'écart au plus d'une image à l'autre) · la caméra de cinéma a pris la main sur ${r.camImages} images et a BALAYÉ ${r.balayage} rad autour du point d'impact · un deuxième coup pendant le ralenti (${r.pendant}) ou juste après (${r.apresRepos}) ne le relance pas` };
+});
+
+// ---- POSTE VÉHICULES : on ne reste plus coincé contre un mur ----
+// Le joueur : « libère les blocages, quand le véhicule touche un obstacle laisse-lui la
+// possibilité de rebondir et se libérer pour repartir, mets-lui un petit dégât de carrosserie,
+// durabilité de vie du véhicule plus longue ». Le déplacement se testait à la position
+// D'ARRIVÉE : dès que la caisse mordait dans un obstacle, TOUTES les destinations étaient
+// refusées — marche arrière comprise — et le véhicule restait planté là pour de bon.
+test('un véhicule coincé contre un mur s\'en dégage toujours, et la carrosserie encaisse bien plus longtemps', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city.cars.find(v => !v.heli && !v.kind && !v.travail && !v.kart);
+    const b = G.city.batiments.filter(x => x.w > 6 && x.d > 6)
+      .sort((a, x) => Math.hypot(a.x, a.z) - Math.hypot(x.x, x.z))[0];
+    if (!c || !b) return { pourquoi: 'aucune voiture ou aucun bâtiment à portée' };
+    // on écarte tout ce qui roule autour : le piège doit être CELUI qu'on pose, pas le hasard
+    const autres = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - b.x, a.z - b.z) > 60) continue;
+      autres.push([a, a.x, a.z]); a.x += 700; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
+    const [vr, vL] = G.vehHalf(c);
+    const dansUnMur = () => (G.city.batiments || []).some(q => Math.abs(c.x - q.x) < q.w / 2 && Math.abs(c.z - q.z) < q.d / 2);
+    const pose = (x, z, h) => {
+      c.dmg = 0; c.deg = 0; c.dead = false; c.accidente = false; c.busy = false;
+      c.hitT = 0; c.rebondT = 0; c.coinceT = 0;
+      c.x = x; c.z = z; c.h = h; c.y = G.groundUnder(x, z, c.solid, 1);
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
+      G.P.pos.set(x, c.y + 0.5, z); if (G.drive.car !== c) G.enterCar(c); G.drive.speed = 0;
+    };
+    const jouer = (cmd, n) => { for (let i = 0; i < n; i++) { G.simTime += 1 / 60; G.conduire(c, cmd, 1 / 60); } };
+    const essai = (nom, x, z, h, voisines) => {
+      pose(x, z, h);
+      for (const [v, dx, dz] of (voisines || [])) { v.x = x + dx; v.z = z + dz; v.h = h; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      const piege = G.carBlocked(c.x, c.z, c.solid, vr, {}, c.y, c.h, vL), x0 = c.x, z0 = c.z;
+      jouer({ gaz: 1, volant: 0, frein: 0 }, 60);   // 1 s : on insiste au gaz, comme un enfant
+      let d = 0;                                     // puis on se dégage : avant / arrière, roues braquées
+      for (let k = 0; k < 4; k++) {
+        jouer({ gaz: -1, volant: 1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+        jouer({ gaz: 1, volant: -1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+      }
+      const res = { nom, piege, sorti: +d.toFixed(2), mur: dansUnMur(), dmg: +c.dmg.toFixed(1), epave: !!c.dead };
+      for (const [v] of (voisines || [])) { v.x += 700; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      return res;
+    };
+    const zf = b.z + b.d / 2, xf = b.x + b.w / 2;
+    const pieges = [
+      essai('nez contre la façade', b.x, zf + 1.6, Math.PI),
+      essai('caisse encastrée dans la façade', b.x, zf - 0.8, Math.PI),
+      essai('encastrée dans un angle', xf - 0.8, zf - 0.8, Math.PI - 0.7),
+      essai('en biais contre l\'angle extérieur', xf + 1.2, zf + 1.2, Math.PI - 0.78),
+      essai('entre deux voitures et la façade', b.x, zf + 2.4, Math.PI,
+        autres.length >= 2 ? [[autres[0][0], -2.5, 0], [autres[1][0], 2.5, 0]] : []),
+    ];
+    // UN choc : il doit marquer la tôle, mais rien qu'un peu
+    pose(b.x, zf + 9, Math.PI);
+    c.hitT = 0; G.drive.speed = 14;
+    for (let i = 0; i < 45 && c.dmg === 0; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+    const unChoc = +c.dmg.toFixed(2);
+    // DURABILITÉ : combien de murs pris à 14 m/s avant que la voiture ne soit bonne pour la casse ?
+    pose(b.x, zf + 9, Math.PI);
+    let chocs = 0;
+    for (let k = 0; k < 80 && !c.dead; k++) {
+      c.x = b.x; c.z = zf + 9; c.h = Math.PI; c.hitT = 0; c.coinceT = 0; c.rebondT = 0;
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c); G.drive.speed = 14;
+      for (let i = 0; i < 45 && !c.dead; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+      chocs = k + 1;
+    }
+    const epave = !!c.dead;
+    c.dmg = 0; c.deg = 0; c.dead = false; c.explosed = false;
+    try { G.repairVisual(c); } catch (e) {}
+    G.exitCar();
+    for (const [a, x, z] of autres) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { pieges, unChoc, chocs, epave };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const coinces = r.pieges.filter(x => x.sorti < 0.6 || x.mur);
+  const ok = r.pieges.length === 5 && r.pieges.filter(x => x.piege).length >= 4
+    && coinces.length === 0 && r.unChoc > 0 && r.unChoc <= 5 && r.chocs >= 18 && r.epave;
+  return { ok, detail: `le véhicule qui touchait un obstacle restait planté là DÉFINITIVEMENT : la collision se testait à la position d'arrivée, et une caisse qui mordait déjà dans un mur se voyait refuser toutes les destinations, marche arrière comprise (mesuré sur la branche d'avant : 0,00 m parcouru dans quatre pièges sur cinq, quoi qu'on fasse au volant) · il se DÉGAGE maintenant — la caisse est ressortie par le plus court chemin, elle rebond${''}it franchement un quart de seconde sur deux et pivote vers l'échappée si ça dure : ${r.pieges.map(x => `${x.nom} ${x.sorti} m`).join(' · ')}${coinces.length ? ' — ENCORE COINCÉ : ' + coinces.map(x => x.nom).join(', ') : ''} · le choc laisse un PETIT dégât (${r.unChoc} % à 50 km/h, contre 8,4 % avant) et la voiture encaisse ${r.chocs} murs à 14 m/s avant d'être bonne pour la casse (9 avant), sans devenir indestructible (épave au bout : ${r.epave})` };
 });

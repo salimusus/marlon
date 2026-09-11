@@ -2429,21 +2429,35 @@ function buildPool() {   // piscine surélevée (ouest, décalée au nord pour l
   city.water = { x1: -57, x2: -45, z1: -12.5 + Z, z2: -3.5 + Z, top: 2.0 };
   city.zones.push({ name: 'Piscine', emoji: '🏊', x1: -62, x2: -40, z1: -26, z2: -3, hint: '🏊 Plonge ! Sors par le petit bain ou le plongeoir' });
 }
-function rifleMesh() {   // fusil laser : crosse, carcasse, long canon, lunette, chargeur incliné, poignée, garde-main, bout orange
-  const g = new THREE.Group(), dark = lam(0x2b2f3a), grey = lam(0x6b7280), orange = lam(0xff8f3a), blue = lam(0x4f8dff);
+function rifleMesh() {   // fusil d'assaut : crosse a busc, rail fendu, garde-main ventile, frein de bouche, poignee quadrillee
+  const g = new THREE.Group(), dark = ARME_NOIR, grey = ARME_ACIER, grain = ARME_GRAIN, orange = lam(0xff8f3a), blue = lam(0x4f8dff);
   const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
-  bx(dark, 0.1, 0.16, 0.34, 0, -0.78, -0.42, 0.25);       // crosse
-  bx(grey, 0.11, 0.13, 0.5, 0, -0.66, 0.05);              // carcasse
-  bx(blue, 0.115, 0.05, 0.36, 0, -0.62, 0.1);             // bande décorative
-  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 8), dark); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 0.55); g.add(c);
-  bx(grey, 0.09, 0.08, 0.3, 0, -0.68, 0.42);              // garde-main
-  bx(orange, 0.07, 0.07, 0.05, 0, -0.64, 0.84);           // bout orange
-  const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 8), dark); sc.rotation.x = Math.PI / 2; sc.position.set(0, -0.53, 0.1); g.add(sc);
-  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.01, 8), neonMat(0x3ef2ff)); lens.rotation.x = Math.PI / 2; lens.position.set(0, -0.53, 0.215); g.add(lens);
-  bx(dark, 0.03, 0.05, 0.03, 0, -0.56, 0.1); bx(dark, 0.03, 0.05, 0.03, 0, -0.56, 0.02);   // supports de lunette
-  const mag = bx(grey, 0.07, 0.2, 0.09, 0, -0.8, 0.02, 0.3);   // chargeur incliné
-  bx(dark, 0.08, 0.16, 0.09, 0, -0.82, -0.14, 0.25);      // poignée
-  bx(dark, 0.06, 0.02, 0.1, 0, -0.75, -0.06);             // pontet
+  // LA CROSSE : un tube de crosse et un busc par-dessus, au lieu d'un pave incline. C'est ce
+  // qui donne au fusil sa ligne basse — l'oeil suit le rail, pas la boite.
+  bx(dark, 0.062, 0.062, 0.3, 0, -0.7, -0.42);            // le tube de crosse
+  bx(dark, 0.09, 0.1, 0.3, 0, -0.77, -0.44, 0.12);        // la plaque de couche
+  bx(grain, 0.084, 0.05, 0.22, 0, -0.64, -0.4);           // le busc, ou se pose la joue
+  bx(grey, 0.11, 0.13, 0.5, 0, -0.66, 0.05);              // la carcasse
+  bx(blue, 0.117, 0.045, 0.3, 0, -0.62, 0.08);            // la bande de couleur (c'est un jouet laser)
+  bx(dark, 0.05, 0.05, 0.1, 0.06, -0.645, 0.16);          // la fenetre d'ejection
+  bx(grain, 0.1, 0.026, 0.44, 0, -0.583, 0.12);           // LE RAIL FENDU sur le dessus
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.033, 0.55, 10), grey); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 0.55); g.add(c);
+  bx(grain, 0.092, 0.082, 0.3, 0, -0.68, 0.42);           // le garde-main, ventile
+  for (const sg of [-1, 1]) bx(dark, 0.014, 0.05, 0.24, sg * 0.047, -0.68, 0.42);   // les fentes d'aeration
+  bx(grey, 0.072, 0.072, 0.09, 0, -0.64, 0.78);           // le frein de bouche
+  for (let i = 0; i < 2; i++) bx(dark, 0.078, 0.016, 0.016, 0, -0.64, 0.755 + i * 0.05);
+  bx(orange, 0.07, 0.07, 0.05, 0, -0.64, 0.845);          // le bout orange
+  const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.24, 10), dark); sc.rotation.x = Math.PI / 2; sc.position.set(0, -0.52, 0.1); g.add(sc);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.01, 10), neonMat(0x3ef2ff)); lens.rotation.x = Math.PI / 2; lens.position.set(0, -0.52, 0.225); g.add(lens);
+  bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.19); bx(dark, 0.03, 0.055, 0.03, 0, -0.552, 0.01);   // les colliers du viseur
+  bx(grey, 0.07, 0.2, 0.09, 0, -0.8, 0.02, 0.3);          // le chargeur incline
+  bx(dark, 0.074, 0.036, 0.094, 0, -0.898, -0.01, 0.3);   // son talon
+  bx(grain, 0.08, 0.16, 0.09, 0, -0.82, -0.14, 0.25);     // la poignee, quadrillee
+  // le pontet en boucle, comme sur le pistolet
+  bx(dark, 0.02, 0.016, 0.11, 0, -0.768, -0.055);
+  bx(dark, 0.02, 0.05, 0.016, 0, -0.748, 0.0);
+  bx(dark, 0.02, 0.042, 0.016, 0, -0.752, -0.11);
+  bx(grey, 0.014, 0.046, 0.016, 0, -0.735, -0.055);       // la detente
   const flash = new THREE.Mesh(unitRound, neonMat(0xffffaa)); flash.scale.set(0.22, 0.22, 0.34); flash.position.set(0, -0.64, 1.0); flash.visible = false; g.add(flash); g.flash = flash;
   return g;
 }
@@ -2464,21 +2478,33 @@ function wrapWeapon(mesh, gy, gz, mx, my, mz) {
   const muz = new THREE.Object3D(); muz.position.set(mx, my - gy, mz - gz); g.add(muz); g.userData.muzzle = muz;
   return g;
 }
-function sniperMesh() {   // fusil à lunette : canon long, grosse lunette, bipied, crosse de précision
+function sniperMesh() {   // fusil a lunette : canon long cannele, grosse lunette a tourelles, bipied ouvert, busc regle
   const g = rifleMesh();
-  const dark = lam(0x1b1f28), grey = lam(0x8f98ab), verre = neonMat(0x9fdcff);
+  const dark = ARME_NOIR, grey = ARME_ACIER, grain = ARME_GRAIN, verre = neonMat(0x9fdcff);
   const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
-  // canon rallongé
-  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.42, 8), dark); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 1.0); g.add(c);
-  bx(dark, 0.075, 0.075, 0.12, 0, -0.64, 1.22);                 // frein de bouche
-  // grosse lunette de visée
-  const lu = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.42, 10), dark); lu.rotation.x = Math.PI / 2; lu.position.set(0, -0.47, 0.16); g.add(lu);
-  const par = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.1, 10), dark); par.rotation.x = Math.PI / 2; par.position.set(0, -0.47, 0.38); g.add(par);
-  const oc = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.06, 10), verre); oc.rotation.x = Math.PI / 2; oc.position.set(0, -0.47, -0.06); g.add(oc);
-  bx(grey, 0.03, 0.09, 0.04, 0, -0.52, 0.3); bx(grey, 0.03, 0.09, 0.04, 0, -0.52, 0.02);   // colliers
-  // bipied replié sous le garde-main
-  for (const sg of [-1, 1]) bx(grey, 0.02, 0.16, 0.02, sg * 0.05, -0.74, 0.6, 0.5);
-  bx(dark, 0.1, 0.2, 0.12, 0, -0.86, -0.5);                     // busc de crosse
+  // LE CANON RALLONGE, avec ses cannelures : un tube lisse de 42 cm faisait « baton », les
+  // trois gorges lui donnent l'epaisseur d'un canon lourd de precision.
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.44, 10), grey); c.rotation.x = Math.PI / 2; c.position.set(0, -0.64, 1.0); g.add(c);
+  for (let i = 0; i < 3; i++) bx(dark, 0.076, 0.076, 0.018, 0, -0.64, 0.88 + i * 0.11);   // les gorges
+  bx(grey, 0.078, 0.078, 0.13, 0, -0.64, 1.23);                 // le frein de bouche
+  for (let i = 0; i < 3; i++) bx(dark, 0.084, 0.02, 0.016, 0, -0.64, 1.19 + i * 0.04);    // ses events
+  // LA GROSSE LUNETTE : corps, cloche d'objectif, oculaire, et les deux TOURELLES de reglage
+  const lu = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.42, 12), dark); lu.rotation.x = Math.PI / 2; lu.position.set(0, -0.46, 0.16); g.add(lu);
+  const par = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.078, 0.12, 12), dark); par.rotation.x = Math.PI / 2; par.position.set(0, -0.46, 0.39); g.add(par);
+  const obj = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, 0.012, 12), verre); obj.rotation.x = Math.PI / 2; obj.position.set(0, -0.46, 0.452); g.add(obj);
+  const oc = new THREE.Mesh(new THREE.CylinderGeometry(0.054, 0.054, 0.07, 12), dark); oc.rotation.x = Math.PI / 2; oc.position.set(0, -0.46, -0.07); g.add(oc);
+  const ocv = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.044, 0.01, 12), verre); ocv.rotation.x = Math.PI / 2; ocv.position.set(0, -0.46, -0.106); g.add(ocv);
+  const tourelle = (px, py, rz) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.05, 10), grain); m.position.set(px, py, 0.1); m.rotation.z = rz; g.add(m); };
+  tourelle(0, -0.385, 0); tourelle(0.078, -0.46, Math.PI / 2);   // hausse (dessus) et derive (cote)
+  bx(grey, 0.032, 0.095, 0.042, 0, -0.515, 0.32); bx(grey, 0.032, 0.095, 0.042, 0, -0.515, 0.0);   // les colliers
+  // LE BIPIED OUVERT : deux jambes ecartees et leurs patins, au lieu de deux batonnets replies
+  for (const sg of [-1, 1]) {
+    const j = bx(grey, 0.018, 0.26, 0.018, sg * 0.075, -0.79, 0.6); j.rotation.z = sg * 0.35;
+    bx(dark, 0.05, 0.022, 0.05, sg * 0.12, -0.91, 0.6);          // le patin
+  }
+  bx(dark, 0.06, 0.05, 0.06, 0, -0.7, 0.6);                      // l'embase du bipied
+  bx(grain, 0.094, 0.07, 0.24, 0, -0.615, -0.42);                // le busc reglable, plus haut que celui du fusil
+  bx(dark, 0.1, 0.2, 0.12, 0, -0.86, -0.5);                      // le patin de crosse
   return g;
 }
 function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, sinon rangée (étui à la hanche / dos)
@@ -5138,18 +5164,61 @@ function knifeMesh() {
   g.userData.pointe = pointe;
   return g;
 }
-function gunMesh() {   // pistolet (jouet laser) : culasse, canon, carcasse, pontet, crosse, chargeur, mire, bout orange
-  const g = new THREE.Group(), dark = lam(0x2b2f3a), grey = lam(0x6b7280), orange = lam(0xff8f3a);
+// ================= LE DESSIN DES ARMES =================
+// « Ameliore le design des armes. » Le pistolet et le fusil etaient des EMPILEMENTS DE BOITES
+// LISSES : pas une strie sur la culasse, pas un quadrillage sur la crosse, pas un rail sur le
+// dessus — a l'ecran, deux barres grises. Ce qui donne son caractere a une arme tient en trois
+// choses, et aucune ne coute un maillage de plus :
+//   1. le GRAIN des surfaces qu'on empoigne (quadrillage de crosse, stries de culasse, fentes
+//      de rail) : c'est `TEX_ARME`, une seule image partagee par toutes les armes du jeu ;
+//   2. le METAL : un materiau brillant (Phong) au lieu d'un aplat mat — le meme choix que la
+//      lame du couteau, qui est de loin la piece la mieux dessinee du lot ;
+//   3. la SILHOUETTE : un pontet qui fait vraiment une boucle, une fenetre d'ejection, un
+//      talon de chargeur, un guidon et une hausse qu'on distingue l'un de l'autre.
+const TEX_ARME = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#3a3f4a'; g.fillRect(0, 0, 128, 128);
+  // haut-gauche : le QUADRILLAGE d'une crosse (losanges graves)
+  g.strokeStyle = 'rgba(12,14,18,.85)'; g.lineWidth = 2;
+  for (let i = -8; i < 16; i++) { g.beginPath(); g.moveTo(i * 8, 0); g.lineTo(i * 8 + 64, 64); g.stroke();
+    g.beginPath(); g.moveTo(i * 8, 64); g.lineTo(i * 8 + 64, 0); g.stroke(); }
+  g.fillStyle = 'rgba(255,255,255,.10)';
+  for (let i = -8; i < 16; i++) { g.save(); g.translate(1, -1); g.fillRect(i * 8, 0, 1.5, 64); g.restore(); }
+  // haut-droit : les STRIES d'une culasse
+  g.fillStyle = '#2f343e'; g.fillRect(64, 0, 64, 64);
+  for (let i = 0; i < 10; i++) { g.fillStyle = 'rgba(10,12,16,.8)'; g.fillRect(68 + i * 6, 0, 3, 64);
+    g.fillStyle = 'rgba(255,255,255,.13)'; g.fillRect(71 + i * 6, 0, 1, 64); }
+  // bas : le RAIL, une suite de fentes carrees
+  g.fillStyle = '#41464f'; g.fillRect(0, 64, 128, 64);
+  g.fillStyle = 'rgba(8,10,14,.85)';
+  for (let i = 0; i < 12; i++) g.fillRect(4 + i * 10, 74, 6, 44);
+  g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(0, 66, 128, 2); g.fillRect(0, 120, 128, 2);
+  const t = new THREE.CanvasTexture(c); shared.add(t); return t;
+})();
+// Les matieres des armes : de l'ACIER qui accroche la lumiere, du polymere mat, et le grain
+// ci-dessus. Partagees : les fabriquer une fois ne coute rien de plus a chaque arme.
+const ARME_ACIER = new THREE.MeshPhongMaterial({ color: 0x8f98a8, specular: 0xdfe6f2, shininess: 90 }); shared.add(ARME_ACIER);
+const ARME_NOIR = new THREE.MeshPhongMaterial({ color: 0x2a2e37, specular: 0x707886, shininess: 55 }); shared.add(ARME_NOIR);
+const ARME_GRAIN = new THREE.MeshPhongMaterial({ map: TEX_ARME, specular: 0x555c68, shininess: 30 }); shared.add(ARME_GRAIN);
+function gunMesh() {   // pistolet : culasse striee, fenetre d'ejection, pontet en boucle, crosse quadrillee, guidon et hausse
+  const g = new THREE.Group(), dark = ARME_NOIR, grey = ARME_ACIER, grain = ARME_GRAIN, orange = lam(0xff8f3a);
   const bx = (mat, sx, sy, sz, px, py, pz, rx = 0) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.rotation.x = rx; g.add(m); return m; };
-  bx(dark, 0.11, 0.1, 0.42, 0, -0.62, 0.22);            // culasse
-  bx(grey, 0.1, 0.09, 0.32, 0, -0.71, 0.16);            // carcasse
-  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8), dark); c.rotation.x = Math.PI / 2; c.position.set(0, -0.62, 0.48); g.add(c);
-  bx(orange, 0.06, 0.06, 0.05, 0, -0.62, 0.52);         // bout orange (jouet)
-  const grip = bx(dark, 0.09, 0.22, 0.11, 0, -0.84, -0.02, 0.35); grip.rotation.x = 0.3;
-  bx(grey, 0.09, 0.03, 0.11, 0, -0.95, -0.06, 0.3);     // chargeur
-  bx(dark, 0.08, 0.02, 0.14, 0, -0.78, 0.1);            // pontet
-  bx(dark, 0.02, 0.05, 0.02, 0, -0.75, 0.08);           // détente
-  bx(grey, 0.03, 0.02, 0.02, 0, -0.56, 0.4); bx(grey, 0.05, 0.02, 0.02, 0, -0.56, 0.02);   // mires
+  bx(grain, 0.112, 0.1, 0.42, 0, -0.62, 0.22);          // la culasse, striee a l'arriere
+  bx(dark, 0.116, 0.035, 0.2, 0, -0.585, 0.3);          // le dessus plat de la culasse
+  bx(dark, 0.05, 0.055, 0.12, 0.058, -0.615, 0.26);     // la fenetre d'ejection, a droite
+  bx(grey, 0.1, 0.09, 0.32, 0, -0.71, 0.16);            // la carcasse
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 10), grey); c.rotation.x = Math.PI / 2; c.position.set(0, -0.62, 0.47); g.add(c);
+  bx(orange, 0.062, 0.062, 0.05, 0, -0.62, 0.53);       // le bout orange (c'est un jouet)
+  const grip = bx(grain, 0.09, 0.23, 0.115, 0, -0.845, -0.02, 0.35); grip.rotation.x = 0.3;   // la crosse QUADRILLEE
+  bx(dark, 0.094, 0.03, 0.12, 0, -0.965, -0.06, 0.3);   // le talon de chargeur
+  bx(dark, 0.055, 0.045, 0.055, 0, -0.7, -0.06);        // le dos de la carcasse (le bec de securite)
+  // LE PONTET FAIT UNE VRAIE BOUCLE : trois barres au lieu d'une planche sous la detente
+  bx(dark, 0.022, 0.017, 0.13, 0, -0.795, 0.1);
+  bx(dark, 0.022, 0.055, 0.018, 0, -0.775, 0.163);
+  bx(dark, 0.022, 0.045, 0.018, 0, -0.78, 0.036);
+  bx(grey, 0.016, 0.05, 0.018, 0, -0.762, 0.1);         // la detente
+  bx(dark, 0.028, 0.028, 0.02, 0, -0.555, 0.4);         // le guidon, plus haut que la hausse
+  bx(dark, 0.058, 0.022, 0.024, 0, -0.552, 0.03); bx(grey, 0.014, 0.024, 0.026, 0, -0.548, 0.03);   // la hausse, fendue
   const flash = new THREE.Mesh(unitRound, neonMat(0xffffaa)); flash.scale.set(0.18, 0.18, 0.28); flash.position.set(0, -0.62, 0.66); flash.visible = false; g.add(flash); g.flash = flash;
   return g;
 }

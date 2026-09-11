@@ -13005,3 +13005,310 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
+
+// ===================================================================================
+//  POSTE JEU STRATEGIQUE — un test par regle du jeu.
+//  Une regle de jeu sans test se perd au round suivant : chacune de celles qui
+//  decident de la partie (le but, les paliers, le prix d'une recrue, la duree d'une
+//  alliance, la mort d'un gang) est verrouillee ici.
+// ===================================================================================
+
+test('le but du jeu : tenir les 8 quartiers lance un compte a rebours de 90 s qui se MET EN PAUSE quand on en perd un, puis sacre le joueur maitre de la ville', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.TERRITOIRES || !G.sacreTick) return { pourquoi: 'regles de la guerre absentes' };
+    const total = G.TERRITOIRES.length;
+    G.guerre.gagne = false; G.guerre.sacre = 0;
+    // sept quartiers sur huit : rien ne se declenche
+    G.guerre.territoires = {};
+    G.TERRITOIRES.forEach((t, i) => { if (i < total - 1) G.guerre.territoires[t.k] = 'joueur'; });
+    G.sacreTick(1);
+    const avecSept = G.guerre.sacre;
+    // le huitieme : le compte a rebours demarre
+    G.guerre.territoires[G.TERRITOIRES[total - 1].k] = 'joueur';
+    G.sacreTick(0.016);
+    const lance = G.guerre.sacre, affiche = document.getElementById('sacre').classList.contains('on');
+    // on perd un quartier au milieu : PAUSE, surtout pas de remise a zero
+    G.guerre.sacre = 40;
+    G.guerre.territoires[G.TERRITOIRES[3].k] = 'jaune';
+    G.sacreTick(1); G.sacreTick(1); G.sacreTick(1);
+    const enPause = G.guerre.sacre, classePause = document.getElementById('sacre').classList.contains('pause');
+    // on le reprend : il repart exactement d'ou il en etait
+    G.guerre.territoires[G.TERRITOIRES[3].k] = 'joueur';
+    G.sacreTick(1);
+    const repart = G.guerre.sacre;
+    // jusqu'au bout : ecran de victoire
+    G.guerre.sacre = 0.5; G.sacreTick(1);
+    const gagne = !!G.guerre.gagne, ecran = !document.getElementById('victoire').classList.contains('hidden');
+    try { G.closeUI(); } catch (e) {}
+    return { total, avecSept, lance, affiche, enPause, classePause, repart, gagne, ecran, duree: G.SACRE_DUREE };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.total === 8 && r.avecSept === 0 && Math.round(r.lance) === r.duree && r.affiche
+    && Math.round(r.enPause) === 40 && r.classePause && Math.round(r.repart) === 39 && r.gagne && r.ecran;
+  return { ok, detail: `avant : le jeu n'avait AUCUNE condition de victoire, on jouait sans but · maintenant, ${r.total} quartiers verts en meme temps lancent le Sacre (${Math.round(r.lance)} s au lieu de ${r.avecSept} avec sept quartiers, compte a rebours a l'ecran : ${r.affiche}) ; perdre un quartier le MET EN PAUSE sans le remettre a zero (3 s de pause, il reste ${Math.round(r.enPause)} s, classe « pause » : ${r.classePause}) et il repart a ${Math.round(r.repart)} s des qu'on a repris le quartier ; a zero le joueur est sacre maitre de la ville (ecran de victoire ouvert : ${r.ecran})` };
+});
+
+test('la difficulte monte etape par etape : deux petits gangs au depart, et un gang plus fort debarque a chaque rang gagne, sans jamais prendre plus de deux quartiers au joueur', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.paliersTick || !G.GANG_DEFS) return { pourquoi: 'table des paliers absente' };
+    const table = G.GANG_DEFS.map(d => ({ id: d.id, palier: d.palier, nb: d.nb, f0: d.f0, terr: (d.terr || []).length }));
+    const auPalier1 = table.filter(d => d.palier === 1).length;
+    // On repart du premier gang de la table qui n'est pas encore en ville : le test ne depend
+    // donc pas de l'avancement de la sauvegarde trouvee au demarrage.
+    const def = G.GANG_DEFS.find(d => !G.gangDe(d.id) && (G.guerre.morts || []).indexOf(d.id) < 0);
+    if (!def) return { pourquoi: 'tous les gangs de la table sont deja en ville' };
+    G.guerre.palier = def.palier - 1;
+    G.guerre.arrivee = null;
+    G.gang.rep = G.PALIERS_GUERRE[def.palier - 1];
+    G.paliersTick();
+    const annonce = G.guerre.arrivee && G.guerre.arrivee.id;
+    if (!annonce) return { pourquoi: 'aucun gang annonce au changement de palier' };
+    // le joueur tient deja les quartiers du nouveau venu, plus deux autres : il ne doit en
+    // perdre que deux au plus, jamais tout d'un coup
+    G.guerre.territoires = {};
+    for (const k of (def.terr || [])) G.guerre.territoires[k] = 'joueur';
+    G.guerre.territoires.centre = 'joueur'; G.guerre.territoires.parc = 'joueur';
+    G.guerre.territoires.residentiel = 'joueur';
+    const avant = G.nbTerritoires('joueur');
+    G.guerre.arrivee.t = G.simTime - 1;
+    G.paliersTick();
+    const apres = G.nbTerritoires('joueur');
+    const nouveau = G.gangDe(annonce);
+    return { table, auPalier1, annonce, attendu: def.id, arrive: !!nouveau,
+      membres: nouveau ? nouveau.membres.length : 0, force: nouveau ? nouveau.force : 0,
+      f0: def.f0, nb: def.nb, perdus: avant - apres, palier: G.guerre.palier, attenduPalier: def.palier };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const croissante = r.table.every((d, i) => i === 0 || (d.palier >= r.table[i - 1].palier && d.f0 > r.table[i - 1].f0));
+  const ok = r.table.length === 6 && croissante && r.auPalier1 === 2 && r.annonce === r.attendu
+    && r.arrive && r.force === r.f0 && r.membres === r.nb + 3 && r.perdus <= 2 && r.palier === r.attenduPalier;
+  return { ok, detail: `avant : les trois gangs arrivaient tous a la premiere seconde, tous pareils, et renaissaient sans fin · maintenant la table compte ${r.table.length} gangs echelonnes sur 5 paliers, de force ${r.table.map(d => d.f0).join(' → ')} (croissante : ${croissante}) et seuls ${r.auPalier1} d'entre eux sont la au depart ; franchir le seuil de respect du palier ${r.attenduPalier} fait debarquer « ${r.annonce} » — annonce d'abord, arrivee 10 s plus tard, ${r.membres} hommes (le chef, ${r.nb} hommes et 2 gardes de planque), force ${r.force} — et il ne prend que ${r.perdus} quartier(s) au joueur (plafond : 2, pour ne jamais tout perdre d'un coup)` };
+});
+
+test('le respect descend aussi, mais jamais sous le seuil du rang atteint : un enfant ne perd jamais un rang ni les places de gang qui vont avec', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.perdRep) return { pourquoi: 'perdRep absent' };
+    G.gang.rep = 500;                       // rang « Caid » : seuil 400, 9 places
+    const rangAvant = G.rangJoueur().n, maxAvant = G.rangJoueur().max, plancher = G.plancherRep();
+    G.perdRep(60, 'test');
+    const apresPetitePerte = G.gang.rep;
+    G.perdRep(5000, 'test');                // on essaie de tout lui prendre
+    const apresGrossePerte = G.gang.rep;
+    const rangApres = G.rangJoueur().n, maxApres = G.rangJoueur().max;
+    G.gang.rep = 50; const plancherBas = G.plancherRep();
+    G.perdRep(500, 'test');
+    const jamaisNegatif = G.gang.rep;
+    return { rangAvant, maxAvant, plancher, apresPetitePerte, apresGrossePerte, rangApres, maxApres, plancherBas, jamaisNegatif };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.plancher === 400 && r.apresPetitePerte === 440 && r.apresGrossePerte === 400
+    && r.rangApres === r.rangAvant && r.maxApres === r.maxAvant && r.jamaisNegatif === 0;
+  return { ok, detail: `avant : le respect ne descendait JAMAIS, gagner ne coutait rien et perdre non plus · maintenant il descend (500 → ${r.apresPetitePerte} apres une perte de 60) mais il BUTE sur le seuil du rang atteint : une perte de 5000 le laisse a ${r.apresGrossePerte} (plancher ${r.plancher}), le rang reste « ${r.rangApres} » et le gang garde ses ${r.maxApres} places · au rang de depart le plancher est ${r.plancherBas} et le respect ne passe jamais sous ${r.jamaisNegatif}` };
+});
+
+test('on recrute un adversaire avec de l\'argent : le prix est affiche, il double si son gang domine et il est divise par deux si son gang n\'a plus de quartier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.prixRecrue || !G.acheterRecrue) return { pourquoi: 'recrutement par l\'argent absent' };
+    G.gang.rep = 0;                          // rang de depart : aucune remise
+    const rouge = G.gangDe('rouge') || G.gangs[0];
+    const m = rouge.membres.find(x => !x.chef);
+    m.perf = 40;
+    // son gang domine (un quartier contre zero)
+    G.guerre.territoires = {}; G.guerre.territoires.zone = rouge.id;
+    const prixDomine = G.prixRecrue(m);
+    // a egalite
+    G.guerre.territoires.centre = 'joueur';
+    const prixEgal = G.prixRecrue(m);
+    // son gang n'a plus rien
+    G.guerre.territoires = { centre: 'joueur' };
+    const prixEffondre = G.prixRecrue(m);
+    // il n'ecoute que s'il est SEUL : ses copains a cote, rien a faire
+    for (const o of rouge.membres) { o.x = G.P.pos.x + 1; o.z = G.P.pos.z + 1; }
+    const entoure = !!G.recrueAchetable();
+    for (const o of rouge.membres) if (o !== m) { o.x = 900; o.z = 900; }
+    m.x = G.P.pos.x + 1; m.z = G.P.pos.z + 1;
+    const isole = G.recrueAchetable() === m;
+    // sans assez de pieces : refus net, il reste chez lui
+    G.wallet = 5;
+    const sansArgent = G.acheterRecrue(m);
+    G.wallet = 5000;
+    const w0 = G.wallet, prix = G.prixRecrue(m);
+    const achat = G.acheterRecrue(m);
+    return { prixDomine, prixEgal, prixEffondre, entoure, isole, sansArgent, achat,
+      paye: w0 - G.wallet, prix, fidelite: G.fideliteDe(m), ancien: m.ancien,
+      dansMonGang: (G.gang.membresLibres || []).indexOf(m) >= 0,
+      plusChezLui: rouge.membres.indexOf(m) < 0 };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.prixDomine === 320 && r.prixEgal === 160 && r.prixEffondre === 80
+    && !r.entoure && r.isole && !r.sansArgent && r.achat && r.paye === r.prix
+    && r.fidelite === 50 && r.ancien === 'rouge' && r.dansMonGang && r.plusChezLui;
+  return { ok, detail: `avant : on ne pouvait rattacher un adversaire QUE par la bagarre, l'argent ne servait a rien dans la guerre · maintenant un homme de force 40 coute ${r.prixEgal} pieces a egalite, ${r.prixDomine} si son gang tient plus de quartiers que toi et seulement ${r.prixEffondre} si son gang n'a plus rien — c'est ce qui apprend au joueur, tout seul, qu'il faut prendre les quartiers AVANT d'acheter les hommes · il n'ecoute que s'il est isole (entoure : ${r.entoure}, seul : ${r.isole}), sans assez de pieces l'achat echoue proprement (${r.sansArgent}), et l'achat retire ${r.paye} pieces, le sort de son gang (${r.plusChezLui}) et le met dans le tien avec une fidelite de ${r.fidelite} au lieu de 80 pour un homme conquis a la bagarre` };
+});
+
+test('un homme achete peut trahir, mais jamais en silence : il previent trente secondes avant et on peut le retenir avec des pieces', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.fideliteTick || !G.retiensMembre) return { pourquoi: 'fidelite absente' };
+    G.wallet = 5000; G.gang.rep = 0;
+    const rouge = G.gangDe('rouge') || G.gangs[0];
+    const m = rouge.membres.find(x => !x.chef);
+    m.perf = 40;
+    for (const o of rouge.membres) if (o !== m) { o.x = 900; o.z = 900; }
+    m.x = G.P.pos.x + 1; m.z = G.P.pos.z + 1;
+    G.guerre.territoires = { centre: 'joueur' };
+    G.acheterRecrue(m);
+    const fidAchat = G.fideliteDe(m);
+    // le joueur n'a plus rien : sa fidelite fond
+    G.guerre.territoires = { zone: rouge.id };
+    G.guerre.fidT = 0; G.fideliteTick();
+    const apresUnTour = G.fideliteDe(m);
+    // au seuil, il PREVIENT et laisse un delai
+    m.fidelite = 5; G.guerre.fidT = 0; G.fideliteTick();
+    const previent = !!m.doute, delai = Math.round(m.doute - G.simTime), prixGarde = m.prixGarde;
+    // il est a portee : on peut le retenir
+    const retenable = G.membreQuiDoute() === m;
+    const w0 = G.wallet;
+    const retenu = G.retiensMembre(m);
+    const fidApres = G.fideliteDe(m), douteEfface = !m.doute, coutGarde = w0 - G.wallet;
+    // et si on ne paie pas, il repart chez lui — apres le delai, pas avant
+    m.fidelite = 0; m.doute = 0; G.guerre.fidT = 0; G.fideliteTick();
+    const rePrevient = !!m.doute;
+    G.guerre.fidT = 0; G.fideliteTick();
+    const encoreLa = (G.gang.membresLibres || []).indexOf(m) >= 0;
+    m.doute = G.simTime - 1; G.guerre.fidT = 0; G.fideliteTick();
+    const parti = (G.gang.membresLibres || []).indexOf(m) < 0;
+    const rentreChezLui = m.gang === rouge.id && rouge.membres.indexOf(m) >= 0;
+    return { fidAchat, apresUnTour, previent, delai, prixGarde, retenable, retenu, fidApres,
+      douteEfface, coutGarde, rePrevient, encoreLa, parti, rentreChezLui, seuil: G.FIDELITE_SEUIL };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.fidAchat === 50 && r.apresUnTour < r.fidAchat && r.previent && r.delai >= 28 && r.delai <= 31
+    && r.retenable && r.retenu && r.fidApres === 70 && r.douteEfface && r.coutGarde === r.prixGarde
+    && r.rePrevient && r.encoreLa && r.parti && r.rentreChezLui;
+  return { ok, detail: `un homme achete arrive a ${r.fidAchat} de fidelite et la perd quand le joueur perd du terrain (${r.fidAchat} → ${r.apresUnTour} en un tour) · sous le seuil de ${r.seuil} il PREVIENT (${r.previent}) et laisse ${r.delai} s : on le retient pour ${r.prixGarde} pieces et sa fidelite remonte a ${r.fidApres} · si on ne paie pas il reste en place tant que le delai court (${r.encoreLa}) puis repart chez lui (${r.parti}, reintegre son ancien gang : ${r.rentreChezLui}) — jamais un depart silencieux, l'enfant voit toujours venir et peut toujours agir` };
+});
+
+test('les alliances sont temporaires et payantes, le gang le plus fort les refuse toujours, et frapper un allie les rompt sur-le-champ', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.scelleAlliance || !G.alliancePrix) return { pourquoi: 'alliances absentes' };
+    G.wallet = 5000;
+    const A = G.gangs[0], B = G.gangs[1];
+    // A tient le centre et la plage, B une seule zone : A est « le premier »
+    G.guerre.territoires = { centre: A.id, plage: A.id, zone: B.id };
+    const premier = G.gangPremier();
+    // le premier refuse toujours : c'est ce qui force « s'allier avec le deuxieme contre le premier »
+    A.relation = 80; A.allieJoueur = false;
+    G.guerre.reunion = { gang: A, x: 0, z: 0, nom: 'test', fin: G.simTime + 999, arrive: true };
+    G.choixReunion('allie');
+    const premierRefuse = !A.allieJoueur;
+    // le deuxieme accepte, contre des pieces
+    const prix = G.alliancePrix(B), w0 = G.wallet;
+    B.relation = 10;
+    G.guerre.reunion = { gang: B, x: 0, z: 0, nom: 'test', fin: G.simTime + 999, arrive: true };
+    G.choixReunion('allie');
+    const scellee = !!B.allieJoueur, paye = w0 - G.wallet;
+    const duree = Math.round(B.allieFin - G.simTime);
+    // le sablier descend et l'alerte tombe trente secondes avant la fin
+    B.allieFin = G.simTime + 20; B.allieAlerte = false;
+    G.allianceTick();
+    const alerte = !!B.allieAlerte, encoreAllie = !!B.allieJoueur;
+    // a zero, elle s'eteint toute seule
+    B.allieFin = G.simTime - 1;
+    G.allianceTick();
+    const expiree = !B.allieJoueur;
+    // et frapper un allie la rompt sur-le-champ
+    G.scelleAlliance(B, G.ALLIANCE_DUREE);
+    const repartie = !!B.allieJoueur;
+    const repAvant = G.gang.rep;
+    const cible = B.membres.find(x => !x.chef && !x.ko);
+    cible.hp = 0;
+    G.gangeurKO(cible, 'le joueur');
+    const rompue = !B.allieJoueur, repApres = G.gang.rep;
+    return { premier, attendu: A.id, premierRefuse, prix, scellee, paye, duree,
+      alerte, encoreAllie, expiree, repartie, rompue, repAvant, repApres, DUREE: G.ALLIANCE_DUREE };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.premier === r.attendu && r.premierRefuse && r.scellee && r.paye === r.prix
+    && r.duree === r.DUREE && r.alerte && r.encoreAllie && r.expiree && r.repartie && r.rompue
+    && r.repApres <= r.repAvant;
+  return { ok, detail: `avant : l'alliance etait gratuite et DEFINITIVE — un bouton, pas une decision · maintenant le gang qui tient le plus de quartiers (${r.premier}) refuse toujours (${r.premierRefuse}), ce qui force la situation voulue « s'allier avec le deuxieme contre le premier » ; l'alliance coute ${r.prix} pieces (${r.paye} retirees), dure ${r.duree} s, previent 30 s avant la fin (alerte : ${r.alerte}, encore active : ${r.encoreAllie}) puis expire toute seule (${r.expiree}) · et frapper un homme de son allie la rompt sur-le-champ (${r.rompue}) en coutant du respect (${r.repAvant} → ${r.repApres})` };
+});
+
+test('un gang sans plus aucun membre debout est mort pour de bon, et tous ses quartiers passent d\'un coup a celui qui l\'a acheve', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.verifieElimination) return { pourquoi: 'elimination absente' };
+    G.guerre.morts = []; G.guerre.detruits = 0;
+    const A = G.gangs[0], B = G.gangs[1];
+    G.guerre.territoires = {}; G.guerre.territoires.zone = A.id;
+    G.guerre.territoires.industriel = A.id; G.guerre.territoires.plage = B.id;
+    // un seul homme encore debout : le gang tient toujours
+    A.membres.forEach((m, i) => { m.hp = i === 0 ? 90 : 0; m.ko = i === 0 ? 0 : G.simTime + 20; });
+    G.verifieElimination(A);
+    const tientEncore = !A.mort;
+    // le dernier tombe : le gang n'existe plus
+    const repAvant = G.gang.rep;
+    A.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; });
+    G.verifieElimination(A);
+    const mort = !!A.mort, repApres = G.gang.rep;
+    const aMoi = G.nbTerritoires('joueur'), memoire = (G.guerre.morts || []).indexOf(A.id) >= 0;
+    // il ne renait plus jamais : c'est ce qui rend la partie finissable
+    G.guerre.tick = 0;
+    for (let i = 0; i < 240; i++) G.guerreTick(1 / 60);
+    const toujoursMort = !!A.mort;
+    // un gang acheve par un AUTRE gang lui laisse ses quartiers, pas au joueur
+    B.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; });
+    const C = G.gangs.find(g => g !== A && g !== B) || A;
+    G.verifieElimination(B, C.id);
+    const aLautre = G.proprio('plage') === C.id, pasAuJoueur = G.proprio('plage') !== 'joueur';
+    return { tientEncore, mort, repAvant, repApres, aMoi, memoire, toujoursMort, aLautre, pasAuJoueur,
+      detruits: G.guerre.detruits };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.tientEncore && r.mort && r.repApres === r.repAvant + 120 && r.aMoi === 2
+    && r.memoire && r.toujoursMort && r.aLautre && r.pasAuJoueur && r.detruits === 2;
+  return { ok, detail: `« plus de membres dans un gang = le gang est mort » : avec un homme encore debout il tient (${r.tientEncore}), le dernier a terre il disparait (${r.mort}) et rapporte 120 points de respect (${r.repAvant} → ${r.repApres}) · avant, ses quartiers redevenaient neutres et il fallait tout recapturer un par un, et surtout IL RENAISSAIT 90 s plus tard, ce qui rendait toute victoire impossible · maintenant ses ${r.aMoi} quartiers passent d'un coup a celui qui l'a acheve, il est inscrit dans les gangs detruits (${r.memoire}) et 4 minutes de jeu plus tard il est toujours mort (${r.toujoursMort}) · et si c'est un gang rival qui acheve l'autre, ce sont SES couleurs qui prennent le quartier (${r.aLautre}), pas celles du joueur (${r.pasAuJoueur}) — c'est ce qui rend une alliance trop longue dangereuse` };
+});
+
+test('un quartier vaut ce qu\'il rapporte et se prend deux fois plus vite quand on vient avec son gang', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (!G.captureDuree || !G.valeurTerritoires) return { pourquoi: 'territoires absents' };
+    const durees = [1, 2, 3, 4, 8].map(n => Math.round(G.captureDuree(n)));
+    const valeurs = G.TERRITOIRES.map(t => t.v);
+    const total = valeurs.reduce((a, b) => a + b, 0);
+    G.guerre.territoires = { parc: 'joueur' };                       // le moins riche
+    const vParc = G.valeurTerritoires('joueur');
+    G.guerre.territoires = { centre: 'joueur' };                     // le plus riche
+    const vCentre = G.valeurTerritoires('joueur');
+    G.TERRITOIRES.forEach(t => { G.guerre.territoires[t.k] = 'joueur'; });
+    const vTout = G.valeurTerritoires('joueur');
+    // la carte des quartiers : huit grosses cases, la couleur dit a qui c'est
+    const html = G.carteTerritoires();
+    const cases = (html.match(/class="tcase"/g) || []).length;
+    const vertes = (html.match(/background:#5cc453/g) || []).length;
+    G.guerre.territoires = {};
+    const libres = (G.carteTerritoires().match(/>libre</g) || []).length;
+    return { durees, valeurs, total, vParc, vCentre, vTout, cases, vertes, libres, n: G.TERRITOIRES.length };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const decroit = r.durees.every((d, i) => i === 0 || d <= r.durees[i - 1]);
+  const ok = r.n === 8 && r.durees[0] === 45 && r.durees[1] === 30 && r.durees[3] === 18
+    && r.durees[4] === 18 && decroit && r.vParc === 1 && r.vCentre === 3 && r.vTout === r.total
+    && r.cases === 8 && r.vertes === 8 && r.libres === 8;
+  return { ok, detail: `avant : une capture durait 45 s quoi qu'il arrive, tous les quartiers rapportaient pareil, et « les quartiers » etaient une liste de texte · maintenant venir nombreux paie — ${r.durees.join(' / ')} s pour 1, 2, 3, 4 et 8 hommes (plafond a 18 s, decroissante : ${decroit}) — chaque quartier a sa valeur (le parc ${r.vParc}, le centre-ville ${r.vCentre}, ${r.total} au total pour la ville entiere) et la carte affiche ${r.cases} grosses cases colorees, ${r.vertes} vertes quand tout est au joueur et ${r.libres} marquees « libre » quand rien n'est pris` };
+});

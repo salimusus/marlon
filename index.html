@@ -25359,10 +25359,17 @@ function valeurTerritoires(id) {
 // Le « premier » de la ville : celui qui tient le plus de quartiers (le joueur compris).
 // C'est LUI qu'on ne peut pas avoir comme allié — d'où « s'allier avec le deuxième contre
 // le premier », que le joueur a demandé mot pour mot.
+// On compare la VALEUR des quartiers (le centre vaut trois fois le parc) et, à égalité
+// parfaite, la force du gang : sans ça, deux gangs à un quartier chacun se départageaient
+// par leur ordre dans la liste, et le joueur ne comprenait pas qui était « le plus fort ».
 function gangPremier() {
-  let best = null, bn = 0;
-  for (const G of gangs) { if (G.mort) continue; const n = nbTerritoires(G.id); if (n > bn) { bn = n; best = G.id; } }
-  return bn > 0 ? best : null;
+  let best = null, bs = 0;
+  for (const G of gangs) {
+    if (G.mort) continue;
+    const s = valeurTerritoires(G.id) * 1000 + (forceGangRival(G) || G.force || 0);
+    if (valeurTerritoires(G.id) > 0 && s > bs) { bs = s; best = G.id; }
+  }
+  return best;
 }
 // 1 homme = 45 s, 2 = 30 s, 3 = 23 s, 4 et plus = 18 s.
 function captureDuree(n) { return Math.max(18, 45 / (1 + 0.5 * (Math.max(1, n | 0) - 1))); }

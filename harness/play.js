@@ -13027,6 +13027,7 @@ test('au volant d\'un engin de chantier, le carré de la manette actionne l\'out
     const res = {};
     try {
       // ---- 1. LA PELLETEUSE : ▢ lance un vrai cycle de fouille ----
+      G.ANIM.trous.length = 0; G.ANIM.chutes.length = 0;   // un test precedent a pu creuser : on repart de zero
       const pelle = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 5, G.P.pos.z, 0);
       G.city.cars.push(pelle);
       G.enterCar(pelle);
@@ -13035,12 +13036,12 @@ test('au volant d\'un engin de chantier, le carré de la manette actionne l\'out
       carre();
       res.apres = !!pelle.creuse;
       // le cycle tourne vraiment : le godet bouge et un trou apparaît
-      const g0 = pelle.outils.godet.rotation.x;
-      const trousAvant = G.ANIM.trous.length;
-      for (let i = 0; i < 300 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.terreChutesTick(1 / 60); }
+      let bouge = 0; const g0 = pelle.outils.godet.rotation.x;
+      for (let i = 0; i < 300 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.terreChutesTick(1 / 60);
+        bouge = Math.max(bouge, Math.abs(pelle.outils.godet.rotation.x - g0)); }
       for (let i = 0; i < 90; i++) G.terreChutesTick(1 / 60);
       const t = G.ANIM.trous[G.ANIM.trous.length - 1];
-      res.fouille = { godetBouge: Math.abs(pelle.outils.godet.rotation.x - g0) < 0.01, trousAjoutes: G.ANIM.trous.length - trousAvant,
+      res.fouille = { godetBouge: +bouge.toFixed(2), trous: G.ANIM.trous.length,
         prof: t ? +t.prof.toFixed(2) : 0, verse: t ? +(t.vide || 0).toFixed(2) : 0 };
       G.exitCar();
       // ---- 2. LE BULLDOZER : ▢ baisse la lame, ▢ la relève ----
@@ -13081,12 +13082,12 @@ test('au volant d\'un engin de chantier, le carré de la manette actionne l\'out
     return res;
   });
   const ok = r.auVolant && r.avant === false && r.apres === true
-    && r.fouille.trousAjoutes === 1 && r.fouille.prof > 0.1 && r.fouille.verse > 0.9
+    && r.fouille.trous === 1 && r.fouille.godetBouge > 0.7 && r.fouille.prof > 0.1 && r.fouille.verse > 0.9
     && r.lameBaisse === 1 && r.lameLeve === 0 && r.grueLeve === true
     && r.aPiedTouche === true && r.voitureTouche === true
     && r.doubles === 0 && /creuser/.test(r.role2) && /atterrir/.test(r.role2)
     && /creuser/.test(r.legende) && /atterrir/.test(r.legende);
-  return { ok, detail: `le cycle de fouille n'était branché que sur la touche O du CLAVIER : à la manette — et l'enfant joue à la manette sur sa télévision — AUCUN bouton ne creusait · ▢ au volant d'un engin actionne maintenant l'outil : pelleteuse, un appui lance la fouille (${r.avant} → ${r.apres}), le cycle creuse ${r.fouille.trousAjoutes} trou de ${r.fouille.prof} m et verse ${r.fouille.verse} godet sur le tas · bulldozer : ▢ baisse la lame (${r.lameBaisse}) puis la relève (${r.lameLeve}) · grue : ▢ lance le levage (${r.grueLeve}) · et ▢ garde tous ses anciens rôles — à pied il frappe (${r.aPiedTouche}), dans une voiture ordinaire il klaxonne (${r.voitureTouche}) · aucun des 18 boutons n'a deux rôles (${r.doubles} collision), le rôle affiché est « ${r.role2} »` };
+  return { ok, detail: `le cycle de fouille n'était branché que sur la touche O du CLAVIER : à la manette — et l'enfant joue à la manette sur sa télévision — AUCUN bouton ne creusait · ▢ au volant d'un engin actionne maintenant l'outil : pelleteuse, un appui lance la fouille (${r.avant} → ${r.apres}), le godet balaie ${r.fouille.godetBouge} rad, creuse ${r.fouille.trous} trou de ${r.fouille.prof} m et verse ${r.fouille.verse} godet sur le tas · bulldozer : ▢ baisse la lame (${r.lameBaisse}) puis la relève (${r.lameLeve}) · grue : ▢ lance le levage (${r.grueLeve}) · et ▢ garde tous ses anciens rôles — à pied il frappe (${r.aPiedTouche}), dans une voiture ordinaire il klaxonne (${r.voitureTouche}) · aucun des 18 boutons n'a deux rôles (${r.doubles} collision), le rôle affiché est « ${r.role2} »` };
 });
 
 test('la terre sort du godet quand il bascule : le trou se creuse au raclage, le tas grossit quand la terre TOUCHE', async p => {

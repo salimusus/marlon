@@ -76,7 +76,13 @@ window.__SHOT = {
       // L'INVENTAIRE ET LES FANTOMES : les deux residus qui ont fait tomber le plus de tests.
       if (typeof owned !== 'undefined') {
         var enTrop = 0; owned.forEach(function (x) { if (__SHOT.achats0.indexOf(x) < 0) enTrop++; });
-        dit(enTrop, enTrop + ' achat(s) de plus qu\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
+        // NOTE : le HOOK est un LITTERAL DE GABARIT (backticks) evalue par Node avant d'etre
+        // injecte dans la page. Une apostrophe d'une chaine JS doit donc y etre echappee DEUX
+        // fois : \\' et non \'. Avec un seul antislash, Node rendait une apostrophe nue, la
+        // chaine se fermait au milieu de la phrase et la page entiere ne parsait plus —
+        // « PAGEERROR: missing ) after argument list », plus AUCUNE capture possible pour
+        // personne. Le defaut ne se voyait pas au lint (il lit le HOOK brut, pas evalue).
+        dit(enTrop, enTrop + " achat(s) de plus qu'au premier chargement (ils changent le tour des armes et le prix en boutique)");
       }
       if (typeof wallet !== 'undefined' && wallet !== __SHOT.argent0) dit(true, 'portefeuille a ' + wallet + ' au lieu de ' + __SHOT.argent0);
       if (typeof solids !== 'undefined') {

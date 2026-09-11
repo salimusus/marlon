@@ -9135,7 +9135,15 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
     G.wallet = 500; G.owned.add('arme:knife'); G.owned.add('arme:pistol'); G.saveOwned && G.saveOwned();
     G.equipWeapon('couteau'); res.nomFrancais = G.P.weapon;   // la manette dit « couteau »
+    // LE TOUR DES ARMES COMPLET. Le test n'achetait que le pistolet et le couteau : le tour
+    // mesuré ne contenait donc QUE ces deux-là, et une disparition des deux fusils du cycle
+    // (celui qu'on achète le plus cher) serait passée inaperçue. On possède maintenant les
+    // quatre armes et on exige l'ordre entier, fusils compris.
+    G.owned.add('arme:rifle'); G.owned.add('arme:sniper');
+    const grenadesAvant = G.P.grenades || 0; G.P.grenades = 0;   // les grenades sont consommables : elles ne doivent pas brouiller l'ordre mesuré
     res.tourDesArmes = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 6; i++) { G.armeSuivante(1); vus.push(G.P.weapon); } return vus; })();
+    res.tourArriere = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 3; i++) { G.armeSuivante(-1); vus.push(G.P.weapon); } return vus; })();
+    G.owned.delete('arme:rifle'); G.owned.delete('arme:sniper'); G.P.grenades = grenadesAvant;   // on rend l'inventaire tel qu'on l'a trouvé
     G.majEtuis(); me.group.updateMatrixWorld(true);
     res.boutique.apresAchat = G.catalog('armes').find(x => x.id === 'knife').owned();
     // ---- l'étui, du côté OPPOSÉ au pistolet, visible en permanence ----
@@ -9193,8 +9201,12 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     && c[0].hp === 100 - r.degats && c[1].hp === 100 - 2 * r.degats && !c[1].ko && c[2].ko
     && c.every(x => Math.abs(x.ventre - 0.95) < 0.02 && x.enMain && x.degaine)
     && r.rangement.programme > 0.4 && !r.rangement.enMainApres && r.rangement.retourFourreau < 0.03
-    && r.horsPortee === 100 && r.nomFrancais === 'knife' && r.tourDesArmes.includes('knife');
-  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
+    && r.horsPortee === 100 && r.nomFrancais === 'knife'
+    // le tour complet : pistolet → fusil → fusil à lunette → couteau → mains nues, puis il boucle
+    && String(r.tourDesArmes) === String(['pistol', 'rifle', 'sniper', 'knife', null, 'pistol'])
+    // et il se remonte à l'envers, sans rester coincé sur « mains nues »
+    && String(r.tourArriere) === String(['knife', 'sniper', 'rifle']);
+  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')} · à l'envers : ${r.tourArriere.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
 });
 
 test('le fusil et le fusil à lunette reposent dans un étui de dos', async p => {
@@ -11903,6 +11915,12 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false; G.P.hp = 100;
+    // ORIENTATION IMPOSEE. Le test mesurait l'esquive avec un coup venu de dz = -1, c'est-a-dire
+    // « de face » SEULEMENT si le joueur regarde le sud (facing = 0). Or __SHOT.go() ne remet pas
+    // le cap : au premier chargement respawn() laisse 0, mais des que le jeu tourne il laisse PI.
+    // Le coup arrivait donc DANS LE DOS, ou l'esquive ne vaut rien (c'est la regle du jeu), et le
+    // test criait « se baisser n'esquive plus » alors que le geste marchait. On fixe le cap.
+    G.P.facing = 0;
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -11921,7 +11939,9 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
       bt(6, 1); G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true);
       res.baisseEtat = { accroupi: !!G.P.accroupi, classe: document.body.classList.contains('accroupi') };
       anime(150); res.baisse = pose();
-      res.esquive = G.defenseJoueur(20, 0, -1, true);        // un coup de face : il passe au-dessus
+      // un coup de face : le recul pousse le joueur vers l'arriere, donc a l'oppose de son cap
+      res.esquive = G.defenseJoueur(20, -Math.sin(G.P.facing), -Math.cos(G.P.facing), true);
+      res.capAuCoup = +G.P.facing.toFixed(2);
       res.gachetteNeBougePas = (() => { G.P.vel.set(0, 0, 0); G.cam.yaw = 0;
         for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
         return +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2); })();

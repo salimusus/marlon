@@ -2519,11 +2519,17 @@ function buildHelipad() {   // héliport (est, nord)
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   g.fillStyle = '#2b3550'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#ffd23f'; g.lineWidth = 6; g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.stroke();
   g.fillStyle = '#ffd23f'; g.font = 'bold 84px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('H', 64, 70);
+  // L'AIRE D'ATTERRISSAGE ETAIT POSEE SUR LA RUE x = 52 : son centre (51, -13) mettait le grand
+  // « H » en plein milieu de la chaussee (49 a 55) et l'helicoptere se garait dessus, 3,3 m dans
+  // la voie. Pire : la dalle du « H » etait EFFACEE a chaque chargement par le degagement des
+  // chaussees, l'heliport n'avait donc plus de marquage du tout. L'aire recule de 8 m a l'ouest
+  // (centre 43), son bord vient affleurer la bordure de la rue, et l'helico est enfin sur l'aire.
+  const HPX = 43;
   const pad = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 0.2, 32), [lam(0x2b3550), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }), lam(0x2b3550)]);
-  pad.position.set(51, 0.1, -13); pad.receiveShadow = true; worldGroup.add(pad);
-  solids.push({ mesh: pad, x: 51, y: 0.1, z: -13, w: 11, h: 0.2, d: 11 }); sgridSale();
-  city.cars.push(makeHeli(51, 0.2, -13, 0));
-  sign(44, 0, -6, '🚁 Hélico : E pour monter'); coin(51, 0.2, -19);
+  pad.position.set(HPX, 0.1, -13); pad.receiveShadow = true; worldGroup.add(pad);
+  solids.push({ mesh: pad, x: HPX, y: 0.1, z: -13, w: 11, h: 0.2, d: 11 }); sgridSale();
+  city.cars.push(makeHeli(HPX, 0.2, -13, 0));
+  sign(HPX - 7.5, 0, -6, '🚁 Hélico : E pour monter'); coin(HPX, 0.2, -19);
   box(58, 1.5, -22, 3, 3, 3, 0x8f98ab); box(58, 3.6, -22, 1.2, 1.2, 1.2, 0xff5c5c, { deco: true, studs: false });   // petite tour de contrôle
 }
 let raceKarts = [];
@@ -4203,7 +4209,11 @@ function voileAuSol(kind, x, y, z) {
 function road(x, z, w, d, yOff = 0, plain) {
   // On garde la liste des chaussées : elle sert à faire rouler les conducteurs SUR LA ROUTE
   // au lieu de couper à travers les pelouses, les terrasses et le parc.
-  if (city.routes) city.routes.push({ x, z, w, d });
+  // `top` : la hauteur du BITUME VISIBLE. Deux rues longeaient une dalle plus epaisse qu'elles
+  // (le sable de la plage, un chemin de terre de La Zone) et disparaissaient dessous : on les
+  // pose quelques centimetres plus haut avec `yOff`, et le controle « du bitume sur toute la
+  // longueur » a besoin de savoir a quelle hauteur chercher la chaussee.
+  if (city.routes) city.routes.push({ x, z, w, d, top: 0.06 + yOff });
   const t = ROAD.clone(); t.needsUpdate = true;
   // Une fois la texture tournee d'un quart de tour, la repetition s'applique dans SES axes :
   // (w/4, 1) rayait la chaussee de huit axes jaunes en travers au lieu d'un seul au milieu.
@@ -4264,10 +4274,17 @@ const PLAN_ROUTIER = {
   axes: [
     // La route du circuit passait DANS LA MER (elle filait vers x = 144 à z = -70, en plein
     // dedans). Elle longe maintenant la plage par l'ouest, puis remonte au nord du rivage.
-    { n: 'Rocade du nord-est', x: 109, z: -70, w: 22, d: 8 },
-    { n: 'Bretelle du circuit', x: 109, z: -128, w: 8, d: 120 },   // a 115 elle passait sous les barrieres de l'anneau
+    // La rocade et la bretelle longent le SABLE DE LA PLAGE, une dalle de 8 cm posee par-dessus
+    // leur bitume de 6 cm : la chaussee disparaissait dessous sur 6 releves sur 9. Elles sont
+    // posees 5 cm plus haut, le bitume repasse devant le sable.
+    { n: 'Rocade du nord-est', x: 109, z: -70, w: 22, d: 8, y: 0.05 },
+    { n: 'Bretelle du circuit', x: 109, z: -128, w: 8, d: 120, y: 0.05 },   // a 115 elle passait sous les barrieres de l'anneau (et sous le sable de la plage)
     { n: 'Accès circuit', x: 122, z: -176, w: 24, d: 8 },
-    { n: 'Route du littoral', x: 100, z: 120, w: 8, d: 50 },   // elle s'arrete a l'avenue des villas au lieu d'entrer dans la villa Azur
+    // Elle partait de z = 95 et le MUR EST DU DERNIER ENTREPOT (x 98,6 a 99, z 86 a 98) lui
+    // mangeait 2,6 m de chaussee sur 2,6 m de long : une voiture s'y encastrait. Son troncon
+    // sud doublait de toute facon la rue du bord de mer (x 104) ; elle part maintenant de
+    // z = 119, apres l'entrepot, et garde son debouche sur l'avenue des villas.
+    { n: 'Route du littoral', x: 100, z: 132, w: 8, d: 26 },   // elle s'arrete a l'avenue des villas au lieu d'entrer dans la villa Azur
     // Ces trois axes traversaient LE CASINO de part en part (l'avenue passait à z = 300, en
     // plein milieu du bâtiment) : le dégagement des chaussées effaçait ses murs de verre.
     // Ils le contournent maintenant et viennent se garer devant la grande entrée.
@@ -4304,6 +4321,16 @@ const PLAN_ROUTIER = {
     { n: 'Rue des Primeurs', x: -160, z: 185, w: 7, d: 116 },
     { n: 'Rue de la Halle', x: -125, z: 185, w: 7, d: 116 },
     { n: 'Cours du Marché', x: -149, z: 185, w: 56, d: 9 },
+    // ---- LE CONTOURNEMENT DE L'ARMURERIE ----
+    // La rue x = 52 etait COUPEE EN DEUX par l'armurerie (12 x 9 m en (52, 19)) : la rue de
+    // l'heliport s'arretait a z = 13, la rue commercante reprenait a z = 25, et pour passer il
+    // fallait redescendre au bord de mer et remonter par la rue de l'est — 520 m de detour pour
+    // 12 m de trou. On ne deplace pas le magasin (ses vitrines, son comptoir et son ratelier
+    // sont poses a la main) : la rue le CONTOURNE par l'est, ou le terrain est vide sur 14 m.
+    // Trois troncons de 6 m, comme les deux rues qu'ils raccordent : 30 m de detour au lieu de 520.
+    { n: 'Contournement sud de l\'armurerie', x: 57.5, z: 10, w: 17, d: 6 },
+    { n: 'Contournement est de l\'armurerie', x: 63, z: 19, w: 6, d: 26 },
+    { n: 'Contournement nord de l\'armurerie', x: 57.5, z: 27.5, w: 17, d: 6 },
   ],
   // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
@@ -4349,6 +4376,13 @@ function finirPlan() {
 function degageLesRoutes() {
   const surChaussee = (x, z) => (city.routes || []).some(r =>
     Math.abs(x - r.x) < r.w / 2 - 0.8 && Math.abs(z - r.z) < r.d / 2 - 0.8);
+  // ON JUGEAIT AU SEUL CENTRE DE L'OBJET. Une poubelle, une caisse ou un bidon posé au bord d'un
+  // trottoir pouvait donc mordre de 1,7 m sur la chaussée sans que rien ne le reprenne (les 16
+  // poubelles tirées au hasard dans La Zone tombaient de temps en temps dans sa desserte ouest,
+  // et le contrôle du plan de ville échouait un tirage sur trois). On juge maintenant sur
+  // l'EMPRISE : au-delà de 60 cm dans la voie — plus qu'une bordure — l'objet part.
+  const mordChaussee = o => (city.routes || []).some(r =>
+    Math.min(r.w / 2 + o.w / 2 - Math.abs(o.x - r.x), r.d / 2 + o.d / 2 - Math.abs(o.z - r.z)) > 0.6);
   // Un meuble posé a l'ETAGE, ou a l'abri DANS un batiment, n'a jamais trainé au milieu de la
   // rue : les appartements de La Zone se faisaient vider parce qu'un axe passait par-dessous.
   const dedans = (x, z) => [...(city.batiments || []), ...(city.interieurs || [])].some(b =>
@@ -4366,7 +4400,7 @@ function degageLesRoutes() {
     const o = solids[i];
     if (vus.has(o) || garde(o) || !o.mesh) continue;
     if (o.feu || o.lampe) continue;
-    if (!surChaussee(o.x, o.z)) continue;
+    if (!mordChaussee(o)) continue;
     // Le mobilier cassable (poubelle, cone, panneau) vit dans un GROUPE : enlever son seul
     // maillage laissait le couvercle et le socle flotter au milieu de la rue. On retire le
     // groupe entier quand il y en a un.
@@ -5052,12 +5086,18 @@ const WORLDS = [
       checkpoint(0, 0, 3, 1); sign(-4, 0, 5, 'Bienvenue en ville !', true);
       // ---- terrain de foot (NO) ----
       fieldLines(-13, 0.3, -13, 18, 12, (g, W, H) => { g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, W - 12, H - 12); g.beginPath(); g.moveTo(W / 2, 6); g.lineTo(W / 2, H - 6); g.stroke(); g.beginPath(); g.arc(W / 2, H / 2, 40, 0, Math.PI * 2); g.stroke(); g.strokeRect(6, H * 0.28, 60, H * 0.44); g.strokeRect(W - 66, H * 0.28, 60, H * 0.44); });
-      for (const gx of [-22, -4]) { for (const dz of [-2.5, 2.5]) box(gx, 1, -13 + dz, 0.2, 2, 0.2, 0xffffff, { studs: false, noRoute: true }); box(gx, 2.1, -13, 0.2, 0.2, 5.2, 0xffffff, { studs: false, noRoute: true, deco: true }); box(gx + (gx < -13 ? -0.6 : 0.6), 1, -13, 0.1, 2, 5.2, 0xffffff, { material: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }), deco: true, noEdges: true, noShadow: true }); }
+      // LES DEUX BUTS ONT RECULE DE 3 m VERS LE CENTRE. Ils etaient a x = -22 et -4, c'est-a-dire
+      // A 1 m DU GRILLAGE (x -23 et -3) qui longe les deux rues : le filet, tendu 2,4 m DERRIERE
+      // la ligne de but, sortait de la cage et debordait de 1,4 m sur la chaussee. Son panneau de
+      // fond etait meme efface a chaque chargement par le degagement des chaussees — le but
+      // n'avait plus de filet au fond. A x = -19 et -7, tout le filet tient dans la cage.
+      const BUT_X = [-19, -7];
+      for (const gx of BUT_X) { for (const dz of [-2.5, 2.5]) box(gx, 1, -13 + dz, 0.2, 2, 0.2, 0xffffff, { studs: false, noRoute: true }); box(gx, 2.1, -13, 0.2, 0.2, 5.2, 0xffffff, { studs: false, noRoute: true, deco: true }); box(gx + (gx < -13 ? -0.6 : 0.6), 1, -13, 0.1, 2, 5.2, 0xffffff, { material: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }), deco: true, noEdges: true, noShadow: true }); }
       sign(-3.6, 0.3, -3.6, '⚽ Foot');
       fenceBox(-13, 0.3, -13, 20, 20, 3, [[-14.5, -11.5]]);   // cage grillagée, entrée côté sud
       // Cages de but : le terrain n'en avait aucune, seul un volume invisible comptait les buts.
       // Poteaux et barre pleins, filet tendu au fond, sur les côtés et au-dessus.
-      for (const [gx, dir] of [[-22, 1], [-4, -1]]) {
+      for (const [gx, dir] of [[BUT_X[0], 1], [BUT_X[1], -1]]) {
         const DEMI = 2.5, HT = 2.1, PROF = 2.4, gz = -13, blanc = 0xf4f6fa;
         for (const dz of [-DEMI, DEMI]) box(gx, 0.3 + HT / 2, gz + dz, 0.16, HT, 0.16, blanc, { studs: false, noRoute: true });
         box(gx, 0.3 + HT, gz, 0.16, 0.16, DEMI * 2 + 0.16, blanc, { studs: false, noRoute: true });
@@ -5077,7 +5117,9 @@ const WORLDS = [
       sign(3.6, 0.3, -3.6, '🎾 Tennis');
       city.zones.push({ name: 'Tennis', emoji: '🎾', x1: 3, x2: 23, z1: -23, z2: -3, hint: '🎾 Renvoie la balle par-dessus le filet !' });
       // ---- parking + magasins (SO) ----
-      city.cars.push(makeCar(0xff5c5c, -15, 9, 0), makeCar(0x4f8dff, -19, 9, 0), makeCar(0xffd23f, -15, 3.5, 0), makeCar(0x111111, -19, 3.5, 0, { sport: true }));
+      // la rangee de devant etait garee a z = 3,5 : les deux voitures depassaient de 1,7 m sur
+      // l'avenue du centre (z -3 a 3). Les deux rangees reculent DANS le parking (dalle z 3 a 23).
+      city.cars.push(makeCar(0xff5c5c, -15, 11.5, 0), makeCar(0x4f8dff, -19, 11.5, 0), makeCar(0xffd23f, -15, 6, 0), makeCar(0x111111, -19, 6, 0, { sport: true }));
       buildGarage(-45, 90);
       buildShops(); sign(-3.6, 0.3, 3.6, '🚗 Parking');
       for (let i = 0; i < 3; i++) coin(-9 - i * 5, 0.3, 4.5);
@@ -5115,7 +5157,7 @@ const WORLDS = [
       for (const [x, z] of [[0, -12], [0, 12], [12, 0], [-12, 0], [22, -22], [-22, 22]]) coin(x, 0, z);
       city.zones.push({ name: 'Parking', emoji: '🚗', x1: -23, x2: -3, z1: 3, z2: 14, hint: '🚗 Parking : E (ou 🚗) devant une voiture, une moto ou le camion pour monter' });
       city.zones.push({ name: 'Trampolines', emoji: '🤸', x1: 3, x2: 23, z1: 3, z2: 23, hint: '🤸 Trampolines : saute dessus pour t\'envoler vers les pièces de la tour' });
-      city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 42, x2: 62, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
+      city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 34, x2: 60, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
       city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 20, x2: RACE_C.x + 34, z1: RACE_C.z + RACE_C.r - 20, z2: RACE_C.z + RACE_C.r + 4, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
@@ -6380,14 +6422,32 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   city.zones.push({ name: 'Rue commerçante', emoji: '🛍️', x1: 45, x2: 68, z1: 34, z2: 94, hint: '🛍️ Rue commerçante : pizzeria, glacier, jouets, arcade, librairie (E devant les vitrines)' });
 }
 function buildFair() {   // fête foraine au sud du circuit : grande roue, carrousel, stands, ballons, guirlandes
-  plat(0, 0.12, 155, 90, 44, 0x6f5aa8, { studs: false, noRoute: true }, 0.24);
+  // LA DALLE DE LA PLACE EST PERCEE LA OU LES RUES LA TRAVERSENT. Trois chaussees passent sur
+  // cette place — le boulevard z = 140 d'un bout a l'autre, la descente vers l'hopital et la
+  // route de la fete — et la dalle (0,12 m) recouvrait leur bitume (0,06 m) : 30 releves sur 68
+  // du boulevard n'avaient AUCUN bitume visible, et une voiture roulait sur le plancher de la
+  // fete. On a choisi de faire VRAIMENT traverser la place (contourner aurait coupe la fete du
+  // reseau et rallonge le boulevard de 90 m) : la dalle est trouee a l'emprise de chaque rue,
+  // le bitume, son axe jaune et ses bords blancs reviennent au jour, et des passages pietons
+  // protegent la traversee de la place. (La COULEUR de la dalle n'est pas touchee.)
+  const TROUS_FETE = [
+    { x0: -45, x1: 45, z0: 136.4, z1: 143.6 },     // le boulevard z = 140, de part en part
+    { x0: 15.1, x1: 24.9, z0: 143.6, z1: 177 },    // la descente vers l'hopital (x = 20)
+    { x0: -4.4, x1: 4.4, z0: 133, z1: 136.4 },     // la route de la fete foraine (x = 0)
+  ];
+  platTrous(0, 0.12, 155, 90, 44, 0x6f5aa8, { studs: false, noRoute: true }, 0.24, TROUS_FETE);
+  // quatre passages pietons sur le boulevard, de part et d'autre des deux manèges
+  for (const px of [-30, -15, 15, 30]) { crosswalk(px, 140, false, 6); city.crossings.push([px, 140]); }
   // La descente est finissait 7 m DANS la parcelle de la villa du joueur (z 148 a 155), pour
   // n'y desservir personne : la villa est desservie par l'avenue nord. On l'arrete a z = 141.
   // La descente ouest partait de z = 125 et traversait de part en part la CASERNE DES POMPIERS
   // (batie depuis, mur est a x = -48,8, z 123 a 136) : les camions s'y encastraient et la
   // desserte de la caserne tombait sur un troncon coupe du reste du reseau. Elle part
   // maintenant de l'avenue du nord (z = 137) et descend vers la fete foraine.
-  road(-48, 146, 6, 18, 0, true); road(48, 133, 6, 16, 0, true);
+  // La descente EST partait de z = 125 pour ne rien rejoindre au nord, et le DEPOT MUNICIPAL
+  // (dalle de 22 x 14 m) l'enterrait sur 5 releves sur 7 : elle remonte maintenant jusqu'a
+  // l'avenue du parc (z = 113), et le depot a ete recule a l'ouest pour la degager.
+  road(-48, 146, 6, 18, 0, true); road(48, 126.5, 6, 29, 0, true);
   // grande roue
   const wx = 12, wz = 158, R = 11;
   const wheel = new THREE.Group(); wheel.position.set(wx, R + 2.5, wz); worldGroup.add(wheel);
@@ -8001,8 +8061,17 @@ function buildDeco() {   // lampadaires et fleurs le long des grands axes, statu
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
   for (const x of [-34, -20, 20, 34]) for (const z of [-4.2, 4.2]) lamp(x, z);
   for (const [x, z] of [[-30, -4.5], [30, -4.5], [-30, 4.5], [30, 4.5]]) flowerBed(x, z, 3, 1);
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(0, 0.6, -28); worldGroup.add(ped); solids.push({ mesh: ped, x: 0, y: 0.6, z: -28, w: 3, h: 1.2, d: 3, statue: true }); sgridSale();
-  const statue = mannequin(0, -28, 0, { jersey: 0, hat: 'crown', jacket: 5 }); statue.group.position.y = 1.2; statue.group.scale.setScalar(1.6); statue.group.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = lam(0xd4a017); }); statue.rig.armR.rotation.x = -2.6;
+  // LA STATUE ETAIT PLANTEE AU MILIEU DE LA CHAUSSEE, en (0, -28) : son socle de 3 m mangeait
+  // 2,5 m des 6 m de la rue du nord (z = -26), plus la rue qui monte au bord de mer et le
+  // rond-point. Une seule exception dans le degagement des chaussees (`o.statue`) l'y laissait,
+  // et les conducteurs s'y encastraient. Au carrefour il n'y a PAS la place d'un ilot central :
+  // entre la facade des deux immeubles (z = -32) et le bord de la rue (z = -29) il reste 3 m
+  // pour un socle de 3,2 m. Le monument prend donc sa vraie place : LA PLACE DU CENTRE (0, 43),
+  // sur le grand axe nord-sud, entre les terrains de sport et le parc — aucune chaussee a moins
+  // de 6 m. C'est aussi le point que le GPS appelle « la place du centre ».
+  const SX0 = 0, SZ0 = 43;
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.2, 16), lam(0xc9ced8)); ped.position.set(SX0, 0.6, SZ0); worldGroup.add(ped); solids.push({ mesh: ped, x: SX0, y: 0.6, z: SZ0, w: 3, h: 1.2, d: 3, statue: true }); sgridSale();
+  const statue = mannequin(SX0, SZ0, Math.PI, { jersey: 0, hat: 'crown', jacket: 5 }); statue.group.position.y = 1.2; statue.group.scale.setScalar(1.6); statue.group.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = lam(0xd4a017); }); statue.rig.armR.rotation.x = -2.6;
 }
 function rideEnter(r) {
   if (P.ride || drive.car) return;
@@ -8492,7 +8561,9 @@ function buildRally() {   // terrain de rallye au nord : collines arrondies, tre
     box(r.x0 - 1.5, 2.2, r.z - r.hw - 1.5, 2.4, 0.9, 0.08, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🚀 TREMPLIN', 0x35d0e6) }), deco: true, noEdges: true }); box(r.x0 - 1.5, 1, r.z - r.hw - 1.5, 0.1, 2, 0.1, 0x3b4252, { deco: true, studs: false });
   }
   for (let i = 0; i < 12; i++) { const fx = -75 + i * 14; box(fx, 1.2, -62.5, 0.1, 2.4, 0.1, 0x3b4252, { deco: true, studs: false }); box(fx + 0.35, 2.1, -62.5, 0.7, 0.45, 0.04, i % 2 ? 0xff5c5c : 0xffd23f, { deco: true, studs: false }); box(fx, 1.2, -77.5, 0.1, 2.4, 0.1, 0x3b4252, { deco: true, studs: false }); }   // fanions
-  for (const x of [-78, -40, 0, 40, 78]) { tireStack(x, -61.5); tireStack(x, -78.5); }
+  // la pile de x = -78 mordait de 1,2 m sur le bout de la rue de l'ouest (x -83 a -77, jusqu'a
+  // z = -62) : un bloc de collision de 1,5 m de haut en pleine voie. Elle recule a x = -74.
+  for (const x of [-74, -40, 0, 40, 78]) { tireStack(x, -61.5); tireStack(x, -78.5); }
   box(-70, 3.5, -77.8, 6, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏜️ RALLYE', 0xff8f3a) }), deco: true, noEdges: true });
   city.cars.push(makeVehicle('buggy', 0xff8f3a, -70, -67, Math.PI / 2), makeVehicle('buggy', 0x35d0e6, -70, -73, Math.PI / 2));
   city.zones.push({ name: 'Rallye', emoji: '🏜️', x1: -80, x2: 80, z1: -80, z2: -60, hint: '🏜️ Rallye : prends un buggy (E), grimpe les collines, saute les tremplins et évite les trous !' });
@@ -9182,13 +9253,18 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   const docs = ['Dr. Malik', 'Dr. Anna', 'Infirmier Théo'];
   city.docs = [];
   for (let i = 0; i < 3; i++) { const av = buildAvatar({ name: docs[i], jersey: 8, pants: PAL.pants[4], cap: null, num: 1, jacket: 0, hair: i % 3, hairColor: i, glasses: i === 0, skirt: i === 1 }); av.group.position.set(hx - 1, 0.36, hz - 6 + i * 5); city.mannequins.push(av); city.docs.push({ av, x: hx - 1, z: hz - 6 + i * 5, y: 0.36, pts: [[hx - 1, hz - 8], [hx - 1, hz + 8], [hx + 4, hz + 6], [hx + 4, hz - 6]], i: (i + 1) % 4, wait: rnd(0, 2) }); }
-  // parking payant avec horodateur
-  const px = hx + 20;
-  plat(px, 0.14, hz - 4, 14, 22, 0x565b66, { studs: false, noRoute: true }, 0.12);
-  for (let i = 0; i < 6; i++) box(px - 6.6 + i * 2.6, 0.21, hz - 4, 0.12, 0.04, 20, 0xffffff, { deco: true, noEdges: true, studs: false });
-  box(px - 8, 1.1, hz + 8, 0.5, 1.8, 0.5, 0x3b4252, { studs: false, noRoute: true }); box(px - 8, 2.1, hz + 8, 0.7, 0.6, 0.55, 0x4f8dff, { deco: true, studs: false }); box(px - 8, 2.1, hz + 7.7, 0.45, 0.35, 0.05, 0, { material: neonMat(0x30ff60), deco: true, noEdges: true });
-  box(px - 8, 3.1, hz + 8, 2.4, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🅿️ 5 🪙 / 2 min') }), deco: true, noEdges: true });
-  city.meter = { x: px - 8, z: hz + 7.4, area: { x1: px - 7, x2: px + 7, z1: hz - 14, z2: hz + 6 } };
+  // PARKING PAYANT. Il faisait 14 m de large a partir de hx + 20 : sa dalle mordait de 6,5 m
+  // sur la rue transversale des villas (x = 36) et lui volait son bitume sur 22 m de long. On ne
+  // peut pas deplacer la rue (elle passe entre deux parcelles de villa) : le parking se range
+  // donc DANS les 7,5 m libres entre le mur est de l'hopital et le bord de la rue, avec ses
+  // places en epi le long de z — huit places au lieu de six, et pas un centimetre sur la voie.
+  const px = hx + 16, PKD = 7;
+  plat(px, 0.14, hz - 4, PKD, 22, 0x565b66, { studs: false, noRoute: true }, 0.12);
+  for (let i = 0; i < 8; i++) box(px, 0.21, hz - 13 + i * 2.6, PKD - 0.6, 0.04, 0.12, 0xffffff, { deco: true, noEdges: true, studs: false });
+  const hoz = hz + 12;   // l'horodateur au bout du parking, hors de la rue et hors du batiment
+  box(px, 1.1, hoz, 0.5, 1.8, 0.5, 0x3b4252, { studs: false, noRoute: true }); box(px, 2.1, hoz, 0.7, 0.6, 0.55, 0x4f8dff, { deco: true, studs: false }); box(px, 2.1, hoz - 0.3, 0.45, 0.35, 0.05, 0, { material: neonMat(0x30ff60), deco: true, noEdges: true });
+  box(px, 3.1, hoz, 2.4, 0.7, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('🅿️ 5 🪙 / 2 min') }), deco: true, noEdges: true });
+  city.meter = { x: px, z: hoz - 0.6, area: { x1: px - PKD / 2, x2: px + PKD / 2, z1: hz - 15, z2: hz + 7 } };
   // héliport sur le côté
   const hpx = hx - 4, hpz = hz + 18;
   const c = document.createElement('canvas'); c.width = c.height = 128; const g2 = c.getContext('2d');
@@ -9552,12 +9628,17 @@ function villaKitchen(HX, HZ, mine, FY) {
 }
 function buildResidential() {   // avenues du quartier sud : les villas donnent sur la rue, feux et passages piétons aux carrefours
   road(40, AV_N, 300, 9, 0, true);      // avenue nord (devant la rangée nord de villas)
-  road(70, AV_S, 280, 9, 0, true);      // avenue sud (devant la rangée sud)
+  road(65, AV_S, 270, 9, 0, true);      // avenue sud : elle filait jusqu'a x = 210, 8 m APRES le mur d'enceinte (x 201,5) — elle s'arrete a 200
   for (const x of VILLA_STREETS) road(x, (AV_N + AV_S) / 2, 7, AV_S - AV_N + 18, 0, true);   // rues transversales, entre les plots
-  road(-62, 170, 9, 54, 0, true); road(12, 170, 9, 54, 0, true);      // descentes depuis la ville vers l'école et l'hôpital
+  // La descente vers l'hopital passait a x = 12 : elle traversait LA GRANDE ROUE de la fete
+  // foraine (plancher 6 x 4 m en (12, 158), pieds a x 9,6 et 14,4). Le plancher de l'attraction
+  // etait silencieusement efface au chargement par le degagement des chaussees, et 12 releves
+  // sur 19 de la rue n'avaient pas de bitume. Elle passe maintenant a x = 20, dans le couloir
+  // libre entre la grande roue et le pilier ouest de l'arche aux lettres (x 26).
+  road(-62, 170, 9, 54, 0, true); road(20, 170, 9, 54, 0, true);      // descentes depuis la ville vers l'école et l'hôpital
   const onPlot = (x, z) => VILLAS.some(v => Math.abs(x - v.x) < VILLA_HALF + 1.5 && Math.abs(z - v.z) < VILLA_HALF + 1.5);
-  const onStreet = x => VILLA_STREETS.some(sx => Math.abs(x - sx) < 9) || Math.abs(x + 62) < 9 || Math.abs(x - 12) < 9;
-  for (const av of [AV_N, AV_S]) for (const x of VILLA_STREETS.concat(av === AV_N ? [-62, 12] : [])) {
+  const onStreet = x => VILLA_STREETS.some(sx => Math.abs(x - sx) < 9) || Math.abs(x + 62) < 9 || Math.abs(x - 20) < 9;
+  for (const av of [AV_N, AV_S]) for (const x of VILLA_STREETS.concat(av === AV_N ? [-62, 20] : [])) {
     // largeur du passage = largeur de la chaussée traversée : 9 m pour l'avenue, 7 m pour la rue transversale
     crosswalk(x - 8, av, false, 9); crosswalk(x + 8, av, false, 9); crosswalk(x, av - 8, true, 7); crosswalk(x, av + 8, true, 7);
     trafficLight(x + 6.2, av - 6.2, Math.PI, 'A'); trafficLight(x - 6.2, av + 6.2, 0, 'A'); trafficLight(x - 6.2, av - 6.2, -Math.PI / 2, 'B'); trafficLight(x + 6.2, av + 6.2, Math.PI / 2, 'B');
@@ -9567,7 +9648,8 @@ function buildResidential() {   // avenues du quartier sud : les villas donnent 
     const lx = -70 + i * 14; if (!onStreet(lx) && !onPlot(lx, av + dz)) lamp(lx, av + dz);
   }
   for (let i = 0; i < 16; i++) { const lx = -60 + i * 18; if (!onStreet(lx) && !onPlot(lx, AV_S + 9)) tree(lx, 0, AV_S + 9, C.leaf); }
-  for (const [x, z, t] of [[-30, AV_N, '🎡 Ville ↑'], [-40, AV_N, '🏫 École ←'], [0, AV_N, '🏥 Hôpital ↓'], [24, AV_N, '🏡 Villas →']]) { box(x, 3.4, z + 6.5, 7, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(t) }), deco: true, noEdges: true }); box(x, 1.8, z + 6.5, 0.18, 3.2, 0.18, 0x3b4252, { studs: false, noRoute: true }); }
+  // le panneau des villas etait plante a x = 24, dans l'emprise de la descente deplacee
+  for (const [x, z, t] of [[-30, AV_N, '🎡 Ville ↑'], [-40, AV_N, '🏫 École ←'], [10, AV_N, '🏥 Hôpital ↓'], [32, AV_N, '🏡 Villas →']]) { box(x, 3.4, z + 6.5, 7, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(t) }), deco: true, noEdges: true }); box(x, 1.8, z + 6.5, 0.18, 3.2, 0.18, 0x3b4252, { studs: false, noRoute: true }); }
   city.zones.push({ name: 'Quartier résidentiel', emoji: '🏡', x1: 30, x2: 190, z1: AV_N - 52, z2: AV_S + 14, hint: '🏡 Quartier résidentiel : 5 villas identiques, avenues avec feux et passages piétons' });
 }
 const DECOR = [
@@ -18516,7 +18598,9 @@ function cityVie(dt) {
     // frappe du membre qui joue contre toi (raquette ou pied)
     sportBotFrappe(b);
     // but ?
-    if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -21.8 || b.pos.x > -4.2) && b.state !== 'goal') {
+    // les deux buts ont recule de 3 m (leur filet debordait sur la chaussee) : la ligne de but
+    // est a x = -19 et -7, le ballon compte des qu'il l'a franchie de 20 cm
+    if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -18.8 || b.pos.x > -7.2) && b.state !== 'goal') {
       b.state = 'goal';
       if (fm.on) footBut(b);
       else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);
@@ -22763,7 +22847,7 @@ function routesOuest() {
   road(-150, -50, 46, 7, 0, true);                    // vers le rallye et le nord de la ville
   road(-138, 130, 70, 7, 0, true);                    // vers le centre
   road(-140, 240, 66, 7, 0, true);                    // vers l'école
-  road(-166, 40, 44, 7, 0, true);                     // desserte de La Zone par l'ouest, entre ses immeubles
+  road(-166, 40, 44, 7, 0.06, true);                  // desserte de La Zone par l'ouest : posee 6 cm plus haut, le chemin de terre de La Zone (10 cm) l'enterrait sur 6 m
   for (const [x, z] of [[-169, -20], [-169, 40], [-169, 100], [-169, 160], [-169, 220], [-140, 125], [-140, 235]]) lamp(x, z);   // sur le trottoir, plus au milieu de l'avenue
   for (const [x, z] of [[-183, -12], [-167, 62], [-183, 152], [-167, 208]]) {   // quelques arbres le long de l'avenue
     const tr = new THREE.Mesh(unitBox, lam(0x6b4423)); tr.scale.set(0.5, 3.2, 0.5); tr.position.set(x, 1.6, z); worldGroup.add(tr);
@@ -24463,57 +24547,96 @@ function metiersReset() {
   METIERS.employes = []; METIERS.pompiers = []; METIERS.balayeurs = []; METIERS.laveurs = []; METIERS.facteurs = [];
   METIERS.prochainFeu = 0; METIERS.prochainNid = 0; METIERS.prochainDetritus = 0; METIERS.repos = 0; METIERS.derniere = null; METIERS.scanT = 0;
 }
+// UNE PLACE DE STATIONNEMENT, PAS UN BOUT DE CHAUSSÉE. Les cinq engins du dépôt et le camion de
+// la caserne démarraient posés au milieu du boulevard z = 140 : les hangars s'ouvraient à 50 cm
+// du bitume, aucune place n'existait devant eux. `placeDeService` recule la place vers le hangar
+// (`recul` = -1 pour aller vers le nord) par pas de 50 cm, tant que le gabarit du véhicule
+// (`demi` : la moitié de sa longueur, plus une marge) mord sur une chaussée ou sur son trottoir.
+// Sans ce garde-fou, redimensionner une cour remettrait discrètement un engin sur la voie.
+const PAS_PARC = 5.2;   // l'écart entre deux places de la cour (voir buildMetiers)
+function placeDeService(x, z, recul, demi = 2.8) {
+  const marge = TROTTOIR_L + demi;
+  const mord = pz => (city.routes || []).some(r =>
+    Math.abs(x - r.x) < r.w / 2 + marge && Math.abs(pz - r.z) < r.d / 2 + marge);
+  for (let i = 0; i < 24; i++) { const pz = z + recul * i * 0.5; if (!mord(pz)) return pz; }
+  return z;
+}
 function buildMetiers() {
   metiersReset();
-  const hangar = (x, z, w, d, coul, titre, sous) => {
+  // LE HANGAR ET SA COUR. Les deux hangars s'ouvraient a 50 cm du bord du boulevard z = 140 :
+  // il n'y avait AUCUNE place devant eux, et les six engins demarraient donc garés en plein
+  // milieu de la chaussee (le camion de la caserne EN TRAVERS). Chaque hangar recule maintenant
+  // au nord et une COUR GOUDRONNEE de 8 m s'ouvre devant lui : c'est là que les engins se
+  // garent, nez vers la rue, et il leur reste 2,5 m de dégagement avant le bitume.
+  const hangar = (x, z, w, d, coul, titre, sous, cw, cd) => {
     plat(x, 0.16, z, w, d, 0x4a5162, { studs: false, noRoute: true }, 0.06);
+    plat(x, 0.14, z + d / 2 + cd / 2, cw, cd, 0x3f434e, { studs: false, noRoute: true }, 0.06);   // la cour : du goudron, pas de la pelouse
+    for (let i = 0; i * PAS_PARC < cw - 2; i++) box(x - cw / 2 + 0.8 + i * PAS_PARC, 0.18, z + d / 2 + cd / 2, 0.14, 0.04, cd - 1.4, 0xf4f6fa, { deco: true, noEdges: true, studs: false });   // les places marquées au sol
     box(x, 2.4, z - d / 2 + 0.2, w, 4.6, 0.4, coul, { studs: false, noRoute: true });
     box(x - w / 2 + 0.2, 2.4, z, 0.4, 4.6, d, coul, { studs: false, noRoute: true });
     box(x + w / 2 - 0.2, 2.4, z, 0.4, 4.6, d, coul, { studs: false, noRoute: true });
     box(x, 4.9, z, w + 0.8, 0.4, d + 0.8, 0x3b4252, { deco: true, studs: false });
     box(x, 5.7, z - d / 2, w * 0.7, 1.2, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, coul) }), deco: true, noEdges: true });
-    sign(x + w / 2 + 2.5, 0.2, z + d / 2 + 1.2, sous);   // sur le côté : au milieu, il gênait le parc de véhicules
+    sign(x - w / 2 - 2.5, 0.2, z, sous);   // sur le flanc OUEST : devant, il gênait le parc de véhicules ; a l'est il tombait dans la descente x = 48
   };
   // ---- LE DÉPÔT MUNICIPAL : le garage des employés, balayeurs, laveurs et facteurs ----
-  const [dx, dz] = terrainLibre([[40, 130], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
+  // Il etait en (40, 130) : sa dalle enterrait la descente x = 48 sur 12 m et son ouverture
+  // donnait sur le bord meme du boulevard. Il recule en (29, 122) : 4 m entre l'avenue du parc
+  // (z = 113) et son mur du fond, 5 m entre son flanc est et la descente, et 8 m de cour devant.
+  const [dx, dz] = terrainLibre([[27, 122], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
   city.depot = { x: dx, z: dz };
-  hangar(dx, dz, 22, 14, 0xffa62b, '🏗️ DÉPÔT MUNICIPAL', '🏗️ Dépôt municipal · les véhicules de travail se prennent avec E');
-  for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 5.4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
-  for (let i = 0; i < 6; i++) { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 9), lam(MET_C.casqueOrange)); c2.position.set(dx + 5 + (i % 3) * 0.8, 0.5, dz - 5.4 + Math.floor(i / 3) * 0.8); worldGroup.add(c2); }
+  hangar(dx, dz, 22, 11, 0xffa62b, '🏗️ DÉPÔT MUNICIPAL', '🏗️ Dépôt municipal · les véhicules de travail se prennent avec E', 30, 8);
+  for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
+  for (let i = 0; i < 6; i++) { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 9), lam(MET_C.casqueOrange)); c2.position.set(dx + 5 + (i % 3) * 0.8, 0.5, dz - 4 + Math.floor(i / 3) * 0.8); worldGroup.add(c2); }
   city.zones.push({ name: 'Dépôt municipal', emoji: '🏗️', x1: dx - 14, x2: dx + 14, z1: dz - 12, z2: dz + 12,
     hint: '🏗️ Dépôt municipal : camion benne, grue, pelleteuse, tracteur, fourgon — E pour monter, O pour l\'outil' });
   // ---- LA CASERNE DES POMPIERS ----
-  const [kx, kz] = terrainLibre([[-40, 130], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
+  // Idem : en (-40, 130) le camion de 8 m ne pouvait se poser que SUR le boulevard, et en
+  // travers. La caserne recule en (-40, 122) et ouvre sa cour de 8 m sur la rue.
+  const [kx, kz] = terrainLibre([[-40, 122], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
   city.caserne = { x: kx, z: kz };
-  hangar(kx, kz, 18, 13, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose avec O');
-  box(kx, 3.4, kz + 5, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
-  for (const sx of [-6, 6]) box(kx + sx, 1.2, kz + 4.4, 1.6, 2.4, 0.3, MET_C.rouge, { deco: true, studs: false });
+  hangar(kx, kz, 18, 11, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose avec O', 22, 8);
+  box(kx, 3.4, kz + 4, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
+  for (const sx of [-6, 6]) box(kx + sx, 1.2, kz + 3.4, 1.6, 2.4, 0.3, MET_C.rouge, { deco: true, studs: false });
   city.zones.push({ name: 'Caserne', emoji: '🚒', x1: kx - 12, x2: kx + 12, z1: kz - 11, z2: kz + 11,
     hint: '🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau' });
   // ---- LES VÉHICULES DE TRAVAIL (tous conduisibles : ils entrent dans city.cars) ----
-  // Tout se gare AU SUD du hangar, du côté ouvert : garée le long d'un mur, la pelleteuse
-  // démarrait ENCASTRÉE dedans et ne pouvait plus bouger d'un centimètre.
-  const fourgon = makeVehiculeTravail('fourgon', 0xf4f6fa, dx - 9, dz + 11, 0);
-  const benne = makeVehiculeTravail('benne', MET_C.casqueOrange, dx - 3, dz + 11, 0);
-  const grue = makeVehiculeTravail('grue', MET_C.jaune, dx + 4, dz + 11, 0);
-  const pelle = makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 11, dz + 11, 0);
-  const tracteur = makeVehiculeTravail('tracteur', 0x2f8f4a, dx - 9, dz + 18, 0);
-  const velo = makeVehiculeTravail('velo', MET_C.poste, dx - 14, dz + 11, 0);
-  const camion = makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 9, 0);
+  // Chacun sur SA place marquée de la cour, le nez vers la rue (cap 0 = vers le sud), aligné sur
+  // les traits blancs du goudron. `gare()` est le garde-fou : il recule la place vers le hangar
+  // tant que le GABARIT REEL du véhicule (le camion de pompiers fait 8 m) mord sur une chaussée
+  // ou sur son trottoir. Le tracteur est rangé à 38 et non à 39,5 : à 39,5 son gabarit touchait
+  // le trottoir de la descente x = 48.
+  const PARC = dz + 5.5 + 3.5;   // le milieu de la cour : bord du hangar + la moitié de sa profondeur
+  const gare = c => {
+    const pz = placeDeService(c.x, c.z, -1, (c.baseD || 6) / 2 + 0.6);
+    c.z = pz; c.g.position.z = pz; c.home0 = [c.x, pz, c.h];
+    vehicleSolid(c); settleVehicle(c); return c;
+  };
+  // Six places de 5,20 m : c'est le PAS MINIMUM pour que le « E : conduire » du joueur désigne
+  // sans ambiguïté l'engin devant lequel il se tient (la détection prend tout véhicule à moins
+  // de 3,60 m ; à 4 m d'écart, c'est le voisin qui répondait). Le tracteur est à l'ouest et le
+  // vélo à l'est : à l'est, le gabarit de 6,40 m du tracteur touchait le trottoir de la descente.
+  const tracteur = gare(makeVehiculeTravail('tracteur', 0x2f8f4a, dx - 13, PARC, 0));
+  const benne = gare(makeVehiculeTravail('benne', MET_C.casqueOrange, dx - 7.8, PARC, 0));
+  const grue = gare(makeVehiculeTravail('grue', MET_C.jaune, dx - 2.6, PARC, 0));
+  const pelle = gare(makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 2.6, PARC, 0));
+  const fourgon = gare(makeVehiculeTravail('fourgon', 0xf4f6fa, dx + 7.8, PARC, 0));
+  const velo = gare(makeVehiculeTravail('velo', MET_C.poste, dx + 13, PARC, 0));
+  const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 3.5, 0));
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
-  const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 4, { orange: true });
-  const E2 = creerTravailleur('employe', 'Gaston', dx - 3, dz + 4, {});
-  const E3 = creerTravailleur('employe', 'Rachid', dx - 1, dz + 4, { orange: true, hair: 0 });
+  const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });
+  const E2 = creerTravailleur('employe', 'Gaston', dx - 3, dz + 3, {});
+  const E3 = creerTravailleur('employe', 'Rachid', dx - 1, dz + 3, { orange: true, hair: 0 });
   METIERS.employes = [E1, E2, E3]; E1.bot.veh = fourgon;
-  const P1 = creerTravailleur('pompier', 'Capitaine Léo', kx - 3, kz + 4, {});
-  const P2 = creerTravailleur('pompier', 'Sam', kx, kz + 4, { hair: 0 });
-  const P3 = creerTravailleur('pompier', 'Nina', kx + 3, kz + 4, { hair: 2, hairColor: 2 });
+  const P1 = creerTravailleur('pompier', 'Capitaine Léo', kx - 6, kz + 3, {});
+  const P2 = creerTravailleur('pompier', 'Sam', kx - 4, kz + 3, { hair: 0 });
+  const P3 = creerTravailleur('pompier', 'Nina', kx + 4, kz + 3, { hair: 2, hairColor: 2 });
   METIERS.pompiers = [P1, P2, P3]; P1.bot.veh = camion;
-  METIERS.balayeurs = [creerTravailleur('balayeur', 'Fatou', dx + 3, dz + 4, { hair: 2, speed: 2.4 }),
-    creerTravailleur('balayeur', 'Jules', dx + 5, dz + 4, { speed: 2.4 })];
-  METIERS.laveurs = [creerTravailleur('laveur', 'Yanis', dx + 7, dz + 4, { hair: 0 })];
-  const F1 = creerTravailleur('facteur', 'Paulette', dx - 9, dz + 4, { hair: 2, hairColor: 1, speed: 3.0 });
+  METIERS.balayeurs = [creerTravailleur('balayeur', 'Fatou', dx + 3, dz + 3, { hair: 2, speed: 2.4 }),
+    creerTravailleur('balayeur', 'Jules', dx + 5, dz + 3, { speed: 2.4 })];
+  METIERS.laveurs = [creerTravailleur('laveur', 'Yanis', dx + 7, dz + 3, { hair: 0 })];
+  const F1 = creerTravailleur('facteur', 'Paulette', dx - 9, dz + 3, { hair: 2, hairColor: 1, speed: 3.0 });
   METIERS.facteurs = [F1]; F1.bot.veh = velo;
   // les outils : chacun part avec le sien à la main
   for (const m of city.metiers) if (m.metier !== 'employe' && m.metier !== 'pompier') donneOutil(m.bot.av, METIERS_DEF[m.metier].outil);
@@ -25885,11 +26008,21 @@ function metiersRepos() {
     settleVehicle(v); vehicleSolid(v);
   }
   METIERS.repos = 0; METIERS.scanT = 0;
+  // QUATRE SECONDES DE CALME APRÈS CHAQUE REMISE À ZÉRO. `metiersRepos` n'est appelé que par le
+  // banc d'essai et par les captures : le banc range tout le parc, puis essaie AUSSITÔT de monter
+  // dans un engin. Sans ce répit, le facteur reprenait son vélo dans la même image — le joueur
+  // « volait » alors un véhicule conduit par un bot, se retrouvait recherché puis en prison, et le
+  // camion de pompiers essayé juste après lui était refusé. Le résultat dépendait de la phase de
+  // l'horloge au moment de la construction de la ville : d'une version à l'autre, il changeait.
+  METIERS.reposT = simTime + 4;
 }
 // ---- LE TOUR DE VIE DES MÉTIERS (appelé par cityVie, une fois par image) ----
 function metiersTick(dt) {
   brancardTick(dt);   // un brancard vit meme sans equipe de metiers en service (secours isole, test)
   if (!city.on || !city.metiers || !city.metiers.length) return;
+  // le répit qui suit une remise à zéro du banc d'essai (voir metiersRepos) : les outils et la
+  // détection de proximité continuent, mais personne ne part en mission ni ne reprend un véhicule
+  if (simTime < (METIERS.reposT || 0)) { outilsVehiculesTick(dt); metierProche(); return; }
   metiersEvenements(dt);
   employesTick(dt);
   pompiersTick(dt);

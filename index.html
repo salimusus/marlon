@@ -5945,7 +5945,10 @@ function depannageDemarre(d) {
   d.dmg0 = ep.dmg; d.accroche = false;
   const aPied = longueurRoute(P.pos.x, P.pos.z, dep.x, dep.z);
   const trajet = longueurRoute(dep.x, dep.z, d.lieu.x, d.lieu.z) + longueurRoute(d.lieu.x, d.lieu.z, gar.x, gar.z);
-  mission.limit = Math.round(aPied / 3.4 + trajet / 8 + 110);
+  // +18 s : le chargement sur le plateau (2,4 s), le déchargement (2,9 s) et surtout les DIX
+  // SECONDES de réparation au garage sont du temps que le joueur REGARDE, pas du temps qu'il
+  // perd — sans cette rallonge, la mission devenait injuste au chrono.
+  mission.limit = Math.round(aPied / 3.4 + trajet / 8 + 110 + 18);
   mission.t0 = simTime;
   setBeacon(dep.x, dep.z, 0, 'mission');
   msg(`🛻 Panne ${d.lieu.nom} — prends la dépanneuse au garage`, 3400);
@@ -5972,25 +5975,64 @@ function depannageTick(dt, d) {
     const pres = enVoiture(dep) && Math.hypot(dep.x - ep.x, dep.z - ep.z) < 10;
     outilAutomatique(dep, dt, pres, '⛓️ Treuil descendu');
     if (pres && dep.outil > 0.5) {
+      // POSTE ANIMATION — ON LA CHARGE SUR LE PLATEAU, on ne la traîne plus au sol.
+      // « je veux que la dépanneuse soulève la voiture en panne (sur le plateau de la
+      // dépanneuse), la remorque et l'emmène au garage, la stationne pour réparation
+      // (animation 10 secondes) ». `depCible` déclenche la manœuvre complète (plateau en
+      // rampe, crochet, treuil, l'épave qui MONTE) ; `outilCible` repasse à zéro pour que
+      // l'animation commune des outils ne se dispute pas les mêmes pièces.
+      dep.outilCible = 0;
+      dep.depCible = 1; dep.remorque = ep; ep.remorque = dep;
       mission.step = 3; d.accroche = true; d.dmg0 = ep.dmg || 0;
-      setBeacon(d.garage.x, d.garage.z, 0, 'mission');
-      msg('⛓️ Treuil accroché ! Remorque doucement jusqu\'au garage — chaque choc coûte cher', 4000); sfx.coin();
+      setBeacon(ep.x, ep.z, 0, 'mission');
+      msg('⛓️ Treuil accroché ! Le plateau s\'incline, la voiture monte…', 3600); sfx.coin();
     }
     return;
   }
-  if (mission.step === 3) {
-    // l'épave suit la dépanneuse, roue avant levée : on la place derrière, dans son axe
-    const recul = 6.2;
-    ep.x = dep.x - Math.sin(dep.h) * recul; ep.z = dep.z - Math.cos(dep.h) * recul; ep.h = dep.h;
-    ep.g.position.set(ep.x, (dep.y || 0) + 0.18, ep.z); ep.g.rotation.y = ep.h; ep.g.rotation.x = -0.12;
-    ep.y = dep.y || 0; settleVehicle(ep); ep.g.rotation.x = -0.12; vehicleSolid(ep);
+  if (mission.step === 3) {   // LE CHARGEMENT : 2,4 s de manœuvre, on regarde
+    // LE CHRONO EST SUSPENDU pendant les manœuvres : le chargement et la réparation sont des
+    // secondes que le joueur REGARDE, pas des secondes où il agit. Sans cela, une mission
+    // serrée pouvait échouer pendant qu'il n'avait aucune main sur rien.
+    mission.t0 += dt;
+    setBeacon(dep.x, dep.z, 0, 'mission');
+    if ((dep.dep || 0) > 0.98) {
+      mission.step = 4;
+      setBeacon(d.garage.x, d.garage.z, 0, 'mission');
+      msg('🚚 Chargée ! Remorque doucement jusqu\'au garage — chaque choc coûte cher', 4000); sfx.check();
+    }
+    return;
+  }
+  if (mission.step === 4) {
+    // L'ÉPAVE RESTE SUR LE PLATEAU : c'est `depanneuseAnime` (poste Animation) qui la tient,
+    // roues en l'air, et qui recale son solide de collision à chaque image.
+    dep.depCible = 1;
     setBeacon(d.garage.x, d.garage.z, 0, 'mission');
     if (Math.hypot(dep.x - d.garage.x, dep.z - d.garage.z) < 11) {
-      const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
-      mission.prime = -Math.min(45, degats);
-      d.degats = degats;
-      ep.g.rotation.x = 0; endMission(true);
+      mission.step = 5; d.t = simTime + DEP_DEPOSE; d.rep = null;
+      dep.depCible = 0;
+      msg('🅿️ Au garage : on décharge et on répare (10 s)', 2800);
     }
+    return;
+  }
+  if (mission.step === 5) {
+    mission.t0 += dt;   // chrono suspendu (voir l'étape 3)
+    // LE STATIONNEMENT ET LA RÉPARATION, DIX SECONDES QU'ON VOIT : le plateau se re-incline,
+    // l'épave redescend, puis le réparateur ouvre le capot et travaille à la clé.
+    if (simTime < d.t) return;
+    if (!d.rep && !d.repFait) {
+      dep.depCible = null; dep.dep = 0; dep.remorque = null; ep.remorque = null;
+      ep.g.rotation.set(0, ep.h, 0, 'YXZ'); settleVehicle(ep); vehicleSolid(ep);
+      d.rep = reparateurArrive(ep, REPAR_DUREE, null);
+      d.t = simTime + REPAR_DUREE;
+      if (!d.rep) d.t = simTime;   // pas d'avatar disponible : on n'immobilise pas la mission
+      return;
+    }
+    if (d.rep) { reparateurRange(d.rep); d.rep = null; }
+    d.repFait = true;
+    const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
+    mission.prime = -Math.min(45, degats);
+    d.degats = degats;
+    ep.g.rotation.x = 0; endMission(true);
   }
 }
 function depannageBandeau(d) {
@@ -5998,12 +6040,17 @@ function depannageBandeau(d) {
   if (mission.step === 0) return `Prends la dépanneuse au garage${chrono}`;
   if (mission.step === 1) return `Rejoins le véhicule en panne ${d.lieu ? d.lieu.nom : ''}${chrono}`;
   if (mission.step === 2) return `Accroche le treuil (O), tout près du véhicule${chrono}`;
+  if (mission.step === 3) return `Le plateau s'incline, la voiture monte…${chrono}`;
+  if (mission.step === 5) return `Au garage : déchargement et réparation (10 s)`;
   return `Remorque jusqu'au garage, sans rien casser${chrono}`;
 }
 function depannageNettoie(d) {
   const ep = d.epave;
-  if (ep) { ep.busy = false; ep.g.rotation.x = 0; settleVehicle(ep); vehicleSolid(ep); }
-  if (d.veh) { d.veh.outilCible = 0; sireneMission(d.veh, false); }
+  if (d.rep) { reparateurRange(d.rep); d.rep = null; }
+  if (ep) { ep.busy = false; ep.remorque = null; ep.g.rotation.set(0, ep.h || 0, 0, 'YXZ'); settleVehicle(ep); vehicleSolid(ep); }
+  // sans cette remise à zéro, une mission abandonnée en plein chargement laissait la
+  // dépanneuse plateau incliné et crochet pendant, pour toujours
+  if (d.veh) { d.veh.outilCible = 0; d.veh.depCible = null; d.veh.dep = 0; d.veh.remorque = null; sireneMission(d.veh, false); }
 }
 
 // ---- 3. POLICE (du bon côté) ----
@@ -11445,7 +11492,11 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
     sonAie(b.pos.x, b.pos.y + 1.5, b.pos.z, hauteurVoix(b.name, !!b.girl));   // il crie de SA voix (tirée de son nom)
-    if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60); }
+    if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60);
+      // POSTE ANIMATION : LE COUP QUI MET À TERRE passe au ralenti pendant trois secondes,
+      // caméra au ras du poing (ou du pied) qui vient de porter. Le côté suivi par la caméra
+      // est celui du poing : le bras reste entre l'objectif et le visage, on VOIT le coup.
+      try { encaisseCoup(b.av, 2); ralentiCoup(ix, P.pos.y, iz, kind === 'kick' ? 'pied' : 'poing', P.facing, P.poing === 'G' ? -1 : 1); } catch (e) {} }
     else { bubble(b.av, pickOne([`aïe ! ❤️ ${b.hp}`, 'ça fait mal !', 'arrête !', `❤️ ${b.hp}`])); }
     if (b.hp <= 0 && !b.robbed) { b.robbed = true; const stolen = 6 + Math.floor(Math.random() * 5); wallet += stolen; saveWallet(); updateHud(); msg(`💰 +${stolen} 🪙 volées à ${b.name}`, 1400); sfx.register(); }
     if (b.hp <= 0) infraction('KO sur ' + b.name, 1, 3); else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('frapper ' + b.name, 1, 1); }
@@ -11506,7 +11557,10 @@ function coupCouteau(av, duree) {
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
     avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
-    if (b.hp <= 0) { b.ko = simTime + 6; b.hp = 0; b.fight = null; botSay(b, ['aaah…', 'au secours…']); msg(`🔪 ${b.name} est à terre`, 1600); infraction('coup de couteau sur ' + b.name, 2, 4); }
+    if (b.hp <= 0) { b.ko = simTime + 6; b.hp = 0; b.fight = null; botSay(b, ['aaah…', 'au secours…']); msg(`🔪 ${b.name} est à terre`, 1600); infraction('coup de couteau sur ' + b.name, 2, 4);
+      // POSTE ANIMATION : ralenti de trois secondes sur le dernier coup de lame, caméra plus
+      // près que pour un poing (une lame ne se lit pas à trois mètres).
+      try { ralentiCoup(ix, P.pos.y, iz, 'couteau', P.facing, 1); } catch (e) {} }
     else { bubble(b.av, pickOne([`au couteau ?! ❤️ ${b.hp}`, 'il est fou !', `❤️ ${b.hp}`])); msg(`🔪 ${b.name} · ❤️ ${b.hp}`, 900); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('agression au couteau sur ' + b.name, 2, 3); } }
   } else if (target.gm) {
     const m = target.gm; m.hp -= dmg;
@@ -18563,6 +18617,10 @@ function placeOccupants(c, dt) {
 // réparé sur place contre un petit paiement, sinon le véhicule est treuillé et remorqué au
 // garage, plus cher. Elle se conduit comme les autres (E) : elle est dans city.cars.
 const PRIX_DEPANNAGE = 30, PRIX_REMORQUAGE = 90, DEGATS_SUR_PLACE = 45;
+// POSTE ANIMATION : les durées des deux manœuvres visibles. Le chargement dure le temps que
+// met `depanneuseAnime` à passer de 0 à 1 (1 / DEP_VITESSE = 2,4 s) plus une demi-seconde de
+// marge, sinon la voiture se retrouvait « accrochée » avant même d'être montée sur le plateau.
+const DEP_CHARGE = 2.9, DEP_DEPOSE = 2.9;
 // LA DÉPANNEUSE — bleu et blanc, gyrophare ROND bleu, plateau inclinable et treuil.
 // Elle sert à deux postes : la mienne (accidents) et celle des MISSIONS (poste Activité),
 // qui la construit par makeVehiculeTravail('depanneuse', …) et actionne son treuil avec la
@@ -18676,26 +18734,53 @@ function depanneusesTick(dt) {
       m.mode = (c.dmg || 0) < DEGATS_SUR_PLACE ? 'place' : 'remorque';
       m.tarif = m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE;
       m.phase = m.mode === 'place' ? 'repare' : 'treuil';
-      m.t = simTime + 2.5;
+      m.t = simTime + (m.mode === 'place' ? REPAR_DUREE : DEP_CHARGE);
+      // POSTE ANIMATION — LA RÉPARATION SUR PLACE SE VOIT. Le joueur demandait : « on voit le
+      // réparateur, tête sur le capot en train de réparer, mouvement de ses bras avec outils »,
+      // pendant DIX SECONDES. Avant, la dépanneuse s'arrêtait deux secondes et demie et la
+      // voiture redevenait neuve toute seule : il ne se passait rien à l'écran.
+      if (m.mode === 'place') m.rep = reparateurArrive(c, REPAR_DUREE, null);
+      else { d.depCible = 1; d.remorque = c; c.remorque = d; c.busy = true; }   // le plateau s'incline, le crochet descend, la voiture MONTE
       msg(m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`, 2600);
     } else if (m.phase === 'repare') {
-      if (simTime < m.t) { burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
+      if (simTime < m.t) { if (!m.rep) burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
+      if (m.rep) { reparateurRange(m.rep); m.rep = null; }
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
       facturerDepannage(m);
       m.phase = 'retour'; m.fini = true; d.remorque = null;
       msg('🔧 Réparé sur place, tu peux repartir', 2400); sfx.pok();
     } else if (m.phase === 'treuil') {
-      d.outilCible = 1;   // le treuil descend : c'est l'animation commune des outils qui le joue
+      // `depCible` (et non `outilCible`) : c'est la manœuvre COMPLÈTE du poste Animation —
+      // plateau incliné en rampe, crochet qui descend de 3 m, câble qui se tend, et le
+      // véhicule qui GLISSE sur le plateau. `outilsVehiculesTick` s'efface pendant ce temps.
+      d.depCible = 1;
       if (simTime < m.t) continue;
-      d.outilCible = 0;
-      d.remorque = c; c.remorque = d; m.phase = 'garage';
-      msg('⛓️ Véhicule accroché : direction le garage', 2400);
+      m.phase = 'garage';
+      msg('⛓️ Véhicule chargé sur le plateau : direction le garage', 2400);
     } else if (m.phase === 'garage') {
       const g = city.garage || { x: d.home0[0], z: d.home0[1] };
-      if (rouleVers(d, g.x, g.z, dt, 14) > 4) { traineVehicule(d, c, dt); continue; }
-      traineVehicule(d, c, dt);
+      // LE VÉHICULE RESTE SUR LE PLATEAU pendant tout le trajet (`depCible` à 1) : c'est
+      // `depanneuseAnime` qui le tient, roues en l'air, et non plus `traineVehicule` qui le
+      // traînait au sol derrière le camion.
+      d.depCible = 1;
+      if (rouleVers(d, g.x, g.z, dt, 14) > 4) continue;
+      d.speed = 0; d.spd = 0;
+      m.phase = 'depose'; m.t = simTime + DEP_DEPOSE;
+      msg('🅿️ Stationnement au garage, déchargement…', 2200);
+    } else if (m.phase === 'depose') {
+      // ON LE STATIONNE. Le plateau se re-incline et la voiture redescend à sa place ; puis le
+      // réparateur arrive et travaille DIX SECONDES, capot ouvert, comme sur place.
+      d.depCible = 0;
+      if (simTime < m.t) continue;
+      d.depCible = null; d.dep = 0; d.remorque = null; c.remorque = null; c.busy = false;
+      try { vehicleSolid(c); settleVehicle(c); } catch (e) {}
+      m.phase = 'garageRepare'; m.t = simTime + REPAR_DUREE;
+      m.rep = reparateurArrive(c, REPAR_DUREE, null);
+      msg('🔧 Réparation au garage : dix secondes', 2400);
+    } else if (m.phase === 'garageRepare') {
+      if (simTime < m.t) continue;
+      if (m.rep) { reparateurRange(m.rep); m.rep = null; }
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
-      c.remorque = null; d.remorque = null;
       facturerDepannage(m);
       m.phase = 'retour'; m.fini = true;
       msg('🚚 Véhicule remorqué au garage et réparé', 2800); sfx.register();
@@ -19860,7 +19945,13 @@ function shotsTick(dt) {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
-      if (b.hp <= 0) botKill(b); else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
+      if (b.hp <= 0) {
+        botKill(b);
+        // POSTE ANIMATION : la balle qui abat l'adversaire déclenche elle aussi le ralenti de
+        // trois secondes — mais SEULEMENT si c'est le joueur qui a tiré (`s.mine`) : se faire
+        // descendre par la police n'est pas un coup vainqueur.
+        if (s.mine) { try { ralentiCoup(b.pos.x, b.pos.y, b.pos.z, 'pistolet', Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 1); } catch (e) {} }
+      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;
@@ -21059,8 +21150,13 @@ function loop() {
 }
 function frame() {
   const brut = clock.getDelta();
-  const dt = Math.min(brut, 0.05);
+  let dt = Math.min(brut, 0.05);
   try { fluiditeTick(brut * 1000); ombresCadence(); diffusionMesure(brut * 1000); aideTick(); } catch (e) {}   // la résolution s'ajuste au vu du temps réel des images, et la diffusion se mesure
+  // POSTE ANIMATION — LE RALENTI DU COUP VAINQUEUR. On ralentit ICI, à la source : toute la
+  // simulation (pas de temps fixes, bots, météo, particules) reçoit un `dt` réduit, donc tout
+  // le monde ralentit ensemble. Le décompte des trois secondes, lui, se fait sur `brut`,
+  // l'horloge RÉELLE de l'image : sinon le ralenti se ralentissait lui-même.
+  { const ech = ralentiEchelle(brut); if (ech < 1) dt *= ech; }
   // (la manette n'est plus lue ici : elle a sa propre cadence de 120 Hz, voir plus bas)
   const active = running && !paused && !dead && !won;
   acc += dt; let n = 0;
@@ -21296,6 +21392,11 @@ function frame() {
   }
   camConduite(dt);   // champ de vision, vibration : la sensation de vitesse, en un seul endroit
   camera.lookAt(cam.target);
+  // POSTE ANIMATION : pendant les trois secondes du coup vainqueur, la caméra de cinéma
+  // écrase la caméra de jeu — et seulement elle. Les commandes du joueur, elles, continuent
+  // de répondre : `cam.yaw` et `cam.dist` restent ceux qu'il a réglés, et l'image lui revient
+  // exactement où il l'avait laissée à la fin du ralenti.
+  try { ralentiCam(); } catch (e) {}
   try { interieurTick(); } catch (e) { if (!interieurTick.err) { interieurTick.err = 1; console.error('interieur', e); } }
   if (city.on && running) { try { gpsTick(); } catch (e) {} }
   // Le soleil suit le joueur (la carte d'ombres ne couvre qu'une centaine de mètres) mais sa
@@ -24899,6 +25000,34 @@ function makeVehiculeTravail(kind, couleur, x, z, h) {
     for (let i = 0; i < 4; i++) bx(chrome, 0.1, 0.1, 0.28, -0.3 + i * 0.2, -0.45, 0.66, godet);   // les dents
     roues([]);
     siege = { x: 0, y: 1.5, z: 0.5 };
+  } else if (kind === 'bulldozer') {   // BULLDOZER (poste Animation) : chenilles, lame qui descend et pousse la terre
+    // Il n'existait pas : le joueur demandait « crée d'autres animations (grue, bulldozer) ».
+    // Sa pièce mobile est la LAME (`outils.lame`), un groupe qui descend de 95 cm et s'incline ;
+    // devant elle, `outils.andain` est le bourrelet de terre qui se forme quand on POUSSE.
+    W = 2.8; D = 5.4; spec = { max: 10, rev: -4, accel: 8, turn: 1.4, seat: 0 };
+    bx(darkM, 2.5, 0.8, 4.4, 0, 0.7, 0);
+    for (const sx of [-1.25, 1.25]) { bx(lam(0x3b4252), 0.55, 1.0, 4.8, sx, 0.55, -0.2); for (let i = 0; i < 8; i++) bx(darkM, 0.62, 0.14, 0.42, sx, 0.06, -2.3 + i * 0.62); }   // chenilles
+    bx(body, 1.9, 1.15, 2.0, 0, 1.65, -0.6);                       // capot moteur
+    const cab = new THREE.Group(); cab.position.set(0, 1.3, -1.6); g.add(cab);
+    bx(body, 1.7, 1.3, 1.6, 0, 0.65, 0, cab);
+    bx(glassCar, 1.5, 0.7, 0.06, 0, 0.9, 0.82, cab);
+    for (const sx of [-0.82, 0.82]) bx(glassCar, 0.06, 0.7, 1.2, sx, 0.9, 0, cab);
+    bx(lam(MET_C.casqueOrange), 1.9, 0.12, 1.8, 0, 1.36, 0, cab);   // le toit de protection
+    cyl(darkM, 0.1, 1.0, 0.7, 2.6, -0.6);                           // le pot d'échappement
+    // LA LAME : un tablier d'acier bombé, deux bras de poussée et deux vérins
+    const lame = new THREE.Group(); lame.position.set(0, 1.25, 2.9); g.add(lame); outils.lame = lame;
+    bx(lam(MET_C.jaune), 3.2, 1.25, 0.18, 0, 0, 0.1, lame);
+    bx(chrome, 3.2, 0.2, 0.3, 0, -0.6, 0.14, lame);                 // le tranchant
+    for (const sx of [-1.4, 1.4]) bx(lam(MET_C.jaune), 0.16, 1.25, 0.5, sx, 0, -0.1, lame);
+    for (const sx of [-1.0, 1.0]) { const b2 = bx(lam(0x3b4252), 0.2, 0.2, 2.6, sx, -0.3, -1.4, lame); b2.rotation.x = 0.12; }
+    for (const sx of [-0.5, 0.5]) { const v2 = bx(chrome, 0.12, 0.12, 1.6, sx, 0.35, -0.9, lame); v2.rotation.x = -0.3; }
+    // l'andain : le bourrelet de terre poussé par la lame, invisible tant qu'on ne pousse pas
+    const andain = new THREE.Mesh(unitRound, lam(0x6b4a2a));
+    andain.scale.set(3.0, 0.2, 0.5); andain.position.set(0, -0.55, 0.6); andain.visible = false;
+    andain.castShadow = true; lame.add(andain); outils.andain = andain;
+    outils.gyros = [bx(neonMat(MET_C.casqueOrange), 0.6, 0.16, 0.28, 0, 2.9, -1.6)];
+    roues([]);
+    siege = { x: 0, y: 1.75, z: -1.5 };
   } else if (kind === 'tracteur') {   // TRACTEUR + REMORQUE
     W = 2.2; D = 6.4; spec = { max: 15, rev: -4, accel: 9, turn: 1.6, seat: 0 };
     bx(body, 1.5, 0.9, 2.6, 0, 1.0, 1.2);
@@ -24989,6 +25118,12 @@ function outilsVehiculesTick(dt) {
     // le gyrophare ne clignote que quand le véhicule SERT (en intervention ou conduit) ;
     // à l'arrêt il reste éteint, sinon toute la ville clignotait en permanence
     if (o.gyros) { const on = (c.gyro || drive.car === c) ? (simTime % 0.7) < 0.35 : false; for (const m of o.gyros) m.visible = on; }
+    // POSTE ANIMATION : QUAND UNE ANIMATION DÉTAILLÉE TIENT LES COMMANDES, ON S'EFFACE.
+    // La dépanneuse en manœuvre (`depCible`), la pelleteuse en pleine fouille (`creuse`) et
+    // la grue en plein levage (`leve`) écrivent EXACTEMENT les mêmes pièces (plateau, crochet,
+    // câble, bras, godet, tourelle) que ce curseur 0 → 1. Les deux en même temps, et les
+    // pièces sautaient d'une pose à l'autre à chaque image.
+    if (c.depCible != null || c.creuse || c.leve) continue;
     if (Math.abs(c.outil - c.outilCible) < 0.002) { c.outil = c.outilCible; }
     else c.outil += clamp(c.outilCible - c.outil, -dt * 0.5, dt * 0.5);
     const u = c.outil;
@@ -25024,6 +25159,25 @@ function arroseAutour(c, dt) {
 // Actionne l'outil du véhicule : benne, flèche, godet, échelle, lance à eau.
 function actionneOutil(c) {
   if (!c || !c.travail) return false;
+  // POSTE ANIMATION — LE JOUEUR AUX COMMANDES DES ENGINS BTP. Trois engins ne se contentent
+  // plus d'un curseur 0 → 1 : la PELLETEUSE lance un vrai cycle de fouille (le godet plonge,
+  // ressort chargé de terre, un trou se creuse et un tas grandit), la GRUE un cycle de levage
+  // avec sa charge au crochet, le BULLDOZER baisse et relève sa lame.
+  if (c.kind === 'pelle') {
+    if (c.creuse) { msg('🚜 Le godet est déjà en train de creuser…', 1200); return true; }
+    enginCreuse(c); msg('🚜 Le godet plonge, la terre sort, le tas grandit', 2000); sfx.pok(); return true;
+  }
+  // `c.depanneuse` : la mission de dépannage retombe sur une GRUE quand la vraie dépanneuse
+  // n'existe pas (fabriqueDepanneuse). Elle sert alors de treuil, pas de grue de levage : on
+  // lui laisse le curseur 0 → 1, sinon le « O » du joueur lançait un cycle de levage à vide
+  // et le crochet ne descendait jamais sur l'épave.
+  if (c.kind === 'grue' && !c.depanneuse) {
+    if (c.leve) { msg('🏗️ La grue est déjà en manœuvre…', 1200); return true; }
+    enginLeve(c); msg('🏗️ Le crochet descend, la grue lève la charge et pivote', 2000); sfx.pok(); return true;
+  }
+  if (c.kind === 'bulldozer') {
+    enginLame(c); msg(c.lameCible ? '🚜 Lame baissée — avance pour pousser la terre' : '🚜 Lame relevée', 1800); sfx.pok(); return true;
+  }
   c.outilCible = c.outilCible > 0.5 ? 0 : 1;
   const quoi = c.kind === 'benne' ? (c.outilCible ? '🚛 La benne se lève' : '🚛 La benne se baisse')
     : c.kind === 'grue' ? (c.outilCible ? '🏗️ La flèche pivote, le crochet descend' : '🏗️ On remonte le crochet')
@@ -25252,7 +25406,7 @@ function buildMetiers() {
   for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
   for (let i = 0; i < 6; i++) { const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 9), lam(MET_C.casqueOrange)); c2.position.set(dx + 5 + (i % 3) * 0.8, 0.5, dz - 4 + Math.floor(i / 3) * 0.8); worldGroup.add(c2); }
   city.zones.push({ name: 'Dépôt municipal', emoji: '🏗️', x1: dx - 14, x2: dx + 14, z1: dz - 12, z2: dz + 12,
-    hint: '🏗️ Dépôt municipal : camion benne, grue, pelleteuse, tracteur, fourgon — E pour monter, O pour l\'outil' });
+    hint: '🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame' });
   // ---- LA CASERNE DES POMPIERS ----
   // Idem : en (-40, 130) le camion de 8 m ne pouvait se poser que SUR le boulevard, et en
   // travers. La caserne recule en (-40, 122) et ouvre sa cour de 8 m sur la rue.
@@ -25286,7 +25440,10 @@ function buildMetiers() {
   const fourgon = gare(makeVehiculeTravail('fourgon', 0xf4f6fa, dx + 7.8, PARC, 0));
   const velo = gare(makeVehiculeTravail('velo', MET_C.poste, dx + 13, PARC, 0));
   const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 3.5, 0));
-  city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion);
+  // POSTE ANIMATION : le BULLDOZER, septième engin du dépôt. Il se gare une rangée en
+  // arrière (les six places de la cour sont prises) et se conduit comme les autres.
+  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 10.4, PARC - 6.2, 0));
+  city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
   const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });
   const E2 = creerTravailleur('employe', 'Gaston', dx - 3, dz + 3, {});
@@ -25657,6 +25814,31 @@ const GESTES = {
       bx: 0.16 * fouille + 0.10 * tend, hx: 0.26 * fouille + 0.12 * tend,
     };
   },
+  // LA TÊTE SUR LE CAPOT. Demande mot pour mot du joueur : « on voit le réparateur, tête sur
+  // le capot en train de réparer, mouvement de ses bras avec outils. » Le buste plonge à
+  // 0,72 rad (41°) et la tête se penche encore de 0,66 rad par-dessus : le nez du réparateur
+  // arrive bien AU-DESSUS du moteur, pas devant la calandre. Les DEUX bras sont dans le
+  // compartiment (épaules très en avant, coudes repliés) ; le droit, celui qui tient la clé,
+  // fait des allers-retours de serrage COURTS et RAPIDES (période 0,86 s) tandis que le
+  // gauche tient la pièce et ne bouge presque pas — c'est ce contraste qui fait qu'on
+  // reconnaît un serrage et pas un brassage de bras. Toutes les deux secondes il se
+  // REDRESSE un instant pour regarder sa pièce : sans cette respiration, dix secondes de
+  // geste en boucle donnaient un automate.
+  capot(t) {
+    const serre = Math.sin(t * 7.3);              // le va-et-vient de la clé
+    const pause = animLiss(Math.sin(t * 0.78) * 3 + 2.1);   // 1 = il se redresse pour regarder
+    const dedans = 1 - 0.55 * pause;
+    return {
+      aRx: -0.30 - 0.92 * dedans + serre * 0.24,
+      cRx: -0.55 - 0.85 * dedans - serre * 0.42,
+      aRz: -0.26 - 0.16 * dedans,
+      aLx: -0.26 - 0.86 * dedans + serre * 0.06,
+      cLx: -0.50 - 0.95 * dedans,
+      aLz: 0.30 + 0.14 * dedans,
+      lLx: -0.30, lRx: -0.12, gLx: 0.44, gRx: 0.24,
+      bx: 0.20 + 0.52 * dedans, hx: 0.20 + 0.46 * dedans, bs: 0.04 + 0.06 * dedans,
+    };
+  },
 };
 // LE PILOTE DES GESTES. À appeler JUSTE APRÈS animateRig, une fois par image :
 //     gesteMetier(w.av.rig, 'marteau', dt, simTime);
@@ -25894,6 +26076,88 @@ function animCombat(av, dt) {
   }
   return true;
 }
+// ---------- LE RALENTI DU COUP VAINQUEUR ----------
+// Demande du joueur, mot pour mot : « sur les scènes de combat avec armes ou poings, je veux
+// des scènes animées où on voit sur plusieurs angles (qu'on voie le couteau, les poings ou le
+// pistolet), mets des ralentis (3 secondes) au dernier coup vainqueur. »
+// TROIS GARDE-FOUS, parce qu'un ralenti mal dosé est vite insupportable :
+//   1. IL NE TOMBE QU'AU COUP DÉCISIF — celui qui met l'adversaire à terre — jamais sur un
+//      échange ordinaire, et jamais deux fois en moins de `RALENTI_REPOS` secondes.
+//   2. LE JOUEUR GARDE LA MAIN. On ne coupe AUCUNE entrée : on ralentit l'horloge de la
+//      simulation et on déplace la caméra, rien d'autre. Il peut continuer de frapper, de
+//      courir, de fuir — tout répond, simplement au ralenti, comme dans un film.
+//   3. LES TROIS SECONDES SONT DU TEMPS RÉEL (`ralentiEchelle` est nourrie par l'horloge de
+//      l'image, PAS par `simTime` qu'on vient justement de ralentir) — sinon le ralenti se
+//      ralentissait lui-même et durait dix secondes.
+// La caméra ne se contente pas de s'approcher : elle BALAIE une soixantaine de degrés autour
+// du point d'impact pendant les trois secondes — c'est ce mouvement qui fait « plusieurs
+// angles » et qui montre l'arme sous plusieurs profils.
+const RALENTI_DUREE = 3;         // s de TEMPS RÉEL
+const RALENTI_LENT = 0.30;       // l'horloge du jeu tourne à 30 % pendant le ralenti
+const RALENTI_REPOS = 9;         // s : pas deux ralentis coup sur coup
+const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null };
+// À APPELER AU COUP QUI MET À TERRE. `arme` : 'poing' | 'pied' | 'couteau' | 'pistolet'.
+// `cote` : +1 la caméra passe à droite de l'attaquant, −1 à gauche (on prend le côté du poing
+// qui frappe, pour que le bras soit entre la caméra et le visage de l'adversaire).
+function ralentiCoup(x, y, z, arme, dir, cote) {
+  if (typeof settings !== 'undefined' && settings && settings.ralenti === false) return false;
+  if (RALENTI.t > 0 || simTime < RALENTI.prochain) return false;
+  if (typeof running !== 'undefined' && (!running || paused)) return false;
+  RALENTI.t = RALENTI_DUREE; RALENTI.prochain = simTime + RALENTI_DUREE + RALENTI_REPOS;
+  RALENTI.x = x; RALENTI.y = y; RALENTI.z = z;
+  RALENTI.dir = dir != null ? dir : (typeof P !== 'undefined' ? P.facing : 0);
+  RALENTI.cote = cote === -1 ? -1 : 1; RALENTI.arme = arme || 'poing'; RALENTI.n++;
+  return true;
+}
+// L'ÉCHELLE DE TEMPS DE L'IMAGE, et le décompte des trois secondes. `reel` est la durée VRAIE
+// de l'image (celle de l'horloge du rendu), jamais une durée déjà ralentie.
+function ralentiEchelle(reel) {
+  if (RALENTI.fige != null) return RALENTI_LENT;   // banc d'essai : l'instant est figé, l'horloge ne court pas
+  if (!(RALENTI.t > 0)) return 1;
+  RALENTI.t = Math.max(0, RALENTI.t - (reel > 0 && reel < 1 ? reel : 0));
+  if (RALENTI.t <= 0) return 1;
+  // il entre et sort en douceur : passer de 1 à 0,3 d'un coup donnait un à-coup très net
+  const u = 1 - RALENTI.t / RALENTI_DUREE;
+  const k = Math.min(animLiss(u / 0.12), animLiss((1 - u) / 0.18));
+  return 1 - (1 - RALENTI_LENT) * k;
+}
+// LA CAMÉRA DU RALENTI. Appelée à la toute fin du placement de caméra : elle écrase la
+// position et la visée, et rend true quand elle a pris la main.
+function ralentiCam() {
+  if (!(RALENTI.t > 0) && RALENTI.fige == null) return false;
+  if (typeof camera === 'undefined' || !camera) return false;
+  const u = RALENTI.fige != null ? clamp(RALENTI.fige, 0, 1) : clamp(1 - RALENTI.t / RALENTI_DUREE, 0, 1);
+  // LE BALAYAGE : on part d'un trois-quarts arrière du côté du bras qui frappe et on passe
+  // au profil, puis au trois-quarts avant de l'adversaire. 62° de course sur trois secondes.
+  const a = RALENTI.dir + RALENTI.cote * (2.05 - 1.08 * animLiss(u));
+  // une lame ou un pistolet se voient de plus près qu'un coup de poing
+  const proche = (RALENTI.arme === 'couteau' || RALENTI.arme === 'pistolet') ? 0.7 : 1;
+  let d = (4.3 - 1.30 * animLiss(u)) * proche;
+  const hy = 2.15 - 0.55 * animLiss(u);
+  // ON VISE LA POITRINE, PAS LES PIEDS : à 0,95 m la moitié basse de l'image était du bitume
+  // et on ne voyait ni les épaules de l'attaquant ni l'arme.
+  const cx = RALENTI.x, cy = RALENTI.y + 1.25, cz = RALENTI.z;
+  // UN MUR DANS LE DOS ? On raccourcit la perche jusqu'à dégager la vue, exactement comme la
+  // caméra normale : sans ça, un ralenti déclenché contre une façade montrait du béton.
+  if (typeof murEntreVue === 'function') {
+    const dx = Math.sin(a), dz = Math.cos(a), dy = (RALENTI.y + hy - cy) / (d || 1);
+    const L = Math.hypot(dx, dz, dy) || 1;
+    for (let k = 0; k < 5 && d > 1.1; k++) {
+      const t = murEntreVue(cx, cy, cz, dx / L, dy / L, dz / L, d - 0.1);
+      if (t < 0) break;
+      d = Math.max(1.1, t - 0.25);
+    }
+  }
+  camera.position.set(cx + Math.sin(a) * d, Math.max(0.5, RALENTI.y + hy), cz + Math.cos(a) * d);
+  camera.lookAt(cx, cy, cz);
+  return true;
+}
+// Filet de sécurité : le ralenti ne survit ni à la mort du joueur, ni au démontage de la ville.
+function ralentiTick() {
+  if (!(RALENTI.t > 0)) return;
+  if ((typeof city !== 'undefined' && !city.on) || (typeof dead !== 'undefined' && dead)) RALENTI.t = 0;
+}
+
 // ---------- LE FEU ----------
 // UNE SEULE implémentation de feu dans tout le jeu (accord passé avec le poste Graphisme,
 // qui fait brûler les véhicules accidentés) :
@@ -26070,10 +26334,29 @@ function depanneuseAnime(c, dt) {
   const deroule = animSeg(u, 0.22, 0.62);   // le treuil déroule, le crochet descend
   const tend = animSeg(u, 0.58, 0.80);      // le câble se tend : le bras encaisse la charge
   const monte = animSeg(u, 0.70, 1);        // le véhicule monte sur le plateau
-  if (o.bras) o.bras.rotation.x = -0.12 - 0.72 * deploie + 0.10 * tend;
+  // LA FLÈCHE DU TREUIL. `o.bras` n'existe que sur les engins à bras articulé ; sur la
+  // dépanneuse du poste Véhicules, la potence porte une FLÈCHE (`c.fleche`) — on la prend en
+  // secours, sinon le treuil restait raide comme un piquet pendant toute la manœuvre.
+  const bras = o.bras || c.fleche;
+  if (bras) bras.rotation.x = -0.12 - 0.42 * deploie + 0.10 * tend;
   if (o.avantBras) o.avantBras.rotation.x = 0.10 + 0.55 * deploie - 0.18 * tend;
-  if (o.plateau) o.plateau.rotation.x = 0.26 * deploie - 0.24 * monte;   // le plateau bascule puis se remet à plat
-  if (o.treuil) o.treuil.rotation.x = -deroule * 9 + tend * 2.2;         // la bobine tourne dans les deux sens
+  // LE PLATEAU BASCULE DANS LE BON SENS. Il était tourné de +0,26 rad, et comme son pivot est
+  // à l'ARRIÈRE du camion (z = −3) et que la tôle part vers l'AVANT, cette rotation enfonçait
+  // le bout du plateau DANS le châssis au lieu d'en faire une rampe. On tourne maintenant en
+  // NÉGATIF (le bout avant se lève de 1,3 m) et on descend le pivot de 55 cm : le bord arrière
+  // vient toucher le sol, et on a une vraie rampe sur laquelle la voiture peut monter.
+  const incl = 0.34 * deploie - 0.32 * monte;
+  if (o.plateau) {
+    const pu = o.plateau.userData;
+    if (pu.y0 == null) { pu.y0 = o.plateau.position.y; pu.z0 = o.plateau.position.z; }
+    o.plateau.rotation.x = -incl;
+    o.plateau.position.y = pu.y0 - 2.0 * incl;   // le bord arrière descend à 26 cm du sol : une vraie rampe
+    o.plateau.position.z = pu.z0 - 1.6 * incl;
+  }
+  // LA BOBINE. Sur la dépanneuse, `outils.treuil` est un ALIAS du crochet : la faire tourner
+  // faisait tournoyer le crochet sur lui-même au bout du câble. On ne tourne la bobine que
+  // lorsqu'elle est une pièce à part.
+  if (o.treuil && o.treuil !== o.crochet) o.treuil.rotation.x = -deroule * 9 + tend * 2.2;
   const desc = 3.0 * deroule - 0.5 * tend - 2.2 * monte;
   if (o.crochet) {
     if (o.crochet.userData.y0 == null) o.crochet.userData.y0 = o.crochet.position.y;
@@ -26084,9 +26367,23 @@ function depanneuseAnime(c, dt) {
     o.cable.scale.y = 1 + desc * 2; o.cable.position.y = o.cable.userData.y0 - desc / 2;
   }
   if (c.remorque && c.remorque.g && o.plateau) {   // le véhicule ramassé glisse sur le plateau
-    const r = c.remorque, cs = Math.cos(c.h), sn = Math.sin(c.h), rec = 6.2 - 3.4 * monte;
-    r.x = c.x - sn * rec; r.z = c.z - cs * rec; r.y = (c.y || 0) + 0.35 + 0.85 * monte;
-    r.h = c.h; r.g.position.set(r.x, r.y, r.z); r.g.rotation.set(-0.22 * (1 - monte), c.h, 0);
+    // RECUL ET HAUTEUR MESURÉS SUR LE MODÈLE. Le plancher du plateau va de −3,0 à +0,9 dans
+    // le repère du camion : une voiture de 4,4 m y est centrée à −1,4 (et non à −2,9, où la
+    // moitié dépassait dans le vide). Son plancher arrive à 0,94 m au-dessus de l'assiette du
+    // camion, c'est la hauteur du plateau : les roues POSENT sur la tôle au lieu de flotter.
+    const r = c.remorque, cs = Math.cos(c.h), sn = Math.sin(c.h), rec = 6.2 - 4.8 * monte;
+    r.x = c.x - sn * rec; r.z = c.z - cs * rec; r.y = (c.y || 0) + 0.02 + 0.92 * monte;
+    // L'ASSIETTE SUIT LA RAMPE, ET AUTOUR DU BON AXE. `rotation.set(x, y, z)` en ordre XYZ
+    // penche autour de l'axe X DU MONDE : une épave chargée sur un camion orienté à l'est
+    // basculait sur le côté. En 'YXZ' le tangage se fait dans l'axe du véhicule, comme pour
+    // le remorquage au sol (traineVehicule).
+    // L'ASSIETTE NE SE CABRE QU'UNE FOIS SUR LA RAMPE. Avec un tangage constant, la voiture
+    // restait nez en l'air pendant les 0,4 s où elle attend encore au sol, derrière le camion.
+    r.h = c.h; r.g.position.set(r.x, r.y, r.z);
+    r.g.rotation.set(-(incl + 0.10) * Math.min(1, monte * 4), c.h, 0, 'YXZ');
+    // sans cette ligne, le solide de collision de l'épave restait sur le lieu de l'accident :
+    // le joueur se cognait à une voiture invisible au milieu de la rue
+    if (typeof vehicleSolid === 'function') { try { vehicleSolid(r); } catch (e) {} }
   }
 }
 function ambulanceAnime(c, dt) {
@@ -26119,6 +26416,420 @@ function secoursTick(dt) {
   if (liste) for (const c of liste) { if (c.depCible != null) depanneuseAnime(c, dt); if (c.ambCible != null) ambulanceAnime(c, dt); }
   const amb = (typeof city !== 'undefined' && city.ambulances) ? city.ambulances : null;
   if (amb) for (const c of amb) { if (c.ambCible != null) ambulanceAnime(c, dt); }
+  const dep = (typeof city !== 'undefined' && city.depanneuses) ? city.depanneuses : null;
+  // les dépanneuses de MISSION ne sont pas toujours dans city.cars : sans cette deuxième
+  // boucle, leur plateau et leur treuil restaient figés pendant toute la manœuvre
+  if (dep) for (const c of dep) { if (c.depCible != null && (!liste || liste.indexOf(c) < 0)) depanneuseAnime(c, dt); }
+}
+
+// ---------- LE RÉPARATEUR, TÊTE SUR LE CAPOT ----------
+// Demande du joueur, mot pour mot : « Si petite réparation, sur place (endroit de l'accident,
+// 10 secondes) : on voit le réparateur, tête sur le capot en train de réparer, mouvement de
+// ses bras avec outils. » Et au garage, « la stationne pour réparation (animation 10 s) ».
+// C'est la MÊME scène dans les deux cas : un employé municipal descend, ouvre le capot, se
+// penche dedans et travaille à la clé pendant dix secondes, puis referme et s'en va.
+// Pour les autres postes :
+//     const r = reparateurArrive(voiture, 10, () => { /* réparé */ });   // null si impossible
+//     reparateurRange(r);          // le renvoyer avant l'heure (ville démontée, mission annulée)
+//     ANIM.reparateurs             // la liste des chantiers en cours
+// Il n'y a JAMAIS plus de `REPAR_MAX` réparateurs à la fois : chacun est un avatar complet.
+const REPAR_DUREE = 10, REPAR_MAX = 3;
+const REPAR_CAPOT = -1.15;   // rad : le capot relevé, bien ouvert sur le moteur
+ANIM.reparateurs = [];
+function reparateurArrive(cible, duree, fini) {
+  if (!cible || !cible.g || typeof buildAvatar !== 'function') return null;
+  if (ANIM.reparateurs.length >= REPAR_MAX) return null;
+  if (ANIM.reparateurs.some(r => r.cible === cible)) return null;   // un seul chantier par véhicule
+  let av = null;
+  try {
+    av = buildAvatar({ name: 'Dépanneur', jersey: 0, pants: PAL.pants[0], cap: PAL.cap[0], num: 1, hair: 1, hairColor: 0, m: 25, f: 12 });
+    av.casqueOrange = true;
+    if (typeof tenueMetier === 'function') tenueMetier(av, 'employe');
+    if (typeof donneOutil === 'function') donneOutil(av, 'cle');
+    if (av.tag) av.tag.visible = false;
+  } catch (e) { if (av && av.group && av.group.parent) av.group.parent.remove(av.group); return null; }
+  // IL SE MET DEVANT LE CAPOT, PAS DANS LA VOITURE : une demi-longueur de véhicule, plus le
+  // recul mesuré ci-dessous, et il regarde la calandre.
+  const cs = Math.cos(cible.h || 0), sn = Math.sin(cible.h || 0);
+  // MESURÉ À LA SONDE : avec ce recul, la tête du réparateur arrive 4 cm AU-DELÀ du bord
+  // avant du capot, donc bien au-dessus du moteur. À 1,15 m elle restait 40 cm en avant du
+  // pare-chocs, et on avait l'air de renifler la calandre.
+  const avantZ = (cible.baseD || 4.4) / 2 + 0.78;
+  const rx = cible.x + sn * avantZ, rz = cible.z + cs * avantZ;
+  const face = Math.atan2(cible.x - rx, cible.z - rz);
+  const y = (typeof groundUnder === 'function') ? groundUnder(rx, rz, null, cible.y || 0) : (cible.y || 0);
+  // L'ORDRE D'EULER 'YXZ', ET POURQUOI. `animPose` penche le buste en écrivant
+  // `groupe.rotation.x`. Avec l'ordre par défaut ('XYZ'), cette rotation s'applique dans le
+  // repère du MONDE, APRÈS le cap : le réparateur se penchait donc toujours vers le sud,
+  // quelle que soit l'orientation de la voiture. Mesuré : tête à 1,85 m DEVANT le bord du
+  // capot, c'est-à-dire penchée à l'opposé du moteur. En 'YXZ' le buste plonge dans l'axe où
+  // le personnage REGARDE, et la tête arrive bien au-dessus du moteur.
+  av.group.rotation.order = 'YXZ';
+  av.group.position.set(rx, y, rz); av.group.rotation.y = face;
+  // LE CAPOT S'OUVRE SUR SA CHARNIÈRE, PAS AUTOUR DE SON MILIEU. Une simple rotation faisait
+  // pivoter la tôle sur son centre : la moitié avant s'enfonçait DANS le moteur pendant que
+  // la moitié arrière passait à travers le pare-brise. On garde donc la charnière fixe (le
+  // bord arrière du capot) et on recalcule le centre à chaque image.
+  const hood = cible.parts && cible.parts.hood;
+  const r = { av, cible, t: 0, dur: duree > 0 ? duree : REPAR_DUREE, fini: fini || null,
+    x: rx, z: rz, y, face, hood, capot: 0,
+    hood0: hood ? hood.rotation.x : 0, hoodY: hood ? hood.position.y : 0, hoodZ: hood ? hood.position.z : 0,
+    hoodL: hood ? (hood.scale.z || 1.35) / 2 : 0, ph: (ANIM.reparateurs.length * 1.37) % 6.28 };
+  ANIM.reparateurs.push(r);
+  return r;
+}
+// Le renvoyer : le capot se referme d'un coup et l'avatar disparaît.
+function reparateurRange(r) {
+  if (!r) return;
+  const i = ANIM.reparateurs.indexOf(r); if (i >= 0) ANIM.reparateurs.splice(i, 1);
+  if (r.hood) { r.hood.rotation.x = r.hood0; r.hood.position.y = r.hoodY; r.hood.position.z = r.hoodZ; }
+  if (r.av && r.av.group && r.av.group.parent) r.av.group.parent.remove(r.av.group);
+  r.av = null;
+}
+// Une image de chantier. Le capot s'ouvre en 0,8 s, se referme dans la dernière seconde ;
+// entre les deux, le geste `capot` tourne en boucle. Tout est fonction de `r.t`, l'horloge
+// PROPRE du chantier : deux mesures au même instant donnent la même pose.
+function reparateurTick(r, dt) {
+  r.t += dt;
+  const reste = r.dur - r.t;
+  r.capot = Math.min(animLiss(r.t / 0.8), animLiss(reste / 0.9));
+  if (r.hood) {
+    const th = r.hood0 + REPAR_CAPOT * r.capot, L = r.hoodL;
+    r.hood.rotation.x = th;
+    r.hood.position.y = r.hoodY - L * Math.sin(th) + L * Math.sin(r.hood0);
+    r.hood.position.z = r.hoodZ - L + L * Math.cos(th) + (L - L * Math.cos(r.hood0));
+  }
+  const av = r.av; if (!av || !av.group) return reste > 0;
+  // LE VÉHICULE PEUT ROULER (il est sur le plateau d'une dépanneuse qui manœuvre) : on recale
+  // le réparateur sur SA voiture à chaque image, sinon il restait planté sur le lieu de
+  // l'accident pendant que la voiture partait au garage.
+  const c = r.cible;
+  if (c && c.g) {
+    const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0), d = (c.baseD || 4.4) / 2 + 0.78;
+    r.x = c.x + sn * d; r.z = c.z + cs * d; r.face = Math.atan2(c.x - r.x, c.z - r.z);
+    r.y = (c.y || 0);
+  }
+  av.group.rotation.order = 'YXZ';   // voir reparateurArrive : sans ça le buste se penche vers le sud
+  av.group.position.set(r.x, r.y - (av.rig.baisse || 0), r.z);
+  av.group.rotation.y = r.face;
+  if (typeof animateRig === 'function') animateRig(av.rig, 'idle', 0, dt, simTime);
+  // le geste ne se joue qu'une fois le capot ouvert : avant, il plongeait la tête dans la tôle
+  // ON DONNE AU GESTE L'HORLOGE DU CHANTIER (`r.t`), PAS `simTime`. Deux raisons : le banc
+  // d'essai fait tourner une réparation sans que l'horloge du jeu avance (le geste restait
+  // alors figé sur une seule pose), et deux réparateurs côte à côte, décalés par `r.ph`, ne
+  // serrent pas leurs boulons en cadence comme deux métronomes.
+  gesteMetier(av.rig, r.capot > 0.55 ? 'capot' : null, dt, r.t + r.ph);
+  av.group.position.y = r.y - (av.rig.baisse || 0);
+  // UNE ÉTINCELLE ET UN COUP DE CLÉ, toutes les 0,7 s : on l'ENTEND réparer. Le son et la
+  // gerbe sont calés sur la MÊME horloge que le geste, pas sur simTime : deux réparations
+  // lancées à des instants différents ne tombent donc jamais en cadence.
+  if (r.capot > 0.55 && r.t > (r.bruitT || 0)) {
+    r.bruitT = r.t + 0.7;
+    if (typeof burst === 'function' && animPres(r.x, r.z)) burst(r.x + Math.sin(r.face) * 0.7, r.y + 1.2, r.z + Math.cos(r.face) * 0.7, 0xfff0c4, 3);
+    if (typeof sonMarteau === 'function') { try { sonMarteau(r.x, r.y + 1.2, r.z); } catch (e) {} }
+  }
+  return reste > 0;
+}
+// ---------- LES ENGINS DE CHANTIER : LE GODET, LA TERRE, LE TROU ET LE TAS ----------
+// Demande du joueur, mot pour mot : « anime les engins de travaux (ex pelleteuse qui enlève
+// de la terre, visuel du godet avec de la terre, et le trou, et le tas de terre), crée
+// d'autres animations (grue, bulldozer) […] je veux que le joueur puisse manœuvrer les
+// engins BTP, creuser un trou, démolir un véhicule ».
+// Avant, l'outil d'un engin était un simple curseur 0 → 1 : le bras se dépliait, le godet
+// s'ouvrait, et RIEN ne se passait — pas de terre dans le godet, pas de trou, pas de tas.
+// Un CYCLE de fouille complet en 4,2 s remplace le curseur :
+//   plongée (0 → 0,22) · raclage (0,22 → 0,36) · relevage chargé (0,36 → 0,58)
+//   pivot vers le tas (0,58 → 0,76) · vidage (0,76 → 0,90) · retour (0,90 → 1)
+// À chaque godet sorti, le TROU s'agrandit et le TAS grandit d'autant : creuser six fois au
+// même endroit fait un vrai cratère et une vraie butte.
+const CREUSE_DUREE = 4.2;        // s : un cycle de fouille complet
+const CREUSE_PORTEE = 5.2;       // m : à quelle distance devant l'engin le godet mord le sol
+const CREUSE_PAS = 0.16;         // m : ce qu'un godet enlève de profondeur
+const CREUSE_TROU_MAX = 6, CREUSE_R_MAX = 2.9;
+const TERRE_C = 0x6b4a2a, TERRE_FOND = 0x241a0f, TERRE_TAS = 0x7a5731;
+ANIM.trous = [];
+// LE TROU. On ne DÉCOUPE pas le sol (la ville est faite de dalles pleines et une découpe
+// coûterait une géométrie neuve par coup de godet) : on empile trois disques concentriques
+// de plus en plus sombres, bordés d'un bourrelet de mottes. De trois quarts — l'angle
+// auquel on joue — cela se lit comme un trou, et ça ne coûte que trois maillages.
+// (Poste GRAPHISME : si tu veux une vraie cuvette en relief, c'est ici qu'il faut la poser ;
+//  garde les champs `t.x, t.z, t.r, t.prof, t.n` et le reste continuera de marcher.)
+function creuseTrou(x, z, y) {
+  for (const t of ANIM.trous) if (Math.hypot(t.x - x, t.z - z) < 2.6) return t;
+  if (typeof worldGroup === 'undefined' || !worldGroup) return null;
+  if (ANIM.trous.length >= CREUSE_TROU_MAX) { const v = ANIM.trous.shift(); if (v.g && v.g.parent) v.g.parent.remove(v.g); }
+  const g = new THREE.Group(); g.position.set(x, (y || 0) + 0.02, z); worldGroup.add(g);
+  const disques = [];
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(1, 16), lam([0x5a3d21, 0x33230f, TERRE_FOND][i]));
+    m.rotation.x = -Math.PI / 2; m.position.y = i * 0.006; g.add(m); disques.push(m);
+  }
+  // le bourrelet de mottes tout autour : c'est LUI qui donne le relief du bord
+  const mottes = [];
+  for (let i = 0; i < 10; i++) {
+    const a = i * 0.6283;
+    const m = new THREE.Mesh(unitRound, lam(i % 2 ? TERRE_C : TERRE_TAS));
+    m.scale.set(0.34, 0.2, 0.34); m.position.set(Math.sin(a), 0.05, Math.cos(a)); m.rotation.y = a;
+    g.add(m); mottes.push(m);
+  }
+  const t = { g, disques, mottes, x, z, y: y || 0, r: 0.9, prof: 0, n: 0, tas: null };
+  ANIM.trous.push(t); creuseTrouMaj(t);
+  return t;
+}
+function creuseTrouMaj(t) {
+  const r = t.r;
+  for (let i = 0; i < 3; i++) t.disques[i].scale.setScalar(r * (1 - i * 0.22));
+  for (let i = 0; i < t.mottes.length; i++) {
+    const m = t.mottes[i], a = i * 0.6283, k = 0.28 + t.prof * 0.5;
+    m.position.set(Math.sin(a) * (r + 0.18), 0.04 + k * 0.3, Math.cos(a) * (r + 0.18));
+    m.scale.set(0.3 + k, 0.14 + k * 0.7, 0.3 + k);
+  }
+}
+// LE TAS DE TERRE, à côté du trou : un cône qui grandit à chaque godet vidé, plus quelques
+// mottes à son pied pour qu'il ne ressemble pas à un chapeau chinois.
+function creuseTas(t) {
+  if (t.tas) return t.tas;
+  const g = new THREE.Group();
+  const a = Math.atan2(t.x - (P ? P.pos.x : 0), t.z - (P ? P.pos.z : 0));   // du côté opposé au joueur : on ne lui bouche pas la vue
+  g.position.set(t.x + Math.sin(a) * 3.4, t.y + 0.02, t.z + Math.cos(a) * 3.4);
+  worldGroup.add(g);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 12), lam(TERRE_TAS));
+  cone.position.y = 0.5; cone.castShadow = true; g.add(cone);
+  const mottes = [];
+  for (let i = 0; i < 6; i++) {
+    const b = i * 1.047;
+    const m = new THREE.Mesh(unitRound, lam(i % 2 ? TERRE_C : TERRE_FOND));
+    m.scale.set(0.3, 0.22, 0.3); m.position.set(Math.sin(b) * 0.9, 0.11, Math.cos(b) * 0.9); g.add(m); mottes.push(m);
+  }
+  t.tas = { g, cone, mottes, h: 0 };
+  creuseTasMaj(t);
+  return t.tas;
+}
+function creuseTasMaj(t) {
+  const s = t.tas; if (!s) return;
+  s.h = clamp(0.35 + t.n * 0.16, 0.35, 2.2);
+  const r = clamp(0.8 + t.n * 0.18, 0.8, 2.6);
+  s.cone.scale.set(r, s.h, r); s.cone.position.y = s.h / 2;
+  for (let i = 0; i < s.mottes.length; i++) { const b = i * 1.047; s.mottes[i].position.set(Math.sin(b) * (r * 0.85), 0.11, Math.cos(b) * (r * 0.85)); }
+}
+// UN GODET DE PLUS : le trou s'élargit et s'approfondit, le tas monte.
+function creuseGodet(t) {
+  if (!t) return;
+  t.n++;
+  t.r = Math.min(CREUSE_R_MAX, t.r + 0.22);
+  t.prof = Math.min(1.5, t.prof + CREUSE_PAS);
+  creuseTrouMaj(t); creuseTas(t); creuseTasMaj(t);
+}
+// LA TERRE DANS LE GODET. Une motte marron logée AU FOND du godet, invisible tant qu'il n'a
+// pas raclé. Elle est créée à la première fouille et gardée : on n'alloue rien par image.
+function godetTerre(c) {
+  const o = c.outils || {}; if (!o.godet) return null;
+  if (o.terre) return o.terre;
+  // LA MOTTE DÉBORDE DU GODET. Mesuré sur capture : logée au fond (y = −0,16) elle était
+  // entièrement CACHÉE par les parois de 70 cm — le godet ressortait aussi propre que vide.
+  // Elle est maintenant à cheval sur le bord (elle dépasse de 18 cm), avec une seconde motte
+  // par-dessus : on voit la terre de vingt mètres.
+  const g = new THREE.Group(); g.position.set(0, 0.06, 0.32);
+  const m = new THREE.Mesh(unitRound, lam(TERRE_C));
+  m.scale.set(0.84, 0.5, 0.58); g.add(m);
+  const m2 = new THREE.Mesh(unitRound, lam(TERRE_TAS));
+  m2.scale.set(0.46, 0.3, 0.36); m2.position.set(0.14, 0.3, 0.04); m2.rotation.y = 0.5; g.add(m2);
+  const m3 = new THREE.Mesh(unitRound, lam(TERRE_FOND));
+  m3.scale.set(0.3, 0.22, 0.28); m3.position.set(-0.22, 0.27, -0.06); m3.rotation.y = -0.7; g.add(m3);
+  g.visible = false;
+  o.godet.add(g); o.terre = g; return g;
+}
+// LANCER UN CYCLE DE FOUILLE. Rend false si l'engin n'est pas une pelleteuse ou s'il creuse
+// déjà : on ne relance jamais un cycle en cours, sinon le bras sautait au milieu du geste.
+function enginCreuse(c) {
+  if (!c || c.kind !== 'pelle' || c.creuse) return false;
+  const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0);
+  const tx = c.x + sn * CREUSE_PORTEE, tz = c.z + cs * CREUSE_PORTEE;
+  const y = (typeof groundUnder === 'function') ? groundUnder(tx, tz, c.solid, c.y || 0) : (c.y || 0);
+  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), vide: false, cri: false };
+  godetTerre(c);
+  return true;
+}
+// UNE IMAGE DE FOUILLE. Tout est fonction de `k.t` : deux mesures au même instant donnent la
+// même pose, et le banc d'essai peut donc garantir une amplitude et un pas maximum.
+function enginCreuseTick(c, dt) {
+  const k = c.creuse, o = c.outils || {};
+  k.t += dt;
+  const u = clamp(k.t / CREUSE_DUREE, 0, 1);
+  const plonge = animSeg(u, 0, 0.20);                            // le bras s'avance et descend
+  const racle = animSeg(u, 0.20, 0.32);                          // le godet se referme sur la terre
+  const leve = animSeg(u, 0.32, 0.50);                           // il ressort, CHARGÉ
+  const pivot = animSeg(u, 0.50, 0.72) - animSeg(u, 0.88, 1);    // la tourelle se tourne vers le tas
+  const vide = animSeg(u, 0.72, 0.88);                           // le godet se retourne et lâche tout
+  // LE REPLI, et POURQUOI IL EXISTE. À la fin du cycle, `c.creuse` repasse à null et
+  // `outilsVehiculesTick` reprend la main : il repose instantanément le bras, l'avant-bras et
+  // le godet sur la pose de repos (celle de `c.outil` = 0). Mesuré : le godet SAUTAIT de
+  // 0,70 radian en une seule image — 40 degrés, une téléportation. Les quatre dernières
+  // dixièmes du cycle ramènent donc tout exactement sur cette pose de repos, et le relais se
+  // fait sans qu'on voie la couture.
+  const repli = 1 - animSeg(u, 0.88, 1);
+  if (o.tourelle) o.tourelle.rotation.y = 0.95 * pivot;
+  if (o.bras) o.bras.rotation.x = -0.9 + (0.86 * plonge - 0.52 * leve) * repli;
+  if (o.avantBras) o.avantBras.rotation.x = 1.5 + (-1.02 * plonge + 0.22 * racle + 0.44 * leve) * repli;
+  if (o.godet) o.godet.rotation.x = -0.7 + (0.62 * plonge - 1.05 * racle - 0.30 * leve + 1.85 * vide) * repli;
+  // LA TERRE EST VISIBLE DÈS QUE LE GODET A RACLÉ, et jusqu'au vidage : c'est exactement ce
+  // que le joueur demande à voir.
+  if (o.terre) o.terre.visible = racle > 0.5 && vide < 0.55;
+  // le trou se creuse au moment où le godet RESSORT (pas au vidage) : c'est là qu'on retire
+  // la terre du sol. Un seul godet par cycle, d'où le drapeau.
+  if (!k.vide && leve > 0.85) {
+    k.vide = true;
+    if (k.trou) creuseGodet(k.trou);
+    if (typeof burst === 'function') burst(k.trou ? k.trou.x : c.x, (k.trou ? k.trou.y : 0) + 0.5, k.trou ? k.trou.z : c.z, TERRE_C, 6);
+    if (typeof sfx !== 'undefined' && sfx.pok) try { sfx.pok(); } catch (e) {}
+  }
+  // au vidage, une gerbe de mottes au-dessus du tas
+  if (vide > 0.35 && vide < 0.9 && k.trou && k.trou.tas && k.t > (k.gerbeT || 0)) {
+    k.gerbeT = k.t + 0.12;
+    const g = k.trou.tas.g;
+    if (typeof burst === 'function') burst(g.position.x, g.position.y + k.trou.tas.h + 0.6, g.position.z, TERRE_TAS, 4);
+  }
+  if (u >= 1) { c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0; }
+}
+// LA GRUE : la flèche pivote d'un quart de tour, le crochet descend chercher la charge, la
+// remonte, la repose de l'autre côté, puis revient. La CHARGE est une caisse accrochée au
+// crochet : sans elle, on voyait une flèche tourner à vide et on ne comprenait pas le geste.
+const GRUE_DUREE = 7.5;
+function grueCharge(c) {
+  const o = c.outils || {}; if (!o.crochet) return null;
+  if (o.charge) return o.charge;
+  const g = new THREE.Group(); g.position.set(0, -1.5, 0); o.crochet.add(g);
+  const b = new THREE.Mesh(unitRound, lam(0x8b5a2b)); b.scale.set(1.4, 1.0, 1.4); b.position.y = -0.5; b.castShadow = true; g.add(b);
+  const s = new THREE.Mesh(unitRound, lam(0xffd23f)); s.scale.set(1.45, 0.12, 0.16); s.position.y = -0.2; g.add(s);
+  g.visible = false; o.charge = g; return g;
+}
+function enginLeve(c) {
+  if (!c || c.kind !== 'grue' || c.leve) return false;
+  c.leve = { t: 0 }; grueCharge(c); return true;
+}
+function enginLeveTick(c, dt) {
+  const k = c.leve, o = c.outils || {};
+  k.t += dt;
+  const u = clamp(k.t / GRUE_DUREE, 0, 1);
+  const descend = animSeg(u, 0, 0.20);                          // le crochet descend
+  const prend = animSeg(u, 0.20, 0.28);                         // il accroche
+  const monte = animSeg(u, 0.28, 0.48);                         // il remonte, chargé
+  const tourne = animSeg(u, 0.48, 0.68);                        // la tourelle pivote
+  const pose = animSeg(u, 0.68, 0.86);                          // il redescend et pose
+  const repart = animSeg(u, 0.86, 1);                           // la tourelle revient à vide
+  // LES QUATRE COEFFICIENTS S'ANNULENT (3,4 − 3,2 + 3,0 − 3,2 = 0) : le crochet finit le cycle
+  // EXACTEMENT à sa hauteur de repos. Avec 2,9 au lieu de 3,2 il restait 30 cm plus bas, et
+  // `outilsVehiculesTick`, en reprenant la main, les rattrapait en UNE image — un à-coup net.
+  const desc = 3.4 * descend - 3.2 * monte + 3.0 * pose - 3.2 * repart;
+  if (o.tourelle) o.tourelle.rotation.y = 1.5 * tourne - 1.5 * repart;
+  if (o.fleche) o.fleche.rotation.x = -0.55 - 0.16 * monte + 0.16 * pose;
+  if (o.crochet) o.crochet.position.y = -0.2 - desc;
+  if (o.cable) { o.cable.scale.y = 1 + desc * 2; o.cable.position.y = -0.5 - desc; }
+  if (o.charge) o.charge.visible = prend > 0.5 && pose < 0.92;
+  if (u >= 1) { c.leve = null; if (o.crochet) o.crochet.position.y = -0.2; if (o.cable) { o.cable.scale.y = 1; o.cable.position.y = -0.5; } if (o.tourelle) o.tourelle.rotation.y = 0; if (o.fleche) o.fleche.rotation.x = -0.55; }
+}
+// LE BULLDOZER : la lame descend, et TANT QU'ELLE RACLE EN AVANÇANT, un andain de terre se
+// forme devant elle et grossit avec la distance parcourue. C'est le seul engin dont
+// l'animation dépend de la CONDUITE : c'est ce qui donne envie de pousser.
+const LAME_VITESSE = 1.3;   // rad/s de descente de la lame
+function enginLame(c) {
+  if (!c || c.kind !== 'bulldozer') return false;
+  c.lameCible = (c.lameCible || 0) > 0.5 ? 0 : 1;
+  return true;
+}
+function enginLameTick(c, dt) {
+  const o = c.outils || {};
+  const cible = c.lameCible || 0;
+  c.lameK = clamp((c.lameK || 0) + clamp(cible - (c.lameK || 0), -dt * LAME_VITESSE, dt * LAME_VITESSE), 0, 1);
+  const u = c.lameK;
+  if (o.lame) { o.lame.position.y = 1.25 - 0.95 * u; o.lame.rotation.x = 0.12 * u; }
+  if (!o.andain) return;
+  // l'andain ne grossit que si la lame est BAISSÉE et que l'engin AVANCE
+  const v = (typeof drive !== 'undefined' && drive.car === c) ? Math.abs(drive.speed || 0) : Math.abs(c.spd || c.speed || 0);
+  if (u > 0.75 && v > 1.2) c.andainK = clamp((c.andainK || 0) + dt * v * 0.055, 0, 1);
+  else c.andainK = clamp((c.andainK || 0) - dt * 0.18, 0, 1);
+  const a = c.andainK || 0;
+  o.andain.visible = a > 0.02;
+  o.andain.scale.set(1 + a * 0.5, 0.18 + a * 1.15, 0.4 + a * 0.9);
+  o.andain.position.y = -0.35 + o.andain.scale.y / 2;
+}
+// ---------- DÉMOLIR UN VÉHICULE AVEC UN ENGIN ----------
+// « je veux que le joueur puisse manœuvrer les engins BTP, creuser un trou, démolir un
+// véhicule (même police, qui déclenche une alerte 3 étoiles de recherche) ».
+// L'outil frappe DEVANT l'engin : on cherche le véhicule le plus proche de la pointe de
+// l'outil et on lui inflige des dégâts tant que l'outil travaille. Le godet d'une pelle fait
+// très mal, la lame d'un bulldozer pousse et écrase, la benne et la grue cognent moins fort.
+const ENGIN_DEGATS = { pelle: 52, bulldozer: 40, grue: 26, benne: 22, tracteur: 16 };
+const ENGIN_PORTEE = { pelle: 6.4, bulldozer: 4.6, grue: 7.2, benne: 4.4, tracteur: 4.2 };
+// L'OUTIL NE DÉMOLIT QUE QUAND QUELQU'UN S'EN SERT VRAIMENT. Les cycles de fouille et de
+// levage ne sont lancés QUE par le joueur (`actionneOutil`) : ils suffisent à eux seuls. La
+// lame du bulldozer et la benne, elles, peuvent rester levées sur un engin garé ou conduit
+// par un employé municipal — sans la condition « le joueur est au volant », une benne de la
+// mairie aurait broyé les voitures de la circulation en passant à côté d'elles.
+function enginOutilActif(c) {
+  if (c.kind === 'pelle') return !!c.creuse;
+  if (c.kind === 'grue') return !!c.leve;
+  if (typeof drive !== 'undefined' && drive.car !== c) return false;
+  if (c.kind === 'bulldozer') return (c.lameK || 0) > 0.55;
+  return (c.outil || 0) > 0.4;
+}
+function enginDemolit(c, dt) {
+  if (!c || !c.travail) return;
+  const deg = ENGIN_DEGATS[c.kind]; if (!deg) return;
+  if (!enginOutilActif(c)) return;
+  const portee = ENGIN_PORTEE[c.kind] || 5;
+  const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0);
+  const px = c.x + sn * portee, pz = c.z + cs * portee;
+  const listes = [city.cars, city.aiCars, police.cars];
+  for (const L of listes) {
+    if (!L) continue;
+    for (const v of L) {
+      if (!v || v === c || !v.g || v.travail) continue;
+      if (Math.hypot(v.x - px, v.z - pz) > 3.1) continue;
+      if (typeof vehicleDamage === 'function') vehicleDamage(v, deg * dt);
+      // RECONNAÎTRE UNE VOITURE DE POLICE. `makeCar` ne pose PAS de champ `police` sur le
+      // véhicule : le jeu la reconnaît à son solide (`solid.pol`) ou à son appartenance à la
+      // flotte `police.cars`. Se fier au seul champ `v.police` ne déclenchait donc JAMAIS
+      // l'alerte trois étoiles — mesuré : 0 étoile pour une voiture de police démolie.
+      const estPolice = !!(v.police || (v.solid && v.solid.pol) || (police.cars && police.cars.indexOf(v) >= 0));
+      // LA POLICE : trois étoiles, sans avertissement, et une seule fois par véhicule.
+      if (estPolice && !v.enginAlerte) {
+        v.enginAlerte = true;
+        if (typeof infraction === 'function') infraction('démolition d\'une voiture de police à l\'engin de chantier', 3, 3, true);
+      } else if (!v.enginAlerte && drive.car === c) {
+        v.enginAlerte = true;
+        if (typeof infraction === 'function') infraction('démolition d\'un véhicule à l\'engin de chantier', 1, 2);
+      }
+      if (typeof msg === 'function' && simTime > (c.demoT || 0)) { c.demoT = simTime + 1.2; msg(estPolice ? '🚨 Voiture de police démolie ! Recherché ★★★' : '💥 Le véhicule se disloque sous l\'outil', 1600); }
+      return;   // un seul véhicule à la fois : l'engin n'est pas une tondeuse
+    }
+  }
+}
+// Le tour de piste des engins : il ne coûte rien tant qu'aucun cycle ne tourne.
+function enginsTick(dt) {
+  if (typeof city === 'undefined' || !city.cars) return;
+  for (const c of city.cars) {
+    if (!c || !c.travail) continue;
+    if (c.creuse) { enginCreuseTick(c, dt); enginDemolit(c, dt); }
+    else if (c.leve) { enginLeveTick(c, dt); enginDemolit(c, dt); }
+    else if (c.kind === 'bulldozer') { enginLameTick(c, dt); enginDemolit(c, dt); }
+    else if (drive.car === c) enginDemolit(c, dt);
+  }
+  // ville démontée : les trous et les tas sont partis avec worldGroup, on vide le registre
+  if (ANIM.trous.length && (!city.on || !ANIM.trous[0].g.parent)) ANIM.trous.length = 0;
+}
+function reparateursTick(dt) {
+  const L = ANIM.reparateurs; if (!L.length) return;
+  // VILLE DÉMONTÉE (changement de monde, remise à zéro du banc d'essai) : on range tout le
+  // monde. Sans ce filet, les avatars des réparateurs survivaient au monde suivant.
+  if (typeof city !== 'undefined' && city && !city.on) { while (L.length) reparateurRange(L[0]); return; }
+  for (let i = L.length - 1; i >= 0; i--) {
+    const r = L[i];
+    if (!r.cible || !r.cible.g || !r.cible.g.parent) { reparateurRange(r); continue; }
+    if (reparateurTick(r, dt)) continue;
+    const f = r.fini; reparateurRange(r);
+    if (f) { try { f(r.cible); } catch (e) {} }
+  }
 }
 
 // ---------- LES TRANSITIONS ----------
@@ -26186,6 +26897,103 @@ function animFige(rig) {
   c.chute = f.combat === 'chute' ? CBT_CHUTE * (1 - u) : 0;
   animCombat(rig, 0);   // dt = 0 : les minuteurs ne bougent pas, la pose reste sur l'image voulue
 }
+// BANC D'ESSAI SEULEMENT. `animScenePhoto(nom, u)` plante une scène d'animation À L'ENDROIT
+// DU JOUEUR (qu'on rend invisible) et l'avance jusqu'à l'instant `u` (0 → 1) du mouvement.
+// Sans cela, impossible de photographier une manœuvre de dépanneuse ou un cycle de fouille :
+// il aurait fallu attendre qu'une mission se déclenche toute seule au bon endroit, et le
+// rendu logiciel du banc n'avance pas deux fois de la même façon.
+//   'depanneuse' — le chargement d'une épave sur le plateau
+//   'reparateur' — le réparateur penché sur le capot ouvert
+//   'creuse'     — la pelleteuse : godet, terre, trou et tas
+//   'grue'       — le levage d'une charge
+//   'bulldozer'  — la lame baissée qui pousse son andain
+//   'ralenti'    — la caméra de cinéma du coup vainqueur, figée sur l'instant u
+function animScenePhoto(nom, u) {
+  const k = clamp(u == null ? 0.5 : u, 0, 1);
+  const x = P.pos.x, z = P.pos.z;
+  // ON DÉBARRASSE LA PRISE PRÉCÉDENTE. Sans cela, chaque vue d'une série ajoutait SON épave
+  // et SON engin à la ville : à la quatrième photo on voyait quatre voitures rouges empilées
+  // autour du camion et on ne jugeait plus rien.
+  ANIM.photo = ANIM.photo || [];
+  for (const v of ANIM.photo) {
+    if (v.g && v.g.parent) v.g.parent.remove(v.g);
+    if (v.solid) { const i = solids.indexOf(v.solid); if (i >= 0) solids.splice(i, 1); }
+    for (const L of [city.cars, city.depanneuses]) { if (!L) continue; const i = L.indexOf(v); if (i >= 0) L.splice(i, 1); }
+  }
+  ANIM.photo.length = 0;
+  for (const t of ANIM.trous) { if (t.g && t.g.parent) t.g.parent.remove(t.g); if (t.tas && t.tas.g && t.tas.g.parent) t.tas.g.parent.remove(t.tas.g); }
+  ANIM.trous.length = 0;
+  try { sgridSale(); } catch (e) {}
+  while (ANIM.reparateurs.length) reparateurRange(ANIM.reparateurs[0]);
+  // LE JOUEUR EST CACHÉ POUR TOUTES LES SCÈNES SAUF LE RALENTI (où c'est LUI qui frappe), et
+  // il est REMONTRÉ à chaque appel : sans cette remise à vrai, une série de captures qui
+  // passait par une scène d'engin laissait le joueur invisible pour toutes les suivantes.
+  me.group.visible = nom === 'ralenti';
+  if (nom === 'depanneuse' || nom === 'reparateur') {
+    const d = (city.depanneuses && city.depanneuses[0]) || makeDepanneuse(x, z, 0);
+    if (city.depanneuses && city.depanneuses.indexOf(d) < 0) { city.depanneuses.push(d); city.cars.push(d); }
+    d.x = x; d.z = z; d.h = 0; d.mission = null; d.g.position.set(x, d.y || 0, z); d.g.rotation.y = 0;
+    try { vehicleSolid(d); settleVehicle(d); } catch (e) {}
+    if (nom === 'reparateur') {
+      // LA VOITURE EN PANNE EST CADRÉE, PAS LE CAMION. La caméra du banc vise TOUJOURS le
+      // joueur : on place donc la voiture 3,35 m en arrière, pour que le RÉPARATEUR, qui se
+      // tient devant son capot, tombe exactement sur le point visé.
+      d.x = x + 9; d.z = z + 4; d.g.position.set(d.x, d.y || 0, d.z); d.depCible = null;
+      try { vehicleSolid(d); settleVehicle(d); } catch (e) {}
+      const c2 = makeCar(0xff5c5c, x, z - 2.98, 0); city.cars.push(c2); ANIM.photo.push(c2);
+      try { settleVehicle(c2); } catch (e) {}
+      c2.dmg = 30;
+      const r = reparateurArrive(c2, REPAR_DUREE, null);
+      if (r) for (let i = 0; i < 900 && r.t < k * REPAR_DUREE; i++) reparateurTick(r, 1 / 60);
+      return true;
+    }
+    const c = makeCar(0xff5c5c, x, z - 6.2, 0); city.cars.push(c); ANIM.photo.push(c);
+    try { settleVehicle(c); } catch (e) {}
+    d.remorque = c; c.remorque = d; c.busy = true; d.depCible = 1; d.dep = 0;
+    for (let i = 0; i < 900 && d.dep < k; i++) depanneuseAnime(d, 1 / 60);
+    depanneuseAnime(d, 0);
+    return true;
+  }
+  if (nom === 'creuse' || nom === 'grue' || nom === 'bulldozer') {
+    const genre = nom === 'creuse' ? 'pelle' : nom === 'grue' ? 'grue' : 'bulldozer';
+    // LA FOUILLE SE JUGE SUR LE TROU ET LE TAS, pas sur la cabine : l'engin recule de 5,2 m
+    // (sa portée) pour que le trou tombe pile sur le point visé par la caméra du banc.
+    // L'ENGIN EST DÉCALÉ DERRIÈRE LE POINT VISÉ. La caméra du banc vise TOUJOURS le joueur ;
+    // si l'engin est pile dessus, son propre gabarit (7,5 m pour la grue) enferme la cible et
+    // la caméra se replie à quatre mètres — on ne photographiait plus qu'un bout de tôle.
+    const c = makeVehiculeTravail(genre, MET_C.casqueOrange, x, z - (nom === 'creuse' ? CREUSE_PORTEE : 8), 0);
+    city.cars.push(c); ANIM.photo.push(c);
+    if (nom === 'creuse') {
+      // DEUX GODETS DÉJÀ SORTIS avant la photo : sur un seul, le trou et le tas sont encore
+      // trop petits pour qu'on juge quoi que ce soit sur l'image.
+      for (let n = 0; n < 2; n++) { enginCreuse(c); for (let i = 0; i < 900 && c.creuse; i++) enginCreuseTick(c, 1 / 60); }
+      enginCreuse(c); for (let i = 0; i < 900 && c.creuse && c.creuse.t < k * CREUSE_DUREE; i++) enginCreuseTick(c, 1 / 60);
+    }
+    else if (nom === 'grue') { enginLeve(c); for (let i = 0; i < 900 && c.leve && c.leve.t < k * GRUE_DUREE; i++) enginLeveTick(c, 1 / 60); }
+    else { c.lameCible = 1; c.spd = 6; c.speed = 6; for (let i = 0; i < 900; i++) enginLameTick(c, 1 / 60); c.andainK = k; enginLameTick(c, 0); }
+    return true;
+  }
+  if (nom === 'ralenti') {
+    // un adversaire à terre devant le joueur, et la caméra de cinéma figée sur l'instant k
+    let b = null;
+    try {
+      b = bots[0];
+      b.pos.set(x + Math.sin(P.facing) * 1.5, P.pos.y, z + Math.cos(P.facing) * 1.5);
+      b.rdv = null; b.wait = 99; b.hp = 0; b.ko = simTime + 30; b.fight = null; b.av.group.visible = true;
+      b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
+      corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
+    } catch (e) {}
+    // LE JOUEUR EST FIGÉ EN PLEINE DÉTENTE DU COUP : sans ça, la boucle de rendu faisait
+    // retomber le poing avant la capture et on photographiait un bonhomme au repos.
+    ANIM.fige = { combat: 'coup', u: 0.55, garde: true, main: 'D' };
+    gardePoings(me, true); coupDePoing(me, 'D', CBT_POING);
+    RALENTI.prochain = 0;
+    ralentiCoup(x + Math.sin(P.facing) * 0.9, P.pos.y, z + Math.cos(P.facing) * 0.9, 'poing', P.facing, 1);
+    RALENTI.fige = k;
+    return true;
+  }
+  return false;
+}
 // Le tour de piste du bloc animation, appelé une fois par image depuis la boucle principale.
 // Remet droite toute tête que plus aucune couche n'incline. Appelé une fois par image :
 // le registre ne contient au plus qu'une poignée de rigs (ceux qui se battent ou travaillent).
@@ -26201,6 +27009,9 @@ function animMondeTick(dt) {
   animTetes();
   feuxAnimTick(dt);
   secoursTick(dt);
+  reparateursTick(dt);   // le réparateur penché sur le capot (sur place ou au garage)
+  enginsTick(dt);        // les engins de chantier : godet qui creuse, lame, grue
+  ralentiTick();         // filet de sécurité du ralenti (son horloge, elle, est du TEMPS RÉEL)
 }
 // ================= LES ACTIONS AUTOMATIQUES =================
 // ---- LES EMPLOYÉS MUNICIPAUX : détecter, poser un chantier, réparer, ranger ----

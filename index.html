@@ -8481,6 +8481,9 @@ function klaxonne(c) {
 }
 // Le pilote automatique d'un vehicule de la circulation : il suit sa voie, ralentit dans les
 // virages, garde ses distances et obeit au code de la route.
+// Combien de temps un vehicule pilote garde son pas de cote une fois qu'il a decide de doubler
+// ce qui est a l'arret devant lui (voir le verrou dans traficRoule).
+const DOUBLE_DUREE = 6;
 function traficRoule(c, dt, opt) {
   opt = opt || {};
   const st = c.ia, R = st.route;
@@ -8530,7 +8533,16 @@ function traficRoule(c, dt, opt) {
   // sans avancer, un vehicule PILOTE par un autre poste se deporte a gauche et double.
   if (opt.pilote && (c.pas || 0) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
   else c.fileT = 0;
-  c.double = c.fileT > 3;
+  // LE PAS DE COTE DOIT DURER ASSEZ LONGTEMPS POUR DOUBLER. Le drapeau se levait au bout de
+  // trois secondes d'arret puis retombait A L'IMAGE SUIVANTE : le pas de cote faisait avancer
+  // le camion de quelques centimetres, `c.pas` repassait au-dessus du seuil, `fileT` revenait
+  // a zero et la depanneuse se remettait sagement dans la file. Mesure : 300 s a 27/15,
+  // derriere les deux voitures de l'accident, a bouger d'un metre toutes les cinq secondes et
+  // a ne JAMAIS rentrer au garage — donc epave jamais reparee, jamais facturee, et l'appel
+  // suivant refuse. On VERROUILLE donc le debordement pendant six secondes : le temps de
+  // passer vraiment a cote de l'obstacle.
+  if (c.fileT > 3) c.doubleT = simTime + DOUBLE_DUREE;
+  c.double = simTime < (c.doubleT || 0);
   if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
   if (c.sireneVeh) ecarteChaussee(c, dt, 1, ECART_SIRENE);
   else if (opt.urgence) {
@@ -20115,6 +20127,74 @@ const VITESSE_SERVICE = 9;     // m/s : le retour au garage, la tournee du facte
 // se faisait arreter par le garde-fou et restait plantee la (mesure : 2 800 images immobile
 // a 15,9 m de l'epave). Au-dela de 18 m on roule donc PAR LES VOIES, en deca on approche.
 const APPROCHE_SERVICE = 18;   // en deca, on vise le but en direct : le but n'est plus sur une voie
+// LE FILET « LE SERVICE FINIT TOUJOURS PAR ARRIVER ». Mesure sur la version publiee : la
+// depanneuse chargee de l'epave n'arrivait JAMAIS au garage — 400 s de simulation, phase
+// bloquee sur « garage », voiture jamais reparee ni facturee, et la depanneuse qui refusait
+// ensuite tout nouvel appel. La cause n'etait pas la machine a etats mais le ROUTAGE :
+// `itineraireVoies` rend un itineraire de 460 m pour 110 m a vol d'oiseau, recalcule toutes
+// les six secondes DEPUIS UN CAP DIFFERENT ; a chaque recalcul le demi-tour repartait dans
+// l'autre sens (mesure : -26/46, soit 48 m du garage, puis 28/20, soit 101 m, en boucle sans
+// fin). Meme symptome pour l'ambulance qui restait en « route » et pour la depanneuse qui ne
+// cloturait pas sa mission a 19,7 m de son garage.
+// LA PARADE : on surveille le RAPPROCHEMENT reel. Tant qu'il progresse, on roule par les
+// voies, proprement. S'il ne progresse plus pendant SERVICE_PATIENCE secondes, on vise le but
+// EN DIRECT (l'approche au pas, qui ne traverse toujours rien) le temps de sortir de la
+// boucle, puis on rend la main au routage. Le vehicule n'est jamais teleporte et ne traverse
+// jamais un mur : il coupe simplement au plus court quand le plan de route tourne en rond.
+const SERVICE_PATIENCE = 10, SERVICE_DIRECT = 9;
+// LA MARCHE ARRIERE DE DEGAGEMENT. `avanceVehicule` ne sait qu'AVANCER : un vehicule de
+// service qui pose son pare-chocs contre une facade, un poteau ou une epave y reste pour
+// l'eternite, capot colle, roues qui patinent (mesure : la depanneuse chargee, 300 s au meme
+// metre carre, jamais rentree au garage). Au bout de SERVICE_COINCE secondes sans bouger, il
+// RECULE une seconde et demie en braquant, comme le ferait n'importe quel conducteur, puis
+// refait son plan de route depuis sa nouvelle position.
+const SERVICE_COINCE = 3, SERVICE_RECUL = 1.5;
+// COMBIEN DE TEMPS UN VEHICULE DE SERVICE GARDE SON PLAN DE ROUTE. `itineraireVoies` interdit
+// le demi-tour : depuis le cap courant il rend un grand tour de pates de maisons (462 m pour
+// 110 m a vol d'oiseau). Recalcule six secondes plus tard depuis le NOUVEAU cap, il rendait le
+// grand tour DANS L'AUTRE SENS, et la depanneuse chargee faisait l'aller-retour entre 48 m et
+// 101 m du garage sans jamais arriver. Un vehicule de service garde donc son plan le temps de
+// le PARCOURIR ; il ne le refait que s'il n'avance plus (filet ci-dessus) ou qu'il arrive au
+// bout. La circulation de fond, elle, ne passe pas par ici et garde son propre rythme.
+const PLAN_SERVICE = 30;
+// ================= LE CONVOYAGE DE SECOURS =================
+// LE SERVICE DOIT ABOUTIR, TOUJOURS. Le plan de route de la ville ne sait pas amener un camion
+// de 6,5 m partout : mesure sur la version publiee, `itineraireVoies` rend 462 m d'itineraire
+// pour 48 m a vol d'oiseau vers le garage, le camion tourne en rond puis se coince, et la
+// depanneuse chargee de l'epave n'arrive JAMAIS. Consequences vues par le joueur : sa voiture
+// revenait « du garage » toujours cassee et jamais facturee (la reparation et la facturation
+// sont a la FIN du trajet), l'ambulance n'emmenait plus le blesse, et la depanneuse ne
+// cloturait pas sa mission — donc refusait l'appel suivant.
+// LE FILET : au bout de SECOURS_PATIENCE secondes sur la MEME etape sans y arriver, on POSE le
+// vehicule a destination, mais seulement s'il est a plus de SECOURS_LOIN metres du joueur — on
+// ne triche pas sous ses yeux. Et si vraiment rien ne se debloque (SECOURS_FORCE secondes),
+// on le pose quand meme : un camion qui disparait une seconde derriere le joueur vaut mieux
+// qu'une voiture jamais reparee et un service en panne pour le reste de la partie.
+const SECOURS_PATIENCE = 45, SECOURS_FORCE = 110, SECOURS_LOIN = 55;
+function convoieSecours(c, tx, tz, h) {
+  c.x = tx; c.z = tz; if (h != null) c.h = h;
+  c.speed = 0; c.spd = 0; c.v = 0; c.pas = 0; c.ia = null; c.libre = null;
+  c.srvBut = null; c.srvFige = 0; c.srvRecul = 0; c.srvDirect = 0; c.recule = false;
+  c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
+  c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+  try { vehicleSolid(c); } catch (e) {}
+  return true;
+}
+// Une etape de trajet d'un vehicule de service : on roule vers le but, et on dit si l'etape
+// est FINIE. `cle` identifie l'etape (son compteur repart a zero quand elle change) et `pose`
+// est le point ou le convoyage depose le vehicule s'il n'y arrive pas (par defaut le but).
+function etapeSecours(c, cle, tx, tz, dt, vmax, opt, seuil, pose) {
+  if (c.etapeK !== cle) { c.etapeK = cle; c.etapeT = 0; }
+  if (rouleVers(c, tx, tz, dt, vmax, opt) <= seuil) { c.etapeT = 0; return true; }
+  c.etapeT = (c.etapeT || 0) + dt;
+  const loin = Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > SECOURS_LOIN;
+  if (c.etapeT > (loin ? SECOURS_PATIENCE : SECOURS_FORCE)) {
+    c.etapeT = 0;
+    convoieSecours(c, pose ? pose[0] : tx, pose ? pose[1] : tz, pose ? pose[2] : null);
+    return true;
+  }
+  return false;
+}
 function rouleVers(c, tx, tz, dt, vmax, opt) {
   if (!c) return 0;
   opt = opt || {};
@@ -20123,10 +20203,26 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
   c.exactVeh = true;   // un vehicule de service ne traverse AUCUN autre vehicule (voir vehiculeMord)
   const d = Math.hypot(tx - c.x, tz - c.z);
   if (d < 0.05) { c.speed = 0; c.v = 0; return 0; }
+  // suivi du rapprochement : nouveau but (ou but deplace de plus de 6 m) = on repart a zero
+  if (!c.srvBut || Math.hypot(c.srvBut[0] - tx, c.srvBut[1] - tz) > 6) { c.srvBut = [tx, tz]; c.srvBest = d; c.srvT = simTime; c.srvDirect = 0; }
+  else if (d < (c.srvBest == null ? d : c.srvBest) - 1.5) { c.srvBest = d; c.srvT = simTime; }
+  else if (simTime - (c.srvT || simTime) > SERVICE_PATIENCE) { c.srvDirect = simTime + SERVICE_DIRECT; c.srvBest = d; c.srvT = simTime; }
+  // ---- coince ? on recule (voir SERVICE_COINCE)
+  if ((c.pas || 0) < 0.03) c.srvFige = (c.srvFige || 0) + dt; else c.srvFige = 0;
+  if (c.srvFige > SERVICE_COINCE) { c.srvFige = 0; c.srvRecul = simTime + SERVICE_RECUL; c.srvSens = (c.srvSens === 1) ? -1 : 1; }
+  if (simTime < (c.srvRecul || 0)) {
+    c.h += (c.srvSens || 1) * 0.9 * dt;
+    const h0r = c.h;
+    avanceVehicule(c, dt, -3, { bar: true, veh: true }, h0r);
+    c.speed = 0; c.v = 0; c.ia = null; c.recule = true; c.stopped = false;
+    return Math.hypot(tx - c.x, tz - c.z);
+  }
+  c.recule = false;
   const plafond = Math.min(vmax || 99, urgence ? VITESSE_SECOURS : VITESSE_SERVICE);
   const G = city.graphe;
-  if (G && G.aretes && G.aretes.length && d > APPROCHE_SERVICE) {
+  if (G && G.aretes && G.aretes.length && d > APPROCHE_SERVICE && simTime > (c.srvDirect || 0)) {
     botConduit(c, tx, tz, dt, { urgence, vmax: plafond });
+    if (c.ia && c.ia.but) c.ia.refaire = Math.max(c.ia.refaire || 0, simTime + PLAN_SERVICE);   // voir PLAN_SERVICE
     // LA SORTIE DU HANGAR. Les véhicules de service DORMENT DANS leur bâtiment : à l'arrêt, le
     // pare-chocs de la dépanneuse mord déjà le poteau de l'auvent du garage, et les engins du
     // dépôt sont serrés sous leur abri. Le garde-fou de collision, qui refuse tout pas depuis
@@ -20420,7 +20516,7 @@ function depanneusesTick(dt) {
       const tx = c.x - sn * ((c.baseD || 4.4) / 2 + 3), tz = c.z - cs * ((c.baseD || 4.4) / 2 + 3);
       // elle vient PAR LA ROUTE, gyrophare et sirène : prioritaire, mais à 13 m/s et pas
       // en ligne droite à travers le parc
-      if (rouleVers(d, tx, tz, dt, VITESSE_SECOURS, { urgence: true }) > 2.6) continue;
+      if (!etapeSecours(d, 'route', tx, tz, dt, VITESSE_SECOURS, { urgence: true }, 2.6, [tx, tz, c.h])) continue;
       m.arrivee = simTime - m.t0;
       if (m.acc) m.acc.tDep = simTime - m.acc.t0;
       // petit accident = réparation SUR PLACE ; gros = treuillage et remorquage au garage
@@ -20457,7 +20553,7 @@ function depanneusesTick(dt) {
       // traînait au sol derrière le camion.
       d.depCible = 1;
       // Avec une epave sur le plateau on ne double personne : plus de priorite, on rentre au pas
-      if (rouleVers(d, g.x, g.z, dt, VITESSE_SERVICE) > 4) continue;
+      if (!etapeSecours(d, 'garage', g.x, g.z, dt, VITESSE_SERVICE, { urgence: true }, 4, [d.home0[0], d.home0[1], d.home0[2]])) continue;
       d.speed = 0; d.spd = 0;
       m.phase = 'depose'; m.t = simTime + DEP_DEPOSE;
       msg('🅿️ Stationnement au garage, déchargement…', 2200);
@@ -20483,7 +20579,7 @@ function depanneusesTick(dt) {
       // travail fini, la dépanneuse était simplement libérée sur place et restait plantée là
       // pour de bon — mesuré : 104,8 m de son garage, en pleine chaussée, à 8,6 m du joueur,
       // et toujours au même endroit trente secondes plus tard.
-      if (rouleVers(d, d.home0[0], d.home0[1], dt, VITESSE_SERVICE) > 2.5) continue;
+      if (!etapeSecours(d, 'retour', d.home0[0], d.home0[1], dt, VITESSE_SERVICE, { urgence: true }, 2.5, d.home0)) continue;
       d.mission = null; d.remorque = null; d.h = d.home0[2]; d.speed = 0; d.spd = 0; poseVehicule(d, dt);
     }
   }
@@ -20571,7 +20667,7 @@ function ambulancesTick(dt) {
     if (!a.etat || drive.car === a) continue;
     const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
     if (a.etat === 'route') {
-      if (rouleVers(a, a.cible.x, a.cible.z, dt, VITESSE_SECOURS, { urgence: true }) > 3.5) continue;
+      if (!etapeSecours(a, 'route', a.cible.x, a.cible.z, dt, VITESSE_SECOURS, { urgence: true }, 3.5)) continue;
       a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE;
       msg('🚑 Les secours embarquent le blessé', 2400);
     } else if (a.etat === 'charge') {
@@ -20579,7 +20675,7 @@ function ambulancesTick(dt) {
       a.etat = 'transport';
     } else if (a.etat === 'transport') {
       porteVictime(a);
-      if (rouleVers(a, hop.x, hop.z + 3, dt, VITESSE_SECOURS, { urgence: true }) > 4) continue;
+      if (!etapeSecours(a, 'transport', hop.x, hop.z + 3, dt, VITESSE_SECOURS, { urgence: true }, 4)) continue;
       a.etat = 'depose'; a.t = simTime + 1.5;
     } else if (a.etat === 'depose') {
       porteVictime(a);
@@ -20587,7 +20683,7 @@ function ambulancesTick(dt) {
       soigneVictime(a);
       a.etat = 'retour'; a.victime = null;
     } else if (a.etat === 'retour') {
-      if (rouleVers(a, a.home0[0], a.home0[1], dt, VITESSE_SERVICE) > 2) continue;
+      if (!etapeSecours(a, 'retour', a.home0[0], a.home0[1], dt, VITESSE_SERVICE, { urgence: true }, 2, a.home0)) continue;
       a.etat = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
     }
   }

@@ -12966,7 +12966,9 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const r = await p.evaluate(async () => {
     const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
     G.settings.sound = true; G.settings.voices = false;
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // `sansBots` : les pas des habitants proches passent par le MEME budget de sons simultanes
+    // (SON.max) et refusaient le pas qu'on essaie de mesurer. On mesure dans une rue vide.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, sansBots: true });
     // ---- 1. LA DUREE DES CHANGEMENTS DE TEMPS ----
     // on part du beau temps, on demande la pluie, et on compte les secondes qu'il faut a
     // l'averse pour s'installer (force 0 → 0,9). Rien de sonore ici : que de la simulation.
@@ -13004,13 +13006,18 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // LA CADENCE DU JEU, et pas une autre : l'averse sort toutes les 1,5 s (sonsVille) et les
     // pas a peu pres deux fois par seconde. Un `sonPluie` a chaque tour de boucle aurait
     // empile soixante-dix averses l'une sur l'autre et mesure un bruit qui n'existe pas.
-    let tP = 0, tA = 0;
-    const pleut = () => { const n = performance.now(); if (n - tP > 1500) { tP = n; G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); } };
-    const parDessus = quoi => () => { pleut(); const n = performance.now(); if (n - tA > 420) { tA = n; quoi(); } };
-    tP = 0; tA = 0; const pluieSeule = await ecoute(3200, pleut);
-    // les pas et les coups PAR-DESSUS l'averse
-    tP = 0; tA = 0; const pas = await ecoute(3200, parDessus(() => G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1)));
-    tP = 0; tA = 0; const coups = await ecoute(3200, parDessus(() => G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3)));
+    let tP = 0, tA = 0, nPluie = 0, nPas = 0, nCoup = 0;
+    const pleut = () => { const n = performance.now(); if (n - tP > 1500) { tP = n; if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; } };
+    const cadence = quoi => () => { const n = performance.now(); if (n - tA > 420) { tA = n; quoi(); } };
+    // ON MESURE CHAQUE SON SEPAREMENT, a la meme distance de l'oreille : melanger l'averse et
+    // le pas dans la meme ecoute ne dit pas lequel des deux fait la crete, et les deux se
+    // disputent le budget de sons simultanes (SON.max) — c'est ainsi qu'on a lu « un pas =
+    // 1,0 fois l'averse » alors que le pas n'avait tout simplement pas joue.
+    tP = 0; const pluieSeule = await ecoute(3200, pleut);
+    tA = 0; const pas = await ecoute(2000, cadence(() => { if (G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1)) nPas++; }));
+    tA = 0; const coups = await ecoute(2000, cadence(() => { if (G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3)) nCoup++; }));
+    // et le melange reel : l'averse ET les pas ensemble, comme en jeu
+    tP = 0; tA = 0; const melange = await ecoute(2400, () => { pleut(); const n = performance.now(); if (n - tA > 420) { tA = n; G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); } });
     // et le RECUL : l'averse baisse d'elle-meme quand un son de jeu vient de sortir
     const q = G.quartierSon(); G.ambiance.set(q.k, q.vol, q.coupe); await dodo(250);
     G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
@@ -13018,7 +13025,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     G.meteoSet('clair', 99999); G.meteo.force = 0;
     return { avantFondu, apresFondu, fondu: G.METEO_FONDU, duree: G.METEO_DUREE, dureeMin, dureeMax,
-      pluieSeule, pas, coups, reculActif, recul: G.PLUIE_RECUL,
+      pluieSeule, pas, coups, melange, nPluie, nPas, nCoup, reculActif, recul: G.PLUIE_RECUL,
       gainPas: +(pas.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1),
       gainCoup: +(coups.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1) };
   });
@@ -13026,7 +13033,9 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const lente = r.apresFondu > r.avantFondu * 3 && r.apresFondu > 20;
   const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
   const discrete = r.pluieSeule.pic < 0.10;
-  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2;
-  const ok = lente && longue && discrete && ressortent && r.reculActif;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  const joues = r.nPluie >= 1 && r.nPas >= 3 && r.nCoup >= 3;
+  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2
+    && r.melange.pic > r.pluieSeule.pic * 2;
+  const ok = lente && longue && discrete && joues && ressortent && r.reculActif;
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, a la meme distance d'oreille : averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic} · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });

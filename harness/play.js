@@ -9157,7 +9157,15 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
     G.wallet = 500; G.owned.add('arme:knife'); G.owned.add('arme:pistol'); G.saveOwned && G.saveOwned();
     G.equipWeapon('couteau'); res.nomFrancais = G.P.weapon;   // la manette dit « couteau »
+    // LE TOUR DES ARMES COMPLET. Le test n'achetait que le pistolet et le couteau : le tour
+    // mesuré ne contenait donc QUE ces deux-là, et une disparition des deux fusils du cycle
+    // (celui qu'on achète le plus cher) serait passée inaperçue. On possède maintenant les
+    // quatre armes et on exige l'ordre entier, fusils compris.
+    G.owned.add('arme:rifle'); G.owned.add('arme:sniper');
+    const grenadesAvant = G.P.grenades || 0; G.P.grenades = 0;   // les grenades sont consommables : elles ne doivent pas brouiller l'ordre mesuré
     res.tourDesArmes = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 6; i++) { G.armeSuivante(1); vus.push(G.P.weapon); } return vus; })();
+    res.tourArriere = (() => { G.equipWeapon(null); const vus = []; for (let i = 0; i < 3; i++) { G.armeSuivante(-1); vus.push(G.P.weapon); } return vus; })();
+    G.owned.delete('arme:rifle'); G.owned.delete('arme:sniper'); G.P.grenades = grenadesAvant;   // on rend l'inventaire tel qu'on l'a trouvé
     G.majEtuis(); me.group.updateMatrixWorld(true);
     res.boutique.apresAchat = G.catalog('armes').find(x => x.id === 'knife').owned();
     // ---- l'étui, du côté OPPOSÉ au pistolet, visible en permanence ----
@@ -9215,8 +9223,12 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     && c[0].hp === 100 - r.degats && c[1].hp === 100 - 2 * r.degats && !c[1].ko && c[2].ko
     && c.every(x => Math.abs(x.ventre - 0.95) < 0.02 && x.enMain && x.degaine)
     && r.rangement.programme > 0.4 && !r.rangement.enMainApres && r.rangement.retourFourreau < 0.03
-    && r.horsPortee === 100 && r.nomFrancais === 'knife' && r.tourDesArmes.includes('knife');
-  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
+    && r.horsPortee === 100 && r.nomFrancais === 'knife'
+    // le tour complet : pistolet → fusil → fusil à lunette → couteau → mains nues, puis il boucle
+    && String(r.tourDesArmes) === String(['pistol', 'rifle', 'sniper', 'knife', null, 'pistol'])
+    // et il se remonte à l'envers, sans rester coincé sur « mains nues »
+    && String(r.tourArriere) === String(['knife', 'sniper', 'rifle']);
+  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')} · à l'envers : ${r.tourArriere.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
 });
 
 test('le fusil et le fusil à lunette reposent dans un étui de dos', async p => {
@@ -11971,6 +11983,16 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false; G.P.hp = 100;
+    // ORIENTATION IMPOSEE. Le test mesurait l'esquive avec un coup venu de dz = -1, c'est-a-dire
+    // « de face » SEULEMENT si le joueur regarde le sud (facing = 0). Or __SHOT.go() ne remet pas
+    // le cap : au premier chargement respawn() laisse 0, mais des que le jeu tourne il laisse PI.
+    // Le coup arrivait donc DANS LE DOS, ou l'esquive ne vaut rien (c'est la regle du jeu), et le
+    // test criait « se baisser n'esquive plus » alors que le geste marchait. On fixe le cap.
+    G.P.facing = 0;
+    // ARME RANGEE : depuis le round 70, L2 sert a DEGAINER quand une arme est equipee, et a se
+    // baisser sinon (la situation tranche, aucun bouton n'a deux roles). Un test precedent peut
+    // laisser une arme equipee : on remet les mains nues pour mesurer bien le geste de L2.
+    G.equipWeapon(null);
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
@@ -11989,7 +12011,9 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
       bt(6, 1); G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true);
       res.baisseEtat = { accroupi: !!G.P.accroupi, classe: document.body.classList.contains('accroupi') };
       anime(150); res.baisse = pose();
-      res.esquive = G.defenseJoueur(20, 0, -1, true);        // un coup de face : il passe au-dessus
+      // un coup de face : le recul pousse le joueur vers l'arriere, donc a l'oppose de son cap
+      res.esquive = G.defenseJoueur(20, -Math.sin(G.P.facing), -Math.cos(G.P.facing), true);
+      res.capAuCoup = +G.P.facing.toFixed(2);
       res.gachetteNeBougePas = (() => { G.P.vel.set(0, 0, 0); G.cam.yaw = 0;
         for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
         return +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2); })();
@@ -14415,4 +14439,267 @@ test('aucun véhicule n\'est garé au départ ailleurs que sur une place prévue
   const ok = r.hors.length === 0 && r.parkings.length >= 10 && q.n >= 12
     && q.libres === q.n && q.sorties === q.n && q.allee >= 6 && q.bord != null && q.bord < 5 && q.via > 2 && q.surRue === 0;
   return { ok, detail: `« ne gare plus de véhicules ici — crée un nouveau parking » · la règle est maintenant tenue pour TOUTE la ville : les ${r.cars} véhicules posés à la construction sont sur une place prévue, gabarit compris — ${r.hors.length} hors d'une place${r.hors.length ? ' → ' + JSON.stringify(r.hors.slice(0, 6)) : ''} · ${r.parkings.length} emplacements déclarés dans city.parkings (${r.parkings.join(', ')}) · le NOUVEAU « ${q.nom} » en (${q.x}, ${q.z}) fait ${q.w} × ${q.d} m : ${q.n} places marquées, toutes libres (${q.libres}) et toutes accessibles en marche arrière (${q.sorties}), une allée de ${q.allee} m pour manœuvrer, une bande d'accès pavée jusqu'au boulevard (${q.bord} m entre le bord de la dalle et la voie, ${q.voie} m depuis son centre) et un itinéraire de ${q.via} points jusqu'au centre — et ${q.surRue} mètre carré sur une chaussée` };
+});
+
+// ===================== POSTE COMBAT & ARMES (round 70) =====================
+// Demande du joueur, mot pour mot : « tu dégaines et braques avec gâchette gauche et tu
+// rengaines avec gâchette gauche. La visée se met directement sur le bot ou le véhicule le
+// plus proche (gang ou pas), et les flèches de la manette permettent de sélectionner un autre
+// bot. Pour tirer : gâchette droite. » Rien de tout cela n'existait : L2 ne faisait que baisser
+// le joueur, les véhicules et les hommes de gang n'étaient pas verrouillables, et aucun bouton
+// ne permettait de CHANGER de cible. Ce test joue la séquence entière à la manette.
+test('la gâchette gauche dégaine et braque la cible la plus proche, les flèches en changent, la droite tire', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
+    const clic = i => { bt(i, 1); G.pollGamepad(1 / 60); bt(i, 0); G.pollGamepad(1 / 60); };
+    const res = {};
+    try {
+      G.keys.clear(); G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0;
+      G.P.pos.set(110, 0.4, 60); G.P.vel.set(0, 0, 0); G.P.hp = 100; G.cam.yaw = 0; G.P.facing = 0;
+      G.P.drawn = false; G.P.lockRef = null; G.P.lock = null;
+      // trois habitants autour du joueur, dont un DANS SON DOS : le braquage doit aller au plus
+      // proche même s'il n'est pas dans le champ de la caméra
+      const trois = G.bots.slice(0, 3);
+      G.bots.forEach(o => { o.av.group.visible = false; o.ko = 0; o.dead = 0; o.fight = null; });
+      const poses = [[110, 54], [117, 62], [104, 56]];   // le premier est le plus proche ET dans le dos (caméra tournée vers +z)
+      trois.forEach((o, i) => { o.pos.set(poses[i][0], 0.4, poses[i][1]); o.av.group.position.copy(o.pos);
+        o.av.group.visible = true; o.hp = 100; o.wait = 9999; o.target = null; });
+      const dist = o => Math.hypot(o.pos.x - 110, o.pos.z - 60);
+      res.distances = trois.map(o => +dist(o).toFixed(1));
+      G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+      res.avant = { degaine: !!G.P.drawn, verrou: G.P.lock ? G.P.lock.nom : null };
+      // ---- L2 : DÉGAINER ET BRAQUER ----
+      clic(6);
+      const cible = trois.slice().sort((a, b2) => dist(a) - dist(b2))[0];   // le plus proche, quel qu'il soit
+      res.braque = { degaine: !!G.P.drawn, nom: G.P.lock && G.P.lock.nom, attendu: cible.name,
+        ecartCap: +Math.abs(Math.atan2(Math.sin(G.P.facing - Math.atan2(cible.pos.x - 110, cible.pos.z - 60)),
+                                       Math.cos(G.P.facing - Math.atan2(cible.pos.x - 110, cible.pos.z - 60)))).toFixed(3),
+        cameraDerriere: +Math.abs(Math.atan2(Math.sin(G.cam.yaw + Math.PI - G.P.facing), Math.cos(G.cam.yaw + Math.PI - G.P.facing))).toFixed(3),
+        distance: +Math.hypot(G.P.lock.x - 110, G.P.lock.z - 60).toFixed(1) };
+      // ---- LA LISTE DES CIBLES : gens ET véhicules ----
+      const liste = G.ciblesVerrouillables(true);
+      res.liste = liste.map(c => c.nom);
+      res.vehicules = liste.filter(c => !G.bots.some(b => b.name === c.nom)).length;
+      // ---- LES FLÈCHES CHANGENT DE CIBLE, SANS TOUCHER À L'ARME ----
+      const arme0 = G.P.weapon;
+      G.padAction('armeSuiv'); res.fleche1 = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      G.padAction('armeSuiv'); res.fleche2 = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      G.padAction('armePrec'); res.flechePrec = { nom: G.P.lock && G.P.lock.nom, arme: G.P.weapon };
+      res.armeInchangee = G.P.weapon === arme0;
+      res.troisCibles = new Set([res.braque.nom, res.fleche1.nom, res.fleche2.nom]).size;
+      // ---- R2 TIRE ----
+      const n0 = G.shots.length; G.P.fireCd = 0;
+      bt(7, 1); G.pollGamepad(1 / 60); res.tirs = G.shots.length - n0; bt(7, 0); G.pollGamepad(1 / 60);
+      // ---- L2 À NOUVEAU : RENGAINER (et surtout pas se baisser) ----
+      clic(6);
+      res.rengaine = { degaine: !!G.P.drawn, accroupi: !!G.P.accroupi };
+      // ---- MAINS NUES : L2 GARDE SON ANCIEN RÔLE, SE BAISSER ----
+      G.equipWeapon(null);
+      bt(6, 1); G.pollGamepad(1 / 60); res.mainsNues = { accroupi: !!G.P.accroupi, degaine: !!G.P.drawn };
+      bt(6, 0); G.pollGamepad(1 / 60); res.mainsNuesLache = !!G.P.accroupi;
+      // ---- ARME RANGÉE : LES FLÈCHES REDEVIENNENT LE TOUR DES ARMES ----
+      G.owned.add('arme:knife'); G.equipWeapon('pistol'); G.P.drawn = false;
+      G.padAction('armeSuiv'); res.flecheArmeRangee = G.P.weapon;
+      // ---- UN VÉHICULE SE VERROUILLE AUSSI (personne en vue) ----
+      G.bots.forEach(o => { o.av.group.visible = false; });
+      G.P.drawn = false; G.P.lockRef = null; G.equipWeapon('pistol');
+      clic(6);
+      res.surVehicule = G.P.lock ? G.P.lock.nom : null;
+      G.bots.forEach(o => { o.av.group.visible = true; o.hp = 100; });
+      G.owned.delete('arme:knife'); G.P.drawn = false; G.P.lockRef = null; G.equipWeapon(null);
+      return res;
+    } finally { navigator.getGamepads = vrai; }
+  });
+  const b = r.braque;
+  const ok = !r.avant.degaine && !r.avant.verrou
+    && b.degaine && b.nom === b.attendu && b.ecartCap < 0.02 && b.cameraDerriere < 0.02
+    && Math.abs(b.distance - Math.min(...r.distances)) < 0.15
+    && r.vehicules >= 1
+    && r.troisCibles === 3 && r.armeInchangee && r.flechePrec.nom === r.fleche1.nom
+    && r.tirs === 1
+    && !r.rengaine.degaine && !r.rengaine.accroupi
+    && r.mainsNues.accroupi && !r.mainsNues.degaine && !r.mainsNuesLache
+    && r.flecheArmeRangee === 'knife'
+    && !!r.surVehicule;
+  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 rengaine (${!r.rengaine.degaine}) sans baisser le joueur · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
+});
+
+// Demande du joueur, mot pour mot : « Ajoute le crochet, l'uppercut, le direct. Je veux voir
+// les bras gauche et droit se lever un par un, un mouvement plus précis, plus détaillé,
+// inspire-toi de GTA, et le poing qui atteint le visage du bot. » Il n'y avait qu'UN geste,
+// rejoué à l'identique, et son point d'impact était toujours à 1,25 m — hauteur de torse :
+// le poing passait donc sous le visage à chaque coup, et de trop loin pour toucher quoi que
+// ce soit. Ce test mesure la TRAJECTOIRE de chacun des trois gestes, des deux bras, et vérifie
+// que le poing arrive vraiment à la tête.
+test('le direct part droit, le crochet arrive de côté, l\'uppercut monte — et le poing atteint la tête', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = { gestes: {} };
+    G.equipWeapon(null); G.P.drawn = false; G.setGarde(false); G.setAccroupi(false);
+    const loc = o => { me.group.updateMatrixWorld(true); const v = new T.Vector3();
+      v.setFromMatrixPosition(o.matrixWorld); return me.group.worldToLocal(v); };
+    // ---- 1) LA TRAJECTOIRE DU POING, geste par geste, bras par bras ----
+    const trace = (geste, main) => {
+      me.group.position.set(0, 0, 0); me.group.rotation.set(0, 0, 0);
+      if (rig.cbt) { rig.cbt.coup = 0; rig.cbt.couteau = 0; rig.cbt.chute = 0; }
+      rig.swing = 0; rig.swingG = 0; rig.garde = false; rig.gardeK = 0; rig.accroupi = false;
+      for (let i = 0; i < 40; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60); }
+      const poing = main === 'G' ? rig.armL.poing : rig.armR.poing;
+      const coude = main === 'G' ? rig.armL.coude : rig.armR.coude;
+      const cote = main === 'G' ? -1 : 1;
+      const repos = loc(poing).clone();
+      G.coupDePoing(me, main, 0.28, geste);
+      const dur = rig.cbt.coupD;
+      const pts = [];
+      for (let i = 0; i < 46; i++) {
+        G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60);
+        me.group.position.set(0, 0, 0); me.group.rotation.set(0, 0, 0);
+        const q = loc(poing);
+        pts.push({ u: 1 - rig.cbt.coup / dur, x: q.x, y: q.y, z: q.z, c: coude.rotation.x });
+      }
+      // les deux instants qui comptent : le sommet de l'ÉLAN (bras armé) et celui de la
+      // DÉTENTE (l'impact). Ce sont les crêtes des deux courbes du code, à u = 0,28 et 0,62.
+      const au = t => pts.reduce((m2, q) => Math.abs(q.u - t) < Math.abs(m2.u - t) ? q : m2, pts[0]);
+      const a = au(0.28), b2 = au(0.62);
+      const vol = pts.filter(q => q.u > 0.06 && q.u < 0.94);
+      return { duree: +dur.toFixed(2),
+        avance: +(b2.z - a.z).toFixed(3), monte: +(b2.y - a.y).toFixed(3),
+        rentre: +((a.x - b2.x) * cote).toFixed(3),                       // > 0 : le poing revient vers l'axe
+        ecarte: +Math.max(...pts.map(q => (q.x - repos.x) * cote)).toFixed(3),   // > 0 : le bras s'ouvre sur le côté
+        coudeArme: +a.c.toFixed(2), coudeImpact: +b2.c.toFixed(2),
+        saut: +Math.max(...vol.slice(1).map((q, i) => Math.hypot(q.x - vol[i].x, q.y - vol[i].y, q.z - vol[i].z))).toFixed(3) };
+    };
+    for (const g of ['direct', 'crochet', 'uppercut'])
+      for (const m2 of ['D', 'G']) res.gestes[g + m2] = trace(g, m2);
+    // ---- 2) L'ENCHAÎNEMENT DONNE LES TROIS GESTES, ET LES DEUX BRAS UN PAR UN ----
+    const b = G.bots[0];
+    G.bots.forEach((o, i) => { if (i) { o.pos.set(500, 0.3, 500); o.av.group.position.copy(o.pos); } });
+    const suite = [], contact = {};
+    for (let n = 0; n < 3; n++) {
+      G.P.pos.set(0, 0.3, 0); G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      b.pos.set(0, 0.3, 1.5); b.av.group.position.copy(b.pos); b.av.group.rotation.y = Math.PI;
+      b.hp = 100; b.ko = 0; b.dead = 0; b.garde = false; b.robbed = false; b.av.group.visible = true;
+      G.P.punchT = 0; G.P.lastHitT = G.simTime; if (n === 0) { G.P.combo = 0; G.P.poing = 'G'; }
+      if (rig.cbt) rig.cbt.coup = 0; rig.swing = 0; rig.swingG = 0;
+      for (let i = 0; i < 40; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60); }
+      const ou = b.pos.clone();
+      G.attack('punch');
+      b.pos.copy(ou); b.av.group.position.copy(ou);   // on annule le recul : on mesure l'instant du coup
+      const geste = G.P.geste, poing = G.P.poing;
+      suite.push({ geste, poing, hauteur: G.P.dernierPoingY, distance: +Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z).toFixed(2) });
+      // le poing, joué jusqu'à l'impact, s'approche-t-il vraiment de la TÊTE du bot ?
+      const pg = poing === 'G' ? rig.armL.poing : rig.armR.poing;
+      let best = null;
+      for (let i = 0; i < 40; i++) {
+        G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60);
+        me.group.position.set(G.P.pos.x, G.P.pos.y, G.P.pos.z); me.group.rotation.set(0, G.P.facing, 0);
+        me.group.updateMatrixWorld(true); b.av.group.updateMatrixWorld(true);
+        const tete = new T.Box3().setFromObject(b.av.tete);
+        const wp = pg.getWorldPosition(new T.Vector3());
+        const d = tete.distanceToPoint(wp);
+        if (i >= 6 && (!best || d < best.d)) best = { d: +d.toFixed(3), y: +wp.y.toFixed(3),
+          teteBas: +tete.min.y.toFixed(2), teteHaut: +tete.max.y.toFixed(2) };
+      }
+      contact[geste] = best;
+    }
+    res.suite = suite; res.contact = contact;
+    b.hp = 100; b.ko = 0; G.bots.forEach(o => { o.av.group.visible = true; });
+    return res;
+  });
+  const g = r.gestes, c = r.contact, s = r.suite;
+  // le DIRECT part droit : il avance beaucoup, il ne monte ni ne balaie, et le coude se TEND
+  const directOk = ['directD', 'directG'].every(k => g[k].avance > 0.40 && Math.abs(g[k].rentre) < 0.15
+    && Math.abs(g[k].monte) < 0.15 && g[k].coudeArme < -2.2 && g[k].coudeImpact > -0.6);
+  // le CROCHET arrive DE CÔTÉ : le bras s'ouvre à l'élan puis le poing rentre vers l'axe, et le coude ne se tend JAMAIS
+  const crochetOk = ['crochetD', 'crochetG'].every(k => g[k].ecarte > 0.15 && g[k].rentre > 0.25
+    && Math.abs(g[k].avance) < 0.45 && g[k].coudeImpact < -1.1);
+  // l'UPPERCUT MONTE : c'est la hauteur qui domine, et le coude reste fermé
+  const upOk = ['uppercutD', 'uppercutG'].every(k => g[k].monte > 0.30 && g[k].monte > Math.abs(g[k].avance)
+    && g[k].coudeImpact < -1.5);
+  // aucune téléportation : le poing ne saute jamais d'un quart de mètre entre deux images
+  const fluide = Object.values(g).every(x => x.saut < 0.26);
+  const enchaine = s[0].geste === 'direct' && s[1].geste === 'crochet' && s[2].geste === 'uppercut'
+    && s[0].poing !== s[1].poing && s[1].poing !== s[2].poing;
+  // LE POING ATTEINT LA TÊTE : au visage pour le direct et l'uppercut (le crochet, lui, va au corps)
+  const teteOk = c.direct && c.uppercut && c.direct.d < 0.30 && c.uppercut.d < 0.45
+    && c.direct.y > c.direct.teteBas && c.direct.y < c.direct.teteHaut
+    && c.uppercut.y > c.uppercut.teteBas && c.uppercut.y < c.uppercut.teteHaut
+    && s[0].hauteur > 1.45 && s[0].hauteur < 1.95 && s[2].hauteur > 1.45 && s[2].hauteur < 1.95
+    && s[1].hauteur < 1.4 && s.every(x => x.distance <= 1.05);
+  const ok = directOk && crochetOk && upOk && fluide && enchaine && teteOk;
+  return { ok, detail: `il n'y avait qu'UN seul geste, rejoué à l'identique, et son point d'impact restait à 1,25 m — hauteur de torse : le poing passait sous le visage · TROIS GESTES maintenant, des deux bras un par un (${s.map(x => x.geste + ' ' + x.poing).join(' → ')}) · le DIRECT part droit (le poing avance de ${g.directD.avance} m pour ${g.directD.rentre} de côté et ${g.directD.monte} de haut, coude ${g.directD.coudeArme} → ${g.directD.coudeImpact} rad : il se TEND) · le CROCHET arrive DE CÔTÉ (le bras s'ouvre de ${g.crochetD.ecarte} m à l'élan puis le poing rentre de ${g.crochetD.rentre} m vers l'axe pour ${g.crochetD.avance} m d'avance seulement, coude bloqué à ${g.crochetD.coudeImpact} rad : il ne se tend jamais) · l'UPPERCUT MONTE (${g.uppercutD.monte} m de haut pour ${g.uppercutD.avance} d'avance, coude fermé à ${g.uppercutD.coudeImpact} rad) · aucun à-coup (plus grand pas ${Math.max(...Object.values(g).map(x => x.saut))} m/image) · ET LE POING ATTEINT LA TÊTE : le personnage fait le pas qu'il faut (cible à 1,5 m, il frappe à ${s[0].distance} m), le direct arrive à ${c.direct.d} m de la boîte de la tête, à ${c.direct.y} m de haut (la tête va de ${c.direct.teteBas} à ${c.direct.teteHaut} m) et l'uppercut à ${c.uppercut.d} m (${c.uppercut.y} m) ; le crochet, lui, reste au corps (${s[1].hauteur} m)` };
+});
+
+// Demande du joueur : « les policiers tirent sans qu'on voie leur pistolet ». C'était exact,
+// et pour deux raisons : aucun agent ne portait la moindre arme (agentTire posait une balle
+// dans la scène et levait le bras), et animateRig rabaissait ce bras à l'image SUIVANTE. Les
+// balles sortaient donc du plexus d'un homme aux mains vides.
+test('le policier sort son arme de service avant de tirer, et la balle part du canon', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    const wp = o => o.getWorldPosition(new T.Vector3());
+    const res = {};
+    const essai = (mil) => {
+      const a = G.creerAgent(G.P.pos.x + 5, G.P.pos.z, G.P.pos.y, mil);
+      const ax = a.x, az = a.z, ay = a.y;
+      G.police.wanted = 3; G.police.riposte = G.simTime + 30;
+      a.vueT = 0; a.vue = false;
+      // ON LE CLOUE SUR PLACE, à 5 m. Sans cela il court sur le joueur, l'attrape et
+      // l'ARRÊTE : le joueur part en cellule à 170 m, la traque s'arrête, et le test ne
+      // mesure plus rien du tout. On repousse aussi l'arrestation.
+      const tourne = n => { for (let i = 0; i < n; i++) {
+        a.x = ax; a.z = az; a.y = ay; a.av.group.position.set(ax, ay, az);
+        G.police.sait = [ax, az]; G.police.arrestT = G.simTime + 1e6; G.jail.on = false;
+        G.agentsTick(1 / 60); G.simTime += 1 / 60; } };
+      const avant = { arme: !!a.av.weapons, enMain: !!a.enMain };
+      const n0 = G.shots.length;
+      tourne(200);
+      a.av.group.updateMatrixWorld(true);
+      const arme = a.av.weapons && a.av.weapons[mil ? 'rifle' : 'pistol'];
+      const enMain = { enMain: !!a.enMain, inHand: !!a.av.inHand, tirs: G.shots.length - n0,
+        visible: !!(arme && arme.visible), voit: !!a.vue,
+        dansLePoing: arme ? +wp(arme).distanceTo(wp(a.av.rig.armR.poing)).toFixed(3) : null,
+        hauteur: arme ? +wp(arme).y.toFixed(2) : null,
+        bras: +a.av.rig.armR.rotation.x.toFixed(2),
+        etui: a.av.etuis ? (mil ? a.av.etuis.dos.visible : a.av.etuis.pistolet.visible) : null };
+      // d'où part la balle ?
+      a.shotT = 0; G.agentTire(a, 6, 0);
+      const sh = G.shots[G.shots.length - 1];
+      const muz = arme && arme.userData.muzzle ? wp(arme.userData.muzzle) : null;
+      const balle = { auCanon: muz ? +sh.p.distanceTo(muz).toFixed(3) : null,
+        duPlexus: +sh.p.distanceTo(new T.Vector3(a.x, a.y + 1.45, a.z)).toFixed(2),
+        versLeJoueur: +new T.Vector3(sh.v.x, 0, sh.v.z).normalize()
+          .dot(new T.Vector3(G.P.pos.x - sh.p.x, 0, G.P.pos.z - sh.p.z).normalize()).toFixed(3) };
+      // le joueur disparaît : l'arme retourne dans son étui
+      const ou = G.P.pos.clone();
+      G.P.pos.set(ou.x + 400, ou.y, ou.z + 400); G.police.lastSeen = null; G.police.sait = null;
+      tourne(500);
+      a.av.group.updateMatrixWorld(true);
+      const rangee = { enMain: !!a.enMain, inHand: !!a.av.inHand,
+        surLeCorps: arme ? +wp(arme).distanceTo(wp(a.av.group)) .toFixed(2) : null };
+      G.P.pos.copy(ou);
+      return { avant, enMain, balle, rangee };
+    };
+    res.police = essai(false);
+    G.policeRepli();
+    res.soldat = essai(true);
+    G.policeRepli(); G.clearWanted(); G.police.riposte = 0;
+    return res;
+  });
+  const bon = o => !o.avant.arme && !o.avant.enMain
+    && o.enMain.voit && o.enMain.enMain && o.enMain.inHand && o.enMain.visible && o.enMain.etui
+    && o.enMain.dansLePoing < 0.06 && o.enMain.hauteur > 1.2 && o.enMain.bras < -1.0
+    && o.enMain.tirs >= 1
+    && o.balle.auCanon < 0.05 && o.balle.duPlexus > 0.3 && o.balle.versLeJoueur > 0.99
+    && !o.rangee.enMain && !o.rangee.inHand;
+  const pl = r.police, so = r.soldat;
+  const ok = bon(pl) && bon(so);
+  return { ok, detail: `les agents tiraient LES MAINS VIDES : ils n'avaient aucune arme, et le bras qu'agentTire levait était rabaissé par animateRig à l'image suivante · chaque agent porte maintenant une arme de service — PISTOLET pour la police, FUSIL pour l'armée — dans un étui visible sur l'uniforme, qu'il DÉGAINE dès qu'il voit le fuyard (policier : arme au poing à ${pl.enMain.dansLePoing} m du poing, à ${pl.enMain.hauteur} m de haut, bras pointé à ${pl.enMain.bras} rad, ${pl.enMain.tirs} tir ; soldat : ${so.enMain.dansLePoing} m, ${so.enMain.hauteur} m, ${so.enMain.bras} rad, ${so.enMain.tirs} tir) et qu'il RANGE cinq secondes après avoir perdu sa cible de vue (en main : ${pl.rangee.enMain}) · et la balle ne sort plus du plexus : elle part de la BOUCHE DU CANON (${pl.balle.auCanon} m du canon, ${pl.balle.duPlexus} m de l'ancien point de départ) et file droit sur le joueur (${pl.balle.versLeJoueur})` };
 });

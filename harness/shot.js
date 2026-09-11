@@ -564,6 +564,20 @@ window.__SHOT = {
       if (v.facing != null) P.facing = v.facing;
       // (le radar qui masquait les etuis est desormais eteint par hideHud lui-meme, plus haut)
     } catch (e16) {} }
+    // POSTE COMBAT : v.agents = nombre de policiers (ou v.soldats de militaires) postes devant
+    // le joueur, arme de service DEGAINEE et pointee sur lui — pour photographier ce que le
+    // joueur reprochait au jeu : « les policiers tirent sans qu'on voie leur pistolet ».
+    if (v.agents || v.soldats) { try {
+      const mil = !v.agents, n = v.agents || v.soldats;
+      police.wanted = 3; police.riposte = simTime + 60; police.arrestT = simTime + 1e6;
+      for (let k = 0; k < n; k++) {
+        const ang = P.facing + (k - (n - 1) / 2) * 0.5;
+        const ag = creerAgent(P.pos.x + Math.sin(ang) * 4.5, P.pos.z + Math.cos(ang) * 4.5, P.pos.y, mil);
+        ag.facing = ang + Math.PI; ag.av.group.rotation.y = ag.facing;
+        armeAgent(ag, true); viseAgent(ag);
+        setTimeout(function () { try { ag.shotT = 0; agentTire(ag, 1, 0.01); } catch (e) {} }, Math.max(200, (v.wait || 1200) - 120));
+      }
+    } catch (eAg) {} }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
@@ -572,10 +586,22 @@ window.__SHOT = {
     if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
       try {
         const b = bots[0];
+        // POSTE COMBAT : on ECARTE les autres habitants. Sans cela le poing partait sur le
+        // voisin le plus proche (nearestFighter prend le plus pres, pas celui qu'on a pose) et
+        // la photo montrait un coup dans le vide, de dos, derriere un passant.
+        for (const o of bots) if (o !== b) { o.pos.set(P.pos.x + 300, o.pos.y, P.pos.z + 300); o.av.group.position.copy(o.pos); o.rdv = null; }
         b.pos.set(P.pos.x + Math.sin(P.facing) * 1.5, P.pos.y, P.pos.z + Math.cos(P.facing) * 1.5);
         b.rdv = null; b.wait = 9; b.ko = 0; b.hp = 100; b.av.group.visible = true;
         b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
-        setTimeout(function () { try { P.punchT = 0; P.combo = v.coup === 'combo' ? 2 : 0; attack(v.coup === 'kick' ? 'kick' : 'punch'); } catch (e) {} }, Math.max(300, (v.wait || 1200) - 90));
+        // POSTE COMBAT : v.coup vaut 'direct', 'crochet', 'uppercut' (les trois gestes du
+        // round 70), 'combo' (l'ancien nom de l'uppercut) ou 'kick'. attack() fait tourner le
+        // compteur avant de choisir le geste : on le pose donc un cran plus bas.
+        // v.coupAvance = millisecondes entre le coup et la photo (90 par defaut = l'elan ;
+        // 250 environ = la detente, le moment ou le poing arrive).
+        setTimeout(function () { try { P.punchT = 0;
+          P.combo = (v.coup === 'combo' || v.coup === 'uppercut') ? 2 : v.coup === 'crochet' ? 1 : 0;
+          P.lastHitT = simTime; attack(v.coup === 'kick' ? 'kick' : 'punch'); } catch (e) {} },
+          Math.max(200, (v.wait || 1200) - (v.coupAvance || 90)));
       } catch (e) {}
     }
     if (v.balleMur) {   // une balle qui vient de frapper le décor
@@ -1869,6 +1895,17 @@ window.__G = {
   get concesSel() { return typeof concesSel !== 'undefined' ? concesSel : null; },
   set concesSel(v) { if (typeof concesSel !== 'undefined') concesSel = v; },
   saveWallet: typeof saveWallet === 'function' ? saveWallet : null,
+  // ---- poste COMBAT & ARMES (visee verrouillee, gestes de poing) : ajoute tes exports SOUS cette ligne ----
+  ciblesVerrouillables: typeof ciblesVerrouillables === 'function' ? ciblesVerrouillables : null,
+  cibleAuto: typeof cibleAuto === 'function' ? cibleAuto : null,
+  cibleSuivante: typeof cibleSuivante === 'function' ? cibleSuivante : null,
+  viseCible: typeof viseCible === 'function' ? viseCible : null,
+  braquerVerrouille: typeof braquerVerrouille === 'function' ? braquerVerrouille : null,
+  armeAgent: typeof armeAgent === 'function' ? armeAgent : null,
+  viseAgent: typeof viseAgent === 'function' ? viseAgent : null,
+  agentTire: typeof agentTire === 'function' ? agentTire : null,
+  policeRepli: typeof policeRepli === 'function' ? policeRepli : null,
+  punch: typeof punch === 'function' ? punch : null,
 };
 `;
 

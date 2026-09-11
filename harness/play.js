@@ -10400,7 +10400,7 @@ test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort 
   return { ok, detail: `un choc ne faisait qu'un « toc » de bruitage, le même à 5 km/h et à 90 · c'est maintenant un vrai BOOM — la masse qui s'arrête (une sinusoïde très grave qui plonge de 150 à 34 Hz) plus la tôle qui plie — envoyé sur le bus effets et mesuré par un analyseur au bout de la chaîne : à l'arrêt RIEN (${r.nArret} BOOM déclenché, ${r.rArret} contre ${r.silence} de silence), petit choc à 14 km/h ${r.rPetit} (intensité ${r.fPetit}), gros choc à 86 km/h ${r.rGros} (intensité ${r.fGros})` };
 });
 
-test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sinon c\'est la prison', async p => {
+test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sans jamais envoyer en prison', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
@@ -10424,14 +10424,15 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     for (let i = 0; i < 60; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(A, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); G.servicesTick(1 / 60); }
     const bloque = { v: +Math.abs(G.drive.speed).toFixed(2), dep: +Math.hypot(A.x - x0, A.z - z0).toFixed(2) };
     let vuPolice = false, vuConstat = false;
-    for (let k = 0; k < 120 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
+    // (200 passes de 1 s : la police vient maintenant PAR LA ROUTE, feux et piétons compris)
+    for (let k = 0; k < 200 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
     const paye = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, wallet: G.wallet, vuPolice, vuConstat };
     for (let k = 0; k < 20; k++) avance(20);
-    // 2) même chose, sans un sou : la prison
+    // 2) même chose, sans un sou : l'amende est plafonnée par le portefeuille, PAS DE PRISON
     pose(); G.wallet = 3; G.jail.on = false;
     const acc2 = G.ouvreAccident(A, B, 12);
-    for (let k = 0; k < 120 && acc2.etat !== 'fini'; k++) avance(20);
-    const fauche = { etat: acc2.etat, paye: acc2.paye, prison: acc2.prison, jail: G.jail.on };
+    for (let k = 0; k < 200 && acc2.etat !== 'fini'; k++) avance(20);
+    const fauche = { etat: acc2.etat, paye: acc2.paye, prison: acc2.prison, jail: G.jail.on, wallet: G.wallet };
     if (G.drive.car) G.exitCar();
     G.jail.on = false; A.accidente = false; B.accidente = false;
     for (let k = 0; k < 20; k++) avance(20);
@@ -10440,9 +10441,10 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
   });
   const ok = r.juste.pc && r.juste.v === 0 && r.juste.a === 0 && r.juste.b === 0
     && r.bloque.v < 0.01 && r.bloque.dep < 0.05
-    && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true && r.paye.amende > 0 && r.paye.wallet === 500 - r.paye.amende
-    && r.fauche.paye === false && r.fauche.prison === true && r.fauche.jail === true;
-  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · sans argent (3 🪙), c'est la prison : payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
+    && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true
+    && r.paye.amende >= 20 && r.paye.amende <= 30 && r.paye.wallet === 500 - r.paye.amende
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · L'AMENDE N'ENVOIE PLUS EN PRISON (elle était de 60 à 100 🪙 et, faute d'argent, la partie s'arrêtait en cellule) : avec 3 🪙 en poche, on paie ce qu'on a et le reste est effacé — payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}, portefeuille ${r.fauche.wallet}` };
 });
 
 test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, et son treuil s\'actionne', async p => {
@@ -10473,7 +10475,9 @@ test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, 
       G.wallet = 900; G.jail.on = false;
       if (G.drive.car !== A) G.enterCar(A);
       const acc = G.ouvreAccident(A, B, 14);
-      for (let k = 0; k < 150 && (!acc.dep || !acc.dep.fini); k++) avance(20);
+      // la dépanneuse n'est plus appelée au moment du choc : c'est la POLICE, une fois sur
+      // place, qui la fait venir. Il faut donc le temps des deux trajets, par la route.
+      for (let k = 0; k < 400 && (!acc.dep || !acc.dep.fini); k++) avance(20);
       const out = { mode: acc.dep && acc.dep.mode, tarif: acc.dep && acc.dep.tarif, paye: acc.dep && acc.dep.paye,
         dmg: A.dmg, wallet: G.wallet, amende: acc.amende };
       for (let k = 0; k < 40 && acc.etat !== 'fini'; k++) avance(20);
@@ -11744,4 +11748,306 @@ test('la dépanneuse rentre au garage après un dépannage sur place', async p =
   });
   const ok = !r.manque && r.mode === 'place' && r.depart > 60 && r.repare > 60 && r.arrivee < 6 && !r.mission && !r.sirene;
   return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene})` };
+});
+
+// ================= POSTE CIRCULATION (round 68) : LES VÉHICULES DE SERVICE =================
+// Demande du joueur, mot pour mot : « dépanneuse, pompier, employé travaux, police, facteur
+// doivent respecter le code la route et doivent rester sur les route (ne peuvent traverser le
+// parc les murs ou les objet de la ville, ni les véhicule) (donne leur la priorité de
+// circulation, et ils arrivent trop vite ralenti leur arrivée, police après dépanneuse
+// (ajuste l'amende et enlève prison)). tous les autres véhicules doivent s'écarter proprement
+// (sans commettre de dégât). les petits dégâts : pas de police, pas de dépanneuse. »
+//
+// AVANT : les cinq métiers avançaient EN LIGNE DROITE vers leur but, à 16-20 m/s, sans aucun
+// test de collision (`rouleVers`, `metierRoule`). Ils traversaient le parc, les façades et les
+// autres voitures, et un accident à 120 m était « couvert » en cinq secondes.
+// MAINTENANT : tous passent par `rouleVers` → `botConduit` → itinéraire par les voies + code
+// de la route + garde-fou de collision, exactement comme les voitures de police en ronde.
+
+test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, facteur) restent sur la chaussée et ne traversent plus rien', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);   // le joueur loin de tout : il ne gêne aucun trajet
+    const DT = 1 / 20;
+    // --- un coin d'un véhicule est-il DANS un solide non franchissable ? (même mesure que le
+    // test « la circulation respecte le code de la route »)
+    const dansUnSolide = v => {
+      const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
+        if (o === v.solid || o.veh || o.h > 30) continue;
+        if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
+        for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
+          const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;
+          if (Math.abs(x - o.x) < o.w / 2 - 0.02 && Math.abs(z - o.z) < o.d / 2 - 0.02) return o;
+        }
+      }
+      return null;
+    };
+    const coins = v => { const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [v.x + lx * cs + lz * sn, v.z - lx * sn + lz * cs]); };
+    const seChevauchent = (u, v) => {
+      const P1 = coins(u), P2 = coins(v);
+      for (const [A, B] of [[P1, P2], [P2, P1]]) for (let i = 0; i < 4; i++) {
+        const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0];
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of A) { const d = q[0] * nx + q[1] * nz; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+        for (const q of B) { const d = q[0] * nx + q[1] * nz; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+        if (a2 < b1 || b2 < a1) return false;
+      }
+      return true;
+    };
+    // --- on déclenche les cinq métiers d'un coup
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    A.accidente = false; B.accidente = false; A.busy = false; A.dead = false;
+    A.dmg = 70; B.dmg = 5;
+    A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+    B.x = 26; B.z = 4; B.h = 0; B.y = A.y;
+    A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z); G.vehicleSolid(A); G.vehicleSolid(B);
+    const acc = G.ouvreAccident(A, B, 14);                    // police (constat) + dépanneuse
+    G.declencheIncendie(40, -30, 500);                        // camion de pompiers
+    for (const b of G.breakables) if (b.broken || b.cracked) { G.repareChose(b); b.enCours = false; }
+    let pan = null, bd = 1e9;                                 // un poteau cassé : équipe des travaux
+    // ASSEZ LOIN DU DÉPÔT pour que le fourgon fasse un VRAI trajet par les rues : à 25 m, il
+    // traversait la cour du hangar en ligne droite et la mesure ne voulait plus rien dire.
+    for (const b of G.breakables) { if (b.kind !== 'panneau') continue;
+      const d = Math.hypot(b.x - c.depot.x, b.z - c.depot.z); if (d > 90 && d < bd) { bd = d; pan = b; } }
+    if (pan) G.breakThing(pan, { x: pan.x + 1, z: pan.z }, true);
+    for (const b of c.boites) b.lettres = 0;                  // la tournée du facteur
+    // --- les cinq véhicules suivis
+    const suivis = [];
+    const ajoute = (nom, v) => { if (v) suivis.push({ nom, v, n: 0, hors: 0, vite: 0, viteHors: 0, solide: 0, degage: 0, veh: 0, long: 0, vmax: 0, etats: [] }); };
+    ajoute('police', acc && acc.pc);
+    ajoute('dépanneuse', (c.depanneuses || [])[0]);
+    ajoute('pompier', G.METIERS.pompiers[0] && G.METIERS.pompiers[0].bot.veh);
+    ajoute('travaux', G.METIERS.employes[0] && G.METIERS.employes[0].bot.veh);
+    ajoute('facteur', G.METIERS.facteurs[0] && G.METIERS.facteurs[0].bot.veh);
+    const equipe = { pompier: G.METIERS.pompiers[0], travaux: G.METIERS.employes[0], facteur: G.METIERS.facteurs[0] };
+    const autres = [].concat(c.cars, c.aiCars, G.police.cars).filter(v => v && !v.heli);
+    for (let i = 0; i < 4500; i++) {
+      G.simTime = G.simTime + DT;
+      // cityStep : la circulation de fond roule pendant ce temps-là (il y a donc du monde à
+      // croiser dans les rues) et c'est lui qui appelle `separerVehicules`, le garde-fou du jeu
+      // contre deux tôles qui se touchent. Sans lui, la mesure n'était pas celle du vrai jeu.
+      G.lightsTick(); G.cityStep(DT); G.servicesTick(DT); G.metiersTick(DT);
+      for (const s of suivis) {
+        const v = s.v, pas = v.pas || 0;
+        const m = equipe[s.nom];
+        if (m && s.etats[s.etats.length - 1] !== m.etat) s.etats.push(m.etat);
+        if (pas < 0.004) continue;                            // à l'arrêt : on ne juge que ce qui roule
+        s.n++; s.long += pas; s.vmax = Math.max(s.vmax, Math.abs(v.speed || 0));
+        const surRoute = G.surLaChaussee(v.x, v.z, 0.9);
+        if (!surRoute) s.hors++;
+        // « EN ROUTE » = au-dessus de 6,5 m/s : l'approche d'un véhicule de service (parvis,
+        // cour de hangar, boîte aux lettres) est plafonnée à 6 m/s, tout ce qui va plus vite
+        // est donc du trajet, et le trajet doit se faire sur le bitume.
+        if (Math.abs(v.speed || 0) > 6.5) { s.vite++; if (!surRoute) s.viteHors++; }
+        // on ne compte pas les images de DÉGAGEMENT : le véhicule est DÉJÀ dans le solide
+        // (un chantier posé sous ses roues, un hangar trop étroit) et il en SORT.
+        if (dansUnSolide(v)) { if (v.degageT) s.degage++; else s.solide++; }
+        for (const o of autres) if (o !== v && Math.abs(o.x - v.x) < 12 && Math.abs(o.z - v.z) < 12 && seChevauchent(v, o)) { s.veh++; break; }
+      }
+    }
+    return { suivis: suivis.map(s => ({ nom: s.nom, kind: s.v.kind || 'voiture', images: s.n, metres: +s.long.toFixed(0),
+      route: s.n ? +(100 * (1 - s.hors / s.n)).toFixed(1) : null,
+      routeVite: s.vite ? +(100 * (1 - s.viteHors / s.vite)).toFixed(1) : null,
+      solide: s.solide, degage: s.degage, veh: s.veh, vmax: +s.vmax.toFixed(1), etats: s.etats.filter(Boolean).join('→') })),
+      accEtat: acc && acc.etat, feux: c.incendies.length, lettres: c.boites.reduce((a, b) => a + b.lettres, 0) };
+  });
+  const S = r.suivis;
+  // « rester sur la route » se juge EN ROULANT : un fourgon qui manœuvre dans la cour de son
+  // hangar, une dépanneuse qui se range devant l'épave ou un facteur qui s'arrête à une boîte
+  // aux lettres ne sont pas « hors des rues ». Le critère est donc le temps sur le bitume
+  // au-dessus de 4 m/s ; le pourcentage brut est donné à titre indicatif.
+  const ok = S.length === 5 && S.every(s => s.metres > 80 && s.solide === 0 && s.veh === 0
+    && s.routeVite != null && s.routeVite >= 95);
+  return { ok, detail: `les cinq métiers avançaient en LIGNE DROITE vers leur but, sans aucun test de collision : ils traversaient le parc, les façades et les autres voitures · ils passent tous par l'itinéraire par les voies + le code de la route + le garde-fou de collision — ` +
+    S.map(s => `${s.nom} (${s.kind}) : ${s.metres} m parcourus, ${s.route} % du temps sur le bitume (${s.routeVite} % au-dessus de 6,5 m/s, c'est-à-dire en trajet), ${s.solide} image dans un solide (+${s.degage} en dégagement), ${s.veh} image dans un autre véhicule, pointe à ${s.vmax} m/s${s.etats ? ' [' + s.etats + ']' : ''}`).join(' · ') };
+});
+
+test('un véhicule de service en intervention a la priorité : les autres se rangent proprement, sans un seul dégât', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);
+    const DT = 1 / 60;
+    // --- une longue avenue large et libre : c'est là qu'on met la file
+    const G2 = c.graphe;
+    let e = null;
+    for (const a of G2.aretes) { if (a.liaison || a.dur || a.larg < 9 || a.long < 70) continue; if (!e || a.long > e.long) e = a; }
+    if (!e) return { erreur: 'aucune avenue assez longue' };
+    const fx = Math.sin(e.sens), fz = Math.cos(e.sens);
+    const surVoie = t => [e.x0 + (e.x1 - e.x0) * t, e.z0 + (e.z1 - e.z0) * t];
+    // « ma droite » dans le repère du jeu (+x est, +z sud, cap = atan2(dx, dz))
+    const droiteDe = (x, z) => { const q = G.projVoie(x, z, e); return (x - q.px) * -Math.cos(e.sens) + (z - q.pz) * Math.sin(e.sens); };
+    // --- on dégage toute la zone, puis on pose trois cobayes en file et le prioritaire derrière
+    const tous = [].concat(c.cars, c.aiCars, G.police.cars).filter(v => v && !v.heli);
+    const remis = [];
+    for (const v of tous) { const q = G.projVoie(v.x, v.z, e);
+      if (q.d < 30 && Math.hypot(v.x - q.px, v.z - q.pz) < 40) { remis.push([v, v.x, v.z, v.h]); v.x += 800; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); } }
+    const pose = (v, t) => { const [x, z] = surVoie(t);
+      v.x = x; v.z = z; v.h = e.sens; v.speed = 0; v.spd = v.spd || 8; v.ia = null; v.libre = null; v.ecart = 0;
+      v.figeT = 0; v.attenteT = 0; v.stopOK = null; v.bloqueT = 0;
+      v.y = G.groundCar(v.x, v.z, v.solid, 0); v.g.position.set(v.x, v.y, v.z); v.g.rotation.y = v.h; G.vehicleSolid(v); };
+    const cobayes = c.aiCars.filter(v => v.spd).slice(0, 3);
+    const dep = (c.depanneuses || [])[0];
+    if (cobayes.length < 3 || !dep) return { erreur: 'pas assez de véhicules' };
+    const L = e.long;
+    cobayes.forEach((v, k) => pose(v, 0.30 + k * (11 / L)));
+    pose(dep, 0.30 - 26 / L);
+    const [bx, bz] = surVoie(0.97);
+    // --- l'état de la carrosserie AVANT
+    const degAvant = tous.reduce((a, v) => a + (v.dmg || 0) + (v.deg || 0) * 100, 0);
+    const accAvant = (c.accidents || []).length;
+    const coins = v => { const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [v.x + lx * cs + lz * sn, v.z - lx * sn + lz * cs]); };
+    const seChevauchent = (u, v) => { const P1 = coins(u), P2 = coins(v);
+      for (const [A, B] of [[P1, P2], [P2, P1]]) for (let i = 0; i < 4; i++) {
+        const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0];
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of A) { const d = q[0] * nx + q[1] * nz; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+        for (const q of B) { const d = q[0] * nx + q[1] * nz; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+        if (a2 < b1 || b2 < a1) return false;
+      } return true; };
+    const dansUnSolide = v => {
+      const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
+        if (o === v.solid || o.veh || o.h > 30) continue;
+        if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
+        for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
+          const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;
+          if (Math.abs(x - o.x) < o.w / 2 - 0.02 && Math.abs(z - o.z) < o.d / 2 - 0.02) return true;
+        }
+      } return false;
+    };
+    const suivi = cobayes.map(v => ({ ecart0: droiteDe(v.x, v.z), ecart: 0, sirene: 0, solide: 0, choc: 0 }));
+    let depX = dep.x, depZ = dep.z, depLong = 0, depArret = 0, n = 0;
+    const leLong = (x, z) => (x - e.x0) * fx + (z - e.z0) * fz;   // l'abscisse le long de l'avenue
+    for (let i = 0; i < 60 * 40; i++) {
+      G.simTime = G.simTime + DT;
+      G.flotteMaj();
+      for (const v of cobayes) G.botConduit(v, bx, bz, DT, {});
+      G.botConduit(dep, bx, bz, DT, { urgence: true });
+      depLong += Math.hypot(dep.x - depX, dep.z - depZ); depX = dep.x; depZ = dep.z;
+      if (Math.abs(dep.speed || 0) < 0.5) depArret++;
+      n++;
+      cobayes.forEach((v, k) => {
+        const s = suivi[k];
+        s.ecart = Math.max(s.ecart, droiteDe(v.x, v.z) - s.ecart0);
+        if (v.raison === 'sirene' || v.sireneVeh) s.sirene++;
+        if (dansUnSolide(v)) s.solide++;
+        for (const o of cobayes.concat([dep])) if (o !== v && seChevauchent(v, o)) { s.choc++; break; }
+      });
+    }
+    const degApres = tous.reduce((a, v) => a + (v.dmg || 0) + (v.deg || 0) * 100, 0);
+    // « IL PASSE » : combien de voitures la prioritaire a-t-elle doublées ? (elles étaient
+    // toutes les trois DEVANT elle au départ)
+    const depasse = cobayes.filter(v => leLong(v.x, v.z) < leLong(dep.x, dep.z)).length;
+    const res = { images: n, avenue: +L.toFixed(0), larg: e.larg, depasse,
+      cobayes: suivi.map(s => ({ ecart: +s.ecart.toFixed(2), sirene: s.sirene, solide: s.solide, choc: s.choc })),
+      depLong: +depLong.toFixed(1), depArret, degAvant, degApres,
+      accidents: (c.accidents || []).length - accAvant };
+    // on remet tout en place
+    for (const [v, x, z, h] of remis) { v.x = x; v.z = z; v.h = h; v.ia = null; v.libre = null; v.g.position.set(x, v.y || 0, z); G.vehicleSolid(v); }
+    for (const v of cobayes) { v.ia = null; v.libre = null; v.ecart = 0; G.traficPose(v); }
+    if (dep.home0) { dep.x = dep.home0[0]; dep.z = dep.home0[1]; dep.h = dep.home0[2]; dep.ia = null; dep.libre = null; dep.speed = 0;
+      dep.g.position.set(dep.x, dep.y || 0, dep.z); dep.g.rotation.y = dep.h; G.settleVehicle(dep); G.vehicleSolid(dep); }
+    return res;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ranges = r.cobayes.filter(s => s.ecart > 0.4).length;
+  const degats = r.degApres - r.degAvant;
+  const ok = ranges >= 2 && r.cobayes.filter(s => s.sirene > 0).length >= 2
+    && r.cobayes.every(s => s.solide === 0 && s.choc === 0)
+    && degats === 0 && r.accidents === 0 && r.depLong > 60 && r.depasse >= 1;
+  return { ok, detail: `celui qui entendait la sirène se contentait de lever le pied : il restait planté au milieu de la voie · sur une avenue de ${r.avenue} m et ${r.larg} m de large, trois voitures voient arriver une dépanneuse en intervention derrière elles — elles se DÉPORTENT vers la droite de ${r.cobayes.map(s => s.ecart + ' m').join(', ')} (${ranges}/3 au-delà de 40 cm), ${r.cobayes.map(s => s.sirene).join('/')} images à céder le passage · et la manœuvre est PROPRE : ${r.cobayes.reduce((a, s) => a + s.solide, 0)} image sur un trottoir ou dans un mur, ${r.cobayes.reduce((a, s) => a + s.choc, 0)} chevauchement de caisses, ${degats} point de dégât infligé, ${r.accidents} accident · et la PRIORITÉ est réelle : la dépanneuse, partie 26 m DERRIÈRE les trois, en a doublé ${r.depasse}/3 et parcouru ${r.depLong} m en ${(r.images / 60).toFixed(0)} s (immobile ${r.depArret} images)` };
+});
+
+test('les secours prennent un vrai temps de route, et la police arrive AVANT la dépanneuse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);
+    const DT = 1 / 20;
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    A.accidente = false; B.accidente = false; A.busy = false; A.dead = false; A.dmg = 12; B.dmg = 5;
+    A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+    B.x = 26; B.z = 4; B.h = 0; B.y = A.y;
+    A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z); G.vehicleSolid(A); G.vehicleSolid(B);
+    const acc = G.ouvreAccident(A, B, 14);
+    let depAppelee = -1;
+    for (let i = 0; i < 5000 && !(acc.dep && acc.dep.arrivee); i++) {
+      G.simTime = G.simTime + DT; G.servicesTick(DT);
+      if (depAppelee < 0 && acc.dep) depAppelee = G.simTime - acc.t0;
+    }
+    return { tPolice: acc.tPolice ? +acc.tPolice.toFixed(1) : null, tDep: acc.tDep ? +acc.tDep.toFixed(1) : null,
+      dPolice: +(acc.dPolice || 0).toFixed(1), dDep: +(acc.dDep || 0).toFixed(1),
+      depAppelee: depAppelee > 0 ? +depAppelee.toFixed(1) : null,
+      vmax: G.VITESSE_SECOURS,
+      vPolice: acc.tPolice ? +(acc.dPolice / acc.tPolice).toFixed(2) : null,
+      vDep: acc.tDep ? +(acc.dDep / acc.tDep).toFixed(2) : null };
+  });
+  // « ils arrivent trop vite » : le trajet doit au moins durer distance / vitesse de secours,
+  // et en pratique bien davantage (la route n'est pas une ligne droite). « police après
+  // dépanneuse » : c'est la police qui arrive d'abord.
+  const ok = r.tPolice > 0 && r.tDep > 0 && r.tDep > r.tPolice
+    && r.tPolice >= r.dPolice / r.vmax && r.tDep >= r.dDep / r.vmax
+    && r.tPolice < 150 && r.tDep < 240 && r.depAppelee >= r.tPolice - 0.5;
+  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tDep} s (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle` };
+});
+
+test('un petit accrochage ne dérange personne : pas de police, pas de dépanneuse — au-dessus du seuil, une amende qui ne ruine pas', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city;
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    const pose = () => { A.accidente = false; B.accidente = false; A.busy = false; A.dead = false; A.dmg = 10; B.dmg = 5;
+      A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+      B.x = 26; B.z = 4; B.h = 0; B.y = A.y; A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z);
+      G.vehicleSolid(A); G.vehicleSolid(B); };
+    // --- LE SEUIL : il est lu dans la table de dégâts DÉJÀ PARTAGÉE du jeu
+    const seuil = { gravite: G.ACCIDENT_GRAVITE_MIN, vitesse: G.ACCIDENT_VITESSE_MIN,
+      table: G.DEGATS.map(d => `${d.n}=${d.vitesse}`).join(' '),
+      coherent: G.graviteChoc(G.ACCIDENT_VITESSE_MIN, 0) >= G.ACCIDENT_GRAVITE_MIN
+        && G.graviteChoc(G.ACCIDENT_VITESSE_MIN - 0.1, 0) < G.ACCIDENT_GRAVITE_MIN };
+    // --- les petits chocs : rien du tout, et on repart
+    const petits = [];
+    for (const v of [1.5, 4, 6, 9.5]) {
+      pose(); const n0 = (c.accidents || []).length;
+      const a1 = G.ouvreAccident(A, B, v);
+      petits.push({ v, accident: !!a1, nouveaux: (c.accidents || []).length - n0,
+        bloque: !!A.accidente, dep: (c.depanneuses || []).some(d => d.mission),
+        police: (G.police.cars || []).some(pc => pc.constat) });
+    }
+    // --- au-dessus du seuil : accident, police, dépanneuse
+    pose(); G.wallet = 500; G.jail.on = false;
+    if (G.drive.car !== A) G.enterCar(A);
+    const acc = G.ouvreAccident(A, B, 12);
+    const gros = { accident: !!acc, bloque: !!A.accidente, police: !!acc.pc };
+    const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
+    for (let k = 0; k < 300 && acc.etat !== 'fini'; k++) avance(20);
+    const riche = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, jail: G.jail.on, wallet: G.wallet, dep: !!acc.dep };
+    for (let k = 0; k < 20; k++) avance(20);
+    // --- sans un sou : on paie ce qu'on a, PAS DE PRISON
+    pose(); G.wallet = 2; G.jail.on = false;
+    if (G.drive.car !== A) G.enterCar(A);
+    const acc2 = G.ouvreAccident(A, B, 12);
+    for (let k = 0; k < 300 && acc2.etat !== 'fini'; k++) avance(20);
+    const fauche = { etat: acc2.etat, amende: acc2.amende, paye: acc2.paye, reste: acc2.reste, prison: acc2.prison, jail: G.jail.on, wallet: G.wallet };
+    if (G.drive.car) G.exitCar();
+    G.jail.on = false; A.accidente = false; B.accidente = false;
+    // combien de petits boulots et de coffres vaut l'amende ?
+    const repere = { boulot: 15, coffre: 500 };
+    return { seuil, petits, gros, riche, fauche, repere, base: G.AMENDE_ACCIDENT };
+  });
+  const ok = r.seuil.coherent && r.seuil.vitesse === 10
+    && r.petits.every(q => q.accident === false && q.nouveaux === 0 && q.bloque === false && q.dep === false && q.police === false)
+    && r.gros.accident && r.gros.bloque && r.gros.police
+    && r.riche.etat === 'fini' && r.riche.dep && r.riche.amende >= 20 && r.riche.amende <= 30
+    && r.riche.paye === true && r.riche.prison === false && r.riche.jail === false && r.riche.wallet === 500 - r.riche.amende
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+  return { ok, detail: `se garer en touchant le pare-chocs du voisin à 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police et une dépanneuse, et coûtait 60 à 100 🪙 — sans le sou, c'était la prison · il y a maintenant un SEUIL DE GRAVITÉ, lu dans la table de dégâts déjà partagée du jeu (${r.seuil.table}) : au-dessous de ${r.seuil.vitesse} m/s d'impact (gravité < ${r.seuil.gravite}) c'est un petit dégât, on repart — ${r.petits.map(q => q.v + ' m/s : ' + (q.accident ? 'ACCIDENT' : 'rien')).join(', ')} · au-dessus, l'accident complet : immobilisation, police (${r.gros.police}), dépanneuse (${r.riche.dep}) et amende de ${r.riche.amende} 🪙 (base ${r.base} 🪙 + 1 par tranche de 4 m/s), soit ${(r.riche.amende / r.repere.boulot).toFixed(1)} petit boulot et ${(100 * r.riche.amende / r.repere.coffre).toFixed(0)} % d'un coffre : portefeuille 500 → ${r.riche.wallet} · et PLUS JAMAIS LA PRISON : avec 2 🪙 en poche on paie 2 🪙, il reste ${r.fauche.reste} 🪙 effacés, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
 });

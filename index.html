@@ -27867,9 +27867,14 @@ function enginCreuse(c) {
   const y = (typeof groundUnder === 'function') ? groundUnder(tx, tz, c.solid, c.y || 0) : (c.y || 0);
   // LE POINT DE VIDAGE : la tourelle pivote de 0,95 rad pendant le cycle, donc le godet
   // bascule sur ce cap-là, à la même portée. C'est LÀ que le tas doit se former.
-  const aTas = (c.h || 0) + 1.30;
+  // LE POINT DE VIDAGE, ET SA DISTANCE. La tourelle pivote de 1,30 rad pendant le cycle : le
+  // godet bascule donc sur ce cap-là. Mais À LA MÊME PORTÉE que la fouille (5,2 m), le tas
+  // retombait CONTRE LE FLANC DE L'ENGIN — vu en capture, la butte était coincée entre les
+  // chenilles et la cabine, et le châssis la cachait à la caméra. On vide à bout de flèche,
+  // 1,8 m plus loin : le tas est alors dégagé de la machine et à 7 m de la fosse.
+  const aTas = (c.h || 0) + 1.30, rTas = CREUSE_PORTEE + 1.8;
   c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
-    tasX: c.x + Math.sin(aTas) * CREUSE_PORTEE, tasZ: c.z + Math.cos(aTas) * CREUSE_PORTEE };
+    tasX: c.x + Math.sin(aTas) * rTas, tasZ: c.z + Math.cos(aTas) * rTas };
   godetTerre(c);
   return true;
 }

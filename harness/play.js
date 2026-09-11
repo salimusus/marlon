@@ -3475,6 +3475,9 @@ test('la guerre des gangs : chefs, planques, kidnapping, braquage, élimination 
     res.gangs = G.gangs.map(g => ({ nom: g.nom, chef: g.chefNom, membres: g.membres.length,
       chefEnJeu: !!(g.chef && g.chef.chef), villa: !!g.villaPos, planque: !!g.planque, magot: g.magot > 0,
       coffre: g.planque.coffre.amount === g.magot }));
+    // au palier 1, seuls les gangs du premier palier sont en ville : c'est la montee en
+    // difficulte etape par etape, les autres debarquent quand le joueur gagne du respect
+    res.attendus = G.GANG_DEFS.filter(d => (d.palier || 1) <= (G.guerre.palier || 1)).length;
     res.planques = G.city.planques.length;
     res.maPlanque = !!(G.gang.planque && G.gang.planque.joueur);
     // on cogne un membre : il encaisse et finit KO
@@ -3505,25 +3508,32 @@ test('la guerre des gangs : chefs, planques, kidnapping, braquage, élimination 
     res.braquage = { gain: G.wallet - w0, attendu: magot, magotVide: g0.magot === 0, guerre: g0.relation <= -50 };
     // élimination : tout le monde au tapis
     const nom0 = g0.nom, chef0 = g0.chefNom;
+    G.guerre.territoires[G.TERRITOIRES[0].k] = g0.id;
     for (const x of g0.membres.slice()) { x.hp = 1; x.ko = 0; G.gangeurKO(x, 'test'); }
     res.elimination = { dissous: !!g0.mort, recrues: (G.gang.membresLibres || []).length,
-      territoiresLiberes: !Object.values(G.guerre.territoires).includes('rouge') };
-    // renaissance
+      // ses quartiers ne se « liberent » plus : ils passent d'un coup a celui qui l'a acheve
+      quartiersAuVainqueur: !Object.values(G.guerre.territoires).includes(g0.id)
+        && G.guerre.territoires[G.TERRITOIRES[0].k] === 'joueur' };
+    // la renaissance n'est plus automatique (elle rendait toute victoire impossible) : elle
+    // n'existe que pour le mode « la ville ne se rend jamais », une fois la partie gagnee
+    G.guerre.tick = 0; for (let i = 0; i < 180; i++) G.guerreTick(1 / 60);
+    res.resteMort = !!g0.mort;
     g0.mort = G.simTime - 1; G.renaitGang(g0);
     res.renaissance = { nouveauNom: g0.nom !== nom0, nouveauChef: g0.chefNom !== chef0, generation: g0.generation,
       plusFort: g0.force > 25, magot: g0.magot > 0, debout: g0.membres.filter(x => !x.ko).length };
     return res;
   });
-  const ok = r.gangs.length === 3 && r.gangs.every(g => g.chefEnJeu && g.villa && g.planque && g.magot && g.coffre && g.membres >= 5)
-    && r.planques === 4 && r.maPlanque
+  const ok = r.gangs.length === r.attendus && r.gangs.length >= 2
+    && r.gangs.every(g => g.chefEnJeu && g.villa && g.planque && g.magot && g.coffre && g.membres >= 5)
+    && r.planques === r.gangs.length + 1 && r.maPlanque
     && r.combat.ko && r.combat.rep >= 3 && r.combat.gangEnColere
     && r.kidnappable && r.otage.enferme && r.otage.dansLaPlanque
     && r.interrogatoire.planqueConnue && r.interrogatoire.balise
     && r.braquage.gain === r.braquage.attendu && r.braquage.magotVide && r.braquage.guerre
-    && r.elimination.dissous && r.elimination.recrues >= 1 && r.elimination.territoiresLiberes
-    && r.renaissance.nouveauNom && r.renaissance.nouveauChef && r.renaissance.generation === 2
-    && r.renaissance.plusFort && r.renaissance.magot && r.renaissance.debout >= 4;
-  return { ok, detail: `3 gangs nommés avec leur chef en jeu, leur villa et leur planque (${r.planques} planques dont la tienne) · ${r.combat.coups} coups pour mettre un membre au tapis (+${r.combat.rep} ⭐, le gang réagit) · il est kidnappé et enfermé dans ta planque, l'interrogatoire révèle leur planque · le coffre rapporte ${r.braquage.gain} 🪙 et déclenche la guerre · gang éliminé : ${r.elimination.recrues} recrue(s) changent de camp, ses quartiers se libèrent, puis il renaît (génération ${r.renaissance.generation}, ${r.renaissance.debout} hommes, plus fort)` };
+    && r.elimination.dissous && r.elimination.recrues >= 1 && r.elimination.quartiersAuVainqueur
+    && r.resteMort && r.renaissance.nouveauNom && r.renaissance.nouveauChef && r.renaissance.generation === 2
+    && r.renaissance.plusFort && r.renaissance.magot && r.renaissance.debout >= 3;   // deux hommes sont passes chez le joueur : il en reste trois
+  return { ok, detail: `${r.gangs.length} gangs en ville au palier de difficulté du moment (les ${6 - r.gangs.length} autres débarqueront avec le respect du joueur), chacun avec son chef en jeu, sa villa et sa planque (${r.planques} planques dont la tienne) · ${r.combat.coups} coups pour mettre un membre au tapis (+${r.combat.rep} ⭐, le gang réagit) · il est kidnappé et enfermé dans ta planque, l'interrogatoire révèle leur planque · le coffre rapporte ${r.braquage.gain} 🪙 et déclenche la guerre · gang éliminé : ${r.elimination.recrues} recrue(s) changent de camp, ses quartiers passent D'UN COUP au vainqueur (${r.elimination.quartiersAuVainqueur}) et il ne renaît plus tout seul (${r.resteMort}) — c'est ce qui rend la partie gagnable ; renaitGang() ne sert plus qu'au mode sans fin (génération ${r.renaissance.generation}, ${r.renaissance.debout} hommes, plus fort)` };
 });
 
 test('territoires, revenus, réunions de chefs, entraînement et sauvegarde de la guerre', async p => {
@@ -3554,8 +3564,10 @@ test('territoires, revenus, réunions de chefs, entraînement et sauvegarde de l
     // revenus versés dans la planque
     G.gang.magot = 0; G.guerre.t = 0; G.revenusTick();
     res.revenus = { magot: G.gang.magot, coffre: G.gang.planque.coffre.amount };
-    // réunion de chef : rendez-vous, arrivée, choix
-    const jaune = G.gangs.find(g => g.id === 'jaune');
+    // réunion de chef : rendez-vous, arrivée, choix. On choisit un gang qui n'est PAS le
+    // plus fort de la ville : depuis ce round, le premier refuse toujours de s'allier.
+    const premier = G.gangPremier();
+    const jaune = G.gangs.find(g => !g.mort && g.id !== premier) || G.gangs[0];
     G.proposeReunion(jaune);
     res.rdv = { propose: !!G.guerre.reunion, lieu: G.guerre.reunion.nom, balise: !!(G.beacon.m && G.beacon.m.visible) };
     G.P.pos.set(G.guerre.reunion.x, 0.3, G.guerre.reunion.z);
@@ -3563,8 +3575,11 @@ test('territoires, revenus, réunions de chefs, entraînement et sauvegarde de l
     res.ouverte = G.uiOpen === 'reunion';
     G.wallet = 2000;
     const rel0 = jaune.relation;
+    jaune.relation = Math.max(0, jaune.relation);
+    const wAv = G.wallet, prixAl = G.alliancePrix(jaune);
     G.choixReunion('allie');
-    res.alliance = { avant: rel0, apres: jaune.relation, allie: !!jaune.allieJoueur, ui: G.uiOpen };
+    res.alliance = { avant: rel0, apres: jaune.relation, allie: !!jaune.allieJoueur, ui: G.uiOpen,
+      prix: prixAl, paye: wAv - G.wallet, duree: Math.round((jaune.allieFin || 0) - G.simTime) };
     // sauvegarde compacte
     G.saveGuerre();
     const sv = JSON.parse(localStorage.getItem('superobby.guerre') || '{}');
@@ -3577,10 +3592,11 @@ test('territoires, revenus, réunions de chefs, entraînement et sauvegarde de l
   const ok = r.quartiers === 8 && r.ordreSport && r.ordreArme && r.entrainement.force > r.entrainement.force0
     && r.entrainement.arme && r.entrainement.cout === 60
     && r.capture.proprio === 'joueur' && r.revenus.magot > 0 && r.revenus.coffre === r.revenus.magot
-    && r.rdv.propose && r.rdv.balise && r.ouverte && r.alliance.allie && r.alliance.apres > r.alliance.avant && !r.alliance.ui
-    && r.sauvegarde.octets < 1200 && r.sauvegarde.rep && r.sauvegarde.gangs === 3 && r.sauvegarde.terr
+    && r.rdv.propose && r.rdv.balise && r.ouverte && r.alliance.allie && r.alliance.apres >= r.alliance.avant && !r.alliance.ui
+    && r.alliance.paye === r.alliance.prix && r.alliance.duree === 300
+    && r.sauvegarde.octets < 1400 && r.sauvegarde.rep && r.sauvegarde.gangs >= 2 && r.sauvegarde.terr
     && r.rang === 'Baron de la ville';
-  return { ok, detail: `${r.quartiers} quartiers à prendre · « va t'entraîner » monte la force du gang de ${r.entrainement.force0} à ${r.entrainement.force} et « prends un fusil » l'arme pour ${r.entrainement.cout} 🪙 · le parc bascule chez le joueur et lui verse ${r.revenus.magot} 🪙 de protection dans sa planque · un chef donne rendez-vous à ${r.rdv.lieu} et l'alliance se conclut (relation ${r.alliance.avant} → ${r.alliance.apres}) · tout tient dans ${r.sauvegarde.octets} octets de sauvegarde · à 1200 ⭐ le joueur est « ${r.rang} »` };
+  return { ok, detail: `${r.quartiers} quartiers à prendre · « va t'entraîner » monte la force du gang de ${r.entrainement.force0} à ${r.entrainement.force} et « prends un fusil » l'arme pour ${r.entrainement.cout} 🪙 · le parc bascule chez le joueur et lui verse ${r.revenus.magot} 🪙 de protection dans sa planque · un chef donne rendez-vous à ${r.rdv.lieu} et l'alliance se conclut contre ${r.alliance.prix} 🪙 (${r.alliance.paye} retirées) pour ${r.alliance.duree} s seulement — elle n'est plus ni gratuite ni définitive — relation ${r.alliance.avant} → ${r.alliance.apres} · tout tient dans ${r.sauvegarde.octets} octets de sauvegarde · à 1200 ⭐ le joueur est « ${r.rang} »` };
 });
 
 test('on nage à la surface au lieu de marcher au fond de la mer', async p => {

@@ -438,6 +438,25 @@ window.__SHOT = {
         if (Math.abs(m.x) < 260 && Math.abs(m.z) < 340) continue;
         m.x -= 400; m.z -= 400; if (m.av) m.av.group.position.set(m.x, m.y, m.z);
       }
+      // POSTE JEU STRATEGIQUE : LA PARTIE EN COURS ne doit pas deborder d'un test sur l'autre.
+      // Un gang raye de la carte par un test restait mort pour tous les suivants (ses hommes
+      // introuvables, son quartier au joueur), un Sacre lance laissait son compte a rebours a
+      // l'ecran, et une alliance scellee rendait un gang inoffensif dans le test d'apres.
+      if (typeof guerre !== 'undefined' && !v.garderSauvegarde) {
+        guerre.morts = []; guerre.palier = 1; guerre.gagne = false; guerre.detruits = 0;
+        guerre.sacre = 0; guerre.sacrePause = false; guerre.sacreBeacon = false;
+        guerre.arrivee = null; guerre.fidT = 0; guerre.sansFin = false;
+        if (typeof gangs !== 'undefined') for (const g of gangs) {
+          g.allieJoueur = false; g.allieFin = 0; g.allieAlerte = false;
+          if (g.mort) {   // on releve un gang detruit par le test precedent
+            g.mort = 0; g.etat = 'repos'; g.t = simTime + 30;
+            for (const m of g.membres) { m.ko = 0; m.captif = false; m.enferme = false; m.hp = m.hpMax || 90;
+              if (m.av) { m.av.group.rotation.x = 0; m.av.group.visible = true; } }
+          }
+        }
+        for (const m of (gang.membresLibres || [])) { m.doute = 0; m.fidelite = m.achete ? 50 : 80; }
+        const sc0 = document.getElementById('sacre'); if (sc0) sc0.classList.remove('on', 'pause');
+      }
     } catch (e11) {}
     if (!v.garderQualite && settings.quality !== 'high') { settings.quality = 'high'; try { applyQuality(); } catch (e12) {} }   // l'Ultra HD doublerait le temps du banc d'essai
     // Les ORDRES ne survivent pas d'un test a l'autre : un garde du corps, un protege, une

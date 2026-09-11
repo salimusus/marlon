@@ -366,6 +366,19 @@ window.__SHOT = {
         try { setWeapon(me, null); } catch (e32) {}
         try { majEtuis(); } catch (e33) {}
         try { updateHud(); } catch (e34) {}
+        // Meme famille : la PREPARATION DE LA VOITURE et le CARNET D'AMIS. Un moteur de
+        // niveau 2 et trois kits laisses par un test changent la vitesse de pointe de la
+        // voiture du test suivant (c'est un des soupcons sur « le cinquieme rapport n'est
+        // jamais atteint »), et un habitant devenu ami ne se bat plus, ne vole plus et ne
+        // repond plus pareil. Les deux sont enregistres : ils reviennent meme apres un
+        // rechargement de page. On repart des valeurs d'usine.
+        if (typeof tuning !== 'undefined' && typeof TUNE_DEF !== 'undefined') {
+          for (const kt of Object.keys(tuning)) delete tuning[kt];
+          Object.assign(tuning, JSON.parse(JSON.stringify(TUNE_DEF)));
+          try { saveTuning(); } catch (e35b) {}
+        }
+        if (typeof amis !== 'undefined') { amis.clear(); try { saveAmis(); } catch (e36) {} }
+        if (typeof bank !== 'undefined') { bank.balance = 0; bank.coffresJour = 0; }
       }
     } catch (e27) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce

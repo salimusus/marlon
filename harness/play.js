@@ -9731,10 +9731,18 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
     d1.veh.x = d1.epave.x + 4; d1.veh.z = d1.epave.z; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
     res.dep.bandeau = document.getElementById('missionHud').textContent;
     d1.veh.outil = 1; d1.veh.outilCible = 1; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
-    // l'épave suit vraiment la dépanneuse
-    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    // LE CHARGEMENT SUR LE PLATEAU (poste Animation) : 2,4 s de manœuvre avant de pouvoir
+    // repartir — le treuil accroché ne suffit plus, il faut que la voiture soit MONTÉE.
+    for (let i = 0; i < 240 && G.mission.step === 3; i++) { G.simTime += 1 / 60; G.animMondeTick(1 / 60); G.missionTick(1 / 60); }
+    res.dep.etapes.push(G.mission.step);
+    res.dep.surPlateau = +(d1.epave.y - (d1.veh.y || 0)).toFixed(2);
+    // l'épave suit vraiment la dépanneuse, posée sur son plateau
+    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.animMondeTick(0.1); G.missionTick(0.1);
     res.dep.remorque = Math.round(Math.hypot(d1.epave.x - d1.veh.x, d1.epave.z - d1.veh.z));
     d1.veh.x = d1.garage.x; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    res.dep.etapes.push(G.mission.step);
+    // le déchargement puis les DIX SECONDES de réparation au garage
+    for (let i = 0; i < 60 * 40 && G.mission.cur; i++) { G.simTime += 1 / 30; G.animMondeTick(1 / 30); G.missionTick(1 / 30); }
     res.dep.fin = { finie: !G.mission.cur, gain: G.wallet };
     // 3. POMPIER : caserne, camion, sirène, lance à eau, blessé à sortir
     G.wallet = 0; G.mission.forcer = 'blesse'; G.startMission('pompier');
@@ -9814,7 +9822,7 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
     && pm.arrosage.apres < pm.arrosage.avant - 20 && pm.etapes.join(',') === '1,2,3' && pm.blesse && pm.fin.finie && pm.fin.gain >= 90
     && ['chauffard', 'voleur', 'escorte', 'barrage'].every(v => po[v].lance && po[v].variante === v && po[v].etapes.join(',') === '1,2' && po[v].sirene && po[v].fin.finie && po[v].fin.gain >= 85)
     && po.chauffard.range && po.chauffard.cellule && po.voleur.cellule && po.escorte.auPoste < 20 && po.barrage.controles === 3;
-  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
+  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière (posée ${dp.surPlateau} m au-dessus de l'assiette du camion, donc SUR le plateau), étapes ${dp.etapes.join('→')}, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
 });
 
 test('une mission de métier ratée est comptée comme un échec, et la carrière verrouille ce qui n\'est pas mérité', async p => {
@@ -11910,8 +11918,10 @@ test('démolir une voiture de police avec un engin de chantier met trois étoile
     const civApres = { dmg: Math.round(civ.dmg), etoiles: G.police.wanted };
     G.clearWanted(); civ.x = pelle.x + 60; civ.z = pelle.z; civ.g.position.set(civ.x, civ.y || 0, civ.z);
     // puis une VOITURE DE POLICE
+    // une voiture de police se reconnaît comme le jeu la reconnaît : son solide porte `pol`
+    // et elle appartient à la flotte `police.cars`
     const pc = G.makeCar(0xf4f6fa, pelle.x, pelle.z + 6.4, 0, { police: true });
-    pc.dmg = 0; pc.dead = false;
+    pc.dmg = 0; pc.dead = false; pc.solid.pol = true; G.police.cars.push(pc);
     const avant = G.police.wanted;
     G.enginCreuse(pelle);
     for (let i = 0; i < 200 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }

@@ -5945,7 +5945,10 @@ function depannageDemarre(d) {
   d.dmg0 = ep.dmg; d.accroche = false;
   const aPied = longueurRoute(P.pos.x, P.pos.z, dep.x, dep.z);
   const trajet = longueurRoute(dep.x, dep.z, d.lieu.x, d.lieu.z) + longueurRoute(d.lieu.x, d.lieu.z, gar.x, gar.z);
-  mission.limit = Math.round(aPied / 3.4 + trajet / 8 + 110);
+  // +18 s : le chargement sur le plateau (2,4 s), le déchargement (2,9 s) et surtout les DIX
+  // SECONDES de réparation au garage sont du temps que le joueur REGARDE, pas du temps qu'il
+  // perd — sans cette rallonge, la mission devenait injuste au chrono.
+  mission.limit = Math.round(aPied / 3.4 + trajet / 8 + 110 + 18);
   mission.t0 = simTime;
   setBeacon(dep.x, dep.z, 0, 'mission');
   msg(`🛻 Panne ${d.lieu.nom} — prends la dépanneuse au garage`, 3400);
@@ -5972,25 +5975,64 @@ function depannageTick(dt, d) {
     const pres = enVoiture(dep) && Math.hypot(dep.x - ep.x, dep.z - ep.z) < 10;
     outilAutomatique(dep, dt, pres, '⛓️ Treuil descendu');
     if (pres && dep.outil > 0.5) {
+      // POSTE ANIMATION — ON LA CHARGE SUR LE PLATEAU, on ne la traîne plus au sol.
+      // « je veux que la dépanneuse soulève la voiture en panne (sur le plateau de la
+      // dépanneuse), la remorque et l'emmène au garage, la stationne pour réparation
+      // (animation 10 secondes) ». `depCible` déclenche la manœuvre complète (plateau en
+      // rampe, crochet, treuil, l'épave qui MONTE) ; `outilCible` repasse à zéro pour que
+      // l'animation commune des outils ne se dispute pas les mêmes pièces.
+      dep.outilCible = 0;
+      dep.depCible = 1; dep.remorque = ep; ep.remorque = dep;
       mission.step = 3; d.accroche = true; d.dmg0 = ep.dmg || 0;
-      setBeacon(d.garage.x, d.garage.z, 0, 'mission');
-      msg('⛓️ Treuil accroché ! Remorque doucement jusqu\'au garage — chaque choc coûte cher', 4000); sfx.coin();
+      setBeacon(ep.x, ep.z, 0, 'mission');
+      msg('⛓️ Treuil accroché ! Le plateau s\'incline, la voiture monte…', 3600); sfx.coin();
     }
     return;
   }
-  if (mission.step === 3) {
-    // l'épave suit la dépanneuse, roue avant levée : on la place derrière, dans son axe
-    const recul = 6.2;
-    ep.x = dep.x - Math.sin(dep.h) * recul; ep.z = dep.z - Math.cos(dep.h) * recul; ep.h = dep.h;
-    ep.g.position.set(ep.x, (dep.y || 0) + 0.18, ep.z); ep.g.rotation.y = ep.h; ep.g.rotation.x = -0.12;
-    ep.y = dep.y || 0; settleVehicle(ep); ep.g.rotation.x = -0.12; vehicleSolid(ep);
+  if (mission.step === 3) {   // LE CHARGEMENT : 2,4 s de manœuvre, on regarde
+    // LE CHRONO EST SUSPENDU pendant les manœuvres : le chargement et la réparation sont des
+    // secondes que le joueur REGARDE, pas des secondes où il agit. Sans cela, une mission
+    // serrée pouvait échouer pendant qu'il n'avait aucune main sur rien.
+    mission.t0 += dt;
+    setBeacon(dep.x, dep.z, 0, 'mission');
+    if ((dep.dep || 0) > 0.98) {
+      mission.step = 4;
+      setBeacon(d.garage.x, d.garage.z, 0, 'mission');
+      msg('🚚 Chargée ! Remorque doucement jusqu\'au garage — chaque choc coûte cher', 4000); sfx.check();
+    }
+    return;
+  }
+  if (mission.step === 4) {
+    // L'ÉPAVE RESTE SUR LE PLATEAU : c'est `depanneuseAnime` (poste Animation) qui la tient,
+    // roues en l'air, et qui recale son solide de collision à chaque image.
+    dep.depCible = 1;
     setBeacon(d.garage.x, d.garage.z, 0, 'mission');
     if (Math.hypot(dep.x - d.garage.x, dep.z - d.garage.z) < 11) {
-      const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
-      mission.prime = -Math.min(45, degats);
-      d.degats = degats;
-      ep.g.rotation.x = 0; endMission(true);
+      mission.step = 5; d.t = simTime + DEP_DEPOSE; d.rep = null;
+      dep.depCible = 0;
+      msg('🅿️ Au garage : on décharge et on répare (10 s)', 2800);
     }
+    return;
+  }
+  if (mission.step === 5) {
+    mission.t0 += dt;   // chrono suspendu (voir l'étape 3)
+    // LE STATIONNEMENT ET LA RÉPARATION, DIX SECONDES QU'ON VOIT : le plateau se re-incline,
+    // l'épave redescend, puis le réparateur ouvre le capot et travaille à la clé.
+    if (simTime < d.t) return;
+    if (!d.rep && !d.repFait) {
+      dep.depCible = null; dep.dep = 0; dep.remorque = null; ep.remorque = null;
+      ep.g.rotation.set(0, ep.h, 0, 'YXZ'); settleVehicle(ep); vehicleSolid(ep);
+      d.rep = reparateurArrive(ep, REPAR_DUREE, null);
+      d.t = simTime + REPAR_DUREE;
+      if (!d.rep) d.t = simTime;   // pas d'avatar disponible : on n'immobilise pas la mission
+      return;
+    }
+    if (d.rep) { reparateurRange(d.rep); d.rep = null; }
+    d.repFait = true;
+    const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
+    mission.prime = -Math.min(45, degats);
+    d.degats = degats;
+    ep.g.rotation.x = 0; endMission(true);
   }
 }
 function depannageBandeau(d) {
@@ -5998,12 +6040,17 @@ function depannageBandeau(d) {
   if (mission.step === 0) return `Prends la dépanneuse au garage${chrono}`;
   if (mission.step === 1) return `Rejoins le véhicule en panne ${d.lieu ? d.lieu.nom : ''}${chrono}`;
   if (mission.step === 2) return `Accroche le treuil (O), tout près du véhicule${chrono}`;
+  if (mission.step === 3) return `Le plateau s'incline, la voiture monte…${chrono}`;
+  if (mission.step === 5) return `Au garage : déchargement et réparation (10 s)`;
   return `Remorque jusqu'au garage, sans rien casser${chrono}`;
 }
 function depannageNettoie(d) {
   const ep = d.epave;
-  if (ep) { ep.busy = false; ep.g.rotation.x = 0; settleVehicle(ep); vehicleSolid(ep); }
-  if (d.veh) { d.veh.outilCible = 0; sireneMission(d.veh, false); }
+  if (d.rep) { reparateurRange(d.rep); d.rep = null; }
+  if (ep) { ep.busy = false; ep.remorque = null; ep.g.rotation.set(0, ep.h || 0, 0, 'YXZ'); settleVehicle(ep); vehicleSolid(ep); }
+  // sans cette remise à zéro, une mission abandonnée en plein chargement laissait la
+  // dépanneuse plateau incliné et crochet pendant, pour toujours
+  if (d.veh) { d.veh.outilCible = 0; d.veh.depCible = null; d.veh.dep = 0; d.veh.remorque = null; sireneMission(d.veh, false); }
 }
 
 // ---- 3. POLICE (du bon côté) ----
@@ -24951,7 +24998,11 @@ function actionneOutil(c) {
     if (c.creuse) { msg('🚜 Le godet est déjà en train de creuser…', 1200); return true; }
     enginCreuse(c); msg('🚜 Le godet plonge, la terre sort, le tas grandit', 2000); sfx.pok(); return true;
   }
-  if (c.kind === 'grue') {
+  // `c.depanneuse` : la mission de dépannage retombe sur une GRUE quand la vraie dépanneuse
+  // n'existe pas (fabriqueDepanneuse). Elle sert alors de treuil, pas de grue de levage : on
+  // lui laisse le curseur 0 → 1, sinon le « O » du joueur lançait un cycle de levage à vide
+  // et le crochet ne descendait jamais sur l'épave.
+  if (c.kind === 'grue' && !c.depanneuse) {
     if (c.leve) { msg('🏗️ La grue est déjà en manœuvre…', 1200); return true; }
     enginLeve(c); msg('🏗️ Le crochet descend, la grue lève la charge et pivote', 2000); sfx.pok(); return true;
   }
@@ -26394,9 +26445,19 @@ function creuseGodet(t) {
 function godetTerre(c) {
   const o = c.outils || {}; if (!o.godet) return null;
   if (o.terre) return o.terre;
+  // LA MOTTE DÉBORDE DU GODET. Mesuré sur capture : logée au fond (y = −0,16) elle était
+  // entièrement CACHÉE par les parois de 70 cm — le godet ressortait aussi propre que vide.
+  // Elle est maintenant à cheval sur le bord (elle dépasse de 18 cm), avec une seconde motte
+  // par-dessus : on voit la terre de vingt mètres.
+  const g = new THREE.Group(); g.position.set(0, 0.06, 0.32);
   const m = new THREE.Mesh(unitRound, lam(TERRE_C));
-  m.scale.set(0.78, 0.42, 0.5); m.position.set(0, -0.16, 0.34); m.visible = false;
-  o.godet.add(m); o.terre = m; return m;
+  m.scale.set(0.84, 0.5, 0.58); g.add(m);
+  const m2 = new THREE.Mesh(unitRound, lam(TERRE_TAS));
+  m2.scale.set(0.46, 0.3, 0.36); m2.position.set(0.14, 0.3, 0.04); m2.rotation.y = 0.5; g.add(m2);
+  const m3 = new THREE.Mesh(unitRound, lam(TERRE_FOND));
+  m3.scale.set(0.3, 0.22, 0.28); m3.position.set(-0.22, 0.27, -0.06); m3.rotation.y = -0.7; g.add(m3);
+  g.visible = false;
+  o.godet.add(g); o.terre = g; return g;
 }
 // LANCER UN CYCLE DE FOUILLE. Rend false si l'engin n'est pas une pelleteuse ou s'il creuse
 // déjà : on ne relance jamais un cycle en cours, sinon le bras sautait au milieu du geste.
@@ -26546,15 +26607,20 @@ function enginDemolit(c, dt) {
       if (!v || v === c || !v.g || v.travail) continue;
       if (Math.hypot(v.x - px, v.z - pz) > 3.1) continue;
       if (typeof vehicleDamage === 'function') vehicleDamage(v, deg * dt);
+      // RECONNAÎTRE UNE VOITURE DE POLICE. `makeCar` ne pose PAS de champ `police` sur le
+      // véhicule : le jeu la reconnaît à son solide (`solid.pol`) ou à son appartenance à la
+      // flotte `police.cars`. Se fier au seul champ `v.police` ne déclenchait donc JAMAIS
+      // l'alerte trois étoiles — mesuré : 0 étoile pour une voiture de police démolie.
+      const estPolice = !!(v.police || (v.solid && v.solid.pol) || (police.cars && police.cars.indexOf(v) >= 0));
       // LA POLICE : trois étoiles, sans avertissement, et une seule fois par véhicule.
-      if (v.police && !v.enginAlerte) {
+      if (estPolice && !v.enginAlerte) {
         v.enginAlerte = true;
         if (typeof infraction === 'function') infraction('démolition d\'une voiture de police à l\'engin de chantier', 3, 3, true);
       } else if (!v.enginAlerte && drive.car === c) {
         v.enginAlerte = true;
         if (typeof infraction === 'function') infraction('démolition d\'un véhicule à l\'engin de chantier', 1, 2);
       }
-      if (typeof msg === 'function' && simTime > (c.demoT || 0)) { c.demoT = simTime + 1.2; msg(v.police ? '🚨 Voiture de police démolie ! Recherché ★★★' : '💥 Le véhicule se disloque sous l\'outil', 1600); }
+      if (typeof msg === 'function' && simTime > (c.demoT || 0)) { c.demoT = simTime + 1.2; msg(estPolice ? '🚨 Voiture de police démolie ! Recherché ★★★' : '💥 Le véhicule se disloque sous l\'outil', 1600); }
       return;   // un seul véhicule à la fois : l'engin n'est pas une tondeuse
     }
   }
@@ -26679,7 +26745,10 @@ function animScenePhoto(nom, u) {
   ANIM.trous.length = 0;
   try { sgridSale(); } catch (e) {}
   while (ANIM.reparateurs.length) reparateurRange(ANIM.reparateurs[0]);
-  if (nom !== 'ralenti') me.group.visible = false;
+  // LE JOUEUR EST CACHÉ POUR TOUTES LES SCÈNES SAUF LE RALENTI (où c'est LUI qui frappe), et
+  // il est REMONTRÉ à chaque appel : sans cette remise à vrai, une série de captures qui
+  // passait par une scène d'engin laissait le joueur invisible pour toutes les suivantes.
+  me.group.visible = nom === 'ralenti';
   if (nom === 'depanneuse' || nom === 'reparateur') {
     const d = (city.depanneuses && city.depanneuses[0]) || makeDepanneuse(x, z, 0);
     if (city.depanneuses && city.depanneuses.indexOf(d) < 0) { city.depanneuses.push(d); city.cars.push(d); }
@@ -26709,9 +26778,17 @@ function animScenePhoto(nom, u) {
     const genre = nom === 'creuse' ? 'pelle' : nom === 'grue' ? 'grue' : 'bulldozer';
     // LA FOUILLE SE JUGE SUR LE TROU ET LE TAS, pas sur la cabine : l'engin recule de 5,2 m
     // (sa portée) pour que le trou tombe pile sur le point visé par la caméra du banc.
-    const c = makeVehiculeTravail(genre, MET_C.casqueOrange, x, z - (nom === 'creuse' ? CREUSE_PORTEE : 0), 0);
+    // L'ENGIN EST DÉCALÉ DERRIÈRE LE POINT VISÉ. La caméra du banc vise TOUJOURS le joueur ;
+    // si l'engin est pile dessus, son propre gabarit (7,5 m pour la grue) enferme la cible et
+    // la caméra se replie à quatre mètres — on ne photographiait plus qu'un bout de tôle.
+    const c = makeVehiculeTravail(genre, MET_C.casqueOrange, x, z - (nom === 'creuse' ? CREUSE_PORTEE : 8), 0);
     city.cars.push(c); ANIM.photo.push(c);
-    if (nom === 'creuse') { enginCreuse(c); for (let i = 0; i < 900 && c.creuse && c.creuse.t < k * CREUSE_DUREE; i++) enginCreuseTick(c, 1 / 60); }
+    if (nom === 'creuse') {
+      // DEUX GODETS DÉJÀ SORTIS avant la photo : sur un seul, le trou et le tas sont encore
+      // trop petits pour qu'on juge quoi que ce soit sur l'image.
+      for (let n = 0; n < 2; n++) { enginCreuse(c); for (let i = 0; i < 900 && c.creuse; i++) enginCreuseTick(c, 1 / 60); }
+      enginCreuse(c); for (let i = 0; i < 900 && c.creuse && c.creuse.t < k * CREUSE_DUREE; i++) enginCreuseTick(c, 1 / 60);
+    }
     else if (nom === 'grue') { enginLeve(c); for (let i = 0; i < 900 && c.leve && c.leve.t < k * GRUE_DUREE; i++) enginLeveTick(c, 1 / 60); }
     else { c.lameCible = 1; c.spd = 6; c.speed = 6; for (let i = 0; i < 900; i++) enginLameTick(c, 1 / 60); c.andainK = k; enginLameTick(c, 0); }
     return true;

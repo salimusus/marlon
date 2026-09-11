@@ -16824,9 +16824,18 @@ function feuVehicule(c, secondes = 10) {
 }
 function eteintFeu(c) {
   const f = c && c.feu; if (!f) return false;
-  if (f.g.parent) f.g.parent.remove(f.g);
-  for (const fl of f.flammes) if (fl.s.material) fl.s.material.dispose();
-  if (f.lueur.material) f.lueur.material.dispose();
+  // LE FEU PARTAGE. Le poste Animation tient le sien dans `ANIM.feux` et sait l'eteindre en
+  // fondu : on le lui laisse, au lieu de demonter un objet qui n'a pas la meme forme (c'est
+  // ce qui faisait planter « Cannot read properties of undefined (reading 'material') »).
+  if (typeof ANIM !== 'undefined' && ANIM.feux && ANIM.feux.indexOf(f) >= 0) {
+    feuEteint(f); c.feu = null;
+    const k = feuxVehicules.indexOf(c); if (k >= 0) feuxVehicules.splice(k, 1);
+    carcasseNoircie(c);
+    return true;
+  }
+  if (f.g && f.g.parent) f.g.parent.remove(f.g);
+  for (const fl of (f.flammes || [])) if (fl.s && fl.s.material) fl.s.material.dispose();
+  if (f.lueur && f.lueur.material) f.lueur.material.dispose();
   c.feu = null;
   const i = feuxVehicules.indexOf(c); if (i >= 0) feuxVehicules.splice(i, 1);
   carcasseNoircie(c);
@@ -16844,6 +16853,11 @@ function feuxVehiculesTick(dt) {
   for (let i = feuxVehicules.length - 1; i >= 0; i--) {
     const c = feuxVehicules[i], f = c.feu;
     if (!f) { feuxVehicules.splice(i, 1); continue; }
+    // un feu du poste Animation s'anime tout seul dans `feuxAnimTick` : on le laisse tranquille
+    if (typeof ANIM !== 'undefined' && ANIM.feux && ANIM.feux.indexOf(f) >= 0) {
+      if (f.fin || f.mort) { c.feu = null; feuxVehicules.splice(i, 1); carcasseNoircie(c); }
+      continue;
+    }
     f.t += dt;
     const p = f.t / f.duree;
     // le feu prend, brûle à plein, puis retombe : sans cela il apparaissait et disparaissait net

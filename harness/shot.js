@@ -76,7 +76,13 @@ window.__SHOT = {
       // L'INVENTAIRE ET LES FANTOMES : les deux residus qui ont fait tomber le plus de tests.
       if (typeof owned !== 'undefined') {
         var enTrop = 0; owned.forEach(function (x) { if (__SHOT.achats0.indexOf(x) < 0) enTrop++; });
-        dit(enTrop, enTrop + ' achat(s) de plus qu\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
+        // NOTE : le HOOK est un LITTERAL DE GABARIT (backticks) evalue par Node avant d'etre
+        // injecte dans la page. Une apostrophe d'une chaine JS doit donc y etre echappee DEUX
+        // fois : \\' et non \'. Avec un seul antislash, Node rendait une apostrophe nue, la
+        // chaine se fermait au milieu de la phrase et la page entiere ne parsait plus —
+        // « PAGEERROR: missing ) after argument list », plus AUCUNE capture possible pour
+        // personne. Le defaut ne se voyait pas au lint (il lit le HOOK brut, pas evalue).
+        dit(enTrop, enTrop + " achat(s) de plus qu'au premier chargement (ils changent le tour des armes et le prix en boutique)");
       }
       if (typeof wallet !== 'undefined' && wallet !== __SHOT.argent0) dit(true, 'portefeuille a ' + wallet + ' au lieu de ' + __SHOT.argent0);
       if (typeof solids !== 'undefined') {
@@ -496,6 +502,22 @@ window.__SHOT = {
     document.querySelectorAll('#top,#chat,#gps,#act,#missionHud,#wanted,#padLeg,#tvBadge').forEach(function (e) { e.style.display = v.hideHud ? 'none' : ''; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
+    // POSTE ASCENSEURS : v.ascenseur = numero d'un toit equipe (city.toits). On pose le
+    // joueur dans la cabine et on FAIT AVANCER LA SIMULATION image par image jusqu'a
+    // l'arrivee sur le toit. Attendre « en vrai » ne montrerait jamais que le rez-de-chaussee :
+    // en rendu logiciel la montre avance deux cents fois plus vite que l'horloge du jeu.
+    if (v.ascenseur != null) {
+      try {
+        var tt = city.toits[v.ascenseur], LL = tt && tt.lift;
+        if (LL) {
+          LL.y = LL.low; LL.target = LL.low; LL.since = 0; LL.cd = 0;
+          LL.g.position.y = LL.y; LL.solid.mesh.position.y = LL.y - 0.05; LL.solid.y = LL.y - 0.05;
+          P.pos.set(LL.x, LL.low + 0.3, LL.z); P.vel.set(0, 0, 0);
+          for (var ia = 0; ia < 1500 && P.pos.y < LL.high - 0.25; ia++) step(1 / 60, true);
+          cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);
+        }
+      } catch (eAsc) {}
+    }
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
     // POSTE PERSONNAGES : le couteau photographie de PROFIL. v.couteau = 'fourreau' garnit les
@@ -1442,6 +1464,9 @@ window.__G = {
   animScenePhoto: typeof animScenePhoto === 'function' ? animScenePhoto : null,
   enginDemolit: typeof enginDemolit === 'function' ? enginDemolit : null,
   creuseTrou: typeof creuseTrou === 'function' ? creuseTrou : null,
+  terreChute: typeof terreChute === 'function' ? terreChute : null,
+  terreChutesTick: typeof terreChutesTick === 'function' ? terreChutesTick : null,
+  creuseVerse: typeof creuseVerse === 'function' ? creuseVerse : null,
   CREUSE_DUREE: typeof CREUSE_DUREE !== 'undefined' ? CREUSE_DUREE : null,
   GRUE_DUREE: typeof GRUE_DUREE !== 'undefined' ? GRUE_DUREE : null,
   RALENTI: typeof RALENTI !== 'undefined' ? RALENTI : null,
@@ -1549,7 +1574,6 @@ window.__G = {
   TATOO_TAILLES: typeof TATOO_TAILLES !== 'undefined' ? TATOO_TAILLES : null,
   construireGraphe: typeof construireGraphe === 'function' ? construireGraphe : null,
   surLaChaussee: typeof surLaChaussee === 'function' ? surLaChaussee : null,
-  carcasseNoircie: typeof carcasseNoircie === 'function' ? carcasseNoircie : null,
   carcasseARamasser: typeof carcasseARamasser === 'function' ? carcasseARamasser : null,
   CARCASSE_DELAI: typeof CARCASSE_DELAI !== 'undefined' ? CARCASSE_DELAI : null,
   parkingPublic: typeof parkingPublic === 'function' ? parkingPublic : null,
@@ -1688,6 +1712,12 @@ window.__G = {
   rangeVoile: typeof rangeVoile === 'function' ? rangeVoile : null,
   voileTick: typeof voileTick === 'function' ? voileTick : null,
   liftTick: typeof liftTick === 'function' ? liftTick : null,
+  degageLesCabines: typeof degageLesCabines === 'function' ? degageLesCabines : null,
+  cabineLibre: typeof cabineLibre === 'function' ? cabineLibre : null,
+  get movers() { return typeof movers !== 'undefined' ? movers : []; },
+  get spinners() { return typeof spinners !== 'undefined' ? spinners : []; },
+  get conveyors() { return typeof conveyors !== 'undefined' ? conveyors : []; },
+  get crumbles() { return typeof crumbles !== 'undefined' ? crumbles : []; },
   toitAccessible: typeof toitAccessible === 'function' ? toitAccessible : null,
   meteo: typeof meteo !== 'undefined' ? meteo : null,
   meteoTick: typeof meteoTick === 'function' ? meteoTick : null,

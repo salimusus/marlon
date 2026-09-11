@@ -13043,3 +13043,74 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, a la meme distance d'oreille : averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic} · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
+
+
+test('rien ne decroche PENDANT le mouvement : les poids restent sur la barre, le joueur colle au siege de la balancoire et a la selle du velo', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, T = G.THREE, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -2.9, y: 1, z: 19, hour: 12, frais: true });
+    await dodo(600);
+    const mondeDe = (o, v) => { o.updateWorldMatrix(true, false); return o.getWorldPosition(v || new T.Vector3()); };
+    // ---------- 1. LE DEVELOPPE COUCHE : les disques suivent-ils la barre ? ----------
+    G.startGym('bench');
+    const b = G.city.gym.bench, poids = b.poids || [];
+    let ecartPoids = 0, monteesBarre = 0, hBarre = [];
+    for (let i = 0; i < 420; i++) {
+      if (i % 22 === 0) G.P.jumpBuf = 0.2;                 // une repetition toutes les 22 images
+      G.simTime += 1 / 60; G.gymTick(1 / 60);
+      const yB = b.barre.mesh.position.y;
+      hBarre.push(+yB.toFixed(2));
+      for (const d of poids) ecartPoids = Math.max(ecartPoids, Math.abs(d.mesh.position.y - yB));
+    }
+    monteesBarre = new Set(hBarre).size;
+    G.gym.on = null;
+    // ---------- 2. LA BALANCOIRE : le corps reste-t-il sur la planche ? ----------
+    const sw = G.city.swings[0];
+    G.P.pos.set(sw.x, 1, sw.z); G.sitSwing(sw);
+    const vs = new T.Vector3();
+    let ecartSwing = 0, ecartSwingH = 0, angMax = 0, nS = 0;
+    for (let i = 0; i < 600; i++) {
+      G.simTime += 1 / 60; G.swingTick(1 / 60);
+      angMax = Math.max(angMax, Math.abs(sw.ang));
+      if (Math.abs(sw.ang) > 0.25) {   // on ne juge qu'EN MOUVEMENT : c'est la que ca decrochait
+        mondeDe(sw.siege, vs); nS++;
+        ecartSwing = Math.max(ecartSwing, Math.abs((vs.y - 0.41) - G.P.pos.y));
+        ecartSwingH = Math.max(ecartSwingH, Math.hypot(vs.x - G.P.pos.x, vs.z - G.P.pos.z));
+      }
+    }
+    G.P.swing = null; sw.rider = null;
+    // ---------- 3. LA SELLE : moto, velo et velo du facteur, EN ROULANT ----------
+    const selles = {};
+    for (const genre of ['moto', 'bike', 'velo']) {
+      const v = (G.city.cars || []).find(c => c.kind === genre);
+      if (!v || !v.selle) { selles[genre] = { manque: true }; continue; }
+      v.busy = false; v.x = G.P.pos.x + 2; v.z = G.P.pos.z; v.h = 0.7; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.y = v.h;
+      if (v.solid) { v.solid.x = v.x; v.solid.z = v.z; }
+      G.P.pos.set(v.x, v.y || 0, v.z);
+      G.enterCar(v);
+      const vv = new T.Vector3();
+      let pire = 0, pireY = 0, vitesse = 0;
+      G.keys.add('KeyW');
+      for (let i = 0; i < 240; i++) {
+        G.simTime += 1 / 60; G.driveStep(1 / 60); G.poseJoueurAuVolant(1 / 60);
+        vitesse = Math.max(vitesse, Math.abs(G.drive.speed));
+        if (Math.abs(G.drive.speed) < 2) continue;          // on ne juge qu'EN ROULANT
+        mondeDe(v.selle, vv);
+        pire = Math.max(pire, Math.hypot(vv.x - G.me.group.position.x, vv.z - G.me.group.position.z));
+        pireY = Math.max(pireY, Math.abs(vv.y - G.me.group.position.y));
+      }
+      G.keys.delete('KeyW');
+      selles[genre] = { ecart: +pire.toFixed(3), ecartY: +pireY.toFixed(3), vitesse: +vitesse.toFixed(1) };
+      if (G.drive.car) G.exitCar();
+    }
+    return { ecartPoids: +ecartPoids.toFixed(3), monteesBarre, poids: poids.length,
+      ecartSwing: +ecartSwing.toFixed(3), ecartSwingH: +ecartSwingH.toFixed(3), angMax: +angMax.toFixed(2), nS, selles };
+  });
+  const s = r.selles;
+  const genres = ['moto', 'bike', 'velo'];
+  const mauvais = genres.filter(k => !s[k] || s[k].manque || s[k].ecart > 0.22 || s[k].ecartY > 0.30);
+  const ok = r.poids >= 2 && r.monteesBarre >= 2 && r.ecartPoids < 0.001
+    && r.angMax > 0.3 && r.nS > 50 && r.ecartSwing < 0.06 && r.ecartSwingH < 0.06
+    && mauvais.length === 0;
+  return { ok, detail: `trois defauts de pose qui se voyaient tout de suite, tous les trois PENDANT le mouvement (a l'arret ils ne se voyaient pas) · DEVELOPPE COUCHE : les disques etaient poses une fois pour toutes a 1,60 m et la barre montait a 1,90 m a chaque poussee — ils decrochaient de 30 cm ; ils suivent maintenant la meme hauteur, ecart maximal ${r.ecartPoids} m sur ${r.monteesBarre} hauteurs de barre distinctes (${r.poids} pieces montees sur la barre) · BALANCOIRE : la place du joueur etait recalculee avec une hauteur ecrite en dur (3,55 m) alors que la poutre est a 3,75 m, il pendait 20 cm sous la planche pendant tout le balancement ; elle est maintenant LUE sur le siege lui-meme — ecart vertical ${r.ecartSwing} m et horizontal ${r.ecartSwingH} m sur ${r.nS} images de vrai balancement (angle jusqu'a ${r.angMax} rad) · SELLE : il n'y avait pas de selle sous le pilote (celle de la moto etait 63 cm en arriere, celle du velo 23 cm) et le joueur s'asseyait a l'origine du vehicule alors que les bots s'asseyaient a la place PLACES ; chaque deux-roues a maintenant une selle centree sur cette place et tout le monde s'y assoit — ${genres.map(k => `${k} : ${s[k] && s[k].manque ? 'PAS DE SELLE' : s[k].ecart + ' m a ' + s[k].vitesse + ' m/s (vertical ' + s[k].ecartY + ')'}`).join(' · ')}` };
+});

@@ -1729,6 +1729,18 @@ window.__G = {
   camPerche: typeof camPerche === 'function' ? camPerche : null,
   camLibres: typeof camLibres === 'function' ? camLibres : null,
   interieurDe: typeof interieurDe === 'function' ? interieurDe : null,
+  // ---- poste CONCESSIONNAIRE (batiment vitre jaune, gammes, achat d'une voiture) ----
+  GAMMES: typeof GAMMES !== 'undefined' ? GAMMES : null,
+  gammeDe: typeof gammeDe === 'function' ? gammeDe : null,
+  etoilesGamme: typeof etoilesGamme === 'function' ? etoilesGamme : null,
+  voitureDeGamme: typeof voitureDeGamme === 'function' ? voitureDeGamme : null,
+  buildConcession: typeof buildConcession === 'function' ? buildConcession : null,
+  openConces: typeof openConces === 'function' ? openConces : null,
+  majConces: typeof majConces === 'function' ? majConces : null,
+  acheterAuConces: typeof acheterAuConces === 'function' ? acheterAuConces : null,
+  get concesSel() { return typeof concesSel !== 'undefined' ? concesSel : null; },
+  set concesSel(v) { if (typeof concesSel !== 'undefined') concesSel = v; },
+  saveWallet: typeof saveWallet === 'function' ? saveWallet : null,
 };
 `;
 

@@ -10853,3 +10853,35 @@ test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni
   const ok = r.casse && r.koCasse && r.repare && monte && r.appel && r.hp === 100 && r.ko === 0 && r.dist < 6;
   return { ok, detail: `une horloge à NaN figeait tout en silence : la boîte restait sur A1 à toutes les vitesses (régime saturé à 19,7) et un blessé au minuteur de KO à NaN n'était plus jamais ramassé · l'horloge se remet d'aplomb toute seule (${r.repare}, ${r.horloge} s) : les rapports montent A${r.rapports.join(' → A')} et le blessé est conduit à l'hôpital (${r.dist} m, ${r.hp} PV, KO ${r.ko})` };
 });
+
+// LE GRAPHE DES VOIES NE FAIT PLUS FAIRE LE TOUR DE LA VILLE. Trois defauts mesures ce round :
+// les liaisons ne reliaient que des ILES (deux bouts de rue separes par douze metres de
+// trottoir restaient sans raccord des qu'un grand tour les reliait deja), rien ne savait
+// qu'un abribus ou un camion gare en travers bouche une voie, et l'arrivee etait toujours la
+// voie la PLUS PROCHE — souvent le mauvais sens de la bonne rue, d'ou 83 m de demi-tour pur.
+test('un itinéraire par les voies ne fait pas le tour de la ville et ne finit pas par un demi-tour', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const PAIRES = [[0, 0, -92, 60], [50, 40, -60, 110], [-92, -40, 60, 60], [0, 110, 40, 200], [-16, 6, 46, -8]];
+    const lon = (q, sx, sz) => { let s = 0, a = [sx, sz]; for (const b of (q || [])) { s += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? s : Infinity; };
+    const res = PAIRES.map(([x0, z0, tx, tz]) => {
+      const grille = lon(G.navPath(x0, z0, tx, tz), x0, z0);
+      const q = G.itineraireVoies(x0, z0, tx, tz, 0) || [];
+      const voies = lon(q, x0, z0);
+      // le demi-tour final : ce qu'on parcourt APRES etre passe au plus pres du but
+      let s = 0, a = [x0, z0], best = Infinity, sBest = 0;
+      for (const b of q) { s += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b;
+        const d = Math.hypot(b[0] - tx, b[1] - tz); if (d < best) { best = d; sBest = s; } }
+      return { grille: Math.round(grille), voies: Math.round(voies), ratio: +(voies / grille).toFixed(2), retour: Math.round(voies - sBest) };
+    });
+    const A = G.city.graphe.aretes;
+    return { res, moy: +(res.reduce((a, x) => a + x.ratio, 0) / res.length).toFixed(2),
+      pireRetour: Math.max(...res.map(x => x.retour)),
+      bouchees: A.filter(e => (e.dur || 0) > 0).length, raccords: G.city.graphe.raccords, aretes: A.length };
+  });
+  // avant : 4,3 fois le chemin de la grille en moyenne, et jusqu'a 83 m de demi-tour a l'arrivee
+  const ok = r.raccords >= 1 && r.bouchees >= 1 && r.res.every(x => isFinite(x.voies) && x.voies > 0)
+    && r.moy <= 2.2 && r.pireRetour <= 25;
+  return { ok, detail: `${r.res.length} itinéraires par les voies : ${r.moy}× le chemin de la grille A* en moyenne (${r.res.map(x => x.ratio).join(', ')}), au pire ${r.pireRetour} m parcourus après être passé au plus près du but (83 m avant) · le graphe a ${r.aretes} arêtes dont ${r.raccords} raccords de rues voisines et connaît ${r.bouchees} voies qu'une voiture ne peut pas emprunter` };
+});

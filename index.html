@@ -13893,63 +13893,70 @@ const sB = (d, dur, freq, vol, q, t, type) => sfx.bruitVers(d, dur, freq, vol, q
 const TIR_VOIX = 6;                 // six voix en rotation : de quoi tenir une rafale entiere
 const TIR_ATTAQUE = 0.0009;         // s : constante de montee de la claque (95 % en 2,7 ms — franc, sans clic numerique)
 const TIR_PLANCHER = 0.00004;       // la cible « silence » : setTargetAtTime n'atteint jamais zero
+// UNE AVANCE DE 12 ms SUR L'HORLOGE AUDIO. Le fil audio rend TOUJOURS un peu en avance sur
+// `currentTime` (la latence de sortie de la carte son), et beaucoup plus quand le fil
+// principal vient de caler sur une image lourde : il rattrape alors son retard d'un coup.
+// Une enveloppe programmee pile a `currentTime` tombe dans ce passe-la et ne sort pas du
+// tout — c'est ce qui faisait mesurer 0,0002 a l'impact dans le mur un coup sur trois.
+// Douze millisecondes, on ne les entend pas, et l'enveloppe part toujours du bon endroit.
+const TIR_AVANCE = 0.012;
 // f : coupure du passe-haut de la claque · q/f du corps (cloche) et de la queue (bande) ·
 // tau : constante de retombee en secondes · n : niveau relatif au niveau general du son.
 const SONS_ARME = {
   // LE PISTOLET : sec, aigu, court. Presque tout est dans la claque, le boum est bref.
-  'tir-pistol': { niv: 0.60, portee: 55,
-    claque: { f: 3100, tau: 0.022, n: 1.00 },
-    corps:  { f: 950,  q: 6.5, tau: 0.050, n: 0.55 },
-    boom:   { type: 'triangle', f0: 160, f1: 58, chute: 0.020, tau: 0.052, n: 0.45 },
-    queue:  { f: 1500, q: 0.9, tau: 0.085, n: 0.14 } },
+  'tir-pistol': { niv: 0.26, portee: 55,
+    claque: { f: 3100, tau: 0.021, n: 1.00 },
+    corps:  { f: 950,  q: 6.5, tau: 0.042, n: 0.55 },
+    boom:   { type: 'triangle', f0: 160, f1: 58, chute: 0.020, tau: 0.048, n: 0.45 },
+    queue:  { f: 1500, q: 0.9, tau: 0.065, n: 0.10 } },
   // LE FUSIL D'ASSAUT : plus gras. Moins de claque aigue, beaucoup plus de corps, un boum
   // plus bas et plus tenu — c'est ce qui fait la difference a l'oreille en rafale.
-  'tir-rifle': { niv: 0.58, portee: 70,
+  'tir-rifle': { niv: 0.24, portee: 70,
     claque: { f: 2100, tau: 0.028, n: 0.82 },
-    corps:  { f: 620,  q: 4.5, tau: 0.075, n: 0.95 },
-    boom:   { type: 'sawtooth', f0: 120, f1: 44, chute: 0.030, tau: 0.080, n: 0.55 },
-    queue:  { f: 950,  q: 0.8, tau: 0.130, n: 0.20 } },
+    corps:  { f: 620,  q: 4.5, tau: 0.092, n: 1.15 },
+    boom:   { type: 'sawtooth', f0: 120, f1: 44, chute: 0.030, tau: 0.098, n: 0.60 },
+    queue:  { f: 950,  q: 0.8, tau: 0.155, n: 0.30 } },
   // LE FUSIL A LUNETTE : un seul coup, lourd et grave, qui roule dans tout le quartier.
-  'tir-sniper': { niv: 0.66, portee: 100,
+  'tir-sniper': { niv: 0.27, portee: 100,
     claque: { f: 1500, tau: 0.040, n: 0.80 },
     corps:  { f: 380,  q: 3.2, tau: 0.115, n: 1.05 },
     boom:   { type: 'sawtooth', f0: 92,  f1: 33, chute: 0.050, tau: 0.135, n: 0.75 },
     queue:  { f: 600,  q: 0.7, tau: 0.290, n: 0.26 } },
   // ---- le reste de l'armement ----
   // DEGAINER : le frottement du cuir de l'etui, puis le clic de l'arme qui se presente.
-  'degaine': { niv: 0.22, portee: 16,
+  'degaine': { niv: 0.10, portee: 16,
     claque: { f: 4200, tau: 0.012, n: 0.55 },
     corps:  { f: 1400, q: 1.2, tau: 0.060, n: 0.70 },
     boom:   { type: 'square', f0: 520, f1: 900, chute: 0.045, tau: 0.035, n: 0.18 },
     queue:  { f: 2600, q: 0.8, tau: 0.045, n: 0.20 } },
   // RENGAINER : le meme frottement, mais qui DESCEND, et le petit choc de l'arme au fond de l'etui.
-  'rengaine': { niv: 0.24, portee: 16,
+  'rengaine': { niv: 0.11, portee: 16,
     claque: { f: 3000, tau: 0.018, n: 0.45 },
     corps:  { f: 700,  q: 1.4, tau: 0.085, n: 0.85 },
     boom:   { type: 'square', f0: 420, f1: 190, chute: 0.060, tau: 0.055, n: 0.22 },
     queue:  { f: 1600, q: 0.8, tau: 0.070, n: 0.18 } },
   // LE CLIC A VIDE : le percuteur sur une chambre vide. Rien que du metal, aucun grave.
   // Avant, un chargeur vide ne faisait AUCUN bruit : on appuyait dans le silence.
-  'vide': { niv: 0.30, portee: 12,
+  'vide': { niv: 0.13, portee: 12,
     claque: { f: 5200, tau: 0.007, n: 1.00 },
     corps:  { f: 2400, q: 9, tau: 0.016, n: 0.55 },
     boom:   { type: 'square', f0: 1500, f1: 900, chute: 0.012, tau: 0.014, n: 0.30 },
     queue:  { f: 3400, q: 1.6, tau: 0.030, n: 0.10 } },
   // LA BALLE DANS LA TOLE : le « tonk » creux d'une carrosserie, avec la resonance du panneau.
-  'tole': { niv: 0.42, portee: 45,
+  'tole': { niv: 0.17, portee: 45,
     claque: { f: 3600, tau: 0.010, n: 0.70 },
     corps:  { f: 480,  q: 11, tau: 0.090, n: 1.00 },
     boom:   { type: 'sine', f0: 300, f1: 175, chute: 0.055, tau: 0.075, n: 0.40 },
     queue:  { f: 1800, q: 1.1, tau: 0.055, n: 0.16 } },
   // LA BALLE DANS LE MUR : sec, mat, plein de poussiere de beton. Pas de resonance.
-  'mur': { niv: 0.36, portee: 45,
+  'mur': { niv: 0.145, portee: 45,
     claque: { f: 2600, tau: 0.014, n: 0.90 },
     corps:  { f: 700,  q: 2.0, tau: 0.045, n: 0.60 },
     boom:   { type: 'triangle', f0: 190, f1: 95, chute: 0.030, tau: 0.040, n: 0.25 },
     queue:  { f: 1200, q: 0.7, tau: 0.075, n: 0.18 } },
   // LE RICOCHET : le sifflement de la balle qui repart de travers. Un glissando qui MONTE
   // puis file, presque pas de bruit — c'est le son le plus reconnaissable d'un tir rate.
-  'ricochet': { niv: 0.30, portee: 50,
+  'ricochet': { niv: 0.13, portee: 50,
     claque: { f: 6000, tau: 0.008, n: 0.35 },
     corps:  { f: 2600, q: 12, tau: 0.030, n: 0.30 },
     boom:   { type: 'sine', f0: 1150, f1: 3300, chute: 0.130, tau: 0.115, n: 1.00 },
@@ -14009,7 +14016,7 @@ function sonArme(nom, x, y, z, force) {
     const V = voixTir(); if (!V) return;
     // on rebranche la voix sur la destination de CE coup (panoramique + distance)
     if (V.dest !== dest) { try { V.mix.disconnect(); } catch (e) {} V.mix.connect(dest); V.dest = dest; }
-    const t = c.currentTime, niv = A.niv * f;
+    const t = c.currentTime + TIR_AVANCE, niv = A.niv * f;
     // le grain change a chaque balle : deux coups ne claquent jamais exactement pareil
     const j = 0.93 + Math.random() * 0.14;
     try { V.src.playbackRate.setValueAtTime(j, t); } catch (e) {}

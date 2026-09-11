@@ -13005,3 +13005,201 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
+
+// ===================== POSTE SON : L'ARMEMENT (detonation, impacts, ricochet) =====================
+// LE BANC D'ECOUTE. On mesure AU BOUT DE LA CHAINE (apres le limiteur) avec un nœud qui
+// ecoute en continu : un analyseur ne montre que les 46 dernieres millisecondes et rate
+// toujours une detonation. Quatre precautions, toutes payees par un test qui mentait :
+//  1. Le ScriptProcessor tourne sur le FIL PRINCIPAL. Sous swiftshader une image de jeu coute
+//     un demi-seconde : il perd des blocs entiers, et la deuxieme balle d'une rafale mesurait
+//     0,23 au lieu de 0,85. On met donc le jeu en veille (`__manetteSeule`, le mode ou loop()
+//     rend la main tout de suite) pendant la mesure — plus une seule image, plus un seul trou.
+//  2. On VERIFIE la couverture de chaque enregistrement (blocs x 1024 / frequence contre le
+//     temps reel ecoule) et on refait la mesure si le banc a perdu ou avale des blocs.
+//  3. Le volume general et le volume du bus « effets » sont ramenes a 1 le temps de la
+//     mesure (un test precedent peut les avoir baisses) puis remis exactement comme avant :
+//     on mesure le SON, pas l'etat laisse par le voisin.
+//  4. Math.random est fige : le grain de chaque coup fait varier les filtres de +/- 7 %.
+const SON_ARME_BANC = `
+  const G = __G, dodo = ms => new Promise(r => setTimeout(r, ms));
+  G.settings.sound = true; G.settings.voices = false;
+  __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+  const c = G.sfx.unlock(), ch = G.sfx.chaine();
+  if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
+  const hasard = Math.random; Math.random = () => 0.5;
+  const volAv = ch.master.gain.value, busAv = ch.bus.effets.gain.value;
+  try { ch.master.gain.cancelScheduledValues(c.currentTime); ch.master.gain.value = 1; } catch (e) {}
+  try { ch.bus.effets.gain.cancelScheduledValues(c.currentTime); ch.bus.effets.gain.value = 1; } catch (e) {}
+  window.__manetteSeule = true;   // le jeu se met en veille : le fil principal est libre pour l'ecoute
+  const serie = []; let crete = 0, somme = 0, nEch = 0;
+  const sp = c.createScriptProcessor(1024, 1, 1);
+  sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); let mx = 0, sm = 0;
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > mx) mx = v; sm += d[i] * d[i]; }
+    if (mx > crete) crete = mx; somme += sm; nEch += d.length; serie.push(+mx.toFixed(4)); };
+  const muet = c.createGain(); muet.gain.value = 0;
+  ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+  const rendre = () => {
+    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    try { ch.master.gain.value = volAv; ch.bus.effets.gain.value = busAv; } catch (e) {}
+    window.__manetteSeule = false; Math.random = hasard;
+  };
+  // on fait taire tout ce qu'un test precedent a pu laisser tourner, puis on REMET la rumeur
+  // du quartier : c'est elle, le bruit de fond au-dessus duquel le coup de feu doit ressortir
+  G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
+  try { G.meteoSet('clair', 9999); } catch (e) {} try { G.craieLitFerme(); } catch (e) {}
+  let quartier = null;
+  try { G.SONV.ambT = 0; quartier = G.quartierSon(); G.ambiance.set(quartier.k, quartier.vol, quartier.coupe); } catch (e) {}
+  await dodo(1100);
+  // ecoute(ms, quoi) : declenche le son puis enregistre ms millisecondes reelles.
+  // pic = crete, rms = valeur efficace, duree = nombre de blocs de 23 ms avant de retomber
+  // sous un dixieme de la crete (la « longueur » du coup), couverture = fiabilite du banc.
+  const brut = async (ms, quoi) => { crete = 0; somme = 0; nEch = 0; serie.length = 0;
+    const t0 = performance.now(); if (quoi) quoi();
+    while (performance.now() - t0 < ms) await dodo(10);
+    const reel = (performance.now() - t0) / 1000, s = serie.slice();
+    let i0 = 0; for (let i = 1; i < s.length; i++) if (s[i] > s[i0]) i0 = i;
+    let duree = 0; for (let i = i0; i < s.length; i++) { if (s[i] < crete * 0.1) break; duree++; }
+    return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nEch)).toFixed(4), duree,
+      blocs: s.length, couverture: +(s.length * 1024 / c.sampleRate / reel).toFixed(2), serie: s };
+  };
+  // on refait l'enregistrement tant que le banc a perdu ou avale des blocs (jusqu'a 4 fois)
+  const ecoute = async (ms, quoi) => { let m = null;
+    for (let k = 0; k < 4; k++) { m = await brut(ms, quoi); m.essais = k + 1; if (m.couverture > 0.85 && m.couverture < 1.2) return m; await dodo(200); }
+    return m; };
+`;
+const bancSon = corps => new Function('return (async () => {' + SON_ARME_BANC + corps + '})()');
+
+test('le coup de feu CLAQUE : une detonation mesuree au bout de la chaine, et un caractere par arme', async p => {
+  const r = await p.evaluate(bancSon(`
+    const P = G.P, x = P.pos.x, y = P.pos.y + 1.3, z = P.pos.z;
+    const lit = await ecoute(520);                       // la rumeur du quartier, seule
+    // L'ANCIENNE RECETTE, rejouee telle quelle : une bouffee de bruit passe-bande a 1,1 kHz
+    // et un bip qui descend de 200 a 60 Hz. C'est tout ce qu'etait un coup de feu.
+    const ancien = await ecoute(520, () => { G.sfx.noise(.07, 1100, .13); G.sfx.tone(200, 0, .09, 'triangle', .09, 60); });
+    await dodo(250);
+    const armes = {};
+    for (const a of ['pistol', 'rifle', 'sniper']) { armes[a] = await ecoute(520, () => G.sonDetonation(a, x, y, z, 1)); await dodo(250); }
+    // et par la VRAIE voie de jeu : fire()
+    const parFire = {};
+    for (const a of ['pistol', 'rifle', 'sniper']) {
+      G.P.weapon = a; G.P.ammo = 99; G.P.reloadT = 0; G.P.drawn = true; G.P.zoom = a === 'sniper';
+      let m = null, emis = 0, nom = null;
+      for (let k = 0; k < 4; k++) {
+        const av = G.armVoix.joues;
+        m = await brut(520, () => { G.P.fireCd = 0; G.P.holsterT = 0; try { G.fire(); } catch (e) {} });
+        emis = G.armVoix.joues - av; nom = G.armVoix.dernier && G.armVoix.dernier.nom;
+        if (m.couverture > 0.85 && m.couverture < 1.2) break;
+        await dodo(200);
+      }
+      parFire[a] = { pic: m.pic, rms: m.rms, duree: m.duree, couverture: m.couverture, emis, nom };
+      await dodo(250);
+    }
+    rendre();
+    return { lit, ancien, armes, parFire, voix: G.armVoix.liste.length, quartier: quartier && quartier.k, volAv: +volAv.toFixed(2) };
+  `));
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const A = r.armes, F = r.parFire, sur = a => +(A[a].pic / Math.max(0.002, r.lit.pic)).toFixed(1);
+  // chaque arme claque fort, sans jamais coller le limiteur (au-dessus de 0,92 tout le reste est ecrase)
+  const fort = ['pistol', 'rifle', 'sniper'].every(a => A[a].pic > 0.6 && A[a].pic < 0.92 && A[a].pic > Math.max(0.05, r.lit.pic) * 12);
+  // le caractere : le pistolet est le plus court et le plus maigre, le fusil a lunette le plus
+  // long et le plus gras — c'est la valeur efficace et la duree qui le disent
+  const caractere = A.pistol.rms < A.rifle.rms && A.rifle.rms < A.sniper.rms
+    && A.pistol.duree < A.rifle.duree && A.rifle.duree < A.sniper.duree;
+  const parLeJeu = ['pistol', 'rifle', 'sniper'].every(a => F[a].emis >= 1 && F[a].nom === 'tir-' + a && F[a].pic > 0.5);
+  const ok = fort && caractere && parLeJeu && r.voix === 6 && A.pistol.pic > r.ancien.pic * 2;
+  return { ok, detail: `un coup de feu, c'etait deux lignes : une bouffee de bruit passe-bande a 1,1 kHz et un bip descendant de 200 a 60 Hz — un « pfft » mou, sans attaque ni corps, identique pour toutes les armes (l'ancienne recette rejouee ici sur ce meme banc : crete ${r.ancien.pic}, efficace ${r.ancien.rms}, ${r.ancien.duree} blocs) · c'est maintenant une DETONATION a quatre couches — la claque (l'onde de choc), le corps (le coup de belier), le boum (le grave qui plonge) et la queue (le renvoi des immeubles) — tirees de ${r.voix} voix PERMANENTES en rotation · mesure au bout de la chaine, rumeur du quartier « ${r.quartier} » a crete ${r.lit.pic} / efficace ${r.lit.rms} : pistolet ${A.pistol.pic} (${sur('pistol')}× la rumeur, efficace ${A.pistol.rms}, ${A.pistol.duree} blocs de 23 ms — sec et court), fusil d'assaut ${A.rifle.pic} (${sur('rifle')}×, efficace ${A.rifle.rms}, ${A.rifle.duree} blocs — plus gras), fusil a lunette ${A.sniper.pic} (${sur('sniper')}×, efficace ${A.sniper.rms}, ${A.sniper.duree} blocs — lourd et grave) · aucune ne colle le limiteur (tout reste sous 0,92) · par la vraie voie de jeu, fire() emet bien la detonation de l'arme tenue : ${F.pistol.nom} ${F.pistol.pic}, ${F.rifle.nom} ${F.rifle.pic}, ${F.sniper.nom} ${F.sniper.pic}` };
+});
+
+test('une rafale reste DECOUPEE : trois coups font trois pics distincts, pas un plateau', async p => {
+  const r = await p.evaluate(bancSon(`
+    const P = G.P, x = P.pos.x, y = P.pos.y + 1.3, z = P.pos.z;
+    const lit = await ecoute(520);
+    // compte les pics d'un enregistrement : un bloc au-dessus de 45 % du maximum ouvre un
+    // pic NOUVEAU seulement si on est redescendu sous 22 % depuis le precedent. Un plateau
+    // ne donne donc qu'un seul pic, trois coups bien detaches en donnent trois.
+    const compte = s => {
+      const mx = Math.max.apply(null, s), haut = mx * 0.45, bas = mx * 0.22;
+      const pics = [], creux = []; let pret = true, courant = 0, creuxMin = 1;
+      for (const v of s) {
+        if (pret && v >= haut) { pret = false; courant = v; if (pics.length) creux.push(+creuxMin.toFixed(4)); creuxMin = 1; }
+        else if (!pret && v > courant) courant = v;
+        if (!pret && v < bas) { pret = true; pics.push(+courant.toFixed(4)); }
+        if (pret && pics.length) creuxMin = Math.min(creuxMin, v);
+      }
+      if (!pret) pics.push(+courant.toFixed(4));
+      return { pics, creux, max: +mx.toFixed(4) };
+    };
+    const rafales = {};
+    for (const a of ['pistol', 'rifle']) {
+      const cd = G.WEAPONS[a].cd * 1000;   // la cadence REELLE de l'arme, prise dans WEAPONS
+      let R = null;
+      for (let k = 0; k < 4; k++) {
+        crete = 0; serie.length = 0; const t0 = performance.now();
+        for (let i = 0; i < 3; i++) { G.sonDetonation(a, x, y, z, 1); const t = performance.now(); while (performance.now() - t < cd) await dodo(6); }
+        const t2 = performance.now(); while (performance.now() - t2 < 420) await dodo(6);
+        const reel = (performance.now() - t0) / 1000, s = serie.slice();
+        R = compte(s); R.cd = G.WEAPONS[a].cd; R.blocs = s.length; R.essais = k + 1;
+        R.couverture = +(s.length * 1024 / c.sampleRate / reel).toFixed(2);
+        await dodo(350);
+        if (R.couverture > 0.85 && R.couverture < 1.2 && R.pics.length === 3) break;
+      }
+      rafales[a] = R;
+    }
+    rendre();
+    return { lit, rafales };
+  `));
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = ['pistol', 'rifle'].every(a => {
+    const R = r.rafales[a];
+    if (R.pics.length !== 3 || R.creux.length !== 2) return false;
+    const mini = Math.min.apply(null, R.pics), maxi = Math.max.apply(null, R.pics);
+    // aucun coup avale (le plus faible fait au moins 65 % du plus fort) et de vrais creux entre eux
+    return mini > 0.45 && mini >= maxi * 0.65 && Math.max.apply(null, R.creux) < mini * 0.35;
+  });
+  const dis = a => { const R = r.rafales[a]; const mini = Math.min.apply(null, R.pics);
+    return `${R.pics.length} pics (${R.pics.join(' / ')}) separes par des creux de ${R.creux.join(' et ')}, soit ${R.creux.map(v => Math.round(100 * v / mini) + ' %').join(' et ')} du plus faible`; };
+  return { ok, detail: `en rafale les tirs se fondaient en bouillie : chaque balle relancait le MEME souffle et la suivante ecrasait la queue de la precedente · six voix PERMANENTES tournent maintenant en rond — chaque balle a sa voix, son grain et sa propre queue, et aucune n'ecrase l'autre · mesure au bout de la chaine, a la cadence REELLE de chaque arme (rumeur de fond ${r.lit.pic}) — pistolet, un coup toutes les ${r.rafales.pistol.cd} s : ${dis('pistol')} ; fusil d'assaut, un coup toutes les ${r.rafales.rifle.cd} s : ${dis('rifle')} · trois coups donnent bien trois pics distincts et jamais un plateau, et le plus faible fait au moins 65 % du plus fort : aucune balle n'est avalee` };
+});
+
+test('le reste de l\'armement a du grain : rengainage, clic a vide, tole, mur et ricochet', async p => {
+  const r = await p.evaluate(bancSon(`
+    const P = G.P, x = P.pos.x, y = P.pos.y + 1.2, z = P.pos.z;
+    const lit = await ecoute(520);
+    const sons = {};
+    for (const k of ['degaine', 'rengaine', 'vide', 'tole', 'mur', 'ricochet']) {
+      sons[k] = await ecoute(480, () => G.sonArme(k, x, y, z, 1)); await dodo(260);
+    }
+    // LE CLIC A VIDE PAR LA VRAIE VOIE : chargeur vide et rechargement en cours, fire() ne
+    // tirait rien et ne faisait AUCUN bruit — on appuyait dans le silence.
+    G.P.weapon = 'pistol'; G.P.drawn = true; G.P.zoom = false; G.P.ammo = 0;
+    G.P.reloadT = G.simTime + 5; G.P.fireCd = 0; G.P.videT = 0;
+    const avVide = G.armVoix.joues, avTirs = G.shots.length;
+    try { G.fire(); } catch (e) {}
+    const clicVide = { emis: G.armVoix.joues - avVide, nom: G.armVoix.dernier && G.armVoix.dernier.nom, balles: G.shots.length - avTirs };
+    // DEGAINER / RENGAINER par la vraie voie
+    G.P.ammo = 8; G.P.reloadT = 0; G.P.drawn = false;
+    const avD = G.armVoix.joues; try { G.drawWeapon(true); } catch (e) {}
+    const degaine = { emis: G.armVoix.joues - avD, nom: G.armVoix.dernier && G.armVoix.dernier.nom };
+    const avR = G.armVoix.joues; try { G.drawWeapon(false); } catch (e) {}
+    const rengaine = { emis: G.armVoix.joues - avR, nom: G.armVoix.dernier && G.armVoix.dernier.nom };
+    // L'IMPACT : une balle sur la tole ou le beton repart en sifflant une fois sur deux
+    // (Math.random est fige a 0,5 pour la mesure : on force donc les deux cas a la main)
+    Math.random = () => 0.1; const avI = G.armVoix.joues; G.sonImpactBalle('tole', x, y, z, 1);
+    const avecRicochet = G.armVoix.joues - avI;
+    Math.random = () => 0.9; const avI2 = G.armVoix.joues; G.sonImpactBalle('mur', x, y, z, 1);
+    const sansRicochet = G.armVoix.joues - avI2;
+    Math.random = () => 0.5;
+    rendre();
+    return { lit, sons, clicVide, degaine, rengaine, avecRicochet, sansRicochet };
+  `));
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const S = r.sons;
+  const audibles = ['degaine', 'rengaine', 'vide', 'tole', 'mur', 'ricochet'].every(k => S[k].pic > Math.max(0.004, r.lit.pic) * 4 && S[k].pic > 0.10 && S[k].pic < 0.92);
+  // un impact tape plus fort qu'un geste d'etui : on ne confond pas une balle avec un holster
+  const hierarchie = S.tole.pic > S.rengaine.pic && S.mur.pic > S.degaine.pic && S.ricochet.duree > S.vide.duree;
+  const parLeJeu = r.clicVide.emis === 1 && r.clicVide.nom === 'vide' && r.clicVide.balles === 0
+    && r.degaine.emis === 1 && r.degaine.nom === 'degaine' && r.rengaine.emis === 1 && r.rengaine.nom === 'rengaine';
+  const ricoche = r.avecRicochet === 2 && r.sansRicochet === 1;
+  const ok = audibles && hierarchie && parLeJeu && ricoche;
+  return { ok, detail: `tout le reste de l'armement etait fait de bips : degainer et rengainer, c'etait la meme onde triangle a 900 et 500 Hz ; une balle dans une carrosserie, une bouffee de 50 ms ; une balle dans un mur ou dans le sol, RIEN DU TOUT ; un chargeur vide, RIEN NON PLUS — on appuyait dans le silence ; et le ricochet n'existait pas · mesure au bout de la chaine (rumeur de fond ${r.lit.pic}) : degainer ${S.degaine.pic} (cuir qui frotte + clic qui MONTE), rengainer ${S.rengaine.pic} (le choc au fond de l'etui, qui DESCEND), clic a vide ${S.vide.pic} (percuteur sec, ${S.vide.duree} bloc de 23 ms), tole ${S.tole.pic} (« tonk » creux, cloche Q 11 a 480 Hz), mur ${S.mur.pic} (sec et mat, poussiere de beton), ricochet ${S.ricochet.pic} (sifflement qui monte de 1150 a 3300 Hz, ${S.ricochet.duree} blocs) · par la vraie voie de jeu : chargeur vide + rechargement en cours, fire() emet « ${r.clicVide.nom} » et ${r.clicVide.balles} balle ; drawWeapon(true) emet « ${r.degaine.nom} », drawWeapon(false) « ${r.rengaine.nom} » · une balle qui tape repart en ricochet une fois sur deux (${r.avecRicochet} sons quand ca ricoche, ${r.sansRicochet} sinon)` };
+});

@@ -6452,9 +6452,17 @@ function depannageTick(dt, d) {
     }
     if (d.rep) { reparateurRange(d.rep); d.rep = null; }
     d.repFait = true;
+    // LA PAIE D'ABORD, LA REPARATION ENSUITE. La retenue sur la paie se calcule sur les degats
+    // CONSTATES a l'arrivee : il faut donc la chiffrer avant de remettre l'epave a neuf.
     const degats = Math.max(0, Math.round((ep.dmg || 0) - d.dmg0) + Math.round(dep.dmg || 0));
     mission.prime = -Math.min(45, degats);
     d.degats = degats;
+    // ET LE GARAGE REPARE POUR DE VRAI. Meme oubli que sur le service automatique : la refonte
+    // a insere une etape de reparation visible (le reparateur, dix secondes, capot ouvert) et
+    // personne n'a reporte a la fin de cette NOUVELLE etape ce que faisait l'ancienne — remettre
+    // les degats a zero. Le joueur regardait donc un employe travailler dix secondes sur une
+    // voiture qui ressortait du garage exactement aussi cassee qu'elle y etait entree.
+    ep.dmg = 0; ep.dead = false; ep.explosed = false; try { repairVisual(ep); } catch (e) {}
     ep.g.rotation.x = 0; endMission(true);
   }
 }
@@ -20151,7 +20159,15 @@ function convoieSecours(c, tx, tz, h) {
     if (px != null) break;
   }
   if (px == null) return false;
+  // CE QU'ON REMORQUE VIENT AVEC. Sans ca, le camion arrivait au garage et laissait son epave
+  // (et son solide de collision) en travers de la rue, a l'autre bout de la ville.
+  const r = c.remorque, dx = px - c.x, dz = pz - c.z;
   c.x = px; c.z = pz; if (h != null) c.h = h;
+  if (r && r.g) {
+    r.x += dx; r.z += dz; r.y = (c.y || 0) + 0.94;
+    r.g.position.set(r.x, r.y, r.z);
+    try { vehicleSolid(r); } catch (e) {}
+  }
   c.speed = 0; c.spd = 0; c.v = 0; c.pas = 0; c.ia = null; c.libre = null;
   c.srvBut = null; c.srvFige = 0; c.srvRecul = 0; c.srvDirect = 0; c.recule = false;
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
@@ -20549,6 +20565,16 @@ function depanneusesTick(dt) {
       d.depCible = 0;
       if (simTime < m.t) continue;
       d.depCible = null; d.dep = 0; d.remorque = null; c.remorque = null; c.busy = false;
+      // ON LE POSE DERRIERE LE CAMION, POUR DE BON. Jusqu'ici c'est la seule animation du
+      // plateau (`depanneuseAnime`, boucle de rendu) qui tenait l'epave en l'air ; la machine a
+      // etats, elle, ne touchait jamais a sa position. Des que le camion arrivait au garage
+      // autrement qu'en roulant image par image, l'epave restait plantee sur le lieu de
+      // l'accident et le garage « reparait » une voiture restee a cent metres de la (mesure :
+      // deposee a 106 m du garage, 1,1 m de son point de depart). Le dechargement pose donc
+      // explicitement le vehicule derriere la depanneuse, roues au sol.
+      { const cs = Math.cos(d.h), sn = Math.sin(d.h), rec = (d.baseD || 5.6) / 2 + (c.baseD || 4.4) / 2 + 0.6;
+        c.x = d.x - sn * rec; c.z = d.z - cs * rec; c.h = d.h;
+        c.g.rotation.set(0, c.h, 0, 'YXZ'); }
       try { vehicleSolid(c); settleVehicle(c); } catch (e) {}
       m.phase = 'garageRepare'; m.t = simTime + REPAR_DUREE;
       m.rep = reparateurArrive(c, REPAR_DUREE, null);

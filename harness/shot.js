@@ -15,16 +15,107 @@ const VIEWS = JSON.parse(fs.readFileSync(process.env.VUES || path.join(__dirname
 const HOOK = `
 window.__SHOT = {
   ready: true,
+  // Le banc d'essai pose ce drapeau (par localStorage, pour qu'il survive au rechargement de
+  // page du test de sauvegarde) : chaque __SHOT.go() rebatit alors la ville de zero.
+  // Voir MONDE NEUF PAR DEFAUT plus bas.
+  fraisDefaut: (function () { try { return localStorage.getItem('superobby.banc.frais') === '1'; } catch (e) { return false; } })(),
+  // CE QUI N'EST PAS AU REPOS A L'ENTREE D'UN TEST (__SHOT.sale).
+  // Le banc d'essai enchaine 300 tests dans UNE page : quand un test echoue, la cause est
+  // souvent l'etat laisse par un VOISIN, et le message d'echec ne le disait pas — on relisait
+  // dix fois un test parfaitement juste. On releve donc, AVANT toute remise a zero, la liste
+  // de ce qui trainait ; le banc l'ajoute au message des tests rouges. La liste ne juge pas :
+  // un test qui demande la continuite (continu: true) trouvera normalement des choses dedans.
+  sale: [],
+  // L'INVENTAIRE DU JOUEUR AU CHARGEMENT DE LA PAGE. On l'ecrit dans le stockage local a la
+  // toute premiere ouverture : il survit ainsi au rechargement de page du test de sauvegarde,
+  // qui relit superobby.owned et y trouverait sinon tous les achats des tests precedents.
+  achats0: (function () {
+    try { var k = 'superobby.banc.achats0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.owned') || '[]');
+      return JSON.parse(localStorage.getItem(k) || '[]') || []; } catch (e) { return []; }
+  })(),
+  argent0: (function () {
+    try { var k = 'superobby.banc.argent0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.wallet') || '25');
+      return +localStorage.getItem(k) || 25; } catch (e) { return 25; }
+  })(),
+  // LA TENUE PORTEE AU CHARGEMENT DE LA PAGE. Meme mecanique que les achats : le test de
+  // rechargement pose une sauvegarde d'avatar (dreads, taille XXL) puis relance la page, et
+  // tous les tests suivants mesuraient un autre personnage que celui du premier chargement.
+  look0: (function () {
+    try { var k = 'superobby.banc.look0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.avatar') || 'null');
+      return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
+  })(),
+  relevePropre() {
+    const s = [];
+    const dit = function (c, t) { if (c) s.push(t); };
+    try {
+      dit(typeof drive !== 'undefined' && drive.car, 'joueur au volant');
+      dit(typeof P !== 'undefined' && (P.sit || P.ride || P.swing || P.eat || P.deco), 'joueur assis / pris par un decor');
+      dit(typeof P !== 'undefined' && P.hp < 100, 'joueur blesse (' + (typeof P !== 'undefined' ? P.hp : '?') + ' PV)');
+      dit(typeof uiOpen !== 'undefined' && uiOpen, 'fenetre ouverte : ' + (typeof uiOpen !== 'undefined' ? uiOpen : ''));
+      dit(typeof paused !== 'undefined' && paused, 'jeu en pause');
+      dit(typeof jail !== 'undefined' && jail.on, 'joueur en prison');
+      dit(typeof police !== 'undefined' && police.wanted > 0, 'recherche police niveau ' + (typeof police !== 'undefined' ? police.wanted : '?'));
+      dit(typeof mission !== 'undefined' && mission.cur, 'mission en cours');
+      dit(typeof city !== 'undefined' && city.accidents && city.accidents.length, (typeof city !== 'undefined' && city.accidents ? city.accidents.length : 0) + ' accident(s) en cours');
+      dit(typeof city !== 'undefined' && city.incendies && city.incendies.length, (typeof city !== 'undefined' && city.incendies ? city.incendies.length : 0) + ' incendie(s)');
+      dit(typeof city !== 'undefined' && city.chantiers && city.chantiers.length, (typeof city !== 'undefined' && city.chantiers ? city.chantiers.length : 0) + ' chantier(s) ouverts');
+      // les etats de bots : on compte plutot que de citer chaque nom
+      if (typeof bots !== 'undefined') {
+        var ko = 0, cond = 0, ordre = 0;
+        for (var i = 0; i < bots.length; i++) { var b = bots[i];
+          if (b.ko || b.mort || b.hp < 100) ko++;
+          if (b.drive && b.drive.car) cond++;
+          if (b.rdv || b.ordre || b.gangMission || b.gardeCorps || b.sport) ordre++; }
+        dit(ko, ko + ' habitant(s) blesses ou au sol');
+        dit(cond, cond + ' habitant(s) au volant');
+        dit(ordre, ordre + ' habitant(s) avec un ordre en cours');
+      }
+      // L'INVENTAIRE ET LES FANTOMES : les deux residus qui ont fait tomber le plus de tests.
+      if (typeof owned !== 'undefined') {
+        var enTrop = 0; owned.forEach(function (x) { if (__SHOT.achats0.indexOf(x) < 0) enTrop++; });
+        dit(enTrop, enTrop + ' achat(s) de plus qu\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
+      }
+      if (typeof wallet !== 'undefined' && wallet !== __SHOT.argent0) dit(true, 'portefeuille a ' + wallet + ' au lieu de ' + __SHOT.argent0);
+      if (typeof solids !== 'undefined') {
+        var auMonde = function (m) { var n = m, q = 0; while (n && q++ < 64) { if (n === scene) return true; n = n.parent; } return false; };
+        var fant = 0; for (var q2 = 0; q2 < solids.length; q2++) { var o2 = solids[q2]; if (o2 && o2.mesh && !auMonde(o2.mesh)) fant++; }
+        dit(fant, fant + ' boite(s) de collision fantomes laissees par une reconstruction du monde');
+      }
+      // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
+      // l'ecran et il fausse toutes les mesures de niveau des tests audio.
+      dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');
+      dit(typeof SON !== 'undefined' && SON.vivants && SON.vivants.length, (typeof SON !== 'undefined' && SON.vivants ? SON.vivants.length : 0) + ' son(s) places encore vivants');
+      dit(typeof casino !== 'undefined' && casino.cine, 'un tour de roulette en cours (bruit de bille en boucle)');
+      // LA MEMOIRE DU RENDU : une fuite ne se voit qu'en comparant d'un test a l'autre.
+      var m = renderer.info.memory;
+      __SHOT.memoire = { geo: m.geometries, tex: m.textures, prog: renderer.info.programs.length, objets: scene.children.length, solides: solids.length };
+    } catch (e) { s.push('releve impossible : ' + (e && e.message)); }
+    return s;
+  },
   go(v) {
+    try { this.sale = this.relevePropre(); } catch (e) { this.sale = []; }
     // le champ de chat garde le focus d'un test a l'autre et avale alors toutes les
     // touches (le jeu ignore les keydown quand chatIn est actif) : on le relache.
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     // un test precedent peut laisser le joueur au volant, assis ou une fenetre ouverte :
     // on repart d'un etat propre, sinon les touches sont ignorees.
+    // CHACUN SON try : quand closeUI() levait une exception, on n'arrivait meme plus a la
+    // ligne qui fait descendre le joueur de voiture, et le test suivant se jouait AU VOLANT.
+    try { if (uiOpen) closeUI(); } catch (e) {}
+    try { if (typeof city !== 'undefined' && city.rideBot && typeof botDescendre === 'function') botDescendre(city.rideBot, true); } catch (e) {}
+    // AU VOLANT. Un test qui laisse le joueur dans une voiture fausse tout le reste : le
+    // comptoir de l'atelier, par exemple, ne se signale VOLONTAIREMENT pas quand on conduit,
+    // et « le garage a demenage » le declarait donc introuvable. exitCar() peut echouer (le
+    // vehicule a ete detruit entre-temps) : on force alors la sortie a la main.
+    try { if (drive.car) exitCar(); } catch (e) {}
     try {
-      if (uiOpen) closeUI();
-      if (typeof city !== 'undefined' && city.rideBot && typeof botDescendre === 'function') botDescendre(city.rideBot, true);
-      if (drive.car) exitCar();
+      if (drive.car) { drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('driving', 'carnear'); }
+      drive.gear = 1; drive.shiftT = 0; drive.boostT = 0; drive.freinMain = false;
+    } catch (e) {}
+    try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
       if (typeof gym !== 'undefined') gym.on = null;
@@ -36,7 +127,13 @@ window.__SHOT = {
     // accident) mesurait alors les restes des autres — d'un run a l'autre le meme test
     // trouvait 2246 ou 7264 appels. Ces tests demandent l'option frais et repartent d'une
     // ville comme au premier chargement.
-    if (v.frais && v.world != null) loadWorld(v.world);
+    // MONDE NEUF PAR DEFAUT (__SHOT.fraisDefaut) : le banc d'essai enchaine ~300 tests dans
+    // UNE SEULE page. Tout ce qu'aucune remise a zero ne rattrape (boucles de son empilees,
+    // minuteries, achats en boutique, textures) se cumule alors pendant deux heures. Un test
+    // peut demander la continuite avec { continu: true } quand il a besoin de l'etat laisse
+    // juste avant (par exemple relire une sauvegarde ecrite a l'appel precedent).
+    var veutFrais = v.frais != null ? v.frais : (v.continu ? false : !!window.__SHOT.fraisDefaut);
+    if (veutFrais && v.world != null) loadWorld(v.world);
     else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');
     document.getElementById('start').classList.add('hidden');
@@ -135,6 +232,10 @@ window.__SHOT = {
       if (typeof police !== 'undefined') for (const pc of (police.cars || [])) {
         pc.constat = null; pc.debarque = false; pc.mission = null; pc.gyro = false; pc.sireneOn = false;
         pc.accidente = false; pc.stopped = false; if (pc.etat) pc.etat.speed = 0;
+        // poste Circulation : la priorite de circulation est un BAIL (pc.prio, un horodatage) et
+        // le rangement pour la sirene laisse un deport (pc.ecart). Laisses tels quels, le test
+        // suivant mesurait une ronde qui se croyait prioritaire et roulait 1,7 m a cote de sa voie.
+        pc.prio = 0; pc.ecart = 0; pc.sireneVeh = null; pc.degageT = 0; pc.serviceBloqueT = 0; pc.ia = null; pc.exactVeh = false;
       }
       // --- 3. LA DEPANNEUSE. d.mission reste accroche a l'accident precedent : la flotte est
       // vue comme OCCUPEE (L.find(x => !x.mission) ne trouve plus rien), elle ne repart pas,
@@ -146,6 +247,7 @@ window.__SHOT = {
         d.gyro = false; d.sirene = false; d.sireneOn = false; d.recule = false;
         d.busy = false; d.metierBusy = false; d.outil = 0; d.outilCible = 0;
         d.accidente = false; d.stopped = false; d.dmg = 0; d.dead = false;
+        d.prio = 0; d.ecart = 0; d.sireneVeh = null; d.degageT = 0; d.serviceBloqueT = 0; d.ia = null; d.exactVeh = false;   // poste Circulation
       }
       // --- 4. LES AMBULANCES. a.etat et a.victime survivent : une ambulance restee en
       // « transport » repose le blesse SUR SON BRANCARD a chaque image — et si la victime est
@@ -157,6 +259,7 @@ window.__SHOT = {
         a.etat = null; a.victime = null; a.cible = null; a.t = 0;
         a.gyro = false; a.sirene = false; a.sireneOn = false; a.recule = false;
         a.busy = false; a.metierBusy = false; a.accidente = false; a.stopped = false;
+        a.prio = 0; a.ecart = 0; a.sireneVeh = null; a.degageT = 0; a.serviceBloqueT = 0; a.ia = null; a.exactVeh = false;   // poste Circulation
       }
       if (typeof city !== 'undefined') city.urgT = 0;   // le scrutin des urgences reprend tout de suite
       // --- 5. LE JOUEUR BLESSE. P.hp n'etait pas remis a neuf : sous 12 points de vie,
@@ -177,6 +280,34 @@ window.__SHOT = {
         v.speed = 0; v.spd = 0; v.v = 0; v.route = null;
         if (v.g) { v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ'); v.g.visible = true; }
         try { settleVehicle(v); vehicleSolid(v); } catch (e21) {}
+      }
+      // --- 7bis. LES ENGINS FANTOMES ET LEURS BOITES DE COLLISION.
+      // Quand le monde est reconstruit, clearWorld detache les maillages mais les TABLEAUX
+      // city.ambulances / city.depanneuses gardent les anciens objets. Les remises a zero n° 7
+      // et 8 ci-dessous les reposent alors sur leur place de parking et remettent leur boite de
+      // collision dans solids — a l'endroit exact ou la NOUVELLE ambulance vient d'etre garee.
+      // MESURE : quatre ambulances pour deux places, +3 boites fantomes par reconstruction
+      // (21 apres huit). Au bout de cent tests l'ambulance etait MUREE dans ses propres
+      // fantomes : « a la manette PS5, R2 avance » lisait -0,14 m/s au lieu de 10,39, et
+      // « le garage a demenage » comptait un conflit de murs inexistant.
+      // Un objet appartient encore au monde si, en remontant ses parents, on retombe sur la
+      // scene : c'est le seul critere sur : le maillage d'un fantome garde son parent (le groupe
+      // auquel il appartenait), mais ce groupe-la n'est plus accroche a rien.
+      var dansLeMonde = function (m) { var n = m, k = 0; while (n && k++ < 64) { if (n === scene) return true; n = n.parent; } return false; };
+      if (typeof city !== 'undefined') for (const nomFlotte of ['ambulances', 'depanneuses', 'cars', 'aiCars', 'mannequins']) {
+        const L = city[nomFlotte]; if (!Array.isArray(L)) continue;
+        for (let kv = L.length - 1; kv >= 0; kv--) {
+          const ve = L[kv], gr = ve && (ve.g || ve.group);
+          if (gr && !dansLeMonde(gr)) L.splice(kv, 1);
+        }
+      }
+      if (typeof solids !== 'undefined') {
+        var nFantomes = 0;
+        for (var kf = solids.length - 1; kf >= 0; kf--) {
+          var sf = solids[kf];
+          if (sf && sf.mesh && !dansLeMonde(sf.mesh)) { solids.splice(kf, 1); nFantomes++; }
+        }
+        if (nFantomes) { try { sgridSale(); } catch (e35) {} }
       }
       // --- 8. UN VEHICULE DE SERVICE SORTI DE LA FLOTTE CONDUISIBLE. Les outils (treuil,
       // plateau, gyrophare) ne sont animes que pour les vehicules presents dans city.cars :
@@ -203,6 +334,7 @@ window.__SHOT = {
       if (typeof city !== 'undefined') for (const v of (city.cars || [])) {
         if (!v || !v.travail) continue;
         v.busy = false; v.metierBusy = false; v.gyro = false; v.sireneOn = false;
+        v.sirene = false; v.prio = 0; v.ecart = 0; v.sireneVeh = null; v.degageT = 0; v.serviceBloqueT = 0; v.ia = null; v.exactVeh = false;   // poste Circulation
         if (v.g) v.g.visible = true;
         if (v.solid && typeof solids !== 'undefined' && solids.indexOf(v.solid) < 0) { solids.push(v.solid); try { sgridSale(); } catch (e28) {} }
       }
@@ -212,7 +344,10 @@ window.__SHOT = {
       if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [])) {
         if (!c) continue;
         if (c.feu || c.enFlammes || c.dead) { try { eteintFeu(c); } catch (e24) {} }
-        if (c.dmg || c.dead || c.explosed) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
+        // ...SAUF quand le test verifie la sauvegarde : loadWorld a deja appele rechargeTout(),
+        // qui repose TA voiture dans le garage AVEC ses bosses. On les effacait juste apres, et
+        // « la sauvegarde garde tout » lisait « 0 % de bosses » alors qu'elle en avait enregistre 17.
+        if (!v.garderSauvegarde && (c.dmg || c.dead || c.explosed)) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
         c.accidente = false; c.stopped = false;
       }
       // --- 11. LA BOITE DE VITESSES. Le rapport courant, le verrou anti-va-et-vient (shiftT) et
@@ -237,6 +372,59 @@ window.__SHOT = {
       // son de sirene en boucle : la mesure de silence des deux tests audio partait deja a
       // pleine puissance.
       if (typeof siren !== 'undefined') { try { siren.stop(); } catch (e26) {} }
+      // --- 14. L'INVENTAIRE DU JOUEUR. C'est le residu que MEME un monde neuf ne repare pas :
+      // owned (les achats), le portefeuille, les grenades et l'arme en main vivent EN DEHORS du
+      // monde, loadWorld ne les touche pas. Or chaque test qui s'offre un fusil a lunette ou un
+      // couteau le laisse a tout jamais, et ces achats reviennent meme apres un rechargement de
+      // page (ils sont enregistres). Symptome exact releve dans la suite complete : « la croix
+      // gauche/droite » fait defiler les armes POSSEDEES, et le tour attendu
+      // pistolet -> fusil -> mains nues devenait pistolet -> fusil -> fusil a lunette -> couteau ;
+      // « le couteau s'achete » lisait « deja possede » ; le harnais de dos restait visible apres
+      // qu'on ait rendu les deux fusils. On repose donc l'inventaire tel qu'il etait au premier
+      // chargement de la page (sauf, evidemment, quand le test verifie justement la sauvegarde).
+      if (!v.garderSauvegarde && !v.garderAchats && typeof owned !== 'undefined') {
+        owned.clear(); for (var ia = 0; ia < __SHOT.achats0.length; ia++) owned.add(__SHOT.achats0[ia]);
+        try { saveOwned(); } catch (e29) {}
+        if (typeof wallet !== 'undefined') { wallet = __SHOT.argent0; try { saveWallet(); } catch (e30) {} }
+        P.grenades = 0; P.ammo = 0; P.drawn = false; P.aim = false; P.melee = null; P.gun = false;
+        try { equipWeapon(null); } catch (e31) {}
+        try { setWeapon(me, null); } catch (e32) {}
+        try { majEtuis(); } catch (e33) {}
+        try { updateHud(); } catch (e34) {}
+        // Meme famille : la PREPARATION DE LA VOITURE et le CARNET D'AMIS. Un moteur de
+        // niveau 2 et trois kits laisses par un test changent la vitesse de pointe de la
+        // voiture du test suivant (c'est un des soupcons sur « le cinquieme rapport n'est
+        // jamais atteint »), et un habitant devenu ami ne se bat plus, ne vole plus et ne
+        // repond plus pareil. Les deux sont enregistres : ils reviennent meme apres un
+        // rechargement de page. On repart des valeurs d'usine.
+        if (typeof tuning !== 'undefined' && typeof TUNE_DEF !== 'undefined') {
+          for (const kt of Object.keys(tuning)) delete tuning[kt];
+          Object.assign(tuning, JSON.parse(JSON.stringify(TUNE_DEF)));
+          try { saveTuning(); } catch (e35b) {}
+        }
+        if (typeof amis !== 'undefined') { amis.clear(); try { saveAmis(); } catch (e36) {} }
+        if (typeof bank !== 'undefined') { bank.balance = 0; bank.coffresJour = 0; }
+        // LA TENUE PORTEE. Un test qui essaie toutes les chaussures de la boutique, une
+        // casquette ou un sac laisse le personnage habille comme ca pour les 200 tests
+        // suivants — et la morphologie change les mesures de geometrie du poste Personnages.
+        if (typeof myCfg !== 'undefined' && __SHOT.look0) {
+          for (const kl of Object.keys(__SHOT.look0)) if (kl in myCfg) myCfg[kl] = __SHOT.look0[kl];
+          try { applyMyLook(); } catch (e37) {}
+        }
+        // LE CHIEN ADOPTE. Il suit le joueur d'un test a l'autre, aboie, mord et se met entre
+        // le joueur et ce qu'on mesure ; et ses points de vie restaient a 20 apres une bagarre.
+        if (typeof chien !== 'undefined') {
+          chien.pet = null; chien.nom = ''; chien.attenteNom = false; chien.attaque = null; chien.attaqueT = 0;
+          chien.couche = false; chien.tag = null; chien.ordre = null; chien.ordreT = 0; chien.poste = null;
+          chien.saut = 0; chien.patte = 0; chien.garde = 0; chien.balle = null; chien.repas = 0;
+          chien.hp = chien.hpMax || 60; chien.perf = 22; chien.bond = 0; chien.bondT = 0;
+          try { localStorage.removeItem('superobby.chien'); } catch (e38) {}
+        }
+        // LE STOCKAGE. Tout ce qui precede est aussi ECRIT sur le disque : sans ce menage, la
+        // progression d'un test revenait apres le rechargement de page du test de sauvegarde.
+        try { for (const cle of ['superobby.perf', 'superobby.progress', 'superobby.carriere', 'superobby.stats',
+          'superobby.guerre', 'superobby.jail', 'superobby.grenades', 'superobby.muni', 'superobby.turbo']) localStorage.removeItem(cle); } catch (e39) {}
+      }
     } catch (e27) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
     // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.
@@ -296,6 +484,10 @@ window.__SHOT = {
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
+    // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
+    // normalement qu'a la demande, par le pave tactile) ; v.padTest ouvre « Tester la manette ».
+    if (v.aide) { document.body.classList.add('manette', 'city', 'aide'); }
+    if (v.padTest && typeof ouvreTestManette === 'function') { try { ouvreTestManette(); } catch (e16) {} }
     // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
     // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
     // enorme en mode tele). En plus rien ne le rallumait : une vue hideHud:false prise apres
@@ -353,6 +545,11 @@ window.__SHOT = {
     // serie d'instants successifs du meme geste (v.anim = { combat, u, garde, geste, t, opt }).
     if (typeof ANIM !== 'undefined' && ANIM) {
       ANIM.fige = v.anim || null;
+      if (typeof RALENTI !== 'undefined' && RALENTI) RALENTI.fige = null;
+      // poste Animation : plante une scene d'animation A L'ENDROIT DU JOUEUR et l'avance
+      // jusqu'a l'instant v.u (0 -> 1). v.scene = depanneuse | reparateur | creuse | grue |
+      // bulldozer | ralenti. Sans ca, aucune manoeuvre longue n'etait photographiable.
+      if (v.scene && typeof animScenePhoto === 'function') { try { animScenePhoto(v.scene, v.u); } catch (e16) {} }
       if (v.anim && v.anim.adversaire) {   // un adversaire plante devant le joueur, pour le combat
         try {
           const b = bots[0];
@@ -379,6 +576,20 @@ window.__SHOT = {
     }
     // poste FINITION : un itineraire GPS actif, pour photographier les chevrons au sol
     if (v.gps) { try { setBeacon(v.gps[0], v.gps[1], 0, 'mission'); gpsRoute.update(); } catch (e17) {} }
+    // poste INFRASTRUCTURE : v.classe = numero de salle (0 a 3), v.place = numero de chaise.
+    // On ASSOIT vraiment le joueur a une table d'ecolier, pour photographier ce que l'enfant
+    // voit pendant l'exercice : c'est la seule facon de verifier que le tableau reste degage.
+    if (v.classe != null) {
+      try {
+        const r = (city.classes || [])[v.classe] || (city.classes || [])[0];
+        if (r) {
+          const ch = r.chaises[v.place != null ? v.place : 1];
+          P.pos.set(ch.x, ch.y, ch.z); P.vel.set(0, 0, 0); cam.target.set(ch.x, ch.y + 1.5, ch.z);
+          sitBench(ch);
+          if (v.exercice && typeof openSchool === 'function') openSchool(r);
+        }
+      } catch (e18) {}
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -404,6 +615,16 @@ window.__G = {
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : 0,
   PAD_BOUTONS: typeof PAD_BOUTONS !== 'undefined' ? PAD_BOUTONS : 0,
   readInput: typeof readInput === 'function' ? readInput : null,
+  gachetteConduite: typeof gachetteConduite === 'function' ? gachetteConduite : null,
+  CONDUITE_V0: typeof CONDUITE_V0 !== 'undefined' ? CONDUITE_V0 : 0,
+  CONDUITE_V1: typeof CONDUITE_V1 !== 'undefined' ? CONDUITE_V1 : 0,
+  FREIN_PEDALE: typeof FREIN_PEDALE !== 'undefined' ? FREIN_PEDALE : 0,
+  FREIN_MAIN: typeof FREIN_MAIN !== 'undefined' ? FREIN_MAIN : 0,
+  heliPoser: typeof heliPoser === 'function' ? heliPoser : null,
+  heliSolSous: typeof heliSolSous === 'function' ? heliSolSous : null,
+  HELI_POSE_MAX: typeof HELI_POSE_MAX !== 'undefined' ? HELI_POSE_MAX : 0,
+  PT_AXES: typeof PT_AXES !== 'undefined' ? PT_AXES : null,
+  SPEED: typeof SPEED !== 'undefined' ? SPEED : 0,
   driveStep: typeof driveStep === 'function' ? driveStep : null,
   diffusion: typeof diffusion !== 'undefined' ? diffusion : null,
   diffusionMode: typeof diffusionMode === 'function' ? diffusionMode : null,
@@ -1206,6 +1427,32 @@ window.__G = {
   botHopital: typeof botHopital === 'function' ? botHopital : null,
   soinTick: typeof soinTick === 'function' ? soinTick : null,
   ANIM: typeof ANIM !== 'undefined' ? ANIM : null,
+  reparateurArrive: typeof reparateurArrive === 'function' ? reparateurArrive : null,
+  reparateurRange: typeof reparateurRange === 'function' ? reparateurRange : null,
+  reparateursTick: typeof reparateursTick === 'function' ? reparateursTick : null,
+  REPAR_DUREE: typeof REPAR_DUREE !== 'undefined' ? REPAR_DUREE : null,
+  enginCreuse: typeof enginCreuse === 'function' ? enginCreuse : null,
+  enginLeve: typeof enginLeve === 'function' ? enginLeve : null,
+  enginLame: typeof enginLame === 'function' ? enginLame : null,
+  enginsTick: typeof enginsTick === 'function' ? enginsTick : null,
+  enginCreuseTick: typeof enginCreuseTick === 'function' ? enginCreuseTick : null,
+  enginLeveTick: typeof enginLeveTick === 'function' ? enginLeveTick : null,
+  enginLameTick: typeof enginLameTick === 'function' ? enginLameTick : null,
+  reparateurTick: typeof reparateurTick === 'function' ? reparateurTick : null,
+  animScenePhoto: typeof animScenePhoto === 'function' ? animScenePhoto : null,
+  enginDemolit: typeof enginDemolit === 'function' ? enginDemolit : null,
+  creuseTrou: typeof creuseTrou === 'function' ? creuseTrou : null,
+  CREUSE_DUREE: typeof CREUSE_DUREE !== 'undefined' ? CREUSE_DUREE : null,
+  GRUE_DUREE: typeof GRUE_DUREE !== 'undefined' ? GRUE_DUREE : null,
+  RALENTI: typeof RALENTI !== 'undefined' ? RALENTI : null,
+  RALENTI_DUREE: typeof RALENTI_DUREE !== 'undefined' ? RALENTI_DUREE : null,
+  ralentiCoup: typeof ralentiCoup === 'function' ? ralentiCoup : null,
+  ralentiEchelle: typeof ralentiEchelle === 'function' ? ralentiEchelle : null,
+  ralentiCam: typeof ralentiCam === 'function' ? ralentiCam : null,
+  depanneusesTick: typeof depanneusesTick === 'function' ? depanneusesTick : null,
+  depanneuseAppel: typeof depanneuseAppel === 'function' ? depanneuseAppel : null,
+  makeVehiculeTravail: typeof makeVehiculeTravail === 'function' ? makeVehiculeTravail : null,
+  actionneOutil: typeof actionneOutil === 'function' ? actionneOutil : null,
   animPose: typeof animPose === 'function' ? animPose : null,
   animPres: typeof animPres === 'function' ? animPres : null,
   GESTES: typeof GESTES !== 'undefined' ? GESTES : null,
@@ -1301,6 +1548,18 @@ window.__G = {
   agentsTick: typeof agentsTick === 'function' ? agentsTick : null,
   TATOO_TAILLES: typeof TATOO_TAILLES !== 'undefined' ? TATOO_TAILLES : null,
   construireGraphe: typeof construireGraphe === 'function' ? construireGraphe : null,
+  surLaChaussee: typeof surLaChaussee === 'function' ? surLaChaussee : null,
+  prioriteService: typeof prioriteService === 'function' ? prioriteService : null,
+  enIntervention: typeof enIntervention === 'function' ? enIntervention : null,
+  ecarteChaussee: typeof ecarteChaussee === 'function' ? ecarteChaussee : null,
+  ECART_SIRENE: typeof ECART_SIRENE !== 'undefined' ? ECART_SIRENE : null,
+  VITESSE_SECOURS: typeof VITESSE_SECOURS !== 'undefined' ? VITESSE_SECOURS : null,
+  VITESSE_SERVICE: typeof VITESSE_SERVICE !== 'undefined' ? VITESSE_SERVICE : null,
+  APPROCHE_SERVICE: typeof APPROCHE_SERVICE !== 'undefined' ? APPROCHE_SERVICE : null,
+  ACCIDENT_GRAVITE_MIN: typeof ACCIDENT_GRAVITE_MIN !== 'undefined' ? ACCIDENT_GRAVITE_MIN : null,
+  ACCIDENT_VITESSE_MIN: typeof ACCIDENT_VITESSE_MIN !== 'undefined' ? ACCIDENT_VITESSE_MIN : null,
+  AMENDE_ACCIDENT: typeof AMENDE_ACCIDENT !== 'undefined' ? AMENDE_ACCIDENT : null,
+  vehiculeMord: typeof vehiculeMord === 'function' ? vehiculeMord : null,
   cheminAretes: typeof cheminAretes === 'function' ? cheminAretes : null,
   vehBloque: typeof vehBloque === 'function' ? vehBloque : null,
   botConduit: typeof botConduit === 'function' ? botConduit : null,
@@ -1322,6 +1581,7 @@ window.__G = {
   gapDevant: typeof gapDevant === 'function' ? gapDevant : null,
   carBlocked: typeof carBlocked === 'function' ? carBlocked : null,
   vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
+  degageVehicule: typeof degageVehicule === 'function' ? degageVehicule : null,
   roleVoie: typeof roleVoie === 'function' ? roleVoie : null,
   feuPhase: typeof feuPhase === 'function' ? feuPhase : null,
   FEU_CYCLE: typeof FEU_CYCLE !== 'undefined' ? FEU_CYCLE : null,
@@ -1465,6 +1725,10 @@ window.__G = {
   DUCK_TENUE: typeof DUCK_TENUE !== 'undefined' ? DUCK_TENUE : 0,
   craieLitFerme: typeof craieLitFerme === 'function' ? craieLitFerme : null,
   sonEn: typeof sonEn === 'function' ? sonEn : null,
+  // ---- poste CAMERA (perche, loi de distance, non-traversee) ----
+  camPerche: typeof camPerche === 'function' ? camPerche : null,
+  camLibres: typeof camLibres === 'function' ? camLibres : null,
+  interieurDe: typeof interieurDe === 'function' ? interieurDe : null,
 };
 `;
 

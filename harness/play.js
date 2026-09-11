@@ -1621,39 +1621,54 @@ test('abattre un policier déclenche l\'armée : 4×4, hélicoptère et projecte
 test('on monte sur le toit en ascenseur, on saute en parachute', async p => {
   const r = await p.evaluate(async () => {
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
-    __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
-    if (__G.P.voile) __G.rangeVoile(false);   // rien qui traîne d'un test précédent
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    if (G.P.voile) G.rangeVoile(false);   // rien qui traîne d'un test précédent
     await dodo(300);
-    const t = __G.city.toits[0], L = t.lift;
-    const nb = { lifts: __G.city.lifts.length, toits: __G.city.toits.length, voiles: __G.city.voiles.length };
-    __G.P.pos.set(L.x, L.low + 0.3, L.z); __G.P.vel.set(0, 0, 0);
-    const t0 = Date.now(); let haut = 0;
-    while (Date.now() - t0 < 55000) { await dodo(250); haut = Math.max(haut, __G.P.pos.y); if (__G.P.pos.y > L.high - 0.4) break; }
+    const t = G.city.toits[0], L = t.lift;
+    const nb = { lifts: G.city.lifts.length, toits: G.city.toits.length, voiles: G.city.voiles.length };
+    // LA MONTÉE SE MESURE EN TEMPS SIMULÉ, PAS À LA MONTRE. On attendait 55 secondes de
+    // montre ; sous la charge du banc d'essai le rendu logiciel tombe à UN CINQUIÈME d'image
+    // par seconde, et comme chaque image n'avance l'horloge du jeu que de 0,05 s au plus,
+    // ces 55 s ne valaient plus que 0,3 s de jeu — moins que la seconde d'attente de la
+    // cabine avant de démarrer. Le test criait « monté à 0,65 m » alors que l'ascenseur
+    // marchait très bien. On avance donc la simulation image par image, comme grimpe() le
+    // fait pour l'escalier de la banque.
+    G.P.pos.set(L.x, L.low + 0.3, L.z); G.P.vel.set(0, 0, 0);
+    let haut = G.P.pos.y, ecart = 0;
+    for (let i = 0; i < 1500 && G.P.pos.y < L.high - 0.4; i++) {
+      G.step(1 / 60, true);
+      haut = Math.max(haut, G.P.pos.y);
+      ecart = Math.max(ecart, Math.hypot(G.P.pos.x - L.x, G.P.pos.z - L.z));
+    }
     const monte = haut;
     // parachute posé sur le toit
-    const para = __G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
-    __G.P.pos.set(para.x, para.y + 0.4, para.z); await dodo(1200);
-    const detecte = !!__G.city.voileNear;
-    __G.prendreVoile(para);
-    // saut depuis 7 m plutôt que depuis le toit : en rendu logiciel le temps simulé avance
-    // 8 fois moins vite que la montre, et une descente de 14 m à 3,2 m/s ne tenait pas
-    // dans le temps imparti — le parachute était accusé de ne pas se replier
-    __G.P.pos.set(t.x + t.w / 2 + 3, 7, t.z); __G.P.vel.set(0, 0, 0);
-    const y0 = __G.P.pos.y, s0 = __G.simTime;
-    let vmin = 0, aVole = false, rangee = false; const t1 = Date.now();
-    while (Date.now() - t1 < 45000) {
-      await dodo(200); vmin = Math.min(vmin, __G.P.vel.y);
-      aVole = aVole || __G.P.voileVol;
-      if (aVole && !__G.P.voile) { rangee = true; break; }   // posé : le parachute se replie
+    const para = G.city.voiles.find(o => o.kind === 'parachute' && Math.abs(o.y - t.y) < 2);
+    G.P.pos.set(para.x, para.y + 0.4, para.z); G.P.vel.set(0, 0, 0);
+    for (let i = 0; i < 90; i++) G.step(1 / 60, true);
+    const detecte = !!G.city.voileNear;
+    G.prendreVoile(para);
+    // saut depuis 7 m plutôt que depuis le toit : la descente entière tiendrait mal dans le
+    // budget d'images du test, et ce qu'on vérifie ici c'est le plafonnement de la chute
+    G.P.pos.set(t.x + t.w / 2 + 3, 7, t.z); G.P.vel.set(0, 0, 0);
+    const y0 = G.P.pos.y, s0 = G.simTime;
+    let vmin = 0, aVole = false, rangee = false;
+    for (let i = 0; i < 2400; i++) {
+      G.step(1 / 60, true);
+      vmin = Math.min(vmin, G.P.vel.y);
+      aVole = aVole || G.P.voileVol;
+      if (aVole && !G.P.voile) { rangee = true; break; }   // posé : le parachute se replie
     }
     return { nb, monte: +monte.toFixed(2), high: +L.high.toFixed(2), toit: +t.y.toFixed(1), detecte,
-      chute: { de: +y0.toFixed(1), a: +__G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(__G.simTime - s0).toFixed(1) },
-      rangee, voileApres: __G.P.voile, mesh: !!__G.P.voileMesh, remise: !para.pris };
+      ecart: +ecart.toFixed(2),
+      chute: { de: +y0.toFixed(1), a: +G.P.pos.y.toFixed(2), vMin: +vmin.toFixed(2), duree: +(G.simTime - s0).toFixed(1) },
+      rangee, voileApres: G.P.voile, mesh: !!G.P.voileMesh, remise: !para.pris };
   });
-  const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.chute.vMin > -7 && r.chute.vMin < -1
+  const ok = r.nb.lifts >= 6 && r.nb.voiles >= 12 && r.monte > r.toit - 1 && r.ecart < 1.4
+    && r.chute.vMin > -7 && r.chute.vMin < -1
     && r.rangee && !r.voileApres && !r.mesh && r.remise;
-  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${r.rangee} et remise sur le toit=${r.remise}` };
+  return { ok, detail: `${r.nb.lifts} ascenseurs, ${r.nb.toits} toits équipés, ${r.nb.voiles} voiles · monté à ${r.monte} m (toit à ${r.toit}), jamais éjecté de la cabine (${r.ecart} m du centre) · parachute détecté=${r.detecte} · saut de ${r.chute.de} m : chute plafonnée à ${r.chute.vMin} m/s (au lieu de −30), posé à ${r.chute.a} m en ${r.chute.duree} s · voile repliée toute seule=${r.rangee} et remise sur le toit=${r.remise}` };
 });
 
 test('le deltaplane plane loin devant au lieu de tomber', async p => {

@@ -1252,6 +1252,10 @@ window.__G = {
   grilleDepart: typeof grilleDepart === 'function' ? grilleDepart : null,
   grilleRecul: typeof grilleRecul === 'function' ? grilleRecul : null,
   // ---- poste K (design et graphisme) ----
+  gunMesh: typeof gunMesh === 'function' ? gunMesh : null,
+  rifleMesh: typeof rifleMesh === 'function' ? rifleMesh : null,
+  sniperMesh: typeof sniperMesh === 'function' ? sniperMesh : null,
+  TEX_ARME: typeof TEX_ARME !== 'undefined' ? TEX_ARME : null,
   empreinte: typeof empreinte === 'function' ? empreinte : null,
   empreintesTick: typeof empreintesTick === 'function' ? empreintesTick : null,
   empreinteMarcheur: typeof empreinteMarcheur === 'function' ? empreinteMarcheur : null,

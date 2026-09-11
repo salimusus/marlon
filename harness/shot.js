@@ -225,7 +225,15 @@ window.__SHOT = {
       if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [], (typeof police !== 'undefined' ? police.cars : []) || [])) {
         if (c && c.etat) { c.etat.gear = 1; c.etat.shiftT = 0; c.etat.boostT = 0; }
       }
-      // --- 12. LA SIRENE ET LE GYROPHARE DU JOUEUR. sireneMission laisse c.sireneOn et un
+      // --- 12. LE TIRAGE AU SORT DE LA CIRCULATION. traficGraine est une graine PARTAGEE qui
+      // avance a chaque appel de traficRnd() : la destination d'une ronde de police et celle
+      // d'une voiture du trafic dependaient donc de TOUT ce que les tests precedents avaient
+      // tire. Symptome mesure : « la police abandonne les recherches » est verte seule, verte
+      // derriere un seul voisin, et rouge derriere trois — les deux voitures de ronde restaient
+      // plantees sur leur voie, 0 image en mouvement sur 85 s de simulation. On remet la graine
+      // a sa valeur de depart : chaque test retrouve le meme tirage qu'au premier chargement.
+      if (typeof traficGraine !== 'undefined') traficGraine = 20240607;
+      // --- 13. LA SIRENE ET LE GYROPHARE DU JOUEUR. sireneMission laisse c.sireneOn et un
       // son de sirene en boucle : la mesure de silence des deux tests audio partait deja a
       // pleine puissance.
       if (typeof siren !== 'undefined') { try { siren.stop(); } catch (e26) {} }

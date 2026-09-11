@@ -5614,7 +5614,10 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   } catch (e) { pret = false; erreur = e.message.slice(0, 120); }
   if (!pret) return { ok: false, detail: `le jeu ne redémarre pas avec une sauvegarde : ${erreur}` };
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // garderSauvegarde : c'est TOUT le sujet de ce test. Le banc d'essai remet sinon la
+    // tenue, le chien, les achats et l'equipe tels qu'ils etaient au premier chargement —
+    // exactement ce qu'on veut ailleurs, exactement ce qu'il ne faut pas ici.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderSauvegarde: true });
     return { ville: __G.city.on, gangs: __G.gangs.length, bots: __G.bots.length,
       perf: __G.perfDe(__G.P), rep: __G.gang.rep,
       look: { coupe: __G.myCfg.hair, bijou: __G.myCfg.bijou, taille: __G.myCfg.taille },

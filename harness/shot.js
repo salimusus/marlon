@@ -39,6 +39,14 @@ window.__SHOT = {
       if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.wallet') || '25');
       return +localStorage.getItem(k) || 25; } catch (e) { return 25; }
   })(),
+  // LA TENUE PORTEE AU CHARGEMENT DE LA PAGE. Meme mecanique que les achats : le test de
+  // rechargement pose une sauvegarde d'avatar (dreads, taille XXL) puis relance la page, et
+  // tous les tests suivants mesuraient un autre personnage que celui du premier chargement.
+  look0: (function () {
+    try { var k = 'superobby.banc.look0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.avatar') || 'null');
+      return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
+  })(),
   relevePropre() {
     const s = [];
     const dit = function (c, t) { if (c) s.push(t); };
@@ -94,10 +102,20 @@ window.__SHOT = {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     // un test precedent peut laisser le joueur au volant, assis ou une fenetre ouverte :
     // on repart d'un etat propre, sinon les touches sont ignorees.
+    // CHACUN SON try : quand closeUI() levait une exception, on n'arrivait meme plus a la
+    // ligne qui fait descendre le joueur de voiture, et le test suivant se jouait AU VOLANT.
+    try { if (uiOpen) closeUI(); } catch (e) {}
+    try { if (typeof city !== 'undefined' && city.rideBot && typeof botDescendre === 'function') botDescendre(city.rideBot, true); } catch (e) {}
+    // AU VOLANT. Un test qui laisse le joueur dans une voiture fausse tout le reste : le
+    // comptoir de l'atelier, par exemple, ne se signale VOLONTAIREMENT pas quand on conduit,
+    // et « le garage a demenage » le declarait donc introuvable. exitCar() peut echouer (le
+    // vehicule a ete detruit entre-temps) : on force alors la sortie a la main.
+    try { if (drive.car) exitCar(); } catch (e) {}
     try {
-      if (uiOpen) closeUI();
-      if (typeof city !== 'undefined' && city.rideBot && typeof botDescendre === 'function') botDescendre(city.rideBot, true);
-      if (drive.car) exitCar();
+      if (drive.car) { drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('driving', 'carnear'); }
+      drive.gear = 1; drive.shiftT = 0; drive.boostT = 0; drive.freinMain = false;
+    } catch (e) {}
+    try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
       if (typeof gym !== 'undefined') gym.on = null;
@@ -379,6 +397,26 @@ window.__SHOT = {
         }
         if (typeof amis !== 'undefined') { amis.clear(); try { saveAmis(); } catch (e36) {} }
         if (typeof bank !== 'undefined') { bank.balance = 0; bank.coffresJour = 0; }
+        // LA TENUE PORTEE. Un test qui essaie toutes les chaussures de la boutique, une
+        // casquette ou un sac laisse le personnage habille comme ca pour les 200 tests
+        // suivants — et la morphologie change les mesures de geometrie du poste Personnages.
+        if (typeof myCfg !== 'undefined' && __SHOT.look0) {
+          for (const kl of Object.keys(__SHOT.look0)) if (kl in myCfg) myCfg[kl] = __SHOT.look0[kl];
+          try { applyMyLook(); } catch (e37) {}
+        }
+        // LE CHIEN ADOPTE. Il suit le joueur d'un test a l'autre, aboie, mord et se met entre
+        // le joueur et ce qu'on mesure ; et ses points de vie restaient a 20 apres une bagarre.
+        if (typeof chien !== 'undefined') {
+          chien.pet = null; chien.nom = ''; chien.attenteNom = false; chien.attaque = null; chien.attaqueT = 0;
+          chien.couche = false; chien.tag = null; chien.ordre = null; chien.ordreT = 0; chien.poste = null;
+          chien.saut = 0; chien.patte = 0; chien.garde = 0; chien.balle = null; chien.repas = 0;
+          chien.hp = chien.hpMax || 60; chien.perf = 22; chien.bond = 0; chien.bondT = 0;
+          try { localStorage.removeItem('superobby.chien'); } catch (e38) {}
+        }
+        // LE STOCKAGE. Tout ce qui precede est aussi ECRIT sur le disque : sans ce menage, la
+        // progression d'un test revenait apres le rechargement de page du test de sauvegarde.
+        try { for (const cle of ['superobby.perf', 'superobby.progress', 'superobby.carriere', 'superobby.stats',
+          'superobby.guerre', 'superobby.jail', 'superobby.grenades', 'superobby.muni', 'superobby.turbo']) localStorage.removeItem(cle); } catch (e39) {}
       }
     } catch (e27) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce

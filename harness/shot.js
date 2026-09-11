@@ -572,10 +572,22 @@ window.__SHOT = {
     if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
       try {
         const b = bots[0];
+        // POSTE COMBAT : on ECARTE les autres habitants. Sans cela le poing partait sur le
+        // voisin le plus proche (nearestFighter prend le plus pres, pas celui qu'on a pose) et
+        // la photo montrait un coup dans le vide, de dos, derriere un passant.
+        for (const o of bots) if (o !== b) { o.pos.set(P.pos.x + 300, o.pos.y, P.pos.z + 300); o.av.group.position.copy(o.pos); o.rdv = null; }
         b.pos.set(P.pos.x + Math.sin(P.facing) * 1.5, P.pos.y, P.pos.z + Math.cos(P.facing) * 1.5);
         b.rdv = null; b.wait = 9; b.ko = 0; b.hp = 100; b.av.group.visible = true;
         b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
-        setTimeout(function () { try { P.punchT = 0; P.combo = v.coup === 'combo' ? 2 : 0; attack(v.coup === 'kick' ? 'kick' : 'punch'); } catch (e) {} }, Math.max(300, (v.wait || 1200) - 90));
+        // POSTE COMBAT : v.coup vaut 'direct', 'crochet', 'uppercut' (les trois gestes du
+        // round 70), 'combo' (l'ancien nom de l'uppercut) ou 'kick'. attack() fait tourner le
+        // compteur avant de choisir le geste : on le pose donc un cran plus bas.
+        // v.coupAvance = millisecondes entre le coup et la photo (90 par defaut = l'elan ;
+        // 250 environ = la detente, le moment ou le poing arrive).
+        setTimeout(function () { try { P.punchT = 0;
+          P.combo = (v.coup === 'combo' || v.coup === 'uppercut') ? 2 : v.coup === 'crochet' ? 1 : 0;
+          P.lastHitT = simTime; attack(v.coup === 'kick' ? 'kick' : 'punch'); } catch (e) {} },
+          Math.max(200, (v.wait || 1200) - (v.coupAvance || 90)));
       } catch (e) {}
     }
     if (v.balleMur) {   // une balle qui vient de frapper le décor

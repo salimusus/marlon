@@ -14460,3 +14460,110 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
     && !!r.surVehicule;
   return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 rengaine (${!r.rengaine.degaine}) sans baisser le joueur · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
 });
+
+// Demande du joueur, mot pour mot : « Ajoute le crochet, l'uppercut, le direct. Je veux voir
+// les bras gauche et droit se lever un par un, un mouvement plus précis, plus détaillé,
+// inspire-toi de GTA, et le poing qui atteint le visage du bot. » Il n'y avait qu'UN geste,
+// rejoué à l'identique, et son point d'impact était toujours à 1,25 m — hauteur de torse :
+// le poing passait donc sous le visage à chaque coup, et de trop loin pour toucher quoi que
+// ce soit. Ce test mesure la TRAJECTOIRE de chacun des trois gestes, des deux bras, et vérifie
+// que le poing arrive vraiment à la tête.
+test('le direct part droit, le crochet arrive de côté, l\'uppercut monte — et le poing atteint la tête', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 0, hour: 12 });
+    const me = G.me, rig = me.rig, res = { gestes: {} };
+    G.equipWeapon(null); G.P.drawn = false; G.setGarde(false); G.setAccroupi(false);
+    const loc = o => { me.group.updateMatrixWorld(true); const v = new T.Vector3();
+      v.setFromMatrixPosition(o.matrixWorld); return me.group.worldToLocal(v); };
+    // ---- 1) LA TRAJECTOIRE DU POING, geste par geste, bras par bras ----
+    const trace = (geste, main) => {
+      me.group.position.set(0, 0, 0); me.group.rotation.set(0, 0, 0);
+      if (rig.cbt) { rig.cbt.coup = 0; rig.cbt.couteau = 0; rig.cbt.chute = 0; }
+      rig.swing = 0; rig.swingG = 0; rig.garde = false; rig.gardeK = 0; rig.accroupi = false;
+      for (let i = 0; i < 40; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60); }
+      const poing = main === 'G' ? rig.armL.poing : rig.armR.poing;
+      const coude = main === 'G' ? rig.armL.coude : rig.armR.coude;
+      const cote = main === 'G' ? -1 : 1;
+      const repos = loc(poing).clone();
+      G.coupDePoing(me, main, 0.28, geste);
+      const dur = rig.cbt.coupD;
+      const pts = [];
+      for (let i = 0; i < 46; i++) {
+        G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60);
+        me.group.position.set(0, 0, 0); me.group.rotation.set(0, 0, 0);
+        const q = loc(poing);
+        pts.push({ u: 1 - rig.cbt.coup / dur, x: q.x, y: q.y, z: q.z, c: coude.rotation.x });
+      }
+      // les deux instants qui comptent : le sommet de l'ÉLAN (bras armé) et celui de la
+      // DÉTENTE (l'impact). Ce sont les crêtes des deux courbes du code, à u = 0,28 et 0,62.
+      const au = t => pts.reduce((m2, q) => Math.abs(q.u - t) < Math.abs(m2.u - t) ? q : m2, pts[0]);
+      const a = au(0.28), b2 = au(0.62);
+      const vol = pts.filter(q => q.u > 0.06 && q.u < 0.94);
+      return { duree: +dur.toFixed(2),
+        avance: +(b2.z - a.z).toFixed(3), monte: +(b2.y - a.y).toFixed(3),
+        rentre: +((a.x - b2.x) * cote).toFixed(3),                       // > 0 : le poing revient vers l'axe
+        ecarte: +Math.max(...pts.map(q => (q.x - repos.x) * cote)).toFixed(3),   // > 0 : le bras s'ouvre sur le côté
+        coudeArme: +a.c.toFixed(2), coudeImpact: +b2.c.toFixed(2),
+        saut: +Math.max(...vol.slice(1).map((q, i) => Math.hypot(q.x - vol[i].x, q.y - vol[i].y, q.z - vol[i].z))).toFixed(3) };
+    };
+    for (const g of ['direct', 'crochet', 'uppercut'])
+      for (const m2 of ['D', 'G']) res.gestes[g + m2] = trace(g, m2);
+    // ---- 2) L'ENCHAÎNEMENT DONNE LES TROIS GESTES, ET LES DEUX BRAS UN PAR UN ----
+    const b = G.bots[0];
+    G.bots.forEach((o, i) => { if (i) { o.pos.set(500, 0.3, 500); o.av.group.position.copy(o.pos); } });
+    const suite = [], contact = {};
+    for (let n = 0; n < 3; n++) {
+      G.P.pos.set(0, 0.3, 0); G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      b.pos.set(0, 0.3, 1.5); b.av.group.position.copy(b.pos); b.av.group.rotation.y = Math.PI;
+      b.hp = 100; b.ko = 0; b.dead = 0; b.garde = false; b.robbed = false; b.av.group.visible = true;
+      G.P.punchT = 0; G.P.lastHitT = G.simTime; if (n === 0) { G.P.combo = 0; G.P.poing = 'G'; }
+      if (rig.cbt) rig.cbt.coup = 0; rig.swing = 0; rig.swingG = 0;
+      for (let i = 0; i < 40; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60); }
+      const ou = b.pos.clone();
+      G.attack('punch');
+      b.pos.copy(ou); b.av.group.position.copy(ou);   // on annule le recul : on mesure l'instant du coup
+      const geste = G.P.geste, poing = G.P.poing;
+      suite.push({ geste, poing, hauteur: G.P.dernierPoingY, distance: +Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z).toFixed(2) });
+      // le poing, joué jusqu'à l'impact, s'approche-t-il vraiment de la TÊTE du bot ?
+      const pg = poing === 'G' ? rig.armL.poing : rig.armR.poing;
+      let best = null;
+      for (let i = 0; i < 40; i++) {
+        G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); G.animCombat(me, 1 / 60);
+        me.group.position.set(G.P.pos.x, G.P.pos.y, G.P.pos.z); me.group.rotation.set(0, G.P.facing, 0);
+        me.group.updateMatrixWorld(true); b.av.group.updateMatrixWorld(true);
+        const tete = new T.Box3().setFromObject(b.av.tete);
+        const wp = pg.getWorldPosition(new T.Vector3());
+        const d = tete.distanceToPoint(wp);
+        if (i >= 6 && (!best || d < best.d)) best = { d: +d.toFixed(3), y: +wp.y.toFixed(3),
+          teteBas: +tete.min.y.toFixed(2), teteHaut: +tete.max.y.toFixed(2) };
+      }
+      contact[geste] = best;
+    }
+    res.suite = suite; res.contact = contact;
+    b.hp = 100; b.ko = 0; G.bots.forEach(o => { o.av.group.visible = true; });
+    return res;
+  });
+  const g = r.gestes, c = r.contact, s = r.suite;
+  // le DIRECT part droit : il avance beaucoup, il ne monte ni ne balaie, et le coude se TEND
+  const directOk = ['directD', 'directG'].every(k => g[k].avance > 0.40 && Math.abs(g[k].rentre) < 0.15
+    && Math.abs(g[k].monte) < 0.15 && g[k].coudeArme < -2.2 && g[k].coudeImpact > -0.6);
+  // le CROCHET arrive DE CÔTÉ : le bras s'ouvre à l'élan puis le poing rentre vers l'axe, et le coude ne se tend JAMAIS
+  const crochetOk = ['crochetD', 'crochetG'].every(k => g[k].ecarte > 0.15 && g[k].rentre > 0.25
+    && Math.abs(g[k].avance) < 0.45 && g[k].coudeImpact < -1.1);
+  // l'UPPERCUT MONTE : c'est la hauteur qui domine, et le coude reste fermé
+  const upOk = ['uppercutD', 'uppercutG'].every(k => g[k].monte > 0.30 && g[k].monte > Math.abs(g[k].avance)
+    && g[k].coudeImpact < -1.5);
+  // aucune téléportation : le poing ne saute jamais d'un quart de mètre entre deux images
+  const fluide = Object.values(g).every(x => x.saut < 0.26);
+  const enchaine = s[0].geste === 'direct' && s[1].geste === 'crochet' && s[2].geste === 'uppercut'
+    && s[0].poing !== s[1].poing && s[1].poing !== s[2].poing;
+  // LE POING ATTEINT LA TÊTE : au visage pour le direct et l'uppercut (le crochet, lui, va au corps)
+  const teteOk = c.direct && c.uppercut && c.direct.d < 0.30 && c.uppercut.d < 0.45
+    && c.direct.y > c.direct.teteBas && c.direct.y < c.direct.teteHaut
+    && c.uppercut.y > c.uppercut.teteBas && c.uppercut.y < c.uppercut.teteHaut
+    && s[0].hauteur > 1.45 && s[0].hauteur < 1.95 && s[2].hauteur > 1.45 && s[2].hauteur < 1.95
+    && s[1].hauteur < 1.4 && s.every(x => x.distance <= 1.05);
+  const ok = directOk && crochetOk && upOk && fluide && enchaine && teteOk;
+  return { ok, detail: `il n'y avait qu'UN seul geste, rejoué à l'identique, et son point d'impact restait à 1,25 m — hauteur de torse : le poing passait sous le visage · TROIS GESTES maintenant, des deux bras un par un (${s.map(x => x.geste + ' ' + x.poing).join(' → ')}) · le DIRECT part droit (le poing avance de ${g.directD.avance} m pour ${g.directD.rentre} de côté et ${g.directD.monte} de haut, coude ${g.directD.coudeArme} → ${g.directD.coudeImpact} rad : il se TEND) · le CROCHET arrive DE CÔTÉ (le bras s'ouvre de ${g.crochetD.ecarte} m à l'élan puis le poing rentre de ${g.crochetD.rentre} m vers l'axe pour ${g.crochetD.avance} m d'avance seulement, coude bloqué à ${g.crochetD.coudeImpact} rad : il ne se tend jamais) · l'UPPERCUT MONTE (${g.uppercutD.monte} m de haut pour ${g.uppercutD.avance} d'avance, coude fermé à ${g.uppercutD.coudeImpact} rad) · aucun à-coup (plus grand pas ${Math.max(...Object.values(g).map(x => x.saut))} m/image) · ET LE POING ATTEINT LA TÊTE : le personnage fait le pas qu'il faut (cible à 1,5 m, il frappe à ${s[0].distance} m), le direct arrive à ${c.direct.d} m de la boîte de la tête, à ${c.direct.y} m de haut (la tête va de ${c.direct.teteBas} à ${c.direct.teteHaut} m) et l'uppercut à ${c.uppercut.d} m (${c.uppercut.y} m) ; le crochet, lui, reste au corps (${s[1].hauteur} m)` };
+});

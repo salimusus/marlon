@@ -12481,6 +12481,7 @@ function nearestFighter(range) {   // bot ou joueur le plus proche devant moi
   }
   return best;
 }
+const PUNCH_PAS = 1.0, PUNCH_PAS_MAX = 0.5;   // distance de frappe visée, et pas maximal d'un coup
 function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, puissant) ; en véhicule : klaxon
   if (drive.car && !drive.car.heli) { horn(drive.car.kind); return; }
   if (!city.on || !running || paused || drive.car || P.swing || gym.on || P.hp <= 0) return;
@@ -12507,9 +12508,25 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // tend à l'impact, et le poing qui frappe est celui qui n'a pas servi au coup précédent.
   if (kind === 'kick') { me.rig.swing = 0.45; me.rig.kick = 0.45; }
   else { P.poing = P.poing === 'D' ? 'G' : 'D'; if (P.poing === 'D') me.rig.swing = 0.28; else me.rig.swingG = 0.28; }
+  // LE GESTE DU COUP (round 70, demande du joueur : « ajoute le crochet, l'uppercut, le
+  // direct »). L'enchaînement de trois en fait maintenant trois DIFFÉRENTS, reconnaissables :
+  // 1 = direct (droit au visage), 2 = crochet (il arrive de côté, au corps — c'est déjà ce
+  // que dit son bruit), 3 = uppercut (il monte au menton, et c'est le coup décisif).
+  const geste = kind === 'kick' ? 'pied' : P.combo === 2 ? 'crochet' : P.combo === 3 ? 'uppercut' : 'direct';
+  P.geste = geste;
+  // LE PAS D'ATTAQUE. Le poing du personnage porte à 0,65 m devant lui ; on frappait jusqu'à
+  // 2,6 m, le coup partait donc dans le vide et l'enfant voyait un poing qui n'atteignait
+  // personne. Comme dans GTA, le personnage AVANCE juste ce qu'il faut pour être à portée de
+  // bras — jamais plus de 35 cm, et jamais s'il est déjà assez près.
+  if (target) {
+    const dc = Math.hypot(target.x - P.pos.x, target.z - P.pos.z);
+    // au-dela de 2,2 m le coup RATE, comme avant : on ne comble pas cet ecart-la
+    if (dc > PUNCH_PAS && dc <= 2.2) { const k = Math.min(dc - PUNCH_PAS, PUNCH_PAS_MAX) / dc;
+      P.pos.x += (target.x - P.pos.x) * k; P.pos.z += (target.z - P.pos.z) * k; }
+  }
   // poste Animation : le MOUVEMENT du coup (elan, coude qui se tend, transfert du poids,
   // rotation des epaules) est joue par animCombat ; on lui donne la meme duree.
-  if (kind !== 'kick') coupDePoing(me, P.poing, 0.28);
+  if (kind !== 'kick') coupDePoing(me, P.poing, 0.28, geste);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
   // LE SON DU COMBAT. Avant : un souffle et un « pok » mono, les mêmes pour un direct, un
   // combo et un coup de pied, et le personnage frappé ne disait rien. Maintenant l'effort
@@ -12518,8 +12535,17 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   sonEffort(P.pos.x, P.pos.y + 1.4, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
   if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return; }   // dans le vide
-  // le point de contact, à hauteur de torse, un peu devant le poing
-  const ix = P.pos.x + fx * 0.75, iz = P.pos.z + fz * 0.75, iy = P.pos.y + (kind === 'kick' ? 0.85 : 1.25);
+  // LE POINT DE CONTACT. Il était toujours à 1,25 m, hauteur de torse : le poing passait donc
+  // sous le visage quel que soit le coup. Le joueur voulait « le poing qui atteint le VISAGE
+  // du bot » : le direct part au visage (1,62 m, la tête d'un habitant va de 1,46 à 1,94 m),
+  // l'uppercut au menton (1,58 m) et le crochet, lui, reste au corps — c'est un crochet au
+  // foie, et c'est déjà ce que raconte son bruit sourd. Le crochet arrive EN PLUS de côté :
+  // son point d'impact est décalé sur la perpendiculaire, du côté du poing qui frappe.
+  const cote = P.poing === 'G' ? -1 : 1;
+  const lat = geste === 'crochet' ? cote * 0.22 : 0;
+  const ix = P.pos.x + fx * 0.75 + fz * lat, iz = P.pos.z + fz * 0.75 - fx * lat;
+  const iy = P.pos.y + (kind === 'kick' ? 0.85 : geste === 'crochet' ? 1.22 : geste === 'uppercut' ? 1.58 : 1.62);
+  P.dernierPoingY = +(iy - P.pos.y).toFixed(3);   // le banc d'essai vérifie que le direct et l'uppercut partent bien au visage
   // LE COMBAT RAPPROCHÉ S'ENTEND EN DÉTAIL. Un direct au visage, un crochet au VENTRE (le
   // deuxième du combo : sourd, et l'air part des poumons), une PARADE qui claque sur
   // l'avant-bras, une LAME qui siffle : ce ne sont plus le même bruit.
@@ -12534,7 +12560,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   impact(ix, iy, iz, { x: fx, y: 0, z: fz }, kind === 'kick' ? 'pied' : 'poing', finisher ? 1.45 : 1);
   camSecousse(kind === 'kick' ? 0.22 : finisher ? 0.26 : 0.12, kind === 'kick' ? 0.26 : 0.2);
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
-  msg(kind === 'kick' ? '🦵 Coup de pied !' : finisher ? '👊 Combo x3 !' : '👊', 500);
+  msg(kind === 'kick' ? '🦵 Coup de pied !' : geste === 'uppercut' ? '👊 Uppercut !' : geste === 'crochet' ? '👊 Crochet !' : '👊 Direct !', 500);
   // EN FACE AUSSI ON SE GARDE : un habitant qui a levé les poings encaisse le quart du coup
   const pare = !!(target.bot && target.bot.garde) || !!(target.gm && target.gm.garde);
   // une garde AMORTIT, elle n'annule pas : au quart, l'adversaire devenait une enclume
@@ -28501,11 +28527,19 @@ function animCbt(av) {
 // UN COUP DE POING. `main` : 'D' (défaut) ou 'G' ; `duree` pour coller à la durée que le
 // poste Personnages a mise dans `rig.swing` / `rig.swingG`. Rend false si un coup est déjà
 // en vol — c'est ce qui empêche le bras de repartir en arrière au milieu de sa détente.
-function coupDePoing(av, main, duree) {
+// TROIS GESTES, PAS UN (round 70). Le joueur : « ajoute le crochet, l'uppercut, le direct.
+// Je veux voir les bras gauche et droit se lever un par un, un mouvement plus precis, plus
+// detaille, inspire-toi de GTA, et le poing qui atteint le visage du bot. » Il n'y avait
+// qu'un seul mouvement, rejoue a l'identique a chaque coup. `geste` vaut maintenant
+// 'direct' | 'crochet' | 'uppercut' ; sans rien, c'est le direct, comme avant.
+// Les durees different : un crochet part de plus loin, un uppercut se charge sur les jambes.
+const CBT_GESTES = { direct: 0.40, crochet: 0.52, uppercut: 0.56 };
+function coupDePoing(av, main, duree, geste) {
   const c = animCbt(av); if (!c || c.coup > 0) return false;
-  // on ne descend JAMAIS sous CBT_POING, meme si le poste Personnages a mis une duree plus
-  // courte dans rig.swing : en dessous, le mouvement n'est plus lisible a l'oeil.
-  c.coupD = Math.max(duree > 0 ? duree : 0, CBT_POING); c.coup = c.coupD;
+  c.geste = CBT_GESTES[geste] ? geste : 'direct';
+  // on ne descend JAMAIS sous la duree minimale du geste, meme si le poste Personnages a mis
+  // une duree plus courte dans rig.swing : en dessous, le mouvement n'est plus lisible a l'oeil.
+  c.coupD = Math.max(duree > 0 ? duree : 0, CBT_GESTES[c.geste]); c.coup = c.coupD;
   c.main = (main === 'G' || main === -1) ? -1 : 1; return true;
 }
 // LA GARDE et L'ESQUIVE appartiennent au poste Personnages : on ne fait que relayer, pour
@@ -28590,20 +28624,52 @@ function animCombat(av, dt) {
     const elan = animSeg(u, 0, 0.28) - animSeg(u, 0.28, 0.58);
     const det = animSeg(u, 0.28, 0.58) - animSeg(u, 0.66, 1);
     const D = cc.main > 0, cote = D ? 1 : -1;
+    // le bras qui frappe et celui qui garde, nommes une fois pour toutes : un seul jeu de
+    // formules sert alors aux trois gestes, a droite comme a gauche (« les bras gauche et
+    // droit se levent un par un »).
+    const A = D ? 'aRx' : 'aLx', C = D ? 'cRx' : 'cLx', Z = D ? 'aRz' : 'aLz';
+    const oA = D ? 'aLx' : 'aRx', oC = D ? 'cLx' : 'cRx', oZ = D ? 'aLz' : 'aRz';
+    const g = cc.geste || 'direct';
     const p = {
       lLx: -0.22 - 0.30 * det, gLx: 0.46 + 0.28 * det,
       lRx: 0.14 + 0.22 * det, gRx: 0.28,
       bx: 0.12 + 0.20 * det - 0.08 * elan, bs: 0.02 + 0.03 * det,
       hy: -cote * 0.22 * det,
     };
-    // le bras qui frappe : le coude part REPLIÉ (−2,7 rad) et finit TENDU (−0,1 rad)
-    p[D ? 'aRx' : 'aLx'] = -1.05 + 0.55 * elan - 0.55 * det;
-    p[D ? 'cRx' : 'cLx'] = -2.10 - 0.60 * elan + 2.00 * det;
-    p[D ? 'aRz' : 'aLz'] = cote * (-0.40 + 0.30 * det);
+    if (g === 'crochet') {
+      // LE CROCHET arrive DE COTE : l'epaule s'ouvre en grand (le bras part a l'horizontale,
+      // loin du corps), le coude reste plie a angle droit — il ne se tend JAMAIS —, et c'est
+      // la fermeture de l'epaule qui balaie le poing devant le visage. Les epaules et la tete
+      // vrillent deux fois plus que sur un direct : c'est ce qui se voit de loin.
+      p[A] = -0.45 - 0.25 * elan - 1.10 * det;
+      p[C] = -1.70 - 0.25 * elan + 0.35 * det;
+      // z POSITIF ouvre l'epaule vers l'exterieur (z negatif rentre le coude, c'est la garde) :
+      // le bras part donc grand ouvert sur le cote (+1,10) et le poing balaie vers l'axe (−0,45).
+      p[Z] = cote * (0.10 + 1.00 * elan - 0.55 * det);
+      p.hy = -cote * (0.45 * det - 0.20 * elan);
+      p.bx = 0.12 + 0.16 * det - 0.10 * elan;
+    } else if (g === 'uppercut') {
+      // L'UPPERCUT MONTE : le poing part sous la hanche (epaule en arriere, coude ferme au
+      // maximum) et remonte au menton sans que le coude s'ouvre. Les jambes le chargent : on
+      // s'accroupit a l'elan (bassin plus bas) et on se detend a l'impact.
+      p[A] = 0.30 + 0.45 * elan - 1.40 * det;
+      p[C] = -2.30 - 0.20 * elan + 0.60 * det;
+      p[Z] = cote * (-0.25 - 0.10 * elan + 0.10 * det);
+      p.bs = 0.02 + 0.11 * elan - 0.07 * det;
+      p.lLx = -0.18 - 0.22 * det; p.gLx = 0.40 + 0.55 * elan + 0.10 * det;
+      p.lRx = 0.12 + 0.16 * det; p.gRx = 0.26 + 0.45 * elan;
+      p.bx = 0.20 * elan - 0.10 * det;
+      p.hy = -cote * 0.12 * det;
+    } else {
+      // LE DIRECT part DROIT : le coude part REPLIE (−2,7 rad) et finit TENDU (−0,1 rad)
+      p[A] = -1.05 + 0.55 * elan - 0.55 * det;
+      p[C] = -2.10 - 0.60 * elan + 2.00 * det;
+      p[Z] = cote * (-0.40 + 0.30 * det);
+    }
     // l'autre bras se resserre sur le visage : l'épaule opposée recule, c'est la vrille du buste
-    p[D ? 'aLx' : 'aRx'] = -1.30 + 0.25 * det;
-    p[D ? 'cLx' : 'cRx'] = -1.60 - 0.30 * det;
-    p[D ? 'aLz' : 'aRz'] = -cote * (0.34 + 0.16 * det);
+    p[oA] = -1.30 + 0.25 * det;
+    p[oC] = -1.60 - 0.30 * det;
+    p[oZ] = -cote * (0.34 + 0.16 * det);
     animPose(rig, p, Math.min(1, Math.sin(Math.PI * u) * 3));
   }
   // 3. LE COUTEAU : armé contre la hanche, un coup COURT vers le ventre, retour immédiat.

@@ -2330,7 +2330,10 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   city.garage = { x, z };
   // LA DÉPANNEUSE du garage : bleu et blanc, gyrophare rond bleu, treuil et crochet. Elle
   // est dans city.cars, donc le joueur peut la prendre (E) comme n'importe quel véhicule.
-  { const dep = makeDepanneuse(x - 13, z + 6, 0); city.depanneuses.push(dep); city.cars.push(dep); }
+  // Elle était garée en z + 6, cap 0 : six mètres et demi de camion à cheval sur le MUR SUD
+  // du garage (il passe en z + 8,85) — l'arrière de la dépanneuse sortait de 55 cm à travers
+  // la façade. On la recule d'un rang : elle tient maintenant tout entière sous le toit.
+  { const dep = makeDepanneuse(x - 13, z + 3.4, 0); city.depanneuses.push(dep); city.cars.push(dep); }
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
@@ -10469,6 +10472,23 @@ function villaTickInner(dt) {
   if (P.sleep && simTime < P.sleep) { P.vel.set(0, 0, 0); }
   stoveTick(dt);
 }
+// LE CUIR DU BALLON DE BASKET, PEINT UNE SEULE FOIS POUR TOUTE LA PARTIE. Sa texture etait
+// dessinee a chaque construction du terrain — donc a chaque changement de monde — et
+// AJOUTEE A `shared` : `clearWorld` a pour consigne de ne jamais liberer ce qui est partage,
+// si bien qu'une texture de ballon de plus restait sur la carte graphique a chaque aller-retour
+// (mesure : +1 texture par cycle, jamais reprise). On la peint une fois, on la garde.
+let BALLON_TEX = null;
+function ballonTexture() {
+  if (BALLON_TEX) return BALLON_TEX;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#e07a2b'; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = '#3b2a1a'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(0, 32); g.lineTo(64, 32); g.stroke();
+  g.beginPath(); g.moveTo(32, 0); g.lineTo(32, 64); g.stroke();
+  g.beginPath(); g.arc(0, 32, 22, -1.2, 1.2); g.stroke();
+  g.beginPath(); g.arc(64, 32, 22, Math.PI - 1.2, Math.PI + 1.2); g.stroke();
+  BALLON_TEX = new THREE.CanvasTexture(c); shared.add(BALLON_TEX); return BALLON_TEX;
+}
 function buildBasket(bx, bz) {   // terrain de basket : panneau, arceau, filet, marquage au sol, ballon jouable (E)
   plat(bx - 4, 0.22, bz, 14, 12, 0xd8a06a, { studs: false, noRoute: true }, 0.05);
   for (const [x, z, w, d] of [[bx - 4, bz - 6, 14, 0.15], [bx - 4, bz + 6, 14, 0.15], [bx - 11, bz, 0.15, 12], [bx + 3, bz, 0.15, 12]]) box(x, 0.24, z, w, 0.02, d, 0xffffff, { deco: true, noEdges: true, studs: false });
@@ -10478,7 +10498,7 @@ function buildBasket(bx, bz) {   // terrain de basket : panneau, arceau, filet, 
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.055, 8, 20), lam(0xff5c5c)); rim.rotation.x = Math.PI / 2; rim.position.set(bx - 0.15, 3.05, bz); worldGroup.add(rim);
   const netM = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.28, 0.55, 12, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(5, 2); return t; })(), transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide }));
   netM.position.set(bx - 0.15, 2.78, bz); worldGroup.add(netM);
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#e07a2b'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3b2a1a'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 32); g.lineTo(64, 32); g.stroke(); g.beginPath(); g.moveTo(32, 0); g.lineTo(32, 64); g.stroke(); g.beginPath(); g.arc(0, 32, 22, -1.2, 1.2); g.stroke(); g.beginPath(); g.arc(64, 32, 22, Math.PI - 1.2, Math.PI + 1.2); g.stroke(); const t = new THREE.CanvasTexture(c); shared.add(t); return new THREE.MeshLambertMaterial({ map: t }); })());
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), new THREE.MeshLambertMaterial({ map: ballonTexture() }));
   ball.castShadow = true; ball.position.set(bx - 6, 0.6, bz); worldGroup.add(ball);
   city.hoop = { x: bx - 0.15, y: 3.05, z: bz, ball, bx: bx - 6, bz, held: false, vel: new THREE.Vector3(), pos: ball.position, score: 0, cd: 0, spawn: [bx - 6, bz] };
   box(bx - 4, 4.4, bz - 6.5, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏀 E : jouer', 0xff8f3a) }), deco: true, noEdges: true }); box(bx - 4, 2.2, bz - 6.5, 0.15, 4.4, 0.15, 0x3b4252, { studs: false, noRoute: true });
@@ -16907,7 +16927,15 @@ function horlogeArriere() {
   police.arrestT = 0; police.vuT = -99;
   cam.mesT = 0; cam.dedansT = 0;
   for (const b of bots) { b.rdvRouteT = 0; b.rdvT = 0; b.hitCd = 0; if (b.bagarre) b.bagarre.cd = 0; }
-  for (const c of [...city.cars, ...city.aiCars]) { c.hitT = 0; c.bumpT = 0; c.scrapeT = 0; }
+  for (const c of [...city.cars, ...city.aiCars]) { c.hitT = 0; c.bumpT = 0; c.scrapeT = 0;
+    // LES MINUTERIES DE CONDUITE AUSSI. Le verrou anti-va-et-vient de la boîte (`shiftT`), le
+    // coup de boost, la fumée de gomme et le bond du buggy sont posés « maintenant + tant de
+    // secondes » : après un retour en arrière de l'horloge ils restaient loin dans le futur et
+    // la boîte de vitesses ne passait plus un seul rapport — exactement ce qu'on reprochait à
+    // l'horloge cassée.
+    c.fumeeT = 0; c.crisT = 0; c.revT = 0; c.hopT = 0;
+    if (c.etat) { c.etat.shiftT = 0; c.etat.boostT = 0; } }
+  drive.shiftT = 0; drive.boostT = 0; drive.nitroCd = 0; drive.nitroT = 0;
   P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0;
   meteo.next = simTime + 40; meteo.tonnerre = 0;
   if (city.cinema) { city.cinema.next = 0; city.cinema.essaiVideo = 0; }
@@ -17118,6 +17146,48 @@ function readInput() {
 }
 // Rayon et demi-longueur d'échantillonnage d'un véhicule : trois disques répartis sur sa
 // longueur couvrent tout le rectangle, coins compris.
+// ================= ON NE RESTE JAMAIS COINCÉ CONTRE UN MUR =================
+// Le joueur : « libère les blocages, quand le véhicule touche un obstacle laisse-lui la
+// possibilité de rebondir et se libérer pour repartir, mets-lui un petit dégât de carrosserie ».
+// Le déplacement se testait à la position D'ARRIVÉE : dès que la caisse mordait déjà dans un
+// obstacle (un angle de mur pris en biais, un poteau en plein nez, une voiture qui se gare
+// dessus, deux véhicules qui se coincent), TOUTES les destinations étaient refusées — la
+// marche arrière comprise — et le véhicule restait planté là pour de bon, moteur hurlant.
+// `degageVehicule` mesure de combien la caisse mord dans chaque obstacle et renvoie le plus
+// court chemin pour l'en SORTIR ; `conduire` applique ce dégagement, ajoute un vrai rebond et
+// finit par braquer la caisse vers l'échappée si ça dure.
+const DEGAGE_VITESSE = 3.4;   // m/s : on se dégage vite, mais on le voit — pas de téléportation
+function degageVehicule(c, r, L) {
+  // On sort la caisse du MÊME volume que celui qui la déclare bloquée (`carBlocked` gonfle le
+  // véhicule de sa demi-diagonale) : dégager moins que ça la laissait au contact, donc encore
+  // bloquée à l'image suivante.
+  const R = r;
+  // On garde les poussées des DEUX CÔTÉS séparément : coincée entre deux murs face à face,
+  // la caisse recevait 1,5 m vers le nord et 1,5 m vers le sud, on n'en gardait qu'une, et
+  // elle faisait la navette de l'un à l'autre sans jamais avancer. Additionnées, elles
+  // s'annulent — cet axe-là est bouché, c'est l'autre qui la sortira.
+  let xp = 0, xm = 0, zp = 0, zm = 0;
+  const y = c.y || 0, sn = Math.sin(c.h) * L, cs = Math.cos(c.h) * L;
+  // le nez, le milieu et l'arrière : une caisse longue se coince par un bout, pas par son centre
+  const points = [[c.x, c.z], [c.x + sn, c.z + cs], [c.x - sn, c.z - cs]];
+  const juge = (ox0, oz0, ow, od) => {
+    for (const [x, z] of points) {
+      const ox = ow / 2 + R - Math.abs(x - ox0), oz = od / 2 + R - Math.abs(z - oz0);
+      if (ox <= 0 || oz <= 0) continue;   // ce point-là ne mord pas dans cet obstacle
+      // on ressort par le côté le plus proche : c'est le chemin le plus court vers l'air libre
+      if (ox < oz) { const d = (Math.sign(x - ox0) || 1) * ox; if (d > xp) xp = d; else if (d < xm) xm = d; }
+      else { const d = (Math.sign(z - oz0) || 1) * oz; if (d > zp) zp = d; else if (d < zm) zm = d; }
+    }
+  };
+  for (const o of solidsAutour(c.x, c.z, R + 2.6 + Math.abs(L), true)) {
+    if (o === c.solid || o.decor) continue;
+    if (o.y + o.h / 2 < y + 0.56) continue;            // marche franchissable : on roule dessus
+    const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;   // au-dessus / en dessous de la caisse
+    juge(o.x, o.z, o.w, o.d);
+  }
+  for (const b of (city.batiments || [])) juge(b.x, b.z, b.w, b.d);   // l'intérieur d'un bâtiment est interdit aux véhicules
+  return { x: xp + xm, z: zp + zm };
+}
 function vehHalf(c) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   return [Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, A * 2 / 3];
@@ -17374,7 +17444,9 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
     if (race.state === 'running' || race.state === 'countdown') continue;   // pendant une course, aucun véhicule ne bloque : on se frôle
     if (simTime > (c.bumpT || 0)) { c.bumpT = simTime + 0.4; const imp = Math.abs(drive.speed);
       if (imp > 3) {
-        vehicleDamage(c, imp * 0.35); v.dmg = clamp((v.dmg || 0) + imp * 0.5, 0, 100); applyDamageVisual(v, Math.sin(c.h) * imp, Math.cos(c.h) * imp);
+        // frotter une autre voiture coûte trois fois moins cher qu'avant : la tôle marque, mais
+        // le véhicule ne part plus à la casse au bout de deux minutes de jeu (durabilité demandée par le joueur)
+        vehicleDamage(c, Math.min(5, imp * 0.15)); v.dmg = clamp((v.dmg || 0) + Math.min(6, imp * 0.22), 0, 100); applyDamageVisual(v, Math.sin(c.h) * imp, Math.cos(c.h) * imp);
         // Au-delà de 25 km/h, taper une autre voiture n'est plus un frottement : c'est un
         // ACCIDENT. Les deux s'immobilisent, la police vient, la dépanneuse aussi.
         choc(c, imp, imp > 7 ? v : null);
@@ -17395,7 +17467,10 @@ function dropPart(c, mesh, vx, vz) {   // une pièce se détache et tombe au sol
 function debrisTick(dt) {
   for (let i = debrisParts.length - 1; i >= 0; i--) {
     const d = debrisParts[i]; d.t += dt;
-    const sol = d.sol || 0.15;
+    // LE SOL SOUS LE DÉBRIS, pas un plancher à hauteur fixe. Un pneu arraché qui roulait sur
+    // un trottoir, la dalle d'un dépôt ou le perron d'un immeuble s'enfonçait de 30 cm dedans
+    // (le plancher valait 0,34 m quel que soit le relief). On relève donc la surface sous lui.
+    const sol = (d.sol || 0.15) + groundUnder(d.m.position.x, d.m.position.z, null, d.m.position.y + 0.4);
     if (d.m.position.y > sol) { d.v.y -= 20 * dt; d.m.position.addScaledVector(d.v, dt); d.m.rotation.x += d.av.x * dt; d.m.rotation.z += d.av.z * dt; if (d.m.position.y <= sol) { d.m.position.y = sol; if (d.roule) d.v.y = 0; else d.v.set(0, 0, 0); sfx.clack(); } }
     // UN PNEU ARRACHÉ ROULE : il tombe au sol, part sur sa lancée et ralentit en tournant.
     // Avant, tout ce qui se détachait se figeait sur place — une roue posée à plat.
@@ -17404,7 +17479,8 @@ function debrisTick(dt) {
       if (vh > 0.05) {
         d.m.position.x += d.v.x * dt; d.m.position.z += d.v.z * dt;
         d.v.x -= d.v.x * Math.min(1, dt * 1.1); d.v.z -= d.v.z * Math.min(1, dt * 1.1);
-        d.m.rotation.x -= vh * dt / (d.sol || 0.34);
+        d.m.position.y = sol;   // il épouse la bordure au lieu de la traverser
+        d.m.rotation.x -= vh * dt / (d.ray || d.sol || 0.34);
       } else d.roule = false;
     }
     if (d.t > 12) { worldGroup.remove(d.m); debrisParts.splice(i, 1); }
@@ -17430,9 +17506,13 @@ function repairVisual(c) {
   if (p.bumpers[0]) { p.bumpers[0].rotation.set(0, 0, 0); } if (p.bumpers[1]) p.bumpers[1].rotation.set(0, 0, 0);
   p.doors.forEach((dr, i) => { dr.rotation.y = 0; dr.position.x = i < 2 ? -1.06 : 1.06; dr.scale.z = 1; });
   // les roues arrachées reviennent : elles étaient les seules à ne jamais être recollées
+  let remontee = false;
   (c.wheels || []).forEach(w => { if (w && w.parent !== c.g && w.userData && w.userData.pos0) {
     const k = debrisParts.findIndex(x => x.m === w); if (k >= 0) debrisParts.splice(k, 1);
-    worldGroup.remove(w); c.g.add(w); w.position.copy(w.userData.pos0); if (w.userData.rot0) w.rotation.copy(w.userData.rot0); w.visible = true; } });
+    worldGroup.remove(w); c.g.add(w); w.position.copy(w.userData.pos0); if (w.userData.rot0) w.rotation.copy(w.userData.rot0); w.visible = true; remontee = true; } });
+  // et on refait la liste des roues vives : arracheRoue l'avait retirée de `c.roues`, sans
+  // quoi la voiture sortait du garage en roulant sur trois roues mesurées et une invisible.
+  if (remontee) { try { calerRoues(c); settleVehicle(c); } catch (e) {} }
   // Toutes les pièces détachées reviennent à leur place : avant, seuls les pare-chocs
   // étaient recollés et un véhicule explosé restait sans capot ni portières.
   const recolle = (m, px, py, pz) => {
@@ -17600,9 +17680,17 @@ function arracheRoue(c, vx, vz) {
   if (!w) return false;
   // on retient sa place AVANT de l'arracher : c'est ce qui permet au garage de la remonter
   w.userData.pos0 = w.position.clone(); w.userData.rot0 = w.rotation.clone();
+  // ELLE NE FAIT PLUS PARTIE DU VÉHICULE. La roue passait dans les débris mais restait
+  // inscrite dans `c.roues` : `rouesTick` continuait à la faire tourner et à la faire BRAQUER
+  // à vingt mètres de la voiture, et surtout `solSousRoues` calait encore la hauteur de la
+  // caisse dessus — le châssis suivait une roue qui roulait ailleurs, et la gomme des trois
+  // roues restantes rentrait dans le bitume (mesuré : 17 cm sous la chaussée).
+  // `repairVisual` la recolle et rappelle `calerRoues` : la voiture réparée les retrouve.
+  const rayon = (c.roues || []).find(r => r.m === w);
+  if (rayon) c.roues.splice(c.roues.indexOf(rayon), 1);
   dropPart(c, w, vx, vz);
   const d = debrisParts[debrisParts.length - 1];
-  if (d && d.m === w) { d.roule = true; d.sol = 0.34; d.v.set((vx || 0) * 0.45 + rnd(-3, 3), 3.4, (vz || 0) * 0.45 + rnd(-3, 3)); }
+  if (d && d.m === w) { d.roule = true; d.ray = rayon ? rayon.r : 0.34; d.sol = d.ray; d.v.set((vx || 0) * 0.45 + rnd(-3, 3), 3.4, (vz || 0) * 0.45 + rnd(-3, 3)); }
   return true;
 }
 // ---- LES VÉHICULES QUI BRÛLENT ----
@@ -17883,7 +17971,15 @@ function conduire(c, cmd, dt) {
   if (pilote && race.state === 'countdown' && c.kart) { iz = 0; V.speed = 0; if (Math.abs(readInput().iz) > 0.3 && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
   const boosted = V.boostT > simTime, dmgMul = 1 - (c.dmg || 0) / 100 * 0.6, vmax = (boosted ? sp.max * 1.55 : sp.max) * (c.dead ? 0.25 : dmgMul);
   // boîte automatique : le rapport suit la vitesse (affiché dans le HUD), l'accélération et le régime moteur en dépendent
-  const ratio = clamp(Math.abs(V.speed) / sp.max, 0, 1);
+  // LA BOÎTE SUIT CE QUE LA VOITURE PEUT VRAIMENT FAIRE. Le rapport se calculait sur la pointe
+  // THÉORIQUE du modèle : une caisse cabossée (pointe amputée de 60 %) ou une épave (pointe
+  // divisée par quatre) restait collée sur A3 ou A4 pied au plancher, moteur figé au même
+  // régime, alors qu'elle était à fond de ce qu'elle savait faire — et on n'entendait plus
+  // jamais monter les rapports. On rapporte donc la vitesse au plafond DU MOMENT. Le coup de
+  // boost, lui, ne compte pas dans le plafond : il doit faire déborder le dernier rapport, pas
+  // faire redescendre la boîte d'un cran au moment où on accélère.
+  const plafond = Math.max(1, sp.max * (c.dead ? 0.25 : dmgMul));
+  const ratio = clamp(Math.abs(V.speed) / plafond, 0, 1);
   const wantGear = c.kind === 'bike' ? 1 : gearOf(ratio) || 1;
   // le verrou anti-va-et-vient s'ecrit « PAS encore trop tot » et non « assez tard » : si la
   // minuterie du dernier passage est restee indefinie, la boite doit passer les rapports
@@ -17921,7 +18017,7 @@ function conduire(c, cmd, dt) {
       const over = Math.abs(ti.lat) - lim, sg = Math.sign(ti.lat), nxN = -ti.tz * sg, nzN = ti.tx * sg;
       nx -= nxN * over; nz -= nzN * over;
       const along = Math.sin(c.h) * ti.tx + Math.cos(c.h) * ti.tz;   // 1 = dans le sens de la piste
-      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(V.speed) * (1 - Math.abs(along)); vehicleDamage(c, impact * 0.5 + 0.3); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit(); }
+      if (simTime > (c.scrapeT || 0)) { c.scrapeT = simTime + 0.3; const impact = Math.abs(V.speed) * (1 - Math.abs(along)); vehicleDamage(c, Math.min(4, impact * 0.22 + 0.15)); sfx.noise(.15, 400, .05); if (impact > 3) sfx.hit(); }
         marqueImpact(null, c.x, 0.08, c.z, Math.max(2, Math.abs(V.speed) * (1 - Math.abs(along))), 'trace');   // la gomme laissee sur la piste
       V.speed -= V.speed * (3 * (1 - Math.abs(along)) + 0.25) * dt;
       let dh = Math.atan2(ti.tx, ti.tz) - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); c.h += dh * Math.min(1, dt * 3);   // aide à réaligner
@@ -17932,11 +18028,47 @@ function conduire(c, cmd, dt) {
   if (Math.abs(V.speed) > 5) for (const b of breakables) if (!b.broken && Math.abs(b.x - nx) < b.r + rr + 0.5 && Math.abs(b.z - nz) < b.r + rr + 0.5) { breakThing(b, c, !pilote); }
   const [vr, vL] = vehHalf(c);
   const bx = carBlocked(nx, c.z, c.solid, vr, {}, c.y, c.h, vL), bz = carBlocked(c.x, nz, c.solid, vr, {}, c.y, c.h, vL);
+  const px0 = c.x, pz0 = c.z;
   if (!bx) c.x = nx; if (!bz) c.z = nz;
+  // le compteur de blocage REDESCEND au lieu de se remettre à zéro : contre un angle, la
+  // caisse se dégage d'un centimètre, redevient libre une image, puis rebute — le compteur
+  // repartait de zéro à chaque fois et la caisse n'a jamais pivoté vers l'échappée.
+  if (!bx && !bz) c.coinceT = Math.max(0, (c.coinceT || 0) - dt * 1.5);
   if (bx || bz) {
     const vAvant = V.speed;
-    if (bx && bz) { V.speed *= -0.3; } else V.speed *= 0.9;
-    if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.abs(vAvant) * 0.6); choc(c, vAvant, null);
+    // BUTER, ce n'est pas FROTTER. Longer un mur en biais doit rester une glissade (c'est ce
+    // qui rend la conduite agréable) ; mais quand le véhicule n'avance PLUS malgré les gaz —
+    // les deux axes bloqués, ou un nez planté droit dans la façade — il est coincé, et avant
+    // il le restait indéfiniment. On mesure donc ce qu'il a VRAIMENT parcouru cette image.
+    const voulu = Math.abs(vAvant) * dt, fait = Math.hypot(c.x - px0, c.z - pz0);
+    const bute = (bx && bz) || (pilote && voulu > 0.004 && fait < voulu * 0.25);
+    if (bute) {
+      const sortie = degageVehicule(c, vr, vL);
+      const norme = Math.hypot(sortie.x, sortie.z);
+      if (norme > 0.0005) { const k = Math.min(1, DEGAGE_VITESSE * dt / norme); c.x += sortie.x * k; c.z += sortie.z * k; }
+      c.coinceT = (c.coinceT || 0) + dt;
+      // LE REBOND : on repart dans l'autre sens, avec un minimum franc — sans ça, la vitesse
+      // tombait à zéro contre le mur et plus rien ne décollait la caisse. Mais il ne se
+      // déclenche qu'un quart de seconde sur l'autre : rebondir à CHAQUE image inversait le
+      // sens soixante fois par seconde et la caisse tremblait sur place à quatre centimètres
+      // d'amplitude — elle n'allait nulle part. Espacé, le rebond décolle vraiment la voiture
+      // du mur, et le joueur a le temps de reprendre la main entre deux.
+      if (Math.abs(vAvant) > 0.4 && simTime > (c.rebondT || 0)) {
+        c.rebondT = simTime + 0.28;
+        V.speed = -Math.sign(vAvant) * Math.min(3.4, Math.abs(vAvant) * 0.35 + 1.1);
+      } else V.speed *= 0.82;
+      // et si ça dure (le nez dans un angle), la caisse pivote vers l'échappée : le joueur
+      // ressort en marche arrière au lieu de faire vingt aller-retours contre la pierre.
+      if (c.coinceT > 0.45 && norme > 0.0005) {
+        let dh = Math.atan2(sortie.x, sortie.z) - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        c.h += dh * Math.min(1, dt * 1.6);
+      }
+    } else { V.speed *= 0.9; c.coinceT = Math.max(0, (c.coinceT || 0) - dt * 1.5); }
+    // UN PETIT DÉGÂT DE CARROSSERIE, PAS UNE MISE À LA CASSE. Un mur pris à 50 km/h coûtait
+    // 8 % de la vie du véhicule et la moindre séance de mur le détruisait en une minute : un
+    // enfant y perdait sa voiture sans arrêt. Le choc marque toujours la tôle — c'est ce qui
+    // rend le rebond crédible — mais trois fois moins, et jamais plus de 5 % d'un coup.
+    if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.min(5, 0.5 + Math.abs(vAvant) * 0.2)); choc(c, vAvant, null);
       // la normale du mur : l'axe bloque, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
       // UNE SEULE MARQUE SUR LE MUR. Deux postes en posaient une AU MEME ENDROIT a chaque
@@ -17958,7 +18090,7 @@ function conduire(c, cmd, dt) {
   else {
     const gy = solSousRoues(c), onTerrain = RALLY.mesh && terrainH(c.x, c.z) != null;
     if (!c.airborne && onTerrain && c.y > gy + 0.06 && Math.abs(V.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; c.airborne = true; }   // le sol se dérobe (bout du tremplin, crête) : on garde l'élan
-    if ((c.vy || 0) > 0.5 || c.y > gy + 0.06) { c.airborne = true; c.vy = (c.vy || 0) - 30 * dt; c.y += c.vy * dt; if (c.y <= gy) { c.airborne = false; c.y = gy; if (c.vy < -3.5) { sfx.hit(); c.susp = -0.28; if (c.kind === 'buggy') { c.vy = -c.vy * 0.32; if (c.vy < 1.2) c.vy = 0; } else { const imp = -c.vy; c.vy = 0; vehicleDamage(c, Math.min(12, imp * 0.4)); } } else c.vy = 0; } }   // en l'air : on retombe (saut sur une bosse)
+    if ((c.vy || 0) > 0.5 || c.y > gy + 0.06) { c.airborne = true; c.vy = (c.vy || 0) - 30 * dt; c.y += c.vy * dt; if (c.y <= gy) { c.airborne = false; c.y = gy; if (c.vy < -3.5) { sfx.hit(); c.susp = -0.28; if (c.kind === 'buggy') { c.vy = -c.vy * 0.32; if (c.vy < 1.2) c.vy = 0; } else { const imp = -c.vy; c.vy = 0; vehicleDamage(c, Math.min(6, imp * 0.22)); /* retomber d'un tremplin abîme deux fois moins : la voiture dure plus longtemps */ } } else c.vy = 0; } }   // en l'air : on retombe (saut sur une bosse)
     else if (onTerrain) {   // relief lissé : on suit la pente ; si le sol s'effondre sous les roues (bout d'un tremplin), on garde l'élan vertical
       const prev = c.prevGy == null ? gy : c.prevGy; const slopeV = (gy - prev) / dt;
       if (gy < c.y - 0.08 && Math.abs(V.speed) > 6) { c.vy = clamp(c.slopeV || 0, 0, 16) + 1.5; } else { c.y = gy; c.vy = 0; c.slopeV = slopeV; }
@@ -18004,7 +18136,13 @@ function calerRoues(c) {
   const b = new THREE.Box3(), ctr = new THREE.Vector3();
   c.roues = [];
   for (const w of c.wheels) {
+    // ROULEMENT ANNULÉ LE TEMPS DE LA MESURE. La boîte englobante d'un cylindre qui tourne
+    // sur son axe enfle de 40 % : recaler une roue EN COURS DE ROUTE (le garage qui monte
+    // des jantes, une roue remise après réparation) lui trouvait un rayon de 57 cm au lieu
+    // de 40 et la faisait flotter 17 cm au-dessus du bitume.
+    const roul = w.rotation.x; w.rotation.x = 0; w.updateMatrixWorld(true);
     b.setFromObject(w); b.getCenter(ctr);
+    w.rotation.x = roul;
     const bas = b.min.y - base.y, r = Math.max(0.12, (b.max.y - b.min.y) / 2);
     w.position.y += MARGE_ROUE - bas;
     w.rotation.order = 'YXZ';   // le braquage (Y) enveloppe le roulement (X), jamais l'inverse
@@ -22256,7 +22394,16 @@ function tuneApply(c, t) {
   } else c.nitroFlammes = null;
   // ---- jantes et hauteur de caisse ----
   const gros = aKitT(t, 'jantes'), bas = aKitT(t, 'rabaisse');
-  for (const w of (c.wheels || [])) { w.scale.setScalar(gros ? 1.22 : 1); w.position.y = (gros ? 0.42 : 0.36) + (bas ? -0.1 : 0); }
+  // LA HAUTEUR DE ROUE N'EST PLUS ÉCRITE À LA MAIN. On posait 0,42 m (grosses jantes) ou
+  // 0,36 m, et 10 cm de moins avec le kit rabaissé, alors que le rayon d'une roue dépend de
+  // l'échelle passée à makeWheel : monter les jantes au garage enfonçait la gomme de 13 cm
+  // dans le bitume sur les voitures à grandes roues, et la faisait flotter sur les autres.
+  // On change l'échelle, puis `calerRoues` REMESURE chaque roue (Box3, parents compris) et la
+  // repose sur le sol — c'est aussi lui qui tient à jour le rayon dont dépend la vitesse de
+  // rotation et `solSousRoues`. Le rabaissement, lui, descend la CAISSE : les roues, elles,
+  // restent posées par terre.
+  for (const w of (c.wheels || [])) w.scale.setScalar(gros ? 1.22 : 1);
+  try { calerRoues(c); } catch (e) {}
   c.g.children.forEach(m => { if (m.userData && m.userData.tuneBase != null) m.position.y = m.userData.tuneBase; });
   if (bas) {   // on descend tout ce qui n'est pas une roue
     for (const m of c.g.children) {
@@ -25967,12 +26114,18 @@ function animTransArme(av, duree) {
 function animTransApplique(av) {
   const g = av && (av.group || av); if (!g) return;
   const u = g.userData; if (!u.trFin || simTime >= u.trFin) return;
-  // ON NE GLISSE QUE SUR UNE COURTE DISTANCE. Au-delà de quatre mètres, ce n'est pas un pas
-  // vers un siège mais une TÉLÉPORTATION voulue par le jeu (banc d'essai, mission, retour au
-  // garage) : le personnage traversait alors cent quarante mètres en fondu, et on ne se
-  // voyait pas au volant de la voiture qu'on venait de prendre.
+  // ON NE GLISSE QUE SUR UNE COURTE DISTANCE : au-delà, ce n'est pas un pas vers un siège
+  // mais une TÉLÉPORTATION voulue par le jeu (banc d'essai, mission, retour au garage) — le
+  // personnage traversait alors cent quarante mètres en fondu, et on ne se voyait pas au
+  // volant de la voiture qu'on venait de prendre.
+  // Le seuil était à QUATRE mètres, et c'était trop court : `exitCar` cherche une place libre
+  // sur les quatre côtés du véhicule (jusqu'à 3 m pour un camion) en partant d'un siège qui
+  // est lui-même décalé et surélevé — descendre faisait couramment 4,3 m. Le fondu était donc
+  // annulé à la première image et le personnage se TÉLÉPORTAIT hors de la voiture, alors qu'il
+  // y montait bien en fondu. Huit mètres couvrent la plus longue descente possible et restent
+  // vingt fois plus courts que la moindre téléportation du jeu.
   const dx = u.trX - g.position.x, dy = u.trY - g.position.y, dz = u.trZ - g.position.z;
-  if (dx * dx + dy * dy + dz * dz > 16) { u.trFin = 0; return; }
+  if (dx * dx + dy * dy + dz * dz > 64) { u.trFin = 0; return; }
   const k = animLiss(clamp((u.trFin - simTime) / u.trDur, 0, 1));   // 1 juste après le déclenchement, 0 à la fin
   g.position.x += (u.trX - g.position.x) * k;
   g.position.y += (u.trY - g.position.y) * k;

@@ -8705,7 +8705,9 @@ function tableauMaj(room, lignes, couleur) {
 // passait SOUS l'ambiance, on ne l'entendait pas. Une source bouclee permanente dont on ne
 // touche QUE le gain sort toujours, quelle que soit la machine, et la bande large donne le
 // vrai grain du baton sur l'ardoise.
-const CRAIE_NIV = 0.34;     // niveau du lit de craie sur le bus « effets » (la rumeur d'un quartier tient dans 0,035)
+const CRAIE_NIV = 0.07;     // niveau du lit de craie sur le bus « effets ». MESURE au bout de la chaine, la
+                            // rumeur la plus forte d'un quartier donne une crete de 0,08 ; ce lit-la donne 0,28 (RMS
+                            // 0,07 contre 0,022) : on l'entend nettement sans jamais coller le limiteur (0,34 tapait 0,93).
 const CRAIE_TENUE = 0.18;   // s : on garde le crissement ouvert apres la derniere lettre, sinon il hachait
 const craieLit = { src: null, bp: null, g: null, jusqu: 0 };
 // Monte le lit une seule fois, puis rebranche sa sortie sur le bus « effets » a chaque
@@ -8744,7 +8746,7 @@ function sonCraie(n) {
     f.type = 'bandpass'; f.frequency.value = 2600 + Math.random() * 2200; f.Q.value = 1.4;
     const at = t0 + i * 0.05, dur = 0.05 + Math.random() * 0.03;
     g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(0.2, at + 0.008);
+    g.gain.exponentialRampToValueAtTime(CRAIE_NIV * 1.7, at + 0.008);   // l'attaque tape un peu au-dessus du lit
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     const sortie = sfx.sortie('effets'); if (!sortie) break;
     src.connect(f).connect(g).connect(sortie);

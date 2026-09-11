@@ -5332,7 +5332,11 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
 
 test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un mur', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // MONDE NEUF. Ce test juge les trois ponts elevateurs du garage : un test precedent qui
+    // laisse une voiture de la circulation, une voiture de police ou une epave arretee sur un
+    // pont faussait la mesure (la caisse etait posee DANS l'autre) et l'echec ne disait pas
+    // pourquoi. Le monde est rebati, et on nomme desormais ce qui chevauche.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
     const G = __G, res = {};
     const g = G.city.garage, d0 = G.city.tuneDesk;
     for (const v of G.city.cars) { v.x += 300; v.z += 300; v.g.position.set(v.x, v.y, v.z); }
@@ -5342,13 +5346,16 @@ test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un 
     const c = G.tuneCible();
     res.pose = { x: +(c.x - g.x).toFixed(1), z: +(c.z - g.z).toFixed(1), h: +c.h.toFixed(2), y: +c.y.toFixed(2) };
     // dans un mur ? on compare son volume aux solides du décor
-    const o = c.solid; let dansMur = 0;
+    const o = c.solid; let dansMur = 0; const qui = [];
     for (const so of G.solids) {
       if (so === o || so.deco) continue;
       if (Math.abs(so.x - o.x) < (so.w + o.w) / 2 - 0.05 && Math.abs(so.z - o.z) < (so.d + o.d) / 2 - 0.05
-        && Math.abs((so.y || 0) - (c.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) dansMur++;
+        && Math.abs((so.y || 0) - (c.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) {
+        dansMur++;
+        if (qui.length < 4) qui.push(`${so.w.toFixed(1)}x${so.d.toFixed(1)} en (${so.x.toFixed(0)}, ${so.z.toFixed(0)})${so.veh ? ' [véhicule]' : ''}`);
+      }
     }
-    res.dansMur = dansMur;
+    res.dansMur = dansMur; res.qui = qui;
     const murs = c2 => { const o2 = c2.solid; let n = 0;
       for (const so of G.solids) { if (so === o2 || so.deco) continue;
         if (Math.abs(so.x - o2.x) < (so.w + o2.w) / 2 - 0.05 && Math.abs(so.z - o2.z) < (so.d + o2.d) / 2 - 0.05
@@ -5377,7 +5384,7 @@ test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un 
   const surTravee = p2 => travees.some(t => Math.abs(p2.x - t) < 0.6) && Math.abs(p2.z) < 0.6 && Math.abs(p2.h) < 0.05;
   const ok = surTravee(r.pose) && r.dansMur === 0 && r.pose.y > 0.1 && r.pose.y < 1
     && r.bouge > 2 && /Remettre/.test(r.bouton) && r.coince > 0 && surTravee(r.remise) && r.apresMurs === 0;
-  return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, bien droite), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
+  return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, z${r.pose.z}, cap ${r.pose.h}), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor${r.qui.length ? ' → ' + JSON.stringify(r.qui) : ''} — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont (travee x${r.remise.x}, z${r.remise.z}, cap ${r.remise.h}) par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
 });
 
 
@@ -5644,7 +5651,8 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
 
 test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus dehors', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 60, y: 1, z: 320, hour: 12 });
+    // MONDE NEUF : ce test juge LE SOL de toute la carte, il ne doit rien devoir a l'ordre des tests.
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 320, hour: 12, frais: true });
     const G = __G;
     // une plaque de sol sous chaque point ? (les grands plateaux, dessus vers y = 0)
     const sol = (x, z) => G.solids.some(o => o.mesh && o.w > 8 && o.d > 8 && o.y + o.h / 2 < 3 && o.y + o.h / 2 > -2
@@ -5658,13 +5666,20 @@ test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus de
     // la grille de navigation couvre-t-elle les deux quartiers ?
     const nav = G.NAV, xMax = nav.x0 + nav.nx * nav.cs, zMax = nav.z0 + nav.nz * nav.cs;
     const navCouvre = (x, z) => x > nav.x0 && x < xMax && z > nav.z0 && z < zMax;
-    return { trous: trous.length, ex: trous.slice(0, 4),
+    // UN ECHEC DOIT DIRE OU. On regroupe les releves dans le vide par rangee de z : une tranchee
+    // d'un bout a l'autre de la carte se lit alors d'un coup d'oeil, au lieu de quatre couples
+    // de coordonnees qui ne racontent rien.
+    const parZ = new Map();
+    for (const [x, z] of trous) { if (!parZ.has(z)) parZ.set(z, []); parZ.get(z).push(x); }
+    const rangees = [...parZ.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6)
+      .map(([z, xs]) => `z=${z} : ${xs.length} releves, x de ${Math.min(...xs)} a ${Math.max(...xs)}`);
+    return { trous: trous.length, ex: trous.slice(0, 4), rangees,
       casino: dedans(c.x, c.z + 40) && navCouvre(c.x, c.z + 40),
       circuit: dedans(ci.x, ci.z - ci.r - 8) && navCouvre(ci.x, ci.z - ci.r - 8),
       murs: murs.length, navZ: [nav.z0, Math.round(zMax)], parvis: sol(c.x, c.z + 40), parvisBord: sol(c.x - 18, c.z + 26) };
   });
   const ok = r.trous === 0 && r.casino && r.circuit && r.murs === 4 && r.parvis && r.parvisBord;
-  return { ok, detail: `le plateau de la ville s'arrêtait a z = 282 et le mur invisible juste derrière : le casino (z 287 → 340) et le circuit étaient bâtis DEHORS, sur du vide — un trou béant devant le casino et deux quartiers interdits · le sol couvre maintenant toute la carte (${r.trous} trou sur 5 500 points testés, parvis et ses bords compris), les ${r.murs} murs d'enceinte sont repoussés au-delà des deux quartiers et la grille de navigation va jusqu'a z = ${r.navZ[1]} (casino navigable=${r.casino}, circuit=${r.circuit})` };
+  return { ok, detail: `le plateau de la ville s'arrêtait a z = 282 et le mur invisible juste derrière : le casino (z 287 → 340) et le circuit étaient bâtis DEHORS, sur du vide — un trou béant devant le casino et deux quartiers interdits · le sol couvre maintenant toute la carte (${r.trous} trou sur 5 500 points testés, parvis et ses bords compris${r.rangees.length ? ' → ' + r.rangees.join(' · ') : ''}), les ${r.murs} murs d'enceinte sont repoussés au-delà des deux quartiers et la grille de navigation va jusqu'a z = ${r.navZ[1]} (casino navigable=${r.casino}, circuit=${r.circuit})` };
 });
 
 test('le casino a de grandes vitres bleues, un tapis rouge et des haies vertes', async p => {
@@ -8672,6 +8687,13 @@ test('chaque geste de metier decrit un vrai cycle : amplitude suffisante, sans a
     // et les travailleurs s'en servent VRAIMENT : sur un nid-de-poule, l'équipe s'accroupit
     G.city.horaires = false;
     G.metierScene('chantier');
+    // LE REPIT DE QUATRE SECONDES. metierScene() passe par metiersRepos(), qui pose
+    // METIERS.reposT = simTime + 4 : pendant ce delai metiersTick() sort AVANT employesTick()
+    // et personne ne joue son geste. Comme on ne simule ici qu'une seconde et demie, l'equipe
+    // restait les bras ballants et le test lisait « geste undefined, poids 0 » — alors que le
+    // geste, lui, n'avait aucun defaut. Le repit sert a empecher un travailleur de REPRENDRE
+    // son vehicule dans la meme image ; la scene est deja posee a la main, on le leve donc.
+    G.METIERS.reposT = 0;
     for (let i = 0; i < 90; i++) G.step(1 / 60, true);
     const eq = G.METIERS.employes;
     out.chantier = { geste: eq[0].bot.av.rig.gNom, poids: +(eq[0].bot.av.rig.gK || 0).toFixed(2),
@@ -9297,23 +9319,33 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
     G.SONV.ambT = G.simTime + 1e6; try { G.ambiance.stop(); } catch (e) {}   // le lit d'ambiance jouerait par-dessus la mesure
     G.bots.forEach(b => { b.wait = 1e6; b.dance = 0; });                     // et les pas des voisins aussi
-    const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
-    const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; return +Math.sqrt(s / d.length).toFixed(4); };
+    // ON ECOUTE EN CONTINU, PLUS PAR COUPS D'OEIL. Un analyseur ne montre que les 46 dernieres
+    // millisecondes : dans la suite complete, ou le banc tombe a une image par seconde, la
+    // fenetre de mesure tombait a cote de la note et le test declarait le son proche PLUS
+    // FAIBLE que le son lointain (mesure en echec : 0,1228 a 1,5 m contre 0,1371 a 20 m) —
+    // alors que sonEn n'avait aucun defaut. On branche donc, comme le test de la rumeur, un
+    // noeud qui voit passer CHAQUE echantillon et garde la crete : la mesure ne depend plus
+    // de la vitesse de la machine ni de l'ordre des tests.
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    let crete = 0;
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
     const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
-    // Un coup de poing dure un dixieme de seconde : sur un rendu logiciel qui hoquette, la
-    // fenetre de mesure le manquait une fois sur trois et le test clignotait. On mesure donc
-    // une NOTE TENUE d'une demi-seconde, jouee trois fois, et on garde la crete.
+    // Un coup de poing dure un dixieme de seconde : on mesure donc une NOTE TENUE d'une
+    // demi-seconde, jouee trois fois, et on garde la crete de toute la fenetre d'ecoute.
     const pic = async (dist) => {
-      let m = 0;
+      crete = 0;
       for (let k = 0; k < 3; k++) {
         G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', 0.5), { duree: 0.6, portee: 40 });
-        for (let i = 0; i < 16; i++) { await dodo(30); m = Math.max(m, rms()); }
+        for (let i = 0; i < 16; i++) await dodo(30);
         await dodo(220);
       }
-      return +m.toFixed(4);
+      return +crete.toFixed(4);
     };
     await dodo(700); await pic(3); await dodo(500);   // un passage de chauffe : le tout premier revient a zero
-    const silence = rms();
+    crete = 0; await dodo(500); const silence = +crete.toFixed(4);
     const loin = await pic(45);
     const moyen = await pic(20);
     const pres = await pic(1.5);
@@ -9324,7 +9356,7 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     G.sonEn(X - 12, Y, Z, () => {}, { duree: .05 }); const gauche = G.SON.dernier;
     G.bots.forEach(b => { b.wait = 0; });
     G.SONV.ambT = 0;
-    try { ch.lim.disconnect(an); } catch (e) {}
+    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     return { etat: c.state, silence, pres, moyen, loin, horsPortee: !!horsPortee, portee: G.SON.portee, coupure: G.SON.coupure,
       attDroite: droite.att, attGauche: gauche.att, bus: Object.keys(G.MIX), stereo: !!c.createStereoPanner };
   });
@@ -9866,9 +9898,13 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
     const mesure = () => {
       G.gpsRoute.hide(); G.gpsRoute.update();
       let n = 0, hors = 0;
+      // ON RECONNAIT UN CHEVRON A SA MARQUE, PLUS A SA FORME. Le test cherchait un cone de
+      // 42 cm de rayon ; depuis que les chevrons sont de la PEINTURE AU SOL (un quadrilatere
+      // plat texture), il n'en trouvait plus AUCUN — 0 chevron sur 0, et le test tombait en
+      // rouge meme lance seul, sans que le GPS ait le moindre defaut. gpsRoute pose
+      // userData.chevron sur chacun de ses reperes justement pour ca.
       G.scene.traverse(o => {
-        if (!o.isMesh || !o.visible || !o.geometry || o.geometry.type !== 'ConeGeometry') return;
-        if (Math.abs(o.geometry.parameters.radius - 0.42) > 0.01) return;
+        if (!o.isMesh || !o.visible || !o.userData || !o.userData.chevron) return;
         n++; if (!surRoute(o.position.x, o.position.z)) hors++;
       });
       return { chevrons: n, hors, pct: n ? Math.round(hors / n * 100) : 0 };

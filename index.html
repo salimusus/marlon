@@ -4496,9 +4496,20 @@ function degageLesRoutes() {
   // `o.h > 4.6` protegeait les MURS... et aussi n'importe quel poteau de 5 m plante au milieu
   // de la chaussee. Un mur est LARGE : on ne garde les objets hauts que s'ils font plus d'un
   // metre dans un sens. Un poteau fin en pleine voie repart avec le reste du mobilier.
-  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.statue || o.trottoir
+  // ON A EMPORTE LE SOL DE LA VILLE. Depuis qu'on juge sur l'EMPRISE et non plus sur le centre,
+  // les BANDES DU GRAND PLATEAU y passaient : le plateau du monde est perce a l'emprise des cinq
+  // piscines des villas, ce qui le decoupe en tranches de 8,70 m de large sur 420 m de long
+  // (z 174,65 → 183,35 et z 228,65 → 237,35). Ces tranches touchent forcement une rue, et la
+  // seule exception pour les grandes dalles demandait plus de 14 m DANS LES DEUX SENS : deux
+  // tranchees s'ouvraient donc d'un bout a l'autre de la carte, 143 releves de sol dans le vide,
+  // avec l'eau visible au fond et une falaise d'1 m devant l'ecole. LE SOL DE LA CARTE (`o.sol`)
+  // n'est pas du mobilier : il passe SOUS le bitume, il n'arrete aucune voiture, et l'enlever
+  // n'ouvre pas la voie — ca ouvre un gouffre. On ne le ramasse plus, quelle que soit sa forme.
+  // (Les dalles POSEES PAR-DESSUS — parvis, cour, allee — continuent, elles, d'etre degagees :
+  // une allee de villa de 44 cm au milieu d'une rue enterre le bitume et fait une marche.)
+  const garde = o => o.porte || o.ai || o.pol || o.bar || o.glass || o.statue || o.trottoir || o.sol
     || (o.h > 4.6 && (o.w > 1 || o.d > 1)) || (o.w > 14 && o.d > 14)
-    || o.y - o.h / 2 > 0.8 || dedans(o.x, o.z);   // portes, véhicules, barrières, vitrages, murs, étages et intérieurs
+    || o.y - o.h / 2 > 0.8 || dedans(o.x, o.z);   // portes, véhicules, barrières, vitrages, murs, étages, intérieurs et sol
   const vus = new Set();
   for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
   let n = 0;
@@ -22343,12 +22354,26 @@ function traveesAtelier() {
 function traveeLibre(sauf) {
   const d0 = city.tuneDesk, l = traveesAtelier();
   if (!l.length) return null;
-  const occupee = (px, pz) => city.cars.some(v => v !== sauf && Math.hypot(v.x - px, v.z - pz) < 3.6)
-    || Math.hypot(P.pos.x - px, P.pos.z - pz) < 1.6;
-  const libres = l.filter(([px, pz]) => !occupee(px, pz));
-  const choix = (libres.length ? libres : l)
-    .sort((a, b) => Math.hypot(a[0] - d0.x, a[1] - d0.z) - Math.hypot(b[0] - d0.x, b[1] - d0.z))[0];
-  return choix || null;
+  // ON NE REGARDAIT QUE `city.cars`. Une voiture de la CIRCULATION, une voiture de POLICE, un
+  // kart ou une epave arretee sur un pont elevateur ne comptait donc pour rien : le bouton
+  // « Amener une voiture » posait la caisse du joueur DANS la carrosserie de l'autre, et elle
+  // ressortait coincee dans le decor — exactement le defaut que ce bouton est cense reparer.
+  // On regarde maintenant TOUS les vehicules, et tout solide qui encombre vraiment la travee.
+  // Et quand les trois ponts sont pris, on ne prenait plus que le plus proche du comptoir, gene
+  // ou pas : on compte la GENE de chaque pont et on garde le moins encombre (a egalite, le plus
+  // proche du comptoir — donc rien ne change quand le garage est vide).
+  const tous = [...city.cars, ...(city.aiCars || []), ...(police.cars || []), ...(raceKarts || [])];
+  const gene = (px, pz) => {
+    let n = 0;
+    for (const v of tous) if (v && v !== sauf && Math.hypot(v.x - px, v.z - pz) < 3.6) n++;
+    if (Math.hypot(P.pos.x - px, P.pos.z - pz) < 1.6) n++;
+    for (const o of solids) if (o.mesh && !o.deco && o !== (sauf && sauf.solid) && o.y + o.h / 2 > 0.35
+      && Math.abs(o.x - px) < (o.w + 4.6) / 2 && Math.abs(o.z - pz) < (o.d + 5) / 2) n++;
+    return n;
+  };
+  const choix = l.map(([px, pz]) => ({ px, pz, g: gene(px, pz), d: Math.hypot(px - d0.x, pz - d0.z) }))
+    .sort((a, b) => (a.g - b.g) || (a.d - b.d))[0];
+  return choix ? [choix.px, choix.pz] : null;
 }
 // Poser une voiture sur la travée : bien droite, roues au sol, collision remise à jour.
 function poseSurTravee(v) {

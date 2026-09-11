@@ -26180,12 +26180,21 @@ function interroger(o) {
     sfx.win(); sfx.coin();
     return;
   }
-  // deuxième interrogatoire : rançon ou recrutement
-  if (G.force < gang.force + 10 && gang.membres.length < rangJoueur().max) {
+  // DEUXIÈME INTERROGATOIRE : il change de camp, ou son gang paie une rançon.
+  // Ce n'est SURTOUT PAS un tirage au sort : le résultat dépend de deux choses que le joueur
+  // maîtrise — la force de son gang face à celle du gang d'en face, et la place qu'il lui
+  // reste. Un enfant doit pouvoir se dire « je m'entraîne, et la prochaine fois il viendra ».
+  // Un hasard ici effacerait tout l'intérêt de s'entraîner et de monter en rang.
+  const place = rangJoueur().max - (gang.membres.length + (gang.membresLibres || []).length);
+  const plusFort = (forceGangRival(G) || G.force) < gang.force + 10;
+  if (plusFort && place > 0) {
     libereOtage(o, true);
-    msg(`🤝 ${o.nom} change de camp et rejoint ton gang !`, 4200);
+    msg(`🤝 ${o.nom} change de camp et rejoint ton gang ! (ton gang ${gang.force} contre ${forceGangRival(G) || G.force})`, 4600);
     return;
   }
+  // On DIT pourquoi il n'est pas venu : sans ça, l'enfant croit à un coup de malchance.
+  if (!plusFort) msg(`💪 ${o.nom} ne veut pas changer de camp : les ${G.nom} sont encore trop forts (${forceGangRival(G) || G.force} contre ${gang.force}) — entraîne tes hommes`, 5200);
+  else msg(`👥 Ton gang est au complet (${rangJoueur().max} places) : monte en rang pour recruter davantage`, 4600);
   const rancon = 60 + Math.floor(rnd(0, 90));
   wallet += rancon; saveWallet(); updateHud(); sfx.coin();
   msg(`💰 Les ${G.nom} paient ${rancon} 🪙 pour récupérer ${o.nom}`, 3600);
@@ -26522,9 +26531,13 @@ function arriveGang(id) {
 // Deuxième chemin, à côté de la bagarre : on paie. Le prix est AFFICHÉ en gros au-dessus de sa
 // tête, jamais à calculer. Il s'effondre quand son gang n'a plus de quartier : c'est ce qui
 // apprend au joueur, tout seul, qu'il vaut mieux prendre les quartiers AVANT d'acheter les hommes.
+// L'ÉCHELLE DES PRIX DU JEU sert de repère (voir GAMMES, le concessionnaire) : petit boulot
+// 15 🪙, citadine 80 🪙, break familial 240 🪙, coffre de banque 500 🪙, voiture de luxe 1050 🪙.
+// Un homme moyen (force 40) coûte donc 240 🪙 — le prix du break, deux fois le prix de quatre
+// armes : c'est un VRAI choix. À moins que son gang ne coule, et là il ne vaut plus que 120 🪙.
 function prixRecrue(m) {
   const G = gangDe(m.gang);
-  let px = 40 + perfDe(m) * 3;
+  let px = 80 + perfDe(m) * 4;
   if (G) {
     const sien = nbTerritoires(G.id), mien = nbTerritoires('joueur');
     if (sien > mien) px *= 2;                 // son gang domine : il n'a aucune raison de partir
@@ -26532,7 +26545,7 @@ function prixRecrue(m) {
   }
   const rang = RANGS.indexOf(rangJoueur());
   px = Math.round(px * (1 - 0.1 * Math.max(0, rang)));   // plus tu es respecté, moins on se fait payer cher
-  return Math.max(20, px);
+  return Math.max(60, px);                    // jamais moins que quatre petits boulots
 }
 // Le rival qu'on peut acheter : tout près, debout, et ISOLÉ (aucun copain à lui à 20 m).
 function recrueAchetable() {

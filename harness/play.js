@@ -13635,6 +13635,7 @@ test('la difficulte monte etape par etape : deux petits gangs au depart, et un g
     G.paliersTick();
     const apres = G.nbTerritoires('joueur');
     const nouveau = G.gangDe(annonce);
+    const palierApres = G.guerre.palier;
     // ON NE SAUTE JAMAIS UNE MARCHE : meme en passant d'un coup au dernier rang, les gangs
     // arrivent un par un, dans l'ordre de la table, sans qu'aucun soit oublie
     G.gang.rep = 5000;
@@ -13645,7 +13646,7 @@ test('la difficulte monte etape par etape : deux petits gangs au depart, et un g
     }
     const tous = G.gangs.map(g => g.id);
     return { table, auPalier1, annonce, attendu: def.id, arrive: !!nouveau, ordre, tous,
-      palierFinal: G.guerre.palier, planques: G.city.planques.length,
+      palierFinal: G.guerre.palier, planques: G.city.planques.length, palierApres,
       membres: nouveau ? nouveau.membres.length : 0, force: nouveau ? nouveau.force : 0,
       f0: def.f0, nb: def.nb, perdus: avant - apres, palier: G.guerre.palier, attenduPalier: def.palier };
   });
@@ -13654,7 +13655,7 @@ test('la difficulte monte etape par etape : deux petits gangs au depart, et un g
   const ordreTable = r.table.map(d => d.id).join(',');
   const sansSaut = r.tous.join(',') === ordreTable && r.palierFinal === 5 && r.planques === 7;
   const ok = r.table.length === 6 && croissante && r.auPalier1 === 2 && r.annonce === r.attendu
-    && r.arrive && r.force === r.f0 && r.membres === r.nb + 3 && r.perdus <= 2 && r.palier === r.attenduPalier
+    && r.arrive && r.force === r.f0 && r.membres === r.nb + 3 && r.perdus <= 2 && r.palierApres === r.attenduPalier
     && sansSaut;
   return { ok, detail: `avant : les trois gangs arrivaient tous a la premiere seconde, tous pareils, et renaissaient sans fin · maintenant la table compte ${r.table.length} gangs echelonnes sur 5 paliers, de force ${r.table.map(d => d.f0).join(' → ')} (croissante : ${croissante}) et seuls ${r.auPalier1} d'entre eux sont la au depart ; franchir le seuil de respect du palier ${r.attenduPalier} fait debarquer « ${r.annonce} » — annonce d'abord, arrivee 10 s plus tard, ${r.membres} hommes (le chef, ${r.nb} hommes et 2 gardes de planque), force ${r.force} — et il ne prend que ${r.perdus} quartier(s) au joueur (plafond : 2, pour ne jamais tout perdre d'un coup) · et on ne saute JAMAIS une marche : en passant d'un coup au dernier rang, les gangs debarquent un par un dans l'ordre (${r.tous.join(' → ')}, palier ${r.palierFinal}/5, ${r.planques} planques) au lieu de sauter directement au plus fort` };
 });
@@ -13718,10 +13719,10 @@ test('on recrute un adversaire avec de l\'argent : le prix est affiche, il doubl
       plusChezLui: rouge.membres.indexOf(m) < 0 };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
-  const ok = r.prixDomine === 320 && r.prixEgal === 160 && r.prixEffondre === 80
+  const ok = r.prixDomine === 480 && r.prixEgal === 240 && r.prixEffondre === 120 && r.prixEgal >= 80
     && !r.entoure && r.isole && !r.sansArgent && r.achat && r.paye === r.prix
     && r.fidelite === 50 && r.ancien === 'rouge' && r.dansMonGang && r.plusChezLui;
-  return { ok, detail: `avant : on ne pouvait rattacher un adversaire QUE par la bagarre, l'argent ne servait a rien dans la guerre · maintenant un homme de force 40 coute ${r.prixEgal} pieces a egalite, ${r.prixDomine} si son gang tient plus de quartiers que toi et seulement ${r.prixEffondre} si son gang n'a plus rien — c'est ce qui apprend au joueur, tout seul, qu'il faut prendre les quartiers AVANT d'acheter les hommes · il n'ecoute que s'il est isole (entoure : ${r.entoure}, seul : ${r.isole}), sans assez de pieces l'achat echoue proprement (${r.sansArgent}), et l'achat retire ${r.paye} pieces, le sort de son gang (${r.plusChezLui}) et le met dans le tien avec une fidelite de ${r.fidelite} au lieu de 80 pour un homme conquis a la bagarre` };
+  return { ok, detail: `avant : on ne pouvait rattacher un adversaire QUE par la bagarre, l'argent ne servait a rien dans la guerre · maintenant un homme de force 40 coute ${r.prixEgal} pieces a egalite (le prix d'un break familial chez le concessionnaire, pour que la recrue reste un VRAI choix face a l'economie des voitures : citadine 80, coffre de banque 500), ${r.prixDomine} si son gang tient plus de quartiers que toi et seulement ${r.prixEffondre} si son gang n'a plus rien — c'est ce qui apprend au joueur, tout seul, qu'il faut prendre les quartiers AVANT d'acheter les hommes · il n'ecoute que s'il est isole (entoure : ${r.entoure}, seul : ${r.isole}), sans assez de pieces l'achat echoue proprement (${r.sansArgent}), et l'achat retire ${r.paye} pieces, le sort de son gang (${r.plusChezLui}) et le met dans le tien avec une fidelite de ${r.fidelite} au lieu de 80 pour un homme conquis a la bagarre` };
 });
 
 test('un homme achete peut trahir, mais jamais en silence : il previent trente secondes avant et on peut le retenir avec des pieces', async p => {

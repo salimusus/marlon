@@ -1188,12 +1188,15 @@ const DA = {
   // hémisphérique (ciel au-dessus, rebond du sol en dessous) qui empêche les faces à l'ombre
   // d'être des trous noirs. Les heures de nuit ne sont jamais atteintes par le cycle
   // automatique (il fait toujours jour) mais servent à l'ambiance « nuit » choisie au menu.
+  // L'APPOINT DE PLEIN JOUR ÉTAIT UN BLANC PUR, légèrement bleuté (0xf4f9ff à 9 h 30, 0xffffff à
+  // 13 h) : tout le décor prenait un ton clinique et la lumière « chaude » annoncée ne l'était pas
+  // du tout à midi. `amb` est maintenant ambré À TOUTE HEURE DU JOUR, comme le soleil et le rebond.
   heures: [
     { h: 0,    haut: 0x060a1c, bas: 0x101733, halo: 0x22315a, sol: 0x8098dc, force: 0.10, amb: 0x7f98e0, rebond: 0x151a30, nuit: 1 },
     { h: 5.2,  haut: 0x1b2650, bas: 0x6a5177, halo: 0xd4906c, sol: 0xffb488, force: 0.28, amb: 0xc0b2d2, rebond: 0x3e3849, nuit: 0.62 },
     { h: 7.0,  haut: 0x5b93cf, bas: 0xffcaa6, halo: 0xffdcb0, sol: 0xffd2a4, force: 0.60, amb: 0xffe8d6, rebond: 0x9a8060, nuit: 0.12 },
-    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 0.78, amb: 0xf4f9ff, rebond: 0x8f8264, nuit: 0.02 },
-    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 0.84, amb: 0xffffff, rebond: 0x8f8a70, nuit: 0 },
+    { h: 9.5,  haut: 0x4c9ce2, bas: 0xd2e7fb, halo: 0xfff1d4, sol: 0xfff0d6, force: 0.78, amb: 0xfff2de, rebond: 0x8f8264, nuit: 0.02 },
+    { h: 13.0, haut: 0x3d90e8, bas: 0xdaeeff, halo: 0xfffdf0, sol: 0xfffaf0, force: 0.84, amb: 0xfff5e6, rebond: 0x8f8a70, nuit: 0 },
     { h: 16.5, haut: 0x4a92dd, bas: 0xe2ebf8, halo: 0xffefc8, sol: 0xfff0cc, force: 0.78, amb: 0xfbf3e8, rebond: 0x8f8264, nuit: 0.03 },
     { h: 19.0, haut: 0x3a5fa4, bas: 0xffad70, halo: 0xffb468, sol: 0xffb87e, force: 0.58, amb: 0xffdcb6, rebond: 0x8a6a4a, nuit: 0.16 },
     { h: 20.6, haut: 0x1f2d5c, bas: 0x93597c, halo: 0xd06e6e, sol: 0xcf8a74, force: 0.30, amb: 0xb9a3c2, rebond: 0x40384c, nuit: 0.66 },

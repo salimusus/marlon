@@ -167,6 +167,19 @@ window.__SHOT = {
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
+    // POSTE PERSONNAGES : le couteau photographie de PROFIL. v.couteau = 'fourreau' garnit les
+    // deux etuis (couteau a une hanche, pistolet a l'autre), 'main' met la lame dans le poing.
+    // On laisse P.drawn a faux : « arme degainee » force le personnage a regarder la camera
+    // (P.facing = cam.yaw + PI), et on ne verrait JAMAIS le geste autrement que de dos.
+    if (v.couteau) { try { owned.add('arme:knife'); owned.add('arme:pistol'); majEtuis();
+      equipWeapon('knife'); setWeapon(me, 'knife', v.couteau === 'main'); P.drawn = false; P.holsterT = 0;
+      // P.gun = false : sinon la boucle d'image (« l'arme en main suit P.drawn ») REMETTAIT la
+      // lame au fourreau a l'image suivante, et on photographiait un poing vide.
+      if (v.couteau === 'main') P.gun = false;
+      if (v.facing != null) P.facing = v.facing;
+      // le radar (canevas #gps) trone au milieu du bas de l'ecran, pile devant la ceinture :
+      // il masquait justement les deux etuis qu'on veut photographier.
+      var gps = document.getElementById('gps'); if (gps && v.hideHud) gps.style.display = 'none'; } catch (e16) {} }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }

@@ -8985,8 +8985,14 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     res.coups = coups;
     res.degats = G.WEAPONS.knife.dmg;
     // il se range TOUT SEUL, sans qu'on touche à rien
-    res.rangement = { programme: +(G.P.holsterT - G.simTime).toFixed(2) };
-    G.simTime = G.P.holsterT + 0.05; G.rangementAuto();
+    // GARDE-FOU : si le coup ne part pas, P.holsterT peut valoir 0 ou undefined. Avancer
+    // l'horloge sur « undefined + 0.05 » mettait simTime a NaN, ce qui FIGEAIT tout le jeu et
+    // faisait echouer en cascade les tests suivants. On ne touche donc a l'horloge que si la
+    // date de rengainage est un nombre utilisable.
+    const hT = +G.P.holsterT || 0;
+    res.rangement = { programme: +(hT - G.simTime).toFixed(2) };
+    if (hT > G.simTime) G.simTime = hT + 0.05;
+    G.rangementAuto();
     me.group.updateMatrixWorld(true);
     res.rangement.enMainApres = me.inHand;
     res.rangement.retourFourreau = +ecartBoites(bte(me.weapons.knife), bte(E.couteau)).toFixed(3);

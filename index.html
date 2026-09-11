@@ -10816,7 +10816,10 @@ function kick() { attack('kick'); }
 function rangementAuto() {
   if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); fermeLunette(); }
 }
-function coupCouteau() {
+function coupCouteau(av, duree) {
+  // Compatibilite : les postes qui veulent seulement JOUER le geste appellent coupCouteau(av).
+  // Sans cet aiguillage, renommer l'animation en `animCouteau` casserait leurs appels.
+  if (av) return animCouteau(av, duree);
   const w = WEAPONS.knife;
   if (!city.on || !running || paused || drive.car || P.swing || gym.on || P.hp <= 0) return false;
   if (simTime < P.punchT || simTime < P.fireCd) return false;
@@ -10827,7 +10830,7 @@ function coupCouteau() {
   P.fireCd = simTime + w.cd; P.punchT = simTime + w.cd;
   P.holsterT = simTime + 0.9;               // rengainage automatique après le coup, comme le pistolet
   me.rig.swing = 0.26; P.poing = 'D';       // le couteau est dans le poing droit
-  coupCouteau(me, 0.26);   // poste Animation : coup COURT et sec au ventre, pas un direct du droit
+  animCouteau(me, 0.26);   // poste Animation : coup COURT et sec au ventre, pas un direct du droit
   P.dernierCouteau = simTime;
   sfx.noise(.05, 2400, .05); sfx.tone(1400, 0, .05, 'triangle', .03, 700);
   const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
@@ -12433,7 +12436,12 @@ const MUNITIONS = {
   inc: { n: 'Cartouches incendiaires ×20', e: '🔥', p: 55, mul: 1.4, nb: 20, feu: true, desc: 'À l\'impact, une flaque de feu brûle tout ce qui passe pendant 12 s.' },
   exp: { n: 'Balles explosives ×15', e: '💥', p: 75, mul: 1.8, nb: 15, boom: true, desc: 'Explosion de 4,5 m : véhicules, mobilier urbain et tout le monde autour.' },
 };
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, garde: false, accroupi: false, poing: 'G', esquiveT: 0, perf: +store.get('superobby.perf') || 10 };
+// `holsterT` (date du rengainage automatique) et `dernierCoupY` (hauteur du dernier coup)
+// n'etaient poses qu'au PREMIER tir ou coup de couteau. Tant qu'on n'avait rien fait ils
+// valaient `undefined`, et le moindre calcul dessus (simTime = P.holsterT + 0.05) rendait
+// NaN : l'horloge de simulation partait en vrille et tout le jeu se figeait. On les declare
+// donc a ZERO des la creation du joueur.
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, holsterT: 0, dernierCoupY: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, garde: false, accroupi: false, poing: 'G', esquiveT: 0, perf: +store.get('superobby.perf') || 10 };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0, shake: 0, shakeT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -24687,7 +24695,11 @@ function esquiveBaisse(av, duree) {
   if (av === me && typeof P !== 'undefined') P.accroupi = true;
 }
 // LE COUTEAU : court et sec, au ventre.
-function coupCouteau(av, duree) {
+// RENOMMEE : ce geste s'appelait lui aussi `coupCouteau`, comme l'ACTION de l'arme blanche
+// declaree plus haut. Deux `function coupCouteau` dans la meme IIFE : la seconde ecrasait la
+// premiere, donc l'appui sur « frapper » avec le couteau ne jouait qu'une animation — aucun
+// degat, aucun rengainage programme. Le geste s'appelle maintenant `animCouteau`.
+function animCouteau(av, duree) {
   const c = animCbt(av); if (!c || c.couteau > 0) return false;
   c.couteau = Math.max(duree > 0 ? duree : 0, CBT_COUTEAU); return true;
 }

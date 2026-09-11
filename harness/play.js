@@ -5330,7 +5330,11 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
 
 test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un mur', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // MONDE NEUF. Ce test juge les trois ponts elevateurs du garage : un test precedent qui
+    // laisse une voiture de la circulation, une voiture de police ou une epave arretee sur un
+    // pont faussait la mesure (la caisse etait posee DANS l'autre) et l'echec ne disait pas
+    // pourquoi. Le monde est rebati, et on nomme desormais ce qui chevauche.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
     const G = __G, res = {};
     const g = G.city.garage, d0 = G.city.tuneDesk;
     for (const v of G.city.cars) { v.x += 300; v.z += 300; v.g.position.set(v.x, v.y, v.z); }
@@ -5340,13 +5344,16 @@ test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un 
     const c = G.tuneCible();
     res.pose = { x: +(c.x - g.x).toFixed(1), z: +(c.z - g.z).toFixed(1), h: +c.h.toFixed(2), y: +c.y.toFixed(2) };
     // dans un mur ? on compare son volume aux solides du décor
-    const o = c.solid; let dansMur = 0;
+    const o = c.solid; let dansMur = 0; const qui = [];
     for (const so of G.solids) {
       if (so === o || so.deco) continue;
       if (Math.abs(so.x - o.x) < (so.w + o.w) / 2 - 0.05 && Math.abs(so.z - o.z) < (so.d + o.d) / 2 - 0.05
-        && Math.abs((so.y || 0) - (c.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) dansMur++;
+        && Math.abs((so.y || 0) - (c.y + 0.8)) < (so.h + 1.6) / 2 - 0.05) {
+        dansMur++;
+        if (qui.length < 4) qui.push(`${so.w.toFixed(1)}x${so.d.toFixed(1)} en (${so.x.toFixed(0)}, ${so.z.toFixed(0)})${so.veh ? ' [véhicule]' : ''}`);
+      }
     }
-    res.dansMur = dansMur;
+    res.dansMur = dansMur; res.qui = qui;
     const murs = c2 => { const o2 = c2.solid; let n = 0;
       for (const so of G.solids) { if (so === o2 || so.deco) continue;
         if (Math.abs(so.x - o2.x) < (so.w + o2.w) / 2 - 0.05 && Math.abs(so.z - o2.z) < (so.d + o2.d) / 2 - 0.05
@@ -5375,7 +5382,7 @@ test('la voiture de l\'atelier se pose sur le pont, sans rester coincee dans un 
   const surTravee = p2 => travees.some(t => Math.abs(p2.x - t) < 0.6) && Math.abs(p2.z) < 0.6 && Math.abs(p2.h) < 0.05;
   const ok = surTravee(r.pose) && r.dansMur === 0 && r.pose.y > 0.1 && r.pose.y < 1
     && r.bouge > 2 && /Remettre/.test(r.bouton) && r.coince > 0 && surTravee(r.remise) && r.apresMurs === 0;
-  return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, bien droite), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
+  return { ok, detail: `la voiture est deposee au MILIEU d'un pont elevateur du garage (travee x${r.pose.x}, z${r.pose.z}, cap ${r.pose.h}), roues au sol a ${r.pose.y} m, ${r.dansMur} chevauchement avec le decor${r.qui.length ? ' → ' + JSON.stringify(r.qui) : ''} — avant elle atterrissait derriere le comptoir, a cheval sur le mur du fond, et y restait coincee · elle roule (${r.bouge} m en marche arriere) · et une caisse posee la ou l'ancien code la mettait (${r.coince} chevauchement avec le mur sud) est remise droite sur le pont (travee x${r.remise.x}, z${r.remise.z}, cap ${r.remise.h}) par le bouton « ${r.bouton} » : ${r.apresMurs} chevauchement` };
 });
 
 
@@ -5642,7 +5649,8 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
 
 test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus dehors', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 60, y: 1, z: 320, hour: 12 });
+    // MONDE NEUF : ce test juge LE SOL de toute la carte, il ne doit rien devoir a l'ordre des tests.
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 320, hour: 12, frais: true });
     const G = __G;
     // une plaque de sol sous chaque point ? (les grands plateaux, dessus vers y = 0)
     const sol = (x, z) => G.solids.some(o => o.mesh && o.w > 8 && o.d > 8 && o.y + o.h / 2 < 3 && o.y + o.h / 2 > -2
@@ -5656,13 +5664,20 @@ test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus de
     // la grille de navigation couvre-t-elle les deux quartiers ?
     const nav = G.NAV, xMax = nav.x0 + nav.nx * nav.cs, zMax = nav.z0 + nav.nz * nav.cs;
     const navCouvre = (x, z) => x > nav.x0 && x < xMax && z > nav.z0 && z < zMax;
-    return { trous: trous.length, ex: trous.slice(0, 4),
+    // UN ECHEC DOIT DIRE OU. On regroupe les releves dans le vide par rangee de z : une tranchee
+    // d'un bout a l'autre de la carte se lit alors d'un coup d'oeil, au lieu de quatre couples
+    // de coordonnees qui ne racontent rien.
+    const parZ = new Map();
+    for (const [x, z] of trous) { if (!parZ.has(z)) parZ.set(z, []); parZ.get(z).push(x); }
+    const rangees = [...parZ.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6)
+      .map(([z, xs]) => `z=${z} : ${xs.length} releves, x de ${Math.min(...xs)} a ${Math.max(...xs)}`);
+    return { trous: trous.length, ex: trous.slice(0, 4), rangees,
       casino: dedans(c.x, c.z + 40) && navCouvre(c.x, c.z + 40),
       circuit: dedans(ci.x, ci.z - ci.r - 8) && navCouvre(ci.x, ci.z - ci.r - 8),
       murs: murs.length, navZ: [nav.z0, Math.round(zMax)], parvis: sol(c.x, c.z + 40), parvisBord: sol(c.x - 18, c.z + 26) };
   });
   const ok = r.trous === 0 && r.casino && r.circuit && r.murs === 4 && r.parvis && r.parvisBord;
-  return { ok, detail: `le plateau de la ville s'arrêtait a z = 282 et le mur invisible juste derrière : le casino (z 287 → 340) et le circuit étaient bâtis DEHORS, sur du vide — un trou béant devant le casino et deux quartiers interdits · le sol couvre maintenant toute la carte (${r.trous} trou sur 5 500 points testés, parvis et ses bords compris), les ${r.murs} murs d'enceinte sont repoussés au-delà des deux quartiers et la grille de navigation va jusqu'a z = ${r.navZ[1]} (casino navigable=${r.casino}, circuit=${r.circuit})` };
+  return { ok, detail: `le plateau de la ville s'arrêtait a z = 282 et le mur invisible juste derrière : le casino (z 287 → 340) et le circuit étaient bâtis DEHORS, sur du vide — un trou béant devant le casino et deux quartiers interdits · le sol couvre maintenant toute la carte (${r.trous} trou sur 5 500 points testés, parvis et ses bords compris${r.rangees.length ? ' → ' + r.rangees.join(' · ') : ''}), les ${r.murs} murs d'enceinte sont repoussés au-delà des deux quartiers et la grille de navigation va jusqu'a z = ${r.navZ[1]} (casino navigable=${r.casino}, circuit=${r.circuit})` };
 });
 
 test('le casino a de grandes vitres bleues, un tapis rouge et des haies vertes', async p => {

@@ -444,6 +444,25 @@ window.__SHOT = {
         if (Math.abs(m.x) < 260 && Math.abs(m.z) < 340) continue;
         m.x -= 400; m.z -= 400; if (m.av) m.av.group.position.set(m.x, m.y, m.z);
       }
+      // POSTE JEU STRATEGIQUE : LA PARTIE EN COURS ne doit pas deborder d'un test sur l'autre.
+      // Un gang raye de la carte par un test restait mort pour tous les suivants (ses hommes
+      // introuvables, son quartier au joueur), un Sacre lance laissait son compte a rebours a
+      // l'ecran, et une alliance scellee rendait un gang inoffensif dans le test d'apres.
+      if (typeof guerre !== 'undefined' && !v.garderSauvegarde) {
+        guerre.morts = []; guerre.palier = 1; guerre.gagne = false; guerre.detruits = 0;
+        guerre.sacre = 0; guerre.sacrePause = false; guerre.sacreBeacon = false;
+        guerre.arrivee = null; guerre.fidT = 0; guerre.sansFin = false;
+        if (typeof gangs !== 'undefined') for (const g of gangs) {
+          g.allieJoueur = false; g.allieFin = 0; g.allieAlerte = false;
+          if (g.mort) {   // on releve un gang detruit par le test precedent
+            g.mort = 0; g.etat = 'repos'; g.t = simTime + 30;
+            for (const m of g.membres) { m.ko = 0; m.captif = false; m.enferme = false; m.hp = m.hpMax || 90;
+              if (m.av) { m.av.group.rotation.x = 0; m.av.group.visible = true; } }
+          }
+        }
+        for (const m of (gang.membresLibres || [])) { m.doute = 0; m.fidelite = m.achete ? 50 : 80; }
+        const sc0 = document.getElementById('sacre'); if (sc0) sc0.classList.remove('on', 'pause');
+      }
     } catch (e11) {}
     if (!v.garderQualite && settings.quality !== 'high') { settings.quality = 'high'; try { applyQuality(); } catch (e12) {} }   // l'Ultra HD doublerait le temps du banc d'essai
     // Les ORDRES ne survivent pas d'un test a l'autre : un garde du corps, un protege, une
@@ -488,6 +507,19 @@ window.__SHOT = {
     if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
     if (v.salonTV && typeof ouvreSalonTV === 'function') { try { ouvreSalonTV(); } catch (e9) {} }
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
+    // POSTE JEU STRATEGIQUE : v.guerreDemo met la guerre dans un etat parlant (trois quartiers
+    // au joueur, deux a chaque gang, une alliance en cours) et ouvre l'ecran 🚩 pour le
+    // photographier — on ne juge la lisibilite d'une carte que sur une carte remplie.
+    if (v.guerreDemo && typeof openGuerre === 'function') {
+      try {
+        gang.rep = v.guerreDemo.rep || 620; gang.magot = 1450; wallet = 900;
+        guerre.territoires = { centre: 'joueur', parc: 'joueur', banque: 'joueur',
+          commerces: 'jaune', plage: 'jaune', zone: 'rouge', industriel: 'rouge' };
+        const B = gangs[1] || gangs[0];
+        if (B && typeof scelleAlliance === 'function') scelleAlliance(B, ALLIANCE_DUREE);
+        majHudGuerre(); openGuerre();
+      } catch (e40) {}
+    }
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
     // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
@@ -889,6 +921,48 @@ window.__G = {
   majGuerre: typeof majGuerre === 'function' ? majGuerre : null,
   saveGuerre: typeof saveGuerre === 'function' ? saveGuerre : null,
   loadGuerre: typeof loadGuerre === 'function' ? loadGuerre : null,
+  // POSTE JEU STRATEGIQUE : les regles de la partie (ajoute tes exports SOUS cette ligne)
+  TERRITOIRES: typeof TERRITOIRES !== 'undefined' ? TERRITOIRES : null,
+  GANG_DEFS: typeof GANG_DEFS !== 'undefined' ? GANG_DEFS : null,
+  PALIERS_GUERRE: typeof PALIERS_GUERRE !== 'undefined' ? PALIERS_GUERRE : null,
+  RANGS: typeof RANGS !== 'undefined' ? RANGS : null,
+  ALLIANCE_DUREE: typeof ALLIANCE_DUREE !== 'undefined' ? ALLIANCE_DUREE : null,
+  SACRE_DUREE: typeof SACRE_DUREE !== 'undefined' ? SACRE_DUREE : null,
+  FIDELITE_SEUIL: typeof FIDELITE_SEUIL !== 'undefined' ? FIDELITE_SEUIL : null,
+  FIDELITE_DELAI: typeof FIDELITE_DELAI !== 'undefined' ? FIDELITE_DELAI : null,
+  perdRep: typeof perdRep === 'function' ? perdRep : null,
+  plancherRep: typeof plancherRep === 'function' ? plancherRep : null,
+  palierDuRang: typeof palierDuRang === 'function' ? palierDuRang : null,
+  paliersTick: typeof paliersTick === 'function' ? paliersTick : null,
+  arriveGang: typeof arriveGang === 'function' ? arriveGang : null,
+  creerGangRival: typeof creerGangRival === 'function' ? creerGangRival : null,
+  nbTerritoires: typeof nbTerritoires === 'function' ? nbTerritoires : null,
+  valeurTerritoires: typeof valeurTerritoires === 'function' ? valeurTerritoires : null,
+  gangPremier: typeof gangPremier === 'function' ? gangPremier : null,
+  captureDuree: typeof captureDuree === 'function' ? captureDuree : null,
+  prixRecrue: typeof prixRecrue === 'function' ? prixRecrue : null,
+  recrueAchetable: typeof recrueAchetable === 'function' ? recrueAchetable : null,
+  acheterRecrue: typeof acheterRecrue === 'function' ? acheterRecrue : null,
+  fideliteDe: typeof fideliteDe === 'function' ? fideliteDe : null,
+  fideliteTick: typeof fideliteTick === 'function' ? fideliteTick : null,
+  quitteLeGang: typeof quitteLeGang === 'function' ? quitteLeGang : null,
+  membreQuiDoute: typeof membreQuiDoute === 'function' ? membreQuiDoute : null,
+  retiensMembre: typeof retiensMembre === 'function' ? retiensMembre : null,
+  alliancePrix: typeof alliancePrix === 'function' ? alliancePrix : null,
+  allieEnCours: typeof allieEnCours === 'function' ? allieEnCours : null,
+  scelleAlliance: typeof scelleAlliance === 'function' ? scelleAlliance : null,
+  rompsAlliance: typeof rompsAlliance === 'function' ? rompsAlliance : null,
+  allianceTick: typeof allianceTick === 'function' ? allianceTick : null,
+  sacreTick: typeof sacreTick === 'function' ? sacreTick : null,
+  gagnePartie: typeof gagnePartie === 'function' ? gagnePartie : null,
+  rejouerGuerre: typeof rejouerGuerre === 'function' ? rejouerGuerre : null,
+  carteTerritoires: typeof carteTerritoires === 'function' ? carteTerritoires : null,
+  choixReunion: typeof choixReunion === 'function' ? choixReunion : null,
+  gangDe: typeof gangDe === 'function' ? gangDe : null,
+  proprio: typeof proprio === 'function' ? proprio : null,
+  perfDe: typeof perfDe === 'function' ? perfDe : null,
+  majForceGang: typeof majForceGang === 'function' ? majForceGang : null,
+  verifieVictoireImmediate: typeof verifieVictoireImmediate === 'function' ? verifieVictoireImmediate : null,
   attack: typeof attack === 'function' ? attack : null,
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   marqueImpact: typeof marqueImpact === 'function' ? marqueImpact : null,

@@ -13005,3 +13005,94 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
+
+// ================= « ON VOIT NI ESCALIER NI PLANCHER NI MUR » =================
+// La plainte du joueur, capture a l'appui, prise au 2e etage de la banque : debout sur du
+// vide, les murs traverses par le regard jusqu'au parc, l'escalier absent. Deux causes
+// mesurees : la maison de poupee effacait TOUT ce qui depasse la tete sur trente metres de
+// haut (donc l'escalier qu'on monte et l'etage ou l'on va), et le mur « traverse » par la
+// camera etait choisi au produit scalaire, ce qui rendait transparente la moitie d'un
+// batiment decoupe en panneaux (quatre directions sur huit sans mur plein).
+// Ce test BALAYE l'interieur de plusieurs batiments et exige, a chaque position, que le SOL
+// sous les pieds et les MURS autour soient VRAIMENT DESSINES : on lance un rayon et on
+// compare le premier objet TOUCHE au premier objet DESSINE (visible, sur le calque de la
+// camera, et assez opaque pour arreter le regard). Si les deux different, c'est qu'un mur ou
+// un plancher a ete efface. On verifie en plus qu'AUCUNE SURFACE PRATICABLE (marche, palier,
+// plancher) accessible a pied depuis le joueur n'est effacee.
+test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l\'escalier restent dessines', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, T = G.THREE, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    // « dessine » = ce que la camera voit vraiment : visible, sur son calque, et opaque.
+    const dessine = o => o.visible && o.layers.test(G.camera.layers)
+      && (!o.material || !o.material.transparent || o.material.opacity == null || o.material.opacity > 0.5);
+    const rc = new T.Raycaster();
+    const lieux = [
+      ['le hall de la banque', -52, 0.5, 70],
+      ['le pied de l\'escalier de la banque', -60.2, 0.5, 62.6],
+      ['le 1er etage de la banque', -52, 5.1, 66],
+      ['la salle des coffres de la banque', -52, 9.9, 76],
+      ['le commissariat', -54, 0.5, 28],
+      ['la salle de sport', -1, 0.5, 20],
+      ['une classe de l\'ecole', -69, 0.5, 209],
+      ['la Villa Azur', 108, 0.8, 168],
+    ];
+    const out = [];
+    for (const [nom, x, y, z] of lieux) {
+      __SHOT.go({ world: 4, x, y, z, hour: 12, yaw: 0, pitch: 0.2, dist: 7, hideHud: true });
+      // il faut de VRAIES images : la maison de poupee est calculee dans frame(). On attend
+      // que le TEMPS SIMULE ait avance, sinon sous la charge de la suite complete on ne
+      // mesure que l'etat laisse par la teleportation.
+      const t0 = G.simTime;
+      for (let i = 0; i < 300 && G.simTime - t0 < 1.2; i++) await dodo(50);
+      const P = G.P, meshes = [];
+      G.worldGroup.traverse(o => { if (o.isMesh) meshes.push(o); });
+      const tir = (ox, oy, oz, dx, dy, dz, portee) => {
+        rc.far = portee; rc.set(new T.Vector3(ox, oy, oz), new T.Vector3(dx, dy, dz).normalize());
+        const hits = rc.intersectObjects(meshes, false);
+        let tout = null, vu = null;
+        for (const h of hits) { if (!tout) tout = h; if (dessine(h.object)) { vu = h; break; } }
+        return { tout: tout ? tout.distance : null, vu: vu ? vu.distance : null, obj: tout ? tout.object : null };
+      };
+      // LE MUR QUE LA CAMERA A TRAVERSE A LE DROIT d'etre transparent : c'est la maison de
+      // poupee, et sans elle l'image serait bouchee. Tous les AUTRES doivent rester pleins.
+      const bb = new T.Box3(), pt = new T.Vector3(), dir = new T.Vector3();
+      const traversePar = obj => {
+        bb.setFromObject(obj); bb.expandByScalar(0.4);
+        const c = G.camera.position, t = G.cam.target;
+        dir.set(t.x - c.x, t.y - c.y, t.z - c.z);
+        const len = dir.length(); if (len < 1e-4) return true;
+        dir.divideScalar(len);
+        const ray = new T.Ray(new T.Vector3(c.x, c.y, c.z), dir);
+        return !!ray.intersectBox(bb, pt) && c.distanceTo(pt) <= len + 0.4;
+      };
+      const sol = tir(P.pos.x, P.pos.y + 0.7, P.pos.z, 0, -1, 0, 3);
+      let murs = 0, mursKO = 0, murXray = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * Math.PI * 2;
+        const m = tir(P.pos.x, P.pos.y + 1.2, P.pos.z, Math.sin(a), 0, Math.cos(a), 26);
+        if (m.tout == null) continue;
+        murs++;
+        if (m.vu != null && m.vu <= m.tout + 0.05) continue;
+        if (m.obj && traversePar(m.obj)) { murXray++; continue; }   // le mur traverse par la camera
+        mursKO++;
+      }
+      // aucune surface praticable (marche, palier, plancher) accessible a pied n'est effacee
+      let marchesKO = 0;
+      const rect = G.interieur.rect;
+      if (rect && G.solsAccessibles) for (const o of G.solsAccessibles(rect, P.pos.x, P.pos.z, P.pos.y))
+        if (o.mesh && !o.mesh.visible) marchesKO++;
+      out.push({ nom, y: +P.pos.y.toFixed(2), dedans: !!rect, masques: G.interieur.masques.length,
+        solKO: !!(sol.tout != null && (sol.vu == null || sol.vu > sol.tout + 0.05)),
+        solVide: sol.tout == null, murs, mursKO, murXray, marchesKO });
+    }
+    return out;
+  });
+  const solsKO = r.filter(e => e.solKO || e.solVide);
+  const mursKO = r.filter(e => e.mursKO > 0);
+  const marchesKO = r.filter(e => e.marchesKO > 0);
+  const dedans = r.filter(e => e.dedans).length;
+  const assezDeMurs = r.every(e => e.murs >= 2);
+  const ok = solsKO.length === 0 && mursKO.length === 0 && marchesKO.length === 0 && dedans >= 5 && assezDeMurs;
+  const dit = e => `${e.nom} (y=${e.y}, ${e.murs} murs autour, ${e.masques} elements masques, ${e.murXray} traverse par la camera)${e.solKO || e.solVide ? ' SANS SOL' : ''}${e.mursKO ? ' ' + e.mursKO + ' MUR(S) EFFACE(S)' : ''}${e.marchesKO ? ' ' + e.marchesKO + ' MARCHE(S) EFFACEE(S)' : ''}`;
+  return { ok, detail: `balayage de ${r.length} interieurs (${dedans} reconnus comme « interieur » par la maison de poupee) : ${r.map(dit).join(' · ')} · bilan : ${solsKO.length} position sans plancher dessine, ${mursKO.length} position avec un mur efface, ${marchesKO.length} position avec une marche effacee (avant correction, la salle des coffres comptait 4 murs effaces sur 8 et le pied de l'escalier perdait la moitie haute de la volee)` };
+});

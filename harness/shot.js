@@ -1703,6 +1703,9 @@ window.__G = {
   // Ce qu'on tient est passe du groupe du bras au noeud main, au centre du poing rond
   // on compte donc les deux, sinon le test « rien ne reste colle a la main » ne voyait plus rien.
   arm() { return me.rig.armR.children.length + (me.rig.armR.main ? me.rig.armR.main.children.length : 0); },
+  // ---- poste URGENCE « on voit ni escalier ni plancher ni mur » (maison de poupee) ----
+  solsAccessibles: typeof solsAccessibles === 'function' ? solsAccessibles : null,
+  murCoupeSegment: typeof murCoupeSegment === 'function' ? murCoupeSegment : null,
   // ---- poste FINITION (fuite de memoire, camera en lieu couvert, equilibre des coups, meteo) ----
   clearWorld: typeof clearWorld === 'function' ? clearWorld : null,
   libereBranche: typeof libereBranche === 'function' ? libereBranche : null,

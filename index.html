@@ -13624,15 +13624,20 @@ function solsAccessibles(r, x0, z0, y0) {
     cand.push(o);
   }
   const pris = new Set();
-  let niv = [{ x: x0, z: z0, top: y0 }];
+  // on part des PIEDS du joueur (une surface ponctuelle) et on enchaîne de proche en proche.
+  // La portée se mesure de BORD À BORD : sans la demi-largeur de la surface de départ, la
+  // grande dalle d'un hall ne « touchait » aucune marche à sept mètres de son centre et la
+  // chaîne s'arrêtait tout de suite.
+  let niv = [{ x: x0, z: z0, w: 0, d: 0, top: y0 }];
   for (let tour = 0; tour < 40 && niv.length; tour++) {
     const suivants = [];
     for (const n of niv) for (const o of cand) {
       if (pris.has(o)) continue;
       const top = o.y + o.h / 2;
       if (top > n.top + MARCHE_MONTEE || top < n.top - 6) continue;
-      if (Math.abs(o.x - n.x) > o.w / 2 + MARCHE_PORTEE || Math.abs(o.z - n.z) > o.d / 2 + MARCHE_PORTEE) continue;
-      pris.add(o); suivants.push({ x: o.x, z: o.z, top });
+      if (Math.abs(o.x - n.x) > o.w / 2 + n.w / 2 + MARCHE_PORTEE) continue;
+      if (Math.abs(o.z - n.z) > o.d / 2 + n.d / 2 + MARCHE_PORTEE) continue;
+      pris.add(o); suivants.push({ x: o.x, z: o.z, w: o.w, d: o.d, top });
     }
     niv = suivants;
   }

@@ -1879,7 +1879,10 @@ test('quand il neige : congères, bonshommes, capots blancs et verglas', async p
     const capots = (__G.city.neigeVeh || []).filter(m => m.visible).length;
     const sol = __G.meteo.sol ? +__G.meteo.sol.material.opacity.toFixed(2) : 0;
     __G.meteoSet('clair', 600); __G.meteo.force = 0;
-    await dodo(1500);
+    // ON ATTEND LE DEGEL, ON NE COMPTE PAS LES MILLISECONDES. C'est la boucle de rendu qui
+    // range le decor de neige (meteoTick → neigeDecor) ; quand le banc d'essai peine, une
+    // image met plusieurs secondes et le delai fixe de 1,5 s tombait AVANT la premiere.
+    for (let k = 0; k < 60 && G.visible; k++) await dodo(100);
     const apres = { visible: G.visible, capots: (__G.city.neigeVeh || []).filter(m => m.visible).length, glisse: __G.surGlace(g0.x, g0.z) };
     return { decor: !!G, bonshommes, congeres, glace: __G.city.glace.length, capots, sol, glisse, sec, apres };
   });

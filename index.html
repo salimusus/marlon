@@ -8336,6 +8336,21 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
         box(x, top + 1, zc + sz, len + 0.3, 0.12, 0.12, trim, { deco: true, studs: false });
       }
     }
+    // LE PALIER D'ARRIVÉE — la dernière partie de l'escalier, qui manquait.
+    // La dernière marche s'arrêtait 47 cm avant le plancher de l'étage, et la petite dalle
+    // d'angle qui en tenait lieu était 60 cm moins large que la volée et décalée sur le
+    // côté : depuis le hall, la volée SEMBLAIT S'ARRÊTER EN L'AIR, sans palier ni suite, et
+    // l'enfant ne montait pas au 2ᵉ étage faute de voir où l'escalier continuait.
+    // Chaque volée arrive désormais sur un vrai palier de marbre, aussi large qu'elle
+    // (3,60 m), jointif avec la dernière marche, qui file jusqu'au mur — main courante
+    // comprise, dans le style des marches.
+    const xA = dir > 0 ? x0 + n * len : bx - W / 2 + 0.4, xB = dir > 0 ? bx + W / 2 - 0.4 : x0, wP = xB - xA;
+    box((xA + xB) / 2, y1 - 0.15, zc, wP, 0.3, LARG, marble, { studs: false, noRoute: true });
+    {
+      const sz = cote * (LARG / 2 - 0.12);
+      for (let k = 0; k <= 2; k++) box(xA + wP * k / 2, y1 + 0.5, zc + sz, 0.09, 1, 0.09, trim, { deco: true, studs: false });
+      box((xA + xB) / 2, y1 + 1, zc + sz, wP, 0.12, 0.12, trim, { deco: true, studs: false });
+    }
   };
   // Les deux volées rasaient le mur : 65 cm entre la main courante et la paroi, on montait
   // dans une fente. On les rentre d'1,20 m dans le hall — 1,85 m de dégagement — sans toucher
@@ -8356,8 +8371,16 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   for (const [px, pz, ry, col] of [[bx - 4, bz + D / 2 - 0.3, 0, 0x4f8dff], [bx + 4, bz + D / 2 - 0.3, 0, 0xff8f3a]]) { box(px, 2.5, pz, 2.2, 1.5, 0.1, trim, { deco: true, studs: false }); box(px, 2.5, pz - 0.06, 1.9, 1.2, 0.05, col, { deco: true, noEdges: true, studs: false }); }   // tableaux
   // étage 1 : bureaux vitrés, ordinateurs, photocopieuse, distributeur
   for (const [dx, dz] of [[-6, 6], [0, 7], [6, 6]]) { box(bx + dx, F + 0.85, bz + dz, 2.4, 0.12, 1.2, C.wood, { deco: true, studs: false }); box(bx + dx, F + 1.2, bz + dz - 0.3, 1, 0.55, 0.06, 0x111111, { deco: true, studs: false }); box(bx + dx, F + 0.6, bz + dz + 1.2, 0.6, 0.6, 0.6, 0x3b4252, { deco: true, studs: false }); box(bx + dx, F + 0.9, bz + dz, 0.4, 0.05, 0.3, 0xffffff, { deco: true, noEdges: true, studs: false }); }
-  box(bx - 7.5, F + 1.1, bz - 6, 1.2, 1.5, 1.2, 0xd6e4ff, { deco: true, studs: false }); box(bx + 7.5, F + 1.3, bz - 6, 1, 1.9, 0.8, 0x4f8dff, { deco: true, studs: false }); box(bx + 7.5, F + 1.7, bz - 6.42, 0.6, 0.4, 0.05, 0x3ef2ff, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
+  box(bx - 7.5, F + 1.1, bz - 6, 1.2, 1.5, 1.2, 0xd6e4ff, { deco: true, studs: false });
+  // Le distributeur était planté juste au débouché de l'escalier, en travers du palier : on
+  // arrivait du rez-de-chaussée dans une machine à boissons. Il passe contre le mur est, le
+  // long de la coursive qui mène à la volée du 2ᵉ étage.
+  box(bx + W / 2 - 1.1, F + 1.3, bz + 2, 0.8, 1.9, 1, 0x4f8dff, { deco: true, studs: false }); box(bx + W / 2 - 1.55, F + 1.7, bz + 2, 0.05, 0.4, 0.6, 0x3ef2ff, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
   box(bx, F + 2.5, bz + D / 2 - 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('BUREAUX · ACCÈS RÉSERVÉ') }), deco: true, noEdges: true });
+  // Arrivé au 1ᵉʳ étage, on ne savait plus où aller : la volée du 2ᵉ longe le mur SUD, à
+  // quinze mètres. Une pancarte au-dessus du palier d'arrivée montre la coursive à suivre.
+  { const pan = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.MeshBasicMaterial({ map: plaqueTexture('COFFRES · 2ᵉ ÉTAGE →') }));
+    pan.position.set(bx + W / 2 - 0.42, F + 2.7, bz - 6.4); pan.rotation.y = -Math.PI / 2; worldGroup.add(pan); }
   // étage 2 : salle des coffres — porte blindée, coffres avec lingots, caméras, lampes rouges
   box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('🔐 SALLE DES COFFRES') }), deco: true, noEdges: true });
   const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 24), lam(0x8f98ab)); vd.rotation.x = Math.PI / 2; vd.position.set(bx + 6, 2 * F + 2.1, bz - 6.5); worldGroup.add(vd); const vw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 16), lam(0xffd23f)); vw.position.set(bx + 6, 2 * F + 2.1, bz - 6.22); worldGroup.add(vw);
@@ -9354,12 +9377,17 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   const tableau = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 2.45), new THREE.MeshLambertMaterial({ map: tex }));
   tableau.position.set(x, 2.25, z - D / 2 + 0.33); worldGroup.add(tableau);
   B(0, 2.25, -D / 2 + 0.29, 5.7, 2.75, 0.06, 0x8b5a2b, { deco: true, studs: false });
-  B(0, 0.98, -D / 2 + 0.42, 5.4, 0.08, 0.22, 0xd8cdb4, { deco: true, studs: false });
-  [[-1.2, 0xffffff], [-0.4, 0xfff2a8], [0.5, 0xffb7d5], [1.3, 0xbfe0ff]].forEach(([dx, c2]) => B(dx, 1.06, -D / 2 + 0.42, 0.42, 0.06, 0.06, c2, { deco: true, studs: false }));   // craies
-  B(2.2, 1.05, -D / 2 + 0.42, 0.34, 0.1, 0.18, 0x3b4252, { deco: true, studs: false });   // la brosse
+  // RIEN NE DOIT MORDRE SUR LA SURFACE ECRITE. La gouttiere, les craies et la brosse
+  // montaient jusqu'a 1,10 m alors que le tableau commence a 1,02 m : elles mangeaient la
+  // derniere ligne, celle ou s'ecrit justement la reponse. On descend l'ensemble de 8 cm.
+  B(0, 0.90, -D / 2 + 0.42, 5.4, 0.08, 0.22, 0xd8cdb4, { deco: true, studs: false });
+  [[-1.2, 0xffffff], [-0.4, 0xfff2a8], [0.5, 0xffb7d5], [1.3, 0xbfe0ff]].forEach(([dx, c2]) => B(dx, 0.97, -D / 2 + 0.42, 0.42, 0.06, 0.06, c2, { deco: true, studs: false }));   // craies
+  B(2.2, 0.98, -D / 2 + 0.42, 0.34, 0.08, 0.18, 0x3b4252, { deco: true, studs: false });   // la brosse
   // le bureau du maitre, sa chaise, le maitre
-  B(-2.8, 0.85, -2.9, 2.2, 0.12, 0.9, C.wood, { studs: false, noRoute: true }); for (const dx of [-0.95, 0.95]) B(-2.8 + dx, 0.42, -2.9, 0.1, 0.85, 0.1, C.wood, { deco: true, studs: false });
-  const teach = mannequin(x - 2.8, z - 3.9, Math.PI, { jersey: 9, jacket: 1, hair: 2, hairColor: 0, skirt: true }); teach.group.position.y = 0.3; renommeEtiquette(teach, 'Maîtresse');
+  B(-3.4, 0.85, -2.9, 2.2, 0.12, 0.9, C.wood, { studs: false, noRoute: true }); for (const dx of [-0.95, 0.95]) B(-3.4 + dx, 0.42, -2.9, 0.1, 0.85, 0.1, C.wood, { deco: true, studs: false });
+  // La maitresse se tenait en plein milieu de la craie : vue de la place d'un eleve, sa tete
+  // cachait la premiere reponse. Elle se range au bout du tableau, a cote de son bureau.
+  const teach = mannequin(x - 4.05, z - 3.8, Math.PI, { jersey: 9, jacket: 1, hair: 2, hairColor: 0, skirt: true }); teach.group.position.y = 0.3; renommeEtiquette(teach, 'Maîtresse');
   // les tables d'ecolier et LES CHAISES ou l'on s'assoit (E) — deux rangees de trois
   const room = { x, z: z + D / 2 - 0.3, subj, e, n, tableau, cv, ctx, tex, chaises: [], texte: '', dessine: '', maitresse: teach };
   for (let r = 0; r < 2; r++) for (let cI = 0; cI < 3; cI++) {
@@ -9377,34 +9405,46 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   }
   // LE MOBILIER DE LA MATIERE
   const affiche = (lx, ly, lz, w, h, txt) => B(lx, ly, lz, w, h, 0.06, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture(txt) }), deco: true, noEdges: true });
+  // LE MUR DU FOND APPARTIENT AU TABLEAU. Les affiches etaient posees n'importe ou sur ce
+  // mur : la carte « MONDE » recouvrait 2,1 m² de craie, les autres pancartes en mangeaient
+  // encore 1,3 m². Depuis la place d'un eleve, la reponse ecrite a la craie etait cachee.
+  // `panneauFond` ne sait poser une affiche que dans les DEUX BANDES LIBRES, a gauche et a
+  // droite du cadre (demi-largeur 2,85 m + 10 cm de marge), entre le cadre et le mur lateral.
+  const TAB_LIBRE = 2.95;   // rien ne se pose a moins de 2,95 m de l'axe du tableau
+  const panneauFond = (cote, ly, w, h, txt) => affiche(cote * (TAB_LIBRE + w / 2), ly, -D / 2 + 0.36, w, h, txt);
+  // Un panneau pedagogique sur un MUR LATERAL, lui, reste le bienvenu : il ne masque rien.
+  const panneauLateral = (cote, lz, ly, w, h, txt) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: textTexture(txt) }));
+    m.position.set(x + cote * (W / 2 - 0.33), ly, z + lz); m.rotation.y = -cote * Math.PI / 2; worldGroup.add(m);
+  };
   const etagere = (lx, lz) => { B(lx, 0.9, lz, 0.5, 1.8, 2.4, C.wood, { studs: false, noRoute: true }); for (let r = 0; r < 2; r++) for (let i = 0; i < 5; i++) B(lx, 1.1 + r * 0.7, lz - 0.9 + i * 0.45, 0.34, 0.55, 0.3, pickOne([0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xb57cff]), { deco: true, studs: false }); };
   const globe = (lx, lz) => { const gl = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), lam(0x4f8dff)); gl.position.set(x + lx, 1.75, z + lz); worldGroup.add(gl); const cont = new THREE.Mesh(new THREE.SphereGeometry(0.425, 14, 10), new THREE.MeshLambertMaterial({ color: 0x5cc453, transparent: true, opacity: 0.85 })); cont.scale.set(0.7, 0.5, 0.9); cont.position.copy(gl.position); worldGroup.add(cont); B(lx, 1.0, lz, 0.5, 1.4, 0.5, C.wood, { studs: false, noRoute: true }); B(lx, 2.2, lz, 0.05, 0.05, 0.6, 0xd8b25a, { deco: true, studs: false }); };
-  const carte = (lx, lz, txt) => affiche(lx, 2.3, lz, 2.4, 1.6, txt);
   const props = [];
   if (subj === 'math') {
     B(4.4, 2.9, -D / 2 + 0.4, 0.14, 2.2, 0.08, 0xffd23f, { deco: true, studs: false }); props.push('règle');                  // la grande regle
     for (let i = 0; i < 10; i++) B(4.4, 1.9 + i * 0.2, -D / 2 + 0.44, 0.08, 0.02, 0.02, 0x141821, { deco: true, studs: false });
-    { const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 3), lam(0xffb347)); tri.rotation.x = Math.PI / 2; tri.position.set(x + 3.4, 2.6, z - D / 2 + 0.42); worldGroup.add(tri); props.push('équerre'); }
+    { const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.05, 3), lam(0xffb347)); tri.rotation.x = Math.PI / 2; tri.position.set(x + 3.55, 2.6, z - D / 2 + 0.42); worldGroup.add(tri); props.push('équerre'); }   // decalee vers le mur : son angle mordait sur le tableau
     B(4.2, 0.9, 3.4, 0.7, 0.12, 0.9, 0x2b3550, { deco: true, studs: false }); B(4.2, 0.98, 3.2, 0.5, 0.04, 0.22, 0x9fdcff, { deco: true, studs: false }); for (let i = 0; i < 12; i++) B(4.0 + (i % 4) * 0.14, 0.99, 3.45 + Math.floor(i / 4) * 0.14, 0.1, 0.03, 0.1, 0xf4f6fa, { deco: true, studs: false }); props.push('calculatrice');
     { B(-4.3, 1.4, 2.0, 0.5, 1.2, 1.4, C.wood, { studs: false, noRoute: true }); for (let r = 0; r < 5; r++) for (let i = 0; i < 8; i++) { const bd = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), lam(i % 2 ? 0xff5c5c : 0x4f8dff)); bd.position.set(x - 4.3, 1.05 + r * 0.2, z + 1.4 + i * 0.15); worldGroup.add(bd); } props.push('boulier'); }
-    affiche(-3.2, 3.2, -D / 2 + 0.36, 1.6, 1.1, '1 2 3 4'); affiche(-1.2, 3.2, -D / 2 + 0.36, 1.6, 1.1, '+ − × ÷'); affiche(3.4, 3.4, -D / 2 + 0.36, 1.4, 1, 'π = 3,14');
+    panneauFond(-1, 3.2, 1.6, 1.1, '1 2 3 4'); panneauFond(-1, 1.95, 1.6, 1.1, '+ − × ÷'); panneauFond(1, 3.72, 1.2, 0.7, 'π = 3,14');
   } else if (subj === 'geo') {
     { const cp = new THREE.Mesh(new THREE.ConeGeometry(0.06, 1.4, 6), lam(0x9fdcff)); cp.rotation.z = 0.35; cp.position.set(x + 4.2, 2.6, z - D / 2 + 0.42); worldGroup.add(cp); const cp2 = cp.clone(); cp2.rotation.z = -0.35; cp2.position.x = x + 4.5; worldGroup.add(cp2); props.push('compas'); }
-    { const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.05, 3), lam(0xffb347)); tri.rotation.x = Math.PI / 2; tri.position.set(x + 3.3, 2.5, z - D / 2 + 0.42); worldGroup.add(tri); props.push('équerre'); }
+    { const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.05, 3), lam(0xffb347)); tri.rotation.x = Math.PI / 2; tri.position.set(x + 3.65, 2.5, z - D / 2 + 0.42); worldGroup.add(tri); props.push('équerre'); }   // decalee vers le mur : son angle mordait sur le tableau
     [[0xff5c5c, 'boite'], [0x4f8dff, 'boule'], [0x5cc453, 'cone'], [0xffd23f, 'cyl']].forEach(([c2, k], i) => { let m; if (k === 'boule') m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 9), lam(c2)); else if (k === 'cone') m = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 12), lam(c2)); else if (k === 'cyl') m = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.6, 12), lam(c2)); else m = new THREE.Mesh(roundedBoxGeo(0.5, 0.5, 0.5, 0.06, 2), lam(c2)); m.position.set(x + 4.2, 1.15, z + 1.2 + i * 0.75); worldGroup.add(m); }); B(4.2, 0.75, 2.3, 0.8, 0.9, 3.4, C.wood, { studs: false, noRoute: true }); props.push('formes');
-    globe(-4.2, 3.2); props.push('globe terrestre'); carte(-2.6, -D / 2 + 0.36, '🗺️ MONDE'); props.push('carte du monde');
-    affiche(1.4, 3.2, -D / 2 + 0.36, 1.6, 1.1, '△ ○ □'); affiche(3.6, 3.5, -D / 2 + 0.36, 1.2, 0.8, '360°');
+    globe(-4.2, 3.2); props.push('globe terrestre'); panneauLateral(-1, 0.4, 2.3, 2.4, 1.6, '🗺️ MONDE'); props.push('carte du monde');   // la carte passe sur le mur de gauche : elle cachait le tableau
+    panneauFond(-1, 3.2, 1.6, 1.1, '△ ○ □'); panneauFond(1, 3.75, 1.2, 0.8, '360°');
   } else if (subj === 'logi') {
     [[0xff5c5c, -0.3, 0], [0x4f8dff, 0.3, 0], [0x5cc453, 0, 0.5], [0xffd23f, 0, -0.5]].forEach(([c2, dx, dz]) => B(4.2 + dx, 0.98, 3.2 + dz, 0.5, 0.06, 0.5, c2, { deco: true, studs: false })); B(4.2, 0.9, 3.2, 1.4, 0.1, 1.6, 0xf4efe2, { deco: true, studs: false }); B(4.2, 0.45, 3.2, 1.4, 0.8, 1.6, C.wood, { studs: false, noRoute: true }); props.push('puzzle');
     for (let i = 0; i < 7; i++) B(-4.2, 0.98, 1.0 + i * 0.32, 0.5, 0.06, 0.26, 0xf4f6fa, { deco: true, studs: false }); B(-4.2, 0.45, 2.0, 0.9, 0.8, 2.8, C.wood, { studs: false, noRoute: true }); props.push('dominos');
     for (let i = 0; i < 3; i++) B(-4.0 + i * 0.4, 1.06, 3.6, 0.28, 0.28, 0.28, [0xffffff, 0xff5c5c, 0x4f8dff][i], { deco: true, studs: false }); props.push('dés');
     { for (let i = 0; i < 8; i++) for (let j2 = 0; j2 < 8; j2++) B(2.2 + i * 0.16 - 0.56, 0.99, -3.4 + j2 * 0.16 - 0.56, 0.15, 0.02, 0.15, (i + j2) % 2 ? 0x2b2f3a : 0xf4efe2, { deco: true, studs: false, noEdges: true }); B(2.2, 0.9, -3.4, 1.5, 0.1, 1.5, C.wood, { deco: true, studs: false }); props.push('échiquier'); }
-    affiche(-3.2, 3.2, -D / 2 + 0.36, 1.6, 1.1, '🧩 ? !'); affiche(-1.2, 3.2, -D / 2 + 0.36, 1.6, 1.1, '1 → 2 → 4'); affiche(3.4, 3.3, -D / 2 + 0.36, 1.4, 1, '🎲');
+    panneauFond(-1, 3.2, 1.6, 1.1, '🧩 ? !'); panneauFond(-1, 1.95, 1.6, 1.1, '1 → 2 → 4'); panneauFond(1, 3.72, 1.2, 0.7, '🎲');
   } else {
-    globe(4.2, 3.2); props.push('globe terrestre'); carte(-2.6, -D / 2 + 0.36, '🌍 MONDE'); props.push('carte du monde');
+    globe(4.2, 3.2); props.push('globe terrestre'); panneauLateral(1, 0.4, 2.3, 2.4, 1.6, '🌍 MONDE'); props.push('carte du monde');   // la carte passe sur le mur de droite : elle cachait le tableau
     etagere(-4.4, 1.5); props.push('bibliothèque');
-    [[0xff5c5c, '🇫🇷'], [0x4f8dff, '🇪🇸'], [0x5cc453, '🇮🇹'], [0xffd23f, '🇩🇪']].forEach(([c2, t], i) => { B(1.2 + i * 0.9, 3.4, -D / 2 + 0.36, 0.7, 0.45, 0.05, c2, { deco: true, studs: false }); }); props.push('drapeaux');
-    affiche(3.4, 3.4, -D / 2 + 0.36, 1.4, 1, 'A B C');
+    // les quatre drapeaux se repartissent sur les deux bandes libres, deux par cote
+    [[0xff5c5c, -1, 0], [0x4f8dff, -1, 1], [0x5cc453, 1, 0], [0xffd23f, 1, 1]].forEach(([c2, cote, k]) => { B(cote * (TAB_LIBRE + 0.4 + k * 0.85), 3.6, -D / 2 + 0.36, 0.7, 0.45, 0.05, c2, { deco: true, studs: false }); }); props.push('drapeaux');
+    panneauFond(1, 2.3, 1.4, 1, 'A B C');
   }
   room.props = props;
   affiche(0, 3.85, D / 2 - 0.34, 4.6, 0.6, `${e} ${n}`);

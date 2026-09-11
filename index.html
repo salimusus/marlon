@@ -1664,7 +1664,7 @@ const DETAIL_RAYON = 1.2;      // m : au-delà de ce rayon, un objet est trop gr
 const DETAIL_OMBRE = 0.32;     // m de rayon : en dessous, l'ombre portée ne se lit sur aucun écran
 const DETAIL_OMBRE_VUE = 55;   // 1/55e de l'écran : sous cette taille apparente, l'ombre PORTÉE s'efface
 const DETAIL_PAS = 4;          // m² : on ne retrie que si la caméra a bougé de deux mètres
-let detailCam = null, detailCoupes = 0, detailOmbres = 0, detailOmbresOff = 0;
+let detailCam = null, detailCoupes = 0, detailOmbres = 0, detailOmbresOff = 0, detailImg = 0;
 // `layers` n'existe pas dans le banc d'essai hors navigateur (ses objets sont des maquettes) :
 // on lit le masque avec précaution et on ne l'écrit que s'il existe — sinon le jeu ne
 // démarrait plus du tout sous le vérificateur.
@@ -1702,7 +1702,12 @@ function detailsInit() {
 function detailsLOD(force) {
   if (typeof camera === 'undefined' || !camera) return -1;
   const c = camera.position;
-  if (!force && detailCam && detailCam.distanceToSquared(c) < DETAIL_PAS) return detailCoupes;
+  // caméra immobile = rien à retrier… SAUF qu'un objet peut naître ou revenir à côté du joueur
+  // (une vitrine réparée, un véhicule qu'on gare, une roue recollée) alors qu'on l'avait éteint
+  // au loin : il resterait invisible tant que personne ne bouge. On retrie donc de force une
+  // image sur trente, ce qui ne se sent nulle part.
+  detailImg = (detailImg + 1) % 30;
+  if (!force && detailImg && detailCam && detailCam.distanceToSquared(c) < DETAIL_PAS) return detailCoupes;
   detailCam = detailCam ? detailCam.copy(c) : c.clone();
   let coupes = 0;
   const S2 = DETAIL_FIN * DETAIL_FIN;

@@ -10774,21 +10774,29 @@ test('un choc contre un mur ne laisse QU\'UNE marque, et la carrosserie encaisse
     c.x = b.x; c.z = b.z + b.d / 2 + 11; c.h = Math.PI;   // cap PI = vers -z, donc vers la facade
     c.y = G.groundUnder(c.x, c.z, c.solid, 1); c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
     G.P.pos.set(c.x, c.y + 0.5, c.z); G.enterCar(c); G.drive.speed = 0;
-    const appels0 = (G.renderer.render(G.scene, G.camera), G.renderer.info.render.calls);
+    const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const appels0 = dessine();
     G.keys.add('ArrowUp');
     let touche = 0;
     for (let i = 0; i < 300 && !touche; i++) { G.step(1 / 60, true); if (c.dmg > 0) touche = i; }
     G.keys.delete('ArrowUp');
     for (let i = 0; i < 60; i++) G.step(1 / 60, true);
-    const appels1 = (G.renderer.render(G.scene, G.camera), G.renderer.info.render.calls);
+    const appels1 = dessine();
+    // LE PRIX DE LA MARQUE, ET DE RIEN D'AUTRE. On comparait les appels de dessin AVANT et
+    // APRÈS le choc : on facturait donc aussi à la marque le feu, les débris, le verre au sol
+    // et la fumée de l'accident (82 appels), alors que la question posée est celle de LA
+    // MARQUE. On l'éteint, on la rallume : la différence, c'est son prix exact.
+    const mm = G.marquesMesh;
+    const sans = (mm.visible = false, dessine()), avec = (mm.visible = true, dessine());
     const res = { ville: G.city.marques.length, mur: G.marques.length, dmg: +c.dmg.toFixed(1),
-      deg: c.deg || 0, touche, appels: appels1 - appels0, mure: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) } };
+      deg: c.deg || 0, touche, appels: avec - sans, accident: appels1 - appels0,
+      mure: { x: +b.x.toFixed(1), z: +b.z.toFixed(1) } };
     G.exitCar();
     return res;
   });
   // une marque de la ville, aucune marque de mur en doublon, et le choc a bien abime la voiture
-  const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels <= 2;
-  return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · coût de rendu : ${r.appels} appel(s) de dessin de plus, la marque de la ville vivant dans un maillage partagé` };
+  const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels === 1 && r.accident <= 120;
+  return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · et elle ne coûte QU'${r.appels === 1 ? 'UN SEUL' : r.appels} appel de dessin (mesuré en éteignant puis rallumant le maillage partagé des marques), l'accident complet — feu, débris, verre, fumée — en ajoutant ${r.accident}` };
 });
 
 // ---- POSTE VÉHICULES : l'horloge de simulation cassée ----
@@ -10837,4 +10845,56 @@ test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni
   const monte = r.rapports[0] === 1 && r.rapports[4] >= 5 && r.rapports.every((g, i) => i === 0 || g >= r.rapports[i - 1]);
   const ok = r.casse && r.koCasse && r.repare && monte && r.appel && r.hp === 100 && r.ko === 0 && r.dist < 6;
   return { ok, detail: `une horloge à NaN figeait tout en silence : la boîte restait sur A1 à toutes les vitesses (régime saturé à 19,7) et un blessé au minuteur de KO à NaN n'était plus jamais ramassé · l'horloge se remet d'aplomb toute seule (${r.repare}, ${r.horloge} s) : les rapports montent A${r.rapports.join(' → A')} et le blessé est conduit à l'hôpital (${r.dist} m, ${r.hp} PV, KO ${r.ko})` };
+});
+
+// ================= POSTE GRAPHISME (round 67) — LE BUDGET D'IMAGE =================
+// « Ça rame sur la télé. » Une image de ville coûtait 6 444 appels de dessin : chaque objet
+// de la scène en vaut un, et un deuxième s'il porte une ombre. Ce test tient le plafond ET
+// prouve que rien de ce qu'on voit vraiment n'a disparu.
+test('le decor lointain ne coute plus rien : contours, details et ombres s\'effacent quand ils ne se voient plus', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true });
+    const avantQ = G.settings.quality;
+    G.settings.quality = 'ultra'; G.applyQuality();
+    // three.js remet ses compteurs a zero au DEBUT de chaque render() : avec la passe de
+    // nettete, le dernier appel est le carre plein ecran et on lirait « 1 appel ». On coupe
+    // la remise a zero automatique pour additionner toutes les passes d'UNE image.
+    G.renderer.info.autoReset = false;
+    const image = () => { G.renderer.info.reset(); G.rendreImage();
+      return { appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    // une image pour degourdir (le tri travaille sur les matrices de l'image PRECEDENTE, et
+    // juste apres une teleportation elles datent de l'ancienne position), puis un tri COMPLET
+    // a la position exacte de la camera : en temps normal le tri ne se refait que tous les
+    // deux metres, et on mesurerait le decor trie depuis un autre point de vue.
+    image();
+    G.detailsLOD(true);
+    const avec = image();
+    // le MEME instant, budget desarme : tout le decor revient, ombres portees comprises
+    G.DETAILS.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
+    G.ARETES.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
+    G.OMBRES.forEach(e => { e.off = false; e.o.castShadow = true; });
+    const sans = image();
+    G.detailsLOD(true);                 // on rearme, et on doit retrouver EXACTEMENT la meme image
+    const repris = image();
+    // RIEN DE CE QUI SE VOIT N'EST COUPE : un objet n'est efface que si sa taille apparente
+    // tombe sous le seuil, donc aucun objet de plus de 25 cm de rayon a moins de 20 m, et
+    // aucun contour a moins de 30 m.
+    const cam = G.camera.position;
+    const loin = e => { const m = e.o.matrixWorld.elements; return Math.hypot(m[12] - cam.x, m[13] - cam.y, m[14] - cam.z); };
+    const fautes = G.DETAILS.filter(e => e.off && e.r > 0.25 && loin(e) < 20).length
+      + G.ARETES.filter(e => e.off && loin(e) < 30).length;
+    const res = { avec, sans, repris, fautes,
+      coupes: G.DETAILS.filter(e => e.off).length, aretes: G.ARETES.filter(e => e.off).length,
+      ombres: G.OMBRES.filter(e => e.off).length,
+      nD: G.DETAILS.length, nA: G.ARETES.length, nO: G.OMBRES.length,
+      fin: G.DETAIL_FIN, arete: G.DETAIL_ARETE, vueOmbre: G.DETAIL_OMBRE_VUE };
+    G.renderer.info.autoReset = true;
+    G.settings.quality = avantQ; G.applyQuality();
+    return res;
+  });
+  const gain = r.sans.appels - r.avec.appels;
+  const ok = gain > 900 && r.avec.appels < 6000 && r.avec.tris < 1000000 && r.fautes === 0
+    && r.repris.appels === r.avec.appels && r.aretes > 200 && r.ombres > 1500;
+  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(gain / r.sans.appels * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
 });

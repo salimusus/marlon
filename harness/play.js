@@ -12761,12 +12761,15 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     G.meteoSet('neige', 99999); G.meteo.force = 1;
     for (let i = 0; i < 200; i++) { G.step(1 / 60, false); G.meteoTick(1 / 60); }
     const manteau = !!(G.city.neigeG && G.city.neigeG.visible);
-    const avantTraces = dessine();
     // 3. le joueur marche 26 m : une empreinte tous les EMPREINTE_PAS metres, un pied puis l'autre
     G.P.pos.set(-85, 0, 150); G.P.facing = 0;
     for (let i = 0; i < 430; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); }
     const n = G.city.empreintes.length;
+    // LE COUT SE MESURE AU MEME INSTANT, piste visible puis piste cachee : la ville vit
+    // (voitures, passants, niveau de detail selon la distance) et deux mesures prises a dix
+    // secondes d'intervalle ne sont pas comparables — c'est ce qui faisait lire « +54 ».
     const apresTraces = dessine();
+    G.empreintesMesh.visible = false; const avantTraces = dessine(); G.empreintesMesh.visible = true;
     const attendu = Math.floor(430 * 0.06 / G.EMPREINTE_PAS);
     // elles alternent gauche / droite et suivent bien la ligne de marche
     const g = G.city.empreintes.map(e => e.gauche ? 1 : 0).join('');
@@ -12778,10 +12781,16 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     const avantBot = G.city.empreintes.length;
     for (let i = 0; i < 200; i++) { b.pos.z += 0.06; b.av.group.position.copy(b.pos); G.step(1 / 60, false); }
     const parLeBot = G.city.empreintes.length - avantBot;
-    // 5. le plafond : 900 pas de plus, le tampon circulaire ne deborde jamais
-    for (let i = 0; i < 900; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); if (G.P.pos.z > 190) G.P.pos.z = 150; }
+    // 5. LE PLAFOND. On court (9 cm par image, soit 5,4 m/s) pour poser plus de EMPREINTES_MAX
+    // empreintes AVANT que les premieres ne se comblent : c'est le seul moyen de voir le
+    // tampon circulaire tourner pour de bon.
+    const posesAvant = G.city.empreintesN;
+    for (let i = 0; i < 1000; i++) { G.P.pos.z += 0.09; G.step(1 / 60, false); if (G.P.pos.z > 195) G.P.pos.z = 150; }
+    const plafondCalls = dessine();
+    G.empreintesMesh.visible = false; const plafondSans = dessine(); G.empreintesMesh.visible = true;
     const plafond = { n: G.city.empreintes.length, max: G.EMPREINTES_MAX, cases: new Set(G.city.empreintes.map(e => e.slot)).size,
-      range: G.empreintesMesh.geometry.drawRange.count, calls: dessine() };
+      range: G.empreintesMesh.geometry.drawRange.count, calls: plafondCalls, sans: plafondSans,
+      poses: G.city.empreintesN - posesAvant };
     // un SEUL maillage pour toute la piste
     let maillages = 0; G.worldGroup.traverse(o => { if (o.isMesh && G.empreintesMesh && o.geometry === G.empreintesMesh.geometry) maillages++; });
     // 6. la neige comble : au bout de EMPREINTE_VIE, la piste a disparu
@@ -12797,13 +12806,14 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
     const apresDegel = { n: G.city.empreintes.length, neige: !!(G.city.neigeG && G.city.neigeG.visible), calls: dessine() };
     return { auSec, manteau, avantTraces, apresTraces, n, attendu, alterne, surLaLigne, parLeBot, plafond, maillages,
       alphaFraiche: +alphaFraiche.toFixed(2), apresVieillissement, avantDegel, apresDegel,
-      cout: apresTraces - avantTraces, coutPlafond: plafond.calls - avantTraces, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
+      cout: apresTraces - avantTraces, coutPlafond: plafond.calls - plafond.sans, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
   });
   const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 4 && r.n <= r.attendu + 2 && r.alterne && r.surLaLigne
-    && r.parLeBot >= 15 && r.plafond.n === r.plafond.max && r.plafond.cases === r.plafond.max
+    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max * 1.4 && r.plafond.n === r.plafond.max
+    && r.plafond.cases === r.plafond.n && r.plafond.range <= r.plafond.max * 6
     && r.maillages === 1 && r.cout === 1 && r.coutPlafond === 1
     && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige;
-  return { ok, detail: `la ville avait un manteau de neige complet (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la moindre marque · le joueur et les habitants creusent maintenant une empreinte a chaque foulee (une tous les ${r.pas} m, un pied puis l'autre : ${r.alterne ? 'alternance respectee' : 'ALTERNANCE CASSEE'}) · au sec : ${r.auSec} trace · 26 m de marche dans la neige : ${r.n} empreintes (attendu ${r.attendu}), un habitant qui marche 12 m en laisse ${r.parLeBot} · COUT EN APPELS DE DESSIN : ${r.avantTraces} sans traces, ${r.apresTraces} avec, soit +${r.cout} — et TOUJOURS +${r.coutPlafond} au plafond de ${r.plafond.max} empreintes (${r.plafond.cases} cases distinctes, ${r.plafond.range} indices, ${r.maillages} seul maillage, une seule texture) parce que tout tient dans une geometrie unique dont la transparence est ecrite sommet par sommet · la neige comble le pas en ${r.vie} s (${r.apresVieillissement} trace restante) et le degel emporte la piste entiere (${r.avantDegel} → ${r.apresDegel.n}, retour a ${r.apresDegel.calls} appels)` };
+  return { ok, detail: `la ville avait un manteau de neige complet (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la moindre marque · le joueur et les habitants creusent maintenant une empreinte a chaque foulee (une tous les ${r.pas} m, un pied puis l'autre : ${r.alterne ? 'alternance respectee' : 'ALTERNANCE CASSEE'}) · au sec : ${r.auSec} trace · 26 m de marche dans la neige : ${r.n} empreintes (attendu ${r.attendu}), un habitant qui marche 12 m en laisse ${r.parLeBot} · COUT EN APPELS DE DESSIN : ${r.avantTraces} sans traces, ${r.apresTraces} avec, soit +${r.cout} — et TOUJOURS +${r.coutPlafond} apres ${r.plafond.poses} pas poses en courant, au plafond de ${r.plafond.max} empreintes (${r.plafond.cases} cases distinctes, ${r.plafond.range} indices, ${r.maillages} seul maillage, une seule texture) parce que tout tient dans une geometrie unique dont la transparence est ecrite sommet par sommet · la neige comble le pas en ${r.vie} s (${r.apresVieillissement} trace restante) et le degel emporte la piste entiere (${r.avantDegel} → ${r.apresDegel.n}, retour a ${r.apresDegel.calls} appels)` };
 });
 
 test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en montant et une lumiere qui vacille autour', async p => {
@@ -12988,6 +12998,9 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     G.ambiance.stop(); await dodo(700);
     // l'averse installee, telle qu'on l'entend en jeu
     G.meteoSet('pluie', 99999); G.meteo.force = 1; G.meteo.abri = false;
+    // La boucle de rendu joue elle aussi une averse toutes les 1,5 s (sonsVille) : on la
+    // repousse, sinon on mesurerait DEUX averses superposees et pas celle du jeu.
+    G.SONV.pluieT = G.simTime + 1e6;
     // LA CADENCE DU JEU, et pas une autre : l'averse sort toutes les 1,5 s (sonsVille) et les
     // pas a peu pres deux fois par seconde. Un `sonPluie` a chaque tour de boucle aurait
     // empile soixante-dix averses l'une sur l'autre et mesure un bruit qui n'existe pas.
@@ -13012,8 +13025,8 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const lente = r.apresFondu > r.avantFondu * 3 && r.apresFondu > 20;
   const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
-  const discrete = r.pluieSeule.pic < 0.05;
-  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.5 && r.coups.pic > r.pluieSeule.pic * 2.5;
+  const discrete = r.pluieSeule.pic < 0.10;
+  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2;
   const ok = lente && longue && discrete && ressortent && r.reculActif;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });

@@ -14144,7 +14144,12 @@ function sonPluie(x, y, z, force) {
   let recul = 1;
   try { if (ambiance.duckActif()) recul = PLUIE_RECUL; } catch (e) {}
   const v = force * recul;
-  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .016 * v, 0.35); sB(d, 1.6, 620, .010 * v, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
+  // MESURE AU BOUT DE LA CHAINE AUDIO : a 0,05 / 0,03, l'averse atteignait une crete de 0,50 —
+  // sept fois le lit de bruit de la ville dont le joueur se plaignait deja. Meme divisee par
+  // trois elle restait a 0,17 et un pas ne sortait qu'a 1,3 fois son niveau : on l'entendait
+  // a peine. A 0,006 / 0,0035 elle plafonne vers 0,06, on l'entend parfaitement quand rien ne
+  // se passe, et un pas ou un coup passent trois fois au-dessus.
+  return !!sonEn(x, y, z, d => { sB(d, 1.6, 1900, .006 * v, 0.35); sB(d, 1.6, 620, .0035 * v, 0.4, .05); }, { duree: 1.8, portee: 40, bus: 'ambiance' });
 }
 function sonAboiement(x, y, z, hauteur) {
   const h = clamp(hauteur || 1, 0.6, 1.6);

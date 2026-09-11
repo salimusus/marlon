@@ -10402,7 +10402,10 @@ test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort 
 
 test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sans jamais envoyer en prison', async p => {
   const r = await p.evaluate(() => {
-    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // MONDE NEUF : la police vient maintenant PAR LA ROUTE, et un test précédent qui laisse un
+    // engin en travers d'une rue ou une voiture de patrouille au fond d'une impasse suffisait à
+    // ce que le constat n'arrive jamais. Le résultat ne dépend plus de l'ordre des tests.
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
     const cars = G.city.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
     const A = cars[0], B = cars[1];
@@ -10449,7 +10452,7 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
 
 test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, et son treuil s\'actionne', async p => {
   const r = await p.evaluate(() => {
-    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });   // monde neuf : la dépanneuse roule par les rues
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
     const d = (G.city.depanneuses || [])[0];
     const forme = d ? { kind: d.kind, travail: !!d.travail, W: d.baseW, D: d.baseD, max: d.spec.max,
@@ -11846,7 +11849,9 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
         // on ne compte pas les images de DÉGAGEMENT : le véhicule est DÉJÀ dans le solide
         // (un chantier posé sous ses roues, un hangar trop étroit) et il en SORT.
         if (dansUnSolide(v)) { if (v.degageT) s.degage++; else s.solide++; }
-        for (const o of autres) if (o !== v && Math.abs(o.x - v.x) < 12 && Math.abs(o.z - v.z) < 12 && seChevauchent(v, o)) { s.veh++; break; }
+        // (l'épave AU CROCHET de la dépanneuse ne compte pas : elle est accrochée, elle suit)
+        for (const o of autres) if (o !== v && o !== v.remorque && v !== o.remorque
+          && Math.abs(o.x - v.x) < 12 && Math.abs(o.z - v.z) < 12 && seChevauchent(v, o)) { s.veh++; break; }
       }
     }
     return { suivis: suivis.map(s => ({ nom: s.nom, kind: s.v.kind || 'voiture', images: s.n, metres: +s.long.toFixed(0),
@@ -11896,7 +11901,12 @@ test('un véhicule de service en intervention a la priorité : les autres se ran
     const L = e.long;
     cobayes.forEach((v, k) => pose(v, 0.30 + k * (11 / L)));
     pose(dep, 0.30 - 26 / L);
-    const [bx, bz] = surVoie(0.97);
+    // LE BUT EST LOIN DERRIÈRE LE BOUT DE L'AVENUE. Posé à 97 % de l'avenue, les trois cobayes
+    // y arrivaient au bout de 25 s, s'arrêtaient en travers de la voie (traficRoule sort AVANT
+    // le code de la route quand on est arrivé, donc ils n'entendaient même plus la sirène) et
+    // faisaient un bouchon que rien ne pouvait défaire. On vise 150 m plus loin : ils roulent.
+    const [bx0, bz0] = surVoie(1);
+    const bx = bx0 + fx * 150, bz = bz0 + fz * 150;
     // --- l'état de la carrosserie AVANT
     const degAvant = tous.reduce((a, v) => a + (v.dmg || 0) + (v.deg || 0) * 100, 0);
     const accAvant = (c.accidents || []).length;
@@ -11924,7 +11934,7 @@ test('un véhicule de service en intervention a la priorité : les autres se ran
     const suivi = cobayes.map(v => ({ ecart0: droiteDe(v.x, v.z), ecart: 0, sirene: 0, solide: 0, choc: 0 }));
     let depX = dep.x, depZ = dep.z, depLong = 0, depArret = 0, n = 0;
     const leLong = (x, z) => (x - e.x0) * fx + (z - e.z0) * fz;   // l'abscisse le long de l'avenue
-    for (let i = 0; i < 60 * 40; i++) {
+    for (let i = 0; i < 60 * 30; i++) {
       G.simTime = G.simTime + DT;
       G.flotteMaj();
       for (const v of cobayes) G.botConduit(v, bx, bz, DT, {});

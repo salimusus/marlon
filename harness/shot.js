@@ -246,6 +246,34 @@ window.__SHOT = {
         if (v.g) { v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ'); v.g.visible = true; }
         try { settleVehicle(v); vehicleSolid(v); } catch (e21) {}
       }
+      // --- 7bis. LES ENGINS FANTOMES ET LEURS BOITES DE COLLISION.
+      // Quand le monde est reconstruit, clearWorld detache les maillages mais les TABLEAUX
+      // city.ambulances / city.depanneuses gardent les anciens objets. Les remises a zero n° 7
+      // et 8 ci-dessous les reposent alors sur leur place de parking et remettent leur boite de
+      // collision dans solids — a l'endroit exact ou la NOUVELLE ambulance vient d'etre garee.
+      // MESURE : quatre ambulances pour deux places, +3 boites fantomes par reconstruction
+      // (21 apres huit). Au bout de cent tests l'ambulance etait MUREE dans ses propres
+      // fantomes : « a la manette PS5, R2 avance » lisait -0,14 m/s au lieu de 10,39, et
+      // « le garage a demenage » comptait un conflit de murs inexistant.
+      // Un objet appartient encore au monde si, en remontant ses parents, on retombe sur la
+      // scene : c'est le seul critere sur : le maillage d'un fantome garde son parent (le groupe
+      // auquel il appartenait), mais ce groupe-la n'est plus accroche a rien.
+      var dansLeMonde = function (m) { var n = m, k = 0; while (n && k++ < 64) { if (n === scene) return true; n = n.parent; } return false; };
+      if (typeof city !== 'undefined') for (const nomFlotte of ['ambulances', 'depanneuses', 'cars', 'aiCars', 'mannequins']) {
+        const L = city[nomFlotte]; if (!Array.isArray(L)) continue;
+        for (let kv = L.length - 1; kv >= 0; kv--) {
+          const ve = L[kv], gr = ve && (ve.g || ve.group);
+          if (gr && !dansLeMonde(gr)) L.splice(kv, 1);
+        }
+      }
+      if (typeof solids !== 'undefined') {
+        var nFantomes = 0;
+        for (var kf = solids.length - 1; kf >= 0; kf--) {
+          var sf = solids[kf];
+          if (sf && sf.mesh && !dansLeMonde(sf.mesh)) { solids.splice(kf, 1); nFantomes++; }
+        }
+        if (nFantomes) { try { sgridSale(); } catch (e35) {} }
+      }
       // --- 8. UN VEHICULE DE SERVICE SORTI DE LA FLOTTE CONDUISIBLE. Les outils (treuil,
       // plateau, gyrophare) ne sont animes que pour les vehicules presents dans city.cars :
       // un test qui en retire un laissait la depanneuse muette et immobile, et le test suivant

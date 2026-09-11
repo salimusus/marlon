@@ -363,6 +363,8 @@ window.__G = {
   sonCraie: typeof sonCraie === 'function' ? sonCraie : null,
   bulleMaitresse: typeof bulleMaitresse === 'function' ? bulleMaitresse : null,
   CRAIE_CPS: typeof CRAIE_CPS !== 'undefined' ? CRAIE_CPS : 0,
+  craieLit: typeof craieLit !== 'undefined' ? craieLit : null,
+  CRAIE_NIV: typeof CRAIE_NIV !== 'undefined' ? CRAIE_NIV : 0,
   man: typeof man !== 'undefined' ? man : null,
   pad: typeof pad !== 'undefined' ? pad : null,
   telCommande: typeof telCommande === 'function' ? telCommande : null,

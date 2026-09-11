@@ -7919,12 +7919,25 @@ test('le facteur fait sa tournée à vélo et dépose une lettre dans une boîte
       if (m.etat === 'tournee' && Math.hypot(m.bot.pos.x - velo.x, m.bot.pos.z - velo.z) < 1.4) aVelo = true;
       if (livre < 0 && c.boites.some(b => b.lettres > 0)) { livre = +(i * DT).toFixed(1); break; }
     }
-    const sacoches = velo.g.children.filter(o => o.material && o.material.color && o.material.color.getHexString() === '8b5a2b').length;
-    return { boites: c.boites.length, livre, aVelo, sacoches,
+    // LES DEUX SACOCHES. On cherchait dans `velo.g.children` : elles n'y sont plus, parce que
+    // le poste Véhicules range désormais tout ce qui n'est pas une roue dans un sous-groupe
+    // (`c.caisse`, la caisse qui s'enfonce sur la suspension). On fouille donc TOUT le vélo,
+    // et on exige mieux qu'un compte : une sacoche à GAUCHE et une à DROITE, au niveau de la
+    // roue ARRIÈRE (z < −0,3, le vélo est cap +z), à peu près à la hauteur de l'essieu.
+    const roueAr = -0.65, cotes = [];
+    velo.g.traverse(o => {
+      if (!o.material || !o.material.color || o.material.color.getHexString() !== '8b5a2b') return;
+      if (!o.scale || o.scale.y < 0.2 || Math.abs(o.position.z - roueAr) > 0.45) return;
+      cotes.push(+o.position.x.toFixed(2));
+    });
+    const sacoches = cotes.length;
+    const gauche = cotes.filter(x => x < -0.1).length, droite = cotes.filter(x => x > 0.1).length;
+    return { boites: c.boites.length, livre, aVelo, sacoches, cotes, gauche, droite,
       total: c.boites.reduce((a, b) => a + b.lettres, 0), etat: m.etat };
   });
-  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1 && r.sacoches >= 2;
-  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches, une de chaque côté de la roue arrière) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
+  const ok = r.boites >= 5 && r.livre > 0 && r.livre < 120 && r.aVelo && r.total >= 1
+    && r.sacoches >= 2 && r.gauche >= 1 && r.droite >= 1;
+  return { ok, detail: `${r.boites} boîtes aux lettres posées devant les maisons : le facteur (vélo à ${r.sacoches} sacoches de cuir, ${r.gauche} à gauche et ${r.droite} à droite de la roue arrière, en x = ${r.cotes.join(' / ')} m) a roulé jusqu'à la première et y a glissé une lettre au bout de ${r.livre} s simulées (${r.total} lettre(s) distribuée(s), état « ${r.etat} »)` };
 });
 
 test('les véhicules de travail sont conduisibles par le joueur et leurs outils s\'actionnent', async p => {

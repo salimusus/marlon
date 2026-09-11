@@ -17019,7 +17019,15 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
     const src = c || P.pos || { x: b.x - 1, z: b.z };
     const dx = b.x - src.x, dz = b.z - src.z, L = Math.hypot(dx, dz) || 1, ax = new THREE.Vector3(dz / L, 0, -dx / L);
     b.g.quaternion.setFromAxisAngle(ax, def.angle == null ? 1.35 : def.angle); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); sgridSale();
-    if (b.bulb) b.bulb.material = lam(0x555555); if (b.lamps) b.lamps.forEach(l => { l.material.color.set(0x222222); l.material.emissive.set(0x000000); });
+    if (b.bulb) b.bulb.material = lam(0x555555);
+    // LAMPES ETEINTES. Depuis que l'infrastructure pose des feux tricolores avec des
+    // materiaux simples, toutes les lampes n'ont pas de canal d'emission : on eteint ce
+    // qui existe au lieu de planter sur `emissive.set` d'un materiau qui n'en a pas.
+    if (b.lamps) b.lamps.forEach(l => {
+      const mt = l && l.material; if (!mt) return;
+      if (mt.color) mt.color.set(0x222222);
+      if (mt.emissive) mt.emissive.set(0x000000);
+    });
     if (def.effet) { try { def.effet(b); } catch (e7) {} }
     burst(b.x, def.hauteur == null ? 3 : def.hauteur, b.z, def.couleur || 0xffd23f, 10); sfx.hit(); sfx.noise(.3, 500, .1);
     msg(def.msg || (b.kind === 'light' ? '💥 Feu tricolore renversé !' : '💥 Lampadaire renversé !'), 900);

@@ -924,6 +924,19 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   </div>
 </div>
 
+<div class="overlay hidden" id="conces">
+  <div class="card wide">
+    <h2>🚗 Blocs Motors — concessionnaire</h2>
+    <p class="sub" id="concesSub"></p>
+    <div id="concesCorps"></div>
+    <p id="concesPrix" class="tuneprix"></p>
+    <div class="mpr" style="justify-content:center">
+      <button class="btn" id="concesOk">Acheter</button>
+      <button class="btn sec" id="concesBack">Retour</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="etal">
   <div class="card wide">
     <h2 id="etalTitre">🛒 Comptoir</h2>
@@ -5287,6 +5300,9 @@ const WORLDS = [
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
       B('le marché', buildMarche); B('techno-parc', buildTechno);
+      // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
+      // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
+      B('concessionnaire', () => buildConcession(-140, 103));
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs);
@@ -10574,6 +10590,9 @@ function sleepBed() {
 // écrite dans la sauvegarde mais jamais relue : on repartait chaque fois seul, et la voiture
 // du garage n'était nulle part.
 function maVoiture() {
+  // La voiture ACHETÉE au concessionnaire est à soi où qu'elle soit garée : sans ça, on la
+  // payait 620 🪙 et la sauvegarde ne la gardait que si on avait pensé à la rentrer au garage.
+  for (const v of (city.cars || [])) if (v && v.mienne && v.parts && v.parts.ws) return v;
   for (const v of (city.cars || [])) if (v && v.parts && v.parts.ws && dansMonGarage(v)) return v;
   if (drive.car && drive.car.parts && drive.car.parts.ws && !drive.car.kart) return drive.car;
   return null;
@@ -10581,7 +10600,7 @@ function maVoiture() {
 function sauveMaVoiture() {
   const v = maVoiture();
   if (!v) return false;
-  store.set('superobby.mavoiture', JSON.stringify({ kind: v.kind || 'car', color: v.color != null ? v.color : 0xff5c5c, dmg: Math.round(v.dmg || 0) }));
+  store.set('superobby.mavoiture', JSON.stringify({ kind: v.kind || 'car', color: v.color != null ? v.color : 0xff5c5c, dmg: Math.round(v.dmg || 0), gamme: v.gamme || null }));
   return true;
 }
 // On la repose dans TON garage à la reprise, avec sa peinture, ses kits et ses bosses.
@@ -10589,7 +10608,12 @@ function restaureMaVoiture() {
   const d = store.json('superobby.mavoiture', null), g = city.monGarage;
   if (!d || !g || !city.on) return null;
   if (maVoiture()) return maVoiture();   // il y en a déjà une : on n'en empile pas
-  const v = makeCar(d.color != null ? d.color : 0xff5c5c, g.x, g.z, Math.PI);
+  // ELLE SE GARE CHEZ TOI. La voiture achetée au concessionnaire revient dans le garage de ta
+  // villa AVEC SA GAMME : sa vitesse, sa tenue de route et sa solidité, pas une voiture neutre.
+  const gm = d.gamme ? gammeDe(d.gamme) : null;
+  const v = gm ? voitureDeGamme(gm, g.x, g.z, Math.PI, d.color)
+               : makeCar(d.color != null ? d.color : 0xff5c5c, g.x, g.z, Math.PI);
+  if (gm) v.mienne = true;
   v.dmg = clamp(d.dmg || 0, 0, 99);
   city.cars.push(v); settleVehicle(v); vehicleSolid(v);
   try { tuneApply(v, tuning); } catch (e) {}
@@ -10971,6 +10995,229 @@ function buildSchool(sx, sz) {   // l'ecole : un batiment vitre vert, quatre cla
   for (let i = 0; i < 3; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.9, 10), lam(0x2b3550)); t.position.set(sx - 2 + i * 2.4, 0.65, sz + 13.5); worldGroup.add(t); }
   for (const dz of [-8, 8]) lamp(sx + 21.5, sz + dz);
   city.zones.push({ name: 'École', emoji: '🏫', x1: sx - 24, x2: sx + 24, z1: sz - 16, z2: sz + 16, hint: '🏫 École : entre dans une classe, assieds-toi a une table (E) et reponds au tableau pour gagner des pieces' });
+}
+// ================= LE CONCESSIONNAIRE « BLOCS MOTORS » =================
+// Le joueur voulait « un grand bâtiment vitré jaune, classe, avec un show-room » pour acheter
+// des voitures. On reprend EXACTEMENT la grammaire visuelle de l'école (buildSchool) : une
+// ossature de couleur, des panneaux de verre teintés dans la même couleur, un bandeau et une
+// enseigne — sauf qu'ici tout est jaune et que le rez-de-chaussée est un seul grand volume.
+// EMPLACEMENT : au sud de la Traverse de l'Ouest (la chaussée x −173 → −103, z 126,5 → 133,5),
+// sur la friche qui séparait La Zone du quartier du Marché. C'est le seul terrain vide de plus
+// de 60 m sur 35 qui touche une vraie rue : la façade vitrée regarde la chaussée à 10 m, le
+// parvis laisse 12 m pour manœuvrer, et RIEN ne mord sur le bitume (la dalle s'arrête à
+// z = 124, soit 2,5 m avant la chaussée).
+const CONCES_JAUNE = 0xffd23f, CONCES_AMBRE = 0xe09a12, CONCES_CLAIR = 0xffe98a;
+const glassJaune = new THREE.MeshLambertMaterial({ color: 0xffdf7a, transparent: true, opacity: 0.36, depthWrite: false, side: THREE.DoubleSide });
+// ---- LES GAMMES ----
+// L'ÉCHELLE DES PRIX. Repères de l'économie du jeu : un petit boulot rapporte 15 🪙, une
+// réparation de dépanneuse 30 à 90 🪙, le couteau de la boutique 35 🪙, un coffre de banque
+// 500 🪙. La citadine coûte donc cinq petits boulots (on l'a le premier jour), et la Majesté
+// deux coffres (c'est l'objectif d'une vraie partie). Entre les deux, chaque marche vaut
+// environ 1,4 fois la précédente : le prix MONTE EXACTEMENT COMME LES ÉTOILES, pour qu'un
+// enfant voie du premier coup d'œil ce qu'il paie de plus.
+//   vmax en m/s (×3,6 = km/h affichés), accel = reprise, turn = tenue de route,
+//   robu = solidité (les dégâts d'un choc sont DIVISÉS par ce nombre), places = passagers.
+const GAMMES = [
+  { k: 'citadine', e: '🚗', n: 'Puce', fam: 'Citadine', p: 80, col: 0x35d0e6, vmax: 22, accel: 17, turn: 2.30, places: 4, robu: 0.85,
+    d: 'Toute petite, elle se gare partout et ne coûte presque rien. Parfaite pour la première voiture.' },
+  { k: 'berline', e: '🚙', n: 'Avenue', fam: 'Berline', p: 160, col: 0x4f8dff, vmax: 27, accel: 21, turn: 2.20, places: 5, robu: 1.0,
+    d: 'La voiture de tous les jours : cinq places, du confort, et elle tient bien la route.' },
+  { k: 'break', e: '🚐', n: 'Tribu', fam: 'Break familial', p: 240, col: 0x5cc453, vmax: 26, accel: 19, turn: 2.00, places: 7, robu: 1.2, galerie: true,
+    d: 'Sept places et une galerie sur le toit. Elle emmène toute la bande… mais elle penche dans les virages.' },
+  { k: 'suv', e: '🚕', n: 'Panorama', fam: 'SUV', p: 340, col: 0xff8f3a, vmax: 30, accel: 23, turn: 2.05, places: 5, robu: 1.4, galerie: true,
+    d: 'Haute sur pattes, costaude et rapide : le SUV encaisse les chocs sans broncher.' },
+  { k: 'quatre', e: '🛻', n: 'Baroudeur', fam: '4×4', p: 460, col: 0x8b6b3a, vmax: 32, accel: 25, turn: 1.90, places: 5, robu: 1.9, galerie: true, buffle: true,
+    d: 'Pare-buffle, galerie, rampe de phares : le plus solide de tous. Il passe partout, mais il vire large.' },
+  { k: 'sportive', e: '🏎️', n: 'Flèche', fam: 'Sportive', p: 620, col: 0xff5c5c, vmax: 40, accel: 33, turn: 2.55, places: 2, robu: 0.9, sport: true,
+    d: 'Deux places, becquet, bandes de course. Elle colle au bitume et reprend en une seconde.' },
+  { k: 'super', e: '🏁', n: 'Foudre', fam: 'Super-sportive', p: 820, col: 0x1b1b1b, vmax: 48, accel: 40, turn: 2.75, places: 2, robu: 0.75, sport: true,
+    d: 'La plus rapide du catalogue. Une fusée à deux places — fragile comme du verre, alors freine !' },
+  { k: 'luxe', e: '💎', n: 'Majesté', fam: 'Luxe', p: 1050, col: 0xf0ecff, vmax: 44, accel: 34, turn: 2.40, places: 5, robu: 1.35, nacre: true, chrome: true,
+    d: 'Peinture nacrée, calandre chromée, cinq places : très rapide ET très confortable. Le haut du panier.' },
+];
+function gammeDe(k) { return GAMMES.find(g => g.k === k) || null; }
+// Les étoiles affichées : elles sont CALCULÉES à partir des vraies valeurs de conduite, donc
+// ce que le panneau promet est exactement ce qu'on sent au volant.
+function etoilesGamme(g) {
+  return { vitesse: clamp(Math.round((g.vmax - 18) / 6.5), 1, 5),
+    tenue: clamp(Math.round((g.turn - 1.75) / 0.22), 1, 5),
+    robu: clamp(Math.round(g.robu * 2.6), 1, 5),
+    places: g.places };
+}
+// UNE VOITURE DE GAMME. On ne redessine AUCUNE carrosserie : `makeCar` fait le modèle (un
+// autre poste l'améliore en ce moment), on ne fait qu'y poser les accessoires de la gamme
+// (galerie, pare-buffle, calandre) et régler la mécanique. Les accessoires vont dans le
+// groupe du véhicule AVANT `separeCaisse` — non : makeCar l'a déjà appelé, on les met donc
+// dans `c.caisse` pour qu'ils suivent le tangage de la caisse comme le reste de la carrosserie.
+function voitureDeGamme(g, x, z, h, couleur) {
+  const col = couleur != null ? couleur : g.col;
+  const c = makeCar(col, x, z, h, { sport: !!g.sport });
+  const k = c.caisse || c.g, noir = lam(0x1b1b1b);
+  const add = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; k.add(m); return m; };
+  if (g.galerie) {   // galerie de toit : deux longerons et deux traverses
+    for (const sx of [-0.62, 0.62]) add(noir, 0.09, 0.09, 1.85, sx, 1.82, -0.15);
+    for (const pz of [-0.9, 0.6]) add(noir, 1.35, 0.08, 0.09, 0, 1.82, pz);
+  }
+  if (g.buffle) {   // pare-buffle + rampe de phares du 4×4
+    add(chrome, 1.7, 0.12, 0.12, 0, 0.95, 2.28);
+    add(neonMat(0xffffcc), 1.3, 0.16, 0.12, 0, 1.95, 0.72);
+  }
+  if (g.chrome) { add(chrome, 1.4, 0.1, 0.05, 0, 0.72, 2.26); add(chrome, 1.9, 0.06, 0.06, 0, 1.18, 0.02); }
+  // La TEINTE NACRÉE du haut de gamme : un rien d'émissif violet dans la laque blanche, elle
+  // prend la lumière comme une perle sans qu'on ait à toucher au modèle de carrosserie.
+  if (g.nacre && c.bodyMat) c.bodyMat.emissive.setHex(0x2a2440);
+  c.gamme = g.k; c.places = g.places; c.solidite = g.robu;
+  c.spec = { max: g.vmax, rev: -Math.round(g.vmax / 4), accel: g.accel, turn: g.turn, seat: 0 };
+  c.specOrig = null;   // l'atelier repartira de CES valeurs-là quand il montera un moteur
+  return c;
+}
+// Le panneau de prix planté devant chaque podium : nom, prix, vitesse et étoiles. C'est là
+// que l'enfant comprend d'un coup d'œil pourquoi la voiture d'à côté coûte le double.
+function panneauGamme(g) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 320;
+  const x = cv.getContext('2d'), s = etoilesGamme(g);
+  const grd = x.createLinearGradient(0, 0, 0, 320); grd.addColorStop(0, '#1d2438'); grd.addColorStop(1, '#0d1220');
+  x.fillStyle = grd; x.fillRect(0, 0, 512, 320);
+  x.strokeStyle = '#ffd23f'; x.lineWidth = 8; x.strokeRect(10, 10, 492, 300);
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = 'bold 40px Nunito, Arial, sans-serif'; x.fillStyle = '#ffffff';
+  x.fillText(g.e + ' ' + g.fam.toUpperCase(), 256, 52);
+  x.font = 'bold 34px Nunito, Arial, sans-serif'; x.fillStyle = '#ffe98a';
+  x.fillText('« ' + g.n + ' »', 256, 96);
+  x.font = 'bold 62px Nunito, Arial, sans-serif'; x.fillStyle = '#ffd23f';
+  x.fillText(g.p + ' \u{1FA99}', 256, 152);
+  x.font = 'bold 27px Nunito, Arial, sans-serif'; x.textAlign = 'left';
+  const lignes = [['Vitesse', s.vitesse, Math.round(g.vmax * 3.6) + ' km/h'],
+    ['Tenue', s.tenue, ''], ['Solidité', s.robu, ''], ['Places', s.places, '']];
+  lignes.forEach((l, i) => {
+    const y = 196 + i * 32;
+    x.fillStyle = '#c9d3e6'; x.fillText(l[0], 26, y);
+    x.fillStyle = '#ffd23f'; x.fillText('★'.repeat(l[1]) + '☆'.repeat(Math.max(0, 5 - l[1])), 150, y);
+    if (l[2]) { x.fillStyle = '#3ef2ff'; x.fillText(l[2], 340, y); }
+  });
+  return new THREE.CanvasTexture(cv);
+}
+// LE BÂTIMENT. cx, cz = centre du show-room. La verrière regarde le SUD (z croissant), c'est
+// de ce côté-là que passe la rue : on voit les voitures depuis la chaussée.
+function buildConcession(cx, cz) {
+  const BW = 46, BD = 26, HM = 7.9;                                  // largeur, profondeur, hauteur des murs
+  const SUD = cz + BD / 2, NORD = cz - BD / 2, OUEST = cx - BW / 2, EST = cx + BW / 2;
+  // ---- le terrain : un grand parvis d'enrobé clair, la dalle du show-room par-dessus ----
+  plat(cx + 1, 0.2, cz + 2, BW + 12, BD + 13, 0x565e70, { studs: false, noRoute: true }, 0.1);   // parvis : z s'arrête 2 m AVANT la chaussée de la Traverse
+  for (let i = 0; i < 6; i++) box(cx - 20 + i * 9, 0.21, cz + 16.5, 8, 0.02, 0.25, 0xf4f7fa, { deco: true, noEdges: true, studs: false });   // marquage du bord de parvis
+  plat(cx, 0.3, cz, BW, BD, 0xe9edf5, { studs: false, noRoute: true }, 0.12);
+  city.batiments.push({ x: cx, z: cz, w: BW - 0.5, d: BD - 0.5, nom: 'Blocs Motors' });
+  city.interieurs.push({ x: cx, z: cz, w: BW - 1, d: BD - 1 });   // le show-room est un INTÉRIEUR : carrelage sous les pas, caméra qui ne sort pas du toit
+  // ---- l'ossature et la verrière jaune ----
+  // La façade sud est percée d'une entrée de 6 m au milieu : on entre à pied, pile dans l'axe
+  // de l'allée centrale, et le comptoir de vente est droit devant au fond.
+  const verre = (x, z, w, d) => box(x, HM / 2 + 0.3, z, w, HM, d, 0, { material: glassJaune, glass: true, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  verre(cx - 13, SUD, 20, 0.3); verre(cx + 13, SUD, 20, 0.3);          // verrière sud, de part et d'autre de l'entrée de 6 m
+  box(cx, HM - 0.4, SUD, 6, 1.6, 0.3, CONCES_JAUNE, { studs: false, noRoute: true });   // linteau au-dessus de l'entrée
+  verre(OUEST, cz, 0.3, BD); verre(EST, cz, 0.3, BD);                  // pignons vitrés
+  box(cx, HM / 2 + 0.3, NORD, BW, HM, 0.4, CONCES_JAUNE, { studs: false, noRoute: true });   // mur plein au fond (arrière-boutique)
+  for (let i = 0; i <= 8; i++) { const mx = OUEST + i * (BW / 8); if (Math.abs(mx - cx) < 3.4) continue; box(mx, HM / 2 + 0.3, SUD, 0.3, HM, 0.34, CONCES_AMBRE, { deco: true, studs: false }); }   // pas de montant dans l'entrée
+  for (let i = 1; i < 4; i++) for (const mx of [OUEST, EST]) box(mx, HM / 2 + 0.3, NORD + i * (BD / 4), 0.34, HM, 0.3, CONCES_AMBRE, { deco: true, studs: false });
+  for (const mx of [OUEST, EST]) for (const mz of [NORD, SUD]) box(mx, HM / 2 + 0.3, mz, 0.44, HM + 0.2, 0.44, CONCES_AMBRE, { deco: true, studs: false });   // poteaux d'angle
+  box(cx, HM + 0.45, cz, BW + 1.2, 0.4, BD + 1.2, CONCES_AMBRE, { deco: true, studs: false });     // acrotère
+  box(cx, HM + 0.8, cz, BW + 0.4, 0.3, BD + 0.4, CONCES_CLAIR, { deco: true, studs: false });      // casquette claire du toit
+  box(cx, HM + 1.55, SUD + 0.4, 18, 1.8, 0.16, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🚗 BLOCS MOTORS', CONCES_JAUNE) }), deco: true, noEdges: true });
+  box(cx, 1.9, SUD + 0.25, 6.4, 0.12, 0.5, 0, { material: neonMat(CONCES_CLAIR), deco: true, noEdges: true });   // bandeau lumineux au-dessus de l'entrée
+  // ---- LE SHOW-ROOM : huit podiums éclairés, une voiture de gamme sur chacun ----
+  box(cx, 0.37, cz + 2, 6, 0.02, 22, 0xffe9a8, { deco: true, noEdges: true, studs: false });       // tapis central, de l'entrée au comptoir
+  city.concesExpo = [];
+  const XS = [cx - 16, cx - 6, cx + 6, cx + 16], ZS = [cz - 7, cz + 6];
+  GAMMES.forEach((g, i) => {
+    const px = XS[i % 4], pz = ZS[Math.floor(i / 4)];
+    plat(px, 0.54, pz, 6.4, 4.4, 0x2b3550, { studs: false, noRoute: true }, 0.24);
+    box(px, 0.47, pz + 2.3, 6.4, 0.14, 0.14, 0, { material: neonMat(CONCES_CLAIR), deco: true, noEdges: true });
+    // le panneau de prix, planté au coin du podium, tourné vers l'allée
+    box(px + 2.6, 1.0, pz + 2.5, 0.12, 1.4, 0.12, 0x8f98ab, { deco: true, studs: false });
+    box(px + 2.6, 2.15, pz + 2.5, 1.9, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: panneauGamme(g) }), deco: true, noEdges: true });
+    // LA VOITURE D'EXPOSITION N'EST PAS DANS `city.cars` : elle est à vendre, pas à prendre.
+    // Sans ça, il suffisait de monter dedans (E) pour repartir avec sans payer.
+    const v = voitureDeGamme(g, px, pz, i < 4 ? Math.PI : 0);
+    v.expo = true; v.busy = true; v.y = 0.54; v.g.position.y = 0.54;
+    if (v.solid) { v.solid.y = 0.54 + 0.7; v.solid.expo = true; }
+    city.concesExpo.push(v);
+  });
+  for (const dx of [-13, 13]) { const l = new THREE.PointLight(0xfff2c8, 0.9, 26); l.position.set(cx + dx, 6.4, cz); worldGroup.add(l); }
+  // ---- LE COMPTOIR DE VENTE, au fond de l'allée centrale ----
+  const kx = cx, kz = NORD + 2.2;
+  box(kx, 0.95, kz, 5.6, 1.3, 1.3, CONCES_JAUNE, { studs: false, noRoute: true });
+  box(kx, 1.66, kz, 5.8, 0.14, 1.5, 0x2b2f3a, { deco: true, studs: false });
+  box(kx, 3.2, kz - 0.9, 5.2, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🔑 VENTE · E', CONCES_JAUNE) }), deco: true, noEdges: true });
+  for (const dx of [-1.9, 1.9]) box(kx + dx, 2.4, kz - 0.55, 0.12, 1.3, 0.12, 0x8f98ab, { deco: true, studs: false });
+  const vend = mannequin(kx + 1.2, kz - 1.2, 0, { jersey: 12, jacket: 1, hat: 'top', glasses: true });
+  vend.tag.visible = true; renommeEtiquette(vend, 'Gérard Boulon');
+  city.concesDesk = { x: kx, z: kz + 1.5 };
+  city.concession = { x: cx, z: cz + 20 };
+  // ---- DEHORS : l'aire de livraison, d'où l'on repart au volant, plein sud vers la rue ----
+  const lx = cx + 15, lz = cz + 18;
+  city.concesLivraison = { x: lx, z: lz, h: 0 };
+  box(lx, 0.26, lz, 3.4, 0.02, 6, 0xffd23f, { deco: true, noEdges: true, studs: false });
+  for (const dz of [-3, 3]) box(lx, 0.26, lz + dz, 3.4, 0.02, 0.3, 0xffffff, { deco: true, noEdges: true, studs: false });
+  box(lx + 2.8, 1.4, lz - 2, 1.7, 0.9, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🔑 LIVRAISON', 0x5cc453) }), deco: true, noEdges: true });
+  box(lx + 2.8, 0.75, lz - 2, 0.12, 1.3, 0.12, 0x8f98ab, { deco: true, studs: false });
+  // le totem au bord de la rue : on le voit depuis la chaussée
+  box(cx - 16, 3.2, cz + 18.5, 0.6, 6, 0.6, CONCES_AMBRE, { studs: false, noRoute: true });
+  box(cx - 16, 5.4, cz + 18.85, 3.6, 2.2, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🚗 BLOCS MOTORS', CONCES_JAUNE) }), deco: true, noEdges: true });
+  for (const dx of [-22, 22]) lamp(cx + dx, cz + 18);
+  flowerBed(cx - 8, cz + 18.5, 6, 1.4); flowerBed(cx + 4, cz + 18.5, 6, 1.4);
+  city.wander.push([cx, 0.3, cz + 17], [cx + 12, 0.3, cz + 17]);
+  city.zones.push({ name: 'Concessionnaire', emoji: '🚗', x1: cx - BW / 2 - 7, x2: cx + BW / 2 + 7, z1: cz - BD / 2 - 4, z2: cz + BD / 2 + 9,
+    hint: '🚗 Blocs Motors : entre dans le show-room, regarde les podiums, et E au comptoir pour acheter ta voiture' });
+}
+// ---- LA FENÊTRE DU CONCESSIONNAIRE ----
+let concesSel = null;
+function openConces() {
+  if (!concesSel) concesSel = (maVoiture() && maVoiture().gamme) || GAMMES[0].k;
+  openUI('conces'); majConces();
+}
+function majConces() {
+  const sel = gammeDe(concesSel) || GAMMES[0];
+  const mienne = maVoiture();
+  $('concesSub').innerHTML = `Tu as <b style="color:#ffd23f">${wallet} 🪙</b>`
+    + (mienne && mienne.gamme ? ` · ta voiture actuelle : <b>${(gammeDe(mienne.gamme) || {}).fam || '—'}</b>` : ' · tu n\'as pas encore de voiture à toi')
+    + ' — choisis un modèle, paie, et repars au volant.';
+  $('concesCorps').innerHTML = '<div class="tunelist">' + GAMMES.map(g => {
+    const s = etoilesGamme(g), trop = g.p > wallet;
+    const barre = (nom, n) => `<span style="color:#ffd23f">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span> ${nom}`;
+    return `<button class="tunebtn large ${concesSel === g.k ? 'on' : ''}" data-g="${g.k}">`
+      + `<b>${g.e} ${g.fam} « ${g.n} »</b><span style="color:${trop ? '#ff8f8f' : '#ffd23f'}">${g.p} 🪙</span>`
+      + `<i>${g.d}<br>${barre('vitesse', s.vitesse)} · ${barre('tenue', s.tenue)} · ${barre('solidité', s.robu)}`
+      + ` · 👥 ${g.places} places · 🏁 ${Math.round(g.vmax * 3.6)} km/h</i></button>`;
+  }).join('') + '</div>';
+  $('concesCorps').querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => { concesSel = b.dataset.g; majConces(); }));
+  const manque = sel.p > wallet;
+  $('concesPrix').textContent = manque ? `${sel.fam} « ${sel.n} » : ${sel.p} 🪙 — il te manque ${sel.p - wallet} 🪙`
+    : `${sel.fam} « ${sel.n} » : ${sel.p} 🪙 — il te restera ${wallet - sel.p} 🪙`;
+  const ok = $('concesOk');
+  ok.disabled = manque; ok.style.opacity = manque ? 0.5 : 1;
+  ok.textContent = manque ? `🪙 Il te manque ${sel.p - wallet}` : `🔑 Acheter la ${sel.fam} (${sel.p} 🪙)`;
+}
+// L'ACHAT. On paie, la voiture neuve est posée sur l'aire de livraison, et on part au volant.
+// Elle est marquée `mienne` : c'est ELLE que la sauvegarde garde et qu'on retrouve au garage
+// de la villa à la reprise de la partie.
+function acheterAuConces(k) {
+  const g = gammeDe(k); if (!g) return false;
+  if (wallet < g.p) { msg(`💰 Il te manque ${g.p - wallet} 🪙 pour la ${g.fam}`, 2400); return false; }
+  wallet -= g.p; saveWallet(); updateHud();
+  for (const v of city.cars) if (v.mienne) v.mienne = false;   // une seule voiture « à soi » à la fois
+  const sp = city.concesLivraison || { x: P.pos.x + 3, z: P.pos.z + 3, h: 0 };
+  const v = voitureDeGamme(g, sp.x, sp.z, sp.h);
+  v.mienne = true; v.home0 = [sp.x, sp.z, sp.h];
+  city.cars.push(v); settleVehicle(v); vehicleSolid(v);
+  try { tuneApply(v, tuning); } catch (e) {}
+  try { sauveMaVoiture(); } catch (e) {}
+  closeUI();
+  try { sfx.win(); } catch (e) {}
+  burst(v.x, (v.y || 0) + 1.2, v.z, CONCES_JAUNE, 20);
+  msg(`🔑 ${g.e} ${g.fam} « ${g.n} » achetée ! −${g.p} 🪙 — elle t'attend sur l'aire de livraison`, 3400);
+  try { chat(null, `🚗 ${myCfg.name} vient d'acheter une ${g.fam} « ${g.n} » chez Blocs Motors (${g.p} 🪙)`); } catch (e) {}
+  P.pos.set(sp.x + 1.8, 0.3, sp.z); P.vel.set(0, 0, 0);
+  try { enterCar(v); } catch (e) {}
+  return true;
 }
 function buildOffice(x, z) {   // bureau des missions : kiosque ouvert avec grand tableau, agent, panneau lumineux
   plat(x, 0.36, z, 7, 5, 0xd6e4ff, { studs: false, noRoute: true }, 0.12);
@@ -12212,7 +12459,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -14194,6 +14441,7 @@ const ACCUEILS = {
   tatoueur:  { qui: 'La tatoueuse', aigu: true, t: () => 'Bonjour ! Choisissez votre motif, je prépare l\'aiguille.' },
   armurerie: { qui: 'L\'armurier', t: () => 'Bonjour. Regardez le présentoir, je vous conseille si vous voulez.' },
   missions:  { qui: 'Le chef de bureau', t: () => 'Bonjour ! J\'ai du travail pour vous, servez-vous sur le tableau.' },
+  concession: { qui: 'Gérard Boulon', t: () => 'Bienvenue chez Blocs Motors ! Faites le tour des podiums, je vous fais les clés quand vous voulez.' },
 };
 const ACCUEIL_DELAI = 45;   // on ne resalue pas le meme lieu avant 45 s : sinon ca tourne en boucle
 const accueilVu = {};
@@ -14218,6 +14466,7 @@ function accueilTick() {
   front('ecole', city.classNear);
   front('boutique', city.vitNear);
   front('garage', city.tuneNear);
+  front('concession', city.concesNear);
   front('banque', city.deskNear);
   front('casino', city.slotNear || city.tableNear);
   front('coiffeur', city.coiffeurNear);
@@ -15019,6 +15268,7 @@ function ANCRES_VIVES() {
   const A = {};
   const p = (nom, o) => { if (o && o.x != null && o.z != null) A[nom] = { x: o.x, z: o.z }; };
   p('Garage custom', city.garage || city.tuneDesk);
+  p('Concessionnaire', city.concession);
   p('Tatouage', city.tatooDesk);
   p('Banque', city.bank);
   p('Commissariat', police.station);
@@ -18120,7 +18370,9 @@ function explodeVehicle(c) {
   msg('💥 Le véhicule a explosé ! Va au garage du parking', 2600);
 }
 function vehicleDamage(c, amount) {
-  c.dmg = clamp((c.dmg || 0) + amount, 0, 100);
+  // `c.solidite` vient de la gamme achetée au concessionnaire (0,75 pour la super-sportive,
+  // 1,9 pour le 4x4) : c'est ce qui fait qu'une voiture chère ENCAISSE mieux, pour de vrai.
+  c.dmg = clamp((c.dmg || 0) + amount / (c.solidite || 1), 0, 100);
   if (c.dmg >= 100 && !c.dead) { c.dead = true; explodeVehicle(c); }
   if (amount > 2) burst(c.x, 1, c.z, 0x8f98ab, Math.min(10, 3 + amount));
   // ON ENTEND LA TOLE. Un choc ne faisait qu'un nuage de fumée grise, en silence. (poste F)
@@ -19762,7 +20014,7 @@ function cityVie(dt) {
   }
   const near = city.gym && Math.hypot(P.pos.x - city.gym.bench.x, P.pos.z - city.gym.bench.z) < 2.2 ? 'bench' : city.gym && Math.hypot(P.pos.x - city.gym.run.x, P.pos.z - city.gym.run.z) < 2.2 ? 'run' : null;
   if (near !== city.shopNear) { city.shopNear = near; if (near && !isMobile) msg(near === 'bench' ? '🏋️ E : soulever la barre' : '🏃 E : courir sur le tapis', 1300); }
-  document.body.classList.toggle('racknear', !!(city.slotNear || city.tableNear || city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.tatooNear || city.coiffeurNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
+  document.body.classList.toggle('racknear', !!(city.slotNear || city.tableNear || city.rackNear || city.gunNear || city.shopNear || city.jetNear || city.swingNear || city.bouleNear || city.petNear || city.vitNear || city.offNear || city.rideNear || city.benchNear || city.safeNear || city.deskNear || city.tuneNear || city.concesNear || city.tatooNear || city.coiffeurNear || city.plainteNear || city.classNear || city.medNear || city.fridgeNear || city.stoveNear || city.bedNear || city.meterNear || city.trampNear || !!P.snack || city.hoopNear || (city.hoop && city.hoop.held) || city.parcelNear || !!P.deco));
   const gunNear = !!city.armory && Math.hypot(P.pos.x - city.armory.x, P.pos.z - city.armory.z) < 3.2;
   if (gunNear !== city.gunNear) { city.gunNear = gunNear; document.body.classList.toggle('racknear', gunNear || !!city.rackNear); if (gunNear && !isMobile) msg('🔫 E : voir toutes les armes', 1200); }
   const tatooNear = !!city.tatooDesk && Math.hypot(P.pos.x - city.tatooDesk.x, P.pos.z - city.tatooDesk.z) < 3 && !drive.car;
@@ -19773,6 +20025,8 @@ function cityVie(dt) {
   if (plainteNear !== city.plainteNear) { city.plainteNear = plainteNear; if (plainteNear && !isMobile) msg('📝 E : déposer une plainte', 2000); }
   const tuneNear = !!city.tuneDesk && Math.hypot(P.pos.x - city.tuneDesk.x, P.pos.z - city.tuneDesk.z) < 3 && !drive.car;
   if (tuneNear !== city.tuneNear) { city.tuneNear = tuneNear; if (tuneNear && !isMobile) msg('🔧 E : garage — réparation, peinture, kits, moteur, nitro', 2200); }
+  const concesNear = !!city.concesDesk && Math.hypot(P.pos.x - city.concesDesk.x, P.pos.z - city.concesDesk.z) < 3.4 && !drive.car;
+  if (concesNear !== city.concesNear) { city.concesNear = concesNear; if (concesNear && !isMobile) msg('🚗 E : acheter une voiture — citadine, berline, SUV, 4×4, sportive, luxe', 2400); }
   const vit = city.vitrines.find(v => Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < v.r) || null;
   if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · E pour acheter`, 1500); }
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
@@ -21006,7 +21260,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -21143,7 +21397,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -23004,6 +23258,8 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
 // ---- boutons du salon TV -------------------------------------------------------------
 $('tvBtn').addEventListener('click', () => ouvreSalonTV());
 $('atelierBack').addEventListener('click', () => closeUI());
+$('concesBack').addEventListener('click', () => closeUI());
+$('concesOk').addEventListener('click', () => acheterAuConces(concesSel));
 $('etalBack').addEventListener('click', () => closeUI());   // comptoir de quartier
 $('tatooBack').addEventListener('click', () => closeUI());
 $('tatooOk').addEventListener('click', () => tatouer());
@@ -23294,7 +23550,10 @@ function tuneApply(c, t) {
   c.spec = Object.assign({}, c.specOrig, {
     max: c.specOrig.max / 26 * mot.max * bonus,
     accel: c.specOrig.accel / 19 * mot.accel * (1 + bonusKits(t) * 0.6),
-    turn: am.turn });
+    // La tenue de route des amortisseurs est RELATIVE à celle de la voiture : monter des
+    // amortisseurs d'origine sur une sportive du concessionnaire lui remettait le train
+    // avant d'une citadine, et l'étoile « tenue » promise sur son podium devenait fausse.
+    turn: am.turn * ((c.specOrig.turn || 2.1) / 2.1) });
   c.tune = t; c.nitroPret = aKitT(t, 'nitro'); c.bonusKits = +(bonus - 1).toFixed(3);
   if (drive.car === c) engine.moteur(t.moteur | 0);   // le bloc change de voix tout de suite
   return c;

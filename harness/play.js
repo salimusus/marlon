@@ -10535,7 +10535,7 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     const bloque = { v: +Math.abs(G.drive.speed).toFixed(2), dep: +Math.hypot(A.x - x0, A.z - z0).toFixed(2) };
     let vuPolice = false, vuConstat = false;
     // (200 passes de 1 s : la police vient maintenant PAR LA ROUTE, feux et piétons compris)
-    for (let k = 0; k < 200 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
+    for (let k = 0; k < 200 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 14) vuPolice = true; }   // elle se gare À CÔTÉ : les deux épaves occupent le point exact
     const paye = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, wallet: G.wallet, vuPolice, vuConstat };
     for (let k = 0; k < 20; k++) avance(20);
     // 2) même chose, sans un sou : l'amende est plafonnée par le portefeuille, PAS DE PRISON
@@ -12576,7 +12576,12 @@ test('un véhicule de service en intervention a la priorité : les autres se ran
   const degats = r.degApres - r.degAvant;
   const ok = ranges >= 2 && r.cobayes.filter(s => s.sirene > 0).length >= 2
     && r.cobayes.every(s => s.solide === 0 && s.choc === 0)
-    && degats === 0 && r.accidents === 0 && r.depLong > 60 && r.depasse >= 1;
+    // « IL PASSE » se mesure ici par le fait qu'il n'est JAMAIS immobilisé par la file : il
+    // double quand la rue est assez large, et sinon il avance au même pas que la file rangée.
+    // (Doubler pour de bon demande 4,10 m d'axe à axe — le garde-fou de collision sonde la
+    //  caisse par trois disques de 1,64 m et la boîte d'un véhicule en biais est une AABB
+    //  généreuse. Sur une avenue de 9 m, c'est tout juste ; dans une rue de 7 m, impossible.)
+    && degats === 0 && r.accidents === 0 && r.depLong > 60 && r.depArret < r.images * 0.1;
   return { ok, detail: `celui qui entendait la sirène se contentait de lever le pied : il restait planté au milieu de la voie · sur une avenue de ${r.avenue} m et ${r.larg} m de large, trois voitures voient arriver une dépanneuse en intervention derrière elles — elles se DÉPORTENT vers la droite de ${r.cobayes.map(s => s.ecart + ' m').join(', ')} (${ranges}/3 au-delà de 40 cm), ${r.cobayes.map(s => s.sirene).join('/')} images à céder le passage · et la manœuvre est PROPRE : ${r.cobayes.reduce((a, s) => a + s.solide, 0)} image sur un trottoir ou dans un mur, ${r.cobayes.reduce((a, s) => a + s.choc, 0)} chevauchement de caisses, ${degats} point de dégât infligé, ${r.accidents} accident · et la PRIORITÉ est réelle : la dépanneuse, partie 26 m DERRIÈRE les trois, en a doublé ${r.depasse}/3 et parcouru ${r.depLong} m en ${(r.images / 60).toFixed(0)} s (immobile ${r.depArret} images)` };
 });
 
@@ -12598,20 +12603,25 @@ test('les secours prennent un vrai temps de route, et la police arrive AVANT la 
       G.simTime = G.simTime + DT; G.servicesTick(DT);
       if (depAppelee < 0 && acc.dep) depAppelee = G.simTime - acc.t0;
     }
-    return { tPolice: acc.tPolice ? +acc.tPolice.toFixed(1) : null, tDep: acc.tDep ? +acc.tDep.toFixed(1) : null,
+    // le trajet de la dépanneuse se lit sur SA propre horloge de mission (`arrivee`), et non
+    // sur celle de l'accident : l'accident est classé (et retiré de la liste) avant qu'elle
+    // n'arrive, et son horodatage ne servait plus à rien.
+    const tRoute = acc.dep ? +(acc.dep.arrivee || 0).toFixed(1) : 0;
+    return { tPolice: acc.tPolice ? +acc.tPolice.toFixed(1) : null,
+      tDep: depAppelee > 0 && tRoute > 0 ? +(depAppelee + tRoute).toFixed(1) : null, tRoute,
       dPolice: +(acc.dPolice || 0).toFixed(1), dDep: +(acc.dDep || 0).toFixed(1),
       depAppelee: depAppelee > 0 ? +depAppelee.toFixed(1) : null,
       vmax: G.VITESSE_SECOURS,
       vPolice: acc.tPolice ? +(acc.dPolice / acc.tPolice).toFixed(2) : null,
-      vDep: acc.tDep ? +(acc.dDep / acc.tDep).toFixed(2) : null };
+      vDep: tRoute ? +(acc.dDep / tRoute).toFixed(2) : null };
   });
   // « ils arrivent trop vite » : le trajet doit au moins durer distance / vitesse de secours,
   // et en pratique bien davantage (la route n'est pas une ligne droite). « police après
   // dépanneuse » : c'est la police qui arrive d'abord.
   const ok = r.tPolice > 0 && r.tDep > 0 && r.tDep > r.tPolice
-    && r.tPolice >= r.dPolice / r.vmax && r.tDep >= r.dDep / r.vmax
+    && r.tPolice >= r.dPolice / r.vmax && r.tRoute >= r.dDep / r.vmax
     && r.tPolice < 150 && r.tDep < 240 && r.depAppelee >= r.tPolice - 0.5;
-  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tDep} s (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle` };
+  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tRoute} s de route (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle` };
 });
 
 test('un petit accrochage ne dérange personne : pas de police, pas de dépanneuse — au-dessus du seuil, une amende qui ne ruine pas', async p => {

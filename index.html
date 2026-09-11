@@ -7741,6 +7741,13 @@ function enIntervention(v) { return !!v && (v.prio || 0) > simTime; }
 //   le prioritaire et on double celui qui s'est range).
 // Rend le deport total deja consenti, en metres.
 const ECART_SIRENE = 1.7;         // de quoi degager une file sur une chaussee de 7 m
+// CELUI QUI DOUBLE VA CHERCHER LA VOIE D'EN FACE. 1,70 m ne suffisaient pas : rangee a 1,18 m
+// du milieu de sa voie (la bordure l'arrete la), la voiture doublee laissait 2,88 m d'axe a
+// axe — et le garde-fou de collision, qui sonde la caisse par trois disques de 1,64 m de
+// rayon, en exige 2,90. La depanneuse prioritaire restait collee derriere a 1,1 m/s, bloquee.
+// Le vehicule qui double se deporte donc jusqu'a 3,20 m, c'est-a-dire sur la voie d'en face —
+// et le test des deux flancs l'empeche toujours de mordre le trottoir dans une rue etroite.
+const ECART_DOUBLE = 3.2;
 function ecarteChaussee(c, dt, sens, but) {
   // LE DEPORT SE MESURE PAR RAPPORT A LA VOIE, PAS EN CUMUL. Premiere version : on comptait
   // les centimetres deja consentis (`c.ecart` += pas) et on s'arretait a 1,70 m. Resultat :
@@ -8011,7 +8018,13 @@ function avanceVehicule(c, dt, spd, opt, h0) {
 // La distance au vehicule de devant, dans notre file : on garde une longueur de securite.
 function gapDevant(c, latVoulu) {
   flotteMaj();
-  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  // QUAND ON DOUBLE, ON MESURE DANS L'AXE DE LA VOIE, PAS DANS L'AXE DU CAPOT. Un vehicule
+  // deporte de 1,70 m braque en permanence pour revenir dans sa voie ; ce petit angle suffisait
+  // a ramener DANS SON COULOIR la voiture qu'il etait justement en train de doubler, huit
+  // metres devant. Mesure : la depanneuse prioritaire restait a 2,6 m/s derriere une voiture
+  // pourtant rangee a 2,9 m sur le cote, et ne doublait jamais personne.
+  const ax = (Math.abs(c.ecart || 0) > 0.8 && c.voieSir) ? c.voieSir.sens : c.h;
+  const fx = Math.sin(ax), fz = Math.cos(ax);
   // LE PRIORITAIRE NE FAIT PAS LA QUEUE. Celui qui lui cede le passage se deporte de 1,7 m :
   // avec un couloir de 2,2 m, le vehicule range restait « devant » et le camion de pompiers
   // s'arretait derriere lui — la priorite ne servait a rien. En intervention on ne regarde
@@ -8023,6 +8036,10 @@ function gapDevant(c, latVoulu) {
     const dx = v.x - c.x, dz = v.z - c.z, al = dx * fx + dz * fz;
     if (al < 0.5 || al > 14) continue;
     if (Math.abs(-dx * fz + dz * fx) > lat) continue;
+    // `c.double` : ON NE FAIT PAS LA QUEUE DERRIERE UNE EPAVE. Un vehicule A L'ARRET n'est pas
+    // une file, c'est un obstacle — le jeu le dit deja pour la priorite a droite. Ce drapeau est
+    // pose par traficRoule quand un vehicule pilote pietine depuis trois secondes.
+    if (c.double && Math.abs(v.speed || 0) < 0.5) continue;
     if (al < gap) { gap = al; longDevant = v.baseD || 4.4; }
   }
   return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
@@ -8087,6 +8104,15 @@ function traficRoule(c, dt, opt) {
   // prioritaire, lui, deborde a GAUCHE pour doubler celui qui vient de se ranger. Des que la
   // sirene est passee, le compteur repart a zero et le suivi d'itineraire ramene tout seul le
   // vehicule dans sa voie.
+  // ON CONTOURNE CE QUI EST A L'ARRET. Une depanneuse qui rentrait au garage restait bloquee
+  // POUR TOUJOURS derriere les deux voitures accidentees qu'elle venait de reparer : « file »
+  // fait partie des bonnes excuses, donc la soupape de traficRoule ne se declenchait jamais
+  // (mesure : 175 s immobile a 30 m de l'epave, gyrophare allume). Au bout de trois secondes
+  // sans avancer, un vehicule PILOTE par un autre poste se deporte a gauche et double.
+  if (opt.pilote && (c.pas || 0) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
+  else c.fileT = 0;
+  c.double = c.fileT > 3;
+  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
   if (c.sireneVeh) ecarteChaussee(c, dt, 1, ECART_SIRENE);
   else if (opt.urgence) {
     // LE PRIORITAIRE DÉBORDE POUR DOUBLER. Attention au piège : `gapDevant` ne regarde qu'un
@@ -8096,7 +8122,7 @@ function traficRoule(c, dt, opt) {
     // encore de un mètre et que le garde-fou de collision le clouait sur place (mesure :
     // 1 035 images immobile, 0 voiture doublée). On rouvre donc ici le couloir à 2,6 m
     // POUR DÉCIDER DU PAS DE CÔTÉ, et seulement pour ça.
-    if (gapDevant(c, 2.6)[0] < 14) ecarteChaussee(c, dt, -1, ECART_SIRENE);
+    if (gapDevant(c, 2.6)[0] < 14) ecarteChaussee(c, dt, -1, ECART_DOUBLE); else c.ecart = 0;
   } else c.ecart = 0;
   if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
   else c.bloqueT = 0;

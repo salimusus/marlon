@@ -10790,3 +10790,51 @@ test('un choc contre un mur ne laisse QU\'UNE marque, et la carrosserie encaisse
   const ok = r.ville === 1 && r.mur === 0 && r.dmg > 0 && r.touche > 0 && r.appels <= 2;
   return { ok, detail: `la voiture tape la façade en (${r.mure.x}, ${r.mure.z}) à l'image ${r.touche} : ${r.dmg} % de dégâts (stade ${r.deg}) · ${r.ville} marque posée par la ville et ${r.mur} par le véhicule (il y en avait DEUX, superposées) · coût de rendu : ${r.appels} appel(s) de dessin de plus, la marque de la ville vivant dans un maillage partagé` };
 });
+
+// ---- POSTE VÉHICULES : l'horloge de simulation cassée ----
+// Le bug qui figeait DEUX mécanismes d'un coup sans le moindre message : dès qu'un seul
+// calcul rate quelque part et met simTime à NaN, toutes les temporisations du jeu
+// (« simTime > minuterie ») deviennent fausses. La boîte restait collée sur A1 (régime
+// saturé à 19,7) et un blessé n'était plus jamais vu à terre (son minuteur de KO valait NaN,
+// donc « faux »). Ce test empoisonne l'horloge EXPRÈS et vérifie que le jeu s'en relève.
+test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni les secours', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 26, y: 1, z: 24, hour: 12 });
+    const c = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
+    const remis = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - 26, a.z - 24) > 80) continue;
+      remis.push([a, a.x, a.z]); a.x += 600; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
+    c.busy = false; c.dmg = 0; c.accidente = false;
+    c.x = 26; c.z = 24; c.h = Math.PI; c.y = G.groundUnder(26, 24, c.solid, 1);
+    G.enterCar(c);
+    G.simTime = NaN;                       // L'EMPOISONNEMENT
+    const casse = !(G.simTime > -Infinity && G.simTime < Infinity);
+    const tour = (v, n) => { G.drive.speed = v; for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); G.drive.speed = v; } return G.drive.gear; };
+    c.regime = null; tour(0, 40);
+    const rapports = [0.03, 0.22, 0.45, 0.7, 0.95].map(f => tour(c.spec.max * f, 30));
+    const repare = G.simTime > -Infinity && G.simTime < Infinity;
+    G.exitCar();
+    for (const [a, x, z] of remis) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    // LES SECOURS, horloge cassée de nouveau : un blessé doit quand même être ramassé
+    for (const a of (G.city.ambulances || [])) { a.etat = null; a.victime = null; a.x = a.home0[0]; a.z = a.home0[1]; a.h = a.home0[2]; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a); }
+    const b = G.bots.find(x => x.av && x.av.group.visible && !x.prison && !x.drive);
+    const hx = G.city.medDesk ? G.city.medDesk.x : 0, hz = G.city.medDesk ? G.city.medDesk.z : 0;
+    b.pos.set(hx + 40, G.groundUnder(hx + 40, hz + 30, null, 1), hz + 30); b.hp = 0;
+    G.corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
+    G.simTime = NaN; b.ko = G.simTime + 400;   // minuteur de KO empoisonné lui aussi
+    const koCasse = !(b.ko > -Infinity && b.ko < Infinity);
+    G.P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
+    const amb = (G.city.ambulances || []).find(x => x.victime === b);
+    for (let k = 0; k < 120 && amb; k++) {
+      for (let i = 0; i < 20; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); }
+      if (!amb.etat) break;
+    }
+    return { casse, koCasse, rapports, repare, appel: !!amb, hp: b.hp, ko: b.ko,
+      dist: +Math.hypot(b.pos.x - hx, b.pos.z - hz).toFixed(1), horloge: +(G.simTime || 0).toFixed(1) };
+  });
+  const monte = r.rapports[0] === 1 && r.rapports[4] >= 5 && r.rapports.every((g, i) => i === 0 || g >= r.rapports[i - 1]);
+  const ok = r.casse && r.koCasse && r.repare && monte && r.appel && r.hp === 100 && r.ko === 0 && r.dist < 6;
+  return { ok, detail: `une horloge à NaN figeait tout en silence : la boîte restait sur A1 à toutes les vitesses (régime saturé à 19,7) et un blessé au minuteur de KO à NaN n'était plus jamais ramassé · l'horloge se remet d'aplomb toute seule (${r.repare}, ${r.horloge} s) : les rapports montent A${r.rapports.join(' → A')} et le blessé est conduit à l'hôpital (${r.dist} m, ${r.hp} PV, KO ${r.ko})` };
+});

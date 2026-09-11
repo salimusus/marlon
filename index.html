@@ -13924,7 +13924,13 @@ function sonsVille(dt) {
       let fini = false;
       for (const c of liste) {
         const genre = urgenceDe(c); if (!genre) continue;
-        if (!(c.sirene || c.gyro || c.urgence || Math.abs(c.spd || c.speed || 0) > 0.2)) continue;   // garée et calme : pas de sirène
+        // `urgence` n'est PAS un état de mission : c'est le drapeau d'IDENTITÉ que portent
+        // l'ambulance et la dépanneuse depuis leur fabrication. Tant qu'il était dans ce
+        // filtre, un véhicule de secours GARÉ, mission finie, hurlait sa sirène à vie —
+        // mesuré : 4 sirènes en 12 s à 8,7 m du joueur, sans aucun moyen de le faire taire
+        // sinon s'éloigner de 60 m. Seuls comptent `sirene` et `gyro`, que l'ambulance et la
+        // dépanneuse allument sur leur mission en cours (`!!a.etat`, `!!d.mission`).
+        if (!(c.sirene || c.gyro)) continue;   // garée, mission finie : pas de sirène
         const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
         if (d < 110) { SONV.ambuT = simTime + 2.6; sonSirene(c.x, c.z, genre); if (c.recule) sonRecul(c.x, c.z); fini = true; break; }
       }
@@ -18518,7 +18524,9 @@ function depanneuseAppel(acc) {
 function depanneusesTick(dt) {
   for (const d of (city.depanneuses || [])) {
     d.gyro = !!d.mission;          // le gyrophare et la sirène sont des DRAPEAUX : le poste
-    d.sirene = !!d.mission;        // Sons les lit pour brancher le son tout seul
+    // Sons les lit pour brancher le son tout seul. Sur le trajet de RETOUR, gyrophare oui,
+    // sirène non : rentrer au garage n'est pas une urgence.
+    d.sirene = !!(d.mission && d.mission.phase !== 'retour');
     const m = d.mission; if (!m || drive.car === d) continue;
     const c = m.cible;
     if (m.phase === 'route') {
@@ -18535,7 +18543,7 @@ function depanneusesTick(dt) {
       if (simTime < m.t) { burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
       facturerDepannage(m);
-      m.phase = 'fini'; m.fini = true; d.mission = null; d.remorque = null;
+      m.phase = 'retour'; m.fini = true; d.remorque = null;
       msg('🔧 Réparé sur place, tu peux repartir', 2400); sfx.pok();
     } else if (m.phase === 'treuil') {
       d.outilCible = 1;   // le treuil descend : c'est l'animation commune des outils qui le joue
@@ -18550,8 +18558,15 @@ function depanneusesTick(dt) {
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
       c.remorque = null; d.remorque = null;
       facturerDepannage(m);
-      m.phase = 'fini'; m.fini = true; d.mission = null;
+      m.phase = 'retour'; m.fini = true;
       msg('🚚 Véhicule remorqué au garage et réparé', 2800); sfx.register();
+    } else if (m.phase === 'retour') {
+      // ELLE RENTRE. Il n'existait AUCUN état de retour (l'ambulance, elle, en a un) : le
+      // travail fini, la dépanneuse était simplement libérée sur place et restait plantée là
+      // pour de bon — mesuré : 104,8 m de son garage, en pleine chaussée, à 8,6 m du joueur,
+      // et toujours au même endroit trente secondes plus tard.
+      if (rouleVers(d, d.home0[0], d.home0[1], dt, 14) > 2.5) continue;
+      d.mission = null; d.remorque = null; d.h = d.home0[2]; d.speed = 0; d.spd = 0; poseVehicule(d, dt);
     }
   }
 }

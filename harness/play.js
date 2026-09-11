@@ -11689,3 +11689,59 @@ test('la rumeur de la ville est une présence, plus un masque : les sons courts 
   const ok = discret && ressort && recule && r.vol <= 0.012;
   return { ok, detail: `la rumeur de quartier couvrait tout le reste : mesurée au bout de la chaîne audio, elle atteignait une crête de 0,065 (efficace 0,017) et masquait complètement le crissement de la craie de l'école — et avec lui les pas, les bots qui parlent, les coups et les cris « aïe » · deux corrections : tous les niveaux de quartier divisés par trois (${r.quartier} : ${r.vol}, gain du bus ${r.etat.gain}) et un RECUL automatique — chaque son de jeu la fait plonger pendant ${r.tenue} s puis elle remonte seule · lit de fond seul : crête ${r.lit.pic}, efficace ${r.lit.rms} · un son de jeu par-dessus : crête ${r.craie.pic} (${r.rapport}× le lit, contre 7,9× avant) · un seul pas la fait reculer (recul n°${r.pendantDuck.n}) de ${r.pendantDuck.cible} à ${r.pendantDuck.niveau}, soit ${Math.round(100 * r.pendantDuck.niveau / r.pendantDuck.cible)} % du niveau du quartier, puis elle remonte seule` };
 });
+
+test('un véhicule de secours garé, mission finie, ne hurle plus — mais il hurle en mission', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    G.settings.sound = true;
+    // On compte les sirènes VOULUES : sonsVille repousse SONV.ambuT de 2,6 s à chaque fois
+    // qu'il en joue une, c'est donc lui qui sert de compteur (le son lui-même dépend du
+    // budget audio et de la présence d'un contexte WebAudio dans le banc d'essai).
+    const compte = sec => { let n = 0; G.SONV.ambuT = 0;
+      for (let i = 0; i < sec * 30; i++) { G.simTime += 1 / 30; const t0 = G.SONV.ambuT; G.sonsVille(1 / 30); if (G.SONV.ambuT !== t0) n++; }
+      return n; };
+    const d = (G.city.depanneuses || [])[0], a = (G.city.ambulances || [])[0];
+    if (!d || !a) return { manque: true };
+    const gare = v => { v.mission = null; v.etat = null; v.sirene = false; v.gyro = false; v.speed = 0; v.spd = 0; };
+    gare(d); gare(a);
+    d.x = G.P.pos.x + 8.7; d.z = G.P.pos.z; d.g.position.set(d.x, d.y || 0, d.z);
+    a.x = G.P.pos.x + 9; a.z = G.P.pos.z + 2; a.g.position.set(a.x, a.y || 0, a.z);
+    const drapeau = { urgenceAmbu: !!a.urgence, urgenceDep: !!d.urgence };
+    const garee = compte(12);
+    a.etat = 'route'; a.sirene = true; a.gyro = true;
+    const enMission = compte(12);
+    gare(a);
+    return { drapeau, garee, enMission, dist: 8.7 };
+  });
+  const ok = !r.manque && r.drapeau.urgenceAmbu && r.drapeau.urgenceDep && r.garee === 0 && r.enMission >= 3;
+  return { ok, detail: `« urgence » n'est pas un état de mission mais le drapeau d'IDENTITÉ de l'ambulance et de la dépanneuse (urgence=${r.drapeau.urgenceAmbu}/${r.drapeau.urgenceDep} à la fabrication) : tant qu'il figurait dans le filtre du son, un véhicule de secours GARÉ, mission terminée, hurlait sa sirène à vie — 4 en 12 s à 8,7 m du joueur, impossible à faire taire autrement qu'en s'éloignant de 60 m · garés à ${r.dist} m, mission finie : ${r.garee} sirène en 12 s · la même ambulance EN mission : ${r.enMission} sirènes sur 12 s` };
+});
+
+test('la dépanneuse rentre au garage après un dépannage sur place', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const d = (G.city.depanneuses || [])[0];
+    if (!d) return { manque: true };
+    d.mission = null; d.remorque = null;
+    // un accrochage léger, loin du garage : c'est une réparation SUR PLACE
+    const A = G.city.cars.find(c => !c.kind && !c.heli && !c.travail && c !== G.drive.car);
+    const B = G.city.cars.find(c => c !== A && !c.kind && !c.heli && !c.travail);
+    const loin = [d.home0[0] + 90, d.home0[1] + 40];
+    A.dmg = 10; B.dmg = 5; A.busy = true; B.busy = true;
+    A.x = loin[0] + 3; A.z = loin[1]; A.h = 0; A.g.position.set(A.x, A.y || 0, A.z);
+    B.x = loin[0] + 8; B.z = loin[1]; B.g.position.set(B.x, B.y || 0, B.z);
+    d.x = loin[0]; d.z = loin[1]; d.g.position.set(d.x, d.y || 0, d.z);
+    const m = G.depanneuseAppel({ a: A, b: B, x: loin[0], z: loin[1] });
+    if (!m) return { manque: true };
+    const dG = () => +Math.hypot(d.x - d.home0[0], d.z - d.home0[1]).toFixed(1);
+    const depart = dG();
+    let repare = null;
+    for (let i = 0; i < 60 * 30; i++) { G.simTime += 1 / 30; G.depanneusesTick(1 / 30);
+      if (repare == null && m.fini) repare = dG(); }
+    return { depart, repare, arrivee: dG(), mission: !!d.mission, sirene: !!d.sirene, mode: m.mode, phase: m.phase };
+  });
+  const ok = !r.manque && r.mode === 'place' && r.depart > 60 && r.repare > 60 && r.arrivee < 6 && !r.mission && !r.sirene;
+  return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene})` };
+});

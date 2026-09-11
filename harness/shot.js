@@ -157,7 +157,12 @@ window.__SHOT = {
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
-    if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
+    // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
+    // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
+    // enorme en mode tele). En plus rien ne le rallumait : une vue hideHud:false prise apres
+    // une vue hideHud:true restait nue. On liste les vrais identifiants, et on remet
+    // l'affichage a sa valeur CSS quand hideHud n'est pas demande.
+    document.querySelectorAll('#top,#chat,#gps,#act,#missionHud,#wanted,#padLeg,#tvBadge').forEach(function (e) { e.style.display = v.hideHud ? 'none' : ''; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
@@ -172,9 +177,8 @@ window.__SHOT = {
       // lame au fourreau a l'image suivante, et on photographiait un poing vide.
       if (v.couteau === 'main') P.gun = false;
       if (v.facing != null) P.facing = v.facing;
-      // le radar (canevas #gps) trone au milieu du bas de l'ecran, pile devant la ceinture :
-      // il masquait justement les deux etuis qu'on veut photographier.
-      var gps = document.getElementById('gps'); if (gps && v.hideHud) gps.style.display = 'none'; } catch (e16) {} }
+      // (le radar qui masquait les etuis est desormais eteint par hideHud lui-meme, plus haut)
+    } catch (e16) {} }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
@@ -1284,7 +1288,11 @@ function serve(htmlFile) {
   const { srv, port } = await serve(file);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage'] });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  // Le mode television doit etre juge dans la vraie definition d'un televiseur : les regles
+  // CSS du mode TV dependent de la largeur de la fenetre (vw), donc une capture prise en
+  // 1280x720 ne dit RIEN de ce que voit un joueur en 1920x1080. LARGEUR / HAUTEUR permettent
+  // de photographier les deux definitions (par defaut 1280x720, comme avant).
+  const page = await browser.newPage({ viewport: { width: +process.env.LARGEUR || 1280, height: +process.env.HAUTEUR || 720 }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));

@@ -51,7 +51,7 @@ button,input{font-family:inherit}
    surtout pas le retour a la ligne (flex-wrap:nowrap) : sur la tele la rangee deborderait
    alors de son cadre et tomberait dans le surbalayage que les televiseurs rognent. */
 .tc .pill{padding:7px 9px;font-size:14px}
-body.tv .tc .pill{padding:calc(var(--u) * .42) calc(var(--u) * .58);font-size:calc(var(--u) * .92)}
+body.tv .tc .pill{padding:calc(var(--uh) * .38) calc(var(--uh) * .55);font-size:calc(var(--uh) * .85)}
 .tr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 /* Les boutons du haut n'avaient AUCUN état visible : ni survol, ni appui, ni focus manette.
    On ne savait jamais lequel on visait. Trois états, tous nets, et une transition très
@@ -424,35 +424,61 @@ body.lobby #emoteBtn{display:none}
    Tout découle maintenant d'une seule unité (--u) et d'un seul retrait (--tvpad) — les
    téléviseurs rognent 3 à 5 % des bords, rien ne doit tomber dedans. Les quatre coins sont
    occupés, le centre reste libre : on voit le jeu et on voit son personnage. */
-body.tv{--u:clamp(15px,1.15vw,23px);--tvpad:max(4vmin,env(safe-area-inset-top));--tvr:calc(var(--u) * .72)}
-body.tv #top{padding:var(--tvpad) var(--tvpad) 0;gap:calc(var(--u) * .8)}
-body.tv .pill{font-size:calc(var(--u) * 1.05);padding:calc(var(--u) * .5) calc(var(--u) * .75);border-radius:var(--tvr);border-width:2px}
-body.tv .ibtn{width:calc(var(--u) * 2.4);height:calc(var(--u) * 2.4);font-size:calc(var(--u) * 1.25);border-radius:var(--tvr)}
-body.tv #me{font-size:calc(var(--u) * .95);padding:calc(var(--u) * .55) calc(var(--u) * .8);border-radius:var(--tvr);gap:calc(var(--u) * .55)}
-body.tv .hp{width:calc(var(--u) * 5);height:calc(var(--u) * .6)}
-/* la colonne de droite ne mange jamais plus du tiers de l'image */
-body.tv .tr{max-width:34vw}
+/* DEUX unités, et non plus une seule. Tout découlait de --u : en grossissant le bandeau de
+   jeu on grossissait AUSSI les fenêtres et le menu, déjà à la bonne taille — et à l'inverse,
+   tant que les fenêtres étaient justes, le bandeau restait minuscule (des pastilles à 20 px
+   sur un écran de 1920, illisibles à trois mètres ; pire, elles RÉTRÉCISSAIENT en passant en
+   mode télé, car --u tombait sur son plancher de 15 px). Désormais :
+     --u  = l'unité des FENÊTRES (menu, boutique, école) — inchangée ;
+     --uh = l'unité du BANDEAU DE JEU, une fois et demie plus grosse, plancher à 24 px pour
+            qu'un téléviseur 720p profite du même confort qu'un 1080p.
+   Et deux retraits au lieu d'un : un téléviseur rogne un pourcentage de CHAQUE bord, or
+   4vmin ne faisait que 2,3 % de la largeur en 16/9 — la barre de vie frôlait le surbalayage. */
+body.tv{--u:clamp(15px,1.15vw,23px);--uh:clamp(24px,1.85vw,38px);
+  --tvpad:max(4.2vh,env(safe-area-inset-top));--tvpadx:max(4.2vw,env(safe-area-inset-left));
+  --tvr:calc(var(--u) * .72);--tvrh:calc(var(--uh) * .42)}
+/* LE BANDEAU DU HAUT SUR DEUX RANGÉES. À cette taille, boutons + pastilles + tableau des
+   joueurs ne tenaient plus côte à côte : les pastilles passaient sur une deuxième ligne, en
+   plein milieu de l'image, juste là où s'affiche le grand message. On donne donc au bandeau
+   une rangée de boutons, puis TOUTE la largeur aux pastilles ; la colonne de droite (barre de
+   vie + tableau) sort du flux et se cale dans le coin, sous la marge de sécurité. */
+body.tv #top{padding:var(--tvpad) var(--tvpadx) 0;grid-template-columns:minmax(0,1fr);gap:calc(var(--uh) * .45)}
+/* les deux rangées se taillent sur leur contenu : étalées sur toute la largeur, leur zone
+   cliquable barrait l'image et avalait les clics destinés au jeu */
+body.tv .tl{flex-wrap:wrap;gap:calc(var(--uh) * .34);justify-self:start;width:max-content;max-width:100%}
+body.tv .tc{gap:calc(var(--uh) * .34);row-gap:calc(var(--uh) * .3);justify-self:center;width:max-content;max-width:100%;min-width:0}
+body.tv .pill{font-size:calc(var(--uh) * .95);padding:calc(var(--uh) * .42) calc(var(--uh) * .62);border-radius:var(--tvrh);border-width:2px}
+body.tv .ibtn{width:calc(var(--uh) * 2.1);height:calc(var(--uh) * 2.1);font-size:calc(var(--uh) * 1.1);border-radius:var(--tvrh)}
+body.tv #me{font-size:calc(var(--uh) * .95);padding:calc(var(--uh) * .5) calc(var(--uh) * .75);border-radius:var(--tvrh);gap:calc(var(--uh) * .5)}
+body.tv .hp{width:calc(var(--uh) * 3.2);height:calc(var(--uh) * .55)}
+/* la colonne de droite : hors du flux, coin haut droit, et jamais plus de 46 % de l'image */
+body.tv .tr{position:fixed;right:var(--tvpadx);top:var(--tvpad);max-width:46vw;gap:calc(var(--uh) * .4)}
 body.tv #me{flex-wrap:wrap;max-width:100%}
-body.tv .hp.st{height:calc(var(--u) * .42)}
-body.tv .hp.pf{height:calc(var(--u) * .6)}
-body.tv .pfn{font-size:calc(var(--u) * .8)}
-body.tv #lb{font-size:calc(var(--u) * .9);min-width:calc(var(--u) * 13);border-radius:var(--tvr)}
-body.tv .lbh,body.tv .lbr{padding:calc(var(--u) * .42) calc(var(--u) * .72);font-size:calc(var(--u) * .85)}
+body.tv .hp.st{height:calc(var(--uh) * .38)}
+body.tv .hp.pf{height:calc(var(--uh) * .55)}
+body.tv .pfn{font-size:calc(var(--uh) * .75)}
+/* le tableau descend sous la rangée des pastilles, qui prend maintenant toute la largeur */
+body.tv #lb{font-size:calc(var(--uh) * .9);min-width:calc(var(--uh) * 11);border-radius:var(--tvrh);margin-top:calc(var(--uh) * 2.5)}
+body.tv .lbh,body.tv .lbr{padding:calc(var(--uh) * .38) calc(var(--uh) * .66);font-size:calc(var(--uh) * .82)}
+body.tv .lbr .nm{max-width:calc(var(--uh) * 6)}
 /* le tableau des joueurs s'arrête au-dessus du milieu : il descendait jusque sur le radar */
 /* et il se fond au lieu d'être tranché net : de loin, une ligne coupée fait « écran cassé » */
-body.tv #lbRows{max-height:26vh;overflow-y:auto;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)}
+body.tv #lbRows{max-height:30vh;overflow-y:auto;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)}
 body.tv #chatLog{-webkit-mask-image:linear-gradient(transparent,#000 16%);mask-image:linear-gradient(transparent,#000 16%)}
 /* le chat descend en bas à gauche : le haut de l'image reste dégagé */
-body.tv #chat{left:var(--tvpad);top:auto;bottom:var(--tvpad);width:calc(var(--u) * 17);border-radius:var(--tvr)}
-body.tv #chatLog{font-size:calc(var(--u) * .9);max-height:calc(var(--u) * 8.5)}
-body.tv #chatIn{font-size:calc(var(--u) * .9);padding:calc(var(--u) * .5)}
-body.tv #msg{font-size:calc(var(--u) * 3.1);top:20%}
-body.tv #msg.long{font-size:calc(var(--u) * 1.65)}
+/* chat et tableau des joueurs restent ETROITS : agrandis, ils mordaient sur la bande du
+   milieu ou se tient le personnage — on joue pour le voir, pas pour lire des panneaux */
+body.tv #chat{left:var(--tvpadx);top:auto;bottom:var(--tvpad);width:calc(var(--uh) * 11);border-radius:var(--tvrh)}
+body.tv #chatLog{font-size:calc(var(--uh) * .85);max-height:calc(var(--uh) * 6)}
+body.tv #chatIn{font-size:calc(var(--uh) * .7);padding:calc(var(--uh) * .42)}   /* l'invite « Ecris ou parle… » etait tranchee net */
+/* le grand message passe SOUS le bandeau à deux rangées : il se posait dessus */
+body.tv #msg{font-size:calc(var(--uh) * 2.6);top:calc(var(--tvpad) + var(--uh) * 7)}
+body.tv #msg.long{font-size:calc(var(--uh) * 1.5)}
 /* LE RADAR passe dans le coin bas droit : au centre, il masquait le joueur */
-body.tv #gps{left:auto;right:var(--tvpad);bottom:var(--tvpad);transform:none;
-  width:calc(var(--u) * 9.2);height:calc(var(--u) * 9.2);border-width:3px}
-body.tv #wanted{font-size:calc(var(--u) * 1.2);padding:calc(var(--u) * .45) calc(var(--u) * .85);top:calc(var(--tvpad) + var(--u) * 3.6)}
-body.tv #missionHud{font-size:calc(var(--u) * .9);padding:calc(var(--u) * .4) calc(var(--u) * .8);top:calc(var(--tvpad) + var(--u) * 6)}
+body.tv #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad);transform:none;
+  width:calc(var(--uh) * 7.6);height:calc(var(--uh) * 7.6);border-width:4px}
+body.tv #wanted{font-size:calc(var(--uh) * 1.1);padding:calc(var(--uh) * .42) calc(var(--uh) * .8);top:calc(var(--tvpad) + var(--uh) * 4.8)}
+body.tv #missionHud{font-size:calc(var(--uh) * .85);padding:calc(var(--uh) * .38) calc(var(--uh) * .75);top:calc(var(--tvpad) + var(--uh) * 7.1)}
 body.tv #perfHud{display:none!important}   /* la performance est déjà dans la barre du haut */
 body.tv #cross{transform:translate(-50%,-50%) scale(1.7)}
 /* une TV n'a pas d'écran tactile : les gros boutons du pouce ne servent à rien */
@@ -465,7 +491,7 @@ body.tv .card h2{font-size:calc(var(--u) * 1.9)}
 body.tv .btn{font-size:calc(var(--u) * 1.1);padding:calc(var(--u) * .6) calc(var(--u) * .95)}
 /* la bande de l'ecole sur une television : lisible a trois metres, et toujours moins d'un
    tiers de la hauteur pour laisser voir le tableau */
-body.tv #schoolUI{padding:var(--tvpad) var(--tvpad) 0}
+body.tv #schoolUI{padding:var(--tvpad) var(--tvpadx) 0}
 body.tv #schoolUI .card{max-width:min(1180px,90vw);padding:calc(var(--u) * .55) calc(var(--u) * 1.1) calc(var(--u) * .75);
   border-radius:var(--tvr);max-height:27vh}
 body.tv #schoolUI h2{font-size:calc(var(--u) * 1.35)}
@@ -486,10 +512,10 @@ body.tv #schoolUI .row .btn{font-size:calc(var(--u) * .95);padding:calc(var(--u)
 body.manette.city.aide #padLeg{display:flex}   /* le bandeau ne sort plus qu'a la demande : il barrait le haut de l'ecran en permanence */
 body.manette.city.uiopen #padLeg,body.manette.city.manetteTel #padLeg{display:none}
 #padLeg{transition:opacity .35s} body:not(.aide) #padLeg{opacity:0}
-body.tv #padLeg{font-size:calc(var(--u) * .95);top:calc(var(--tvpad) + var(--u) * 3.4);padding:calc(var(--u) * .35) calc(var(--u) * .7)}
+body.tv #padLeg{font-size:calc(var(--uh) * .85);top:calc(var(--tvpad) + var(--uh) * 4.8);padding:calc(var(--uh) * .32) calc(var(--uh) * .62)}
 #tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
-  color:#eaf0ff;font-weight:800;padding:calc(var(--u,15px) * .4) calc(var(--u,15px) * .9);font-size:calc(var(--u,15px) * .85)}
+  color:#eaf0ff;font-weight:800;padding:calc(var(--uh,15px) * .4) calc(var(--uh,15px) * .9);font-size:calc(var(--uh,15px) * .85)}
 body.tv #tvBadge.on{display:block}
 /* NAVIGATION À LA MANETTE : le curseur. À trois mètres d'une télé, un simple contour jaune
    se perdait dans une carte claire ou une vignette déjà bordée. Il est maintenant DOUBLE

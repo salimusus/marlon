@@ -2996,6 +2996,14 @@ test("six gangs arrivent en ville l'un apres l'autre, au rythme du joueur, et s'
     // la casse du gang ne doit pas etre mise sur le dos du joueur
     res.recherche = G.police.wanted || 0;
     G.P.hp = 100; g0.etat = 'repos'; g0.cible = null; G.clearWanted();
+    // ON REND LA GUERRE COMME ON L'A TROUVEE. Ce test amene les six gangs en ville, donne les
+    // huit quartiers au joueur (ce qui LANCE LE SACRE et peut le faire gagner) et le pousse au
+    // dernier rang : sans ce rangement, les tests de guerre qui suivent trouvaient une partie
+    // deja gagnee et tous les gangs deja arrives — ils etaient verts seuls et rouges en lot.
+    G.gang.rep = 0; G.guerre.palier = 1; G.guerre.morts = []; G.guerre.territoires = {};
+    G.guerre.arrivee = null; G.guerre.sacre = 0; G.guerre.sacrePause = false; G.guerre.gagne = false;
+    G.buildGangs();
+    res.range = { gangs: G.gangs.length, gagne: !!G.guerre.gagne, palier: G.guerre.palier };
     return res;
   });
   const couleurs = new Set(r.fin.map(g => g.peinture));
@@ -3008,8 +3016,9 @@ test("six gangs arrivent en ville l'un apres l'autre, au rythme du joueur, et s'
     && couleurs.size === 6;
   const vie = ['joueur', 'rival', 'boutique', 'cambriolage'].every(e => r.etats.includes(e))
     && r.approche[1] < r.approche[0] - 4 && r.degats > 0 && r.hpRival < 100 && r.vitrine && r.recherche === 0;
-  const ok = table && montee && allure && vie;
-  return { ok, detail: `ce test decrivait l'ancien monde — « trois gangs, tous les trois des la premiere seconde » · la ville en a maintenant SIX, repartis sur ${r.paliers.length} paliers de respect (${r.paliers.join('/')} ⭐), de force ${r.forces.join(' → ')}, et ils n'arrivent pas ensemble : ${r.depart.length} au depart (${r.depart.map(g => g.id).join(', ')}), un de plus a chaque rang gagne · a ${r.paliers[1]} ⭐ le jeu ANNONCE « ${r.annonce} » et rien ne bouge (${r.pendantAnnonce} gangs), dix secondes plus tard ils debarquent (${r.apresArrivee.length} gangs, le nouveau a ${r.apresArrivee[2].f} de force contre ${r.apresArrivee[1].f}) · et meme avec 5000 ⭐ d'un coup on ne saute aucune marche : ${r.suite.filter((n, i) => i === 0 || n !== r.suite[i - 1]).join(' → ')} gangs un par un (${r.parUn}) jusqu'au palier ${r.palierFinal}, sans jamais prendre plus de ${r.piresPertes} quartiers au joueur d'un coup · les ${r.fin.length} gangs ont ${r.fin.map(g => g.n).join('/')} hommes, un bandana, une voiture customisee (${r.fin[0].kits} kits) et ${couleurs.size} peintures differentes · ils fondent toujours sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherche ${r.recherche})` };
+  const ok = table && montee && allure && vie
+    && r.range.gangs === 2 && !r.range.gagne && r.range.palier === 1;
+  return { ok, detail: `ce test decrivait l'ancien monde — « trois gangs, tous les trois des la premiere seconde » · la ville en a maintenant SIX, repartis sur ${r.paliers.length} paliers de respect (${r.paliers.join('/')} ⭐), de force ${r.forces.join(' → ')}, et ils n'arrivent pas ensemble : ${r.depart.length} au depart (${r.depart.map(g => g.id).join(', ')}), un de plus a chaque rang gagne · a ${r.paliers[1]} ⭐ le jeu ANNONCE « ${r.annonce} » et rien ne bouge (${r.pendantAnnonce} gangs), dix secondes plus tard ils debarquent (${r.apresArrivee.length} gangs, le nouveau a ${r.apresArrivee[2].f} de force contre ${r.apresArrivee[1].f}) · et meme avec 5000 ⭐ d'un coup on ne saute aucune marche : ${r.suite.filter((n, i) => i === 0 || n !== r.suite[i - 1]).join(' → ')} gangs un par un (${r.parUn}) jusqu'au palier ${r.palierFinal}, sans jamais prendre plus de ${r.piresPertes} quartiers au joueur d'un coup · les ${r.fin.length} gangs ont ${r.fin.map(g => g.n).join('/')} hommes, un bandana, une voiture customisee (${r.fin[0].kits} kits) et ${couleurs.size} peintures differentes · ils fondent toujours sur le joueur (${r.approche[0]} → ${r.approche[1]} m, −${r.degats} PV), tapent le gang rival (${r.hpRival} PV) et brisent une vitrine sans que la police s'en prenne au joueur (recherche ${r.recherche}) · guerre rangee derriere soi : ${r.range.gangs} gangs, palier ${r.range.palier}, partie gagnee=${r.range.gagne}` };
 });
 
 test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en échec", async p => {

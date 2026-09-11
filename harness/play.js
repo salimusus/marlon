@@ -5632,15 +5632,38 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   // test, sans aucun rapport avec ce qu'elle mesure. On laisse trois minutes.
   await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'load',timeout:180000});
   await page.waitForFunction(()=>window.__SHOT&&window.__SHOT.ready,null,{timeout:60000});
+  // MONDE NEUF PAR DEFAUT : les 300 tests s'enchainent dans UNE page ; sans reconstruction,
+  // ce qu'aucune remise a zero ne rattrape s'accumule pendant deux heures. FRAIS=0 revient a
+  // l'ancien comportement (utile pour mesurer le surcout).
+  const fraisDefaut = process.env.FRAIS !== '0';
+  await page.evaluate(f => { window.__SHOT.fraisDefaut = f;
+    try { if (f) localStorage.setItem('superobby.banc.frais', '1'); else localStorage.removeItem('superobby.banc.frais'); } catch (e) {} }, fraisDefaut);
   let pass=0, fail=0;
   const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;
-  for(const c of CASES){
+  // PLAGE="180-250" : ne joue que les tests n° 180 a 250 (numerotation = ordre du fichier).
+  // Les pannes de FIABILITE ne se voient qu'en LOT : un test sali par ses voisins est vert
+  // seul et rouge apres soixante autres. Un lot par numeros reproduit exactement la meme
+  // sequence d'un essai a l'autre, ce qu'un FILTRE par mots-cles ne garantit pas.
+  const plage = process.env.PLAGE ? process.env.PLAGE.split('-').map(Number) : null;
+  for(let idx = 0; idx < CASES.length; idx++){
+    const c = CASES[idx];
+    if (plage && (idx + 1 < plage[0] || idx + 1 > plage[1])) continue;
     if (filtre && !filtre.test(c.n)) continue;
     const before=errors.length;
     let r; try { r=await c.fn(page); } catch(e){ r={ok:false,detail:'exception : '+e.message}; }
     const newErr=errors.slice(before);
     const ok=r.ok&&newErr.length===0;
-    console.log(`${ok?'  OK  ':'ÉCHEC '} ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}`);
+    // POURQUOI CE TEST EST-IL ROUGE ? Quand il echoue, on montre ce que le test PRECEDENT
+    // avait laisse derriere lui (releve par __SHOT.go avant toute remise a zero) et la
+    // memoire du rendu. Sans cela, un test sali par un voisin donnait un message qui se lit
+    // comme une reussite et on relisait dix fois un test parfaitement juste.
+    let sale='';
+    if (!ok) { try {
+      const d = await page.evaluate(() => ({ sale: window.__SHOT.sale || [], mem: window.__SHOT.memoire || null }));
+      const m = d.mem ? ` · memoire du rendu : ${d.mem.geo} geometries, ${d.mem.tex} textures, ${d.mem.prog} programmes, ${d.mem.objets} objets de scene, ${d.mem.solides} solides` : '';
+      if (d.sale.length || m) sale = `\n        état trouvé à l'entrée du test (laissé par les précédents) : ${d.sale.length ? d.sale.join(' · ') : 'rien de notable'}${m}`;
+    } catch (e) {} }
+    console.log(`${ok?'  OK  ':'ÉCHEC '} [${idx+1}] ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}${sale}`);
     ok?pass++:fail++;
   }
   console.log(`\n${pass} réussis, ${fail} échoués — ${errors.length} erreur(s) console au total`);

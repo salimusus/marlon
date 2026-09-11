@@ -15,7 +15,56 @@ const VIEWS = JSON.parse(fs.readFileSync(process.env.VUES || path.join(__dirname
 const HOOK = `
 window.__SHOT = {
   ready: true,
+  // Le banc d'essai pose ce drapeau (par localStorage, pour qu'il survive au rechargement de
+  // page du test de sauvegarde) : chaque __SHOT.go() rebatit alors la ville de zero.
+  // Voir MONDE NEUF PAR DEFAUT plus bas.
+  fraisDefaut: (function () { try { return localStorage.getItem('superobby.banc.frais') === '1'; } catch (e) { return false; } })(),
+  // CE QUI N'EST PAS AU REPOS A L'ENTREE D'UN TEST (__SHOT.sale).
+  // Le banc d'essai enchaine 300 tests dans UNE page : quand un test echoue, la cause est
+  // souvent l'etat laisse par un VOISIN, et le message d'echec ne le disait pas — on relisait
+  // dix fois un test parfaitement juste. On releve donc, AVANT toute remise a zero, la liste
+  // de ce qui trainait ; le banc l'ajoute au message des tests rouges. La liste ne juge pas :
+  // un test qui demande la continuite (continu: true) trouvera normalement des choses dedans.
+  sale: [],
+  relevePropre() {
+    const s = [];
+    const dit = function (c, t) { if (c) s.push(t); };
+    try {
+      dit(typeof drive !== 'undefined' && drive.car, 'joueur au volant');
+      dit(typeof P !== 'undefined' && (P.sit || P.ride || P.swing || P.eat || P.deco), 'joueur assis / pris par un decor');
+      dit(typeof P !== 'undefined' && P.hp < 100, 'joueur blesse (' + (typeof P !== 'undefined' ? P.hp : '?') + ' PV)');
+      dit(typeof uiOpen !== 'undefined' && uiOpen, 'fenetre ouverte : ' + (typeof uiOpen !== 'undefined' ? uiOpen : ''));
+      dit(typeof paused !== 'undefined' && paused, 'jeu en pause');
+      dit(typeof jail !== 'undefined' && jail.on, 'joueur en prison');
+      dit(typeof police !== 'undefined' && police.wanted > 0, 'recherche police niveau ' + (typeof police !== 'undefined' ? police.wanted : '?'));
+      dit(typeof mission !== 'undefined' && mission.cur, 'mission en cours');
+      dit(typeof city !== 'undefined' && city.accidents && city.accidents.length, (typeof city !== 'undefined' && city.accidents ? city.accidents.length : 0) + ' accident(s) en cours');
+      dit(typeof city !== 'undefined' && city.incendies && city.incendies.length, (typeof city !== 'undefined' && city.incendies ? city.incendies.length : 0) + ' incendie(s)');
+      dit(typeof city !== 'undefined' && city.chantiers && city.chantiers.length, (typeof city !== 'undefined' && city.chantiers ? city.chantiers.length : 0) + ' chantier(s) ouverts');
+      // les etats de bots : on compte plutot que de citer chaque nom
+      if (typeof bots !== 'undefined') {
+        var ko = 0, cond = 0, ordre = 0;
+        for (var i = 0; i < bots.length; i++) { var b = bots[i];
+          if (b.ko || b.mort || b.hp < 100) ko++;
+          if (b.drive && b.drive.car) cond++;
+          if (b.rdv || b.ordre || b.gangMission || b.gardeCorps || b.sport) ordre++; }
+        dit(ko, ko + ' habitant(s) blesses ou au sol');
+        dit(cond, cond + ' habitant(s) au volant');
+        dit(ordre, ordre + ' habitant(s) avec un ordre en cours');
+      }
+      // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
+      // l'ecran et il fausse toutes les mesures de niveau des tests audio.
+      dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');
+      dit(typeof SON !== 'undefined' && SON.vivants && SON.vivants.length, (typeof SON !== 'undefined' && SON.vivants ? SON.vivants.length : 0) + ' son(s) places encore vivants');
+      dit(typeof casino !== 'undefined' && casino.cine, 'un tour de roulette en cours (bruit de bille en boucle)');
+      // LA MEMOIRE DU RENDU : une fuite ne se voit qu'en comparant d'un test a l'autre.
+      var m = renderer.info.memory;
+      __SHOT.memoire = { geo: m.geometries, tex: m.textures, prog: renderer.info.programs.length, objets: scene.children.length, solides: solids.length };
+    } catch (e) { s.push('releve impossible : ' + (e && e.message)); }
+    return s;
+  },
   go(v) {
+    try { this.sale = this.relevePropre(); } catch (e) { this.sale = []; }
     // le champ de chat garde le focus d'un test a l'autre et avale alors toutes les
     // touches (le jeu ignore les keydown quand chatIn est actif) : on le relache.
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -36,7 +85,13 @@ window.__SHOT = {
     // accident) mesurait alors les restes des autres — d'un run a l'autre le meme test
     // trouvait 2246 ou 7264 appels. Ces tests demandent l'option frais et repartent d'une
     // ville comme au premier chargement.
-    if (v.frais && v.world != null) loadWorld(v.world);
+    // MONDE NEUF PAR DEFAUT (__SHOT.fraisDefaut) : le banc d'essai enchaine ~300 tests dans
+    // UNE SEULE page. Tout ce qu'aucune remise a zero ne rattrape (boucles de son empilees,
+    // minuteries, achats en boutique, textures) se cumule alors pendant deux heures. Un test
+    // peut demander la continuite avec { continu: true } quand il a besoin de l'etat laisse
+    // juste avant (par exemple relire une sauvegarde ecrite a l'appel precedent).
+    var veutFrais = v.frais != null ? v.frais : (v.continu ? false : !!window.__SHOT.fraisDefaut);
+    if (veutFrais && v.world != null) loadWorld(v.world);
     else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');
     document.getElementById('start').classList.add('hidden');
@@ -212,7 +267,10 @@ window.__SHOT = {
       if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [])) {
         if (!c) continue;
         if (c.feu || c.enFlammes || c.dead) { try { eteintFeu(c); } catch (e24) {} }
-        if (c.dmg || c.dead || c.explosed) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
+        // ...SAUF quand le test verifie la sauvegarde : loadWorld a deja appele rechargeTout(),
+        // qui repose TA voiture dans le garage AVEC ses bosses. On les effacait juste apres, et
+        // « la sauvegarde garde tout » lisait « 0 % de bosses » alors qu'elle en avait enregistre 17.
+        if (!v.garderSauvegarde && (c.dmg || c.dead || c.explosed)) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
         c.accidente = false; c.stopped = false;
       }
       // --- 11. LA BOITE DE VITESSES. Le rapport courant, le verrou anti-va-et-vient (shiftT) et

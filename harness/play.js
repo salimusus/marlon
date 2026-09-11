@@ -1158,7 +1158,12 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
   const dehors = await lis(() => __G.cam.dist > 7.5);
   await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
-  const dedans = await lis(() => __G.cam.dist < 4.2);
+  // (round 68, poste CAMERA : dans une piece, la maison de poupee ne recule plus a 4,8 m
+  //  quoi qu'il arrive — elle recule d'autant plus que la piece est GRANDE, jusqu'a 7,4 m,
+  //  parce qu'a 4,8 m dans une halle de vingt-quatre metres on ne voyait rien. Le seuil de ce
+  //  test passe donc de 4,2 a 6,2 m : ce qu'il garantit reste « dedans, on est plus pres que
+  //  dehors, et devant un objet plus pres encore ».)
+  const dedans = await lis(() => __G.cam.dist < 6.2);
   await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
   const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);
   // le point visé rattrape le joueur par interpolation : on attend qu'il l'ait rejoint
@@ -1166,7 +1171,7 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   const cible = await p.evaluate(() => ({ dx: +(__G.cam.target.x - __G.P.pos.x).toFixed(2), dz: +(__G.cam.target.z - __G.P.pos.z).toFixed(2) }));
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));
   const retour = await lis(() => __G.cam.dist > 7.5);
-  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 5.0   // maison de poupee : 3,8 a 4,8 m dans une piece
+  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 6.2 && dedans.dist < dehors.dist - 2   // maison de poupee : de 3,8 m dans un placard a 7,4 m dans une halle
     && frigo.inter && frigo.dist < dedans.dist + 0.1 && (Math.abs(cible.dx) + Math.abs(cible.dz)) > 0.1 && retour.dist > 7;
   return { ok, detail: `rue : ${dehors.dist} m · hall d'immeuble : ${dedans.dist} m · devant le frigo : ${frigo.dist} m (objet cadré, décalage ${cible.dx}/${cible.dz}) · de retour dehors : ${retour.dist} m` };
 });

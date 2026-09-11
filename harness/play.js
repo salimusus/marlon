@@ -2319,7 +2319,7 @@ test('la manette de salon a tous les boutons, et la croix navigue dans les menus
   });
   const ok = r.stick.x > 0.5 && r.stick.y > 0.5 && r.camera > 0.02 && r.saut === 0.15 && r.degaine
     && r.rengaine && r.court && r.recule > 0.7 && r.nav.bague && r.nav.bouge && r.nav.pasDeMarche && r.nav.valide;
-  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · ◯ saute (${r.saut}), ✕ braque (${r.degaine}) et rengaine (${r.rengaine}), L3 fait courir (${r.court}) et la gâchette L2 fait reculer (${r.recule}) · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
+  return { ok, detail: `stick gauche (${r.stick.x}, ${r.stick.y}), stick droit tourne la caméra de ${r.camera} rad · ◯ saute (${r.saut}), ✕ braque (${r.degaine}) et rengaine (${r.rengaine}), L3 fait courir (${r.court}) et la gâchette L2 est lue en analogique (${r.recule}) pour freiner au volant · dans un menu la croix pose une bague sur « ${r.nav.quoi} » et n'avance plus le joueur (${r.nav.pasDeMarche}), A valide et ferme (${r.nav.valide})` };
 });
 
 test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
@@ -2426,12 +2426,19 @@ test('le garage a déménagé et il est bien plus grand, avec son atelier', asyn
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    // au volant, le comptoir d'atelier ne se signale pas (il faut se garer et y aller à pied) :
+    // si un test précédent nous a laissés dans une voiture, on en descend d'abord.
+    if (__G.drive.car) __G.exitCar();
     await dodo(600);
     const g = __G.city.garage, d = __G.city.tuneDesk;
     const z = __G.city.zones.find(x => x.name === 'Garage custom');
     // aucun mur d'un autre bâtiment ne doit traverser le garage ni son parvis
     const sien = o => Math.abs(o.x - g.x) < 15.5 && Math.abs(o.z - g.z) < 10.5;
-    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && o.y + o.h / 2 > 0.6 && !sien(o)
+    // UNE VOITURE GARÉE N'EST PAS UN MUR. On comptait les boîtes de collision des VÉHICULES
+    // (`o.veh`) comme des murs : la dépanneuse du garage poussée de deux mètres, ou n'importe
+    // quelle voiture laissée sur le parvis par un test précédent, comptait pour un « conflit
+    // de murs » — d'où un défaut qui n'apparaissait que dans la suite complète, jamais seul.
+    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && !o.veh && o.y + o.h / 2 > 0.6 && !sien(o)
       && Math.abs(o.x - cx) < (o.w + W) / 2 && Math.abs(o.z - g.z) < (o.d + D) / 2).length;
     const chevauche = [];
     if (dedans(g.x, 28, 18)) chevauche.push('bâtiment');
@@ -7128,7 +7135,7 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
     && r.bons === r.total && r.gachetteFaible > 0.4 && r.gachetteFaible < 0.55 && r.gachetteFort === 1
     && r.r2NeTirePas === 0 && r.recule > 0.7
     && r.court && r.recentre && r.vibre && r.vibre.strongMagnitude > 0.5 && r.noms === '✕◯▢△';
-  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ braquer / rengainer, ◯ sauter, ▢ frapper, △ agir, R1 tirer, Create parler, Options menu · R2 AVANCE et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans plus tirer (R1 s'en charge : ${r.r2NeTirePas} tir), L2 RECULE (${r.recule}), « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
+  return { ok, detail: `la manette était lue « au hasard » : seule la PREMIÈRE prise était regardée (une DualSense branchée en deuxième était ignorée), la zone morte était CARRÉE — pousser en diagonale coupait un axe et on partait tout droit — les gâchettes étaient traitées en tout ou rien, et rien ne vibrait · tout est repris : la DualSense est trouvée quelle que soit sa prise (${r.nomPS}), la zone morte est ronde (frémissement a 0.05 → ${r.fremis[0]}, diagonale franche → ${r.diag[0]}/${r.diag[1]}, les deux axes a parts égales), les deux sticks marchent (déplacement ${r.marche.x}/${r.marche.y}, caméra ${r.camera} rad) · les ${r.bons}/${r.total} boutons de la façade PlayStation sont mappés — ✕ braquer / rengainer, ◯ sauter, ▢ frapper, △ agir, R1 tirer, Create parler, Options menu · R2 ACCÉLÈRE au volant et reste analogique (a moitié enfoncée → ${r.gachetteFaible}, a fond → ${r.gachetteFort}) sans tirer tant que l'arme est rangée (${r.r2NeTirePas} tir), L2 FREINE (${r.recule}) et baisse le joueur a pied, « courir » a déménagé sur L3 (${r.court}), R3 recentre la caméra · et elle VIBRE a chaque secousse de l'image (${r.vibre.duration} ms, force ${r.vibre.strongMagnitude.toFixed(2)})` };
 });
 
 test('l\'ecole est un batiment VITRE VERT ou l\'on s\'assoit a une table et repond au tableau', async p => {
@@ -7426,81 +7433,123 @@ test('la jupe se souleve sur la cuisse au lieu de se faire traverser', async p =
     && r.souleve < -0.2 && Math.abs(r.repos) < 0.05 && r.ourlet > r.genou;
   return { ok, detail: `la jupe etait une BOITE rigide autour du bassin : des qu'une cuisse montait, elle la traversait de part en part · c'est maintenant un tronc de cone evase (rayon ${r.hautJupe} m a la taille, ${r.basJupe} m a l'ourlet) qui SE SOULEVE quand un genou monte (${r.souleve} rad genou a terre, retour a ${r.repos} au repos) · le genou reste toujours hors du tissu : marge de ${-r.debout} m debout, ${-r.marche} en marchant, ${-r.course} en courant, ${-r.coupDePied} au coup de pied, ${-r.agenou} genou a terre · et l'ourlet (${r.ourlet} m) reste au-dessus du genou (${r.genou} m)` };
 });
-test('a la manette PS5, R2 avance et L2 recule — a pied comme au volant, et en analogique', async p => {
+test('a la manette PS5, on marche au STICK GAUCHE seul, et on conduit a la gachette droite (accelerer) et gauche (freiner)', async p => {
+  // POURQUOI CE TEST A CHANGE DE REGLE. Au round precedent le joueur avait demande que la
+  // gachette droite fasse avancer A PIED comme au volant, et ce test le garantissait sous le
+  // titre « R2 avance et L2 recule — a pied comme au volant ». A l'usage il n'en a pas voulu :
+  // marcher a la gachette empeche de doser une direction (la gachette n'a qu'un axe, le
+  // personnage partait tout droit) et se bat avec le pouce qui, lui, tient le stick. Sa
+  // nouvelle demande, mot pour mot : « pour marcher reculer aller a droite gauche : joystick
+  // gauche pas les gachettes. pour conduire : accelerer gachette droite et freiner gachette
+  // gauche ». Le volet « au volant » est donc conserve et affine ; le volet « a pied » est
+  // inverse : les gachettes ne doivent PLUS deplacer le personnage.
   const r = await p.evaluate(() => {
     const G = __G;
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });   // une grande avenue degagee : rien a percuter
     const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
     ferme();
     // le joystick tactile et la manette-telephone s'ADDITIONNENT a la manette : un test
     // precedent qui laisse une fleche appuyee bloquerait l'entree a fond dans une direction
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
-    G.P.drawn = false; G.settings.ctrl = 'cam';   // arme rangée : R2 avance (braquée, elle tire — c'est son autre test)
+    G.P.drawn = false; G.settings.ctrl = 'cam';   // mode camera : les quatre directions sont de vrais deplacements
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
-    const gachette = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; G.pollGamepad(0.02); };
+    const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
     try {
       const res = {};
       // ---- A PIED. On mesure la VITESSE atteinte, pas la distance : le joueur est remis a
       // son point de depart a chaque image (une case degagee, connue), sinon un habitant ou
       // une voiture qui passe par la fausserait la mesure une fois sur deux.
-      const marche = v => {
-        gachette(7, v > 0 ? v : 0); gachette(6, v < 0 ? -v : 0);
+      const marche = (ax, ay) => {
+        ds.axes = [ax, ay, 0, 0];
         G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0); G.P.run = false;
-        let dz = 0;
-        for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); dz = G.P.pos.z - 8; }
-        const r2 = { v: +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2), sens: Math.sign(+dz.toFixed(3)) };
-        gachette(7, 0); gachette(6, 0);
-        return r2;
+        for (let i = 0; i < 70; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+        return { vx: +G.P.vel.x.toFixed(2), vz: +G.P.vel.z.toFixed(2), v: +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2) };
       };
-      res.pied = { plein: marche(1), demi: marche(0.5), arriere: marche(-1), rien: marche(0) };
-      res.gazAFond = (gachette(7, 1), +G.pad.gaz.toFixed(2)); gachette(7, 0);
-      res.gazDemi = (gachette(7, 0.5), +G.pad.gaz.toFixed(2)); gachette(7, 0);
-      res.freinAFond = (gachette(6, 1), +G.pad.frein.toFixed(2)); gachette(6, 0);
-      // le stick gauche DEPLACE toujours : les deux commandes coexistent (meme mesure pinnee)
-      G.cam.yaw = 0; G.P.vel.set(0, 0, 0);
-      ds.axes = [1, 0, 0, 0]; gachette(7, 1);
-      for (let i = 0; i < 60; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
-      res.ensemble = { vx: +G.P.vel.x.toFixed(2), vz: +G.P.vel.z.toFixed(2) };
-      ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
-      // ---- AU VOLANT : on mesure la montee en vitesse sur un tiers de seconde, avant
-      // d'avoir parcouru assez de route pour rencontrer quoi que ce soit
+      res.avant = marche(0, -1); res.arriere = marche(0, 1); res.gauche = marche(-1, 0); res.droite = marche(1, 0);
+      res.demi = marche(0, -0.5); res.fremis = marche(0.05, -0.05); res.repos = marche(0, 0);
+      // LES GACHETTES NE DEPLACENT PLUS RIEN A PIED (c'est tout l'objet du changement)
+      ds.axes = [0, 0, 0, 0];
+      bt(7, 1); res.r2Pied = marche(0, 0).v; bt(7, 0);
+      bt(6, 1); res.l2Pied = marche(0, 0).v; bt(6, 0); G.pollGamepad(1 / 60);
+      // la course des gachettes, elle, reste analogique et lineaire (c'est elle qui conduit)
+      res.gazAFond = (bt(7, 1), G.pollGamepad(0.02), +G.pad.gaz.toFixed(3));
+      res.gazDemi = (bt(7, 0.5), G.pollGamepad(0.02), +G.pad.gaz.toFixed(3));
+      res.gazZoneMorte = (bt(7, 0.05), G.pollGamepad(0.02), +G.pad.gaz.toFixed(3));
+      res.freinAFond = (bt(7, 0), bt(6, 1), G.pollGamepad(0.02), +G.pad.frein.toFixed(3));
+      bt(6, 0); G.pollGamepad(0.02);
+      // ---- AU VOLANT. La voiture est posee sur la grande avenue, cap a l'est, a chaque essai :
+      // aucune facade, aucun trottoir dans les six secondes qui suivent.
       const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
       res.voiture = c ? (c.kind || 'voiture') : null;
       if (c) {
         G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
         res.dedans = !!G.drive.car;
-        const pousse = (i, v, n) => { gachette(7, i === 7 ? v : 0); gachette(6, i === 6 ? v : 0);
-          G.drive.speed = 0; for (let k = 0; k < (n || 20); k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
-          const s = +G.drive.speed.toFixed(2); gachette(7, 0); gachette(6, 0); return s; };
-        res.volant = { plein: pousse(7, 1), demi: pousse(7, 0.5), arriere: pousse(6, 1) };
-        // braquer au stick PENDANT qu'on accelere a la gachette
-        gachette(7, 1); ds.axes = [1, 0, 0, 0]; G.drive.speed = 0;
-        const h0 = G.drive.car.h;
+        const roule = (r2, l2, n, v0) => {
+          c.x = -60; c.z = 196; c.h = Math.PI / 2; c.vy = 0; G.drive.speed = v0 || 0; G.drive.arMax = 0;
+          bt(7, r2); bt(6, l2);
+          const acc = [];
+          for (let i = 0; i < n; i++) { const a0 = G.drive.speed; G.pollGamepad(1 / 60); G.driveStep(1 / 60); acc.push({ v: a0, a: (G.drive.speed - a0) * 60 }); }
+          const cm = G.drive.car.cmd || {};
+          bt(7, 0); bt(6, 0);
+          return { v: +G.drive.speed.toFixed(2), gaz: +(cm.gaz || 0).toFixed(3), frein: +(cm.frein || 0).toFixed(3), main: !!cm.main, acc };
+        };
+        const sansSuite = o => ({ v: o.v, gaz: o.gaz, frein: o.frein, main: o.main });
+        res.gazPlein = sansSuite(roule(1, 0, 20));
+        res.gazMiCourse = sansSuite(roule(0.5, 0, 20));
+        res.gazQuart = sansSuite(roule(0.25, 0, 20));
+        res.freine = sansSuite(roule(0, 1, 30, 15));       // L2 depuis 15 m/s : ca freine
+        res.roueLibre = sansSuite(roule(0, 0, 30, 15));    // rien : le frein moteur seul
+        res.recule = sansSuite(roule(0, 1, 90, 0));        // L2 a l'arret : ca recule
+        res.r2ContreRecul = sansSuite(roule(1, 0, 40, -5)); // R2 pendant une marche arriere : ca freine puis repart
+        // LE PASSAGE DU FREIN A LA MARCHE ARRIERE, sans a-coup : on regarde le plus gros saut
+        // d'acceleration d'une image a l'autre (hors butee de vitesse arriere, ou le moteur
+        // sature a -7 m/s et l'acceleration tombe a zero d'un coup, ce qui est normal).
+        const t = roule(0, 1, 220, 12);
+        const h = t.acc.filter(x => x.v > -6.8);
+        let saut = 0; for (let i = 2; i < h.length; i++) saut = Math.max(saut, Math.abs(h[i].a - h[i - 1].a));
+        res.transition = { saut: +saut.toFixed(2), fin: t.v };
+        // le stick gauche BRAQUE, et il ne fait QUE braquer (sinon le pouce qui tourne
+        // remettrait des gaz par-dessus la gachette et on ne saurait plus doser)
+        bt(7, 1); ds.axes = [1, 0, 0, 0];
+        c.x = -60; c.z = 196; c.h = Math.PI / 2; G.drive.speed = 0;
+        const h0 = c.h;
         for (let k = 0; k < 40; k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
-        res.braque = { dh: +Math.abs(G.drive.car.h - h0).toFixed(2), vitesse: +G.drive.speed.toFixed(2) };
-        ds.axes = [0, 0, 0, 0]; gachette(7, 0); G.pollGamepad(0.02);
+        res.braque = { dh: +Math.abs(c.h - h0).toFixed(2), vitesse: +G.drive.speed.toFixed(2) };
+        bt(7, 0); ds.axes = [0, -1, 0, 0];
+        c.x = -60; c.z = 196; c.h = Math.PI / 2; G.drive.speed = 0;
+        for (let k = 0; k < 40; k++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
+        res.stickAvantSeul = +G.drive.speed.toFixed(3);
+        ds.axes = [0, 0, 0, 0]; G.pollGamepad(0.02);
         G.exitCar();
       }
+      res.freinMain = G.FREIN_MAIN;
       res.legende = (document.getElementById('padLeg') || {}).textContent || '';
       res.aide = ([...document.querySelectorAll('.keys span')].map(e => e.textContent).join(' ') || '');
       return res;
-    } finally { navigator.getGamepads = vrai; ferme(); }
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; ferme(); }
   });
-  const pd = r.pied, vl = r.volant || {};
-  const ratioPied = pd.demi.v ? +(pd.plein.v / pd.demi.v).toFixed(2) : 0;
-  const ratioVolant = vl.demi ? +(vl.plein / vl.demi).toFixed(2) : 0;
-  const ok = pd.plein.v > 5 && pd.plein.sens === -1 && pd.demi.v > 2 && pd.demi.sens === -1
-    && pd.arriere.v > 5 && pd.arriere.sens === 1 && pd.rien.v === 0
-    && ratioPied > 1.8 && ratioPied < 2.4
-    && r.gazAFond === 1 && r.gazDemi > 0.4 && r.gazDemi < 0.55 && r.freinAFond === 1
-    && r.ensemble.vx > 2 && r.ensemble.vz < -2
-    && r.dedans && vl.plein > 1 && vl.arriere < -1 && ratioVolant > 1.7 && ratioVolant < 2.4
-    && r.braque.dh > 0.3 && r.braque.vitesse > 1
-    && /R2/.test(r.legende) && /avancer/.test(r.legende) && /L2/.test(r.legende) && /reculer/.test(r.legende)
-    && /R2<\/b> avancer/.test(r.aide) === false && /avancer \/ accélérer/.test(r.aide);
-  return { ok, detail: `le joueur demandait des GACHETTES : R2 pour accélérer et avancer, L2 pour reculer · a pied, R2 a fond amène a ${pd.plein.v} m/s vers l'avant, a moitié a ${pd.demi.v} m/s (rapport ${ratioPied} : c'est bien analogique), L2 ramène a ${pd.arriere.v} m/s vers l'ARRIÈRE et rien ne bouge gâchettes lâchées (${pd.rien.v} m/s) · au volant (${r.voiture}) la vitesse monte a ${vl.plein} m/s a fond contre ${vl.demi} a mi-course (rapport ${ratioVolant}) et la marche arrière descend a ${vl.arriere} · le stick gauche COEXISTE : poussé a droite pendant que R2 accélère, le personnage part en diagonale (${r.ensemble.vx} m/s de côté, ${r.ensemble.vz} m/s devant) et la voiture braque de ${r.braque.dh} rad tout en prenant ${r.braque.vitesse} m/s · la légende et l'aide sont a jour` };
+  const q = [r.avant.v, r.arriere.v, r.gauche.v, r.droite.v];
+  const symetrie = +(Math.max(...q) - Math.min(...q)).toFixed(3);
+  const ratioGaz = r.gazMiCourse.v ? +(r.gazPlein.v / r.gazMiCourse.v).toFixed(2) : 0;
+  const ok = // a pied : le stick, et lui seul
+       symetrie < 0.05 && r.avant.v > 5 && r.avant.vz < -5 && r.arriere.vz > 5 && r.gauche.vx < -5 && r.droite.vx > 5
+    && r.demi.v > 1.5 && r.demi.v < r.avant.v * 0.55 && r.fremis.v === 0 && r.repos.v === 0
+    && r.r2Pied === 0 && r.l2Pied === 0
+    // les gachettes : analogiques, lineaires, avec zone morte
+    && r.gazAFond === 1 && r.gazDemi > 0.44 && r.gazDemi < 0.52 && r.gazZoneMorte === 0 && r.freinAFond === 1
+    // au volant : R2 accelere (a mi-course, a peu pres moitie moins), L2 freine puis recule
+    && r.dedans && r.gazPlein.v > 5 && ratioGaz > 1.8 && ratioGaz < 2.6 && r.gazQuart.v < r.gazMiCourse.v
+    && r.freine.v < r.roueLibre.v - 3 && r.freine.frein > 0.5 && r.freine.frein <= r.freinMain && !r.freine.main
+    && r.recule.v < -3 && r.r2ContreRecul.v > 3
+    && r.transition.saut < 6 && r.transition.fin < -3
+    && r.braque.dh > 0.3 && r.braque.vitesse > 5 && r.stickAvantSeul === 0
+    // la legende et l'aide disent la nouvelle regle
+    && /Stick G/.test(r.legende) && /marcher/.test(r.legende) && /accélérer/.test(r.legende)
+    && /freiner/.test(r.legende) && !/R2<\/b>avancer/.test(r.legende)
+    && /tout part du stick gauche/.test(r.aide) && /R2<\/b> accélérer/.test(r.aide) === false && /accélérer et/.test(r.aide);
+  return { ok, detail: `le joueur a change d'avis : les gachettes ne marchent plus A PIED, c'est le stick gauche et lui seul · les quatre directions donnent exactement la meme vitesse (avant ${r.avant.v}, arriere ${r.arriere.v}, gauche ${r.gauche.v}, droite ${r.droite.v} m/s, ecart ${symetrie}), a moitie pousse on marche a ${r.demi.v} m/s, un fremissement du pouce ne fait rien (${r.fremis.v} m/s) et R2 comme L2 laissent le personnage sur place (${r.r2Pied} et ${r.l2Pied} m/s) · AU VOLANT en revanche les gachettes font tout : R2 a fond amene la ${r.voiture} a ${r.gazPlein.v} m/s en un tiers de seconde contre ${r.gazMiCourse.v} a mi-course (rapport ${ratioGaz}, la commande valant ${r.gazAFond} et ${r.gazDemi}) et ${r.gazQuart.v} au quart ; L2 depuis 15 m/s ramene a ${r.freine.v} m/s la ou le frein moteur seul laisserait ${r.roueLibre.v}, sans jamais tirer le frein a main (commande ${r.freine.frein} ≤ ${r.freinMain}) ; a l'arret L2 passe en marche arriere jusqu'a ${r.recule.v} m/s et R2 rattrape un recul (${r.r2ContreRecul.v} m/s) · le passage frein → marche arriere ne fait aucun a-coup : au plus ${r.transition.saut} m/s² d'ecart d'une image a l'autre · le stick gauche ne fait QUE braquer (${r.braque.dh} rad a ${r.braque.vitesse} m/s, et pousse en avant tout seul la voiture reste a ${r.stickAvantSeul} m/s)` };
 });
 
 test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', async p => {
@@ -7612,14 +7661,19 @@ test('une manette au mapping non standard (navigateur de tele) est remise d\'apl
       hid.axes[6] = -0.42857142857142855; G.pollGamepad(0.02); G.simTime += 0.1;
       hid.axes[6] = 1.2857142857142856; G.pollGamepad(0.02);
       res.armeParChapeau = G.P.weapon;
-      // 4) LES GACHETTES sont sur les axes 3 et 4, et restent analogiques
+      // 4) LES GACHETTES sont sur les axes 3 et 4, et restent analogiques (c'est la conduite
+      // qui les lit depuis le round 68 : a pied on marche au STICK GAUCHE, axes 0 et 1)
       hid.axes[4] = 0; L = G.padLu(hid); res.r2Demi = +L.r2.toFixed(2);
       hid.axes[4] = 1; G.pollGamepad(0.02); res.gazPlein = +G.pad.gaz.toFixed(2);
       G.cam.yaw = 0; G.P.pos.set(0, 0.5, 8); G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.gachetteAPied = +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2);   // la gachette ne marche plus
+      hid.axes[1] = -1;   // le stick gauche vers l'avant, lui, fait marcher
+      G.P.vel.set(0, 0, 0);
       const z0 = G.P.pos.z;
       for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.step(1 / 60, true); }
       res.avance = +(G.P.pos.z - z0).toFixed(2);
-      hid.axes[4] = -1; G.pollGamepad(0.02);
+      hid.axes[1] = 0; hid.axes[4] = -1; G.pollGamepad(0.02);
       // 5) LES FACES sont dans l'ordre HID : le bouton 1 est ✕ (index 0 en standard)
       hid.buttons[1] = { pressed: true, value: 1 }; L = G.padLu(hid);
       res.faces = { hid1EstCroix: L.b[0], hid0EstCarre: G.padLu(hid).b[2] };
@@ -7644,11 +7698,11 @@ test('une manette au mapping non standard (navigateur de tele) est remise d\'apl
     && r.stickD.rx === 0.8 && r.stickD.ry === -0.6
     && r.chapGauche[0] && !r.chapGauche[1] && !r.chapDroite[0] && r.chapDroite[1] && r.chapHaut
     && r.armeParChapeau === 'pistol'
-    && r.r2Demi > 0.45 && r.r2Demi < 0.55 && r.gazPlein === 1 && r.avance < -4
+    && r.r2Demi > 0.45 && r.r2Demi < 0.55 && r.gazPlein === 1 && r.gachetteAPied === 0 && r.avance < -4
     && r.faces.hid1EstCroix && r.faces.hid0EstCarre
     && r.ecran.ui === 'padTest' && r.ecran.barres === 6 && r.ecran.boutons === 18 && r.ecran.allumes >= 1
     && /ps-hid/.test(r.ecran.nom) && /non standard corrigé/.test(r.ecran.diag);
-  return { ok, detail: `sur le navigateur d'une télé (ou Firefox), la MEME DualSense arrive avec « mapping » vide et un tout autre agencement : le jeu lisait l'axe 3 (= L2 relâchée, a ${r.avant.ryLu}) comme le stick droit vertical — la caméra plongeait toute seule — le stick droit était introuvable, et la croix, qui n'a alors AUCUN bouton mais un « chapeau » sur un axe, ne faisait RIEN : c'est le « gauche/droite ne fonctionne pas » du joueur · tout est normalisé (profil ${r.profil}) : plus aucune dérive (${r.derive.yaw} rad de lacet, ${r.derive.pitch} d'inclinaison en une seconde), le stick droit est retrouvé sur les axes 2 et 5 (${r.stickD.rx} / ${r.stickD.ry}), le chapeau redevient une croix (← ${r.chapGauche[0]}, → ${r.chapDroite[1]}, ↑ ${r.chapHaut}) qui change d'arme (${r.armeParChapeau}), les gâchettes des axes 3/4 restent analogiques (mi-course ${r.r2Demi}, a fond ${r.gazPlein} → ${Math.abs(r.avance)} m parcourus) et les faces HID reprennent leur place (✕ et ▢) · l'écran « Tester la manette » montre les ${r.ecran.barres} axes et les ${r.ecran.boutons} boutons en direct et affiche : « ${r.ecran.diag} »` };
+  return { ok, detail: `sur le navigateur d'une télé (ou Firefox), la MEME DualSense arrive avec « mapping » vide et un tout autre agencement : le jeu lisait l'axe 3 (= L2 relâchée, a ${r.avant.ryLu}) comme le stick droit vertical — la caméra plongeait toute seule — le stick droit était introuvable, et la croix, qui n'a alors AUCUN bouton mais un « chapeau » sur un axe, ne faisait RIEN : c'est le « gauche/droite ne fonctionne pas » du joueur · tout est normalisé (profil ${r.profil}) : plus aucune dérive (${r.derive.yaw} rad de lacet, ${r.derive.pitch} d'inclinaison en une seconde), le stick droit est retrouvé sur les axes 2 et 5 (${r.stickD.rx} / ${r.stickD.ry}), le chapeau redevient une croix (← ${r.chapGauche[0]}, → ${r.chapDroite[1]}, ↑ ${r.chapHaut}) qui change d'arme (${r.armeParChapeau}), les gâchettes des axes 3/4 restent analogiques pour la CONDUITE (mi-course ${r.r2Demi}, a fond ${r.gazPlein}) sans plus faire marcher a pied (${r.gachetteAPied} m/s), ou c'est le stick gauche qui mene (${Math.abs(r.avance)} m parcourus) et les faces HID reprennent leur place (✕ et ▢) · l'écran « Tester la manette » montre les ${r.ecran.barres} axes et les ${r.ecran.boutons} boutons en direct et affiche : « ${r.ecran.diag} »` };
 });
 
 test('le mode diffusion vise 60 images par seconde NETTES sur la tele', async p => {
@@ -9278,9 +9332,14 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.P.drawn = false;
       tap(0); res.braque = !!G.P.drawn;
       tap(0); res.rengaine = !G.P.drawn;
-      // ---- R2 : avance quand l'arme est rangee
-      G.P.drawn = false; gach(7, 1);
+      // ---- R2 A PIED, ARME RANGEE : elle ne deplace plus personne (round 68 : le joueur a
+      // demande que la marche revienne au STICK GAUCHE). La course de la gachette est bien
+      // lue — elle sert au volant — mais le personnage ne bouge pas d'un pouce.
+      G.P.drawn = false; G.settings.ctrl = 'cam'; gach(7, 1);
       res.gazRange = +G.pad.gaz.toFixed(2); res.braqueeRange = !!G.pad.armeBraquee;
+      G.cam.yaw = 0; G.P.facing = 0; G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.marcheRange = +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2);
       gach(7, 0);
       // ---- R2 accelere TOUJOURS au volant, meme arme sortie (essaye AVANT de tirer : cinq
       // balles reveillent la police, dont les voitures viennent se coller a la notre)
@@ -9300,7 +9359,10 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       G.drawWeapon(true); G.P.fireCd = 0; G.simTime += 1;
       const n0 = G.shots.length;
       gach(7, 1);
-      res.tir = { gaz: +G.pad.gaz.toFixed(2), tirs: G.shots.length - n0, braquee: !!G.pad.armeBraquee };
+      res.tir = { tirs: G.shots.length - n0, braquee: !!G.pad.armeBraquee };
+      G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.tir.marche = +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2);
       // maintenue, la gachette tire en rafale (la cadence est bridee par le jeu)
       for (let i = 0; i < 8; i++) { G.simTime += 0.25; G.pollGamepad(1 / 60); }
       res.rafale = G.shots.length - n0;
@@ -9326,15 +9388,15 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
   });
   const ok = r.plan[0] === 'KeyG' && r.plan[1] === 'Space' && r.plan[2] === 'KeyV' && r.plan[3] === 'KeyE'
     && r.braque && r.rengaine
-    && r.gazRange === 1 && r.braqueeRange === false
-    && r.tir.gaz === 0 && r.tir.tirs === 1 && r.tir.braquee && r.rafale > 3
+    && r.gazRange === 1 && r.braqueeRange === false && r.marcheRange === 0
+    && r.tir.marche === 0 && r.tir.tirs === 1 && r.tir.braquee && r.rafale > 3
     && r.volant && r.volant.gaz === 1 && r.volant.braquee === false && r.volant.vitesse > 1
     && r.saut === 0.15 && r.pres && r.agit && r.frappe
     && /✕/.test(r.legende) && /braquer/.test(r.legende) && /◯/.test(r.legende) && /sauter/.test(r.legende)
     && /△/.test(r.legende) && /agir/.test(r.legende)
     && /braquer \/ rengainer/.test(r.roles) && /sauter/.test(r.roles) && /agir/.test(r.roles)
     && /braquer/.test(r.diag);
-  return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée elle fait avancer (gaz ${r.gazRange}), arme braquée elle TIRE et n'avance plus (gaz ${r.tir.gaz}, ${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
+  return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée sa course est lue pour la conduite (${r.gazRange}) mais elle ne fait plus marcher personne (${r.marcheRange} m/s — c'est le stick gauche qui marche depuis le round 68), arme braquée elle TIRE (${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant) sans deplacer le joueur (${r.tir.marche} m/s), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
 });
 // ================= POSTE F : LES SONS DU MONDE =================
 test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus faible qu\'un son proche, et le panoramique suit la camera', async p => {
@@ -9758,10 +9820,18 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
     d1.veh.x = d1.epave.x + 4; d1.veh.z = d1.epave.z; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
     res.dep.bandeau = document.getElementById('missionHud').textContent;
     d1.veh.outil = 1; d1.veh.outilCible = 1; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
-    // l'épave suit vraiment la dépanneuse
-    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    // LE CHARGEMENT SUR LE PLATEAU (poste Animation) : 2,4 s de manœuvre avant de pouvoir
+    // repartir — le treuil accroché ne suffit plus, il faut que la voiture soit MONTÉE.
+    for (let i = 0; i < 240 && G.mission.step === 3; i++) { G.simTime += 1 / 60; G.animMondeTick(1 / 60); G.missionTick(1 / 60); }
+    res.dep.etapes.push(G.mission.step);
+    res.dep.surPlateau = +(d1.epave.y - (d1.veh.y || 0)).toFixed(2);
+    // l'épave suit vraiment la dépanneuse, posée sur son plateau
+    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.animMondeTick(0.1); G.missionTick(0.1);
     res.dep.remorque = Math.round(Math.hypot(d1.epave.x - d1.veh.x, d1.epave.z - d1.veh.z));
     d1.veh.x = d1.garage.x; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    res.dep.etapes.push(G.mission.step);
+    // le déchargement puis les DIX SECONDES de réparation au garage
+    for (let i = 0; i < 60 * 40 && G.mission.cur; i++) { G.simTime += 1 / 30; G.animMondeTick(1 / 30); G.missionTick(1 / 30); }
     res.dep.fin = { finie: !G.mission.cur, gain: G.wallet };
     // 3. POMPIER : caserne, camion, sirène, lance à eau, blessé à sortir
     G.wallet = 0; G.mission.forcer = 'blesse'; G.startMission('pompier');
@@ -9836,12 +9906,12 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
   const b = r.bureau, dp = r.dep, pm = r.pomp, po = r.pol;
   const ok = b.cartes === b.total && b.ouvertes === b.total && b.difficultes === b.total
     && ['depannage', 'pompier', 'police'].every(id => b.ids.includes(id))
-    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3' && dp.remorque <= 8 && dp.fin.finie && dp.fin.gain >= 70
+    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3,4,5' && dp.remorque <= 8 && dp.surPlateau > 0.8 && dp.fin.finie && dp.fin.gain >= 70
     && pm.lance && pm.variante === 'blesse' && pm.feux >= 1 && pm.chrono && pm.sirene && pm.feuMonte
     && pm.arrosage.apres < pm.arrosage.avant - 20 && pm.etapes.join(',') === '1,2,3' && pm.blesse && pm.fin.finie && pm.fin.gain >= 90
     && ['chauffard', 'voleur', 'escorte', 'barrage'].every(v => po[v].lance && po[v].variante === v && po[v].etapes.join(',') === '1,2' && po[v].sirene && po[v].fin.finie && po[v].fin.gain >= 85)
     && po.chauffard.range && po.chauffard.cellule && po.voleur.cellule && po.escorte.auPoste < 20 && po.barrage.controles === 3;
-  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
+  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière (posée ${dp.surPlateau} m au-dessus de l'assiette du camion, donc SUR le plateau), étapes ${dp.etapes.join('→')}, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
 });
 
 test('une mission de métier ratée est comptée comme un échec, et la carrière verrouille ce qui n\'est pas mérité', async p => {
@@ -11771,4 +11841,503 @@ test('la dépanneuse rentre au garage après un dépannage sur place', async p =
   });
   const ok = !r.manque && r.mode === 'place' && r.depart > 60 && r.repare > 60 && r.arrivee < 6 && !r.mission && !r.sirene;
   return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene})` };
+});
+
+test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueur, et le plan de commandes n\'a aucune collision', async p => {
+  // Demande du joueur, mot pour mot : « ajoute une touche de commande pour l'helicoptere
+  // puisse atterrir (le carre) et une touche pour baisser le joueur ». Le geste de se baisser
+  // existait deja (c'est l'esquive du combat) mais n'avait aucun bouton de manette ; l'hélico,
+  // lui, ne se posait qu'en dosant Ctrl a la main — trop peu on restait en l'air, trop
+  // longtemps on s'ecrasait. On verifie les deux, et qu'aucun bouton ne sert deux fois.
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    ferme();
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false; G.P.hp = 100;
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
+    const clic = i => { bt(i, 1); G.pollGamepad(1 / 60); bt(i, 0); G.pollGamepad(1 / 60); };
+    const res = {};
+    try {
+      const rig = G.me.rig;
+      // ---- L2 : SE BAISSER. On mesure la pose (le rig du joueur est anime par la boucle de
+      // rendu, pas par step() : on l'avance donc a la main) et l'effet de jeu (l'esquive).
+      const anime = n => { for (let i = 0; i < n; i++) G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); };
+      const pose = () => { G.me.group.updateMatrixWorld(true);
+        return { baisse: +(rig.baisse || 0).toFixed(3), genou: +rig.legL.genou.rotation.x.toFixed(2),
+          semelle: +Math.min(rig.legL.semelle.getWorldPosition(new T.Vector3()).y, rig.legR.semelle.getWorldPosition(new T.Vector3()).y).toFixed(3) }; };
+      rig.accroupi = false; G.P.accroupi = false; anime(120); res.debout = pose();
+      bt(6, 1); G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true);
+      res.baisseEtat = { accroupi: !!G.P.accroupi, classe: document.body.classList.contains('accroupi') };
+      anime(150); res.baisse = pose();
+      res.esquive = G.defenseJoueur(20, 0, -1, true);        // un coup de face : il passe au-dessus
+      res.gachetteNeBougePas = (() => { G.P.vel.set(0, 0, 0); G.cam.yaw = 0;
+        for (let i = 0; i < 40; i++) { G.P.pos.set(0, 0.5, 8); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+        return +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2); })();
+      bt(6, 0); G.pollGamepad(1 / 60); G.step(1 / 60, true);
+      res.releve = { accroupi: !!G.P.accroupi };
+      anime(200); res.apres = pose();
+      // ---- L1 : garde quand l'arme est rangee, visee quand elle est braquee (un seul bouton,
+      // deux etats qui ne peuvent pas coexister : setGarde refuse la garde une arme au poing)
+      bt(4, 1); G.pollGamepad(1 / 60); res.l1Garde = !!G.P.garde;
+      bt(4, 0); G.pollGamepad(1 / 60); res.l1Lache = !!G.P.garde;
+      G.P.drawn = true; G.P.aimToggle = false; clic(4);
+      res.l1Arme = { vise: !!G.P.aimToggle, garde: !!G.P.garde };
+      G.P.drawn = false; G.P.aimToggle = false; G.pollGamepad(1 / 60);
+      // ---- ▢ A PIED : ca frappe toujours (le carre ne sert a l'helico QUE dans l'helico)
+      G.keys.delete('KeyV'); bt(2, 1); G.pollGamepad(1 / 60);
+      res.carrePied = G.keys.has('KeyV');
+      bt(2, 0); G.pollGamepad(1 / 60);
+      // ---- ▢ EN HELICO : SE POSER
+      const h = (G.city.cars || []).find(v => v.heli);
+      res.helico = !!h;
+      if (h) {
+        G.P.pos.set(h.x, h.y + 0.3, h.z); G.enterCar(h);
+        h.dmg = 0; h.y = 60; h.vy = h.vx = h.vz = 0; h.landed = false; h.poser = false;
+        res.solSous = +G.heliSolSous(h).toFixed(2);
+        clic(2); res.enclenche = !!h.poser;
+        let n = 0, vyMin = 0;
+        for (; n < 3000 && !h.landed; n++) { G.heliStep(1 / 60); vyMin = Math.min(vyMin, h.vy); }
+        res.descente = { secondes: +(n / 60).toFixed(1), pose: !!h.landed, y: +h.y.toFixed(2),
+          vyMax: +(-vyMin).toFixed(2), degats: +(h.dmg || 0).toFixed(1), consigneRendue: !h.poser };
+        // ◯ (monter) reprend la main : on annule l'atterrissage
+        h.y = 40; h.landed = false; h.vy = 0; clic(2); res.enclenche2 = !!h.poser;
+        G.pad.a = true; G.heliStep(1 / 60); res.annuleParRond = !h.poser; G.pad.a = false;
+        // L2 fait descendre l'helico, comme elle freine en voiture et baisse le joueur a pied
+        h.y = 40; h.vy = 0; h.poser = false; bt(6, 1); G.pollGamepad(1 / 60);
+        for (let i = 0; i < 30; i++) G.heliStep(1 / 60);
+        res.l2Descend = +h.vy.toFixed(2); bt(6, 0); G.pollGamepad(1 / 60);
+        h.y = 0.2; h.landed = true; G.exitCar();
+      }
+      // ---- AUCUNE COLLISION DANS LE PLAN DE COMMANDES : un bouton = un role
+      const doubles = [];
+      const pris = {};
+      for (const [i, k] of Object.entries(G.PAD_MAP)) { if (pris[i]) doubles.push(i); pris[i] = 'touche ' + k; }
+      for (const i of Object.keys(G.PAD_CROIX)) { if (pris[i]) doubles.push(i); pris[i] = 'croix'; }
+      res.doubles = doubles;
+      res.plan = { croix: G.PAD_MAP[0], rond: G.PAD_MAP[1], carre: G.PAD_MAP[2], triangle: G.PAD_MAP[3],
+        gauche: G.PAD_CROIX[14], droite: G.PAD_CROIX[15], pave: G.PAD_CROIX[17] };
+      res.roles = G.PT_ROLES;
+      res.axes = (G.PT_AXES || []).map(a => a[0]);
+      res.legende = (document.getElementById('padLeg') || {}).textContent || '';
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; ferme(); }
+  });
+  const d = r.descente || {}, pl = r.plan || {};
+  const descendu = +(r.baisse.baisse - r.debout.baisse).toFixed(3);
+  const ok = // se baisser
+       r.baisseEtat.accroupi && r.baisseEtat.classe && descendu > 0.15 && r.baisse.genou > 1.4
+    // « semelles au sol » : la remontee du pied dans le squelette compense EXACTEMENT
+    // l'abaissement du bassin (le groupe descend de rig.baisse a la mise en place), donc le
+    // pied reste pose au sol dans le monde. On verifie que les deux se compensent au cm pres.
+    && Math.abs((r.baisse.semelle - r.debout.semelle) - descendu) < 0.012
+    && r.esquive.esquive === true && r.esquive.dmg === 0
+    && r.gachetteNeBougePas === 0 && !r.releve.accroupi && r.apres.baisse < 0.02
+    // L1 : garde / visee
+    && r.l1Garde && !r.l1Lache && r.l1Arme.vise && !r.l1Arme.garde
+    // le carre : frapper a pied, se poser en helico
+    && r.carrePied && r.helico && r.enclenche && d.pose && d.y < 1 && d.vyMax <= 3 && d.degats === 0
+    && d.consigneRendue && r.enclenche2 && r.annuleParRond && r.l2Descend < -3
+    // aucun bouton a deux roles
+    && r.doubles.length === 0 && pl.croix === 'KeyG' && pl.rond === 'Space' && pl.carre === 'KeyV' && pl.triangle === 'KeyE'
+    && pl.gauche === 'armePrec' && pl.droite === 'armeSuiv' && pl.pave === 'aide'
+    && /atterrir/.test(r.roles[2]) && /baisser/.test(r.roles[6]) && /garde/.test(r.roles[4])
+    && /se baisser/.test(r.legende) && /atterrir/.test(r.legende);
+  return { ok, detail: `le geste de se baisser existait (bassin abaisse, genoux plies, semelles au sol) mais n'avait aucun bouton de manette : il est sur L2, la gachette liberee par le passage de la marche au stick gauche · L2 enfoncee, le bassin descend de ${descendu} m, les genoux se plient a ${r.baisse.genou} rad, les semelles restent posees au sol (le pied remonte de ${+(r.baisse.semelle - r.debout.semelle).toFixed(3)} m dans le squelette, exactement ce dont le bassin descend), un coup de face ne fait plus aucun degat (${r.esquive.dmg}) et le personnage ne se deplace pas d'un centimetre (${r.gachetteNeBougePas} m/s) ; lachee, il se releve (${r.apres.baisse} m) · L1 leve la garde arme rangee et vise arme braquee, sans jamais les deux · le carre frappe a pied et POSE l'helicoptere : lance de 60 m, il descend a ${d.vyMax} m/s au plus (le seuil de casse est a 3), touche le sol en ${d.secondes} s a ${d.y} m avec ${d.degats} degat, et rend la main ; ◯ annule la descente et L2 fait descendre a ${r.l2Descend} m/s · aucun des 18 boutons n'a deux roles (${r.doubles.length} collision)` };
+});
+
+// ===================== POSTE INFRASTRUCTURE (round 68) =====================
+// L'enfant : « escalier banque pas finit … ajoute la dernière partie de l'escalier pour que
+// le joueur puisse atteindre le deuxième étage ». Le test précédent (« les escaliers de la
+// banque ne rasent plus le mur ») ne mesurait que l'écartement au mur : un escalier peut le
+// respecter et rester INGRAVISSABLE. Celui-ci FAIT MONTER le joueur, image par image, du
+// hall jusqu'à la salle des coffres, et exige qu'il y arrive.
+test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -56, y: 1, z: 66, hour: 12, frais: true });
+    const bk = G.city.bank;
+    if (!bk || !bk.esc || bk.esc.length < 2) return { manque: true };
+    const e0 = bk.esc[0], e1 = bk.esc[1], journal = [];
+    let ymax = G.P.pos.y;
+    // on tient « avancer » en pointant la caméra sur le point visé : avancer va vers
+    // (-sin yaw, -cos yaw). En temps SIMULÉ, comme grimpe(), pour ne pas dépendre du rendu.
+    const marcher = (tx, tz, secondes) => {
+      G.keys.add('ArrowUp');
+      for (let i = 0; i < secondes * 60; i++) {
+        G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9;
+        G.step(1 / 60, true);
+        if (G.P.pos.y > ymax) ymax = G.P.pos.y;
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.8) break;
+      }
+      G.keys.delete('ArrowUp');
+      journal.push(`${G.P.pos.y.toFixed(2)} m`);
+    };
+    marcher(e0.bas[0] + 0.8, e0.bas[1], 10);      // le pied de la volée du hall
+    marcher(e0.haut[0] + 1.2, e0.haut[1], 16);    // on la monte jusqu'au palier du 1ᵉʳ
+    const y1 = G.P.pos.y;
+    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
+    marcher(bk.x + 6.5, e1.bas[1] - 0.8, 10);
+    marcher(e1.bas[0], e1.bas[1], 10);            // le pied de la volée du 2ᵉ
+    marcher(e1.haut[0], e1.haut[1], 18);          // et on monte aux coffres
+    const c = (G.city.safes || [])[0];
+    // hauteur et profondeur des marches : la règle des autres escaliers du jeu
+    const marches = bk.esc.map(e => {
+      const m = G.solids.filter(o => Math.abs(o.z - e.z) < 0.4 && Math.abs(o.d - 3.6) < 0.3
+        && o.w > 1.3 && o.w < 1.8 && o.y > e.y0 - 1 && o.y < e.y1 + 1).sort((a, b) => a.y - b.y);
+      return { n: m.length, haut: +m[0].h.toFixed(3), giron: +(m[0].w - 0.06).toFixed(2) };
+    });
+    // LE PALIER D'ARRIVÉE : du marbre continu, aussi large que la volée, entre la dernière
+    // marche et le mur. On relève le plus grand VIDE rencontré sur ce trajet (avant, la
+    // dernière marche s'arrêtait 47 cm avant la dalle : l'escalier finissait en l'air).
+    const paliers = bk.esc.map(e => {
+      const sens = e.haut[0] > e.bas[0] ? 1 : -1, mur = bk.x + sens * (bk.w / 2 - 0.4);
+      let vide = 0, pire = 0, n = 0;
+      for (let d = 0; d <= Math.abs(mur - e.haut[0]) - 0.25; d += 0.1) {
+        for (const dz of [-1.5, 0, 1.5]) {
+          n++;
+          if (Math.abs(G.groundUnder(e.haut[0] + sens * d, e.z + dz, null, e.y1 + 0.4) - e.y1) < 0.06) vide = 0;
+          else { vide += dz === 0 ? 0.1 : 0; pire = Math.max(pire, vide); }
+        }
+      }
+      return { pire: +pire.toFixed(2), n };
+    });
+    return { y1: +y1.toFixed(2), y2: +G.P.pos.y.toFixed(2), ymax: +ymax.toFixed(2), journal,
+      etage2: c ? +c.y.toFixed(2) : null, distCoffre: c ? +Math.hypot(G.P.pos.x - c.x, G.P.pos.z - c.z).toFixed(1) : null,
+      marches, paliers };
+  });
+  if (r.manque) return { ok: false, detail: 'la banque n\'a pas d\'escalier enregistré' };
+  const monte1 = r.y1 > 4.9, monte2 = r.y2 > r.etage2 - 0.15;
+  const bonnesMarches = r.marches.every(m => m.n >= 8 && m.haut <= 0.52 && m.giron >= 0.55);
+  const bonsPaliers = r.paliers.every(v => v.pire === 0);
+  return { ok: monte1 && monte2 && bonnesMarches && bonsPaliers,
+    detail: `du hall (0,85 m) au 1ᵉʳ étage : ${r.y1} m, puis jusqu'aux coffres : ${r.y2} m (2ᵉ étage à ${r.etage2} m, coffre le plus proche à ${r.distCoffre} m) · étapes ${r.journal.join(' → ')} · marches ${r.marches.map(m => `${m.n} × ${m.haut} m de haut, ${m.giron} m de giron`).join(' et ')} (limite de la maison : 0,52 m de haut) · palier d'arrivée : plus aucun vide entre la dernière marche et le mur, sur toute la largeur de la volée (plus grand trou ${r.paliers.map(v => v.pire + ' m').join(' et ')}, contre 0,47 m avant)` };
+});
+
+// L'enfant : « enlève le panneau … et le panneau MONDE qui cache le tableau gris ». La carte
+// du monde était plantée à 3 cm DEVANT le tableau, pile là où la maîtresse écrit la réponse
+// à la craie ; d'autres pancartes mordaient encore dessus. Le test mesure, salle par salle,
+// la SURFACE de craie recouverte par le mobilier de la classe — et exige zéro.
+test('rien ne cache le tableau gris des salles de l\'école', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 213, hour: 12, frais: true });
+    const bb = new G.THREE.Box3(), salles = [];
+    for (const room of (G.city.classes || [])) {
+      const t = room.tableau, bz = t.position.z, bx = t.position.x;
+      // la surface écrite : le plan de 5,40 × 2,45 m posé à 2,25 m du sol
+      const x1 = bx - 2.7, x2 = bx + 2.7, y1 = 2.25 - 1.225, y2 = 2.25 + 1.225;
+      let aire = 0; const pires = [];
+      G.worldGroup.traverse(o => {
+        if (!o.isMesh || o === t) return;
+        bb.setFromObject(o);
+        if (bb.max.z <= bz + 0.002 || bb.min.z > bz + 2.5) return;   // seulement ce qui est DEVANT le tableau
+        if (bb.max.x < x1 || bb.min.x > x2 || bb.max.y < y1 || bb.min.y > y2) return;
+        const a = (Math.min(bb.max.x, x2) - Math.max(bb.min.x, x1)) * (Math.min(bb.max.y, y2) - Math.max(bb.min.y, y1));
+        aire += a; pires.push(`${a.toFixed(2)} m² en x ${bb.min.x.toFixed(1)}→${bb.max.x.toFixed(1)}`);
+      });
+      salles.push({ subj: room.subj, aire: +aire.toFixed(2), pires: pires.slice(0, 3), props: (room.props || []).length });
+    }
+    return { salles, total: +salles.reduce((s, v) => s + v.aire, 0).toFixed(2) };
+  });
+  const ok = r.salles.length === 4 && r.salles.every(s => s.aire === 0) && r.salles.every(s => s.props >= 3);
+  return { ok, detail: `surface du tableau (13,23 m²) masquée par le mobilier, salle par salle : ${r.salles.map(s => `${s.subj} ${s.aire} m²${s.pires.length ? ' (' + s.pires.join(', ') + ')' : ''}`).join(' · ')} — avant : math 1,69, géo 3,53, logique 1,69, culture 2,65 m² · total ${r.total} m², et chaque salle garde son mobilier pédagogique (${r.salles.map(s => s.props).join('/')} objets)` };
+});
+
+test('la dépanneuse charge vraiment l\'épave SUR son plateau, la remorque, la stationne et la répare dix secondes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const d = (G.city.depanneuses || [])[0];
+    if (!d) return { manque: true };
+    d.mission = null; d.remorque = null; d.depCible = null; d.dep = 0;
+    const A = G.city.cars.find(c => !c.kind && !c.heli && !c.travail && c !== G.drive.car);
+    const B = G.city.cars.find(c => c !== A && !c.kind && !c.heli && !c.travail);
+    if (!A || !B) return { manque: true };
+    const loin = [d.home0[0] + 70, d.home0[1] + 30];
+    A.dmg = 80; B.dmg = 5; A.busy = true; B.busy = true;   // 80 > DEGATS_SUR_PLACE : c'est un REMORQUAGE
+    A.x = loin[0] + 3; A.z = loin[1]; A.h = 0; A.g.position.set(A.x, A.y || 0, A.z);
+    B.x = loin[0] + 9; B.z = loin[1]; B.g.position.set(B.x, B.y || 0, B.z);
+    d.x = loin[0]; d.z = loin[1]; d.g.position.set(d.x, d.y || 0, d.z);
+    const m = G.depanneuseAppel({ a: A, b: B, x: loin[0], z: loin[1], joueur: false });
+    if (!m) return { manque: true };
+    // HAUTEUR DE L'ÉPAVE AU-DESSUS DE L'ASSIETTE DU CAMION : c'est la mesure qui dit si elle
+    // est SUR le plateau (0,94 m, la hauteur de la tôle) ou traînée AU SOL (0 m).
+    const dessus = () => +(A.y - (d.y || 0)).toFixed(2);
+    const recul = () => +Math.hypot(A.x - d.x, A.z - d.z).toFixed(2);
+    const phases = [];
+    let hautMax = 0, hautGarage = null, reparT = 0, reparVu = 0, tGarage = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      G.simTime += 1 / 30; G.depanneusesTick(1 / 30); G.animMondeTick(1 / 30);
+      if (!phases.length || phases[phases.length - 1] !== m.phase) phases.push(m.phase);
+      if (A.y - (d.y || 0) > hautMax) hautMax = +(A.y - (d.y || 0)).toFixed(2);
+      if (m.phase === 'garage') { hautGarage = dessus(); tGarage = recul(); }
+      if (m.phase === 'garageRepare') { reparT += 1 / 30; if (G.ANIM.reparateurs.length) reparVu++; }
+      if (m.fini && m.phase === 'retour') break;
+    }
+    return { phases, hautMax, hautGarage, reculGarage: tGarage, reparT: +reparT.toFixed(1), reparVu,
+      mode: m.mode, fini: !!m.fini, dmgFinal: A.dmg, capotRange: A.parts && +A.parts.hood.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque && r.mode === 'remorque'
+    && r.phases.indexOf('treuil') >= 0 && r.phases.indexOf('garage') >= 0
+    && r.phases.indexOf('depose') >= 0 && r.phases.indexOf('garageRepare') >= 0
+    && r.hautMax > 0.8 && r.hautGarage > 0.8 && r.reculGarage < 2.2
+    && r.reparT >= 9.5 && r.reparVu > 250 && r.fini && r.dmgFinal === 0 && r.capotRange === 0;
+  return { ok, detail: `le treuillage n'était qu'une attente de 2,5 s : l'épave se téléportait DERRIÈRE le camion, roues au sol, et le garage la réparait en une image · maintenant le plateau s'incline en rampe, le crochet descend et l'épave MONTE : ${r.hautMax} m au-dessus de l'assiette du camion, à ${r.reculGarage} m de son centre (elle est SUR la tôle), phases traversées ${JSON.stringify(r.phases)}, réparation au garage ${r.reparT} s avec un réparateur visible sur ${r.reparVu} images, capot refermé (${r.capotRange} rad) et dégâts ${r.dmgFinal}` };
+});
+
+test('le réparateur se penche tête au-dessus du capot ouvert et bouge ses bras avec sa clé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.makeCar(0x4f8dff, G.P.pos.x + 4, G.P.pos.z, 0);
+    const rep = G.reparateurArrive(c, G.REPAR_DUREE, null);
+    if (!rep) return { manque: true };
+    const rig = rep.av.rig;
+    const ech = [];
+    for (let i = 0; i < 60 * 10; i++) {
+      G.simTime += 1 / 60;
+      G.reparateurTick(rep, 1 / 60);
+      ech.push({ capot: c.parts.hood.rotation.x, buste: rep.av.group.rotation.x,
+        tete: rig.head.rotation.x, brasD: rig.armR.rotation.x, coudeD: rig.armR.coude.rotation.x });
+    }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const outil = rep.av.outilNom;
+    const res = { capot: st('capot'), buste: st('buste'), tete: st('tete'), brasD: st('brasD'), coudeD: st('coudeD'),
+      outil, images: ech.length, encore: G.ANIM.reparateurs.length };
+    G.reparateurRange(rep);
+    res.apres = G.ANIM.reparateurs.length;
+    return res;
+  });
+  const ok = !r.manque && r.outil === 'cle'
+    && r.capot.amp > 1 && r.capot.pasMax < 0.06
+    && r.buste.max > 0.55 && r.tete.max > 0.55
+    && r.coudeD.amp > 0.5 && r.coudeD.pasMax < 0.12
+    && r.brasD.amp > 0.3 && r.brasD.pasMax < 0.12
+    && r.encore === 1 && r.apres === 0;
+  return { ok, detail: `la réparation ne se VOYAIT pas : la dépanneuse s'arrêtait 2,5 s et les dégâts tombaient à zéro tout seuls · maintenant un employé municipal arrive clé à la main (outil « ${r.outil} »), le capot s'ouvre sur sa charnière (${r.capot.amp} rad, pas max ${r.capot.pasMax} rad/image), il plonge le buste à ${r.buste.max} rad et la tête à ${r.tete.max} rad AU-DESSUS du moteur, et son coude droit serre (${r.coudeD.amp} rad d'amplitude, ${r.coudeD.pasMax} rad/image) sur ${r.images} images = 10 s` };
+});
+
+test('la pelleteuse creuse pour de vrai : godet chargé de terre, trou qui s\'agrandit, tas qui monte', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    G.ANIM.trous.length = 0;
+    // l'engin mesuré reste HORS de city.cars : sinon la boucle de rendu du jeu ferait avancer
+    // le cycle une deuxième fois, avec son propre dt, et le pas par image n'aurait aucun sens
+    const c = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 30, G.P.pos.z, 0);
+    G.enginCreuseTick && null;
+    if (!G.enginCreuse(c)) return { manque: true };
+    const trou = c.creuse.trou;
+    if (!trou) return { manque: true };
+    const o = c.outils;
+    const cle = { bras: () => o.bras.rotation.x, avant: () => o.avantBras.rotation.x,
+      godet: () => o.godet.rotation.x, tour: () => o.tourelle.rotation.y };
+    const ech = []; let terreVue = 0;
+    G.enginCreuseTick(c, 0);
+    const lire = () => { const e = {}; for (const k in cle) e[k] = cle[k](); return e; };
+    ech.push(lire());
+    for (let i = 0; i < 280; i++) { if (c.creuse) G.enginCreuseTick(c, 1 / 60); if (o.terre && o.terre.visible) terreVue++; ech.push(lire()); }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const un = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    for (let k = 0; k < 3; k++) { G.enginCreuse(c); for (let i = 0; i < 280 && c.creuse; i++) G.enginCreuseTick(c, 1 / 60); }
+    const quatre = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    return { godet: st('godet'), bras: st('bras'), avant: st('avant'), tour: st('tour'),
+      terreVue, images: ech.length, un, quatre, trous: G.ANIM.trous.length, reposGodet: +o.godet.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque
+    && r.godet.amp > 1.5 && r.godet.pasMax < 0.1
+    && r.bras.amp > 0.7 && r.bras.pasMax < 0.06
+    && r.tour.amp > 0.8 && r.tour.pasMax < 0.06
+    && r.terreVue > 90
+    && r.un.n === 1 && r.quatre.n === 4
+    && r.quatre.r > r.un.r && r.quatre.prof > r.un.prof && r.quatre.tas > r.un.tas
+    && r.trous === 1 && Math.abs(r.reposGodet + 0.7) < 0.01;
+  return { ok, detail: `l'outil de la pelleteuse n'était qu'un curseur 0 → 1 : le bras se dépliait et RIEN ne se passait — pas de terre, pas de trou, pas de tas · maintenant un cycle complet de 4,2 s (godet ${r.godet.amp} rad d'amplitude, ${r.godet.pasMax} rad/image au plus ; bras ${r.bras.amp} rad ; tourelle ${r.tour.amp} rad), la TERRE est visible dans le godet sur ${r.terreVue} des ${r.images} images, et après 1 puis 4 godets le trou passe de ${r.un.r} à ${r.quatre.r} m de rayon et de ${r.un.prof} à ${r.quatre.prof} m de profondeur pendant que le tas monte de ${r.un.tas} à ${r.quatre.tas} m` };
+});
+
+test('la grue lève sa charge et le bulldozer pousse son andain, chacun sans à-coup', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const st = (ech, k) => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const gr = G.makeVehiculeTravail('grue', 0xffd23f, G.P.pos.x + 44, G.P.pos.z, 0);
+    if (!G.enginLeve(gr)) return { manque: true };
+    const og = gr.outils, eg = []; let charge = 0;
+    G.enginLeveTick(gr, 0);
+    const lg = () => ({ tour: og.tourelle.rotation.y, crochet: og.crochet.position.y, fleche: og.fleche.rotation.x });
+    eg.push(lg());
+    for (let i = 0; i < 480; i++) { if (gr.leve) G.enginLeveTick(gr, 1 / 60); if (og.charge && og.charge.visible) charge++; eg.push(lg()); }
+    const bu = G.makeVehiculeTravail('bulldozer', 0xffd23f, G.P.pos.x + 58, G.P.pos.z, 0);
+    bu.spd = 6; G.enginLame(bu);
+    const ob = bu.outils, eb = []; let andain = 0;
+    G.enginLameTick(bu, 0);
+    const lb = () => ({ lameY: ob.lame.position.y, andainH: ob.andain.scale.y });
+    eb.push(lb());
+    for (let i = 0; i < 240; i++) { G.enginLameTick(bu, 1 / 60); if (ob.andain.visible) andain++; eb.push(lb()); }
+    return { grue: { tour: st(eg, 'tour'), crochet: st(eg, 'crochet'), charge, images: eg.length, reposCrochet: +og.crochet.position.y.toFixed(3) },
+      bull: { lame: st(eb, 'lameY'), andainH: st(eb, 'andainH'), andain, images: eb.length } };
+  });
+  const ok = !r.manque
+    && r.grue.tour.amp > 1.2 && r.grue.tour.pasMax < 0.06
+    && r.grue.crochet.amp > 3 && r.grue.crochet.pasMax < 0.1
+    && r.grue.charge > 150 && Math.abs(r.grue.reposCrochet + 0.2) < 0.01
+    && r.bull.lame.amp > 0.8 && r.bull.lame.pasMax < 0.04
+    && r.bull.andainH.amp > 0.8 && r.bull.andainH.pasMax < 0.04 && r.bull.andain > 100;
+  return { ok, detail: `la grue tournait à vide (aucune charge au crochet) et le bulldozer n'existait pas · grue : tourelle ${r.grue.tour.amp} rad (${r.grue.tour.pasMax} rad/image), crochet ${r.grue.crochet.amp} m (${r.grue.crochet.pasMax} m/image), charge visible sur ${r.grue.charge} des ${r.grue.images} images et crochet rendu à sa hauteur de repos (${r.grue.reposCrochet}) · bulldozer : lame ${r.bull.lame.amp} m (${r.bull.lame.pasMax} m/image) et andain qui grossit de ${r.bull.andainH.amp} sur ${r.bull.andain} images` };
+});
+
+test('démolir une voiture de police avec un engin de chantier met trois étoiles de recherche', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12, frais: true });
+    G.clearWanted();
+    const pelle = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 26, G.P.pos.z, 0);
+    G.city.cars.push(pelle);
+    // une voiture ORDINAIRE d'abord : elle casse, mais sans trois étoiles
+    const civ = G.makeCar(0x4f8dff, pelle.x, pelle.z + 6.4, 0); G.city.cars.push(civ);
+    civ.dmg = 0; civ.dead = false;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 120 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    const civApres = { dmg: Math.round(civ.dmg), etoiles: G.police.wanted };
+    G.clearWanted(); civ.x = pelle.x + 60; civ.z = pelle.z; civ.g.position.set(civ.x, civ.y || 0, civ.z);
+    // puis une VOITURE DE POLICE
+    // une voiture de police se reconnaît comme le jeu la reconnaît : son solide porte `pol`
+    // et elle appartient à la flotte `police.cars`
+    const pc = G.makeCar(0xf4f6fa, pelle.x, pelle.z + 6.4, 0, { police: true });
+    pc.dmg = 0; pc.dead = false; pc.solid.pol = true; G.police.cars.push(pc);
+    const avant = G.police.wanted;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 200 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    return { civApres, avant, apres: G.police.wanted, dmgPolice: Math.round(pc.dmg), alerte: !!pc.enginAlerte };
+  });
+  const ok = r.civApres.dmg > 20 && r.avant === 0 && r.apres === 3 && r.dmgPolice > 20 && r.alerte;
+  return { ok, detail: `le joueur demandait de pouvoir « démolir un véhicule (même police, qui déclenche une alerte 3 étoiles) » : aucun engin ne faisait le moindre dégât à un véhicule · le godet d'une pelleteuse inflige maintenant 52 points de dégâts par seconde à 6,4 m devant elle (voiture ordinaire : ${r.civApres.dmg} points, ${r.civApres.etoiles} étoile(s)) et, sur une voiture de POLICE, l'alerte part sans avertissement : ${r.avant} → ${r.apres} étoiles pour ${r.dmgPolice} points de dégâts` };
+});
+
+test('le coup qui met à terre passe au ralenti pendant trois secondes de temps réel, et pas deux fois de suite', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const R = G.RALENTI;
+    R.t = 0; R.fige = null; R.prochain = 0;
+    const normal = G.ralentiEchelle(1 / 60);
+    const arme = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    // un DEUXIÈME coup pendant le ralenti doit être refusé : sinon chaque échange rallongeait
+    const pendant = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    const ech = []; let reel = 0, cam = 0;
+    const cp = () => ({ x: G.camera.position.x, y: G.camera.position.y, z: G.camera.position.z });
+    const angles = [];
+    for (let i = 0; i < 400; i++) {
+      const k = G.ralentiEchelle(1 / 60); reel += 1 / 60; ech.push({ t: +reel.toFixed(3), k });
+      if (k < 1) { if (G.ralentiCam()) { cam++; const c = cp(); angles.push(+Math.atan2(c.x - G.P.pos.x, c.z - (G.P.pos.z + 1)).toFixed(3)); } }
+    }
+    let fin = 0, mini = 1;
+    for (const e of ech) { if (e.k < 0.999) { fin = e.t; if (e.k < mini) mini = e.k; } }
+    let pasMax = 0; for (let i = 1; i < ech.length; i++) pasMax = Math.max(pasMax, Math.abs(ech[i].k - ech[i - 1].k));
+    // balayage de la caméra : l'écart entre le premier et le dernier angle
+    let balayage = 0;
+    if (angles.length > 2) { let d = angles[angles.length - 1] - angles[0]; balayage = +Math.abs(Math.atan2(Math.sin(d), Math.cos(d))).toFixed(3); }
+    // après le ralenti, l'échelle est revenue à 1 et un nouveau coup reste refusé (repos)
+    const apresEchelle = G.ralentiEchelle(1 / 60);
+    const apresRepos = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    R.t = 0; R.prochain = 0;
+    return { normal, arme, pendant, fin: +fin.toFixed(2), mini: +mini.toFixed(3), pasMax: +pasMax.toFixed(4),
+      camImages: cam, balayage, apresEchelle, apresRepos, duree: G.RALENTI_DUREE };
+  });
+  const ok = r.normal === 1 && r.arme === true && r.pendant === false
+    && r.fin > 2.7 && r.fin < 3.2 && r.mini < 0.32 && r.mini > 0.28
+    && r.pasMax < 0.06 && r.camImages > 150 && r.balayage > 0.8
+    && r.apresEchelle === 1 && r.apresRepos === false;
+  return { ok, detail: `« mets des ralentis (3 secondes) au dernier coup vainqueur » : hors ralenti le temps tourne à ${r.normal}× · le coup qui met à terre le ralentit jusqu'à ${r.mini}× et rend la main après ${r.fin} s de TEMPS RÉEL (le décompte se fait sur l'horloge du rendu, pas sur celle du jeu, sinon le ralenti se ralentissait lui-même), avec une entrée et une sortie en fondu (${r.pasMax} d'écart au plus d'une image à l'autre) · la caméra de cinéma a pris la main sur ${r.camImages} images et a BALAYÉ ${r.balayage} rad autour du point d'impact · un deuxième coup pendant le ralenti (${r.pendant}) ou juste après (${r.apresRepos}) ne le relance pas` };
+});
+
+// ---- POSTE VÉHICULES : on ne reste plus coincé contre un mur ----
+// Le joueur : « libère les blocages, quand le véhicule touche un obstacle laisse-lui la
+// possibilité de rebondir et se libérer pour repartir, mets-lui un petit dégât de carrosserie,
+// durabilité de vie du véhicule plus longue ». Le déplacement se testait à la position
+// D'ARRIVÉE : dès que la caisse mordait dans un obstacle, TOUTES les destinations étaient
+// refusées — marche arrière comprise — et le véhicule restait planté là pour de bon.
+test('un véhicule coincé contre un mur s\'en dégage toujours, et la carrosserie encaisse bien plus longtemps', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city.cars.find(v => !v.heli && !v.kind && !v.travail && !v.kart);
+    const b = G.city.batiments.filter(x => x.w > 6 && x.d > 6)
+      .sort((a, x) => Math.hypot(a.x, a.z) - Math.hypot(x.x, x.z))[0];
+    if (!c || !b) return { pourquoi: 'aucune voiture ou aucun bâtiment à portée' };
+    // on écarte tout ce qui roule autour : le piège doit être CELUI qu'on pose, pas le hasard
+    const autres = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - b.x, a.z - b.z) > 60) continue;
+      autres.push([a, a.x, a.z]); a.x += 700; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
+    const [vr, vL] = G.vehHalf(c);
+    const dansUnMur = () => (G.city.batiments || []).some(q => Math.abs(c.x - q.x) < q.w / 2 && Math.abs(c.z - q.z) < q.d / 2);
+    const pose = (x, z, h) => {
+      c.dmg = 0; c.deg = 0; c.dead = false; c.accidente = false; c.busy = false;
+      c.hitT = 0; c.rebondT = 0; c.coinceT = 0;
+      c.x = x; c.z = z; c.h = h; c.y = G.groundUnder(x, z, c.solid, 1);
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
+      G.P.pos.set(x, c.y + 0.5, z); if (G.drive.car !== c) G.enterCar(c); G.drive.speed = 0;
+    };
+    const jouer = (cmd, n) => { for (let i = 0; i < n; i++) { G.simTime += 1 / 60; G.conduire(c, cmd, 1 / 60); } };
+    const essai = (nom, x, z, h, voisines) => {
+      pose(x, z, h);
+      for (const [v, dx, dz] of (voisines || [])) { v.x = x + dx; v.z = z + dz; v.h = h; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      const piege = G.carBlocked(c.x, c.z, c.solid, vr, {}, c.y, c.h, vL), x0 = c.x, z0 = c.z;
+      jouer({ gaz: 1, volant: 0, frein: 0 }, 60);   // 1 s : on insiste au gaz, comme un enfant
+      let d = 0;                                     // puis on se dégage : avant / arrière, roues braquées
+      for (let k = 0; k < 4; k++) {
+        jouer({ gaz: -1, volant: 1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+        jouer({ gaz: 1, volant: -1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+      }
+      const res = { nom, piege, sorti: +d.toFixed(2), mur: dansUnMur(), dmg: +c.dmg.toFixed(1), epave: !!c.dead };
+      for (const [v] of (voisines || [])) { v.x += 700; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      return res;
+    };
+    const zf = b.z + b.d / 2, xf = b.x + b.w / 2;
+    const pieges = [
+      essai('nez contre la façade', b.x, zf + 1.6, Math.PI),
+      essai('caisse encastrée dans la façade', b.x, zf - 0.8, Math.PI),
+      essai('encastrée dans un angle', xf - 0.8, zf - 0.8, Math.PI - 0.7),
+      essai('en biais contre l\'angle extérieur', xf + 1.2, zf + 1.2, Math.PI - 0.78),
+      essai('entre deux voitures et la façade', b.x, zf + 2.4, Math.PI,
+        autres.length >= 2 ? [[autres[0][0], -2.5, 0], [autres[1][0], 2.5, 0]] : []),
+    ];
+    // UN choc : il doit marquer la tôle, mais rien qu'un peu
+    pose(b.x, zf + 9, Math.PI);
+    c.hitT = 0; G.drive.speed = 14;
+    for (let i = 0; i < 45 && c.dmg === 0; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+    const unChoc = +c.dmg.toFixed(2);
+    // DURABILITÉ : combien de murs pris à 14 m/s avant que la voiture ne soit bonne pour la casse ?
+    pose(b.x, zf + 9, Math.PI);
+    let chocs = 0;
+    for (let k = 0; k < 80 && !c.dead; k++) {
+      c.x = b.x; c.z = zf + 9; c.h = Math.PI; c.hitT = 0; c.coinceT = 0; c.rebondT = 0;
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c); G.drive.speed = 14;
+      for (let i = 0; i < 45 && !c.dead; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+      chocs = k + 1;
+    }
+    const epave = !!c.dead;
+    c.dmg = 0; c.deg = 0; c.dead = false; c.explosed = false;
+    try { G.repairVisual(c); } catch (e) {}
+    G.exitCar();
+    for (const [a, x, z] of autres) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { pieges, unChoc, chocs, epave };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const coinces = r.pieges.filter(x => x.sorti < 0.6 || x.mur);
+  const ok = r.pieges.length === 5 && r.pieges.filter(x => x.piege).length >= 4
+    && coinces.length === 0 && r.unChoc > 0 && r.unChoc <= 5 && r.chocs >= 18 && r.epave;
+  return { ok, detail: `le véhicule qui touchait un obstacle restait planté là DÉFINITIVEMENT : la collision se testait à la position d'arrivée, et une caisse qui mordait déjà dans un mur se voyait refuser toutes les destinations, marche arrière comprise (mesuré sur la branche d'avant : 0,00 m parcouru dans quatre pièges sur cinq, quoi qu'on fasse au volant) · il se DÉGAGE maintenant — la caisse est ressortie par le plus court chemin, elle rebond${''}it franchement un quart de seconde sur deux et pivote vers l'échappée si ça dure : ${r.pieges.map(x => `${x.nom} ${x.sorti} m`).join(' · ')}${coinces.length ? ' — ENCORE COINCÉ : ' + coinces.map(x => x.nom).join(', ') : ''} · le choc laisse un PETIT dégât (${r.unChoc} % à 50 km/h, contre 8,4 % avant) et la voiture encaisse ${r.chocs} murs à 14 m/s avant d'être bonne pour la casse (9 avant), sans devenir indestructible (épave au bout : ${r.epave})` };
 });

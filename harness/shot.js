@@ -439,6 +439,10 @@ window.__SHOT = {
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
+    // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
+    // normalement qu'a la demande, par le pave tactile) ; v.padTest ouvre « Tester la manette ».
+    if (v.aide) { document.body.classList.add('manette', 'city', 'aide'); }
+    if (v.padTest && typeof ouvreTestManette === 'function') { try { ouvreTestManette(); } catch (e16) {} }
     // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
     // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
     // enorme en mode tele). En plus rien ne le rallumait : une vue hideHud:false prise apres
@@ -496,6 +500,11 @@ window.__SHOT = {
     // serie d'instants successifs du meme geste (v.anim = { combat, u, garde, geste, t, opt }).
     if (typeof ANIM !== 'undefined' && ANIM) {
       ANIM.fige = v.anim || null;
+      if (typeof RALENTI !== 'undefined' && RALENTI) RALENTI.fige = null;
+      // poste Animation : plante une scene d'animation A L'ENDROIT DU JOUEUR et l'avance
+      // jusqu'a l'instant v.u (0 -> 1). v.scene = depanneuse | reparateur | creuse | grue |
+      // bulldozer | ralenti. Sans ca, aucune manoeuvre longue n'etait photographiable.
+      if (v.scene && typeof animScenePhoto === 'function') { try { animScenePhoto(v.scene, v.u); } catch (e16) {} }
       if (v.anim && v.anim.adversaire) {   // un adversaire plante devant le joueur, pour le combat
         try {
           const b = bots[0];
@@ -522,6 +531,20 @@ window.__SHOT = {
     }
     // poste FINITION : un itineraire GPS actif, pour photographier les chevrons au sol
     if (v.gps) { try { setBeacon(v.gps[0], v.gps[1], 0, 'mission'); gpsRoute.update(); } catch (e17) {} }
+    // poste INFRASTRUCTURE : v.classe = numero de salle (0 a 3), v.place = numero de chaise.
+    // On ASSOIT vraiment le joueur a une table d'ecolier, pour photographier ce que l'enfant
+    // voit pendant l'exercice : c'est la seule facon de verifier que le tableau reste degage.
+    if (v.classe != null) {
+      try {
+        const r = (city.classes || [])[v.classe] || (city.classes || [])[0];
+        if (r) {
+          const ch = r.chaises[v.place != null ? v.place : 1];
+          P.pos.set(ch.x, ch.y, ch.z); P.vel.set(0, 0, 0); cam.target.set(ch.x, ch.y + 1.5, ch.z);
+          sitBench(ch);
+          if (v.exercice && typeof openSchool === 'function') openSchool(r);
+        }
+      } catch (e18) {}
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -547,6 +570,16 @@ window.__G = {
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : 0,
   PAD_BOUTONS: typeof PAD_BOUTONS !== 'undefined' ? PAD_BOUTONS : 0,
   readInput: typeof readInput === 'function' ? readInput : null,
+  gachetteConduite: typeof gachetteConduite === 'function' ? gachetteConduite : null,
+  CONDUITE_V0: typeof CONDUITE_V0 !== 'undefined' ? CONDUITE_V0 : 0,
+  CONDUITE_V1: typeof CONDUITE_V1 !== 'undefined' ? CONDUITE_V1 : 0,
+  FREIN_PEDALE: typeof FREIN_PEDALE !== 'undefined' ? FREIN_PEDALE : 0,
+  FREIN_MAIN: typeof FREIN_MAIN !== 'undefined' ? FREIN_MAIN : 0,
+  heliPoser: typeof heliPoser === 'function' ? heliPoser : null,
+  heliSolSous: typeof heliSolSous === 'function' ? heliSolSous : null,
+  HELI_POSE_MAX: typeof HELI_POSE_MAX !== 'undefined' ? HELI_POSE_MAX : 0,
+  PT_AXES: typeof PT_AXES !== 'undefined' ? PT_AXES : null,
+  SPEED: typeof SPEED !== 'undefined' ? SPEED : 0,
   driveStep: typeof driveStep === 'function' ? driveStep : null,
   diffusion: typeof diffusion !== 'undefined' ? diffusion : null,
   diffusionMode: typeof diffusionMode === 'function' ? diffusionMode : null,
@@ -1330,6 +1363,32 @@ window.__G = {
   botHopital: typeof botHopital === 'function' ? botHopital : null,
   soinTick: typeof soinTick === 'function' ? soinTick : null,
   ANIM: typeof ANIM !== 'undefined' ? ANIM : null,
+  reparateurArrive: typeof reparateurArrive === 'function' ? reparateurArrive : null,
+  reparateurRange: typeof reparateurRange === 'function' ? reparateurRange : null,
+  reparateursTick: typeof reparateursTick === 'function' ? reparateursTick : null,
+  REPAR_DUREE: typeof REPAR_DUREE !== 'undefined' ? REPAR_DUREE : null,
+  enginCreuse: typeof enginCreuse === 'function' ? enginCreuse : null,
+  enginLeve: typeof enginLeve === 'function' ? enginLeve : null,
+  enginLame: typeof enginLame === 'function' ? enginLame : null,
+  enginsTick: typeof enginsTick === 'function' ? enginsTick : null,
+  enginCreuseTick: typeof enginCreuseTick === 'function' ? enginCreuseTick : null,
+  enginLeveTick: typeof enginLeveTick === 'function' ? enginLeveTick : null,
+  enginLameTick: typeof enginLameTick === 'function' ? enginLameTick : null,
+  reparateurTick: typeof reparateurTick === 'function' ? reparateurTick : null,
+  animScenePhoto: typeof animScenePhoto === 'function' ? animScenePhoto : null,
+  enginDemolit: typeof enginDemolit === 'function' ? enginDemolit : null,
+  creuseTrou: typeof creuseTrou === 'function' ? creuseTrou : null,
+  CREUSE_DUREE: typeof CREUSE_DUREE !== 'undefined' ? CREUSE_DUREE : null,
+  GRUE_DUREE: typeof GRUE_DUREE !== 'undefined' ? GRUE_DUREE : null,
+  RALENTI: typeof RALENTI !== 'undefined' ? RALENTI : null,
+  RALENTI_DUREE: typeof RALENTI_DUREE !== 'undefined' ? RALENTI_DUREE : null,
+  ralentiCoup: typeof ralentiCoup === 'function' ? ralentiCoup : null,
+  ralentiEchelle: typeof ralentiEchelle === 'function' ? ralentiEchelle : null,
+  ralentiCam: typeof ralentiCam === 'function' ? ralentiCam : null,
+  depanneusesTick: typeof depanneusesTick === 'function' ? depanneusesTick : null,
+  depanneuseAppel: typeof depanneuseAppel === 'function' ? depanneuseAppel : null,
+  makeVehiculeTravail: typeof makeVehiculeTravail === 'function' ? makeVehiculeTravail : null,
+  actionneOutil: typeof actionneOutil === 'function' ? actionneOutil : null,
   animPose: typeof animPose === 'function' ? animPose : null,
   animPres: typeof animPres === 'function' ? animPres : null,
   GESTES: typeof GESTES !== 'undefined' ? GESTES : null,
@@ -1446,6 +1505,7 @@ window.__G = {
   gapDevant: typeof gapDevant === 'function' ? gapDevant : null,
   carBlocked: typeof carBlocked === 'function' ? carBlocked : null,
   vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
+  degageVehicule: typeof degageVehicule === 'function' ? degageVehicule : null,
   roleVoie: typeof roleVoie === 'function' ? roleVoie : null,
   feuPhase: typeof feuPhase === 'function' ? feuPhase : null,
   FEU_CYCLE: typeof FEU_CYCLE !== 'undefined' ? FEU_CYCLE : null,

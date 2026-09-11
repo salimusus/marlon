@@ -13061,7 +13061,9 @@ test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène a
     const vue0 = G.carcasseARamasser() === v;                 // pas tout de suite : on laisse fumer
     let appel = -1, charge = -1, auGarage = -1, fin = -1, horsRoute = 0, nRoute = 0;
     let mode = null, tarif = null, carc = false, finGarage = -1;
-    for (let i = 0; i < 9000; i++) {
+    // 180 s simulées : l'enlèvement complet en prend une centaine (8 s d'appel, 30 s de route,
+    // le chargement, 35 s de retour, le déchargement et les dix secondes de réparation).
+    for (let i = 0; i < 3600; i++) {
       // cityStep : sans lui, les voitures de la circulation restent FIGÉES au milieu des rues
       // et bouchent le trajet de la dépanneuse (mesuré : 450 s sans jamais atteindre l'épave).
       G.simTime = G.simTime + DT; G.lightsTick(); G.cityStep(DT); G.servicesTick(DT);

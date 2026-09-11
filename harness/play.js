@@ -2354,7 +2354,15 @@ test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
     const vraiPeer = window.Peer;
     window.Peer = function () { this.on = () => {}; this.connect = () => ({ on: () => {}, open: false }); this.destroy = () => {}; };
     location.hash = '#jeu=KLMN';
-    await dodo(700);
+    // ON ATTEND LA CONNEXION, ON NE COMPTE PAS LES MILLISECONDES. Le lien pose un rendez-vous
+    // (`routeLien` appelle `joinGame` 400 ms plus tard, le temps que l'ecran se range) ; or le
+    // rendu logiciel du banc met plusieurs SECONDES par image, et l'evenement `hashchange`
+    // n'etait distribue qu'a la fin de l'image en cours — apres le delai fixe de 700 ms du
+    // test. On lisait donc « Solo (avec des bots) » et on croyait le lien casse, alors que la
+    // connexion demarrait une seconde plus tard. Mesure : la premiere lecture tombait a
+    // 6,4 s de temps reel, la connexion a 8,2 s.
+    let attente = 0;
+    while (attente < 60 && !/KLMN/.test(document.getElementById('mpStatus').textContent)) { await dodo(100); attente++; }
     const rempli = document.getElementById('codeIn').value;
     const statut = document.getElementById('mpStatus').textContent;
     __G.netTeardown && __G.netTeardown();
@@ -2363,7 +2371,9 @@ test('un lien #jeu=CODE fait rejoindre la partie sans rien taper', async p => {
     await dodo(200);
     // et le lien manette ouvre la télécommande
     location.hash = '#manette=WXYZ';
-    await dodo(400);
+    // meme raison : on attend que la telecommande s'ouvre, sans compter sur une duree
+    let att2 = 0;
+    while (att2 < 60 && !document.getElementById('manette').classList.contains('on')) { await dodo(100); att2++; }
     const man = { on: document.getElementById('manette').classList.contains('on'),
       code: document.getElementById('telCode').value };
     __G.manetteFerme();

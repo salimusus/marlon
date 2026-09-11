@@ -2349,7 +2349,7 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
 // à vélos du parc, la piste de rallye et les bases de gang. Le test « aucun véhicule n'est garé
 // hors d'une place prévue » la relit, rectangle par rectangle, GABARIT COMPRIS.
 //
-// LE NOUVEAU PARKING est au SUD de la ville, en (20, −80), sur le seul grand terrain plat,
+// LE NOUVEAU PARKING est au SUD de la ville, en (20, −85), le long du boulevard z = −100, sur le seul grand terrain plat,
 // libre et bordé de rue qu'il restait à moins de 90 m du centre (mesuré : 121 emplacements
 // candidats de 32 × 22 m dans toute la carte, celui-ci est le plus proche du centre après les
 // deux du sud). POUR LE POSTE QUI CONSTRUIT LE CONCESSIONNAIRE : je prends (20, −80) et ses
@@ -2369,6 +2369,15 @@ function parkingPublic(x, z, nom, cols) {
     }
     box(x, 0.17, zr + sg * PARK_PLACE_P / 2, W - 1.4, 0.02, 0.12, 0xf4f6fa, { deco: true, studs: false, noEdges: true, noShadow: true });
     for (let i = 0; i < cols; i++) places.push([x - W / 2 + 0.7 + (i + 0.5) * PARK_PLACE_L, zr, sg > 0 ? 0 : Math.PI]);
+  }
+  // L'ACCÈS DEPUIS LA RUE. Sans lui le parking était une dalle posée sur la pelouse à 6,60 m
+  // du bitume : on y arrivait en tout-terrain. On pave la bande qui va du bord sud de la dalle
+  // jusqu'au trottoir de la rue la plus proche, sur toute la largeur d'une entrée de parking.
+  const vp = voieProche(x, z);
+  if (vp) {
+    const bord = z + D / 2, vers = vp.pz;
+    if (vers > bord) { const L = vers - bord;
+      plat(x, 0.16, bord + L / 2, 9, L + 1, 0x565b66, { studs: false, noRoute: true }, 0.1); }
   }
   sign(x, 0.2, z - D / 2 - 1.4, '🅿️ ' + nom);
   city.zones.push({ name: nom, emoji: '🅿️', x1: x - W / 2, x2: x + W / 2, z1: z - D / 2, z2: z + D / 2,
@@ -5307,7 +5316,7 @@ const WORLDS = [
       // traînait ailleurs — voir `declareLesParkings` et le test « aucun véhicule garé hors
       // d'une place prévue ».
       city.parkings = [];
-      const parkSud = parkingPublic(20, -80, 'Parking du Sud', 8);
+      const parkSud = parkingPublic(20, -85, 'Parking du Sud', 8);
       for (let i = 0; i < 3; i++) coin(-9 - i * 5, 0.3, 4.5);
       // ---- parc à trampolines (SE) ----
       for (const [px, pz] of [[8, 8], [18, 8], [8, 18], [18, 18]]) bouncePad(px, 0.3, pz);

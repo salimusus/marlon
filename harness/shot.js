@@ -177,9 +177,8 @@ window.__SHOT = {
       // lame au fourreau a l'image suivante, et on photographiait un poing vide.
       if (v.couteau === 'main') P.gun = false;
       if (v.facing != null) P.facing = v.facing;
-      // le radar (canevas #gps) trone au milieu du bas de l'ecran, pile devant la ceinture :
-      // il masquait justement les deux etuis qu'on veut photographier.
-      var gps = document.getElementById('gps'); if (gps && v.hideHud) gps.style.display = 'none'; } catch (e16) {} }
+      // (le radar qui masquait les etuis est desormais eteint par hideHud lui-meme, plus haut)
+    } catch (e16) {} }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }

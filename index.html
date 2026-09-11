@@ -24506,9 +24506,27 @@ function tuneApply(c, t) {
   const mot = TUNE_MOTEURS[t.moteur] || TUNE_MOTEURS[0], am = TUNE_AMORTIS[t.amorti] || TUNE_AMORTIS[0];
   if (!c.specOrig) c.specOrig = Object.assign({}, c.spec);
   const bonus = 1 + bonusKits(t);
+  // LA REFERENCE, C'EST LE BLOC D'ORIGINE, PAS UN NOMBRE ECRIT A LA MAIN. Les deux diviseurs
+  // etaient 26 et 19 : l'ancienne vitesse et l'ancienne reprise d'une voiture de serie. Quand
+  // la vitesse de base est descendue a 21 m/s (« reduis la vitesse de base des vehicules »),
+  // personne n'a bouge ces deux nombres, et TOUTE voiture qui passait par l'atelier perdait
+  // un cinquieme de sa fiche technique — moteur d'origine compris. Mesure : la sportive du
+  // concessionnaire, annoncee 144 km/h sur son podium, ressortait du garage de la villa a
+  // 116 km/h (40 / 26 x 21), et une voiture de serie tombait de 21 a 17 m/s.
+  // ET LE GAIN DU MOTEUR S'AJOUTE, IL NE SE MULTIPLIE PLUS. En proportion, le 500 chevaux
+  // (x2,86) envoyait la super-sportive du concessionnaire a 137 m/s, soit 493 km/h : a ce
+  // regime elle avance de plus de deux metres par image et traverse la ville en huit secondes.
+  // On ajoute donc l'ECART entre le bloc monte et le bloc d'origine (TUNE_MOTEURS[0]) :
+  // - une voiture de serie fait toujours 21 / 38 / 60 m/s, exactement ce que le joueur a
+  //   demande (« reduis la vitesse de base, augmente a partir de 300 chevaux, et a 500
+  //   chevaux vitesse max puissante ») ;
+  // - avec le bloc d'origine, la voiture du concessionnaire rend EXACTEMENT sa fiche (la
+  //   sportive : 40 m/s = 144 km/h, le chiffre affiche sur son podium) ;
+  // - et la sportive gagne autant de chevaux que les autres : 40 / 57 / 79 m/s.
+  const ref = TUNE_MOTEURS[0];
   c.spec = Object.assign({}, c.specOrig, {
-    max: c.specOrig.max / 26 * mot.max * bonus,
-    accel: c.specOrig.accel / 19 * mot.accel * (1 + bonusKits(t) * 0.6),
+    max: (c.specOrig.max + (mot.max - ref.max)) * bonus,
+    accel: (c.specOrig.accel + (mot.accel - ref.accel)) * (1 + bonusKits(t) * 0.6),
     // La tenue de route des amortisseurs est RELATIVE à celle de la voiture : monter des
     // amortisseurs d'origine sur une sportive du concessionnaire lui remettait le train
     // avant d'une citadine, et l'étoile « tenue » promise sur son podium devenait fausse.

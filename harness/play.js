@@ -5644,10 +5644,14 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   // Les pannes de FIABILITE ne se voient qu'en LOT : un test sali par ses voisins est vert
   // seul et rouge apres soixante autres. Un lot par numeros reproduit exactement la meme
   // sequence d'un essai a l'autre, ce qu'un FILTRE par mots-cles ne garantit pas.
-  const plage = process.env.PLAGE ? process.env.PLAGE.split('-').map(Number) : null;
+  // Plusieurs tranches se separent par une virgule : PLAGE="1-50,225-250" rejoue les
+  // cinquante premiers tests PUIS les tests 225 a 250. C'est la seule facon de reproduire une
+  // pollution d'etat sur une machine en moins d'une heure : les tests qui SALISSENT sont au
+  // debut de la suite, ceux qui en souffrent tout a la fin.
+  const plages = process.env.PLAGE ? process.env.PLAGE.split(',').map(t => t.split('-').map(Number)) : null;
   for(let idx = 0; idx < CASES.length; idx++){
     const c = CASES[idx];
-    if (plage && (idx + 1 < plage[0] || idx + 1 > plage[1])) continue;
+    if (plages && !plages.some(pl => idx + 1 >= pl[0] && idx + 1 <= (pl[1] == null ? pl[0] : pl[1]))) continue;
     if (filtre && !filtre.test(c.n)) continue;
     const before=errors.length;
     let r; try { r=await c.fn(page); } catch(e){ r={ok:false,detail:'exception : '+e.message}; }

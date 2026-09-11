@@ -26,6 +26,19 @@ window.__SHOT = {
   // de ce qui trainait ; le banc l'ajoute au message des tests rouges. La liste ne juge pas :
   // un test qui demande la continuite (continu: true) trouvera normalement des choses dedans.
   sale: [],
+  // L'INVENTAIRE DU JOUEUR AU CHARGEMENT DE LA PAGE. On l'ecrit dans le stockage local a la
+  // toute premiere ouverture : il survit ainsi au rechargement de page du test de sauvegarde,
+  // qui relit superobby.owned et y trouverait sinon tous les achats des tests precedents.
+  achats0: (function () {
+    try { var k = 'superobby.banc.achats0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.owned') || '[]');
+      return JSON.parse(localStorage.getItem(k) || '[]') || []; } catch (e) { return []; }
+  })(),
+  argent0: (function () {
+    try { var k = 'superobby.banc.argent0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.wallet') || '25');
+      return +localStorage.getItem(k) || 25; } catch (e) { return 25; }
+  })(),
   relevePropre() {
     const s = [];
     const dit = function (c, t) { if (c) s.push(t); };
@@ -295,6 +308,26 @@ window.__SHOT = {
       // son de sirene en boucle : la mesure de silence des deux tests audio partait deja a
       // pleine puissance.
       if (typeof siren !== 'undefined') { try { siren.stop(); } catch (e26) {} }
+      // --- 14. L'INVENTAIRE DU JOUEUR. C'est le residu que MEME un monde neuf ne repare pas :
+      // owned (les achats), le portefeuille, les grenades et l'arme en main vivent EN DEHORS du
+      // monde, loadWorld ne les touche pas. Or chaque test qui s'offre un fusil a lunette ou un
+      // couteau le laisse a tout jamais, et ces achats reviennent meme apres un rechargement de
+      // page (ils sont enregistres). Symptome exact releve dans la suite complete : « la croix
+      // gauche/droite » fait defiler les armes POSSEDEES, et le tour attendu
+      // pistolet -> fusil -> mains nues devenait pistolet -> fusil -> fusil a lunette -> couteau ;
+      // « le couteau s'achete » lisait « deja possede » ; le harnais de dos restait visible apres
+      // qu'on ait rendu les deux fusils. On repose donc l'inventaire tel qu'il etait au premier
+      // chargement de la page (sauf, evidemment, quand le test verifie justement la sauvegarde).
+      if (!v.garderSauvegarde && !v.garderAchats && typeof owned !== 'undefined') {
+        owned.clear(); for (var ia = 0; ia < __SHOT.achats0.length; ia++) owned.add(__SHOT.achats0[ia]);
+        try { saveOwned(); } catch (e29) {}
+        if (typeof wallet !== 'undefined') { wallet = __SHOT.argent0; try { saveWallet(); } catch (e30) {} }
+        P.grenades = 0; P.ammo = 0; P.drawn = false; P.aim = false; P.melee = null; P.gun = false;
+        try { equipWeapon(null); } catch (e31) {}
+        try { setWeapon(me, null); } catch (e32) {}
+        try { majEtuis(); } catch (e33) {}
+        try { updateHud(); } catch (e34) {}
+      }
     } catch (e27) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
     // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.

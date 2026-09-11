@@ -13076,14 +13076,29 @@ test('les plateformes mobiles, les tapis roulants et les manèges emmènent touj
       await dodo(250);
       const e = { monde: w, movers: G.movers.length, spinners: G.spinners.length, conveyors: G.conveyors.length };
       if (G.movers.length) {
-        const m = G.movers[0], p0 = [m.x, m.y, m.z];
-        for (let i = 0; i < 180; i++) G.step(1 / 60, true);
-        e.bouge = +Math.hypot(m.x - p0[0], m.y - p0[1], m.z - p0[2]).toFixed(2);
+        // La plateforme la plus AMPLE du monde, et on l'observe sur une PÉRIODE ENTIÈRE
+        // (2π/vitesse) : en n'en regardant qu'un bout, on tombait parfois sur le moment où
+        // elle fait demi-tour et le test l'accusait de ne plus bouger (7 cm de course).
+        const m = G.movers.slice().sort((a, b) =>
+          Math.hypot(b.ax, b.ay, b.az) - Math.hypot(a.ax, a.ay, a.az))[0];
+        const periode = Math.ceil(2 * Math.PI / Math.max(0.05, m.speed) * 60);
+        let x1 = m.x, x2 = m.x, y1 = m.y, y2 = m.y, z1 = m.z, z2 = m.z;
+        for (let i = 0; i < periode; i++) {
+          G.step(1 / 60, true);
+          x1 = Math.min(x1, m.x); x2 = Math.max(x2, m.x); y1 = Math.min(y1, m.y);
+          y2 = Math.max(y2, m.y); z1 = Math.min(z1, m.z); z2 = Math.max(z2, m.z);
+        }
+        e.bouge = +Math.hypot(x2 - x1, y2 - y1, z2 - z1).toFixed(2);
         P.pos.set(m.x, m.y + m.h / 2 + 0.02, m.z); P.vel.set(0, 0, 0); P.sit = null; P.ride = null;
-        for (let i = 0; i < 30; i++) G.step(1 / 60, true);
-        const pose = P.standing === m;
-        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
-        e.porte = pose && Math.hypot(P.pos.x - m.x, P.pos.z - m.z) < 1.2;
+        for (let i = 0; i < 60; i++) G.step(1 / 60, true);   // le temps de se poser dessus
+        let dessus = 0, derive = 0;
+        for (let i = 0; i < 180; i++) {
+          G.step(1 / 60, true);
+          if (P.standing === m) dessus++;
+          derive = Math.max(derive, Math.hypot(P.pos.x - m.x, P.pos.z - m.z));
+        }
+        e.dessus = dessus; e.derive = +derive.toFixed(2);
+        e.porte = dessus > 120 && derive < 1.5;
       }
       if (G.spinners.length) { const s = G.spinners[0], a0 = s.angle; for (let i = 0; i < 120; i++) G.step(1 / 60, true); e.tourne = +(s.angle - a0).toFixed(2); }
       if (G.conveyors.length) {
@@ -13116,10 +13131,12 @@ test('les plateformes mobiles, les tapis roulants et les manèges emmènent touj
   });
   const avec = r.mondes.filter(m => m.movers);
   const moversOk = avec.length > 0 && avec.every(m => m.bouge > 0.5 && m.porte);
+  // (m.bouge = la course complète de la plateforme la plus ample du monde, m.porte = le
+  //  joueur reste posé dessus et ne dérive jamais de plus d'un mètre et demi)
   const spinOk = r.mondes.filter(m => m.spinners).every(m => Math.abs(m.tourne) > 0.3);
   const tapisOk = r.mondes.filter(m => m.conveyors).every(m => m.defile > 0.001 && m.emporte > 0.5);
   const manOk = r.manages.length >= 2 && r.manages.every(m => Math.abs(m.tourne) > 0.3);
   const carOk = !!(r.carrousel && r.carrousel.monte && r.carrousel.deplace > 2);
   const ok = moversOk && spinOk && tapisOk && manOk && carOk;
-  return { ok, detail: `plateformes va-et-vient : ${r.mondes.map(m => `monde ${m.monde} ${m.movers} mobiles${m.bouge != null ? ` (${m.bouge} m de course, joueur emporté=${m.porte})` : ''}`).join(' · ')} · tournantes ${r.mondes.filter(m => m.spinners).map(m => `${m.spinners} en ${m.tourne} rad/2 s`).join(', ') || 'aucune'} · tapis ${r.mondes.filter(m => m.conveyors).map(m => `${m.conveyors} (texture ${m.defile}, joueur emporté de ${m.emporte} m)`).join(', ') || 'aucun'} · manèges ${r.manages.map(m => `${m.kind} ${m.tourne} rad/2 s`).join(', ')} · carrousel : monté=${r.carrousel && r.carrousel.monte}, tourné avec lui sur ${r.carrousel && r.carrousel.deplace} m` };
+  return { ok, detail: `plateformes va-et-vient : ${r.mondes.map(m => `monde ${m.monde} ${m.movers} mobiles${m.bouge != null ? ` (${m.bouge} m de course, posé dessus ${m.dessus}/180 images, dérive ${m.derive} m, emporté=${m.porte})` : ''}`).join(' · ')} · tournantes ${r.mondes.filter(m => m.spinners).map(m => `${m.spinners} en ${m.tourne} rad/2 s`).join(', ') || 'aucune'} · tapis ${r.mondes.filter(m => m.conveyors).map(m => `${m.conveyors} (texture ${m.defile}, joueur emporté de ${m.emporte} m)`).join(', ') || 'aucun'} · manèges ${r.manages.map(m => `${m.kind} ${m.tourne} rad/2 s`).join(', ')} · carrousel : monté=${r.carrousel && r.carrousel.monte}, tourné avec lui sur ${r.carrousel && r.carrousel.deplace} m` };
 });

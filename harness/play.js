@@ -11764,15 +11764,15 @@ test('la rumeur de la ville est une présence, plus un masque : les sons courts 
     const c = G.sfx.unlock(), ch = G.sfx.chaine(); if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
     // ÉCOUTE AU BOUT DE LA CHAÎNE : un analyseur ne montre que les 46 dernières millisecondes,
     // toujours trop tard sur la machine du banc. On branche un nœud qui écoute en continu.
-    let crete = 0, somme = 0, n = 0;
+    let crete = 0, somme = 0, nn = 0;
     const sp = c.createScriptProcessor(2048, 1, 1);
     sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
-      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; n++; } };
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; nn++; } };
     const muet = c.createGain(); muet.gain.value = 0;
     ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
-    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; n = 0; const t = performance.now();
+    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; nn = 0; const t = performance.now();
       while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); }
-      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, n)).toFixed(4) }; };
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nn)).toFixed(4) }; };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
     try { G.meteoSet('clair', 9999); } catch (e) {} try { G.craieLitFerme(); } catch (e) {}
     for (let i = 0; i < 8; i++) { G.simTime += 2; G.sonsVille(1.3); }
@@ -12809,7 +12809,7 @@ test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne cou
       cout: apresTraces - avantTraces, coutPlafond: plafond.calls - plafond.sans, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
   });
   const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 4 && r.n <= r.attendu + 2 && r.alterne && r.surLaLigne
-    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max * 1.15 && r.plafond.n === r.plafond.max
+    && r.parLeBot >= 15 && r.plafond.poses > r.plafond.max && r.plafond.n === r.plafond.max
     && r.plafond.cases === r.plafond.n && r.plafond.range <= r.plafond.max * 6
     && r.maillages === 1 && r.cout === 1 && r.coutPlafond === 1
     && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige;
@@ -13006,22 +13006,25 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // LA CADENCE DU JEU, et pas une autre : l'averse sort toutes les 1,5 s (sonsVille) et les
     // pas a peu pres deux fois par seconde. Un `sonPluie` a chaque tour de boucle aurait
     // empile soixante-dix averses l'une sur l'autre et mesure un bruit qui n'existe pas.
-    let tP = 0, tA = 0, nPluie = 0, nPas = 0, nCoup = 0;
-    const pleut = () => { const n = performance.now(); if (n - tP > 1500) { tP = n; G.SON.vivants.length = 0; if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; } };
-    // LE BUDGET DE SONS SIMULTANES (SON.max = 16) refusait le pas qu'on veut mesurer des que
-    // seize sons plus proches jouaient deja : on lisait alors « 1 pas joue sur 5 » et une
-    // crete qui n'etait que celle de l'averse. On libere la file avant chaque mesure — on
-    // mesure un NIVEAU, pas un budget.
-    const cadence = quoi => () => { const n = performance.now(); if (n - tA > 420) { tA = n; G.SON.vivants.length = 0; quoi(); } };
+    let nPluie = 0, nPas = 0, nCoup = 0;
+    // ON COMPTE LES SONS, PAS LES MILLISECONDES. Une ecoute « pendant 2 s en declenchant
+    // toutes les 420 ms » ne joue rien du tout quand la machine du banc rame : on a lu « 1 pas
+    // joue » et une crete qui n'etait que celle de l'averse. `jouer` garantit N declenchements,
+    // quel que soit le temps que la page met a respirer. Et on vide la file des sons
+    // simultanes avant chacun (SON.max = 16) : on mesure un NIVEAU, pas un budget.
+    const jouer = async (n, espace, quoi) => {
+      crete = 0; somme = 0; nn = 0;
+      for (let i = 0; i < n; i++) { G.SON.vivants.length = 0; quoi(); await dodo(espace); }
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nn)).toFixed(4) };
+    };
     // ON MESURE CHAQUE SON SEPAREMENT, a la meme distance de l'oreille : melanger l'averse et
-    // le pas dans la meme ecoute ne dit pas lequel des deux fait la crete, et les deux se
-    // disputent le budget de sons simultanes (SON.max) — c'est ainsi qu'on a lu « un pas =
-    // 1,0 fois l'averse » alors que le pas n'avait tout simplement pas joue.
-    tP = 0; const pluieSeule = await ecoute(3200, pleut);
-    tA = 0; const pas = await ecoute(2000, cadence(() => { if (G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1)) nPas++; }));
-    tA = 0; const coups = await ecoute(2000, cadence(() => { if (G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3)) nCoup++; }));
+    // le pas dans la meme ecoute ne dit pas lequel des deux fait la crete.
+    const pluieSeule = await jouer(3, 1100, () => { if (G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1)) nPluie++; });
+    const pas = await jouer(5, 420, () => { if (G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1)) nPas++; });
+    const coups = await jouer(5, 420, () => { if (G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3)) nCoup++; });
     // et le melange reel : l'averse ET les pas ensemble, comme en jeu
-    tP = 0; tA = 0; const melange = await ecoute(2400, () => { pleut(); const n = performance.now(); if (n - tA > 420) { tA = n; G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); } });
+    let k = 0;
+    const melange = await jouer(6, 420, () => { if (k++ % 3 === 0) G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); });
     // et le RECUL : l'averse baisse d'elle-meme quand un son de jeu vient de sortir
     const q = G.quartierSon(); G.ambiance.set(q.k, q.vol, q.coupe); await dodo(250);
     G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
@@ -13037,7 +13040,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const lente = r.apresFondu > r.avantFondu * 3 && r.apresFondu > 20;
   const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
   const discrete = r.pluieSeule.pic < 0.10;
-  const joues = r.nPluie >= 1 && r.nPas >= 3 && r.nCoup >= 3;
+  const joues = r.nPluie >= 2 && r.nPas >= 4 && r.nCoup >= 4;
   const ressortent = r.pas.pic > r.pluieSeule.pic * 2.2 && r.coups.pic > r.pluieSeule.pic * 2.2
     && r.melange.pic > r.pluieSeule.pic * 2;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif;

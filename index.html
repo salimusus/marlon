@@ -4053,6 +4053,14 @@ function makePet(kind, x, z, color) {
   const t1 = new THREE.Mesh(unitRound, fur); t1.scale.set(0.1 * sc, 0.1 * sc, (dog ? 0.35 : 0.42) * sc); t1.position.z = -(dog ? 0.17 : 0.2) * sc; tail.add(t1);
   if (!dog) { const t2 = new THREE.Mesh(unitRound, fur); t2.scale.set(0.09 * sc, 0.3 * sc, 0.09 * sc); t2.position.set(0, 0.14 * sc, -0.42 * sc); tail.add(t2); }
   tail.rotation.x = dog ? -0.7 : -0.5;
+  // UN ANIMAL MARCHE : il ne doit JAMAIS etre solidifie comme du decor. solidifieDecor()
+  // n'ecartait que `city.pets` (les animaux du parc) ; les cinq CHIENS ERRANTS de La Zone,
+  // eux, etaient fondus dans le decor a l'endroit exact ou ils se trouvaient a la
+  // construction — un mur invisible de 1,30 m plante au hasard, parfois en pleine chaussee
+  // (le controle qualite l'a vu sur la rue relevee de La Zone). La marque `userData.mobile`
+  // est deja comprise par solidifieDecor : elle couvre d'office toute nouvelle famille
+  // d'animaux, sans liste a tenir a la main.
+  g.userData.mobile = true;
   g.position.set(x, 0.3, z); worldGroup.add(g);
   return { g, kind, x, z, y: 0.3, home: [x, z], tgt: null, wait: rnd(0, 3), facing: 0, tail, head, pattes, corps: g, follow: 0, soundT: 0, petT: 0 };
 }

@@ -11272,17 +11272,46 @@ test('changer de monde dix fois ne laisse plus rien sur la carte graphique', asy
     // remet les compteurs de dessin à 1 appel / 2 triangles, on rend donc la scène à la main.
     const cycle = () => { n = 7; G.loadWorld(4); __SHOT.go(vue); R.render(G.scene, G.camera);
       return { g: R.info.memory.geometries, t: R.info.memory.textures }; };
+    // LA MESURE EXACTE, celle qui ne ment pas : on marque ce qui est libéré, on relève tout ce
+    // que la scène tient, on reconstruit, et on compte ce qui reste VIVANT sans être ni libéré,
+    // ni encore dans la scène, ni partagé. Ces orphelins-là sont la fuite, et ils doivent être
+    // zéro. Le compteur du moteur de rendu, lui, oscille de quelques unités d'un cycle à
+    // l'autre : il ne compte que ce qui a ÉTÉ RENDU, et la ville vit (bulles de chat, effets,
+    // gouttes de pluie, heure qui avance) même avec un hasard figé. On lui demande donc de ne
+    // pas CROÎTRE, pas de retomber au chiffre près.
+    const dg = G.THREE.BufferGeometry.prototype.dispose, dt = G.THREE.Texture.prototype.dispose;
+    G.THREE.BufferGeometry.prototype.dispose = function () { this.__lib = true; return dg.call(this); };
+    G.THREE.Texture.prototype.dispose = function () { this.__lib = true; return dt.call(this); };
     try {
       cycle(); cycle();                       // les caches de matériaux se remplissent
       const base = cycle();
       const suite = []; for (let i = 0; i < 8; i++) suite.push(cycle());
       const fin = suite[suite.length - 1];
       const max = suite.reduce((a, b) => Math.max(a, b.g), 0);
-      return { base, fin, max, dG: fin.g - base.g, dT: fin.t - base.t, serie: suite.map(x => x.g) };
-    } finally { Math.random = vrai; }
+      // le relevé avant / après d'un cycle de plus, pour compter les orphelins
+      const geos = new Set(), texs = new Set();
+      const releve = (sg, st) => { G.scene.traverse(o => { if (o.geometry) sg.add(o.geometry);
+        for (const m of (Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])))
+          for (const k in m) { const v = m[k]; if (v && v.isTexture) st.add(v); } }); };
+      releve(geos, texs);
+      cycle();
+      const vg = new Set(), vt = new Set(); releve(vg, vt);
+      let orphG = 0, orphT = 0;
+      for (const g2 of geos) if (!g2.__lib && !vg.has(g2) && !G.shared.has(g2)) orphG++;
+      for (const t2 of texs) if (!t2.__lib && !vt.has(t2) && !G.shared.has(t2)) orphT++;
+      // la TENDANCE : moyenne des trois derniers cycles contre celle des trois premiers
+      const moy = a2 => a2.reduce((u, v) => u + v, 0) / a2.length;
+      const tendance = +(moy(suite.slice(-3).map(x => x.g)) - moy(suite.slice(0, 3).map(x => x.g))).toFixed(1);
+      const tendanceT = +(moy(suite.slice(-3).map(x => x.t)) - moy(suite.slice(0, 3).map(x => x.t))).toFixed(1);
+      return { base, fin, max, dG: fin.g - base.g, dT: fin.t - base.t, serie: suite.map(x => x.g),
+        serieT: suite.map(x => x.t), orphG, orphT, tendance, tendanceT, vus: geos.size + texs.size };
+    } finally { Math.random = vrai; G.THREE.BufferGeometry.prototype.dispose = dg; G.THREE.Texture.prototype.dispose = dt; }
   });
-  const ok = r.dG <= 30 && r.dT <= 4 && r.max <= r.base.g + 30;
-  return { ok, detail: `les avatars (mannequins de vitrine, gardes, médecins, travailleurs) sont ajoutés à la SCÈNE et non au groupe du monde : clearWorld ne voyait pas leurs géométries et chaque reconstruction en abandonnait des milliers sur la carte (mesuré avant correction : +459 géométries et +33 textures PAR CYCLE, soit +3 676 et +265 sur huit changements de monde) · après huit changements de monde : géométries ${r.base.g} → ${r.fin.g} (${r.dG >= 0 ? '+' : ''}${r.dG}, pointe à ${r.max}), textures ${r.base.t} → ${r.fin.t} (${r.dT >= 0 ? '+' : ''}${r.dT}) · série : ${r.serie.join(', ')}` };
+  // zéro orphelin : c'est la garantie forte. Le compteur du moteur, lui, ne doit pas croître
+  // (tendance quasi nulle sur huit cycles) et ne jamais s'envoler (moins de 30 au-dessus).
+  const ok = r.orphG === 0 && r.orphT === 0 && r.tendance <= 6 && r.tendanceT <= 3
+    && r.max <= r.base.g + 30 && r.dT <= 15;
+  return { ok, detail: `les avatars (mannequins de vitrine, gardes, médecins, travailleurs) sont ajoutés à la SCÈNE et non au groupe du monde : clearWorld ne voyait pas leurs géométries et chaque reconstruction en abandonnait des milliers sur la carte (mesuré avant correction : +459 géométries et +33 textures PAR CYCLE, soit +3 676 et +265 sur huit changements de monde) · MESURE EXACTE après reconstruction : sur ${r.vus} ressources tenues par la scène, ${r.orphG} géométrie et ${r.orphT} texture restent vivantes sans être ni libérées, ni encore dans la scène, ni partagées · le compteur du moteur de rendu, lui, oscille de quelques unités (la ville vit : bulles, effets, gouttes) et ne doit donc pas RETOMBER au chiffre près mais ne pas CROÎTRE : géométries ${r.base.g} → ${r.fin.g} (pointe ${r.max}, tendance ${r.tendance >= 0 ? '+' : ''}${r.tendance} sur huit cycles), textures ${r.base.t} → ${r.fin.t} (tendance ${r.tendanceT >= 0 ? '+' : ''}${r.tendanceT}) · série : ${r.serie.join(', ')}` };
 });
 
 test('sous un toit non déclaré « intérieur », aucun mur ne sépare la caméra du joueur', async p => {
@@ -11432,24 +11461,36 @@ test('la fête foraine n\'est plus violet fluo et aucun banc ne traîne au milie
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 152, hour: 12 });
-    const dalle = (x, z, w, d) => {
-      for (const o of G.solids) if (o.mesh && o.w > w && o.d > d && o.y + o.h / 2 < 1
-        && Math.abs(x - o.x) < 2 && Math.abs(z - o.z) < 2) return [].concat(o.mesh.material)[0];
-      return null;
-    };
-    const mf = dalle(0, 155, 80, 40);
+    // LA DALLE N'EST PLUS D'UN SEUL TENANT : le poste Infrastructure l'a PERCEE là où trois
+    // rues traversent la place (platTrous découpe le grand rectangle en une dizaine de
+    // morceaux). On ne cherche donc plus « le grand pavé de 90 × 44 » — qui n'existe plus et
+    // rendait null — mais la couleur qui REVÊT LE PLUS DE SURFACE au sol dans l'emprise de la
+    // fête foraine, quel que soit le nombre de morceaux. Le test survit au prochain découpage.
+    const surface = new Map(), meshDe = new Map();
+    for (const o of G.solids) {
+      if (!o.mesh || o.h > 0.6 || o.y + o.h / 2 > 1) continue;                 // une dalle au sol
+      if (Math.abs(o.x) > 45 || o.z < 133 || o.z > 177) continue;              // dans la fête foraine
+      const m = [].concat(o.mesh.material)[0]; if (!m || !m.color) continue;
+      const k = m.color.getHexString();
+      surface.set(k, (surface.get(k) || 0) + o.w * o.d); meshDe.set(k, m);
+    }
+    const gagnant = [...surface.entries()].sort((u, v) => v[1] - u[1])[0] || null;
+    const mf = gagnant ? meshDe.get(gagnant[0]) : null;
     const c = mf && mf.color ? mf.color : null;
+    const morceaux = [...G.solids].filter(o => o.mesh && o.h <= 0.6 && o.y + o.h / 2 <= 1 && Math.abs(o.x) <= 45
+      && o.z >= 133 && o.z <= 177 && [].concat(o.mesh.material)[0] === mf).length;
+    const aire = gagnant ? Math.round(gagnant[1]) : 0;
     // saturation HSL : c'est elle qui faisait « jurer » le violet avec le reste de la ville
     const hsl = c ? c.getHSL({}) : null;
     // les bancs de la place du Techno-Parc : aucun ne doit rester dans les 8 m du centre
     const bancs = (G.city.benches || []).filter(b => Math.abs(b.x - 3) < 28 && Math.abs(b.z + 125) < 10);
     const auMilieu = bancs.filter(b => Math.hypot(b.x - 3, b.z + 125) < 9);
     return { couleur: c ? '#' + mf.color.getHexString() : null, sat: hsl ? +hsl.s.toFixed(3) : null,
-      lum: hsl ? +hsl.l.toFixed(3) : null, bancs: bancs.length, auMilieu: auMilieu.length,
+      lum: hsl ? +hsl.l.toFixed(3) : null, morceaux, aire, bancs: bancs.length, auMilieu: auMilieu.length,
       positions: bancs.map(b => [Math.round(b.x), Math.round(b.z)]) };
   });
-  const ok = r.couleur != null && r.sat <= 0.16 && r.bancs >= 3 && r.auMilieu === 0;
-  return { ok, detail: `le sol de la fête foraine était un violet saturé (#6f5aa8, saturation 0,31) qui jurait avec tout le reste de la ville : c'est maintenant un gris-violet désaturé ${r.couleur} (saturation ${r.sat}, clarté ${r.lum}) qui laisse ressortir les stands, les ballons et les néons · et les deux bancs plantés au beau milieu de la place du Techno-Parc — de loin, un canapé abandonné en plein extérieur — sont alignés le long du bord nord, sous les lampadaires, tournés vers la place : ${r.bancs} bancs sur la place, ${r.auMilieu} à moins de 9 m du centre (${r.positions.map(x => '(' + x + ')').join(' ')})` };
+  const ok = r.couleur != null && r.sat <= 0.16 && r.aire > 1500 && r.morceaux >= 2 && r.bancs >= 3 && r.auMilieu === 0;
+  return { ok, detail: `le sol de la fête foraine était un violet saturé (#6f5aa8, saturation 0,31) qui jurait avec tout le reste de la ville : c'est maintenant un gris-violet désaturé ${r.couleur} (saturation ${r.sat}, clarté ${r.lum}) qui laisse ressortir les stands, les ballons et les néons — et qui tient toujours quand la dalle est PERCÉE par les trois rues qui traversent la place (${r.morceaux} morceaux, ${r.aire} m² au total, c'est le revêtement majoritaire) · et les deux bancs plantés au beau milieu de la place du Techno-Parc — de loin, un canapé abandonné en plein extérieur — sont alignés le long du bord nord, sous les lampadaires, tournés vers la place : ${r.bancs} bancs sur la place, ${r.auMilieu} à moins de 9 m du centre (${r.positions.map(x => '(' + x + ')').join(' ')})` };
 });
 
 test('la mer a une vraie surface : profondeur, ondulation et bord fondu dans le sable', async p => {

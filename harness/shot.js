@@ -1097,6 +1097,7 @@ window.__G = {
   agentsTick: typeof agentsTick === 'function' ? agentsTick : null,
   TATOO_TAILLES: typeof TATOO_TAILLES !== 'undefined' ? TATOO_TAILLES : null,
   construireGraphe: typeof construireGraphe === 'function' ? construireGraphe : null,
+  cheminAretes: typeof cheminAretes === 'function' ? cheminAretes : null,
   botConduit: typeof botConduit === 'function' ? botConduit : null,
   traficPose: typeof traficPose === 'function' ? traficPose : null,
   carrefourLibre: typeof carrefourLibre === 'function' ? carrefourLibre : null,

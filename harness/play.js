@@ -4047,7 +4047,7 @@ test('les conducteurs suivent les rues au lieu de couper à travers tout', async
       let t = 0, colle = 0, virages = 0, hPrec = c.h, chemin = 0, px = c.x, pz = c.z, arrive = 0, surRoute = 0, ech = 0;
       const dt = 1 / 60;
       for (let i = 0; i < 60 * 240; i++) {
-        G.step(dt); const dd = G.conduire(c, tx, tz, dt, st); t += dt;
+        G.step(dt); const dd = G.conduireVersPoint(c, tx, tz, dt, st); t += dt;
         let dh = c.h - hPrec; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); virages += Math.abs(dh); hPrec = c.h;
         chemin += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
         if (st.bloqueT > 0.05) colle++;

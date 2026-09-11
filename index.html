@@ -1733,6 +1733,13 @@ const DETAIL_RAYON = 1.2;      // m : au-delà de ce rayon, un objet est trop gr
 const DETAIL_OMBRE = 0.32;     // m de rayon : en dessous, l'ombre portée ne se lit sur aucun écran
 const DETAIL_OMBRE_VUE = 55;   // 1/55e de l'écran : sous cette taille apparente, l'ombre PORTÉE s'efface
 const DETAIL_PAS = 4;          // m² : on ne retrie que si la caméra a bougé de deux mètres
+// LE FILET DE SÉCURITÉ. Le budget d'image n'a pas le droit d'effacer ce qu'on a SOUS LE NEZ :
+// dans une pièce, un mur vu de très près n'est pas un détail, quelle que soit sa taille
+// apparente. Deux garde-fous, posés après la plainte « on voit ni escalier ni plancher ni
+// mur » : rien ne s'efface à moins de DETAIL_GARDE mètres de la caméra, et un maillage qui
+// porte un SOLIDE (mur, sol, marche, toit — tout ce qui arrête le joueur ou la caméra)
+// n'entre même pas dans la liste des détails.
+const DETAIL_GARDE = 7;       // m : autour de la caméra, on ne coupe RIEN
 let detailCam = null, detailCoupes = 0, detailOmbres = 0, detailOmbresOff = 0, detailImg = 0;
 // `layers` n'existe pas dans le banc d'essai hors navigateur (ses objets sont des maquettes) :
 // on lit le masque avec précaution et on ne l'écrit que s'il existe — sinon le jeu ne
@@ -1749,8 +1756,13 @@ const addEdges = mesh => {
 function detailsInit() {
   DETAILS.length = 0; OMBRES.length = 0; detailCam = null; detailOmbres = 0;
   if (typeof worldGroup === 'undefined' || !worldGroup) return 0;
+  // les maillages « de structure » : murs, sols, marches, toits. Ils ne sont jamais des détails.
+  const structure = new Set();
+  for (const o of solids) if (o.mesh) structure.add(o.mesh);
+  for (const o of camToits) if (o.mesh) structure.add(o.mesh);
   worldGroup.traverse(o => {
     if (!o.isMesh || !o.geometry) return;
+    if (structure.has(o)) return;   // un mur, un sol, une marche, un toit : jamais effacé
     const g = o.geometry;
     // la sphère englobante donne la taille RÉELLE du maillage (un cylindre, une sphère, une
     // boîte à arêtes arrondies n'ont pas la même) ; certaines maquettes du banc d'essai n'en
@@ -1779,11 +1791,12 @@ function detailsLOD(force) {
   if (!force && detailImg && detailCam && detailCam.distanceToSquared(c) < DETAIL_PAS) return detailCoupes;
   detailCam = detailCam ? detailCam.copy(c) : c.clone();
   let coupes = 0;
-  const S2 = DETAIL_FIN * DETAIL_FIN;
+  const S2 = DETAIL_FIN * DETAIL_FIN, G2 = DETAIL_GARDE * DETAIL_GARDE;
   for (let i = DETAILS.length - 1; i >= 0; i--) {
     const e = DETAILS[i], m = e.o.matrixWorld.elements;
     const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
-    const off = dx * dx + dy * dy + dz * dz > e.r * e.r * S2;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    const off = d2 > G2 && d2 > e.r * e.r * S2;   // jamais ce qui est à portée de main
     if (off !== e.off) { e.off = off; calqueMet(e.o, off ? 0 : e.masque); }
     if (off) coupes++;
   }
@@ -13776,7 +13789,7 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // professionnels : des qu'on entre quelque part, le PLAFOND et tout ce qui est au-dessus de
 // la tete s'effacent, la camera peut traverser les murs de la piece, et le mur qu'elle a
 // traverse devient transparent. On voit la piece entiere, comme une maison de poupee.
-const interieur = { rect: null, masques: [], murs: [] };
+const interieur = { rect: null, masques: [], murs: [], yCoupe: null };
 function interieurDe(x, z) {
   for (const b of (city.interieurs || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
   for (const b of (city.batiments || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
@@ -13785,21 +13798,78 @@ function interieurDe(x, z) {
 function interieurQuitte() {
   for (const m of interieur.masques) m.visible = true;
   for (const o of interieur.murs) { o.xray = false; const m = o.mesh; if (m && m.userData.matOpaque) { m.material = m.userData.matOpaque; m.userData.matOpaque = null; } }
-  interieur.masques = []; interieur.murs = []; interieur.rect = null; interieur.yTete = null; cam.interieur = null;
+  interieur.masques = []; interieur.murs = []; interieur.rect = null; interieur.yTete = null; interieur.yCoupe = null; cam.interieur = null;
 }
 const _wp = new THREE.Vector3(), _bb = new THREE.Box3();
+// ================= CE QU'ON N'EFFACE JAMAIS : LE SOL, LES MARCHES, LE PALIER =================
+// « CORRIGE ON VOIT NI ESCALIER NI PLANCHER NI MUR. » La maison de poupée effaçait TOUT ce qui
+// dépasse la tête, sur trente mètres de haut et sur toute l'emprise du bâtiment. Dans un
+// bâtiment à étages c'était un désastre : au pied de l'escalier de la banque, les cinq marches
+// hautes (de 2,73 m à 4,63 m), le palier et le plancher du 1ᵉʳ étage passaient d'un coup à
+// l'invisible, et l'enfant se retrouvait devant un escalier coupé en deux menant à un étage
+// qui n'existait plus.
+// On relève donc d'abord TOUT CE SUR QUOI LE JOUEUR PEUT MARCHER depuis l'endroit où il se
+// trouve : on part de ses pieds et on remonte de marche en marche — 70 cm au maximum, ce que
+// le joueur franchit d'un pas (STEP_UP = 0,6 m), et 2,20 m de portée horizontale. Ces
+// surfaces-là ne s'effacent JAMAIS, et RIEN ne s'efface plus au-dessus de la première d'entre
+// elles : l'étage du dessus reste entier, avec son escalier, son plancher et son toit.
+const MARCHE_MONTEE = 0.7;    // m : la hauteur qu'un joueur franchit d'un pas (STEP_UP + marge)
+const MARCHE_PORTEE = 2.2;    // m : au-delà, deux surfaces ne s'enchaînent pas à pied
+function solsAccessibles(r, x0, z0, y0) {
+  const cand = [];
+  for (const o of solids) {
+    // un mur ou un bloc d'immeuble n'est pas une marche : on ne garde que les dalles minces,
+    // et seulement les vrais solides (le mobilier solidifié après coup porte `decor`)
+    if (o.deco || o.decor || o.veh || o.h > 1.4 || !o.mesh) continue;
+    if (Math.abs(o.x - r.x) > r.w / 2 + 1.2 || Math.abs(o.z - r.z) > r.d / 2 + 1.2) continue;
+    cand.push(o);
+  }
+  const pris = new Set();
+  // on part des PIEDS du joueur (une surface ponctuelle) et on enchaîne de proche en proche.
+  // La portée se mesure de BORD À BORD : sans la demi-largeur de la surface de départ, la
+  // grande dalle d'un hall ne « touchait » aucune marche à sept mètres de son centre et la
+  // chaîne s'arrêtait tout de suite.
+  let niv = [{ x: x0, z: z0, w: 0, d: 0, top: y0 }];
+  for (let tour = 0; tour < 40 && niv.length; tour++) {
+    const suivants = [];
+    for (const n of niv) for (const o of cand) {
+      if (pris.has(o)) continue;
+      const top = o.y + o.h / 2;
+      if (top > n.top + MARCHE_MONTEE || top < n.top - 6) continue;
+      if (Math.abs(o.x - n.x) > o.w / 2 + n.w / 2 + MARCHE_PORTEE) continue;
+      if (Math.abs(o.z - n.z) > o.d / 2 + n.d / 2 + MARCHE_PORTEE) continue;
+      pris.add(o); suivants.push({ x: o.x, z: o.z, w: o.w, d: o.d, top });
+    }
+    niv = suivants;
+  }
+  return pris;
+}
 function interieurEntre(r) {
   interieurQuitte(); interieur.rect = r; cam.interieur = r;
   const yTete = P.pos.y + 2.25, marge = 0.6;
   interieur.yTete = yTete;   // hauteur de reference : si le joueur change d'etage, il faudra refaire le tri
+  // les sols praticables depuis les pieds du joueur : leurs maillages sont intouchables, et le
+  // premier qui dépasse la tête pose le PLAFOND DE COUPE (au-dessus, on n'efface plus rien).
+  const marches = solsAccessibles(r, P.pos.x, P.pos.z, P.pos.y);
+  const intouchables = new Set(); let yCoupe = yTete + 30;
+  for (const o of marches) {
+    intouchables.add(o.mesh);
+    // LE PLAFOND DE COUPE : la première vraie DALLE D'ÉTAGE au-dessus de la tête (large dans
+    // les deux sens et mince), pas une simple marche. Au-dessus d'elle on n'efface plus rien :
+    // l'étage du dessus garde son plancher, ses murs, son escalier et son toit.
+    const bas = o.y - o.h / 2;
+    if (bas > yTete && bas < yCoupe && o.h <= 0.8 && o.w >= 2.5 && o.d >= 2.5) yCoupe = bas;
+  }
+  interieur.yCoupe = yCoupe;
   worldGroup.traverse(o => {
     if (!o.isMesh || !o.visible) return;
+    if (intouchables.has(o)) return;   // un sol, une marche, un palier : JAMAIS effacé
     o.getWorldPosition(_wp);
     if (Math.abs(_wp.x - r.x) > r.w / 2 + marge + 4 || Math.abs(_wp.z - r.z) > r.d / 2 + marge + 4) return;   // tri grossier, pas cher
     _bb.setFromObject(o); if (!isFinite(_bb.min.y)) return;
     const cx = (_bb.min.x + _bb.max.x) / 2, cz = (_bb.min.z + _bb.max.z) / 2;
     if (Math.abs(cx - r.x) > r.w / 2 + marge || Math.abs(cz - r.z) > r.d / 2 + marge) return;
-    if (_bb.min.y > yTete && _bb.min.y < yTete + 30) { o.visible = false; interieur.masques.push(o); }
+    if (_bb.min.y > yTete && _bb.min.y < yCoupe) { o.visible = false; interieur.masques.push(o); }
   });
   for (const o of solids) {
     if (!o.mesh || o.h < 2.2 || o.h > 30 || o.veh) continue;
@@ -13807,6 +13877,23 @@ function interieurEntre(r) {
     if (o.y - o.h / 2 > yTete) continue;
     o.xray = true; interieur.murs.push(o);
   }
+}
+// Le segment A → B coupe-t-il la boîte du solide `o` (élargie de 35 cm, la garde de la
+// caméra) ? Méthode des tranches : on rogne l'intervalle [0,1] axe par axe.
+function murCoupeSegment(o, ax, ay, az, bx, by, bz) {
+  const R = 0.35, h = [Math.max(o.w, 0.36) / 2 + R, o.h / 2 + R, Math.max(o.d, 0.36) / 2 + R];
+  const a = [ax, ay, az], b = [bx, by, bz], c = [o.x, o.y, o.z];
+  let t0 = 0, t1 = 1;
+  for (let i = 0; i < 3; i++) {
+    const d = b[i] - a[i];
+    if (Math.abs(d) < 1e-6) { if (a[i] < c[i] - h[i] || a[i] > c[i] + h[i]) return false; continue; }
+    let ta = (c[i] - h[i] - a[i]) / d, tb = (c[i] + h[i] - a[i]) / d;
+    if (ta > tb) { const s = ta; ta = tb; tb = s; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  return true;
 }
 function interieurTick() {
   const r = city.on && running && !drive.car && !P.voile ? interieurDe(P.pos.x, P.pos.z) : null;
@@ -13821,10 +13908,16 @@ function interieurTick() {
   // le mur que la camera a traverse s'efface (les autres restent pleins)
   const r2 = interieur.rect, c = camera.position;
   const dehors = Math.abs(c.x - r2.x) > r2.w / 2 - 0.3 || Math.abs(c.z - r2.z) > r2.d / 2 - 0.3;
+  const t = cam.target;
   for (const o of interieur.murs) {
     const m = o.mesh; if (!m || !m.material) continue;
-    const cote = (o.x - r2.x) * (c.x - r2.x) + (o.z - r2.z) * (c.z - r2.z) > 0;
-    const veut = dehors && cote ? 0.22 : 1;
+    // LE MUR QUI S'EFFACE EST CELUI QUE LA CAMÉRA A VRAIMENT TRAVERSÉ. On jugeait au CÔTÉ (un
+    // simple produit scalaire) : dans la banque, dont chaque façade est découpée en plusieurs
+    // panneaux, la moitié du bâtiment passait à 22 % d'opacité — mesuré au 2ᵉ étage : quatre
+    // directions sur huit n'avaient plus de mur plein, et l'on voyait le parc et les boutiques
+    // au travers. On teste maintenant le SEGMENT caméra → joueur contre la boîte du mur : seul
+    // celui qui coupe vraiment la ligne de vue s'efface, les autres restent pleins.
+    const veut = dehors && murCoupeSegment(o, c.x, c.y, c.z, t.x, t.y, t.z) ? 0.22 : 1;
     if (veut < 1 && !m.userData.matOpaque) {
       m.userData.matOpaque = m.material;
       m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone();

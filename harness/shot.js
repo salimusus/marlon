@@ -215,10 +215,12 @@ window.__SHOT = {
         if (c.dmg || c.dead || c.explosed) { c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e25) {} }
         c.accidente = false; c.stopped = false;
       }
-      // --- 11. LA BOITE DE VITESSES. Le rapport, le verrou anti-va-et-vient (shiftT) et le
-      // turbo (boostT) vivent sur drive et sur c.etat, qui survivent au test. Symptome
-      // exact : « les rapports montent A1 -> A2 -> A3 -> A4 -> A4 » — le dernier passage etait
-      // refuse parce que le verrou avait ete pose a une heure de simulation plus tardive.
+      // --- 11. LA BOITE DE VITESSES. Le rapport courant, le verrou anti-va-et-vient (shiftT) et
+      // le turbo (boostT) vivent sur drive et sur c.etat : c'est le seul etat de boite qui
+      // survive d'un test a l'autre, et un verrou pose a une heure de simulation plus tardive
+      // refuse le passage suivant. Symptome releve dans la suite complete : « les rapports
+      // montent A1 -> A2 -> A3 -> A4 -> A4 », le cinquieme n'etant jamais atteint. On remet
+      // donc la boite au point mort pour que la mesure reparte de zero.
       if (typeof drive !== 'undefined') { drive.gear = 1; drive.shiftT = 0; drive.boostT = 0; }
       if (typeof city !== 'undefined') for (const c of [].concat(city.cars || [], city.aiCars || [], (typeof police !== 'undefined' ? police.cars : []) || [])) {
         if (c && c.etat) { c.etat.gear = 1; c.etat.shiftT = 0; c.etat.boostT = 0; }

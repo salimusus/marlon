@@ -48,7 +48,25 @@ lignes.forEach((l, k) => {
     catch (e) { dur = true; console.log(`❌ erreur de syntaxe dans harness/${f} : ${String(e.stderr || e.message).split('\n').slice(0, 3).join(' ').trim()}`); }
   }
   if (dur) process.exit(1);
-  console.log('✅ le banc d\'essai se charge');
+  // LE HOOK EVALUE. shot.js garde le code injecte dans la page dans un LITTERAL DE GABARIT,
+  // que Node evalue avant de l'envoyer au navigateur. Une apostrophe echappee une seule fois
+  // (\\' au lieu de \\\\') y devient une apostrophe NUE a l'evaluation : la chaine se referme au
+  // milieu d'une phrase et la page entiere ne parse plus (« missing ) after argument list »).
+  // Le controle ci-dessus ne le voit pas — il lit le HOOK BRUT — et la sonde non plus, car
+  // son extraction tronque avant. Resultat au round 69 : plus AUCUNE capture d'ecran pour
+  // AUCUN poste, en silence, pendant des heures. On parse donc le HOOK TEL QU'IL SERA INJECTE.
+  try {
+    const shot = path.join(__dirname, 'shot.js');
+    if (fs.existsSync(shot)) {
+      const { HOOK } = require(shot);
+      if (typeof HOOK === 'string') new (Object.getPrototypeOf(function () {}).constructor)(HOOK);
+    }
+  } catch (e) {
+    console.log('❌ le code injecte dans la page ne parse plus : ' + String(e.message).split('\n')[0]);
+    console.log('   (cherche une apostrophe echappee UNE SEULE fois dans le HOOK de shot.js)');
+    process.exit(1);
+  }
+  console.log('✅ le banc d\'essai se charge, et le code injecte dans la page aussi');
 }
 // LE JEU DOIT DÉMARRER. Une variable déclarée avec `let` ou `const` en milieu de fichier mais
 // lue par une fonction appelée AU CHARGEMENT tombe dans la « zone morte temporelle » : la

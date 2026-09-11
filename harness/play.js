@@ -5669,9 +5669,13 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
       look: { coupe: __G.myCfg.hair, bijou: __G.myCfg.bijou, taille: __G.myCfg.taille },
       chien: __G.chien.nom };
   });
-  const ok = r.ville && r.gangs === 3 && r.bots >= 10 && r.perf === 42 && r.rep === 30
+  // DEUX GANGS, PAS TROIS. La ville n'a plus trois gangs tous presents des la premiere
+  // seconde : elle a six gangs repartis sur cinq paliers, et seuls ceux du palier atteint
+  // sont en ville. La sauvegarde rechargee porte 30 points de respect, donc le palier 1,
+  // donc les deux petits gangs du debut (Frelons Jaunes et Requins Rouges).
+  const ok = r.ville && r.gangs === 2 && r.bots >= 10 && r.perf === 42 && r.rep === 30
     && r.look.coupe === 'dreads' && r.look.bijou === 'grosse' && r.look.taille === 'XXL' && r.chien === 'Rex';
-  return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs, ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
+  return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs en ville (le palier 1, celui des 30 points de respect sauvegardés), ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
 });
 
 (async()=>{

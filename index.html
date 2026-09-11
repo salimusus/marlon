@@ -24451,9 +24451,16 @@ function tuneApply(c, t) {
   const mot = TUNE_MOTEURS[t.moteur] || TUNE_MOTEURS[0], am = TUNE_AMORTIS[t.amorti] || TUNE_AMORTIS[0];
   if (!c.specOrig) c.specOrig = Object.assign({}, c.spec);
   const bonus = 1 + bonusKits(t);
+  // LE MOTEUR D'ORIGINE NE DOIT RIEN CHANGER DU TOUT. On divisait par 26 et par 19, les
+  // chiffres du bloc de serie AVANT qu'il ne passe a 21 m/s et 16 de reprise : une voiture
+  // rendue a son etat d'origine au garage ressortait a 16,96 m/s au lieu de 21 — on entrait
+  // a l'atelier, on ressortait sans rien acheter, et la voiture avait perdu un cinquieme de
+  // sa pointe pour toujours. La reference, c'est LE PREMIER MOTEUR DE LA LISTE : quoi qu'on
+  // reregle un jour, `moteur 0 + aucun kit` rend exactement la voiture d'origine.
+  const REF = TUNE_MOTEURS[0];
   c.spec = Object.assign({}, c.specOrig, {
-    max: c.specOrig.max / 26 * mot.max * bonus,
-    accel: c.specOrig.accel / 19 * mot.accel * (1 + bonusKits(t) * 0.6),
+    max: c.specOrig.max / REF.max * mot.max * bonus,
+    accel: c.specOrig.accel / REF.accel * mot.accel * (1 + bonusKits(t) * 0.6),
     // La tenue de route des amortisseurs est RELATIVE à celle de la voiture : monter des
     // amortisseurs d'origine sur une sportive du concessionnaire lui remettait le train
     // avant d'une citadine, et l'étoile « tenue » promise sur son podium devenait fausse.

@@ -22008,6 +22008,14 @@ function camPerche(dt, aiming) {
     camera.updateProjectionMatrix();
   }
   camera.lookAt(cam.target);
+  // POSTE ANIMATION : pendant les trois secondes du coup vainqueur, la caméra de cinéma
+  // écrase la caméra de jeu — et seulement elle. Les commandes du joueur continuent de
+  // répondre, `cam.yaw` et `cam.dist` restent ceux qu'il a réglés, et l'image lui revient
+  // exactement où il l'avait laissée à la fin du ralenti.
+  // (L'appel avait DISPARU quand la caméra a été refaite en `camPerche` : le ralenti
+  //  ralentissait bien le temps mais ne changeait plus d'angle — il ne restait que la moitié
+  //  de ce que le joueur avait demandé.)
+  try { ralentiCam(); } catch (e) {}
 }
 
 function loop() {

@@ -10736,7 +10736,11 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
 
 test('la police abandonne les recherches quand le joueur est cache, et repart des qu\'il se montre', async p => {
   const r = await p.evaluate(() => {
-    const G = __G; __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 });   // hall d'immeuble, loin de la villa
+    // `frais` : la ville est rebatie. Sans elle, ce test heritait de la neige, des epaves,
+    // des chantiers et des vehicules deplaces par les tests precedents ; la ronde de police
+    // se retrouvait devant des rues bouchees et le pourcentage passait de 98 a 51,9 selon
+    // l'ordre des tests. On mesure un comportement, pas les restes des voisins.
+    const G = __G; __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12, frais: true });   // hall d'immeuble, loin de la villa
     G.jail.on = false; if (G.uiOpen) G.closeUI();
     G.clearWanted(); G.police.agents = [];
     G.P.pos.set(-35.5, 0.3, -27); G.cam.dedansT = -1;
@@ -10776,24 +10780,37 @@ test('la police abandonne les recherches quand le joueur est cache, et repart de
     // (c) en patrouille, les voitures de police roulent SUR LA CHAUSSÉE
     G.clearWanted(); G.police.agents = [];
     G.P.pos.set(300, 0.3, 300);
-    G.police.cars.forEach(c => { c.goHome = false; c.active = false; c.patrouille = null; c.patT = 0; c.mil = false;
-      c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.speed = 0; c.route = null; c.routeT = 0; c.libre = null;
-      c.g.position.set(c.x, 0, c.z); G.vehicleSolid(c); });
+    // ON POSE LES PATROUILLES SOI-MEME, SUR UNE VOIE. Les laisser sur le parking du
+    // commissariat rendait la mesure dependante de l'etat ou le test precedent les avait
+    // laissees : une voiture restee en mission de constat d'accident (`constat`) ou avec ses
+    // agents debarques (`debarque`) ne bouge plus du tout, et comme le parking n'est pas une
+    // chaussee elle comptait 4200 images hors bitume a elle seule — la moitie de la mesure.
+    const DEPARTS = [[0, -44], [0, 26]];   // deux rues du centre, loin l'une de l'autre
+    G.police.cars.forEach((c, i) => {
+      c.goHome = false; c.active = false; c.patrouille = null; c.patT = 0; c.mil = false;
+      c.constat = null; c.debarque = false; c.fouille = null; c.fouilleT = 0;
+      c.stuck = 0; c.stuckTot = 0; c.avoidT = 0; c.revT = 0; c.renonce = false;
+      c.nearT = 0; c.vueT = 0; c.vue = false; c.speed = 0; c.route = null; c.routeT = 0; c.libre = null;
+      const d = DEPARTS[i % DEPARTS.length], v = G.voieProche(d[0], d[1]);
+      c.x = v ? v.px : d[0]; c.z = v ? v.pz : d[1]; c.y = 0; c.h = v ? v.arete.sens : 0;
+      c.g.position.set(c.x, 0, c.z); c.g.rotation.y = c.h; G.vehicleSolid(c);
+    });
     const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + 0.6 && Math.abs(z - rt.z) < rt.d / 2 + 0.6);
+    const depSurRoute = G.police.cars.every(c => surRoute(c.x, c.z));
     let dedans = 0, dehors = 0, roule = 0;
     for (let i = 0; i < 60 * 90; i++) {
       G.simTime += 1 / 60; G.lightsTick(); G.flotteMaj(); G.policeTick(1 / 60);
-      if (i < 60 * 20) continue;   // le temps de quitter le parking du commissariat
+      if (i < 60 * 5) continue;   // le temps que la ronde se choisisse une destination
       for (const c of G.police.cars) { if (Math.abs(c.speed || 0) > 0.5) roule++; if (surRoute(c.x, c.z)) dedans++; else dehors++; }
     }
     G.clearWanted();
-    return { abri, dansLeNoir, etapes, hud, hudFin, cache10, revu,
+    return { abri, dansLeNoir, etapes, hud, hudFin, cache10, revu, depSurRoute,
       patrouille: +(dedans / (dedans + dehors) * 100).toFixed(1), roule, voitures: G.police.cars.length };
   });
   const ok = r.abri === 'batiment' && r.dansLeNoir != null && r.dansLeNoir < 40 && r.etapes.length >= 3
     && /cherche/i.test(r.hud || '') && r.cache10.wanted === 2 && r.revu.wanted === 2 && r.revu.hide < 0.5
-    && /voient/i.test(r.revu.hud || '') && r.patrouille > 95 && r.roule > 0;
-  return { ok, detail: `caché dans un bâtiment (${r.abri}) et hors de vue : la traque passe par ${r.etapes.map(e => e[1] + '★ à ' + e[0] + ' s').join(' → ')} et s'éteint en ${r.dansLeNoir} s simulées · le HUD dit « ${r.hud} » puis « ${r.hudFin} » · dix secondes cachées ne suffisent pas à deux étoiles (${r.cache10.wanted}★, ${r.cache10.hide} s de compteur) et dès qu'une patrouille le revoit le compteur repart de ${r.revu.hide} s (« ${r.revu.hud} ») · en patrouille, les ${r.voitures} voitures de police sont sur la chaussée ${r.patrouille} % du temps (${r.roule} images en mouvement)` };
+    && /voient/i.test(r.revu.hud || '') && r.depSurRoute && r.patrouille > 95 && r.roule > 0;
+  return { ok, detail: `caché dans un bâtiment (${r.abri}) et hors de vue : la traque passe par ${r.etapes.map(e => e[1] + '★ à ' + e[0] + ' s').join(' → ')} et s'éteint en ${r.dansLeNoir} s simulées · le HUD dit « ${r.hud} » puis « ${r.hudFin} » · dix secondes cachées ne suffisent pas à deux étoiles (${r.cache10.wanted}★, ${r.cache10.hide} s de compteur) et dès qu'une patrouille le revoit le compteur repart de ${r.revu.hide} s (« ${r.revu.hud} ») · posées sur une voie (${r.depSurRoute}) et lâchées en patrouille, les ${r.voitures} voitures de police sont sur la chaussée ${r.patrouille} % du temps (${r.roule} images en mouvement)` };
 });
 
 // UNE SEULE MARQUE PAR CHOC. Trois postes ont pose leur propre systeme ce round : les marques

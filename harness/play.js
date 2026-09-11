@@ -11906,3 +11906,101 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     && /se baisser/.test(r.legende) && /atterrir/.test(r.legende);
   return { ok, detail: `le geste de se baisser existait (bassin abaisse, genoux plies, semelles au sol) mais n'avait aucun bouton de manette : il est sur L2, la gachette liberee par le passage de la marche au stick gauche · L2 enfoncee, le bassin descend de ${descendu} m, les genoux se plient a ${r.baisse.genou} rad, les semelles restent posees au sol (le pied remonte de ${+(r.baisse.semelle - r.debout.semelle).toFixed(3)} m dans le squelette, exactement ce dont le bassin descend), un coup de face ne fait plus aucun degat (${r.esquive.dmg}) et le personnage ne se deplace pas d'un centimetre (${r.gachetteNeBougePas} m/s) ; lachee, il se releve (${r.apres.baisse} m) · L1 leve la garde arme rangee et vise arme braquee, sans jamais les deux · le carre frappe a pied et POSE l'helicoptere : lance de 60 m, il descend a ${d.vyMax} m/s au plus (le seuil de casse est a 3), touche le sol en ${d.secondes} s a ${d.y} m avec ${d.degats} degat, et rend la main ; ◯ annule la descente et L2 fait descendre a ${r.l2Descend} m/s · aucun des 18 boutons n'a deux roles (${r.doubles.length} collision)` };
 });
+
+// ===================== POSTE INFRASTRUCTURE (round 68) =====================
+// L'enfant : « escalier banque pas finit … ajoute la dernière partie de l'escalier pour que
+// le joueur puisse atteindre le deuxième étage ». Le test précédent (« les escaliers de la
+// banque ne rasent plus le mur ») ne mesurait que l'écartement au mur : un escalier peut le
+// respecter et rester INGRAVISSABLE. Celui-ci FAIT MONTER le joueur, image par image, du
+// hall jusqu'à la salle des coffres, et exige qu'il y arrive.
+test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -56, y: 1, z: 66, hour: 12, frais: true });
+    const bk = G.city.bank;
+    if (!bk || !bk.esc || bk.esc.length < 2) return { manque: true };
+    const e0 = bk.esc[0], e1 = bk.esc[1], journal = [];
+    let ymax = G.P.pos.y;
+    // on tient « avancer » en pointant la caméra sur le point visé : avancer va vers
+    // (-sin yaw, -cos yaw). En temps SIMULÉ, comme grimpe(), pour ne pas dépendre du rendu.
+    const marcher = (tx, tz, secondes) => {
+      G.keys.add('ArrowUp');
+      for (let i = 0; i < secondes * 60; i++) {
+        G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9;
+        G.step(1 / 60, true);
+        if (G.P.pos.y > ymax) ymax = G.P.pos.y;
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.8) break;
+      }
+      G.keys.delete('ArrowUp');
+      journal.push(`${G.P.pos.y.toFixed(2)} m`);
+    };
+    marcher(e0.bas[0] + 0.8, e0.bas[1], 10);      // le pied de la volée du hall
+    marcher(e0.haut[0] + 1.2, e0.haut[1], 16);    // on la monte jusqu'au palier du 1ᵉʳ
+    const y1 = G.P.pos.y;
+    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
+    marcher(bk.x + 6.5, e1.bas[1] - 0.8, 10);
+    marcher(e1.bas[0], e1.bas[1], 10);            // le pied de la volée du 2ᵉ
+    marcher(e1.haut[0], e1.haut[1], 18);          // et on monte aux coffres
+    const c = (G.city.safes || [])[0];
+    // hauteur et profondeur des marches : la règle des autres escaliers du jeu
+    const marches = bk.esc.map(e => {
+      const m = G.solids.filter(o => Math.abs(o.z - e.z) < 0.4 && Math.abs(o.d - 3.6) < 0.3
+        && o.w > 1.3 && o.w < 1.8 && o.y > e.y0 - 1 && o.y < e.y1 + 1).sort((a, b) => a.y - b.y);
+      return { n: m.length, haut: +m[0].h.toFixed(3), giron: +(m[0].w - 0.06).toFixed(2) };
+    });
+    // LE PALIER D'ARRIVÉE : du marbre continu, aussi large que la volée, entre la dernière
+    // marche et le mur. On relève le plus grand VIDE rencontré sur ce trajet (avant, la
+    // dernière marche s'arrêtait 47 cm avant la dalle : l'escalier finissait en l'air).
+    const paliers = bk.esc.map(e => {
+      const sens = e.haut[0] > e.bas[0] ? 1 : -1, mur = bk.x + sens * (bk.w / 2 - 0.4);
+      let vide = 0, pire = 0, n = 0;
+      for (let d = 0; d <= Math.abs(mur - e.haut[0]) - 0.25; d += 0.1) {
+        for (const dz of [-1.5, 0, 1.5]) {
+          n++;
+          if (Math.abs(G.groundUnder(e.haut[0] + sens * d, e.z + dz, null, e.y1 + 0.4) - e.y1) < 0.06) vide = 0;
+          else { vide += dz === 0 ? 0.1 : 0; pire = Math.max(pire, vide); }
+        }
+      }
+      return { pire: +pire.toFixed(2), n };
+    });
+    return { y1: +y1.toFixed(2), y2: +G.P.pos.y.toFixed(2), ymax: +ymax.toFixed(2), journal,
+      etage2: c ? +c.y.toFixed(2) : null, distCoffre: c ? +Math.hypot(G.P.pos.x - c.x, G.P.pos.z - c.z).toFixed(1) : null,
+      marches, paliers };
+  });
+  if (r.manque) return { ok: false, detail: 'la banque n\'a pas d\'escalier enregistré' };
+  const monte1 = r.y1 > 4.9, monte2 = r.y2 > r.etage2 - 0.15;
+  const bonnesMarches = r.marches.every(m => m.n >= 8 && m.haut <= 0.52 && m.giron >= 0.55);
+  const bonsPaliers = r.paliers.every(v => v.pire === 0);
+  return { ok: monte1 && monte2 && bonnesMarches && bonsPaliers,
+    detail: `du hall (0,85 m) au 1ᵉʳ étage : ${r.y1} m, puis jusqu'aux coffres : ${r.y2} m (2ᵉ étage à ${r.etage2} m, coffre le plus proche à ${r.distCoffre} m) · étapes ${r.journal.join(' → ')} · marches ${r.marches.map(m => `${m.n} × ${m.haut} m de haut, ${m.giron} m de giron`).join(' et ')} (limite de la maison : 0,52 m de haut) · palier d'arrivée : plus aucun vide entre la dernière marche et le mur, sur toute la largeur de la volée (plus grand trou ${r.paliers.map(v => v.pire + ' m').join(' et ')}, contre 0,47 m avant)` };
+});
+
+// L'enfant : « enlève le panneau … et le panneau MONDE qui cache le tableau gris ». La carte
+// du monde était plantée à 3 cm DEVANT le tableau, pile là où la maîtresse écrit la réponse
+// à la craie ; d'autres pancartes mordaient encore dessus. Le test mesure, salle par salle,
+// la SURFACE de craie recouverte par le mobilier de la classe — et exige zéro.
+test('rien ne cache le tableau gris des salles de l\'école', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 213, hour: 12, frais: true });
+    const bb = new G.THREE.Box3(), salles = [];
+    for (const room of (G.city.classes || [])) {
+      const t = room.tableau, bz = t.position.z, bx = t.position.x;
+      // la surface écrite : le plan de 5,40 × 2,45 m posé à 2,25 m du sol
+      const x1 = bx - 2.7, x2 = bx + 2.7, y1 = 2.25 - 1.225, y2 = 2.25 + 1.225;
+      let aire = 0; const pires = [];
+      G.worldGroup.traverse(o => {
+        if (!o.isMesh || o === t) return;
+        bb.setFromObject(o);
+        if (bb.max.z <= bz + 0.002 || bb.min.z > bz + 2.5) return;   // seulement ce qui est DEVANT le tableau
+        if (bb.max.x < x1 || bb.min.x > x2 || bb.max.y < y1 || bb.min.y > y2) return;
+        const a = (Math.min(bb.max.x, x2) - Math.max(bb.min.x, x1)) * (Math.min(bb.max.y, y2) - Math.max(bb.min.y, y1));
+        aire += a; pires.push(`${a.toFixed(2)} m² en x ${bb.min.x.toFixed(1)}→${bb.max.x.toFixed(1)}`);
+      });
+      salles.push({ subj: room.subj, aire: +aire.toFixed(2), pires: pires.slice(0, 3), props: (room.props || []).length });
+    }
+    return { salles, total: +salles.reduce((s, v) => s + v.aire, 0).toFixed(2) };
+  });
+  const ok = r.salles.length === 4 && r.salles.every(s => s.aire === 0) && r.salles.every(s => s.props >= 3);
+  return { ok, detail: `surface du tableau (13,23 m²) masquée par le mobilier, salle par salle : ${r.salles.map(s => `${s.subj} ${s.aire} m²${s.pires.length ? ' (' + s.pires.join(', ') + ')' : ''}`).join(' · ')} — avant : math 1,69, géo 3,53, logique 1,69, culture 2,65 m² · total ${r.total} m², et chaque salle garde son mobilier pédagogique (${r.salles.map(s => s.props).join('/')} objets)` };
+});

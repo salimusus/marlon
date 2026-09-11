@@ -383,6 +383,20 @@ window.__SHOT = {
     }
     // poste FINITION : un itineraire GPS actif, pour photographier les chevrons au sol
     if (v.gps) { try { setBeacon(v.gps[0], v.gps[1], 0, 'mission'); gpsRoute.update(); } catch (e17) {} }
+    // poste INFRASTRUCTURE : v.classe = numero de salle (0 a 3), v.place = numero de chaise.
+    // On ASSOIT vraiment le joueur a une table d'ecolier, pour photographier ce que l'enfant
+    // voit pendant l'exercice : c'est la seule facon de verifier que le tableau reste degage.
+    if (v.classe != null) {
+      try {
+        const r = (city.classes || [])[v.classe] || (city.classes || [])[0];
+        if (r) {
+          const ch = r.chaises[v.place != null ? v.place : 1];
+          P.pos.set(ch.x, ch.y, ch.z); P.vel.set(0, 0, 0); cam.target.set(ch.x, ch.y + 1.5, ch.z);
+          sitBench(ch);
+          if (v.exercice && typeof openSchool === 'function') openSchool(r);
+        }
+      } catch (e18) {}
+    }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }

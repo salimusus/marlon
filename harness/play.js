@@ -1134,7 +1134,11 @@ test('un ami organise un braquage, attend au volant et file à la villa', async 
     __G.coupMonter();
     const fuite = __G.coup.etat, cache = !__G.me.group.visible;
     const sous = __G.wallet;
-    let n = 0; while (__G.coup.etat === 'fuite' && n < 60000) { __G.coupTick(1 / 60); n++; }
+    // LA FUITE SE JOUE COMME UN VRAI TOUR DE JEU : l'horloge avance (sinon les feux restent
+    // rouges pour l'eternite) et le portail de la villa s'ouvre (sinon l'ami tourne devant la
+    // grille fermee pendant treize minutes, le butin n'est jamais partage et les etoiles
+    // restent allumees — c'est exactement ce que mesurait l'echec : 1000 s, +0 pieces, 3 etoiles).
+    let n = 0; while (__G.coup.etat === 'fuite' && n < 60000) { __G.simTime += 1 / 60; __G.villaTick(1 / 60); __G.coupTick(1 / 60); n++; }
     const arrive = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 184);
     return { pasAmi, etatApresRefus, traite, attente, complice, pret, fuite, cache,
       arrive: +arrive.toFixed(1), fin: __G.coup.etat, wanted: __G.police.wanted, gain: __G.wallet - sous, secondes: +(n / 60).toFixed(0) };
@@ -4037,10 +4041,21 @@ test('les conducteurs suivent les rues au lieu de couper à travers tout', async
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G;
     const TRAJETS = [[-40, -40, 40, 90], [0, 0, -92, 60], [50, 40, -60, 110], [-16, 6, 46, -8], [0, 110, 40, 200], [-92, -40, 60, 60]];
+    // CE QUE CE TEST MESURE : le suivi d'itineraire, pas la courtoisie au passage pieton. La
+    // simulation est figee (step sans `active`), si bien qu'un habitant plante sur la chaussee
+    // y restait pour l'eternite : le conducteur klaxonnait, le contournait, se rabattait et
+    // rallongeait son trajet de 150 m sans que ce soit sa faute. On range donc tout le monde
+    // loin de la route. L'arret au feu, au stop et devant un pieton a son propre test
+    // (« la circulation respecte le code de la route »).
+    G.P.pos.set(300, 0.3, 300);
+    G.bots.forEach(b => { b.pos.set(300, 0.3, 300); if (b.av) b.av.group.position.copy(b.pos); b.wait = 9999; });
     const res = [];
     for (const [x0, z0, tx, tz] of TRAJETS) {
       const c = G.city.cars.find(v => !v.heli && !v.busy && v.kind !== 'jetski' && !v.rider);
       if (!c) break;
+      // `c.libre` (la derniere place libre connue) date du trajet precedent : sans cette remise
+      // a zero, la voiture reposee ici repartait d'un bond a l'autre bout de la ville.
+      c.libre = null;
       c.x = x0; c.z = z0; c.h = 0; c.speed = 0; c.y = G.groundUnder(x0, z0, c.solid, 0.5);
       const st = { saut: true };
       let plan = 0; { const q = G.navPath(x0, z0, tx, tz) || []; let a = [x0, z0]; for (const b of q) { plan += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } }

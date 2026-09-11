@@ -458,17 +458,19 @@ body.tv .hp.st{height:calc(var(--uh) * .38)}
 body.tv .hp.pf{height:calc(var(--uh) * .55)}
 body.tv .pfn{font-size:calc(var(--uh) * .75)}
 /* le tableau descend sous la rangée des pastilles, qui prend maintenant toute la largeur */
-body.tv #lb{font-size:calc(var(--uh) * .9);min-width:calc(var(--uh) * 13);border-radius:var(--tvrh);margin-top:calc(var(--uh) * 2.5)}
+body.tv #lb{font-size:calc(var(--uh) * .9);min-width:calc(var(--uh) * 11);border-radius:var(--tvrh);margin-top:calc(var(--uh) * 2.5)}
 body.tv .lbh,body.tv .lbr{padding:calc(var(--uh) * .38) calc(var(--uh) * .66);font-size:calc(var(--uh) * .82)}
-body.tv .lbr .nm{max-width:calc(var(--uh) * 7)}
+body.tv .lbr .nm{max-width:calc(var(--uh) * 6)}
 /* le tableau des joueurs s'arrête au-dessus du milieu : il descendait jusque sur le radar */
 /* et il se fond au lieu d'être tranché net : de loin, une ligne coupée fait « écran cassé » */
 body.tv #lbRows{max-height:30vh;overflow-y:auto;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)}
 body.tv #chatLog{-webkit-mask-image:linear-gradient(transparent,#000 16%);mask-image:linear-gradient(transparent,#000 16%)}
 /* le chat descend en bas à gauche : le haut de l'image reste dégagé */
-body.tv #chat{left:var(--tvpadx);top:auto;bottom:var(--tvpad);width:calc(var(--uh) * 13);border-radius:var(--tvrh)}
+/* chat et tableau des joueurs restent ETROITS : agrandis, ils mordaient sur la bande du
+   milieu ou se tient le personnage — on joue pour le voir, pas pour lire des panneaux */
+body.tv #chat{left:var(--tvpadx);top:auto;bottom:var(--tvpad);width:calc(var(--uh) * 11);border-radius:var(--tvrh)}
 body.tv #chatLog{font-size:calc(var(--uh) * .85);max-height:calc(var(--uh) * 6)}
-body.tv #chatIn{font-size:calc(var(--uh) * .85);padding:calc(var(--uh) * .45)}
+body.tv #chatIn{font-size:calc(var(--uh) * .7);padding:calc(var(--uh) * .42)}   /* l'invite « Ecris ou parle… » etait tranchee net */
 /* le grand message passe SOUS le bandeau à deux rangées : il se posait dessus */
 body.tv #msg{font-size:calc(var(--uh) * 2.6);top:calc(var(--tvpad) + var(--uh) * 7)}
 body.tv #msg.long{font-size:calc(var(--uh) * 1.5)}

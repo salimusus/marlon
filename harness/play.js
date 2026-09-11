@@ -6003,7 +6003,11 @@ test('sur la tele, le radar et les jauges sont harmonises et laissent voir le jo
     const baseAvant = G.cam.base;
     G.modeTV(true);
     document.getElementById('chat').classList.add('open');
-    const W = innerWidth, H = innerHeight, marge = Math.min(W, H) * 0.04;
+    // Une SEULE marge calculee sur le petit cote ne protegeait le bord gauche et le bord
+    // droit d'un ecran 16/9 qu'a 2,3 % de la largeur — sous les 3,5 % de la zone « action
+    // safe » des diffuseurs, alors qu'un televiseur rogne un pourcentage de CHAQUE bord.
+    // La marge se mesure donc en largeur a gauche/droite et en hauteur en haut/bas.
+    const W = innerWidth, H = innerHeight, margeX = W * 0.042, margeY = H * 0.042;
     const box = sel => { const e = sel[0] === '.' ? document.querySelector(sel) : document.getElementById(sel);
       if (!e) return null; const st = getComputedStyle(e), b = e.getBoundingClientRect();
       if (st.display === 'none' || st.visibility === 'hidden' || !b.width) return null;
@@ -6011,8 +6015,8 @@ test('sur la tele, le radar et les jauges sont harmonises et laissent voir le jo
     const panneaux = ['me', 'lb', 'chat', 'gps', 'act'].map(box).filter(Boolean);
     const cadres = ['.tl', '.tc', '.tr'].map(box).filter(Boolean);
     // 1) rien ne tombe dans le surbalayage (les télés rognent 3 a 5 % des bords)
-    const dehors = [...panneaux, ...cadres].filter(b => b.x < marge - 2 || b.y < marge - 2
-      || b.x + b.w > W - marge + 2 || b.y + b.h > H - marge + 2).map(b => b.id);
+    const dehors = [...panneaux, ...cadres].filter(b => b.x < margeX - 2 || b.y < margeY - 2
+      || b.x + b.w > W - margeX + 2 || b.y + b.h > H - margeY + 2).map(b => b.id);
     // 2) la bande du milieu — la ou se tient le joueur — reste libre
     const cx1 = W * 0.32, cx2 = W * 0.68, cy1 = H * 0.42, cy2 = H * 0.98;
     const gene = panneaux.filter(b => b.x < cx2 && b.x + b.w > cx1 && b.y < cy2 && b.y + b.h > cy1).map(b => b.id);
@@ -6037,15 +6041,15 @@ test('sur la tele, le radar et les jauges sont harmonises et laissent voir le jo
     G.modeTV(false);
     const gpsNormal = box('gps');
     const centre = gpsNormal ? Math.abs((gpsNormal.x + gpsNormal.w / 2) - W / 2) < 6 : false;
-    return { W, H, marge: Math.round(marge), panneaux, dehors, gene, chev, coin, chatCoin,
+    return { W, H, margeX: Math.round(margeX), margeY: Math.round(margeY), panneaux, dehors, gene, chev, coin, chatCoin,
       enU, enPad, tactiles, baseAvant, baseApres, gpsNormalAuCentre: centre, base3: G.cam.base };
   });
   const ok = r.dehors.length === 0 && r.gene.length === 0 && r.chev.length === 0
-    && r.coin && r.coin.droite <= r.marge + 3 && r.coin.bas <= r.marge + 3
-    && r.chatCoin && r.chatCoin.gauche <= r.marge + 3 && r.chatCoin.bas <= r.marge + 3
+    && r.coin && r.coin.droite <= r.margeX + 3 && r.coin.bas <= r.margeY + 3
+    && r.chatCoin && r.chatCoin.gauche <= r.margeX + 3 && r.chatCoin.bas <= r.margeY + 3
     && r.enU >= 12 && r.enPad >= 4 && r.tactiles.length === 0
     && r.baseApres > r.baseAvant && r.gpsNormalAuCentre;
-  return { ok, detail: `chaque élément avait sa propre formule de taille et sa propre marge, et le radar trônait au MILIEU du bas de l'écran, pile devant le joueur · tout découle maintenant d'une seule unité (--u, ${r.enU} règles) et d'un seul retrait (--tvpad, ${r.enPad} règles) · les quatre coins sont pris — jauges et scores en haut, chat en bas a gauche (${r.chatCoin.gauche} px du bord), RADAR en bas a droite (${r.coin.droite} px du bord, ${r.coin.bas} px du bas) — et la bande du milieu ou se tient le joueur reste libre (${r.gene.length} gêneur, ${r.chev.length} chevauchement) · rien ne tombe dans le surbalayage de ${r.marge} px que rognent les télés (${r.dehors.length} débordement) · les ${5 - r.tactiles.length}/5 boutons tactiles s'effacent et la caméra recule de ${r.baseAvant} a ${r.baseApres} pour qu'on voie son personnage de loin · hors mode TV le radar revient au centre` };
+  return { ok, detail: `chaque élément avait sa propre formule de taille et sa propre marge, et le radar trônait au MILIEU du bas de l'écran, pile devant le joueur · tout découle maintenant d'une seule unité (--u, ${r.enU} règles) et d'un seul retrait (--tvpad, ${r.enPad} règles) · les quatre coins sont pris — jauges et scores en haut, chat en bas a gauche (${r.chatCoin.gauche} px du bord), RADAR en bas a droite (${r.coin.droite} px du bord, ${r.coin.bas} px du bas) — et la bande du milieu ou se tient le joueur reste libre (${r.gene.length} gêneur, ${r.chev.length} chevauchement) · rien ne tombe dans le surbalayage que rognent les télés — 4,2 % de chaque bord, soit ${r.margeX} px a gauche/droite et ${r.margeY} px en haut/bas (${r.dehors.length} débordement) · les ${5 - r.tactiles.length}/5 boutons tactiles s'effacent et la caméra recule de ${r.baseAvant} a ${r.baseApres} pour qu'on voie son personnage de loin · hors mode TV le radar revient au centre` };
 });
 
 test('on connecte une smart TV et le telephone sert de manette', async p => {
@@ -10837,4 +10841,82 @@ test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni
   const monte = r.rapports[0] === 1 && r.rapports[4] >= 5 && r.rapports.every((g, i) => i === 0 || g >= r.rapports[i - 1]);
   const ok = r.casse && r.koCasse && r.repare && monte && r.appel && r.hp === 100 && r.ko === 0 && r.dist < 6;
   return { ok, detail: `une horloge à NaN figeait tout en silence : la boîte restait sur A1 à toutes les vitesses (régime saturé à 19,7) et un blessé au minuteur de KO à NaN n'était plus jamais ramassé · l'horloge se remet d'aplomb toute seule (${r.repare}, ${r.horloge} s) : les rapports montent A${r.rapports.join(' → A')} et le blessé est conduit à l'hôpital (${r.dist} m, ${r.hp} PV, KO ${r.ko})` };
+});
+
+// ================= POSTE A — le rendu sur une vraie télévision =================
+// Le mode télé grossissait « à peine » : tout découlait de --u, une unité plafonnée par la
+// taille des FENÊTRES, et son plancher (15 px) était plus petit que la taille normale des
+// pastilles (14 px) — elles RÉTRÉCISSAIENT en passant à la télé. On mesure donc le bandeau
+// dans la vraie définition d'un téléviseur, et pas seulement dans la fenêtre du banc d'essai.
+test('sur une télé 1080p le bandeau grossit vraiment, tient sur une ligne et reste hors du surbalayage', async p => {
+  await p.setViewportSize({ width: 1920, height: 1080 });
+  await p.waitForTimeout(400);
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    if (G.uiOpen) G.closeUI();
+    const px = s => parseFloat(s) || 0;
+    const mesure = () => {
+      const pill = document.querySelector('.tc .pill');
+      return { pastille: px(getComputedStyle(pill).fontSize),
+        bouton: px(getComputedStyle(document.getElementById('chatBtn')).width),
+        joueur: px(getComputedStyle(document.getElementById('me')).fontSize),
+        tableau: document.getElementById('lb').getBoundingClientRect().width,
+        radar: document.getElementById('gps').getBoundingClientRect().width,
+        chat: px(getComputedStyle(document.getElementById('chatLog')).fontSize) };
+    };
+    G.modeTV(false); await dodo(150);
+    const avant = mesure();
+    G.modeTV(true); await dodo(250);
+    const apres = mesure();
+    // 1) les pastilles du haut tiennent-elles sur UNE SEULE ligne ?
+    const visibles = [...document.querySelectorAll('.tc .pill')].filter(e => e.offsetParent);
+    const lignes = new Set(visibles.map(e => Math.round(e.getBoundingClientRect().top))).size;
+    // 2) rien ne tombe dans le surbalayage : 4,2 % de CHAQUE bord (un téléviseur rogne un
+    //    pourcentage de la largeur et de la hauteur, pas du petit côté)
+    const W = innerWidth, H = innerHeight, mx = W * 0.042 - 2, my = H * 0.042 - 2;
+    const dehors = [];
+    document.querySelectorAll('#top .pill,#top .ibtn,#me,#lb,#gps,#chat,#tvBadge').forEach(e => {
+      if (!e.offsetParent) return;
+      const b = e.getBoundingClientRect(); if (!b.width || !b.height) return;
+      if (b.left < mx || b.top < my || b.right > W - mx || b.bottom > H - my)
+        dehors.push(e.id || e.className);
+    });
+    // 3) et le grand message ne se pose pas sur le bandeau à deux rangées
+    const bas = document.querySelector('.tc').getBoundingClientRect().bottom;
+    const msg = document.getElementById('msg').getBoundingClientRect();
+    G.modeTV(false); await dodo(150);
+    return { avant, apres, lignes, dehors, pastilles: visibles.length,
+      messageSousBandeau: msg.top >= bas - 1, bandeau: Math.round(bas), message: Math.round(msg.top) };
+  });
+  await p.setViewportSize({ width: 1024, height: 640 });
+  await p.waitForTimeout(300);
+  const a = r.avant, b = r.apres;
+  const fact = v => +(b[v] / a[v]).toFixed(2);
+  const ok = fact('pastille') >= 1.4 && fact('bouton') >= 1.4 && fact('joueur') >= 1.4
+    && fact('tableau') >= 1.3 && fact('radar') >= 1.3 && fact('chat') >= 1.4
+    && r.lignes === 1 && r.pastilles >= 5 && r.dehors.length === 0 && r.messageSousBandeau;
+  return { ok, detail: `en 1920×1080 le mode télé multiplie enfin les tailles au lieu de les rogner : pastilles ${a.pastille} → ${b.pastille} px (×${fact('pastille')}), boutons ${a.bouton} → ${b.bouton} px (×${fact('bouton')}), barre de vie ${a.joueur} → ${b.joueur} px (×${fact('joueur')}), tableau des joueurs ${Math.round(a.tableau)} → ${Math.round(b.tableau)} px, radar ${Math.round(a.radar)} → ${Math.round(b.radar)} px, chat ${a.chat} → ${b.chat} px · les ${r.pastilles} pastilles tiennent sur ${r.lignes} ligne et le grand message passe sous le bandeau (${r.bandeau} px → ${r.message} px) · ${r.dehors.length} élément dans le surbalayage que rognent les télés` };
+});
+
+// Le contrôle qualité photographiait la ville « sans interface » et le RADAR restait allumé
+// dans le coin : hideHud visait #radar, un identifiant qui n'existe dans aucune page.
+test('les captures sans interface cachent vraiment le radar, et l\'interface revient après', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const vus = id => getComputedStyle(document.getElementById(id)).display !== 'none';
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    await dodo(150);
+    const normal = { radar: vus('gps'), haut: vus('top'), chat: vus('chat') };
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, hideHud: true });
+    await dodo(150);
+    const nu = { radar: vus('gps'), haut: vus('top'), chat: vus('chat') };
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    await dodo(150);
+    const retour = { radar: vus('gps'), haut: vus('top'), chat: vus('chat') };
+    return { normal, nu, retour };
+  });
+  const ok = r.normal.radar && r.normal.haut && !r.nu.radar && !r.nu.haut && !r.nu.chat
+    && r.retour.radar && r.retour.haut && r.retour.chat;
+  return { ok, detail: `hideHud visait « #radar », un identifiant qui n'existe pas — le radar (#gps) restait allumé sur toutes les captures « sans interface », et rien ne rallumait l'interface ensuite · avec interface radar=${r.normal.radar}/bandeau=${r.normal.haut} · sans interface radar=${r.nu.radar}/bandeau=${r.nu.haut}/chat=${r.nu.chat} · et tout revient après : radar=${r.retour.radar}/bandeau=${r.retour.haut}/chat=${r.retour.chat}` };
 });

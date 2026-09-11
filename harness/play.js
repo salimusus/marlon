@@ -551,7 +551,7 @@ test('on est bien assis sur la balançoire', async p => {
   await p.waitForTimeout(900);
   const a = await p.evaluate(() => ({ y: +__G.P.pos.y.toFixed(2), rot: +__G.me.group.rotation.x.toFixed(2), ang: +__G.P.swing.ang.toFixed(2) }));
   await p.evaluate(() => { const sw = __G.P.swing; if (sw) sw.rider = null; __G.P.swing = null; });
-  // planche à 0,95 m, dessus 1,00 m : le joueur s'assoit à 0,49 m
+  // planche à 0,90 m, dessus 0,95 m : le joueur s'assoit à 0,49 m
   const ok = Math.abs(a.y - 0.49) < 0.12 && Math.abs(a.rot + a.ang) < 0.02;
   return { ok, detail: `assis à y=${a.y} (attendu ≈0,49), corps incliné de ${a.rot} pour une nacelle à ${a.ang}` };
 });

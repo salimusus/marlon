@@ -4168,11 +4168,17 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
   for (let i = 1; i <= 4; i++) {
     const sx = SWX - SWL / 2 + SWL * i / 5;   // 4 sièges régulièrement espacés, aucun devant un pied
     const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
-    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, 2.6, 0.06); rope.position.set(dx, -1.3, 0); piv.add(rope); }
-    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -2.6, 0); piv.add(seat);
+    // LA LONGUEUR DES CORDES SUIT LA POUTRE. Elles mesuraient 2,60 m, la longueur qu'il
+    // fallait quand la poutre etait a 3,55 m : depuis qu'elle est a 3,75 m (elle repose SUR
+    // les pieds), la planche etait remontee a 1,15 m et le joueur s'y asseyait a 0,74 m au
+    // lieu de 0,49 — perche a hauteur de hanche d'adulte, les pieds dans le vide. On rallonge
+    // les cordes de 25 cm : la planche retrouve sa hauteur de dessus de 0,95 m.
+    const SWCORDE = 2.85;
+    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, SWCORDE, 0.06); rope.position.set(dx, -SWCORDE / 2, 0); piv.add(rope); }
+    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -SWCORDE, 0); piv.add(seat);
     // `siege` : le maillage lui-meme. swingTick s'en sert pour COLLER le joueur a la planche
     // au lieu de recalculer sa place avec une formule (voir swingTick).
-    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: 2.6, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null });
   }
   sign(-12, 0.3, 58, '🎠 Balançoires : E pour s\'asseoir', false, Math.PI);
   // terrain de boules
@@ -4288,7 +4294,8 @@ function swingTick(dt) {
       const seatX = sp.x, seatY = sp.y, seatZ = sp.z;
       const dAng = sw.amp * w * Math.cos(sw.t * w);
       const vz = -dAng * sw.L * Math.cos(sw.ang), vy = dAng * sw.L * Math.sin(sw.ang);
-      // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,51 m plus bas, comme sur un banc
+      // dessus de la planche = seatY + 0,05 ; le joueur s'assoit 0,46 m plus bas (0,05 m de
+      // demi-planche + 0,41 m d'assise) : la planche est a 0,90 m, ses pieds a 0,49 m
       P.pos.set(seatX, seatY - 0.41, seatZ); P.vel.set(0, vy, vz); P.facing = 0;   // 0,05 m de demi-planche + 0,36 m d'assise
       if (P.jumpBuf > 0) { P.jumpBuf = 0; sw.rider = null; P.swing = null; P.vel.set(0, vy * 1.3 + 6, vz * 1.5); P.grounded = false; msg('🎠 Wouhou !', 700); sfx.jump(); }
     }

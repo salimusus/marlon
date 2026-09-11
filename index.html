@@ -26282,10 +26282,17 @@ function reparateurArrive(cible, duree, fini) {
   // IL SE MET DEVANT LE CAPOT, PAS DANS LA VOITURE. `baseD` est la longueur du véhicule :
   // on se place une demi-longueur devant, plus 1,15 m, et on regarde la calandre.
   const cs = Math.cos(cible.h || 0), sn = Math.sin(cible.h || 0);
-  const avantZ = (cible.baseD || 4.4) / 2 + 0.78;   // mesuré sur capture : à 1,15 m il avait la tête au-dessus du PARE-CHOCS, pas du moteur
+  X   // mesuré sur capture : à 1,15 m il avait la tête au-dessus du PARE-CHOCS, pas du moteur
   const rx = cible.x + sn * avantZ, rz = cible.z + cs * avantZ;
   const face = Math.atan2(cible.x - rx, cible.z - rz);
   const y = (typeof groundUnder === 'function') ? groundUnder(rx, rz, null, cible.y || 0) : (cible.y || 0);
+  // L'ORDRE D'EULER 'YXZ', ET POURQUOI. `animPose` penche le buste en écrivant
+  // `groupe.rotation.x`. Avec l'ordre par défaut ('XYZ'), cette rotation s'applique dans le
+  // repère du MONDE, APRÈS le cap : le réparateur se penchait donc toujours vers le sud,
+  // quelle que soit l'orientation de la voiture. Mesuré : tête à 1,85 m DEVANT le bord du
+  // capot, c'est-à-dire penchée à l'opposé du moteur. En 'YXZ' le buste plonge dans l'axe où
+  // le personnage REGARDE, et la tête arrive bien au-dessus du moteur.
+  av.group.rotation.order = 'YXZ';
   av.group.position.set(rx, y, rz); av.group.rotation.y = face;
   // LE CAPOT S'OUVRE SUR SA CHARNIÈRE, PAS AUTOUR DE SON MILIEU. Une simple rotation faisait
   // pivoter la tôle sur son centre : la moitié avant s'enfonçait DANS le moteur pendant que
@@ -26326,10 +26333,11 @@ function reparateurTick(r, dt) {
   // l'accident pendant que la voiture partait au garage.
   const c = r.cible;
   if (c && c.g) {
-    const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0), d = (c.baseD || 4.4) / 2 + 0.78;
+    const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0), d = (c.baseD || 4.4) / 2 + 0.62;
     r.x = c.x + sn * d; r.z = c.z + cs * d; r.face = Math.atan2(c.x - r.x, c.z - r.z);
     r.y = (c.y || 0);
   }
+  av.group.rotation.order = 'YXZ';   // voir reparateurArrive : sans ça le buste se penche vers le sud
   av.group.position.set(r.x, r.y - (av.rig.baisse || 0), r.z);
   av.group.rotation.y = r.face;
   if (typeof animateRig === 'function') animateRig(av.rig, 'idle', 0, dt, simTime);

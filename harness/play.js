@@ -9817,7 +9817,7 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
   const b = r.bureau, dp = r.dep, pm = r.pomp, po = r.pol;
   const ok = b.cartes === b.total && b.ouvertes === b.total && b.difficultes === b.total
     && ['depannage', 'pompier', 'police'].every(id => b.ids.includes(id))
-    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3' && dp.remorque <= 8 && dp.fin.finie && dp.fin.gain >= 70
+    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3,4,5' && dp.remorque <= 8 && dp.surPlateau > 0.8 && dp.fin.finie && dp.fin.gain >= 70
     && pm.lance && pm.variante === 'blesse' && pm.feux >= 1 && pm.chrono && pm.sirene && pm.feuMonte
     && pm.arrosage.apres < pm.arrosage.avant - 20 && pm.etapes.join(',') === '1,2,3' && pm.blesse && pm.fin.finie && pm.fin.gain >= 90
     && ['chauffard', 'voleur', 'escorte', 'barrage'].every(v => po[v].lance && po[v].variante === v && po[v].etapes.join(',') === '1,2' && po[v].sirene && po[v].fin.finie && po[v].fin.gain >= 85)

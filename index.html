@@ -706,6 +706,28 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   .tb.gros{height:clamp(38px,14vh,60px)}
   #telBar{padding:4px 8px calc(env(safe-area-inset-bottom) + 4px)}
 }
+/* ===== POSTE JEU STRATÉGIQUE : la carte des quartiers, le Sacre, l'écran de victoire ===== */
+/* La carte des quartiers remplace une liste de texte que personne ne lisait : huit gros
+   carrés colorés, vert = à toi. Lisible d'un canapé, à trois mètres d'une télé. */
+#guerreCarte{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 10px}
+@media (max-width:640px){#guerreCarte{grid-template-columns:repeat(2,1fr)}}
+.tcase{border-radius:12px;padding:8px 6px;text-align:center;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+  display:flex;flex-direction:column;align-items:center;gap:2px;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.tcase .te{font-size:26px;line-height:1.05}
+.tcase .tn{font-size:13px;font-weight:800;line-height:1.15}
+.tcase .tq{font-size:11px;font-weight:700;opacity:.9;text-transform:uppercase;letter-spacing:.4px}
+.tcase .tv{font-size:11px;letter-spacing:-2px}
+/* le compte à rebours du Sacre : énorme, au milieu, impossible à rater */
+#sacre{position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:60;display:none;
+  text-align:center;font-size:64px;font-weight:900;color:#ffd23f;text-shadow:0 3px 14px rgba(0,0,0,.8);
+  pointer-events:none;line-height:1}
+#sacre.on{display:block}
+#sacre span{display:block;font-size:17px;font-weight:800;color:#f4f6fa;margin-top:4px}
+#sacre.pause{color:#ff8f3a}
+@media (max-width:640px){#sacre{font-size:44px}#sacre span{font-size:14px}}
+/* le sablier de l'alliance, à côté des pastilles du haut */
+#alliance{display:none}
+#alliance.on{display:inline-flex}
 </style>
 </head>
 <body class="lobby">
@@ -727,6 +749,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
     <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt"> · 🚩 0/8</span></div>
+    <div class="pill cityonly" id="alliance" title="Alliance temporaire">🤝 —</div>
     <div class="pill" id="timer">⏱ 0:00</div>
     <div class="pill" id="coins">🪙 0/0</div>
     <div class="pill" id="deaths">💀 0</div>
@@ -994,13 +1017,27 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   </div>
 </div>
 
+<!-- POSTE JEU STRATÉGIQUE : le compte à rebours du Sacre (les 90 s finales) et l'écran de victoire -->
+<div id="sacre"></div>
+<div class="overlay hidden" id="victoire">
+  <div class="card">
+    <h2>👑 MAÎTRE DE LA VILLE</h2>
+    <p class="sub" id="victoireTxt"></p>
+    <div class="mpr" style="flex-direction:column;align-items:stretch">
+      <button class="btn" id="victoireRejouer">🚩 Nouvelle guerre, plus dure</button>
+      <button class="btn sec" id="victoireBack">Continuer à jouer</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="guerre">
   <div class="card wide">
     <h2>🚩 La guerre des gangs</h2>
     <p class="sub" id="guerreSub">Ton but : contrôler la ville. Bats les gangs, prends leurs quartiers, recrute leurs membres.</p>
     <div class="tatlab">Ton gang</div><div id="guerreMoi" class="tatliste"></div>
     <div class="tatlab">Les gangs de la ville</div><div id="guerreListe" class="tatliste"></div>
-    <div class="tatlab">Les quartiers</div><div id="guerreTerr" class="pills"></div>
+    <div class="tatlab">La carte des quartiers — vert = à toi</div><div id="guerreCarte"></div>
+    <div id="guerreTerr" class="pills" style="display:none"></div>
     <div class="mpr" style="justify-content:center">
       <button class="btn sec" id="guerreBack">Retour</button>
     </div>
@@ -14695,7 +14732,7 @@ const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;'
 // Résumé de la guerre des gangs affiché en haut de l'écran. On passe par cet objet plutôt que
 // de lire gang/guerre directement : updateHud() tourne dès le démarrage, avant que ces
 // constantes ne soient initialisées.
-const HUD_GUERRE = { rep: 0, terr: 0, total: 8, rang: 'Débutant' };
+const HUD_GUERRE = { rep: 0, terr: 0, total: 8, rang: 'Débutant', allie: null };
 function updateHud() {
   try { majPerfHud(); } catch (e) {}
   $('coins').textContent = WORLDS[worldIdx] && WORLDS[worldIdx].free ? `🪙 ${wallet}` : `🪙 ${coinCount}/${coins.length} · ${wallet}`;
@@ -14705,6 +14742,13 @@ function updateHud() {
   // pastille de la guerre des gangs : respect gagné et quartiers tenus
   const rp = $('respect');
   if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt"> · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
+  // le sablier de l'alliance : on voit toujours le temps qu'il reste, on n'est jamais surpris
+  const al = $('alliance');
+  if (al) {
+    const A = HUD_GUERRE.allie;
+    if (A && A.reste > 0) { al.classList.add('on'); al.innerHTML = `🤝 ${A.nom} ⏳ ${Math.floor(A.reste / 60)}:${String(A.reste % 60).padStart(2, '0')}`; al.title = 'Alliance temporaire avec ' + A.nom; }
+    else al.classList.remove('on');
+  }
 }
 function updateTimer() { $('timer').textContent = '⏱ ' + fmt(elapsed); }
 function showBest() {
@@ -21006,7 +21050,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -21143,7 +21187,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null; if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });
@@ -22332,15 +22376,34 @@ function poseTatouages(av, list) {
 // Chaque gang a un nom, un chef, un bandana, la villa de son chef à un coin de la ville et
 // une planque secrète où il cache son magot. Quand un gang tombe, un nouveau se forme avec
 // un autre chef, un autre nom et plus de moyens : la guerre ne s'arrête jamais.
+// `palier` : le rang du joueur à partir duquel ce gang débarque en ville (voir PALIERS_GUERRE).
+// `nb` : ses hommes en plus du chef · `f0` : sa performance de départ · `terr` : les quartiers
+// qu'il occupe en arrivant. La difficulté monte ÉTAPE PAR ÉTAPE : au début deux petits gangs,
+// puis un nouveau, plus fort, à chaque changement de rang du joueur.
 const GANG_DEFS = [
-  { id: 'rouge', nom: 'Les Requins Rouges', hat: 'bandana', couleur: 0xd42b2b, teinte: '#d42b2b', voiture: 0xd42b2b, villa: [-200, -50], toit: 0xd42b2b },
-  { id: 'bleu', nom: 'Les Loups Bleus', hat: 'bandanaB', couleur: 0x2f6fe0, teinte: '#2f6fe0', voiture: 0x2f6fe0, villa: [-200, 130], toit: 0x2f6fe0 },
-  { id: 'jaune', nom: 'Les Frelons Jaunes', hat: 'bandanaJ', couleur: 0xf2c21a, teinte: '#f2c21a', voiture: 0xf2c21a, villa: [-200, 240], toit: 0xd8a017 },
+  { id: 'jaune', nom: 'Les Frelons Jaunes', hat: 'bandanaJ', couleur: 0xf2c21a, teinte: '#f2c21a', voiture: 0xf2c21a, villa: [-200, 240], toit: 0xd8a017,
+    palier: 1, nb: 2, f0: 20, terr: ['plage'] },
+  { id: 'rouge', nom: 'Les Requins Rouges', hat: 'bandana', couleur: 0xd42b2b, teinte: '#d42b2b', voiture: 0xd42b2b, villa: [-200, -50], toit: 0xd42b2b,
+    palier: 1, nb: 3, f0: 30, terr: ['zone'] },
+  { id: 'bleu', nom: 'Les Loups Bleus', hat: 'bandanaB', couleur: 0x2f6fe0, teinte: '#2f6fe0', voiture: 0x2f6fe0, villa: [-200, 130], toit: 0x2f6fe0,
+    palier: 2, nb: 4, f0: 42, terr: ['industriel', 'parc'] },
+  { id: 'noir', nom: 'Les Corbeaux Noirs', hat: 'bandana', couleur: 0x2b2f38, teinte: '#5a6272', voiture: 0x2b2f38, toit: 0x2b2f38,
+    palier: 3, nb: 5, f0: 55, terr: ['commerces', 'banque'], armes: true },
+  { id: 'violet', nom: 'Les Panthères Violettes', hat: 'bandanaB', couleur: 0x8e44d0, teinte: '#8e44d0', voiture: 0x8e44d0, toit: 0x8e44d0,
+    palier: 4, nb: 6, f0: 70, terr: ['centre', 'residentiel'], coalise: true },
+  { id: 'blanc', nom: 'Le Clan Fantôme', hat: 'bandana', couleur: 0xe8ecf3, teinte: '#b9c2d2', voiture: 0xe8ecf3, toit: 0xcdd4e0,
+    palier: 5, nb: 7, f0: 85, terr: ['centre', 'commerces', 'banque'], cache: true, armes: true },
 ];
+// Les cinq paliers de difficulté, calés sur les rangs du joueur (RANGS). On change de palier
+// en gagnant du respect : le jeu devient plus dur AU RYTHME du joueur, jamais avant.
+const PALIERS_GUERRE = [0, 120, 400, 1000, 2500];
 const GANG_NOMS_RELEVE = {
   rouge: ['Les Requins Rouges', 'Les Braises', 'Les Coquelicots', 'Le Clan Cerise', 'Les Fusées Rouges'],
   bleu: ['Les Loups Bleus', 'Les Marées', 'Le Clan Cobalt', 'Les Bleuets', 'Les Orques'],
   jaune: ['Les Frelons Jaunes', 'Les Étincelles', 'Le Clan Safran', 'Les Guêpes', 'Les Canaris'],
+  noir: ['Les Corbeaux Noirs', 'Les Ombres', 'Le Clan Charbon', 'Les Chouettes'],
+  violet: ['Les Panthères Violettes', 'Les Améthystes', 'Le Clan Prune', 'Les Orchidées'],
+  blanc: ['Le Clan Fantôme', 'Les Spectres', 'Les Neiges', 'Le Clan Ivoire'],
 };
 const CHEFS_NOMS = ['Rocco le Rouge', 'Bruno Bulldozer', 'Sonia Sirocco', 'Nina la Fouine', 'Marco Cent-Clés',
   'Vito le Vif', 'Tonio Turbo', 'Gina Grelot', 'Karim Klaxon', 'Milo Moustache', 'Zoé Zigzag', 'Bebel le Malin',
@@ -22356,7 +22419,11 @@ const RANGS = [
 const gangs = [];
 const gang = { membres: [], nom: 'Ton gang', couleur: 0x5cc453, mission: null, butin: 0,
   force: 20, magot: 0, rep: 0, planque: null, otages: [], armes: 0, entrain: null, capture: null, missions: [] };
-const guerre = { territoires: {}, reunion: null, prochaineReunion: 0, saison: 1, t: 0, tick: 0 };
+// `palier` : la marche de difficulté atteinte (1 à 5) · `sacre` : les secondes qu'il reste à tenir
+// pour devenir maître de la ville, 0 quand le compte à rebours n'est pas lancé · `gagne` : la partie
+// est remportée · `arrivee` : le gang annoncé qui débarque dans quelques secondes.
+const guerre = { territoires: {}, reunion: null, prochaineReunion: 0, saison: 1, t: 0, tick: 0,
+  palier: 1, sacre: 0, sacrePause: false, gagne: false, arrivee: null, detruits: 0, debut: 0, fidT: 0 };
 const GANG_ORDRES = [
   'va t\'entraîner (salle de sport)', 'va au stand de tir', 'prends un fusil',
   'allez voler de l\'argent à <nom>', 'allez braquer la banque', 'allez voler une voiture',
@@ -24343,11 +24410,13 @@ function buildPlanque(x, z, opt = {}) {
   return P2;
 }
 // Les huit quartiers que les gangs se disputent : celui qui les tient touche la « protection ».
+// `v` = ce qu'il rapporte (1 = tranquille, 3 = le gros lot) : le centre-ville et la banque valent
+// trois fois le parc, et c'est pour ça qu'on se bat dessus. `e` = son émoji sur la carte.
 const TERRITOIRES = [
-  { k: 'centre', n: 'Centre-ville', x: 0, z: 40, r: 40 }, { k: 'commerces', n: 'Rue commerçante', x: 56, z: 64, r: 30 },
-  { k: 'banque', n: 'Quartier de la banque', x: -52, z: 70, r: 28 }, { k: 'parc', n: 'Parc', x: 0, z: 80, r: 26 },
-  { k: 'plage', n: 'Plage', x: 150, z: 40, r: 46 }, { k: 'zone', n: 'La Zone', x: -145, z: 40, r: 46 },
-  { k: 'residentiel', n: 'Quartier résidentiel', x: 110, z: 195, r: 60 }, { k: 'industriel', n: 'Zone industrielle', x: 92, z: -20, r: 34 },
+  { k: 'centre', n: 'Centre-ville', x: 0, z: 40, r: 40, v: 3, e: '🏙️' }, { k: 'commerces', n: 'Rue commerçante', x: 56, z: 64, r: 30, v: 2, e: '🛍️' },
+  { k: 'banque', n: 'Quartier de la banque', x: -52, z: 70, r: 28, v: 3, e: '🏦' }, { k: 'parc', n: 'Parc', x: 0, z: 80, r: 26, v: 1, e: '🌳' },
+  { k: 'plage', n: 'Plage', x: 150, z: 40, r: 46, v: 2, e: '🏖️' }, { k: 'zone', n: 'La Zone', x: -145, z: 40, r: 46, v: 2, e: '🏚️' },
+  { k: 'residentiel', n: 'Quartier résidentiel', x: 110, z: 195, r: 60, v: 1, e: '🏡' }, { k: 'industriel', n: 'Zone industrielle', x: 92, z: -20, r: 34, v: 2, e: '🏭' },
 ];
 // L'ouest s'urbanise : une avenue longe les villas des chefs et des chemins de terre la
 // relient à La Zone, au rallye et à l'école.
@@ -24369,44 +24438,61 @@ function routesOuest() {
     const fe = new THREE.Mesh(new THREE.SphereGeometry(1.9, 10, 8), lam(0x3fae4a)); fe.position.set(x, 4, z); worldGroup.add(fe);
   }
 }
+// Fabrique UN gang rival. Sortie de buildGangs() pour que les gangs des paliers suivants
+// puissent débarquer en pleine partie (arriveGang) exactement comme ceux du début.
+function creerGangRival(G, i, chefNom) {
+  const Z = city.zone2 || { x: -145, z: 40 };
+  const spots = guerre.spots || PLANQUES_SPOTS;
+  const sp = spots[i % spots.length] || [Z.x, Z.z];
+  // Les trois premiers gangs campent dans La Zone ; les suivants, arrivés plus tard, posent
+  // leurs affaires devant leur propre planque (un terrain qu'on vient de dégager, donc libre).
+  const bases = [[Z.x - 24, Z.z - 22], [Z.x + 26, Z.z - 22], [Z.x - 6, Z.z + 24]];
+  const [bx, bz] = bases[i] || [sp[0], sp[1] + 13];
+  const sauve = (guerre.sauve && guerre.sauve[G.id]) || null;
+  const g2 = { ...G, base: [bx, bz], membres: [], etat: 'repos', t: simTime + rnd(10, 40), cible: null, voit: null,
+    chefNom: chefNom || (sauve && sauve.chef) || pickOne(CHEFS_NOMS),
+    nom: (sauve && sauve.nom) || G.nom,
+    generation: (sauve && sauve.gen) || 1,
+    force: (sauve && sauve.force) || G.f0 || 25,
+    relation: (sauve && sauve.rel) != null ? sauve.rel : 0,
+    magot: (sauve && sauve.magot) || Math.floor(rnd(300, 700) + (G.f0 || 25) * 6),
+    connu: !!(sauve && sauve.connu), reunionT: simTime + rnd(180, 420) };
+  // le chef et ses hommes — leur nombre vient de la table des paliers
+  g2.chef = creerGangeur(g2, bx, bz, true);
+  g2.membres.push(g2.chef);
+  for (let k = 0; k < (G.nb != null ? G.nb : 3); k++) g2.membres.push(creerGangeur(g2, bx + rnd(-3, 3), bz + rnd(-3, 3)));
+  // la belle voiture du gang, peinte et équipée
+  const c = makeCar(G.voiture, bx + rnd(-6, 6), bz + 7, rnd(0, 6.28), {});
+  try { tuneApply(c, { couleur: G.voiture, finition: 'metal', kits: ['aileron', 'jupes', 'jantes', 'teinte', 'echap', 'rabaisse', 'nitro'], moteur: 1, amorti: 1 }); } catch (e) {}
+  c.gang = G.id; c.busy = true; g2.voit = c;
+  // la planque secrète, quelque part en ville
+  g2.planque = buildPlanque(sp[0], sp[1], { couleur: G.couleur });
+  g2.planque.gang = g2; g2.planque.coffre.gang = g2; g2.planque.coffre.amount = g2.magot;
+  // deux gardes devant la planque
+  for (let k = 0; k < 2; k++) {
+    const m = creerGangeur(g2, sp[0] - 3 + k * 6, sp[1] + 7);
+    m.garde = [sp[0] - 3 + k * 6, sp[1] + 7]; g2.membres.push(m);
+  }
+  // les gangs des paliers 3 et 5 arrivent armés : la moitié de leurs hommes ont un fusil
+  if (G.armes) g2.membres.forEach((m, k) => { if (k % 2 === 0) m.arme = true; });
+  // la villa du chef, à un coin de la ville (seuls les trois premiers en ont une)
+  if (G.villa) { buildVilla(G.villa[0], G.villa[1], { name: '🏰 Villa de ' + g2.chefNom, roof: G.toit || G.couleur, wall: 0xf1e7d6 }); g2.villaPos = { x: G.villa[0], z: G.villa[1] }; }
+  gangs.push(g2);
+  return g2;
+}
 function buildGangs() {
   gangs.length = 0;
   if (!city.zone2) return;
   const Z = city.zone2;
-  const bases = [[Z.x - 24, Z.z - 22], [Z.x + 26, Z.z - 22], [Z.x - 6, Z.z + 24]];
-  const spots = [...PLANQUES_SPOTS].sort(() => Math.random() - 0.5);
+  guerre.spots = [...PLANQUES_SPOTS].sort(() => Math.random() - 0.5);
+  guerre.palier = palierDuRang();
   const chefs = [...CHEFS_NOMS].sort(() => Math.random() - 0.5);
+  // On ne bâtit QUE les gangs de la difficulté atteinte, et jamais ceux que le joueur a déjà
+  // détruits : chaque victoire reste acquise, la partie avance toujours dans le même sens.
   GANG_DEFS.forEach((G, i) => {
-    const [bx, bz] = bases[i];
-    const sauve = (guerre.sauve && guerre.sauve[G.id]) || null;
-    const g2 = { ...G, base: [bx, bz], membres: [], etat: 'repos', t: simTime + rnd(10, 40), cible: null, voit: null,
-      chefNom: (sauve && sauve.chef) || chefs[i] || 'Le Chef',
-      nom: (sauve && sauve.nom) || G.nom,
-      generation: (sauve && sauve.gen) || 1,
-      force: (sauve && sauve.force) || 25 + i * 5,
-      relation: (sauve && sauve.rel) != null ? sauve.rel : 0,
-      magot: (sauve && sauve.magot) || Math.floor(rnd(300, 700)),
-      connu: !!(sauve && sauve.connu), reunionT: simTime + rnd(180, 420) };
-    // le chef et ses hommes
-    g2.chef = creerGangeur(g2, bx, bz, true);
-    g2.membres.push(g2.chef);
-    for (let k = 0; k < 3; k++) g2.membres.push(creerGangeur(g2, bx + rnd(-3, 3), bz + rnd(-3, 3)));
-    // la belle voiture du gang, peinte et équipée
-    const c = makeCar(G.voiture, bx + rnd(-6, 6), bz + 7, rnd(0, 6.28), {});
-    try { tuneApply(c, { couleur: G.voiture, finition: 'metal', kits: ['aileron', 'jupes', 'jantes', 'teinte', 'echap', 'rabaisse', 'nitro'], moteur: 1, amorti: 1 }); } catch (e) {}
-    c.gang = G.id; c.busy = true; g2.voit = c;
-    // la planque secrète, quelque part en ville
-    const sp = spots[i] || [Z.x, Z.z];
-    g2.planque = buildPlanque(sp[0], sp[1], { couleur: G.couleur });
-    g2.planque.gang = g2; g2.planque.coffre.gang = g2; g2.planque.coffre.amount = g2.magot;
-    // deux gardes devant la planque
-    for (let k = 0; k < 2; k++) {
-      const m = creerGangeur(g2, sp[0] - 3 + k * 6, sp[1] + 7);
-      m.garde = [sp[0] - 3 + k * 6, sp[1] + 7]; g2.membres.push(m);
-    }
-    // la villa du chef, à un coin de la ville
-    if (G.villa) { buildVilla(G.villa[0], G.villa[1], { name: '🏰 Villa de ' + g2.chefNom, roof: G.toit || G.couleur, wall: 0xf1e7d6 }); g2.villaPos = { x: G.villa[0], z: G.villa[1] }; }
-    gangs.push(g2);
+    if ((G.palier || 1) > guerre.palier) return;
+    if ((guerre.morts || []).indexOf(G.id) >= 0) return;
+    creerGangRival(G, i, chefs[i]);
   });
   // la planque du joueur : au sud de La Zone, avec son propre coffre
   gang.planque = buildPlanque(Z.x + 34, Z.z + 26, { joueur: true, couleur: 0x5cc453 });
@@ -24418,14 +24504,19 @@ function buildGangs() {
   for (const r of (guerre.sauveRecrues || [])) {
     const m = creerGangeur(modeleJoueur, gang.planque.x + rnd(-7, 7), gang.planque.z + rnd(5, 9));
     m.nom = r.n || m.nom; m.gang = 'joueur'; m.recrue = true; m.force = r.f || 0;
+    m.fidelite = r.fi != null ? r.fi : 80; m.ancien = r.an || null;
     gang.membresLibres.push(m);
   }
-  // partage initial des quartiers : trois aux gangs, le reste neutre
+  // partage initial des quartiers : chaque gang présent occupe les siens (table GANG_DEFS),
+  // tout le reste est libre — au palier 1 il n'y a que deux drapeaux ennemis sur huit.
   if (!Object.keys(guerre.territoires).length) {
-    guerre.territoires = { zone: 'rouge', industriel: 'bleu', plage: 'jaune' };
+    for (const g2 of gangs) for (const k of (g2.terr || [])) if (!guerre.territoires[k]) guerre.territoires[k] = g2.id;
   }
+  if (!guerre.debut) guerre.debut = simTime;
+  guerre.sacre = 0; guerre.sacrePause = false; guerre.sacreBeacon = false; guerre.arrivee = null;
+  const sc = $('sacre'); if (sc) sc.classList.remove('on', 'pause');
   majHudGuerre();
-  city.zones.push({ name: 'Territoire ' + gangs[0].nom, emoji: '🚩', x1: Z.x - 40, x2: Z.x - 8, z1: Z.z - 32, z2: Z.z - 12, hint: '🚩 Territoire de gang — on n\'est pas le bienvenu' });
+  if (gangs.length) city.zones.push({ name: 'Territoire ' + gangs[0].nom, emoji: '🚩', x1: Z.x - 40, x2: Z.x - 8, z1: Z.z - 32, z2: Z.z - 12, hint: '🚩 Territoire de gang — on n\'est pas le bienvenu' });
 }
 function gangTick(dt) {
   if (!city.on || !gangs.length) return;
@@ -24573,7 +24664,7 @@ function gangTick(dt) {
         for (const o2 of O.membres) { if (o2.ko) continue;
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
             o2.hp -= 6 + Math.round(perfDe(m) / 6); impact(o2.x, o2.y + 1.2, o2.z, { x: o2.x - m.x, y: 0, z: o2.z - m.z }, 'sang', 0.9); sfx.hit();
-            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; corpsAuSol(o2.av, o2.x, o2.z, o2.y); perfGagne(m, 2); perfPerd(o2, 5); } } } }
+            if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; corpsAuSol(o2.av, o2.x, o2.z, o2.y); perfGagne(m, 2); perfPerd(o2, 5); verifieElimination(O, G.id); } } } }
       // ILS S'EN PRENNENT AUSSI À TES HOMMES — et peuvent les tuer. Un membre bien entraîné
       // encaisse et rend les coups ; un débutant envoyé seul face à un chef y laisse la peau.
       if ((G.etat === 'rival' || G.etat === 'joueur') && gang.membres.length) {
@@ -24794,6 +24885,8 @@ function majHudGuerre() {   // recopie l'état de la guerre dans la pastille du 
   HUD_GUERRE.terr = Object.keys(guerre.territoires || {}).filter(k => guerre.territoires[k] === 'joueur').length;
   HUD_GUERRE.total = TERRITOIRES.length;
   HUD_GUERRE.rang = rangJoueur().n;
+  const A = typeof allieEnCours === 'function' ? allieEnCours() : null;
+  HUD_GUERRE.allie = A ? { nom: A.nom, reste: Math.max(0, Math.round(A.allieFin - simTime)) } : null;
   updateHud();
 }
 function gangDe(id) { return gangs.find(g => g.id === id) || null; }
@@ -24820,6 +24913,8 @@ function gangeurKO(m, par) {
   burst(m.x, m.y + 1, m.z, 0xff5c5c, 12); sfx.tone(300, 0, .45, 'sawtooth', .07, 60);
   const G = gangDe(m.gang);
   if (!G) return;
+  // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.
+  if (G.allieJoueur) rompsAlliance(G, 'trahison');
   G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
   G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
   if (m.chef) {
@@ -24830,17 +24925,35 @@ function gangeurKO(m, par) {
   verifieElimination(G);
 }
 // ---- élimination d'un gang et naissance du suivant ----
-function verifieElimination(G) {
+function verifieElimination(G, vainqueur) {
   if (G.mort) return;
   const debout = G.membres.filter(m => !m.ko && !m.captif).length;
   if (debout > 0) return;
-  G.mort = simTime + 90;   // le gang est dissous ; un autre se formera
-  msg(`🏆 Les ${G.nom} sont hors jeu ! Leur quartier est à prendre`, 4600); sfx.win(); sfx.cheer();
-  chat(null, `🏆 ${myCfg.name} a mis les ${G.nom} au tapis`);
-  gagneRep(120, 'gang vaincu');
-  // leurs quartiers deviennent neutres
-  for (const k of Object.keys(guerre.territoires)) if (guerre.territoires[k] === G.id) delete guerre.territoires[k];
-  // les survivants changent de camp : c'est le cœur du jeu, on grossit à chaque victoire
+  // « Plus de membres dans un gang = le gang est mort. » Et il ne renaît PLUS : ce qui arrive
+  // à la place, c'est le gang du palier suivant (paliersTick). Sans ça, la partie ne finissait
+  // jamais et le joueur n'avait aucun but à atteindre.
+  G.mort = simTime + 1e9;
+  guerre.morts = (guerre.morts || []).concat([G.id]);
+  guerre.detruits = (guerre.detruits || 0) + 1;
+  G.allieJoueur = false; G.allieFin = 0;
+  const parJoueur = !vainqueur || vainqueur === 'joueur';
+  if (parJoueur) {
+    msg(`🏆 Les ${G.nom} n'existent plus ! Tous leurs quartiers sont à toi`, 4600); sfx.win(); sfx.cheer();
+    chat(null, `🏆 ${myCfg.name} a rayé les ${G.nom} de la carte`);
+    gagneRep(120, 'gang vaincu');
+  } else {
+    msg(`💀 Les ${G.nom} ont été détruits par ${nomGang(vainqueur)} — attention, ils grossissent`, 4600); sfx.die();
+    chat(null, `💀 ${nomGang(vainqueur)} ont détruit les ${G.nom}`);
+  }
+  // LEURS QUARTIERS VONT À CELUI QUI LES A ACHEVÉS (le joueur par défaut). C'est la grande
+  // récompense : on ne recapture pas un par un ce qu'on vient de gagner à la loyale.
+  const prend = vainqueur || 'joueur';
+  let n = 0;
+  for (const k of Object.keys(guerre.territoires)) if (guerre.territoires[k] === G.id) { guerre.territoires[k] = prend; n++; }
+  if (n) { majHudGuerre(); msg(`🚩 ${n} quartier${n > 1 ? 's' : ''} passe${n > 1 ? 'nt' : ''} à ${nomGang(prend)}`, 3600); }
+  // les survivants changent de camp : c'est le cœur du jeu, on grossit à chaque victoire.
+  // Mais seulement si c'est TOI qui as achevé le gang — sinon ses hommes quittent la ville.
+  if (!parJoueur) { saveGuerre(); return; }
   const place = rangJoueur().max - (gang.membres.length + (gang.membresLibres || []).length);
   const pris = G.membres.filter(m => !m.chef).slice(0, Math.max(0, Math.min(2, place)));
   for (const m of pris) recruteVaincu(m, G);
@@ -24873,6 +24986,7 @@ function renaitGang(G) {
 function recruteVaincu(m, G) {
   const k = G.membres.indexOf(m); if (k >= 0) G.membres.splice(k, 1);
   m.gang = 'joueur'; m.recrue = true; m.ko = 0; m.captif = false; m.hp = m.hpMax || 90;
+  m.ancien = G.id; m.fidelite = 80;   // conquis à la bagarre : il t'a vu gagner, il est plus fidèle qu'un homme acheté
   m.av.group.rotation.x = 0; m.av.group.visible = true;
   try { applyLook(m.av, m.nom, { jersey: 4, hat: 'bandanaV', jacket: 6, m: 55 }); } catch (e) {}
   gang.membresLibres = (gang.membresLibres || []).concat([m]);
@@ -25005,7 +25119,7 @@ function libereOtage(o, recrute) {
   if (recrute) {
     const G = gangDe(o.gang);
     if (G) { const k = G.membres.indexOf(o); if (k >= 0) G.membres.splice(k, 1); verifieElimination(G); }
-    o.gang = 'joueur'; o.recrue = true;
+    o.gang = 'joueur'; o.recrue = true; o.ancien = (G && G.id) || null; o.fidelite = 80;
     try { applyLook(o.av, o.nom, { jersey: 4, hat: 'bandanaV', jacket: 6, m: 55 }); } catch (e) {}
     gang.membresLibres = (gang.membresLibres || []).concat([o]);
     gang.force = Math.min(100, gang.force + 4);
@@ -25102,8 +25216,14 @@ function openReunion() {
   const G = r.gang;
   $('reunionTitre').textContent = `🤝 ${G.chefNom} · ${G.nom}`;
   const rel = G.relation > 30 ? 'Il t\'apprécie plutôt.' : G.relation < -30 ? 'Il ne peut pas te sentir.' : 'Il te jauge du regard.';
-  $('reunionTxt').innerHTML = `${rel}<br>Force de son gang : <b>${G.force}</b> · le tien : <b>${gang.force}</b> · ${G.membres.filter(m => !m.ko).length} hommes debout.<br>Que fais-tu ?`;
-  $('reunionTribut').textContent = `💰 Payer un tribut de ${tributPrix()} 🪙 (calme les choses)`;
+  const premier = gangPremier() === G.id;
+  $('reunionTxt').innerHTML = `${rel}<br>Force de son gang : <b>${G.force}</b> · le tien : <b>${gang.force}</b> · ${G.membres.filter(m => !m.ko).length} hommes debout.`
+    + `<br>🚩 Ses quartiers : <b>${nbTerritoires(G.id)}</b> · les tiens : <b>${nbTerritoires('joueur')}</b>`
+    + (premier ? '<br><b style="color:#ff8f3a">C\'est lui le plus fort de la ville : il refusera toute alliance.</b>' : '')
+    + '<br>Que fais-tu ?';
+  // les prix sont ÉCRITS sur les boutons : un enfant n'a jamais à calculer avant de choisir
+  $('reunionAllie').textContent = premier ? '🤝 Proposer une alliance (il va refuser)' : `🤝 Alliance de ${Math.round(ALLIANCE_DUREE / 60)} min — ${alliancePrix(G)} 🪙`;
+  $('reunionTribut').textContent = `💰 Payer un tribut de ${tributPrix()} 🪙 (calme les choses, −10 ⭐)`;
   openUI('reunion');
 }
 function tributPrix() { const G = guerre.reunion && guerre.reunion.gang; return G ? 40 + G.force * 2 : 60; }
@@ -25111,14 +25231,23 @@ function choixReunion(choix) {
   const r = guerre.reunion; if (!r) { closeUI(); return; }
   const G = r.gang;
   if (choix === 'allie') {
-    if (G.relation < 0) { msg(`❌ ${G.chefNom} refuse : « on n'est pas assez copains »`, 3200); G.relation = clamp(G.relation + 5, -100, 100); }
-    else { G.relation = clamp(G.relation + 45, -100, 100); G.allieJoueur = true; msg(`🤝 Alliance conclue avec ${G.nom} : ils ne t'attaqueront plus`, 4200); chat(null, `🤝 ${myCfg.name} et ${G.nom} font alliance`); gagneRep(20, 'alliance'); sfx.win(); }
+    // LE PREMIER REFUSE TOUJOURS. C'est la règle qui fabrique la situation voulue par le jeu :
+    // on s'associe avec le deuxième pour faire tomber le premier, jamais avec le plus fort.
+    if (gangPremier() === G.id) { msg(`❌ ${G.chefNom} : « je suis le plus fort de cette ville, je n'ai pas besoin de toi »`, 4200); }
+    else if (G.relation < 0) { msg(`❌ ${G.chefNom} refuse : « on n'est pas assez copains »`, 3200); G.relation = clamp(G.relation + 5, -100, 100); }
+    else {
+      const px = alliancePrix(G);
+      if (wallet < px) { msg(`Il te manque ${px - wallet} 🪙 pour sceller l'alliance`, 2600); return; }
+      wallet -= px; saveWallet(); updateHud();
+      scelleAlliance(G, ALLIANCE_DUREE);
+    }
   } else if (choix === 'tribut') {
     const px = tributPrix();
     if (wallet < px) { msg(`Il te manque ${px - wallet} 🪙`, 2200); return; }
     wallet -= px; saveWallet(); updateHud();
     G.relation = clamp(G.relation + 30, -100, 100); G.etat = 'repos'; G.cible = null;
     msg(`💰 Tribut payé : ${G.nom} te laisse tranquille un moment`, 3600); sfx.register();
+    perdRep(10, 'tu t\'es écrasé devant un chef');   // payer, c'est se coucher : ça coûte du respect
   } else if (choix === 'guerre') {
     G.relation = -100; G.allieJoueur = false; G.etat = 'joueur'; G.t = simTime + 30; G.cible = [P.pos.x, P.pos.z];
     msg(`⚔️ Guerre déclarée aux ${G.nom} ! Prépare ton gang`, 4200); chat(null, `⚔️ ${myCfg.name} déclare la guerre aux ${G.nom}`);
@@ -25144,15 +25273,22 @@ function captureTick(dt) {
     return;
   }
   if (!gang.capture || gang.capture.k !== t.k) gang.capture = { k: t.k, p: 0, msgT: 0 };
-  gang.capture.p += dt / 45;
-  $('act').textContent = `🚩 Prise de ${t.n} : ${Math.round(gang.capture.p * 100)} %`;
+  // PLUS ON VIENT NOMBREUX, PLUS ÇA VA VITE : 1 homme = 45 s, 2 = 30 s, 3 = 23 s, 4 et + = 18 s.
+  // C'est la première récompense de l'organisation — emmener son gang change tout.
+  const duree = captureDuree(soutien);
+  gang.capture.p += dt / duree;
+  gang.capture.n = soutien;
+  $('act').textContent = `🚩 Prise de ${t.n} : ${Math.round(gang.capture.p * 100)} % (👥 ${soutien} — ${Math.round(duree)} s)`;
   if (gang.capture.p >= 1) {
     guerre.territoires[t.k] = 'joueur';
     gang.capture = null; majHudGuerre();
     msg(`🚩 ${t.n} est à toi ! Il te rapporte de l'argent chaque minute`, 4600); sfx.win(); sfx.cheer();
     chat(null, `🚩 ${myCfg.name} contrôle ${t.n}`);
     gagneRep(45, 'quartier pris');
-    const G = gangDe(maitre); if (G) { G.relation = clamp(G.relation - 30, -100, 100); G.etat = 'joueur'; G.t = simTime + 30; }
+    const G = gangDe(maitre);
+    if (G && G.allieJoueur) rompsAlliance(G, 'trahison');   // on ne prend pas un quartier à son allié sans casser l'alliance
+    if (G) { G.relation = clamp(G.relation - 30, -100, 100); G.etat = 'joueur'; G.t = simTime + 30; }
+    verifieVictoireImmediate();
     saveGuerre();
   }
 }
@@ -25161,7 +25297,8 @@ function revenusTick() {
   guerre.t = simTime + 120;
   const mien = Object.keys(guerre.territoires).filter(k => guerre.territoires[k] === 'joueur');
   if (!mien.length) return;
-  const gainT = mien.length * (18 + Math.floor(gang.rep / 200) * 4);
+  // chaque quartier rapporte selon SA valeur (le centre-ville vaut trois fois le parc)
+  const gainT = valeurTerritoires('joueur') * (6 + Math.floor(gang.rep / 200) * 2);
   gang.magot += gainT;
   if (gang.planque) gang.planque.coffre.amount = gang.magot;
   msg(`💵 Protection des quartiers : +${gainT} 🪙 déposés dans ta planque (${gang.magot} 🪙)`, 3600);
@@ -25175,7 +25312,8 @@ function repriseTick() {
   const vivants = gangs.filter(g => !g.mort);
   if (!vivants.length) return;
   const G = pickOne(vivants);
-  const cibles = TERRITOIRES.filter(t => proprio(t.k) !== G.id);
+  // un allié ne touche pas à tes quartiers tant que le sablier tourne : c'est ce qu'on a payé
+  const cibles = TERRITOIRES.filter(t => proprio(t.k) !== G.id && !(G.allieJoueur && proprio(t.k) === 'joueur'));
   if (!cibles.length) return;
   const t = pickOne(cibles);
   const avant = proprio(t.k);
@@ -25185,11 +25323,342 @@ function repriseTick() {
       || Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r;
     if (garde) { chat(G.chefNom, `on a essayé de prendre ${t.n}, mais ${myCfg.name} avait laissé du monde…`, G.couleur); return; }
     msg(`🚩 Les ${G.nom} t'ont pris ${t.n} ! Va le reprendre`, 4200); sfx.die();
+    setBeacon(t.x, t.z, 0.3);            // la colonne bleue montre où aller : on sait toujours quoi faire
+    perdRep(15, 'quartier perdu');
+    for (const m of (gang.membresLibres || [])) m.fidelite = Math.max(0, (m.fidelite != null ? m.fidelite : 70) - 20);
   }
   guerre.territoires[t.k] = G.id; majHudGuerre();
   chat(null, `🚩 ${G.nom} contrôle maintenant ${t.n}`);
   saveGuerre();
 }
+// ===================================================================================
+//  POSTE JEU STRATÉGIQUE — LES RÈGLES DE LA PARTIE
+//  Le but tient en une phrase : « tu gagnes quand les 8 drapeaux de la ville sont verts
+//  en même temps ». Tout ce qui suit sert ce but — les paliers de difficulté, le prix
+//  d'une recrue, la durée d'une alliance, la fidélité d'un homme, le Sacre final.
+//  Règle d'or du poste : AUCUN calcul mental, AUCUNE lecture rapide, JAMAIS de perte
+//  brutale sans avertissement. Les prix sont écrits, les délais durent 30 s, le compte à
+//  rebours du Sacre se met en PAUSE au lieu de repartir à zéro.
+// ===================================================================================
+
+const ALLIANCE_DUREE = 300;        // une alliance dure cinq minutes, pas une seconde de plus
+const ALLIANCE_ALERTE = 30;        // on prévient trente secondes avant la fin
+const SACRE_DUREE = 90;            // tenir les huit quartiers pendant quatre-vingt-dix secondes
+const FIDELITE_SEUIL = 20;         // en dessous, un homme menace de repartir chez lui
+const FIDELITE_DELAI = 30;         // et il te laisse trente secondes pour le retenir
+const RECRUE_PORTEE = 3.2;         // distance à laquelle on peut proposer des pièces à un rival
+const RECRUE_ISOLE = 20;           // il n'écoute que si aucun copain à lui n'est à moins de 20 m
+
+// ---- combien de quartiers, et combien ils valent ----
+function nbTerritoires(id) { return Object.keys(guerre.territoires || {}).filter(k => guerre.territoires[k] === id).length; }
+function valeurTerritoires(id) {
+  let s = 0;
+  for (const t of TERRITOIRES) if (proprio(t.k) === id) s += (t.v || 1);
+  return s;
+}
+// Le « premier » de la ville : celui qui tient le plus de quartiers (le joueur compris).
+// C'est LUI qu'on ne peut pas avoir comme allié — d'où « s'allier avec le deuxième contre
+// le premier », que le joueur a demandé mot pour mot.
+function gangPremier() {
+  let best = null, bn = 0;
+  for (const G of gangs) { if (G.mort) continue; const n = nbTerritoires(G.id); if (n > bn) { bn = n; best = G.id; } }
+  return bn > 0 ? best : null;
+}
+// 1 homme = 45 s, 2 = 30 s, 3 = 23 s, 4 et plus = 18 s.
+function captureDuree(n) { return Math.max(18, 45 / (1 + 0.5 * (Math.max(1, n | 0) - 1))); }
+
+// ---- LE RESPECT QUI DESCEND ----
+// Il ne descendait jamais : gagner ne coûtait rien et perdre non plus. Il descend maintenant,
+// MAIS il ne repasse jamais sous le seuil du rang atteint : on ne perd donc jamais un rang,
+// donc jamais des places dans son gang, donc jamais ses hommes. C'est le garde-fou « on ne
+// perd jamais tout d'un coup ».
+function plancherRep() { return rangJoueur().r; }
+function perdRep(n, quoi) {
+  if (!n) return 0;
+  const av = gang.rep;
+  gang.rep = Math.max(plancherRep(), gang.rep - Math.abs(n));
+  const perdu = av - gang.rep;
+  majHudGuerre();
+  if (perdu && quoi) { msg(`⭐ −${perdu} points de respect (${quoi})`, 2400); sfx.tone(220, 0, .25, 'triangle', .05, 140); }
+  saveGuerre();
+  return perdu;
+}
+
+// ---- LES PALIERS DE DIFFICULTÉ ----
+// Le respect du joueur commande l'arrivée des gangs : chaque changement de rang fait débarquer
+// un adversaire plus fort. Un enfant qui joue doucement reste au palier 1 et gagne quand même ;
+// un enfant qui joue bien a toujours quelqu'un à sa mesure en face.
+function palierDuRang() {
+  let p = 1;
+  for (let i = 0; i < PALIERS_GUERRE.length; i++) if (gang.rep >= PALIERS_GUERRE[i]) p = i + 1;
+  return p;
+}
+function paliersTick() {
+  if (guerre.gagne) return;
+  const p = palierDuRang();
+  // l'annonce tombe d'abord, le gang arrive dix secondes plus tard : jamais par surprise
+  if (p > (guerre.palier || 1) && !guerre.arrivee) {
+    const def = GANG_DEFS.find(G => (G.palier || 1) === p && !gangDe(G.id) && (guerre.morts || []).indexOf(G.id) < 0);
+    guerre.palier = p;
+    if (!def) return;
+    guerre.arrivee = { id: def.id, t: simTime + 10 };
+    msg(`🚨 Un nouveau gang arrive en ville : ${def.nom} — force ${def.f0}, ${def.nb + 1} hommes`, 6000);
+    chat(null, `🚨 ${def.nom} débarquent en ville. Ils sont plus forts que les autres.`);
+    sfx.tone(160, 0, .8, 'sawtooth', .09, 70);
+    return;
+  }
+  if (guerre.arrivee && simTime > guerre.arrivee.t) {
+    const a = guerre.arrivee; guerre.arrivee = null;
+    arriveGang(a.id);
+  }
+}
+function arriveGang(id) {
+  const i = GANG_DEFS.findIndex(G => G.id === id);
+  if (i < 0 || gangDe(id)) return null;
+  const def = GANG_DEFS[i];
+  const g2 = creerGangRival(def, i, pickOne(CHEFS_NOMS));
+  try { sgridSale(); } catch (e) {}
+  // il s'installe sur ses quartiers, mais IL N'EN PREND JAMAIS PLUS DE DEUX AU JOUEUR :
+  // on ne se réveille pas dépouillé sans comprendre pourquoi.
+  let prisAuJoueur = 0;
+  for (const k of (def.terr || [])) {
+    if (proprio(k) === 'joueur') { if (prisAuJoueur >= 2) continue; prisAuJoueur++; }
+    guerre.territoires[k] = id;
+  }
+  majHudGuerre();
+  msg(`🚩 ${g2.nom} s'installent${prisAuJoueur ? ` et te prennent ${prisAuJoueur} quartier${prisAuJoueur > 1 ? 's' : ''}` : ''} — leur chef est ${g2.chefNom}`, 5600);
+  sfx.die(); saveGuerre();
+  return g2;
+}
+
+// ---- RECRUTER UN ADVERSAIRE AVEC DE L'ARGENT ----
+// Deuxième chemin, à côté de la bagarre : on paie. Le prix est AFFICHÉ en gros au-dessus de sa
+// tête, jamais à calculer. Il s'effondre quand son gang n'a plus de quartier : c'est ce qui
+// apprend au joueur, tout seul, qu'il vaut mieux prendre les quartiers AVANT d'acheter les hommes.
+function prixRecrue(m) {
+  const G = gangDe(m.gang);
+  let px = 40 + perfDe(m) * 3;
+  if (G) {
+    const sien = nbTerritoires(G.id), mien = nbTerritoires('joueur');
+    if (sien > mien) px *= 2;                 // son gang domine : il n'a aucune raison de partir
+    else if (sien === 0) px = Math.round(px / 2);   // son gang coule : il saute du navire
+  }
+  const rang = RANGS.indexOf(rangJoueur());
+  px = Math.round(px * (1 - 0.1 * Math.max(0, rang)));   // plus tu es respecté, moins on se fait payer cher
+  return Math.max(20, px);
+}
+// Le rival qu'on peut acheter : tout près, debout, et ISOLÉ (aucun copain à lui à 20 m).
+function recrueAchetable() {
+  if (P.otage) return null;
+  const place = rangJoueur().max - (gang.membres.length + (gang.membresLibres || []).length);
+  if (place <= 0) return null;
+  for (const G of gangs) {
+    if (G.mort) continue;
+    for (const m of G.membres) {
+      if (m.ko || m.captif || m.chef) continue;   // un chef ne s'achète pas : lui, il faut le battre
+      if (Math.hypot(m.x - P.pos.x, m.z - P.pos.z) > RECRUE_PORTEE) continue;
+      const seul = !G.membres.some(o => o !== m && !o.ko && !o.captif && Math.hypot(o.x - m.x, o.z - m.z) < RECRUE_ISOLE);
+      if (seul) return m;
+    }
+  }
+  return null;
+}
+function acheterRecrue(m) {
+  const G = gangDe(m.gang); if (!G) return false;
+  const px = prixRecrue(m);
+  if (wallet < px) { msg(`💸 ${m.nom} veut ${px} 🪙 — il t'en manque ${px - wallet}`, 3000); sfx.tone(180, 0, .2, 'square', .05, 120); return false; }
+  wallet -= px; saveWallet(); updateHud();
+  const k = G.membres.indexOf(m); if (k >= 0) G.membres.splice(k, 1);
+  m.gang = 'joueur'; m.recrue = true; m.achete = true; m.ko = 0; m.captif = false; m.hp = m.hpMax || 90;
+  m.ancien = G.id; m.fidelite = 50;                    // venu pour les pièces : moins fidèle qu'un homme conquis
+  m.av.group.rotation.x = 0; m.av.group.visible = true;
+  try { applyLook(m.av, m.nom, { jersey: 4, hat: 'bandanaV', jacket: 6, m: 55 }); } catch (e) {}
+  gang.membresLibres = (gang.membresLibres || []).concat([m]);
+  majForceGang();
+  msg(`🤝 ${m.nom} quitte les ${G.nom} pour ${px} 🪙 et rejoint TON gang !`, 4200);
+  chat(null, `💰 ${myCfg.name} a acheté ${m.nom} aux ${G.nom} pour ${px} 🪙`);
+  gagneRep(25, 'recrue achetée');
+  sfx.coin(); sfx.win();
+  verifieElimination(G);              // un gang peut mourir à coups de pièces, sans un seul coup de poing
+  saveGuerre();
+  return true;
+}
+// l'étiquette du prix au-dessus de sa tête, tant qu'on est à portée
+function recrueArgentTick() {
+  const m = recrueAchetable();
+  city.recrueNear = m;
+  if (!m) return;
+  const px = prixRecrue(m);
+  $('act').textContent = `💰 ${m.nom} : ${px} 🪙 pour qu'il rejoigne ton gang (🅴)`;
+  if (simTime > (m.offreT || 0)) { m.offreT = simTime + 6; bubble(m.av, `${px} 🪙 et je viens avec toi…`); }
+}
+
+// ---- LA FIDÉLITÉ ET LA TRAHISON ----
+// Un homme acheté est moins sûr qu'un homme conquis. Sa fidélité monte quand tu gagnes et
+// descend quand tu perds des quartiers. Sous le seuil, il PRÉVIENT et laisse trente secondes :
+// jamais de départ silencieux, jamais de gang qui fond sans qu'on ait pu agir.
+function fideliteDe(m) { return clamp(Math.round(m.fidelite != null ? m.fidelite : 80), 0, 100); }
+function fideliteTick() {
+  if (simTime < (guerre.fidT || 0)) return;
+  guerre.fidT = simTime + 10;
+  const mien = nbTerritoires('joueur');
+  for (const m of (gang.membresLibres || []).slice()) {
+    if (m.fidelite == null) m.fidelite = m.achete ? 50 : 80;
+    const G = gangDe(m.ancien || '');
+    const adverse = G && !G.mort ? nbTerritoires(G.id) : 0;
+    // + quand tu domines son ancien gang, − quand il reprend l'avantage
+    m.fidelite = clamp(m.fidelite + (mien > adverse ? 1 : -2.5), 0, 100);
+    if (m.fidelite <= FIDELITE_SEUIL && !m.doute) {
+      m.doute = simTime + FIDELITE_DELAI;
+      m.prixGarde = 30 + perfDe(m);
+      msg(`💔 ${m.nom} hésite à repartir — donne-lui ${m.prixGarde} 🪙 pour le garder (🅴, ${FIDELITE_DELAI} s)`, 6000);
+      bubble(m.av, 'je ne sais plus si je reste…'); sfx.tone(240, 0, .4, 'triangle', .06, 120);
+    } else if (m.doute && simTime > m.doute) {
+      quitteLeGang(m);
+    }
+  }
+}
+function quitteLeGang(m) {
+  const i = (gang.membresLibres || []).indexOf(m); if (i >= 0) gang.membresLibres.splice(i, 1);
+  m.doute = 0; m.recrue = false; m.fidelite = 60;
+  const G = gangDe(m.ancien || '');
+  if (G && !G.mort) { m.gang = G.id; G.membres.push(m); try { applyLook(m.av, m.nom, { jersey: 4, hat: G.hat, jacket: 6, m: 55 }); } catch (e) {} }
+  else if (m.av) m.av.group.visible = false;
+  msg(`💔 ${m.nom} a quitté ton gang${G && !G.mort ? ` et est reparti chez les ${G.nom}` : ''}`, 4200);
+  chat(null, `💔 ${m.nom} a quitté le gang de ${myCfg.name}`);
+  perdRep(20, 'un homme t\'a quitté'); majForceGang(); sfx.die(); saveGuerre();
+}
+// l'homme qui doute et qu'on peut retenir avec des pièces (touche 🅴 / △)
+function membreQuiDoute() {
+  for (const m of (gang.membresLibres || [])) if (m.doute && Math.hypot(P.pos.x - m.x, P.pos.z - m.z) < 3.2) return m;
+  return null;
+}
+function retiensMembre(m) {
+  const px = m.prixGarde || 60;
+  if (wallet < px) { msg(`💸 Il te manque ${px - wallet} 🪙 pour retenir ${m.nom}`, 2800); return false; }
+  wallet -= px; saveWallet(); updateHud();
+  m.doute = 0; m.fidelite = 70;
+  msg(`💚 ${m.nom} reste avec toi (−${px} 🪙)`, 3200); bubble(m.av, 'd\'accord chef, je reste ! 💚');
+  sfx.coin(); saveGuerre();
+  return true;
+}
+
+// ---- LES ALLIANCES TEMPORAIRES ----
+function alliancePrix(G) { return 30 + (forceGangRival(G) || G.force || 25) * 2; }
+function allieEnCours() { return gangs.find(G => !G.mort && G.allieJoueur && simTime < (G.allieFin || 0)) || null; }
+function scelleAlliance(G, duree) {
+  G.relation = clamp(G.relation + 45, -100, 100);
+  G.allieJoueur = true; G.allieFin = simTime + (duree || ALLIANCE_DUREE); G.allieAlerte = false;
+  // Ce n'est pas qu'une non-agression : ils partent harceler le premier de la ville.
+  const cible = gangPremier();
+  if (cible && cible !== G.id && cible !== 'joueur') {
+    const C = gangDe(cible);
+    if (C) { G.etat = 'rival'; G.cible = [C.base[0], C.base[1]]; G.t = simTime + 90;
+      chat(G.chefNom, `marché conclu. On s'occupe des ${C.nom}.`, G.couleur); }
+  }
+  msg(`🤝 Alliance avec ${G.nom} pour ${Math.round((duree || ALLIANCE_DUREE) / 60)} minutes — ils ne t'attaqueront plus`, 4600);
+  chat(null, `🤝 ${myCfg.name} et ${G.nom} font alliance`);
+  gagneRep(20, 'alliance'); sfx.win(); saveGuerre();
+}
+function rompsAlliance(G, raison) {
+  if (!G || !G.allieJoueur) return;
+  G.allieJoueur = false; G.allieFin = 0; G.allieAlerte = false;
+  if (raison === 'trahison') {
+    G.relation = clamp(G.relation - 60, -100, 100); G.etat = 'joueur'; G.t = simTime + 40; G.cible = [P.pos.x, P.pos.z];
+    msg(`💥 Tu as trahi ${G.nom} ! L'alliance est rompue`, 4200);
+    perdRep(30, 'alliance trahie'); sfx.die();
+  } else {
+    G.relation = clamp(G.relation - 10, -100, 100);
+    msg(`⌛ L'alliance avec ${G.nom} est terminée`, 3600);
+  }
+  chat(null, `⚔️ ${myCfg.name} n'est plus allié à ${G.nom}`);
+  saveGuerre();
+}
+function allianceTick() {
+  for (const G of gangs) {
+    if (!G.allieJoueur) continue;
+    if (G.mort) { G.allieJoueur = false; G.allieFin = 0; continue; }
+    const reste = (G.allieFin || 0) - simTime;
+    if (reste <= ALLIANCE_ALERTE && !G.allieAlerte && reste > 0) {
+      G.allieAlerte = true;
+      msg(`⏳ L'alliance avec ${G.nom} se termine dans ${Math.round(reste)} s — renouvelle-la ou prépare-toi`, 5000);
+      sfx.tone(420, 0, .3, 'sine', .05, 500);
+    }
+    if (reste <= 0) rompsAlliance(G, 'fin');
+    else majHudGuerre();   // le sablier de la pastille du haut descend seconde par seconde
+  }
+}
+
+// ---- LE SACRE : LES QUATRE-VINGT-DIX DERNIÈRES SECONDES ----
+// Quand les huit drapeaux sont verts, un gros compte à rebours démarre. Si l'on perd un
+// quartier, il se MET EN PAUSE et ne repart pas de zéro : on ne perd jamais tout d'un coup,
+// on répare et il repart là où il s'était arrêté.
+function sacreTick(dt) {
+  if (guerre.gagne) return;
+  const tous = TERRITOIRES.every(t => proprio(t.k) === 'joueur');
+  const el = $('sacre');
+  if (!tous) {
+    if (guerre.sacre > 0) {
+      // en pause : le chiffre reste, il vire à l'orange, la colonne bleue montre quoi reprendre
+      guerre.sacrePause = true;
+      const perdu = TERRITOIRES.find(t => proprio(t.k) !== 'joueur');
+      if (el) { el.classList.add('on', 'pause'); el.innerHTML = `👑 ${Math.ceil(guerre.sacre)}<span>⏸️ reprends ${perdu ? perdu.n : 'ton quartier'}</span>`; }
+      if (perdu && !guerre.sacreBeacon) { guerre.sacreBeacon = true; setBeacon(perdu.x, perdu.z, 0.3); }
+    } else if (el) el.classList.remove('on', 'pause');
+    return;
+  }
+  if (guerre.sacre <= 0) {
+    guerre.sacre = SACRE_DUREE;
+    msg('👑 LES 8 QUARTIERS SONT À TOI ! Tiens-les 90 secondes pour devenir maître de la ville', 7000);
+    chat(null, `👑 ${myCfg.name} tient toute la ville — plus que 90 secondes !`);
+    sfx.win(); sfx.cheer();
+    for (const G of gangs) if (!G.mort && !G.allieJoueur) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + SACRE_DUREE; }
+  }
+  guerre.sacrePause = false; guerre.sacreBeacon = false;
+  guerre.sacre -= dt;
+  if (el) { el.classList.add('on'); el.classList.remove('pause'); el.innerHTML = `👑 ${Math.ceil(guerre.sacre)}<span>tiens bon !</span>`; }
+  if (guerre.sacre <= 0) gagnePartie();
+}
+// Après une prise de quartier, on regarde tout de suite si c'était la huitième : le compte
+// à rebours du Sacre démarre dans la seconde, pas à la frame suivante.
+function verifieVictoireImmediate() { if (!guerre.gagne) sacreTick(0); }
+function gagnePartie() {
+  guerre.gagne = true; guerre.sacre = 0;
+  const el = $('sacre'); if (el) el.classList.remove('on', 'pause');
+  const mn = Math.max(1, Math.round((simTime - (guerre.debut || 0)) / 60));
+  msg(`👑 MAÎTRE DE LA VILLE ! ${gang.nom} règne sur les 8 quartiers`, 9000);
+  chat(null, `👑 ${myCfg.name} est MAÎTRE DE LA VILLE avec ${gang.nom} !`);
+  const v = $('victoireTxt');
+  if (v) v.innerHTML = `<b>${gang.nom}</b> tient les 8 quartiers de la ville.<br><br>`
+    + `⭐ ${gang.rep} points de respect · rang « ${rangJoueur().n} »<br>`
+    + `👥 ${gang.membres.length + (gang.membresLibres || []).length} hommes · 💰 ${gang.magot} 🪙 dans la planque<br>`
+    + `🏆 ${guerre.detruits || 0} gang${(guerre.detruits || 0) > 1 ? 's' : ''} détruit${(guerre.detruits || 0) > 1 ? 's' : ''} · ⏱️ ${mn} minutes de règne`;
+  try { openUI('victoire'); } catch (e) {}
+  sfx.win(); sfx.cheer(); saveGuerre();
+}
+// « Encore une partie » : on repart au palier suivant, en gardant son gang et son respect.
+function rejouerGuerre() {
+  guerre.gagne = false; guerre.sacre = 0; guerre.morts = []; guerre.territoires = {};
+  guerre.palier = Math.min(PALIERS_GUERRE.length, (guerre.palier || 1) + 1);
+  guerre.debut = simTime;
+  closeUI();
+  msg('🚩 Nouvelle guerre : les gangs reviennent, plus forts. Reprends la ville !', 5200);
+  try { buildGangs(); } catch (e) { console.error('nouvelle guerre', e); }
+  saveGuerre();
+}
+
+// ---- la carte des quartiers : huit gros carrés colorés, lisibles de loin sur la télé ----
+function carteTerritoires() {
+  return TERRITOIRES.map(t => {
+    const o = proprio(t.k);
+    const c = o === 'joueur' ? '#5cc453' : o ? (gangDe(o) ? gangDe(o).teinte : '#7a86a0') : '#4b5468';
+    const qui = o === 'joueur' ? 'À TOI' : o ? nomGang(o) : 'libre';
+    return `<div class="tcase" style="background:${c}"><span class="te">${t.e || '🚩'}</span>`
+      + `<span class="tn">${t.n}</span><span class="tq">${qui}</span>`
+      + `<span class="tv">${'🪙'.repeat(t.v || 1)}</span></div>`;
+  }).join('');
+}
+
 // ---- boucle principale de la guerre ----
 function guerreTick(dt) {
   if (!city.on || !gangs.length) return;
@@ -25197,13 +25666,20 @@ function guerreTick(dt) {
   recruesTick(dt);
   entrainementTick(dt);
   reunionTick(dt);
+  sacreTick(dt);
   if (simTime > (guerre.tick || 0)) {
     guerre.tick = simTime + 1;
     captureTick(1);
     revenusTick();
     repriseTick();
+    paliersTick();
+    allianceTick();
+    fideliteTick();
+    recrueArgentTick();
     for (const G of gangs) {
-      if (G.mort && simTime > G.mort) renaitGang(G);
+      // renaitGang() n'est PLUS appelé ici : un gang détruit reste détruit. Il est conservé
+      // pour le mode « la ville ne se rend jamais » (guerre.sansFin), une fois le jeu gagné.
+      if (G.mort && guerre.sansFin && simTime > G.mort) renaitGang(G);
       // le magot des gangs remonte tout seul (ils travaillent, eux aussi)
       if (!G.mort && simTime > (G.magotT || 0)) { G.magotT = simTime + 90; G.magot = Math.min(4000, G.magot + 20 + G.generation * 10); if (G.planque && !G.planque.coffre.open) G.planque.coffre.amount = G.magot; }
       // réunion proposée par un chef qui a des choses à dire
@@ -25215,7 +25691,12 @@ function guerreTick(dt) {
 function openGuerre() { openUI('guerre'); majGuerre(); }
 function majGuerre() {
   const r = rangJoueur();
-  $('guerreSub').innerHTML = `But du jeu : <b>contrôler la ville</b>. Bats les gangs, prends leurs quartiers, vide leurs planques et recrute leurs membres.`;
+  const mien = nbTerritoires('joueur');
+  // LE BUT DU JEU, EN UNE PHRASE, EN HAUT DE L'ÉCRAN : un enfant n'a rien d'autre à lire.
+  $('guerreSub').innerHTML = `<b style="font-size:17px">Tu gagnes quand les 8 drapeaux sont VERTS en même temps.</b>`
+    + `<br>🚩 ${mien}/${TERRITOIRES.length} · difficulté ${'🔥'.repeat(guerre.palier || 1)} palier ${guerre.palier || 1}/${PALIERS_GUERRE.length}`
+    + (guerre.gagne ? ' · <b style="color:#5cc453">👑 VILLE CONQUISE</b>' : '');
+  $('guerreCarte').innerHTML = carteTerritoires();
   majForceGang();
   // Les barres de performance : la tienne, celle de chacun de tes hommes, celle de la police.
   const pol = Math.round(policePerf());
@@ -25233,10 +25714,14 @@ function majGuerre() {
     + (gang.otages.length ? `<b>🔒 otages : ${gang.otages.map(o => o.nom).join(', ')}</b>` : '');
   $('guerreListe').innerHTML = gangs.map(g => {
     const debout = g.membres.filter(m => !m.ko && !m.captif).length;
-    const rel = g.allieJoueur ? '🤝 allié' : g.relation < -50 ? '⚔️ en guerre' : g.relation < 0 ? '😠 hostile' : g.relation > 30 ? '🙂 cordial' : '😐 neutre';
+    const rst = Math.max(0, Math.round((g.allieFin || 0) - simTime));
+    const rel = g.allieJoueur ? `🤝 allié ⏳ ${Math.floor(rst / 60)}:${String(rst % 60).padStart(2, '0')}`
+      : g.relation < -50 ? '⚔️ en guerre' : g.relation < 0 ? '😠 hostile' : g.relation > 30 ? '🙂 cordial' : '😐 neutre';
     const pl = g.connu ? `planque repérée (${Math.round(g.planque.x)}, ${Math.round(g.planque.z)})` : 'planque inconnue';
     const f = forceGangRival(g) || g.force;
-    return perfLigne(`${g.mort ? '💀 ' : ''}${g.nom} · chef ${g.chefNom}`, f, `${debout} hommes debout · ${rel} · ${pl}`, g.teinte);
+    const prem = gangPremier() === g.id ? ' 👑 le plus fort' : '';
+    return perfLigne(`${g.mort ? '💀 ' : ''}${g.nom} · chef ${g.chefNom}${prem}`, f,
+      `${debout} hommes debout · 🚩 ${nbTerritoires(g.id)} quartier(s) · ${rel} · ${pl}`, g.teinte);
   }).join('');
   $('guerreTerr').innerHTML = TERRITOIRES.map(t => {
     const o = proprio(t.k);
@@ -25249,9 +25734,10 @@ function saveGuerre() {
   try {
     const d = { rep: gang.rep, force: gang.force, magot: gang.magot, armes: gang.armes || 0,
       terr: guerre.territoires, saison: guerre.saison,
+      palier: guerre.palier || 1, morts: guerre.morts || [], gagne: !!guerre.gagne, detruits: guerre.detruits || 0,
       gangs: {} };
     for (const g of gangs) d.gangs[g.id] = { nom: g.nom, chef: g.chefNom, gen: g.generation, force: g.force, rel: g.relation, magot: g.magot, connu: !!g.connu };
-    d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0, p: perfDe(m) }));
+    d.recrues = (gang.membresLibres || []).slice(0, 24).map(m => ({ n: m.nom, f: m.force || 0, p: perfDe(m), fi: fideliteDe(m), an: m.ancien || null }));
     d.perf = perfDe(P);
     d.membres = gang.membres.map(b => ({ n: b.name, p: perfDe(b) }));   // la progression de chaque homme
     // on tient à jour l'instantané que relit restaureGang() : si on change de monde et qu'on
@@ -25265,10 +25751,13 @@ function loadGuerre() {
   if (!d) return;
   gang.rep = d.rep || 0; gang.force = d.force || 20; gang.magot = d.magot || 0; gang.armes = d.armes || 0;
   guerre.territoires = d.terr || {}; guerre.saison = d.saison || 1;
+  guerre.palier = d.palier || 1; guerre.morts = d.morts || []; guerre.gagne = !!d.gagne; guerre.detruits = d.detruits || 0;
   guerre.sauve = d.gangs || null; guerre.sauveRecrues = d.recrues || [];
   guerre.sauvePerf = d.membres || [];   // on retrouve le niveau de chacun à la reprise
   if (d.perf != null) { P.perf = clamp(d.perf, 0, 100); savePerf(); }
 }
+$('victoireRejouer').addEventListener('click', rejouerGuerre);
+$('victoireBack').addEventListener('click', closeUI);
 $('guerreBtn').addEventListener('click', () => { if (running && city.on) openGuerre(); });
 $('guerreBack').addEventListener('click', closeUI);
 $('reunionAllie').addEventListener('click', () => choixReunion('allie'));

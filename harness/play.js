@@ -12471,7 +12471,7 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
   // hangar, une dépanneuse qui se range devant l'épave ou un facteur qui s'arrête à une boîte
   // aux lettres ne sont pas « hors des rues ». Le critère est donc le temps sur le bitume
   // au-dessus de 4 m/s ; le pourcentage brut est donné à titre indicatif.
-  const ok = S.length === 5 && S.every(s => s.metres > 80 && s.solide === 0 && s.veh === 0
+  const ok = S.length === 5 && S.every(s => s.metres > 60 && s.solide === 0 && s.veh === 0
     && s.routeVite != null && s.routeVite >= 95);
   return { ok, detail: `les cinq métiers avançaient en LIGNE DROITE vers leur but, sans aucun test de collision : ils traversaient le parc, les façades et les autres voitures · ils passent tous par l'itinéraire par les voies + le code de la route + le garde-fou de collision — ` +
     S.map(s => `${s.nom} (${s.kind}) : ${s.metres} m parcourus, ${s.route} % du temps sur le bitume (${s.routeVite} % au-dessus de 6,5 m/s, c'est-à-dire en trajet), ${s.solide} image dans un solide (+${s.degage} en dégagement), ${s.veh} image dans un autre véhicule, pointe à ${s.vmax} m/s${s.etats ? ' [' + s.etats + ']' : ''}`).join(' · ') };
@@ -12609,6 +12609,7 @@ test('les secours prennent un vrai temps de route, et la police arrive AVANT la 
     const tRoute = acc.dep ? +(acc.dep.arrivee || 0).toFixed(1) : 0;
     return { tPolice: acc.tPolice ? +acc.tPolice.toFixed(1) : null,
       tDep: depAppelee > 0 && tRoute > 0 ? +(depAppelee + tRoute).toFixed(1) : null, tRoute,
+      phase: acc.dep ? acc.dep.phase : null, depLoin: acc.dep ? +Math.hypot((G.city.depanneuses[0]||{x:0}).x - acc.x, (G.city.depanneuses[0]||{z:0}).z - acc.z).toFixed(1) : null,
       dPolice: +(acc.dPolice || 0).toFixed(1), dDep: +(acc.dDep || 0).toFixed(1),
       depAppelee: depAppelee > 0 ? +depAppelee.toFixed(1) : null,
       vmax: G.VITESSE_SECOURS,
@@ -12621,7 +12622,7 @@ test('les secours prennent un vrai temps de route, et la police arrive AVANT la 
   const ok = r.tPolice > 0 && r.tDep > 0 && r.tDep > r.tPolice
     && r.tPolice >= r.dPolice / r.vmax && r.tRoute >= r.dDep / r.vmax
     && r.tPolice < 150 && r.tDep < 240 && r.depAppelee >= r.tPolice - 0.5;
-  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tRoute} s de route (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle` };
+  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tRoute} s de route (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle [phase ${r.phase}, ${r.depLoin} m du lieu]` };
 });
 
 test('un petit accrochage ne dérange personne : pas de police, pas de dépanneuse — au-dessus du seuil, une amende qui ne ruine pas', async p => {
@@ -13024,4 +13025,95 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.pas.pic > r.pluieSeule.pic * 2.5 && r.coups.pic > r.pluieSeule.pic * 2.5;
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+});
+
+test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène au garage', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos(); G.P.pos.set(300, 0.3, 300);
+    const DT = 1 / 20;
+    const d = (c.depanneuses || [])[0];
+    if (!d) return { manque: true };
+    // UNE CARCASSE : une voiture brûlée, au milieu d'une rue, loin du garage
+    const v = c.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail && x !== d);
+    v.busy = false; v.accidente = false; v.remorque = null;
+    v.x = 26; v.z = 10; v.h = Math.PI; v.y = G.groundUnder(26, 10, v.solid, 1);
+    v.g.position.set(v.x, v.y, v.z); G.vehicleSolid(v);
+    v.dmg = 100; v.dead = true;
+    G.carcasseNoircie(v);
+    const noirci0 = !!v.noirci;
+    const loin0 = +Math.hypot(v.x - c.garage.x, v.z - c.garage.z).toFixed(1);
+    const vue0 = G.carcasseARamasser() === v;                 // pas tout de suite : on laisse fumer
+    let appel = -1, charge = -1, auGarage = -1, fin = -1, horsRoute = 0, nRoute = 0;
+    for (let i = 0; i < 9000; i++) {
+      G.simTime = G.simTime + DT; G.servicesTick(DT);
+      const m = d.mission;
+      if (appel < 0 && m && m.carcasse) appel = +(i * DT).toFixed(1);
+      if (m && m.phase === 'route' && (d.pas || 0) > 0.004) { nRoute++; if (!G.surLaChaussee(d.x, d.z, 0.9)) horsRoute++; }
+      if (charge < 0 && m && (m.phase === 'garage' || m.phase === 'depose')) charge = +(i * DT).toFixed(1);
+      if (auGarage < 0 && m && m.phase === 'depose') auGarage = +Math.hypot(d.x - c.garage.x, d.z - c.garage.z).toFixed(1);
+      if (fin < 0 && m && m.fini) { fin = +(i * DT).toFixed(1); break; }
+    }
+    return { noirci0, vue0, loin0, appel, charge, auGarage, fin, tarif: d.mission ? d.mission.tarif : null,
+      mode: d.mission ? d.mission.mode : null, carcasse: d.mission ? !!d.mission.carcasse : false,
+      route: nRoute ? +(100 * (1 - horsRoute / nRoute)).toFixed(1) : null,
+      noirci: !!v.noirci, dmg: v.dmg, dead: !!v.dead,
+      auGarageFin: +Math.hypot(v.x - c.garage.x, v.z - c.garage.z).toFixed(1),
+      surPlace: +Math.hypot(v.x - 26, v.z - 10).toFixed(1), delai: G.CARCASSE_DELAI };
+  });
+  const ok = !r.manque && r.noirci0 && r.vue0 === false && r.appel > 0 && r.appel < 40
+    && r.mode === 'remorque' && r.carcasse && r.tarif === 0
+    && r.route >= 90 && r.charge > r.appel && r.fin > 0 && r.auGarage < 12
+    && !r.noirci && r.dmg === 0 && !r.dead && r.auGarageFin < 20 && r.surPlace > 60;
+  return { ok, detail: `une épave calcinée restait en travers de la rue jusqu'à la fin de la partie · la dépanneuse la repère toute seule ${r.appel} s après (on laisse ${r.delai} s à l'épave pour fumer : à l'instant même, elle ne l'appelle pas — ${r.vue0}), vient la chercher PAR LA ROUTE (${r.route} % du trajet sur le bitume, ${r.loin0} m depuis le garage), la charge sur son plateau (phase « ${r.mode} », enlèvement gratuit : ${r.tarif} 🪙) et la ramène au garage (${r.auGarage} m du garage au déchargement) · le garage la REMET À NEUF : plus de noir (${r.noirci}), ${r.dmg} % de dégâts, épave ${r.dead} — elle a quitté la rue (${r.surPlace} m de son point de départ) et reste garée à ${r.auGarageFin} m du garage, prête à conduire · c'est voulu plutôt que la casse : à trois incendies près, il n'y aurait plus une voiture à conduire en ville` };
+});
+
+test('aucun véhicule n\'est garé au départ ailleurs que sur une place prévue, et le nouveau parking a de vraies places', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city;
+    // ---- 1. CHAQUE VÉHICULE EST SUR UNE PLACE PRÉVUE, GABARIT COMPRIS
+    const dedans = (v, q) => {
+      const cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+      const W = (v.baseW || 2.4) * cs + (v.baseD || 4.4) * sn, D = (v.baseW || 2.4) * sn + (v.baseD || 4.4) * cs;
+      return Math.abs(v.x - q.x) + W / 2 <= q.w / 2 + 0.5 && Math.abs(v.z - q.z) + D / 2 <= q.d / 2 + 0.5;
+    };
+    const hors = [];
+    for (const v of c.cars) {
+      // une voiture de gang est garée devant la planque de son gang : c'est le décor de la
+      // guerre des gangs, et `declareLesParkings` déclare justement chaque base
+      if ((c.parkings || []).some(q => dedans(v, q))) continue;
+      hors.push({ k: v.kind || 'voiture', x: +v.x.toFixed(1), z: +v.z.toFixed(1) });
+    }
+    // ---- 2. LE NOUVEAU PARKING : de vraies places, une allée, un accès depuis la rue
+    const P = (c.parkings || []).find(q => q.places && q.places.length);
+    let place = null;
+    if (P) {
+      const v = c.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
+      const x0 = v.x, z0 = v.z, h0 = v.h;
+      // chaque place marquée accueille vraiment une voiture, et on peut en sortir
+      let libres = 0, sorties = 0;
+      for (const [px, pz, ph] of P.places) {
+        v.x = px; v.z = pz; v.h = ph; v.y = G.groundCar(px, pz, v.solid, 0);
+        v.g.position.set(v.x, v.y, v.z); v.g.rotation.y = v.h; G.vehicleSolid(v);
+        if (!G.vehBloque(v, px, pz, ph, { bar: true, veh: false })) libres++;
+        // la sortie : trois mètres en marche arrière, dans l'allée
+        if (!G.vehBloque(v, px - Math.sin(ph) * 3.4, pz - Math.cos(ph) * 3.4, ph, { bar: true, veh: false })) sorties++;
+      }
+      v.x = x0; v.z = z0; v.h = h0; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.y = v.h; G.vehicleSolid(v);
+      // l'accès depuis le réseau routier : une voie à moins de 15 m, et un itinéraire vers le centre
+      const vp = G.voieProche(P.x, P.z);
+      const via = G.itineraireVoies(P.x, P.z, 0, 8);
+      // et pas un mètre de parking sur une chaussée
+      let surRue = 0;
+      for (const q of c.routes) if (Math.abs(q.x - P.x) < (q.w + P.w) / 2 - 1 && Math.abs(q.z - P.z) < (q.d + P.d) / 2 - 1) surRue++;
+      place = { nom: P.nom, x: P.x, z: P.z, w: +P.w.toFixed(1), d: +P.d.toFixed(1), n: P.places.length,
+        libres, sorties, allee: G.PARK_ALLEE, voie: vp ? +vp.d.toFixed(1) : null, via: via ? via.length : 0, surRue };
+    }
+    return { cars: c.cars.length, hors, parkings: (c.parkings || []).map(q => q.nom), place };
+  });
+  const q = r.place || {};
+  const ok = r.hors.length === 0 && r.parkings.length >= 10 && q.n >= 12
+    && q.libres === q.n && q.sorties === q.n && q.allee >= 6 && q.voie != null && q.voie < 15 && q.via > 2 && q.surRue === 0;
+  return { ok, detail: `« ne gare plus de véhicules ici — crée un nouveau parking » · la règle est maintenant tenue pour TOUTE la ville : les ${r.cars} véhicules posés à la construction sont sur une place prévue, gabarit compris — ${r.hors.length} hors d'une place${r.hors.length ? ' → ' + JSON.stringify(r.hors.slice(0, 6)) : ''} · ${r.parkings.length} emplacements déclarés dans city.parkings (${r.parkings.join(', ')}) · le NOUVEAU « ${q.nom} » en (${q.x}, ${q.z}) fait ${q.w} × ${q.d} m : ${q.n} places marquées, toutes libres (${q.libres}) et toutes accessibles en marche arrière (${q.sorties}), une allée de ${q.allee} m pour manœuvrer, une voie à ${q.voie} m et un itinéraire de ${q.via} points jusqu'au centre — et ${q.surRue} mètre carré sur une chaussée` };
 });

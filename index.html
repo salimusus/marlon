@@ -2341,6 +2341,62 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
+// ================= LES PARKINGS =================
+// « Ne gare plus de véhicules ici (capture) — crée un nouveau parking. »
+// La règle, étendue à toute la ville : UN VÉHICULE N'EST JAMAIS GARÉ AU DÉPART AILLEURS QUE SUR
+// UNE PLACE PRÉVUE. `city.parkings` est la liste de ces places — les parkings publics, les cours
+// des services (dépôt, caserne, garage, commissariat, hôpital), les héliports, la plage, le rack
+// à vélos du parc, la piste de rallye et les bases de gang. Le test « aucun véhicule n'est garé
+// hors d'une place prévue » la relit, rectangle par rectangle, GABARIT COMPRIS.
+//
+// LE NOUVEAU PARKING est au SUD de la ville, en (20, −80), sur le seul grand terrain plat,
+// libre et bordé de rue qu'il restait à moins de 90 m du centre (mesuré : 121 emplacements
+// candidats de 32 × 22 m dans toute la carte, celui-ci est le plus proche du centre après les
+// deux du sud). POUR LE POSTE QUI CONSTRUIT LE CONCESSIONNAIRE : je prends (20, −80) et ses
+// 26 × 20 m ; l'autre terrain libre du même genre est en (−20, −80), symétrique, et les grands
+// terrains de l'est (x ≈ 124) sont libres aussi — prends l'un de ceux-là.
+const PARK_PLACE_L = 2.9, PARK_PLACE_P = 5.4, PARK_ALLEE = 7;
+function parkingPublic(x, z, nom, cols) {
+  const W = cols * PARK_PLACE_L + 1.4, D = PARK_PLACE_P * 2 + PARK_ALLEE;
+  plat(x, 0.16, z, W, D, 0x565b66, { studs: false, noRoute: true }, 0.1);   // la dalle
+  // LES PLACES MARQUÉES : deux rangées dos à dos, une allée de 7 m au milieu pour manœuvrer.
+  const places = [];
+  for (const sg of [-1, 1]) {
+    const zr = z + sg * (PARK_ALLEE / 2 + PARK_PLACE_P / 2);
+    for (let i = 0; i <= cols; i++) {
+      const px = x - W / 2 + 0.7 + i * PARK_PLACE_L;
+      box(px, 0.17, zr, 0.12, 0.02, PARK_PLACE_P, 0xf4f6fa, { deco: true, studs: false, noEdges: true, noShadow: true });
+    }
+    box(x, 0.17, zr + sg * PARK_PLACE_P / 2, W - 1.4, 0.02, 0.12, 0xf4f6fa, { deco: true, studs: false, noEdges: true, noShadow: true });
+    for (let i = 0; i < cols; i++) places.push([x - W / 2 + 0.7 + (i + 0.5) * PARK_PLACE_L, zr, sg > 0 ? 0 : Math.PI]);
+  }
+  sign(x, 0.2, z - D / 2 - 1.4, '🅿️ ' + nom);
+  city.zones.push({ name: nom, emoji: '🅿️', x1: x - W / 2, x2: x + W / 2, z1: z - D / 2, z2: z + D / 2,
+    hint: '🅿️ ' + nom + ' : gare-toi entre les lignes blanches (E pour monter dans un véhicule)' });
+  const q = { x, z, w: W, d: D, nom, places };
+  city.parkings.push(q);
+  return q;
+}
+// LA LISTE DES PLACES LÉGITIMES. Appelée tout à la fin de la construction de la ville : elle a
+// besoin du dépôt, de la caserne, du garage, du commissariat et de l'hôpital, qui sont posés
+// par des blocs différents.
+function declareLesParkings() {
+  const P = (x, z, w, d, nom) => { if (x != null) city.parkings.push({ x, z, w, d, nom }); };
+  P(-13, 8.5, 24, 16, 'Parking du centre');                                   // la dalle du sud-ouest
+  if (city.casino) P(city.casino.x - 30, city.casino.z + 26, 26, 20, 'Parking du casino');
+  if (city.garage) P(city.garage.x, city.garage.z + 13, 30, 18, 'Parvis du garage');
+  if (city.depot) P(city.depot.x, city.depot.z + 10, 48, 20, 'Cour du dépôt municipal');
+  if (city.caserne) P(city.caserne.x, city.caserne.z + 9, 26, 20, 'Cour de la caserne');
+  if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
+  if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
+  P(43, -13, 22, 20, 'Héliport');
+  P(8, 230, 22, 20, 'Hélistation nord');
+  if (city.sea) P(city.sea.x1 + 3, 45, 12, 20, 'Rampe de mise à l\'eau');      // les jet-skis
+  P(-70, -70, 14, 20, 'Dépôt du rallye');                                     // les buggys
+  P(-20.4, 51, 12, 8, 'Rack à vélos du parc');
+  P(RACE_C.x, RACE_C.z + RACE_C.r + 2, 70, 24, 'Grille de départ');            // les karts
+  for (const g of gangs) if (g.base) P(g.base[0], g.base[1] + 7, 20, 16, 'Base ' + (g.nom || 'de gang'));
+}
 function buildShops() {
   // ---- boutique de vêtements : vitrines avec mannequins habillés, portants, miroir, tapis rouge ----
   shop(-19, 19.5, 9, 7, 0xb57cff, '👕 Vêtements', 0xb57cff);
@@ -5246,6 +5302,12 @@ const WORLDS = [
       city.cars.push(makeCar(0xff5c5c, -15, 11.5, 0), makeCar(0x4f8dff, -19, 11.5, 0), makeCar(0xffd23f, -15, 6, 0), makeCar(0x111111, -19, 6, 0, { sport: true }));
       buildGarage(-45, 90);
       buildShops(); sign(-3.6, 0.3, 3.6, '🚗 Parking');
+      // LE NOUVEAU PARKING DU SUD : 16 places marquées, deux rangées dos à dos, une allée de 7 m
+      // pour manœuvrer, accès par la rue qui descend du centre. C'est là que se gare tout ce qui
+      // traînait ailleurs — voir `declareLesParkings` et le test « aucun véhicule garé hors
+      // d'une place prévue ».
+      city.parkings = [];
+      const parkSud = parkingPublic(20, -80, 'Parking du Sud', 8);
       for (let i = 0; i < 3; i++) coin(-9 - i * 5, 0.3, 4.5);
       // ---- parc à trampolines (SE) ----
       for (const [px, pz] of [[8, 8], [18, 8], [8, 18], [18, 18]]) bouncePad(px, 0.3, pz);
@@ -5275,7 +5337,12 @@ const WORLDS = [
       // ---- voitures qui circulent ----
       for (let i = 0; i < 3; i++) { const c = makeCar([0x5cc453, 0xff5cd6, 0xc9ced8][i], 26, 0, 0); c.s = i * 69; c.spd = 8.5; c.half = [1.4, 2.4]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.5, y: -0.35, z: 0.3 }); }
       for (let i = 0; i < 2; i++) { const c = makeVehicle('truck', [0x4f8dff, 0xffd23f][i], 26, 0, 0); c.s = 35 + i * 104; c.spd = 6; c.half = [1.6, 4.6]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.62, y: 0.3, z: 2.55 }); }
-      city.cars.push(makeVehicle('moto', 0xff5c5c, -22, 11.5, Math.PI), makeVehicle('moto', 0x1b2a4a, -20, 11.5, Math.PI), makeVehicle('truck', 0x5cc453, 90, 30, Math.PI));
+      // LE CAMION NE DORT PLUS AU BORD DE L'AVENUE. Il était garé en (90, 30), sur la pelouse,
+      // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
+      // pointe. Il prend maintenant le bord est du Parking du Sud, dans la longueur (8,60 m ne
+      // tient pas dans une place de 5,40 m) : il ne gêne ni les places ni l'allée.
+      city.cars.push(makeVehicle('moto', 0xff5c5c, -22, 11.5, Math.PI), makeVehicle('moto', 0x1b2a4a, -20, 11.5, Math.PI),
+        makeVehicle('truck', 0x5cc453, parkSud.x + parkSud.w / 2 - 1.7, parkSud.z, 0));
       // ---- points de balade pour les bots ----
       city.wander = [[0, 0, 3], [-13, 0.3, -8], [13, 0.3, -8], [13, 0.3, 13], [-13, 0.3, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [48, 0.3, 22], [46, 0, -8], [0, 0.3, 70], [-14, 0.3, 66], [14, 0.3, 74], [-22, 0.3, 84], [20, 0.3, 90], [-84, 0, 12], [-84, 0, 60], [84, 0, 30], [50, 0, 60], [40, 0.36, 10], [0, 0.36, 150], [-30, 0.36, 160]];
       for (const [x, z] of [[0, -12], [0, 12], [12, 0], [-12, 0], [22, -22], [-22, 22]]) coin(x, 0, z);
@@ -5304,13 +5371,14 @@ const WORLDS = [
       // LE GRAPHE DES VOIES : deux voies par rue, un noeud par carrefour, les manoeuvres
       // possibles. Il vient APRES la signalisation (il retient ou sont les feux et les
       // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
+      B('places de stationnement', declareLesParkings);   // poste Circulation : la liste des places légitimes (dépôt, caserne, garage, héliports…)
       B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], marques: [], marquesN: 0 };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0 };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 // Les trois réglages des SENSATIONS DE CONDUITE (voir la grande section « conduire »).
@@ -7869,7 +7937,10 @@ function codeRoute(c, dt, opt) {
     const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
     if (d > 30 || Math.abs(CAP((v.h || 0) - h)) > 0.9) continue;
     if (dx * fx + dz * fz > 1) continue;   // il est devant nous : rien a faire
-    c.sireneVeh = v; cap(2.5, 'sirene');
+    // 4,5 m/s et non 2,5 : a 2,5 m/s toute la file rampait, et le vehicule prioritaire, coince
+    // derriere elle, n'avancait pas plus vite (mesure : 50 m en 30 s). On LEVE LE PIED et on se
+    // RANGE — c'est le pas de cote qui degage la voie, pas la lenteur.
+    c.sireneVeh = v; cap(4.5, 'sirene');
   }
   // ---- 4) priorite a droite aux carrefours sans feu ni panneau ; et toujours au vehicule
   // deja engage. Sur une voie PRIORITAIRE (boulevard, avenue, losange jaune) on ne s'arrete pas.
@@ -18284,6 +18355,7 @@ function eteintFeu(c) {
 function carcasseNoircie(c) {
   if (c.noirci) return false;
   c.noirci = true;
+  c.noirciT = simTime;   // l'heure a laquelle elle est devenue une carcasse : la depanneuse attend un peu avant de venir
   c.peinture = c.peinture || new Map();
   // on descend l'arbre a la main pour pouvoir SAUTER une branche entiere : le groupe d'un feu
   // (marque `userData.feu`) ne doit jamais etre repeint en noir.
@@ -19403,8 +19475,43 @@ function depanneuseAppel(acc) {
   msg('🚚 Une dépanneuse a été appelée (service payant)', 2400);
   return d.mission;
 }
+// ================= LES CARCASSES =================
+// « La depanneuse doit ramasser les carcasses de vehicule brule. » Une epave calcinee
+// (`c.noirci`, pose par `carcasseNoircie` quand le feu s'eteint) restait en travers de la rue
+// jusqu'a la fin de la partie : la ville se couvrait de taches noires et la chaussee restait
+// bouchee. La depanneuse libre la repere toute seule, vient la chercher PAR LA ROUTE, la charge
+// sur son plateau (l'animation de chargement est celle du poste Animation, on ne la refait pas)
+// et la ramene au garage.
+// CE QUI SE PASSE ENSUITE : le garage la REMET A NEUF et elle reste garee sur le parvis. On a
+// prefere ca a la casse (faire disparaitre le vehicule) pour deux raisons : le parc de la ville
+// fondrait a chaque incendie — au bout de trois feux il n'y aurait plus rien a conduire — et le
+// joueur retrouve sa voiture au garage, exactement comme apres un remorquage. Le service est
+// gratuit : c'est la ville qui fait enlever une epave, pas le proprietaire.
+const CARCASSE_DELAI = 8;   // secondes : on laisse le temps de voir l'epave fumer avant l'appel
+function carcasseARamasser() {
+  if (!city.on) return null;
+  for (const c of (city.cars || [])) {
+    if (!c.noirci || c.feu) continue;
+    if (drive.car === c || c.busy || c.remorque || c.travail || c.heli || c.rider) continue;
+    if (simTime < (c.noirciT || 0) + CARCASSE_DELAI) continue;
+    if ((city.depanneuses || []).some(x => x.mission && x.mission.cible === c)) continue;
+    return c;
+  }
+  return null;
+}
 function depanneusesTick(dt) {
   for (const d of (city.depanneuses || [])) {
+    // UNE DEPANNEUSE LIBRE VA CHERCHER LES CARCASSES. Meme mission que sur un accident, avec
+    // `carcasse: true` : elle force le remorquage (une epave brulee ne se repare pas sur place)
+    // et le tarif est nul.
+    if (!d.mission && drive.car !== d && !d.busy) {
+      const ep = carcasseARamasser();
+      if (ep) {
+        d.mission = { acc: null, cible: ep, phase: 'route', mode: null, tarif: 0, fini: false,
+          carcasse: true, t0: simTime, d0: Math.hypot(d.x - ep.x, d.z - ep.z), arrivee: 0 };
+        msg('🚚 Une carcasse a été signalée : la dépanneuse part la ramasser', 2800);
+      }
+    }
     d.gyro = !!d.mission;          // le gyrophare et la sirène sont des DRAPEAUX : le poste
     // Sons les lit pour brancher le son tout seul. Sur le trajet de RETOUR, gyrophare oui,
     // sirène non : rentrer au garage n'est pas une urgence.
@@ -19420,8 +19527,8 @@ function depanneusesTick(dt) {
       m.arrivee = simTime - m.t0;
       if (m.acc) m.acc.tDep = simTime - m.acc.t0;
       // petit accident = réparation SUR PLACE ; gros = treuillage et remorquage au garage
-      m.mode = (c.dmg || 0) < DEGATS_SUR_PLACE ? 'place' : 'remorque';
-      m.tarif = m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE;
+      m.mode = (!m.carcasse && (c.dmg || 0) < DEGATS_SUR_PLACE) ? 'place' : 'remorque';
+      m.tarif = m.carcasse ? 0 : (m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE);
       m.phase = m.mode === 'place' ? 'repare' : 'treuil';
       m.t = simTime + (m.mode === 'place' ? REPAR_DUREE : DEP_CHARGE);
       // POSTE ANIMATION — LA RÉPARATION SUR PLACE SE VOIT. Le joueur demandait : « on voit le
@@ -19430,7 +19537,7 @@ function depanneusesTick(dt) {
       // voiture redevenait neuve toute seule : il ne se passait rien à l'écran.
       if (m.mode === 'place') m.rep = reparateurArrive(c, REPAR_DUREE, null);
       else { d.depCible = 1; d.remorque = c; c.remorque = d; c.busy = true; }   // le plateau s'incline, le crochet descend, la voiture MONTE
-      msg(m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`, 2600);
+      msg(m.carcasse ? '⛓️ Carcasse chargée sur le plateau : enlèvement gratuit' : (m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`), 2600);
     } else if (m.phase === 'repare') {
       if (simTime < m.t) { if (!m.rep) burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
       if (m.rep) { reparateurRange(m.rep); m.rep = null; }

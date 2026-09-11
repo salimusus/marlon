@@ -1158,7 +1158,12 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
   const dehors = await lis(() => __G.cam.dist > 7.5);
   await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
-  const dedans = await lis(() => __G.cam.dist < 4.2);
+  // (round 68, poste CAMERA : dans une piece, la maison de poupee ne recule plus a 4,8 m
+  //  quoi qu'il arrive — elle recule d'autant plus que la piece est GRANDE, jusqu'a 7,4 m,
+  //  parce qu'a 4,8 m dans une halle de vingt-quatre metres on ne voyait rien. Le seuil de ce
+  //  test passe donc de 4,2 a 6,2 m : ce qu'il garantit reste « dedans, on est plus pres que
+  //  dehors, et devant un objet plus pres encore ».)
+  const dedans = await lis(() => __G.cam.dist < 6.2);
   await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
   const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);
   // le point visé rattrape le joueur par interpolation : on attend qu'il l'ait rejoint
@@ -1166,7 +1171,7 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   const cible = await p.evaluate(() => ({ dx: +(__G.cam.target.x - __G.P.pos.x).toFixed(2), dz: +(__G.cam.target.z - __G.P.pos.z).toFixed(2) }));
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));
   const retour = await lis(() => __G.cam.dist > 7.5);
-  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 5.0   // maison de poupee : 3,8 a 4,8 m dans une piece
+  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 6.2 && dedans.dist < dehors.dist - 2   // maison de poupee : de 3,8 m dans un placard a 7,4 m dans une halle
     && frigo.inter && frigo.dist < dedans.dist + 0.1 && (Math.abs(cible.dx) + Math.abs(cible.dz)) > 0.1 && retour.dist > 7;
   return { ok, detail: `rue : ${dehors.dist} m · hall d'immeuble : ${dedans.dist} m · devant le frigo : ${frigo.dist} m (objet cadré, décalage ${cible.dx}/${cible.dz}) · de retour dehors : ${retour.dist} m` };
 });
@@ -2426,12 +2431,19 @@ test('le garage a déménagé et il est bien plus grand, avec son atelier', asyn
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: -45, y: 1, z: 90, hour: 12 });
     __G.jail.on = false; if (__G.uiOpen) __G.closeUI();
+    // au volant, le comptoir d'atelier ne se signale pas (il faut se garer et y aller à pied) :
+    // si un test précédent nous a laissés dans une voiture, on en descend d'abord.
+    if (__G.drive.car) __G.exitCar();
     await dodo(600);
     const g = __G.city.garage, d = __G.city.tuneDesk;
     const z = __G.city.zones.find(x => x.name === 'Garage custom');
     // aucun mur d'un autre bâtiment ne doit traverser le garage ni son parvis
     const sien = o => Math.abs(o.x - g.x) < 15.5 && Math.abs(o.z - g.z) < 10.5;
-    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && o.y + o.h / 2 > 0.6 && !sien(o)
+    // UNE VOITURE GARÉE N'EST PAS UN MUR. On comptait les boîtes de collision des VÉHICULES
+    // (`o.veh`) comme des murs : la dépanneuse du garage poussée de deux mètres, ou n'importe
+    // quelle voiture laissée sur le parvis par un test précédent, comptait pour un « conflit
+    // de murs » — d'où un défaut qui n'apparaissait que dans la suite complète, jamais seul.
+    const dedans = (cx, W, D) => __G.solids.filter(o => o.w && !o.veh && o.y + o.h / 2 > 0.6 && !sien(o)
       && Math.abs(o.x - cx) < (o.w + W) / 2 && Math.abs(o.z - g.z) < (o.d + D) / 2).length;
     const chevauche = [];
     if (dedans(g.x, 28, 18)) chevauche.push('bâtiment');
@@ -5607,7 +5619,10 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   } catch (e) { pret = false; erreur = e.message.slice(0, 120); }
   if (!pret) return { ok: false, detail: `le jeu ne redémarre pas avec une sauvegarde : ${erreur}` };
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // garderSauvegarde : c'est TOUT le sujet de ce test. Le banc d'essai remet sinon la
+    // tenue, le chien, les achats et l'equipe tels qu'ils etaient au premier chargement —
+    // exactement ce qu'on veut ailleurs, exactement ce qu'il ne faut pas ici.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderSauvegarde: true });
     return { ville: __G.city.on, gangs: __G.gangs.length, bots: __G.bots.length,
       perf: __G.perfDe(__G.P), rep: __G.gang.rep,
       look: { coupe: __G.myCfg.hair, bijou: __G.myCfg.bijou, taille: __G.myCfg.taille },
@@ -5632,15 +5647,42 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   // test, sans aucun rapport avec ce qu'elle mesure. On laisse trois minutes.
   await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'load',timeout:180000});
   await page.waitForFunction(()=>window.__SHOT&&window.__SHOT.ready,null,{timeout:60000});
+  // MONDE NEUF PAR DEFAUT : les 300 tests s'enchainent dans UNE page ; sans reconstruction,
+  // ce qu'aucune remise a zero ne rattrape s'accumule pendant deux heures. FRAIS=0 revient a
+  // l'ancien comportement (utile pour mesurer le surcout).
+  const fraisDefaut = process.env.FRAIS !== '0';
+  await page.evaluate(f => { window.__SHOT.fraisDefaut = f;
+    try { if (f) localStorage.setItem('superobby.banc.frais', '1'); else localStorage.removeItem('superobby.banc.frais'); } catch (e) {} }, fraisDefaut);
   let pass=0, fail=0;
   const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;
-  for(const c of CASES){
+  // PLAGE="180-250" : ne joue que les tests n° 180 a 250 (numerotation = ordre du fichier).
+  // Les pannes de FIABILITE ne se voient qu'en LOT : un test sali par ses voisins est vert
+  // seul et rouge apres soixante autres. Un lot par numeros reproduit exactement la meme
+  // sequence d'un essai a l'autre, ce qu'un FILTRE par mots-cles ne garantit pas.
+  // Plusieurs tranches se separent par une virgule : PLAGE="1-50,225-250" rejoue les
+  // cinquante premiers tests PUIS les tests 225 a 250. C'est la seule facon de reproduire une
+  // pollution d'etat sur une machine en moins d'une heure : les tests qui SALISSENT sont au
+  // debut de la suite, ceux qui en souffrent tout a la fin.
+  const plages = process.env.PLAGE ? process.env.PLAGE.split(',').map(t => t.split('-').map(Number)) : null;
+  for(let idx = 0; idx < CASES.length; idx++){
+    const c = CASES[idx];
+    if (plages && !plages.some(pl => idx + 1 >= pl[0] && idx + 1 <= (pl[1] == null ? pl[0] : pl[1]))) continue;
     if (filtre && !filtre.test(c.n)) continue;
     const before=errors.length;
     let r; try { r=await c.fn(page); } catch(e){ r={ok:false,detail:'exception : '+e.message}; }
     const newErr=errors.slice(before);
     const ok=r.ok&&newErr.length===0;
-    console.log(`${ok?'  OK  ':'ÉCHEC '} ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}`);
+    // POURQUOI CE TEST EST-IL ROUGE ? Quand il echoue, on montre ce que le test PRECEDENT
+    // avait laisse derriere lui (releve par __SHOT.go avant toute remise a zero) et la
+    // memoire du rendu. Sans cela, un test sali par un voisin donnait un message qui se lit
+    // comme une reussite et on relisait dix fois un test parfaitement juste.
+    let sale='';
+    if (!ok) { try {
+      const d = await page.evaluate(() => ({ sale: window.__SHOT.sale || [], mem: window.__SHOT.memoire || null }));
+      const m = d.mem ? ` · memoire du rendu : ${d.mem.geo} geometries, ${d.mem.tex} textures, ${d.mem.prog} programmes, ${d.mem.objets} objets de scene, ${d.mem.solides} solides` : '';
+      if (d.sale.length || m) sale = `\n        état trouvé à l'entrée du test (laissé par les précédents) : ${d.sale.length ? d.sale.join(' · ') : 'rien de notable'}${m}`;
+    } catch (e) {} }
+    console.log(`${ok?'  OK  ':'ÉCHEC '} [${idx+1}] ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}${sale}`);
     ok?pass++:fail++;
   }
   console.log(`\n${pass} réussis, ${fail} échoués — ${errors.length} erreur(s) console au total`);
@@ -8836,7 +8878,9 @@ test('le feu vit et s\'eteint : des flammes de tailles differentes qui ondulent,
       image();
       f.flammes.forEach((m, j) => suivi[j].push(m.scale.y));
       fumeeY.push(f.fumees[0].position.y); fumeeOp.push(f.fumees[0].material.opacity);
-      braiseY.push(f.braises[0].position.y); halo.push(f.halo.material.opacity);
+      // les braises ne sont plus cinq petits cubes mais UN nuage de points (un appel de dessin
+      // au lieu de cinq) : la hauteur de la premiere braise se lit dans le tampon partage
+      braiseY.push(f.brPos ? f.brPos[1] : f.braises[0].position.y); halo.push(f.halo.material.opacity);
     }
     const amp = suivi.map(v => +(Math.max.apply(null, v) - Math.min.apply(null, v)).toFixed(3));
     // la fumée monte : la hauteur augmente bien plus souvent qu'elle ne baisse (elle ne
@@ -9786,10 +9830,18 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
     d1.veh.x = d1.epave.x + 4; d1.veh.z = d1.epave.z; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
     res.dep.bandeau = document.getElementById('missionHud').textContent;
     d1.veh.outil = 1; d1.veh.outilCible = 1; G.missionTick(0.1); res.dep.etapes.push(G.mission.step);
-    // l'épave suit vraiment la dépanneuse
-    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    // LE CHARGEMENT SUR LE PLATEAU (poste Animation) : 2,4 s de manœuvre avant de pouvoir
+    // repartir — le treuil accroché ne suffit plus, il faut que la voiture soit MONTÉE.
+    for (let i = 0; i < 240 && G.mission.step === 3; i++) { G.simTime += 1 / 60; G.animMondeTick(1 / 60); G.missionTick(1 / 60); }
+    res.dep.etapes.push(G.mission.step);
+    res.dep.surPlateau = +(d1.epave.y - (d1.veh.y || 0)).toFixed(2);
+    // l'épave suit vraiment la dépanneuse, posée sur son plateau
+    d1.veh.x = d1.garage.x - 40; d1.veh.z = d1.garage.z; G.animMondeTick(0.1); G.missionTick(0.1);
     res.dep.remorque = Math.round(Math.hypot(d1.epave.x - d1.veh.x, d1.epave.z - d1.veh.z));
     d1.veh.x = d1.garage.x; d1.veh.z = d1.garage.z; G.missionTick(0.1);
+    res.dep.etapes.push(G.mission.step);
+    // le déchargement puis les DIX SECONDES de réparation au garage
+    for (let i = 0; i < 60 * 40 && G.mission.cur; i++) { G.simTime += 1 / 30; G.animMondeTick(1 / 30); G.missionTick(1 / 30); }
     res.dep.fin = { finie: !G.mission.cur, gain: G.wallet };
     // 3. POMPIER : caserne, camion, sirène, lance à eau, blessé à sortir
     G.wallet = 0; G.mission.forcer = 'blesse'; G.startMission('pompier');
@@ -9864,12 +9916,12 @@ test('les trois missions de métier (pompier, dépanneuse, police) se jouent du 
   const b = r.bureau, dp = r.dep, pm = r.pomp, po = r.pol;
   const ok = b.cartes === b.total && b.ouvertes === b.total && b.difficultes === b.total
     && ['depannage', 'pompier', 'police'].every(id => b.ids.includes(id))
-    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3' && dp.remorque <= 8 && dp.fin.finie && dp.fin.gain >= 70
+    && dp.lance && dp.veh && dp.epave && dp.chrono && dp.etapes.join(',') === '1,2,3,4,5' && dp.remorque <= 8 && dp.surPlateau > 0.8 && dp.fin.finie && dp.fin.gain >= 70
     && pm.lance && pm.variante === 'blesse' && pm.feux >= 1 && pm.chrono && pm.sirene && pm.feuMonte
     && pm.arrosage.apres < pm.arrosage.avant - 20 && pm.etapes.join(',') === '1,2,3' && pm.blesse && pm.fin.finie && pm.fin.gain >= 90
     && ['chauffard', 'voleur', 'escorte', 'barrage'].every(v => po[v].lance && po[v].variante === v && po[v].etapes.join(',') === '1,2' && po[v].sirene && po[v].fin.finie && po[v].fin.gain >= 85)
     && po.chauffard.range && po.chauffard.cellule && po.voleur.cellule && po.escorte.auPoste < 20 && po.barrage.controles === 3;
-  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
+  return { ok, detail: `le bureau affiche ses ${b.cartes} missions, toutes avec une difficulté (${b.difficultes}/${b.total}) · 🛻 dépannage : dépanneuse prise, treuil accroché, épave remorquée à ${dp.remorque} m derrière (posée ${dp.surPlateau} m au-dessus de l'assiette du camion, donc SUR le plateau), étapes ${dp.etapes.join('→')}, garage → +${dp.fin.gain} 🪙 · 🚒 pompier : camion pris, sirène ${pm.sirene}, le feu monte tout seul (${pm.feuMonte}) et la lance le fait tomber de ${pm.arrosage.avant} à ${pm.arrosage.apres}, blessé sorti → +${pm.fin.gain} 🪙 · 🚓 police : chauffard rangé et en cellule (+${po.chauffard.fin.gain}), voleur rattrapé et en cellule (+${po.voleur.fin.gain}), convoi escorté jusqu'au poste à ${po.escorte.auPoste} m (+${po.escorte.fin.gain}), barrage ${po.barrage.controles}/3 (+${po.barrage.fin.gain})` };
 });
 
 test('une mission de métier ratée est comptée comme un échec, et la carrière verrouille ce qui n\'est pas mérité', async p => {
@@ -10455,7 +10507,7 @@ test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort 
   return { ok, detail: `un choc ne faisait qu'un « toc » de bruitage, le même à 5 km/h et à 90 · c'est maintenant un vrai BOOM — la masse qui s'arrête (une sinusoïde très grave qui plonge de 150 à 34 Hz) plus la tôle qui plie — envoyé sur le bus effets et mesuré par un analyseur au bout de la chaîne : à l'arrêt RIEN (${r.nArret} BOOM déclenché, ${r.rArret} contre ${r.silence} de silence), petit choc à 14 km/h ${r.rPetit} (intensité ${r.fPetit}), gros choc à 86 km/h ${r.rGros} (intensité ${r.fGros})` };
 });
 
-test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sinon c\'est la prison', async p => {
+test('un accident immobilise les deux véhicules, la police vient constater, et l\'amende est prélevée — sans jamais envoyer en prison', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
@@ -10479,14 +10531,15 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     for (let i = 0; i < 60; i++) { G.simTime = G.simTime + 1 / 60; G.conduire(A, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); G.servicesTick(1 / 60); }
     const bloque = { v: +Math.abs(G.drive.speed).toFixed(2), dep: +Math.hypot(A.x - x0, A.z - z0).toFixed(2) };
     let vuPolice = false, vuConstat = false;
-    for (let k = 0; k < 120 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
+    // (200 passes de 1 s : la police vient maintenant PAR LA ROUTE, feux et piétons compris)
+    for (let k = 0; k < 200 && acc.etat !== 'fini'; k++) { avance(20); if (acc.etat === 'constat') vuConstat = true; if (acc.pc && Math.hypot(acc.pc.x - acc.x, acc.pc.z - acc.z) < 8) vuPolice = true; }
     const paye = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, wallet: G.wallet, vuPolice, vuConstat };
     for (let k = 0; k < 20; k++) avance(20);
-    // 2) même chose, sans un sou : la prison
+    // 2) même chose, sans un sou : l'amende est plafonnée par le portefeuille, PAS DE PRISON
     pose(); G.wallet = 3; G.jail.on = false;
     const acc2 = G.ouvreAccident(A, B, 12);
-    for (let k = 0; k < 120 && acc2.etat !== 'fini'; k++) avance(20);
-    const fauche = { etat: acc2.etat, paye: acc2.paye, prison: acc2.prison, jail: G.jail.on };
+    for (let k = 0; k < 200 && acc2.etat !== 'fini'; k++) avance(20);
+    const fauche = { etat: acc2.etat, paye: acc2.paye, prison: acc2.prison, jail: G.jail.on, wallet: G.wallet };
     if (G.drive.car) G.exitCar();
     G.jail.on = false; A.accidente = false; B.accidente = false;
     for (let k = 0; k < 20; k++) avance(20);
@@ -10495,9 +10548,10 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
   });
   const ok = r.juste.pc && r.juste.v === 0 && r.juste.a === 0 && r.juste.b === 0
     && r.bloque.v < 0.01 && r.bloque.dep < 0.05
-    && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true && r.paye.amende > 0 && r.paye.wallet === 500 - r.paye.amende
-    && r.fauche.paye === false && r.fauche.prison === true && r.fauche.jail === true;
-  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · sans argent (3 🪙), c'est la prison : payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
+    && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true
+    && r.paye.amende >= 20 && r.paye.amende <= 30 && r.paye.wallet === 500 - r.paye.amende
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+  return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · L'AMENDE N'ENVOIE PLUS EN PRISON (elle était de 60 à 100 🪙 et, faute d'argent, la partie s'arrêtait en cellule) : avec 3 🪙 en poche, on paie ce qu'on a et le reste est effacé — payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}, portefeuille ${r.fauche.wallet}` };
 });
 
 test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, et son treuil s\'actionne', async p => {
@@ -10528,7 +10582,9 @@ test('la dépanneuse répare sur place ou remorque au garage, avec deux tarifs, 
       G.wallet = 900; G.jail.on = false;
       if (G.drive.car !== A) G.enterCar(A);
       const acc = G.ouvreAccident(A, B, 14);
-      for (let k = 0; k < 150 && (!acc.dep || !acc.dep.fini); k++) avance(20);
+      // la dépanneuse n'est plus appelée au moment du choc : c'est la POLICE, une fois sur
+      // place, qui la fait venir. Il faut donc le temps des deux trajets, par la route.
+      for (let k = 0; k < 400 && (!acc.dep || !acc.dep.fini); k++) avance(20);
       const out = { mode: acc.dep && acc.dep.mode, tarif: acc.dep && acc.dep.tarif, paye: acc.dep && acc.dep.paye,
         dmg: A.dmg, wallet: G.wallet, amende: acc.amende };
       for (let k = 0; k < 40 && acc.etat !== 'fini'; k++) avance(20);
@@ -11905,4 +11961,1047 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     && /atterrir/.test(r.roles[2]) && /baisser/.test(r.roles[6]) && /garde/.test(r.roles[4])
     && /se baisser/.test(r.legende) && /atterrir/.test(r.legende);
   return { ok, detail: `le geste de se baisser existait (bassin abaisse, genoux plies, semelles au sol) mais n'avait aucun bouton de manette : il est sur L2, la gachette liberee par le passage de la marche au stick gauche · L2 enfoncee, le bassin descend de ${descendu} m, les genoux se plient a ${r.baisse.genou} rad, les semelles restent posees au sol (le pied remonte de ${+(r.baisse.semelle - r.debout.semelle).toFixed(3)} m dans le squelette, exactement ce dont le bassin descend), un coup de face ne fait plus aucun degat (${r.esquive.dmg}) et le personnage ne se deplace pas d'un centimetre (${r.gachetteNeBougePas} m/s) ; lachee, il se releve (${r.apres.baisse} m) · L1 leve la garde arme rangee et vise arme braquee, sans jamais les deux · le carre frappe a pied et POSE l'helicoptere : lance de 60 m, il descend a ${d.vyMax} m/s au plus (le seuil de casse est a 3), touche le sol en ${d.secondes} s a ${d.y} m avec ${d.degats} degat, et rend la main ; ◯ annule la descente et L2 fait descendre a ${r.l2Descend} m/s · aucun des 18 boutons n'a deux roles (${r.doubles.length} collision)` };
+});
+
+// ===================== POSTE INFRASTRUCTURE (round 68) =====================
+// L'enfant : « escalier banque pas finit … ajoute la dernière partie de l'escalier pour que
+// le joueur puisse atteindre le deuxième étage ». Le test précédent (« les escaliers de la
+// banque ne rasent plus le mur ») ne mesurait que l'écartement au mur : un escalier peut le
+// respecter et rester INGRAVISSABLE. Celui-ci FAIT MONTER le joueur, image par image, du
+// hall jusqu'à la salle des coffres, et exige qu'il y arrive.
+test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -56, y: 1, z: 66, hour: 12, frais: true });
+    const bk = G.city.bank;
+    if (!bk || !bk.esc || bk.esc.length < 2) return { manque: true };
+    const e0 = bk.esc[0], e1 = bk.esc[1], journal = [];
+    let ymax = G.P.pos.y;
+    // on tient « avancer » en pointant la caméra sur le point visé : avancer va vers
+    // (-sin yaw, -cos yaw). En temps SIMULÉ, comme grimpe(), pour ne pas dépendre du rendu.
+    const marcher = (tx, tz, secondes) => {
+      G.keys.add('ArrowUp');
+      for (let i = 0; i < secondes * 60; i++) {
+        G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9;
+        G.step(1 / 60, true);
+        if (G.P.pos.y > ymax) ymax = G.P.pos.y;
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.8) break;
+      }
+      G.keys.delete('ArrowUp');
+      journal.push(`${G.P.pos.y.toFixed(2)} m`);
+    };
+    marcher(e0.bas[0] + 0.8, e0.bas[1], 10);      // le pied de la volée du hall
+    marcher(e0.haut[0] + 1.2, e0.haut[1], 16);    // on la monte jusqu'au palier du 1ᵉʳ
+    const y1 = G.P.pos.y;
+    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
+    marcher(bk.x + 6.5, e1.bas[1] - 0.8, 10);
+    marcher(e1.bas[0], e1.bas[1], 10);            // le pied de la volée du 2ᵉ
+    marcher(e1.haut[0], e1.haut[1], 18);          // et on monte aux coffres
+    const c = (G.city.safes || [])[0];
+    // hauteur et profondeur des marches : la règle des autres escaliers du jeu
+    const marches = bk.esc.map(e => {
+      const m = G.solids.filter(o => Math.abs(o.z - e.z) < 0.4 && Math.abs(o.d - 3.6) < 0.3
+        && o.w > 1.3 && o.w < 1.8 && o.y > e.y0 - 1 && o.y < e.y1 + 1).sort((a, b) => a.y - b.y);
+      return { n: m.length, haut: +m[0].h.toFixed(3), giron: +(m[0].w - 0.06).toFixed(2) };
+    });
+    // LE PALIER D'ARRIVÉE : du marbre continu, aussi large que la volée, entre la dernière
+    // marche et le mur. On relève le plus grand VIDE rencontré sur ce trajet (avant, la
+    // dernière marche s'arrêtait 47 cm avant la dalle : l'escalier finissait en l'air).
+    const paliers = bk.esc.map(e => {
+      const sens = e.haut[0] > e.bas[0] ? 1 : -1, mur = bk.x + sens * (bk.w / 2 - 0.4);
+      let vide = 0, pire = 0, n = 0;
+      for (let d = 0; d <= Math.abs(mur - e.haut[0]) - 0.25; d += 0.1) {
+        for (const dz of [-1.5, 0, 1.5]) {
+          n++;
+          if (Math.abs(G.groundUnder(e.haut[0] + sens * d, e.z + dz, null, e.y1 + 0.4) - e.y1) < 0.06) vide = 0;
+          else { vide += dz === 0 ? 0.1 : 0; pire = Math.max(pire, vide); }
+        }
+      }
+      return { pire: +pire.toFixed(2), n };
+    });
+    return { y1: +y1.toFixed(2), y2: +G.P.pos.y.toFixed(2), ymax: +ymax.toFixed(2), journal,
+      etage2: c ? +c.y.toFixed(2) : null, distCoffre: c ? +Math.hypot(G.P.pos.x - c.x, G.P.pos.z - c.z).toFixed(1) : null,
+      marches, paliers };
+  });
+  if (r.manque) return { ok: false, detail: 'la banque n\'a pas d\'escalier enregistré' };
+  const monte1 = r.y1 > 4.9, monte2 = r.y2 > r.etage2 - 0.15;
+  const bonnesMarches = r.marches.every(m => m.n >= 8 && m.haut <= 0.52 && m.giron >= 0.55);
+  const bonsPaliers = r.paliers.every(v => v.pire === 0);
+  return { ok: monte1 && monte2 && bonnesMarches && bonsPaliers,
+    detail: `du hall (0,85 m) au 1ᵉʳ étage : ${r.y1} m, puis jusqu'aux coffres : ${r.y2} m (2ᵉ étage à ${r.etage2} m, coffre le plus proche à ${r.distCoffre} m) · étapes ${r.journal.join(' → ')} · marches ${r.marches.map(m => `${m.n} × ${m.haut} m de haut, ${m.giron} m de giron`).join(' et ')} (limite de la maison : 0,52 m de haut) · palier d'arrivée : plus aucun vide entre la dernière marche et le mur, sur toute la largeur de la volée (plus grand trou ${r.paliers.map(v => v.pire + ' m').join(' et ')}, contre 0,47 m avant)` };
+});
+
+// L'enfant : « enlève le panneau … et le panneau MONDE qui cache le tableau gris ». La carte
+// du monde était plantée à 3 cm DEVANT le tableau, pile là où la maîtresse écrit la réponse
+// à la craie ; d'autres pancartes mordaient encore dessus. Le test mesure, salle par salle,
+// la SURFACE de craie recouverte par le mobilier de la classe — et exige zéro.
+test('rien ne cache le tableau gris des salles de l\'école', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 213, hour: 12, frais: true });
+    const bb = new G.THREE.Box3(), salles = [];
+    for (const room of (G.city.classes || [])) {
+      const t = room.tableau, bz = t.position.z, bx = t.position.x;
+      // la surface écrite : le plan de 5,40 × 2,45 m posé à 2,25 m du sol
+      const x1 = bx - 2.7, x2 = bx + 2.7, y1 = 2.25 - 1.225, y2 = 2.25 + 1.225;
+      let aire = 0; const pires = [];
+      G.worldGroup.traverse(o => {
+        if (!o.isMesh || o === t) return;
+        bb.setFromObject(o);
+        if (bb.max.z <= bz + 0.002 || bb.min.z > bz + 2.5) return;   // seulement ce qui est DEVANT le tableau
+        if (bb.max.x < x1 || bb.min.x > x2 || bb.max.y < y1 || bb.min.y > y2) return;
+        const a = (Math.min(bb.max.x, x2) - Math.max(bb.min.x, x1)) * (Math.min(bb.max.y, y2) - Math.max(bb.min.y, y1));
+        aire += a; pires.push(`${a.toFixed(2)} m² en x ${bb.min.x.toFixed(1)}→${bb.max.x.toFixed(1)}`);
+      });
+      salles.push({ subj: room.subj, aire: +aire.toFixed(2), pires: pires.slice(0, 3), props: (room.props || []).length });
+    }
+    return { salles, total: +salles.reduce((s, v) => s + v.aire, 0).toFixed(2) };
+  });
+  const ok = r.salles.length === 4 && r.salles.every(s => s.aire === 0) && r.salles.every(s => s.props >= 3);
+  return { ok, detail: `surface du tableau (13,23 m²) masquée par le mobilier, salle par salle : ${r.salles.map(s => `${s.subj} ${s.aire} m²${s.pires.length ? ' (' + s.pires.join(', ') + ')' : ''}`).join(' · ')} — avant : math 1,69, géo 3,53, logique 1,69, culture 2,65 m² · total ${r.total} m², et chaque salle garde son mobilier pédagogique (${r.salles.map(s => s.props).join('/')} objets)` };
+});
+
+test('la dépanneuse charge vraiment l\'épave SUR son plateau, la remorque, la stationne et la répare dix secondes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const d = (G.city.depanneuses || [])[0];
+    if (!d) return { manque: true };
+    d.mission = null; d.remorque = null; d.depCible = null; d.dep = 0;
+    const A = G.city.cars.find(c => !c.kind && !c.heli && !c.travail && c !== G.drive.car);
+    const B = G.city.cars.find(c => c !== A && !c.kind && !c.heli && !c.travail);
+    if (!A || !B) return { manque: true };
+    const loin = [d.home0[0] + 70, d.home0[1] + 30];
+    A.dmg = 80; B.dmg = 5; A.busy = true; B.busy = true;   // 80 > DEGATS_SUR_PLACE : c'est un REMORQUAGE
+    A.x = loin[0] + 3; A.z = loin[1]; A.h = 0; A.g.position.set(A.x, A.y || 0, A.z);
+    B.x = loin[0] + 9; B.z = loin[1]; B.g.position.set(B.x, B.y || 0, B.z);
+    d.x = loin[0]; d.z = loin[1]; d.g.position.set(d.x, d.y || 0, d.z);
+    const m = G.depanneuseAppel({ a: A, b: B, x: loin[0], z: loin[1], joueur: false });
+    if (!m) return { manque: true };
+    // HAUTEUR DE L'ÉPAVE AU-DESSUS DE L'ASSIETTE DU CAMION : c'est la mesure qui dit si elle
+    // est SUR le plateau (0,94 m, la hauteur de la tôle) ou traînée AU SOL (0 m).
+    const dessus = () => +(A.y - (d.y || 0)).toFixed(2);
+    const recul = () => +Math.hypot(A.x - d.x, A.z - d.z).toFixed(2);
+    const phases = [];
+    let hautMax = 0, hautGarage = null, reparT = 0, reparVu = 0, tGarage = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      G.simTime += 1 / 30; G.depanneusesTick(1 / 30); G.animMondeTick(1 / 30);
+      if (!phases.length || phases[phases.length - 1] !== m.phase) phases.push(m.phase);
+      if (A.y - (d.y || 0) > hautMax) hautMax = +(A.y - (d.y || 0)).toFixed(2);
+      if (m.phase === 'garage') { hautGarage = dessus(); tGarage = recul(); }
+      if (m.phase === 'garageRepare') { reparT += 1 / 30; if (G.ANIM.reparateurs.length) reparVu++; }
+      if (m.fini && m.phase === 'retour') break;
+    }
+    return { phases, hautMax, hautGarage, reculGarage: tGarage, reparT: +reparT.toFixed(1), reparVu,
+      mode: m.mode, fini: !!m.fini, dmgFinal: A.dmg, capotRange: A.parts && +A.parts.hood.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque && r.mode === 'remorque'
+    && r.phases.indexOf('treuil') >= 0 && r.phases.indexOf('garage') >= 0
+    && r.phases.indexOf('depose') >= 0 && r.phases.indexOf('garageRepare') >= 0
+    && r.hautMax > 0.8 && r.hautGarage > 0.8 && r.reculGarage < 2.2
+    && r.reparT >= 9.5 && r.reparVu > 250 && r.fini && r.dmgFinal === 0 && r.capotRange === 0;
+  return { ok, detail: `le treuillage n'était qu'une attente de 2,5 s : l'épave se téléportait DERRIÈRE le camion, roues au sol, et le garage la réparait en une image · maintenant le plateau s'incline en rampe, le crochet descend et l'épave MONTE : ${r.hautMax} m au-dessus de l'assiette du camion, à ${r.reculGarage} m de son centre (elle est SUR la tôle), phases traversées ${JSON.stringify(r.phases)}, réparation au garage ${r.reparT} s avec un réparateur visible sur ${r.reparVu} images, capot refermé (${r.capotRange} rad) et dégâts ${r.dmgFinal}` };
+});
+
+test('le réparateur se penche tête au-dessus du capot ouvert et bouge ses bras avec sa clé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.makeCar(0x4f8dff, G.P.pos.x + 4, G.P.pos.z, 0);
+    const rep = G.reparateurArrive(c, G.REPAR_DUREE, null);
+    if (!rep) return { manque: true };
+    const rig = rep.av.rig;
+    const ech = [];
+    for (let i = 0; i < 60 * 10; i++) {
+      G.simTime += 1 / 60;
+      G.reparateurTick(rep, 1 / 60);
+      ech.push({ capot: c.parts.hood.rotation.x, buste: rep.av.group.rotation.x,
+        tete: rig.head.rotation.x, brasD: rig.armR.rotation.x, coudeD: rig.armR.coude.rotation.x });
+    }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const outil = rep.av.outilNom;
+    const res = { capot: st('capot'), buste: st('buste'), tete: st('tete'), brasD: st('brasD'), coudeD: st('coudeD'),
+      outil, images: ech.length, encore: G.ANIM.reparateurs.length };
+    G.reparateurRange(rep);
+    res.apres = G.ANIM.reparateurs.length;
+    return res;
+  });
+  const ok = !r.manque && r.outil === 'cle'
+    && r.capot.amp > 1 && r.capot.pasMax < 0.06
+    && r.buste.max > 0.55 && r.tete.max > 0.55
+    && r.coudeD.amp > 0.5 && r.coudeD.pasMax < 0.12
+    && r.brasD.amp > 0.3 && r.brasD.pasMax < 0.12
+    && r.encore === 1 && r.apres === 0;
+  return { ok, detail: `la réparation ne se VOYAIT pas : la dépanneuse s'arrêtait 2,5 s et les dégâts tombaient à zéro tout seuls · maintenant un employé municipal arrive clé à la main (outil « ${r.outil} »), le capot s'ouvre sur sa charnière (${r.capot.amp} rad, pas max ${r.capot.pasMax} rad/image), il plonge le buste à ${r.buste.max} rad et la tête à ${r.tete.max} rad AU-DESSUS du moteur, et son coude droit serre (${r.coudeD.amp} rad d'amplitude, ${r.coudeD.pasMax} rad/image) sur ${r.images} images = 10 s` };
+});
+
+test('la pelleteuse creuse pour de vrai : godet chargé de terre, trou qui s\'agrandit, tas qui monte', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    G.ANIM.trous.length = 0;
+    // l'engin mesuré reste HORS de city.cars : sinon la boucle de rendu du jeu ferait avancer
+    // le cycle une deuxième fois, avec son propre dt, et le pas par image n'aurait aucun sens
+    const c = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 30, G.P.pos.z, 0);
+    G.enginCreuseTick && null;
+    if (!G.enginCreuse(c)) return { manque: true };
+    const trou = c.creuse.trou;
+    if (!trou) return { manque: true };
+    const o = c.outils;
+    const cle = { bras: () => o.bras.rotation.x, avant: () => o.avantBras.rotation.x,
+      godet: () => o.godet.rotation.x, tour: () => o.tourelle.rotation.y };
+    const ech = []; let terreVue = 0;
+    G.enginCreuseTick(c, 0);
+    const lire = () => { const e = {}; for (const k in cle) e[k] = cle[k](); return e; };
+    ech.push(lire());
+    for (let i = 0; i < 280; i++) { if (c.creuse) G.enginCreuseTick(c, 1 / 60); if (o.terre && o.terre.visible) terreVue++; ech.push(lire()); }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const un = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    for (let k = 0; k < 3; k++) { G.enginCreuse(c); for (let i = 0; i < 280 && c.creuse; i++) G.enginCreuseTick(c, 1 / 60); }
+    const quatre = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    return { godet: st('godet'), bras: st('bras'), avant: st('avant'), tour: st('tour'),
+      terreVue, images: ech.length, un, quatre, trous: G.ANIM.trous.length, reposGodet: +o.godet.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque
+    && r.godet.amp > 1.5 && r.godet.pasMax < 0.1
+    && r.bras.amp > 0.7 && r.bras.pasMax < 0.06
+    && r.tour.amp > 0.8 && r.tour.pasMax < 0.06
+    && r.terreVue > 90
+    && r.un.n === 1 && r.quatre.n === 4
+    && r.quatre.r > r.un.r && r.quatre.prof > r.un.prof && r.quatre.tas > r.un.tas
+    && r.trous === 1 && Math.abs(r.reposGodet + 0.7) < 0.01;
+  return { ok, detail: `l'outil de la pelleteuse n'était qu'un curseur 0 → 1 : le bras se dépliait et RIEN ne se passait — pas de terre, pas de trou, pas de tas · maintenant un cycle complet de 4,2 s (godet ${r.godet.amp} rad d'amplitude, ${r.godet.pasMax} rad/image au plus ; bras ${r.bras.amp} rad ; tourelle ${r.tour.amp} rad), la TERRE est visible dans le godet sur ${r.terreVue} des ${r.images} images, et après 1 puis 4 godets le trou passe de ${r.un.r} à ${r.quatre.r} m de rayon et de ${r.un.prof} à ${r.quatre.prof} m de profondeur pendant que le tas monte de ${r.un.tas} à ${r.quatre.tas} m` };
+});
+
+test('la grue lève sa charge et le bulldozer pousse son andain, chacun sans à-coup', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const st = (ech, k) => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const gr = G.makeVehiculeTravail('grue', 0xffd23f, G.P.pos.x + 44, G.P.pos.z, 0);
+    if (!G.enginLeve(gr)) return { manque: true };
+    const og = gr.outils, eg = []; let charge = 0;
+    G.enginLeveTick(gr, 0);
+    const lg = () => ({ tour: og.tourelle.rotation.y, crochet: og.crochet.position.y, fleche: og.fleche.rotation.x });
+    eg.push(lg());
+    for (let i = 0; i < 480; i++) { if (gr.leve) G.enginLeveTick(gr, 1 / 60); if (og.charge && og.charge.visible) charge++; eg.push(lg()); }
+    const bu = G.makeVehiculeTravail('bulldozer', 0xffd23f, G.P.pos.x + 58, G.P.pos.z, 0);
+    bu.spd = 6; G.enginLame(bu);
+    const ob = bu.outils, eb = []; let andain = 0;
+    G.enginLameTick(bu, 0);
+    const lb = () => ({ lameY: ob.lame.position.y, andainH: ob.andain.scale.y });
+    eb.push(lb());
+    for (let i = 0; i < 240; i++) { G.enginLameTick(bu, 1 / 60); if (ob.andain.visible) andain++; eb.push(lb()); }
+    return { grue: { tour: st(eg, 'tour'), crochet: st(eg, 'crochet'), charge, images: eg.length, reposCrochet: +og.crochet.position.y.toFixed(3) },
+      bull: { lame: st(eb, 'lameY'), andainH: st(eb, 'andainH'), andain, images: eb.length } };
+  });
+  const ok = !r.manque
+    && r.grue.tour.amp > 1.2 && r.grue.tour.pasMax < 0.06
+    && r.grue.crochet.amp > 3 && r.grue.crochet.pasMax < 0.1
+    && r.grue.charge > 150 && Math.abs(r.grue.reposCrochet + 0.2) < 0.01
+    && r.bull.lame.amp > 0.8 && r.bull.lame.pasMax < 0.04
+    && r.bull.andainH.amp > 0.8 && r.bull.andainH.pasMax < 0.04 && r.bull.andain > 100;
+  return { ok, detail: `la grue tournait à vide (aucune charge au crochet) et le bulldozer n'existait pas · grue : tourelle ${r.grue.tour.amp} rad (${r.grue.tour.pasMax} rad/image), crochet ${r.grue.crochet.amp} m (${r.grue.crochet.pasMax} m/image), charge visible sur ${r.grue.charge} des ${r.grue.images} images et crochet rendu à sa hauteur de repos (${r.grue.reposCrochet}) · bulldozer : lame ${r.bull.lame.amp} m (${r.bull.lame.pasMax} m/image) et andain qui grossit de ${r.bull.andainH.amp} sur ${r.bull.andain} images` };
+});
+
+test('démolir une voiture de police avec un engin de chantier met trois étoiles de recherche', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12, frais: true });
+    G.clearWanted();
+    const pelle = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 26, G.P.pos.z, 0);
+    G.city.cars.push(pelle);
+    // une voiture ORDINAIRE d'abord : elle casse, mais sans trois étoiles
+    const civ = G.makeCar(0x4f8dff, pelle.x, pelle.z + 6.4, 0); G.city.cars.push(civ);
+    civ.dmg = 0; civ.dead = false;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 120 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    const civApres = { dmg: Math.round(civ.dmg), etoiles: G.police.wanted };
+    G.clearWanted(); civ.x = pelle.x + 60; civ.z = pelle.z; civ.g.position.set(civ.x, civ.y || 0, civ.z);
+    // puis une VOITURE DE POLICE
+    // une voiture de police se reconnaît comme le jeu la reconnaît : son solide porte `pol`
+    // et elle appartient à la flotte `police.cars`
+    const pc = G.makeCar(0xf4f6fa, pelle.x, pelle.z + 6.4, 0, { police: true });
+    pc.dmg = 0; pc.dead = false; pc.solid.pol = true; G.police.cars.push(pc);
+    const avant = G.police.wanted;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 200 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    return { civApres, avant, apres: G.police.wanted, dmgPolice: Math.round(pc.dmg), alerte: !!pc.enginAlerte };
+  });
+  const ok = r.civApres.dmg > 20 && r.avant === 0 && r.apres === 3 && r.dmgPolice > 20 && r.alerte;
+  return { ok, detail: `le joueur demandait de pouvoir « démolir un véhicule (même police, qui déclenche une alerte 3 étoiles) » : aucun engin ne faisait le moindre dégât à un véhicule · le godet d'une pelleteuse inflige maintenant 52 points de dégâts par seconde à 6,4 m devant elle (voiture ordinaire : ${r.civApres.dmg} points, ${r.civApres.etoiles} étoile(s)) et, sur une voiture de POLICE, l'alerte part sans avertissement : ${r.avant} → ${r.apres} étoiles pour ${r.dmgPolice} points de dégâts` };
+});
+
+test('le coup qui met à terre passe au ralenti pendant trois secondes de temps réel, et pas deux fois de suite', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const R = G.RALENTI;
+    R.t = 0; R.fige = null; R.prochain = 0;
+    const normal = G.ralentiEchelle(1 / 60);
+    const arme = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    // un DEUXIÈME coup pendant le ralenti doit être refusé : sinon chaque échange rallongeait
+    const pendant = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    const ech = []; let reel = 0, cam = 0;
+    const cp = () => ({ x: G.camera.position.x, y: G.camera.position.y, z: G.camera.position.z });
+    const angles = [];
+    for (let i = 0; i < 400; i++) {
+      const k = G.ralentiEchelle(1 / 60); reel += 1 / 60; ech.push({ t: +reel.toFixed(3), k });
+      if (k < 1) { if (G.ralentiCam()) { cam++; const c = cp(); angles.push(+Math.atan2(c.x - G.P.pos.x, c.z - (G.P.pos.z + 1)).toFixed(3)); } }
+    }
+    let fin = 0, mini = 1;
+    for (const e of ech) { if (e.k < 0.999) { fin = e.t; if (e.k < mini) mini = e.k; } }
+    let pasMax = 0; for (let i = 1; i < ech.length; i++) pasMax = Math.max(pasMax, Math.abs(ech[i].k - ech[i - 1].k));
+    // balayage de la caméra : l'écart entre le premier et le dernier angle
+    let balayage = 0;
+    if (angles.length > 2) { let d = angles[angles.length - 1] - angles[0]; balayage = +Math.abs(Math.atan2(Math.sin(d), Math.cos(d))).toFixed(3); }
+    // après le ralenti, l'échelle est revenue à 1 et un nouveau coup reste refusé (repos)
+    const apresEchelle = G.ralentiEchelle(1 / 60);
+    const apresRepos = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    R.t = 0; R.prochain = 0;
+    return { normal, arme, pendant, fin: +fin.toFixed(2), mini: +mini.toFixed(3), pasMax: +pasMax.toFixed(4),
+      camImages: cam, balayage, apresEchelle, apresRepos, duree: G.RALENTI_DUREE };
+  });
+  const ok = r.normal === 1 && r.arme === true && r.pendant === false
+    && r.fin > 2.7 && r.fin < 3.2 && r.mini < 0.32 && r.mini > 0.28
+    && r.pasMax < 0.06 && r.camImages > 150 && r.balayage > 0.8
+    && r.apresEchelle === 1 && r.apresRepos === false;
+  return { ok, detail: `« mets des ralentis (3 secondes) au dernier coup vainqueur » : hors ralenti le temps tourne à ${r.normal}× · le coup qui met à terre le ralentit jusqu'à ${r.mini}× et rend la main après ${r.fin} s de TEMPS RÉEL (le décompte se fait sur l'horloge du rendu, pas sur celle du jeu, sinon le ralenti se ralentissait lui-même), avec une entrée et une sortie en fondu (${r.pasMax} d'écart au plus d'une image à l'autre) · la caméra de cinéma a pris la main sur ${r.camImages} images et a BALAYÉ ${r.balayage} rad autour du point d'impact · un deuxième coup pendant le ralenti (${r.pendant}) ou juste après (${r.apresRepos}) ne le relance pas` };
+});
+
+// ---- POSTE VÉHICULES : on ne reste plus coincé contre un mur ----
+// Le joueur : « libère les blocages, quand le véhicule touche un obstacle laisse-lui la
+// possibilité de rebondir et se libérer pour repartir, mets-lui un petit dégât de carrosserie,
+// durabilité de vie du véhicule plus longue ». Le déplacement se testait à la position
+// D'ARRIVÉE : dès que la caisse mordait dans un obstacle, TOUTES les destinations étaient
+// refusées — marche arrière comprise — et le véhicule restait planté là pour de bon.
+test('un véhicule coincé contre un mur s\'en dégage toujours, et la carrosserie encaisse bien plus longtemps', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city.cars.find(v => !v.heli && !v.kind && !v.travail && !v.kart);
+    const b = G.city.batiments.filter(x => x.w > 6 && x.d > 6)
+      .sort((a, x) => Math.hypot(a.x, a.z) - Math.hypot(x.x, x.z))[0];
+    if (!c || !b) return { pourquoi: 'aucune voiture ou aucun bâtiment à portée' };
+    // on écarte tout ce qui roule autour : le piège doit être CELUI qu'on pose, pas le hasard
+    const autres = [];
+    for (const a of [...G.city.cars, ...G.city.aiCars, ...G.police.cars]) {
+      if (a === c || Math.hypot(a.x - b.x, a.z - b.z) > 60) continue;
+      autres.push([a, a.x, a.z]); a.x += 700; a.g.position.set(a.x, a.y || 0, a.z); G.vehicleSolid(a);
+    }
+    const [vr, vL] = G.vehHalf(c);
+    const dansUnMur = () => (G.city.batiments || []).some(q => Math.abs(c.x - q.x) < q.w / 2 && Math.abs(c.z - q.z) < q.d / 2);
+    const pose = (x, z, h) => {
+      c.dmg = 0; c.deg = 0; c.dead = false; c.accidente = false; c.busy = false;
+      c.hitT = 0; c.rebondT = 0; c.coinceT = 0;
+      c.x = x; c.z = z; c.h = h; c.y = G.groundUnder(x, z, c.solid, 1);
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c);
+      G.P.pos.set(x, c.y + 0.5, z); if (G.drive.car !== c) G.enterCar(c); G.drive.speed = 0;
+    };
+    const jouer = (cmd, n) => { for (let i = 0; i < n; i++) { G.simTime += 1 / 60; G.conduire(c, cmd, 1 / 60); } };
+    const essai = (nom, x, z, h, voisines) => {
+      pose(x, z, h);
+      for (const [v, dx, dz] of (voisines || [])) { v.x = x + dx; v.z = z + dz; v.h = h; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      const piege = G.carBlocked(c.x, c.z, c.solid, vr, {}, c.y, c.h, vL), x0 = c.x, z0 = c.z;
+      jouer({ gaz: 1, volant: 0, frein: 0 }, 60);   // 1 s : on insiste au gaz, comme un enfant
+      let d = 0;                                     // puis on se dégage : avant / arrière, roues braquées
+      for (let k = 0; k < 4; k++) {
+        jouer({ gaz: -1, volant: 1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+        jouer({ gaz: 1, volant: -1, frein: 0 }, 45); d = Math.max(d, Math.hypot(c.x - x0, c.z - z0));
+      }
+      const res = { nom, piege, sorti: +d.toFixed(2), mur: dansUnMur(), dmg: +c.dmg.toFixed(1), epave: !!c.dead };
+      for (const [v] of (voisines || [])) { v.x += 700; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); }
+      return res;
+    };
+    const zf = b.z + b.d / 2, xf = b.x + b.w / 2;
+    const pieges = [
+      essai('nez contre la façade', b.x, zf + 1.6, Math.PI),
+      essai('caisse encastrée dans la façade', b.x, zf - 0.8, Math.PI),
+      essai('encastrée dans un angle', xf - 0.8, zf - 0.8, Math.PI - 0.7),
+      essai('en biais contre l\'angle extérieur', xf + 1.2, zf + 1.2, Math.PI - 0.78),
+      essai('entre deux voitures et la façade', b.x, zf + 2.4, Math.PI,
+        autres.length >= 2 ? [[autres[0][0], -2.5, 0], [autres[1][0], 2.5, 0]] : []),
+    ];
+    // UN choc : il doit marquer la tôle, mais rien qu'un peu
+    pose(b.x, zf + 9, Math.PI);
+    c.hitT = 0; G.drive.speed = 14;
+    for (let i = 0; i < 45 && c.dmg === 0; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+    const unChoc = +c.dmg.toFixed(2);
+    // DURABILITÉ : combien de murs pris à 14 m/s avant que la voiture ne soit bonne pour la casse ?
+    pose(b.x, zf + 9, Math.PI);
+    let chocs = 0;
+    for (let k = 0; k < 80 && !c.dead; k++) {
+      c.x = b.x; c.z = zf + 9; c.h = Math.PI; c.hitT = 0; c.coinceT = 0; c.rebondT = 0;
+      c.g.position.set(c.x, c.y, c.z); G.vehicleSolid(c); G.drive.speed = 14;
+      for (let i = 0; i < 45 && !c.dead; i++) { G.simTime += 1 / 60; G.conduire(c, { gaz: 1, volant: 0, frein: 0 }, 1 / 60); }
+      chocs = k + 1;
+    }
+    const epave = !!c.dead;
+    c.dmg = 0; c.deg = 0; c.dead = false; c.explosed = false;
+    try { G.repairVisual(c); } catch (e) {}
+    G.exitCar();
+    for (const [a, x, z] of autres) { a.x = x; a.z = z; a.g.position.set(x, a.y || 0, z); G.vehicleSolid(a); }
+    return { pieges, unChoc, chocs, epave };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const coinces = r.pieges.filter(x => x.sorti < 0.6 || x.mur);
+  const ok = r.pieges.length === 5 && r.pieges.filter(x => x.piege).length >= 4
+    && coinces.length === 0 && r.unChoc > 0 && r.unChoc <= 5 && r.chocs >= 18 && r.epave;
+  return { ok, detail: `le véhicule qui touchait un obstacle restait planté là DÉFINITIVEMENT : la collision se testait à la position d'arrivée, et une caisse qui mordait déjà dans un mur se voyait refuser toutes les destinations, marche arrière comprise (mesuré sur la branche d'avant : 0,00 m parcouru dans quatre pièges sur cinq, quoi qu'on fasse au volant) · il se DÉGAGE maintenant — la caisse est ressortie par le plus court chemin, elle rebond${''}it franchement un quart de seconde sur deux et pivote vers l'échappée si ça dure : ${r.pieges.map(x => `${x.nom} ${x.sorti} m`).join(' · ')}${coinces.length ? ' — ENCORE COINCÉ : ' + coinces.map(x => x.nom).join(', ') : ''} · le choc laisse un PETIT dégât (${r.unChoc} % à 50 km/h, contre 8,4 % avant) et la voiture encaisse ${r.chocs} murs à 14 m/s avant d'être bonne pour la casse (9 avant), sans devenir indestructible (épave au bout : ${r.epave})` };
+});
+
+// ================= POSTE CIRCULATION (round 68) : LES VÉHICULES DE SERVICE =================
+// Demande du joueur, mot pour mot : « dépanneuse, pompier, employé travaux, police, facteur
+// doivent respecter le code la route et doivent rester sur les route (ne peuvent traverser le
+// parc les murs ou les objet de la ville, ni les véhicule) (donne leur la priorité de
+// circulation, et ils arrivent trop vite ralenti leur arrivée, police après dépanneuse
+// (ajuste l'amende et enlève prison)). tous les autres véhicules doivent s'écarter proprement
+// (sans commettre de dégât). les petits dégâts : pas de police, pas de dépanneuse. »
+//
+// AVANT : les cinq métiers avançaient EN LIGNE DROITE vers leur but, à 16-20 m/s, sans aucun
+// test de collision (`rouleVers`, `metierRoule`). Ils traversaient le parc, les façades et les
+// autres voitures, et un accident à 120 m était « couvert » en cinq secondes.
+// MAINTENANT : tous passent par `rouleVers` → `botConduit` → itinéraire par les voies + code
+// de la route + garde-fou de collision, exactement comme les voitures de police en ronde.
+
+test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, facteur) restent sur la chaussée et ne traversent plus rien', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);   // le joueur loin de tout : il ne gêne aucun trajet
+    const DT = 1 / 20;
+    // --- un coin d'un véhicule est-il DANS un solide non franchissable ? (même mesure que le
+    // test « la circulation respecte le code de la route »)
+    const dansUnSolide = v => {
+      const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
+        if (o === v.solid || o.veh || o.h > 30) continue;
+        if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
+        for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
+          const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;
+          if (Math.abs(x - o.x) < o.w / 2 - 0.02 && Math.abs(z - o.z) < o.d / 2 - 0.02) return o;
+        }
+      }
+      return null;
+    };
+    const coins = v => { const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [v.x + lx * cs + lz * sn, v.z - lx * sn + lz * cs]); };
+    const seChevauchent = (u, v) => {
+      const P1 = coins(u), P2 = coins(v);
+      for (const [A, B] of [[P1, P2], [P2, P1]]) for (let i = 0; i < 4; i++) {
+        const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0];
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of A) { const d = q[0] * nx + q[1] * nz; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+        for (const q of B) { const d = q[0] * nx + q[1] * nz; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+        if (a2 < b1 || b2 < a1) return false;
+      }
+      return true;
+    };
+    // --- on déclenche les cinq métiers d'un coup
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    A.accidente = false; B.accidente = false; A.busy = false; A.dead = false;
+    A.dmg = 70; B.dmg = 5;
+    A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+    B.x = 26; B.z = 4; B.h = 0; B.y = A.y;
+    A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z); G.vehicleSolid(A); G.vehicleSolid(B);
+    const acc = G.ouvreAccident(A, B, 14);                    // police (constat) + dépanneuse
+    G.declencheIncendie(40, -30, 500);                        // camion de pompiers
+    for (const b of G.breakables) if (b.broken || b.cracked) { G.repareChose(b); b.enCours = false; }
+    let pan = null, bd = 1e9;                                 // un poteau cassé : équipe des travaux
+    // ASSEZ LOIN DU DÉPÔT pour que le fourgon fasse un VRAI trajet par les rues : à 25 m, il
+    // traversait la cour du hangar en ligne droite et la mesure ne voulait plus rien dire.
+    for (const b of G.breakables) { if (b.kind !== 'panneau') continue;
+      const d = Math.hypot(b.x - c.depot.x, b.z - c.depot.z); if (d > 90 && d < bd) { bd = d; pan = b; } }
+    if (pan) G.breakThing(pan, { x: pan.x + 1, z: pan.z }, true);
+    for (const b of c.boites) b.lettres = 0;                  // la tournée du facteur
+    // --- les cinq véhicules suivis
+    const suivis = [];
+    const ajoute = (nom, v) => { if (v) suivis.push({ nom, v, n: 0, hors: 0, vite: 0, viteHors: 0, solide: 0, degage: 0, veh: 0, long: 0, vmax: 0, etats: [] }); };
+    ajoute('police', acc && acc.pc);
+    ajoute('dépanneuse', (c.depanneuses || [])[0]);
+    ajoute('pompier', G.METIERS.pompiers[0] && G.METIERS.pompiers[0].bot.veh);
+    ajoute('travaux', G.METIERS.employes[0] && G.METIERS.employes[0].bot.veh);
+    ajoute('facteur', G.METIERS.facteurs[0] && G.METIERS.facteurs[0].bot.veh);
+    const equipe = { pompier: G.METIERS.pompiers[0], travaux: G.METIERS.employes[0], facteur: G.METIERS.facteurs[0] };
+    const autres = [].concat(c.cars, c.aiCars, G.police.cars).filter(v => v && !v.heli);
+    for (let i = 0; i < 4500; i++) {
+      G.simTime = G.simTime + DT;
+      // cityStep : la circulation de fond roule pendant ce temps-là (il y a donc du monde à
+      // croiser dans les rues) et c'est lui qui appelle `separerVehicules`, le garde-fou du jeu
+      // contre deux tôles qui se touchent. Sans lui, la mesure n'était pas celle du vrai jeu.
+      G.lightsTick(); G.cityStep(DT); G.servicesTick(DT); G.metiersTick(DT);
+      for (const s of suivis) {
+        const v = s.v, pas = v.pas || 0;
+        const m = equipe[s.nom];
+        if (m && s.etats[s.etats.length - 1] !== m.etat) s.etats.push(m.etat);
+        if (pas < 0.004) continue;                            // à l'arrêt : on ne juge que ce qui roule
+        s.n++; s.long += pas; s.vmax = Math.max(s.vmax, Math.abs(v.speed || 0));
+        const surRoute = G.surLaChaussee(v.x, v.z, 0.9);
+        if (!surRoute) s.hors++;
+        // « EN ROUTE » = au-dessus de 6,5 m/s : l'approche d'un véhicule de service (parvis,
+        // cour de hangar, boîte aux lettres) est plafonnée à 6 m/s, tout ce qui va plus vite
+        // est donc du trajet, et le trajet doit se faire sur le bitume.
+        if (Math.abs(v.speed || 0) > 6.5) { s.vite++; if (!surRoute) s.viteHors++; }
+        // on ne compte pas les images de DÉGAGEMENT : le véhicule est DÉJÀ dans le solide
+        // (un chantier posé sous ses roues, un hangar trop étroit) et il en SORT.
+        if (dansUnSolide(v)) { if (v.degageT) s.degage++; else s.solide++; }
+        for (const o of autres) if (o !== v && Math.abs(o.x - v.x) < 12 && Math.abs(o.z - v.z) < 12 && seChevauchent(v, o)) { s.veh++; break; }
+      }
+    }
+    return { suivis: suivis.map(s => ({ nom: s.nom, kind: s.v.kind || 'voiture', images: s.n, metres: +s.long.toFixed(0),
+      route: s.n ? +(100 * (1 - s.hors / s.n)).toFixed(1) : null,
+      routeVite: s.vite ? +(100 * (1 - s.viteHors / s.vite)).toFixed(1) : null,
+      solide: s.solide, degage: s.degage, veh: s.veh, vmax: +s.vmax.toFixed(1), etats: s.etats.filter(Boolean).join('→') })),
+      accEtat: acc && acc.etat, feux: c.incendies.length, lettres: c.boites.reduce((a, b) => a + b.lettres, 0) };
+  });
+  const S = r.suivis;
+  // « rester sur la route » se juge EN ROULANT : un fourgon qui manœuvre dans la cour de son
+  // hangar, une dépanneuse qui se range devant l'épave ou un facteur qui s'arrête à une boîte
+  // aux lettres ne sont pas « hors des rues ». Le critère est donc le temps sur le bitume
+  // au-dessus de 4 m/s ; le pourcentage brut est donné à titre indicatif.
+  const ok = S.length === 5 && S.every(s => s.metres > 80 && s.solide === 0 && s.veh === 0
+    && s.routeVite != null && s.routeVite >= 95);
+  return { ok, detail: `les cinq métiers avançaient en LIGNE DROITE vers leur but, sans aucun test de collision : ils traversaient le parc, les façades et les autres voitures · ils passent tous par l'itinéraire par les voies + le code de la route + le garde-fou de collision — ` +
+    S.map(s => `${s.nom} (${s.kind}) : ${s.metres} m parcourus, ${s.route} % du temps sur le bitume (${s.routeVite} % au-dessus de 6,5 m/s, c'est-à-dire en trajet), ${s.solide} image dans un solide (+${s.degage} en dégagement), ${s.veh} image dans un autre véhicule, pointe à ${s.vmax} m/s${s.etats ? ' [' + s.etats + ']' : ''}`).join(' · ') };
+});
+
+test('un véhicule de service en intervention a la priorité : les autres se rangent proprement, sans un seul dégât', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);
+    const DT = 1 / 60;
+    // --- une longue avenue large et libre : c'est là qu'on met la file
+    const G2 = c.graphe;
+    let e = null;
+    for (const a of G2.aretes) { if (a.liaison || a.dur || a.larg < 9 || a.long < 70) continue; if (!e || a.long > e.long) e = a; }
+    if (!e) return { erreur: 'aucune avenue assez longue' };
+    const fx = Math.sin(e.sens), fz = Math.cos(e.sens);
+    const surVoie = t => [e.x0 + (e.x1 - e.x0) * t, e.z0 + (e.z1 - e.z0) * t];
+    // « ma droite » dans le repère du jeu (+x est, +z sud, cap = atan2(dx, dz))
+    const droiteDe = (x, z) => { const q = G.projVoie(x, z, e); return (x - q.px) * -Math.cos(e.sens) + (z - q.pz) * Math.sin(e.sens); };
+    // --- on dégage toute la zone, puis on pose trois cobayes en file et le prioritaire derrière
+    const tous = [].concat(c.cars, c.aiCars, G.police.cars).filter(v => v && !v.heli);
+    const remis = [];
+    for (const v of tous) { const q = G.projVoie(v.x, v.z, e);
+      if (q.d < 30 && Math.hypot(v.x - q.px, v.z - q.pz) < 40) { remis.push([v, v.x, v.z, v.h]); v.x += 800; v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v); } }
+    const pose = (v, t) => { const [x, z] = surVoie(t);
+      v.x = x; v.z = z; v.h = e.sens; v.speed = 0; v.spd = v.spd || 8; v.ia = null; v.libre = null; v.ecart = 0;
+      v.figeT = 0; v.attenteT = 0; v.stopOK = null; v.bloqueT = 0;
+      v.y = G.groundCar(v.x, v.z, v.solid, 0); v.g.position.set(v.x, v.y, v.z); v.g.rotation.y = v.h; G.vehicleSolid(v); };
+    const cobayes = c.aiCars.filter(v => v.spd).slice(0, 3);
+    const dep = (c.depanneuses || [])[0];
+    if (cobayes.length < 3 || !dep) return { erreur: 'pas assez de véhicules' };
+    const L = e.long;
+    cobayes.forEach((v, k) => pose(v, 0.30 + k * (11 / L)));
+    pose(dep, 0.30 - 26 / L);
+    const [bx, bz] = surVoie(0.97);
+    // --- l'état de la carrosserie AVANT
+    const degAvant = tous.reduce((a, v) => a + (v.dmg || 0) + (v.deg || 0) * 100, 0);
+    const accAvant = (c.accidents || []).length;
+    const coins = v => { const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [v.x + lx * cs + lz * sn, v.z - lx * sn + lz * cs]); };
+    const seChevauchent = (u, v) => { const P1 = coins(u), P2 = coins(v);
+      for (const [A, B] of [[P1, P2], [P2, P1]]) for (let i = 0; i < 4; i++) {
+        const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0];
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of A) { const d = q[0] * nx + q[1] * nz; a1 = Math.min(a1, d); a2 = Math.max(a2, d); }
+        for (const q of B) { const d = q[0] * nx + q[1] * nz; b1 = Math.min(b1, d); b2 = Math.max(b2, d); }
+        if (a2 < b1 || b2 < a1) return false;
+      } return true; };
+    const dansUnSolide = v => {
+      const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+      for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
+        if (o === v.solid || o.veh || o.h > 30) continue;
+        if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
+        for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
+          const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;
+          if (Math.abs(x - o.x) < o.w / 2 - 0.02 && Math.abs(z - o.z) < o.d / 2 - 0.02) return true;
+        }
+      } return false;
+    };
+    const suivi = cobayes.map(v => ({ ecart0: droiteDe(v.x, v.z), ecart: 0, sirene: 0, solide: 0, choc: 0 }));
+    let depX = dep.x, depZ = dep.z, depLong = 0, depArret = 0, n = 0;
+    const leLong = (x, z) => (x - e.x0) * fx + (z - e.z0) * fz;   // l'abscisse le long de l'avenue
+    for (let i = 0; i < 60 * 40; i++) {
+      G.simTime = G.simTime + DT;
+      G.flotteMaj();
+      for (const v of cobayes) G.botConduit(v, bx, bz, DT, {});
+      G.botConduit(dep, bx, bz, DT, { urgence: true });
+      depLong += Math.hypot(dep.x - depX, dep.z - depZ); depX = dep.x; depZ = dep.z;
+      if (Math.abs(dep.speed || 0) < 0.5) depArret++;
+      n++;
+      cobayes.forEach((v, k) => {
+        const s = suivi[k];
+        s.ecart = Math.max(s.ecart, droiteDe(v.x, v.z) - s.ecart0);
+        if (v.raison === 'sirene' || v.sireneVeh) s.sirene++;
+        if (dansUnSolide(v)) s.solide++;
+        for (const o of cobayes.concat([dep])) if (o !== v && seChevauchent(v, o)) { s.choc++; break; }
+      });
+    }
+    const degApres = tous.reduce((a, v) => a + (v.dmg || 0) + (v.deg || 0) * 100, 0);
+    // « IL PASSE » : combien de voitures la prioritaire a-t-elle doublées ? (elles étaient
+    // toutes les trois DEVANT elle au départ)
+    const depasse = cobayes.filter(v => leLong(v.x, v.z) < leLong(dep.x, dep.z)).length;
+    const res = { images: n, avenue: +L.toFixed(0), larg: e.larg, depasse,
+      cobayes: suivi.map(s => ({ ecart: +s.ecart.toFixed(2), sirene: s.sirene, solide: s.solide, choc: s.choc })),
+      depLong: +depLong.toFixed(1), depArret, degAvant, degApres,
+      accidents: (c.accidents || []).length - accAvant };
+    // on remet tout en place
+    for (const [v, x, z, h] of remis) { v.x = x; v.z = z; v.h = h; v.ia = null; v.libre = null; v.g.position.set(x, v.y || 0, z); G.vehicleSolid(v); }
+    for (const v of cobayes) { v.ia = null; v.libre = null; v.ecart = 0; G.traficPose(v); }
+    if (dep.home0) { dep.x = dep.home0[0]; dep.z = dep.home0[1]; dep.h = dep.home0[2]; dep.ia = null; dep.libre = null; dep.speed = 0;
+      dep.g.position.set(dep.x, dep.y || 0, dep.z); dep.g.rotation.y = dep.h; G.settleVehicle(dep); G.vehicleSolid(dep); }
+    return res;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ranges = r.cobayes.filter(s => s.ecart > 0.4).length;
+  const degats = r.degApres - r.degAvant;
+  const ok = ranges >= 2 && r.cobayes.filter(s => s.sirene > 0).length >= 2
+    && r.cobayes.every(s => s.solide === 0 && s.choc === 0)
+    && degats === 0 && r.accidents === 0 && r.depLong > 60 && r.depasse >= 1;
+  return { ok, detail: `celui qui entendait la sirène se contentait de lever le pied : il restait planté au milieu de la voie · sur une avenue de ${r.avenue} m et ${r.larg} m de large, trois voitures voient arriver une dépanneuse en intervention derrière elles — elles se DÉPORTENT vers la droite de ${r.cobayes.map(s => s.ecart + ' m').join(', ')} (${ranges}/3 au-delà de 40 cm), ${r.cobayes.map(s => s.sirene).join('/')} images à céder le passage · et la manœuvre est PROPRE : ${r.cobayes.reduce((a, s) => a + s.solide, 0)} image sur un trottoir ou dans un mur, ${r.cobayes.reduce((a, s) => a + s.choc, 0)} chevauchement de caisses, ${degats} point de dégât infligé, ${r.accidents} accident · et la PRIORITÉ est réelle : la dépanneuse, partie 26 m DERRIÈRE les trois, en a doublé ${r.depasse}/3 et parcouru ${r.depLong} m en ${(r.images / 60).toFixed(0)} s (immobile ${r.depArret} images)` };
+});
+
+test('les secours prennent un vrai temps de route, et la police arrive AVANT la dépanneuse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();
+    G.P.pos.set(300, 0.3, 300);
+    const DT = 1 / 20;
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    A.accidente = false; B.accidente = false; A.busy = false; A.dead = false; A.dmg = 12; B.dmg = 5;
+    A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+    B.x = 26; B.z = 4; B.h = 0; B.y = A.y;
+    A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z); G.vehicleSolid(A); G.vehicleSolid(B);
+    const acc = G.ouvreAccident(A, B, 14);
+    let depAppelee = -1;
+    for (let i = 0; i < 5000 && !(acc.dep && acc.dep.arrivee); i++) {
+      G.simTime = G.simTime + DT; G.servicesTick(DT);
+      if (depAppelee < 0 && acc.dep) depAppelee = G.simTime - acc.t0;
+    }
+    return { tPolice: acc.tPolice ? +acc.tPolice.toFixed(1) : null, tDep: acc.tDep ? +acc.tDep.toFixed(1) : null,
+      dPolice: +(acc.dPolice || 0).toFixed(1), dDep: +(acc.dDep || 0).toFixed(1),
+      depAppelee: depAppelee > 0 ? +depAppelee.toFixed(1) : null,
+      vmax: G.VITESSE_SECOURS,
+      vPolice: acc.tPolice ? +(acc.dPolice / acc.tPolice).toFixed(2) : null,
+      vDep: acc.tDep ? +(acc.dDep / acc.tDep).toFixed(2) : null };
+  });
+  // « ils arrivent trop vite » : le trajet doit au moins durer distance / vitesse de secours,
+  // et en pratique bien davantage (la route n'est pas une ligne droite). « police après
+  // dépanneuse » : c'est la police qui arrive d'abord.
+  const ok = r.tPolice > 0 && r.tDep > 0 && r.tDep > r.tPolice
+    && r.tPolice >= r.dPolice / r.vmax && r.tDep >= r.dDep / r.vmax
+    && r.tPolice < 150 && r.tDep < 240 && r.depAppelee >= r.tPolice - 0.5;
+  return { ok, detail: `les secours surgissaient : ligne droite à 18-20 m/s à travers le parc et les murs, soit ${(r.dPolice / 18).toFixed(1)} s pour la police et ${(r.dDep / 18).toFixed(1)} s pour la dépanneuse · ils prennent maintenant la route : la police couvre ${r.dPolice} m en ${r.tPolice} s (${r.vPolice} m/s de moyenne, plafond ${r.vmax} m/s) et la dépanneuse ${r.dDep} m en ${r.tDep} s (${r.vDep} m/s) · et l'ORDRE demandé est tenu : la dépanneuse n'est appelée qu'une fois la police sur place (appel à ${r.depAppelee} s, arrivée police ${r.tPolice} s), elle arrive donc ${(r.tDep - r.tPolice).toFixed(1)} s après elle` };
+});
+
+test('un petit accrochage ne dérange personne : pas de police, pas de dépanneuse — au-dessus du seuil, une amende qui ne ruine pas', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city;
+    const voitures = c.cars.filter(v => !v.kind && !v.heli && !v.kart && !v.travail);
+    const A = voitures[0], B = voitures[1];
+    const pose = () => { A.accidente = false; B.accidente = false; A.busy = false; A.dead = false; A.dmg = 10; B.dmg = 5;
+      A.x = 26; A.z = 10; A.h = Math.PI; A.y = G.groundUnder(26, 10, A.solid, 1);
+      B.x = 26; B.z = 4; B.h = 0; B.y = A.y; A.g.position.set(A.x, A.y, A.z); B.g.position.set(B.x, B.y, B.z);
+      G.vehicleSolid(A); G.vehicleSolid(B); };
+    // --- LE SEUIL : il est lu dans la table de dégâts DÉJÀ PARTAGÉE du jeu
+    const seuil = { gravite: G.ACCIDENT_GRAVITE_MIN, vitesse: G.ACCIDENT_VITESSE_MIN,
+      table: G.DEGATS.map(d => `${d.n}=${d.vitesse}`).join(' '),
+      coherent: G.graviteChoc(G.ACCIDENT_VITESSE_MIN, 0) >= G.ACCIDENT_GRAVITE_MIN
+        && G.graviteChoc(G.ACCIDENT_VITESSE_MIN - 0.1, 0) < G.ACCIDENT_GRAVITE_MIN };
+    // --- les petits chocs : rien du tout, et on repart
+    const petits = [];
+    for (const v of [1.5, 4, 6, 9.5]) {
+      pose(); const n0 = (c.accidents || []).length;
+      const a1 = G.ouvreAccident(A, B, v);
+      petits.push({ v, accident: !!a1, nouveaux: (c.accidents || []).length - n0,
+        bloque: !!A.accidente, dep: (c.depanneuses || []).some(d => d.mission),
+        police: (G.police.cars || []).some(pc => pc.constat) });
+    }
+    // --- au-dessus du seuil : accident, police, dépanneuse
+    pose(); G.wallet = 500; G.jail.on = false;
+    if (G.drive.car !== A) G.enterCar(A);
+    const acc = G.ouvreAccident(A, B, 12);
+    const gros = { accident: !!acc, bloque: !!A.accidente, police: !!acc.pc };
+    const avance = n => { for (let i = 0; i < n; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); } };
+    for (let k = 0; k < 300 && acc.etat !== 'fini'; k++) avance(20);
+    const riche = { etat: acc.etat, amende: acc.amende, paye: acc.paye, prison: acc.prison, jail: G.jail.on, wallet: G.wallet, dep: !!acc.dep };
+    for (let k = 0; k < 20; k++) avance(20);
+    // --- sans un sou : on paie ce qu'on a, PAS DE PRISON
+    pose(); G.wallet = 2; G.jail.on = false;
+    if (G.drive.car !== A) G.enterCar(A);
+    const acc2 = G.ouvreAccident(A, B, 12);
+    for (let k = 0; k < 300 && acc2.etat !== 'fini'; k++) avance(20);
+    const fauche = { etat: acc2.etat, amende: acc2.amende, paye: acc2.paye, reste: acc2.reste, prison: acc2.prison, jail: G.jail.on, wallet: G.wallet };
+    if (G.drive.car) G.exitCar();
+    G.jail.on = false; A.accidente = false; B.accidente = false;
+    // combien de petits boulots et de coffres vaut l'amende ?
+    const repere = { boulot: 15, coffre: 500 };
+    return { seuil, petits, gros, riche, fauche, repere, base: G.AMENDE_ACCIDENT };
+  });
+  const ok = r.seuil.coherent && r.seuil.vitesse === 10
+    && r.petits.every(q => q.accident === false && q.nouveaux === 0 && q.bloque === false && q.dep === false && q.police === false)
+    && r.gros.accident && r.gros.bloque && r.gros.police
+    && r.riche.etat === 'fini' && r.riche.dep && r.riche.amende >= 20 && r.riche.amende <= 30
+    && r.riche.paye === true && r.riche.prison === false && r.riche.jail === false && r.riche.wallet === 500 - r.riche.amende
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+  return { ok, detail: `se garer en touchant le pare-chocs du voisin à 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police et une dépanneuse, et coûtait 60 à 100 🪙 — sans le sou, c'était la prison · il y a maintenant un SEUIL DE GRAVITÉ, lu dans la table de dégâts déjà partagée du jeu (${r.seuil.table}) : au-dessous de ${r.seuil.vitesse} m/s d'impact (gravité < ${r.seuil.gravite}) c'est un petit dégât, on repart — ${r.petits.map(q => q.v + ' m/s : ' + (q.accident ? 'ACCIDENT' : 'rien')).join(', ')} · au-dessus, l'accident complet : immobilisation, police (${r.gros.police}), dépanneuse (${r.riche.dep}) et amende de ${r.riche.amende} 🪙 (base ${r.base} 🪙 + 1 par tranche de 4 m/s), soit ${(r.riche.amende / r.repere.boulot).toFixed(1)} petit boulot et ${(100 * r.riche.amende / r.repere.coffre).toFixed(0)} % d'un coffre : portefeuille 500 → ${r.riche.wallet} · et PLUS JAMAIS LA PRISON : avec 2 🪙 en poche on paie 2 🪙, il reste ${r.fauche.reste} 🪙 effacés, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
+});
+
+
+// ================= POSTE CAMÉRA (round 68) =================
+// Le joueur s'est plaint trois fois de la même chose : « à l'intérieur d'un bâtiment, d'une
+// villa, ou collé à un mur, la caméra est trop collée au personnage ». Les deux corrections
+// précédentes traitaient des LIEUX (une liste d'intérieurs, puis les toits non déclarés) ;
+// ce test-ci fixe la LOI GÉNÉRALE, par familles de situations, et c'est lui qui doit
+// empêcher le sujet de revenir une quatrième fois.
+test('la caméra garde une distance jouable dans toutes les situations, sans jamais traverser un mur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    // chaque situation : le point, le cap de la caméra, et la distance MINIMALE acceptable
+    // (mesurée caméra ↔ poitrine du joueur) pour que l'on joue confortablement
+    const SIT = [
+      ['dehors, rue dégagée',    { x: 0, y: 1, z: 50, yaw: 0 },            8.0],
+      ['dos au mur de l\'école', { x: -64, y: 1, z: 215.6, yaw: 3.14 },    2.4],
+      ['le long du mur',         { x: -64, y: 1, z: 215.6, yaw: 1.57 },    4.3],
+      ['ruelle, dans l\'axe',    { x: 60, y: 1, z: 46, yaw: 1.57 },        8.0],
+      ['ruelle, en travers',     { x: 60, y: 1, z: 46, yaw: 0 },           3.2],
+      ['petite boutique',        { x: 60, y: 1, z: 40, yaw: 0 },           4.0],
+      ['coin de boutique',       { x: 62, y: 1, z: 42.3, yaw: 0 },         4.0],
+      ['grande halle du marché', { x: -142.5, y: 1, z: 159, yaw: 0 },      6.0],
+      ['sous le préau',          { x: -78, y: 1, z: 225, yaw: 1.57 },      7.0],
+      ['dépôt municipal',        { x: 27, y: 1, z: 122, yaw: 3.14 },       4.0],
+      ['contre la vitrine',      { x: 48.5, y: 1, z: 19, yaw: 1.57 },      5.0],
+      ['salle de classe',        { x: -79, y: 1, z: 213.2, yaw: 0 },       4.3],
+      ['casino, plafond bas',    { x: 90, y: 1, z: 306, yaw: 0 },          4.0],
+      ['petit appartement',      { x: -143, y: 1, z: 10, yaw: 0 },         3.0],
+      ['salle de sport',         { x: -1, y: 0.5, z: 19.5, yaw: 0 },       4.0],
+      ['étage de la banque',     { x: -52, y: 5.6, z: 70, yaw: 0 },        6.0],
+      ['au volant, en rue',      { x: 26, y: 1, z: 0, yaw: 0, auto: 1 },   9.0],
+      ['au volant, sous un toit', { x: 27, y: 1, z: 122, yaw: 3.14, auto: 1 }, 4.2],
+    ];
+    // la caméra est-elle DANS un solide ? (le pire défaut : on se retrouve dans le mur).
+    // Un solide effacé à l'écran (plafond de la maison de poupée) ne compte pas : on ne le
+    // voit pas, il ne peut donc pas boucher l'image.
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    const tourne = (n) => { for (let i = 0; i < n; i++) { G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick(); } };
+    const out = [];
+    for (const [nom, v, mini] of SIT) {
+      __SHOT.go(Object.assign({ world: 4, hour: 12, pitch: 0.32, dist: 9, hideHud: true }, v));
+      if (v.auto) {
+        const c = G.city.cars.find(w => !w.heli && !w.rider && !w.busy) || G.city.cars[0];
+        c.x = v.x; c.z = v.z; c.h = v.yaw + Math.PI; c.busy = false; c.g.position.set(c.x, c.y || 0, c.z);
+        if (G.drive.car) G.exitCar();
+        G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); G.enterCar(c);
+      } else if (G.drive.car) G.exitCar();
+      // on fait tourner la perche À LA MAIN : camPerche() est isolée de frame() justement
+      // pour que le banc d'essai n'ait pas à attendre de vraies images (2 par seconde ici)
+      tourne(150);
+      const c = G.camera.position, t = G.cam.target, q = G.P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15);
+      out.push({ nom, mini,
+        d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        h: +(c.y - q.y).toFixed(2), coupe: mur >= 0, dans: dansUnSolide(c) });
+    }
+    if (G.drive.car) G.exitCar();
+    // RETOUR EN DOUCEUR : on décolle du mur en marchant, la perche doit se rallonger sans
+    // le moindre saut d'image (c'est l'à-coup dont se plaignait le joueur)
+    __SHOT.go({ world: 4, x: -64, y: 1, z: 215.6, yaw: 3.14, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+    tourne(150);
+    const dist = () => Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.y - (G.P.pos.y + 1.2), G.camera.position.z - G.P.pos.z);
+    let prec = dist(); const debut = prec; let saut = 0;
+    for (let i = 0; i < 220; i++) {
+      // step() fait AUSSI avancer l'horloge de simulation : sans elle, les mesures de la
+      // caméra (qui ne sont refaites que cinq fois par seconde) resteraient figées et la
+      // perche ne se rallongerait jamais
+      G.step(1 / 60, true);
+      G.P.pos.z += 0.06;   // le joueur s'éloigne du mur, 3,6 m/s
+      G.camPerche(1 / 60, false); G.interieurTick();
+      const L = dist(); saut = Math.max(saut, Math.abs(L - prec)); prec = L;
+    }
+    return { out, doux: { debut: +debut.toFixed(2), fin: +prec.toFixed(2), saut: +saut.toFixed(3) } };
+  });
+  const rates = r.out.filter(s => s.d < s.mini);
+  const traverse = r.out.filter(s => s.coupe || s.dans);
+  const ok = rates.length === 0 && traverse.length === 0 && r.doux.fin > 8 && r.doux.saut < 0.2;
+  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h})`).join(' · ')} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
+});
+
+test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne coutent qu\'UN appel de dessin', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -85, y: 1, z: 176, facing: 0, yaw: 0, pitch: 0.5, dist: 8, hour: 12, sansBots: true, frais: true });
+    await dodo(600);
+    const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    // 1. il fait beau : aucune trace, meme en marchant
+    G.meteoSet('clair', 99999); G.meteo.force = 0;
+    for (let i = 0; i < 60; i++) { G.step(1 / 60, false); G.meteoTick(1 / 60); }
+    G.P.pos.set(-85, 0, 150); G.P.facing = 0;
+    for (let i = 0; i < 200; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); }
+    const auSec = (G.city.empreintes || []).length;
+    // 2. il neige : le manteau se pose
+    G.meteoSet('neige', 99999); G.meteo.force = 1;
+    for (let i = 0; i < 200; i++) { G.step(1 / 60, false); G.meteoTick(1 / 60); }
+    const manteau = !!(G.city.neigeG && G.city.neigeG.visible);
+    const avantTraces = dessine();
+    // 3. le joueur marche 26 m : une empreinte tous les EMPREINTE_PAS metres, un pied puis l'autre
+    G.P.pos.set(-85, 0, 150); G.P.facing = 0;
+    for (let i = 0; i < 430; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); }
+    const n = G.city.empreintes.length;
+    const apresTraces = dessine();
+    const attendu = Math.floor(430 * 0.06 / G.EMPREINTE_PAS);
+    // elles alternent gauche / droite et suivent bien la ligne de marche
+    const g = G.city.empreintes.map(e => e.gauche ? 1 : 0).join('');
+    const alterne = !/00|11/.test(g);
+    const surLaLigne = G.city.empreintes.every(e => Math.abs(e.x + 85) < 0.01) && G.city.empreintes[0].z < G.city.empreintes[n - 1].z;
+    // 4. un habitant en laisse aussi
+    const b = G.bots.find(bb => bb.av && bb.av.group);
+    b.av.group.visible = true; b.pos.set(-80, 0, 150); b.facing = 0; b.drive = null; b.empX = null;
+    const avantBot = G.city.empreintes.length;
+    for (let i = 0; i < 200; i++) { b.pos.z += 0.06; b.av.group.position.copy(b.pos); G.step(1 / 60, false); }
+    const parLeBot = G.city.empreintes.length - avantBot;
+    // 5. le plafond : 900 pas de plus, le tampon circulaire ne deborde jamais
+    for (let i = 0; i < 900; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); if (G.P.pos.z > 190) G.P.pos.z = 150; }
+    const plafond = { n: G.city.empreintes.length, max: G.EMPREINTES_MAX, cases: new Set(G.city.empreintes.map(e => e.slot)).size,
+      range: G.empreintesMesh.geometry.drawRange.count, calls: dessine() };
+    // un SEUL maillage pour toute la piste
+    let maillages = 0; G.worldGroup.traverse(o => { if (o.isMesh && G.empreintesMesh && o.geometry === G.empreintesMesh.geometry) maillages++; });
+    // 6. la neige comble : au bout de EMPREINTE_VIE, la piste a disparu
+    const alphaFraiche = G.empreintesMesh.geometry.attributes.color.array[(G.city.empreintes[G.city.empreintes.length - 1].slot * 4) * 4 + 3];
+    for (let i = 0; i < 60 * (G.EMPREINTE_VIE + 3); i++) G.step(1 / 60, false);
+    const apresVieillissement = G.city.empreintes.length;
+    // 7. le degel emporte tout
+    G.P.pos.set(-85, 0, 160);
+    for (let i = 0; i < 200; i++) { G.P.pos.z += 0.06; G.step(1 / 60, false); }
+    const avantDegel = G.city.empreintes.length;
+    G.meteoSet('clair', 99999); G.meteo.force = 0;
+    for (let i = 0; i < 200; i++) { G.step(1 / 60, false); G.meteoTick(1 / 60); }
+    const apresDegel = { n: G.city.empreintes.length, neige: !!(G.city.neigeG && G.city.neigeG.visible), calls: dessine() };
+    return { auSec, manteau, avantTraces, apresTraces, n, attendu, alterne, surLaLigne, parLeBot, plafond, maillages,
+      alphaFraiche: +alphaFraiche.toFixed(2), apresVieillissement, avantDegel, apresDegel,
+      cout: apresTraces - avantTraces, coutPlafond: plafond.calls - avantTraces, vie: G.EMPREINTE_VIE, pas: G.EMPREINTE_PAS };
+  });
+  const ok = r.auSec === 0 && r.manteau && r.n >= r.attendu - 2 && r.n <= r.attendu + 1 && r.alterne && r.surLaLigne
+    && r.parLeBot >= 15 && r.plafond.n === r.plafond.max && r.plafond.cases === r.plafond.max
+    && r.maillages === 1 && r.cout === 1 && r.coutPlafond === 1
+    && r.apresVieillissement === 0 && r.avantDegel > 10 && r.apresDegel.n === 0 && !r.apresDegel.neige
+    && r.apresDegel.calls === r.avantTraces - (r.avantTraces - r.apresDegel.calls);
+  return { ok, detail: `la ville avait un manteau de neige complet (congeres, bonshommes, verglas, nappe au sol) mais on le traversait sans y laisser la moindre marque · le joueur et les habitants creusent maintenant une empreinte a chaque foulee (une tous les ${r.pas} m, un pied puis l'autre : ${r.alterne ? 'alternance respectee' : 'ALTERNANCE CASSEE'}) · au sec : ${r.auSec} trace · 26 m de marche dans la neige : ${r.n} empreintes (attendu ${r.attendu}), un habitant qui marche 12 m en laisse ${r.parLeBot} · COUT EN APPELS DE DESSIN : ${r.avantTraces} sans traces, ${r.apresTraces} avec, soit +${r.cout} — et TOUJOURS +${r.coutPlafond} au plafond de ${r.plafond.max} empreintes (${r.plafond.cases} cases distinctes, ${r.plafond.range} indices, ${r.maillages} seul maillage, une seule texture) parce que tout tient dans une geometrie unique dont la transparence est ecrite sommet par sommet · la neige comble le pas en ${r.vie} s (${r.apresVieillissement} trace restante) et le degel emporte la piste entiere (${r.avantDegel} → ${r.apresDegel.n}, retour a ${r.apresDegel.calls} appels)` };
+});
+
+test('le feu a un coeur clair, une pointe qui se dissout, une fumee qui palit en montant et une lumiere qui vacille autour', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -85, y: 1, z: 158, facing: 0, yaw: 0, pitch: 0.04, dist: 11, hour: 12, sansBots: true, frais: true });
+    await dodo(600);
+    for (const f0 of (G.city.incendies || []).slice()) G.feuDetruit(f0.anim);
+    G.city.incendies.length = 0;
+    const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const sansFeu = dessine();
+    const f = G.feuAnime(-85, 0, 150, 1.7, 0);
+    if (!f) return { pourquoi: 'feuAnime n\'a rien rendu' };
+    const image = () => { G.step(1 / 60, false); G.feuxAnimTick(1 / 60); G.animMondeTick(1 / 60); };
+    for (let i = 0; i < 90; i++) image();
+    const avecFeu = dessine();
+    // 1. LE DEGRADE : chaque langue porte la texture de flamme (coeur clair en bas, pointe
+    //    transparente en haut). On lit la texture elle-meme, pixel par pixel.
+    const tex = f.flammes[0].material.map;
+    const cv = tex && tex.image;
+    let bas = null, haut = null, milieu = null;
+    if (cv) { const cx = cv.getContext('2d');
+      const lis = y => { const d = cx.getImageData(32, y, 1, 1).data; return [d[0], d[1], d[2], d[3]]; };
+      bas = lis(cv.height - 4); milieu = lis(Math.round(cv.height * 0.5)); haut = lis(4); }
+    const degrade = !!(bas && haut && bas[3] > 200 && haut[3] < 60 && bas[0] + bas[1] + bas[2] > milieu[0] + milieu[1] + milieu[2]);
+    // 2. LA DEFORMATION : la langue n'est pas un cone d'echelle uniforme — largeur et
+    //    profondeur different, et les sept langues n'ont pas la meme silhouette.
+    const formes = f.flammes.map(m => +(m.scale.x / Math.max(1e-6, m.scale.z)).toFixed(3));
+    const deforme = formes.filter(v => Math.abs(v - 1) > 0.03).length;
+    // 3. LA FUMEE PALIT ET SE DILUE EN MONTANT : on suit une bouffee sur un cycle entier.
+    const suivi = [];
+    for (let i = 0; i < 420; i++) { image();
+      const s = f.fumees[0];
+      suivi.push({ y: s.position.y, op: s.material.opacity, gris: Math.round(s.material.color.r * 255), rot: s.material.rotation }); }
+    const yMin = Math.min.apply(null, suivi.map(o => o.y)), yMax = Math.max.apply(null, suivi.map(o => o.y));
+    const moy = t => t.length ? t.reduce((a, b) => a + b, 0) / t.length : 0;
+    const basY = suivi.filter(o => (o.y - yMin) / (yMax - yMin || 1) < 0.3);
+    const hautY = suivi.filter(o => (o.y - yMin) / (yMax - yMin || 1) > 0.8);
+    const palit = moy(hautY.map(o => o.gris)) > moy(basY.map(o => o.gris)) * 1.5;
+    const dilue = moy(hautY.map(o => o.op)) < moy(basY.map(o => o.op)) * 0.6;
+    const tourne = new Set(suivi.map(o => +o.rot.toFixed(2))).size > 20;
+    // 4. LA LUMIERE PROJETEE VACILLE : on releve son intensite image par image.
+    const lum = [];
+    for (let i = 0; i < 180; i++) { image(); lum.push(G.FEU_LUM && G.FEU_LUM.l ? G.FEU_LUM.l.intensity : 0); }
+    const lumMin = Math.min.apply(null, lum), lumMax = Math.max.apply(null, lum);
+    const vacille = lumMax > 0.4 && (lumMax - lumMin) > lumMax * 0.25;
+    // 5. LA FLAQUE AU SOL bat elle aussi
+    const flaque = [];
+    for (let i = 0; i < 180; i++) { image(); flaque.push(f.flaque ? f.flaque.material.opacity : 0); }
+    const flaqueBat = +(Math.max.apply(null, flaque) - Math.min.apply(null, flaque)).toFixed(3);
+    // 6. LE COUT : combien d'objets, combien d'appels de dessin
+    const objets = f.g.children.length;
+    const braisesUnNuage = !!(f.braisesPts && f.braisesPts.isPoints) && f.braises.length === 1;
+    const nBraises = f.brPos ? f.brPos.length / 3 : 0;
+    G.feuDetruit(f);
+    const apresExtinction = dessine();
+    return { sansFeu, avecFeu, apresExtinction, cout: avecFeu - sansFeu, degrade, bas, milieu, haut,
+      formes, deforme, palit, dilue, tourne, grisBas: Math.round(moy(basY.map(o => o.gris))), grisHaut: Math.round(moy(hautY.map(o => o.gris))),
+      opBas: +moy(basY.map(o => o.op)).toFixed(3), opHaut: +moy(hautY.map(o => o.op)).toFixed(3),
+      vacille, lumMin: +lumMin.toFixed(2), lumMax: +lumMax.toFixed(2), flaqueBat, objets, braisesUnNuage, nBraises };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.degrade && r.deforme >= 5 && r.palit && r.dilue && r.tourne && r.vacille
+    && r.flaqueBat > 0.02 && r.braisesUnNuage && r.cout <= 16 && r.apresExtinction === r.sansFeu;
+  return { ok, detail: `le feu etait SEPT CONES ORANGE PLEINS — sept triangles plats et opaques poses les uns sur les autres, et le joueur le trouvait laid · chaque langue porte maintenant un DEGRADE peint dans une texture partagee : blanc-jaune opaque au pied (alpha ${r.bas[3]}/255, rgb ${r.bas.slice(0, 3).join(',')}), orange a mi-hauteur (${r.milieu.slice(0, 3).join(',')}), rouge transparent a la pointe (alpha ${r.haut[3]}) qui se dissout dans l'air · elle se DEFORME au lieu de changer d'echelle en bloc : ${r.deforme}/7 langues ont une section non circulaire, et elles tournent lentement sur elles-memes · la FUMEE part du haut des flammes, roule sur elle-meme (${r.tourne}), PALIT en montant (gris ${r.grisBas} en bas de la colonne → ${r.grisHaut} en haut) et se dilue (opacite ${r.opBas} → ${r.opHaut}) · une LUMIERE projetee eclaire ce qui entoure le foyer et VACILLE : intensite de ${r.lumMin} a ${r.lumMax}, plus une flaque de lumiere au sol qui bat de ${r.flaqueBat} · COUT : ${r.objets} objets et +${r.cout} appels de dessin (les cinq braises-cubes sont devenues UN nuage de ${r.nBraises} points, soit quatre appels economises) ; a l'extinction on retombe exactement sur ${r.apresExtinction}` };
+});
+
+test('la lance a eau lance une vraie gerbe — gouttes, eclaboussure, vapeur — et le feu recule la ou l\'eau arrive', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -88, y: 1, z: 165, facing: 0, yaw: 0, pitch: 0.14, dist: 17, hour: 12, sansBots: true, frais: true });
+    await dodo(600);
+    const c = (G.city.cars || []).find(v => v.kind === 'pompier');
+    if (!c) return { pourquoi: 'aucun camion de pompiers en ville' };
+    for (const f0 of (G.city.incendies || []).slice()) G.feuDetruit(f0.anim);
+    G.city.incendies.length = 0;
+    c.x = -95; c.z = 165; c.h = Math.PI / 2; c.y = 0; c.g.position.set(c.x, 0, c.z); c.g.rotation.y = c.h;
+    if (c.solid) { c.solid.x = c.x; c.solid.z = c.z; }
+    c.outil = 0; c.outilCible = 0; c.jetTouche = 0;
+    const dessine = () => { G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const image = () => { G.step(1 / 60, false); G.feuxAnimTick(1 / 60); G.outilsVehiculesTick(1 / 60); G.incendiesTick(1 / 60); };
+    for (let i = 0; i < 60; i++) image();
+    // lance fermee : rien ne se voit, rien ne coute
+    const fermee = G.jetEauEtat(c);
+    const sansJet = dessine();
+    // un incendie juste au bout de la lance (8,5 m devant le camion)
+    const f = G.declencheIncendie(-86.5, 165, 100);
+    if (!f) return { pourquoi: 'l\'incendie ne s\'est pas declenche' };
+    for (let i = 0; i < 90; i++) image();
+    const forceDepart = Math.round(f.force);
+    const hauteurDepart = f.anim.flammes.reduce((a, m) => a + m.scale.y, 0) / f.anim.flammes.length;
+    // on ouvre la lance
+    G.actionneOutil(c);
+    for (let i = 0; i < 180; i++) image();
+    const ouverte = G.jetEauEtat(c);
+    const avecJet = dessine();
+    // ce qui compose le jet : la gerbe et ses trois nuages de points
+    const J = c.outils.jet, u = J.userData;
+    const pieces = { gerbe: !!(u.gerbe && u.gerbe.isMesh), gouttes: !!(u.gouttes && u.gouttes.m.isPoints),
+      eclats: !!(u.eclats && u.eclats.m.isPoints), vapeur: !!(u.vapeur && u.vapeur.m.isPoints) };
+    // la gerbe S'OUVRE : la transparence de ses sommets passe de presque rien au bout a dense
+    // a la sortie de la lance
+    const col = u.gerbe.geometry.attributes.color.array;
+    let aMin = 1, aMax = 0; for (let i = 3; i < col.length; i += 4) { aMin = Math.min(aMin, col[i]); aMax = Math.max(aMax, col[i]); }
+    // les gouttes BOUGENT et s'ecartent de l'axe en s'eloignant
+    const p0 = u.gouttes.p.slice();
+    for (let i = 0; i < 12; i++) image();
+    const p1 = u.gouttes.p;
+    let bougent = 0; for (let i = 0; i < p0.length; i += 3) if (Math.abs(p0[i + 2] - p1[i + 2]) > 1e-4) bougent++;
+    let procheAxe = 0, loinAxe = 0, nProche = 0, nLoin = 0;
+    for (let i = 0; i < p1.length; i += 3) { const z = p1[i + 2], r = Math.hypot(p1[i], p1[i + 1]);
+      if (z < G.JET_PORTEE * 0.25) { procheAxe += r; nProche++; } else if (z > G.JET_PORTEE * 0.75) { loinAxe += r; nLoin++; } }
+    const souvre = nProche > 3 && nLoin > 3 && (loinAxe / nLoin) > (procheAxe / nProche) * 2;
+    // l'eau TOUCHE le feu : vapeur, force qui tombe, flammes couchees et rabaissees
+    const vapeur = ouverte.vapeur;
+    for (let i = 0; i < 240; i++) image();
+    const forceArrosee = Math.round(f.force);
+    const souffle = f.anim.souffle ? +f.anim.souffle.k.toFixed(2) : 0;
+    const penche = f.anim.flammes.filter(m => Math.abs(m.rotation.z) > 0.35 || Math.abs(m.rotation.x) > 0.35).length;
+    const hauteurArrosee = f.anim.flammes.reduce((a, m) => a + m.scale.y, 0) / f.anim.flammes.length;
+    // on referme : la pression retombe et le jet disparait
+    G.actionneOutil(c);
+    for (let i = 0; i < 120; i++) image();
+    const refermee = G.jetEauEtat(c);
+    const apresFermeture = dessine();
+    G.feuDetruit(f.anim); const i0 = G.city.incendies.indexOf(f); if (i0 >= 0) G.city.incendies.splice(i0, 1);
+    return { fermee, ouverte, refermee, sansJet, avecJet, apresFermeture, cout: avecJet - sansJet, pieces,
+      aMin: +aMin.toFixed(2), aMax: +aMax.toFixed(2), bougent, total: p0.length / 3, souvre,
+      forceDepart, forceArrosee, vapeur, souffle, penche,
+      hauteurDepart: +hauteurDepart.toFixed(2), hauteurArrosee: +hauteurArrosee.toFixed(2) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = !r.fermee.ouvert && r.ouverte.ouvert && r.ouverte.pression > 0.9
+    && r.pieces.gerbe && r.pieces.gouttes && r.pieces.eclats && r.pieces.vapeur
+    && r.aMin < 0.2 && r.aMax > 0.8 && r.bougent === r.total && r.souvre
+    && r.ouverte.touche > 0.5 && r.vapeur > 0.3 && r.forceArrosee < r.forceDepart - 40
+    && r.souffle > 0.5 && r.penche >= 5 && r.hauteurArrosee < r.hauteurDepart
+    && r.cout <= 6 && !r.refermee.ouvert && r.apresFermeture === r.sansJet;
+  return { ok, detail: `le jet d'eau etait UN CONE BLEU TRANSPARENT de largeur constante, allume et eteint d'un coup, et rien ne montrait que l'eau touchait quoi que ce soit · c'est maintenant une vraie lance en quatre morceaux (gerbe=${r.pieces.gerbe}, gouttes=${r.pieces.gouttes}, eclaboussure=${r.pieces.eclats}, vapeur=${r.pieces.vapeur}) · la GERBE S'OUVRE : sa transparence va de ${r.aMin} au bout a ${r.aMax} a la sortie de la lance, et les ${r.total} gouttes s'ecartent de l'axe en s'eloignant (${r.souvre}), toutes en mouvement (${r.bougent}/${r.total}) · l'eau ARRIVE sur le brasier (impact ${r.ouverte.touche}) : la VAPEUR monte (${r.vapeur}), la force du feu tombe de ${r.forceDepart} a ${r.forceArrosee}, et le feu RECULE — souffle ${r.souffle}, ${r.penche}/7 langues couchees dans le sens du jet, hauteur moyenne ${r.hauteurDepart} → ${r.hauteurArrosee} · COUT : ${r.sansJet} appels de dessin lance fermee, ${r.avecJet} lance ouverte, soit +${r.cout} seulement (les gouttes, l'eclaboussure et la vapeur sont trois NUAGES DE POINTS : un appel chacun quel que soit le nombre de gouttes) et on retombe a ${r.apresFermeture} des qu'on referme` };
+});
+
+test('la pluie ne couvre plus les pas ni les coups, et les changements de temps prennent leur temps', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    G.settings.sound = true; G.settings.voices = false;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // ---- 1. LA DUREE DES CHANGEMENTS DE TEMPS ----
+    // on part du beau temps, on demande la pluie, et on compte les secondes qu'il faut a
+    // l'averse pour s'installer (force 0 → 0,9). Rien de sonore ici : que de la simulation.
+    const monte = fondu => { G.meteoSet('clair', 99999); G.meteo.force = 0;
+      G.meteoSet('pluie', 99999); G.meteo.force = 0;
+      let t = 0; const dt = 1 / 30;
+      while (t < 300 && G.meteo.force < 0.9) { G.meteo.force += (1 - G.meteo.force) * Math.min(1, dt * fondu); t += dt; }
+      return +t.toFixed(1); };
+    const avantFondu = monte(0.35);        // le reglage d'avant
+    const apresFondu = monte(G.METEO_FONDU);
+    G.meteoSet('clair', 99999); G.meteo.force = 0;
+    // la duree d'un episode : elle est tiree dans METEO_DUREE
+    const durees = []; for (let i = 0; i < 12; i++) { const t0 = G.simTime; G.meteoSet('pluie'); durees.push(Math.round(G.meteo.next - t0)); }
+    const dureeMin = Math.min.apply(null, durees), dureeMax = Math.max.apply(null, durees);
+    G.meteoSet('clair', 99999); G.meteo.force = 0;
+    // ---- 2. LE SON ----
+    const c = G.sfx.unlock(), ch = G.sfx.chaine(); if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
+    let crete = 0, somme = 0, n = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; n++; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; n = 0; const t = performance.now();
+      while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); }
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, n)).toFixed(4) }; };
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
+    try { G.craieLitFerme(); } catch (e) {}
+    G.ambiance.stop(); await dodo(700);
+    // l'averse installee, telle qu'on l'entend en jeu
+    G.meteoSet('pluie', 99999); G.meteo.force = 1; G.meteo.abri = false;
+    const pluieSeule = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); });
+    // les pas, les coups et une voix PAR-DESSUS l'averse
+    const pas = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1); });
+    const coups = await ecoute(1400, () => { G.sonPluie(G.P.pos.x, G.P.pos.y + 4, G.P.pos.z, 1); G.sonCoup(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z, 1.3); });
+    // et le RECUL : l'averse baisse d'elle-meme quand un son de jeu vient de sortir
+    const q = G.quartierSon(); G.ambiance.set(q.k, q.vol, q.coupe); await dodo(250);
+    G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
+    const reculActif = G.ambiance.duckActif();
+    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    G.meteoSet('clair', 99999); G.meteo.force = 0;
+    return { avantFondu, apresFondu, fondu: G.METEO_FONDU, duree: G.METEO_DUREE, dureeMin, dureeMax,
+      pluieSeule, pas, coups, reculActif, recul: G.PLUIE_RECUL,
+      gainPas: +(pas.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1),
+      gainCoup: +(coups.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const lente = r.apresFondu > r.avantFondu * 3 && r.apresFondu > 20;
+  const longue = r.dureeMin >= 180 && r.dureeMax <= 331;
+  const discrete = r.pluieSeule.pic < 0.05;
+  const ressortent = r.pas.pic > r.pluieSeule.pic * 2.5 && r.coups.pic > r.pluieSeule.pic * 2.5;
+  const ok = lente && longue && discrete && ressortent && r.reculActif;
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });

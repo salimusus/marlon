@@ -13064,8 +13064,10 @@ const SON_ARME_BANC = `
     const t0 = performance.now(); if (quoi) quoi();
     while (performance.now() - t0 < ms) await dodo(10);
     const reel = (performance.now() - t0) / 1000, s = serie.slice();
-    let i0 = 0; for (let i = 1; i < s.length; i++) if (s[i] > s[i0]) i0 = i;
-    let duree = 0; for (let i = i0; i < s.length; i++) { if (s[i] < crete * 0.1) break; duree++; }
+    // LA LONGUEUR DU COUP : le nombre de blocs de 23 ms qui portent encore au moins un
+    // dixieme de la crete. On les COMPTE au lieu de s'arreter au premier qui manque : si le
+    // banc perd un bloc au milieu, la mesure baisse d'un cran au lieu de s'effondrer.
+    let duree = 0; for (let i = 0; i < s.length; i++) if (s[i] >= crete * 0.1) duree++;
     return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, nEch)).toFixed(4), duree,
       blocs: s.length, couverture: +(s.length * 1024 / c.sampleRate / reel).toFixed(2), serie: s };
   };
@@ -13076,7 +13078,8 @@ const SON_ARME_BANC = `
   // 0,26 la ou le son en vaut 0,88 : le bloc qui portait l'attaque etait tombe a l'eau.)
   const ecoute = async (ms, quoi) => { let best = null;
     for (let k = 0; k < 3; k++) { const m = await brut(ms, quoi);
-      if (!best || m.pic > best.pic) { best = m; best.essais = k + 1; }
+      if (!best) best = m;
+      else { best.pic = Math.max(best.pic, m.pic); best.rms = Math.max(best.rms, m.rms); best.duree = Math.max(best.duree, m.duree); }
       await dodo(180); }
     return best; };
 `;
@@ -13103,7 +13106,7 @@ test('le coup de feu CLAQUE : une detonation mesuree au bout de la chaine, et un
       let m = null, emis = 0, nom = null;
       for (let k = 0; k < 3; k++) {
         const av = G.armVoix.joues;
-        const u = await brut(520, () => { G.P.fireCd = 0; G.P.holsterT = 0; try { G.fire(); } catch (e) {} });
+        const u = await brut(520, () => { G.P.fireCd = 0; G.P.holsterT = 0; G.P.zoom = a === 'sniper'; G.P.ammo = 99; try { G.fire(); } catch (e) {} });
         emis += G.armVoix.joues - av; nom = G.armVoix.dernier && G.armVoix.dernier.nom;
         if (!m || u.pic > m.pic) m = u;
         await dodo(180);
@@ -13128,7 +13131,7 @@ test('le coup de feu CLAQUE : une detonation mesuree au bout de la chaine, et un
   const parLeJeu = ['pistol', 'rifle', 'sniper'].every(a => F[a].emis >= 1 && F[a].nom === 'tir-' + a && F[a].pic > 0.5);
   const discret = r.lit.pic < 0.05;   // le fond du jeu reste une presence, pas un masque
   const ok = fort && discret && caractere && parLeJeu && r.cuits >= 3 && A.pistol.pic > r.ancien.pic * 2;
-  return { ok, detail: `un coup de feu, c'etait deux lignes : une bouffee de bruit passe-bande a 1,1 kHz et un bip descendant de 200 a 60 Hz — un « pfft » mou, sans attaque ni corps, identique pour toutes les armes (l'ancienne recette rejouee ici sur ce meme banc : crete ${r.ancien.pic}, efficace ${r.ancien.rms}, ${r.ancien.duree} blocs) · c'est maintenant une DETONATION a quatre couches — la claque (l'onde de choc), le corps (le coup de belier), le boum (le grave qui plonge) et la queue (le renvoi des immeubles) — CUITES A L'AVANCE dans un echantillon (${r.tampons.pistol} ms pour le pistolet, ${r.tampons.rifle} ms pour le fusil, ${r.tampons.sniper} ms pour la lunette, trois grains chacune) que chaque coup se contente de LIRE : une lecture lancee sans date ne peut pas etre ratee par le fil audio, la ou une enveloppe programmee a currentTime ratait un coup sur trois · mesure au bout de la chaine, fond du jeu (rumeur du quartier « ${r.quartier} », niveau ${r.amb.volCible}, robinet de recul ${r.duck.robinet}) a crete ${r.lit.pic} / efficace ${r.lit.rms} : pistolet ${A.pistol.pic} (${sur('pistol')}× le fond, efficace ${A.pistol.rms}, ${A.pistol.duree} blocs de 23 ms — sec et court), fusil d'assaut ${A.rifle.pic} (${sur('rifle')}×, efficace ${A.rifle.rms}, ${A.rifle.duree} blocs — plus gras), fusil a lunette ${A.sniper.pic} (${sur('sniper')}×, efficace ${A.sniper.rms}, ${A.sniper.duree} blocs — lourd et grave) · aucune ne colle le limiteur (tout reste sous 0,92) · par la vraie voie de jeu, fire() emet bien la detonation de l'arme tenue : ${F.pistol.nom} ${F.pistol.pic}, ${F.rifle.nom} ${F.rifle.pic}, ${F.sniper.nom} ${F.sniper.pic}` };
+  return { ok, detail: `un coup de feu, c'etait deux lignes : une bouffee de bruit passe-bande a 1,1 kHz et un bip descendant de 200 a 60 Hz — un « pfft » mou, sans attaque ni corps, identique pour toutes les armes (l'ancienne recette rejouee ici sur ce meme banc : crete ${r.ancien.pic}, efficace ${r.ancien.rms}, ${r.ancien.duree} blocs) · c'est maintenant une DETONATION a quatre couches — la claque (l'onde de choc), le corps (le coup de belier), le boum (le grave qui plonge) et la queue (le renvoi des immeubles) — CUITES A L'AVANCE dans un echantillon (${r.tampons.pistol} ms pour le pistolet, ${r.tampons.rifle} ms pour le fusil, ${r.tampons.sniper} ms pour la lunette, trois grains chacune) que chaque coup se contente de LIRE : une lecture lancee sans date ne peut pas etre ratee par le fil audio, la ou une enveloppe programmee a currentTime ratait un coup sur trois · mesure au bout de la chaine, fond du jeu (rumeur du quartier « ${r.quartier} », niveau vise ${r.amb.volCible}, robinet ouvert a ${r.amb.gain}, recul a ${r.duck.robinet}) a crete ${r.lit.pic} / efficace ${r.lit.rms} : pistolet ${A.pistol.pic} (${sur('pistol')}× le fond, efficace ${A.pistol.rms}, ${A.pistol.duree} blocs de 23 ms — sec et court), fusil d'assaut ${A.rifle.pic} (${sur('rifle')}×, efficace ${A.rifle.rms}, ${A.rifle.duree} blocs — plus gras), fusil a lunette ${A.sniper.pic} (${sur('sniper')}×, efficace ${A.sniper.rms}, ${A.sniper.duree} blocs — lourd et grave) · aucune ne colle le limiteur (tout reste sous 0,92) · par la vraie voie de jeu, fire() emet bien la detonation de l'arme tenue : ${F.pistol.nom} ${F.pistol.pic}, ${F.rifle.nom} ${F.rifle.pic}, ${F.sniper.nom} ${F.sniper.pic}` };
 });
 
 test('une rafale reste DECOUPEE : trois coups font trois pics distincts, pas un plateau', async p => {

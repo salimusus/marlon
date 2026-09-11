@@ -26279,10 +26279,13 @@ function reparateurArrive(cible, duree, fini) {
     if (typeof donneOutil === 'function') donneOutil(av, 'cle');
     if (av.tag) av.tag.visible = false;
   } catch (e) { if (av && av.group && av.group.parent) av.group.parent.remove(av.group); return null; }
-  // IL SE MET DEVANT LE CAPOT, PAS DANS LA VOITURE. `baseD` est la longueur du véhicule :
-  // on se place une demi-longueur devant, plus 1,15 m, et on regarde la calandre.
+  // IL SE MET DEVANT LE CAPOT, PAS DANS LA VOITURE : une demi-longueur de véhicule, plus le
+  // recul mesuré ci-dessous, et il regarde la calandre.
   const cs = Math.cos(cible.h || 0), sn = Math.sin(cible.h || 0);
-  X   // mesuré sur capture : à 1,15 m il avait la tête au-dessus du PARE-CHOCS, pas du moteur
+  // MESURÉ À LA SONDE : avec ce recul, la tête du réparateur arrive 4 cm AU-DELÀ du bord
+  // avant du capot, donc bien au-dessus du moteur. À 1,15 m elle restait 40 cm en avant du
+  // pare-chocs, et on avait l'air de renifler la calandre.
+  const avantZ = (cible.baseD || 4.4) / 2 + 0.78;
   const rx = cible.x + sn * avantZ, rz = cible.z + cs * avantZ;
   const face = Math.atan2(cible.x - rx, cible.z - rz);
   const y = (typeof groundUnder === 'function') ? groundUnder(rx, rz, null, cible.y || 0) : (cible.y || 0);
@@ -26333,7 +26336,7 @@ function reparateurTick(r, dt) {
   // l'accident pendant que la voiture partait au garage.
   const c = r.cible;
   if (c && c.g) {
-    const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0), d = (c.baseD || 4.4) / 2 + 0.62;
+    const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0), d = (c.baseD || 4.4) / 2 + 0.78;
     r.x = c.x + sn * d; r.z = c.z + cs * d; r.face = Math.atan2(c.x - r.x, c.z - r.z);
     r.y = (c.y || 0);
   }

@@ -13020,3 +13020,106 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ok = lente && longue && discrete && ressortent && r.reculActif;
   return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par trois (0,05/0,03 → 0,016/0,010) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio : averse seule, crete ${r.pluieSeule.pic} (efficace ${r.pluieSeule.rms}) ; un pas par-dessus ${r.pas.pic} (${r.gainPas}× l'averse) ; un coup ${r.coups.pic} (${r.gainCoup}×) · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
+
+test('les 22 ascenseurs ont une cabine libre et emmènent le joueur sur le toit', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G, city = G.city, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12, frais: true });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    if (P.voile) G.rangeVoile(false);
+    await dodo(300);
+    const res = [];
+    for (let i = 0; i < city.lifts.length; i++) {
+      const L = city.lifts[i];
+      // LE MUR DU VOISIN DANS LE PLANCHER DE LA CABINE. C'est ce qui rendait cinq toits
+      // inaccessibles : le joueur posé au milieu chevauchait la paroi de l'immeuble d'à côté
+      // et les collisions le rejetaient jusqu'à 3,70 m de là, hors de la cabine.
+      let genant = null;
+      for (const o of G.solidsAutour(L.x, L.z, 3)) {
+        if (o === L.solid || o.deco || !o.mesh) continue;
+        if (Math.abs(o.x - L.x) < o.w / 2 + P.hw && Math.abs(o.z - L.z) < o.d / 2 + P.hw
+          && o.y + o.h / 2 > L.low + 0.5 && o.y - o.h / 2 < L.low + 2) { genant = o; break; }
+      }
+      // montée réelle, en temps simulé. On arme l'attente de la cabine (1,2 s) pour ne pas
+      // payer 72 images par ascenseur : ce qui est testé ici, c'est que la cabine VOIT le
+      // joueur dessus et qu'elle l'emmène en haut sans le perdre en route.
+      L.y = L.low; L.target = L.low; L.cd = 0; L.msgT = 0;
+      L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
+      P.pos.set(L.x, L.low + 0.3, L.z); P.vel.set(0, 0, 0); P.sit = null; P.ride = null; P.swing = null;
+      L.since = G.simTime - 1.25;
+      let haut = P.pos.y, ecart = 0;
+      for (let k = 0; k < 400 && P.pos.y < L.high - 0.3; k++) {
+        G.step(1 / 60, true);
+        haut = Math.max(haut, P.pos.y);
+        ecart = Math.max(ecart, Math.hypot(P.pos.x - L.x, P.pos.z - L.z));
+      }
+      res.push({ i, x: +L.x.toFixed(1), z: +L.z.toFixed(1), high: +L.high.toFixed(1),
+        monte: +haut.toFixed(2), ecart: +ecart.toFixed(2), genant: !!genant,
+        ok: haut > L.high - 0.5 && ecart < 1.4 });
+    }
+    return { n: res.length, toits: city.toits.length, bougees: city.cabinesBougees,
+      ko: res.filter(e => !e.ok), genants: res.filter(e => e.genant).length,
+      bas: Math.min(...res.map(e => e.monte)), ecartMax: Math.max(...res.map(e => e.ecart)) };
+  });
+  const ok = r.n >= 22 && r.toits >= 21 && r.ko.length === 0 && r.genants === 0;
+  return { ok, detail: `${r.n} ascenseurs et ${r.toits} toits équipés · ${r.bougees} cabines déménagées à la construction (le mur du voisin traversait leur plancher) · aucune cabine encombrée (${r.genants}) · tous montent jusqu'en haut (le plus bas arrive à ${r.bas} m) et personne n'est éjecté en route (écart max du centre ${r.ecartMax} m) · en échec : ${r.ko.length ? JSON.stringify(r.ko) : 'aucun'}` };
+});
+
+test('les plateformes mobiles, les tapis roulants et les manèges emmènent toujours le joueur', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G, P = G.P;
+    const mondes = [];
+    for (const w of [0, 1, 2, 3]) {
+      __SHOT.go({ world: w, x: 0, y: 1, z: 3, frais: true });
+      await dodo(250);
+      const e = { monde: w, movers: G.movers.length, spinners: G.spinners.length, conveyors: G.conveyors.length };
+      if (G.movers.length) {
+        const m = G.movers[0], p0 = [m.x, m.y, m.z];
+        for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+        e.bouge = +Math.hypot(m.x - p0[0], m.y - p0[1], m.z - p0[2]).toFixed(2);
+        P.pos.set(m.x, m.y + m.h / 2 + 0.02, m.z); P.vel.set(0, 0, 0); P.sit = null; P.ride = null;
+        for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+        const pose = P.standing === m;
+        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+        e.porte = pose && Math.hypot(P.pos.x - m.x, P.pos.z - m.z) < 1.2;
+      }
+      if (G.spinners.length) { const s = G.spinners[0], a0 = s.angle; for (let i = 0; i < 120; i++) G.step(1 / 60, true); e.tourne = +(s.angle - a0).toFixed(2); }
+      if (G.conveyors.length) {
+        const c = G.conveyors[0], o0 = c.tex.offset.x, q0 = c.tex.offset.y;
+        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+        e.defile = +(Math.abs(c.tex.offset.x - o0) + Math.abs(c.tex.offset.y - q0)).toFixed(3);
+        P.pos.set(c.x, c.y + c.h / 2 + 0.02, c.z); P.vel.set(0, 0, 0);
+        for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+        const x0 = P.pos.x, z0 = P.pos.z;
+        for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+        e.emporte = +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2);
+      }
+      mondes.push(e);
+    }
+    // les manèges de la fête foraine
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    await dodo(250);
+    const manages = G.city.rides.map(rr => { const a0 = rr.ang; for (let i = 0; i < 120; i++) G.step(1 / 60, true); return { kind: rr.kind, tourne: +(rr.ang - a0).toFixed(2) }; });
+    const car = G.city.rides.find(rr => rr.kind === 'carousel');
+    let carrousel = null;
+    if (car) {
+      P.pos.set(car.ex, 0.4, car.ez); P.vel.set(0, 0, 0); P.sit = null; P.ride = null;
+      G.rideEnter(car);
+      const x0 = P.pos.x, z0 = P.pos.z;
+      for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+      carrousel = { monte: !!P.ride, deplace: +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2) };
+      P.ride = null;
+    }
+    return { mondes, manages, carrousel };
+  });
+  const avec = r.mondes.filter(m => m.movers);
+  const moversOk = avec.length > 0 && avec.every(m => m.bouge > 0.5 && m.porte);
+  const spinOk = r.mondes.filter(m => m.spinners).every(m => Math.abs(m.tourne) > 0.3);
+  const tapisOk = r.mondes.filter(m => m.conveyors).every(m => m.defile > 0.001 && m.emporte > 0.5);
+  const manOk = r.manages.length >= 2 && r.manages.every(m => Math.abs(m.tourne) > 0.3);
+  const carOk = !!(r.carrousel && r.carrousel.monte && r.carrousel.deplace > 2);
+  const ok = moversOk && spinOk && tapisOk && manOk && carOk;
+  return { ok, detail: `plateformes va-et-vient : ${r.mondes.map(m => `monde ${m.monde} ${m.movers} mobiles${m.bouge != null ? ` (${m.bouge} m de course, joueur emporté=${m.porte})` : ''}`).join(' · ')} · tournantes ${r.mondes.filter(m => m.spinners).map(m => `${m.spinners} en ${m.tourne} rad/2 s`).join(', ') || 'aucune'} · tapis ${r.mondes.filter(m => m.conveyors).map(m => `${m.conveyors} (texture ${m.defile}, joueur emporté de ${m.emporte} m)`).join(', ') || 'aucun'} · manèges ${r.manages.map(m => `${m.kind} ${m.tourne} rad/2 s`).join(', ')} · carrousel : monté=${r.carrousel && r.carrousel.monte}, tourné avec lui sur ${r.carrousel && r.carrousel.deplace} m` };
+});

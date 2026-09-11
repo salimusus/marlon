@@ -76,7 +76,7 @@ window.__SHOT = {
       // L'INVENTAIRE ET LES FANTOMES : les deux residus qui ont fait tomber le plus de tests.
       if (typeof owned !== 'undefined') {
         var enTrop = 0; owned.forEach(function (x) { if (__SHOT.achats0.indexOf(x) < 0) enTrop++; });
-        dit(enTrop, enTrop + ' achat(s) de plus qu\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
+        dit(enTrop, enTrop + ' achat(s) de plus qu\\'au premier chargement (ils changent le tour des armes et le prix en boutique)');
       }
       if (typeof wallet !== 'undefined' && wallet !== __SHOT.argent0) dit(true, 'portefeuille a ' + wallet + ' au lieu de ' + __SHOT.argent0);
       if (typeof solids !== 'undefined') {
@@ -1696,6 +1696,12 @@ window.__G = {
   rangeVoile: typeof rangeVoile === 'function' ? rangeVoile : null,
   voileTick: typeof voileTick === 'function' ? voileTick : null,
   liftTick: typeof liftTick === 'function' ? liftTick : null,
+  degageLesCabines: typeof degageLesCabines === 'function' ? degageLesCabines : null,
+  cabineLibre: typeof cabineLibre === 'function' ? cabineLibre : null,
+  get movers() { return typeof movers !== 'undefined' ? movers : []; },
+  get spinners() { return typeof spinners !== 'undefined' ? spinners : []; },
+  get conveyors() { return typeof conveyors !== 'undefined' ? conveyors : []; },
+  get crumbles() { return typeof crumbles !== 'undefined' ? crumbles : []; },
   toitAccessible: typeof toitAccessible === 'function' ? toitAccessible : null,
   meteo: typeof meteo !== 'undefined' ? meteo : null,
   meteoTick: typeof meteoTick === 'function' ? meteoTick : null,

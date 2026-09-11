@@ -501,6 +501,19 @@ window.__SHOT = {
     if (v.tv && typeof modeTV === 'function') modeTV(true); else if (v.tv === false && typeof modeTV === 'function') modeTV(false);
     if (v.salonTV && typeof ouvreSalonTV === 'function') { try { ouvreSalonTV(); } catch (e9) {} }
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
+    // POSTE JEU STRATEGIQUE : v.guerreDemo met la guerre dans un etat parlant (trois quartiers
+    // au joueur, deux a chaque gang, une alliance en cours) et ouvre l'ecran 🚩 pour le
+    // photographier — on ne juge la lisibilite d'une carte que sur une carte remplie.
+    if (v.guerreDemo && typeof openGuerre === 'function') {
+      try {
+        gang.rep = v.guerreDemo.rep || 620; gang.magot = 1450; wallet = 900;
+        guerre.territoires = { centre: 'joueur', parc: 'joueur', banque: 'joueur',
+          commerces: 'jaune', plage: 'jaune', zone: 'rouge', industriel: 'rouge' };
+        const B = gangs[1] || gangs[0];
+        if (B && typeof scelleAlliance === 'function') scelleAlliance(B, ALLIANCE_DUREE);
+        majHudGuerre(); openGuerre();
+      } catch (e40) {}
+    }
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
     // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche

@@ -3704,8 +3704,12 @@ test('le GPS trace le chemin jusqu\'au bout, même à l\'autre bout de la ville'
       G.P.pos.set(px, 1, pz); G.P.vel.set(0, 0, 0);
       G.setBeacon(x, z, 0.3); G.gpsRoute.hide(); G.gpsRoute.update();
       const cones = [];
-      G.scene.traverse(o => { if (o.isMesh && o.visible && o.geometry && o.geometry.type === 'ConeGeometry'
-        && o.material && o.material.color && o.material.color.getHex() === 0x3ef2ff) cones.push(o); });
+      // les chevrons se reconnaissent a leur marque `userData.chevron` : ils etaient identifies
+      // par leur FORME (un cone cyan), et le jour ou le poste Finition en a fait de vraies
+      // fleches peintes (une facette texturee, pour qu'elles cessent de ressembler a des
+      // triangles egares), ce test ne trouvait plus rien. L'ancienne forme reste acceptee.
+      G.scene.traverse(o => { if (o.isMesh && o.visible && ((o.userData && o.userData.chevron)
+        || (o.geometry && o.geometry.type === 'ConeGeometry' && o.material && o.material.color && o.material.color.getHex() === 0x3ef2ff))) cones.push(o); });
       let reste = 1e9;
       for (const c of cones) reste = Math.min(reste, Math.hypot(c.position.x - x, c.position.z - z));
       out.push({ trajet: nomD + ' → ' + nom, loin: Math.round(Math.hypot(px - x, pz - z)),
@@ -11251,4 +11255,358 @@ test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement
   });
   const ok = isFinite(r.rue52) && r.rue52 <= 70 && r.ouvert.every(Boolean);
   return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant le contournement de l'armurerie, et la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les trois tronçons du contournement sont bien de la chaussée ouverte aux voitures (${r.ouvert.filter(Boolean).length}/3)` };
+});
+
+// ===================== POSTE FINITION (contrôle qualité, round 67) =====================
+
+test('changer de monde dix fois ne laisse plus rien sur la carte graphique', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, R = G.renderer;
+    const vue = { world: 4, x: -14, y: 1, z: -2, hour: 12, yaw: 0, pitch: 0.3, dist: 12, hideHud: true };
+    // Le hasard change ce que la ville contient d'une construction à l'autre (voitures,
+    // habitants, décor) : on le FIGE sur une suite reproductible, sinon la mesure danse de
+    // quelques dizaines de géométries et le test devient une loterie.
+    const vrai = Math.random; let n = 0;
+    Math.random = () => ((n = (n * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    // `renderer.info.memory` ne dit la vérité qu'APRÈS un rendu : la passe de netteté du jeu
+    // remet les compteurs de dessin à 1 appel / 2 triangles, on rend donc la scène à la main.
+    const cycle = () => { n = 7; G.loadWorld(4); __SHOT.go(vue); R.render(G.scene, G.camera);
+      return { g: R.info.memory.geometries, t: R.info.memory.textures }; };
+    try {
+      cycle(); cycle();                       // les caches de matériaux se remplissent
+      const base = cycle();
+      const suite = []; for (let i = 0; i < 8; i++) suite.push(cycle());
+      const fin = suite[suite.length - 1];
+      const max = suite.reduce((a, b) => Math.max(a, b.g), 0);
+      return { base, fin, max, dG: fin.g - base.g, dT: fin.t - base.t, serie: suite.map(x => x.g) };
+    } finally { Math.random = vrai; }
+  });
+  const ok = r.dG <= 30 && r.dT <= 4 && r.max <= r.base.g + 30;
+  return { ok, detail: `les avatars (mannequins de vitrine, gardes, médecins, travailleurs) sont ajoutés à la SCÈNE et non au groupe du monde : clearWorld ne voyait pas leurs géométries et chaque reconstruction en abandonnait des milliers sur la carte (mesuré avant correction : +459 géométries et +33 textures PAR CYCLE, soit +3 676 et +265 sur huit changements de monde) · après huit changements de monde : géométries ${r.base.g} → ${r.fin.g} (${r.dG >= 0 ? '+' : ''}${r.dG}, pointe à ${r.max}), textures ${r.base.t} → ${r.fin.t} (${r.dT >= 0 ? '+' : ''}${r.dT}) · série : ${r.serie.join(', ')}` };
+});
+
+test('sous un toit non déclaré « intérieur », aucun mur ne sépare la caméra du joueur', async p => {
+  // 1) les toits DÉCORATIFS (sans collision) sont-ils connus de la caméra ?
+  const inv = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G, dep = G.city.depot;
+    const sous = (x, z) => (G.camToits || []).filter(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2);
+    return { total: (G.camToits || []).length, depot: sous(dep.x, dep.z).length,
+      preau: sous(-78, 225).length, dep: [dep.x, dep.z],
+      // aucun de ces toits n'est un solide : le joueur passe bien dessous sans se cogner
+      solide: (G.camToits || []).filter(o => G.solids.indexOf(o) >= 0).length };
+  });
+  const lis = async (v) => {
+    await p.evaluate(vv => __SHOT.go(vv), v);
+    await attendre(p, () => __G.cam.libre != null, 30000);
+    await p.waitForTimeout(2600);   // deux ou trois images de plus : la perche finit de se caler
+    return p.evaluate(() => {
+      const G = __G, c = G.camera.position, t = G.cam.target;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15);
+      return { L: +L.toFixed(2), mur: +mur.toFixed(2), coupe: mur >= 0, pitch: +G.cam.pitch.toFixed(2),
+        libre: G.cam.libre == null ? null : +G.cam.libre.toFixed(2), plafond: G.cam.plafond == null ? null : +G.cam.plafond.toFixed(1),
+        interieur: !!G.cam.interieur, y: +c.y.toFixed(2) };
+    });
+  };
+  const depot = await lis({ world: 4, x: inv.dep[0], y: 1, z: inv.dep[1], hour: 12, yaw: 3.14, pitch: 0.5, dist: 12, hideHud: true });
+  const preau = await lis({ world: 4, x: -78, y: 1, z: 225, hour: 12, yaw: 1.57, pitch: 0.5, dist: 12, hideHud: true });
+  const ok = inv.depot >= 1 && inv.preau >= 1 && inv.solide === 0 && inv.total > 20
+    && !depot.coupe && !preau.coupe && depot.plafond < 4 && preau.plafond < 4 && depot.pitch <= 0.5 && preau.pitch <= 0.5;
+  return { ok, detail: `un auvent, une halle, la dalle d'un préau ou la couverture du dépôt sont posés SANS collision pour qu'on passe dessous : ils n'étaient donc nulle part dans « solids » et la caméra ne les voyait pas du tout — elle montait par-dessus et l'image n'était plus qu'un pan de toiture (vu en capture au préau de l'école) · ${inv.total} toits décoratifs sont maintenant repérés à la construction, aucun n'est devenu solide (${inv.solide}) · dépôt municipal : plafond mesuré à ${depot.plafond} m, perche ramenée à ${depot.libre} m, visée aplatie à ${depot.pitch}, mur entre la caméra et le joueur : ${depot.coupe ? 'OUI à ' + depot.mur + ' m' : 'aucun'} · préau de l'école : plafond ${preau.plafond} m, perche ${preau.libre} m, visée ${preau.pitch}, mur : ${preau.coupe ? 'OUI à ' + preau.mur + ' m' : 'aucun'} · et rien de tout cela n'est déclaré « intérieur » (${depot.interieur || preau.interieur})` };
+});
+
+test('six coups de poing suffisent à mettre un habitant à terre, cinq balles aussi', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const essai = (garde) => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+      const b = G.bots[0];
+      G.P.hp = 100; G.P.combo = 0; G.P.lastHitT = 0; G.P.punchT = 0; G.P.garde = false; G.P.accroupi = false;
+      b.hp = 100; b.ko = 0; b.mort = 0; b.fight = null; b.robbed = false; b.av.group.visible = true;
+      const pv = []; let n = 0;
+      while (n < 40 && b.hp > 0 && !b.ko) {
+        // le coup REPOUSSE l'adversaire : sans le remettre devant, le deuxième coup part
+        // dans le vide et le test mesurerait la portée, pas les dégâts
+        b.pos.set(G.P.pos.x + Math.sin(G.P.facing) * 1.25, G.P.pos.y, G.P.pos.z + Math.cos(G.P.facing) * 1.25);
+        b.av.group.position.copy(b.pos);
+        b.garde = garde; if (b.av && b.av.rig) b.av.rig.garde = garde;
+        G.P.punchT = 0; G.simTime += 0.42;   // l'enchaînement tient (moins de 1,2 s entre deux coups)
+        G.punch(); n++; pv.push(b.hp);
+      }
+      return { coups: n, ko: !!b.ko, pv };
+    };
+    const sans = essai(false), avec = essai(true);
+    // et EN FACE on frappe aussi : le joueur encaisse pour de vrai
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const hp0 = G.P.hp = 100;
+    G.hurt(9, 'un habitant', 0, 1, 1.5, 'poing');
+    const encaisse = hp0 - G.P.hp;
+    return { sans, avec, encaisse, balles: Math.ceil(100 / G.WEAPONS.pistol.dmg), dmgBalle: G.WEAPONS.pistol.dmg };
+  });
+  const ok = r.sans.ko && r.sans.coups >= 5 && r.sans.coups <= 6 && r.avec.ko && r.avec.coups <= 14
+    && r.encaisse >= 5 && r.balles <= 6;
+  return { ok, detail: `il fallait DIX-SEPT coups de poing pour mettre un habitant à terre contre quatre balles : le corps à corps, justement ce qu'on voulait rendre agréable avec les deux poings, était décourageant · trois causes trouvées — des dégâts trop faibles (8/8/16), une garde adverse levée les trois quarts du temps qui divisait le coup par QUATRE, et un enchaînement qui ne bouclait pas (le coup décisif ne tombait qu'une seule fois par bagarre) · désormais 14 / 14 / 26 par enchaînement de trois, garde qui amortit à 45 % et compteur qui tourne : ${r.sans.coups} coups garde baissée (${r.sans.pv.join(' → ')}), ${r.avec.coups} coups contre une garde tenue en permanence, ${r.balles} balles de pistolet (${r.dmgBalle} PV) · et le joueur encaisse ${r.encaisse} PV par coup reçu : personne n'est invincible` };
+});
+
+test('la force de la météo change vraiment ce qu\'on voit : gouttes, opacité, vitesse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });   // en pleine rue, pas sous un toit
+    G.buildMeteo();
+    const mesure = (force) => {
+      G.meteoSet('pluie', 9999, force);
+      // la force rejoint sa cible en douceur : on lui laisse le temps, en pas de simulation
+      for (let i = 0; i < 400; i++) G.meteoTick(0.05);
+      return { cible: G.meteo.cible, force: +G.meteo.force.toFixed(3), densite: G.meteo.densite,
+        opacite: +G.meteo.opacite.toFixed(3), vitesse: +G.meteo.vitesse.toFixed(2),
+        dessine: G.meteo.seg.geometry.drawRange.count, opaMat: +G.meteo.seg.material.opacity.toFixed(3) };
+    };
+    const bruine = mesure(0.2), averse = mesure(0.6), deluge = mesure(1);
+    G.meteoSet('neige', 9999, 0.25); for (let i = 0; i < 400; i++) G.meteoTick(0.05);
+    const neigeFaible = { densite: G.meteo.densite, opacite: +G.meteo.opacite.toFixed(3), dessine: G.meteo.flocons.geometry.drawRange.count };
+    G.meteoSet('neige', 9999, 1); for (let i = 0; i < 400; i++) G.meteoTick(0.05);
+    const neigeForte = { densite: G.meteo.densite, opacite: +G.meteo.opacite.toFixed(3), dessine: G.meteo.flocons.geometry.drawRange.count };
+    G.meteoSet('clair', 9999); for (let i = 0; i < 400; i++) G.meteoTick(0.05);
+    const clair = { force: +G.meteo.force.toFixed(3), visible: G.meteo.seg.visible || G.meteo.flocons.visible };
+    return { bruine, averse, deluge, neigeFaible, neigeForte, clair };
+  });
+  const suit = Math.abs(r.bruine.force - 0.2) < 0.05 && Math.abs(r.averse.force - 0.6) < 0.05 && r.deluge.force > 0.94;
+  const dens = r.deluge.densite > r.bruine.densite * 2.5 && r.averse.densite > r.bruine.densite * 1.5
+    && r.deluge.dessine === r.deluge.densite * 2 && r.bruine.dessine === r.bruine.densite * 2;
+  const opa = r.deluge.opacite > r.bruine.opacite * 2.5 && r.deluge.opaMat === r.deluge.opacite;
+  const vit = r.deluge.vitesse > r.bruine.vitesse * 1.6;
+  const neige = r.neigeForte.densite > r.neigeFaible.densite * 2.5 && r.neigeForte.opacite > r.neigeFaible.opacite * 2.5
+    && r.neigeForte.dessine === r.neigeForte.densite;
+  const ok = suit && dens && opa && vit && neige && !r.clair.visible && r.clair.force < 0.02;
+  return { ok, detail: `« meteo.force » remontait TOUJOURS à 1 dès qu'il ne faisait plus beau : régler la force d'une averse ou d'une chute de neige ne changeait rigoureusement rien à ce qu'on voyait (seule l'opacité suivait, et elle était pilotée par cette force toujours pleine) · meteoSet(genre, durée, FORCE) fixe maintenant une cible que la force rejoint, et elle pilote trois choses visibles — bruine 20 % : ${r.bruine.densite} gouttes tracées, opacité ${r.bruine.opacite}, chute à ${r.bruine.vitesse} m/s · averse 60 % : ${r.averse.densite} gouttes, ${r.averse.opacite}, ${r.averse.vitesse} m/s · déluge : ${r.deluge.densite} gouttes, ${r.deluge.opacite}, ${r.deluge.vitesse} m/s · neige faible ${r.neigeFaible.densite} flocons (${r.neigeFaible.opacite}) contre ${r.neigeForte.densite} (${r.neigeForte.opacite}) à pleine force · et « clair » rend le ciel (force ${r.clair.force}, rien d'affiché)` };
+});
+
+test('les chevrons du GPS se lisent sur le bitume comme sur la dalle du Techno-Parc', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -14, y: 1, z: -2, hour: 12 });
+    // la couleur du sol sous un point : le solide plat le plus haut qui le recouvre
+    const couleurSol = (x, z) => {
+      let best = null, top = -9;
+      for (const o of G.solids) {
+        if (o.h > 30 || o.veh || !o.mesh) continue;
+        const t = o.y + o.h / 2;
+        if (t > 1.2 || t <= top) continue;
+        if (Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2) { top = t; best = o; }
+      }
+      const m = best && ([].concat(best.mesh.material)[0]);
+      return m && m.color ? [m.color.r, m.color.g, m.color.b] : null;
+    };
+    const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    G.setBeacon(40, 60, 0, 'mission'); G.gpsRoute.update();
+    const chev = G.scene.children.filter(o => o.isMesh && o.material && o.material.map
+      && o.material.map.image && o.material.map.image.width === 128 && o.geometry.type === 'PlaneGeometry');
+    const m = chev.length ? chev[0] : null;
+    let clair = 0, sombre = 1, opaques = 0, doux = 0;
+    if (m) {
+      const cv = m.material.map.image, g = cv.getContext('2d'), d = g.getImageData(0, 0, 128, 128).data;
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3] / 255; if (a < 0.35) { if (a > 0.02) doux++; continue; }
+        opaques++;
+        const L = lum([d[i] / 255, d[i + 1] / 255, d[i + 2] / 255]);
+        if (L > clair) clair = L; if (L < sombre) sombre = L;
+      }
+    }
+    const bitume = couleurSol(-14, -2), dalle = couleurSol(3, -125);
+    const contraste = sol => sol ? Math.max(Math.abs(clair - lum(sol)), Math.abs(sombre - lum(sol))) : 0;
+    const haut = chev.length ? +(chev[0].position.y - G.groundCar(chev[0].position.x, chev[0].position.z, null, 0)).toFixed(3) : null;
+    G.clearBeacon('mission'); G.gpsRoute.hide();
+    const restants = chev.filter(o => o.visible).length;
+    return { n: chev.length, clair: +clair.toFixed(3), sombre: +sombre.toFixed(3), opaques, doux, haut,
+      bitume: bitume ? +lum(bitume).toFixed(3) : null, dalle: dalle ? +lum(dalle).toFixed(3) : null,
+      cBitume: +contraste(bitume).toFixed(3), cDalle: +contraste(dalle).toFixed(3), restants,
+      forme: m ? [m.geometry.parameters.width, m.geometry.parameters.height] : null };
+  });
+  const ok = r.n >= 6 && r.cBitume > 0.25 && r.cDalle > 0.25 && r.clair > 0.6 && r.sombre < 0.12
+    && r.doux > 200 && r.haut != null && r.haut <= 0.12 && r.restants === 0;
+  return { ok, detail: `les « triangles cyan au sol » vus un peu partout sur les routes du centre-ville, c'étaient CES chevrons-là (et non les voiles du décor, qui sont sur les toits entre 14 et 19 m) : des triangles pleins d'une seule couleur vive, à arêtes franches, qui ne ressemblaient à rien de connu — et qui, sur la dalle du Techno-Parc déjà peinte de rubans cyan, devenaient carrément invisibles · ce sont maintenant de vrais chevrons peints, cernés d'un liseré sombre et à bords doux (${r.opaques} pixels pleins, ${r.doux} pixels de bord adouci ; clair ${r.clair}, liseré ${r.sombre}) : contraste ${r.cBitume} sur le bitume du centre (luminance ${r.bitume}) et ${r.cDalle} sur la dalle du Techno-Parc (${r.dalle}) · ${r.n} chevrons posés à plat, ${r.haut} m au-dessus du sol, et plus un seul visible quand la destination est effacée (${r.restants})` };
+});
+
+test('la fête foraine n\'est plus violet fluo et aucun banc ne traîne au milieu de la place du Techno-Parc', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 152, hour: 12 });
+    const dalle = (x, z, w, d) => {
+      for (const o of G.solids) if (o.mesh && o.w > w && o.d > d && o.y + o.h / 2 < 1
+        && Math.abs(x - o.x) < 2 && Math.abs(z - o.z) < 2) return [].concat(o.mesh.material)[0];
+      return null;
+    };
+    const mf = dalle(0, 155, 80, 40);
+    const c = mf && mf.color ? mf.color : null;
+    // saturation HSL : c'est elle qui faisait « jurer » le violet avec le reste de la ville
+    const hsl = c ? c.getHSL({}) : null;
+    // les bancs de la place du Techno-Parc : aucun ne doit rester dans les 8 m du centre
+    const bancs = (G.city.benches || []).filter(b => Math.abs(b.x - 3) < 28 && Math.abs(b.z + 125) < 10);
+    const auMilieu = bancs.filter(b => Math.hypot(b.x - 3, b.z + 125) < 9);
+    return { couleur: c ? '#' + mf.color.getHexString() : null, sat: hsl ? +hsl.s.toFixed(3) : null,
+      lum: hsl ? +hsl.l.toFixed(3) : null, bancs: bancs.length, auMilieu: auMilieu.length,
+      positions: bancs.map(b => [Math.round(b.x), Math.round(b.z)]) };
+  });
+  const ok = r.couleur != null && r.sat <= 0.16 && r.bancs >= 3 && r.auMilieu === 0;
+  return { ok, detail: `le sol de la fête foraine était un violet saturé (#6f5aa8, saturation 0,31) qui jurait avec tout le reste de la ville : c'est maintenant un gris-violet désaturé ${r.couleur} (saturation ${r.sat}, clarté ${r.lum}) qui laisse ressortir les stands, les ballons et les néons · et les deux bancs plantés au beau milieu de la place du Techno-Parc — de loin, un canapé abandonné en plein extérieur — sont alignés le long du bord nord, sous les lampadaires, tournés vers la place : ${r.bancs} bancs sur la place, ${r.auMilieu} à moins de 9 m du centre (${r.positions.map(x => '(' + x + ')').join(' ')})` };
+});
+
+test('la mer a une vraie surface : profondeur, ondulation et bord fondu dans le sable', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 118, y: 1, z: 30, hour: 12 });
+    const sea = G.city.seaMesh; if (!sea) return { pourquoi: 'pas de mer' };
+    const m = [].concat(sea.material)[0], tex = m.map;
+    let bord = null, large = null, cBord = null, cLarge = null;
+    if (tex && tex.image && tex.image.getContext) {
+      const g = tex.image.getContext('2d'), W = tex.image.width;
+      const px = u => { const d = g.getImageData(Math.min(W - 1, Math.round(u * W)), 4, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
+      const a = px(0), b = px(0.75);
+      bord = +a[3].toFixed(3); large = +b[3].toFixed(3);
+      cBord = a.slice(0, 3); cLarge = b.slice(0, 3);
+    }
+    // l'ondulation : on fait tourner l'horloge et on regarde bouger les sommets
+    const pos = sea.geometry.attributes.position;
+    const ech = [];
+    for (let k = 0; k < 3; k++) { G.simTime += 0.8; G.cityVie(0.016);   // c'est cityVie qui fait battre la houle (ridesTick)
+      ech.push([pos.getY(4), pos.getY(Math.floor(pos.count / 2)), pos.getY(pos.count - 5)]); }
+    let ampli = 0, rivage = 0;
+    for (let i = 0; i < pos.count; i++) { const y = Math.abs(pos.getY(i)); if (y > ampli) ampli = y;
+      if (pos.getX(i) < -41 && y > rivage) rivage = y; }
+    const bouge = ech.some((e, i) => i > 0 && e.some((v, j) => Math.abs(v - ech[i - 1][j]) > 0.01));
+    return { bord, large, cBord, cLarge, ampli: +ampli.toFixed(3), rivage: +rivage.toFixed(3), bouge,
+      segments: [sea.geometry.parameters.widthSegments, sea.geometry.parameters.heightSegments], ech };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const profondeur = r.cLarge && r.cBord && (r.cBord[2] - r.cBord[0]) < (r.cLarge[2] - r.cLarge[0]);
+  const ok = r.bord <= 0.05 && r.large >= 0.85 && profondeur && r.ampli > 0.12 && r.rivage < 0.06 && r.bouge;
+  return { ok, detail: `la mer était une dalle bleue UNIE, d'une seule couleur du rivage au large, arrêtée net sur le sable comme une feuille de papier posée là · elle a maintenant une surface : la texture passe du turquoise des hauts-fonds (rvb ${r.cBord ? r.cBord.join(',') : '?'}) au bleu profond du large (${r.cLarge ? r.cLarge.join(',') : '?'}), et son opacité monte de ${r.bord} au bord à ${r.large} au large — les derniers mètres se fondent dans le sable au lieu de s'arrêter net · la houle bat à ${r.ampli} m d'amplitude au large (${r.segments[0]}×${r.segments[1]} facettes) et meurt sur le rivage (${r.rivage} m), et elle bouge d'une image à l'autre (${r.bouge})` };
+});
+
+test('quand plusieurs bots parlent au même endroit, les bulles ne se superposent plus', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    // la caméra n'est déplacée que par frame() : sans image rendue depuis le test précédent
+    // elle est restée à l'autre bout de la ville, et tickBubbles jugeait toutes les bulles
+    // « trop loin » (au-delà de 48 m). On la pose à la main derrière le joueur.
+    G.camera.position.set(G.P.pos.x, G.P.pos.y + 2.2, G.P.pos.z - 7);
+    const n = 4, av = [];
+    for (let i = 0; i < n; i++) {
+      const b = G.bots[i];
+      b.pos.set(G.P.pos.x + 0.4 * i, G.P.pos.y, G.P.pos.z + 3 + 0.3 * i);
+      b.av.group.position.copy(b.pos); b.av.group.visible = true; b.ko = 0; b.rdv = null; b.wait = 99;
+      G.bubble(b.av, 'Salut ' + i); b.av.bubbleT = G.simTime + 1e6;
+      av.push(b.av);
+    }
+    G.tickBubbles();
+    const groupes = av.map(a => ({ y: +a.bubble.position.y.toFixed(2), h: +a.bubble.scale.y.toFixed(2), tag: +a.tag.position.y.toFixed(2) }));
+    // et quand ils se dispersent, tout revient à la hauteur normale
+    for (let i = 0; i < n; i++) { const b = G.bots[i]; b.pos.set(G.P.pos.x + i * 6, G.P.pos.y, G.P.pos.z + 3); b.av.group.position.copy(b.pos); }
+    G.tickBubbles();
+    const separes = av.map(a => +a.bubble.position.y.toFixed(2));
+    for (const a of av) { if (a.bubble) { a.bubbleT = 0; } }
+    return { groupes, separes };
+  });
+  const ys = r.groupes.map(g => g.y).sort((a, b) => a - b);
+  const distinctes = new Set(ys).size === ys.length;
+  let ecartMini = 99; for (let i = 1; i < ys.length; i++) ecartMini = Math.min(ecartMini, ys[i] - ys[i - 1]);
+  const hMax = Math.max(...r.groupes.map(g => g.h));
+  const tagsDistincts = new Set(r.groupes.map(g => g.tag)).size === r.groupes.length;
+  const reviennent = r.separes.every(y => Math.abs(y - 3.35) < 0.01);
+  const ok = distinctes && ecartMini >= hMax * 0.9 && tagsDistincts && reviennent;
+  return { ok, detail: `quatre habitants côte à côte et l'on ne lisait qu'UNE bulle, les trois autres exactement derrière (vu en capture) · elles s'empilent maintenant : hauteurs ${ys.join(' / ')} m (écart le plus serré ${ecartMini.toFixed(2)} m pour des bulles de ${hMax} m de haut), et les étiquettes de noms, qui se chevauchaient pareil, sont décalées elles aussi (${r.groupes.map(g => g.tag).join(' / ')}) · dès qu'ils se dispersent tout revient à 3,35 m (${reviennent})` };
+});
+
+test('les grillages ne moirent plus quand on les voit à angle rasant', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 231, hour: 12 });
+    const t = G.FENCE, cv = t.image, g = cv.getContext('2d'), d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let pleins = 0, doux = 0, vides = 0;
+    for (let i = 0; i < d.length; i += 4) { const a = d[i + 3] / 255; if (a > 0.6) pleins++; else if (a > 0.03) doux++; else vides++; }
+    // les matériaux de grillage de la ville : tous au même seuil de découpe
+    const mats = new Set(); let n = 0;
+    G.worldGroup.traverse(o => { if (!o.isMesh || !o.material) return;
+      for (const m of [].concat(o.material)) { if (!m || !m.map || m.map.image !== cv || mats.has(m)) continue; mats.add(m); n++; } });
+    const seuils = [...mats].map(m => m.alphaTest);
+    G.netteteTextures();
+    const aniso = [...mats].map(m => m.map.anisotropy);
+    return { taille: cv.width, pleins, doux, vides, grillages: n, seuil: G.GRILLAGE_SEUIL,
+      seuilMax: seuils.length ? Math.max(...seuils) : null, anisoMin: aniso.length ? Math.min(...aniso) : null,
+      mipmaps: t.generateMipmaps, minFilter: t.minFilter === G.THREE.LinearMipmapLinearFilter };
+  });
+  const ok = r.taille >= 128 && r.doux > r.pleins * 0.5 && r.grillages >= 3 && r.seuilMax <= 0.1
+    && r.anisoMin >= 4 && r.mipmaps && r.minFilter;
+  return { ok, detail: `vu à angle rasant, un grillage se transformait en damier clignotant de barres noires : des fils NETS de 3 px sur 64 avec un seuil de découpe à 0,40 — au loin la moyenne du mipmap tombe sous ce seuil, la maille disparaît par plaques et revient, c'est exactement la recette du moiré · la maille fait maintenant ${r.taille} px et se dessine en deux passes (${r.pleins} pixels de fil plein, ${r.doux} pixels de bord adouci que le mipmap peut moyenner proprement, ${r.vides} pixels vides), le seuil de découpe des ${r.grillages} grillages de la ville descend à ${r.seuilMax} (au loin la maille devient un voile gris régulier au lieu de clignoter), mipmaps ${r.mipmaps} et filtrage anisotrope ×${r.anisoMin}` };
+});
+
+test('à 1024 px de large, les pastilles du haut de l\'écran tiennent sur une seule ligne', async p => {
+  const lire = async (w, h) => {
+    await p.setViewportSize({ width: w, height: h });
+    await p.waitForTimeout(350);
+    return p.evaluate(() => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+      const tc = document.querySelector('.tc');
+      const vis = [...tc.children].filter(e => e.offsetParent !== null);
+      const lignes = new Set(vis.map(e => e.offsetTop));
+      const top = document.getElementById('top');
+      return { pastilles: vis.length, lignes: lignes.size, hauteur: tc.offsetHeight,
+        textes: vis.map(e => e.textContent.trim().slice(0, 18)),
+        largeurTc: tc.offsetWidth, somme: vis.reduce((a, e) => a + e.offsetWidth, 0),
+        deborde: tc.scrollWidth > tc.offsetWidth + 1, basDuTop: top.getBoundingClientRect().bottom };
+    });
+  };
+  const p1024 = await lire(1024, 640);
+  const p1280 = await lire(1280, 720);
+  const p800 = await lire(800, 600);
+  await p.setViewportSize({ width: 1024, height: 640 });
+  const ok = p1024.lignes === 1 && p1280.lignes === 1 && p800.lignes === 1 && !p1024.deborde && p1024.pastilles >= 4;
+  return { ok, detail: `à 1024 px — la largeur du banc d'essai, et celle d'un navigateur en demi-écran — les pastilles du centre passaient sur QUATRE lignes, qui tombaient en plein milieu de l'image (vu en capture) · le vrai goulot n'était pas les pastilles mais leurs deux voisines — la rangée de boutons à gauche et, à droite, le bloc du joueur avec ses trois jauges de 96 px plus le tableau des scores : à eux deux ils prenaient 720 px des 1024 · entre 641 et 1420 px tout se resserre (nom du monde et détail des territoires masqués, pastille de lieu bornée, boutons à 32 px, jauges à 48 px, tableau plus étroit) et sous 900 px le bloc du joueur s'efface comme sur téléphone : ${p1024.pastilles} pastilles sur ${p1024.lignes} ligne à 1024 px (${p1024.somme} px de pastilles dans ${p1024.largeurTc} px de colonne, débordement ${p1024.deborde}) — « ${p1024.textes.join(' | ')} » · ${p1280.lignes} ligne à 1280 px, ${p800.lignes} ligne à 800 px` };
+});
+
+test('la rumeur de la ville est une présence, plus un masque : les sons courts ressortent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    G.settings.sound = true; G.settings.voices = false;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });   // le centre : le quartier le plus bruyant après la plage
+    const c = G.sfx.unlock(), ch = G.sfx.chaine(); if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
+    // ÉCOUTE AU BOUT DE LA CHAÎNE : un analyseur ne montre que les 46 dernières millisecondes,
+    // toujours trop tard sur la machine du banc. On branche un nœud qui écoute en continu.
+    let crete = 0, somme = 0, n = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; n++; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; somme = 0; n = 0; const t = performance.now();
+      while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); }
+      return { pic: +crete.toFixed(4), rms: +Math.sqrt(somme / Math.max(1, n)).toFixed(4) }; };
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
+    try { G.meteoSet('clair', 9999); } catch (e) {} try { G.craieLitFerme(); } catch (e) {}
+    for (let i = 0; i < 8; i++) { G.simTime += 2; G.sonsVille(1.3); }
+    await dodo(1200);
+    const quartier = G.quartierSon();
+    const etat = G.ambiance.etat();
+    const lit = await ecoute(900);                                  // le lit de fond SEUL
+    const craie = await ecoute(900, () => { try { G.sonCraie(3); } catch (e) {} });   // un son de jeu par-dessus
+    try { G.craieLitFerme(); } catch (e) {}
+    // le recul de la rumeur : un son de jeu la fait plonger puis elle remonte toute seule
+    G.ambiance.set(quartier.k, quartier.vol, quartier.coupe); await dodo(300);
+    const avantDuck = G.ambiance.duckInfo();
+    const joue = G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
+    const pendantDuck = G.ambiance.duckInfo();
+    const actif = G.ambiance.duckActif();
+    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    return { quartier: quartier.k, vol: quartier.vol, etat, lit, craie, avantDuck, pendantDuck, actif, joue,
+      rapport: +(craie.pic / Math.max(1e-6, lit.pic)).toFixed(1), tenue: G.DUCK_TENUE };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const discret = r.lit.pic < 0.035 && r.lit.rms < 0.010;
+  const ressort = r.craie.pic > r.lit.pic * 6 && r.craie.pic > 0.1;
+  // un pas suffit à la faire reculer : le compteur monte et le niveau visé tombe sous la moitié
+  const recule = r.joue && r.pendantDuck.n === r.avantDuck.n + 1 && r.pendantDuck.niveau <= r.pendantDuck.cible * 0.45 && r.actif;
+  const ok = discret && ressort && recule && r.vol <= 0.012;
+  return { ok, detail: `la rumeur de quartier couvrait tout le reste : mesurée au bout de la chaîne audio, elle atteignait une crête de 0,065 (efficace 0,017) et masquait complètement le crissement de la craie de l'école — et avec lui les pas, les bots qui parlent, les coups et les cris « aïe » · deux corrections : tous les niveaux de quartier divisés par trois (${r.quartier} : ${r.vol}, gain du bus ${r.etat.gain}) et un RECUL automatique — chaque son de jeu la fait plonger pendant ${r.tenue} s puis elle remonte seule · lit de fond seul : crête ${r.lit.pic}, efficace ${r.lit.rms} · un son de jeu par-dessus : crête ${r.craie.pic} (${r.rapport}× le lit, contre 7,9× avant) · un seul pas la fait reculer (recul n°${r.pendantDuck.n}) de ${r.pendantDuck.cible} à ${r.pendantDuck.niveau}, soit ${Math.round(100 * r.pendantDuck.niveau / r.pendantDuck.cible)} % du niveau du quartier, puis elle remonte seule` };
 });

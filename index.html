@@ -96,6 +96,41 @@ body.tv .hp.pf{height:13px}body.tv .pfn{font-size:clamp(13px,1vw,19px)}
 .lbr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 #lb.closed #lbRows{display:none}
 @media (max-width:640px){#top{grid-template-columns:auto 1fr}.tr{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 52px)}#lb{min-width:128px;font-size:12px}.lbr .nm{max-width:82px}.lbr,.lbh{padding:4px 8px}.pill{font-size:12px;padding:6px 7px}#me{display:none}.tc{gap:4px}.ibtn{width:36px;height:36px;font-size:16px}#world .wn{display:none}#respect .rt{display:none}}
+/* LARGEUR MOYENNE (641 a 1180 px : fenetre de PC etroite, navigateur en demi-ecran, une
+   television 1024). La colonne du milieu est prise en etau entre les boutons a gauche et le
+   tableau des scores a droite : des que l'horloge ou la pastille d'activite apparaissaient,
+   les pastilles passaient sur une DEUXIEME LIGNE, pile dans la zone du grand message. On les
+   resserre d'un cran a ces largeurs-la (et on rend un peu de place en retrecissant le tableau
+   des scores) : tout tient sur une seule ligne, sans jamais figer le retour a la ligne. */
+@media (min-width:641px) and (max-width:1420px){
+  .tc{gap:3px}
+  .tc .pill{font-size:11px;padding:4px 6px}
+  /* le nom du monde et le detail des territoires reprennent la place des chiffres */
+  #world .wn{display:none}
+  #respect .rt{display:none}
+  /* la pastille de lieu peut dire « Dépôt municipal » ou « Balade · 0 pts » : on la borne */
+  #act{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ibtn{width:32px;height:32px;font-size:15px}
+  /* LE VRAI GOULOT n'etait pas les pastilles mais leurs DEUX VOISINES : la rangee de boutons
+     a gauche et, a droite, le bloc du joueur avec ses trois jauges de 96 px et le tableau des
+     scores. A eux deux ils prenaient 720 px des 1024, et il ne restait que 270 px au milieu
+     pour 410 px de pastilles. On les resserre : jauges a 48 px, nom borne, tableau plus etroit. */
+  #me{font-size:12px;padding:4px 6px;gap:5px}
+  #meName{display:inline-block;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+  .hp{width:48px;height:8px}
+  #lb{min-width:118px;font-size:11px}
+  .lbr .nm{max-width:74px}
+  .lbr,.lbh{padding:3px 7px}
+}
+/* Entre 641 et 900 px il ne reste vraiment plus la place pour TOUT : le bloc du joueur (nom
+   et trois jauges) s'efface, comme il le fait deja sur telephone. La vie reste lisible sur la
+   rangee de pastilles et dans le tableau des scores. */
+@media (min-width:641px) and (max-width:900px){
+  #me{display:none}
+  .tc .pill{font-size:10px;padding:3px 5px}
+  #act{max-width:92px}
+  .ibtn{width:30px;height:30px;font-size:14px}
+}
 /* Téléphone en portrait : la colonne du milieu se retrouvait coincée à 40 px de large et
    ses pastilles débordaient de l'écran par la droite. On lui donne toute la largeur, sur
    une deuxième ligne, et on lui interdit de dépasser. */
@@ -1648,6 +1683,14 @@ const SVIDE = [];
 // tout retrait et toute remise à zéro appellent donc explicitement cette fonction.
 function sgridSale() { SGRID.n = -1; }
 let solids = [], kills = [], coins = [], checkpoints = [], blinkers = [], movers = [], spinners = [], conveyors = [], clouds = [], pads = [], trusses = [], crumbles = [], decoSpin = [], route = [];
+// LES TOITS QUI NE SONT PAS DES SOLIDES. Un auvent, une halle, la dalle d'un préau ou la
+// couverture du dépôt municipal sont posés en `deco : true` pour que le joueur passe dessous
+// sans s'y cogner — ils ne sont donc NULLE PART dans `solids` et la caméra ne les voyait pas
+// du tout : elle montait par-dessus et l'image n'était plus qu'un pan de toiture. Résultat,
+// la caméra « se coinçait dans les murs » dans tout lieu couvert non déclaré « intérieur »
+// (le dépôt, le préau de l'école). On range donc automatiquement, à la construction, toute
+// pièce décorative PLATE, LARGE et EN HAUTEUR : c'est un toit. Aucune liste à tenir à la main.
+let camToits = [];
 let goal = null, spawn = new THREE.Vector3(0, 0, 3);
 const shared = new Set();
 const unitBox = new THREE.BoxGeometry(1, 1, 1); shared.add(unitBox);
@@ -1794,13 +1837,48 @@ function brickMats(color, w, d) {
 // rayonnent. On les inscrit dans NEONS pour que lumieresVille() puisse les monter d'un cran
 // — sans cette liste, personne ne savait où ils étaient.
 function neonMat(color) { const m = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.55 }); NEONS.push(m); return m; }
-function clearWorld() {
-  worldGroup.traverse(o => {
-    if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
+// FUITE DE MÉMOIRE GRAPHIQUE (round 67) : chaque changement de monde laissait environ
+// +340 géométries et +34 textures sur la carte graphique. La raison : clearWorld ne
+// regardait que `worldGroup`, alors que TOUS les avatars (buildAvatar) sont ajoutés
+// directement à `scene` — mannequins de vitrine, gardes, médecins, travailleurs des métiers.
+// Ils étaient bien retirés de la scène, jamais libérés. Un enfant qui change de monde dix
+// fois saturait la carte. `libereBranche` libère une branche entière une seule fois par
+// ressource (les matériaux d'un avatar sont partagés entre ses dizaines de pièces : les
+// libérer autant de fois qu'il y a de pièces fait crier le renderer).
+// Les cartes autres que `map` comptent aussi : un maillot a une texture avant ET arrière,
+// une enseigne a un `emissiveMap`.
+const CARTES_MAT = ['map', 'emissiveMap', 'alphaMap', 'normalMap', 'bumpMap', 'specularMap', 'lightMap', 'aoMap', 'envMap'];
+function libereBranche(racine) {
+  if (!racine) return;
+  const vus = new Set();
+  racine.traverse(o => {
+    if (o.geometry && !shared.has(o.geometry) && !vus.has(o.geometry)) { vus.add(o.geometry); o.geometry.dispose(); }
     const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
-    for (const m of mats) { if (shared.has(m)) continue; if (m.map && !shared.has(m.map)) m.map.dispose(); m.dispose(); }
+    for (const m of mats) {
+      if (!m || shared.has(m) || vus.has(m)) continue;
+      vus.add(m);
+      for (const k of CARTES_MAT) { const t = m[k]; if (t && t.isTexture && !shared.has(t) && !vus.has(t)) { vus.add(t); t.dispose(); } }
+      m.dispose();
+    }
   });
+}
+// Les avatars du monde qu'on jette : on les reconnaît à leur marque `userData.avatar`
+// (posée par buildAvatar) au lieu d'une liste écrite à la main — ainsi toute nouvelle
+// famille d'avatars (métiers, agents, passants) est couverte d'office. Seuls le joueur et
+// les bots permanents survivent au changement de monde.
+function balaieAvatars() {
+  const gardes = new Set();
+  try { if (me && me.group) gardes.add(me.group); } catch (e) {}
+  try { for (const b of bots) if (b.av && b.av.group) gardes.add(b.av.group); } catch (e) {}
+  for (const o of scene.children.slice()) {
+    if (!o.userData || !o.userData.avatar || gardes.has(o)) continue;
+    scene.remove(o); libereBranche(o);
+  }
+}
+function clearWorld() {
+  libereBranche(worldGroup);
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
+  balaieAvatars();
   // les marques de choc et les véhicules en feu vivaient dans l'ancien monde : sans cette
   // remise à zéro, on gardait des références vers des objets retirés de la scène
   // (NEONS aussi : les matériaux de néon appartiennent au monde qu'on vient de jeter ; sans
@@ -1810,7 +1888,7 @@ function clearWorld() {
   // les deux listes du budget d'image pointaient vers des objets retirés de la scène : elles
   // grossissaient à chaque changement de monde et on triait des fantômes à chaque image
   try { ARETES.length = 0; DETAILS.length = 0; OMBRES.length = 0; detailCam = null; } catch (e7) {}
-  solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; sgridSale();
+  solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; camToits = []; sgridSale();
   goal = null; cityReset();
 }
 
@@ -1822,9 +1900,14 @@ function box(x, y, z, w, h, d, color, opt = {}) {
   if (!opt.noEdges && !opt.neon) addEdges(m);
   worldGroup.add(m);
   const o = Object.assign({ mesh: m, x, y, z, w: Math.max(w, 0.36), h, d: Math.max(d, 0.36) }, opt);   // murs fins épaissis pour la collision
-  if (opt.kill) kills.push(o); else if (!opt.deco) solids.push(o); sgridSale();
+  if (opt.kill) kills.push(o); else if (!opt.deco) solids.push(o); else if (estUnToit(o)) camToits.push(o);
+  sgridSale();
   return o;
 }
+// Un « toit » pour la caméra : une pièce décorative plate (moins de 1,2 m d'épaisseur), large
+// d'au moins 2,5 m dans les deux sens, et dont le dessous passe au-dessus de la tête (1,9 m).
+// Une enseigne, un garde-corps ou un bandeau de façade ne rentrent pas dans ce moule.
+function estUnToit(o) { return o.h <= 1.2 && o.w >= 2.5 && o.d >= 2.5 && o.y - o.h / 2 >= 1.9 && o.y - o.h / 2 <= 14; }
 function groundUnder(x, z, self, yNow = 0) {   // hauteur de la surface sous un véhicule (dalles, parking, parc…)
   let top = 0;
   // `decor` (mobilier solidifié pour le joueur) : on ne pose pas une voiture sur un banc
@@ -2115,16 +2198,31 @@ function raceProgress(x, z) {   // index du point du tracé le plus proche (0 = 
   for (let i = 0; i < RACE_PTS.length; i++) { const d = (RACE_PTS[i][0] - x) ** 2 + (RACE_PTS[i][1] - z) ** 2; if (d < bd) { bd = d; best = i; } }
   return best;
 }
+// LE MOIRE DES GRILLAGES. Vu a angle rasant, un grillage se transformait en damier
+// clignotant de barres noires : des fils NETS de 3 px sur 64, avec un seuil de decoupe
+// (`alphaTest`) a 0,4. Au loin, la moyenne du mipmap tombe sous ce seuil, les fils
+// disparaissent par plaques et reviennent : c'est exactement la recette du moire. Deux
+// changements : la maille est dessinee en DEUX passes (un halo large et pale sous le fil
+// net), ce qui donne des bords doux que le mipmap peut moyenner proprement, et le seuil de
+// decoupe descend a 0,08 dans tous les grillages — au loin la maille devient un voile gris
+// regulier au lieu de clignoter. Filtrage anisotrope au maximum par-dessus.
 const FENCE = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.clearRect(0, 0, 64, 64); g.strokeStyle = 'rgba(40,46,60,.9)'; g.lineWidth = 3;
-  for (let i = 0; i <= 64; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 64); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(64, i); g.stroke(); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.clearRect(0, 0, 128, 128);
+  for (const [l, a] of [[8, 0.16], [4.4, 0.82]]) {
+    g.strokeStyle = 'rgba(40,46,60,' + a + ')'; g.lineWidth = l;
+    for (let i = 0; i <= 128; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(128, i); g.stroke(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true; t.anisotropy = 16;
+  shared.add(t); return t;
 })();
+// seuil de decoupe commun a tous les grillages (voir le commentaire du moire ci-dessus)
+const GRILLAGE_SEUIL = 0.08;
 function fenceBox(cx, base, cz, w, d, h, gapsSouth = []) {   // grillage autour d'un terrain (avec ouvertures sur le côté sud)
   const mk = (x, z, len, thick, alongX) => {
     const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(len / 1.2, h / 1.2);
-    const mat = new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+    const mat = new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide });
     box(x, base + h / 2, z, alongX ? len : thick, h, alongX ? thick : len, 0, { material: mat, noEdges: true, noShadow: true, studs: false, noRoute: true });
   };
   mk(cx, cz - d / 2, w, 0.12, true); mk(cx - w / 2, cz, d, 0.12, false); mk(cx + w / 2, cz, d, 0.12, false);
@@ -5102,7 +5200,7 @@ const WORLDS = [
         for (const dz of [-DEMI, DEMI]) box(gx, 0.3 + HT / 2, gz + dz, 0.16, HT, 0.16, blanc, { studs: false, noRoute: true });
         box(gx, 0.3 + HT, gz, 0.16, 0.16, DEMI * 2 + 0.16, blanc, { studs: false, noRoute: true });
         for (const dz of [-DEMI, DEMI]) box(gx - dir * PROF, 0.3 + HT * 0.4, gz + dz, 0.12, HT * 0.8, 0.12, blanc, { deco: true, studs: false });
-        const filet = new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(5, 3); return t; })(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+        const filet = new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(5, 3); return t; })(), transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide });
         box(gx - dir * PROF, 0.3 + HT / 2, gz, 0.1, HT, DEMI * 2, 0, { material: filet, studs: false, noRoute: true, noEdges: true, noShadow: true });         // fond
         for (const dz of [-DEMI, DEMI]) box(gx - dir * PROF / 2, 0.3 + HT / 2, gz + dz, PROF, HT, 0.1, 0, { material: filet, studs: false, noRoute: true, noEdges: true, noShadow: true });   // côtés
         box(gx - dir * PROF / 2, 0.3 + HT, gz, PROF, 0.1, DEMI * 2, 0, { material: filet, studs: false, noRoute: true, noEdges: true, noShadow: true });        // toit
@@ -5311,10 +5409,28 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
   // enterrés au milieu de la route se lisaient comme un bug d'affichage (le contrôle qualité
   // les a d'abord pris pour des deltaplanes tombés du décor). Aplatis à 10 cm et posés à 5 cm
   // du sol, ils redeviennent ce qu'ils sont : des flèches peintes qui montrent le chemin.
-  const pool = [], geo = new THREE.ConeGeometry(0.42, 1.0, 3);
-  geo.rotateX(Math.PI / 2); geo.scale(1, 0.1, 1);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x3ef2ff, transparent: true, opacity: 0.8, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });   // pas de bagarre de profondeur avec la chaussée
+  // CE QUE VOYAIT LE CONTROLE QUALITE : des TRIANGLES CYAN pleins, a aretes franches, poses
+  // sur la chaussee du centre-ville — « ca se lit comme un bug d'affichage ». C'etaient bien
+  // ces chevrons-la (et non les voiles du decor, qui sont sur les toits a 14-19 m). Un triangle
+  // plein d'une seule couleur vive ne ressemble a rien de connu : sur la dalle du Techno-Parc,
+  // deja peinte de rubans cyan, il devenait carrement invisible (l'autre moitie du defaut).
+  // Ils deviennent donc de VRAIS CHEVRONS PEINTS : un « ^ » a bords doux, cerne d'un liseré
+  // sombre. Le liseré est ce qui les rend lisibles a la fois sur le bitume clair et sur une
+  // dalle sombre, et les bords doux leur enlevent l'air d'un polygone egare.
+  const CHEVRON = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.clearRect(0, 0, 128, 128); g.lineJoin = 'round'; g.lineCap = 'round';
+    // pointe EN HAUT du canevas : apres rotateX(+90°) le haut de la texture regarde le +Z
+    // local, c'est-a-dire la direction de marche donnee par lookAt()
+    const trace = l => { g.beginPath(); g.moveTo(18, 100); g.lineTo(64, 26); g.lineTo(110, 100); g.lineWidth = l; g.stroke(); };
+    g.strokeStyle = 'rgba(4,16,30,.62)'; trace(36);   // le liseré sombre
+    g.strokeStyle = 'rgba(120,246,255,.97)'; trace(19);
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 8; shared.add(t); return t;
+  })();
+  const pool = [], geo = new THREE.PlaneGeometry(1.5, 1.7);
+  geo.rotateX(Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ map: CHEVRON, transparent: true, opacity: 0.95, depthWrite: false,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });   // pas de bagarre de profondeur avec la chaussée
   let lastT = 0, lastX = 0, lastZ = 0;
   return {
     update() {
@@ -5356,7 +5472,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           const x = a[0] + ux * t, z = a[1] + uz * t;
           versProchain = parcouru < 50 ? 2.4 : Math.min(11, 2.4 + (parcouru - 50) * 0.1);
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
-          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; scene.add(pool[k]); }
+          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; scene.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme
           const m = pool[k++], gy = groundCar(x, z, null, 0);
           m.position.set(x, gy + 0.05, z); m.lookAt(x + ux, gy + 0.05, z + uz); m.visible = true;
         }
@@ -6429,13 +6545,15 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   // fete. On a choisi de faire VRAIMENT traverser la place (contourner aurait coupe la fete du
   // reseau et rallonge le boulevard de 90 m) : la dalle est trouee a l'emprise de chaque rue,
   // le bitume, son axe jaune et ses bords blancs reviennent au jour, et des passages pietons
-  // protegent la traversee de la place. (La COULEUR de la dalle n'est pas touchee.)
+  // protegent la traversee de la place. Et la COULEUR, un violet sature (0x6f5aa8) qui jurait
+  // avec toute la ville, passe a un gris-violet sombre : les stands, les ballons et les neons
+  // ressortent au lieu de se battre avec le sol.
   const TROUS_FETE = [
     { x0: -45, x1: 45, z0: 136.4, z1: 143.6 },     // le boulevard z = 140, de part en part
     { x0: 15.1, x1: 24.9, z0: 143.6, z1: 177 },    // la descente vers l'hopital (x = 20)
     { x0: -4.4, x1: 4.4, z0: 133, z1: 136.4 },     // la route de la fete foraine (x = 0)
   ];
-  platTrous(0, 0.12, 155, 90, 44, 0x6f5aa8, { studs: false, noRoute: true }, 0.24, TROUS_FETE);
+  platTrous(0, 0.12, 155, 90, 44, 0x574f5e, { studs: false, noRoute: true }, 0.24, TROUS_FETE);
   // quatre passages pietons sur le boulevard, de part et d'autre des deux manèges
   for (const px of [-30, -15, 15, 30]) { crosswalk(px, 140, false, 6); city.crossings.push([px, 140]); }
   // La descente est finissait 7 m DANS la parcelle de la villa du joueur (z 148 a 155), pour
@@ -6896,9 +7014,13 @@ function buildTechno() {
   // elle recule au NORD des boutiques, en dalle sombre, et le circuit imprimé y ressort.
   plat(3, 0.2, -125, 54, 14, 0x39414f, { studs: false, noRoute: true }, 0.1);
   fieldLines(3, 0.3, -125, 54, 14, (g, W, H) => {   // un circuit imprimé géant peint sur la dalle
-    g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(62,242,255,.75)'; g.lineWidth = 4;
+    // LE CIRCUIT IMPRIME ETAIT PLUS LUMINEUX QUE LE GPS. A 75 % d'opacite et 4 px de large,
+    // ces rubans cyan eclairaient la dalle comme des neons : les chevrons du GPS, cyan eux
+    // aussi, disparaissaient purement et simplement dedans. Le motif redevient ce qu'il est —
+    // un dessin peint, discret, sur une dalle sombre.
+    g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(62,242,255,.26)'; g.lineWidth = 2.5;
     for (let i = 0; i < 9; i++) { const y = 12 + i * (H - 24) / 8; g.beginPath(); g.moveTo(10, y); g.lineTo(W * 0.36, y); g.lineTo(W * 0.44, y + 18); g.lineTo(W - 10, y + 18); g.stroke(); }
-    g.fillStyle = 'rgba(62,242,255,.55)';
+    g.fillStyle = 'rgba(62,242,255,.2)';
     for (let i = 0; i < 22; i++) g.beginPath(), g.arc(30 + i * (W - 60) / 21, H / 2, 6, 0, 7), g.fill();
   });
   // ---- les trois tours de bureaux vitrées, au nord de l'avenue des Sciences ----
@@ -6958,7 +7080,11 @@ function buildTechno() {
   // ---- éclairage, décor, mobilier ----
   for (const [lx, lz] of [[-26, -108], [-8, -108], [10, -108], [28, -108], [-26, -132], [-8, -132], [10, -132], [28, -132], [-40, -110], [46, -110]]) lamp(lx, lz);
   for (const [tx, tz] of [[-40, -128], [-40, -142], [46, -128], [46, -142], [44, -118], [-38, -136]]) tree(tx, 0, tz, 0x2f8f3a, true);
-  bench(-6, -122, 0); bench(6, -122, Math.PI); bench(-21, -128, 0); bench(25, -128, Math.PI);
+  // DEUX BANCS ETAIENT PLANTES AU MILIEU DE LA PLACE, dos a rien, face a rien : de loin on
+  // ne voyait qu'un canape abandonne en plein exterieur. Les quatre bancs s'alignent
+  // maintenant le long du bord NORD de la dalle, sous les lampadaires, tournes vers la place
+  // et les food-trucks — une vraie terrasse de quartier au lieu d'un meuble oublie.
+  bench(-20, -130, 0); bench(-8.8, -130, 0); bench(11.2, -130, 0); bench(23, -130, 0);
   for (const [cx2, cz2] of [[-11, -119], [-9, -119], [15, -119], [17, -119]]) coneRue(cx2, cz2);   // l'aire de livraison des boutiques
   for (const [px, pz] of [[-10, -119], [16, -119], [-24, -120], [28, -120]]) poubelle(px, pz);
   flowerBed(-34, -122, 5, 1.6); flowerBed(40, -122, 5, 1.6);
@@ -7908,8 +8034,21 @@ function dayTick() {
 // ================= MÉTÉO : pluie et neige =================
 // Un seul nuage de segments sert aux deux : longs et rapides pour la pluie,
 // courts, lents et flottants pour la neige. Il suit la caméra, donc il tombe partout.
-const meteo = { kind: 'clair', force: 0, next: 0, seg: null, flocons: null, pos: null, pts: null, base: null, vy: null, drift: null,
-  N: 1600, sol: null, solParc: null, abri: false, abriT: 0, tonnerre: 0, ecl: 0 };
+// `cible` : L'INTENSITE VOULUE, de 0 (rien) a 1 (deluge). `force` la rejoint en douceur.
+// Avant, `force` montait TOUJOURS jusqu'a 1 des qu'il ne faisait plus beau : regler la force
+// d'une averse ou d'une chute de neige ne changeait rigoureusement rien a ce qu'on voyait.
+// `densite`, `opacite` et `vitesse` sont les trois effets visibles qu'elle pilote maintenant.
+const meteo = { kind: 'clair', force: 0, cible: 1, next: 0, seg: null, flocons: null, pos: null, pts: null, base: null, vy: null, drift: null,
+  N: 1600, densite: 0, opacite: 0, vitesse: 0, sol: null, solParc: null, abri: false, abriT: 0, tonnerre: 0, ecl: 0 };
+// Les trois grandeurs visibles tirees de la force du moment : le nombre de gouttes (ou de
+// flocons) affiches, leur opacite et leur vitesse de chute. Une bruine a 20 % compte cinq fois
+// moins de gouttes qu'un orage, elles sont plus pales et tombent moins vite.
+function meteoIntensite(f) {
+  const x = clamp(f == null ? meteo.force * (meteo.abri ? 0.05 : 1) : f, 0, 1);
+  const neige = meteo.kind === 'neige';
+  return { force: x, densite: Math.max(40, Math.round(meteo.N * (0.12 + 0.88 * x))),
+    opacite: neige ? x * 0.95 : x * 0.55, vitesse: (neige ? 2.2 : 26) * (0.45 + 0.55 * x) };
+}
 function buildMeteo() {
   if (meteo.seg) return;
   const N = meteo.N, pos = new Float32Array(N * 6);
@@ -7931,8 +8070,10 @@ function buildMeteo() {
   meteo.sol = nappe(0.09, 460, 480, 30, 60);
   meteo.solParc = nappe(0.315, 60, 52, 0, 74);
 }
-function meteoSet(kind, duree) {
+function meteoSet(kind, duree, force) {
   meteo.kind = kind; meteo.next = simTime + (duree || rnd(70, 150));
+  // une averse n'a pas toujours la meme force : le troisieme argument la choisit (1 par defaut)
+  meteo.cible = force == null ? 1 : clamp(force, 0, 1);
   if (kind !== 'clair') msg(kind === 'pluie' ? '🌧️ La pluie arrive…' : '❄️ Il commence à neiger !', 2200);
   else msg('☀️ Le ciel se dégage', 1800);
   chat(null, kind === 'pluie' ? '🌧️ Averse sur la ville' : kind === 'neige' ? '❄️ Chute de neige' : '☀️ Beau temps');
@@ -8007,15 +8148,20 @@ function meteoTick(dt) {
   if (!running) return;
   buildMeteo();
   if (simTime > meteo.next) meteoSet(pickOne(['clair', 'clair', 'clair', 'pluie', 'pluie', 'neige']));
-  const veut = meteo.kind === 'clair' ? 0 : 1;
+  const veut = meteo.kind === 'clair' ? 0 : clamp(meteo.cible == null ? 1 : meteo.cible, 0, 1);
   meteo.force += (veut - meteo.force) * Math.min(1, dt * 0.35);   // l'averse monte et retombe doucement
   meteo.abri = sousToit();   // sous un toit : on coupe les gouttes, sinon il pleuvait dans les maisons
   const f = meteo.force * (meteo.abri ? 0.05 : 1);
   const seg = meteo.seg, flocons = meteo.flocons, neige = meteo.kind === 'neige', actif = f > 0.02;
   seg.visible = actif && !neige; flocons.visible = actif && neige;
-  seg.material.opacity = f * 0.55; flocons.material.opacity = f;
+  // LA FORCE SE VOIT : nombre de gouttes, opacite ET vitesse de chute en decoulent.
+  const I = meteoIntensite(f);
+  meteo.densite = I.densite; meteo.opacite = I.opacite; meteo.vitesse = I.vitesse;
+  seg.material.opacity = neige ? 0 : I.opacite; flocons.material.opacity = neige ? I.opacite : 0;
+  // 2 sommets par goutte pour les segments de pluie, 1 par flocon pour les points
+  seg.geometry.setDrawRange(0, I.densite * 2); flocons.geometry.setDrawRange(0, I.densite);
   if (actif) {
-    const N = meteo.N, pos = meteo.pos, pts = meteo.pts, base = meteo.base, L = 0.62, V = neige ? 2.2 : 26;
+    const N = I.densite, pos = meteo.pos, pts = meteo.pts, base = meteo.base, L = 0.62, V = I.vitesse;
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     for (let i = 0; i < N; i++) {
       let y = base[i * 3 + 1] - V * meteo.vy[i] * dt;
@@ -8100,7 +8246,14 @@ function ridesTick(dt) {
   if (city.balloons) for (const b of city.balloons) b.position.y = b.userData.balloon.y0 + Math.sin(simTime * 1.2 + b.userData.balloon.ph) * 0.4;
   if (city.bankHands) { const h = day.h; city.bankHands[0].rotation.z = -(h % 12) / 12 * Math.PI * 2; city.bankHands[1].rotation.z = -((h * 60) % 60) / 60 * Math.PI * 2; }
   if (city.seaMesh) {   // vagues
-    const pos = city.seaMesh.geometry.attributes.position; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, Math.sin(x * 0.6 + simTime * 1.8) * 0.16 + Math.sin(z * 0.25 - simTime * 1.3) * 0.12); } pos.needsUpdate = true;
+    // L'ONDULATION etait si plate qu'elle ne se voyait pas. Le clapot est maintenant plus
+    // marque AU LARGE et s'aplatit en approchant du rivage, comme une houle qui meurt sur le
+    // sable (x local : 0 au centre du rectangle, -42,5 au bord de la plage).
+    const pos = city.seaMesh.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i);
+      const large = clamp((x + 42.5) / 22, 0, 1);   // 0 au rivage, 1 a 22 m du bord
+      pos.setY(i, large * (Math.sin(x * 0.55 + simTime * 1.7) * 0.17 + Math.sin(z * 0.31 - simTime * 1.15) * 0.13 + Math.sin((x + z) * 0.17 + simTime * 0.7) * 0.09)); }
+    pos.needsUpdate = true; city.seaMesh.geometry.computeVertexNormals();
     if (city.boat) { city.boat.rotation.z = Math.sin(simTime * 1.1) * 0.08; city.boat.rotation.x = Math.sin(simTime * 0.8) * 0.05; city.boat.position.y = 1.6 + Math.sin(simTime * 1.4) * 0.12; }
     if (city.foam) city.foam.scale.x = 1.2 + Math.sin(simTime * 1.8) * 0.5;
     for (const b of city.buoys) b.m.position.y = 1.8 + Math.sin(simTime * 1.6 + b.z) * 0.15;
@@ -8406,11 +8559,64 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   // le sable traversait la Villa Azur et la Villa Palmier se dressait au milieu de la mer
   const BZ1 = -75, BZ2 = 138, BZC = (BZ1 + BZ2) / 2, BZD = BZ2 - BZ1;
   plat(113, 0.08, BZC, 18, BZD, 0xf2dea0, { studs: false, noRoute: true }, 0.16);
-  plat(164, 0.02, BZC, 84, BZD, 0x1d6fa8, { studs: false, noRoute: true, noEdges: true }, 0.04);   // fond marin
-  const geo = new THREE.PlaneGeometry(85, BZD + 2, 34, 70); geo.rotateX(-Math.PI / 2);
-  const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f9be6, transparent: true, opacity: 0.72, side: THREE.DoubleSide })); sea.position.set(164, 1.55, BZC); worldGroup.add(sea);
+  // LE FOND MARIN était un bleu uni : sous une eau presque transparente au bord, il dessinait
+  // une BANDE SOMBRE collée au sable — le trait net qu'on venait justement d'effacer. Il part
+  // maintenant du sable mouillé et descend vers le bleu profond, comme un vrai fond de plage.
+  const fondTex = (() => {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 8; const g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 128, 0);
+    gr.addColorStop(0.00, '#ead9a8'); gr.addColorStop(0.05, '#d8cfa0');   // le sable continue sous l'eau
+    gr.addColorStop(0.14, '#8fbfae'); gr.addColorStop(0.34, '#2e88b6'); gr.addColorStop(1.00, '#12406e');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 8);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
+  })();
+  plat(164, 0.02, BZC, 84, BZD, 0x1d6fa8, { studs: false, noRoute: true, noEdges: true, material: new THREE.MeshLambertMaterial({ map: fondTex }) }, 0.04);   // fond marin
+  // LA MER ETAIT UNE DALLE CYAN UNIE A ARETE FRANCHE : une seule couleur du rivage au large,
+  // et un trait net la ou elle rencontrait le sable, comme une feuille de papier posee sur la
+  // plage. On lui donne une vraie SURFACE : une texture de profondeur (du turquoise des
+  // hauts-fonds au bleu sombre du large), des rides claires, et surtout une TRANSPARENCE QUI
+  // S'EFFACE AU BORD — les derniers metres se fondent dans le sable au lieu de s'arreter net.
+  // Le u de la texture va du rivage (x = 121,5 m) vers le large et ne se repete pas, sinon le
+  // degrade de profondeur reviendrait en boucle.
+  const seaTex = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 256, 0);
+    grad.addColorStop(0.000, 'rgba(214,240,232,0)');     // sur le sable : plus d'eau du tout
+    grad.addColorStop(0.022, 'rgba(178,235,232,0.42)');  // la frange mouillee
+    grad.addColorStop(0.060, 'rgba(112,214,224,0.70)');  // haut-fond turquoise
+    grad.addColorStop(0.180, 'rgba(58,175,226,0.84)');
+    grad.addColorStop(0.480, 'rgba(30,124,196,0.92)');
+    grad.addColorStop(1.000, 'rgba(12,62,126,0.96)');    // le large, profond
+    g.fillStyle = grad; g.fillRect(0, 0, 256, 64);
+    // les rides : de longues stries claires paralleles au rivage, de plus en plus espacees
+    g.globalCompositeOperation = 'lighter';
+    // les rides commencent AU LARGE (8 % de la largeur) : en « lighter » elles ajoutent de
+    // l'opacite, et une ride posee sur le tout premier pixel redonnait un bord net au rivage
+    for (let i = 0; i < 34; i++) {
+      const u = 20 + Math.pow(i / 33, 1.35) * 236;
+      g.fillStyle = 'rgba(255,255,255,' + (0.05 + 0.05 * Math.sin(i * 1.7)).toFixed(3) + ')';
+      g.fillRect(u, 0, 1.6 + i * 0.12, 64);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 5); t.anisotropy = 8;
+    return t;
+  })();
+  const geo = new THREE.PlaneGeometry(85, BZD + 2, 60, 96); geo.rotateX(-Math.PI / 2);
+  const sea = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff, map: seaTex, transparent: true, opacity: 1, depthWrite: false, side: THREE.DoubleSide })); sea.position.set(164, 1.55, BZC); sea.renderOrder = 1; worldGroup.add(sea);
   city.seaMesh = sea; city.sea = { x1: sea1, x2: sea2, z1: BZ1, z2: BZ2, top: 1.6 };
-  const foam = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); foam.scale.set(1.2, 0.05, BZD); foam.position.set(sea1 + 0.3, 1.62, BZC); worldGroup.add(foam); city.foam = foam;
+  // L'ECUME DU BORD : une barre blanche pleine de 1,2 m tracait un trait net de plus. C'est
+  // maintenant un ruban a bords fondus, deux fois plus large et plus discret.
+  const foamTex = (() => {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 8; const g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 64, 0);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.45, 'rgba(255,255,255,.62)');
+    gr.addColorStop(0.62, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 8);
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 40); return t;
+  })();
+  const foamGeo = new THREE.PlaneGeometry(2.6, BZD); foamGeo.rotateX(-Math.PI / 2);
+  const foam = new THREE.Mesh(foamGeo, new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
+  foam.position.set(sea1 + 0.6, 1.63, BZC); foam.renderOrder = 2; worldGroup.add(foam); city.foam = foam;
   // Promenade du littoral : 5 m, la largeur des DESSERTES du plan (elle faisait 4 m, une
   // largeur qui n'existait nulle part ailleurs). On l'élargit vers l'EST, côté plage :
   // son bord ouest reste à 101,5 m, là où il ne frotte pas les murs des entrepôts.
@@ -9023,6 +9229,7 @@ function sonCraie(n) {
   const joues = Math.min(n, 3);
   // LE GRAIN CHANGE A CHAQUE LETTRE : une craie ne crisse jamais deux fois pareil, et sans
   // ce glissement de bande le lit continu sonnait comme un souffle de radio.
+  try { ambiance.duck(); } catch (e) {}   // la rumeur du quartier recule pendant le crissement
   craieLit.bp.frequency.setTargetAtTime(2400 + Math.random() * 1600, c.currentTime, 0.012);
   craieLit.g.gain.setTargetAtTime(CRAIE_NIV, c.currentTime, 0.006);
   craieLit.jusqu = simTime + CRAIE_TENUE;
@@ -9568,7 +9775,7 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   const mat2 = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.2, 24), lam(0x2b3550)); mat2.position.set(TX, 1.5, TZ); worldGroup.add(mat2);
   const rim = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.18, 8, 24), lam(0x4f8dff)); rim.rotation.x = Math.PI / 2; rim.position.set(TX, 1.55, TZ); worldGroup.add(rim);
   for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.5, 8), lam(0x8f98ab)); leg.position.set(TX + Math.cos(a) * 2.7, 0.75, TZ + Math.sin(a) * 2.7); worldGroup.add(leg); const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.2, 8), lam(0x4f8dff)); pole.position.set(TX + Math.cos(a) * 3, 3.2, TZ + Math.sin(a) * 3); worldGroup.add(pole); }
-  const net = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.05, 3.2, 20, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(10, 3); return t; })(), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide })); net.position.set(TX, 3.2, TZ); worldGroup.add(net);
+  const net = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.05, 3.2, 20, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(10, 3); return t; })(), transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide })); net.position.set(TX, 3.2, TZ); worldGroup.add(net);
   // marches d'accès : la première faisait 0,625 m depuis la pelouse, au-dessus des 0,60 m
   // franchissables — on ne pouvait donc pas monter sur le trampoline
   for (let i = 0; i < 4; i++) { const top = 0.3 + (i + 1) * (1.65 - 0.3) / 4; box(TX, top - 0.125, TZ + 4.7 - i * 0.5, 1.7, 0.25, 0.6, 0xc9ced8, { studs: false, noRoute: true }); }
@@ -10250,7 +10457,7 @@ function buildBasket(bx, bz) {   // terrain de basket : panneau, arceau, filet, 
   box(bx + 1.4, 1.9, bz, 0.3, 3.8, 0.3, 0x3b4252, { studs: false, noRoute: true }); box(bx + 1, 3.1, bz, 0.5, 0.25, 0.25, 0x3b4252, { deco: true, studs: false });
   box(bx + 0.45, 3.5, bz, 0.14, 1.3, 2, 0xffffff, { studs: false, noRoute: true }); box(bx + 0.36, 3.35, bz, 0.05, 0.7, 1.1, 0xff5c5c, { deco: true, studs: false });
   const rim = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.055, 8, 20), lam(0xff5c5c)); rim.rotation.x = Math.PI / 2; rim.position.set(bx - 0.15, 3.05, bz); worldGroup.add(rim);
-  const netM = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.28, 0.55, 12, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(5, 2); return t; })(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }));
+  const netM = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.28, 0.55, 12, 1, true), new THREE.MeshLambertMaterial({ map: (() => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(5, 2); return t; })(), transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide }));
   netM.position.set(bx - 0.15, 2.78, bz); worldGroup.add(netM);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#e07a2b'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#3b2a1a'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 32); g.lineTo(64, 32); g.stroke(); g.beginPath(); g.moveTo(32, 0); g.lineTo(32, 64); g.stroke(); g.beginPath(); g.arc(0, 32, 22, -1.2, 1.2); g.stroke(); g.beginPath(); g.arc(64, 32, 22, Math.PI - 1.2, Math.PI + 1.2); g.stroke(); const t = new THREE.CanvasTexture(c); shared.add(t); return new THREE.MeshLambertMaterial({ map: t }); })());
   ball.castShadow = true; ball.position.set(bx - 6, 0.6, bz); worldGroup.add(ball);
@@ -10294,7 +10501,7 @@ function buildSchool(sx, sz) {   // l'ecole : un batiment vitre vert, quatre cla
   for (let i = 0; i < 10; i++) for (let j2 = 0; j2 < 6; j2++) if ((i + j2) % 2 === 0) box(sx - 20.7 + i * 4.6, 0.21, sz - 12.5 + j2 * 5, 4.4, 0.02, 4.8, 0xcfc6b4, { deco: true, noEdges: true, studs: false });   // dallage
   { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#e86a3a'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.strokeRect(8, 8, 112, 112); for (let k = 1; k < 5; k++) { g.beginPath(); g.moveTo(8, 8 + k * 22); g.lineTo(120, 8 + k * 22); g.stroke(); } g.font = 'bold 26px sans-serif'; g.fillStyle = '#fff'; g.textAlign = 'center'; for (let k = 0; k < 5; k++) g.fillText(String(k + 1), 64, 32 + k * 22); const t = new THREE.CanvasTexture(c); const m = new THREE.Mesh(new THREE.PlaneGeometry(4, 9), new THREE.MeshLambertMaterial({ map: t })); m.rotation.x = -Math.PI / 2; m.position.set(sx + 12, 0.23, sz + 8); worldGroup.add(m); }   // marelle
   // cloture : grillage sur muret, avec un grand portail ouvert a l'est
-  const railTex = (len, h) => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(len / 1.1, h / 1.1); return new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }); };
+  const railTex = (len, h) => { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(len / 1.1, h / 1.1); return new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide }); };
   const fenceSeg = (x, z, w, d) => { const len = Math.max(w, d), h = 2.6; box(x, 0.35, z, w, 0.7, d, 0xd8cdb4, { studs: false, noRoute: true }); box(x, 0.7 + h / 2, z, w, h, d, 0, { material: railTex(len, h), noEdges: true, noShadow: true, studs: false, noRoute: true }); };
   fenceSeg(sx, sz - 15.2, 46, 0.5); fenceSeg(sx, sz + 15.2, 46, 0.5); fenceSeg(sx - 23.2, sz, 0.5, 30);
   fenceSeg(sx + 23.2, sz - 9.5, 0.5, 11); fenceSeg(sx + 23.2, sz + 9.5, 0.5, 11);                               // ouverture de 8 m au milieu
@@ -11098,10 +11305,19 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   const target = nearestFighter(2.6);
   if (target) { P.facing = Math.atan2(target.x - P.pos.x, target.z - P.pos.z); }   // on se tourne vers la cible
   if (simTime - (P.lastHitT || 0) > 1.2) P.combo = 0;
-  P.combo = kind === 'kick' ? 0 : (P.combo || 0) + 1; P.lastHitT = simTime;
+  // L'ENCHAINEMENT NE BOUCLAIT PAS : le compteur montait 1, 2, 3, 4, 5… et comme le coup
+  // decisif est le TROISIEME, il ne tombait qu'UNE SEULE FOIS par bagarre, jamais plus. On le
+  // fait tourner : droite, gauche, decisif, droite, gauche, decisif…
+  P.combo = kind === 'kick' ? 0 : ((P.combo || 0) % 3) + 1; P.lastHitT = simTime;
   // `dmg` et `kb` ne sont plus constants : la garde de l'adversaire les fait baisser plus bas
   const finisher = P.combo === 3;
-  let dmg = kind === 'kick' ? 15 : finisher ? 16 : 8, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
+  // ÉQUILIBRE DES COUPS (round 67). Il fallait DIX-SEPT coups de poing pour mettre un habitant
+  // à terre, contre quatre balles de pistolet : le combat à mains nues — justement celui qu'on
+  // voulait rendre agréable avec les deux poings — était décourageant. Deux raisons : des dégâts
+  // trop faibles (8 / 8 / 16 par enchaînement) et surtout la garde de l'adversaire, levée les
+  // trois quarts du temps, qui divisait chaque coup par quatre. Un échange se règle maintenant
+  // en SIX coups (14 + 14 + 26 par enchaînement de trois), comme un vrai corps à corps.
+  let dmg = kind === 'kick' ? 22 : finisher ? 26 : 14, kb = kind === 'kick' ? 5 : finisher ? 4 : 1.6;
   P.punchT = simTime + (kind === 'kick' ? 1.0 : finisher ? 0.8 : 0.42);
   // LES DEUX POINGS. Le joueur ne frappait que du bras droit, encore et encore. Maintenant
   // l'enchaînement ALTERNE : droite, gauche, droite… chaque coup part du coude replié et se
@@ -11138,7 +11354,8 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   msg(kind === 'kick' ? '🦵 Coup de pied !' : finisher ? '👊 Combo x3 !' : '👊', 500);
   // EN FACE AUSSI ON SE GARDE : un habitant qui a levé les poings encaisse le quart du coup
   const pare = !!(target.bot && target.bot.garde) || !!(target.gm && target.gm.garde);
-  if (pare) { dmg = Math.max(1, Math.round(dmg * 0.25)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
+  // une garde AMORTIT, elle n'annule pas : au quart, l'adversaire devenait une enclume
+  if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
@@ -11321,13 +11538,16 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
     else {
       // EN FACE AUSSI ON SE GARDE : entre deux coups, l'habitant lève les deux poings devant
       // son visage. Un coup qui arrive à ce moment-là ne passe qu'au quart (voir `attack`).
-      b.garde = d < 2.8 && simTime < (b.hitCd || 0) - 0.3;
+      // La fenêtre de garde couvrait 0,8 s sur 1,1 : l'habitant était garde LEVEE les trois
+      // quarts du temps et presque tous les coups du joueur ne passaient qu'au quart. Elle
+      // couvre maintenant moins de la moitié du cycle : on peut le toucher pour de bon.
+      b.garde = d < 2.8 && simTime < (b.hitCd || 0) - 0.65;
       if (d > 1.6) { const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, dx / d * 4.5 * dt, dz / d * 4.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; animateRig(b.av.rig, 'walk', 4.5, dt, simTime); }
       else if (simTime > (b.hitCd || 0) && !drive.car && P.hp > 0) { b.hitCd = simTime + 1.1; b.garde = false;
         // il frappe des deux poings lui aussi, en alternant
         b.poing = b.poing === 'D' ? 'G' : 'D'; if (b.poing === 'D') b.av.rig.swing = 0.3; else b.av.rig.swingG = 0.3;
         coupDePoing(b.av, b.poing, 0.3);   // poste Animation : le meme mouvement complet que pour le joueur
-        hurt(7, b.name, dx / d, dz / d, 1.5, 'poing'); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
+        hurt(9, b.name, dx / d, dz / d, 1.5, 'poing'); if (Math.random() < 0.5) botSay(b, ['tiens !', 'prends ça !', 'tu l\'as cherché !']); }
       b.facing = Math.atan2(dx, dz);
     }
     b.av.rig.garde = !!b.garde;
@@ -11407,7 +11627,7 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   // prison : cellule grillagée accolée au commissariat
   const cx = sx, cz = sz - 11, cw = 8, cd = 8, ch = 5;
   box(cx, ch / 2, cz - cd / 2, cw, ch, 0.4, 0x8f98ab, { studs: false, noRoute: true }); box(cx + cw / 2, ch / 2, cz, 0.4, ch, cd, 0x8f98ab, { studs: false, noRoute: true }); box(cx - cw / 2, ch / 2, cz, 0.4, ch, cd, 0x8f98ab, { studs: false, noRoute: true });
-  { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(cw / 0.7, ch / 0.7); box(cx, ch / 2, cz + cd / 2, cw, ch, 0.14, 0, { material: new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }), noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); }
+  { const t = FENCE.clone(); t.needsUpdate = true; t.repeat.set(cw / 0.7, ch / 0.7); box(cx, ch / 2, cz + cd / 2, cw, ch, 0.14, 0, { material: new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: GRILLAGE_SEUIL, side: THREE.DoubleSide }), noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); }
   box(cx, ch + 0.2, cz, cw + 0.4, 0.4, cd + 0.4, 0x3b4252, { deco: true, studs: false }); box(cx, 0.02, cz, cw - 0.6, 0.04, cd - 0.6, 0x4a4f5c, { deco: true, noEdges: true, studs: false });
   box(cx - 2.5, 0.5, cz - 2.5, 2.4, 0.5, 1.2, 0x8b4a2b, { studs: false, noRoute: true }); box(cx - 2.5, 0.9, cz - 3, 2.4, 0.3, 0.3, 0x8b4a2b, { deco: true, studs: false });   // banc/lit
   box(cx + 2.5, 0.45, cz - 2.8, 0.8, 0.9, 0.8, 0xf4f6fa, { deco: true, studs: false });   // toilettes
@@ -11977,6 +12197,9 @@ function buildAvatar(cfg) {
   for (const sx of [-0.62, 0.62]) part(0.42 * S, 2.1 * S, 1.1 * S, shirt, sx * S, 0, 0, bretelles);
   part(1.9 * S, 0.5 * S, 1.06 * S, shirt, 0, -0.72 * S, 0, bretelles);
   const tag = nameTag(cfg.name); g.add(tag);
+  // marque de reconnaissance : clearWorld balaie les avatars restés dans `scene` au
+  // changement de monde grâce à elle (voir balaieAvatars), sans liste à tenir à la main
+  g.userData.avatar = true;
   scene.add(g);
   const av = { group: g, rig, mats: { shirt, sleeve, pants, cap, front, back, hair: hairMat, jacket: jacketM, bag: bagM, skin, shoe, sole: soleM, bande: bandeM, bracelet: braceletM, montre: montreM, bijou: bijouMat, bijou2: bijou2Mat }, capParts, setHair, setBijou, bijoux, skirt, jacket, bag, glasses, hatGroups, torso, tete: teteMesh, tag, bracelet, montre, cadran, bretelles, tatouages: [], name: cfg.name, num: cfg.num || 1, bubble: null, bubbleT: 0, m: 0, f: 0 , muscles: { pecs, trap, delts }, visage, degats: 0, hpPrec: 100 };
   // POINTS D'ATTACHE pour tout ce qui s'ajoute par-dessus (tenues de métier du poste J,
@@ -12191,6 +12414,7 @@ function jambesEnCabine(av, cacher, seuil) {
 const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
 function tickBubbles() {
   const cp = camera.position;
+  const parlants = [];   // ceux dont la bulle est visible : on les empile plus bas
   for (const av of allAvatars()) {
     if (!av.bubble) continue;
     if (simTime > av.bubbleT) { av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null; continue; }
@@ -12199,9 +12423,25 @@ function tickBubbles() {
     av.bubble.visible = true;
     const h = clamp(BULLE_K * d, 0.5, 1.6);
     av.bubble.scale.set(h * 3.2, h, 1);
+    parlants.push({ av, h });
+  }
+  // QUAND PLUSIEURS PARLENT AU MEME ENDROIT, LES BULLES SE SUPERPOSAIENT : quatre habitants
+  // cote a cote et on n'en lisait qu'une, les trois autres cachees derriere. On les EMPILE
+  // maintenant : chaque bulle qui a deja un voisin a moins de 3,2 m monte d'un cran au-dessus
+  // de la plus haute du groupe. L'ordre est celui, stable, de allAvatars() : la meme scene
+  // donne toujours le meme empilement, sans clignotement d'une image a l'autre.
+  for (let i = 0; i < parlants.length; i++) {
+    const a = parlants[i]; let y = 3.35;
+    for (let j = 0; j < i; j++) {
+      const b = parlants[j];
+      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 3.2) continue;
+      y = Math.max(y, b.av.bubble.position.y + b.h * 1.25);
+    }
+    a.av.bubble.position.y = y;
   }
   // Les étiquettes de noms sont des sprites eux aussi mesurés en mètres : de près, un nom
   // barrait tout l'écran. Même règle, et elles s'effacent au-delà de 60 m.
+  const nommes = [];
   for (const av of allAvatars()) {
     const tg = av.tag; if (!tg) continue;
     const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 2.5 - cp.y, av.group.position.z - cp.z);
@@ -12210,6 +12450,19 @@ function tickBubbles() {
     tg.visible = true;
     const h = clamp(0.055 * d, 0.3, 0.85);
     tg.scale.set(h * 4, h, 1);
+    if (tg.userData.y0 == null) tg.userData.y0 = tg.position.y;
+    nommes.push({ av, tg, h });
+  }
+  // meme empilement pour les ETIQUETTES DE NOM : cinq personnages groupes et les cinq noms
+  // se chevauchaient en une bouillie illisible (vu en capture)
+  for (let i = 0; i < nommes.length; i++) {
+    const a = nommes[i]; let y = a.tg.userData.y0;
+    for (let j = 0; j < i; j++) {
+      const b = nommes[j];
+      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 2.2) continue;
+      y = Math.max(y, b.tg.position.y + b.h * 1.15);
+    }
+    a.tg.position.y = y;
   }
 }
 const allAvatars = () => [me, ...bots.map(b => b.av), ...[...net.remotes.values()].map(r => r.av)];
@@ -13086,6 +13339,9 @@ function sonEn(x, y, z, faire, opt) {
     p.pan.value = clamp((dx * rx + dz * rz) / Math.max(0.8, d), -1, 1) * 0.85;
     g.connect(p); if (sortie) p.connect(sortie);
   } else if (sortie) g.connect(sortie);
+  // la rumeur du quartier recule le temps du son (sauf pour les sons d'ambiance eux-memes :
+  // une mouette n'a pas a faire taire la ville)
+  if ((opt.bus || 'effets') !== 'ambiance' && att > 0.05) { try { ambiance.duck(); } catch (e) {} }
   const v = { fin: now + (opt.duree || 0.5), d, g };
   SON.vivants.push(v); SON.joues++; SON.dernier = { x, y, z, d: +d.toFixed(2), att: +att.toFixed(4) };
   if (SON.vivants.length > SON.pic) SON.pic = SON.vivants.length;
@@ -13263,8 +13519,9 @@ function hornEn(kind, x, z) {
   return !!sonEn(x, 1.1, z, d => paires.forEach(([f, dur, v], i) => sT(d, f, i * .02, dur, kind === 'bike' ? 'sine' : 'triangle', v)), { duree: 0.7, portee: 45, coupure: 80 });
 }
 // ---- L'AMBIANCE : la rumeur du quartier, un lit de bruit filtre qui ne s'arrete jamais ----
+const DUCK_TENUE = 0.32;   // duree pendant laquelle la rumeur reste en retrait apres un son de jeu
 const ambiance = (() => {
-  let src = null, filt = null, hp = null, g = null, cle = null, volCible = 0, coupeCible = 0;
+  let src = null, filt = null, hp = null, g = null, duckG = null, cle = null, volCible = 0, coupeCible = 0, duckT = 0, duckN = 0, duckNiveau = 0, duckDernier = -9;
   const monte = () => {
     const c = sfx.unlock(); if (!c) return null;
     if (src) return c;
@@ -13274,8 +13531,17 @@ const ambiance = (() => {
     hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 110;
     filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700; filt.Q.value = 0.4;
     g = c.createGain(); g.gain.value = 0.0001;
+    // LE RECUL A SON PROPRE ROBINET, en serie derriere le niveau du quartier. Il vaut 1 au
+    // repos et descend a 0,34 le temps d'un son de jeu. C'est VOLONTAIREMENT un deuxieme
+    // noeud : piloter `g` directement revenait a empiler des courbes sur le gain d'une source
+    // de BRUIT BLANC a pleine echelle qui tourne en boucle — au moindre sursaut d'automation,
+    // une bouffee de souffle a 0,23 au bout de la chaine, aussi fort qu'un son a 1,5 m (elle
+    // faisait echouer la mesure de spatialisation et noyait la rumeur qu'on voulait discrete).
+    // Avec un robinet separe, le pire cas possible est « pas de recul du tout » : jamais plus
+    // fort que la rumeur normale.
+    duckG = c.createGain(); duckG.gain.value = 1;
     const out = sfx.sortie('ambiance');
-    src.connect(hp).connect(filt).connect(g); if (out) g.connect(out);
+    src.connect(hp).connect(filt).connect(g).connect(duckG); if (out) duckG.connect(out);
     try { src.start(); } catch (e) {}
     return c;
   };
@@ -13289,21 +13555,50 @@ const ambiance = (() => {
       filt.frequency.setTargetAtTime(coupeCible, c.currentTime, 0.9);
     },
     stop() { const c = sfx.ctx(); if (g && c) { volCible = 0.0001; g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4); } },
+    // LA RUMEUR S'EFFACE DES QU'UN SON DE JEU ARRIVE. Un pas, un coup, un « aie », une
+    // portiere, la craie du tableau : le lit de fond recule d'un cran pendant un tiers de
+    // seconde puis revient tout seul. C'est le geste d'un vrai mixage — on garde la presence
+    // du quartier sans qu'elle mange les sons courts, ceux que l'enfant a demande a entendre.
+    duck(force) {
+      const c = sfx.ctx(); if (!g || !duckG || !c) return 0;
+      const bas = Math.max(0.0001, volCible * (force == null ? 0.34 : force));
+      // On compte les reculs et on retient le niveau vise : sur le banc d'essai l'horloge
+      // audio tourne dix fois plus vite que le temps reel, le creux est deja remonte quand on
+      // regarde la valeur du gain. Ces deux chiffres, eux, se mesurent a coup sur.
+      duckN++; duckNiveau = bas;
+      // On ne reprogramme pas plus de douze fois par seconde : les pas d'une course
+      // enfilaient sinon des dizaines de courbes sur le meme parametre.
+      if (c.currentTime < duckDernier + 0.08) { duckT = Math.max(duckT, c.currentTime + DUCK_TENUE); return bas; }
+      duckDernier = c.currentTime;
+      duckT = c.currentTime + DUCK_TENUE;
+      const k = bas / Math.max(1e-9, volCible);
+      duckG.gain.setTargetAtTime(k, c.currentTime, 0.03);      // elle se baisse vite…
+      duckG.gain.setTargetAtTime(1, duckT, 0.35);              // …et remonte doucement
+      return bas;
+    },
+    duckActif: () => { const c = sfx.ctx(); return !!(c && c.currentTime < duckT); },
+    duckInfo: () => ({ n: duckN, niveau: +duckNiveau.toFixed(5), cible: +volCible.toFixed(5), robinet: duckG ? +duckG.gain.value.toFixed(3) : 1 }),
     etat: () => ({ cle, gain: g ? +g.gain.value.toFixed(4) : 0, coupe: filt ? Math.round(filt.frequency.value) : 0,
-      volCible: +volCible.toFixed(4), coupeCible: Math.round(coupeCible) }),
+      volCible: +volCible.toFixed(4), coupeCible: Math.round(coupeCible), duck: +duckT.toFixed(2) }),
   };
 })();
 // Chaque quartier a sa rumeur : le centre bourdonne, la plage respire, La Zone est sourde.
+// LA RUMEUR COUVRAIT TOUT LE RESTE. Mesure au bout de la chaine audio : le lit de fond seul
+// atteignait une crete de 0,065 alors qu'il ne devrait etre qu'une PRESENCE. Le poste Ecole a
+// trouve le meme defaut par l'autre bout : son crissement de craie etait completement masque.
+// Les pas, les coups, les « aie » et les portieres passaient dessous eux aussi. On divise donc
+// tous les niveaux par trois : on l'entend encore quand rien ne se passe, elle ne masque plus
+// rien. (Et `ambiance.duck()`, ci-dessous, la fait reculer des qu'un son de jeu arrive.)
 const QUARTIERS = {
-  centre:      { n: 'centre animé',         vol: .030, coupe: 1300, foule: 1.0 },
-  commerces:   { n: 'rue commerçante',      vol: .028, coupe: 1400, foule: 1.0 },
-  banque:      { n: 'quartier d\'affaires', vol: .020, coupe: 1000, foule: 0.6 },
-  parc:        { n: 'parc',                 vol: .014, coupe: 900,  foule: 0.3, oiseaux: 1 },
-  plage:       { n: 'plage',                vol: .034, coupe: 620,  foule: 0.4, vagues: 1, mouettes: 1 },
-  zone:        { n: 'La Zone',              vol: .020, coupe: 380,  foule: 0.5 },
-  residentiel: { n: 'quartier résidentiel', vol: .012, coupe: 800,  foule: 0.3, oiseaux: 0.6 },
-  industriel:  { n: 'zone industrielle',    vol: .024, coupe: 520,  foule: 0.3 },
-  campagne:    { n: 'les environs',         vol: .010, coupe: 700,  foule: 0.15, oiseaux: 0.5 },
+  centre:      { n: 'centre animé',         vol: .010, coupe: 1300, foule: 1.0 },
+  commerces:   { n: 'rue commerçante',      vol: .0095, coupe: 1400, foule: 1.0 },
+  banque:      { n: 'quartier d\'affaires', vol: .0068, coupe: 1000, foule: 0.6 },
+  parc:        { n: 'parc',                 vol: .0048, coupe: 900,  foule: 0.3, oiseaux: 1 },
+  plage:       { n: 'plage',                vol: .011, coupe: 620,  foule: 0.4, vagues: 1, mouettes: 1 },
+  zone:        { n: 'La Zone',              vol: .0068, coupe: 380,  foule: 0.5 },
+  residentiel: { n: 'quartier résidentiel', vol: .004, coupe: 800,  foule: 0.3, oiseaux: 0.6 },
+  industriel:  { n: 'zone industrielle',    vol: .008, coupe: 520,  foule: 0.3 },
+  campagne:    { n: 'les environs',         vol: .0034, coupe: 700,  foule: 0.15, oiseaux: 0.5 },
 };
 function quartierSon() {
   let k = 'campagne', best = Infinity;
@@ -13501,7 +13796,7 @@ function sonsVille(dt) {
     const nuit = (typeof day !== 'undefined' && day && day.h != null) ? (day.h < 7 || day.h > 20 ? 0.45 : 1) : 1;
     const pluie = (typeof meteo !== 'undefined' && meteo && meteo.kind !== 'clair') ? clamp(meteo.force || 0, 0, 1) : 0;
     const haut = clamp((P.pos.y - 18) / 40, 0, 1);   // en hauteur la rumeur s'eloigne, le vent prend le dessus
-    ambiance.set(q0.k, q0.vol * nuit * (1 - haut * 0.7) + pluie * 0.03, q0.coupe * (1 - haut * 0.4) + pluie * 900);
+    ambiance.set(q0.k, q0.vol * nuit * (1 - haut * 0.7) + pluie * 0.012, q0.coupe * (1 - haut * 0.4) + pluie * 900);
   }
   const q = quartierSon();
   // --- les evenements ponctuels du quartier ---
@@ -18985,19 +19280,57 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
 function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const R = 0.3, out = dirs.map(() => maxD);
-  for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || o.glass || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est
+  const essaie = (o) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
-    if (o.y + hy < oy - 1.4) continue;   // sol et petits meubles : la caméra passe au-dessus
+    if (o.y + hy < oy - 1.4) return;   // sol et petits meubles : la caméra passe au-dessus
     // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
     // tomberaient à zéro dès qu'on frôle un mur
-    if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) continue;
+    if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;
     for (let i = 0; i < dirs.length; i++) {
       const t = rayBox(ox, oy, oz, dirs[i][0], dirs[i][1], dirs[i][2], o.x, o.y, o.z, hx, hy, hz, out[i]);
       if (t >= 0 && t < out[i]) out[i] = t;
     }
+  };
+  for (const o of solidsAutour(ox, oz, maxD + 1)) {
+    if (o === skip || o.glass || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est
+    essaie(o);
+  }
+  // LES TOITS DÉCORATIFS (auvent, halle, préau, couverture du dépôt) : invisibles pour la
+  // collision du joueur, mais ils BOUCHENT LA VUE. Sans eux, la caméra montait par-dessus et
+  // l'image était un pan de toiture. `interieur` les efface déjà dans une pièce déclarée : on
+  // saute donc ceux qui sont masqués, pour ne pas gêner la maison de poupée.
+  const lim = maxD + 1;
+  for (const o of camToits) {
+    if (o === skip || o.xray || Math.abs(ox - o.x) > o.w / 2 + lim || Math.abs(oz - o.z) > o.d / 2 + lim) continue;
+    if (o.mesh && !o.mesh.visible) continue;
+    essaie(o);
   }
   return out;
+}
+// UN MUR ENTRE LA CAMÉRA ET LE JOUEUR ? Renvoie la distance du premier obstacle qui coupe la
+// ligne de vue (−1 si la vue est dégagée). On regarde les solides ET les toits décoratifs, on
+// ignore les vitres, les murs rendus traversables par la maison de poupée (`xray`), les
+// véhicules et la boîte qui contient déjà le joueur (sinon frôler une cloison collerait la
+// caméra à la nuque en permanence).
+function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
+  if (!(maxD > 0.2)) return -1;
+  let best = -1;
+  const essaie = (o) => {
+    const hx = Math.max(o.w, 0.36) / 2, hy = o.h / 2, hz = Math.max(o.d, 0.36) / 2;
+    if (Math.abs(ox - o.x) < hx + 0.12 && Math.abs(oy - o.y) < hy + 0.12 && Math.abs(oz - o.z) < hz + 0.12) return;
+    const t = rayBox(ox, oy, oz, dx, dy, dz, o.x, o.y, o.z, hx, hy, hz, best < 0 ? maxD : best);
+    if (t >= 0 && (best < 0 || t < best)) best = t;
+  };
+  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3)) {
+    if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+    essaie(o);
+  }
+  for (const o of camToits) {
+    if (o.xray || Math.abs(ox - o.x) > o.w / 2 + maxD || Math.abs(oz - o.z) > o.d / 2 + maxD) continue;
+    if (o.mesh && !o.mesh.visible) continue;
+    essaie(o);
+  }
+  return best;
 }
 // Boîte d'un personnage debout (joueur, bot, garde, joueur distant).
 function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
@@ -20627,6 +20960,17 @@ function frame() {
       }
       if (!coince) break;
       d = Math.max(0.4, d - 0.3); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
+      camera.position.copy(cam.target).addScaledVector(dir, d);
+    }
+    // DERNIER FILET : Y A-T-IL UN MUR ENTRE LA CAMÉRA ET LE JOUEUR ? Le cône de camLibres
+    // s'arrête avant l'obstacle, mais il laisse passer deux cas et l'image se retrouvait
+    // bouchée : la boîte qui contient déjà la cible (on la frôle) et les pièces ajoutées après
+    // la mesure. Au lieu d'une liste d'« intérieurs » écrite à la main, on interroge la LIGNE
+    // DE VUE elle-même et on raccourcit la perche jusqu'à ce que le joueur soit dégagé.
+    if (running) for (let k = 0; k < 6 && d > 0.6; k++) {
+      const t = murEntreVue(cam.target.x, cam.target.y, cam.target.z, dir.x, dir.y, dir.z, d - 0.1);
+      if (t < 0) break;
+      d = Math.max(0.6, t - 0.25); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
       camera.position.copy(cam.target).addScaledVector(dir, d);
     }
     // La secousse : un coup qui porte se sent à l'image. Elle retombe toute seule.

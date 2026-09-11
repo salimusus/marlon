@@ -2330,10 +2330,14 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   city.garage = { x, z };
   // LA DÉPANNEUSE du garage : bleu et blanc, gyrophare rond bleu, treuil et crochet. Elle
   // est dans city.cars, donc le joueur peut la prendre (E) comme n'importe quel véhicule.
-  // Elle était garée en z + 6, cap 0 : six mètres et demi de camion à cheval sur le MUR SUD
-  // du garage (il passe en z + 8,85) — l'arrière de la dépanneuse sortait de 55 cm à travers
-  // la façade. On la recule d'un rang : elle tient maintenant tout entière sous le toit.
-  { const dep = makeDepanneuse(x - 13, z + 3.4, 0); city.depanneuses.push(dep); city.cars.push(dep); }
+  // LA PLACE DE LA DÉPANNEUSE (poste Circulation, une ligne). Elle dormait sous l'auvent, en
+  // (x − 13, z + 6) : son pare-chocs avant mordait le poteau de l'auvent — elle DORMAIT dans
+  // un solide — et la travée où elle était garée fait 2,85 m entre le poteau et le comptoir
+  // de l'atelier, soit moins que son gabarit. Depuis qu'elle ne traverse plus les obstacles,
+  // elle ne pouvait tout simplement plus sortir (mesure : 200 s de simulation, 0 m parcouru,
+  // l'accident jamais dépanné). Elle est maintenant rangée sur le PARVIS du garage, nez vers
+  // la rue : elle en sort en 1 s et rejoint un accident à 120 m en 32 s, dont 97 % sur le bitume.
+  { const dep = makeDepanneuse(x, z + 15, Math.PI / 2); city.depanneuses.push(dep); city.cars.push(dep); }
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
@@ -7713,6 +7717,45 @@ function surLaChaussee(x, z, m = 0.6) {
   for (const r of (city.routes || [])) if (Math.abs(x - r.x) < r.w / 2 + m && Math.abs(z - r.z) < r.d / 2 + m) return true;
   return false;
 }
+// ================= LA PRIORITE DE CIRCULATION =================
+// « donne leur la priorite de circulation » (depanneuse, pompier, employe travaux, police,
+// facteur). La priorite N'EST PAS une etiquette collee au vehicule : `c.urgence` est le
+// drapeau d'IDENTITE pose a la fabrication (l'ambulance et la depanneuse le portent a vie, et
+// le poste Sons s'en sert pour reconnaitre un vehicule de secours). Tant que le code de la
+// route lisait CE drapeau, toute la circulation ralentissait devant une depanneuse GAREE
+// depuis dix minutes sur le parking du garage.
+// `c.prio` porte donc un BAIL COURT : l'horodatage de fin de priorite. Celui qui pilote un
+// vehicule de service EN INTERVENTION le repousse a chaque image (prioriteService), et il
+// s'eteint tout seul deux secondes apres la fin de la mission.
+const PRIO_BAIL = 2;
+function prioriteService(c) { if (c) c.prio = simTime + PRIO_BAIL; return c; }
+function enIntervention(v) { return !!v && (v.prio || 0) > simTime; }
+// L'ECART VERS LE COTE, SANS RIEN TOUCHER — « ils s'ecartent PROPREMENT, sans commettre de
+// degat ». Avant, celui qui entendait la sirene se contentait de lever le pied : il restait
+// plante au milieu de la voie et le camion de pompiers finissait par lui rentrer dedans.
+// Ici on DEPORTE le vehicule d'un pas de 1,4 m/s vers le cote, et on ne pose le pas que si
+// le point d'arrivee est LIBRE (murs, mobilier, trottoir, autres vehicules : les memes
+// garde-fous que la conduite normale) ET encore sur le bitume. Si la place manque, on ne
+// bouge pas d'un centimetre : mieux vaut gener une seconde de plus que froisser une tole.
+//   `sens` : +1 on se range a DROITE (on cede le passage), -1 on deborde a GAUCHE (on est
+//   le prioritaire et on double celui qui s'est range).
+// Rend le deport total deja consenti, en metres.
+const ECART_SIRENE = 1.7;         // de quoi degager une file sur une chaussee de 7 m
+function ecarteChaussee(c, dt, sens, but) {
+  const reste = (but || ECART_SIRENE) - (c.ecart || 0);
+  if (reste <= 0.01) return c.ecart || 0;
+  const rx = -Math.cos(c.h) * sens, rz = Math.sin(c.h) * sens;   // « ma droite » = (-cos h, sin h)
+  const pas = Math.min(reste, 1.4 * dt);
+  const nx = c.x + rx * pas, nz = c.z + rz * pas;
+  if (!surLaChaussee(nx, nz, 0.15)) return c.ecart || 0;              // pas une roue sur le trottoir
+  if (vehBloque(c, nx, nz, c.h, { bar: true, veh: true })) return c.ecart || 0;
+  c.x = nx; c.z = nz; c.ecart = (c.ecart || 0) + pas;
+  c.libre = [c.x, c.z, c.h];                                          // le filet de securite d'avanceVehicule
+  c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
+  c.g.position.set(c.x, c.y, c.z);
+  vehicleSolid(c);
+  return c.ecart;
+}
 function codeRoute(c, dt, opt) {
   opt = opt || {};
   const h = c.h, fx = Math.sin(h), fz = Math.cos(h), spd = Math.abs(c.speed || 0);
@@ -7779,19 +7822,25 @@ function codeRoute(c, dt, opt) {
   } else c.passT = 0;
   // ---- 3 ter) quelqu'un A PIED juste devant le capot : on freine et on klaxonne (meme regle,
   // meme garde-fou : au bout de 6 s on avance au pas plutot que de rester plante la)
+  // (un vehicule EN INTERVENTION ne patiente que 2,5 s : il klaxonne, le pieton s'ecarte, et
+  //  il repart au pas. Six secondes d'arret par pieton croise, c'etait la moitie du trajet
+  //  d'une voiture de police qui va constater un accident.)
   if (pietonDevant(c)) {
     c.pietT = (c.pietT || 0) + (dt || 0); klaxonne(c);
-    cap(c.pietT < 6 ? 0 : 1.5, 'pieton');
+    cap(c.pietT < (opt.urgence ? 2.5 : 6) ? 0 : 1.5, 'pieton');
   } else c.pietT = 0;
-  // ---- 3 bis) ON SE RANGE POUR LA SIRENE. Un vehicule prioritaire (police en poursuite,
-  // pompiers, ambulance) porte `urgence` : celui qui l'entend arriver derriere lui leve le pied
-  // et le laisse passer au lieu de lui boucher la rue.
+  // ---- 3 bis) ON SE RANGE POUR LA SIRENE. Un vehicule de service EN INTERVENTION (bail
+  // `c.prio`, voir prioriteService) est prioritaire : celui qui l'entend arriver derriere lui
+  // leve le pied ET SE RANGE (c'est traficRoule qui pose le pas de cote, avec ecarteChaussee).
+  // On retient QUEL vehicule nous double : sans lui, le rangement ne savait pas de quel cote
+  // se pousser ni quand s'arreter.
+  c.sireneVeh = null;
   if (!opt.urgence) for (const v of FLOTTE) {
-    if (v === c || !v.urgence) continue;
+    if (v === c || !enIntervention(v)) continue;
     const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
     if (d > 30 || Math.abs(CAP((v.h || 0) - h)) > 0.9) continue;
     if (dx * fx + dz * fz > 1) continue;   // il est devant nous : rien a faire
-    cap(2.5, 'sirene');
+    c.sireneVeh = v; cap(2.5, 'sirene');
   }
   // ---- 4) priorite a droite aux carrefours sans feu ni panneau ; et toujours au vehicule
   // deja engage. Sur une voie PRIORITAIRE (boulevard, avenue, losange jaune) on ne s'arrete pas.
@@ -7827,7 +7876,10 @@ function botConduit(c, x, z, dt, opt) {
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
   c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
-  c.urgence = !!opt.urgence;
+  // `c.urgence` est le drapeau d'IDENTITE du vehicule (ambulance, depanneuse) : l'ecraser ici
+  // rendait muette une ambulance qu'un autre poste faisait rouler sans urgence. La priorite
+  // de circulation passe par le bail `c.prio`.
+  if (opt.urgence) prioriteService(c);
   traficRoule(c, dt, { pilote: true, urgence: !!opt.urgence });
   return dist;
 }
@@ -7878,11 +7930,20 @@ function traficPlace() {
 // enseigne sans qu'aucun disque ne le voie. Ici on teste les quatre coins, les deux flancs et
 // le centre, sans approximation — c'est ce qui garantit qu'aucune image ne montre un vehicule
 // bot dans un solide. (Les autres vehicules sont exclus : ils sont geres par `separerVehicules`.)
+// `c.exactVeh` : LES VEHICULES DE SERVICE COMPTENT AUSSI LES AUTRES VEHICULES au rectangle
+// exact. Pour la circulation de fond, les tôles sont laissées a `separerVehicules` (trois
+// disques suffisent, et un test exact ferait patiner les files). Mais le joueur a demande que
+// la depanneuse, le camion de pompiers, le fourgon des travaux, la police et le velo du
+// facteur ne traversent « ni les vehicule » : eux testent les quatre coins. Sans ça, une
+// manoeuvre dans la cour du depot faisait passer le coin du fourgon DANS la benne d'a cote
+// (mesure : 57 images de chevauchement par aller-retour).
 function vehiculeMord(c, x, z, h) {
   const cs = Math.cos(h), sn = Math.sin(h);
   const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
   for (const o of solidsAutour(x, z, A + B + 2, true)) {
-    if (o === c.solid || o.veh || o.h > 30) continue;
+    if (o === c.solid || o.h > 30) continue;
+    if (o.veh && !c.exactVeh) continue;
+    if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
     for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0], [B, 0], [-B, 0]]) {
       const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
@@ -7928,12 +7989,17 @@ function avanceVehicule(c, dt, spd, opt, h0) {
 function gapDevant(c) {
   flotteMaj();
   const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  // LE PRIORITAIRE NE FAIT PAS LA QUEUE. Celui qui lui cede le passage se deporte de 1,7 m :
+  // avec un couloir de 2,2 m, le vehicule range restait « devant » et le camion de pompiers
+  // s'arretait derriere lui — la priorite ne servait a rien. En intervention on ne regarde
+  // donc que ce qui est VRAIMENT dans l'axe (1,2 m), et le reste on le double.
+  const lat = enIntervention(c) ? 1.2 : 2.2;
   let gap = 99, longDevant = 4.4;
   for (const v of FLOTTE) {
     if (v === c || v.heli) continue;
     const dx = v.x - c.x, dz = v.z - c.z, al = dx * fx + dz * fz;
     if (al < 0.5 || al > 14) continue;
-    if (Math.abs(-dx * fz + dz * fx) > 2.2) continue;
+    if (Math.abs(-dx * fz + dz * fx) > lat) continue;
     if (al < gap) { gap = al; longDevant = v.baseD || 4.4; }
   }
   return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
@@ -7993,6 +8059,14 @@ function traficRoule(c, dt, opt) {
   if (c.speed < 0.05) c.speed = 0;
   c.stopped = c.speed < 0.4;
   const bloque = avanceVehicule(c, dt, c.speed, {}, h0);
+  // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un
+  // pas de cote (ecarteChaussee ne pose le pas que s'il est libre : zero degat) ; le
+  // prioritaire, lui, deborde a GAUCHE pour doubler celui qui vient de se ranger. Des que la
+  // sirene est passee, le compteur repart a zero et le suivi d'itineraire ramene tout seul le
+  // vehicule dans sa voie.
+  if (c.sireneVeh) ecarteChaussee(c, dt, 1, ECART_SIRENE);
+  else if (opt.urgence && (gap < mini + 5)) ecarteChaussee(c, dt, -1, ECART_SIRENE);
+  else c.ecart = 0;
   if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
   else c.bloqueT = 0;
   // SOUPAPE. Une voiture arretee au feu, au stop ou devant un pieton fait son travail ; une
@@ -11276,7 +11350,11 @@ function policeTick(dt) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
     if (pc.debarque) { pc.speed = 0; continue; }   // les agents sont descendus : la voiture attend devant le bâtiment
-    if (pc.constat) { pc.speed = 0; continue; }    // envoyée sur un accident : c'est accidentsTick qui la pilote
+    // envoyée sur un accident : c'est accidentsTick qui la pilote (par les voies, sirène
+    // allumée). ON NE REMET PLUS SA VITESSE À ZÉRO ICI : policeTick passe AVANT servicesTick,
+    // et remettre le compteur à zéro à chaque image empêchait la voiture de prendre de la
+    // vitesse — elle rampait à 0,4 m/s jusqu'au lieu de l'accident.
+    if (pc.constat) continue;
     if (pc.active && police.wanted > 0 && police.sait) { tx = police.sait[0]; tz = police.sait[1]; }
     else if (pc.active && police.wanted > 0 && police.lastSeen) {
       tx = police.lastSeen[0]; tz = police.lastSeen[1];
@@ -11370,7 +11448,8 @@ function policeTick(dt) {
       // elle ne fauche personne : elle s'arrete quand un pieton est engage devant elle. En
       // patrouille, elle obeit a toute la signalisation comme n'importe quel conducteur.
       const urgence = pc.active && (police.wanted > 0 || police.alarmT > simTime);
-      pc.urgence = urgence;   // les autres conducteurs se rangent quand la sirene arrive
+      pc.urgence = urgence;
+      if (urgence) prioriteService(pc);   // les autres conducteurs se rangent quand la sirene arrive
       const loi = codeRoute(pc, dt, { urgence });
       target = Math.min(target, loi.v); pc.raison = loi.raison;
       pc.speed += (target - pc.speed) * Math.min(1, dt * (target < pc.speed ? 4 : 1.5));
@@ -11416,6 +11495,11 @@ function policeTick(dt) {
       const ar = groundCar(pc.x - Math.sin(pc.h) * 2, pc.z - Math.cos(pc.h) * 2, pc.solid, pc.y + 1);
       pc.g.rotation.x = clamp(Math.atan2(ar - av, 4), -0.5, 0.5); }
     pc.wheels.forEach(w => w.rotation.x -= pc.speed * dt / 0.3); vehicleSolid(pc);
+    // ELLE AUSSI SE RANGE. Une voiture de ronde qui entend arriver une sirène derrière elle
+    // levait le pied (codeRoute) mais restait au milieu de la voie : le camion de pompiers
+    // finissait par lui coller au pare-chocs. `ecarteChaussee` ne pose le pas de côté que
+    // s'il est libre — donc sans un seul dégât.
+    if (pc.sireneVeh) ecarteChaussee(pc, dt, 1, ECART_SIRENE); else pc.ecart = 0;
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
     const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
@@ -18567,16 +18651,52 @@ function ecraseAuSol(c, V) {
   return n;
 }
 // ================= LES ACCIDENTS =================
-// Deux véhicules qui se percutent, c'est un ACCIDENT : les deux s'immobilisent et ne
-// repartent PAS, la police vient faire le constat, le responsable paie l'amende — et s'il
-// n'a pas de quoi, il finit en cellule. La dépanneuse est appelée dans la foulée.
+// Deux véhicules qui se percutent ASSEZ FORT, c'est un ACCIDENT : les deux s'immobilisent et
+// ne repartent PAS, la police vient faire le constat, le responsable paie l'amende, et LA
+// POLICE UNE FOIS SUR PLACE appelle la dépanneuse.
+//
+// LE SEUIL DE GRAVITÉ (demande du joueur : « les petits dégâts : pas de police, pas de
+// dépanneuse »). Il n'existait aucun seuil : se garer en touchant le pare-chocs du voisin à
+// 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police
+// et une dépanneuse, et coûtait 60 🪙. On réutilise la table de dégâts DÉJÀ PARTAGÉE du jeu
+// (`DEGATS`, lue aussi par `graviteChoc`, `chocVehicule` et `degatsVehicule`) plutôt que
+// d'inventer une deuxième échelle : gravité 1 = « léger » (dès 4,5 m/s), 2 = « moyen »
+// (10 m/s), 3 = « grave » (17 m/s).
+//   - gravité 0 et 1 (jusqu'à 10 m/s) : petits dégâts. Rien. On repart, la tôle est froissée.
+//   - gravité ≥ 2 : accident. Police, constat, amende, dépanneuse.
+// C'EST CE SEUIL QUE PARTAGE LE POSTE QUI TRAVAILLE SUR LE REBOND DES VÉHICULES BLOQUÉS ET
+// LES PETITS DÉGÂTS DE CARROSSERIE : `ACCIDENT_GRAVITE_MIN` / `ACCIDENT_VITESSE_MIN` sont
+// l'unique frontière entre « bobo de carrosserie » et « accident de la circulation ».
 const ACCIDENT_CONSTAT = 5;      // secondes de constat, une fois la police sur place
-const AMENDE_ACCIDENT = 60;
+const ACCIDENT_GRAVITE_MIN = 2;                              // « moyen » dans DEGATS
+const ACCIDENT_VITESSE_MIN = DEGATS[ACCIDENT_GRAVITE_MIN].vitesse;   // 10 m/s
+// L'AMENDE. Elle était de 60 à 100 🪙 et, faute d'argent, elle envoyait l'enfant EN PRISON :
+// une partie s'arrêtait net sur un accrochage. Repère de valeur dans le jeu : un coffre vaut
+// 500 🪙, un petit boulot 15 🪙. L'amende doit être une contrariété, pas une punition — on la
+// ramène à 20 🪙 + 1 🪙 par tranche de 4 m/s d'impact (20 à 30 🪙 en pratique, soit un ou deux
+// petits boulots, 5 % d'un coffre). Et elle est PLAFONNÉE PAR LE PORTEFEUILLE : on ne peut
+// plus la « rater », donc plus aucune prison pour accident.
+const AMENDE_ACCIDENT = 20;
+// QUELLE VOITURE DE POLICE ENVOYER ? La plus proche — MAIS capable de partir. Les deux
+// voitures du commissariat sont garées nez à queue sur la voie de sortie : depuis qu'elles ne
+// traversent plus leur collègue, celle de derrière n'allait nulle part (mesure : 80 s de
+// simulation, un mètre parcouru, accident jamais constaté). On écarte donc celles qui ont déjà
+// un véhicule collé devant le capot, et à égalité on prend la plus proche du lieu.
+function policeDisponible(x, z) {
+  const libres = (police.cars || []).filter(p => !p.constat && !p.debarque && !p.mil && drive.car !== p);
+  if (!libres.length) return null;
+  const note = p => { const g = gapDevant(p); return (g[0] < g[1] + 1 ? 1000 : 0) + Math.hypot(p.x - x, p.z - z); };
+  let best = libres[0], bn = note(best);
+  for (const p of libres) { const n = note(p); if (n < bn) { bn = n; best = p; } }
+  return best;
+}
 function ouvreAccident(a, b, v) {
   if (!a || !b || a === b || !city.on) return null;
   // En COURSE, on se frôle et on se tape : ce n'est pas un accident de la circulation, et
   // immobiliser les concurrents au premier contact aurait tué la course.
   if (race.state === 'running' || race.state === 'countdown' || hrace.on) return null;
+  // LE SEUIL : sous 10 m/s d'impact, c'est un petit dégât — on repart, personne n'est appelé.
+  if (Math.abs(v || 0) < ACCIDENT_VITESSE_MIN) return null;
   if (!city.accidents) city.accidents = [];
   if (a.accidente || b.accidente) return null;
   const joueur = drive.car === a || drive.car === b;
@@ -18588,12 +18708,17 @@ function ouvreAccident(a, b, v) {
   if (joueur) drive.speed = 0;
   const acc = { a, b, x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, t0: simTime, etat: 'police',
     responsable: drive.car === a ? a : drive.car === b ? b : a, joueur, force: v,
-    constatT: 0, regle: false, amende: 0, paye: null, prison: false, pc: null, dep: null };
+    constatT: 0, regle: false, amende: 0, paye: null, prison: false, pc: null, dep: null,
+    tPolice: 0, tDep: 0, dPolice: 0, dDep: 0 };
   city.accidents.push(acc);
   msg('💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive', 2800);
-  const pc = (police.cars || []).find(p => !p.constat);
-  if (pc) { pc.constat = acc; pc.active = true; acc.pc = pc; }
-  depanneuseAppel(acc);
+  const pc = policeDisponible(acc.x, acc.z);
+  if (pc) { pc.constat = acc; pc.active = true; acc.pc = pc; acc.dPolice = Math.hypot(pc.x - acc.x, pc.z - acc.z); acc.pcT = simTime; acc.pcx = pc.x; acc.pcz = pc.z; }
+  // LA DÉPANNEUSE N'EST PLUS APPELÉE ICI. « police après dépanneuse » : le joueur veut voir
+  // arriver la police D'ABORD et la dépanneuse ENSUITE. Les deux partaient du même coup, et
+  // comme la dépanneuse est garée plus près du centre, c'est elle qu'on voyait en premier.
+  // C'est maintenant la police, une fois sur les lieux, qui appelle le dépannage
+  // (`accidentsTick`, passage à l'état « constat »).
   return acc;
 }
 function accidentsTick(dt) {
@@ -18606,9 +18731,28 @@ function accidentsTick(dt) {
     if (acc.joueur && (drive.car === acc.a || drive.car === acc.b)) drive.speed = 0;
     if (acc.etat === 'police') {
       const pc = acc.pc;
-      if (pc && Math.hypot(pc.x - acc.x, pc.z - acc.z) > 7) { rouleVers(pc, acc.x, acc.z, dt, 18); continue; }
+      // ELLE VIENT PAR LA ROUTE, sirène allumée (`urgence`) : itinéraire par les voies, code
+      // de la route, et les autres se rangent. Avant : une ligne droite à 18 m/s à travers le
+      // parc et les façades, accident « couvert » en trois secondes.
+      // LE RELAIS : une voiture qui n'a pas avancé de 3 m en 12 s est coincée (garée derrière
+      // un camion, engagée dans une impasse). Elle passe la main à une autre plutôt que de
+      // laisser l'accident sans constat pour l'éternité.
+      if (pc) {
+        if (Math.hypot(pc.x - (acc.pcx || pc.x), pc.z - (acc.pcz || pc.z)) > 3) { acc.pcx = pc.x; acc.pcz = pc.z; acc.pcT = simTime; }
+        else if (simTime - (acc.pcT || simTime) > 12) {
+          pc.constat = null; const autre = policeDisponible(acc.x, acc.z);
+          acc.pcT = simTime; acc.pcx = pc.x; acc.pcz = pc.z;
+          if (autre && autre !== pc) { autre.constat = acc; autre.active = true; acc.pc = autre; acc.pcx = autre.x; acc.pcz = autre.z; }
+          else pc.constat = acc;
+        }
+      }
+      if (acc.pc && rouleVers(acc.pc, acc.x, acc.z, dt, VITESSE_SECOURS, { urgence: true }) > 7) continue;
       acc.etat = 'constat'; acc.constatT = simTime + ACCIDENT_CONSTAT;
+      acc.tPolice = simTime - acc.t0;
       msg('🚓 Constat en cours…', 2200);
+      // LA POLICE APPELLE LA DÉPANNEUSE : c'est elle qui arrive la première, la dépanneuse
+      // ensuite — l'ordre demandé par le joueur.
+      depanneuseAppel(acc);
     } else if (acc.etat === 'constat') {
       if (simTime < acc.constatT) continue;
       regleAccident(acc);
@@ -18621,35 +18765,113 @@ function accidentsTick(dt) {
 }
 function regleAccident(acc) {
   acc.etat = 'fini'; acc.finT = simTime + 2.5; acc.regle = true;
-  acc.amende = AMENDE_ACCIDENT + Math.round(clamp(acc.force, 0, 40));
+  // 20 🪙 + 1 🪙 par tranche de 4 m/s d'impact : de 20 à 30 🪙 en pratique (voir AMENDE_ACCIDENT).
+  acc.amende = AMENDE_ACCIDENT + Math.round(clamp(acc.force, 0, 40) / 4);
   if (!acc.joueur) { acc.paye = true; msg('🚓 Constat terminé : le responsable a payé', 2400); return; }
-  if (wallet >= acc.amende) {
-    wallet -= acc.amende; saveWallet(); updateHud(); acc.paye = true;
-    msg(`🚓 Constat : ${acc.amende} 🪙 d'amende — payé`, 3000); sfx.register();
-  } else {
-    acc.paye = false; acc.prison = true;
-    msg('🚓 Pas de quoi payer l\'amende : direction la prison !', 3200);
-    jail.on = true; jail.level = Math.max(jail.level || 0, 1);
-    try { saveJail(); } catch (e) {}
-    jailEnter(true);
-  }
+  // PLUS DE PRISON POUR UN ACCIDENT. Le portefeuille plafonne l'amende : on paie ce qu'on a,
+  // le reste est passé par pertes et profits, et la partie continue. Avant, un enfant fauché
+  // partait en cellule sur un accrochage et devait réussir trois épreuves pour ressortir.
+  const du = Math.min(wallet, acc.amende);
+  if (du > 0) { wallet -= du; saveWallet(); updateHud(); }
+  acc.paye = du >= acc.amende; acc.reste = acc.amende - du; acc.prison = false;
+  if (acc.paye) { msg(`🚓 Constat : ${acc.amende} 🪙 d'amende — payé`, 3000); sfx.register(); }
+  else msg(`🚓 Constat : ${acc.amende} 🪙 d'amende, tu n'avais que ${du} 🪙 — le reste est effacé, sois prudent !`, 3400);
 }
-// Un déplacement simple « en ligne droite vers un point » : il sert à la police qui vient
-// constater, à la dépanneuse et à l'ambulance. Les bots conducteurs du poste ROUTE ont, eux,
-// le graphe de voies : rouleVers() n'est là que pour les véhicules de service.
-function rouleVers(c, tx, tz, dt, vmax = 14) {
-  if (!c) return 0;
-  const d = Math.hypot(tx - c.x, tz - c.z);
-  if (d < 0.05) return 0;
-  const pas = Math.min(d, vmax * dt);
-  c.x += (tx - c.x) / d * pas; c.z += (tz - c.z) / d * pas;
-  c.h = Math.atan2(tx - c.x, tz - c.z);
-  c.y = groundUnder(c.x, c.z, c.solid, c.y || 0);
-  c.v = vmax;
-  c.cmd = { v: vmax, volant: 0, ratio: 0.5, freine: false, derape: false, accLong: 0 };
-  poseVehicule(c, dt);
+// LE DEPLACEMENT DES VEHICULES DE SERVICE : DEPANNEUSE, POLICE EN CONSTAT, AMBULANCE,
+// CAMION DE POMPIERS, ENGINS DE TRAVAUX, VELO DU FACTEUR.
+// AVANT : cette fonction poussait le vehicule EN LIGNE DROITE vers son but a 18 ou 20 m/s,
+// sans le moindre garde-fou. La depanneuse traversait le parc, le camion de pompiers passait
+// au travers d'un mur d'immeuble, la voiture de police se garait DANS l'epave, et les secours
+// arrivaient si vite qu'on ne les voyait jamais rouler (mesure : 0 % du trajet sur le bitume,
+// 100 % des trajets en ligne droite, un accident a 90 m « couvert » en 5 s).
+// MAINTENANT : exactement la meme methode que les voitures de police en ronde —
+//   `botConduit` = itineraire par les voies (`itineraireVoies`) + code de la route
+//   (`codeRoute`) + garde-fou de collision (`vehBloque`) — tant qu'il reste de la route a
+//   faire, puis une APPROCHE lente sur les derniers metres (l'epave, le parvis de l'hopital,
+//   le hangar du depot ne sont pas sur une voie). L'approche passe elle aussi par
+//   `avanceVehicule` : elle est donc, elle aussi, incapable d'entrer dans un solide.
+// `opt.urgence` : le vehicule est EN INTERVENTION — il franchit les feux et les stops, et les
+// autres conducteurs se rangent pour le laisser passer (voir prioriteService).
+// Le pas de sortie de garage : on vise le premier point de l'itineraire deja calcule par
+// botConduit (la porte, l'allee, la voie la plus proche), au pas d'un homme.
+function degageService(c, dt) {
+  const R = c.ia && c.ia.route;
+  const wp = R && R.length ? R[Math.min(c.ia.i, R.length - 1)] : null;
+  if (!wp) return false;
+  const dh = CAP(Math.atan2(wp[0] - c.x, wp[1] - c.z) - c.h);
+  c.h += clamp(dh, -1, 1) * 1.8 * dt;
+  const v = 3;
+  const nx = c.x + Math.sin(c.h) * v * dt, nz = c.z + Math.cos(c.h) * v * dt;
+  // On sort d'un MUR, jamais d'un VEHICULE : le camion de pompiers qui se degageait d'un
+  // chantier pose sous ses roues raclait au passage le velo du facteur (une image de
+  // chevauchement, mesuree). Les vehicules restent inviolables meme pendant le degagement.
+  if (vehiculeMord(c, nx, nz, c.h)) { c.speed = 0; c.pas = 0; return false; }
+  c.x = nx; c.z = nz;
+  c.speed = v; c.pas = v * dt; c.libre = null;
+  c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
+  c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+  if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= v * dt / 0.3; });
   vehicleSolid(c);
-  return d - pas;
+  return true;
+}
+const VITESSE_SECOURS = 13;    // m/s (~47 km/h) sirene allumee : pressé, mais on le voit venir
+const VITESSE_SERVICE = 9;     // m/s : le retour au garage, la tournee du facteur, un engin
+// 18 m, et surtout PAS moins de 16 : au-dessous de 16 m `botConduit` ne calcule plus
+// d'itineraire du tout et se rabat sur une ligne droite. Avec un seuil a 15 m, la depanneuse
+// tombait dans ce trou de un metre, visait son but en ligne droite depuis le mode « voies »,
+// se faisait arreter par le garde-fou et restait plantee la (mesure : 2 800 images immobile
+// a 15,9 m de l'epave). Au-dela de 18 m on roule donc PAR LES VOIES, en deca on approche.
+const APPROCHE_SERVICE = 18;   // en deca, on vise le but en direct : le but n'est plus sur une voie
+function rouleVers(c, tx, tz, dt, vmax, opt) {
+  if (!c) return 0;
+  opt = opt || {};
+  const urgence = !!opt.urgence;
+  if (urgence) prioriteService(c);
+  c.exactVeh = true;   // un vehicule de service ne traverse AUCUN autre vehicule (voir vehiculeMord)
+  const d = Math.hypot(tx - c.x, tz - c.z);
+  if (d < 0.05) { c.speed = 0; c.v = 0; return 0; }
+  const plafond = Math.min(vmax || 99, urgence ? VITESSE_SECOURS : VITESSE_SERVICE);
+  const G = city.graphe;
+  if (G && G.aretes && G.aretes.length && d > APPROCHE_SERVICE) {
+    botConduit(c, tx, tz, dt, { urgence, vmax: plafond });
+    // LA SORTIE DU HANGAR. Les véhicules de service DORMENT DANS leur bâtiment : à l'arrêt, le
+    // pare-chocs de la dépanneuse mord déjà le poteau de l'auvent du garage, et les engins du
+    // dépôt sont serrés sous leur abri. Le garde-fou de collision, qui refuse tout pas depuis
+    // une position déjà en faute, les y clouait pour de bon (mesure : 5 315 images, zéro
+    // centimètre parcouru, l'accident jamais dépanné). Tant que le véhicule est ENCORE dans le
+    // solide où il dormait, on le laisse SORTIR au pas vers le premier point de son
+    // itinéraire — six secondes au plus. Dès qu'il est au clair, le garde-fou reprend la main
+    // et ne le lâche plus : c'est le seul endroit du jeu où un véhicule de service peut
+    // traverser quelque chose, et c'est pour en SORTIR.
+    if ((c.pas || 0) < 0.05 * dt && vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) {
+      c.degageT = (c.degageT || 0) + dt;
+      if (c.degageT < 6) degageService(c, dt);
+    } else c.degageT = 0;
+    c.v = Math.abs(c.speed || 0); c.serviceBloqueT = 0;
+    return Math.hypot(tx - c.x, tz - c.z);
+  }
+  // ---- l'approche : on vise le but, doucement, et on s'arrete devant ce qui gene
+  const h0 = c.h;
+  const dh = CAP(Math.atan2(tx - c.x, tz - c.z) - c.h);
+  c.h += clamp(dh, -1, 1) * 2.6 * dt;
+  // ON APPROCHE AU PAS. C'est la seule portion de trajet qui quitte le bitume (le parvis de
+  // l'hopital, la cour du hangar, l'epave sur le bas-cote) : on n'y traverse pas un parking a
+  // 13 m/s. 6 m/s au plus, et de moins en moins vite a mesure qu'on arrive.
+  const cible = Math.min(plafond, 6, 2 + d * 0.55, Math.abs(dh) > 1 ? 3 : 99);
+  c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * 4);
+  c.ia = null;
+  const bloque = avanceVehicule(c, dt, c.speed, { bar: true, veh: true }, h0);
+  c.v = Math.abs(c.speed || 0);
+  c.cmd = { v: c.v, volant: 0, ratio: 0.5, freine: false, derape: false, accLong: 0 };
+  // ON NE FORCE JAMAIS LE PASSAGE. L'epave a depanner, le parvis de l'hopital ou le hangar
+  // sont souvent encombres : au bout de 2,5 s sans avancer, le vehicule se gare la ou il est
+  // et le service continue. C'est ce qui evite qu'une depanneuse POUSSE la voiture accidentee
+  // pour venir se coller dessus — et c'est ce qui remplace l'ancienne traversee pure et simple.
+  const reste = Math.hypot(tx - c.x, tz - c.z);
+  if (bloque || (c.pas || 0) < 0.15 * dt) c.serviceBloqueT = (c.serviceBloqueT || 0) + dt;
+  else c.serviceBloqueT = 0;
+  if (c.serviceBloqueT > 2.5 && reste < APPROCHE_SERVICE) { c.serviceBloqueT = 0; c.speed = 0; return 0; }
+  return reste;
 }
 // ================= LES PLACES ASSISES =================
 // « Mets les bonnes positions du joueur, des bots et du chien dans les véhicules (tout seul,
@@ -18851,8 +19073,9 @@ function depanneuseAppel(acc) {
   if (!d || !acc) return null;
   // le véhicule à dépanner : le plus abîmé des deux
   const cible = ((acc.a.dmg || 0) >= (acc.b.dmg || 0)) ? acc.a : acc.b;
-  d.mission = { acc, cible, phase: 'route', mode: null, tarif: 0, fini: false };
-  acc.dep = d.mission;
+  d.mission = { acc, cible, phase: 'route', mode: null, tarif: 0, fini: false,
+    t0: simTime, d0: Math.hypot(d.x - cible.x, d.z - cible.z), arrivee: 0 };
+  acc.dep = d.mission; acc.dDep = d.mission.d0;
   msg('🚚 Une dépanneuse a été appelée (service payant)', 2400);
   return d.mission;
 }
@@ -18867,7 +19090,11 @@ function depanneusesTick(dt) {
     if (m.phase === 'route') {
       const cs = Math.cos(c.h), sn = Math.sin(c.h);
       const tx = c.x - sn * ((c.baseD || 4.4) / 2 + 3), tz = c.z - cs * ((c.baseD || 4.4) / 2 + 3);
-      if (rouleVers(d, tx, tz, dt, 16) > 1.2) continue;
+      // elle vient PAR LA ROUTE, gyrophare et sirène : prioritaire, mais à 13 m/s et pas
+      // en ligne droite à travers le parc
+      if (rouleVers(d, tx, tz, dt, VITESSE_SECOURS, { urgence: true }) > 2.6) continue;
+      m.arrivee = simTime - m.t0;
+      if (m.acc) m.acc.tDep = simTime - m.acc.t0;
       // petit accident = réparation SUR PLACE ; gros = treuillage et remorquage au garage
       m.mode = (c.dmg || 0) < DEGATS_SUR_PLACE ? 'place' : 'remorque';
       m.tarif = m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE;
@@ -18901,7 +19128,8 @@ function depanneusesTick(dt) {
       // `depanneuseAnime` qui le tient, roues en l'air, et non plus `traineVehicule` qui le
       // traînait au sol derrière le camion.
       d.depCible = 1;
-      if (rouleVers(d, g.x, g.z, dt, 14) > 4) continue;
+      // Avec une epave sur le plateau on ne double personne : plus de priorite, on rentre au pas
+      if (rouleVers(d, g.x, g.z, dt, VITESSE_SERVICE) > 4) continue;
       d.speed = 0; d.spd = 0;
       m.phase = 'depose'; m.t = simTime + DEP_DEPOSE;
       msg('🅿️ Stationnement au garage, déchargement…', 2200);
@@ -18927,7 +19155,7 @@ function depanneusesTick(dt) {
       // travail fini, la dépanneuse était simplement libérée sur place et restait plantée là
       // pour de bon — mesuré : 104,8 m de son garage, en pleine chaussée, à 8,6 m du joueur,
       // et toujours au même endroit trente secondes plus tard.
-      if (rouleVers(d, d.home0[0], d.home0[1], dt, 14) > 2.5) continue;
+      if (rouleVers(d, d.home0[0], d.home0[1], dt, VITESSE_SERVICE) > 2.5) continue;
       d.mission = null; d.remorque = null; d.h = d.home0[2]; d.speed = 0; d.spd = 0; poseVehicule(d, dt);
     }
   }
@@ -19015,7 +19243,7 @@ function ambulancesTick(dt) {
     if (!a.etat || drive.car === a) continue;
     const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
     if (a.etat === 'route') {
-      if (rouleVers(a, a.cible.x, a.cible.z, dt, 20) > 3.5) continue;
+      if (rouleVers(a, a.cible.x, a.cible.z, dt, VITESSE_SECOURS, { urgence: true }) > 3.5) continue;
       a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE;
       msg('🚑 Les secours embarquent le blessé', 2400);
     } else if (a.etat === 'charge') {
@@ -19023,7 +19251,7 @@ function ambulancesTick(dt) {
       a.etat = 'transport';
     } else if (a.etat === 'transport') {
       porteVictime(a);
-      if (rouleVers(a, hop.x, hop.z + 3, dt, 20) > 4) continue;
+      if (rouleVers(a, hop.x, hop.z + 3, dt, VITESSE_SECOURS, { urgence: true }) > 4) continue;
       a.etat = 'depose'; a.t = simTime + 1.5;
     } else if (a.etat === 'depose') {
       porteVictime(a);
@@ -19031,7 +19259,7 @@ function ambulancesTick(dt) {
       soigneVictime(a);
       a.etat = 'retour'; a.victime = null;
     } else if (a.etat === 'retour') {
-      if (rouleVers(a, a.home0[0], a.home0[1], dt, 16) > 2) continue;
+      if (rouleVers(a, a.home0[0], a.home0[1], dt, VITESSE_SERVICE) > 2) continue;
       a.etat = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
     }
   }
@@ -25586,9 +25814,12 @@ function buildMetiers() {
   const pelle = gare(makeVehiculeTravail('pelle', MET_C.casqueOrange, dx + 2.6, PARC, 0));
   const fourgon = gare(makeVehiculeTravail('fourgon', 0xf4f6fa, dx + 7.8, PARC, 0));
   const velo = gare(makeVehiculeTravail('velo', MET_C.poste, dx + 13, PARC, 0));
-  const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 3.5, 0));
-  // POSTE ANIMATION : le BULLDOZER, septième engin du dépôt. Il se gare une rangée en
-  // arrière (les six places de la cour sont prises) et se conduit comme les autres.
+  // Le camion de pompiers recule de 1,5 m : a kz + 9, son avant de 8,60 m mordait le mat de la
+  // caserne — il DORMAIT dans un solide et ne pouvait plus demarrer depuis qu'il ne traverse
+  // plus rien (poste Circulation).
+  const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 1.5, 0));
+  // POSTE ANIMATION : le BULLDOZER, septieme engin du depot. Il se gare une rangee en
+  // arriere (les six places de la cour sont prises) et se conduit comme les autres.
   const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 10.4, PARC - 6.2, 0));
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
@@ -25703,29 +25934,32 @@ function metierPassager(w, c, i, dt) {
   animateRig(w.av.rig, 'sit', 0, dt, simTime);
   metierSync(w);
 }
-// Conduit le véhicule de travail vers un point, en suivant la grille des VOITURES.
+// CONDUIT LE VÉHICULE DE TRAVAIL VERS UN POINT — PAR LA ROUTE.
+// AVANT : il suivait la grille A* des piétons-voitures (`navPath`, un pas de 2 m) et,
+// surtout, il avançait par `c.x += sin(h) * v * dt` — SANS AUCUN test de collision. Le
+// camion de pompiers traversait les murs, la benne coupait à travers le parc, le vélo du
+// facteur passait au milieu des bancs, et tous trois roulaient à travers les autres voitures.
+// MAINTENANT : la même méthode que les voitures de police et que la circulation de fond —
+// `rouleVers` → `botConduit` → itinéraire par les voies + code de la route + garde-fou de
+// collision. Le camion de pompiers en intervention est PRIORITAIRE (`urgence`), les autres
+// engins et le vélo du facteur roulent comme tout le monde mais gardent la priorité de
+// service que le joueur a demandée (bail `c.prio`, posé ci-dessous à chaque image de route).
 function metierRoule(w, tx, tz, dt, seuil = 6) {
   const c = w.veh; if (!c) return metierMarche(w, tx, tz, dt);
   const dist = Math.hypot(tx - c.x, tz - c.z);
-  if (dist < seuil) { w.vroute = null; metierAuVolant(w, c, 0, dt); return dist; }
-  if (!w.vroute || !w.vroute.length || simTime > (w.vrouteT || 0)
-    || !w.vrouteCible || Math.hypot(w.vrouteCible[0] - tx, w.vrouteCible[1] - tz) > 4) {
-    w.vrouteT = simTime + 4 + Math.random() * 2; w.vrouteCible = [tx, tz];
-    const p = navPath(c.x, c.z, tx, tz);
-    w.vroute = (p && p.length) ? p.concat([[tx, tz]]) : [[tx, tz]];
-  }
-  while (w.vroute.length > 1 && Math.hypot(w.vroute[0][0] - c.x, w.vroute[0][1] - c.z) < 3.6) w.vroute.shift();
-  const wp = w.vroute[0], dx = wp[0] - c.x, dz = wp[1] - c.z;
-  const v = Math.min((c.spec ? c.spec.max : 16) * 0.6, 13);
-  const vise = Math.atan2(dx, dz);
-  const da = ((vise - c.h + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-  c.h += clamp(da, -2.4 * dt, 2.4 * dt);
-  c.x += Math.sin(c.h) * v * dt; c.z += Math.cos(c.h) * v * dt;
-  c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
-  settleVehicle(c); vehicleSolid(c);
-  for (const wh of c.wheels) wh.rotation.x -= v * dt / 0.45;
-  metierAuVolant(w, c, v, dt);
-  return dist;
+  if (dist < seuil) { w.vroute = null; c.speed = 0; c.spd = 0; metierAuVolant(w, c, 0, dt); return dist; }
+  // le camion de pompiers qui part sur un feu : sirène, gyrophare, il passe aux feux rouges.
+  // Les autres véhicules de service gardent la priorité de circulation sans forcer les feux.
+  const urgence = !!c.sirene;
+  if (!urgence) prioriteService(c);
+  const vmax = Math.min((c.spec ? c.spec.max : 16) * 0.7, urgence ? VITESSE_SECOURS : VITESSE_SERVICE);
+  // on rend CE QUE REND rouleVers, pas la distance brute : quand le véhicule ne peut pas
+  // s'approcher davantage (un incendie au milieu d'une cour, un chantier derrière une haie),
+  // rouleVers rend 0 — « je me suis garé au plus près ». En recalculant la distance ici, le
+  // camion de pompiers restait bloqué à 12,5 m du feu et ne déployait jamais sa lance.
+  const reste = rouleVers(c, tx, tz, dt, vmax, { urgence });
+  metierAuVolant(w, c, Math.abs(c.speed || 0), dt);
+  return reste;
 }
 // ---- CE QU'IL Y A À RÉPARER ----
 function chercheCasse() {
@@ -27270,12 +27504,14 @@ function pompiersTick(dt) {
   const majEtat = e => { for (const m of eq) m.etat = e; };
   switch (chef.etat) {
     case 'repos': {
-      if (w0.veh) { w0.veh.gyro = false; w0.veh.outilCible = 0; if (drive.car !== w0.veh) { w0.veh.busy = false; w0.veh.metierBusy = false; } }
+      if (w0.veh) { w0.veh.gyro = false; w0.veh.sirene = false; w0.veh.outilCible = 0; if (drive.car !== w0.veh) { w0.veh.busy = false; w0.veh.metierBusy = false; } }
       for (const m of eq) metierMarche(m.bot, m.bot.base[0], m.bot.base[1], dt);
       const f = city.incendies.find(x => !x.pris);
       if (!f || !veh) return;
       f.pris = true; for (const m of eq) m.cible = f;
-      majEtat('route'); veh.busy = true; veh.metierBusy = true; veh.gyro = true;
+      // le camion part EN INTERVENTION : gyrophare ET sirène (le drapeau `sirene` est lu par
+      // le poste Sons, et c'est lui qui donne la priorité de circulation au camion)
+      majEtat('route'); veh.busy = true; veh.metierBusy = true; veh.gyro = true; veh.sirene = true;
       for (const m of eq) donneOutil(m.bot.av, 'lance');
       metierDit(w0, 'au feu ! Tout le monde à bord, sirène ! 🚒');
       return;
@@ -27329,6 +27565,7 @@ function pompiersTick(dt) {
     }
     case 'retour': {
       const k = city.caserne || { x: 0, z: 0 };
+      if (veh) veh.sirene = false;   // rentrer à la caserne n'est pas une urgence
       const d = veh ? metierRoule(w0, k.x, k.z + 9, dt, 8) : metierMarche(w0, w0.base[0], w0.base[1], dt);
       for (let i = 0; i < suite.length; i++) { if (veh) metierPassager(suite[i].bot, veh, i, dt); else metierMarche(suite[i].bot, k.x + i * 1.6, k.z + 5, dt); }
       if (d < (veh ? 9 : 1.6)) { majEtat('repos'); for (const m of eq) { m.cible = null; donneOutil(m.bot.av, null); } }

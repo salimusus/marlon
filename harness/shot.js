@@ -232,6 +232,10 @@ window.__SHOT = {
       if (typeof police !== 'undefined') for (const pc of (police.cars || [])) {
         pc.constat = null; pc.debarque = false; pc.mission = null; pc.gyro = false; pc.sireneOn = false;
         pc.accidente = false; pc.stopped = false; if (pc.etat) pc.etat.speed = 0;
+        // poste Circulation : la priorite de circulation est un BAIL (pc.prio, un horodatage) et
+        // le rangement pour la sirene laisse un deport (pc.ecart). Laisses tels quels, le test
+        // suivant mesurait une ronde qui se croyait prioritaire et roulait 1,7 m a cote de sa voie.
+        pc.prio = 0; pc.ecart = 0; pc.sireneVeh = null; pc.degageT = 0; pc.serviceBloqueT = 0; pc.ia = null; pc.exactVeh = false;
       }
       // --- 3. LA DEPANNEUSE. d.mission reste accroche a l'accident precedent : la flotte est
       // vue comme OCCUPEE (L.find(x => !x.mission) ne trouve plus rien), elle ne repart pas,
@@ -243,6 +247,7 @@ window.__SHOT = {
         d.gyro = false; d.sirene = false; d.sireneOn = false; d.recule = false;
         d.busy = false; d.metierBusy = false; d.outil = 0; d.outilCible = 0;
         d.accidente = false; d.stopped = false; d.dmg = 0; d.dead = false;
+        d.prio = 0; d.ecart = 0; d.sireneVeh = null; d.degageT = 0; d.serviceBloqueT = 0; d.ia = null; d.exactVeh = false;   // poste Circulation
       }
       // --- 4. LES AMBULANCES. a.etat et a.victime survivent : une ambulance restee en
       // « transport » repose le blesse SUR SON BRANCARD a chaque image — et si la victime est
@@ -254,6 +259,7 @@ window.__SHOT = {
         a.etat = null; a.victime = null; a.cible = null; a.t = 0;
         a.gyro = false; a.sirene = false; a.sireneOn = false; a.recule = false;
         a.busy = false; a.metierBusy = false; a.accidente = false; a.stopped = false;
+        a.prio = 0; a.ecart = 0; a.sireneVeh = null; a.degageT = 0; a.serviceBloqueT = 0; a.ia = null; a.exactVeh = false;   // poste Circulation
       }
       if (typeof city !== 'undefined') city.urgT = 0;   // le scrutin des urgences reprend tout de suite
       // --- 5. LE JOUEUR BLESSE. P.hp n'etait pas remis a neuf : sous 12 points de vie,
@@ -328,6 +334,7 @@ window.__SHOT = {
       if (typeof city !== 'undefined') for (const v of (city.cars || [])) {
         if (!v || !v.travail) continue;
         v.busy = false; v.metierBusy = false; v.gyro = false; v.sireneOn = false;
+        v.sirene = false; v.prio = 0; v.ecart = 0; v.sireneVeh = null; v.degageT = 0; v.serviceBloqueT = 0; v.ia = null; v.exactVeh = false;   // poste Circulation
         if (v.g) v.g.visible = true;
         if (v.solid && typeof solids !== 'undefined' && solids.indexOf(v.solid) < 0) { solids.push(v.solid); try { sgridSale(); } catch (e28) {} }
       }
@@ -1522,6 +1529,18 @@ window.__G = {
   agentsTick: typeof agentsTick === 'function' ? agentsTick : null,
   TATOO_TAILLES: typeof TATOO_TAILLES !== 'undefined' ? TATOO_TAILLES : null,
   construireGraphe: typeof construireGraphe === 'function' ? construireGraphe : null,
+  surLaChaussee: typeof surLaChaussee === 'function' ? surLaChaussee : null,
+  prioriteService: typeof prioriteService === 'function' ? prioriteService : null,
+  enIntervention: typeof enIntervention === 'function' ? enIntervention : null,
+  ecarteChaussee: typeof ecarteChaussee === 'function' ? ecarteChaussee : null,
+  ECART_SIRENE: typeof ECART_SIRENE !== 'undefined' ? ECART_SIRENE : null,
+  VITESSE_SECOURS: typeof VITESSE_SECOURS !== 'undefined' ? VITESSE_SECOURS : null,
+  VITESSE_SERVICE: typeof VITESSE_SERVICE !== 'undefined' ? VITESSE_SERVICE : null,
+  APPROCHE_SERVICE: typeof APPROCHE_SERVICE !== 'undefined' ? APPROCHE_SERVICE : null,
+  ACCIDENT_GRAVITE_MIN: typeof ACCIDENT_GRAVITE_MIN !== 'undefined' ? ACCIDENT_GRAVITE_MIN : null,
+  ACCIDENT_VITESSE_MIN: typeof ACCIDENT_VITESSE_MIN !== 'undefined' ? ACCIDENT_VITESSE_MIN : null,
+  AMENDE_ACCIDENT: typeof AMENDE_ACCIDENT !== 'undefined' ? AMENDE_ACCIDENT : null,
+  vehiculeMord: typeof vehiculeMord === 'function' ? vehiculeMord : null,
   cheminAretes: typeof cheminAretes === 'function' ? cheminAretes : null,
   vehBloque: typeof vehBloque === 'function' ? vehBloque : null,
   botConduit: typeof botConduit === 'function' ? botConduit : null,

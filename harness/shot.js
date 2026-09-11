@@ -1051,6 +1051,7 @@ window.__G = {
   tenueMetier: typeof tenueMetier !== 'undefined' ? tenueMetier : null,
   METIERS_DEF: typeof METIERS_DEF !== 'undefined' ? METIERS_DEF : null,
   METIERS: typeof METIERS !== 'undefined' ? METIERS : null,
+  FACTEUR_SACOCHE: typeof FACTEUR_SACOCHE !== 'undefined' ? FACTEUR_SACOCHE : null,
   MET_C: typeof MET_C !== 'undefined' ? MET_C : null,
   outilMesh: typeof outilMesh !== 'undefined' ? outilMesh : null,
   donneOutil: typeof donneOutil !== 'undefined' ? donneOutil : null,

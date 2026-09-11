@@ -5672,6 +5672,38 @@ test('le casino WORLD TELIO MARLON : machines, roulette et poker qui paient vrai
   return { ok, detail: `le WORLD TELIO MARLON ouvre au nord de la ville : ${r.batiment.machines} machines à sous, une roulette, deux tables de poker, ${r.batiment.neons} ampoules de façade et la grande enseigne lumineuse · les jeux paient comme un vrai casino, mesuré sur 300 000 tirages : la machine rend ${r.machine.retour} de la mise (${r.machine.jackpots} jackpots à ×100), la roulette ${r.roulette.rouge} sur rouge/noir et ${r.roulette.plein} sur un numéro plein, avec ${r.roulette.paris} types de paris · le poker fermé distribue 5 cartes, on garde ce qu'on veut et la main est jugée juste (carré, couleur, quinte, full) · et ${r.bots} habitants viennent tirer les bras des machines` };
 });
 
+test('le facteur fait une VRAIE tournee : toutes les boites d\'affilee, puis il rentre au depot', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city; c.horaires = false; G.metiersRepos();   // ville au repos : les tests s'enchainent dans la meme page
+    for (const b of c.boites) b.lettres = 0;
+    const m = G.METIERS.facteurs[0], velo = m.bot.veh;
+    const DT = 1 / 20;
+    const etats = []; let prev = null; let premiere = -1;
+    // on avance jusqu'a ce que la tournee soit FINIE (m.faites monte), au plus 900 s simulees
+    for (let i = 0; i < 14000; i++) {
+      G.simTime = G.simTime + DT; G.metiersTick(DT);
+      if (m.etat !== prev) { prev = m.etat; etats.push(m.etat); }
+      if (premiere < 0 && c.boites.some(b => b.lettres > 0)) premiere = +(i * DT).toFixed(1);
+      if ((m.faites || 0) >= 1) break;
+    }
+    const lettres = c.boites.map(b => b.lettres);
+    return { boites: c.boites.length, sacoche: G.FACTEUR_SACOCHE, lettres, faites: m.faites || 0, premiere,
+      repos: etats.filter(e => e === 'repos').length, depose: etats.filter(e => e === 'depose').length,
+      rentre: etats.indexOf('rentre'), nEtats: etats.length, trois: etats.slice(-3).join('→'),
+      suite: etats.slice(0, 6).join('→') + ' … ' + etats.slice(-3).join('→'),
+      veloRange: +Math.hypot(velo.x - velo.home0[0], velo.z - velo.home0[1]).toFixed(1), libre: !velo.busy };
+  });
+  // une tournee, c'est : UN depart, toutes les boites a la suite, puis le retour.
+  // « repos » ne doit apparaitre qu'au depart et a l'arrivee — s'il y repasse entre deux
+  // boites, c'est une navette, pas une tournee.
+  const servies = r.lettres.filter(n => n > 0).length;
+  const ok = r.boites >= 5 && r.faites === 1 && r.repos === 2 && r.depose === r.sacoche
+    && servies === r.sacoche && r.lettres.every(n => n <= 1) && r.trois === 'depose→rentre→repos'
+    && r.premiere > 0 && r.premiere < 150 && r.libre;
+  return { ok, detail: `le facteur choisissait UNE boite, y glissait une lettre et repassait par le depot : la suite d'etats etait repos→tournee→depose→repos→tournee→depose… a l'infini, sans jamais rien achever · il charge maintenant sa sacoche une fois pour toutes et enchaine les ${r.sacoche} boites de sa sacoche de proche en proche (${r.suite}), choisies parmi les ${r.boites} de la ville : ${r.depose} depots, ${r.lettres.join('/')} lettre(s) par boite, premiere lettre a ${r.premiere} s, « repos » traverse ${r.repos} fois seulement (le depart et l'arrivee), et la tournee se TERMINE : ${r.trois} — il rentre au depot et rend le velo (libre=${r.libre}, a ${r.veloRange} m de sa place) — ${r.faites} tournee achevee` };
+});
+
 // À GARDER EN DERNIER : ce test RECHARGE la page. Il reproduit le seul cas que tout le reste
 // du banc d'essai ne voyait pas — une partie DÉJÀ COMMENCÉE. Avec un localStorage vide,
 // loadGuerre() sortait tout de suite ; avec une sauvegarde, il touchait une constante encore
@@ -5713,6 +5745,7 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
     && r.look.coupe === 'dreads' && r.look.bijou === 'grosse' && r.look.taille === 'XXL' && r.chien === 'Rex';
   return { ok, detail: `partie reprise : ville chargée, ${r.gangs} gangs en ville (le palier 1, celui des 30 points de respect sauvegardés), ${r.bots} habitants · performance ${r.perf}/100 et ${r.rep} pts de réputation retrouvés · tenue mémorisée (${r.look.coupe}, ${r.look.bijou}, taille ${r.look.taille}) · chien « ${r.chien} »` };
 });
+
 
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');

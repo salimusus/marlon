@@ -30174,6 +30174,35 @@ function laveurTick(m, dt) {
   }
 }
 // ---- LE FACTEUR : à vélo, de boîte en boîte, une lettre dans chaque ----
+// UNE VRAIE TOURNÉE, QUI SE TERMINE. Avant, il choisissait UNE boîte, allait y glisser une
+// lettre, puis repassait par « repos » et recommençait : mesurée, la suite d'états était
+// repos → tournee → depose → repos → tournee → depose… à l'infini, sans jamais rien achever.
+// Ce n'était pas une tournée, c'était une navette. Il prépare maintenant sa sacoche au dépôt
+// (`m.tournee` : TOUTES les boîtes, rangées de proche en proche depuis le dépôt), les fait
+// l'une après l'autre sans repasser par la case départ, et quand la sacoche est vide il
+// RENTRE au dépôt, range le vélo et prend sa pause. `m.faites` compte les tournées finies.
+const FACTEUR_PAUSE = 12;    // s : la pause au dépôt entre deux tournées (il vide sa sacoche)
+// COMBIEN DE LETTRES TIENNENT DANS LA SACOCHE. Une tournée qui passe par les neuf boîtes de
+// la ville dure sept minutes : mesurée, l'enfant ne la voit jamais finir. Le facteur charge
+// donc QUATRE lettres, fait ses quatre boîtes et rentre en chercher d'autres — une tournée
+// dure deux à trois minutes, on la suit du début à la fin, et les boîtes les moins servies
+// passant toujours en premier, tout le monde finit par avoir son courrier.
+const FACTEUR_SACOCHE = 4;
+// Choisit les boîtes de la prochaine tournée (les moins servies d'abord) et les range de
+// proche en proche à partir du dépôt : le plus court chemin exact serait un casse-tête,
+// « la plus proche d'abord » suffit et donne un itinéraire qui a l'air sensé.
+function tourneeFacteur(x0, z0) {
+  const reste = (city.boites || []).slice()
+    .sort((a, b) => (a.lettres || 0) - (b.lettres || 0)).slice(0, FACTEUR_SACOCHE);
+  const ordre = [];
+  let cx = x0, cz = z0;
+  while (reste.length) {
+    let k = 0, bd = Infinity;
+    for (let i = 0; i < reste.length; i++) { const d = Math.hypot(reste[i].x - cx, reste[i].z - cz); if (d < bd) { bd = d; k = i; } }
+    const b = reste.splice(k, 1)[0]; ordre.push(b); cx = b.x; cz = b.z;
+  }
+  return ordre;
+}
 function facteurTick(m, dt) {
   const w = m.bot;
   const veh = (w.veh && drive.car !== w.veh) ? w.veh : null;
@@ -30182,22 +30211,21 @@ function facteurTick(m, dt) {
       if (w.veh && drive.car !== w.veh) { w.veh.busy = false; w.veh.metierBusy = false; }
       metierMarche(w, w.base[0], w.base[1], dt);
       if (!metierOuvert() || !city.boites.length || simTime < (w.pause || 0)) return;
-      // la tournée : la boîte la moins servie d'abord, la plus proche à égalité
-      let best = null, bd = Infinity;
-      for (const b of city.boites) { const s = b.lettres * 500 + Math.hypot(b.x - w.pos.x, b.z - w.pos.z); if (s < bd) { bd = s; best = b; } }
-      m.cible = best; m.etat = 'tournee';
+      // il charge sa sacoche : toutes les boîtes de la ville, dans l'ordre du trajet
+      m.tournee = tourneeFacteur(w.base[0], w.base[1]); m.i = 0;
+      m.cible = m.tournee[0]; m.etat = 'tournee';
       if (veh) { veh.busy = true; veh.metierBusy = true; }
       metierDit(w, pickOne(['le courrier, c\'est parti ! 📮', 'ma tournée m\'attend 🚲', 'du courrier pour tout le monde !']));
       return;
     }
     case 'tournee': {
-      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
-      const d = veh ? metierRoule(w, b.x, b.z, dt, 3.4) : metierMarche(w, b.x, b.z, dt, 1.5);
+      const b = m.cible; if (!b) { m.etat = 'rentre'; return; }
+      const d = veh ? metierRoule(w, b.x, b.z, dt, 4.2) : metierMarche(w, b.x, b.z, dt, 1.5);
       if (d < (veh ? 4.2 : 1.9)) { m.etat = 'depose'; w.t = simTime + 2.6; donneOutil(w.av, 'lettre'); }
       return;
     }
     case 'depose': {
-      const b = m.cible; if (!b) { m.etat = 'repos'; return; }
+      const b = m.cible; if (!b) { m.etat = 'rentre'; return; }
       // il met pied à terre à côté du vélo, sort la lettre de la sacoche et la glisse
       if (veh) { w.pos.set(veh.x - Math.cos(veh.h) * 1.1, groundUnder(veh.x, veh.z, null, 2), veh.z + Math.sin(veh.h) * 1.1); }
       w.facing = Math.atan2(b.x - w.pos.x, b.z - w.pos.z);
@@ -30214,8 +30242,27 @@ function facteurTick(m, dt) {
       if (simTime > w.t) {
         b.lettres++; if (b.volet) b.volet.rotation.x = 0;
         sfx.pok(); burst(b.x, 1.35, b.z, 0xf4f6fa, 4);
-        metierDit(w, pickOne(['et une lettre de plus ! 📬', 'voilà le courrier 📬', 'bonne lecture !']));
-        m.cible = null; m.etat = 'repos'; w.pause = simTime + 3;
+        // BOÎTE SUIVANTE, SANS REPASSER PAR LE DÉPÔT. C'est toute la différence entre une
+        // tournée et une navette : il enchaîne, et ce n'est qu'une fois la sacoche vide
+        // qu'il rentre.
+        m.i = (m.i || 0) + 1;
+        const suite = m.tournee && m.tournee[m.i];
+        if (suite) { m.cible = suite; m.etat = 'tournee'; metierDit(w, pickOne(['et une lettre de plus ! 📬', 'voilà le courrier 📬', 'bonne lecture !'])); }
+        else { m.cible = null; m.tournee = null; m.etat = 'rentre';
+          metierDit(w, pickOne(['sacoche vide, je rentre au dépôt ! 🚲', 'tournée terminée, tout le monde a son courrier 📬'])); }
+      }
+      return;
+    }
+    case 'rentre': {
+      // LA FIN DE LA TOURNÉE. Il rapporte le vélo au dépôt : sans cette étape, le vélo
+      // restait garé devant la dernière maison et la tournée suivante partait de nulle part.
+      const d = veh ? metierRoule(w, w.base[0], w.base[1], dt, 4.2) : metierMarche(w, w.base[0], w.base[1], dt);
+      if (d < (veh ? 4.2 : 1.4)) {
+        if (veh) { veh.busy = false; veh.metierBusy = false; }
+        donneOutil(w.av, METIERS_DEF.facteur.outil);
+        m.faites = (m.faites || 0) + 1;
+        w.pause = simTime + FACTEUR_PAUSE;
+        m.etat = 'repos';
       }
       return;
     }
@@ -30323,7 +30370,10 @@ function phraseMetier(m, salut) {
   if (m.metier === 'laveur') return e === 'lave' ? 'je lave les vitres, ça brille hein ? 🪟' : 'laveur de vitres : je monte à l\'échelle et je fais briller les devantures 🪟';
   if (m.metier === 'pompier') return city.incendies.length ? 'attention, il y a le feu ! Reste derrière nous 🚒'
     : 'pompier ! Prends le camion pour nous aider — O ouvre la lance à eau 🚒';
-  if (m.metier === 'facteur') return e === 'depose' ? 'je glisse la lettre dans la boîte 📬' : 'facteur : je fais ma tournée à vélo, tu peux me suivre ! 🚲';
+  if (m.metier === 'facteur') return e === 'depose' ? 'je glisse la lettre dans la boîte 📬'
+    : e === 'rentre' ? 'sacoche vide ! Je rapporte le vélo au dépôt 🚲'
+    : e === 'tournee' ? `ma tournée : encore ${Math.max(0, (m.tournee ? m.tournee.length : 0) - (m.i || 0))} boîtes à faire 📮`
+    : 'facteur : je fais ma tournée à vélo, tu peux me suivre ! 🚲';
   return 'bonjour !';
 }
 // Branchée en tête de commandeSociale() : si on parle à un travailleur (par son nom, par son
@@ -30360,7 +30410,7 @@ function metiersRepos() {
   if (city.detritus) city.detritus.length = 0;
   for (const m of city.metiers) {
     const w = m.bot;
-    m.etat = 'repos'; m.cible = null; m.chantier = null;
+    m.etat = 'repos'; m.cible = null; m.chantier = null; m.tournee = null; m.i = 0;
     w.route = null; w.vroute = null; w.pause = 0; w.t = 0; w.bloqueT = 0; w.h2 = 0;
     if (w.echelle) { worldGroup.remove(w.echelle.g); w.echelle = null; }
     w.pos.set(w.base[0], groundUnder(w.base[0], w.base[1], null, 2.5), w.base[1]);

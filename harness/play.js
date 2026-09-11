@@ -13022,9 +13022,11 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
 test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l\'escalier restent dessines', async p => {
   const r = await p.evaluate(async () => {
     const G = __G, T = G.THREE, dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    // « dessine » = ce que la camera voit vraiment : visible, sur son calque, et opaque.
-    const dessine = o => o.visible && o.layers.test(G.camera.layers)
-      && (!o.material || !o.material.transparent || o.material.opacity == null || o.material.opacity > 0.5);
+    // « dessine » = ce que la camera voit vraiment. Une VITRE (verriere de l'ecole, baie d'une
+    // villa) est transparente de naissance et se voit tres bien : ce n'est pas un mur efface.
+    // Le seul effacement qui compte est celui de la maison de poupee, qui se reconnait a coup
+    // sur : elle CLONE le materiau et range l'original dans userData.matOpaque.
+    const dessine = o => o.visible && o.layers.test(G.camera.layers) && !(o.userData && o.userData.matOpaque);
     const rc = new T.Raycaster();
     const lieux = [
       ['le hall de la banque', -52, 0.5, 70],

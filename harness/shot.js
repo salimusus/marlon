@@ -296,6 +296,10 @@ window.__SHOT = {
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
+    // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
+    // normalement qu'a la demande, par le pave tactile) ; v.padTest ouvre « Tester la manette ».
+    if (v.aide) { document.body.classList.add('manette', 'city', 'aide'); }
+    if (v.padTest && typeof ouvreTestManette === 'function') { try { ouvreTestManette(); } catch (e16) {} }
     // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
     // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
     // enorme en mode tele). En plus rien ne le rallumait : une vue hideHud:false prise apres
@@ -404,6 +408,16 @@ window.__G = {
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : 0,
   PAD_BOUTONS: typeof PAD_BOUTONS !== 'undefined' ? PAD_BOUTONS : 0,
   readInput: typeof readInput === 'function' ? readInput : null,
+  gachetteConduite: typeof gachetteConduite === 'function' ? gachetteConduite : null,
+  CONDUITE_V0: typeof CONDUITE_V0 !== 'undefined' ? CONDUITE_V0 : 0,
+  CONDUITE_V1: typeof CONDUITE_V1 !== 'undefined' ? CONDUITE_V1 : 0,
+  FREIN_PEDALE: typeof FREIN_PEDALE !== 'undefined' ? FREIN_PEDALE : 0,
+  FREIN_MAIN: typeof FREIN_MAIN !== 'undefined' ? FREIN_MAIN : 0,
+  heliPoser: typeof heliPoser === 'function' ? heliPoser : null,
+  heliSolSous: typeof heliSolSous === 'function' ? heliSolSous : null,
+  HELI_POSE_MAX: typeof HELI_POSE_MAX !== 'undefined' ? HELI_POSE_MAX : 0,
+  PT_AXES: typeof PT_AXES !== 'undefined' ? PT_AXES : null,
+  SPEED: typeof SPEED !== 'undefined' ? SPEED : 0,
   driveStep: typeof driveStep === 'function' ? driveStep : null,
   diffusion: typeof diffusion !== 'undefined' ? diffusion : null,
   diffusionMode: typeof diffusionMode === 'function' ? diffusionMode : null,

@@ -748,7 +748,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>R2</b>avancer / accélérer<i>(arme braquée : tirer)</i><b>L2</b>reculer<b>Stick G</b>direction / tourner<b>L3</b>courir<b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>L1</b>viser<b>Pavé</b>cette aide</div>
+<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -782,9 +782,9 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
     <div class="field"><span>Bas</span><div class="pills" id="skirtSel"><b data-v="0">Pantalon</b><b data-v="1">Jupe</b></div></div>
     <div class="keys">
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
-      <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture) · <kbd>Ctrl</kbd> descendre · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied)</span>
+      <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture ; maintenu au volant : frein à main) · <kbd>C</kbd> ou <kbd>Ctrl</kbd> se baisser (descendre en hélico) · <kbd>H</kbd> garde · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied ; en hélico : 🚁 se poser)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
-      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : <b>R2</b> avancer / accélérer et <b>L2</b> reculer (gâchettes ANALOGIQUES : à moitié enfoncée = demi-vitesse), stick gauche pour la direction (en mode « rotation » il FAIT TOURNER le personnage et braque le véhicule ; en mode « caméra » il déplace dans la direction regardée), stick droit pour la caméra, <b>L3</b> courir, <b>✕</b> braquer et rengainer l'arme, <b>R2</b> tirer quand elle est braquée, <b>◯</b> sauter, <b>△</b> agir (monter en voiture, parler, s'asseoir, ouvrir), <b>▢</b> frapper, <b>L1</b> viser, <b>R3</b> recentrer · la croix : <b>←</b> <b>→</b> 🔫 arme précédente / suivante (maintenu : <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions), <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner · <b>pavé tactile</b> : rappeler cette liste de touches à l'écran · si quelque chose répond de travers, ⚙️ → « 🎮 Tester la manette » montre en direct axes et boutons · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
+      <div><kbd>🎮 PS5</kbd></div><span>branche une DualSense (câble ou Bluetooth) : <b>À PIED, tout part du stick gauche</b> — avancer, reculer, aller à gauche et à droite, en analogique (à moitié poussé = on marche à moitié) ; en mode « rotation » gauche/droite FAIT TOURNER le personnage, en mode « caméra » il se déplace dans la direction regardée ; stick droit pour la caméra, <b>L3</b> courir, <b>L2</b> se baisser (s'accroupir, esquiver un coup), <b>R2</b> tirer quand l'arme est braquée · <b>AU VOLANT</b> : <b>R2</b> accélérer et <b>L2</b> freiner (gâchettes ANALOGIQUES : à moitié enfoncée = on accélère deux fois moins vite ; à l'arrêt, L2 passe en marche arrière sans à-coup), stick gauche pour braquer, <b>Espace</b> maintenu : frein à main · <b>EN HÉLICO</b> : <b>◯</b> monter, <b>L2</b> descendre, <b>▢</b> se poser tout seul en douceur · et partout : <b>✕</b> braquer et rengainer l'arme, <b>◯</b> sauter, <b>△</b> agir (monter en voiture, parler, s'asseoir, ouvrir), <b>▢</b> frapper, <b>L1</b> garde (arme rangée) ou viser (arme braquée), <b>R3</b> recentrer · la croix : <b>←</b> <b>→</b> 🔫 arme précédente / suivante (maintenu : <b>←</b> 🛍️ boutique, <b>→</b> 🎯 missions), <b>↑</b> 📣 ordres (tenu : 🚩 guerre des gangs), <b>↓</b> 🎭 danser / klaxonner · <b>pavé tactile</b> : rappeler cette liste de touches à l'écran · si quelque chose répond de travers, ⚙️ → « 🎮 Tester la manette » montre en direct axes et boutons · dans les menus : croix ou stick pour se déplacer (maintenu : ça répète), <b>R1/L1</b> onglet suivant / précédent, <b>✕</b> valider, <b>◯</b> revenir · <b>Create</b> micro, <b>Options</b> menu — et elle vibre à chaque coup · le bouton « Connecter une manette PS5 » (📺 ou ⚙️) guide l'appairage Bluetooth</span>
       <div><kbd>/</kbd></div><span>écrire dans le chat · <kbd>Échap</kbd> menu</span>
       <div><kbd>📺</kbd></div><span>sur la télé : le bouton 📺 affiche un QR code, ton téléphone devient la manette et tes amis rejoignent en scannant</span>
     </div>
@@ -11517,7 +11517,7 @@ function defenseJoueur(dmg, dx, dz, melee) {
 }
 // ---- LES DEUX GESTES DE DÉFENSE, exposés sous le nom que la manette appelle ----
 // `garde(true/false)` : les deux poings devant le visage (L1 sur la DualSense).
-// `esquive(true/false)` : se baisser (touche C ou Ctrl au clavier, bouton 🙇 au doigt).
+// `esquive(true/false)` : se baisser (L2 sur la DualSense, C ou Ctrl au clavier, 🙇 au doigt).
 function garde(on) { return setGarde(on); }
 function esquive(on) { return setAccroupi(on); }
 function setGarde(on) {   // point d'entrée manette / tactile / clavier : lever ou baisser la garde
@@ -13192,7 +13192,9 @@ function interieurTick() {
 }
 const keys = new Set();
 const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
-const pad = { x: 0, y: 0, a: false, gaz: 0, frein: 0, lu: null };   // gaz = R2, frein = L2 (analogiques)
+// gaz = R2 et frein = L2, analogiques, AU VOLANT seulement. l2 = la gachette gauche en tout
+// ou rien : a pied elle baisse le joueur, en helico elle le fait descendre.
+const pad = { x: 0, y: 0, a: false, gaz: 0, frein: 0, l2: false, baisse: false, lu: null };
 const look = { id: null, lx: 0, ly: 0 };
 let running = false, paused = false, dead = false, won = false, timerOn = false, elapsed = 0, deaths = 0, coinCount = 0, simTime = 0;
 let cp = null;
@@ -16972,9 +16974,14 @@ function step(dt, active) {
 
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  // R2 = avancer, L2 = reculer : les gachettes s'ajoutent au stick gauche, qui garde la
-  // direction. Les deux coexistent — on peut avancer a la gachette et se decaler au stick.
-  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y + (pad.gaz || 0) - (pad.frein || 0), -1, 1);
+  // A PIED : LE STICK GAUCHE, ET LUI SEUL. Au round precedent les gachettes faisaient aussi
+  // avancer et reculer le personnage ; a l'usage le joueur n'en a pas voulu (« pour marcher
+  // reculer aller a droite gauche : joystick gauche pas les gachettes »). `pad.gaz` et
+  // `pad.frein` ne servent donc plus qu'AU VOLANT : ils ne sont plus additionnes ici, et
+  // R2/L2 a pied ont retrouve d'autres roles (R2 tire arme au poing, L2 baisse le joueur).
+  // La zone morte ronde et la courbe analogique sont dans padStick : pousse a moitie, on
+  // marche a moitie, et les quatre directions repondent exactement pareil.
+  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y, -1, 1);
   let wantX, wantZ, len;
   // arme dégainée : on passe en déplacement relatif à la caméra, sinon Q/D ferait tourner
   // le personnage contre la visée
@@ -17110,11 +17117,17 @@ function step(dt, active) {
 }
 
 // ================= VILLE : voitures, ballons, mini-jeux =================
-function readInput() {
+function readInput(sansStickY) {
   const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
-  // au volant : R2 accelere, L2 recule, et le stick gauche continue de braquer ET d'avancer
-  return { ix: clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz: clamp(kf + joy.y + pad.y + tel.y + (pad.gaz || 0) - (pad.frein || 0), -1, 1) };
+  // ENTREE COMMUNE, SANS LES GACHETTES. readInput() sert au parachute, au deltaplane et a
+  // l'helico : partout, c'est le stick gauche (ou le clavier, le joystick tactile, la
+  // manette-telephone) qui dirige. Les gachettes analogiques sont lues a part, par
+  // commandesManette(), parce qu'AU VOLANT seulement elles accelerent et freinent.
+  // `sansStickY` : AU VOLANT, le stick gauche ne fait que BRAQUER. Sinon le pouce qui pousse
+  // en diagonale pour tourner remettrait des gaz par-dessus la gachette, et on ne saurait
+  // plus doser — c'est exactement la precision que le joueur demandait.
+  return { ix: clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz: clamp(kf + joy.y + (sansStickY ? 0 : pad.y) + tel.y, -1, 1) };
 }
 // Rayon et demi-longueur d'échantillonnage d'un véhicule : trois disques répartis sur sa
 // longueur couvrent tout le rectangle, coins compris.
@@ -17265,7 +17278,7 @@ function enterCar(c) {
 }
 function exitCar() {
   const c = drive.car; if (!c) return;
-  drive.car = null; drive.speed = 0; engine.stop(); if (hrace.on) { hrace.on = false; updateAct(); }
+  drive.car = null; drive.speed = 0; drive.arMax = 0; engine.stop(); c.poser = false; if (hrace.on) { hrace.on = false; updateAct(); }   // on descend : la descente automatique du ▢ est annulée
   animTransArme(me);   // et pareil pour descendre : on sort du siège en glissant, pas d'un claquement de doigts
   if (c.rider) c.g.rotation.z = 0;
   // on ne descend pas d'un hélico en vol : il se pose d'abord sur ce qu'il y a dessous
@@ -17315,13 +17328,58 @@ function heliBlocked(x, y, z, c) {   // l'hélico est une boîte (selon son orie
   }
   return null;
 }
+// ================= SE POSER EN HELICO (le bouton ▢) =================
+// Demande du joueur : « ajoute une touche de commande pour l'helicoptere puisse atterrir
+// (le carre) ». Avant, poser l'appareil voulait dire MAINTENIR Ctrl (ou le bouton 🎭) au
+// bon dosage : trop peu on restait en vol stationnaire, trop longtemps on s'ecrasait
+// (au-dela de 3 m/s de descente, heliStep inflige des degats). ▢ enclenche maintenant une
+// descente AUTOMATIQUE et MAITRISEE, qui se pose vraiment et se coupe toute seule.
+// La hauteur du sol (ou du toit) sous l'appareil : la meme boite que heliBlocked, mais on
+// cherche le HAUT du solide le plus haut sous l'helico au lieu d'une collision.
+function heliSolSous(c) {
+  const W = 2.6, D = 6.4, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h));
+  const hw = (W * cs + D * sn) / 2 * 0.85, hd = (W * sn + D * cs) / 2 * 0.85;
+  let haut = 0.2;   // le plancher du monde
+  for (const o of solidsAutour(c.x, c.z, Math.max(hw, hd) + 1, true)) {
+    if (o === c.solid || o.h > 30) continue;
+    if (c.x + hw <= o.x - o.w / 2 || c.x - hw >= o.x + o.w / 2) continue;
+    if (c.z + hd <= o.z - o.d / 2 || c.z - hd >= o.z + o.d / 2) continue;
+    const t = o.y + o.h / 2;
+    if (t <= c.y + 0.25 && t > haut) haut = t;
+  }
+  return haut;
+}
+const HELI_POSE_MIN = 0.5;    // vitesse de descente juste avant de toucher (m/s) : on se POSE
+const HELI_POSE_MAX = 2.9;    // vitesse de descente en altitude : juste SOUS le seuil de casse (3 m/s)
+function heliPoser(force) {   // ▢ (ou V au clavier) : enclenche / annule la descente automatique
+  const c = drive.car;
+  if (!c || !c.heli) return false;
+  const on = force == null ? !c.poser : !!force;
+  if (c.landed && on) { msg('🚁 Déjà posé', 900); return false; }
+  c.poser = on;
+  msg(on ? '🚁 Atterrissage… (▢ ou ◯ pour annuler)' : '🚁 Atterrissage annulé', 1300);
+  sfx.tone(on ? 420 : 300, 0, .09, 'triangle', .04, on ? 620 : 220);
+  return true;
+}
 function heliStep(dt) {
   const c = drive.car, { ix, iz } = readInput();
-  const up = (jumpHeld || keys.has('Space') || pad.a ? 1 : 0) - (downHeld || keys.has('ShiftLeft') || keys.has('ControlLeft') || keys.has('KeyC') ? 1 : 0);
+  // L2 fait descendre l'helico, comme elle freine en voiture et baisse le joueur a pied :
+  // a gauche, on ralentit ou on descend. C'est la meme gachette, la meme idee.
+  const up = (jumpHeld || keys.has('Space') || pad.a ? 1 : 0) - (downHeld || keys.has('ShiftLeft') || keys.has('ControlLeft') || keys.has('KeyC') || pad.l2 ? 1 : 0);
   c.h -= ix * 1.5 * dt;
   const k = 1 - Math.exp(-2.2 * dt);
   c.vx += (Math.sin(c.h) * iz * 16 - c.vx) * k; c.vz += (Math.cos(c.h) * iz * 16 - c.vz) * k;
-  c.vy += (up * 7 - c.vy) * (1 - Math.exp(-3 * dt));
+  // LA DESCENTE AUTOMATIQUE. La consigne suit la hauteur restante : franche en altitude,
+  // de plus en plus douce en approchant, jamais au-dela de HELI_POSE_MAX (donc jamais de
+  // casse a l'arrivee). Remettre les gaz (◯) reprend la main immediatement.
+  if (c.poser && up > 0) { c.poser = false; msg('🚁 Remise des gaz', 900); }
+  if (c.poser) {
+    const reste = Math.max(0, c.y - heliSolSous(c));
+    const cible = -clamp(HELI_POSE_MIN + reste * 0.85, HELI_POSE_MIN, HELI_POSE_MAX);
+    c.vy += (cible - c.vy) * (1 - Math.exp(-4 * dt));
+    // on se pose SUR PLACE : sans consigne au stick, la derive horizontale s'eteint
+    if (Math.abs(iz) < 0.05 && Math.abs(ix) < 0.05) { const f = Math.min(1, dt * 2.4); c.vx -= c.vx * f; c.vz -= c.vz * f; }
+  } else c.vy += (up * 7 - c.vy) * (1 - Math.exp(-3 * dt));
   // déplacement axe par axe avec collision contre tout : murs, immeubles, véhicules, portique, barrières
   const nx = clamp(c.x + c.vx * dt, MONDE.x1 + 2, MONDE.x2 - 2);
   if (!heliBlocked(nx, c.y, c.z, c)) c.x = nx; else { c.vx *= -0.25; if (Math.abs(c.vx) > 1.5) { sfx.hit(); vehicleDamage(c, 2); } }
@@ -17335,7 +17393,7 @@ function heliStep(dt) {
   if (!hitY) { c.y = ny; c.landed = up <= 0 && (ny <= 0.21 || !!heliBlocked(c.x, ny - 0.25, c.z, c)); }
   else if (c.vy <= 0) { c.y = Math.max(c.y, hitY.y + hitY.h / 2 + 0.02); c.landed = up <= 0; if (c.vy < -3) { sfx.hit(); vehicleDamage(c, -c.vy); } c.vy = 0; }
   else { c.vy = 0; }
-  if (c.landed) { c.vy = 0; c.vx *= 0.9; c.vz *= 0.9; }
+  if (c.landed) { c.vy = 0; c.vx *= 0.9; c.vz *= 0.9; if (c.poser) { c.poser = false; msg('🚁 Posé !', 1200); sfx.tone(300, 0, .12, 'triangle', .05, 180); } }
   c.spin = Math.min(1, c.spin + dt * 0.6);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.set(iz * 0.16, c.h, -ix * 0.14, 'YXZ');
   vehicleSolid(c);
@@ -17837,22 +17895,63 @@ function gearOf(ratio) { return ratio < 0.02 ? 0 : ratio < 0.18 ? 1 : ratio < 0.
 // Elle range dans c.cmd tout ce dont dépendent les roues, la fumée, la caméra et le son :
 //   { gaz, volant, frein, v, ratio, gear, braquage, freine, derape, glisse }
 // et renvoie ce même objet.
-function commandesManette() {
-  const { ix, iz } = readInput();
-  // freiner, c'est pousser DANS LE SENS CONTRAIRE de la marche (comme dans un GTA : une
-  // seule gâchette pour la marche arrière et le frein). La touche B, elle, tire le frein à main.
-  const v = drive.speed, contre = v * iz < -0.4 ? Math.min(1, Math.abs(iz)) : 0;
+// ================= LES DEUX PEDALES : R2 ACCELERE, L2 FREINE =================
+// Demande du joueur, mot pour mot : « pour conduire : accélérer gâchette droite et freiner
+// gâchette gauche, affine pour que ce soit précis en jouabilité ». Trois soins particuliers :
+//   1. ANALOGIQUE ET LINEAIRE. padCourse() enlève la zone morte (une gâchette au repos ne
+//      rend pas toujours zéro) puis étale le reste sur toute la course : à mi-course on
+//      commande à peu près la moitié de l'accélération, pas le quart comme une courbe au
+//      carré, ni tout comme un simple bouton.
+//   2. PAS D'À-COUP ENTRE LE FREIN ET LA MARCHE ARRIÈRE. Une gâchette poussée CONTRE le sens
+//      de la marche freine ; à l'arrêt, elle passe en marche arrière. Le basculement se fait
+//      par un FONDU entre CONDUITE_V0 et CONDUITE_V1 : entre les deux, une part freine et
+//      l'autre pousse en arrière, la somme reste continue — la voiture ne se cabre pas.
+//   3. LA PÉDALE NE DÉCLENCHE JAMAIS LE FREIN À MAIN. Au-delà de FREIN_MAIN (0,85) conduire()
+//      fait décrocher l'arrière : L2 à fond partait en tête-à-queue au moindre freinage. La
+//      pédale est donc plafonnée à FREIN_PEDALE ; le frein à main reste sur ESPACE maintenu.
+const CONDUITE_V0 = 0.4;      // en dessous de 0,4 m/s la gâchette opposée passe en marche arrière
+const CONDUITE_V1 = 2.2;      // au-delà de 2,2 m/s elle ne fait plus que freiner
+const FREIN_PEDALE = 0.8;     // freinage maximal à la pédale (au-delà, conduite() croirait au frein à main)
+const MARCHE_AR_MONTEE = 2.2;  // la commande de marche arrière monte en ~0,45 s : elle ne part jamais d'un coup
+// Une gâchette de conduite : `sens` = +1 pour R2 (marche avant), −1 pour L2 (frein / arrière).
+// Renvoie ce qu'elle ajoute au gaz et ce qu'elle ajoute au frein.
+function gachetteConduite(course, sens, v) {
+  if (course <= 0) return [0, 0];
+  // `contre` = 1 quand on roule franchement dans l'autre sens (donc : freiner), 0 à l'arrêt
+  const contre = clamp((-sens * v - CONDUITE_V0) / (CONDUITE_V1 - CONDUITE_V0), 0, 1);
+  return [sens * course * (1 - contre), course * contre * FREIN_PEDALE];
+}
+function commandesManette(dt) {
+  const { ix, iz } = readInput(true);
+  const v = drive.speed;
+  // Le clavier, le joystick tactile et la manette-téléphone gardent l'ancienne règle : pousser
+  // dans le sens contraire freine, puis recule. On la fait passer par le MÊME fondu, pour que
+  // la touche S et la gâchette L2 donnent exactement la même sensation.
+  let gaz = 0, frein = 0;
+  if (Math.abs(iz) > 0.02) { const [g, f] = gachetteConduite(Math.abs(iz), Math.sign(iz), v); gaz += g; frein += f; }
+  // LES GÂCHETTES : R2 accélère, L2 freine puis recule. `pad.gaz` et `pad.frein` sont déjà
+  // passées par la zone morte et la mise à l'échelle (padCourse, dans pollGamepad).
+  if (pad.gaz > 0) { const [g, f] = gachetteConduite(pad.gaz, 1, v); gaz += g; frein += f; }
+  if (pad.frein > 0) { const [g, f] = gachetteConduite(pad.frein, -1, v); gaz += g; frein += f; }
   // FREIN À MAIN : la barre d'espace MAINTENUE, comme dans un GTA (l'appui bref, lui,
   // klaxonne toujours, et dans le buggy il fait bondir la machine). B était déjà pris : il
   // ouvre la boutique, et on se serait retrouvé au magasin en pleine glissade.
   const c = drive.car;
   const main = (keys.has('Space') && !!c && c.kind !== 'buggy' && c.kind !== 'bike' && c.kind !== 'velo') || !!drive.freinMain;
-  return { gaz: iz, volant: ix, frein: main ? 1 : contre, main, nitro: false };
+  gaz = clamp(gaz, -1, 1);
+  // L'ARRIÈRE NE PART PAS D'UN COUP. La marche arrière pousse aussi fort que la marche avant
+  // (plus de 24 m/s² sur une ambulance) : à l'instant précis où le freinage amenait la voiture
+  // à l'arrêt, elle REBONDISSAIT en arrière — un à-coup dans les mains, et on repartait de
+  // travers. La commande de marche arrière monte donc progressivement (MARCHE_AR_MONTEE par
+  // seconde) et retombe à zéro dès qu'on relâche : on recule en douceur, sans rien perdre.
+  if (gaz < 0) { drive.arMax = Math.min(1, (drive.arMax || 0) + MARCHE_AR_MONTEE * (dt || 1 / 60)); gaz = Math.max(gaz, -drive.arMax); }
+  else drive.arMax = 0;
+  return { gaz, volant: ix, frein: main ? 1 : clamp(frein, 0, FREIN_PEDALE), main, nitro: false };
 }
 function driveStep(dt) {
   const c = drive.car; if (!c) return;
   if (c.heli) return heliStep(dt);
-  conduire(c, commandesManette(), dt);
+  conduire(c, commandesManette(dt), dt);
 }
 function conduire(c, cmd, dt) {
   if (!c || c.heli) return null;
@@ -17880,7 +17979,7 @@ function conduire(c, cmd, dt) {
   let ix = clamp(cmd.volant || 0, -1, 1), iz = clamp(cmd.gaz || 0, -1, 1);
   const frein = clamp(cmd.frein || 0, 0, 1), main = !!cmd.main || frein > FREIN_MAIN;
   if (cmd.nitro && pilote) nitroGo();
-  if (pilote && race.state === 'countdown' && c.kart) { iz = 0; V.speed = 0; if (Math.abs(readInput().iz) > 0.3 && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
+  if (pilote && race.state === 'countdown' && c.kart) { iz = 0; V.speed = 0; if ((Math.abs(readInput().iz) > 0.3 || pad.gaz > 0.3) && simTime > (c.revT || 0)) { c.revT = simTime + 0.4; sfx.tone(140, 0, .15, 'triangle', .04, 90); } }   // feux rouges : on attend le vert
   const boosted = V.boostT > simTime, dmgMul = 1 - (c.dmg || 0) / 100 * 0.6, vmax = (boosted ? sp.max * 1.55 : sp.max) * (c.dead ? 0.25 : dmgMul);
   // boîte automatique : le rapport suit la vitesse (affiché dans le HUD), l'accélération et le régime moteur en dépendent
   const ratio = clamp(Math.abs(V.speed) / sp.max, 0, 1);
@@ -20138,6 +20237,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Digit3' && running) { if (P.grenades > 0) equipWeapon(P.weapon === 'grenade' ? null : 'grenade'); return; }
   if (e.code === 'Digit4' && running) { if (owned.has('arme:knife')) equipWeapon(P.weapon === 'knife' ? null : 'knife'); return; }
   if (e.code === 'KeyG' && running && !paused) { drawWeapon(); return; }
+  // V aux commandes d'un helicoptere : se poser (c'est le ▢ de la manette). Au sol, V frappe.
+  if (e.code === 'KeyV' && running && !paused && drive.car && drive.car.heli) { heliPoser(); return; }
   if (e.code === 'KeyV' && running && !paused) { if (!keys.has('KeyV')) { keys.add('KeyV'); P.vDown = simTime; } return; }
   // LE COMBAT : C (ou Ctrl gauche) pour se baisser et esquiver, H pour lever la garde.
   if ((e.code === 'KeyC' || e.code === 'ControlLeft') && running && !paused && !drive.car) { keys.add(e.code); setAccroupi(true); return; }
@@ -20445,20 +20546,33 @@ function padVibre(force = 0.6, ms = 120) {
 }
 function pollGamepad(dt) {
   const gp = padActive();
-  if (!gp) { pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.lu = null; if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; }
+  if (!gp) { pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.l2 = false; if (pad.baisse) { pad.baisse = false; setAccroupi(false); } pad.lu = null;
+    if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; if (P.garde) setGarde(false); }
     if (uiOpen === 'padTest') padEssaiTick(null); return; }
   const L = padLu(gp);                       // agencement normalise : voir padLu
   pad.lu = L; manetteSalon.profil = L.profil;
   const menu = !!document.querySelector('.overlay:not(.hidden)');
   const [gx, gy] = padStick(L.lx, L.ly);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
-  // LES GACHETTES ANALOGIQUES : R2 avance/accelere, L2 recule. A moitie enfoncee = demi-vitesse.
-  // MAIS quand l'arme est BRAQUEE et qu'on est a pied, R2 devient la gachette de TIR : les deux
-  // usages ne se marchent jamais dessus, c'est l'etat de l'arme qui tranche (au volant, R2
-  // accelere toujours — on ne tire pas au jugé en conduisant).
+  // LES DEUX GACHETTES, NOUVEAU PARTAGE (round 68). Le joueur a change d'avis : les gachettes
+  // ne font plus AVANCER A PIED (c'est le stick gauche, et lui seul). Elles gardent trois
+  // roles, qui ne se croisent jamais parce que la SITUATION tranche :
+  //   au volant   : R2 accelere, L2 freine puis recule  (analogiques — voir commandesManette)
+  //   a pied      : R2 tire quand l'arme est braquee, L2 baisse le joueur
+  //   en helico   : L2 fait descendre, ▢ pose l'appareil
   const armeBraquee = !!P.drawn && !drive.car;
   pad.armeBraquee = armeBraquee;
-  pad.gaz = (menu || armeBraquee) ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
+  pad.gaz = menu ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
+  pad.l2 = !menu && L.b[6];
+  // L2 A PIED : SE BAISSER. Le geste existait deja (l'esquive du combat : bassin abaisse de
+  // 19,8 cm, genoux plies a 1,66 rad, semelles au sol) mais n'avait aucun bouton a lui sur la
+  // manette — seulement C ou Ctrl au clavier. Il tient maintenant dans la gachette gauche,
+  // libree par le changement ci-dessus, et coherente avec le reste : a gauche on ralentit
+  // (frein), on descend (helico) ou on se baisse (a pied).
+  {
+    const baisse = pad.l2 && !drive.car && running && !paused;
+    if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
+  }
   if (running && !paused && !menu) {
     const [vx, vy] = padStick(L.rx, L.ry, 0.08);
     // la camera tournait a 3,4 rad/s : trop lent pour se retourner. 5,5 rad/s au bord, et le
@@ -20476,10 +20590,17 @@ function pollGamepad(dt) {
   // reste muette (touche OK de la telecommande, ou un doigt sur l'ecran).
   if (Object.keys(neuf).some(i => neuf[i] && !bas[i])) padSon();
   if (menu) {
+    if (P.garde) setGarde(false);   // un menu s'ouvre : on ne reste pas fige en garde ou accroupi
     if (uiOpen === 'padTest') padEssaiTick(L, neuf, bas); else padMenu(L, neuf, bas);
   } else {
+    // ▢ EN HELICO = ATTERRIR. Au sol le carre frappe (KeyV) ; aux commandes d'un helicoptere
+    // il n'y a personne a frapper, donc le meme bouton y enclenche la descente automatique.
+    // Aucune collision : c'est l'un OU l'autre selon qu'on vole ou non.
+    const enHelico = !!drive.car && !!drive.car.heli;
+    if (enHelico && neuf[2] && !bas[2]) { heliPoser(); padVibre(0.25, 60); }
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
+      if (+i === 2 && enHelico) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne frappe pas en vol : il fait atterrir
       telTouche(k, neuf[i]);
     }
     // LA GACHETTE DE TIR. Arme braquee (✕), a pied : R2 tire — maintenue, elle tire en
@@ -20492,10 +20613,16 @@ function pollGamepad(dt) {
       if (debut) padVibre(0.3, 50);
     }
     pad.tirR2 = tireR2;
-    // « courir » est sur L3, comme dans les grands jeux de ville. L2 recule.
+    // « courir » est sur L3, comme dans les grands jeux de ville (L2 baisse le joueur).
     const court = neuf[10];                                           // L3 : courir
     if (court !== !!bas[10]) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
-    if (neuf[4] && !bas[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); }
+    // L1 : GARDE quand l'arme est rangee (on MAINTIENT, les deux poings devant le visage),
+    // VISEE quand elle est braquee. Les deux ne peuvent pas coexister — setGarde() refuse la
+    // garde une arme au poing —, donc un seul bouton suffit et rien ne se marche dessus.
+    if (neuf[4] !== !!bas[4]) {
+      if (P.drawn || drive.car) { if (neuf[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } }
+      else setGarde(neuf[4]);
+    }
     if (neuf[11] && !bas[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }   // R3 : recentrer la caméra
     if (neuf[16] && !bas[16]) telTouche('Escape', true);
     // la croix : appui court = l'action ; ↑ ← → tenus 0,7 s = guerre des gangs / boutique / missions
@@ -20547,11 +20674,11 @@ function padMenu(L, neuf, bas) {
 // puisse savoir si le stick etait mort, mal branche, inverse, ou simplement mappe sur autre
 // chose. Ici on voit les axes bruts, les axes apres zone morte, les gachettes et les 18
 // boutons s'allumer — et une phrase de diagnostic dit ce qui est detecte.
-const PT_AXES = [['Stick G ←→', 'lx'], ['Stick G ↑↓', 'ly'], ['Stick D ←→', 'rx'], ['Stick D ↑↓', 'ry'], ['L2 (reculer)', 'l2'], ['R2 (avancer / tir)', 'r2']];
+const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
 // A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
-const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter', 2: 'frapper', 3: 'agir', 4: 'viser', 5: 'tirer',
-  6: 'reculer', 7: 'avancer / tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
+const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
+  6: 'freiner · se baisser', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
   12: 'ordres', 13: 'danser', 14: 'arme préc.', 15: 'arme suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
@@ -20589,13 +20716,15 @@ function padEssaiTick(L, neuf, bas) {
   if (d) {
     const p = [];
     if (L.profil !== 'standard') p.push(`agencement non standard corrigé (${L.profil}${L.chapeau >= 0 ? `, croix sur l'axe ${L.chapeau}` : ''})`);
-    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${settings.ctrl === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
+    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : settings.ctrl === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
+    if (Math.abs(ny) > 0.15) p.push(`stick gauche : ${ny < 0 ? 'AVANT' : 'ARRIÈRE'} (${(-ny).toFixed(2)}) → ${drive.car ? 'rien (au volant, on accélère aux gâchettes)' : 'on marche'}`);
     if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
     if (L.b[0]) p.push('✕ : braquer / rengainer l\'arme');
     if (L.b[1]) p.push('◯ : sauter');
     if (L.b[3]) p.push('△ : agir');
-    if (vals.r2 > 0.05) p.push(`R2 = ${pad.armeBraquee ? 'TIRER' : 'avancer'} à ${Math.round(vals.r2 * 100)} %`);
-    if (vals.l2 > 0.05) p.push(`L2 = reculer à ${Math.round(vals.l2 * 100)} %`);
+    if (L.b[2] && drive.car && drive.car.heli) p.push('▢ : 🚁 se poser (descente automatique)');
+    if (vals.r2 > 0.05) p.push(`R2 = ${drive.car ? 'ACCÉLÉRER' : pad.armeBraquee ? 'TIRER' : '(à pied, arme rangée : rien — on marche au stick gauche)'} à ${Math.round(vals.r2 * 100)} %`);
+    if (vals.l2 > 0.05) p.push(`L2 = ${drive.car ? (drive.car.heli ? 'DESCENDRE' : 'FREINER (à l\'arrêt : marche arrière)') : 'SE BAISSER'} à ${Math.round(vals.l2 * 100)} %`);
     d.textContent = p.length ? p.join(' · ') : 'Bouge les sticks, appuie sur les gâchettes et sur la croix : tout doit s\'allumer ici.';
   }
   padEssai.diag = d ? d.textContent : '';
@@ -20627,7 +20756,7 @@ setInterval(() => {
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
-  msg(ps ? '🎮 Manette PlayStation connectée — R2 avancer (tirer arme braquée) · ✕ braquer · ◯ sauter · △ agir' : '🎮 Manette connectée !', 3200);
+  msg(ps ? '🎮 Manette PlayStation connectée — stick gauche marcher · L2 se baisser · R2 accélérer au volant (tirer arme braquée) · ✕ braquer · ◯ sauter · △ agir' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
   try { montreAide(7); } catch (e) {}
   unlockAudio(); padVibre(0.5, 200);

@@ -1833,6 +1833,15 @@ window.__G = {
   DUCK_TENUE: typeof DUCK_TENUE !== 'undefined' ? DUCK_TENUE : 0,
   craieLitFerme: typeof craieLitFerme === 'function' ? craieLitFerme : null,
   sonEn: typeof sonEn === 'function' ? sonEn : null,
+  // ---- poste SON (armement : detonation, impacts, ricochet) ----
+  sonArme: typeof sonArme === 'function' ? sonArme : null,
+  sonDetonation: typeof sonDetonation === 'function' ? sonDetonation : null,
+  sonImpactBalle: typeof sonImpactBalle === 'function' ? sonImpactBalle : null,
+  SONS_ARME: typeof SONS_ARME !== 'undefined' ? SONS_ARME : null,
+  armVoix: typeof armVoix !== 'undefined' ? armVoix : null,
+  bufArme: typeof bufArme === 'function' ? bufArme : null,
+  cuisArme: typeof cuisArme === 'function' ? cuisArme : null,
+  dureeArme: typeof dureeArme === 'function' ? dureeArme : null,
   // ---- poste CAMERA (perche, loi de distance, non-traversee) ----
   camPerche: typeof camPerche === 'function' ? camPerche : null,
   camLibres: typeof camLibres === 'function' ? camLibres : null,

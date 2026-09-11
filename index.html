@@ -11528,7 +11528,7 @@ function agentTire(a, dmg, disp) {
   dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp);
   dir.normalize().multiplyScalar(85);
   const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: a.name, dmg };
-  shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60);
+  shots.push(sh); spawnShot(sh); sonDetonation('rifle', origin.x, origin.y, origin.z, 0.85);   // poste SON : la police tire la meme detonation que le joueur, placee a SON canon
   a.av.rig.armR.rotation.x = -1.5;
 }
 function agentsTick(dt) {
@@ -11733,7 +11733,7 @@ function armeeTick(dt) {
     dir.x += rnd(-0.03, 0.03); dir.y += rnd(-0.02, 0.02); dir.z += rnd(-0.03, 0.03);
     dir.normalize().multiplyScalar(95);
     const sh = { m: null, p: o, v: dir, t: 0, mine: false, police: true, byName: 'l\'hélicoptère', dmg: 14 };
-    shots.push(sh); spawnShot(sh); sfx.noise(.05, 1500, .05);
+    shots.push(sh); spawnShot(sh); sonDetonation('rifle', o.x, o.y, o.z, 0.9);   // poste SON : la mitrailleuse de l'helicoptere, placee la-haut
     if (simTime > (armee.avertT || 0)) { armee.avertT = simTime + 6; msg('🚁 L\'hélicoptère te tire dessus sur le toit !', 2200); }
   }
   if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; if (dF < 60) sfx.tone(60, 0, .5, 'sawtooth', .03, 40); }
@@ -11996,7 +11996,7 @@ function policeTick(dt) {
       const portee = armee.on ? 40 : braquage ? 32 : 10 + police.wanted * 4 + tenace * 2;
       if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.8, 2.2 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
         dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
-        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: Math.max(2, Math.round(((pc.mil ? 16 : 4) + police.wanted + tenace) * (0.45 + policePerf() / 100))) }; shots.push(sh); spawnShot(sh); sfx.noise(.05, 1300, .05); sfx.tone(180, 0, .06, 'triangle', .04, 60); }
+        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: Math.max(2, Math.round(((pc.mil ? 16 : 4) + police.wanted + tenace) * (0.45 + policePerf() / 100))) }; shots.push(sh); spawnShot(sh); sonDetonation('rifle', origin.x, origin.y, origin.z, 0.85); }   // poste SON : la police tire la meme detonation que le joueur, placee a SON canon
     }
     // arrestation : la police me touche (ou reste coincée tout près : les agents descendent et m'attrapent à pied)
     const dP = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z);
@@ -14195,6 +14195,212 @@ function sonEn(x, y, z, faire, opt) {
 }
 const sT = (d, f, t, dur, type, vol, slide) => sfx.toneVers(d, f, t, dur, type, vol, slide);
 const sB = (d, dur, freq, vol, q, t, type) => sfx.bruitVers(d, dur, freq, vol, q, t, type);
+
+// ================= L'ARMEMENT : LE SON QUI CLAQUE (poste SON) =================
+// LE PROBLEME. Un coup de feu, c'etait deux lignes : une bouffee de bruit passe-bande a
+// 1,1 kHz et un bip descendant de 200 a 60 Hz. Resultat : un « pfft » mou, sans attaque, sans
+// corps, identique pour le pistolet et le fusil, et qui se fondait en bouillie des qu'on
+// enchainait — trois balles ne faisaient qu'un seul plateau de bruit.
+//
+// CE QU'EST VRAIMENT UNE DETONATION. Quatre choses qui arrivent en meme temps :
+//   1. LA CLAQUE  — l'onde de choc : du bruit tres aigu, qui monte en une milliseconde et
+//                   tombe en vingt. C'est elle qu'on identifie comme « un coup de feu ».
+//   2. LE CORPS   — le coup de belier dans le canon : du bruit filtre en cloche autour du
+//                   medium grave, un peu plus lent. C'est lui qui donne le poids.
+//   3. LE BOUM    — l'onde grave qui part de la bouche, un glissando qui plonge. Le ventre.
+//   4. LA QUEUE   — le renvoi des immeubles d'en face, discret et plus long. La ville.
+//
+// Chaque arme dose ces quatre-la autrement, et c'est le TABLEAU ci-dessous qui le dit — un
+// reglage par couche, pas une ligne de code : le pistolet claque sec et aigu, le fusil
+// d'assaut tape plus gras (plus de corps, moins de claque), le fusil a lunette donne un coup
+// lourd et grave avec une longue queue qui roule dans le quartier.
+// f : coupure du passe-haut de la claque · q/f du corps (cloche) et de la queue (bande) ·
+// tau : constante de retombee en secondes · n : niveau relatif au niveau general du son.
+const SONS_ARME = {
+  // LE PISTOLET : sec, aigu, court. Presque tout est dans la claque, le boum est bref.
+  'tir-pistol': { niv: 0.40, portee: 55,
+    claque: { f: 3100, tau: 0.021, n: 1.00 },
+    corps:  { f: 950,  q: 6.5, tau: 0.042, n: 0.55 },
+    boom:   { type: 'triangle', f0: 160, f1: 58, chute: 0.020, tau: 0.048, n: 0.45 },
+    queue:  { f: 1500, q: 0.9, tau: 0.065, n: 0.10 } },
+  // LE FUSIL D'ASSAUT : plus gras. Moins de claque aigue, beaucoup plus de corps, un boum
+  // plus bas et plus tenu — c'est ce qui fait la difference a l'oreille en rafale.
+  'tir-rifle': { niv: 0.36, portee: 70,
+    claque: { f: 2100, tau: 0.028, n: 0.82 },
+    corps:  { f: 620,  q: 4.5, tau: 0.092, n: 1.15 },
+    boom:   { type: 'sawtooth', f0: 120, f1: 44, chute: 0.030, tau: 0.098, n: 0.60 },
+    queue:  { f: 950,  q: 0.8, tau: 0.155, n: 0.30 } },
+  // LE FUSIL A LUNETTE : un seul coup, lourd et grave, qui roule dans tout le quartier.
+  'tir-sniper': { niv: 0.38, portee: 100,
+    claque: { f: 1500, tau: 0.040, n: 0.80 },
+    corps:  { f: 380,  q: 3.2, tau: 0.115, n: 1.05 },
+    boom:   { type: 'sawtooth', f0: 92,  f1: 33, chute: 0.050, tau: 0.135, n: 0.75 },
+    queue:  { f: 600,  q: 0.7, tau: 0.290, n: 0.26 } },
+  // ---- le reste de l'armement ----
+  // DEGAINER : le frottement du cuir de l'etui, puis le clic de l'arme qui se presente.
+  'degaine': { niv: 0.13, portee: 16,
+    claque: { f: 4200, tau: 0.012, n: 0.55 },
+    corps:  { f: 1400, q: 1.2, tau: 0.060, n: 0.70 },
+    boom:   { type: 'square', f0: 520, f1: 900, chute: 0.045, tau: 0.035, n: 0.18 },
+    queue:  { f: 2600, q: 0.8, tau: 0.045, n: 0.20 } },
+  // RENGAINER : le meme frottement, mais qui DESCEND, et le petit choc de l'arme au fond de l'etui.
+  'rengaine': { niv: 0.15, portee: 16,
+    claque: { f: 3000, tau: 0.018, n: 0.45 },
+    corps:  { f: 700,  q: 1.4, tau: 0.085, n: 0.85 },
+    boom:   { type: 'square', f0: 420, f1: 190, chute: 0.060, tau: 0.055, n: 0.22 },
+    queue:  { f: 1600, q: 0.8, tau: 0.070, n: 0.18 } },
+  // LE CLIC A VIDE : le percuteur sur une chambre vide. Rien que du metal, aucun grave.
+  // Avant, un chargeur vide ne faisait AUCUN bruit : on appuyait dans le silence.
+  'vide': { niv: 0.17, portee: 12,
+    claque: { f: 5200, tau: 0.007, n: 1.00 },
+    corps:  { f: 2400, q: 9, tau: 0.016, n: 0.55 },
+    boom:   { type: 'square', f0: 1500, f1: 900, chute: 0.012, tau: 0.014, n: 0.30 },
+    queue:  { f: 3400, q: 1.6, tau: 0.030, n: 0.10 } },
+  // LA BALLE DANS LA TOLE : le « tonk » creux d'une carrosserie, avec la resonance du panneau.
+  'tole': { niv: 0.22, portee: 45,
+    claque: { f: 3600, tau: 0.010, n: 0.70 },
+    corps:  { f: 480,  q: 11, tau: 0.090, n: 1.00 },
+    boom:   { type: 'sine', f0: 300, f1: 175, chute: 0.055, tau: 0.075, n: 0.40 },
+    queue:  { f: 1800, q: 1.1, tau: 0.055, n: 0.16 } },
+  // LA BALLE DANS LE MUR : sec, mat, plein de poussiere de beton. Pas de resonance.
+  'mur': { niv: 0.21, portee: 45,
+    claque: { f: 2600, tau: 0.014, n: 0.90 },
+    corps:  { f: 700,  q: 2.0, tau: 0.045, n: 0.60 },
+    boom:   { type: 'triangle', f0: 190, f1: 95, chute: 0.030, tau: 0.040, n: 0.25 },
+    queue:  { f: 1200, q: 0.7, tau: 0.075, n: 0.18 } },
+  // LE RICOCHET : le sifflement de la balle qui repart de travers. Un glissando qui MONTE
+  // puis file, presque pas de bruit — c'est le son le plus reconnaissable d'un tir rate.
+  'ricochet': { niv: 0.16, portee: 50,
+    claque: { f: 6000, tau: 0.008, n: 0.35 },
+    corps:  { f: 2600, q: 12, tau: 0.030, n: 0.30 },
+    boom:   { type: 'sine', f0: 1150, f1: 3300, chute: 0.130, tau: 0.115, n: 1.00 },
+    queue:  { f: 4200, q: 2.2, tau: 0.090, n: 0.10 } },
+};
+// POURQUOI LE SON EST CUIT A L'AVANCE, ET PAS JOUE PAR DES NŒUDS. Premiere version : six
+// « voix » permanentes (bruit boucle + filtres + oscillateur) dont on ouvrait et fermait les
+// gains. Ca sonnait tres bien... au casque. Sur le banc d'essai, un coup sur trois mesurait
+// 0,0002. La raison : le fil audio rend TOUJOURS un peu en avance sur `currentTime`, et
+// beaucoup plus quand le fil principal vient de caler sur une image lourde (il rattrape alors
+// son retard d'un coup, l'horloge audio « saute »). Une enveloppe programmee a `currentTime`
+// tombe dans ce passe-la : le fil audio ne voit plus que la fin de la retombee, et la
+// detonation est deja eteinte quand elle sort. Aucun reglage d'avance ne rattrape ca, parce
+// que l'avance varie d'une image a l'autre.
+// LA SOLUTION, qui est aussi la meilleure pour le son : on FABRIQUE la forme d'onde complete
+// une fois pour toutes, echantillon par echantillon, et chaque coup n'est plus qu'une lecture
+// d'echantillon lancee par `start()` SANS argument — « des que possible ». Une lecture sans
+// date ne peut pas etre ratee : il n'y a pas de passe ou tomber. C'est exactement ce qui fait
+// que `sfx.noise` sortait, lui, sur toutes les machines.
+// Trois bonus : c'est bien moins cher (plus aucun filtre ni oscillateur permanent qui tourne
+// pour rien sur une tablette), la crete de chaque son est NORMALISEE au chiffre du tableau
+// (le niveau d'une arme devient un reglage, plus le hasard d'une somme), et trois variantes
+// par son evitent l'effet « mitraillette de photocopieuse » quand on tire en rafale.
+const ARM_VARIANTES = 3;            // trois grains differents par son, tires au sort a chaque coup
+// Un generateur de hasard A NOUS pour fabriquer le bruit. Math.random est FIGE par le banc
+// d'essai (c'est ce qui rend les mesures reproductibles) et un bruit blanc tire de Math.random
+// serait alors un SILENCE parfait. Xorshift 32 bits : deux lignes, et toujours la meme
+// detonation d'une partie a l'autre.
+function hasardArme(graine) {
+  let x = (graine | 0) || 1;
+  return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 2147483648 - 1; };
+}
+// La longueur du son : six fois la plus longue des quatre retombees (au-dela il ne reste
+// rien d'audible), au plus 1,2 s pour le coup de fusil a lunette qui roule dans le quartier.
+function dureeArme(A) { return Math.min(1.2, Math.max(0.08, Math.max(A.claque.tau, A.corps.tau, A.queue.tau, A.boom.tau) * 6)); }
+// LA CUISSON. Quatre couches ecrites a la main, echantillon par echantillon :
+//  - la claque : bruit blanc passe-haut (un pole) + attaque de 1,2 ms, retombee tres courte ;
+//  - le corps  : le meme bruit dans un filtre resonant (Chamberlin, deux poles) — la cloche
+//                du canon ; c'est le Q qui fait la difference entre un « tonk » de tole (Q 11)
+//                et le medium large d'un fusil (Q 4,5) ;
+//  - la queue  : le meme bruit dans un second resonant, large et lent — le renvoi des murs ;
+//  - le boum   : un glissando (l'onde grave qui plonge), ou qui MONTE pour le ricochet.
+function cuisArme(nom, k) {
+  const c = sfx.unlock(); if (!c) return null;
+  const A = SONS_ARME[nom]; if (!A) return null;
+  const sr = c.sampleRate, n = Math.max(64, Math.ceil(sr * dureeArme(A)));
+  const buf = c.createBuffer(1, n, sr), d = buf.getChannelData(0);
+  const bruit = hasardArme(0x9e3779b1 + k * 7919 + nom.length * 104729 + nom.charCodeAt(0) * 31);
+  const rc = 1 / (2 * Math.PI * A.claque.f), aHP = rc / (rc + 1 / sr);   // passe-haut a un pole
+  let xPrec = 0, yPrec = 0;
+  const fC = 2 * Math.sin(Math.PI * Math.min(0.45, A.corps.f / sr)), qC = 1 / Math.max(0.5, A.corps.q);
+  let lowC = 0, bandC = 0;
+  const fQ = 2 * Math.sin(Math.PI * Math.min(0.45, A.queue.f / sr)), qQ = 1 / Math.max(0.3, A.queue.q);
+  let lowQ = 0, bandQ = 0;
+  const tauF = Math.max(0.002, A.boom.chute / 3);
+  const deuxPi = Math.PI * 2;
+  let phase = 0, pic = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, br = bruit();
+    const yHP = aHP * (yPrec + br - xPrec); xPrec = br; yPrec = yHP;
+    const eC = (1 - Math.exp(-t / 0.0012)) * Math.exp(-t / A.claque.tau);
+    const hiC = br - lowC - qC * bandC; bandC += fC * hiC; lowC += fC * bandC;
+    const eB = (1 - Math.exp(-t / 0.0030)) * Math.exp(-t / A.corps.tau);
+    const hiQ = br - lowQ - qQ * bandQ; bandQ += fQ * hiQ; lowQ += fQ * bandQ;
+    const eQ = (1 - Math.exp(-t / 0.0090)) * Math.exp(-t / A.queue.tau);
+    const f = A.boom.f1 + (A.boom.f0 - A.boom.f1) * Math.exp(-t / tauF);
+    phase += deuxPi * f / sr; if (phase >= deuxPi) phase -= deuxPi;
+    const o = A.boom.type === 'sine' ? Math.sin(phase)
+      : A.boom.type === 'square' ? (phase < Math.PI ? 1 : -1)
+      : A.boom.type === 'sawtooth' ? (phase / Math.PI - 1)
+      : (2 / Math.PI) * Math.asin(Math.sin(phase));   // triangle
+    const eO = (1 - Math.exp(-t / 0.0020)) * Math.exp(-t / A.boom.tau);
+    const v = yHP * eC * A.claque.n + bandC * eB * A.corps.n + bandQ * eQ * A.queue.n * 0.8 + o * eO * A.boom.n;
+    d[i] = v; const a = v < 0 ? -v : v; if (a > pic) pic = a;
+  }
+  // NORMALISATION : la crete du son vaut EXACTEMENT le `niv` du tableau. Le niveau d'une arme
+  // devient un reglage qu'on lit, et non le resultat hasardeux d'une somme de quatre couches.
+  const ech = A.niv / Math.max(1e-6, pic);
+  for (let i = 0; i < n; i++) d[i] *= ech;
+  // les vingt dernieres millisecondes en fondu : sinon la fin du tampon fait un « clic »
+  const fondu = Math.min(n, Math.ceil(sr * 0.02));
+  for (let i = 0; i < fondu; i++) d[n - 1 - i] *= i / fondu;
+  return buf;
+}
+const armVoix = { table: {}, joues: 0, cuits: 0, dernier: null };
+function bufArme(nom) {
+  const t = armVoix.table[nom] || (armVoix.table[nom] = []);
+  const k = Math.min(ARM_VARIANTES - 1, Math.floor(Math.random() * ARM_VARIANTES));
+  if (!t[k]) { t[k] = cuisArme(nom, k); if (t[k]) armVoix.cuits++; }
+  return t[k];
+}
+// LE SON D'ARMEMENT, place dans l'espace. `nom` est une entree de SONS_ARME.
+// Renvoie le niveau effectivement joue (0 si le son a ete refuse : trop loin, ou budget plein
+// avec des sons tous plus proches).
+function sonArme(nom, x, y, z, force) {
+  if (!settings.sound) return 0;
+  const A = SONS_ARME[nom]; if (!A) return 0;
+  const f = force == null ? 1 : clamp(force, 0.15, 1.6);
+  let joue = 0;
+  sonEn(x, y, z, (dest, att) => {
+    const c = sfx.ctx(); if (!c) return;
+    const buf = bufArme(nom); if (!buf) return;
+    const src = c.createBufferSource(); src.buffer = buf;
+    // le grain change a chaque balle : variante tiree au sort plus un leger ecart de lecture.
+    // Deux coups de suite ne sonnent jamais exactement pareil — c'est ce qui separe une vraie
+    // rafale d'une boucle d'echantillon.
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const g = c.createGain(); g.gain.value = f;
+    src.connect(g).connect(dest);
+    try { src.start(); } catch (e) { return; }   // SANS argument : « des que possible », jamais rate
+    src.onended = () => { try { src.disconnect(); g.disconnect(); } catch (e) {} };
+    joue = A.niv * f * att;
+    armVoix.joues++; armVoix.dernier = { nom, niv: +(A.niv * f).toFixed(3), att: +att.toFixed(3) };
+    // la place prise dans le budget des sons places colle a la vraie longueur du son : un clic
+    // a vide de 30 ms gardait une place une demi-seconde, et volait celle d'une detonation.
+  }, { duree: dureeArme(A) + 0.05, portee: A.portee, bus: 'effets' });
+  return joue;
+}
+// LA DETONATION du joueur ou d'un tireur : `arme` est la cle de WEAPONS ('pistol', 'rifle',
+// 'sniper'), tout le reste retombe sur le pistolet.
+function sonDetonation(arme, x, y, z, force) {
+  return sonArme(SONS_ARME['tir-' + arme] ? 'tir-' + arme : 'tir-pistol', x, y, z, force);
+}
+// L'IMPACT d'une balle : 'tole' (carrosserie), 'mur' (beton) ou 'ricochet'.
+// Une balle sur deux qui touche un mur repart en sifflant : c'est ce qui rend une fusillade vivante.
+function sonImpactBalle(genre, x, y, z, force) {
+  const n = sonArme(genre, x, y, z, force);
+  if ((genre === 'mur' || genre === 'tole') && Math.random() < 0.45) sonArme('ricochet', x, y, z, (force || 1) * 0.8);
+  return n;
+}
 
 // ---- LE SOL SOUS LES PIEDS : chaque matiere a son timbre ----
 const SOLS = {
@@ -17721,7 +17927,7 @@ function horlogeArriere() {
     c.fumeeT = 0; c.crisT = 0; c.revT = 0; c.hopT = 0;
     if (c.etat) { c.etat.shiftT = 0; c.etat.boostT = 0; } }
   drive.shiftT = 0; drive.boostT = 0; drive.nitroCd = 0; drive.nitroT = 0;
-  P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0;
+  P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0; P.videT = 0;   // poste SON : videT = anti-repetition du clic a vide
   meteo.next = simTime + 40; meteo.tonnerre = 0;
   if (city.cinema) { city.cinema.next = 0; city.cinema.essaiVideo = 0; }
   for (const s2 of city.safes || []) s2.tickT = 0;
@@ -20531,7 +20737,10 @@ function drawWeapon(on) {   // dégainer / rengainer
   document.body.classList.toggle('drawn', !!P.drawn);
   $('drawBtn').textContent = P.drawn ? '🔻' : '✊';
   if (!P.drawn) msg('🤚 Arme rangée dans l\'étui', 900);
-  sfx.tone(P.drawn ? 900 : 500, 0, .09, 'triangle', .05, P.drawn ? 1200 : 320);
+  // DEGAINER / RENGAINER (poste SON) : un bip de synthe ne disait rien. Maintenant c'est du
+  // cuir qui frotte et du metal qui clique — qui MONTE quand l'arme sort, qui DESCEND quand
+  // elle retourne au fond de l'etui.
+  sonArme(P.drawn ? 'degaine' : 'rengaine', P.pos.x, P.pos.y + 1.1, P.pos.z, 1);
 }
 function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
   if (b.dead) return; b.dead = simTime + 8; b.hp = 0; b.fight = null; b.ko = 0;
@@ -20824,7 +21033,13 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     if (P.lock) P.facing = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z);
     if (!P.drawn) { drawWeapon(true); setWeapon(me, P.weapon, true); }
     const w = WEAPONS[P.weapon];
-    if (P.ammo <= 0) { if (simTime > P.reloadT) { P.ammo = w.ammo; msg('🔫 Chargeur plein', 700); sfx.register(); } else return; }
+    if (P.ammo <= 0) { if (simTime > P.reloadT) { P.ammo = w.ammo; msg('🔫 Chargeur plein', 700); sfx.register(); }
+      else {
+        // LE CLIC A VIDE (poste SON) : chargeur vide, on appuyait dans le SILENCE — on ne
+        // comprenait pas pourquoi rien ne partait. Le percuteur claque maintenant a sec.
+        if (simTime > (P.videT || 0)) { P.videT = simTime + 0.22; sonArme('vide', P.pos.x, P.pos.y + 1.3, P.pos.z, 1); }
+        return;
+      } }
     P.ammo--; if (P.ammo === 0) { P.reloadT = simTime + w.reload; msg('🔫 Rechargement…', 1200); sfx.tone(300, .4, .15, 'triangle', .04, 200); }
     P.fireCd = simTime + w.cd; P.drawT = simTime + 1.5; if (!me.inHand) setWeapon(me, P.weapon, true);
     if (me.weapons && me.weapons[P.weapon]) me.weapons[P.weapon].rotation.x = -0.12;   // léger recul de l'arme
@@ -20854,12 +21069,18 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     const s = { m: null, p: origin, v: dirV, t: 0, mine: true, dmg: Math.round(w.dmg * mu.mul), feu: !!mu.feu, boom: !!mu.boom };
     shots.push(s); spawnShot(s);
     fermeLunette();
-    if (P.weapon === 'rifle') { sfx.noise(.05, 1500, .08); sfx.tone(160, 0, .05, 'triangle', .06, 70); } else { sfx.noise(.07, 1100, .13); sfx.tone(200, 0, .09, 'triangle', .09, 60); }
+    // LA DETONATION (poste SON) : plus un « pfft » de bruit passe-bande, mais les quatre
+    // couches d'un vrai coup de feu (claque, corps, boum, queue), placees A LA BOUCHE DU
+    // CANON et differentes selon l'arme. Voir SONS_ARME.
+    sonDetonation(P.weapon, origin.x, origin.y, origin.z, 1);
     if (net.on) netSend({ t: 'fire', p: [+s.p.x.toFixed(2), +s.p.y.toFixed(2), +s.p.z.toFixed(2)], v: [+s.v.x.toFixed(2), +s.v.y.toFixed(2), +s.v.z.toFixed(2)], dmg: w.dmg, name: myCfg.name });
     return;
   }
   const s = { m: null, p: new THREE.Vector3(remote.p[0], remote.p[1], remote.p[2]), v: new THREE.Vector3(remote.v[0], remote.v[1], remote.v[2]), t: 0, mine: false, by: remote.id, byName: remote.name, dmg: remote.dmg || 20, police: !!remote.police };
   shots.push(s); spawnShot(s);
+  // POSTE SON : le tir d'un autre joueur ne faisait AUCUN bruit — on voyait la balle passer
+  // en silence. Il claque maintenant comme le notre, place la ou il part.
+  sonDetonation('pistol', s.p.x, s.p.y, s.p.z, 1);
 }
 const shotGeo = new THREE.BoxGeometry(0.045, 0.045, 0.7); shared.add(shotGeo);
 const shotMat = neonMat(0xffcc55); shared.add(shotMat);
@@ -20939,13 +21160,16 @@ function shotsTick(dt) {
     if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
     s.p.set(s.p.x + dx * best, s.p.y + dy * best, s.p.z + dz * best);   // point d'impact exact
     const L2 = Math.hypot(s.v.x, s.v.z) || 1;
-    if (quoi === 'sol') { impact(s.p.x, s.p.y + 0.02, s.p.z, { x: dx, y: dy, z: dz }, 'mur', 0.9); }
+    // POSTE SON : une balle qui tape ne faisait AUCUN bruit — on voyait l'eclat, on
+    // n'entendait rien. Beton au sol et sur les murs : sec et mat, avec un ricochet sifflant
+    // une fois sur deux.
+    if (quoi === 'sol') { impact(s.p.x, s.p.y + 0.02, s.p.z, { x: dx, y: dy, z: dz }, 'mur', 0.9); sonImpactBalle('mur', s.p.x, s.p.y + 0.02, s.p.z, 0.85); }
     else if (quoi === 'solide') {
       // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
       const br = cible && cible.brk;
       const nd = { x: dx, y: dy, z: dz };
-      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); }
-      else impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1);
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
+      else { impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1); sonImpactBalle('mur', s.p.x, s.p.y, s.p.z, 1); }
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
     else if (quoi === 'cible') {
@@ -20968,7 +21192,8 @@ function shotsTick(dt) {
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;
-      impact(s.p.x, s.p.y, s.p.z, { x: dx, y: dy, z: dz }, 'metal', 1.1); sfx.noise(.05, 900, .05);
+      impact(s.p.x, s.p.y, s.p.z, { x: dx, y: dy, z: dz }, 'metal', 1.1);
+      sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1);   // poste SON : le « tonk » creux d'une carrosserie, et un ricochet une fois sur deux
       const av = v.dmg || 0;
       vehicleDamage(v, (s.dmg || 20) * 1.6);
       applyDamageVisual(v, s.v.x / L2 * 3, s.v.z / L2 * 3);
@@ -24024,7 +24249,7 @@ function gardeArmeTick(b, dt) {
   dir.normalize().multiplyScalar(95);
   const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22 };
   shots.push(sh); spawnShot(sh);
-  sfx.noise(.05, 1250, .05); sfx.tone(190, 0, .06, 'triangle', .04, 60);
+  sonDetonation('pistol', origin.x, origin.y, origin.z, 0.9);   // poste SON : le coequipier tire la meme detonation, placee a SON canon
   // touche directe : la balle de l'ami compte tout de suite (le rayon générique ne vise que le joueur)
   if (c.agent) { c.agent.hp -= 22; impact(c.agent.x, c.agent.y + 1.3, c.agent.z, null, 'sang', 1);
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }

@@ -20262,12 +20262,20 @@ const PLACES = {
   moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
   bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
   velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
-  buggy: { conducteur: { x: 0.48, y: 0.58, z: 0.25 }, avant: { x: -0.48, y: 0.58, z: 0.25 },
+  // le buggy : les pieds passaient 12 cm sous le plancher tubulaire, on remonte de 14 cm
+  buggy: { conducteur: { x: 0.48, y: 0.72, z: 0.25 }, avant: { x: -0.48, y: 0.72, z: 0.25 },
     chien: { x: 0, y: 0.95, z: -0.8 } },
   jetski: { conducteur: { x: 0, y: 0.4, z: -0.05 }, arriereG: { x: 0, y: 0.4, z: -1.0 } },
-  heli: { conducteur: { x: 0.55, y: 0.05, z: 0.6 }, avant: { x: -0.55, y: 0.05, z: 0.6 },
-    arriereG: { x: 0.55, y: 0.05, z: -0.7 }, arriereD: { x: -0.55, y: 0.05, z: -0.7 },
-    chien: { x: 0, y: 0.55, z: -1.45 } },
+  // « LE JOUEUR DEPASSE DE L'HELICOPTERE (PIEDS) », mot pour mot. Assis a 5 cm au-dessus du
+  // repere de l'appareil, avec les cuisses a l'horizontale et les genoux plies, le bas des
+  // jambes descendait SOUS le plancher de la cabine : mesure, le point le plus bas du pilote
+  // etait 25 cm sous la piece la plus basse de l'helicoptere et 18 cm sous son repere — deux
+  // pieds qui pendaient dans le vide, visibles de dessous comme de cote. La cabine n'est pas
+  // « fermee » au sens du jeu, donc le masquage des jambes (jambesEnCabine) ne s'y applique
+  // pas : on REMONTE les quatre places de 30 cm. Il reste 94 cm sous la verriere.
+  heli: { conducteur: { x: 0.55, y: 0.35, z: 0.6 }, avant: { x: -0.55, y: 0.35, z: 0.6 },
+    arriereG: { x: 0.55, y: 0.35, z: -0.7 }, arriereD: { x: -0.55, y: 0.35, z: -0.7 },
+    chien: { x: 0, y: 0.62, z: -1.45 } },
   ambulance: { seuil: 1.5, conducteur: { x: 0.5, y: -0.45, z: 1.45 }, avant: { x: -0.5, y: -0.45, z: 1.45 },
     arriereG: { x: 0.55, y: -0.45, z: -0.8 }, arriereD: { x: -0.55, y: -0.45, z: -0.8 },
     chien: { x: 0, y: -0.05, z: -1.9 } },
@@ -20276,7 +20284,8 @@ const PLACES = {
   benne: { seuil: 1.5, conducteur: { x: 0.55, y: -0.1, z: 2.3 }, avant: { x: -0.55, y: -0.1, z: 2.3 }, chien: { x: 0, y: 0.3, z: 1.45 } },
   grue: { seuil: 1.6, conducteur: { x: 0.55, y: -0.1, z: 2.6 }, avant: { x: -0.55, y: -0.1, z: 2.6 }, chien: { x: 0, y: 0.3, z: 1.75 } },
   pelle: { seuil: 1.5, conducteur: { x: 0, y: -0.35, z: 0.3 } },
-  tracteur: { seuil: 1.45, conducteur: { x: 0, y: -0.3, z: -0.35 } },
+  // le tracteur : meme defaut, en plus discret (les bottes passaient 15 cm sous le carter)
+  tracteur: { seuil: 1.45, conducteur: { x: 0, y: -0.12, z: -0.35 } },
   pompier: { seuil: 1.5, conducteur: { x: 0.6, y: 0, z: 2.9 }, avant: { x: -0.6, y: 0, z: 2.9 }, chien: { x: 0, y: 0.4, z: 2.05 } },
   fourgon: { seuil: 1.6, conducteur: { x: 0.5, y: -0.68, z: 1.4 }, avant: { x: -0.5, y: -0.68, z: 1.4 }, chien: { x: 0, y: -0.28, z: 0.45 } },
 };

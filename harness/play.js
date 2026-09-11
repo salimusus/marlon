@@ -10496,8 +10496,42 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       for (const a of figs) a.group.visible = false;
       res[k] = e;
     }
-    // LE JOUEUR QUI MONTE APPARAÎT ASSIS : dès la première image, sans transition
-    const v = G.city.cars.find(x => !x.kind && !x.heli && !x.kart && !x.travail);
+    // LE JOUEUR AU VOLANT DE CHAQUE VÉHICULE : RIEN NE PASSE SOUS LE PLANCHER.
+    // Plainte du joueur, mot pour mot : « le joueur dépasse de l'hélicoptère (pieds) ». Assis
+    // 5 cm au-dessus du repère de l'appareil, cuisses à l'horizontale et genoux pliés, il
+    // avait le bas des jambes 25 cm SOUS la pièce la plus basse de la machine, 18 cm sous son
+    // repère — deux pieds qui pendaient dans le vide. La cabine d'un hélicoptère n'est pas
+    // « fermée » au sens du jeu : le masquage des jambes ne s'y appliquait pas, et le contrôle
+    // ci-dessus (réservé aux caisses fermées) ne le voyait pas non plus. On mesure donc, pour
+    // TOUS les véhicules à cabine, le VRAI joueur à la place du conducteur.
+    const sousPlancher = [];
+    for (const c of tous) {
+      const k = c.kind || (c.kart ? 'kart' : c.heli ? 'heli' : c.sport ? 'sport' : 'voiture');
+      if (c.rider) continue;           // moto, vélo, jet-ski : on est à califourchon, les pieds sont bas par nature
+      if (sousPlancher.vus && sousPlancher.vus[k]) continue;
+      sousPlancher.vus = sousPlancher.vus || {}; sousPlancher.vus[k] = 1;
+      if (G.drive.car) G.exitCar();
+      c.busy = false; c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.set(0, c.h, 0, 'YXZ');
+      if (c.caisse) { c.caisse.position.y = 0; c.caisse.rotation.set(0, 0, 0); }
+      c.tangage = 0; c.roulis = 0; c.susp = 0; c.suspV = 0; c.tiltX = 0; c.tilt = 0;
+      G.P.pos.set(c.x + 1.5, c.y || 0, c.z + 1.5);
+      G.enterCar(c);
+      if (G.drive.car !== c) continue;
+      G.poseJoueurAuVolant(1 / 60);
+      const bj = boite(G.me.group), bv = boite(c.caisse || c.g);
+      if (!bj || !bv) continue;
+      const dessous = bv.min.y - bj.min.y;
+      if (dessous > 0.05) sousPlancher.push(k + ' ' + dessous.toFixed(2) + ' m');
+    }
+    if (G.drive.car) G.exitCar();
+    // LE JOUEUR QUI MONTE APPARAÎT ASSIS : dès la première image, sans transition.
+    // ON MESURE SUR UNE VOITURE NEUVE. En prenant la première venue de `city.cars`, on
+    // mesurait une carrosserie qu'un test précédent avait rabaissée, repeinte, cabossée ou
+    // remplacée par la voiture achetée au concessionnaire : le contrôle « il tient entier dans
+    // la caisse » tombait en rouge dans la suite complète et passait tout seul en isolé.
+    const v = G.makeCar(0x4f8dff, G.P.pos.x + 6, G.P.pos.z, 0);
+    G.city.cars.push(v); G.settleVehicle(v); G.vehicleSolid(v);
+    try { G.setWeapon(G.me, null); } catch (e) {}
     v.busy = false; v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.set(0, v.h, 0, 'YXZ');
     if (v.caisse) { v.caisse.position.y = 0; v.caisse.rotation.set(0, 0, 0); }
     v.tangage = 0; v.roulis = 0; v.susp = 0; v.suspV = 0; v.tiltX = 0; v.tilt = 0;
@@ -10510,17 +10544,29 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       bV.min.x = Math.min(bV.min.x, v.x - (W * cs + D * sn)); bV.max.x = Math.max(bV.max.x, v.x + (W * cs + D * sn));
       bV.min.y = Math.min(bV.min.y, (v.y || 0) + 0.2); }
     pose.dedans = bJ.min.x > bV.min.x - 0.03 && bJ.max.x < bV.max.x + 0.03 && bJ.max.y < bV.max.y + 0.03 && bJ.min.y > bV.min.y - 0.03;
+    // SI ÇA DÉPASSE, ON DIT QUOI : sans le nom des morceaux fautifs, « il tient entier dans la
+    // caisse (false) » n'apprend rien et le défaut se relit dix fois.
+    pose.morceaux = [];
+    G.me.group.traverse(m => {
+      if (!m.isMesh || !m.visible || !m.geometry || pose.morceaux.length > 5) return;
+      const b = new T.Box3().setFromObject(m);
+      const d = { gauche: bV.min.x - b.min.x, droite: b.max.x - bV.max.x, bas: bV.min.y - b.min.y, haut: b.max.y - bV.max.y };
+      const pire = Object.entries(d).filter(([, q]) => q > 0.03);
+      if (pire.length) pose.morceaux.push((m.name || '?') + ' ' + pire.map(([q, w]) => q + '=' + w.toFixed(2)).join(' '));
+    });
     G.exitCar();
-    return { res, pose, genres: Object.keys(res).length };
+    { const i = G.city.cars.indexOf(v); if (i >= 0) G.city.cars.splice(i, 1); }
+    G.worldGroup.remove(v.g); { const j = G.solids.indexOf(v.solid); if (j >= 0) G.solids.splice(j, 1); }
+    return { res, pose, sousPlancher, genres: Object.keys(res).length };
   });
   const sortis = Object.entries(r.res).filter(([, e]) => e.dehors.length).map(([k, e]) => k + ' (' + e.dehors.join(', ') + ')');
   const serres = Object.entries(r.res).filter(([, e]) => e.ecart < 0.92).map(([k, e]) => k + ' ' + e.ecart.toFixed(2) + ' m');
   const chiensSerres = Object.entries(r.res).filter(([, e]) => e.chien && e.ecartChien < 0.55).map(([k, e]) => k + ' ' + e.ecartChien.toFixed(2) + ' m');
   const places = Object.values(r.res).reduce((s, e) => s + e.places, 0);
   const chiens = Object.values(r.res).filter(e => e.chien).length;
-  const ok = r.genres >= 15 && !sortis.length && !serres.length && !chiensSerres.length
+  const ok = r.genres >= 15 && !sortis.length && !serres.length && !chiensSerres.length && !r.sousPlancher.length
     && r.pose.cuisse < -1.3 && r.pose.genou > 1.3 && r.pose.bras < -1 && r.pose.dedans;
-  return { ok, detail: `un personnage mesure 2,36 m et l'habitacle d'une berline 1,60 m : le conducteur avait la tête 40 cm AU-DESSUS du toit, et il fallait attendre une demi-seconde pour qu'il s'asseye · table PLACES pour ${r.genres} genres de véhicule, ${places} places nommées (conducteur, passager avant, deux places arrière) et ${chiens} places de chien · à 1, 2 puis 3 occupants, aucun morceau ne sort de la carrosserie (${sortis.length ? 'RESTE ' + sortis.join(', ') : 'zéro débordement'}), deux personnes ne sont jamais à moins de 92 cm (${serres.length ? 'TROP SERRÉ ' + serres.join(', ') : 'toutes bien espacées'}) et le chien jamais à moins de 55 cm de quelqu'un (${chiensSerres.length ? 'TROP PRÈS ' + chiensSerres.join(', ') : 'sa place à lui'}) · le joueur qui monte apparaît assis DÈS LA PREMIÈRE IMAGE : cuisse ${r.pose.cuisse} rad (à l'horizontale), genou ${r.pose.genou} rad (plié), bras ${r.pose.bras} rad (mains sur le volant), et il tient entier dans la caisse (${r.pose.dedans})` };
+  return { ok, detail: `un personnage mesure 2,36 m et l'habitacle d'une berline 1,60 m : le conducteur avait la tête 40 cm AU-DESSUS du toit, et il fallait attendre une demi-seconde pour qu'il s'asseye · table PLACES pour ${r.genres} genres de véhicule, ${places} places nommées (conducteur, passager avant, deux places arrière) et ${chiens} places de chien · à 1, 2 puis 3 occupants, aucun morceau ne sort de la carrosserie (${sortis.length ? 'RESTE ' + sortis.join(', ') : 'zéro débordement'}), deux personnes ne sont jamais à moins de 92 cm (${serres.length ? 'TROP SERRÉ ' + serres.join(', ') : 'toutes bien espacées'}) et le chien jamais à moins de 55 cm de quelqu'un (${chiensSerres.length ? 'TROP PRÈS ' + chiensSerres.join(', ') : 'sa place à lui'}) · le joueur qui monte apparaît assis DÈS LA PREMIÈRE IMAGE : cuisse ${r.pose.cuisse} rad (à l'horizontale), genou ${r.pose.genou} rad (plié), bras ${r.pose.bras} rad (mains sur le volant), et il tient entier dans la caisse (${r.pose.dedans}${r.pose.morceaux && r.pose.morceaux.length ? ' — dehors : ' + r.pose.morceaux.join(', ') : ''}) · au volant, plus un morceau de lui ne passe SOUS le plancher, hélicoptère compris (${r.sousPlancher.length ? 'RESTE ' + r.sousPlancher.join(', ') : 'zéro'})` };
 });
 
 test('le BOOM du choc sort au choc, jamais à l\'arrêt, et d\'autant plus fort qu\'on va vite', async p => {

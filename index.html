@@ -13462,7 +13462,7 @@ function onNetData(conn, d) {
     else if (d.t === 'punch') { if (d.id === 'host') punched(d.by, d.dx, d.dz, d.dmg, d.kb); else { const c = net.conns.find(x => x.peer === d.id); if (c && c.open) c.send(d); } }
   } else {
     if (d.t === 'welcome') {
-      net.world = d.world; simTime = d.st;
+      net.world = d.world; if (d.st > -Infinity && d.st < Infinity) simTime = d.st;   // meme garde-fou : l'heure de l'hote doit etre un nombre
       (d.players || []).forEach(p => addRemote(p.id, p.name, p.look || {}, p.stage));
       netStatus(`Connecté à la partie ${net.code} · ${net.remotes.size + 1} joueurs · appuie sur Jouer`); updateNetPill(); showBotsOrNot();
       if (running && worldIdx !== d.world) chooseWorld(d.world);
@@ -13473,7 +13473,7 @@ function onNetData(conn, d) {
     else if (d.t === 'chat') { const r = net.remotes.get(d.id); chat(d.name, d.text, r ? r.color : '#fff'); if (r) bubble(r.av, d.text); }
     else if (d.t === 'look') { const r = net.remotes.get(d.id); if (r) { r.look = d.look; applyLook(r.av, d.name, d.look); r.name = d.name; } }
     else if (d.t === 'world') { net.world = d.world; if (running) chooseWorld(d.world); }
-    else if (d.t === 'time') { const diff = d.st - simTime; if (Math.abs(diff) > 0.5) simTime = d.st; else simTime += diff * 0.2; }
+    else if (d.t === 'time') { if (d.st > -Infinity && d.st < Infinity) { const diff = d.st - simTime; if (Math.abs(diff) > 0.5) simTime = d.st; else simTime += diff * 0.2; } }   // une heure vide venue du reseau cassait l'horloge de TOUTE la partie
     else if (d.t === 'win') chat(null, d.k === 'heli' ? `🚁 ${d.name} a fini la course d'anneaux en ${fmt(d.time)}` : `🏆 ${d.name} a terminé en ${fmt(d.time)} !`);
     else if (d.t === 'balls') { if (city.on) syncBalls(d.b); }
     else if (d.t === 'fire') fire({ p: d.p, v: d.v, id: d.id, dmg: d.dmg, name: d.name });
@@ -16172,10 +16172,27 @@ function horlogeArriere() {
   for (const s2 of city.safes || []) s2.tickT = 0;
 }
 let simPrec = 0;
+// L'HORLOGE PEUT DEVENIR « PAS UN NOMBRE ». Il suffit d'un seul calcul rate quelque part
+// (une synchro reseau qui envoie une heure vide, une minuterie posee sur une valeur absente)
+// pour que simTime vaille NaN — et alors le jeu se FIGE POUR DE BON sans rien afficher :
+// toutes les temporisations du jeu s'ecrivent « simTime > minuterie », et TOUTE comparaison
+// avec NaN est fausse. C'est ce qui bloquait la boite de vitesses sur le premier rapport
+// (le regime saturait a 19,7 sans jamais passer A2) et laissait un blesse a terre a vie
+// (son minuteur de KO valait NaN, donc « faux » : personne ne le voyait a terre).
+// On remet donc l'horloge d'aplomb des qu'on la surprend cassee, en repartant de la
+// derniere valeur saine, et on remet a zero les minuteries comme pour un retour en arriere.
+let horlogeVue = 0;
+function horlogeSaine() {
+  if (simTime > -Infinity && simTime < Infinity) { horlogeVue = simTime; return simTime; }
+  simTime = horlogeVue; simPrec = simTime;
+  try { horlogeArriere(); } catch (e) {}
+  return simTime;
+}
 function step(dt, active) {
-  simTime += dt;
+  horlogeSaine();
+  simTime += (dt > -Infinity && dt < Infinity) ? dt : 0;   // une image de duree indefinie ne doit pas contaminer l'horloge
   if (simTime < simPrec - 1) horlogeArriere();
-  simPrec = simTime;
+  simPrec = simTime; horlogeVue = simTime;
   for (const o of movers) {
     const s = Math.sin(simTime * o.speed + o.phase);
     const nx = o.ox + s * o.ax, ny = o.oy + s * o.ay, nz = o.oz + s * o.az, dx = nx - o.x, dy = ny - o.y, dz = nz - o.z;
@@ -17112,6 +17129,7 @@ function driveStep(dt) {
 }
 function conduire(c, cmd, dt) {
   if (!c || c.heli) return null;
+  horlogeSaine();   // une horloge cassee bloquait la boite de vitesses sur le premier rapport
   cmd = cmd || {};
   const pilote = drive.car === c;
   // Un véhicule qui n'est pas celui du joueur garde SA vitesse dans c.v : les bots peuvent
@@ -17140,7 +17158,10 @@ function conduire(c, cmd, dt) {
   // boîte automatique : le rapport suit la vitesse (affiché dans le HUD), l'accélération et le régime moteur en dépendent
   const ratio = clamp(Math.abs(V.speed) / sp.max, 0, 1);
   const wantGear = c.kind === 'bike' ? 1 : gearOf(ratio) || 1;
-  if (wantGear !== V.gear && simTime > (V.shiftT || 0)) { V.shiftT = simTime + 0.35; if (pilote && wantGear > V.gear) sfx.tone(260 + wantGear * 50, 0, .07, 'triangle', .035, 200 + wantGear * 50); V.gear = wantGear; }
+  // le verrou anti-va-et-vient s'ecrit « PAS encore trop tot » et non « assez tard » : si la
+  // minuterie du dernier passage est restee indefinie, la boite doit passer les rapports
+  // quand meme au lieu de rester collee sur A1 (regime sature a 19,7, aucune dent de scie)
+  if (wantGear !== V.gear && !(simTime < (V.shiftT || 0))) { V.shiftT = simTime + 0.35; if (pilote && wantGear > V.gear) sfx.tone(260 + wantGear * 50, 0, .07, 'triangle', .035, 200 + wantGear * 50); V.gear = wantGear; }
   const gsp = c.kind === 'bike' ? { max: 1, acc: 1 } : GEARS[V.gear - 1];
   const acc = sp.accel * (0.7 + gsp.acc * 0.5) * (boosted ? 1.5 : 1) * dmgMul;
   const v0 = V.speed;
@@ -17927,11 +17948,15 @@ function urgencesTick(dt) {
   if (P.hp <= 12 && !jail.on && !drive.car && !(city.ambulances || []).some(a => a.victime === 'joueur')) { ambulanceAppel(P.pos.x, P.pos.z, 'joueur'); return; }
   for (const b of bots) {
     if (!b.av || !b.av.group.visible || b.prison || b.drive) continue;
-    if ((b.hp == null ? 100 : b.hp) > 0 || !b.ko) continue;
+    // A TERRE = PLUS DE POINTS DE VIE. On exigeait en plus un minuteur de KO valide : un
+    // blesse dont le minuteur manquait (ou valait NaN) restait invisible pour les secours et
+    // gisait sur le trottoir jusqu'a la fin de la partie.
+    if ((b.hp == null ? 100 : b.hp) > 0) continue;
     if (ambulanceAppel(b.pos.x, b.pos.z, b)) return;
   }
 }
 function servicesTick(dt) {
+  horlogeSaine();   // sans horloge saine, ni l'ambulance ni la depanneuse ne changeaient d'etat
   try { accidentsTick(dt); } catch (e) {}
   try { depanneusesTick(dt); } catch (e) {}
   try { ambulancesTick(dt); } catch (e) {}

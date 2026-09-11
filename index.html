@@ -8193,8 +8193,8 @@ function neigeDecor(on) {
 const EMPREINTES_MAX = 140;     // pas gardes en meme temps : au-dela, le plus ancien disparait
 const EMPREINTE_VIE = 22;       // s : le temps que la neige met a combler un pas
 const EMPREINTE_PAS = 0.62;     // m entre deux empreintes : la longueur d'une foulee
-const EMPREINTE_ECART = 0.16;   // m : un pied a droite, un pied a gauche de l'axe de marche
-const EMPREINTE_L = 0.40, EMPREINTE_W = 0.23;   // m : longueur et largeur d'une semelle
+const EMPREINTE_ECART = 0.19;   // m : un pied a droite, un pied a gauche de l'axe de marche
+const EMPREINTE_L = 0.44, EMPREINTE_W = 0.27;   // m : longueur et largeur d'une semelle
 // LE MANTEAU BLANC EST UNE NAPPE POSEE AU-DESSUS DU SOL (`meteo.sol` a 9 cm, `meteo.solParc`
 // a 31 cm au-dessus de la pelouse du parc). Les premieres empreintes etaient ecrites a 4 cm
 // du sol : elles etaient donc DESSOUS, et on ne voyait rien du tout. On creuse dans la NEIGE,
@@ -8213,17 +8213,34 @@ function neigeNappeY(x, z) {
 // trois crampons. Dessinee une fois, partagee par toutes les empreintes du jeu.
 const TEX_EMPREINTE = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  const ovale = (cx, cy, rx, ry) => { g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 6.2832); };
-  const creux = g.createRadialGradient(32, 30, 2, 32, 30, 28);
-  creux.addColorStop(0, 'rgba(88,116,154,.88)'); creux.addColorStop(0.7, 'rgba(116,146,184,.66)'); creux.addColorStop(1, 'rgba(140,168,200,.5)');
-  g.fillStyle = creux;
-  ovale(32, 23, 13, 15); g.fill();   // l'avant du pied
-  ovale(32, 49, 9, 10); g.fill();    // le talon
-  g.fillStyle = 'rgba(58,86,124,.55)';   // les crampons de la semelle
-  for (let i = 0; i < 3; i++) g.fillRect(24, 15 + i * 7, 16, 3);
-  g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 3.2;   // le bourrelet de neige repoussee
-  ovale(32, 23, 13, 15); g.stroke();
-  ovale(32, 49, 9, 10); g.stroke();
+  // LA SEMELLE OCCUPE TOUT LE CADRE, ET C'EST UNE SEULE FORME. Premieres versions : un petit
+  // pied dessine au milieu d'un carre de 64 px, puis deux ovales separes. Le premier ne
+  // laissait a l'ecran qu'un trait bleu pale de quelques pixels, le second deux pastilles
+  // rondes — ni l'un ni l'autre ne se lisait comme un PAS. On dessine donc le contour complet
+  // d'une semelle (avant large, voute resserree, talon), remplie d'un creux bleute, barree de
+  // crampons et cernee d'un bourrelet blanc : la neige repoussee sur le pourtour, qui est ce
+  // qui donne le relief.
+  const semelle = () => { g.beginPath();
+    g.moveTo(6, 26);
+    g.quadraticCurveTo(4, 3, 32, 2);
+    g.quadraticCurveTo(60, 3, 58, 26);
+    g.quadraticCurveTo(56, 34, 47, 40);
+    g.quadraticCurveTo(51, 45, 51, 52);
+    g.quadraticCurveTo(51, 62, 32, 62);
+    g.quadraticCurveTo(13, 62, 13, 52);
+    g.quadraticCurveTo(13, 45, 17, 40);
+    g.quadraticCurveTo(8, 34, 6, 26);
+    g.closePath(); };
+  const creux = g.createRadialGradient(32, 26, 2, 32, 30, 36);
+  creux.addColorStop(0, 'rgba(70,98,138,.95)'); creux.addColorStop(0.65, 'rgba(94,124,166,.86)'); creux.addColorStop(1, 'rgba(120,150,190,.66)');
+  g.fillStyle = creux; semelle(); g.fill();
+  g.save(); semelle(); g.clip();          // les crampons ne debordent pas de la semelle
+  g.fillStyle = 'rgba(44,70,106,.55)';
+  for (let i = 0; i < 5; i++) g.fillRect(2, 6 + i * 8, 60, 4);
+  g.fillRect(2, 50, 60, 4);
+  g.restore();
+  g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 2.8;
+  semelle(); g.stroke();
   const t = new THREE.CanvasTexture(c); shared.add(t); return t;
 })();
 // `var` et non `let`, pour la meme raison que `marquesMesh` : la remise a zero de la ville
@@ -8248,8 +8265,12 @@ function empreintesInit() {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 4));   // 4 composantes : c'est l'ALPHA du sommet qui efface
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.setDrawRange(0, 0);
+  // `DoubleSide` n'est pas un detail : l'ordre des quatre sommets d'une empreinte donne une
+  // normale qui pointe VERS LE BAS, et en face avant seule on ne voyait donc rigoureusement
+  // rien depuis le ciel — quarante-huit empreintes bien posees, et une rue vierge a l'ecran.
+  // (Les marques de choc du decor ont la meme precaution, pour la meme raison.)
   const mat = new THREE.MeshBasicMaterial({ map: TEX_EMPREINTE, transparent: true, depthWrite: false, vertexColors: true,
-    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   // `shared` : ce maillage est UNIQUE pour toute la partie et se range simplement d'un monde a
   // l'autre. Sans cette inscription, `libereBranche` (qui vide le monde) detruirait sa
   // geometrie et son materiau, et toutes les empreintes du monde suivant seraient ecrites

@@ -4287,9 +4287,12 @@ function toitAccessible(x, z, w, d, toit, fx, fz) {
   }
   const solid = box(lx, 0.3, lz, 1.8, 0.2, 1.8, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
   // rail de guidage (décor) et appel de l'ascenseur au sol
-  box(lx + (fx ? 0 : 0.98) * 0, toit / 2, lz, 0.12, toit, 0.12, 0x8b8f98, { deco: true, studs: false });
-  box(lx, 1.2, lz - 0.92, 0.3, 0.4, 0.06, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
-  const L = { g, solid, x: lx, z: lz, y: 0.35, target: 0.35, low: 0.35, high: toit + 0.2, t: 0, toit: true };
+  const rail = box(lx, toit / 2, lz, 0.12, toit, 0.12, 0x8b8f98, { deco: true, studs: false });
+  const appel = box(lx, 1.2, lz - 0.92, 0.3, 0.4, 0.06, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
+  // On garde l'emprise de l'immeuble et le côté de la façade : `degageLesCabines()` en a
+  // besoin pour déménager la cabine quand le voisin lui traverse le plancher (voir plus bas).
+  const L = { g, solid, x: lx, z: lz, y: 0.35, target: 0.35, low: 0.35, high: toit + 0.2, t: 0, toit: true,
+    rail, appel, bat: { x, z, w, d }, fx, fz };
   city.lifts.push(L);
   // garde-corps du toit (décor) et matériel de saut
   for (const [sx2, sz2, ww, dd] of [[0, -d / 2 + 0.2, w, 0.12], [0, d / 2 - 0.2, w, 0.12], [-w / 2 + 0.2, 0, 0.12, d], [w / 2 - 0.2, 0, 0.12, d]])
@@ -4298,6 +4301,60 @@ function toitAccessible(x, z, w, d, toit, fx, fz) {
   voileAuSol('parachute', px, toit + 0.05, pz);
   voileAuSol('delta', x - (fx ? 1.4 : 0) - fx * 1.6, toit + 0.05, z - (fz ? 1.4 : 0) - fz * 1.6);
   city.toits.push({ x, z, w, d, y: toit, lift: L });
+}
+// LES CABINES D'ASCENSEUR PLANTÉES DANS LE MUR DU VOISIN.
+// L'ascenseur extérieur d'une tour se pose contre la façade, 1,20 m en retrait d'un angle.
+// Quand l'immeuble d'à côté n'est qu'à un mètre de là, SA paroi (36 cm d'épaisseur, 3,80 m
+// de haut) traverse le plancher de la cabine. Le joueur posé au milieu chevauchait alors ce
+// mur de 21 cm : la résolution des collisions le rejetait D'UN COUP de l'autre côté du mur,
+// jusqu'à 3,70 m de là — hors de la cabine. `liftTick` ne voyait donc plus personne dessus
+// et l'ascenseur ne partait JAMAIS. Cinq des vingt et un toits équipés étaient ainsi
+// inaccessibles (mesuré : monté à 0,65 m au lieu de 15, 12, 20, 12 et 20 m), et avec eux
+// leur parachute et leur deltaplane.
+// On vérifie donc chaque cabine UNE FOIS LA VILLE ENTIÈRE CONSTRUITE — murs, quartiers
+// neufs et décor solidifié compris — et on déménage l'ascenseur sur un autre angle de son
+// immeuble tant qu'on n'a pas trouvé un carré libre. Un ascenseur qui monte n'est jamais
+// figé dans le décor : on le déplace en bloc (cabine, plancher de collision, rail, bouton).
+function cabineLibre(lx, lz, low, self, marge) {
+  for (const o of solidsAutour(lx, lz, 3)) {
+    if (o === self || o.deco || !o.mesh || !isSolid(o)) continue;
+    if (Math.abs(o.x - lx) < o.w / 2 + marge && Math.abs(o.z - lz) < o.d / 2 + marge
+      && o.y + o.h / 2 > low + 0.5 && o.y - o.h / 2 < low + 2.2) return false;
+  }
+  return true;
+}
+function bougeCabine(L, lx, lz) {
+  const dx = lx - L.x, dz = lz - L.z;
+  L.x = lx; L.z = lz; L.g.position.x = lx; L.g.position.z = lz;
+  for (const o of [L.solid, L.rail, L.appel]) {
+    if (!o || !o.mesh) continue;
+    o.x += dx; o.z += dz; o.mesh.position.x += dx; o.mesh.position.z += dz;
+  }
+}
+function degageLesCabines() {
+  let bouges = 0;
+  for (const L of (city.lifts || [])) {
+    if (!L.toit || !L.bat || !L.solid) continue;
+    // 0,90 m = le plancher entier de la cabine ; 0,45 m = la seule place du joueur au milieu.
+    // On cherche d'abord un angle où RIEN ne traverse la cabine, et on se contente à défaut
+    // d'un angle où le joueur, lui, tient debout sans chevaucher quoi que ce soit.
+    for (const marge of [0.9, 0.45]) {
+      if (cabineLibre(L.x, L.z, L.low, L.solid, marge)) break;
+      const b = L.bat; let choix = null;
+      for (const [fx, fz] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        for (const s of [1, -1]) {
+          const lx = b.x + fx * (b.w / 2 + 1.05) + (fx ? 0 : s * (b.w / 2 - 1.2));
+          const lz = b.z + fz * (b.d / 2 + 1.05) + (fz ? 0 : s * (b.d / 2 - 1.2));
+          if (cabineLibre(lx, lz, L.low, L.solid, marge)) { choix = [lx, lz]; break; }
+        }
+        if (choix) break;
+      }
+      if (choix) { bougeCabine(L, choix[0], choix[1]); bouges++; break; }
+    }
+  }
+  if (bouges) sgridSale();
+  city.cabinesBougees = bouges;
+  return bouges;
 }
 // Sac de parachute ou aile de deltaplane posé sur un toit : E pour l'enfiler.
 function voileAuSol(kind, x, y, z) {
@@ -5291,6 +5348,9 @@ const WORLDS = [
       // (poste G) en DERNIER : la règle de collision couvre alors tout ce que les autres
       // postes viennent d'ajouter — panneaux, quartiers neufs, chantiers, boîtes aux lettres
       B('collisions du décor', () => { solidifieDecor(); degageDecorSurRoutes(); });
+      // APRÈS le décor solidifié : c'est le dernier moment où un nouveau mur peut apparaître
+      // dans le plancher d'une cabine d'ascenseur (voir degageLesCabines).
+      B('cabines d\'ascenseur', degageLesCabines);
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls

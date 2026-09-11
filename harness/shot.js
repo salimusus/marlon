@@ -308,6 +308,22 @@ window.__SHOT = {
     document.querySelectorAll('#top,#chat,#gps,#act,#missionHud,#wanted,#padLeg,#tvBadge').forEach(function (e) { e.style.display = v.hideHud ? 'none' : ''; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
+    // POSTE ASCENSEURS : v.ascenseur = numero d'un toit equipe (city.toits). On pose le
+    // joueur dans la cabine et on FAIT AVANCER LA SIMULATION image par image jusqu'a
+    // l'arrivee sur le toit. Attendre « en vrai » ne montrerait jamais que le rez-de-chaussee :
+    // en rendu logiciel la montre avance deux cents fois plus vite que l'horloge du jeu.
+    if (v.ascenseur != null) {
+      try {
+        var tt = city.toits[v.ascenseur], LL = tt && tt.lift;
+        if (LL) {
+          LL.y = LL.low; LL.target = LL.low; LL.since = 0; LL.cd = 0;
+          LL.g.position.y = LL.y; LL.solid.mesh.position.y = LL.y - 0.05; LL.solid.y = LL.y - 0.05;
+          P.pos.set(LL.x, LL.low + 0.3, LL.z); P.vel.set(0, 0, 0);
+          for (var ia = 0; ia < 1500 && P.pos.y < LL.high - 0.25; ia++) step(1 / 60, true);
+          cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);
+        }
+      } catch (eAsc) {}
+    }
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
     if (v.arme) { owned.add('arme:' + v.arme); equipWeapon(v.arme); drawWeapon(true); P.aimPitch = v.pitchVisee || 0; }
     // POSTE PERSONNAGES : le couteau photographie de PROFIL. v.couteau = 'fourreau' garnit les

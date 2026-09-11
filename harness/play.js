@@ -385,9 +385,12 @@ test('le stand de tir a des cibles et on peut les toucher', async p => {
 test('les cages de but existent, avec filet', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: -13, y: 1, z: -13, hour: 12 });
-    // poteaux : fins, ~2,1 m de haut, aux deux bouts du terrain
-    const poteaux = __G.solids.filter(o => o.h > 1.9 && o.h < 2.3 && o.w < 0.4 && o.d < 0.4 && Math.abs(o.z + 13) < 3 && (Math.abs(o.x + 22) < 0.5 || Math.abs(o.x + 4) < 0.5));
-    const filets = __G.solids.filter(o => Math.abs(o.z + 13) < 4 && (o.x < -21 || o.x > -5) && o.material && o.material.alphaTest);
+    // poteaux : fins, ~2,1 m de haut, aux deux bouts du terrain. Les deux cages ont RECULÉ de 3 m
+    // (ligne de but à x = -19 et -7 au lieu de -22 et -4) : collées au grillage, leur filet tendu
+    // 2,4 m derrière la ligne débordait sur les deux rues qui longent le terrain, et son panneau
+    // de fond était même effacé à chaque chargement par le dégagement des chaussées.
+    const poteaux = __G.solids.filter(o => o.h > 1.9 && o.h < 2.3 && o.w < 0.4 && o.d < 0.4 && Math.abs(o.z + 13) < 3 && (Math.abs(o.x + 19) < 0.5 || Math.abs(o.x + 7) < 0.5));
+    const filets = __G.solids.filter(o => Math.abs(o.z + 13) < 4 && (o.x < -18.9 || o.x > -7.1) && o.material && o.material.alphaTest);
     return { poteaux: poteaux.length, filets: filets.length };
   });
   return { ok: r.poteaux >= 4 && r.filets >= 6, detail: `${r.poteaux} poteaux, ${r.filets} panneaux de filet` };
@@ -11119,4 +11122,116 @@ test('un itinéraire par les voies ne fait pas le tour de la ville et ne finit p
   const ok = r.raccords >= 1 && r.bouchees >= 1 && r.res.every(x => isFinite(x.voies) && x.voies > 0)
     && r.moy <= 2.2 && r.pireRetour <= 25;
   return { ok, detail: `${r.res.length} itinéraires par les voies : ${r.moy}× le chemin de la grille A* en moyenne (${r.res.map(x => x.ratio).join(', ')}), au pire ${r.pireRetour} m parcourus après être passé au plus près du but (83 m avant) · le graphe a ${r.aretes} arêtes dont ${r.raccords} raccords de rues voisines et connaît ${r.bouchees} voies qu'une voiture ne peut pas emprunter` };
+});
+
+// ================= POSTE INFRASTRUCTURE — LE PLAN DE VILLE =================
+// Le poste Circulation avait remonté deux défauts de PLAN : neuf véhicules de travail garés en
+// plein milieu du boulevard z = 140, et ce même boulevard qui passait SOUS la dalle de la fête
+// foraine, donc sans un centimètre de bitume visible. Les deux avaient été trouvés par hasard.
+// Ce contrôle balaie LES 69 RUES d'un coup et tient les trois promesses du plan :
+//   1. aucun objet fixe (bâtiment, mur, socle, pile de pneus, filet de but…) dans l'emprise ;
+//   2. aucun véhicule garé au départ dans l'emprise ;
+//   3. du bitume visible sur toute la longueur de chaque chaussée.
+// Tant qu'il passe, un hangar reculé ou une dalle redessinée ne peut plus remettre discrètement
+// un obstacle en pleine voie.
+test('le plan de ville est net : aucun obstacle ni véhicule garé dans une chaussée, et du bitume visible sur toute la longueur de chaque rue', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city, routes = c.routes;
+    // les boîtes de collision des véhicules bougent : on les juge au point 2, pas au point 1
+    const vsol = new Set();
+    for (const v of [...c.cars, ...c.aiCars, ...G.police.cars, ...(G.raceKarts || [])]) if (v && v.solid) vsol.add(v.solid);
+    // profondeur d'intrusion d'une boîte dans un rectangle de chaussée (négatif = dehors)
+    const dans = (x, z, w, d, q) => Math.min(q.w / 2 + w / 2 - Math.abs(x - q.x), q.d / 2 + d / 2 - Math.abs(z - q.z));
+    // ---- 1. AUCUN OBSTACLE FIXE DANS L'EMPRISE D'UNE CHAUSSÉE ----
+    // On ne retient que ce qui ARRÊTE UNE VOITURE : un solide dont le toit dépasse 0,56 m (la
+    // marche que les véhicules franchissent) et dont le bas est sous 0,90 m — plus haut, c'est
+    // une arche, une enseigne ou un étage, la voiture passe dessous. Les portes, les barrières
+    // du circuit et le grand sol de la ville ne comptent pas.
+    const obstacles = [];
+    for (const o of G.solids) {
+      if (vsol.has(o) || o.porte || o.veh || o.bar) continue;
+      const top = o.y + o.h / 2, bas = o.y - o.h / 2;
+      if (top < 0.57 || bas > 0.9) continue;
+      if (o.w > 40 && o.d > 40) continue;
+      for (let i = 0; i < routes.length; i++) {
+        const e = dans(o.x, o.z, o.w, o.d, routes[i]);
+        if (e > 0.8) { obstacles.push({ r: i, x: +o.x.toFixed(1), z: +o.z.toFixed(1), w: +o.w.toFixed(1), d: +o.d.toFixed(1), h: +top.toFixed(1), dans: +e.toFixed(1), cles: Object.keys(o).filter(k => k !== 'mesh' && k !== 'material' && k !== 'mats').join(',') }); break; }
+      }
+    }
+    // ---- 2. AUCUN VÉHICULE GARÉ AU DÉPART DANS L'EMPRISE ----
+    // Le gabarit est celui du véhicule, cap compris : le camion de pompiers fait 8 m de long, et
+    // il était posé EN TRAVERS du boulevard. On tolère 0,6 m pour une voiture rangée au bord.
+    const gares = [];
+    for (const v of c.cars) {
+      if (v.heli && (v.y || 0) > 2) continue;   // un hélico en vol n'est pas garé
+      const W = v.baseW || 2.6, D = v.baseD || 3, cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+      for (let i = 0; i < routes.length; i++) {
+        const e = dans(v.x, v.z, W * cs + D * sn, W * sn + D * cs, routes[i]);
+        if (e > 0.6) { gares.push({ r: i, kind: v.kind || 'voiture', x: +v.x.toFixed(1), z: +v.z.toFixed(1), dans: +e.toFixed(1) }); break; }
+      }
+    }
+    // ---- 3. DU BITUME VISIBLE SUR TOUTE LA LONGUEUR ----
+    // On remonte l'axe de chaque rue tous les 3 m et on cherche une DALLE posée plus haut que son
+    // bitume (`q.top`, la hauteur rendue par road()). Les deux relevés des extrémités sont exclus :
+    // une rue a le droit de finir sur un parvis, une cour ou un parking.
+    const enterre = [];
+    for (let i = 0; i < routes.length; i++) {
+      const q = routes[i], long = q.d >= q.w, L = long ? q.d : q.w, n = Math.max(4, Math.ceil(L / 3));
+      let k = 0, ex = null;
+      for (let j = 1; j < n; j++) {
+        const t = j / n, x = long ? q.x : q.x - q.w / 2 + t * q.w, z = long ? q.z - q.d / 2 + t * q.d : q.z;
+        let haut = 0, qui = null;
+        for (const o of G.solidsPres(x, z)) {
+          if (vsol.has(o) || o.veh || o.trottoir) continue;
+          const top = o.y + o.h / 2;
+          if (top <= (q.top || 0.06) + 0.01 || top > 1.2) continue;
+          if (x > o.x - o.w / 2 && x < o.x + o.w / 2 && z > o.z - o.d / 2 && z < o.z + o.d / 2 && top > haut) { haut = top; qui = o; }
+        }
+        if (haut) { k++; if (!ex) ex = { x: +x.toFixed(1), z: +z.toFixed(1), haut: +haut.toFixed(2), dalle: `${qui.w.toFixed(0)}x${qui.d.toFixed(0)} en (${qui.x.toFixed(0)}, ${qui.z.toFixed(0)})` }; }
+      }
+      if (k) enterre.push({ r: i, x: q.x, z: q.z, sur: k, de: n - 1, ex });
+    }
+    // ---- les six engins de travail : chacun sur une cour, et de la place pour sortir ----
+    const travail = c.cars.filter(v => v.travail);
+    const surCour = travail.filter(v => {
+      const cour = [c.depot, c.caserne].filter(Boolean);
+      return cour.some(h => Math.abs(v.x - h.x) < 15 && v.z > h.z && v.z < h.z + 16);
+    }).length;
+    return { routes: routes.length, obstacles, gares, enterre, travail: travail.length, surCour,
+      depot: c.depot, caserne: c.caserne };
+  });
+  const ok = r.obstacles.length === 0 && r.gares.length === 0 && r.enterre.length === 0
+    && r.routes >= 69 && r.surCour >= 7;
+  return { ok, detail: `balayage des ${r.routes} chaussées de la ville : ${r.obstacles.length} obstacle(s) fixe(s) dans une emprise (il y en avait 11 : la statue en (0, -28), le mur de l'entrepôt dans la route du littoral, les filets de but du terrain de foot, une pile de pneus, l'avenue des villas qui dépassait le mur d'enceinte)${r.obstacles.length ? ' → ' + JSON.stringify(r.obstacles.slice(0, 6)) : ''} · ${r.gares.length} véhicule(s) garé(s) sur la chaussée (il y en avait 9, dont les 6 engins du dépôt et de la caserne)${r.gares.length ? ' → ' + JSON.stringify(r.gares.slice(0, 8)) : ''} · ${r.enterre.length} chaussée(s) sans bitume visible (il y en avait 14, dont 30 relevés sur 68 du boulevard z = 140 sous la dalle de la fête foraine)${r.enterre.length ? ' → ' + JSON.stringify(r.enterre.slice(0, 6)) : ''} · les ${r.travail} véhicules de travail sont garés sur la cour de leur hangar (${r.surCour}/7) — dépôt en (${r.depot && r.depot.x}, ${r.depot && r.depot.z}), caserne en (${r.caserne && r.caserne.x}, ${r.caserne && r.caserne.z})` };
+});
+
+// Défaut 3 : l'armurerie coupait la rue x = 52 en deux (la rue de l'héliport s'arrêtait à z = 13,
+// la rue commerçante reprenait à z = 25). Pour franchir ces 12 m il fallait redescendre au bord de
+// mer et remonter par la rue de l'est : plus de 500 m. On mesure le trajet VRAIMENT roulable, par
+// la grille des voitures, entre les deux bouts de la rue.
+test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement de l\'armurerie remplace 520 m de détour', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    if (!G.NAV.voit) G.buildNav();
+    const lg = (a, b, c2, d) => {
+      const p2 = G.navPath(a, b, c2, d);
+      if (!p2 || !p2.length) return { m: Infinity, n: 0 };
+      let m = Math.hypot(p2[0][0] - a, p2[0][1] - b);
+      for (let i = 1; i < p2.length; i++) m += Math.hypot(p2[i][0] - p2[i - 1][0], p2[i][1] - p2[i - 1][1]);
+      m += Math.hypot(c2 - p2[p2.length - 1][0], d - p2[p2.length - 1][1]);
+      return { m: Math.round(m), n: p2.length };
+    };
+    const rue52 = lg(52, 6, 52, 32);            // les deux bouts de la rue coupée
+    const voisin = lg(26, 6, 26, 32);           // la rue parallèle, jamais coupée : le mètre-étalon
+    // le contournement est bien de la chaussée ouverte aux voitures (coût 1 dans la grille)
+    const ouvert = [[57.5, 10], [63, 19], [57.5, 27.5]].map(([x, z]) => {
+      const N = G.NAV, i = Math.round((x - N.x0) / N.cs), j = Math.round((z - N.z0) / N.cs);
+      const k = j * N.nx + i;
+      return N.cout[k] === 1 && !N.voit[k];
+    });
+    return { rue52: rue52.m, voisin: voisin.m, direct: 26, ouvert };
+  });
+  const ok = isFinite(r.rue52) && r.rue52 <= 70 && r.ouvert.every(Boolean);
+  return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant le contournement de l'armurerie, et la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les trois tronçons du contournement sont bien de la chaussée ouverte aux voitures (${r.ouvert.filter(Boolean).length}/3)` };
 });

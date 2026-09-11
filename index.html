@@ -7074,13 +7074,17 @@ function construireGraphe() {
   // ruelle x = 0 entre z = -20 et z = 0, 40 s de va-et-vient sur un trajet de 150 m). On sonde
   // donc chaque voie tous les quatre metres AVEC LE GABARIT D'UNE VOITURE, et le calcul
   // d'itineraire paye cher chaque point bouche : il contourne s'il existe une autre rue.
+  // Les VEHICULES DEJA POSES comptent aussi, car ceux-la ne bougeront plus : le camion de la
+  // caserne et les cinq engins du depot municipal sont gares en travers du boulevard z = 140,
+  // sur vingt-cinq metres de long. Le graphe est bati apres eux, une seule fois : aucun cout
+  // par image, et la ronde de police fait le tour du pate de maisons au lieu de la pelouse.
   for (const e of aretes) {
     if (e.liaison) { e.dur = 0; continue; }
     const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), k = Math.max(1, Math.round(L / 4));
     let dur = 0;
     for (let u = 0; u <= k; u++) {
       const x = e.x0 + (e.x1 - e.x0) * u / k, z = e.z0 + (e.z1 - e.z0) * u / k;
-      if (carBlocked(x, z, null, 1.4, { veh: false })) dur++;
+      if (carBlocked(x, z, null, 1.4, { veh: true })) dur++;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
     }
     e.dur = dur;
   }
@@ -7311,6 +7315,12 @@ function pietonSurPassage(p) {
   const dedans = (x, y, z) => Math.abs(y) < 2.6 && Math.abs(x - p.x) < p.w / 2 + 0.7 && Math.abs(z - p.z) < p.d / 2 + 0.7;
   if (!drive.car && P.hp > 0 && dedans(P.pos.x, P.pos.y, P.pos.z)) return true;
   for (const b of bots) if (!b.drive && !b.prison && b.av && b.av.group.visible && dedans(b.pos.x, b.pos.y, b.pos.z)) return true;
+  return false;
+}
+// EST-ON SUR LE BITUME ? Chaque fonction avait sa propre reponse locale ; la conduite, elle,
+// n'en avait aucune et sortait des rues des qu'elle contournait quelque chose.
+function surLaChaussee(x, z, m = 0.6) {
+  for (const r of (city.routes || [])) if (Math.abs(x - r.x) < r.w / 2 + m && Math.abs(z - r.z) < r.d / 2 + m) return true;
   return false;
 }
 function codeRoute(c, dt, opt) {
@@ -10676,6 +10686,13 @@ function policeTick(dt) {
       // PATROUILLE. Les voitures inactives dormaient sur le parking du commissariat : elles
       // tournent maintenant dans la ville par le graphe des voies, tranquillement et dans les
       // regles (feux, stops, passages pietons), et repartent en chasse des qu'on les appelle.
+      // ON NE S'ACHARNE PAS SUR UNE RUE BOUCHEE. Le camion de la caserne est gare EN TRAVERS
+      // du boulevard z = 140 : la ronde s'y presentait, montait sur la pelouse pour passer,
+      // s'y rebloquait, et y restait une demi-minute (mesure : 36 s hors chaussee au meme
+      // endroit). Des qu'elle patine, elle se choisit une AUTRE destination — et tout de
+      // suite, dans la meme image : laissee sans destination, elle s'arretait pile la, une
+      // roue sur le gazon. (En chasse, au contraire, elle insiste : c'est le joueur qu'elle suit.)
+      if (pc.renonce) { pc.renonce = false; pc.patrouille = null; pc.patT = 0; pc.route = null; }
       if (!pc.patrouille || simTime > (pc.patT || 0)) {
         pc.patT = simTime + 40; pc.patrouille = null;
         const N = city.graphe.noeuds;
@@ -10703,7 +10720,11 @@ function policeTick(dt) {
       // LES VOITURES DE POLICE SUIVENT LES VOIES elles aussi : par le graphe tant que la
       // cible est loin, puis en direct sur les 25 derniers metres (elle bouge, et le dernier
       // troncon passe souvent par un parking ou une allee).
-      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > 25) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
+      // Une cible POSEE SUR UNE VOIE (patrouille, fouille : ce sont des noeuds du graphe) se
+      // rejoint par les voies jusqu'au bout. On ne basculait sur les voies qu'au-dela de 25 m,
+      // et la grille A* finissait le trajet en diagonale a travers les pelouses.
+      const seuilVoies = (pc.patrouille || pc.fouille) ? 8 : 25;
+      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > seuilVoies) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
       if (via && via.length > 2) pc.route = via.concat([[tx, tz]]);
       else { const path = navPath(pc.x, pc.z, tx, tz);
         pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]); }
@@ -10711,7 +10732,10 @@ function policeTick(dt) {
     while (pc.route.length > 1 && Math.hypot(pc.route[0][0] - pc.x, pc.route[0][1] - pc.z) < 2.6) pc.route.shift();
     const wp = pc.route[0], dx = wp[0] - pc.x, dz = wp[1] - pc.z, want = Math.atan2(dx, dz);
     let dh = want - pc.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-    if ((pc.revT || 0) > simTime) { pc.speed += (-6 - pc.speed) * Math.min(1, dt * 3); pc.h -= clamp(dh, -1, 1) * 1.4 * dt; }   // marche arrière en contre-braquant
+    // Marche arriere en contre-braquant. EN RONDE ON RECULE DOUCEMENT : a 6 m/s, 1,2 s de
+    // marche arriere sortait la voiture de la rue par l'arriere, et elle finissait le
+    // contournement sur la pelouse. A 3 m/s elle reste entre les trottoirs.
+    if ((pc.revT || 0) > simTime) { pc.speed += ((pc.active ? -6 : -3) - pc.speed) * Math.min(1, dt * 3); pc.h -= clamp(dh, -1, 1) * 1.4 * dt; }
     else if ((pc.avoidT || 0) > simTime) { let da = pc.avoidH - pc.h; da = Math.atan2(Math.sin(da), Math.cos(da)); pc.h += clamp(da, -1, 1) * 3 * dt; pc.speed += (6 - pc.speed) * Math.min(1, dt * 2); }   // contournement
     else {
       pc.h += clamp(dh, -1, 1) * 4 * dt;
@@ -10733,12 +10757,30 @@ function policeTick(dt) {
     if (bx || bz) {
       pc.stuck = (pc.stuck || 0) + dt;
       if ((pc.avoidT || 0) < simTime) {   // on cherche une direction libre autour de l'obstacle (30°, 60°, 90°… à gauche et à droite)
+        // ON CONTOURNE SANS QUITTER LA RUE. Avant, la premiere direction libre gagnait : la
+        // voiture partait sur la pelouse, s'y bloquait de nouveau, recontournait… Mesure : en
+        // patrouille elle passait 20 % du temps hors chaussee, dont 85 % en contournement.
+        // Premier tour : uniquement des directions qui restent sur le bitume. Second tour :
+        // n'importe quelle direction libre, car il faut bien se degager.
         let found = null;
-        for (const a of [0.55, -0.55, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) { const hh = pc.h + a, px = pc.x + Math.sin(hh) * 3.5, pz = pc.z + Math.cos(hh) * 3.5; if (!carBlocked(px, pz, pc.solid, 1.4, opt) && !carBlocked(pc.x + Math.sin(hh) * 1.8, pc.z + Math.cos(hh) * 1.8, pc.solid, 1.4, opt)) { found = hh; break; } }
-        if (found != null) { pc.avoidH = found; pc.avoidT = simTime + 0.9; pc.speed = Math.max(pc.speed, 4); }
-        else if ((pc.revT || 0) < simTime) { pc.revT = simTime + 1.2; pc.route = null; }
+        for (const bitume of [true, false]) {
+          for (const a of [0.55, -0.55, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) {
+            const hh = pc.h + a, px = pc.x + Math.sin(hh) * 3.5, pz = pc.z + Math.cos(hh) * 3.5;
+            if (bitume && !surLaChaussee(px, pz)) continue;
+            if (!carBlocked(px, pz, pc.solid, 1.4, opt) && !carBlocked(pc.x + Math.sin(hh) * 1.8, pc.z + Math.cos(hh) * 1.8, pc.solid, 1.4, opt)) { found = hh; break; }
+          }
+          if (found != null) break;
+        }
+        // EN RONDE, ON NE MONTE PAS SUR LE GAZON. Si le seul passage libre quitte la chaussee,
+        // la voiture de ronde renonce a sa destination et recule sur la rue au lieu de couper
+        // par la pelouse (mesure : 6,6 s de tout-terrain par tour de ville devant le camion de
+        // la caserne). En chasse, elle passe ou elle peut : c'est le joueur qu'elle suit.
+        const bitumeOK = found == null || surLaChaussee(pc.x + Math.sin(found) * 3.5, pc.z + Math.cos(found) * 3.5);
+        if (found != null && (pc.active || bitumeOK)) { pc.avoidH = found; pc.avoidT = simTime + 0.9; pc.speed = Math.max(pc.speed, 4); }
+        else if ((pc.revT || 0) < simTime) { pc.revT = simTime + 1.2; pc.route = null; if (!pc.active) pc.renonce = true; }
       }
       if (pc.stuck > 2.5 && (pc.revT || 0) < simTime) { pc.stuck = 0; pc.revT = simTime + 1.2; pc.route = null; pc.stuckTot = (pc.stuckTot || 0) + 1; }
+      if (!pc.active && pc.stuck > 0.8) pc.renonce = true;   // en ronde : on renonce a cette destination (traite en tete de la patrouille)
       if ((pc.stuckTot || 0) >= 5 && pc.active && dist > 20) { pc.stuckTot = 0; const [ms] = nearS(tx, tz); const [lx, lz] = loopPos(ms); pc.x = lx; pc.z = lz; pc.route = null; pc.speed = 2; msg('🚔 Des renforts arrivent !', 1200); }   // vraiment coincée : renforts sur l'anneau routier
     } else pc.stuck = Math.max(0, (pc.stuck || 0) - dt * 0.5);
     // groundCar : le relief du rallye compte, sinon la voiture roulait SOUS le sable

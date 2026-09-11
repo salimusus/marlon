@@ -1158,7 +1158,12 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
   const dehors = await lis(() => __G.cam.dist > 7.5);
   await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
-  const dedans = await lis(() => __G.cam.dist < 4.2);
+  // (round 68, poste CAMERA : dans une piece, la maison de poupee ne recule plus a 4,8 m
+  //  quoi qu'il arrive — elle recule d'autant plus que la piece est GRANDE, jusqu'a 7,4 m,
+  //  parce qu'a 4,8 m dans une halle de vingt-quatre metres on ne voyait rien. Le seuil de ce
+  //  test passe donc de 4,2 a 6,2 m : ce qu'il garantit reste « dedans, on est plus pres que
+  //  dehors, et devant un objet plus pres encore ».)
+  const dedans = await lis(() => __G.cam.dist < 6.2);
   await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
   const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);
   // le point visé rattrape le joueur par interpolation : on attend qu'il l'ait rejoint
@@ -1166,7 +1171,7 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   const cible = await p.evaluate(() => ({ dx: +(__G.cam.target.x - __G.P.pos.x).toFixed(2), dz: +(__G.cam.target.z - __G.P.pos.z).toFixed(2) }));
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));
   const retour = await lis(() => __G.cam.dist > 7.5);
-  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 5.0   // maison de poupee : 3,8 a 4,8 m dans une piece
+  const ok = !dehors.dedans && dehors.dist > 7 && dedans.dedans && dedans.dist < 6.2 && dedans.dist < dehors.dist - 2   // maison de poupee : de 3,8 m dans un placard a 7,4 m dans une halle
     && frigo.inter && frigo.dist < dedans.dist + 0.1 && (Math.abs(cible.dx) + Math.abs(cible.dz)) > 0.1 && retour.dist > 7;
   return { ok, detail: `rue : ${dehors.dist} m · hall d'immeuble : ${dedans.dist} m · devant le frigo : ${frigo.dist} m (objet cadré, décalage ${cible.dx}/${cible.dz}) · de retour dehors : ${retour.dist} m` };
 });
@@ -12649,4 +12654,91 @@ test('un petit accrochage ne dérange personne : pas de police, pas de dépanneu
     && r.riche.paye === true && r.riche.prison === false && r.riche.jail === false && r.riche.wallet === 500 - r.riche.amende
     && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
   return { ok, detail: `se garer en touchant le pare-chocs du voisin à 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police et une dépanneuse, et coûtait 60 à 100 🪙 — sans le sou, c'était la prison · il y a maintenant un SEUIL DE GRAVITÉ, lu dans la table de dégâts déjà partagée du jeu (${r.seuil.table}) : au-dessous de ${r.seuil.vitesse} m/s d'impact (gravité < ${r.seuil.gravite}) c'est un petit dégât, on repart — ${r.petits.map(q => q.v + ' m/s : ' + (q.accident ? 'ACCIDENT' : 'rien')).join(', ')} · au-dessus, l'accident complet : immobilisation, police (${r.gros.police}), dépanneuse (${r.riche.dep}) et amende de ${r.riche.amende} 🪙 (base ${r.base} 🪙 + 1 par tranche de 4 m/s), soit ${(r.riche.amende / r.repere.boulot).toFixed(1)} petit boulot et ${(100 * r.riche.amende / r.repere.coffre).toFixed(0)} % d'un coffre : portefeuille 500 → ${r.riche.wallet} · et PLUS JAMAIS LA PRISON : avec 2 🪙 en poche on paie 2 🪙, il reste ${r.fauche.reste} 🪙 effacés, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
+});
+
+
+// ================= POSTE CAMÉRA (round 68) =================
+// Le joueur s'est plaint trois fois de la même chose : « à l'intérieur d'un bâtiment, d'une
+// villa, ou collé à un mur, la caméra est trop collée au personnage ». Les deux corrections
+// précédentes traitaient des LIEUX (une liste d'intérieurs, puis les toits non déclarés) ;
+// ce test-ci fixe la LOI GÉNÉRALE, par familles de situations, et c'est lui qui doit
+// empêcher le sujet de revenir une quatrième fois.
+test('la caméra garde une distance jouable dans toutes les situations, sans jamais traverser un mur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    // chaque situation : le point, le cap de la caméra, et la distance MINIMALE acceptable
+    // (mesurée caméra ↔ poitrine du joueur) pour que l'on joue confortablement
+    const SIT = [
+      ['dehors, rue dégagée',    { x: 0, y: 1, z: 50, yaw: 0 },            8.0],
+      ['dos au mur de l\'école', { x: -64, y: 1, z: 215.6, yaw: 3.14 },    2.4],
+      ['le long du mur',         { x: -64, y: 1, z: 215.6, yaw: 1.57 },    4.3],
+      ['ruelle, dans l\'axe',    { x: 60, y: 1, z: 46, yaw: 1.57 },        8.0],
+      ['ruelle, en travers',     { x: 60, y: 1, z: 46, yaw: 0 },           3.2],
+      ['petite boutique',        { x: 60, y: 1, z: 40, yaw: 0 },           4.0],
+      ['coin de boutique',       { x: 62, y: 1, z: 42.3, yaw: 0 },         4.0],
+      ['grande halle du marché', { x: -142.5, y: 1, z: 159, yaw: 0 },      6.0],
+      ['sous le préau',          { x: -78, y: 1, z: 225, yaw: 1.57 },      7.0],
+      ['dépôt municipal',        { x: 27, y: 1, z: 122, yaw: 3.14 },       4.0],
+      ['contre la vitrine',      { x: 48.5, y: 1, z: 19, yaw: 1.57 },      5.0],
+      ['salle de classe',        { x: -79, y: 1, z: 213.2, yaw: 0 },       4.3],
+      ['casino, plafond bas',    { x: 90, y: 1, z: 306, yaw: 0 },          4.0],
+      ['petit appartement',      { x: -143, y: 1, z: 10, yaw: 0 },         3.0],
+      ['salle de sport',         { x: -1, y: 0.5, z: 19.5, yaw: 0 },       4.0],
+      ['étage de la banque',     { x: -52, y: 5.6, z: 70, yaw: 0 },        6.0],
+      ['au volant, en rue',      { x: 26, y: 1, z: 0, yaw: 0, auto: 1 },   9.0],
+      ['au volant, sous un toit', { x: 27, y: 1, z: 122, yaw: 3.14, auto: 1 }, 4.2],
+    ];
+    // la caméra est-elle DANS un solide ? (le pire défaut : on se retrouve dans le mur).
+    // Un solide effacé à l'écran (plafond de la maison de poupée) ne compte pas : on ne le
+    // voit pas, il ne peut donc pas boucher l'image.
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    const tourne = (n) => { for (let i = 0; i < n; i++) { G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick(); } };
+    const out = [];
+    for (const [nom, v, mini] of SIT) {
+      __SHOT.go(Object.assign({ world: 4, hour: 12, pitch: 0.32, dist: 9, hideHud: true }, v));
+      if (v.auto) {
+        const c = G.city.cars.find(w => !w.heli && !w.rider && !w.busy) || G.city.cars[0];
+        c.x = v.x; c.z = v.z; c.h = v.yaw + Math.PI; c.busy = false; c.g.position.set(c.x, c.y || 0, c.z);
+        if (G.drive.car) G.exitCar();
+        G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); G.enterCar(c);
+      } else if (G.drive.car) G.exitCar();
+      // on fait tourner la perche À LA MAIN : camPerche() est isolée de frame() justement
+      // pour que le banc d'essai n'ait pas à attendre de vraies images (2 par seconde ici)
+      tourne(150);
+      const c = G.camera.position, t = G.cam.target, q = G.P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15);
+      out.push({ nom, mini,
+        d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        h: +(c.y - q.y).toFixed(2), coupe: mur >= 0, dans: dansUnSolide(c) });
+    }
+    if (G.drive.car) G.exitCar();
+    // RETOUR EN DOUCEUR : on décolle du mur en marchant, la perche doit se rallonger sans
+    // le moindre saut d'image (c'est l'à-coup dont se plaignait le joueur)
+    __SHOT.go({ world: 4, x: -64, y: 1, z: 215.6, yaw: 3.14, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+    tourne(150);
+    const dist = () => Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.y - (G.P.pos.y + 1.2), G.camera.position.z - G.P.pos.z);
+    let prec = dist(); const debut = prec; let saut = 0;
+    for (let i = 0; i < 220; i++) {
+      // step() fait AUSSI avancer l'horloge de simulation : sans elle, les mesures de la
+      // caméra (qui ne sont refaites que cinq fois par seconde) resteraient figées et la
+      // perche ne se rallongerait jamais
+      G.step(1 / 60, true);
+      G.P.pos.z += 0.06;   // le joueur s'éloigne du mur, 3,6 m/s
+      G.camPerche(1 / 60, false); G.interieurTick();
+      const L = dist(); saut = Math.max(saut, Math.abs(L - prec)); prec = L;
+    }
+    return { out, doux: { debut: +debut.toFixed(2), fin: +prec.toFixed(2), saut: +saut.toFixed(3) } };
+  });
+  const rates = r.out.filter(s => s.d < s.mini);
+  const traverse = r.out.filter(s => s.coupe || s.dans);
+  const ok = rates.length === 0 && traverse.length === 0 && r.doux.fin > 8 && r.doux.saut < 0.2;
+  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h})`).join(' · ')} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
 });

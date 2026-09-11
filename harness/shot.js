@@ -1706,6 +1706,10 @@ window.__G = {
   DUCK_TENUE: typeof DUCK_TENUE !== 'undefined' ? DUCK_TENUE : 0,
   craieLitFerme: typeof craieLitFerme === 'function' ? craieLitFerme : null,
   sonEn: typeof sonEn === 'function' ? sonEn : null,
+  // ---- poste CAMERA (perche, loi de distance, non-traversee) ----
+  camPerche: typeof camPerche === 'function' ? camPerche : null,
+  camLibres: typeof camLibres === 'function' ? camLibres : null,
+  interieurDe: typeof interieurDe === 'function' ? interieurDe : null,
 };
 `;
 

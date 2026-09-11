@@ -7155,18 +7155,73 @@ function construireGraphe() {
       if (carBlocked(x, z, null, 1.9, { veh: false })) return false; }
     return true;
   };
-  for (const [d, i, j] of cand) {
-    if (trouve(i) === trouve(j)) continue;
-    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
-    unir(i, j); nliaison++;
+  // l'adjacence non orientee : elle sert a mesurer le detour qu'un raccord ferait gagner
+  const adj = noeuds.map(() => []);
+  for (const e of aretes) { adj[e.de].push([e.vers, e.long]); adj[e.vers].push([e.de, e.long]); }
+  // poser une liaison (les deux sens) entre deux noeuds, et tenir `adj` a jour
+  const poseLiaison = (i, j, d, idRoute) => {
     const A = noeuds[i], B = noeuds[j], sens = Math.atan2(B.x - A.x, B.z - A.z);
     for (const [de, vers, sg, cap2] of [[A, B, 1, sens], [B, A, -1, CAP(sens + Math.PI)]]) {
-      const e = { id: aretes.length, de: de.id, vers: vers.id, route: -1 - nliaison, voie: -1,
+      const e = { id: aretes.length, de: de.id, vers: vers.id, route: idRoute, voie: -1,
         alongZ: Math.abs(Math.cos(cap2)) > 0.5, sens: cap2, sgn: sg, lat: 0, larg: 6, role: 'desserte',
         vmax: 6, c0: 0, c1: d, long: d, inv: -1, liaison: true,
         x0: de.x, z0: de.z, x1: vers.x, z1: vers.z };
       aretes.push(e); de.sortantes.push(e.id); vers.entrantes.push(e.id);
     }
+    adj[i].push([j, d]); adj[j].push([i, d]);
+  };
+  for (const [d, i, j] of cand) {
+    if (trouve(i) === trouve(j)) continue;
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    unir(i, j); nliaison++;
+    poseLiaison(i, j, d, -1 - nliaison);
+  }
+  // ---- 5 bis) LES RACCORDS MANQUANTS. Les liaisons ci-dessus ne relient que des ILES
+  // differentes : deux bouts de rue separes par DOUZE METRES de trottoir restaient sans
+  // raccord des lors qu'un grand tour les reliait deja. Mesure d'avant : pour aller de
+  // (-40, -40) a (40, 90) — 243 m par la grille A* — le meilleur chemin par les voies
+  // faisait 876 m, et le conducteur faisait litteralement le tour de la ville. On ajoute
+  // donc un raccord partout ou un tout petit saut remplace un detour huit fois plus long.
+  const detourNoeuds = (i, j, max) => {   // longueur du chemin ACTUEL entre deux noeuds, plafonnee
+    const dd = new Float64Array(noeuds.length).fill(Infinity); dd[i] = 0;
+    const tas2 = [[0, i]];
+    while (tas2.length) {
+      let bi = 0; for (let k = 1; k < tas2.length; k++) if (tas2[k][0] < tas2[bi][0]) bi = k;
+      const [dc, u] = tas2.splice(bi, 1)[0];
+      if (dc > dd[u] + 1e-6) continue;
+      if (u === j) return dc;
+      for (const [v, L] of adj[u]) { const nd = dc + L; if (nd < dd[v] && nd <= max) { dd[v] = nd; tas2.push([nd, v]); } }
+    }
+    return Infinity;
+  };
+  let nraccord = 0;
+  for (const [d, i, j] of cand) {
+    if (d > 13) continue;
+    if (adj[i].some(([v]) => v === j)) continue;                     // deja voisins directs
+    if (detourNoeuds(i, j, d * 8 + 20) < d * 8 + 20) continue;       // un chemin raisonnable existe deja
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    nraccord++; poseLiaison(i, j, d, -1000 - nraccord);
+  }
+  // ---- 5 ter) LES VOIES OU UNE VOITURE NE PASSE PAS. Le graphe ne connaissait que les
+  // rectangles du plan : un abribus, un massif ou le coin d'un immeuble plante au milieu de la
+  // voie restait invisible. L'itineraire y envoyait le conducteur, le garde-fou de collision
+  // l'arretait net, et il faisait des aller-retours pendant quarante secondes (mesure : la
+  // ruelle x = 0 entre z = -20 et z = 0, 40 s de va-et-vient sur un trajet de 150 m). On sonde
+  // donc chaque voie tous les quatre metres AVEC LE GABARIT D'UNE VOITURE, et le calcul
+  // d'itineraire paye cher chaque point bouche : il contourne s'il existe une autre rue.
+  // Les VEHICULES DEJA POSES comptent aussi, car ceux-la ne bougeront plus : le camion de la
+  // caserne et les cinq engins du depot municipal sont gares en travers du boulevard z = 140,
+  // sur vingt-cinq metres de long. Le graphe est bati apres eux, une seule fois : aucun cout
+  // par image, et la ronde de police fait le tour du pate de maisons au lieu de la pelouse.
+  for (const e of aretes) {
+    if (e.liaison) { e.dur = 0; continue; }
+    const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), k = Math.max(1, Math.round(L / 4));
+    let dur = 0;
+    for (let u = 0; u <= k; u++) {
+      const x = e.x0 + (e.x1 - e.x0) * u / k, z = e.z0 + (e.z1 - e.z0) * u / k;
+      if (carBlocked(x, z, null, 1.4, { veh: true })) dur++;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+    }
+    e.dur = dur;
   }
   // l'arete INVERSE (meme troncon, sens oppose) : c'est elle qu'on interdit, pour ne pas
   // faire demi-tour en pleine rue
@@ -7197,7 +7252,7 @@ function construireGraphe() {
     k.panneau = (city.panneaux || []).some(q => (q.type === 'stop' || q.type === 'cede') && Math.hypot(q.x - k.cx, q.z - k.cz) < 16);
     k.larg = Math.max(k.ox, k.oz) / 2 + 1.6;
   }
-  return { noeuds, aretes, voies, carrefours: cars, liaisons: nliaison };
+  return { noeuds, aretes, voies, carrefours: cars, liaisons: nliaison, raccords: nraccord };
 }
 // La projection d'un point sur une arete (le long de la voie de droite). Elle marche aussi
 // pour les LIAISONS, qui ne suivent aucun axe.
@@ -7240,9 +7295,14 @@ function majVoiesBarrees() {
 }
 // Dijkstra sur les ARETES (et non sur les noeuds) : la manoeuvre depend de la voie d'ou l'on
 // vient, et c'est elle qui coute — tourner a gauche coupe la circulation d'en face.
-function cheminAretes(e0, e1) {
+// `cibles` (facultatif) : une Map id d'arete -> cout restant (negatif : la portion de
+// l'arete qu'on NE parcourt PAS, puisque la cible tombe au milieu). Sans elle, on s'arrete
+// a `e1` comme avant. Avec elle, on garde la MEILLEURE arrivee : la cible est souvent a
+// egale distance des deux sens de la meme rue, et retenir le mauvais obligeait a remonter
+// toute la rue puis a la redescendre (mesure : 83 m de demi-tour pur).
+function cheminAretes(e0, e1, cibles) {
   const G = city.graphe, A = G.aretes;
-  if (e0.id === e1.id) return [e0];
+  if (!cibles && e0.id === e1.id) return [e0];
   const dist = new Float64Array(A.length).fill(Infinity), prev = new Int32Array(A.length).fill(-1);
   const tas = [];
   const push = (id, d) => { tas.push([d, id]); let i = tas.length - 1;
@@ -7255,20 +7315,23 @@ function cheminAretes(e0, e1) {
         if (m === i) break; const t = tas[m]; tas[m] = tas[i]; tas[i] = t; i = m; } }
     return top; };
   dist[e0.id] = 0; push(e0.id, 0);
+  let but = cibles ? -1 : e1.id, mieux = Infinity;
+  if (cibles && cibles.has(e0.id)) { mieux = cibles.get(e0.id); but = e0.id; }
   while (tas.length) {
     const [d, id] = pop();
     if (d > dist[id] + 1e-6) continue;
-    if (id === e1.id) break;
+    if (cibles) { const r = cibles.get(id); if (r != null && d + r < mieux) { mieux = d + r; but = id; } }
+    else if (id === e1.id) break;
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
   }
-  if (!isFinite(dist[e1.id])) return null;
+  if (but < 0 || !isFinite(dist[but])) return null;
   const out = [];
-  for (let id = e1.id; id >= 0; id = prev[id]) { out.push(A[id]); if (id === e0.id) break; }
+  for (let id = but; id >= 0; id = prev[id]) { out.push(A[id]); if (id === e0.id) break; }
   return out.reverse();
 }
 // L'ITINERAIRE PAR LES VOIES : une suite de points [x, z] sur la voie de droite, echantillonnee
@@ -7278,7 +7341,18 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
   majVoiesBarrees();   // un chantier tout neuf ne doit pas se retrouver sur le trace
   const A = voieProche(x1, z1, cap), B = voieProche(x2, z2);
   if (!A || !B) return null;
-  const suite = (A.arete.id === B.arete.id && B.t >= A.t - 0.001) ? [A.arete] : cheminAretes(A.arete, B.arete);
+  // TOUTES les voies qui passent pres de l'arrivee, pas seulement la plus proche : on laisse
+  // Dijkstra choisir le bon sens de la bonne rue. Le cout garde d'une arete d'arrivee est
+  // NEGATIF (on ne parcourt pas la fin de l'arete), plus une penalite pour les metres qui
+  // restent a faire a pied entre la voie et la cible.
+  const cibles = new Map();
+  for (const e of city.graphe.aretes) {
+    const p = projVoie(x2, z2, e);
+    if (p.d > B.d + 9) continue;
+    const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
+    const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
+  }
+  const suite = (A.arete.id === B.arete.id && B.t >= A.t - 0.001) ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
   if (!suite) return null;
   const pts = [[+A.px.toFixed(2), +A.pz.toFixed(2)]];
   const pousse = (x, z, coupe) => {
@@ -7304,7 +7378,9 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
       pousse(w * w * ax + 2 * w * u * cx + u * u * bx, w * w * az + 2 * w * u * cz + u * u * bz, false); }
     pousse(bx, bz, false);
   }
-  pousse(B.px, B.pz);
+  // le dernier point suit l'arete REELLEMENT retenue, qui n'est pas forcement `B.arete`
+  const finE = suite[suite.length - 1], finP = projVoie(x2, z2, finE);
+  pousse(finP.px, finP.pz);
   return pts;
 }
 // LE MAPPING DES QUARTIERS : chaque desserte du plan est rattachee a une voie et a un noeud.
@@ -7374,6 +7450,12 @@ function pietonSurPassage(p) {
   const dedans = (x, y, z) => Math.abs(y) < 2.6 && Math.abs(x - p.x) < p.w / 2 + 0.7 && Math.abs(z - p.z) < p.d / 2 + 0.7;
   if (!drive.car && P.hp > 0 && dedans(P.pos.x, P.pos.y, P.pos.z)) return true;
   for (const b of bots) if (!b.drive && !b.prison && b.av && b.av.group.visible && dedans(b.pos.x, b.pos.y, b.pos.z)) return true;
+  return false;
+}
+// EST-ON SUR LE BITUME ? Chaque fonction avait sa propre reponse locale ; la conduite, elle,
+// n'en avait aucune et sortait des rues des qu'elle contournait quelque chose.
+function surLaChaussee(x, z, m = 0.6) {
+  for (const r of (city.routes || [])) if (Math.abs(x - r.x) < r.w / 2 + m && Math.abs(z - r.z) < r.d / 2 + m) return true;
   return false;
 }
 function codeRoute(c, dt, opt) {
@@ -10789,6 +10871,13 @@ function policeTick(dt) {
       // PATROUILLE. Les voitures inactives dormaient sur le parking du commissariat : elles
       // tournent maintenant dans la ville par le graphe des voies, tranquillement et dans les
       // regles (feux, stops, passages pietons), et repartent en chasse des qu'on les appelle.
+      // ON NE S'ACHARNE PAS SUR UNE RUE BOUCHEE. Le camion de la caserne est gare EN TRAVERS
+      // du boulevard z = 140 : la ronde s'y presentait, montait sur la pelouse pour passer,
+      // s'y rebloquait, et y restait une demi-minute (mesure : 36 s hors chaussee au meme
+      // endroit). Des qu'elle patine, elle se choisit une AUTRE destination — et tout de
+      // suite, dans la meme image : laissee sans destination, elle s'arretait pile la, une
+      // roue sur le gazon. (En chasse, au contraire, elle insiste : c'est le joueur qu'elle suit.)
+      if (pc.renonce) { pc.renonce = false; pc.patrouille = null; pc.patT = 0; pc.route = null; }
       if (!pc.patrouille || simTime > (pc.patT || 0)) {
         pc.patT = simTime + 40; pc.patrouille = null;
         const N = city.graphe.noeuds;
@@ -10816,7 +10905,11 @@ function policeTick(dt) {
       // LES VOITURES DE POLICE SUIVENT LES VOIES elles aussi : par le graphe tant que la
       // cible est loin, puis en direct sur les 25 derniers metres (elle bouge, et le dernier
       // troncon passe souvent par un parking ou une allee).
-      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > 25) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
+      // Une cible POSEE SUR UNE VOIE (patrouille, fouille : ce sont des noeuds du graphe) se
+      // rejoint par les voies jusqu'au bout. On ne basculait sur les voies qu'au-dela de 25 m,
+      // et la grille A* finissait le trajet en diagonale a travers les pelouses.
+      const seuilVoies = (pc.patrouille || pc.fouille) ? 8 : 25;
+      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > seuilVoies) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
       if (via && via.length > 2) pc.route = via.concat([[tx, tz]]);
       else { const path = navPath(pc.x, pc.z, tx, tz);
         pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]); }
@@ -10824,7 +10917,10 @@ function policeTick(dt) {
     while (pc.route.length > 1 && Math.hypot(pc.route[0][0] - pc.x, pc.route[0][1] - pc.z) < 2.6) pc.route.shift();
     const wp = pc.route[0], dx = wp[0] - pc.x, dz = wp[1] - pc.z, want = Math.atan2(dx, dz);
     let dh = want - pc.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-    if ((pc.revT || 0) > simTime) { pc.speed += (-6 - pc.speed) * Math.min(1, dt * 3); pc.h -= clamp(dh, -1, 1) * 1.4 * dt; }   // marche arrière en contre-braquant
+    // Marche arriere en contre-braquant. EN RONDE ON RECULE DOUCEMENT : a 6 m/s, 1,2 s de
+    // marche arriere sortait la voiture de la rue par l'arriere, et elle finissait le
+    // contournement sur la pelouse. A 3 m/s elle reste entre les trottoirs.
+    if ((pc.revT || 0) > simTime) { pc.speed += ((pc.active ? -6 : -3) - pc.speed) * Math.min(1, dt * 3); pc.h -= clamp(dh, -1, 1) * 1.4 * dt; }
     else if ((pc.avoidT || 0) > simTime) { let da = pc.avoidH - pc.h; da = Math.atan2(Math.sin(da), Math.cos(da)); pc.h += clamp(da, -1, 1) * 3 * dt; pc.speed += (6 - pc.speed) * Math.min(1, dt * 2); }   // contournement
     else {
       pc.h += clamp(dh, -1, 1) * 4 * dt;
@@ -10846,12 +10942,30 @@ function policeTick(dt) {
     if (bx || bz) {
       pc.stuck = (pc.stuck || 0) + dt;
       if ((pc.avoidT || 0) < simTime) {   // on cherche une direction libre autour de l'obstacle (30°, 60°, 90°… à gauche et à droite)
+        // ON CONTOURNE SANS QUITTER LA RUE. Avant, la premiere direction libre gagnait : la
+        // voiture partait sur la pelouse, s'y bloquait de nouveau, recontournait… Mesure : en
+        // patrouille elle passait 20 % du temps hors chaussee, dont 85 % en contournement.
+        // Premier tour : uniquement des directions qui restent sur le bitume. Second tour :
+        // n'importe quelle direction libre, car il faut bien se degager.
         let found = null;
-        for (const a of [0.55, -0.55, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) { const hh = pc.h + a, px = pc.x + Math.sin(hh) * 3.5, pz = pc.z + Math.cos(hh) * 3.5; if (!carBlocked(px, pz, pc.solid, 1.4, opt) && !carBlocked(pc.x + Math.sin(hh) * 1.8, pc.z + Math.cos(hh) * 1.8, pc.solid, 1.4, opt)) { found = hh; break; } }
-        if (found != null) { pc.avoidH = found; pc.avoidT = simTime + 0.9; pc.speed = Math.max(pc.speed, 4); }
-        else if ((pc.revT || 0) < simTime) { pc.revT = simTime + 1.2; pc.route = null; }
+        for (const bitume of [true, false]) {
+          for (const a of [0.55, -0.55, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) {
+            const hh = pc.h + a, px = pc.x + Math.sin(hh) * 3.5, pz = pc.z + Math.cos(hh) * 3.5;
+            if (bitume && !surLaChaussee(px, pz)) continue;
+            if (!carBlocked(px, pz, pc.solid, 1.4, opt) && !carBlocked(pc.x + Math.sin(hh) * 1.8, pc.z + Math.cos(hh) * 1.8, pc.solid, 1.4, opt)) { found = hh; break; }
+          }
+          if (found != null) break;
+        }
+        // EN RONDE, ON NE MONTE PAS SUR LE GAZON. Si le seul passage libre quitte la chaussee,
+        // la voiture de ronde renonce a sa destination et recule sur la rue au lieu de couper
+        // par la pelouse (mesure : 6,6 s de tout-terrain par tour de ville devant le camion de
+        // la caserne). En chasse, elle passe ou elle peut : c'est le joueur qu'elle suit.
+        const bitumeOK = found == null || surLaChaussee(pc.x + Math.sin(found) * 3.5, pc.z + Math.cos(found) * 3.5);
+        if (found != null && (pc.active || bitumeOK)) { pc.avoidH = found; pc.avoidT = simTime + 0.9; pc.speed = Math.max(pc.speed, 4); }
+        else if ((pc.revT || 0) < simTime) { pc.revT = simTime + 1.2; pc.route = null; if (!pc.active) pc.renonce = true; }
       }
       if (pc.stuck > 2.5 && (pc.revT || 0) < simTime) { pc.stuck = 0; pc.revT = simTime + 1.2; pc.route = null; pc.stuckTot = (pc.stuckTot || 0) + 1; }
+      if (!pc.active && pc.stuck > 0.8) pc.renonce = true;   // en ronde : on renonce a cette destination (traite en tete de la patrouille)
       if ((pc.stuckTot || 0) >= 5 && pc.active && dist > 20) { pc.stuckTot = 0; const [ms] = nearS(tx, tz); const [lx, lz] = loopPos(ms); pc.x = lx; pc.z = lz; pc.route = null; pc.speed = 2; msg('🚔 Des renforts arrivent !', 1200); }   // vraiment coincée : renforts sur l'anneau routier
     } else pc.stuck = Math.max(0, (pc.stuck || 0) - dt * 0.5);
     // groundCar : le relief du rallye compte, sinon la voiture roulait SOUS le sable
@@ -14193,7 +14307,14 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
     // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
     const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
-    const pth = (via && via.length > 2) ? via : navPath(c.x, c.z, tx, tz);
+    const grille = navPath(c.x, c.z, tx, tz);
+    // LE DETOUR ABSURDE. Dans un quartier ou un immeuble coupe la rue en deux, le graphe des
+    // voies impose parfois trois fois le chemin direct : mesure relevee, 755 m par les voies
+    // pour 243 m par la grille, et le conducteur faisait litteralement le tour de la ville.
+    // Un vrai conducteur, lui, coupe par le parking. Au-dela de deux fois le chemin de la
+    // grille, on reprend donc le trace de la grille.
+    const lgTrace = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return q && q.length ? l : Infinity; };
+    const pth = (via && via.length > 2 && lgTrace(via, c.x, c.z) < lgTrace(grille, c.x, c.z) * 2.1) ? via : grille;
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }
   // Progression : si l'on ne se rapproche plus du but pendant 40 s, on passe a la grille A*
@@ -14255,7 +14376,11 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   if (!vehBloque(c, nx, c.z, c.h, opt)) c.x = nx; else { c.speed *= 0.4; bloque++; }
   if (!vehBloque(c, c.x, nz, c.h, opt)) c.z = nz; else { c.speed *= 0.4; bloque++; }
   if (!vehBloque(c, c.x, c.z, c.h, opt)) c.libre = [c.x, c.z, c.h];
-  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
+  // LE RETOUR A LA DERNIERE PLACE LIBRE NE TELEPORTE PLUS A L'AUTRE BOUT DE LA VILLE : la
+  // place memorisee peut dater d'un tout autre trajet (une voiture reposee ailleurs, un ami
+  // qui reprend le volant). On avait mesure un bond de 200 m. On ne s'y replie qu'a 8 m.
+  else if (c.libre && Math.hypot(c.libre[0] - c.x, c.libre[1] - c.z) < 8) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; }
+  else c.libre = null;
   // Le compteur de blocage DECROIT au lieu de retomber a zero : une voiture qui rabote un
   // mur n'est bloquee que sur un axe a la fois, si bien qu'elle remettait le compteur a zero
   // une image sur deux et que le deblocage ne partait jamais.

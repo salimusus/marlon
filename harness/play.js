@@ -1134,7 +1134,11 @@ test('un ami organise un braquage, attend au volant et file à la villa', async 
     __G.coupMonter();
     const fuite = __G.coup.etat, cache = !__G.me.group.visible;
     const sous = __G.wallet;
-    let n = 0; while (__G.coup.etat === 'fuite' && n < 60000) { __G.coupTick(1 / 60); n++; }
+    // LA FUITE SE JOUE COMME UN VRAI TOUR DE JEU : l'horloge avance (sinon les feux restent
+    // rouges pour l'eternite) et le portail de la villa s'ouvre (sinon l'ami tourne devant la
+    // grille fermee pendant treize minutes, le butin n'est jamais partage et les etoiles
+    // restent allumees — c'est exactement ce que mesurait l'echec : 1000 s, +0 pieces, 3 etoiles).
+    let n = 0; while (__G.coup.etat === 'fuite' && n < 60000) { __G.simTime += 1 / 60; __G.villaTick(1 / 60); __G.coupTick(1 / 60); n++; }
     const arrive = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 184);
     return { pasAmi, etatApresRefus, traite, attente, complice, pret, fuite, cache,
       arrive: +arrive.toFixed(1), fin: __G.coup.etat, wanted: __G.police.wanted, gain: __G.wallet - sous, secondes: +(n / 60).toFixed(0) };
@@ -4037,17 +4041,28 @@ test('les conducteurs suivent les rues au lieu de couper à travers tout', async
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G;
     const TRAJETS = [[-40, -40, 40, 90], [0, 0, -92, 60], [50, 40, -60, 110], [-16, 6, 46, -8], [0, 110, 40, 200], [-92, -40, 60, 60]];
+    // CE QUE CE TEST MESURE : le suivi d'itineraire, pas la courtoisie au passage pieton. La
+    // simulation est figee (step sans `active`), si bien qu'un habitant plante sur la chaussee
+    // y restait pour l'eternite : le conducteur klaxonnait, le contournait, se rabattait et
+    // rallongeait son trajet de 150 m sans que ce soit sa faute. On range donc tout le monde
+    // loin de la route. L'arret au feu, au stop et devant un pieton a son propre test
+    // (« la circulation respecte le code de la route »).
+    G.P.pos.set(300, 0.3, 300);
+    G.bots.forEach(b => { b.pos.set(300, 0.3, 300); if (b.av) b.av.group.position.copy(b.pos); b.wait = 9999; });
     const res = [];
     for (const [x0, z0, tx, tz] of TRAJETS) {
       const c = G.city.cars.find(v => !v.heli && !v.busy && v.kind !== 'jetski' && !v.rider);
       if (!c) break;
+      // `c.libre` (la derniere place libre connue) date du trajet precedent : sans cette remise
+      // a zero, la voiture reposee ici repartait d'un bond a l'autre bout de la ville.
+      c.libre = null;
       c.x = x0; c.z = z0; c.h = 0; c.speed = 0; c.y = G.groundUnder(x0, z0, c.solid, 0.5);
       const st = { saut: true };
       let plan = 0; { const q = G.navPath(x0, z0, tx, tz) || []; let a = [x0, z0]; for (const b of q) { plan += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } }
       let t = 0, colle = 0, virages = 0, hPrec = c.h, chemin = 0, px = c.x, pz = c.z, arrive = 0, surRoute = 0, ech = 0;
       const dt = 1 / 60;
       for (let i = 0; i < 60 * 240; i++) {
-        G.step(dt); const dd = G.conduire(c, tx, tz, dt, st); t += dt;
+        G.step(dt); const dd = G.conduireVersPoint(c, tx, tz, dt, st); t += dt;
         let dh = c.h - hPrec; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); virages += Math.abs(dh); hPrec = c.h;
         chemin += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
         if (st.bloqueT > 0.05) colle++;
@@ -11072,4 +11087,36 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     && r.repris.appels === r.avec.appels
     && r.aretes > r.nA * 0.5 && r.coupes > r.nD * 0.5 && r.ombres > r.nO * 0.4;
   return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
+});
+
+// LE GRAPHE DES VOIES NE FAIT PLUS FAIRE LE TOUR DE LA VILLE. Trois defauts mesures ce round :
+// les liaisons ne reliaient que des ILES (deux bouts de rue separes par douze metres de
+// trottoir restaient sans raccord des qu'un grand tour les reliait deja), rien ne savait
+// qu'un abribus ou un camion gare en travers bouche une voie, et l'arrivee etait toujours la
+// voie la PLUS PROCHE — souvent le mauvais sens de la bonne rue, d'ou 83 m de demi-tour pur.
+test('un itinéraire par les voies ne fait pas le tour de la ville et ne finit pas par un demi-tour', async p => {
+  const r = await p.evaluate(() => {
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const G = __G;
+    const PAIRES = [[0, 0, -92, 60], [50, 40, -60, 110], [-92, -40, 60, 60], [0, 110, 40, 200], [-16, 6, 46, -8]];
+    const lon = (q, sx, sz) => { let s = 0, a = [sx, sz]; for (const b of (q || [])) { s += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? s : Infinity; };
+    const res = PAIRES.map(([x0, z0, tx, tz]) => {
+      const grille = lon(G.navPath(x0, z0, tx, tz), x0, z0);
+      const q = G.itineraireVoies(x0, z0, tx, tz, 0) || [];
+      const voies = lon(q, x0, z0);
+      // le demi-tour final : ce qu'on parcourt APRES etre passe au plus pres du but
+      let s = 0, a = [x0, z0], best = Infinity, sBest = 0;
+      for (const b of q) { s += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b;
+        const d = Math.hypot(b[0] - tx, b[1] - tz); if (d < best) { best = d; sBest = s; } }
+      return { grille: Math.round(grille), voies: Math.round(voies), ratio: +(voies / grille).toFixed(2), retour: Math.round(voies - sBest) };
+    });
+    const A = G.city.graphe.aretes;
+    return { res, moy: +(res.reduce((a, x) => a + x.ratio, 0) / res.length).toFixed(2),
+      pireRetour: Math.max(...res.map(x => x.retour)),
+      bouchees: A.filter(e => (e.dur || 0) > 0).length, raccords: G.city.graphe.raccords, aretes: A.length };
+  });
+  // avant : 4,3 fois le chemin de la grille en moyenne, et jusqu'a 83 m de demi-tour a l'arrivee
+  const ok = r.raccords >= 1 && r.bouchees >= 1 && r.res.every(x => isFinite(x.voies) && x.voies > 0)
+    && r.moy <= 2.2 && r.pireRetour <= 25;
+  return { ok, detail: `${r.res.length} itinéraires par les voies : ${r.moy}× le chemin de la grille A* en moyenne (${r.res.map(x => x.ratio).join(', ')}), au pire ${r.pireRetour} m parcourus après être passé au plus près du but (83 m avant) · le graphe a ${r.aretes} arêtes dont ${r.raccords} raccords de rues voisines et connaît ${r.bouchees} voies qu'une voiture ne peut pas emprunter` };
 });

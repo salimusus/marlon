@@ -748,7 +748,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
+<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -21443,9 +21443,21 @@ function pollGamepad(dt) {
     // Aucune collision : c'est l'un OU l'autre selon qu'on vole ou non.
     const enHelico = !!drive.car && !!drive.car.heli;
     if (enHelico && neuf[2] && !bas[2]) { heliPoser(); padVibre(0.25, 60); }
+    // ▢ AU VOLANT D'UN ENGIN DE CHANTIER = ACTIONNER L'OUTIL (poste Animation).
+    // Le joueur : « quand le joueur prend par ex la pelleteuse pour faire un trou, aucune
+    // touche de la manette n'est affectee a cette action ». C'etait vrai : le cycle de fouille
+    // n'etait branche que sur la touche O du CLAVIER, et l'enfant joue a la manette sur sa
+    // television — le travail etait inutilisable pour lui.
+    // Pourquoi ▢ et pas un bouton neuf : les dix-huit boutons sont deja pris, et ▢ a
+    // exactement le bon profil. A pied il FRAPPE ; dans un vehicule ordinaire il ne fait que
+    // klaxonner (ce que fait deja ↓ de la croix, c'etait donc un doublon) ; en helicoptere il
+    // POSE l'appareil. C'est le bouton « geste du vehicule ». La situation tranche, comme pour
+    // l'helicoptere : aucun des dix-huit boutons ne gagne un second role.
+    const enEngin = !!drive.car && !!drive.car.travail && !drive.car.heli;
+    if (enEngin && neuf[2] && !bas[2]) { if (actionneOutil(drive.car)) padVibre(0.35, 70); }
     for (const [i, k] of Object.entries(PAD_MAP)) {
       if (neuf[i] === bas[i]) continue;
-      if (+i === 2 && enHelico) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne frappe pas en vol : il fait atterrir
+      if (+i === 2 && (enHelico || enEngin)) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne klaxonne pas dans un engin : il actionne l'outil
       telTouche(k, neuf[i]);
     }
     // LA GACHETTE DE TIR. Arme braquee (✕), a pied : R2 tire — maintenue, elle tire en
@@ -21522,7 +21534,7 @@ function padMenu(L, neuf, bas) {
 const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
 // A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
-const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
+const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
   6: 'freiner · se baisser', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
   12: 'ordres', 13: 'danser', 14: 'arme préc.', 15: 'arme suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
@@ -22068,6 +22080,14 @@ function camPerche(dt, aiming) {
     camera.updateProjectionMatrix();
   }
   camera.lookAt(cam.target);
+  // POSTE ANIMATION : pendant les trois secondes du coup vainqueur, la caméra de cinéma
+  // écrase la caméra de jeu — et seulement elle. Les commandes du joueur continuent de
+  // répondre, `cam.yaw` et `cam.dist` restent ceux qu'il a réglés, et l'image lui revient
+  // exactement où il l'avait laissée à la fin du ralenti.
+  // (L'appel avait DISPARU quand la caméra a été refaite en `camPerche` : le ralenti
+  //  ralentissait bien le temps mais ne changeait plus d'angle — il ne restait que la moitié
+  //  de ce que le joueur avait demandé.)
+  try { ralentiCam(); } catch (e) {}
 }
 
 function loop() {
@@ -27714,47 +27734,73 @@ function creuseTrou(x, z, y) {
   if (typeof worldGroup === 'undefined' || !worldGroup) return null;
   if (ANIM.trous.length >= CREUSE_TROU_MAX) { const v = ANIM.trous.shift(); if (v.g && v.g.parent) v.g.parent.remove(v.g); }
   const g = new THREE.Group(); g.position.set(x, (y || 0) + 0.02, z); worldGroup.add(g);
-  const disques = [];
-  for (let i = 0; i < 3; i++) {
-    const m = new THREE.Mesh(new THREE.CircleGeometry(1, 16), lam([0x5a3d21, 0x33230f, TERRE_FOND][i]));
-    m.rotation.x = -Math.PI / 2; m.position.y = i * 0.006; g.add(m); disques.push(m);
-  }
+  // LA CUVETTE. Premier essai : trois disques plats de plus en plus sombres. Regardé en
+  // capture, ça se lisait « de loin et de trois quarts » mais restait un DESSIN sur le sol —
+  // aucun relief, aucune ombre. On ne peut toujours pas DÉCOUPER la chaussée (la ville est
+  // faite de dalles pleines, et une découpe coûterait une géométrie neuve par coup de godet),
+  // alors on fait ce que fait un vrai terrassement : le trou est une CUVETTE dont le bord est
+  // remonté par la terre sortie. La paroi est un tronc de cône OUVERT, faces intérieures
+  // visibles (`DoubleSide`), qui descend du bourrelet jusqu'au fond ; tout reste AU-DESSUS du
+  // sol, donc tout se rend, et l'éclairage fait le reste : la paroi s'assombrit dans la pente
+  // et l'œil lit un trou, pas une tache.
+  const paroi = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.42, 1, 18, 1, true),
+    new THREE.MeshLambertMaterial({ color: 0x4a3218, side: THREE.DoubleSide }));
+  g.add(paroi);
+  const fond = new THREE.Mesh(new THREE.CircleGeometry(1, 16), lam(TERRE_FOND));
+  fond.rotation.x = -Math.PI / 2; g.add(fond);
   // le bourrelet de mottes tout autour : c'est LUI qui donne le relief du bord
   const mottes = [];
-  for (let i = 0; i < 10; i++) {
-    const a = i * 0.6283;
-    const m = new THREE.Mesh(unitRound, lam(i % 2 ? TERRE_C : TERRE_TAS));
-    m.scale.set(0.34, 0.2, 0.34); m.position.set(Math.sin(a), 0.05, Math.cos(a)); m.rotation.y = a;
+  for (let i = 0; i < 14; i++) {
+    const a = i * 0.4488;
+    const m = new THREE.Mesh(unitRound, lam(i % 3 === 0 ? TERRE_TAS : i % 3 === 1 ? TERRE_C : 0x5a3d21));
+    m.scale.set(0.34, 0.2, 0.34); m.position.set(Math.sin(a), 0.05, Math.cos(a)); m.rotation.y = a * 1.7;
     g.add(m); mottes.push(m);
   }
-  const t = { g, disques, mottes, x, z, y: y || 0, r: 0.9, prof: 0, n: 0, tas: null };
+  const t = { g, paroi, fond, mottes, x, z, y: y || 0, r: 0.9, prof: 0, n: 0, vide: 0, tas: null };
   ANIM.trous.push(t); creuseTrouMaj(t);
   return t;
 }
 function creuseTrouMaj(t) {
-  const r = t.r;
-  for (let i = 0; i < 3; i++) t.disques[i].scale.setScalar(r * (1 - i * 0.22));
+  const r = t.r, h = 0.22 + t.prof * 0.9;   // la cuvette s'enfonce ET son bord monte avec la terre sortie
+  // la paroi : large en haut (le bourrelet), étroite en bas (le fond)
+  t.paroi.scale.set(r, h, r);
+  t.paroi.position.y = h / 2 + 0.01;
+  t.fond.scale.setScalar(r * 0.42);
+  t.fond.position.y = 0.012;
   for (let i = 0; i < t.mottes.length; i++) {
-    const m = t.mottes[i], a = i * 0.6283, k = 0.28 + t.prof * 0.5;
-    m.position.set(Math.sin(a) * (r + 0.18), 0.04 + k * 0.3, Math.cos(a) * (r + 0.18));
-    m.scale.set(0.3 + k, 0.14 + k * 0.7, 0.3 + k);
+    const m = t.mottes[i], a = i * 0.4488, k = 0.26 + t.prof * 0.45;
+    // les mottes du bord s'appuient sur le HAUT de la paroi : elles ferment le bourrelet
+    m.position.set(Math.sin(a) * (r + 0.12), h * 0.86 + k * 0.16, Math.cos(a) * (r + 0.12));
+    m.scale.set(0.3 + k, 0.16 + k * 0.6, 0.3 + k);
+    m.rotation.x = Math.sin(a * 2.3) * 0.3;
   }
 }
 // LE TAS DE TERRE, à côté du trou : un cône qui grandit à chaque godet vidé, plus quelques
 // mottes à son pied pour qu'il ne ressemble pas à un chapeau chinois.
-function creuseTas(t) {
+// LE TAS SE FORME EXACTEMENT SOUS LE GODET QUI BASCULE. Il était posé « du côté opposé au
+// joueur », ce qui n'a aucun rapport avec le geste : vu en capture, la pelleteuse vidait son
+// godet AU-DESSUS DU TROU et la terre apparaissait trois mètres plus loin. `x`/`z` sont
+// maintenant le point que vise la flèche une fois la tourelle pivotée.
+function creuseTas(t, x, z) {
   if (t.tas) return t.tas;
   const g = new THREE.Group();
-  const a = Math.atan2(t.x - (P ? P.pos.x : 0), t.z - (P ? P.pos.z : 0));   // du côté opposé au joueur : on ne lui bouche pas la vue
-  g.position.set(t.x + Math.sin(a) * 3.4, t.y + 0.02, t.z + Math.cos(a) * 3.4);
+  if (x == null) {   // secours : personne ne nous a dit où — on se met à côté, hors du trou
+    const a = Math.atan2(t.x - (P ? P.pos.x : 0), t.z - (P ? P.pos.z : 0));
+    x = t.x + Math.sin(a) * 3.4; z = t.z + Math.cos(a) * 3.4;
+  }
+  g.position.set(x, t.y + 0.02, z);
   worldGroup.add(g);
   const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 12), lam(TERRE_TAS));
   cone.position.y = 0.5; cone.castShadow = true; g.add(cone);
+  // DE LA TERRE, PAS UN CHAPEAU CHINOIS. Un cône nu se voyait pour ce qu'il était. On lui
+  // colle douze mottes de trois tailles et de trois bruns, réparties du pied jusqu'aux deux
+  // tiers de la hauteur : la silhouette devient irrégulière et la matière se lit.
   const mottes = [];
-  for (let i = 0; i < 6; i++) {
-    const b = i * 1.047;
-    const m = new THREE.Mesh(unitRound, lam(i % 2 ? TERRE_C : TERRE_FOND));
-    m.scale.set(0.3, 0.22, 0.3); m.position.set(Math.sin(b) * 0.9, 0.11, Math.cos(b) * 0.9); g.add(m); mottes.push(m);
+  for (let i = 0; i < 12; i++) {
+    const b = i * 2.399;   // l'angle d'or : jamais deux mottes alignées
+    const m = new THREE.Mesh(unitRound, lam(i % 3 === 0 ? TERRE_C : i % 3 === 1 ? TERRE_FOND : 0x5a3d21));
+    m.rotation.set(Math.sin(b) * 0.4, b, Math.cos(b) * 0.35);
+    m.castShadow = true; g.add(m); mottes.push(m);
   }
   t.tas = { g, cone, mottes, h: 0 };
   creuseTasMaj(t);
@@ -27762,18 +27808,96 @@ function creuseTas(t) {
 }
 function creuseTasMaj(t) {
   const s = t.tas; if (!s) return;
-  s.h = clamp(0.35 + t.n * 0.16, 0.35, 2.2);
-  const r = clamp(0.8 + t.n * 0.18, 0.8, 2.6);
+  // LE VOLUME DU TAS SUIT LA TERRE RÉELLEMENT TOMBÉE (`t.vide`), pas le nombre de godets
+  // RACLÉS (`t.n`). C'est toute la demande du joueur : « la terre retirée doit apparaître
+  // quand le godet vide la terre ». Avant, le tas montait au moment du RELEVAGE, une seconde
+  // et demie avant que le godet ne bascule : on voyait l'effet avant la cause.
+  const n = t.vide || 0;
+  // TANT QUE RIEN N'EST TOMBÉ, IL N'Y A PAS DE TAS. Le groupe est créé à l'avance (on
+  // n'alloue rien pendant le vidage) mais il reste invisible : sinon une butte apparaissait
+  // toute seule à côté du trou avant même que le godet n'ait basculé.
+  s.g.visible = n > 0.01;
+  // MESURÉ EN CAPTURE : à 0,16 m par godet, deux godets faisaient une galette de 67 cm qu'on
+  // prenait pour une flaque de boue. Un godet de pelleteuse, c'est un gros seau : on monte de
+  // 26 cm et on élargit de 20 cm à chaque fois.
+  s.h = clamp(0.40 + n * 0.26, 0.34, 2.6);
+  const r = clamp(0.75 + n * 0.20, 0.7, 2.8);
   s.cone.scale.set(r, s.h, r); s.cone.position.y = s.h / 2;
+  for (let i = 0; i < s.mottes.length; i++) {
+    const m = s.mottes[i], b = i * 2.399, u = (i % 4) / 4;         // u : à quelle hauteur du cône elle s'accroche
+    const ry = r * (1 - u * 0.75) * 0.96, taille = 0.22 + (i % 3) * 0.12;
+    m.position.set(Math.sin(b) * ry, 0.08 + u * s.h * 0.8, Math.cos(b) * ry);
+    m.scale.set(taille, taille * 0.7, taille);
+  }
   for (let i = 0; i < s.mottes.length; i++) { const b = i * 1.047; s.mottes[i].position.set(Math.sin(b) * (r * 0.85), 0.11, Math.cos(b) * (r * 0.85)); }
 }
 // UN GODET DE PLUS : le trou s'élargit et s'approfondit, le tas monte.
+// LA CAUSE : LE GODET RACLE, LE TROU SE CREUSE. Appelé À LA FIN DU RACLAGE, pas au relevage :
+// c'est à cet instant-là que la terre quitte le sol.
 function creuseGodet(t) {
   if (!t) return;
   t.n++;
   t.r = Math.min(CREUSE_R_MAX, t.r + 0.22);
   t.prof = Math.min(1.5, t.prof + CREUSE_PAS);
-  creuseTrouMaj(t); creuseTas(t); creuseTasMaj(t);
+  creuseTrouMaj(t);
+}
+// L'EFFET : LA TERRE TOMBE SUR LE TAS. Appelé quand une motte lâchée par le godet TOUCHE le
+// tas — jamais avant. `part` est la fraction de godet que cette motte représente.
+function creuseVerse(t, part) {
+  if (!t) return;
+  t.vide = (t.vide || 0) + (part > 0 ? part : 1);
+  creuseTas(t); creuseTasMaj(t);
+}
+
+// ---------- LA TERRE QUI TOMBE DU GODET ----------
+// « la terre retirée doit apparaître quand le godet vide la terre ». Il ne suffisait pas de
+// déplacer l'instant où le tas grandit : il fallait qu'on VOIE la terre faire le trajet. Des
+// mottes quittent donc le godet à l'instant où il bascule, tombent en parabole (vraie
+// gravité) et, en touchant le tas, le font grossir d'un quart de godet chacune. Cause, trajet,
+// effet : les trois sont à l'écran, dans cet ordre.
+// Économe : un POOL de `CHUTE_MAX` maillages réutilisés, rien n'est alloué en vol.
+// MESURÉ : à 16 m/s² et sans élan vers le haut, une motte touchait le tas en 0,117 s — sept
+// images, invisibles à l'œil comme à la capture. Elle est maintenant LANCÉE vers le haut par
+// la bascule du godet et retombe plus mollement : la parabole dure environ quatre dixièmes de
+// seconde, et on SUIT la terre des yeux du godet jusqu'au tas.
+const CHUTE_MAX = 16, CHUTE_G = 9.5, CHUTE_ELAN = 1.9;
+ANIM.chutes = [];
+function terreChute(x, y, z, vx, vy, vz, trou, part, taille) {
+  if (typeof worldGroup === 'undefined' || !worldGroup) return null;
+  let ch = ANIM.chutes.find(c => !c.actif);
+  if (!ch) {
+    if (ANIM.chutes.length >= CHUTE_MAX) return null;
+    const m = new THREE.Mesh(unitRound, lam(TERRE_C));
+    m.castShadow = true; worldGroup.add(m);
+    ch = { m, actif: false }; ANIM.chutes.push(ch);
+  }
+  if (!ch.m.parent) worldGroup.add(ch.m);
+  const T = taille > 0 ? taille : 0.3;
+  ch.actif = true; ch.trou = trou; ch.part = part || 0;
+  ch.x = x; ch.y = y; ch.z = z; ch.vx = vx; ch.vy = vy; ch.vz = vz; ch.t = 0;
+  ch.sol = trou && trou.tas ? trou.tas.g.position.y : 0;
+  ch.m.visible = true; ch.m.scale.set(T, T * 0.72, T);
+  ch.m.position.set(x, y, z);
+  ch.m.rotation.set(x % 3, z % 3, 0);
+  return ch;
+}
+function terreChutesTick(dt) {
+  if (!ANIM.chutes.length) return;
+  for (const ch of ANIM.chutes) {
+    if (!ch.actif) continue;
+    ch.t += dt;
+    ch.vy -= CHUTE_G * dt;
+    ch.x += ch.vx * dt; ch.y += ch.vy * dt; ch.z += ch.vz * dt;
+    ch.m.position.set(ch.x, ch.y, ch.z);
+    ch.m.rotation.x += dt * 5.5; ch.m.rotation.z += dt * 3.7;
+    // elle a touché le tas (ou le sol, si le tas a disparu entre-temps) ou elle traîne
+    const hauteurTas = ch.trou && ch.trou.tas ? ch.trou.tas.h : 0;
+    if (ch.vy < 0 && (ch.y <= ch.sol + hauteurTas * 0.5 || ch.t > 3)) {
+      ch.actif = false; ch.m.visible = false;
+      if (ch.part > 0) creuseVerse(ch.trou, ch.part);
+      if (typeof burst === 'function' && ch.t <= 3 && animPres(ch.x, ch.z)) burst(ch.x, ch.y + 0.15, ch.z, TERRE_TAS, 3);
+    }
+  }
 }
 // LA TERRE DANS LE GODET. Une motte marron logée AU FOND du godet, invisible tant qu'il n'a
 // pas raclé. Elle est créée à la première fouille et gardée : on n'alloue rien par image.
@@ -27801,7 +27925,11 @@ function enginCreuse(c) {
   const cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0);
   const tx = c.x + sn * CREUSE_PORTEE, tz = c.z + cs * CREUSE_PORTEE;
   const y = (typeof groundUnder === 'function') ? groundUnder(tx, tz, c.solid, c.y || 0) : (c.y || 0);
-  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), vide: false, cri: false };
+  // LE POINT DE VIDAGE : la tourelle pivote de 0,95 rad pendant le cycle, donc le godet
+  // bascule sur ce cap-là, à la même portée. C'est LÀ que le tas doit se former.
+  const aTas = (c.h || 0) + 1.30;
+  c.creuse = { t: 0, trou: creuseTrou(tx, tz, y), creuse: false, lache: false,
+    tasX: c.x + Math.sin(aTas) * CREUSE_PORTEE, tasZ: c.z + Math.cos(aTas) * CREUSE_PORTEE };
   godetTerre(c);
   return true;
 }
@@ -27823,26 +27951,49 @@ function enginCreuseTick(c, dt) {
   // dixièmes du cycle ramènent donc tout exactement sur cette pose de repos, et le relais se
   // fait sans qu'on voie la couture.
   const repli = 1 - animSeg(u, 0.88, 1);
-  if (o.tourelle) o.tourelle.rotation.y = 0.95 * pivot;
+  // 1,30 rad DE PIVOT, ET POURQUOI PAS MOINS. À 0,95 rad le tas de terre retombait au bord
+  // même du trou : sur la capture, la butte et la cuvette se touchaient et on ne distinguait
+  // plus l'une de l'autre. À 1,30 rad ils sont écartés de 6,3 m — la fosse d'un côté, la
+  // terre de l'autre, comme sur un vrai chantier.
+  if (o.tourelle) o.tourelle.rotation.y = 1.30 * pivot;
   if (o.bras) o.bras.rotation.x = -0.9 + (0.86 * plonge - 0.52 * leve) * repli;
   if (o.avantBras) o.avantBras.rotation.x = 1.5 + (-1.02 * plonge + 0.22 * racle + 0.44 * leve) * repli;
   if (o.godet) o.godet.rotation.x = -0.7 + (0.62 * plonge - 1.05 * racle - 0.30 * leve + 1.85 * vide) * repli;
   // LA TERRE EST VISIBLE DÈS QUE LE GODET A RACLÉ, et jusqu'au vidage : c'est exactement ce
   // que le joueur demande à voir.
   if (o.terre) o.terre.visible = racle > 0.5 && vide < 0.55;
-  // le trou se creuse au moment où le godet RESSORT (pas au vidage) : c'est là qu'on retire
-  // la terre du sol. Un seul godet par cycle, d'où le drapeau.
-  if (!k.vide && leve > 0.85) {
-    k.vide = true;
+  // 1. LA CAUSE — LE TROU SE CREUSE AU RACLAGE. C'est l'instant où les dents du godet
+  //    arrachent la terre ; une image plus tard elle est dans le godet. Avant, le trou
+  //    s'agrandissait au RELEVAGE, le godet déjà sorti : on voyait le sol s'enfoncer alors
+  //    que plus rien ne le touchait.
+  if (!k.creuse && racle > 0.92) {
+    k.creuse = true;
     if (k.trou) creuseGodet(k.trou);
-    if (typeof burst === 'function') burst(k.trou ? k.trou.x : c.x, (k.trou ? k.trou.y : 0) + 0.5, k.trou ? k.trou.z : c.z, TERRE_C, 6);
+    if (typeof burst === 'function') burst(k.trou ? k.trou.x : c.x, (k.trou ? k.trou.y : 0) + 0.35, k.trou ? k.trou.z : c.z, TERRE_C, 7);
     if (typeof sfx !== 'undefined' && sfx.pok) try { sfx.pok(); } catch (e) {}
   }
-  // au vidage, une gerbe de mottes au-dessus du tas
-  if (vide > 0.35 && vide < 0.9 && k.trou && k.trou.tas && k.t > (k.gerbeT || 0)) {
-    k.gerbeT = k.t + 0.12;
-    const g = k.trou.tas.g;
-    if (typeof burst === 'function') burst(g.position.x, g.position.y + k.trou.tas.h + 0.6, g.position.z, TERRE_TAS, 4);
+  // 2. L'EFFET — LA TERRE TOMBE QUAND LE GODET BASCULE. Quatre mottes quittent le godet à sa
+  //    position RÉELLE dans le monde (on lit sa matrice, il est au bout de deux articulations
+  //    et d'une tourelle qui a pivoté), tombent en parabole, et c'est en touchant le tas
+  //    qu'elles le font grossir d'un quart de godet chacune.
+  if (k.trou && !k.lache && vide > 0.42) {
+    k.lache = true;
+    creuseTas(k.trou, k.tasX, k.tasZ);
+    const tas = k.trou.tas;
+    if (o.godet && tas) {
+      o.godet.updateMatrixWorld(true);
+      const p = new THREE.Vector3(0, 0.06, 0.42).applyMatrix4(o.godet.matrixWorld);
+      for (let i = 0; i < 4; i++) {
+        const a = i * 1.571 + 0.4;
+        // une pincée de vitesse VERS le tas : les mottes ne tombent pas toutes au même point
+        const vers = Math.atan2(tas.g.position.x - p.x, tas.g.position.z - p.z);
+        terreChute(p.x + Math.sin(a) * 0.16, p.y, p.z + Math.cos(a) * 0.16,
+          Math.sin(vers) * (0.7 + i * 0.25) + Math.sin(a) * 0.4, CHUTE_ELAN - i * 0.16,
+          Math.cos(vers) * (0.7 + i * 0.25) + Math.cos(a) * 0.4,
+          k.trou, 0.25, 0.26 + (i % 3) * 0.08);
+      }
+      if (typeof sonTole === 'function') { try { sonTole(tas.g.position.x, tas.g.position.y + 0.6, tas.g.position.z, 0.5); } catch (e) {} }
+    }
   }
   if (u >= 1) { c.creuse = null; if (o.terre) o.terre.visible = false; if (o.tourelle) o.tourelle.rotation.y = 0; }
 }
@@ -27970,8 +28121,10 @@ function enginsTick(dt) {
     else if (c.kind === 'bulldozer') { enginLameTick(c, dt); enginDemolit(c, dt); }
     else if (drive.car === c) enginDemolit(c, dt);
   }
-  // ville démontée : les trous et les tas sont partis avec worldGroup, on vide le registre
+  terreChutesTick(dt);   // les mottes lâchées par le godet, en vol
+  // ville démontée : les trous, les tas et les mottes sont partis avec worldGroup
   if (ANIM.trous.length && (!city.on || !ANIM.trous[0].g.parent)) ANIM.trous.length = 0;
+  if (ANIM.chutes.length && (!city.on || !ANIM.chutes[0].m.parent)) ANIM.chutes.length = 0;
 }
 function reparateursTick(dt) {
   const L = ANIM.reparateurs; if (!L.length) return;
@@ -28084,6 +28237,8 @@ function animScenePhoto(nom, u) {
   ANIM.photo.length = 0;
   for (const t of ANIM.trous) { if (t.g && t.g.parent) t.g.parent.remove(t.g); if (t.tas && t.tas.g && t.tas.g.parent) t.tas.g.parent.remove(t.tas.g); }
   ANIM.trous.length = 0;
+  for (const ch of ANIM.chutes) { ch.actif = false; if (ch.m && ch.m.parent) ch.m.parent.remove(ch.m); }
+  ANIM.chutes.length = 0;
   try { sgridSale(); } catch (e) {}
   while (ANIM.reparateurs.length) reparateurRange(ANIM.reparateurs[0]);
   // LE JOUEUR EST CACHÉ POUR TOUTES LES SCÈNES SAUF LE RALENTI (où c'est LUI qui frappe), et
@@ -28127,8 +28282,9 @@ function animScenePhoto(nom, u) {
     if (nom === 'creuse') {
       // DEUX GODETS DÉJÀ SORTIS avant la photo : sur un seul, le trou et le tas sont encore
       // trop petits pour qu'on juge quoi que ce soit sur l'image.
-      for (let n = 0; n < 2; n++) { enginCreuse(c); for (let i = 0; i < 900 && c.creuse; i++) enginCreuseTick(c, 1 / 60); }
-      enginCreuse(c); for (let i = 0; i < 900 && c.creuse && c.creuse.t < k * CREUSE_DUREE; i++) enginCreuseTick(c, 1 / 60);
+      for (let n = 0; n < 2; n++) { enginCreuse(c); for (let i = 0; i < 900 && c.creuse; i++) { enginCreuseTick(c, 1 / 60); terreChutesTick(1 / 60); } }
+      for (let i = 0; i < 120; i++) terreChutesTick(1 / 60);   // les dernières mottes touchent le tas
+      enginCreuse(c); for (let i = 0; i < 900 && c.creuse && c.creuse.t < k * CREUSE_DUREE; i++) { enginCreuseTick(c, 1 / 60); terreChutesTick(1 / 60); }
     }
     else if (nom === 'grue') { enginLeve(c); for (let i = 0; i < 900 && c.leve && c.leve.t < k * GRUE_DUREE; i++) enginLeveTick(c, 1 / 60); }
     else { c.lameCible = 1; c.spd = 6; c.speed = 6; for (let i = 0; i < 900; i++) enginLameTick(c, 1 / 60); c.andainK = k; enginLameTick(c, 0); }

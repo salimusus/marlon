@@ -8335,7 +8335,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
   box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
   box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
-  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.9, 1.9, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; emp.group.remove(emp.tag); emp.tag = nameTag(dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); emp.group.add(emp.tag); }
+  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.9, 1.9, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
   city.bankDesk = { x: bx - 4.4, z: bz };
   for (const [dx, dz] of [[8, -8], [8, 8], [-8, 8], [-8, -8]]) { box(bx + dx, 0.7, bz + dz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false }); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), lam(0x3fae4a)); pl.position.set(bx + dx, 1.75, bz + dz); worldGroup.add(pl); }
   for (const dz of [-3, 3]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);   // rapprochés du centre : les volées déplacées passaient dessus
@@ -9348,7 +9348,7 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   B(2.2, 1.05, -D / 2 + 0.42, 0.34, 0.1, 0.18, 0x3b4252, { deco: true, studs: false });   // la brosse
   // le bureau du maitre, sa chaise, le maitre
   B(-2.8, 0.85, -2.9, 2.2, 0.12, 0.9, C.wood, { studs: false, noRoute: true }); for (const dx of [-0.95, 0.95]) B(-2.8 + dx, 0.42, -2.9, 0.1, 0.85, 0.1, C.wood, { deco: true, studs: false });
-  const teach = mannequin(x - 2.8, z - 3.9, Math.PI, { jersey: 9, jacket: 1, hair: 2, hairColor: 0, skirt: true }); teach.group.position.y = 0.3; teach.group.remove(teach.tag); teach.tag = nameTag('Maîtresse'); teach.group.add(teach.tag);
+  const teach = mannequin(x - 2.8, z - 3.9, Math.PI, { jersey: 9, jacket: 1, hair: 2, hairColor: 0, skirt: true }); teach.group.position.y = 0.3; renommeEtiquette(teach, 'Maîtresse');
   // les tables d'ecolier et LES CHAISES ou l'on s'assoit (E) — deux rangees de trois
   const room = { x, z: z + D / 2 - 0.3, subj, e, n, tableau, cv, ctx, tex, chaises: [], texte: '', dessine: '', maitresse: teach };
   for (let r = 0; r < 2; r++) for (let cI = 0; cI < 3; cI++) {
@@ -9444,7 +9444,7 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   box(hx + 7, 0.9, hz - 6.5, 1.4, 1.1, 6, 0xd6e4ff, { studs: false, noRoute: true }); box(hx + 7, 1.5, hz - 6.5, 1.6, 0.15, 6.2, 0xffffff, { deco: true, studs: false });
   box(hx + 7, 2.3, hz - 6.5, 0.1, 1.4, 5, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
   box(hx + 6.2, 1.75, hz - 5.2, 0.5, 0.35, 0.7, 0x111318, { deco: true, studs: false });
-  const rec = mannequin(hx + 5.4, hz - 6.5, Math.PI / 2, { jersey: 8, jacket: 0, hair: 2, hairColor: 2, skirt: true }); rec.group.position.y = 0.36; rec.group.remove(rec.tag); rec.tag = nameTag('Dr. Camille'); rec.group.add(rec.tag);
+  const rec = mannequin(hx + 5.4, hz - 6.5, Math.PI / 2, { jersey: 8, jacket: 0, hair: 2, hairColor: 2, skirt: true }); rec.group.position.y = 0.36; renommeEtiquette(rec, 'Dr. Camille');
   city.medDesk = { x: hx + 8.4, z: hz - 6.5 };
   box(hx + 7, 3.4, hz - 6.5, 3, 0.9, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('ACCUEIL') }), deco: true, noEdges: true });
   for (const dz of [-4, 4]) bench(hx + 10, hz + dz, dz < 0 ? 0 : Math.PI);
@@ -10538,7 +10538,7 @@ function buildSchool(sx, sz) {   // l'ecole : un batiment vitre vert, quatre cla
   box(sx - 16, 3.95, sz + 7.5, 11.5, 0.35, 10.5, 0x5cc453, { deco: true, studs: false }); box(sx - 16, 4.25, sz + 7.5, 11.9, 0.2, 10.9, 0x2f8f3a, { deco: true, studs: false });
   box(sx - 16, 5.0, sz + 7.5, 4, 0.9, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('⛱️ PRÉAU', 0x5cc453) }), deco: true, noEdges: true });
   bench(sx - 18, sz + 5, 0); bench(sx - 14, sz + 5, 0); bench(sx + 4, sz + 13, Math.PI);
-  for (let i = 0; i < 4; i++) { const p = mannequin(sx + rnd(-8, 8), sz + rnd(4, 12), rnd(0, 6), { jersey: Math.floor(rnd(0, 19)), hair: i % 3, hairColor: i, skirt: i === 1, bag: 1 + (i % 4) }); p.group.position.y = 0.2; p.group.remove(p.tag); p.tag = nameTag(['Léa', 'Tom', 'Inès', 'Noah'][i]); p.group.add(p.tag); }
+  for (let i = 0; i < 4; i++) { const p = mannequin(sx + rnd(-8, 8), sz + rnd(4, 12), rnd(0, 6), { jersey: Math.floor(rnd(0, 19)), hair: i % 3, hairColor: i, skirt: i === 1, bag: 1 + (i % 4) }); p.group.position.y = 0.2; renommeEtiquette(p, ['Léa', 'Tom', 'Inès', 'Noah'][i]); }
   for (const [dx, dz] of [[-6, 12], [0, 12], [21, -12], [-21, -13]]) tree(sx + dx, 0.2, sz + dz, C.leaf);
   flowerBed(sx + 20, sz - 12, 4, 1.2); flowerBed(sx + 20, sz + 12, 4, 1.2);
   buildBasket(sx + 17, sz + 8);
@@ -10552,7 +10552,7 @@ function buildOffice(x, z) {   // bureau des missions : kiosque ouvert avec gran
   box(x, 3.9, z, 7.6, 0.3, 5.6, 0x4f8dff, { deco: true, studs: false });
   box(x, 2.2, z + 2.2, 6, 2.4, 0.15, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: textTexture('📋 MISSIONS') }), studs: false, noRoute: true });   // grand tableau (fond)
   box(x, 0.9, z + 0.6, 4, 1, 0.8, C.wood, { studs: false, noRoute: true });   // comptoir
-  const agent = mannequin(x, z + 1.5, Math.PI, { hat: 'helmet', jacket: 1, jersey: 5 }); agent.group.position.y = 0.36; agent.tag.visible = true; agent.group.remove(agent.tag); agent.tag = nameTag('Agent Max'); agent.group.add(agent.tag);
+  const agent = mannequin(x, z + 1.5, Math.PI, { hat: 'helmet', jacket: 1, jersey: 5 }); agent.group.position.y = 0.36; agent.tag.visible = true; renommeEtiquette(agent, 'Agent Max');
   box(x, 4.6, z, 5, 1, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('💰 DÉFIS & MISSIONS', 0xffd23f) }), deco: true, noEdges: true });
   for (const dx of [-2.5, 2.5]) box(x + dx, 4.6, z, 0.3, 0.5, 0.3, 0, { material: neonMat(0xffd23f), deco: true, noEdges: true });
   city.office = { x, z: z - 0.4 }; setTimeout(() => { if (city.on && !mission.cur) { /* colonne lumineuse d'indication */ } }, 0);
@@ -10754,6 +10754,12 @@ function policeVoit(o, portee = 45) {
   return o.vue;
 }
 // Le joueur est-il à couvert ? 'planque' = garage à semer la police, 'batiment' = sous un toit.
+// Le bâtiment qui CONTIENT un point (sinon null). city.batiments est la liste des emprises
+// fermées aux véhicules : c'est elle qui dit si une destination est « dans un bâtiment ».
+function batimentSous(x, z) {
+  for (const b of (city.batiments || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
+  return null;
+}
 function abriDuJoueur() {
   if (drive.car) return null;
   if (city.hideouts && city.hideouts.some(h => Math.abs(P.pos.x - h.x) < h.w / 2 - 0.5 && Math.abs(P.pos.z - h.z) < h.d / 2 - 0.5)) return 'planque';
@@ -10764,8 +10770,12 @@ function abriDuJoueur() {
 function tenueUniforme(av, mil) {
   const base = mil ? 0x3f4a2c : 0x16264a, fonce = mil ? 0x2f381f : 0x0e1a33, jaune = 0xffd23f;
   for (const k of ['shirt', 'sleeve', 'front', 'back', 'jacket']) if (av.mats[k]) av.mats[k].color.setHex(base);
-  if (av.mats.front.map) { av.mats.front.map = null; av.mats.front.needsUpdate = true; }
-  if (av.mats.back.map) { av.mats.back.map = null; av.mats.back.needsUpdate = true; }
+  // On LIBÈRE la toile du maillot avant de la décrocher : `map = null` seul l'abandonnait sur
+  // la carte graphique, et chaque reconstruction du monde en laissait deux par gangster et par
+  // agent (mesuré : 36 textures de 256×256 par cycle, jamais reprises par clearWorld puisque
+  // plus aucun matériau ne les tenait).
+  if (av.mats.front.map) { av.mats.front.map.dispose(); av.mats.front.map = null; av.mats.front.needsUpdate = true; }
+  if (av.mats.back.map) { av.mats.back.map.dispose(); av.mats.back.map = null; av.mats.back.needsUpdate = true; }
   av.mats.pants.color.setHex(fonce); av.mats.cap.color.setHex(fonce);
   const jauneMat = new THREE.MeshLambertMaterial({ color: jaune });
   const noirMat = new THREE.MeshLambertMaterial({ color: 0x11151f });
@@ -11189,6 +11199,22 @@ function policeTick(dt) {
       }
     }
     if (tx == null) continue;
+    // CIBLE À L'INTÉRIEUR D'UN BÂTIMENT. Pendant un braquage, le point de ralliement est le
+    // CENTRE de la banque (20 m de côté) : aucune voiture ne peut l'atteindre. Elles se
+    // cognaient à la façade, patinaient, contournaient, repartaient — mesure : 55 s après
+    // l'alarme, AUCUN agent n'était descendu et la plus proche errait encore à 48 m (et la
+    // distance aux agents valait alors l'infini, faute d'agent). Une voiture vise maintenant
+    // le PARVIS du bâtiment (la grande porte quand il y en a une), s'y arrête, et ce sont les
+    // agents qui entrent à pied.
+    const bCible = batimentSous(tx, tz);
+    if (bCible) {
+      if (city.bank && city.bank.approche && Math.abs(tx - city.bank.x) < city.bank.w / 2 && Math.abs(tz - city.bank.z) < city.bank.d / 2) { tx = city.bank.approche[0]; tz = city.bank.approche[1]; }
+      else {
+        const hx = bCible.w / 2 + 3.2, hz = bCible.d / 2 + 3.2, ex = pc.x - bCible.x, ez = pc.z - bCible.z;
+        if (Math.abs(ex) * hz >= Math.abs(ez) * hx) { tx = bCible.x + (ex >= 0 ? hx : -hx); tz = clamp(pc.z, bCible.z - hz, bCible.z + hz); }
+        else { tz = bCible.z + (ez >= 0 ? hz : -hz); tx = clamp(pc.x, bCible.x - hx, bCible.x + hx); }
+      }
+    }
     const dist = Math.hypot(tx - pc.x, tz - pc.z);
     if (police.sait && pc.active && !pc.debarque && police.agents.length < 10
         && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) { policeDebarque(pc, 2); continue; }
@@ -11537,12 +11563,21 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
     // Un homme tombé à zéro ne marche pas : il reste à terre jusqu'à ce qu'il récupère
     // (ou qu'on l'envoie à l'hôpital). On en voyait déambuler avec ❤️ 0.
     if (!b.ko && (b.hp ?? 100) <= 0) { b.hp = 0; b.ko = simTime + 14; b.fight = null; b.bagarre = null; corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y); continue; }
-    if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null;
+    if (!b.fight || simTime > b.fightT) { if (b.fight) { b.fight = null; b.fuitDe = null;
       b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); }
       if (b.garde) { b.garde = false; if (b.av && b.av.rig) b.av.rig.garde = false; } continue; }
     const dx = P.pos.x - b.pos.x, dz = P.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
     b.wait = 0.3; b.dance = 0;
-    if (b.fight === 'flee') { b.garde = false; const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -dx / d * 5.5 * dt, -dz / d * 5.5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-dx, -dz); animateRig(b.av.rig, 'walk', 5.5, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
+    if (b.fight === 'flee') { b.garde = false;
+      // on fuit SON agresseur (un ami du joueur, un gangster…) et non le joueur par défaut
+      const parBot = !!(b.fuitDe && b.fuitDe.pos && !b.fuitDe.ko);
+      const qui = parBot ? b.fuitDe.pos : P.pos;
+      // On DÉTALE devant le joueur (5,5 m/s) mais on RECULE seulement devant un autre habitant
+      // (2,6 m/s) : une bagarre de rue entre deux passants reste sur place au lieu de devenir
+      // une course-poursuite de cent mètres à travers la ville.
+      const vf = parBot ? 2.6 : 5.5;
+      const fx = qui.x - b.pos.x, fz = qui.z - b.pos.z, fd = Math.hypot(fx, fz) || 1;
+      const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -fx / fd * vf * dt, -fz / fd * vf * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-fx, -fz); animateRig(b.av.rig, 'walk', vf, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
     else {
       // EN FACE AUSSI ON SE GARDE : entre deux coups, l'habitant lève les deux poings devant
       // son visage. Un coup qui arrive à ce moment-là ne passe qu'au quart (voir `attack`).
@@ -11987,6 +12022,16 @@ function nameTag(name) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
   sp.renderOrder = 9; sp.scale.set(1.8, 0.45, 1); sp.position.y = 2.5; sp.userData.etiquette = true; return sp;
 }
+// Changer l'étiquette d'un avatar SANS abandonner l'ancienne sur la carte graphique. Sept
+// endroits (banque, école, hôpital, boutique, commissariat, pseudo du joueur) écrivaient
+// retiraient l'ancienne étiquette pour en accrocher une neuve : le vieux panneau et sa toile
+// restaient vivants, invisibles, et clearWorld ne pouvait plus les voir — mesuré : douze
+// textures abandonnées à chaque reconstruction du monde.
+function renommeEtiquette(av, nom) {
+  if (!av || !av.group) return null;
+  if (av.tag) { av.group.remove(av.tag); try { av.tag.material.map.dispose(); av.tag.material.dispose(); } catch (e) {} }
+  av.tag = nameTag(nom); av.group.add(av.tag); return av.tag;
+}
 function buildAvatar(cfg) {
   const g = new THREE.Group();
   g.userData.perso = true;   // (poste G) marque tout avatar : solidifieDecor ne fige jamais un personnage qui marche
@@ -12357,7 +12402,7 @@ function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, 
   if (av.mats.back.map) av.mats.back.map.dispose(); if (av.mats.front.map) av.mats.front.map.dispose();
   av.mats.front.map = jerseyFront(j, av.num); av.mats.front.needsUpdate = true;
   av.mats.back.map = jerseyTexture(name, j, av.num); av.mats.back.needsUpdate = true;
-  if (name !== av.name) { av.group.remove(av.tag); av.tag.material.map.dispose(); av.tag = nameTag(name); av.group.add(av.tag); av.name = name; }
+  if (name !== av.name) { renommeEtiquette(av, name); av.name = name; }
   applyStats(av, look.m || 0, look.f || 0);
   if (av !== me) { setJet(av, !!look.jet); setWeapon(av, look.weapon || null, !!look.aim); setEtuis(av, look.etuis || {}); }
 }
@@ -15628,11 +15673,28 @@ function bagarreTick(b, dt) {
   const dx = c.pos.x - b.pos.x, dz = c.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
   b.wait = 0; b.dance = 0; b.facing = Math.atan2(dx, dz);
   if (d > 1.5) {
-    const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z };
-    npcMove(o, dx / d * 5 * dt, dz / d * 5 * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z;
-    animateRig(b.av.rig, 'walk', 5, dt, simTime);
+    // ON COURT PLUS VITE QUE CELUI QU'ON POURSUIT. Le premier coup faisait détaler la victime
+    // à 5,5 m/s alors que l'agresseur n'avançait qu'à 5 : il ne la rattrapait plus jamais.
+    // ET ON CONTOURNE LES MURS : la poursuite allait tout droit, l'ami lancé aux trousses de
+    // quelqu'un s'écrasait sur la première façade et y restait planté jusqu'à la fin de la
+    // bagarre (mesure : 17,5 m derrière sa cible, immobile pendant trente secondes).
+    const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }, tout = Math.atan2(dx, dz);
+    const ang = (g.evT || 0) > simTime ? g.evH : tout;
+    if (npcMove(o, Math.sin(ang) * 6.5 * dt, Math.cos(ang) * 6.5 * dt, 0.4)) {
+      g.evT = 0;
+      for (const off of [0.8, -0.8, 1.5, -1.5, 2.2, -2.2, 2.9, -2.9]) {
+        const h2 = tout + off, cx = Math.sin(h2), cz = Math.cos(h2);
+        if (!npcBlocked(b.pos.x + cx * 0.6, b.pos.y, b.pos.z + cz * 0.6, 0.4)
+          && !npcBlocked(b.pos.x + cx * 1.7, b.pos.y, b.pos.z + cz * 1.7, 0.4)) { g.evH = h2; g.evT = simTime + 0.8; break; }
+      }
+    }
+    b.pos.x = o.x; b.pos.z = o.z; b.facing = ang;
+    animateRig(b.av.rig, 'walk', 6.5, dt, simTime);
   } else if (simTime > g.cd) {
     g.cd = simTime + 1.1; b.av.rig.swing = 0.3;
+    // ON FUIT CELUI QUI FRAPPE : la victime d'un ami du joueur fuyait le JOUEUR, qui n'y
+    // était pour rien — elle lui courait dessus au lieu de s'échapper de son agresseur.
+    c.fuitDe = b;
     c.hp = (c.hp ?? 100) - 12; c.fight = 'flee'; c.fightT = simTime + 6; c.wait = 0;
     c.pos.x += dx / d * 0.5; c.pos.z += dz / d * 0.5;
     impact(c.pos.x, c.pos.y + 1.2, c.pos.z, null, 'sang', 1); sfx.hit();
@@ -16433,6 +16495,12 @@ function npcBlocked(x, y, z, hw = 0.4) {   // un personnage (bot, garde, animal)
   return false;
 }
 function npcMove(obj, dx, dz, hw) {   // déplacement axe par axe avec blocage ; renvoie vrai si bloqué
+  // DÉJÀ DANS L'OBSTACLE : on le laisse en SORTIR. Un personnage qui se retrouve à l'intérieur
+  // d'un solide (l'ami envoyé se battre était planté dans le socle de la statue de la place)
+  // voyait ses deux axes refusés pour toujours : il restait figé là, et l'ordre « tape untel »
+  // ne partait jamais — mesure : il s'arrêtait à 6 m de sa cible sans lui enlever un seul
+  // point de vie. Tant qu'il est dedans, on le laisse bouger : c'est le seul moyen d'en sortir.
+  if (npcBlocked(obj.x, obj.y, obj.z, hw)) { obj.x += dx; obj.z += dz; return false; }
   let blocked = false;
   if (!npcBlocked(obj.x + dx, obj.y, obj.z, hw)) obj.x += dx; else blocked = true;
   if (!npcBlocked(obj.x, obj.y, obj.z + dz, hw)) obj.z += dz; else blocked = true;
@@ -17935,14 +18003,27 @@ function prepareVehicule(c) { calerRoues(c); separeCaisse(c); return c; }
 // La hauteur du sol SOUS LES ROUES. Un véhicule repose sur la plus HAUTE de ses roues : en
 // ne regardant que son centre, il s'enfonçait de 4 cm dès qu'un train montait sur une dalle
 // (dépôt municipal, caserne, parking de l'hôpital) — la gomme rentrait dans le béton.
+// Et surtout on ignorait le TANGAGE DU CHÂSSIS (c.tiltX, la pente suivie sur le relief, qui
+// fait basculer le groupe entier, roues comprises) : nez en l'air de 0,15 rad, la roue
+// arrière descendait de 21 cm SOUS la chaussée — en roulant, une roue s'enfonçait de 20 cm
+// dans le bitume (la plainte du joueur : « les roues du véhicule entrent dans le sol »).
+// On calcule donc, pour chaque roue, la hauteur de groupe qu'il lui faut pour que sa gomme
+// AFFLEURE le sol malgré le tangage et le roulis, et on garde la plus exigeante.
 function solSousRoues(c) {
   let top = groundCar(c.x, c.z, c.solid, c.y || 0);
   if (!c.roues || !c.roues.length) return top;
   const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  // même composition que c.g.rotation.set(tiltX, h, tiltZ, 'YXZ') = Ry · Rx · Rz : le cap (Y)
+  // ne change pas la hauteur, restent le tangage (X) et le roulis de deux-roues (Z).
+  const ax = c.tiltX || 0, az = c.rider ? (c.tilt || 0) : 0;
+  const cx = Math.cos(ax), sx = Math.sin(ax), cz = Math.cos(az), sz = Math.sin(az);
   for (const r of c.roues) {
     const x = c.x + r.x * cs + r.z * sn, z = c.z - r.x * sn + r.z * cs;
     const g = groundCar(x, z, c.solid, (c.y || 0) + 0.35);
-    if (g > top) top = g;
+    // hauteur du bas de la roue au-dessus de l'origine du groupe, une fois le groupe tourné
+    const dy = (r.x * sz + MARGE_ROUE * cz) * cx - r.z * sx;
+    const need = g - dy + MARGE_ROUE;   // à tangage nul, dy = MARGE_ROUE : on retrouve « need = g »
+    if (need > top) top = need;
   }
   return top;
 }
@@ -20614,7 +20695,7 @@ swatches('swPants', 'pants'); swatches('swCap', 'cap'); swatches('swHair', 'hair
 function startGame() {
   const n = nameIn.value.trim().slice(0, 16) || myCfg.name;
   myCfg.name = n; store.set('superobby.name', n); store.set('superobby.avatar', JSON.stringify(myLook()));
-  me.group.remove(me.tag); me.tag = nameTag(n); me.group.add(me.tag);
+  renommeEtiquette(me, n);
   sfx.unlock(); music.start(); keepAwake(); jailPasses = 2;
   setTimeout(() => { const c = sfx.ctx(); if (settings.sound && c && c.state !== 'running') { c.resume().catch(() => {}); msg('🔇 Touche l\'écran pour activer le son', 2500); } }, 1500);
   if (document.body.classList.contains('touch')) goFullscreen();
@@ -23132,8 +23213,12 @@ function creerGangeur(G, x, z, chef) {
   av.tag.visible = !!chef;   // seul le chef porte son nom au-dessus de la tête
   av.mats.shirt.color.setHex(G.couleur); av.mats.sleeve.color.setHex(G.couleur);
   av.mats.front.color.setHex(G.couleur); av.mats.back.color.setHex(G.couleur);
-  if (av.mats.front.map) { av.mats.front.map = null; av.mats.front.needsUpdate = true; }
-  if (av.mats.back.map) { av.mats.back.map = null; av.mats.back.needsUpdate = true; }
+  // On LIBÈRE la toile du maillot avant de la décrocher : `map = null` seul l'abandonnait sur
+  // la carte graphique, et chaque reconstruction du monde en laissait deux par gangster et par
+  // agent (mesuré : 36 textures de 256×256 par cycle, jamais reprises par clearWorld puisque
+  // plus aucun matériau ne les tenait).
+  if (av.mats.front.map) { av.mats.front.map.dispose(); av.mats.front.map = null; av.mats.front.needsUpdate = true; }
+  if (av.mats.back.map) { av.mats.back.map.dispose(); av.mats.back.map = null; av.mats.back.needsUpdate = true; }
   if (chef) {   // chaîne dorée et veste sombre : on repère le chef d'un coup d'œil
     av.mats.jacket.color.setHex(0x1b1b1b);
     const ch = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 14), lam(0xffd23f));

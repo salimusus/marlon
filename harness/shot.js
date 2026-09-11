@@ -29,7 +29,15 @@ window.__SHOT = {
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
       if (typeof gym !== 'undefined') gym.on = null;
     } catch (e) {}
-    if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
+    // MONDE NEUF (v.frais). Les tests ne rebatissent le monde que s'ils CHANGENT de monde :
+    // la neige, les chantiers, les epaves et les vehicules deplaces par le test precedent
+    // restent donc en place. C'est sans consequence pour la plupart des mesures, mais un
+    // test qui COMPTE les objets de la scene (appels de dessin, triangles, cout d'un
+    // accident) mesurait alors les restes des autres — d'un run a l'autre le meme test
+    // trouvait 2246 ou 7264 appels. Ces tests demandent l'option frais et repartent d'une
+    // ville comme au premier chargement.
+    if (v.frais && v.world != null) loadWorld(v.world);
+    else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');
     document.getElementById('start').classList.add('hidden');
     document.getElementById('worlds').classList.add('hidden');

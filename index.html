@@ -1567,6 +1567,7 @@ function postCible() {
   return post.rt;
 }
 function rendreImage() {
+  detailsLOD();   // le budget d'image : on éteint d'abord ce qui ne se voit plus
   if (!post.on) { renderer.render(scene, camera); return false; }
   try {
     postMonte();
@@ -1638,7 +1639,104 @@ function roundedBoxGeo(w, h, d, r, seg = 3) {   // boîte aux arêtes arrondies 
 const unitRound = roundedBoxGeo(1, 1, 1, 0.14, 3); shared.add(unitRound);
 const edgeGeo = new THREE.EdgesGeometry(unitBox); shared.add(edgeGeo);
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }); shared.add(edgeMat);
-const addEdges = mesh => { const l = new THREE.LineSegments(edgeGeo, edgeMat); l.scale.setScalar(1.004); mesh.add(l); };
+// ================= LE BUDGET D'IMAGE : LE DÉTAIL QUI NE SE VOIT PLUS =================
+// « Ça rame sur la télé. » Voilà pourquoi : dans la ville, une image coûtait 6 200 APPELS DE
+// DESSIN. Chaque objet de la scène en vaut un, et un deuxième s'il porte une ombre. Sur les
+// 2 400 objets visibles, MILLE mesuraient moins de cinquante centimètres — poignées, pavés,
+// bornes, jardinières, plaques — et cinq cents de plus étaient des CONTOURS NOIRS, des traits
+// d'un pixel noyés dans la brume à soixante mètres. On les paie plein tarif pour rien.
+//
+// Deux règles, appliquées à chaque image :
+//   · un contour noir ne se dessine plus au-delà de DETAIL_ARETE mètres ;
+//   · un petit maillage disparaît quand sa taille APPARENTE tombe sous 1/DETAIL_FIN de
+//     l'écran (une dizaine de pixels) — même règle pour un pavé à 20 m et une borne à 60 m.
+//
+// ON N'ÉCRIT JAMAIS SUR `visible` : c'est le JEU qui s'en sert (une vitre cassée, une portière
+// arrachée, un lampadaire éteint), et on aurait ressuscité des objets cassés. On joue sur les
+// CALQUES (`layers`), que seule la caméra consulte : les deux mécanismes ne se marchent donc
+// jamais sur les pieds. Un calque vide, c'est un objet qui n'est ni dessiné ni porteur d'ombre.
+const DETAILS = [];            // les petits maillages du décor : { o, r, masque, off }
+const ARETES = [];             // les contours noirs : { o, masque, off }
+const OMBRES = [];             // les porteurs d'ombre du décor : { o, r, off }
+const DETAIL_FIN = 100;        // 1/100e de l'écran ≈ treize pixels de haut : en dessous, on coupe
+const DETAIL_ARETE = 36;       // m : au-delà, un trait d'un pixel ne dit plus rien
+const DETAIL_RAYON = 1.2;      // m : au-delà de ce rayon, un objet est trop gros pour être « un détail »
+const DETAIL_OMBRE = 0.32;     // m de rayon : en dessous, l'ombre portée ne se lit sur aucun écran
+const DETAIL_OMBRE_VUE = 55;   // 1/55e de l'écran : sous cette taille apparente, l'ombre PORTÉE s'efface
+const DETAIL_PAS = 4;          // m² : on ne retrie que si la caméra a bougé de deux mètres
+let detailCam = null, detailCoupes = 0, detailOmbres = 0, detailOmbresOff = 0;
+// `layers` n'existe pas dans le banc d'essai hors navigateur (ses objets sont des maquettes) :
+// on lit le masque avec précaution et on ne l'écrit que s'il existe — sinon le jeu ne
+// démarrait plus du tout sous le vérificateur.
+const calqueDe = o => (o && o.layers ? o.layers.mask : 1);
+const calqueMet = (o, masque) => { if (o && o.layers) o.layers.mask = masque; };
+const addEdges = mesh => {
+  const l = new THREE.LineSegments(edgeGeo, edgeMat); l.scale.setScalar(1.004); mesh.add(l);
+  ARETES.push({ o: l, masque: calqueDe(l), off: false });
+  return l;
+};
+// Recense les petits maillages du monde qu'on vient de bâtir. Appelée une fois par monde :
+// parcourir vingt-huit mille objets à chaque image, ce serait pire que le mal.
+function detailsInit() {
+  DETAILS.length = 0; OMBRES.length = 0; detailCam = null; detailOmbres = 0;
+  if (typeof worldGroup === 'undefined' || !worldGroup) return 0;
+  worldGroup.traverse(o => {
+    if (!o.isMesh || !o.geometry) return;
+    const g = o.geometry;
+    // la sphère englobante donne la taille RÉELLE du maillage (un cylindre, une sphère, une
+    // boîte à arêtes arrondies n'ont pas la même) ; certaines maquettes du banc d'essai n'en
+    // ont pas, on les laisse tranquilles.
+    if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
+    if (!g.boundingSphere) return;
+    const r = g.boundingSphere.radius * Math.max(Math.abs(o.scale.x), Math.abs(o.scale.y), Math.abs(o.scale.z));
+    // l'ombre d'un boulon, d'une poignée ou d'un pavé : personne ne l'a jamais vue, et elle
+    // coûte un deuxième appel de dessin dans la carte d'ombres.
+    if (r < DETAIL_OMBRE && o.castShadow) { o.castShadow = false; detailOmbres++; }
+    else if (o.castShadow) OMBRES.push({ o, r, off: false });
+    if (r < DETAIL_RAYON) DETAILS.push({ o, r, masque: calqueDe(o), off: false });
+  });
+  return DETAILS.length;
+}
+// Le tri, une fois par image — mais seulement si la caméra a bougé d'un mètre : immobile,
+// rien ne change et la boucle ne coûte rien du tout.
+function detailsLOD(force) {
+  if (typeof camera === 'undefined' || !camera) return -1;
+  const c = camera.position;
+  if (!force && detailCam && detailCam.distanceToSquared(c) < DETAIL_PAS) return detailCoupes;
+  detailCam = detailCam ? detailCam.copy(c) : c.clone();
+  let coupes = 0;
+  const S2 = DETAIL_FIN * DETAIL_FIN;
+  for (let i = DETAILS.length - 1; i >= 0; i--) {
+    const e = DETAILS[i], m = e.o.matrixWorld.elements;
+    const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
+    const off = dx * dx + dy * dy + dz * dz > e.r * e.r * S2;
+    if (off !== e.off) { e.off = off; calqueMet(e.o, off ? 0 : e.masque); }
+    if (off) coupes++;
+  }
+  const A2 = DETAIL_ARETE * DETAIL_ARETE;
+  for (let i = ARETES.length - 1; i >= 0; i--) {
+    const e = ARETES[i], m = e.o.matrixWorld.elements;
+    const dx = m[12] - c.x, dz = m[14] - c.z;
+    const off = dx * dx + dz * dz > A2;
+    if (off !== e.off) { e.off = off; calqueMet(e.o, off ? 0 : e.masque); }
+    if (off) coupes++;
+  }
+  // LA PASSE D'OMBRES, deuxième moitié de la facture (2 500 appels sur 5 000) : l'ombre d'un
+  // banc à soixante mètres fait quatre pixels. Elle s'efface quand l'objet qui la porte devient
+  // trop petit à l'écran — l'objet, lui, reste parfaitement visible.
+  let ombresOff = 0;
+  const O2 = DETAIL_OMBRE_VUE * DETAIL_OMBRE_VUE;
+  for (let i = OMBRES.length - 1; i >= 0; i--) {
+    const e = OMBRES[i], m = e.o.matrixWorld.elements;
+    const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
+    const off = dx * dx + dy * dy + dz * dz > e.r * e.r * O2;
+    if (off !== e.off) { e.off = off; e.o.castShadow = !off; }
+    if (off) ombresOff++;
+  }
+  detailOmbresOff = ombresOff;
+  detailCoupes = coupes;
+  return coupes;
+}
 const STUD = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const g = c.getContext('2d');
@@ -1678,6 +1776,9 @@ function clearWorld() {
   // cette remise à zéro la liste grossissait à chaque changement de monde et retenait des
   // matériaux déjà libérés)
   try { marques.length = 0; feuxVehicules.length = 0; NEONS.length = 0; } catch (e) {}
+  // les deux listes du budget d'image pointaient vers des objets retirés de la scène : elles
+  // grossissaient à chaque changement de monde et on triait des fantômes à chaque image
+  try { ARETES.length = 0; DETAILS.length = 0; OMBRES.length = 0; detailCam = null; } catch (e7) {}
   solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; sgridSale();
   goal = null; cityReset();
 }
@@ -11159,6 +11260,7 @@ function applyTheme(t) {
 function loadWorld(i) {
   worldIdx = i; const w = WORLDS[i];
   clearWorld(); G = w.gravity; applyTheme(w.theme); w.build(); PATH = genPath();
+  detailsInit();   // recense les petits maillages et leur retire l'ombre portée quand elle ne se voit pas
   cp = checkpoints[0];
   bots.forEach((b, k) => resetBot(b, rnd(2, 6) + k * 5));
   resetGame();

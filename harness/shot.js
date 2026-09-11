@@ -157,7 +157,10 @@ window.__SHOT = {
     if (v.menu && typeof toggleMenu === 'function') { try { toggleMenu(true); } catch (e14) {} }   // capture du menu des reglages (poste F)
     if (v.mixOuvert) { try { document.getElementById('mixBloc').open = true; document.getElementById('mixBloc').scrollIntoView(); } catch (e15) {} }
     if (v.manette && typeof manetteOuvre === 'function') { try { manetteOuvre(''); document.getElementById('manette').classList.add('pret'); } catch (e10) {} }
-    if (v.hideHud) document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = 'none'; });
+    // Le masquage de l'interface ne se DEFAISAIT jamais : une vue « hideHud » rendait toutes
+    // les vues suivantes de la meme serie sans interface, et l'on ne pouvait plus photographier
+    // le haut de l'ecran. On remet donc l'affichage quand la vue ne demande pas de masquage.
+    document.querySelectorAll('#top,#chat,#radar,#act,#missionHud').forEach(function (e) { e.style.display = v.hideHud ? 'none' : ''; });
     if (v.noClip) { P.pos.y = v.y; P.vel.set(0, 0, 0); }
     if (v.sansBots) bots.forEach(function (b) { b.av.group.visible = false; });
     if (v.dormir) { const b = city.beds[0]; if (b) { P.pos.set(b.x, b.y + 1, b.z); city.bedNear = b; sleepBed(); } }
@@ -219,6 +222,23 @@ window.__SHOT = {
         } catch (e15) {}
       }
     }
+    // poste FINITION : trois bots plantes AU MEME ENDROIT et qui parlent tous, pour
+    // photographier des bulles de dialogue qui se chevauchent (v.bulles = nombre de bots)
+    if (v.bulles) {
+      try {
+        const n = Math.min(v.bulles, bots.length);
+        for (let i = 0; i < n; i++) {
+          const b = bots[i];
+          b.pos.set(P.pos.x + Math.sin(P.facing) * (3 + i * 0.25), P.pos.y, P.pos.z + Math.cos(P.facing) * (3.2 + i * 0.2));
+          b.rdv = null; b.wait = 99; b.ko = 0; b.hp = 100; b.fight = null; b.av.group.visible = true;
+          b.av.group.position.copy(b.pos); b.facing = P.facing + Math.PI; b.av.group.rotation.y = b.facing;
+          bubble(b.av, ['Salut !', 'Belle journée…', 'Tu vas où comme ça ?', 'Attention à la route !'][i % 4]);
+          b.av.bubbleT = simTime + 1e6;   // la bulle ne doit pas expirer pendant les 8 s de pose de la capture
+        }
+      } catch (e16) {}
+    }
+    // poste FINITION : un itineraire GPS actif, pour photographier les chevrons au sol
+    if (v.gps) { try { setBeacon(v.gps[0], v.gps[1], 0, 'mission'); gpsRoute.update(); } catch (e17) {} }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -1252,6 +1272,28 @@ window.__G = {
   // Ce qu'on tient est passe du groupe du bras au noeud main, au centre du poing rond
   // on compte donc les deux, sinon le test « rien ne reste colle a la main » ne voyait plus rien.
   arm() { return me.rig.armR.children.length + (me.rig.armR.main ? me.rig.armR.main.children.length : 0); },
+  // ---- poste FINITION (fuite de memoire, camera en lieu couvert, equilibre des coups, meteo) ----
+  clearWorld: typeof clearWorld === 'function' ? clearWorld : null,
+  libereBranche: typeof libereBranche === 'function' ? libereBranche : null,
+  balaieAvatars: typeof balaieAvatars === 'function' ? balaieAvatars : null,
+  murEntreVue: typeof murEntreVue === 'function' ? murEntreVue : null,
+  estUnToit: typeof estUnToit === 'function' ? estUnToit : null,
+  get camToits() { return typeof camToits !== 'undefined' ? camToits : null; },
+  attack: typeof attack === 'function' ? attack : null,
+  nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
+  gpsRoute: typeof gpsRoute !== 'undefined' ? gpsRoute : null,
+  FENCE: typeof FENCE !== 'undefined' ? FENCE : null,
+  GRILLAGE_SEUIL: typeof GRILLAGE_SEUIL !== 'undefined' ? GRILLAGE_SEUIL : null,
+  tickBubbles: typeof tickBubbles === 'function' ? tickBubbles : null,
+  bubble: typeof bubble === 'function' ? bubble : null,
+  allAvatars: typeof allAvatars === 'function' ? allAvatars : null,
+  buildMeteo: typeof buildMeteo === 'function' ? buildMeteo : null,
+  sousToit: typeof sousToit === 'function' ? sousToit : null,
+  meteoIntensite: typeof meteoIntensite === 'function' ? meteoIntensite : null,
+  QUARTIERS: typeof QUARTIERS !== 'undefined' ? QUARTIERS : null,
+  DUCK_TENUE: typeof DUCK_TENUE !== 'undefined' ? DUCK_TENUE : 0,
+  craieLitFerme: typeof craieLitFerme === 'function' ? craieLitFerme : null,
+  sonEn: typeof sonEn === 'function' ? sonEn : null,
 };
 `;
 
@@ -1283,9 +1325,13 @@ function serve(htmlFile) {
     .catch(() => { throw new Error('le crochet __SHOT n\'est jamais devenu prêt — le jeu n\'a pas démarré. Erreurs: ' + errors.join(' | ')); });
 
   for (const v of VIEWS) {
+    // largeur/hauteur de fenetre par vue : les pastilles du haut de l'ecran passaient sur deux
+    // lignes a 1024 px et il n'y avait aucun moyen de le photographier (le banc est en 1280)
+    if (v.w || v.h) { await page.setViewportSize({ width: v.w || 1280, height: v.h || 720 }); await page.waitForTimeout(300); }
     await page.evaluate(vv => window.__SHOT.go(vv), v);
     await page.waitForTimeout(v.wait || 700);
     await page.screenshot({ path: path.join(OUT, v.name + '.png') });
+    if (v.w || v.h) await page.setViewportSize({ width: 1280, height: 720 });
   }
   const stats = await page.evaluate(() => window.__SHOT.stats());
   console.log('rendu :', JSON.stringify(stats));

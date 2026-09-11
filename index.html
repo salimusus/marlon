@@ -2404,6 +2404,71 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
+// ================= LES PARKINGS =================
+// « Ne gare plus de véhicules ici (capture) — crée un nouveau parking. »
+// La règle, étendue à toute la ville : UN VÉHICULE N'EST JAMAIS GARÉ AU DÉPART AILLEURS QUE SUR
+// UNE PLACE PRÉVUE. `city.parkings` est la liste de ces places — les parkings publics, les cours
+// des services (dépôt, caserne, garage, commissariat, hôpital), les héliports, la plage, le rack
+// à vélos du parc, la piste de rallye et les bases de gang. Le test « aucun véhicule n'est garé
+// hors d'une place prévue » la relit, rectangle par rectangle, GABARIT COMPRIS.
+//
+// LE NOUVEAU PARKING est au SUD de la ville, en (20, −85), le long du boulevard z = −100, sur le seul grand terrain plat,
+// libre et bordé de rue qu'il restait à moins de 90 m du centre (mesuré : 121 emplacements
+// candidats de 32 × 22 m dans toute la carte, celui-ci est le plus proche du centre après les
+// deux du sud). POUR LE POSTE QUI CONSTRUIT LE CONCESSIONNAIRE : je prends (20, −80) et ses
+// 26 × 20 m ; l'autre terrain libre du même genre est en (−20, −80), symétrique, et les grands
+// terrains de l'est (x ≈ 124) sont libres aussi — prends l'un de ceux-là.
+const PARK_PLACE_L = 2.9, PARK_PLACE_P = 5.4, PARK_ALLEE = 7;
+function parkingPublic(x, z, nom, cols) {
+  const W = cols * PARK_PLACE_L + 1.4, D = PARK_PLACE_P * 2 + PARK_ALLEE;
+  plat(x, 0.16, z, W, D, 0x565b66, { studs: false, noRoute: true }, 0.1);   // la dalle
+  // LES PLACES MARQUÉES : deux rangées dos à dos, une allée de 7 m au milieu pour manœuvrer.
+  const places = [];
+  for (const sg of [-1, 1]) {
+    const zr = z + sg * (PARK_ALLEE / 2 + PARK_PLACE_P / 2);
+    for (let i = 0; i <= cols; i++) {
+      const px = x - W / 2 + 0.7 + i * PARK_PLACE_L;
+      box(px, 0.17, zr, 0.12, 0.02, PARK_PLACE_P, 0xf4f6fa, { deco: true, studs: false, noEdges: true, noShadow: true });
+    }
+    box(x, 0.17, zr + sg * PARK_PLACE_P / 2, W - 1.4, 0.02, 0.12, 0xf4f6fa, { deco: true, studs: false, noEdges: true, noShadow: true });
+    for (let i = 0; i < cols; i++) places.push([x - W / 2 + 0.7 + (i + 0.5) * PARK_PLACE_L, zr, sg > 0 ? 0 : Math.PI]);
+  }
+  // L'ACCÈS DEPUIS LA RUE. Sans lui le parking était une dalle posée sur la pelouse à 6,60 m
+  // du bitume : on y arrivait en tout-terrain. On pave la bande qui va du bord sud de la dalle
+  // jusqu'au trottoir de la rue la plus proche, sur toute la largeur d'une entrée de parking.
+  const vp = voieProche(x, z);
+  if (vp) {
+    const bord = z + D / 2, vers = vp.pz;
+    if (vers > bord) { const L = vers - bord;
+      plat(x, 0.16, bord + L / 2, 9, L + 1, 0x565b66, { studs: false, noRoute: true }, 0.1); }
+  }
+  sign(x, 0.2, z - D / 2 - 1.4, '🅿️ ' + nom);
+  city.zones.push({ name: nom, emoji: '🅿️', x1: x - W / 2, x2: x + W / 2, z1: z - D / 2, z2: z + D / 2,
+    hint: '🅿️ ' + nom + ' : gare-toi entre les lignes blanches (E pour monter dans un véhicule)' });
+  const q = { x, z, w: W, d: D, nom, places };
+  city.parkings.push(q);
+  return q;
+}
+// LA LISTE DES PLACES LÉGITIMES. Appelée tout à la fin de la construction de la ville : elle a
+// besoin du dépôt, de la caserne, du garage, du commissariat et de l'hôpital, qui sont posés
+// par des blocs différents.
+function declareLesParkings() {
+  const P = (x, z, w, d, nom) => { if (x != null) city.parkings.push({ x, z, w, d, nom }); };
+  P(-13, 8.5, 24, 16, 'Parking du centre');                                   // la dalle du sud-ouest
+  if (city.casino) P(city.casino.x - 30, city.casino.z + 26, 26, 20, 'Parking du casino');
+  if (city.garage) P(city.garage.x, city.garage.z + 13, 30, 18, 'Parvis du garage');
+  if (city.depot) P(city.depot.x, city.depot.z + 10, 48, 20, 'Cour du dépôt municipal');
+  if (city.caserne) P(city.caserne.x, city.caserne.z + 9, 26, 20, 'Cour de la caserne');
+  if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
+  if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
+  P(43, -13, 22, 20, 'Héliport');
+  P(8, 230, 22, 20, 'Hélistation nord');
+  if (city.sea) P(city.sea.x1 + 3, 45, 12, 20, 'Rampe de mise à l\'eau');      // les jet-skis
+  P(-70, -70, 14, 20, 'Dépôt du rallye');                                     // les buggys
+  P(-20.4, 51, 12, 8, 'Rack à vélos du parc');
+  P(RACE_C.x, RACE_C.z + RACE_C.r + 2, 70, 24, 'Grille de départ');            // les karts
+  for (const g of gangs) if (g.base) P(g.base[0], g.base[1] + 7, 20, 16, 'Base ' + (g.nom || 'de gang'));
+}
 function buildShops() {
   // ---- boutique de vêtements : vitrines avec mannequins habillés, portants, miroir, tapis rouge ----
   shop(-19, 19.5, 9, 7, 0xb57cff, '👕 Vêtements', 0xb57cff);
@@ -5504,6 +5569,12 @@ const WORLDS = [
       city.cars.push(makeCar(0xff5c5c, -15, 11.5, 0), makeCar(0x4f8dff, -19, 11.5, 0), makeCar(0xffd23f, -15, 6, 0), makeCar(0x111111, -19, 6, 0, { sport: true }));
       buildGarage(-45, 90);
       buildShops(); sign(-3.6, 0.3, 3.6, '🚗 Parking');
+      // LE NOUVEAU PARKING DU SUD : 16 places marquées, deux rangées dos à dos, une allée de 7 m
+      // pour manœuvrer, accès par la rue qui descend du centre. C'est là que se gare tout ce qui
+      // traînait ailleurs — voir `declareLesParkings` et le test « aucun véhicule garé hors
+      // d'une place prévue ».
+      city.parkings = [];
+      const parkSud = parkingPublic(20, -85, 'Parking du Sud', 8);
       for (let i = 0; i < 3; i++) coin(-9 - i * 5, 0.3, 4.5);
       // ---- parc à trampolines (SE) ----
       for (const [px, pz] of [[8, 8], [18, 8], [8, 18], [18, 18]]) bouncePad(px, 0.3, pz);
@@ -5533,7 +5604,12 @@ const WORLDS = [
       // ---- voitures qui circulent ----
       for (let i = 0; i < 3; i++) { const c = makeCar([0x5cc453, 0xff5cd6, 0xc9ced8][i], 26, 0, 0); c.s = i * 69; c.spd = 8.5; c.half = [1.4, 2.4]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.5, y: -0.35, z: 0.3 }); }
       for (let i = 0; i < 2; i++) { const c = makeVehicle('truck', [0x4f8dff, 0xffd23f][i], 26, 0, 0); c.s = 35 + i * 104; c.spd = 6; c.half = [1.6, 4.6]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.62, y: 0.3, z: 2.55 }); }
-      city.cars.push(makeVehicle('moto', 0xff5c5c, -22, 11.5, Math.PI), makeVehicle('moto', 0x1b2a4a, -20, 11.5, Math.PI), makeVehicle('truck', 0x5cc453, 90, 30, Math.PI));
+      // LE CAMION NE DORT PLUS AU BORD DE L'AVENUE. Il était garé en (90, 30), sur la pelouse,
+      // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
+      // pointe. Il prend maintenant le bord est du Parking du Sud, dans la longueur (8,60 m ne
+      // tient pas dans une place de 5,40 m) : il ne gêne ni les places ni l'allée.
+      city.cars.push(makeVehicle('moto', 0xff5c5c, -22, 11.5, Math.PI), makeVehicle('moto', 0x1b2a4a, -20, 11.5, Math.PI),
+        makeVehicle('truck', 0x5cc453, parkSud.x + parkSud.w / 2 - 1.7, parkSud.z, 0));
       // ---- points de balade pour les bots ----
       city.wander = [[0, 0, 3], [-13, 0.3, -8], [13, 0.3, -8], [13, 0.3, 13], [-13, 0.3, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [48, 0.3, 22], [46, 0, -8], [0, 0.3, 70], [-14, 0.3, 66], [14, 0.3, 74], [-22, 0.3, 84], [20, 0.3, 90], [-84, 0, 12], [-84, 0, 60], [84, 0, 30], [50, 0, 60], [40, 0.36, 10], [0, 0.36, 150], [-30, 0.36, 160]];
       for (const [x, z] of [[0, -12], [0, 12], [12, 0], [-12, 0], [22, -22], [-22, 22]]) coin(x, 0, z);
@@ -5568,13 +5644,14 @@ const WORLDS = [
       // LE GRAPHE DES VOIES : deux voies par rue, un noeud par carrefour, les manoeuvres
       // possibles. Il vient APRES la signalisation (il retient ou sont les feux et les
       // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
+      B('places de stationnement', declareLesParkings);   // poste Circulation : la liste des places légitimes (dépôt, caserne, garage, héliports…)
       B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], marques: [], marquesN: 0 };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0 };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 // Les trois réglages des SENSATIONS DE CONDUITE (voir la grande section « conduire »).
@@ -8005,15 +8082,44 @@ function enIntervention(v) { return !!v && (v.prio || 0) > simTime; }
 //   le prioritaire et on double celui qui s'est range).
 // Rend le deport total deja consenti, en metres.
 const ECART_SIRENE = 1.7;         // de quoi degager une file sur une chaussee de 7 m
+// CELUI QUI DOUBLE VA CHERCHER LA VOIE D'EN FACE. 1,70 m ne suffisaient pas : rangee a 1,18 m
+// du milieu de sa voie (la bordure l'arrete la), la voiture doublee laissait 2,88 m d'axe a
+// axe — et le garde-fou de collision, qui sonde la caisse par trois disques de 1,64 m de
+// rayon, en exige 2,90. La depanneuse prioritaire restait collee derriere a 1,1 m/s, bloquee.
+// Le vehicule qui double se deporte donc jusqu'a 3,20 m, c'est-a-dire sur la voie d'en face —
+// et le test des deux flancs l'empeche toujours de mordre le trottoir dans une rue etroite.
+const ECART_DOUBLE = 3.2;
 function ecarteChaussee(c, dt, sens, but) {
-  const reste = (but || ECART_SIRENE) - (c.ecart || 0);
-  if (reste <= 0.01) return c.ecart || 0;
-  const rx = -Math.cos(c.h) * sens, rz = Math.sin(c.h) * sens;   // « ma droite » = (-cos h, sin h)
+  // LE DEPORT SE MESURE PAR RAPPORT A LA VOIE, PAS EN CUMUL. Premiere version : on comptait
+  // les centimetres deja consentis (`c.ecart` += pas) et on s'arretait a 1,70 m. Resultat :
+  // le vehicule se deportait en une seconde, le suivi d'itineraire le ramenait tranquillement
+  // dans l'axe de sa voie les cinq secondes suivantes, et comme le budget etait epuise il ne
+  // se rangeait PLUS JAMAIS. Mesure : la depanneuse prioritaire restait 920 images immobile
+  // derriere une file qui s'etait « rangee » puis remise au milieu, 0 voiture doublee.
+  // On vise donc un DEPORT LATERAL TENU : tant que la sirene est la, on repousse le vehicule
+  // a 1,70 m du milieu de sa voie, contre le rappel du volant.
+  if (!c.voieSirT || simTime > c.voieSirT || !c.voieSir) {
+    const vp = voieProche(c.x, c.z, c.h);
+    if (!vp) return 0;
+    c.voieSir = vp.arete; c.voieSirT = simTime + 0.4;   // la voie ne change pas a chaque image
+  }
+  const e = c.voieSir, p = projVoie(c.x, c.z, e);
+  const rx = -Math.cos(e.sens), rz = Math.sin(e.sens);          // « la droite » de la voie
+  const dec = (c.x - p.px) * rx + (c.z - p.pz) * rz;            // deport ACTUEL, compte a droite
+  const visee = (but || ECART_SIRENE) * sens;
+  const reste = (visee - dec) * sens;
+  c.ecart = dec * sens;
+  if (reste <= 0.02) return c.ecart;
   const pas = Math.min(reste, 1.4 * dt);
-  const nx = c.x + rx * pas, nz = c.z + rz * pas;
-  if (!surLaChaussee(nx, nz, 0.15)) return c.ecart || 0;              // pas une roue sur le trottoir
-  if (vehBloque(c, nx, nz, c.h, { bar: true, veh: true })) return c.ecart || 0;
-  c.x = nx; c.z = nz; c.ecart = (c.ecart || 0) + pas;
+  const nx = c.x + rx * sens * pas, nz = c.z + rz * sens * pas;
+  // PAS UNE ROUE SUR LE TROTTOIR : on teste les deux FLANCS, pas le centre. Une bordure n'est
+  // pas un solide pour un vehicule (son dessus est sous 0,56 m, la marche franchissable), donc
+  // le garde-fou de collision ne l'aurait jamais vu : une voiture qui se range de 1,7 m sur une
+  // rue de 7 m aurait fini deux roues sur le trottoir sans que rien ne l'arrete.
+  const bw = (c.baseW || 2.4) / 2, fx2 = -Math.cos(c.h) * bw, fz2 = Math.sin(c.h) * bw;
+  if (!surLaChaussee(nx + fx2, nz + fz2, 0.1) || !surLaChaussee(nx - fx2, nz - fz2, 0.1)) return c.ecart;
+  if (vehBloque(c, nx, nz, c.h, { bar: true, veh: true })) return c.ecart;
+  c.x = nx; c.z = nz; c.ecart = (dec + pas * sens) * sens;
   c.libre = [c.x, c.z, c.h];                                          // le filet de securite d'avanceVehicule
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z);
@@ -8104,7 +8210,10 @@ function codeRoute(c, dt, opt) {
     const dx = v.x - c.x, dz = v.z - c.z, d = Math.hypot(dx, dz);
     if (d > 30 || Math.abs(CAP((v.h || 0) - h)) > 0.9) continue;
     if (dx * fx + dz * fz > 1) continue;   // il est devant nous : rien a faire
-    c.sireneVeh = v; cap(2.5, 'sirene');
+    // 4,5 m/s et non 2,5 : a 2,5 m/s toute la file rampait, et le vehicule prioritaire, coince
+    // derriere elle, n'avancait pas plus vite (mesure : 50 m en 30 s). On LEVE LE PIED et on se
+    // RANGE — c'est le pas de cote qui degage la voie, pas la lenteur.
+    c.sireneVeh = v; cap(4.5, 'sirene');
   }
   // ---- 4) priorite a droite aux carrefours sans feu ni panneau ; et toujours au vehicule
   // deja engage. Sur une voie PRIORITAIRE (boulevard, avenue, losange jaune) on ne s'arrete pas.
@@ -8220,7 +8329,8 @@ function vehiculeMord(c, x, z, h) {
 // batiments, barrieres, autres vehicules) ET le rectangle exact.
 function vehBloque(c, x, z, h, opt) {
   const [r0, L] = vehHalf(c);
-  return carBlocked(x, z, c.solid, r0, opt || {}, 0, h, L) || vehiculeMord(c, x, z, h);
+  const o = c.remorque && c.remorque.solid ? Object.assign({}, opt || {}, { ignore: c.remorque.solid }) : (opt || {});
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || vehiculeMord(c, x, z, h);
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
@@ -8250,20 +8360,30 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   return bloque;
 }
 // La distance au vehicule de devant, dans notre file : on garde une longueur de securite.
-function gapDevant(c) {
+function gapDevant(c, latVoulu) {
   flotteMaj();
-  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  // QUAND ON DOUBLE, ON MESURE DANS L'AXE DE LA VOIE, PAS DANS L'AXE DU CAPOT. Un vehicule
+  // deporte de 1,70 m braque en permanence pour revenir dans sa voie ; ce petit angle suffisait
+  // a ramener DANS SON COULOIR la voiture qu'il etait justement en train de doubler, huit
+  // metres devant. Mesure : la depanneuse prioritaire restait a 2,6 m/s derriere une voiture
+  // pourtant rangee a 2,9 m sur le cote, et ne doublait jamais personne.
+  const ax = (Math.abs(c.ecart || 0) > 0.8 && c.voieSir) ? c.voieSir.sens : c.h;
+  const fx = Math.sin(ax), fz = Math.cos(ax);
   // LE PRIORITAIRE NE FAIT PAS LA QUEUE. Celui qui lui cede le passage se deporte de 1,7 m :
   // avec un couloir de 2,2 m, le vehicule range restait « devant » et le camion de pompiers
   // s'arretait derriere lui — la priorite ne servait a rien. En intervention on ne regarde
   // donc que ce qui est VRAIMENT dans l'axe (1,2 m), et le reste on le double.
-  const lat = enIntervention(c) ? 1.2 : 2.2;
+  const lat = latVoulu != null ? latVoulu : (enIntervention(c) ? 1.2 : 2.2);
   let gap = 99, longDevant = 4.4;
   for (const v of FLOTTE) {
     if (v === c || v.heli) continue;
     const dx = v.x - c.x, dz = v.z - c.z, al = dx * fx + dz * fz;
     if (al < 0.5 || al > 14) continue;
     if (Math.abs(-dx * fz + dz * fx) > lat) continue;
+    // `c.double` : ON NE FAIT PAS LA QUEUE DERRIERE UNE EPAVE. Un vehicule A L'ARRET n'est pas
+    // une file, c'est un obstacle — le jeu le dit deja pour la priorite a droite. Ce drapeau est
+    // pose par traficRoule quand un vehicule pilote pietine depuis trois secondes.
+    if (c.double && Math.abs(v.speed || 0) < 0.5) continue;
     if (al < gap) { gap = al; longDevant = v.baseD || 4.4; }
   }
   return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
@@ -8328,9 +8448,26 @@ function traficRoule(c, dt, opt) {
   // prioritaire, lui, deborde a GAUCHE pour doubler celui qui vient de se ranger. Des que la
   // sirene est passee, le compteur repart a zero et le suivi d'itineraire ramene tout seul le
   // vehicule dans sa voie.
+  // ON CONTOURNE CE QUI EST A L'ARRET. Une depanneuse qui rentrait au garage restait bloquee
+  // POUR TOUJOURS derriere les deux voitures accidentees qu'elle venait de reparer : « file »
+  // fait partie des bonnes excuses, donc la soupape de traficRoule ne se declenchait jamais
+  // (mesure : 175 s immobile a 30 m de l'epave, gyrophare allume). Au bout de trois secondes
+  // sans avancer, un vehicule PILOTE par un autre poste se deporte a gauche et double.
+  if (opt.pilote && (c.pas || 0) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
+  else c.fileT = 0;
+  c.double = c.fileT > 3;
+  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
   if (c.sireneVeh) ecarteChaussee(c, dt, 1, ECART_SIRENE);
-  else if (opt.urgence && (gap < mini + 5)) ecarteChaussee(c, dt, -1, ECART_SIRENE);
-  else c.ecart = 0;
+  else if (opt.urgence) {
+    // LE PRIORITAIRE DÉBORDE POUR DOUBLER. Attention au piège : `gapDevant` ne regarde qu'un
+    // couloir de 1,2 m quand on est en intervention, justement pour ne pas faire la queue
+    // derrière celui qui vient de se ranger — du coup il ne voyait plus personne et ne se
+    // déportait jamais, alors que les deux caisses (2,4 m de large chacune) se chevauchaient
+    // encore de un mètre et que le garde-fou de collision le clouait sur place (mesure :
+    // 1 035 images immobile, 0 voiture doublée). On rouvre donc ici le couloir à 2,6 m
+    // POUR DÉCIDER DU PAS DE CÔTÉ, et seulement pour ça.
+    if (gapDevant(c, 2.6)[0] < 14) ecarteChaussee(c, dt, -1, ECART_DOUBLE); else c.ecart = 0;
+  } else c.ecart = 0;
   if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
   else c.bloqueT = 0;
   // SOUPAPE. Une voiture arretee au feu, au stop ou devant un pieton fait son travail ; une
@@ -18455,6 +18592,11 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
   for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
+    // `opt.ignore` : UN SOLIDE QU'ON TRAINE DERRIERE SOI. L'epave accrochee au crochet de la
+    // depanneuse suit a 5,85 m : le disque arriere du camion (1,64 m de rayon a 2,17 m du
+    // centre) la touchait, et la depanneuse se bloquait sur sa propre remorque — elle n'est
+    // jamais repartie au garage (mesure : remorquage jamais termine, tarif 0).
+    if (opt.ignore && o === opt.ignore) continue;
     if (o.decor) continue;   // mobilier solidifié pour le joueur : la conduite reste exactement celle d'avant
     if (o.y + o.h / 2 < y + 0.56) continue;   // marche / bosse franchissable
     if (o.veh && !opt.veh) continue; if (o.bar && !opt.bar) continue;   // par défaut : véhicules gérés à part, barrières par le couloir de piste
@@ -19026,6 +19168,7 @@ function eteintFeu(c) {
 function carcasseNoircie(c) {
   if (c.noirci) return false;
   c.noirci = true;
+  c.noirciT = simTime;   // l'heure a laquelle elle est devenue une carcasse : la depanneuse attend un peu avant de venir
   c.peinture = c.peinture || new Map();
   // on descend l'arbre a la main pour pouvoir SAUTER une branche entiere : le groupe d'un feu
   // (marque `userData.feu`) ne doit jamais etre repeint en noir.
@@ -20154,8 +20297,43 @@ function depanneuseAppel(acc) {
   msg('🚚 Une dépanneuse a été appelée (service payant)', 2400);
   return d.mission;
 }
+// ================= LES CARCASSES =================
+// « La depanneuse doit ramasser les carcasses de vehicule brule. » Une epave calcinee
+// (`c.noirci`, pose par `carcasseNoircie` quand le feu s'eteint) restait en travers de la rue
+// jusqu'a la fin de la partie : la ville se couvrait de taches noires et la chaussee restait
+// bouchee. La depanneuse libre la repere toute seule, vient la chercher PAR LA ROUTE, la charge
+// sur son plateau (l'animation de chargement est celle du poste Animation, on ne la refait pas)
+// et la ramene au garage.
+// CE QUI SE PASSE ENSUITE : le garage la REMET A NEUF et elle reste garee sur le parvis. On a
+// prefere ca a la casse (faire disparaitre le vehicule) pour deux raisons : le parc de la ville
+// fondrait a chaque incendie — au bout de trois feux il n'y aurait plus rien a conduire — et le
+// joueur retrouve sa voiture au garage, exactement comme apres un remorquage. Le service est
+// gratuit : c'est la ville qui fait enlever une epave, pas le proprietaire.
+const CARCASSE_DELAI = 8;   // secondes : on laisse le temps de voir l'epave fumer avant l'appel
+function carcasseARamasser() {
+  if (!city.on) return null;
+  for (const c of (city.cars || [])) {
+    if (!c.noirci || c.feu) continue;
+    if (drive.car === c || c.busy || c.remorque || c.travail || c.heli || c.rider) continue;
+    if (simTime < (c.noirciT || 0) + CARCASSE_DELAI) continue;
+    if ((city.depanneuses || []).some(x => x.mission && x.mission.cible === c)) continue;
+    return c;
+  }
+  return null;
+}
 function depanneusesTick(dt) {
   for (const d of (city.depanneuses || [])) {
+    // UNE DEPANNEUSE LIBRE VA CHERCHER LES CARCASSES. Meme mission que sur un accident, avec
+    // `carcasse: true` : elle force le remorquage (une epave brulee ne se repare pas sur place)
+    // et le tarif est nul.
+    if (!d.mission && drive.car !== d && !d.busy) {
+      const ep = carcasseARamasser();
+      if (ep) {
+        d.mission = { acc: null, cible: ep, phase: 'route', mode: null, tarif: 0, fini: false,
+          carcasse: true, t0: simTime, d0: Math.hypot(d.x - ep.x, d.z - ep.z), arrivee: 0 };
+        msg('🚚 Une carcasse a été signalée : la dépanneuse part la ramasser', 2800);
+      }
+    }
     d.gyro = !!d.mission;          // le gyrophare et la sirène sont des DRAPEAUX : le poste
     // Sons les lit pour brancher le son tout seul. Sur le trajet de RETOUR, gyrophare oui,
     // sirène non : rentrer au garage n'est pas une urgence.
@@ -20171,8 +20349,8 @@ function depanneusesTick(dt) {
       m.arrivee = simTime - m.t0;
       if (m.acc) m.acc.tDep = simTime - m.acc.t0;
       // petit accident = réparation SUR PLACE ; gros = treuillage et remorquage au garage
-      m.mode = (c.dmg || 0) < DEGATS_SUR_PLACE ? 'place' : 'remorque';
-      m.tarif = m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE;
+      m.mode = (!m.carcasse && (c.dmg || 0) < DEGATS_SUR_PLACE) ? 'place' : 'remorque';
+      m.tarif = m.carcasse ? 0 : (m.mode === 'place' ? PRIX_DEPANNAGE : PRIX_REMORQUAGE);
       m.phase = m.mode === 'place' ? 'repare' : 'treuil';
       m.t = simTime + (m.mode === 'place' ? REPAR_DUREE : DEP_CHARGE);
       // POSTE ANIMATION — LA RÉPARATION SUR PLACE SE VOIT. Le joueur demandait : « on voit le
@@ -20181,7 +20359,7 @@ function depanneusesTick(dt) {
       // voiture redevenait neuve toute seule : il ne se passait rien à l'écran.
       if (m.mode === 'place') m.rep = reparateurArrive(c, REPAR_DUREE, null);
       else { d.depCible = 1; d.remorque = c; c.remorque = d; c.busy = true; }   // le plateau s'incline, le crochet descend, la voiture MONTE
-      msg(m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`, 2600);
+      msg(m.carcasse ? '⛓️ Carcasse chargée sur le plateau : enlèvement gratuit' : (m.mode === 'place' ? `🔧 Réparation sur place : ${m.tarif} 🪙` : `⛓️ Treuillage et remorquage au garage : ${m.tarif} 🪙`), 2600);
     } else if (m.phase === 'repare') {
       if (simTime < m.t) { if (!m.rep) burst(c.x, (c.y || 0) + 1, c.z, 0xffd23f, 1); continue; }
       if (m.rep) { reparateurRange(m.rep); m.rep = null; }

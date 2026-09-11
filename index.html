@@ -8730,8 +8730,9 @@ function craieLitOuvre() {
 }
 function sonCraie(n) {
   if (!settings.sound) return 0;
+  if (!(n > 0)) return 0;   // aucune lettre tracee : on ne rouvre pas le lit pour rien
   const c = craieLitOuvre(); if (!c) return 0;
-  const joues = Math.max(1, Math.min(n, 3));
+  const joues = Math.min(n, 3);
   // LE GRAIN CHANGE A CHAQUE LETTRE : une craie ne crisse jamais deux fois pareil, et sans
   // ce glissement de bande le lit continu sonnait comme un souffle de radio.
   craieLit.bp.frequency.setTargetAtTime(2400 + Math.random() * 1600, c.currentTime, 0.012);

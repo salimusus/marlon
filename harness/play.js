@@ -10851,3 +10851,43 @@ test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni
   const ok = r.casse && r.koCasse && r.repare && monte && r.appel && r.hp === 100 && r.ko === 0 && r.dist < 6;
   return { ok, detail: `une horloge à NaN figeait tout en silence : la boîte restait sur A1 à toutes les vitesses (régime saturé à 19,7) et un blessé au minuteur de KO à NaN n'était plus jamais ramassé · l'horloge se remet d'aplomb toute seule (${r.repare}, ${r.horloge} s) : les rapports montent A${r.rapports.join(' → A')} et le blessé est conduit à l'hôpital (${r.dist} m, ${r.hp} PV, KO ${r.ko})` };
 });
+
+test('le crissement de la craie se tait dès que le tableau a fini de s\'écrire', async p => {
+  // GARDE-FOU DU LIT DE CRAIE. Le crissement n'est plus une suite de bouffées mais une
+  // SOURCE BOUCLÉE permanente dont on ouvre et ferme le gain : elle ne s'arrête jamais
+  // d'elle-même. Si `craieLitFerme` cessait d'être appelée, la classe sifflerait en
+  // continu pour le reste de la partie. Ce test l'attrape.
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12 });
+    await dodo(300);
+    G.settings.sound = true; G.settings.voices = false;
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
+    const c = G.sfx.unlock(), chn = G.sfx.chaine(); if (!c || !chn) return { pourquoi: 'pas de moteur audio' };
+    // on écoute EN CONTINU le bout de la chaîne : sur la machine du banc d'essai un
+    // analyseur ne montre que les 46 dernières millisecondes, toujours trop tard
+    let crete = 0;
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    chn.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const ecoute = async (ms, quoi) => { crete = 0; const t = performance.now(); while (performance.now() - t < ms) { if (quoi) quoi(); await dodo(25); } return +crete.toFixed(4); };
+    const fond = await ecoute(600);
+    const pendant = await ecoute(700, () => G.sonCraie(3));
+    const ouvert = +(G.craieLit.g ? G.craieLit.g.gain.value : 0).toFixed(3);
+    // plus une seule lettre : l'horloge dépasse la tenue, et craieTick doit refermer le lit
+    G.simTime = G.simTime + 5;
+    for (let i = 0; i < 4; i++) { G.craieTick(1 / 60); await dodo(120); }
+    await dodo(500);
+    const apres = await ecoute(700);
+    const ferme = +(G.craieLit.g ? G.craieLit.g.gain.value : 0).toFixed(4);
+    try { chn.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    return { fond, pendant, apres, ouvert, ferme, niv: G.CRAIE_NIV, tenue: G.craieLit.jusqu > 0 };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const sort = r.pendant > r.fond * 1.6 && r.pendant > 0.1;       // on l'ENTEND, très au-dessus de la rumeur
+  const ouvre = r.ouvert > r.niv * 0.6;                            // le lit est bien monté au niveau voulu
+  const tait = r.ferme < 0.01 && r.apres < r.pendant * 0.45;       // et il est bien retombé
+  const ok = sort && ouvre && tait;
+  return { ok, detail: `le lit de craie est une source bouclée permanente : il s'ouvre à ${r.ouvert} (niveau voulu ${r.niv}) pendant le tracé et se referme à ${r.ferme} dès que plus aucune lettre ne s'écrit · mesuré au bout de la chaîne : rumeur seule ${r.fond}, craie ${r.pendant}, puis retour à ${r.apres}` };
+});

@@ -8685,6 +8685,13 @@ test('chaque geste de metier decrit un vrai cycle : amplitude suffisante, sans a
     // et les travailleurs s'en servent VRAIMENT : sur un nid-de-poule, l'équipe s'accroupit
     G.city.horaires = false;
     G.metierScene('chantier');
+    // LE REPIT DE QUATRE SECONDES. metierScene() passe par metiersRepos(), qui pose
+    // METIERS.reposT = simTime + 4 : pendant ce delai metiersTick() sort AVANT employesTick()
+    // et personne ne joue son geste. Comme on ne simule ici qu'une seconde et demie, l'equipe
+    // restait les bras ballants et le test lisait « geste undefined, poids 0 » — alors que le
+    // geste, lui, n'avait aucun defaut. Le repit sert a empecher un travailleur de REPRENDRE
+    // son vehicule dans la meme image ; la scene est deja posee a la main, on le leve donc.
+    G.METIERS.reposT = 0;
     for (let i = 0; i < 90; i++) G.step(1 / 60, true);
     const eq = G.METIERS.employes;
     out.chantier = { geste: eq[0].bot.av.rig.gNom, poids: +(eq[0].bot.av.rig.gK || 0).toFixed(2),
@@ -9310,23 +9317,33 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
     G.SONV.ambT = G.simTime + 1e6; try { G.ambiance.stop(); } catch (e) {}   // le lit d'ambiance jouerait par-dessus la mesure
     G.bots.forEach(b => { b.wait = 1e6; b.dance = 0; });                     // et les pas des voisins aussi
-    const an = c.createAnalyser(); an.fftSize = 2048; ch.lim.connect(an);
-    const rms = () => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; return +Math.sqrt(s / d.length).toFixed(4); };
+    // ON ECOUTE EN CONTINU, PLUS PAR COUPS D'OEIL. Un analyseur ne montre que les 46 dernieres
+    // millisecondes : dans la suite complete, ou le banc tombe a une image par seconde, la
+    // fenetre de mesure tombait a cote de la note et le test declarait le son proche PLUS
+    // FAIBLE que le son lointain (mesure en echec : 0,1228 a 1,5 m contre 0,1371 a 20 m) —
+    // alors que sonEn n'avait aucun defaut. On branche donc, comme le test de la rumeur, un
+    // noeud qui voit passer CHAQUE echantillon et garde la crete : la mesure ne depend plus
+    // de la vitesse de la machine ni de l'ordre des tests.
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    let crete = 0;
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
     const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
-    // Un coup de poing dure un dixieme de seconde : sur un rendu logiciel qui hoquette, la
-    // fenetre de mesure le manquait une fois sur trois et le test clignotait. On mesure donc
-    // une NOTE TENUE d'une demi-seconde, jouee trois fois, et on garde la crete.
+    // Un coup de poing dure un dixieme de seconde : on mesure donc une NOTE TENUE d'une
+    // demi-seconde, jouee trois fois, et on garde la crete de toute la fenetre d'ecoute.
     const pic = async (dist) => {
-      let m = 0;
+      crete = 0;
       for (let k = 0; k < 3; k++) {
         G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', 0.5), { duree: 0.6, portee: 40 });
-        for (let i = 0; i < 16; i++) { await dodo(30); m = Math.max(m, rms()); }
+        for (let i = 0; i < 16; i++) await dodo(30);
         await dodo(220);
       }
-      return +m.toFixed(4);
+      return +crete.toFixed(4);
     };
     await dodo(700); await pic(3); await dodo(500);   // un passage de chauffe : le tout premier revient a zero
-    const silence = rms();
+    crete = 0; await dodo(500); const silence = +crete.toFixed(4);
     const loin = await pic(45);
     const moyen = await pic(20);
     const pres = await pic(1.5);
@@ -9337,7 +9354,7 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     G.sonEn(X - 12, Y, Z, () => {}, { duree: .05 }); const gauche = G.SON.dernier;
     G.bots.forEach(b => { b.wait = 0; });
     G.SONV.ambT = 0;
-    try { ch.lim.disconnect(an); } catch (e) {}
+    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
     return { etat: c.state, silence, pres, moyen, loin, horsPortee: !!horsPortee, portee: G.SON.portee, coupure: G.SON.coupure,
       attDroite: droite.att, attGauche: gauche.att, bus: Object.keys(G.MIX), stereo: !!c.createStereoPanner };
   });
@@ -9879,9 +9896,13 @@ test('le repère GPS de chaque mission du bureau mène à un point que l\'on peu
     const mesure = () => {
       G.gpsRoute.hide(); G.gpsRoute.update();
       let n = 0, hors = 0;
+      // ON RECONNAIT UN CHEVRON A SA MARQUE, PLUS A SA FORME. Le test cherchait un cone de
+      // 42 cm de rayon ; depuis que les chevrons sont de la PEINTURE AU SOL (un quadrilatere
+      // plat texture), il n'en trouvait plus AUCUN — 0 chevron sur 0, et le test tombait en
+      // rouge meme lance seul, sans que le GPS ait le moindre defaut. gpsRoute pose
+      // userData.chevron sur chacun de ses reperes justement pour ca.
       G.scene.traverse(o => {
-        if (!o.isMesh || !o.visible || !o.geometry || o.geometry.type !== 'ConeGeometry') return;
-        if (Math.abs(o.geometry.parameters.radius - 0.42) > 0.01) return;
+        if (!o.isMesh || !o.visible || !o.userData || !o.userData.chevron) return;
         n++; if (!surRoute(o.position.x, o.position.z)) hors++;
       });
       return { chevrons: n, hors, pct: n ? Math.round(hors / n * 100) : 0 };

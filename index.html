@@ -8699,6 +8699,14 @@ function buildMeteo() {
 //   METEO_DUREE : combien de temps un episode tient avant que le ciel ne se decide a autre
 //     chose. De 70-150 s a 180-330 s : une averse dure maintenant plusieurs minutes.
 const METEO_FONDU = 0.085;
+//   METEO_FIN : LA MARCHE MINIMALE, en force par seconde. Une approche purement
+//     exponentielle n'ARRIVE jamais : mesure, vingt secondes apres « ☀️ Le ciel se degage »
+//     il restait 0,16 de force — la pluie tombait encore, le ciel restait voile, et une
+//     bruine reglee a 20 % s'installait a 16 % pendant qu'une neige a 100 % plafonnait a
+//     88 %. On garde le fondu doux tant qu'on est loin du compte, et on termine le trajet a
+//     vitesse constante : le temps demande FINIT toujours par s'installer pour de bon
+//     (0 → plein en 18 s, plein → beau temps en 17 s).
+const METEO_FIN = 0.05;
 const METEO_DUREE = [180, 330];
 function meteoSet(kind, duree, force) {
   meteo.kind = kind; meteo.next = simTime + (duree || rnd(METEO_DUREE[0], METEO_DUREE[1]));
@@ -8996,7 +9004,10 @@ function meteoTick(dt) {
   buildMeteo();
   if (simTime > meteo.next) meteoSet(pickOne(['clair', 'clair', 'clair', 'pluie', 'pluie', 'neige']));
   const veut = meteo.kind === 'clair' ? 0 : clamp(meteo.cible == null ? 1 : meteo.cible, 0, 1);
-  meteo.force += (veut - meteo.force) * Math.min(1, dt * METEO_FONDU);   // l'averse monte et retombe TRES doucement (voir METEO_FONDU)
+  // l'averse monte et retombe TRES doucement (METEO_FONDU), mais elle ARRIVE (METEO_FIN)
+  const ecart = veut - meteo.force;
+  const bond = Math.max(Math.abs(ecart) * Math.min(1, dt * METEO_FONDU), dt * METEO_FIN);
+  meteo.force = Math.abs(ecart) <= bond ? veut : meteo.force + Math.sign(ecart) * bond;
   meteo.abri = sousToit();   // sous un toit : on coupe les gouttes, sinon il pleuvait dans les maisons
   const f = meteo.force * (meteo.abri ? 0.05 : 1);
   const seg = meteo.seg, flocons = meteo.flocons, neige = meteo.kind === 'neige', actif = f > 0.02;

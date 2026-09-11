@@ -21506,10 +21506,18 @@ const NOMS_CIBLE_VEH = { moto: 'une moto', bike: 'un vélo', truck: 'un camion',
   ambulance: 'une ambulance', depanneuse: 'une dépanneuse', pompier: 'un camion de pompiers', taxi: 'un taxi',
   police: 'une voiture de police', kart: 'un kart' };
 const nomCible = c => c.heli ? 'un hélicoptère' : c.travail ? 'un engin de chantier' : (NOMS_CIBLE_VEH[c.kind] || 'une voiture');
-function ciblesVerrouillables(tout) {   // `tout` : sans le cone de vue, pour braquer ou changer de cible
+// `tout` : sans le cone de vue (pour braquer ou changer de cible a la fleche).
+// `max` : on s'arrete des qu'on a ce nombre de cibles en vue directe. LE RAYON VERS LE DECOR
+// COUTE CHER et cette fonction tourne a CHAQUE IMAGE : depuis qu'elle compte aussi les
+// vehicules, en tirer un par candidat faisait tomber la cadence (mesure : le rengainage
+// automatique n'arrivait plus au bout de 25 s dans le banc d'essai). Le verrouillage
+// automatique n'a besoin que d'UNE cible, donc d'un seul rayon.
+// `seul` : ne garder que cette cible-la (celle que le joueur a choisie a la fleche).
+function ciblesVerrouillables(tout, max, seul) {
   const ox = P.pos.x, oy = P.pos.y + 1.35, oz = P.pos.z, vue = cam.yaw + Math.PI;
   const cand = [];
   const ajoute = (ref, x, y, z, nom, malus) => {
+    if (seul && ref !== seul) return;
     const dx = x - ox, dz = z - oz, dh = Math.hypot(dx, dz);
     if (dh > LOCK_PORTEE || dh < 0.6) return;
     let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
@@ -21530,24 +21538,25 @@ function ciblesVerrouillables(tout) {   // `tout` : sans le cone de vue, pour br
   for (const lot of [city.cars, city.aiCars, police.cars]) for (const c of (lot || []))
     if (c && c !== drive.car && c.g && c.g.visible) ajoute(c, c.x, (c.y || 0) + 0.3, c.z, nomCible(c), malusVeh);
   cand.sort((a, b) => a.note - b.note);
-  // Le rayon vers le decor coute cher : on ne le tire QUE sur les mieux classes, et on
-  // s'arrete des qu'on a de quoi remplir le tour des fleches.
-  const vus = [];
+  // on ne tire le rayon que sur les mieux classes, et jamais plus de seize fois
+  const vus = [], limite = max || 8;
+  let essais = 0;
   for (const c of cand) {
+    if (++essais > 16) break;
     const ty = c.y + 1, ddx = c.x - ox, ddy = ty - oy, ddz = c.z - oz, L = Math.hypot(ddx, ddy, ddz) || 1;
     if (castSolids(ox, oy, oz, ddx / L, ddy / L, ddz / L, L - 0.6, true).o) continue;   // un mur s'interpose
     vus.push(c);
-    if (vus.length >= 8) break;
+    if (vus.length >= limite) break;
   }
   return vus;
 }
 // Cible la plus proche devant le joueur, en vue directe. Sert au tir automatique : appelee a
 // chaque image, elle RESPECTE le choix fait a la fleche tant que cette cible reste visible.
 function cibleAuto() {
-  const l = ciblesVerrouillables(false);
-  if (!l.length) { P.lockRef = null; return null; }
-  if (P.lockRef) { const c = l.find(x => x.ref === P.lockRef); if (c) return c; P.lockRef = null; }
-  return l[0];
+  // la cible choisie a la fleche d'abord, et ELLE SEULE : un seul rayon suffit a savoir si
+  // elle est toujours visible. Sinon, la meilleure — un rayon aussi.
+  if (P.lockRef) { const c = ciblesVerrouillables(false, 1, P.lockRef)[0]; if (c) return c; P.lockRef = null; }
+  return ciblesVerrouillables(false, 1)[0] || null;
 }
 function viseCible(c) {   // on se tourne vers la cible choisie et la camera se replace derriere
   if (!c) return null;

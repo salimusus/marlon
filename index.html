@@ -4960,7 +4960,13 @@ function makeCar(color, x, z, h, opt = {}) {
   const solid = box(x, 0.7, z, 2.6, 1.4, 4.3, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   for (const w of wheels) w.position.y = 0.36;
   const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, kart, baseW: 2.4, baseD: 4.4, dmg: 0, home0: [x, z, h], lampR: g.lampR, lampB: g.lampB, bodyMat: body, tuneMesh: [], parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors: [] } };
-  if (kart) c.spec = { max: 32, rev: -9, accel: 26, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 38, rev: -9, accel: 32, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 26, rev: -8, accel: 19, turn: 2.1, seat: 0 };
+  // LES TROIS PALIERS DE PUISSANCE. « Reduis la vitesse de base des vehicules, et augmente a
+  // partir de 300 chevaux, et a 500 chevaux vitesse max puissante. » Une voiture de serie
+  // filait a 26 m/s (94 km/h) des la premiere pression : trop vif et trop peu rassurant pour
+  // debuter, et surtout les trois moteurs du garage ne se sentaient presque pas (26 → 40 → 56).
+  // L'origine descend a 21 m/s (75 km/h), et l'ecart entre les paliers se creuse nettement :
+  // voir TUNE_MOTEURS, ou le 300 chevaux passe a 38 et le 500 a 60.
+  if (kart) c.spec = { max: 28, rev: -8, accel: 23, turn: 2.3, seat: 0 }; else if (opt.sport) { c.spec = { max: 31, rev: -8, accel: 26, turn: 2.0, seat: 0 }; c.sport = true; } else c.spec = { max: 21, rev: -7, accel: 16, turn: 2.1, seat: 0 };
   prepareVehicule(c); vehicleSolid(c); return c;
 }
 function makeVehicle(kind, color, x, z, h) {
@@ -4976,11 +4982,11 @@ function makeVehicle(kind, color, x, z, h) {
     // vide, au-dessus du reservoir, et la selle roulait vide derriere lui. Elle est maintenant
     // EXACTEMENT sous la place du conducteur, large et creusee, avec un dosseret et la selle
     // du passager derriere.
-    const selleM = bx(darkM, 0.56, 0.17, 1.0, 0, 0.94, 0.05);                                    // l'assise du pilote
-    bx(darkM, 0.5, 0.1, 0.34, 0, 1.0, 0.42, false);                                              // le bourrelet avant
-    bx(darkM, 0.5, 0.2, 0.16, 0, 1.02, -0.45, false);                                            // le dosseret
-    bx(darkM, 0.46, 0.15, 0.5, 0, 0.99, -0.78, false);                                           // la selle du passager
-    for (const sx of [-0.26, 0.26]) bx(chrome, 0.03, 0.04, 0.9, sx, 1.02, 0.05, false);          // les surpiqures
+    const selleM = bx(darkM, 0.56, 0.17, 1.0, 0, 0.94, 0.15);                                    // l'assise du pilote, pile sous PLACES.moto.conducteur
+    bx(darkM, 0.5, 0.1, 0.34, 0, 1.0, 0.52, false);                                              // le bourrelet avant
+    bx(darkM, 0.5, 0.2, 0.16, 0, 1.02, -0.36, false);                                            // le dosseret
+    bx(darkM, 0.46, 0.15, 0.5, 0, 0.99, -0.76, false);                                           // la selle du passager
+    for (const sx of [-0.26, 0.26]) bx(chrome, 0.03, 0.04, 0.9, sx, 1.02, 0.15, false);          // les surpiqures
     outilsSelle = selleM;
     bx(body, 0.5, 0.5, 0.45, 0, 0.7, 0.75); const fair = bx(body, 0.55, 0.3, 0.35, 0, 1.03, 0.78); fair.rotation.x = 0.4;   // carénage
     bx(glassCar, 0.5, 0.35, 0.04, 0, 1.25, 0.95, false).rotation.x = 0.5;      // bulle
@@ -4992,7 +4998,7 @@ function makeVehicle(kind, color, x, z, h) {
     cyl(darkM, 0.08, 0.08, 0.5, 0, 0.55, 0.05, 0, 0); bx(darkM, 0.1, 0.35, 0.05, -0.25, 0.45, -0.75, false);   // moteur + béquille
     bx(lam(0xffffff), 0.3, 0.14, 0.02, 0, 0.75, -1.22, false);
     for (const wz of [0.85, -0.85]) { const w = makeWheel(1.15); w.position.set(0, 0.4, wz); g.add(w); wheels.push(w); }
-    spec = { max: 36, rev: -7, accel: 31, turn: 2.6, seat: 1.02, lean: 0.35 }; W = 1.1; D = 2.5; rider = true;
+    spec = { max: 29, rev: -6, accel: 25, turn: 2.6, seat: 1.02, lean: 0.35 }; W = 1.1; D = 2.5; rider = true;
   } else if (kind === 'bike') {
     const t1 = bx(body, 0.06, 0.06, 1.15, 0, 0.78, 0.05, false); t1.rotation.x = 0.25;
     const t2 = bx(body, 0.06, 0.06, 0.9, 0, 0.62, -0.1, false); t2.rotation.x = -0.6;
@@ -5008,7 +5014,7 @@ function makeVehicle(kind, color, x, z, h) {
     cyl(darkM, 0.16, 0.16, 0.04, 0, 0.5, 0, 0, Math.PI / 2); bx(chrome, 0.4, 0.04, 0.04, 0, 0.5, 0, false); for (const sx of [-0.2, 0.2]) bx(darkM, 0.12, 0.04, 0.08, sx, 0.5 + sx * 0.5, 0.05, false);   // plateau + manivelles
     bx(lam(0x8b4a2b), 0.55, 0.3, 0.45, 0, 1.0, 0.85, false); bx(chrome, 0.1, 0.1, 0.1, 0.32, 1.16, 0.4, false);   // panier + sonnette
     for (const wz of [0.65, -0.65]) { const w = makeWheel(1.05); w.children[0].scale.y = 0.35;   /* pneu FIN : on amincit la hauteur du cylindre, pas son rayon */ w.position.set(0, 0.36, wz); g.add(w); wheels.push(w); bx(body, 0.1, 0.06, 0.45, 0, 0.78, wz, false); }
-    spec = { max: 17, rev: -4, accel: 13, turn: 2.4, seat: 1.08, lean: 0.2 }; W = 0.9; D = 2; rider = true;
+    spec = { max: 14, rev: -4, accel: 11, turn: 2.4, seat: 1.08, lean: 0.2 }; W = 0.9; D = 2; rider = true;
   } else if (kind === 'buggy') {   // buggy de rallye : grosses roues, arceau, suspension haute, très rapide
     bx(body, 1.5, 0.45, 2.6, 0, 0.95, 0.1); bx(body, 1.3, 0.35, 1.0, 0, 1.2, 0.9); bx(darkM, 1.1, 0.3, 0.9, 0, 1.15, -0.5);
     for (const sx of [-0.6, 0.6]) { bx(darkM, 0.08, 1.1, 0.08, sx, 1.7, -0.2, false); bx(darkM, 0.08, 1.1, 0.08, sx, 1.7, 0.7, false); bx(darkM, 0.08, 0.08, 1.0, sx, 2.25, 0.25, false); }   // arceau
@@ -5016,11 +5022,11 @@ function makeVehicle(kind, color, x, z, h) {
     bx(chrome, 0.9, 0.06, 0.06, 0, 1.45, 0.75, false); bx(neonMat(0xffffcc), 0.5, 0.2, 0.1, 0, 1.25, 1.42, false); for (const sx of [-0.4, 0.4]) bx(neonMat(0xffffcc), 0.2, 0.2, 0.08, sx, 2.3, 0.8, false);   // rampe de phares
     bx(darkM, 1.6, 0.12, 0.3, 0, 0.55, 1.45); bx(darkM, 1.6, 0.12, 0.3, 0, 0.55, -1.35);
     for (const [wx, wz] of [[-0.95, 1.05], [0.95, 1.05], [-0.95, -1.0], [0.95, -1.0]]) { const w = makeWheel(1.55); w.position.set(wx, 0.52, wz); g.add(w); wheels.push(w); }
-    spec = { max: 40, rev: -10, accel: 36, turn: 2.6, seat: 1.15, lean: 0 }; W = 2.2; D = 3; rider = true;
+    spec = { max: 33, rev: -8, accel: 29, turn: 2.6, seat: 1.15, lean: 0 }; W = 2.2; D = 3; rider = true;
   } else if (kind === 'jetski') {   // scooter des mers
     bx(body, 1.0, 0.5, 2.6, 0, 0.45, 0); bx(body, 0.8, 0.3, 0.9, 0, 0.75, 0.8); bx(darkM, 0.7, 0.2, 1.1, 0, 0.75, -0.4);
     bx(chrome, 0.8, 0.06, 0.06, 0, 1.05, 0.85, false); bx(chrome, 0.06, 0.4, 0.06, 0, 0.95, 0.85, false); bx(lam(0xffffff), 1.02, 0.12, 2.62, 0, 0.2, 0, false);
-    spec = { max: 30, rev: -6, accel: 20, turn: 3.0, seat: 0.95, lean: 0.4 }; W = 1.1; D = 2.6; rider = true;
+    spec = { max: 25, rev: -5, accel: 17, turn: 3.0, seat: 0.95, lean: 0.4 }; W = 1.1; D = 2.6; rider = true;
   } else {   // camion
     bx(body, 2.4, 2.1, 2.6, 0, 1.55, 2.8); bx(body, 2.4, 0.5, 0.6, 0, 2.85, 2.2);              // cabine + déflecteur
     bx(glassCar, 2.2, 0.9, 0.06, 0, 2.05, 4.13, false); for (const sx of [-1.21, 1.21]) bx(glassCar, 0.06, 0.7, 1.0, sx, 2.05, 3.1, false);   // vitres
@@ -23329,10 +23335,16 @@ const TUNE_KITS = [
   { k: 'moteur', n: 'Moteur apparent', e: '🔩', p: 200, desc: 'Bloc rouge et noir qui sort du capot, avec le turbo.' },
   { k: 'nitro', n: 'Nitro', e: '🔥', p: 250, desc: 'Bouteille de protoxyde : MAJ (ou ⚡ à la manette) donne un coup de pied sec d\'une seconde, flammes aux deux pots — à renvoyer toutes les 3,5 s.' },
 ];
+// LES TROIS MOTEURS DU GARAGE, et c'est LA que se joue la sensation de puissance. Avant :
+// 26 → 40 → 56 m/s, c'est-a-dire une voiture de serie deja rapide et deux paliers qui ne se
+// sentaient qu'a peine. Maintenant : une origine SAGE (21 m/s, 75 km/h — le meme chiffre que
+// `makeCar`, pour qu'une voiture ramassee dans la rue et une voiture d'origine au garage
+// aillent exactement pareil), un 300 chevaux qui fait presque le double (38 m/s, 137 km/h) et
+// un 500 chevaux qui decolle vraiment (60 m/s, 216 km/h).
 const TUNE_MOTEURS = [
-  { n: '100 chevaux', e: '🐎', p: 0, max: 26, accel: 19, desc: 'Le moteur d\'origine. Ronronnement tranquille.' },
-  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 40, accel: 31, desc: 'Reprises franches et pointe bien plus haute. Le son descend : gros grave et bourdonnement.' },
-  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 56, accel: 46, desc: 'Une fusée. Le bloc gronde très bas — à ce niveau, il faut savoir freiner.' },
+  { n: '100 chevaux', e: '🐎', p: 0, max: 21, accel: 16, desc: 'Le moteur d\'origine. Ronronnement tranquille, vitesse rassurante.' },
+  { n: '300 chevaux', e: '🐎🐎', p: 260, max: 38, accel: 33, desc: 'Presque le double de la pointe d\'origine, et des reprises franches. Le son descend : gros grave et bourdonnement.' },
+  { n: '500 chevaux', e: '🐎🐎🐎', p: 520, max: 60, accel: 52, desc: 'Une fusée : trois fois la vitesse d\'origine. Le bloc gronde très bas — à ce niveau, il faut savoir freiner.' },
 ];
 // CHAQUE AMÉLIORATION FAIT GAGNER DE LA VITESSE. Avant, seul le moteur comptait : les kits
 // étaient purement décoratifs. Chacun apporte maintenant son petit pourcentage, cumulable.

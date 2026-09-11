@@ -13089,7 +13089,7 @@ test('rien ne decroche PENDANT le mouvement : les poids restent sur la barre, le
       G.P.pos.set(v.x, v.y || 0, v.z);
       G.enterCar(v);
       const vv = new T.Vector3();
-      let pire = 0, pireY = 0, vitesse = 0;
+      let pire = 0, sousLeBassin = 1, vitesse = 0, hauteurs = [];
       G.keys.add('KeyW');
       for (let i = 0; i < 240; i++) {
         G.simTime += 1 / 60; G.driveStep(1 / 60); G.poseJoueurAuVolant(1 / 60);
@@ -13097,10 +13097,14 @@ test('rien ne decroche PENDANT le mouvement : les poids restent sur la barre, le
         if (Math.abs(G.drive.speed) < 2) continue;          // on ne juge qu'EN ROULANT
         mondeDe(v.selle, vv);
         pire = Math.max(pire, Math.hypot(vv.x - G.me.group.position.x, vv.z - G.me.group.position.z));
-        pireY = Math.max(pireY, Math.abs(vv.y - G.me.group.position.y));
+        // L'ORIGINE D'UN AVATAR EST AUX PIEDS : comparer sa hauteur a celle de la selle n'a
+        // aucun sens (les pieds pendent 50 cm sous l'assise). Ce qu'on verifie, c'est que la
+        // selle est bien SOUS LE BASSIN — entre 30 et 80 cm au-dessus des pieds.
+        const dh = vv.y - G.me.group.position.y; hauteurs.push(+dh.toFixed(2));
+        if (!(dh > 0.3 && dh < 0.8)) sousLeBassin = 0;
       }
       G.keys.delete('KeyW');
-      selles[genre] = { ecart: +pire.toFixed(3), ecartY: +pireY.toFixed(3), vitesse: +vitesse.toFixed(1) };
+      selles[genre] = { ecart: +pire.toFixed(3), sousLeBassin, haut: hauteurs.length ? hauteurs[hauteurs.length - 1] : null, vitesse: +vitesse.toFixed(1) };
       if (G.drive.car) G.exitCar();
     }
     return { ecartPoids: +ecartPoids.toFixed(3), monteesBarre, poids: poids.length,
@@ -13108,9 +13112,9 @@ test('rien ne decroche PENDANT le mouvement : les poids restent sur la barre, le
   });
   const s = r.selles;
   const genres = ['moto', 'bike', 'velo'];
-  const mauvais = genres.filter(k => !s[k] || s[k].manque || s[k].ecart > 0.22 || s[k].ecartY > 0.30);
+  const mauvais = genres.filter(k => !s[k] || s[k].manque || s[k].ecart > 0.16 || !s[k].sousLeBassin);
   const ok = r.poids >= 2 && r.monteesBarre >= 2 && r.ecartPoids < 0.001
     && r.angMax > 0.3 && r.nS > 50 && r.ecartSwing < 0.06 && r.ecartSwingH < 0.06
     && mauvais.length === 0;
-  return { ok, detail: `trois defauts de pose qui se voyaient tout de suite, tous les trois PENDANT le mouvement (a l'arret ils ne se voyaient pas) · DEVELOPPE COUCHE : les disques etaient poses une fois pour toutes a 1,60 m et la barre montait a 1,90 m a chaque poussee — ils decrochaient de 30 cm ; ils suivent maintenant la meme hauteur, ecart maximal ${r.ecartPoids} m sur ${r.monteesBarre} hauteurs de barre distinctes (${r.poids} pieces montees sur la barre) · BALANCOIRE : la place du joueur etait recalculee avec une hauteur ecrite en dur (3,55 m) alors que la poutre est a 3,75 m, il pendait 20 cm sous la planche pendant tout le balancement ; elle est maintenant LUE sur le siege lui-meme — ecart vertical ${r.ecartSwing} m et horizontal ${r.ecartSwingH} m sur ${r.nS} images de vrai balancement (angle jusqu'a ${r.angMax} rad) · SELLE : il n'y avait pas de selle sous le pilote (celle de la moto etait 63 cm en arriere, celle du velo 23 cm) et le joueur s'asseyait a l'origine du vehicule alors que les bots s'asseyaient a la place PLACES ; chaque deux-roues a maintenant une selle centree sur cette place et tout le monde s'y assoit — ${genres.map(k => `${k} : ${s[k] && s[k].manque ? 'PAS DE SELLE' : s[k].ecart + ' m a ' + s[k].vitesse + ' m/s (vertical ' + s[k].ecartY + ')'}`).join(' · ')}` };
+  return { ok, detail: `trois defauts de pose qui se voyaient tout de suite, tous les trois PENDANT le mouvement (a l'arret ils ne se voyaient pas) · DEVELOPPE COUCHE : les disques etaient poses une fois pour toutes a 1,60 m et la barre montait a 1,90 m a chaque poussee — ils decrochaient de 30 cm ; ils suivent maintenant la meme hauteur, ecart maximal ${r.ecartPoids} m sur ${r.monteesBarre} hauteurs de barre distinctes (${r.poids} pieces montees sur la barre) · BALANCOIRE : la place du joueur etait recalculee avec une hauteur ecrite en dur (3,55 m) alors que la poutre est a 3,75 m, il pendait 20 cm sous la planche pendant tout le balancement ; elle est maintenant LUE sur le siege lui-meme — ecart vertical ${r.ecartSwing} m et horizontal ${r.ecartSwingH} m sur ${r.nS} images de vrai balancement (angle jusqu'a ${r.angMax} rad) · SELLE : il n'y avait pas de selle sous le pilote (celle de la moto etait 63 cm en arriere, celle du velo 23 cm) et le joueur s'asseyait a l'origine du vehicule alors que les bots s'asseyaient a la place PLACES ; chaque deux-roues a maintenant une selle centree sur cette place et tout le monde s'y assoit — ${genres.map(k => `${k} : ${s[k] && s[k].manque ? 'PAS DE SELLE' : s[k].ecart + ' m d\'ecart au sol a ' + s[k].vitesse + ' m/s, assise ' + s[k].haut + ' m au-dessus des pieds'}`).join(' · ')}` };
 });

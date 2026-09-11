@@ -11745,3 +11745,215 @@ test('la dépanneuse rentre au garage après un dépannage sur place', async p =
   const ok = !r.manque && r.mode === 'place' && r.depart > 60 && r.repare > 60 && r.arrivee < 6 && !r.mission && !r.sirene;
   return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene})` };
 });
+
+test('la dépanneuse charge vraiment l\'épave SUR son plateau, la remorque, la stationne et la répare dix secondes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const d = (G.city.depanneuses || [])[0];
+    if (!d) return { manque: true };
+    d.mission = null; d.remorque = null; d.depCible = null; d.dep = 0;
+    const A = G.city.cars.find(c => !c.kind && !c.heli && !c.travail && c !== G.drive.car);
+    const B = G.city.cars.find(c => c !== A && !c.kind && !c.heli && !c.travail);
+    if (!A || !B) return { manque: true };
+    const loin = [d.home0[0] + 70, d.home0[1] + 30];
+    A.dmg = 80; B.dmg = 5; A.busy = true; B.busy = true;   // 80 > DEGATS_SUR_PLACE : c'est un REMORQUAGE
+    A.x = loin[0] + 3; A.z = loin[1]; A.h = 0; A.g.position.set(A.x, A.y || 0, A.z);
+    B.x = loin[0] + 9; B.z = loin[1]; B.g.position.set(B.x, B.y || 0, B.z);
+    d.x = loin[0]; d.z = loin[1]; d.g.position.set(d.x, d.y || 0, d.z);
+    const m = G.depanneuseAppel({ a: A, b: B, x: loin[0], z: loin[1], joueur: false });
+    if (!m) return { manque: true };
+    // HAUTEUR DE L'ÉPAVE AU-DESSUS DE L'ASSIETTE DU CAMION : c'est la mesure qui dit si elle
+    // est SUR le plateau (0,94 m, la hauteur de la tôle) ou traînée AU SOL (0 m).
+    const dessus = () => +(A.y - (d.y || 0)).toFixed(2);
+    const recul = () => +Math.hypot(A.x - d.x, A.z - d.z).toFixed(2);
+    const phases = [];
+    let hautMax = 0, hautGarage = null, reparT = 0, reparVu = 0, tGarage = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      G.simTime += 1 / 30; G.depanneusesTick(1 / 30); G.animMondeTick(1 / 30);
+      if (!phases.length || phases[phases.length - 1] !== m.phase) phases.push(m.phase);
+      if (A.y - (d.y || 0) > hautMax) hautMax = +(A.y - (d.y || 0)).toFixed(2);
+      if (m.phase === 'garage') { hautGarage = dessus(); tGarage = recul(); }
+      if (m.phase === 'garageRepare') { reparT += 1 / 30; if (G.ANIM.reparateurs.length) reparVu++; }
+      if (m.fini && m.phase === 'retour') break;
+    }
+    return { phases, hautMax, hautGarage, reculGarage: tGarage, reparT: +reparT.toFixed(1), reparVu,
+      mode: m.mode, fini: !!m.fini, dmgFinal: A.dmg, capotRange: A.parts && +A.parts.hood.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque && r.mode === 'remorque'
+    && r.phases.indexOf('treuil') >= 0 && r.phases.indexOf('garage') >= 0
+    && r.phases.indexOf('depose') >= 0 && r.phases.indexOf('garageRepare') >= 0
+    && r.hautMax > 0.8 && r.hautGarage > 0.8 && r.reculGarage < 2.2
+    && r.reparT >= 9.5 && r.reparVu > 250 && r.fini && r.dmgFinal === 0 && r.capotRange === 0;
+  return { ok, detail: `le treuillage n'était qu'une attente de 2,5 s : l'épave se téléportait DERRIÈRE le camion, roues au sol, et le garage la réparait en une image · maintenant le plateau s'incline en rampe, le crochet descend et l'épave MONTE : ${r.hautMax} m au-dessus de l'assiette du camion, à ${r.reculGarage} m de son centre (elle est SUR la tôle), phases traversées ${JSON.stringify(r.phases)}, réparation au garage ${r.reparT} s avec un réparateur visible sur ${r.reparVu} images, capot refermé (${r.capotRange} rad) et dégâts ${r.dmgFinal}` };
+});
+
+test('le réparateur se penche tête au-dessus du capot ouvert et bouge ses bras avec sa clé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.makeCar(0x4f8dff, G.P.pos.x + 4, G.P.pos.z, 0);
+    const rep = G.reparateurArrive(c, G.REPAR_DUREE, null);
+    if (!rep) return { manque: true };
+    const rig = rep.av.rig;
+    const ech = [];
+    for (let i = 0; i < 60 * 10; i++) {
+      G.simTime += 1 / 60;
+      G.reparateurTick(rep, 1 / 60);
+      ech.push({ capot: c.parts.hood.rotation.x, buste: rep.av.group.rotation.x,
+        tete: rig.head.rotation.x, brasD: rig.armR.rotation.x, coudeD: rig.armR.coude.rotation.x });
+    }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const outil = rep.av.outilNom;
+    const res = { capot: st('capot'), buste: st('buste'), tete: st('tete'), brasD: st('brasD'), coudeD: st('coudeD'),
+      outil, images: ech.length, encore: G.ANIM.reparateurs.length };
+    G.reparateurRange(rep);
+    res.apres = G.ANIM.reparateurs.length;
+    return res;
+  });
+  const ok = !r.manque && r.outil === 'cle'
+    && r.capot.amp > 1 && r.capot.pasMax < 0.06
+    && r.buste.max > 0.55 && r.tete.max > 0.55
+    && r.coudeD.amp > 0.5 && r.coudeD.pasMax < 0.12
+    && r.brasD.amp > 0.3 && r.brasD.pasMax < 0.12
+    && r.encore === 1 && r.apres === 0;
+  return { ok, detail: `la réparation ne se VOYAIT pas : la dépanneuse s'arrêtait 2,5 s et les dégâts tombaient à zéro tout seuls · maintenant un employé municipal arrive clé à la main (outil « ${r.outil} »), le capot s'ouvre sur sa charnière (${r.capot.amp} rad, pas max ${r.capot.pasMax} rad/image), il plonge le buste à ${r.buste.max} rad et la tête à ${r.tete.max} rad AU-DESSUS du moteur, et son coude droit serre (${r.coudeD.amp} rad d'amplitude, ${r.coudeD.pasMax} rad/image) sur ${r.images} images = 10 s` };
+});
+
+test('la pelleteuse creuse pour de vrai : godet chargé de terre, trou qui s\'agrandit, tas qui monte', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    G.ANIM.trous.length = 0;
+    // l'engin mesuré reste HORS de city.cars : sinon la boucle de rendu du jeu ferait avancer
+    // le cycle une deuxième fois, avec son propre dt, et le pas par image n'aurait aucun sens
+    const c = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 30, G.P.pos.z, 0);
+    G.enginCreuseTick && null;
+    if (!G.enginCreuse(c)) return { manque: true };
+    const trou = c.creuse.trou;
+    if (!trou) return { manque: true };
+    const o = c.outils;
+    const cle = { bras: () => o.bras.rotation.x, avant: () => o.avantBras.rotation.x,
+      godet: () => o.godet.rotation.x, tour: () => o.tourelle.rotation.y };
+    const ech = []; let terreVue = 0;
+    G.enginCreuseTick(c, 0);
+    const lire = () => { const e = {}; for (const k in cle) e[k] = cle[k](); return e; };
+    ech.push(lire());
+    for (let i = 0; i < 280; i++) { if (c.creuse) G.enginCreuseTick(c, 1 / 60); if (o.terre && o.terre.visible) terreVue++; ech.push(lire()); }
+    const st = k => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const un = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    for (let k = 0; k < 3; k++) { G.enginCreuse(c); for (let i = 0; i < 280 && c.creuse; i++) G.enginCreuseTick(c, 1 / 60); }
+    const quatre = { r: +trou.r.toFixed(2), prof: +trou.prof.toFixed(2), n: trou.n, tas: trou.tas ? +trou.tas.h.toFixed(2) : 0 };
+    return { godet: st('godet'), bras: st('bras'), avant: st('avant'), tour: st('tour'),
+      terreVue, images: ech.length, un, quatre, trous: G.ANIM.trous.length, reposGodet: +o.godet.rotation.x.toFixed(3) };
+  });
+  const ok = !r.manque
+    && r.godet.amp > 1.5 && r.godet.pasMax < 0.1
+    && r.bras.amp > 0.7 && r.bras.pasMax < 0.06
+    && r.tour.amp > 0.8 && r.tour.pasMax < 0.06
+    && r.terreVue > 90
+    && r.un.n === 1 && r.quatre.n === 4
+    && r.quatre.r > r.un.r && r.quatre.prof > r.un.prof && r.quatre.tas > r.un.tas
+    && r.trous === 1 && Math.abs(r.reposGodet + 0.7) < 0.01;
+  return { ok, detail: `l'outil de la pelleteuse n'était qu'un curseur 0 → 1 : le bras se dépliait et RIEN ne se passait — pas de terre, pas de trou, pas de tas · maintenant un cycle complet de 4,2 s (godet ${r.godet.amp} rad d'amplitude, ${r.godet.pasMax} rad/image au plus ; bras ${r.bras.amp} rad ; tourelle ${r.tour.amp} rad), la TERRE est visible dans le godet sur ${r.terreVue} des ${r.images} images, et après 1 puis 4 godets le trou passe de ${r.un.r} à ${r.quatre.r} m de rayon et de ${r.un.prof} à ${r.quatre.prof} m de profondeur pendant que le tas monte de ${r.un.tas} à ${r.quatre.tas} m` };
+});
+
+test('la grue lève sa charge et le bulldozer pousse son andain, chacun sans à-coup', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const st = (ech, k) => { let mn = Infinity, mx = -Infinity, pas = 0;
+      for (let i = 0; i < ech.length; i++) { const v = ech[i][k]; if (v < mn) mn = v; if (v > mx) mx = v; if (i) pas = Math.max(pas, Math.abs(v - ech[i - 1][k])); }
+      return { min: +mn.toFixed(3), max: +mx.toFixed(3), amp: +(mx - mn).toFixed(3), pasMax: +pas.toFixed(4) }; };
+    const gr = G.makeVehiculeTravail('grue', 0xffd23f, G.P.pos.x + 44, G.P.pos.z, 0);
+    if (!G.enginLeve(gr)) return { manque: true };
+    const og = gr.outils, eg = []; let charge = 0;
+    G.enginLeveTick(gr, 0);
+    const lg = () => ({ tour: og.tourelle.rotation.y, crochet: og.crochet.position.y, fleche: og.fleche.rotation.x });
+    eg.push(lg());
+    for (let i = 0; i < 480; i++) { if (gr.leve) G.enginLeveTick(gr, 1 / 60); if (og.charge && og.charge.visible) charge++; eg.push(lg()); }
+    const bu = G.makeVehiculeTravail('bulldozer', 0xffd23f, G.P.pos.x + 58, G.P.pos.z, 0);
+    bu.spd = 6; G.enginLame(bu);
+    const ob = bu.outils, eb = []; let andain = 0;
+    G.enginLameTick(bu, 0);
+    const lb = () => ({ lameY: ob.lame.position.y, andainH: ob.andain.scale.y });
+    eb.push(lb());
+    for (let i = 0; i < 240; i++) { G.enginLameTick(bu, 1 / 60); if (ob.andain.visible) andain++; eb.push(lb()); }
+    return { grue: { tour: st(eg, 'tour'), crochet: st(eg, 'crochet'), charge, images: eg.length, reposCrochet: +og.crochet.position.y.toFixed(3) },
+      bull: { lame: st(eb, 'lameY'), andainH: st(eb, 'andainH'), andain, images: eb.length } };
+  });
+  const ok = !r.manque
+    && r.grue.tour.amp > 1.2 && r.grue.tour.pasMax < 0.06
+    && r.grue.crochet.amp > 3 && r.grue.crochet.pasMax < 0.1
+    && r.grue.charge > 150 && Math.abs(r.grue.reposCrochet + 0.2) < 0.01
+    && r.bull.lame.amp > 0.8 && r.bull.lame.pasMax < 0.04
+    && r.bull.andainH.amp > 0.8 && r.bull.andainH.pasMax < 0.04 && r.bull.andain > 100;
+  return { ok, detail: `la grue tournait à vide (aucune charge au crochet) et le bulldozer n'existait pas · grue : tourelle ${r.grue.tour.amp} rad (${r.grue.tour.pasMax} rad/image), crochet ${r.grue.crochet.amp} m (${r.grue.crochet.pasMax} m/image), charge visible sur ${r.grue.charge} des ${r.grue.images} images et crochet rendu à sa hauteur de repos (${r.grue.reposCrochet}) · bulldozer : lame ${r.bull.lame.amp} m (${r.bull.lame.pasMax} m/image) et andain qui grossit de ${r.bull.andainH.amp} sur ${r.bull.andain} images` };
+});
+
+test('démolir une voiture de police avec un engin de chantier met trois étoiles de recherche', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12, frais: true });
+    G.clearWanted();
+    const pelle = G.makeVehiculeTravail('pelle', 0xffa62b, G.P.pos.x + 26, G.P.pos.z, 0);
+    G.city.cars.push(pelle);
+    // une voiture ORDINAIRE d'abord : elle casse, mais sans trois étoiles
+    const civ = G.makeCar(0x4f8dff, pelle.x, pelle.z + 6.4, 0); G.city.cars.push(civ);
+    civ.dmg = 0; civ.dead = false;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 120 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    const civApres = { dmg: Math.round(civ.dmg), etoiles: G.police.wanted };
+    G.clearWanted(); civ.x = pelle.x + 60; civ.z = pelle.z; civ.g.position.set(civ.x, civ.y || 0, civ.z);
+    // puis une VOITURE DE POLICE
+    const pc = G.makeCar(0xf4f6fa, pelle.x, pelle.z + 6.4, 0, { police: true });
+    pc.dmg = 0; pc.dead = false;
+    const avant = G.police.wanted;
+    G.enginCreuse(pelle);
+    for (let i = 0; i < 200 && pelle.creuse; i++) { G.simTime += 1 / 60; G.enginCreuseTick(pelle, 1 / 60); G.enginDemolit(pelle, 1 / 60); }
+    return { civApres, avant, apres: G.police.wanted, dmgPolice: Math.round(pc.dmg), alerte: !!pc.enginAlerte };
+  });
+  const ok = r.civApres.dmg > 20 && r.avant === 0 && r.apres === 3 && r.dmgPolice > 20 && r.alerte;
+  return { ok, detail: `le joueur demandait de pouvoir « démolir un véhicule (même police, qui déclenche une alerte 3 étoiles) » : aucun engin ne faisait le moindre dégât à un véhicule · le godet d'une pelleteuse inflige maintenant 52 points de dégâts par seconde à 6,4 m devant elle (voiture ordinaire : ${r.civApres.dmg} points, ${r.civApres.etoiles} étoile(s)) et, sur une voiture de POLICE, l'alerte part sans avertissement : ${r.avant} → ${r.apres} étoiles pour ${r.dmgPolice} points de dégâts` };
+});
+
+test('le coup qui met à terre passe au ralenti pendant trois secondes de temps réel, et pas deux fois de suite', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -2, y: 1, z: 150, hour: 12 });
+    const R = G.RALENTI;
+    R.t = 0; R.fige = null; R.prochain = 0;
+    const normal = G.ralentiEchelle(1 / 60);
+    const arme = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    // un DEUXIÈME coup pendant le ralenti doit être refusé : sinon chaque échange rallongeait
+    const pendant = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    const ech = []; let reel = 0, cam = 0;
+    const cp = () => ({ x: G.camera.position.x, y: G.camera.position.y, z: G.camera.position.z });
+    const angles = [];
+    for (let i = 0; i < 400; i++) {
+      const k = G.ralentiEchelle(1 / 60); reel += 1 / 60; ech.push({ t: +reel.toFixed(3), k });
+      if (k < 1) { if (G.ralentiCam()) { cam++; const c = cp(); angles.push(+Math.atan2(c.x - G.P.pos.x, c.z - (G.P.pos.z + 1)).toFixed(3)); } }
+    }
+    let fin = 0, mini = 1;
+    for (const e of ech) { if (e.k < 0.999) { fin = e.t; if (e.k < mini) mini = e.k; } }
+    let pasMax = 0; for (let i = 1; i < ech.length; i++) pasMax = Math.max(pasMax, Math.abs(ech[i].k - ech[i - 1].k));
+    // balayage de la caméra : l'écart entre le premier et le dernier angle
+    let balayage = 0;
+    if (angles.length > 2) { let d = angles[angles.length - 1] - angles[0]; balayage = +Math.abs(Math.atan2(Math.sin(d), Math.cos(d))).toFixed(3); }
+    // après le ralenti, l'échelle est revenue à 1 et un nouveau coup reste refusé (repos)
+    const apresEchelle = G.ralentiEchelle(1 / 60);
+    const apresRepos = G.ralentiCoup(G.P.pos.x, G.P.pos.y, G.P.pos.z + 1, 'poing', 0, 1);
+    R.t = 0; R.prochain = 0;
+    return { normal, arme, pendant, fin: +fin.toFixed(2), mini: +mini.toFixed(3), pasMax: +pasMax.toFixed(4),
+      camImages: cam, balayage, apresEchelle, apresRepos, duree: G.RALENTI_DUREE };
+  });
+  const ok = r.normal === 1 && r.arme === true && r.pendant === false
+    && r.fin > 2.7 && r.fin < 3.2 && r.mini < 0.32 && r.mini > 0.28
+    && r.pasMax < 0.06 && r.camImages > 150 && r.balayage > 0.8
+    && r.apresEchelle === 1 && r.apresRepos === false;
+  return { ok, detail: `« mets des ralentis (3 secondes) au dernier coup vainqueur » : hors ralenti le temps tourne à ${r.normal}× · le coup qui met à terre le ralentit jusqu'à ${r.mini}× et rend la main après ${r.fin} s de TEMPS RÉEL (le décompte se fait sur l'horloge du rendu, pas sur celle du jeu, sinon le ralenti se ralentissait lui-même), avec une entrée et une sortie en fondu (${r.pasMax} d'écart au plus d'une image à l'autre) · la caméra de cinéma a pris la main sur ${r.camImages} images et a BALAYÉ ${r.balayage} rad autour du point d'impact · un deuxième coup pendant le ralenti (${r.pendant}) ou juste après (${r.apresRepos}) ne le relance pas` };
+});

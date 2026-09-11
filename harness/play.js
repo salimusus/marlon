@@ -14071,3 +14071,140 @@ test('le reste de l\'armement a du grain : rengainage, clic a vide, tole, mur et
   const ok = audibles && hierarchie && parLeJeu && ricoche;
   return { ok, detail: `tout le reste de l'armement etait fait de bips : degainer et rengainer, c'etait la meme onde triangle a 900 et 500 Hz ; une balle dans une carrosserie, une bouffee de 50 ms ; une balle dans un mur ou dans le sol, RIEN DU TOUT ; un chargeur vide, RIEN NON PLUS — on appuyait dans le silence ; et le ricochet n'existait pas · mesure au bout de la chaine (rumeur de fond ${r.lit.pic}) : degainer ${S.degaine.pic} (cuir qui frotte + clic qui MONTE), rengainer ${S.rengaine.pic} (le choc au fond de l'etui, qui DESCEND), clic a vide ${S.vide.pic} (percuteur sec, ${S.vide.duree} bloc de 23 ms), tole ${S.tole.pic} (« tonk » creux, cloche Q 11 a 480 Hz), mur ${S.mur.pic} (sec et mat, poussiere de beton), ricochet ${S.ricochet.pic} (sifflement qui monte de 1150 a 3300 Hz, ${S.ricochet.duree} blocs) · par la vraie voie de jeu : chargeur vide + rechargement en cours, fire() emet « ${r.clicVide.nom} » et ${r.clicVide.balles} balle ; drawWeapon(true) emet « ${r.degaine.nom} », drawWeapon(false) « ${r.rengaine.nom} » · une balle qui tape repart en ricochet une fois sur deux (${r.avecRicochet} sons quand ca ricoche, ${r.sansRicochet} sinon)` };
 });
+
+// ================= LE CONCESSIONNAIRE « BLOCS MOTORS » (poste concessionnaire) =================
+test('le concessionnaire existe : bâtiment vitré jaune sur une vraie rue, show-room accessible à pied, une voiture par gamme sur son podium', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -140, y: 1, z: 124, hour: 12 });
+    const c = G.city;
+    const bat = (c.batiments || []).find(b => b.nom === 'Blocs Motors');
+    const zone = (c.zones || []).find(z => z.name === 'Concessionnaire');
+    const desserte = ((c.plan || {}).dessertes || []).find(d => d.n === 'Concessionnaire');
+    // ---- 1. le bâtiment est bien vitré : on compte les panneaux de verre du show-room ----
+    let verres = 0, jaunes = 0, hauteur = 0;
+    for (const o of G.solids) {
+      if (Math.abs(o.x - bat.x) > bat.w / 2 + 1 || Math.abs(o.z - bat.z) > bat.d / 2 + 1) continue;
+      if (o.glass) verres++;
+      const col = o.mesh && o.mesh.material && o.mesh.material.color;
+      if (col && col.r > 0.75 && col.g > 0.55 && col.b < 0.45) jaunes++;   // jaune : beaucoup de rouge et de vert, peu de bleu
+      hauteur = Math.max(hauteur, o.y + o.h / 2);
+    }
+    // ---- 2. ON Y ENTRE À PIED. On marche depuis le trottoir jusqu'au comptoir, image par image ----
+    const desk = c.concesDesk;
+    G.P.pos.set(desk.x, 0.4, desk.z + 26); G.P.vel.set(0, 0, 0); G.P.facing = Math.PI;
+    let dmin = 999, pas = 0;
+    for (let i = 0; i < 900; i++) {
+      const dx = desk.x - G.P.pos.x, dz = desk.z - G.P.pos.z, d = Math.hypot(dx, dz);
+      dmin = Math.min(dmin, d);
+      if (d < 2) break;
+      G.P.facing = Math.atan2(dx, dz);
+      G.keys.clear(); G.keys.add('KeyW');
+      G.step(1 / 60, true); pas++;
+    }
+    G.keys.clear();
+    // ---- 3. une voiture par gamme, sur son podium, DANS le bâtiment ----
+    const expo = c.concesExpo || [];
+    const surPodium = expo.filter(v => Math.abs(v.y - 0.54) < 0.01
+      && Math.abs(v.x - bat.x) < bat.w / 2 && Math.abs(v.z - bat.z) < bat.d / 2).length;
+    // une voiture d'exposition n'est PAS à prendre : elle n'est pas dans city.cars
+    const dansCityCars = expo.filter(v => c.cars.includes(v)).length;
+    const gammesExpo = expo.map(v => v.gamme).join(',');
+    // ---- 4. le comptoir ouvre bien la fenêtre de vente ----
+    G.P.pos.set(desk.x, 0.4, desk.z); G.drive.car = null;
+    G.cityStep(1 / 60);
+    const pres = !!c.concesNear;
+    G.openConces(); const fenetre = G.uiOpen;
+    const lignes = document.querySelectorAll('#concesCorps [data-g]').length;
+    G.closeUI();
+    return { bat, zone: !!zone, desserte, verres, jaunes, hauteur: +hauteur.toFixed(1),
+      dmin: +dmin.toFixed(2), pas, expo: expo.length, surPodium, dansCityCars, gammesExpo,
+      pres, fenetre, lignes, gammes: G.GAMMES.length,
+      vendeur: (c.mannequins || []).some(m => Math.abs(m.group.position.x - desk.x) < 4 && Math.abs(m.group.position.z - desk.z) < 5) };
+  });
+  const ok = !!r.bat && r.bat.w > 40 && r.bat.d > 20 && r.zone && r.desserte && r.desserte.loin <= 8
+    && r.verres >= 4 && r.jaunes >= 6 && r.hauteur >= 8
+    && r.dmin < 2 && r.expo === r.gammes && r.surPodium === r.gammes && r.dansCityCars === 0
+    && r.pres && r.fenetre === 'conces' && r.lignes === r.gammes && r.vendeur;
+  return { ok, detail: `bâtiment « Blocs Motors » ${r.bat.w}×${r.bat.d} m, ${r.hauteur} m de haut, ${r.verres} panneaux de verre et ${r.jaunes} pièces jaunes · desserte routière à ${r.desserte.loin} m en (${r.desserte.x}, ${r.desserte.z}) · on marche de la rue au comptoir en ${r.pas} images et on arrive à ${r.dmin} m · ${r.surPodium}/${r.expo} voitures d'exposition sur leur podium dans le show-room (${r.gammesExpo}), ${r.dansCityCars} conduisible sans payer · comptoir détecté=${r.pres}, fenêtre="${r.fenetre}" avec ${r.lignes}/${r.gammes} gammes, vendeur présent=${r.vendeur}` };
+});
+
+test('chaque gamme du concessionnaire est achetable : le prix est débité, la voiture est à soi et roule selon sa gamme', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -140, y: 1, z: 100, hour: 12 });
+    const c = G.city, lignes = [];
+    // les prix montent bien, et chaque marche se PAIE en caractéristiques
+    const prix = G.GAMMES.map(g => g.p);
+    const monte = prix.every((v, i) => i === 0 || v > prix[i - 1]);
+    for (const g of G.GAMMES) {
+      if (G.drive.car) G.exitCar();
+      // 1. pas assez d'argent : on ne peut pas acheter
+      G.wallet = g.p - 1; G.saveWallet();
+      const refuse = !G.acheterAuConces(g.k);
+      // 2. avec l'argent, on achète
+      G.wallet = g.p + 7; G.saveWallet();
+      const avant = G.wallet, nb = c.cars.length;
+      const pris = G.acheterAuConces(g.k);
+      const v = G.maVoiture();
+      const st = G.etoilesGamme(g);
+      lignes.push({ k: g.k, p: g.p, refuse, pris, reste: G.wallet, debit: avant - G.wallet,
+        neuves: c.cars.length - nb, mienne: !!(v && v.mienne), gamme: v && v.gamme,
+        pointe: v ? Math.round(v.spec.max * 3.6) : 0, turn: v ? +v.spec.turn.toFixed(2) : 0,
+        solidite: v ? v.solidite : 0, places: v ? v.places : 0,
+        volant: G.drive.car === v, etoiles: [st.vitesse, st.tenue, st.robu].join('') });
+    }
+    // la solidité compte VRAIMENT : le même choc n'abîme pas pareil une citadine et un 4×4
+    const choc = {};
+    for (const k of ['citadine', 'quatre', 'super']) {
+      const g = G.gammeDe(k), t = G.voitureDeGamme(g, -150, 100, 0);
+      G.vehicleDamage(t, 20); choc[k] = Math.round(t.dmg);
+      G.worldGroup.remove(t.g);
+    }
+    if (G.drive.car) G.exitCar();
+    G.wallet = 25; G.saveWallet();
+    return { lignes, monte, prix, choc };
+  });
+  const l = r.lignes;
+  const ok = r.monte && l.length === 8
+    && l.every(x => x.refuse && x.pris && x.debit === x.p && x.neuves === 1 && x.mienne && x.volant && x.gamme === x.k)
+    // les caractéristiques suivent le prix : la plus chère des sportives est la plus rapide
+    && l[0].pointe < l[1].pointe && l[5].pointe < l[6].pointe && l[0].pointe < l[7].pointe
+    && r.choc.quatre < r.choc.citadine && r.choc.citadine < r.choc.super;
+  return { ok, detail: `les ${l.length} gammes s'achètent au comptoir : ${l.map(x => `${x.k} ${x.p}🪙→reste ${x.reste} (${x.pointe} km/h, tenue ${x.turn}, ★${x.etoiles}, ${x.places} pl.)`).join(' · ')} · prix strictement croissants=${r.monte} · un choc de 20 fait ${r.choc.quatre} % de dégâts au 4×4, ${r.choc.citadine} % à la citadine et ${r.choc.super} % à la super-sportive` };
+});
+
+test('la voiture achetée au concessionnaire se conduit, se sauvegarde et se retrouve au garage de la villa', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -140, y: 1, z: 100, hour: 12 });
+    G.wallet = 1500; G.saveWallet();
+    const achat = G.acheterAuConces('sportive');
+    const v = G.maVoiture();
+    const dep = { x: v.x, z: v.z };
+    // ON REPART AU VOLANT : on accélère une seconde et la voiture doit avancer pour de bon
+    let dist = 0;
+    if (G.drive.car === v) {
+      for (let i = 0; i < 120; i++) { G.keys.clear(); G.keys.add('KeyW'); G.step(1 / 60, true); }
+      G.keys.clear();
+      dist = Math.hypot(v.x - dep.x, v.z - dep.z);
+    }
+    // on la range dans SON garage, on sauvegarde, on quitte la ville et on revient
+    const gar = G.city.monGarage;
+    v.x = gar.x; v.z = gar.z; v.g.position.set(v.x, v.y, v.z); G.vehicleSolid(v);
+    G.sauveTout();
+    const ecrit = G.store.json('superobby.mavoiture', null);
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12, garderSauvegarde: true });
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderSauvegarde: true });
+    const apres = G.maVoiture();
+    const ref = G.gammeDe('sportive');
+    const res = { achat, conduite: dist > 4, dist: +dist.toFixed(1), ecrit,
+      retrouvee: !!apres, gamme: apres && apres.gamme, mienne: !!(apres && apres.mienne),
+      dansLeGarage: apres ? G.dansMonGarage(apres) : false,
+      pointe: apres ? Math.round(apres.spec.max * 3.6) : 0, attendu: Math.round(ref.vmax * 3.6),
+      solidite: apres ? apres.solidite : 0, places: apres ? apres.places : 0 };
+    G.wallet = 25; G.saveWallet(); G.store.set('superobby.mavoiture', '');
+    return res;
+  });
+  const ok = r.achat && r.conduite && r.ecrit && r.ecrit.gamme === 'sportive'
+    && r.retrouvee && r.gamme === 'sportive' && r.mienne && r.dansLeGarage
+    && r.pointe === r.attendu && r.places === 2;
+  return { ok, detail: `sportive « Flèche » achetée, on repart au volant et on parcourt ${r.dist} m en 2 s · la sauvegarde écrit la gamme (${r.ecrit && r.ecrit.gamme}) · après un aller-retour hors de la ville elle est de nouveau là, dans le garage de la villa=${r.dansLeGarage}, gamme ${r.gamme}, ${r.pointe} km/h (attendu ${r.attendu}), solidité ${r.solidite}, ${r.places} places` };
+});

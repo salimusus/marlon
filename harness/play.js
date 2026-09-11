@@ -11023,6 +11023,11 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
     const avantQ = G.settings.quality;
     G.settings.quality = 'ultra'; G.applyQuality();
+    // POINT DE VUE FIXE. Compter des appels de dessin sans fixer la camera n'a aucun sens :
+    // selon l'orientation laissee par le test precedent, la meme place demandait 6 100 appels
+    // (vue sur le parc) ou 14 400 (vue en enfilade dans un boulevard). On regarde toujours le
+    // meme bout de ville, et le chiffre devient reproductible a 2 % pres.
+    G.camera.position.set(0, 7, 58); G.camera.lookAt(0, 2, 34); G.camera.updateMatrixWorld(true);
     // three.js remet ses compteurs a zero au DEBUT de chaque render() : avec la passe de
     // nettete, le dernier appel est le carre plein ecran et on lirait « 1 appel ». On coupe
     // la remise a zero automatique pour additionner toutes les passes d'UNE image.
@@ -11063,7 +11068,7 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
   // TOUT EST EN PROPORTION, sauf le plafond final. Un seuil en nombre d'appels ne veut rien
   // dire : il dépend de la taille de la ville, qui grossit à chaque round. Ce qui doit rester
   // vrai, c'est la PART du décor qu'on n'a plus à dessiner.
-  const ok = pc > 0.15 && r.avec.appels < 8000 && r.avec.tris < 1000000 && r.fautes === 0
+  const ok = pc > 0.20 && r.avec.appels < 9000 && r.avec.tris < 600000 && r.fautes === 0
     && r.repris.appels === r.avec.appels
     && r.aretes > r.nA * 0.5 && r.coupes > r.nD * 0.5 && r.ombres > r.nO * 0.4;
   return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };

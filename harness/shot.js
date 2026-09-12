@@ -624,6 +624,22 @@ window.__SHOT = {
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
         amenerVoitureAtelier(); } catch (e) {}
     }
+    // AU VOLANT, POUR LA CAPTURE. On monte dans le vehicule le plus proche et la pose assise
+    // est figee des la premiere image. L'option muscle (0 a 100) pose l'entrainement voulu :
+    // c'est le gabarit sur lequel le deltoide sortait de 13 cm de la carrosserie.
+    if (v.auVolant) {
+      try {
+        if (v.muscle != null && typeof stats !== 'undefined') { stats.m = v.muscle; stats.f = v.gras || 0; applyMyLook(); }
+        var mieux = null, dmin2 = 1e9;
+        for (var kv2 = 0; kv2 < city.cars.length; kv2++) {
+          var cv2 = city.cars[kv2];
+          if (!cv2 || cv2.heli || cv2.rider || cv2.busy) continue;
+          var dd2 = Math.hypot(cv2.x - P.pos.x, cv2.z - P.pos.z);
+          if (dd2 < dmin2) { dmin2 = dd2; mieux = cv2; }
+        }
+        if (mieux) { enterCar(mieux); poseJoueurAuVolant(1); }
+      } catch (e40) {}
+    }
     if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
       try {
         const b = bots[0];

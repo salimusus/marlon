@@ -447,7 +447,13 @@ window.__SHOT = {
         // casquette ou un sac laisse le personnage habille comme ca pour les 200 tests
         // suivants — et la morphologie change les mesures de geometrie du poste Personnages.
         if (typeof myCfg !== 'undefined' && __SHOT.look0) {
-          for (const kl of Object.keys(__SHOT.look0)) if (kl in myCfg) myCfg[kl] = __SHOT.look0[kl];
+          // COPIE, PAS REFERENCE : myCfg.tatouages est un TABLEAU. En le rendant tel quel, un
+          // test qui y ajoute un tatouage modifiait look0 lui-meme, et la « tenue d'origine »
+          // ne revenait plus jamais a l'origine.
+          for (const kl of Object.keys(__SHOT.look0)) if (kl in myCfg) {
+            const vl = __SHOT.look0[kl];
+            myCfg[kl] = Array.isArray(vl) ? vl.slice() : vl;
+          }
         }
         // LA MUSCULATURE. Elle ne vit pas dans myCfg mais dans l'objet stats, et applyMyLook le lit
         // (myLook() renvoie m: stats.m, f: stats.f) : sans cette remise a zero, la salle de

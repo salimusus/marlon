@@ -10851,7 +10851,7 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     && r.bloque.v < 0.01 && r.bloque.dep < 0.05
     && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true
     && r.paye.amende >= 20 && r.paye.amende <= 30 && r.paye.wallet === 500 - r.paye.amende
-    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 2;   // (Joueur, n° 35 : jamais plus de la moitie du porte-monnaie)
   return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · L'AMENDE N'ENVOIE PLUS EN PRISON (elle était de 60 à 100 🪙 et, faute d'argent, la partie s'arrêtait en cellule) : avec 3 🪙 en poche, on paie ce qu'on a et le reste est effacé — payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}, portefeuille ${r.fauche.wallet}` };
 });
 
@@ -13005,7 +13005,7 @@ test('un petit accrochage ne dérange personne : pas de police, pas de dépanneu
     && r.gros.accident && r.gros.bloque && r.gros.police
     && r.riche.etat === 'fini' && r.riche.dep && r.riche.amende >= 20 && r.riche.amende <= 30
     && r.riche.paye === true && r.riche.prison === false && r.riche.jail === false && r.riche.wallet === 500 - r.riche.amende
-    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 1;   // (Joueur, n° 35 : jamais plus de la moitie du porte-monnaie)
   return { ok, detail: `se garer en touchant le pare-chocs du voisin à 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police et une dépanneuse, et coûtait 60 à 100 🪙 — sans le sou, c'était la prison · il y a maintenant un SEUIL DE GRAVITÉ, lu dans la table de dégâts déjà partagée du jeu (${r.seuil.table}) : au-dessous de ${r.seuil.vitesse} m/s d'impact (gravité < ${r.seuil.gravite}) c'est un petit dégât, on repart — ${r.petits.map(q => q.v + ' m/s : ' + (q.accident ? 'ACCIDENT' : 'rien')).join(', ')} · au-dessus, l'accident complet : immobilisation, police (${r.gros.police}), dépanneuse (${r.riche.dep}) et amende de ${r.riche.amende} 🪙 (base ${r.base} 🪙 + 1 par tranche de 4 m/s), soit ${(r.riche.amende / r.repere.boulot).toFixed(1)} petit boulot et ${(100 * r.riche.amende / r.repere.coffre).toFixed(0)} % d'un coffre : portefeuille 500 → ${r.riche.wallet} · et PLUS JAMAIS LA PRISON : avec 2 🪙 en poche on paie 2 🪙, il reste ${r.fauche.reste} 🪙 effacés, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
 });
 
@@ -15374,4 +15374,25 @@ test('la circulation compte huit véhicules, tous sur la chaussée', async p => 
   });
   const ok = r.total >= 8 && r.horsPct <= 3;
   return { ok, detail: `cinq véhicules seulement (la plus proche à 147 m) : ${r.total} maintenant, ${r.horsPct} % du temps hors chaussée sur 40 s` };
+});
+
+test('un choc frontal à 60 km/h contre un camion froisse le capot, secoue la caméra et abîme franchement les deux véhicules', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 30.6, y: 1, z: -66, hour: 12, frais: true });
+    const camion = G.city.cars.find(c => c.kind === 'truck' && Math.hypot(c.x - 30.6, c.z + 85) < 15);
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart);
+    // la voiture du joueur, cap au nord, le nez a 6 m du camion, lancee a 17 m/s (61 km/h)
+    car.x = camion.x; car.z = camion.z + 12; car.h = Math.PI; car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = car.h; G.vehicleSolid(car);
+    P.pos.set(car.x, car.y + 0.4, car.z); G.enterCar(car);
+    const dmg0 = car.dmg || 0, dmgC0 = camion.dmg || 0, hood0 = car.parts.hood ? car.parts.hood.rotation.x : 0;
+    G.cam.shake = 0; G.cam.kick = 0; G.city.accidents.length = 0;
+    G.drive.speed = 17; let shakeMax = 0, kickMax = 0, vMax = 0;
+    G.keys.add('KeyZ');
+    for (let i = 0; i < 120; i++) { G.step(1 / 60, true); shakeMax = Math.max(shakeMax, G.cam.shake || 0); kickMax = Math.max(kickMax, G.cam.kick || 0); vMax = Math.max(vMax, Math.abs(G.drive.speed)); }
+    G.keys.delete('KeyZ');
+    return { vMax: +vMax.toFixed(1), dmg: +((car.dmg || 0) - dmg0).toFixed(1), dmgCamion: +((camion.dmg || 0) - dmgC0).toFixed(1), stade: car.deg || 0, capot: car.parts.hood ? +(car.parts.hood.rotation.x - hood0).toFixed(2) : null, shake: +shakeMax.toFixed(2), kick: +kickMax.toFixed(3), accidents: G.city.accidents.length, dist: +Math.hypot(car.x - camion.x, car.z - camion.z).toFixed(1) };
+  });
+  const ok = r.vMax >= 12 && r.dmg >= 10 && r.dmgCamion >= 5 && r.stade >= 2 && r.capot !== null && r.capot < -0.2 && r.shake >= 0.15 && r.kick > 0 && r.accidents >= 1;
+  return { ok, detail: `avant : 3 % de dégâts, cam.kick 0, aucune marque · choc à ${r.vMax} m/s : dégâts +${r.dmg} % (camion +${r.dmgCamion}), stade ${r.stade}, capot ${r.capot} rad, secousse ${r.shake}, kick ${r.kick}, accident déclaré=${r.accidents >= 1}, distance finale ${r.dist} m` };
 });

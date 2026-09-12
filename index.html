@@ -19258,6 +19258,15 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
         vehicleDamage(c, Math.min(5, imp * 0.15)); v.dmg = clamp((v.dmg || 0) + Math.min(6, imp * 0.22), 0, 100); applyDamageVisual(v, Math.sin(c.h) * imp, Math.cos(c.h) * imp);
         // Au-delà de 25 km/h, taper une autre voiture n'est plus un frottement : c'est un
         // ACCIDENT. Les deux s'immobilisent, la police vient, la dépanneuse aussi.
+        // ...ET CA SE VOIT, CA SE SENT. Un choc frontal a 62 km/h contre un camion faisait 3 %
+        // de degats, aucune secousse, aucun capot froisse : seul le frottement (plafonne a 5 %)
+        // etait compte, et les stades visibles (chocVehicule) n'etaient poses que contre un MUR.
+        // Un accident abime franchement les deux vehicules, froisse la tole et secoue la camera.
+        if (imp > 7) {
+          vehicleDamage(c, Math.min(30, imp * 1.1)); v.dmg = clamp((v.dmg || 0) + Math.min(20, imp * 0.8), 0, 100);
+          chocVehicule(c, imp); chocVehicule(v, imp * 0.8);
+          cam.kick = (cam.kick || 0) + 0.08; camSecousse(clamp(imp * 0.02, 0.15, 0.4), 0.45);
+        }
         choc(c, imp, imp > 7 ? v : null);
       } else sfx.tone(120, 0, .06, 'square', .04, 80); }
     drive.speed *= 0.75;

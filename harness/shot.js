@@ -2060,6 +2060,7 @@ window.__G = {
   punch: typeof punch === 'function' ? punch : null,
   // ---- poste REPARATEUR (round 70, BUGS.md du Joueur) : ajoute tes exports SOUS cette ligne ----
   updateAct: typeof updateAct === 'function' ? updateAct : null,
+  resolveVehicleOverlap: typeof resolveVehicleOverlap === 'function' ? resolveVehicleOverlap : null,
   policeTire: typeof policeTire === 'function' ? policeTire : null, ecraseAuSol: typeof ecraseAuSol === 'function' ? ecraseAuSol : null,
   infraction: typeof infraction === 'function' ? infraction : null, get police() { return typeof police !== 'undefined' ? police : null; },
   tunable: typeof tunable === 'function' ? tunable : null, tunePrix: typeof tunePrix === 'function' ? tunePrix : null,

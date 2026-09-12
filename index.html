@@ -95,6 +95,7 @@ body.tv .hp.pf{height:13px}body.tv .pfn{font-size:clamp(13px,1vw,19px)}
 .lbr.me{background:rgba(255,255,255,.14)}
 .lbr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 #lb.closed #lbRows{display:none}
+#lb.sansScore{display:none!important}   /* ville en solo : pas de points, pas de tableau */
 @media (max-width:640px){#top{grid-template-columns:auto 1fr}.tr{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 52px)}#lb{min-width:128px;font-size:12px}.lbr .nm{max-width:82px}.lbr,.lbh{padding:4px 8px}.pill{font-size:12px;padding:6px 7px}#me{display:none}.tc{gap:4px}.ibtn{width:36px;height:36px;font-size:16px}#world .wn{display:none}#respect .rt{display:none}}
 /* LARGEUR MOYENNE (641 a 1180 px : fenetre de PC etroite, navigateur en demi-ecran, une
    television 1024). La colonne du milieu est prise en etau entre les boutons a gauche et le
@@ -13160,6 +13161,7 @@ function loadWorld(i) {
   detailsInit();   // recense les petits maillages et leur retire l'ombre portée quand elle ne se voit pas
   cp = checkpoints[0];
   bots.forEach((b, k) => resetBot(b, rnd(2, 6) + k * 5));
+  if (w.free) { try { placeBotsVille(); } catch (e) { console.error('foule', e); } }
   resetGame();
   $('world').innerHTML = w.free ? `${w.emoji} <span class="wn">${w.name}</span>` : `${w.emoji} <span class="wn">${w.name} · </span><span id="stageTxt">1/8</span>`;
   document.body.classList.toggle('city', !!w.free);
@@ -15975,6 +15977,9 @@ function updateLeaderboard() {
   const others = net.on ? [...net.remotes.values()].map(r => ({ name: r.name, stage: r.st, color: r.color })) : bots.map(b => ({ name: b.name, stage: b.stage, color: b.color }));
   const rows = [{ name: myCfg.name, stage: WORLDS[worldIdx].free ? city.goals + city.tennis + city.shots + city.tags : (won ? 9 : (cp ? cp.idx : 1)), me: true }, ...others.map(o => WORLDS[worldIdx].free && o.color && !net.on ? Object.assign(o, { stage: 0 }) : o)];
   rows.sort((a, b) => b.stage - a.stage || a.name.localeCompare(b.name));
+  // PAS DE CLASSEMENT EN VILLE : douze pseudos a 0 point n'apprennent rien, et en mode TV la
+  // colonne couvrait un quart de l'ecran. Il revient en multijoueur (les joueurs distants y sont).
+  $('lb').classList.toggle('sansScore', !!(WORLDS[worldIdx] && WORLDS[worldIdx].free) && !net.on);
   $('lbRows').innerHTML = rows.map(r => `<div class="lbr${r.me ? ' me' : ''}"><span class="nm" style="color:${r.color || '#fff'}">${estAmi(r.name) ? '⭐ ' : ''}${esc(r.name)}</span><span>${r.stage === 9 ? '🏆' : r.stage}</span></div>`).join('');
 }
 function renderWorlds() {
@@ -16221,6 +16226,30 @@ const bots = BOT_DEFS.map((d, i) => {
   const av = buildAvatar({ name: d.name, jersey: d.jersey, pants: PAL.pants[d.girl ? 4 : (i * 3 + 2) % 6], cap: PAL.cap[d.cap], num: d.num, hair: d.hair, hairColor: d.hairColor, skirt: !!d.skirt, shorts: !!d.shorts, glasses: !!d.glasses, bag: d.bag || 0, jacket: d.jacket || 0, hat: d.hat, m: d.m, f: d.f });
   return { ...d, av, pos: new THREE.Vector3(), vel: new THREE.Vector3(), facing: 0, i: 0, stage: 1, wait: 5, hop: null, riding: false, walking: false, state: 'run', cpPos: null, cpStep: 0, floorY: 0, dance: 0 };
 });
+// LA FOULE DE LA VILLE SE TIENT SUR LES TROTTOIRS. resetBot() range les douze habitants sur la
+// grille du depart d'obby (x -5…5, z 0,5…7) avec 2 a 60 s d'attente : en ville, c'etait douze
+// personnages plantes sur la ligne jaune de la rue autour du point d'apparition, immobiles
+// pendant la premiere minute, deux d'entre eux colles a la camera. On les pose sur les
+// trottoirs a moins de 40 m, chacun sur un pan different, et ils partent dans les 4 s.
+function placeBotsVille() {
+  const sx = 0, sz = 3.5;
+  const pans = (city.trottoirs || []).filter(t => Math.hypot(t.x - sx, t.z - sz) < 40 && Math.min(t.w, t.d) >= 1.6);
+  if (!pans.length) return 0;
+  const gene = (x, z) => solidsAutour(x, z, 1, true).some(o => !o.deco && o.h > 0.5 && o.y - o.h / 2 < 1.5 && Math.abs(x - o.x) < o.w / 2 + 0.45 && Math.abs(z - o.z) < o.d / 2 + 0.45);
+  let n = 0;
+  bots.forEach((b, k) => {
+    const t = pans[(k * 7 + 3) % pans.length];
+    let x = t.x, z = t.z;
+    for (let essai = 0; essai < 8; essai++) {
+      x = t.x + rnd(-t.w / 2 + 0.6, t.w / 2 - 0.6); z = t.z + rnd(-t.d / 2 + 0.6, t.d / 2 - 0.6);
+      if (!gene(x, z)) break;
+    }
+    const y = t.o ? t.o.y + t.o.h / 2 : 0.3;
+    b.pos.set(x, y, z); b.cpPos = b.pos.clone(); b.facing = rnd(0, Math.PI * 2); b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
+    b.wait = rnd(0.5, 4); n++;
+  });
+  return n;
+}
 function resetBot(b, wait) {
   b.state = 'run'; b.i = 0; b.stage = 1; b.hop = null; b.riding = false; b.walking = false; b.wait = wait; b.dance = 0;
   const k = bots.indexOf(b);
@@ -24263,8 +24292,12 @@ function tvManettesMaj() {
   // la pastille du bas de l'écran : depuis le canapé on veut savoir d'un coup d'œil si la
   // manette répond, sans rouvrir le salon
   const b = $('tvBadge');
-  if (b) { b.textContent = n ? `🎮 ${n} manette${n > 1 ? 's' : ''} · code ${tv.code || '----'}` : `📺 Manette : ouvre 📺 et scanne le code`;
-    b.classList.toggle('on', document.body.classList.contains('tv')); }
+  // UNE DUALSENSE BRANCHEE SUFFIT. La pastille invitait en permanence a « scanner le code »
+  // alors qu'une manette PS5 etait deja reconnue : elle le dit, puis s'efface.
+  const ds = !n && !!padActive();
+  if (b) { b.textContent = n ? `🎮 ${n} manette${n > 1 ? 's' : ''} · code ${tv.code || '----'}` : ds ? `🎮 Manette PS5 connectée` : `📺 Manette : ouvre 📺 et scanne le code`;
+    b.classList.toggle('on', document.body.classList.contains('tv'));
+    if (ds) { clearTimeout(tv.badgeT); tv.badgeT = setTimeout(() => { if (!tv.conns.filter(c => c.open).length) b.classList.remove('on'); }, 5000); } }   // (tv.badgeT : pas de `let` a portee de TDZ)
   // démarrage automatique sur la télé : dès qu'un téléphone répond, on rend l'écran au jeu
   if (n > 0 && tvAuto) { tvAuto = false; try { closeUI(); } catch (e) {} msg('🎮 Manette connectée — à toi de jouer !', 2600); sfx.win(); }
 }

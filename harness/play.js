@@ -15396,3 +15396,47 @@ test('un choc frontal à 60 km/h contre un camion froisse le capot, secoue la ca
   const ok = r.vMax >= 12 && r.dmg >= 10 && r.dmgCamion >= 5 && r.stade >= 2 && r.capot !== null && r.capot < -0.2 && r.shake >= 0.15 && r.kick > 0 && r.accidents >= 1;
   return { ok, detail: `avant : 3 % de dégâts, cam.kick 0, aucune marque · choc à ${r.vMax} m/s : dégâts +${r.dmg} % (camion +${r.dmgCamion}), stade ${r.stade}, capot ${r.capot} rad, secousse ${r.shake}, kick ${r.kick}, accident déclaré=${r.accidents >= 1}, distance finale ${r.dist} m` };
 });
+
+test('en ville, la foule du départ se tient sur les trottoirs, pas sur la chaussée, et se met en marche dans les secondes qui suivent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 && Math.abs(z - rt.z) < rt.d / 2);
+    const surTrottoir = (x, z) => G.city.trottoirs.some(t => Math.abs(x - t.x) <= t.w / 2 && Math.abs(z - t.z) <= t.d / 2);
+    const depart = G.bots.map(b => ({ n: b.name, x: +b.pos.x.toFixed(1), z: +b.pos.z.toFixed(1), route: surRoute(b.pos.x, b.pos.z), trottoir: surTrottoir(b.pos.x, b.pos.z), d: +Math.hypot(b.pos.x, b.pos.z - 3.5).toFixed(1), attente: +b.wait.toFixed(1) }));
+    const p0 = G.bots.map(b => b.pos.clone());
+    for (let i = 0; i < 720; i++) { G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); }
+    const bouges = G.bots.filter((b, i) => b.pos.distanceTo(p0[i]) > 1).length;
+    return { depart, surRoute: depart.filter(b => b.route).length, surTrottoir: depart.filter(b => b.trottoir).length, loin: depart.filter(b => b.d > 45).length, attenteMax: Math.max(...depart.map(b => b.attente)), bouges };
+  });
+  const ok = r.surRoute === 0 && r.surTrottoir >= 10 && r.loin === 0 && r.attenteMax <= 4.5 && r.bouges >= 6;
+  return { ok, detail: `douze habitants étaient rangés sur la grille de l'obby (ligne jaune de la rue), 2 à 60 s d'attente · maintenant ${r.surTrottoir}/12 sur un trottoir, ${r.surRoute} sur la chaussée, attente max ${r.attenteMax} s, ${r.bouges}/12 ont bougé de plus d'un mètre en 12 s` };
+});
+
+test('le tableau « Joueurs / Pts » ne s\'affiche pas en ville (solo) mais reste dans un parcours', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, vu = () => getComputedStyle(document.getElementById('lb')).display !== 'none';
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 }); G.updateLeaderboard(); const ville = vu();
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12 }); G.updateLeaderboard(); const obby = vu();
+    return { ville, obby };
+  });
+  const ok = !r.ville && r.obby;
+  return { ok, detail: `douze pseudos à 0 point couvraient un quart de l'écran TV · en ville : affiché=${r.ville} · dans un parcours : affiché=${r.obby}` };
+});
+
+test('en mode TV avec une DualSense branchée, la pastille ne réclame plus de scanner le code', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, b = document.getElementById('tvBadge');
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; const res = {};
+    try {
+      G.modeTV(true);
+      navigator.getGamepads = () => []; G.tvManettesMaj(); res.sans = b.textContent;
+      navigator.getGamepads = () => [ds]; G.tvManettesMaj(); res.avec = b.textContent; res.avecVisible = getComputedStyle(b).display !== 'none';
+    } finally { navigator.getGamepads = vrai; G.modeTV(false); G.closeUI(); }
+    return res;
+  });
+  const ok = /scanne/.test(r.sans) && !/scanne/.test(r.avec) && /PS5/.test(r.avec);
+  return { ok, detail: `sans manette : « ${r.sans} » · DualSense branchée : « ${r.avec} » (visible=${r.avecVisible}, elle s'efface au bout de 5 s)` };
+});

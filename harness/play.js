@@ -15271,3 +15271,29 @@ test('les voitures du parking du centre regardent la rue et partent au premier R
   const ok = r.n === 4 && r.res.every(q => q.genes === 0 && q.parcouru > 3 && q.versLaRue && q.degats < 1 && q.y < 0.5);
   return { ok, detail: `elles étaient garées cap au sud, le nez sur les bancs et la terrasse du snack (posés à z = 13,5, DANS le parking) : R2 = 2 m/s et 10 % de dégâts · ` + r.res.map(q => `(${q.x}, ${q.z}) cap ${q.cap} : ${q.genes} obstacle, ${q.parcouru} m vers la rue=${q.versLaRue}, dégâts +${q.degats}, y ${q.y}`).join(' · ') };
 });
+
+test('écraser un passant : l\'ambulance vient pour le blessé, et la police arrête sans tirer (elle ne tire que pour un crime grave)', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, police = G.police;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.clearWanted('test'); police.crimeLevel = 0; police.riposte = 0; police.alarmT = 0;
+    const hud = () => (document.getElementById('wanted').textContent || '');
+    // trois passants ecrases (delit moyen, sans pitie : pas d'avertissement) : trois etoiles, mais PAS de coups de feu
+    for (const n of ['Tom', 'Lea', 'Zoe']) G.infraction('écraser ' + n, 1, 2, true);
+    const accident = { wanted: police.wanted, crime: police.crimeLevel, tire: G.policeTire(), hud: hud() };
+    // un crime grave (KO, arme) : la, oui
+    G.infraction('KO sur Tom', 1, 3, true);
+    const grave = { crime: police.crimeLevel, tire: G.policeTire(), hud: hud() };
+    G.clearWanted('test'); police.crimeLevel = 0;
+    // un passant renverse a 45 km/h (12 m/s) : il reste a terre et l'ambulance part
+    const b = G.bots.find(x => x.av.group.visible && !x.ko);
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    car.x = b.pos.x; car.z = b.pos.z; car.h = 0; car.g.position.set(car.x, car.y, car.z);
+    for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+    const touches = G.ecraseAuSol(car, { speed: 12 });
+    const amb = G.city.ambulances.find(a => a.victime === b);
+    return { accident, grave, touches, hp: b.hp, aTerre: b.ko > G.simTime + 20, ambulance: amb ? amb.etat : null };
+  });
+  const ok = r.accident.wanted === 3 && !r.accident.tire && !/tirent/.test(r.accident.hud) && r.grave.tire && r.touches >= 1 && r.hp > 0 && r.aTerre && r.ambulance === 'route';
+  return { ok, detail: `la police tirait dès deux étoiles (deux passants écrasés = ils tirent 40 s plus tard) et l'ambulance ne partait qu'à ❤️ 0 · accident ★${r.accident.wanted} : tire=${r.accident.tire}, « ${r.accident.hud.slice(0, 40)} » · crime grave : tire=${r.grave.tire} · passant renversé à 12 m/s : ❤️ ${r.hp}, reste à terre=${r.aTerre}, ambulance=${r.ambulance}` };
+});

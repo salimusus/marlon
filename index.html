@@ -5852,8 +5852,16 @@ function infraction(what, level, sev = 1, sansPitie) {   // sev : 1 petit délit
     : `🚔 Infraction : ${what} ! Niveau ${'★'.repeat(police.wanted)} — ils sont déjà à tes trousses !`, 2400);
   chat(null, `🚔 La police recherche ${myCfg.name} (${what})`);
   $('wanted').textContent = reste ? `🚔 Recherché ${'★'.repeat(police.wanted)} · la police arrive dans ${reste} s — sauve-toi !`
-    : `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`;
+    : `🚔 Recherché ${'★'.repeat(police.wanted)}${policeTire() ? ' · ils tirent !' : ''} · cache-toi dans une planque`;
   $('wanted').classList.add('on'); siren.start();
+}
+// LA POLICE NE TIRE QUE POUR UN CRIME GRAVE. Elle ouvrait le feu des deux etoiles : un enfant
+// qui ecrasait deux passants en sortant du parking (deux delits « moyens ») se faisait tirer
+// dessus quarante secondes plus tard. Elle tire si le crime est grave (KO, arme, braquage :
+// crimeLevel 3), si on lui a tire dessus (riposte), pendant un braquage (alarme) ou face a
+// l'armee ; sinon elle arrete, sans tirer, quel que soit le nombre d'etoiles.
+function policeTire() {
+  return (police.crimeLevel || 0) >= 3 || (typeof armee !== 'undefined' && armee.on) || simTime < (police.riposte || 0) || (police.alarmT || 0) > simTime;
 }
 function clearWanted(reason) {
   police.usure = 0;   // ils repartent frais pour la prochaine fois
@@ -12260,7 +12268,7 @@ function agentsTick(dt) {
     if (voit && simTime > (a.sayT || 0)) { a.sayT = simTime + 7; bubble(a.av, pickOne(a.mil ? ['cible en vue !', 'feu à volonté !', 'ne le laissez pas filer'] : ['police, ne bouge plus !', 'les mains en l\'air !', 'il est là !'])); }
     // l'armée tire à vue ; la police riposte si on lui tire dessus, si l'alerte est maximale
     // ou pendant un braquage
-    const tire = a.mil || armee.on || simTime < (police.riposte || 0) || police.wanted >= 2 || police.alarmT > simTime;
+    const tire = a.mil || policeTire();   // (voir policeTire : plus de coups de feu pour un accident)
     // L'ARME SORT AVANT LE COUP DE FEU (round 70). Elle reste en main tant qu'on voit le
     // fuyard, et cinq secondes de plus ; sinon elle retourne dans l'etui. La pose de tir est
     // appliquee ICI, apres animateRig, qui vient justement de rabaisser les bras.
@@ -12354,7 +12362,7 @@ function majWanted() {
   const el = $('wanted'); if (!el || police.wanted <= 0) return;
   if (police.reactT > simTime) return;   // le compte à rebours d'intervention a la priorité
   const et = '★'.repeat(police.wanted);
-  if (simTime - (police.vuT || -999) < 1.2 || police.sait) el.textContent = `🚔 Recherché ${et}${police.wanted >= 2 ? ' · ils tirent !' : ''} · ils te voient — sauve-toi !`;
+  if (simTime - (police.vuT || -999) < 1.2 || police.sait) el.textContent = `🚔 Recherché ${et}${policeTire() ? ' · ils tirent !' : ''} · ils te voient — sauve-toi !`;
   else if (police.perdu) el.textContent = `🙈 Ils t'ont perdu ${et} · ne te montre pas`;
   else el.textContent = `🔎 On te cherche… ${et} · reste hors de vue ${Math.max(0, Math.ceil(PERTE_DELAI(police.wanted) - police.hideT))} s`;
 }
@@ -12375,7 +12383,7 @@ function policeTick(dt) {
     if (simTime > police.reactT) {
       police.reactT = 0;
       police.cars.forEach(pc => { pc.active = true; pc.goHome = false; });
-      $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${police.wanted >= 2 ? ' · ils tirent !' : ''} · cache-toi dans une planque`;
+      $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)}${policeTire() ? ' · ils tirent !' : ''} · cache-toi dans une planque`;
       if (police.wanted > 0) msg('🚔 Les voitures de police s\'élancent !', 2000);
     } else if (police.wanted > 0) {
       $('wanted').textContent = `🚔 Recherché ${'★'.repeat(police.wanted)} · la police arrive dans ${Math.ceil(police.reactT - simTime)} s — sauve-toi !`;
@@ -12600,7 +12608,7 @@ function policeTick(dt) {
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
     const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
-    if ((braquage || armee.on || police.wanted >= 2 || simTime < (police.riposte || 0)) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
+    if ((braquage || policeTire()) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
       const d = Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z);
       const portee = armee.on ? 40 : braquage ? 32 : 10 + police.wanted * 4 + tenace * 2;
       if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.8, 2.2 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
@@ -20230,7 +20238,11 @@ function ecraseAuSol(c, V) {
     botSay(b, ['aïïïe !!', 'au secours !', 'tu m\'as écrasé !', 'chauffard !!']);
     boom(c.x, c.z, v * 0.6);
     if (drive.car === c) { infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
-    if (b.hp <= 0) ambulanceAppel(b.pos.x, b.pos.z, b);
+    // L'AMBULANCE VIENT AUSSI POUR UN BLESSE LOURD. Elle n'etait appelee qu'a zero point de
+    // vie : un passant renverse a 50 km/h (❤️ 56) se relevait au bout de 4,5 s en disant
+    // « plus jamais ca », et aucun secours ne partait. Au-dessus de 8 m/s (30 km/h), on
+    // appelle, et le blesse reste a terre jusqu'a l'arrivee du brancard.
+    if (b.hp <= 0 || v > 8) { const amb = ambulanceAppel(b.pos.x, b.pos.z, b); if (amb && b.hp > 0) b.ko = simTime + 40; }
   }
   return n;
 }
@@ -22153,7 +22165,7 @@ function shotsTick(dt) {
       impact(tg.m.position.x, tg.y, tg.z, { x: dx, y: dy, z: dz }, 'metal', 1.2); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
       const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); impact(r.cur.x, r.cur.y + 1, r.cur.z, { x: dx, y: dy, z: dz }, 'balle', 1); updateAct();
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 2); }
+      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte
     } else if (quoi === 'bot') {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
@@ -22164,7 +22176,7 @@ function shotsTick(dt) {
         // trois secondes — mais SEULEMENT si c'est le joueur qui a tiré (`s.mine`) : se faire
         // descendre par la police n'est pas un coup vainqueur.
         if (s.mine) { try { ralentiCoup(b.pos.x, b.pos.y, b.pos.z, 'pistolet', Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 1); } catch (e) {} }
-      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 2); } }
+      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 3); } }
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;

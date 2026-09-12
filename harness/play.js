@@ -15006,3 +15006,43 @@ test('le policier sort son arme de service avant de tirer, et la balle part du c
   const ok = bon(pl) && bon(so);
   return { ok, detail: `les agents tiraient LES MAINS VIDES : ils n'avaient aucune arme, et le bras qu'agentTire levait était rabaissé par animateRig à l'image suivante · chaque agent porte maintenant une arme de service — PISTOLET pour la police, FUSIL pour l'armée — dans un étui visible sur l'uniforme, qu'il DÉGAINE dès qu'il voit le fuyard (policier : arme au poing à ${pl.enMain.dansLePoing} m du poing, à ${pl.enMain.hauteur} m de haut, bras pointé à ${pl.enMain.bras} rad, ${pl.enMain.tirs} tir ; soldat : ${so.enMain.dansLePoing} m, ${so.enMain.hauteur} m, ${so.enMain.bras} rad, ${so.enMain.tirs} tir) et qu'il RANGE cinq secondes après avoir perdu sa cible de vue (en main : ${pl.rangee.enMain}) · et la balle ne sort plus du plexus : elle part de la BOUCHE DU CANON (${pl.balle.auCanon} m du canon, ${pl.balle.duPlexus} m de l'ancien point de départ) et file droit sur le joueur (${pl.balle.versLeJoueur})` };
 });
+
+test('une plateforme mobile reste dans la grille des solides pendant toute sa course', async p => {
+  // LE SOL DISPARAISSAIT SOUS LES PIEDS DU JOUEUR. La grille spatiale range les solides dans
+  // des cases de 12 m et ne se rebâtit qu'une fois par seconde : une plateforme va-et-vient,
+  // qui file jusqu'à 5 m/s, restait donc enregistrée dans la case qu'elle venait de quitter.
+  // Passé la ligne de case, la grille répondait « il n'y a rien ici » et le joueur posé
+  // dessus tombait dans le vide sans avoir touché une seule commande — mesuré sur la
+  // plateforme de glace du monde 2 (course de 8 m, qui traverse pile la ligne x = 0) :
+  // chute à la 107e image, mort. On vérifie ici l'invariant, monde par monde et image par
+  // image : la grille doit TOUJOURS rendre la plateforme là où elle est à cet instant.
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G, P = G.P;
+    const mondes = [];
+    for (const w of [0, 1, 2, 3]) {
+      __SHOT.go({ world: w, x: 0, y: 1, z: 3, frais: true });
+      await dodo(250);
+      // les blocs de LAVE sont des pièges (`kills`), pas des solides : la grille ne les
+      // range pas et n'a pas à les rendre. On ne regarde que celles qui portent le joueur.
+      const ms = G.movers.filter(m => G.solids.includes(m));
+      let absentes = 0, pires = 0;
+      // 480 images = 8 s : plus d'une période complète pour chacune, et huit rebâtissages
+      // de la grille (elle se périme au bout d'une seconde)
+      for (let i = 0; i < 480; i++) {
+        G.step(1 / 60, true);
+        for (const m of ms) {
+          if (!G.solidsAutour(m.x, m.z, 2, true).includes(m)) absentes++;
+          // et vue depuis le BORD de la plateforme, là où se tiennent les pieds du joueur
+          if (!G.solidsAutour(m.x + m.w / 2 - 0.1, m.z, 2, true).includes(m)) pires++;
+        }
+      }
+      mondes.push({ monde: w, plateformes: ms.length, images: 480, absentes, pires,
+        course: +Math.max(...ms.map(m => 2 * Math.hypot(m.ax || 0, m.ay || 0, m.az || 0)), 0).toFixed(1) });
+    }
+    return { mondes, ptr: P.pos.y };
+  });
+  const total = r.mondes.reduce((a, m) => a + m.absentes + m.pires, 0);
+  const ok = r.mondes.length === 4 && r.mondes.every(m => m.plateformes > 0) && total === 0;
+  return { ok, detail: `la grille spatiale rangeait les plateformes va-et-vient dans une case FIXE, périmée jusqu'à une seconde : elles en sortaient et le sol s'évanouissait sous les pieds · ${total} image(s) où la grille ne rend pas la plateforme là où elle est — ${r.mondes.map(m => `monde ${m.monde} : ${m.plateformes} plateforme(s), course ${m.course} m, ${m.absentes} absente(s) au centre et ${m.pires} au bord sur ${m.images} images`).join(' · ')}` };
+});

@@ -15297,3 +15297,81 @@ test('écraser un passant : l\'ambulance vient pour le blessé, et la police arr
   const ok = r.accident.wanted === 3 && !r.accident.tire && !/tirent/.test(r.accident.hud) && r.grave.tire && r.touches >= 1 && r.hp > 0 && r.aTerre && r.ambulance === 'route';
   return { ok, detail: `la police tirait dès deux étoiles (deux passants écrasés = ils tirent 40 s plus tard) et l'ambulance ne partait qu'à ❤️ 0 · accident ★${r.accident.wanted} : tire=${r.accident.tire}, « ${r.accident.hud.slice(0, 40)} » · crime grave : tire=${r.grave.tire} · passant renversé à 12 m/s : ❤️ ${r.hp}, reste à terre=${r.aTerre}, ambulance=${r.ambulance}` };
 });
+
+test('armes à la manette : ✕ sort l\'arme, L2 verrouille SANS la rengainer, R2 tire', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); if (P.drawn) G.drawWeapon(false); P.ammo = 8;
+    // un habitant devant le joueur (au nord, la camera derriere)
+    const b = G.bots.find(x => x.av.group.visible); b.pos.set(0, 0, -4); b.av.group.position.copy(b.pos); b.wait = 99; b.ko = 0;
+    P.facing = Math.PI; G.cam.yaw = 0; G.cam.freeUntil = 0;
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = (i, v = 1) => { ds.buttons[i] = { pressed: true, value: v }; G.pollGamepad(0.05); G.step(1 / 60, true); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); G.step(1 / 60, true); };
+    const lire = () => (document.getElementById('msg').textContent || '').trim();
+    const res = {};
+    try {
+      tap(0); res.apresX = { drawn: !!P.drawn, msg: lire() };
+      tap(6); res.apresL2 = { drawn: !!P.drawn, lock: !!P.lock, cible: P.lock && P.lock.name, msg: lire() };
+      const ammo0 = P.ammo; P.fireCd = 0;
+      tap(7); res.apresR2 = { drawn: !!P.drawn, tirs: ammo0 - P.ammo };
+      tap(0); res.apresX2 = { drawn: !!P.drawn };
+    } finally { navigator.getGamepads = vrai; }
+    return res;
+  });
+  const ok = r.apresX.drawn && r.apresL2.drawn && !/rangée/.test(r.apresL2.msg) && r.apresL2.lock && r.apresR2.tirs >= 1 && !r.apresX2.drawn;
+  return { ok, detail: `L2 basculait l'arme comme ✕ : « ✕ puis L2 » = « 🤚 Arme rangée dans l'étui » et R2 ne tirait plus · ✕ → sortie=${r.apresX.drawn} · L2 → sortie=${r.apresL2.drawn}, cible verrouillée=${r.apresL2.lock} (${r.apresL2.cible}), message « ${r.apresL2.msg} » · R2 → ${r.apresR2.tirs} tir · ✕ → rangée=${!r.apresX2.drawn}` };
+});
+
+test('à mains nues, l\'habitant frappé tient tête (ou revient après trois secondes de fuite) : KO en une dizaine de coups', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av.group.visible); b.hp = 100; b.ko = 0; b.fight = null; b.garde = false;
+    const vrai = Math.random; Math.random = () => 0.9;   // le tirage tombe sur « fuite » : le cas qui rendait le combat impossible
+    const coups = []; let ko = false;
+    try {
+      for (let i = 0; i < 14 && !ko; i++) {
+        // le joueur se replace face a l'habitant (a 1,1 m, comme le Joueur) et frappe
+        P.pos.set(b.pos.x, b.pos.y, b.pos.z + 1.1); P.facing = Math.PI; P.vel.set(0, 0, 0); P.punchCd = 0; P.poingT = 0;
+        G.punch();
+        const hp0 = b.hp;
+        for (let k = 0; k < 40; k++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }   // 0,66 s entre deux coups
+        coups.push({ i, hp: +b.hp.toFixed(0), etat: b.fight, d: +Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z).toFixed(1) });
+        if (b.hp <= 0 || b.ko) ko = true;
+      }
+    } finally { Math.random = vrai; }
+    return { coups, ko, hp: +b.hp.toFixed(0), revenu: coups.some(c => c.etat === 'fight') };
+  });
+  const ok = r.ko && r.revenu && r.coups.length <= 14;
+  return { ok, detail: `un habitant sur deux détalait au premier coup et récupérait 100 ❤️ hors de vue (16 coups, jamais KO) · fuite tirée au sort → il revient se battre=${r.revenu}, KO en ${r.coups.length} coups (${r.coups.map(c => c.hp + (c.etat === 'flee' ? '↗' : '')).join(' ')})` };
+});
+
+test('l\'amende d\'un accident ne prend jamais plus de la moitié du porte-monnaie', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 30.6, y: 1, z: -66, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart), camion = G.city.cars.find(c => c.kind === 'truck');
+    const acc = { a: car, b: camion, joueur: true, force: 17, amende: 0 };
+    G.wallet = 25; G.regleAccident(acc); const pauvre = { amende: acc.amende, reste: G.wallet };
+    G.wallet = 400; const acc2 = { a: car, b: camion, joueur: true, force: 17, amende: 0 }; G.regleAccident(acc2); const riche = { amende: acc2.amende, reste: G.wallet };
+    return { pauvre, riche };
+  });
+  const ok = r.pauvre.amende >= 20 && r.pauvre.reste >= 12 && r.riche.reste === 400 - r.riche.amende;
+  return { ok, detail: `avec 25 🪙, un constat de ${r.pauvre.amende} 🪙 laissait 0 · il laisse maintenant ${r.pauvre.reste} 🪙 ; avec 400 🪙 on paie tout (${r.riche.amende}, reste ${r.riche.reste})` };
+});
+
+test('la circulation compte huit véhicules, tous sur la chaussée', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + 0.6 && Math.abs(z - rt.z) < rt.d / 2 + 0.6);
+    const ai = G.city.aiCars.filter(c => c.spd);
+    let hors = 0, n = 0;
+    for (let t = 0; t < 40; t++) { for (let i = 0; i < 30; i++) G.step(1 / 30, true); for (const c of ai) { n++; if (!surRoute(c.x, c.z)) hors++; } }
+    return { total: ai.length, horsPct: Math.round(100 * hors / n) };
+  });
+  const ok = r.total >= 8 && r.horsPct <= 3;
+  return { ok, detail: `cinq véhicules seulement (la plus proche à 147 m) : ${r.total} maintenant, ${r.horsPct} % du temps hors chaussée sur 40 s` };
+});

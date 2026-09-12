@@ -5737,7 +5737,8 @@ const WORLDS = [
       sign(30.5, 0, 20, '🏁 Départ course');
       city.race.cps = [[26, -26], [-26, -26], [-26, 26]];   // petit tour de ville (anneau)
       // ---- voitures qui circulent ----
-      for (let i = 0; i < 3; i++) { const c = makeCar([0x5cc453, 0xff5cd6, 0xc9ced8][i], 26, 0, 0); c.s = i * 69; c.spd = 8.5; c.half = [1.4, 2.4]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.5, y: -0.35, z: 0.3 }); }
+      // HUIT VEHICULES AU LIEU DE CINQ : « la circulation est quasi vide » (la plus proche a 147 m).
+      for (let i = 0; i < 6; i++) { const c = makeCar([0x5cc453, 0xff5cd6, 0xc9ced8, 0x4f8dff, 0xffd23f, 0xff9f1c][i], 26, 0, 0); c.s = i * 69; c.spd = 8.5; c.half = [1.4, 2.4]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.5, y: -0.35, z: 0.3 }); }
       for (let i = 0; i < 2; i++) { const c = makeVehicle('truck', [0x4f8dff, 0xffd23f][i], 26, 0, 0); c.s = 35 + i * 104; c.spd = 6; c.half = [1.6, 4.6]; c.solid.ai = true; city.aiCars.push(c); addDriver(c, { x: 0.62, y: 0.3, z: 2.55 }); }
       // LE CAMION NE DORT PLUS AU BORD DE L'AVENUE. Il était garé en (90, 30), sur la pelouse,
       // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
@@ -12724,7 +12725,12 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // une garde AMORTIT, elle n'annule pas : au quart, l'adversaire devenait une enclume
   if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
-    const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.fight = b.fight || (Math.random() < 0.55 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
+    const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.wait = 0.5; b.dance = 0;
+    // ON PEUT SE BATTRE. Un habitant sur deux detalait au premier coup a 5,5 m/s et ne
+    // revenait jamais : les coups suivants frappaient le vide et il recuperait 100 ❤️ hors de
+    // vue — jamais de KO, jamais le ralenti du coup final. Un sur trois recule encore, mais
+    // trois secondes seulement : il revient, furieux, et tient tete.
+    if (!b.fight) { b.fight = Math.random() < 0.68 ? 'fight' : 'flee'; if (b.fight === 'flee') b.fuiteFin = simTime + 3; }
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
     sonAie(b.pos.x, b.pos.y + 1.5, b.pos.z, hauteurVoix(b.name, !!b.girl));   // il crie de SA voix (tirée de son nom)
     if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60);
@@ -12908,6 +12914,7 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
       if (b.garde) { b.garde = false; if (b.av && b.av.rig) b.av.rig.garde = false; } continue; }
     const dx = P.pos.x - b.pos.x, dz = P.pos.z - b.pos.z, d = Math.hypot(dx, dz) || 1;
     b.wait = 0.3; b.dance = 0;
+    if (b.fight === 'flee' && b.fuiteFin && simTime > b.fuiteFin && !(b.fuitDe && b.fuitDe.pos)) { b.fight = 'fight'; b.fuiteFin = 0; botSay(b, ['tu vas voir ! 😤', 'reviens ici !', 'ok, tu l\'auras voulu']); }   // le fuyard fait demi-tour et se bat
     if (b.fight === 'flee') { b.garde = false;
       // on fuit SON agresseur (un ami du joueur, un gangster…) et non le joueur par défaut
       const parBot = !!(b.fuitDe && b.fuitDe.pos && !b.fuitDe.ko);
@@ -20367,11 +20374,13 @@ function regleAccident(acc) {
   // PLUS DE PRISON POUR UN ACCIDENT. Le portefeuille plafonne l'amende : on paie ce qu'on a,
   // le reste est passé par pertes et profits, et la partie continue. Avant, un enfant fauché
   // partait en cellule sur un accrochage et devait réussir trois épreuves pour ressortir.
-  const du = Math.min(wallet, acc.amende);
+  // ...ET JAMAIS PLUS DE LA MOITIE DE CE QU'ON A : 25 🪙 d'amende sur un porte-monnaie de 25,
+  // c'etait un enfant ruine pour un accrochage. On paie au plus la moitie, le reste est efface.
+  const du = Math.min(Math.floor(wallet / 2), acc.amende);
   if (du > 0) { wallet -= du; saveWallet(); updateHud(); }
   acc.paye = du >= acc.amende; acc.reste = acc.amende - du; acc.prison = false;
   if (acc.paye) { msg(`🚓 Constat : ${acc.amende} 🪙 d'amende — payé`, 3000); sfx.register(); }
-  else msg(`🚓 Constat : ${acc.amende} 🪙 d'amende, tu n'avais que ${du} 🪙 — le reste est effacé, sois prudent !`, 3400);
+  else msg(`🚓 Constat : ${acc.amende} 🪙 d'amende, tu n'en paies que ${du} — le reste est effacé, sois prudent !`, 3400);
 }
 // LE DEPLACEMENT DES VEHICULES DE SERVICE : DEPANNEUSE, POLICE EN CONSTAT, AMBULANCE,
 // CAMION DE POMPIERS, ENGINS DE TRAVAUX, VELO DU FACTEUR.
@@ -21920,7 +21929,10 @@ function cibleSuivante(sens = 1) {   // ← / → de la croix, arme braquee : pa
 // aucun bouton ne gagne deux roles.
 function braquerVerrouille() {
   if (!P.weapon) return false;
-  if (P.drawn) { drawWeapon(false); P.lockRef = null; return true; }
+  // L2 NE RENGAINE JAMAIS. Il basculait l'arme comme ✕ : « ✕ (degainer) puis L2 (braquer) »
+  // rangeait l'arme dans l'etui sans un mot, et R2 ne tirait plus. Arme deja sortie, L2
+  // verrouille (ou reverrouille) la cible la plus proche ; ✕ reste le seul bouton qui range.
+  if (P.drawn) { P.lockRef = null; const c0 = ciblesVerrouillables(true)[0]; if (c0) viseCible(c0); else msg('🎯 Personne en vue · R2 pour tirer', 1100); return true; }
   drawWeapon(true);
   P.lockRef = null;
   const c = ciblesVerrouillables(true)[0];

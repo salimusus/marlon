@@ -14341,15 +14341,31 @@ test('le concessionnaire existe : bâtiment vitré jaune sur une vraie rue, show
     const bat = (c.batiments || []).find(b => b.nom === 'Blocs Motors');
     const zone = (c.zones || []).find(z => z.name === 'Concessionnaire');
     const desserte = ((c.plan || {}).dessertes || []).find(d => d.n === 'Concessionnaire');
-    // ---- 1. le bâtiment est bien vitré : on compte les panneaux de verre du show-room ----
-    let verres = 0, jaunes = 0, hauteur = 0;
+    // ---- 1. le bâtiment est bien vitré et bien JAUNE ----
+    // ON COMPTE CE QUI SE VOIT, PAS CE QUI SE COGNE. Le compte des pièces jaunes se faisait
+    // sur `solids`, où ne figurent QUE les obstacles : tout le jaune de ce bâtiment (montants
+    // ambrés, acrotère, casquette du toit, enseignes) est posé en `deco: true` et n'y est
+    // donc pas. Le test lisait 3 pièces jaunes — le linteau, le mur du fond et le comptoir —
+    // et en exigeait 6, alors que la façade est jaune d'un bout à l'autre (capture regardée).
+    // On parcourt maintenant les MAILLAGES du monde dans l'emprise du bâtiment.
+    let verres = 0, jaunes = 0, jaunesSolides = 0, hauteur = 0;
     for (const o of G.solids) {
       if (Math.abs(o.x - bat.x) > bat.w / 2 + 1 || Math.abs(o.z - bat.z) > bat.d / 2 + 1) continue;
       if (o.glass) verres++;
       const col = o.mesh && o.mesh.material && o.mesh.material.color;
-      if (col && col.r > 0.75 && col.g > 0.55 && col.b < 0.45) jaunes++;   // jaune : beaucoup de rouge et de vert, peu de bleu
+      if (col && col.r > 0.75 && col.g > 0.55 && col.b < 0.45) jaunesSolides++;
       hauteur = Math.max(hauteur, o.y + o.h / 2);
     }
+    { const T3 = G.THREE, v3 = new T3.Vector3(); G.worldGroup.updateMatrixWorld(true);
+      G.worldGroup.traverse(m => {
+        if (!m.isMesh || !m.visible || !m.geometry || !m.material || !m.material.color) return;
+        m.getWorldPosition(v3);
+        if (Math.abs(v3.x - bat.x) > bat.w / 2 + 1 || Math.abs(v3.z - bat.z) > bat.d / 2 + 1) return;
+        // au-dessus de 3 m : c'est l'OSSATURE (montants, linteau, acrotère, enseignes), jamais
+        // une voiture d'exposition qui se trouverait peinte en jaune
+        const col = m.material.color;
+        if (v3.y > 3 && col.r > 0.75 && col.g > 0.55 && col.b < 0.45) jaunes++;
+      }); }
     // ---- 2. ON Y ENTRE À PIED. On marche depuis le trottoir jusqu'au comptoir, image par image ----
     const desk = c.concesDesk;
     G.P.pos.set(desk.x, 0.4, desk.z + 26); G.P.vel.set(0, 0, 0); G.P.facing = Math.PI;
@@ -14377,16 +14393,16 @@ test('le concessionnaire existe : bâtiment vitré jaune sur une vraie rue, show
     G.openConces(); const fenetre = G.uiOpen;
     const lignes = document.querySelectorAll('#concesCorps [data-g]').length;
     G.closeUI();
-    return { bat, zone: !!zone, desserte, verres, jaunes, hauteur: +hauteur.toFixed(1),
+    return { bat, zone: !!zone, desserte, verres, jaunes, jaunesSolides, hauteur: +hauteur.toFixed(1),
       dmin: +dmin.toFixed(2), pas, expo: expo.length, surPodium, dansCityCars, gammesExpo,
       pres, fenetre, lignes, gammes: G.GAMMES.length,
       vendeur: (c.mannequins || []).some(m => Math.abs(m.group.position.x - desk.x) < 4 && Math.abs(m.group.position.z - desk.z) < 5) };
   });
   const ok = !!r.bat && r.bat.w > 40 && r.bat.d > 20 && r.zone && r.desserte && r.desserte.loin <= 8
-    && r.verres >= 4 && r.jaunes >= 6 && r.hauteur >= 8
+    && r.verres >= 4 && r.jaunes >= 12 && r.hauteur >= 8
     && r.dmin < 2 && r.expo === r.gammes && r.surPodium === r.gammes && r.dansCityCars === 0
     && r.pres && r.fenetre === 'conces' && r.lignes === r.gammes && r.vendeur;
-  return { ok, detail: `bâtiment « Blocs Motors » ${r.bat.w}×${r.bat.d} m, ${r.hauteur} m de haut, ${r.verres} panneaux de verre et ${r.jaunes} pièces jaunes · desserte routière à ${r.desserte.loin} m en (${r.desserte.x}, ${r.desserte.z}) · on marche de la rue au comptoir en ${r.pas} images et on arrive à ${r.dmin} m · ${r.surPodium}/${r.expo} voitures d'exposition sur leur podium dans le show-room (${r.gammesExpo}), ${r.dansCityCars} conduisible sans payer · comptoir détecté=${r.pres}, fenêtre="${r.fenetre}" avec ${r.lignes}/${r.gammes} gammes, vendeur présent=${r.vendeur}` };
+  return { ok, detail: `bâtiment « Blocs Motors » ${r.bat.w}×${r.bat.d} m, ${r.hauteur} m de haut, ${r.verres} panneaux de verre et ${r.jaunes} pièces jaunes dans l'ossature au-dessus de 3 m (dont ${r.jaunesSolides} qui font obstacle : le reste est du décor, et c'est lui qui porte le jaune) · desserte routière à ${r.desserte.loin} m en (${r.desserte.x}, ${r.desserte.z}) · on marche de la rue au comptoir en ${r.pas} images et on arrive à ${r.dmin} m · ${r.surPodium}/${r.expo} voitures d'exposition sur leur podium dans le show-room (${r.gammesExpo}), ${r.dansCityCars} conduisible sans payer · comptoir détecté=${r.pres}, fenêtre="${r.fenetre}" avec ${r.lignes}/${r.gammes} gammes, vendeur présent=${r.vendeur}` };
 });
 
 test('chaque gamme du concessionnaire est achetable : le prix est débité, la voiture est à soi et roule selon sa gamme', async p => {

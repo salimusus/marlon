@@ -14655,6 +14655,7 @@ test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène a
     let mode = null, tarif = null, carc = false, finGarage = -1;
     // 180 s simulées : l'enlèvement complet en prend une centaine (8 s d'appel, 30 s de route,
     // le chargement, 35 s de retour, le déchargement et les dix secondes de réparation).
+    let pxD = null, pzD = null;
     for (let i = 0; i < 3600; i++) {
       // cityStep : sans lui, les voitures de la circulation restent FIGÉES au milieu des rues
       // et bouchent le trajet de la dépanneuse (mesuré : 450 s sans jamais atteindre l'épave).
@@ -14663,7 +14664,13 @@ test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène a
       G.simTime = G.simTime + DT; G.cityStep(DT);
       const m = d.mission;
       if (appel < 0 && m && m.carcasse) appel = +(i * DT).toFixed(1);
-      if (m && m.phase === 'route' && (d.pas || 0) > 0.004) { nRoute++; if (!G.surLaChaussee(d.x, d.z, 0.9)) horsRoute++; }
+      // LE DEPLACEMENT REEL, et non `d.pas` : ce compteur n'est pose que par certains chemins
+      // de conduite et garde sa derniere valeur ailleurs. Quand il reste a zero sur tout le
+      // trajet, AUCUNE image n'est comptee, `route` vaut null et le test devient rouge en
+      // affichant « null % du trajet sur le bitume » — alors que la depanneuse a parcouru ses
+      // 107 m par la route. C'est la meme lecon que le test des cinq vehicules de service.
+      const bouge = pxD == null ? 0 : Math.hypot(d.x - pxD, d.z - pzD); pxD = d.x; pzD = d.z;
+      if (m && m.phase === 'route' && bouge > 0.004 && bouge < 1.5) { nRoute++; if (!G.surLaChaussee(d.x, d.z, 0.9)) horsRoute++; }
       if (charge < 0 && m && (m.phase === 'garage' || m.phase === 'depose')) {
         charge = +(i * DT).toFixed(1); mode = m.mode; tarif = m.tarif; carc = !!m.carcasse;
       }

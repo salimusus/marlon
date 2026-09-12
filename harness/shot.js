@@ -201,6 +201,7 @@ window.__SHOT = {
           guerre.palier = 1; guerre.morts = []; guerre.gagne = false; guerre.detruits = 0;
           guerre.territoires = {}; guerre.saison = 1; guerre.debut = 0;
           guerre.sauve = null; guerre.sauveRecrues = []; guerre.sauvePerf = [];
+          guerre.vu = false;   // l'ecran 🚩 n'a pas encore ete ouvert : la ville se tait sur les gangs
         }
         // LA PERFORMANCE DU JOUEUR. Elle decide des degats au corps a corps, de la resistance
         // et de la reussite des coups : un test qui passe par la salle de sport ou le stand de
@@ -2057,6 +2058,13 @@ window.__G = {
   agentTire: typeof agentTire === 'function' ? agentTire : null,
   policeRepli: typeof policeRepli === 'function' ? policeRepli : null,
   punch: typeof punch === 'function' ? punch : null,
+  // ---- poste REPARATEUR (round 70, BUGS.md du Joueur) : ajoute tes exports SOUS cette ligne ----
+  updateAct: typeof updateAct === 'function' ? updateAct : null,
+  joueurDansLaGuerre: typeof joueurDansLaGuerre === 'function' ? joueurDansLaGuerre : null,
+  bienvenueVille: typeof bienvenueVille === 'function' ? bienvenueVille : null,
+  navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
+  navValide: typeof navValide === 'function' ? navValide : null,
+  updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
 };
 `;
 

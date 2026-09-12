@@ -15066,3 +15066,30 @@ test('une partie neuve dit « Bienvenue en ville » et non « Partie rechargée 
   const ok = /^👋 Bienvenue en ville/.test(r.neuve) && !/rechargée/.test(r.neuve) && /^💾 Partie rechargée : 25 🪙/.test(r.rechargee) && r.r1 === true && r.r2 === false;
   return { ok, detail: `profil vierge : « ${r.neuve} » · sauvegarde : « ${r.rechargee} »` };
 });
+
+test('la pastille ne parle pas de la guerre des gangs à un joueur qui n\'y est pas entré, et se rend au lieu quand il sort du quartier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const act = () => (document.getElementById('act').textContent || '').trim();
+    const t = G.territoireDe(0, 3.5);
+    // partie neuve : ecran 🚩 jamais ouvert, pas de respect, personne dans le gang
+    G.guerre.vu = false; G.gang.rep = 0; G.gang.membres.length = 0; G.gang.membresLibres = [];
+    G.gang.capture = null; G.updateAct();
+    const avant = act();
+    for (let i = 0; i < 20; i++) { G.step(1 / 60, true); G.captureTick(1); }
+    const neuve = act();
+    // le joueur ouvre l'ecran de la guerre : le conseil a maintenant un sens
+    G.guerre.vu = true; G.gang.capture = null;
+    for (let i = 0; i < 20; i++) { G.step(1 / 60, true); G.captureTick(1); }
+    const engage = act();
+    // il sort du quartier (on le lui donne) : la pastille redevient l'action du lieu
+    if (t) G.guerre.territoires[t.k] = 'joueur';
+    G.captureTick(1);
+    const sorti = act();
+    return { terr: t && t.k, maitre: t && G.proprio(t.k), avant, neuve, engage, sorti };
+  });
+  const gang = /🚩 Il te faut|🚩 Chasse/;
+  const ok = !!r.terr && !gang.test(r.neuve) && r.neuve === r.avant && gang.test(r.engage) && !gang.test(r.sorti);
+  return { ok, detail: `apparition dans « ${r.terr} » (tenu par ${r.maitre}) · partie neuve : « ${r.neuve} » (avant : « ${r.avant} ») · écran 🚩 ouvert : « ${r.engage} » · quartier quitté : « ${r.sorti} »` };
+});

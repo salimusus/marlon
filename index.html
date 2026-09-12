@@ -26761,17 +26761,30 @@ function choixReunion(choix) {
   guerre.reunion = null; closeUI(); saveGuerre();
 }
 // ---- territoires ----
+// Le joueur est « dans la guerre » des qu'il a ouvert l'ecran 🚩, gagne du respect ou recrute
+// un homme. Avant cela, la ville doit se taire sur les gangs.
+function joueurDansLaGuerre() {
+  return !!(guerre.vu || gang.rep > 0 || gang.membres.length || (gang.membresLibres || []).length);
+}
+// La pastille d'action, quand c'est la capture qui l'avait ecrite : on la rend a l'action du lieu.
+function rendPastilleCapture() { if (gang.capture && gang.capture.pastille) { gang.capture.pastille = false; try { updateAct(); } catch (e) {} } }
 function captureTick(dt) {
   const t = territoireDe(P.pos.x, P.pos.z);
-  if (!t) { gang.capture = null; return; }
+  if (!t) { rendPastilleCapture(); gang.capture = null; return; }
   const maitre = proprio(t.k);
-  if (maitre === 'joueur') { gang.capture = null; return; }
+  if (maitre === 'joueur') { rendPastilleCapture(); gang.capture = null; return; }
   const ennemisSurPlace = gangs.some(G => !G.mort && G.id === maitre && G.membres.some(m => !m.ko && Math.hypot(m.x - P.pos.x, m.z - P.pos.z) < 34));
   const soutien = gang.membres.filter(b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 26).length
     + (gang.membresLibres || []).filter(b => Math.hypot(b.x - P.pos.x, b.z - P.pos.z) < 26).length;
   if (ennemisSurPlace || soutien < 1) {
-    if (gang.capture && simTime > (gang.capture.msgT || 0)) {
-      gang.capture.msgT = simTime + 6;
+    // « 🚩 Il te faut un membre de ton gang avec toi » s'affichait DES LA PREMIERE SECONDE d'une
+    // partie neuve : le point d'apparition est dans un quartier tenu par un gang, le joueur n'a
+    // personne, et la pastille etait reecrite toutes les 6 s — puis restait la, meme hors du
+    // quartier, faute d'updateAct(). Le conseil n'a de sens que pour un joueur entre dans la
+    // guerre (ecran 🚩 ouvert, respect ou recrue) ; et quand on quitte le quartier, la pastille
+    // redevient l'action du lieu.
+    if (gang.capture && simTime > (gang.capture.msgT || 0) && joueurDansLaGuerre()) {
+      gang.capture.msgT = simTime + 6; gang.capture.pastille = true;
       $('act').textContent = ennemisSurPlace ? '🚩 Chasse d\'abord leurs hommes du quartier' : '🚩 Il te faut un membre de ton gang avec toi';
     }
     if (!gang.capture) gang.capture = { k: t.k, p: 0, msgT: 0 };
@@ -27210,7 +27223,7 @@ function guerreTick(dt) {
   }
 }
 // ---- écran de la guerre des gangs ----
-function openGuerre() { openUI('guerre'); majGuerre(); }
+function openGuerre() { guerre.vu = true; openUI('guerre'); majGuerre(); }   // des lors, la ville peut parler de la guerre au joueur
 function majGuerre() {
   const r = rangJoueur();
   const mien = nbTerritoires('joueur');

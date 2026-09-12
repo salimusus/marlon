@@ -24828,7 +24828,8 @@ function tuneApply(c, t) {
     c.color = t.couleur;
   }
   // ---- vitres teintées ----
-  const vitres = [c.parts.ws, c.parts.rw, ...(c.parts.sides || [])].filter(Boolean);
+  const parts = c.parts || {};   // un vehicule sans vitres (camion, benne…) : rien a teinter, mais on ne plante plus
+  const vitres = [parts.ws, parts.rw, ...(parts.sides || [])].filter(Boolean);
   if (aKitT(t, 'teinte')) { if (!c.vitreOrig) c.vitreOrig = vitres[0] && vitres[0].material;
     const noir = new THREE.MeshLambertMaterial({ color: 0x0d1018, transparent: true, opacity: 0.88 });
     for (const v of vitres) v.material = noir; }
@@ -24997,14 +24998,19 @@ function dansMonGarage(v) {
   const g = city.monGarage; if (!g || !v) return false;
   return Math.abs(v.x - g.x) < g.w / 2 + 1 && Math.abs(v.z - g.z) < g.d / 2 + 1;
 }
+// CE QUI PASSE A L'ATELIER : une voiture de makeCar (carrosserie `bodyMat`, vitres `parts`). La
+// depanneuse, un camion, une benne, un velo n'ont ni l'une ni l'autre : « Valider » sur l'un
+// d'eux PLANTAIT tuneApply (« Cannot read properties of undefined (reading 'ws') ») APRES avoir
+// encaisse 210 🪙 — c'est la depanneuse garee devant le garage que tuneCible() choisissait.
+function tunable(v) { return !!(v && v.g && !v.kart && v.parts && v.bodyMat); }
 function tuneCible() {   // la voiture qu'on prépare : celle qu'on conduit, sinon la plus proche
-  if (drive.car && !drive.car.kart) return drive.car;
+  if (drive.car && !drive.car.kart) return tunable(drive.car) ? drive.car : null;
   // On regarde autour du JOUEUR *et* autour du COMPTOIR : une voiture garée devant
   // l'atelier comptait pour rien dès qu'on avançait de quelques mètres jusqu'à la borne.
   const d0 = city.tuneDesk;
   let best = null, bd = 999;
   for (const v of city.cars) {
-    if (v.kart || v.rider) continue;
+    if (v.kart || v.rider || !tunable(v)) continue;
     const dj = Math.hypot(v.x - P.pos.x, v.z - P.pos.z);
     const dc = d0 ? Math.hypot(v.x - d0.x, v.z - d0.z) : 999;
     const d = Math.min(dj, dc);
@@ -25189,13 +25195,16 @@ function laveAtelier() {
 function validerAtelier() {
   const t = atelierBrouillon, c = tuneCible(), prix = tunePrix(t);
   if (!c) { msg('🚗 Gare d\'abord une voiture devant le comptoir', 2200); return; }
+  if (!tunable(c)) { msg('🔧 Ce véhicule ne passe pas à l\'atelier : gare une voiture devant le comptoir', 2400); return; }
   if (prix > wallet) { msg('💰 Pas assez de pièces', 1800); return; }
+  // on applique D'ABORD, on encaisse ENSUITE : un plantage ne doit jamais prendre l'argent
+  try { Object.assign(tuning, { couleur: t.couleur, finition: t.finition, kits: [...t.kits], moteur: t.moteur, amorti: t.amorti }); tuneApply(c, tuning); }
+  catch (e) { console.error('atelier', e); msg('⚠️ L\'atelier n\'a pas pu préparer cette voiture — rien n\'a été payé', 2600); return; }
   wallet -= prix; saveWallet(); updateHud();
   owned.add('tune:fin:' + t.finition); t.kits.forEach(k => owned.add('tune:kit:' + k));
   owned.add('tune:mot:' + t.moteur); owned.add('tune:am:' + t.amorti);
   store.set('superobby.owned', JSON.stringify([...owned]));
-  Object.assign(tuning, { couleur: t.couleur, finition: t.finition, kits: [...t.kits], moteur: t.moteur, amorti: t.amorti });
-  saveTuning(); tuneApply(c, tuning);
+  saveTuning();
   msg(`✅ Voiture préparée !${prix ? ' −' + prix + ' 🪙' : ''} · ${TUNE_MOTEURS[t.moteur].n}, ${t.kits.length} kit${t.kits.length > 1 ? 's' : ''}`, 3000);
   sfx.win(); chat(null, `🔧 ${myCfg.name} a customisé sa voiture (${TUNE_MOTEURS[t.moteur].n})`);
   closeUI();

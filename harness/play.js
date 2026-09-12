@@ -15215,3 +15215,32 @@ test('sur l\'accueil, aucun habitant ne colle plus l\'objectif : la caméra du s
   const ok = r.accueil.dmin >= 4 && r.accueil.dist >= 8.5 && r.accueil.joueurDansLeCadre;
   return { ok, detail: `à 5,2 m presque à plat, le dernier rang de la foule (z = 6,9) passait à un mètre de la caméra · maintenant perche ${r.accueil.dist} m, habitant le plus proche à ${r.accueil.dmin} m, joueur dans le cadre=${r.accueil.joueurDansLeCadre}` };
 });
+
+test('au garage, « Valider » ne plante plus et ne prend pas l\'argent pour rien : la dépanneuse n\'est jamais la cible, une vraie voiture est repeinte et équipée', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -53.5, y: 1, z: 99, hour: 12, frais: true });
+    const d0 = G.city.tuneDesk;
+    const pose = (c, x, z) => { c.x = x; c.z = z; c.g.position.set(x, c.g.position.y, z); if (c.solid) { c.solid.x = x; c.solid.z = z; } };
+    // on eloigne toutes les voitures preparables, on colle un vehicule SANS carrosserie ni vitres (camion,
+    // depanneuse…) tout pres du comptoir : c'est lui que l'ancien tuneCible() choisissait
+    const voitures = G.city.cars.filter(c => G.tunable(c)), autres = G.city.cars.filter(c => !G.tunable(c) && !c.rider && !c.kart && c.g);
+    voitures.forEach((c, i) => pose(c, d0.x + 60 + i * 5, d0.z + 60));
+    const camion = autres[0]; pose(camion, d0.x + 3, d0.z + 4);
+    const cibleSansVoiture = G.tuneCible();
+    // « Valider » sans voiture : rien de paye, pas de plantage
+    G.wallet = 400; G.openAtelier(); G.atelierBrouillon = Object.assign(G.atelierBrouillon, { finition: 'fluo', kits: ['jupes'], couleur: 0x22cc44 });
+    let erreur = null; try { G.validerAtelier(); } catch (e) { erreur = String(e.message || e); }
+    const walletSansVoiture = G.wallet; G.closeUI();
+    // une vraie voiture devant le comptoir : elle passe a l'atelier
+    const auto = voitures[0]; pose(auto, d0.x + 2, d0.z + 5); const couleur0 = auto.color;
+    const cible = G.tuneCible();
+    G.openAtelier(); G.atelierBrouillon = Object.assign(G.atelierBrouillon, { finition: 'fluo', kits: ['jupes'], couleur: 0x22cc44 });
+    const prix = G.tunePrix(G.atelierBrouillon);
+    try { G.validerAtelier(); } catch (e) { erreur = String(e.message || e); }
+    return { cibleSansVoiture: cibleSansVoiture ? (cibleSansVoiture.kind || 'voiture') : null, camion: camion && camion.kind, walletSansVoiture, erreur,
+      cible: cible === auto, prix, wallet: G.wallet, couleur: auto.color, couleur0, jupes: (auto.tuneMesh || []).length, fluo: auto.bodyMat.emissive.getHex() > 0, ferme: G.uiOpen == null };
+  });
+  const ok = r.cibleSansVoiture === null && r.walletSansVoiture === 400 && !r.erreur && r.cible && r.prix > 0 && r.wallet === 400 - r.prix && r.couleur === 0x22cc44 && r.jupes >= 2 && r.fluo && r.ferme;
+  return { ok, detail: `tuneCible() prenait le véhicule le plus proche quel qu'il soit (ici « ${r.camion || 'véhicule spécial'} ») et tuneApply lisait c.parts.ws → plantage APRÈS encaissement · sans voiture : cible=${r.cibleSansVoiture}, portefeuille ${r.walletSansVoiture} (rien payé), erreur=${r.erreur} · avec voiture : cible ok=${r.cible}, ${r.prix} 🪙 payés (reste ${r.wallet}), couleur ${r.couleur0} → ${r.couleur}, ${r.jupes} pièces de kit, fluo=${r.fluo}, fenêtre fermée=${r.ferme}` };
+});

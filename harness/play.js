@@ -15244,3 +15244,30 @@ test('au garage, « Valider » ne plante plus et ne prend pas l\'argent pour rie
   const ok = r.cibleSansVoiture === null && r.walletSansVoiture === 400 && !r.erreur && r.cible && r.prix > 0 && r.wallet === 400 - r.prix && r.couleur === 0x22cc44 && r.jupes >= 2 && r.fluo && r.ferme;
   return { ok, detail: `tuneCible() prenait le véhicule le plus proche quel qu'il soit (ici « ${r.camion || 'véhicule spécial'} ») et tuneApply lisait c.parts.ws → plantage APRÈS encaissement · sans voiture : cible=${r.cibleSansVoiture}, portefeuille ${r.walletSansVoiture} (rien payé), erreur=${r.erreur} · avec voiture : cible ok=${r.cible}, ${r.prix} 🪙 payés (reste ${r.wallet}), couleur ${r.couleur0} → ${r.couleur}, ${r.jupes} pièces de kit, fluo=${r.fluo}, fenêtre fermée=${r.ferme}` };
 });
+
+test('les voitures du parking du centre regardent la rue et partent au premier R2, sans rien défoncer', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const autos = G.city.cars.filter(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14);
+    const res = [];
+    for (const c of autos) {
+      // ce qui se trouve dans l'emprise de la voiture et sur 3 m devant elle (vers la rue) : rien de solide
+      const fx = Math.sin(c.h), fz = Math.cos(c.h);
+      const genes = G.solids.filter(o => o !== c.solid && !o.veh && o.mesh && o.y + o.h / 2 >= 0.56   // (sous 0,56 m, une voiture passe dessus : c'est la regle de carBlocked)
+        && Math.abs(o.x - (c.x + fx * 1.5)) < 1.4 + o.w / 2 && Math.abs(o.z - (c.z + fz * 1.5)) < 3.8 + o.d / 2).length;
+      P.pos.set(c.x, c.y + 0.4, c.z); G.enterCar(c);
+      const x0 = c.x, z0 = c.z, dmg0 = c.dmg || 0;
+      // on accelere jusqu'a la rue (z < 2), au plus 4 s ; on ne traverse pas la rue pour aller taper le grillage d'en face
+      let zMin = c.z;
+      G.keys.add('KeyZ'); for (let i = 0; i < 240 && c.z > 6; i++) { G.step(1 / 60, true); zMin = Math.min(zMin, c.z); } G.keys.delete('KeyZ');
+      G.keys.add('KeyS'); for (let i = 0; i < 90; i++) G.step(1 / 60, true); G.keys.delete('KeyS');   // et on freine avant la rue (a 16 m/s on traverserait jusqu'au grillage d'en face)
+      const parcouru = z0 - zMin;
+      res.push({ x: +x0.toFixed(1), z: +z0.toFixed(1), cap: +c.h.toFixed(2), genes, parcouru: +parcouru.toFixed(1), versLaRue: zMin < z0 - 3, degats: +((c.dmg || 0) - dmg0).toFixed(2), y: +c.y.toFixed(2) });
+      G.exitCar(); for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    }
+    return { n: autos.length, res };
+  });
+  const ok = r.n === 4 && r.res.every(q => q.genes === 0 && q.parcouru > 3 && q.versLaRue && q.degats < 1 && q.y < 0.5);
+  return { ok, detail: `elles étaient garées cap au sud, le nez sur les bancs et la terrasse du snack (posés à z = 13,5, DANS le parking) : R2 = 2 m/s et 10 % de dégâts · ` + r.res.map(q => `(${q.x}, ${q.z}) cap ${q.cap} : ${q.genes} obstacle, ${q.parcouru} m vers la rue=${q.versLaRue}, dégâts +${q.degats}, y ${q.y}`).join(' · ') };
+});

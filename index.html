@@ -2510,12 +2510,13 @@ function buildShops() {
   box(-6.6, 1.2, 22.4, 1.2, 2.2, 0.9, 0xffffff, { deco: true, studs: false }); box(-6.6, 1.2, 21.9, 0.9, 1.6, 0.05, 0x4f8dff, { deco: true, studs: false });   // frigo
   box(-9.5, 3.2, 22.6, 5.4, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🍔 🍕 🍟 🥗 🍦 🍩', 0xffa040) }), deco: true, noEdges: true });   // menu
   for (const sx of [-11.2, -9.5, -7.8]) { box(sx, 0.7, 17.6, 0.6, 0.12, 0.6, 0xff5c5c, { deco: true, studs: false }); box(sx, 0.35, 17.6, 0.12, 0.6, 0.12, 0x3b4252, { deco: true, studs: false }); }   // tabourets
-  bench(-15, 13.5, 0); bench(-4, 13.5, 0); bench(-9.5, 10.5, Math.PI);
+  // bancs et terrasse HORS du parking (z > 14,6) : ils etaient sur les places de stationnement
+  bench(-15, 14.9, 0); bench(-4, 14.9, 0); bench(-9.5, 14.9, 0);
   for (const tx of [-12.5, -6.5]) {   // terrasse : tables rondes + parasols + chaises
-    const tb = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 14), lam(0xf4f6fa)); tb.position.set(tx, 0.9, 13.5); worldGroup.add(tb); box(tx, 0.45, 13.5, 0.12, 0.85, 0.12, 0x3b4252, { deco: true, studs: false });
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6), lam(0x3b4252)); pole.position.set(tx, 2.2, 13.5); worldGroup.add(pole);
-    const par = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.6, 10), lam(tx < -9 ? 0xff5c5c : 0xffd23f)); par.position.set(tx, 3.4, 13.5); worldGroup.add(par);
-    for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 1.1], [0, -1.1]]) { box(tx + dx, 0.45, 13.5 + dz, 0.5, 0.08, 0.5, 0xffd23f, { deco: true, studs: false }); box(tx + dx, 0.25, 13.5 + dz, 0.08, 0.45, 0.08, 0x3b4252, { deco: true, studs: false }); }
+    const tb = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 14), lam(0xf4f6fa)); tb.position.set(tx, 0.9, 14.7); worldGroup.add(tb); box(tx, 0.45, 14.7, 0.12, 0.85, 0.12, 0x3b4252, { deco: true, studs: false });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6), lam(0x3b4252)); pole.position.set(tx, 2.2, 14.7); worldGroup.add(pole);
+    const par = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.6, 10), lam(tx < -9 ? 0xff5c5c : 0xffd23f)); par.position.set(tx, 3.4, 14.7); worldGroup.add(par);
+    for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 1.1], [0, -1.1]]) { box(tx + dx, 0.45, 14.7 + dz, 0.5, 0.08, 0.5, 0xffd23f, { deco: true, studs: false }); box(tx + dx, 0.25, 14.7 + dz, 0.08, 0.45, 0.08, 0x3b4252, { deco: true, studs: false }); }
   }
   const cone = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), lam(0xd9a066)); cone.rotation.x = Math.PI; cone.position.set(-9.5, 6.3, 16.2); worldGroup.add(cone);
   const scoop = new THREE.Mesh(new THREE.SphereGeometry(0.75, 12, 8), lam(0xff7ad9)); scoop.position.set(-9.5, 7.3, 16.2); worldGroup.add(scoop);   // glace géante sur le toit
@@ -5691,7 +5692,16 @@ const WORLDS = [
       // ---- parking + magasins (SO) ----
       // la rangee de devant etait garee a z = 3,5 : les deux voitures depassaient de 1,7 m sur
       // l'avenue du centre (z -3 a 3). Les deux rangees reculent DANS le parking (dalle z 3 a 23).
-      city.cars.push(makeCar(0xff5c5c, -15, 11.5, 0), makeCar(0x4f8dff, -19, 11.5, 0), makeCar(0xffd23f, -15, 6, 0), makeCar(0x111111, -19, 6, 0, { sport: true }));
+      // LE PARKING DU CENTRE REGARDE LA RUE. Les quatre voitures etaient garees cap au SUD
+      // (h = 0), le nez sur les bancs et la terrasse du snack, poses A L'INTERIEUR du parking
+      // (z = 13,5) : la premiere voiture qu'un enfant prenait ne partait pas (R2 = 2 m/s, 10 %
+      // de degats en 5 s, et elle grimpait sur un banc en braquant). Elles regardent maintenant
+      // la rue du nord (h = π), et le mobilier du snack a recule au-dela de z = 14,6.
+      // Et UNE SEULE RANGEE : avec deux rangees l'une derriere l'autre, la rangee du fond
+      // demarrait dans le coffre de celle de devant (mesure : 15 % de degats au premier R2).
+      // (pas plus a l'ouest que x = -17,9 : deux lampadaires bordent la sortie en (-20, 4,2) et
+      // (-21,8, 4,2), et une voiture garde 1,4 m de marge autour d'un poteau)
+      city.cars.push(makeCar(0xff5c5c, -17.9, 10, Math.PI), makeCar(0x4f8dff, -14.6, 10, Math.PI), makeCar(0xffd23f, -11.3, 10, Math.PI), makeCar(0x111111, -8, 10, Math.PI, { sport: true }));
       buildGarage(-45, 90);
       buildShops(); sign(-3.6, 0.3, 3.6, '🚗 Parking');
       // LE NOUVEAU PARKING DU SUD : 16 places marquées, deux rangées dos à dos, une allée de 7 m
@@ -5733,7 +5743,7 @@ const WORLDS = [
       // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
       // pointe. Il prend maintenant le bord est du Parking du Sud, dans la longueur (8,60 m ne
       // tient pas dans une place de 5,40 m) : il ne gêne ni les places ni l'allée.
-      city.cars.push(makeVehicle('moto', 0xff5c5c, -22, 11.5, Math.PI), makeVehicle('moto', 0x1b2a4a, -20, 11.5, Math.PI),
+      city.cars.push(makeVehicle('moto', 0xff5c5c, -5.6, 10, Math.PI), makeVehicle('moto', 0x1b2a4a, -4.5, 10, Math.PI),   // les motos au bout de la rangee, pres de la rue
         makeVehicle('truck', 0x5cc453, parkSud.x + parkSud.w / 2 - 1.7, parkSud.z, 0));
       // ---- points de balade pour les bots ----
       city.wander = [[0, 0, 3], [-13, 0.3, -8], [13, 0.3, -8], [13, 0.3, 13], [-13, 0.3, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [48, 0.3, 22], [46, 0, -8], [0, 0.3, 70], [-14, 0.3, 66], [14, 0.3, 74], [-22, 0.3, 84], [20, 0.3, 90], [-84, 0, 12], [-84, 0, 60], [84, 0, 30], [50, 0, 60], [40, 0.36, 10], [0, 0.36, 150], [-30, 0.36, 160]];
@@ -19853,8 +19863,22 @@ function conduire(c, cmd, dt) {
   }
   // autres obstacles : on glisse sur l'axe libre, on ne rebondit que si tout est bloqué
   if (pilote && Math.abs(V.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(tl.x - c.x) < 4.5 && Math.abs(tl.z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
-  if (Math.abs(V.speed) > 5) for (const b of breakables) if (!b.broken && Math.abs(b.x - nx) < b.r + rr + 0.5 && Math.abs(b.z - nz) < b.r + rr + 0.5) { breakThing(b, c, !pilote); }
+  // LA CASSE DU MOBILIER SE JUGE DANS LE REPERE DE LA VOITURE. On testait un CARRE AXE de
+  // demi-cote b.r + rr + 0,5 (rr = la demi-LONGUEUR) : une voiture qui sortait du parking en
+  // passant a 2,1 m d'un lampadaire, DE COTE, le cassait et prenait 9 % de degats — a chaque
+  // premiere sortie. On teste maintenant la vraie boite : demi-largeur en travers, demi-longueur
+  // dans l'axe, plus le rayon de l'objet.
   const [vr, vL] = vehHalf(c);
+  if (Math.abs(V.speed) > 5) {
+    const cs = Math.cos(c.h), sn = Math.sin(c.h), hw = (c.half ? c.half[0] : 1.2), hl = Math.max(vL, c.half ? c.half[1] : 2.2);
+    for (const b of breakables) {
+      if (b.broken) continue;
+      const dx = b.x - nx, dz = b.z - nz;
+      if (Math.abs(dx) > b.r + hl + 0.5 || Math.abs(dz) > b.r + hl + 0.5) continue;   // tri grossier
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+      if (Math.abs(lx) < b.r + hw + 0.15 && Math.abs(lz) < b.r + hl + 0.3) breakThing(b, c, !pilote);
+    }
+  }
   const bx = carBlocked(nx, c.z, c.solid, vr, {}, c.y, c.h, vL), bz = carBlocked(c.x, nz, c.solid, vr, {}, c.y, c.h, vL);
   const px0 = c.x, pz0 = c.z;
   if (!bx) c.x = nx; if (!bz) c.z = nz;

@@ -15093,3 +15093,23 @@ test('la pastille ne parle pas de la guerre des gangs à un joueur qui n\'y est 
   const ok = !!r.terr && !gang.test(r.neuve) && r.neuve === r.avant && gang.test(r.engage) && !gang.test(r.sorti);
   return { ok, detail: `apparition dans « ${r.terr} » (tenu par ${r.maitre}) · partie neuve : « ${r.neuve} » (avant : « ${r.avant} ») · écran 🚩 ouvert : « ${r.engage} » · quartier quitté : « ${r.sorti} »` };
 });
+
+test('à pied, on ne tombe plus dans le vide au bord de la ville : les quatre bords arrêtent le joueur', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, M = G.MONDE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const bords = [];
+    // (départ à 1,5 m du bord, cap vers le bord, 4 s de marche : 6 m/s × 4 s = bien au-delà)
+    for (const [nom, x, z, cap] of [['nord', 0, M.z1 + 1.5, Math.PI], ['sud', 0, M.z2 - 1.5, 0], ['est', M.x2 - 1.5, 75, Math.PI / 2], ['ouest', M.x1 + 1.5, 75, -Math.PI / 2]]) {
+      __SHOT.go({ world: 4, x, y: 1, z, hour: 12 });
+      P.facing = cap; G.settings.ctrl = 'rot'; G.keys.add('KeyZ');
+      let yMin = 9, morts0 = G.deaths;
+      for (let i = 0; i < 240; i++) { G.step(1 / 60, true); yMin = Math.min(yMin, P.pos.y); }
+      G.keys.delete('KeyZ');
+      bords.push({ nom, x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), yMin: +yMin.toFixed(2), morts: G.deaths - morts0, dedans: P.pos.x >= M.x1 - 0.5 && P.pos.x <= M.x2 + 0.5 && P.pos.z >= M.z1 - 0.5 && P.pos.z <= M.z2 + 0.5 });
+    }
+    return { bords };
+  });
+  const ok = r.bords.length === 4 && r.bords.every(b => b.dedans && b.yMin > -0.5 && b.morts === 0);
+  return { ok, detail: `le mur invisible était posé 1,5 m DEHORS du plateau : on tombait dans le fossé puis sous le mur (y −100, 💀 +1) · ` + r.bords.map(b => `${b.nom} : (${b.x}, ${b.z}) y min ${b.yMin} morts ${b.morts}`).join(' · ') };
+});

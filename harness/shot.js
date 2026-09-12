@@ -2060,6 +2060,7 @@ window.__G = {
   punch: typeof punch === 'function' ? punch : null,
   // ---- poste REPARATEUR (round 70, BUGS.md du Joueur) : ajoute tes exports SOUS cette ligne ----
   updateAct: typeof updateAct === 'function' ? updateAct : null,
+  get dead() { return typeof dead !== 'undefined' ? dead : null; }, get deaths() { return typeof deaths !== 'undefined' ? deaths : null; },
   joueurDansLaGuerre: typeof joueurDansLaGuerre === 'function' ? joueurDansLaGuerre : null,
   bienvenueVille: typeof bienvenueVille === 'function' ? bienvenueVille : null,
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,

@@ -5596,8 +5596,23 @@ const WORLDS = [
       // mur invisible interdisait d'atteindre. Le plateau va maintenant de z = −200 à z = 350.
       platTrous(MONDE.cx, 0, MONDE.cz, MONDE.w, MONDE.d, 0x4a4f5c, { studs: false, noRoute: true, sol: true }, 1, poolTrous());
       for (const o of solids) if (o.sol && o.mesh) { const t = PAVE.clone(); t.needsUpdate = true; t.repeat.set(o.w / 4, o.d / 4); o.mesh.material = new THREE.MeshLambertMaterial({ map: t }); }
-      for (const [x, z, w, d] of [[MONDE.x1 - 1.5, MONDE.cz, 1, MONDE.d], [MONDE.x2 + 1.5, MONDE.cz, 1, MONDE.d],
-        [MONDE.cx, MONDE.z1 - 1.5, MONDE.w, 1], [MONDE.cx, MONDE.z2 + 1.5, MONDE.w, 1]]) wall(x, z, w, d);
+      // L'ENCEINTE COLLE AU PLATEAU. Le mur invisible etait pose a 1,5 m DEHORS (de -202 a -201
+      // pour un plateau qui s'arrete a -200) : entre les deux, un fosse d'un metre sans sol. A
+      // pied, tout droit vers le nord, le joueur enjambait le bord, tombait dans ce fosse, passait
+      // SOUS le mur (haut de 4 m seulement, depuis y = 0) et finissait a y = -100 : « Oups ! »,
+      // 💀 +1, retour au centre — sa toute premiere balade. Le mur commence maintenant AU bord
+      // du plateau et descend sous lui, pour qu'on ne passe ni par-dessus ni par-dessous.
+      for (const [x, z, w, d] of [[MONDE.x1 - 0.5, MONDE.cz, 1, MONDE.d + 2], [MONDE.x2 + 0.5, MONDE.cz, 1, MONDE.d + 2],
+        [MONDE.cx, MONDE.z1 - 0.5, MONDE.w + 2, 1], [MONDE.cx, MONDE.z2 + 0.5, MONDE.w + 2, 1]]) {
+        box(x, 3, z, w, 16, d, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+      }
+      // ET ELLE SE VOIT : une haie taillee tout autour de la ville (sans collision : c'est le mur
+      // ci-dessus qui arrete). Un enfant comprend une haie ; il ne comprend pas un mur invisible.
+      for (const [x, z, w, d] of [[MONDE.x1 + 0.8, MONDE.cz, 1.4, MONDE.d], [MONDE.x2 - 0.8, MONDE.cz, 1.4, MONDE.d],
+        [MONDE.cx, MONDE.z1 + 0.8, MONDE.w, 1.4], [MONDE.cx, MONDE.z2 - 0.8, MONDE.w, 1.4]]) {
+        box(x, 0.6, z, w, 1.2, d, 0x2f7d3a, { deco: true, studs: false, noRoute: true, noEdges: true });
+        box(x, 1.28, z, w - 0.2, 0.22, d - 0.2, 0x49a552, { deco: true, studs: false, noRoute: true, noEdges: true });
+      }
       road(-45, 0, 32, 6); road(52, 0, 46, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m)
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));

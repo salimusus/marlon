@@ -3,7 +3,7 @@
 Méthode : manette PS5 simulée, images simulées (`__G.step(1/60, true)` + `pollGamepad` + `updateBot`),
 captures regardées une à une, en 1280×720 (PC) et en 1920×1080 mode TV. Outils dans
 `scratchpad/joueur/` (`joueur.js` pilote, `aide.js` manette simulée, `sN.js` scénarios, `img/sN/` captures).
-Rien n'a été corrigé dans `index.html`. Liste classée par gravité, numérotée dans l'ordre de découverte.
+Rien n'a été corrigé dans `index.html`. Liste classée par gravité, numérotée dans l'ordre de découverte (le n° 1 a été retiré : fausse alerte, le personnage est bien vu de dos au départ — le nom et le numéro sont dans le dos du maillot).
 
 Gravités : BLOQUANT (on ne peut plus jouer) · GRAVE (une fonction promise ne marche pas) ·
 GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
@@ -12,16 +12,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ## GRAVE
 
-### 1. Au premier pas, le personnage marche VERS la caméra
-- **Gravité** : GRAVE (première minute — le premier geste de l'enfant part à l'envers)
-- **Reproduire** : accueil → Jouer → Ville. Sans toucher la caméra, pousser le stick gauche vers l'avant.
-- **On voit** : le personnage nous regarde (on lit « JOUEUR64 51 » sur sa poitrine : `P.facing = π`, `cam.yaw = 0`),
-  il avance vers l'écran et disparaît sous la caméra. Voir mesure dans la section « Scénario 2 » (`s2-avant.png`).
-- **On devrait voir** : le personnage de dos, qui part dans le décor quand on pousse vers l'avant (comme dans tous les jeux de ville).
-- **Capture** : `scratchpad/joueur/img/s1/s1-premier-regard.png` (le personnage de face au départ).
-- **Sonde** : `chooseWorld()` pose `P.facing = Math.PI; cam.yaw = 0` (index.html ~l. 15895).
-
 ### 2. Le message de bienvenue d'une partie NEUVE est « 💾 Partie rechargée : 25 🪙 »
+✅ RÉPARÉ — `wallet` vaut 25 par défaut sans clé enregistrée et `rechargeTout()` prenait cette valeur pour une sauvegarde ; on ne dit « rechargée » que si `superobby.wallet` existe, sinon « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (vocabulaire de la commande) — commit 3fe8d47
 - **Gravité** : GRAVE (première minute — premier message faux)
 - **Reproduire** : profil vierge (navigateur neuf), accueil → Jouer → Ville.
 - **On voit** : en très gros au centre « 💾 Partie rechargée : 25 🪙 », puis rien qui dise quoi faire.
@@ -29,6 +21,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard.png`, `img/s1/s1-premier-regard-tv.png`.
 
 ### 3. Dès la première seconde, la pastille du haut dit « 🚩 Il te faut un membre de ton gang avec toi »
+✅ RÉPARÉ — `captureTick()` écrivait le conseil dès qu'on se tenait dans un quartier tenu par un gang, toutes les 6 s, sans jamais rendre la pastille ; il n'apparaît plus qu'à un joueur entré dans la guerre (écran 🚩 ouvert, respect > 0 ou recrue) et `updateAct()` reprend la main en sortant du quartier — commit a36c5da
 - **Gravité** : GRAVE (incompréhensible pour un enfant qui vient d'arriver ; ça reste affiché en permanence)
 - **Reproduire** : entrer dans la Ville, attendre 2 s sans rien faire, au point d'apparition (0, 3.5).
 - **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » (tronqué « 🚩 Il te faut un ... » en 1280) et ça reste pendant les 12 s observées.
@@ -49,16 +42,39 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : Ville, se placer en (−54, 40) face au nord, stick avant 7 s : on entre par la porte sud du commissariat (−54, 28) ; puis stick droit vers la gauche 0,8 s.
 - **On voit** : à l'intérieur, les murs montrent les fenêtres bleues de la FAÇADE extérieure, au-dessus un bloc de toit sombre qui flotte avec le ciel autour ; le guichet « PLAINTES » est vide alors que « L'agent d'accueil : Bonjour, que puis-je pour vous ? » s'écrit dans le chat ; en tournant la caméra on se retrouve DEHORS, à regarder le dos du panneau « AVIS DE RECHERCHE », personnage invisible.
 - **On devrait voir** : une pièce fermée (plafond, murs intérieurs), un agent derrière le guichet, une caméra qui reste dedans.
-- **Capture** : , .
-- **Sonde** :  mais rien ne bloque la caméra ( 5,0 → 6,8 en tournant).
+- **Capture** : `img/s3/s3-commissariat-2-dedans.png`, `img/s3/s3-commissariat-3-regard.png`.
+- **Sonde** : `cam.interieur = true` mais rien ne bloque la caméra (`cam.dist` 5,0 → 6,8 en tournant).
 
 ### 22. Dans les bâtiments, le stick droit envoie la caméra à travers les murs et les meubles
 - **Gravité** : GRAVE (dès qu'un enfant regarde autour de lui dedans, il ne voit plus son personnage)
 - **Reproduire** : entrer dans l'école (classe (−69, 213)), la banque (guichet (−57, 70)), l'hôpital (hall (14, 212)) ou le concessionnaire (comptoir (−140, 93)), puis pousser le stick droit à gauche 0,8 s.
 - **On voit** : école → la caméra est DEHORS, on voit la façade verte et le grillage, personnage invisible ; banque → caméra dans la vitre du guichet, étiquette « guichet » géante, tête du guichetier dans l'objectif ; hôpital → caméra DANS le bureau d'accueil (une planche brune barre l'écran) ; concessionnaire → caméra dans le bras du personnage (aplat couleur peau plein écran).
 - **On devrait voir** : la caméra qui s'arrête au mur et se rapproche du personnage, jamais dans un meuble ni dehors.
-- **Capture** : , , , .
-- **Sonde** : hôpital  alors que le joueur est en (14, 212) au milieu du hall (l'hôpital n'est pas dans ).
+- **Capture** : `img/s3/s3-ecole-3-regard.png`, `img/s3/s3-banque-3-regard.png`, `img/s3/s3-hopital-3-regard.png`, `img/s3/s3-concessionnaire-3-regard.png`.
+- **Sonde** : hôpital `cam.interieur = false` alors que le joueur est en (14, 212) au milieu du hall (l'hôpital n'est pas dans `city.interieurs`).
+
+### 26. Les voitures du parking du centre sont garées face à la terrasse du snack : R2 = on défonce les tables sans avancer
+- **Gravité** : GRAVE (première voiture qu'un enfant prend : elle ne part pas et se casse)
+- **Reproduire** : parking (−23…−3, 3…14), voiture en (−15, 11,5). △ pour monter, R2 à fond 5 s.
+- **On voit** : la voiture reste sur place (vitesse 2,6 → −2 → 1 m/s, position inchangée), les dégâts montent 🔧 2 % → 10 % en 5 s ; en braquant elle GRIMPE sur la terrasse (`c.y` 0,15 → 0,66, roues 60 cm au-dessus du sol). Le parking est dessiné au milieu des tables et parasols du snack.
+- **On devrait voir** : des places de parking dégagées, ouvertes sur la rue, et aucun dégât à 2 km/h.
+- **Capture** : `img/s4/s4-0-pres.png` (table et tabourets contre la voiture), `img/s4/s4-2-roule.png`, `img/s4/s4-3-tourne.png`.
+- **Sonde** : `s4-pc.log` pas `gaz+1s…+5s` : `dmg` 2,36 → 9,54, `spd` ≤ 2,6, `car.z` 11,5 → 11,53.
+
+### 27. Écraser un piéton : aucune ambulance, et la police TIRE sur l'enfant
+- **Gravité** : GRAVE (fonction promise : ambulance pour les blessés, police proportionnée)
+- **Reproduire** : rouler à 50 km/h dans la foule du point d'apparition (0, 3).
+- **On voit** : « 🚔 Infraction : écraser Tom_le_ouf ! Niveau ★★★ », deux bots KO (hp 56), aucune ambulance ne part (`city.ambulances[*].etat = null` après 6 s), les bots écrasés se relèvent et disent « plus jamais ça » ; 40 s plus tard « Recherché ★★ · ils tirent ! ». Puis arrestation → écran Prison.
+- **On devrait voir** : ambulance + brancard pour le blessé (promis au poste B/E), une police qui arrête sans tirer pour un accident.
+- **Capture** : `img/s4/s4-6-mur.png` (★★★, « la police arrive dans 20 s »), `img/s4/s4-8-voiture.png` (« ils tirent ! »).
+
+### 28. La circulation est quasi vide et roule HORS de la ville
+- **Gravité** : GRAVE (le joueur a demandé une vraie circulation ; « conducteurs hors chaussée » déjà relevé au round 67, toujours là)
+- **Reproduire** : prendre une voiture, chercher la voiture de circulation la plus proche (`city.aiCars`).
+- **On voit** : 5 voitures de circulation pour toute la ville, la plus proche à 147 m ; celle-là roule sur le dallage blanc à l'extérieur de la ville, en (−75, −105), au nord du Rallye, là où il n'y a aucune route.
+- **On devrait voir** : des voitures sur les avenues du centre, jamais hors de la chaussée.
+- **Capture** : `img/s4/s4-8-voiture.png` (le dallage blanc, notre voiture et la police, débris de l'autre voiture).
+- **Sonde** : `autre.d = 147.74` ; position (−69,9, −104,4) hors de tout `city.routes`.
 
 ## GÊNANT
 
@@ -137,14 +153,48 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : marcher jusqu'au guichet de la banque (−57, 70) ; jusqu'au comptoir de Blocs Motors (−140, 93).
 - **On voit** : le guichetier écrit « Un dépôt ou un retrait ? » dans le chat, mais la pastille d'action affiche « 🚩 Il te faut un membre de ton gang… » (banque) ou « 🚗 Concession… » (tronqué). Aucun « △ » à l'écran.
 - **On devrait voir** : « △ Déposer / retirer », « △ Acheter une voiture », comme pour monter en voiture.
-- **Capture** : , .
+- **Capture** : `img/s3/s3-banque-2-dedans.png`, `img/s3/s3-concessionnaire-2-dedans.png`.
 
 ### 24. Les habitants fixent des rendez-vous à l'enfant sans qu'il ait rien demandé, et le GPS s'allume tout seul
 - **Gravité** : GÊNANT (les chevrons cyan au sol dès la première seconde viennent de là — cf. n° 3)
 - **Reproduire** : rester en ville 2 minutes.
 - **On voit** : « Sarah_bee : ok Joueur40, je prends un vélo et je te retrouve à Parking du Sud 🚗 », « MaxiBloc : ok Joueur40, je prends une voiture et je te retrouve à Tatouage », gros message central « 🚗 MaxiBloc va chercher une voiture, direction Tatouage », et le radar affiche une destination (297 m, 135 m, 179 m) avec des chevrons cyan au sol — l'enfant n'a jamais parlé à ces bots.
 - **On devrait voir** : un rendez-vous seulement après une vraie invitation (△ parler → « on se retrouve où ? »).
-- **Capture** :  (chevrons + 297 m),  (message central).
+- **Capture** : `img/s3/s3-hopital-2-dedans.png` (chevrons + 297 m), `img/s3/s3-hopital-3-regard.png` (message central).
+
+### 29. Reculer du parking donne une étoile « 🚦 Feu rouge grillé ! »
+- **Gravité** : GÊNANT
+- **Reproduire** : parking du centre, L2 tenu pour reculer sur 8 m vers (−22, 7), puis R2.
+- **On voit** : « 🚦 Feu rouge grillé ! » et ★ recherché niveau 1 alors qu'on sort d'un parking en marche arrière à 25 km/h.
+- **On devrait voir** : pas d'infraction en manœuvre de parking (ni en marche arrière).
+- **Sonde** : `s4-pc.log` pas `recule2+2s` : `wanted 1`, msg « 🚦 Feu rouge grillé ! ».
+
+### 30. Au volant, les messages parlent encore du clavier et proposent de s'asseoir sur un banc
+- **Gravité** : GÊNANT
+- **Reproduire** : monter dans la voiture du parking (message « 🚗 Appuie sur E pour conduire »), rouler devant le snack.
+- **On voit** : à chaque seconde « 🪑 E : s'asseoir » pendant qu'on conduit ; « 🚗 Parking : E (ou 🚗) devant une voiture, une moto… » ; « Boîte automatique · 📯 klaxon · Espace maintenu = frein à main ».
+- **On devrait voir** : « △ » à la place de E, et aucune invitation à s'asseoir au volant.
+- **Sonde** : `s4-pc.log` pas `gaz+1s` … `recule+3s` : msg « 🪑 E : s'asseoir ».
+
+### 31. Taper un mur : pas de BOOM, pas de secousse, la voiture glisse le long du mur et s'enfonce dans le sol
+- **Gravité** : GÊNANT (promis au round 67 : chocs BOOM, marques d'impact)
+- **Reproduire** : viser l'immeuble « Centre-ville » (−35,5, 16) depuis (−22, 7), R2 6 s.
+- **On voit** : vitesse 4 km/h collée au mur, la voiture continue de glisser (z 8,9 → 13,3), dégâts +2 % seulement, `cam.kick = 0`, aucun message ; `c.y` tombe de 0,15 à 0,00 et le bas des roues passe à −0,06 / −0,12 (sous la route).
+- **On devrait voir** : arrêt net, secousse, bruit, marque sur le mur, roues sur la route.
+- **Capture** : `img/s4/s4-6-mur.png` (non probant : la caméra est derrière un feu tricolore, cf. n° 32).
+
+### 32. En voiture, la caméra traîne loin derrière, se cale derrière les poteaux et perd la voiture
+- **Gravité** : GÊNANT
+- **Reproduire** : rouler à 50 km/h vers l'est depuis (−15, 7) ; sortir de la ville.
+- **On voit** : `s4-6-mur.png` : la voiture est un point rouge au loin, le feu tricolore occupe le premier plan ; `s4-7b-apres-pieton.png` : la voiture n'est plus dans l'image du tout (dallage blanc, un arbre, un banc).
+- **On devrait voir** : la caméra collée derrière la voiture, qui passe devant les poteaux.
+
+### 33. Sortir de prison = finir un parcours d'obby entier
+- **Gravité** : GÊNANT (design, mais bloquant pour un enfant sans pièces)
+- **Reproduire** : se faire arrêter avec 25 🪙 et 0 pass.
+- **On voit** : « Pour sortir, réussis les épreuves ci-dessous (jusqu'au drapeau final), paie 100 🪙 (tu as 25), ou utilise un pass liberté (2 pour cette partie) » — Prairie ▶ / Volcan ▶. Sans pass ni argent, l'enfant doit finir 8 étapes d'obby pour retourner en ville.
+- **On devrait voir** : une peine courte (attendre 30 s, ou une mini-épreuve dans la cellule).
+- **Capture** : `img/s4/s4-9-accident.png`.
 
 ## COSMÉTIQUE
 
@@ -173,6 +223,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : rectangle vert plat posé par-dessus le trottoir gris et la bordure, arête franche (bas droite de `img/s2/s2-fin-tv.png`).
 
 ### 25. Petits défauts vus dans les bâtiments
-- Banque : écrans d'ordinateur qui flottent sans pied sur le guichet, « pyramide » jaune posée sur le comptoir () ; étiquette « Joueur40 » qui recouvre le panneau « COFFRES · 2e ÉTAGE » ().
-- Hôpital : bandes de sol cyan et verte de 2 m de large qui ressemblent à des tapis, sans explication ().
-- Concessionnaire : le vendeur « Gérard Boulon » porte chapeau melon et lunettes noires derrière son comptoir ().
+- Banque : écrans d'ordinateur qui flottent sans pied sur le guichet, « pyramide » jaune posée sur le comptoir (`img/s3/s3-banque-1-porte.png`) ; étiquette « Joueur40 » qui recouvre le panneau « COFFRES · 2e ÉTAGE » (`img/s3/s3-banque-escalier-haut.png`).
+- Hôpital : bandes de sol cyan et verte de 2 m de large qui ressemblent à des tapis, sans explication (`img/s3/s3-hopital-2-dedans.png`).
+- Concessionnaire : le vendeur « Gérard Boulon » porte chapeau melon et lunettes noires derrière son comptoir (`img/s3/s3-concessionnaire-2-dedans.png`).
+
+### 34. Fautes de frappe et d'accent dans les phrases des bots
+- « Tu as combien de pieces ? » (pièces), « Tu as deja pilote l'helico ? », « on joue jouer au tennis / au foot », « je te retrouve à Quartier résidentiel » (au), « Les Requins Rouges contrôle » (contrôlent).
+- **Capture** : `img/s4/s4-8-voiture.png`, `img/s3/s3-banque-1-porte.png`.

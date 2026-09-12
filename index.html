@@ -16139,9 +16139,16 @@ const estAmi = n => amis.has(String(n));
 // Le chien a lui aussi sa vie et sa performance — volontairement PLUS FAIBLES que celles
 // d'un homme de gang : il ne gagne pas le combat, il mord, il fait mal et il donne au
 // joueur le temps de filer.
+// Le chien à l'adoption : 14 de performance, SOUS le niveau du gang le plus faible de la
+// ville (les Frelons Jaunes sont à 20, cf. GANG_DEFS). Il était à 22, donc plus fort qu'un
+// homme des Frelons — l'inverse de ce que dit le jeu deux lignes plus bas et de ce qu'on
+// veut : un chien mord, gêne et fait gagner du temps, il ne bat pas un gangster. À 14 comme
+// à 22 sa morsure fait les mêmes 7 points de dégâts (5 + perf/9 arrondi), rien ne change au
+// combat : c'est le classement face aux gangs qui redevient juste.
+const CHIEN_PERF0 = 14;
 const chien = { pet: null, nom: '', attenteNom: false, attaque: null, attaqueT: 0, aboiT: 0, couche: false, tag: null,
   ordre: null, ordreT: 0, poste: null, saut: 0, patte: 0, garde: 0, balle: null, repas: 0,
-  hp: 60, hpMax: 60, perf: 22, bond: 0, bondT: 0 };
+  hp: 60, hpMax: 60, perf: CHIEN_PERF0, bond: 0, bondT: 0 };
 const CHIEN_PERF_MAX = 45;   // même bien dressé, il reste sous le niveau d'un gangster
 const coup = { etat: 'aucun', bot: null, car: null, route: null, routeT: 0, t: 0 };
 

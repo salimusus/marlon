@@ -69,6 +69,17 @@ window.__SHOT = {
       if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.stats') || 'null');
       return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
   })(),
+  // LE NIVEAU DU JOUEUR AU CHARGEMENT DE LA PAGE. Meme famille que achats0 et stats0 : la
+  // performance (0 a 100) decide des degats au corps a corps, de la resistance et de la
+  // reussite des coups, elle se gagne a la salle de sport, au stand de tir et en mission, et
+  // elle est ENREGISTREE. Un test qui s'entraine laissait donc un joueur plus fort pour tous
+  // les suivants, et le test de rechargement pose en plus une sauvegarde a 42 : sans cette
+  // valeur mise de cote au premier chargement, on n'a plus aucun moyen de revenir au depart.
+  perf0: (function () {
+    try { var k = 'superobby.banc.perf0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.perf') || '10');
+      return +localStorage.getItem(k) || 10; } catch (e) { return 10; }
+  })(),
   relevePropre() {
     const s = [];
     const dit = function (c, t) { if (c) s.push(t); };
@@ -171,6 +182,32 @@ window.__SHOT = {
     // place ; le test etait vert lance seul et rouge derriere les tests du concessionnaire.
     if (veutFrais && !v.garderSauvegarde && !v.garderAchats) {
       try { localStorage.removeItem('superobby.mavoiture'); } catch (e39) {}
+    }
+    // OU EN EST LA PARTIE : ON REPART DU PREMIER JOUR, ET AVANT LA RECONSTRUCTION.
+    // Meme piege d'ordre que superobby.mavoiture juste au-dessus. buildGangs() commence par
+    // guerre.palier = palierDuRang(), qui lit gang.rep, et ne batit QUE les gangs du palier
+    // atteint : un test qui s'offre 5 000 points de respect (il y en a) faisait donc debarquer
+    // SIX gangs dans la ville de tous les tests suivants au lieu des deux du debut. La remise a
+    // zero de guerre.palier existait deja, mais plus bas — APRES la construction : elle
+    // remettait le compteur a 1 sans renvoyer personne chez lui. De la meme facon,
+    // guerre.territoires n'est partage qu'une fois (un seul if sur sa taille) : des
+    // quartiers conquis par un test restaient conquis pour toute la suite, et guerre.sauve
+    // (relu par creerGangRival) imposait aux gangs la force d'une partie deja avancee.
+    // On repose donc la partie telle qu'elle est au premier chargement AVANT de rebatir.
+    if (!v.garderSauvegarde) {
+      try {
+        if (typeof gang !== 'undefined') { gang.rep = 0; gang.force = 20; gang.magot = 0; gang.armes = 0; gang.butin = 0; }
+        if (typeof guerre !== 'undefined') {
+          guerre.palier = 1; guerre.morts = []; guerre.gagne = false; guerre.detruits = 0;
+          guerre.territoires = {}; guerre.saison = 1; guerre.debut = 0;
+          guerre.sauve = null; guerre.sauveRecrues = []; guerre.sauvePerf = [];
+        }
+        // LA PERFORMANCE DU JOUEUR. Elle decide des degats au corps a corps, de la resistance
+        // et de la reussite des coups : un test qui passe par la salle de sport ou le stand de
+        // tir laissait un joueur plus fort a tous les suivants (et majForceGang() la recopie
+        // dans la force du gang quand il est vide).
+        if (typeof P !== 'undefined') P.perf = __SHOT.perf0;
+      } catch (e40b) {}
     }
     if (veutFrais && v.world != null) loadWorld(v.world);
     else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
@@ -470,7 +507,10 @@ window.__SHOT = {
           chien.pet = null; chien.nom = ''; chien.attenteNom = false; chien.attaque = null; chien.attaqueT = 0;
           chien.couche = false; chien.tag = null; chien.ordre = null; chien.ordreT = 0; chien.poste = null;
           chien.saut = 0; chien.patte = 0; chien.garde = 0; chien.balle = null; chien.repas = 0;
-          chien.hp = chien.hpMax || 60; chien.perf = 22; chien.bond = 0; chien.bondT = 0;
+          // on relit la valeur du jeu (CHIEN_PERF0) au lieu de recopier un chiffre : un 22 en dur
+          // ici survivait a la correction du niveau de depart du chien dans index.html
+          chien.hp = chien.hpMax || 60; chien.perf = typeof CHIEN_PERF0 !== 'undefined' ? CHIEN_PERF0 : 14;
+          chien.bond = 0; chien.bondT = 0;
           try { localStorage.removeItem('superobby.chien'); } catch (e38) {}
         }
         // LE STOCKAGE. Tout ce qui precede est aussi ECRIT sur le disque : sans ce menage, la
@@ -506,6 +546,27 @@ window.__SHOT = {
             for (const m of g.membres) { m.ko = 0; m.captif = false; m.enferme = false; m.hp = m.hpMax || 90;
               if (m.av) { m.av.group.rotation.x = 0; m.av.group.visible = true; } }
           }
+        }
+        // LE NIVEAU DES HOMMES DE GANG EST TIRE AU SORT A CHAQUE RECONSTRUCTION DU MONDE.
+        // creerGangeur() donne a chacun le niveau de son gang PLUS rnd(-6, 6) : le meme homme
+        // du meme gang valait 14 a un test et 26 au suivant, alors qu'aucune ligne du jeu
+        // n'avait change entre les deux. Meme famille que la graine de la circulation (n. 12) :
+        // un tirage au sort qui traverse les tests. Symptome exact releve dans la suite
+        // complete : le test du chien compare le chien (performance 22) a un homme des Frelons
+        // Jaunes (niveau du gang : 20) et affirme que le chien est le plus faible — c'etait
+        // vrai une fois sur trois seulement, et la MEME morsure lui coutait 15 ou 18 PV selon
+        // le tirage. On repose chaque homme sur le niveau EXACT de son gang, plus la prime du
+        // chef, comme a la creation mais sans le hasard : deux lancements de la suite donnent
+        // desormais les memes chiffres de combat.
+        for (const g of gangs) for (const m of (g.membres || [])) {
+          m.perf = Math.max(5, Math.min(100, Math.round((g.force || 25) + (m.chef ? 18 : 0))));
+          // ET IL REPART INDEMNE. Quand un test demande la continuite (continu / frais: false),
+          // les gangsters ne sont pas reconstruits : un homme laisse a 3 PV, assomme au sol ou
+          // lance a la poursuite du joueur par le test precedent changeait tout le combat
+          // suivant (forceGangRival ne compte ni les KO ni les captifs).
+          m.hp = m.hpMax || (m.chef ? 170 : 90); m.ko = 0; m.mort = 0; m.captif = false; m.enferme = false;
+          m.cd = 0; m.mordu = 0; m.chasse = null; m.cible = null;
+          if (m.av) { m.av.group.rotation.x = 0; m.av.group.visible = true; }
         }
         for (const m of (gang.membresLibres || [])) { m.doute = 0; m.fidelite = m.achete ? 50 : 80; }
         const sc0 = document.getElementById('sacre'); if (sc0) sc0.classList.remove('on', 'pause');

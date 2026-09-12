@@ -139,6 +139,17 @@ window.__SHOT = {
     // peut demander la continuite avec { continu: true } quand il a besoin de l'etat laisse
     // juste avant (par exemple relire une sauvegarde ecrite a l'appel precedent).
     var veutFrais = v.frais != null ? v.frais : (v.continu ? false : !!window.__SHOT.fraisDefaut);
+    // LA SAUVEGARDE S'EFFACE AVANT LA RECONSTRUCTION, PAS APRES. La voiture achetee au
+    // concessionnaire est ecrite dans superobby.mavoiture ; loadWorld() la REPOSE dans le
+    // garage de la villa pendant qu'il rebatit la ville. Le menage de l'inventaire (plus bas)
+    // arrivait APRES : la cle etait effacee, mais la voiture, elle, etait deja dans
+    // city.cars — et elle y restait pour tous les tests suivants. Symptome exact releve dans
+    // la suite complete : « aucun vehicule n'est gare au depart ailleurs que sur une place
+    // prevue » comptait 35 voitures au lieu de 34, la 35e garee en (48, 179), hors de toute
+    // place ; le test etait vert lance seul et rouge derriere les tests du concessionnaire.
+    if (veutFrais && !v.garderSauvegarde && !v.garderAchats) {
+      try { localStorage.removeItem('superobby.mavoiture'); } catch (e39) {}
+    }
     if (veutFrais && v.world != null) loadWorld(v.world);
     else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');

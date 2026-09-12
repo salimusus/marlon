@@ -13326,14 +13326,41 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     G.meteoSet('clair', 99999); G.meteo.force = 0;
     // ---- 2. LE SON ----
     const c = G.sfx.unlock(), ch = G.sfx.chaine(); if (!c || !ch) return { pourquoi: 'pas de moteur audio' };
+    // ON MESURE AVEC UN ANALYSEUR, PLUS AVEC UN ScriptProcessor. Un ScriptProcessor fabrique
+    // ses echantillons SUR LE FIL PRINCIPAL : quand la page peine (rendu logiciel, une image
+    // par demi-seconde), ses paquets sont purement et simplement jetes — et un son court
+    // (un pas, un coup : 0,1 a 0,4 s) tombe entier dans un paquet perdu. Mesure relevee en
+    // lot derriere deux voisins : averse 0,0011, pas 0,0002, coup 0,0002 — deux mille fois
+    // trop bas, alors que le gain general et les cinq curseurs de melange etaient a leur
+    // valeur d'usine (on le verifie et on le publie desormais).
+    // L'analyseur, lui, tourne sur le fil AUDIO et garde une memoire glissante de 32 768
+    // echantillons (0,74 s) : on la relit toutes les 60 ms, et meme un blocage d'une
+    // demi-seconde du fil principal ne fait plus rien perdre.
     let crete = 0, somme = 0, ech = 0;
-    const sp = c.createScriptProcessor(2048, 1, 1);
-    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0);
-      for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; somme += d[i] * d[i]; ech++; } };
-    const muet = c.createGain(); muet.gain.value = 0;
-    ch.lim.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const an = c.createAnalyser(); an.fftSize = 32768; an.smoothingTimeConstant = 0;
+    const tampon = new Float32Array(an.fftSize);
+    ch.lim.connect(an);
+    const releve = () => { an.getFloatTimeDomainData(tampon);
+      for (let i = 0; i < tampon.length; i++) { const v = Math.abs(tampon[i]); if (v > crete) crete = v; somme += tampon[i] * tampon[i]; ech++; } };
+    const ecoute = async ms => { const t0 = performance.now();
+      while (performance.now() - t0 < ms) { releve(); await dodo(60); }
+      releve(); };
     G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {}
     try { G.craieLitFerme(); } catch (e) {}
+    // ON REPART DU NIVEAU D'USINE. Le volume general et les cinq curseurs de melange sont des
+    // REGLAGES : ils vivent dans le stockage local et survivent a tout. Et la page se met en
+    // SOURDINE des qu'elle passe en arriere-plan (visibilitychange → sfx.sourdine), ce qui
+    // arrive sur un banc d'essai. Mesure relevee en lot : averse 0,0011, pas 0,0002, coup
+    // 0,0002 — deux mille fois trop bas, et le test accusait le jeu. On remet donc la chaine
+    // a son etat d'usine avant de mesurer, et on PUBLIE ce qu'on a trouve.
+    let audio0 = null;
+    try {
+      audio0 = { master: +ch.master.gain.value.toFixed(3), volume: G.settings.volume,
+        mix: Object.keys(G.MIX).map(n => n + '=' + G.MIX[n]).join(' ') };
+      G.sfx.sourdine(false); G.sfx.volume(1);
+      for (const n2 of Object.keys(G.MIX_DEF)) G.sfx.bus(n2, G.MIX_DEF[n2]);
+    } catch (e) {}
+    await dodo(200);
     // LA VILLE SE TAIT PENDANT LA MESURE — sinon ce n'est pas la pluie qu'on mesure.
     // Le banc ecoute AU BOUT de la chaine audio, la ou TOUT arrive. La rumeur du quartier
     // (relancee toutes les 1,2 s par sonsVille), les oiseaux, la cloche de l'ecole et surtout
@@ -13362,7 +13389,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     const fenetre = async (n, espace, quoi) => {
       calme(); crete = 0; somme = 0; ech = 0;
       const j0 = G.SON.joues; let voulus = 0;
-      for (let i = 0; i < n; i++) { G.SON.vivants.length = 0; voulus += (quoi ? quoi() : 0); await dodo(espace); }
+      for (let i = 0; i < n; i++) { G.SON.vivants.length = 0; voulus += (quoi ? quoi() : 0); await ecoute(espace); }
       return { pic: crete, rms: Math.sqrt(somme / Math.max(1, ech)), sale: G.SON.joues - j0 === voulus ? 0 : 1 };
     };
     // CINQ FENETRES ET LA MEDIANE, PLUS UNE FENETRE DE CHAUFFE JETEE.
@@ -13400,10 +13427,11 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     const q = G.quartierSon(); G.ambiance.set(q.k, q.vol, q.coupe); await dodo(250);
     G.sonPas(G.P.pos.x, G.P.pos.y, G.P.pos.z, 'bitume', 1);
     const reculActif = G.ambiance.duckActif();
-    try { ch.lim.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    try { ch.lim.disconnect(an); } catch (e) {}
     G.meteoSet('clair', 99999); G.meteo.force = 0;
     return { avantFondu, apresFondu, fondu: G.METEO_FONDU, duree: G.METEO_DUREE, dureeMin, dureeMax,
       fond, pluieSeule, pas, coups, melange, nPluie, nPas, nCoup, reculActif, recul: G.PLUIE_RECUL,
+      audio0, master: +(ch.master.gain.value).toFixed(3),
       gainPas: +(pas.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1),
       gainCoup: +(coups.pic / Math.max(1e-6, pluieSeule.pic)).toFixed(1) };
   });
@@ -13425,7 +13453,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
     && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif && banc;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecart}, efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecart}, efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 

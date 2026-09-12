@@ -7439,6 +7439,22 @@ test('la basket se voit a six metres, quel que soit le modele achete, et sa seme
         marche: solPour(1.4, 200) };
       poseNeutre(me);
     }
+    // L'AVATAR ENTIEREMENT MUSCLE. C'est CE controle-la qui tombait dans la suite complete :
+    // le verdict « large » (la chaussure est-elle plus large que le mollet ?) etait le seul
+    // du test a ne pas apparaitre dans le bilan, et le mollet grossit de 35 % a l'entrainement.
+    // Des une trentaine de points de muscle il passait DEVANT la basket (0,41 m contre 0,37)
+    // et le test devenait rouge en affichant « toutes plus larges que le mollet ». Le
+    // chiffre est desormais publie, et le tour des modeles se refait a stats.m = 100.
+    const mAvant = G.stats.m, fAvant = G.stats.f;
+    G.stats.m = 100; G.stats.f = 0; G.applyMyLook();
+    res.muscle = {};
+    for (const it of G.SHOP.Chaussures) {
+      G.myCfg.chaussures = it.id; G.applyMyLook(); poseNeutre(me);
+      const b = boite(rig.legL.piedParts), bm = boite(rig.legL.mollet);
+      res.muscle[it.id] = { pied: +(b.max.x - b.min.x).toFixed(3), mollet: +(bm.max.x - bm.min.x).toFixed(3),
+        large: +(b.max.x - b.min.x).toFixed(3) > +(bm.max.x - bm.min.x).toFixed(3), sol: +b.min.y.toFixed(3) };
+    }
+    G.stats.m = mAvant; G.stats.f = fAvant;
     G.myCfg.chaussures = 'basket'; G.applyMyLook(); poseNeutre(me);
     res.course = solPour(2.2, 200);
     poseNeutre(me);
@@ -7460,7 +7476,7 @@ test('la basket se voit a six metres, quel que soit le modele achete, et sa seme
     poseNeutre(me);
     return res;
   `));
-  const m = r.modeles, base = ['basket', 'running', 'montante', 'lumineuse'];
+  const m = r.modeles, mus = r.muscle, base = ['basket', 'running', 'montante', 'lumineuse'];
   const ok = r.rig.mollet === 'CylinderGeometry' && r.rig.cheville && r.rig.semelle && r.rig.languette
     && r.rig.lacets >= 2 && r.rig.bandes === 2 && r.rig.talon && r.rig.bout === 'CylinderGeometry'
     && Object.values(m).every(v => v.longueur >= 0.3 && Math.abs(v.sol) < 0.02 && v.large && Math.abs(v.marche) < 0.02)
@@ -7468,9 +7484,11 @@ test('la basket se voit a six metres, quel que soit le modele achete, et sa seme
     && m.bottes.tige && m.cowboy.tige && m.cowboy.eperon && m.montante.tige && !m.basket.tige
     && Math.abs(r.course) < 0.02 && Math.abs(r.coupDePied) < 0.02
     && r.agenou.pieds > -0.03 && r.agenou.pieds < 0.04 && r.agenou.genou < 0.06 && r.agenou.genou > -0.03
-    && r.cheville.pivot && Math.abs(r.cheville.repos) < 0.01;
-  const liste = Object.entries(m).map(([k, v]) => `${k} ${v.longueur} m / semelle ${v.semelle} m / ${v.prix} pieces`).join(', ');
-  return { ok, detail: `le pied etait une boite plate de 5 cm de semelle : a six metres on ne voyait aucune chaussure · le mollet est maintenant un CYLINDRE avec une cheville, et la chaussure une VRAIE BASKET (semelle epaisse debordante et arrondie a l'avant, empeigne coloree, languette, ${r.rig.lacets} lacets, bande laterale, talon renforce) · ${Object.keys(m).length} modeles vendus : ${liste} · toutes plus larges que le mollet, semelle posee au sol a ${Object.values(m).map(v => v.sol).join(' / ')} m debout, jamais plus de 2 cm d'ecart en marchant (${Object.values(m).map(v => v.marche).join(' / ')}) ni en courant (${r.course}) ni au coup de pied (${r.coupDePied}) — c'est la CHEVILLE qui pivote pour garder la semelle a plat · genou a terre, les semelles sont a ${r.agenou.pieds} m et le genou pose a ${r.agenou.genou} m` };
+    && r.cheville.pivot && Math.abs(r.cheville.repos) < 0.01
+    && Object.values(mus).every(v => v.large && Math.abs(v.sol) < 0.02);
+  const liste = Object.entries(m).map(([k, v]) => `${k} ${v.longueur} m / semelle ${v.semelle} m / ${v.prix} pieces / large=${v.large}${v.tige ? ' / tige' : ''}${v.eperon ? ' / eperon' : ''}`).join(', ');
+  const larges = Object.entries(mus).map(([k, v]) => `${k} ${v.pied} vs mollet ${v.mollet} (${v.large})`).join(', ');
+  return { ok, detail: `le pied etait une boite plate de 5 cm de semelle : a six metres on ne voyait aucune chaussure · le mollet est maintenant un CYLINDRE avec une cheville, et la chaussure une VRAIE BASKET (semelle epaisse debordante et arrondie a l'avant, empeigne coloree, languette, ${r.rig.lacets} lacets, bande laterale, talon renforce) · ${Object.keys(m).length} modeles vendus : ${liste} · toutes plus larges que le mollet, semelle posee au sol a ${Object.values(m).map(v => v.sol).join(' / ')} m debout, jamais plus de 2 cm d'ecart en marchant (${Object.values(m).map(v => v.marche).join(' / ')}) ni en courant (${r.course}) ni au coup de pied (${r.coupDePied}) — c'est la CHEVILLE qui pivote pour garder la semelle a plat · genou a terre, les semelles sont a ${r.agenou.pieds} m et le genou pose a ${r.agenou.genou} m · la CHEVILLE est bien un pivot (${r.cheville.pivot}) et revient a plat au repos (${r.cheville.repos} rad), le rig porte ${r.rig.lacets} lacets et ${r.rig.bandes} bandes laterales, mollet ${r.rig.mollet}, bout ${r.rig.bout} · ENTIEREMENT MUSCLE (stats.m = 100), le mollet grossit de 35 % et la chaussure grossit avec lui : ${larges}` };
 });
 
 test('chaque article de la boutique tient sur le bon segment, sans flotter ni traverser', async p => {

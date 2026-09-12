@@ -13581,7 +13581,17 @@ function applyStats(av, m, f) {   // muscles (bras, épaules), embonpoint (ventr
     for (const p2 of av.muscles.pecs) { p2.visible = av.m > 10; p2.scale.set(1 + mu * 0.5, 1 + mu * 0.4, 1 + mu * 1.6); }
     av.muscles.trap.visible = av.m > 15; av.muscles.trap.scale.set(1 + mu * 0.3, 1 + mu * 1.4, 1);
     for (const d of av.muscles.delts) { d.visible = av.m > 8; d.scale.setScalar(0.55 + mu * 0.75); }
-    for (const l of [av.rig.legL, av.rig.legR]) if (l.mollet) l.mollet.scale.set(1 + mu * 0.35, 1, 1 + mu * 0.35);
+    // LA CHAUSSURE SUIT LE MOLLET. Seul le mollet grossissait a l'entrainement (jusqu'a
+    // +35 %) : a partir d'une trentaine de points de muscle il devenait PLUS LARGE que la
+    // basket (0,41 m contre 0,37), et la chaussure disparaissait derriere la jambe — juste ce
+    // que « la basket se voit a six metres » interdit. On elargit donc le pied et la tige de
+    // botte du meme facteur : la proportion chaussure/mollet reste exactement celle du repos
+    // (1,11), quel que soit l'entrainement. On n'allonge pas le pied, on ne fait que l'elargir.
+    for (const l of [av.rig.legL, av.rig.legR]) if (l.mollet) {
+      l.mollet.scale.set(1 + mu * 0.35, 1, 1 + mu * 0.35);
+      if (l.pied) l.pied.scale.x = 1 + mu * 0.35;
+      if (l.tige) { l.tige.scale.x = 1 + mu * 0.35; l.tige.scale.z = 1 + mu * 0.35; }
+    }
   }
 }
 // ---- le visage marque ----

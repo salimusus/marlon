@@ -13556,7 +13556,12 @@ function poseGants(av, id) {
   for (const br of [av.rig.armL, av.rig.armR]) {
     if (!br.gant) continue;
     br.gant.g.visible = !!G2; br.poing.visible = !G2; br.pouce.visible = !G2;
-    if (!G2) continue;
+    // ON RETIRE LES GANTS POUR DE BON. La position de la main (celle qui tient l'arme, la
+    // raquette ou le casse-croute) est reculee pour tenir compte de l'epaisseur du gant —
+    // mais elle n'etait JAMAIS remise en place quand on enlevait les gants : apres un essayage
+    // de gants de boxe, le pistolet restait decale dans le poing pour le reste de la partie
+    // (mesure : 0,029 m d'ecart au poing a mains nues, 0,074 apres avoir porte des gants).
+    if (!G2) { br.main.position.set(0, br.poing.position.y, 0.09 * S); continue; }
     br.gant.mat.color.setHex(G2.c); br.gant.reversMat.color.setHex(G2.lacet || G2.c);
     br.gant.boule.scale.setScalar(G2.r); br.gant.pouce.visible = !!G2.pouce;
     br.gant.pouce.position.set(-br.cote * br.poingR * 0.74 * G2.r, br.poingR * 0.24 * G2.r, br.poingR * 0.34 * G2.r);

@@ -9266,6 +9266,11 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     const wp = o => o.getWorldPosition(new T2.Vector3());
     const bte = o => { me.group.updateMatrixWorld(true); return new T2.Box3().setFromObject(o); };
     // ---- la boutique ----
+    // « PAS ENCORE ACHETE » : ON LE GARANTIT, on ne l'espere pas. Le test lisait l'inventaire
+    // tel que les tests precedents l'avaient laisse ; un seul d'entre eux qui offre un couteau
+    // au joueur et le controle « la boutique le propose a l'achat » tombait en rouge, sans que
+    // le bilan ne dise jamais pourquoi (le chiffre affiche restait juste).
+    G.owned.delete('arme:knife'); G.majEtuis();
     const fiche = G.catalog('armes').find(x => x.id === 'knife');
     res.boutique = { existe: !!fiche, prix: fiche && fiche.p, nom: fiche && fiche.n, possede: fiche && fiche.owned() };
     G.wallet = 500; G.owned.add('arme:knife'); G.owned.add('arme:pistol'); G.saveOwned && G.saveOwned();
@@ -9296,6 +9301,10 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
       cote: +local(k).x.toFixed(2), pieces: G.knifeMesh().children.length };
     G.setWeapon(me, 'knife', true); me.group.updateMatrixWorld(true);
     res.enMain = +wp(k).distanceTo(wp(rig.armR.poing)).toFixed(3);
+    // « DANS LE POING » SE MESURE EN RAYONS DE POING (voir le test du harnais de dos) : sur un
+    // avatar entraine, le poing fait 80 % de plus et un seuil absolu de 5 cm devient faux.
+    { const gt = rig.armR.gant, pg = (gt && gt.g && gt.g.visible) ? gt.boule : rig.armR.poing;
+      const bb = bte(pg); res.poing = +((bb.max.x - bb.min.x) / 2).toFixed(3); }
     // ---- le coup au ventre, puis le rangement tout seul ----
     posePlayer(); const b = seul(1.3);
     G.setWeapon(me, 'knife', false); G.P.drawn = false;
@@ -9331,7 +9340,7 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     && r.etui.couteau && r.etui.pistolet && r.etui.ceinture && !r.etui.sansAchat
     && r.etui.xCouteau < -0.1 && r.etui.xPistolet > 0.1
     && r.range.visible && r.range.dansLeFourreau < 0.03 && r.range.cote < -0.1 && r.range.pieces >= 8
-    && r.enMain < 0.05
+    && r.enMain < r.poing
     && r.degats >= 25 && r.degats <= 40
     && c[0].hp === 100 - r.degats && c[1].hp === 100 - 2 * r.degats && !c[1].ko && c[2].ko
     && c.every(x => Math.abs(x.ventre - 0.95) < 0.02 && x.enMain && x.degaine)
@@ -9341,7 +9350,7 @@ test('le couteau s\'achète, dort dans son étui de hanche et tue en plusieurs c
     && String(r.tourDesArmes) === String(['pistol', 'rifle', 'sniper', 'knife', null, 'pistol'])
     // et il se remonte à l'envers, sans rester coincé sur « mains nues »
     && String(r.tourArriere) === String(['knife', 'sniper', 'rifle']);
-  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')} · à l'envers : ${r.tourArriere.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau »` };
+  return { ok, detail: `la boutique vend maintenant le « ${r.boutique.nom} » ${r.boutique.prix} 🪙 · une fois acheté, son FOURREAU reste à la ceinture en permanence, à la hanche gauche (x = ${r.etui.xCouteau}) — de l'autre côté de l'étui du pistolet (x = ${r.etui.xPistolet}) — et disparaît si on ne l'a pas · la lame (${r.range.pieces} pièces : soie, gouttière, garde en laiton, manche cerclé, reflet sur le tranchant) dort dedans (${r.range.dansLeFourreau} m d'écart) et passe dans le POING quand on dégaine (${r.enMain} m) · un appui suffit : le coup part DANS LE VENTRE (${c[0].ventre} m au-dessus des pieds), ${r.degats} PV par coup — ${c.map(x => '❤️ ' + x.hp).join(' → ')}, à terre au troisième — puis le couteau retourne SEUL dans son fourreau ${r.rangement.programme} s plus tard (${r.rangement.retourFourreau} m) · à quatre mètres il ne touche personne (${r.horsPortee} PV) · il prend sa place dans le TOUR DES ARMES de la manette (${r.tourDesArmes.map(x => x || 'mains nues').join(' → ')} · à l'envers : ${r.tourArriere.map(x => x || 'mains nues').join(' → ')}) et repond aussi au nom francais « couteau » (${r.nomFrancais}) · les controles qui ne se lisaient nulle part : pas encore possede avant l'achat (${r.boutique.possede}), possede apres (${r.boutique.apresAchat}), ceinture portee (${r.etui.ceinture}), pas de fourreau sans achat (${r.etui.sansAchat}), lame visible au fourreau (${r.range.visible}) a x = ${r.range.cote}, poing de ${r.poing} m de rayon (la lame est DEDANS a ${r.enMain} m), a terre seulement au 3e coup (${c.map(x => x.ko).join('/')}), lame en main et degainee a chaque coup (${c.map(x => (x.enMain ? 'M' : '-') + (x.degaine ? 'D' : '-')).join(' ')}), et plus rien en main apres le rangement (${r.rangement.enMainApres})` };
 });
 
 test('le fusil et le fusil à lunette reposent dans un étui de dos', async p => {
@@ -9353,27 +9362,47 @@ test('le fusil et le fusil à lunette reposent dans un étui de dos', async p =>
     G.owned.add('arme:rifle'); G.owned.add('arme:sniper'); G.majEtuis();
     res.etuiVisible = me.etuis.dos.visible;
     res.pieces = me.etuis.dos.children.length;
-    for (const arme of ['rifle', 'sniper']) {
-      G.equipWeapon(arme); G.setWeapon(me, arme, false); poseNeutre(me);
-      const m = me.weapons[arme];
-      const range = +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3);
-      const derriere = +me.group.worldToLocal(wp(m).clone()).z.toFixed(2);
-      G.setWeapon(me, arme, true); poseNeutre(me);
-      res.armes[arme] = { range, derriere, visible: m.visible,
-        enMain: +wp(m).distanceTo(wp(rig.armR.poing)).toFixed(3),
-        quitteLeDos: +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3) };
-      G.setWeapon(me, arme, false);
-    }
+    // « DANS LE POING », CA SE MESURE EN RAYONS DE POING, PAS EN CENTIMETRES. Le seuil etait
+    // un absolu de 5 cm : sur un avatar entraine, le poing lui-meme fait 80 % de plus (le bras
+    // entier est mis a l'echelle par applyStats) et l'arme, pourtant bien AU CENTRE de la
+    // main, se retrouvait a 6,6 cm de son origine — le test tombait en rouge en affichant un
+    // chiffre parfaitement sain. On exige donc que l'arme soit DANS le poing (ou dans le gant),
+    // quel que soit le gabarit, et on publie le rayon mesure.
+    const rayonMain = () => { me.group.updateMatrixWorld(true);
+      const g = rig.armR.gant, p = (g && g.g && g.g.visible) ? g.boule : rig.armR.poing;
+      const b = new T2.Box3().setFromObject(p); return +((b.max.x - b.min.x) / 2).toFixed(3); };
+    const mesureArmes = (cible) => {
+      for (const arme of ['rifle', 'sniper']) {
+        G.equipWeapon(arme); G.setWeapon(me, arme, false); poseNeutre(me);
+        const m = me.weapons[arme];
+        const range = +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3);
+        const derriere = +me.group.worldToLocal(wp(m).clone()).z.toFixed(2);
+        G.setWeapon(me, arme, true); poseNeutre(me);
+        cible[arme] = { range, derriere, visible: m.visible,
+          enMain: +wp(m).distanceTo(wp(rig.armR.poing)).toFixed(3),
+          quitteLeDos: +wp(m).distanceTo(G.appuiDosMonde(me)).toFixed(3) };
+        G.setWeapon(me, arme, false);
+      }
+    };
+    mesureArmes(res.armes);
+    res.poing = rayonMain();
+    // et le meme controle sur un avatar ENTIEREMENT MUSCLE (stats.m = 100) : c'est le gabarit
+    // que laissait derriere elle la salle de sport, et personne ne le mesurait.
+    const mAvant = G.stats.m, fAvant = G.stats.f;
+    G.stats.m = 100; G.stats.f = 0; G.applyMyLook(); poseNeutre(me);
+    res.muscle = {}; mesureArmes(res.muscle); res.poingMuscle = rayonMain();
+    G.stats.m = mAvant; G.stats.f = fAvant; G.applyMyLook(); poseNeutre(me);
     // sans fusil acheté, pas de harnais
     G.owned.delete('arme:rifle'); G.owned.delete('arme:sniper'); G.equipWeapon(null); G.majEtuis();
     res.sansFusil = me.etuis.dos.visible;
     G.owned.add('arme:rifle'); G.majEtuis();
     return res;
   `));
-  const a = r.armes;
+  const a = r.armes, am = r.muscle;
   const ok = r.etuiVisible && !r.sansFusil && r.pieces >= 4
-    && ['rifle', 'sniper'].every(k => a[k].range < 0.12 && a[k].derriere < -0.1 && a[k].enMain < 0.05 && a[k].quitteLeDos > 0.5);
-  return { ok, detail: `le fusil flottait derrière les omoplates sans rien pour le tenir · il y a maintenant un HARNAIS DE DOS (${r.pieces} pièces : bandoulière en diagonale, sangle de taille, deux appuis et une boucle), visible dès qu'on possède un fusil et absent sinon · le fusil d'assaut y repose à ${a.rifle.range} m de son appui (${a.rifle.derriere} m derrière le dos) et le fusil à lunette à ${a.sniper.range} m · à la prise en main ils quittent le dos (${a.rifle.quitteLeDos} / ${a.sniper.quitteLeDos} m) pour venir dans le poing (${a.rifle.enMain} / ${a.sniper.enMain} m)` };
+    && ['rifle', 'sniper'].every(k => a[k].range < 0.12 && a[k].derriere < -0.1 && a[k].enMain < r.poing && a[k].quitteLeDos > 0.5)
+    && ['rifle', 'sniper'].every(k => am[k].range < 0.12 && am[k].enMain < r.poingMuscle && am[k].quitteLeDos > 0.5);
+  return { ok, detail: `le fusil flottait derrière les omoplates sans rien pour le tenir · il y a maintenant un HARNAIS DE DOS (${r.pieces} pièces : bandoulière en diagonale, sangle de taille, deux appuis et une boucle), visible dès qu'on possède un fusil et absent sinon · le fusil d'assaut y repose à ${a.rifle.range} m de son appui (${a.rifle.derriere} m derrière le dos) et le fusil à lunette à ${a.sniper.range} m · à la prise en main ils quittent le dos (${a.rifle.quitteLeDos} / ${a.sniper.quitteLeDos} m) pour venir dans le poing (${a.rifle.enMain} / ${a.sniper.enMain} m, poing de ${r.poing} m de rayon : l'arme est DEDANS) · le harnais n'apparait que si on possede un fusil (visible=${r.etuiVisible}, et ${r.sansFusil} une fois les deux rendus) · ENTIEREMENT MUSCLE (stats.m = 100), le poing passe a ${r.poingMuscle} m de rayon et l'arme y reste (${am.rifle.enMain} / ${am.sniper.enMain} m), toujours posee sur son appui (${am.rifle.range} / ${am.sniper.range} m)` };
 });
 
 test('l\'ambulancier porte une tenue blanche à croix rouge et un brancard', async p => {

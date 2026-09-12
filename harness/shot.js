@@ -42,9 +42,20 @@ window.__SHOT = {
   // LA TENUE PORTEE AU CHARGEMENT DE LA PAGE. Meme mecanique que les achats : le test de
   // rechargement pose une sauvegarde d'avatar (dreads, taille XXL) puis relance la page, et
   // tous les tests suivants mesuraient un autre personnage que celui du premier chargement.
+  // PROFIL NEUF = AUCUNE TENUE ENREGISTREE. Le banc d'essai ouvre un profil vierge : la cle
+  // superobby.avatar n'existe pas, look0 valait donc null, et la remise en etat de la tenue
+  // etait PUREMENT ET SIMPLEMENT SAUTEE (elle est gardee par « if (look0) »). Tout test qui
+  // essayait une paire de gants de boxe, des bottes, une veste ou une taille XXXL habillait
+  // le personnage pour les 200 tests suivants — et la morphologie change toutes les mesures
+  // de geometrie. On prend donc, a defaut de sauvegarde, la tenue telle qu'elle est au
+  // premier chargement de la page.
   look0: (function () {
     try { var k = 'superobby.banc.look0';
-      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.avatar') || 'null');
+      if (localStorage.getItem(k) == null) {
+        var d = localStorage.getItem('superobby.avatar');
+        if (d == null && typeof myCfg !== 'undefined') d = JSON.stringify(myCfg);
+        localStorage.setItem(k, d || 'null');
+      }
       return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
   })(),
   // LA MUSCULATURE AU CHARGEMENT DE LA PAGE. Meme famille que look0, et le residu le plus

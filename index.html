@@ -11142,12 +11142,28 @@ function rechargeTout() {
   const hommes = essaieSauve('gang', () => restaureGang()) || 0;
   const auto = essaieSauve('voiture', () => restaureMaVoiture());
   const bouts = [];
-  if (wallet) bouts.push(`${wallet} 🪙`);
+  // LE PORTE-MONNAIE DE DEPART N'EST PAS UNE SAUVEGARDE. `wallet` vaut 25 quand rien n'est
+  // enregistre (`+store.get('superobby.wallet') || 25`) : un profil VIERGE lisait donc, comme
+  // tout premier message de sa vie, « 💾 Partie rechargée : 25 🪙 » — et rien ne lui disait
+  // quoi faire. On ne parle de rechargement que si la cle existe vraiment ; sinon on souhaite
+  // la bienvenue avec les trois gestes qui comptent, dans le vocabulaire de SA commande.
+  const walletSauve = store.get('superobby.wallet') != null;
+  if (walletSauve && wallet) bouts.push(`${wallet} 🪙`);
   if (hommes) bouts.push(`${hommes} homme${hommes > 1 ? 's' : ''} dans le gang`);
   if (auto) bouts.push('ta voiture au garage');
   if (owned.size) bouts.push(`${owned.size} achat${owned.size > 1 ? 's' : ''}`);
   if (bouts.length) setTimeout(() => msg('💾 Partie rechargée : ' + bouts.join(' · '), 3200), 900);
-  return { hommes, auto: !!auto, wallet, achats: owned.size };
+  else setTimeout(() => msg(bienvenueVille(), 4200), 900);
+  return { hommes, auto: !!auto, wallet, achats: owned.size, neuve: !bouts.length };
+}
+// Le mot d'accueil d'une partie neuve : une phrase, trois gestes, dans le vocabulaire de la
+// commande utilisee (manette PS5, ecran tactile ou clavier).
+function bienvenueVille() {
+  const b = document.body.classList;
+  const gestes = b.contains('manette') || (typeof padActive === 'function' && padActive()) ? 'stick gauche pour marcher · △ agir · ◯ sauter'
+    : b.contains('touch') ? 'joystick pour marcher · ✋ agir · SAUT sauter'
+    : 'Z Q S D pour marcher · E agir · Espace sauter';
+  return '👋 Bienvenue en ville ! ' + gestes;
 }
 function essaieSauve(nom, fn) { try { return fn(); } catch (e) { console.error('sauvegarde ' + nom, e); return null; } }
 // SAUVEGARDE AUTOMATIQUE. On ne perd plus une partie parce qu'on a fermé l'onglet sans aller

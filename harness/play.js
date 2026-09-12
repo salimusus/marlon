@@ -15046,3 +15046,23 @@ test('une plateforme mobile reste dans la grille des solides pendant toute sa co
   const ok = r.mondes.length === 4 && r.mondes.every(m => m.plateformes > 0) && total === 0;
   return { ok, detail: `la grille spatiale rangeait les plateformes va-et-vient dans une case FIXE, périmée jusqu'à une seconde : elles en sortaient et le sol s'évanouissait sous les pieds · ${total} image(s) où la grille ne rend pas la plateforme là où elle est — ${r.mondes.map(m => `monde ${m.monde} : ${m.plateformes} plateforme(s), course ${m.course} m, ${m.absentes} absente(s) au centre et ${m.pires} au bord sur ${m.images} images`).join(' · ')}` };
 });
+
+test('une partie neuve dit « Bienvenue en ville » et non « Partie rechargée : 25 🪙 »', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const lire = () => (document.getElementById('msg').textContent || '').trim();
+    // profil vierge : aucune cle de porte-monnaie, aucun achat, aucun homme
+    const sauve = localStorage.getItem('superobby.wallet');
+    localStorage.removeItem('superobby.wallet');
+    const r1 = G.rechargeTout(); await dodo(1300); const neuve = lire();
+    // partie vraiment sauvegardee : la cle existe
+    localStorage.setItem('superobby.wallet', '25');
+    const r2 = G.rechargeTout(); await dodo(1300); const rechargee = lire();
+    if (sauve != null) localStorage.setItem('superobby.wallet', sauve);
+    return { neuve, rechargee, r1: r1.neuve, r2: r2.neuve };
+  });
+  const ok = /^👋 Bienvenue en ville/.test(r.neuve) && !/rechargée/.test(r.neuve) && /^💾 Partie rechargée : 25 🪙/.test(r.rechargee) && r.r1 === true && r.r2 === false;
+  return { ok, detail: `profil vierge : « ${r.neuve} » · sauvegarde : « ${r.rechargee} »` };
+});

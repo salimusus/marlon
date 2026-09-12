@@ -13663,6 +13663,14 @@ function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, 
   av.mats.back.map = jerseyTexture(name, j, av.num); av.mats.back.needsUpdate = true;
   if (name !== av.name) { renommeEtiquette(av, name); av.name = name; }
   applyStats(av, look.m || 0, look.f || 0);
+  // CHANGER DE TENUE AU VOLANT NE REND PLUS LES JAMBES A TRAVERS LE PLANCHER. jambesEnCabine
+  // garde la liste des morceaux qu'il a masques et un drapeau « c'est deja fait » ; tout ce
+  // qui precede vient de REMONTRER une partie de ces morceaux (manches, bas, chaussures,
+  // muscles). Le drapeau restant a vrai, le masquage n'etait jamais refait : on a mesure
+  // 63 cm de jambe sous le bas de caisse d'une berline. On oublie donc le masquage ici ; la
+  // premiere image assise le refait proprement.
+  { const g2 = av.group || av;
+    if (g2 && g2.userData && g2.userData.jambesCachees) { g2.userData.jambesCachees = false; g2.userData.cachesCabine = null; g2.userData.seuilCabine = null; } }
   if (av !== me) { setJet(av, !!look.jet); setWeapon(av, look.weapon || null, !!look.aim); setEtuis(av, look.etuis || {}); }
 }
 function bubble(av, text) {   // bulle de chat au-dessus de la tête
@@ -13721,6 +13729,26 @@ function jambesEnCabine(av, cacher, seuil) {
   } else {
     for (const o of (g.userData.cachesCabine || [])) o.visible = true;
     g.userData.cachesCabine = null;
+  }
+}
+// LES EPAULES RENTRENT DANS L'HABITACLE. Le joueur avait demande que « rien ne depasse a
+// l'exterieur du vehicule ». A force de musculation (stats.m monte jusqu'a 100), les
+// deltoides — deux spheres posees sur les epaules, qui grossissent de 30 % avec
+// l'entrainement — sortaient de 13 cm de la carrosserie a la place du conducteur : mesure
+// faite sur une berline neuve, avatar entierement muscle. Assis dans une caisse FERMEE, ces
+// bosses de muscle sont de toute facon invisibles derriere la tole : on les rentre, et on les
+// rend en descendant (applyStats les repose exactement comme l'entrainement les avait mises).
+function musclesEnCabine(av, cacher) {
+  const M = av && av.muscles; if (!M) return;
+  const g = av.group || av; if (!g) return;
+  if (cacher) {
+    for (const o of M.pecs) o.visible = false;
+    M.trap.visible = false;
+    for (const d of M.delts) d.visible = false;
+    g.userData.musclesCaches = true;
+  } else if (g.userData.musclesCaches) {
+    g.userData.musclesCaches = false;
+    applyStats(av, av.m, av.f);
   }
 }
 const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
@@ -16481,7 +16509,7 @@ function monterAvecBot(b) {
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
 function botDescendre(b, garde) {
-  jambesEnCabine(b.av, false);   // il retrouve ses jambes en sortant
+  jambesEnCabine(b.av, false); musclesEnCabine(b.av, false);   // il retrouve ses jambes et ses epaules en sortant
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
@@ -17041,7 +17069,7 @@ function botDit(b, t) { botSay(b, [t]); }
 // Un véhicule réservé par un ami reste « busy » : s'il abandonne, il faut le rendre,
 // sinon la voiture était perdue pour tout le monde.
 function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0;
-  for (const b of bots) if (b.drive && b.drive.car === c) jambesEnCabine(b.av, false); }
+  for (const b of bots) if (b.drive && b.drive.car === c) { jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); } }
 function botStop(b, dire, libre) {
   if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
   if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
@@ -18883,8 +18911,25 @@ function separerVehicules() {
     // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte
     const ra = a.s != null || a.busy, rb = b.s != null || b.busy;
     const pa = ra && !rb ? 0 : rb && !ra ? 1 : 0.5, pb = 1 - pa;
-    if (ox < oz) { const sg = Math.sign(a.x - b.x) || 1; a.x += sg * ox * pa; b.x -= sg * ox * pb; }
-    else { const sg = Math.sign(a.z - b.z) || 1; a.z += sg * oz * pa; b.z -= sg * oz * pb; }
+    // ON NE POUSSE PERSONNE DANS UN MUR. L'ecartement est maintenant la DERNIERE chose de
+    // l'image (voir cityStep) : si le pas de cote met une caisse dans une facade, plus
+    // personne ne la rattrape ensuite — mesure : 97 images de voiture de police DANS un
+    // solide. Le pas qui rentre dans un solide est donc annule, et l'autre vehicule s'ecarte
+    // a sa place. (`exactVeh` est neutralise le temps du test : ici on cherche les MURS, pas
+    // les toles — les toles, c'est justement ce qu'on est en train de separer.)
+    const mur = v => { const ex = v.exactVeh; v.exactVeh = false;
+      const b2 = vehBloque(v, v.x, v.z, v.h, { bar: true, veh: false }); v.exactVeh = ex; return b2; };
+    const bouge = (v, dx, dz) => { if (!dx && !dz) return true;
+      const x0 = v.x, z0 = v.z; v.x += dx; v.z += dz;
+      if (mur(v)) { v.x = x0; v.z = z0; return false; }
+      return true; };
+    if (ox < oz) { const sg = Math.sign(a.x - b.x) || 1;
+      if (!bouge(a, sg * ox * pa, 0)) bouge(b, -sg * ox * pa, 0);
+      if (!bouge(b, -sg * ox * pb, 0)) bouge(a, sg * ox * pb, 0);
+    } else { const sg = Math.sign(a.z - b.z) || 1;
+      if (!bouge(a, 0, sg * oz * pa)) bouge(b, 0, -sg * oz * pa);
+      if (!bouge(b, 0, -sg * oz * pb)) bouge(a, 0, sg * oz * pb);
+    }
     for (const v of [a, b]) if (v.s == null) { v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
   }
 }
@@ -19916,7 +19961,7 @@ function poseVehicule(c, dt) {
 // pour que le banc d'essai puisse la jouer sans dépendre de la cadence d'affichage.
 function poseJoueurAuVolant(dt) {
   const c = drive.car;
-  if (!c) { jambesEnCabine(me, false); me.group.rotation.z = 0; return null; }
+  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); me.group.rotation.z = 0; return null; }
   if (c.rider) {
     // LE PILOTE ETAIT ASSIS A L'ORIGINE DU VEHICULE (z local = 0), c'est-a-dire au-dessus du
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
@@ -20432,6 +20477,7 @@ function assiedAvatar(av, c, p, dt, volant) {
     r.armL.rotation.z = 0.12; r.armR.rotation.z = -0.12;
   }
   jambesEnCabine(av, caisseFermee(c), placesDe(c).seuil);
+  musclesEnCabine(av, caisseFermee(c));
   return w;
 }
 // Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un.

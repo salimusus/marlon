@@ -47,6 +47,17 @@ window.__SHOT = {
       if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.avatar') || 'null');
       return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
   })(),
+  // LA MUSCULATURE AU CHARGEMENT DE LA PAGE. Meme famille que look0, et le residu le plus
+  // sournois des trois : stats.m (l'entrainement) fait GROSSIR l'avatar — bras x1,8,
+  // deltoides, pectoraux, trapezes — et il est enregistre sur le disque. Un test qui passe
+  // par la salle de sport laissait donc un personnage plus large pour les 200 tests suivants.
+  // Symptome exact releve dans la suite complete : « chacun sa place assise dans le vehicule »
+  // trouvait 9 cm de deltoide DEHORS a la place du conducteur, et etait vert lance seul.
+  stats0: (function () {
+    try { var k = 'superobby.banc.stats0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.stats') || 'null');
+      return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
+  })(),
   relevePropre() {
     const s = [];
     const dit = function (c, t) { if (c) s.push(t); };
@@ -426,8 +437,16 @@ window.__SHOT = {
         // suivants — et la morphologie change les mesures de geometrie du poste Personnages.
         if (typeof myCfg !== 'undefined' && __SHOT.look0) {
           for (const kl of Object.keys(__SHOT.look0)) if (kl in myCfg) myCfg[kl] = __SHOT.look0[kl];
-          try { applyMyLook(); } catch (e37) {}
         }
+        // LA MUSCULATURE. Elle ne vit pas dans myCfg mais dans l'objet stats, et applyMyLook le lit
+        // (myLook() renvoie m: stats.m, f: stats.f) : sans cette remise a zero, la salle de
+        // sport d'un test rendait l'avatar plus large pour tous les suivants.
+        if (typeof stats !== 'undefined') {
+          const s0 = __SHOT.stats0 || {};
+          stats.m = +s0.m || 0; stats.f = +s0.f || 0; stats.endu = +s0.endu || 0;
+          try { localStorage.setItem('superobby.stats', JSON.stringify(stats)); } catch (e37b) {}
+        }
+        try { applyMyLook(); } catch (e37) {}
         // LE CHIEN ADOPTE. Il suit le joueur d'un test a l'autre, aboie, mord et se met entre
         // le joueur et ce qu'on mesure ; et ses points de vie restaient a 20 apres une bagarre.
         if (typeof chien !== 'undefined') {

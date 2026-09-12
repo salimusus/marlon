@@ -121,6 +121,61 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s8/s8-4-braque.png` (après L2 : arme dans l'étui), `img/s8/s8-5-tire.png`.
 - **Sonde** : `s8-pc.log` : `degaine.drawn = true` → `braque.msg = "🤚 Arme rangée dans l'étui"`, `tir.shots = 0`, `tir.ammo = 8`.
 
+### 48. Le parachute ne s'ouvre pas : on marche jusqu'au bord du toit, on tombe 13 m et le jeu dit « Bien posé ! »
+- **Gravité** : GRAVE (fonction promise : sauter en parachute)
+- **Reproduire** : ascenseur du toit (30,9, 19,3) → toit (35,5, 16, y 13) ; △ sur le sac de parachute (38,5, 16) ; stick vers l'est jusqu'au bord, ◯.
+- **On voit** : « 🪂 Parachute sur le dos : saute du toit ! » puis, une demi-seconde après avoir quitté le toit, le personnage est au sol (y 0) avec « 🪂 Bien posé ! La voile se replie toute seule » — la voile ne s'est jamais déployée (`P.voileVol = false`, `P.voileMesh = null`), pas de descente. Le deltaplane, lui, marche (vol plané à 14 m/s, −2,6 m/s).
+- **On devrait voir** : la voile ronde qui s'ouvre et une descente lente.
+- **Capture** : `img/s14/s14-parachute-1-vol.png`, `img/s14/s14-parachute-2-sol.png` (comparer `img/s14/s14-deltaplane-1-vol.png`).
+- **Sonde** : `s14-pc.log` `parachute.vol[0] = {t: 0.5, y: 0, vol: false, mesh: false, msg: "Bien posé !"}`.
+
+### 49. Le couteau ne frappe jamais à la manette, et L2 / ✕ se marchent dessus à chaque arme
+- **Gravité** : GRAVE
+- **Reproduire** : couteau équipé (croix →), à 1,5 m d'un habitant : L2 puis R2 ; ou ✕ puis L2 puis R2.
+- **On voit** : « 🤚 Arme rangée dans l'étui », l'habitant garde ses PV (28 → 28 après 4 R2). Le couteau, une fois sélectionné avec l'arme sortie, se retrouve dans un état « sortie/rangée » inversé : chaque L2 bascule, et R2 ne plante que si l'état interne dit « sortie » — l'enfant ne peut pas le deviner.
+- **On devrait voir** : L2 = viser (arme sortie quoi qu'il arrive), R2 = frapper.
+- **Capture** : `img/s8b/s8b-4-couteau-braque.png`, `img/s8b/s8b-5-couteau-coup.png`.
+- **Sonde** : `s8b-pc.log` `couteauL2.drawn = false`, `couteauCoup.touche = false`, `couteau3.hp = 28`.
+
+### 50. Arme braquée, la croix → change d'ARME au lieu de changer de cible
+- **Gravité** : GRAVE (le plan annoncé : flèches ← → = changer de cible quand on vise)
+- **Reproduire** : pistolet, L2 tenu (🎯 Lucas_2014 · 10 m), deux autres habitants à 15 m, appuyer → puis → puis ←.
+- **On voit** : la cible reste Lucas_2014 les trois fois, et le message passe à « 🔫 Couteau » : on a changé d'arme en pleine visée ; la pastille affiche ensuite « 🔪 Couteau de chasse 5/undefined ».
+- **On devrait voir** : la cible qui passe à l'habitant suivant, l'arme inchangée ; jamais « undefined » à l'écran.
+- **Sonde** : `s8b-pc.log` `cibles = {c0..c3: "Lucas_2014", msg: "🔫 Couteau"}`, `relache.act = "🔪 Couteau de chasse 5/undefined"`.
+
+### 51. Réunion de chef de gang : à la manette, la bague est sur un bouton d'un AUTRE écran
+- **Gravité** : GRAVE (à la manette, impossible de choisir Alliance / Tribut / Guerre)
+- **Reproduire** : accepter le rendez-vous de Nina la Fouine (place du centre (0, 40)) ; la fenêtre « 🤝 Nina la Fouine » s'ouvre et met le jeu en pause.
+- **On voit** : quatre gros boutons (Alliance 98 🪙, Tribut 108 🪙, Déclarer la guerre, Partir) mais `.focustv` est sur `guerreBack:Retour` (le bouton de l'écran 🚩 fermé) : ✕ ne valide rien de visible, ↓ ne bouge pas la bague.
+- **On devrait voir** : la bague sur « Alliance », ↓ pour descendre, ✕ pour choisir.
+- **Capture** : `img/s10/s10-7-reunion.png`.
+- **Sonde** : `s10-pc.log` `reunionUI.focus = "guerreBack:Retour"`.
+
+### 52. Les pompiers ne bougent pas : le feu brûle 2 minutes, le camion reste à la caserne
+- **Gravité** : GRAVE (fonction promise : « appeler les pompiers sur un feu »)
+- **Reproduire** : `declencheIncendie(0, 60)` (ou attendre le feu spontané « 🔥 AU FEU ! La caserne envoie le camion ») et regarder la caserne (−40, 122).
+- **On voit** : les trois pompiers restent en état `route` à 84 m du feu sans avancer d'un centimètre (84,28 → 84,29 en 25 s), le camion (`kind: pompier`) reste à 81 m ; le feu garde `force = 100`, `city.incendies = 2`.
+- **On devrait voir** : le camion qui part, sirène, la lance à eau, le feu qui baisse.
+- **Capture** : `img/s12/s12-8-pompiers-20s.png`, `img/s12/s12-9-pompiers-50s.png`, `img/s12/s12-10-feu-fin.png`.
+- **Sonde** : `s12-pc.log` `pompiers[*]` : distance constante 84,28 / camion 81,13, `incendies 2` jusqu'au bout.
+
+### 53. L'équipe municipale met plus de deux minutes à venir réparer un lampadaire cassé (1 m/s)
+- **Gravité** : GRAVE (fonction promise : « regarder les employés réparer un lampadaire »)
+- **Reproduire** : casser le lampadaire (45,5, 13,2) (`breakThing`), regarder les trois employés du dépôt (22…26, 125).
+- **On voit** : ils passent en `route` mais avancent de 120 m à 80 m en 40 s (1 m/s à pied, aucun véhicule) ; aucun chantier ouvert (`city.chantiers = []`) ; le lampadaire est encore cassé après 2 min.
+- **On devrait voir** : le fourgon qui part avec l'équipe, un chantier balisé, une réparation en moins d'une minute.
+- **Capture** : `img/s12/s12-4-reparation-30s.png`, `img/s12/s12-6-reparation-fin.png`.
+- **Sonde** : `s12-pc.log` `reparation[*].etats` : « route@120 » → « route@80 » à 40 s.
+
+### 54. À l'école, △ devant une chaise ne fait pas s'asseoir
+- **Gravité** : GRAVE (toute la leçon commence par « assieds-toi »)
+- **Reproduire** : classe Géométrie (−69, 213), se placer à 1,2 m au sud de la chaise (−72,6, 209,1) face à elle, △.
+- **On voit** : le jeu a bien dit « 🪑 E : s'asseoir en classe » en arrivant, mais `benchNear = false`, `classNear = false` au moment de l'appui, △ ne fait rien (`P.sit = false`), la fenêtre des exercices ne s'ouvre pas ; ◯ ensuite fait sauter le personnage sur la table.
+- **On devrait voir** : le personnage assis à la table, la maîtresse qui parle, la première question.
+- **Capture** : `img/s11/s11-0-devant-chaise.png`, `img/s11/s11-1-assis.png`.
+- **Sonde** : `s11-pc.log` `assis = {sit: false, ui: null}`.
+
 ## GÊNANT
 
 ### 4. Sur l'accueil à la manette, ✕ ne fait rien : il faut 9 appuis sur ↓ pour atteindre « Jouer »
@@ -285,6 +340,36 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : △ au comptoir de Blocs Motors avec 25 🪙, en 1280×720.
 - **On voit** : la fiche des 8 modèles remplit tout l'écran, la ligne de boutons est coupée en bas (en 1920×1080 elle tient).
 - **Capture** : `img/s6/s6-1-conces-25.png` (comparer `img/s6/s6-1-conces-25-tv.png`).
+
+### 55. Mettre KO un gangster demande plus de 15 coups de poing
+- **Gravité** : GÊNANT (la garde de l'adversaire divise chaque coup par quatre : 100 → 50 PV en 15 coups, `peutKidnapper = false`)
+- **Reproduire** : membre des Frelons Jaunes, ▢ ×15 à 1,2 m.
+- **On devrait voir** : six coups (14 + 14 + 26 ×2) comme annoncé.
+- **Sonde** : `s10-pc.log` `koGangster = {n: 15, ko: false, hp: 50}`.
+
+### 56. Villa : le portail et la porte du garage s'ouvrent trop tard, la voiture les percute (16 % de dégâts en rentrant chez soi)
+- **Gravité** : GÊNANT
+- **Reproduire** : sa propre voiture, arriver au portail (60, 189) à 45 km/h ; puis entrer dans le garage (48, 185,5).
+- **On voit** : le portail s'ouvre à 0,39 quand la voiture est déjà dessus (vitesse 13 → −1 m/s, 🔧 3,8 %), la porte du garage idem (🔧 16 % à l'arrivée). △ fait descendre le personnage alors que la voiture roule encore à 16 km/h.
+- **Capture** : `img/s6b/s6b-1-portail.png`, `img/s6b/s6b-3-garage-villa.png`.
+
+### 57. Conduire la grue hors du dépôt = « 💥 ACCIDENT ! — la police arrive »
+- **Gravité** : GÊNANT
+- **Reproduire** : dépôt municipal, △ sur la grue (24,4, 130,5), R2 2 s, stick gauche 1,5 s.
+- **On voit** : accident, véhicule immobilisé, police, amende — les engins sont garés serrés et le moindre contact avec la benne voisine déclenche le constat.
+- **Sonde** : `s13-pc.log` `grue.roule.msg = "💥 ACCIDENT ! …"`.
+
+### 58. Tirer sur un habitant : « la police laisse passer (avertissement 1/4) »
+- **Gravité** : GÊNANT (jeu pour enfant : trois balles dans un passant sans réaction)
+- **Reproduire** : L2 sur un habitant, R2 ×3 (100 → 28 PV).
+- **On voit** : « ⚠️ tirer sur Lucas_2014 : la police laisse passer (avertissement 1/4) », `wanted = 0`. Idem trois coups de poing sur une vitrine ou un tir dans la vitrine : rien ne casse, personne ne vient.
+- **Sonde** : `s8b-pc.log` `tir.wanted = 0` ; `s9-pc.log` `coupsVitrine.cassee = false`, `coupDeFeu.wanted = 0`.
+
+### 59. Hélicoptère : ▢ pose l'appareil SUR un objet de la rue
+- **Gravité** : GÊNANT
+- **Reproduire** : héliport (43, −13), △, ◯ 4 s, stick avant 4 s, ▢.
+- **On voit** : la descente automatique (« Atterrissage… ») se termine à y 0,21 en (43, 51) sur un solide de 3 × 2,4 × 7 m (abribus / mobilier) ; △ fait descendre le personnage à y 2,3, debout sur l'objet.
+- **Capture** : `img/s14/s14-heli-4-au-sol.png`.
 
 ## COSMÉTIQUE
 

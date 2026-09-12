@@ -18936,16 +18936,27 @@ function separerVehicules() {
     // les toles — les toles, c'est justement ce qu'on est en train de separer.)
     const mur = v => { const ex = v.exactVeh; v.exactVeh = false;
       const b2 = vehBloque(v, v.x, v.z, v.h, { bar: true, veh: false }); v.exactVeh = ex; return b2; };
-    const bouge = (v, dx, dz) => { if (!dx && !dz) return true;
+    let bougea = false;
+    const bouge = (v, dx, dz) => { if (!dx && !dz) return false;
       const x0 = v.x, z0 = v.z; v.x += dx; v.z += dz;
       if (mur(v)) { v.x = x0; v.z = z0; return false; }
-      return true; };
-    if (ox < oz) { const sg = Math.sign(a.x - b.x) || 1;
-      if (!bouge(a, sg * ox * pa, 0)) bouge(b, -sg * ox * pa, 0);
-      if (!bouge(b, -sg * ox * pb, 0)) bouge(a, sg * ox * pb, 0);
-    } else { const sg = Math.sign(a.z - b.z) || 1;
-      if (!bouge(a, 0, sg * oz * pa)) bouge(b, 0, -sg * oz * pa);
-      if (!bouge(b, 0, -sg * oz * pb)) bouge(a, 0, sg * oz * pb);
+      bougea = true; return true; };
+    const sgx = Math.sign(a.x - b.x) || 1, sgz = Math.sign(a.z - b.z) || 1;
+    const ux = ox < oz ? sgx * ox : 0, uz = ox < oz ? 0 : sgz * oz;
+    if (!bouge(a, ux * pa, uz * pa) && pa) bouge(b, -ux * pa, -uz * pa);
+    if (!bouge(b, -ux * pb, -uz * pb) && pb) bouge(a, ux * pb, uz * pb);
+    // DERNIER RECOURS : LE COUPLE COINCE. Le garde-fou ci-dessus refuse le pas qui finit dans
+    // un solide — mais il le refusait AUSSI a un vehicule qui etait DEJA dedans au depart, et
+    // qui ne pouvait donc plus jamais s'ecarter : mesure, deux ambulances garees devant
+    // l'hopital (leur place mord le hangar) et posees l'une sur l'autre restaient a 0,60 m
+    // apres dix passages, pas un centimetre gagne, tole dans tole. Quand AUCUN des deux n'a pu
+    // faire son pas, on force donc celui qui etait deja dans un solide : on n'empire rien
+    // (il y etait), et les caisses se demelent. Tant qu'un seul des deux peut bouger, on ne
+    // change rien : c'est le chemin normal, celui qui garde la police et les metiers propres.
+    if (!bougea) {
+      const ca = pa > 0 && mur(a), cb = pb > 0 && mur(b);   // celui qui suit son rail ne bouge pas, meme en dernier recours
+      const qa = ca ? (cb ? pa : 1) : 0, qb = cb ? (ca ? pb : 1) : 0;
+      a.x += ux * qa; a.z += uz * qa; b.x -= ux * qb; b.z -= uz * qb;
     }
     for (const v of [a, b]) if (v.s == null) { v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
   }

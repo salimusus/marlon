@@ -1,287 +1,184 @@
-# MARLON — Empire urbain · Refonte 03
+# MARLON — Sunshine City · 04
 
-**Nouvelle base jouable, réécrite à partir du principe de conquête de territoires.**
-Le code du précédent jeu a été remplacé ; seul le moteur Three.js r128 et sa
-licence sont réutilisés. Les anciens modes SuperObby ne sont plus présents.
+Extension jouable de la refonte 03 : ville cartoon pastel, personnage jeune adulte,
+commerces, véhicules personnalisables et activités. **Version de développement**.
+Le bilan détaillé, y compris les demandes encore partielles, figure dans
+[BILAN-SUNSHINE.md](BILAN-SUNSHINE.md).
 
-**Statut : version de développement.** Cette livraison ne constitue pas un jeu
-AAA, une reproduction de GTA, ni une version validée pour commercialisation.
-Les modèles et textures sont procéduraux. La différence visuelle peut être
-évaluée dans les captures réelles du dossier `verification/` et directement en jeu.
+## Jouer
 
-## Lancer le jeu
-
-1. Extraire **toute** l’archive.
-2. Ouvrir `index.html` dans Chrome, Edge ou Firefox avec l’accélération graphique.
-3. Cliquer sur **Entrer dans la ville**.
-4. À proximité de la planque : **B** pour recruter un équipier (200 €).
-5. Approcher la Vesper GT bleue et appuyer sur **E** pour entrer.
-6. **M** ouvre la carte. Choisir un quartier voisin et placer un repère.
-
-Tous les fichiers du jeu sont locaux. Aucun CDN, police distante, modèle distant
-ou service multijoueur n’est nécessaire. Une ouverture directe du fichier HTML
-ne nécessite pas de compilation. Si le navigateur restreint les commandes ou la
-sauvegarde en fichier local, lancer le serveur fourni :
+Ouvrir le [jeu publié](https://salimusus.github.io/marlon/). Pour une utilisation
+locale, extraire tous les fichiers et ouvrir `index.html`, ou exécuter :
 
 ```sh
 python3 serve.py
 ```
 
-Sous Windows, `py serve.py` convient également. Ouvrir ensuite
-`http://localhost:8080`. Garder la même adresse pour retrouver la progression.
+Puis ouvrir `http://localhost:8080`. Le jeu n’utilise aucun CDN ou modèle distant.
+Garder la même adresse et le même navigateur pour retrouver la sauvegarde.
 
-## Nouveautés de la version 3
+**Commencer par M / pavé tactile → Lieux, commerces et activités.** Choisir un
+lieu place une destination et un trajet jaune sur la minicarte. Entrer par
+l’ouverture centrale du bâtiment, approcher le comptoir et appuyer sur **E /
+Triangle**. Les achats exigent la monnaie gagnée dans le jeu. Aucun argent réel
+ne peut être acheté ou misé.
 
-- Animation avec transitions progressives entre repos, marche, course et visée.
-  Les jambes disposent d’une résolution à deux articulations, avec flexion des
-  genoux et orientation des pieds. Le haut du corps peut viser ou recharger
-  pendant le déplacement ; le cycle des jambes reste continu.
-- Respiration, inclinaison du buste, recul, manipulation du chargeur, alternance
-  des coups, saut, amortissement de réception, chute et geste de secours.
-  Les dégâts de mêlée sont appliqués au contact prévu dans le geste, une seule
-  fois par coup. Un troisième coup réussi inflige davantage de dégâts.
-- Entrée et sortie de voiture sur 1,45 seconde avec portière articulée, transition
-  vers le siège, conducteur visible et volant animé. La conduite attend la fin
-  de l’entrée ; la pause suspend la transition.
-- Équipiers vulnérables : santé individuelle affichée, mise à terre, 60 secondes
-  pour intervenir et réanimation de 2,6 secondes. Une blessure du joueur
-  interrompt son geste de secours. Le ravitaillement soigne aussi l’équipe.
-- Recherche de chemin autour des bâtiments et séparation locale des acteurs.
-  Les équipiers sont replacés dans un emplacement libre à la sortie de voiture.
-- Sauvegarde étendue, copie précédente de secours, migration de la refonte 02
-  et export/import d’un fichier de campagne depuis Pause.
-- Réglage pour réduire les secousses de caméra.
+## Dans cette version
 
-### Examiner les animations
+- Un personnage jeune adulte avec jean bleu clair, débardeur blanc, baskets,
+  visage repris, bras découverts et animations de la refonte 03.
+- Une ville d’environ 600 × 600 unités : cent bâtiments, vingt lieux identifiés,
+  architecture pastel, palmiers, plantations, parcs et enseignes. Les bâtiments
+  construits avec étages disposent d’escaliers, de paliers et d’un ascenseur.
+  Les intérieurs utilisent une structure modulaire commune.
+- 92 bots créés : 76 habitants et agents urbains, 16 employés de comptoir.
+  Les personnages proches sont animés et les plus éloignés sont masqués.
+- 34 véhicules dans la simulation, 18 familles de modèles dont 14 achetables :
+  compacte, berline, break, 4×4, sport, supercar, cabriolet, pick-up, utilitaire,
+  classique, buggy, limousine, vélo et moto. Patrouilles et services complètent
+  le parc. Les formes, empattements, hauteurs et performances varient.
+- Un showroom jaune vitré, quatre véhicules d’exposition et livraison sur le
+  parking après achat. Huit peintures de base, prix, puissance et vitesse
+  distincts. Les places occupées empêchent une livraison qui ferait apparaître
+  deux voitures au même endroit.
+- Garage : réparation, moteur, turbo, jupes, becquet, vitres teintées, roues,
+  suspension basse, jantes, peinture métallisée ou fluo, double échappement et
+  moteur apparent. Les modifications sont visibles ; moteur et turbo augmentent
+  accélération et vitesse. Une pièce installée ne peut être facturée deux fois.
+- Boutique : douze articles de vêtements et accessoires, achat puis équipement
+  gratuit. Coiffeur : cinq coupes. Tatoueur : trois choix de motif. Armurerie :
+  quatre profils d’armes avec dégâts et cadence distincts, achat de munitions.
+- Pizzeria et hôpital avec achats de soins. Salle de sport et stand de tir avec
+  séances animées, progression de force/précision et évolution visuelle des bras.
+- École : classe, tables, chaises, tableau gris, cour, marelle, préau et terrain
+  de basket. 494 questions : **264 maths, 110 logique, 80 géographie, 40 biologie**.
+  Les maths et suites logiques sont générées à partir de paramètres ; les autres
+  questions reposent sur une liste de faits. Récompense de 5 pièces par question
+  réussie inédite, protégée contre les doubles clics. La question, les choix et
+  la réponse sont également dessinés sur le tableau 3D.
+- Banque : dépôts et retraits, trois coffres fictifs à ouvrir pendant un braquage
+  de 18 secondes. Un coffre toutes les six secondes, gains 750, 1 500 et 2 250
+  pièces, alerte trois étoiles. E / Triangle interrompt le braquage.
+- Police : patrouilles, gyrophares rouge/bleu, niveaux d’alerte de 1 à 3, poursuite
+  locale et amendes. Déclaration contre les gangs simulés au commissariat.
+- Circulation automatique, y compris vélo/moto, arrêt devant un feu rouge et
+  obstacle proche. Feux à phases vert/orange/rouge, avec intervalles où tous les
+  axes sont rouges. Panneaux STOP et cédez-le-passage visibles.
+- Collisions : perte de santé, déformation visuelle de carrosserie et pare-chocs,
+  disparition des vitres très endommagées, marques au sol. Bancs, poubelles et
+  lampadaires dédiés peuvent être renversés. Un agent technique peut les réparer.
+- Accident : constat de 80 pièces, dépanneuse, rapprochement, câble de treuil,
+  montée sur plateau et transport au garage. Sortir du véhicule pour permettre
+  le chargement. La réparation reste à demander au comptoir.
+- Chiens et chats adoptables, nommables, avec suivi, assis, couché et patte.
+  Trois compagnons maximum. Approcher un compagnon puis E pour ses commandes.
+- Recrutement d’habitants dans la rue, nom du gang et ordres à trois équipiers :
+  suivre, protéger, récupérer une voiture, braquer, rapporter des munitions,
+  aller à l’hôpital, au sport ou au stand de tir.
+- Villa avec intérieur, piscine décorative, jardin, portail automatique et
+  trampoline qui fait rebondir le joueur. Grande roue avec tour de cabine.
+- Hélicoptère pilotable, montée/descente et pose sur les toits.
+- Bureau des missions : colis, circuit automobile, vol panoramique et promenade
+  d’un compagnon, avec étapes, délai, récompense et guidage sur la minicarte.
+  Les cinq opérations territoriales de la base restent disponibles avec J.
+- Casino : roulette animée, rouleaux de machine à sous, poker fermé avec cartes
+  à conserver, dames et échecs contre un bot. Monnaie fictive, mise de 20 pièces.
+- Cycle jour/nuit de dix-huit minutes de simulation. Soleil, pluie et neige
+  sélectionnables dans Pause ; particules et éclairage adaptés.
 
-Ouvrir `studio.html` ou **Pause → Studio des animations**. Dix séquences sont
-sélectionnables, avec pause, reprise, vitesse de 0,25× à 1,5× et rotation de la
-vue par glissement. Le studio utilise le même personnage et le même moteur
-d’animation que le jeu, avec déplacement sur place pour faciliter l’inspection.
+## Commandes
 
-`verification/MARLON-animations-v3.mp4` montre huit secondes du rendu réel du
-studio : marche, course, visée en déplacement, rechargement, coups et saut.
-La vidéo est un échantillon de poses, pas une mesure de performance du jeu.
-
-## Ce qui a été reconstruit
-
-- Ville de douze quartiers sur une grille d’environ 600 × 600 unités, avec
-  253 constructions principales, vitrines, corniches, toitures techniques,
-  escaliers de secours extérieurs, passages piétons, mobilier, arbres,
-  quais, voies ferrées, conteneurs et grues.
-- Éclairage directionnel avec ombres, ciel dégradé, brouillard de distance,
-  façades texturées, reflets automobiles et réglage de résolution.
-- 34 véhicules : coupés, berlines, SUV et utilitaires. Carrosseries construites
-  par sections, habitacles vitrés, montants, rétroviseurs, roues et jantes,
-  éclairage avant/arrière, suspension visuelle et direction des roues avant.
-  Six véhicules suivent des trajets de circulation simples.
-- Personnages aux proportions humaines, articulations animées pour la marche,
-  la course, le saut, la visée et le corps à corps.
-- Contrôleur de déplacement indépendant de la caméra. Le stick gauche ne
-  génère jamais de fausses touches clavier. Le stick droit ne fait pas marcher.
-- Caméra à la troisième personne avec orbite libre, visée à l’épaule, recentrage
-  explicite et rétraction devant les obstacles. Le suivi automatique de la
-  direction est réservé au véhicule, après une temporisation de caméra libre.
-- Conduite analogique, accélération, freinage puis marche arrière, frein à main,
-  collisions, dégâts et sortie uniquement à faible vitesse avec recherche d’un
-  emplacement libre.
-- Combat avec chargeur, réserve, rechargement, cadence, recul visuel, tracés de
-  tirs, dégâts, mêlée, riposte ennemie et soutien des équipiers. Les tirs testent
-  l’obstacle entre le canon et le point visé, en plus du rayon de caméra.
-- Carte stratégique, conquêtes adjacentes, revenus, fortifications,
-  contre-attaques annoncées et cinq opérations.
-- Interface revue, menus utilisables à la manette, réglages de sensibilité,
-  zone morte, inversion verticale, profil manette, son et commandes tactiles.
-
-## Les commandes
-
-| Action | Clavier / souris | DualSense |
+| Action | Clavier/souris | DualSense |
 |---|---|---|
-| Déplacement / direction | ZQSD ou WASD | Stick gauche |
+| Marcher / direction | ZQSD ou WASD | Stick gauche |
 | Caméra | Souris après clic dans la scène | Stick droit |
-| Courir | Maj maintenue | L3 maintenu |
-| Recentrer la caméra | C | R3 |
-| Entrer / sortir d’un véhicule | E | Triangle |
-| Sortir / ranger l’arme | G | Croix |
+| Courir | Maj | L3 maintenu |
+| Interagir / entrer / sortir | E | Triangle |
+| Carte et annuaire des lieux | M | Pavé tactile |
+| Opérations territoriales | J | Create |
+| Pause, météo et gang | Échap | Options |
 | Sauter | Espace | Rond |
+| Arme | G | Croix |
+| Viser / tirer | Clic droit / clic gauche | L2 / R2 |
+| Recharger | R | Gauche de la croix |
 | Corps à corps | F | Carré |
-| Viser | Clic droit maintenu | L2 maintenue |
-| Tirer | Clic gauche ou X | R2 |
-| Recharger | R | Gauche de la croix directionnelle |
-| Accélérer | Z ou W | R2 |
-| Freiner puis reculer | S | L2 |
+| Recruter à la planque / relever un équipier | B | Haut de la croix |
+| Ravitaillement à la planque | H | Bas de la croix |
+| Recentrer caméra | C | R3 |
+| Accélérer / freiner-reculer | W ou Z / S | R2 / L2 |
 | Frein à main | Espace | R1 |
-| Recruter à la planque / relever un équipier proche | B | Haut de la croix directionnelle |
-| Soins, munitions, réparation à la planque | H | Bas de la croix directionnelle |
-| Carte | M | Pavé tactile |
-| Opérations | J | Create |
-| Pause / fermer | Échap | Options |
+| Hélicoptère : monter / descendre | Espace / Maj | R2 / L2 |
 
-Dans les menus : stick gauche ou croix directionnelle pour parcourir les boutons,
-Croix ou Triangle pour activer, Rond pour revenir. La carte propose également
-une sélection horizontale avec le stick gauche. Les réglages restent accessibles
-au clavier et à la souris. La touche Échap du navigateur peut d’abord libérer la
-souris avant de reprendre les commandes normales du menu.
+Menus : stick gauche ou croix, puis Croix/Triangle pour valider. Les tableaux de
+casino et la sélection des cartes de poker utilisent actuellement la souris ou
+le tactile. Les réglages de zone morte, sensibilité, inversion et réduction des
+secousses sont conservés. **Les essais DualSense sont simulés**, pas réalisés
+sur une manette USB/Bluetooth physique.
 
-Brancher ou appairer la DualSense puis appuyer sur un bouton dans la page active.
-Le profil automatique donne priorité à la correspondance standard du navigateur.
-Le profil Sony HID brut lit la caméra sur les axes 2/5 et les gâchettes sur 3/4.
-Le diagnostic affiche les valeurs effectivement reçues. Une déconnexion met le
-jeu en pause lorsqu’on utilisait la manette. Une perte de focus remet les entrées
-à zéro. La zone morte par défaut est radiale, à 17 %.
+## Sauvegarde
 
-**Les essais manette de cette livraison sont simulés.** Aucun essai USB ou
-Bluetooth sur une DualSense physique n’a été effectué. Les vibrations simples
-sont facultatives selon le navigateur ; les gâchettes adaptatives sont absentes.
+Le format de campagne validé de la refonte 03 reste le conteneur. Le champ `city`
+contient la progression Sunshine : compte bancaire, tenue, achats, coupe,
+tatouage, collection et pièces automobiles, animaux, performances, mission,
+questions déjà récompensées, météo, heure et alertes. Les sauvegardes des refontes
+02/03 sont reprises avec des valeurs initiales pour les nouveautés.
 
-## Conquérir et gagner
+Sauvegarde automatique, copie précédente de secours et export/import dans Pause.
+Les voitures détenues gardent leur position ; la circulation est replacée sur
+ses circuits au chargement. La vitesse repart de zéro. Les gestes en cours,
+parties de casino, dégâts de mobilier, interventions de dépannage et ordres
+transitoires des équipiers ne sont pas repris après fermeture. Une activité
+payée puis interrompue par la fermeture peut donc nécessiter un nouvel achat.
+Les données du navigateur restent locales ; exporter régulièrement la campagne.
 
-Le joueur commence avec les Forges, 900 €, un chargeur de 24 et 120 munitions de
-réserve. Une recrue coûte 200 €, pour une équipe maximale de trois.
+## Casino
 
-La conquête exige un quartier qui touche un quartier contrôlé, l’absence de
-défenseurs à proximité du point, un équipier présent et le joueur à pied au sol.
-Maintenir la présence pendant 18 secondes donne le quartier, 350 € et 60 points
-de réputation. Une absence interrompt la progression sans effacer les secondes
-déjà acquises. Les frontières diagonales ne comptent pas.
+Roulette à 37 cases : rouge/noir rapporte 40 pièces pour une mise de 20 ; le zéro
+fait perdre. Machine à sous : trois symboles identiques rendent 160, une paire
+25, sinon 0. Poker : une paire rend la mise, puis multiplicateurs 2, 3, 4, 6, 8,
+20 et 50 suivant la combinaison. Les gains indiqués incluent la mise rendue.
 
-Chaque quartier rapporte 75 € toutes les deux minutes de simulation. Trois
-niveaux de fortification coûtent 120, 240 puis 360 €. Une contre-attaque est
-annoncée 45 secondes avant l’arrivée des assaillants. Le joueur dispose ensuite
-de 70 secondes pour les éliminer. À défaut, une fortification absorbe l’attaque
-en consommant un niveau ; sans fortification, le quartier est perdu. La planque
-des Forges est protégée des contre-attaques.
+Dames : damier 8 × 8, prises obligatoires, prises multiples et promotion.
+Échecs : déplacements légaux, protection du roi, mat/pat et promotion automatique
+en dame ; **variante sans roque ni prise en passant**. Les parties de plateau
+sont déclarées nulles après 160 demi-coups. Une victoire rend 40 pièces, une
+partie nulle 20. Quitter une partie engagée perd la mise. Ces jeux n’implémentent
+pas de multijoueur ni de règles de tournoi complètes.
 
-Contrôler les douze quartiers pendant 90 secondes remporte la campagne. Il reste
-possible de jouer après la victoire. La mise à terre ramène à la planque, soigne
-le joueur et coûte au maximum 180 €. Le ravitaillement à la planque coûte 60 €
-si des soins, des munitions ou une réparation sont nécessaires.
-
-Les cinq opérations sont la reconnaissance, la livraison en véhicule, la
-conquête, la patrouille et la défense. Une seule peut être active. La première
-réussite rapporte la récompense complète ; une répétition rapporte 40 %.
-L’abandon ou l’expiration ne donnent aucune récompense.
-
-## Sauvegarde et compatibilité
-
-Sauvegarde automatique toutes les quinze secondes de jeu, après les événements
-de progression et en quittant la page ; sauvegarde manuelle dans Pause.
-Sont conservés : argent, réputation, santé, munitions, position, territoires,
-fortifications, équipiers avec santé et délai de secours, opérations réussies,
-victoire, mission et attaque en cours, captures partielles, véhicules avec santé
-et position, ennemis neutralisés et délais économiques.
-
-Au chargement, les véhicules sont remis à l’arrêt pour éviter un départ sans
-commande. Les gestes transitoires (entrée, sortie, secours, chute du joueur)
-ne sont pas sauvegardés : une fermeture pendant ces gestes reprend la dernière
-sauvegarde achevée. Les projectiles, effets, chemins calculés et poses ne sont
-pas persistés. Les menus suspendent la simulation.
-
-La clé `marlon.rebuild.save.v3` contient un état validé et une somme de contrôle
-qui détecte les altérations accidentelles. Ce n’est pas une protection contre
-la modification volontaire. La clé `.backup` conserve la sauvegarde valide
-précédente ; elle est utilisée automatiquement si la principale est illisible.
-Un refus de stockage conserve l’ancienne sauvegarde et affiche un message.
-
-Une sauvegarde de la refonte 02 est migrée lors de la reprise ; les éléments
-qu’elle ne conservait pas reprennent leurs valeurs initiales. Les sauvegardes
-du jeu antérieur à la refonte 02 ne sont pas importées. **Nouvelle campagne**
-efface les sauvegardes des refontes 02/03, après confirmation. Les réglages
-restent séparés.
-
-**Pause → Exporter la campagne** télécharge un fichier JSON transportable.
-**Importer une campagne** valide le fichier avant de demander le remplacement
-et de recharger la partie. Conserver des exports personnels : une suppression
-des données du navigateur peut effacer la sauvegarde et sa copie de secours.
-
-## Rendu et performance
-
-Performance désactive les ombres et réduit la résolution ; Équilibré emploie
-des ombres 1024 ; Élevé et Ultra HD emploient des ombres 2048. Ultra HD peut
-dessiner jusqu’à 3840 pixels de large, selon la fenêtre et l’écran. Cela ne
-transforme pas les textures procédurales en photographies 4K.
-
-Les éléments fixes sont regroupés par géométrie et matière avec instanciation.
-Les véhicules détaillés et personnages lointains sont masqués. Les collisions
-utilisent une grille spatiale et des sous-pas pour éviter de franchir un mur
-à grande vitesse. La simulation utilise un pas fixe de 1/60 seconde.
-
-## Structure et vérification
-
-```text
-index.html             Interface et chargement local
-style.css              Présentation, HUD, menus et adaptations d’écran
-src/core.js            Mathématiques, collisions, conduite, territoires, sauvegarde
-src/input.js           Commandes clavier, souris, manette et remise à zéro
-src/world.js           Ville, textures, végétation et obstacles
-src/models.js          Personnages et véhicules
-src/animation.js       Transitions, articulations et événements des gestes
-src/navigation.js      Recherche de chemin et visibilité
-src/persistence.js     Validation, copie de secours et migration
-src/gameplay-v3.js     Intégration des nouvelles mécaniques
-src/game.js            Simulation, combat, équipe, économie, missions, caméra
-src/ui.js              Carte, menus, réglages, diagnostic et tactile
-src/ui-v3.js           Santé de l’équipe, export/import et réglage caméra
-studio.html            Visionneuse interactive des animations
-src/studio.js          Scène et séquences du studio
-src/main.js            Rendu, éclairage, démarrage et boucle d’animation
-vendor/                Three.js r128 et licence MIT
-tests/                 Tests reproductibles
-verification/          Résultats et captures réelles du navigateur
-```
-
-Tests sans navigateur :
+## Développement et vérification
 
 ```sh
 node tests/core.cjs
 node tests/input.cjs
 node tests/animation.cjs
 node tests/campaign.cjs
-```
-
-Tests navigateur avec Node.js et Playwright :
-
-```sh
-npm install --save-dev playwright
-npx playwright install chromium
+node tests/city.cjs
+# Avec Playwright et Chromium installés :
 node tests/browser.cjs
 node tests/lifecycle.cjs
 ```
 
-`CHROMIUM_PATH` permet d’utiliser un Chromium déjà installé. Les scénarios de
-simulation avancent une horloge contrôlée afin que leurs résultats ne dépendent
-pas de la vitesse du GPU. Ce ne sont pas des mesures de fréquence d’images.
-`?test=1` active les outils de diagnostic utilisés par les tests.
+`tests/browser.cjs` lance désormais `city-browser.cjs`. `CHROMIUM_PATH` accepte
+un Chromium déjà installé. Les captures et résultats sont dans `verification/`.
+Les anciennes captures 01–06 et la vidéo v3 documentent la livraison précédente ;
+les nouvelles captures commencent à 07. Les vues 13–17 utilisent une caméra
+d’inspection du rendu réel et masquent le HUD.
 
-## État de la préparation commerciale
+Les nouveaux modules sont `city-data.js`, `city-models.js`, `city-world.js`,
+`city-sim.js`, `city-ui.js` et `board-games.js`. Ils étendent la base version 3.
+Cette organisation facilite l’itération, mais un regroupement des contrôleurs
+et une rationalisation des couches de compatibilité restent souhaitables avant
+une maintenance à grande échelle.
 
-Les fondations jouables et les essais automatisés sont livrés. Restent notamment
-à produire ou valider :
+## Recherche et ressources
 
-- Des modèles humains et animations de production, des bâtiments et véhicules
-  offrant davantage de variété et un travail artistique validé en jeu. Les
-  animations procédurales de cette version ne remplacent pas une bibliothèque
-  d’animations finalisées : prises de main, contacts au sol, transitions vers
-  les sièges et intersections entre vêtements demandent encore du travail.
-- Une IA avec navigation robuste à grande distance, trafic urbain complet,
-  évitement entre tous les acteurs et comportements de combat plus avancés.
-- L’équilibrage d’une campagne complète, sa durée, sa difficulté et les retours
-  de joueurs, dont le coût et la difficulté du secours aux équipiers.
-- Des effets et sons de production. Les sons présents sont synthétisés.
-- Les tests sur une vraie DualSense en USB et Bluetooth, plusieurs GPU,
-  Windows, Android et écrans cibles ; la définition des configurations minimales.
-- Les essais de longue durée, de restauration, d’accessibilité et de livraison
-  propres à la plateforme de vente choisie.
-
-Les bâtiments sont principalement extérieurs ; cette version n’intègre pas
-d’intérieurs visitables, de multijoueur, de campagne narrative doublée, d’APK
-ou d’installateur Windows. Les commandes tactiles existent mais n’ont pas été
-validées sur tablette physique.
-
-Le site existant n’a pas été publié ou remplacé. Pour une publication statique,
-déployer `index.html`, `studio.html`, `style.css`, `src/` et `vendor/` ensemble. Les outils de
-test et le serveur Python ne sont pas nécessaires à l’exécution du jeu.
-
-Références techniques : [Gamepad API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API),
-[Three.js r128 — sources](https://github.com/mrdoob/three.js/tree/r128).
-La licence Three.js est incluse dans `vendor/THREE-LICENSE.txt`.
+Les sources suivantes ont été examinées pour orienter les modèles, les animations
+et les coûts de rendu : [Kenney Car Kit](https://kenney.nl/assets/car-kit),
+[Quaternius Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html),
+[instanciation Three.js](https://threejs.org/docs/pages/InstancedMesh.html) et
+[coût des ombres](https://threejs.org/manual/en/shadows.html).
+Kenney et Quaternius proposent les ressources citées sous CC0 ; **leurs modèles
+ne sont pas incorporés dans cette livraison**. Les modèles présents sont créés
+par le code du projet. Le moteur embarqué reste Three.js r128, avec sa licence
+MIT dans `vendor/THREE-LICENSE.txt`. Les documentations récentes ont servi de
+référence conceptuelle, sans mise à niveau implicite du moteur.

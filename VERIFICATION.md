@@ -1,89 +1,50 @@
-# Vérification — Refonte 03
+# Vérification — Sunshine City 04
 
-Vérification effectuée le 12 septembre 2026.
+Vérification le 12 septembre 2026. Résultats du code livré, sous Linux / Chromium
+headless / WebGL SwiftShader. Les scénarios principaux avancent une simulation
+contrôlée. Ils ne mesurent pas la fréquence d’images d’un ordinateur de joueur.
 
-**68 contrôles automatisés réussis, aucun échec.** Aucun message d’exception
-JavaScript ou d’erreur de compilation des shaders relevé dans les parcours
-navigateur. Ces résultats ne garantissent pas l’absence de tout bug.
+| Suite | Réussis | Preuve |
+|---|---:|---|
+| Logique, collisions, conduite de base | 13 | `verification/core-results.txt` |
+| Commandes, profils manette et remise à zéro | 7 | `verification/input-results.txt` |
+| Animation articulée | 8 | `verification/animation-results.txt` |
+| Sauvegarde et navigation de base | 9 | `verification/campaign-results.txt` |
+| Catalogues, questions, progression, dames/échecs/poker | 9 | `verification/city-results.txt` |
+| Parcours de la nouvelle ville | 30 | `verification/city-browser-results.json` |
+| Import et nouvelle campagne après navigation réelle | 2 | `verification/lifecycle-results.json` |
 
-## Environnement des essais
+Total : **78 contrôles réussis**. Aucun échec et aucune exception JavaScript
+relevée sur ces parcours. Les anciens résultats de refonte 03 constituent un
+historique, pas des tests supplémentaires de la nouvelle ville.
 
-Linux, Node.js, Chromium headless et rendu WebGL 1 logiciel SwiftShader.
-Les ressources du jeu sont locales. Captures à 1280 × 800 et contrôle
-d’interface mobile à 390 × 844. Les scénarios de simulation utilisent une
-horloge contrôlée ; un parcours distinct vérifie aussi le démarrage par clic
-et le déplacement clavier avec la vraie boucle requestAnimationFrame.
-Les manettes sont simulées : aucun essai physique DualSense USB/Bluetooth,
-GPU de joueur ou appareil Android n’a été effectué.
+Les parcours navigateur couvrent les achats et refus, la livraison physique,
+les performances des pièces moteur, les vêtements, les récompenses scolaires
+uniques, l’ascenseur/pause, la continuité des escaliers, les animaux, la grande
+roue, les coffres chronométrés, l’entraînement, les feux, le mobilier, les missions,
+l’hélicoptère, l’ouverture des commerces et casinos, la facturation de la police,
+l’arrêt au feu rouge, un ordre de soin d’équipier, le constat et le treuil,
+la persistance de progression et l’interface mobile. Le casino vérifie aussi
+qu’une animation périmée ne crédite pas une autre session et qu’un gain n’est
+pas versé deux fois.
 
-## Résultats reproductibles
+La DualSense est simulée dans quatre orientations de caméra ; le stick droit
+est vérifié indépendamment du déplacement. L’entrée, la conduite et la sortie
+des nouveaux véhicules sont exécutées dans la simulation. Les profils standard
+et Sony HID restent vérifiés par la suite de commandes.
 
-| Suite | Réussis | Échecs | Preuve incluse |
-|---|---:|---:|---|
-| Logique et collisions | 13 | 0 | `verification/core-results.txt` |
-| Commandes | 7 | 0 | `verification/input-results.txt` |
-| Animation | 8 | 0 | `verification/animation-results.txt` |
-| Persistance et navigation | 9 | 0 | `verification/campaign-results.txt` |
-| Navigateur et intégration | 29 | 0 | `verification/browser-results.json` |
-| Import et nouvelle campagne après rechargement | 2 | 0 | `verification/lifecycle-results.json` |
+## Inspection visuelle
 
-Les tests de commandes couvrent les orientations de caméra, la diagonale,
-la zone morte, la séparation des sticks et gâchettes, les entrées résiduelles
-et la déconnexion. Les tests de simulation couvrent collisions, conduite,
-recrutement, tirs, couverture, rechargement, conquêtes, fortification et mission.
+Les captures 07–17 sont issues du rendu du programme. Les vues 13–17 masquent le
+HUD et utilisent une caméra d’inspection pour examiner la ville, le showroom,
+la classe et le personnage. Elles ne sont pas des illustrations générées.
+Les anciennes captures 01–06 et la vidéo v3 documentent la livraison antérieure.
+Les résultats d’essais utilisent des campagnes de test avec des états modifiés.
 
-Les nouveaux contrôles vérifient :
+## Limites
 
-- La longueur des segments articulés et la limitation de portée, les démarrages
-  et arrêts progressifs, les jambes pendant la visée/recharge, l’événement de
-  réception unique et des transformations finies à 30, 60 et 120 Hz.
-- La portière, la suspension de l’entrée par la pause, le blocage des commandes
-  pendant la transition et la pose assise du conducteur.
-- Le contact différé du corps à corps et l’attribution unique des dégâts.
-- La mise à terre, le secours temporisé, la perte à expiration et l’exclusion
-  des équipiers à terre du calcul de capture.
-- La restauration d’une mission, d’une attaque, d’une voiture et des ennemis
-  neutralisés, ainsi que la reprise sur une copie de secours après corruption.
-- La migration v2 avec portefeuille à zéro, le refus d’un import incorrect,
-  la conservation de l’ancienne sauvegarde quand le stockage échoue et les
-  détours autour d’un obstacle sans traverser ses angles.
-- L’accès aux dix séquences du studio d’animation.
-- L’import réel d’un fichier depuis Pause et une nouvelle campagne confirmée,
-  suivis d’un rechargement : la sauvegarde à la fermeture ne doit ni écraser
-  l’import ni recréer la campagne effacée.
-
-Le fichier de résultats navigateur décrit chaque contrôle et son statut.
-Les instructions d’exécution sont dans `README.md`.
-
-## Inspection visuelle et démonstration
-
-Les captures dans `verification/` proviennent du véritable rendu :
-
-- `01-accueil.png` : ville et accueil.
-- `02-jeu.png` : personnage, équipe, ombres et interface.
-- `03-vehicule.png` : véhicule à proximité du personnage.
-- `04-carte.png` : carte et informations du quartier.
-- `05-mobile.png` : interface sur fenêtre étroite.
-- `06-studio.png` : studio et pose de visée.
-- `MARLON-animations-v3.mp4` : six extraits de séquences, huit secondes,
-  960 × 600, 24 images/s, sans audio. Les images ont été rendues une à une
-  par le studio puis encodées ; leur cadence n’est pas un benchmark.
-
-Les captures du jeu emploient une campagne de test. Une nouvelle campagne
-commence avec 900 €, les Forges et aucun équipier.
-
-## Ce qui reste à valider avant la vente
-
-Le rendu et les animations restent procéduraux et stylisés. Les prises de main,
-appuis au sol et transitions vers les véhicules demandent encore une finition
-artistique ; le studio rend ces limites inspectables. Le système de chemins
-ne constitue pas une simulation complète de trafic ni une IA tactique avancée.
-
-Il manque notamment une campagne complète testée par des joueurs, l’équilibrage,
-des sessions d’endurance, des mesures sur les GPU cibles, les essais physiques
-manette/mobile, les configurations minimales et les critères de la plateforme
-de distribution. Les sons sont synthétisés, les bâtiments principalement
-extérieurs et aucun installateur natif n’est fourni. **Cette livraison n’est
-pas déclarée prête à être commercialisée.**
-
-Aucun déploiement public n’a été effectué pendant cette itération.
+Absence d’essai sur une vraie manette, tablette Android ou GPU de joueur ; absence
+de mesure de latence, de test d’endurance, de campagne complète jouée humainement
+et de revue pédagogique exhaustive. La présence d’un décor n’implique pas que
+chaque objet soit manipulable. Le fichier `BILAN-SUNSHINE.md` distingue les
+fonctionnalités livrées des réalisations partielles et des travaux restants.

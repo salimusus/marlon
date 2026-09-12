@@ -2,7 +2,7 @@
 'use strict';const T=THREE;
 function ellipsoid(g,mat,x,y,z,sx,sy,sz){const m=M.mesh(g,new T.SphereGeometry(1,16,12),mat,x,y,z);m.scale.set(sx,sy,sz);return m;}
 function limb(g,mat,x,y,z,len,r1,r2){const joint=new T.Group;joint.position.set(x,y,z);g.add(joint);M.mesh(joint,new T.CylinderGeometry(r1,r2,len,12),mat,0,-len/2,0);ellipsoid(joint,mat,0,0,0,r1,r1,r1);return joint;}
-M.character=function(color='#263138',enemy=false){const root=new T.Group,body=new T.Group;root.add(body);const skin=M.mat(enemy?'#b48b73':'#9d735a',.9),coat=M.mat(color,.73),pants=M.mat('#24292e',.86),sole=M.mat('#101619',.65),stitch=M.mat('#697072',.7),hair=M.mat('#211e1c');
+M.character=function(color='#263138',enemy=false){const root=new T.Group,body=new T.Group;root.add(body);const skin=M.mat(enemy?'#bd977c':'#d7aa8c',.9),coat=M.mat(color,.73),pants=M.mat('#8fb5e1',.86),sole=M.mat('#101619',.65),stitch=M.mat('#697072',.7),hair=M.mat('#211e1c');
  const shirt=new T.LatheGeometry([new T.Vector2(.18,.96),new T.Vector2(.19,1.02),new T.Vector2(.17,1.15),new T.Vector2(.225,1.34),new T.Vector2(.235,1.4),new T.Vector2(.11,1.46),new T.Vector2(.075,1.48)],20);shirt.scale(1,1,.66);M.mesh(body,shirt,coat);
  for(const side of [-1,1]){const collar=M.box(body,.083,.105,.035,side*.063,1.455,.064,coat);collar.rotation.z=-side*.38;M.box(body,.10,.055,.014,side*.115,1.29,.141,coat);M.box(body,.018,.018,.012,side*.115,1.29,.152,stitch);}
  M.box(body,.4,.08,.25,0,.96,0,sole);M.box(body,.034,.46,.015,0,1.25,.153,stitch);
@@ -12,7 +12,7 @@ M.character=function(color='#263138',enemy=false){const root=new T.Group,body=ne
  const gun=new T.Group;re.add(gun);gun.position.set(0,-.30,.055);gun.rotation.x=Math.PI/2;M.box(gun,.07,.09,.28,0,.018,.09,sole);M.box(gun,.063,.15,.07,0,-.06,0,sole);M.mesh(gun,new T.CylinderGeometry(.023,.023,.13,12),stitch,0,.036,.23).rotation.x=Math.PI/2;gun.visible=false;
  const magazine=M.box(le,.045,.095,.04,0,-.3,.025,sole);magazine.visible=false;
  const flash=new T.Mesh(new T.SphereGeometry(.085,8,6),new T.MeshBasicMaterial({color:'#fff1a1'}));flash.position.set(0,.036,.32);flash.scale.z=2;flash.visible=false;gun.add(flash);
- return{root,body,head,l,r,lk,rk,lf,rf,la,ra,le,re,gun,flash,magazine,phase:0};};
+ return{root,body,head,l,r,lk,rk,lf,rf,la,ra,le,re,gun,flash,magazine,phase:0,materials:{skin,coat,pants,sole,hair,stitch}};};
 M.animateCharacter=function(a,speed,dt,time,armed=false,aim=false,melee=0,hit=0){a.phase+=speed*dt*2.5;const k=Math.min(1,speed/3.5),s=Math.sin(a.phase),c=Math.cos(a.phase);a.l.rotation.x=s*.65*k;a.r.rotation.x=-s*.65*k;a.lk.rotation.x=Math.max(0,-s)*.8*k;a.rk.rotation.x=Math.max(0,s)*.8*k;a.body.position.y=Math.abs(c)*.035*k+Math.sin(time*2)*.004;a.body.rotation.z=hit*.12;
  a.la.rotation.set(-s*.45*k,0,.07);a.ra.rotation.set(s*.45*k,0,-.07);a.le.rotation.x=-.16;a.re.rotation.x=-.16;
  if(armed){a.ra.rotation.x=aim?-1.42:-.25;a.re.rotation.x=aim?-.12:-.75;if(aim){a.la.rotation.set(-1.12,-.35,-.3);a.le.rotation.x=-.6;}}

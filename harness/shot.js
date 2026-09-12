@@ -463,6 +463,17 @@ window.__SHOT = {
         try { saveOwned(); } catch (e29) {}
         if (typeof wallet !== 'undefined') { wallet = __SHOT.argent0; try { saveWallet(); } catch (e30) {} }
         P.grenades = 0; P.ammo = 0; P.drawn = false; P.aim = false; P.melee = null; P.gun = false;
+        // LES MUNITIONS SPECIALES : UN MULTIPLICATEUR DE DEGATS QUI RESTE CHARGE.
+        // Meme famille que les achats, et la plus traitre : P.munition choisit la cartouche et
+        // MUNITIONS[k].mul multiplie les degats de CHAQUE balle — x2,2 pour les perforantes,
+        // x1,8 pour les explosives (qui ajoutent en plus une explosion de 4,5 m) et x1,4 pour
+        // les incendiaires (qui allument une flaque de feu de 12 s). Un test achete un chargeur
+        // perforant, et tous les tests de tir qui suivent mesuraient des degats doubles, des
+        // explosions et des incendies qu'ils n'avaient pas demandes. La cle superobby.muni est
+        // bien effacee plus bas, mais le stock vivait EN MEMOIRE et ne revenait jamais au
+        // standard. On recharge donc les cartouches de base, fournies avec l'arme.
+        P.munition = 'std'; P.muniStock = {};
+        try { saveMunitions(); } catch (e30b) {}
         try { equipWeapon(null); } catch (e31) {}
         try { setWeapon(me, null); } catch (e32) {}
         try { majEtuis(); } catch (e33) {}
@@ -480,6 +491,12 @@ window.__SHOT = {
         }
         if (typeof amis !== 'undefined') { amis.clear(); try { saveAmis(); } catch (e36) {} }
         if (typeof bank !== 'undefined') { bank.balance = 0; bank.coffresJour = 0; }
+        // LE GRADE ET LES MISSIONS DEBLOQUEES. carriere.total ouvre les missions du bureau
+        // (missionDebloquee) et donne le grade : un test qui enchaine des missions en ouvrait
+        // pour tous les suivants, et le test du cadenas (il faut N missions pour l'ouvrir) ne
+        // trouvait plus rien de ferme. La cle superobby.carriere est effacee plus bas, mais
+        // l'objet, lui, restait rempli.
+        if (typeof carriere !== 'undefined') { carriere.total = 0; carriere.parId = {}; }
         // LA TENUE PORTEE. Un test qui essaie toutes les chaussures de la boutique, une
         // casquette ou un sac laisse le personnage habille comme ca pour les 200 tests
         // suivants — et la morphologie change les mesures de geometrie du poste Personnages.

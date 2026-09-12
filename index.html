@@ -1725,7 +1725,7 @@ const C = { base: 0xa3a2a5, grass: 0x4fae46, stone: 0xc9ced8, stone2: 0x8f98ab, 
   rock: 0x4a4550, rock2: 0x625c66, snow: 0xe6eef7, ice: 0x9fdcff, pine: 0x2f7a4a, space: 0x2a2a44, cyan: 0x3ef2ff, magenta: 0xff4fd8, lime: 0x9dff3a };
 // ---- grille spatiale des solides (déclarée ici, au plus près de `solids`, pour qu'elle
 // existe déjà quand le premier monde se construit) ----
-const SGRID = { cs: 12, x0: -216, z0: -96, nx: 36, nz: 32, cells: null, n: -1, t: -99 };
+const SGRID = { cs: 12, x0: -216, z0: -96, nx: 36, nz: 32, cells: null, n: -1, t: -99, veh: [], mob: [] };
 const SVIDE = [];
 // La longueur de `solids` ne suffit pas à repérer un changement : casser une vitrine pendant
 // qu'une autre est réparée laisse le compte identique et la grille pointait alors sur des
@@ -2013,6 +2013,9 @@ function plat(x, top, z, w, d, color, opt = {}, h = 1) {
 function mover(x, top, z, w, d, color, mo, opt = {}) {
   const o = plat(x, top, z, w, d, color, Object.assign({ noRoute: true }, opt), opt.h || 1);
   Object.assign(o, { ox: x, oy: o.y, oz: z, ax: mo.ax || 0, ay: mo.ay || 0, az: mo.az || 0, speed: mo.speed || 1, phase: mo.phase || 0 });
+  // UNE PLATEFORME QUI SE DEPLACE NE TIENT PAS DANS LA GRILLE FIXE DES SOLIDES (voir
+  // buildSGrid) : elle est rangee dans la petite liste `SGRID.mob`, relue en entier.
+  o.mobile = true;
   movers.push(o); if (!opt.kill) route.push({ kind: 'mover', o }); return o;
 }
 function blinker(x, top, z, w, d, color, off, opt = {}) {
@@ -18090,25 +18093,34 @@ function finDefi() {
 // soit une vingtaine de millisecondes par image rien que pour faire marcher les bots et les
 // gangs. On range les solides dans des cases de 12 m et on ne teste plus que la case utile.
 function buildSGrid() {
-  const { cs, x0, z0, nx, nz } = SGRID, cells = new Array(nx * nz), veh = [];
+  const { cs, x0, z0, nx, nz } = SGRID, cells = new Array(nx * nz), veh = [], mob = [];
   for (const o of solids) {
     // Les véhicules changent de case à chaque image : les ranger dans la grille les aurait
     // laissés à jamais sur leur case de départ (on traversait une voiture qui roule et on
     // butait sur un fantôme à son point d'apparition). On les garde donc à part, dans une
     // petite liste qu'on parcourt en entier — ils sont une trentaine, pas deux mille.
     if (o.veh) { veh.push(o); continue; }
+    // MEME TRAITEMENT POUR LES PLATEFORMES MOBILES. Rangees dans une case, elles y restaient
+    // jusqu'au prochain rebatissage de la grille (une seconde !) alors qu'elles parcourent
+    // jusqu'a 5 m/s : passe la ligne de case, la grille repondait « il n'y a rien ici » et
+    // LE SOL DISPARAISSAIT SOUS LES PIEDS DU JOUEUR. Mesure sur la plateforme de glace du
+    // monde 2 (course de 8 m, qui traverse la ligne x = 0) : pose dessus, l'enfant tombait
+    // dans le vide au bout de 107 images, sans avoir touche une seule commande. Elles sont
+    // une poignee par monde et aucune en ville : on les relit en entier, comme les voitures.
+    if (o.mobile) { mob.push(o); continue; }
     const i1 = Math.max(0, Math.floor((o.x - o.w / 2 - x0) / cs)), i2 = Math.min(nx - 1, Math.floor((o.x + o.w / 2 - x0) / cs));
     const j1 = Math.max(0, Math.floor((o.z - o.d / 2 - z0) / cs)), j2 = Math.min(nz - 1, Math.floor((o.z + o.d / 2 - z0) / cs));
     for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const k = j * nx + i; (cells[k] || (cells[k] = [])).push(o); }
   }
-  SGRID.cells = cells; SGRID.veh = veh; SGRID.n = solids.length; SGRID.t = simTime;
+  SGRID.cells = cells; SGRID.veh = veh; SGRID.mob = mob; SGRID.n = solids.length; SGRID.t = simTime;
 }
 function solidsPres(x, z) {   // les solides de la case qui contient ce point (liste complète hors grille)
   if (!SGRID.cells || solids.length !== SGRID.n || simTime - SGRID.t > 1) buildSGrid();
   const { cs, x0, z0, nx, nz } = SGRID;
   const i = Math.floor((x - x0) / cs), j = Math.floor((z - z0) / cs);
   if (i < 0 || j < 0 || i >= nx || j >= nz) return solids;
-  return SGRID.cells[j * nx + i] || SVIDE;
+  const c = SGRID.cells[j * nx + i] || SVIDE;
+  return SGRID.mob.length ? c.concat(SGRID.mob) : c;   // aucune plateforme mobile en ville : le chemin rapide est intact
 }
 // Même chose pour une BOÎTE (un véhicule) : on rassemble les cases qu'elle touche. Un même
 // solide peut revenir deux fois si la boîte chevauche deux cases : sans conséquence ici.
@@ -18121,8 +18133,9 @@ function solidsAutour(x, z, r, avecVeh) {
   const i1 = Math.floor((x - r - x0) / cs), i2 = Math.floor((x + r - x0) / cs);
   const j1 = Math.floor((z - r - z0) / cs), j2 = Math.floor((z + r - z0) / cs);
   if (i1 < 0 || j1 < 0 || i2 >= nx || j2 >= nz) return solids;
-  if (i1 === i2 && j1 === j2 && !avecVeh) return SGRID.cells[j1 * nx + i1] || SVIDE;
+  if (i1 === i2 && j1 === j2 && !avecVeh && !SGRID.mob.length) return SGRID.cells[j1 * nx + i1] || SVIDE;
   const out = avecVeh ? SGRID.veh.slice() : [];
+  if (SGRID.mob.length) out.push(...SGRID.mob);
   for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
   return out;
 }

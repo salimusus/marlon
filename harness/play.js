@@ -10602,7 +10602,14 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const T = G.THREE;
-    const boite = o => { let b = null; o.updateMatrixWorld(true); o.traverse(m => { if (!m.isMesh || !m.visible || !m.geometry) return; const k = new T.Box3().setFromObject(m); b = b ? b.union(k) : k.clone(); }); return b; };
+    // VISIBLE POUR DE VRAI : on remonte toute la chaine des parents. `m.visible` ne dit que ce
+    // que porte LE MAILLAGE : quand un GROUPE entier est masque (l'etui de dos quand on n'a
+    // pas de fusil, la ceinture quand on n'a pas d'arme), ses maillages gardent leur propre
+    // drapeau a vrai et etaient donc comptes. C'est ce qui faisait « heli 0,13 m (torse) » —
+    // une piece de harnais INVISIBLE, 12,5 cm sous le patin de l'helicoptere — et seulement
+    // apres un test d'armes, celui qui fabrique les etuis pour la premiere fois.
+    const vuPourDeVrai = m => { let n = m; while (n) { if (!n.visible) return false; n = n.parent; } return true; };
+    const boite = o => { let b = null; o.updateMatrixWorld(true); o.traverse(m => { if (!m.isMesh || !m.geometry || !vuPourDeVrai(m)) return; const k = new T.Box3().setFromObject(m); b = b ? b.union(k) : k.clone(); }); return b; };
     // ON NOMME LE MORCEAU FAUTIF. « dehors : ? droite = 0,09 » n'apprenait rien : les
     // maillages du corps n'ont pas de nom, et le bilan ne disait pas non plus DE QUEL vehicule
     // il parlait. On remonte donc du maillage jusqu'au membre (ou au muscle) qui le porte.
@@ -10653,9 +10660,13 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
         e.ecart = Math.min(e.ecart, Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z));
       if (TT.chien) for (const q of pts) e.ecartChien = Math.min(e.ecartChien, Math.hypot(q.x - TT.chien.x, q.z - TT.chien.z));
       for (let n = 1; n <= Math.min(3, noms.length); n++) {
-        for (let i = 0; i < n; i++) G.assiedAvatar(figs[i], c, TT[noms[i]], 1, noms[i] === 'conducteur');
+        // ON LES REMONTRE AVANT DE MESURER : la boucle les masque a la fin de chaque vehicule,
+        // et depuis que la mesure tient compte de la visibilite des PARENTS, une figurine
+        // masquee ne donne plus aucune boite du tout.
+        for (let i = 0; i < n; i++) { figs[i].group.visible = true; G.assiedAvatar(figs[i], c, TT[noms[i]], 1, noms[i] === 'conducteur'); }
         for (let i = 0; i < n; i++) {
           const b = boite(figs[i].group), m = 0.03;
+          if (!b) continue;
           const deb = { g: bc.min.x - b.min.x, d: b.max.x - bc.max.x, bas: bc.min.y - b.min.y,
             haut: b.max.y - bc.max.y, ar: bc.min.z - b.min.z, av: b.max.z - bc.max.z };
           const pire = Object.entries(deb).filter(([, q]) => q > m);
@@ -10693,7 +10704,7 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       const dessous = bv.min.y - bj.min.y;
       if (dessous > 0.05) {
         let bas = null, ymin = 9;
-        G.me.group.traverse(m => { if (!m.isMesh || !m.visible || !m.geometry) return;
+        G.me.group.traverse(m => { if (!m.isMesh || !m.geometry || !vuPourDeVrai(m)) return;
           const b = new T.Box3().setFromObject(m); if (b.min.y < ymin) { ymin = b.min.y; bas = m; } });
         sousPlancher.push(k + ' ' + dessous.toFixed(2) + ' m (' + ouEst(G.me, bas) + ')');
       }
@@ -10731,7 +10742,7 @@ test('chacun sa place assise dans le véhicule — seul, à deux, à trois, et l
       // « il tient entier dans la caisse (false) » n'apprend rien et le defaut se relit dix fois.
       p.morceaux = [];
       G.me.group.traverse(m => {
-        if (!m.isMesh || !m.visible || !m.geometry || p.morceaux.length > 5) return;
+        if (!m.isMesh || !m.geometry || !vuPourDeVrai(m) || p.morceaux.length > 5) return;
         const b = new T.Box3().setFromObject(m);
         const d = { gauche: bV.min.x - b.min.x, droite: b.max.x - bV.max.x, bas: bV.min.y - b.min.y, haut: b.max.y - bV.max.y };
         const pire = Object.entries(d).filter(([, q]) => q > 0.03);
@@ -13404,8 +13415,13 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
       await fenetre(n, espace, quoi);                    // fenetre de chauffe : jetee
       const F = []; for (let k2 = 0; k2 < 5; k2++) F.push(await fenetre(n, espace, quoi));
       const pics = F.map(f => f.pic);
+      // DEUX ECARTS. `ecart` est l'amplitude brute des cinq fenetres : elle bondit des qu'une
+      // seule est salie (un habitant qui dit bonjour a deux metres), et c'est justement ce que
+      // la mediane est la pour absorber. `ecartQ` est l'amplitude des TROIS fenetres du
+      // milieu : c'est lui qui dit si la mesure elle-meme est stable, et c'est lui qu'on juge.
+      const tri = pics.slice().sort((a, b) => a - b);
       return { pic: +median(pics).toFixed(4), rms: +median(F.map(f => f.rms)).toFixed(4),
-        ecart: +(Math.max.apply(null, pics) - Math.min.apply(null, pics)).toFixed(4),
+        ecart: +(tri[tri.length - 1] - tri[0]).toFixed(4), ecartQ: +(tri[3] - tri[1]).toFixed(4),
         sale: F.reduce((a, f) => a + f.sale, 0) };
     };
     // LE SILENCE DE REFERENCE : exactement la meme fenetre, sans rien declencher. S'il n'est
@@ -13443,7 +13459,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   // LE BANC EST-IL SILENCIEUX ? C'est la premiere chose a verifier, et elle manquait : sans
   // silence de reference, une mesure de niveau ne vaut rien. Le fond doit etre inaudible et
   // les cinq fenetres de l'averse doivent donner a peu pres la meme crete.
-  const banc = r.fond.pic < 0.01 && r.pluieSeule.ecart < 0.05;
+  const banc = r.fond.pic < 0.01 && r.pluieSeule.ecartQ < 0.01;
   // CE QU'ON EXIGE D'UN PAS N'EST PAS CE QU'ON EXIGE D'UN COUP. Un pas est un son COURT et
   // volontairement discret : mesure seule, a douze metres de l'oreille, sa crete vaut celle
   // d'une averse — et c'est normal, un pas de promenade n'est pas censé claquer. Ce qui compte,
@@ -13453,7 +13469,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
     && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif && banc;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecart}, efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres du milieu, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 
@@ -14488,7 +14504,13 @@ test('le concessionnaire existe : bâtiment vitré jaune sur une vraie rue, show
       const dx = desk.x - G.P.pos.x, dz = desk.z - G.P.pos.z, d = Math.hypot(dx, dz);
       dmin = Math.min(dmin, d);
       if (d < 2) break;
+      // A PIED, « AVANCER » EST RELATIF A LA CAMERA, pas au cap du personnage (readInput :
+      // fx = -sin(cam.yaw)). Le test ne reglait que P.facing : il marchait donc dans la
+      // direction ou le test PRECEDENT avait laisse la camera. Lance seul il partait de
+      // l'orientation d'origine et entrait dans le show-room ; derriere un voisin il
+      // s'eloignait et arrivait a 26 m du comptoir au lieu de 2.
       G.P.facing = Math.atan2(dx, dz);
+      G.cam.yaw = Math.atan2(-dx, -dz);
       G.keys.clear(); G.keys.add('KeyW');
       G.step(1 / 60, true); pas++;
     }

@@ -13682,10 +13682,12 @@ function applyLook(av, name, look) {   // change la tenue d'un avatar (maillot, 
   // garde la liste des morceaux qu'il a masques et un drapeau « c'est deja fait » ; tout ce
   // qui precede vient de REMONTRER une partie de ces morceaux (manches, bas, chaussures,
   // muscles). Le drapeau restant a vrai, le masquage n'etait jamais refait : on a mesure
-  // 63 cm de jambe sous le bas de caisse d'une berline. On oublie donc le masquage ici ; la
-  // premiere image assise le refait proprement.
-  { const g2 = av.group || av;
-    if (g2 && g2.userData && g2.userData.jambesCachees) { g2.userData.jambesCachees = false; g2.userData.cachesCabine = null; g2.userData.seuilCabine = null; } }
+  // 63 cm de jambe sous le bas de caisse d'une berline.
+  // ON REND LES MORCEAUX, on ne se contente pas d'oublier la liste : sinon les pieces que la
+  // tenue ne repose pas elle-meme (cuisse, mollet, cheville, semelle) restaient invisibles
+  // POUR TOUJOURS — le torse devenait le point le plus bas du personnage et il passait
+  // 13 cm sous le plancher de l'helicoptere. La premiere image assise refait le masquage.
+  jambesEnCabine(av, false);
   if (av !== me) { setJet(av, !!look.jet); setWeapon(av, look.weapon || null, !!look.aim); setEtuis(av, look.etuis || {}); }
 }
 function bubble(av, text) {   // bulle de chat au-dessus de la tête

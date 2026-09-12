@@ -3,7 +3,7 @@
 // se croisent (manger + changer de monde, conduire + changer de monde, fenêtres,
 // prison, missions…) et signale toute erreur de console ou état resté coincé.
 const fs=require('fs'), path=require('path'), http=require('http');
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('./runtime').playwright;
 const ROOT=path.join(__dirname,'..');
 const shot=fs.readFileSync(path.join(__dirname,'shot.js'),'utf8');
 const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
@@ -11,10 +11,11 @@ const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
 function serve(file){
   const html=fs.readFileSync(file,'utf8')
     .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/r128\/three\.min\.js"><\/script>/,'<script src="/three.min.js"></script>')
-    .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
+    .replace(/<script(?: defer)? src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
     .replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/,'')
+    .replace(/<script src="\.\/vendor\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
     .replace(/\nloop\(\);/, '\nloop();\n'+HOOK);
-  const three=fs.readFileSync(path.join(__dirname,'vendor','three.min.js'));
+  const three=fs.readFileSync(path.join(__dirname,'..','vendor','three.min.js'));
   const srv=http.createServer((q,r)=>{ if(q.url.startsWith('/three')){r.writeHead(200,{'Content-Type':'application/javascript'});r.end(three);}
     else {r.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});r.end(html);} });
   return new Promise(res=>srv.listen(0,'127.0.0.1',()=>res({srv,port:srv.address().port})));
@@ -5762,9 +5763,10 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);
-  const browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || undefined,
     args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage({viewport:{width:1024,height:640}});
+  if (process.env.TEST_QUALITY) await page.addInitScript(q => localStorage.setItem('superobby.quality', q), process.env.TEST_QUALITY);
   const errors=[];
   page.on('console',m=>{ if(m.type()==='error') errors.push(m.text()); });
   page.on('pageerror',e=>errors.push('PAGEERROR: '+e.message));

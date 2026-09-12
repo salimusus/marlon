@@ -7,8 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>SuperObby</title>
-<link rel="manifest" href='data:application/manifest+json,{"name":"SuperObby","short_name":"SuperObby","display":"fullscreen","orientation":"landscape","background_color":"%231b2a4a","theme_color":"%231b2a4a","start_url":".","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%231b2a4a%27/%3E%3Crect x=%2716%27 y=%2758%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%235cc453%27/%3E%3Crect x=%2737%27 y=%2737%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%234f8dff%27/%3E%3Crect x=%2758%27 y=%2716%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%23ff5c5c%27/%3E%3C/svg%3E","sizes":"192x192 512x512","type":"image/svg+xml","purpose":"any"}]}'>
+<title>MARLON — Empire urbain</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"MARLON Empire urbain","short_name":"MARLON","display":"fullscreen","orientation":"landscape","background_color":"%231b2a4a","theme_color":"%231b2a4a","start_url":".","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%231b2a4a%27/%3E%3Crect x=%2716%27 y=%2758%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%235cc453%27/%3E%3Crect x=%2737%27 y=%2737%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%234f8dff%27/%3E%3Crect x=%2758%27 y=%2716%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%23ff5c5c%27/%3E%3C/svg%3E","sizes":"192x192 512x512","type":"image/svg+xml","purpose":"any"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
@@ -738,6 +738,51 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 /* le sablier de l'alliance, à côté des pastilles du haut */
 #alliance{display:none}
 #alliance.on{display:inline-flex}
+/* MARLON: a restrained, responsive city interface. */
+:root{--panel:rgba(13,22,29,.91);--panel2:rgba(9,16,23,.97);--line:rgba(157,181,194,.23);--r:7px;--r-sm:5px;--encre:#e6edf0;--encre2:#9fafbc;--vif:#e7c78a;--sombre:#e1e8eb}
+html,body{background:#0c1720;font-family:Inter,'Segoe UI',system-ui,sans-serif}
+button{touch-action:manipulation}
+.card{background:linear-gradient(145deg,#182731,#0d171f)!important;color:#e6edf0;border:1px solid #34434c!important;border-radius:14px!important;box-shadow:0 28px 100px #0008!important}
+.card .sub,.card p.sub{color:#aebec6!important}.card input{background:#0b151d!important;color:#edf3f5!important;border-color:#44545f!important}
+.card h1,.card h2{color:#edf3f5!important;text-shadow:none!important}
+#start{background:radial-gradient(ellipse at 80% 20%,#325052aa,transparent 50%),linear-gradient(125deg,#071118ec,#192a34bb)}
+#start .card{max-width:620px;padding:28px;max-height:92dvh}
+#start h1{font-size:clamp(42px,8vw,64px);letter-spacing:.13em;line-height:1;margin:13px 0 18px;font-weight:900}
+#start h1 span{display:block;font-size:12px;letter-spacing:.48em;color:#d6bd8c;margin-top:14px}
+.eyebrow{font-size:10px;letter-spacing:.2em;font-weight:700;color:#61cdb7}
+.btn{border-radius:6px!important;background:#cfc09c!important;color:#13212b!important;border:1px solid #d9cba9!important;box-shadow:none!important;font-weight:700}
+.btn.sec{background:#23343f!important;color:#dce5e9!important;border-color:#4b5c66!important}.btn:hover{filter:brightness(1.12)}
+button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}button:disabled{opacity:.45;cursor:not-allowed}
+#worldGrid .wcard:last-child{order:-1;border:2px solid #65c6b0;background:#1e4944;color:#eaf5f2}
+#worldGrid{display:flex;flex-wrap:wrap}#worldGrid .wcard{flex:1 1 145px}
+#top .ibtn,#top .pill,#me,#lb{box-shadow:0 4px 12px #0003;border-color:#879ea52f}
+canvas#c{filter:none}#cross{width:16px;height:16px}
+#guerre .card{max-width:1180px;width:min(1180px,96vw);max-height:94dvh;padding:24px;text-align:left}
+#guerre h2{letter-spacing:.07em;font-size:24px}#guerre .tatlab{color:#b7c8ce;margin-top:20px}
+.empire-layout{display:grid;grid-template-columns:minmax(240px,.85fr) minmax(230px,1fr);gap:20px;align-items:start}
+#empireMap{background:#0b141c;border:1px solid #394b57;border-radius:8px;overflow:hidden;max-height:480px;display:flex;justify-content:center}
+#empireMap svg{width:100%;height:440px;max-height:55dvh}
+#empireSelected{padding:20px;background:#172731;border-left:3px solid #58c7af;border-radius:4px}
+#empireSelected h3{font-size:23px;margin:12px 0;color:#eef4f4}#empireSelected p{font-size:13px;line-height:1.65;color:#b6c3cb;margin:9px 0 15px}
+#empireSelected .btn{margin:5px 5px 0 0;font-size:13px;padding:10px 14px}
+#empireOps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:18px}
+.operation{display:flex;flex-direction:column;gap:7px;text-align:left;padding:14px;color:#edf1f2;background:#1b2a34;border:1px solid #43545e;border-radius:6px;cursor:pointer;font:inherit}
+.operation b{font-size:13px}.operation span{color:#aebdc6;font-size:11px;line-height:1.5}.operation small{font-size:10px;color:#6bd1b9;letter-spacing:.04em}
+#guerreCarte{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tcase{font:inherit;cursor:pointer;background:#182934!important;border:1px solid #455660!important;border-top:3px solid var(--owner)!important;min-width:0;box-shadow:none!important;padding:12px 8px!important;border-radius:6px!important}
+.tcase.selected{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
+#empireHud{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(390px,44vw);z-index:3;background:#0d1a22e8;border:1px solid #52636c;border-radius:6px;color:#e6edef;padding:12px 14px;pointer-events:none;box-shadow:0 5px 24px #0005}
+#empireHud[hidden],body.lobby #empireHud,body.uiopen #empireHud{display:none!important}#empireHudTitle{display:block;font-size:10px;letter-spacing:.16em;color:#72d4bf;margin-bottom:6px}#empireHudText{display:block;font-size:12px;line-height:1.5}
+#empireHud .track{height:3px;background:#43545c;margin-top:10px}#empireProgress{display:block;height:100%;background:#73d4be;width:0;transition:width .25s}#empireMapBtn{pointer-events:auto;margin-top:8px;border:0;color:#a9bdc8;background:none;font-size:10px;cursor:pointer}
+@media(max-width:700px){.empire-layout{grid-template-columns:1fr}#empireMap svg{height:300px}#empireOps{grid-template-columns:1fr}#guerreCarte{grid-template-columns:repeat(3,minmax(0,1fr))}#guerre .card{padding:16px}#empireHud{bottom:10px;width:44vw;padding:8px}#empireHudText{font-size:10px}#empireHudTitle{font-size:8px}#start .card{padding:20px}}
+@media(max-height:500px){#empireHud{bottom:8px;width:34vw;padding:7px}#empireHudTitle{font-size:8px;margin-bottom:3px}#empireHudText{font-size:10px}#empireMapBtn{margin-top:2px}#start .card{padding:16px}#start h1{font-size:34px}#start h1 span{font-size:9px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+
+.card .field>span,.card .jn,.card #mpStatus{color:#a8bbc5}.card .mp,.card .keysWrap summary{background:#20313c;color:#dce8ec;border:1px solid #3d525f}.card .keys .ps5 b{color:#d6bd8c}.card .pills b{background:#304552;color:#dbe6ed}.card .pills b.sel{background:#5a877d;color:#fff}#start h1{transform:none}
+body.city #gps{left:26px;bottom:24px;transform:none}body.tv.city #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad)}
+@media(max-width:700px){body.city #gps{left:10px;bottom:10px;width:95px;height:95px}body.touch.city #gps{left:10px;bottom:165px}}
+#guerre .tatliste>b,#guerre .tatliste>div{background:#21333e!important;color:#e1e8ed!important;border:1px solid #425762}#guerre .tatliste span{color:inherit}#guerre .tatliste{gap:8px}
+.empire-close{position:sticky;float:right;top:0;z-index:3;margin-left:8px!important}#guerre h2{padding-top:4px}
 </style>
 </head>
 <body class="lobby">
@@ -745,16 +790,16 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 
 <div id="top">
   <div class="tl">
-    <button class="ibtn on" id="chatBtn" title="Chat">💬</button>
-    <button class="ibtn" id="menuBtn" title="Menu (Échap)">☰</button>
+    <button class="ibtn on" id="chatBtn" title="Chat"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 8h8M8 12h5"/></svg></button>
+    <button class="ibtn" id="menuBtn" title="Menu (Échap)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <button class="ibtn touchonly" id="fsBtn" title="Plein écran">⛶</button>
     <button class="ibtn" id="sndTop" title="Son">🔊</button>
-    <button class="ibtn cityonly" id="storeBtn" title="Boutique">🛒</button>
-    <button class="ibtn cityonly" id="missBtn" title="Missions">📋</button>
-    <button class="ibtn cityonly" id="ordresBtn" title="Donner un ordre">📣</button>
-    <button class="ibtn cityonly" id="guerreBtn" title="Guerre des gangs">🚩</button>
-    <button class="ibtn" id="jailBtn" title="Prison" style="display:none">🔒</button>
-    <button class="ibtn" id="tvBtn" title="Jouer sur la télé">📺</button>
+    <button class="ibtn cityonly" id="storeBtn" title="Boutique"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 8 2-4h12l2 4v3H4V8ZM6 11v9h12v-9M10 20v-6h4v6"/></svg></button>
+    <button class="ibtn cityonly" id="missBtn" title="Missions"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9ZM9 12h6M9 16h6"/></svg></button>
+    <button class="ibtn cityonly" id="ordresBtn" title="Donner un ordre"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5"/></svg></button>
+    <button class="ibtn cityonly" id="guerreBtn" title="Guerre des gangs"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 5 6-2 6 3 6-2v16l-6 2-6-3-6 2V5ZM9 3v16M15 6v16"/></svg></button>
+    <button class="ibtn" id="jailBtn" title="Prison" style="display:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v4"/></svg></button>
+    <button class="ibtn" id="tvBtn" title="Jouer sur la télé"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M8 22h8M12 18v4"/></svg></button>
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
@@ -781,7 +826,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(arme braquée : 🎯 changer de cible · tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>cette aide</div>
+<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(arme braquée : 🎯 changer de cible · tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>carte stratégique</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -805,8 +850,8 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 
 <div class="overlay" id="start">
   <div class="card">
-    <h1>SuperObby</h1>
-    <p class="sub">4 parcours + une ville · multijoueur, chacun sur son téléphone</p>
+    <div class="eyebrow">MONDE OUVERT · STRATÉGIE</div><h1>MARLON<span>EMPIRE URBAIN</span></h1>
+    <p class="sub">Bâtis ton gang. Relie tes territoires. Défends ton empire.</p>
     <div class="field"><span>Pseudo</span><input id="nameIn" maxlength="16" placeholder="Ton pseudo"></div>
     <div class="field"><span>Maillot</span><div><div class="sw" id="swShirt"></div><div class="jn" id="jerseyName"></div></div></div>
     <div class="field"><span>Pantalon</span><div class="sw" id="swPants"></div></div>
@@ -814,7 +859,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
     <div class="field"><span>Cheveux</span><div><div class="pills" id="hairStyle"><b data-v="0">Aucun</b><b data-v="1">Courts</b><b data-v="2">Longs</b></div><div class="sw" id="swHair" style="margin-top:6px"></div></div></div>
     <div class="field"><span>Bas</span><div class="pills" id="skirtSel"><b data-v="0">Pantalon</b><b data-v="1">Jupe</b></div></div>
     <details class="keysWrap"><summary data-nav>⌨️ 🎮 Comment jouer (clavier, souris, manette PS5)</summary>
-    <div class="keys">
+    <div class="keys"><div><kbd>M</kbd></div><span>Carte stratégique · <kbd>J</kbd> missions classiques · pavé PS5 : carte</span>
       <div><kbd>G</kbd></div><span>dégainer / rengainer l'arme · <kbd>↑</kbd><kbd>↓</kbd> viser plus haut / plus bas</span>
       <div><kbd>Z</kbd><kbd>S</kbd></div><span>avancer / reculer · <kbd>Q</kbd><kbd>D</kbd> tourner · <kbd>Espace</kbd> sauter (monter en hélico, klaxon en voiture ; maintenu au volant : frein à main) · <kbd>C</kbd> ou <kbd>Ctrl</kbd> se baisser (descendre en hélico) · <kbd>H</kbd> garde · <kbd>E</kbd> danser / véhicule / prendre · <kbd>F</kbd> course · <kbd>X</kbd> ou clic : tirer · <kbd>V</kbd> frapper (maintenir : coup de pied ; en hélico : 🚁 se poser)</span>
       <div><kbd>Souris</kbd></div><span>glisser pour tourner la caméra, molette pour zoomer</span>
@@ -842,7 +887,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
       </div>
     </div>
     <p id="bestTime"></p>
-    <button class="btn" id="play">Jouer</button>
+    <button class="btn" id="play">Entrer dans Marlon</button>
   </div>
 </div>
 
@@ -907,7 +952,7 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
 
 <div id="manette">
   <div id="telTop">
-    <span id="telEtat">Manette SuperObby</span>
+    <span id="telEtat">Manette MARLON</span>
     <button id="telQuitte">Quitter</button>
   </div>
   <div id="telCo">
@@ -1061,10 +1106,12 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   </div>
 </div>
 
+<div id="empireHud" hidden><b id="empireHudTitle"></b><span id="empireHudText"></span><div class="track"><i id="empireProgress"></i></div><button id="empireMapBtn">CARTE · M / PAVÉ PS5</button></div>
 <div class="overlay hidden" id="guerre">
   <div class="card wide">
-    <h2>🚩 La guerre des gangs</h2>
+    <button class="btn sec small empire-close" id="empireClose" title="Fermer la carte">Fermer ×</button><h2>EMPIRE · Carte stratégique</h2>
     <p class="sub" id="guerreSub">Ton but : contrôler la ville. Bats les gangs, prends leurs quartiers, recrute leurs membres.</p>
+    <div class="empire-layout"><div id="empireMap"></div><div><div id="empireSelected"></div><div id="empireOps"></div></div></div>
     <div class="tatlab">Ton gang</div><div id="guerreMoi" class="tatliste"></div>
     <div class="tatlab">Les gangs de la ville</div><div id="guerreListe" class="tatliste"></div>
     <div class="tatlab">La carte des quartiers — vert = à toi</div><div id="guerreCarte"></div>
@@ -1227,8 +1274,8 @@ body.tv #padTest .card{max-width:min(1100px,92vw)}
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)"></script>
+<script src="./vendor/three.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)"></script>
 <script>
 (() => {
 'use strict';
@@ -1255,7 +1302,7 @@ const canvas = $('c');
 const versTV = /(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1';
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile || versTV, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
-renderer.toneMapping = THREE.NoToneMapping;   // couleurs franches façon briques : ACES délavait toute la palette
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;   // couleurs franches façon briques : ACES délavait toute la palette
 renderer.physicallyCorrectLights = false;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 700);
@@ -1453,9 +1500,9 @@ const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
 const QUALITES = {
   // grade : etalonnage (contraste, saturation, vignettage) — quelques instructions par pixel
   // halo  : la lumiere des sources vives qui deborde — huit echantillons de plus, Ultra HD seul
-  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },
+  ultra: { n: 'Ultra HD · adaptatif', ratio: d => Math.min(d, 2), plafond: 3840, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },
   high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8, grade: true, halo: false },
-  dlss: { n: 'DLSS 5 (upscaling)', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8, grade: true, halo: false },
+  dlss: { n: 'Performance · résolution réduite', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8, grade: true, halo: false },
   low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4, grade: false, halo: false },
 };
 function qualite() { return QUALITES[settings.quality] || QUALITES.high; }
@@ -1957,6 +2004,8 @@ function balaieAvatars() {
   }
 }
 function clearWorld() {
+  empire.operation = null; empire.attack = null; empire.markers = []; empire.acc = 0;
+  if ($('empireHud')) $('empireHud').hidden = true;
   libereBranche(worldGroup);
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   balaieAvatars();
@@ -1975,6 +2024,7 @@ function clearWorld() {
 
 // ---- constructeurs de briques (tous enregistrent une "route" pour les bots) ----
 function box(x, y, z, w, h, d, color, opt = {}) {
+  if (city.on) opt = { ...opt, studs: false, noEdges: true };
   const m = new THREE.Mesh(unitBox, opt.material || (opt.neon ? neonMat(color) : opt.studs === false ? lam(color) : brickMats(color, w, d)));
   m.scale.set(w, h, d); m.position.set(x, y, z);
   m.castShadow = !opt.noShadow; m.receiveShadow = true;
@@ -2180,6 +2230,18 @@ function sign(x, top, z, text, big, ry = 0) {
   face.position.set(0, 1.7 + H / 2, 0.08); g.add(face);
 }
 function tree(x, top, z, leaf = C.leaf, pine = false) {
+  if (city.on) {
+    if (!empire.treeGeo) {
+      empire.treeGeo = new THREE.SphereGeometry(.5, 10, 7); empire.trunkGeo = new THREE.CylinderGeometry(.36, .5, 1, 8);
+      shared.add(empire.treeGeo); shared.add(empire.trunkGeo);
+    }
+    const trunk = box(x, top + 1.6, z, .48, 3.2, .48, 0x635044, { studs: false }); trunk.mesh.geometry = empire.trunkGeo;
+    const leaves = new THREE.Color(leaf).lerp(new THREE.Color(0x4b6246), .7);
+    for (const [dx,dy,dz,w,h] of [[0,3.5,0,3.5,3.6],[-.95,3.2,.3,2.3,2.4],[.8,4,.4,2.2,2.5]]) {
+      const m = new THREE.Mesh(empire.treeGeo, lam(leaves.getHex())); m.scale.set(w,h,w*.85); m.position.set(x+dx,top+dy,z+dz); m.castShadow=true; worldGroup.add(m);
+    }
+    return;
+  }
   box(x, top + 0.8, z, 0.5, 1.6, 0.5, C.wood, { studs: false });
   if (pine) { box(x, top + 2.2, z, 2.4, 1.2, 2.4, leaf, { deco: true }); box(x, top + 3.3, z, 1.7, 1.1, 1.7, leaf, { deco: true }); box(x, top + 4.3, z, 1, 1, 1, leaf, { deco: true }); }
   else { box(x, top + 2.5, z, 2.2, 2, 2.2, leaf, { deco: true }); box(x, top + 3.9, z, 1.4, 1.1, 1.4, leaf, { deco: true }); }
@@ -2239,7 +2301,7 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // grille de navigation, le rayon d'action de l'hélicoptère) et avaient fini par diverger :
 // l'hélico butait sur un mur invisible à x = −98 et z = 278, bien avant le bord de la carte.
 // Tout part maintenant d'ici, et tout suit quand la ville s'agrandit.
-const MONDE = { x1: -220, x2: 200, z1: -200, z2: 350, plafond: 80 };
+const MONDE = { x1: -300, x2: 200, z1: -380, z2: 350, plafond: 100 };
 MONDE.cx = (MONDE.x1 + MONDE.x2) / 2; MONDE.cz = (MONDE.z1 + MONDE.z2) / 2;
 MONDE.w = MONDE.x2 - MONDE.x1; MONDE.d = MONDE.z2 - MONDE.z1;
 // LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
@@ -4354,11 +4416,21 @@ function buildRings() {   // anneaux de la course d'hélico
 }
 // ---- briques de la ville ----
 const WINDOWS = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
-  for (let y = 8; y < 64; y += 28) for (let x = 6; x < 64; x += 20) { g.fillStyle = Math.random() < 0.7 ? '#fff4b8' : '#6f8fb8'; g.fillRect(x, y, 12, 16); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y + 14, 12, 2); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#b4b1a8'; g.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 512; y += 128) for (let x = 0; x < 512; x += 128) {
+    g.fillStyle = '#535d61'; g.fillRect(x + 17, y + 13, 94, 100);
+    const glass = g.createLinearGradient(x, y, x + 128, y + 110);
+    glass.addColorStop(0, '#263e4e'); glass.addColorStop(.45, '#76939e'); glass.addColorStop(1, '#354957');
+    g.fillStyle = glass; g.fillRect(x + 21, y + 17, 86, 90);
+    g.fillStyle = 'rgba(217,236,235,.16)'; g.fillRect(x + 25, y + 19, 26, 86);
+    g.fillStyle = '#9ba1a0'; g.fillRect(x + 61, y + 17, 4, 90); g.fillRect(x + 21, y + 60, 86, 3);
+    g.fillStyle = '#656967'; g.fillRect(x + 14, y + 111, 100, 4);
+    g.fillStyle = '#cecbc0'; g.fillRect(x, y + 124, 128, 4);
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
+
 // LA CHAUSSEE : un vrai bitume (grain), une ligne blanche continue sur chaque bord et la
 // ligne jaune discontinue au milieu. Une tuile = 4 m de route, dans la largeur de la voie.
 const ROAD = (() => {
@@ -4422,12 +4494,15 @@ function setRacket(av, on) {
   if (!av.racket) { av.racket = racketMesh(); av.racket.scale.setScalar(0.72); av.racket.rotation.set(-0.14, 0, 0.2); av.racket.position.set(-0.023, 0.112, -0.016); (av.rig.armR.main || av.rig.armR.coude).add(av.racket); }
   av.racket.visible = !!on;
 }
-const WINMASK = (() => {   // fenêtres allumées (masque d'émission pour la nuit)
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#000000'; g.fillRect(0, 0, 64, 64);
-  for (let y = 8; y < 64; y += 28) for (let x = 6; x < 64; x += 20) { g.fillStyle = Math.random() < 0.65 ? '#ffd27a' : '#000000'; g.fillRect(x, y, 12, 16); }
+const WINMASK = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#000000'; g.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 512; y += 128) for (let x = 0; x < 512; x += 128) {
+    if (((x + y * 3) / 128) % 3 === 0) { g.fillStyle = '#a18455'; g.fillRect(x + 21, y + 17, 86, 90); }
+  }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
 })();
+
 // Mur percé d'une porte : deux jambages et un linteau. `alongX` = le mur court le long de x.
 function wallDoor(x, z, len, h, thick, alongX, dw, dh, col, mat, dOff = 0) {
   const O = mat ? { studs: false, noRoute: true, material: mat } : { studs: false, noRoute: true };
@@ -4471,10 +4546,10 @@ function coque(x, z, w, d, h, col, dir, dw = 2, dh = 2.6, T = 0.35, matX, matZ) 
 function building(x, z, w, h, d, color, dir) {
   color = varieTeinte(color, x, z);   // deux immeubles voisins ne sont plus jamais du même bleu exact
   const GF = 3.8, hh = Math.max(h - GF, 2.2);   // rez-de-chaussée creux : on entre dans le hall
-  const tx = WINDOWS.clone(); tx.needsUpdate = true; tx.repeat.set(w / 2.2, hh / 2.2);
-  const tz = WINDOWS.clone(); tz.needsUpdate = true; tz.repeat.set(d / 2.2, hh / 2.2);
-  const mx = new THREE.MeshLambertMaterial({ color, map: tx }), mz = new THREE.MeshLambertMaterial({ color, map: tz });
-  const ex = WINMASK.clone(); ex.needsUpdate = true; ex.repeat.set(w / 2.2, hh / 2.2); const ez = WINMASK.clone(); ez.needsUpdate = true; ez.repeat.set(d / 2.2, hh / 2.2);
+  const tx = WINDOWS.clone(); tx.needsUpdate = true; tx.repeat.set(w / 8.8, hh / 8.8);
+  const tz = WINDOWS.clone(); tz.needsUpdate = true; tz.repeat.set(d / 8.8, hh / 8.8);
+  const mx = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x929799), 0.65), map: tx, shininess: 24, specular: 0x485c67 }), mz = mx.clone(); mz.map = tz;
+  const ex = WINMASK.clone(); ex.needsUpdate = true; ex.repeat.set(w / 8.8, hh / 8.8); const ez = WINMASK.clone(); ez.needsUpdate = true; ez.repeat.set(d / 8.8, hh / 8.8);
   mx.emissiveMap = ex; mz.emissiveMap = ez; mx.emissive.set(0x000000); mz.emissive.set(0x000000); city.buildings.push(mx, mz);
   box(x, GF + hh / 2, z, w, hh, d, color, { material: [mx, mx, lam(color), lam(color), mz, mz] });   // les étages
   box(x, GF + hh + 0.2, z, w * 0.7, 0.4, d * 0.7, 0x3b4252, { deco: true, studs: false });
@@ -4922,7 +4997,7 @@ function trottoirs() {
   return n;
 }
 function buisson(x, z, big) {
-  const c = pickOne([0x3fae4a, 0x2f8f3a, 0x5cc453, 0x4caf50]);
+  const c = pickOne([0x4f6746, 0x485f3d, 0x697d50, 0x556e4a]);
   const s = big ? 1.3 : 1;
   for (const [dx, dy, dz, w] of [[0, 0.45, 0, 1.1], [0.45, 0.5, 0.2, 0.8], [-0.4, 0.4, 0.3, 0.75], [0.1, 0.85, -0.2, 0.7]]) {
     const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(w * s, w * 0.85 * s, w * s); m.position.set(x + dx * s, dy * s, z + dz * s); m.castShadow = true; worldGroup.add(m);
@@ -5156,7 +5231,7 @@ function numberDecal(n, color) {
   g.fillStyle = '#1b2a4a'; g.font = 'bold 76px Nunito, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), 64, 70);
   return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true });
 }
-const glassCar = new THREE.MeshLambertMaterial({ color: 0x7ec8ff, transparent: true, opacity: 0.72 }); shared.add(glassCar);
+const glassCar = new THREE.MeshPhongMaterial({ color: 0x7893a4, specular: 0xc8e5ed, shininess: 110, transparent: true, opacity: 0.56 }); shared.add(glassCar);
 const chrome = lam(0xd8dde6), darkM = lam(0x23262e), tireM = lam(0x1e1e1e);
 // L'AILE AU-DESSUS DE LA ROUE. C'etait une planche noire de 20 cm collee sur le flanc, qui
 // depassait comme une equerre : rien a voir avec un passage de roue. C'est maintenant un
@@ -5176,7 +5251,7 @@ function makeCar(color, x, z, h, opt = {}) {
   // le soleil, une voiture rouge et un mur rouge rendaient exactement la meme couleur. Un
   // materiau Phong lui donne le reflet allonge d'une tole vernie — c'est ce qui fait « une
   // voiture » avant meme qu'on en distingue les pieces, et ca ne coute pas un appel de plus.
-  const g = new THREE.Group(), body = new THREE.MeshPhongMaterial({ color, shininess: 62, specular: 0x4a525e }), dark = lam(0x2b3550);
+  const g = new THREE.Group(), body = new THREE.MeshPhongMaterial({ color, shininess: 100, specular: 0x849aaa, envMap: empireEnvironment(), reflectivity: 0.32, combine: THREE.MixOperation }), dark = lam(0x2b3550);
   const bx = (mat, sx, sy, sz, px, py, pz, edges = true) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const kart = !!opt.kart;
   bx(body, 2.1, 0.55, 4.3, 0, 0.6, 0);                          // caisse
@@ -5222,7 +5297,7 @@ function makeCar(color, x, z, h, opt = {}) {
   prepareVehicule(c); vehicleSolid(c); return c;
 }
 function makeVehicle(kind, color, x, z, h) {
-  const g = new THREE.Group(), body = lam(color);
+  const g = new THREE.Group(), body = new THREE.MeshPhongMaterial({ color, shininess: 75, specular: 0x718592, envMap: empireEnvironment(), reflectivity: 0.2, combine: THREE.MixOperation });
   const bx = (mat, sx, sy, sz, px, py, pz, edges = true) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const cyl = (mat, r1, r2, len, px, py, pz, rx = Math.PI / 2, rz = 0) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 10), mat); m.rotation.set(rx, 0, rz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const wheels = []; let spec, W = 2.6, D = 3, rider = false, outilsSelle = null;
@@ -5289,7 +5364,7 @@ function makeVehicle(kind, color, x, z, h) {
     for (const sx of [-1.0, 1.0]) cyl(chrome, 0.1, 0.1, 2.4, sx, 2.2, 1.35, 0, 0);            // cheminées d'échappement
     bx(darkM, 2.2, 0.15, 0.6, 0, 0.55, 3.0, false);
     bx(lam(0xf4f6fa), 2.6, 2.8, 5.6, 0, 1.9, -1.4); bx(body, 2.62, 0.35, 5.62, 0, 0.58, -1.4, false); bx(darkM, 0.03, 2.6, 0.03, 0, 1.9, -4.22, false); bx(darkM, 2.62, 0.06, 0.06, 0, 3.32, -1.4, false);   // remorque + stries
-    const logo = new THREE.MeshBasicMaterial({ map: textTexture('SUPER OBBY') });
+    const logo = new THREE.MeshBasicMaterial({ map: textTexture('MARLON LOGISTICS') });
     for (const [sx, ry] of [[-1.32, -Math.PI / 2], [1.32, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.7), logo); pl.position.set(sx, 2.2, -1.4); pl.rotation.y = ry; g.add(pl); }
     for (const sx of [-1.0, 1.0]) bx(darkM, 0.5, 0.5, 0.05, sx, 0.4, -4.2, false);            // bavettes
     bx(neonMat(0xff3b3b), 2, 0.2, 0.1, 0, 0.9, -4.24, false); bx(darkM, 2.4, 0.12, 0.12, 0, 0.5, -4.25, false);
@@ -5346,7 +5421,7 @@ function makeHeli(x, y, z, h) {
   bx(dark, 0.08, 0.9, 0.08, 0.5, 3.2, -0.4, false);                                          // antenne
   bx(dark, 0.08, 0.5, 0.08, 0, 2.7, 0.6, false);
   const beacon = bx(neonMat(0xff2020), 0.22, 0.14, 0.22, 0, 2.5, -3.2, false); beacon.userData.blink = true;   // feu anticollision
-  const logo = new THREE.MeshBasicMaterial({ map: textTexture('SUPER OBBY') });
+  const logo = new THREE.MeshBasicMaterial({ map: textTexture('MARLON LOGISTICS') });
   for (const [sx, ry] of [[-1.18, -Math.PI / 2], [1.18, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.7), logo); pl.position.set(sx, 1.05, -0.3); pl.rotation.y = ry; g.add(pl); }
   bx(neonMat(0x30ff60), 0.12, 0.12, 0.12, 0, 2.1, -6.7, false);
   g.position.set(x, y, z); g.rotation.y = h; worldGroup.add(g);
@@ -5503,6 +5578,238 @@ const pillar = (x, top, z, color) => plat(x, top, z, 1.4, 1.4, color, { studs: f
 
 // ================= LES MONDES =================
 let G = 30;
+// ================= MARLON : EXTENSION STRATÉGIQUE =================
+const EMPIRE_LINKS = {
+  centre: ['banque', 'commerces', 'parc', 'industriel'], banque: ['centre', 'zone'],
+  parc: ['centre', 'commerces', 'residentiel'], commerces: ['centre', 'parc', 'plage', 'residentiel'],
+  zone: ['banque', 'northwest'], residentiel: ['parc', 'commerces', 'plage'],
+  industriel: ['centre', 'plage', 'freight'], plage: ['commerces', 'residentiel', 'industriel'],
+  northwest: ['zone', 'finance'], finance: ['northwest', 'freight'],
+  freight: ['finance', 'industriel', 'docks'], docks: ['freight'],
+};
+const empire = { selected: 'centre', defenses: {}, completed: [], wins: 0, operation: null, attack: null, markers: [], acc: 0, env: null };
+const EMPIRE_OPERATIONS = [
+  { id: 'recon', name: 'Reconnaissance du Nord', desc: 'Repère trois points de rendez-vous dans les nouveaux quartiers.', reward: 120, rep: 25, seconds: 300, route: ['northwest', 'finance', 'freight'] },
+  { id: 'freight', name: 'La route des Docks', desc: 'Au volant, récupère la cargaison au terminal puis rejoins les Docks.', reward: 180, rep: 35, seconds: 180, route: ['freight', 'docks'], car: true },
+  { id: 'capture', name: 'Une nouvelle frontière', desc: 'Conquiers le territoire sélectionné avec au moins une recrue en état de combattre.', reward: 240, rep: 45, seconds: 420, capture: true },
+  { id: 'patrol', name: 'Présence sur le terrain', desc: 'Inspecte trois territoires de ton gang et conserve-les pendant la mission.', reward: 160, rep: 30, seconds: 240, patrol: true },
+  { id: 'defense', name: 'Tenir la ligne', desc: 'Rejoins le quartier menacé et repousse l’attaque en cours.', reward: 200, rep: 40, seconds: 90, defense: true },
+];
+function empireEscape(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function restoreEmpire(d) {
+  empire.defenses = {}; empire.completed = []; empire.wins = 0;
+  if (!d || typeof d !== 'object') return;
+  for (const k of Object.keys(EMPIRE_LINKS)) empire.defenses[k] = clamp(Math.floor(Number(d.defenses && d.defenses[k]) || 0), 0, 3);
+  empire.completed = Array.isArray(d.completed) ? [...new Set(d.completed.filter(id => EMPIRE_OPERATIONS.some(o => o.id === id)))] : [];
+  empire.wins = Math.max(0, Math.min(100000, Math.floor(Number(d.wins) || 0)));
+}
+function empireCanExpand(k, owner) {
+  if (!EMPIRE_LINKS[k]) return false;
+  const hasLand = Object.keys(EMPIRE_LINKS).some(t => proprio(t) === owner);
+  // A new gang can establish its first foothold in the original city.
+  if (!hasLand) return !['northwest', 'finance', 'freight', 'docks'].includes(k);
+  return EMPIRE_LINKS[k].some(t => proprio(t) === owner);
+}
+function empireGuardCount(t) {
+  return gang.membres.filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.pos.x - t.x, b.pos.z - t.z) < t.r).length
+    + (gang.membresLibres || []).filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.x - t.x, b.z - t.z) < t.r).length;
+}
+function empireFortify(k) {
+  if (!city.on || proprio(k) !== 'joueur' || !EMPIRE_LINKS[k]) return false;
+  const n = empire.defenses[k] || 0, cost = 80 * (n + 1);
+  if (n >= 3) { msg('Défense maximale : niveau 3.', 1800); return false; }
+  if (wallet < cost) { msg(`Il te manque ${cost - wallet} pièces pour cette défense.`, 2400); return false; }
+  wallet -= cost; empire.defenses[k] = n + 1; saveWallet(); saveGuerre(); updateHud(); majGuerre();
+  msg(`Défense renforcée · niveau ${n + 1}/3`, 2200); return true;
+}
+function empireStartOperation(id) {
+  if (!city.on || empire.operation) { msg('Termine ou abandonne d’abord l’opération en cours.', 2500); return false; }
+  const def = EMPIRE_OPERATIONS.find(o => o.id === id); if (!def) return false;
+  let route = def.route ? [...def.route] : [empire.selected];
+  if (def.capture && (proprio(empire.selected) === 'joueur' || !empireCanExpand(empire.selected, 'joueur'))) { msg('Choisis une frontière accessible que ton gang ne contrôle pas.', 3000); return false; }
+  if (def.patrol) {
+    route = TERRITOIRES.filter(t => proprio(t.k) === 'joueur').slice(0, 3).map(t => t.k);
+    if (route.length < 3) { msg('Cette opération demande trois territoires contrôlés.', 2500); return false; }
+  }
+  if (def.defense) {
+    if (!empire.attack) { msg('Aucun de tes quartiers n’est attaqué actuellement.', 2500); return false; }
+    route = [empire.attack.k];
+  }
+  empire.operation = { id, route, step: 0, remaining: def.seconds, reached: false };
+  guerre.vu = true; empireTrack(route[0], false); closeUI(); return true;
+}
+function empireEndOperation(success) {
+  const op = empire.operation; if (!op) return;
+  const def = EMPIRE_OPERATIONS.find(o => o.id === op.id);
+  empire.operation = null;
+  if (success) {
+    // First completion pays full value; replay rewards are smaller and shown in the UI.
+    const reward = empire.completed.includes(op.id) ? Math.round(def.reward * .4) : def.reward;
+    wallet += reward; empire.wins++; if (!empire.completed.includes(op.id)) empire.completed.push(op.id);
+    saveWallet(); gagneRep(def.rep, 'opération réussie'); saveGuerre(); updateHud();
+    msg(`OPÉRATION RÉUSSIE · ${def.name} · +${reward} pièces`, 4500); sfx.win();
+  } else msg('Opération terminée sans récompense. Tu peux la relancer depuis la carte.', 3200);
+}
+function empireTrack(k, close = true) {
+  const t = TERRITOIRES.find(t => t.k === k); if (!t) return;
+  empire.selected = k; setBeacon(t.x, t.z, .3);
+  if (close) { closeUI(); msg(`OBJECTIF · ${t.n} · ${Math.round(Math.hypot(P.pos.x - t.x, P.pos.z - t.z))} m`, 2500); }
+}
+function empireResolveAttack() {
+  const a = empire.attack; if (!a) return false;
+  const t = TERRITOIRES.find(t => t.k === a.k), g = gangDe(a.gang);
+  if (!t || !g || g.mort || g.allieJoueur || proprio(t.k) !== 'joueur') { empire.attack = null; return false; }
+  const present = !jail.on && P.hp > 0 && Math.abs(P.pos.y) < 6 && Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r;
+  const power = (empire.defenses[t.k] || 0) + empireGuardCount(t) + (present ? 2 : 0);
+  const held = power >= a.strength;
+  if (held) { msg(`${t.n} a résisté à l’attaque.`, 3600); empire.defenses[t.k] = Math.max(0, (empire.defenses[t.k] || 0) - 1); }
+  else { guerre.territoires[t.k] = g.id; empire.defenses[t.k] = 0; perdRep(15, 'quartier perdu'); msg(`${t.n} est tombé. Prépare la reconquête.`, 4000); }
+  if (empire.operation && empire.operation.id === 'defense' && empire.operation.route[0] === t.k) empireEndOperation(held && empire.operation.reached);
+  empire.attack = null; majHudGuerre(); saveGuerre(); return held;
+}
+function empireTick(dt) {
+  if (!city.on || paused || !running) return;
+  empire.acc += dt; if (empire.acc < .25) return;
+  const step = empire.acc; empire.acc = 0;
+  if (empire.attack) {
+    empire.attack.remaining -= step;
+    if (empire.attack.remaining <= 0) empireResolveAttack();
+  }
+  const op = empire.operation;
+  if (op) {
+    const def = EMPIRE_OPERATIONS.find(o => o.id === op.id), t = TERRITOIRES.find(t => t.k === op.route[op.step]);
+    op.remaining -= step;
+    if (op.remaining <= 0 || jail.on || P.hp <= 0 || (def.patrol && op.route.some(k => proprio(k) !== 'joueur'))) empireEndOperation(false);
+    else if (t) {
+      const near = Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < 16 && Math.abs(P.pos.y) < 6;
+      if (def.defense) { if (near) op.reached = true; if (!empire.attack) empireEndOperation(false); }
+      else if (def.capture ? proprio(t.k) === 'joueur' : near && (!def.car || (drive.car && !drive.car.heli && !drive.car.boat && drive.car.kind !== 'jetski'))) {
+        op.step++;
+        if (op.step >= op.route.length) empireEndOperation(true);
+        else { empireTrack(op.route[op.step], false); msg(`Étape ${op.step}/${op.route.length} validée. Prochain point indiqué.`, 2300); }
+      }
+    }
+  }
+  for (const marker of empire.markers) marker.material.color.set(empireOwnerColor(marker.userData.territory));
+  const hud = $('empireHud'); if (!hud) return;
+  hud.hidden = !joueurDansLaGuerre();
+  const t = territoireDe(P.pos.x, P.pos.z), a = empire.attack, active = empire.operation;
+  const selected = TERRITOIRES.find(t => t.k === empire.selected);
+  $('empireHudTitle').textContent = a ? `ATTAQUE · ${Math.ceil(a.remaining)} s` : active ? 'OPÉRATION EN COURS' : 'EMPIRE URBAIN';
+  $('empireHudText').textContent = a ? `${TERRITOIRES.find(t => t.k === a.k).n} · force ${a.strength} · rejoins la défense`
+    : active ? `${EMPIRE_OPERATIONS.find(o => o.id === active.id).name} · ${active.step}/${active.route.length} · ${Math.ceil(active.remaining)} s`
+    : `${nbTerritoires('joueur')}/${TERRITOIRES.length} territoires · ${t ? t.n : 'Hors secteur'}${selected ? ' · objectif à ' + Math.round(Math.hypot(P.pos.x - selected.x, P.pos.z - selected.z)) + ' m' : ''}`;
+  $('empireProgress').style.width = `${gang.capture ? clamp(gang.capture.p * 100, 0, 100) : nbTerritoires('joueur') / TERRITOIRES.length * 100}%`;
+}
+function empireOwnerColor(k) { const o = proprio(k), g = gangDe(o); return o === 'joueur' ? '#53cdb5' : g ? g.teinte || '#dd786f' : '#71889a'; }
+function empireMapSvg() {
+  const vb = `${MONDE.x1 - 15} ${MONDE.z1 - 15} ${MONDE.w + 30} ${MONDE.d + 30}`;
+  let svg = `<svg viewBox="${vb}" role="img" aria-label="Carte de Marlon : routes, frontières et position"><rect x="${MONDE.x1}" y="${MONDE.z1}" width="${MONDE.w}" height="${MONDE.d}" rx="8" fill="#101e2a"/>`;
+  for (const r of city.routes || []) svg += `<rect x="${r.x - r.w / 2}" y="${r.z - r.d / 2}" width="${r.w}" height="${r.d}" fill="#36424d"/>`;
+  const seen = new Set();
+  for (const t of TERRITOIRES) for (const k of EMPIRE_LINKS[t.k]) {
+    const id = [t.k, k].sort().join(':'); if (seen.has(id)) continue; seen.add(id);
+    const b = TERRITOIRES.find(t => t.k === k);
+    svg += `<path d="M${t.x} ${t.z}L${b.x} ${b.z}" stroke="#7e929d" stroke-width="1.5" stroke-dasharray="4 5" opacity=".6"/>`;
+  }
+  for (const t of TERRITOIRES) {
+    svg += `<g data-territory="${t.k}" style="cursor:pointer"><circle cx="${t.x}" cy="${t.z}" r="${t.r * .75}" fill="${empireOwnerColor(t.k)}" fill-opacity=".22" stroke="${empire.selected === t.k ? '#ffe0a3' : empireOwnerColor(t.k)}" stroke-width="${empire.selected === t.k ? 3 : 1.5}"/><circle cx="${t.x}" cy="${t.z}" r="4" fill="${empireOwnerColor(t.k)}"/><text x="${t.x}" y="${t.z - 12}" fill="#f5f6f7" font-family="system-ui" font-size="14" font-weight="700" text-anchor="middle">${TERRITOIRES.indexOf(t) + 1}</text><title>${empireEscape(t.n)}</title></g>`;
+  }
+  svg += `<circle cx="${P.pos.x}" cy="${P.pos.z}" r="6" fill="#fff" stroke="#53cdb5" stroke-width="2"/><text x="${MONDE.x1 + 10}" y="${MONDE.z1 + 18}" fill="#afbfcb" font-size="12">N ↑</text></svg>`;
+  return svg;
+}
+function renderEmpirePanel() {
+  const t = TERRITOIRES.find(t => t.k === empire.selected) || TERRITOIRES[0], mine = proprio(t.k) === 'joueur', n = empire.defenses[t.k] || 0;
+  $('empireMap').innerHTML = empireMapSvg();
+  $('empireSelected').innerHTML = `<span class="eyebrow">RENSEIGNEMENTS · SECTEUR</span><h3>${t.n}</h3><p>${empireEscape(nomGang(proprio(t.k)))} · valeur ${t.v} · défense ${n}/3</p><p>${mine ? 'Territoire contrôlé. Les défenses et les recrues présentes repoussent les attaques.' : empireCanExpand(t.k, 'joueur') ? 'Frontière accessible. Rejoins le secteur avec une recrue et élimine la présence rivale pour le capturer.' : 'Frontière inaccessible. Conquiers d’abord un secteur voisin relié sur la carte.'}</p><button class="btn" data-empire="track">Marquer l’objectif</button>${mine ? `<button class="btn sec" data-empire="fortify" ${n >= 3 ? 'disabled' : ''}>${n >= 3 ? 'Défense maximale' : 'Renforcer · ' + 80 * (n + 1) + ' pièces'}</button>` : ''}`;
+  $('empireOps').innerHTML = EMPIRE_OPERATIONS.map(o => `<button class="operation" data-operation="${o.id}" ${empire.operation ? 'disabled' : ''}><b>${o.name}</b><span>${o.desc}</span><small>${empire.completed.includes(o.id) ? 'REJOUER · ' + Math.round(o.reward * .4) : 'PREMIÈRE RÉUSSITE · ' + o.reward} pièces · ${o.rep} respect</small></button>`).join('')
+    + (empire.operation ? '<button class="btn sec" data-empire="abandon">Abandonner l’opération</button>' : '');
+}
+// Shared procedural reflection map: six small sky/city faces, no network or external asset dependency.
+function empireEnvironment() {
+  if (empire.env) return empire.env;
+  const faces = [];
+  for (let side = 0; side < 6; side++) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const sky = g.createLinearGradient(0, 0, 0, 128); sky.addColorStop(0, '#789caf'); sky.addColorStop(.5, '#d2dcd9'); sky.addColorStop(.54, '#515d61'); sky.addColorStop(1, '#242a30');
+    g.fillStyle = sky; g.fillRect(0, 0, 128, 128);
+    if (side !== 2) for (let x = 0; x < 128; x += 18) { const h = 12 + ((x * 7 + side * 11) % 31); g.fillStyle = '#56616b'; g.fillRect(x, 66 - h, 12, h); }
+    faces.push(c);
+  }
+  empire.env = new THREE.CubeTexture(faces); empire.env.needsUpdate = true; shared.add(empire.env); return empire.env;
+}
+function buildEmpireDistricts() {
+  // Four north blocks, connected by a ring road with a western link to the existing city.
+  road(-175, -147, 10, 154); road(-52, -215, 486, 10); road(-52, -335, 486, 10);
+  for (const x of [-294, -175, -45, 85, 190]) road(x, -275, 9, 120);
+  const areas = TERRITOIRES.slice(0, 4);
+  for (let i = 0; i < areas.length; i++) {
+    const t = areas[i];
+    city.zones.push({ name: t.n, emoji: '▥', x1: t.x - t.r, x2: t.x + t.r, z1: t.z - t.r, z2: t.z + t.r, hint: `${t.n} · ouvre la carte stratégique pour préparer une opération` });
+    city.wander.push([t.x, .3, t.z]);
+    // Clear civic forecourt, unobstructed objective at its center.
+    plat(t.x, .12, t.z, 27, 28, 0x87908c, { studs: false, noRoute: true });
+    road(t.x, -230, 9, 30); road(t.x, -320, 9, 30);
+    for (const x of [t.x - 26, t.x + 26]) for (const z of [-243, -304]) {
+      if (i < 2) {
+        const h = i === 1 ? 32 + ((x + z) & 15) : 15 + ((x + z) & 7);
+        building(x, z, 17, h, 18, i === 1 ? 0x708a91 : 0xb4aaa0, 2);
+        box(x, h + .7, z, 10, 1.2, 10, 0x414d53, { studs: false, noRoute: true });
+        // Rooftop utility unit and parapet distinguish the silhouettes.
+        box(x + 3, h + 1.9, z, 3, 1.2, 2, 0x98a1a2, { studs: false, noRoute: true });
+      } else {
+        building(x, z, 19, 7, 19, i === 2 ? 0xa99e87 : 0x748a8f, 2);
+        for (let k = 0; k < 3; k++) box(x - 6 + k * 6, 7.35, z, 3.6, .5, 10, 0x324e62, { studs: false, noRoute: true });
+      }
+    }
+    if (i >= 2) for (let k = 0; k < 4; k++) {
+      const x = t.x - 32 + k * 20, z = -363;
+      box(x, 1.5, z, 12, 3, 5, [0x79534a, 0x506a77, 0x8d8967, 0x4d6460][k], { studs: false, noRoute: true });
+      for (let n = 0; n < 9; n++) box(x - 5 + n * 1.25, 1.5, z + 2.53, .07, 2.7, .07, 0x424c50, { deco: true, studs: false, noRoute: true });
+    }
+    for (const dx of [-18, 18]) { lamp(t.x + dx, -222); lamp(t.x + dx, -328); }
+    sign(t.x + 10, .12, t.z + 9, t.n, true);
+    const c = makeCar([0x263e50, 0x8e979c, 0x526058, 0x733d39][i], t.x + 9, -231, Math.PI, { sport: i === 1 });
+    c.modelName = ['Sentinel', 'Spectre GT', 'Atlas', 'Vesper'][i]; city.cars.push(c);
+    if (i === 2) city.cars.push(makeVehicle('camion', 0x505b63, t.x - 10, -231, Math.PI));
+    const m = new THREE.Mesh(new THREE.RingGeometry(7.4, 8, 48), new THREE.MeshBasicMaterial({ color: empireOwnerColor(t.k), transparent: true, opacity: .7, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.set(t.x, .14, t.z); m.userData.territory = t.k; worldGroup.add(m); empire.markers.push(m);
+  }
+  // Landmark cranes of the dry port, all pieces use normal world collisions.
+  for (const x of [113, 166]) {
+    for (const dx of [-6, 6]) box(x + dx, 10, -351, .7, 20, .7, 0xa68b50, { studs: false, noRoute: true });
+    box(x, 20, -351, 18, 1, 1, 0xa68b50, { studs: false, noRoute: true });
+    box(x, 19, -351, 2, 2, 2, 0x4c5e66, { studs: false, noRoute: true });
+  }
+}
+function releaseGamepad() {
+  // Remove held keys directly: synthesizing a KeyV key-up would throw a punch on disconnect.
+  for (const key of Object.values(PAD_MAP)) keys.delete(key);
+  pad.x = pad.y = pad.gaz = pad.frein = 0; pad.l2 = pad.l2Bas = pad.tirR2 = false;
+  pad.bas = null; pad.lu = null; pad.longT = {}; pad.longFait = {}; pad.baisse = false;
+  P.run = false; P.aimHeld = false; P.jumpBuf = 0; jumpHeld = downHeld = false;
+  setGarde(false); setAccroupi(false);
+}
+function initEmpireUI() {
+  $('empireClose').addEventListener('click', closeUI);
+  $('guerre').addEventListener('click', e => {
+    const t = e.target.closest('[data-territory]'); if (t) { empire.selected = t.dataset.territory; majGuerre(); return; }
+    const op = e.target.closest('[data-operation]'); if (op) { empireStartOperation(op.dataset.operation); return; }
+    const action = e.target.closest('[data-empire]'); if (!action) return;
+    if (action.dataset.empire === 'track') empireTrack(empire.selected);
+    if (action.dataset.empire === 'fortify') empireFortify(empire.selected);
+    if (action.dataset.empire === 'abandon') { empireEndOperation(false); majGuerre(); }
+  });
+  $('empireMapBtn').addEventListener('click', () => { if (city.on && running) openGuerre(); });
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyM' || !city.on || !running || e.repeat || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) return;
+    e.preventDefault(); if (uiOpen === 'guerre') closeUI(); else if (!uiOpen) openGuerre();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') releaseGamepad(); });
+  window.addEventListener('blur', releaseGamepad);
+  $('padLeg').innerHTML = $('padLeg').innerHTML.replace('arme équipée : 🎯 braquer / rengainer', 'arme équipée : viser en maintenant L2');
+}
+
 const WORLDS = [
   { id: 'prairie', name: 'Prairie', emoji: '🌳', color: '#5cc453', diff: 'Facile', gravity: 30, music: { bpm: 112, root: 262, minor: false },
     theme: { sky: 0x7ec8ff, fog: [0x7ec8ff, 70, 210], water: [0x3a8fe6, -16, 0], hemi: [0xe8f6ff, 0x5c8f3c, 0.9], sun: [0xfff5e0, 1.0], clouds: 0xffffff, stars: false },
@@ -5611,7 +5918,7 @@ const WORLDS = [
       plat(0, 3, -238, 10, 10, C.space); checkpoint(0, 3, -238, 8); trophy(0, 3, -238); sign(-4, 3, -241, 'Arrivée', true); rocket(4, 3, -242);
       for (let i = 0; i < 26; i++) asteroid(rnd(-45, 45), rnd(-6, 28), rnd(15, -260), rnd(1.5, 5));
     } },
-  { id: 'ville', name: 'Ville', emoji: '🏙️', color: '#4f8dff', diff: 'Libre', gravity: 30, free: true, music: { bpm: 118, root: 247, minor: false },
+  { id: 'ville', name: 'Marlon · Empire urbain', emoji: '🏙️', color: '#53cdb5', diff: '12 territoires', gravity: 30, free: true, music: { bpm: 118, root: 247, minor: false },
     theme: { sky: 0x8fd0ff, fog: [0xa8d8ff, 90, 260], water: [0x3a8fe6, -16, 0], hemi: [0xe8f6ff, 0x6a7a8a, 0.95], sun: [0xfff5e0, 1.0], clouds: 0xffffff, stars: false },
     build: () => {
       city.on = true; noSigns = true;
@@ -5745,7 +6052,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno);
+      B('le marché', buildMarche); B('techno-parc', buildTechno); B('extension nord', buildEmpireDistricts);
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -13309,7 +13616,7 @@ const BIJOUX_DEF = {
   medaille: { r: 0.55, ep: 0.06, y: 0.68, pendentif: true, pw: 0.44, ph: 0.44, txt: '🏅' },
 };
 const PAL = {
-  pants: [0x3a3d8f, 0x2b3550, 0x5cc453, 0xff8f3a, 0xc9ced8, 0x8b4a2b],
+  pants: [0x384b60, 0x252c35, 0x58644b, 0x8e745c, 0x909a9e, 0x664c40],
   cap: [0xff5c5c, 0x1b2a4a, 0xffd23f, 0x35d0e6, 0xffffff, null],
   hair: [0x4a2c17, 0x1b1b1b, 0xf2d27a, 0xc4502a, 0xff7ad9, 0xf4f6fa, 0x8b8f96, 0x3ef2ff, 0x5cc453, 0x8b4fd0, 0xff5c5c, 0x2f6fe0],
   // les teintes proposées à la boutique pour le haut (indépendantes des maillots)
@@ -13326,7 +13633,7 @@ const enduDe = () => clamp(stats.endu || 0, 0, 100);
 const sprintDuree = () => 6.5 + enduDe() * 0.075;
 const saveStats = () => store.set('superobby.stats', JSON.stringify(stats));
 const statMul = () => ({ speed: clamp(1 + stats.m / 100 * 0.15 - stats.f / 100 * 0.3, 0.65, 1.2), jump: clamp(1 + stats.m / 100 * 0.12 - stats.f / 100 * 0.2, 0.75, 1.15) });
-let wallet = +store.get('superobby.wallet') || 25;
+let wallet = (() => { const v = store.get('superobby.wallet'); const n = Number(v); return v !== null && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 25; })();
 const saveWallet = () => store.set('superobby.wallet', String(wallet));
 const owned = new Set(store.json('superobby.owned', []));
 const saveOwned = () => store.set('superobby.owned', JSON.stringify([...owned]));
@@ -13346,10 +13653,10 @@ function nameTag(name) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 128;
   const g = c.getContext('2d');
   g.font = 'bold 60px Nunito, "Segoe UI", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.lineWidth = 10; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(name, 256, 64);
+  g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(name, 256, 64);
   g.fillStyle = '#fff'; g.fillText(name, 256, 64);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
-  sp.renderOrder = 9; sp.scale.set(1.8, 0.45, 1); sp.position.y = 2.5; sp.userData.etiquette = true; return sp;
+  sp.renderOrder = 9; sp.scale.set(1.45, 0.32, 1); sp.position.y = 2.5; sp.userData.etiquette = true; return sp;
 }
 // Changer l'étiquette d'un avatar SANS abandonner l'ancienne sur la carte graphique. Sept
 // endroits (banque, école, hôpital, boutique, commissariat, pseudo du joueur) écrivaient
@@ -21153,6 +21460,7 @@ function cityCommon(dt) {
   cityVie(d);
 }
 function cityVie(dt) {
+  empireTick(dt);
   for (const r of (city.barbierRubans || [])) r.rotation.y += dt * 1.6;   // l'enseigne du coiffeur tourne
   protectionTick(dt);   // gardes du corps, protection d'un membre, garde de la villa
   soinTick(dt);         // les blessés qu'on a envoyés à l'hôpital
@@ -22538,7 +22846,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape') { if (uiOpen) closeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
   if (e.code === 'KeyR' && running && !paused && !dead && !won) { die(true); msg('Réinitialisation…', 900); return; }
   if (e.code === 'KeyB' && running && city.on && !uiOpen) { openStore(); return; }
-  if (e.code === 'KeyM' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }
+  if (e.code === 'KeyJ' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
@@ -22719,7 +23027,7 @@ const PAD_MAP = {
 // elle change d'arme (comme la molette d'un jeu de tir). La boutique et les missions restent
 // a portee de pouce, en MAINTENANT ← ou → (0,7 s), comme la guerre des gangs sur ↑.
 const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cache le bandeau d'aide
-const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △)
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'guerre' };   // le pave tactile rappelle les touches (l'arme est sur △)
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
 const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', sniper: 'Fusil à lunette', knife: 'Couteau', grenade: 'Grenade' };
@@ -22778,7 +23086,7 @@ function padProfil(gp) {
   if (!gp) return 'aucun';
   if (gp.mapping === 'standard') return 'standard';
   const nb = (gp.buttons || []).length, na = (gp.axes || []).length;
-  if (nb <= 15 && na >= 6) return 'ps-hid';   // DualSense/DualShock brut : gachettes sur les axes, croix sur un chapeau
+  if (/dualsense|dualshock|playstation|054c|wireless controller/i.test(gp.id || '') && nb <= 15 && na >= 6) return 'ps-hid';   // DualSense/DualShock brut : gachettes sur les axes, croix sur un chapeau
   return 'brut';
 }
 // Le « chapeau » : un seul axe code les huit directions de la croix (et le repos hors de
@@ -22866,17 +23174,19 @@ const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) + (pad.gaz || 0) + (pad
 function padVibre(force = 0.6, ms = 120) {
   const g = padActive(); if (!g || !g.vibrationActuator || simTime < manetteSalon.vibT) return false;
   manetteSalon.vibT = simTime + 0.05;
-  try { g.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: force, weakMagnitude: force * 0.7 }); return true; }
+  try { const p = g.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: force, weakMagnitude: force * 0.7 }); if (p && p.catch) p.catch(() => {}); return true; }
   catch (e) { return false; }
 }
 function pollGamepad(dt) {
   const gp = padActive();
-  if (!gp) { pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.l2 = false; if (pad.baisse) { pad.baisse = false; setAccroupi(false); } pad.lu = null;
+  if (!gp) { if (pad.bas || pad.lu || pad.l2) releaseGamepad(); pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.l2 = false; if (pad.baisse) { pad.baisse = false; setAccroupi(false); } pad.lu = null;
     if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; if (P.garde) setGarde(false); }
     if (uiOpen === 'padTest') padEssaiTick(null); return; }
   const L = padLu(gp);                       // agencement normalise : voir padLu
   pad.lu = L; manetteSalon.profil = L.profil;
+  if (document.visibilityState === 'hidden') { releaseGamepad(); return; }
   const menu = !!document.querySelector('.overlay:not(.hidden)');
+  if (menu && !pad.menuAvant) releaseGamepad(); pad.menuAvant = menu;
   const [gx, gy] = padStick(L.lx, L.ly);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
   // LES DEUX GACHETTES, NOUVEAU PARTAGE (round 68). Le joueur a change d'avis : les gachettes
@@ -22900,7 +23210,8 @@ function pollGamepad(dt) {
   {
     const aPied = !drive.car && running && !paused;
     const braque = aPied && !!P.weapon;
-    if (braque && pad.l2 && !pad.l2Bas) braquerVerrouille();
+    if (braque && pad.l2 && !pad.l2Bas && !P.drawn) braquerVerrouille();
+    P.aimHeld = braque && pad.l2;
     const baisse = pad.l2 && aPied && !braque;
     if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
     pad.l2Bas = pad.l2;
@@ -23033,7 +23344,7 @@ const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)'
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
 const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
   6: 'freiner · se baisser · braquer', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
-  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
+  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'carte stratégique' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
   if (padEssai.fait) return;
@@ -23110,7 +23421,7 @@ setInterval(() => {
 window.addEventListener('gamepadconnected', e => {
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
-  msg(ps ? '🎮 Manette PlayStation connectée — stick gauche marcher · △ agir · ◯ sauter · ✕ braquer · L2 se baisser' : '🎮 Manette connectée !', 3200);
+  msg(ps ? '🎮 Manette PlayStation connectée — stick gauche marcher · △ agir · ◯ sauter · ✕ braquer · L2 viser / se baisser' : '🎮 Manette connectée !', 3200);
   document.body.classList.add('manette');
   try { curseurAccueil(); } catch (_) {} try { tvManettesMaj(); } catch (_) {}   // la bague sur « Jouer », et la pastille TV sait qu'une manette est la
   try { montreAide(7); } catch (e) {}
@@ -23118,7 +23429,7 @@ window.addEventListener('gamepadconnected', e => {
   try { manetteBTSonde(); } catch (_) {}
   try { chat(null, ps ? '🎮 DualSense prête : stick gauche pour marcher et tourner, △ pour agir, ◯ pour sauter, ✕ pour braquer (puis R2 pour tirer), L2 pour se baisser. Au volant : R2 accélère, L2 freine.' : '🎮 Manette prête.'); } catch (_) {}
 });
-window.addEventListener('gamepaddisconnected', () => { pad.x = pad.y = 0; pad.bas = null; manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
+window.addEventListener('gamepaddisconnected', () => { releaseGamepad(); manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
 // ================= « CONNECTER UNE MANETTE PS5 » =================
 // Ce qu'une page web PEUT faire, honnetement : elle ne peut pas appairer une manette en
 // Bluetooth a la place de l'appareil (le navigateur l'interdit pour les manettes). Mais elle
@@ -23229,7 +23540,7 @@ function startGame() {
   $('start').classList.add('hidden');
   if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   if (net.on && !net.host) { chooseWorld(net.world ?? 0); }
-  else { renderWorlds(); $('worlds').classList.remove('hidden'); }
+  else { chooseWorld(4); guerre.vu = true; msg('MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5.', 6000); }
   updateHud();
 }
 $('hostBtn').addEventListener('click', () => hostGame());
@@ -25979,6 +26290,10 @@ function buildPlanque(x, z, opt = {}) {
 // `v` = ce qu'il rapporte (1 = tranquille, 3 = le gros lot) : le centre-ville et la banque valent
 // trois fois le parc, et c'est pour ça qu'on se bat dessus. `e` = son émoji sur la carte.
 const TERRITOIRES = [
+  { k: 'northwest', n: 'Les Hauts', x: -235, z: -276, r: 51, v: 2, e: '▥' },
+  { k: 'finance', n: 'Quartier des affaires', x: -110, z: -276, r: 51, v: 4, e: '▥' },
+  { k: 'freight', n: 'Terminal logistique', x: 20, z: -276, r: 51, v: 3, e: '▤' },
+  { k: 'docks', n: 'Docks Nord', x: 140, z: -276, r: 47, v: 3, e: '▤' },
   { k: 'centre', n: 'Centre-ville', x: 0, z: 40, r: 40, v: 3, e: '🏙️' }, { k: 'commerces', n: 'Rue commerçante', x: 56, z: 64, r: 30, v: 2, e: '🛍️' },
   { k: 'banque', n: 'Quartier de la banque', x: -52, z: 70, r: 28, v: 3, e: '🏦' }, { k: 'parc', n: 'Parc', x: 0, z: 80, r: 26, v: 1, e: '🌳' },
   { k: 'plage', n: 'Plage', x: 150, z: 40, r: 46, v: 2, e: '🏖️' }, { k: 'zone', n: 'La Zone', x: -145, z: 40, r: 46, v: 2, e: '🏚️' },
@@ -26021,7 +26336,7 @@ function creerGangRival(G, i, chefNom) {
     generation: (sauve && sauve.gen) || 1,
     force: (sauve && sauve.force) || G.f0 || 25,
     relation: (sauve && sauve.rel) != null ? sauve.rel : 0,
-    magot: (sauve && sauve.magot) || Math.floor(rnd(300, 700) + (G.f0 || 25) * 6),
+    magot: (sauve && sauve.magot) != null ? sauve.magot : Math.floor(rnd(300, 700) + (G.f0 || 25) * 6),
     connu: !!(sauve && sauve.connu), reunionT: simTime + rnd(180, 420) };
   // le chef et ses hommes — leur nombre vient de la table des paliers
   g2.chef = creerGangeur(g2, bx, bz, true);
@@ -26839,14 +27154,18 @@ function joueurDansLaGuerre() {
 // La pastille d'action, quand c'est la capture qui l'avait ecrite : on la rend a l'action du lieu.
 function rendPastilleCapture() { if (gang.capture && gang.capture.pastille) { gang.capture.pastille = false; try { updateAct(); } catch (e) {} } }
 function captureTick(dt) {
+  if (!city.on || jail.on || P.hp <= 0 || P.pos.y > 6 || drive.car) { rendPastilleCapture(); gang.capture = null; return; }
   const t = territoireDe(P.pos.x, P.pos.z);
   if (!t) { rendPastilleCapture(); gang.capture = null; return; }
   const maitre = proprio(t.k);
+  if (!empireCanExpand(t.k, 'joueur')) { rendPastilleCapture(); gang.capture = null; return; }
   if (maitre === 'joueur') { rendPastilleCapture(); gang.capture = null; return; }
   const ennemisSurPlace = gangs.some(G => !G.mort && G.id === maitre && G.membres.some(m => !m.ko && Math.hypot(m.x - P.pos.x, m.z - P.pos.z) < 34));
-  const soutien = gang.membres.filter(b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 26).length
-    + (gang.membresLibres || []).filter(b => Math.hypot(b.x - P.pos.x, b.z - P.pos.z) < 26).length;
+  const soutien = gang.membres.filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 26).length
+    + (gang.membresLibres || []).filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.x - P.pos.x, b.z - P.pos.z) < 26).length;
   if (ennemisSurPlace || soutien < 1) {
+    if (gang.capture && gang.capture.k !== t.k) { rendPastilleCapture(); gang.capture = null; }
+    if (gang.capture) gang.capture.p = Math.max(0, gang.capture.p - dt / 60);
     // « 🚩 Il te faut un membre de ton gang avec toi » s'affichait DES LA PREMIERE SECONDE d'une
     // partie neuve : le point d'apparition est dans un quartier tenu par un gang, le joueur n'a
     // personne, et la pastille etait reecrite toutes les 6 s — puis restait la, meme hors du
@@ -26865,12 +27184,13 @@ function captureTick(dt) {
   // C'est la première récompense de l'organisation — emmener son gang change tout.
   const duree = captureDuree(soutien);
   gang.capture.p += dt / duree;
-  gang.capture.n = soutien;
+  gang.capture.n = soutien; gang.capture.pastille = true;
   $('act').textContent = `🚩 Prise de ${t.n} : ${Math.round(gang.capture.p * 100)} % (👥 ${soutien} — ${Math.round(duree)} s)`;
   if (gang.capture.p >= 1) {
     guerre.territoires[t.k] = 'joueur';
-    gang.capture = null; majHudGuerre();
-    msg(`🚩 ${t.n} est à toi ! Il te rapporte de l'argent chaque minute`, 4600); sfx.win(); sfx.cheer();
+    empire.defenses[t.k] = 0;
+    rendPastilleCapture(); gang.capture = null; majHudGuerre();
+    msg(`🚩 ${t.n} est à toi ! Il te rapporte des revenus toutes les deux minutes`, 4600); sfx.win(); sfx.cheer();
     chat(null, `🚩 ${myCfg.name} contrôle ${t.n}`);
     gagneRep(45, 'quartier pris');
     const G = gangDe(maitre);
@@ -26895,30 +27215,23 @@ function revenusTick() {
 }
 // les gangs reprennent les quartiers laissés sans surveillance
 function repriseTick() {
-  if (simTime < (guerre.repriseT || 0)) return;
+  if (empire.attack || simTime < (guerre.repriseT || 0)) return;
   guerre.repriseT = simTime + 180;
   const vivants = gangs.filter(g => !g.mort);
-  if (!vivants.length) return;
+  if (!vivants.length || !joueurDansLaGuerre()) return;
   const G = pickOne(vivants);
-  // un allié ne touche pas à tes quartiers tant que le sablier tourne : c'est ce qu'on a payé
-  const cibles = TERRITOIRES.filter(t => proprio(t.k) !== G.id && !(G.allieJoueur && proprio(t.k) === 'joueur'));
+  const cibles = TERRITOIRES.filter(t => proprio(t.k) !== G.id && empireCanExpand(t.k, G.id)
+    && !(G.allieJoueur && proprio(t.k) === 'joueur'));
   if (!cibles.length) return;
   const t = pickOne(cibles);
-  const avant = proprio(t.k);
-  if (avant === 'joueur') {
-    // ils ne prennent un quartier au joueur que si personne du gang n'est dans le coin
-    const garde = gang.membres.some(b => Math.hypot(b.pos.x - t.x, b.pos.z - t.z) < t.r)
-      || Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r;
-    if (garde) { chat(G.chefNom, `on a essayé de prendre ${t.n}, mais ${myCfg.name} avait laissé du monde…`, G.couleur); return; }
-    msg(`🚩 Les ${G.nom} t'ont pris ${t.n} ! Va le reprendre`, 4200); sfx.die();
-    setBeacon(t.x, t.z, 0.3);            // la colonne bleue montre où aller : on sait toujours quoi faire
-    perdRep(15, 'quartier perdu');
-    for (const m of (gang.membresLibres || [])) m.fidelite = Math.max(0, (m.fidelite != null ? m.fidelite : 70) - 20);
+  if (proprio(t.k) === 'joueur') {
+    empire.attack = { k: t.k, gang: G.id, remaining: 60, strength: Math.min(3, 1 + Math.floor((guerre.palier || 1) / 2)) };
+    msg(`ALERTE · ${G.nom} attaque ${t.n}. Tu as 60 secondes pour organiser sa défense.`, 6500);
+    setBeacon(t.x, t.z, 0.3); return;
   }
-  guerre.territoires[t.k] = G.id; majHudGuerre();
-  chat(null, `🚩 ${G.nom} contrôle maintenant ${t.n}`);
-  saveGuerre();
+  guerre.territoires[t.k] = G.id; empire.defenses[t.k] = 0; majHudGuerre(); saveGuerre();
 }
+
 // ===================================================================================
 //  POSTE JEU STRATÉGIQUE — LES RÈGLES DE LA PARTIE
 //  Le but tient en une phrase : « tu gagnes quand les 8 drapeaux de la ville sont verts
@@ -27214,7 +27527,7 @@ function sacreTick(dt) {
   }
   if (guerre.sacre <= 0) {
     guerre.sacre = SACRE_DUREE;
-    msg('👑 LES 8 QUARTIERS SONT À TOI ! Tiens-les 90 secondes pour devenir maître de la ville', 7000);
+    msg(`👑 LES ${TERRITOIRES.length} QUARTIERS SONT À TOI ! Tiens-les 90 secondes pour devenir maître de la ville`, 7000);
     chat(null, `👑 ${myCfg.name} tient toute la ville — plus que 90 secondes !`);
     sfx.win(); sfx.cheer();
     for (const G of gangs) if (!G.mort && !G.allieJoueur) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + SACRE_DUREE; }
@@ -27231,10 +27544,10 @@ function gagnePartie() {
   guerre.gagne = true; guerre.sacre = 0;
   const el = $('sacre'); if (el) el.classList.remove('on', 'pause');
   const mn = Math.max(1, Math.round((simTime - (guerre.debut || 0)) / 60));
-  msg(`👑 MAÎTRE DE LA VILLE ! ${gang.nom} règne sur les 8 quartiers`, 9000);
+  msg(`👑 MAÎTRE DE LA VILLE ! ${gang.nom} règne sur les ${TERRITOIRES.length} quartiers`, 9000);
   chat(null, `👑 ${myCfg.name} est MAÎTRE DE LA VILLE avec ${gang.nom} !`);
   const v = $('victoireTxt');
-  if (v) v.innerHTML = `<b>${gang.nom}</b> tient les 8 quartiers de la ville.<br><br>`
+  if (v) v.innerHTML = `<b>${gang.nom}</b> tient les ${TERRITOIRES.length} quartiers de la ville.<br><br>`
     + `⭐ ${gang.rep} points de respect · rang « ${rangJoueur().n} »<br>`
     + `👥 ${gang.membres.length + (gang.membresLibres || []).length} hommes · 💰 ${gang.magot} 🪙 dans la planque<br>`
     + `🏆 ${guerre.detruits || 0} gang${(guerre.detruits || 0) > 1 ? 's' : ''} détruit${(guerre.detruits || 0) > 1 ? 's' : ''} · ⏱️ ${mn} minutes de règne`;
@@ -27248,8 +27561,9 @@ function rejouerGuerre() {
   guerre.debut = simTime;
   closeUI();
   msg('🚩 Nouvelle guerre : les gangs reviennent, plus forts. Reprends la ville !', 5200);
-  try { buildGangs(); } catch (e) { console.error('nouvelle guerre', e); }
+  empire.defenses = {}; empire.attack = null; empire.operation = null;
   saveGuerre();
+  loadWorld(4);
 }
 
 // ---- la carte des quartiers : huit gros carrés colorés, lisibles de loin sur la télé ----
@@ -27258,15 +27572,15 @@ function carteTerritoires() {
     const o = proprio(t.k);
     const c = o === 'joueur' ? '#5cc453' : o ? (gangDe(o) ? gangDe(o).teinte : '#7a86a0') : '#4b5468';
     const qui = o === 'joueur' ? 'À TOI' : o ? nomGang(o) : 'libre';
-    return `<div class="tcase" style="background:${c}"><span class="te">${t.e || '🚩'}</span>`
-      + `<span class="tn">${t.n}</span><span class="tq">${qui}</span>`
-      + `<span class="tv">${'🪙'.repeat(t.v || 1)}</span></div>`;
+    return `<button type="button" data-territory="${t.k}" class="tcase${empire.selected === t.k ? ' selected' : ''}" style="--owner:${c};background:${c}"><span class="te">${t.e || '🚩'}</span>`
+      + `<span class="tn">${TERRITOIRES.indexOf(t) + 1}. ${t.n}</span><span class="tq">${qui}</span>`
+      + `<span class="tv">${'🪙'.repeat(t.v || 1)}</span></button>`;
   }).join('');
 }
 
 // ---- boucle principale de la guerre ----
 function guerreTick(dt) {
-  if (!city.on || !gangs.length) return;
+  if (!city.on) return;
   otageTick(dt);
   recruesTick(dt);
   entrainementTick(dt);
@@ -27298,10 +27612,11 @@ function majGuerre() {
   const r = rangJoueur();
   const mien = nbTerritoires('joueur');
   // LE BUT DU JEU, EN UNE PHRASE, EN HAUT DE L'ÉCRAN : un enfant n'a rien d'autre à lire.
-  $('guerreSub').innerHTML = `<b style="font-size:17px">Tu gagnes quand les 8 drapeaux sont VERTS en même temps.</b>`
+  $('guerreSub').innerHTML = `<b style="font-size:17px">Contrôle les ${TERRITOIRES.length} secteurs, puis tiens la ville pendant 90 secondes.</b>`
     + `<br>🚩 ${mien}/${TERRITOIRES.length} · difficulté ${'🔥'.repeat(guerre.palier || 1)} palier ${guerre.palier || 1}/${PALIERS_GUERRE.length}`
     + (guerre.gagne ? ' · <b style="color:#5cc453">👑 VILLE CONQUISE</b>' : '');
   $('guerreCarte').innerHTML = carteTerritoires();
+  renderEmpirePanel();
   majForceGang();
   // Les barres de performance : la tienne, celle de chacun de tes hommes, celle de la police.
   const pol = Math.round(policePerf());
@@ -27337,7 +27652,7 @@ function majGuerre() {
 // ---- sauvegarde de la guerre ----
 function saveGuerre() {
   try {
-    const d = { rep: gang.rep, force: gang.force, magot: gang.magot, armes: gang.armes || 0,
+    const d = { empire: { version: 2, defenses: empire.defenses, completed: empire.completed, wins: empire.wins }, rep: gang.rep, force: gang.force, magot: gang.magot, armes: gang.armes || 0,
       terr: guerre.territoires, saison: guerre.saison,
       palier: guerre.palier || 1, morts: guerre.morts || [], gagne: !!guerre.gagne, detruits: guerre.detruits || 0,
       gangs: {} };
@@ -27353,10 +27668,13 @@ function saveGuerre() {
 }
 function loadGuerre() {
   const d = store.json('superobby.guerre', null);
-  if (!d) return;
+  if (!d || typeof d !== 'object') return;
+  restoreEmpire(d.empire);
   gang.rep = d.rep || 0; gang.force = d.force || 20; gang.magot = d.magot || 0; gang.armes = d.armes || 0;
-  guerre.territoires = d.terr || {}; guerre.saison = d.saison || 1;
-  guerre.palier = d.palier || 1; guerre.morts = d.morts || []; guerre.gagne = !!d.gagne; guerre.detruits = d.detruits || 0;
+  guerre.territoires = {};
+  if (d.terr && typeof d.terr === 'object') for (const k of Object.keys(EMPIRE_LINKS)) { const owner = d.terr[k]; if (owner === 'joueur' || GANG_DEFS.some(g => g.id === owner)) guerre.territoires[k] = owner; }
+  guerre.saison = d.saison || 1;
+  guerre.palier = d.palier || 1; guerre.morts = d.morts || []; guerre.gagne = !!d.gagne && Object.keys(EMPIRE_LINKS).every(k => guerre.territoires[k] === 'joueur'); guerre.detruits = d.detruits || 0;
   guerre.sauve = d.gangs || null; guerre.sauveRecrues = d.recrues || [];
   guerre.sauvePerf = d.membres || [];   // on retrouve le niveau de chacun à la reprise
   if (d.perf != null) { P.perf = clamp(d.perf, 0, 100); savePerf(); }
@@ -31051,6 +31369,7 @@ window.addEventListener('keydown', e => {
   else if (drive.car) msg('🔧 O n\'actionne un outil que sur un véhicule de travail (dépôt municipal, caserne)', 2200);
 });
 
+initEmpireUI();
 loop();
 })();
 </script>

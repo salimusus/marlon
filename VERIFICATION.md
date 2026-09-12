@@ -1,53 +1,89 @@
-# Vérification de MARLON — Empire urbain
+# Vérification — Refonte 03
 
-## Corrections ciblées
+Vérification effectuée le 12 septembre 2026.
 
-- Touches et gâchettes bloquées après déconnexion de la manette.
-- Rejet asynchrone des vibrations non pris en charge.
-- Joystick générique pris à tort pour une manette Sony HID.
-- Double bascule de l'arme sur L2 au lieu d'une visée maintenue.
-- Conflit entre la nouvelle carte M et le raccourci historique des missions.
-- Recrues KO / captives comptées comme soutien à la capture.
-- Progression de capture et texte d'action périmés en changeant de secteur.
-- Vols instantanés de territoires sans délai de défense.
-- Portefeuille sauvegardé à zéro restauré arbitrairement à 25.
-- Magot rival égal à zéro remplacé par un nouveau magot aléatoire.
-- Victoire à huit secteurs conservée à tort après agrandissement de la carte.
-- Reconstruction des gangs en double lors d'une nouvelle campagne.
-- Faux libellé « DLSS 5 » pour un simple rendu en résolution réduite.
-- Tests liés à des chemins absolus et script de captures exécuté au simple import.
+**68 contrôles automatisés réussis, aucun échec.** Aucun message d’exception
+JavaScript ou d’erreur de compilation des shaders relevé dans les parcours
+navigateur. Ces résultats ne garantissent pas l’absence de tout bug.
 
-## Essais
+## Environnement des essais
 
-Le rapport final des tests navigateur est dans `verification/browser-results.json`.
-Les captures sont prises dans Chromium en rendu logiciel, avec le préréglage bas
-pour les scénarios fonctionnels. Elles ne mesurent pas les performances d'un GPU
-réel ni le rendu 4K matériel.
+Linux, Node.js, Chromium headless et rendu WebGL 1 logiciel SwiftShader.
+Les ressources du jeu sont locales. Captures à 1280 × 800 et contrôle
+d’interface mobile à 390 × 844. Les scénarios de simulation utilisent une
+horloge contrôlée ; un parcours distinct vérifie aussi le démarrage par clic
+et le déplacement clavier avec la vraie boucle requestAnimationFrame.
+Les manettes sont simulées : aucun essai physique DualSense USB/Bluetooth,
+GPU de joueur ou appareil Android n’a été effectué.
 
-- Analyse de syntaxe de tous les scripts et du code injecté par les tests.
-- Chargement du jeu et construction de la ville avec le banc de simulation.
-- 15 tests ciblés : géométrie des rendez-vous, graphes de frontières, capture
-  complète avec une recrue valide, coût des défenses, unités invalides, attaque, récompenses,
-  validation de sauvegarde, profils DualSense, déconnexion, absence de manette,
-  changement de monde et portefeuille nul.
-- 5 tests de régression existants en vrai Chromium : objet porté, changement de
-  monde en véhicule, fermeture par Échap, bot bloqué contre un mur et mission
-  Livraison express. Résultat : 5 réussis, aucune erreur console.
-- Essais interactifs additionnels : accueil, nouveaux secteurs, carte au clavier,
-  sélection d'objectif, reconnaissance, pavé DualSense simulé, déconnexion et
-  affichage mobile. Voir le rapport JSON pour le résultat final.
+## Résultats reproductibles
 
-## Limites
+| Suite | Réussis | Échecs | Preuve incluse |
+|---|---:|---:|---|
+| Logique et collisions | 13 | 0 | `verification/core-results.txt` |
+| Commandes | 7 | 0 | `verification/input-results.txt` |
+| Animation | 8 | 0 | `verification/animation-results.txt` |
+| Persistance et navigation | 9 | 0 | `verification/campaign-results.txt` |
+| Navigateur et intégration | 29 | 0 | `verification/browser-results.json` |
+| Import et nouvelle campagne après rechargement | 2 | 0 | `verification/lifecycle-results.json` |
 
-Pas de test matériel DualSense / téléviseur / téléphone, pas de mesure de débit
-sur carte graphique, pas de test multijoueur distant. La grande suite historique
-n'a pas été exécutée intégralement. Les personnages conservent leur modèle
-stylisé et les véhicules conservent leur architecture de base et leurs animations.
-Les graphismes ne sont pas photoréalistes.
+Les tests de commandes couvrent les orientations de caméra, la diagonale,
+la zone morte, la séparation des sticks et gâchettes, les entrées résiduelles
+et la déconnexion. Les tests de simulation couvrent collisions, conduite,
+recrutement, tirs, couverture, rechargement, conquêtes, fortification et mission.
 
-## Résultat final
+Les nouveaux contrôles vérifient :
 
-**29 scénarios réussis** : 15 tests ciblés, 5 régressions historiques et 9
-contrôles dans Chromium. Aucune exception JavaScript ni erreur shader relevée
-dans les parcours navigateur exécutés. Les captures ordinateur et mobile ont
-été inspectées visuellement.
+- La longueur des segments articulés et la limitation de portée, les démarrages
+  et arrêts progressifs, les jambes pendant la visée/recharge, l’événement de
+  réception unique et des transformations finies à 30, 60 et 120 Hz.
+- La portière, la suspension de l’entrée par la pause, le blocage des commandes
+  pendant la transition et la pose assise du conducteur.
+- Le contact différé du corps à corps et l’attribution unique des dégâts.
+- La mise à terre, le secours temporisé, la perte à expiration et l’exclusion
+  des équipiers à terre du calcul de capture.
+- La restauration d’une mission, d’une attaque, d’une voiture et des ennemis
+  neutralisés, ainsi que la reprise sur une copie de secours après corruption.
+- La migration v2 avec portefeuille à zéro, le refus d’un import incorrect,
+  la conservation de l’ancienne sauvegarde quand le stockage échoue et les
+  détours autour d’un obstacle sans traverser ses angles.
+- L’accès aux dix séquences du studio d’animation.
+- L’import réel d’un fichier depuis Pause et une nouvelle campagne confirmée,
+  suivis d’un rechargement : la sauvegarde à la fermeture ne doit ni écraser
+  l’import ni recréer la campagne effacée.
+
+Le fichier de résultats navigateur décrit chaque contrôle et son statut.
+Les instructions d’exécution sont dans `README.md`.
+
+## Inspection visuelle et démonstration
+
+Les captures dans `verification/` proviennent du véritable rendu :
+
+- `01-accueil.png` : ville et accueil.
+- `02-jeu.png` : personnage, équipe, ombres et interface.
+- `03-vehicule.png` : véhicule à proximité du personnage.
+- `04-carte.png` : carte et informations du quartier.
+- `05-mobile.png` : interface sur fenêtre étroite.
+- `06-studio.png` : studio et pose de visée.
+- `MARLON-animations-v3.mp4` : six extraits de séquences, huit secondes,
+  960 × 600, 24 images/s, sans audio. Les images ont été rendues une à une
+  par le studio puis encodées ; leur cadence n’est pas un benchmark.
+
+Les captures du jeu emploient une campagne de test. Une nouvelle campagne
+commence avec 900 €, les Forges et aucun équipier.
+
+## Ce qui reste à valider avant la vente
+
+Le rendu et les animations restent procéduraux et stylisés. Les prises de main,
+appuis au sol et transitions vers les véhicules demandent encore une finition
+artistique ; le studio rend ces limites inspectables. Le système de chemins
+ne constitue pas une simulation complète de trafic ni une IA tactique avancée.
+
+Il manque notamment une campagne complète testée par des joueurs, l’équilibrage,
+des sessions d’endurance, des mesures sur les GPU cibles, les essais physiques
+manette/mobile, les configurations minimales et les critères de la plateforme
+de distribution. Les sons sont synthétisés, les bâtiments principalement
+extérieurs et aucun installateur natif n’est fourni. **Cette livraison n’est
+pas déclarée prête à être commercialisée.**
+
+Aucun déploiement public n’a été effectué pendant cette itération.

@@ -1,0 +1,8 @@
+PASS Stick gauche seul déplace, stick droit seul oriente
+PASS Gâchettes indépendantes du déplacement à pied
+PASS Un appui produit une seule action
+PASS Déconnexion : mouvement neutralisé et pause
+PASS Perte de focus : entrées clavier, souris et tactiles libérées
+PASS Profil Sony brut : caméra sur axes 2/5, gâchettes 3/4
+PASS Pas de contamination des touches clavier par la manette
+7 tests réussis.

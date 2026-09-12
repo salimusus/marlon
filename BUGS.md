@@ -10,6 +10,16 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ---
 
+## BLOQUANT
+
+### 37. Au garage, « Valider » plante le jeu : l'argent est pris, la voiture reste comme avant
+- **Gravité** : BLOQUANT (le garage — repeindre, monter un kit — ne marche pas du tout)
+- **Reproduire** : voiture du parking, la garer devant le garage custom (−45, 90), △ au comptoir (−53,5, 96,6), onglet 🎨 Peinture : choisir une finition (fluo), onglet 🧰 Kits : choisir « Jupes latérales », « Valider ».
+- **On voit** : le chat écrit « ⚠️ Bug détecté : Uncaught TypeError: Cannot read properties of undefined (reading 'ws') at tuneApply », message « ⚠️ Un bug a été détecté (voir le chat), le jeu continue » ; le portefeuille passe de 400 à **190** (210 🪙 payés) ; la voiture reste rouge (#ff5c5c), sans jupes ; la fenêtre de l'atelier reste ouverte.
+- **On devrait voir** : la voiture repeinte et équipée, et l'argent pris seulement si ça marche.
+- **Capture** : `img/s5/s5-6-apres.png` (l'erreur dans le chat, 190 🪙), `img/s5/s5-7-ressort.png` (voiture toujours rouge).
+- **Sonde** : `s5-pc.log` : `valide.wallet 400 → 190`, `remonte.couleur = 16735324` (inchangée), `tuning = {finition: "fluo", kits: ["jupes"]}` mais `PAGEERROR: Cannot read properties of undefined (reading 'ws')` (index.html l. ~24745, `tuneApply`).
+
 ## GRAVE
 
 ### 2. Le message de bienvenue d'une partie NEUVE est « 💾 Partie rechargée : 25 🪙 »
@@ -30,6 +40,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `J.hud().act` = « 🚩 Il te faut un membre de ton gang avec toi » à t+2 s, zone = null.
 
 ### 14. On sort de la ville à pied et on TOMBE DANS LE VIDE (mort, 💀 +1)
+✅ RÉPARÉ — le mur invisible d'enceinte était posé 1,5 m DEHORS du plateau (fossé d'un mètre sans sol) et haut de 4 m seulement depuis y = 0 : on tombait dans le fossé puis SOUS le mur ; il colle maintenant au bord et descend sous le plateau, et une haie visible fait le tour de la ville — commit 8d14cd1
 - **Gravité** : GRAVE (première marche libre : l'enfant meurt sans comprendre)
 - **Reproduire** : Ville, point d'apparition, stick avant 4 s (on part vers le nord), stick gauche 2 s, avant 6 s, droite 2 s, avant ~30 s (direction nord-ouest, vers (-84, -157) puis (-102, -222)).
 - **On voit** : d'abord un dallage blanc infini sans rien dessus (`s2-course.png`, position (-55, -124)), puis le personnage tombe sous le sol (`P.pos.y = -100`), message « Oups ! », compteur 💀 passe à 1 et on réapparaît au centre.
@@ -75,6 +86,21 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On devrait voir** : des voitures sur les avenues du centre, jamais hors de la chaussée.
 - **Capture** : `img/s4/s4-8-voiture.png` (le dallage blanc, notre voiture et la police, débris de l'autre voiture).
 - **Sonde** : `autre.d = 147.74` ; position (−69,9, −104,4) hors de tout `city.routes`.
+
+### 35. Après un accident, la police et la dépanneuse « arrivent » mais ne viennent JAMAIS ; l'amende prend tout l'argent de l'enfant
+- **Gravité** : GRAVE (fonction promise au round 67 : accidents, constat, dépanneuse)
+- **Reproduire** : voiture du parking, se poser en (30,6, −63) cap nord, R2 : on tape le camion garé du Parking du Sud (30,6, −85) à 62 km/h.
+- **On voit** : « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive » ; pendant 25 s rien ne vient : la voiture de police reste à 160 m (`pc.constat = true` à 164 m, `debarque = false`), la dépanneuse annoncée « 🚚 Une dépanneuse a été appelée (service payant) » garde `etat = null` et ne bouge pas de 54 m ; puis « 🚓 Constat : 25 🪙 d'amende — payé » : le portefeuille passe de 25 à **0**. La voiture reste bloquée 30 s, même si on la déplace (l'état `accidente` la suit jusqu'au milieu de la pelouse du Parc).
+- **On devrait voir** : la voiture de police qui arrive sur place, l'agent qui descend, la dépanneuse qui vient, une amende plafonnée (jamais tout l'argent d'un enfant de 25 🪙).
+- **Capture** : `img/s4b/s4b-2-choc-camion.png` (le choc), `img/s4b/s4b-6-accident15s.png`, `img/s4b/s4b-7-accident40s.png` (voiture bloquée dans le Parc, personne ne vient).
+- **Sonde** : `s4b-pc.log` `suivi` t = 5…25 s : `pol[0].d` 164 → 158 m, `dep[0].etat = null`, `wallet` 25 → 0.
+
+### 36. Un choc frontal à 62 km/h contre un camion = 3 % de dégâts, aucune secousse, aucune marque
+- **Gravité** : GRAVE (promis : chocs BOOM, dégâts par paliers, marques d'impact)
+- **Reproduire** : idem n° 35.
+- **On voit** : `dmg` 0 → 2,97, `cam.kick = 0`, `city.marques.length = 0`, aucun bruit noté, la voiture s'arrête net sans rebond ni fumée.
+- **On devrait voir** : capot froissé, pare-brise étoilé, secousse de caméra, klaxon/BOOM, marques sur le camion.
+- **Capture** : `img/s4b/s4b-2-choc-camion.png`.
 
 ## GÊNANT
 
@@ -172,7 +198,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 30. Au volant, les messages parlent encore du clavier et proposent de s'asseoir sur un banc
 - **Gravité** : GÊNANT
 - **Reproduire** : monter dans la voiture du parking (message « 🚗 Appuie sur E pour conduire »), rouler devant le snack.
-- **On voit** : à chaque seconde « 🪑 E : s'asseoir » pendant qu'on conduit ; « 🚗 Parking : E (ou 🚗) devant une voiture, une moto… » ; « Boîte automatique · 📯 klaxon · Espace maintenu = frein à main ».
+- **On voit** : à chaque seconde « 🪑 E : s'asseoir » pendant qu'on conduit ; « 🚗 Parking : E (ou 🚗) devant une voiture, une moto… » ; « Boîte automatique · 📯 klaxon · Espace maintenu = frein à main » ; « 🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau » ; « 🔧 E : garage — réparation, peinture… » ; « 🔫 E : voir toutes les armes ».
 - **On devrait voir** : « △ » à la place de E, et aucune invitation à s'asseoir au volant.
 - **Sonde** : `s4-pc.log` pas `gaz+1s` … `recule+3s` : msg « 🪑 E : s'asseoir ».
 
@@ -195,6 +221,24 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : « Pour sortir, réussis les épreuves ci-dessous (jusqu'au drapeau final), paie 100 🪙 (tu as 25), ou utilise un pass liberté (2 pour cette partie) » — Prairie ▶ / Volcan ▶. Sans pass ni argent, l'enfant doit finir 8 étapes d'obby pour retourner en ville.
 - **On devrait voir** : une peine courte (attendre 30 s, ou une mini-épreuve dans la cellule).
 - **Capture** : `img/s4/s4-9-accident.png`.
+
+### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
+- **Gravité** : GÊNANT
+- **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
+- **On voit** : la dépanneuse stationnée sur la chaussée en (−45, 105), pile dans l'axe ; à 25 km/h on la tape (🔧 7 % avant même d'être au garage), étoile d'impact sur le capot.
+- **Capture** : `img/s5/s5-0-devant-garage.png`, `img/s5/s5-1-dans-garage.png`.
+
+### 39. Au comptoir du garage, la caméra entre dans la tête du personnage
+- **Gravité** : GÊNANT
+- **Reproduire** : se placer devant le comptoir de l'atelier (−51, 96,6) face à l'ouest.
+- **On voit** : l'écran est rempli par l'arrière du crâne et la casquette du personnage (la caméra est repoussée par le comptoir derrière lui).
+- **Capture** : `img/s5/s5-2-comptoir.png`.
+
+### 40. Fenêtre de l'atelier, onglet Peinture : la ligne des finitions est coupée
+- **Gravité** : GÊNANT
+- **Reproduire** : ouvrir l'atelier, onglet 🎨 Peinture, en 1280×720.
+- **On voit** : sous les 24 couleurs, une rangée de boutons (finitions) coupée en deux par le bord de la zone, le texte « Rien à payer » passe dessus. À la manette, R1 change d'onglet mais ne pose aucune bague de sélection : ✕ ne fait rien tant qu'on n'a pas appuyé sur une direction.
+- **Capture** : `img/s5/s5-4-peinture.png`.
 
 ## COSMÉTIQUE
 

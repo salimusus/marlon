@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "name": "Accueil MARLON lisible",
+      "ok": true
+    },
+    {
+      "name": "Entrée réelle dans la ville depuis le bouton de démarrage",
+      "ok": true
+    },
+    {
+      "name": "Extension construite avec 12 secteurs et 4 repères",
+      "ok": true
+    },
+    {
+      "name": "Carte stratégique accessible au clavier",
+      "ok": true
+    },
+    {
+      "name": "Sélection du quartier et suivi d’objectif",
+      "ok": true
+    },
+    {
+      "name": "Mission reconnaissance : trois points physiques et une seule récompense",
+      "ok": true
+    },
+    {
+      "name": "DualSense simulée : pavé ouvre la carte, déconnexion libère les touches",
+      "ok": true
+    },
+    {
+      "name": "Carte mobile : contrôles et panneaux restent dans leur fenêtre",
+      "ok": true
+    },
+    {
+      "name": "Aucune exception JavaScript ou erreur shader",
+      "ok": true
+    }
+  ],
+  "errors": []
+}

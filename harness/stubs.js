@@ -168,7 +168,7 @@ const THREE = {
   BufferAttribute: BufAttr, Float32BufferAttribute: BufAttr,
   MeshLambertMaterial: Mat, MeshBasicMaterial: Mat, MeshPhongMaterial: Mat, MeshStandardMaterial: Mat,
   MeshNormalMaterial: Mat, MeshDepthMaterial: Mat, SpriteMaterial: Mat, PointsMaterial: Mat, LineBasicMaterial: Mat, ShaderMaterial: Mat,
-  CanvasTexture: Tex, Texture: Tex, DataTexture: Tex,
+  CanvasTexture: Tex, Texture: Tex, DataTexture: Tex, CubeTexture: Tex,
   HemisphereLight: class extends Obj3D { constructor(a, b, i) { super(); this.color = new Col(a); this.groundColor = new Col(b); this.intensity = i; } },
   DirectionalLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; this.target = new Obj3D();
     this.shadow = { mapSize: { set() {}, width: 1024, height: 1024 }, camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0, updateProjectionMatrix() {} }, bias: 0, normalBias: 0, radius: 1 }; } },

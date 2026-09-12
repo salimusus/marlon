@@ -2,7 +2,7 @@
 // Sonde : ouvre le jeu dans Chromium et evalue un script (IIFE ou IIFE async) dans la page.
 // Usage : node harness/sonde.js mon-script.js   (JEU=... pour un autre index.html)
 const fs=require('fs'), path=require('path'), http=require('http');
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('./runtime').playwright;
 const ROOT=path.join(__dirname,'..');
 const shot=fs.readFileSync(path.join(ROOT,'harness','shot.js'),'utf8');
 const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
@@ -19,7 +19,7 @@ function serve(file){
 }
 (async()=>{
   const {srv,port}=await serve(process.env.JEU || path.join(ROOT,'index.html'));
-  const browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || undefined,
     args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage({viewport:{width:1024,height:640}});
   const errors=[];

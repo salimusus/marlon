@@ -155,7 +155,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 52. Les pompiers ne bougent pas : le feu brûle 2 minutes, le camion reste à la caserne
 - **Gravité** : GRAVE (fonction promise : « appeler les pompiers sur un feu »)
 - **Reproduire** : `declencheIncendie(0, 60)` (ou attendre le feu spontané « 🔥 AU FEU ! La caserne envoie le camion ») et regarder la caserne (−40, 122).
-- **On voit** : les trois pompiers restent en état `route` à 84 m du feu sans avancer d'un centimètre (84,28 → 84,29 en 25 s), le camion (`kind: pompier`) reste à 81 m ; le feu garde `force = 100`, `city.incendies = 2`.
+- **On voit** : les trois pompiers restent en état `route` à 84 m du feu sans avancer d'un centimètre (84,28 → 84,29 en **120 s**), le camion (`kind: pompier`) reste à 81 m ; le feu garde `force = 100`, `city.incendies = 2`. Et à 8 m du point d'allumage (0, 60) on ne voit AUCUNE flamme (le terrain de boules du Parc, rien d'autre).
 - **On devrait voir** : le camion qui part, sirène, la lance à eau, le feu qui baisse.
 - **Capture** : `img/s12/s12-8-pompiers-20s.png`, `img/s12/s12-9-pompiers-50s.png`, `img/s12/s12-10-feu-fin.png`.
 - **Sonde** : `s12-pc.log` `pompiers[*]` : distance constante 84,28 / camion 81,13, `incendies 2` jusqu'au bout.
@@ -163,18 +163,26 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 53. L'équipe municipale met plus de deux minutes à venir réparer un lampadaire cassé (1 m/s)
 - **Gravité** : GRAVE (fonction promise : « regarder les employés réparer un lampadaire »)
 - **Reproduire** : casser le lampadaire (45,5, 13,2) (`breakThing`), regarder les trois employés du dépôt (22…26, 125).
-- **On voit** : ils passent en `route` mais avancent de 120 m à 80 m en 40 s (1 m/s à pied, aucun véhicule) ; aucun chantier ouvert (`city.chantiers = []`) ; le lampadaire est encore cassé après 2 min.
+- **On voit** : ils passent en `route` mais avancent de 120 m à 80 m en 40 s (1 m/s à pied, aucun véhicule) ; aucun chantier ouvert (`city.chantiers = []`) ; le lampadaire n'est réparé qu'à 65 s (`retour`) — et pendant ce temps le message central n'a rien dit de la réparation.
 - **On devrait voir** : le fourgon qui part avec l'équipe, un chantier balisé, une réparation en moins d'une minute.
 - **Capture** : `img/s12/s12-4-reparation-30s.png`, `img/s12/s12-6-reparation-fin.png`.
 - **Sonde** : `s12-pc.log` `reparation[*].etats` : « route@120 » → « route@80 » à 40 s.
 
-### 54. À l'école, △ devant une chaise ne fait pas s'asseoir
-- **Gravité** : GRAVE (toute la leçon commence par « assieds-toi »)
+### 54. À l'école, △ devant une chaise ne fait pas s'asseoir — À CONFIRMER (scénario 11b en cours : la capture montre le personnage DEHORS contre la vitre, à 1,2 m de la chaise)
+- **Gravité** : GRAVE si confirmé (toute la leçon commence par « assieds-toi »)
 - **Reproduire** : classe Géométrie (−69, 213), se placer à 1,2 m au sud de la chaise (−72,6, 209,1) face à elle, △.
 - **On voit** : le jeu a bien dit « 🪑 E : s'asseoir en classe » en arrivant, mais `benchNear = false`, `classNear = false` au moment de l'appui, △ ne fait rien (`P.sit = false`), la fenêtre des exercices ne s'ouvre pas ; ◯ ensuite fait sauter le personnage sur la table.
 - **On devrait voir** : le personnage assis à la table, la maîtresse qui parle, la première question.
 - **Capture** : `img/s11/s11-0-devant-chaise.png`, `img/s11/s11-1-assis.png`.
 - **Sonde** : `s11-pc.log` `assis = {sit: false, ui: null}`.
+
+### 61. Quatre balles dans la rue commerçante : un lampadaire renversé, une voiture DÉTRUITE (en feu) — et zéro étoile, pas un policier
+- **Gravité** : GRAVE (le scénario « déclencher la police, fuir, se cacher, se faire arrêter » est impossible : rien de ce que fait l'enfant ne déclenche la police, sauf écraser un piéton — cf. n° 27)
+- **Reproduire** : rue des commerces (−13, 14), pistolet, L2 (la visée se verrouille sur le décor), R2 ×4.
+- **On voit** : « 💥 Lampadaire renversé ! » ×3 puis « 💥 Véhicule détruit ! » : la voiture jaune garée devant le snack explose et brûle. `police.wanted = 0`, `police.avert = 0`, aucune voiture de patrouille n'approche pendant 30 s, aucun agent. Personne ne vient pendant les 90 s suivantes. La dépanneuse, elle, vient ramasser la carcasse (ça marche). Une vitrine ne peut pas être cassée par le joueur : `city.vitrines[*]` n'a aucun état (clés `x, z, tab, key, label, r`), 3 coups de poing + 4 balles n'y changent rien.
+- **On devrait voir** : un tir en ville = recherché ★ (au moins un avertissement visible), une voiture détruite = ★★, vitrine brisée = ★ ; des policiers armés qui arrivent, une traque qui s'arrête quand on est caché.
+- **Capture** : `img/s9b/s9b-1-vitrine-tiree.png` (voiture en feu, ⭐ 0), `img/s9b/s9b-3-police-15s.png`, `img/s9b/s9b-4-police-30s.png` (personne), `img/s9/s9-1-vitrine-frappee.png` (le joueur est ENTRÉ dans la vitrine en marchant).
+- **Sonde** : `s9b-pc.log` `tirs[*].wanted = 0`, `venue[*].agents = 0`, `arrestation[*].wanted = 0` pendant 90 s.
 
 ## GÊNANT
 
@@ -370,6 +378,25 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : héliport (43, −13), △, ◯ 4 s, stick avant 4 s, ▢.
 - **On voit** : la descente automatique (« Atterrissage… ») se termine à y 0,21 en (43, 51) sur un solide de 3 × 2,4 × 7 m (abribus / mobilier) ; △ fait descendre le personnage à y 2,3, debout sur l'objet.
 - **Capture** : `img/s14/s14-heli-4-au-sol.png`.
+
+### 60. Le facteur fait sa tournée à pied à 25 km/h, le vélo reste au dépôt
+- **Gravité** : GÊNANT (promis au round 67 : le facteur, ses sacoches, son vélo)
+- **Reproduire** : dépôt municipal (27, 122), suivre « Paulette » (`city.metiers`, `facteur`) 90 s.
+- **On voit** : état `tournee`, elle traverse la ville à pied (26 m toutes les 5 s, soit 5 m/s+ sans courir), `b.drive = null` pendant les 90 s alors que le vélo de service (`kind: velo`) est garé en (40, 131) ; on ne voit ni sacoche ni courrier dans les mains. (Dans une autre partie, `img/s9b/s9b-9-fin.png`, on la voit bien à vélo : ce n'est donc pas systématique.)
+- **Capture** : `img/s12/s12-0-facteur.png`, `img/s12/s12-1-facteur-40s.png`.
+- **Sonde** : `s12-pc.log` `facteur[*].velo = false`.
+
+### 62. Le viseur reste affiché quand l'arme est rangée
+- **Gravité** : GÊNANT
+- **Reproduire** : pistolet, L2 (viser), L2 (ranger), marcher.
+- **On voit** : la petite croix rouge reste au milieu de l'écran avec l'arme dans l'étui (pastille « 🚩 Il te faut… », pas de « Pistolet »).
+- **Capture** : `img/s9b/s9b-3-police-15s.png`, `img/s9b/s9b-4-police-30s.png`.
+
+### 63. Le joueur perd 56 PV sans qu'on lui dise pourquoi
+- **Gravité** : GÊNANT
+- **Reproduire** : après la voiture détruite (n° 61), rester au point d'apparition 40 s.
+- **On voit** : `P.hp` 100 → 72 → 44 puis remonte tout seul à 100 ; aucun message, aucun « aïe », la barre verte descend sans raison visible (explosion à distance ? bagarre de bots ?).
+- **Sonde** : `s9b-pc.log` `arrestation[3..7].hp` = 72, 44, 46, 66…
 
 ## COSMÉTIQUE
 

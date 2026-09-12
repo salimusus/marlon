@@ -12654,10 +12654,15 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
     const autres = [].concat(c.cars, c.aiCars, G.police.cars).filter(v => v && !v.heli);
     for (let i = 0; i < 4500; i++) {
       G.simTime = G.simTime + DT;
-      // cityStep : la circulation de fond roule pendant ce temps-là (il y a donc du monde à
-      // croiser dans les rues) et c'est lui qui appelle `separerVehicules`, le garde-fou du jeu
-      // contre deux tôles qui se touchent. Sans lui, la mesure n'était pas celle du vrai jeu.
-      G.lightsTick(); G.cityStep(DT); G.servicesTick(DT); G.metiersTick(DT);
+      // cityStep ET RIEN D'AUTRE. C'est LUI qui fait vivre la ville : il appelle deja
+      // lightsTick, policeTick, servicesTick et metiersTick (par cityCommon → cityVie), et
+      // c'est lui qui appelle `separerVehicules`, le garde-fou du jeu contre deux toles qui
+      // se touchent. Les rappeler A LA MAIN faisait avancer CHAQUE vehicule de service DEUX
+      // FOIS par image : le velo du facteur, plafonne a 9 m/s, pointait a 18 ; le camion de
+      // pompiers, plafonne a 13, pointait a 26 ; et une caisse qui saute 1,3 m d'un coup
+      // passe A TRAVERS celle d'a cote sans que le garde-fou ait son mot a dire — d'ou les
+      // « 421 images dans un autre vehicule » que ce test reprochait au jeu.
+      G.cityStep(DT);
       for (const s of suivis) {
         const v = s.v;
         // LE DÉPLACEMENT RÉEL, et non `v.pas` ni `v.speed` : pendant le treuillage, le
@@ -14510,7 +14515,9 @@ test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène a
     for (let i = 0; i < 3600; i++) {
       // cityStep : sans lui, les voitures de la circulation restent FIGÉES au milieu des rues
       // et bouchent le trajet de la dépanneuse (mesuré : 450 s sans jamais atteindre l'épave).
-      G.simTime = G.simTime + DT; G.lightsTick(); G.cityStep(DT); G.servicesTick(DT);
+      // Et lui SEUL : il appelle deja lightsTick et servicesTick (par cityCommon → cityVie).
+      // Les rappeler ici faisait rouler la depanneuse deux fois plus vite que sa fiche.
+      G.simTime = G.simTime + DT; G.cityStep(DT);
       const m = d.mission;
       if (appel < 0 && m && m.carcasse) appel = +(i * DT).toFixed(1);
       if (m && m.phase === 'route' && (d.pas || 0) > 0.004) { nRoute++; if (!G.surLaChaussee(d.x, d.z, 0.9)) horsRoute++; }

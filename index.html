@@ -8403,14 +8403,23 @@ function traficPlace() {
 function vehiculeMord(c, x, z, h) {
   const cs = Math.cos(h), sn = Math.sin(h);
   const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+  // LES POINTS DE CONTROLE SUIVENT LA LONGUEUR DU VEHICULE, un tous les 1,2 m au plus.
+  // Il n'y en avait que sept (quatre coins, deux flancs, le centre) : sur le camion de
+  // pompiers, long de 8 m, deux points de flanc voisins sont alors distants de 4 m — et le
+  // velo du facteur, long de 2 m, passait ENTIER entre les deux sans jamais etre vu. Mesure
+  // dans la cour du depot : 53 images de camion DANS le velo gare a cote, a chaque sortie.
+  const pas = Math.max(2, Math.ceil(A * 2 / 1.2));
   for (const o of solidsAutour(x, z, A + B + 2, true)) {
     if (o === c.solid || o.h > 30) continue;
     if (o.veh && !c.exactVeh) continue;
     if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
-    for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0], [B, 0], [-B, 0]]) {
-      const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
-      if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+    for (let i = 0; i <= pas; i++) {
+      const lz = -A + 2 * A * i / pas;
+      for (const lx of [B, 0, -B]) {
+        const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
+        if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+      }
     }
   }
   return false;
@@ -20944,6 +20953,13 @@ function cityStep(dt) {
   }
   if (near !== city.near) { city.near = near; if (near && !isMobile) msg('🚗 Appuie sur E pour conduire', 1200); }
   document.body.classList.toggle('carnear', !!city.near || !!city.jackNear || !!drive.car);
+  // L'ECARTEMENT DES TOLES PASSE EN DERNIER. Il etait fait ICI, avant cityCommon() — donc
+  // avant policeTick, servicesTick et metiersTick, qui sont justement ceux qui font rouler la
+  // police, les secours et les metiers. Leur dernier pas de l'image n'etait donc controle par
+  // personne : une voiture de patrouille qui sortait du commissariat restait a 4,34 m de sa
+  // voisine (il en faut 4,42) pendant onze images d'affilee. On fait donc vivre la ville
+  // D'ABORD, on ecarte les toles ENSUITE, et on revalide le trafic apres l'ecartement.
+  if (!drive.car) cityCommon(dt);
   separerVehicules();
   // L'ECARTEMENT DES VEHICULES peut pousser une voiture du trafic DANS un mur : deux voitures
   // qui se chevauchent au ras d'une facade sont separees vers l'exterieur, et l'une des deux
@@ -20955,7 +20971,6 @@ function cityStep(dt) {
     c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; vehicleSolid(c);
   }
-  if (!drive.car) cityCommon(dt);
 }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image
 // La physique du joueur tourne à pas fixe de 1/120 s (précision des sauts et des collisions),

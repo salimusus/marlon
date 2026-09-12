@@ -15159,3 +15159,59 @@ test('le commissariat a un intérieur : murs peints dedans (pas la façade vitr�
   const ok = r.murs >= 4 && r.peints === r.murs && r.vitresDedans === 0 && !!r.agent && r.agent.dedans && r.agent.visible && Math.abs(r.agent.x - r.guichet[0]) < 0.5 && r.agent.z < r.guichet[1];
   return { ok, detail: `la façade (texture de fenêtres) couvrait les six faces des murs : on la voyait de l'intérieur, et le guichet « PLAINTES » n'avait personne · ${r.murs} murs dont ${r.peints} peints dedans, ${r.vitresDedans} avec la vitrine côté pièce · agent ${r.agent ? `« ${r.agent.nom} » en (${r.agent.x}, ${r.agent.z}) y ${r.agent.y}, derrière le guichet (${r.guichet.join(', ')})` : 'absent'}` };
 });
+
+test('accueil à la manette : la bague est sur « Jouer » dès que la manette parle, ✕ lance, et « Jouer » tient dans l\'écran', async p => {
+  const vp = p.viewportSize(); await p.setViewportSize({ width: 1280, height: 720 });   // l'ecran du PC du joueur
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    const st = document.getElementById('start'), play = document.getElementById('play');
+    const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.tagName) : null; };
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); };
+    const res = {};
+    try {
+      // l'ecran d'accueil, sans aucune bague, et une manette qu'on branche
+      st.classList.remove('hidden'); document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+      st.scrollTop = 0; await dodo(60);
+      const rp = play.getBoundingClientRect();   // AVANT toute bague (elle ferait defiler jusqu'au bouton)
+      G.manetteSalon.i = -1; G.pollGamepad(0.05);
+      res.bagueAuBranchement = focus();
+      res.jouerVisible = rp.bottom <= window.innerHeight && rp.top >= 0 && rp.height > 10;
+      res.ecran = [window.innerWidth, window.innerHeight];
+      res.details = document.querySelector('.keysWrap'); res.replie = !!res.details && !res.details.open; res.details = !!res.details;
+      // ✕ sans bague : elle se pose sur « Jouer »
+      document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+      tap(0); res.bagueApresX = focus();
+      // ✕ encore : « Jouer » est lance, l'accueil disparait
+      tap(0); await dodo(80);
+      res.accueilCache = st.classList.contains('hidden');
+    } finally { navigator.getGamepads = vrai; st.classList.add('hidden'); }
+    return res;
+  });
+  if (vp) await p.setViewportSize(vp);
+  const ok = r.bagueAuBranchement === 'play' && r.jouerVisible && r.details && r.replie && r.bagueApresX === 'play' && r.accueilCache;
+  return { ok, detail: `l'accueil n'est pas ouvert par openUI() : aucune bague, ✕ ne faisait rien, et « Jouer » était sous le bord de l'écran (carte de 900 px) · bague au branchement=${r.bagueAuBranchement} · Jouer visible=${r.jouerVisible} (${r.ecran.join('×')}) · mode d'emploi replié=${r.replie} · ✕ sans bague → ${r.bagueApresX} · ✕ → accueil caché=${r.accueilCache}` };
+});
+
+test('sur l\'accueil, aucun habitant ne colle plus l\'objectif : la caméra du salon recule à 9 m', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12, frais: true });
+    G.bots.forEach((b, k) => G.resetBot(b, 99));   // la foule de l'accueil, rangee comme au chargement
+    const mesure = () => {
+      let dmin = 99; for (const b of G.bots) dmin = Math.min(dmin, Math.hypot(b.pos.x - G.camera.position.x, b.pos.y + 1.6 - G.camera.position.y, b.pos.z - G.camera.position.z));
+      const v = G.me.group.position.clone(); v.y += 1; v.project(G.camera);
+      return { dmin: +dmin.toFixed(2), dist: +G.cam.dist.toFixed(2), joueurDansLeCadre: Math.abs(v.x) < 1 && Math.abs(v.y) < 1 };
+    };
+    // l'accueil : running = false, et camPerche se met en place en quelques images
+    G.running = false; G.cam.dist = 5.2;
+    for (let i = 0; i < 240; i++) G.camPerche(1 / 60, false);
+    const accueil = mesure();
+    G.running = true;
+    return { accueil, bots: G.bots.length };
+  });
+  const ok = r.accueil.dmin >= 4 && r.accueil.dist >= 8.5 && r.accueil.joueurDansLeCadre;
+  return { ok, detail: `à 5,2 m presque à plat, le dernier rang de la foule (z = 6,9) passait à un mètre de la caméra · maintenant perche ${r.accueil.dist} m, habitant le plus proche à ${r.accueil.dmin} m, joueur dans le cadre=${r.accueil.joueurDansLeCadre}` };
+});

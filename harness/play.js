@@ -13380,7 +13380,19 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // essai a l'autre, et le 0,26 n'etait pas la pluie mais un habitant qui disait bonjour.
     // On repousse donc TOUS les rendez-vous sonores du monde (les minuteries de SONV) et on
     // coupe la nappe d'ambiance avant CHAQUE fenetre d'ecoute.
-    const calme = () => { for (const kk of Object.keys(G.SONV)) if (/T$/.test(kk)) G.SONV[kk] = G.simTime + 1e6; G.ambiance.stop(); };
+    // ON REFAIT LE SILENCE AVANT CHAQUE FENETRE, PAS UNE FOIS POUR TOUTES. Le moteur, la
+    // musique, la sirene, le lit de craie et la nappe d'ambiance peuvent REPARTIR entre deux
+    // fenetres (un vehicule qui demarre, un incendie laisse par le test d'avant) : mesure
+    // relevee derriere le test de la lance a eau, trois fenetres sur cinq salies et une
+    // amplitude de 0,062 sur une averse qui vaut 0,008.
+    const calme = () => {
+      for (const kk of Object.keys(G.SONV)) if (/T$/.test(kk)) G.SONV[kk] = G.simTime + 1e6;
+      G.ambiance.stop();
+      try { G.engine.stop(); } catch (e) {}
+      try { G.music.stop(); } catch (e) {}
+      try { G.siren.stop(); } catch (e) {}
+      try { G.craieLitFerme(); } catch (e) {}
+    };
     calme(); await dodo(700);
     // l'averse installee, telle qu'on l'entend en jeu
     G.meteoSet('pluie', 99999); G.meteo.force = 1; G.meteo.abri = false;

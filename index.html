@@ -4426,12 +4426,19 @@ function wallDoor(x, z, len, h, thick, alongX, dw, dh, col, mat, dOff = 0) {
 // Par défaut la porte donne vers le centre de la ville.
 function coque(x, z, w, d, h, col, dir, dw = 2, dh = 2.6, T = 0.35, matX, matZ) {
   if (dir == null) dir = Math.abs(x) > Math.abs(z) ? (x > 0 ? 3 : 1) : (z > 0 ? 0 : 2);
-  const OX = matZ ? { studs: false, noRoute: true, material: matZ } : { studs: false, noRoute: true };
-  const OZ = matX ? { studs: false, noRoute: true, material: matX } : { studs: false, noRoute: true };
-  const murX = (zz, porte) => porte ? wallDoor(x, zz, w, h, T, true, dw, dh, col, matZ) : box(x, h / 2, zz, w, h, T, col, OX);
-  const murZ = (xx, porte) => porte ? wallDoor(xx, z, d - T * 2, h, T, false, dw, dh, col, matX) : box(xx, h / 2, z, T, h, d - T * 2, col, OZ);
-  murX(z - d / 2 + T / 2, dir === 0); murX(z + d / 2 - T / 2, dir === 2);
-  murZ(x - w / 2 + T / 2, dir === 3); murZ(x + w / 2 - T / 2, dir === 1);
+  // LA FACE INTERIEURE DES MURS EST PEINTE, PAS VITREE. La facade (texture de fenetres) etait
+  // appliquee aux six faces de chaque mur : depuis le hall du commissariat, on voyait les
+  // fenetres bleues de la RUE sur les murs de la piece (« facade vue de l'interieur »). Chaque
+  // mur recoit maintenant un tableau de materiaux : facade dehors, peinture claire dedans.
+  // Ordre des faces d'une boite three.js : +x, -x, +y, -y, +z, -z.
+  const peint = (matX || matZ) ? new THREE.MeshLambertMaterial({ color: 0xece6d8 }) : null;
+  const matMurX = (nord) => !peint ? matZ : (nord ? [matZ, matZ, matZ, matZ, peint, matZ] : [matZ, matZ, matZ, matZ, matZ, peint]);
+  const matMurZ = (ouest) => !peint ? matX : (ouest ? [peint, matX, matX, matX, matX, matX] : [matX, peint, matX, matX, matX, matX]);
+  const OX = (m) => m ? { studs: false, noRoute: true, material: m } : { studs: false, noRoute: true };
+  const murX = (zz, porte, nord) => porte ? wallDoor(x, zz, w, h, T, true, dw, dh, col, matMurX(nord)) : box(x, h / 2, zz, w, h, T, col, OX(matMurX(nord)));
+  const murZ = (xx, porte, ouest) => porte ? wallDoor(xx, z, d - T * 2, h, T, false, dw, dh, col, matMurZ(ouest)) : box(xx, h / 2, z, T, h, d - T * 2, col, OX(matMurZ(ouest)));
+  murX(z - d / 2 + T / 2, dir === 0, true); murX(z + d / 2 - T / 2, dir === 2, false);
+  murZ(x - w / 2 + T / 2, dir === 3, true); murZ(x + w / 2 - T / 2, dir === 1, false);
   box(x, 0.15, z, w - T * 2, 0.3, d - T * 2, 0xe8e2d4, { studs: false, noRoute: true });   // sol intérieur
   // encadrement sombre : sans lui, l'entrée n'est qu'un trou dans le mur
   { const ep = T + 0.1, C2 = 0x3b4252, E = { deco: true, studs: false };
@@ -10368,6 +10375,10 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   box(ex, (H + 3.4) / 2, hz, 0.4, H - 3.4, 4, 0xf4f6fa, { studs: false, noRoute: true });
   box(hx, H + 0.3, hz, W + 0.6, 0.6, D + 0.6, 0xd6e4ff, { deco: true, studs: false });
   box(hx, H + 0.75, hz, W - 3, 0.5, D - 3, 0xc3d8ee, { deco: true, studs: false });
+  // L'HOPITAL EST UN INTERIEUR COMME LES AUTRES. Il n'etait enregistre nulle part : la maison
+  // de poupee ne s'y appliquait pas, le toit restait sur la tete et la camera se cognait aux
+  // murs du hall au lieu de les traverser en les effacant, comme a la banque ou a l'ecole.
+  city.interieurs.push({ x: hx, z: hz, w: W - 0.5, d: D - 0.5 });
   for (let i = 0; i < 5; i++) box(hx - 8 + i * 4, 5.6, hz, 3.4, 0.12, 3.4, 0, { material: neonMat(0xf2fbff), deco: true, noEdges: true });   // plafonniers du hall
   for (const dz of [-8, -3, 3, 8]) { box(hx - 1, 5.6, hz + dz, 2.4, 0.1, 0.7, 0, { material: neonMat(0xf2fbff), deco: true, noEdges: true }); }
   // LES AMBULANCES, garées devant l'entrée : un vrai break blanc à croix rouge, gyrophare et
@@ -12957,6 +12968,13 @@ function buildPolice() {   // commissariat (nord-ouest, dans le circuit), 2 voit
   box(sx + 2.6, 1.24, sz - 2.6, 3.8, 0.1, 1, 0xc9a84c, { deco: true, studs: false });
   box(sx + 2.6, 1.45, sz - 2.95, 1.6, 0.32, 0.06, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('📝 PLAINTES') }), deco: true, noEdges: true });
   box(sx + 3.6, 1.33, sz - 2.5, 0.5, 0.08, 0.36, 0xf4f6fa, { deco: true, studs: false });                        // registre ouvert
+  // L'AGENT D'ACCUEIL EST LA. « L'agent d'accueil : Bonjour, que puis-je pour vous ? » s'ecrivait
+  // dans le chat devant un guichet VIDE. Un agent en uniforme se tient derriere le comptoir,
+  // face a la porte (au sud) ; c'est un mannequin d'ameublement, pas un policier de patrouille.
+  { const av = buildAvatar({ name: 'Agent d\'accueil', jersey: 12, pants: PAL.pants[1], cap: 0x1b2a4a, num: 1, hat: 'helmet', jacket: 1, m: 40 });
+    tenueUniforme(av, false); av.group.position.set(sx + 2.6, 0.3, sz - 3.55); av.group.rotation.y = 0;   // les pieds sur le sol interieur (0,3 m)
+    av.rig.armL.rotation.set(-0.35, 0, 0.12); av.rig.armR.rotation.set(-0.35, 0, -0.12);   // les mains posees sur le comptoir
+    av.tag.visible = true; renommeEtiquette(av, 'Agent d\'accueil'); city.mannequins.push(av); police.accueil = av; }
   box(sx + 1.7, 1.36, sz - 2.5, 0.14, 0.14, 0.14, 0x2b2f3a, { deco: true, studs: false });                        // sonnette
   city.plainteDesk = { x: sx + 2.6, z: sz - 1.9 };
   road(-46, 9, 6, 12, 0, true);   // sortie du commissariat vers la route ouest
@@ -14588,7 +14606,6 @@ function interieurTick() {
   if (!interieur.rect) return;
   // le mur que la camera a traverse s'efface (les autres restent pleins)
   const r2 = interieur.rect, c = camera.position;
-  const dehors = Math.abs(c.x - r2.x) > r2.w / 2 - 0.3 || Math.abs(c.z - r2.z) > r2.d / 2 - 0.3;
   const t = cam.target;
   for (const o of interieur.murs) {
     const m = o.mesh; if (!m || !m.material) continue;
@@ -14598,7 +14615,12 @@ function interieurTick() {
     // directions sur huit n'avaient plus de mur plein, et l'on voyait le parc et les boutiques
     // au travers. On teste maintenant le SEGMENT caméra → joueur contre la boîte du mur : seul
     // celui qui coupe vraiment la ligne de vue s'efface, les autres restent pleins.
-    const veut = dehors && murCoupeSegment(o, c.x, c.y, c.z, t.x, t.y, t.z) ? 0.22 : 1;
+    // ...ET AUSSI UNE CLOISON INTERIEURE. L'effacement n'etait tente que camera DEHORS du
+    // batiment (`dehors &&`) : dans l'ecole, la camera traversait la cloison d'une classe
+    // (0,3 × 4,2 × 9 m) en restant dans l'enceinte, et la cloison restait pleine, a 1,9 m de
+    // l'objectif — personnage invisible des qu'on tournait le stick droit. Toute paroi
+    // traversable (`xray`) qui coupe la ligne de vue s'efface, dedans comme dehors.
+    const veut = murCoupeSegment(o, c.x, c.y, c.z, t.x, t.y, t.z) ? 0.22 : 1;
     if (veut < 1 && !m.userData.matOpaque) {
       m.userData.matOpaque = m.material;
       m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone();

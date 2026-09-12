@@ -15113,3 +15113,49 @@ test('à pied, on ne tombe plus dans le vide au bord de la ville : les quatre bo
   const ok = r.bords.length === 4 && r.bords.every(b => b.dedans && b.yMin > -0.5 && b.morts === 0);
   return { ok, detail: `le mur invisible était posé 1,5 m DEHORS du plateau : on tombait dans le fossé puis sous le mur (y −100, 💀 +1) · ` + r.bords.map(b => `${b.nom} : (${b.x}, ${b.z}) y min ${b.yMin} morts ${b.morts}`).join(' · ') };
 });
+
+test('dedans, le stick droit ne cache plus le personnage derrière une cloison : école, banque, commissariat, hôpital', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, out = {};
+    const ray = new THREE.Raycaster();
+    for (const [nom, x, z] of [['école', -69, 213], ['banque', -57, 70], ['commissariat', -54, 30], ['hôpital', 14, 212]]) {
+      __SHOT.go({ world: 4, x, y: 1, z, hour: 12, frais: nom === 'école' });
+      G.P.facing = Math.PI; G.settings.ctrl = 'rot';
+      const res = [];
+      for (let k = 0; k < 8; k++) {
+        G.cam.yaw = k * Math.PI / 4; G.cam.freeUntil = 1e9;
+        // 60 images : la perche se place, la maison de poupée efface ce que la caméra traverse
+        for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.interieurTick(); G.camPerche(1 / 60, false); }
+        const c = G.camera.position, tete = new THREE.Vector3(G.P.pos.x, G.P.pos.y + 1.5, G.P.pos.z);
+        const dir = tete.clone().sub(c), dist = dir.length(); dir.normalize(); ray.set(c, dir); ray.far = dist - 0.3;
+        const meshes = []; G.scene.traverse(o => { if (o.isMesh && o.visible && o.geometry && !o.isSprite && !(o.parent === G.me.group)) meshes.push(o); });
+        // ce qui coupe la ligne de vue caméra → tête ET reste opaque (> 50 %)
+        const opaques = ray.intersectObjects(meshes, false).filter(h => [].concat(h.object.material).some(m => !m.transparent || m.opacity > 0.5));
+        res.push({ yaw: +G.cam.yaw.toFixed(2), bouche: opaques.length, taille: opaques[0] ? opaques[0].object.scale.toArray().map(v => +v.toFixed(1)).join('×') : '' });
+      }
+      out[nom] = { dedans: !!G.interieur.rect, bouches: res.filter(q => q.bouche).map(q => `${q.yaw} (${q.taille})`) };
+    }
+    return out;
+  });
+  const noms = Object.keys(r);
+  const ok = noms.length === 4 && noms.every(n => r[n].dedans && r[n].bouches.length === 0);
+  return { ok, detail: `la cloison traversée ne s'effaçait que caméra DEHORS du bâtiment (dans l'école, une cloison de classe 0,3×4,2×9 restait pleine à 1,9 m de l'objectif), et l'hôpital n'était pas un intérieur · ` + noms.map(n => `${n} : intérieur ${r[n].dedans}, angles bouchés [${r[n].bouches.join(', ')}]`).join(' · ') };
+});
+
+test('le commissariat a un intérieur : murs peints dedans (pas la façade vitrée), et un agent derrière le guichet des plaintes', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 30, hour: 12, frais: true });
+    const sx = G.police.station.x, sz = G.police.station.z;
+    // les murs de la coque (16 × 10 m, 3,8 m de haut) : leur face intérieure est peinte
+    const murs = G.solids.filter(o => o.mesh && Math.abs(o.h - 3.8) < 0.01 && Math.abs(o.x - sx) < 8.5 && Math.abs(o.z - sz) < 5.5 && (o.w > 2 || o.d > 2));
+    const peints = murs.filter(o => Array.isArray(o.mesh.material) && o.mesh.material.some(m => !m.map && m.color && m.color.getHex() === 0xece6d8));
+    const vitresDedans = murs.filter(o => { const ms = [].concat(o.mesh.material); const nord = o.z < sz, ouest = o.x < sx, alongX = o.w > o.d;
+      const idx = alongX ? (nord ? 4 : 5) : (ouest ? 0 : 1); return !!(ms[idx] && ms[idx].map); }).length;
+    const a = G.police.accueil;
+    const agent = a ? { x: +a.group.position.x.toFixed(1), z: +a.group.position.z.toFixed(1), y: +a.group.position.y.toFixed(2), dedans: Math.abs(a.group.position.x - sx) < 8 && Math.abs(a.group.position.z - sz) < 5, visible: a.group.visible, nom: a.name } : null;
+    return { murs: murs.length, peints: peints.length, vitresDedans, agent, guichet: [sx + 2.6, sz - 2.6] };
+  });
+  const ok = r.murs >= 4 && r.peints === r.murs && r.vitresDedans === 0 && !!r.agent && r.agent.dedans && r.agent.visible && Math.abs(r.agent.x - r.guichet[0]) < 0.5 && r.agent.z < r.guichet[1];
+  return { ok, detail: `la façade (texture de fenêtres) couvrait les six faces des murs : on la voyait de l'intérieur, et le guichet « PLAINTES » n'avait personne · ${r.murs} murs dont ${r.peints} peints dedans, ${r.vitresDedans} avec la vitrine côté pièce · agent ${r.agent ? `« ${r.agent.nom} » en (${r.agent.x}, ${r.agent.z}) y ${r.agent.y}, derrière le guichet (${r.guichet.join(', ')})` : 'absent'}` };
+});

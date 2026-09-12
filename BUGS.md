@@ -13,12 +13,13 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## BLOQUANT
 
 ### 37. Au garage, « Valider » plante le jeu : l'argent est pris, la voiture reste comme avant
+✅ RÉPARÉ — `tuneCible()` prenait le véhicule le plus proche de `city.cars` quel qu'il soit (la dépanneuse garée devant le garage, n° 38) et `tuneApply` lisait `c.parts.ws` que seules les voitures de `makeCar` ont ; seule une voiture préparable est ciblée (`tunable()`), `tuneApply` tolère un véhicule sans vitres, et l'argent n'est pris qu'APRÈS l'application réussie — commit abe9583
 - **Gravité** : BLOQUANT (le garage — repeindre, monter un kit — ne marche pas du tout)
 - **Reproduire** : voiture du parking, la garer devant le garage custom (−45, 90), △ au comptoir (−53,5, 96,6), onglet 🎨 Peinture : choisir une finition (fluo), onglet 🧰 Kits : choisir « Jupes latérales », « Valider ».
 - **On voit** : le chat écrit « ⚠️ Bug détecté : Uncaught TypeError: Cannot read properties of undefined (reading 'ws') at tuneApply », message « ⚠️ Un bug a été détecté (voir le chat), le jeu continue » ; le portefeuille passe de 400 à **190** (210 🪙 payés) ; la voiture reste rouge (#ff5c5c), sans jupes ; la fenêtre de l'atelier reste ouverte.
 - **On devrait voir** : la voiture repeinte et équipée, et l'argent pris seulement si ça marche.
 - **Capture** : `img/s5/s5-6-apres.png` (l'erreur dans le chat, 190 🪙), `img/s5/s5-7-ressort.png` (voiture toujours rouge).
-- **Sonde** : `s5-pc.log` : `valide.wallet 400 → 190`, `remonte.couleur = 16735324` (inchangée), `tuning = {finition: "fluo", kits: ["jupes"]}` mais `PAGEERROR: Cannot read properties of undefined (reading 'ws')` (index.html l. ~24745, `tuneApply`).
+- **Sonde** : `s5-pc.log` : `valide.wallet 400 → 190`, `remonte.couleur = 16735324` (inchangée), `tuning = {finition: "fluo", kits: ["jupes"]}` mais `PAGEERROR: Cannot read properties of undefined (reading 'ws')` (index.html l. 24745, `tuneApply` lit `c.parts.ws` alors que la cible choisie par `tuneCible()` — « Voiture garée à 9 m » — n'a pas de `parts`).
 
 ## GRAVE
 
@@ -26,7 +27,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ✅ RÉPARÉ — `wallet` vaut 25 par défaut sans clé enregistrée et `rechargeTout()` prenait cette valeur pour une sauvegarde ; on ne dit « rechargée » que si `superobby.wallet` existe, sinon « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (vocabulaire de la commande) — commit 3fe8d47
 - **Gravité** : GRAVE (première minute — premier message faux)
 - **Reproduire** : profil vierge (navigateur neuf), accueil → Jouer → Ville.
-- **On voit** : en très gros au centre « 💾 Partie rechargée : 25 🪙 », puis rien qui dise quoi faire.
+- **On voit** : en très gros au centre « 💾 Partie rechargée : 25 🪙 », puis rien qui dise quoi faire. Le message revient à CHAQUE changement de monde, et le montant est faux : en entrant dans la Prairie avec 620 🪙 il affiche encore « 25 » (`img/s15/s15-0-prairie.png`). Le vrai « 🏙️ Bienvenue en ville ! Foot, tennis… » n'apparaît que dans le chat, en petit.
 - **On devrait voir** : un accueil (« Bienvenue en ville ! △ pour agir, stick pour marcher… »), et « Partie rechargée » seulement quand il y a vraiment une sauvegarde.
 - **Capture** : `img/s1/s1-premier-regard.png`, `img/s1/s1-premier-regard-tv.png`.
 
@@ -49,6 +50,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : trace `avant10s-apres-cam` : x −102, y **−100,25**, z −222 ; `hud.msg = "Oups !"`.
 
 ### 21. Le commissariat n'a pas d'intérieur : pas de plafond, façade vue de l'intérieur, caméra dehors
+✅ RÉPARÉ (en partie) — la façade vitrée couvrait les six faces des murs de coque (`coque()`), d'où « façade vue de l'intérieur » : la face intérieure est maintenant peinte (tous les halls `building()`) ; un agent d'accueil en uniforme se tient derrière le guichet PLAINTES (`police.accueil`). Le plafond effacé et la caméra qui sort en fondant le mur sont la « maison de poupée » voulue au round précédent (poste URGENCE) : on ne la défait pas — commit 86b5118
 - **Gravité** : GRAVE (bâtiment promis « visitable » : commissariat, prison, guichet des plaintes)
 - **Reproduire** : Ville, se placer en (−54, 40) face au nord, stick avant 7 s : on entre par la porte sud du commissariat (−54, 28) ; puis stick droit vers la gauche 0,8 s.
 - **On voit** : à l'intérieur, les murs montrent les fenêtres bleues de la FAÇADE extérieure, au-dessus un bloc de toit sombre qui flotte avec le ciel autour ; le guichet « PLAINTES » est vide alors que « L'agent d'accueil : Bonjour, que puis-je pour vous ? » s'écrit dans le chat ; en tournant la caméra on se retrouve DEHORS, à regarder le dos du panneau « AVIS DE RECHERCHE », personnage invisible.
@@ -57,6 +59,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `cam.interieur = true` mais rien ne bloque la caméra (`cam.dist` 5,0 → 6,8 en tournant).
 
 ### 22. Dans les bâtiments, le stick droit envoie la caméra à travers les murs et les meubles
+✅ RÉPARÉ — cause mesurée à l'école : la caméra traversait une cloison de classe (0,3×4,2×9 m) en restant DANS l'enceinte, et l'effacement n'était tenté que caméra dehors (`dehors &&` dans `interieurTick`) ; toute paroi traversée s'efface maintenant. L'hôpital n'était enregistré dans aucune liste d'intérieurs (pas de maison de poupée) : ajouté. Mesure après : 0 angle bouché sur 8 dans les 4 bâtiments. Le reste (« personnage invisible » sur tes captures) tient à ton pilote : `interieurTick`/`camPerche`/le fondu vivent dans `frame()` — commit 86b5118
 - **Gravité** : GRAVE (dès qu'un enfant regarde autour de lui dedans, il ne voit plus son personnage)
 - **Reproduire** : entrer dans l'école (classe (−69, 213)), la banque (guichet (−57, 70)), l'hôpital (hall (14, 212)) ou le concessionnaire (comptoir (−140, 93)), puis pousser le stick droit à gauche 0,8 s.
 - **On voit** : école → la caméra est DEHORS, on voit la façade verte et le grillage, personnage invisible ; banque → caméra dans la vitre du guichet, étiquette « guichet » géante, tête du guichetier dans l'objectif ; hôpital → caméra DANS le bureau d'accueil (une planche brune barre l'écran) ; concessionnaire → caméra dans le bras du personnage (aplat couleur peau plein écran).
@@ -121,6 +124,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## GÊNANT
 
 ### 4. Sur l'accueil à la manette, ✕ ne fait rien : il faut 9 appuis sur ↓ pour atteindre « Jouer »
+✅ RÉPARÉ — l'accueil n'est pas ouvert par `openUI()` (qui pose la bague) : aucune bague, `navValide()` ne trouvait rien ; la bague se pose sur « Jouer » dès que la manette parle (`curseurAccueil`), ✕ sans bague choisit « Jouer » ; et la carte de 800 px se resserre sous 800 px de haut (mode d'emploi replié) : « Jouer » visible en 1280×720 sans défiler — commit 5eac31d
 - **Gravité** : GÊNANT (la toute première action)
 - **Reproduire** : page chargée, manette branchée, ✕ → rien (aucune bague de sélection). ↓ ×9 : pseudo, 5 couleurs, « Jupe », le champ CODE, puis « Jouer ».
 - **On voit** : le bouton « Jouer » est sous le bord de l'écran en 1280×720 (la carte déborde), et aucun élément n'est sélectionné au départ.
@@ -158,7 +162,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 9. Les étiquettes de nom et les bulles se chevauchent et se coupent
 - **Gravité** : GÊNANT
 - **Reproduire** : point d'apparition, foule autour du joueur.
-- **On voit** : « IneZoe_rider » (Ines_gg + Zoe_rider superposés), bulle « Joueur63 ! trop content de » coupée par le message central, bulle « la lave c chaud » de 40 px qui déborde sous le classement, la pastille de vie du joueur (haut droite, TV) posée SUR une bulle de dialogue, et les bulles passent DERRIÈRE la barre d'icônes du haut (« Joueur79 ! trop content de » sous 📣🚩📺, `img/s2/s2-depart-tv.png`).
+- **On voit** : « IneZoe_rider » (Ines_gg + Zoe_rider superposés), bulle « Joueur63 ! trop content de » coupée par le message central, bulle « la lave c chaud » de 40 px qui déborde sous le classement, la pastille de vie du joueur (haut droite, TV) posée SUR une bulle de dialogue, et les bulles passent DERRIÈRE la barre d'icônes du haut (« Joueur79 ! trop content de » sous 📣🚩📺, `img/s2/s2-depart-tv.png`) ; une bulle proche de la caméra devient géante et son texte déborde des deux côtés (« ai repéré un truc dans ce… », `img/s15/s15-4-recharge-ville.png`).
 - **On devrait voir** : des étiquettes qui s'écartent ou s'estompent quand elles se recouvrent, une bulle jamais coupée.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`, `img/s1/s1-apres-12s.png`.
 
@@ -166,10 +170,12 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Gravité** : GÊNANT (l'enfant cherche une touche « E » sur sa manette)
 - **Reproduire** : manette PS5 branchée, entrer dans la zone Rallye (0, −60) : gros message « 🏜️ Rallye : prends un buggy (E), grimpe les collines… ».
 - **On voit** : « (E) » ; l'aide de la zone École dit aussi « assieds-toi a une table (E) » (`hint` de la zone, sans accents).
-- **On devrait voir** : « △ » quand la manette est active (`ctrlText` ne convertit pas les « (E) » entre parenthèses).
+- **On devrait voir** : « △ » quand la manette est active.
+- **Sonde** : `ctrlText()` (index.html l. 15840) ne traduit les touches QUE si `body.touch` (écran tactile) ; à la manette (`body.manette`) il rend le texte tel quel — tous les « E », « Espace », « O », « clic » du jeu restent en clavier.
 - **Capture** : `img/s2/s2-avant2.png`.
 
 ### 16. Se baisser (L2 à pied) ne se voit pas
+❌ PAS UN BUG — artefact du pilote : la pose (genoux, bassin) est appliquée dans `frame()` (rAF), pas dans `step()`. Mesuré avec de vrais rAF : L2 tenu → bassin −0,15 m, genoux −0,81 rad, `P.accroupi = true` ; en marchant −0,19 m, genoux −0,83 rad.
 - **Gravité** : GÊNANT
 - **Reproduire** : à pied, sans arme, tenir L2 ; puis marcher en tenant L2.
 - **On voit** : `pad.baisse = true` mais le personnage a l'air debout, jambes droites, même hauteur de tête ; en marchant accroupi il marche normalement.
@@ -268,6 +274,18 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Gravité** : GÊNANT (cf. n° 15)
 - **On voit** : « 🔫 Pistolet · clic pour tirer : le personnage vise tout seul la cible la plus proche » à la manette.
 
+### 45. La tête du conducteur dépasse du toit de la citadine « Puce »
+- **Gravité** : GÊNANT (ça se voit à chaque seconde de conduite)
+- **Reproduire** : acheter la citadine chez Blocs Motors, regarder la voiture de derrière.
+- **On voit** : la tête (et la casquette) du personnage plantée à travers le toit, le corps à l'intérieur.
+- **Capture** : `img/s6/s6-3-achetee.png`, `img/s6/s6-3-achetee-tv.png`, `img/s6/s6-6-villa.png`.
+
+### 46. Chez le concessionnaire, en 1280×720 avec 25 🪙, les boutons « Il te manque 55 » et « Retour » sont sous le bord de l'écran
+- **Gravité** : GÊNANT (l'enfant ne voit pas comment refermer la fenêtre)
+- **Reproduire** : △ au comptoir de Blocs Motors avec 25 🪙, en 1280×720.
+- **On voit** : la fiche des 8 modèles remplit tout l'écran, la ligne de boutons est coupée en bas (en 1920×1080 elle tient).
+- **Capture** : `img/s6/s6-1-conces-25.png` (comparer `img/s6/s6-1-conces-25-tv.png`).
+
 ## COSMÉTIQUE
 
 ### 10. Les bots parlent de lave et de tennis dans la Ville
@@ -276,6 +294,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-apres-12s.png`, `img/s1/s1-premier-regard.png`.
 
 ### 11. Sur l'écran d'accueil, un bot du décor est collé contre la caméra
+✅ RÉPARÉ — la caméra du salon (`camPerche`, branche `!running`) était à 5,2 m presque à plat : le dernier rang de la foule (z = 6,9) passait à 1 m de l'objectif ; elle recule à 9,5 m, un peu plus haut (habitant le plus proche > 4 m) — commit 5eac31d
 - **Reproduire** : charger la page.
 - **On voit** : un personnage géant (blond, tenue blanche) qui occupe un tiers de l'écran au premier plan, devant le panneau « 1 · Sauts ».
 - **Capture** : `img/s1/s1-accueil.png`, `img/s1/s1-accueil-tv.png`.
@@ -285,6 +304,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`.
 
 ### 13. L'accueil : le mode d'emploi PS5 est un pavé de 25 lignes
+✅ RÉPARÉ — le paragraphe de 250 mots est réécrit en 7 lignes courtes (à pied / au volant / en hélico / croix / menus), et tout le mode d'emploi est replié derrière « ⌨️ 🎮 Comment jouer » — commit 5eac31d
 - **On voit** : sur l'accueil, la ligne « 🎮 PS5 » est un paragraphe compact de ~250 mots en 11 px ; personne ne le lit. En TV il occupe la moitié de la carte.
 - **Capture** : `img/s1/s1-focus-jouer.png`, `img/s1/s1-accueil-tv.png`.
 
@@ -302,3 +322,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 34. Fautes de frappe et d'accent dans les phrases des bots
 - « Tu as combien de pieces ? » (pièces), « Tu as deja pilote l'helico ? », « on joue jouer au tennis / au foot », « je te retrouve à Quartier résidentiel » (au), « Les Requins Rouges contrôle » (contrôlent).
 - **Capture** : `img/s4/s4-8-voiture.png`, `img/s3/s3-banque-1-porte.png`.
+
+### 47. Après l'achat, en mode TV, tout l'écran est teinté jaune
+- **Reproduire** : acheter une voiture (aire de livraison (−125, 121)), mode TV.
+- **On voit** : la caméra (plus reculée en TV, `cam.dist` 8,4–9,4) se retrouve sous la verrière jaune du concessionnaire : l'image entière est jaune-sépia.
+- **Capture** : `img/s6/s6-3-achetee-tv.png` (comparer `img/s6/s6-3-achetee.png`).

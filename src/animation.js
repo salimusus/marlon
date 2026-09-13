@@ -37,11 +37,14 @@ class Animator{
  if(melee){const q=M.clamp(info.meleeProgress||0,0,1),strike=pulse(q,.08,.35)*(1-pulse(q,.5,1)),wind=Math.sin(q*Math.PI);const left=info.combo%2===0;
  if(left){lx=-1.8*strike+.3*(1-strike);le=-.25*(1-strike);ly=.3;rx=-.55;re=-1.1;}else{rx=-1.8*strike+.3*(1-strike);re=-.25*(1-strike);ry=-.3;lx=-.55;le=-1.1;}twist=(left?-1:1)*wind*.32;lean+=strike*.09;}
  rx-=recoil*.18;re-=recoil*.24;lean-=recoil*.025;roll+=hit*Math.sin(time*37)*.04;
- if(info.seated||info.enter){const seated=info.seated?1:smooth(info.enterProgress||0);pelvis-=.4*seated;lean=-.05*seated;lx=rx=-1.1*seated;le=re=-.65*seated;ly=-.16*seated;ry=.16*seated;lz=.05;rz=-.05;twist=(info.steer||0)*.1;}
+ if(info.seated||info.enter){const seated=info.seated?1:smooth(info.enterProgress||0);pelvis-=.4*seated;lean=-.05*seated;lx=rx=-1.1*seated;le=re=-.65*seated;ly=-.16*seated;ry=.16*seated;lz=-.35*seated;rz=.35*seated;twist=(info.steer||0)*.1;}
  if(info.revive||down){pelvis=-.42;lean=.24;lx=-.6;rx=-.85;le=-.6;re=-.65;}
  if(dead){const q=smooth(this.death);pelvis=.1*q;roll=1.45*q;lean=.15*q;twist=0;lx=-.6*q;rx=.4*q;le=-.6;re=-.4;}
  a.body.position.y=M.damp(a.body.position.y,pelvis+move*bounce*.018+Math.sin(time*2.2)*.004*(1-move),18,dt);
- a.body.rotation.set(lean,twist,roll);
+ a.body.rotation.set(M.damp(a.body.rotation.x,lean,16,dt),M.damp(a.body.rotation.y,twist,15,dt),M.damp(a.body.rotation.z,roll,18,dt));
+ if(a.eyeLids){const blink=time%4.6;for(const lid of a.eyeLids)lid.visible=blink>4.40&&blink<4.53;}
+ if(a.chest)a.chest.scale.y=.17*(1+Math.sin(time*2.2)*.006*(1-move));
+ if(a.hairFringe)a.hairFringe.rotation.z=-.18+Math.sin(this.phase+.5)*.014*move;
  // Foot targets follow the direction of travel even while the upper body faces the aim direction.
  const localForward=info.forward===undefined?1:M.clamp(info.forward,-1,1),localSide=M.clamp(info.strafe||0,-1,1);
  for(let i=0;i<2;i++){
@@ -57,7 +60,8 @@ class Animator{
   hip.quaternion.slerp(solution.upper,1-Math.exp(-24*dt));knee.quaternion.slerp(solution.lower,1-Math.exp(-24*dt));
   if(ankle){const upright=hip.quaternion.clone().multiply(knee.quaternion).invert();ankle.quaternion.slerp(upright,1-Math.exp(-24*dt));}
  }
- a.la.rotation.set(lx,ly,lz);a.ra.rotation.set(rx,ry,rz);a.le.rotation.x=le;a.re.rotation.x=re;
+ const blendArm=(joint,x,y,z)=>joint.rotation.set(M.damp(joint.rotation.x,x,19,dt),M.damp(joint.rotation.y,y,19,dt),M.damp(joint.rotation.z,z,19,dt));
+ blendArm(a.la,lx,ly,lz);blendArm(a.ra,rx,ry,rz);a.le.rotation.x=M.damp(a.le.rotation.x,le,20,dt);a.re.rotation.x=M.damp(a.re.rotation.x,re,20,dt);
  a.gun.visible=!!info.armed&&!dead&&!down&&!info.seated&&!info.enter&&!info.revive;
  if(a.magazine)a.magazine.visible=reload&&(info.reloadProgress||0)>.22&&(info.reloadProgress||0)<.67;
  return this.state;

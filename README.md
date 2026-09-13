@@ -1,7 +1,8 @@
-# MARLON — Sunshine City · 04
+# MARLON — Sunshine City · 05
 
-Extension jouable de la refonte 03 : ville cartoon pastel, personnage jeune adulte,
-commerces, véhicules personnalisables et activités. **Version de développement**.
+Refonte cartoon aux **couleurs vives**, personnages épais et arrondis, véhicules
+remodelés et quartiers enrichis. Jeu solo navigateur, avec commerces, missions,
+animaux, bandes, conduite et personnalisation. **Version de développement jouable**.
 Le bilan détaillé, y compris les demandes encore partielles, figure dans
 [BILAN-SUNSHINE.md](BILAN-SUNSHINE.md).
 
@@ -23,15 +24,47 @@ l’ouverture centrale du bâtiment, approcher le comptoir et appuyer sur **E /
 Triangle**. Les achats exigent la monnaie gagnée dans le jeu. Aucun argent réel
 ne peut être acheté ou misé.
 
-## Dans cette version
+## Nouveautés 05
+
+- Direction artistique saturée : turquoise, jaune soleil, bleu électrique, corail,
+  orange et violet. Façades Art Déco, coins arrondis, villas, végétation groupée,
+  enseignes et quartier des Docks avec tags, carcasses et mobilier usé.
+- Personnage aux proportions plus épaisses, visage expressif, mains et baskets
+  arrondies ; transitions adoucies, respiration et clignements corrigés.
+- Voitures remodelées, sièges et conducteurs visibles. E / Triangle près d'une
+  voiture occupée et ralentie déclenche l'extraction animée du conducteur et
+  une étoile. Les portières se referment en fin d'entrée ou de sortie.
+- Tangage de suspension, fumée blanche au freinage, dégâts par pièces : capot,
+  phares, vitres et pare-chocs. À zéro santé, explosion cartoon rouge/bleu,
+  immobilisation de l'épave et sortie protégée du joueur.
+- 42 personnages supplémentaires, dont 12 membres de bandes, et 5 chiens errants.
+  Nora, aux Docks (nord-ouest), propose trois missions : nettoyage, colis et
+  sauvetage d'un chien. Les missions rapportent respectivement 120, 150 et
+  90 pièces une seule fois ; progression conservée au rechargement.
+- S'asseoir, discuter, danser, téléphoner, caresser puis adopter un chien,
+  utiliser un distributeur et recycler. Les objets utilisables affichent une
+  indication à proximité ; les racines de mobilier restent réparables.
+- Musique originale synthétisée, pas alternés, moteur selon régime, pluie,
+  freinage, choc et explosion. Bouton Son dans le HUD ; volumes et musique dans
+  Réglages. L'audio démarre après une interaction et se suspend dans les menus.
+- Support vertical corrigé : chutes depuis les toits, réceptions sur les dalles,
+  passage au-dessus des voitures et pieds des PNJ sur les trottoirs. Caméra
+  progressive, précision du stick droit et sensation de vitesse réglable.
+- Rendu Ultra HD jusqu'à **3840 × 2160**, y compris par suréchantillonnage d'un
+  écran plus petit. Ombres de contact, matériaux et éclairage revus, décor
+  instancié et visibilité limitée au champ de caméra. Ce réglage demande plus
+  de ressources ; il ne constitue pas une garantie de fréquence d'images.
+
+## Contenu conservé et enrichi
 
 - Un personnage jeune adulte avec jean bleu clair, débardeur blanc, baskets,
-  visage repris, bras découverts et animations de la refonte 03.
+  visage expressif, bras découverts et animations articulées enrichies.
 - Une ville d’environ 600 × 600 unités : cent bâtiments, vingt lieux identifiés,
-  architecture pastel, palmiers, plantations, parcs et enseignes. Les bâtiments
+  architecture aux couleurs vives, palmiers, plantations, parcs et enseignes. Les bâtiments
   construits avec étages disposent d’escaliers, de paliers et d’un ascenseur.
   Les intérieurs utilisent une structure modulaire commune.
-- 92 bots créés : 76 habitants et agents urbains, 16 employés de comptoir.
+- 134 habitants, agents, employés et personnages de quartier : 92 de la ville
+  initiale et 42 nouveaux. Adversaires, équipiers et conducteurs s’y ajoutent.
   Les personnages proches sont animés et les plus éloignés sont masqués.
 - 34 véhicules dans la simulation, 18 familles de modèles dont 14 achetables :
   compacte, berline, break, 4×4, sport, supercar, cabriolet, pick-up, utilitaire,
@@ -65,7 +98,7 @@ ne peut être acheté ou misé.
   obstacle proche. Feux à phases vert/orange/rouge, avec intervalles où tous les
   axes sont rouges. Panneaux STOP et cédez-le-passage visibles.
 - Collisions : perte de santé, déformation visuelle de carrosserie et pare-chocs,
-  disparition des vitres très endommagées, marques au sol. Bancs, poubelles et
+  bris visuels de vitres et phares, explosion à zéro santé, marques au sol. Bancs, poubelles et
   lampadaires dédiés peuvent être renversés. Un agent technique peut les réparer.
 - Accident : constat de 80 pièces, dépanneuse, rapprochement, câble de treuil,
   montée sur plateau et transport au garage. Sortir du véhicule pour permettre
@@ -156,17 +189,21 @@ node tests/city.cjs
 # Avec Playwright et Chromium installés :
 node tests/browser.cjs
 node tests/lifecycle.cjs
+node tests/v5-browser.cjs
+node tests/feel-audio.cjs
 ```
 
 `tests/browser.cjs` lance désormais `city-browser.cjs`. `CHROMIUM_PATH` accepte
 un Chromium déjà installé. Les captures et résultats sont dans `verification/`.
 Les anciennes captures 01–06 et la vidéo v3 documentent la livraison précédente ;
-les nouvelles captures commencent à 07. Les vues 13–17 utilisent une caméra
-d’inspection du rendu réel et masquent le HUD.
+les captures 13–18 concernent la version 04 ; les vues 07–12 sont produites par
+les régressions du code actuel. Les vues 20–25 et `v5-*`
+montrent cette version, parfois avec une caméra d’inspection et sans HUD.
 
 Les nouveaux modules sont `city-data.js`, `city-models.js`, `city-world.js`,
 `city-sim.js`, `city-ui.js` et `board-games.js`. Ils étendent la base version 3.
-Cette organisation facilite l’itération, mais un regroupement des contrôleurs
+La version 05 ajoute `vehicles-v5.js`, `life-v5.js`, `audio-v5.js`,
+`feel-v5.js` et `render-v5.js`. Cette organisation facilite l’itération, mais un regroupement des contrôleurs
 et une rationalisation des couches de compatibilité restent souhaitables avant
 une maintenance à grande échelle.
 
@@ -176,9 +213,17 @@ Les sources suivantes ont été examinées pour orienter les modèles, les anima
 et les coûts de rendu : [Kenney Car Kit](https://kenney.nl/assets/car-kit),
 [Quaternius Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html),
 [instanciation Three.js](https://threejs.org/docs/pages/InstancedMesh.html) et
-[coût des ombres](https://threejs.org/manual/en/shadows.html).
+[gestion des ombres](https://threejs.org/docs/pages/LightShadow.html).
 Kenney et Quaternius proposent les ressources citées sous CC0 ; **leurs modèles
 ne sont pas incorporés dans cette livraison**. Les modèles présents sont créés
 par le code du projet. Le moteur embarqué reste Three.js r128, avec sa licence
 MIT dans `vendor/THREE-LICENSE.txt`. Les documentations récentes ont servi de
 référence conceptuelle, sans mise à niveau implicite du moteur.
+
+
+Pour la version 05, la cohérence des formes et des décors suit les principes de
+[construction d’assets et kits modulaires de Roblox](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/develop-polished-assets).
+Le jeu utilise ses propres modèles et son identité ; aucun modèle ou personnage
+GTA, Roblox, Mario ou Fortnite n'est extrait ou intégré. La suspension audio et
+le lissage des paramètres utilisent les recommandations
+[Web Audio de MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices).

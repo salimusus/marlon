@@ -9511,8 +9511,11 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
         // lancée vers le nord depuis (0, 8) écrasait un passant, l'accident l'immobilisait, et les essais
         // suivants ne braquaient plus (0 rad). On écarte les habitants et on remet la caisse en état.
         G.bots.forEach(b => { b.pos.set(150, 0.3, 150); b.av.group.position.copy(b.pos); b.wait = 99; b.target = null; });
+        // et la case de départ est sur la rue Est-Ouest (z = 26, 58 m de long), cap à l'est : depuis (0, 8) vers le
+        // nord, la voiture percutait le parking du centre à 12 m/s (mesuré : accident déclaré à l'image 31, vitesse 0
+        // ensuite, et plus aucun braquage possible aux essais suivants)
         const braque = (mode, v) => { G.settings.ctrl = mode; ds.axes = [v, 0, 0, 0];
-          c.x = 0; c.z = 8; c.h = 0; c.accidente = false; c.stopped = false; c.dead = false; G.settleVehicle(c);
+          c.x = -20; c.z = 26; c.h = Math.PI / 2; c.accidente = false; c.stopped = false; c.dead = false; G.city.accidents.length = 0; G.settleVehicle(c);
           ds.buttons[7] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
           G.drive.speed = 0; const h0 = G.drive.car.h;
           for (let i = 0; i < 40; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }

@@ -15442,3 +15442,185 @@ test('en mode TV avec une DualSense branchée, la pastille ne réclame plus de s
   const ok = /scanne/.test(r.sans) && !/scanne/.test(r.avec) && /PS5/.test(r.avec);
   return { ok, detail: `sans manette : « ${r.sans} » · DualSense branchée : « ${r.avec} » (visible=${r.avecVisible}, elle s'efface au bout de 5 s)` };
 });
+
+// ---- Round 70, le Réparateur : les sept GRAVES du Joueur ----
+test('parachute : la voile dérive dans le sens de la marche, reste ouverte jusqu\'au sol et le joueur se pose loin de la façade', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    const essai = (yaw, ctrl) => {
+      __SHOT.go({ world: 4, x: 30.9, y: 1, z: 22, hour: 11, frais: true });
+      G.settings.ctrl = ctrl;
+      const t = G.city.toits[2];
+      const para = G.city.voiles.find(v => v.kind === 'parachute' && !v.pris && Math.hypot(v.x - t.x, v.z - t.z) < 12);
+      P.pos.set(para.x, t.y + 0.3, para.z - 1.2); P.vel.set(0, 0, 0); G.prendreVoile(para);   // à côté du sac (posé DANS son solide, on est repoussé)
+      P.facing = Math.PI / 2; G.cam.yaw = yaw; G.cam.freeUntil = 1e9;   // on court vers l'est ; la caméra reste où on la met
+      G.keys.add('KeyW');
+      let ouvert = 0, vyMin = 0, pose = null, i = 0;
+      for (; i < 1200 && !(P.grounded && P.pos.y < 0.3); i++) {
+        G.step(1 / 60, true);
+        if (P.voileMesh) ouvert++;
+        if (P.voileVol && P.vel.y < vyMin) vyMin = P.vel.y;
+        // « Bien posé » doit tomber les pieds SUR quelque chose (le sol, ou un toit plus bas sur lequel la dérive nous a portés)
+        if (pose == null && /Bien pos/.test(document.getElementById('msg').textContent)) pose = { y: +P.pos.y.toFixed(2), x: +P.pos.x.toFixed(1), sol: +G.groundUnder(P.pos.x, P.pos.z, null, P.pos.y + 0.6).toFixed(2) };
+      }
+      G.keys.delete('KeyW');
+      return { images: i, ouvert, vyMin: +vyMin.toFixed(1), pose, x: +P.pos.x.toFixed(1), y: +P.pos.y.toFixed(2), hp: P.hp, facadeX: t.x + t.w / 2 };
+    };
+    // caméra dans le dos en mode caméra ; caméra DEVANT le personnage en mode rotation (le
+    // réglage par défaut) : la dérive doit suivre le cap du personnage, pas la caméra
+    return { derriere: essai(Math.PI / 2 + Math.PI, 'cam'), devant: essai(Math.PI / 2, 'rot') };
+  });
+  const bon = e => e.ouvert > 150 && e.vyMin >= -3.3 && e.pose && e.pose.y <= e.pose.sol + 0.4 && e.x > e.facadeX + 3 && e.y < 0.3 && e.hp === 100;
+  const ok = bon(r.derriere) && bon(r.devant);
+  const d = e => `${e.ouvert} images sous la voile, vy min ${e.vyMin} m/s, « Bien posé » à y=${e.pose && e.pose.y} (surface à ${e.pose && e.pose.sol}), au sol en x=${e.x} (façade x=${e.facadeX}), ❤️ ${e.hp}`;
+  return { ok, detail: `avant : la dérive suivait la caméra (gauche/droite inversées), le joueur glissait contre la façade, « Bien posé » sur la marquise à 3,8 m puis chute · caméra derrière : ${d(r.derriere)} · caméra devant : ${d(r.devant)}` };
+});
+
+test('à la manette, L2 tenu garde l\'arme sortie entre deux R2, L2 relâché ne la range pas, seul ✕ la range, et le couteau frappe', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 52, y: 1, z: 30, hour: 15, frais: true });
+    const gp = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, touched: false, value: 0 })), timestamp: 0 };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [gp];
+    const btn = (i, d) => { gp.buttons[i] = { pressed: !!d, touched: !!d, value: d ? 1 : 0 }; };
+    const frame = n => { for (let k = 0; k < n; k++) { gp.timestamp++; G.pollGamepad(1 / 60); G.step(1 / 60, true); } };
+    const res = {};
+    try {
+      G.owned.add('arme:pistol'); G.owned.add('arme:knife'); G.equipWeapon('pistol'); P.drawn = false; frame(5);
+      const b = G.bots[0]; const fige = (x, z) => { b.pos.set(x, 0, z); b.av.group.position.set(x, 0, z); b.rdv = null; b.wander = null; b.fight = null; b.wait = 99; b.hp = 100; b.ko = 0; };
+      fige(52, 40); P.pos.set(52, 0.3, 30); P.facing = 0; G.cam.yaw = 0; G.cam.freeUntil = 0; frame(5);
+      btn(6, true); frame(10); res.l2 = { drawn: !!P.drawn, cible: P.lock && P.lock.nom };
+      const seq = [];
+      for (let i = 0; i < 3; i++) { fige(52, 40); btn(7, true); frame(3); btn(7, false); frame(72); seq.push({ drawn: !!P.drawn, ammo: P.ammo }); }   // 1,25 s entre deux coups : au-delà du rengainage automatique de 0,85 s
+      res.tirs = seq;
+      btn(6, false); frame(70); res.relache = !!P.drawn;
+      btn(0, true); frame(3); btn(0, false); frame(10); res.croix = !!P.drawn;
+      btn(15, true); frame(3); btn(15, false); frame(10); res.arme = P.weapon;   // → : l'arme suivante (rangée)
+      fige(52, 40); P.pos.set(52, 0.3, 38.5); P.facing = 0; frame(5);
+      btn(6, true); frame(8); res.couteauL2 = !!P.drawn;
+      const hp0 = b.hp; btn(7, true); frame(3); btn(7, false); frame(40); res.couteau = { hp0, hp: b.hp, drawn: !!P.drawn };
+      btn(6, false); frame(3);
+    } finally { navigator.getGamepads = vrai; G.pollGamepad(1 / 60); }
+    return res;
+  });
+  const ok = r.l2.drawn && r.tirs.every(t => t.drawn) && r.tirs[2].ammo === 5 && r.relache === true && r.croix === false && r.arme === 'knife' && r.couteauL2 && r.couteau.hp < r.couteau.hp0;
+  return { ok, detail: `avant : 0,85 s après un tir l'arme retournait dans l'étui alors que L2 était tenu, et R2 ne faisait plus rien · L2 : sortie=${r.l2.drawn} (${r.l2.cible}) · 3 R2 espacés : ${r.tirs.map(t => (t.drawn ? 'sortie' : 'rangée') + ' ' + t.ammo).join(', ')} · L2 relâché : sortie=${r.relache} · ✕ : sortie=${r.croix} · → : ${r.arme} · couteau L2+R2 : ❤️ ${r.couteau.hp0} → ${r.couteau.hp}` };
+});
+
+test('la réunion de chef de gang pose la bague sur SES boutons, même si la fenêtre 🚩 fermée avait gardé la sienne', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 16, frais: true });
+    const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.className.split(' ')[0]) + ':' + f.textContent.trim().slice(0, 20) : null; };
+    const res = {};
+    document.body.classList.add('tv');
+    try {
+      G.openUI('guerre'); G.navChoisit(document.getElementById('guerreBack')); res.avant = focus();
+      G.closeUI(); res.apresFermeture = focus();
+      const g2 = G.gangs[1] || G.gangs[0];
+      G.proposeReunion(g2); G.openReunion();
+      await new Promise(r2 => setTimeout(r2, 120));
+      res.reunion = { ui: G.uiOpen, focus: focus(), dedans: !!(document.querySelector('.focustv') && document.getElementById('reunion').contains(document.querySelector('.focustv'))) };
+      G.navVers('bas'); res.bas = focus();
+    } finally { document.body.classList.remove('tv'); if (G.uiOpen) G.closeUI(); G.guerre.reunion = null; }
+    return res;
+  });
+  const ok = r.avant === 'guerreBack:Retour' && r.apresFermeture === null && r.reunion.ui === 'reunion' && r.reunion.dedans && /reunion/.test(r.bas || '');
+  return { ok, detail: `avant : la bague restait sur « guerreBack:Retour » (fenêtre cachée), ✕ ne validait rien · bague après fermeture de 🚩 : ${r.apresFermeture} · réunion ouverte : bague sur ${r.reunion.focus} (dans la fenêtre=${r.reunion.dedans}) · ↓ : ${r.bas}` };
+});
+
+test('le camion de pompiers sort de la caserne, rejoint la rue la plus proche du feu et l\'équipe éteint un feu allumé dans le parc', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 27, y: 1, z: 118, hour: 9, frais: true });
+    G.city.horaires = false;
+    const cam = G.city.cars.find(c => c.kind === 'pompier');
+    const x0 = cam.x, z0 = cam.z;
+    const f = G.declencheIncendie(0, 60, 100);
+    const pp = G.city.metiers.filter(m => m.metier === 'pompier');
+    let dMin = 1e9, t = 0, tArrose = null, dChefArrose = null, sorti = null, tFin = null, forceMin = 100;
+    for (let i = 0; i < 180 * 60 && !tFin; i++) {
+      G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
+      const d = Math.hypot(cam.x, cam.z - 60); if (d < dMin) dMin = d;
+      if (sorti == null && Math.hypot(cam.x - x0, cam.z - z0) > 12) sorti = +t.toFixed(0);
+      if (tArrose == null && pp[0].etat === 'arrose') { tArrose = +t.toFixed(0); dChefArrose = +Math.hypot(pp[0].bot.pos.x, pp[0].bot.pos.z - 60).toFixed(1); }
+      if (f) forceMin = Math.min(forceMin, f.force);
+      if (!G.city.incendies.length) tFin = +t.toFixed(0);
+    }
+    return { allume: !!f, sorti, tArrose, dChefArrose, tFin, dMin: +dMin.toFixed(1), etat: pp[0].etat, forceMin: +forceMin.toFixed(0) };
+  });
+  const ok = r.allume && r.sorti != null && r.sorti < 30 && r.tArrose != null && r.dChefArrose != null && r.dChefArrose < 9 && r.tFin != null && r.tFin < 170;
+  return { ok, detail: `avant : un banc sur le trottoir devant la cour clouait le camion (84 m du feu pendant 120 s), et le camion visait le foyer lui-même au lieu de la rue · camion sorti à ${r.sorti} s, au plus près à ${r.dMin} m, lance ouverte à ${r.tArrose} s avec le chef à ${r.dChefArrose} m du feu, feu éteint à ${r.tFin} s (état ${r.etat}, force min ${r.forceMin})` };
+});
+
+test('tirer en pleine rue est un délit (avertissements), et faire exploser une voiture vaut deux étoiles', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 12, hour: 16, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.bots.forEach(b => { b.av.group.visible = false; });   // personne dans la ligne de mire : on vise la voiture
+    // une VOITURE du parking du centre (une moto est trop fine pour la dispersion des balles), vue depuis la rue au nord
+    const v = G.city.cars.find(c => c.parts && !c.heli && c.g.visible && !c.busy && Math.abs(c.x + 11.3) < 0.6 && Math.abs(c.z - 10) < 0.6) || G.city.cars.find(c => c.parts && !c.heli && c.g.visible && !c.busy);
+    P.pos.set(v.x, 0.3, v.z - 8); P.vel.set(0, 0, 0); P.facing = 0; G.cam.yaw = Math.PI; G.cam.freeUntil = 0; P.aimHeld = true; P.aim = true;
+    for (let i = 0; i < 10; i++) G.step(1 / 60, true);
+    const tirs = [];
+    for (let i = 0; i < 14 && !v.dead; i++) { P.ammo = 8; P.fireCd = 0; P.lockRef = v; G.fire(); for (let k = 0; k < 70; k++) G.step(1 / 60, true); tirs.push({ wanted: G.police.wanted, avert: G.police.avert || 0, dmg: Math.round(v.dmg || 0) }); }
+    P.aimHeld = false;
+    const msgW = document.getElementById('wanted').textContent;
+    const res = { tirs, dead: !!v.dead, wanted: G.police.wanted, crimeLevel: G.police.crimeLevel, msgW, kind: v.kind };
+    P.aim = false; P.aimHeld = false; G.clearWanted(); G.drawWeapon(false); G.bots.forEach(b => { b.av.group.visible = true; });
+    return res;
+  });
+  const ok = r.tirs[0].avert >= 1 && r.dead && r.wanted >= 2 && r.crimeLevel >= 3;
+  return { ok, detail: `avant : quatre balles, une voiture détruite, ⭐ 0 et personne · maintenant (${r.kind}), 1er tir : avertissement ${r.tirs[0].avert}/4 · ${r.tirs.map(t => '★' + t.wanted + '/' + t.dmg + '%').join(' ')} · détruite=${r.dead}, recherché ★${r.wanted}, gravité ${r.crimeLevel}, « ${r.msgW.slice(0, 50)} »` };
+});
+
+test('l\'équipe municipale part en fourgon, balise un chantier et répare un lampadaire cassé en moins d\'une minute', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 27, y: 1, z: 118, hour: 9, frais: true });
+    G.city.horaires = false;
+    const lamp = G.breakables.find(b => b.kind === 'lamp' && Math.hypot(b.x - 45.5, b.z - 13.2) < 2) || G.breakables.find(b => b.kind === 'lamp');
+    G.breakThing(lamp, null, true);
+    const emp = G.city.metiers.filter(m => m.metier === 'employe'), four = emp[0].bot.veh;
+    const x0 = four.x, z0 = four.z;
+    let t = 0, sorti = null, chantier = null, tFin = null, enFourgon = 0;
+    for (let i = 0; i < 120 * 60 && !tFin; i++) {
+      G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
+      if (sorti == null && Math.hypot(four.x - x0, four.z - z0) > 12) sorti = +t.toFixed(0);
+      if (emp[0].etat === 'route' && Math.hypot(emp[0].bot.pos.x - four.x, emp[0].bot.pos.z - four.z) < 4) enFourgon++;
+      if (chantier == null && G.city.chantiers.length) chantier = +t.toFixed(0);
+      if (!lamp.broken) tFin = +t.toFixed(0);
+    }
+    return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat };
+  });
+  // l'itinéraire par les voies varie avec la circulation (45 à 80 s de route) : on juge le fourgon, le chantier et la réparation dans les deux minutes
+  const ok = r.veh === 'fourgon' && r.sorti != null && r.sorti < 25 && r.enFourgon >= 10 && r.chantier != null && r.tFin != null && r.tFin < 110 && r.dFourgon < 16;
+  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat})` };
+});
+
+test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchir dans son sens, si', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -15, y: 1, z: 7, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart);
+    const tl = G.city.trafficLights.find(t => !t.broken && t.ligne);
+    const pose = (recule) => {
+      // la voiture dans l'axe du feu, le nez vers la ligne d'arrêt : en marche avant elle part de 9 m et franchit
+      // la ligne ; en marche arrière elle part à 2 m de la ligne (dans les 4,5 m de l'ancien test) et s'en éloigne
+      const sx = Math.sin(tl.sens), sz = Math.cos(tl.sens);
+      car.x = tl.ligne.x - sx * (recule ? 2 : 9); car.z = tl.ligne.z - sz * (recule ? 2 : 9); car.h = tl.sens;
+      car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = car.h; G.vehicleSolid(car);
+      P.pos.set(car.x, car.y + 0.4, car.z); if (G.drive.car !== car) G.enterCar(car);
+      G.clearWanted(); P.crime = 0; tl.runT = 0; tl.state = 0; tl.etat = 'rouge';
+      G.drive.speed = recule ? -8 : 8; let w = 0, m = '';
+      for (let i = 0; i < 150; i++) { tl.state = 0; tl.etat = 'rouge'; G.drive.speed = recule ? -8 : 8; G.step(1 / 60, true); w = Math.max(w, G.police.wanted); if (/grill/.test(document.getElementById('msg').textContent)) m = 'grillé'; }
+      return { w, m, dLigne: +Math.hypot(car.x - tl.ligne.x, car.z - tl.ligne.z).toFixed(1) };
+    };
+    const arriere = pose(true), avant = pose(false);
+    G.exitCar(); G.clearWanted();
+    return { arriere, avant };
+  });
+  const ok = r.arriere.m === '' && r.arriere.w === 0 && r.avant.m === 'grillé';
+  return { ok, detail: `avant : tout véhicule à moins de 4,5 m du poteau, quel que soit son cap, « grillait » le feu (reculer du parking = ★) · marche arrière devant la ligne : ${r.arriere.m || 'rien'}, ★${r.arriere.w} · marche avant dans le sens du feu : ${r.avant.m || 'rien'}` };
+});

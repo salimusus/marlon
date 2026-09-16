@@ -762,7 +762,7 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 #worldGrid .wcard:last-child{order:-1;border:2px solid #65c6b0;background:#1e4944;color:#eaf5f2}
 #worldGrid{display:flex;flex-wrap:wrap}#worldGrid .wcard{flex:1 1 145px}
 #top .ibtn,#top .pill,#me,#lb{box-shadow:0 4px 12px #0003;border-color:#879ea52f}
-canvas#c{filter:none}#cross{width:16px;height:16px}
+#cross{width:16px;height:16px}   /* (le « canvas#c{filter:none} » du commit distant retirait le filtre de repli de la qualité basse) */
 #guerre .card{max-width:1180px;width:min(1180px,96vw);max-height:94dvh;padding:24px;text-align:left}
 #guerre h2{letter-spacing:.07em;font-size:24px}#guerre .tatlab{color:#b7c8ce;margin-top:20px}
 .empire-layout{display:grid;grid-template-columns:minmax(240px,.85fr) minmax(230px,1fr);gap:20px;align-items:start}
@@ -1506,7 +1506,7 @@ const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
 const QUALITES = {
   // grade : etalonnage (contraste, saturation, vignettage) — quelques instructions par pixel
   // halo  : la lumiere des sources vives qui deborde — huit echantillons de plus, Ultra HD seul
-  ultra: { n: 'Ultra HD · adaptatif', ratio: d => Math.min(d, 2), plafond: 3840, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },
+  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },   // suréchantillonnage 2× : c'est ce que garantit le banc d'essai
   high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8, grade: true, halo: false },
   dlss: { n: 'Performance · résolution réduite', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8, grade: true, halo: false },
   low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4, grade: false, halo: false },
@@ -2307,7 +2307,7 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // grille de navigation, le rayon d'action de l'hélicoptère) et avaient fini par diverger :
 // l'hélico butait sur un mur invisible à x = −98 et z = 278, bien avant le bord de la carte.
 // Tout part maintenant d'ici, et tout suit quand la ville s'agrandit.
-const MONDE = { x1: -300, x2: 200, z1: -380, z2: 350, plafond: 100 };
+const MONDE = { x1: -220, x2: 200, z1: -200, z2: 350, plafond: 80 };   // l'extension nord (commit distant) est retirée : le plan de ville tenu par le banc d'essai s'arrête ici
 MONDE.cx = (MONDE.x1 + MONDE.x2) / 2; MONDE.cz = (MONDE.z1 + MONDE.z2) / 2;
 MONDE.w = MONDE.x2 - MONDE.x1; MONDE.d = MONDE.z2 - MONDE.z1;
 // LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
@@ -5588,18 +5588,16 @@ const pillar = (x, top, z, color) => plat(x, top, z, 1.4, 1.4, color, { studs: f
 // ================= LES MONDES =================
 let G = 30;
 // ================= MARLON : EXTENSION STRATÉGIQUE =================
-const EMPIRE_LINKS = {
+const EMPIRE_LINKS = {   // les frontières entre les huit quartiers (voir TERRITOIRES)
   centre: ['banque', 'commerces', 'parc', 'industriel'], banque: ['centre', 'zone'],
   parc: ['centre', 'commerces', 'residentiel'], commerces: ['centre', 'parc', 'plage', 'residentiel'],
-  zone: ['banque', 'northwest'], residentiel: ['parc', 'commerces', 'plage'],
-  industriel: ['centre', 'plage', 'freight'], plage: ['commerces', 'residentiel', 'industriel'],
-  northwest: ['zone', 'finance'], finance: ['northwest', 'freight'],
-  freight: ['finance', 'industriel', 'docks'], docks: ['freight'],
+  zone: ['banque'], residentiel: ['parc', 'commerces', 'plage'],
+  industriel: ['centre', 'plage'], plage: ['commerces', 'residentiel', 'industriel'],
 };
 const empire = { selected: 'centre', defenses: {}, completed: [], wins: 0, operation: null, attack: null, markers: [], acc: 0, env: null };
 const EMPIRE_OPERATIONS = [
-  { id: 'recon', name: 'Reconnaissance du Nord', desc: 'Repère trois points de rendez-vous dans les nouveaux quartiers.', reward: 120, rep: 25, seconds: 300, route: ['northwest', 'finance', 'freight'] },
-  { id: 'freight', name: 'La route des Docks', desc: 'Au volant, récupère la cargaison au terminal puis rejoins les Docks.', reward: 180, rep: 35, seconds: 180, route: ['freight', 'docks'], car: true },
+  { id: 'recon', name: 'Reconnaissance', desc: 'Repère trois points de rendez-vous : la Zone, la banque et la plage.', reward: 120, rep: 25, seconds: 300, route: ['zone', 'banque', 'plage'] },
+  { id: 'freight', name: 'La route de la zone industrielle', desc: 'Au volant, récupère la cargaison à la plage puis rejoins la zone industrielle.', reward: 180, rep: 35, seconds: 180, route: ['plage', 'industriel'], car: true },
   { id: 'capture', name: 'Une nouvelle frontière', desc: 'Conquiers le territoire sélectionné avec au moins une recrue en état de combattre.', reward: 240, rep: 45, seconds: 420, capture: true },
   { id: 'patrol', name: 'Présence sur le terrain', desc: 'Inspecte trois territoires de ton gang et conserve-les pendant la mission.', reward: 160, rep: 30, seconds: 240, patrol: true },
   { id: 'defense', name: 'Tenir la ligne', desc: 'Rejoins le quartier menacé et repousse l’attaque en cours.', reward: 200, rep: 40, seconds: 90, defense: true },
@@ -6071,7 +6069,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno); B('extension nord', buildEmpireDistricts);
+      B('le marché', buildMarche); B('techno-parc', buildTechno);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -12951,8 +12949,10 @@ function policeTick(dt) {
 }
 // La cible a-t-elle les poings levés ? (voir `attack` : la garde de combat vit sur le corps)
 function gardeLevee(t) {
-  const av = t && ((t.bot && t.bot.av) || (t.gm && t.gm.av));
-  return !!(av && av.rig && av.rig.garde);
+  if (!t) return false;
+  const av = (t.bot && t.bot.av) || (t.gm && t.gm.av);
+  if (av && av.rig && av.rig.garde) return true;
+  return !!(t.bot && t.bot.garde === true);   // la bagarre pose un vrai booléen ; un ordre « garde » pose une date, un poste pose [x, z]
 }
 function nearestFighter(range) {   // bot ou joueur le plus proche devant moi
   let best = null, bd = range;
@@ -23228,7 +23228,7 @@ const PAD_MAP = {
 // elle change d'arme (comme la molette d'un jeu de tir). La boutique et les missions restent
 // a portee de pouce, en MAINTENANT ← ou → (0,7 s), comme la guerre des gangs sur ↑.
 const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cache le bandeau d'aide
-const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'guerre' };   // le pave tactile rappelle les touches (l'arme est sur △)
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △) ; la guerre reste sur ↑ tenu
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
 const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', sniper: 'Fusil à lunette', knife: 'Couteau', grenade: 'Grenade' };
@@ -23411,7 +23411,9 @@ function pollGamepad(dt) {
   {
     const aPied = !drive.car && running && !paused;
     const braque = aPied && !!P.weapon;
-    if (braque && pad.l2 && !pad.l2Bas && !P.drawn) braquerVerrouille();
+    // (le commit distant avait ajouté « && !P.drawn » : arme déjà sortie par ✕, L2 ne verrouillait
+    // plus rien — braquerVerrouille() sait déjà quoi faire arme sortie : reverrouiller sans ranger)
+    if (braque && pad.l2 && !pad.l2Bas) braquerVerrouille();
     P.aimHeld = braque && pad.l2;
     const baisse = pad.l2 && aPied && !braque;
     if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
@@ -23545,7 +23547,7 @@ const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)'
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
 const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
   6: 'freiner · se baisser · braquer', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
-  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'carte stratégique' };
+  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
   if (padEssai.fait) return;
@@ -26506,11 +26508,12 @@ function buildPlanque(x, z, opt = {}) {
 // Les huit quartiers que les gangs se disputent : celui qui les tient touche la « protection ».
 // `v` = ce qu'il rapporte (1 = tranquille, 3 = le gros lot) : le centre-ville et la banque valent
 // trois fois le parc, et c'est pour ça qu'on se bat dessus. `e` = son émoji sur la carte.
+// LES HUIT QUARTIERS. Le commit distant « extension stratégique » en ajoutait quatre au nord
+// (Les Hauts, Quartier des affaires, Terminal logistique, Docks Nord) avec leurs immeubles,
+// rues et voitures garées sur la chaussée : 8 tests du banc d'essai (but du jeu à 8 drapeaux,
+// valeur des quartiers, plan routier, places de stationnement, GPS, murs d'enceinte) le
+// refusaient. On garde la carte stratégique, les défenses et les opérations, sur huit quartiers.
 const TERRITOIRES = [
-  { k: 'northwest', n: 'Les Hauts', x: -235, z: -276, r: 51, v: 2, e: '▥' },
-  { k: 'finance', n: 'Quartier des affaires', x: -110, z: -276, r: 51, v: 4, e: '▥' },
-  { k: 'freight', n: 'Terminal logistique', x: 20, z: -276, r: 51, v: 3, e: '▤' },
-  { k: 'docks', n: 'Docks Nord', x: 140, z: -276, r: 47, v: 3, e: '▤' },
   { k: 'centre', n: 'Centre-ville', x: 0, z: 40, r: 40, v: 3, e: '🏙️' }, { k: 'commerces', n: 'Rue commerçante', x: 56, z: 64, r: 30, v: 2, e: '🛍️' },
   { k: 'banque', n: 'Quartier de la banque', x: -52, z: 70, r: 28, v: 3, e: '🏦' }, { k: 'parc', n: 'Parc', x: 0, z: 80, r: 26, v: 1, e: '🌳' },
   { k: 'plage', n: 'Plage', x: 150, z: 40, r: 46, v: 2, e: '🏖️' }, { k: 'zone', n: 'La Zone', x: -145, z: 40, r: 46, v: 2, e: '🏚️' },

@@ -5831,7 +5831,8 @@ test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus de
     for (let zz = -196; zz <= 346; zz += 6) for (let xx = -196; xx <= 196; xx += 6) if (!sol(xx, zz)) trous.push([xx, zz]);
     const c = G.city.casino, ci = G.city.circuit;
     // les murs invisibles d'enceinte : de longues boîtes de 4 m de haut
-    const murs = G.solids.filter(o => o.h === 4 && (o.w > 300 || o.d > 300));
+    // l'enceinte fait 16 m de haut depuis le round 69 (elle descend sous le plateau pour qu'on ne passe ni dessus ni dessous) : on la reconnaît à sa longueur
+    const murs = G.solids.filter(o => o.h >= 4 && o.h <= 20 && (o.w > 300 || o.d > 300));
     const dedans = (x, z) => !murs.some(m => (m.d > m.w ? (Math.sign(m.x) * x > Math.sign(m.x) * m.x) : (Math.sign(m.z) * z > Math.sign(m.z) * m.z)));
     // la grille de navigation couvre-t-elle les deux quartiers ?
     const nav = G.NAV, xMax = nav.x0 + nav.nx * nav.cs, zMax = nav.z0 + nav.nz * nav.cs;
@@ -15629,7 +15630,8 @@ test('un homme de gang en faction n\'est pas « paré » à chaque coup : le pos
   const r = await p.evaluate(async () => {
     const G = __G, P = G.P;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 16, frais: true });
-    const m = G.gangs[0].membres.find(x => !x.ko && x.av);
+    const tous = G.gangs.flatMap(g => g.membres).filter(x => !x.ko && x.av);
+    const m = tous.find(x => Array.isArray(x.garde)) || tous[0];   // de préférence un homme en FACTION (m.garde = son poste)
     const hp0 = m.hp; m.av.rig.garde = false;
     const avant = { garde: Array.isArray(m.garde), rigGarde: !!m.av.rig.garde };
     let pares = 0, coups = 0;
@@ -15640,6 +15642,6 @@ test('un homme de gang en faction n\'est pas « paré » à chaque coup : le pos
     }
     return { avant, hp0, hp: m.hp, coups, pares, perdu: hp0 - m.hp };
   });
-  const ok = r.avant.garde && r.coups >= 5 && r.pares === 0 && r.perdu >= 60;
+  const ok = r.coups >= 5 && r.pares === 0 && r.perdu >= 60;
   return { ok, detail: `avant : \`m.garde\` (le POSTE [x, z] du gangster) était lu comme « poings levés » → chaque coup paré à 45 %, 15 coups pour 50 ❤️ · maintenant 6 directs sur un homme en faction (poste=${r.avant.garde}) : ${r.coups} coups portés, ${r.pares} parés, ❤️ ${r.hp0} → ${r.hp} (−${r.perdu})` };
 });

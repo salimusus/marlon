@@ -85,7 +85,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 27. Écraser un piéton : aucune ambulance, et la police TIRE sur l'enfant
 ✅ RÉPARÉ — la police tirait dès `wanted >= 2` quel que soit le délit (écraser = gravité 2) : elle ne tire plus que pour un crime grave (`policeTire()` : KO/arme/braquage, riposte, alarme, armée) et « tirer sur quelqu'un » passe en gravité 3 ; l'ambulance n'était appelée qu'à ❤️ 0 (`ecraseAuSol`) : elle part aussi au-dessus de 8 m/s et le blessé reste à terre jusqu'au brancard — commit 0b83501
-🔎 CONTRÔLÉ : OK — piéton renversé à 15,5 m/s sur la rue du point d'apparition : ❤️ 100 → 54, KO au sol jusqu'au brancard, « 🚑 Une ambulance a été appelée », ambulance en `route` puis `transport` (chargement à t+45 s, blessé emporté) ; police ★★★ mais AUCUN tir sur 80 s (`riposte = 0`, aucun « ils tirent »). Elle abandonne d'ailleurs la recherche à t+25 s (★★★ → 0) sans être venue (`c7-pc.log`, `img/c7/c7-27-30s.png`).
+🔎 CONTRÔLÉ : OK — piéton renversé à 15,5 m/s sur la rue du point d'apparition : ❤️ 100 → 54, KO au sol jusqu'au brancard, « 🚑 Une ambulance a été appelée », ambulance en `route` puis `transport` (chargement à t+45 s, blessé emporté) ; police ★★★ mais AUCUN tir sur 80 s (`riposte = 0`, aucun « ils tirent »). Elle ARRÊTE le joueur à t+25 s (voiture de police à 13 m à t+20 s, ★★★ → 0, écran 🔒 Prison à t+30 s : `img/c7/c7-27-30s.png`) — sans jamais tirer (`c7-pc.log`).
 - **Gravité** : GRAVE (fonction promise : ambulance pour les blessés, police proportionnée)
 - **Reproduire** : rouler à 50 km/h dans la foule du point d'apparition (0, 3).
 - **On voit** : « 🚔 Infraction : écraser Tom_le_ouf ! Niveau ★★★ », deux bots KO (hp 56), aucune ambulance ne part (`city.ambulances[*].etat = null` après 6 s), les bots écrasés se relèvent et disent « plus jamais ça » ; 40 s plus tard « Recherché ★★ · ils tirent ! ». Puis arrestation → écran Prison.
@@ -325,6 +325,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 33. Sortir de prison = finir un parcours d'obby entier
 - **Gravité** : GÊNANT (design, mais bloquant pour un enfant sans pièces)
+🔎 Revu round 70 : toujours là, et à la manette l'écran 🔒 Prison n'a AUCUNE bague de sélection sur ses 5 boutons (Prairie ▶, Volcan ▶, Payer 100, Pass liberté, Rester en cellule) — `img/c7/c7-27-30s.png` (vu 1 fois, écran atteint par hasard après l'arrestation du contrôle 27).
 - **Reproduire** : se faire arrêter avec 25 🪙 et 0 pass.
 - **On voit** : « Pour sortir, réussis les épreuves ci-dessous (jusqu'au drapeau final), paie 100 🪙 (tu as 25), ou utilise un pass liberté (2 pour cette partie) » — Prairie ▶ / Volcan ▶. Sans pass ni argent, l'enfant doit finir 8 étapes d'obby pour retourner en ville.
 - **On devrait voir** : une peine courte (attendre 30 s, ou une mini-épreuve dans la cellule).

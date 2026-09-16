@@ -14,6 +14,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 37. Au garage, « Valider » plante le jeu : l'argent est pris, la voiture reste comme avant
 ✅ RÉPARÉ — `tuneCible()` prenait le véhicule le plus proche de `city.cars` quel qu'il soit (la dépanneuse garée devant le garage, n° 38) et `tuneApply` lisait `c.parts.ws` que seules les voitures de `makeCar` ont ; seule une voiture préparable est ciblée (`tunable()`), `tuneApply` tolère un véhicule sans vitres, et l'argent n'est pris qu'APRÈS l'application réussie — commit abe9583
+🔎 CONTRÔLÉ : OK — finition fluo + jupes latérales, « Valider » : 400 → 190 🪙, « ✅ Voiture préparée ! −210 🪙 · 100 chevaux, 1 kit », `c.tune = {finition: fluo, kits: [jupes]}`, aucune erreur console (`c4-pc.log`). Au passage : la dépanneuse devant le garage provoque maintenant un « 💥 ACCIDENT ! » (🔧 15 %) en arrivant (n° 38 aggravé), la caméra entre encore dans la tête au comptoir (n° 39, `img/c4/c4-1-comptoir.png`) et la bague reste sur le bouton caché « Entrer dans Marlon » quand l'atelier s'ouvre (n° 40).
 - **Gravité** : BLOQUANT (le garage — repeindre, monter un kit — ne marche pas du tout)
 - **Reproduire** : voiture du parking, la garer devant le garage custom (−45, 90), △ au comptoir (−53,5, 96,6), onglet 🎨 Peinture : choisir une finition (fluo), onglet 🧰 Kits : choisir « Jupes latérales », « Valider ».
 - **On voit** : le chat écrit « ⚠️ Bug détecté : Uncaught TypeError: Cannot read properties of undefined (reading 'ws') at tuneApply », message « ⚠️ Un bug a été détecté (voir le chat), le jeu continue » ; le portefeuille passe de 400 à **190** (210 🪙 payés) ; la voiture reste rouge (#ff5c5c), sans jupes ; la fenêtre de l'atelier reste ouverte.
@@ -44,6 +45,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 14. On sort de la ville à pied et on TOMBE DANS LE VIDE (mort, 💀 +1)
 ✅ RÉPARÉ — le mur invisible d'enceinte était posé 1,5 m DEHORS du plateau (fossé d'un mètre sans sol) et haut de 4 m seulement depuis y = 0 : on tombait dans le fossé puis SOUS le mur ; il colle maintenant au bord et descend sous le plateau, et une haie visible fait le tour de la ville — commit 8d14cd1
+🔎 CONTRÔLÉ : OK — cinq marches de 25–30 s au stick depuis le bord (nord-ouest (−55,−124)→(−145,−295), nord, sud, est, ouest) : `y` jamais sous 0, 💀 0, aucun « Oups ». Au nord on bute sur une boutique du Techno-Parc (0, −107), à l'ouest sur un mur invisible en x = −299,6, à l'est on entre dans la mer jusqu'en x = 199,6 (voir n° 70 : le requin). `c2-pc.log` `c14`.
 - **Gravité** : GRAVE (première marche libre : l'enfant meurt sans comprendre)
 - **Reproduire** : Ville, point d'apparition, stick avant 4 s (on part vers le nord), stick gauche 2 s, avant 6 s, droite 2 s, avant ~30 s (direction nord-ouest, vers (-84, -157) puis (-102, -222)).
 - **On voit** : d'abord un dallage blanc infini sans rien dessus (`s2-course.png`, position (-55, -124)), puis le personnage tombe sous le sol (`P.pos.y = -100`), message « Oups ! », compteur 💀 passe à 1 et on réapparaît au centre.
@@ -53,6 +55,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 21. Le commissariat n'a pas d'intérieur : pas de plafond, façade vue de l'intérieur, caméra dehors
 ✅ RÉPARÉ (en partie) — la façade vitrée couvrait les six faces des murs de coque (`coque()`), d'où « façade vue de l'intérieur » : la face intérieure est maintenant peinte (tous les halls `building()`) ; un agent d'accueil en uniforme se tient derrière le guichet PLAINTES (`police.accueil`). Le plafond effacé et la caméra qui sort en fondant le mur sont la « maison de poupée » voulue au round précédent (poste URGENCE) : on ne la défait pas — commit 86b5118
+🔎 CONTRÔLÉ : OK — murs intérieurs beiges (plus de façade vue de l'intérieur), agent d'accueil en uniforme derrière le guichet PLAINTES à 2,8 m (`police.accueil`), caméra à 5,5–7 m qui reste dans la pièce sur 8 angles (`img/c2/c2-commissariat-1-dedans.png`, `-2-regard.png`). Plafond toujours absent (maison de poupée assumée).
 - **Gravité** : GRAVE (bâtiment promis « visitable » : commissariat, prison, guichet des plaintes)
 - **Reproduire** : Ville, se placer en (−54, 40) face au nord, stick avant 7 s : on entre par la porte sud du commissariat (−54, 28) ; puis stick droit vers la gauche 0,8 s.
 - **On voit** : à l'intérieur, les murs montrent les fenêtres bleues de la FAÇADE extérieure, au-dessus un bloc de toit sombre qui flotte avec le ciel autour ; le guichet « PLAINTES » est vide alors que « L'agent d'accueil : Bonjour, que puis-je pour vous ? » s'écrit dans le chat ; en tournant la caméra on se retrouve DEHORS, à regarder le dos du panneau « AVIS DE RECHERCHE », personnage invisible.
@@ -62,6 +65,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 22. Dans les bâtiments, le stick droit envoie la caméra à travers les murs et les meubles
 ✅ RÉPARÉ — cause mesurée à l'école : la caméra traversait une cloison de classe (0,3×4,2×9 m) en restant DANS l'enceinte, et l'effacement n'était tenté que caméra dehors (`dehors &&` dans `interieurTick`) ; toute paroi traversée s'efface maintenant. L'hôpital n'était enregistré dans aucune liste d'intérieurs (pas de maison de poupée) : ajouté. Mesure après : 0 angle bouché sur 8 dans les 4 bâtiments. Le reste (« personnage invisible » sur tes captures) tient à ton pilote : `interieurTick`/`camPerche`/le fondu vivent dans `frame()` — commit 86b5118
+🔎 CONTRÔLÉ : OK — avec de vraies images (rAF) entre chaque pas du stick droit : 0 angle bouché sur 8 dans les 5 bâtiments (commissariat, école, banque, hôpital, concessionnaire) — `cam.interieur` vrai, caméra jamais dans un solide, personnage visible, `cam.dist` 4,8–7 m ; au concessionnaire la caméra se rapproche à 1,7 m du personnage sans entrer dedans (`c2-pc.log` `bats[*].angles`, `img/c2/c2-ecole-2-regard.png`, `c2-banque-2-regard.png`, `c2-hopital-2-regard.png`).
 - **Gravité** : GRAVE (dès qu'un enfant regarde autour de lui dedans, il ne voit plus son personnage)
 - **Reproduire** : entrer dans l'école (classe (−69, 213)), la banque (guichet (−57, 70)), l'hôpital (hall (14, 212)) ou le concessionnaire (comptoir (−140, 93)), puis pousser le stick droit à gauche 0,8 s.
 - **On voit** : école → la caméra est DEHORS, on voit la façade verte et le grillage, personnage invisible ; banque → caméra dans la vitre du guichet, étiquette « guichet » géante, tête du guichetier dans l'objectif ; hôpital → caméra DANS le bureau d'accueil (une planche brune barre l'écran) ; concessionnaire → caméra dans le bras du personnage (aplat couleur peau plein écran).
@@ -71,6 +75,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 26. Les voitures du parking du centre sont garées face à la terrasse du snack : R2 = on défonce les tables sans avancer
 ✅ RÉPARÉ — trois causes mesurées : les voitures étaient garées cap au sud (nez sur les bancs et la terrasse posés DANS le parking à z = 13,5), en deux rangées (la rangée du fond démarrait dans le coffre de l'autre : +15 % de dégâts), et la casse du mobilier par un véhicule testait un CARRÉ axé de demi-côté r + demi-longueur + 0,5 → en sortant on cassait le lampadaire à 2,1 m de côté (+9 %). Une rangée cap au nord, mobilier reculé, casse en boîte orientée — commit 65ab948
+🔎 CONTRÔLÉ : OK en partie — les 4 voitures et 2 motos sont sur une rangée cap nord (z = 10, h = 3,14) et la voiture PART : 27 m/s après 5 s de R2. Mais tout droit c'est le grillage du terrain de foot, 13 m plus loin : 🔧 +20,9 % en 5 s (run 2) ; au run 1 arrêt contre le grillage à 6 km/h avec des cônes de chantier sur la route (`img/c3/c3-26-roule.png`). Voir n° 69.
 - **Gravité** : GRAVE (première voiture qu'un enfant prend : elle ne part pas et se casse)
 - **Reproduire** : parking (−23…−3, 3…14), voiture en (−15, 11,5). △ pour monter, R2 à fond 5 s.
 - **On voit** : la voiture reste sur place (vitesse 2,6 → −2 → 1 m/s, position inchangée), les dégâts montent 🔧 2 % → 10 % en 5 s ; en braquant elle GRIMPE sur la terrasse (`c.y` 0,15 → 0,66, roues 60 cm au-dessus du sol). Le parking est dessiné au milieu des tables et parasols du snack.
@@ -88,6 +93,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 28. La circulation est quasi vide et roule HORS de la ville
 ✅ RÉPARÉ (nombre) / ❌ PAS UN BUG (hors chaussée) — huit véhicules au lieu de cinq ; mesuré sur 90 s puis 40 s : 0–1 % du temps hors des rectangles de `city.routes`, ta voiture de (−70,−104) devait être poussée par un accident ou une poursuite — commit 0affff2
+🔎 CONTRÔLÉ : OK — 8 voitures de circulation, 0 échantillon hors chaussée sur 64 (8 relevés × 8 voitures pendant 40 s). Reste : la plus proche du parking du centre est à 160 m — depuis le centre-ville, l'enfant ne voit toujours passer aucune voiture (`c3-pc.log` `c28`).
 - **Gravité** : GRAVE (le joueur a demandé une vraie circulation ; « conducteurs hors chaussée » déjà relevé au round 67, toujours là)
 - **Reproduire** : prendre une voiture, chercher la voiture de circulation la plus proche (`city.aiCars`).
 - **On voit** : 5 voitures de circulation pour toute la ville, la plus proche à 147 m ; celle-là roule sur le dallage blanc à l'extérieur de la ville, en (−75, −105), au nord du Rallye, là où il n'y a aucune route.
@@ -106,6 +112,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 36. Un choc frontal à 62 km/h contre un camion = 3 % de dégâts, aucune secousse, aucune marque
 ✅ RÉPARÉ — dans `resolveVehicleOverlap`, un choc contre un autre véhicule ne comptait que le frottement (`min(5, imp × 0,15)`) et `chocVehicule()` (capot, phares, pare-brise, marque) n'était appelé que contre un MUR ; au-delà de 7 m/s : dégâts francs aux deux (+24 % / +20 % mesurés à 19 m/s), stade 3, capot −0,55 rad, secousse 0,39, `cam.kick` — commit edf2a72
+🔎 CONTRÔLÉ : OK — camion du Parking du Sud percuté à 24 m/s : 🔧 +30,2 %, 4 marques d'impact, « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive », capot relevé sur la capture (`img/c3/c3-36-choc.png`). Secousse faible : `cam.kick` max 0,08. La caméra, elle, se retrouve derrière la colline du Rallye (n° 32).
 - **Gravité** : GRAVE (promis : chocs BOOM, dégâts par paliers, marques d'impact)
 - **Reproduire** : idem n° 35.
 - **On voit** : `dmg` 0 → 2,97, `cam.kick = 0`, `city.marques.length = 0`, aucun bruit noté, la voiture s'arrête net sans rebond ni fumée.
@@ -114,6 +121,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 41. Se battre à mains nues est impossible : l'habitant s'enfuit au premier coup, les suivants frappent le vide
 ✅ RÉPARÉ — `attack()` tirait « fuite » à 45 % et le fuyard détalait à 5,5 m/s jusqu'à la fin du combat (8 s), puis récupérait 20 ❤️ ; 32 % reculent encore mais reviennent se battre après 3 s (`b.fuiteFin`). Mesuré : fuite tirée au sort → KO en 9 coups (86 72 46 46 32 18 6 6 0) — commit 0affff2
+🔎 CONTRÔLÉ : OK — `Math.random` forcé dans les deux cas : « combat » → KO en 7 coups qui touchent (86 60 54 40 14 8 0), ralenti 3 s ; « fuite » → l'habitant recule 2 coups puis revient (« ok, tu l'auras voulu ») et tombe KO au 8e, ralenti 2,7 s, ambulance appelée (`c5-pc.log`, `img/c5/c5-41-combat-fin.png`). Le KO d'un habitant vaut ★★ (« la police arrive dans 14 s »).
 - **Gravité** : GRAVE (fonction promise : direct / crochet / uppercut, KO en six coups, ralenti du coup final)
 - **Reproduire** : point d'apparition, s'approcher d'un habitant (Tom_le_ouf) à 1,1 m, ▢ ×3 puis ▢ tenu.
 - **On voit** : 1er ▢ = direct, il touche (100 → 86 PV) ; le bot part aussitôt en courant (« laisse-moi ! police !! au secours ! ») : à la 2e frappe il est à 8 m, à la 3e à 14 m, au coup de pied à 20 m, et 16 coups plus tard à 55 m avec **100 PV** (il a tout récupéré). Jamais de KO, donc jamais le ralenti du coup final (`RALENTI.t = 0`), jamais de crochet ni d'uppercut qui touche. Le personnage ne suit pas sa cible (« pas d'attaque » de 16 cm seulement).

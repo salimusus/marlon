@@ -103,6 +103,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 35. Après un accident, la police et la dépanneuse « arrivent » mais ne viennent JAMAIS ; l'amende prend tout l'argent de l'enfant
 ✅ RÉPARÉ (amende) / ⏸ TROP GROS (trajet) — l'amende prenait tout (`min(wallet, amende)`) : au plus la moitié du porte-monnaie (25 → 13). Mesuré avec la vraie boucle : la police ARRIVE (constat à 40 s) mais par un détour de ~250 m pour 117 m à vol d'oiseau (graphe de voies du poste D : (−43,12)→(−41,48)→(−77,7)→(−88,−95)→(28,−98)) ; la dépanneuse est appelée par la police au constat et porte `mission`, pas `etat` (ta sonde lisait le mauvais champ). Raccourcir l'itinéraire = refonte du graphe de voies, je laisse au chef — commit 0affff2
+🔎 CONTRÔLÉ : OK — même choc contre le camion : la police est à 25 m à t+25 s, 14 m à t+30 s ; « 🚚 Une dépanneuse a été appelée » à t+30 s ; « 🚓 Constat : 25 🪙 d'amende, tu n'en paies que 12 — le reste est effacé » à t+35 s, porte-monnaie 25 → 13 ; la voiture est libérée à t+40 s (`c6-pc.log` `c35`). La dépanneuse, elle, reste à 198 m pendant les 55 s observées.
 - **Gravité** : GRAVE (fonction promise au round 67 : accidents, constat, dépanneuse)
 - **Reproduire** : voiture du parking, se poser en (30,6, −63) cap nord, R2 : on tape le camion garé du Parking du Sud (30,6, −85) à 62 km/h.
 - **On voit** : « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive » ; pendant 25 s rien ne vient : la voiture de police reste à 160 m (`pc.constat = true` à 164 m, `debarque = false`), la dépanneuse annoncée « 🚚 Une dépanneuse a été appelée (service payant) » garde `etat = null` et ne bouge pas de 54 m ; puis « 🚓 Constat : 25 🪙 d'amende — payé » : le portefeuille passe de 25 à **0**. La voiture reste bloquée 30 s, même si on la déplace (l'état `accidente` la suit jusqu'au milieu de la pelouse du Parc).
@@ -131,6 +132,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 42. Armes : ✕ puis L2 = arme RENGAINÉE, et R2 ne tire pas
 ✅ RÉPARÉ — `braquerVerrouille()` (L2) basculait l'arme comme ✕ : `if (P.drawn) drawWeapon(false)` ; arme sortie, L2 verrouille maintenant la cible la plus proche (« 🎯 Tom_le_ouf · 2 m »), R2 tire, seul ✕ range. Le « ciblesVerrouillables() = 0 » de ta sonde venait de l'arme rengainée par L2 — commit 0affff2
+🔎 CONTRÔLÉ : TOUJOURS CASSÉ (à moitié) — 2/2 (`c5-pc.log`, `c6-pc.log`) : ✕ sort l'arme, L2 ne la range plus (✔) et R2 tire (8 → 5 balles) ; MAIS L2 après ✕ ne verrouille rien : `P.lock = false`, message toujours « 🔫 Pistolet · clic pour tirer », et les 3 balles ratent un habitant planté à 4 m droit devant (100 PV). Cause : `pollGamepad` (l. 23299) n'appelle `braquerVerrouille()` que si `!P.drawn` — l'arme déjà sortie par ✕, L2 ne fait que `aimHeld`. Et → pendant la visée passe à « 🤚 Mains nues » (n° 50 toujours là), ce qui range l'arme.
 - **Gravité** : GRAVE (le plan de commandes annoncé — ✕ dégainer, L2 braquer, R2 tirer — ne marche pas dans cet ordre)
 - **Reproduire** : acheter le pistolet, ✕ (dégainer : « 🔫 Pistolet 8/8 »), puis L2 (braquer), puis R2.
 - **On voit** : L2 affiche « 🤚 Arme rangée dans l'étui » (les deux boutons BASCULENT l'arme : `braquerVerrouille()` rengaine si elle est déjà sortie), R2 ne tire pas (8/8, 0 tir), `ciblesVerrouillables() = 0` avec deux habitants à 10 m devant. Même chose avec le couteau : ✕ le sort, L2 le range, R2 ne plante rien.
@@ -491,3 +493,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : un cadre sombre de 390 px centré en bas : « EMPIRE URBAIN · 0/12 territoires · Centre-ville · objectif à 37 m · CARTE · M / PAVÉ PS5 », jamais effacé (il n'a pas de règle `body.tv`, ni de traduction manette : `#empireMapBtn` est un texte fixe l. 1110). Il se superpose aux chevrons de GPS et au message central quand ils descendent.
 - **On devrait voir** : rien de l'empire tant que l'enfant n'a pas ouvert la carte ; sinon un panneau qui grossit en TV et dit « Pavé tactile » à la manette.
 - **Capture** : `img/c1/c1-14s.png`, `img/c1/c1-14s-tv.png`.
+
+### 69. La première voiture du parking fonce dans le grillage du terrain de foot : R2 tout droit = 🔧 +21 % en 5 s
+- **Gravité** : GÊNANT (suite du n° 26 : la voiture part maintenant, mais la sortie du parking est un mur)
+- **Reproduire** : parking du centre (voitures en (−17,9…−8, 10), cap nord), △ pour monter, R2 à fond 5 s sans toucher au stick. Reproduit 2/2 (`c3` run 1 et run 2).
+- **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
+- **On devrait voir** : des places qui donnent sur la rue (cap est ou ouest, ou une sortie marquée) et une accélération plus douce sur les premiers mètres.
+- **Sonde** : `c3-pc.log` `c26.gaz5s = {depl: 102.08, dmg: 20.87, spd: 27.12, cap: 1.08}`.

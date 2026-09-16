@@ -1,0 +1,10 @@
+PASS Catalogues : identifiants uniques, 14 véhicules achetables et puissances distinctes
+PASS Questions : identifiants uniques, réponses présentes et choix sans doublon
+PASS Questions : prochaine question exclut les réponses déjà récompensées
+PASS Sauvegarde urbaine : bornes, catalogue et noms contrôlés
+PASS Persistance : vêtements achetés, compte et véhicules conservés
+PASS Échecs : 20 coups initiaux et déplacement illégal refusé
+PASS Échecs : le roi ne peut rester en échec
+PASS Dames : prises obligatoires et capture retirée
+PASS Poker : couleur, paire et quinte flush distinguées
+9 tests réussis.

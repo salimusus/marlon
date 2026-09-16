@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "date": "2026-09-12T22:29:05.634Z",
+  "scope": "Couleurs de l’explosion après collision réelle au clavier",
+  "red": 29,
+  "blue": 15,
+  "observedSRGB": {
+    "blue": "006bfe",
+    "red": "fe3000"
+  },
+  "expectedSRGB": {
+    "red": "ff3000",
+    "blue": "006bff"
+  },
+  "tolerancePerRGBChannel": 1,
+  "reason": "Arrondi de la conversion colorimétrique aller-retour dans Three.js r128",
+  "toneMapped": false,
+  "explosions": 1,
+  "errors": [],
+  "environment": "Chromium / SwiftShader, simulation fixe contrôlée"
+}

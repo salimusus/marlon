@@ -1,0 +1,9 @@
+PASS IK : longueurs de segments constantes et cible atteinte
+PASS IK : cible trop proche ou hors de portée sans NaN ni hyperextension
+PASS Départ et arrêt : amplitude progressive sans remise à zéro du cycle
+PASS Visée et rechargement conservent le cycle des jambes
+PASS Saut : réception émise une seule fois et amortissement terminé
+PASS Gestes prioritaires : conduite, réanimation et chute
+PASS Contacts de pas associés au mouvement, aucun pas au repos
+PASS Toutes les poses produisent des transformations finies à 30/60/120 Hz
+8 tests réussis.

@@ -1,0 +1,10 @@
+PASS Campagne : mission, attaque, équipier blessé et véhicules restaurés
+PASS Copie de secours utilisée après corruption du fichier principal
+PASS Fichier exporté altéré : rejet sans modifier la campagne
+PASS Migration v2 : portefeuille zéro, équipiers et conquêtes conservés
+PASS Échec de stockage : sauvegarde précédente conservée
+PASS Import invalide : mission inconnue, secteur incorrect et taille rejetés
+PASS Navigation : détour autour d’un bâtiment et segments libres
+PASS Navigation : diagonales ne traversent pas un angle fermé
+PASS Navigation : destination inaccessible ne provoque ni boucle ni téléportation
+9 tests réussis.

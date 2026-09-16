@@ -2,7 +2,7 @@
 // Ouvre le jeu dans un vrai Chromium, joue quelques secondes et prend des captures.
 // three.js est servi en local (le CDN n'est pas joignable depuis cet environnement).
 const fs = require('fs'), path = require('path'), http = require('http');
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('./runtime').playwright;
 
 const ROOT = path.join(__dirname, '..');
 const OUT = process.env.SHOT_DIR || path.join(ROOT, 'shots');
@@ -201,6 +201,7 @@ window.__SHOT = {
           guerre.palier = 1; guerre.morts = []; guerre.gagne = false; guerre.detruits = 0;
           guerre.territoires = {}; guerre.saison = 1; guerre.debut = 0;
           guerre.sauve = null; guerre.sauveRecrues = []; guerre.sauvePerf = [];
+          guerre.vu = false;   // l'ecran 🚩 n'a pas encore ete ouvert : la ville se tait sur les gangs
         }
         // LA PERFORMANCE DU JOUEUR. Elle decide des degats au corps a corps, de la resistance
         // et de la reussite des coups : un test qui passe par la salle de sport ou le stand de
@@ -825,6 +826,7 @@ window.__SHOT = {
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
 };
 window.__G = {
+  empire, empireTick, EMPIRE_LINKS, EMPIRE_OPERATIONS, empireCanExpand, empireFortify, empireStartOperation, empireEndOperation, empireResolveAttack, restoreEmpire, releaseGamepad, empireMapSvg,
   P, city, drive, police, jail, bank, mission, net, race, gym, cam, settings, me, bots, RALLY, tm, shared, ballMats, owned,
   updateBot, tennisMatchTick, policeTick, worldGroup, THREE,
   fm: typeof fm !== 'undefined' ? fm : null,
@@ -2057,16 +2059,30 @@ window.__G = {
   agentTire: typeof agentTire === 'function' ? agentTire : null,
   policeRepli: typeof policeRepli === 'function' ? policeRepli : null,
   punch: typeof punch === 'function' ? punch : null,
+  // ---- poste REPARATEUR (round 70, BUGS.md du Joueur) : ajoute tes exports SOUS cette ligne ----
+  updateAct: typeof updateAct === 'function' ? updateAct : null,
+  resolveVehicleOverlap: typeof resolveVehicleOverlap === 'function' ? resolveVehicleOverlap : null,
+  policeTire: typeof policeTire === 'function' ? policeTire : null, ecraseAuSol: typeof ecraseAuSol === 'function' ? ecraseAuSol : null,
+  infraction: typeof infraction === 'function' ? infraction : null, get police() { return typeof police !== 'undefined' ? police : null; },
+  tunable: typeof tunable === 'function' ? tunable : null, tunePrix: typeof tunePrix === 'function' ? tunePrix : null,
+  get atelierBrouillon() { return typeof atelierBrouillon !== 'undefined' ? atelierBrouillon : null; }, set atelierBrouillon(v) { atelierBrouillon = v; },
+  get dead() { return typeof dead !== 'undefined' ? dead : null; }, get deaths() { return typeof deaths !== 'undefined' ? deaths : null; },
+  joueurDansLaGuerre: typeof joueurDansLaGuerre === 'function' ? joueurDansLaGuerre : null,
+  bienvenueVille: typeof bienvenueVille === 'function' ? bienvenueVille : null,
+  navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
+  navValide: typeof navValide === 'function' ? navValide : null,
+  updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
 };
 `;
 
 function serve(htmlFile) {
   const html = fs.readFileSync(htmlFile, 'utf8')
     .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/r128\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
-    .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/, '')
+    .replace(/<script(?: defer)? src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/, '')
     .replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/, '')
+    .replace(/<script src="\.\/vendor\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
     .replace(/\nloop\(\);/, '\nloop();\n' + HOOK);
-  const three = fs.readFileSync(path.join(__dirname, 'vendor', 'three.min.js'));
+  const three = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'three.min.js'));
   const srv = http.createServer((req, res) => {
     if (req.url.startsWith('/three.min.js')) { res.writeHead(200, { 'Content-Type': 'application/javascript' }); res.end(three); }
     else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); }
@@ -2074,10 +2090,12 @@ function serve(htmlFile) {
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }
 
+module.exports = { HOOK };
+if (require.main === module) {
 (async () => {
   const file = process.argv[2] || path.join(ROOT, 'index.html');
   const { srv, port } = await serve(file);
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined,
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage'] });
   // Le mode television doit etre juge dans la vraie definition d'un televiseur : les regles
   // CSS du mode TV dependent de la largeur de la fenetre (vw), donc une capture prise en
@@ -2107,3 +2125,5 @@ function serve(htmlFile) {
   await browser.close(); srv.close();
   console.log('captures dans', OUT);
 })().catch(e => { console.error(e.message || e); process.exit(1); });
+
+}

@@ -3,7 +3,7 @@
 // se croisent (manger + changer de monde, conduire + changer de monde, fenêtres,
 // prison, missions…) et signale toute erreur de console ou état resté coincé.
 const fs=require('fs'), path=require('path'), http=require('http');
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('./runtime').playwright;
 const ROOT=path.join(__dirname,'..');
 const shot=fs.readFileSync(path.join(__dirname,'shot.js'),'utf8');
 const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
@@ -11,10 +11,11 @@ const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
 function serve(file){
   const html=fs.readFileSync(file,'utf8')
     .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/r128\/three\.min\.js"><\/script>/,'<script src="/three.min.js"></script>')
-    .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
+    .replace(/<script(?: defer)? src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
     .replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/,'')
+    .replace(/<script src="\.\/vendor\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
     .replace(/\nloop\(\);/, '\nloop();\n'+HOOK);
-  const three=fs.readFileSync(path.join(__dirname,'vendor','three.min.js'));
+  const three=fs.readFileSync(path.join(__dirname,'..','vendor','three.min.js'));
   const srv=http.createServer((q,r)=>{ if(q.url.startsWith('/three')){r.writeHead(200,{'Content-Type':'application/javascript'});r.end(three);}
     else {r.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});r.end(html);} });
   return new Promise(res=>srv.listen(0,'127.0.0.1',()=>res({srv,port:srv.address().port})));
@@ -5762,9 +5763,10 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
 (async()=>{
   const file=process.argv[2]||path.join(ROOT,'index.html');
   const {srv,port}=await serve(file);
-  const browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || undefined,
     args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage({viewport:{width:1024,height:640}});
+  if (process.env.TEST_QUALITY) await page.addInitScript(q => localStorage.setItem('superobby.quality', q), process.env.TEST_QUALITY);
   const errors=[];
   page.on('console',m=>{ if(m.type()==='error') errors.push(m.text()); });
   page.on('pageerror',e=>errors.push('PAGEERROR: '+e.message));
@@ -10851,7 +10853,7 @@ test('un accident immobilise les deux véhicules, la police vient constater, et 
     && r.bloque.v < 0.01 && r.bloque.dep < 0.05
     && r.paye.vuPolice && r.paye.vuConstat && r.paye.etat === 'fini' && r.paye.paye === true
     && r.paye.amende >= 20 && r.paye.amende <= 30 && r.paye.wallet === 500 - r.paye.amende
-    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 2;   // (Joueur, n° 35 : jamais plus de la moitie du porte-monnaie)
   return { ok, detail: `deux véhicules qui se percutaient rebondissaient et repartaient comme si de rien n'était · c'est maintenant un ACCIDENT : les deux s'immobilisent et RESTENT immobiles — une seconde de plein gaz les fait bouger de ${r.bloque.dep} m, vitesse ${r.bloque.v} — une voiture de police part sur le lieu (${r.juste.dpc} m au départ, arrivée ${r.paye.vuPolice}), fait le constat (${r.paye.vuConstat}) et le responsable paie ${r.paye.amende} 🪙 : portefeuille 500 → ${r.paye.wallet} · L'AMENDE N'ENVOIE PLUS EN PRISON (elle était de 60 à 100 🪙 et, faute d'argent, la partie s'arrêtait en cellule) : avec 3 🪙 en poche, on paie ce qu'on a et le reste est effacé — payé=${r.fauche.paye}, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}, portefeuille ${r.fauche.wallet}` };
 });
 
@@ -13005,7 +13007,7 @@ test('un petit accrochage ne dérange personne : pas de police, pas de dépanneu
     && r.gros.accident && r.gros.bloque && r.gros.police
     && r.riche.etat === 'fini' && r.riche.dep && r.riche.amende >= 20 && r.riche.amende <= 30
     && r.riche.paye === true && r.riche.prison === false && r.riche.jail === false && r.riche.wallet === 500 - r.riche.amende
-    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 0;
+    && r.fauche.etat === 'fini' && r.fauche.paye === false && r.fauche.prison === false && r.fauche.jail === false && r.fauche.wallet === 1;   // (Joueur, n° 35 : jamais plus de la moitie du porte-monnaie)
   return { ok, detail: `se garer en touchant le pare-chocs du voisin à 1,3 m/s immobilisait DÉFINITIVEMENT les deux véhicules, faisait venir une voiture de police et une dépanneuse, et coûtait 60 à 100 🪙 — sans le sou, c'était la prison · il y a maintenant un SEUIL DE GRAVITÉ, lu dans la table de dégâts déjà partagée du jeu (${r.seuil.table}) : au-dessous de ${r.seuil.vitesse} m/s d'impact (gravité < ${r.seuil.gravite}) c'est un petit dégât, on repart — ${r.petits.map(q => q.v + ' m/s : ' + (q.accident ? 'ACCIDENT' : 'rien')).join(', ')} · au-dessus, l'accident complet : immobilisation, police (${r.gros.police}), dépanneuse (${r.riche.dep}) et amende de ${r.riche.amende} 🪙 (base ${r.base} 🪙 + 1 par tranche de 4 m/s), soit ${(r.riche.amende / r.repere.boulot).toFixed(1)} petit boulot et ${(100 * r.riche.amende / r.repere.coffre).toFixed(0)} % d'un coffre : portefeuille 500 → ${r.riche.wallet} · et PLUS JAMAIS LA PRISON : avec 2 🪙 en poche on paie 2 🪙, il reste ${r.fauche.reste} 🪙 effacés, prison=${r.fauche.prison}, jail.on=${r.fauche.jail}` };
 });
 
@@ -15045,4 +15047,398 @@ test('une plateforme mobile reste dans la grille des solides pendant toute sa co
   const total = r.mondes.reduce((a, m) => a + m.absentes + m.pires, 0);
   const ok = r.mondes.length === 4 && r.mondes.every(m => m.plateformes > 0) && total === 0;
   return { ok, detail: `la grille spatiale rangeait les plateformes va-et-vient dans une case FIXE, périmée jusqu'à une seconde : elles en sortaient et le sol s'évanouissait sous les pieds · ${total} image(s) où la grille ne rend pas la plateforme là où elle est — ${r.mondes.map(m => `monde ${m.monde} : ${m.plateformes} plateforme(s), course ${m.course} m, ${m.absentes} absente(s) au centre et ${m.pires} au bord sur ${m.images} images`).join(' · ')}` };
+});
+
+test('une partie neuve dit « Bienvenue en ville » et non « Partie rechargée : 25 🪙 »', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const lire = () => (document.getElementById('msg').textContent || '').trim();
+    // profil vierge : aucune cle de porte-monnaie, aucun achat, aucun homme
+    const sauve = localStorage.getItem('superobby.wallet');
+    localStorage.removeItem('superobby.wallet');
+    const r1 = G.rechargeTout(); await dodo(1300); const neuve = lire();
+    // partie vraiment sauvegardee : la cle existe
+    localStorage.setItem('superobby.wallet', '25');
+    const r2 = G.rechargeTout(); await dodo(1300); const rechargee = lire();
+    if (sauve != null) localStorage.setItem('superobby.wallet', sauve);
+    return { neuve, rechargee, r1: r1.neuve, r2: r2.neuve };
+  });
+  const ok = /^👋 Bienvenue en ville/.test(r.neuve) && !/rechargée/.test(r.neuve) && /^💾 Partie rechargée : 25 🪙/.test(r.rechargee) && r.r1 === true && r.r2 === false;
+  return { ok, detail: `profil vierge : « ${r.neuve} » · sauvegarde : « ${r.rechargee} »` };
+});
+
+test('la pastille ne parle pas de la guerre des gangs à un joueur qui n\'y est pas entré, et se rend au lieu quand il sort du quartier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const act = () => (document.getElementById('act').textContent || '').trim();
+    const t = G.territoireDe(0, 3.5);
+    // partie neuve : ecran 🚩 jamais ouvert, pas de respect, personne dans le gang
+    G.guerre.vu = false; G.gang.rep = 0; G.gang.membres.length = 0; G.gang.membresLibres = [];
+    G.gang.capture = null; G.updateAct();
+    const avant = act();
+    for (let i = 0; i < 20; i++) { G.step(1 / 60, true); G.captureTick(1); }
+    const neuve = act();
+    // le joueur ouvre l'ecran de la guerre : le conseil a maintenant un sens
+    G.guerre.vu = true; G.gang.capture = null;
+    for (let i = 0; i < 20; i++) { G.step(1 / 60, true); G.captureTick(1); }
+    const engage = act();
+    // il sort du quartier (on le lui donne) : la pastille redevient l'action du lieu
+    if (t) G.guerre.territoires[t.k] = 'joueur';
+    G.captureTick(1);
+    const sorti = act();
+    return { terr: t && t.k, maitre: t && G.proprio(t.k), avant, neuve, engage, sorti };
+  });
+  const gang = /🚩 Il te faut|🚩 Chasse/;
+  const ok = !!r.terr && !gang.test(r.neuve) && r.neuve === r.avant && gang.test(r.engage) && !gang.test(r.sorti);
+  return { ok, detail: `apparition dans « ${r.terr} » (tenu par ${r.maitre}) · partie neuve : « ${r.neuve} » (avant : « ${r.avant} ») · écran 🚩 ouvert : « ${r.engage} » · quartier quitté : « ${r.sorti} »` };
+});
+
+test('à pied, on ne tombe plus dans le vide au bord de la ville : les quatre bords arrêtent le joueur', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, M = G.MONDE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const bords = [];
+    // (départ à 1,5 m du bord, cap vers le bord, 4 s de marche : 6 m/s × 4 s = bien au-delà)
+    for (const [nom, x, z, cap] of [['nord', 0, M.z1 + 1.5, Math.PI], ['sud', 0, M.z2 - 1.5, 0], ['est', M.x2 - 1.5, 75, Math.PI / 2], ['ouest', M.x1 + 1.5, 75, -Math.PI / 2]]) {
+      __SHOT.go({ world: 4, x, y: 1, z, hour: 12 });
+      P.facing = cap; G.settings.ctrl = 'rot'; G.keys.add('KeyZ');
+      let yMin = 9, morts0 = G.deaths;
+      for (let i = 0; i < 240; i++) { G.step(1 / 60, true); yMin = Math.min(yMin, P.pos.y); }
+      G.keys.delete('KeyZ');
+      bords.push({ nom, x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), yMin: +yMin.toFixed(2), morts: G.deaths - morts0, dedans: P.pos.x >= M.x1 - 0.5 && P.pos.x <= M.x2 + 0.5 && P.pos.z >= M.z1 - 0.5 && P.pos.z <= M.z2 + 0.5 });
+    }
+    return { bords };
+  });
+  const ok = r.bords.length === 4 && r.bords.every(b => b.dedans && b.yMin > -0.5 && b.morts === 0);
+  return { ok, detail: `le mur invisible était posé 1,5 m DEHORS du plateau : on tombait dans le fossé puis sous le mur (y −100, 💀 +1) · ` + r.bords.map(b => `${b.nom} : (${b.x}, ${b.z}) y min ${b.yMin} morts ${b.morts}`).join(' · ') };
+});
+
+test('dedans, le stick droit ne cache plus le personnage derrière une cloison : école, banque, commissariat, hôpital', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, out = {};
+    const ray = new THREE.Raycaster();
+    for (const [nom, x, z] of [['école', -69, 213], ['banque', -57, 70], ['commissariat', -54, 30], ['hôpital', 14, 212]]) {
+      __SHOT.go({ world: 4, x, y: 1, z, hour: 12, frais: nom === 'école' });
+      G.P.facing = Math.PI; G.settings.ctrl = 'rot';
+      const res = [];
+      for (let k = 0; k < 8; k++) {
+        G.cam.yaw = k * Math.PI / 4; G.cam.freeUntil = 1e9;
+        // 60 images : la perche se place, la maison de poupée efface ce que la caméra traverse
+        for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.interieurTick(); G.camPerche(1 / 60, false); }
+        const c = G.camera.position, tete = new THREE.Vector3(G.P.pos.x, G.P.pos.y + 1.5, G.P.pos.z);
+        const dir = tete.clone().sub(c), dist = dir.length(); dir.normalize(); ray.set(c, dir); ray.far = dist - 0.3;
+        const meshes = []; G.scene.traverse(o => { if (o.isMesh && o.visible && o.geometry && !o.isSprite && !(o.parent === G.me.group)) meshes.push(o); });
+        // ce qui coupe la ligne de vue caméra → tête ET reste opaque (> 50 %)
+        const opaques = ray.intersectObjects(meshes, false).filter(h => [].concat(h.object.material).some(m => !m.transparent || m.opacity > 0.5));
+        res.push({ yaw: +G.cam.yaw.toFixed(2), bouche: opaques.length, taille: opaques[0] ? opaques[0].object.scale.toArray().map(v => +v.toFixed(1)).join('×') : '' });
+      }
+      out[nom] = { dedans: !!G.interieur.rect, bouches: res.filter(q => q.bouche).map(q => `${q.yaw} (${q.taille})`) };
+    }
+    return out;
+  });
+  const noms = Object.keys(r);
+  const ok = noms.length === 4 && noms.every(n => r[n].dedans && r[n].bouches.length === 0);
+  return { ok, detail: `la cloison traversée ne s'effaçait que caméra DEHORS du bâtiment (dans l'école, une cloison de classe 0,3×4,2×9 restait pleine à 1,9 m de l'objectif), et l'hôpital n'était pas un intérieur · ` + noms.map(n => `${n} : intérieur ${r[n].dedans}, angles bouchés [${r[n].bouches.join(', ')}]`).join(' · ') };
+});
+
+test('le commissariat a un intérieur : murs peints dedans (pas la façade vitrée), et un agent derrière le guichet des plaintes', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 30, hour: 12, frais: true });
+    const sx = G.police.station.x, sz = G.police.station.z;
+    // les murs de la coque (16 × 10 m, 3,8 m de haut) : leur face intérieure est peinte
+    const murs = G.solids.filter(o => o.mesh && Math.abs(o.h - 3.8) < 0.01 && Math.abs(o.x - sx) < 8.5 && Math.abs(o.z - sz) < 5.5 && (o.w > 2 || o.d > 2));
+    const peints = murs.filter(o => Array.isArray(o.mesh.material) && o.mesh.material.some(m => !m.map && m.color && m.color.getHex() === 0xece6d8));
+    const vitresDedans = murs.filter(o => { const ms = [].concat(o.mesh.material); const nord = o.z < sz, ouest = o.x < sx, alongX = o.w > o.d;
+      const idx = alongX ? (nord ? 4 : 5) : (ouest ? 0 : 1); return !!(ms[idx] && ms[idx].map); }).length;
+    const a = G.police.accueil;
+    const agent = a ? { x: +a.group.position.x.toFixed(1), z: +a.group.position.z.toFixed(1), y: +a.group.position.y.toFixed(2), dedans: Math.abs(a.group.position.x - sx) < 8 && Math.abs(a.group.position.z - sz) < 5, visible: a.group.visible, nom: a.name } : null;
+    return { murs: murs.length, peints: peints.length, vitresDedans, agent, guichet: [sx + 2.6, sz - 2.6] };
+  });
+  const ok = r.murs >= 4 && r.peints === r.murs && r.vitresDedans === 0 && !!r.agent && r.agent.dedans && r.agent.visible && Math.abs(r.agent.x - r.guichet[0]) < 0.5 && r.agent.z < r.guichet[1];
+  return { ok, detail: `la façade (texture de fenêtres) couvrait les six faces des murs : on la voyait de l'intérieur, et le guichet « PLAINTES » n'avait personne · ${r.murs} murs dont ${r.peints} peints dedans, ${r.vitresDedans} avec la vitrine côté pièce · agent ${r.agent ? `« ${r.agent.nom} » en (${r.agent.x}, ${r.agent.z}) y ${r.agent.y}, derrière le guichet (${r.guichet.join(', ')})` : 'absent'}` };
+});
+
+test('accueil à la manette : la bague est sur « Jouer » dès que la manette parle, ✕ lance, et « Jouer » tient dans l\'écran', async p => {
+  const vp = p.viewportSize(); await p.setViewportSize({ width: 1280, height: 720 });   // l'ecran du PC du joueur
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
+    const st = document.getElementById('start'), play = document.getElementById('play');
+    const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.tagName) : null; };
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); };
+    const res = {};
+    try {
+      // l'ecran d'accueil, sans aucune bague, et une manette qu'on branche
+      st.classList.remove('hidden'); document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+      st.scrollTop = 0; await dodo(60);
+      const rp = play.getBoundingClientRect();   // AVANT toute bague (elle ferait defiler jusqu'au bouton)
+      G.manetteSalon.i = -1; G.pollGamepad(0.05);
+      res.bagueAuBranchement = focus();
+      res.jouerVisible = rp.bottom <= window.innerHeight && rp.top >= 0 && rp.height > 10;
+      res.ecran = [window.innerWidth, window.innerHeight];
+      res.details = document.querySelector('.keysWrap'); res.replie = !!res.details && !res.details.open; res.details = !!res.details;
+      // ✕ sans bague : elle se pose sur « Jouer »
+      document.querySelectorAll('.focustv').forEach(e => e.classList.remove('focustv'));
+      tap(0); res.bagueApresX = focus();
+      // ✕ encore : « Jouer » est lance, l'accueil disparait
+      tap(0); await dodo(80);
+      res.accueilCache = st.classList.contains('hidden');
+    } finally { navigator.getGamepads = vrai; st.classList.add('hidden'); }
+    return res;
+  });
+  if (vp) await p.setViewportSize(vp);
+  const ok = r.bagueAuBranchement === 'play' && r.jouerVisible && r.details && r.replie && r.bagueApresX === 'play' && r.accueilCache;
+  return { ok, detail: `l'accueil n'est pas ouvert par openUI() : aucune bague, ✕ ne faisait rien, et « Jouer » était sous le bord de l'écran (carte de 900 px) · bague au branchement=${r.bagueAuBranchement} · Jouer visible=${r.jouerVisible} (${r.ecran.join('×')}) · mode d'emploi replié=${r.replie} · ✕ sans bague → ${r.bagueApresX} · ✕ → accueil caché=${r.accueilCache}` };
+});
+
+test('sur l\'accueil, aucun habitant ne colle plus l\'objectif : la caméra du salon recule à 9 m', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12, frais: true });
+    G.bots.forEach((b, k) => G.resetBot(b, 99));   // la foule de l'accueil, rangee comme au chargement
+    const mesure = () => {
+      let dmin = 99; for (const b of G.bots) dmin = Math.min(dmin, Math.hypot(b.pos.x - G.camera.position.x, b.pos.y + 1.6 - G.camera.position.y, b.pos.z - G.camera.position.z));
+      const v = G.me.group.position.clone(); v.y += 1; v.project(G.camera);
+      return { dmin: +dmin.toFixed(2), dist: +G.cam.dist.toFixed(2), joueurDansLeCadre: Math.abs(v.x) < 1 && Math.abs(v.y) < 1 };
+    };
+    // l'accueil : running = false, et camPerche se met en place en quelques images
+    G.running = false; G.cam.dist = 5.2;
+    for (let i = 0; i < 240; i++) G.camPerche(1 / 60, false);
+    const accueil = mesure();
+    G.running = true;
+    return { accueil, bots: G.bots.length };
+  });
+  const ok = r.accueil.dmin >= 4 && r.accueil.dist >= 8.5 && r.accueil.joueurDansLeCadre;
+  return { ok, detail: `à 5,2 m presque à plat, le dernier rang de la foule (z = 6,9) passait à un mètre de la caméra · maintenant perche ${r.accueil.dist} m, habitant le plus proche à ${r.accueil.dmin} m, joueur dans le cadre=${r.accueil.joueurDansLeCadre}` };
+});
+
+test('au garage, « Valider » ne plante plus et ne prend pas l\'argent pour rien : la dépanneuse n\'est jamais la cible, une vraie voiture est repeinte et équipée', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -53.5, y: 1, z: 99, hour: 12, frais: true });
+    const d0 = G.city.tuneDesk;
+    const pose = (c, x, z) => { c.x = x; c.z = z; c.g.position.set(x, c.g.position.y, z); if (c.solid) { c.solid.x = x; c.solid.z = z; } };
+    // on eloigne toutes les voitures preparables, on colle un vehicule SANS carrosserie ni vitres (camion,
+    // depanneuse…) tout pres du comptoir : c'est lui que l'ancien tuneCible() choisissait
+    const voitures = G.city.cars.filter(c => G.tunable(c)), autres = G.city.cars.filter(c => !G.tunable(c) && !c.rider && !c.kart && c.g);
+    voitures.forEach((c, i) => pose(c, d0.x + 60 + i * 5, d0.z + 60));
+    const camion = autres[0]; pose(camion, d0.x + 3, d0.z + 4);
+    const cibleSansVoiture = G.tuneCible();
+    // « Valider » sans voiture : rien de paye, pas de plantage
+    G.wallet = 400; G.openAtelier(); G.atelierBrouillon = Object.assign(G.atelierBrouillon, { finition: 'fluo', kits: ['jupes'], couleur: 0x22cc44 });
+    let erreur = null; try { G.validerAtelier(); } catch (e) { erreur = String(e.message || e); }
+    const walletSansVoiture = G.wallet; G.closeUI();
+    // une vraie voiture devant le comptoir : elle passe a l'atelier
+    const auto = voitures[0]; pose(auto, d0.x + 2, d0.z + 5); const couleur0 = auto.color;
+    const cible = G.tuneCible();
+    G.openAtelier(); G.atelierBrouillon = Object.assign(G.atelierBrouillon, { finition: 'fluo', kits: ['jupes'], couleur: 0x22cc44 });
+    const prix = G.tunePrix(G.atelierBrouillon);
+    try { G.validerAtelier(); } catch (e) { erreur = String(e.message || e); }
+    return { cibleSansVoiture: cibleSansVoiture ? (cibleSansVoiture.kind || 'voiture') : null, camion: camion && camion.kind, walletSansVoiture, erreur,
+      cible: cible === auto, prix, wallet: G.wallet, couleur: auto.color, couleur0, jupes: (auto.tuneMesh || []).length, fluo: auto.bodyMat.emissive.getHex() > 0, ferme: G.uiOpen == null };
+  });
+  const ok = r.cibleSansVoiture === null && r.walletSansVoiture === 400 && !r.erreur && r.cible && r.prix > 0 && r.wallet === 400 - r.prix && r.couleur === 0x22cc44 && r.jupes >= 2 && r.fluo && r.ferme;
+  return { ok, detail: `tuneCible() prenait le véhicule le plus proche quel qu'il soit (ici « ${r.camion || 'véhicule spécial'} ») et tuneApply lisait c.parts.ws → plantage APRÈS encaissement · sans voiture : cible=${r.cibleSansVoiture}, portefeuille ${r.walletSansVoiture} (rien payé), erreur=${r.erreur} · avec voiture : cible ok=${r.cible}, ${r.prix} 🪙 payés (reste ${r.wallet}), couleur ${r.couleur0} → ${r.couleur}, ${r.jupes} pièces de kit, fluo=${r.fluo}, fenêtre fermée=${r.ferme}` };
+});
+
+test('les voitures du parking du centre regardent la rue et partent au premier R2, sans rien défoncer', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const autos = G.city.cars.filter(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14);
+    const res = [];
+    for (const c of autos) {
+      // ce qui se trouve dans l'emprise de la voiture et sur 3 m devant elle (vers la rue) : rien de solide
+      const fx = Math.sin(c.h), fz = Math.cos(c.h);
+      const genes = G.solids.filter(o => o !== c.solid && !o.veh && o.mesh && o.y + o.h / 2 >= 0.56   // (sous 0,56 m, une voiture passe dessus : c'est la regle de carBlocked)
+        && Math.abs(o.x - (c.x + fx * 1.5)) < 1.4 + o.w / 2 && Math.abs(o.z - (c.z + fz * 1.5)) < 3.8 + o.d / 2).length;
+      P.pos.set(c.x, c.y + 0.4, c.z); G.enterCar(c);
+      const x0 = c.x, z0 = c.z, dmg0 = c.dmg || 0;
+      // on accelere jusqu'a la rue (z < 2), au plus 4 s ; on ne traverse pas la rue pour aller taper le grillage d'en face
+      let zMin = c.z;
+      G.keys.add('KeyZ'); for (let i = 0; i < 240 && c.z > 6; i++) { G.step(1 / 60, true); zMin = Math.min(zMin, c.z); } G.keys.delete('KeyZ');
+      G.keys.add('KeyS'); for (let i = 0; i < 90; i++) G.step(1 / 60, true); G.keys.delete('KeyS');   // et on freine avant la rue (a 16 m/s on traverserait jusqu'au grillage d'en face)
+      const parcouru = z0 - zMin;
+      res.push({ x: +x0.toFixed(1), z: +z0.toFixed(1), cap: +c.h.toFixed(2), genes, parcouru: +parcouru.toFixed(1), versLaRue: zMin < z0 - 3, degats: +((c.dmg || 0) - dmg0).toFixed(2), y: +c.y.toFixed(2) });
+      G.exitCar(); for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    }
+    return { n: autos.length, res };
+  });
+  const ok = r.n === 4 && r.res.every(q => q.genes === 0 && q.parcouru > 3 && q.versLaRue && q.degats < 1 && q.y < 0.5);
+  return { ok, detail: `elles étaient garées cap au sud, le nez sur les bancs et la terrasse du snack (posés à z = 13,5, DANS le parking) : R2 = 2 m/s et 10 % de dégâts · ` + r.res.map(q => `(${q.x}, ${q.z}) cap ${q.cap} : ${q.genes} obstacle, ${q.parcouru} m vers la rue=${q.versLaRue}, dégâts +${q.degats}, y ${q.y}`).join(' · ') };
+});
+
+test('écraser un passant : l\'ambulance vient pour le blessé, et la police arrête sans tirer (elle ne tire que pour un crime grave)', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, police = G.police;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.clearWanted('test'); police.crimeLevel = 0; police.riposte = 0; police.alarmT = 0;
+    const hud = () => (document.getElementById('wanted').textContent || '');
+    // trois passants ecrases (delit moyen, sans pitie : pas d'avertissement) : trois etoiles, mais PAS de coups de feu
+    for (const n of ['Tom', 'Lea', 'Zoe']) G.infraction('écraser ' + n, 1, 2, true);
+    const accident = { wanted: police.wanted, crime: police.crimeLevel, tire: G.policeTire(), hud: hud() };
+    // un crime grave (KO, arme) : la, oui
+    G.infraction('KO sur Tom', 1, 3, true);
+    const grave = { crime: police.crimeLevel, tire: G.policeTire(), hud: hud() };
+    G.clearWanted('test'); police.crimeLevel = 0;
+    // un passant renverse a 45 km/h (12 m/s) : il reste a terre et l'ambulance part
+    const b = G.bots.find(x => x.av.group.visible && !x.ko);
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    car.x = b.pos.x; car.z = b.pos.z; car.h = 0; car.g.position.set(car.x, car.y, car.z);
+    for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+    const touches = G.ecraseAuSol(car, { speed: 12 });
+    const amb = G.city.ambulances.find(a => a.victime === b);
+    return { accident, grave, touches, hp: b.hp, aTerre: b.ko > G.simTime + 20, ambulance: amb ? amb.etat : null };
+  });
+  const ok = r.accident.wanted === 3 && !r.accident.tire && !/tirent/.test(r.accident.hud) && r.grave.tire && r.touches >= 1 && r.hp > 0 && r.aTerre && r.ambulance === 'route';
+  return { ok, detail: `la police tirait dès deux étoiles (deux passants écrasés = ils tirent 40 s plus tard) et l'ambulance ne partait qu'à ❤️ 0 · accident ★${r.accident.wanted} : tire=${r.accident.tire}, « ${r.accident.hud.slice(0, 40)} » · crime grave : tire=${r.grave.tire} · passant renversé à 12 m/s : ❤️ ${r.hp}, reste à terre=${r.aTerre}, ambulance=${r.ambulance}` };
+});
+
+test('armes à la manette : ✕ sort l\'arme, L2 verrouille SANS la rengainer, R2 tire', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); if (P.drawn) G.drawWeapon(false); P.ammo = 8;
+    // un habitant devant le joueur (au nord, la camera derriere)
+    const b = G.bots.find(x => x.av.group.visible); b.pos.set(0, 0, -4); b.av.group.position.copy(b.pos); b.wait = 99; b.ko = 0;
+    P.facing = Math.PI; G.cam.yaw = 0; G.cam.freeUntil = 0;
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const tap = (i, v = 1) => { ds.buttons[i] = { pressed: true, value: v }; G.pollGamepad(0.05); G.step(1 / 60, true); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); G.step(1 / 60, true); };
+    const lire = () => (document.getElementById('msg').textContent || '').trim();
+    const res = {};
+    try {
+      tap(0); res.apresX = { drawn: !!P.drawn, msg: lire() };
+      tap(6); res.apresL2 = { drawn: !!P.drawn, lock: !!P.lock, cible: P.lock && P.lock.name, msg: lire() };
+      const ammo0 = P.ammo; P.fireCd = 0;
+      tap(7); res.apresR2 = { drawn: !!P.drawn, tirs: ammo0 - P.ammo };
+      tap(0); res.apresX2 = { drawn: !!P.drawn };
+    } finally { navigator.getGamepads = vrai; }
+    return res;
+  });
+  const ok = r.apresX.drawn && r.apresL2.drawn && !/rangée/.test(r.apresL2.msg) && r.apresL2.lock && r.apresR2.tirs >= 1 && !r.apresX2.drawn;
+  return { ok, detail: `L2 basculait l'arme comme ✕ : « ✕ puis L2 » = « 🤚 Arme rangée dans l'étui » et R2 ne tirait plus · ✕ → sortie=${r.apresX.drawn} · L2 → sortie=${r.apresL2.drawn}, cible verrouillée=${r.apresL2.lock} (${r.apresL2.cible}), message « ${r.apresL2.msg} » · R2 → ${r.apresR2.tirs} tir · ✕ → rangée=${!r.apresX2.drawn}` };
+});
+
+test('à mains nues, l\'habitant frappé tient tête (ou revient après trois secondes de fuite) : KO en une dizaine de coups', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av.group.visible); b.hp = 100; b.ko = 0; b.fight = null; b.garde = false;
+    const vrai = Math.random; Math.random = () => 0.9;   // le tirage tombe sur « fuite » : le cas qui rendait le combat impossible
+    const coups = []; let ko = false;
+    try {
+      for (let i = 0; i < 14 && !ko; i++) {
+        // le joueur se replace face a l'habitant (a 1,1 m, comme le Joueur) et frappe
+        P.pos.set(b.pos.x, b.pos.y, b.pos.z + 1.1); P.facing = Math.PI; P.vel.set(0, 0, 0); P.punchCd = 0; P.poingT = 0;
+        G.punch();
+        const hp0 = b.hp;
+        for (let k = 0; k < 40; k++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }   // 0,66 s entre deux coups
+        coups.push({ i, hp: +b.hp.toFixed(0), etat: b.fight, d: +Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z).toFixed(1) });
+        if (b.hp <= 0 || b.ko) ko = true;
+      }
+    } finally { Math.random = vrai; }
+    return { coups, ko, hp: +b.hp.toFixed(0), revenu: coups.some(c => c.etat === 'fight') };
+  });
+  const ok = r.ko && r.revenu && r.coups.length <= 14;
+  return { ok, detail: `un habitant sur deux détalait au premier coup et récupérait 100 ❤️ hors de vue (16 coups, jamais KO) · fuite tirée au sort → il revient se battre=${r.revenu}, KO en ${r.coups.length} coups (${r.coups.map(c => c.hp + (c.etat === 'flee' ? '↗' : '')).join(' ')})` };
+});
+
+test('l\'amende d\'un accident ne prend jamais plus de la moitié du porte-monnaie', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 30.6, y: 1, z: -66, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart), camion = G.city.cars.find(c => c.kind === 'truck');
+    const acc = { a: car, b: camion, joueur: true, force: 17, amende: 0 };
+    G.wallet = 25; G.regleAccident(acc); const pauvre = { amende: acc.amende, reste: G.wallet };
+    G.wallet = 400; const acc2 = { a: car, b: camion, joueur: true, force: 17, amende: 0 }; G.regleAccident(acc2); const riche = { amende: acc2.amende, reste: G.wallet };
+    return { pauvre, riche };
+  });
+  const ok = r.pauvre.amende >= 20 && r.pauvre.reste >= 12 && r.riche.reste === 400 - r.riche.amende;
+  return { ok, detail: `avec 25 🪙, un constat de ${r.pauvre.amende} 🪙 laissait 0 · il laisse maintenant ${r.pauvre.reste} 🪙 ; avec 400 🪙 on paie tout (${r.riche.amende}, reste ${r.riche.reste})` };
+});
+
+test('la circulation compte huit véhicules, tous sur la chaussée', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 + 0.6 && Math.abs(z - rt.z) < rt.d / 2 + 0.6);
+    const ai = G.city.aiCars.filter(c => c.spd);
+    let hors = 0, n = 0;
+    for (let t = 0; t < 40; t++) { for (let i = 0; i < 30; i++) G.step(1 / 30, true); for (const c of ai) { n++; if (!surRoute(c.x, c.z)) hors++; } }
+    return { total: ai.length, horsPct: Math.round(100 * hors / n) };
+  });
+  const ok = r.total >= 8 && r.horsPct <= 3;
+  return { ok, detail: `cinq véhicules seulement (la plus proche à 147 m) : ${r.total} maintenant, ${r.horsPct} % du temps hors chaussée sur 40 s` };
+});
+
+test('un choc frontal à 60 km/h contre un camion froisse le capot, secoue la caméra et abîme franchement les deux véhicules', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 30.6, y: 1, z: -66, hour: 12, frais: true });
+    const camion = G.city.cars.find(c => c.kind === 'truck' && Math.hypot(c.x - 30.6, c.z + 85) < 15);
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart);
+    // la voiture du joueur, cap au nord, le nez a 6 m du camion, lancee a 17 m/s (61 km/h)
+    car.x = camion.x; car.z = camion.z + 12; car.h = Math.PI; car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = car.h; G.vehicleSolid(car);
+    P.pos.set(car.x, car.y + 0.4, car.z); G.enterCar(car);
+    const dmg0 = car.dmg || 0, dmgC0 = camion.dmg || 0, hood0 = car.parts.hood ? car.parts.hood.rotation.x : 0;
+    G.cam.shake = 0; G.cam.kick = 0; G.city.accidents.length = 0;
+    G.drive.speed = 17; let shakeMax = 0, kickMax = 0, vMax = 0;
+    G.keys.add('KeyZ');
+    for (let i = 0; i < 120; i++) { G.step(1 / 60, true); shakeMax = Math.max(shakeMax, G.cam.shake || 0); kickMax = Math.max(kickMax, G.cam.kick || 0); vMax = Math.max(vMax, Math.abs(G.drive.speed)); }
+    G.keys.delete('KeyZ');
+    return { vMax: +vMax.toFixed(1), dmg: +((car.dmg || 0) - dmg0).toFixed(1), dmgCamion: +((camion.dmg || 0) - dmgC0).toFixed(1), stade: car.deg || 0, capot: car.parts.hood ? +(car.parts.hood.rotation.x - hood0).toFixed(2) : null, shake: +shakeMax.toFixed(2), kick: +kickMax.toFixed(3), accidents: G.city.accidents.length, dist: +Math.hypot(car.x - camion.x, car.z - camion.z).toFixed(1) };
+  });
+  const ok = r.vMax >= 12 && r.dmg >= 10 && r.dmgCamion >= 5 && r.stade >= 2 && r.capot !== null && r.capot < -0.2 && r.shake >= 0.15 && r.kick > 0 && r.accidents >= 1;
+  return { ok, detail: `avant : 3 % de dégâts, cam.kick 0, aucune marque · choc à ${r.vMax} m/s : dégâts +${r.dmg} % (camion +${r.dmgCamion}), stade ${r.stade}, capot ${r.capot} rad, secousse ${r.shake}, kick ${r.kick}, accident déclaré=${r.accidents >= 1}, distance finale ${r.dist} m` };
+});
+
+test('en ville, la foule du départ se tient sur les trottoirs, pas sur la chaussée, et se met en marche dans les secondes qui suivent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const surRoute = (x, z) => G.city.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 && Math.abs(z - rt.z) < rt.d / 2);
+    const surTrottoir = (x, z) => G.city.trottoirs.some(t => Math.abs(x - t.x) <= t.w / 2 && Math.abs(z - t.z) <= t.d / 2);
+    const depart = G.bots.map(b => ({ n: b.name, x: +b.pos.x.toFixed(1), z: +b.pos.z.toFixed(1), route: surRoute(b.pos.x, b.pos.z), trottoir: surTrottoir(b.pos.x, b.pos.z), d: +Math.hypot(b.pos.x, b.pos.z - 3.5).toFixed(1), attente: +b.wait.toFixed(1) }));
+    const p0 = G.bots.map(b => b.pos.clone());
+    for (let i = 0; i < 720; i++) { G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); }
+    const bouges = G.bots.filter((b, i) => b.pos.distanceTo(p0[i]) > 1).length;
+    return { depart, surRoute: depart.filter(b => b.route).length, surTrottoir: depart.filter(b => b.trottoir).length, loin: depart.filter(b => b.d > 45).length, attenteMax: Math.max(...depart.map(b => b.attente)), bouges };
+  });
+  const ok = r.surRoute === 0 && r.surTrottoir >= 10 && r.loin === 0 && r.attenteMax <= 4.5 && r.bouges >= 6;
+  return { ok, detail: `douze habitants étaient rangés sur la grille de l'obby (ligne jaune de la rue), 2 à 60 s d'attente · maintenant ${r.surTrottoir}/12 sur un trottoir, ${r.surRoute} sur la chaussée, attente max ${r.attenteMax} s, ${r.bouges}/12 ont bougé de plus d'un mètre en 12 s` };
+});
+
+test('le tableau « Joueurs / Pts » ne s\'affiche pas en ville (solo) mais reste dans un parcours', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, vu = () => getComputedStyle(document.getElementById('lb')).display !== 'none';
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 }); G.updateLeaderboard(); const ville = vu();
+    __SHOT.go({ world: 0, x: 0, y: 1, z: 3, hour: 12 }); G.updateLeaderboard(); const obby = vu();
+    return { ville, obby };
+  });
+  const ok = !r.ville && r.obby;
+  return { ok, detail: `douze pseudos à 0 point couvraient un quart de l'écran TV · en ville : affiché=${r.ville} · dans un parcours : affiché=${r.obby}` };
+});
+
+test('en mode TV avec une DualSense branchée, la pastille ne réclame plus de scanner le code', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, b = document.getElementById('tvBadge');
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+    const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; const res = {};
+    try {
+      G.modeTV(true);
+      navigator.getGamepads = () => []; G.tvManettesMaj(); res.sans = b.textContent;
+      navigator.getGamepads = () => [ds]; G.tvManettesMaj(); res.avec = b.textContent; res.avecVisible = getComputedStyle(b).display !== 'none';
+    } finally { navigator.getGamepads = vrai; G.modeTV(false); G.closeUI(); }
+    return res;
+  });
+  const ok = /scanne/.test(r.sans) && !/scanne/.test(r.avec) && /PS5/.test(r.avec);
+  return { ok, detail: `sans manette : « ${r.sans} » · DualSense branchée : « ${r.avec} » (visible=${r.avecVisible}, elle s'efface au bout de 5 s)` };
 });

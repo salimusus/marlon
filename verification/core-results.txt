@@ -1,0 +1,14 @@
+PASS Bruit des sticks supprimé, amplitude radiale bornée
+PASS Avant et droite cohérents aux quatre orientations caméra
+PASS Pas de vitesse supplémentaire en diagonale
+PASS Le déplacement ne modifie pas le lacet de caméra
+PASS Collision à grande vitesse : aucun franchissement du mur
+PASS Glissement le long des murs
+PASS Rayon caméra : intersection, tangence et obstacle derrière
+PASS La conduite reste stable à 30, 60 et 120 Hz
+PASS L2 freine avant la marche arrière
+PASS Relâchement des gâchettes : véhicule ralentit
+PASS Conquête limitée aux frontières horizontales et verticales
+PASS Sauvegarde : zéro monétaire et progression conservés
+PASS Sauvegarde corrompue et ancienne version rejetées
+13 tests réussis.

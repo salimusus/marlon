@@ -1,0 +1,414 @@
+{
+  "date": "2026-09-12T22:22:54.473Z",
+  "checks": [
+    {
+      "name": "Démarrage par le bouton Jouer et monde initialisé",
+      "ok": true,
+      "ms": 241,
+      "details": {
+        "mode": "play",
+        "services": 20,
+        "cars": 34,
+        "npcs": 92,
+        "questions": 494
+      }
+    },
+    {
+      "name": "Clavier réel : déplacement ZQSD et arrêt sans dérive",
+      "ok": true,
+      "ms": 297,
+      "details": {
+        "moving": {
+          "x": -225,
+          "z": 246.64619892635136
+        },
+        "still": {
+          "x": -225,
+          "z": 246.50000008149
+        }
+      }
+    },
+    {
+      "name": "Clavier réel : saut au sol, atterrissage et santé conservée",
+      "ok": true,
+      "ms": 396,
+      "details": {
+        "air": 0.7883333333333333,
+        "y": 0,
+        "health": 100
+      }
+    },
+    {
+      "name": "Clavier réel : pause suspend la simulation et Échap reprend",
+      "ok": true,
+      "ms": 52
+    },
+    {
+      "name": "Manette simulée : déplacement dans quatre orientations et caméra indépendante",
+      "ok": true,
+      "ms": 639,
+      "details": {
+        "rows": [
+          {
+            "dx": 0,
+            "dz": -2.6091224310958694,
+            "yaw": 0,
+            "camera": 0
+          },
+          {
+            "dx": 2.6091224310958694,
+            "dz": 0,
+            "yaw": 1.5707963267948966,
+            "camera": 1.5707963267948966
+          },
+          {
+            "dx": 0,
+            "dz": 2.6091224310958694,
+            "yaw": 3.141592653589793,
+            "camera": 3.141592653589793
+          },
+          {
+            "dx": -2.6091224310958694,
+            "dz": 0,
+            "yaw": 4.71238898038469,
+            "camera": 4.71238898038469
+          }
+        ],
+        "isolated": true
+      }
+    },
+    {
+      "name": "Chute depuis 14 m : retour au sol sans mort ni téléportation",
+      "ok": true,
+      "ms": 305,
+      "details": {
+        "x": -223.95000004741235,
+        "z": 250,
+        "y": 0,
+        "health": 100,
+        "visible": true
+      }
+    },
+    {
+      "name": "École : entrée par E et bonne réponse créditée une fois",
+      "ok": true,
+      "ms": 3285
+    },
+    {
+      "name": "Bouton Son : activation par geste utilisateur et coupure",
+      "ok": true,
+      "ms": 299,
+      "details": {
+        "state": "running",
+        "enabled": true
+      }
+    },
+    {
+      "name": "Trafic : conducteur matérialisé et assis dans chaque voiture active",
+      "ok": true,
+      "ms": 5,
+      "details": [
+        {
+          "id": 14,
+          "kind": "compact",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 15,
+          "kind": "sedan",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 16,
+          "kind": "wagon",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 17,
+          "kind": "suv",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 18,
+          "kind": "sport",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 19,
+          "kind": "super",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 20,
+          "kind": "convertible",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 21,
+          "kind": "pickup",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 22,
+          "kind": "van",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 23,
+          "kind": "retro",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 24,
+          "kind": "buggy",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 25,
+          "kind": "limo",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 26,
+          "kind": "bike",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 27,
+          "kind": "moto",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 28,
+          "kind": "compact",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 29,
+          "kind": "sedan",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 30,
+          "kind": "police",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        },
+        {
+          "id": 31,
+          "kind": "police",
+          "driver": true,
+          "parented": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "name": "Clavier réel : vol avec extraction du conducteur, portière et une étoile",
+      "ok": true,
+      "ms": 5295,
+      "details": {
+        "started": {
+          "kind": "enter",
+          "jacking": true,
+          "duration": 2.8
+        },
+        "mid": {
+          "door": [
+            1.05,
+            0
+          ],
+          "driver": [
+            0.4,
+            0.03,
+            -0.13
+          ]
+        },
+        "entered": true,
+        "wanted": 1,
+        "removed": true,
+        "displaced": 1,
+        "doors": [
+          0,
+          0
+        ],
+        "events": 1
+      }
+    },
+    {
+      "name": "Clavier réel : freinage provoque tangage et fumée blanche",
+      "ok": true,
+      "ms": 3373,
+      "details": {
+        "speed": 18.37614024827931,
+        "pitch": 0.06839642319413622,
+        "braking": 0,
+        "events": 5,
+        "pool": 96
+      }
+    },
+    {
+      "name": "Clavier réel : sortie sûre et fermeture des deux portières",
+      "ok": true,
+      "ms": 505,
+      "details": {
+        "exited": true,
+        "free": true,
+        "doors": [
+          0,
+          0
+        ],
+        "visible": true
+      }
+    },
+    {
+      "name": "Collision réelle : dégâts, explosion unique et véhicule immobilisé",
+      "ok": true,
+      "ms": 3789,
+      "details": {
+        "x": -231,
+        "z": 291.3230653846241,
+        "kind": "compact",
+        "mode": "play",
+        "inCar": false,
+        "health": 0,
+        "wrecked": true,
+        "stage": 3,
+        "speed": 0,
+        "events": 1,
+        "playerHealth": 96.37090363636773,
+        "pool": 96
+      }
+    },
+    {
+      "name": "Vie du quartier : gangs distincts, chiens errants et bots supplémentaires",
+      "ok": true,
+      "ms": 3,
+      "details": {
+        "people": 42,
+        "strays": 5,
+        "gangs": 12
+      }
+    },
+    {
+      "name": "Clavier réel : rencontre avec le chef de bande aux docks",
+      "ok": true,
+      "ms": 608,
+      "details": {
+        "mode": "city",
+        "place": "life-person",
+        "body": "LES MISSIONS DE NORADANSER ENSEMBLEME GUIDER VERS LES DOCKSREPRENDRE LA PROMENADEIci, on prend soin du quartier. Vous pouvez donner un coup de main ou rencontrer les équipes des Docks."
+      }
+    },
+    {
+      "name": "Clavier réel : rencontre avec un chien errant",
+      "ok": true,
+      "ms": 801,
+      "details": {
+        "mode": "city",
+        "place": "life-dog"
+      }
+    },
+    {
+      "name": "Chien errant : caresse animée et confiance obtenue",
+      "ok": true,
+      "ms": 509
+    },
+    {
+      "name": "Banc : interaction E, position assise et lever avec E",
+      "ok": true,
+      "ms": 1102
+    },
+    {
+      "name": "Sauvegarde : état relu après véritable rechargement",
+      "ok": true,
+      "ms": 1945,
+      "details": {
+        "bank": 2345,
+        "strength": 30,
+        "cash": 876
+      }
+    },
+    {
+      "name": "Interface mobile : aucun débordement du concessionnaire",
+      "ok": true,
+      "ms": 157
+    },
+    {
+      "name": "Ultra HD : tampon 3840 × 2160 sur un affichage 1280 × 720",
+      "ok": true,
+      "ms": 414,
+      "details": {
+        "width": 3840,
+        "height": 2160
+      }
+    },
+    {
+      "name": "Captures du rendu courant et mesures GPU logicielles",
+      "ok": true,
+      "ms": 21890,
+      "details": {
+        "calls": 639,
+        "triangles": 620082,
+        "geometries": 2584,
+        "textures": 186
+      }
+    },
+    {
+      "name": "Boucle temps réel : jeu au clavier avec requestAnimationFrame native",
+      "ok": true,
+      "ms": 92315,
+      "details": {
+        "distance": 1.3615264095489863,
+        "simulationSeconds": 0.6000000000000009,
+        "health": 100
+      }
+    },
+    {
+      "name": "Aucune exception JavaScript pendant les parcours",
+      "ok": true,
+      "ms": 0
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "calls": 639,
+    "triangles": 620082,
+    "geometries": 2584,
+    "textures": 186
+  },
+  "environment": "Chromium headless / SwiftShader. Simulation fixe contrôlée ; vraies touches clavier et boutons DOM ; manette simulée, aucune manette physique. Les placements de scénario utilisent ?test=1."
+}

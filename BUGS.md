@@ -370,6 +370,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s6/s6-1-conces-25.png` (comparer `img/s6/s6-1-conces-25-tv.png`).
 
 ### 55. Mettre KO un gangster demande plus de 15 coups de poing
+✅ RÉPARÉ — `m.garde` d'un homme de gang est son POSTE de garde ([x, z]) et `b.garde` d'un habitant peut être une date de fin d'ordre : `attack()` les lisait comme « poings levés » et parait 55 % de chaque coup. Nouvelle `gardeLevee()` : la garde de combat se lit sur le corps (`rig.garde`, booléen posé par la bagarre). Mesure : 6 directs sur un gangster en faction → 6 coups portés, 0 paré, ❤️ 170 → 86 (un gangster a 170 ❤️ : une dizaine de coups, plus les 15 coups pour 50 ❤️) — commit 8359dcc
 - **Gravité** : GÊNANT (la garde de l'adversaire divise chaque coup par quatre : 100 → 50 PV en 15 coups, `peutKidnapper = false`)
 - **Reproduire** : membre des Frelons Jaunes, ▢ ×15 à 1,2 m.
 - **On devrait voir** : six coups (14 + 14 + 26 ×2) comme annoncé.

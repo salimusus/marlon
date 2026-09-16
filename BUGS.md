@@ -354,6 +354,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 43. Dans la boutique, la bague de la manette démarre sur la croix « ✕ » de fermeture, puis parcourt les onglets
 - **Gravité** : GÊNANT
+🔎 Revu round 70 : toujours là, en pire — à l'ouverture de l'armurerie la bague est sur le bouton CACHÉ « Entrer dans Marlon » (`focus.visible = false`), → → → fait défiler les onglets (Tenues, Couleurs, Accessoires : l'enfant se retrouve dans les chapeaux), ✕ pose la bague sur la croix de fermeture ; aucun article n'est jamais sélectionné (`l1b-pc.log` `armurerie`, `img/l1/l1b-01-boutique-armes.png`, `l1b-02-fiche.png`). La barre d'onglets est coupée en deux par la grille dans l'onglet Accessoires.
 - **Reproduire** : △ devant l'armurerie (52, 21), regarder où est la bague jaune, appuyer sur → quatre fois.
 - **On voit** : bague sur `storeClose:✕` (un appui ✕ referme la boutique qu'on vient d'ouvrir), puis → parcourt « ⭐ En vedette, 👕 Tenues, 🎨 Couleurs, 🎩 Accessoires » au lieu des armes affichées.
 - **On devrait voir** : la bague sur le premier article de l'onglet ouvert (le pistolet).
@@ -415,6 +416,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 62. Le viseur reste affiché quand l'arme est rangée
 - **Gravité** : GÊNANT
+🔎 Revu round 70 : après ✕ (rengainer), `P.drawn = false` mais la pastille dit encore « 🔫 Pistolet 4/8 · 🎯 visée » (`l1b-pc.log` `tir.range`).
 - **Reproduire** : pistolet, L2 (viser), L2 (ranger), marcher.
 - **On voit** : la petite croix rouge reste au milieu de l'écran avec l'arme dans l'étui (pastille « 🚩 Il te faut… », pas de « Pistolet »).
 - **Capture** : `img/s9b/s9b-3-police-15s.png`, `img/s9b/s9b-4-police-30s.png`.

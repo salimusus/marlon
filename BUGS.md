@@ -521,3 +521,9 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
 - **On devrait voir** : aucune bague hors des menus.
 - **Sonde** : `c1-pc.log` `c4.apresX1.focus = "chatBtn:"`, `l1a-pc.log` `focusEnJeu.el = "chatBtn:"`.
+
+### 72. La villa d'un joueur qui vient d'arriver est cambriolée : tout son porte-monnaie (25 🪙 → 0) disparaît sans qu'il ait rien vu
+- **Gravité** : GRAVE (première partie : l'enfant perd tout son argent pendant qu'il visite la banque, sans explication visible)
+- **Reproduire** : partie neuve, se promener 10 minutes loin de la villa (contrôle 2 : banque, hôpital…). **Dépend de `Math.random`** : à chaque décision d'un gang (`gangTick`, l. 26547), 7 % de chances de tirer une villa, et si c'est celle du joueur (`v.mine`) le cambriolage démarre et réussit 55 s plus tard si personne n'est à moins de 22 m. Vu 1 fois sur 6 parties de contrôle (`img/c2/c2-banque-2-regard.png` : « 💸 Cambriolage réussi : ils sont partis avec 25 🪙 », chat « 💸 La villa de Joueur42 a été cambriolée (−25 🪙) », porte-monnaie 0 dans le HUD) ; la sonde `c8.js` (hasard forcé à 0,8 pendant 200 s) n'a pas retiré la villa du joueur.
+- **On voit** : seul avertissement, une ligne de chat « 🏠 Des ombres rôdent autour de ta villa… » (sans alarme achetée), à 175 m de là ; puis `wallet -= min(butin 60–240, wallet)` : un enfant à 25 🪙 perd tout.
+- **On devrait voir** : pas de cambriolage tant que le joueur n'a rien mis dans sa villa ni ouvert la guerre des gangs, un plafond (jamais plus de la moitié, comme l'amende du n° 35) et une alerte visible (message central + GPS).

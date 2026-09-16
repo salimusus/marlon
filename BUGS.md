@@ -25,6 +25,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 2. Le message de bienvenue d'une partie NEUVE est « 💾 Partie rechargée : 25 🪙 »
 ✅ RÉPARÉ — `wallet` vaut 25 par défaut sans clé enregistrée et `rechargeTout()` prenait cette valeur pour une sauvegarde ; on ne dit « rechargée » que si `superobby.wallet` existe, sinon « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (vocabulaire de la commande) — commit 3fe8d47
+🔎 CONTRÔLÉ : OK — profil vierge, PC et TV : premier message « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (la clé `superobby.wallet` = 25 n'est écrite qu'ensuite) ; plus de « Partie rechargée » (`c1-pc.log`, `c1-tv.log` `c2.msgs`).
 - **Gravité** : GRAVE (première minute — premier message faux)
 - **Reproduire** : profil vierge (navigateur neuf), accueil → Jouer → Ville.
 - **On voit** : en très gros au centre « 💾 Partie rechargée : 25 🪙 », puis rien qui dise quoi faire. Le message revient à CHAQUE changement de monde, et le montant est faux : en entrant dans la Prairie avec 620 🪙 il affiche encore « 25 » (`img/s15/s15-0-prairie.png`). Le vrai « 🏙️ Bienvenue en ville ! Foot, tennis… » n'apparaît que dans le chat, en petit.
@@ -33,6 +34,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 3. Dès la première seconde, la pastille du haut dit « 🚩 Il te faut un membre de ton gang avec toi »
 ✅ RÉPARÉ — `captureTick()` écrivait le conseil dès qu'on se tenait dans un quartier tenu par un gang, toutes les 6 s, sans jamais rendre la pastille ; il n'apparaît plus qu'à un joueur entré dans la guerre (écran 🚩 ouvert, respect > 0 ou recrue) et `updateAct()` reprend la main en sortant du quartier — commit a36c5da
+🔎 CONTRÔLÉ : TOUJOURS CASSÉ — 2/2 (PC et TV) : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s sur un profil vierge, tronqué « 🚩 Il te faut un ... » en 1280 (`img/c1/c1-2s.png`, `c1-14s-tv.png`). Cause : la version intégrée a remplacé « Jouer » par « Entrer dans Marlon » (index.html l. 23629) qui fait `guerre.vu = true` dès le clic — `joueurDansLaGuerre()` est donc vrai pour tout le monde et la garde de `captureTick()` ne sert plus. Voir n° 67.
 - **Gravité** : GRAVE (incompréhensible pour un enfant qui vient d'arriver ; ça reste affiché en permanence)
 - **Reproduire** : entrer dans la Ville, attendre 2 s sans rien faire, au point d'apparition (0, 3.5).
 - **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » (tronqué « 🚩 Il te faut un ... » en 1280) et ça reste pendant les 12 s observées.
@@ -189,6 +191,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 4. Sur l'accueil à la manette, ✕ ne fait rien : il faut 9 appuis sur ↓ pour atteindre « Jouer »
 ✅ RÉPARÉ — l'accueil n'est pas ouvert par `openUI()` (qui pose la bague) : aucune bague, `navValide()` ne trouvait rien ; la bague se pose sur « Jouer » dès que la manette parle (`curseurAccueil`), ✕ sans bague choisit « Jouer » ; et la carte de 800 px se resserre sous 800 px de haut (mode d'emploi replié) : « Jouer » visible en 1280×720 sans défiler — commit 5eac31d
+🔎 CONTRÔLÉ : OK — bague sur « Entrer dans Marlon » dès le chargement (`focus0 = play`), bouton visible sans défiler (bas à 661 px sur 720, 928 sur 1080), ✕ entre directement dans la Ville (`c1-accueil.png`). Le choix du monde n'est plus proposé : ✕ = Ville.
 - **Gravité** : GÊNANT (la toute première action)
 - **Reproduire** : page chargée, manette branchée, ✕ → rien (aucune bague de sélection). ↓ ×9 : pseudo, 5 couleurs, « Jupe », le champ CODE, puis « Jouer ».
 - **On voit** : le bouton « Jouer » est sous le bord de l'écran en 1280×720 (la carte déborde), et aucun élément n'est sélectionné au départ.
@@ -197,6 +200,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 5. La foule de 12 bots est plantée en plein milieu de la route, autour du point d'apparition
 ✅ RÉPARÉ — `loadWorld` appelait `resetBot()` (grille du départ d'obby x −5…5, z 0,5…7, sur la rue, attente 2 à 60 s) aussi pour la ville ; `placeBotsVille()` pose les douze sur les trottoirs à < 40 m, attente 0,5–4 s (mesuré : 12/12 sur trottoir, 11/12 en marche en 12 s) — commit f0ca7d7
+🔎 CONTRÔLÉ : OK — à t+17 s : 2/12 bots sur la chaussée en PC (en train de traverser), 5/12 en TV, 11–12/12 en mouvement sur 3 s, le plus proche à 12,8 m (PC) ; plus de cercle figé (`c1-14s.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : entrer dans la Ville, regarder autour de soi.
 - **On voit** : les 12 habitants debout sur la ligne jaune de la chaussée, immobiles pendant 12 s, deux d'entre eux collés dans la caméra (on voit leur dos en très gros au premier plan, cf. bas gauche des captures).
@@ -205,6 +209,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 6. Le tableau « Joueurs / Pts » (classement d'obby) est affiché dans la Ville, avec 12 zéros
 ✅ RÉPARÉ — `#lb` n'était jamais caché en ville ; `updateLeaderboard` pose `sansScore` (display none) quand le monde est libre et qu'on n'est pas en multijoueur — commit f0ca7d7
+🔎 CONTRÔLÉ : OK — `#lb` en `display: none` (`sansScore`) en Ville, PC et TV (`c1-14s-tv.png`).
 - **Gravité** : GÊNANT (en mode TV il couvre un quart de l'écran et cache les habitants)
 - **Reproduire** : entrer dans la Ville.
 - **On voit** : à droite, une colonne de 12 pseudos à 0 point. En 1920×1080 TV elle est énorme.
@@ -213,6 +218,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 7. En mode TV avec une manette PS5 branchée, un bandeau permanent dit « 📺 Manette : ouvre 📺 et scanne le code »
 ✅ RÉPARÉ — `tvManettesMaj` ne regardait que les téléphones (`tv.conns`) ; avec une DualSense (`padActive()`) elle dit « 🎮 Manette PS5 connectée » et s'efface au bout de 5 s ; rappelée au branchement — commit f0ca7d7
+🔎 CONTRÔLÉ : OK — TV 1920×1080 + DualSense : `#tvBadge` = « 🎮 Manette PS5 connectée », classe `on` absente (effacé), aucun bandeau « scanne le code » pendant 17 s (`c1-14s-tv.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : accueil → « Jouer sur la télé » (ou `modeTV(true)`), manette PS5 connectée, entrer dans la Ville.
 - **On voit** : bandeau en bas de l'écran, en permanence, qui invite à utiliser le téléphone comme manette alors qu'une DualSense est déjà reconnue (`body.manette`).
@@ -419,6 +425,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 11. Sur l'écran d'accueil, un bot du décor est collé contre la caméra
 ✅ RÉPARÉ — la caméra du salon (`camPerche`, branche `!running`) était à 5,2 m presque à plat : le dernier rang de la foule (z = 6,9) passait à 1 m de l'objectif ; elle recule à 9,5 m, un peu plus haut (habitant le plus proche > 4 m) — commit 5eac31d
+🔎 CONTRÔLÉ : OK — caméra d'accueil en (0,4, 4,5, 12,1), habitant le plus proche à 7,3 m (PC) / 6,7 m (TV) ; plus de géant au premier plan (`c1-accueil.png`).
 - **Reproduire** : charger la page.
 - **On voit** : un personnage géant (blond, tenue blanche) qui occupe un tiers de l'écran au premier plan, devant le panneau « 1 · Sauts ».
 - **Capture** : `img/s1/s1-accueil.png`, `img/s1/s1-accueil-tv.png`.
@@ -429,6 +436,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 13. L'accueil : le mode d'emploi PS5 est un pavé de 25 lignes
 ✅ RÉPARÉ — le paragraphe de 250 mots est réécrit en 7 lignes courtes (à pied / au volant / en hélico / croix / menus), et tout le mode d'emploi est replié derrière « ⌨️ 🎮 Comment jouer » — commit 5eac31d
+🔎 CONTRÔLÉ : OK — `<details>` « ⌨️ 🎮 Comment jouer » replié au chargement, ligne PS5 de 8 mots (`c1-accueil.png`).
 - **On voit** : sur l'accueil, la ligne « 🎮 PS5 » est un paragraphe compact de ~250 mots en 11 px ; personne ne le lit. En TV il occupe la moitié de la carte.
 - **Capture** : `img/s1/s1-focus-jouer.png`, `img/s1/s1-accueil-tv.png`.
 

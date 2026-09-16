@@ -1,53 +1,70 @@
-# Vérification de MARLON — Empire urbain
+# Vérification — Sunshine City 05
 
-## Corrections ciblées
+Campagne de vérification du 12 septembre 2026, sous Linux / Chromium headless /
+WebGL SwiftShader. Les résultats portent sur les scénarios décrits ci-dessous.
 
-- Touches et gâchettes bloquées après déconnexion de la manette.
-- Rejet asynchrone des vibrations non pris en charge.
-- Joystick générique pris à tort pour une manette Sony HID.
-- Double bascule de l'arme sur L2 au lieu d'une visée maintenue.
-- Conflit entre la nouvelle carte M et le raccourci historique des missions.
-- Recrues KO / captives comptées comme soutien à la capture.
-- Progression de capture et texte d'action périmés en changeant de secteur.
-- Vols instantanés de territoires sans délai de défense.
-- Portefeuille sauvegardé à zéro restauré arbitrairement à 25.
-- Magot rival égal à zéro remplacé par un nouveau magot aléatoire.
-- Victoire à huit secteurs conservée à tort après agrandissement de la carte.
-- Reconstruction des gangs en double lors d'une nouvelle campagne.
-- Faux libellé « DLSS 5 » pour un simple rendu en résolution réduite.
-- Tests liés à des chemins absolus et script de captures exécuté au simple import.
+| Suite | Réussis | Preuve |
+|---|---:|---|
+| Logique, collisions et conduite de base | 13 | `verification/core-results.txt` |
+| Commandes et profils manette | 7 | `verification/input-results.txt` |
+| Animation articulée | 8 | `verification/animation-results.txt` |
+| Sauvegarde et navigation | 9 | `verification/campaign-results.txt` |
+| Catalogues, école et jeux de plateau | 9 | `verification/city-results.txt` |
+| Régression des activités urbaines | 30 | `verification/city-browser-results.json` |
+| Import et nouvelle campagne avec navigation réelle | 2 | `verification/lifecycle-results.json` |
+| Contrôle indépendant de la version 05 | 24 | `verification/v5-browser-results.json` |
+| Chutes, caméra et signal audio | 16 | `verification/feel-audio-results.json` |
+| Couleurs rouge/bleu de l’explosion après collision | 1 | `verification/v5-explosion-color-results.json` |
 
-## Essais
+**119 contrôles réussis, aucun échec final ni exception JavaScript relevée.**
+Ce nombre compte les assertions regroupées en scénarios des suites ; il ne
+signifie pas que toutes les combinaisons possibles du jeu ont été explorées.
 
-Le rapport final des tests navigateur est dans `verification/browser-results.json`.
-Les captures sont prises dans Chromium en rendu logiciel, avec le préréglage bas
-pour les scénarios fonctionnels. Elles ne mesurent pas les performances d'un GPU
-réel ni le rendu 4K matériel.
+## Contrôle indépendant
 
-- Analyse de syntaxe de tous les scripts et du code injecté par les tests.
-- Chargement du jeu et construction de la ville avec le banc de simulation.
-- 15 tests ciblés : géométrie des rendez-vous, graphes de frontières, capture
-  complète avec une recrue valide, coût des défenses, unités invalides, attaque, récompenses,
-  validation de sauvegarde, profils DualSense, déconnexion, absence de manette,
-  changement de monde et portefeuille nul.
-- 5 tests de régression existants en vrai Chromium : objet porté, changement de
-  monde en véhicule, fermeture par Échap, bot bloqué contre un mur et mission
-  Livraison express. Résultat : 5 réussis, aucune erreur console.
-- Essais interactifs additionnels : accueil, nouveaux secteurs, carte au clavier,
-  sélection d'objectif, reconnaissance, pavé DualSense simulé, déconnexion et
-  affichage mobile. Voir le rapport JSON pour le résultat final.
+Le rapport [v5-review.md](verification/v5-review.md) détaille les 24 parcours de
+l'agent de contrôle : démarrage avec le bouton Jouer, vraies touches clavier,
+manette simulée dans quatre orientations, vol occupé, extraction du conducteur,
+portières, freinage, collision contre une façade, explosion unique, sortie
+protégée, banc, chiens, gangs, école, son, sauvegarde, mobile et résolution UHD.
+Une seconde page conserve la boucle requestAnimationFrame native et vérifie
+un déplacement au clavier. Les positions de départ et certains états de scénario
+sont préparés via `?test=1`, puis les actions utilisateur sont exécutées.
 
-## Limites
+L'inspection des images a découvert un défaut de respiration qui étirait le
+torse en un grand ovale blanc. Il a été corrigé dans l'animation, puis la capture
+du personnage a été régénérée et inspectée pour vérifier sa disparition.
 
-Pas de test matériel DualSense / téléviseur / téléphone, pas de mesure de débit
-sur carte graphique, pas de test multijoueur distant. La grande suite historique
-n'a pas été exécutée intégralement. Les personnages conservent leur modèle
-stylisé et les véhicules conservent leur architecture de base et leurs animations.
-Les graphismes ne sont pas photoréalistes.
+## Cas complémentaires
 
-## Résultat final
+Les 16 contrôles de chute et de son couvrent des hauteurs de 8, 16 et 40 mètres,
+un passage du toit à la rue, une réception rapide sur dalle, les escaliers, le
+support indépendant des PNJ et le passage au-dessus d'une voiture. Ils ne donnent
+pas d'invincibilité au joueur pour masquer un problème de chute.
 
-**29 scénarios réussis** : 15 tests ciblés, 5 régressions historiques et 9
-contrôles dans Chromium. Aucune exception JavaScript ni erreur shader relevée
-dans les parcours navigateur exécutés. Les captures ordinateur et mobile ont
-été inspectées visuellement.
+Le graphe audio ne se crée qu'après interaction. Les essais vérifient les pas,
+les événements, la suspension en pause, les volumes persistants et un signal
+moteur effectivement non nul, dont l'amplitude reste bornée. Ce contrôle du
+signal ne remplace pas une écoute sur des équipements physiques variés.
+
+## Rendu et portée des mesures
+
+Le réglage Ultra HD crée un tampon de **3840 × 2160 pixels** pour un viewport
+1280 × 720. Ce contrôle de dimensions n'est pas un benchmark d'image 4K.
+La vue de portrait inspectée demande 639 appels de dessin et 620 082 triangles
+après optimisation, contre 1 217 appels et 1 498 936 triangles avant correction
+de la visibilité dans cette même vue. Le coût d'une vue générale est plus élevé.
+Aucun chiffre de FPS sur PC ou téléphone de joueur n'est revendiqué.
+
+Les captures `20-*` à `25-*` et `v5-*` proviennent du programme. Certaines vues
+utilisent une caméra d'inspection et masquent le HUD. Elles ne sont pas des
+illustrations générées. Les captures 01–06 et 13–18 et les anciens rapports de refonte 03
+restent des documents historiques ; ils ne s'ajoutent pas au total de tests V5.
+
+## Validation restant à faire
+
+Aucun essai sur manette physique, GPU de joueur, tablette ou équipement audio
+physique ; pas de test d'endurance de plusieurs heures ni de campagne complète
+jouée humainement. L'agent de contrôle valide les parcours indiqués, pas une
+certification commerciale. Le [bilan](BILAN-SUNSHINE.md) précise les simulations
+simplifiées, les décors qui restent non manipulables et les travaux restants.

@@ -1,0 +1,161 @@
+{
+  "results": [
+    {
+      "name": "Pas de contexte audio avant geste utilisateur",
+      "ok": true
+    },
+    {
+      "name": "Chutes libres 8 / 16 / 40 m : réception, santé conservée",
+      "ok": true,
+      "detail": [
+        {
+          "height": 8,
+          "y": 0,
+          "health": 100,
+          "action": null
+        },
+        {
+          "height": 16,
+          "y": 0,
+          "health": 100,
+          "action": null
+        },
+        {
+          "height": 40,
+          "y": 0,
+          "health": 100,
+          "action": null
+        }
+      ]
+    },
+    {
+      "name": "Saut du toit vers rue : réception au sol sans téléportation",
+      "ok": true,
+      "detail": {
+        "y": 0.34,
+        "z": 143.100063932205,
+        "health": 100,
+        "landings": 4
+      }
+    },
+    {
+      "name": "Étage balayé : chute rapide ne traverse pas la dalle",
+      "ok": true,
+      "detail": {
+        "y": 4.22,
+        "vy": 0
+      }
+    },
+    {
+      "name": "Support PNJ indépendant de la hauteur du joueur",
+      "ok": true,
+      "detail": {
+        "npc": 0.22,
+        "player": 8.22
+      }
+    },
+    {
+      "name": "Escaliers : appui continu du sol au premier étage",
+      "ok": true,
+      "detail": {
+        "y": 4.219999999999772,
+        "max": 0.019999999999999574
+      }
+    },
+    {
+      "name": "Passage au-dessus voiture : pas de blocage par collision 2D",
+      "ok": true,
+      "detail": {
+        "dz": 0.8606927825711352,
+        "y": 7.2875
+      }
+    },
+    {
+      "name": "Pieds des PNJ et animaux alignés aux nouveaux trottoirs",
+      "ok": true,
+      "detail": true
+    },
+    {
+      "name": "Stick caméra : centre précis et amplitude entière conservée",
+      "ok": true,
+      "detail": {
+        "center": 0.0825270827072318,
+        "max": 1,
+        "min": -1,
+        "nan": 0
+      }
+    },
+    {
+      "name": "Caméra vitesse optionnelle : FOV borné, option confort",
+      "ok": true,
+      "detail": {
+        "fast": 76.22552254848596,
+        "comfort": 66.00046423800548
+      }
+    },
+    {
+      "name": "Audio déverrouillé par geste : graphe unique et pas alternés",
+      "ok": true,
+      "detail": {
+        "state": "running",
+        "layers": 3,
+        "steps": 16,
+        "voices": 28
+      }
+    },
+    {
+      "name": "Événements véhicule : impacts, explosion, portière",
+      "ok": true,
+      "detail": {
+        "counts": {
+          "land": 2,
+          "footsteps": 16,
+          "explosion": 1,
+          "door": 1,
+          "impact": 1
+        },
+        "voices": 35
+      }
+    },
+    {
+      "name": "Signal sonore réel mesuré : moteur audible et amplitude bornée",
+      "ok": true,
+      "detail": {
+        "rms": 0.016004708611686964,
+        "peak": 0.03484579548239708
+      }
+    },
+    {
+      "name": "Pause et muet suspendent le graphe et libèrent les voix",
+      "ok": true,
+      "detail": {
+        "voices": 0,
+        "state": "suspended"
+      }
+    },
+    {
+      "name": "Réglages audio/caméra accessibles et persistants",
+      "ok": true,
+      "detail": {
+        "quality": "performance",
+        "deadzone": 0.17,
+        "sensitivity": 1,
+        "invert": false,
+        "profile": "auto",
+        "sound": true,
+        "touch": false,
+        "reduceShake": false,
+        "masterVolume": 0.4,
+        "music": false,
+        "musicVolume": 0.24,
+        "haptics": false,
+        "speedCamera": true
+      }
+    },
+    {
+      "name": "Aucune exception navigateur",
+      "ok": true
+    }
+  ],
+  "errors": []
+}

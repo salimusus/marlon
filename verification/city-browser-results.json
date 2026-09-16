@@ -1,0 +1,126 @@
+{
+  "checks": [
+    {
+      "name": "Ville : 20 lieux, bâtiments accessibles, 92 bots et 494 questions",
+      "ok": true
+    },
+    {
+      "name": "DualSense : déplacement relatif à quatre orientations, sticks indépendants",
+      "ok": true
+    },
+    {
+      "name": "Entrée, conduite et sortie des nouveaux véhicules",
+      "ok": true
+    },
+    {
+      "name": "Concession : achat facturé, couleur choisie et livraison physique",
+      "ok": true
+    },
+    {
+      "name": "Achat refusé sans fonds : portefeuille et collection inchangés",
+      "ok": true
+    },
+    {
+      "name": "Garage : moteur et turbo augmentent la vitesse, sans double achat",
+      "ok": true
+    },
+    {
+      "name": "Vêtements : achat puis équipement gratuit",
+      "ok": true
+    },
+    {
+      "name": "École : réponse correcte créditée une seule fois et tableau mis à jour",
+      "ok": true
+    },
+    {
+      "name": "École : mauvaise réponse sans récompense",
+      "ok": true
+    },
+    {
+      "name": "Ascenseur : montée temporisée, pause et sortie à l’étage",
+      "ok": true
+    },
+    {
+      "name": "Escaliers : appuis continus sans saut d’étage",
+      "ok": true
+    },
+    {
+      "name": "Animaux : nom, suivi et gestes distincts",
+      "ok": true
+    },
+    {
+      "name": "Grande roue : déplacement du passager et retour au sol",
+      "ok": true
+    },
+    {
+      "name": "Braquage : coffres chronométrés et trois étoiles",
+      "ok": true
+    },
+    {
+      "name": "Entraînement : performance et muscles, coût unique",
+      "ok": true
+    },
+    {
+      "name": "Circulation : feux opposés jamais verts ensemble",
+      "ok": true
+    },
+    {
+      "name": "Mobilier : destruction et réparation par un agent",
+      "ok": true
+    },
+    {
+      "name": "Mission : récompense unique après les étapes obligatoires",
+      "ok": true
+    },
+    {
+      "name": "Hélicoptère : décollage et altitude",
+      "ok": true
+    },
+    {
+      "name": "Menus : toutes les activités et jeux de casino ouvrent sans exception",
+      "ok": true
+    },
+    {
+      "name": "Casino : règlement unique de roulette et annulation des rappels périmés",
+      "ok": true
+    },
+    {
+      "name": "Police : interpellation facturée une fois et alerte effacée",
+      "ok": true
+    },
+    {
+      "name": "Trafic : un véhicule ralentit avant un feu rouge",
+      "ok": true
+    },
+    {
+      "name": "Équipier : ordre de soin exécuté à destination",
+      "ok": true
+    },
+    {
+      "name": "Dépannage : constat unique, câble de treuil et début de transport",
+      "ok": true
+    },
+    {
+      "name": "Sauvegarde : compte, vêtements, animal, performances et peinture restaurés",
+      "ok": true
+    },
+    {
+      "name": "Pluie et neige : particules et éclairage jour/nuit",
+      "ok": true
+    },
+    {
+      "name": "Captures réelles : ville, intérieur école, tableau et casino",
+      "ok": true
+    },
+    {
+      "name": "Interface mobile : aucun débordement horizontal",
+      "ok": true
+    },
+    {
+      "name": "Aucune erreur JavaScript pendant les parcours",
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "environment": "Chromium headless / SwiftShader, simulation contrôlée, aucune manette physique"
+}

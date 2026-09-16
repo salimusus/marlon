@@ -1,0 +1,13 @@
+{
+  "checks": [
+    {
+      "name": "Import via fichier et rechargement : état importé préservé au pagehide",
+      "ok": true
+    },
+    {
+      "name": "Nouvelle campagne confirmée : suppression conservée après pagehide",
+      "ok": true
+    }
+  ],
+  "errors": []
+}

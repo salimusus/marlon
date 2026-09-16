@@ -85,6 +85,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 27. Écraser un piéton : aucune ambulance, et la police TIRE sur l'enfant
 ✅ RÉPARÉ — la police tirait dès `wanted >= 2` quel que soit le délit (écraser = gravité 2) : elle ne tire plus que pour un crime grave (`policeTire()` : KO/arme/braquage, riposte, alarme, armée) et « tirer sur quelqu'un » passe en gravité 3 ; l'ambulance n'était appelée qu'à ❤️ 0 (`ecraseAuSol`) : elle part aussi au-dessus de 8 m/s et le blessé reste à terre jusqu'au brancard — commit 0b83501
+🔎 CONTRÔLÉ : OK — piéton renversé à 15,5 m/s sur la rue du point d'apparition : ❤️ 100 → 54, KO au sol jusqu'au brancard, « 🚑 Une ambulance a été appelée », ambulance en `route` puis `transport` (chargement à t+45 s, blessé emporté) ; police ★★★ mais AUCUN tir sur 80 s (`riposte = 0`, aucun « ils tirent »). Elle abandonne d'ailleurs la recherche à t+25 s (★★★ → 0) sans être venue (`c7-pc.log`, `img/c7/c7-27-30s.png`).
 - **Gravité** : GRAVE (fonction promise : ambulance pour les blessés, police proportionnée)
 - **Reproduire** : rouler à 50 km/h dans la foule du point d'apparition (0, 3).
 - **On voit** : « 🚔 Infraction : écraser Tom_le_ouf ! Niveau ★★★ », deux bots KO (hp 56), aucune ambulance ne part (`city.ambulances[*].etat = null` après 6 s), les bots écrasés se relèvent et disent « plus jamais ça » ; 40 s plus tard « Recherché ★★ · ils tirent ! ». Puis arrestation → écran Prison.
@@ -251,6 +252,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 15. Les consignes affichées parlent des touches du CLAVIER à un enfant qui joue à la manette
 - **Gravité** : GÊNANT (l'enfant cherche une touche « E » sur sa manette)
+🔎 Revu round 70 (manette) : toujours là — « 🚗 Appuie sur E pour conduire », « 🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir », « 🪑 E : s'asseoir », « Espace maintenu = frein à main », « 🏊 Tu nages ! Espace pour sauter », « 🚗 E : monter à côté de Enzo_turbo », « ouvre la carte avec M » (`l1a-pc.log` `bilan.defauts[type=clavier]`, `c6-pc.log` `mer.msgs`).
 - **Reproduire** : manette PS5 branchée, entrer dans la zone Rallye (0, −60) : gros message « 🏜️ Rallye : prends un buggy (E), grimpe les collines… ».
 - **On voit** : « (E) » ; l'aide de la zone École dit aussi « assieds-toi a une table (E) » (`hint` de la zone, sans accents).
 - **On devrait voir** : « △ » quand la manette est active.
@@ -288,6 +290,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 24. Les habitants fixent des rendez-vous à l'enfant sans qu'il ait rien demandé, et le GPS s'allume tout seul
 - **Gravité** : GÊNANT (les chevrons cyan au sol dès la première seconde viennent de là — cf. n° 3)
+🔎 Revu round 70 : toujours là dès la première minute — « Chloe_mia : ok Joueur60, je prends un vélo et je te retrouve à Parking du Sud » + chevrons cyan au sol à t+14 s (`img/c1/c1-14s.png`, `img/l1/l1a-02-croix-en-jeu.png`).
 - **Reproduire** : rester en ville 2 minutes.
 - **On voit** : « Sarah_bee : ok Joueur40, je prends un vélo et je te retrouve à Parking du Sud 🚗 », « MaxiBloc : ok Joueur40, je prends une voiture et je te retrouve à Tatouage », gros message central « 🚗 MaxiBloc va chercher une voiture, direction Tatouage », et le radar affiche une destination (297 m, 135 m, 179 m) avec des chevrons cyan au sol — l'enfant n'a jamais parlé à ces bots.
 - **On devrait voir** : un rendez-vous seulement après une vraie invitation (△ parler → « on se retrouve où ? »).
@@ -329,18 +332,21 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
 - **Gravité** : GÊNANT
+🔎 Revu round 70 : aggravé — arriver au garage en voiture déclenche maintenant « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive », 🔧 15 % (`c4-pc.log` `arrive`).
 - **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
 - **On voit** : la dépanneuse stationnée sur la chaussée en (−45, 105), pile dans l'axe ; à 25 km/h on la tape (🔧 7 % avant même d'être au garage), étoile d'impact sur le capot.
 - **Capture** : `img/s5/s5-0-devant-garage.png`, `img/s5/s5-1-dans-garage.png`.
 
 ### 39. Au comptoir du garage, la caméra entre dans la tête du personnage
 - **Gravité** : GÊNANT
+🔎 Revu round 70 : toujours là (`img/c4/c4-1-comptoir.png` : le crâne plein écran alors que `cam.dist` annonce 10,9 m).
 - **Reproduire** : se placer devant le comptoir de l'atelier (−51, 96,6) face à l'ouest.
 - **On voit** : l'écran est rempli par l'arrière du crâne et la casquette du personnage (la caméra est repoussée par le comptoir derrière lui).
 - **Capture** : `img/s5/s5-2-comptoir.png`.
 
 ### 40. Fenêtre de l'atelier, onglet Peinture : la ligne des finitions est coupée
 - **Gravité** : GÊNANT
+🔎 Revu round 70 : à l'ouverture de l'atelier la bague est sur le bouton caché « Entrer dans Marlon » (`c4-pc.log` `ouvert.focus = play:Entrer dans Marlon`).
 - **Reproduire** : ouvrir l'atelier, onglet 🎨 Peinture, en 1280×720.
 - **On voit** : sous les 24 couleurs, une rangée de boutons (finitions) coupée en deux par le bord de la zone, le texte « Rien à payer » passe dessus. À la manette, R1 change d'onglet mais ne pose aucune bague de sélection : ✕ ne fait rien tant qu'on n'a pas appuyé sur une direction.
 - **Capture** : `img/s5/s5-4-peinture.png`.
@@ -500,3 +506,17 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
 - **On devrait voir** : des places qui donnent sur la rue (cap est ou ouest, ou une sortie marquée) et une accélération plus douce sur les premiers mètres.
 - **Sonde** : `c3-pc.log` `c26.gaz5s = {depl: 102.08, dmg: 20.87, spd: 27.12, cap: 1.08}`.
+
+### 70. Au stick, sortir du parking du centre détruit la voiture : 🔧 100 % et incendie en 40 s, la dépanneuse l'emporte avec le conducteur éjecté
+- **Gravité** : GRAVE (la première voiture d'un enfant brûle avant même d'avoir quitté le parking)
+- **Reproduire** : parking du centre, △ pour monter, puis conduire « vers le parc » comme un enfant (R2 à 80 %, stick pour viser le nord, frein quand ça part de travers) pendant 40 s. Reproduit 2/2 (`l1a` run 1 et run 2, mêmes commandes).
+- **On voit** : la voiture bute sur le grillage du foot et les tables du snack, les dégâts grimpent 2 % → 30 % → **96,6 %** en 41 s sans jamais dépasser 30 km/h, elle prend feu (run 1 : `img/l1/l1a-11-roule-garage.png`, carcasse en flammes devant la terrasse), le personnage se retrouve à pied à côté (run 2 : `car: false` à t+84 s, position (−12,8, 13,1)), puis « ⛓️ Véhicule chargé sur le plateau : direction le garage » — la dépanneuse emporte l'épave. Aucun message n'a dit à l'enfant pourquoi la voiture chauffait ni qu'elle allait brûler.
+- **On devrait voir** : des dégâts proportionnels à la vitesse (rien sous 15 km/h), un avertissement clair (fumée, « 🔧 Ta voiture est abîmée : va au garage ») bien avant l'incendie, et une sortie de parking évidente.
+- **Sonde** : `l1a-pc.log` `conduite[0] = {secondes: 41, dmg: 96.63, fin: [−16.2, 9.5]}` ; `bilan.defauts` : « ⚙️ A2 · 0 km/h · 🔧 100% » à t+84 s.
+
+### 71. En jeu, la bague jaune de la manette reste posée sur le bouton du chat (haut gauche) pendant toute la partie
+- **Gravité** : GÊNANT (l'enfant croit qu'il a « sélectionné » quelque chose ; ✕ ne fait rien d'utile)
+- **Reproduire** : accueil, ✕ (« Entrer dans Marlon »). Reproduit 3/3 (`c1` PC, `c1` TV, `l1a`).
+- **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
+- **On devrait voir** : aucune bague hors des menus.
+- **Sonde** : `c1-pc.log` `c4.apresX1.focus = "chatBtn:"`, `l1a-pc.log` `focusEnJeu.el = "chatBtn:"`.

@@ -2242,7 +2242,10 @@ function tree(x, top, z, leaf = C.leaf, pine = false) {
     }
     const trunk = box(x, top + 1.6, z, .48, 3.2, .48, 0x635044, { studs: false }); trunk.mesh.geometry = empire.trunkGeo;
     const leaves = new THREE.Color(leaf).lerp(new THREE.Color(0x4b6246), .7);
-    for (const [dx,dy,dz,w,h] of [[0,3.5,0,3.5,3.6],[-.95,3.2,.3,2.3,2.4],[.8,4,.4,2.2,2.5]]) {
+    // Les houppiers du commit distant faisaient 3,5 m de large (contre 2,4 m pour les anciens
+    // feuillages) : un arbre planté contre l'école passait à travers le mur et masquait 0,94 m² du
+    // tableau de la classe de maths. Même allure ronde, mais dans l'emprise d'origine (1,2 m de rayon).
+    for (const [dx,dy,dz,w,h] of [[0,3.3,0,2.4,2.8],[-.5,3.0,.2,1.4,1.7],[.5,3.6,.3,1.4,1.8]]) {
       const m = new THREE.Mesh(empire.treeGeo, lam(leaves.getHex())); m.scale.set(w,h,w*.85); m.position.set(x+dx,top+dy,z+dz); m.castShadow=true; worldGroup.add(m);
     }
     return;

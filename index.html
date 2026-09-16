@@ -775,7 +775,7 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 .operation{display:flex;flex-direction:column;gap:7px;text-align:left;padding:14px;color:#edf1f2;background:#1b2a34;border:1px solid #43545e;border-radius:6px;cursor:pointer;font:inherit}
 .operation b{font-size:13px}.operation span{color:#aebdc6;font-size:11px;line-height:1.5}.operation small{font-size:10px;color:#6bd1b9;letter-spacing:.04em}
 #guerreCarte{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tcase{font:inherit;cursor:pointer;background:#182934!important;border:1px solid #455660!important;border-top:3px solid var(--owner)!important;min-width:0;box-shadow:none!important;padding:12px 8px!important;border-radius:6px!important}
-.tcase.selected{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
+.tcase[data-sel]{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
 #empireHud{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(390px,44vw);z-index:3;background:#0d1a22e8;border:1px solid #52636c;border-radius:6px;color:#e6edef;padding:12px 14px;pointer-events:none;box-shadow:0 5px 24px #0005}
 #empireHud[hidden],body.lobby #empireHud,body.uiopen #empireHud{display:none!important}#empireHudTitle{display:block;font-size:10px;letter-spacing:.16em;color:#72d4bf;margin-bottom:6px}#empireHudText{display:block;font-size:12px;line-height:1.5}
 #empireHud .track{height:3px;background:#43545c;margin-top:10px}#empireProgress{display:block;height:100%;background:#73d4be;width:0;transition:width .25s}#empireMapBtn{pointer-events:auto;margin-top:8px;border:0;color:#a9bdc8;background:none;font-size:10px;cursor:pointer}
@@ -785,8 +785,7 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 
 
 .card .field>span,.card .jn,.card #mpStatus{color:#a8bbc5}.card .mp,.card .keysWrap summary{background:#20313c;color:#dce8ec;border:1px solid #3d525f}.card .keys .ps5 b{color:#d6bd8c}.card .pills b{background:#304552;color:#dbe6ed}.card .pills b.sel{background:#5a877d;color:#fff}#start h1{transform:none}
-body.city #gps{left:26px;bottom:24px;transform:none}body.tv.city #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad)}
-@media(max-width:700px){body.city #gps{left:10px;bottom:10px;width:95px;height:95px}body.touch.city #gps{left:10px;bottom:165px}}
+/* (le radar reste au centre du bas hors mode télé, comme le banc d'essai le garantit ; le commit distant le poussait à gauche) */
 #guerre .tatliste>b,#guerre .tatliste>div{background:#21333e!important;color:#e1e8ed!important;border:1px solid #425762}#guerre .tatliste span{color:inherit}#guerre .tatliste{gap:8px}
 .empire-close{position:sticky;float:right;top:0;z-index:3;margin-left:8px!important}#guerre h2{padding-top:4px}
 </style>
@@ -27792,7 +27791,7 @@ function carteTerritoires() {
     const o = proprio(t.k);
     const c = o === 'joueur' ? '#5cc453' : o ? (gangDe(o) ? gangDe(o).teinte : '#7a86a0') : '#4b5468';
     const qui = o === 'joueur' ? 'À TOI' : o ? nomGang(o) : 'libre';
-    return `<button type="button" data-territory="${t.k}" class="tcase${empire.selected === t.k ? ' selected' : ''}" style="--owner:${c};background:${c}"><span class="te">${t.e || '🚩'}</span>`
+    return `<button type="button" data-territory="${t.k}" class="tcase"${empire.selected === t.k ? ' data-sel="1"' : ''} style="--owner:${c};background:${c}"><span class="te">${t.e || '🚩'}</span>`
       + `<span class="tn">${TERRITOIRES.indexOf(t) + 1}. ${t.n}</span><span class="tq">${qui}</span>`
       + `<span class="tv">${'🪙'.repeat(t.v || 1)}</span></button>`;
   }).join('');

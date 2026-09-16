@@ -4217,7 +4217,9 @@ test('le garage répare la voiture cabossée, et la lave', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G;
-    const c = G.city.cars.find(v => !v.heli && !v.rider && v.kind !== 'jetski' && !v.busy);
+    // une voiture PRÉPARABLE (carrosserie, vitres) : depuis le n° 37 du Joueur, l'atelier ne cible que celles-là —
+    // le premier véhicule de la liste est l'ambulance, qui n'a ni `parts` ni `bodyMat`
+    const c = G.city.cars.find(v => !v.heli && !v.rider && !v.kart && v.parts && v.bodyMat && !v.busy);
     c.x = G.P.pos.x + 2; c.z = G.P.pos.z; c.dmg = 0; c.dead = false;
     G.wallet = 500;
     const neuf = G.prixRepare(c);
@@ -9505,8 +9507,12 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
         G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
         // avant CHAQUE essai la voiture revient sur la case degagee du depart : elle roule
         // pendant la mesure, et une voiture arretee contre un mur ne braque plus
+        // la foule du départ se tient sur les trottoirs autour de (0, 3,5) depuis le round 70 : la voiture
+        // lancée vers le nord depuis (0, 8) écrasait un passant, l'accident l'immobilisait, et les essais
+        // suivants ne braquaient plus (0 rad). On écarte les habitants et on remet la caisse en état.
+        G.bots.forEach(b => { b.pos.set(150, 0.3, 150); b.av.group.position.copy(b.pos); b.wait = 99; b.target = null; });
         const braque = (mode, v) => { G.settings.ctrl = mode; ds.axes = [v, 0, 0, 0];
-          c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+          c.x = 0; c.z = 8; c.h = 0; c.accidente = false; c.stopped = false; c.dead = false; G.settleVehicle(c);
           ds.buttons[7] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
           G.drive.speed = 0; const h0 = G.drive.car.h;
           for (let i = 0; i < 40; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
@@ -11435,7 +11441,8 @@ test('sur une télé 1080p le bandeau grossit vraiment, tient sur une ligne et r
   const a = r.avant, b = r.apres;
   const fact = v => +(b[v] / a[v]).toFixed(2);
   const ok = fact('pastille') >= 1.4 && fact('bouton') >= 1.4 && fact('joueur') >= 1.4
-    && fact('tableau') >= 1.3 && fact('radar') >= 1.3 && fact('chat') >= 1.4
+    && (fact('tableau') >= 1.3 || (a.tableau === 0 && b.tableau === 0))   // le tableau des joueurs n'existe plus en ville solo (n° 6 du Joueur)
+    && fact('radar') >= 1.3 && fact('chat') >= 1.4
     && r.lignes === 1 && r.pastilles >= 5 && r.dehors.length === 0 && r.messageSousBandeau;
   return { ok, detail: `en 1920×1080 le mode télé multiplie enfin les tailles au lieu de les rogner : pastilles ${a.pastille} → ${b.pastille} px (×${fact('pastille')}), boutons ${a.bouton} → ${b.bouton} px (×${fact('bouton')}), barre de vie ${a.joueur} → ${b.joueur} px (×${fact('joueur')}), tableau des joueurs ${Math.round(a.tableau)} → ${Math.round(b.tableau)} px, radar ${Math.round(a.radar)} → ${Math.round(b.radar)} px, chat ${a.chat} → ${b.chat} px · les ${r.pastilles} pastilles tiennent sur ${r.lignes} ligne et le grand message passe sous le bandeau (${r.bandeau} px → ${r.message} px) · ${r.dehors.length} élément dans le surbalayage que rognent les télés` };
 });
@@ -14801,9 +14808,11 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
       // ---- R2 TIRE ----
       const n0 = G.shots.length; G.P.fireCd = 0;
       bt(7, 1); G.pollGamepad(1 / 60); res.tirs = G.shots.length - n0; bt(7, 0); G.pollGamepad(1 / 60);
-      // ---- L2 À NOUVEAU : RENGAINER (et surtout pas se baisser) ----
+      // ---- L2 À NOUVEAU : L'ARME RESTE SORTIE (décision du joueur, n° 42 et 49 : L2 ne
+      // rengaine jamais, il reverrouille ; seul ✕ range) et surtout pas se baisser ----
       clic(6);
       res.rengaine = { degaine: !!G.P.drawn, accroupi: !!G.P.accroupi };
+      clic(0); res.croix = { degaine: !!G.P.drawn };
       // ---- MAINS NUES : L2 GARDE SON ANCIEN RÔLE, SE BAISSER ----
       G.equipWeapon(null);
       bt(6, 1); G.pollGamepad(1 / 60); res.mainsNues = { accroupi: !!G.P.accroupi, degaine: !!G.P.drawn };
@@ -14828,11 +14837,11 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
     && r.vehicules >= 1
     && r.troisCibles === 3 && r.armeInchangee && r.flechePrec.nom === r.fleche1.nom
     && r.tirs === 1
-    && !r.rengaine.degaine && !r.rengaine.accroupi
+    && r.rengaine.degaine && !r.rengaine.accroupi && r.croix && !r.croix.degaine
     && r.mainsNues.accroupi && !r.mainsNues.degaine && !r.mainsNuesLache
     && r.flecheArmeRangee === 'knife'
     && !!r.surVehicule;
-  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 rengaine (${!r.rengaine.degaine}) sans baisser le joueur · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
+  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 garde l'arme sortie (${r.rengaine.degaine}) sans baisser le joueur, et ✕ la range (${r.croix && !r.croix.degaine}) · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
 });
 
 // Demande du joueur, mot pour mot : « Ajoute le crochet, l'uppercut, le direct. Je veux voir

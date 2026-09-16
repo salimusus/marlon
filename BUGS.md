@@ -464,3 +464,22 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : classe Géométrie, question « Un ballon de football a la forme d'une… ? ».
 - **On voit / entend** : la synthèse vocale reçoit « …forme d'une et ensuite ? ... Réponse un : cube… » — le « … » est remplacé par « et ensuite ».
 - **Sonde** : `s11c-pc.log` `reps[2].dits[1]`.
+
+---
+
+## NOUVEAUX DÉFAUTS — round 70, version intégrée 541d0e0 (contrôles `c*.js`, partie libre `l1*.js` / `l2*.js`)
+
+### 67. « Entrer dans Marlon » met d'office l'enfant « dans la guerre » : le conseil 🚩 revient dès la première seconde
+- **Gravité** : GRAVE (défait la réparation n° 3 : la première pastille d'un profil vierge parle d'un gang qu'il n'a pas)
+- **Reproduire** : profil vierge, accueil, ✕ (« Entrer dans Marlon »), attendre 2 s au point d'apparition. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
+- **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s (tronqué « 🚩 Il te faut un ... » en 1280), et le gros message « MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5 » — la touche « M » à un enfant à la manette.
+- **On devrait voir** : l'action du lieu (« 🏙️ Balade »), rien de la guerre tant que l'écran 🚩 n'a pas été ouvert (c'était la règle posée par la réparation n° 3).
+- **Capture** : `img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`.
+- **Sonde** : `c1-pc.log` / `c1-tv.log` `c3.acts = ["🚩 Il te faut un membre de ton gang avec toi"]`. Cause : index.html l. 23629 (`chooseWorld(4); guerre.vu = true; msg('MARLON · Recrute…')`) — `guerre.vu` vaut vrai avant même le premier pas, `joueurDansLaGuerre()` répond donc toujours vrai.
+
+### 68. Le panneau « EMPIRE URBAIN » couvre le bas de l'écran en permanence, minuscule en TV, et parle de la touche « M »
+- **Gravité** : GÊNANT (première minute ; en TV le texte fait 12 px sur un écran de 1080 lignes : illisible du canapé)
+- **Reproduire** : entrer dans la Ville (profil vierge), regarder le bas de l'écran. Reproduit 2/2 (PC, TV).
+- **On voit** : un cadre sombre de 390 px centré en bas : « EMPIRE URBAIN · 0/12 territoires · Centre-ville · objectif à 37 m · CARTE · M / PAVÉ PS5 », jamais effacé (il n'a pas de règle `body.tv`, ni de traduction manette : `#empireMapBtn` est un texte fixe l. 1110). Il se superpose aux chevrons de GPS et au message central quand ils descendent.
+- **On devrait voir** : rien de l'empire tant que l'enfant n'a pas ouvert la carte ; sinon un panneau qui grossit en TV et dit « Pavé tactile » à la manette.
+- **Capture** : `img/c1/c1-14s.png`, `img/c1/c1-14s-tv.png`.

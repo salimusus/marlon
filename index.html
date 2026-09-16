@@ -12949,6 +12949,11 @@ function policeTick(dt) {
     if (pc.mil && pc.active && dP < 16 && !pc.debarque && police.agents.length < 10 && simTime > (pc.debT || 0)) { pc.debT = simTime + 12; policeDebarque(pc, 2); }
   }
 }
+// La cible a-t-elle les poings levés ? (voir `attack` : la garde de combat vit sur le corps)
+function gardeLevee(t) {
+  const av = t && ((t.bot && t.bot.av) || (t.gm && t.gm.av));
+  return !!(av && av.rig && av.rig.garde);
+}
 function nearestFighter(range) {   // bot ou joueur le plus proche devant moi
   let best = null, bd = range;
   for (const b of bots) { if (!b.av.group.visible || b.ko > simTime) continue; const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < bd && Math.abs(b.pos.y - P.pos.y) < 2) { bd = d; best = { bot: b, x: b.pos.x, z: b.pos.z }; } }
@@ -13041,7 +13046,12 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
   msg(kind === 'kick' ? '🦵 Coup de pied !' : geste === 'uppercut' ? '👊 Uppercut !' : geste === 'crochet' ? '👊 Crochet !' : '👊 Direct !', 500);
   // EN FACE AUSSI ON SE GARDE : un habitant qui a levé les poings encaisse le quart du coup
-  const pare = !!(target.bot && target.bot.garde) || !!(target.gm && target.gm.garde);
+  // LA GARDE, C'EST CELLE DES POINGS. `m.garde` d'un homme de gang est son POSTE de garde (une
+  // position [x, z]) et `b.garde` d'un habitant peut être une date de fin d'ordre « garde » :
+  // les deux étaient lus comme « poings levés », donc CHAQUE coup sur un gangster en faction
+  // était paré (15 coups pour 50 ❤️, n° 55 du Joueur). On lit la garde de combat sur le corps
+  // (`rig.garde`), posée uniquement par la bagarre.
+  const pare = gardeLevee(target);
   // une garde AMORTIT, elle n'annule pas : au quart, l'adversaire devenait une enclume
   if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
@@ -13119,7 +13129,7 @@ function coupCouteau(av, duree) {
   camSecousse(0.2, 0.24); cam.kick = (cam.kick || 0) + 0.05;
   sfx.tone(120, 0, .14, 'sawtooth', .09, 60);
   let dmg = w.dmg;
-  if ((target.bot && target.bot.garde) || (target.gm && target.gm.garde)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
+  if (gardeLevee(target)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;

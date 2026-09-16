@@ -15624,3 +15624,22 @@ test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchi
   const ok = r.arriere.m === '' && r.arriere.w === 0 && r.avant.m === 'grillé';
   return { ok, detail: `avant : tout véhicule à moins de 4,5 m du poteau, quel que soit son cap, « grillait » le feu (reculer du parking = ★) · marche arrière devant la ligne : ${r.arriere.m || 'rien'}, ★${r.arriere.w} · marche avant dans le sens du feu : ${r.avant.m || 'rien'}` };
 });
+
+test('un homme de gang en faction n\'est pas « paré » à chaque coup : le poste de garde n\'est pas une garde de poings', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 16, frais: true });
+    const m = G.gangs[0].membres.find(x => !x.ko && x.av);
+    const hp0 = m.hp; m.av.rig.garde = false;
+    const avant = { garde: Array.isArray(m.garde), rigGarde: !!m.av.rig.garde };
+    let pares = 0, coups = 0;
+    for (let i = 0; i < 6; i++) {
+      P.pos.set(m.x - 1.2, 0.3, m.z); P.facing = Math.PI / 2; P.punchT = 0; P.combo = 0;
+      const h = m.hp; G.punch(); for (let k = 0; k < 40; k++) G.step(1 / 60, true);
+      if (m.hp < h) coups++; if (/Paré/.test(document.getElementById('msg').textContent)) pares++;
+    }
+    return { avant, hp0, hp: m.hp, coups, pares, perdu: hp0 - m.hp };
+  });
+  const ok = r.avant.garde && r.coups >= 5 && r.pares === 0 && r.perdu >= 60;
+  return { ok, detail: `avant : \`m.garde\` (le POSTE [x, z] du gangster) était lu comme « poings levés » → chaque coup paré à 45 %, 15 coups pour 50 ❤️ · maintenant 6 directs sur un homme en faction (poste=${r.avant.garde}) : ${r.coups} coups portés, ${r.pares} parés, ❤️ ${r.hp0} → ${r.hp} (−${r.perdu})` };
+});

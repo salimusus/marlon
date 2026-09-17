@@ -227,6 +227,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`, `img/s1/s1-aide-tv.png`.
 
 ### 8. Le pavé tactile affiche une aide illisible pour un enfant
+✅ RÉPARÉ — `#padLeg` est une fiche : titre, une ligne par bouton (pastille blanche + action), les cas particuliers en petit dessous, plus de parenthèses imbriquées. Mesuré 1280×720 : 520×504 px à 15 px, 13 lignes, dans l'écran ; TV 1920×1080 : 806×694 px à 25,6 px, dans l'écran — commit 27aa6bf
 - **Gravité** : GÊNANT
 - **Reproduire** : en ville, appuyer sur le pavé tactile.
 - **On voit** : en 1280×720, quatre lignes de texte minuscule (11 px) avec des parenthèses imbriquées « (arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre) », par-dessus le chat et les bots ; en TV le texte est grand mais les parenthèses se cassent sur trois lignes et le bloc cache tout le centre de l'écran.
@@ -258,6 +259,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s2/s2-baisse.png`, `img/s2/s2-baisse-marche.png` (comparer avec `s2-saut.png`).
 
 ### 17. À pied, on « glisse » à 6,9 m/s (25 km/h) sans courir
+✅ RÉPARÉ — `SPEED` 7 → 5,6 m/s, course ×1,3 (7,3 m/s) et L3 à BASCULE (un appui lance, le suivant arrête, plus besoin de maintenir). Mesuré sur la rue Est-Ouest : marche 5,6 m/s (21,6 m en 4 s), L3 → « 🏃 Tu cours ! » 7,28 m/s, L3 → « 🚶 Tu marches », stick à moitié 2,2 m/s — commit 5ad367a
 - **Gravité** : GÊNANT
 - **Reproduire** : stick avant 4 s depuis le point d'apparition.
 - **On voit** : 27,5 m parcourus en 4 s (`vel.z = −6,43`), on traverse tout le centre-ville en 9 s ; les jambes ne suivent pas cette vitesse : impression de patinage. Courir demande de MAINTENIR L3 enfoncé tout en poussant le stick (un appui bref n'enclenche rien : `P.run` retombe à false dès qu'on relâche) — difficile pour une petite main et rien ne le dit.
@@ -265,6 +267,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s2-pc.log` → `deplacementZ: -27.56` en 4 s ; `course.run = false` après un appui L3.
 
 ### 18. Dès la première minute, les habitants se battent entre eux et crient « au secours ! police !! »
+✅ RÉPARÉ — `vieTick` lançait vol / braquage / bagarre dès les premières secondes et `botSay` écrivait dans le chat depuis l'autre bout de la ville. Plus aucun délit pendant les 3 premières minutes (`VIE_CALME`), une bagarre ne se lance qu'à 45 m du joueur avec une victime à moins de 40 m (il la VOIT), et un habitant à plus de 60 m n'écrit plus dans le chat. Mesuré : 120 s de chat, 26 lignes, 0 « attaque / au secours / police / chapardé » — commit 111af2f
 - **Gravité** : GÊNANT (l'enfant n'a rien fait, la ville hurle)
 - **Reproduire** : Ville, marcher 20 s, lire le chat.
 - **On voit** : « Momo_king : au secours ! », « Momo_king : aïe ! », « Momo_king : police !! », « 💥 Ines_gg attaque Karim_flash ! », « 🕵️ Lucas_2014 a chapardé 31 🪙 dans une boutique » — sans qu'on voie rien de tout ça.
@@ -317,6 +320,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On devrait voir** : la caméra collée derrière la voiture, qui passe devant les poteaux.
 
 ### 33. Sortir de prison = finir un parcours d'obby entier
+✅ RÉPARÉ — bouton « ⏳ Attendre 30 s en cellule » (45 s délit moyen, 60 s grave) dans la fenêtre de la prison, compte à rebours dans la pastille (« ⏳ Libre dans 30 s »), libération automatique. Mesuré : bouton présent, pastille, `jail.on = false` à 30 s — commit 02bd822
 - **Gravité** : GÊNANT (design, mais bloquant pour un enfant sans pièces)
 - **Reproduire** : se faire arrêter avec 25 🪙 et 0 pass.
 - **On voit** : « Pour sortir, réussis les épreuves ci-dessous (jusqu'au drapeau final), paie 100 🪙 (tu as 25), ou utilise un pass liberté (2 pour cette partie) » — Prairie ▶ / Volcan ▶. Sans pass ni argent, l'enfant doit finir 8 étapes d'obby pour retourner en ville.
@@ -428,6 +432,66 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : assis en classe, leçon ouverte, ◯.
 - **On voit** : la fenêtre se ferme, `P.sit` reste vrai, le message dit encore « 🪑 Assis (Espace / SAUT pour se lever) » — il faut un second ◯ (confirmé au scénario 11c : `leve1.sit = true`, `leve2.sit = false`), et la consigne parle d'« Espace ». À la manette, depuis les pastilles d'âge, ↓ saute sur la 2e réponse (« 2️⃣ cercle ») et non la 1re.
 - **Sonde** : `s11b-pc.log` `leve = {sit: true, ui: null}`.
+
+## CONTRÔLE DU JOUEUR SUR 541d0e0 (entrées 67 à 74, copiées de r70-joueur 15343e7)
+
+### 67. « Entrer dans Marlon » met d'office l'enfant « dans la guerre » : le conseil 🚩 revient dès la première seconde
+✅ RÉPARÉ — `startGame()` posait `guerre.vu = true` et affichait « … ouvre la carte avec M » : retirés ; message « 🏙️ Bienvenue à Marlon ! Balade-toi : △ pour agir… » (passe par ctrlText). Mesuré profil vierge : `guerre.vu = false`, `joueurDansLaGuerre() = false`, pastille « 🏙️ Balade · 0 pts » — commit 5976786
+- **Gravité** : GRAVE (défait la réparation n° 3 : la première pastille d'un profil vierge parle d'un gang qu'il n'a pas)
+- **Reproduire** : profil vierge, accueil, ✕ (« Entrer dans Marlon »), attendre 2 s au point d'apparition. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
+- **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s (tronqué « 🚩 Il te faut un ... » en 1280), et le gros message « MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5 » — la touche « M » à un enfant à la manette.
+- **On devrait voir** : l'action du lieu (« 🏙️ Balade »), rien de la guerre tant que l'écran 🚩 n'a pas été ouvert (c'était la règle posée par la réparation n° 3).
+- **Capture** : `img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`.
+- **Sonde** : `c1-pc.log` / `c1-tv.log` `c3.acts = ["🚩 Il te faut un membre de ton gang avec toi"]`. Cause : index.html l. 23629 (`chooseWorld(4); guerre.vu = true; msg('MARLON · Recrute…')`) — `guerre.vu` vaut vrai avant même le premier pas, `joueurDansLaGuerre()` répond donc toujours vrai.
+
+### 68. Le panneau « EMPIRE URBAIN » couvre le bas de l'écran en permanence, minuscule en TV, et parle de la touche « M »
+✅ RÉPARÉ — `#empireHud` n'apparaît que pendant une opération ou une attaque ET une fois dans la guerre ; règles `body.tv` (largeur 30 vw, texte en unités --uh) ; le bouton dit « CARTE · ↑ tenu » quand une manette pilote. Mesuré profil vierge : `hidden = true`, display none — commit e4ac561
+- **Gravité** : GÊNANT (première minute ; en TV le texte fait 12 px sur un écran de 1080 lignes : illisible du canapé)
+- **Reproduire** : entrer dans la Ville (profil vierge), regarder le bas de l'écran. Reproduit 2/2 (PC, TV).
+- **On voit** : un cadre sombre de 390 px centré en bas : « EMPIRE URBAIN · 0/12 territoires · Centre-ville · objectif à 37 m · CARTE · M / PAVÉ PS5 », jamais effacé (il n'a pas de règle `body.tv`, ni de traduction manette : `#empireMapBtn` est un texte fixe l. 1110). Il se superpose aux chevrons de GPS et au message central quand ils descendent.
+- **On devrait voir** : rien de l'empire tant que l'enfant n'a pas ouvert la carte ; sinon un panneau qui grossit en TV et dit « Pavé tactile » à la manette.
+- **Capture** : `img/c1/c1-14s.png`, `img/c1/c1-14s-tv.png`.
+
+### 69. La première voiture du parking fonce dans le grillage du terrain de foot : R2 tout droit = 🔧 +21 % en 5 s
+- **Gravité** : GÊNANT (suite du n° 26 : la voiture part maintenant, mais la sortie du parking est un mur)
+- **Reproduire** : parking du centre (voitures en (−17,9…−8, 10), cap nord), △ pour monter, R2 à fond 5 s sans toucher au stick. Reproduit 2/2 (`c3` run 1 et run 2).
+- **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
+- **On devrait voir** : des places qui donnent sur la rue (cap est ou ouest, ou une sortie marquée) et une accélération plus douce sur les premiers mètres.
+- **Sonde** : `c3-pc.log` `c26.gaz5s = {depl: 102.08, dmg: 20.87, spd: 27.12, cap: 1.08}`.
+
+### 70. Au stick, sortir du parking du centre détruit la voiture : 🔧 100 % et incendie en 40 s, la dépanneuse l'emporte avec le conducteur éjecté
+- **Gravité** : GRAVE (la première voiture d'un enfant brûle avant même d'avoir quitté le parking)
+- **Reproduire** : parking du centre, △ pour monter, puis conduire « vers le parc » comme un enfant (R2 à 80 %, stick pour viser le nord, frein quand ça part de travers) pendant 40 s. Reproduit 3/3 (`l1a` run 1 et run 2 en PC, `l2a` en TV, mêmes commandes).
+- **On voit** : la voiture bute sur le grillage du foot et les tables du snack, les dégâts grimpent 2 % → 30 % → **96,6 %** en 41 s sans jamais dépasser 30 km/h, elle prend feu (run 1 : `img/l1/l1a-11-roule-garage.png`, carcasse en flammes devant la terrasse), le personnage se retrouve à pied à côté (run 2 : `car: false` à t+84 s, position (−12,8, 13,1)), puis « ⛓️ Véhicule chargé sur le plateau : direction le garage » — la dépanneuse emporte l'épave. Aucun message n'a dit à l'enfant pourquoi la voiture chauffait ni qu'elle allait brûler.
+- **On devrait voir** : des dégâts proportionnels à la vitesse (rien sous 15 km/h), un avertissement clair (fumée, « 🔧 Ta voiture est abîmée : va au garage ») bien avant l'incendie, et une sortie de parking évidente.
+- **Sonde** : `l1a-pc.log` `conduite[0] = {secondes: 41, dmg: 96.63, fin: [−16.2, 9.5]}` ; `bilan.defauts` : « ⚙️ A2 · 0 km/h · 🔧 100% » à t+84 s. En TV (`l2a-tv.log`) : `dmg: 100` à 41 s, le joueur éjecté a perdu 28 ❤️ (100 → 72) sans message, et △ le fait REMONTER dans l'épave (« ⚙️ A1 · 0 km/h · 🔧 100% »).
+
+### 71. En jeu, la bague jaune de la manette reste posée sur le bouton du chat (haut gauche) pendant toute la partie
+- **Gravité** : GÊNANT (l'enfant croit qu'il a « sélectionné » quelque chose ; ✕ ne fait rien d'utile)
+- **Reproduire** : accueil, ✕ (« Entrer dans Marlon »). Reproduit 3/3 (`c1` PC, `c1` TV, `l1a`).
+- **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
+- **On devrait voir** : aucune bague hors des menus.
+- **Sonde** : `c1-pc.log` `c4.apresX1.focus = "chatBtn:"`, `l1a-pc.log` `focusEnJeu.el = "chatBtn:"`.
+
+### 72. La villa d'un joueur qui vient d'arriver est cambriolée : tout son porte-monnaie (25 🪙 → 0) disparaît sans qu'il ait rien vu
+- **Gravité** : GRAVE (première partie : l'enfant perd tout son argent pendant qu'il visite la banque, sans explication visible)
+- **Reproduire** : partie neuve, se promener 10 minutes loin de la villa (contrôle 2 : banque, hôpital…). **Dépend de `Math.random`** : à chaque décision d'un gang (`gangTick`, l. 26547), 7 % de chances de tirer une villa, et si c'est celle du joueur (`v.mine`) le cambriolage démarre et réussit 55 s plus tard si personne n'est à moins de 22 m. Vu 1 fois sur 6 parties de contrôle (`img/c2/c2-banque-2-regard.png` : « 💸 Cambriolage réussi : ils sont partis avec 25 🪙 », chat « 💸 La villa de Joueur42 a été cambriolée (−25 🪙) », porte-monnaie 0 dans le HUD) ; la sonde `c8.js` (hasard forcé à 0,8 pendant 200 s) n'a pas retiré la villa du joueur.
+- **On voit** : seul avertissement, une ligne de chat « 🏠 Des ombres rôdent autour de ta villa… » (sans alarme achetée), à 175 m de là ; puis `wallet -= min(butin 60–240, wallet)` : un enfant à 25 🪙 perd tout.
+- **On devrait voir** : pas de cambriolage tant que le joueur n'a rien mis dans sa villa ni ouvert la guerre des gangs, un plafond (jamais plus de la moitié, comme l'amende du n° 35) et une alerte visible (message central + GPS).
+
+### 73. Le pavé tactile ouvre « EMPIRE · Carte stratégique » : un écran d'adulte, sans bague, coupé en bas en 1280×720
+- **Gravité** : GÊNANT (c'est le bouton « aide » de l'enfant : il tombe sur un tableau de bord de stratégie)
+- **Reproduire** : en ville à la manette, appuyer sur le pavé tactile. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
+- **On voit** : le jeu en pause sous un grand cadre « EMPIRE · Carte stratégique — Contrôle les 12 secteurs, puis tiens la ville pendant 90 secondes · 🚩 0/12 · difficulté 🔥 palier 1/5 », une carte à 12 numéros, un encart « RENSEIGNEMENTS · SECTEUR », cinq cartes d'opérations (« Reconnaissance du Nord · PREMIÈRE RÉUSSITE · 120 pièces · 25 respect »…). La bague reste sur le bouton du chat derrière (`aide.focus = chatBtn`), il faut un premier ↓ pour qu'elle apparaisse sur « Fermer × ». En 1280×720 la dernière carte (« Tenir la ligne ») passe sous le bord de l'écran (`img/l1/l1a-04-aide.png`) ; en TV ça tient (bas à 1048 px sur 1080, `img/l2/l1a-04-aide-tv.png`). Aucun rappel des boutons de la manette nulle part (l'ancienne aide du n° 8 a disparu).
+- **On devrait voir** : sur le pavé, la fiche des boutons PS5 (une ligne par bouton) ; la carte stratégique derrière un bouton nommé, avec la bague posée sur « Fermer » ou le premier choix.
+- **Sonde** : `l1a-pc.log` / `l2a-tv.log` `aide = {ui: "guerre", focus: chatBtn, croixBas: [empireClose:Fermer ×, operation:…]}`.
+
+### 74. ↑ (ordres) : l'écran « 📣 À qui donner un ordre ? » n'a pas de bague, dit « Clique sur quelqu'un » et sa liste est coupée
+- **Gravité** : GÊNANT (à la manette, l'enfant ne peut désigner personne ; c'est pourtant l'entrée du recrutement promis par le message d'accueil « Recrute un ami via les ordres ↑ »)
+- **Reproduire** : en ville, appui court sur ↑. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
+- **On voit** : douze cartes d'habitants (« Momo_king 4 m »…), la bague `.focustv` reste sur le bouton CACHÉ « Fermer × » de la carte stratégique (`focus.visible = false`), la consigne dit « Clique sur quelqu'un… Tu peux aussi écrire son nom dans le chat », et la 4e rangée de cartes passe sous le bord de la fenêtre en 1280×720 (`img/l1/l1c-14-ordres.png`).
+- **On devrait voir** : la bague sur la première carte, ↓/→ pour changer, ✕ pour choisir, une fenêtre qui défile ou tient dans l'écran.
+- **Sonde** : `l1c-pc.log` / `l2c-tv.log` `ordres.focus = {el: "empireClose:Fermer ×", visible: false}`.
 
 ## COSMÉTIQUE
 

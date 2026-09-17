@@ -14257,7 +14257,12 @@ const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
 // que deux bulles ou deux noms se recouvrent, pas dans le monde. Deux habitants à 2 m l'un de
 // l'autre mais l'un DERRIÈRE l'autre se lisaient « IneZoe_rider » (n° 9 du Joueur).
 const _ecranV = new THREE.Vector3();
-function ecranDe(av, yOff) { _ecranV.set(av.group.position.x, av.group.position.y + yOff, av.group.position.z).project(camera); return [_ecranV.x, _ecranV.y, _ecranV.z]; }
+function ecranDe(av, yOff) {
+  const p = av.group.position;
+  // caméra à plus de 40 m (ou restée ailleurs, comme sur le banc d'essai) : la projection ne veut rien dire
+  if (Math.hypot(p.x - camera.position.x, p.z - camera.position.z) > 40) return null;
+  _ecranV.set(p.x, p.y + yOff, p.z).project(camera); return _ecranV.z < 1 ? [_ecranV.x, _ecranV.y, _ecranV.z] : null;
+}
 function tickBubbles() {
   const cp = camera.position;
   const parlants = [];   // ceux dont la bulle est visible : on les empile plus bas
@@ -14282,7 +14287,7 @@ function tickBubbles() {
     for (let j = 0; j < i; j++) {
       const b = parlants[j];
       const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 3.2
-        || (a.e[2] < 1 && b.e[2] < 1 && Math.abs(a.e[0] - b.e[0]) < 0.3 && Math.abs(a.e[1] - b.e[1]) < 0.28);   // ou superposées À L'ÉCRAN
+        || (a.e && b.e && Math.abs(a.e[0] - b.e[0]) < 0.3 && Math.abs(a.e[1] - b.e[1]) < 0.28);   // ou superposées À L'ÉCRAN
       if (!pres) continue;
       y = Math.max(y, b.av.bubble.position.y + b.h * 1.25);
     }
@@ -14309,7 +14314,7 @@ function tickBubbles() {
     for (let j = 0; j < i; j++) {
       const b = nommes[j];
       const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 2.2
-        || (a.e[2] < 1 && b.e[2] < 1 && Math.abs(a.e[0] - b.e[0]) < 0.16 && Math.abs(a.e[1] - b.e[1]) < 0.09);   // ou superposés À L'ÉCRAN
+        || (a.e && b.e && Math.abs(a.e[0] - b.e[0]) < 0.16 && Math.abs(a.e[1] - b.e[1]) < 0.09);   // ou superposés À L'ÉCRAN
       if (!pres) continue;
       y = Math.max(y, b.tg.position.y + b.h * 1.15);
     }

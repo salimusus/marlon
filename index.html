@@ -26477,7 +26477,14 @@ function camPerche(dt, aiming) {
       // (le plafond se rouvre PROGRESSIVEMENT quand la camera redescend, et il est DEJA
       //  grand ouvert quand la montee s'annule : un seuil net faisait sauter la perche de
       //  80 cm d'une image a l'autre — l'a-coup dont se plaignait le joueur)
-      if (cam.hausse > 0) d = Math.min(d, camConfortVeh() + 0.8 + clamp((0.25 - cam.hausse) / 0.246, 0, 1) * 12);
+      // ... MAIS PAS DANS UN VÉHICULE (round 72). Ce plafond est le garde-fou du PIÉTON : une
+      // fois la caméra passée par-dessus un toit, la place libre redevient énorme et l'on
+      // jouerait à la fourmi. En voiture il faisait exactement le contraire du service rendu :
+      // dès qu'un rayon latéral du cône touchait un trottoir, la montée s'enclenchait et la
+      // perche était RABOTÉE de 10,74 m à 3,45 m EN UNE SECONDE — le grand plongeon dans la
+      // carrosserie mesuré en pleine route, alors que RIEN ne barrait la ligne de vue. Dans un
+      // véhicule la montée ne fait plus que ce que son nom dit : elle donne de la HAUTEUR.
+      if (cam.hausse > 0 && !vehiculeAssis()) d = Math.min(d, CAM_CONFORT + 0.8 + clamp((0.25 - cam.hausse) / 0.246, 0, 1) * 12);
       // LIMITEUR DE RETOUR. Quelle que soit la raison qui libère la perche — le mur qui
       // s'éloigne, la montée qui s'annule, la molette — elle ne se rallonge JAMAIS de plus de
       // cinq mètres par seconde. C'est le dernier à-coup qui restait : en sortant d'un coin,

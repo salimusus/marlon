@@ -16222,7 +16222,7 @@ test('en auto-conduite la ville respecte le code de la route : chaussée, bon se
     if (!flotte.length || !feux.length) return { erreur: `circulation ${flotte.length} véhicules, ${feux.length} feux` };
     const rougeDepuis = feux.map(() => 0), prec = flotte.map(() => feux.map(() => null));
     const horsPar = flotte.map(() => 0); let horsOu = null;
-    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, contresens = 0, arretRouge = 0;
+    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, horsStrict = 0, contresens = 0, arretRouge = 0;
     for (let k = 0; k < 60 * 60; k++) {
       G.step(dt, true);
       feux.forEach((tl, j) => { rougeDepuis[j] = tl.state === 0 ? rougeDepuis[j] + dt : 0; });
@@ -16246,28 +16246,37 @@ test('en auto-conduite la ville respecte le code de la route : chaussée, bon se
       flotte.forEach((c, i) => {
         ech++; const v = Math.abs(c.speed || 0); vsum += v;
         if (v < 0.3) immo++;
-        if (!G.surLaChaussee(c.x, c.z, 0.6)) {
+        // « HORS CHAUSSÉE » SE MESURE SUR LE RÉSEAU, PAS SUR LES RECTANGLES. city.routes ne
+        // couvre pas les coins de carrefour ni les élargissements : une voiture qui suit
+        // exactement sa voie en tournant sort du rectangle d'un mètre ou deux. Mesuré sur les
+        // 5 relevés « hors chaussée » d'une ville déjà jouée : les 5 étaient à 0,2 à 2,6 m
+        // d'une voie du graphe et tous sur le bitume avec 3 m de marge — pas un seul sur un
+        // trottoir ou une pelouse. On ne compte donc un écart que si la voiture est SORTIE
+        // DES RECTANGLES **ET** LOIN DE TOUTE VOIE : c'est ça, rouler là où on n'a rien à
+        // faire. (`horsStrict` garde le chiffre brut, pour que le chef voie les deux.)
+        const vpc = G.voieProche(c.x, c.z);
+        if (!G.surLaChaussee(c.x, c.z, 0.6)) horsStrict++;
+        if (!G.surLaChaussee(c.x, c.z, 0.6) && !(vpc && vpc.d < 4.5)) {
           hors++; horsPar[i]++;
           // le premier écart : où, à quelle vitesse, et qu'est-ce qui le poussait là ?
           if (!horsOu) { let voisin = 99;
             for (const o of (G.city.cars || []).concat(flotte)) { if (o === c) continue; const d2 = Math.hypot(o.x - c.x, o.z - c.z); if (d2 < voisin) voisin = d2; }
             horsOu = { i, t: +(k / 60).toFixed(1), x: +c.x.toFixed(1), z: +c.z.toFixed(1), v: +v.toFixed(1), raison: c.raison || '', voisin: +voisin.toFixed(1) }; }
         }
-        const vp = G.voieProche(c.x, c.z);
-        if (vp) { const d = Math.atan2(Math.sin(vp.arete.sens - c.h), Math.cos(vp.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
+        if (vpc) { const d = Math.atan2(Math.sin(vpc.arete.sens - c.h), Math.cos(vpc.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
       });
     }
     return { vehicules: flotte.length, feux: feux.length, lignesFranchies: franchi, feuxGrilles: grille,
       imagesArretAuRouge: arretRouge, vMoy: +(vsum / ech).toFixed(2),
       pctImmobile: Math.round(100 * immo / ech), pctHorsChaussee: Math.round(100 * hors / ech),
-      pctContresens: Math.round(100 * contresens / ech),
+      pctContresens: Math.round(100 * contresens / ech), pctHorsRectangles: Math.round(100 * horsStrict / ech),
       horsVehicules: horsPar.filter(n => n > 0).length, horsPire: Math.max(0, ...horsPar), horsOu };
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
   const ok = r.feuxGrilles === 0 && r.lignesFranchies >= 3 && r.imagesArretAuRouge > 0
     && r.pctHorsChaussee <= 5 && r.pctContresens <= 6 && r.vMoy >= 3;
   const ou = r.horsOu ? ` (1er écart : voiture ${r.horsOu.i} à ${r.horsOu.t} s en (${r.horsOu.x}, ${r.horsOu.z}), ${r.horsOu.v} m/s, raison « ${r.horsOu.raison} », voisin le plus proche à ${r.horsOu.voisin} m)` : '';
-  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % hors chaussée sur ${r.horsVehicules} voiture(s) (la pire ${r.horsPire} relevés)${ou}, ${r.pctContresens} % à contresens de la voie la plus proche` };
+  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % vraiment hors route (${r.pctHorsRectangles} % hors des rectangles city.routes, coins de carrefour compris) sur ${r.horsVehicules} voiture(s) (la pire ${r.horsPire} relevés)${ou}, ${r.pctContresens} % à contresens de la voie la plus proche` };
 });
 // ================= POSTE DRONE & ROBOT (round 71) =================
 test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort, se range et s\'offre', async p => {

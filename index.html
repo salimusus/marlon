@@ -9642,7 +9642,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
   box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
   box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
-  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.9, 1.9, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
+  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.45, 1.98, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); box(bx - 6.45, 1.6, bz + dz, 0.2, 0.04, 0.3, 0x2b2f3a, { deco: true, studs: false }); box(bx - 6.45, 1.68, bz + dz, 0.05, 0.12, 0.05, 0x2b2f3a, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
   city.bankDesk = { x: bx - 4.4, z: bz };
   for (const [dx, dz] of [[8, -8], [8, 8], [-8, 8], [-8, -8]]) { box(bx + dx, 0.7, bz + dz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false }); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), lam(0x3fae4a)); pl.position.set(bx + dx, 1.75, bz + dz); worldGroup.add(pl); }
   for (const dz of [-3, 3]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);   // rapprochés du centre : les volées déplacées passaient dessus
@@ -9697,10 +9697,15 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     box(bx - 5.5, 0.95, bz - 2, 5.2, 1.2, 0.9, bois, { studs: false, noRoute: true });
     box(bx - 5.5, 1.62, bz - 2, 5.4, 0.14, 1.1, or, { deco: true, studs: false });
     box(bx - 5.5, 2.3, bz - 2, 5.2, 1.2, 0.06, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
-    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 1.95, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+    // Les écrans ont un PIED (socle + tige) et la lampe un vrai pied : posés sur le comptoir,
+    // ils ne flottent plus et le cône jaune n'est plus une « pyramide » (n° 25 du Joueur).
+    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 2.06, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+      box(bx - 5.5 + dx, 1.71, bz - 2.2, 0.3, 0.04, 0.2, 0x3b4252, { deco: true, studs: false }); box(bx - 5.5 + dx, 1.77, bz - 2.2, 0.06, 0.1, 0.05, 0x3b4252, { deco: true, studs: false });
       box(bx - 5.5 + dx, 1.72, bz - 1.9, 0.7, 0.05, 0.35, 0x3b4252, { deco: true, studs: false }); }
-    { const l = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.4, 10), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8 }));
-      l.position.set(bx - 7.8, 1.95, bz - 2); worldGroup.add(l); }
+    { const pied = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), lam(0x2b2f3a)); pied.position.set(bx - 7.8, 1.71, bz - 2); worldGroup.add(pied);
+      const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 8), lam(0x2b2f3a)); tige.position.set(bx - 7.8, 1.93, bz - 2); worldGroup.add(tige);
+      const l = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8, side: THREE.DoubleSide }));
+      l.position.set(bx - 7.8, 2.2, bz - 2); worldGroup.add(l); }
     // deux distributeurs automatiques près de l'entrée
     for (const dz of [-3.4, 3.4]) {
       const ex2 = bx + W / 2 - 1.3;
@@ -10750,8 +10755,10 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   const W = 26, D = 22, H = 9;
   plat(hx, 0.36, hz, W, D, 0xeef3f8, { studs: false, noRoute: true }, 0.12);
   for (let i = 0; i < 13; i++) for (let j = 0; j < 11; j++) if ((i + j) % 2 === 0) box(hx - 12 + i * 2, 0.37, hz - 10 + j * 2, 1.9, 0.02, 1.9, 0xe2ebf5, { deco: true, noEdges: true, studs: false });   // carrelage
-  box(hx + 5, 0.38, hz, 2, 0.02, D - 2, 0x35d0e6, { deco: true, noEdges: true, studs: false });   // ligne de guidage bleue
-  box(hx - 3, 0.38, hz, 2, 0.02, D - 2, 0x5cc453, { deco: true, noEdges: true, studs: false });
+  // Deux LIGNES de guidage au sol (40 cm), comme dans un vrai hôpital : à 2 m de large on
+  // les prenait pour des tapis (n° 25 du Joueur).
+  box(hx + 5, 0.38, hz, 0.4, 0.02, D - 2, 0x35d0e6, { deco: true, noEdges: true, studs: false });   // ligne de guidage bleue
+  box(hx - 3, 0.38, hz, 0.4, 0.02, D - 2, 0x5cc453, { deco: true, noEdges: true, studs: false });   // ligne de guidage verte
   box(hx, H / 2, hz - D / 2 + 0.2, W, H, 0.4, 0xf4f6fa, { studs: false, noRoute: true }); box(hx, H / 2, hz + D / 2 - 0.2, W, H, 0.4, 0xf4f6fa, { studs: false, noRoute: true });
   box(hx - W / 2 + 0.2, H / 2, hz, 0.4, H, D, 0xf4f6fa, { studs: false, noRoute: true });
   const ex = hx + W / 2 - 0.2;
@@ -12091,7 +12098,7 @@ function buildConcession(cx, cz) {
   box(kx, 1.66, kz, 5.8, 0.14, 1.5, 0x2b2f3a, { deco: true, studs: false });
   box(kx, 3.2, kz - 0.9, 5.2, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🔑 VENTE · E', CONCES_JAUNE) }), deco: true, noEdges: true });
   for (const dx of [-1.9, 1.9]) box(kx + dx, 2.4, kz - 0.55, 0.12, 1.3, 0.12, 0x8f98ab, { deco: true, studs: false });
-  const vend = mannequin(kx + 1.2, kz - 1.2, 0, { jersey: 12, jacket: 1, hat: 'top', glasses: true });
+  const vend = mannequin(kx + 1.2, kz - 1.2, 0, { jersey: 12, jacket: 1, hair: 1 });   // en veste, tête nue : un vendeur, pas un magicien (n° 25)
   vend.tag.visible = true; renommeEtiquette(vend, 'Gérard Boulon');
   city.concesDesk = { x: kx, z: kz + 1.5 };
   city.concession = { x: cx, z: cz + 20 };

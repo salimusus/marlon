@@ -2175,8 +2175,11 @@ window.__G = {
   ARETES: typeof ARETES !== 'undefined' ? ARETES : null,
   DETAIL_OMBRE_MOBILE: typeof DETAIL_OMBRE_MOBILE !== 'undefined' ? DETAIL_OMBRE_MOBILE : 0,
   OMBRE_CADRE: typeof OMBRE_CADRE !== 'undefined' ? OMBRE_CADRE : 0,
-  solids: typeof solids !== 'undefined' ? solids : null,
-  worldGroup: typeof worldGroup !== 'undefined' ? worldGroup : null,
+  // PIEGE (round 71) : PAS de « solids: solids » ici. Cette cle ECRASE le « get solids() »
+  // ecrit plus haut, et fige un INSTANTANE du tableau : apres une reconstruction du monde, les
+  // tests lisaient l'ancien tableau (vide) et cinq d'entre eux tombaient sur « mur est null ».
+  // Un tableau qui vit avec le monde s'exporte en accesseur, jamais en valeur.
+  get worldGroup() { return typeof worldGroup !== 'undefined' ? worldGroup : null; },
   // ---- poste DRONE & ROBOT (round 71) : ajoute tes exports SOUS cette ligne ----
   get sac() { return typeof sac !== 'undefined' ? sac : null; },
   get JOUETS() { return typeof JOUETS !== 'undefined' ? JOUETS : null; },

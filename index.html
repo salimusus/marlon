@@ -17220,6 +17220,14 @@ function monterAvecBot(b) {
   // tout le trajet, plainte n° 1 du round. `drive.assis = false` fige la pose dès la première
   // image : on APPARAÎT assis, sans une demi-seconde debout dans la caisse.
   st.passager = true; city.rideBot = b; me.group.visible = true; drive.assis = false; P.vel.set(0, 0, 0);
+  // LA PERCHE REPART DE ZERO QUAND ON MONTE. Le joueur est TELEPORTE sur le siege : la
+  // longueur de perche mesuree juste avant, debout a cote de la portiere, n'a plus aucun sens.
+  // Comme elle ne se rallonge que de 5 m/s (CAM_RETOUR), la camera restait collee a la
+  // carrosserie pendant deux bonnes secondes apres chaque montee — mesure : 1,28 m a la
+  // dixieme image, 3,90 m a la soixantieme. C'est exactement ce que montre la capture du chef.
+  // On efface la mesure : l'image suivante repose la camera a la bonne distance, d'un coup,
+  // comme le fait deja tout changement de monde.
+  cam.libre = null; cam.dLisse = null; cam.hausse = 0; cam.hausseCible = 0; cam.hauT = 0; cam.mesT = 0; cam.recale = true;
   clearBeacon(); engine.start(moto ? 'moto' : 'car', moteurDe(drive.car));
   botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
@@ -20915,6 +20923,10 @@ function enterCar(c) {
   if (c.bodyMat && !c.kart && !c.heli && !c.rider && c.tune !== tuning) { try { tuneApply(c, tuning); } catch (e) {} }   // la caisse reprend le look de l'atelier
   if (c.solid) { c.solid.ai = true; navSale(); }   // ma voiture bouge : la police ne la considère plus comme un obstacle fixe
   $('carBtn').textContent = '🚶'; cam.freeUntil = 0;
+  // ... et la perche repart de zéro ici aussi : au volant comme en passager, on est TÉLÉPORTÉ
+  // sur le siège, et la longueur mesurée debout à côté de la portière n'a plus de sens (elle
+  // ne se rallonge que de 5 m/s, d'où deux secondes de tôle plein écran après chaque montée).
+  cam.libre = null; cam.dLisse = null; cam.hausse = 0; cam.hausseCible = 0; cam.hauT = 0; cam.mesT = 0; cam.recale = true;
   if (c.heli) { msg(isMobile ? '🚁 ⬆ monter, ⬇ descendre, 🏁 course d\'anneaux' : '🚁 Espace = monter, Ctrl = descendre, F = course d\'anneaux', 2400); $('jumpBtn').textContent = '⬆'; $('emoteBtn').textContent = '⬇'; }
   else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
   sonPortiere(c, true);   // on ouvre, on s'installe, la portière claque : on monte VRAIMENT dans la voiture
@@ -22040,10 +22052,17 @@ function poseJoueurAuVolant(dt) {
 // LA SENSATION DE VITESSE, en UN SEUL endroit : le champ de vision qui s'ouvre, la caméra
 // qui recule et la vibration du châssis. frame() l'appelle à chaque image ; le banc d'essai
 // peut l'appeler seul, sans dépendre de la cadence d'affichage (2 images/s en rendu logiciel).
+// LA VITESSE RESSENTIE, DE 0 A 1. Elle ne lisait que `drive.car` : PASSAGER d'un ami ou d'un
+// membre du gang, le jeu la croyait nulle — pas de champ qui s'ouvre, pas de recul de caméra,
+// pas de vibration : on était emmené à la villa comme sur un tapis roulant. On répond
+// maintenant pour le véhicule OU L'ON EST, volant en main ou pas (vehiculeDuJoueur), et la
+// vitesse vient de `drive.speed` au volant, de `c.speed` quand c'est un bot qui conduit.
 function vitesseRel() {
-  const c = drive.car;
+  const vj = typeof vehiculeDuJoueur === 'function' ? vehiculeDuJoueur() : null;
+  const c = vj ? vj.car : drive.car;
   if (!c || c.heli) return 0;
-  return clamp(Math.abs(drive.speed) / ((c.spec && c.spec.max) || 26), 0, 1.2);
+  const v = vj && !vj.volant ? (c.speed || 0) : drive.speed;
+  return clamp(Math.abs(v) / ((c.spec && c.spec.max) || 26), 0, 1.2);
 }
 function reculConduite() { return vitesseRel() * 2.6; }   // la caméra recule avec la vitesse (2,6 m à fond) : la sensation de vitesse du test 288 ; elle part de base + 2 m au lieu de base + 4 m, donc reste plus près qu'avant (n° 32)
 function camConduite(dt) {
@@ -22535,6 +22554,27 @@ function vehiculeDuJoueur() {
     return { car: c, place: nom, volant: false, ami: b };
   }
   return null;
+}
+// Raccourci : LE VÉHICULE DANS LEQUEL LE JOUEUR EST ASSIS, volant en main ou non, ou null.
+// La caméra (camPerche) et la sensation de vitesse (vitesseRel) passent par lui : sans ça
+// chacune reposait la question à sa façon et le PASSAGER passait entre les mailles.
+// LA DISTANCE CONFORTABLE DÉPEND DE LA TAILLE DE L'ENGIN. 4,6 m derrière une voiture de
+// 4,4 m, on voit la voiture et la route ; 4,6 m derrière un CAMION DE POMPIERS de 8 m, la
+// caméra est au-dessus de sa propre caisse et l'image est un aplat de tôle rouge — le défaut
+// mesuré par le chef, joueur passager (4,47 m de perche, objectif à 5,65 m de haut). On
+// demande donc au moins la demi-longueur du véhicule plus deux mètres et demi.
+function camConfortVeh() {
+  const c = vehiculeAssis();
+  if (!c || !c.solid) return CAM_CONFORT;
+  return Math.max(CAM_CONFORT, Math.max(c.solid.w, c.solid.d) / 2 + 2.5);
+}
+function vehiculeAssis() {
+  const v = vehiculeDuJoueur();
+  if (v) return v.car;
+  // vehiculeDuJoueur() rend null quand l'engin n'a PAS de siege passager nomme (velo, engin de
+  // chantier a une place) : le joueur y est pourtant bien embarque, et la camera doit le savoir.
+  const b = typeof city !== 'undefined' ? city.rideBot : null;
+  return b && b.drive && b.drive.passager && b.drive.car ? b.drive.car : null;
 }
 function placeMonde(c, p) {   // repère local du véhicule → monde
   const cs = Math.cos(c.h), sn = Math.sin(c.h);
@@ -25954,8 +25994,14 @@ function camPerche(dt, aiming) {
     if (aiming) { const ep = P.aim ? 1.25 : 0.9; tmpV.x += Math.cos(cam.yaw) * ep; tmpV.z -= Math.sin(cam.yaw) * ep; }
     // Dans une pièce, la caméra reculait dans le mur ou par-dessus le plafond : on la ramène
     // près du joueur. Et devant un objet à manipuler, on se rapproche encore et on le cadre.
-    // passager chez un ami : on est en voiture même si drive.car est vide
-    const veh = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null);
+    // PASSAGER CHEZ UN AMI : ON EST EN VOITURE MÊME SI `drive.car` EST VIDE. Trois endroits de
+    // cette fonction posaient la question chacun à sa façon, et deux d'entre eux ne regardaient
+    // que `drive.car` : emmené à la villa par un membre du gang, le joueur était traité en
+    // PIÉTON. La caméra lui appliquait donc la montée le long des murs, se plantait à 5,3 m et
+    // 6,4 m de haut au-dessus du toit, et l'on regardait la tôle pendant tout le trajet
+    // (mesuré : 5,27 m, hausse 0,75 rad). Une seule réponse maintenant, celle que le reste du
+    // jeu utilise déjà pour le chien, le drone et la ceinture : vehiculeDuJoueur().
+    const veh = vehiculeAssis();
     const dedans = running && !veh && sousToit();
     const inter = !veh && city.on ? city.interact : null;
     // la caméra RECULE avec la vitesse (jusqu'à 2,6 m de plus) : le capot rentre dans le
@@ -26001,7 +26047,11 @@ function camPerche(dt, aiming) {
     // traverse les murs, qui s'effacent) et reste basse pour ne pas regarder par le toit.
     // Le plafond de 4,8 m etait le meme dans un placard et dans une halle de 24 m : dans une
     // GRANDE piece on s'autorise maintenant a reculer jusqu'a 7,4 m (on voit la salle).
-    if (cam.interieur && !aiming) {
+    // ... mais JAMAIS DANS UN VEHICULE. La maison de poupée est faite pour un piéton qui entre
+    // dans une pièce : appliquée à une voiture garée dans un garage ou à un joueur PASSAGER
+    // dont le siège tombe dans un volume déclaré, elle ramenait la perche à 3,8 m et couchait
+    // la visée à 0,42 rad — la carrosserie plein écran. Un véhicule a sa propre loi de distance.
+    if (cam.interieur && !aiming && !veh) {
       want = clamp(want, 3.8, 4.8 + clamp(((cam.salle == null ? 4 : cam.salle) - 4.6) * 0.6, 0, 2.6));
       if (cam.pitch > 0.42) cam.pitch = 0.42; cam.pmax = Math.min(cam.pmax, 0.42);
     }
@@ -26028,7 +26078,16 @@ function camPerche(dt, aiming) {
   // LE LÉGER RETARD. À pied la caméra colle au joueur ; au volant, plus on va vite, plus
   // elle traîne derrière la voiture — c'est ce décalage qui donne le poids d'un GTA.
   {
-    const vv = drive.car && !drive.car.heli ? clamp(Math.abs(drive.speed) / ((drive.car.spec && drive.car.spec.max) || 26), 0, 1.2) : 0;
+    // RECALAGE DEMANDÉ (on vient de monter dans un véhicule, ou d'être téléporté). Le point
+    // visé rejoint normalement le joueur EN GLISSANT — c'est ce retard qui donne le poids
+    // d'un GTA. Mais quand le joueur est TÉLÉPORTÉ sur un siège, le chemin entre l'endroit où
+    // il se tenait et le siège n'a aucun sens : la caméra le parcourait en frôlant la tôle, et
+    // comme la perche ne se rallonge que de 5 m/s il fallait deux secondes pour s'en sortir
+    // (mesuré après une montée : 1,25 m à la première image, 1,28 m à la dixième, 3,90 m à la
+    // soixantième — c'est exactement ce que montre la capture du chef). On POSE donc la caméra.
+    if (cam.recale) { cam.recale = false; cam.target.copy(tmpV); cam.libre = null; cam.dLisse = null; cam.hausse = 0; cam.hausseCible = 0; }
+    // (passager compris : c'est la MEME voiture qui roule, le retard doit se sentir pareil)
+    const vv = vitesseRel();
     cam.target.lerp(tmpV, 1 - Math.exp(-(14 - vv * 7) * dt));
     // LA LAISSE. Le retard est un EFFET, pas une dérive. Le Joueur a mesuré à l'écran une
     // caméra qui DÉCROCHE à pleine vitesse : 11 → 25 → 34 → 41 → 46 → 50 m à 75 km/h, la
@@ -26055,9 +26114,15 @@ function camPerche(dt, aiming) {
   // choc. Elle est donc autorisée au volant, mais uniquement quand la perche est vraiment
   // bridée (moins que la distance confortable) et sans jamais dépasser 1,1 rad : la caméra
   // prend de la hauteur derrière la voiture, elle ne bascule pas en vue de dessus.
-  const vehM = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null);
-  const monteVeh = !!drive.car && cam.dJoueur != null && cam.dJoueur < CAM_CONFORT && !drive.car.heli;
-  if (running && !aiming && (!drive.car || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {
+  // LE PASSAGER N'EST PAS UN PIETON (round 71, défaut du chef). Ces deux lignes ne regardaient
+  // que `drive.car` : emmené par un ami, le joueur recevait la montée DU PIÉTON, plafonnée à
+  // 1,25 rad et sans le véhicule en « skip ». La caméra grimpait à 0,75 rad, la perche tombait
+  // à 5,3 m (le plafond de la montée) et l'on passait le trajet à regarder le toit de la
+  // voiture. Les deux lignes passent par `vehiculeAssis()` : même règle qu'au volant.
+  const vehM = vehiculeAssis();
+  const confort = camConfortVeh();
+  const monteVeh = !!vehM && cam.dJoueur != null && cam.dJoueur < confort && !vehM.heli;
+  if (running && !aiming && (!vehM || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {
     if (simTime > (cam.hauT || 0) || simTime < cam.hauT - 0.3) {
       cam.hauT = simTime + 0.2;
       // on ne vise PAS la distance voulue (9 m) mais la distance CONFORTABLE : la caméra monte
@@ -26069,7 +26134,7 @@ function camPerche(dt, aiming) {
       // Ce plan très plongeant ne sert QUE là — dès qu'il y a de la place, la montée s'annule.
       const plafondM = Math.min(cam.pmax == null ? 1.25 : cam.pmax, monteVeh ? 1.1 : 1.25);
       cam.hausseCible = camMontee(cam.target.x, cam.target.y, cam.target.z, cam.yaw, cam.pitch,
-        Math.min(cam.dist, CAM_CONFORT), plafondM, vehM ? vehM.solid : null);
+        Math.min(cam.dist, confort), plafondM, vehM ? vehM.solid : null);
     }
   } else cam.hausseCible = 0;
   // montée franche (trois dixièmes de seconde), redescente deux fois plus lente : dès que la
@@ -26088,7 +26153,7 @@ function camPerche(dt, aiming) {
       // Collision de caméra : au lieu d'un seul rayon échantillonné tous les 40 cm (qui
       // traversait les cloisons fines et laissait la caméra frôler les murs), on lance un
       // vrai cône de trois rayons — l'axe et deux côtés — et on s'arrête avant le premier mur.
-      const veh2 = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null), skip = veh2 ? veh2.solid : null;
+      const veh2 = vehiculeAssis(), skip = veh2 ? veh2.solid : null;
       if (city.bank && Math.abs(P.pos.x - city.bank.x) < city.bank.w / 2 && Math.abs(P.pos.z - city.bank.z) < city.bank.d / 2 && P.pos.y > 4) { if (cam.pitch > 0.32) cam.pitch = 0.32; }   // à l'étage de la banque : caméra basse pour voir l'intérieur
       const sp = Math.sin(pitchVue);
       const g = a => [Math.sin(cam.yaw + a) * cpch, sp, Math.cos(cam.yaw + a) * cpch];
@@ -26111,7 +26176,7 @@ function camPerche(dt, aiming) {
       // (le plafond se rouvre PROGRESSIVEMENT quand la camera redescend, et il est DEJA
       //  grand ouvert quand la montee s'annule : un seuil net faisait sauter la perche de
       //  80 cm d'une image a l'autre — l'a-coup dont se plaignait le joueur)
-      if (cam.hausse > 0) d = Math.min(d, CAM_CONFORT + 0.8 + clamp((0.25 - cam.hausse) / 0.246, 0, 1) * 12);
+      if (cam.hausse > 0) d = Math.min(d, camConfortVeh() + 0.8 + clamp((0.25 - cam.hausse) / 0.246, 0, 1) * 12);
       // LIMITEUR DE RETOUR. Quelle que soit la raison qui libère la perche — le mur qui
       // s'éloigne, la montée qui s'annule, la molette — elle ne se rallonge JAMAIS de plus de
       // cinq mètres par seconde. C'est le dernier à-coup qui restait : en sortant d'un coin,

@@ -783,6 +783,7 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 #empireHud[hidden],body.lobby #empireHud,body.uiopen #empireHud{display:none!important}#empireHudTitle{display:block;font-size:10px;letter-spacing:.16em;color:#72d4bf;margin-bottom:6px}#empireHudText{display:block;font-size:12px;line-height:1.5}
 #empireHud .track{height:3px;background:#43545c;margin-top:10px}#empireProgress{display:block;height:100%;background:#73d4be;width:0;transition:width .25s}#empireMapBtn{pointer-events:auto;margin-top:8px;border:0;color:#a9bdc8;background:none;font-size:10px;cursor:pointer}
 @media(max-width:700px){.empire-layout{grid-template-columns:1fr}#empireMap svg{height:300px}#empireOps{grid-template-columns:1fr}#guerreCarte{grid-template-columns:repeat(3,minmax(0,1fr))}#guerre .card{padding:16px}#empireHud{bottom:10px;width:44vw;padding:8px}#empireHudText{font-size:10px}#empireHudTitle{font-size:8px}#start .card{padding:20px}}
+body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 3.2);padding:calc(var(--uh) * .5)}body.tv #empireHudTitle{font-size:calc(var(--uh) * .55)}body.tv #empireHudText{font-size:calc(var(--uh) * .7)}body.tv #empireMapBtn{font-size:calc(var(--uh) * .55)}
 @media(max-height:500px){#empireHud{bottom:8px;width:34vw;padding:7px}#empireHudTitle{font-size:8px;margin-bottom:3px}#empireHudText{font-size:10px}#empireMapBtn{margin-top:2px}#start .card{padding:16px}#start h1{font-size:34px}#start h1 span{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
@@ -5721,7 +5722,11 @@ function empireTick(dt) {
   }
   for (const marker of empire.markers) marker.material.color.set(empireOwnerColor(marker.userData.territory));
   const hud = $('empireHud'); if (!hud) return;
-  hud.hidden = !joueurDansLaGuerre();
+  // LE PANNEAU « EMPIRE » NE RESTE PAS À L'ÉCRAN (n° 68). Il couvrait le bas de l'écran en
+  // permanence, en 12 px sur la télé, et parlait de la touche M. Il ne sort que pendant une
+  // opération ou une attaque, une fois la guerre commencée ; le bouton parle manette quand il faut.
+  hud.hidden = !(joueurDansLaGuerre() && (empire.attack || empire.operation));
+  const mb = $('empireMapBtn'); if (mb) { const lib = document.body.classList.contains('manette') ? 'CARTE · ↑ tenu' : 'CARTE · M'; if (mb.textContent !== lib) mb.textContent = lib; }
   const t = territoireDe(P.pos.x, P.pos.z), a = empire.attack, active = empire.operation;
   const selected = TERRITOIRES.find(t => t.k === empire.selected);
   $('empireHudTitle').textContent = a ? `ATTAQUE · ${Math.ceil(a.remaining)} s` : active ? 'OPÉRATION EN COURS' : 'EMPIRE URBAIN';

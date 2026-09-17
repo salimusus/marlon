@@ -20491,8 +20491,12 @@ function conduire(c, cmd, dt) {
     const perte = Math.max(0, Math.abs(vAvant) - fait / Math.max(dt, 1e-4));
     // (et un choc suppose d'ARRIVER vite : le nez planté contre un grillage, gaz enfoncés, le rebond
     //  de 3,4 m/s relançait un « choc » toutes les demi-secondes — 14 % → 41 % en cinq secondes mesurés)
-    if (perte > 4 && Math.abs(vAvant) > 6 && simTime > (c.hitT || 0)) { c.hitT = simTime + 1.2; vehicleDamage(c, Math.min(14, perte * 0.9)); choc(c, perte, null); if (pilote) cam.kick = (cam.kick || 0) + Math.min(0.08, perte * 0.006);
-      msg(perte > 9 ? '💥 BOUM ! Gros choc contre le mur' : '💥 Choc contre le mur', 900);
+    // Un choc franc coûte 5 % au plus (test 331 : une voiture encaisse dix-huit murs à 50 km/h
+    // avant la casse) ; un petit choc (> 1,5 m/s perdus, ou moins de 6 m/s) laisse sa MARQUE sur
+    // le mur et sur la tôle sans BOOM (test 282 : la trace suit la vitesse, dès 4 m/s).
+    const franc = perte > 4 && Math.abs(vAvant) > 6;
+    if ((franc || perte > 1.5) && simTime > (c.hitT || 0)) { c.hitT = simTime + (franc ? 1.2 : 0.6); vehicleDamage(c, franc ? Math.min(5, 0.6 + perte * 0.3) : 0.3);
+      if (franc) { choc(c, perte, null); if (pilote) cam.kick = (cam.kick || 0) + Math.min(0.08, perte * 0.006); msg(perte > 9 ? '💥 BOUM ! Gros choc contre le mur' : '💥 Choc contre le mur', 900); }
       // la normale du mur : l'axe bloque, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
       // UNE SEULE MARQUE SUR LE MUR. Deux postes en posaient une AU MEME ENDROIT a chaque

@@ -1030,6 +1030,8 @@ window.__G = {
   joueurAPied: typeof joueurAPied === 'function' ? joueurAPied : null,
   pietonSurPassage: typeof pietonSurPassage === 'function' ? pietonSurPassage : null,
   lieuDe: typeof lieuDe === 'function' ? lieuDe : null,
+  vehiculeDeService: typeof vehiculeDeService === 'function' ? vehiculeDeService : null,
+  voitureEmpruntable: typeof voitureEmpruntable === 'function' ? voitureEmpruntable : null,
   micro: typeof micro !== 'undefined' ? micro : null,
   chienAttaque: typeof chienAttaque === 'function' ? chienAttaque : null,
   aboie: typeof aboie === 'function' ? aboie : null,

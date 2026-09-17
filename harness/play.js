@@ -3975,7 +3975,11 @@ test('les habitants prennent aussi la voiture, pas seulement le vélo', async p 
     b.activite = null; b.rdv = null; b.drive = null; b.ordre = null; b.wait = 0;
     // on gare une voiture libre juste à côté de lui : sous rendu logiciel, le trajet à pied
     // mangeait tout le temps imparti et le test échouait sur la montre, pas sur le jeu
-    { const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+    // UNE VOITURE ORDINAIRE, pas la première caisse venue : « la première libre » de city.cars
+    // se trouve être l'AMBULANCE de la ville, et un habitant ne prend plus un véhicule de
+    // service (round 71 — il venait chercher le joueur au volant de l'ambulance). Le test
+    // garait donc l'ambulance à côté de lui et s'étonnait qu'il n'en veuille pas.
+    { const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy);
       if (c) { c.x = b.pos.x + 3; c.z = b.pos.z + 3; c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c); } }
     const lance = G.lancerActivite(b, { k: 'voiture', e: '🚗', n: 'faire un tour en voiture' }) !== false;
     if (b.activite) b.activite.fin = G.simTime + 600;   // on lui laisse le temps d'arriver
@@ -17266,4 +17270,120 @@ test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout
   });
   const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
   return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
+});
+
+// ================= POSTE CONDUITE — round 71, deuxième passe =================
+test('l\'ami qui vient chercher le joueur prend une voiture ordinaire, jamais l\'ambulance ni un engin de service', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av && !x.ko);
+    G.devenirAmi(b);
+    const services = (G.city.cars || []).filter(v => G.vehiculeDeService(v));
+    if (services.length < 5) return { erreur: `seulement ${services.length} véhicules de service dans la ville` };
+    // DIX TENTATIONS : on plante l'ami à 2,5 m d'un véhicule de service différent à chaque
+    // fois — c'est donc lui le plus proche, et c'est lui qu'il prenait (mesuré : il est parti
+    // avec l'ambulance de la ville, croix rouge sur le hayon).
+    const essais = [];
+    for (let k = 0; k < 10; k++) {
+      const cible = services[k % services.length];
+      if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.drive = null; b.wait = 0; b.target = null;
+      for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
+      b.pos.set(cible.x + 2.5, 0, cible.z + 2.5); b.av.group.position.copy(b.pos);
+      P.pos.set(cible.x + 12, 0.5, cible.z);
+      G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+      const choisi = b.rdv && b.rdv.auto ? b.rdv.auto.car : null;
+      essais.push({ tentation: cible.kind || 'service', choisi: choisi ? (choisi.kind || 'voiture ordinaire') : 'aucune',
+        estService: !!(choisi && G.vehiculeDeService(choisi)),
+        dTentation: +Math.hypot(cible.x - b.pos.x, cible.z - b.pos.z).toFixed(1),
+        dChoisi: choisi ? +Math.hypot(choisi.x - b.pos.x, choisi.z - b.pos.z).toFixed(1) : null });
+    }
+    // ... et une fois pour de vrai : il va la chercher et il arrive au volant
+    b.rdv = null; b.drive = null; b.wait = 0;
+    b.pos.set(6, 0, 8); b.av.group.position.copy(b.pos);
+    P.pos.set(0, 0.5, 8);
+    G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+    let t = 0; const dt = 1 / 60;
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) { G.step(dt, true); G.updateBot(b, dt); t += dt; }
+    const c = b.drive ? b.drive.car : null;
+    const arrive = { t: +t.toFixed(1), kind: c ? (c.kind || 'voiture ordinaire') : 'aucune',
+      estService: !!(c && G.vehiculeDeService(c)) };
+    if (b.drive) G.botDescendre(b, false);
+    b.rdv = null; b.wait = 0;
+    // les secours gardent leur véhicule : aucune ambulance réservée, et elles sont toujours là
+    const amb = (G.city.ambulances || []);
+    return { essais, arrive, ambulances: amb.length, ambulancesLibres: amb.filter(a => !a.busy).length,
+      services: services.length };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const fautes = r.essais.filter(e => e.estService || e.choisi === 'aucune');
+  const ok = fautes.length === 0 && !r.arrive.estService && r.arrive.kind !== 'aucune'
+    && r.ambulances > 0 && r.ambulancesLibres === r.ambulances;
+  return { ok, detail: `avant : il partait avec la caisse la plus proche sans regarder — l'AMBULANCE de la ville (croix rouge sur le hayon) · maintenant, 10 tentations (planté à 2,5 m d'un ${r.services > 0 ? 'véhicule de service' : '?'} différent à chaque fois : ${[...new Set(r.essais.map(e => e.tentation))].join(', ')}) → ${fautes.length} faute(s), il choisit « ${[...new Set(r.essais.map(e => e.choisi))].join(', ')} » à ${r.essais[0].dChoisi} m au lieu de celui à ${r.essais[0].dTentation} m · pour de vrai il arrive au volant d'un « ${r.arrive.kind} » en ${r.arrive.t} s · ${r.ambulancesLibres}/${r.ambulances} ambulance(s) restée(s) disponible(s) pour les secours` };
+});
+
+// LA BOUCLE DU JEU TOURNE SEULE. Leçon de la ronde : les tests 402 et 403 appellent
+// `poseJoueurAuVolant` à la main et mesurent l'état posé — ils ne voient donc pas ce qui se
+// passe image par image pendant que la voiture roule. Ici on mesure DEUX choses que seul le
+// déroulé révèle : les arrêts SANS RAISON LÉGALE au milieu de la route (ce que le joueur
+// appelle « ça bug »), et l'assise après quelques vraies images d'affichage, sans qu'on ait
+// touché à quoi que ce soit.
+test('pendant que le membre conduit, la voiture ne reste pas plantée sans raison et le joueur reste assis', async p => {
+  const depart = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) { G.step(dt, true); G.updateBot(b, dt); t += dt; }
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais amené la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    window.__AMI = b;
+    return { venue: +t.toFixed(1), vehicule: b.drive.car.kind || 'voiture ordinaire' };
+  })()`);
+  if (depart.erreur) return { ok: false, detail: depart.erreur };
+  const roule = await p.evaluate(() => {
+    const G = __G, b = window.__AMI, c = b.drive.car, st = b.drive, dt = 1 / 60;
+    // un arrêt EXCUSÉ par le code de la route n'est pas un blocage
+    const excuses = ['feu', 'feu-panne', 'stop', 'cede', 'passage', 'pieton', 'sirene', 'priorite', 'file'];
+    let t = 0, planteT = 0, pire = 0, pireOu = null, plantages = 0, dParc = 0;
+    let px = c.x, pz = c.z, enPanne = false;
+    while (t < 150 && st.etat === 'route') {
+      G.step(dt, true); G.updateBot(b, dt); t += dt;
+      // PLANTÉ = NE BOUGE PLUS, pas « compteur à zéro ». Mesuré : `c.pas` n'est pas tenu à
+      // jour par conduireVersPoint (il vaut 0 même à 10 m/s), et pendant la manœuvre de
+      // dégagement en marche arrière `c.speed` vaut 0 alors que la voiture avance bel et bien.
+      // On mesure donc le DÉPLACEMENT RÉEL de l'image : moins d'un centimètre en 1/60 s
+      // (soit moins de 0,6 m/s), c'est une voiture qui ne va nulle part.
+      const bouge = Math.hypot(c.x - px, c.z - pz);
+      dParc += bouge; px = c.x; pz = c.z;
+      if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
+        planteT += dt;
+        if (planteT > pire) { pire = planteT; pireOu = { x: +c.x.toFixed(1), z: +c.z.toFixed(1), raison: c.raison || '-' }; }
+        if (planteT > 1.5 && !enPanne) { enPanne = true; plantages++; }
+      } else { planteT = 0; enPanne = false; }
+    }
+    return { trajet: +t.toFixed(1), etat: st.etat, pire: +pire.toFixed(1), pireOu, plantages,
+      parcouru: +dParc.toFixed(0), vMoy: +(dParc / Math.max(0.001, t)).toFixed(2),
+      dVilla: +Math.hypot(c.x - (G.city.villaMine || { x: 60, z: 168 }).x, c.z - (G.city.villaMine || { x: 60, z: 168 }).z).toFixed(1) };
+  });
+  // ON NE TOUCHE PLUS À RIEN : la boucle d'affichage du jeu tourne toute seule pendant deux
+  // secondes et demie, et c'est ELLE qui doit tenir le joueur sur son siège.
+  await p.waitForTimeout(2500);
+  const assise = await p.evaluate(() => {
+    const G = __G, b = window.__AMI, c = b.drive && b.drive.car, av = G.me.group;
+    if (!c) return { erreur: 'plus de voiture' };
+    const dx = av.position.x - c.x, dz = av.position.z - c.z, k = Math.cos(c.h), s = Math.sin(c.h);
+    return { visible: av.visible, droite: +(dx * k - dz * s).toFixed(2), avant: +(dx * s + dz * k).toFixed(2),
+      haut: +(av.position.y - (c.y || 0)).toFixed(2), cuisse: +G.me.rig.legL.rotation.x.toFixed(2),
+      cap: +Math.abs(Math.atan2(Math.sin(av.rotation.y - c.h), Math.cos(av.rotation.y - c.h))).toFixed(3),
+      largeur: c.baseW || 2.4, longueur: c.baseD || 4.4, passager: !!(b.drive && b.drive.passager) };
+  });
+  await p.evaluate(() => { const b = window.__AMI; if (b && b.drive) __G.botDescendre(b, false); if (b) { b.rdv = null; b.wait = 0; } window.__AMI = null; });
+  if (assise.erreur) return { ok: false, detail: assise.erreur };
+  const ok = roule.etat === 'arrive' && roule.pire < 2.5 && roule.plantages === 0 && roule.vMoy > 3
+    && assise.visible && assise.passager && Math.abs(assise.droite) < assise.largeur / 2
+    && Math.abs(assise.avant) < assise.longueur / 2 && assise.cap < 0.05 && assise.cuisse < -1;
+  return { ok, detail: `avant : trois arrêts de 3,5 s en 60 s de route, toujours nez contre un lampadaire du trottoir (0,2 · 0,2 · 0,5 m/s relevés, aucune raison de s'arrêter) · maintenant, trajet en « ${depart.vehicule} » amené en ${depart.venue} s : ${roule.trajet} s jusqu'à la villa (${roule.parcouru} m, ${roule.vMoy} m/s, arrivé à ${roule.dVilla} m), le plus long arrêt SANS RAISON dure ${roule.pire} s${roule.pireOu ? ` (en ${roule.pireOu.x}, ${roule.pireOu.z})` : ''}, ${roule.plantages} plantage(s) de plus de 1,5 s · après 2,5 s de boucle d'affichage laissée seule : joueur visible=${assise.visible}, ${assise.droite} m sur le côté et ${assise.avant} m en avant du centre, ${assise.haut} m sous le repère, cuisses ${assise.cuisse}` };
 });

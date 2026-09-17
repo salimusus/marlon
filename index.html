@@ -9156,6 +9156,19 @@ function pietonDevant(c) {
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
 }
+// QUELQU'UN DERRIÈRE LE COFFRE ? Le pendant de `pietonDevant`, pour la marche arrière de
+// dégagement : on ne recule JAMAIS sur un piéton. Même couloir que devant, en un peu plus
+// court (on ne recule que d'un mètre ou deux).
+function pietonDerriere(c) {
+  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.2);
+  const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, ar = -(dx * fx + dz * fz);
+    return Math.abs(y - (c.y || 0)) < 2.4 && ar > 0 && ar < 4 && Math.abs(-dx * fz + dz * fx) < lat; };
+  if (joueurAPied() && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
+  for (const b of bots) if (!b.drive && b.av && b.av.group.visible && gene(b.pos.x, b.pos.y, b.pos.z)) return true;
+  for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
+  return false;
+}
 function klaxonne(c) {
   if (simTime < (c.klaxT || 0)) return;
   c.klaxT = simTime + 2.4;
@@ -17256,7 +17269,9 @@ function organiserCoup(b) {
   const bx = banque ? (banque.x1 + banque.x2) / 2 : -52, bz = banque ? (banque.z1 + banque.z2) / 2 : 70;
   // voiture de fuite : la plus proche de la banque, garée devant, moteur tournant
   let c = null, dmin = Infinity;
-  for (const v of city.cars) { if (v.heli || v.busy || v.kind === 'jetski' || v.kind === 'bike' || dansMonGarage(v)) continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
+  // Même règle que pour l'ami qui vient te chercher : une voiture de fuite, ça n'est pas
+  // l'ambulance de la ville ni la benne des travaux (voir voitureEmpruntable).
+  for (const v of city.cars) { if (v.busy || v.kind === 'bike' || dansMonGarage(v) || !voitureEmpruntable(v)) continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
   if (!c) { botSay(b, ['je ne trouve aucune voiture 😬']); return; }
   c.x = bx + 13; c.z = bz + 2; c.h = Math.PI / 2; settleVehicle(c); c.g.rotation.y = c.h; vehicleSolid(c);
   coup.etat = 'attente'; coup.bot = b; coup.car = c; coup.t = simTime;
@@ -17400,6 +17415,29 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // mur n'est bloquee que sur un axe a la fois, si bien qu'elle remettait le compteur a zero
   // une image sur deux et que le deblocage ne partait jamais.
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : Math.max(0, (st.bloqueT || 0) - dt * 0.6);
+  // SE DÉGAGER EN MARCHE ARRIÈRE, COMME UN VRAI CONDUCTEUR.
+  // Mesuré image par image sur le trajet « un membre emmène le joueur à la villa » : trois
+  // arrêts de 3,5 s en 60 s de route (vitesses relevées 0,2 · 0,2 · 0,5 m/s), et toujours la
+  // même scène — en tournant au carrefour, la voiture se retrouve NEZ CONTRE UN LAMPADAIRE du
+  // trottoir (un poteau de 40 × 40 cm et 4,40 m de haut, à 0,97 — 1,32 m du capot). Elle est
+  // pourtant bien sur la chaussée, à 20 cm de l'axe de sa voie : c'est le tracé de la grille
+  // A*, qui raisonne en POINT et frôle le mobilier, qui l'y amène. Elle ne pouvait alors ni
+  // avancer (le poteau) ni tourner (la rotation qui l'en sortirait est annulée juste au-dessus,
+  // parce qu'elle mord elle aussi le poteau) : elle attendait les 3,5 s du filet de secours,
+  // qui la reposait trois mètres plus loin. C'est exactement ce que le joueur appelle « ça bug ».
+  // Au bout de 0,6 s à pousser contre l'obstacle, on recule donc pendant une seconde et on
+  // refait le tracé depuis la nouvelle place. Le recul passe par le MÊME garde-fou (aucun pas
+  // qui rentre dans quoi que ce soit) et s'annule si quelqu'un est à pied derrière.
+  if (bloque && Math.abs(c.speed || 0) < 1.5) st.colleT = (st.colleT || 0) + dt; else st.colleT = 0;
+  if (st.colleT > 0.45 && (st.reculT || 0) < T) { st.colleT = 0; st.reculT = T + 1; st.routeT = 0; }
+  if ((st.reculT || 0) > T) {
+    if (pietonDerriere(c)) { st.reculT = 0; klaxonne(c); }
+    else {
+      const rx = c.x - Math.sin(c.h) * 2.2 * dt, rz = c.z - Math.cos(c.h) * 2.2 * dt;
+      if (!vehBloque(c, rx, rz, c.h, opt)) { c.x = rx; c.z = rz; c.speed = 0; c.recule = true; st.bloqueT = 0; }
+      else st.reculT = 0;                 // l'arrière est pris aussi : on laisse le contournement jouer
+    }
+  } else c.recule = false;
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {
@@ -17451,11 +17489,29 @@ function auLieu(nom) {
   if (/^(plage|banque|zone|villa|fête|caserne|école|piscine|rue|place|prison|boutique|concession|clinique|gare)/i.test(n)) return 'à la ' + n;
   return 'à ' + n;
 }
+// UN VEHICULE DE SERVICE APPARTIENT A SON SERVICE. Le membre du gang parti chercher le joueur
+// prenait la caisse la plus proche SANS REGARDER CE QUE C'EST : il est revenu au volant de
+// l'AMBULANCE de la ville — croix rouge sur le hayon blanc, un enfant la reconnait tout de
+// suite — et les secours n'avaient plus de vehicule pour le blesse suivant. On reconnait ces
+// vehicules a leur DRAPEAU D'IDENTITE, pose a la fabrication, plutot qu'a une liste de noms
+// qu'il faudrait tenir a jour : `travail` (tout le depot des travaux : benne, grue, pelle,
+// tracteur, bulldozer, fourgon, velo du facteur, camion de pompiers, depanneuse), `ambulance`,
+// `depanneuse`, `urgence` (le drapeau des secours), `police`.
+function vehiculeDeService(v) {
+  return !!v && !!(v.travail || v.ambulance || v.depanneuse || v.pompier || v.urgence || v.police || v.patrouille);
+}
+// La voiture qu'un habitant a le droit d'emprunter : une voiture ORDINAIRE. Ni un vehicule de
+// service, ni un kart du circuit, ni un engin qui ne se conduit pas assis (helico, jet-ski).
+// (Le deux-roues, lui, depend de ce qu'on a demande : voir `genre` chez l'appelant.)
+function voitureEmpruntable(v) {
+  return !!v && !v.heli && !v.kart && v.kind !== 'jetski' && !vehiculeDeService(v);
+}
 function botPrendVoiture(b, lieu, genre, libre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
   for (const v of city.cars) {
-    if (v.heli || v.busy || v.kind === 'jetski' || v === coup.car || v === drive.car || dansMonGarage(v)) continue;   // pas la tienne, garée chez toi
+    if (v.busy || v === coup.car || v === drive.car || dansMonGarage(v)) continue;   // pas la tienne, garée chez toi
+    if (!voitureEmpruntable(v)) continue;                                            // jamais l'ambulance ni un engin de chantier
     // « va me chercher un vélo » / « une moto » : on cible le bon type d'engin
     if (genre === 'bike' ? v.kind !== 'bike' : genre === 'moto' ? v.kind !== 'moto' : v.rider) continue;   // « une voiture » : pas un deux-roues
     const d = Math.hypot(v.x - b.pos.x, v.z - b.pos.z); if (d < dmin) { dmin = d; c = v; }

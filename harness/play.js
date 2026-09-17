@@ -11551,12 +11551,21 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     // a la position exacte de la camera : en temps normal le tri ne se refait que tous les
     // deux metres, et on mesurerait le decor trie depuis un autre point de vue.
     image();
+    // LE RECENSEMENT DES OMBRES MOBILES EST ETALE sur une trentaine d'images (vehicules et
+    // habitants vont et viennent) : sans ce tour complet force, la liste serait a moitie
+    // remplie et le test mesurerait la moitie du budget.
+    if (G.ombresMobilesTick) for (let k = 0; k < 120; k++) G.ombresMobilesTick();
     G.detailsLOD(true);
     const avec = image();
     // le MEME instant, budget desarme : tout le decor revient, ombres portees comprises
     G.DETAILS.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
     G.ARETES.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
     G.OMBRES.forEach(e => { e.off = false; e.o.castShadow = true; });
+    // … Y COMPRIS CELLES DES VEHICULES ET DES HABITANTS (poste FLUIDITE, round 71) : elles font
+    // partie du meme budget d'image. Sans cette ligne, elles restaient eteintes des DEUX cotes
+    // de la mesure et la part economisee tombait a 16 % — le test criait au recul alors que
+    // l'image coutait mille cinq cents appels de MOINS qu'avant.
+    (G.OMBRES_MOB || []).forEach(e => { e.off = false; e.o.castShadow = true; e.o.ombreLoin = false; });
     const sans = image();
     G.detailsLOD(true);                 // on rearme, et on doit retrouver EXACTEMENT la meme image
     const repris = image();
@@ -11570,6 +11579,7 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     const res = { avec, sans, repris, fautes,
       coupes: G.DETAILS.filter(e => e.off).length, aretes: G.ARETES.filter(e => e.off).length,
       ombres: G.OMBRES.filter(e => e.off).length,
+      ombresMob: (G.OMBRES_MOB || []).filter(e => e.off).length, nM: (G.OMBRES_MOB || []).length,
       nD: G.DETAILS.length, nA: G.ARETES.length, nO: G.OMBRES.length,
       fin: G.DETAIL_FIN, arete: G.DETAIL_ARETE, vueOmbre: G.DETAIL_OMBRE_VUE };
     G.renderer.info.autoReset = true;
@@ -11583,7 +11593,7 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
   const ok = pc > 0.20 && r.avec.appels < 9000 && r.avec.tris < 600000 && r.fautes === 0
     && r.repris.appels === r.avec.appels
     && r.aretes > r.nA * 0.5 && r.coupes > r.nD * 0.5 && r.ombres > r.nO * 0.4;
-  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
+  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · ${r.ombresMob} ombres de vehicules et d'habitants sur ${r.nM} effacees au loin · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
 });
 
 // LE GRAPHE DES VOIES NE FAIT PLUS FAIRE LE TOUR DE LA VILLE. Trois defauts mesures ce round :

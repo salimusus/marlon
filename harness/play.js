@@ -3975,7 +3975,11 @@ test('les habitants prennent aussi la voiture, pas seulement le vélo', async p 
     b.activite = null; b.rdv = null; b.drive = null; b.ordre = null; b.wait = 0;
     // on gare une voiture libre juste à côté de lui : sous rendu logiciel, le trajet à pied
     // mangeait tout le temps imparti et le test échouait sur la montre, pas sur le jeu
-    { const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+    // UNE VOITURE ORDINAIRE, pas la première caisse venue : « la première libre » de city.cars
+    // se trouve être l'AMBULANCE de la ville, et un habitant ne prend plus un véhicule de
+    // service (round 71 — il venait chercher le joueur au volant de l'ambulance). Le test
+    // garait donc l'ambulance à côté de lui et s'étonnait qu'il n'en veuille pas.
+    { const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy);
       if (c) { c.x = b.pos.x + 3; c.z = b.pos.z + 3; c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c); } }
     const lance = G.lancerActivite(b, { k: 'voiture', e: '🚗', n: 'faire un tour en voiture' }) !== false;
     if (b.activite) b.activite.fin = G.simTime + 600;   // on lui laisse le temps d'arriver
@@ -16827,7 +16831,13 @@ test('on entre vraiment dans chaque salle de classe et rien ne barre le seuil', 
     }
     return { salles };
   });
-  const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 1 && s.t < 4 && s.approche < 1.6 && s.assis);
+  // SEUIL SUR LE FRANCHISSEMENT : 0,9 m et non 1 m. `marcher` s'arrete des que le joueur est
+  // a moins de 55 cm d'un point vise 1,50 m DANS la salle : il s'immobilise donc a 0,95 m du
+  // seuil, plus la fraction d'image qui depasse — et cette fraction depend de la VITESSE DE
+  // MARCHE. Le test tenait a 5,6 m/s (1,03 m) et tombait a 6,2 m/s (0,99 m) sans que rien
+  // n'ait change dans l'ecole. Ce qu'il doit garantir, c'est qu'on est bien ENTRE : la zone de
+  // seuil surveillee s'arrete a 0,70 m dans la salle, 0,90 m la passe sans ambiguite.
+  const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 0.9 && s.t < 4 && s.approche < 1.6 && s.assis);
   return { ok, detail: `avant : un bandeau blanc de 10 m × 0,90 m barrait le seuil des 4 salles de 0,30 à 1,20 m · maintenant ${r.salles.map(s => `${s.n} : ${s.bloc} objet dans le seuil, franchi de ${s.franchi} m en ${s.t} s, table à ${s.approche} m, assis ${s.assis ? 'oui' : 'NON'}`).join(' · ')}` };
 });
 
@@ -17148,6 +17158,31 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
       botsProches++;
       b.av.group.traverse(o => { if (o.isMesh && o.ombreLoin) botsProchesEteints++; });
     }
+    // 5. LES ROUES, A TOUTE DISTANCE. Le joueur a signale un camion roulant SANS ROUES au loin.
+    //    Mesure d'alors : les pneus d'un vehicule gare disparaissaient des 40 m (le budget du
+    //    DECOR les prenait pour un detail — un pneu fait 0,372 de rayon, soit 1/100e d'ecran a
+    //    37 m). Son critere : a toute distance ou l'on distingue le vehicule, il a ses roues.
+    //    On regarde ici le CALQUE, qui est ce que le budget d'image commande — pas `visible`,
+    //    que le jeu utilise pour ses propres raisons (roue arrachee, vehicule range).
+    const DIST_ROUES = [20, 40, 80, 150];
+    const flotte = [].concat(G.city.cars || [], G.city.aiCars || [], (G.police && G.police.cars) || []);
+    const parSorte = {};
+    for (const v of flotte) {
+      const k = v.kind || (v.kart ? 'kart' : 'voiture');
+      if (!parSorte[k] && v.wheels && v.wheels.length && v.g && v.g.visible) parSorte[k] = v;
+    }
+    let rouesVues = 0, rouesEffacees = 0; const sortesRoues = [];
+    for (const k in parSorte) {
+      const v = parSorte[k]; v.g.updateMatrixWorld(true);
+      let manque = 0, total = 0;
+      for (const d of DIST_ROUES) {
+        G.camera.position.set(v.x, 2.2, v.z + d); G.camera.lookAt(v.x, 1, v.z); G.camera.updateMatrixWorld(true);
+        G.detailsLOD(true);
+        for (const w of v.wheels) w.traverse(o => { if (!o.isMesh) return; total++; if (o.layers && o.layers.mask === 0) manque++; });
+      }
+      sortesRoues.push(k + (manque ? ' ' + (total - manque) + '/' + total + ' ❌' : ''));
+      rouesVues += total - manque; rouesEffacees += manque;
+    }
     // LE COUT DU CODE DE JEU. La circulation tourne a 60 pas par seconde, la vie de la ville
     // aussi : deux pas de simulation (1/120 s) pour un tour. C'est ce qui a divise par deux le
     // travail de cityStep — si quelqu'un remet la circulation a 120 Hz, ce compte le dira.
@@ -17158,6 +17193,7 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
     return { couleur, ombre, total: couleur + ombre, tris, dessines,
       fautesDecor, joueurEteint, procheEteints, procheEfface, botsProches, botsProchesEteints, toursTrafic, toursVille,
       mobEffaces: G.OMBRES_MOB.filter(e => e.offV).length,
+      rouesVues, rouesEffacees, sortesRoues, sortesTestees: sortesRoues.length, distRoues: DIST_ROUES,
       mob: G.OMBRES_MOB.length, mobEteints: G.OMBRES_MOB.filter(e => e.off).length,
       geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures,
       prog: G.renderer.info.programs ? G.renderer.info.programs.length : -1 };
@@ -17174,8 +17210,9 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
   // pour revenir en arriere.
   const ok = r.total < 5600 && r.ombre < 1900 && r.couleur < 4400
     && r.dessines > 2800 && r.fautesDecor === 0 && r.joueurEteint === 0 && r.procheEteints === 0
-    && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60;
-  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
+    && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60
+    && r.rouesEffacees === 0 && r.sortesTestees >= 10;
+  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · ET LES ROUES SONT TOUJOURS LA : ${r.rouesVues} maillages de roue dessines sur ${r.rouesVues + r.rouesEffacees}, a ${r.distRoues.join(', ')} m, pour les ${r.sortesTestees} sortes de vehicules de la ville (${r.sortesRoues.join(', ')}) — avant, un vehicule gare perdait ses roues des 40 m · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
 });
 
 // POSTE FLUIDITE (round 71). Les quatre reglages de qualite doivent faire EXACTEMENT ce que
@@ -17239,4 +17276,395 @@ test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout
   });
   const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
   return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
+});
+
+// ================= POSTE CONDUITE — round 71, deuxième passe =================
+test('l\'ami qui vient chercher le joueur prend une voiture ordinaire, jamais l\'ambulance ni un engin de service', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av && !x.ko);
+    G.devenirAmi(b);
+    const services = (G.city.cars || []).filter(v => G.vehiculeDeService(v));
+    if (services.length < 5) return { erreur: `seulement ${services.length} véhicules de service dans la ville` };
+    // DIX TENTATIONS : on plante l'ami à 2,5 m d'un véhicule de service différent à chaque
+    // fois — c'est donc lui le plus proche, et c'est lui qu'il prenait (mesuré : il est parti
+    // avec l'ambulance de la ville, croix rouge sur le hayon).
+    const essais = [];
+    for (let k = 0; k < 10; k++) {
+      const cible = services[k % services.length];
+      if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.drive = null; b.wait = 0; b.target = null;
+      for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
+      b.pos.set(cible.x + 2.5, 0, cible.z + 2.5); b.av.group.position.copy(b.pos);
+      P.pos.set(cible.x + 12, 0.5, cible.z);
+      G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+      const choisi = b.rdv && b.rdv.auto ? b.rdv.auto.car : null;
+      essais.push({ tentation: cible.kind || 'service', choisi: choisi ? (choisi.kind || 'voiture ordinaire') : 'aucune',
+        estService: !!(choisi && G.vehiculeDeService(choisi)),
+        dTentation: +Math.hypot(cible.x - b.pos.x, cible.z - b.pos.z).toFixed(1),
+        dChoisi: choisi ? +Math.hypot(choisi.x - b.pos.x, choisi.z - b.pos.z).toFixed(1) : null });
+    }
+    // ... et une fois pour de vrai : il va la chercher et il arrive au volant
+    b.rdv = null; b.drive = null; b.wait = 0;
+    b.pos.set(6, 0, 8); b.av.group.position.copy(b.pos);
+    P.pos.set(0, 0.5, 8);
+    G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+    let t = 0; const dt = 1 / 60;
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) { G.step(dt, true); G.updateBot(b, dt); t += dt; }
+    const c = b.drive ? b.drive.car : null;
+    const arrive = { t: +t.toFixed(1), kind: c ? (c.kind || 'voiture ordinaire') : 'aucune',
+      estService: !!(c && G.vehiculeDeService(c)) };
+    if (b.drive) G.botDescendre(b, false);
+    b.rdv = null; b.wait = 0;
+    // les secours gardent leur véhicule : aucune ambulance réservée, et elles sont toujours là
+    const amb = (G.city.ambulances || []);
+    return { essais, arrive, ambulances: amb.length, ambulancesLibres: amb.filter(a => !a.busy).length,
+      services: services.length };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const fautes = r.essais.filter(e => e.estService || e.choisi === 'aucune');
+  const ok = fautes.length === 0 && !r.arrive.estService && r.arrive.kind !== 'aucune'
+    && r.ambulances > 0 && r.ambulancesLibres === r.ambulances;
+  return { ok, detail: `avant : il partait avec la caisse la plus proche sans regarder — l'AMBULANCE de la ville (croix rouge sur le hayon) · maintenant, 10 tentations (planté à 2,5 m d'un ${r.services > 0 ? 'véhicule de service' : '?'} différent à chaque fois : ${[...new Set(r.essais.map(e => e.tentation))].join(', ')}) → ${fautes.length} faute(s), il choisit « ${[...new Set(r.essais.map(e => e.choisi))].join(', ')} » à ${r.essais[0].dChoisi} m au lieu de celui à ${r.essais[0].dTentation} m · pour de vrai il arrive au volant d'un « ${r.arrive.kind} » en ${r.arrive.t} s · ${r.ambulancesLibres}/${r.ambulances} ambulance(s) restée(s) disponible(s) pour les secours` };
+});
+
+// LA BOUCLE DU JEU TOURNE SEULE. Leçon de la ronde : les tests 402 et 403 appellent
+// `poseJoueurAuVolant` à la main et mesurent l'état posé — ils ne voient donc pas ce qui se
+// passe image par image pendant que la voiture roule. Ici on mesure DEUX choses que seul le
+// déroulé révèle : les arrêts SANS RAISON LÉGALE au milieu de la route (ce que le joueur
+// appelle « ça bug »), et l'assise après quelques vraies images d'affichage, sans qu'on ait
+// touché à quoi que ce soit.
+test('pendant que le membre conduit, la voiture ne reste pas plantée sans raison et le joueur reste assis', async p => {
+  const depart = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) { G.step(dt, true); G.updateBot(b, dt); t += dt; }
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais amené la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    window.__AMI = b;
+    return { venue: +t.toFixed(1), vehicule: b.drive.car.kind || 'voiture ordinaire' };
+  })()`);
+  if (depart.erreur) return { ok: false, detail: depart.erreur };
+  const roule = await p.evaluate(() => {
+    const G = __G, b = window.__AMI, c = b.drive.car, st = b.drive, dt = 1 / 60;
+    // un arrêt EXCUSÉ par le code de la route n'est pas un blocage
+    const excuses = ['feu', 'feu-panne', 'stop', 'cede', 'passage', 'pieton', 'sirene', 'priorite', 'file'];
+    let t = 0, planteT = 0, pire = 0, pireOu = null, plantages = 0, dParc = 0;
+    let px = c.x, pz = c.z, enPanne = false;
+    while (t < 150 && st.etat === 'route') {
+      G.step(dt, true); G.updateBot(b, dt); t += dt;
+      // PLANTÉ = NE BOUGE PLUS, pas « compteur à zéro ». Mesuré : `c.pas` n'est pas tenu à
+      // jour par conduireVersPoint (il vaut 0 même à 10 m/s), et pendant la manœuvre de
+      // dégagement en marche arrière `c.speed` vaut 0 alors que la voiture avance bel et bien.
+      // On mesure donc le DÉPLACEMENT RÉEL de l'image : moins d'un centimètre en 1/60 s
+      // (soit moins de 0,6 m/s), c'est une voiture qui ne va nulle part.
+      const bouge = Math.hypot(c.x - px, c.z - pz);
+      dParc += bouge; px = c.x; pz = c.z;
+      if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
+        planteT += dt;
+        if (planteT > pire) { pire = planteT; pireOu = { x: +c.x.toFixed(1), z: +c.z.toFixed(1), raison: c.raison || '-' }; }
+        if (planteT > 1.5 && !enPanne) { enPanne = true; plantages++; }
+      } else { planteT = 0; enPanne = false; }
+    }
+    return { trajet: +t.toFixed(1), etat: st.etat, pire: +pire.toFixed(1), pireOu, plantages,
+      parcouru: +dParc.toFixed(0), vMoy: +(dParc / Math.max(0.001, t)).toFixed(2),
+      dVilla: +Math.hypot(c.x - (G.city.villaMine || { x: 60, z: 168 }).x, c.z - (G.city.villaMine || { x: 60, z: 168 }).z).toFixed(1) };
+  });
+  // ON NE TOUCHE PLUS À RIEN : la boucle d'affichage du jeu tourne toute seule pendant deux
+  // secondes et demie, et c'est ELLE qui doit tenir le joueur sur son siège.
+  await p.waitForTimeout(2500);
+  const assise = await p.evaluate(() => {
+    const G = __G, b = window.__AMI, c = b.drive && b.drive.car, av = G.me.group;
+    if (!c) return { erreur: 'plus de voiture' };
+    const dx = av.position.x - c.x, dz = av.position.z - c.z, k = Math.cos(c.h), s = Math.sin(c.h);
+    return { visible: av.visible, droite: +(dx * k - dz * s).toFixed(2), avant: +(dx * s + dz * k).toFixed(2),
+      haut: +(av.position.y - (c.y || 0)).toFixed(2), cuisse: +G.me.rig.legL.rotation.x.toFixed(2),
+      cap: +Math.abs(Math.atan2(Math.sin(av.rotation.y - c.h), Math.cos(av.rotation.y - c.h))).toFixed(3),
+      largeur: c.baseW || 2.4, longueur: c.baseD || 4.4, passager: !!(b.drive && b.drive.passager) };
+  });
+  await p.evaluate(() => { const b = window.__AMI; if (b && b.drive) __G.botDescendre(b, false); if (b) { b.rdv = null; b.wait = 0; } window.__AMI = null; });
+  if (assise.erreur) return { ok: false, detail: assise.erreur };
+  const ok = roule.etat === 'arrive' && roule.pire < 2.5 && roule.plantages === 0 && roule.vMoy > 3
+    && assise.visible && assise.passager && Math.abs(assise.droite) < assise.largeur / 2
+    && Math.abs(assise.avant) < assise.longueur / 2 && assise.cap < 0.05 && assise.cuisse < -1;
+  return { ok, detail: `avant : trois arrêts de 3,5 s en 60 s de route, toujours nez contre un lampadaire du trottoir (0,2 · 0,2 · 0,5 m/s relevés, aucune raison de s'arrêter) · maintenant, trajet en « ${depart.vehicule} » amené en ${depart.venue} s : ${roule.trajet} s jusqu'à la villa (${roule.parcouru} m, ${roule.vMoy} m/s, arrivé à ${roule.dVilla} m), le plus long arrêt SANS RAISON dure ${roule.pire} s${roule.pireOu ? ` (en ${roule.pireOu.x}, ${roule.pireOu.z})` : ''}, ${roule.plantages} plantage(s) de plus de 1,5 s · après 2,5 s de boucle d'affichage laissée seule : joueur visible=${assise.visible}, ${assise.droite} m sur le côté et ${assise.avant} m en avant du centre, ${assise.haut} m sous le repère, cuisses ${assise.cuisse}` };
+});
+test('douze secondes de trajet en passager : la camera suit le vehicule sans plonger dans la tole ni s envoler', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    // LE TRAJET DOIT ETRE LE MEME A CHAQUE ESSAI. La route que prend l'ami, la voiture qu'il
+    // trouve et le mobilier qu'il longe dependent du hasard : joue seul le test passait, joue
+    // dans un lot il tombait sur un autre itineraire et sur un autre trottoir. On force donc le
+    // tirage (le brief l'autorise expressement) et on le rend a la fin, quoi qu'il arrive.
+    const vraiRnd = Math.random; let graine = 987654321;
+    Math.random = () => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine / 0x7fffffff; };
+    try {
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais pris la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    const car = b.drive.car;
+    const out = { voiture: car.kind || 'voiture', long: +(car.baseD || 3).toFixed(1), sec: [] };
+    // ON LAISSE TOURNER : douze secondes de route a 60 images par seconde, et la camera est
+    // remise a jour A CHAQUE IMAGE (c'est frame() qui le fait dans le jeu ; sur le banc, une
+    // image reelle par seconde ne mesurerait rien). On releve une fois par seconde.
+    const cam = () => G.camera.position;
+    let dPireJoueur = 0, sauts = 0, sautMax = 0, prec = null, hors = 0;
+    let pireD = 99, pireQuoi = null;
+    for (let s = 0; s < 12; s++) {
+      for (let i = 0; i < 60; i++) {
+        pas();
+        G.camPerche(dt, false);
+        const dpc = Math.hypot(P.pos.x - car.x, P.pos.z - car.z);
+        if (dpc > dPireJoueur) dPireJoueur = dpc;
+      }
+      const c = cam();
+      const dCar = +Math.hypot(c.x - car.x, c.y - ((car.y || 0) + 1.2), c.z - car.z).toFixed(2);
+      // QUI COUPE LA PERCHE quand elle est courte ? on garde la taille du solide fautif, pour
+      // que le bilan dise s'il s'agit d'un poteau, d'une facade ou du vehicule lui-meme.
+      if (dCar < pireD) {
+        pireD = dCar; pireQuoi = null;
+        const cp2 = Math.cos(G.cam.pitch), T = G.cam.target;
+        const dir = [Math.sin(G.cam.yaw) * cp2, Math.sin(G.cam.pitch), Math.cos(G.cam.yaw) * cp2];
+        let m = 99;
+        for (const o of G.solidsAutour(T.x, T.z, 14)) {
+          if (o === car.solid || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;
+          if (o.mesh && !o.mesh.visible) continue;
+          const hx = Math.max(o.w, 0.36) / 2 + 0.3, hy = o.h / 2 + 0.3, hz = Math.max(o.d, 0.36) / 2 + 0.3;
+          if (o.y + hy < T.y - 1.4) continue;
+          if (Math.abs(T.x - o.x) < hx && Math.abs(T.y - o.y) < hy && Math.abs(T.z - o.z) < hz) continue;
+          const t2 = G.rayBox(T.x, T.y, T.z, dir[0], dir[1], dir[2], o.x, o.y, o.z, hx, hy, hz, 14);
+          if (t2 >= 0 && t2 < m) { m = t2; pireQuoi = { w: +o.w.toFixed(2), d: +o.d.toFixed(2), h: +o.h.toFixed(2), a: +t2.toFixed(2) }; }
+        }
+      }
+      if (prec != null) { const j = Math.abs(dCar - prec); if (j > sautMax) sautMax = j; if (j > 5) sauts++; }
+      prec = dCar;
+      const v = new THREE.Vector3(car.x, (car.y || 0) + 0.8, car.z); v.project(G.camera);
+      const dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
+      if (!dansLeCadre) hors++;
+      out.sec.push({ s: s + 1, d: dCar, camY: +c.y.toFixed(2), vit: +((car.speed || 0)).toFixed(1), cadre: dansLeCadre });
+    }
+    out.dJoueurVoiture = +dPireJoueur.toFixed(2);
+    out.coupable = pireQuoi;
+    out.sautMax = +sautMax.toFixed(2); out.sauts = sauts; out.horsCadre = hors;
+    out.dMin = Math.min(...out.sec.map(x => x.d)); out.dMax = Math.max(...out.sec.map(x => x.d));
+    out.passager = !!(G.city.rideBot && G.city.rideBot.drive && G.city.rideBot.drive.passager);
+    try { G.botDescendre(G.city.rideBot, false); } catch (e) {}
+    try { b.drive = null; b.rdv = null; car.busy = false; car.speed = 0; } catch (e) {}
+    G.city.botCarNear = null; G.city.rideBot = null;
+    return out;
+    } finally { Math.random = vraiRnd; }
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  // Le plancher : la camera ne doit jamais rentrer dans la caisse. On l'exige a la
+  // demi-longueur du vehicule PLUS UN METRE, mesure depuis son centre — c'est-a-dire un metre
+  // derriere le pare-chocs. Et le joueur, lui, ne doit jamais quitter la carrosserie : son
+  // siege est a 1,53 m du centre sur cette ambulance, on tolere la demi-longueur.
+  // Le plancher du CODE vaut demi-longueur + 1,2 m mesuree depuis le point vise, qui est le
+  // SIEGE du passager (1,53 m en avant du centre sur cette ambulance) : vu depuis le centre du
+  // vehicule, la garantie vaut donc demi-longueur + 0,8.
+  const plancher = r.long / 2 + 0.8;
+  // CE QU'ON EXIGE. Le plancher, d'abord : la camera ne rentre jamais dans la caisse. Ensuite
+  // la REGLE : sur douze secondes de rue, au plus deux secondes sous la distance confortable
+  // du vehicule — un mur qui passe vraiment entre la camera et la voiture a le droit de la
+  // rapprocher une seconde, c'est ce que fait n'importe quel jeu ; ce qui n'est pas admissible,
+  // c'est d'y rester. Le plus gros saut est IMPRIME mais pas exige : quand une facade de douze
+  // metres arrive, la perche DOIT se raccourcir vite, sinon elle la traverse.
+  const confort = r.long / 2 + 2.5;
+  const basses = r.sec.filter(x => x.d < confort).length;
+  const ok = r.passager && r.dJoueurVoiture < r.long / 2
+    && r.dMin > plancher && r.dMax < 17 && basses <= 2 && r.horsCadre === 0;
+  return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m depuis le centre ; avant, le chef relevait 8 · 12 · 9,9 · 6,1 · 8,5 · 4,6 · 1,7 · 1,5 · 3,3 · 2,8 · 5,8 · 3,8 m), ${basses} seconde(s) sur douze sous la distance confortable de ${confort.toFixed(1)} m, et c'est un vrai mur qui la justifie (plus gros ecart d'une seconde a l'autre : ${r.sautMax} m ; au plus court, ce qui barrait la perche mesurait ${r.coupable ? r.coupable.w + ' × ' + r.coupable.d + ' × ' + r.coupable.h + ' m a ' + r.coupable.a + ' m' : 'rien'}), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
+});
+// ================= POSTE LOCOMOTION (round 72) =================
+// Le joueur : « améliore la rapidité de marche et la course du joueur, et améliore le mouvement
+// de (on a l'impression qu'il glisse) ». Le glissement a été MESURÉ avant correction : à
+// 5,6 m/s le corps avançait de 1,87 m par pas pendant que le pied « posé » n'en balayait que
+// 0,66 — 1,21 m de patinage par pas, 1,25 m en course.
+//
+// Note de méthode : l'animation de l'avatar du joueur vit dans la boucle d'AFFICHAGE, pas dans
+// step(). Les tests rejouent donc à la main les lignes de frame() qui posent l'avatar
+// (position, rattrapage de marche, cap, animateRig, décalages verticaux) — sinon rien ne
+// bougerait au banc, où le rendu tourne à une image par seconde. Les scripts sont des CHAÎNES
+// (IIFE évaluées dans la page) parce qu'ils partagent ce préambule.
+const LOCO_AIDE = `
+  const DTL = 1 / 60, SL = 0.36, VL = new __G.THREE.Vector3();
+  const locoSemelle = lg => { lg.semelle.getWorldPosition(VL); return { x: VL.x, y: VL.y - 0.12 * SL, z: VL.z }; };
+  const locoPose = t => {
+    const G = __G, P = G.P, me = G.me;
+    me.group.position.copy(P.pos);
+    // meme rattrapage de hauteur que frame() : la physique monte une marche d'un bloc,
+    // l'affichage la monte en un dixieme de seconde
+    if (P.yVu == null || !P.grounded || Math.abs(P.pos.y - P.yVu) > 0.75) P.yVu = P.pos.y;
+    else { const ec = P.pos.y - P.yVu, q = Math.max(1.8, Math.abs(ec) * 9) * DTL; P.yVu += Math.max(-q, Math.min(q, ec)); }
+    me.group.position.y = P.yVu;
+    const sp = Math.hypot(P.vel.x, P.vel.z);
+    if (sp > 0.6) { const c = Math.atan2(P.vel.x, P.vel.z); let d = c - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d)); P.facing += d * Math.min(1, DTL * 14); }
+    me.group.rotation.y = P.facing; me.group.rotation.x = 0;
+    G.animateRig(me.rig, sp > 0.6 ? 'walk' : 'idle', sp, DTL, t);
+    me.group.rotation.x = me.rig.inclin || 0;
+    me.group.position.y -= (me.rig.baisse || 0) + (me.rig.bassin || 0);
+    me.group.updateMatrixWorld(true);
+    return sp;
+  };
+  // longue rue nord-sud de 197 m (x = 104) : de quoi courir quatre secondes en ligne droite
+  const locoDepart = course => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 104, y: 1, z: -50, hour: 12 });
+    G.keys.clear(); P.vel.set(0, 0, 0); P.facing = 0; G.cam.yaw = Math.PI;
+    P.run = !!course; P.energie = 100; P.essouffle = false; G.keys.add('KeyW');
+  };
+`;
+
+test('le pied qui porte le poids ne glisse plus : moins de 6 cm par pas, a la marche comme a la course', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P, me = G.me;
+    const essai = course => {
+      locoDepart(course);
+      let t = 0;
+      for (let i = 0; i < 120; i++) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); }   // mise en vitesse
+      let L = locoSemelle(me.rig.legL), R = locoSemelle(me.rig.legR);
+      let glisse = 0, pire = 0, pas = 0, dernier = null, bas = 9, haut = -9;
+      const x0 = P.pos.x, z0 = P.pos.z;
+      for (let i = 0; i < 240; i++) {
+        P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t);
+        const nL = locoSemelle(me.rig.legL), nR = locoSemelle(me.rig.legR);
+        const dL = Math.hypot(nL.x - L.x, nL.z - L.z), dR = Math.hypot(nR.x - R.x, nR.z - R.z);
+        const gauche = nL.y <= nR.y;
+        // le pied PORTEUR : le plus bas des deux, et a moins de 2,5 cm du sol
+        if (Math.min(nL.y, nR.y) < P.pos.y + 0.025) {
+          const d = gauche ? dL : dR;
+          glisse += d; if (d > pire) pire = d;
+          const q = gauche ? 'L' : 'R';
+          if (dernier && q !== dernier) pas++;
+          dernier = q;
+        }
+        const h = me.group.position.y - P.pos.y; if (h < bas) bas = h; if (h > haut) haut = h;
+        L = nL; R = nR;
+      }
+      const dist = Math.hypot(P.pos.x - x0, P.pos.z - z0);
+      return { v: +(dist / 4).toFixed(2), pas, cadence: +(pas / 4).toFixed(2),
+        foulee: +(pas ? dist / pas : 0).toFixed(2), glisse: +(pas ? glisse / pas * 100 : 99).toFixed(2),
+        pire: +(pire * 100).toFixed(2), bassin: +((haut - bas) * 100).toFixed(1),
+        buste: +((me.rig.inclin || 0) * 180 / Math.PI).toFixed(1) };
+    };
+    return { marche: essai(false), course: essai(true) };
+  })()`);
+  const m = r.marche, c = r.course;
+  const ok = m.pas > 10 && c.pas > 10 && m.glisse < 6 && c.glisse < 6 && m.pire < 6 && c.pire < 6
+    && m.bassin > 4 && c.bassin > 4 && c.foulee > m.foulee && c.buste > m.buste;
+  return { ok, detail: `glissement du pied porteur, par pas : marche ${m.glisse} cm (121 cm avant ce round), course ${c.glisse} cm (125 cm avant) · pire image ${m.pire} / ${c.pire} cm · la foulee S'ALLONGE avec la vitesse : ${m.foulee} m a ${m.v} m/s (${m.cadence} pas/s), ${c.foulee} m a ${c.v} m/s (${c.cadence} pas/s) · le bassin monte et descend de ${m.bassin} / ${c.bassin} cm (0 cm avant) et le buste se penche de ${m.buste}° a la marche, ${c.buste}° en course` };
+});
+
+test('la marche monte a 6,2 m/s et la course a 9,6 m/s, et l\'endurance ne se vide pas pour autant', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P;
+    const vitesse = course => {
+      locoDepart(course);
+      for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); }
+      let s = 0;
+      for (let i = 0; i < 60; i++) { P.energie = 100; G.step(DTL, true); s += Math.hypot(P.vel.x, P.vel.z); }
+      return +(s / 60).toFixed(2);
+    };
+    const marche = vitesse(false), course = vitesse(true);
+    // l'endurance : combien de temps on tient a fond, et combien de metres ca represente
+    locoDepart(true); P.energie = 100;
+    let n = 0; while (n < 3000 && P.energie > 0) { G.step(DTL, true); n++; }
+    const tenue = +(n * DTL).toFixed(1);
+    // relacher la course (la bascule L3) ramene bien a la vitesse de marche
+    locoDepart(true);
+    for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); }
+    P.run = false;
+    for (let i = 0; i < 90; i++) { P.energie = 100; G.step(DTL, true); }
+    const retourMarche = +Math.hypot(P.vel.x, P.vel.z).toFixed(2);
+    return { marche, course, tenue, retourMarche, SPEED: G.SPEED, COURSE: G.COURSE };
+  })()`);
+  const ok = Math.abs(r.marche - 6.2) < 0.25 && Math.abs(r.course - 9.6) < 0.35
+    && r.course - r.marche > 3 && Math.abs(r.retourMarche - r.marche) < 0.25
+    && r.tenue > 5 && r.tenue < 12;
+  return { ok, detail: `marche ${r.marche} m/s (5,60 avant ce round, ${(r.marche * 3.6).toFixed(0)} km/h), course ${r.course} m/s (7,28 avant, ${(r.course * 3.6).toFixed(0)} km/h) — ${(r.course - r.marche).toFixed(2)} m/s d'ecart, on VOIT la difference · constantes SPEED=${r.SPEED}, COURSE=${r.COURSE} · on coupe la course (bascule L3, inchangee) et on retombe a ${r.retourMarche} m/s · l'endurance tient ${r.tenue} s a fond, soit ${Math.round(r.tenue * r.course)} m : elle ne se vide pas en deux secondes malgre la course plus rapide` };
+});
+
+test('le depart et l\'arret prennent une duree bornee, et le demi-tour fait pivoter le corps', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P;
+    const rampe = course => {
+      locoDepart(course);
+      const v = [];
+      for (let i = 0; i < 240; i++) { P.energie = 100; G.step(DTL, true); v.push(Math.hypot(P.vel.x, P.vel.z)); }
+      const vmax = Math.max.apply(null, v);
+      const iDep = v.findIndex(s => s >= vmax * 0.95);
+      G.keys.delete('KeyW');
+      const w = [];
+      for (let i = 0; i < 240; i++) { G.step(DTL, true); w.push(Math.hypot(P.vel.x, P.vel.z)); }
+      let iArr = w.findIndex(s => s < 0.15); if (iArr < 0) iArr = 239;
+      // reste-t-il une traine ? la vitesse doit etre EXACTEMENT nulle une fois arrete
+      return { vmax: +vmax.toFixed(2), depart: +((iDep + 1) * DTL).toFixed(3),
+        arret: +((iArr + 1) * DTL).toFixed(3), traine: +w[w.length - 1].toFixed(4) };
+    };
+    const marche = rampe(false), course = rampe(true);
+    // demi-tour : on court plein sud (+z), on demande plein nord, on compte le temps de bascule
+    locoDepart(true);
+    let t = 0;
+    for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); }
+    const vAvant = +Math.hypot(P.vel.x, P.vel.z).toFixed(2);
+    G.keys.delete('KeyW'); G.keys.add('KeyS');
+    let n = 0;
+    while (n < 240) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); n++; if (P.vel.z < -vAvant * 0.8) break; }
+    const ecart = Math.abs(Math.atan2(Math.sin(P.facing - Math.PI), Math.cos(P.facing - Math.PI)));
+    return { marche, course, vAvant, demiTour: +(n * DTL).toFixed(3), capEcartDeg: +(ecart * 180 / Math.PI).toFixed(1) };
+  })()`);
+  const ok = r.marche.depart > 0.08 && r.marche.depart < 0.45 && r.course.depart > 0.1 && r.course.depart < 0.55
+    && r.marche.arret < 0.25 && r.course.arret < 0.35 && r.marche.traine === 0 && r.course.traine === 0
+    && r.demiTour < 0.9 && r.capEcartDeg < 25;
+  return { ok, detail: `depart (0 → 95 % de la vitesse) : ${r.marche.depart} s a la marche, ${r.course.depart} s en course — franc sans etre instantane · arret COMPLET : ${r.marche.arret} s et ${r.course.arret} s (0,27 s avant ce round) et la vitesse finit a ${r.marche.traine} m/s : plus aucune traine, c'est elle qui donnait l'impression de glisser au relachement · demi-tour a pleine course (${r.vAvant} m/s) : ${r.demiTour} s pour repartir en sens inverse, le corps a pivote et ne reste qu'a ${r.capEcartDeg}° du cap demande` };
+});
+
+test('monter une marche ne fait pas tressauter l\'avatar', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P, me = G.me;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // on cherche une VRAIE marche franchissable dans la ville : un solide large, pose au sol,
+    // dont le dessus est entre 15 et 56 cm — un perron, une estrade, une bordure.
+    const cands = G.solids.filter(o => { const top = o.y + o.h / 2; return top > 0.15 && top < 0.56 && o.w > 2.5 && o.d > 2.5 && Math.abs(o.y - o.h / 2) < 0.3; })
+      .sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z)).slice(0, 10);
+    let res = null;
+    for (const o of cands) {
+      for (const d of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]]) {
+        const top = o.y + o.h / 2;
+        const x = o.x - d[0] * (o.w / 2 + 2.2), z = o.z - d[1] * (o.d / 2 + 2.2);
+        __SHOT.go({ world: 4, x: x, y: top + 1.5, z: z, hour: 12 });
+        G.keys.clear(); P.vel.set(0, 0, 0); P.run = false; P.facing = d[2]; G.cam.yaw = d[2] + Math.PI;
+        for (let i = 0; i < 40; i++) G.step(DTL, true);   // il retombe sur ses pieds
+        if (Math.abs(P.pos.y - top) < 0.1) continue;      // deja sur la marche : rien a monter
+        const y0 = P.pos.y;
+        G.keys.add('KeyW');
+        let t = 0, sautPhys = 0, sautVu = 0, monte = 0, yv = null;
+        for (let i = 0; i < 110; i++) {
+          const yA = P.pos.y;
+          G.step(DTL, true); t += DTL; locoPose(t);
+          sautPhys = Math.max(sautPhys, P.pos.y - yA);
+          if (yv != null) sautVu = Math.max(sautVu, me.group.position.y - yv);
+          yv = me.group.position.y;
+          monte = Math.max(monte, P.pos.y - y0);
+        }
+        if (sautPhys > 0.12) { res = { sautPhysCm: +(sautPhys * 100).toFixed(1), sautVuCm: +(sautVu * 100).toFixed(1), monteeCm: +(monte * 100).toFixed(1), marcheCm: +(top * 100).toFixed(0) }; break; }
+      }
+      if (res) break;
+    }
+    return { res: res, cands: cands.length };
+  })()`);
+  const d = r.res;
+  const ok = !!d && d.sautPhysCm > 12 && d.sautVuCm < 8 && d.monteeCm > 10;
+  return { ok, detail: d
+    ? `marche de ${d.marcheCm} cm : la physique fait bondir le joueur de ${d.sautPhysCm} cm en UNE image (c'est moveAxis, on n'y touche pas, la montee doit rester franche), mais l'avatar affiche ne monte jamais de plus de ${d.sautVuCm} cm par image — le rattrapage est etale sur un dixieme de seconde et l'avatar ne tressaute plus. Montee totale ${d.monteeCm} cm.`
+    : `aucune marche franchissable trouvee parmi les ${r.cands} candidates : le test n'a rien pu mesurer` };
 });

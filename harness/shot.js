@@ -1030,6 +1030,8 @@ window.__G = {
   joueurAPied: typeof joueurAPied === 'function' ? joueurAPied : null,
   pietonSurPassage: typeof pietonSurPassage === 'function' ? pietonSurPassage : null,
   lieuDe: typeof lieuDe === 'function' ? lieuDe : null,
+  vehiculeDeService: typeof vehiculeDeService === 'function' ? vehiculeDeService : null,
+  voitureEmpruntable: typeof voitureEmpruntable === 'function' ? voitureEmpruntable : null,
   micro: typeof micro !== 'undefined' ? micro : null,
   chienAttaque: typeof chienAttaque === 'function' ? chienAttaque : null,
   aboie: typeof aboie === 'function' ? aboie : null,
@@ -2247,6 +2249,16 @@ window.__G = {
   hitBall: typeof hitBall === 'function' ? hitBall : null,
   sacSauve: typeof sacSauve === 'function' ? sacSauve : null,
   jouetsReset: typeof jouetsReset === 'function' ? jouetsReset : null,
+  // ---- POSTE LOCOMOTION (marche, course, foulee) : exports apres cette ligne-repere ----
+  animateRig: typeof animateRig === 'function' ? animateRig : null,
+  animateRigCorps: typeof animateRigCorps === 'function' ? animateRigCorps : null,
+  COURSE: typeof COURSE !== 'undefined' ? COURSE : 0,
+  ACCEL_SOL: typeof ACCEL_SOL !== 'undefined' ? ACCEL_SOL : 0,
+  FREIN_SOL: typeof FREIN_SOL !== 'undefined' ? FREIN_SOL : 0,
+  DEMI_TOUR: typeof DEMI_TOUR !== 'undefined' ? DEMI_TOUR : 0,
+  fouleeDe: typeof fouleeDe === 'function' ? fouleeDe : null,
+  poseJambes: typeof poseJambes === 'function' ? poseJambes : null,
+  poseAvatarJoueur: typeof poseAvatarJoueur === 'function' ? poseAvatarJoueur : null,
 };
 `;
 

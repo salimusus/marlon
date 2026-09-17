@@ -2238,7 +2238,10 @@ if (require.main === module) {
     if (v.w || v.h) { await page.setViewportSize({ width: v.w || 1280, height: v.h || 720 }); await page.waitForTimeout(300); }
     await page.evaluate(vv => window.__SHOT.go(vv), v);
     await page.waitForTimeout(v.wait || 700);
-    await page.screenshot({ path: path.join(OUT, v.name + '.png') });
+    // 30 s (le delai par defaut de Playwright) ne suffisent plus des que plusieurs bancs
+    // d'essai tournent en meme temps sur la machine : la capture expirait et le poste
+    // repartait sans image. Deux minutes, et on prend la photo meme sur une machine chargee.
+    await page.screenshot({ path: path.join(OUT, v.name + '.png'), timeout: 120000 });
     if (v.w || v.h) await page.setViewportSize({ width: 1280, height: 720 });
   }
   const stats = await page.evaluate(() => window.__SHOT.stats());

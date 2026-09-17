@@ -355,6 +355,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 33. Sortir de prison = finir un parcours d'obby entier
 🔎 Revu round 70 : toujours là, et à la manette l'écran 🔒 Prison n'a AUCUNE bague de sélection sur ses 5 boutons (Prairie ▶, Volcan ▶, Payer 100, Pass liberté, Rester en cellule) — `img/c7/c7-27-30s.png` (vu 1 fois, écran atteint par hasard après l'arrestation du contrôle 27).
+🔎 CONTRÔLÉ (bdcc5e4) : OK — arrestation (délit moyen) : fenêtre 🔒 avec la bague déjà sur « ⏳ Attendre 45 s en cellule », ✕ → « ⏳ Tu purges ta peine : 45 s dans la cellule, sans bouger », pastille « ⏳ Libre dans 40 s … 5 s », libération automatique à 45 s (« ⏳ Peine purgée : tu es libre ! », chat « 🔓 … est sorti de prison »), le stick ne fait bouger que de 3,4 m dans la cellule (PC et TV, `p6c-pc.log`, `img/p6/p6c-01-cellule.png`). Remarque : un piéton écrasé à 15 m/s (★★★) n'a mené à aucune arrestation en 120 s d'attente sur place (`p6b`, PC et TV) — la prison n'a pu être atteinte qu'en forçant `arrestation()`.
 ✅ RÉPARÉ — bouton « ⏳ Attendre 30 s en cellule » (45 s délit moyen, 60 s grave) dans la fenêtre de la prison, compte à rebours dans la pastille (« ⏳ Libre dans 30 s »), libération automatique. Mesuré : bouton présent, pastille, `jail.on = false` à 30 s — commit 02bd822
 - **Gravité** : GÊNANT (design, mais bloquant pour un enfant sans pièces)
 - **Reproduire** : se faire arrêter avec 25 🪙 et 0 pass.

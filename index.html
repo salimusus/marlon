@@ -18497,7 +18497,12 @@ function robotTick(dt) {
   // AU VOLANT, PAS DE LAISSE. Un robot de 90 cm ne monte pas en voiture : il resterait
   // traîné à 2 m d'un véhicule lancé à 90 km/h, en volant. Il attend donc sur place et se
   // replace à côté du joueur dès qu'il redescend.
-  if (drive.car || P.voile) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
+  // (le joueur EMMENÉ par un ami compte aussi : depuis que le passager est visible, il n'est
+  //  plus au volant — `drive.car` est vide — et la laisse le traînait derrière la voiture.
+  //  Même test que pour le chien : `city.rideBot`.)
+  const enVoiture = drive.car || P.voile
+    || (city.rideBot && city.rideBot.drive && city.rideBot.drive.passager ? city.rideBot.drive.car : null);
+  if (enVoiture) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
   if (robot.loin) {
     robot.loin = false; robot.replaces++;
     robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;

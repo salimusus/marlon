@@ -16292,7 +16292,7 @@ test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentr
     G.keys.delete('KeyW');
     // 3. le plafond : il ne monte pas à l'infini
     d.bat = 100; G.keys.add('Space');
-    for (let i = 0; i < 60 * 25; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 60 * 16; i++) G.step(1 / 60, true);   // 55 m à 5 m/s = 11 s : 16 s suffisent pour coller au plafond
     const altMax = G.droneAlt();
     G.keys.delete('Space');
     // 4. UN IMMEUBLE : il fonce dedans, il ne le traverse pas
@@ -16382,7 +16382,7 @@ test('le petit robot acheté marche, parle, reste collé au joueur (escalier com
     essai('robot va chercher', () => R.ordre === 'cherche' && !!R.objet);
     const rap0 = R.rapportes || 0;
     let rapporte = false;
-    for (let i = 0; i < 60 * 40 && !rapporte; i++) { G.step(1 / 60, true); if ((R.rapportes || 0) > rap0) rapporte = true; }
+    for (let i = 0; i < 60 * 15 && !rapporte; i++) { G.step(1 / 60, true); if ((R.rapportes || 0) > rap0) rapporte = true; }   // 17 m aller-retour à 9,4 m/s = 4 s : 15 s suffisent
     faits['il rapporte l\'objet'] = rapporte;
     G.robotRanger(true);
     return { sorti, ecartMax: +max.toFixed(2), colle: G.ROBOT_COLLE, marche, replaces: R.replaces,

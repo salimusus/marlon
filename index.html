@@ -556,14 +556,17 @@ body.tv #schChoices .item .e{font-size:calc(var(--u) * 1.05)}
 body.tv #schoolUI .row .btn{font-size:calc(var(--u) * .95);padding:calc(var(--u) * .38) calc(var(--u) * .85)}
 /* pastille discrète en bas au centre : combien de manettes sont branchées */
 /* la legende de la manette : ce que fait chaque bouton, en un coup d'oeil, tant qu'aucune fenetre n'est ouverte */
-#padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;gap:6px;flex-wrap:wrap;justify-content:center;
-  max-width:96vw;padding:5px 9px;border-radius:12px;background:rgba(10,16,36,.62);color:#fff;font-size:12px;line-height:1.4;pointer-events:none}
-#padLeg b{display:inline-block;min-width:16px;padding:0 5px;margin-right:3px;border-radius:6px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center}
-#padLeg i{font-style:normal;opacity:.75;margin-left:2px}
+#padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;flex-direction:column;gap:3px;
+  width:min(520px,94vw);max-height:calc(100vh - 80px);overflow:hidden;padding:12px 16px 14px;border-radius:16px;background:rgba(10,16,36,.9);color:#fff;font-size:15px;line-height:1.3;pointer-events:none;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+#padLeg .plt{font-weight:800;font-size:17px;text-align:center;margin-bottom:6px;color:#ffd23f}
+#padLeg .pl{display:flex;align-items:center;gap:12px}
+#padLeg b{flex:0 0 66px;display:inline-block;padding:3px 6px;border-radius:8px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center;font-size:15px}
+#padLeg span{flex:1;font-weight:700}
+#padLeg i{display:block;font-style:normal;font-weight:500;opacity:.75;font-size:12px;line-height:1.25}
 body.manette.city.aide #padLeg{display:flex}   /* le bandeau ne sort plus qu'a la demande : il barrait le haut de l'ecran en permanence */
 body.manette.city.uiopen #padLeg,body.manette.city.manetteTel #padLeg{display:none}
 #padLeg{transition:opacity .35s} body:not(.aide) #padLeg{opacity:0}
-body.tv #padLeg{font-size:calc(var(--uh) * .85);top:calc(var(--tvpad) + var(--uh) * 4.8);padding:calc(var(--uh) * .32) calc(var(--uh) * .62)}
+body.tv #padLeg{font-size:calc(var(--uh) * .72);width:min(42vw,860px);top:calc(var(--tvpad) + var(--uh) * 4.8);padding:calc(var(--uh) * .45) calc(var(--uh) * .8);gap:2px}body.tv #padLeg b{flex-basis:calc(var(--uh) * 3.4);font-size:calc(var(--uh) * .7);padding:2px 6px}body.tv #padLeg .plt{font-size:calc(var(--uh) * .8);margin-bottom:4px}body.tv #padLeg i{font-size:calc(var(--uh) * .52)}
 #tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
   color:#eaf0ff;font-weight:800;padding:calc(var(--uh,15px) * .4) calc(var(--uh,15px) * .9);font-size:calc(var(--uh,15px) * .85)}
@@ -831,7 +834,24 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(arme braquée : 🎯 changer de cible · tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>carte stratégique</div>
+<!-- L'AIDE DES TOUCHES, LISIBLE PAR UN ENFANT (n° 8 du Joueur) : une ligne par bouton, le bouton dans sa pastille,
+     l'action en clair, les cas particuliers en petit dessous — plus de parenthèses imbriquées en 11 px. -->
+<div id="padLeg">
+  <div class="plt">🎮 Les touches de la manette</div>
+  <div class="pl"><b>Stick G</b><span>marcher / tourner</span></div>
+  <div class="pl"><b>L3</b><span>courir</span></div>
+  <div class="pl"><b>L2</b><span>se baisser<i>arme équipée : 🎯 viser · au volant : freiner · hélico : descendre</i></span></div>
+  <div class="pl"><b>R2</b><span>accélérer<i>arme braquée : tirer</i></span></div>
+  <div class="pl"><b>✕</b><span>braquer / rengainer l'arme</span></div>
+  <div class="pl"><b>◯</b><span>sauter</span></div>
+  <div class="pl"><b>△</b><span>agir : monter, parler, prendre</span></div>
+  <div class="pl"><b>▢</b><span>frapper<i>hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame</i></span></div>
+  <div class="pl"><b>L1</b><span>garde / viser</span></div>
+  <div class="pl"><b>← →</b><span>🔫 changer d'arme<i>arme braquée : 🎯 changer de cible · tenu : 🛍️ boutique / 🎯 missions</i></span></div>
+  <div class="pl"><b>↑</b><span>📣 ordres<i>tenu : 🚩 guerre des gangs</i></span></div>
+  <div class="pl"><b>↓</b><span>🎭 danser</span></div>
+  <div class="pl"><b>Pavé</b><span>montrer / cacher cette aide</span></div>
+</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>

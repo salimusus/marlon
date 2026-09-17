@@ -11791,9 +11791,14 @@ function villaTickInner(dt) {
   for (const [obj, dist] of [[city.gate, 9], [city.garageDoor, 8], ...city.autoDoors.map(o => [o, 8])]) {
     if (!obj) continue;
     const who = drive.car && !drive.car.heli ? drive.car : P.pos, d = Math.hypot((who.x ?? who.x) - obj.x, (who.z ?? who.z) - obj.z);
-    const want = d < dist ? 1 : 0;
+    // LE PORTAIL VOIT VENIR LA VOITURE (n° 56 du Joueur). À 9 m et 1,6/s d'ouverture, une voiture
+    // à 45 km/h (12,5 m/s) arrivait sur le battant encore fermé (ouvert à 0,39, −3,8 % de carrosserie,
+    // 16 % pour la porte du garage). La distance de déclenchement grandit avec la vitesse (1,6 s
+    // d'avance) et les battants coulissent deux fois plus vite.
+    const v = drive.car && !drive.car.heli ? Math.abs(drive.speed || 0) : 0;
+    const want = d < dist + v * 1.6 ? 1 : 0;
     if (want !== obj.want) { obj.want = want; if (want) sfx.tone(600, 0, .2, 'sine', .05, 900); }
-    obj.open += (want - obj.open) * Math.min(1, dt * 1.6);
+    obj.open += (want - obj.open) * Math.min(1, dt * 3.2);
     if (obj.kind === 'gate') {   // les deux battants coulissent derrière les piliers
       const half = obj.w / 4, run = obj.w / 2;
       obj.g.children[0].position.x = -half - obj.open * run; obj.g.children[1].position.x = half + obj.open * run;

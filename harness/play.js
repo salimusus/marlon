@@ -15772,3 +15772,55 @@ test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort,
     && r.apresRangement === null && r.offert && r.ami && r.resteDansSac === 0 && r.mainApres === null;
   return { ok, detail: `avant : l'achat déduisait l'argent et n'en faisait RIEN (aucun inventaire) · maintenant la rose coûte ${r.w0 - r.w1} 🪙 et arrive dans le sac (×${r.dansSac}), se sort en main (${r.enMain}), se range (${r.apresRangement}), s'offre (${r.offert ? 'oui' : 'non'}) et fait un ami (${r.ami ? 'oui' : 'non'}) — il en reste ${r.resteDansSac} dans le sac · articles encore sans usage : ${r.morts.length}` };
 });
+
+test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentre tout seul à batterie basse', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, d = G.drone;
+    __SHOT.go({ world: 4, x: 3, y: 1, z: -118, hour: 12 });
+    G.sacAjoute('drone');
+    const sorti = G.sacSortir('drone');
+    const alt0 = G.droneAlt();
+    // 1. il décolle et il monte quand on pousse « monter » — et le joueur, lui, ne bouge pas
+    const pj = { x: P.pos.x, z: P.pos.z };
+    G.keys.add('Space');
+    for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+    const alt1 = G.droneAlt(), pilote = G.dronePilote();
+    // 2. il avance quand on pousse « avant »
+    G.keys.delete('Space'); G.keys.add('KeyW');
+    const x0 = d.x, z0 = d.z;
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    const parcouru = Math.hypot(d.x - x0, d.z - z0);
+    const joueurBouge = Math.hypot(P.pos.x - pj.x, P.pos.z - pj.z);
+    G.keys.delete('KeyW');
+    // 3. le plafond : il ne monte pas à l'infini
+    d.bat = 100; G.keys.add('Space');
+    for (let i = 0; i < 60 * 25; i++) G.step(1 / 60, true);
+    const altMax = G.droneAlt();
+    G.keys.delete('Space');
+    // 4. UN IMMEUBLE : il fonce dedans, il ne le traverse pas
+    const sol = G.solids.filter(s => s.h > 6 && s.h < 30 && s.w > 6)
+      .sort((a, c) => Math.hypot(a.x - 3, a.z + 118) - Math.hypot(c.x - 3, c.z + 118))[0];
+    d.x = sol.x; d.z = sol.z + sol.d / 2 + 12; d.y = sol.y; d.h = Math.PI;
+    d.vx = d.vz = d.vy = 0; d.bat = 100; d.vol = true; d.mode = 'pilote'; d.decolle = 0;
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW');
+    const mur = { face: +(sol.z + sol.d / 2).toFixed(2), drone: +d.z.toFixed(2), dedans: d.z < sol.z + sol.d / 2 - 0.1 };
+    // 5. batterie basse : il rentre tout seul et il se pose près du joueur
+    d.x = P.pos.x + 60; d.z = P.pos.z; d.y = 20; d.vx = d.vz = d.vy = 0;
+    d.bat = G.DRONE_BAS + 0.5; d.mode = 'pilote'; d.vol = true;
+    let modeRetour = false;
+    for (let i = 0; i < 60 * 90 && !d.posee; i++) { G.step(1 / 60, true); if (d.mode === 'retour') modeRetour = true; }
+    const distFin = Math.hypot(d.x - P.pos.x, d.z - P.pos.z);
+    // 6. la vue à bord, et le rangement
+    G.droneVue(true); const vue = d.vue && document.body.classList.contains('dronevue');
+    G.droneRanger(true);
+    return { sorti, alt0: +alt0.toFixed(2), alt1: +alt1.toFixed(1), pilote, parcouru: +parcouru.toFixed(1),
+      joueurBouge: +joueurBouge.toFixed(2), altMax: +altMax.toFixed(1), plafond: G.DRONE_PLAFOND,
+      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif };
+  });
+  const ok = r.sorti && r.alt0 < 0.5 && r.alt1 > 8 && r.pilote && r.parcouru > 12 && r.joueurBouge < 0.05
+    && Math.abs(r.altMax - r.plafond) < 0.6 && !r.mur.dedans && r.modeRetour && r.posee && r.distFin < 3
+    && r.vue && r.range;
+  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${__G.DRONE_BAS} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
+});

@@ -792,10 +792,25 @@ body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 
 /* (le radar reste au centre du bas hors mode télé, comme le banc d'essai le garantit ; le commit distant le poussait à gauche) */
 #guerre .tatliste>b,#guerre .tatliste>div{background:#21333e!important;color:#e1e8ed!important;border:1px solid #425762}#guerre .tatliste span{color:inherit}#guerre .tatliste{gap:8px}
 .empire-close{position:sticky;float:right;top:0;z-index:3;margin-left:8px!important}#guerre h2{padding-top:4px}
+/* ---- poste DRONE & ROBOT : l'écran de pilotage du drone ---- */
+#droneHud{position:fixed;inset:0;z-index:4;pointer-events:none;display:none}
+body.drone #droneHud{display:block}
+body.uiopen #droneHud,body.lobby #droneHud{display:none!important}
+#droneInfo{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#0d1a22e0;border:1px solid #5cc453;border-radius:9px;color:#dff7e2;font-size:13px;font-weight:800;padding:5px 12px;letter-spacing:.03em;white-space:nowrap;font-family:ui-monospace,monospace}
+#droneAide{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#0d1a22c4;border-radius:9px;color:#b9c9dd;font-size:11px;font-weight:700;padding:4px 10px;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+#droneCadre{position:absolute;inset:0;display:none}
+body.dronevue #droneCadre{display:block;border:3px solid #3ef2ff44;box-shadow:inset 0 0 110px #00131c99}
+body.dronevue #droneCadre::before{content:'';position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border:2px solid #3ef2ffcc;border-radius:50%;box-shadow:0 0 0 1px #0006}
+body.dronevue #droneCadre::after{content:'\25CF REC \00B7 DRONE';position:absolute;top:14px;left:18px;color:#ff6b6b;font-size:12px;font-weight:800;letter-spacing:.14em;text-shadow:0 1px 3px #000}
+body.flash #droneHud::after{content:'';position:absolute;inset:0;background:#fff;opacity:.75;pointer-events:none}
+body.tv #droneInfo{font-size:calc(var(--uh) * .75);top:calc(var(--tvpad) + var(--uh) * 2.4)}
+body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var(--uh) * .5)}
+@media(max-width:700px){#droneInfo{font-size:11px;top:48px}#droneAide{font-size:9px}}
 </style>
 </head>
 <body class="lobby">
 <canvas id="c"></canvas>
+<div id="droneHud"><div id="droneCadre"></div><div id="droneInfo"></div><div id="droneAide"></div></div>
 
 <div id="top">
   <div class="tl">
@@ -13538,6 +13553,8 @@ const GANTS = {
 const FOOD = [{ e: '🍔', n: 'Burger', p: 3, f: 9 }, { e: '🍕', n: 'Pizza', p: 3, f: 11 }, { e: '🍟', n: 'Frites', p: 2, f: 6 }, { e: '🥤', n: 'Soda', p: 2, f: 5 }, { e: '🍦', n: 'Glace', p: 2, f: 7 }, { e: '🍩', n: 'Donut', p: 2, f: 8 }, { e: '🥗', n: 'Salade', p: 2, f: -5 }, { e: '🍎', n: 'Pomme', p: 1, f: -3 }, { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3 }];
 let jumpHeld = false, downHeld = false;
 function cityReset() {
+  try { droneReset(); } catch (e) {}   // poste DRONE & ROBOT
+  try { robotReset(); } catch (e) {}   // poste DRONE & ROBOT
   try { sacReset(); } catch (e) {}   // poste DRONE & ROBOT : le sac à jouets, le drone et le robot
   try { metiersReset(); } catch (e) {}   // poste J : travailleurs, chantiers, incendies, boîtes aux lettres (try : cityReset tourne aussi au chargement, avant l'initialisation du bloc des métiers)
   // aucun de ces indicateurs de proximité n'était remis à zéro : hors de la ville, un appui sur E
@@ -17695,7 +17712,18 @@ function sacVide() { return !Object.keys(sac.objets).length; }
 // Le catalogue : un objet du sac par ARTICLE de comptoir. `article` est le nom exact vendu au
 // comptoir — c'est lui qui fait le lien, pour qu'aucun achat ne retombe dans le vide.
 const JOUETS = [
-  // (le drone, le robot, les batteries et l'arcade s'ajoutent juste en dessous, dans leur propre bloc)
+  { id: 'drone', e: '🚁', n: 'Mini-drone', article: 'Mini-drone',
+    aide: 'Il décolle et tu le pilotes vraiment.',
+    dehors: () => !!(typeof drone !== 'undefined' && drone.actif),
+    sortir: () => droneSortir(), ranger: () => droneRanger(), menu: () => openDroneMenu() },
+  { id: 'batterie', e: '🔋', n: 'Pack de batteries', article: 'Pack de batteries', pile: true,
+    aide: 'Recharge le drone et le robot à fond (il s\'use).',
+    sortir: () => batterieUtilise() },
+  { id: 'robot', e: '🤖', n: 'Robot compagnon', article: 'Robot compagnon',
+    aide: 'Il marche collé à toi, il parle et il obéit.',
+    dehors: () => !!(typeof robot !== 'undefined' && robot.actif),
+    sortir: () => robotSortir(), ranger: () => robotRanger(), menu: () => openOrdresRobot() },
+  // (l'arcade s'ajoute juste en dessous, dans son propre bloc)
   { id: 'casque', e: '🎧', n: 'Casque audio', article: 'Casque audio',
     aide: 'Sur les oreilles : la musique passe devant, la ville s\'assourdit.',
     dehors: () => !!sac.casque, sortir: () => casqueMet(true), ranger: () => casqueMet(false) },
@@ -17838,7 +17866,10 @@ function openSac() {
   $('ordresGrid').innerHTML = html;
   ordresRetourVisible(false);
   $('ordresGrid').querySelectorAll('[data-sac]').forEach(btn => btn.addEventListener('click', () => {
-    const id = btn.dataset.sac;
+    const id = btn.dataset.sac, j = JOUET(id);
+    // objet DEHORS et qui a son propre menu (le drone, le robot) : on ouvre ce menu au lieu
+    // de le ranger — sinon ses ordres seraient inatteignables à la manette.
+    if (sacDehors(id) && j && j.menu) { j.menu(); return; }
     if (sacDehors(id)) { sacRangerObjet(id); closeUI(); }
     else { closeUI(); sacSortir(id); }
   }));
@@ -17850,6 +17881,629 @@ function sacReset() {
   if (sac.casque) casqueMet(false);
   if (sac.manettePro) manetteProMet(false);
 }
+// ================= LE MINI-DRONE, VRAIMENT PILOTABLE (round 71) =================
+// LE JOUEUR : « drone fait le fonctionner ». Il s'achetait 15 🪙 au Techno-Parc et ne faisait
+// rien. Il vole maintenant pour de bon : quatre hélices qui tournent, une ombre au sol, un
+// bourdonnement, une batterie qui se vide et qui le RAMÈNE tout seul quand elle est basse,
+// un plafond, et des murs qu'il ne traverse pas. Deux modes : PILOTE (le joueur reste au sol
+// et tient les manches) et SUIT (le drone le filme en le suivant, et le joueur remarche).
+const DRONE_VMAX = 13;        // m/s à plat : vif, mais on le rattrape en voiture
+const DRONE_VZ = 5;           // m/s en montée et en descente
+const DRONE_TOUR = 2.2;       // rad/s : le virage
+const DRONE_PLAFOND = 55;     // m au-dessus du sol — il ne monte PAS à l'infini
+const DRONE_PORTEE = 190;     // m : au-delà, la liaison se coupe et il rentre tout seul
+const DRONE_AUTO = 150;       // s d'autonomie pleine puissance
+const DRONE_BAS = 20;         // % de batterie : retour automatique au joueur
+const drone = { actif: false, vol: false, g: null, helices: [], ombre: null, led: null,
+  x: 0, y: 0, z: 0, h: 0, vx: 0, vz: 0, vy: 0, bat: 100, vue: false, mode: 'pilote',
+  album: [], sonT: 0, decolle: 0, hudT: 0, contacts: 0, posee: false };
+function droneMesh() {
+  const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.09, 0.36), M(0x2b3550)));
+  for (const ry of [0.785, -0.785]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.026, 0.045), M(0x3b4252)); b.rotation.y = ry; g.add(b); }
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), M(0x3ef2ff)); cap.position.set(0, -0.03, 0.2); g.add(cap);   // la caméra, à l'avant
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff3b3b }));
+  led.position.set(0, 0.07, -0.18); g.add(led); drone.led = led;
+  drone.helices = [];
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const mot = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.055, 8), M(0x1e1e1e));
+    mot.position.set(sx * 0.247, 0.04, sz * 0.247); g.add(mot);
+    const hel = new THREE.Group();
+    for (const a of [0, Math.PI / 2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.006, 0.03), M(0xdfe6f3)); p.rotation.y = a; hel.add(p); }
+    hel.position.set(sx * 0.247, 0.082, sz * 0.247); g.add(hel); drone.helices.push(hel);
+  }
+  return g;
+}
+// La boîte du drone contre les solides de la ville. Même garde-fou que l'hélicoptère : on
+// ignore les volumes de plus de 30 m (ciel, enveloppes), sinon il resterait cloué au sol.
+function droneBloque(x, y, z) {
+  const r = 0.33;
+  for (const o of solidsAutour(x, z, r + 1.2, true)) {
+    if (o.h > 30 || o.deco) continue;
+    if (Math.abs(x - o.x) < o.w / 2 + r && Math.abs(y - o.y) < o.h / 2 + r * 0.6 && Math.abs(z - o.z) < o.d / 2 + r) return o;
+  }
+  return null;
+}
+// LE SOL SOUS LE DRONE — ET RIEN D'AUTRE. On se servait de `groundAt`, qui cherche le haut
+// du solide le plus haut dans un carré de 90 cm autour du point : à l'approche d'une tour,
+// il renvoyait le TOIT, et le drone était TÉLÉPORTÉ dessus 80 cm avant d'avoir touché la
+// façade (mesuré : il traversait l'immeuble du Techno-Parc sans un contact). On ne retient
+// donc que les surfaces qui sont VRAIMENT sous lui : un mur plus haut que le drone n'est pas
+// un sol, c'est un mur — et c'est droneBloque qui l'arrête.
+function droneSolSous(x, z, y) {
+  let top = 0;
+  for (const o of solidsAutour(x, z, 1, true)) {
+    if (o.h > 30) continue;
+    const t = o.y + o.h / 2;
+    if (t > y + 0.06) continue;   // au-dessus de lui : c'est un mur ou un plafond, pas un sol
+    if (x > o.x - o.w / 2 - 0.2 && x < o.x + o.w / 2 + 0.2 && z > o.z - o.d / 2 - 0.2 && z < o.z + o.d / 2 + 0.2) top = Math.max(top, t);
+  }
+  return top;
+}
+const droneSol = () => droneSolSous(drone.x, drone.z, drone.y);
+const droneAlt = () => Math.max(0, drone.y - droneSol());
+const droneDist = () => Math.hypot(drone.x - P.pos.x, drone.z - P.pos.z);
+// « Pilote » : le joueur tient les manches, donc il ne marche pas. C'est ce test que `step`
+// interroge pour ne pas faire courir le personnage sous son propre drone.
+function dronePilote() {
+  return !!(drone.actif && drone.vol && drone.mode === 'pilote' && running && !paused && !uiOpen && !drive.car);
+}
+function droneSortir() {
+  if (!city.on) { msg('🚁 Le drone ne vole qu\'en ville', 2000); return false; }
+  if (drone.bat < 5) { msg('🚁 Batterie à plat — sors un 🔋 pack de batteries de ton sac', 3000); return false; }
+  droneRanger(true);
+  drone.g = droneMesh(); worldGroup.add(drone.g);
+  const om = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
+  om.rotation.x = -Math.PI / 2; worldGroup.add(om); drone.ombre = om;
+  drone.x = P.pos.x + Math.cos(P.facing) * 1.2; drone.z = P.pos.z - Math.sin(P.facing) * 1.2;
+  drone.y = groundAt(drone.x, drone.z) + 0.25; drone.h = P.facing;
+  drone.vx = drone.vz = drone.vy = 0; drone.actif = true; drone.vol = true; drone.mode = 'pilote';
+  drone.posee = false; drone.contacts = 0; drone.decolle = simTime + 1.6;
+  document.body.classList.add('drone');
+  try { sfx.unlock(); sfx.tone(160, 0, .3, 'sawtooth', .05); } catch (e) {}
+  msg('🚁 Le drone décolle ! Stick gauche (ZQSD) pour voler · R2/L2 (Espace/C) monter-descendre · ▢ (V) la vue · △ (E) se poser', 5200);
+  droneHudMaj(true);
+  return true;
+}
+function droneRanger(silencieux) {
+  if (drone.g) { worldGroup.remove(drone.g); drone.g = null; }
+  if (drone.ombre) { worldGroup.remove(drone.ombre); drone.ombre = null; }
+  drone.helices = []; drone.led = null;
+  drone.actif = false; drone.vol = false; drone.vue = false; drone.mode = 'pilote';
+  document.body.classList.remove('drone', 'dronevue');
+  if (!silencieux) msg('🚁 Drone rangé dans ton sac', 1600);
+  droneHudMaj(true);
+  return true;
+}
+// ▢ (V) : la caméra passe À BORD, et revient au joueur. C'est la « vue du drone » demandée.
+function droneVue(on) {
+  if (!drone.actif) return false;
+  drone.vue = on == null ? !drone.vue : !!on;
+  document.body.classList.toggle('dronevue', drone.vue);
+  msg(drone.vue ? '📹 Vue du drone — ▢ (V) pour revenir au joueur' : '👤 Vue du joueur', 1800);
+  try { sfx.tone(drone.vue ? 880 : 520, 0, .09, 'sine', .05); } catch (e) {}
+  return true;
+}
+// △ (E) : se poser, puis redécoller. La descente est maîtrisée : 1,8 m/s, et il s'arrête net
+// au contact du sol (ou du toit) au lieu de s'y enfoncer.
+function dronePoser() {
+  if (!drone.actif) return false;
+  if (drone.vol) { drone.vol = false; drone.posee = false; msg('🚁 Le drone se pose…', 1800); }
+  else { drone.vol = true; drone.posee = false; drone.decolle = simTime + 1.1; msg('🚁 Il redécolle', 1500); }
+  return true;
+}
+// « filme-moi » : le drone lâche les manches, se met en vol stationnaire derrière le joueur
+// et le suit en le cadrant. Le joueur remarche aussitôt.
+function droneSuit(on) {
+  if (!drone.actif) return false;
+  drone.mode = (on == null ? (drone.mode !== 'suit') : !!on) ? 'suit' : 'pilote';
+  if (drone.mode === 'suit') { drone.vol = true; msg('📹 Le drone te suit et te filme — tu peux remarcher', 2800); }
+  else msg('🎮 Tu reprends les manches du drone', 2000);
+  return true;
+}
+// « repérer un lieu » : la colonne de lumière du GPS se plante sous le drone. On l'envoie en
+// reconnaissance, on repère la place, on y retourne à pied.
+function droneRepere() {
+  if (!drone.actif) return false;
+  setBeacon(drone.x, drone.z, 0);
+  msg(`📍 Repère posé sous le drone (${Math.round(droneDist())} m d'ici) — suis la colonne de lumière`, 3200);
+  try { sfx.coin(); } catch (e) {}
+  return true;
+}
+const droneLieu = () => {
+  let z = null, a = Infinity;
+  for (const zn of city.zones) if (drone.x > zn.x1 && drone.x < zn.x2 && drone.z > zn.z1 && drone.z < zn.z2) {
+    const s = (zn.x2 - zn.x1) * (zn.z2 - zn.z1); if (s < a) { a = s; z = zn; }
+  }
+  return z ? `${z.emoji} ${z.name}` : '🏙️ la ville';
+};
+// « photographier » : l'écran fait un éclair, l'obturateur claque, et la vue est notée dans
+// l'album du drone (lieu, altitude, heure). Ce n'est PAS une vraie image : la toile 3D ne se
+// relit pas sans `preserveDrawingBuffer`, qui coûterait des images par seconde à tout le jeu.
+function dronePhoto() {
+  if (!drone.actif) return false;
+  const h = Math.round(day.h);
+  drone.album.push({ lieu: droneLieu(), alt: Math.round(droneAlt()), h });
+  if (drone.album.length > 30) drone.album.shift();
+  try { sfx.tone(1400, 0, .04, 'square', .05); sfx.tone(700, .05, .07, 'square', .04); } catch (e) {}
+  document.body.classList.add('flash'); setTimeout(() => document.body.classList.remove('flash'), 140);
+  msg(`📷 Photo n° ${drone.album.length} : ${drone.album[drone.album.length - 1].lieu}, à ${drone.album[drone.album.length - 1].alt} m`, 2600);
+  return true;
+}
+// Les manches : les MÊMES touches et le MÊME stick que la marche — c'est la situation qui
+// tranche (le joueur ne marche pas pendant qu'il pilote), comme partout ailleurs dans le jeu.
+function droneEntrees() {
+  if (!dronePilote()) return { av: 0, tour: 0, mont: 0 };
+  const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
+  const haut = (jumpHeld || keys.has('Space') || pad.a ? 1 : 0) + (pad.gaz || 0);
+  const bas = (downHeld || keys.has('ShiftLeft') || keys.has('ControlLeft') || keys.has('KeyC') ? 1 : 0) + (pad.frein || 0);
+  return { av: clamp(kf + pad.y + joy.y, -1, 1), tour: clamp(kr + pad.x + joy.x, -1, 1), mont: clamp(haut - bas, -1, 1) };
+}
+function droneTick(dt) {
+  if (!drone.actif || !drone.g) return;
+  const e = droneEntrees();
+  const gaz = Math.min(1, (Math.hypot(drone.vx, drone.vz) / DRONE_VMAX + Math.abs(drone.vy) / DRONE_VZ) * 0.7);
+  // ---- la batterie : elle se vide, elle ramène le drone, puis elle le pose ----
+  if (drone.vol) drone.bat = Math.max(0, drone.bat - (0.5 + gaz * 0.5) * (100 / DRONE_AUTO) * dt);
+  if (drone.bat <= DRONE_BAS && drone.mode !== 'retour' && drone.vol) {
+    drone.mode = 'retour'; drone.vue = false; document.body.classList.remove('dronevue');
+    msg(`🔋 Batterie à ${Math.round(drone.bat)} % : le drone rentre tout seul`, 3400);
+    try { sfx.tone(300, 0, .12, 'square', .05); sfx.tone(220, .14, .18, 'square', .05); } catch (e2) {}
+  }
+  if (drone.bat <= 0 && drone.vol) { drone.vol = false; msg('🔋 Batterie vide : le drone se pose là où il est', 3000); }
+  // ---- hors de portée : la liaison se coupe, il rentre ----
+  if (drone.vol && drone.mode === 'pilote' && droneDist() > DRONE_PORTEE) {
+    drone.mode = 'retour'; msg(`📡 Liaison perdue à ${Math.round(droneDist())} m : le drone rentre`, 3200);
+  }
+  // ---- ce que le drone VEUT faire, selon son mode ----
+  if (drone.vol) {
+    if (drone.mode === 'pilote') {
+      drone.h -= e.tour * DRONE_TOUR * dt;
+      const c = DRONE_VMAX * e.av;
+      drone.vx += (Math.sin(drone.h) * c - drone.vx) * Math.min(1, dt * 3.5);
+      drone.vz += (Math.cos(drone.h) * c - drone.vz) * Math.min(1, dt * 3.5);
+      let vy = e.mont * DRONE_VZ;
+      if (simTime < drone.decolle) vy = Math.max(vy, 3.4);   // le décollage se fait tout seul
+      drone.vy += (vy - drone.vy) * Math.min(1, dt * 4);
+    } else {
+      // suivi et retour : une même consigne, un point de vol stationnaire près du joueur
+      const suit = drone.mode === 'suit';
+      const bx = P.pos.x - Math.sin(P.facing) * (suit ? 3.4 : 0), bz = P.pos.z - Math.cos(P.facing) * (suit ? 3.4 : 0);
+      const by = P.pos.y + (suit ? 3.4 : 5.5);
+      const dx = bx - drone.x, dz = bz - drone.z, d = Math.hypot(dx, dz);
+      const v = Math.min(DRONE_VMAX, d * 1.6);
+      drone.vx += ((d > 0.2 ? dx / d * v : 0) - drone.vx) * Math.min(1, dt * 3);
+      drone.vz += ((d > 0.2 ? dz / d * v : 0) - drone.vz) * Math.min(1, dt * 3);
+      drone.vy += (clamp((by - drone.y) * 1.4, -DRONE_VZ, DRONE_VZ) - drone.vy) * Math.min(1, dt * 3);
+      const cap = Math.atan2(P.pos.x - drone.x, P.pos.z - drone.z);
+      let dh = cap - drone.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); drone.h += dh * Math.min(1, dt * 3);
+      // arrivé au-dessus du joueur, batterie basse : il se pose à ses pieds
+      if (drone.mode === 'retour' && d < 1.6) { drone.vol = false; msg('🚁 Le drone est revenu se poser près de toi', 2600); }
+    }
+  } else {   // moteurs coupés : descente maîtrisée, puis il reste posé
+    drone.vx -= drone.vx * Math.min(1, dt * 3); drone.vz -= drone.vz * Math.min(1, dt * 3);
+    drone.vy = drone.posee ? 0 : -1.8;
+  }
+  // ---- le déplacement, axe par axe, et les murs qu'il ne traverse pas ----
+  const nx = drone.x + drone.vx * dt, nz = drone.z + drone.vz * dt;
+  if (!droneBloque(nx, drone.y, drone.z)) drone.x = nx; else { drone.vx = -drone.vx * 0.15; drone.contacts++; droneCogne(); }
+  if (!droneBloque(drone.x, drone.y, nz)) drone.z = nz; else { drone.vz = -drone.vz * 0.15; drone.contacts++; droneCogne(); }
+  const ny = drone.y + drone.vy * dt;
+  if (!droneBloque(drone.x, ny, drone.z)) drone.y = ny; else { drone.vy = 0; drone.contacts++; droneCogne(); }
+  // ---- le sol, le plafond ----
+  const sol = droneSol();
+  // POSÉ, IL RESTE POSÉ. Le test « y < sol + 0,22 » se retournait à l'image suivante (y VAUT
+  // sol + 0,22 après le calage) : le drone repassait « pas posé », rallumait ses hélices et
+  // clignotait entre les deux états. On garde une marge d'un demi-centimètre.
+  if (drone.y <= sol + 0.225) { drone.y = sol + 0.22; if (drone.vy < 0) drone.vy = 0; if (!drone.vol && !drone.posee) { drone.posee = true; try { sfx.tone(120, 0, .12, 'sine', .04); } catch (e3) {} } }
+  else if (!drone.vol) drone.posee = false;
+  if (drone.y > sol + DRONE_PLAFOND) { drone.y = sol + DRONE_PLAFOND; if (drone.vy > 0) drone.vy = 0;
+    if (simTime > (drone.plafT || 0)) { drone.plafT = simTime + 6; msg(`🚁 Plafond atteint : ${DRONE_PLAFOND} m au-dessus du sol`, 2200); } }
+  // ---- ce qu'on voit : l'assiette, les hélices, l'ombre, la LED ----
+  drone.g.position.set(drone.x, drone.y, drone.z);
+  drone.g.rotation.set(0, drone.h, 0);
+  const avant = drone.vx * Math.sin(drone.h) + drone.vz * Math.cos(drone.h);
+  const cote = drone.vx * Math.cos(drone.h) - drone.vz * Math.sin(drone.h);
+  drone.g.rotation.x = clamp(avant / DRONE_VMAX, -1, 1) * 0.3;
+  drone.g.rotation.z = -clamp(cote / DRONE_VMAX, -1, 1) * 0.3;
+  const tourne = drone.vol || !drone.posee;
+  for (const h of drone.helices) h.rotation.y += (tourne ? 46 : 0) * dt;
+  if (drone.led) drone.led.material.color.setHex(drone.bat <= DRONE_BAS ? (Math.sin(simTime * 9) > 0 ? 0xff3b3b : 0x400000) : 0x5cff7a);
+  if (drone.ombre) {
+    const alt = droneAlt();
+    drone.ombre.position.set(drone.x, sol + 0.04, drone.z);
+    drone.ombre.scale.setScalar(0.75 + alt * 0.05);
+    drone.ombre.material.opacity = 0.34 * clamp(1 - alt / 34, 0.07, 1);
+    drone.ombre.visible = alt < 48;
+  }
+  // ---- le bourdonnement : il faiblit avec la distance, il monte avec les gaz ----
+  if (tourne && simTime > drone.sonT) {
+    drone.sonT = simTime + 0.13;
+    const vol = Math.max(0, 0.055 - droneDist() * 0.0007) * (drone.vue ? 1.5 : 1);
+    if (vol > 0.002) { try { sfx.tone(148 + gaz * 70, 0, .14, 'sawtooth', vol); } catch (e4) {} }
+  }
+  droneHudMaj();
+}
+function droneCogne() {
+  if (simTime < (drone.cogneT || 0)) return;
+  drone.cogneT = simTime + 0.35;
+  try { sfx.tone(90, 0, .07, 'square', .05); } catch (e) {}
+}
+// LA CAMÉRA À BORD. Elle s'applique APRÈS la caméra du jeu (une seule ligne ajoutée à la fin
+// de camPerche) : rien du cadrage habituel n'est touché, et l'image revient exactement où
+// elle était dès qu'on repasse sur le joueur.
+function droneCam() {
+  if (!drone.actif || !drone.vue || !drone.g) return;
+  const cx = drone.x - Math.sin(drone.h) * 1.15, cz = drone.z - Math.cos(drone.h) * 1.15;
+  camera.position.set(cx, drone.y + 0.5, cz);
+  if (drone.mode === 'suit') camera.lookAt(P.pos.x, P.pos.y + 1.1, P.pos.z);
+  else camera.lookAt(drone.x + Math.sin(drone.h) * 9, drone.y - 1.9, drone.z + Math.cos(drone.h) * 9);
+}
+function droneHudMaj(force) {
+  const el = $('droneInfo'); if (!el) return;
+  if (!drone.actif) { document.body.classList.remove('drone', 'dronevue'); return; }
+  if (!force && simTime < (drone.hudT || 0)) return;
+  drone.hudT = simTime + 0.15;
+  const bat = Math.round(drone.bat), alt = Math.round(droneAlt()), d = Math.round(droneDist());
+  const jauge = '█'.repeat(Math.round(bat / 10)) + '░'.repeat(10 - Math.round(bat / 10));
+  const etat = !drone.vol ? (drone.posee ? 'posé' : 'se pose') : drone.mode === 'retour' ? 'retour auto' : drone.mode === 'suit' ? 'te filme' : 'en vol';
+  el.innerHTML = `🚁 <b style="color:${bat <= DRONE_BAS ? '#ff5c5c' : '#5cff7a'}">${jauge} ${bat} %</b> · ↕ ${alt} m · ↔ ${d} m · ${etat}`;
+  const aide = $('droneAide');
+  if (aide) aide.textContent = drone.mode === 'suit'
+    ? '↓ (U) reprendre les manches · ▢ (V) la vue · R1 (P) photo'
+    : 'stick gauche : voler · R2/L2 : monter / descendre · △ (E) se poser · ▢ (V) la vue · R1 (P) photo · ↓ (U) filme-moi';
+}
+// Le menu du drone, dans le sac : tout ce qui n'a pas de bouton à soi y est, donc tout est
+// atteignable à la manette (la croix parcourt, ✕ valide).
+function openDroneMenu() {
+  if (!drone.actif) { msg('🚁 Sors d\'abord le drone de ton sac', 2000); return false; }
+  $('ordresTitre').textContent = '🚁 Ton drone';
+  $('ordresSub').innerHTML = `Batterie ${Math.round(drone.bat)} % · altitude ${Math.round(droneAlt())} m · ${drone.album.length} photo(s)`;
+  const O = [
+    ['poser', drone.vol ? '🛬' : '🛫', drone.vol ? 'Se poser' : 'Décoller', '△ (E) fait la même chose'],
+    ['vue', '📹', drone.vue ? 'Revenir au joueur' : 'Vue du drone', '▢ (V) fait la même chose'],
+    ['suit', '🎥', drone.mode === 'suit' ? 'Reprendre les manches' : 'Qu\'il me filme', 'il te suit et te cadre'],
+    ['photo', '📷', 'Photographier', `album : ${drone.album.length} photo(s)`],
+    ['repere', '📍', 'Repérer ce lieu', 'une colonne de lumière se plante ici'],
+    ['rentre', '🏠', 'Rappelle-le', 'il revient se poser près de toi'],
+    ['range', '🎒', 'Le ranger', 'retour dans le sac'],
+  ];
+  $('ordresGrid').innerHTML = O.map(([k, e, t, i]) => `<button class="ocard" data-dr="${k}"><span>${e}</span>${t}<i>${i}</i></button>`).join('');
+  ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-dr]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.dr; closeUI();
+    if (k === 'poser') dronePoser(); else if (k === 'vue') droneVue();
+    else if (k === 'suit') droneSuit(); else if (k === 'photo') dronePhoto();
+    else if (k === 'repere') droneRepere(); else if (k === 'range') droneRanger();
+    else if (k === 'rentre') { drone.vol = true; drone.mode = 'retour'; msg('🚁 Il rentre se poser près de toi', 2400); }
+  }));
+  openUI('ordres');
+  return true;
+}
+// Les batteries achetées au Techno-Parc : elles rendent au drone (et au robot) leur plein.
+function batterieUtilise() {
+  if (!sacA('batterie')) return false;
+  drone.bat = 100;
+  if (typeof robot !== 'undefined') robot.bat = 100;
+  sacRetire('batterie');
+  try { sfx.win(); } catch (e) {}
+  msg(`🔋 Pack de batteries utilisé : drone et robot à 100 % (il t'en reste ${sacNb('batterie')})`, 3000);
+  droneHudMaj(true);
+  return true;
+}
+function droneReset() { droneRanger(true); drone.bat = 100; drone.album = []; drone.contacts = 0; }
+// ================= LE PETIT ROBOT COMPAGNON (round 71) =================
+// LE JOUEUR : « petit robot fait le marcher parler et il doit être collé au joueur, il doit
+// obéir aux ordres du joueur ». Il s'achetait 30 🪙 au Techno-Parc (« Il te suit partout… en
+// théorie ») et ne faisait rien du tout. Il marche maintenant sur deux jambes articulées, il
+// parle AVEC LA VOIX DE LA MAÎTRESSE D'ÉCOLE (la même synthèse du navigateur), il reste
+// COLLÉ au joueur (2 m au plus), il contourne les murs, il monte les marches, il se replace
+// s'il est distancé — et il obéit aux mêmes ordres écrits que le chien et le gang, par le
+// MÊME interprète (commandeExacte), plus une liste cliquable pour la manette.
+const ROBOT_COLLE = 2;        // m : la distance que le joueur a demandée — jamais plus loin
+const ROBOT_SUIT = 1.15;      // m : la place qu'il vise derrière l'épaule
+const ROBOT_VMAX = 9.4;       // m/s : nettement plus vite que le joueur qui court (5,6 × 1,3)
+const ROBOT_AUTO = 900;       // s d'autonomie (15 min) : un pack de batteries le refait
+const robot = { actif: false, g: null, rig: null, nom: 'Bip', x: 0, y: 0, z: 0, h: 0,
+  ordre: 'suit', poste: null, bat: 100, pas: 0, vit: 0, stuckT: 0, danse: 0, parleT: 0,
+  objet: null, phase: '', ecart: 0, ecartMax: 0, dit: '', ditT: 0, jambe: 0, replaces: 0 };
+function robotMesh() {
+  const M = c => new THREE.MeshLambertMaterial({ color: c });
+  const BLEU = 0x4f8dff, GRIS = 0xc9ced8, NOIR = 0x2b3550;
+  const g = new THREE.Group(), rig = {};
+  const bassin = new THREE.Group(); bassin.position.y = 0.42; g.add(bassin); rig.bassin = bassin;
+  const corps = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.2), M(BLEU)); corps.position.y = 0.15; bassin.add(corps);
+  const ecran = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.09, 0.02), new THREE.MeshBasicMaterial({ color: 0x3ef2ff }));
+  ecran.position.set(0, 0.17, 0.108); bassin.add(ecran); rig.ecran = ecran;
+  const cou = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.07, 8), M(GRIS)); cou.position.y = 0.33; bassin.add(cou);
+  const tete = new THREE.Group(); tete.position.y = 0.37; bassin.add(tete); rig.tete = tete;
+  tete.add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.2, 0.2), M(GRIS)));
+  rig.yeux = [];
+  for (const s of [-1, 1]) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3ef2ff }));
+    o.position.set(s * 0.06, 0.025, 0.1); tete.add(o); rig.yeux.push(o); }
+  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.15, 6), M(NOIR)); ant.position.y = 0.175; tete.add(ant);
+  const bl = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff5c5c }));
+  bl.position.y = 0.25; tete.add(bl); rig.boule = bl;
+  rig.bras = {};
+  for (const s of [-1, 1]) {
+    const ep = new THREE.Group(); ep.position.set(s * 0.19, 0.24, 0); bassin.add(ep);
+    const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.06), M(GRIS)); br.position.y = -0.1; ep.add(br);
+    const mn = new THREE.Mesh(new THREE.SphereGeometry(0.046, 8, 6), M(BLEU)); mn.position.y = -0.22; ep.add(mn);
+    rig.bras[s < 0 ? 'g' : 'd'] = ep; if (s > 0) rig.main = mn;
+  }
+  rig.jambes = {};
+  for (const s of [-1, 1]) {
+    const ha = new THREE.Group(); ha.position.set(s * 0.09, 0, 0); bassin.add(ha);
+    const cu = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.2, 0.075), M(NOIR)); cu.position.y = -0.1; ha.add(cu);
+    const ge = new THREE.Group(); ge.position.y = -0.2; ha.add(ge);
+    const mo = new THREE.Mesh(new THREE.BoxGeometry(0.066, 0.18, 0.066), M(GRIS)); mo.position.y = -0.09; ge.add(mo);
+    const pi = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.17), M(NOIR)); pi.position.set(0, -0.2, 0.035); ge.add(pi);
+    rig.jambes[s < 0 ? 'g' : 'd'] = { ha, ge };
+  }
+  g.userData.rig = rig;
+  return g;
+}
+// IL PARLE. Même voix que la maîtresse d'école : `voice.say(texte, fille, force)`. Le texte
+// s'écrit AUSSI (bulle + chat) pour l'enfant qui n'a pas le son, et pour les tests.
+function robotDit(txt, ms = 2600) {
+  robot.dit = txt; robot.ditT = simTime;
+  msg(`🤖 ${robot.nom} : ${txt}`, ms);
+  try { chat(robot.nom, txt, '#4f8dff'); } catch (e) {}
+  try { voice.say(txt, true, true); } catch (e) {}
+  try { sfx.tone(660, 0, .05, 'square', .035); sfx.tone(880, .06, .05, 'square', .03); } catch (e) {}
+  robot.parleT = simTime + 1.2;
+  return true;
+}
+const ROBOT_PHRASES = ['je suis là, chef !', 'tout va bien de mon côté', 'j\'aime bien marcher avec toi',
+  'tu as vu comme la ville est grande ?', 'mes batteries vont bien, merci', 'bip bip ! je t\'écoute',
+  'dis-moi quoi faire, je sais faire plein de choses', 'à mes calculs, il fait beau aujourd\'hui'];
+const ROBOT_BLAGUES = ['pourquoi le robot a traversé la route ? parce qu\'il était programmé comme ça !',
+  'je connais un langage : le bip. Bip ! Voilà, tu sais tout.',
+  'un robot qui danse mal, ça s\'appelle un robot qui danse.',
+  'j\'ai compté les pavés de la rue : il y en a beaucoup.'];
+function robotSortir() {
+  if (!city.on) { msg('🤖 Le robot ne sort qu\'en ville', 2000); return false; }
+  robotRanger(true);
+  robot.g = robotMesh(); robot.rig = robot.g.userData.rig; worldGroup.add(robot.g);
+  robot.x = P.pos.x + Math.cos(P.facing) * 0.9; robot.z = P.pos.z - Math.sin(P.facing) * 0.9;
+  robot.y = groundUnder(robot.x, robot.z, null, P.pos.y + 1.2); robot.h = P.facing;
+  robot.actif = true; robot.ordre = 'suit'; robot.poste = null; robot.objet = null;
+  robot.ecartMax = 0; robot.replaces = 0; robot.danse = 0; robot.babilT = simTime + rnd(25, 50);
+  robot.g.position.set(robot.x, robot.y, robot.z); robot.g.rotation.y = robot.h;
+  try { sfx.unlock(); } catch (e) {}
+  robotDit(`bonjour ! je suis ${robot.nom}, je te suis partout. Dis-moi « viens », « attends ici », « danse », « va chercher »…`, 5000);
+  return true;
+}
+function robotRanger(silencieux) {
+  if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
+  if (robot.g) { worldGroup.remove(robot.g); robot.g = null; robot.rig = null; }
+  robot.actif = false; robot.ordre = 'suit'; robot.poste = null;
+  if (!silencieux) msg('🤖 Robot rangé dans ton sac', 1600);
+  return true;
+}
+// ---- les ordres : la MÊME forme que ceux du chien, pour passer par le MÊME interprète ----
+const ORDRES_ROBOT = [
+  { id: 'viens', e: '🫳', t: 'Viens', mots: /\bviens|vient|ici|rejoins|rapproche|approche\b/, dit: 'il accourt vers toi' },
+  { id: 'suit', e: '🫡', t: 'Suis-moi', mots: /\bsuis moi|suis-moi|suivre|suis|colle|accompagne|au pied\b/, dit: 'il te colle aux talons' },
+  { id: 'reste', e: '✋', t: 'Attends ici', mots: /\battends|attend|reste|bouge pas|pas bouger|stop|arrete|stoppe\b/, dit: 'il ne bouge plus d\'ici' },
+  { id: 'parle', e: '💬', t: 'Parle', mots: /\bparle|parler|dis|raconte|cause|chante\b/, dit: 'il dit une petite phrase à voix haute' },
+  { id: 'blague', e: '😄', t: 'Raconte une blague', mots: /\bblague|blagues|rigole|drole|marrant\b/, dit: 'il en connaît quatre' },
+  { id: 'danse', e: '💃', t: 'Danse', mots: /\bdanse|danser|guinche|bouge\b/, dit: 'il danse sur place' },
+  { id: 'garde', e: '🛡️', t: 'Garde cet endroit', mots: /\bgarde|garder|surveille|surveiller|protege|veille\b/, dit: 'il se poste ici et surveille' },
+  { id: 'cherche', e: '🎾', t: 'Va chercher', mots: /\bva chercher|cherche|chercher|rapporte|ramene|fetch\b/, dit: 'tu lances, il rapporte' },
+  { id: 'saute', e: '🦘', t: 'Saute', mots: /\bsaute|saut|bondis\b/, dit: 'il fait un bond de robot' },
+  { id: 'lampe', e: '🔦', t: 'Allume ta lampe', mots: /\blampe|lumiere|lumière|eclaire|éclaire|torche|allume\b/, dit: 'il éclaire devant toi' },
+  { id: 'etat', e: '🔋', t: 'Comment tu vas ?', mots: /\bbatterie|forme|etat|état|comment vas|ca va|ça va\b/, dit: 'il annonce sa batterie' },
+  { id: 'nom', e: '🏷️', t: 'Change son nom', mots: /\bnom|nomme|nommer|renomme|appelle|baptise|prenom|prénom\b/, dit: 'écris son nouveau nom dans le chat' },
+  { id: 'range', e: '🎒', t: 'Range-toi', mots: /\brange|ranger|rentre|au sac|repose toi|dodo\b/, dit: 'il retourne dans le sac' },
+];
+// « va chercher » : on lance vraiment un boulon devant soi, il court le ramasser et il te le
+// rapporte. Exactement le geste du chien avec sa balle — ce que l'enfant connaît déjà.
+function robotLance() {
+  if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
+  const d = 11 + Math.random() * 6;
+  const bx = P.pos.x + Math.sin(P.facing) * d, bz = P.pos.z + Math.cos(P.facing) * d;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshLambertMaterial({ color: 0xffd23f }));
+  m.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); worldGroup.add(m);
+  robot.objet = { m, x: bx, z: bz, y: groundUnder(bx, bz, null, P.pos.y + 1.2) + 0.1, tenu: false, t: 0,
+    dep: [P.pos.x, P.pos.y + 1.2, P.pos.z] };
+  robot.ordre = 'cherche'; robot.phase = 'aller'; robot.poste = null;
+  robotDit('j\'y vais ! je te le rapporte', 2400);
+  return true;
+}
+function robotOrdre(id, txt) {
+  if (!robot.actif) { msg('🤖 Sors d\'abord ton robot du sac (touche I)', 2600); return true; }
+  const o = ORDRES_ROBOT.find(x => x.id === id); if (!o) return false;
+  robot.danse = 0;
+  if (id === 'range') return robotRanger();
+  if (id === 'cherche') return robotLance();
+  if (id === 'parle') { robot.ordre = robot.ordre === 'cherche' ? 'suit' : robot.ordre; return robotDit(pickOne(ROBOT_PHRASES)); }
+  if (id === 'blague') return robotDit(pickOne(ROBOT_BLAGUES), 4200);
+  if (id === 'etat') return robotDit(`ma batterie est à ${Math.round(robot.bat)} pour cent, et je suis à ${Math.round(robotDist())} mètres de toi`, 3600);
+  if (id === 'saute') { robot.saut = simTime + 0.8; robotDit('hop !', 1400); return true; }
+  if (id === 'lampe') { robot.lampe = !robot.lampe; robotLampe(robot.lampe); robotDit(robot.lampe ? 'lampe allumée !' : 'lampe éteinte', 1800); return true; }
+  if (id === 'danse') { robot.ordre = 'danse'; robot.danse = simTime + 9; robot.poste = { x: robot.x, z: robot.z }; robotDit('regarde comme je danse !', 2600); return true; }
+  if (id === 'garde') { robot.ordre = 'garde'; robot.poste = { x: robot.x, z: robot.z }; robotDit('je garde cet endroit, personne ne passe', 3000); return true; }
+  if (id === 'reste') { robot.ordre = 'reste'; robot.poste = { x: robot.x, z: robot.z }; robotDit('d\'accord, je t\'attends ici', 2600); return true; }
+  if (id === 'viens') { robot.ordre = 'viens'; robot.poste = null; robotDit('j\'arrive !', 1800); return true; }
+  if (id === 'suit') { robot.ordre = 'suit'; robot.poste = null; robotDit('je te suis, reste devant moi', 2400); return true; }
+  if (id === 'nom') { robot.attenteNom = true; msg(`🏷️ Écris le nouveau nom de ton robot dans le chat (il s'appelle ${robot.nom})`, 4000);
+    try { chat(null, '🏷️ Comment veux-tu appeler ton robot ? Écris son nouveau nom.'); } catch (e) {} return true; }
+  return false;
+}
+function robotNomme(n) {
+  robot.nom = String(n).slice(0, 14) || 'Bip'; robot.attenteNom = false;
+  try { store.set('superobby.robotnom', robot.nom); } catch (e) {}
+  robotDit(`super, je m'appelle ${robot.nom} maintenant !`, 3000);
+  return true;
+}
+function robotLampe(on) {
+  if (!robot.rig) return false;
+  if (on && !robot.faisceau) {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.75, 3.4, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+    f.rotation.x = Math.PI / 2; f.position.set(0, 0.02, 1.75); robot.rig.tete.add(f); robot.faisceau = f;
+  }
+  if (robot.faisceau) robot.faisceau.visible = !!on;
+  return true;
+}
+const robotDist = () => robot.actif ? Math.hypot(robot.x - P.pos.x, robot.z - P.pos.z) : 0;
+// Le point qu'il vise selon l'ordre en cours.
+function robotBut() {
+  if (robot.ordre === 'cherche' && robot.objet) {
+    if (robot.phase === 'aller') return { x: robot.objet.x, z: robot.objet.z, arret: 0.6 };
+    return { x: P.pos.x, z: P.pos.z, arret: 1 };
+  }
+  if ((robot.ordre === 'reste' || robot.ordre === 'garde' || robot.ordre === 'danse') && robot.poste)
+    return { x: robot.poste.x, z: robot.poste.z, arret: 0.3 };
+  // « viens » et « suis » : la place derrière l'épaule du joueur
+  return { x: P.pos.x - Math.sin(P.facing) * ROBOT_SUIT, z: P.pos.z - Math.cos(P.facing) * ROBOT_SUIT, arret: 0.35 };
+}
+function robotTick(dt) {
+  if (!robot.actif || !robot.g) return;
+  robot.bat = Math.max(0, robot.bat - dt * (100 / ROBOT_AUTO));
+  if (robot.bat <= 0 && robot.ordre !== 'panne') { robot.ordre = 'panne'; robot.poste = { x: robot.x, z: robot.z }; robotDit('ma batterie est vide… donne-moi un pack de batteries', 4000); }
+  if (robot.bat > 0 && robot.ordre === 'panne') { robot.ordre = 'suit'; robot.poste = null; }
+  // ---- le boulon lancé : il vole jusqu'à son point de chute ----
+  const ob = robot.objet;
+  if (ob && !ob.tenu) {
+    ob.t = Math.min(1, ob.t + dt * 1.4);
+    ob.m.position.set(ob.dep[0] + (ob.x - ob.dep[0]) * ob.t, ob.dep[1] + (ob.y - ob.dep[1]) * ob.t + Math.sin(ob.t * Math.PI) * 2.4, ob.dep[2] + (ob.z - ob.dep[2]) * ob.t);
+    ob.m.rotation.x += dt * 7; ob.m.rotation.y += dt * 5;
+  }
+  // ---- où il veut aller, et à quelle vitesse ----
+  const but = robot.ordre === 'panne' ? null : robotBut();
+  let d = 0, avance = 0;
+  if (but) {
+    const dx = but.x - robot.x, dz = but.z - robot.z; d = Math.hypot(dx, dz);
+    const joueur = robot.ordre === 'suit' || robot.ordre === 'viens' || (robot.ordre === 'cherche' && robot.phase === 'retour');
+    // IL RESTE COLLÉ. Plus il traîne, plus il accélère — jusqu'à 9,4 m/s, nettement au-dessus
+    // du joueur qui court (5,6 × 1,3 = 7,3 m/s). C'est ce qui garantit les 2 m demandés.
+    const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 1.6 + d * 4.2);
+    if (v > 0) {
+      const o = { x: robot.x, y: robot.y, z: robot.z };
+      const bloque = npcMove(o, dx / d * v * dt, dz / d * v * dt, 0.26);
+      robot.x = o.x; robot.z = o.z;
+      robot.h = Math.atan2(dx, dz);
+      avance = Math.hypot(o.x - (but.x - dx), o.z - (but.z - dz)) / Math.max(dt, 1e-4);
+      // BLOQUÉ CONTRE UN MUR : au bout d'une seconde et demie il se replace derrière le
+      // joueur au lieu de rester planté là (c'est ce qui « perdait » le chien du jeu).
+      robot.stuckT = bloque ? robot.stuckT + dt : 0;
+      if (joueur && (robot.stuckT > 1.5 || d > 16 || Math.abs(P.pos.y - robot.y) > 3.5)) {
+        robot.stuckT = 0; robot.replaces++;
+        robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
+        robot.y = P.pos.y;
+      }
+    } else robot.stuckT = 0;
+    if (robot.ordre === 'viens' && d <= but.arret + 0.2) { robot.ordre = 'suit'; robotDit('me voilà !', 1600); }
+  }
+  robot.vit = avance;
+  // ---- « va chercher » : il ramasse, il revient, il pose ----
+  if (robot.ordre === 'cherche' && ob) {
+    if (robot.phase === 'aller' && ob.t >= 1 && Math.hypot(robot.x - ob.x, robot.z - ob.z) < 0.9) {
+      ob.tenu = true; robot.phase = 'retour'; robotDit('je l\'ai ! je reviens', 2200);
+    }
+    if (ob.tenu && robot.rig && robot.rig.main) {
+      const p = robot.rig.main.getWorldPosition(new THREE.Vector3());
+      ob.m.position.copy(p); ob.m.rotation.set(0, robot.h, 0);
+    }
+    if (robot.phase === 'retour' && robotDist() < 1.4) {
+      worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
+      robotDit('tiens, je te le rends !', 2400);
+      try { sfx.coin(); } catch (e) {}
+    }
+  }
+  // ---- « garde » : il pivote et il annonce ce qui approche ----
+  if (robot.ordre === 'garde') {
+    robot.h = Math.sin(simTime * 0.7) * 1.3;
+    if (simTime > (robot.gardeT || 0)) {
+      robot.gardeT = simTime + 3;
+      for (const b of bots) {
+        if (b.ko || !b.av || !b.av.group.visible) continue;
+        if (Math.hypot(b.pos.x - robot.x, b.pos.z - robot.z) > 7) continue;
+        if (simTime < (robot.gardeDit || 0)) break;
+        robot.gardeDit = simTime + 12; robotDit(`attention, ${b.name} approche de mon poste`, 3200); break;
+      }
+    }
+  }
+  if (robot.ordre === 'danse' && simTime > robot.danse) { robot.ordre = 'suit'; robot.poste = null; }
+  // ---- il parle tout seul, de temps en temps, quand il suit ----
+  if (robot.ordre === 'suit' && simTime > (robot.babilT || 0)) {
+    robot.babilT = simTime + rnd(28, 55);
+    robotDit(pickOne(ROBOT_PHRASES), 2400);
+  }
+  // ---- le sol, les marches, et ce qu'on voit ----
+  robot.y = groundUnder(robot.x, robot.z, null, robot.y + 1.2);
+  robot.ecart = robotDist();
+  if (robot.ordre === 'suit' || robot.ordre === 'viens') robot.ecartMax = Math.max(robot.ecartMax, robot.ecart);
+  robotAnime(dt);
+}
+// LES JAMBES. Un compagnon qui GLISSE au sol n'est pas un robot qui marche : les hanches
+// battent la cadence, les genoux plient, les bras balancent à contretemps.
+function robotAnime(dt) {
+  const r = robot.rig; if (!r) return;
+  const v = Math.min(1, robot.vit / 4.5);
+  robot.pas += dt * (3 + robot.vit * 1.7);
+  const a = Math.sin(robot.pas * 2.4) * (0.15 + v * 0.55);
+  robot.jambe = a;
+  r.jambes.g.ha.rotation.x = a; r.jambes.d.ha.rotation.x = -a;
+  r.jambes.g.ge.rotation.x = Math.max(0, -a) * 1.1; r.jambes.d.ge.rotation.x = Math.max(0, a) * 1.1;
+  const dans = robot.ordre === 'danse';
+  if (dans) {
+    r.bras.g.rotation.z = 1.6 + Math.sin(simTime * 7) * 0.5; r.bras.d.rotation.z = -1.6 - Math.sin(simTime * 7) * 0.5;
+    r.bras.g.rotation.x = 0; r.bras.d.rotation.x = 0;
+    r.bassin.rotation.y = Math.sin(simTime * 5) * 0.5;
+    r.tete.rotation.z = Math.sin(simTime * 7) * 0.3;
+  } else {
+    r.bras.g.rotation.z = 0; r.bras.d.rotation.z = 0;
+    r.bras.g.rotation.x = -a * 0.9; r.bras.d.rotation.x = a * 0.9;
+    r.bassin.rotation.y = 0;
+    r.tete.rotation.z = 0;
+    r.tete.rotation.y = robot.ordre === 'garde' ? 0 : Math.sin(simTime * 0.8) * 0.2;
+  }
+  // il parle : l'écran du ventre et les yeux clignotent, l'antenne s'allume
+  const parle = simTime < robot.parleT;
+  if (r.ecran) r.ecran.material.color.setHex(parle && Math.sin(simTime * 22) > 0 ? 0xffd23f : 0x3ef2ff);
+  if (r.boule) r.boule.material.color.setHex(robot.bat < 15 ? (Math.sin(simTime * 8) > 0 ? 0xff5c5c : 0x3a0f0f) : parle ? 0x5cff7a : 0xff5c5c);
+  const saut = robot.saut && simTime < robot.saut ? Math.abs(Math.sin((robot.saut - simTime) * 8)) * 0.5 : 0;
+  robot.g.position.set(robot.x, robot.y + saut + Math.abs(Math.sin(robot.pas * 2.4)) * v * 0.035, robot.z);
+  let dh = robot.h - robot.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  robot.g.rotation.y += dh * Math.min(1, dt * 9);
+}
+// La liste cliquable — le même écran que pour le chien, donc utilisable à la manette.
+function openOrdresRobot() {
+  if (!robot.actif) { msg('🤖 Sors d\'abord ton robot du sac (touche I)', 2600); return false; }
+  $('ordresTitre').textContent = `🤖 Ordres pour ${robot.nom}`;
+  $('ordresSub').innerHTML = `🔋 ${Math.round(robot.bat)} % · à ${robot.ecart.toFixed(1)} m de toi · ordre en cours : ${robot.ordre}`
+    + '<br>Clique un ordre, ou écris-le dans le chat (« robot viens », « attends ici », « va chercher »…).';
+  $('ordresGrid').innerHTML = ORDRES_ROBOT.map(o =>
+    `<button class="ocard" data-rb="${o.id}"><span>${o.e}</span>${o.t}<i>${o.dit}</i></button>`).join('');
+  ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-rb]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.rb; closeUI();
+    try { chat(myCfg.name, `${robot.nom} ${(ORDRES_ROBOT.find(o => o.id === id) || {}).t || id}`); } catch (e) {}
+    robotOrdre(id, '');
+  }));
+  openUI('ordres');
+  return true;
+}
+// L'INTERPRÈTE EXISTANT, PAS UN NOUVEAU. `commandeExacte` (le même qui sert au chien et au
+// gang) appelle cette fonction : une phrase qui parle au robot y est reconnue au mot près.
+function ordreRobotTexte(txt) {
+  if (!robot.actif && !/\brobot\b/.test(norm(txt))) return false;
+  const t = norm(txt);
+  if (robot.attenteNom && !/^\//.test(txt)) { robotNomme(txt.replace(/[^\p{L}\p{N} '-]/gu, '').trim() || 'Bip'); return true; }
+  const nomme = robot.nom && t.includes(norm(robot.nom));
+  const viseRobot = /\brobot|androide|androïde|bip\b/.test(t) || nomme;
+  // le nom seul (ou « robot » seul) ouvre sa liste d'ordres
+  if (viseRobot && t.replace(/[^a-z0-9]+/g, ' ').trim().replace(/\b(robot|androide|bip)\b/g, '').trim() === '') return openOrdresRobot();
+  // sans le nom, on ne lui parle QUE s'il est sorti et qu'aucun bot n'est nommé dans la phrase
+  if (!viseRobot && (!robot.actif || trouveBot(txt) || chien.pet)) return false;
+  for (const o of ORDRES_ROBOT) if (o.mots.test(t)) { robotOrdre(o.id, txt); return true; }
+  return false;
+}
+function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.lampe = false; robot.faisceau = null; }
 // ---- interprétation des messages adressés à un ami ou au chien ----
 // ================= ORDRES DONNÉS AUX AMIS =================
 // Un ami exécute ce qu'on lui demande : suivre, attendre, aller chercher un véhicule, taper
@@ -18151,6 +18805,9 @@ function commandeExacte(txt) {
   if (chien.pet) { const m2 = /(?:appelle|appeler|renomme|renommer|nomme|nommer|baptise|baptiser)\s+(?:le\s+|la\s+|mon\s+|ma\s+)?(?:chien|chienne|chiot|toutou)?\s*:?\s*([\p{L}][\p{L}\p{N}'-]{1,13})\s*$/iu.exec(txt.trim());
     if (m2 && !/^(chien|chienne|chiot|toutou)$/i.test(m2[1])) { nommerChien(m2[1]); return true; } }
   if (ordreGang(txt)) return true;   // ordres collectifs au gang (avant le chien : « allez attaquer les bleus »)
+  // LE ROBOT PASSE PAR LE MÊME INTERPRÈTE QUE LE CHIEN ET LE GANG (poste DRONE & ROBOT) :
+  // on n'en écrit pas un second, on ajoute une ligne à celui qui existe.
+  try { if (ordreRobotTexte(txt)) return true; } catch (eRb) {}
   // « attaque … » ne veut pas dire « chien, mords-le » quand la phrase parle d'un gang :
   // cette branche avalait « attaque un membre d'un gang adverse » et le chien partait seul.
   // ---- les ordres du chien ----
@@ -18732,6 +19389,8 @@ function openQui() {
   if (avecChien) html += `<p class="osec">🐶 Ton chien</p><button class="ocard" data-chienqui="1"><span>🐶</span>${chienNom()}<i>assis, couché, la balle, mords…</i></button>`;
   // LE SAC ET LE ROBOT, A PORTEE DE POUCE. C'est le seul ecran que la manette sait deja
   // parcourir : sans cette entree, le drone et le robot etaient injouables sans clavier.
+  if (typeof robot !== 'undefined' && robot.actif) html += `<p class="osec">🤖 Ton robot</p><button class="ocard" data-robotqui="1"><span>🤖</span>${robot.nom}<i>viens, attends ici, danse, va chercher…</i></button>`;
+  if (typeof drone !== 'undefined' && drone.actif) html += `<p class="osec">🚁 Ton drone</p><button class="ocard" data-dronequi="1"><span>🚁</span>Le mini-drone<i>décoller, se poser, la vue, photo, repérer</i></button>`;
   if (!sacVide()) html += `<p class="osec">🎒 Ton sac</p><button class="ocard" data-sacqui="1"><span>🎒</span>Tes objets<i>${Object.keys(sac.objets).length} objet(s) : sortir, ranger, jouer</i></button>`;
   for (const { titre, l } of lignes) {
     html += `<p class="osec">${titre}</p>`;
@@ -18746,6 +19405,8 @@ function openQui() {
   $('ordresGrid').querySelectorAll('[data-equipe]').forEach(btn => btn.addEventListener('click', () => openEquipe()));
   $('ordresGrid').querySelectorAll('[data-chienqui]').forEach(btn => btn.addEventListener('click', () => openOrdresChien()));
   $('ordresGrid').querySelectorAll('[data-sacqui]').forEach(btn => btn.addEventListener('click', () => openSac()));
+  $('ordresGrid').querySelectorAll('[data-robotqui]').forEach(btn => btn.addEventListener('click', () => openOrdresRobot()));
+  $('ordresGrid').querySelectorAll('[data-dronequi]').forEach(btn => btn.addEventListener('click', () => openDroneMenu()));
   $('ordresGrid').querySelectorAll('[data-qui]').forEach(btn => btn.addEventListener('click', () => {
     const b = bots.find(x => x.name === btn.dataset.qui); if (b) openOrdres(b);
   }));
@@ -19397,8 +20058,12 @@ function step(dt, active) {
   if (P.standing && P.standing.conv) { P.pos.x += P.standing.conv.x * dt; P.pos.z += P.standing.conv.z * dt; }
   const onIce = !!(P.standing && P.standing.ice) || (P.grounded && surGlace(P.pos.x, P.pos.z));
 
-  const kf = (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
-  const kr = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
+  // AUX MANCHES DU DRONE, ON NE MARCHE PAS. Les mêmes touches et le même stick pilotent
+  // l'appareil (droneEntrees) : sans ce garde-fou, on décollait et le personnage partait
+  // courir tout seul sous son propre drone. C'est la SITUATION qui tranche, comme partout.
+  const volDrone = typeof dronePilote === 'function' && dronePilote();
+  const kf = volDrone ? 0 : (keys.has('KeyW') || keys.has('KeyZ') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  const kr = volDrone ? 0 : (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
   // A PIED : LE STICK GAUCHE, ET LUI SEUL. Au round precedent les gachettes faisaient aussi
   // avancer et reculer le personnage ; a l'usage le joueur n'en a pas voulu (« pour marcher
   // reculer aller a droite gauche : joystick gauche pas les gachettes »). `pad.gaz` et
@@ -19406,7 +20071,7 @@ function step(dt, active) {
   // R2/L2 a pied ont retrouve d'autres roles (R2 tire arme au poing, L2 baisse le joueur).
   // La zone morte ronde et la courbe analogique sont dans padStick : pousse a moitie, on
   // marche a moitie, et les quatre directions repondent exactement pareil.
-  let ix = clamp(kr + joy.x + pad.x + tel.x, -1, 1), iz = clamp(kf + joy.y + pad.y + tel.y, -1, 1);
+  let ix = clamp(kr + (volDrone ? 0 : joy.x + pad.x + tel.x), -1, 1), iz = clamp(kf + (volDrone ? 0 : joy.y + pad.y + tel.y), -1, 1);
   let wantX, wantZ, len;
   // arme dégainée : on passe en déplacement relatif à la caméra, sinon Q/D ferait tourner
   // le personnage contre la visée
@@ -19426,7 +20091,7 @@ function step(dt, active) {
     // poussait presque tout droit (bande morte de 32 % !) puis le dosait au carre, donc rien
     // ne se passait avant la moitie de la course. Desormais : zone morte FINE de 6 %, reponse
     // proportionnelle, et la vitesse de rotation reglable de ⚙️ (100 / 160 / 240 °/s).
-    const ax = clamp(joy.x + pad.x + tel.x, -1, 1);
+    const ax = clamp(volDrone ? 0 : joy.x + pad.x + tel.x, -1, 1);
     let turnIn = kr;
     if (Math.abs(ax) > ROT_MORTE) turnIn += Math.sign(ax) * (Math.abs(ax) - ROT_MORTE) / (1 - ROT_MORTE);
     if (Math.abs(turnIn) > 0.02) P.facing -= clamp(turnIn, -1, 1) * settings.turn * Math.PI / 180 * dt;
@@ -21980,6 +22645,8 @@ function cityVie(dt) {
   if (city.pets.length) safe('animaux', () => petsTick(dt));
   if (city.trafficLights.length) safe('feux', () => lightsTick());
   safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('services', () => servicesTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
+  safe('drone', () => droneTick(dt));   // poste DRONE & ROBOT
+  safe('robot', () => robotTick(dt));   // poste DRONE & ROBOT
   safe('sons du monde', () => sonsVille(dt));   // pas des bots, rotor, ambiance du quartier, accueils parles
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('feu des véhicules', () => feuxVehiculesTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
@@ -23416,6 +24083,13 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyB' && running && city.on && !uiOpen) { openStore(); return; }
   if (e.code === 'KeyJ' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }
   if (e.code === 'KeyI' && running && city.on && !uiOpen) { openSac(); return; }   // 🎒 le sac à jouets
+  // ---- les touches du drone (poste DRONE & ROBOT) : elles ne répondent que drone sorti ----
+  if (typeof drone !== 'undefined' && drone.actif && running && !paused && !uiOpen) {
+    if (e.code === 'KeyV') { droneVue(); return; }                 // ▢ à la manette
+    if (e.code === 'KeyE') { dronePoser(); return; }               // △ à la manette
+    if (e.code === 'KeyP' || (e.code === 'KeyX' && dronePilote())) { dronePhoto(); return; }   // R1 à la manette
+    if (e.code === 'KeyU') { droneSuit(); return; }                // ↓ de la croix à la manette
+  }
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
@@ -23442,7 +24116,7 @@ window.addEventListener('keydown', e => {
   if ((e.code === 'KeyC' || e.code === 'ControlLeft') && running && !paused && !drive.car) { keys.add(e.code); setAccroupi(true); return; }
   if (e.code === 'KeyH' && running && !paused && !drive.car) { keys.add(e.code); setGarde(true); return; }
   keys.add(e.code);
-  if (e.code === 'Space') P.jumpBuf = 0.15;
+  if (e.code === 'Space') { if (!(typeof dronePilote === 'function' && dronePilote())) P.jumpBuf = 0.15; }   // aux manches du drone, Espace fait MONTER (droneEntrees)
 });
 window.addEventListener('keyup', e => { if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') P.run = false;
   if (e.code === 'KeyC' || e.code === 'ControlLeft') { keys.delete(e.code); if (!keys.has('KeyC') && !keys.has('ControlLeft')) setAccroupi(false); return; }
@@ -23629,6 +24303,9 @@ function padAction(quoi) {
   if (quoi === 'guerre') { if (!libre) return false; openGuerre(); return true; }
   if (quoi === 'boutique') { if (!libre) return false; openStore(); return true; }
   if (quoi === 'missions') { if (!libre) return false; openMissions(city.offNear); return true; }
+  // ↓ DE LA CROIX, DRONE SORTI : il passe en « filme-moi » et te rend les jambes. Le joueur
+  // n'a rien d'autre à faire de ce bouton pendant qu'il pilote (il ne peut pas danser).
+  if (quoi === 'emote' && typeof drone !== 'undefined' && drone.actif && !uiOpen) { droneSuit(); return true; }
   if (quoi === 'emote') { if (paused) return false; if (drive.car) { if (drive.car.heli) return false; horn(drive.car.kind); } else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return true; }
   // LES FLECHES ONT DEUX EMPLOIS QUE LA SITUATION SEPARE (round 70) : arme RANGEE, elles font
   // tourner le tour des armes ; arme BRAQUEE, elles choisissent la cible verrouillee — « les
@@ -24473,6 +25150,7 @@ function camPerche(dt, aiming) {
     camera.updateProjectionMatrix();
   }
   camera.lookAt(cam.target);
+  try { droneCam(); } catch (eDr) {}   // poste DRONE & ROBOT : la vue à bord écrase la caméra du jeu, et rien d'autre
   // POSTE ANIMATION : pendant les trois secondes du coup vainqueur, la caméra de cinéma
   // écrase la caméra de jeu — et seulement elle. Les commandes du joueur continuent de
   // répondre, `cam.yaw` et `cam.dist` restent ceux qu'il a réglés, et l'image lui revient

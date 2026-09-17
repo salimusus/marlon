@@ -19500,6 +19500,7 @@ function separerVehicules() {
 }
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
+  if (c.dead) { msg('🔥 Cette voiture est une épave : la dépanneuse va la remettre en état au garage', 2200); return; }   // on ne remonte pas dans une carcasse (n° 70)
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
   setGarde(false); setAccroupi(false);   // on ne conduit pas accroupi les poings devant le visage
   // on se voit désormais au volant, comme les amis bots conducteurs
@@ -20371,7 +20372,17 @@ function conduire(c, cmd, dt) {
     // 8 % de la vie du véhicule et la moindre séance de mur le détruisait en une minute : un
     // enfant y perdait sa voiture sans arrêt. Le choc marque toujours la tôle — c'est ce qui
     // rend le rebond crédible — mais trois fois moins, et jamais plus de 5 % d'un coup.
-    if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.min(5, 0.5 + Math.abs(vAvant) * 0.2)); choc(c, vAvant, null);
+    // CE QUI COMPTE, C'EST LA VITESSE PERDUE CONTRE LE MUR, PAS LA VITESSE. Avant, longer une
+    // façade à 3 m/s coûtait 1,2 % toutes les 0,35 s (mesuré : 4 % → 25 % en cinq secondes de
+    // glissade, la voiture d'un enfant brûlait avant d'avoir quitté le parking — n° 31, 69, 70),
+    // et un vrai choc de face n'avait ni BOOM ni secousse. On mesure la vitesse que le mur a
+    // ÔTÉE cette image (`perte`) : un choc franc (> 4 m/s perdus, soit 15 km/h) fait BOOM, secoue
+    // la caméra et abîme la tôle en proportion ; un frottement ne coûte que des rayures.
+    const perte = Math.max(0, Math.abs(vAvant) - fait / Math.max(dt, 1e-4));
+    // (et un choc suppose d'ARRIVER vite : le nez planté contre un grillage, gaz enfoncés, le rebond
+    //  de 3,4 m/s relançait un « choc » toutes les demi-secondes — 14 % → 41 % en cinq secondes mesurés)
+    if (perte > 4 && Math.abs(vAvant) > 6 && simTime > (c.hitT || 0)) { c.hitT = simTime + 1.2; vehicleDamage(c, Math.min(14, perte * 0.9)); choc(c, perte, null); if (pilote) cam.kick = (cam.kick || 0) + Math.min(0.08, perte * 0.006);
+      msg(perte > 9 ? '💥 BOUM ! Gros choc contre le mur' : '💥 Choc contre le mur', 900);
       // la normale du mur : l'axe bloque, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
       // UNE SEULE MARQUE SUR LE MUR. Deux postes en posaient une AU MEME ENDROIT a chaque
@@ -20383,9 +20394,9 @@ function conduire(c, cmd, dt) {
       // Au passage, chocDecor recevait `bx ? nx : c.x` — la NORMALE (±1) a la place de
       // l'abscisse du choc : le premier point sonde tombait vers x = ±1, a l'autre bout de
       // la ville. On lui passe le vehicule, il sonde deja son nez et son arriere.
-      const marqueVille = chocDecor(c, c.x, c.z, Math.abs(vAvant));
-      chocVehicule(c, Math.abs(vAvant), nx, nz, !!marqueVille);   // degats visibles sur la carrosserie
-    }
+      const marqueVille = chocDecor(c, c.x, c.z, perte);
+      chocVehicule(c, perte, nx, nz, !!marqueVille);   // degats visibles sur la carrosserie
+    } else if (Math.abs(vAvant) > 1.5 && simTime > (c.frotteT || 0)) { c.frotteT = simTime + 1.5; vehicleDamage(c, 0.2); }   // la rayure du frottement : rien de plus
   }
   vehicleSolid(c); if (pilote) resolveVehicleOverlap(c);
   ecraseAuSol(c, V);

@@ -14975,7 +14975,7 @@ const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal
 // parte pas sous le bitume (une caméra qui tourne AUTOUR du joueur descend quand on lève les yeux).
 const CAM_PITCH_HAUT = -0.5;
 const CAM_RECENTRE = 2.2;      // rad/s : vitesse MAXIMALE du replacement automatique derrière le joueur (126 °/s)
-const CAM_LAISSE = 2.5;        // mètres : retard MAXIMAL du point visé sur le joueur ou la voiture (voir « LA LAISSE »)
+const CAM_LAISSE = 2;          // mètres : retard MAXIMAL du point visé sur le joueur ou la voiture (voir « LA LAISSE ») — avec la perche de conduite (9 + 2 + 2,6 m) la caméra ne dépasse donc jamais 15,6 m derrière la voiture
 // CONTRAT AVEC LES AUTRES POSTES : poser `cam.fixe = true` suspend TOUTE l'adaptation de la
 // perche (montée, décalage de la visée, ouverture du champ) le temps d'un plan de caméra
 // écrit à la main — plan de combat, cinématique. Les filets anti-mur, eux, restent actifs.
@@ -24274,10 +24274,11 @@ function camPerche(dt, aiming) {
       // on ne vise PAS la distance voulue (9 m) mais la distance CONFORTABLE : la caméra monte
       // juste ce qu'il faut pour qu'on joue bien, et pas un degré de plus — sinon le moindre
       // muret la faisait basculer en vue de dessus
-      // 1,0 rad (57°) au volant : mesuré, 0,8 ne suffisait pas — la caméra coincée entre la
-      // voiture et une façade de 4,2 m n'arrivait pas à passer PAR-DESSUS le toit du bâtiment
-      // et restait posée sur la carrosserie (2,6 m). Au-delà on basculerait en vue de dessus.
-      const plafondM = Math.min(cam.pmax == null ? 1.25 : cam.pmax, monteVeh ? 1 : 1.25);
+      // 1,1 rad (63°) au volant : mesuré. À 0,8 la caméra coincée entre la voiture et une
+      // façade de 4,2 m restait posée sur la carrosserie (2,6 m) ; à 1,0 elle frôlait encore
+      // l'arête du toit (3,5 m) ; à 1,1 elle passe par-dessus et retrouve une perche entière.
+      // Ce plan très plongeant ne sert QUE là — dès qu'il y a de la place, la montée s'annule.
+      const plafondM = Math.min(cam.pmax == null ? 1.25 : cam.pmax, monteVeh ? 1.1 : 1.25);
       cam.hausseCible = camMontee(cam.target.x, cam.target.y, cam.target.z, cam.yaw, cam.pitch,
         Math.min(cam.dist, CAM_CONFORT), plafondM, vehM ? vehM.solid : null);
     }

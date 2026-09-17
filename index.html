@@ -14796,18 +14796,24 @@ function poseJambes(rig, vDonne, dt) {
   // LE BASSIN. Ce n'est pas une decoration : a 35 cm devant la hanche, une jambe de 72 cm
   // n'atteint le sol que si la hanche descend de 11 cm. On calcule la descente exigee par le
   // ou les pieds au sol, on la lisse, et on la borne.
-  let besoin = 0;
+  let besoin = 0, aucun = true;
   for (let i = 0; i < 2; i++) {
     if (!appuis[i]) continue;
+    aucun = false;
     const [fx, fy, fz] = pos[i], hx = (i ? 0.5 : -0.5) * S;
     const plat = Math.hypot(fx - hx, fz - PIED_AVANT);
     const haut = Math.sqrt(Math.max(0.0004, JAMBE_LONG * JAMBE_LONG - plat * plat));
     besoin = Math.max(besoin, HANCHE_Y - (fy + PIED_BAS + haut));
   }
-  besoin = Math.max(0, Math.min(BASSIN_MAX, besoin));
+  // EN SUSPENSION, ON NE REMONTE PAS LE BASSIN. Les deux pieds en l'air, plus aucune jambe
+  // n'exige quoi que ce soit : le besoin retombait a zero, le bassin se relevait, puis le
+  // pied se reposait et il replongeait — 9,7 cm de saut EN UNE IMAGE, mesure par le test 423,
+  // qu'on avait d'abord pris pour un defaut de l'escalier. On garde la hauteur du dernier
+  // appui : en l'air, le corps est un projectile, son bassin ne remonte pas tout seul.
+  besoin = aucun ? (rig.bassin || 0) : Math.max(0, Math.min(BASSIN_MAX, besoin));
   // lissage RAPIDE : le bassin oscille a deux fois la cadence du pas (plus de 10 Hz en
   // course), un lissage mou l'aurait simplement efface et le pied n'aurait plus atteint le sol
-  rig.bassin = (rig.bassin || 0) + (besoin - (rig.bassin || 0)) * Math.min(1, dt * 45);
+  rig.bassin = (rig.bassin || 0) + (besoin - (rig.bassin || 0)) * Math.min(1, dt * 26);
   // LE BUSTE se penche en avant quand on court : c'est le tronc qui emmene le corps.
   const inclinC = Math.max(0, Math.min(1, (v - 4.2) / 5.5)) * BUSTE_MAX;
   rig.inclin = (rig.inclin || 0) + (inclinC - (rig.inclin || 0)) * Math.min(1, dt * 5);

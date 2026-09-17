@@ -21739,9 +21739,9 @@ function ambulanceRangeCiviere(a) {
   plieBrancard(br, 0);
 }
 // L'ÉQUIPAGE REMONTE ET DISPARAÎT : fin de mission, ou interruption.
-function ambulanceRangeEquipe(a, dt) {
+function ambulanceRangeEquipe(a) {
   for (const w of (a.equipe || [])) {
-    if (w.rigPorte !== false && w.av && w.av.rig) w.av.rig.porte = false;
+    if (w.av && w.av.rig) w.av.rig.porte = false;
     if (w.av) w.av.group.visible = false;
     w.route = null;
   }
@@ -21754,7 +21754,7 @@ function ambulanceAbandon(a, raison) {
   if (!a) return null;
   try { ambulanceDescend(a, false); } catch (e) {}
   try { ambulanceRangeCiviere(a); } catch (e) {}
-  try { ambulanceRangeEquipe(a, 0); } catch (e) {}
+  try { ambulanceRangeEquipe(a); } catch (e) {}
   if (P.secours === a) P.secours = null;
   a.etat = null; a.phase = null; a.phaseT = 0; a.victime = null; a.cible = null;
   a.surCiviere = false; a.sortDe = null; a.sortVers = null; a.poseFaite = false;
@@ -21810,7 +21810,7 @@ function ambulancesTick(dt) {
       a.speed = 0; a.spd = 0; a.v = 0;
       ambulanceLivraison(a, dt, hop);
     } else if (a.etat === 'retour') {
-      ambulanceRangeEquipe(a, dt);
+      ambulanceRangeEquipe(a);
       if (!etapeSecours(a, 'retour', a.home0[0], a.home0[1], dt, VITESSE_SERVICE, { urgence: true }, 2, a.home0)) continue;
       a.etat = null; a.phase = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
     }
@@ -21855,7 +21855,7 @@ function ambulanceRamassage(a, dt) {
     const fini = ambulanceMarcheEquipe(a, p2.x, p2.z, dt);
     if (fini || a.phaseT > AMB_MARCHE_MAX) ambPhase(a, 'embarque');
   } else if (a.phase === 'embarque') {
-    ambulanceEntreCiviere(a, dt, () => { a.etat = 'transport'; a.phase = null; });
+    ambulanceEntreCiviere(a, dt, AMB_GESTES.embarque, () => { a.etat = 'transport'; a.phase = null; });
   } else { ambPhase(a, 'ouvre'); }
 }
 // ---- LA LIVRAISON À L'HÔPITAL (état 'depose') ----
@@ -21883,7 +21883,7 @@ function ambulanceLivraison(a, dt, hop) {
     const fini = ambulanceMarcheEquipe(a, p2.x, p2.z, dt);
     if (fini || a.phaseT > AMB_MARCHE_MAX) ambPhase(a, 'rentre');
   } else if (a.phase === 'rentre') {
-    ambulanceEntreCiviere(a, dt, () => { a.etat = 'retour'; a.phase = null; a.victime = null; });
+    ambulanceEntreCiviere(a, dt, AMB_GESTES.rembarque, () => { a.etat = 'retour'; a.phase = null; a.victime = null; });
   } else { ambPhase(a, 'ouvreHop'); }
 }
 // LE BRANCARD SORT DU FOURGON : il glisse sur ses rails vers l'arrière, descend à hauteur
@@ -21912,7 +21912,7 @@ function ambulanceSortCiviere(a, dt, suite) {
 // LE BRANCARD RENTRE : `chargerBrancard` le fait glisser jusqu'à l'ancrage de la cellule
 // (état 'glisse' du brancard), les pieds se replient, les portes se referment et l'équipage
 // remonte — un au volant, l'autre à l'arrière.
-function ambulanceEntreCiviere(a, dt, fini) {
+function ambulanceEntreCiviere(a, dt, duree, fini) {
   const br = ambulanceCiviere(a), e = ambulanceEquipe(a);
   if (br.etat !== 'glisse' && br.etat !== 'charge') { chargerBrancard(br, a); }
   if (br.etat === 'glisse') {
@@ -21927,7 +21927,7 @@ function ambulanceEntreCiviere(a, dt, fini) {
   a.ambCible = 0;                                  // les portes se referment
   ambulanceAssied(a, e[0], 'volant', dt);
   ambulanceAssied(a, e[1], 'cellule', dt);
-  if (a.phaseT >= AMB_GESTES.embarque && (a.amb || 0) < 0.06) fini();
+  if (a.phaseT >= duree && (a.amb || 0) < 0.06) fini();
 }
 function porteVictime(a) {   // ancien nom : le blessé voyage SUR LE BRANCARD, dans la cellule
   ambulanceSuiviBlesse(a, 0);

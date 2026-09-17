@@ -318,6 +318,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 29. Reculer du parking donne une étoile « 🚦 Feu rouge grillé ! »
 ✅ RÉPARÉ — le test prenait tout véhicule à moins de 4,5 m du POTEAU quel que soit son cap : on juge maintenant le cap de déplacement réel (marche arrière comprise) à 35° de `tl.sens` et la proximité de la LIGNE d'arrêt du feu — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — voir n° 57 : reculer dans le parking ne donne plus « Feu rouge grillé ».
 - **Gravité** : GÊNANT
 - **Reproduire** : parking du centre, L2 tenu pour reculer sur 8 m vers (−22, 7), puis R2.
 - **On voit** : « 🚦 Feu rouge grillé ! » et ★ recherché niveau 1 alors qu'on sort d'un parking en marche arrière à 25 km/h.
@@ -334,6 +335,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 31. Taper un mur : pas de BOOM, pas de secousse, la voiture glisse le long du mur et s'enfonce dans le sol
 ✅ RÉPARÉ — les dégâts d'un mur suivent la vitesse PERDUE contre lui (`perte`), pas la vitesse : choc franc (> 4 m/s perdus, arrivée > 6 m/s) = BOUM + secousse + tôle (≤ 14 %), frottement = 0,2 % toutes les 1,5 s. Mesuré (viser l'immeuble Centre-ville à 11 m/s en biais) : avant 4 % → 25 % en 5 s de glissade, aucun message ; après « 💥 Choc contre le mur » 6,8 % puis 7,4 % après 5 s de glissade, kick 0,04. Le « s'enfonce » était le bord de la dalle (sol à 0 au-delà du trottoir) — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK — choc frontal à 12,5 m/s contre l'immeuble Centre-ville : « 💥 BOUM ! Gros choc contre le mur », 🔧 +24,6 % (PC) / +24,9 % (TV), 4 marques ; glissade en biais 6 s à 60 % de gaz : +4,0 % / +4,3 % (avant : 25 %), `c.y` reste à 0 (ne s'enfonce plus). Secousse : `cam.kick` max 0,08 seulement, peu visible.
 - **Gravité** : GÊNANT (promis au round 67 : chocs BOOM, marques d'impact)
 - **Reproduire** : viser l'immeuble « Centre-ville » (−35,5, 16) depuis (−22, 7), R2 6 s.
 - **On voit** : vitesse 4 km/h collée au mur, la voiture continue de glisser (z 8,9 → 13,3), dégâts +2 % seulement, `cam.kick = 0`, aucun message ; `c.y` tombe de 0,15 à 0,00 et le bas des roues passe à −0,06 / −0,12 (sous la route).
@@ -342,6 +344,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 32. En voiture, la caméra traîne loin derrière, se cale derrière les poteaux et perd la voiture
 ✅ RÉPARÉ — `camLibres` ignorait déjà les vitres mais pas les poteaux : les solides de moins de 0,7 m de côté ne calent plus la perche ; en voiture la caméra vise base + 2 m + recul court (`reculConduite = vitesseRel × 1,2`) au lieu de traîner loin derrière. Mesuré à 60 km/h : distance caméra 9,4 m → 6,1 m, jamais coincée derrière un poteau sur 20 s de tour — commit 61df87c
+🔎 CONTRÔLÉ (bdcc5e4) : OK en partie — plus de caméra derrière les poteaux (0 objet entre caméra et voiture sur 10 relevés PC ; en TV les 4 relevés « bouchés » sont un véhicule garé contre lequel ma voiture rebondissait). Mais à l'arrêt la caméra colle au toit (1,9–3,0 m) : voir n° 76. Mesure à 60 km/h refaite au point 4 (`p4`).
 - **Gravité** : GÊNANT
 - **Reproduire** : rouler à 50 km/h vers l'est depuis (−15, 7) ; sortir de la ville.
 - **On voit** : `s4-6-mur.png` : la voiture est un point rouge au loin, le feu tricolore occupe le premier plan ; `s4-7b-apres-pieton.png` : la voiture n'est plus dans l'image du tout (dallage blanc, un arbre, un banc).
@@ -358,6 +361,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
 🔎 Revu round 70 : aggravé — arriver au garage en voiture déclenche maintenant « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive », 🔧 15 % (`c4-pc.log` `arrive`).
+🔎 CONTRÔLÉ (bdcc5e4) : OK — dépanneuse en (−55, 102,5), à 10 m de l'axe d'entrée x = −45 (PC et TV).
 ✅ RÉPARÉ — `makeDepanneuse(x - 10, z + 12.5, π/2)` : elle dort sur le côté du parvis (à 10 m de l'axe d'entrée) au lieu d'en travers de la porte — commit c6ea15b ; à (x − 10, z + 10) elle mordait le mur de façade du garage (z 98,6–99,0) et restait coincée (test 361 : 0 % du trajet sur la route, téléportée après 45 s) → reculée de 2,5 m, elle rejoint l'épave par la route en 32 s, 100 % sur le bitume
 - **Gravité** : GÊNANT
 - **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
@@ -425,6 +429,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 57. Conduire la grue hors du dépôt = « 💥 ACCIDENT ! — la police arrive »
 ✅ RÉPARÉ — `choc(c, imp, v)` : frôler un véhicule GARÉ (immobile, pas en mission) sous 12 d'impact ne déclare plus d'accident ni n'appelle la police (seuls les vrais chocs, > 12, ou contre un véhicule qui roule). Mesuré : la grue sort du dépôt en frottant le camion garé → aucun « ACCIDENT », 0 ★ — commit f630b86
+🔎 CONTRÔLÉ (bdcc5e4) : OK — marche arrière 4 s dans le parking après le choc du grillage : ★ 0, aucun accident, aucun constat (PC et TV) ; vaut aussi pour le n° 29.
 - **Gravité** : GÊNANT
 - **Reproduire** : dépôt municipal, △ sur la grue (24,4, 130,5), R2 2 s, stick gauche 1,5 s.
 - **On voit** : accident, véhicule immobilisé, police, amende — les engins sont garés serrés et le moindre contact avec la benne voisine déclenche le constat.
@@ -499,6 +504,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 69. La première voiture du parking fonce dans le grillage du terrain de foot : R2 tout droit = 🔧 +21 % en 5 s
 ✅ RÉPARÉ — voir n° 31 : R2 tout droit depuis la place → un seul « 💥 BOUM ! » contre le grillage (14 %), puis 14,6 % après 5 s gaz enfoncés (avant : 41 %). Les places regardent bien la rue z = 0 (le grillage du foot est juste derrière) — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK conforme à la réparation, mais le piège reste — R2 5 s depuis la place : un seul « 💥 BOUM ! Gros choc contre le mur », 🔧 14,6 %, la voiture s'arrête dans le grillage du foot à z = 0,2 (PC et TV identiques, `img/p2/p2-00-r2-5s.png`). L'enfant qui appuie sur R2 en sortant du parking prend toujours 15 % de tôle dans les 3 premières secondes.
 - **Gravité** : GÊNANT (suite du n° 26 : la voiture part maintenant, mais la sortie du parking est un mur)
 - **Reproduire** : parking du centre (voitures en (−17,9…−8, 10), cap nord), △ pour monter, R2 à fond 5 s sans toucher au stick. Reproduit 2/2 (`c3` run 1 et run 2).
 - **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
@@ -507,6 +513,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 70. Au stick, sortir du parking du centre détruit la voiture : 🔧 100 % et incendie en 40 s, la dépanneuse l'emporte avec le conducteur éjecté
 ✅ RÉPARÉ — voir n° 31 : 40 s de conduite « comme un enfant » dans le parking → 🔧 17,7 %, pas d'incendie (avant 96,6 % et le feu) ; `enterCar` refuse une épave (« 🔥 Cette voiture est une épave… »). L'éjection à l'explosion a déjà un message (« 💥 Le véhicule a explosé ! ») — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK — 40 s de conduite « comme un enfant » dans le parking : 🔧 +22,4 % (PC) / +18,2 % (TV), pas d'incendie, la voiture reste à l'enfant (cumul 49 % / 45 % avec le R2 du n° 69 : à ce niveau la carrosserie est déjà entièrement brun-noir, elle a l'air brûlée — voir n° 76).
 - **Gravité** : GRAVE (la première voiture d'un enfant brûle avant même d'avoir quitté le parking)
 - **Reproduire** : parking du centre, △ pour monter, puis conduire « vers le parc » comme un enfant (R2 à 80 %, stick pour viser le nord, frein quand ça part de travers) pendant 40 s. Reproduit 3/3 (`l1a` run 1 et run 2 en PC, `l2a` en TV, mêmes commandes).
 - **On voit** : la voiture bute sur le grillage du foot et les tables du snack, les dégâts grimpent 2 % → 30 % → **96,6 %** en 41 s sans jamais dépasser 30 km/h, elle prend feu (run 1 : `img/l1/l1a-11-roule-garage.png`, carcasse en flammes devant la terrasse), le personnage se retrouve à pied à côté (run 2 : `car: false` à t+84 s, position (−12,8, 13,1)), puis « ⛓️ Véhicule chargé sur le plateau : direction le garage » — la dépanneuse emporte l'épave. Aucun message n'a dit à l'enfant pourquoi la voiture chauffait ni qu'elle allait brûler.
@@ -617,3 +624,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : gros message central + colonne bleue GPS vers La Zone / la fête foraine ; `guerre.vu` est pourtant faux et le joueur n'a ni respect ni recrue.
 - **On devrait voir** : aucune réunion, aucun « te cherchent » avant que l'enfant soit entré dans la guerre (même garde que `captureTick` / `declencheCambriolage`).
 - **Sonde** : `p1-pc.log` / `p1-tv.log` `bilan.msgs[dernier]`, `attente30.chatViolence` (TV).
+
+### 76. Voiture à l'arrêt ou au pas : la caméra est collée au toit (1,9–3 m), l'écran est rempli par la carrosserie — qui a l'air carbonisée dès 45 % de dégâts
+- **Gravité** : GÊNANT (après chaque choc, l'enfant ne voit plus que le toit de sa voiture et croit qu'elle a brûlé)
+- **Reproduire** : voiture du parking, choc contre l'immeuble Centre-ville, rester à 0–1 km/h. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
+- **On voit** : caméra à 2,99 m (PC) / 1,85 m (TV) de la voiture au 1er relevé, le toit et le capot occupent les deux tiers de l'image (`img/p2/p2-02-choc-mur.png`, `p2-02-choc-mur-tv.png`) ; la carrosserie est uniformément brun-noir à 🔧 49–70 % alors qu'il n'y a ni feu ni fumée.
+- **On devrait voir** : un recul minimal de ~5 m même à l'arrêt (la réparation n° 32 a réglé « recul = vitesse × 1,2 », donc rien à 0 km/h), et une teinte de dégâts qui reste une voiture cabossée (bosses, phares cassés) et non une carcasse.
+- **Sonde** : `p2-pc.log` `p32.releves[0].dist = 2.99`, `p2-tv.log` `p32.releves[0].dist = 1.85`.

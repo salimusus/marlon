@@ -24904,7 +24904,7 @@ function tvManettesMaj() {
   // liaison cédée à la télé, page relancée), les connexions qu'il portait restaient dans
   // `tv.conns` avec leur drapeau `open` : la pastille disait « 🎮 1 manette · code … » à un
   // enfant qui lançait le mode TV sans aucun téléphone branché (test 384, et la vraie vie).
-  if (!tv.peer || tv.peer.destroyed) tv.conns.length = 0;
+  if (tv.peer && tv.peer.destroyed) tv.conns.length = 0;   // (un pair pas encore créé n'efface rien : le lien #tv peut recevoir un téléphone avant que PeerJS réponde — test 202)
   const n = tv.conns.filter(c => c.open).length;
   const el = $('tvManettes');
   // On dit précisément où on en est : « prêt » veut dire que cet écran ÉCOUTE vraiment. Avant,

@@ -15694,3 +15694,42 @@ test('hélico : ▢ ne pose pas l\'appareil SUR un objet de la rue, il se décal
   const ok = r.decale && r.landed && r.y < 0.4 && r.sol < 0.3 && r.dmg === 0 && r.dObjet > 3;
   return { ok, detail: `avant : la descente automatique se posait sur ce qu'il y avait dessous, l'appareil finissait perché à y 2,49 sur l'objet · maintenant ▢ choisit une place libre (décalage=${r.decale}), l'hélico se pose en ${r.t} s à (${r.x}, ${r.z}), y ${r.y}, sol sous lui ${r.sol}, à ${r.dObjet} m de l'objet, dégâts ${r.dmg}` };
 });
+
+test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une balle dedans vaut une étoile, une cible verrouillée n\'a pas d\'avertissement « pleine rue » avant l\'infraction', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, out = {};
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+    // 1. un habitant verrouillé à 4 m, trois balles : une seule sorte de message, l'infraction
+    const b = G.bots.find(x => x.av && !x.ko); b.pos.set(4, 0, 3.5); b.av.group.position.copy(b.pos); b.hp = 100; b.wait = 99;
+    G.bots.forEach(o => { if (o !== b) { o.pos.set(150, 0, 150); o.av.group.position.copy(o.pos); } });
+    P.pos.set(0, 0.3, 3.5); P.facing = 0; G.police.wanted = 0; G.police.avert = 0; G.police.avertT = -999; P.crime = 0;
+    G.braquerVerrouille(); for (let k = 0; k < 3; k++) G.step(1 / 60, true);
+    const msgs = [];
+    for (let i = 0; i < 3; i++) { P.fireCd = 0; G.fire(); for (let k = 0; k < 30; k++) { G.step(1 / 60, true); const m = document.getElementById('msg').textContent; if (m && !msgs.includes(m)) msgs.push(m); } }
+    out.tir = { lock: P.lock ? P.lock.nom : null, hp: b.hp, wanted: G.police.wanted, laissePasser: msgs.filter(m => /laisse passer/.test(m)).length, infraction: msgs.filter(m => /Infraction : tirer sur/.test(m)).length };
+    // 2. une vitrine au poing : fissurée au premier coup, brisée au second
+    G.clearWanted(); G.police.avert = 0; P.crime = 0; P.lockRef = null; P.lock = null; P.drawn = false; G.equipWeapon(null);
+    const vitres = G.breakables.filter(x => x.kind === 'glass' && !x.broken && x.solid);
+    const vit = vitres[0], o = vit.solid, nz = o.d < o.w ? 1 : 0;
+    const px = o.x + (nz ? 0 : 1.2), pz = o.z + (nz ? 1.2 : 0);
+    P.pos.set(px, 0.3, pz); P.facing = Math.atan2(o.x - px, o.z - pz); for (let k = 0; k < 2; k++) G.step(1 / 60, true);
+    const etats = [];
+    for (let i = 0; i < 2; i++) { P.punchT = 0; P.combo = 0; G.punch(); for (let k = 0; k < 40; k++) G.step(1 / 60, true); etats.push(vit.broken ? 'brisée' : vit.cracked ? 'fissurée' : 'intacte'); }
+    out.poing = { etats, wanted: G.police.wanted };
+    // 3. une balle dans une autre vitrine : la police vient
+    G.clearWanted(); G.police.avert = 0; P.crime = 0;
+    const v2 = vitres.find(x => x !== vit && !x.broken), o2 = v2.solid, nz2 = o2.d < o2.w ? 1 : 0;
+    P.pos.set(o2.x + (nz2 ? 0 : 4), 0.3, o2.z + (nz2 ? 4 : 0));
+    P.facing = Math.atan2(o2.x - P.pos.x, o2.z - P.pos.z); G.cam.yaw = P.facing + Math.PI; G.cam.pitch = 0;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); P.drawn = true; P.aim = true; P.lock = null; P.lockRef = null;
+    for (let i = 0; i < 2; i++) { P.fireCd = 0; G.fire(); for (let k = 0; k < 30; k++) G.step(1 / 60, true); }
+    out.balle = { etat: v2.broken ? 'brisée' : v2.cracked ? 'fissurée' : 'intacte', wanted: G.police.wanted, msg: document.getElementById('msg').textContent };
+    G.clearWanted(); P.drawn = false; P.aim = false; G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return out;
+  });
+  const ok = r.tir.wanted >= 1 && r.tir.laissePasser === 0 && r.tir.infraction >= 1
+    && r.poing.etats[0] === 'fissurée' && r.poing.etats[1] === 'brisée'
+    && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
+  return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
+});

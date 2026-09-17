@@ -13079,7 +13079,18 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // coup manqué n'est plus qu'un souffle, et celui qui encaisse crie « aïe » de SA voix.
   sonEffort(P.pos.x, P.pos.y + 1.4, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
-  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return; }   // dans le vide
+  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) {
+    // UNE VITRINE SOUS LE POING (n° 58 du Joueur) : trois coups dessus ne faisaient rien, elle
+    // ne se cassait qu'en voiture ou à la balle. Le poing la fissure, puis la brise.
+    const vit = breakables.find(b => !b.broken && b.kind === 'glass' && b.solid && (() => {
+      const o = b.solid, ex = Math.max(Math.abs(P.pos.x - o.x) - o.w / 2, 0), ez = Math.max(Math.abs(P.pos.z - o.z) - o.d / 2, 0);
+      if (Math.hypot(ex, ez) > 1.6) return false;
+      const px = clamp(P.pos.x, o.x - o.w / 2, o.x + o.w / 2), pz = clamp(P.pos.z, o.z - o.d / 2, o.z + o.d / 2);
+      return (px - P.pos.x) * fx + (pz - P.pos.z) * fz > 0.2;
+    })());
+    if (vit) { breakThing(vit, { x: P.pos.x, z: P.pos.z }); return; }
+    sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return;   // dans le vide
+  }
   // LE POINT DE CONTACT. Il était toujours à 1,25 m, hauteur de torse : le poing passait donc
   // sous le visage quel que soit le coup. Le joueur voulait « le poing qui atteint le VISAGE
   // du bot » : le direct part au visage (1,62 m, la tête d'un habitant va de 1,46 à 1,94 m),
@@ -20213,7 +20224,7 @@ function degatsVehicule(c, gravite, vx, vz) {
 }
 // sansDelit : la casse n'est pas l'œuvre du joueur (un gang qui saccage une devanture)
 // — sinon la police lui collait la vitrine sur le dos et le prenait en chasse.
-function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
+function breakThing(b, c, sansDelit, parBalle) {   // mobilier percuté par un véhicule (parBalle : cassé d'un coup de feu du joueur)
   if (b.broken) return;
   b.casseT = simTime;   // heure de la casse : la ville remet tout en état au bout d'un moment
   if (!b.quat0 && b.g) b.quat0 = b.g.quaternion.clone();   // orientation d'origine, pour le redressement
@@ -20225,7 +20236,9 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.kind === 'glass') {
     if (!b.cracked) { b.cracked = true; b.m.material = crackedGlass; sfx.clack(); sfx.noise(.15, 2500, .06); msg('💥 Vitrine fissurée', 700); return; }
     b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900); sgridSale();
-    if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
+    // Une balle dans une vitrine n'est pas un petit délit qu'on « laisse passer » : la police
+    // vient tout de suite (n° 58). Au poing ou en voiture, les avertissements s'appliquent.
+    if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; if (parBalle) infraction('tirer dans une vitrine', 1, 2, true); else infraction('casser une vitrine', 1, 1); }
   } else {
     // Chaque sorte d'objet se casse a sa maniere (CASSE_DEF) : le panneau se tord, le cone se
     // couche, la poubelle se vide sur le trottoir, le bonhomme de neige eclate. Sans entree
@@ -22655,7 +22668,10 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     // avertissements « la police laisse passer 1/4 » s'appliquent, sauf témoin), sauf au stand
     // de tir. Il ne pose pas `P.crime` : la balle qui touche quelqu'un ensuite reste un crime
     // grave à part entière, il ne doit pas le masquer.
-    if (city.on && police.wanted === 0 && simTime > (P.crimeTir || 0)
+    // Une PERSONNE verrouillée : c'est la balle qui touche qui sera jugée (crime grave), pas
+    // le coup de feu — sinon « la police laisse passer » s'affichait juste avant « Infraction ★ ».
+    // (Un véhicule verrouillé reste un tir en pleine rue.)
+    if (city.on && police.wanted === 0 && simTime > (P.crimeTir || 0) && !(P.lock && P.lock.ref && P.lock.ref.av)
       && !(city.targets || []).some(t => Math.hypot(t.x - P.pos.x, t.z - P.pos.z) < 30)) {
       P.crimeTir = simTime + 1; infraction('tirer en pleine rue', 1, 1);
     }
@@ -22765,7 +22781,7 @@ function shotsTick(dt) {
         if (!s.vitres) s.vitres = new Set();
         if (s.vitres.has(b)) continue;        // une balle ne casse chaque vitre qu'une fois
         s.vitres.add(b);
-        burst(s.p.x + dx * t, s.p.y + dy * t, s.p.z + dz * t, 0x9fdcff, 7); breakThing(b, { x: o.x, z: o.z });
+        burst(s.p.x + dx * t, s.p.y + dy * t, s.p.z + dz * t, 0x9fdcff, 7); breakThing(b, { x: o.x, z: o.z }, false, true);
       }
     }
     if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
@@ -22779,7 +22795,7 @@ function shotsTick(dt) {
       // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
       const br = cible && cible.brk;
       const nd = { x: dx, y: dy, z: dz };
-      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine, s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
       else { impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1); sonImpactBalle('mur', s.p.x, s.p.y, s.p.z, 1); }
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);

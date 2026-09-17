@@ -14804,13 +14804,15 @@ function poseJambes(rig, vDonne, dt) {
   rig.inclin = (rig.inclin || 0) + (inclinC - (rig.inclin || 0)) * Math.min(1, dt * 5);
   const ci = Math.cos(rig.inclin), si = Math.sin(rig.inclin);
   rig.foulK = Math.min(1, (rig.foulK || 0) + dt * 9);   // fondu court a la reprise de la marche
-  const hancheY = HANCHE_Y - rig.bassin;
   for (let i = 0; i < 2; i++) {
     const [fx, fy, fz] = pos[i], hx = (i ? 0.5 : -0.5) * S, jambe = i ? jR : jL;
-    // cheville visee, puis basculee dans le repere du buste penche
-    const ax = fx, ay0 = fy + PIED_BAS, az0 = fz - PIED_AVANT;
+    // La cheville visee, DANS LE REPERE DU GROUPE : le groupe est descendu de `bassin` (le
+    // sol est donc au-dessus de son origine) puis bascule de `inclin` vers l'avant. On ajoute
+    // l'un et on annule l'autre, sinon le pied se posait deux centimetres trop en arriere a
+    // pleine course — un decalage qui varie dans le pas, donc un reste de glissement.
+    const ay0 = fy + PIED_BAS + rig.bassin, az0 = fz - PIED_AVANT;
     const ay = ay0 * ci + az0 * si, az = -ay0 * si + az0 * ci;
-    const ik = jambeIK(ax - hx, ay - hancheY, az);
+    const ik = jambeIK(fx - hx, ay - HANCHE_Y, az);
     const k = rig.foulK;
     jambe.rotation.x += (ik.hanche - jambe.rotation.x) * k;
     jambe.genou.rotation.x += (ik.genou - jambe.genou.rotation.x) * k;
@@ -14830,6 +14832,9 @@ function animateRig(rig, mode, speed, dt, t) {
     rig.bassin = (rig.bassin || 0) * r; rig.inclin = (rig.inclin || 0) * r;
     if (rig.bassin < 0.001) rig.bassin = 0;
     if (rig.inclin < 0.001) rig.inclin = 0;
+    // l'ouverture laterale de la jambe (le pas de cote) se referme : les poses assise,
+    // accroupie ou a genoux sortent avant d'avoir remis rotation.z a zero
+    if (rig.legL && rig.legR) { const k = Math.min(1, dt * 10); rig.legL.rotation.z -= rig.legL.rotation.z * k; rig.legR.rotation.z -= rig.legR.rotation.z * k; }
   }
   const ease2 = Math.min(1, dt * 12);
   // LE PIED RESTE A PLAT. La basket est plus longue que l'ancien pied carre : soudee au tibia,
@@ -26827,7 +26832,7 @@ function frame() {
   if (P.marcheLisse) { P.marcheLisse = Math.max(0, P.marcheLisse - Math.max(1.6, P.marcheLisse * 9) * dt); me.group.position.y -= P.marcheLisse; }
   const sp = Math.hypot(P.vel.x, P.vel.z);
   if (P.dance > 0 && active) { P.dance -= dt; P.facing += dt * 2.5; if (P.dance <= 0) stopDance(); }
-  else if (settings.ctrl !== 'rot' && (sp > 0.6 || (P.capVoulu != null && !surLeCourt()))) {
+  else if (settings.ctrl !== 'rot' && (sp > 0.6 || (active && P.capVoulu != null && !surLeCourt()))) {
     // Au-dessus de 1,5 m/s on suit la VITESSE (le corps regarde ou il va) ; en dessous on
     // suit le CAP DEMANDE, sinon a l'arret ou en plein demi-tour rien ne le fait tourner.
     const target = (sp > 1.5 || P.capVoulu == null) ? Math.atan2(P.vel.x, P.vel.z) : P.capVoulu;

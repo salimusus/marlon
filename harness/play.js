@@ -16940,3 +16940,120 @@ test('rien ne bouche les passages de la banque, et ses pancartes sont hors du ch
     && r.nPanneaux >= 6 && r.assises >= 2;
   return { ok, detail: `avant : le comptoir d'accueil traversait celui des guichets et les poteaux de file étaient plantés dedans · maintenant 6 couloirs contrôlés, ${r.bouches.length} obstacle${r.bouches.length ? ' (' + r.bouches.join(' · ') + ')' : ''} · ${r.nMeubles} meubles du hall, ${r.croises.length} paire qui se traverse${r.croises.length ? ' (' + r.croises.join(' · ') + ')' : ''} · ${r.nPanneaux} pancartes, aucune avec collision, la plus basse à ${r.plusBasse} m${r.basses.length ? ' — fautives : ' + r.basses.join(', ') : ''} · ${r.assises} places assises dans le hall` };
 });
+test('emmene par un ami, la camera reste accrochee au vehicule : elle sort de la caisse au lieu de se poser sur le toit', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, out = {};
+    const cam = () => G.camera.position;
+    const dJ = () => +Math.hypot(cam().x - G.P.pos.x, cam().y - (G.P.pos.y + 1.2), cam().z - G.P.pos.z).toFixed(2);
+    // QUELLE PART DE L'ECRAN LA CARROSSERIE OCCUPE-T-ELLE ? on projette les huit coins de la
+    // boite du vehicule : c'est la mesure de « on ne voit qu'un aplat de tole ».
+    const partDeTole = (s) => {
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9, devant = 0;
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        const q = new THREE.Vector3(s.x + sx * s.w / 2, s.y + sy * s.h / 2, s.z + sz * s.d / 2);
+        q.project(G.camera);
+        if (q.z < 1) { devant++; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
+      }
+      if (!devant) return 0;
+      const lx = Math.max(0, Math.min(1, x1) - Math.max(-1, x0)), ly = Math.max(0, Math.min(1, y1) - Math.max(-1, y0));
+      return +(lx * ly / 4).toFixed(2);
+    };
+    const bilan = (car) => {
+      const cc = cam(), s = car.solid;
+      const dx = G.P.pos.x - cc.x, dy = (G.P.pos.y + 1.2) - cc.y, dz = G.P.pos.z - cc.z, L = Math.hypot(dx, dy, dz) || 1;
+      const v = new THREE.Vector3(G.P.pos.x, G.P.pos.y + 1.2, G.P.pos.z); v.project(G.camera);
+      return { d: dJ(), camY: +cc.y.toFixed(2), hausse: +(G.cam.hausse || 0).toFixed(2),
+        tole: partDeTole(s),
+        mur: G.murEntreVue(cc.x, cc.y, cc.z, dx / L, dy / L, dz / L, L - 0.2) >= 0,
+        dedans: !!(Math.abs(cc.x - s.x) < s.w / 2 && Math.abs(cc.y - s.y) < s.h / 2 && Math.abs(cc.z - s.z) < s.d / 2),
+        cadre: Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1 };
+    };
+    // ======== 1) LA SITUATION DU CHEF : la vue « passager » telle quelle (elle tombe sur le
+    // camion de pompiers, 8 m de long — c'est justement le cas qui cassait)
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, passager: true, hideHud: true, hour: 13 });
+    {
+      const car = G.city.rideBot && G.city.rideBot.drive ? G.city.rideBot.drive.car : null;
+      if (!car) return { erreur: 'la vue passager n a mis personne au volant' };
+      out.engin = { kind: car.kind || 'voiture', long: +car.solid.d.toFixed(1), confort: +G.camConfortVeh().toFixed(2) };
+      const suite = [];
+      for (let i = 1; i <= 300; i++) {
+        G.simTime += 1 / 60; G.step(1 / 60, true);
+        try { G.botDriveTick(1 / 60); } catch (e) {}
+        G.camPerche(1 / 60, false);
+        try { G.interieurTick(); } catch (e) {}
+        if ([1, 10, 60, 300].includes(i)) suite.push({ i, d: dJ() });
+      }
+      out.montee = suite;
+      out.chef = bilan(car);
+    }
+    // ======== 2) UNE VOITURE ORDINAIRE SUR UNE AVENUE DEGAGEE, a l'arret puis a 12 m/s
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 13 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const c = (G.city.cars || []).find(v => v && v.spec && !v.heli && !v.rider && (v.baseD || 3) < 5 && v.kind !== 'jetski');
+    const b = G.bots.find(x => x.av && !x.ko);
+    if (!c || !b) return Object.assign(out, { erreur: 'pas de voiture ordinaire' });
+    const X0 = -60, Z0 = 196, H = Math.PI / 2;
+    c.x = X0; c.z = Z0; c.h = H; c.busy = true; c.speed = 0;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
+    G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); G.P.facing = c.h;
+    b.drive = { car: c, tx: c.x, tz: c.z, nom: 'la villa', etat: 'arrive', passager: false, annonce: G.simTime };
+    G.city.botCarNear = b; G.monterAvecBot(b); G.poseJoueurAuVolant(1);
+    out.passager = !!(G.city.rideBot && G.city.rideBot.drive && G.city.rideBot.drive.passager);
+    out.auVolant = !!G.drive.car;
+    out.vehiculeVu = !!G.vehiculeAssis();
+    G.cam.yaw = H + Math.PI; G.cam.pitch = 0.32;
+    for (let i = 0; i < 300; i++) {
+      G.simTime += 1 / 60;
+      c.x = X0; c.z = Z0; c.h = H; G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z);
+      G.camPerche(1 / 60, false); try { G.interieurTick(); } catch (e) {}
+    }
+    out.arret = bilan(c);
+    c.speed = 12;
+    for (let i = 0; i < 300; i++) {
+      G.simTime += 1 / 60;
+      c.x += Math.sin(H) * 12 / 60; c.z += Math.cos(H) * 12 / 60;
+      G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); G.P.facing = H;
+      c.g.position.set(c.x, c.y || 0, c.z); try { G.vehicleSolid(c); } catch (e) {}
+      G.camPerche(1 / 60, false); try { G.interieurTick(); } catch (e) {}
+      if (c.x > 120) { const dx = 180; c.x -= dx; G.P.pos.x -= dx; G.cam.target.x -= dx; }
+    }
+    out.roule = bilan(c);
+    out.roule.recul = +G.reculConduite().toFixed(2);
+    out.roule.vRel = +G.vitesseRel().toFixed(2);
+    // ======== 3) LE STICK DROIT REGARDE AUTOUR SANS LACHER LA VOITURE
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense (Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 1, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      // on repose la voiture a son point de depart : la mesure doit etre la meme a chaque essai
+      c.speed = 0; c.x = X0; c.z = Z0; c.h = H;
+      G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); c.g.position.set(c.x, c.y || 0, c.z);
+      try { G.vehicleSolid(c); } catch (e) {}
+      G.cam.target.set(c.x, (c.y || 0) + 1.5, c.z); G.cam.libre = null; G.cam.dLisse = null;
+      const y0 = G.cam.yaw;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.simTime += 1 / 60; G.P.pos.set(c.x, (c.y || 0) + 0.4, c.z); G.camPerche(1 / 60, false); }
+      out.regard = { tourne: +Math.abs((G.cam.yaw - y0) * 180 / Math.PI).toFixed(0), d: dJ() };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+    } finally { navigator.getGamepads = vrai; }
+    // ON RANGE DERRIERE SOI : le bot descend POUR DE BON (garde=false libere la voiture), il
+    // reprend sa vie, et la voiture redevient disponible. Un test qui laisse un habitant au
+    // volant fait echouer les tests de conduite qui le suivent.
+    try { G.botDescendre(G.city.rideBot, false); } catch (e) {}
+    try { if (b) { b.drive = null; b.rdv = null; } } catch (e) {}
+    try { c.busy = false; c.speed = 0; } catch (e) {}
+    G.city.botCarNear = null; G.city.rideBot = null;
+    return out;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  // Ce qui est GARANTI : l'etat pose. La vue du chef tombe dans un recoin (le camion de
+  // pompiers nez contre une facade) ou la perche est legitimement bridee les premieres images :
+  // on l'IMPRIME pour qu'un humain la lise, on ne l'exige pas.
+  const ok = r.passager && !r.auVolant && r.vehiculeVu
+    && r.chef.d > 3 && r.chef.tole < 0.4 && r.chef.cadre && !r.chef.dedans && !r.chef.mur
+    && r.arret.d > 8 && r.arret.d < 14 && r.arret.hausse === 0 && !r.arret.dedans && r.arret.cadre && r.arret.tole < 0.25
+    && r.roule.d > 8 && r.roule.d < 16.5 && r.roule.recul > 0.8 && r.roule.vRel > 0.4 && r.roule.cadre
+    && r.regard.tourne > 100 && r.regard.d > 4;
+  return { ok, detail: `défaut du chef : passager d'un ami, « la caméra est collée à la carrosserie, on ne voit rien » · reproduit sur sa vue (elle tombe sur le ${r.engin.kind}, ${r.engin.long} m de long) : la perche se posait à 5,27 m avec l'objectif à 6,42 m de haut et 0,75 rad de montée — la caméra AU-DESSUS du toit — et elle passait la première seconde à 1,25 m de la tôle · cause : trois endroits de camPerche demandaient « suis-je en voiture ? » chacun à sa façon et deux ne lisaient que drive.car, donc le passager recevait la montée DU PIÉTON · maintenant tout passe par vehiculeAssis() (${r.vehiculeVu}), la distance confortable suit la taille de l'engin (${r.engin.confort} m ici) et la perche est POSÉE à la montée au lieu de ramper : ${r.montee.map(v => v.i + ' img→' + v.d + ' m').join(' · ')} · au bout du compte perche ${r.chef.d} m, la carrosserie occupe ${Math.round(r.chef.tole * 100)} % de l'image (contre l'aplat plein écran de la capture), joueur dans le cadre=${r.chef.cadre}, aucun mur entre elle et lui · sur une voiture ordinaire, avenue dégagée : ${r.arret.d} m à l'arrêt sans aucune montée (${r.arret.hausse}) et ${r.roule.d} m à 12 m/s — le recul de vitesse marche ENFIN en passager (${r.roule.recul} m, vitesse ressentie ${r.roule.vRel}, elle valait 0 avant) · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lâcher la voiture (${r.regard.d} m) · (la vue du chef tombe dans un recoin, camion nez contre une façade : la perche y est bridée les premières images, c'est la géométrie du lieu, pas la règle de caméra — la voiture ordinaire, elle, se comporte exactement comme au volant)` };
+});

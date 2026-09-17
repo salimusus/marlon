@@ -1659,6 +1659,8 @@ window.__G = {
   padVibre: typeof padVibre === 'function' ? padVibre : null,
   padVisee: typeof padVisee === 'function' ? padVisee : null,
   camRecentre: typeof camRecentre === 'function' ? camRecentre : null,
+  vehiculeAssis: typeof vehiculeAssis === 'function' ? vehiculeAssis : null,
+  camConfortVeh: typeof camConfortVeh === 'function' ? camConfortVeh : null,
   CAM_LAISSE: typeof CAM_LAISSE !== 'undefined' ? CAM_LAISSE : null,
   CAM_MORTE: typeof CAM_MORTE !== 'undefined' ? CAM_MORTE : null,
   CAM_VYAW: typeof CAM_VYAW !== 'undefined' ? CAM_VYAW : null,

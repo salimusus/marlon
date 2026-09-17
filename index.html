@@ -7994,8 +7994,12 @@ function buildTechno() {
       { e: '🔋', n: 'Pack de batteries', p: 5, d: 'Pour que ça ne s\'arrête jamais.' }], { jersey: 5, hat: 'cap' });
   boutique(13, -112, 11, 8, 0xff7ad9, '🕹️ Jeux vidéo', 'jeux', '🕹️', 'Jeux Vidéo du Parc',
     'Les nouveautés et les vieux classiques', [
-      { e: '🕹️', n: 'Borne d\'arcade miniature', p: 25, d: 'Avec le vrai bruit des pièces.' },
-      { e: '💿', n: 'Jeu du mois', p: 9, d: 'Tout le monde en parle.' },
+      { e: '🕹️', n: 'Borne d\'arcade miniature', p: 25, d: 'La suite de couleurs, avec le vrai bruit des pièces.' },
+      { e: '💿', n: 'Jeu du mois', p: 9, d: 'Un Memory de huit paires — tout le monde en parle.' },
+      { e: '⚽', n: 'Ballon de foot', p: 4, d: 'On tape dedans, il roule et il rebondit.' },
+      { e: '🪁', n: 'Cerf-volant', p: 7, d: 'Il monte quand tu cours.' },
+      { e: '🪃', n: 'Boomerang', p: 6, d: 'Il part, il tourne, il revient.' },
+      { e: '🧸', n: 'Peluche', p: 5, d: 'Pour les gros câlins.' },
       { e: '🧃', n: 'Boisson énergisante', p: 2, f: 4, d: 'Pour tenir jusqu\'au bout du niveau.' }], { jersey: 8, jacket: 3 });
   // ---- les food-trucks de la place ----
   const foodTruck = (fx, fz, col, txt) => {
@@ -13555,6 +13559,7 @@ let jumpHeld = false, downHeld = false;
 function cityReset() {
   try { droneReset(); } catch (e) {}   // poste DRONE & ROBOT
   try { robotReset(); } catch (e) {}   // poste DRONE & ROBOT
+  try { jouetsReset(); } catch (e) {}   // poste DRONE & ROBOT
   try { sacReset(); } catch (e) {}   // poste DRONE & ROBOT : le sac à jouets, le drone et le robot
   try { metiersReset(); } catch (e) {}   // poste J : travailleurs, chantiers, incendies, boîtes aux lettres (try : cityReset tourne aussi au chargement, avant l'initialisation du bloc des métiers)
   // aucun de ces indicateurs de proximité n'était remis à zéro : hors de la ville, un appui sur E
@@ -17723,13 +17728,31 @@ const JOUETS = [
     aide: 'Il marche collé à toi, il parle et il obéit.',
     dehors: () => !!(typeof robot !== 'undefined' && robot.actif),
     sortir: () => robotSortir(), ranger: () => robotRanger(), menu: () => openOrdresRobot() },
-  // (l'arcade s'ajoute juste en dessous, dans son propre bloc)
+  { id: 'ordi', e: '💻', n: 'Ordinateur portable', article: 'Ordinateur portable',
+    aide: 'Ouvre la salle d\'arcade (deux jeux) et l\'album du drone.',
+    sortir: () => ouvreArcade('ordi') },
+  { id: 'arcade', e: '🕹️', n: 'Borne d\'arcade miniature', article: 'Borne d\'arcade miniature',
+    aide: 'La suite de couleurs : elle s\'allonge à chaque tour.',
+    sortir: () => ouvreArcade('borne') },
+  { id: 'jeu', e: '💿', n: 'Jeu du mois', article: 'Jeu du mois',
+    aide: 'Memory : retrouve les huit paires en le moins de coups.',
+    sortir: () => ouvreArcade('jeu') },
   { id: 'casque', e: '🎧', n: 'Casque audio', article: 'Casque audio',
     aide: 'Sur les oreilles : la musique passe devant, la ville s\'assourdit.',
     dehors: () => !!sac.casque, sortir: () => casqueMet(true), ranger: () => casqueMet(false) },
   { id: 'manette', e: '🎮', n: 'Manette pro', article: 'Manette pro',
     aide: 'En main : visée plus fine et pièces doublées à l\'arcade.',
     dehors: () => !!sac.manettePro, sortir: () => manetteProMet(true), ranger: () => manetteProMet(false) },
+  { id: 'ballon', e: '⚽', n: 'Ballon de foot', article: 'Ballon de foot',
+    aide: 'Posé au sol : fonce dedans, il roule et il rebondit.',
+    dehors: () => !!sac.ballon, sortir: () => ballonSortir(), ranger: () => ballonRanger() },
+  { id: 'cerf', e: '🪁', n: 'Cerf-volant', article: 'Cerf-volant',
+    aide: 'Cours et il monte au bout de son fil.',
+    dehors: () => !!sac.cerf, sortir: () => cerfSortir(), ranger: () => cerfRanger() },
+  { id: 'boomerang', e: '🪃', n: 'Boomerang', article: 'Boomerang', main: true,
+    aide: 'En main : E le lance, il fait sa boucle et il revient.' },
+  { id: 'peluche', e: '🧸', n: 'Peluche', article: 'Peluche', main: true,
+    aide: 'En main : E pour un gros câlin (+6 ❤️).' },
   { id: 'bouquet', e: '💐', n: 'Bouquet du marché', article: 'Bouquet du marché', main: true, offre: 3,
     aide: 'En main : E devant quelqu\'un pour le lui offrir.' },
   { id: 'rose', e: '🌹', n: 'Rose unique', article: 'Rose unique', main: true, offre: 2,
@@ -18284,21 +18307,24 @@ function robotRanger(silencieux) {
 }
 // ---- les ordres : la MÊME forme que ceux du chien, pour passer par le MÊME interprète ----
 const ORDRES_ROBOT = [
-  { id: 'viens', e: '🫳', t: 'Viens', mots: /\bviens|vient|ici|rejoins|rapproche|approche\b/, dit: 'il accourt vers toi' },
-  { id: 'suit', e: '🫡', t: 'Suis-moi', mots: /\bsuis moi|suis-moi|suivre|suis|colle|accompagne|au pied\b/, dit: 'il te colle aux talons' },
-  { id: 'reste', e: '✋', t: 'Attends ici', mots: /\battends|attend|reste|bouge pas|pas bouger|stop|arrete|stoppe\b/, dit: 'il ne bouge plus d\'ici' },
-  { id: 'parle', e: '💬', t: 'Parle', mots: /\bparle|parler|dis|raconte|cause|chante\b/, dit: 'il dit une petite phrase à voix haute' },
-  { id: 'blague', e: '😄', t: 'Raconte une blague', mots: /\bblague|blagues|rigole|drole|marrant\b/, dit: 'il en connaît quatre' },
-  { id: 'danse', e: '💃', t: 'Danse', mots: /\bdanse|danser|guinche|bouge\b/, dit: 'il danse sur place' },
-  { id: 'garde', e: '🛡️', t: 'Garde cet endroit', mots: /\bgarde|garder|surveille|surveiller|protege|veille\b/, dit: 'il se poste ici et surveille' },
-  { id: 'cherche', e: '🎾', t: 'Va chercher', mots: /\bva chercher|cherche|chercher|rapporte|ramene|fetch\b/, dit: 'tu lances, il rapporte' },
-  { id: 'saute', e: '🦘', t: 'Saute', mots: /\bsaute|saut|bondis\b/, dit: 'il fait un bond de robot' },
-  { id: 'lampe', e: '🔦', t: 'Allume ta lampe', mots: /\blampe|lumiere|lumière|eclaire|éclaire|torche|allume\b/, dit: 'il éclaire devant toi' },
-  { id: 'etat', e: '🔋', t: 'Comment tu vas ?', mots: /\bbatterie|forme|etat|état|comment vas|ca va|ça va\b/, dit: 'il annonce sa batterie' },
-  { id: 'nom', e: '🏷️', t: 'Change son nom', mots: /\bnom|nomme|nommer|renomme|appelle|baptise|prenom|prénom\b/, dit: 'écris son nouveau nom dans le chat' },
-  { id: 'range', e: '🎒', t: 'Range-toi', mots: /\brange|ranger|rentre|au sac|repose toi|dodo\b/, dit: 'il retourne dans le sac' },
-];
-// « va chercher » : on lance vraiment un boulon devant soi, il court le ramasser et il te le
+  // L'ORDRE DE CETTE LISTE EST L'ORDRE DE RECONNAISSANCE : le premier motif qui colle gagne.
+  // Chaque motif est un GROUPE entre parenthèses — sans les parenthèses, le `\b` du début ne
+  // portait que sur le premier mot, et « attends ICI » partait sur « viens » au lieu de
+  // « attends ici » (mesuré : l'ordre « attends ici » ne marchait pas du tout).
+  { id: 'viens', e: '🫳', t: 'Viens', mots: /\b(viens|vient|venez|rejoins|rejoindre|approche|rapproche|au pied)\b/, dit: 'il accourt vers toi' },
+  { id: 'suit', e: '🫡', t: 'Suis-moi', mots: /\b(suis[- ]moi|suis|suivre|suivez|colle|accompagne|accompagner)\b/, dit: 'il te colle aux talons' },
+  { id: 'reste', e: '✋', t: 'Attends ici', mots: /\b(attends?|attendre|reste|restes|bouge pas|pas bouger|stop|arrete|arrête|stoppe|immobile)\b/, dit: 'il ne bouge plus d\'ici' },
+  { id: 'blague', e: '😄', t: 'Raconte une blague', mots: /\b(blague|blagues|rigole|drole|drôle|marrant|raconte)\b/, dit: 'il en connaît quatre' },
+  { id: 'parle', e: '💬', t: 'Parle', mots: /\b(parle|parler|parlez|dis|cause|chante|chanter)\b/, dit: 'il dit une petite phrase à voix haute' },
+  { id: 'danse', e: '💃', t: 'Danse', mots: /\b(danse|danser|danses|dansez|guinche)\b/, dit: 'il danse sur place' },
+  { id: 'garde', e: '🛡️', t: 'Garde cet endroit', mots: /\b(garde|garder|gardes|surveille|surveiller|protege|protège|veille)\b/, dit: 'il se poste ici et surveille' },
+  { id: 'cherche', e: '🎾', t: 'Va chercher', mots: /\b(va chercher|cherche|chercher|rapporte|ramene|ramène|fetch)\b/, dit: 'tu lances, il rapporte' },
+  { id: 'saute', e: '🦘', t: 'Saute', mots: /\b(saute|saut|saute[rz]|bondis)\b/, dit: 'il fait un bond de robot' },
+  { id: 'lampe', e: '🔦', t: 'Allume ta lampe', mots: /\b(lampe|lumiere|lumière|eclaire|éclaire|torche|allume)\b/, dit: 'il éclaire devant toi' },
+  { id: 'etat', e: '🔋', t: 'Comment tu vas ?', mots: /\b(batterie|forme|etat|état|comment vas|ca va|ça va)\b/, dit: 'il annonce sa batterie' },
+  { id: 'nom', e: '🏷️', t: 'Change son nom', mots: /\b(nom|nomme|nommer|renomme|appelle|baptise|prenom|prénom)\b/, dit: 'écris son nouveau nom dans le chat' },
+  { id: 'range', e: '🎒', t: 'Range-toi', mots: /\b(range|ranger|rentre|au sac|repose|dodo)\b/, dit: 'il retourne dans le sac' },
+];// « va chercher » : on lance vraiment un boulon devant soi, il court le ramasser et il te le
 // rapporte. Exactement le geste du chien avec sa balle — ce que l'enfant connaît déjà.
 function robotLance() {
   if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
@@ -18362,6 +18388,16 @@ function robotBut() {
 }
 function robotTick(dt) {
   if (!robot.actif || !robot.g) return;
+  // AU VOLANT, PAS DE LAISSE. Un robot de 90 cm ne monte pas en voiture : il resterait
+  // traîné à 2 m d'un véhicule lancé à 90 km/h, en volant. Il attend donc sur place et se
+  // replace à côté du joueur dès qu'il redescend.
+  if (drive.car || P.voile) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
+  if (robot.loin) {
+    robot.loin = false; robot.replaces++;
+    robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
+    robot.y = groundUnder(robot.x, robot.z, null, P.pos.y + 1.2);
+    if (robot.ordre === 'suit') robotDit('me revoilà ! je n\'entre pas dans les voitures', 2600);
+  }
   robot.bat = Math.max(0, robot.bat - dt * (100 / ROBOT_AUTO));
   if (robot.bat <= 0 && robot.ordre !== 'panne') { robot.ordre = 'panne'; robot.poste = { x: robot.x, z: robot.z }; robotDit('ma batterie est vide… donne-moi un pack de batteries', 4000); }
   if (robot.bat > 0 && robot.ordre === 'panne') { robot.ordre = 'suit'; robot.poste = null; }
@@ -18380,7 +18416,7 @@ function robotTick(dt) {
     const joueur = robot.ordre === 'suit' || robot.ordre === 'viens' || (robot.ordre === 'cherche' && robot.phase === 'retour');
     // IL RESTE COLLÉ. Plus il traîne, plus il accélère — jusqu'à 9,4 m/s, nettement au-dessus
     // du joueur qui court (5,6 × 1,3 = 7,3 m/s). C'est ce qui garantit les 2 m demandés.
-    const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 1.6 + d * 4.2);
+    const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 2.2 + d * 5.5);
     if (v > 0) {
       const o = { x: robot.x, y: robot.y, z: robot.z };
       const bloque = npcMove(o, dx / d * v * dt, dz / d * v * dt, 0.26);
@@ -18390,7 +18426,7 @@ function robotTick(dt) {
       // BLOQUÉ CONTRE UN MUR : au bout d'une seconde et demie il se replace derrière le
       // joueur au lieu de rester planté là (c'est ce qui « perdait » le chien du jeu).
       robot.stuckT = bloque ? robot.stuckT + dt : 0;
-      if (joueur && (robot.stuckT > 1.5 || d > 16 || Math.abs(P.pos.y - robot.y) > 3.5)) {
+      if (joueur && (robot.stuckT > 1.2 || d > 8 || Math.abs(P.pos.y - robot.y) > 3.5)) {
         robot.stuckT = 0; robot.replaces++;
         robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
         robot.y = P.pos.y;
@@ -18436,6 +18472,20 @@ function robotTick(dt) {
   // ---- le sol, les marches, et ce qu'on voit ----
   robot.y = groundUnder(robot.x, robot.z, null, robot.y + 1.2);
   robot.ecart = robotDist();
+  // LA LAISSE : « il doit être collé au joueur », « il reste à moins de 2 m ». La marche
+  // normale ne suffit pas — mesuré, il montait à 3,41 m dès qu'un lampadaire ou un coin de
+  // trottoir le retenait une seconde. Quand il SUIT, on le ramène donc, image par image, sur
+  // le cercle de 1,9 m autour du joueur : il glisse du minimum nécessaire, la marche
+  // continue, et l'écart ne peut plus dépasser la limite promise. (Pas de laisse quand il
+  // va chercher, quand il garde un poste ou quand on lui a dit d'attendre : là, on VEUT
+  // qu'il s'éloigne.)
+  if (robot.ordre === 'suit' && robot.ecart > ROBOT_COLLE - 0.1) {
+    const k = (ROBOT_COLLE - 0.1) / robot.ecart;
+    robot.x = P.pos.x + (robot.x - P.pos.x) * k;
+    robot.z = P.pos.z + (robot.z - P.pos.z) * k;
+    robot.y = groundUnder(robot.x, robot.z, null, P.pos.y + 1.2);
+    robot.ecart = robotDist();
+  }
   if (robot.ordre === 'suit' || robot.ordre === 'viens') robot.ecartMax = Math.max(robot.ecartMax, robot.ecart);
   robotAnime(dt);
 }
@@ -18504,6 +18554,285 @@ function ordreRobotTexte(txt) {
   return false;
 }
 function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.lampe = false; robot.faisceau = null; }
+// ================= LES JOUETS DE PLEIN AIR (round 71) =================
+// Le joueur cite « ballon, cerf-volant, skate, boomerang, peluche ». Le rayon Jeux Vidéo du
+// Techno-Parc ne vendait que de l'électronique : on y ajoute quatre jouets, et chacun se joue
+// pour de bon. (Le skate n'est PAS fait : il touche à la marche du joueur, qu'un autre poste
+// est en train de retravailler ce round — je préfère ne rien casser.)
+function ballonSortir() {
+  if (!city.on) { msg('⚽ Le ballon ne sort qu\'en ville', 2000); return false; }
+  ballonRanger(true);
+  const x = P.pos.x + Math.sin(P.facing) * 1.8, z = P.pos.z + Math.cos(P.facing) * 1.8;
+  const sol = groundUnder(x, z, null, P.pos.y + 1.2);
+  const b = makeBall('foot', x, sol + 0.6, z); b.ground = sol + 0.02; b.jouet = true;
+  sac.ballon = b;
+  try { sfx.tone(180, 0, .1, 'sine', .04); } catch (e) {}
+  msg('⚽ Ballon posé : fonce dedans pour tirer, il roule et il rebondit', 3400);
+  return true;
+}
+function ballonRanger(silencieux) {
+  if (sac.ballon) { try { removeBall(sac.ballon); } catch (e) {} sac.ballon = null; if (!silencieux) msg('⚽ Ballon rangé dans le sac', 1500); }
+  return true;
+}
+// ---- le cerf-volant : il monte quand on court, il redescend quand on s'arrête ----
+function cerfSortir() {
+  if (!city.on) { msg('🪁 Le cerf-volant ne vole qu\'en ville', 2000); return false; }
+  cerfRanger(true);
+  const g = new THREE.Group();
+  const toile = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95),
+    new THREE.MeshLambertMaterial({ color: 0xff5c5c, side: THREE.DoubleSide }));
+  toile.rotation.z = Math.PI / 4; g.add(toile);
+  const croix = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.02, 0.02), new THREE.MeshLambertMaterial({ color: 0x8b5a2b }));
+  croix.rotation.z = Math.PI / 4; g.add(croix);
+  for (let i = 0; i < 6; i++) {
+    const n = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.11, 0.02), new THREE.MeshLambertMaterial({ color: i % 2 ? 0xffd23f : 0x3ef2ff }));
+    n.position.set(0, -0.78 - i * 0.33, 0); g.add(n);
+  }
+  worldGroup.add(g);
+  const fil = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 4), new THREE.MeshLambertMaterial({ color: 0xf4f6fa }));
+  worldGroup.add(fil);
+  sac.cerf = { g, fil, h: 5, dist: 5 };
+  msg('🪁 Cerf-volant lâché : COURS, il monte ! (jusqu\'à 22 m)', 3600);
+  return true;
+}
+function cerfRanger(silencieux) {
+  if (sac.cerf) { worldGroup.remove(sac.cerf.g); worldGroup.remove(sac.cerf.fil); sac.cerf = null;
+    if (!silencieux) msg('🪁 Cerf-volant enroulé et rangé', 1500); }
+  return true;
+}
+// ---- la peluche : le câlin (elle reste en main, elle ne se perd pas) ----
+function pelucheCalin() {
+  burst(P.pos.x, P.pos.y + 1.4, P.pos.z, 0xff7ad9, 14);
+  P.hp = Math.min(P.hpMax || 100, (P.hp || 0) + 6);
+  bubble(me, pickOne(['gros câlin 🧸', 'elle est trop douce', 'mon doudou ❤️']));
+  try { sfx.tone(520, 0, .12, 'sine', .05); sfx.tone(660, .12, .16, 'sine', .04); } catch (e) {}
+  if (typeof robot !== 'undefined' && robot.actif && robotDist() < 6) robotDit('moi aussi je veux un câlin !', 2600);
+  msg('🧸 Câlin ! (+6 ❤️)', 2000);
+  return true;
+}
+// ---- le boomerang : il part, il tourne, il revient en main ----
+function boomerangLance() {
+  if (sac.boom) return false;
+  const m = jouetMesh('boomerang'); m.scale.setScalar(1.7); worldGroup.add(m);
+  jouetRange();
+  sac.boom = { m, t: 0, x0: P.pos.x, z0: P.pos.z, y: P.pos.y + 1.15, cap: P.facing, sens: Math.random() < 0.5 ? 1 : -1, touche: null };
+  try { sfx.tone(300, 0, .12, 'sine', .05); } catch (e) {}
+  msg('🪃 Lancé ! Il fait sa boucle et il revient tout seul', 2600);
+  return true;
+}
+function boomerangRanger() { if (sac.boom) { worldGroup.remove(sac.boom.m); sac.boom = null; } return true; }
+// Un seul battement de cœur pour tous les jouets de plein air.
+function jouetsTick(dt) {
+  // le ballon suit le relief : sans cela il flottait (ou s'enfonçait) dès qu'il quittait la
+  // dalle sur laquelle on l'avait posé
+  if (sac.ballon) {
+    if (city.balls.indexOf(sac.ballon) < 0) sac.ballon = null;
+    else sac.ballon.ground = groundUnder(sac.ballon.pos.x, sac.ballon.pos.z, null, sac.ballon.pos.y) + 0.02;
+  }
+  // le cerf-volant : la hauteur suit la vitesse du joueur
+  const k = sac.cerf;
+  if (k) {
+    const v = Math.hypot(P.vel.x, P.vel.z);
+    const vise = 3 + Math.min(19, v * 2.6);
+    k.h += (vise - k.h) * Math.min(1, dt * 0.9);
+    k.dist = 3 + k.h * 0.35;
+    const bx = P.pos.x - Math.sin(P.facing) * k.dist, bz = P.pos.z - Math.cos(P.facing) * k.dist;
+    k.g.position.set(bx + Math.sin(simTime * 1.3) * 0.7, P.pos.y + k.h, bz + Math.cos(simTime * 1.1) * 0.7);
+    k.g.rotation.set(0.45 - Math.min(0.4, v * 0.05), P.facing + Math.PI, Math.sin(simTime * 1.7) * 0.22);
+    const main = new THREE.Vector3(P.pos.x, P.pos.y + 1.1, P.pos.z);
+    const dir = new THREE.Vector3().subVectors(k.g.position, main);
+    const len = Math.max(0.2, dir.length());
+    k.fil.position.copy(main).addScaledVector(dir, 0.5);
+    k.fil.scale.set(1, len, 1);
+    k.fil.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  }
+  // le boomerang : une boucle de 2,4 s dont la seconde moitié vise le joueur là où il est
+  const b = sac.boom;
+  if (b) {
+    b.t += dt;
+    const u = Math.min(1, b.t / 2.4);
+    if (u > 0.5) { b.x0 += (P.pos.x - b.x0) * Math.min(1, dt * 1.6); b.z0 += (P.pos.z - b.z0) * Math.min(1, dt * 1.6); }
+    const f = Math.sin(Math.PI * u) * 17, s = Math.sin(2 * Math.PI * u) * 5.5 * b.sens;
+    const x = b.x0 + Math.sin(b.cap) * f + Math.cos(b.cap) * s;
+    const z = b.z0 + Math.cos(b.cap) * f - Math.sin(b.cap) * s;
+    b.m.position.set(x, b.y + Math.sin(Math.PI * u) * 1.7, z);
+    b.m.rotation.y += dt * 24;
+    if (!b.touche) for (const o of bots) {
+      if (o.ko || !o.av || !o.av.group.visible) continue;
+      if (Math.hypot(o.pos.x - x, o.pos.z - z) > 1) continue;
+      b.touche = o; try { botSay(o, ['aïe ! fais attention avec ça 😠']); sfx.hit(); } catch (e) {} break;
+    }
+    if (u >= 1) {
+      boomerangRanger();
+      if (sacA('boomerang')) { jouetEnMain('boomerang'); msg('🪃 Rattrapé !', 1800); try { sfx.coin(); } catch (e) {} }
+    }
+  }
+}
+// E EN MAIN : ce que fait le jouet qu'on tient. Une seule porte d'entrée pour la touche E et
+// le bouton ✋ du tactile, pour ne pas empiler dix branches de plus dans la chaîne des « E ».
+function jouetActionPrete() {
+  if (!sac.main) return null;
+  const j = JOUET(sac.main); if (!j) return null;
+  if (j.offre) { const b = botAOffrir(); return b ? { quoi: 'offre', bot: b } : null; }
+  if (sac.main === 'peluche') return { quoi: 'calin' };
+  if (sac.main === 'boomerang') return sac.boom ? null : { quoi: 'boomerang' };
+  return null;
+}
+function jouetAction(a) {
+  if (!a) return false;
+  if (a.quoi === 'offre') return offreFleur(a.bot);
+  if (a.quoi === 'calin') return pelucheCalin();
+  if (a.quoi === 'boomerang') return boomerangLance();
+  return false;
+}
+function jouetsReset() { ballonRanger(true); cerfRanger(true); boomerangRanger(); }
+// ================= LA SALLE D'ARCADE DU SAC (round 71) =================
+// LE JOUEUR : « les jeu acheter en boutique, crée les avec un mode de jeu ». Trois articles
+// de la boutique Jeux Vidéo (borne d'arcade 25 🪙, jeu du mois 9 🪙, ordinateur portable
+// 40 🪙) ne faisaient rien. Ils ouvrent maintenant deux VRAIES petites parties, qui se
+// jouent AU BOUTON — donc entièrement à la manette : on réutilise l'écran des ordres, le
+// seul que la croix sache déjà parcourir et que ✕ sache valider. Elles rapportent des pièces.
+const ARC_COULEURS = [['🟥', 0xff5c5c, 392], ['🟩', 0x5cc453, 494], ['🟦', 0x4f8dff, 587], ['🟨', 0xffd23f, 698]];
+const ARC_EMOJIS = ['🚗', '🐶', '⚽', '🍕', '🚁', '🤖', '🎸', '🐱'];
+const arcade = { jeu: null, sim: [], pos: 0, montre: -1, attente: false, cartes: [], ouverts: [], coups: 0, paires: 0, gains: 0, minutes: 0 };
+function arcadePrix(n) { return Math.max(0, Math.round(n * (sac.manettePro ? 2 : 1))); }
+function arcadePaye(n, quoi) {
+  const g = arcadePrix(n); if (!g) return 0;
+  wallet += g; saveWallet(); updateHud();
+  try { sfx.coin(); } catch (e) {}
+  msg(`🕹️ ${quoi} : +${g} 🪙${sac.manettePro ? ' (×2, manette pro)' : ''}`, 3000);
+  return g;
+}
+// ---- l'accueil : que veut-on jouer ? ----
+function ouvreArcade(source) {
+  arcade.source = source || 'borne';
+  if (source === 'borne') return arcadeSimon();
+  if (source === 'jeu') return arcadeMemory();
+  $('ordresTitre').textContent = '💻 Ordinateur portable';
+  $('ordresSub').innerHTML = 'Deux jeux, et l\'album du drone. Tout se joue au bouton (croix + ✕ à la manette).';
+  const O = [
+    ['simon', '🕹️', 'Suite de couleurs', 'répète la suite : elle s\'allonge à chaque tour'],
+    ['memo', '💿', 'Jeu du mois : Memory', 'retrouve les huit paires en le moins de coups'],
+    ['album', '📷', 'Album du drone', `${drone.album.length} photo(s) prises en vol`],
+  ];
+  $('ordresGrid').innerHTML = O.map(([k, e, t, i]) => `<button class="ocard" data-arc="${k}"><span>${e}</span>${t}<i>${i}</i></button>`).join('');
+  ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-arc]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.arc;
+    if (k === 'simon') arcadeSimon(); else if (k === 'memo') arcadeMemory(); else arcadeAlbum();
+  }));
+  openUI('ordres');
+  return true;
+}
+function arcadeAlbum() {
+  $('ordresTitre').textContent = '📷 Album du drone';
+  $('ordresSub').innerHTML = drone.album.length ? `${drone.album.length} photo(s) — la plus haute à ${Math.max(...drone.album.map(a => a.alt))} m`
+    : 'Aucune photo : fais voler le drone et appuie sur R1 (P).';
+  $('ordresGrid').innerHTML = drone.album.slice().reverse().map((a, i) =>
+    `<button class="ocard"><span>📷</span>Photo ${drone.album.length - i}<i>${a.lieu} · ${a.alt} m · ${a.h} h</i></button>`).join('')
+    || '<span style="display:block;color:#7a86a0">📷 rien à montrer pour l\'instant</span>';
+  ordresRetourVisible(false);
+  openUI('ordres');
+  return true;
+}
+// ---- JEU 1 : la suite de couleurs (la borne d'arcade) ----
+function arcadeSimon(suite) {
+  arcade.jeu = 'simon';
+  if (!suite) { arcade.sim = []; arcade.gains = 0; }
+  arcade.sim.push(Math.floor(Math.random() * 4)); arcade.pos = 0; arcade.attente = true;
+  majArcadeSimon('👀 Regarde bien la suite…');
+  arcadeMontre(0);
+  openUI('ordres');
+  return true;
+}
+function arcadeMontre(i) {
+  if (arcade.jeu !== 'simon') return;
+  if (i >= arcade.sim.length) { arcade.montre = -1; arcade.attente = false; majArcadeSimon('👆 À toi : répète la suite'); return; }
+  arcade.montre = arcade.sim[i]; majArcadeSimon('👀 Regarde bien la suite…');
+  try { sfx.tone(ARC_COULEURS[arcade.sim[i]][2], 0, .26, 'sine', .06); } catch (e) {}
+  setTimeout(() => { arcade.montre = -1; majArcadeSimon('👀 Regarde bien la suite…'); setTimeout(() => arcadeMontre(i + 1), 170); }, 430);
+}
+function majArcadeSimon(sous) {
+  if (uiOpen !== 'ordres' && arcade.jeu !== 'simon') return;
+  $('ordresTitre').textContent = '🕹️ Suite de couleurs';
+  $('ordresSub').innerHTML = `Tour ${arcade.sim.length} · ${arcade.gains} 🪙 en jeu<br>${sous}`;
+  $('ordresGrid').innerHTML = ARC_COULEURS.map(([e], i) =>
+    `<button class="ocard${arcade.montre === i ? ' on' : ''}" data-sim="${i}" style="${arcade.montre === i ? 'background:#ffd23f;border-color:#ff8f3a' : ''}"><span style="font-size:30px">${e}</span></button>`).join('')
+    + '<button class="ocard" data-simq="1"><span>🚪</span>Arrêter<i>on garde les pièces gagnées</i></button>';
+  ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-sim]').forEach(b => b.addEventListener('click', () => arcadeAppui(+b.dataset.sim)));
+  $('ordresGrid').querySelectorAll('[data-simq]').forEach(b => b.addEventListener('click', () => { arcade.jeu = null; closeUI(); }));
+}
+function arcadeAppui(i) {
+  if (arcade.jeu !== 'simon' || arcade.attente) return false;
+  try { sfx.tone(ARC_COULEURS[i][2], 0, .16, 'sine', .05); } catch (e) {}
+  if (arcade.sim[arcade.pos] !== i) {
+    arcade.jeu = null;
+    try { sfx.tone(140, 0, .3, 'sawtooth', .06); } catch (e) {}
+    const g = arcadePaye(arcade.gains, `Suite de couleurs, tour ${arcade.sim.length}`);
+    $('ordresSub').innerHTML = `❌ Raté ! La bonne couleur était ${ARC_COULEURS[arcade.sim[arcade.pos]][0]}.<br>Tu as tenu ${arcade.sim.length - 1} tour(s) et gagné ${g} 🪙.`;
+    $('ordresGrid').innerHTML = '<button class="ocard" data-rej="1"><span>🔁</span>Rejouer<i>on repart du premier tour</i></button>'
+      + '<button class="ocard" data-simq="1"><span>🚪</span>Arrêter<i>retour au jeu</i></button>';
+    $('ordresGrid').querySelectorAll('[data-rej]').forEach(b => b.addEventListener('click', () => arcadeSimon()));
+    $('ordresGrid').querySelectorAll('[data-simq]').forEach(b => b.addEventListener('click', () => closeUI()));
+    return false;
+  }
+  arcade.pos++;
+  if (arcade.pos >= arcade.sim.length) { arcade.gains += arcade.sim.length; arcade.attente = true; setTimeout(() => arcadeSimon(true), 600); }
+  return true;
+}
+// ---- JEU 2 : le Memory (le jeu du mois) ----
+function arcadeMemory() {
+  arcade.jeu = 'memo'; arcade.coups = 0; arcade.paires = 0; arcade.ouverts = [];
+  const paire = ARC_EMOJIS.concat(ARC_EMOJIS);
+  for (let i = paire.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = paire[i]; paire[i] = paire[j]; paire[j] = t; }
+  arcade.cartes = paire.map(e => ({ e, vue: false, trouve: false }));
+  majArcadeMemo('Retourne deux cartes : si elles sont pareilles, elles restent.');
+  openUI('ordres');
+  return true;
+}
+function majArcadeMemo(sous) {
+  $('ordresTitre').textContent = '💿 Jeu du mois : Memory';
+  $('ordresSub').innerHTML = `${arcade.paires}/8 paires · ${arcade.coups} coup(s)<br>${sous}`;
+  $('ordresGrid').innerHTML = arcade.cartes.map((c, i) =>
+    `<button class="ocard${c.trouve ? ' on' : ''}" data-mem="${i}"${c.trouve ? ' disabled' : ''}><span style="font-size:28px">${c.trouve || c.vue ? c.e : '❓'}</span></button>`).join('')
+    + '<button class="ocard" data-memq="1"><span>🚪</span>Arrêter<i>retour au jeu</i></button>';
+  ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-mem]').forEach(b => b.addEventListener('click', () => arcadeCarte(+b.dataset.mem)));
+  $('ordresGrid').querySelectorAll('[data-memq]').forEach(b => b.addEventListener('click', () => { arcade.jeu = null; closeUI(); }));
+}
+function arcadeCarte(i) {
+  if (arcade.jeu !== 'memo') return false;
+  const c = arcade.cartes[i];
+  if (!c || c.trouve || c.vue || arcade.ouverts.length >= 2) return false;
+  c.vue = true; arcade.ouverts.push(i);
+  try { sfx.tone(600 + i * 12, 0, .07, 'sine', .04); } catch (e) {}
+  if (arcade.ouverts.length < 2) { majArcadeMemo('Et la deuxième ?'); return true; }
+  arcade.coups++;
+  const [a, b] = arcade.ouverts, ca = arcade.cartes[a], cb = arcade.cartes[b];
+  if (ca.e === cb.e) {
+    ca.trouve = cb.trouve = true; arcade.paires++; arcade.ouverts = [];
+    try { sfx.coin(); } catch (e) {}
+    if (arcade.paires >= 8) {
+      arcade.jeu = null;
+      const g = arcadePaye(Math.max(6, 34 - arcade.coups), `Memory terminé en ${arcade.coups} coups`);
+      majArcadeMemo(`🏆 Toutes les paires ! ${arcade.coups} coups, +${g} 🪙`);
+      $('ordresGrid').innerHTML = '<button class="ocard" data-rej="1"><span>🔁</span>Rejouer<i>nouvelles cartes</i></button>'
+        + '<button class="ocard" data-memq="1"><span>🚪</span>Arrêter<i>retour au jeu</i></button>';
+      $('ordresGrid').querySelectorAll('[data-rej]').forEach(x => x.addEventListener('click', () => arcadeMemory()));
+      $('ordresGrid').querySelectorAll('[data-memq]').forEach(x => x.addEventListener('click', () => closeUI()));
+      return true;
+    }
+    majArcadeMemo('🎉 Une paire ! Continue.');
+    return true;
+  }
+  majArcadeMemo('Ce n\'est pas la même… on les retourne.');
+  setTimeout(() => {
+    ca.vue = false; cb.vue = false; arcade.ouverts = [];
+    if (arcade.jeu === 'memo') majArcadeMemo('À toi de rejouer.');
+  }, 750);
+  return true;
+}
 // ---- interprétation des messages adressés à un ami ou au chien ----
 // ================= ORDRES DONNÉS AUX AMIS =================
 // Un ami exécute ce qu'on lui demande : suivre, attendre, aller chercher un véhicule, taper
@@ -22647,6 +22976,7 @@ function cityVie(dt) {
   safe('feux', () => feuxTick(dt)); safe('débris', () => debrisTick(dt)); safe('repas', () => eatTick(dt)); safe('gardes', () => guardsTick(dt)); safe('butin', () => lootTick(dt)); safe('coffres', () => safesTick(dt)); safe('cinéma', () => cinemaTick(dt)); safe('fuyards', () => fleeTick(dt)); safe('chien', () => chienTick(dt)); safe('coup', () => coupTick(dt)); safe('chauffeur', () => botDriveTick(dt)); safe('nitro', () => nitroTick(dt)); safe('services', () => servicesTick(dt)); safe('remise en état', () => remiseTick(dt)); safe('plaintes', () => plainteTick(dt)); safe('guerre des gangs', () => guerreTick(dt)); safe('vie', () => vieTick(dt)); safe('gangs', () => gangTick(dt)); safe('gang du joueur', () => gangMissionTick(dt)); safe('cambriolage', () => cambrioTick(dt)); safe('métiers', () => metiersTick(dt)); safe('promenade', () => promenadeTick()); safe('défi', () => defiTick()); safe('jour', () => dayTick()); safe('gps', () => gpsRoute.update()); safe('sauvegarde auto', () => autoSauve()); safe('manette', () => tvVeille());
   safe('drone', () => droneTick(dt));   // poste DRONE & ROBOT
   safe('robot', () => robotTick(dt));   // poste DRONE & ROBOT
+  safe('jouets', () => jouetsTick(dt));   // poste DRONE & ROBOT
   safe('sons du monde', () => sonsVille(dt));   // pas des bots, rotor, ambiance du quartier, accueils parles
   if (city.docs) safe('médecins', () => docsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('feu des véhicules', () => feuxVehiculesTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
@@ -24093,7 +24423,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof botAOffrir === 'function' ? botAOffrir() : null; if (flr) offreFleur(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof jouetActionPrete === 'function' ? jouetActionPrete() : null; if (flr) jouetAction(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -24230,7 +24560,7 @@ for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).a
 $('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
-$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof botAOffrir === 'function' ? botAOffrir() : null; if (flr) offreFleur(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
+$('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof jouetActionPrete === 'function' ? jouetActionPrete() : null; if (flr) jouetAction(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });
 $('fireBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) fire(); });
 $('punchBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.pDown = simTime; });
 for (const ev of ['pointerup', 'pointercancel']) $('punchBtn').addEventListener(ev, e => { e.preventDefault(); if (P.pDown != null) { if (simTime - P.pDown > 0.4) kick(); else punch(); P.pDown = null; } });

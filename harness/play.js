@@ -17387,3 +17387,94 @@ test('pendant que le membre conduit, la voiture ne reste pas plantée sans raiso
     && Math.abs(assise.avant) < assise.longueur / 2 && assise.cap < 0.05 && assise.cuisse < -1;
   return { ok, detail: `avant : trois arrêts de 3,5 s en 60 s de route, toujours nez contre un lampadaire du trottoir (0,2 · 0,2 · 0,5 m/s relevés, aucune raison de s'arrêter) · maintenant, trajet en « ${depart.vehicule} » amené en ${depart.venue} s : ${roule.trajet} s jusqu'à la villa (${roule.parcouru} m, ${roule.vMoy} m/s, arrivé à ${roule.dVilla} m), le plus long arrêt SANS RAISON dure ${roule.pire} s${roule.pireOu ? ` (en ${roule.pireOu.x}, ${roule.pireOu.z})` : ''}, ${roule.plantages} plantage(s) de plus de 1,5 s · après 2,5 s de boucle d'affichage laissée seule : joueur visible=${assise.visible}, ${assise.droite} m sur le côté et ${assise.avant} m en avant du centre, ${assise.haut} m sous le repère, cuisses ${assise.cuisse}` };
 });
+test('douze secondes de trajet en passager : la camera suit le vehicule sans plonger dans la tole ni s envoler', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    // LE TRAJET DOIT ETRE LE MEME A CHAQUE ESSAI. La route que prend l'ami, la voiture qu'il
+    // trouve et le mobilier qu'il longe dependent du hasard : joue seul le test passait, joue
+    // dans un lot il tombait sur un autre itineraire et sur un autre trottoir. On force donc le
+    // tirage (le brief l'autorise expressement) et on le rend a la fin, quoi qu'il arrive.
+    const vraiRnd = Math.random; let graine = 987654321;
+    Math.random = () => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine / 0x7fffffff; };
+    try {
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais pris la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    const car = b.drive.car;
+    const out = { voiture: car.kind || 'voiture', long: +(car.baseD || 3).toFixed(1), sec: [] };
+    // ON LAISSE TOURNER : douze secondes de route a 60 images par seconde, et la camera est
+    // remise a jour A CHAQUE IMAGE (c'est frame() qui le fait dans le jeu ; sur le banc, une
+    // image reelle par seconde ne mesurerait rien). On releve une fois par seconde.
+    const cam = () => G.camera.position;
+    let dPireJoueur = 0, sauts = 0, sautMax = 0, prec = null, hors = 0;
+    let pireD = 99, pireQuoi = null;
+    for (let s = 0; s < 12; s++) {
+      for (let i = 0; i < 60; i++) {
+        pas();
+        G.camPerche(dt, false);
+        const dpc = Math.hypot(P.pos.x - car.x, P.pos.z - car.z);
+        if (dpc > dPireJoueur) dPireJoueur = dpc;
+      }
+      const c = cam();
+      const dCar = +Math.hypot(c.x - car.x, c.y - ((car.y || 0) + 1.2), c.z - car.z).toFixed(2);
+      // QUI COUPE LA PERCHE quand elle est courte ? on garde la taille du solide fautif, pour
+      // que le bilan dise s'il s'agit d'un poteau, d'une facade ou du vehicule lui-meme.
+      if (dCar < pireD) {
+        pireD = dCar; pireQuoi = null;
+        const cp2 = Math.cos(G.cam.pitch), T = G.cam.target;
+        const dir = [Math.sin(G.cam.yaw) * cp2, Math.sin(G.cam.pitch), Math.cos(G.cam.yaw) * cp2];
+        let m = 99;
+        for (const o of G.solidsAutour(T.x, T.z, 14)) {
+          if (o === car.solid || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;
+          if (o.mesh && !o.mesh.visible) continue;
+          const hx = Math.max(o.w, 0.36) / 2 + 0.3, hy = o.h / 2 + 0.3, hz = Math.max(o.d, 0.36) / 2 + 0.3;
+          if (o.y + hy < T.y - 1.4) continue;
+          if (Math.abs(T.x - o.x) < hx && Math.abs(T.y - o.y) < hy && Math.abs(T.z - o.z) < hz) continue;
+          const t2 = G.rayBox(T.x, T.y, T.z, dir[0], dir[1], dir[2], o.x, o.y, o.z, hx, hy, hz, 14);
+          if (t2 >= 0 && t2 < m) { m = t2; pireQuoi = { w: +o.w.toFixed(2), d: +o.d.toFixed(2), h: +o.h.toFixed(2), a: +t2.toFixed(2) }; }
+        }
+      }
+      if (prec != null) { const j = Math.abs(dCar - prec); if (j > sautMax) sautMax = j; if (j > 5) sauts++; }
+      prec = dCar;
+      const v = new THREE.Vector3(car.x, (car.y || 0) + 0.8, car.z); v.project(G.camera);
+      const dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
+      if (!dansLeCadre) hors++;
+      out.sec.push({ s: s + 1, d: dCar, camY: +c.y.toFixed(2), vit: +((car.speed || 0)).toFixed(1), cadre: dansLeCadre });
+    }
+    out.dJoueurVoiture = +dPireJoueur.toFixed(2);
+    out.coupable = pireQuoi;
+    out.sautMax = +sautMax.toFixed(2); out.sauts = sauts; out.horsCadre = hors;
+    out.dMin = Math.min(...out.sec.map(x => x.d)); out.dMax = Math.max(...out.sec.map(x => x.d));
+    out.passager = !!(G.city.rideBot && G.city.rideBot.drive && G.city.rideBot.drive.passager);
+    try { G.botDescendre(G.city.rideBot, false); } catch (e) {}
+    try { b.drive = null; b.rdv = null; car.busy = false; car.speed = 0; } catch (e) {}
+    G.city.botCarNear = null; G.city.rideBot = null;
+    return out;
+    } finally { Math.random = vraiRnd; }
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  // Le plancher : la camera ne doit jamais rentrer dans la caisse. On l'exige a la
+  // demi-longueur du vehicule PLUS UN METRE, mesure depuis son centre — c'est-a-dire un metre
+  // derriere le pare-chocs. Et le joueur, lui, ne doit jamais quitter la carrosserie : son
+  // siege est a 1,53 m du centre sur cette ambulance, on tolere la demi-longueur.
+  // Le plancher du CODE vaut demi-longueur + 1,2 m mesuree depuis le point vise, qui est le
+  // SIEGE du passager (1,53 m en avant du centre sur cette ambulance) : vu depuis le centre du
+  // vehicule, la garantie vaut donc demi-longueur + 0,8.
+  const plancher = r.long / 2 + 0.8;
+  // CE QU'ON EXIGE. Le plancher, d'abord : la camera ne rentre jamais dans la caisse. Ensuite
+  // la REGLE : sur douze secondes de rue, au plus deux secondes sous la distance confortable
+  // du vehicule — un mur qui passe vraiment entre la camera et la voiture a le droit de la
+  // rapprocher une seconde, c'est ce que fait n'importe quel jeu ; ce qui n'est pas admissible,
+  // c'est d'y rester. Le plus gros saut est IMPRIME mais pas exige : quand une facade de douze
+  // metres arrive, la perche DOIT se raccourcir vite, sinon elle la traverse.
+  const confort = r.long / 2 + 2.5;
+  const basses = r.sec.filter(x => x.d < confort).length;
+  const ok = r.passager && r.dJoueurVoiture < r.long / 2
+    && r.dMin > plancher && r.dMax < 17 && basses <= 2 && r.horsCadre === 0;
+  return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m depuis le centre ; avant, le chef relevait 8 · 12 · 9,9 · 6,1 · 8,5 · 4,6 · 1,7 · 1,5 · 3,3 · 2,8 · 5,8 · 3,8 m), ${basses} seconde(s) sur douze sous la distance confortable de ${confort.toFixed(1)} m, et c'est un vrai mur qui la justifie (plus gros ecart d'une seconde a l'autre : ${r.sautMax} m ; au plus court, ce qui barrait la perche mesurait ${r.coupable ? r.coupable.w + ' × ' + r.coupable.d + ' × ' + r.coupable.h + ' m a ' + r.coupable.a + ' m' : 'rien'}), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
+});

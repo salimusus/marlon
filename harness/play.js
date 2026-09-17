@@ -17148,6 +17148,31 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
       botsProches++;
       b.av.group.traverse(o => { if (o.isMesh && o.ombreLoin) botsProchesEteints++; });
     }
+    // 5. LES ROUES, A TOUTE DISTANCE. Le joueur a signale un camion roulant SANS ROUES au loin.
+    //    Mesure d'alors : les pneus d'un vehicule gare disparaissaient des 40 m (le budget du
+    //    DECOR les prenait pour un detail — un pneu fait 0,372 de rayon, soit 1/100e d'ecran a
+    //    37 m). Son critere : a toute distance ou l'on distingue le vehicule, il a ses roues.
+    //    On regarde ici le CALQUE, qui est ce que le budget d'image commande — pas `visible`,
+    //    que le jeu utilise pour ses propres raisons (roue arrachee, vehicule range).
+    const DIST_ROUES = [20, 40, 80, 150];
+    const flotte = [].concat(G.city.cars || [], G.city.aiCars || [], (G.police && G.police.cars) || []);
+    const parSorte = {};
+    for (const v of flotte) {
+      const k = v.kind || (v.kart ? 'kart' : 'voiture');
+      if (!parSorte[k] && v.wheels && v.wheels.length && v.g && v.g.visible) parSorte[k] = v;
+    }
+    let rouesVues = 0, rouesEffacees = 0; const sortesRoues = [];
+    for (const k in parSorte) {
+      const v = parSorte[k]; v.g.updateMatrixWorld(true);
+      let manque = 0, total = 0;
+      for (const d of DIST_ROUES) {
+        G.camera.position.set(v.x, 2.2, v.z + d); G.camera.lookAt(v.x, 1, v.z); G.camera.updateMatrixWorld(true);
+        G.detailsLOD(true);
+        for (const w of v.wheels) w.traverse(o => { if (!o.isMesh) return; total++; if (o.layers && o.layers.mask === 0) manque++; });
+      }
+      sortesRoues.push(k + (manque ? ' ' + (total - manque) + '/' + total + ' ❌' : ''));
+      rouesVues += total - manque; rouesEffacees += manque;
+    }
     // LE COUT DU CODE DE JEU. La circulation tourne a 60 pas par seconde, la vie de la ville
     // aussi : deux pas de simulation (1/120 s) pour un tour. C'est ce qui a divise par deux le
     // travail de cityStep — si quelqu'un remet la circulation a 120 Hz, ce compte le dira.
@@ -17158,6 +17183,7 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
     return { couleur, ombre, total: couleur + ombre, tris, dessines,
       fautesDecor, joueurEteint, procheEteints, procheEfface, botsProches, botsProchesEteints, toursTrafic, toursVille,
       mobEffaces: G.OMBRES_MOB.filter(e => e.offV).length,
+      rouesVues, rouesEffacees, sortesRoues, sortesTestees: sortesRoues.length, distRoues: DIST_ROUES,
       mob: G.OMBRES_MOB.length, mobEteints: G.OMBRES_MOB.filter(e => e.off).length,
       geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures,
       prog: G.renderer.info.programs ? G.renderer.info.programs.length : -1 };
@@ -17174,8 +17200,9 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
   // pour revenir en arriere.
   const ok = r.total < 5600 && r.ombre < 1900 && r.couleur < 4400
     && r.dessines > 2800 && r.fautesDecor === 0 && r.joueurEteint === 0 && r.procheEteints === 0
-    && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60;
-  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
+    && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60
+    && r.rouesEffacees === 0 && r.sortesTestees >= 10;
+  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · ET LES ROUES SONT TOUJOURS LA : ${r.rouesVues} maillages de roue dessines sur ${r.rouesVues + r.rouesEffacees}, a ${r.distRoues.join(', ')} m, pour les ${r.sortesTestees} sortes de vehicules de la ville (${r.sortesRoues.join(', ')}) — avant, un vehicule gare perdait ses roues des 40 m · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
 });
 
 // POSTE FLUIDITE (round 71). Les quatre reglages de qualite doivent faire EXACTEMENT ce que

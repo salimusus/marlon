@@ -723,6 +723,24 @@ window.__SHOT = {
         setTimeout(function () { try { ag.shotT = 0; agentTire(ag, 1, 0.01); } catch (e) {} }, Math.max(200, (v.wait || 1200) - 120));
       }
     } catch (eAg) {} }
+    // POSTE CONCESSIONNAIRE : v.carro = la cle d'une gamme. On degage la rue, on pose UNE
+    // voiture de cette gamme a l'endroit vise, cap v.hcar (0 = nez vers le sud), et on cache
+    // le joueur : la capture ne montre que la CARROSSERIE, de trois quarts avant. La bonne
+    // orbite pour un trois-quarts avant est yaw = hcar + PI + 0,7.
+    if (v.carro) {
+      try {
+        for (var kc = 0; kc < city.cars.length; kc++) { var vc = city.cars[kc]; vc.x += 400; vc.z += 400; vc.g.position.set(vc.x, vc.y || 0, vc.z); if (vc.solid) { vc.solid.x = vc.x; vc.solid.z = vc.z; } }
+        var gg = gammeDe(v.carro);
+        if (gg) {
+          var nv = voitureDeGamme(gg, v.x, v.z, v.hcar != null ? v.hcar : 0);
+          settleVehicle(nv); vehicleSolid(nv); city.cars.push(nv);
+          if (v.pilote) { P.pos.set(v.x + 2.5, v.y, v.z); enterCar(nv); poseJoueurAuVolant(1); }
+          else me.group.visible = false;
+          try { document.getElementById('msg').style.display = 'none'; } catch (eM) {}   // le bandeau « Bienvenue en ville » couvrait le toit de la voiture
+          window.__SHOT.voitureVue = nv;
+        }
+      } catch (eCar) {}
+    }
     if (v.raquette) { P.racket = true; setRacket(me, true); }
     if (v.atelier) {   // une voiture posée sur la travée de l'atelier, pour la capture
       try { for (const c of city.cars) { c.x += 300; c.z += 300; c.g.position.set(c.x, c.y, c.z); }
@@ -2114,6 +2132,11 @@ window.__G = {
   camLibres: typeof camLibres === 'function' ? camLibres : null,
   interieurDe: typeof interieurDe === 'function' ? interieurDe : null,
   // ---- poste CONCESSIONNAIRE (batiment vitre jaune, gammes, achat d'une voiture) ----
+  CARROSSERIES: typeof CARROSSERIES !== 'undefined' ? CARROSSERIES : null,
+  carrosserieDe: typeof carrosserieDe === 'function' ? carrosserieDe : null,
+  makeCarrosserie: typeof makeCarrosserie === 'function' ? makeCarrosserie : null,
+  panneauGamme: typeof panneauGamme === 'function' ? panneauGamme : null,
+  navPremier: typeof navPremier === 'function' ? navPremier : null,
   GAMMES: typeof GAMMES !== 'undefined' ? GAMMES : null,
   gammeDe: typeof gammeDe === 'function' ? gammeDe : null,
   etoilesGamme: typeof etoilesGamme === 'function' ? etoilesGamme : null,

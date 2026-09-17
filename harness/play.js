@@ -17835,3 +17835,191 @@ test('les conseils du robot sortent de l\'état réel de la partie, et jamais de
   const ok = r.total === 5 && !r.repete && r.parle && new Set(r.suite.filter(Boolean)).size >= 4;
   return { ok, detail: `avant : le robot sortait une phrase au hasard d'une liste de huit · maintenant chaque conseil lit l'état réel : ${Object.entries(r.pris).map(([k, v]) => `${k} → ${v.ok ? '✅ ' + v.id : '❌'}`).join(', ')} · six conseils d'affilée donnent ${new Set(r.suite.filter(Boolean)).size} conseils différents (${r.suite.join(' → ')}), aucun répété d'affilée (${!r.repete}) et il les dit à voix haute` };
 });
+// ================= LES CINQ CARROSSERIES DU CONCESSIONNAIRE (poste concessionnaire) =================
+// « chez le concessionnaire , met des véhicule de diffèrent style , 4x4 , berline , suv ,
+// décapotable , break » (le joueur, mot pour mot). MESURÉ AVANT CE ROUND : les huit modèles
+// du show-room partageaient EXACTEMENT la même carrosserie — 4,73 × 2,40 × 2,15 m, toit à
+// 1,76 m, roues de 34 cm, empattement 2,60 m pour les huit. Seules la couleur, la galerie et
+// le pare-buffle changeaient. Ces quatre tests garantissent qu'elles ne se ressemblent plus.
+test('les cinq carrosseries du concessionnaire ont chacune sa silhouette : longueur, toit, roues et garde au sol distinctes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const cle = { berline: 'berline', break: 'break', suv: 'suv', quatre: 'quatre', decapotable: 'sportive' };
+    const m = {};
+    for (const st of Object.keys(cle)) {
+      const v = G.voitureDeGamme(G.gammeDe(cle[st]), -300, 300, 0);
+      v.g.updateMatrixWorld(true);
+      const b = new THREE.Box3().setFromObject(v.g);
+      // LE TOIT : la pièce large (plus de 1,20 m dans les deux sens) la plus haute. C'est la
+      // même définition que le test de la citadine assise, pour que les deux se comparent.
+      let toit = -1;
+      v.g.traverse(o => { if (o.isMesh) { const bb = new THREE.Box3().setFromObject(o); if (bb.max.y > toit && (bb.max.x - bb.min.x) > 1.2 && (bb.max.z - bb.min.z) > 1.2) toit = bb.max.y; } });
+      let plaques = 0; v.g.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'PlaneGeometry') plaques++; });
+      const pr = v.parts, zs = v.roues.map(x => x.z);
+      m[st] = { style: v.style, L: +(b.max.z - b.min.z).toFixed(2), W: +(b.max.x - b.min.x).toFixed(2),
+        H: +(b.max.y - b.min.y).toFixed(2), toit: +toit.toFixed(2), aToit: v.toitY != null,
+        roue: +v.roues[0].r.toFixed(3), nRoues: v.roues.length, garde: v.garde,
+        empat: +(Math.max.apply(null, zs) - Math.min.apply(null, zs)).toFixed(2),
+        capot: !!pr.hood, phares: pr.lights.length, pareChocs: pr.bumpers.length,
+        pareBrise: !!pr.ws, vitres: pr.sides.length, portes: pr.doors.length, plaques };
+      G.worldGroup.remove(v.g);
+    }
+    return m;
+  });
+  const S = ['berline', 'break', 'suv', 'quatre', 'decapotable'].map(k => r[k]);
+  // chaque carrosserie a bien toutes ses pièces (celles dont dépendent les dégâts)
+  const complet = S.every(x => x.capot && x.phares === 4 && x.pareChocs === 2 && x.pareBrise && x.portes >= 2 && x.plaques >= 1 && x.nRoues === 4);
+  // aucune paire ne se ressemble : longueur, hauteur de toit et rayon de roue
+  let distinctes = true;
+  for (let i = 0; i < S.length; i++) for (let j = i + 1; j < S.length; j++)
+    if (Math.abs(S[i].L - S[j].L) < 0.15 && Math.abs(S[i].toit - S[j].toit) < 0.1 && Math.abs(S[i].roue - S[j].roue) < 0.02) distinctes = false;
+  const ok = complet && distinctes
+    && r.decapotable.aToit === false && r.berline.aToit && r.break.aToit && r.suv.aToit && r.quatre.aToit
+    && r.berline.toit < r.break.toit && r.break.toit < r.suv.toit && r.suv.toit < r.quatre.toit   // de plus en plus haut
+    && r.break.L > r.berline.L + 0.25                                                            // le break est le plus long
+    && r.quatre.roue > r.suv.roue && r.suv.roue > r.berline.roue                                 // des roues de plus en plus grandes
+    && r.quatre.garde > r.suv.garde && r.suv.garde > r.berline.garde && r.berline.garde > r.decapotable.garde
+    && r.quatre.W > r.berline.W + 0.3;                                                           // pneus larges : le 4×4 est le plus large
+  return { ok, detail: `avant : les huit modèles faisaient 4,73 × 2,40 × 2,15 m, toit 1,76 m, roues 34 cm, empattement 2,60 m — les MÊMES · maintenant `
+    + ['berline', 'break', 'suv', 'quatre', 'decapotable'].map(k => `${k} ${r[k].L}×${r[k].W} m, toit ${r[k].aToit ? r[k].toit + ' m' : 'AUCUN'}, roues ${r[k].roue} m, empattement ${r[k].empat} m, garde ${r[k].garde} m, ${r[k].vitres} panneau(x) de vitre latérale, ${r[k].portes} portières`).join(' · ')
+    + ` · toutes complètes (capot, 4 phares, 2 pare-chocs, pare-brise, plaque)=${complet}, deux à deux différentes=${distinctes}` };
+});
+
+test('dans chacune des cinq carrosseries le conducteur est ASSIS à la bonne hauteur : sa tête passe sous SON toit', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const cle = { berline: 'berline', break: 'break', suv: 'suv', quatre: 'quatre', decapotable: 'sportive' };
+    const m = {};
+    for (const st of Object.keys(cle)) {
+      const v = G.voitureDeGamme(G.gammeDe(cle[st]), -120, 121, 0); G.city.cars.push(v);
+      G.settleVehicle(v);
+      G.P.pos.set(v.x + 2.5, 0.3, v.z); G.enterCar(v); G.poseJoueurAuVolant(1);
+      G.me.group.updateMatrixWorld(true); v.g.updateMatrixWorld(true);
+      const bh = new THREE.Box3().setFromObject(G.me.rig.head);
+      let toit = -1;
+      v.g.traverse(o => { if (o.isMesh) { const bb = new THREE.Box3().setFromObject(o); if (bb.max.y > toit && (bb.max.x - bb.min.x) > 1.2 && (bb.max.z - bb.min.z) > 1.2) toit = bb.max.y; } });
+      const T = G.placesDe(v);
+      m[st] = { table: typeof T, siege: T.conducteur ? T.conducteur.y : null, seuil: T.seuil,
+        sieges: ['conducteur', 'avant', 'arriereG', 'arriereD'].filter(n => T[n]).length,
+        nbPlaces: v.nbPlaces, chien: !!T.chien,
+        tete: +bh.max.y.toFixed(2), toit: +toit.toFixed(2), marge: +(toit - bh.max.y).toFixed(2),
+        aToit: v.toitY != null, epaule: +Math.max(Math.abs(bh.min.x - v.x), Math.abs(bh.max.x - v.x)).toFixed(2), demiLarge: +(v.baseW / 2).toFixed(2) };
+      G.exitCar();
+      v.x = 400; v.z = 400; v.g.position.set(400, 0, 400);
+    }
+    return m;
+  });
+  const fermes = ['berline', 'break', 'suv', 'quatre'].map(k => r[k]);
+  const ok = Object.values(r).every(x => x.table === 'object' && typeof x.siege === 'number' && x.chien && x.tete < 2.5)
+    // les quatre caisses fermées : la tête passe sous le toit, sans flotter à 60 cm dessous
+    && fermes.every(x => x.marge > 0.05 && x.marge < 0.6)
+    && fermes.every(x => x.epaule < x.demiLarge + 0.2)
+    // on est assis DE PLUS EN PLUS HAUT en montant vers le 4×4
+    && r.berline.siege < r.suv.siege && r.suv.siege < r.quatre.siege
+    && r.berline.sieges === 4 && r.break.sieges === 4 && r.quatre.sieges === 4
+    // la décapotable : deux places, pas de toit, et la tête SORT (cheveux au vent)
+    && r.decapotable.sieges === 2 && r.decapotable.nbPlaces === 2 && !r.decapotable.aToit && r.decapotable.marge < 0;
+  return { ok, detail: `piège connu : c.nbPlaces est le NOMBRE, placesDe(c) la TABLE des sièges · `
+    + ['berline', 'break', 'suv', 'quatre', 'decapotable'].map(k => `${k} : assise à ${r[k].siege} m, tête ${r[k].tete} m, toit ${r[k].aToit ? r[k].toit + ' m (marge ' + r[k].marge + ' m)' : 'AUCUN (la tête dépasse de ' + (-r[k].marge).toFixed(2) + ' m, c\'est le principe)'}, ${r[k].sieges} sièges pour ${r[k].nbPlaces} places, épaules à ${r[k].epaule} m pour ${r[k].demiLarge} m de demi-caisse`).join(' · ') };
+});
+
+test('acheter chez Blocs Motors livre la carrosserie choisie, le show-room expose les cinq styles et la bague se pose sur le premier modèle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -140, y: 1, z: 100, hour: 12, frais: true });
+    // 1. les huit podiums du show-room, et les CINQ styles qu'ils exposent
+    const expo = (G.city.concesExpo || []).map(v => v.style);
+    const stylesExpo = Array.from(new Set(expo)).sort().join(',');
+    // 2. chaque achat livre bien la carrosserie annoncée, aux dimensions du style
+    const ref = {};
+    for (const st of Object.keys(G.CARROSSERIES)) {
+      const g0 = G.GAMMES.find(g => g.style === st);
+      const t = G.voitureDeGamme(g0, -300, 300, 0); t.g.updateMatrixWorld(true);
+      const b = new THREE.Box3().setFromObject(t.g);
+      ref[st] = { H: +(b.max.y - b.min.y).toFixed(2), roue: +t.roues[0].r.toFixed(3) };
+      G.worldGroup.remove(t.g);
+    }
+    const achats = [];
+    for (const g of G.GAMMES) {
+      if (G.drive.car) G.exitCar();
+      G.wallet = g.p + 5; G.saveWallet();
+      const pris = G.acheterAuConces(g.k);
+      const v = G.maVoiture();
+      v.g.updateMatrixWorld(true);
+      const b = new THREE.Box3().setFromObject(v.g);
+      achats.push({ k: g.k, pris, style: v.style, attendu: g.style,
+        bonStyle: v.style === g.style,
+        bonneTaille: Math.abs((b.max.y - b.min.y) - ref[g.style].H) < 0.05 && Math.abs(v.roues[0].r - ref[g.style].roue) < 0.01,
+        nbPlaces: v.nbPlaces, volant: G.drive.car === v });
+    }
+    if (G.drive.car) G.exitCar();
+    // 3. la fenêtre de vente : la carrosserie écrite sur chaque ligne, la fiche, et la bague
+    G.wallet = 2000; G.saveWallet();
+    G.openConces();
+    const corps = document.getElementById('concesCorps').textContent;
+    const fiche = document.getElementById('concesPrix').textContent;
+    const boutons = Array.from(document.querySelectorAll('#concesCorps [data-g]'));
+    document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
+    G.navPremier();
+    const bague = document.querySelector('.focustv');
+    const out = { stylesExpo, expo: expo.length, achats,
+      lignes: boutons.length, gammes: G.GAMMES.length,
+      nomsDansLaListe: Object.values(G.CARROSSERIES).filter(S => corps.indexOf(S.nom) >= 0).length,
+      fiche, ficheOk: /\u{1F3C1}/u.test(fiche) && /km\/h/.test(fiche) && /places/.test(fiche) && /\u{1FA99}/u.test(fiche),
+      bague: bague ? (bague.dataset.g || bague.id || bague.textContent.slice(0, 12)) : null,
+      baguePremier: !!bague && bague === boutons[0] };
+    G.closeUI(); G.wallet = 25; G.saveWallet(); G.store.set('superobby.mavoiture', '');
+    return out;
+  });
+  const ok = r.expo === r.gammes && r.stylesExpo === 'berline,break,decapotable,quatre,suv'
+    && r.achats.every(a => a.pris && a.bonStyle && a.bonneTaille && a.volant)
+    && r.lignes === r.gammes && r.nomsDansLaListe === 5 && r.ficheOk && r.baguePremier;
+  return { ok, detail: `le show-room expose ${r.expo} voitures pour ${r.stylesExpo.split(',').length} carrosseries (${r.stylesExpo}) · `
+    + r.achats.map(a => `${a.k}→${a.style}${a.bonStyle && a.bonneTaille ? ' ✔' : ' ✘'} (${a.nbPlaces} pl.)`).join(' · ')
+    + ` · la fenêtre montre ${r.lignes} modèles et nomme les ${r.nomsDansLaListe} carrosseries, fiche « ${r.fiche} » · la bague de la manette se pose sur « ${r.bague} » (premier modèle=${r.baguePremier})` };
+});
+
+test('le comportement suit la silhouette : le 4×4 franchit ce qui arrête une berline, et aucune pointe ne sort des bornes du joueur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    // 1. LES BORNES : le joueur a tranché 21 (origine), 38 (300 ch) et 60 m/s (500 ch).
+    const pointes = G.GAMMES.map(g => ({ k: g.k, style: g.style, vmax: g.vmax, accel: g.accel, turn: g.turn }));
+    const dansLesBornes = pointes.every(x => x.vmax >= 21 && x.vmax <= 60);
+    // LA RÉFÉRENCE, c'est la berline « Avenue » elle-même — pas le minimum de toutes les
+    // berlines : la citadine est une berline RACCOURCIE, volontairement moins vive, et sa
+    // reprise de 17 servait de repère à la place de celle de la vraie berline (22).
+    const b = G.GAMMES.find(g => g.k === 'berline');
+    // 2. LA GARDE AU SOL COMPTE VRAIMENT : une marche de 70 cm, franchie par le 4×4, pas par
+    // la berline. C'est la règle de carBlocked (opt.garde), mesurée sur le même obstacle, posé
+    // au milieu de la plus longue ligne droite de la ville (une route, donc du plat).
+    const rt = G.city.routes.slice().sort((x, y) => Math.max(y.w, y.d) - Math.max(x.w, x.d))[0];
+    const axeX = rt.w >= rt.d, ox = rt.x, oz = rt.z, hh = axeX ? Math.PI / 2 : 0;
+    G.solids.push({ x: ox, y: 0.35, z: oz, w: axeX ? 1.4 : 8, h: 0.70, d: axeX ? 8 : 1.4 });
+    try { G.sgridSale(); } catch (e) {}
+    const bloque = garde => G.carBlocked(ox, oz, null, 1.4, { garde }, 0, hh, 2);
+    const mur = { berline: bloque(0.32), suv: bloque(0.56), quatre: bloque(0.76) };
+    // 3. et en roulant pour de vrai : chacun fonce sur la marche pendant deux secondes
+    const x0 = axeX ? ox - 16 : ox, z0 = axeX ? oz : oz - 16;
+    const roule = k => {
+      const v = G.voitureDeGamme(G.gammeDe(k), x0, z0, hh); G.city.cars.push(v); G.settleVehicle(v);
+      for (let i = 0; i < 240; i++) G.conduire(v, { gaz: 1, volant: 0, frein: 0 }, 1 / 120);
+      const d = Math.hypot(v.x - x0, v.z - z0); v.x = 600; v.z = 600; v.g.position.set(600, 0, 600);
+      return +d.toFixed(1);
+    };
+    return { pointes, dansLesBornes, b, mur, route: [Math.round(rt.x), Math.round(rt.z), Math.round(rt.w), Math.round(rt.d)],
+      dBerline: roule('berline'), dQuatre: roule('quatre'),
+      rapideStyle: pointes.slice().sort((x, y) => y.vmax - x.vmax)[0].style };
+  });
+  const q = r.pointes.find(x => x.k === 'quatre'), s = r.pointes.find(x => x.k === 'suv'), br = r.pointes.find(x => x.k === 'break');
+  const ok = r.dansLesBornes && r.rapideStyle === 'decapotable'
+    && q.turn < r.b.turn && s.turn < r.b.turn && br.turn < r.b.turn          // SUV, 4×4 et break virent plus large que la berline
+    && q.accel < r.b.accel && s.accel < r.b.accel && br.accel < r.b.accel    // et reprennent moins vite
+    && r.mur.berline === true && r.mur.suv === true && r.mur.quatre === false
+    && r.dQuatre > r.dBerline + 5;
+  return { ok, detail: `les huit pointes tiennent entre 21 et 60 m/s (${r.pointes.map(x => x.k + ' ' + x.vmax).join(', ')}), la plus rapide est une ${r.rapideStyle} · `
+    + `la berline fait référence (tenue ${r.b.turn}, reprise ${r.b.accel}) : le break ${br.turn}/${br.accel}, le SUV ${s.turn}/${s.accel}, le 4×4 ${q.turn}/${q.accel} — tous plus lourds et moins vifs · `
+    + `sur une marche de 70 cm posée au milieu de la plus longue route (${r.route.join(', ')}) : la berline (garde 32 cm) est bloquée=${r.mur.berline}, le SUV (56 cm) aussi=${r.mur.suv}, le 4×4 (76 cm) passe=${!r.mur.quatre} — en roulant deux secondes, la berline avance de ${r.dBerline} m et le 4×4 de ${r.dQuatre} m` };
+});

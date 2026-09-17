@@ -9667,6 +9667,9 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // l'autre côté, c'est la TRÉMIE de la volée qui arrive à cet étage. Avant, le bandeau
   // nord du 1ᵉʳ s'avançait jusqu'à 1,20 m de la volée : on montait la tête sous la dalle.
   const bande = (W - A) / 2 - 0.4, axeB = W / 2 - (W - A) / 4 - 0.2;   // 5,60 m de large, axe à 6,80 m
+  // Les marches commencent 3 m après la face du mur ouest (1,50 m avant) : cela laisse un
+  // VRAI PALIER DE DÉPART de 2,60 m devant la première marche, au lieu d'une fente de
+  // 1,10 m où l'on ne pouvait pas se placer.
   const xEsc0 = bx - W / 2 + 3, xEsc1 = xEsc0 + 15;                    // départ et fin des marches
   for (let f = 1; f <= 2; f++) {
     const y = f * F, sens = f === 1 ? 1 : -1;   // +1 = plancher au sud (1ᵉʳ), −1 = au nord (2ᵉ)

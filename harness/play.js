@@ -15831,7 +15831,11 @@ test('transporté par les secours, le joueur est allongé sans commandes et repr
     const msgPris = document.getElementById('msg').textContent;
     // LES COMMANDES SONT COUPÉES : on pousse en avant pendant une seconde, il ne bouge pas de sa civière
     const br = a.civiere;
-    const posBr = () => { br.g.updateMatrixWorld(true); return br.g.getWorldPosition(new G.THREE.Vector3()); };
+    // LE POINT DE REFERENCE, c'est le REPERE `couche` du brancard (la place du blessé), pas
+    // l'origine du groupe : quand les brancardiers soulèvent la civière elle TOURNE, et son
+    // origine ne se déplace alors pas comme le matelas. Mesuré avec l'origine : 1,92 m d'écart
+    // pour un joueur qui n'avait pourtant pas bougé d'un centimètre sur sa civière.
+    const posBr = () => { br.g.updateMatrixWorld(true); return br.g.userData.couche.getWorldPosition(new G.THREE.Vector3()); };
     const av0 = { x: P.pos.x, z: P.pos.z }, b0 = posBr();
     G.keys.add('KeyW'); G.keys.add('Space');
     for (let i = 0; i < 60; i++) G.step(1 / 60, true);

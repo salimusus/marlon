@@ -13,6 +13,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## BLOQUANT
 
 ### 37. Au garage, « Valider » plante le jeu : l'argent est pris, la voiture reste comme avant
+🔎 CONTRÔLÉ : OK — finition fluo + jupes latérales, « Valider » : 400 → 190 🪙, « ✅ Voiture préparée ! −210 🪙 · 100 chevaux, 1 kit », `c.tune = {finition: fluo, kits: [jupes]}`, aucune erreur console (`c4-pc.log`). Au passage : la dépanneuse devant le garage provoque maintenant un « 💥 ACCIDENT ! » (🔧 15 %) en arrivant (n° 38 aggravé), la caméra entre encore dans la tête au comptoir (n° 39, `img/c4/c4-1-comptoir.png`) et la bague reste sur le bouton caché « Entrer dans Marlon » quand l'atelier s'ouvre (n° 40).
 ✅ RÉPARÉ — `tuneCible()` prenait le véhicule le plus proche de `city.cars` quel qu'il soit (la dépanneuse garée devant le garage, n° 38) et `tuneApply` lisait `c.parts.ws` que seules les voitures de `makeCar` ont ; seule une voiture préparable est ciblée (`tunable()`), `tuneApply` tolère un véhicule sans vitres, et l'argent n'est pris qu'APRÈS l'application réussie — commit abe9583
 - **Gravité** : BLOQUANT (le garage — repeindre, monter un kit — ne marche pas du tout)
 - **Reproduire** : voiture du parking, la garer devant le garage custom (−45, 90), △ au comptoir (−53,5, 96,6), onglet 🎨 Peinture : choisir une finition (fluo), onglet 🧰 Kits : choisir « Jupes latérales », « Valider ».
@@ -24,6 +25,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## GRAVE
 
 ### 2. Le message de bienvenue d'une partie NEUVE est « 💾 Partie rechargée : 25 🪙 »
+🔎 CONTRÔLÉ : OK — profil vierge, PC et TV : premier message « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (la clé `superobby.wallet` = 25 n'est écrite qu'ensuite) ; plus de « Partie rechargée » (`c1-pc.log`, `c1-tv.log` `c2.msgs`).
 ✅ RÉPARÉ — `wallet` vaut 25 par défaut sans clé enregistrée et `rechargeTout()` prenait cette valeur pour une sauvegarde ; on ne dit « rechargée » que si `superobby.wallet` existe, sinon « 👋 Bienvenue en ville ! stick gauche pour marcher · △ agir · ◯ sauter » (vocabulaire de la commande) — commit 3fe8d47
 - **Gravité** : GRAVE (première minute — premier message faux)
 - **Reproduire** : profil vierge (navigateur neuf), accueil → Jouer → Ville.
@@ -32,6 +34,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard.png`, `img/s1/s1-premier-regard-tv.png`.
 
 ### 3. Dès la première seconde, la pastille du haut dit « 🚩 Il te faut un membre de ton gang avec toi »
+🔎 CONTRÔLÉ : TOUJOURS CASSÉ — 2/2 (PC et TV) : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s sur un profil vierge, tronqué « 🚩 Il te faut un ... » en 1280 (`img/c1/c1-2s.png`, `c1-14s-tv.png`). Cause : la version intégrée a remplacé « Jouer » par « Entrer dans Marlon » (index.html l. 23629) qui fait `guerre.vu = true` dès le clic — `joueurDansLaGuerre()` est donc vrai pour tout le monde et la garde de `captureTick()` ne sert plus. Voir n° 67.
+🔎 CONTRÔLÉ (bdcc5e4) : OK — aucun « 🚩 » dans `#act` pendant 30 s puis 4 min de balade (PC et TV).
 ✅ RÉPARÉ — `captureTick()` écrivait le conseil dès qu'on se tenait dans un quartier tenu par un gang, toutes les 6 s, sans jamais rendre la pastille ; il n'apparaît plus qu'à un joueur entré dans la guerre (écran 🚩 ouvert, respect > 0 ou recrue) et `updateAct()` reprend la main en sortant du quartier — commit a36c5da
 - **Gravité** : GRAVE (incompréhensible pour un enfant qui vient d'arriver ; ça reste affiché en permanence)
 - **Reproduire** : entrer dans la Ville, attendre 2 s sans rien faire, au point d'apparition (0, 3.5).
@@ -41,6 +45,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `J.hud().act` = « 🚩 Il te faut un membre de ton gang avec toi » à t+2 s, zone = null.
 
 ### 14. On sort de la ville à pied et on TOMBE DANS LE VIDE (mort, 💀 +1)
+🔎 CONTRÔLÉ : OK — cinq marches de 25–30 s au stick depuis le bord (nord-ouest (−55,−124)→(−145,−295), nord, sud, est, ouest) : `y` jamais sous 0, 💀 0, aucun « Oups ». Au nord on bute sur une boutique du Techno-Parc (0, −107), à l'ouest sur un mur invisible en x = −299,6, à l'est on entre dans la mer jusqu'en x = 199,6 (voir n° 70 : le requin). `c2-pc.log` `c14`.
 ✅ RÉPARÉ — le mur invisible d'enceinte était posé 1,5 m DEHORS du plateau (fossé d'un mètre sans sol) et haut de 4 m seulement depuis y = 0 : on tombait dans le fossé puis SOUS le mur ; il colle maintenant au bord et descend sous le plateau, et une haie visible fait le tour de la ville — commit 8d14cd1
 - **Gravité** : GRAVE (première marche libre : l'enfant meurt sans comprendre)
 - **Reproduire** : Ville, point d'apparition, stick avant 4 s (on part vers le nord), stick gauche 2 s, avant 6 s, droite 2 s, avant ~30 s (direction nord-ouest, vers (-84, -157) puis (-102, -222)).
@@ -50,6 +55,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : trace `avant10s-apres-cam` : x −102, y **−100,25**, z −222 ; `hud.msg = "Oups !"`.
 
 ### 21. Le commissariat n'a pas d'intérieur : pas de plafond, façade vue de l'intérieur, caméra dehors
+🔎 CONTRÔLÉ : OK — murs intérieurs beiges (plus de façade vue de l'intérieur), agent d'accueil en uniforme derrière le guichet PLAINTES à 2,8 m (`police.accueil`), caméra à 5,5–7 m qui reste dans la pièce sur 8 angles (`img/c2/c2-commissariat-1-dedans.png`, `-2-regard.png`). Plafond toujours absent (maison de poupée assumée).
 ✅ RÉPARÉ (en partie) — la façade vitrée couvrait les six faces des murs de coque (`coque()`), d'où « façade vue de l'intérieur » : la face intérieure est maintenant peinte (tous les halls `building()`) ; un agent d'accueil en uniforme se tient derrière le guichet PLAINTES (`police.accueil`). Le plafond effacé et la caméra qui sort en fondant le mur sont la « maison de poupée » voulue au round précédent (poste URGENCE) : on ne la défait pas — commit 86b5118
 - **Gravité** : GRAVE (bâtiment promis « visitable » : commissariat, prison, guichet des plaintes)
 - **Reproduire** : Ville, se placer en (−54, 40) face au nord, stick avant 7 s : on entre par la porte sud du commissariat (−54, 28) ; puis stick droit vers la gauche 0,8 s.
@@ -59,6 +65,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `cam.interieur = true` mais rien ne bloque la caméra (`cam.dist` 5,0 → 6,8 en tournant).
 
 ### 22. Dans les bâtiments, le stick droit envoie la caméra à travers les murs et les meubles
+🔎 CONTRÔLÉ : OK — avec de vraies images (rAF) entre chaque pas du stick droit : 0 angle bouché sur 8 dans les 5 bâtiments (commissariat, école, banque, hôpital, concessionnaire) — `cam.interieur` vrai, caméra jamais dans un solide, personnage visible, `cam.dist` 4,8–7 m ; au concessionnaire la caméra se rapproche à 1,7 m du personnage sans entrer dedans (`c2-pc.log` `bats[*].angles`, `img/c2/c2-ecole-2-regard.png`, `c2-banque-2-regard.png`, `c2-hopital-2-regard.png`).
 ✅ RÉPARÉ — cause mesurée à l'école : la caméra traversait une cloison de classe (0,3×4,2×9 m) en restant DANS l'enceinte, et l'effacement n'était tenté que caméra dehors (`dehors &&` dans `interieurTick`) ; toute paroi traversée s'efface maintenant. L'hôpital n'était enregistré dans aucune liste d'intérieurs (pas de maison de poupée) : ajouté. Mesure après : 0 angle bouché sur 8 dans les 4 bâtiments. Le reste (« personnage invisible » sur tes captures) tient à ton pilote : `interieurTick`/`camPerche`/le fondu vivent dans `frame()` — commit 86b5118
 - **Gravité** : GRAVE (dès qu'un enfant regarde autour de lui dedans, il ne voit plus son personnage)
 - **Reproduire** : entrer dans l'école (classe (−69, 213)), la banque (guichet (−57, 70)), l'hôpital (hall (14, 212)) ou le concessionnaire (comptoir (−140, 93)), puis pousser le stick droit à gauche 0,8 s.
@@ -68,6 +75,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : hôpital `cam.interieur = false` alors que le joueur est en (14, 212) au milieu du hall (l'hôpital n'est pas dans `city.interieurs`).
 
 ### 26. Les voitures du parking du centre sont garées face à la terrasse du snack : R2 = on défonce les tables sans avancer
+🔎 CONTRÔLÉ : OK en partie — les 4 voitures et 2 motos sont sur une rangée cap nord (z = 10, h = 3,14) et la voiture PART : 27 m/s après 5 s de R2. Mais tout droit c'est le grillage du terrain de foot, 13 m plus loin : 🔧 +20,9 % en 5 s (run 2) ; au run 1 arrêt contre le grillage à 6 km/h avec des cônes de chantier sur la route (`img/c3/c3-26-roule.png`). Voir n° 69.
 ✅ RÉPARÉ — trois causes mesurées : les voitures étaient garées cap au sud (nez sur les bancs et la terrasse posés DANS le parking à z = 13,5), en deux rangées (la rangée du fond démarrait dans le coffre de l'autre : +15 % de dégâts), et la casse du mobilier par un véhicule testait un CARRÉ axé de demi-côté r + demi-longueur + 0,5 → en sortant on cassait le lampadaire à 2,1 m de côté (+9 %). Une rangée cap au nord, mobilier reculé, casse en boîte orientée — commit 65ab948
 - **Gravité** : GRAVE (première voiture qu'un enfant prend : elle ne part pas et se casse)
 - **Reproduire** : parking (−23…−3, 3…14), voiture en (−15, 11,5). △ pour monter, R2 à fond 5 s.
@@ -77,6 +85,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s4-pc.log` pas `gaz+1s…+5s` : `dmg` 2,36 → 9,54, `spd` ≤ 2,6, `car.z` 11,5 → 11,53.
 
 ### 27. Écraser un piéton : aucune ambulance, et la police TIRE sur l'enfant
+🔎 CONTRÔLÉ : OK — piéton renversé à 15,5 m/s sur la rue du point d'apparition : ❤️ 100 → 54, KO au sol jusqu'au brancard, « 🚑 Une ambulance a été appelée », ambulance en `route` puis `transport` (chargement à t+45 s, blessé emporté) ; police ★★★ mais AUCUN tir sur 80 s (`riposte = 0`, aucun « ils tirent »). Elle ARRÊTE le joueur à t+25 s (voiture de police à 13 m à t+20 s, ★★★ → 0, écran 🔒 Prison à t+30 s : `img/c7/c7-27-30s.png`) — sans jamais tirer (`c7-pc.log`).
 ✅ RÉPARÉ — la police tirait dès `wanted >= 2` quel que soit le délit (écraser = gravité 2) : elle ne tire plus que pour un crime grave (`policeTire()` : KO/arme/braquage, riposte, alarme, armée) et « tirer sur quelqu'un » passe en gravité 3 ; l'ambulance n'était appelée qu'à ❤️ 0 (`ecraseAuSol`) : elle part aussi au-dessus de 8 m/s et le blessé reste à terre jusqu'au brancard — commit 0b83501
 - **Gravité** : GRAVE (fonction promise : ambulance pour les blessés, police proportionnée)
 - **Reproduire** : rouler à 50 km/h dans la foule du point d'apparition (0, 3).
@@ -85,6 +94,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4/s4-6-mur.png` (★★★, « la police arrive dans 20 s »), `img/s4/s4-8-voiture.png` (« ils tirent ! »).
 
 ### 28. La circulation est quasi vide et roule HORS de la ville
+🔎 CONTRÔLÉ : OK — 8 voitures de circulation, 0 échantillon hors chaussée sur 64 (8 relevés × 8 voitures pendant 40 s). Reste : la plus proche du parking du centre est à 160 m — depuis le centre-ville, l'enfant ne voit toujours passer aucune voiture (`c3-pc.log` `c28`).
 ✅ RÉPARÉ (nombre) / ❌ PAS UN BUG (hors chaussée) — huit véhicules au lieu de cinq ; mesuré sur 90 s puis 40 s : 0–1 % du temps hors des rectangles de `city.routes`, ta voiture de (−70,−104) devait être poussée par un accident ou une poursuite — commit 0affff2
 - **Gravité** : GRAVE (le joueur a demandé une vraie circulation ; « conducteurs hors chaussée » déjà relevé au round 67, toujours là)
 - **Reproduire** : prendre une voiture, chercher la voiture de circulation la plus proche (`city.aiCars`).
@@ -94,6 +104,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `autre.d = 147.74` ; position (−69,9, −104,4) hors de tout `city.routes`.
 
 ### 35. Après un accident, la police et la dépanneuse « arrivent » mais ne viennent JAMAIS ; l'amende prend tout l'argent de l'enfant
+🔎 CONTRÔLÉ : OK — même choc contre le camion : la police est à 25 m à t+25 s, 14 m à t+30 s ; « 🚚 Une dépanneuse a été appelée » à t+30 s ; « 🚓 Constat : 25 🪙 d'amende, tu n'en paies que 12 — le reste est effacé » à t+35 s, porte-monnaie 25 → 13 ; la voiture est libérée à t+40 s (`c6-pc.log` `c35`). La dépanneuse, elle, reste à 198 m pendant les 55 s observées.
 ✅ RÉPARÉ (amende) / ⏸ TROP GROS (trajet) — l'amende prenait tout (`min(wallet, amende)`) : au plus la moitié du porte-monnaie (25 → 13). Mesuré avec la vraie boucle : la police ARRIVE (constat à 40 s) mais par un détour de ~250 m pour 117 m à vol d'oiseau (graphe de voies du poste D : (−43,12)→(−41,48)→(−77,7)→(−88,−95)→(28,−98)) ; la dépanneuse est appelée par la police au constat et porte `mission`, pas `etat` (ta sonde lisait le mauvais champ). Raccourcir l'itinéraire = refonte du graphe de voies, je laisse au chef — commit 0affff2
 - **Gravité** : GRAVE (fonction promise au round 67 : accidents, constat, dépanneuse)
 - **Reproduire** : voiture du parking, se poser en (30,6, −63) cap nord, R2 : on tape le camion garé du Parking du Sud (30,6, −85) à 62 km/h.
@@ -103,6 +114,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s4b-pc.log` `suivi` t = 5…25 s : `pol[0].d` 164 → 158 m, `dep[0].etat = null`, `wallet` 25 → 0.
 
 ### 36. Un choc frontal à 62 km/h contre un camion = 3 % de dégâts, aucune secousse, aucune marque
+🔎 CONTRÔLÉ : OK — camion du Parking du Sud percuté à 24 m/s : 🔧 +30,2 %, 4 marques d'impact, « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive », capot relevé sur la capture (`img/c3/c3-36-choc.png`). Secousse faible : `cam.kick` max 0,08. La caméra, elle, se retrouve derrière la colline du Rallye (n° 32).
 ✅ RÉPARÉ — dans `resolveVehicleOverlap`, un choc contre un autre véhicule ne comptait que le frottement (`min(5, imp × 0,15)`) et `chocVehicule()` (capot, phares, pare-brise, marque) n'était appelé que contre un MUR ; au-delà de 7 m/s : dégâts francs aux deux (+24 % / +20 % mesurés à 19 m/s), stade 3, capot −0,55 rad, secousse 0,39, `cam.kick` — commit edf2a72
 - **Gravité** : GRAVE (promis : chocs BOOM, dégâts par paliers, marques d'impact)
 - **Reproduire** : idem n° 35.
@@ -111,6 +123,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4b/s4b-2-choc-camion.png`.
 
 ### 41. Se battre à mains nues est impossible : l'habitant s'enfuit au premier coup, les suivants frappent le vide
+🔎 CONTRÔLÉ : OK — `Math.random` forcé dans les deux cas : « combat » → KO en 7 coups qui touchent (86 60 54 40 14 8 0), ralenti 3 s ; « fuite » → l'habitant recule 2 coups puis revient (« ok, tu l'auras voulu ») et tombe KO au 8e, ralenti 2,7 s, ambulance appelée (`c5-pc.log`, `img/c5/c5-41-combat-fin.png`). Le KO d'un habitant vaut ★★ (« la police arrive dans 14 s »).
 ✅ RÉPARÉ — `attack()` tirait « fuite » à 45 % et le fuyard détalait à 5,5 m/s jusqu'à la fin du combat (8 s), puis récupérait 20 ❤️ ; 32 % reculent encore mais reviennent se battre après 3 s (`b.fuiteFin`). Mesuré : fuite tirée au sort → KO en 9 coups (86 72 46 46 32 18 6 6 0) — commit 0affff2
 - **Gravité** : GRAVE (fonction promise : direct / crochet / uppercut, KO en six coups, ralenti du coup final)
 - **Reproduire** : point d'apparition, s'approcher d'un habitant (Tom_le_ouf) à 1,1 m, ▢ ×3 puis ▢ tenu.
@@ -120,6 +133,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s7-pc.log` `coups[*].d` : 3,41 → 9,33 → 15,11 → 25,01 ; `ko.hp = 100` après 16 coups.
 
 ### 42. Armes : ✕ puis L2 = arme RENGAINÉE, et R2 ne tire pas
+🔎 CONTRÔLÉ : TOUJOURS CASSÉ (à moitié) — 2/2 (`c5-pc.log`, `c6-pc.log`) : ✕ sort l'arme, L2 ne la range plus (✔) et R2 tire (8 → 5 balles) ; MAIS L2 après ✕ ne verrouille rien : `P.lock = false`, message toujours « 🔫 Pistolet · clic pour tirer », et les 3 balles ratent un habitant planté à 4 m droit devant (100 PV). Cause : `pollGamepad` (l. 23299) n'appelle `braquerVerrouille()` que si `!P.drawn` — l'arme déjà sortie par ✕, L2 ne fait que `aimHeld`. Et → pendant la visée passe à « 🤚 Mains nues » (n° 50 toujours là), ce qui range l'arme.
 ✅ RÉPARÉ — `braquerVerrouille()` (L2) basculait l'arme comme ✕ : `if (P.drawn) drawWeapon(false)` ; arme sortie, L2 verrouille maintenant la cible la plus proche (« 🎯 Tom_le_ouf · 2 m »), R2 tire, seul ✕ range. Le « ciblesVerrouillables() = 0 » de ta sonde venait de l'arme rengainée par L2 — commit 0affff2
 - **Gravité** : GRAVE (le plan de commandes annoncé — ✕ dégainer, L2 braquer, R2 tirer — ne marche pas dans cet ordre)
 - **Reproduire** : acheter le pistolet, ✕ (dégainer : « 🔫 Pistolet 8/8 »), puis L2 (braquer), puis R2.
@@ -156,6 +170,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 51. Réunion de chef de gang : à la manette, la bague est sur un bouton d'un AUTRE écran
 ✅ RÉPARÉ — `openUI()` ne posait une bague que « s'il n'y en avait pas déjà » — et il y en avait une, dans la fenêtre 🚩 cachée (`guerreBack`). openUI efface toute bague hors de la fenêtre ouverte, closeUI efface celles de la fenêtre fermée. Mesure : bague sur `reunionAllie`, ↓ → `reunionTribut` — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — réunion (Bruno Bulldozer / Vito le Vif) : bague sur « 🤝 Alliance de 5 min — 78 🪙 », ↓ → Tribut, Déclarer la guerre, Partir ; ✕ sur « Partir » ferme la fenêtre (PC et TV, `img/p4/p4-06-reunion.png`).
 - **Gravité** : GRAVE (à la manette, impossible de choisir Alliance / Tribut / Guerre)
 - **Reproduire** : accepter le rendez-vous de Nina la Fouine (place du centre (0, 40)) ; la fenêtre « 🤝 Nina la Fouine » s'ouvre et met le jeu en pause.
 - **On voit** : quatre gros boutons (Alliance 98 🪙, Tribut 108 🪙, Déclarer la guerre, Partir) mais `.focustv` est sur `guerreBack:Retour` (le bouton de l'écran 🚩 fermé) : ✕ ne valide rien de visible, ↓ ne bouge pas la bague.
@@ -195,6 +210,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## GÊNANT
 
 ### 4. Sur l'accueil à la manette, ✕ ne fait rien : il faut 9 appuis sur ↓ pour atteindre « Jouer »
+🔎 CONTRÔLÉ : OK — bague sur « Entrer dans Marlon » dès le chargement (`focus0 = play`), bouton visible sans défiler (bas à 661 px sur 720, 928 sur 1080), ✕ entre directement dans la Ville (`c1-accueil.png`). Le choix du monde n'est plus proposé : ✕ = Ville.
 ✅ RÉPARÉ — l'accueil n'est pas ouvert par `openUI()` (qui pose la bague) : aucune bague, `navValide()` ne trouvait rien ; la bague se pose sur « Jouer » dès que la manette parle (`curseurAccueil`), ✕ sans bague choisit « Jouer » ; et la carte de 800 px se resserre sous 800 px de haut (mode d'emploi replié) : « Jouer » visible en 1280×720 sans défiler — commit 5eac31d
 - **Gravité** : GÊNANT (la toute première action)
 - **Reproduire** : page chargée, manette branchée, ✕ → rien (aucune bague de sélection). ↓ ×9 : pseudo, 5 couleurs, « Jupe », le champ CODE, puis « Jouer ».
@@ -203,6 +219,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-accueil.png` (pas de « Jouer » visible), `img/s1/s1-focus-jouer.png`.
 
 ### 5. La foule de 12 bots est plantée en plein milieu de la route, autour du point d'apparition
+🔎 CONTRÔLÉ : OK — à t+17 s : 2/12 bots sur la chaussée en PC (en train de traverser), 5/12 en TV, 11–12/12 en mouvement sur 3 s, le plus proche à 12,8 m (PC) ; plus de cercle figé (`c1-14s.png`).
 ✅ RÉPARÉ — `loadWorld` appelait `resetBot()` (grille du départ d'obby x −5…5, z 0,5…7, sur la rue, attente 2 à 60 s) aussi pour la ville ; `placeBotsVille()` pose les douze sur les trottoirs à < 40 m, attente 0,5–4 s (mesuré : 12/12 sur trottoir, 11/12 en marche en 12 s) — commit f0ca7d7
 - **Gravité** : GÊNANT
 - **Reproduire** : entrer dans la Ville, regarder autour de soi.
@@ -211,6 +228,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard.png`, `img/s1/s1-apres-12s.png`.
 
 ### 6. Le tableau « Joueurs / Pts » (classement d'obby) est affiché dans la Ville, avec 12 zéros
+🔎 CONTRÔLÉ : OK — `#lb` en `display: none` (`sansScore`) en Ville, PC et TV (`c1-14s-tv.png`).
 ✅ RÉPARÉ — `#lb` n'était jamais caché en ville ; `updateLeaderboard` pose `sansScore` (display none) quand le monde est libre et qu'on n'est pas en multijoueur — commit f0ca7d7
 - **Gravité** : GÊNANT (en mode TV il couvre un quart de l'écran et cache les habitants)
 - **Reproduire** : entrer dans la Ville.
@@ -219,6 +237,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`.
 
 ### 7. En mode TV avec une manette PS5 branchée, un bandeau permanent dit « 📺 Manette : ouvre 📺 et scanne le code »
+🔎 CONTRÔLÉ : OK — TV 1920×1080 + DualSense : `#tvBadge` = « 🎮 Manette PS5 connectée », classe `on` absente (effacé), aucun bandeau « scanne le code » pendant 17 s (`c1-14s-tv.png`).
 ✅ RÉPARÉ — `tvManettesMaj` ne regardait que les téléphones (`tv.conns`) ; avec une DualSense (`padActive()`) elle dit « 🎮 Manette PS5 connectée » et s'efface au bout de 5 s ; rappelée au branchement — commit f0ca7d7
 - **Gravité** : GÊNANT
 - **Reproduire** : accueil → « Jouer sur la télé » (ou `modeTV(true)`), manette PS5 connectée, entrer dans la Ville.
@@ -228,6 +247,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 8. Le pavé tactile affiche une aide illisible pour un enfant
 ✅ RÉPARÉ — `#padLeg` est une fiche : titre, une ligne par bouton (pastille blanche + action), les cas particuliers en petit dessous, plus de parenthèses imbriquées. Mesuré 1280×720 : 520×504 px à 15 px, 13 lignes, dans l'écran ; TV 1920×1080 : 806×694 px à 25,6 px, dans l'écran — commit 27aa6bf
+🔎 CONTRÔLÉ (bdcc5e4) : OK — voir n° 73 : une ligne par bouton, pastille blanche, lisible ; le jeu n'est pas en pause derrière (les bots continuent), acceptable.
 - **Gravité** : GÊNANT
 - **Reproduire** : en ville, appuyer sur le pavé tactile.
 - **On voit** : en 1280×720, quatre lignes de texte minuscule (11 px) avec des parenthèses imbriquées « (arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre) », par-dessus le chat et les bots ; en TV le texte est grand mais les parenthèses se cassent sur trois lignes et le bloc cache tout le centre de l'écran.
@@ -243,6 +263,9 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`, `img/s1/s1-apres-12s.png`.
 
 ### 15. Les consignes affichées parlent des touches du CLAVIER à un enfant qui joue à la manette
+🔎 Revu round 70 (manette) : toujours là — « 🚗 Appuie sur E pour conduire », « 🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir », « 🪑 E : s'asseoir », « Espace maintenu = frein à main », « 🏊 Tu nages ! Espace pour sauter », « 🚗 E : monter à côté de Enzo_turbo », « ouvre la carte avec M » (`l1a-pc.log` `bilan.defauts[type=clavier]`, `c6-pc.log` `mer.msgs`).
+🔎 CONTRÔLÉ (bdcc5e4), bilan du point 5 : sur ~15 min de jeu cumulées à la manette (balade 4,5 min ×2, voiture, boutique, ordres, carte, réunion, hélico, bagarre — PC et TV), la sonde `prelude.js` n'a relevé AUCUNE pastille ni message avec E / Espace / clic / M / F / G / O / V (`bilan.defauts` vide dans `p1`, `p2`, `p4`, `p6`). Exemples vus : « 🚁 ▢ : course d'anneaux », « 🪴 Grande plante 15 🪙 · △ pour acheter », « 🔫 △ : voir toutes les armes ».
+🔎 CONTRÔLÉ (bdcc5e4) : OK sur 4,5 min de balade à pied (PC et TV) : « 🚗 Appuie sur △ pour conduire », « 🪑 △ : s'asseoir », « 📋 … △ devant le comptoir », « 🪟 △ : donner un coup de main », « 🚗 △ : monter à côté de Enzo_turbo » — 0 mot clavier détecté par la sonde (regex E/Espace/clic/M/F/G/O/V). Suite au point 5.
 ✅ RÉPARÉ — `ctrlText()` ne traduisait les touches que pour l'écran tactile : à la manette (`body.manette`) E → △, Espace → ◯, clic → R2, G → ✕, O/V/F → ▢, Ctrl → L2 (tous les msg() passent par là, y compris les `hint` de zone) — commit fe303fe
 - **Gravité** : GÊNANT (l'enfant cherche une touche « E » sur sa manette)
 - **Reproduire** : manette PS5 branchée, entrer dans la zone Rallye (0, −60) : gros message « 🏜️ Rallye : prends un buggy (E), grimpe les collines… ».
@@ -261,6 +284,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 17. À pied, on « glisse » à 6,9 m/s (25 km/h) sans courir
 ✅ RÉPARÉ — `SPEED` 7 → 5,6 m/s, course ×1,3 (7,3 m/s) et L3 à BASCULE (un appui lance, le suivant arrête, plus besoin de maintenir). Mesuré sur la rue Est-Ouest : marche 5,6 m/s (21,6 m en 4 s), L3 → « 🏃 Tu cours ! » 7,28 m/s, L3 → « 🚶 Tu marches », stick à moitié 2,2 m/s — commit 5ad367a
+🔎 CONTRÔLÉ (bdcc5e4) : OK — rue est-ouest : 22,0 m en 4 s = 5,51 m/s ; L3 → « 🏃 Tu cours ! (L3 pour marcher) » 7,28 m/s ; L3 → « 🚶 Tu marches » 5,61 m/s (PC et TV identiques).
 - **Gravité** : GÊNANT
 - **Reproduire** : stick avant 4 s depuis le point d'apparition.
 - **On voit** : 27,5 m parcourus en 4 s (`vel.z = −6,43`), on traverse tout le centre-ville en 9 s ; les jambes ne suivent pas cette vitesse : impression de patinage. Courir demande de MAINTENIR L3 enfoncé tout en poussant le stick (un appui bref n'enclenche rien : `P.run` retombe à false dès qu'on relâche) — difficile pour une petite main et rien ne le dit.
@@ -269,6 +293,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 18. Dès la première minute, les habitants se battent entre eux et crient « au secours ! police !! »
 ✅ RÉPARÉ — `vieTick` lançait vol / braquage / bagarre dès les premières secondes et `botSay` écrivait dans le chat depuis l'autre bout de la ville. Plus aucun délit pendant les 3 premières minutes (`VIE_CALME`), une bagarre ne se lance qu'à 45 m du joueur avec une victime à moins de 40 m (il la VOIT), et un habitant à plus de 60 m n'écrit plus dans le chat. Mesuré : 120 s de chat, 26 lignes, 0 « attaque / au secours / police / chapardé » — commit 111af2f
+🔎 CONTRÔLÉ (bdcc5e4) : OK en partie — 30 s de chat : plus aucune bagarre, vol ni « au secours » (PC : 0/9 lignes, TV : 0/11) ; mais en TV dès les 30 premières secondes « 🚩 Les Requins Rouges te cherchent… » et « 🚩 Les Frelons Jaunes attaquent Les Requins Rouges ! », et à ~4 min (2/2) un chef de gang donne rendez-vous à l'enfant — voir n° 75.
 - **Gravité** : GÊNANT (l'enfant n'a rien fait, la ville hurle)
 - **Reproduire** : Ville, marcher 20 s, lire le chat.
 - **On voit** : « Momo_king : au secours ! », « Momo_king : aïe ! », « Momo_king : police !! », « 💥 Ines_gg attaque Karim_flash ! », « 🕵️ Lucas_2014 a chapardé 31 🪙 dans une boutique » — sans qu'on voie rien de tout ça.
@@ -284,6 +309,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s3/s3-banque-2-dedans.png`, `img/s3/s3-concessionnaire-2-dedans.png`.
 
 ### 24. Les habitants fixent des rendez-vous à l'enfant sans qu'il ait rien demandé, et le GPS s'allume tout seul
+🔎 Revu round 70 : toujours là dès la première minute — « Chloe_mia : ok Joueur60, je prends un vélo et je te retrouve à Parking du Sud » + chevrons cyan au sol à t+14 s (`img/c1/c1-14s.png`, `img/l1/l1a-02-croix-en-jeu.png`).
 ✅ RÉPARÉ — `botPrendVoiture` (balade spontanée d'un habitant) parlait au joueur et allumait le GPS → drapeau `libre` (fe303fe) ; et `reunionTick` faisait proposer un rendez-vous par un chef de gang dès la première minute (`guerre.prochaineReunion = 0`) → plus de réunion tant que le joueur n'est pas entré dans la guerre. Mesuré : 90 s de partie neuve, aucune réunion, aucune colonne bleue — commit 5ffb3ce
 ✅ RÉPARÉ — `lancerActivite()` (balade spontanée d'un habitant en vélo/moto/voiture) passait par `botPrendVoiture` qui parlait au joueur, affichait le message central et allumait le GPS : nouveau drapeau `libre`, plus rien de tout ça pour une balade — commit fe303fe
 - **Gravité** : GÊNANT (les chevrons cyan au sol dès la première seconde viennent de là — cf. n° 3)
@@ -294,6 +320,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 29. Reculer du parking donne une étoile « 🚦 Feu rouge grillé ! »
 ✅ RÉPARÉ — le test prenait tout véhicule à moins de 4,5 m du POTEAU quel que soit son cap : on juge maintenant le cap de déplacement réel (marche arrière comprise) à 35° de `tl.sens` et la proximité de la LIGNE d'arrêt du feu — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — voir n° 57 : reculer dans le parking ne donne plus « Feu rouge grillé ».
 - **Gravité** : GÊNANT
 - **Reproduire** : parking du centre, L2 tenu pour reculer sur 8 m vers (−22, 7), puis R2.
 - **On voit** : « 🚦 Feu rouge grillé ! » et ★ recherché niveau 1 alors qu'on sort d'un parking en marche arrière à 25 km/h.
@@ -302,6 +329,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 30. Au volant, les messages parlent encore du clavier et proposent de s'asseoir sur un banc
 ✅ RÉPARÉ — plus de « E : s'asseoir » au volant (`benchNear` ignoré si `drive.car`) ; les touches passent par ctrlText (voir n° 15) — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — au volant : « 🚗 Boîte automatique · 📯 klaxon · ◯ maintenu = frein à main », plus de « E : s'asseoir » pendant 3 min de conduite (PC et TV, `p2-pc.log` `bilan.defauts = []`).
 - **Gravité** : GÊNANT
 - **Reproduire** : monter dans la voiture du parking (message « 🚗 Appuie sur E pour conduire »), rouler devant le snack.
 - **On voit** : à chaque seconde « 🪑 E : s'asseoir » pendant qu'on conduit ; « 🚗 Parking : E (ou 🚗) devant une voiture, une moto… » ; « Boîte automatique · 📯 klaxon · Espace maintenu = frein à main » ; « 🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau » ; « 🔧 E : garage — réparation, peinture… » ; « 🔫 E : voir toutes les armes ».
@@ -310,6 +338,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 31. Taper un mur : pas de BOOM, pas de secousse, la voiture glisse le long du mur et s'enfonce dans le sol
 ✅ RÉPARÉ — les dégâts d'un mur suivent la vitesse PERDUE contre lui (`perte`), pas la vitesse : choc franc (> 4 m/s perdus, arrivée > 6 m/s) = BOUM + secousse + tôle (≤ 14 %), frottement = 0,2 % toutes les 1,5 s. Mesuré (viser l'immeuble Centre-ville à 11 m/s en biais) : avant 4 % → 25 % en 5 s de glissade, aucun message ; après « 💥 Choc contre le mur » 6,8 % puis 7,4 % après 5 s de glissade, kick 0,04. Le « s'enfonce » était le bord de la dalle (sol à 0 au-delà du trottoir) — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK — choc frontal à 12,5 m/s contre l'immeuble Centre-ville : « 💥 BOUM ! Gros choc contre le mur », 🔧 +24,6 % (PC) / +24,9 % (TV), 4 marques ; glissade en biais 6 s à 60 % de gaz : +4,0 % / +4,3 % (avant : 25 %), `c.y` reste à 0 (ne s'enfonce plus). Secousse : `cam.kick` max 0,08 seulement, peu visible.
 - **Gravité** : GÊNANT (promis au round 67 : chocs BOOM, marques d'impact)
 - **Reproduire** : viser l'immeuble « Centre-ville » (−35,5, 16) depuis (−22, 7), R2 6 s.
 - **On voit** : vitesse 4 km/h collée au mur, la voiture continue de glisser (z 8,9 → 13,3), dégâts +2 % seulement, `cam.kick = 0`, aucun message ; `c.y` tombe de 0,15 à 0,00 et le bas des roues passe à −0,06 / −0,12 (sous la route).
@@ -318,12 +347,15 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 32. En voiture, la caméra traîne loin derrière, se cale derrière les poteaux et perd la voiture
 ✅ RÉPARÉ — `camLibres` ignorait déjà les vitres mais pas les poteaux : les solides de moins de 0,7 m de côté ne calent plus la perche ; en voiture la caméra vise base + 2 m + recul court (`reculConduite = vitesseRel × 1,2`) au lieu de traîner loin derrière. Mesuré à 60 km/h : distance caméra 9,4 m → 6,1 m, jamais coincée derrière un poteau sur 20 s de tour — commit 61df87c
+🔎 CONTRÔLÉ (bdcc5e4) : TOUJOURS CASSÉ à pleine vitesse — plus de caméra derrière les poteaux (0 objet entre caméra et voiture sur 10 relevés), mais sur la grande avenue du Quartier résidentiel (route x −110…190, z 196), caméra calée à 3,9 m à l'arrêt, R2 à fond : 11 m à 64 km/h (t+1 s), 25 m, 34 m, 41 m, 46 m, **50 m à 75 km/h (t+6 s)** — la voiture est un point au bout de l'avenue (`img/p4/p4-08-camera-60.png`) ; elle revient à 8,6 m 6 s après l'arrêt. Identique PC / TV (`p6-pc.log`, `p6-tv.log` `camera60`). Et à l'arrêt contre un mur elle colle au toit (1,9–3 m, n° 76).
 - **Gravité** : GÊNANT
 - **Reproduire** : rouler à 50 km/h vers l'est depuis (−15, 7) ; sortir de la ville.
 - **On voit** : `s4-6-mur.png` : la voiture est un point rouge au loin, le feu tricolore occupe le premier plan ; `s4-7b-apres-pieton.png` : la voiture n'est plus dans l'image du tout (dallage blanc, un arbre, un banc).
 - **On devrait voir** : la caméra collée derrière la voiture, qui passe devant les poteaux.
 
 ### 33. Sortir de prison = finir un parcours d'obby entier
+🔎 Revu round 70 : toujours là, et à la manette l'écran 🔒 Prison n'a AUCUNE bague de sélection sur ses 5 boutons (Prairie ▶, Volcan ▶, Payer 100, Pass liberté, Rester en cellule) — `img/c7/c7-27-30s.png` (vu 1 fois, écran atteint par hasard après l'arrestation du contrôle 27).
+🔎 CONTRÔLÉ (bdcc5e4) : OK — arrestation (délit moyen) : fenêtre 🔒 avec la bague déjà sur « ⏳ Attendre 45 s en cellule », ✕ → « ⏳ Tu purges ta peine : 45 s dans la cellule, sans bouger », pastille « ⏳ Libre dans 40 s … 5 s », libération automatique à 45 s (« ⏳ Peine purgée : tu es libre ! », chat « 🔓 … est sorti de prison »), le stick ne fait bouger que de 3,4 m dans la cellule (PC et TV, `p6c-pc.log`, `img/p6/p6c-01-cellule.png`). Remarque : un piéton écrasé à 15 m/s (★★★) n'a mené à aucune arrestation en 120 s d'attente sur place (`p6b`, PC et TV) — la prison n'a pu être atteinte qu'en forçant `arrestation()`.
 ✅ RÉPARÉ — bouton « ⏳ Attendre 30 s en cellule » (45 s délit moyen, 60 s grave) dans la fenêtre de la prison, compte à rebours dans la pastille (« ⏳ Libre dans 30 s »), libération automatique. Mesuré : bouton présent, pastille, `jail.on = false` à 30 s — commit 02bd822
 - **Gravité** : GÊNANT (design, mais bloquant pour un enfant sans pièces)
 - **Reproduire** : se faire arrêter avec 25 🪙 et 0 pass.
@@ -332,6 +364,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4/s4-9-accident.png`.
 
 ### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
+🔎 Revu round 70 : aggravé — arriver au garage en voiture déclenche maintenant « 💥 ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive », 🔧 15 % (`c4-pc.log` `arrive`).
+🔎 CONTRÔLÉ (bdcc5e4) : OK — dépanneuse en (−55, 102,5), à 10 m de l'axe d'entrée x = −45 (PC et TV).
 ✅ RÉPARÉ — `makeDepanneuse(x - 10, z + 12.5, π/2)` : elle dort sur le côté du parvis (à 10 m de l'axe d'entrée) au lieu d'en travers de la porte — commit c6ea15b ; à (x − 10, z + 10) elle mordait le mur de façade du garage (z 98,6–99,0) et restait coincée (test 361 : 0 % du trajet sur la route, téléportée après 45 s) → reculée de 2,5 m, elle rejoint l'épave par la route en 32 s, 100 % sur le bitume
 - **Gravité** : GÊNANT
 - **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
@@ -339,6 +373,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s5/s5-0-devant-garage.png`, `img/s5/s5-1-dans-garage.png`.
 
 ### 39. Au comptoir du garage, la caméra entre dans la tête du personnage
+🔎 Revu round 70 : toujours là (`img/c4/c4-1-comptoir.png` : le crâne plein écran alors que `cam.dist` annonce 10,9 m).
 ✅ VÉRIFIÉ sans changement — au comptoir du garage la caméra reste à 4,86 m du personnage (mesure `J.dodo` en temps réel, mode PC et TV) ; l'entrée dans la tête venait de la perche calée par le poteau du comptoir, corrigée par le n° 32 (61df87c)
 - **Gravité** : GÊNANT
 - **Reproduire** : se placer devant le comptoir de l'atelier (−51, 96,6) face à l'ouest.
@@ -346,6 +381,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s5/s5-2-comptoir.png`.
 
 ### 40. Fenêtre de l'atelier, onglet Peinture : la ligne des finitions est coupée
+🔎 Revu round 70 : à l'ouverture de l'atelier la bague est sur le bouton caché « Entrer dans Marlon » (`c4-pc.log` `ouvert.focus = play:Entrer dans Marlon`).
 ✅ RÉPARÉ — `#atelierCorps` défile sur 52 vh avec une marge basse, et `.overlay .card` ne dépasse plus l'écran (max-height 100vh − 32 px, défilement) ; à la manette la première bague va sur un article (voir n° 43) — commit fe303fe
 - **Gravité** : GÊNANT
 - **Reproduire** : ouvrir l'atelier, onglet 🎨 Peinture, en 1280×720.
@@ -353,6 +389,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s5/s5-4-peinture.png`.
 
 ### 43. Dans la boutique, la bague de la manette démarre sur la croix « ✕ » de fermeture, puis parcourt les onglets
+🔎 Revu round 70 : toujours là, en pire — à l'ouverture de l'armurerie la bague est sur le bouton CACHÉ « Entrer dans Marlon » (`focus.visible = false`), → → → fait défiler les onglets (Tenues, Couleurs, Accessoires : l'enfant se retrouve dans les chapeaux), ✕ pose la bague sur la croix de fermeture ; aucun article n'est jamais sélectionné (`l1b-pc.log` `armurerie`, `img/l1/l1b-01-boutique-armes.png`, `l1b-02-fiche.png`). La barre d'onglets est coupée en deux par la grille dans l'onglet Accessoires.
+🔎 CONTRÔLÉ (bdcc5e4) : OK — armurerie : bague sur « Pistolet » à l'ouverture, → parcourt fusil d'assaut, fusil à lunette, couteau, ✕ ouvre la fiche (« Acheter (35 🪙) »), ↓ ×3 atteint « Acheter », ✕ achète (300 → 265, message manette « R2 pour planter »), ◯ ferme (PC et TV, `img/p4/p4-00-boutique.png`).
 ✅ RÉPARÉ — nouvelle `navPremier()` : à l'ouverture d'une fenêtre (et après un clic qui change de fenêtre) la bague va sur le premier ARTICLE ou la première vraie action, jamais sur ✕ / Retour / Fermer — commit fe303fe
 - **Gravité** : GÊNANT
 - **Reproduire** : △ devant l'armurerie (52, 21), regarder où est la bague jaune, appuyer sur → quatre fois.
@@ -363,6 +401,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 44. Les messages des armes parlent de « clic »
 ✅ RÉPARÉ — voir n° 15 : « clic pour tirer » → « R2 pour tirer » à la manette — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — armes : « 🔪 Couteau de chasse · R2 pour planter… » à l'achat (PC et TV, `p4`).
 - **Gravité** : GÊNANT (cf. n° 15)
 - **On voit** : « 🔫 Pistolet · clic pour tirer : le personnage vise tout seul la cible la plus proche » à la manette.
 
@@ -396,6 +435,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 57. Conduire la grue hors du dépôt = « 💥 ACCIDENT ! — la police arrive »
 ✅ RÉPARÉ — `choc(c, imp, v)` : frôler un véhicule GARÉ (immobile, pas en mission) sous 12 d'impact ne déclare plus d'accident ni n'appelle la police (seuls les vrais chocs, > 12, ou contre un véhicule qui roule). Mesuré : la grue sort du dépôt en frottant le camion garé → aucun « ACCIDENT », 0 ★ — commit f630b86
+🔎 CONTRÔLÉ (bdcc5e4) : OK — marche arrière 4 s dans le parking après le choc du grillage : ★ 0, aucun accident, aucun constat (PC et TV) ; vaut aussi pour le n° 29.
 - **Gravité** : GÊNANT
 - **Reproduire** : dépôt municipal, △ sur la grue (24,4, 130,5), R2 2 s, stick gauche 1,5 s.
 - **On voit** : accident, véhicule immobilisé, police, amende — les engins sont garés serrés et le moindre contact avec la benne voisine déclenche le constat.
@@ -410,6 +450,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 59. Hélicoptère : ▢ pose l'appareil SUR un objet de la rue
 ✅ RÉPARÉ — la descente automatique (▢) se posait sur N'IMPORTE QUOI sous l'appareil. `heliPointLibre()` : on ne se pose que sur le sol ou un vrai toit (solide ≥ 8 × 8 m, pas un véhicule) et sinon l'hélico se décale sur la place libre la plus proche (cercles de 3 à 24 m), en restant à 1,5 m au-dessus des obstacles en chemin ; ▢ le dit (« je me décale sur une place libre »). Mesuré avec un objet de 3 × 2,4 × 7 m en (43, 51) : posé à y 2,49 SUR l'objet → posé à (38, 48) y 0,20 au sol, 0 dégât. Test 394 ajouté — commit 2f5d844
+🔎 CONTRÔLÉ (bdcc5e4) : OK — hélico au-dessus de la rue commerçante (43, 52,9) à 28 m, ▢ : l'appareil se décale de 2,7 m et se pose au sol en (43, 50,2), y = 0,44, aucun solide dessous (avant : sur l'abribus) ; PC et TV (`img/p6/p6-04-heli-pose.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : héliport (43, −13), △, ◯ 4 s, stick avant 4 s, ▢.
 - **On voit** : la descente automatique (« Atterrissage… ») se termine à y 0,21 en (43, 51) sur un solide de 3 × 2,4 × 7 m (abribus / mobilier) ; △ fait descendre le personnage à y 2,3, debout sur l'objet.
@@ -424,6 +465,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s12-pc.log` `facteur[*].velo = false`.
 
 ### 62. Le viseur reste affiché quand l'arme est rangée
+🔎 Revu round 70 : après ✕ (rengainer), `P.drawn = false` mais la pastille dit encore « 🔫 Pistolet 4/8 · 🎯 visée » (`l1b-pc.log` `tir.range`).
 ✅ RÉPARÉ — `P.lock` (donc le viseur) était calculé dès qu'une arme était ÉQUIPÉE ; il l'est maintenant seulement arme en main (`P.drawn`) — commit fe303fe
 - **Gravité** : GÊNANT
 - **Reproduire** : pistolet, L2 (viser), L2 (ranger), marcher.
@@ -432,6 +474,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 63. Le joueur perd 56 PV sans qu'on lui dise pourquoi
 ✅ RÉPARÉ — `hurt()` affiche « 🤕 −12 ❤️ · Momo_king » (dégâts ≥ 5, avec l'auteur ou « un coup ») ; mesuré sur un coup de bot — commit 5b3e586
+🔎 CONTRÔLÉ (bdcc5e4) : OK — coup reçu d'un habitant qui se bat : « 🤕 −9 ❤️ · Karim_flash » à l'instant du coup (PC et TV, `img/p6/p6-00-coup-recu.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : après la voiture détruite (n° 61), rester au point d'apparition 40 s.
 - **On voit** : `P.hp` 100 → 72 → 44 puis remonte tout seul à 100 ; aucun message, aucun « aïe », la barre verte descend sans raison visible (explosion à distance ? bagarre de bots ?).
@@ -450,6 +493,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 67. « Entrer dans Marlon » met d'office l'enfant « dans la guerre » : le conseil 🚩 revient dès la première seconde
 ✅ RÉPARÉ — `startGame()` posait `guerre.vu = true` et affichait « … ouvre la carte avec M » : retirés ; message « 🏙️ Bienvenue à Marlon ! Balade-toi : △ pour agir… » (passe par ctrlText). Mesuré profil vierge : `guerre.vu = false`, `joueurDansLaGuerre() = false`, pastille « 🏙️ Balade · 0 pts » — commit 5976786
+🔎 CONTRÔLÉ (bdcc5e4) : OK — profil vierge, PC et TV : `guerre.vu` faux, `joueurDansLaGuerre() = false`, pastille « 🏙️ Balade · 0 pts » pendant 30 s, plus de « carte avec M » (`p1-pc.log`, `p1-tv.log`, `img/p1/p1-01-3s.png`).
 - **Gravité** : GRAVE (défait la réparation n° 3 : la première pastille d'un profil vierge parle d'un gang qu'il n'a pas)
 - **Reproduire** : profil vierge, accueil, ✕ (« Entrer dans Marlon »), attendre 2 s au point d'apparition. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
 - **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s (tronqué « 🚩 Il te faut un ... » en 1280), et le gros message « MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5 » — la touche « M » à un enfant à la manette.
@@ -459,6 +503,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 68. Le panneau « EMPIRE URBAIN » couvre le bas de l'écran en permanence, minuscule en TV, et parle de la touche « M »
 ✅ RÉPARÉ — `#empireHud` n'apparaît que pendant une opération ou une attaque ET une fois dans la guerre ; règles `body.tv` (largeur 30 vw, texte en unités --uh) ; le bouton dit « CARTE · ↑ tenu » quand une manette pilote. Mesuré profil vierge : `hidden = true`, display none — commit e4ac561
+🔎 CONTRÔLÉ (bdcc5e4) : OK — `#empireHud` `hidden` pendant toute la partie d'un profil vierge (PC et TV).
 - **Gravité** : GÊNANT (première minute ; en TV le texte fait 12 px sur un écran de 1080 lignes : illisible du canapé)
 - **Reproduire** : entrer dans la Ville (profil vierge), regarder le bas de l'écran. Reproduit 2/2 (PC, TV).
 - **On voit** : un cadre sombre de 390 px centré en bas : « EMPIRE URBAIN · 0/12 territoires · Centre-ville · objectif à 37 m · CARTE · M / PAVÉ PS5 », jamais effacé (il n'a pas de règle `body.tv`, ni de traduction manette : `#empireMapBtn` est un texte fixe l. 1110). Il se superpose aux chevrons de GPS et au message central quand ils descendent.
@@ -467,6 +512,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 69. La première voiture du parking fonce dans le grillage du terrain de foot : R2 tout droit = 🔧 +21 % en 5 s
 ✅ RÉPARÉ — voir n° 31 : R2 tout droit depuis la place → un seul « 💥 BOUM ! » contre le grillage (14 %), puis 14,6 % après 5 s gaz enfoncés (avant : 41 %). Les places regardent bien la rue z = 0 (le grillage du foot est juste derrière) — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK conforme à la réparation, mais le piège reste — R2 5 s depuis la place : un seul « 💥 BOUM ! Gros choc contre le mur », 🔧 14,6 %, la voiture s'arrête dans le grillage du foot à z = 0,2 (PC et TV identiques, `img/p2/p2-00-r2-5s.png`). L'enfant qui appuie sur R2 en sortant du parking prend toujours 15 % de tôle dans les 3 premières secondes.
 - **Gravité** : GÊNANT (suite du n° 26 : la voiture part maintenant, mais la sortie du parking est un mur)
 - **Reproduire** : parking du centre (voitures en (−17,9…−8, 10), cap nord), △ pour monter, R2 à fond 5 s sans toucher au stick. Reproduit 2/2 (`c3` run 1 et run 2).
 - **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
@@ -475,6 +521,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 70. Au stick, sortir du parking du centre détruit la voiture : 🔧 100 % et incendie en 40 s, la dépanneuse l'emporte avec le conducteur éjecté
 ✅ RÉPARÉ — voir n° 31 : 40 s de conduite « comme un enfant » dans le parking → 🔧 17,7 %, pas d'incendie (avant 96,6 % et le feu) ; `enterCar` refuse une épave (« 🔥 Cette voiture est une épave… »). L'éjection à l'explosion a déjà un message (« 💥 Le véhicule a explosé ! ») — commit 9554688
+🔎 CONTRÔLÉ (bdcc5e4) : OK — 40 s de conduite « comme un enfant » dans le parking : 🔧 +22,4 % (PC) / +18,2 % (TV), pas d'incendie, la voiture reste à l'enfant (cumul 49 % / 45 % avec le R2 du n° 69 : à ce niveau la carrosserie est déjà entièrement brun-noir, elle a l'air brûlée — voir n° 76).
 - **Gravité** : GRAVE (la première voiture d'un enfant brûle avant même d'avoir quitté le parking)
 - **Reproduire** : parking du centre, △ pour monter, puis conduire « vers le parc » comme un enfant (R2 à 80 %, stick pour viser le nord, frein quand ça part de travers) pendant 40 s. Reproduit 3/3 (`l1a` run 1 et run 2 en PC, `l2a` en TV, mêmes commandes).
 - **On voit** : la voiture bute sur le grillage du foot et les tables du snack, les dégâts grimpent 2 % → 30 % → **96,6 %** en 41 s sans jamais dépasser 30 km/h, elle prend feu (run 1 : `img/l1/l1a-11-roule-garage.png`, carcasse en flammes devant la terrasse), le personnage se retrouve à pied à côté (run 2 : `car: false` à t+84 s, position (−12,8, 13,1)), puis « ⛓️ Véhicule chargé sur le plateau : direction le garage » — la dépanneuse emporte l'épave. Aucun message n'a dit à l'enfant pourquoi la voiture chauffait ni qu'elle allait brûler.
@@ -483,6 +530,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 71. En jeu, la bague jaune de la manette reste posée sur le bouton du chat (haut gauche) pendant toute la partie
 ✅ RÉPARÉ — `navValide()` reposait une bague après un clic même sans fenêtre ouverte (d'où le 💬 encadré) ; plus de bague sans fenêtre, et `startGame()` efface celle de l'accueil — commit 3e84817
+🔎 CONTRÔLÉ (bdcc5e4) : OK — `.focustv` = null dès l'entrée en ville et pendant 30 s (PC et TV) ; plus de cadre sur le chat (`img/p1/p1-01-3s.png`).
 - **Gravité** : GÊNANT (l'enfant croit qu'il a « sélectionné » quelque chose ; ✕ ne fait rien d'utile)
 - **Reproduire** : accueil, ✕ (« Entrer dans Marlon »). Reproduit 3/3 (`c1` PC, `c1` TV, `l1a`).
 - **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
@@ -491,6 +539,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 72. La villa d'un joueur qui vient d'arriver est cambriolée : tout son porte-monnaie (25 🪙 → 0) disparaît sans qu'il ait rien vu
 ✅ RÉPARÉ — `declencheCambriolage` ne se lance que si le joueur a un homme (recruté ou libre) ou un quartier ; le butin est plafonné à la moitié du porte-monnaie ; sans alarme, message central « 🏠 Les Frelons Jaunes rôdent autour de ta villa ! Cours-y » + colonne bleue, et le bilan dit qui et pourquoi. Mesuré : profil neuf → rien ; avec un homme → message, beacon, 25 🪙 → 13 — commit 94973ac
+🔎 CONTRÔLÉ (bdcc5e4) : OK — 28 🪙 à t+50 s, 28 🪙 à t+262 s après banque, commissariat, parc et rue commerçante, `city.villaMine` présent (PC et TV).
 - **Gravité** : GRAVE (première partie : l'enfant perd tout son argent pendant qu'il visite la banque, sans explication visible)
 - **Reproduire** : partie neuve, se promener 10 minutes loin de la villa (contrôle 2 : banque, hôpital…). **Dépend de `Math.random`** : à chaque décision d'un gang (`gangTick`, l. 26547), 7 % de chances de tirer une villa, et si c'est celle du joueur (`v.mine`) le cambriolage démarre et réussit 55 s plus tard si personne n'est à moins de 22 m. Vu 1 fois sur 6 parties de contrôle (`img/c2/c2-banque-2-regard.png` : « 💸 Cambriolage réussi : ils sont partis avec 25 🪙 », chat « 💸 La villa de Joueur42 a été cambriolée (−25 🪙) », porte-monnaie 0 dans le HUD) ; la sonde `c8.js` (hasard forcé à 0,8 pendant 200 s) n'a pas retiré la villa du joueur.
 - **On voit** : seul avertissement, une ligne de chat « 🏠 Des ombres rôdent autour de ta villa… » (sans alarme achetée), à 175 m de là ; puis `wallet -= min(butin 60–240, wallet)` : un enfant à 25 🪙 perd tout.
@@ -498,6 +547,8 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 73. Le pavé tactile ouvre « EMPIRE · Carte stratégique » : un écran d'adulte, sans bague, coupé en bas en 1280×720
 ✅ RÉPARÉ — le pavé tactile ouvre l'AIDE des boutons (`PAD_CROIX[17] = 'aide'`, fiche lisible du n° 8) et plus la carte stratégique ; mesuré : pavé → `ui: null, aide: true`, la carte ne s'ouvre que par ↑ tenu et pose la bague sur « Fermer × » — commits 9ec9481, 27aa6bf, e4ac561
+🔎 CONTRÔLÉ (bdcc5e4), carte stratégique par ↑ tenu : bague sur « Fermer × », ↓ parcourt les opérations puis les secteurs, ◯ ferme (PC et TV).
+🔎 CONTRÔLÉ (bdcc5e4) : OK — le pavé ouvre la fiche « 🎮 Les touches de la manette » (520×504 px à 15 px en 1280×720, 806×694 px à 25,6 px en TV, dans l'écran), un second appui la ferme ; la carte stratégique ne s'ouvre plus (`img/p1/p1-03-aide.png`). Petit défaut : le radar saute du coin en bas à gauche au milieu du bas de l'écran pendant l'aide.
 - **Gravité** : GÊNANT (c'est le bouton « aide » de l'enfant : il tombe sur un tableau de bord de stratégie)
 - **Reproduire** : en ville à la manette, appuyer sur le pavé tactile. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
 - **On voit** : le jeu en pause sous un grand cadre « EMPIRE · Carte stratégique — Contrôle les 12 secteurs, puis tiens la ville pendant 90 secondes · 🚩 0/12 · difficulté 🔥 palier 1/5 », une carte à 12 numéros, un encart « RENSEIGNEMENTS · SECTEUR », cinq cartes d'opérations (« Reconnaissance du Nord · PREMIÈRE RÉUSSITE · 120 pièces · 25 respect »…). La bague reste sur le bouton du chat derrière (`aide.focus = chatBtn`), il faut un premier ↓ pour qu'elle apparaisse sur « Fermer × ». En 1280×720 la dernière carte (« Tenir la ligne ») passe sous le bord de l'écran (`img/l1/l1a-04-aide.png`) ; en TV ça tient (bas à 1048 px sur 1080, `img/l2/l1a-04-aide-tv.png`). Aucun rappel des boutons de la manette nulle part (l'ancienne aide du n° 8 a disparu).
@@ -506,6 +557,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 74. ↑ (ordres) : l'écran « 📣 À qui donner un ordre ? » n'a pas de bague, dit « Clique sur quelqu'un » et sa liste est coupée
 ✅ RÉPARÉ — la bague part sur la première carte d'habitant (`navPremier`, n° 43/71) ; à la manette la consigne dit « Choisis quelqu'un avec la croix, puis ✕ » au lieu de « Clique » ; la grille défile (52 vh) et la fenêtre tient en 1280×720 (bas de carte à 641 px). Mesuré : focus `ocard:Karim_flash`, 12 cartes — commit 6dca9df
+🔎 CONTRÔLÉ (bdcc5e4) : OK — bague sur la première carte d'habitant (`ocard:Lucas_2014`), consigne « Choisis quelqu'un avec la croix, puis ✕ », bas de fenêtre à 511 px sur 720 (PC) / 732 sur 1080 (TV). Reste : → depuis la première carte saute sur « Fermer » au lieu de la carte suivante.
 - **Gravité** : GÊNANT (à la manette, l'enfant ne peut désigner personne ; c'est pourtant l'entrée du recrutement promis par le message d'accueil « Recrute un ami via les ordres ↑ »)
 - **Reproduire** : en ville, appui court sur ↑. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
 - **On voit** : douze cartes d'habitants (« Momo_king 4 m »…), la bague `.focustv` reste sur le bouton CACHÉ « Fermer × » de la carte stratégique (`focus.visible = false`), la consigne dit « Clique sur quelqu'un… Tu peux aussi écrire son nom dans le chat », et la 4e rangée de cartes passe sous le bord de la fenêtre en 1280×720 (`img/l1/l1c-14-ordres.png`).
@@ -521,6 +573,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-apres-12s.png`, `img/s1/s1-premier-regard.png`.
 
 ### 11. Sur l'écran d'accueil, un bot du décor est collé contre la caméra
+🔎 CONTRÔLÉ : OK — caméra d'accueil en (0,4, 4,5, 12,1), habitant le plus proche à 7,3 m (PC) / 6,7 m (TV) ; plus de géant au premier plan (`c1-accueil.png`).
 ✅ RÉPARÉ — la caméra du salon (`camPerche`, branche `!running`) était à 5,2 m presque à plat : le dernier rang de la foule (z = 6,9) passait à 1 m de l'objectif ; elle recule à 9,5 m, un peu plus haut (habitant le plus proche > 4 m) — commit 5eac31d
 - **Reproduire** : charger la page.
 - **On voit** : un personnage géant (blond, tenue blanche) qui occupe un tiers de l'écran au premier plan, devant le panneau « 1 · Sauts ».
@@ -532,6 +585,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-premier-regard-tv.png`.
 
 ### 13. L'accueil : le mode d'emploi PS5 est un pavé de 25 lignes
+🔎 CONTRÔLÉ : OK — `<details>` « ⌨️ 🎮 Comment jouer » replié au chargement, ligne PS5 de 8 mots (`c1-accueil.png`).
 ✅ RÉPARÉ — le paragraphe de 250 mots est réécrit en 7 lignes courtes (à pied / au volant / en hélico / croix / menus), et tout le mode d'emploi est replié derrière « ⌨️ 🎮 Comment jouer » — commit 5eac31d
 - **On voit** : sur l'accueil, la ligne « 🎮 PS5 » est un paragraphe compact de ~250 mots en 11 px ; personne ne le lit. En TV il occupe la moitié de la carte.
 - **Capture** : `img/s1/s1-focus-jouer.png`, `img/s1/s1-accueil-tv.png`.
@@ -566,3 +620,24 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : classe Géométrie, question « Un ballon de football a la forme d'une… ? ».
 - **On voit / entend** : la synthèse vocale reçoit « …forme d'une et ensuite ? ... Réponse un : cube… » — le « … » est remplacé par « et ensuite ».
 - **Sonde** : `s11c-pc.log` `reps[2].dits[1]`.
+
+---
+
+## Scénario 15 (sauvegarde et rechargement) — rejoué round 70 sur la version intégrée (`s15.js` + `s15b.js`, `s15-r70-pc.log`)
+- Achat d'une citadine (700 → 620 🪙), pistolet, respect 130, Parc conquis ; Prairie → Glace → Ville : tout est conservé (`wallet 621`, `arme:pistol`, voiture `mienne`, `rep 130`, `parc: joueur`).
+- Fermeture et réouverture du jeu (rechargement de la page) : accueil avec 621 🪙, puis « 💾 Partie rechargée : 621 🪙 · ta voiture au garage · 1 achat », la citadine est bien dans le garage de la villa (48, 179) sans dégâts, les territoires sont retrouvés. ✅ Rien de cassé.
+- Seule remarque : le message « 💾 Partie rechargée : N 🪙 » revient à CHAQUE reconstruction de la ville (retour d'un autre monde) dès qu'une sauvegarde existe — pour un enfant qui revient de la Prairie ce n'est pas un « rechargement ».
+
+### 75. Un chef de gang donne rendez-vous à un enfant qui vient d'arriver (« la colonne bleue t'y emmène ») et son gang « le cherche » dès la première demi-minute
+- **Gravité** : GÊNANT (première minute ; contredit la règle du n° 67 : rien de la guerre tant que l'écran 🚩 n'a pas été ouvert)
+- **Reproduire** : profil vierge, ✕ sur l'accueil, se balader 4 minutes sans rien faire d'autre. Reproduit 2/2 (PC 1280×720 à t+~250 s : « 🤝 Gina Grelot (Les Requins Rouges) te donne rendez-vous à La Zone — la colonne bleue t'y emmène » ; TV 1920×1080 à t+~250 s : « 🤝 Tonio Turbo (Les Requins Rouges) te donne rendez-vous à la fête foraine… »). En TV, dans les 30 premières secondes de chat : « 🚩 Les Requins Rouges te cherchent… », « 🚩 Les Frelons Jaunes attaquent Les Requins Rouges ! » ; en PC « 🚩 Les Frelons Jaunes te cherchent… » à ~4 min.
+- **On voit** : gros message central + colonne bleue GPS vers La Zone / la fête foraine ; `guerre.vu` est pourtant faux et le joueur n'a ni respect ni recrue.
+- **On devrait voir** : aucune réunion, aucun « te cherchent » avant que l'enfant soit entré dans la guerre (même garde que `captureTick` / `declencheCambriolage`).
+- **Sonde** : `p1-pc.log` / `p1-tv.log` `bilan.msgs[dernier]`, `attente30.chatViolence` (TV).
+
+### 76. Voiture à l'arrêt ou au pas : la caméra est collée au toit (1,9–3 m), l'écran est rempli par la carrosserie — qui a l'air carbonisée dès 45 % de dégâts
+- **Gravité** : GÊNANT (après chaque choc, l'enfant ne voit plus que le toit de sa voiture et croit qu'elle a brûlé)
+- **Reproduire** : voiture du parking, choc contre l'immeuble Centre-ville, rester à 0–1 km/h. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
+- **On voit** : caméra à 2,99 m (PC) / 1,85 m (TV) de la voiture au 1er relevé, le toit et le capot occupent les deux tiers de l'image (`img/p2/p2-02-choc-mur.png`, `p2-02-choc-mur-tv.png`) ; la carrosserie est uniformément brun-noir à 🔧 49–70 % alors qu'il n'y a ni feu ni fumée.
+- **On devrait voir** : un recul minimal de ~5 m même à l'arrêt (la réparation n° 32 a réglé « recul = vitesse × 1,2 », donc rien à 0 km/h), et une teinte de dégâts qui reste une voiture cabossée (bosses, phares cassés) et non une carcasse.
+- **Sonde** : `p2-pc.log` `p32.releves[0].dist = 2.99`, `p2-tv.log` `p32.releves[0].dist = 1.85`.

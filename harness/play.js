@@ -13892,12 +13892,17 @@ test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l
       // (-52, 66) au 1ᵉʳ et (-52, 76) au 2ᵉ étaient désormais AU-DESSUS DU VIDE, le joueur y
       // tombait sur une marche (y = 2,73 et 7,98) et on mesurait l'escalier au lieu de
       // l'étage. On vise maintenant le plancher plein de chaque niveau : les bureaux au sud
-      // du 1ᵉʳ, la salle des coffres au nord du 2ᵉ, et le palier de départ de la volée basse.
-      // Au 1ᵉʳ on se place DERRIÈRE la volée du 2ᵉ (dz = +9) : à dz = +6 on naissait dessous,
-      // dans le vide entre le plancher et les marches, et la désincarcération éjectait le
-      // joueur hors du bâtiment (y = 0).
+      // la coursive est du 1ᵉʳ, la salle des coffres au nord du 2ᵉ, et le palier de départ.
+      // Au 1ᵉʳ, on se place sur la COURSIVE EST, là où l'on débouche de la volée : dans la
+      // rangée de bureaux du sud, le joueur naissait contre une table ou sous les marches de
+      // la volée du 2ᵉ, et la désincarcération l'éjectait HORS du bâtiment (y = 0, 5 murs
+      // autour, 0 élément masqué) — on ne mesurait plus rien. Sur la coursive il reste
+      // dedans (7 murs, 29 éléments masqués) ; il y retombe au rez-de-chaussée (y = 0,36)
+      // parce que le banc tourne à une ou deux images par seconde et que le joueur
+      // traverse la dalle de 30 cm avant la première image. La MONTÉE au 1ᵉʳ, elle, est
+      // prouvée en temps simulé par les tests 323 et 411.
       ['le pied de l\'escalier de la banque', -60.2, 0.5, 64.2],
-      ['le 1er etage de la banque', -52, 5.1, 79],
+      ['le 1er etage de la banque', -46, 5.1, 70],
       ['la salle des coffres de la banque', -52, 9.9, 64],
       ['le commissariat', -54, 0.5, 28],
       ['la salle de sport', -1, 0.5, 20],

@@ -15830,13 +15830,21 @@ test('transporté par les secours, le joueur est allongé sans commandes et repr
     if (!a.surCiviere) return { err: 'le joueur n\'a jamais ete allonge', etat: a.etat, phase: a.phase };
     const msgPris = document.getElementById('msg').textContent;
     // LES COMMANDES SONT COUPÉES : on pousse en avant pendant une seconde, il ne bouge pas de sa civière
-    const av0 = { x: P.pos.x, z: P.pos.z };
+    const br = a.civiere;
+    const posBr = () => { br.g.updateMatrixWorld(true); return br.g.getWorldPosition(new G.THREE.Vector3()); };
+    const av0 = { x: P.pos.x, z: P.pos.z }, b0 = posBr();
     G.keys.add('KeyW'); G.keys.add('Space');
     for (let i = 0; i < 60; i++) G.step(1 / 60, true);
     G.keys.delete('KeyW'); G.keys.delete('Space');
-    const br = a.civiere; br.g.updateMatrixWorld(true);
+    const b1 = posBr();
+    br.g.updateMatrixWorld(true);
     const c = br.g.userData.couche.getWorldPosition(new G.THREE.Vector3());
+    // CE QU'ON MESURE, c'est le GLISSEMENT du joueur PAR RAPPORT au brancard : pendant la
+    // seconde de « W », la civière peut très bien être en train d'avancer (les brancardiers
+    // marchent), et un déplacement absolu ne prouverait rien. S'il ne glisse pas d'un
+    // centimètre sur le matelas, c'est que la touche n'a eu aucun effet.
     const pendant = { bouge: +Math.hypot(P.pos.x - av0.x, P.pos.z - av0.z).toFixed(2),
+      glisse: +Math.hypot((P.pos.x - av0.x) - (b1.x - b0.x), (P.pos.z - av0.z) - (b1.z - b0.z)).toFixed(2),
       surLeMatelas: +Math.hypot(P.pos.x - c.x, P.pos.z - c.z).toFixed(2),
       couche: +G.me.group.rotation.x.toFixed(2), verrou: !!P.secours, hp: P.hp,
       camera: { yaw: G.cam.yaw, libre: true } };
@@ -15853,10 +15861,10 @@ test('transporté par les secours, le joueur est allongé sans commandes et repr
       dist: +Math.hypot(P.pos.x - hx, P.pos.z - hz).toFixed(1), abandon: a.abandon || null };
   });
   const d = r.pendant || {};
-  const ok = !r.err && /secours/i.test(r.msgPris || '') && d.verrou && d.bouge < 1.2 && d.surLeMatelas < 0.4
+  const ok = !r.err && /secours/i.test(r.msgPris || '') && d.verrou && d.glisse < 0.2 && d.surLeMatelas < 0.4
     && Math.abs(d.couche + 1.57) < 0.05 && d.camera.tourne > 0.5
     && !r.etatFin && !r.verrouFin && r.hp === 100 && Math.abs(r.deboutFin) < 0.05 && Math.abs(r.auSol) < 0.6 && r.dist < 12 && !r.abandon;
-  return { ok, detail: `le joueur blessé était TÉLÉPORTÉ dans la caisse puis re-téléporté au bureau de l'hôpital, debout, sans rien voir · maintenant il est allongé sur le brancard (${d.couche} rad, ${d.surLeMatelas} m du matelas), on le lui dit (« ${(r.msgPris || '').slice(0, 42)} »), ses commandes sont coupées (une seconde de W + saut : ${d.bouge} m) mais PAS sa caméra (+${d.camera.tourne} rad au stick), et à l'arrivée il reprend la main debout (${r.deboutFin} rad, ${r.auSol} m au-dessus du sol), soigné (${r.hp} PV), à ${r.dist} m de l'accueil` };
+  return { ok, detail: `le joueur blessé était TÉLÉPORTÉ dans la caisse puis re-téléporté au bureau de l'hôpital, debout, sans rien voir · maintenant il est allongé sur le brancard (${d.couche} rad, ${d.surLeMatelas} m du matelas), on le lui dit (« ${(r.msgPris || '').slice(0, 42)} »), ses commandes sont coupées (une seconde de W + saut : ${d.glisse} m de glissement sur le matelas, ${d.bouge} m en absolu — c'est le brancard qui bouge) mais PAS sa caméra (+${d.camera.tourne} rad au stick), et à l'arrivée il reprend la main debout (${r.deboutFin} rad, ${r.auSol} m au-dessus du sol), soigné (${r.hp} PV), à ${r.dist} m de l'accueil` };
 });
 
 test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni ambulancier planté, ni joueur bloqué allongé', async p => {

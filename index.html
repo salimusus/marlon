@@ -21823,7 +21823,13 @@ function ambulanceInterrompue(a) {
 }
 function ambulancesTick(dt) {
   for (const a of (city.ambulances || [])) {
-    a.gyro = !!a.etat; a.sirene = !!a.etat;   // drapeaux lus par le poste Sons
+    // GYROPHARE PENDANT TOUTE L'INTERVENTION, SIRÈNE SEULEMENT EN ROULANT. L'ambulance
+    // arrêtée sur les lieux, portes ouvertes, hurlait son deux-tons pendant les vingt secondes
+    // du brancardage, puis encore autant sur le parvis de l'hôpital — juste à côté du joueur,
+    // c'était intenable. Comme les vrais secours : on coupe la sirène en se garant, le
+    // gyrophare, lui, tourne du départ au retour. (drapeaux lus par le poste Sons)
+    a.gyro = !!a.etat;
+    a.sirene = a.etat === 'route' || a.etat === 'transport';
     if (a.gyros) { const on = a.gyro && (simTime % 0.6) < 0.3; for (const m of a.gyros) m.visible = on; }
     if (a.ambCible != null) ambulanceAnime(a, dt);    // les portes arrière
     if (a.civiere && a.civiere.g) { try { majBrancard(a.civiere, dt); brancardAnime(a.civiere, dt); } catch (eb) {} }

@@ -8864,15 +8864,21 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
   const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
-  let bloque = 0;
+  let bloque = 0, posSaine = false;
   if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
-  if (!vehBloque(c, c.x, nz, c.h, o)) c.z = nz; else bloque++;
+  // `posSaine` : quand le pas en z passe, la question posee est EXACTEMENT celle du controle
+  // final plus bas — memes x, z, cap et memes options. On retient la reponse au lieu de la
+  // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
+  // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
+  if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
   // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
   // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
   // VERIFIEE et on y revient : plus une seule image avec un capot dans un mur.
-  if (!vehBloque(c, c.x, c.z, c.h, o)) c.libre = [c.x, c.z, c.h];
-  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  if (posSaine || !vehBloque(c, c.x, c.z, c.h, o)) {
+    // on reecrit le triplet au lieu d'en creer un neuf a chaque image et par vehicule
+    if (c.libre) { c.libre[0] = c.x; c.libre[1] = c.z; c.libre[2] = c.h; } else c.libre = [c.x, c.z, c.h];
+  } else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
@@ -18744,9 +18750,25 @@ function solidsAutour(x, z, r, avecVeh) {
   const j1 = Math.floor((z - r - z0) / cs), j2 = Math.floor((z + r - z0) / cs);
   if (i1 < 0 || j1 < 0 || i2 >= nx || j2 >= nz) return solids;
   if (i1 === i2 && j1 === j2 && !avecVeh && !SGRID.mob.length) return SGRID.cells[j1 * nx + i1] || SVIDE;
-  const out = avecVeh ? SGRID.veh.slice() : [];
-  if (SGRID.mob.length) out.push(...SGRID.mob);
-  for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
+  const out = [];
+  // FLUIDITE — LES VEHICULES AUSSI SONT TRIES PAR LA POSITION. Ils vivent HORS de la grille
+  // (ils changent de case a chaque image) et on RECOPIAIT LES CINQUANTE-NEUF a chaque appel :
+  // la circulation en demande une centaine par pas de simulation, soit six mille recopies
+  // inutiles par pas, cent quarante mille par seconde. Or le contrat de la fonction est « les
+  // solides autour de ce point, dans un rayon r » : un vehicule dont la caisse ne touche meme
+  // pas ce carre ne peut satisfaire AUCUN test de l'appelant (verifie un par un : tous ont une
+  // portee inferieure ou egale a r). On le laisse donc de cote.
+  if (avecVeh) for (let k = 0; k < SGRID.veh.length; k++) {
+    const o = SGRID.veh[k];
+    if (Math.abs(x - o.x) <= o.w / 2 + r && Math.abs(z - o.z) <= o.d / 2 + r) out.push(o);
+  }
+  // `out.push(...tableau)` deplie le tableau en arguments : sur une case de deux cents solides
+  // c'est un appel a deux cents arguments, et il coute bien plus qu'une boucle ordinaire.
+  for (let k = 0; k < SGRID.mob.length; k++) out.push(SGRID.mob[k]);
+  for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) {
+    const c = SGRID.cells[j * nx + i];
+    if (c) for (let k = 0; k < c.length; k++) out.push(c[k]);
+  }
   return out;
 }
 // (`decor` : le mobilier solidifié pour le joueur est ignoré ici — les habitants gardent

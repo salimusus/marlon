@@ -10653,7 +10653,13 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   // le mur de la cour, perce d'une porte de 2,2 m
   for (const sx of [-1, 1]) B(sx * (W / 4 + 0.55), H / 2 + 0.3, D / 2 - 0.15, W / 2 - 1.1, H, 0.3, col, { studs: false, noRoute: true });
   B(0, H - 0.35 + 0.3, D / 2 - 0.15, 2.2, 0.7, 0.3, col, { studs: false, noRoute: true });
-  B(0, 0.75, D / 2 - 0.32, W, 0.9, 0.06, 0xf4efe2, { deco: true, studs: false });
+  // LA PLAQUE DEVANT L'ENTREE DE LA CLASSE (demande du Joueur : « enleve la, je veux que le
+  // joueur puisse rentrer dans la classe »). Ce bandeau blanc faisait 10 m de long : il barrait
+  // la porte de 2,20 m sur TOUTE sa largeur, de 0,30 a 1,20 m de haut, 3 cm devant le mur.
+  // Sans collision, mais depuis la cour on voyait une plaque en travers du seuil, et l'enfant
+  // n'entrait pas. On le coupe en deux panneaux qui suivent EXACTEMENT les deux trumeaux du
+  // mur de la cour : l'ouverture reste libre du sol au linteau.
+  for (const sx of [-1, 1]) B(sx * (W / 4 + 0.55), 0.75, D / 2 - 0.32, W / 2 - 1.1, 0.9, 0.06, 0xf4efe2, { deco: true, studs: false });
   // plafond, neons
   B(0, H + 0.42, 0, W + 0.3, 0.24, D + 0.3, 0xf4efe2, { deco: true, studs: false });
   for (const dz of [-2.2, 1.4]) B(0, H + 0.22, dz, 2.6, 0.1, 0.6, 0, { material: neonMat(0xfff6d8), deco: true, noEdges: true });
@@ -10733,7 +10739,10 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
     panneauFond(1, 2.3, 1.4, 1, 'A B C');
   }
   room.props = props;
-  affiche(0, 3.85, D / 2 - 0.34, 4.6, 0.6, `${e} ${n}`);
+  // LE NOM DE LA SALLE RESTE, MAIS AU-DESSUS DE LA PORTE : a 3,85 m il mordait de 25 cm sur
+  // l'ouverture (qui monte jusqu'a 3,80 m). Il se cale maintenant pile sur le linteau
+  // (3,80 a 4,50 m), sans collision : on lit la matiere sans rien avoir dans le passage.
+  affiche(0, 4.15, D / 2 - 0.34, 4.6, 0.6, `${e} ${n}`);
   tableauMaj(room, [`${e} Classe de ${n}`, 'Assieds-toi (E) pour jouer']);
   city.classes.push(room);
   return room;

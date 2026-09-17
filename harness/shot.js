@@ -2072,6 +2072,10 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  // ---- poste BATIMENTS (ecole : entree des classes ; banque : escalier et plan) : ajoute tes exports SOUS cette ligne ----
+  solids: typeof solids !== 'undefined' ? solids : null,
+  classroom: typeof classroom === 'function' ? classroom : null,
+  buildBank: typeof buildBank === 'function' ? buildBank : null,
 };
 `;
 

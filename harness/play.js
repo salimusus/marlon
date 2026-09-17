@@ -16211,10 +16211,14 @@ test('un membre emmène le joueur à la villa : il vient, on monte, il conduit p
     const dest = (lieu && Math.hypot(lieu.x - V.x, lieu.z - V.z) < 40) ? lieu : { nom: 'ta villa', x: V.x, z: V.z };
     const t0 = t;
     G.botConduireVers(b, dest);
-    let n = 0, surRoute = 0, surRect = 0, ech = 0, dParc = 0, px = c.x, pz = c.z, pireEcart = null;
+    let n = 0, surRoute = 0, surRect = 0, ech = 0, dParc = 0, sauts = 0, px = c.x, pz = c.z, pireEcart = null;
     while (t - t0 < 240 && b.drive && b.drive.etat === 'route') {
       pas(); n++;
-      dParc += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+      // LA DISTANCE PARCOURUE NE COMPTE PAS LES BONDS. Quand la voiture est coincee pour de
+      // bon, le filet de securite la repose quelques metres plus loin : ces sauts gonflaient
+      // le compteur et donnaient une moyenne de 16,8 m/s alors que le pilote est plafonne a
+      // 12 m/s. A 12 m/s une image de 1/60 s fait 20 cm : au-dela d'un metre, c'est un saut.
+      { const dd = Math.hypot(c.x - px, c.z - pz); if (dd > 1) sauts++; else dParc += dd; px = c.x; pz = c.z; }
       // MÊME MESURE QU'AU TEST DE CIRCULATION : « hors chaussée » se juge sur le RÉSEAU, pas
       // sur les rectangles city.routes, qui ne couvrent ni les coins de carrefour ni les
       // élargissements — une voiture qui suit exactement sa voie en tournant en sort d'un
@@ -16233,7 +16237,7 @@ test('un membre emmène le joueur à la villa : il vient, on monte, il conduit p
       dVilla: +Math.hypot(c.x - V.x, c.z - V.z).toFixed(1),
       dPortail: G2 ? +Math.hypot(c.x - G2.x, c.z - G2.z).toFixed(1) : null,
       surChaussee: ech ? Math.round(100 * surRoute / ech) : 0, surRect: ech ? Math.round(100 * surRect / ech) : 0, pireEcart,
-      vMoy: +(dParc / Math.max(0.001, t - t0)).toFixed(2), parcouru: +dParc.toFixed(0),
+      vMoy: +(dParc / Math.max(0.001, t - t0)).toFixed(2), parcouru: +dParc.toFixed(0), sauts,
       volOiseau: +Math.hypot(V.x - 8, V.z - 8).toFixed(0), garee: G.surLaChaussee(c.x, c.z, 0.6) };
     // On descend : l'avatar redevient un piéton, dehors, visible — ET L'AMI REND LA VOITURE
     // (garde à faux). Avec garde à vrai il restait au volant pour toute la suite du banc
@@ -16251,7 +16255,7 @@ test('un membre emmène le joueur à la villa : il vient, on monte, il conduit p
   const ok = r.monte && r.arrive && r.trajet < 150 && r.dPortail != null && r.dPortail < 40
     && r.surChaussee >= 80 && r.vMoy > 3 && !r.descendu.rideBot && r.descendu.visible && r.descendu.dVoiture > 1.5
     && !r.descendu.auVolant;
-  return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.surChaussee} % du trajet sur la route — ${r.surRect} % à l'intérieur des rectangles city.routes, coins de carrefour compris${r.pireEcart ? `, écart le plus franc à ${r.pireEcart.dVoie} m de toute voie en (${r.pireEcart.x}, ${r.pireEcart.z})` : ', aucun écart hors réseau'}), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
+  return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.sauts} bond(s) du filet de secours, ${r.surChaussee} % du trajet sur la route — ${r.surRect} % à l'intérieur des rectangles city.routes, coins de carrefour compris${r.pireEcart ? `, écart le plus franc à ${r.pireEcart.dVoie} m de toute voie en (${r.pireEcart.x}, ${r.pireEcart.z})` : ', aucun écart hors réseau'}), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
 });
 
 

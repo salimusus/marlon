@@ -21141,7 +21141,15 @@ function step(dt, active) {
       P.facing = c.h; P.grounded = true; P.standing = null;
       const vC = c.speed || 0;
       P.vel.set(Math.sin(c.h) * vC, 0, Math.cos(c.h) * vC);
-      cityCommon(dt); return;
+      // PAS DE SECOND `cityCommon(dt)` ICI. `cityStep(dt)`, appelé quelques lignes plus haut,
+      // le fait déjà quand le joueur n'est pas au volant — et `cityCommon` ne se protège pas
+      // d'un deuxième appel dans la même image : il rejoue toute la vie de la ville. Mesuré
+      // sur le trajet vers la villa : la voiture parcourait 380 m alors que son compteur n'en
+      // annonçait que 188 (0,17 m par image pour 0,08 m attendus, très exactement le double),
+      // soit 16,8 m/s de moyenne pour un pilote plafonné à 12 — et avec elle toute la ville
+      // (police, secours, gangs, métiers) tournait à double vitesse tant que le joueur était
+      // assis à côté de son ami.
+      return;
     }
   }
 

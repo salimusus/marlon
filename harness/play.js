@@ -17668,3 +17668,93 @@ test('monter une marche ne fait pas tressauter l\'avatar', async p => {
     ? `marche de ${d.marcheCm} cm : la physique fait bondir le joueur de ${d.sautPhysCm} cm en UNE image (c'est moveAxis, on n'y touche pas, la montee doit rester franche), mais l'avatar affiche ne monte jamais de plus de ${d.sautVuCm} cm par image — le rattrapage est etale sur un dixieme de seconde et l'avatar ne tressaute plus. Montee totale ${d.monteeCm} cm.`
     : `aucune marche franchissable trouvee parmi les ${r.cands} candidates : le test n'a rien pu mesurer` };
 });
+
+test('dans chaque villa, l\'escalier est écarté du mur, ses marches ne bougent pas, et sa rambarde est un vrai solide', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 108, y: 1, z: 168, hour: 12, frais: true });
+    // les huit villas sortent du même buildVilla() : celle du joueur, quatre voisines et
+    // jusqu'à trois villas de chefs de gang (les gangs des paliers suivants n'existent pas
+    // encore au rang de départ). Celle du joueur a un ascenseur, pas d'escalier.
+    const lieux = [];
+    for (const v of (G.VILLAS || [])) lieux.push({ nom: v.mine ? 'ma villa' : (v.name || 'villa'), x: v.x, z: v.z, mine: !!v.mine });
+    for (const g of (G.gangs || [])) if (g.villaPos) lieux.push({ nom: 'villa de ' + (g.chefNom || g.nom), x: g.villaPos.x, z: g.villaPos.z, mine: false });
+    const villas = lieux.map(L => {
+      const HX = L.x + 3, HZ = L.z - 6;
+      const dans = o => Math.abs(o.x - HX) < 12 && Math.abs(o.z - HZ) < 9;
+      const marches = G.solids.filter(o => dans(o) && Math.abs(o.h - 0.505) < 0.005 && Math.abs(o.w - 2.6) < 0.05 && Math.abs(o.d - 0.68) < 0.05);
+      // la rambarde : des solides de 1,30 m de haut, minces, le long de la volée et de la trémie
+      const rails = G.solids.filter(o => dans(o) && Math.abs(o.h - 1.3) < 0.01 && !o.decor && Math.min(o.w, o.d) < 0.5);
+      if (!marches.length) return { nom: L.nom, mine: L.mine, escalier: false, rails: rails.length };
+      const murEst = HX + 10.6, murSud = HZ + 7.6;   // faces INTÉRIEURES des murs de la maison
+      const xE = Math.max(...marches.map(o => o.x + o.w / 2)), zS = Math.max(...marches.map(o => o.z + o.d / 2));
+      const volee = rails.filter(o => o.d > 0.5 && o.d < 1);
+      const cotes = [...new Set(volee.map(o => Math.round(o.x * 20)))].length;
+      return { nom: L.nom, mine: L.mine, escalier: true, n: marches.length,
+        haut: +marches[0].h.toFixed(3), giron: +(marches[0].d - 0.1).toFixed(2), larg: +marches[0].w.toFixed(2),
+        murEst: +(murEst - xE).toFixed(2), murSud: +(murSud - zS).toFixed(2),
+        rails: rails.length, voleeRails: volee.length, cotes };
+    });
+    return { villas };
+  });
+  const avecEsc = r.villas.filter(v => v.escalier);
+  const ok = r.villas.length >= 6 && avecEsc.length === r.villas.length - 1
+    && avecEsc.every(v => v.murEst >= 1.8 && v.murSud >= 1.8 && v.n === 10
+      && Math.abs(v.haut - 0.505) < 0.005 && Math.abs(v.giron - 0.58) < 0.02 && v.larg >= 2.5
+      && v.cotes === 2 && v.voleeRails >= 20 && v.rails >= 22);
+  return { ok, detail: `avant : la volée passait à 1,30 m du mur est et ses balustres (10 cm de côté) étaient PUREMENT décoratifs · maintenant ${r.villas.length} villas construites, dont ${avecEsc.length} avec escalier (celle du joueur a un ascenseur) · ` + avecEsc.map(v => `${v.nom} : ${v.n} marches de ${v.haut} m sur ${v.giron} m de giron, ${v.murEst} m du mur est et ${v.murSud} m du mur sud, ${v.rails} solides de rambarde sur ${v.cotes} côtés`).join(' · ') };
+});
+
+test('dans une villa on monte à l\'étage, on ne traverse pas la rambarde même en courant, et on ne tombe pas du palier', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 108, y: 1, z: 168, hour: 12, frais: true });
+    const HZ = 162, ETAGE = 4.6 + 0.75, ESX = 118.4;   // Villa Azur : maison en (111, 162)
+    const poser = (x, y, z) => { G.P.sit = null; G.P.pos.set(x, y, z); G.P.vel.set(0, 0, 0); for (let k = 0; k < 6; k++) G.step(1 / 60, true); };
+    const marcher = (tx, tz, sec) => { G.keys.add('ArrowUp'); let i = 0;
+      for (; i < sec * 60; i++) { G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9; G.step(1 / 60, true);
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.5) break; }
+      G.keys.delete('ArrowUp'); return i / 60; };
+    // ON POUSSE EN COURANT : P.run se met par un double appui, on le force image par image
+    // (et l'endurance avec, sinon le joueur s'essouffle avant la fin de la poussée).
+    const pousser = (x, y, z, dx, dz, sec) => {
+      poser(x, y, z);
+      const p0 = { x: G.P.pos.x, y: G.P.pos.y, z: G.P.pos.z };
+      let vmax = 0, avant = { x: p0.x, z: p0.z }, courut = false;
+      G.keys.add('ArrowUp');
+      for (let i = 0; i < sec * 60; i++) {
+        G.P.run = true; G.P.energie = 100; G.P.essouffle = false;
+        G.cam.yaw = Math.atan2(-dx, -dz); G.cam.freeUntil = 1e9; G.step(1 / 60, true);
+        if (G.P.court) courut = true;   // la course est bien ENGAGÉE, pas seulement demandée
+        const v = Math.hypot(G.P.pos.x - avant.x, G.P.pos.z - avant.z) * 60; if (v > vmax) vmax = v;
+        avant = { x: G.P.pos.x, z: G.P.pos.z };
+      }
+      G.keys.delete('ArrowUp'); G.P.run = false;
+      // la pointe de vitesse ne vaut rien ici : le joueur est contre un obstacle dès le
+      // deuxième mètre. Ce qui compte, c'est que la course soit engagée (P.court) pendant
+      // toute la poussée — la vitesse de course elle-même est mesurée par le test 424.
+      return { avance: +Math.hypot(G.P.pos.x - p0.x, G.P.pos.z - p0.z).toFixed(2),
+        chute: +(p0.y - G.P.pos.y).toFixed(2), vmax: +vmax.toFixed(1), courut,
+        a: [+G.P.pos.x.toFixed(2), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(2)] };
+    };
+    // 1. MONTER, en temps simulé
+    poser(ESX + 0.6, 0.55, HZ + 7);
+    const t0 = G.simTime;
+    marcher(ESX, HZ + 5.4, 5); marcher(ESX, HZ - 1.5, 14);
+    const monte = { y: +G.P.pos.y.toFixed(2), t: +(G.simTime - t0).toFixed(1), etage: ETAGE };
+    // 2. LA RAMBARDE, à mi-volée (marche 6, dessus à 3,33 m), des deux côtés
+    const voleeOuest = pousser(ESX, 3.4, HZ + 2.9, -1, 0, 5);
+    const voleeEst = pousser(ESX, 3.4, HZ + 2.9, 1, 0, 5);
+    // 3. LE GARDE-CORPS DE LA TRÉMIE, depuis l'étage : retour nord, puis bord ouest
+    const tremieNord = pousser(120.8, ETAGE + 0.05, HZ - 1.7, 0, 1, 5);
+    const tremieOuest = pousser(116.2, ETAGE + 0.05, HZ + 3, 1, 0, 5);
+    // 4. LE PALIER D'ARRIVÉE : on ne bascule ni à droite ni à gauche
+    const palierEst = pousser(ESX, ETAGE + 0.05, HZ - 0.7, 1, 0, 5);
+    const palierOuest = pousser(ESX, ETAGE + 0.05, HZ - 0.7, -1, 0, 5);
+    return { monte, voleeOuest, voleeEst, tremieNord, tremieOuest, palierEst, palierOuest };
+  });
+  const murs = [r.voleeOuest, r.voleeEst, r.tremieNord, r.tremieOuest, r.palierEst, r.palierOuest];
+  const ok = r.monte.y > r.monte.etage - 0.1 && r.monte.t < 6
+    && murs.every(m => m.avance < 1.2 && m.chute < 0.3 && m.courut);
+  return { ok, detail: `avant : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et parcourait 18,20 m en tombant de 2,32 m ; depuis l'étage il tombait de 3,71 m dans la trémie · maintenant il monte à ${r.monte.y} m (étage ${r.monte.etage}) en ${r.monte.t} s simulées, et poussé 5 s EN COURANT (course engagée sur les ${murs.filter(m => m.courut).length} poussées, pointe ${Math.max(...murs.map(m => m.vmax))} m/s avant de buter) : volée ouest ${r.voleeOuest.avance} m (chute ${r.voleeOuest.chute}), volée est ${r.voleeEst.avance} m (${r.voleeEst.chute}), trémie nord ${r.tremieNord.avance} m (${r.tremieNord.chute}), trémie ouest ${r.tremieOuest.avance} m (${r.tremieOuest.chute}), palier est ${r.palierEst.avance} m (${r.palierEst.chute}), palier ouest ${r.palierOuest.avance} m (${r.palierOuest.chute})` };
+});

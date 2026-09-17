@@ -16295,7 +16295,7 @@ test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentr
     G.keys.delete('KeyW');
     // 3. le plafond : il ne monte pas à l'infini
     d.bat = 100; G.keys.add('Space');
-    for (let i = 0; i < 60 * 25; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 60 * 16; i++) G.step(1 / 60, true);   // 55 m à 5 m/s = 11 s : 16 s suffisent pour coller au plafond
     const altMax = G.droneAlt();
     G.keys.delete('Space');
     // 4. UN IMMEUBLE : il fonce dedans, il ne le traverse pas
@@ -16318,12 +16318,12 @@ test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentr
     G.droneRanger(true);
     return { sorti, alt0: +alt0.toFixed(2), alt1: +alt1.toFixed(1), pilote, parcouru: +parcouru.toFixed(1),
       joueurBouge: +joueurBouge.toFixed(2), altMax: +altMax.toFixed(1), plafond: G.DRONE_PLAFOND,
-      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif };
+      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif, bas: G.DRONE_BAS };
   });
   const ok = r.sorti && r.alt0 < 0.5 && r.alt1 > 8 && r.pilote && r.parcouru > 12 && r.joueurBouge < 0.05
     && Math.abs(r.altMax - r.plafond) < 0.6 && !r.mur.dedans && r.modeRetour && r.posee && r.distFin < 3
     && r.vue && r.range;
-  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${__G.DRONE_BAS} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
+  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${r.bas} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
 });
 
 test('le petit robot acheté marche, parle, reste collé au joueur (escalier compris) et obéit à ses ordres', async p => {
@@ -16370,6 +16370,12 @@ test('le petit robot acheté marche, parle, reste collé au joueur (escalier com
       yFin = R.y;
     }
     // ---- 3. les ordres, par le MÊME interprète que le chien et le gang
+    // On redescend de l'escalier avant : « va chercher » lance un objet DEVANT le joueur, et
+    // du haut d'une volée de La Zone il atterrit derrière une rambarde. Les ordres se jugent
+    // sur le plat, l'escalier a déjà été mesuré juste au-dessus.
+    P.pos.set(0, 0.3, 8); P.vel.set(0, 0, 0); P.facing = 0;
+    R.x = 0; R.z = 9; R.y = 0.3; R.ordre = 'suit'; R.poste = null;
+    for (let k = 0; k < 40; k++) G.step(1 / 60, true);
     const faits = {};
     const essai = (txt, verif) => { G.commandeExacte(txt); for (let k = 0; k < 40; k++) G.step(1 / 60, true); faits[txt] = !!verif(); };
     essai('robot attends ici', () => R.ordre === 'reste');
@@ -16383,8 +16389,9 @@ test('le petit robot acheté marche, parle, reste collé au joueur (escalier com
     essai('robot danse', () => R.ordre === 'danse');
     essai('robot garde cet endroit', () => R.ordre === 'garde' && !!R.poste);
     essai('robot va chercher', () => R.ordre === 'cherche' && !!R.objet);
+    const rap0 = R.rapportes || 0;
     let rapporte = false;
-    for (let i = 0; i < 60 * 30 && !rapporte; i++) { G.step(1 / 60, true); if (R.ordre === 'suit' && !R.objet) rapporte = true; }
+    for (let i = 0; i < 60 * 15 && !rapporte; i++) { G.step(1 / 60, true); if ((R.rapportes || 0) > rap0) rapporte = true; }   // 17 m aller-retour à 9,4 m/s = 4 s : 15 s suffisent
     faits['il rapporte l\'objet'] = rapporte;
     G.robotRanger(true);
     return { sorti, ecartMax: +max.toFixed(2), colle: G.ROBOT_COLLE, marche, replaces: R.replaces,
@@ -16458,13 +16465,24 @@ test('aucun article acheté en boutique ne reste un objet mort, et les jouets de
     for (let i = 0; i < 120; i++) G.step(1 / 60, true);
     const d1 = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
     // ---- 3. le cerf-volant : il monte quand le joueur court ----
+    // On fait TOURNER le cap pendant la course : plein nord, le joueur finissait le nez dans
+    // une façade, sa vitesse tombait à zéro et le cerf-volant redescendait — le test mesurait
+    // alors un joueur immobile, pas un cerf-volant. On vérifie aussi qu'il a vraiment couru.
     G.sacAjoute('cerf'); G.sacSortir('cerf');
     for (let i = 0; i < 40; i++) G.step(1 / 60, true);
     const h0 = G.sac.cerf.h;
+    let hMax = h0, course = 0, vMax = 0, px = P.pos.x, pz = P.pos.z;
     G.keys.add('KeyW'); P.run = true;
-    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 60 * 10; i++) {
+      G.cam.yaw = Math.sin(i / 300) * 2.2;
+      G.step(1 / 60, true);
+      course += Math.hypot(P.pos.x - px, P.pos.z - pz); px = P.pos.x; pz = P.pos.z;
+      vMax = Math.max(vMax, Math.hypot(P.vel.x, P.vel.z));
+      hMax = Math.max(hMax, G.sac.cerf.h);
+    }
     G.keys.delete('KeyW');
-    const h1 = G.sac.cerf.h, hautCerf = +(G.sac.cerf.g.position.y - P.pos.y).toFixed(1);
+    const h1 = hMax, hautCerf = +(G.sac.cerf.g.position.y - P.pos.y).toFixed(1);
+    const parcouru = +course.toFixed(1), vitesse = +vMax.toFixed(1);
     // ---- 4. le boomerang : il part, il s'éloigne, il revient en main ----
     G.sacAjoute('boomerang'); G.sacSortir('boomerang');
     const enMain0 = G.sac.main;
@@ -16477,12 +16495,13 @@ test('aucun article acheté en boutique ne reste un objet mort, et les jouets de
     G.sacAjoute('peluche'); G.sacSortir('peluche');
     P.hp = 40; const calin = G.jouetAction(G.jouetActionPrete()); const hp = P.hp;
     return { morts, nbVivants: vivants.length, pose, d0: +d0.toFixed(1), d1: +d1.toFixed(1),
-      h0: +h0.toFixed(1), h1: +h1.toFixed(1), hautCerf, enMain0, loin: +loin.toFixed(1), revenu, calin, hp };
+      h0: +h0.toFixed(1), h1: +h1.toFixed(1), hautCerf, parcouru, vitesse,
+      enMain0, loin: +loin.toFixed(1), revenu, calin, hp };
   });
   const ok = r.morts.length === 0 && r.nbVivants >= 14 && r.pose < 1.2 && r.d1 > r.d0 + 4
-    && r.h1 > r.h0 + 4 && r.hautCerf > 6 && r.enMain0 === 'boomerang' && r.loin > 10 && r.revenu
+    && r.parcouru > 15 && r.h1 > r.h0 + 4 && r.enMain0 === 'boomerang' && r.loin > 10 && r.revenu
     && r.calin && r.hp > 40;
-  return { ok, detail: `avant : 11 articles achetés au comptoir sur 11 ne faisaient RIEN · maintenant ${r.morts.length} article sans usage (${r.morts.join(', ') || 'aucun'}) sur ${r.nbVivants} au catalogue du sac · ballon posé au sol à ${r.pose} m, envoyé de ${r.d0} m à ${r.d1} m d'un coup de pied · cerf-volant monté de ${r.h0} m à ${r.h1} m en courant (${r.hautCerf} m au-dessus du joueur) · boomerang parti à ${r.loin} m et revenu en main : ${r.revenu ? 'oui' : 'non'} · câlin de peluche : ❤️ 40 → ${r.hp}` };
+  return { ok, detail: `avant : 11 articles achetés au comptoir sur 11 ne faisaient RIEN · maintenant ${r.morts.length} article sans usage (${r.morts.join(', ') || 'aucun'}) sur ${r.nbVivants} au catalogue du sac · ballon posé au sol à ${r.pose} m, envoyé de ${r.d0} m à ${r.d1} m d'un coup de pied · cerf-volant monté de ${r.h0} m à ${r.h1} m pendant une course de ${r.parcouru} m à ${r.vitesse} m/s (fil tendu à ${r.hautCerf} m au-dessus du joueur à l'arrivée) · boomerang parti à ${r.loin} m et revenu en main : ${r.revenu ? 'oui' : 'non'} · câlin de peluche : ❤️ 40 → ${r.hp}` };
 });
 
 // ================= POSTE AMBULANCE (round 71) =================

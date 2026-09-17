@@ -797,15 +797,18 @@ body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 
 body.drone #droneHud{display:block}
 body.uiopen #droneHud,body.lobby #droneHud{display:none!important}
 #droneInfo{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#0d1a22e0;border:1px solid #5cc453;border-radius:9px;color:#dff7e2;font-size:13px;font-weight:800;padding:5px 12px;letter-spacing:.03em;white-space:nowrap;font-family:ui-monospace,monospace}
-#droneAide{position:absolute;top:84px;left:50%;transform:translateX(-50%);background:#0d1a22c4;border-radius:9px;color:#b9c9dd;font-size:11px;font-weight:700;padding:4px 10px;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+#droneAide{position:absolute;bottom:12px;right:12px;background:#0d1a22d0;border-radius:9px;color:#b9c9dd;font-size:11px;font-weight:700;padding:4px 10px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}
 #droneCadre{position:absolute;inset:0;display:none}
 body.dronevue #droneCadre{display:block;border:3px solid #3ef2ff44;box-shadow:inset 0 0 110px #00131c99}
 body.dronevue #droneCadre::before{content:'';position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border:2px solid #3ef2ffcc;border-radius:50%;box-shadow:0 0 0 1px #0006}
-body.dronevue #droneCadre::after{content:'\25CF REC \00B7 DRONE';position:absolute;bottom:16px;right:20px;color:#ff6b6b;font-size:13px;font-weight:800;letter-spacing:.14em;text-shadow:0 1px 3px #000}
+body.dronevue #droneCadre::after{content:'\25CF REC \00B7 DRONE';position:absolute;top:54px;right:20px;color:#ff6b6b;font-size:13px;font-weight:800;letter-spacing:.14em;text-shadow:0 1px 3px #000}
+/* VUE DU DRONE : le radar du JOUEUR n'a rien à faire à bord — et il masquait l'appareil,
+   pile au centre bas de l'écran (vu en capture). Il revient dès qu'on repasse au joueur. */
+body.dronevue #gps{display:none!important}
 body.flash #droneHud::after{content:'';position:absolute;inset:0;background:#fff;opacity:.75;pointer-events:none}
 body.tv #droneInfo{font-size:calc(var(--uh) * .75);top:calc(var(--tvpad) + var(--uh) * 2.4)}
-body.tv #droneAide{font-size:calc(var(--uh) * .6);top:calc(var(--tvpad) + var(--uh) * 3.5)}
-@media(max-width:700px){#droneInfo{font-size:11px;top:48px}#droneAide{font-size:9px;top:72px}}
+body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var(--uh) * .4);right:calc(var(--tvpad) + 4px)}
+@media(max-width:700px){#droneInfo{font-size:11px;top:48px}#droneAide{font-size:9px;max-width:72vw}}
 </style>
 </head>
 <body class="lobby">
@@ -5627,7 +5630,11 @@ const ballMats = (() => {
 function makeBall(kind, x, y, z) {
   const r = kind === 'foot' ? 0.5 : 0.28;   // (les boules sont retaillées après création)
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, kind === 'foot' ? 20 : 12, kind === 'foot' ? 14 : 9), ballMats[kind] || lam(0xb9c2cf)); mesh.castShadow = true; mesh.position.set(x, y, z); worldGroup.add(mesh);
-  const b = { mesh, pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), r, kind, hitCd: 0, state: 'idle', bounces: 0, ground: 0.15, bounds: null, id: ++ballSeq, tgt: new THREE.Vector3(x, y, z), lastHit: -1 };
+  // `home` : le point d'engagement, où le ballon revient après un but. Il n'était posé QUE
+  // sur le ballon du terrain de foot ; le jour où un autre ballon (celui du sac, poste DRONE
+  // & ROBOT) a franchi la ligne de but, `b.pos.copy(b.home)` a fait planter toute la ville
+  // (« Cannot read properties of undefined »). Chaque ballon naît donc avec le sien.
+  const b = { mesh, pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), r, kind, hitCd: 0, state: 'idle', bounces: 0, ground: 0.15, bounds: null, id: ++ballSeq, tgt: new THREE.Vector3(x, y, z), home: new THREE.Vector3(x, y, z), lastHit: -1 };
   city.balls.push(b); return b;
 }
 let ballSeq = 0;
@@ -18423,12 +18430,30 @@ const ORDRES_ROBOT = [
 // rapporte. Exactement le geste du chien avec sa balle — ce que l'enfant connaît déjà.
 function robotLance() {
   if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
-  const d = 11 + Math.random() * 6;
-  const bx = P.pos.x + Math.sin(P.facing) * d, bz = P.pos.z + Math.cos(P.facing) * d;
+  // ON NE LANCE PAS LE BOULON DANS UN MUR. La distance était tirée au sort entre 11 et 17 m
+  // devant le joueur : une fois sur trois il atterrissait DANS une façade ou derrière une
+  // clôture, le robot s'y cognait et ne revenait jamais (test rouge « il rapporte » une fois
+  // sur deux). On recule le point de chute mètre par mètre jusqu'à trouver de la place.
+  // On vérifie non seulement le POINT de chute mais TOUTE la ligne, mètre par mètre : un
+  // boulon qui tombe dans une cour fermée est « libre » là où il est, et parfaitement
+  // inatteignable. On recule jusqu'à trouver un jet entièrement dégagé.
+  const ligneLibre = (tx, tz) => {
+    const n = Math.max(2, Math.ceil(Math.hypot(tx - P.pos.x, tz - P.pos.z)));
+    for (let i = 1; i <= n; i++) {
+      const u = i / n;
+      if (npcBlocked(P.pos.x + (tx - P.pos.x) * u, P.pos.y, P.pos.z + (tz - P.pos.z) * u, 0.45)) return false;
+    }
+    return true;
+  };
+  let d = 11 + Math.random() * 6, bx = 0, bz = 0;
+  for (; d > 3; d -= 1) {
+    bx = P.pos.x + Math.sin(P.facing) * d; bz = P.pos.z + Math.cos(P.facing) * d;
+    if (ligneLibre(bx, bz)) break;
+  }
   const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshLambertMaterial({ color: 0xffd23f }));
   m.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); worldGroup.add(m);
   robot.objet = { m, x: bx, z: bz, y: groundUnder(bx, bz, null, P.pos.y + 1.2) + 0.1, tenu: false, t: 0,
-    dep: [P.pos.x, P.pos.y + 1.2, P.pos.z] };
+    dep: [P.pos.x, P.pos.y + 1.2, P.pos.z], fin: simTime + 25 };
   robot.ordre = 'cherche'; robot.phase = 'aller'; robot.poste = null;
   robotDit('j\'y vais ! je te le rapporte', 2400);
   return true;
@@ -18486,7 +18511,12 @@ function robotTick(dt) {
   // AU VOLANT, PAS DE LAISSE. Un robot de 90 cm ne monte pas en voiture : il resterait
   // traîné à 2 m d'un véhicule lancé à 90 km/h, en volant. Il attend donc sur place et se
   // replace à côté du joueur dès qu'il redescend.
-  if (drive.car || P.voile) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
+  // (le joueur EMMENÉ par un ami compte aussi : depuis que le passager est visible, il n'est
+  //  plus au volant — `drive.car` est vide — et la laisse le traînait derrière la voiture.
+  //  Même test que pour le chien : `city.rideBot`.)
+  const enVoiture = drive.car || P.voile
+    || (city.rideBot && city.rideBot.drive && city.rideBot.drive.passager ? city.rideBot.drive.car : null);
+  if (enVoiture) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
   if (robot.loin) {
     robot.loin = false; robot.replaces++;
     robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
@@ -18513,8 +18543,22 @@ function robotTick(dt) {
     // du joueur qui court (5,6 × 1,3 = 7,3 m/s). C'est ce qui garantit les 2 m demandés.
     const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 2.2 + d * 5.5);
     if (v > 0) {
+      // IL CONTOURNE. Tout droit et rien d'autre, il restait planté contre le premier mur
+      // venu : mesuré, envoyé chercher un objet à 24 m il s'arrêtait à 8,4 m de lui, contre
+      // une façade, et n'en repartait plus. Quand le cap direct est refusé, on essaie six
+      // caps déviés (±40°, ±80°, ±120°) et on prend le premier libre — le côté choisi tient
+      // 1,2 s pour qu'il longe le mur au lieu d'osciller devant.
+      const cap = Math.atan2(dx, dz);
       const o = { x: robot.x, y: robot.y, z: robot.z };
-      const bloque = npcMove(o, dx / d * v * dt, dz / d * v * dt, 0.26);
+      let bloque = npcMove(o, Math.sin(cap) * v * dt, Math.cos(cap) * v * dt, 0.26);
+      if (bloque) {
+        if (simTime > (robot.coteT || 0)) { robot.coteT = simTime + 1.2; robot.cote = robot.cote === 1 ? -1 : 1; }
+        for (const da of [0.7, 1.4, 2.1]) {
+          const a = cap + da * (robot.cote || 1);
+          const o2 = { x: robot.x, y: robot.y, z: robot.z };
+          if (!npcMove(o2, Math.sin(a) * v * dt, Math.cos(a) * v * dt, 0.26)) { o.x = o2.x; o.z = o2.z; bloque = false; break; }
+        }
+      }
       robot.x = o.x; robot.z = o.z;
       robot.h = Math.atan2(dx, dz);
       avance = Math.hypot(o.x - (but.x - dx), o.z - (but.z - dz)) / Math.max(dt, 1e-4);
@@ -18535,12 +18579,21 @@ function robotTick(dt) {
     if (robot.phase === 'aller' && ob.t >= 1 && Math.hypot(robot.x - ob.x, robot.z - ob.z) < 0.9) {
       ob.tenu = true; robot.phase = 'retour'; robotDit('je l\'ai ! je reviens', 2200);
     }
+    // IL NE PART PAS POUR TOUJOURS. Si au bout de 25 s il n'a pas mis la main dessus (une
+    // grille, un fossé, un camion garé entre les deux), il abandonne et revient : un
+    // compagnon qui disparaît de la partie est pire qu'un compagnon qui échoue.
+    if (robot.phase === 'aller' && (simTime > ob.fin || robot.stuckT > 6)) {
+      worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
+      robotDit('je n\'arrive pas à l\'attraper, je reviens', 2800);
+      return robotAnime(dt);
+    }
     if (ob.tenu && robot.rig && robot.rig.main) {
       const p = robot.rig.main.getWorldPosition(new THREE.Vector3());
       ob.m.position.copy(p); ob.m.rotation.set(0, robot.h, 0);
     }
     if (robot.phase === 'retour' && robotDist() < 1.4) {
       worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
+      robot.rapportes = (robot.rapportes || 0) + 1;
       robotDit('tiens, je te le rends !', 2400);
       try { sfx.coin(); } catch (e) {}
     }
@@ -18648,7 +18701,7 @@ function ordreRobotTexte(txt) {
   for (const o of ORDRES_ROBOT) if (o.mots.test(t)) { robotOrdre(o.id, txt); return true; }
   return false;
 }
-function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.lampe = false; robot.faisceau = null; }
+function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.rapportes = 0; robot.lampe = false; robot.faisceau = null; }
 // ================= LES JOUETS DE PLEIN AIR (round 71) =================
 // Le joueur cite « ballon, cerf-volant, skate, boomerang, peluche ». Le rayon Jeux Vidéo du
 // Techno-Parc ne vendait que de l'électronique : on y ajoute quatre jouets, et chacun se joue
@@ -23662,7 +23715,7 @@ function cityVie(dt) {
     // but ?
     // les deux buts ont recule de 3 m (leur filet debordait sur la chaussee) : la ligne de but
     // est a x = -19 et -7, le ballon compte des qu'il l'a franchie de 20 cm
-    if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -18.8 || b.pos.x > -7.2) && b.state !== 'goal') {
+    if (b.kind === 'foot' && !b.jouet && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -18.8 || b.pos.x > -7.2) && b.state !== 'goal') {   // `!b.jouet` : le ballon sorti du sac n'est pas celui du match, il ne compte pas les buts de la ville
       b.state = 'goal';
       if (fm.on) footBut(b);
       else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);

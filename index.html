@@ -9142,7 +9142,9 @@ function meteoSet(kind, duree, force) {
   meteo.cible = force == null ? 1 : clamp(force, 0, 1);
   if (kind !== 'clair') msg(kind === 'pluie' ? '🌧️ La pluie arrive…' : '❄️ Il commence à neiger !', 2200);
   else msg('☀️ Le ciel se dégage', 1800);
-  chat(null, kind === 'pluie' ? '🌧️ Averse sur la ville' : kind === 'neige' ? '❄️ Chute de neige' : '☀️ Beau temps');
+  // le chat annonce ce qui ARRIVE (le changement met une vingtaine de secondes à s'installer) : « Chute de
+  // neige » sous un ciel encore bleu semblait une erreur (n° 19)
+  chat(null, kind === 'pluie' ? '🌧️ La pluie arrive sur la ville' : kind === 'neige' ? '❄️ La neige arrive' : '☀️ Le beau temps revient');
 }
 // ---- Décor de neige : congères, toits et lampadaires enneigés, capots blancs, bonshommes
 // de neige et plaques de verglas. Construit une seule fois par monde, montré quand il neige.

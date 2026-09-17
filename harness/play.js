@@ -16544,3 +16544,131 @@ test('on entre vraiment dans chaque salle de classe et rien ne barre le seuil', 
   const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 1 && s.t < 4 && s.approche < 1.6 && s.assis);
   return { ok, detail: `avant : un bandeau blanc de 10 m × 0,90 m barrait le seuil des 4 salles de 0,30 à 1,20 m · maintenant ${r.salles.map(s => `${s.n} : ${s.bloc} objet dans le seuil, franchi de ${s.franchi} m en ${s.t} s, table à ${s.approche} m, assis ${s.assis ? 'oui' : 'NON'}`).join(' · ')}` };
 });
+
+test('l\'escalier de la banque ne touche plus le mur : on passe derrière, et on monte au 2ᵉ', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: -42, y: 1, z: 70, hour: 12, frais: true });
+    const bk = G.city.bank, bx = bk.x, bz = bk.z, bb = new T.Box3();
+    const marcher = (tx, tz, secondes) => {
+      G.keys.add('ArrowUp'); let i = 0;
+      for (; i < secondes * 60; i++) {
+        G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9;
+        G.step(1 / 60, true);
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.7) break;
+      }
+      G.keys.delete('ArrowUp'); return i / 60;
+    };
+    // 1. POUR CHAQUE VOLÉE : sa largeur, l'écart entre son BORD et la face intérieure du mur
+    //    qu'elle longe, et le nombre de segments de main courante DE CHAQUE CÔTÉ.
+    const volees = bk.esc.map(e => {
+      const m = G.solids.filter(o => Math.abs(o.z - e.z) < 0.3 && Math.abs(o.d - 3.6) < 0.25
+        && o.w > 1.3 && o.w < 1.8 && o.y > e.y0 && o.y < e.y1 + 1).sort((a, b) => a.y - b.y);
+      const larg = Math.max(...m.map(o => o.d));
+      const nord = e.z < bz, bord = nord ? e.z - larg / 2 : e.z + larg / 2;
+      const murs = G.solids.filter(o => o.h > 3 && o.w > 8 && Math.abs(o.x - bx) < bk.w
+        && (nord ? o.z < bz - bk.d / 2 + 1.5 : o.z > bz + bk.d / 2 - 1.5));
+      const face = nord ? Math.max(...murs.map(o => o.z + o.d / 2)) : Math.min(...murs.map(o => o.z - o.d / 2));
+      const x1 = Math.min(e.bas[0], e.haut[0]), x2 = Math.max(e.bas[0], e.haut[0]);
+      const rampes = [-1, 1].map(s => {
+        let n = 0;
+        G.worldGroup.traverse(o => {
+          if (!o.isMesh || !o.geometry) return;
+          bb.setFromObject(o);
+          if (!isFinite(bb.min.x)) return;
+          const cz = (bb.min.z + bb.max.z) / 2, cx = (bb.min.x + bb.max.x) / 2, cy = (bb.min.y + bb.max.y) / 2;
+          if (Math.abs(cz - (e.z + s * (larg / 2 - 0.12))) > 0.12) return;
+          if (cx < x1 || cx > x2 || cy < e.y0 || cy > e.y1 + 1.8) return;
+          if (bb.max.x - bb.min.x > 2.2 || bb.max.z - bb.min.z > 0.3) return;
+          n++;
+        });
+        return n;
+      });
+      return { etage: e.y0 < 1 ? 'RDC' : '1ᵉʳ', largeur: +larg.toFixed(2), ecartMur: +Math.abs(bord - face).toFixed(2),
+        marches: m.length, haut: +m[0].h.toFixed(3), giron: +(m[0].w - 0.06).toFixed(2), rampes };
+    });
+    // 2. ON PASSE VRAIMENT DERRIÈRE : le joueur longe la volée du hall d'un bout à l'autre.
+    G.P.sit = null; G.P.pos.set(bx - 7.5, 0.36, bz - 8.6); G.P.vel.set(0, 0, 0);
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    const depart = G.P.pos.x;
+    marcher(bx + 7.5, bz - 8.6, 12);
+    const derriere = +(G.P.pos.x - depart).toFixed(2), zDerriere = +(G.P.pos.z - bz).toFixed(2);
+    // 3. ET ON MONTE : porte → pied de la volée → 1ᵉʳ → volée du 2ᵉ → coffre
+    G.P.pos.set(bx + 9, 0.36, bz); G.P.vel.set(0, 0, 0);
+    const e0 = bk.esc[0], e1 = bk.esc[1], t0 = G.simTime;
+    marcher(bx + 6.5, bz, 8); marcher(bx - 7, bz, 14);
+    marcher(e0.bas[0] + 0.6, e0.bas[1], 12); marcher(e0.haut[0] + 1.0, e0.haut[1], 20);
+    const y1 = +G.P.pos.y.toFixed(2), t1 = +(G.simTime - t0).toFixed(1);
+    marcher(bx + 6.5, bz, 12); marcher(bx + 6.5, e1.bas[1] - 0.9, 12);
+    marcher(e1.bas[0], e1.bas[1], 12); marcher(e1.haut[0], e1.haut[1], 22);
+    const y2 = +G.P.pos.y.toFixed(2);
+    const c = (G.city.safes || []).find(s => Math.abs(s.x - bx) < 10 && Math.abs(s.z - bz) < 10);
+    marcher(c.x + 0.7, c.z, 16);
+    return { volees, derriere, zDerriere, y1, t1, y2, coffreY: +c.y.toFixed(2),
+      dCoffre: +Math.hypot(G.P.pos.x - c.x, G.P.pos.z - c.z).toFixed(2), total: +(G.simTime - t0).toFixed(1) };
+  });
+  const ok = r.volees.length === 2
+    && r.volees.every(v => v.ecartMur >= 1.5 && v.largeur >= 3.4 && v.marches >= 10 && v.haut <= 0.52 && v.giron >= 0.55
+      && v.rampes[0] >= 10 && v.rampes[1] >= 10)
+    && r.derriere >= 13 && r.y1 > 4.9 && r.y2 > r.coffreY - 0.15 && r.dCoffre < 1.6;
+  return { ok, detail: `avant : les deux volées passaient à 0,40 m de leur mur, main courante d'un seul côté · maintenant ${r.volees.map(v => `volée du ${v.etage} : ${v.largeur} m de large à ${v.ecartMur} m du mur, ${v.marches} marches de ${v.haut} m sur ${v.giron} m de giron, ${v.rampes[0]}+${v.rampes[1]} segments de main courante`).join(' · ')} · le joueur longe la volée du hall par-derrière sur ${r.derriere} m (à z ${r.zDerriere} du centre) · et de la porte il atteint le palier du 1ᵉʳ (${r.y1} m) en ${r.t1} s puis le coffre du 2ᵉ (${r.y2} m, à ${r.dCoffre} m) en ${r.total} s simulées` };
+});
+
+test('rien ne bouche les passages de la banque, et ses pancartes sont hors du chemin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: -42, y: 1, z: 70, hour: 12, frais: true });
+    const bk = G.city.bank, bx = bk.x, bz = bk.z, bb = new T.Box3();
+    // LES COULOIRS QUE LE JOUEUR DOIT POUVOIR EMPRUNTER, à hauteur d'épaules (0,50 à 1,90 m
+    // au-dessus du plancher de leur étage). Aucun solide n'a le droit d'y mordre.
+    const lanes = [
+      { n: 'seuil → hall', x: [bx + 1, bx + 9.2], z: [bz - 1.4, bz + 1.4], y: 0.36 },
+      { n: 'hall → guichets', x: [bx - 1.4, bx + 1.4], z: [bz + 1, bz + 5.6], y: 0.36 },
+      { n: 'hall → couloir ouest', x: [bx - 9.2, bx - 5.2], z: [bz - 3.4, bz + 3.4], y: 0.36 },
+      { n: 'derrière la volée du hall', x: [bx - 8.4, bx + 8.4], z: [bz - 9.2, bz - 8.0], y: 0.36 },
+      // la coursive fait 5,60 m : on contrôle les 3,80 m du milieu, le distributeur a le droit
+      // d'être contre le mur est, comme les bacs à plantes dans leurs angles.
+      { n: 'coursive est du 1ᵉʳ', x: [bx + 4.6, bx + 8.4], z: [bz - 3.4, bz + 3.4], y: 5.1 },
+      { n: 'devant les coffres du 2ᵉ', x: [bx - 7.4, bx - 6.0], z: [bz - 8, bz + 2], y: 9.9 },
+    ];
+    const bouches = [];
+    for (const L of lanes) for (const o of G.solids) {
+      if (o.x + o.w / 2 <= L.x[0] || o.x - o.w / 2 >= L.x[1]) continue;
+      if (o.z + o.d / 2 <= L.z[0] || o.z - o.d / 2 >= L.z[1]) continue;
+      if (o.y + o.h / 2 <= L.y + 0.5 || o.y - o.h / 2 >= L.y + 1.9) continue;
+      bouches.push(`${L.n} : bloc ${o.w.toFixed(1)}×${o.h.toFixed(1)}×${o.d.toFixed(1)} en (${(o.x - bx).toFixed(1)}, ${(o.z - bz).toFixed(1)})`);
+    }
+    // DEUX MEUBLES NE SE TRAVERSENT PAS. Le comptoir d'accueil était planté DANS celui des
+    // guichets : on relève toute paire de meubles du hall qui se chevauche de plus de 5 cm.
+    // On ne compare que les meubles DÉCLARÉS (pas les `decor` que solidifieDecor ramasse :
+    // le dossier d'un canapé ou un écran posé sur un comptoir le touchent forcément).
+    const meubles = G.solids.filter(o => !o.decor && Math.abs(o.x - bx) < 9.6 && Math.abs(o.z - bz) < 9.6
+      && o.h >= 0.45 && o.h <= 3 && o.w < 6 && o.d < 6 && o.y - o.h / 2 < 3.5 && o.y + o.h / 2 > 0.4);
+    const croises = [];
+    for (let i = 0; i < meubles.length; i++) for (let j = i + 1; j < meubles.length; j++) {
+      const a = meubles[i], b = meubles[j];
+      const ox = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+      const oz = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+      const oy = Math.min(a.y + a.h / 2, b.y + b.h / 2) - Math.max(a.y - a.h / 2, b.y - b.h / 2);
+      if (ox > 0.05 && oz > 0.05 && oy > 0.05) croises.push(`(${(a.x - bx).toFixed(1)},${(a.z - bz).toFixed(1)}) × (${(b.x - bx).toFixed(1)},${(b.z - bz).toFixed(1)})`);
+    }
+    // LES PANCARTES : jamais un solide, et jamais sous 1,70 m si elles ne sont pas au mur.
+    const panneaux = [], basses = [];
+    G.worldGroup.traverse(m => {
+      if (!m.isMesh || !m.material || !m.material.map || !m.material.isMeshBasicMaterial) return;
+      bb.setFromObject(m);
+      if (!isFinite(bb.min.x)) return;
+      if (bb.min.x < bx - 9.6 || bb.max.x > bx + 9.6 || bb.min.z < bz - 9.6 || bb.max.z > bz + 9.6) return;
+      const solide = G.solids.some(o => o.mesh === m);
+      const auMur = bb.min.x < bx - 9.0 || bb.max.x > bx + 9.0 || bb.min.z < bz - 9.0 || bb.max.z > bz + 9.0;
+      panneaux.push(+bb.min.y.toFixed(2));
+      if (solide || (!auMur && bb.min.y < 1.7)) basses.push(`${bb.min.y.toFixed(2)} m${solide ? ' (avec collision !)' : ''}`);
+    });
+    const assises = G.city.benches.filter(b => Math.abs(b.x - bx) < 9 && Math.abs(b.z - bz) < 9).length;
+    return { bouches, croises, nPanneaux: panneaux.length, basses,
+      plusBasse: panneaux.length ? Math.min(...panneaux) : 0, assises, nMeubles: meubles.length };
+  });
+  const ok = r.bouches.length === 0 && r.croises.length === 0 && r.basses.length === 0
+    && r.nPanneaux >= 6 && r.assises >= 2;
+  return { ok, detail: `avant : le comptoir d'accueil traversait celui des guichets et les poteaux de file étaient plantés dedans · maintenant 6 couloirs contrôlés, ${r.bouches.length} obstacle${r.bouches.length ? ' (' + r.bouches.join(' · ') + ')' : ''} · ${r.nMeubles} meubles du hall, ${r.croises.length} paire qui se traverse${r.croises.length ? ' (' + r.croises.join(' · ') + ')' : ''} · ${r.nPanneaux} pancartes, aucune avec collision, la plus basse à ${r.plusBasse} m${r.basses.length ? ' — fautives : ' + r.basses.join(', ') : ''} · ${r.assises} places assises dans le hall` };
+});

@@ -9807,8 +9807,10 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     box(ex2 - 0.38, 1.55, bz + dz, 0.06, 0.6, 0.8, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
     box(ex2 - 0.38, 1.0, bz + dz, 0.06, 0.18, 0.5, trim, { deco: true, studs: false });
   }
-  // LES PLANTES aux quatre angles (elles étaient posées DEUX FOIS au même endroit)
-  for (const [px, pz] of [[-8.8, -8.8], [8.8, -8.8], [8.8, 8.8], [-8.8, 8.8]]) {
+  // LES PLANTES aux quatre angles (elles étaient posées DEUX FOIS au même endroit). Un bac
+  // est SOLIDE pour le joueur (solidifieDecor le ramasse) : à 8,80 m du centre il mordait de
+  // 10 cm sur le couloir de 1,80 m qui passe derrière la volée. Il rentre dans l'angle exact.
+  for (const [px, pz] of [[-9.15, -9.15], [9.15, -9.15], [9.15, 9.15], [-9.15, 9.15]]) {
     box(bx + px, 0.7, bz + pz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false });
     const pl = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8), lam(0x3fae4a)); pl.position.set(bx + px, 1.7, bz + pz); pl.scale.y = 1.25; worldGroup.add(pl);
   }

@@ -8542,10 +8542,26 @@ function carrefourLibre(c, k) {
   }
   return true;
 }
+// LE JOUEUR EST-IL UN PIETON ? Il ne l'est pas seulement quand il tient le volant : il est
+// AUSSI dans une caisse quand un membre du gang ou un ami le conduit (city.rideBot) et pendant
+// la fuite apres un braquage (coup). Sans cette reponse commune, la voiture qui l'emmenait
+// voyait « quelqu'un a pied juste devant le capot » — c'etait lui, assis sur le siege passager,
+// 30 cm devant le centre de la caisse — et elle klaxonnait en roulant au pas tout le trajet.
+function joueurAPied() {
+  if (drive.car) return false;
+  if (typeof city !== 'undefined' && city.rideBot && city.rideBot.drive && city.rideBot.drive.passager) return false;
+  if (typeof coup !== 'undefined' && coup.etat === 'fuite') return false;
+  return true;
+}
 // Un pieton (bot, joueur, ouvrier) est-il engage sur ce passage ?
+// IL FAUT AVOIR LE PIED SUR LE BITUME. La tolerance de 70 cm autour du rectangle du passage
+// deborde sur le trottoir : un habitant qui attendait sagement au bord, ou qui longeait la
+// bordure, arretait toute la circulation. On exige donc que le pieton soit REELLEMENT sur la
+// chaussee — c'est la definition du code de la route : engage sur le passage.
 function pietonSurPassage(p) {
-  const dedans = (x, y, z) => Math.abs(y) < 2.6 && Math.abs(x - p.x) < p.w / 2 + 0.7 && Math.abs(z - p.z) < p.d / 2 + 0.7;
-  if (!drive.car && P.hp > 0 && dedans(P.pos.x, P.pos.y, P.pos.z)) return true;
+  const dedans = (x, y, z) => Math.abs(y) < 2.6 && Math.abs(x - p.x) < p.w / 2 + 0.4 && Math.abs(z - p.z) < p.d / 2 + 0.4
+    && surLaChaussee(x, z, 0);
+  if (joueurAPied() && P.hp > 0 && dedans(P.pos.x, P.pos.y, P.pos.z)) return true;
   for (const b of bots) if (!b.drive && !b.prison && b.av && b.av.group.visible && dedans(b.pos.x, b.pos.y, b.pos.z)) return true;
   return false;
 }
@@ -8895,12 +8911,21 @@ function gapDevant(c, latVoulu) {
   return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
 }
 // Freine et klaxonne quand quelqu'un est a pied juste devant le capot.
+// CE QUI EST SUR LE TROTTOIR N'EST PAS DEVANT LE CAPOT. Mesure du trajet « un membre emmene
+// le joueur a la villa » : 67 % du temps la voiture etait a l'arret ou au pas avec la raison
+// « pieton », parce que le couloir de 1,7 m de large mordait les deux trottoirs et que la
+// ville est pleine d'habitants qui marchent le long des rues. Resultat : 195 s et 1,6 m/s de
+// moyenne pour 168 m a vol d'oiseau. On ne freine donc que pour qui a VRAIMENT un pied sur la
+// chaussee, et dans la largeur de la caisse (1,35 m de demi-couloir) plutot que d'un bus.
 function pietonDevant(c) {
   const fx = Math.sin(c.h), fz = Math.cos(c.h), spd = Math.abs(c.speed || 0);
-  const portee = 3.2 + spd * 0.7;
+  const portee = 3.2 + spd * 0.7, lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.2);
   const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, al = dx * fx + dz * fz;
-    return Math.abs(y - (c.y || 0)) < 2.4 && al > 0 && al < portee && Math.abs(-dx * fz + dz * fx) < 1.7; };
-  if (!drive.car && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
+    // hors chaussee (parking, allee, place), on freine quand meme pour qui est a TOUCHER le
+    // pare-chocs : on ne renverse personne, meme au milieu d'un parking.
+    return Math.abs(y - (c.y || 0)) < 2.4 && al > 0 && al < portee && Math.abs(-dx * fz + dz * fx) < lat
+      && (surLaChaussee(x, z, 0) || al < 2.4); };
+  if (joueurAPied() && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
   for (const b of bots) if (!b.drive && b.av && b.av.group.visible && gene(b.pos.x, b.pos.y, b.pos.z)) return true;
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
@@ -20680,19 +20705,25 @@ function poseVehicule(c, dt) {
 // APPARAÎT assis au lieu de rester planté debout une demi-seconde. C'est une fonction à part
 // pour que le banc d'essai puisse la jouer sans dépendre de la cadence d'affichage.
 function poseJoueurAuVolant(dt) {
-  const c = drive.car;
-  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); me.group.rotation.z = 0; return null; }
+  // PASSAGER : le membre du gang (ou l'ami) conduit, le joueur est assis A COTE DE LUI et on
+  // le VOIT. Même chemin que le conducteur, même table de places : c'est la seule façon de
+  // garantir la bonne hauteur, le bon cap et les jambes pliées dans tous les véhicules.
+  const vj = vehiculeDuJoueur();
+  const c = vj ? vj.car : null;
+  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); me.group.rotation.z = 0; drive.assis = false; return null; }
   if (c.rider) {
     // LE PILOTE ETAIT ASSIS A L'ORIGINE DU VEHICULE (z local = 0), c'est-a-dire au-dessus du
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
     // et que c'est LA qu'est la selle. Sur une moto, ca fait 15 cm devant la selle ; sur un
     // velo, 22 cm derriere le pilote. On applique donc le meme deport a tout le monde.
-    const pl = (typeof placesDe === 'function' ? (placesDe(c) || {}).conducteur : null) || { x: 0, z: 0 };
+    const pc = (typeof placesDe === 'function' ? (placesDe(c) || {}).conducteur : null) || { x: 0, z: 0 };
+    // en croupe : 75 cm derrière le pilote, sinon les deux bonshommes se chevauchent
+    const pl = vj.volant ? pc : { x: pc.x, z: pc.z - 0.75 };
     const sn = Math.sin(c.h), cs = Math.cos(c.h);
     me.group.position.set(c.x + pl.x * cs + pl.z * sn, c.y + c.spec.seat - 0.55, c.z - pl.x * sn + pl.z * cs);
-    me.group.rotation.z = c.tilt || 0; return 'rider';
+    me.group.rotation.y = c.h; me.group.rotation.z = c.tilt || 0; return 'rider';
   }
-  assiedAvatar(me, c, placesDe(c).conducteur, drive.assis ? dt : 1, true);
+  assiedAvatar(me, c, placesDe(c)[vj.place] || placesDe(c).conducteur, drive.assis ? dt : 1, vj.volant);
   drive.assis = true;
   if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
   return 'assis';
@@ -21176,6 +21207,25 @@ function placesDe(c) {
   if (!c) return PLACES.voiture;
   if (c.places) return c.places;
   return PLACES[c.kind || (c.heli ? 'heli' : 'voiture')] || PLACES.voiture;
+}
+// LE VÉHICULE DANS LEQUEL LE JOUEUR EST ASSIS — le sien (drive.car, au volant) ou celui d'un
+// membre du gang / d'un ami qui l'emmène (city.rideBot). Une seule réponse pour tout le jeu :
+// avant, le trajet « mon membre vient me chercher » cachait purement et simplement l'avatar
+// (`me.group.visible = false`) et posait le joueur au CENTRE de la caisse — on ne se voyait
+// pas assis à côté du conducteur, ce que le joueur a signalé.
+// `place` est le nom de la place dans la table PLACES (attention : `c.nbPlaces` est le NOMBRE
+// de places, `c.places` la table des sièges quand un véhicule a la sienne).
+function vehiculeDuJoueur() {
+  if (drive.car) return { car: drive.car, place: 'conducteur', volant: true };
+  const b = typeof city !== 'undefined' ? city.rideBot : null;
+  if (b && b.drive && b.drive.passager && b.drive.car) {
+    const c = b.drive.car, T = placesDe(c);
+    // le siège d'à côté d'abord, sinon la banquette ; jamais sur les genoux du conducteur
+    const nom = T.avant ? 'avant' : T.arriereG ? 'arriereG' : T.arriereD ? 'arriereD' : null;
+    if (!nom) return null;
+    return { car: c, place: nom, volant: false, ami: b };
+  }
+  return null;
 }
 function placeMonde(c, p) {   // repère local du véhicule → monde
   const cs = Math.cos(c.h), sn = Math.sin(c.h);
@@ -24369,11 +24419,15 @@ function frame() {
   const couche = (P.sleep && simTime < P.sleep) || gym.on === 'bench';
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
   else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
-  const riding = drive.car && drive.car.rider;
+  // PASSAGER D'UN AMI : il est assis dans une voiture, comme au volant. Sans ce « vj », la
+  // boucle d'affichage rejouait l'animation « debout » par-dessus la pose assise et le joueur
+  // se retrouvait planté au milieu de la caisse, jambes tendues.
+  const vj = vehiculeDuJoueur();
+  const riding = !!(vj && vj.car.rider);
   poseJoueurAuVolant(dt);
   const sousVoile = !!(P.voile && P.voileMesh);
-  const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : drive.car ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
-  animateRig(me.rig, myAnim, riding ? Math.abs(drive.speed) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
+  const myAnim = gym.on === 'bench' ? 'lift' : couche ? 'sleep' : riding ? 'ride' : vj ? 'sit' : (P.swing || P.ride || P.sit) ? 'sit' : gym.on === 'bench' ? 'lift' : gym.on === 'run' ? 'walk' : P.swimming ? 'swim' : P.dance > 0 ? 'dance' : (running && !P.grounded && !P.climbing) ? 'air' : (sp > 0.6 || P.climbing) ? 'walk' : 'idle';
+  animateRig(me.rig, myAnim, riding ? Math.abs(vj.car === drive.car ? drive.speed : (vj.car.speed || 0)) : gym.on === 'run' ? 7 : P.climbing ? 3 : sp, dt, simTime);
   // POSTE ANIMATION : le combat du joueur se joue APRÈS la pose de base — garde, élan et
   // détente du coup de poing, coup de couteau, esquive, encaissement, chute. Sans cet appel,
   // les déclencheurs (coupDePoing, gardePoings…) n'auraient aucun effet visible.

@@ -519,6 +519,19 @@ window.__SHOT = {
           try { localStorage.setItem('superobby.stats', JSON.stringify(stats)); } catch (e37b) {}
         }
         try { applyMyLook(); } catch (e37) {}
+        // POSTE DRONE & ROBOT : le drone reste en l'air, le robot colle au joueur et les jouets
+        // restent poses d'un test (ou d'une capture) a l'autre. On vide le sac et on range tout.
+        try {
+          if (typeof droneRanger === 'function') droneRanger(true);
+          if (typeof robotRanger === 'function') robotRanger(true);
+          if (typeof jouetsReset === 'function') jouetsReset();
+          if (typeof sacReset === 'function') sacReset();
+          if (typeof sac !== 'undefined' && sac.objets) { for (const k of Object.keys(sac.objets)) delete sac.objets[k]; sacSauve(); }
+          if (typeof drone !== 'undefined') { drone.bat = 100; drone.album = []; drone.contacts = 0; }
+          if (typeof robot !== 'undefined') { robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.nom = 'Bip'; robot.dit = ''; }
+          if (typeof arcade !== 'undefined') arcade.jeu = null;
+          localStorage.removeItem('superobby.sac');
+        } catch (e39b) {}
         // LE CHIEN ADOPTE. Il suit le joueur d'un test a l'autre, aboie, mord et se met entre
         // le joueur et ce qu'on mesure ; et ses points de vie restaient a 20 apres une bagarre.
         if (typeof chien !== 'undefined') {
@@ -2141,6 +2154,8 @@ window.__G = {
   jouetAction: typeof jouetAction === 'function' ? jouetAction : null,
   jouetsTick: typeof jouetsTick === 'function' ? jouetsTick : null,
   hitBall: typeof hitBall === 'function' ? hitBall : null,
+  sacSauve: typeof sacSauve === 'function' ? sacSauve : null,
+  jouetsReset: typeof jouetsReset === 'function' ? jouetsReset : null,
 };
 `;
 

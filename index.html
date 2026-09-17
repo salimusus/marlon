@@ -19707,7 +19707,11 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
           chocVehicule(c, imp); chocVehicule(v, imp * 0.8);
           cam.kick = (cam.kick || 0) + 0.08; camSecousse(clamp(imp * 0.02, 0.15, 0.4), 0.45);
         }
-        choc(c, imp, imp > 7 ? v : null);
+        // TOUCHER UN VÉHICULE GARÉ EN MANŒUVRANT N'EST PAS UN ACCIDENT (n° 57 du Joueur : la grue
+        // sortie du dépôt frôlait la benne voisine à 8 m/s → « ACCIDENT ! », police, amende). Un
+        // véhicule à l'arrêt et libre ne fait l'objet d'un constat qu'à partir de 12 m/s (43 km/h).
+        const gare = !v.busy && Math.abs(v.speed || v.spd || 0) < 0.5;
+        choc(c, imp, imp > 7 && !(gare && imp < 12) ? v : null);
       } else sfx.tone(120, 0, .06, 'square', .04, 80); }
     drive.speed *= 0.75;
     if (!v.busy && !v.spd && !v.kart && !v.active) { const push = 0.5; if (ox < oz) v.x -= (Math.sign(a.x - b.x) || 1) * push; else v.z -= (Math.sign(a.z - b.z) || 1) * push; v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }   // une voiture garée se déplace un peu

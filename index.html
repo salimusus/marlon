@@ -14846,7 +14846,10 @@ function coneRue(x, z) {
 }
 
 // ================= JOUEUR =================
-const JUMP = 12, SPEED = 7, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
+// LA MARCHE. 7 m/s (25 km/h) sans courir : « on glisse », les jambes ne suivaient pas et on
+// traversait le centre-ville en 9 s (n° 17 du Joueur). 5,6 m/s à pied, la course (L3, à
+// bascule) monte à 7,3 m/s : on VOIT la différence, et le stick à mi-course marche vraiment.
+const JUMP = 12, SPEED = 5.6, COURSE = 1.3, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
 // Mode « rotation » : zone morte du stick pour le braquage. Fine (6 %) — une DualSense neuve
 // ne derive pas au-dela de 5 % — la ou l'ancienne formule ignorait tout virage sous 32 %.
 const ROT_MORTE = 0.06;
@@ -19171,7 +19174,7 @@ function step(dt, active) {
     const bouge = len > 0.05;
     const peut = P.run && bouge && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on && !P.eat && P.energie > 0;
     P.court = peut;
-    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / sprintDuree()); wantX *= 1.55; wantZ *= 1.55; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
+    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / sprintDuree()); wantX *= COURSE; wantZ *= COURSE; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
     else { P.energie = Math.min(100, P.energie + dt * (P.essouffle ? 100 / (11 - enduDe() * 0.03) : 100 / (7 - enduDe() * 0.02))); if (P.essouffle && P.energie > 45) P.essouffle = false; }
     const bar = $('stBar'); if (bar) { bar.style.width = P.energie + '%'; $('stBar').parentNode.classList.toggle('vide', P.essouffle); }
   }
@@ -23494,8 +23497,10 @@ function pollGamepad(dt) {
     }
     pad.tirR2 = tireR2;
     // « courir » est sur L3, comme dans les grands jeux de ville (L2 baisse le joueur).
-    const court = neuf[10];                                           // L3 : courir
-    if (court !== !!bas[10]) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
+    // L3 : COURIR, À BASCULE. Il fallait MAINTENIR L3 enfoncé tout en poussant le stick — impossible
+    // pour une petite main, et rien ne le disait (n° 17). Un appui lance la course, le suivant l'arrête ;
+    // elle s'arrête aussi toute seule à bout de souffle (voir plus haut).
+    if (neuf[10] && !bas[10]) { P.run = !P.run && !P.essouffle && P.energie > 10; msg(P.run ? '🏃 Tu cours ! (L3 pour marcher)' : '🚶 Tu marches', 900); }
     // L1 : GARDE quand l'arme est rangee (on MAINTIENT, les deux poings devant le visage),
     // VISEE quand elle est braquee. Les deux ne peuvent pas coexister — setGarde() refuse la
     // garde une arme au poing —, donc un seul bouton suffit et rien ne se marche dessus.

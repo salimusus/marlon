@@ -3975,7 +3975,11 @@ test('les habitants prennent aussi la voiture, pas seulement le vélo', async p 
     b.activite = null; b.rdv = null; b.drive = null; b.ordre = null; b.wait = 0;
     // on gare une voiture libre juste à côté de lui : sous rendu logiciel, le trajet à pied
     // mangeait tout le temps imparti et le test échouait sur la montre, pas sur le jeu
-    { const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+    // UNE VOITURE ORDINAIRE, pas la première caisse venue : « la première libre » de city.cars
+    // se trouve être l'AMBULANCE de la ville, et un habitant ne prend plus un véhicule de
+    // service (round 71 — il venait chercher le joueur au volant de l'ambulance). Le test
+    // garait donc l'ambulance à côté de lui et s'étonnait qu'il n'en veuille pas.
+    { const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy);
       if (c) { c.x = b.pos.x + 3; c.z = b.pos.z + 3; c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c); } }
     const lance = G.lancerActivite(b, { k: 'voiture', e: '🚗', n: 'faire un tour en voiture' }) !== false;
     if (b.activite) b.activite.fin = G.simTime + 600;   // on lui laisse le temps d'arriver

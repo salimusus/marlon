@@ -2514,7 +2514,7 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   // la rue : elle en sort en 1 s et rejoint un accident à 120 m en 32 s, dont 97 % sur le bitume.
   // la dépanneuse dort SUR LE CÔTÉ du parvis, pas en travers de l'entrée : garée en (x, z + 15)
   // elle barrait l'axe garage ↔ rue et toute voiture qui arrivait la percutait (n° 38 du Joueur)
-  { const dep = makeDepanneuse(x - 10, z + 10, Math.PI / 2); city.depanneuses.push(dep); city.cars.push(dep); }
+  { const dep = makeDepanneuse(x - 10, z + 12.5, Math.PI / 2); city.depanneuses.push(dep); city.cars.push(dep); }
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }

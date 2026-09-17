@@ -13585,6 +13585,10 @@ function setAccroupi(on) {   // point d'entrée manette / tactile / clavier : se
 }
 function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp <= 0) return;
+  // LE ROBOT COMPAGNON S'INTERPOSE (poste DRONE & ROBOT). `hurt` est le SEUL endroit par
+  // lequel un coup atteint le joueur : en le branchant ici, le robot ne peut pas rater une
+  // agression, et il ne peut rien déclencher d'autre. Il atténue, il ne protège pas de tout.
+  try { dmg = robotPare(dmg, dx, dz); } catch (eRb) {}
   const def = defenseJoueur(dmg, dx, dz, melee);
   if (def.esquive) {   // baissé au bon moment : le coup passe au-dessus
     msg('💨 Esquive !', 700); sfx.noise(.06, 900, .05);
@@ -18550,7 +18554,7 @@ function openDroneMenu() {
 function batterieUtilise() {
   if (!sacA('batterie')) return false;
   drone.bat = 100;
-  if (typeof robot !== 'undefined') robot.bat = 100;
+  if (typeof robot !== 'undefined') { robot.bat = 100; robot.energie = 100; robot.platT = 0; }
   sacRetire('batterie');
   try { sfx.win(); } catch (e) {}
   msg(`🔋 Pack de batteries utilisé : drone et robot à 100 % (il t'en reste ${sacNb('batterie')})`, 3000);
@@ -18572,38 +18576,85 @@ const ROBOT_VMAX = 9.4;       // m/s : nettement plus vite que le joueur qui cou
 const ROBOT_AUTO = 900;       // s d'autonomie (15 min) : un pack de batteries le refait
 const robot = { actif: false, g: null, rig: null, nom: 'Bip', x: 0, y: 0, z: 0, h: 0,
   ordre: 'suit', poste: null, bat: 100, pas: 0, vit: 0, stuckT: 0, danse: 0, parleT: 0,
-  objet: null, phase: '', ecart: 0, ecartMax: 0, dit: '', ditT: 0, jambe: 0, replaces: 0 };
+  objet: null, phase: '', ecart: 0, ecartMax: 0, dit: '', ditT: 0, jambe: 0, replaces: 0,
+  couleur: store.get('superobby.robotcouleur') || 'bleu', energie: 100, defense: 0, decharges: 0, dechargeT: 0, conseils: [] };
+// ---- LE DESSIN DU ROBOT (round 71, demande du joueur : « améliore son design ») ----
+// Avant : un cube bleu, deux billes cyan, une antenne, deux jambes — et 18 maillages qui se
+// payaient chacun SA géométrie et SON matériau (18 + 18, mesuré). C'est maintenant un vrai
+// petit compagnon : tête large et ronde (les proportions de dessin animé, lisibles de loin
+// à la télévision), visière sombre avec deux yeux et une bouche qui s'allument, plastron,
+// cœur lumineux, épaules et genoux articulés qui font lire la marche, réacteur dorsal,
+// antenne. Le coût par image ne bouge presque pas parce que TOUTES les pièces se partagent
+// cinq géométries et sept matériaux au lieu d'en allouer une paire chacune.
+// Cinq géométries pour vingt-six pièces, et taillées au plus juste : le robot fait 30 cm de
+// large à l'écran, personne ne comptera ses facettes. (Mesuré : 2 948 triangles avec des
+// sphères 10×8 et la boîte arrondie standard, 1 476 avec celles-ci — pour le même dessin.)
+const ROBOT_SPH = new THREE.SphereGeometry(0.5, 8, 6); shared.add(ROBOT_SPH);
+const ROBOT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 6); shared.add(ROBOT_CYL);
+const ROBOT_ANNEAU = new THREE.TorusGeometry(0.5, 0.16, 5, 10); shared.add(ROBOT_ANNEAU);
+const ROBOT_BOITE = roundedBoxGeo(1, 1, 1, 0.17, 1); shared.add(ROBOT_BOITE);
+// Les couleurs franches du joueur (« il peut changer de couleur »). Chaque teinte donne la
+// coque ET la lueur des yeux : un robot rouge a le regard orangé, un robot vert le regard
+// vert d'eau — sinon les six robots se ressemblaient tous de loin.
+const ROBOT_COULEURS = [
+  { k: 'bleu', n: 'Bleu', e: '🔵', c: 0x4f8dff, oeil: 0x3ef2ff },
+  { k: 'rouge', n: 'Rouge', e: '🔴', c: 0xff5c5c, oeil: 0xffd23f },
+  { k: 'vert', n: 'Vert', e: '🟢', c: 0x5cc453, oeil: 0xd4ff4f },
+  { k: 'jaune', n: 'Jaune', e: '🟡', c: 0xffd23f, oeil: 0xff8f3a },
+  { k: 'violet', n: 'Violet', e: '🟣', c: 0xb57cff, oeil: 0xff7ad9 },
+  { k: 'orange', n: 'Orange', e: '🟠', c: 0xff8f3a, oeil: 0xffd23f },
+  { k: 'rose', n: 'Rose', e: '🩷', c: 0xff7ad9, oeil: 0xfff2b0 },
+  { k: 'blanc', n: 'Blanc', e: '⚪', c: 0xf4f6fa, oeil: 0x3ef2ff },
+];
+const robotTeinte = () => ROBOT_COULEURS.find(c => c.k === robot.couleur) || ROBOT_COULEURS[0];
 function robotMesh() {
-  const M = c => new THREE.MeshLambertMaterial({ color: c });
-  const BLEU = 0x4f8dff, GRIS = 0xc9ced8, NOIR = 0x2b3550;
+  const t = robotTeinte();
+  const METAL = lam(0xc9ced8), SOMBRE = lam(0x2b3550), VISIERE = lam(0x121a2c);   // `lam` : matériaux partagés avec toute la ville
   const g = new THREE.Group(), rig = {};
-  const bassin = new THREE.Group(); bassin.position.y = 0.42; g.add(bassin); rig.bassin = bassin;
-  const corps = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.2), M(BLEU)); corps.position.y = 0.15; bassin.add(corps);
-  const ecran = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.09, 0.02), new THREE.MeshBasicMaterial({ color: 0x3ef2ff }));
-  ecran.position.set(0, 0.17, 0.108); bassin.add(ecran); rig.ecran = ecran;
-  const cou = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.07, 8), M(GRIS)); cou.position.y = 0.33; bassin.add(cou);
-  const tete = new THREE.Group(); tete.position.y = 0.37; bassin.add(tete); rig.tete = tete;
-  tete.add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.2, 0.2), M(GRIS)));
-  rig.yeux = [];
-  for (const s of [-1, 1]) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3ef2ff }));
-    o.position.set(s * 0.06, 0.025, 0.1); tete.add(o); rig.yeux.push(o); }
-  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.15, 6), M(NOIR)); ant.position.y = 0.175; tete.add(ant);
-  const bl = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff5c5c }));
-  bl.position.y = 0.25; tete.add(bl); rig.boule = bl;
+  // les quatre matériaux qui appartiennent à CE robot : la coque (elle change de couleur),
+  // les yeux, la bouche et les deux lueurs. Tout le reste est partagé.
+  const coque = new THREE.MeshLambertMaterial({ color: t.c });
+  const oeil = new THREE.MeshBasicMaterial({ color: t.oeil });
+  const coeurM = new THREE.MeshBasicMaterial({ color: t.oeil });
+  const bouleM = new THREE.MeshBasicMaterial({ color: 0xff5c5c });
+  rig.coque = coque; rig.oeilMat = oeil; rig.coeurMat = coeurM;
+  const piece = (geo, mat, x, y, z, sx, sy, sz, parent) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz === undefined ? sy : sz);
+    (parent || g).add(m); return m;
+  };
+  // ---- le bassin : tout le corps pend de là (la marche le fait monter et descendre) ----
+  const bassin = new THREE.Group(); bassin.position.y = 0.4; g.add(bassin); rig.bassin = bassin;
+  piece(ROBOT_BOITE, coque, 0, 0.16, 0, 0.32, 0.32, 0.24, bassin);                 // le torse
+  rig.ecran = piece(ROBOT_SPH, coeurM, 0, 0.19, 0.115, 0.11, 0.11, 0.05, bassin);   // le cœur lumineux
+  piece(ROBOT_ANNEAU, METAL, 0, 0.19, 0.105, 0.28, 0.28, 0.28, bassin);          // le cerclage du cœur
+  rig.reacteur = piece(ROBOT_SPH, bouleM, 0, 0.17, -0.13, 0.14, 0.14, 0.05, bassin);   // le réacteur dorsal
+  piece(ROBOT_CYL, METAL, 0, 0.35, 0, 0.1, 0.07, 0.1, bassin);                   // le cou
+  // ---- la tête : large, ronde, et une vraie figure ----
+  const tete = new THREE.Group(); tete.position.y = 0.38; bassin.add(tete); rig.tete = tete;
+  piece(ROBOT_BOITE, coque, 0, 0.12, 0, 0.3, 0.26, 0.26, tete);                    // le casque
+  piece(ROBOT_BOITE, VISIERE, 0, 0.12, 0.105, 0.26, 0.17, 0.08, tete);             // la visière
+  rig.yeux = [-1, 1].map(s => piece(ROBOT_SPH, oeil, s * 0.068, 0.14, 0.145, 0.072, 0.072, 0.04, tete));
+  rig.bouche = piece(unitBox, oeil, 0, 0.068, 0.145, 0.085, 0.016, 0.02, tete);  // la bouche, qui bouge quand il parle
+  piece(ROBOT_CYL, SOMBRE, 0, 0.35, 0, 0.018, 0.16, 0.018, tete);                // l'antenne
+  rig.boule = piece(ROBOT_SPH, bouleM, 0, 0.44, 0, 0.07, 0.07, 0.07, tete);      // la boule d'antenne
+  // ---- les bras : épaule ronde (l'articulation se VOIT), bras, main ----
   rig.bras = {};
   for (const s of [-1, 1]) {
-    const ep = new THREE.Group(); ep.position.set(s * 0.19, 0.24, 0); bassin.add(ep);
-    const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.06), M(GRIS)); br.position.y = -0.1; ep.add(br);
-    const mn = new THREE.Mesh(new THREE.SphereGeometry(0.046, 8, 6), M(BLEU)); mn.position.y = -0.22; ep.add(mn);
+    const ep = new THREE.Group(); ep.position.set(s * 0.19, 0.26, 0); bassin.add(ep);
+    piece(ROBOT_SPH, coque, 0, 0, 0, 0.13, 0.13, 0.13, ep);                      // l'épaulière
+    piece(ROBOT_BOITE, METAL, 0, -0.11, 0, 0.075, 0.19, 0.075, ep);                // le bras
+    const mn = piece(ROBOT_SPH, coque, 0, -0.23, 0, 0.1, 0.1, 0.1, ep);          // la main
     rig.bras[s < 0 ? 'g' : 'd'] = ep; if (s > 0) rig.main = mn;
   }
+  // ---- les jambes : cuisse, genou rond, mollet, pied ----
   rig.jambes = {};
   for (const s of [-1, 1]) {
-    const ha = new THREE.Group(); ha.position.set(s * 0.09, 0, 0); bassin.add(ha);
-    const cu = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.2, 0.075), M(NOIR)); cu.position.y = -0.1; ha.add(cu);
-    const ge = new THREE.Group(); ge.position.y = -0.2; ha.add(ge);
-    const mo = new THREE.Mesh(new THREE.BoxGeometry(0.066, 0.18, 0.066), M(GRIS)); mo.position.y = -0.09; ge.add(mo);
-    const pi = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.17), M(NOIR)); pi.position.set(0, -0.2, 0.035); ge.add(pi);
+    const ha = new THREE.Group(); ha.position.set(s * 0.085, 0, 0); bassin.add(ha);
+    piece(ROBOT_BOITE, SOMBRE, 0, -0.085, 0, 0.085, 0.17, 0.085, ha);              // la cuisse
+    const ge = new THREE.Group(); ge.position.y = -0.17; ha.add(ge);
+    piece(ROBOT_SPH, METAL, 0, 0, 0, 0.1, 0.1, 0.1, ge);                         // le genou
+    piece(ROBOT_BOITE, METAL, 0, -0.09, 0, 0.075, 0.16, 0.075, ge);                // le mollet
+    piece(ROBOT_BOITE, SOMBRE, 0, -0.195, 0.03, 0.115, 0.06, 0.19, ge);            // le pied
     rig.jambes[s < 0 ? 'g' : 'd'] = { ha, ge };
   }
   g.userData.rig = rig;
@@ -18641,6 +18692,7 @@ function robotSortir() {
   return true;
 }
 function robotRanger(silencieux) {
+  if (robot.arc) { worldGroup.remove(robot.arc.g); robot.arc.mat.dispose(); robot.arc = null; }
   if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
   if (robot.g) { worldGroup.remove(robot.g); robot.g = null; robot.rig = null; }
   robot.actif = false; robot.ordre = 'suit'; robot.poste = null;
@@ -18656,6 +18708,12 @@ const ORDRES_ROBOT = [
   { id: 'viens', e: '🫳', t: 'Viens', mots: /\b(viens|vient|venez|rejoins|rejoindre|approche|rapproche|au pied)\b/, dit: 'il accourt vers toi' },
   { id: 'suit', e: '🫡', t: 'Suis-moi', mots: /\b(suis[- ]moi|suis|suivre|suivez|colle|accompagne|accompagner)\b/, dit: 'il te colle aux talons' },
   { id: 'reste', e: '✋', t: 'Attends ici', mots: /\b(attends?|attendre|reste|restes|bouge pas|pas bouger|stop|arrete|arrête|stoppe|immobile)\b/, dit: 'il ne bouge plus d\'ici' },
+  // « défends-moi » AVANT « garde cet endroit » : sans cela, « protège-moi » tombait sur le
+  // motif de « garde » (qui contient « protege ») et le robot allait monter la garde ailleurs.
+  { id: 'defends', e: '⚡', t: 'Défends-moi', mots: /\b(defends?[- ]moi|defend[- ]moi|protege[- ]moi|protege moi|defense|protection|garde du corps|garde moi|gorille)\b/, dit: 'il s\'interpose et il électrise les agresseurs' },
+  // « conseil » AVANT « blague » et « parle » : les deux contiennent « raconte » et « dis ».
+  { id: 'conseil', e: '💡', t: 'Donne-moi un conseil', mots: /\b(conseil|conseils|astuce|astuces|idee|que faire|quoi faire|aide moi|un tuyau)\b/, dit: 'il regarde la partie et te dit quoi faire' },
+  { id: 'couleur', e: '🎨', t: 'Change de couleur', mots: /\b(couleur|couleurs|teinte|repeins|repeindre|repeint|coloris)\b/, dit: 'huit couleurs franches, gardées dans la sauvegarde' },
   { id: 'blague', e: '😄', t: 'Raconte une blague', mots: /\b(blague|blagues|rigole|drole|drôle|marrant|raconte)\b/, dit: 'il en connaît quatre' },
   { id: 'parle', e: '💬', t: 'Parle', mots: /\b(parle|parler|parlez|dis|cause|chante|chanter)\b/, dit: 'il dit une petite phrase à voix haute' },
   { id: 'danse', e: '💃', t: 'Danse', mots: /\b(danse|danser|danses|dansez|guinche)\b/, dit: 'il danse sur place' },
@@ -18702,6 +18760,9 @@ function robotOrdre(id, txt) {
   if (!robot.actif) { msg('🤖 Sors d\'abord ton robot du sac (touche I)', 2600); return true; }
   const o = ORDRES_ROBOT.find(x => x.id === id); if (!o) return false;
   robot.danse = 0;
+  if (id === 'defends') return robotDefends();
+  if (id === 'conseil') { robotConseilDit(true); return true; }
+  if (id === 'couleur') return robotCouleurSuivante();
   if (id === 'range') return robotRanger();
   if (id === 'cherche') return robotLance();
   if (id === 'parle') { robot.ordre = robot.ordre === 'cherche' ? 'suit' : robot.ordre; return robotDit(pickOne(ROBOT_PHRASES)); }
@@ -18743,6 +18804,16 @@ function robotBut() {
   }
   if ((robot.ordre === 'reste' || robot.ordre === 'garde' || robot.ordre === 'danse') && robot.poste)
     return { x: robot.poste.x, z: robot.poste.z, arret: 0.3 };
+  // IL SE MET ENTRE LE JOUEUR ET L'AGRESSEUR. C'est la première chose que demande l'ordre
+  // « défends-moi » : pas un garde qui reste derrière l'épaule, un garde qui BARRE le passage.
+  if (robot.defense > simTime) {
+    const ag = robotAgresseur(11);
+    if (ag) {
+      const dx = ag.x - P.pos.x, dz = ag.z - P.pos.z, d = Math.max(0.5, Math.hypot(dx, dz));
+      const pas = Math.min(1.25, d * 0.55);
+      return { x: P.pos.x + dx / d * pas, z: P.pos.z + dz / d * pas, arret: 0.3, vers: ag };
+    }
+  }
   // « viens » et « suis » : la place derrière l'épaule du joueur
   return { x: P.pos.x - Math.sin(P.facing) * ROBOT_SUIT, z: P.pos.z - Math.cos(P.facing) * ROBOT_SUIT, arret: 0.35 };
 }
@@ -18762,6 +18833,24 @@ function robotTick(dt) {
     robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
     robot.y = groundUnder(robot.x, robot.z, null, P.pos.y + 1.2);
     if (robot.ordre === 'suit') robotDit('me revoilà ! je n\'entre pas dans les voitures', 2600);
+  }
+  // ---- l'énergie de décharge se refait toute seule, et l'éclair s'efface ----
+  if (robot.energie < 100) robot.energie = Math.min(100, robot.energie + ROBOT_RECHARGE * dt);
+  if (robot.arc) {
+    const reste = robot.arc.fin - simTime;
+    if (reste <= 0) { worldGroup.remove(robot.arc.g); robot.arc.mat.dispose(); robot.arc = null; }
+    else { robot.arc.g.visible = Math.sin(simTime * 60) > -0.3; robot.arc.mat.color.setHex(Math.sin(simTime * 47) > 0 ? 0xbfe9ff : 0x7fe0ff); }
+  }
+  // ---- EN GARDE : il ne se contente pas d'attendre le coup. Un agresseur qui SERRE le
+  // joueur (moins de 2,2 m, en train de se battre) prend la décharge avant de frapper : le
+  // robot fait son travail. Mêmes règles d'énergie, de repos et de non-KO qu'ailleurs.
+  if (robot.defense > simTime && robot.energie >= ROBOT_DECHARGE && simTime > robot.dechargeT && robotDist() < ROBOT_PORTEE) {
+    const ag = robotAgresseur(2.2);
+    if (ag) robotDecharge(ag, 0);
+  }
+  if (robot.defense > simTime && robot.energie < ROBOT_DECHARGE && simTime > (robot.platT || 0)) {
+    robot.platT = simTime + 20;
+    robotDit('mon condensateur est vide… donne-moi un pack de batteries 🔋', 3200);
   }
   robot.bat = Math.max(0, robot.bat - dt * (100 / ROBOT_AUTO));
   if (robot.bat <= 0 && robot.ordre !== 'panne') { robot.ordre = 'panne'; robot.poste = { x: robot.x, z: robot.z }; robotDit('ma batterie est vide… donne-moi un pack de batteries', 4000); }
@@ -18887,12 +18976,19 @@ function robotAnime(dt) {
   robot.jambe = a;
   r.jambes.g.ha.rotation.x = a; r.jambes.d.ha.rotation.x = -a;
   r.jambes.g.ge.rotation.x = Math.max(0, -a) * 1.1; r.jambes.d.ge.rotation.x = Math.max(0, a) * 1.1;
-  const dans = robot.ordre === 'danse';
+  const dans = robot.ordre === 'danse', garde = robot.defense > simTime;
   if (dans) {
     r.bras.g.rotation.z = 1.6 + Math.sin(simTime * 7) * 0.5; r.bras.d.rotation.z = -1.6 - Math.sin(simTime * 7) * 0.5;
     r.bras.g.rotation.x = 0; r.bras.d.rotation.x = 0;
     r.bassin.rotation.y = Math.sin(simTime * 5) * 0.5;
     r.tete.rotation.z = Math.sin(simTime * 7) * 0.3;
+  } else if (garde && robot.vit < 0.6) {
+    // EN GARDE : poings devant, buste tourné vers ce qu'il surveille. On voit tout de suite
+    // qu'il n'est plus en promenade — c'est ce qui manquait pour que l'ordre se sente.
+    r.bras.g.rotation.z = 0.5; r.bras.d.rotation.z = -0.5;
+    r.bras.g.rotation.x = -1.1; r.bras.d.rotation.x = -1.1;
+    r.bassin.rotation.y = Math.sin(simTime * 2.4) * 0.12;
+    r.tete.rotation.z = 0; r.tete.rotation.y = Math.sin(simTime * 1.8) * 0.35;
   } else {
     r.bras.g.rotation.z = 0; r.bras.d.rotation.z = 0;
     r.bras.g.rotation.x = -a * 0.9; r.bras.d.rotation.x = a * 0.9;
@@ -18900,14 +18996,217 @@ function robotAnime(dt) {
     r.tete.rotation.z = 0;
     r.tete.rotation.y = robot.ordre === 'garde' ? 0 : Math.sin(simTime * 0.8) * 0.2;
   }
-  // il parle : l'écran du ventre et les yeux clignotent, l'antenne s'allume
+  // ---- LA FIGURE. Trois choses la font vivre, et elles coûtent trois lignes : il CLIGNE
+  // (les yeux s'écrasent un dixième de seconde toutes les trois à cinq secondes), sa BOUCHE
+  // s'ouvre et se ferme quand il parle, et ses yeux passent au ROUGE quand il monte la garde.
   const parle = simTime < robot.parleT;
-  if (r.ecran) r.ecran.material.color.setHex(parle && Math.sin(simTime * 22) > 0 ? 0xffd23f : 0x3ef2ff);
-  if (r.boule) r.boule.material.color.setHex(robot.bat < 15 ? (Math.sin(simTime * 8) > 0 ? 0xff5c5c : 0x3a0f0f) : parle ? 0x5cff7a : 0xff5c5c);
+  if (simTime > (robot.clignT || 0)) { robot.clignT = simTime + rnd(2.5, 5.5); robot.clignFin = simTime + 0.12; }
+  const cligne = simTime < (robot.clignFin || 0) ? 0.14 : 1;
+  for (const o of r.yeux) o.scale.y = 0.072 * cligne;
+  if (r.bouche) r.bouche.scale.set(0.085, parle ? 0.016 + Math.abs(Math.sin(simTime * 17)) * 0.05 : 0.016, 0.02);
+  if (r.oeilMat) r.oeilMat.color.setHex(garde ? (Math.sin(simTime * 5) > 0 ? 0xff5c5c : 0xff9a5c) : robotTeinte().oeil);
+  // le cœur bat plus vite quand il parle ; l'antenne et le réacteur passent au rouge quand
+  // la batterie ou l'énergie de décharge sont au plus bas
+  if (r.coeurMat) { const p = 0.55 + Math.abs(Math.sin(simTime * (parle ? 9 : 2.2))) * 0.45;
+    const t = robotTeinte(); r.coeurMat.color.setHex(t.oeil).multiplyScalar(p); }
+  if (r.boule) r.boule.material.color.setHex(
+    robot.bat < 15 || robot.energie < 20 ? (Math.sin(simTime * 8) > 0 ? 0xff5c5c : 0x3a0f0f)
+    : garde ? 0x5cff7a : parle ? 0x5cff7a : 0xff5c5c);
   const saut = robot.saut && simTime < robot.saut ? Math.abs(Math.sin((robot.saut - simTime) * 8)) * 0.5 : 0;
   robot.g.position.set(robot.x, robot.y + saut + Math.abs(Math.sin(robot.pas * 2.4)) * v * 0.035, robot.z);
   let dh = robot.h - robot.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   robot.g.rotation.y += dh * Math.min(1, dt * 9);
+}
+// « il peut changer de couleur » : une seule teinte à changer, la coque entière suit (toutes
+// ses pièces partagent le même matériau) — et le regard prend la nuance assortie.
+function robotCouleur(k, silencieux) {
+  const c = ROBOT_COULEURS.find(x => x.k === k) || ROBOT_COULEURS[0];
+  robot.couleur = c.k;
+  try { store.set('superobby.robotcouleur', c.k); } catch (e) {}
+  if (robot.rig) { robot.rig.coque.color.setHex(c.c); robot.rig.oeilMat.color.setHex(c.oeil); robot.rig.coeurMat.color.setHex(c.oeil); }
+  if (!silencieux) { robotDit(`et voilà, je suis ${c.n.toLowerCase()} ${c.e}`, 2400); try { burst(robot.x, robot.y + 0.6, robot.z, c.c, 10); } catch (e) {} }
+  return true;
+}
+function robotCouleurSuivante() {
+  const i = ROBOT_COULEURS.findIndex(x => x.k === robot.couleur);
+  return robotCouleur(ROBOT_COULEURS[(i + 1 + ROBOT_COULEURS.length) % ROBOT_COULEURS.length].k);
+}
+// ================= LES CONSEILS DU ROBOT (round 71) =================
+// LE JOUEUR : « donner des conseils au joueur ». Un compagnon qui débite des phrases toutes
+// faites n'est pas un compagnon, c'est un bruit de fond. Chaque conseil ci-dessous LIT L'ÉTAT
+// RÉEL de la partie (vie, police, portefeuille devant un comptoir, mission en cours, classe
+// à côté, batteries, chien blessé…) et ne sort que si sa situation est vraie. Les plus
+// urgents passent devant, et on ne redit jamais un conseil déjà donné dans les trois
+// derniers — c'est ce qui fait la différence entre un conseil et un perroquet.
+const ROBOT_CONSEILS = [
+  { id: 'vie', p: 100, si: () => P.hp < 45,
+    dit: () => `tu n'as plus que ${Math.round(P.hp)} points de vie. Va voir l'hôpital, ou mange quelque chose au marché.` },
+  { id: 'police', p: 95, si: () => (police.wanted || 0) >= 1,
+    dit: () => `la police te cherche, ${(police.wanted || 0)} étoile${police.wanted > 1 ? 's' : ''}. Éloigne-toi et reste hors de vue, ça se calme tout seul.` },
+  { id: 'condensateur', p: 88, si: () => robot.defense > simTime && robot.energie < ROBOT_DECHARGE,
+    dit: () => 'je n\'ai plus de quoi t\'électriser personne. Un pack de batteries et je repars.' },
+  { id: 'prix', p: 80, si: () => { const e = etalRegarde(); return !!(e && e.manque > 0); },
+    dit: () => { const e = etalRegarde(); return `il te manque ${e.manque} pièces pour ${e.nom}. Ramasse les pièces dorées, ou fais une mission.`; } },
+  { id: 'mission', p: 70, si: () => !!(mission && mission.cur),
+    dit: () => `ta mission en cours : ${(mission.cur && (mission.cur.n || mission.cur.desc || mission.cur.id)) || 'en route'}. La colonne de lumière t'y emmène.` },
+  { id: 'ecole', p: 65, si: () => !!city.classNear,
+    dit: () => 'il y a une classe juste là. Assieds-toi et appuie sur E : la maîtresse pose des questions, et ça rapporte des pièces.' },
+  { id: 'batterie', p: 60, si: () => robot.bat < 25 || (typeof drone !== 'undefined' && drone.actif && drone.bat < 25),
+    dit: () => 'nos batteries sont basses. Il y a des packs de batteries au Techno-Parc, cinq pièces.' },
+  { id: 'chien', p: 55, si: () => !!(chien.pet && chien.hp < chien.hpMax * 0.55),
+    dit: () => `${chienNom()} est blessé. Le vétérinaire le remet sur pattes pour quelques pièces.` },
+  { id: 'faim', p: 50, si: () => (P.energie != null && P.energie < 30),
+    dit: () => 'tu es à bout de souffle. Marche un peu, ou prends quelque chose à manger : tu recourras plus vite.' },
+  { id: 'voiture', p: 40, si: () => wallet >= 120 && !(city.cars || []).some(c => c.mienne),
+    dit: () => `tu as ${wallet} pièces : de quoi t'acheter une vraie voiture chez Blocs Motors, au show-room.` },
+  { id: 'zone', p: 30, si: () => !!city.zone,
+    dit: () => `nous sommes ${city.zone.name ? 'à ' + city.zone.name : 'en ville'}. ${(city.zone.hint || '').replace(/^.*?: /, '') || 'Il y a de quoi faire par ici.'}` },
+  { id: 'argent', p: 20, si: () => wallet < 10,
+    dit: () => 'tu n\'as presque plus de pièces. Les missions du carnet en rapportent le plus vite.' },
+  { id: 'sac', p: 15, si: () => !sacVide(),
+    dit: () => `n'oublie pas ton sac : touche I, ou la flèche du haut à la manette. Tu y as ${Object.keys(sac.objets).length} objet(s) qui ne demandent qu'à sortir.` },
+];
+// Le comptoir (ou la vitrine) devant lequel le joueur est planté, et ce qui lui manque pour
+// l'article le moins cher qu'il ne peut pas encore s'offrir.
+function etalRegarde() {
+  const e = (city.etals || []).find(o => Math.hypot(o.vx - P.pos.x, o.vz - P.pos.z) < 3.2);
+  if (!e) return null;
+  const trop = e.articles.filter(a => a.p > wallet).sort((a, b) => a.p - b.p)[0];
+  return trop ? { nom: `${trop.e} ${trop.n}`, manque: trop.p - wallet } : null;
+}
+// Le meilleur conseil applicable qui n'a pas été donné récemment. `force` ignore la mémoire
+// (quand le joueur DEMANDE un conseil, il doit toujours en avoir un).
+function robotConseil(force) {
+  const vus = robot.conseils || [];
+  const dispo = ROBOT_CONSEILS.filter(c => { try { return c.si(); } catch (e) { return false; } })
+    .sort((a, b) => b.p - a.p);
+  if (!dispo.length) return null;
+  const neuf = dispo.find(c => !vus.includes(c.id));
+  const c = neuf || (force ? dispo[0] : null);
+  if (!c) return null;
+  let t = ''; try { t = c.dit(); } catch (e) { return null; }
+  return { id: c.id, texte: t };
+}
+function robotConseilDit(force) {
+  const c = robotConseil(force);
+  if (!c) { robotDit('tout va bien pour l\'instant, je n\'ai rien d\'utile à te dire', 2600); return null; }
+  robot.conseils = [c.id, ...(robot.conseils || [])].slice(0, 4);   // jamais deux fois de suite, ni dans les trois d'avant
+  robotDit('💡 ' + c.texte, 4600);
+  return c;
+}
+// ================= « DÉFENDS-MOI » : LE ROBOT S'ÉLECTRISE (round 71) =================
+// LE JOUEUR : « ordre défend moi, il peut s'électriser et défendre le joueur contre les
+// attaques ». LA RÈGLE QUE JE RETIENS, et c'est elle qui tient tout l'équilibre :
+//
+//   LA DÉCHARGE EST UNE PROTECTION, JAMAIS UNE ARME.
+//   1. Elle ne part QUE si l'on vient de frapper le joueur (ou si un agresseur le serre de
+//      près) — jamais sur commande, jamais sur un passant tranquille. On ne peut donc pas
+//      s'en servir pour attaquer, et l'enfant ne devient pas le méchant sans le vouloir.
+//   2. Elle ATTÉNUE le coup reçu de 45 %, elle ne l'annule pas : le joueur perd quand même
+//      de la vie, il doit encore fuir ou se battre. Pas d'invincibilité.
+//   3. Elle REPOUSSE et fait fuir, elle n'assomme pas : la cible ne descend jamais sous
+//      12 ❤️ par la décharge. Le robot fait gagner du temps, il ne gagne pas le combat.
+//   4. Trois décharges et l'énergie est à plat (34 % chacune) : il faut attendre 11 s par
+//      décharge, ou sortir un 🔋 pack de batteries du sac. On ne tient pas un siège.
+//   5. AUCUNE INFRACTION, AUCUNE ÉTOILE DE POLICE. C'est de la légitime défense : le jeu ne
+//      met pas la police au dos d'un enfant qui vient de se faire agresser. (Le chien, lui,
+//      déclenche une infraction — mais on le LANCE sur quelqu'un, ce n'est pas la même chose.)
+const ROBOT_DECHARGE = 34;    // % d'énergie par décharge
+const ROBOT_RECHARGE = 3.1;   // % par seconde : environ 11 s pour refaire une décharge
+const ROBOT_REPOS = 2.2;      // s entre deux décharges
+const ROBOT_PORTEE = 4.5;     // m : au-delà, il est trop loin pour intervenir
+const ROBOT_GARDE = 240;      // s que dure l'ordre « défends-moi »
+// Qui s'en prend au joueur, en ce moment, à portée du robot ? On regarde les habitants qui
+// se battent et les gangsters lancés à ses trousses — les deux sources d'agression du jeu.
+function robotAgresseur(portee) {
+  const R = portee || ROBOT_PORTEE + 2.5;
+  let best = null, bd = R;
+  for (const b of bots) {
+    if (b.ko || !b.av || !b.av.group.visible) continue;
+    if (!b.fight || b.fight === 'flee' || simTime > (b.fightT || 0)) continue;
+    const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+    if (d < bd) { bd = d; best = { obj: b, bot: true, x: b.pos.x, y: b.pos.y, z: b.pos.z, nom: b.name }; }
+  }
+  for (const G of gangs) for (const m of (G.membres || [])) {
+    if (m.ko || m.captif) continue;
+    const d = Math.hypot(m.x - P.pos.x, m.z - P.pos.z);
+    if (d >= bd) continue;
+    if (!(m.chasse && m.chasse.joueur) && G.etat !== 'joueur' && d > 3.5) continue;
+    bd = d; best = { obj: m, bot: false, x: m.x, y: m.y, z: m.z, nom: m.nom };
+  }
+  return best;
+}
+// L'ÉCLAIR. Cinq segments en zigzag entre le robot et sa cible, qui vivent un tiers de
+// seconde. Ils se posent dans un seul groupe qu'on retire ensuite : rien ne s'accumule.
+function robotArc(x1, y1, z1, x2, y2, z2) {
+  if (robot.arc) { worldGroup.remove(robot.arc.g); robot.arc = null; }
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xbfe9ff });
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const u0 = i / n, u1 = (i + 1) / n, e = 0.26;
+    const ax = x1 + (x2 - x1) * u0 + (i ? rnd(-e, e) : 0), az = z1 + (z2 - z1) * u0 + (i ? rnd(-e, e) : 0);
+    const ay = y1 + (y2 - y1) * u0 + (i ? rnd(-e, e) : 0);
+    const bx = x1 + (x2 - x1) * u1 + (i < n - 1 ? rnd(-e, e) : 0), bz = z1 + (z2 - z1) * u1 + (i < n - 1 ? rnd(-e, e) : 0);
+    const by = y1 + (y2 - y1) * u1 + (i < n - 1 ? rnd(-e, e) : 0);
+    const dx = bx - ax, dy = by - ay, dz = bz - az, L = Math.max(0.05, Math.hypot(dx, dy, dz));
+    const m = new THREE.Mesh(unitBox, mat);
+    m.scale.set(0.05, 0.05, L);
+    m.position.set(ax + dx / 2, ay + dy / 2, az + dz / 2);
+    m.lookAt(bx, by, bz);
+    g.add(m);
+  }
+  worldGroup.add(g);
+  robot.arc = { g, mat, fin: simTime + 0.34 };
+}
+// La décharge elle-même. `dmg` est le coup qui l'a déclenchée ; on rend ce qu'il en reste.
+function robotDecharge(cible, dmg) {
+  robot.energie = Math.max(0, robot.energie - ROBOT_DECHARGE);
+  robot.dechargeT = simTime + ROBOT_REPOS; robot.decharges++;
+  const cx = cible.x, cy = (cible.y || 0) + 1.1, cz = cible.z;
+  robotArc(robot.x, robot.y + 0.75, robot.z, cx, cy, cz);
+  try {
+    burst(cx, cy, cz, 0x7fe0ff, 14);
+    sfx.noise(.12, 2600, .07); sfx.tone(1400, 0, .06, 'square', .05, 300); sfx.tone(320, .07, .18, 'sawtooth', .05);
+    camSecousse(0.12, 0.22);
+    fxAnneau(cx, cy, cz, { x: cx - robot.x, y: 0, z: cz - robot.z }, 0x7fe0ff, 1.1, 0.26);
+  } catch (e) {}
+  // ---- l'effet sur l'agresseur : il recule, il détale, il perd un peu de vie. JAMAIS KO. ----
+  const o = cible.obj, dx = cx - P.pos.x, dz = cz - P.pos.z, d = Math.max(0.3, Math.hypot(dx, dz));
+  const px = dx / d * 1.6, pz = dz / d * 1.6;
+  if (cible.bot) {
+    o.hp = Math.max(12, (o.hp ?? 100) - 10);
+    o.fight = 'flee'; o.fuiteFin = simTime + 5; o.fightT = simTime + 5; o.fuitDe = P.pos.clone ? P.pos.clone() : null;
+    o.wait = 0.4; o.dance = 0; o.pos.x += px; o.pos.z += pz;
+    try { botSay(o, ['aïe ! ce truc m\'a électrisé ⚡', 'au secours, son robot mord !', 'ok ok je m\'en vais !']); } catch (e) {}
+  } else {
+    o.hp = Math.max(12, (o.hp ?? 100) - 10);
+    o.chasse = null; o.x += px; o.z += pz; o.wait = Math.max(o.wait || 0, 1.6);
+    try { chat(null, `⚡ ${robot.nom} a électrisé ${o.nom} — il lâche prise`); } catch (e) {}
+  }
+  robotDit(`⚡ décharge ! recule, ${cible.nom} !`, 2200);
+  // La règle 2 : on rend le coup ATTÉNUÉ, pas annulé.
+  return dmg * 0.55;
+}
+// Appelé depuis `hurt()`, au moment exact où le joueur encaisse. C'est le seul endroit par
+// lequel un coup passe : le robot ne peut donc rien rater, et rien déclencher d'autre.
+function robotPare(dmg, dx, dz) {
+  if (!robot.actif || robot.defense <= simTime) return dmg;
+  if (robot.energie < ROBOT_DECHARGE || simTime < robot.dechargeT) return dmg;
+  if (robotDist() > ROBOT_PORTEE) return dmg;
+  // la cible : celui qui se bat près du joueur, sinon le point d'où vient le coup
+  const cible = robotAgresseur() || null;
+  if (!cible) return dmg;
+  return robotDecharge(cible, dmg);
+}
+// L'ORDRE. Il dure quatre minutes, il s'annonce, et le robot se met en position.
+function robotDefends(on) {
+  const veut = on == null ? !(robot.defense > simTime) : !!on;
+  if (!veut) { robot.defense = 0; robotDit('je baisse la garde', 2000); return true; }
+  robot.defense = simTime + ROBOT_GARDE;
+  robot.ordre = 'suit'; robot.poste = null;
+  robotDit(`je te défends ! je me mets entre toi et les ennuis, et j'ai ${Math.floor(robot.energie / ROBOT_DECHARGE)} décharge(s) prête(s) ⚡`, 4200);
+  return true;
 }
 // La liste cliquable — le même écran que pour le chien, donc utilisable à la manette.
 function openOrdresRobot() {
@@ -18938,10 +19237,13 @@ function ordreRobotTexte(txt) {
   if (viseRobot && t.replace(/[^a-z0-9]+/g, ' ').trim().replace(/\b(robot|androide|bip)\b/g, '').trim() === '') return openOrdresRobot();
   // sans le nom, on ne lui parle QUE s'il est sorti et qu'aucun bot n'est nommé dans la phrase
   if (!viseRobot && (!robot.actif || trouveBot(txt) || chien.pet)) return false;
+  // une couleur NOMMÉE dans la phrase gagne sur tout le reste : « robot deviens rouge »
+  const teinte = ROBOT_COULEURS.find(c => new RegExp('\\b' + c.k + '\\b').test(t));
+  if (teinte && (viseRobot || /\b(couleur|deviens|passe|mets|met|repeins|colore)\b/.test(t))) { robotCouleur(teinte.k); return true; }
   for (const o of ORDRES_ROBOT) if (o.mots.test(t)) { robotOrdre(o.id, txt); return true; }
   return false;
 }
-function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.rapportes = 0; robot.lampe = false; robot.faisceau = null; }
+function robotReset() { robotRanger(true); robot.bat = 100; robot.energie = 100; robot.defense = 0; robot.decharges = 0; robot.dechargeT = 0; robot.conseils = []; robot.ecartMax = 0; robot.replaces = 0; robot.rapportes = 0; robot.lampe = false; robot.faisceau = null; }
 // ================= LES JOUETS DE PLEIN AIR (round 71) =================
 // Le joueur cite « ballon, cerf-volant, skate, boomerang, peluche ». Le rayon Jeux Vidéo du
 // Techno-Parc ne vendait que de l'électronique : on y ajoute quatre jouets, et chacun se joue

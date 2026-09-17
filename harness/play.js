@@ -4217,7 +4217,9 @@ test('le garage répare la voiture cabossée, et la lave', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G;
-    const c = G.city.cars.find(v => !v.heli && !v.rider && v.kind !== 'jetski' && !v.busy);
+    // une voiture PRÉPARABLE (carrosserie, vitres) : depuis le n° 37 du Joueur, l'atelier ne cible que celles-là —
+    // le premier véhicule de la liste est l'ambulance, qui n'a ni `parts` ni `bodyMat`
+    const c = G.city.cars.find(v => !v.heli && !v.rider && !v.kart && v.parts && v.bodyMat && !v.busy);
     c.x = G.P.pos.x + 2; c.z = G.P.pos.z; c.dmg = 0; c.dead = false;
     G.wallet = 500;
     const neuf = G.prixRepare(c);
@@ -5831,7 +5833,8 @@ test('le sol va jusqu\'au casino et au circuit, et le mur ne les enferme plus de
     for (let zz = -196; zz <= 346; zz += 6) for (let xx = -196; xx <= 196; xx += 6) if (!sol(xx, zz)) trous.push([xx, zz]);
     const c = G.city.casino, ci = G.city.circuit;
     // les murs invisibles d'enceinte : de longues boîtes de 4 m de haut
-    const murs = G.solids.filter(o => o.h === 4 && (o.w > 300 || o.d > 300));
+    // l'enceinte fait 16 m de haut depuis le round 69 (elle descend sous le plateau pour qu'on ne passe ni dessus ni dessous) : on la reconnaît à sa longueur
+    const murs = G.solids.filter(o => o.h >= 4 && o.h <= 20 && (o.w > 300 || o.d > 300));
     const dedans = (x, z) => !murs.some(m => (m.d > m.w ? (Math.sign(m.x) * x > Math.sign(m.x) * m.x) : (Math.sign(m.z) * z > Math.sign(m.z) * m.z)));
     // la grille de navigation couvre-t-elle les deux quartiers ?
     const nav = G.NAV, xMax = nav.x0 + nav.nx * nav.cs, zMax = nav.z0 + nav.nz * nav.cs;
@@ -9504,8 +9507,15 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
         G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
         // avant CHAQUE essai la voiture revient sur la case degagee du depart : elle roule
         // pendant la mesure, et une voiture arretee contre un mur ne braque plus
+        // la foule du départ se tient sur les trottoirs autour de (0, 3,5) depuis le round 70 : la voiture
+        // lancée vers le nord depuis (0, 8) écrasait un passant, l'accident l'immobilisait, et les essais
+        // suivants ne braquaient plus (0 rad). On écarte les habitants et on remet la caisse en état.
+        G.bots.forEach(b => { b.pos.set(150, 0.3, 150); b.av.group.position.copy(b.pos); b.wait = 99; b.target = null; });
+        // et la case de départ est sur la rue Est-Ouest (z = 26, 58 m de long), cap à l'est : depuis (0, 8) vers le
+        // nord, la voiture percutait le parking du centre à 12 m/s (mesuré : accident déclaré à l'image 31, vitesse 0
+        // ensuite, et plus aucun braquage possible aux essais suivants)
         const braque = (mode, v) => { G.settings.ctrl = mode; ds.axes = [v, 0, 0, 0];
-          c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+          c.x = -20; c.z = 26; c.h = Math.PI / 2; c.accidente = false; c.stopped = false; c.dead = false; G.city.accidents.length = 0; G.settleVehicle(c);
           ds.buttons[7] = { pressed: true, value: 1 }; G.pollGamepad(0.02);
           G.drive.speed = 0; const h0 = G.drive.car.h;
           for (let i = 0; i < 40; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
@@ -11434,7 +11444,8 @@ test('sur une télé 1080p le bandeau grossit vraiment, tient sur une ligne et r
   const a = r.avant, b = r.apres;
   const fact = v => +(b[v] / a[v]).toFixed(2);
   const ok = fact('pastille') >= 1.4 && fact('bouton') >= 1.4 && fact('joueur') >= 1.4
-    && fact('tableau') >= 1.3 && fact('radar') >= 1.3 && fact('chat') >= 1.4
+    && (fact('tableau') >= 1.3 || (a.tableau === 0 && b.tableau === 0))   // le tableau des joueurs n'existe plus en ville solo (n° 6 du Joueur)
+    && fact('radar') >= 1.3 && fact('chat') >= 1.4
     && r.lignes === 1 && r.pastilles >= 5 && r.dehors.length === 0 && r.messageSousBandeau;
   return { ok, detail: `en 1920×1080 le mode télé multiplie enfin les tailles au lieu de les rogner : pastilles ${a.pastille} → ${b.pastille} px (×${fact('pastille')}), boutons ${a.bouton} → ${b.bouton} px (×${fact('bouton')}), barre de vie ${a.joueur} → ${b.joueur} px (×${fact('joueur')}), tableau des joueurs ${Math.round(a.tableau)} → ${Math.round(b.tableau)} px, radar ${Math.round(a.radar)} → ${Math.round(b.radar)} px, chat ${a.chat} → ${b.chat} px · les ${r.pastilles} pastilles tiennent sur ${r.lignes} ligne et le grand message passe sous le bandeau (${r.bandeau} px → ${r.message} px) · ${r.dehors.length} élément dans le surbalayage que rognent les télés` };
 });
@@ -14626,7 +14637,7 @@ test('la voiture achetée au concessionnaire se conduit, se sauvegarde et se ret
       retrouvee: !!apres, gamme: apres && apres.gamme, mienne: !!(apres && apres.mienne),
       dansLeGarage: apres ? G.dansMonGarage(apres) : false,
       pointe: apres ? Math.round(apres.spec.max * 3.6) : 0, attendu: Math.round(ref.vmax * 3.6),
-      solidite: apres ? apres.solidite : 0, places: apres ? apres.places : 0 };
+      solidite: apres ? apres.solidite : 0, places: apres ? apres.nbPlaces : 0 };
     G.wallet = 25; G.saveWallet(); G.store.set('superobby.mavoiture', '');
     return res;
   });
@@ -14800,9 +14811,11 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
       // ---- R2 TIRE ----
       const n0 = G.shots.length; G.P.fireCd = 0;
       bt(7, 1); G.pollGamepad(1 / 60); res.tirs = G.shots.length - n0; bt(7, 0); G.pollGamepad(1 / 60);
-      // ---- L2 À NOUVEAU : RENGAINER (et surtout pas se baisser) ----
+      // ---- L2 À NOUVEAU : L'ARME RESTE SORTIE (décision du joueur, n° 42 et 49 : L2 ne
+      // rengaine jamais, il reverrouille ; seul ✕ range) et surtout pas se baisser ----
       clic(6);
       res.rengaine = { degaine: !!G.P.drawn, accroupi: !!G.P.accroupi };
+      clic(0); res.croix = { degaine: !!G.P.drawn };
       // ---- MAINS NUES : L2 GARDE SON ANCIEN RÔLE, SE BAISSER ----
       G.equipWeapon(null);
       bt(6, 1); G.pollGamepad(1 / 60); res.mainsNues = { accroupi: !!G.P.accroupi, degaine: !!G.P.drawn };
@@ -14827,11 +14840,11 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
     && r.vehicules >= 1
     && r.troisCibles === 3 && r.armeInchangee && r.flechePrec.nom === r.fleche1.nom
     && r.tirs === 1
-    && !r.rengaine.degaine && !r.rengaine.accroupi
+    && r.rengaine.degaine && !r.rengaine.accroupi && r.croix && !r.croix.degaine
     && r.mainsNues.accroupi && !r.mainsNues.degaine && !r.mainsNuesLache
     && r.flecheArmeRangee === 'knife'
     && !!r.surVehicule;
-  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 rengaine (${!r.rengaine.degaine}) sans baisser le joueur · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
+  return { ok, detail: `la gâchette gauche ne faisait que baisser le joueur et aucun bouton ne changeait de cible · L2 DÉGAINE ET BRAQUE : la visée se pose sur ${b.nom} à ${b.distance} m — le plus proche des trois (${r.distances.join(' / ')} m), même dans le dos : le personnage pivote dessus (écart de cap ${b.ecartCap} rad) et la caméra se replace derrière (${b.cameraDerriere} rad) · les cibles verrouillables comptent maintenant les VÉHICULES et les hommes de gang (${r.liste.length} en vue, dont ${r.vehicules} qui ne sont pas des habitants ; sans personne en vue, L2 braque ${r.surVehicule}) · les FLÈCHES font le tour des cibles sans toucher à l'arme (${b.nom} → ${r.fleche1.nom} → ${r.fleche2.nom}, et ← revient sur ${r.flechePrec.nom}, arme toujours ${r.fleche2.arme}) · R2 tire (${r.tirs} balle) · un second appui sur L2 garde l'arme sortie (${r.rengaine.degaine}) sans baisser le joueur, et ✕ la range (${r.croix && !r.croix.degaine}) · MAINS NUES, L2 garde son ancien rôle : se baisser (${r.mainsNues.accroupi}) — et arme rangée, les flèches refont le tour des armes (${r.flecheArmeRangee})` };
 });
 
 // Demande du joueur, mot pour mot : « Ajoute le crochet, l'uppercut, le direct. Je veux voir
@@ -15441,4 +15454,282 @@ test('en mode TV avec une DualSense branchée, la pastille ne réclame plus de s
   });
   const ok = /scanne/.test(r.sans) && !/scanne/.test(r.avec) && /PS5/.test(r.avec);
   return { ok, detail: `sans manette : « ${r.sans} » · DualSense branchée : « ${r.avec} » (visible=${r.avecVisible}, elle s'efface au bout de 5 s)` };
+});
+
+// ---- Round 70, le Réparateur : les sept GRAVES du Joueur ----
+test('parachute : la voile dérive dans le sens de la marche, reste ouverte jusqu\'au sol et le joueur se pose loin de la façade', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    const essai = (yaw, ctrl) => {
+      __SHOT.go({ world: 4, x: 30.9, y: 1, z: 22, hour: 11, frais: true });
+      G.settings.ctrl = ctrl;
+      const t = G.city.toits[2];
+      const para = G.city.voiles.find(v => v.kind === 'parachute' && !v.pris && Math.hypot(v.x - t.x, v.z - t.z) < 12);
+      P.pos.set(para.x, t.y + 0.3, para.z - 1.2); P.vel.set(0, 0, 0); G.prendreVoile(para);   // à côté du sac (posé DANS son solide, on est repoussé)
+      P.facing = Math.PI / 2; G.cam.yaw = yaw; G.cam.freeUntil = 1e9;   // on court vers l'est ; la caméra reste où on la met
+      G.keys.add('KeyW');
+      let ouvert = 0, vyMin = 0, pose = null, i = 0;
+      for (; i < 1200 && !(P.grounded && P.pos.y < 0.3); i++) {
+        G.step(1 / 60, true);
+        if (P.voileMesh) ouvert++;
+        if (P.voileVol && P.vel.y < vyMin) vyMin = P.vel.y;
+        // « Bien posé » doit tomber les pieds SUR quelque chose (le sol, ou un toit plus bas sur lequel la dérive nous a portés)
+        if (pose == null && /Bien pos/.test(document.getElementById('msg').textContent)) pose = { y: +P.pos.y.toFixed(2), x: +P.pos.x.toFixed(1), sol: +G.groundUnder(P.pos.x, P.pos.z, null, P.pos.y + 0.6).toFixed(2) };
+      }
+      G.keys.delete('KeyW');
+      return { images: i, ouvert, vyMin: +vyMin.toFixed(1), pose, x: +P.pos.x.toFixed(1), y: +P.pos.y.toFixed(2), hp: P.hp, facadeX: t.x + t.w / 2 };
+    };
+    // caméra dans le dos en mode caméra ; caméra DEVANT le personnage en mode rotation (le
+    // réglage par défaut) : la dérive doit suivre le cap du personnage, pas la caméra
+    return { derriere: essai(Math.PI / 2 + Math.PI, 'cam'), devant: essai(Math.PI / 2, 'rot') };
+  });
+  const bon = e => e.ouvert > 150 && e.vyMin >= -3.3 && e.pose && e.pose.y <= e.pose.sol + 0.4 && e.x > e.facadeX + 3 && e.y < 0.3 && e.hp === 100;
+  const ok = bon(r.derriere) && bon(r.devant);
+  const d = e => `${e.ouvert} images sous la voile, vy min ${e.vyMin} m/s, « Bien posé » à y=${e.pose && e.pose.y} (surface à ${e.pose && e.pose.sol}), au sol en x=${e.x} (façade x=${e.facadeX}), ❤️ ${e.hp}`;
+  return { ok, detail: `avant : la dérive suivait la caméra (gauche/droite inversées), le joueur glissait contre la façade, « Bien posé » sur la marquise à 3,8 m puis chute · caméra derrière : ${d(r.derriere)} · caméra devant : ${d(r.devant)}` };
+});
+
+test('à la manette, L2 tenu garde l\'arme sortie entre deux R2, L2 relâché ne la range pas, seul ✕ la range, et le couteau frappe', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 52, y: 1, z: 30, hour: 15, frais: true });
+    const gp = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, touched: false, value: 0 })), timestamp: 0 };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [gp];
+    const btn = (i, d) => { gp.buttons[i] = { pressed: !!d, touched: !!d, value: d ? 1 : 0 }; };
+    const frame = n => { for (let k = 0; k < n; k++) { gp.timestamp++; G.pollGamepad(1 / 60); G.step(1 / 60, true); } };
+    const res = {};
+    try {
+      G.owned.add('arme:pistol'); G.owned.add('arme:knife'); G.equipWeapon('pistol'); P.drawn = false; frame(5);
+      const b = G.bots[0]; const fige = (x, z) => { b.pos.set(x, 0, z); b.av.group.position.set(x, 0, z); b.rdv = null; b.wander = null; b.fight = null; b.wait = 99; b.hp = 100; b.ko = 0; };
+      fige(52, 40); P.pos.set(52, 0.3, 30); P.facing = 0; G.cam.yaw = 0; G.cam.freeUntil = 0; frame(5);
+      btn(6, true); frame(10); res.l2 = { drawn: !!P.drawn, cible: P.lock && P.lock.nom };
+      const seq = [];
+      for (let i = 0; i < 3; i++) { fige(52, 40); btn(7, true); frame(3); btn(7, false); frame(72); seq.push({ drawn: !!P.drawn, ammo: P.ammo }); }   // 1,25 s entre deux coups : au-delà du rengainage automatique de 0,85 s
+      res.tirs = seq;
+      btn(6, false); frame(70); res.relache = !!P.drawn;
+      btn(0, true); frame(3); btn(0, false); frame(10); res.croix = !!P.drawn;
+      btn(15, true); frame(3); btn(15, false); frame(10); res.arme = P.weapon;   // → : l'arme suivante (rangée)
+      fige(52, 40); P.pos.set(52, 0.3, 38.5); P.facing = 0; frame(5);
+      btn(6, true); frame(8); res.couteauL2 = !!P.drawn;
+      const hp0 = b.hp; btn(7, true); frame(3); btn(7, false); frame(40); res.couteau = { hp0, hp: b.hp, drawn: !!P.drawn };
+      btn(6, false); frame(3);
+    } finally { navigator.getGamepads = vrai; G.pollGamepad(1 / 60); }
+    return res;
+  });
+  const ok = r.l2.drawn && r.tirs.every(t => t.drawn) && r.tirs[2].ammo === 5 && r.relache === true && r.croix === false && r.arme === 'knife' && r.couteauL2 && r.couteau.hp < r.couteau.hp0;
+  return { ok, detail: `avant : 0,85 s après un tir l'arme retournait dans l'étui alors que L2 était tenu, et R2 ne faisait plus rien · L2 : sortie=${r.l2.drawn} (${r.l2.cible}) · 3 R2 espacés : ${r.tirs.map(t => (t.drawn ? 'sortie' : 'rangée') + ' ' + t.ammo).join(', ')} · L2 relâché : sortie=${r.relache} · ✕ : sortie=${r.croix} · → : ${r.arme} · couteau L2+R2 : ❤️ ${r.couteau.hp0} → ${r.couteau.hp}` };
+});
+
+test('la réunion de chef de gang pose la bague sur SES boutons, même si la fenêtre 🚩 fermée avait gardé la sienne', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 16, frais: true });
+    const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.className.split(' ')[0]) + ':' + f.textContent.trim().slice(0, 20) : null; };
+    const res = {};
+    document.body.classList.add('tv');
+    try {
+      G.openUI('guerre'); G.navChoisit(document.getElementById('guerreBack')); res.avant = focus();
+      G.closeUI(); res.apresFermeture = focus();
+      const g2 = G.gangs[1] || G.gangs[0];
+      G.proposeReunion(g2); G.openReunion();
+      await new Promise(r2 => setTimeout(r2, 120));
+      res.reunion = { ui: G.uiOpen, focus: focus(), dedans: !!(document.querySelector('.focustv') && document.getElementById('reunion').contains(document.querySelector('.focustv'))) };
+      G.navVers('bas'); res.bas = focus();
+    } finally { document.body.classList.remove('tv'); if (G.uiOpen) G.closeUI(); G.guerre.reunion = null; }
+    return res;
+  });
+  const ok = r.avant === 'guerreBack:Retour' && r.apresFermeture === null && r.reunion.ui === 'reunion' && r.reunion.dedans && /reunion/.test(r.bas || '');
+  return { ok, detail: `avant : la bague restait sur « guerreBack:Retour » (fenêtre cachée), ✕ ne validait rien · bague après fermeture de 🚩 : ${r.apresFermeture} · réunion ouverte : bague sur ${r.reunion.focus} (dans la fenêtre=${r.reunion.dedans}) · ↓ : ${r.bas}` };
+});
+
+test('le camion de pompiers sort de la caserne, rejoint la rue la plus proche du feu et l\'équipe éteint un feu allumé dans le parc', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 27, y: 1, z: 118, hour: 9, frais: true });
+    G.city.horaires = false;
+    const cam = G.city.cars.find(c => c.kind === 'pompier');
+    const x0 = cam.x, z0 = cam.z;
+    const f = G.declencheIncendie(0, 60, 100);
+    const pp = G.city.metiers.filter(m => m.metier === 'pompier');
+    let dMin = 1e9, t = 0, tArrose = null, dChefArrose = null, sorti = null, tFin = null, forceMin = 100;
+    for (let i = 0; i < 180 * 60 && !tFin; i++) {
+      G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
+      const d = Math.hypot(cam.x, cam.z - 60); if (d < dMin) dMin = d;
+      if (sorti == null && Math.hypot(cam.x - x0, cam.z - z0) > 12) sorti = +t.toFixed(0);
+      if (tArrose == null && pp[0].etat === 'arrose') { tArrose = +t.toFixed(0); dChefArrose = +Math.hypot(pp[0].bot.pos.x, pp[0].bot.pos.z - 60).toFixed(1); }
+      if (f) forceMin = Math.min(forceMin, f.force);
+      if (!G.city.incendies.length) tFin = +t.toFixed(0);
+    }
+    return { allume: !!f, sorti, tArrose, dChefArrose, tFin, dMin: +dMin.toFixed(1), etat: pp[0].etat, forceMin: +forceMin.toFixed(0) };
+  });
+  const ok = r.allume && r.sorti != null && r.sorti < 30 && r.tArrose != null && r.dChefArrose != null && r.dChefArrose < 9 && r.tFin != null && r.tFin < 170;
+  return { ok, detail: `avant : un banc sur le trottoir devant la cour clouait le camion (84 m du feu pendant 120 s), et le camion visait le foyer lui-même au lieu de la rue · camion sorti à ${r.sorti} s, au plus près à ${r.dMin} m, lance ouverte à ${r.tArrose} s avec le chef à ${r.dChefArrose} m du feu, feu éteint à ${r.tFin} s (état ${r.etat}, force min ${r.forceMin})` };
+});
+
+test('tirer en pleine rue est un délit (avertissements), et faire exploser une voiture vaut deux étoiles', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 12, hour: 16, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.bots.forEach(b => { b.av.group.visible = false; });   // personne dans la ligne de mire : on vise la voiture
+    // une VOITURE du parking du centre (une moto est trop fine pour la dispersion des balles), vue depuis la rue au nord
+    const v = G.city.cars.find(c => c.parts && !c.heli && c.g.visible && !c.busy && Math.abs(c.x + 11.3) < 0.6 && Math.abs(c.z - 10) < 0.6) || G.city.cars.find(c => c.parts && !c.heli && c.g.visible && !c.busy);
+    P.pos.set(v.x, 0.3, v.z - 8); P.vel.set(0, 0, 0); P.facing = 0; G.cam.yaw = Math.PI; G.cam.freeUntil = 0; P.aimHeld = true; P.aim = true;
+    for (let i = 0; i < 10; i++) G.step(1 / 60, true);
+    const tirs = [];
+    for (let i = 0; i < 14 && !v.dead; i++) { P.ammo = 8; P.fireCd = 0; P.lockRef = v; G.fire(); for (let k = 0; k < 70; k++) G.step(1 / 60, true); tirs.push({ wanted: G.police.wanted, avert: G.police.avert || 0, dmg: Math.round(v.dmg || 0) }); }
+    P.aimHeld = false;
+    const msgW = document.getElementById('wanted').textContent;
+    const res = { tirs, dead: !!v.dead, wanted: G.police.wanted, crimeLevel: G.police.crimeLevel, msgW, kind: v.kind };
+    P.aim = false; P.aimHeld = false; G.clearWanted(); G.drawWeapon(false); G.bots.forEach(b => { b.av.group.visible = true; });
+    return res;
+  });
+  const ok = r.tirs[0].avert >= 1 && r.dead && r.wanted >= 2 && r.crimeLevel >= 3;
+  return { ok, detail: `avant : quatre balles, une voiture détruite, ⭐ 0 et personne · maintenant (${r.kind}), 1er tir : avertissement ${r.tirs[0].avert}/4 · ${r.tirs.map(t => '★' + t.wanted + '/' + t.dmg + '%').join(' ')} · détruite=${r.dead}, recherché ★${r.wanted}, gravité ${r.crimeLevel}, « ${r.msgW.slice(0, 50)} »` };
+});
+
+test('l\'équipe municipale part en fourgon, balise un chantier et répare un lampadaire cassé en moins d\'une minute', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 27, y: 1, z: 118, hour: 9, frais: true });
+    G.city.horaires = false;
+    const lamp = G.breakables.find(b => b.kind === 'lamp' && Math.hypot(b.x - 45.5, b.z - 13.2) < 2) || G.breakables.find(b => b.kind === 'lamp');
+    G.breakThing(lamp, null, true);
+    const emp = G.city.metiers.filter(m => m.metier === 'employe'), four = emp[0].bot.veh;
+    const x0 = four.x, z0 = four.z;
+    let t = 0, sorti = null, chantier = null, tFin = null, enFourgon = 0;
+    for (let i = 0; i < 120 * 60 && !tFin; i++) {
+      G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
+      if (sorti == null && Math.hypot(four.x - x0, four.z - z0) > 12) sorti = +t.toFixed(0);
+      if (emp[0].etat === 'route' && Math.hypot(emp[0].bot.pos.x - four.x, emp[0].bot.pos.z - four.z) < 4) enFourgon++;
+      if (chantier == null && G.city.chantiers.length) chantier = +t.toFixed(0);
+      if (!lamp.broken) tFin = +t.toFixed(0);
+    }
+    return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat };
+  });
+  // l'itinéraire par les voies varie avec la circulation (45 à 80 s de route) : on juge le fourgon, le chantier et la réparation dans les deux minutes
+  const ok = r.veh === 'fourgon' && r.sorti != null && r.sorti < 25 && r.enFourgon >= 10 && r.chantier != null && r.tFin != null && r.tFin < 110 && r.dFourgon < 16;
+  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat})` };
+});
+
+test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchir dans son sens, si', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -15, y: 1, z: 7, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.busy && !c.rider && !c.kart);
+    const tl = G.city.trafficLights.find(t => !t.broken && t.ligne);
+    const pose = (recule) => {
+      // la voiture dans l'axe du feu, le nez vers la ligne d'arrêt : en marche avant elle part de 9 m et franchit
+      // la ligne ; en marche arrière elle part à 2 m de la ligne (dans les 4,5 m de l'ancien test) et s'en éloigne
+      const sx = Math.sin(tl.sens), sz = Math.cos(tl.sens);
+      car.x = tl.ligne.x - sx * (recule ? 2 : 9); car.z = tl.ligne.z - sz * (recule ? 2 : 9); car.h = tl.sens;
+      car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = car.h; G.vehicleSolid(car);
+      P.pos.set(car.x, car.y + 0.4, car.z); if (G.drive.car !== car) G.enterCar(car);
+      G.clearWanted(); P.crime = 0; tl.runT = 0; tl.state = 0; tl.etat = 'rouge';
+      G.drive.speed = recule ? -8 : 8; let w = 0, m = '';
+      for (let i = 0; i < 150; i++) { tl.state = 0; tl.etat = 'rouge'; G.drive.speed = recule ? -8 : 8; G.step(1 / 60, true); w = Math.max(w, G.police.wanted); if (/grill/.test(document.getElementById('msg').textContent)) m = 'grillé'; }
+      return { w, m, dLigne: +Math.hypot(car.x - tl.ligne.x, car.z - tl.ligne.z).toFixed(1) };
+    };
+    const arriere = pose(true), avant = pose(false);
+    G.exitCar(); G.clearWanted();
+    return { arriere, avant };
+  });
+  const ok = r.arriere.m === '' && r.arriere.w === 0 && r.avant.m === 'grillé';
+  return { ok, detail: `avant : tout véhicule à moins de 4,5 m du poteau, quel que soit son cap, « grillait » le feu (reculer du parking = ★) · marche arrière devant la ligne : ${r.arriere.m || 'rien'}, ★${r.arriere.w} · marche avant dans le sens du feu : ${r.avant.m || 'rien'}` };
+});
+
+test('un homme de gang en faction n\'est pas « paré » à chaque coup : le poste de garde n\'est pas une garde de poings', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 16, frais: true });
+    const tous = G.gangs.flatMap(g => g.membres).filter(x => !x.ko && x.av);
+    const m = tous.find(x => Array.isArray(x.garde)) || tous[0];   // de préférence un homme en FACTION (m.garde = son poste)
+    const hp0 = m.hp; m.av.rig.garde = false;
+    const avant = { garde: Array.isArray(m.garde), rigGarde: !!m.av.rig.garde };
+    let pares = 0, coups = 0;
+    for (let i = 0; i < 6; i++) {
+      P.pos.set(m.x - 1.2, 0.3, m.z); P.facing = Math.PI / 2; P.punchT = 0; P.combo = 0;
+      const h = m.hp; G.punch(); for (let k = 0; k < 40; k++) G.step(1 / 60, true);
+      if (m.hp < h) coups++; if (/Paré/.test(document.getElementById('msg').textContent)) pares++;
+    }
+    return { avant, hp0, hp: m.hp, coups, pares, perdu: hp0 - m.hp };
+  });
+  const ok = r.coups >= 5 && r.pares === 0 && r.perdu >= 60;
+  return { ok, detail: `avant : \`m.garde\` (le POSTE [x, z] du gangster) était lu comme « poings levés » → chaque coup paré à 45 %, 15 coups pour 50 ❤️ · maintenant 6 directs sur un homme en faction (poste=${r.avant.garde}) : ${r.coups} coups portés, ${r.pares} parés, ❤️ ${r.hp0} → ${r.hp} (−${r.perdu})` };
+});
+
+test('dans la citadine « Puce » du concessionnaire, le conducteur est ASSIS : sa tête reste sous le toit', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const mesure = c => {
+      G.P.pos.set(c.x + 2, 0.3, c.z); G.enterCar(c); G.poseJoueurAuVolant(1);
+      G.me.group.updateMatrixWorld(true); c.g.updateMatrixWorld(true);
+      const bh = new THREE.Box3().setFromObject(G.me.rig.head);
+      let toit = -1; c.g.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); if (b.max.y > toit && (b.max.x - b.min.x) > 1.2 && (b.max.z - b.min.z) > 1.2) toit = b.max.y; } });
+      const out = { placesDe: typeof G.placesDe(c), hautTete: +bh.max.y.toFixed(2), toit: +toit.toFixed(2), depasse: +(bh.max.y - toit).toFixed(2) };
+      G.exitCar(); return out;
+    };
+    const puce = G.voitureDeGamme(G.gammeDe('citadine'), -120, 121, 0); G.city.cars.push(puce);
+    const std = G.city.cars.find(c => c.parts && !c.gamme && !c.busy && !c.rider);
+    return { puce: mesure(puce), std: mesure(std) };
+  });
+  const ok = r.puce.placesDe === 'object' && r.puce.depasse < 0 && r.std.depasse < 0;
+  return { ok, detail: `avant : \`c.places = 4\` (le NOMBRE de places) écrasait la table des sièges → placesDe() rendait 4, le conducteur restait debout, tête 75 cm au-dessus du toit · maintenant Puce : haut de tête ${r.puce.hautTete} m, toit ${r.puce.toit} m (${r.puce.depasse} m) · voiture de rue : ${r.std.depasse} m` };
+});
+
+test('hélico : ▢ ne pose pas l\'appareil SUR un objet de la rue, il se décale sur une place libre au sol', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 43, y: 1, z: -13, hour: 12, frais: true });
+    G.solids.push({ x: 43, y: 1.2, z: 51, w: 3, h: 2.4, d: 7 });   // l'objet de rue du rapport (3 × 2,4 × 7 m) posé en (43, 51)
+    const h = G.city.cars.find(c => c.heli);
+    G.P.pos.set(h.x + 2, 0.3, h.z); G.enterCar(h);
+    h.x = 43; h.z = 51; h.y = 14; h.h = 0; h.vx = h.vz = h.vy = 0; h.landed = false; G.heliPoser(true);
+    const decale = !!h.poserVers;
+    let t = 0; while (t < 30 && !h.landed) { G.step(1 / 60, true); t += 1 / 60; }
+    const out = { decale, t: +t.toFixed(1), x: +h.x.toFixed(1), y: +h.y.toFixed(2), z: +h.z.toFixed(1), landed: h.landed, sol: +G.heliSolSous(h).toFixed(2), dmg: Math.round(h.dmg || 0), dObjet: +Math.hypot(h.x - 43, h.z - 51).toFixed(1) };
+    G.exitCar(); return out;
+  });
+  const ok = r.decale && r.landed && r.y < 0.4 && r.sol < 0.3 && r.dmg === 0 && r.dObjet > 3;
+  return { ok, detail: `avant : la descente automatique se posait sur ce qu'il y avait dessous, l'appareil finissait perché à y 2,49 sur l'objet · maintenant ▢ choisit une place libre (décalage=${r.decale}), l'hélico se pose en ${r.t} s à (${r.x}, ${r.z}), y ${r.y}, sol sous lui ${r.sol}, à ${r.dObjet} m de l'objet, dégâts ${r.dmg}` };
+});
+
+test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une balle dedans vaut une étoile, une cible verrouillée n\'a pas d\'avertissement « pleine rue » avant l\'infraction', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, out = {};
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+    // 1. un habitant verrouillé à 4 m, trois balles : une seule sorte de message, l'infraction
+    const b = G.bots.find(x => x.av && !x.ko); b.pos.set(4, 0, 3.5); b.av.group.position.copy(b.pos); b.hp = 100; b.wait = 99;
+    G.bots.forEach(o => { if (o !== b) { o.pos.set(150, 0, 150); o.av.group.position.copy(o.pos); } });
+    P.pos.set(0, 0.3, 3.5); P.facing = 0; G.police.wanted = 0; G.police.avert = 0; G.police.avertT = -999; P.crime = 0;
+    G.braquerVerrouille(); for (let k = 0; k < 3; k++) G.step(1 / 60, true);
+    const msgs = [];
+    for (let i = 0; i < 3; i++) { P.fireCd = 0; G.fire(); for (let k = 0; k < 30; k++) { G.step(1 / 60, true); const m = document.getElementById('msg').textContent; if (m && !msgs.includes(m)) msgs.push(m); } }
+    out.tir = { lock: P.lock ? P.lock.nom : null, hp: b.hp, wanted: G.police.wanted, laissePasser: msgs.filter(m => /laisse passer/.test(m)).length, infraction: msgs.filter(m => /Infraction : tirer sur/.test(m)).length };
+    // 2. une vitrine au poing : fissurée au premier coup, brisée au second
+    G.clearWanted(); G.police.avert = 0; P.crime = 0; P.lockRef = null; P.lock = null; P.drawn = false; G.equipWeapon(null);
+    const vitres = G.breakables.filter(x => x.kind === 'glass' && !x.broken && x.solid);
+    const vit = vitres[0], o = vit.solid, nz = o.d < o.w ? 1 : 0;
+    const px = o.x + (nz ? 0 : 1.2), pz = o.z + (nz ? 1.2 : 0);
+    P.pos.set(px, 0.3, pz); P.facing = Math.atan2(o.x - px, o.z - pz); for (let k = 0; k < 2; k++) G.step(1 / 60, true);
+    const etats = [];
+    for (let i = 0; i < 2; i++) { P.punchT = 0; P.combo = 0; G.punch(); for (let k = 0; k < 40; k++) G.step(1 / 60, true); etats.push(vit.broken ? 'brisée' : vit.cracked ? 'fissurée' : 'intacte'); }
+    out.poing = { etats, wanted: G.police.wanted };
+    // 3. une balle dans une autre vitrine : la police vient
+    G.clearWanted(); G.police.avert = 0; P.crime = 0;
+    const v2 = vitres.find(x => x !== vit && !x.broken), o2 = v2.solid, nz2 = o2.d < o2.w ? 1 : 0;
+    P.pos.set(o2.x + (nz2 ? 0 : 4), 0.3, o2.z + (nz2 ? 4 : 0));
+    P.facing = Math.atan2(o2.x - P.pos.x, o2.z - P.pos.z); G.cam.yaw = P.facing + Math.PI; G.cam.pitch = 0;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); P.drawn = true; P.aim = true; P.lock = null; P.lockRef = null;
+    for (let i = 0; i < 2; i++) { P.fireCd = 0; G.fire(); for (let k = 0; k < 30; k++) G.step(1 / 60, true); }
+    out.balle = { etat: v2.broken ? 'brisée' : v2.cracked ? 'fissurée' : 'intacte', wanted: G.police.wanted, msg: document.getElementById('msg').textContent };
+    G.clearWanted(); P.drawn = false; P.aim = false; G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return out;
+  });
+  const ok = r.tir.wanted >= 1 && r.tir.laissePasser === 0 && r.tir.infraction >= 1
+    && r.poing.etats[0] === 'fissurée' && r.poing.etats[1] === 'brisée'
+    && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
+  return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });

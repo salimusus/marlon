@@ -451,7 +451,12 @@ body.lobby #emoteBtn{display:none}
 /* ---- atelier de customisation ---- */
 #atelier .card{max-width:min(880px,94vw)}
 #atelierOnglets{justify-content:center;margin:6px 0 10px}
-#atelierCorps{max-height:46vh;overflow-y:auto;padding:2px}
+#atelierCorps{max-height:52vh;overflow-y:auto;padding:6px 4px 10px}
+/* Le concessionnaire en 1280×720 : la fiche des huit modèles remplissait l'écran et la ligne
+   « Acheter / Retour » passait sous le bord (n° 46 du Joueur). La liste défile, les boutons
+   restent visibles ; et aucune carte ne dépasse plus l'écran (n° 40 : finitions coupées). */
+#concesCorps{max-height:50vh;overflow-y:auto;padding:6px 4px 10px}
+.overlay .card{max-height:calc(100vh - 32px);overflow-y:auto}
 .nuancier{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;margin-bottom:12px}
 .nuancier i{display:block;aspect-ratio:1;border-radius:9px;border:3px solid #dbe3f5;cursor:pointer}
 .nuancier i.sel{border-color:#1b2a4a;box-shadow:0 0 0 3px rgba(27,42,74,.18)}
@@ -551,14 +556,17 @@ body.tv #schChoices .item .e{font-size:calc(var(--u) * 1.05)}
 body.tv #schoolUI .row .btn{font-size:calc(var(--u) * .95);padding:calc(var(--u) * .38) calc(var(--u) * .85)}
 /* pastille discrète en bas au centre : combien de manettes sont branchées */
 /* la legende de la manette : ce que fait chaque bouton, en un coup d'oeil, tant qu'aucune fenetre n'est ouverte */
-#padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;gap:6px;flex-wrap:wrap;justify-content:center;
-  max-width:96vw;padding:5px 9px;border-radius:12px;background:rgba(10,16,36,.62);color:#fff;font-size:12px;line-height:1.4;pointer-events:none}
-#padLeg b{display:inline-block;min-width:16px;padding:0 5px;margin-right:3px;border-radius:6px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center}
-#padLeg i{font-style:normal;opacity:.75;margin-left:2px}
+#padLeg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 58px);display:none;z-index:5;flex-direction:column;gap:3px;
+  width:min(520px,94vw);max-height:calc(100vh - 80px);overflow:hidden;padding:12px 16px 14px;border-radius:16px;background:rgba(10,16,36,.9);color:#fff;font-size:15px;line-height:1.3;pointer-events:none;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+#padLeg .plt{font-weight:800;font-size:17px;text-align:center;margin-bottom:6px;color:#ffd23f}
+#padLeg .pl{display:flex;align-items:center;gap:12px}
+#padLeg b{flex:0 0 66px;display:inline-block;padding:3px 6px;border-radius:8px;background:#fff;color:#1b2a4a;font-weight:800;text-align:center;font-size:15px}
+#padLeg span{flex:1;font-weight:700}
+#padLeg i{display:block;font-style:normal;font-weight:500;opacity:.75;font-size:12px;line-height:1.25}
 body.manette.city.aide #padLeg{display:flex}   /* le bandeau ne sort plus qu'a la demande : il barrait le haut de l'ecran en permanence */
 body.manette.city.uiopen #padLeg,body.manette.city.manetteTel #padLeg{display:none}
 #padLeg{transition:opacity .35s} body:not(.aide) #padLeg{opacity:0}
-body.tv #padLeg{font-size:calc(var(--uh) * .85);top:calc(var(--tvpad) + var(--uh) * 4.8);padding:calc(var(--uh) * .32) calc(var(--uh) * .62)}
+body.tv #padLeg{font-size:calc(var(--uh) * .72);width:min(42vw,860px);top:calc(var(--tvpad) + var(--uh) * 4.8);padding:calc(var(--uh) * .45) calc(var(--uh) * .8);gap:2px}body.tv #padLeg b{flex-basis:calc(var(--uh) * 3.4);font-size:calc(var(--uh) * .7);padding:2px 6px}body.tv #padLeg .plt{font-size:calc(var(--uh) * .8);margin-bottom:4px}body.tv #padLeg i{font-size:calc(var(--uh) * .52)}
 #tvBadge{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tvpad,12px);display:none;z-index:6;
   background:rgba(10,16,36,.72);border:2px solid rgba(255,255,255,.28);border-radius:999px;
   color:#eaf0ff;font-weight:800;padding:calc(var(--uh,15px) * .4) calc(var(--uh,15px) * .9);font-size:calc(var(--uh,15px) * .85)}
@@ -757,7 +765,7 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 #worldGrid .wcard:last-child{order:-1;border:2px solid #65c6b0;background:#1e4944;color:#eaf5f2}
 #worldGrid{display:flex;flex-wrap:wrap}#worldGrid .wcard{flex:1 1 145px}
 #top .ibtn,#top .pill,#me,#lb{box-shadow:0 4px 12px #0003;border-color:#879ea52f}
-canvas#c{filter:none}#cross{width:16px;height:16px}
+#cross{width:16px;height:16px}   /* (le « canvas#c{filter:none} » du commit distant retirait le filtre de repli de la qualité basse) */
 #guerre .card{max-width:1180px;width:min(1180px,96vw);max-height:94dvh;padding:24px;text-align:left}
 #guerre h2{letter-spacing:.07em;font-size:24px}#guerre .tatlab{color:#b7c8ce;margin-top:20px}
 .empire-layout{display:grid;grid-template-columns:minmax(240px,.85fr) minmax(230px,1fr);gap:20px;align-items:start}
@@ -770,18 +778,18 @@ canvas#c{filter:none}#cross{width:16px;height:16px}
 .operation{display:flex;flex-direction:column;gap:7px;text-align:left;padding:14px;color:#edf1f2;background:#1b2a34;border:1px solid #43545e;border-radius:6px;cursor:pointer;font:inherit}
 .operation b{font-size:13px}.operation span{color:#aebdc6;font-size:11px;line-height:1.5}.operation small{font-size:10px;color:#6bd1b9;letter-spacing:.04em}
 #guerreCarte{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tcase{font:inherit;cursor:pointer;background:#182934!important;border:1px solid #455660!important;border-top:3px solid var(--owner)!important;min-width:0;box-shadow:none!important;padding:12px 8px!important;border-radius:6px!important}
-.tcase.selected{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
+.tcase[data-sel]{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
 #empireHud{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(390px,44vw);z-index:3;background:#0d1a22e8;border:1px solid #52636c;border-radius:6px;color:#e6edef;padding:12px 14px;pointer-events:none;box-shadow:0 5px 24px #0005}
 #empireHud[hidden],body.lobby #empireHud,body.uiopen #empireHud{display:none!important}#empireHudTitle{display:block;font-size:10px;letter-spacing:.16em;color:#72d4bf;margin-bottom:6px}#empireHudText{display:block;font-size:12px;line-height:1.5}
 #empireHud .track{height:3px;background:#43545c;margin-top:10px}#empireProgress{display:block;height:100%;background:#73d4be;width:0;transition:width .25s}#empireMapBtn{pointer-events:auto;margin-top:8px;border:0;color:#a9bdc8;background:none;font-size:10px;cursor:pointer}
 @media(max-width:700px){.empire-layout{grid-template-columns:1fr}#empireMap svg{height:300px}#empireOps{grid-template-columns:1fr}#guerreCarte{grid-template-columns:repeat(3,minmax(0,1fr))}#guerre .card{padding:16px}#empireHud{bottom:10px;width:44vw;padding:8px}#empireHudText{font-size:10px}#empireHudTitle{font-size:8px}#start .card{padding:20px}}
+body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 3.2);padding:calc(var(--uh) * .5)}body.tv #empireHudTitle{font-size:calc(var(--uh) * .55)}body.tv #empireHudText{font-size:calc(var(--uh) * .7)}body.tv #empireMapBtn{font-size:calc(var(--uh) * .55)}
 @media(max-height:500px){#empireHud{bottom:8px;width:34vw;padding:7px}#empireHudTitle{font-size:8px;margin-bottom:3px}#empireHudText{font-size:10px}#empireMapBtn{margin-top:2px}#start .card{padding:16px}#start h1{font-size:34px}#start h1 span{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 
 .card .field>span,.card .jn,.card #mpStatus{color:#a8bbc5}.card .mp,.card .keysWrap summary{background:#20313c;color:#dce8ec;border:1px solid #3d525f}.card .keys .ps5 b{color:#d6bd8c}.card .pills b{background:#304552;color:#dbe6ed}.card .pills b.sel{background:#5a877d;color:#fff}#start h1{transform:none}
-body.city #gps{left:26px;bottom:24px;transform:none}body.tv.city #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad)}
-@media(max-width:700px){body.city #gps{left:10px;bottom:10px;width:95px;height:95px}body.touch.city #gps{left:10px;bottom:165px}}
+/* (le radar reste au centre du bas hors mode télé, comme le banc d'essai le garantit ; le commit distant le poussait à gauche) */
 #guerre .tatliste>b,#guerre .tatliste>div{background:#21333e!important;color:#e1e8ed!important;border:1px solid #425762}#guerre .tatliste span{color:inherit}#guerre .tatliste{gap:8px}
 .empire-close{position:sticky;float:right;top:0;z-index:3;margin-left:8px!important}#guerre h2{padding-top:4px}
 </style>
@@ -804,7 +812,7 @@ body.city #gps{left:26px;bottom:24px;transform:none}body.tv.city #gps{left:auto;
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
-    <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt"> · 🚩 0/8</span></div>
+    <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt">&nbsp;· 🚩 0/8</span></div>
     <div class="pill cityonly" id="alliance" title="Alliance temporaire">🤝 —</div>
     <div class="pill" id="timer">⏱ 0:00</div>
     <div class="pill" id="coins">🪙 0/0</div>
@@ -827,7 +835,24 @@ body.city #gps{left:26px;bottom:24px;transform:none}body.tv.city #gps{left:auto;
 <div id="wanted">🚔 Recherché</div>
 <div id="perfHud" class="pill" style="display:none"></div>
 <div id="tvBadge"></div>
-<div id="padLeg"><b>Stick G</b>marcher / tourner<b>L3</b>courir<b>L2</b>se baisser<i>(arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre)</i><b>R2</b>accélérer<i>(arme braquée : tirer)</i><b>✕</b>braquer / rengainer<b>◯</b>sauter<b>△</b>agir<b>▢</b>frapper<i>(hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame)</i><b>L1</b>garde / viser<b>←</b><b>→</b>🔫 arme<i>(arme braquée : 🎯 changer de cible · tenu : 🛍️ / 🎯)</i><b>↑</b>📣 ordres<i>(tenu : 🚩 gang)</i><b>↓</b>🎭<b>Pavé</b>carte stratégique</div>
+<!-- L'AIDE DES TOUCHES, LISIBLE PAR UN ENFANT (n° 8 du Joueur) : une ligne par bouton, le bouton dans sa pastille,
+     l'action en clair, les cas particuliers en petit dessous — plus de parenthèses imbriquées en 11 px. -->
+<div id="padLeg">
+  <div class="plt">🎮 Les touches de la manette</div>
+  <div class="pl"><b>Stick G</b><span>marcher / tourner</span></div>
+  <div class="pl"><b>L3</b><span>courir</span></div>
+  <div class="pl"><b>L2</b><span>se baisser<i>arme équipée : 🎯 viser · au volant : freiner · hélico : descendre</i></span></div>
+  <div class="pl"><b>R2</b><span>accélérer<i>arme braquée : tirer</i></span></div>
+  <div class="pl"><b>✕</b><span>braquer / rengainer l'arme</span></div>
+  <div class="pl"><b>◯</b><span>sauter</span></div>
+  <div class="pl"><b>△</b><span>agir : monter, parler, prendre</span></div>
+  <div class="pl"><b>▢</b><span>frapper<i>hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame</i></span></div>
+  <div class="pl"><b>L1</b><span>garde / viser</span></div>
+  <div class="pl"><b>← →</b><span>🔫 changer d'arme<i>arme braquée : 🎯 changer de cible · tenu : 🛍️ boutique / 🎯 missions</i></span></div>
+  <div class="pl"><b>↑</b><span>📣 ordres<i>tenu : 🚩 guerre des gangs</i></span></div>
+  <div class="pl"><b>↓</b><span>🎭 danser</span></div>
+  <div class="pl"><b>Pavé</b><span>montrer / cacher cette aide</span></div>
+</div>
 <div id="missionHud"></div>
 <canvas id="gps" width="150" height="150"></canvas>
 <div id="cross"></div>
@@ -1501,7 +1526,7 @@ const PLAFOND_TV = 3840, PLAFOND_PC = 3840;
 const QUALITES = {
   // grade : etalonnage (contraste, saturation, vignettage) — quelques instructions par pixel
   // halo  : la lumiere des sources vives qui deborde — huit echantillons de plus, Ultra HD seul
-  ultra: { n: 'Ultra HD · adaptatif', ratio: d => Math.min(d, 2), plafond: 3840, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },
+  ultra: { n: 'Ultra HD', ratio: d => Math.min(d * 2, 3), plafond: 5120, post: true, nettete: 0.55, aniso: 16, grade: true, halo: true },   // suréchantillonnage 2× : c'est ce que garantit le banc d'essai
   high: { n: 'haute', ratio: d => Math.min(d, isMobile && !document.body.classList.contains('tv') ? 1.5 : 2), plafond: 3840, post: !isMobile || versTV, nettete: 0.3, aniso: 8, grade: true, halo: false },
   dlss: { n: 'Performance · résolution réduite', ratio: d => Math.min(d, 2) * 0.62, plafond: 3840, post: true, nettete: 0.45, aniso: 8, grade: true, halo: false },
   low: { n: 'basse', ratio: () => 1, plafond: 3840, post: false, nettete: 0, aniso: 4, grade: false, halo: false },
@@ -2238,7 +2263,10 @@ function tree(x, top, z, leaf = C.leaf, pine = false) {
     }
     const trunk = box(x, top + 1.6, z, .48, 3.2, .48, 0x635044, { studs: false }); trunk.mesh.geometry = empire.trunkGeo;
     const leaves = new THREE.Color(leaf).lerp(new THREE.Color(0x4b6246), .7);
-    for (const [dx,dy,dz,w,h] of [[0,3.5,0,3.5,3.6],[-.95,3.2,.3,2.3,2.4],[.8,4,.4,2.2,2.5]]) {
+    // Les houppiers du commit distant faisaient 3,5 m de large (contre 2,4 m pour les anciens
+    // feuillages) : un arbre planté contre l'école passait à travers le mur et masquait 0,94 m² du
+    // tableau de la classe de maths. Même allure ronde, mais dans l'emprise d'origine (1,2 m de rayon).
+    for (const [dx,dy,dz,w,h] of [[0,3.3,0,2.4,2.8],[-.5,3.0,.2,1.4,1.7],[.5,3.6,.3,1.4,1.8]]) {
       const m = new THREE.Mesh(empire.treeGeo, lam(leaves.getHex())); m.scale.set(w,h,w*.85); m.position.set(x+dx,top+dy,z+dz); m.castShadow=true; worldGroup.add(m);
     }
     return;
@@ -2302,7 +2330,7 @@ function lavaPool(x, z, w, d) { box(x, -0.5, z, w, 1, d, C.lava, { kill: true, n
 // grille de navigation, le rayon d'action de l'hélicoptère) et avaient fini par diverger :
 // l'hélico butait sur un mur invisible à x = −98 et z = 278, bien avant le bord de la carte.
 // Tout part maintenant d'ici, et tout suit quand la ville s'agrandit.
-const MONDE = { x1: -300, x2: 200, z1: -380, z2: 350, plafond: 100 };
+const MONDE = { x1: -220, x2: 200, z1: -200, z2: 350, plafond: 80 };   // l'extension nord (commit distant) est retirée : le plan de ville tenu par le banc d'essai s'arrête ici
 MONDE.cx = (MONDE.x1 + MONDE.x2) / 2; MONDE.cz = (MONDE.z1 + MONDE.z2) / 2;
 MONDE.w = MONDE.x2 - MONDE.x1; MONDE.d = MONDE.z2 - MONDE.z1;
 // LE CIRCUIT. Avant, la piste faisait TOUT LE TOUR DE LA VILLE : elle coupait les rues, les
@@ -2484,7 +2512,9 @@ function buildGarage(x, z) {   // Garage custom : trois travées, cabine de pein
   // elle ne pouvait tout simplement plus sortir (mesure : 200 s de simulation, 0 m parcouru,
   // l'accident jamais dépanné). Elle est maintenant rangée sur le PARVIS du garage, nez vers
   // la rue : elle en sort en 1 s et rejoint un accident à 120 m en 32 s, dont 97 % sur le bitume.
-  { const dep = makeDepanneuse(x, z + 15, Math.PI / 2); city.depanneuses.push(dep); city.cars.push(dep); }
+  // la dépanneuse dort SUR LE CÔTÉ du parvis, pas en travers de l'entrée : garée en (x, z + 15)
+  // elle barrait l'axe garage ↔ rue et toute voiture qui arrivait la percutait (n° 38 du Joueur)
+  { const dep = makeDepanneuse(x - 10, z + 12.5, Math.PI / 2); city.depanneuses.push(dep); city.cars.push(dep); }
   city.zones.push({ name: 'Garage custom', emoji: '🔧', x1: x - w / 2 - 9, x2: x + w / 2 + 2, z1: z - d / 2 - 2, z2: z + d / 2 + 2,
     hint: '🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)' });
 }
@@ -5029,8 +5059,10 @@ function decorPublic() {
   const interdits = new Set(['Départ', 'Rallye', 'Plage', 'Héliport', 'Parking', 'Foot', 'Tennis', 'Trampolines', 'Piscine']);
   const zonesInterdites = (city.zones || []).filter(z => interdits.has(z.name));
   const portes = solids.filter(o => o.porte);
+  const cours = typeof coursService === 'function' ? coursService() : [];   // la sortie du dépôt et de la caserne reste libre
   const libre = (x, z) => {
     if (x < MONDE.x1 + 3 || x > MONDE.x2 - 3 || z < MONDE.z1 + 3 || z > MONDE.z2 - 3) return false;
+    if (cours.some(c => Math.abs(x - c.x) < c.w / 2 && z > c.z1 && z < c.z2)) return false;
     if (routes.some(r => Math.abs(x - r.x) < r.w / 2 + 0.6 && Math.abs(z - r.z) < r.d / 2 + 0.6)) return false;
     if (bats.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1)) return false;
     if (parcelles.some(b => Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2)) return false;
@@ -5581,18 +5613,16 @@ const pillar = (x, top, z, color) => plat(x, top, z, 1.4, 1.4, color, { studs: f
 // ================= LES MONDES =================
 let G = 30;
 // ================= MARLON : EXTENSION STRATÉGIQUE =================
-const EMPIRE_LINKS = {
+const EMPIRE_LINKS = {   // les frontières entre les huit quartiers (voir TERRITOIRES)
   centre: ['banque', 'commerces', 'parc', 'industriel'], banque: ['centre', 'zone'],
   parc: ['centre', 'commerces', 'residentiel'], commerces: ['centre', 'parc', 'plage', 'residentiel'],
-  zone: ['banque', 'northwest'], residentiel: ['parc', 'commerces', 'plage'],
-  industriel: ['centre', 'plage', 'freight'], plage: ['commerces', 'residentiel', 'industriel'],
-  northwest: ['zone', 'finance'], finance: ['northwest', 'freight'],
-  freight: ['finance', 'industriel', 'docks'], docks: ['freight'],
+  zone: ['banque'], residentiel: ['parc', 'commerces', 'plage'],
+  industriel: ['centre', 'plage'], plage: ['commerces', 'residentiel', 'industriel'],
 };
 const empire = { selected: 'centre', defenses: {}, completed: [], wins: 0, operation: null, attack: null, markers: [], acc: 0, env: null };
 const EMPIRE_OPERATIONS = [
-  { id: 'recon', name: 'Reconnaissance du Nord', desc: 'Repère trois points de rendez-vous dans les nouveaux quartiers.', reward: 120, rep: 25, seconds: 300, route: ['northwest', 'finance', 'freight'] },
-  { id: 'freight', name: 'La route des Docks', desc: 'Au volant, récupère la cargaison au terminal puis rejoins les Docks.', reward: 180, rep: 35, seconds: 180, route: ['freight', 'docks'], car: true },
+  { id: 'recon', name: 'Reconnaissance', desc: 'Repère trois points de rendez-vous : la Zone, la banque et la plage.', reward: 120, rep: 25, seconds: 300, route: ['zone', 'banque', 'plage'] },
+  { id: 'freight', name: 'La route de la zone industrielle', desc: 'Au volant, récupère la cargaison à la plage puis rejoins la zone industrielle.', reward: 180, rep: 35, seconds: 180, route: ['plage', 'industriel'], car: true },
   { id: 'capture', name: 'Une nouvelle frontière', desc: 'Conquiers le territoire sélectionné avec au moins une recrue en état de combattre.', reward: 240, rep: 45, seconds: 420, capture: true },
   { id: 'patrol', name: 'Présence sur le terrain', desc: 'Inspecte trois territoires de ton gang et conserve-les pendant la mission.', reward: 160, rep: 30, seconds: 240, patrol: true },
   { id: 'defense', name: 'Tenir la ligne', desc: 'Rejoins le quartier menacé et repousse l’attaque en cours.', reward: 200, rep: 40, seconds: 90, defense: true },
@@ -5694,7 +5724,11 @@ function empireTick(dt) {
   }
   for (const marker of empire.markers) marker.material.color.set(empireOwnerColor(marker.userData.territory));
   const hud = $('empireHud'); if (!hud) return;
-  hud.hidden = !joueurDansLaGuerre();
+  // LE PANNEAU « EMPIRE » NE RESTE PAS À L'ÉCRAN (n° 68). Il couvrait le bas de l'écran en
+  // permanence, en 12 px sur la télé, et parlait de la touche M. Il ne sort que pendant une
+  // opération ou une attaque, une fois la guerre commencée ; le bouton parle manette quand il faut.
+  hud.hidden = !(joueurDansLaGuerre() && (empire.attack || empire.operation));
+  const mb = $('empireMapBtn'); if (mb) { const lib = document.body.classList.contains('manette') ? 'CARTE · ↑ tenu' : 'CARTE · M'; if (mb.textContent !== lib) mb.textContent = lib; }
   const t = territoireDe(P.pos.x, P.pos.z), a = empire.attack, active = empire.operation;
   const selected = TERRITOIRES.find(t => t.k === empire.selected);
   $('empireHudTitle').textContent = a ? `ATTAQUE · ${Math.ceil(a.remaining)} s` : active ? 'OPÉRATION EN COURS' : 'EMPIRE URBAIN';
@@ -5963,7 +5997,10 @@ const WORLDS = [
       plat(-13, 0.15, -13, 20, 20, 0x5cc453, { studs: false, noRoute: true }, 0.3);   // NO : foot
       plat(13, 0.15, -13, 20, 20, 0xb9c2cf, { studs: false, noRoute: true }, 0.3);    // NE : tennis
       plat(-13, 0.15, 13, 20, 20, 0x8f98ab, { studs: false, noRoute: true }, 0.3);    // SO : parking
-      plat(13, 0.15, 13, 20, 20, 0x5cc453, { studs: false, noRoute: true }, 0.3);     // SE : trampolines
+      // SE : trampolines. La pelouse s'arrête au bord du trottoir (1,8 m de chaque côté) : à
+      // 20 m de large elle recouvrait les trottoirs et leur bordure, en vert vif à 30 cm de
+      // haut, jusqu'au bord de la chaussée (n° 20 du Joueur).
+      plat(13, 0.15, 13, 20 - 2 * TROTTOIR_L, 20 - 2 * TROTTOIR_L, 0x5cc453, { studs: false, noRoute: true }, 0.3);
       checkpoint(0, 0, 3, 1); sign(-4, 0, 5, 'Bienvenue en ville !', true);
       // ---- terrain de foot (NO) ----
       fieldLines(-13, 0.3, -13, 18, 12, (g, W, H) => { g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, W - 12, H - 12); g.beginPath(); g.moveTo(W / 2, 6); g.lineTo(W / 2, H - 6); g.stroke(); g.beginPath(); g.arc(W / 2, H / 2, 40, 0, Math.PI * 2); g.stroke(); g.strokeRect(6, H * 0.28, 60, H * 0.44); g.strokeRect(W - 66, H * 0.28, 60, H * 0.44); });
@@ -6022,7 +6059,7 @@ const WORLDS = [
       // ---- parc à trampolines (SE) ----
       for (const [px, pz] of [[8, 8], [18, 8], [8, 18], [18, 18]]) bouncePad(px, 0.3, pz);
       box(13, 4.3, 13, 3, 8, 3, C.teal, { studs: false, noRoute: true }); coin(13, 8.3, 13); coin(12, 8.3, 14); coin(14, 8.3, 12);
-      sign(3.6, 0.3, 3.6, '🤸 Trampolines');
+      sign(5.6, 0.3, 5.6, '🤸 Trampolines');   // sur la pelouse, pas sur le trottoir
       // ---- immeubles autour de la ville ----
       const cols = [0xff8f3a, 0x4f8dff, 0xb57cff, 0x35d0e6, 0xff5c5c, 0xffd23f, 0x5cc453, 0xc9ced8];
       let k = 0;
@@ -6064,7 +6101,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno); B('extension nord', buildEmpireDistricts);
+      B('le marché', buildMarche); B('techno-parc', buildTechno);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -9108,7 +9145,9 @@ function meteoSet(kind, duree, force) {
   meteo.cible = force == null ? 1 : clamp(force, 0, 1);
   if (kind !== 'clair') msg(kind === 'pluie' ? '🌧️ La pluie arrive…' : '❄️ Il commence à neiger !', 2200);
   else msg('☀️ Le ciel se dégage', 1800);
-  chat(null, kind === 'pluie' ? '🌧️ Averse sur la ville' : kind === 'neige' ? '❄️ Chute de neige' : '☀️ Beau temps');
+  // le chat annonce ce qui ARRIVE (le changement met une vingtaine de secondes à s'installer) : « Chute de
+  // neige » sous un ciel encore bleu semblait une erreur (n° 19)
+  chat(null, kind === 'pluie' ? '🌧️ La pluie arrive sur la ville' : kind === 'neige' ? '❄️ La neige arrive' : '☀️ Le beau temps revient');
 }
 // ---- Décor de neige : congères, toits et lampadaires enneigés, capots blancs, bonshommes
 // de neige et plaques de verglas. Construit une seule fois par monde, montré quand il neige.
@@ -9603,7 +9642,7 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
   box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
   box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
-  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.9, 1.9, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
+  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.45, 1.98, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); box(bx - 6.45, 1.6, bz + dz, 0.2, 0.04, 0.3, 0x2b2f3a, { deco: true, studs: false }); box(bx - 6.45, 1.68, bz + dz, 0.05, 0.12, 0.05, 0x2b2f3a, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
   city.bankDesk = { x: bx - 4.4, z: bz };
   for (const [dx, dz] of [[8, -8], [8, 8], [-8, 8], [-8, -8]]) { box(bx + dx, 0.7, bz + dz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false }); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), lam(0x3fae4a)); pl.position.set(bx + dx, 1.75, bz + dz); worldGroup.add(pl); }
   for (const dz of [-3, 3]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);   // rapprochés du centre : les volées déplacées passaient dessus
@@ -9658,10 +9697,15 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     box(bx - 5.5, 0.95, bz - 2, 5.2, 1.2, 0.9, bois, { studs: false, noRoute: true });
     box(bx - 5.5, 1.62, bz - 2, 5.4, 0.14, 1.1, or, { deco: true, studs: false });
     box(bx - 5.5, 2.3, bz - 2, 5.2, 1.2, 0.06, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
-    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 1.95, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+    // Les écrans ont un PIED (socle + tige) et la lampe un vrai pied : posés sur le comptoir,
+    // ils ne flottent plus et le cône jaune n'est plus une « pyramide » (n° 25 du Joueur).
+    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 2.06, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+      box(bx - 5.5 + dx, 1.71, bz - 2.2, 0.3, 0.04, 0.2, 0x3b4252, { deco: true, studs: false }); box(bx - 5.5 + dx, 1.77, bz - 2.2, 0.06, 0.1, 0.05, 0x3b4252, { deco: true, studs: false });
       box(bx - 5.5 + dx, 1.72, bz - 1.9, 0.7, 0.05, 0.35, 0x3b4252, { deco: true, studs: false }); }
-    { const l = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.4, 10), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8 }));
-      l.position.set(bx - 7.8, 1.95, bz - 2); worldGroup.add(l); }
+    { const pied = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), lam(0x2b2f3a)); pied.position.set(bx - 7.8, 1.71, bz - 2); worldGroup.add(pied);
+      const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 8), lam(0x2b2f3a)); tige.position.set(bx - 7.8, 1.93, bz - 2); worldGroup.add(tige);
+      const l = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8, side: THREE.DoubleSide }));
+      l.position.set(bx - 7.8, 2.2, bz - 2); worldGroup.add(l); }
     // deux distributeurs automatiques près de l'entrée
     for (const dz of [-3.4, 3.4]) {
       const ex2 = bx + W / 2 - 1.3;
@@ -10344,7 +10388,7 @@ function schDire(txt) {
     .replace(/(\d)\s*²/g, '$1 au carré').replace(/×/g, ' fois ').replace(/÷/g, ' divisé par ')
     .replace(/\+/g, ' plus ').replace(/[−–]/g, ' moins ').replace(/=/g, ' égale ')
     .replace(/%/g, ' pour cent ').replace(/°/g, ' degrés ').replace(/€/g, ' euros ')
-    .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/…/g, ' et ensuite ')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/\s*(…|\.\.\.)\s*\?/g, ' quoi ?').replace(/…|\.\.\./g, ', ')   // « a la forme d'une… ? » se lit « d'une quoi ? », pas « et ensuite » (n° 66)
     .replace(/\s+/g, ' ').trim();
   school.dit = dit; school.ditT = Date.now();
   voice.say(dit, true, true);
@@ -10380,7 +10424,7 @@ function answer(v, el) {
   // on laisse la craie finir sa phrase avant de passer a l'exercice suivant
   school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, Math.max(good ? 1500 : 2800, craie * 1000 + 1200));
 }
-$('schClose').addEventListener('click', () => { voice.stop(); closeUI(); msg('🪑 Toujours assis : E pour reprendre, Espace pour te lever', 2200); });
+$('schClose').addEventListener('click', () => { voice.stop(); fermeUI(); msg('🏫 Leçon terminée : tu te lèves (E sur une chaise pour reprendre)', 2200); });
 $('schRelire').addEventListener('click', () => schLire());
 // ================= L'ECOLE : UNE VRAIE SALLE DE CLASSE =================
 // Un tableau GRIS avec ses craies, des tables d'ecolier et des chaises ou l'on s'assoit pour
@@ -10711,8 +10755,10 @@ function buildHospital(hx, hz) {   // hôpital : hall d'accueil, 4 chambres, mé
   const W = 26, D = 22, H = 9;
   plat(hx, 0.36, hz, W, D, 0xeef3f8, { studs: false, noRoute: true }, 0.12);
   for (let i = 0; i < 13; i++) for (let j = 0; j < 11; j++) if ((i + j) % 2 === 0) box(hx - 12 + i * 2, 0.37, hz - 10 + j * 2, 1.9, 0.02, 1.9, 0xe2ebf5, { deco: true, noEdges: true, studs: false });   // carrelage
-  box(hx + 5, 0.38, hz, 2, 0.02, D - 2, 0x35d0e6, { deco: true, noEdges: true, studs: false });   // ligne de guidage bleue
-  box(hx - 3, 0.38, hz, 2, 0.02, D - 2, 0x5cc453, { deco: true, noEdges: true, studs: false });
+  // Deux LIGNES de guidage au sol (40 cm), comme dans un vrai hôpital : à 2 m de large on
+  // les prenait pour des tapis (n° 25 du Joueur).
+  box(hx + 5, 0.38, hz, 0.4, 0.02, D - 2, 0x35d0e6, { deco: true, noEdges: true, studs: false });   // ligne de guidage bleue
+  box(hx - 3, 0.38, hz, 0.4, 0.02, D - 2, 0x5cc453, { deco: true, noEdges: true, studs: false });   // ligne de guidage verte
   box(hx, H / 2, hz - D / 2 + 0.2, W, H, 0.4, 0xf4f6fa, { studs: false, noRoute: true }); box(hx, H / 2, hz + D / 2 - 0.2, W, H, 0.4, 0xf4f6fa, { studs: false, noRoute: true });
   box(hx - W / 2 + 0.2, H / 2, hz, 0.4, H, D, 0xf4f6fa, { studs: false, noRoute: true });
   const ex = hx + W / 2 - 0.2;
@@ -11686,7 +11732,7 @@ function rangeVoile(atterri) {
   P.voile = null; P.voileVol = false;
 }
 // Vol : le parachute freine la chute, le deltaplane plane vers l'avant.
-function voileTick(dt) {
+function voileTick(dt, wantX, wantZ) {
   if (!P.voile) return;
   // Atterrissage : on ne peut pas se fier au seul P.grounded — le deltaplane file à 14 m/s et
   // rebondit, il rasait le sol sans jamais « toucher ». On regarde donc aussi la hauteur du sol.
@@ -11703,10 +11749,15 @@ function voileTick(dt) {
   ouvreVoile();
   if (P.voile === 'parachute') {
     if (P.vel.y < -3.2) P.vel.y = -3.2;
-    const cs = Math.cos(cam.yaw), sn = Math.sin(cam.yaw);
-    const { ix, iz } = readInput();
-    P.vel.x += (-(iz * sn + ix * cs) * 6 - P.vel.x) * Math.min(1, dt * 5);
-    P.vel.z += (-(iz * cs - ix * sn) * 6 - P.vel.z) * Math.min(1, dt * 5);
+    // LA DÉRIVE SUIT LA MARCHE. L'ancien calcul repartait de la caméra : gauche et droite
+    // étaient inversées, et en mode rotation (le réglage par défaut) il ignorait le cap du
+    // personnage. Tant que la caméra n'était pas revenue dans son dos, « avant » poussait le
+    // joueur vers la façade : il glissait le long du mur, se posait sur la marquise à 3,8 m
+    // (« Bien posé ! »), puis retombait de 4 m — le parachute « ne s'ouvrait pas ». On
+    // reprend wantX/wantZ, la direction que step() vient de calculer pour les pieds.
+    const l = Math.hypot(wantX || 0, wantZ || 0), k = l > 0 ? Math.min(1, l / SPEED) * 6 / l : 0;
+    P.vel.x += ((wantX || 0) * k - P.vel.x) * Math.min(1, dt * 5);
+    P.vel.z += ((wantZ || 0) * k - P.vel.z) * Math.min(1, dt * 5);
   } else {
     if (P.vel.y < -2.6) P.vel.y = -2.6;
     const { ix } = readInput();
@@ -11754,9 +11805,14 @@ function villaTickInner(dt) {
   for (const [obj, dist] of [[city.gate, 9], [city.garageDoor, 8], ...city.autoDoors.map(o => [o, 8])]) {
     if (!obj) continue;
     const who = drive.car && !drive.car.heli ? drive.car : P.pos, d = Math.hypot((who.x ?? who.x) - obj.x, (who.z ?? who.z) - obj.z);
-    const want = d < dist ? 1 : 0;
+    // LE PORTAIL VOIT VENIR LA VOITURE (n° 56 du Joueur). À 9 m et 1,6/s d'ouverture, une voiture
+    // à 45 km/h (12,5 m/s) arrivait sur le battant encore fermé (ouvert à 0,39, −3,8 % de carrosserie,
+    // 16 % pour la porte du garage). La distance de déclenchement grandit avec la vitesse (1,6 s
+    // d'avance) et les battants coulissent deux fois plus vite.
+    const v = drive.car && !drive.car.heli ? Math.abs(drive.speed || 0) : 0;
+    const want = d < dist + v * 1.6 ? 1 : 0;
     if (want !== obj.want) { obj.want = want; if (want) sfx.tone(600, 0, .2, 'sine', .05, 900); }
-    obj.open += (want - obj.open) * Math.min(1, dt * 1.6);
+    obj.open += (want - obj.open) * Math.min(1, dt * 3.2);
     if (obj.kind === 'gate') {   // les deux battants coulissent derrière les piliers
       const half = obj.w / 4, run = obj.w / 2;
       obj.g.children[0].position.x = -half - obj.open * run; obj.g.children[1].position.x = half + obj.open * run;
@@ -11954,7 +12010,10 @@ function voitureDeGamme(g, x, z, h, couleur) {
   // La TEINTE NACRÉE du haut de gamme : un rien d'émissif violet dans la laque blanche, elle
   // prend la lumière comme une perle sans qu'on ait à toucher au modèle de carrosserie.
   if (g.nacre && c.bodyMat) c.bodyMat.emissive.setHex(0x2a2440);
-  c.gamme = g.k; c.places = g.places; c.solidite = g.robu;
+  // Le NOMBRE de places va dans nbPlaces : c.places est réservé à la TABLE des places assises
+  // (placesDe), et y mettre « 4 » laissait le conducteur DEBOUT dans la caisse, la tête à
+  // travers le toit (mesuré : 75 cm au-dessus du toit de la citadine).
+  c.gamme = g.k; c.nbPlaces = g.places; c.solidite = g.robu;
   c.spec = { max: g.vmax, rev: -Math.round(g.vmax / 4), accel: g.accel, turn: g.turn, seat: 0 };
   c.specOrig = null;   // l'atelier repartira de CES valeurs-là quand il montera un moteur
   return c;
@@ -11999,7 +12058,10 @@ function buildConcession(cx, cz) {
   // ---- l'ossature et la verrière jaune ----
   // La façade sud est percée d'une entrée de 6 m au milieu : on entre à pied, pile dans l'axe
   // de l'allée centrale, et le comptoir de vente est droit devant au fond.
-  const verre = (x, z, w, d) => box(x, HM / 2 + 0.3, z, w, HM, d, 0, { material: glassJaune, glass: true, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  // `camMur` : la caméra ne passe PAS à travers la verrière jaune (elle traversait le verre comme
+  // toute vitre, se plaçait dehors et regardait le show-room À TRAVERS le jaune : image sépia en
+  // mode TV, où elle recule plus loin — n° 47 du Joueur)
+  const verre = (x, z, w, d) => box(x, HM / 2 + 0.3, z, w, HM, d, 0, { material: glassJaune, glass: true, camMur: true, noEdges: true, noShadow: true, studs: false, noRoute: true });
   verre(cx - 13, SUD, 20, 0.3); verre(cx + 13, SUD, 20, 0.3);          // verrière sud, de part et d'autre de l'entrée de 6 m
   box(cx, HM - 0.4, SUD, 6, 1.6, 0.3, CONCES_JAUNE, { studs: false, noRoute: true });   // linteau au-dessus de l'entrée
   verre(OUEST, cz, 0.3, BD); verre(EST, cz, 0.3, BD);                  // pignons vitrés
@@ -12036,7 +12098,7 @@ function buildConcession(cx, cz) {
   box(kx, 1.66, kz, 5.8, 0.14, 1.5, 0x2b2f3a, { deco: true, studs: false });
   box(kx, 3.2, kz - 0.9, 5.2, 1.2, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🔑 VENTE · E', CONCES_JAUNE) }), deco: true, noEdges: true });
   for (const dx of [-1.9, 1.9]) box(kx + dx, 2.4, kz - 0.55, 0.12, 1.3, 0.12, 0x8f98ab, { deco: true, studs: false });
-  const vend = mannequin(kx + 1.2, kz - 1.2, 0, { jersey: 12, jacket: 1, hat: 'top', glasses: true });
+  const vend = mannequin(kx + 1.2, kz - 1.2, 0, { jersey: 12, jacket: 1, hair: 1 });   // en veste, tête nue : un vendeur, pas un magicien (n° 25)
   vend.tag.visible = true; renommeEtiquette(vend, 'Gérard Boulon');
   city.concesDesk = { x: kx, z: kz + 1.5 };
   city.concession = { x: cx, z: cz + 20 };
@@ -12287,12 +12349,21 @@ function jailFree(reason) {
 }
 function openJail() {
   const needs = jailNeeds(), fine = JAIL_FINE[jail.level] || 50, lvlTxt = jail.level >= 3 ? 'délit grave' : jail.level === 2 ? 'délit moyen' : 'petit délit';
-  $('jailText').innerHTML = `Tu as été arrêté pour un <b>${lvlTxt}</b>. Pour sortir, réussis ${needs.length > 1 ? 'les épreuves' : 'l\'épreuve'} ci-dessous (jusqu'au drapeau final), paie <b>${fine} 🪙</b> (tu as ${wallet}), ou utilise un <b>pass liberté</b> (${jailPasses} pour cette partie).`;
-  $('jailBtns').innerHTML = needs.map(i => `<button class="btn ${jail.done.includes(i) ? 'sec' : ''}" data-w="${i}">${WORLDS[i].emoji} ${WORLDS[i].name} ${jail.done.includes(i) ? '✅' : '▶'}</button>`).join('') + `<button class="btn" id="jailPay" ${wallet < fine ? 'disabled style="opacity:.5"' : ''}>💰 Payer ${fine} 🪙</button>` + `<button class="btn" id="jailPass" ${jailPasses <= 0 ? 'disabled style="opacity:.5"' : ''}>🎟️ Pass liberté (${jailPasses} restant${jailPasses > 1 ? 's' : ''})</button>`;
+  $('jailText').innerHTML = `Tu as été arrêté pour un <b>${lvlTxt}</b>. Pour sortir, attends ${jailAttente()} s dans ta cellule, réussis ${needs.length > 1 ? 'les épreuves' : 'l\'épreuve'} ci-dessous (jusqu'au drapeau final), paie <b>${fine} 🪙</b> (tu as ${wallet}), ou utilise un <b>pass liberté</b> (${jailPasses} pour cette partie).`;
+  $('jailBtns').innerHTML = `<button class="btn" id="jailAttend">⏳ Attendre ${jailAttente()} s en cellule</button>` + needs.map(i => `<button class="btn ${jail.done.includes(i) ? 'sec' : ''}" data-w="${i}">${WORLDS[i].emoji} ${WORLDS[i].name} ${jail.done.includes(i) ? '✅' : '▶'}</button>`).join('') + `<button class="btn" id="jailPay" ${wallet < fine ? 'disabled style="opacity:.5"' : ''}>💰 Payer ${fine} 🪙</button>` + `<button class="btn" id="jailPass" ${jailPasses <= 0 ? 'disabled style="opacity:.5"' : ''}>🎟️ Pass liberté (${jailPasses} restant${jailPasses > 1 ? 's' : ''})</button>`;
   $('jailBtns').querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => { closeUI(); chooseWorld(+b.dataset.w); }));
   $('jailPay').addEventListener('click', () => { if (wallet < fine) return; wallet -= fine; saveWallet(); updateHud(); jailFree(`💰 Amende payée (${fine} 🪙) : libre !`); });
   $('jailPass').addEventListener('click', () => { if (jailPasses <= 0) return; jailPasses--; jailFree(`🎟️ Pass liberté utilisé : libre ! (${jailPasses} restant${jailPasses > 1 ? 's' : ''})`); });
+  // UNE PEINE COURTE (n° 33 du Joueur). Sans pièces ni pass, un enfant devait finir un parcours
+  // d'obby ENTIER (huit étapes) pour revenir en ville. On peut maintenant purger sa peine en
+  // attendant dans la cellule : 30 s, 45 s ou 60 s selon la gravité, le compte à rebours dans la pastille.
+  const att = $('jailAttend'); if (att) att.addEventListener('click', () => { jail.attenteFin = simTime + jailAttente(); closeUI(); msg(`⏳ Tu purges ta peine : ${jailAttente()} s dans la cellule, sans bouger`, 3200); });
   openUI('jailUI');
+}
+function jailAttente() { return jail.level >= 3 ? 60 : jail.level === 2 ? 45 : 30; }
+function jailAttenteTick() {
+  if (!jail.on || !jail.attenteFin) return;
+  if (simTime >= jail.attenteFin) { jail.attenteFin = 0; jailFree('⏳ Peine purgée : tu es libre !'); }
 }
 $('jailClose').addEventListener('click', closeUI); $('jailBtn').addEventListener('click', () => { if (jail.on) openJail(); });
 function jailWorldDone(i) {   // une épreuve réussie compte pour la libération
@@ -12937,6 +13008,13 @@ function policeTick(dt) {
     if (pc.mil && pc.active && dP < 16 && !pc.debarque && police.agents.length < 10 && simTime > (pc.debT || 0)) { pc.debT = simTime + 12; policeDebarque(pc, 2); }
   }
 }
+// La cible a-t-elle les poings levés ? (voir `attack` : la garde de combat vit sur le corps)
+function gardeLevee(t) {
+  if (!t) return false;
+  const av = (t.bot && t.bot.av) || (t.gm && t.gm.av);
+  if (av && av.rig && av.rig.garde) return true;
+  return !!(t.bot && t.bot.garde === true);   // la bagarre pose un vrai booléen ; un ordre « garde » pose une date, un poste pose [x, z]
+}
 function nearestFighter(range) {   // bot ou joueur le plus proche devant moi
   let best = null, bd = range;
   for (const b of bots) { if (!b.av.group.visible || b.ko > simTime) continue; const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < bd && Math.abs(b.pos.y - P.pos.y) < 2) { bd = d; best = { bot: b, x: b.pos.x, z: b.pos.z }; } }
@@ -13001,7 +13079,18 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   // coup manqué n'est plus qu'un souffle, et celui qui encaisse crie « aïe » de SA voix.
   sonEffort(P.pos.x, P.pos.y + 1.4, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   fxTrainee(P.pos.x + fx * 0.3, P.pos.y + 1.25, P.pos.z + fz * 0.3, P.facing, kind === 'kick');
-  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) { sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return; }   // dans le vide
+  if (!target || Math.hypot(target.x - P.pos.x, target.z - P.pos.z) > 2.2) {
+    // UNE VITRINE SOUS LE POING (n° 58 du Joueur) : trois coups dessus ne faisaient rien, elle
+    // ne se cassait qu'en voiture ou à la balle. Le poing la fissure, puis la brise.
+    const vit = breakables.find(b => !b.broken && b.kind === 'glass' && b.solid && (() => {
+      const o = b.solid, ex = Math.max(Math.abs(P.pos.x - o.x) - o.w / 2, 0), ez = Math.max(Math.abs(P.pos.z - o.z) - o.d / 2, 0);
+      if (Math.hypot(ex, ez) > 1.6) return false;
+      const px = clamp(P.pos.x, o.x - o.w / 2, o.x + o.w / 2), pz = clamp(P.pos.z, o.z - o.d / 2, o.z + o.d / 2);
+      return (px - P.pos.x) * fx + (pz - P.pos.z) * fz > 0.2;
+    })());
+    if (vit) { breakThing(vit, { x: P.pos.x, z: P.pos.z }); return; }
+    sonRate(P.pos.x + fx * 0.8, P.pos.y + 1.3, P.pos.z + fz * 0.8); return;   // dans le vide
+  }
   // LE POINT DE CONTACT. Il était toujours à 1,25 m, hauteur de torse : le poing passait donc
   // sous le visage quel que soit le coup. Le joueur voulait « le poing qui atteint le VISAGE
   // du bot » : le direct part au visage (1,62 m, la tête d'un habitant va de 1,46 à 1,94 m),
@@ -13029,7 +13118,12 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   cam.kick = (cam.kick || 0) + (kind === 'kick' ? 0.06 : finisher ? 0.06 : 0.035);   // l'image plonge sur le coup : on le VOIT porter
   msg(kind === 'kick' ? '🦵 Coup de pied !' : geste === 'uppercut' ? '👊 Uppercut !' : geste === 'crochet' ? '👊 Crochet !' : '👊 Direct !', 500);
   // EN FACE AUSSI ON SE GARDE : un habitant qui a levé les poings encaisse le quart du coup
-  const pare = !!(target.bot && target.bot.garde) || !!(target.gm && target.gm.garde);
+  // LA GARDE, C'EST CELLE DES POINGS. `m.garde` d'un homme de gang est son POSTE de garde (une
+  // position [x, z]) et `b.garde` d'un habitant peut être une date de fin d'ordre « garde » :
+  // les deux étaient lus comme « poings levés », donc CHAQUE coup sur un gangster en faction
+  // était paré (15 coups pour 50 ❤️, n° 55 du Joueur). On lit la garde de combat sur le corps
+  // (`rig.garde`), posée uniquement par la bagarre.
+  const pare = gardeLevee(target);
   // une garde AMORTIT, elle n'annule pas : au quart, l'adversaire devenait une enclume
   if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
@@ -13071,6 +13165,13 @@ function kick() { attack('kick'); }
 // seule dans son étui. Sorti de la boucle d'image pour que le banc d'essai puisse le
 // déclencher sans attendre soixante images.
 function rangementAuto() {
+  // L2 TENU = ARME SORTIE, QUOI QU'IL ARRIVE. Le rengainage automatique (0,85 s après un tir
+  // ou un coup de couteau) date du « un clic = on dégaine, on tire, on rengaine » du clavier.
+  // À la manette il défaisait la règle « L2 vise, R2 tire » : la gâchette gauche encore
+  // enfoncée, l'arme retournait dans l'étui toute seule, et le R2 suivant ne faisait plus
+  // rien — il fallait relâcher L2 et la réappuyer entre chaque coup. Tant que la visée est
+  // tenue (L2, ou le bouton droit de la souris), l'arme reste en main.
+  if (P.aimHeld) { P.holsterT = 0; return; }
   if (P.holsterT && simTime > P.holsterT) { P.holsterT = 0; if (P.drawn) drawWeapon(false); fermeLunette(); }
 }
 function coupCouteau(av, duree) {
@@ -13100,7 +13201,7 @@ function coupCouteau(av, duree) {
   camSecousse(0.2, 0.24); cam.kick = (cam.kick || 0) + 0.05;
   sfx.tone(120, 0, .14, 'sawtooth', .09, 60);
   let dmg = w.dmg;
-  if ((target.bot && target.bot.garde) || (target.gm && target.gm.garde)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
+  if (gardeLevee(target)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
@@ -13203,6 +13304,9 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp > 0) sonAie(P.pos.x, P.pos.y + 1.5, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   impact(P.pos.x + dx * 0.4, P.pos.y + 1.2, P.pos.z + dz * 0.4, { x: dx, y: 0, z: dz }, 'sang', Math.min(1.5, 0.7 + dmg / 22));
   camSecousse(0.1 + Math.min(0.24, dmg / 90), 0.28);
+  // ON DIT POURQUOI ON A MAL (n° 63 du Joueur : 56 ❤️ perdus sans un mot). Un coup de 5 ❤️ ou plus
+  // affiche qui l'a donné, sauf s'il vient d'un message déjà à l'écran (KO plus bas).
+  if (P.hp > 0 && dmg >= 5) msg(`🤕 −${Math.round(dmg)} ❤️ · ${by || 'un coup'}`, 1100);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
 }
@@ -14173,6 +14277,16 @@ function musclesEnCabine(av, cacher) {
   }
 }
 const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
+// Position À L'ÉCRAN (coordonnées normalisées −1…1) d'un point au-dessus d'un avatar : c'est là
+// que deux bulles ou deux noms se recouvrent, pas dans le monde. Deux habitants à 2 m l'un de
+// l'autre mais l'un DERRIÈRE l'autre se lisaient « IneZoe_rider » (n° 9 du Joueur).
+const _ecranV = new THREE.Vector3();
+function ecranDe(av, yOff) {
+  const p = av.group.position;
+  // caméra à plus de 40 m (ou restée ailleurs, comme sur le banc d'essai) : la projection ne veut rien dire
+  if (Math.hypot(p.x - camera.position.x, p.z - camera.position.z) > 40) return null;
+  _ecranV.set(p.x, p.y + yOff, p.z).project(camera); return _ecranV.z < 1 ? [_ecranV.x, _ecranV.y, _ecranV.z] : null;
+}
 function tickBubbles() {
   const cp = camera.position;
   const parlants = [];   // ceux dont la bulle est visible : on les empile plus bas
@@ -14182,9 +14296,10 @@ function tickBubbles() {
     const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 3.35 - cp.y, av.group.position.z - cp.z);
     if (d > 48) { av.bubble.visible = false; continue; }
     av.bubble.visible = true;
-    const h = clamp(BULLE_K * d, 0.5, 1.6);
+    // 0,5 m de haut à moins de 4 m : la bulle d'un passant qui frôle la caméra remplissait l'écran
+    const h = clamp(BULLE_K * d, 0.3, 1.6);
     av.bubble.scale.set(h * 3.2, h, 1);
-    parlants.push({ av, h });
+    parlants.push({ av, h, e: ecranDe(av, 3.35) });
   }
   // QUAND PLUSIEURS PARLENT AU MEME ENDROIT, LES BULLES SE SUPERPOSAIENT : quatre habitants
   // cote a cote et on n'en lisait qu'une, les trois autres cachees derriere. On les EMPILE
@@ -14195,7 +14310,9 @@ function tickBubbles() {
     const a = parlants[i]; let y = 3.35;
     for (let j = 0; j < i; j++) {
       const b = parlants[j];
-      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 3.2) continue;
+      const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 3.2
+        || (a.e && b.e && Math.abs(a.e[0] - b.e[0]) < 0.3 && Math.abs(a.e[1] - b.e[1]) < 0.28);   // ou superposées À L'ÉCRAN
+      if (!pres) continue;
       y = Math.max(y, b.av.bubble.position.y + b.h * 1.25);
     }
     a.av.bubble.position.y = y;
@@ -14212,7 +14329,7 @@ function tickBubbles() {
     const h = clamp(0.055 * d, 0.3, 0.85);
     tg.scale.set(h * 4, h, 1);
     if (tg.userData.y0 == null) tg.userData.y0 = tg.position.y;
-    nommes.push({ av, tg, h });
+    nommes.push({ av, tg, h, e: ecranDe(av, 2.5) });
   }
   // meme empilement pour les ETIQUETTES DE NOM : cinq personnages groupes et les cinq noms
   // se chevauchaient en une bouillie illisible (vu en capture)
@@ -14220,7 +14337,9 @@ function tickBubbles() {
     const a = nommes[i]; let y = a.tg.userData.y0;
     for (let j = 0; j < i; j++) {
       const b = nommes[j];
-      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 2.2) continue;
+      const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 2.2
+        || (a.e && b.e && Math.abs(a.e[0] - b.e[0]) < 0.16 && Math.abs(a.e[1] - b.e[1]) < 0.09);   // ou superposés À L'ÉCRAN
+      if (!pres) continue;
       y = Math.max(y, b.tg.position.y + b.h * 1.15);
     }
     a.tg.position.y = y;
@@ -14795,7 +14914,10 @@ function coneRue(x, z) {
 }
 
 // ================= JOUEUR =================
-const JUMP = 12, SPEED = 7, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
+// LA MARCHE. 7 m/s (25 km/h) sans courir : « on glisse », les jambes ne suivaient pas et on
+// traversait le centre-ville en 9 s (n° 17 du Joueur). 5,6 m/s à pied, la course (L3, à
+// bascule) monte à 7,3 m/s : on VOIT la différence, et le stick à mi-course marche vraiment.
+const JUMP = 12, SPEED = 5.6, COURSE = 1.3, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
 // Mode « rotation » : zone morte du stick pour le braquage. Fine (6 %) — une DualSense neuve
 // ne derive pas au-dela de 5 % — la ou l'ancienne formule ignorait tout virage sous 32 %.
 const ROT_MORTE = 0.06;
@@ -16244,7 +16366,17 @@ const msgEl = $('msg'); let msgTimer = 0;
 // au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
 const ctrlText = t => {
   t = String(t);
-  if (!document.body.classList.contains('touch')) return t;
+  const b = document.body.classList;
+  // À LA MANETTE, ON PARLE MANETTE (n° 15, 30, 44 du Joueur). Les consignes ne traduisaient les
+  // touches que pour l'écran tactile : un enfant sur sa PS5 cherchait la touche « E ». Dès
+  // qu'une manette pilote, E devient △, Espace ◯, le clic R2, G ✕, O et V ▢, Ctrl L2, F ▢.
+  if (b.contains('manette') && !b.contains('touch')) {
+    return t.replace(/Espace \/ SAUT/g, '◯').replace(/\bEspace\b/g, '◯').replace(/\bE\b(?!\.)/g, '△')
+      .replace(/\bclic ou X\b/g, 'R2').replace(/\bclic\b/g, 'R2').replace(/\bG\b(?= pour| :|\))/g, '✕')
+      .replace(/\b[OV]\b(?= pour| =| :|\))/g, '▢').replace(/\bCtrl\b/g, 'L2').replace(/\bF\b(?= pour| =| :|\))/g, '▢')
+      .replace(/\(ou 🚗\)/g, '');
+  }
+  if (!b.contains('touch')) return t;
   return t.replace(/Espace \/ SAUT/g, 'SAUT').replace(/\bEspace(?=\s*(?:\/|pour|ou|,))/g, 'SAUT').replace(/\bE\b/g, '✋');
 };
 function msg(text, ms = 1400) {
@@ -16266,7 +16398,7 @@ function updateHud() {
   const st = $('stageTxt'); if (st && cp) st.textContent = `${cp.idx}/8`;
   // pastille de la guerre des gangs : respect gagné et quartiers tenus
   const rp = $('respect');
-  if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt"> · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
+  if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt">&nbsp;· 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }   // &nbsp; : l'espace ouvrante d'un inline-block s'effaçait (« ⭐ 0· », n° 12)
   // le sablier de l'alliance : on voit toujours le temps qu'il reste, on n'est jamais surpris
   const al = $('alliance');
   if (al) {
@@ -16319,7 +16451,8 @@ function chat(name, text, color = '#fff') {
 const CHAT_IDLE = ['salut tout le monde !', 'gg', "trop dur l'étape 5 mdr", 'qui a déjà fini ?', "let's go", 'attendez-moi !', "c'est le meilleur obby", 'vous êtes à quelle étape ?', 'trop belle ma jupe 💃', 'qui vient à la piscine ?', "on fait une course d'hélico ?",
   'je suis pro 😎', 'la lave c chaud', 'mdr', 'jsuis trop fort', "quelqu'un veut faire équipe ?", 'la poutre est trop dure', 'le monde espace est trop bien', 'la glace ça glisse trop', '/e dance'];
 const CHAT_FALL = ['nooooon', 'argh je suis tombé', 'mdr la lave', 'pfff', 'encore tombé 😭', "c'est pas juste"];
-const CHAT_IDLE_CITY = ['la police court après quelqu\'un !', 'j\'ai réparé mon kart au garage', 'ma moto va trop vite 🏍️', 'qui vient à la piscine ?'];
+const CHAT_IDLE_CITY = ['la police court après quelqu\'un !', 'j\'ai réparé mon kart au garage', 'ma moto va trop vite 🏍️', 'qui vient à la piscine ?',
+  'quelqu\'un a vu le glacier ? 🍦', 'je vais au parc, qui vient ?', 'trop beau, le coucher de soleil sur la plage', 'j\'ai gagné 3 pièces à l\'école 📚', 'on fait un foot ? ⚽'];
 const CHAT_FINISH = ["GG j'ai fini !!!", 'trop facile 😎', 'FINI !!! gg', "j'ai gagné 🏆"];
 const CHAT_REPLY = ['lol', 'mdr', 'oui', 'gg', 'trop bien', 'moi aussi', 'ok', '👍', 'haha', 'pareil', 'go go go'];
 // ---- petit "cerveau" de discussion des bots (mots-clés + suivi de la question posée) ----
@@ -16328,8 +16461,8 @@ const norm = t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '
 const BOT_QUESTIONS = [
   { q: 'tu veux faire une course de karts ?', topic: 'course', yes: 'go ! rendez-vous au portique du circuit, appuie sur F 🏁', no: 'ok, une autre fois alors' },
   { q: 'tu preferes le foot ou le tennis ?', topic: 'sport', foot: 'moi aussi le foot ⚽ viens, je te fais des passes', tennis: 'le tennis ! prends une raquette au râtelier 🎾' },
-  { q: 'tu as deja pilote l\'helico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec F', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
-  { q: 'tu as combien de pieces ?', topic: 'pieces', any: 'pas mal ! achète-toi un chapeau à la boutique 👑' },
+  { q: 'tu as déjà piloté l\'hélico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec F', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
+  { q: 'tu as combien de pièces ?', topic: 'pieces', any: 'pas mal ! achète-toi un chapeau à la boutique 👑' },
   { q: 'on va a la piscine ?', topic: 'piscine', yes: 'yes ! le dernier au plongeoir a perdu 🏊', no: 'tant pis, moi j\'y vais' },
   { q: 'tu es musclé toi ?', topic: 'muscle', yes: 'montre à la salle de sport alors 💪', no: 'va soulever la barre à la salle de sport, tape vite sur Espace !' },
   { q: 'c\'est quoi ton maillot préféré ?', topic: 'maillot', any: 'stylé ! moi je change tout le temps' },
@@ -16547,9 +16680,12 @@ function placeBotsVille() {
   bots.forEach((b, k) => {
     const t = pans[(k * 7 + 3) % pans.length];
     let x = t.x, z = t.z;
-    for (let essai = 0; essai < 8; essai++) {
+    // La foule du départ reste à moins de 40 m du point d'arrivée : un pan de trottoir de
+    // 19 m dont le centre est à 38 m menait un habitant à 46 m, hors de vue.
+    for (let essai = 0; essai < 12; essai++) {
       x = t.x + rnd(-t.w / 2 + 0.6, t.w / 2 - 0.6); z = t.z + rnd(-t.d / 2 + 0.6, t.d / 2 - 0.6);
-      if (!gene(x, z)) break;
+      if (!gene(x, z) && Math.hypot(x - sx, z - sz) <= 40) break;
+      if (essai === 11) { x = t.x; z = t.z; }
     }
     const y = t.o ? t.o.y + t.o.h / 2 : 0.3;
     b.pos.set(x, y, z); b.cpPos = b.pos.clone(); b.facing = rnd(0, Math.PI * 2); b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;
@@ -16563,7 +16699,9 @@ function resetBot(b, wait) {
   b.pos.set(-5 + (k % 4) * 3.4 + rnd(-0.5, 0.5), 0, 0.5 + Math.floor(k / 4) * 3.2 + rnd(-0.5, 0.5));
   b.cpPos = b.pos.clone(); b.cpStep = 0; b.facing = 0; b.av.group.visible = true; b.av.group.position.copy(b.pos);
 }
-function botSay(b, list) { const t = pickOne(list); chat(b.name, t, b.color); bubble(b.av, t); }
+// Un habitant qu'on ne voit pas n'écrit pas dans le chat : ses « aïe ! » et « police !! » à
+// l'autre bout de la ville faisaient croire à une bagarre invisible (n° 18). La bulle, elle, reste.
+function botSay(b, list) { const t = pickOne(list); if (!b.pos || Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 60) chat(b.name, t, b.color); bubble(b.av, t); }
 // ================= AMIS, CHIEN ADOPTÉ ET COUPS ORGANISÉS =================
 const amis = new Set(store.json('superobby.amis', []));
 const saveAmis = () => store.set('superobby.amis', JSON.stringify([...amis]));
@@ -16933,7 +17071,20 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   return dist;
 }
 // ---- un ami prend une voiture, vient te chercher, puis te conduit où tu veux ----
-function botPrendVoiture(b, lieu, genre) {
+// `libre` : le bot part de LUI-MÊME faire un tour (activité spontanée). Sans ce drapeau, la
+// balade d'un habitant s'annonçait comme un rendez-vous pris avec l'enfant (« ok Joueur, je te
+// retrouve à Tatouage »), avec le gros message central et la colonne GPS allumée alors qu'il
+// n'avait parlé à personne (n° 24 du Joueur).
+// « je te retrouve à Quartier résidentiel » (n° 34) : l'article selon le nom du lieu
+function auLieu(nom) {
+  const n = String(nom || ''); if (!n) return 'là-bas';
+  if (/^(le |la |les |l')/i.test(n)) return (n.startsWith('le ') ? 'au ' + n.slice(3) : n.startsWith('les ') ? 'aux ' + n.slice(4) : 'à ' + n);
+  if (/^[aeiouéèêh]/i.test(n)) return 'à l\'' + n;
+  if (/^(quartier|parking|parc|garage|centre|commissariat|stade|techno|marché|circuit|port|dépôt|bureau|casino|snack|cinéma|terrain)/i.test(n)) return 'au ' + n;
+  if (/^(plage|banque|zone|villa|fête|caserne|école|piscine|rue|place|prison|boutique|concession|clinique|gare)/i.test(n)) return 'à la ' + n;
+  return 'à ' + n;
+}
+function botPrendVoiture(b, lieu, genre, libre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
   for (const v of city.cars) {
@@ -16947,7 +17098,8 @@ function botPrendVoiture(b, lieu, genre) {
   const nomV = genre === 'moto' ? 'une moto' : genre === 'bike' ? 'un vélo' : 'une voiture';
   b.rdv = { x: c.x + 2.2, z: c.z + 2.2, y: 0.3, nom: nomV, arrive: false, auto: { car: c, tx: arr.x, tz: arr.z, nom: lieu.nom } };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
-  botSay(b, [`ok ${myCfg.name}, je prends ${nomV} et je te retrouve à ${lieu.nom} 🚗`]);
+  if (libre) return;   // il l'a déjà dit avec ses mots à lui, et ça ne regarde pas le GPS du joueur
+  botSay(b, [`ok ${myCfg.name}, je prends ${nomV} et je te retrouve ${auLieu(lieu.nom)} 🚗`]);
   msg(`🚗 ${b.name} va chercher ${nomV}, direction ${lieu.nom}`, 3200);
   setBeacon(lieu.x, lieu.z);
 }
@@ -18384,9 +18536,12 @@ function openQui() {
   ajoute(bots.filter(b => dist(b) < 40), '🙋 Autour de toi');
   $('ordresTitre').textContent = '📣 À qui donner un ordre ?';
   ordresRetourVisible(false);
+  // À la manette on ne « clique » pas : la croix déplace la bague, ✕ choisit (n° 74).
+  const manette = document.body.classList.contains('manette') && !document.body.classList.contains('touch');
   $('ordresSub').innerHTML = (lignes.length
-    ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
-    : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.') + resumeMissions();
+    ? (manette ? 'Choisis quelqu\'un avec la croix, puis ✕ : tu verras tout ce que tu peux lui demander.'
+      : 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.')
+    : 'Personne autour de toi. Approche-toi de quelqu\'un' + (manette ? '.' : ', ou écris son nom dans le chat.')) + resumeMissions();
   let html = '';
   if ((gang.membres || []).length) html += '<p class="osec">👥 Mission de groupe</p>'
     + `<button class="ocard" data-equipe="1"><span>👥</span>Choisir plusieurs hommes<i>coche qui tu envoies, vois les chances, et lance le coup</i></button>`;
@@ -18706,9 +18861,9 @@ function updateBot(b, dt) {
           b.rdvRoute = null; b.wait = 0; botDit(b, `j'ai ${it.e} ${it.n}, j'arrive !`); }
         if (!b.rdv.arrive && !b.rdv.gang && !b.rdv.entrain && !b.rdv.soin) finirOrdre(b, 'reussi');
         if (!b.rdv.arrive && b.rdv.sport) { b.rdv.arrive = true; demarreSport(b); }
-        else if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
+        else if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on va ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
         const dp = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
-        if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
+        if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on va ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
       }
     }
     // Arrivé au rendez-vous, il reste sur place : avant, il repartait aussitôt se promener
@@ -19105,7 +19260,7 @@ function step(dt, active) {
     const bouge = len > 0.05;
     const peut = P.run && bouge && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on && !P.eat && P.energie > 0;
     P.court = peut;
-    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / sprintDuree()); wantX *= 1.55; wantZ *= 1.55; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
+    if (peut) { P.energie = Math.max(0, P.energie - dt * 100 / sprintDuree()); wantX *= COURSE; wantZ *= COURSE; if (P.energie <= 0) { P.run = false; P.essouffle = true; msg('😮‍💨 Plus de souffle ! Reprends ton souffle avant de recourir', 2000); sfx.tone(160, 0, .35, 'sine', .05, 90); } }
     else { P.energie = Math.min(100, P.energie + dt * (P.essouffle ? 100 / (11 - enduDe() * 0.03) : 100 / (7 - enduDe() * 0.02))); if (P.essouffle && P.energie > 45) P.essouffle = false; }
     const bar = $('stBar'); if (bar) { bar.style.width = P.energie + '%'; $('stBar').parentNode.classList.toggle('vide', P.essouffle); }
   }
@@ -19153,7 +19308,7 @@ function step(dt, active) {
     if (P.jumpBuf > 0 && P.coyote > 0) { P.vel.y = JUMP * statMul().jump; P.grounded = false; P.coyote = 0; P.jumpBuf = 0; P.standing = null; P.dance = 0; sfx.jump(); }
     if (tr && !P.grounded && P.vel.y < 0 && len < 0.05) P.vel.y = 0;
     else { P.vel.y -= G * dt; if (P.vel.y < -30) P.vel.y = -30; }
-    voileTick(dt);   // parachute / deltaplane : freine la chute et guide le vol
+    voileTick(dt, wantX, wantZ);   // parachute / deltaplane : freine la chute et guide le vol
     // propulseur : maintenir le saut pour s'envoler tant qu'il reste du carburant
     if (P.jet) {
       const thrust = (jumpHeld || keys.has('Space') || pad.a) && P.fuel > 0;
@@ -19415,6 +19570,7 @@ function separerVehicules() {
 }
 function enterCar(c) {
   if (jail.on) { msg('🔒 Tu es en prison !', 1000); return; }
+  if (c.dead) { msg('🔥 Cette voiture est une épave : la dépanneuse va la remettre en état au garage', 2200); return; }   // on ne remonte pas dans une carcasse (n° 70)
   if (c.busy) { msg('Ce véhicule est déjà pris', 1000); return; }
   setGarde(false); setAccroupi(false);   // on ne conduit pas accroupi les poings devant le visage
   // on se voit désormais au volant, comme les amis bots conducteurs
@@ -19493,18 +19649,39 @@ function heliBlocked(x, y, z, c) {   // l'hélico est une boîte (selon son orie
 // descente AUTOMATIQUE et MAITRISEE, qui se pose vraiment et se coupe toute seule.
 // La hauteur du sol (ou du toit) sous l'appareil : la meme boite que heliBlocked, mais on
 // cherche le HAUT du solide le plus haut sous l'helico au lieu d'une collision.
-function heliSolSous(c) {
+function heliSolSous(c, x = c.x, z = c.z, info) {
   const W = 2.6, D = 6.4, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h));
   const hw = (W * cs + D * sn) / 2 * 0.85, hd = (W * sn + D * cs) / 2 * 0.85;
-  let haut = 0.2;   // le plancher du monde
-  for (const o of solidsAutour(c.x, c.z, Math.max(hw, hd) + 1, true)) {
+  let haut = 0.2, sur = null;   // le plancher du monde
+  for (const o of solidsAutour(x, z, Math.max(hw, hd) + 1, true)) {
     if (o === c.solid || o.h > 30) continue;
-    if (c.x + hw <= o.x - o.w / 2 || c.x - hw >= o.x + o.w / 2) continue;
-    if (c.z + hd <= o.z - o.d / 2 || c.z - hd >= o.z + o.d / 2) continue;
+    if (x + hw <= o.x - o.w / 2 || x - hw >= o.x + o.w / 2) continue;
+    if (z + hd <= o.z - o.d / 2 || z - hd >= o.z + o.d / 2) continue;
     const t = o.y + o.h / 2;
-    if (t <= c.y + 0.25 && t > haut) haut = t;
+    if (t <= c.y + 0.25 && t > haut) { haut = t; sur = o; }
   }
+  if (info) info.sur = sur;
   return haut;
+}
+// UN VRAI TERRAIN D'ATTERRISSAGE (n° 59 du Joueur). La descente automatique se posait SUR ce
+// qu'il y avait dessous, quoi que ce soit : un abribus, une camionnette, un banc — l'appareil
+// finissait perché sur un objet de la rue et le pilote en descendait dessus. On ne se pose
+// que sur le sol ou sur un TOIT (un solide d'au moins 8 m × 8 m qui n'est pas un véhicule) ;
+// sinon on cherche, en cercles de plus en plus larges, la place libre la plus proche.
+function heliTerrainOk(c, x, z) {
+  const info = {}, haut = heliSolSous(c, x, z, info);
+  if (info.sur && (info.sur.veh || info.sur.w < 8 || info.sur.d < 8)) return false;
+  return !heliBlocked(x, haut + 0.02, z, c);
+}
+function heliPointLibre(c) {
+  if (heliTerrainOk(c, c.x, c.z)) return null;   // ici même : rien à faire
+  for (let r = 3; r <= 24; r += 3) for (let k = 0; k < 12; k++) {
+    const a = k / 12 * Math.PI * 2, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r;
+    if (x < MONDE.x1 + 4 || x > MONDE.x2 - 4 || z < MONDE.z1 + 4 || z > MONDE.z2 - 4) continue;
+    // la place et 1,2 m tout autour : l'appareil s'arrête à quelques dizaines de cm près
+    if (heliTerrainOk(c, x, z) && heliTerrainOk(c, x + 1.2, z) && heliTerrainOk(c, x - 1.2, z) && heliTerrainOk(c, x, z + 1.2) && heliTerrainOk(c, x, z - 1.2)) return { x, z };
+  }
+  return null;
 }
 const HELI_POSE_MIN = 0.5;    // vitesse de descente juste avant de toucher (m/s) : on se POSE
 const HELI_POSE_MAX = 2.9;    // vitesse de descente en altitude : juste SOUS le seuil de casse (3 m/s)
@@ -19514,7 +19691,8 @@ function heliPoser(force) {   // ▢ (ou V au clavier) : enclenche / annule la d
   const on = force == null ? !c.poser : !!force;
   if (c.landed && on) { msg('🚁 Déjà posé', 900); return false; }
   c.poser = on;
-  msg(on ? '🚁 Atterrissage… (▢ ou ◯ pour annuler)' : '🚁 Atterrissage annulé', 1300);
+  c.poserVers = on ? heliPointLibre(c) : null;
+  msg(on ? (c.poserVers ? '🚁 Atterrissage… je me décale sur une place libre (▢ ou ◯ pour annuler)' : '🚁 Atterrissage… (▢ ou ◯ pour annuler)') : '🚁 Atterrissage annulé', 1300);
   sfx.tone(on ? 420 : 300, 0, .09, 'triangle', .04, on ? 620 : 220);
   return true;
 }
@@ -19531,11 +19709,23 @@ function heliStep(dt) {
   // casse a l'arrivee). Remettre les gaz (◯) reprend la main immediatement.
   if (c.poser && up > 0) { c.poser = false; msg('🚁 Remise des gaz', 900); }
   if (c.poser) {
+    const stick = Math.abs(iz) >= 0.05 || Math.abs(ix) >= 0.05;
+    // Le pilote reprend le manche : on oublie la place libre choisie, il sait où il va.
+    if (stick) c.poserVers = null;
+    const vers = c.poserVers, dV = vers ? Math.hypot(vers.x - c.x, vers.z - c.z) : 0;
+    if (vers && dV < 0.3) c.poserVers = null;
     const reste = Math.max(0, c.y - heliSolSous(c));
-    const cible = -clamp(HELI_POSE_MIN + reste * 0.85, HELI_POSE_MIN, HELI_POSE_MAX);
+    let cible = -clamp(HELI_POSE_MIN + reste * 0.85, HELI_POSE_MIN, HELI_POSE_MAX);
+    // Pas encore au-dessus de la place libre : on glisse vers elle (4 m/s au plus) et on ne
+    // descend jamais à moins de 1,5 m de ce qu'il y a sous l'appareil en chemin.
+    if (vers && dV >= 0.3) {
+      const v = Math.min(4, dV * 1.2), f = 1 - Math.exp(-2.2 * dt);
+      c.vx += ((vers.x - c.x) / dV * v - c.vx) * f; c.vz += ((vers.z - c.z) / dV * v - c.vz) * f;
+      if (reste < 1.5) cible = 0;
+    }
     c.vy += (cible - c.vy) * (1 - Math.exp(-4 * dt));
     // on se pose SUR PLACE : sans consigne au stick, la derive horizontale s'eteint
-    if (Math.abs(iz) < 0.05 && Math.abs(ix) < 0.05) { const f = Math.min(1, dt * 2.4); c.vx -= c.vx * f; c.vz -= c.vz * f; }
+    if (!stick && !(vers && dV >= 0.3)) { const f = Math.min(1, dt * 2.4); c.vx -= c.vx * f; c.vz -= c.vz * f; }
   } else c.vy += (up * 7 - c.vy) * (1 - Math.exp(-3 * dt));
   // déplacement axe par axe avec collision contre tout : murs, immeubles, véhicules, portique, barrières
   const nx = clamp(c.x + c.vx * dt, MONDE.x1 + 2, MONDE.x2 - 2);
@@ -19603,7 +19793,11 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
           chocVehicule(c, imp); chocVehicule(v, imp * 0.8);
           cam.kick = (cam.kick || 0) + 0.08; camSecousse(clamp(imp * 0.02, 0.15, 0.4), 0.45);
         }
-        choc(c, imp, imp > 7 ? v : null);
+        // TOUCHER UN VÉHICULE GARÉ EN MANŒUVRANT N'EST PAS UN ACCIDENT (n° 57 du Joueur : la grue
+        // sortie du dépôt frôlait la benne voisine à 8 m/s → « ACCIDENT ! », police, amende). Un
+        // véhicule à l'arrêt et libre ne fait l'objet d'un constat qu'à partir de 12 m/s (43 km/h).
+        const gare = !v.busy && Math.abs(v.speed || v.spd || 0) < 0.5;
+        choc(c, imp, imp > 7 && !(gare && imp < 12) ? v : null);
       } else sfx.tone(120, 0, .06, 'square', .04, 80); }
     drive.speed *= 0.75;
     if (!v.busy && !v.spd && !v.kart && !v.active) { const push = 0.5; if (ox < oz) v.x -= (Math.sign(a.x - b.x) || 1) * push; else v.z -= (Math.sign(a.z - b.z) || 1) * push; v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }   // une voiture garée se déplace un peu
@@ -20030,7 +20224,7 @@ function degatsVehicule(c, gravite, vx, vz) {
 }
 // sansDelit : la casse n'est pas l'œuvre du joueur (un gang qui saccage une devanture)
 // — sinon la police lui collait la vitrine sur le dos et le prenait en chasse.
-function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
+function breakThing(b, c, sansDelit, parBalle) {   // mobilier percuté par un véhicule (parBalle : cassé d'un coup de feu du joueur)
   if (b.broken) return;
   b.casseT = simTime;   // heure de la casse : la ville remet tout en état au bout d'un moment
   if (!b.quat0 && b.g) b.quat0 = b.g.quaternion.clone();   // orientation d'origine, pour le redressement
@@ -20042,7 +20236,9 @@ function breakThing(b, c, sansDelit) {   // mobilier percuté par un véhicule
   if (b.kind === 'glass') {
     if (!b.cracked) { b.cracked = true; b.m.material = crackedGlass; sfx.clack(); sfx.noise(.15, 2500, .06); msg('💥 Vitrine fissurée', 700); return; }
     b.broken = true; burst(b.x, 2.5, b.z, 0x9fdcff, 22); burst(b.x, 1.2, b.z, 0xffffff, 10); sfx.noise(.5, 3000, .12); sfx.clack(); worldGroup.remove(b.m); const k = solids.indexOf(b.solid); if (k >= 0) solids.splice(k, 1); msg('💥 Vitrine brisée !', 900); sgridSale();
-    if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('casser une vitrine', 1, 1); }
+    // Une balle dans une vitrine n'est pas un petit délit qu'on « laisse passer » : la police
+    // vient tout de suite (n° 58). Au poing ou en voiture, les avertissements s'appliquent.
+    if (!sansDelit && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; if (parBalle) infraction('tirer dans une vitrine', 1, 2, true); else infraction('casser une vitrine', 1, 1); }
   } else {
     // Chaque sorte d'objet se casse a sa maniere (CASSE_DEF) : le panneau se tord, le cone se
     // couche, la poubelle se vide sur le trottoir, le bonhomme de neige eclate. Sans entree
@@ -20222,7 +20418,13 @@ function conduire(c, cmd, dt) {
     }
   }
   // autres obstacles : on glisse sur l'axe libre, on ne rebondit que si tout est bloqué
-  if (pilote && Math.abs(V.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(tl.x - c.x) < 4.5 && Math.abs(tl.z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
+  // GRILLER UN FEU, C'EST PASSER SA LIGNE DANS SON SENS. Le test prenait tout véhicule à
+  // moins de 4,5 m du poteau, quel que soit son cap : reculer du parking à 25 km/h près d'un
+  // feu rouge de la rue d'à côté valait une étoile (n° 29 du Joueur). On ne compte que la
+  // circulation que ce feu ARRÊTE (cap de déplacement réel, marche arrière comprise, à moins
+  // de 35° de `tl.sens`) et près de SA ligne d'arrêt.
+  const capRoule = V.speed < 0 ? c.h + Math.PI : c.h;
+  if (pilote && Math.abs(V.speed) > 6) for (const tl of city.trafficLights) if (!tl.broken && tl.state === 0 && simTime > (tl.runT || 0) && Math.abs(CAP(tl.sens - capRoule)) < 0.6 && Math.abs((tl.ligne || tl).x - c.x) < 4.5 && Math.abs((tl.ligne || tl).z - c.z) < 4.5) { tl.runT = simTime + 8; msg('🚦 Feu rouge grillé !', 1000); sfx.tone(500, 0, .12, 'triangle', .05, 300); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('griller un feu rouge', 1, 1); } }
   // LA CASSE DU MOBILIER SE JUGE DANS LE REPERE DE LA VOITURE. On testait un CARRE AXE de
   // demi-cote b.r + rr + 0,5 (rr = la demi-LONGUEUR) : une voiture qui sortait du parking en
   // passant a 2,1 m d'un lampadaire, DE COTE, le cassait et prenait 9 % de degats — a chaque
@@ -20280,7 +20482,17 @@ function conduire(c, cmd, dt) {
     // 8 % de la vie du véhicule et la moindre séance de mur le détruisait en une minute : un
     // enfant y perdait sa voiture sans arrêt. Le choc marque toujours la tôle — c'est ce qui
     // rend le rebond crédible — mais trois fois moins, et jamais plus de 5 % d'un coup.
-    if (Math.abs(vAvant) > 2 && simTime > (c.hitT || 0)) { c.hitT = simTime + 0.35; vehicleDamage(c, Math.min(5, 0.5 + Math.abs(vAvant) * 0.2)); choc(c, vAvant, null);
+    // CE QUI COMPTE, C'EST LA VITESSE PERDUE CONTRE LE MUR, PAS LA VITESSE. Avant, longer une
+    // façade à 3 m/s coûtait 1,2 % toutes les 0,35 s (mesuré : 4 % → 25 % en cinq secondes de
+    // glissade, la voiture d'un enfant brûlait avant d'avoir quitté le parking — n° 31, 69, 70),
+    // et un vrai choc de face n'avait ni BOOM ni secousse. On mesure la vitesse que le mur a
+    // ÔTÉE cette image (`perte`) : un choc franc (> 4 m/s perdus, soit 15 km/h) fait BOOM, secoue
+    // la caméra et abîme la tôle en proportion ; un frottement ne coûte que des rayures.
+    const perte = Math.max(0, Math.abs(vAvant) - fait / Math.max(dt, 1e-4));
+    // (et un choc suppose d'ARRIVER vite : le nez planté contre un grillage, gaz enfoncés, le rebond
+    //  de 3,4 m/s relançait un « choc » toutes les demi-secondes — 14 % → 41 % en cinq secondes mesurés)
+    if (perte > 4 && Math.abs(vAvant) > 6 && simTime > (c.hitT || 0)) { c.hitT = simTime + 1.2; vehicleDamage(c, Math.min(14, perte * 0.9)); choc(c, perte, null); if (pilote) cam.kick = (cam.kick || 0) + Math.min(0.08, perte * 0.006);
+      msg(perte > 9 ? '💥 BOUM ! Gros choc contre le mur' : '💥 Choc contre le mur', 900);
       // la normale du mur : l'axe bloque, dans le sens inverse de la marche
       const nx = bx ? -Math.sign(Math.sin(c.h) || 1) : 0, nz = bz && !bx ? -Math.sign(Math.cos(c.h) || 1) : 0;
       // UNE SEULE MARQUE SUR LE MUR. Deux postes en posaient une AU MEME ENDROIT a chaque
@@ -20292,9 +20504,9 @@ function conduire(c, cmd, dt) {
       // Au passage, chocDecor recevait `bx ? nx : c.x` — la NORMALE (±1) a la place de
       // l'abscisse du choc : le premier point sonde tombait vers x = ±1, a l'autre bout de
       // la ville. On lui passe le vehicule, il sonde deja son nez et son arriere.
-      const marqueVille = chocDecor(c, c.x, c.z, Math.abs(vAvant));
-      chocVehicule(c, Math.abs(vAvant), nx, nz, !!marqueVille);   // degats visibles sur la carrosserie
-    }
+      const marqueVille = chocDecor(c, c.x, c.z, perte);
+      chocVehicule(c, perte, nx, nz, !!marqueVille);   // degats visibles sur la carrosserie
+    } else if (Math.abs(vAvant) > 1.5 && simTime > (c.frotteT || 0)) { c.frotteT = simTime + 1.5; vehicleDamage(c, 0.2); }   // la rayure du frottement : rien de plus
   }
   vehicleSolid(c); if (pilote) resolveVehicleOverlap(c);
   ecraseAuSol(c, V);
@@ -20488,7 +20700,7 @@ function vitesseRel() {
   if (!c || c.heli) return 0;
   return clamp(Math.abs(drive.speed) / ((c.spec && c.spec.max) || 26), 0, 1.2);
 }
-function reculConduite() { return vitesseRel() * 2.6; }   // la caméra recule jusqu'à 3,1 m de plus
+function reculConduite() { return vitesseRel() * 1.2; }   // la caméra recule un peu avec la vitesse (1,2 m à fond : elle reste COLLÉE à la voiture, n° 32)
 function camConduite(dt) {
   const r = vitesseRel();
   // 55° à l'arrêt, jusqu'à 72° à fond : c'est ce qui donne l'impression que le décor défile
@@ -21610,7 +21822,8 @@ function cityVie(dt) {
   if (vit !== city.vitNear) { city.vitNear = vit; if (vit && !uiOpen) msg(`${vit.label} · E pour acheter`, 1500); }
   const offNear = !!city.office && Math.hypot(P.pos.x - city.office.x, P.pos.z - city.office.z) < 3.5;
   if (offNear !== city.offNear) { city.offNear = offNear; if (offNear && !isMobile) msg('📋 E : choisir une mission', 1200); }
-  const benchNear = (!P.sit && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg(benchNear.ecole ? '🪑 E : s\'asseoir en classe' : '🪑 E : s\'asseoir', 900); }
+  // au volant on ne propose pas de s'asseoir sur le banc qu'on longe (n° 30 du Joueur)
+  const benchNear = (!P.sit && !drive.car && city.benches.find(b => Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 1.8)) || null; if (benchNear !== city.benchNear) { city.benchNear = benchNear; if (benchNear && !isMobile) msg(benchNear.ecole ? '🪑 E : s\'asseoir en classe' : '🪑 E : s\'asseoir', 900); }
   // Le rayon était de 2 m : un pas de côté et on n'était plus « devant » le coffre, la
   // progression se figeait et on repartait de la banque les mains vides en croyant l'avoir
   // braquée. 3 m, et on prévient clairement quand on s'éloigne sans avoir fini.
@@ -21748,6 +21961,35 @@ function cityVie(dt) {
     if (r.t > 240) { r.on = false; msg('Course abandonnée', 1200); }
     $('act').textContent = `🏁 ${fmt(r.t)} · ${r.next}/${r.cps.length}`;
   }
+  // la pastille d'action suit ce qu'on a sous le nez (guichet, comptoir, voiture, banc…)
+  jailAttenteTick();
+  const cp2 = consigneProche(); if (cp2 !== VILLE.consigne) { VILLE.consigne = cp2; updateAct(); }
+}
+// CE QU'ON PEUT FAIRE ICI, EN UNE LIGNE. Devant le guichet de la banque ou le comptoir du
+// concessionnaire, la pastille disait « 🚩 Il te faut un membre de ton gang… » ou le nom du
+// quartier : rien ne disait quoi faire (n° 23 du Joueur). Le message fugitif « E : … » ne
+// suffit pas à un enfant qui arrive en regardant ailleurs. La consigne reste affichée tant
+// qu'on est devant (E devient △ ou ✋ selon la manette ou l'écran tactile, voir ctrlText).
+function consigneProche() {
+  if (!city.on) return null;
+  if (jail.on && jail.attenteFin) return `⏳ Libre dans ${Math.max(0, Math.ceil(jail.attenteFin - simTime))} s`;
+  if (drive.car || P.sit || P.ride || P.swing) return null;
+  if (city.deskNear) return '🏦 E : déposer ou retirer';
+  if (city.concesNear) return '🚗 E : acheter une voiture';
+  if (city.tuneNear) return '🔧 E : garage';
+  if (city.medNear) return '🏥 E : se faire soigner';
+  if (city.plainteNear) return '📝 E : déposer une plainte';
+  if (city.tatooNear) return '🖊️ E : se faire tatouer';
+  if (city.coiffeurNear) return '💈 E : se faire coiffer';
+  if (city.gunNear) return '🔫 E : armurerie';
+  if (city.vitNear) return '🛍️ E : entrer dans la boutique';
+  if (city.offNear) return '📋 E : les missions';
+  if (city.slotNear) return '🎰 E : jouer';
+  if (city.tableNear) return '🃏 E : jouer';
+  if (city.classNear) return '🏫 E : la leçon';
+  if (city.near) return '🚗 E : monter';
+  if (city.benchNear) return '🪑 E : s\'asseoir';
+  return null;
 }
 function tennisBounce(b) {
   const inCourt = Math.abs(b.pos.x - 13) < 4.4 && b.pos.z < -4.5 && b.pos.z > -21.5, side = b.pos.z > -13 ? 0 : 1;
@@ -21788,9 +22030,31 @@ function showTennis(txt, over) { msg(over || txt, over ? 2600 : 1600); sfx.check
 function startDance(sec) { if (P.dance <= 0) P.danceFace = P.facing; P.dance = sec; cam.freeUntil = simTime + sec + 0.5; }
 function stopDance() { P.dance = 0; if (P.danceFace != null) { P.facing = P.danceFace; P.danceFace = null; } cam.freeUntil = 0; }
 function openUI(id) { if (uiOpen && uiOpen !== id) $(uiOpen).classList.add('hidden'); uiOpen = id; paused = true; keys.clear(); jumpHeld = downHeld = false; $(id).classList.remove('hidden'); document.body.classList.add('uiopen');
+  // LA BAGUE D'UN AUTRE ÉCRAN. La fenêtre 🚩 fermée par ◯ gardait sa bague sur « Retour » ;
+  // quand la réunion de chef de gang s'ouvrait ensuite, « il y a déjà une bague » — mais
+  // dans une fenêtre cachée : ✕ ne validait rien de visible et ↓ ne bougeait rien. On efface
+  // toute bague qui n'est pas dans la fenêtre qu'on ouvre.
+  document.querySelectorAll('.focustv').forEach(x => { if (!$(id).contains(x)) x.classList.remove('focustv'); });
   // a la manette, un curseur des l'ouverture : sinon il fallait deviner qu'il faut d'abord appuyer sur une fleche
-  if (manetteSalon.i >= 0 || document.body.classList.contains('tv')) setTimeout(() => { if (uiOpen === id && !document.querySelector('.focustv')) navBouge(1); }, 30); }
-function closeUI() { if (!uiOpen) return; $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
+  if (manetteSalon.i >= 0 || document.body.classList.contains('tv')) setTimeout(() => { if (uiOpen === id && !document.querySelector('.focustv')) navPremier(); }, 30); }
+// LA PREMIÈRE BAGUE D'UNE FENÊTRE. `navBouge(1)` prenait le premier élément cliquable dans
+// l'ordre du code : dans la boutique c'était la croix « ✕ » de fermeture — un ✕ de plus et la
+// fenêtre qu'on venait d'ouvrir se refermait (n° 43 du Joueur). On préfère le premier ARTICLE
+// ou la première vraie action ; les boutons « fermer / retour » passent en dernier.
+function navPremier() {
+  const c = navCibles(); if (!c.length) return false;
+  const ferme = e => /^(✕|×|x|Fermer|Retour|Annuler)$/i.test((e.textContent || '').trim()) || /close|back|retour|ferme/i.test(e.id || '') || /\bstclose\b|\bclose\b/.test(e.className || '');
+  const art = c.find(e => /\bitem\b|\bfcard\b|\bwcard\b|\bocard\b/.test(e.className || '') || e.hasAttribute('data-i') || e.hasAttribute('data-v'));
+  const e = art || c.find(x => !ferme(x)) || c[0];
+  NAVTV.i = c.indexOf(e); return navChoisit(e);
+}
+function closeUI() { if (!uiOpen) return; $(uiOpen).querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
+// FERMER LA LEÇON AVEC ◯ / ÉCHAP, C'EST SE LEVER. ◯ fermait la fenêtre de l'école mais le personnage
+// restait assis, et il fallait un second ◯ (n° 65 du Joueur). Quand c'est l'ENFANT qui ferme (◯,
+// Échap, le bouton ✕), on demande le saut qui fait quitter la chaise (sitTick choisit le côté
+// libre). Le jeu, lui, ferme la fenêtre par closeUI() sans lever personne (l'exercice suivant,
+// le banc d'essai qui mesure le tableau en restant assis).
+function fermeUI() { const lecon = uiOpen === 'schoolUI' && P.sit && P.sit.ecole; closeUI(); if (lecon) P.jumpBuf = 0.2; }
 const itemKey = (cat, it) => `${cat}:${it.id}`;
 function applyShopItem(cat, it) {
   if (cat === 'Chapeaux') myCfg.hat = it.id; else if (cat === 'Gants') myCfg.gants = it.id; else if (cat === 'Vestes') myCfg.jacket = it.id; else if (cat === 'Lunettes') myCfg.glasses = !!it.id; else if (cat === 'Sacs') myCfg.bag = it.id;
@@ -22116,7 +22380,11 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     }
   };
   for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || o.glass || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est
+    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
+    // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
+    // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
+    // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
+    if (o.w < 0.7 && o.d < 0.7) continue;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.
@@ -22394,6 +22662,19 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     aimTick();   // visée recalculée à l'instant du tir : plus de point de visée périmé
     P.holsterT = simTime + 0.85;   // rengainage automatique après le coup
     if (police.wanted > 0 || police.agents.length) police.riposte = simTime + 30;   // tirer sur la police : elle riposte
+    // UN COUP DE FEU EN VILLE EST UN DÉLIT. Quatre balles dans la rue commerçante (un lampadaire
+    // renversé, une voiture garée détruite) ne valaient pas une étoile : seule la balle qui
+    // TOUCHAIT quelqu'un comptait. Tirer en pleine rue est maintenant un petit délit (les
+    // avertissements « la police laisse passer 1/4 » s'appliquent, sauf témoin), sauf au stand
+    // de tir. Il ne pose pas `P.crime` : la balle qui touche quelqu'un ensuite reste un crime
+    // grave à part entière, il ne doit pas le masquer.
+    // Une PERSONNE verrouillée : c'est la balle qui touche qui sera jugée (crime grave), pas
+    // le coup de feu — sinon « la police laisse passer » s'affichait juste avant « Infraction ★ ».
+    // (Un véhicule verrouillé reste un tir en pleine rue.)
+    if (city.on && police.wanted === 0 && simTime > (P.crimeTir || 0) && !(P.lock && P.lock.ref && P.lock.ref.av)
+      && !(city.targets || []).some(t => Math.hypot(t.x - P.pos.x, t.z - P.pos.z) < 30)) {
+      P.crimeTir = simTime + 1; infraction('tirer en pleine rue', 1, 1);
+    }
     const rx = Math.cos(P.facing), rz = -Math.sin(P.facing);
     // Bouche du canon calculée depuis la position et la visée du joueur, et non depuis la
     // pose rendue de l'avatar, qui a une image de retard : la balle partait alors d'où le
@@ -22500,7 +22781,7 @@ function shotsTick(dt) {
         if (!s.vitres) s.vitres = new Set();
         if (s.vitres.has(b)) continue;        // une balle ne casse chaque vitre qu'une fois
         s.vitres.add(b);
-        burst(s.p.x + dx * t, s.p.y + dy * t, s.p.z + dz * t, 0x9fdcff, 7); breakThing(b, { x: o.x, z: o.z });
+        burst(s.p.x + dx * t, s.p.y + dy * t, s.p.z + dz * t, 0x9fdcff, 7); breakThing(b, { x: o.x, z: o.z }, false, true);
       }
     }
     if (!quoi) { s.p.add(seg); s.m.position.copy(s.p); continue; }   // rien sur le trajet
@@ -22514,7 +22795,7 @@ function shotsTick(dt) {
       // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
       const br = cible && cible.brk;
       const nd = { x: dx, y: dy, z: dz };
-      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine, s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
       else { impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1); sonImpactBalle('mur', s.p.x, s.p.y, s.p.z, 1); }
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
@@ -22546,7 +22827,12 @@ function shotsTick(dt) {
       if ((v.dmg || 0) >= 100 && av < 100) {
         explodeVehicle(v);
         if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); }
-        else msg('💥 Véhicule détruit !', 1600);
+        else {
+          msg('💥 Véhicule détruit !', 1600);
+          // FAIRE EXPLOSER UNE VOITURE, C'EST DEUX ÉTOILES, SANS PITIÉ. Avant : un message, et
+          // personne ne venait (mesuré : voiture en feu devant le snack, ⭐ 0 pendant 90 s).
+          if (s.mine) { P.crime = simTime + 20; infraction('faire exploser un véhicule', 2, 3, true); }
+        }
       } else if (v.mil || (v.solid && v.solid.pol)) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } }
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
@@ -22871,7 +23157,9 @@ function updateAct() {
   if (P.jet) { $('act').textContent = `🚀 Carburant ${Math.round(P.fuel)}%`; return; }
   if (tm.on) { $('act').textContent = `🎾 ${tm.names[0]} ${tm.s[0]} – ${tm.s[1]} ${tm.names[1]} · jeux ${tm.j[0]}–${tm.j[1]}`; return; }
   if (fm.on) { $('act').textContent = `⚽ ${fm.names[0]} ${fm.s[0]} – ${fm.s[1]} ${fm.names[1]} (en ${DUEL_GAGNANTS} buts)`; return; }
-  if (P.weapon) { const w = WEAPONS[P.weapon]; $('act').textContent = P.weapon === 'grenade' ? `💣 Grenades : ${P.grenades}` : `${w.e} ${w.n} ${P.ammo}/${w.ammo}${P.aim ? ' · 🎯 visée' : ''}`; return; }
+  const consigne = typeof consigneProche === 'function' ? consigneProche() : null;
+  if (consigne) { $('act').textContent = ctrlText(consigne); return; }
+  if (P.weapon) { const w = WEAPONS[P.weapon]; $('act').textContent = P.weapon === 'grenade' ? `💣 Grenades : ${P.grenades}` : (w.blanche ? `${w.e} ${w.n}` : `${w.e} ${w.n} ${P.ammo}/${w.ammo}`) + (P.aim ? ' · 🎯 visée' : ''); return; }   // le couteau n'a pas de chargeur : plus de « 5/undefined »
   $('act').textContent = z ? (z.name === 'Foot' ? `⚽ Buts : ${city.goals}` : z.name === 'Tennis' ? `🎾 Points : ${city.tennis}` : z.name === 'Parc' ? `🎯 Boules : ${city.boulesPts} pt` : `${z.emoji} ${z.name}`) : `🏙️ Balade · ${city.goals + city.tennis + city.shots + city.tags + city.boulesPts} pts`;
 }
 
@@ -22929,7 +23217,7 @@ window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   if (e.code === 'Slash' || e.key === '/') { if (running) { e.preventDefault(); $('chat').classList.add('open'); $('chatBtn').classList.add('on'); chatIn.focus(); } return; }
-  if (e.code === 'Escape') { if (uiOpen) closeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
+  if (e.code === 'Escape') { if (uiOpen) fermeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
   if (e.code === 'KeyR' && running && !paused && !dead && !won) { die(true); msg('Réinitialisation…', 900); return; }
   if (e.code === 'KeyB' && running && city.on && !uiOpen) { openStore(); return; }
   if (e.code === 'KeyJ' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }
@@ -23113,7 +23401,7 @@ const PAD_MAP = {
 // elle change d'arme (comme la molette d'un jeu de tir). La boutique et les missions restent
 // a portee de pouce, en MAINTENANT ← ou → (0,7 s), comme la guerre des gangs sur ↑.
 const PAD_TACTILE_AIDE = 17;   // le pave tactile de la DualSense montre ou cache le bandeau d'aide
-const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'guerre' };   // le pave tactile rappelle les touches (l'arme est sur △)
+const PAD_CROIX = { 12: 'ordres', 13: 'emote', 14: 'armePrec', 15: 'armeSuiv', 17: 'aide' };   // le pave tactile rappelle les touches (l'arme est sur △) ; la guerre reste sur ↑ tenu
 const PAD_CROIX_LONG = { 12: 'guerre', 14: 'boutique', 15: 'missions' };
 const PAD_LONG = 0.7;   // ↑ maintenu : la guerre des gangs (un appui court : les ordres)
 const NOMS_ARMES = { pistol: 'Pistolet', rifle: 'Fusil', sniper: 'Fusil à lunette', knife: 'Couteau', grenade: 'Grenade' };
@@ -23296,7 +23584,9 @@ function pollGamepad(dt) {
   {
     const aPied = !drive.car && running && !paused;
     const braque = aPied && !!P.weapon;
-    if (braque && pad.l2 && !pad.l2Bas && !P.drawn) braquerVerrouille();
+    // (le commit distant avait ajouté « && !P.drawn » : arme déjà sortie par ✕, L2 ne verrouillait
+    // plus rien — braquerVerrouille() sait déjà quoi faire arme sortie : reverrouiller sans ranger)
+    if (braque && pad.l2 && !pad.l2Bas) braquerVerrouille();
     P.aimHeld = braque && pad.l2;
     const baisse = pad.l2 && aPied && !braque;
     if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
@@ -23355,8 +23645,10 @@ function pollGamepad(dt) {
     }
     pad.tirR2 = tireR2;
     // « courir » est sur L3, comme dans les grands jeux de ville (L2 baisse le joueur).
-    const court = neuf[10];                                           // L3 : courir
-    if (court !== !!bas[10]) { P.run = court && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); }
+    // L3 : COURIR, À BASCULE. Il fallait MAINTENIR L3 enfoncé tout en poussant le stick — impossible
+    // pour une petite main, et rien ne le disait (n° 17). Un appui lance la course, le suivant l'arrête ;
+    // elle s'arrête aussi toute seule à bout de souffle (voir plus haut).
+    if (neuf[10] && !bas[10]) { P.run = !P.run && !P.essouffle && P.energie > 10; msg(P.run ? '🏃 Tu cours ! (L3 pour marcher)' : '🚶 Tu marches', 900); }
     // L1 : GARDE quand l'arme est rangee (on MAINTIENT, les deux poings devant le visage),
     // VISEE quand elle est braquee. Les deux ne peuvent pas coexister — setGarde() refuse la
     // garde une arme au poing —, donc un seul bouton suffit et rien ne se marche dessus.
@@ -23430,7 +23722,7 @@ const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)'
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
 const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
   6: 'freiner · se baisser · braquer', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
-  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'carte stratégique' };
+  12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
   if (padEssai.fait) return;
@@ -23626,7 +23918,12 @@ function startGame() {
   $('start').classList.add('hidden');
   if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   if (net.on && !net.host) { chooseWorld(net.world ?? 0); }
-  else { chooseWorld(4); guerre.vu = true; msg('MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5.', 6000); }
+  // On entre directement en ville — mais PAS dans la guerre des gangs : `guerre.vu = true` dès
+  // l'accueil faisait parler la pastille d'un gang que l'enfant n'a pas (n° 67, et le n° 3 qui
+  // revenait). La guerre ne commence que quand l'écran 🚩 a été ouvert. Le message de bienvenue
+  // passe par ctrlText : « E » devient △ à la manette.
+  else { chooseWorld(4); msg('🏙️ Bienvenue à Marlon ! Balade-toi : E pour agir, monter en voiture, parler', 5000); }
+  document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));   // la bague de l'accueil ne suit pas en ville (n° 71)
   updateHud();
 }
 $('hostBtn').addEventListener('click', () => hostGame());
@@ -23788,7 +24085,9 @@ function camPerche(dt, aiming) {
     const inter = !veh && city.on ? city.interact : null;
     // la caméra RECULE avec la vitesse (jusqu'à 2,6 m de plus) : le capot rentre dans le
     // cadre et l'on voit venir la route
-    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4 + reculConduite()) : 0);
+    // en voiture la caméra traînait 13 à 15 m derrière (base 9 + 4 + recul) : la voiture n'était qu'un
+    // point au loin et le premier poteau la cachait (n° 32). 2 m de plus que la base, et le recul court.
+    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 2 + reculConduite()) : 0);
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Elle sert à savoir dans quel genre d'endroit on se trouve ; c'est
     // la LIGNE DE VUE (plus bas) qui décide vraiment de la longueur de la perche.
@@ -24012,7 +24311,7 @@ function frame() {
   if (n === 8) acc = 0;
   if (active && timerOn) { elapsed += dt; updateTimer(); }
   if (!paused && !net.on) bots.forEach(b => updateBot(b, dt)); else if (net.on) bots.forEach(b => { b.av.group.visible = false; });
-  if (running && !paused && !net.on && simTime > nextChat) { const b = pickOne(bots); const t = pickOne(CHAT_IDLE); chat(b.name, t, b.color); if (t === '/e dance') b.dance = 3; else bubble(b.av, t); dialog.lastBot = b; nextChat = simTime + rnd(16, 32); }
+  if (running && !paused && !net.on && simTime > nextChat) { const b = pickOne(bots); const t = pickOne(city.on ? CHAT_IDLE_CITY : CHAT_IDLE); /* en ville, on ne parle pas de lave ni de l'étape 5 (n° 10) */ chat(b.name, t, b.color); if (t === '/e dance') b.dance = 3; else bubble(b.av, t); dialog.lastBot = b; nextChat = simTime + rnd(16, 32); }
   if (running && !paused && !net.on && simTime > dialog.nextAsk) { botAsk(); dialog.nextAsk = simTime + rnd(45, 80); }
   if (running && !paused && !net.on && city.on) for (const b of bots) { const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < 3.5 && simTime > (b.greetT || 0)) { b.greetT = simTime + 45; const g = pickOne([`salut ${myCfg.name} !`, `coucou ${myCfg.name}, ça va ?`, `hé ${myCfg.name}, tu viens jouer ?`, 'salut toi !', `${myCfg.name} ! trop content de te voir`]); bubble(b.av, g); voice.say(g, !!b.girl); } }
   if (!paused) { try { meteoTick(dt); } catch (e) { if (loopErr++ < 3) console.error('météo', e); } }
@@ -24095,8 +24394,11 @@ function frame() {
     P.facing = cam.yaw + Math.PI;
     P.aimPitch = clamp(-cam.pitch, -0.9, 1.1);
   } else if (P.aimPitch) P.aimPitch *= 1 - Math.min(1, dt * 3);
-  // verrouillage automatique : visible dès qu'une arme est équipée, pour qu'on sache sur quoi on tirera
-  P.lock = (P.weapon && P.weapon !== 'grenade' && running && !paused && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on) ? cibleAuto() : null;
+  // verrouillage automatique : visible dès que l'arme est EN MAIN, pour qu'on sache sur quoi on
+  // tirera. Il l'était dès qu'une arme était équipée : le viseur rouge restait au milieu de
+  // l'écran avec le pistolet dans l'étui (n° 62 du Joueur), alors que L2 / ✕ sont justement
+  // là pour dire quand on vise.
+  P.lock = (P.weapon && P.drawn && P.weapon !== 'grenade' && running && !paused && !drive.car && !P.sit && !P.swing && !P.ride && !gym.on) ? cibleAuto() : null;
   rangementAuto();
   if (P.zoom && (simTime > (P.zoomT || 0) || !P.drawn || drive.car || P.sit)) fermeLunette();
   P.aim = armed && !!(P.aimHeld || P.aimToggle);   // visée « épaule » (zoom) en plus
@@ -24591,6 +24893,11 @@ function tvVeille() {
   tvHeberge(tv.code);
 }
 function tvManettesMaj() {
+  // UNE LIAISON SANS PAIR N'EST PAS UNE MANETTE. Quand le pair PeerJS est fermé (salon quitté,
+  // liaison cédée à la télé, page relancée), les connexions qu'il portait restaient dans
+  // `tv.conns` avec leur drapeau `open` : la pastille disait « 🎮 1 manette · code … » à un
+  // enfant qui lançait le mode TV sans aucun téléphone branché (test 384, et la vraie vie).
+  if (!tv.peer || tv.peer.destroyed) tv.conns.length = 0;
   const n = tv.conns.filter(c => c.open).length;
   const el = $('tvManettes');
   // On dit précisément où on en est : « prêt » veut dire que cet écran ÉCOUTE vraiment. Avant,
@@ -24750,6 +25057,10 @@ function tvSalonMaj() {
   try { diffusionAffiche(); } catch (e) {}   // la derniere mesure s'affiche tout de suite
 }
 function modeTV(on) {
+  // EN PASSANT SUR LA TÉLÉ, ON NE COMPTE QUE LES TÉLÉPHONES VRAIMENT RELIÉS. Une liaison d'une
+  // partie précédente dont le tuyau WebRTC n'existe plus restait dans `tv.conns` avec `open`
+  // levé : la pastille annonçait « 🎮 1 manette · code … » à un enfant sans téléphone (test 384).
+  if (on) tv.conns = tv.conns.filter(c => c && c.open && c.peerConnection && c.peerConnection.connectionState !== 'closed' && c.peerConnection.connectionState !== 'failed');
   document.body.classList.toggle('tv', on);
   store.set('superobby.tv', on ? '1' : '0');
   // L'ACCELERATEUR D'IMAGE s'allume avec le mode tele (c'est la que le probleme se pose), sauf
@@ -25104,7 +25415,10 @@ function navValide() {
   if (e.tagName === 'INPUT') return true;
   e.click();
   // apres un clic la fenetre a pu changer : on garde un curseur visible dans la nouvelle
-  setTimeout(() => { if (!document.contains(e) || e.offsetParent === null || !document.querySelector('.overlay:not(.hidden)')) { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); if (manetteSalon.i >= 0) navBouge(1); } }, 60);
+  // PAS DE BAGUE HORS D'UN MENU (n° 71). Après « Entrer dans Marlon » plus aucune fenêtre n'est
+  // ouverte : navPremier() posait alors la bague sur le premier bouton de la PAGE — le 💬 du chat,
+  // encadré de jaune pendant toute la partie. On ne repose une bague que s'il reste une fenêtre.
+  setTimeout(() => { if (!document.contains(e) || e.offsetParent === null || !document.querySelector('.overlay:not(.hidden)')) { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); if (manetteSalon.i >= 0 && document.querySelector('.overlay:not(.hidden)')) navPremier(); } }, 60);
   return true;
 }
 // un curseur (input range) sous le doigt : gauche / droite le font glisser
@@ -25714,7 +26028,7 @@ function lancerActivite(b, a) {
     const l = { x: (dest.x1 + dest.x2) / 2, z: (dest.z1 + dest.z2) / 2, nom: dest.name };
     const quoi = a.k === 'moto' ? 'la moto' : a.k === 'voiture' ? 'la voiture' : 'le vélo';
     dire(pickOne([`je prends ${quoi} ${a.e}`, `petit tour ${a.k === 'velo' ? 'à vélo' : 'en ' + quoi.slice(3)} !`, `direction ${dest.name} ${a.e}`]));
-    botPrendVoiture(b, l, a.k === 'moto' ? 'moto' : a.k === 'velo' ? 'bike' : null);
+    botPrendVoiture(b, l, a.k === 'moto' ? 'moto' : a.k === 'velo' ? 'bike' : null, true);
     if (!b.rdv) { b.activite = null; return false; }
     b.rdv.libre = true;
   } else if (a.k === 'vol') {
@@ -25740,7 +26054,8 @@ function lancerActivite(b, a) {
       botSay(b, [`viens te battre ${myCfg.name} ! 😤`, 'tu me dois quelque chose !', 'approche un peu !']);
       chat(null, `😤 ${b.name} s'en prend à ${myCfg.name} !`);
     } else {
-      const o = pickOne(bots.filter(x => x !== b && !x.ko && x.av.group.visible));
+      // la victime aussi doit être sous les yeux du joueur : une bagarre hors champ n'est que du bruit dans le chat
+      const o = pickOne(bots.filter(x => x !== b && !x.ko && x.av.group.visible && Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) < 40));
       if (!o) { b.activite = null; return false; }
       botTape(b, o); b.ordre = null;
     }
@@ -25781,8 +26096,10 @@ function activiteTick(b, dt) {
     b.rdvRoute = null; b.wait = 0;
   }
 }
+const VIE_CALME = 180;   // secondes de ville sans vol, braquage ni bagarre : l'enfant arrive dans une ville tranquille
 function vieTick(dt) {
   if (!city.on || net.on || !running) return;
+  if (vie.debut == null || simTime < vie.debut) vie.debut = simTime;
   for (const b of bots) activiteTick(b, dt);
   if (simTime < vie.t) return;
   vie.t = simTime + rnd(6, 14);
@@ -25792,7 +26109,14 @@ function vieTick(dt) {
   const occupes = bots.filter(b => b.activite).length;
   if (occupes >= Math.ceil(bots.length * 0.6)) return;
   const b = pickOne(libres);
-  lancerActivite(b, choisirActivite());
+  // LA VILLE EST CALME AU DÉPART (n° 18 du Joueur) : « au secours ! police !! » et « X attaque Y » dès
+  // la première minute, sans rien voir. Pas de délit pendant les trois premières minutes, et une
+  // bagarre entre habitants ne se lance qu'à portée de vue du joueur (il la VOIT).
+  let a = choisirActivite();
+  const delit = k => k === 'vol' || k === 'braquage' || k === 'bagarre';
+  if (delit(a.k) && simTime - vie.debut < VIE_CALME) return;
+  if (a.k === 'bagarre' && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) > 45) return;
+  lancerActivite(b, a);
 }
 
 // ---- salon de tatouage : on compose son motif puis on paie ----
@@ -26388,11 +26712,12 @@ function buildPlanque(x, z, opt = {}) {
 // Les huit quartiers que les gangs se disputent : celui qui les tient touche la « protection ».
 // `v` = ce qu'il rapporte (1 = tranquille, 3 = le gros lot) : le centre-ville et la banque valent
 // trois fois le parc, et c'est pour ça qu'on se bat dessus. `e` = son émoji sur la carte.
+// LES HUIT QUARTIERS. Le commit distant « extension stratégique » en ajoutait quatre au nord
+// (Les Hauts, Quartier des affaires, Terminal logistique, Docks Nord) avec leurs immeubles,
+// rues et voitures garées sur la chaussée : 8 tests du banc d'essai (but du jeu à 8 drapeaux,
+// valeur des quartiers, plan routier, places de stationnement, GPS, murs d'enceinte) le
+// refusaient. On garde la carte stratégique, les défenses et les opérations, sur huit quartiers.
 const TERRITOIRES = [
-  { k: 'northwest', n: 'Les Hauts', x: -235, z: -276, r: 51, v: 2, e: '▥' },
-  { k: 'finance', n: 'Quartier des affaires', x: -110, z: -276, r: 51, v: 4, e: '▥' },
-  { k: 'freight', n: 'Terminal logistique', x: 20, z: -276, r: 51, v: 3, e: '▤' },
-  { k: 'docks', n: 'Docks Nord', x: 140, z: -276, r: 47, v: 3, e: '▤' },
   { k: 'centre', n: 'Centre-ville', x: 0, z: 40, r: 40, v: 3, e: '🏙️' }, { k: 'commerces', n: 'Rue commerçante', x: 56, z: 64, r: 30, v: 2, e: '🛍️' },
   { k: 'banque', n: 'Quartier de la banque', x: -52, z: 70, r: 28, v: 3, e: '🏦' }, { k: 'parc', n: 'Parc', x: 0, z: 80, r: 26, v: 1, e: '🌳' },
   { k: 'plage', n: 'Plage', x: 150, z: 40, r: 46, v: 2, e: '🏖️' }, { k: 'zone', n: 'La Zone', x: -145, z: 40, r: 46, v: 2, e: '🏚️' },
@@ -26697,8 +27022,15 @@ function gangTick(dt) {
 function alarmeInstallee() { return owned.has('deco:alarme'); }
 function declencheCambriolage(G) {
   if (cambrio.on || !city.villaMine) return;
+  // PAS DE CAMBRIOLAGE SUBI SANS RAISON (n° 72 du Joueur, décision : pas de hasard sans
+  // explication). Un enfant qui vient d'arriver, sans gang ni quartier, visitait la banque et
+  // retrouvait son porte-monnaie à zéro avec une ligne de chat pour toute explication. Les gangs
+  // ne s'en prennent à la villa que d'un joueur ENTRÉ dans la guerre (un homme recruté ou un
+  // quartier pris), l'écran le dit clairement, et ils ne prennent jamais plus de la moitié.
+  const dansLeJeu = (gang.membres.length + (gang.membresLibres || []).length) > 0 || nbTerritoires('joueur') > 0;
+  if (!dansLeJeu) return;
   const v = city.villaMine;
-  cambrio.on = true; cambrio.t = simTime + 55; cambrio.voleurs = G ? G.membres.slice(0, 2) : [];
+  cambrio.on = true; cambrio.t = simTime + 55; cambrio.voleurs = G ? G.membres.slice(0, 2) : []; cambrio.gang = G ? G.nom : null;
   cambrio.butin = Math.floor(rnd(60, 240));
   for (const m of cambrio.voleurs) { m.cambrio = true; }
   if (G) { G.etat = 'cambriolage'; G.cible = [v.x, v.z]; G.t = simTime + 60; }
@@ -26712,7 +27044,9 @@ function declencheCambriolage(G) {
     sfx.tone(880, 0, .18, 'square', .07); setTimeout(() => sfx.tone(660, 0, .18, 'square', .07), 220);
     setBeacon(v.x, v.z, 2);
   } else {
-    chat(null, '🏠 Des ombres rôdent autour de ta villa…');
+    msg(`🏠 ${G ? G.nom : 'Des voleurs'} rôdent autour de ta villa ! Cours-y : la colonne bleue te guide`, 4200); sfx.tone(520, 0, .25, 'square', .06);
+    chat(null, `🏠 ${G ? G.nom : 'Des voleurs'} rôdent autour de la villa de ${myCfg.name}…`);
+    setBeacon(v.x, v.z, 2);
   }
 }
 function cambrioTick(dt) {
@@ -26733,7 +27067,7 @@ function cambrioTick(dt) {
   if (simTime > cambrio.t) cambrioFin(false);
 }
 function cambrioFin(sauve, par) {
-  const perdu = sauve ? 0 : Math.min(cambrio.butin, wallet);
+  const perdu = sauve ? 0 : Math.min(cambrio.butin, Math.floor(wallet / 2));   // jamais plus de la moitié du porte-monnaie (comme l'amende du n° 35)
   for (const m of cambrio.voleurs) m.cambrio = false;
   cambrio.voleurs = []; cambrio.on = false; cambrio.alerte = 0;
   document.body.classList.remove('alarme');
@@ -26742,7 +27076,8 @@ function cambrioFin(sauve, par) {
   if (sauve) { msg(`🛡️ Cambriolage évité — ${par === 'toi' ? 'tu les as' : 'ton gang les a'} fait fuir !`, 3600); sfx.win();
     chat(null, `🛡️ Les cambrioleurs ont fui la villa de ${myCfg.name}`); }
   else { wallet -= perdu; saveWallet(); updateHud();
-    msg(`💸 Cambriolage réussi : ils sont partis avec ${perdu} 🪙`, 4000); sfx.die();
+    const qui = cambrio.gang || 'Les voleurs';
+    msg(`💸 ${qui} ont cambriolé ta villa : −${perdu} 🪙 (jamais plus de la moitié). Un homme de ton gang près de la villa les fait fuir`, 5200); sfx.die();
     chat(null, `💸 La villa de ${myCfg.name} a été cambriolée (−${perdu} 🪙)`); }
 }
 
@@ -27181,6 +27516,9 @@ function proposeReunion(G) {
 }
 function reunionTick(dt) {
   const r = guerre.reunion;
+  // Un chef de gang ne donne pas rendez-vous à un enfant qui n'est pas dans la guerre (n° 24 du
+  // Joueur : « MaxiBloc… rendez-vous à Tatouage » et la colonne bleue à t + 14 s d'une partie neuve)
+  if (!r && !joueurDansLaGuerre()) return;
   if (!r) {
     // les chefs finissent par s'appeler entre eux
     if (simTime > guerre.prochaineReunion && gangs.length) {
@@ -27671,7 +28009,7 @@ function carteTerritoires() {
     const o = proprio(t.k);
     const c = o === 'joueur' ? '#5cc453' : o ? (gangDe(o) ? gangDe(o).teinte : '#7a86a0') : '#4b5468';
     const qui = o === 'joueur' ? 'À TOI' : o ? nomGang(o) : 'libre';
-    return `<button type="button" data-territory="${t.k}" class="tcase${empire.selected === t.k ? ' selected' : ''}" style="--owner:${c};background:${c}"><span class="te">${t.e || '🚩'}</span>`
+    return `<button type="button" data-territory="${t.k}" class="tcase"${empire.selected === t.k ? ' data-sel="1"' : ''} style="--owner:${c};background:${c}"><span class="te">${t.e || '🚩'}</span>`
       + `<span class="tn">${TERRITOIRES.indexOf(t) + 1}. ${t.n}</span><span class="tq">${qui}</span>`
       + `<span class="tv">${'🪙'.repeat(t.v || 1)}</span></button>`;
   }).join('');
@@ -28772,6 +29110,21 @@ function terrainLibre(cands, r) {
   }
   return cands[cands.length - 1];
 }
+// OÙ VONT LE DÉPÔT ET LA CASERNE. Une seule liste de candidats, lue par buildMetiers ET par le
+// mobilier public : les bancs sont plantés AVANT les hangars, et un banc posé sur le trottoir
+// juste devant la cour de la caserne clouait le camion de pompiers sur place (mesuré : 8 m de
+// camion, un banc de 66 cm à 4,5 m de son pare-chocs, 120 s d'incendie sans bouger d'un mètre).
+function emplacementsService() {
+  return { depot: terrainLibre([[27, 122], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13),
+    caserne: terrainLibre([[-40, 122], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13) };
+}
+// La sortie des hangars : la cour goudronnée ET le trottoir qu'elle traverse pour rejoindre la
+// rue. Rien ne s'y plante (banc, arbre, poubelle), sinon les engins ne sortent plus.
+function coursService() {
+  const e = emplacementsService();
+  return [{ x: e.depot[0], w: 32, z1: e.depot[1] - 6.5, z2: e.depot[1] + 5.5 + 8 + 7 },
+    { x: e.caserne[0], w: 24, z1: e.caserne[1] - 6.5, z2: e.caserne[1] + 5.5 + 8 + 7 }];
+}
 function creerTravailleur(metier, nom, x, z, opt = {}) {
   const av = buildAvatar({ name: nom, jersey: 0, pants: PAL.pants[0], cap: PAL.cap[0], num: 1,
     hair: opt.hair ?? 1, hairColor: opt.hairColor ?? 0, m: 25, f: 12 });
@@ -28830,7 +29183,7 @@ function buildMetiers() {
   // Il etait en (40, 130) : sa dalle enterrait la descente x = 48 sur 12 m et son ouverture
   // donnait sur le bord meme du boulevard. Il recule en (29, 122) : 4 m entre l'avenue du parc
   // (z = 113) et son mur du fond, 5 m entre son flanc est et la descente, et 8 m de cour devant.
-  const [dx, dz] = terrainLibre([[27, 122], [92, 76], [-70, 100], [72, 30], [-70, -30], [70, 104]], 13);
+  const [dx, dz] = emplacementsService().depot;
   city.depot = { x: dx, z: dz };
   hangar(dx, dz, 22, 11, 0xffa62b, '🏗️ DÉPÔT MUNICIPAL', '🏗️ Dépôt municipal · les véhicules de travail se prennent avec E', 30, 8);
   for (let i = 0; i < 4; i++) box(dx - 8 + i * 1.6, 0.9, dz - 4, 1.2, 1.4, 1.2, 0x8f98ab, { studs: false, noRoute: true });   // les bennes à gravats
@@ -28840,7 +29193,7 @@ function buildMetiers() {
   // ---- LA CASERNE DES POMPIERS ----
   // Idem : en (-40, 130) le camion de 8 m ne pouvait se poser que SUR le boulevard, et en
   // travers. La caserne recule en (-40, 122) et ouvre sa cour de 8 m sur la rue.
-  const [kx, kz] = terrainLibre([[-40, 122], [60, -40], [-70, -30], [-70, 100], [92, -12], [92, 104]], 13);
+  const [kx, kz] = emplacementsService().caserne;
   city.caserne = { x: kx, z: kz };
   hangar(kx, kz, 18, 11, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose avec O', 22, 8);
   box(kx, 3.4, kz + 4, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
@@ -30958,19 +31311,38 @@ function pompiersTick(dt) {
       // la sirène : deux notes qui alternent (on ne touche pas à celle de la police)
       // la sirène vient du CAMION : on l'entend arriver de la rue, et pas de sa propre tête
       if (simTime > (w0.sirT || 0)) { w0.sirT = simTime + 1.9; sonSirene(veh ? veh.x : w0.pos.x, veh ? veh.z : w0.pos.z, 'pompier'); }
-      const d = metierRoule(w0, feu.x, feu.z, dt, 11);
+      // LE FEU N'EST PAS AU BORD D'UNE RUE. Les départs de feu tombent sur des points de balade
+      // (le terrain de boules du parc, une cour) : le camion visait le foyer LUI-MÊME, s'arrêtait
+      // nez contre la façade la plus proche et attendait d'être « à moins de 12 m » — il n'y
+      // arrivait jamais, le feu brûlait ses 240 s tout seul. Le camion vise maintenant le point
+      // de CHAUSSÉE le plus proche du feu ; arrivé là (ou coincé plus de 8 s sans gagner un
+      // mètre à moins de 70 m), l'équipe descend et finit à pied avec la lance.
+      if (!chef.acces || chef.accesFeu !== feu) {
+        const p = typeof pointRouteLibre === 'function' ? pointRouteLibre(feu.x, feu.z) : null;
+        chef.acces = p ? [p.x, p.z] : [feu.x, feu.z]; chef.accesFeu = feu; w0.progD = 1e9; w0.progT = simTime;
+      }
+      const dA = metierRoule(w0, chef.acces[0], chef.acces[1], dt, 11);
       for (let i = 0; i < suite.length; i++) metierPassager(suite[i].bot, veh, i, dt);
-      if (d < 12) { majEtat('deploie'); w0.t = simTime + 3; if (veh) veh.outilCible = 1; }
+      const dF = veh ? Math.hypot(veh.x - feu.x, veh.z - feu.z) : Math.hypot(w0.pos.x - feu.x, w0.pos.z - feu.z);
+      // « coincé » = le camion ne ROULE plus (pas la distance au feu : un itinéraire contourne
+      // souvent un pâté de maisons et s'éloigne un moment avant de revenir)
+      if (!veh || (veh.pas || 0) > 0.5 * dt) w0.progT = simTime;
+      const coince = simTime - w0.progT > 8 && dF < 70;
+      if (dF < 12 || dA < 11 || coince) { majEtat('deploie'); w0.t = simTime + 3; w0.tMax = simTime + 40; if (veh) { veh.outilCible = 1; veh.speed = 0; veh.spd = 0; } }
       return;
     }
     case 'deploie': {
       if (!vivant) { majEtat('range'); w0.t = simTime + 1.5; return; }
       const ang = Math.atan2(w0.pos.x - feu.x, w0.pos.z - feu.z);
+      let dChef = 99;   // distance du chef à SON poste de lance (à 6,5 m du feu)
       for (let i = 0; i < eq.length; i++) {
         const a = ang + (i - 1) * 0.6;
-        metierMarche(eq[i].bot, feu.x + Math.sin(a) * 6.5, feu.z + Math.cos(a) * 6.5, dt, 1.4);
+        const dd = metierMarche(eq[i].bot, feu.x + Math.sin(a) * 6.5, feu.z + Math.cos(a) * 6.5, dt, 1.4);
+        if (i === 0) dChef = dd;
       }
-      if (simTime > w0.t) { majEtat('arrose'); metierDit(w0, 'lance en batterie — on arrose ! 💧'); }
+      // on n'arrose que lance en main DEVANT le feu : le trajet à pied depuis la chaussée peut
+      // prendre vingt secondes (au bout de 40 s on arrose d'où l'on est, le feu ne doit pas durer)
+      if (simTime > w0.t && (dChef < 2 || simTime > (w0.tMax || 0))) { majEtat('arrose'); metierDit(w0, 'lance en batterie — on arrose ! 💧'); }
       return;
     }
     case 'arrose': {

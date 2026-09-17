@@ -9817,16 +9817,15 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // L'HORLOGE du hall (ses aiguilles suivent l'heure du jeu) et celle du mur ouest
   const clock = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.1, 20), lam(0xffffff)); clock.rotation.x = Math.PI / 2; clock.position.set(bx, 3.6, bz - D / 2 + 0.5); worldGroup.add(clock); city.bankClock = { c: clock, x: bx, z: bz - D / 2 + 0.44 };
   city.bankHands = [0, 1].map(i => { const h = new THREE.Mesh(unitBox, lam(0x111111)); h.scale.set(0.06, i ? 0.7 : 0.5, 0.02); h.position.set(bx, 3.6, bz - D / 2 + 0.43); worldGroup.add(h); return h; });
-  { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.16, 18), lam(trim)); h.rotation.x = Math.PI / 2;
-    h.position.set(bx - W / 2 + 0.45, 3.2, bz); worldGroup.add(h);
-    const cad = new THREE.Mesh(new THREE.CircleGeometry(0.78, 18), lam(0xf4f0e4)); cad.position.set(bx - W / 2 + 0.55, 3.2, bz); cad.rotation.y = Math.PI / 2; worldGroup.add(cad);
-    for (const [lg, ang] of [[0.6, 1.1], [0.4, 2.6]]) { const ai = new THREE.Mesh(unitRound, lam(0x1b1b22));
-      ai.scale.set(0.04, lg, 0.05); ai.position.set(bx - W / 2 + 0.6, 3.2 + Math.cos(ang) * lg / 2, bz + Math.sin(ang) * lg / 2);
-      ai.rotation.x = -ang; worldGroup.add(ai); } }
+  // LA DEUXIÈME HORLOGE, sur le mur ouest, EST SUPPRIMÉE. Il y en avait deux dans la même
+  // salle, et celle-ci (0,90 m de rayon, 3,20 m de haut, débordant de 16 cm du mur) était
+  // pile dans l'axe du nouveau couloir ouest : quand le joueur regarde vers l'ouest, la
+  // caméra passe derrière le mur (maison de poupée) et l'horloge, elle, restait pleine —
+  // elle bouchait le personnage (test 370). Le mur du couloir reste nu, c'est un passage.
   // LE LUSTRE de l'atrium (il y en avait DEUX, empilés au même endroit)
   const chand = new THREE.Group(); chand.position.set(bx, H - 0.6, bz); worldGroup.add(chand); const chain = new THREE.Mesh(unitBox, lam(trim)); chain.scale.set(0.06, 1.2, 0.06); chain.position.y = 0.6; chand.add(chain); const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.08, 8, 24), lam(trim)); ring.rotation.x = Math.PI / 2; chand.add(ring); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), neonMat(0xfff2b0)); b.position.set(Math.cos(a) * 1.6, -0.2, Math.sin(a) * 1.6); chand.add(b); }
   // LES TABLEAUX : deux sur le mur ouest (le couloir de l'escalier), deux sur le mur est
-  for (const [tz, col] of [[-2.8, 0x2f6f4a], [2.8, 0x6b3a5a]]) {
+  for (const [tz, col] of [[-3.4, 0x2f6f4a], [3.4, 0x6b3a5a]]) {
     box(bx - W / 2 + 0.5, 2.6, bz + tz, 0.12, 1.6, 2.2, trim, { deco: true, studs: false });
     box(bx - W / 2 + 0.56, 2.6, bz + tz, 0.06, 1.3, 1.9, col, { deco: true, studs: false });
   }

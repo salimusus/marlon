@@ -13536,7 +13536,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -19206,6 +19206,11 @@ function step(dt, active) {
   if (P.swing) { swingTick(dt); cityCommon(dt); return; }
   if (P.ride) { cityCommon(dt); return; }
   if (P.sit) { sitTick(dt); cityCommon(dt); return; }
+  // ALLONGE SUR LE BRANCARD DES SECOURS : il regarde la scene, il ne la pilote pas. On sort
+  // AVANT toute lecture des commandes de deplacement (aucune touche, aucun stick ne le fait
+  // bouger) mais APRES `cityCommon`, qui fait justement avancer l'ambulance qui le transporte.
+  // La camera, elle, reste entiere : elle est pilotee ailleurs, dans la boucle d'affichage.
+  if (P.secours) { cityCommon(dt); return; }
 
   if (P.standing && P.standing.conv) { P.pos.x += P.standing.conv.x * dt; P.pos.z += P.standing.conv.z * dt; }
   const onIce = !!(P.standing && P.standing.ice) || (P.grounded && surGlace(P.pos.x, P.pos.z));
@@ -21496,7 +21501,22 @@ function makeAmbulance(x, z, h) {
   bx(glassCar, 1.95, 0.62, 0.06, 0, 1.62, 2.36).rotation.x = 0.38;        // pare-brise
   for (const sx of [-1.06, 1.06]) bx(glassCar, 0.06, 0.5, 1.1, sx, 1.62, 1.35);
   for (const sx of [-1.11, 1.11]) bx(glassCar, 0.06, 0.5, 1.0, sx, 1.95, -0.6);
-  bx(glassCar, 1.7, 0.6, 0.06, 0, 1.95, -2.56);
+  // LES DEUX PORTES ARRIERE, qui s'ouvrent pour de bon. La lunette de la cellule etait un
+  // simple panneau vitre colle a l'arriere : on ne pouvait rien faire entrer ni sortir. Chaque
+  // porte est maintenant un GROUPE charniere pose sur le montant exterieur (x = +/-1.08), avec
+  // son panneau, sa vitre et sa demi-croix rouge ; `ambulanceAnime` les fait pivoter de 2,25 rad
+  // (129 deg) vers l'arriere. Le battant va donc se plaquer le long du flanc, degageant toute
+  // la largeur de la caisse pour le brancard.
+  const portes = {};
+  for (const s2 of [1, -1]) {
+    const piv = new THREE.Group(); piv.position.set(s2 * 1.08, 1.62, -2.56); g.add(piv);
+    const pan = new THREE.Mesh(unitRound, blanc); pan.scale.set(1.02, 1.42, 0.09); pan.position.set(-s2 * 0.52, 0, 0); pan.castShadow = true; piv.add(pan);
+    const vit = new THREE.Mesh(unitRound, glassCar); vit.scale.set(0.72, 0.5, 0.11); vit.position.set(-s2 * 0.52, 0.32, 0); piv.add(vit);
+    const c1 = new THREE.Mesh(unitRound, rouge); c1.scale.set(0.5, 0.11, 0.12); c1.position.set(-s2 * 0.52, -0.28, -0.03); piv.add(c1);
+    const c2 = new THREE.Mesh(unitRound, rouge); c2.scale.set(0.12, 0.42, 0.12); c2.position.set(-s2 * 0.52, -0.28, -0.03); piv.add(c2);
+    const poi = new THREE.Mesh(unitRound, darkM); poi.scale.set(0.09, 0.09, 0.2); poi.position.set(-s2 * 0.92, -0.05, -0.05); piv.add(poi);
+    portes[s2 > 0 ? 'porteG' : 'porteD'] = piv;
+  }
   for (const sx of [-0.7, 0.7]) bx(neonMat(0xffffcc), 0.36, 0.2, 0.08, sx, 0.85, 2.5);
   bx(neonMat(0xff3030), 1.9, 0.16, 0.08, 0, 0.9, -2.56);
   bx(darkM, 2.3, 0.24, 0.16, 0, 0.5, 2.5); bx(darkM, 2.3, 0.24, 0.16, 0, 0.5, -2.54);
@@ -21515,7 +21535,11 @@ function makeAmbulance(x, z, h) {
   for (const [sx, ry] of [[-1.13, -Math.PI / 2], [1.13, Math.PI / 2]]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.42), enseigne); pl.position.set(sx, 1.12, 0.4); pl.rotation.y = ry; g.add(pl); }
   // LE POINT D'ANCRAGE DU BRANCARD, dans la cellule : c'est là que le poste ANIMATION
   // viendra poser la civière et jouer le brancardage.
-  const brancard = new THREE.Group(); brancard.position.set(0, 1.05, -1.2); g.add(brancard);
+  // Le plancher de la cellule est le haut de la caisse basse (0,62 + 0,30 = 0,92 m) : l'ancrage
+  // est pose LA, et non a 1,05 m, pour que les roulettes du brancard touchent la tole au lieu
+  // de flotter 13 cm au-dessus. Il est decale a -1,05 : le brancard fait 2,20 m et la cellule
+  // va de -2,55 a +0,35, il tient donc tout entier dedans.
+  const brancard = new THREE.Group(); brancard.position.set(0, 0.92, -1.05); g.add(brancard);
   const wheels = [];
   for (const [wx, wz] of [[-0.95, 1.55], [0.95, 1.55], [-0.95, -1.65], [0.95, -1.65]]) { const w = makeWheel(1.05); w.position.set(wx, 0.36, wz); g.add(w); wheels.push(w); }
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -21523,7 +21547,7 @@ function makeAmbulance(x, z, h) {
   const solid = box(x, 0.7, z, W, 1.4, D, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   const c = { g, wheels, x, y: 0, z, h, color: 0xf4f6fa, busy: false, solid, kind: 'ambulance',
     spec: { max: 30, rev: -7, accel: 22, turn: 1.9, seat: 0 }, baseW: W, baseD: D, home0: [x, z, h],
-    gyros, brancard, etat: null, victime: null, ambulance: true, urgence: true, sirene: false, gyro: false, recule: false };
+    gyros, brancard, outils: portes, etat: null, victime: null, ambulance: true, urgence: true, sirene: false, gyro: false, recule: false };
   solid.ai = true;
   prepareVehicule(c); vehicleSolid(c); settleVehicle(c);
   return c;
@@ -21536,49 +21560,389 @@ function ambulanceAppel(x, z, victime) {
   const amb = L.find(a => !a.etat && drive.car !== a);
   if (!amb) return null;
   amb.etat = 'route'; amb.victime = victime || null; amb.cible = { x, z }; amb.sirene = true; amb.t = 0;
+  amb.phase = null; amb.phaseT = 0; amb.surCiviere = false; amb.poseFaite = false;
+  amb.sortDe = null; amb.sortVers = null; amb.abandon = null;
+  try { ambulanceEquipe(amb); } catch (e) {}   // l'equipage est a bord des le depart, visible par le pare-brise
   msg('🚑 Une ambulance a été appelée', 2200);
   return amb;
+}
+// ================= LA SÉQUENCE DE SECOURS, D'UN BOUT À L'AUTRE =================
+// Demande du joueur, mot pour mot : « améliore le système ambulance, crée une animation qui
+// sort le brancard et met le joueur ou un bot allongé dessus, le fait rentrer à l'intérieur du
+// fourgon puis l'emmène à l'hôpital ».
+// AVANT : l'ambulance roulait jusqu'au blessé, attendait TROIS SECONDES devant un fourgon
+// fermé, et le blessé se TÉLÉPORTAIT dans la cellule (`porteVictime` posait ses coordonnées
+// sur l'ancrage à chaque image). Personne ne descendait, aucune porte ne s'ouvrait, le
+// brancard — pourtant modélisé — n'était jamais sorti de sa boîte. Mesuré sur la version
+// d'avant : douze secondes et six dixièmes de bout en bout, dont zéro geste visible.
+// MAINTENANT, onze étapes qui s'enchaînent, chacune avec sa durée :
+//   route     → l'ambulance roule, gyrophare et sirène, l'équipage assis dedans ;
+//   charge    → ouvre (les deux ambulanciers descendent, les portes arrière s'ouvrent)
+//               → sortie (le brancard glisse dehors, les pieds se déplient, roulettes au sol)
+//               → approche (ils le poussent jusqu'au blessé) → allonge (ils le posent, corps
+//               à plat, couverture tirée) → ramène (retour au hayon) → embarque (le brancard
+//               rentre dans la caisse, les portes se referment, l'équipage remonte) ;
+//   transport → l'ambulance roule jusqu'à l'hôpital, le blessé sanglé dans la cellule ;
+//   depose    → ouvreHop → sortieHop → livre (on le pousse jusqu'à l'accueil et on le
+//               dépose : soins, points de vie rendus) → rembarque ;
+//   retour    → elle rentre se garer, l'équipage rangé.
+// Les noms d'états 'route' / 'charge' / 'transport' / 'depose' / 'retour' sont ceux que lisent
+// les autres postes et le banc d'essai : la mécanique fine tient dans `a.phase`.
+const AMB_GESTES = {          // la durée MINIMALE de chaque geste, en secondes simulées
+  ouvre: 1.4, sortie: 1.7, allonge: 2.8, embarque: 2.6,
+  ouvreHop: 1.3, sortieHop: 1.7, livre: 2.2, rembarque: 2.4,
+};
+// LE PLAFOND DE CHAQUE MARCHE. Onze secondes suffisent largement pour les vingt metres qui
+// separent le hayon du blesse ou de l'accueil ; au-dela, c'est que les brancardiers butent
+// sur quelque chose, et on passe a l'etape suivante plutot que de laisser la sequence dormir.
+// Mesure de la sequence complete avec ce plafond : 107 s de bout en bout (dont 55 s de route).
+const AMB_MARCHE_MAX = 11;
+const AMB_NOMS = [['Karim', 'Léa'], ['Samir', 'Julie'], ['Mehdi', 'Anna'], ['Bruno', 'Inès']];
+function ambulanceEtapeDuree(nom) { return AMB_GESTES[nom] || 0; }
+// Un point du repère LOCAL du fourgon (x à gauche, z vers l'avant) ramené dans le monde.
+function ambulancePoint(a, lx, lz) {
+  const cs = Math.cos(a.h), sn = Math.sin(a.h);
+  return { x: a.x + lx * cs + lz * sn, z: a.z - lx * sn + lz * cs };
+}
+// L'ÉQUIPAGE : deux ambulanciers en blouse blanche à croix rouge. On ne passe pas par
+// `creerTravailleur` exprès : il inscrit le personnage dans `city.metiers`, que `metiersReset`
+// vide à chaque remise à zéro du banc d'essai — l'équipage aurait disparu en pleine
+// intervention. Les avatars vont dans `city.mannequins`, qui est nettoyé au changement de monde.
+function ambulanceEquipe(a) {
+  if (a.equipe && a.equipe.length === 2 && a.equipe[0].av && a.equipe[0].av.group.parent) return a.equipe;
+  const noms = AMB_NOMS[Math.max(0, (city.ambulances || []).indexOf(a)) % AMB_NOMS.length];
+  a.equipe = noms.map((nom, i) => {
+    const av = buildAvatar({ name: nom, jersey: 0, pants: PAL.pants[0], cap: PAL.cap[0], num: 1,
+      hair: i ? 2 : 1, hairColor: i, m: 25, f: 12 });
+    try { tenueMetier(av, 'ambulancier'); } catch (e) {}
+    if (av.tag) av.tag.visible = false;   // pas d'étiquette flottante au-dessus d'un secouriste
+    city.mannequins.push(av);
+    return { name: nom, av, metier: 'ambulancier', pos: new THREE.Vector3(a.x, a.y || 0, a.z),
+      facing: a.h, speed: 3.4, route: null, routeT: 0, routeCible: null, bloqueT: 0 };
+  });
+  return a.equipe;
+}
+// Assied un ambulancier à bord : 'volant' pour le conducteur, sinon la banquette de la cellule,
+// à côté du brancard. Les deux places sont dans le repère du fourgon.
+function ambulanceAssied(a, w, place, dt) {
+  const s = place === 'volant' ? { x: 0.5, y: 0.52, z: 1.35 } : { x: -0.72, y: 0.62, z: -1.85 };
+  const cs = Math.cos(a.h), sn = Math.sin(a.h);
+  w.pos.set(a.x + s.x * cs + s.z * sn, (a.y || 0) + s.y, a.z - s.x * sn + s.z * cs);
+  w.facing = place === 'volant' ? a.h : a.h + Math.PI / 2;
+  if (w.av) { animateRig(w.av.rig, 'sit', place === 'volant' ? Math.abs(a.speed || 0) : 0, dt, simTime); w.av.group.visible = true; }
+  metierSync(w);
+}
+// LA CIVIÈRE DU FOURGON : créée à la première intervention, rangée dans la cellule, pieds
+// repliés. `br.ambu` dit à `brancardTick` de ne pas la repasser une deuxième fois par image.
+function ambulanceCiviere(a) {
+  if (a.civiere && a.civiere.g && a.civiere.g.parent) return a.civiere;
+  const br = creerBrancard(a.x, a.z, a.y || 0);
+  br.ambu = a; a.civiere = br;
+  const anc = ancrageBrancard(a);
+  if (br.g.parent) br.g.parent.remove(br.g);
+  anc.parent.add(br.g);
+  br.g.position.copy(anc.position); br.g.quaternion.copy(anc.quaternion);
+  br.etat = 'charge'; br.etatPrec = 'charge'; br.vehicule = a; br.ancrage = anc;
+  plieBrancard(br, 0); couvreBrancard(br, false);
+  return br;
+}
+function ambPhase(a, nom) { a.phase = nom; a.phaseT = 0; a.sortDe = null; }
+// Où est le blessé, maintenant ?
+function ambulanceCible(a) {
+  const v = a.victime;
+  if (v === 'joueur') return { x: P.pos.x, z: P.pos.z, y: P.pos.y };
+  if (v && v.pos) return { x: v.pos.x, z: v.pos.z, y: v.pos.y };
+  return a.cible || { x: a.x, z: a.z, y: 0 };
+}
+// L'ÉQUIPE MARCHE EN FILE, brancard entre les deux paires de poings : le premier vise le but,
+// le second se tient une longueur de brancard derrière lui. Rend true quand ils y sont.
+function ambulanceMarcheEquipe(a, tx, tz, dt) {
+  const e = a.equipe; if (!e || e.length < 2) return true;
+  const dx = tx - e[0].pos.x, dz = tz - e[0].pos.z, d = Math.hypot(dx, dz);
+  let ux, uz;
+  if (d > 1.2) { ux = dx / d; uz = dz / d; }
+  else {   // arrivé : l'axe du brancard, c'est celui des deux porteurs (sinon il pivoterait sur place)
+    const ax = e[0].pos.x - e[1].pos.x, az = e[0].pos.z - e[1].pos.z, ad = Math.hypot(ax, az) || 1;
+    ux = ax / ad; uz = az / ad;
+  }
+  const ecart = BRANCARD_L + 0.24;
+  const d1 = metierMarche(e[0], tx, tz, dt, 0.9);
+  const d2 = metierMarche(e[1], tx - ux * ecart, tz - uz * ecart, dt, 0.9);
+  return d1 < 1.1 && d2 < 1.6;
+}
+// LE BLESSÉ SUIT SON BRANCARD, image par image. Pour un habitant, `majBrancard` a déjà posé
+// l'avatar : on recopie seulement sa position dans `b.pos`, sinon l'IA des bots le ramènerait
+// au sol à l'image suivante. Pour le JOUEUR, on ne touche pas à `me.group` (la boucle
+// d'affichage l'écrase avec `P.pos`) : on pose `P.pos` et `P.facing`, et le drapeau
+// `P.secours` fait le reste (corps à plat, animation « sleep », commandes coupées).
+function ambulanceSuiviBlesse(a, dt) {
+  const br = a.civiere; if (!br || !a.surCiviere) return;
+  const v = a.victime;
+  br.g.updateMatrixWorld(true);
+  const c = br.g.userData.couche.getWorldPosition(new THREE.Vector3());
+  if (v === 'joueur') {
+    P.pos.set(c.x, c.y, c.z); P.vel.set(0, 0, 0);
+    P.facing = br.g.rotation.y;
+    me.group.position.copy(P.pos);
+    me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
+    animateRig(me.rig, 'sleep', 0, dt, simTime);
+    return;
+  }
+  if (v && v.pos && v.av) {
+    v.pos.set(c.x, c.y, c.z);
+    v.wait = Math.max(v.wait || 0, 1); v.ko = simTime + 6; v.fight = null;
+    animateRig(v.av.rig, 'sleep', 0, dt, simTime);
+  }
+}
+// ON ALLONGE LE BLESSÉ. Corps à plat sur le matelas, bras le long du corps (pose « sleep »),
+// couverture tirée. Pour le joueur, c'est ici qu'il perd la main — et qu'on le lui dit.
+function ambulanceAllonge(a) {
+  const br = a.civiere; if (!br || a.surCiviere) return;
+  a.surCiviere = true;
+  couvreBrancard(br, true);
+  if (a.victime === 'joueur') {
+    P.secours = a; P.vel.set(0, 0, 0); P.sit = null; P.swing = null; P.ride = null;
+    msg('🚑 Les secours t\'emmènent à l\'hôpital', 4200);
+    try { sfx.check(); } catch (e) {}
+  } else if (a.victime && a.victime.av) {
+    allongerSurBrancard(br, a.victime.av);
+    a.victime.wait = 3; a.victime.ko = simTime + 6;
+  }
+}
+// ON LE REPOSE : debout et soigné à l'hôpital, ou simplement libéré si la séquence casse.
+function ambulanceDescend(a, soigne) {
+  const br = a.civiere;
+  if (br) { descendreDuBrancard(br); couvreBrancard(br, false); }
+  const v = a.victime;
+  a.surCiviere = false;
+  if (v === 'joueur') {
+    P.secours = null;
+    const sol = groundUnder(P.pos.x, P.pos.z, null, P.pos.y + 2.2);
+    P.pos.y = sol; P.vel.set(0, 0, 0);
+    me.group.rotation.order = 'XYZ'; me.group.rotation.set(0, P.facing, 0);
+  } else if (v && v.av) {
+    v.pos.y = groundUnder(v.pos.x, v.pos.z, null, v.pos.y + 1.6);
+    if (soigne) corpsDebout(v.av, v.pos.x, v.pos.z, v.pos.y);
+    else corpsAuSol(v.av, v.pos.x, v.pos.z, v.pos.y);
+  }
+}
+// RANGE LA CIVIÈRE dans la cellule, sans animation : fin de mission, ou interruption.
+function ambulanceRangeCiviere(a) {
+  const br = a.civiere; if (!br || !br.g) return;
+  descendreDuBrancard(br); couvreBrancard(br, false);
+  for (const p2 of [br.avant, br.arriere]) if (p2 && p2.rig) p2.rig.porte = false;
+  br.avant = br.arriere = null;
+  const anc = ancrageBrancard(a);
+  if (br.g.parent !== anc.parent) { if (br.g.parent) br.g.parent.remove(br.g); anc.parent.add(br.g); }
+  br.g.position.copy(anc.position); br.g.quaternion.copy(anc.quaternion);
+  br.etat = 'charge'; br.etatPrec = 'charge'; br.vehicule = a; br.ancrage = anc; br.glisse = 1;
+  plieBrancard(br, 0);
+}
+// L'ÉQUIPAGE REMONTE ET DISPARAÎT : fin de mission, ou interruption.
+function ambulanceRangeEquipe(a, dt) {
+  for (const w of (a.equipe || [])) {
+    if (w.rigPorte !== false && w.av && w.av.rig) w.av.rig.porte = false;
+    if (w.av) w.av.group.visible = false;
+    w.route = null;
+  }
+}
+// LE FILET DE SÉCURITÉ. Une séquence interrompue (le blessé se relève, l'ambulance est
+// détruite ou volée par le joueur, le monde est rebâti) ne doit RIEN laisser derrière elle :
+// pas de brancard fantôme au milieu de la rue, pas d'ambulancier planté sur le trottoir, et
+// surtout pas un joueur bloqué allongé sans commandes.
+function ambulanceAbandon(a, raison) {
+  if (!a) return null;
+  try { ambulanceDescend(a, false); } catch (e) {}
+  try { ambulanceRangeCiviere(a); } catch (e) {}
+  try { ambulanceRangeEquipe(a, 0); } catch (e) {}
+  if (P.secours === a) P.secours = null;
+  a.etat = null; a.phase = null; a.phaseT = 0; a.victime = null; a.cible = null;
+  a.surCiviere = false; a.sortDe = null; a.sortVers = null; a.poseFaite = false;
+  a.ambCible = 0; a.amb = 0; a.sirene = false; a.gyro = false;
+  try { ambulanceAnime(a, 10); } catch (e) {}   // les portes se referment d'un coup
+  if (raison && raison !== 'silence') a.abandon = raison;
+  return a;
+}
+// La séquence doit-elle s'arrêter ? Trois cas : le blessé s'est relevé avant qu'on l'embarque,
+// l'ambulance est morte (épave, incendie), ou le joueur en a pris le volant.
+function ambulanceInterrompue(a) {
+  if (a.dead) return 'ambulance hors service';        // `dead` : l'epave calcinee (c.dmg est un POURCENTAGE de degats, pas un drapeau)
+  // PASSE L'HOPITAL, PLUS RIEN N'INTERROMPT. `soigneVictime` rend ses 100 points de vie au
+  // blesse : sans ce garde-fou, l'image suivante lisait « hp > 0, il s'est releve », coupait
+  // la sequence en plein depot et laissait l'ambulance plantee sur le parvis, brancard dehors.
+  if (a.etat === 'depose' || a.etat === 'retour') return null;
+  const v = a.victime;
+  if (!v) return null;
+  if (a.surCiviere) return null;                      // déjà sur le brancard : on va jusqu'au bout
+  if (v === 'joueur') { if (dead || jail.on || drive.car) return 'le joueur n\'est plus là'; return null; }
+  if (!v.av || !v.av.group.visible || v.prison || v.drive) return 'le blessé n\'est plus là';
+  if ((v.hp == null ? 100 : v.hp) > 0 && !(v.ko > simTime)) return 'le blessé s\'est relevé';
+  return null;
 }
 function ambulancesTick(dt) {
   for (const a of (city.ambulances || [])) {
     a.gyro = !!a.etat; a.sirene = !!a.etat;   // drapeaux lus par le poste Sons
     if (a.gyros) { const on = a.gyro && (simTime % 0.6) < 0.3; for (const m of a.gyros) m.visible = on; }
-    if (!a.etat || drive.car === a) continue;
+    if (a.ambCible != null) ambulanceAnime(a, dt);    // les portes arrière
+    if (a.civiere && a.civiere.g) { try { majBrancard(a.civiere, dt); brancardAnime(a.civiere, dt); } catch (eb) {} }
+    if (!a.etat) continue;
+    if (drive.car === a) { ambulanceAbandon(a, 'le joueur a pris le volant'); continue; }
+    const coupe = ambulanceInterrompue(a);
+    if (coupe) { ambulanceAbandon(a, coupe); continue; }
+    ambulanceSuiviBlesse(a, dt);
     const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
     if (a.etat === 'route') {
-      if (!etapeSecours(a, 'route', a.cible.x, a.cible.z, dt, VITESSE_SECOURS, { urgence: true }, 3.5)) continue;
-      a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE;
+      for (const w of (a.equipe || [])) ambulanceAssied(a, w, w === a.equipe[0] ? 'volant' : 'cellule', dt);
+      const c2 = ambulanceCible(a);
+      if (!etapeSecours(a, 'route', c2.x, c2.z, dt, VITESSE_SECOURS, { urgence: true }, 3.5)) continue;
+      a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE; ambPhase(a, 'ouvre');
+      a.poseFaite = false; a.surCiviere = false;
+      ambulanceCiviere(a); ambulanceEquipe(a);
       msg('🚑 Les secours embarquent le blessé', 2400);
     } else if (a.etat === 'charge') {
-      if (simTime < a.t) continue;
-      a.etat = 'transport';
+      a.speed = 0; a.spd = 0; a.v = 0;
+      ambulanceRamassage(a, dt);
     } else if (a.etat === 'transport') {
-      porteVictime(a);
+      for (const w of (a.equipe || [])) ambulanceAssied(a, w, w === a.equipe[0] ? 'volant' : 'cellule', dt);
       if (!etapeSecours(a, 'transport', hop.x, hop.z + 3, dt, VITESSE_SECOURS, { urgence: true }, 4)) continue;
-      a.etat = 'depose'; a.t = simTime + 1.5;
+      a.etat = 'depose'; a.t = simTime + 1.5; ambPhase(a, 'ouvreHop'); a.poseFaite = false;
     } else if (a.etat === 'depose') {
-      porteVictime(a);
-      if (simTime < a.t) continue;
-      soigneVictime(a);
-      a.etat = 'retour'; a.victime = null;
+      a.speed = 0; a.spd = 0; a.v = 0;
+      ambulanceLivraison(a, dt, hop);
     } else if (a.etat === 'retour') {
+      ambulanceRangeEquipe(a, dt);
       if (!etapeSecours(a, 'retour', a.home0[0], a.home0[1], dt, VITESSE_SERVICE, { urgence: true }, 2, a.home0)) continue;
-      a.etat = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
+      a.etat = null; a.phase = null; a.sirene = false; a.h = a.home0[2]; poseVehicule(a, dt);
     }
   }
 }
-function porteVictime(a) {   // le blessé voyage SUR LE BRANCARD, dans la cellule
-  const v = a.victime; if (!v) return;
-  a.brancard.updateMatrixWorld(true);
-  const p = new THREE.Vector3(); a.brancard.getWorldPosition(p);
-  if (v === 'joueur') { P.pos.set(p.x, p.y - 0.55, p.z); return; }
-  if (v.pos && v.av) { v.pos.set(p.x, p.y - 0.55, p.z); corpsAuSol(v.av, p.x, p.z, p.y - 0.55); v.wait = 2; v.ko = simTime + 2; }
+// ---- LE RAMASSAGE SUR PLACE (état 'charge') ----
+function ambulanceRamassage(a, dt) {
+  const e = ambulanceEquipe(a), br = ambulanceCiviere(a);
+  a.phaseT = (a.phaseT || 0) + dt;
+  const cote = [ambulancePoint(a, 0.95, -3.3), ambulancePoint(a, -0.95, -3.3)];
+  if (a.phase === 'ouvre') {
+    // Les deux ambulanciers descendent du fourgon et viennent derrière les portes, qui
+    // s'ouvrent en grand pendant qu'ils marchent.
+    a.ambCible = 1;
+    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
+    if (a.phaseT >= AMB_GESTES.ouvre && (a.amb || 0) > 0.28) ambPhase(a, 'sortie');
+  } else if (a.phase === 'sortie') {
+    ambulanceSortCiviere(a, dt, 'approche');
+  } else if (a.phase === 'approche') {
+    // Ils POUSSENT le brancard jusqu'au blessé : il tient entre leurs quatre poings.
+    const c2 = ambulanceCible(a);
+    const fini = ambulanceMarcheEquipe(a, c2.x, c2.z, dt);
+    if (fini || a.phaseT > AMB_MARCHE_MAX) ambPhase(a, 'allonge');
+  } else if (a.phase === 'allonge') {
+    const c2 = ambulanceCible(a);
+    if (!a.poseFaite) {
+      // le brancard se pose À CÔTÉ du blessé (1,1 m), jamais dessus : il faut qu'on voie les
+      // deux corps séparés avant le transfert, sinon le blessé a l'air de traverser la toile
+      const cap = Math.atan2(a.x - c2.x, a.z - c2.z);   // tête du brancard tournée vers le fourgon
+      const px = c2.x + Math.sin(cap + Math.PI / 2) * 1.1, pz = c2.z + Math.cos(cap + Math.PI / 2) * 1.1;
+      poserBrancard(br, px, pz, groundUnder(px, pz, null, (c2.y || 0) + 2));
+      br.cap = cap; a.poseFaite = true; plieBrancard(br, 1);
+    }
+    br.g.updateMatrixWorld(true);
+    const tete = br.g.userData.avant.getWorldPosition(new THREE.Vector3());
+    const pieds = br.g.userData.arriere.getWorldPosition(new THREE.Vector3());
+    metierMarche(e[0], tete.x, tete.z, dt, 0.6); metierMarche(e[1], pieds.x, pieds.z, dt, 0.6);
+    if (a.phaseT > AMB_GESTES.allonge * 0.45) ambulanceAllonge(a);
+    if (a.phaseT >= AMB_GESTES.allonge) { porterBrancard(br, e[0].av, e[1].av); ambPhase(a, 'ramene'); }
+  } else if (a.phase === 'ramene') {
+    const p2 = ambulancePoint(a, 0, -3.2);
+    const fini = ambulanceMarcheEquipe(a, p2.x, p2.z, dt);
+    if (fini || a.phaseT > AMB_MARCHE_MAX) ambPhase(a, 'embarque');
+  } else if (a.phase === 'embarque') {
+    ambulanceEntreCiviere(a, dt, () => { a.etat = 'transport'; a.phase = null; });
+  } else { ambPhase(a, 'ouvre'); }
+}
+// ---- LA LIVRAISON À L'HÔPITAL (état 'depose') ----
+function ambulanceLivraison(a, dt, hop) {
+  const e = ambulanceEquipe(a), br = ambulanceCiviere(a);
+  a.phaseT = (a.phaseT || 0) + dt;
+  const cote = [ambulancePoint(a, 0.95, -3.3), ambulancePoint(a, -0.95, -3.3)];
+  if (a.phase === 'ouvreHop') {
+    a.ambCible = 1;
+    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
+    if (a.phaseT >= AMB_GESTES.ouvreHop && (a.amb || 0) > 0.28) ambPhase(a, 'sortieHop');
+  } else if (a.phase === 'sortieHop') {
+    ambulanceSortCiviere(a, dt, 'livre');
+  } else if (a.phase === 'livre') {
+    // on pousse le brancard jusqu'à l'accueil, et c'est LÀ qu'on le dépose et qu'on le soigne
+    const arrive = ambulanceMarcheEquipe(a, hop.x, hop.z + 2.4, dt);
+    if (!a.poseFaite) { if (arrive || a.phaseT > AMB_MARCHE_MAX) { a.poseFaite = true; a.phaseT = 0; } }
+    else {
+      if (br.etat !== 'pose') { poserBrancard(br, br.g.position.x, br.g.position.z, groundUnder(br.g.position.x, br.g.position.z, null, 2.5)); br.cap = br.g.rotation.y; plieBrancard(br, 1); }
+      if (a.phaseT >= AMB_GESTES.livre * 0.5 && a.surCiviere) { ambulanceDescend(a, true); soigneVictime(a); }
+      if (a.phaseT >= AMB_GESTES.livre) { porterBrancard(br, e[0].av, e[1].av); a.victime = null; ambPhase(a, 'rembarque'); }
+    }
+  } else if (a.phase === 'rembarque') {
+    const p2 = ambulancePoint(a, 0, -3.2);
+    const fini = ambulanceMarcheEquipe(a, p2.x, p2.z, dt);
+    if (fini || a.phaseT > AMB_MARCHE_MAX) ambPhase(a, 'rentre');
+  } else if (a.phase === 'rentre') {
+    ambulanceEntreCiviere(a, dt, () => { a.etat = 'retour'; a.phase = null; a.victime = null; });
+  } else { ambPhase(a, 'ouvreHop'); }
+}
+// LE BRANCARD SORT DU FOURGON : il glisse sur ses rails vers l'arrière, descend à hauteur
+// d'homme, et ses quatre pieds se déplient sous lui — roulettes au sol.
+function ambulanceSortCiviere(a, dt, suite) {
+  const br = ambulanceCiviere(a), e = ambulanceEquipe(a);
+  if (!a.sortDe) {
+    sortirBrancard(br);                       // il quitte la caisse en gardant sa position monde
+    br.etat = 'pose'; br.etatPrec = 'pose'; br.cap = a.h;
+    a.sortDe = { x: br.x, y: br.y, z: br.z };
+    const p2 = ambulancePoint(a, 0, -3.2);
+    a.sortVers = { x: p2.x, y: groundUnder(p2.x, p2.z, null, (a.y || 0) + 2), z: p2.z };
+  }
+  const k = clamp(a.phaseT / AMB_GESTES.sortie, 0, 1), s = k * k * (3 - 2 * k);
+  br.x = a.sortDe.x + (a.sortVers.x - a.sortDe.x) * s;
+  br.y = a.sortDe.y + (a.sortVers.y - a.sortDe.y) * s;
+  br.z = a.sortDe.z + (a.sortVers.z - a.sortDe.z) * s;
+  br.cap = a.h;
+  plieBrancard(br, clamp((k - 0.3) / 0.5, 0, 1));
+  br.g.updateMatrixWorld(true);
+  const tete = br.g.userData.avant.getWorldPosition(new THREE.Vector3());
+  const pieds = br.g.userData.arriere.getWorldPosition(new THREE.Vector3());
+  metierMarche(e[0], tete.x, tete.z, dt, 0.7); metierMarche(e[1], pieds.x, pieds.z, dt, 0.7);
+  if (k >= 1) { porterBrancard(br, e[0].av, e[1].av); ambPhase(a, suite); }
+}
+// LE BRANCARD RENTRE : `chargerBrancard` le fait glisser jusqu'à l'ancrage de la cellule
+// (état 'glisse' du brancard), les pieds se replient, les portes se referment et l'équipage
+// remonte — un au volant, l'autre à l'arrière.
+function ambulanceEntreCiviere(a, dt, fini) {
+  const br = ambulanceCiviere(a), e = ambulanceEquipe(a);
+  if (br.etat !== 'glisse' && br.etat !== 'charge') { chargerBrancard(br, a); }
+  if (br.etat === 'glisse') {
+    plieBrancard(br, 1 - clamp(br.glisse * 1.6, 0, 1));
+    br.g.updateMatrixWorld(true);
+    const tete = br.g.userData.avant.getWorldPosition(new THREE.Vector3());
+    const pieds = br.g.userData.arriere.getWorldPosition(new THREE.Vector3());
+    metierMarche(e[0], tete.x, tete.z, dt, 0.8); metierMarche(e[1], pieds.x, pieds.z, dt, 0.8);
+    return;
+  }
+  plieBrancard(br, 0);
+  a.ambCible = 0;                                  // les portes se referment
+  ambulanceAssied(a, e[0], 'volant', dt);
+  ambulanceAssied(a, e[1], 'cellule', dt);
+  if (a.phaseT >= AMB_GESTES.embarque && (a.amb || 0) < 0.06) fini();
+}
+function porteVictime(a) {   // ancien nom : le blessé voyage SUR LE BRANCARD, dans la cellule
+  ambulanceSuiviBlesse(a, 0);
 }
 function soigneVictime(a) {
   const v = a.victime; if (!v) return;
-  if (v === 'joueur') { P.hp = 100; if (city.medDesk) P.pos.set(city.medDesk.x, 0.3, city.medDesk.z + 2); msg('🏥 Soigné à l\'hôpital', 2600); sfx.check(); return; }
+  if (v === 'joueur') {
+    P.hp = 100; P.secours = null;
+    msg('🏥 Soigné à l\'hôpital', 2600); sfx.check(); return;
+  }
   v.hp = 100; v.ko = 0; v.soin = 0; v.fight = null;
-  if (city.medDesk) { v.pos.set(city.medDesk.x, groundUnder(city.medDesk.x, city.medDesk.z + 2, null, 1), city.medDesk.z + 2); corpsDebout(v.av, v.pos.x, v.pos.z, v.pos.y); }
+  // Il est déjà DEVANT l'accueil : les brancardiers l'y ont poussé. On ne le téléporte donc
+  // plus sur le bureau (l'ancienne version le faisait apparaître à l'autre bout du parvis) —
+  // on le remet simplement debout là où la civière s'est arrêtée.
+  if (v.pos && v.av) { v.pos.y = groundUnder(v.pos.x, v.pos.z, null, v.pos.y + 1.6); corpsDebout(v.av, v.pos.x, v.pos.z, v.pos.y); }
   chat(null, `🏥 ${v.name} a été soigné à l'hôpital`);
 }
 // Le SCRUTIN AUTOMATIQUE : un blessé à terre depuis plus de deux secondes et personne pour
@@ -24366,7 +24730,7 @@ function frame() {
   // s'allongeait toujours vers le nord quelle que soit son orientation ; en 'YXZ' il
   // s'allonge dans l'axe où il regarde, tête sur l'oreiller quel que soit le sens du lit.
   // allongé : au lit… ou sur le banc de développé couché (avant, le joueur restait debout)
-  const couche = (P.sleep && simTime < P.sleep) || gym.on === 'bench';
+  const couche = (P.sleep && simTime < P.sleep) || gym.on === 'bench' || !!P.secours;   // au lit, au developpe couche… ou sur le brancard des secours
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
   else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
   const riding = drive.car && drive.car.rider;
@@ -28340,19 +28704,39 @@ function brancardMesh() {
   const g = new THREE.Group();
   const alu = lam(0xc9ced8), toile = lam(MET_C.toile), matelas = lam(MET_C.matelas), sangle = lam(0x2b2f3a);
   const bx = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  const pieds = [];
   for (const sx of [-1, 1]) {
     bx(alu, 0.07, 0.07, BRANCARD_L, sx * (BRANCARD_W / 2), 0.3, 0);                    // les deux barres
     for (const sz of [-1, 1]) bx(alu, 0.06, 0.06, 0.34, sx * (BRANCARD_W / 2), 0.3, sz * (BRANCARD_L / 2 + 0.12));   // les poignées
-    for (const sz of [-0.72, 0.72]) { bx(alu, 0.05, 0.3, 0.05, sx * (BRANCARD_W / 2 - 0.02), 0.15, sz);              // les pieds
-      bx(alu, 0.09, 0.05, 0.09, sx * (BRANCARD_W / 2 - 0.02), 0.03, sz); }
+    // LES QUATRE PIEDS SE REPLIENT POUR DE BON. Ils etaient de simples batons soudes sous la
+    // toile : un brancard qui entre dans une ambulance rentre sur SES RAILS, pieds replies.
+    // Chaque pied est maintenant une paire (montant + roulette) rangee dans `userData.pieds`,
+    // que `plieBrancard(br, k)` escamote de 0 (replie sous le chassis) a 1 (deploye au sol).
+    for (const sz of [-0.72, 0.72]) {
+      const mont = bx(alu, 0.05, 0.3, 0.05, sx * (BRANCARD_W / 2 - 0.02), 0.15, sz);
+      const roue = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 9), lam(0x1b1b1b));
+      roue.rotation.z = Math.PI / 2; roue.position.set(sx * (BRANCARD_W / 2 - 0.02), 0.055, sz); roue.castShadow = true; g.add(roue);
+      pieds.push({ mont, roue });
+    }
   }
+  g.userData.pieds = pieds;
   bx(toile, BRANCARD_W - 0.02, 0.05, BRANCARD_L - 0.12, 0, 0.31, 0);                   // la toile tendue
   bx(matelas, BRANCARD_W - 0.1, 0.09, BRANCARD_L - 0.3, 0, 0.37, 0);                   // le matelas
   bx(lam(0xf4f6fa), BRANCARD_W - 0.16, 0.07, 0.34, 0, 0.44, BRANCARD_L / 2 - 0.32);    // l'oreiller
   for (const sz of [-0.5, 0.35]) bx(sangle, BRANCARD_W + 0.04, 0.05, 0.09, 0, 0.42, sz);   // les deux sangles
   bx(lam(MET_C.croix), 0.26, 0.02, 0.08, 0, 0.42, -0.85); bx(lam(MET_C.croix), 0.08, 0.02, 0.26, 0, 0.42, -0.85);   // la croix rouge au pied
+  // LA COUVERTURE DE SURVIE, pliee au pied du brancard quand il est vide, tiree sur le blesse
+  // des qu'il est allonge (`couvreBrancard`). Sans elle, un blesse sur une civiere avait l'air
+  // d'un mannequin pose sur une planche.
+  const couv = bx(lam(MET_C.bleuSecours), BRANCARD_W + 0.02, 0.06, 0.5, 0, 0.47, -BRANCARD_L / 2 + 0.35);
+  g.userData.couverture = couv;
   const rep = (nom, z, y) => { const o = new THREE.Object3D(); o.position.set(0, y, z); g.add(o); g.userData[nom] = o; return o; };
-  rep('avant', BRANCARD_L / 2 + 0.12, 0.3); rep('arriere', -BRANCARD_L / 2 - 0.12, 0.3); rep('couche', 0.1, 0.42);
+  // `couche` EST LE POINT OU L'ON POSE LES PIEDS DU BLESSE, pas son milieu : dans tout le jeu
+  // l'origine d'un avatar est AUX PIEDS. Pose sur le milieu du matelas (z = +0,10), un corps
+  // de 2,36 m debordait donc de 1,26 m par l'avant du brancard, tete dans le vide. On recule
+  // le repere au pied de la civiere (z = -0,92) et on le monte a 56 cm : le corps s'etend vers
+  // l'oreiller et le dos repose sur le matelas.
+  rep('avant', BRANCARD_L / 2 + 0.12, 0.3); rep('arriere', -BRANCARD_L / 2 - 0.12, 0.3); rep('couche', -0.92, 0.56);
   return g;
 }
 // Crée un brancard posé au sol et le renvoie. `city.brancards` les regroupe tous.
@@ -28364,6 +28748,32 @@ function creerBrancard(x, z, y) {
   if (!city.brancards) city.brancards = [];
   city.brancards.push(br);
   return br;
+}
+// PLIE OU DEPLIE LES PIEDS. `k` = 0 : les quatre montants sont escamotes sous le chassis et
+// les roulettes collees a la toile — c'est dans cet etat que le brancard glisse sur les rails
+// de l'ambulance. `k` = 1 : pieds tendus, roulettes au sol. Entre les deux, on voit le train
+// se deplier, ce qui est exactement ce qu'on regarde quand une civiere sort d'un fourgon.
+function plieBrancard(br, k) {
+  const L = br && br.g && br.g.userData.pieds; if (!L) return;
+  k = clamp(k, 0, 1);
+  br.pieds = k;
+  for (const p2 of L) {
+    // `unitRound` est un CUBE DE UN METRE : la hauteur du montant, c'est son scale.y. En y
+    // mettant `k` tout court, un brancard deplie se retrouvait avec des pieds d'un metre de
+    // haut (mesure : le gabarit passait de 24 cm a 1 m). La hauteur pleine est 0,30 m.
+    const h = 0.3 * k;
+    p2.mont.scale.y = Math.max(0.02, h);
+    p2.mont.position.y = 0.3 - h / 2;           // le haut du montant reste sous la barre
+    p2.roue.position.y = 0.3 - h + 0.055;       // la roulette suit le bas du montant
+    p2.roue.visible = k > 0.25;
+  }
+}
+// TIRE LA COUVERTURE sur le blesse (ou la replie au pied du brancard quand il est vide).
+function couvreBrancard(br, on) {
+  const c = br && br.g && br.g.userData.couverture; if (!c) return;
+  if (on) { c.scale.set(BRANCARD_W + 0.06, 0.07, BRANCARD_L - 0.85); c.position.set(0, 0.5, -0.32); }
+  else { c.scale.set(BRANCARD_W + 0.02, 0.06, 0.5); c.position.set(0, 0.47, -BRANCARD_L / 2 + 0.35); }
+  br.couvert = !!on;
 }
 // Le fait porter : `avAvant` tient les poignées avant, `avArriere` (facultatif) celles de
 // derrière. Avec un seul porteur, le brancard suit devant lui, à hauteur de poing.
@@ -28478,10 +28888,7 @@ function majBrancard(br, dt) {
     g.position.set(br.x, br.y, br.z); g.rotation.set(0, br.cap || 0, 0);
   }
   if (br.blesse && br.blesse.group) {   // le blessé suit le matelas, couché sur le dos
-    g.updateMatrixWorld(true);
-    const c = g.userData.couche.getWorldPosition(new THREE.Vector3());
-    br.blesse.group.position.set(c.x, c.y, c.z);
-    br.blesse.group.rotation.set(-Math.PI / 2, g.rotation.y, 0);
+    poseBlesseSurBrancard(br, br.blesse.group);
   }
 }
 // Le point d'un POING, en coordonnées monde : c'est là qu'on accroche le brancard.
@@ -28493,7 +28900,25 @@ function mainDeAvatar(av, cote) {
   return n.getWorldPosition(new THREE.Vector3());
 }
 function brancardTick(dt) {
-  for (const br of (city.brancards || [])) { try { majBrancard(br, dt); brancardAnime(br, dt); } catch (e) {} }
+  // `br.ambu` : le brancard d'une ambulance en intervention est deja avance par
+  // `ambulancesTick` (qui tourne dans servicesTick, avant les metiers). Le repasser ici
+  // faisait progresser son glissement DEUX fois par image : il entrait dans le fourgon en
+  // 0,6 s au lieu de 1,2 s, et sa fondu de transition sautait une image sur deux.
+  for (const br of (city.brancards || [])) { if (br.ambu) continue; try { majBrancard(br, dt); brancardAnime(br, dt); } catch (e) {} }
+}
+// POSE UN CORPS A PLAT SUR LE BRANCARD, dans l'axe du brancard et tete sur l'oreiller.
+// L'ancienne version tournait en ordre XYZ : `rotation.set(-PI/2, cap, 0)` bascule alors le
+// corps autour de l'axe X DU MONDE, donc un blesse s'allongeait TOUJOURS vers le nord, quel
+// que soit le cap de la civiere — sur un brancard oriente est-ouest, il le traversait en
+// travers. En 'YXZ' la bascule se fait dans l'axe du brancard (meme correctif que pour le
+// joueur endormi). Le +PI amene la TETE du cote de l'oreiller (+z du brancard) : sans lui,
+// le blesse avait les pieds sur l'oreiller et la tete sur la croix rouge.
+function poseBlesseSurBrancard(br, grp) {
+  const g = br.g; g.updateMatrixWorld(true);
+  const c = g.userData.couche.getWorldPosition(new THREE.Vector3());
+  grp.position.copy(c);
+  grp.rotation.set(-Math.PI / 2, g.rotation.y + Math.PI, 0, 'YXZ');
+  return c;
 }
 // LE BRANCARD BOUGE COMME UN VRAI (poste Animation). Le poste Personnages le PLACE — aux
 // poignees des porteurs, ou en glissant dans l'ambulance. Il manquait le mouvement :

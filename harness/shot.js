@@ -333,7 +333,14 @@ window.__SHOT = {
       // la ou ils venaient de le poser. En prime, la flotte etait vue comme occupee et le
       // blesse suivant restait a terre.
       if (typeof city !== 'undefined') for (const a of (city.ambulances || [])) {
+        // POSTE AMBULANCE : une sequence de secours coupee en plein vol laissait un brancard
+        // fantome au milieu de la rue, deux ambulanciers plantes sur le trottoir et — si la
+        // victime etait le joueur — un personnage COUCHE et sans commandes pour le test
+        // suivant. ambulanceAbandon range tout : civiere dans la cellule, equipage a bord,
+        // portes refermees, P.secours efface.
+        if (a.etat && typeof ambulanceAbandon === 'function') { try { ambulanceAbandon(a, 'banc essai'); } catch (e40) {} }
         a.etat = null; a.victime = null; a.cible = null; a.t = 0;
+        a.phase = null; a.phaseT = 0; a.surCiviere = false; a.poseFaite = false; a.sortDe = null; a.sortVers = null;
         a.gyro = false; a.sirene = false; a.sireneOn = false; a.recule = false;
         a.busy = false; a.metierBusy = false; a.accidente = false; a.stopped = false;
         a.prio = 0; a.ecart = 0; a.sireneVeh = null; a.degageT = 0; a.serviceBloqueT = 0; a.ia = null; a.exactVeh = false;   // poste Circulation
@@ -342,7 +349,7 @@ window.__SHOT = {
       // --- 5. LE JOUEUR BLESSE. P.hp n'etait pas remis a neuf : sous 12 points de vie,
       // urgencesTick appelle une ambulance POUR LE JOUEUR tout seul, et le test suivant se
       // faisait enlever son personnage au milieu de la mesure.
-      if (typeof P !== 'undefined') P.hp = 100;
+      if (typeof P !== 'undefined') { P.hp = 100; P.secours = null; }
       // --- 6. LA PRISON. Un test qui finit sans un sou part en cellule ; le joueur restait
       // enferme et tous les tests suivants mesuraient un personnage bloque au commissariat.
       if (typeof jail !== 'undefined' && jail.on) { jail.on = false; try { jailFree('banc'); } catch (e20) {} }
@@ -2072,6 +2079,14 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  // ---- poste AMBULANCE (round 71 : la sequence de secours complete) : ajoute tes exports SOUS cette ligne ----
+  majBrancard: typeof majBrancard === 'function' ? majBrancard : null,
+  plieBrancard: typeof plieBrancard === 'function' ? plieBrancard : null,
+  couvreBrancard: typeof couvreBrancard === 'function' ? couvreBrancard : null,
+  poseBlesseSurBrancard: typeof poseBlesseSurBrancard === 'function' ? poseBlesseSurBrancard : null,
+  ambulanceEquipe: typeof ambulanceEquipe === 'function' ? ambulanceEquipe : null,
+  ambulanceAbandon: typeof ambulanceAbandon === 'function' ? ambulanceAbandon : null,
+  ambulanceEtapeDuree: typeof ambulanceEtapeDuree === 'function' ? ambulanceEtapeDuree : null,
 };
 `;
 

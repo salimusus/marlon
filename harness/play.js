@@ -10945,7 +10945,10 @@ test('l\'ambulance vient chercher un blessé toute seule et le dépose à l\'hô
     G.P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
     const amb = (G.city.ambulances || []).find(x => x.victime === b);
     const etats = [];
-    for (let k = 0; k < 120 && amb; k++) { avance(20); if (etats[etats.length - 1] !== amb.etat) etats.push(amb.etat); if (!amb.etat && etats.length > 3) break; }
+    // 200 tours et non 120 : la sequence de secours ne se contente plus de teleporter le blesse
+    // dans la caisse, elle sort le brancard, l'allonge dessus, le fait rentrer et le ressort a
+    // l'hopital — mesure, 107 s simulees de bout en bout au lieu de 12,6
+    for (let k = 0; k < 200 && amb; k++) { avance(20); if (etats[etats.length - 1] !== amb.etat) etats.push(amb.etat); if (!amb.etat && etats.length > 3) break; }
     const dist = +Math.hypot(b.pos.x - hx, b.pos.z - hz).toFixed(1);
     return { flotte, forme, appel: !!amb, etats, hp: b.hp, ko: b.ko, loin0, dist,
       retour: amb ? +Math.hypot(amb.x - amb.home0[0], amb.z - amb.home0[1]).toFixed(1) : null };
@@ -11386,7 +11389,7 @@ test('une horloge de simulation cassée ne fige plus ni la boîte de vitesses ni
     const koCasse = !(b.ko > -Infinity && b.ko < Infinity);
     G.P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
     const amb = (G.city.ambulances || []).find(x => x.victime === b);
-    for (let k = 0; k < 120 && amb; k++) {
+    for (let k = 0; k < 220 && amb; k++) {
       for (let i = 0; i < 20; i++) { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); }
       if (!amb.etat) break;
     }

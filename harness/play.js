@@ -16795,7 +16795,13 @@ test('emmene par un ami, la camera reste accrochee au vehicule : elle sort de la
       out.regard = { tourne: +Math.abs((G.cam.yaw - y0) * 180 / Math.PI).toFixed(0), d: dJ() };
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
     } finally { navigator.getGamepads = vrai; }
-    try { G.botDescendre(G.city.rideBot, true); } catch (e) {}
+    // ON RANGE DERRIERE SOI : le bot descend POUR DE BON (garde=false libere la voiture), il
+    // reprend sa vie, et la voiture redevient disponible. Un test qui laisse un habitant au
+    // volant fait echouer les tests de conduite qui le suivent.
+    try { G.botDescendre(G.city.rideBot, false); } catch (e) {}
+    try { if (b) { b.drive = null; b.rdv = null; } } catch (e) {}
+    try { c.busy = false; c.speed = 0; } catch (e) {}
+    G.city.botCarNear = null; G.city.rideBot = null;
     return out;
   });
   if (r.erreur) return { ok: false, detail: r.erreur };

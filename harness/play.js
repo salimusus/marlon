@@ -3029,6 +3029,10 @@ test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en
     const G = __G, res = {};
     res.article = G.DECOR.find(d => d.id === 'alarme') || null;
     res.villa = !!G.city.villaMine;
+    // Les gangs ne cambriolent que la villa d'un joueur ENTRÉ dans la guerre (n° 72 du Joueur) : on
+    // lui donne un quartier le temps du test, et de quoi perdre tout le butin (jamais plus de la moitié).
+    const terrK = G.TERRITOIRES[0].k, terr0 = G.guerre.territoires[terrK];
+    G.guerre.territoires[terrK] = 'joueur'; G.wallet = Math.max(G.wallet, 1000);
     G.owned.delete('deco:alarme');
     res.sansAlarme = G.alarmeInstallee();
     // sans alarme : personne ne prévient
@@ -3071,6 +3075,7 @@ test("l'alarme de villa prévient au poignet et le cambriolage peut être mis en
     const w2 = G.wallet; G.cambrioTick(0.016);
     res.parLeGang = { en: G.cambrio.on, perte: w2 - G.wallet };
     G.gang.membres.slice().forEach(b => G.quitterGang(b));
+    if (terr0 == null) delete G.guerre.territoires[terrK]; else G.guerre.territoires[terrK] = terr0;
     return res;
   });
   const ok = r.article && r.article.p > 0 && r.villa && !r.sansAlarme

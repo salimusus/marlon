@@ -12469,7 +12469,6 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   const body = new THREE.MeshPhongMaterial({ color, shininess: 100, specular: 0x849aaa, envMap: empireEnvironment(), reflectivity: 0.32, combine: THREE.MixOperation });
   const dark = lam(0x2b3550), noir = lam(0x1b1b1b);
   const bx = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; m.userData.pos0 = m.position.clone(); g.add(m); return m; };
-  const cyl = (mat, r, len, px, py, pz, rx) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 12), mat); m.rotation.x = rx == null ? Math.PI / 2 : rx; m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const AV = S.av * e, AR = S.ar * e, Lc = AV - AR, Zc = (AV + AR) / 2;
   const basC = S.sol, hautC = S.sol + S.ch, flanc = S.W / 2;
   // ---- la caisse : le grand bloc de tôle, du nez au cul ----
@@ -12506,8 +12505,8 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   for (let i = 0; i < 3; i++) bx(chrome, S.W * 0.48, 0.03, 0.02, 0, basC + S.ch * 0.30 + i * 0.07, phZ + 0.04);
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.17), plaqueVoiture());
   plaque.position.set(0, basC + 0.26, feuZ - 0.07); plaque.rotation.y = Math.PI; g.add(plaque);
-  const ech = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), chrome);
-  ech.rotation.x = Math.PI / 2; ech.position.set(0.6, basC + 0.04, AR - 0.05); g.add(ech);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), chrome);
+  pot.rotation.x = Math.PI / 2; pot.position.set(0.6, basC + 0.04, AR - 0.05); g.add(pot);
   // ---- rétroviseurs, portières, poignées ----
   const mirrors = [];
   for (const sx of [-1, 1]) { mirrors.push(bx(body, 0.16, 0.12, 0.28, sx * (flanc + 0.12), hautC + 0.28, S.ws.z * e - 0.30)); bx(chrome, 0.14, 0.10, 0.04, sx * (flanc + 0.12), hautC + 0.28, S.ws.z * e - 0.30); }
@@ -12549,6 +12548,11 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
     r2.position.set(0, basC + S.ch * 0.66, AR - 0.22); g.add(r2);
   }
   if (S.marchepied) for (const sx of [-1, 1]) bx(darkM, 0.26, 0.10, 2.20 * e, sx * (flanc + 0.10), basC - 0.16, 0);
+  if (!S.toit) {   // SANS TOIT, le pare-brise seul ne se voyait pas : on lui met un cadre chromé
+    const hh = S.ws.h * Math.cos(S.ws.a), dz = S.ws.h * Math.sin(S.ws.a) / 2;
+    bx(chrome, S.W - 0.36, 0.07, 0.09, 0, S.ws.y + hh / 2, S.ws.z * e - dz);
+    for (const sx of [-1, 1]) { const mt = bx(chrome, 0.07, hh, 0.09, sx * (S.W / 2 - 0.20), S.ws.y, S.ws.z * e); mt.rotation.x = S.ws.a; }
+  }
   if (S.capote) {   // LA CAPOTE REPLIÉE derrière les sièges : on voit qu'elle existe, elle est juste rangée
     bx(darkM, S.W - 0.30, 0.26, 0.70, 0, hautC + 0.10, -1.05 * e);
     for (let i = 0; i < 3; i++) bx(noir, S.W - 0.34, 0.04, 0.05, 0, hautC + 0.23, (-1.30 + i * 0.22) * e);

@@ -17716,7 +17716,7 @@ test('les cinq carrosseries du concessionnaire ont chacune sa silhouette : longu
     && r.quatre.garde > r.suv.garde && r.suv.garde > r.berline.garde && r.berline.garde > r.decapotable.garde
     && r.quatre.W > r.berline.W + 0.3;                                                           // pneus larges : le 4×4 est le plus large
   return { ok, detail: `avant : les huit modèles faisaient 4,73 × 2,40 × 2,15 m, toit 1,76 m, roues 34 cm, empattement 2,60 m — les MÊMES · maintenant `
-    + ['berline', 'break', 'suv', 'quatre', 'decapotable'].map(k => `${k} ${r[k].L}×${r[k].W} m, toit ${r[k].aToit ? r[k].toit + ' m' : 'AUCUN'}, roues ${r[k].roue} m, empattement ${r[k].empat} m, garde ${r[k].garde} m, ${r[k].vitres} custodes, ${r[k].portes} portières`).join(' · ')
+    + ['berline', 'break', 'suv', 'quatre', 'decapotable'].map(k => `${k} ${r[k].L}×${r[k].W} m, toit ${r[k].aToit ? r[k].toit + ' m' : 'AUCUN'}, roues ${r[k].roue} m, empattement ${r[k].empat} m, garde ${r[k].garde} m, ${r[k].vitres} panneau(x) de vitre latérale, ${r[k].portes} portières`).join(' · ')
     + ` · toutes complètes (capot, 4 phares, 2 pare-chocs, pare-brise, plaque)=${complet}, deux à deux différentes=${distinctes}` };
 });
 
@@ -17822,11 +17822,10 @@ test('le comportement suit la silhouette : le 4×4 franchit ce qui arrête une b
     // 1. LES BORNES : le joueur a tranché 21 (origine), 38 (300 ch) et 60 m/s (500 ch).
     const pointes = G.GAMMES.map(g => ({ k: g.k, style: g.style, vmax: g.vmax, accel: g.accel, turn: g.turn }));
     const dansLesBornes = pointes.every(x => x.vmax >= 21 && x.vmax <= 60);
-    const par = st => pointes.filter(x => x.style === st);
-    const maxDe = st => Math.max.apply(null, par(st).map(x => x.vmax));
-    const minTurn = st => Math.min.apply(null, par(st).map(x => x.turn));
-    const minAcc = st => Math.min.apply(null, par(st).map(x => x.accel));
-    const b = { vmax: maxDe('berline'), turn: minTurn('berline'), accel: minAcc('berline') };
+    // LA RÉFÉRENCE, c'est la berline « Avenue » elle-même — pas le minimum de toutes les
+    // berlines : la citadine est une berline RACCOURCIE, volontairement moins vive, et sa
+    // reprise de 17 servait de repère à la place de celle de la vraie berline (22).
+    const b = G.GAMMES.find(g => g.k === 'berline');
     // 2. LA GARDE AU SOL COMPTE VRAIMENT : une marche de 70 cm, franchie par le 4×4, pas par
     // la berline. C'est la règle de carBlocked (opt.garde), mesurée sur le même obstacle, posé
     // au milieu de la plus longue ligne droite de la ville (une route, donc du plat).

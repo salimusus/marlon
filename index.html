@@ -26458,7 +26458,16 @@ function camPerche(dt, aiming) {
       if (city.bank && Math.abs(P.pos.x - city.bank.x) < city.bank.w / 2 && Math.abs(P.pos.z - city.bank.z) < city.bank.d / 2 && P.pos.y > 4) { if (cam.pitch > 0.32) cam.pitch = 0.32; }   // à l'étage de la banque : caméra basse pour voir l'intérieur
       const sp = Math.sin(pitchVue);
       const g = a => [Math.sin(cam.yaw + a) * cpch, sp, Math.cos(cam.yaw + a) * cpch];
-      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(0.4), g(-0.4)], cam.dist + 0.6, skip);
+      // L'OUVERTURE DU CÔNE DÉPEND DE CE QU'ON EST. À pied, ±0,4 rad : c'est ce qui empêche la
+      // caméra de raser une cloison fine et d'entrer dans le mur d'à côté. EN VÉHICULE ce même
+      // cône, ouvert à 0,4 rad sur une perche de onze mètres, balaie huit mètres de large :
+      // il attrapait les trottoirs, les bancs et les devantures que la voiture longe, alors
+      // que la ligne de vue elle-même était parfaitement dégagée. Mesuré en pleine route, la
+      // perche tombait ainsi de 10,74 m à 2 m EN UNE SECONDE — le grand plongeon dans la
+      // carrosserie. Au volant comme en passager, on resserre à ±0,12 rad : la caméra reste
+      // protégée des murs qu'elle aborde de face, et la rue cesse de la faire plonger.
+      const ouv = veh2 ? 0.12 : 0.4;
+      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(ouv), g(-ouv)], cam.dist + 0.6, skip);
       // 12 cm de garde ne suffisaient pas : la camera mordait encore le coin d'un meuble.
       // Et le plancher de 1,05 m l'empechait de reculer assez dans une cuisine encombree :
       // elle finissait DANS le placard. On s'arrete 30 cm avant l'obstacle, quitte a se

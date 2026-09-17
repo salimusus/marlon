@@ -15738,3 +15738,295 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
     && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
+
+// ============================================================================
+// POSTE MANETTE & CAMERA (round 71) — « la manette n est pas au point avec la camera »
+// Les cinq tests ci-dessous mesurent la camera COMME UNE MANETTE la pilote : on branche une
+// DualSense simulee, on pousse les sticks, et on compte des degres par seconde et des metres.
+// Le banc tourne a une image par seconde : rien n'est mesure a la montre, tout est compte en
+// IMAGES SIMULEES (pollGamepad / camPerche appeles a la main, 60 ou 120 fois par seconde).
+// ============================================================================
+const MAN_DS = () => ({ index: 0, connected: true, mapping: 'standard',
+  id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+  axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) });
+
+test('stick droit relache : la camera ne bouge pas d un degre, et une poussee legere repond tout de suite', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'cam'; G.P.drawn = false; G.P.aim = false;
+      // une seconde simulee de stick (120 images a 1/120), en degres par seconde
+      const vit = (rx, ry) => {
+        ds.axes = [0, 0, rx, ry]; G.cam.yaw = 0; G.cam.pitch = 0.32;
+        for (let i = 0; i < 120; i++) G.pollGamepad(1 / 120);
+        return { yaw: +(Math.abs(G.cam.yaw) * DEG).toFixed(1), pitch: +(Math.abs(G.cam.pitch - 0.32) * DEG).toFixed(1) };
+      };
+      const res = {};
+      // 1) MANETTE AU REPOS, et manette qui DERIVE (une DualSense usee rend 5 % au repos)
+      res.repos = vit(0, 0);
+      res.derive05 = vit(0.05, 0.05);
+      // 2) POUSSEE LEGERE : 12 % de la course doit deja faire tourner l'image
+      res.legere = vit(0.12, 0);
+      res.legereV = vit(0, 0.12);
+      // 3) LA COURBE : quart, moitie, trois quarts, bord
+      res.q25 = vit(0.25, 0); res.q50 = vit(0.5, 0); res.q75 = vit(0.75, 0); res.plein = vit(1, 0);
+      res.pleinV = vit(0, 1);
+      // 4) PAS DE MARCHE D'ESCALIER : la vitesse doit monter sans saut en balayant la course
+      const courbe = [];
+      for (let v = 0; v <= 1.0001; v += 0.05) courbe.push(vit(+v.toFixed(2), 0).yaw);
+      let saut = 0;
+      for (let i = 1; i < courbe.length; i++) saut = Math.max(saut, courbe[i] - courbe[i - 1]);
+      res.sautMax = +saut.toFixed(1); res.courbe = courbe;
+      // 5) LE STICK DROIT NE DEPLACE PAS LE JOUEUR, LE STICK GAUCHE N'ARRACHE PAS LA CAMERA
+      G.settings.ctrl = 'cam'; G.P.vel.set(0, 0, 0); G.P.facing = 0; G.cam.yaw = 0;
+      ds.axes = [0, 0, 1, 0];
+      for (let i = 0; i < 60; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.stickDroitBouge = +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2);
+      res.stickDroitFacing = +(Math.abs(G.P.facing) * DEG).toFixed(1);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.settings.ctrl = 'cam'; }
+  });
+  const ratioV = +(r.pleinV.pitch / r.plein.yaw).toFixed(2);
+  const ok = r.repos.yaw === 0 && r.repos.pitch === 0 && r.derive05.yaw === 0 && r.derive05.pitch === 0
+    && r.legere.yaw > 2 && r.legere.yaw < 25 && r.legereV.pitch > 1 && r.legereV.pitch < 20
+    && r.q50.yaw > 60 && r.q50.yaw < 0.35 * r.plein.yaw
+    && r.plein.yaw > 280 && r.plein.yaw < 340 && r.sautMax < 45
+    && ratioV > 0.55 && ratioV < 0.7
+    && r.stickDroitBouge < 0.05 && r.stickDroitFacing < 0.5;
+  return { ok, detail: `stick droit relache : ${r.repos.yaw} °/s (une manette usee qui derive de 5 % : ${r.derive05.yaw} °/s) — la zone morte ronde tient · poussee legere a 12 % : ${r.legere.yaw} °/s horizontal et ${r.legereV.pitch} °/s vertical, ca repond sans seuil · la courbe monte ${r.q25.yaw} → ${r.q50.yaw} → ${r.q75.yaw} → ${r.plein.yaw} °/s (a mi-course on est a ${Math.round(r.q50.yaw / r.plein.yaw * 100)} % de la vitesse maximale, contre 43 % avec la courbe de MARCHE d'avant : c'est ce qui rendait le cadrage impossible) · plus grosse marche d'une graduation a l'autre : ${r.sautMax} °/s, aucune saccade en poussant a fond · le vertical rend ${r.pleinV.pitch} °/s au bord, soit ${ratioV} fois l'horizontal : le MEME ressenti sur les deux axes · et le stick droit ne deplace pas le personnage (${r.stickDroitBouge} m/s, cap ${r.stickDroitFacing}°)` };
+});
+
+test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s inverse depuis la pause', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const vueY = () => {   // composante verticale de la direction du regard : > 0 = on regarde vers le haut
+      const d = new THREE.Vector3(); G.camera.getWorldDirection(d); return +d.y.toFixed(3);
+    };
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'cam'; G.P.drawn = false; G.P.aim = false;
+      const invAvant = !!G.settings.invY; G.settings.invY = false;
+      const pousse = (ry, n) => {
+        ds.axes = [0, 0, 0, ry];
+        for (let i = 0; i < n; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 120); G.pollGamepad(1 / 120); G.camPerche(1 / 60, false); }
+        return { pitch: +G.cam.pitch.toFixed(3), deg: +(G.cam.pitch * DEG).toFixed(1), camY: +G.camera.position.y.toFixed(2),
+          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY() };
+      };
+      const res = {};
+      G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null;
+      res.ciel = pousse(-1, 240);      // stick droit vers le haut : on leve les yeux
+      res.sol = pousse(1, 300);        // puis vers le bas : on regarde ses pieds
+      // ... et on revient : aucun retournement, l'image reste a l'endroit (la camera ne passe
+      // jamais sous l'horizon du joueur au point de se mettre la tete en bas)
+      res.retour = pousse(-1, 200);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      // L'INVERSION : le meme geste doit faire l'inverse
+      G.cam.pitch = 0.32; G.settings.invY = true;
+      res.inverse = pousse(-1, 120);
+      G.settings.invY = false; G.cam.pitch = 0.32;
+      res.normal = pousse(-1, 120);
+      G.settings.invY = invAvant;
+      res.bouton = !!document.getElementById('invYBtn');
+      res.retenu = (() => { const b = document.getElementById('invYBtn'); if (!b) return null; b.click(); const v = localStorage.getItem('superobby.invY'); b.click(); return v; })();
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120); G.cam.pitch = 0.32;
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.cam.pitch = 0.32; }
+  });
+  const ok = r.ciel.pitch <= -0.4 && r.ciel.vue > 0.25 && r.ciel.camY > 0.5 && r.ciel.d > 1.5
+    && r.sol.pitch >= 1.2 && r.sol.vue < -0.6 && r.retour.pitch <= -0.4
+    && r.inverse.pitch > 0.32 && r.normal.pitch < 0.32 && r.bouton && r.retenu === '1';
+  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
+});
+
+test('apres un virage, la camera se replace derriere le joueur en douceur, sans coup sec', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'rot'; G.settings.turn = 160;
+      G.P.drawn = false; G.P.aim = false; G.P.run = false;
+      // LE DEMI-TOUR AU STICK DROIT : on regarde derriere soi, on relache, et la camera
+      // revient derriere le joueur. On compte la vitesse de retour IMAGE PAR IMAGE.
+      G.cam.yaw = Math.PI; G.P.facing = 0; G.cam.freeUntil = 0; G.P.vel.set(0, 0, 0);
+      const pas = [];
+      for (let i = 0; i < 300; i++) {
+        G.P.pos.set(-60, 0.5, 196);
+        const y0 = G.cam.yaw; G.step(1 / 60, true); G.camPerche(1 / 60, false);
+        pas.push(Math.abs(Math.atan2(Math.sin(G.cam.yaw - y0), Math.cos(G.cam.yaw - y0))) * DEG * 60);
+      }
+      const ecart = a => { const d = Math.atan2(Math.sin(a), Math.cos(a)); return Math.abs(d) * DEG; };
+      const res = { pointe: +Math.max(...pas).toFixed(0), reste: +ecart(G.P.facing + Math.PI - G.cam.yaw).toFixed(1),
+        images: pas.findIndex(v => v < 1) };
+      // LA MARCHE N'ARRACHE PAS LA CAMERA : on tourne au stick GAUCHE (mode rotation, le choix
+      // du joueur), la camera suit le personnage mais jamais plus vite que lui.
+      G.cam.yaw = Math.PI; G.P.facing = 0; G.cam.freeUntil = 0;
+      ds.axes = [1, 0, 0, 0];
+      const pas2 = [];
+      for (let i = 0; i < 120; i++) {
+        G.P.pos.set(-60, 0.5, 196);
+        const y0 = G.cam.yaw; G.pollGamepad(1 / 60); G.step(1 / 60, true); G.camPerche(1 / 60, false);
+        pas2.push(Math.abs(Math.atan2(Math.sin(G.cam.yaw - y0), Math.cos(G.cam.yaw - y0))) * DEG * 60);
+      }
+      res.marche = +Math.max(...pas2).toFixed(0);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      // LE STICK DROIT GARDE LA MAIN : tant qu'on le pousse, aucun replacement ne vient
+      // contrarier le joueur (deux secondes et demie de repit apres le dernier geste)
+      G.cam.yaw = Math.PI; G.P.facing = 0; G.cam.freeUntil = 0;
+      ds.axes = [0, 0, 0.6, 0];
+      for (let i = 0; i < 120; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.libre = +(ecart(G.P.facing + Math.PI - G.cam.yaw)).toFixed(0);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      G.settings.ctrl = 'cam';
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.settings.ctrl = 'cam'; }
+  });
+  const ok = r.pointe <= 140 && r.reste < 2 && r.images > 30 && r.images < 200 && r.marche <= 200 && r.libre > 40;
+  return { ok, detail: `avant : le replacement automatique etait une simple exponentielle de constante 5 — au retour d un demi-tour il rendait 15° EN UNE IMAGE, soit plus de 900 °/s : c'etait le coup sec · maintenant la vitesse de retour est plafonnee : pointe a ${r.pointe} °/s, le demi-tour se rattrape en ${r.images} images (${(r.images / 60).toFixed(1)} s) et se pose a ${r.reste}° du dos du joueur · en tournant au stick GAUCHE la camera ne depasse jamais ${r.marche} °/s (elle suit le personnage, elle ne l'arrache pas) · et tant que le stick droit est pousse, la camera reste ou le joueur la met (${r.libre}° de decalage garde)` };
+});
+
+test('la camera ne traverse pas les murs et ne rentre pas dans la tete du joueur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.P.drawn = false; G.P.aim = false;
+    // UNE FACADE : le plus gros mur de la ville, et le joueur colle dessus (1,2 m)
+    let mur = null;
+    for (const o of G.solids) {
+      if (o.veh || o.deco || o.glass || o.xray || o.h < 4 || o.h > 30) continue;
+      if (o.w < 6 || o.d < 6) continue;
+      if (!mur || o.w * o.d > mur.w * mur.d) mur = o;
+    }
+    const px = mur.x, pz = mur.z + mur.d / 2 + 1.2;
+    const res = { mur: { x: +mur.x.toFixed(1), z: +mur.z.toFixed(1), w: +mur.w.toFixed(1), d: +mur.d.toFixed(1), h: +mur.h.toFixed(1) } };
+    // on fait le tour complet de la perche, un degre a la fois, et on regarde ou finit l'objectif
+    let dedans = 0, traverse = 0, dMin = 99, dMax = 0, souterrain = 0;
+    G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null; G.cam.hausse = 0; G.cam.yaw = 0;
+    for (let i = 0; i < 720; i++) {
+      G.P.pos.set(px, 0.3, pz); G.P.vel.set(0, 0, 0);
+      G.cam.yaw = i * Math.PI / 180;
+      G.simTime += 1 / 60;
+      G.camPerche(1 / 60, false);
+      if (i < 360) continue;   // premier tour : la perche se met en place (elle ne se rallonge que de 5 m/s)
+      const c = G.camera.position;
+      const d = Math.hypot(c.x - G.P.pos.x, c.y - (G.P.pos.y + 1.2), c.z - (G.P.pos.z));
+      dMin = Math.min(dMin, d); dMax = Math.max(dMax, d);
+      if (c.y < 0.35) souterrain++;
+      // 1) la camera est-elle DANS un solide ?
+      for (const o of G.solidsAutour(c.x, c.z, 2)) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 - 0.02 && Math.abs(c.y - o.y) < o.h / 2 - 0.02 && Math.abs(c.z - o.z) < o.d / 2 - 0.02) { dedans++; break; }
+      }
+      // 2) y a-t-il un mur ENTRE la camera et le joueur ? (l'image serait bouchee)
+      const dx = (G.P.pos.x - c.x) / d, dy = (G.P.pos.y + 1.2 - c.y) / d, dz = (G.P.pos.z - c.z) / d;
+      if (G.murEntreVue(c.x, c.y, c.z, dx, dy, dz, d - 0.3) >= 0) traverse++;
+    }
+    res.dedans = dedans; res.traverse = traverse; res.souterrain = souterrain;
+    res.dMin = +dMin.toFixed(2); res.dMax = +dMax.toFixed(2);
+    return res;
+  });
+  const ok = r.dedans === 0 && r.traverse === 0 && r.souterrain === 0 && r.dMin > 0.6 && r.dMax < 12;
+  return { ok, detail: `dos a la plus grande facade de la ville (${r.mur.w} × ${r.mur.d} × ${r.mur.h} m), le joueur a 1,2 m du mur : on fait tourner la perche sur 360°, un degre par image · la camera n'est DANS un solide sur aucune des 360 positions (${r.dedans}), aucun mur ne vient entre elle et le joueur (${r.traverse}), elle ne passe jamais sous le sol (${r.souterrain}) · et elle reste entre ${r.dMin} m (elle ne rentre pas dans la tete : plancher a 0,5 m) et ${r.dMax} m du joueur` };
+});
+
+test('au volant la camera reste accrochee a la voiture : le recul suit la vitesse mais ne s emballe pas', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+    if (!c) return { voiture: null };
+    G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+    const res = { voiture: c.kind || 'voiture', max: +c.spec.max.toFixed(1) };
+    const dCar = () => Math.hypot(G.camera.position.x - c.x, G.camera.position.y - (c.y + 1.2), G.camera.position.z - c.z);
+    // ---- PLEIN GAZ SUR UNE AVENUE DEGAGEE, huit secondes simulees
+    c.x = -160; c.z = 196; c.h = Math.PI / 2; c.vy = 0; G.drive.speed = 0; G.drive.arMax = 0;
+    G.cam.yaw = c.h + Math.PI; G.cam.pitch = 0.32; G.cam.dist = 3.9; G.cam.libre = null; G.cam.dLisse = null;
+    G.cam.target.set(c.x, c.y + 1.5, c.z);
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense (Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const suivi = [];
+    try {
+      ds.buttons[7] = { pressed: true, value: 1 };   // R2 a fond : c'est la commande du joueur
+      for (let i = 0; i < 480; i++) {
+        G.pollGamepad(1 / 60); G.driveStep(1 / 60); G.camPerche(1 / 60, false);
+        if (i % 60 === 59) suivi.push({ s: (i + 1) / 60, kmh: Math.round(Math.abs(G.drive.speed) * 3.6), d: +dCar().toFixed(1) });
+        if (c.x > 380) { const dx = 540; c.x -= dx; G.cam.target.x -= dx; G.camera.position.x -= dx; }
+      }
+      ds.buttons[7] = { pressed: false, value: 0 }; G.pollGamepad(1 / 60);
+    } finally { navigator.getGamepads = vrai; }
+    res.course = suivi;
+    // LE MEME ESSAI AVEC DES IMAGES LENTES (une demi-seconde chacune, comme sur une television
+    // chargee) : c'est la que le retard s'emballait, parce qu'il se rattrape PAR IMAGE.
+    c.x = -160; c.z = 196; c.h = Math.PI / 2; G.drive.speed = c.spec.max;
+    G.cam.yaw = c.h + Math.PI; G.cam.target.set(c.x, c.y + 1.5, c.z); G.cam.libre = null; G.cam.dLisse = null;
+    for (let i = 0; i < 20; i++) {
+      c.x += Math.sin(c.h) * c.spec.max * 0.5; c.z += Math.cos(c.h) * c.spec.max * 0.5;
+      G.camPerche(0.5, false);
+      if (c.x > 380) { const dx = 540; c.x -= dx; G.cam.target.x -= dx; G.camera.position.x -= dx; }
+    }
+    res.lent = +dCar().toFixed(1);
+    G.drive.speed = 0;
+    res.dFin = suivi[suivi.length - 1].d; res.kmhFin = suivi[suivi.length - 1].kmh;
+    res.dMax = +Math.max(...suivi.map(v => v.d)).toFixed(1);
+    // ---- A L'ARRET, NEZ CONTRE UN MUR (c'est l'etat d'apres un choc)
+    let mur = null;
+    for (const o of G.solids) {
+      if (o.veh || o.deco || o.glass || o.xray || o.h < 4 || o.h > 30 || o.w < 6 || o.d < 6) continue;
+      if (!mur || o.w * o.d > mur.w * mur.d) mur = o;
+    }
+    const mx = mur.x, mz = mur.z + mur.d / 2 + 2.4;
+    c.x = mx; c.z = mz; c.h = 0; c.vy = 0; G.drive.speed = 0; c.cmd.gaz = 0; c.cmd.frein = 1;
+    G.cam.yaw = c.h + Math.PI; G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null; G.cam.dist = 11;
+    G.cam.target.set(c.x, c.y + 1.5, c.z);
+    for (let i = 0; i < 300; i++) { c.x = mx; c.z = mz; c.h = 0; G.drive.speed = 0; G.driveStep(1 / 60); G.camPerche(1 / 60, false); }
+    res.choc = { d: +dCar().toFixed(2), camY: +G.camera.position.y.toFixed(2) };
+    // ---- LE STICK DROIT REGARDE AUTOUR SANS LACHER LA VOITURE
+    const vrai2 = navigator.getGamepads; ds.axes = [0, 0, 1, 0]; navigator.getGamepads = () => [ds];
+    try {
+      c.x = -160; c.z = 196; c.h = Math.PI / 2; G.drive.speed = 14; G.cam.yaw = c.h + Math.PI;
+      const y0 = G.cam.yaw;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); G.camPerche(1 / 60, false); }
+      res.regard = { tourne: +Math.abs((G.cam.yaw - y0) * 180 / Math.PI).toFixed(0), d: +dCar().toFixed(1) };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+    } finally { navigator.getGamepads = vrai2; }
+    res.recul = { arret: +G.reculConduite().toFixed(2) };
+    G.drive.speed = c.spec.max; res.recul.fond = +G.reculConduite().toFixed(2);
+    G.drive.speed = 0;
+    G.exitCar();
+    return res;
+  });
+  const ok = r.voiture && r.dMax < 16 && r.dFin > 8 && r.kmhFin > 50 && r.lent < 16
+    && r.choc.d > 3.6 && r.choc.d < 14 && r.recul.fond > 2.4 && r.recul.fond < 2.8 && r.recul.arret === 0
+    && r.regard.tourne > 100 && r.regard.d < 16;
+  return { ok, detail: `defaut du Joueur : plein gaz, la camera decrochait — 11 → 25 → 34 → 41 → 46 → 50 m a 75 km/h, la voiture n'etait plus qu'un point · mesure ici, huit secondes plein gaz : ${r.course.map(v => v.kmh + ' km/h→' + v.d + ' m').join(' · ')} — au plus loin ${r.dMax} m, et ${r.lent} m meme avec des images d'une demi-seconde (c'est LA que le retard s'emballait : il se rattrape par image, il est maintenant borne a 2,5 m) · conforme au recul voulu (0 m a l'arret, ${r.recul.fond} m a fond, test 288) · a l'arret nez contre une facade (l'etat d'apres un choc, ou la camera collait au toit a 1,9 m) : ${r.choc.d} m, objectif a ${r.choc.camY} m de haut · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lacher la voiture (${r.regard.d} m)` };
+});

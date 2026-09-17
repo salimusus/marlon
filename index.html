@@ -24762,6 +24762,11 @@ function tvVeille() {
   tvHeberge(tv.code);
 }
 function tvManettesMaj() {
+  // UNE LIAISON SANS PAIR N'EST PAS UNE MANETTE. Quand le pair PeerJS est fermé (salon quitté,
+  // liaison cédée à la télé, page relancée), les connexions qu'il portait restaient dans
+  // `tv.conns` avec leur drapeau `open` : la pastille disait « 🎮 1 manette · code … » à un
+  // enfant qui lançait le mode TV sans aucun téléphone branché (test 384, et la vraie vie).
+  if (!tv.peer || tv.peer.destroyed) tv.conns.length = 0;
   const n = tv.conns.filter(c => c.open).length;
   const el = $('tvManettes');
   // On dit précisément où on en est : « prêt » veut dire que cet écran ÉCOUTE vraiment. Avant,
@@ -24921,6 +24926,10 @@ function tvSalonMaj() {
   try { diffusionAffiche(); } catch (e) {}   // la derniere mesure s'affiche tout de suite
 }
 function modeTV(on) {
+  // EN PASSANT SUR LA TÉLÉ, ON NE COMPTE QUE LES TÉLÉPHONES VRAIMENT RELIÉS. Une liaison d'une
+  // partie précédente dont le tuyau WebRTC n'existe plus restait dans `tv.conns` avec `open`
+  // levé : la pastille annonçait « 🎮 1 manette · code … » à un enfant sans téléphone (test 384).
+  if (on) tv.conns = tv.conns.filter(c => c && c.open && c.peerConnection && c.peerConnection.connectionState !== 'closed' && c.peerConnection.connectionState !== 'failed');
   document.body.classList.toggle('tv', on);
   store.set('superobby.tv', on ? '1' : '0');
   // L'ACCELERATEUR D'IMAGE s'allume avec le mode tele (c'est la que le probleme se pose), sauf

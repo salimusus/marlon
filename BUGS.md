@@ -332,7 +332,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4/s4-9-accident.png`.
 
 ### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
-✅ RÉPARÉ — `makeDepanneuse(x - 10, z + 10, π/2)` : elle dort sur le côté du parvis (mesurée à (−55, 100), à 10 m de l'axe d'entrée) au lieu d'en travers de la porte — commit c6ea15b
+✅ RÉPARÉ — `makeDepanneuse(x - 10, z + 12.5, π/2)` : elle dort sur le côté du parvis (à 10 m de l'axe d'entrée) au lieu d'en travers de la porte — commit c6ea15b ; à (x − 10, z + 10) elle mordait le mur de façade du garage (z 98,6–99,0) et restait coincée (test 361 : 0 % du trajet sur la route, téléportée après 45 s) → reculée de 2,5 m, elle rejoint l'épave par la route en 32 s, 100 % sur le bitume
 - **Gravité** : GÊNANT
 - **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
 - **On voit** : la dépanneuse stationnée sur la chaussée en (−45, 105), pile dans l'axe ; à 25 km/h on la tape (🔧 7 % avant même d'être au garage), étoile d'impact sur le capot.
@@ -402,6 +402,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s13-pc.log` `grue.roule.msg = "💥 ACCIDENT ! …"`.
 
 ### 58. Tirer sur un habitant : « la police laisse passer (avertissement 1/4) »
+✅ RÉPARÉ — trois choses : (1) la balle qui touche un habitant était déjà un crime grave (★ immédiate, `infraction(…, 1, 3)`), mais depuis le n° 61 le coup de feu lui-même affichait « tirer en pleine rue : la police laisse passer (1/4) » juste avant l'infraction — avec une PERSONNE verrouillée, seul l'impact est jugé ; (2) `attack()` ne regardait jamais les vitrines : le poing la fissure puis la brise (1,6 m devant soi) ; (3) une balle dans une vitrine vaut une ★ immédiate (`breakThing(…, parBalle)`), au poing ou en voiture les avertissements restent. Mesuré : cible verrouillée, 3 balles (❤️ 100 → 28) → ★1, 0 « laisse passer » ; poing : fissurée puis brisée ; balle : brisée, ★1. Test 395 ajouté
 - **Gravité** : GÊNANT (jeu pour enfant : trois balles dans un passant sans réaction)
 - **Reproduire** : L2 sur un habitant, R2 ×3 (100 → 28 PV).
 - **On voit** : « ⚠️ tirer sur Lucas_2014 : la police laisse passer (avertissement 1/4) », `wanted = 0`. Idem trois coups de poing sur une vitrine ou un tir dans la vitrine : rien ne casse, personne ne vient.

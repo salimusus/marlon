@@ -15677,3 +15677,20 @@ test('dans la citadine « Puce » du concessionnaire, le conducteur est ASSIS : 
   const ok = r.puce.placesDe === 'object' && r.puce.depasse < 0 && r.std.depasse < 0;
   return { ok, detail: `avant : \`c.places = 4\` (le NOMBRE de places) écrasait la table des sièges → placesDe() rendait 4, le conducteur restait debout, tête 75 cm au-dessus du toit · maintenant Puce : haut de tête ${r.puce.hautTete} m, toit ${r.puce.toit} m (${r.puce.depasse} m) · voiture de rue : ${r.std.depasse} m` };
 });
+
+test('hélico : ▢ ne pose pas l\'appareil SUR un objet de la rue, il se décale sur une place libre au sol', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 43, y: 1, z: -13, hour: 12, frais: true });
+    G.solids.push({ x: 43, y: 1.2, z: 51, w: 3, h: 2.4, d: 7 });   // l'objet de rue du rapport (3 × 2,4 × 7 m) posé en (43, 51)
+    const h = G.city.cars.find(c => c.heli);
+    G.P.pos.set(h.x + 2, 0.3, h.z); G.enterCar(h);
+    h.x = 43; h.z = 51; h.y = 14; h.h = 0; h.vx = h.vz = h.vy = 0; h.landed = false; G.heliPoser(true);
+    const decale = !!h.poserVers;
+    let t = 0; while (t < 30 && !h.landed) { G.step(1 / 60, true); t += 1 / 60; }
+    const out = { decale, t: +t.toFixed(1), x: +h.x.toFixed(1), y: +h.y.toFixed(2), z: +h.z.toFixed(1), landed: h.landed, sol: +G.heliSolSous(h).toFixed(2), dmg: Math.round(h.dmg || 0), dObjet: +Math.hypot(h.x - 43, h.z - 51).toFixed(1) };
+    G.exitCar(); return out;
+  });
+  const ok = r.decale && r.landed && r.y < 0.4 && r.sol < 0.3 && r.dmg === 0 && r.dObjet > 3;
+  return { ok, detail: `avant : la descente automatique se posait sur ce qu'il y avait dessous, l'appareil finissait perché à y 2,49 sur l'objet · maintenant ▢ choisit une place libre (décalage=${r.decale}), l'hélico se pose en ${r.t} s à (${r.x}, ${r.z}), y ${r.y}, sol sous lui ${r.sol}, à ${r.dObjet} m de l'objet, dégâts ${r.dmg}` };
+});

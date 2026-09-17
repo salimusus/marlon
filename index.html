@@ -19625,18 +19625,39 @@ function heliBlocked(x, y, z, c) {   // l'hélico est une boîte (selon son orie
 // descente AUTOMATIQUE et MAITRISEE, qui se pose vraiment et se coupe toute seule.
 // La hauteur du sol (ou du toit) sous l'appareil : la meme boite que heliBlocked, mais on
 // cherche le HAUT du solide le plus haut sous l'helico au lieu d'une collision.
-function heliSolSous(c) {
+function heliSolSous(c, x = c.x, z = c.z, info) {
   const W = 2.6, D = 6.4, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h));
   const hw = (W * cs + D * sn) / 2 * 0.85, hd = (W * sn + D * cs) / 2 * 0.85;
-  let haut = 0.2;   // le plancher du monde
-  for (const o of solidsAutour(c.x, c.z, Math.max(hw, hd) + 1, true)) {
+  let haut = 0.2, sur = null;   // le plancher du monde
+  for (const o of solidsAutour(x, z, Math.max(hw, hd) + 1, true)) {
     if (o === c.solid || o.h > 30) continue;
-    if (c.x + hw <= o.x - o.w / 2 || c.x - hw >= o.x + o.w / 2) continue;
-    if (c.z + hd <= o.z - o.d / 2 || c.z - hd >= o.z + o.d / 2) continue;
+    if (x + hw <= o.x - o.w / 2 || x - hw >= o.x + o.w / 2) continue;
+    if (z + hd <= o.z - o.d / 2 || z - hd >= o.z + o.d / 2) continue;
     const t = o.y + o.h / 2;
-    if (t <= c.y + 0.25 && t > haut) haut = t;
+    if (t <= c.y + 0.25 && t > haut) { haut = t; sur = o; }
   }
+  if (info) info.sur = sur;
   return haut;
+}
+// UN VRAI TERRAIN D'ATTERRISSAGE (n° 59 du Joueur). La descente automatique se posait SUR ce
+// qu'il y avait dessous, quoi que ce soit : un abribus, une camionnette, un banc — l'appareil
+// finissait perché sur un objet de la rue et le pilote en descendait dessus. On ne se pose
+// que sur le sol ou sur un TOIT (un solide d'au moins 8 m × 8 m qui n'est pas un véhicule) ;
+// sinon on cherche, en cercles de plus en plus larges, la place libre la plus proche.
+function heliTerrainOk(c, x, z) {
+  const info = {}, haut = heliSolSous(c, x, z, info);
+  if (info.sur && (info.sur.veh || info.sur.w < 8 || info.sur.d < 8)) return false;
+  return !heliBlocked(x, haut + 0.02, z, c);
+}
+function heliPointLibre(c) {
+  if (heliTerrainOk(c, c.x, c.z)) return null;   // ici même : rien à faire
+  for (let r = 3; r <= 24; r += 3) for (let k = 0; k < 12; k++) {
+    const a = k / 12 * Math.PI * 2, x = c.x + Math.sin(a) * r, z = c.z + Math.cos(a) * r;
+    if (x < MONDE.x1 + 4 || x > MONDE.x2 - 4 || z < MONDE.z1 + 4 || z > MONDE.z2 - 4) continue;
+    // la place et 1,2 m tout autour : l'appareil s'arrête à quelques dizaines de cm près
+    if (heliTerrainOk(c, x, z) && heliTerrainOk(c, x + 1.2, z) && heliTerrainOk(c, x - 1.2, z) && heliTerrainOk(c, x, z + 1.2) && heliTerrainOk(c, x, z - 1.2)) return { x, z };
+  }
+  return null;
 }
 const HELI_POSE_MIN = 0.5;    // vitesse de descente juste avant de toucher (m/s) : on se POSE
 const HELI_POSE_MAX = 2.9;    // vitesse de descente en altitude : juste SOUS le seuil de casse (3 m/s)
@@ -19646,7 +19667,8 @@ function heliPoser(force) {   // ▢ (ou V au clavier) : enclenche / annule la d
   const on = force == null ? !c.poser : !!force;
   if (c.landed && on) { msg('🚁 Déjà posé', 900); return false; }
   c.poser = on;
-  msg(on ? '🚁 Atterrissage… (▢ ou ◯ pour annuler)' : '🚁 Atterrissage annulé', 1300);
+  c.poserVers = on ? heliPointLibre(c) : null;
+  msg(on ? (c.poserVers ? '🚁 Atterrissage… je me décale sur une place libre (▢ ou ◯ pour annuler)' : '🚁 Atterrissage… (▢ ou ◯ pour annuler)') : '🚁 Atterrissage annulé', 1300);
   sfx.tone(on ? 420 : 300, 0, .09, 'triangle', .04, on ? 620 : 220);
   return true;
 }
@@ -19663,11 +19685,23 @@ function heliStep(dt) {
   // casse a l'arrivee). Remettre les gaz (◯) reprend la main immediatement.
   if (c.poser && up > 0) { c.poser = false; msg('🚁 Remise des gaz', 900); }
   if (c.poser) {
+    const stick = Math.abs(iz) >= 0.05 || Math.abs(ix) >= 0.05;
+    // Le pilote reprend le manche : on oublie la place libre choisie, il sait où il va.
+    if (stick) c.poserVers = null;
+    const vers = c.poserVers, dV = vers ? Math.hypot(vers.x - c.x, vers.z - c.z) : 0;
+    if (vers && dV < 0.3) c.poserVers = null;
     const reste = Math.max(0, c.y - heliSolSous(c));
-    const cible = -clamp(HELI_POSE_MIN + reste * 0.85, HELI_POSE_MIN, HELI_POSE_MAX);
+    let cible = -clamp(HELI_POSE_MIN + reste * 0.85, HELI_POSE_MIN, HELI_POSE_MAX);
+    // Pas encore au-dessus de la place libre : on glisse vers elle (4 m/s au plus) et on ne
+    // descend jamais à moins de 1,5 m de ce qu'il y a sous l'appareil en chemin.
+    if (vers && dV >= 0.3) {
+      const v = Math.min(4, dV * 1.2), f = 1 - Math.exp(-2.2 * dt);
+      c.vx += ((vers.x - c.x) / dV * v - c.vx) * f; c.vz += ((vers.z - c.z) / dV * v - c.vz) * f;
+      if (reste < 1.5) cible = 0;
+    }
     c.vy += (cible - c.vy) * (1 - Math.exp(-4 * dt));
     // on se pose SUR PLACE : sans consigne au stick, la derive horizontale s'eteint
-    if (Math.abs(iz) < 0.05 && Math.abs(ix) < 0.05) { const f = Math.min(1, dt * 2.4); c.vx -= c.vx * f; c.vz -= c.vz * f; }
+    if (!stick && !(vers && dV >= 0.3)) { const f = Math.min(1, dt * 2.4); c.vx -= c.vx * f; c.vz -= c.vz * f; }
   } else c.vy += (up * 7 - c.vy) * (1 - Math.exp(-3 * dt));
   // déplacement axe par axe avec collision contre tout : murs, immeubles, véhicules, portique, barrières
   const nx = clamp(c.x + c.vx * dt, MONDE.x1 + 2, MONDE.x2 - 2);

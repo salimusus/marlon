@@ -16831,7 +16831,13 @@ test('on entre vraiment dans chaque salle de classe et rien ne barre le seuil', 
     }
     return { salles };
   });
-  const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 1 && s.t < 4 && s.approche < 1.6 && s.assis);
+  // SEUIL SUR LE FRANCHISSEMENT : 0,9 m et non 1 m. `marcher` s'arrete des que le joueur est
+  // a moins de 55 cm d'un point vise 1,50 m DANS la salle : il s'immobilise donc a 0,95 m du
+  // seuil, plus la fraction d'image qui depasse — et cette fraction depend de la VITESSE DE
+  // MARCHE. Le test tenait a 5,6 m/s (1,03 m) et tombait a 6,2 m/s (0,99 m) sans que rien
+  // n'ait change dans l'ecole. Ce qu'il doit garantir, c'est qu'on est bien ENTRE : la zone de
+  // seuil surveillee s'arrete a 0,70 m dans la salle, 0,90 m la passe sans ambiguite.
+  const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 0.9 && s.t < 4 && s.approche < 1.6 && s.assis);
   return { ok, detail: `avant : un bandeau blanc de 10 m × 0,90 m barrait le seuil des 4 salles de 0,30 à 1,20 m · maintenant ${r.salles.map(s => `${s.n} : ${s.bloc} objet dans le seuil, franchi de ${s.franchi} m en ${s.t} s, table à ${s.approche} m, assis ${s.assis ? 'oui' : 'NON'}`).join(' · ')}` };
 });
 

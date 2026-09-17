@@ -18554,7 +18554,7 @@ function robotTick(dt) {
     // IL NE PART PAS POUR TOUJOURS. Si au bout de 25 s il n'a pas mis la main dessus (une
     // grille, un fossé, un camion garé entre les deux), il abandonne et revient : un
     // compagnon qui disparaît de la partie est pire qu'un compagnon qui échoue.
-    if (robot.phase === 'aller' && simTime > ob.fin) {
+    if (robot.phase === 'aller' && (simTime > ob.fin || robot.stuckT > 6)) {
       worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
       robotDit('je n\'arrive pas à l\'attraper, je reviens', 2800);
       return robotAnime(dt);

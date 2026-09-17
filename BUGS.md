@@ -35,6 +35,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 3. Dès la première seconde, la pastille du haut dit « 🚩 Il te faut un membre de ton gang avec toi »
 🔎 CONTRÔLÉ : TOUJOURS CASSÉ — 2/2 (PC et TV) : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s sur un profil vierge, tronqué « 🚩 Il te faut un ... » en 1280 (`img/c1/c1-2s.png`, `c1-14s-tv.png`). Cause : la version intégrée a remplacé « Jouer » par « Entrer dans Marlon » (index.html l. 23629) qui fait `guerre.vu = true` dès le clic — `joueurDansLaGuerre()` est donc vrai pour tout le monde et la garde de `captureTick()` ne sert plus. Voir n° 67.
+🔎 CONTRÔLÉ (bdcc5e4) : OK — aucun « 🚩 » dans `#act` pendant 30 s puis 4 min de balade (PC et TV).
 ✅ RÉPARÉ — `captureTick()` écrivait le conseil dès qu'on se tenait dans un quartier tenu par un gang, toutes les 6 s, sans jamais rendre la pastille ; il n'apparaît plus qu'à un joueur entré dans la guerre (écran 🚩 ouvert, respect > 0 ou recrue) et `updateAct()` reprend la main en sortant du quartier — commit a36c5da
 - **Gravité** : GRAVE (incompréhensible pour un enfant qui vient d'arriver ; ça reste affiché en permanence)
 - **Reproduire** : entrer dans la Ville, attendre 2 s sans rien faire, au point d'apparition (0, 3.5).
@@ -245,6 +246,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 8. Le pavé tactile affiche une aide illisible pour un enfant
 ✅ RÉPARÉ — `#padLeg` est une fiche : titre, une ligne par bouton (pastille blanche + action), les cas particuliers en petit dessous, plus de parenthèses imbriquées. Mesuré 1280×720 : 520×504 px à 15 px, 13 lignes, dans l'écran ; TV 1920×1080 : 806×694 px à 25,6 px, dans l'écran — commit 27aa6bf
+🔎 CONTRÔLÉ (bdcc5e4) : OK — voir n° 73 : une ligne par bouton, pastille blanche, lisible ; le jeu n'est pas en pause derrière (les bots continuent), acceptable.
 - **Gravité** : GÊNANT
 - **Reproduire** : en ville, appuyer sur le pavé tactile.
 - **On voit** : en 1280×720, quatre lignes de texte minuscule (11 px) avec des parenthèses imbriquées « (arme équipée : 🎯 braquer / rengainer · volant : freiner · hélico : descendre) », par-dessus le chat et les bots ; en TV le texte est grand mais les parenthèses se cassent sur trois lignes et le bloc cache tout le centre de l'écran.
@@ -261,6 +263,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 15. Les consignes affichées parlent des touches du CLAVIER à un enfant qui joue à la manette
 🔎 Revu round 70 (manette) : toujours là — « 🚗 Appuie sur E pour conduire », « 🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir », « 🪑 E : s'asseoir », « Espace maintenu = frein à main », « 🏊 Tu nages ! Espace pour sauter », « 🚗 E : monter à côté de Enzo_turbo », « ouvre la carte avec M » (`l1a-pc.log` `bilan.defauts[type=clavier]`, `c6-pc.log` `mer.msgs`).
+🔎 CONTRÔLÉ (bdcc5e4) : OK sur 4,5 min de balade à pied (PC et TV) : « 🚗 Appuie sur △ pour conduire », « 🪑 △ : s'asseoir », « 📋 … △ devant le comptoir », « 🪟 △ : donner un coup de main », « 🚗 △ : monter à côté de Enzo_turbo » — 0 mot clavier détecté par la sonde (regex E/Espace/clic/M/F/G/O/V). Suite au point 5.
 ✅ RÉPARÉ — `ctrlText()` ne traduisait les touches que pour l'écran tactile : à la manette (`body.manette`) E → △, Espace → ◯, clic → R2, G → ✕, O/V/F → ▢, Ctrl → L2 (tous les msg() passent par là, y compris les `hint` de zone) — commit fe303fe
 - **Gravité** : GÊNANT (l'enfant cherche une touche « E » sur sa manette)
 - **Reproduire** : manette PS5 branchée, entrer dans la zone Rallye (0, −60) : gros message « 🏜️ Rallye : prends un buggy (E), grimpe les collines… ».
@@ -279,6 +282,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 17. À pied, on « glisse » à 6,9 m/s (25 km/h) sans courir
 ✅ RÉPARÉ — `SPEED` 7 → 5,6 m/s, course ×1,3 (7,3 m/s) et L3 à BASCULE (un appui lance, le suivant arrête, plus besoin de maintenir). Mesuré sur la rue Est-Ouest : marche 5,6 m/s (21,6 m en 4 s), L3 → « 🏃 Tu cours ! » 7,28 m/s, L3 → « 🚶 Tu marches », stick à moitié 2,2 m/s — commit 5ad367a
+🔎 CONTRÔLÉ (bdcc5e4) : OK — rue est-ouest : 22,0 m en 4 s = 5,51 m/s ; L3 → « 🏃 Tu cours ! (L3 pour marcher) » 7,28 m/s ; L3 → « 🚶 Tu marches » 5,61 m/s (PC et TV identiques).
 - **Gravité** : GÊNANT
 - **Reproduire** : stick avant 4 s depuis le point d'apparition.
 - **On voit** : 27,5 m parcourus en 4 s (`vel.z = −6,43`), on traverse tout le centre-ville en 9 s ; les jambes ne suivent pas cette vitesse : impression de patinage. Courir demande de MAINTENIR L3 enfoncé tout en poussant le stick (un appui bref n'enclenche rien : `P.run` retombe à false dès qu'on relâche) — difficile pour une petite main et rien ne le dit.
@@ -287,6 +291,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 18. Dès la première minute, les habitants se battent entre eux et crient « au secours ! police !! »
 ✅ RÉPARÉ — `vieTick` lançait vol / braquage / bagarre dès les premières secondes et `botSay` écrivait dans le chat depuis l'autre bout de la ville. Plus aucun délit pendant les 3 premières minutes (`VIE_CALME`), une bagarre ne se lance qu'à 45 m du joueur avec une victime à moins de 40 m (il la VOIT), et un habitant à plus de 60 m n'écrit plus dans le chat. Mesuré : 120 s de chat, 26 lignes, 0 « attaque / au secours / police / chapardé » — commit 111af2f
+🔎 CONTRÔLÉ (bdcc5e4) : OK en partie — 30 s de chat : plus aucune bagarre, vol ni « au secours » (PC : 0/9 lignes, TV : 0/11) ; mais en TV dès les 30 premières secondes « 🚩 Les Requins Rouges te cherchent… » et « 🚩 Les Frelons Jaunes attaquent Les Requins Rouges ! », et à ~4 min (2/2) un chef de gang donne rendez-vous à l'enfant — voir n° 75.
 - **Gravité** : GÊNANT (l'enfant n'a rien fait, la ville hurle)
 - **Reproduire** : Ville, marcher 20 s, lire le chat.
 - **On voit** : « Momo_king : au secours ! », « Momo_king : aïe ! », « Momo_king : police !! », « 💥 Ines_gg attaque Karim_flash ! », « 🕵️ Lucas_2014 a chapardé 31 🪙 dans une boutique » — sans qu'on voie rien de tout ça.
@@ -475,6 +480,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 67. « Entrer dans Marlon » met d'office l'enfant « dans la guerre » : le conseil 🚩 revient dès la première seconde
 ✅ RÉPARÉ — `startGame()` posait `guerre.vu = true` et affichait « … ouvre la carte avec M » : retirés ; message « 🏙️ Bienvenue à Marlon ! Balade-toi : △ pour agir… » (passe par ctrlText). Mesuré profil vierge : `guerre.vu = false`, `joueurDansLaGuerre() = false`, pastille « 🏙️ Balade · 0 pts » — commit 5976786
+🔎 CONTRÔLÉ (bdcc5e4) : OK — profil vierge, PC et TV : `guerre.vu` faux, `joueurDansLaGuerre() = false`, pastille « 🏙️ Balade · 0 pts » pendant 30 s, plus de « carte avec M » (`p1-pc.log`, `p1-tv.log`, `img/p1/p1-01-3s.png`).
 - **Gravité** : GRAVE (défait la réparation n° 3 : la première pastille d'un profil vierge parle d'un gang qu'il n'a pas)
 - **Reproduire** : profil vierge, accueil, ✕ (« Entrer dans Marlon »), attendre 2 s au point d'apparition. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
 - **On voit** : `#act` = « 🚩 Il te faut un membre de ton gang avec toi » de t+1 s à t+17 s (tronqué « 🚩 Il te faut un ... » en 1280), et le gros message « MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5 » — la touche « M » à un enfant à la manette.
@@ -484,6 +490,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 68. Le panneau « EMPIRE URBAIN » couvre le bas de l'écran en permanence, minuscule en TV, et parle de la touche « M »
 ✅ RÉPARÉ — `#empireHud` n'apparaît que pendant une opération ou une attaque ET une fois dans la guerre ; règles `body.tv` (largeur 30 vw, texte en unités --uh) ; le bouton dit « CARTE · ↑ tenu » quand une manette pilote. Mesuré profil vierge : `hidden = true`, display none — commit e4ac561
+🔎 CONTRÔLÉ (bdcc5e4) : OK — `#empireHud` `hidden` pendant toute la partie d'un profil vierge (PC et TV).
 - **Gravité** : GÊNANT (première minute ; en TV le texte fait 12 px sur un écran de 1080 lignes : illisible du canapé)
 - **Reproduire** : entrer dans la Ville (profil vierge), regarder le bas de l'écran. Reproduit 2/2 (PC, TV).
 - **On voit** : un cadre sombre de 390 px centré en bas : « EMPIRE URBAIN · 0/12 territoires · Centre-ville · objectif à 37 m · CARTE · M / PAVÉ PS5 », jamais effacé (il n'a pas de règle `body.tv`, ni de traduction manette : `#empireMapBtn` est un texte fixe l. 1110). Il se superpose aux chevrons de GPS et au message central quand ils descendent.
@@ -508,6 +515,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 71. En jeu, la bague jaune de la manette reste posée sur le bouton du chat (haut gauche) pendant toute la partie
 ✅ RÉPARÉ — `navValide()` reposait une bague après un clic même sans fenêtre ouverte (d'où le 💬 encadré) ; plus de bague sans fenêtre, et `startGame()` efface celle de l'accueil — commit 3e84817
+🔎 CONTRÔLÉ (bdcc5e4) : OK — `.focustv` = null dès l'entrée en ville et pendant 30 s (PC et TV) ; plus de cadre sur le chat (`img/p1/p1-01-3s.png`).
 - **Gravité** : GÊNANT (l'enfant croit qu'il a « sélectionné » quelque chose ; ✕ ne fait rien d'utile)
 - **Reproduire** : accueil, ✕ (« Entrer dans Marlon »). Reproduit 3/3 (`c1` PC, `c1` TV, `l1a`).
 - **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
@@ -516,6 +524,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 72. La villa d'un joueur qui vient d'arriver est cambriolée : tout son porte-monnaie (25 🪙 → 0) disparaît sans qu'il ait rien vu
 ✅ RÉPARÉ — `declencheCambriolage` ne se lance que si le joueur a un homme (recruté ou libre) ou un quartier ; le butin est plafonné à la moitié du porte-monnaie ; sans alarme, message central « 🏠 Les Frelons Jaunes rôdent autour de ta villa ! Cours-y » + colonne bleue, et le bilan dit qui et pourquoi. Mesuré : profil neuf → rien ; avec un homme → message, beacon, 25 🪙 → 13 — commit 94973ac
+🔎 CONTRÔLÉ (bdcc5e4) : OK — 28 🪙 à t+50 s, 28 🪙 à t+262 s après banque, commissariat, parc et rue commerçante, `city.villaMine` présent (PC et TV).
 - **Gravité** : GRAVE (première partie : l'enfant perd tout son argent pendant qu'il visite la banque, sans explication visible)
 - **Reproduire** : partie neuve, se promener 10 minutes loin de la villa (contrôle 2 : banque, hôpital…). **Dépend de `Math.random`** : à chaque décision d'un gang (`gangTick`, l. 26547), 7 % de chances de tirer une villa, et si c'est celle du joueur (`v.mine`) le cambriolage démarre et réussit 55 s plus tard si personne n'est à moins de 22 m. Vu 1 fois sur 6 parties de contrôle (`img/c2/c2-banque-2-regard.png` : « 💸 Cambriolage réussi : ils sont partis avec 25 🪙 », chat « 💸 La villa de Joueur42 a été cambriolée (−25 🪙) », porte-monnaie 0 dans le HUD) ; la sonde `c8.js` (hasard forcé à 0,8 pendant 200 s) n'a pas retiré la villa du joueur.
 - **On voit** : seul avertissement, une ligne de chat « 🏠 Des ombres rôdent autour de ta villa… » (sans alarme achetée), à 175 m de là ; puis `wallet -= min(butin 60–240, wallet)` : un enfant à 25 🪙 perd tout.
@@ -523,6 +532,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 73. Le pavé tactile ouvre « EMPIRE · Carte stratégique » : un écran d'adulte, sans bague, coupé en bas en 1280×720
 ✅ RÉPARÉ — le pavé tactile ouvre l'AIDE des boutons (`PAD_CROIX[17] = 'aide'`, fiche lisible du n° 8) et plus la carte stratégique ; mesuré : pavé → `ui: null, aide: true`, la carte ne s'ouvre que par ↑ tenu et pose la bague sur « Fermer × » — commits 9ec9481, 27aa6bf, e4ac561
+🔎 CONTRÔLÉ (bdcc5e4) : OK — le pavé ouvre la fiche « 🎮 Les touches de la manette » (520×504 px à 15 px en 1280×720, 806×694 px à 25,6 px en TV, dans l'écran), un second appui la ferme ; la carte stratégique ne s'ouvre plus (`img/p1/p1-03-aide.png`). Petit défaut : le radar saute du coin en bas à gauche au milieu du bas de l'écran pendant l'aide.
 - **Gravité** : GÊNANT (c'est le bouton « aide » de l'enfant : il tombe sur un tableau de bord de stratégie)
 - **Reproduire** : en ville à la manette, appuyer sur le pavé tactile. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
 - **On voit** : le jeu en pause sous un grand cadre « EMPIRE · Carte stratégique — Contrôle les 12 secteurs, puis tiens la ville pendant 90 secondes · 🚩 0/12 · difficulté 🔥 palier 1/5 », une carte à 12 numéros, un encart « RENSEIGNEMENTS · SECTEUR », cinq cartes d'opérations (« Reconnaissance du Nord · PREMIÈRE RÉUSSITE · 120 pièces · 25 respect »…). La bague reste sur le bouton du chat derrière (`aide.focus = chatBtn`), il faut un premier ↓ pour qu'elle apparaisse sur « Fermer × ». En 1280×720 la dernière carte (« Tenir la ligne ») passe sous le bord de l'écran (`img/l1/l1a-04-aide.png`) ; en TV ça tient (bas à 1048 px sur 1080, `img/l2/l1a-04-aide-tv.png`). Aucun rappel des boutons de la manette nulle part (l'ancienne aide du n° 8 a disparu).
@@ -600,3 +610,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - Achat d'une citadine (700 → 620 🪙), pistolet, respect 130, Parc conquis ; Prairie → Glace → Ville : tout est conservé (`wallet 621`, `arme:pistol`, voiture `mienne`, `rep 130`, `parc: joueur`).
 - Fermeture et réouverture du jeu (rechargement de la page) : accueil avec 621 🪙, puis « 💾 Partie rechargée : 621 🪙 · ta voiture au garage · 1 achat », la citadine est bien dans le garage de la villa (48, 179) sans dégâts, les territoires sont retrouvés. ✅ Rien de cassé.
 - Seule remarque : le message « 💾 Partie rechargée : N 🪙 » revient à CHAQUE reconstruction de la ville (retour d'un autre monde) dès qu'une sauvegarde existe — pour un enfant qui revient de la Prairie ce n'est pas un « rechargement ».
+
+### 75. Un chef de gang donne rendez-vous à un enfant qui vient d'arriver (« la colonne bleue t'y emmène ») et son gang « le cherche » dès la première demi-minute
+- **Gravité** : GÊNANT (première minute ; contredit la règle du n° 67 : rien de la guerre tant que l'écran 🚩 n'a pas été ouvert)
+- **Reproduire** : profil vierge, ✕ sur l'accueil, se balader 4 minutes sans rien faire d'autre. Reproduit 2/2 (PC 1280×720 à t+~250 s : « 🤝 Gina Grelot (Les Requins Rouges) te donne rendez-vous à La Zone — la colonne bleue t'y emmène » ; TV 1920×1080 à t+~250 s : « 🤝 Tonio Turbo (Les Requins Rouges) te donne rendez-vous à la fête foraine… »). En TV, dans les 30 premières secondes de chat : « 🚩 Les Requins Rouges te cherchent… », « 🚩 Les Frelons Jaunes attaquent Les Requins Rouges ! » ; en PC « 🚩 Les Frelons Jaunes te cherchent… » à ~4 min.
+- **On voit** : gros message central + colonne bleue GPS vers La Zone / la fête foraine ; `guerre.vu` est pourtant faux et le joueur n'a ni respect ni recrue.
+- **On devrait voir** : aucune réunion, aucun « te cherchent » avant que l'enfant soit entré dans la guerre (même garde que `captureTick` / `declencheCambriolage`).
+- **Sonde** : `p1-pc.log` / `p1-tv.log` `bilan.msgs[dernier]`, `attente30.chatViolence` (TV).

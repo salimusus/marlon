@@ -170,6 +170,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 51. Réunion de chef de gang : à la manette, la bague est sur un bouton d'un AUTRE écran
 ✅ RÉPARÉ — `openUI()` ne posait une bague que « s'il n'y en avait pas déjà » — et il y en avait une, dans la fenêtre 🚩 cachée (`guerreBack`). openUI efface toute bague hors de la fenêtre ouverte, closeUI efface celles de la fenêtre fermée. Mesure : bague sur `reunionAllie`, ↓ → `reunionTribut` — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — réunion (Bruno Bulldozer / Vito le Vif) : bague sur « 🤝 Alliance de 5 min — 78 🪙 », ↓ → Tribut, Déclarer la guerre, Partir ; ✕ sur « Partir » ferme la fenêtre (PC et TV, `img/p4/p4-06-reunion.png`).
 - **Gravité** : GRAVE (à la manette, impossible de choisir Alliance / Tribut / Guerre)
 - **Reproduire** : accepter le rendez-vous de Nina la Fouine (place du centre (0, 40)) ; la fenêtre « 🤝 Nina la Fouine » s'ouvre et met le jeu en pause.
 - **On voit** : quatre gros boutons (Alliance 98 🪙, Tribut 108 🪙, Déclarer la guerre, Partir) mais `.focustv` est sur `guerreBack:Retour` (le bouton de l'écran 🚩 fermé) : ✕ ne valide rien de visible, ↓ ne bouge pas la bague.
@@ -386,6 +387,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 43. Dans la boutique, la bague de la manette démarre sur la croix « ✕ » de fermeture, puis parcourt les onglets
 🔎 Revu round 70 : toujours là, en pire — à l'ouverture de l'armurerie la bague est sur le bouton CACHÉ « Entrer dans Marlon » (`focus.visible = false`), → → → fait défiler les onglets (Tenues, Couleurs, Accessoires : l'enfant se retrouve dans les chapeaux), ✕ pose la bague sur la croix de fermeture ; aucun article n'est jamais sélectionné (`l1b-pc.log` `armurerie`, `img/l1/l1b-01-boutique-armes.png`, `l1b-02-fiche.png`). La barre d'onglets est coupée en deux par la grille dans l'onglet Accessoires.
+🔎 CONTRÔLÉ (bdcc5e4) : OK — armurerie : bague sur « Pistolet » à l'ouverture, → parcourt fusil d'assaut, fusil à lunette, couteau, ✕ ouvre la fiche (« Acheter (35 🪙) »), ↓ ×3 atteint « Acheter », ✕ achète (300 → 265, message manette « R2 pour planter »), ◯ ferme (PC et TV, `img/p4/p4-00-boutique.png`).
 ✅ RÉPARÉ — nouvelle `navPremier()` : à l'ouverture d'une fenêtre (et après un clic qui change de fenêtre) la bague va sur le premier ARTICLE ou la première vraie action, jamais sur ✕ / Retour / Fermer — commit fe303fe
 - **Gravité** : GÊNANT
 - **Reproduire** : △ devant l'armurerie (52, 21), regarder où est la bague jaune, appuyer sur → quatre fois.
@@ -539,6 +541,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 73. Le pavé tactile ouvre « EMPIRE · Carte stratégique » : un écran d'adulte, sans bague, coupé en bas en 1280×720
 ✅ RÉPARÉ — le pavé tactile ouvre l'AIDE des boutons (`PAD_CROIX[17] = 'aide'`, fiche lisible du n° 8) et plus la carte stratégique ; mesuré : pavé → `ui: null, aide: true`, la carte ne s'ouvre que par ↑ tenu et pose la bague sur « Fermer × » — commits 9ec9481, 27aa6bf, e4ac561
+🔎 CONTRÔLÉ (bdcc5e4), carte stratégique par ↑ tenu : bague sur « Fermer × », ↓ parcourt les opérations puis les secteurs, ◯ ferme (PC et TV).
 🔎 CONTRÔLÉ (bdcc5e4) : OK — le pavé ouvre la fiche « 🎮 Les touches de la manette » (520×504 px à 15 px en 1280×720, 806×694 px à 25,6 px en TV, dans l'écran), un second appui la ferme ; la carte stratégique ne s'ouvre plus (`img/p1/p1-03-aide.png`). Petit défaut : le radar saute du coin en bas à gauche au milieu du bas de l'écran pendant l'aide.
 - **Gravité** : GÊNANT (c'est le bouton « aide » de l'enfant : il tombe sur un tableau de bord de stratégie)
 - **Reproduire** : en ville à la manette, appuyer sur le pavé tactile. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
@@ -548,6 +551,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 74. ↑ (ordres) : l'écran « 📣 À qui donner un ordre ? » n'a pas de bague, dit « Clique sur quelqu'un » et sa liste est coupée
 ✅ RÉPARÉ — la bague part sur la première carte d'habitant (`navPremier`, n° 43/71) ; à la manette la consigne dit « Choisis quelqu'un avec la croix, puis ✕ » au lieu de « Clique » ; la grille défile (52 vh) et la fenêtre tient en 1280×720 (bas de carte à 641 px). Mesuré : focus `ocard:Karim_flash`, 12 cartes — commit 6dca9df
+🔎 CONTRÔLÉ (bdcc5e4) : OK — bague sur la première carte d'habitant (`ocard:Lucas_2014`), consigne « Choisis quelqu'un avec la croix, puis ✕ », bas de fenêtre à 511 px sur 720 (PC) / 732 sur 1080 (TV). Reste : → depuis la première carte saute sur « Fermer » au lieu de la carte suivante.
 - **Gravité** : GÊNANT (à la manette, l'enfant ne peut désigner personne ; c'est pourtant l'entrée du recrutement promis par le message d'accueil « Recrute un ami via les ordres ↑ »)
 - **Reproduire** : en ville, appui court sur ↑. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
 - **On voit** : douze cartes d'habitants (« Momo_king 4 m »…), la bague `.focustv` reste sur le bouton CACHÉ « Fermer × » de la carte stratégique (`focus.visible = false`), la consigne dit « Clique sur quelqu'un… Tu peux aussi écrire son nom dans le chat », et la 4e rangée de cartes passe sous le bord de la fenêtre en 1280×720 (`img/l1/l1c-14-ordres.png`).

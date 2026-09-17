@@ -18431,10 +18431,21 @@ function robotLance() {
   // devant le joueur : une fois sur trois il atterrissait DANS une façade ou derrière une
   // clôture, le robot s'y cognait et ne revenait jamais (test rouge « il rapporte » une fois
   // sur deux). On recule le point de chute mètre par mètre jusqu'à trouver de la place.
+  // On vérifie non seulement le POINT de chute mais TOUTE la ligne, mètre par mètre : un
+  // boulon qui tombe dans une cour fermée est « libre » là où il est, et parfaitement
+  // inatteignable. On recule jusqu'à trouver un jet entièrement dégagé.
+  const ligneLibre = (tx, tz) => {
+    const n = Math.max(2, Math.ceil(Math.hypot(tx - P.pos.x, tz - P.pos.z)));
+    for (let i = 1; i <= n; i++) {
+      const u = i / n;
+      if (npcBlocked(P.pos.x + (tx - P.pos.x) * u, P.pos.y, P.pos.z + (tz - P.pos.z) * u, 0.45)) return false;
+    }
+    return true;
+  };
   let d = 11 + Math.random() * 6, bx = 0, bz = 0;
   for (; d > 3; d -= 1) {
     bx = P.pos.x + Math.sin(P.facing) * d; bz = P.pos.z + Math.cos(P.facing) * d;
-    if (!npcBlocked(bx, P.pos.y, bz, 0.5)) break;
+    if (ligneLibre(bx, bz)) break;
   }
   const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshLambertMaterial({ color: 0xffd23f }));
   m.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); worldGroup.add(m);
@@ -18529,8 +18540,22 @@ function robotTick(dt) {
     // du joueur qui court (5,6 × 1,3 = 7,3 m/s). C'est ce qui garantit les 2 m demandés.
     const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 2.2 + d * 5.5);
     if (v > 0) {
+      // IL CONTOURNE. Tout droit et rien d'autre, il restait planté contre le premier mur
+      // venu : mesuré, envoyé chercher un objet à 24 m il s'arrêtait à 8,4 m de lui, contre
+      // une façade, et n'en repartait plus. Quand le cap direct est refusé, on essaie six
+      // caps déviés (±40°, ±80°, ±120°) et on prend le premier libre — le côté choisi tient
+      // 1,2 s pour qu'il longe le mur au lieu d'osciller devant.
+      const cap = Math.atan2(dx, dz);
       const o = { x: robot.x, y: robot.y, z: robot.z };
-      const bloque = npcMove(o, dx / d * v * dt, dz / d * v * dt, 0.26);
+      let bloque = npcMove(o, Math.sin(cap) * v * dt, Math.cos(cap) * v * dt, 0.26);
+      if (bloque) {
+        if (simTime > (robot.coteT || 0)) { robot.coteT = simTime + 1.2; robot.cote = robot.cote === 1 ? -1 : 1; }
+        for (const da of [0.7, 1.4, 2.1]) {
+          const a = cap + da * (robot.cote || 1);
+          const o2 = { x: robot.x, y: robot.y, z: robot.z };
+          if (!npcMove(o2, Math.sin(a) * v * dt, Math.cos(a) * v * dt, 0.26)) { o.x = o2.x; o.z = o2.z; bloque = false; break; }
+        }
+      }
       robot.x = o.x; robot.z = o.z;
       robot.h = Math.atan2(dx, dz);
       avance = Math.hypot(o.x - (but.x - dx), o.z - (but.z - dz)) / Math.max(dt, 1e-4);

@@ -16152,8 +16152,13 @@ test('le joueur est vu assis sur le siège passager quand un membre vient le che
     G.poseJoueurAuVolant(1 / 60);
     const route = mesure();
     const T = G.placesDe(c);
-    return { montee: montee, route: route, largeur: c.baseW || 2.4, longueur: c.baseD || 4.4,
+    const sortie = { montee: montee, route: route, largeur: c.baseW || 2.4, longueur: c.baseD || 4.4,
       siege: T.avant ? [T.avant.x, T.avant.y, T.avant.z] : null, place: (G.vehiculeDuJoueur() || {}).place };
+    // ON REND LA VOITURE. Sans ça l'ami reste au volant pour TOUTE la suite, sa caisse garée
+    // au milieu de la chaussée : le test de circulation d'après trouvait 7 % de voitures sur
+    // le trottoir, poussées par cette épave-là.
+    G.botDescendre(b, false); b.rdv = null; b.wait = 0;
+    return sortie;
   })()`);
   if (r.erreur) return { ok: false, detail: r.erreur };
   const bon = m => m.visible && Math.abs(m.droite) < r.largeur / 2 && Math.abs(m.avant) < r.longueur / 2
@@ -16193,16 +16198,22 @@ test('un membre emmène le joueur à la villa : il vient, on monte, il conduit p
       surChaussee: ech ? Math.round(100 * surRoute / ech) : 0,
       vMoy: +(dParc / Math.max(0.001, t - t0)).toFixed(2), parcouru: +dParc.toFixed(0),
       volOiseau: +Math.hypot(V.x - 8, V.z - 8).toFixed(0), garee: G.surLaChaussee(c.x, c.z, 0.6) };
-    // on descend : l'avatar redevient un piéton, dehors, visible
-    G.botDescendre(b, true);
+    // On descend : l'avatar redevient un piéton, dehors, visible — ET L'AMI REND LA VOITURE
+    // (garde à faux). Avec garde à vrai il restait au volant pour toute la suite du banc
+    // d'essai, sa caisse garée sur la chaussée devant la villa : le test de circulation qui
+    // vient après mesurait alors 7 % de voitures sur le trottoir (elles la contournaient),
+    // alors qu'il trouvait 0 % lancé seul.
+    G.botDescendre(b, false);
     for (let k = 0; k < 6; k++) pas();
-    out.descendu = { rideBot: !!G.city.rideBot, visible: G.me.group.visible,
+    out.descendu = { rideBot: !!G.city.rideBot, visible: G.me.group.visible, auVolant: !!b.drive,
       dVoiture: +Math.hypot(P.pos.x - c.x, P.pos.z - c.z).toFixed(1) };
+    b.rdv = null; b.wait = 0;
     return out;
   })()`);
   if (r.erreur) return { ok: false, detail: r.erreur };
   const ok = r.monte && r.arrive && r.trajet < 150 && r.dPortail != null && r.dPortail < 40
-    && r.surChaussee >= 80 && r.vMoy > 3 && !r.descendu.rideBot && r.descendu.visible && r.descendu.dVoiture > 1.5;
+    && r.surChaussee >= 80 && r.vMoy > 3 && !r.descendu.rideBot && r.descendu.visible && r.descendu.dVoiture > 1.5
+    && !r.descendu.auVolant;
   return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.surChaussee} % du trajet sur la chaussée), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
 });
 
@@ -16216,12 +16227,22 @@ test('en auto-conduite la ville respecte le code de la route : chaussée, bon se
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // ON MESURE UNE VILLE AU REPOS. Un test précédent peut laisser un habitant AU VOLANT
+    // (botDescendre(b, true) = « il garde la voiture ») : sa caisse reste garée sur la
+    // chaussée pour toujours, la circulation s'y bute et `separerVehicules` finit par pousser
+    // une voiture sur le trottoir. Symptôme mesuré : 0 % hors chaussée lancé seul, 7 %
+    // enchaîné derrière le trajet vers la villa. On rend donc les véhicules et on renvoie
+    // tout le monde à pied avant de compter.
+    G.bots.forEach(b => { if (b.drive) G.botDescendre(b, false); b.rdv = null; b.rdvRoute = null; b.target = null; });
+    G.city.rideBot = null; G.city.botCarNear = null;
+    for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
     const dt = 1 / 60;
     const flotte = (G.city.aiCars || []).slice();
     const feux = (G.city.trafficLights || []).filter(t => t.ligne && !t.broken);
     if (!flotte.length || !feux.length) return { erreur: `circulation ${flotte.length} véhicules, ${feux.length} feux` };
     const rougeDepuis = feux.map(() => 0), prec = flotte.map(() => feux.map(() => null));
-    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, contresens = 0, arretRouge = 0;
+    const horsPar = flotte.map(() => 0); let horsOu = null;
+    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, horsStrict = 0, contresens = 0, arretRouge = 0;
     for (let k = 0; k < 60 * 60; k++) {
       G.step(dt, true);
       feux.forEach((tl, j) => { rougeDepuis[j] = tl.state === 0 ? rougeDepuis[j] + dt : 0; });
@@ -16242,23 +16263,40 @@ test('en auto-conduite la ville respecte le code de la route : chaussée, bon se
         });
       });
       if (k % 20) continue;
-      for (const c of flotte) {
+      flotte.forEach((c, i) => {
         ech++; const v = Math.abs(c.speed || 0); vsum += v;
         if (v < 0.3) immo++;
-        if (!G.surLaChaussee(c.x, c.z, 0.6)) hors++;
-        const vp = G.voieProche(c.x, c.z);
-        if (vp) { const d = Math.atan2(Math.sin(vp.arete.sens - c.h), Math.cos(vp.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
-      }
+        // « HORS CHAUSSÉE » SE MESURE SUR LE RÉSEAU, PAS SUR LES RECTANGLES. city.routes ne
+        // couvre pas les coins de carrefour ni les élargissements : une voiture qui suit
+        // exactement sa voie en tournant sort du rectangle d'un mètre ou deux. Mesuré sur les
+        // 5 relevés « hors chaussée » d'une ville déjà jouée : les 5 étaient à 0,2 à 2,6 m
+        // d'une voie du graphe et tous sur le bitume avec 3 m de marge — pas un seul sur un
+        // trottoir ou une pelouse. On ne compte donc un écart que si la voiture est SORTIE
+        // DES RECTANGLES **ET** LOIN DE TOUTE VOIE : c'est ça, rouler là où on n'a rien à
+        // faire. (`horsStrict` garde le chiffre brut, pour que le chef voie les deux.)
+        const vpc = G.voieProche(c.x, c.z);
+        if (!G.surLaChaussee(c.x, c.z, 0.6)) horsStrict++;
+        if (!G.surLaChaussee(c.x, c.z, 0.6) && !(vpc && vpc.d < 4.5)) {
+          hors++; horsPar[i]++;
+          // le premier écart : où, à quelle vitesse, et qu'est-ce qui le poussait là ?
+          if (!horsOu) { let voisin = 99;
+            for (const o of (G.city.cars || []).concat(flotte)) { if (o === c) continue; const d2 = Math.hypot(o.x - c.x, o.z - c.z); if (d2 < voisin) voisin = d2; }
+            horsOu = { i, t: +(k / 60).toFixed(1), x: +c.x.toFixed(1), z: +c.z.toFixed(1), v: +v.toFixed(1), raison: c.raison || '', voisin: +voisin.toFixed(1) }; }
+        }
+        if (vpc) { const d = Math.atan2(Math.sin(vpc.arete.sens - c.h), Math.cos(vpc.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
+      });
     }
     return { vehicules: flotte.length, feux: feux.length, lignesFranchies: franchi, feuxGrilles: grille,
       imagesArretAuRouge: arretRouge, vMoy: +(vsum / ech).toFixed(2),
       pctImmobile: Math.round(100 * immo / ech), pctHorsChaussee: Math.round(100 * hors / ech),
-      pctContresens: Math.round(100 * contresens / ech) };
+      pctContresens: Math.round(100 * contresens / ech), pctHorsRectangles: Math.round(100 * horsStrict / ech),
+      horsVehicules: horsPar.filter(n => n > 0).length, horsPire: Math.max(0, ...horsPar), horsOu };
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
   const ok = r.feuxGrilles === 0 && r.lignesFranchies >= 3 && r.imagesArretAuRouge > 0
     && r.pctHorsChaussee <= 5 && r.pctContresens <= 6 && r.vMoy >= 3;
-  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % hors chaussée, ${r.pctContresens} % à contresens de la voie la plus proche` };
+  const ou = r.horsOu ? ` (1er écart : voiture ${r.horsOu.i} à ${r.horsOu.t} s en (${r.horsOu.x}, ${r.horsOu.z}), ${r.horsOu.v} m/s, raison « ${r.horsOu.raison} », voisin le plus proche à ${r.horsOu.voisin} m)` : '';
+  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % vraiment hors route (${r.pctHorsRectangles} % hors des rectangles city.routes, coins de carrefour compris) sur ${r.horsVehicules} voiture(s) (la pire ${r.horsPire} relevés)${ou}, ${r.pctContresens} % à contresens de la voie la plus proche` };
 });
 // ================= POSTE DRONE & ROBOT (round 71) =================
 test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort, se range et s\'offre', async p => {

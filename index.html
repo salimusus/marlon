@@ -20792,6 +20792,26 @@ function step(dt, active) {
   // bouger) mais APRES `cityCommon`, qui fait justement avancer l'ambulance qui le transporte.
   // La camera, elle, reste entiere : elle est pilotee ailleurs, dans la boucle d'affichage.
   if (P.secours) { cityCommon(dt); return; }
+  // PASSAGER D'UN AMI : LE JOUEUR EST DANS LA CAISSE, PAS SUR LE BITUME. C'est la racine du
+  // « quand le joueur est dans un vehicule avec un membre, ca bug » du joueur. step() n'avait
+  // AUCUNE sortie pour lui : on lui appliquait la gravite, les collisions et tout le code de la
+  // MARCHE pendant que `poseJoueurAuVolant` dessinait son avatar sur le siege. Sa position
+  // REELLE restait donc plantee a l'endroit ou il etait monte, la voiture partait sans lui, et
+  // la camera — qui suit la position, pas le dessin — restait en arriere : mesure, apres douze
+  // secondes de route le joueur etait a 32 m de la voiture ou il etait cense etre assis.
+  // On le colle au vehicule EXACTEMENT comme driveStep le fait pour le conducteur (meme
+  // hauteur, meme cap, meme vitesse) ; l'avatar, lui, garde son siege de passager.
+  {
+    const vjp = vehiculeDuJoueur();
+    if (vjp && !vjp.volant && vjp.car) {
+      const c = vjp.car, sp = c.spec || { seat: 0.85 };
+      P.pos.set(c.x, (c.y || 0) + (c.rider ? sp.seat - 0.55 : 0.3), c.z);
+      P.facing = c.h; P.grounded = true; P.standing = null;
+      const vC = c.speed || 0;
+      P.vel.set(Math.sin(c.h) * vC, 0, Math.cos(c.h) * vC);
+      cityCommon(dt); return;
+    }
+  }
 
   if (P.standing && P.standing.conv) { P.pos.x += P.standing.conv.x * dt; P.pos.z += P.standing.conv.z * dt; }
   const onIce = !!(P.standing && P.standing.ice) || (P.grounded && surGlace(P.pos.x, P.pos.z));
@@ -24462,6 +24482,7 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
 function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const R = 0.3, out = dirs.map(() => maxD);
+  const enVehicule = !!vehiculeAssis();   // au volant OU passager : voir « UN POTEAU NE CALE PAS LA CAMÉRA »
   const essaie = (o) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
     if (o.y + hy < oy - 1.4) return;   // sol et petits meubles : la caméra passe au-dessus
@@ -24478,9 +24499,14 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
     // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
     // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
-    // AU VOLANT seulement : à pied, en intérieur, ce sont justement les agrès et les petits
-    // meubles qui posent la caméra à bonne distance (maison de poupée, test 219).
-    if (drive.car && o.w < 0.7 && o.d < 0.7) continue;
+    // DANS UN VÉHICULE seulement : à pied, en intérieur, ce sont justement les agrès et les
+    // petits meubles qui posent la caméra à bonne distance (maison de poupée, test 219).
+    // ET LE PASSAGER Y A DROIT AUSSI (round 72). La règle ne lisait que `drive.car` : emmené
+    // par un ami, la perche se faisait couper par chaque lampadaire longé. Mesuré pendant un
+    // trajet réel : un poteau de 36 cm la ramenait à 3,09 m, la caméra plongeait dans la
+    // carrosserie, puis repartait — « la caméra est ivre ». `enVehicule` est calculé UNE fois
+    // par appel (vehiculeDuJoueur remonte city.rideBot, ce n'est pas gratuit dans une boucle).
+    if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.
@@ -24508,6 +24534,10 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
 function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
   if (!(maxD > 0.2)) return -1;
   let best = -1;
+  // MÊME RÈGLE QUE camLibres : dans un véhicule, un poteau ne bouche pas la vue. Sans cela ce
+  // dernier filet recoupait la perche sur le lampadaire que camLibres venait d'ignorer, et la
+  // caméra retombait sur la carrosserie une image sur deux.
+  const enVehicule = !!vehiculeAssis();
   const essaie = (o) => {
     const hx = Math.max(o.w, 0.36) / 2, hy = o.h / 2, hz = Math.max(o.d, 0.36) / 2;
     if (Math.abs(ox - o.x) < hx + 0.12 && Math.abs(oy - o.y) < hy + 0.12 && Math.abs(oz - o.z) < hz + 0.12) return;
@@ -24516,6 +24546,7 @@ function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
   };
   for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3)) {
     if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+    if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
     if (o.mesh && !o.mesh.visible) continue;   // un solide efface (plafond de la maison de poupee) ne bouche rien
     essaie(o);
   }

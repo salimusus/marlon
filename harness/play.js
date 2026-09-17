@@ -17240,3 +17240,53 @@ test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout
   const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
   return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
 });
+
+test('douze secondes de trajet en passager : la camera suit le vehicule sans plonger dans la tole ni s envoler', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais pris la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    const car = b.drive.car;
+    const out = { voiture: car.kind || 'voiture', long: +(car.baseD || 3).toFixed(1), sec: [] };
+    // ON LAISSE TOURNER : douze secondes de route a 60 images par seconde, et la camera est
+    // remise a jour A CHAQUE IMAGE (c'est frame() qui le fait dans le jeu ; sur le banc, une
+    // image reelle par seconde ne mesurerait rien). On releve une fois par seconde.
+    const cam = () => G.camera.position;
+    let dPireJoueur = 0, sauts = 0, sautMax = 0, prec = null, hors = 0;
+    for (let s = 0; s < 12; s++) {
+      for (let i = 0; i < 60; i++) {
+        pas();
+        G.camPerche(dt, false);
+        const dpc = Math.hypot(P.pos.x - car.x, P.pos.z - car.z);
+        if (dpc > dPireJoueur) dPireJoueur = dpc;
+      }
+      const c = cam();
+      const dCar = +Math.hypot(c.x - car.x, c.y - ((car.y || 0) + 1.2), c.z - car.z).toFixed(2);
+      if (prec != null) { const j = Math.abs(dCar - prec); if (j > sautMax) sautMax = j; if (j > 5) sauts++; }
+      prec = dCar;
+      const v = new THREE.Vector3(car.x, (car.y || 0) + 0.8, car.z); v.project(G.camera);
+      const dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
+      if (!dansLeCadre) hors++;
+      out.sec.push({ s: s + 1, d: dCar, camY: +c.y.toFixed(2), vit: +((car.speed || 0)).toFixed(1), cadre: dansLeCadre });
+    }
+    out.dJoueurVoiture = +dPireJoueur.toFixed(2);
+    out.sautMax = +sautMax.toFixed(2); out.sauts = sauts; out.horsCadre = hors;
+    out.dMin = Math.min(...out.sec.map(x => x.d)); out.dMax = Math.max(...out.sec.map(x => x.d));
+    out.passager = !!(G.city.rideBot && G.city.rideBot.drive && G.city.rideBot.drive.passager);
+    try { G.botDescendre(G.city.rideBot, false); } catch (e) {}
+    try { b.drive = null; b.rdv = null; car.busy = false; car.speed = 0; } catch (e) {}
+    G.city.botCarNear = null; G.city.rideBot = null;
+    return out;
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const plancher = r.long / 2 + 1.5;
+  const ok = r.passager && r.dJoueurVoiture < 0.6
+    && r.dMin > plancher && r.dMax < 17 && r.sauts === 0 && r.sautMax < 5 && r.horsCadre === 0;
+  return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m = demi-longueur + 1,5), sans aucun saut de plus de 5 m d'une seconde a l'autre (plus gros : ${r.sautMax} m), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
+});

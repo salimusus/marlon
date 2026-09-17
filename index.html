@@ -23785,7 +23785,11 @@ function startGame() {
   $('start').classList.add('hidden');
   if (net.on) netSend({ t: 'look', name: myCfg.name, look: myLook() });
   if (net.on && !net.host) { chooseWorld(net.world ?? 0); }
-  else { chooseWorld(4); guerre.vu = true; msg('MARLON · Recrute un ami via les ordres ↑, puis ouvre la carte avec M ou le pavé PS5.', 6000); }
+  // On entre directement en ville — mais PAS dans la guerre des gangs : `guerre.vu = true` dès
+  // l'accueil faisait parler la pastille d'un gang que l'enfant n'a pas (n° 67, et le n° 3 qui
+  // revenait). La guerre ne commence que quand l'écran 🚩 a été ouvert. Le message de bienvenue
+  // passe par ctrlText : « E » devient △ à la manette.
+  else { chooseWorld(4); msg('🏙️ Bienvenue à Marlon ! Balade-toi : E pour agir, monter en voiture, parler', 5000); }
   updateHud();
 }
 $('hostBtn').addEventListener('click', () => hostGame());

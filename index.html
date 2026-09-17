@@ -16662,9 +16662,12 @@ function placeBotsVille() {
   bots.forEach((b, k) => {
     const t = pans[(k * 7 + 3) % pans.length];
     let x = t.x, z = t.z;
-    for (let essai = 0; essai < 8; essai++) {
+    // La foule du départ reste à moins de 40 m du point d'arrivée : un pan de trottoir de
+    // 19 m dont le centre est à 38 m menait un habitant à 46 m, hors de vue.
+    for (let essai = 0; essai < 12; essai++) {
       x = t.x + rnd(-t.w / 2 + 0.6, t.w / 2 - 0.6); z = t.z + rnd(-t.d / 2 + 0.6, t.d / 2 - 0.6);
-      if (!gene(x, z)) break;
+      if (!gene(x, z) && Math.hypot(x - sx, z - sz) <= 40) break;
+      if (essai === 11) { x = t.x; z = t.z; }
     }
     const y = t.o ? t.o.y + t.o.h / 2 : 0.3;
     b.pos.set(x, y, z); b.cpPos = b.pos.clone(); b.facing = rnd(0, Math.PI * 2); b.av.group.position.copy(b.pos); b.av.group.rotation.y = b.facing;

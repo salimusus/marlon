@@ -10407,7 +10407,7 @@ function answer(v, el) {
   // on laisse la craie finir sa phrase avant de passer a l'exercice suivant
   school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, Math.max(good ? 1500 : 2800, craie * 1000 + 1200));
 }
-$('schClose').addEventListener('click', () => { voice.stop(); closeUI(); msg('🏫 Leçon terminée : tu te lèves (E sur une chaise pour reprendre)', 2200); });
+$('schClose').addEventListener('click', () => { voice.stop(); fermeUI(); msg('🏫 Leçon terminée : tu te lèves (E sur une chaise pour reprendre)', 2200); });
 $('schRelire').addEventListener('click', () => schLire());
 // ================= L'ECOLE : UNE VRAIE SALLE DE CLASSE =================
 // Un tableau GRIS avec ses craies, des tables d'ecolier et des chaises ou l'on s'assoit pour
@@ -21922,12 +21922,13 @@ function navPremier() {
   const e = art || c.find(x => !ferme(x)) || c[0];
   NAVTV.i = c.indexOf(e); return navChoisit(e);
 }
-function closeUI() { if (!uiOpen) return; $(uiOpen).querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
-  // FERMER LA LEÇON, C'EST SE LEVER. ◯ fermait la fenêtre de l'école mais le personnage restait
-  // assis, et il fallait un second ◯ (n° 65 du Joueur). On demande le saut qui fait quitter la
-  // chaise (sitTick choisit le côté libre), comme si l'enfant l'avait appuyé lui-même.
-  if (uiOpen === 'schoolUI' && P.sit && P.sit.ecole) P.jumpBuf = 0.2;
-  $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
+function closeUI() { if (!uiOpen) return; $(uiOpen).querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); $(uiOpen).classList.add('hidden'); uiOpen = null; paused = false; document.body.classList.remove('uiopen'); }
+// FERMER LA LEÇON AVEC ◯ / ÉCHAP, C'EST SE LEVER. ◯ fermait la fenêtre de l'école mais le personnage
+// restait assis, et il fallait un second ◯ (n° 65 du Joueur). Quand c'est l'ENFANT qui ferme (◯,
+// Échap, le bouton ✕), on demande le saut qui fait quitter la chaise (sitTick choisit le côté
+// libre). Le jeu, lui, ferme la fenêtre par closeUI() sans lever personne (l'exercice suivant,
+// le banc d'essai qui mesure le tableau en restant assis).
+function fermeUI() { const lecon = uiOpen === 'schoolUI' && P.sit && P.sit.ecole; closeUI(); if (lecon) P.jumpBuf = 0.2; }
 const itemKey = (cat, it) => `${cat}:${it.id}`;
 function applyShopItem(cat, it) {
   if (cat === 'Chapeaux') myCfg.hat = it.id; else if (cat === 'Gants') myCfg.gants = it.id; else if (cat === 'Vestes') myCfg.jacket = it.id; else if (cat === 'Lunettes') myCfg.glasses = !!it.id; else if (cat === 'Sacs') myCfg.bag = it.id;
@@ -23083,7 +23084,7 @@ window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   if (e.code === 'Slash' || e.key === '/') { if (running) { e.preventDefault(); $('chat').classList.add('open'); $('chatBtn').classList.add('on'); chatIn.focus(); } return; }
-  if (e.code === 'Escape') { if (uiOpen) closeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
+  if (e.code === 'Escape') { if (uiOpen) fermeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
   if (e.code === 'KeyR' && running && !paused && !dead && !won) { die(true); msg('Réinitialisation…', 900); return; }
   if (e.code === 'KeyB' && running && city.on && !uiOpen) { openStore(); return; }
   if (e.code === 'KeyJ' && running && city.on && !uiOpen) { openMissions(city.offNear); return; }

@@ -11998,7 +11998,7 @@ function voilePose(dt) {
   const g = P.voileMesh;
   const vx = P.vel.x, vz = P.vel.z, v = Math.hypot(vx, vz);
   if (P.voile === 'parachute') {
-    me.group.position.set(P.pos.x, P.pos.y - (me.rig.baisse || 0), P.pos.z);
+    me.group.position.set(P.pos.x, P.pos.y - (me.rig.baisse || 0) - (me.rig.bassin || 0), P.pos.z);
     me.group.rotation.set(-(me.rig.penche || 0), P.facing, 0, 'YXZ');
     me.rig.armL.rotation.set(-2.5, 0, 0.5); me.rig.armR.rotation.set(-2.5, 0, -0.5);
     me.rig.legL.rotation.set(0.35, 0, 0); me.rig.legR.rotation.set(0.2, 0, 0);
@@ -14651,8 +14651,186 @@ function tickBubbles() {
   }
 }
 const allAvatars = () => [me, ...bots.map(b => b.av), ...[...net.remotes.values()].map(r => r.av)];
+// ================= LA FOULEE : LE PIED NE GLISSE PLUS =================
+// LE DEFAUT, mesure au banc avant correction : a 5,6 m/s le corps avancait de 1,87 m par pas
+// pendant que le pied « pose » n'en balayait que 0,66 — 1,21 m de patinage PAR PAS, 1,25 m en
+// course. Les jambes tournaient a cadence FIXE (`rig.walk += dt * vitesse * 1,7`) et le pied
+// decrivait toujours le meme petit arc : le personnage avancait plus vite que ses pieds ne le
+// portaient. C'est exactement ce que le joueur decrivait : « on a l'impression qu'il glisse ».
+//
+// LA CORRECTION, A LA RACINE : le pied d'appui est VERROUILLE AU SOL. A chaque image on lui
+// retire le deplacement reel du corps et la rotation du corps ; il ne bouge donc plus d'un
+// millimetre par rapport au sol tant qu'il porte le poids, et c'est le corps qui passe
+// par-dessus, comme dans une vraie marche. Le reste en decoule :
+//   — la FOULEE S'ALLONGE avec la vitesse (0,42 m a l'arret, 1,50 m au sprint) au lieu de
+//     seulement s'accelerer ; la cadence, elle, se deduit (cadence = vitesse / longueur) ;
+//   — la part du cycle passee au sol DIMINUE quand on court : au sprint il y a une vraie
+//     phase de suspension, les deux pieds en l'air ;
+//   — le BASSIN monte et descend : une jambe de 72 cm ne peut PAS toucher le sol a 35 cm
+//     devant la hanche sans que la hanche descende. La descente est calculee, pas decoree ;
+//   — le BUSTE se penche en avant a la course.
+// La pose est obtenue par cinematique inverse (deux segments dans le plan sagittal) : on
+// donne la position du pied, on en deduit hanche et genou. L'inverse de l'ancienne methode.
+const JAMBE_CUISSE = 1.0 * S;      // hanche → genou
+const JAMBE_TIBIA = 0.7 * S;       // genou → cheville (le pivot du pied)
+const JAMBE_LONG = JAMBE_CUISSE + JAMBE_TIBIA;
+const PIED_AVANT = 0.14 * S;       // la semelle porte 5 cm devant la cheville
+const PIED_BAS = 0.30 * S;         // dessous de semelle sous la cheville
+const HANCHE_Y = 2.0 * S;          // hauteur de la hanche, jambe tendue
+const FOULEE_MAX = 1.50;           // longueur d'un pas au sprint (m)
+const APPUI_COURSE = 0.70;         // course du pied AU SOL : bornee par la longueur de jambe
+const BASSIN_MAX = 0.13;           // descente maximale du bassin (m)
+const BUSTE_MAX = 0.16;            // inclinaison du buste a pleine course (rad, ~9°)
+// Les trois nombres d'une allure, a une vitesse donnee. `freq` est en PAS par seconde (un
+// cycle complet = deux pas). `appui` est la fraction du cycle qu'un pied donne passe au sol :
+// > 0,5 il y a double appui (marche lente), < 0,5 il y a suspension (course).
+function fouleeDe(v) {
+  const va = Math.min(Math.max(v || 0, 0), 16);
+  const pas = Math.min(0.42 + 0.115 * va, FOULEE_MAX);
+  const appui = Math.min(0.62, Math.max(0.26, APPUI_COURSE / (2 * pas)));
+  return { pas, appui, sol: 2 * appui * pas, freq: va / pas };
+}
+// Cinematique inverse d'une jambe : on veut la CHEVILLE en (dx, dy, dz) par rapport a la
+// hanche. `rotation.z` ouvre la jambe sur le cote (le petit pas de cote quand on change de
+// direction), `rotation.x` de la hanche et du genou font le reste dans le plan.
+// Si le point est hors d'atteinte on garde la composante HORIZONTALE exacte — c'est elle qui
+// se verrait glisser — et on laisse le pied se lever : c'est ce que fait un vrai pied qui
+// deroule sur la pointe en fin d'appui.
+function jambeIK(dx, dy, dz) {
+  if (dy > -0.06) dy = -0.06;
+  const max = JAMBE_LONG * 0.999;
+  let h = Math.hypot(dx, dy), r = Math.hypot(h, dz);
+  if (r > max) {
+    if (Math.abs(dz) > max) { dz = Math.sign(dz) * max; h = 0.02; }
+    else h = Math.sqrt(Math.max(0.0004, max * max - dz * dz));
+    const k = h / Math.max(1e-4, Math.hypot(dx, dy)); dx *= k; dy *= k; r = Math.hypot(h, dz);
+  }
+  if (r < 0.18) { const k = 0.18 / Math.max(1e-4, r); dx *= k; dy *= k; dz *= k; h *= k; r = 0.18; }
+  const a = JAMBE_CUISSE, b = JAMBE_TIBIA;
+  const genou = Math.acos(Math.min(1, Math.max(-1, (r * r - a * a - b * b) / (2 * a * b))));
+  const ecart = Math.acos(Math.min(1, Math.max(-1, (a * a + r * r - b * b) / (2 * a * r))));
+  const beta = Math.atan2(-dz, h);
+  return { hanche: beta - ecart, genou, cote: Math.max(-0.4, Math.min(0.4, Math.atan2(dx, -dy))) };
+}
+// Le pas lui-meme. Renvoie la phase du cycle pour que les bras suivent les jambes.
+function poseJambes(rig, vDonne, dt) {
+  const g = rig.groupe, jL = rig.legL, jR = rig.legR;
+  if (!g || !jL || !jL.genou || !jR || !jR.genou || !(dt > 0)) return null;
+  // LE MOTEUR DE LA FOULEE, C'EST LE DEPLACEMENT REEL DU CORPS, pas une horloge a part : en
+  // le lisant sur le groupe de l'avatar on marche juste pour le joueur ET pour les bots, et
+  // le jour ou le personnage est bloque contre un mur ses jambes s'arretent avec lui.
+  const gx = g.position.x, gy = g.position.y, gz = g.position.z, gf = g.rotation.y;
+  const neuf = rig.pieds == null || rig.px == null;
+  if (rig.px == null) { rig.px = gx; rig.py = gy; rig.pz = gz; rig.pf = gf; }
+  let wx = gx - rig.px, wy = gy - rig.py, wz = gz - rig.pz;
+  let df = Math.atan2(Math.sin(gf - rig.pf), Math.cos(gf - rig.pf));
+  const saute = Math.hypot(wx, wz) > 2.5 || Math.abs(wy) > 2.5;   // teleportation (__SHOT.go, respawn)
+  rig.px = gx; rig.py = gy; rig.pz = gz; rig.pf = gf;
+  if (saute || neuf) { wx = wy = wz = 0; df = 0; rig.pieds = null; }
+  const cf = Math.cos(gf), sf = Math.sin(gf);
+  const lx = wx * cf - wz * sf, lz = wx * sf + wz * cf;   // deplacement du corps dans SON repere
+  const v = Math.min(16, rig.pieds ? Math.hypot(lx, lz) / dt : Math.max(0, vDonne || 0));
+  const F = fouleeDe(v);
+  if (!rig.pieds) {
+    rig.cycle = 0; rig.dirx = 0; rig.dirz = 1; rig.foulK = 0;
+    rig.pieds = [{ ax: -0.5 * S, az: 0, ay: 0, sol: true, bx: null, bz: 0 }, { ax: 0.5 * S, az: 0, ay: 0, sol: true, bx: null, bz: 0 }];
+  }
+  rig.cycle = (rig.cycle + dt * F.freq / 2) % 1;
+  // direction du pas : celle du deplacement, lissee. C'est elle qui pose le pied DE COTE
+  // quand on change de direction en marchant, sans rien coder de special pour ca.
+  const n = Math.hypot(lx, lz);
+  if (n > 1e-4) { const k = Math.min(1, dt * 12); rig.dirx += (lx / n - rig.dirx) * k; rig.dirz += (lz / n - rig.dirz) * k; }
+  const dn = Math.hypot(rig.dirx, rig.dirz) || 1;
+  const dirx = rig.dirx / dn, dirz = rig.dirz / dn;
+  const leve = 0.05 + 0.10 * Math.min(1, v / 9);     // garde au sol du pied pendant le retour
+  const avance = F.sol / 2;
+  const pos = [], appuis = [];
+  for (let i = 0; i < 2; i++) {
+    const p = rig.pieds[i], hx = (i ? 0.5 : -0.5) * S;
+    const u = (rig.cycle + i * 0.5) % 1, auSol = u < F.appui;
+    // L'ANCRE SUIT LE SOL : on lui retire la rotation puis le deplacement du corps. Pendant
+    // l'appui c'est le pied lui-meme (donc glissement nul par construction) ; pendant le
+    // retour c'est le point d'ou il a decolle, qui recule pareil.
+    if (df) {
+      const c2 = Math.cos(df), s2 = Math.sin(df);
+      const nx = p.ax * c2 - p.az * s2, nz = p.ax * s2 + p.az * c2; p.ax = nx; p.az = nz;
+      if (p.bx != null) { const mx = p.bx * c2 - p.bz * s2, mz = p.bx * s2 + p.bz * c2; p.bx = mx; p.bz = mz; }
+    }
+    p.ax -= lx; p.az -= lz; p.ay -= wy;
+    if (p.bx != null) { p.bx -= lx; p.bz -= lz; }
+    const cx = hx + dirx * avance, cz = dirz * avance;   // point de pose prevu, devant la hanche
+    let fx, fy, fz;
+    if (auSol) {
+      // on se pose EXACTEMENT sur le point vise en fin de retour : aucune saccade au contact
+      if (!p.sol) { p.sol = true; p.ax = p.bx != null ? p.bx : cx; p.az = p.bx != null ? p.bz : cz; p.ay = 0; p.bx = null; }
+      fx = p.ax; fy = p.ay; fz = p.az;
+    } else {
+      p.sol = false;
+      const s = (u - F.appui) / (1 - F.appui), e = s * s * (3 - 2 * s);
+      fx = p.ax + (cx - p.ax) * e; fz = p.az + (cz - p.az) * e;
+      fy = p.ay * (1 - e) + leve * Math.sin(Math.PI * s);
+      // POSE DOUCE. En visant jusqu'au bout un point lie au CORPS, le pied arrivait au sol en
+      // avancant encore a la vitesse du corps : il patinait a chaque contact. A mi-retour on
+      // FIGE donc le point d'arrivee DANS LE MONDE (il recule ensuite comme le sol) et on
+      // finit dessus en douceur : vitesse nulle a l'instant exact du contact.
+      if (s >= 0.55) {
+        if (p.bx == null) {
+          const T = 2 / Math.max(0.2, F.freq), reste = (1 - s) * (1 - F.appui) * T;
+          p.bx = cx + dirx * v * reste; p.bz = cz + dirz * v * reste;
+        }
+        const w = (s - 0.55) / 0.45, ew = w * w * (3 - 2 * w);
+        fx += (p.bx - fx) * ew; fz += (p.bz - fz) * ew;
+      }
+    }
+    pos.push([fx, fy, fz]); appuis.push(auSol);
+  }
+  // LE BASSIN. Ce n'est pas une decoration : a 35 cm devant la hanche, une jambe de 72 cm
+  // n'atteint le sol que si la hanche descend de 11 cm. On calcule la descente exigee par le
+  // ou les pieds au sol, on la lisse, et on la borne.
+  let besoin = 0;
+  for (let i = 0; i < 2; i++) {
+    if (!appuis[i]) continue;
+    const [fx, fy, fz] = pos[i], hx = (i ? 0.5 : -0.5) * S;
+    const plat = Math.hypot(fx - hx, fz - PIED_AVANT);
+    const haut = Math.sqrt(Math.max(0.0004, JAMBE_LONG * JAMBE_LONG - plat * plat));
+    besoin = Math.max(besoin, HANCHE_Y - (fy + PIED_BAS + haut));
+  }
+  besoin = Math.max(0, Math.min(BASSIN_MAX, besoin));
+  // lissage RAPIDE : le bassin oscille a deux fois la cadence du pas (plus de 10 Hz en
+  // course), un lissage mou l'aurait simplement efface et le pied n'aurait plus atteint le sol
+  rig.bassin = (rig.bassin || 0) + (besoin - (rig.bassin || 0)) * Math.min(1, dt * 45);
+  // LE BUSTE se penche en avant quand on court : c'est le tronc qui emmene le corps.
+  const inclinC = Math.max(0, Math.min(1, (v - 4.2) / 5.5)) * BUSTE_MAX;
+  rig.inclin = (rig.inclin || 0) + (inclinC - (rig.inclin || 0)) * Math.min(1, dt * 5);
+  const ci = Math.cos(rig.inclin), si = Math.sin(rig.inclin);
+  rig.foulK = Math.min(1, (rig.foulK || 0) + dt * 9);   // fondu court a la reprise de la marche
+  const hancheY = HANCHE_Y - rig.bassin;
+  for (let i = 0; i < 2; i++) {
+    const [fx, fy, fz] = pos[i], hx = (i ? 0.5 : -0.5) * S, jambe = i ? jR : jL;
+    // cheville visee, puis basculee dans le repere du buste penche
+    const ax = fx, ay0 = fy + PIED_BAS, az0 = fz - PIED_AVANT;
+    const ay = ay0 * ci + az0 * si, az = -ay0 * si + az0 * ci;
+    const ik = jambeIK(ax - hx, ay - hancheY, az);
+    const k = rig.foulK;
+    jambe.rotation.x += (ik.hanche - jambe.rotation.x) * k;
+    jambe.genou.rotation.x += (ik.genou - jambe.genou.rotation.x) * k;
+    jambe.rotation.z += (ik.cote - jambe.rotation.z) * k;
+  }
+  rig.foulActive = true;
+  return rig.cycle;
+}
 function animateRig(rig, mode, speed, dt, t) {
+  rig.foulActive = false;
   animateRigCorps(rig, mode, speed, dt, t);
+  // Hors marche (en l'air, assis, a l'arret, accroupi...) la foulee se defait : les ancres au
+  // sol sont perimees, le bassin remonte et le buste se redresse.
+  if (!rig.foulActive) {
+    rig.pieds = null; rig.foulK = 0;
+    const r = Math.max(0, 1 - dt * 8);
+    rig.bassin = (rig.bassin || 0) * r; rig.inclin = (rig.inclin || 0) * r;
+    if (rig.bassin < 0.001) rig.bassin = 0;
+    if (rig.inclin < 0.001) rig.inclin = 0;
+  }
   const ease2 = Math.min(1, dt * 12);
   // LE PIED RESTE A PLAT. La basket est plus longue que l'ancien pied carre : soudee au tibia,
   // sa pointe s'enfoncait de 10 cm dans le bitume au milieu de la foulee. La CHEVILLE compense
@@ -14660,7 +14838,9 @@ function animateRig(rig, mode, speed, dt, t) {
   // APRES le corps : en le faisant avant, le pied avait une image de retard et replongeait.
   for (const lg of [rig.legL, rig.legR]) {
     if (!lg.pied) continue;
-    lg.pied.rotation.x = Math.max(-2, Math.min(0.8, -(lg.rotation.x + lg.genou.rotation.x)));
+    // (+ rig.inclin : le buste penche fait pivoter TOUT le groupe, la semelle doit rester
+    // parallele au sol du monde, pas a celui du personnage)
+    lg.pied.rotation.x = Math.max(-2, Math.min(0.8, -(lg.rotation.x + lg.genou.rotation.x + (rig.inclin || 0))));
   }
   // LA GARDE : les deux poings serres devant le visage, coudes rentres. On la pose APRES le
   // reste pour qu'elle tienne quel que soit ce que font les jambes (on recule en gardant) —
@@ -14709,7 +14889,7 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   // ACCUSER LE COUP : on se penche brievement vers l'avant ; A BOUT DE FORCES : un genou a terre
   if (rig.recul > 0) rig.recul = Math.max(0, rig.recul - dt);
   rig.penche = rig.recul > 0 ? Math.sin(rig.recul / 0.35 * Math.PI) * 0.45 : 0;
-  if (rig.groupe && rig.groupe !== me.group && Math.abs(rig.groupe.rotation.x) < 1) rig.groupe.rotation.x = -rig.penche;
+  if (rig.groupe && rig.groupe !== me.group && Math.abs(rig.groupe.rotation.x) < 1) rig.groupe.rotation.x = -rig.penche + (rig.inclin || 0);
   const debout = mode !== 'sleep' && mode !== 'sit' && mode !== 'ride' && mode !== 'swim' && mode !== 'lift';
   // 0,95 S a genoux, 0,55 S accroupi : c'est la hauteur dont le bassin descend, et les
   // jambes se plient pile de ce qu'il faut pour que les semelles restent au sol.
@@ -14764,15 +14944,22 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   if (rig.swingG > 0) { rig.swingG -= dt; rig.armL.rotation.x = -2.4 + (0.35 - rig.swingG) * 4.5; rig.armL.rotation.z = 0.6; if (cL) cL.rotation.x = -1.5 * Math.max(0, rig.swingG / 0.35 - 0.15); if (rig.swingG <= 0) { rig.armL.rotation.z = 0; if (cL) cL.rotation.x = 0; } }
   if (mode === 'air') { if (!(rig.swingG > 0)) to(rig.armL, -2.8); if (!(rig.swing > 0)) to(rig.armR, -2.8); to(rig.legL, 0.45); to(rig.legR, -0.35); toK(gL, 0.9); toK(gR, 0.5); if (!(rig.swingG > 0)) toK(cL, -0.4); if (!(rig.swing > 0)) toK(cR, -0.4); }
   else if (speed > 0.6) {
-    rig.walk += dt * speed * 1.7;
-    const s = Math.sin(rig.walk) * 0.85, course = speed > 1.3;
-    to(rig.legL, s); if (!(rig.kick > 0)) to(rig.legR, -s); if (!(rig.swingG > 0)) to(rig.armL, -s * 0.8); if (!(rig.swing > 0)) to(rig.armR, s * 0.8);
-    // LES GENOUX plient quand la jambe revient vers l'avant et se tendent quand elle pousse ;
-    // en course les talons montent bien plus haut et les coudes se replient
-    const k = course ? 1.6 : 1.2;
-    toK(gL, Math.max(0, -Math.sin(rig.walk + 0.9)) * k); if (!(rig.kick > 0)) toK(gR, Math.max(0, Math.sin(rig.walk + 0.9)) * k);
+    // LA FOULEE (voir poseJambes) : c'est elle qui pose hanches et genoux, a partir du
+    // deplacement REEL du corps, pour que le pied d'appui ne glisse pas. Les bras, eux,
+    // restent une sinusoide — mais calee sur la phase du cycle des jambes.
+    const cyc = (rig.kick > 0) ? null : poseJambes(rig, speed, dt);
+    if (cyc == null) {   // coup de pied en cours (ou rig incomplet) : ancienne cadence
+      rig.walk += dt * speed * 1.7;
+      const s0 = Math.sin(rig.walk) * 0.85;
+      to(rig.legL, s0); if (!(rig.kick > 0)) to(rig.legR, -s0);
+      toK(gL, Math.max(0, -Math.sin(rig.walk + 0.9)) * 1.2); if (!(rig.kick > 0)) toK(gR, Math.max(0, Math.sin(rig.walk + 0.9)) * 1.2);
+    } else rig.walk = cyc * Math.PI * 2 + Math.PI * 1.5;   // jambe gauche devant a cycle = 0
+    const s = Math.sin(rig.walk) * 0.85, course = speed > 5.5;
+    // les bras balancent a l'oppose des jambes, et plus ample quand on court
+    const amp = course ? 1.05 : 0.8;
+    if (!(rig.swingG > 0)) to(rig.armL, -s * amp); if (!(rig.swing > 0)) to(rig.armR, s * amp);
     if (!(rig.swingG > 0)) toK(cL, course ? -1.3 : -0.4); if (!(rig.swing > 0)) toK(cR, course ? -1.3 : -0.4);
-  } else { if (!(rig.swingG > 0)) to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); if (!(rig.swingG > 0)) toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); }
+  } else { if (!(rig.swingG > 0)) to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); if (!(rig.swingG > 0)) toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); rig.legL.rotation.z += (0 - rig.legL.rotation.z) * ease; rig.legR.rotation.z += (0 - rig.legR.rotation.z) * ease; }
   if (!(rig.swingG > 0) && !(rig.swing > 0)) { rig.armL.rotation.z += ((mode === 'air' ? 0.15 : 0.05 * Math.sin(t * 2)) - rig.armL.rotation.z) * ease; rig.armR.rotation.z = -rig.armL.rotation.z; }
   rig.head.rotation.y += (Math.sin(t * 0.9) * 0.12 - rig.head.rotation.y) * ease;
 }
@@ -15911,9 +16098,12 @@ function sonPas(x, y, z, sol, force) {
 function cadencePas(e, vitesse, dt) {
   if (!e) return 0;
   if (!(vitesse > 0.6)) { e.phasePas = 0; return 0; }
-  e.phasePas = (e.phasePas || 0) + dt * vitesse * 1.7;
-  const n = Math.floor(e.phasePas / Math.PI);
-  if (n > 0) { e.phasePas -= n * Math.PI; return Math.min(n, 3); }
+  // `fouleeDe` donne la cadence EXACTE des jambes en pas par seconde (la foulee s'allonge
+  // avec la vitesse, elle ne fait pas que s'accelerer) : `phasePas` compte donc des pas
+  // entiers, et le bruit tombe pile quand le pied touche.
+  e.phasePas = (e.phasePas || 0) + dt * fouleeDe(vitesse).freq;
+  const n = Math.floor(e.phasePas);
+  if (n > 0) { e.phasePas -= n; return Math.min(n, 3); }
   return 0;
 }
 // ---- LES COUPS ----
@@ -20375,7 +20565,7 @@ function updateBot(b, dt) {
   // POSTE ANIMATION : le combat d'un PNJ passe ici, entre la pose de base d'animateRig et la
   // mise en place du groupe — il faut que `rig.baisse` (l'esquive, la chute) soit déjà à
   // jour quand on descend l'avatar. Sans rig.cbt, animCombat rend la main immédiatement.
-  const sync = () => { animCombat(av, dt); av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0); av.group.rotation.y = b.facing; };
+  const sync = () => { animCombat(av, dt); av.group.position.copy(b.pos); av.group.position.y -= (av.rig.baisse || 0) + (av.rig.bassin || 0); av.group.rotation.y = b.facing; };
   if (b.state === 'fall') {
     b.vel.y -= G * dt; b.pos.addScaledVector(b.vel, dt); sync();
     animateRig(av.rig, 'air', 0, dt, simTime);
@@ -26635,7 +26825,9 @@ function frame() {
   // allongé : au lit… ou sur le banc de développé couché (avant, le joueur restait debout)
   const couche = (P.sleep && simTime < P.sleep) || gym.on === 'bench' || !!P.secours;   // au lit, au developpe couche… ou sur le brancard des secours
   if (couche) me.group.rotation.set(-Math.PI / 2, P.facing + Math.PI, 0, 'YXZ');
-  else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : 0; }
+  // buste penche en avant a la course (me.rig.inclin, pose par poseJambes) : le groupe du
+  // joueur est le seul que animateRigCorps ne touche pas, il faut l'appliquer ici
+  else { me.group.rotation.order = 'XYZ'; me.group.rotation.x = P.swing ? -P.swing.ang : (me.rig.inclin || 0); }
   // PASSAGER D'UN AMI : il est assis dans une voiture, comme au volant. Sans ce « vj », la
   // boucle d'affichage rejouait l'animation « debout » par-dessus la pose assise et le joueur
   // se retrouvait planté au milieu de la caisse, jambes tendues.
@@ -26654,7 +26846,7 @@ function frame() {
   // travailleurs : le joueur à bout de forces, ou qui esquive un coup, pliait les jambes
   // mais gardait la tête exactement à la même hauteur — l'esquive ne passait pas sous le
   // poing. On descend maintenant le groupe de la même quantité, comme pour tout le monde.
-  else if (!drive.car && !couche) me.group.position.y -= (me.rig.baisse || 0);
+  else if (!drive.car && !couche) me.group.position.y -= (me.rig.baisse || 0) + (me.rig.bassin || 0);
   // visée : le personnage regarde là où pointe la caméra, réticule + point laser
   // arme en main = visée active en permanence : elle suit l'orientation du joueur (Q/D ou joystick) et la hauteur des flèches
   const armed = !!(P.gun && P.drawn && !drive.car && running && !gym.on && !P.sit && !P.swing && !P.ride);
@@ -31617,7 +31809,7 @@ function poseBoites(n) {
 // ---- DÉPLACEMENTS DES TRAVAILLEURS ----
 function metierSync(w) {
   const av = w.av;
-  av.group.position.copy(w.pos); av.group.position.y -= (av.rig.baisse || 0);
+  av.group.position.copy(w.pos); av.group.position.y -= (av.rig.baisse || 0) + (av.rig.bassin || 0);
   av.group.rotation.y = w.facing;
 }
 function metierDit(w, txt) {
@@ -32853,7 +33045,7 @@ function reparateurTick(r, dt) {
     r.y = (c.y || 0);
   }
   av.group.rotation.order = 'YXZ';   // voir reparateurArrive : sans ça le buste se penche vers le sud
-  av.group.position.set(r.x, r.y - (av.rig.baisse || 0), r.z);
+  av.group.position.set(r.x, r.y - (av.rig.baisse || 0) - (av.rig.bassin || 0), r.z);
   av.group.rotation.y = r.face;
   if (typeof animateRig === 'function') animateRig(av.rig, 'idle', 0, dt, simTime);
   // le geste ne se joue qu'une fois le capot ouvert : avant, il plongeait la tête dans la tôle
@@ -32862,7 +33054,7 @@ function reparateurTick(r, dt) {
   // alors figé sur une seule pose), et deux réparateurs côte à côte, décalés par `r.ph`, ne
   // serrent pas leurs boulons en cadence comme deux métronomes.
   gesteMetier(av.rig, r.capot > 0.55 ? 'capot' : null, dt, r.t + r.ph);
-  av.group.position.y = r.y - (av.rig.baisse || 0);
+  av.group.position.y = r.y - (av.rig.baisse || 0) - (av.rig.bassin || 0);
   // UNE ÉTINCELLE ET UN COUP DE CLÉ, toutes les 0,7 s : on l'ENTEND réparer. Le son et la
   // gerbe sont calés sur la MÊME horloge que le geste, pas sur simTime : deux réparations
   // lancées à des instants différents ne tombent donc jamais en cadence.

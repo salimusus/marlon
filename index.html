@@ -23796,8 +23796,10 @@ function padEssaiTick(L, neuf, bas) {
   }
   const g = padActive();
   if (nom) nom.textContent = `${(manetteSalon.nom || 'Manette').split('(')[0].trim()} · prise ${(manetteSalon.i | 0) + 1} · agencement « ${L.profil} » · ${(L.brut || []).length} axes, ${((g && g.buttons) || []).length} boutons`;
-  // les sticks passent par la MEME zone morte que le jeu : ce qu'on voit est ce qui est joue
-  const [nx, ny] = padStick(L.lx, L.ly), [dx, dy] = padStick(L.rx, L.ry);
+  // les sticks passent par la MEME zone morte que le jeu : ce qu'on voit est ce qui est joue.
+  // Le stick DROIT a sa propre courbe depuis le round 71 (padVisee, plus fine au centre) : on
+  // l'affiche avec la sienne, sinon l'ecran d'essai mentirait sur ce que fait la camera.
+  const [nx, ny] = padStick(L.lx, L.ly), [dx, dy] = padVisee(L.rx, L.ry);
   // vertical : on montre ce que voit le JEU (pousser vers le haut = valeur positive)
   const vals = { lx: nx, ly: -ny, rx: dx, ry: -dy, l2: padCourse(L.l2), r2: padCourse(L.r2) };
   for (const [, k] of PT_AXES) {
@@ -23814,6 +23816,7 @@ function padEssaiTick(L, neuf, bas) {
     if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : settings.ctrl === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
     if (Math.abs(ny) > 0.15) p.push(`stick gauche : ${ny < 0 ? 'AVANT' : 'ARRIÈRE'} (${(-ny).toFixed(2)}) → ${drive.car ? 'rien (au volant, on accélère aux gâchettes)' : 'on marche'}`);
     if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) p.push(`stick droit : la CAMERA (${Math.abs(dx) > 0.1 ? (dx > 0 ? 'tourne a droite' : 'tourne a gauche') : ''}${Math.abs(dx) > 0.1 && Math.abs(dy) > 0.1 ? ', ' : ''}${Math.abs(dy) > 0.1 ? ((settings.invY ? -dy : dy) > 0 ? 'regarde en bas' : 'regarde en haut') : ''})${settings.invY ? ' — axe vertical inverse (⚙️)' : ''}`);
     if (L.b[0]) p.push('✕ : braquer / rengainer l\'arme');
     if (L.b[1]) p.push('◯ : sauter');
     if (L.b[3]) p.push('△ : agir');

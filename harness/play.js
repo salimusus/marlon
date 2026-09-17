@@ -17244,6 +17244,13 @@ test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout
 test('douze secondes de trajet en passager : la camera suit le vehicule sans plonger dans la tole ni s envoler', async p => {
   const r = await p.evaluate(`(() => {
     const G = __G, P = G.P;
+    // LE TRAJET DOIT ETRE LE MEME A CHAQUE ESSAI. La route que prend l'ami, la voiture qu'il
+    // trouve et le mobilier qu'il longe dependent du hasard : joue seul le test passait, joue
+    // dans un lot il tombait sur un autre itineraire et sur un autre trottoir. On force donc le
+    // tirage (le brief l'autorise expressement) et on le rend a la fin, quoi qu'il arrive.
+    const vraiRnd = Math.random; let graine = 987654321;
+    Math.random = () => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine / 0x7fffffff; };
+    try {
     const { b } = ${CONDUITE_SETUP};
     const dt = 1 / 60; let t = 0;
     const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
@@ -17283,6 +17290,7 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
     try { b.drive = null; b.rdv = null; car.busy = false; car.speed = 0; } catch (e) {}
     G.city.botCarNear = null; G.city.rideBot = null;
     return out;
+    } finally { Math.random = vraiRnd; }
   })()`);
   if (r.erreur) return { ok: false, detail: r.erreur };
   // Le plancher : la camera ne doit jamais rentrer dans la caisse. On l'exige a la

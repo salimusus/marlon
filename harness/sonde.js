@@ -9,10 +9,11 @@ const HOOK=/const HOOK = `([\s\S]*?)`;\n/.exec(shot)[1];
 function serve(file){
   const html=fs.readFileSync(file,'utf8')
     .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/r128\/three\.min\.js"><\/script>/,'<script src="/three.min.js"></script>')
-    .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
+    .replace(/<script(?: defer)? src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs[^<]*<\/script>/,'')
+    .replace(/<script src="\.\/vendor\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
     .replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/,'')
     .replace(/\nloop\(\);/, '\nloop();\n'+HOOK);
-  const three=fs.readFileSync(path.join(ROOT,'harness','vendor','three.min.js'));
+  const three=fs.readFileSync(path.join(ROOT,'vendor','three.min.js'));
   const srv=http.createServer((q,r)=>{ if(q.url.startsWith('/three')){r.writeHead(200,{'Content-Type':'application/javascript'});r.end(three);}
     else {r.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});r.end(html);} });
   return new Promise(res=>srv.listen(0,'127.0.0.1',()=>res({srv,port:srv.address().port})));

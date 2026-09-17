@@ -1281,20 +1281,25 @@ test('un ami prend une voiture, vient te chercher et te conduit', async p => {
     __G.P.pos.set(c.x + 2, c.y + 0.4, c.z + 2); __G.botDriveTick(1 / 60);
     const propose = __G.city.botCarNear && __G.city.botCarNear.name;
     __G.monterAvecBot(b);
-    const passager = b.drive.passager, cache = !__G.me.group.visible;
+    // ROUND 71 : le joueur n'est plus CACHÉ quand un ami le conduit, il est VU assis sur le
+    // siège d'à côté (c'était sa plainte n° 1). Ce test exigeait l'inverse (`cache`).
+    const passager = b.drive.passager, vu = __G.me.group.visible;
     // « va à la villa »
     const ordre2 = __G.commandeSociale('Nathan_pro va à la villa');
     let m = 0; while (b.drive && b.drive.etat === 'route' && m < 120000) { rouler(); m++; }
-    const dVilla = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 190);
-    const suit = Math.hypot(__G.P.pos.x - b.drive.car.x, __G.P.pos.z - b.drive.car.z);
+    const cv = b.drive.car;
+    const dVilla = Math.hypot(cv.x - 48, cv.z - 190);
+    // il reste À BORD : sa place est le siège passager, à un mètre et demi du centre de la
+    // caisse — et non plus pile sur son axe
+    const suit = Math.hypot(__G.P.pos.x - cv.x, __G.P.pos.z - cv.z);
     __G.botDescendre(b, false);
     const descendu = !b.drive && __G.me.group.visible;
-    return { ordre, dest, auVolant, arrivee: +arrivee.toFixed(1), propose, passager, cache, ordre2,
+    return { ordre, dest, auVolant, arrivee: +arrivee.toFixed(1), propose, passager, vu, ordre2,
       dVilla: +dVilla.toFixed(1), suit: +suit.toFixed(2), descendu, s1: +(n / 60).toFixed(0), s2: +(m / 60).toFixed(0) };
   });
-  const ok = r.ordre && r.dest && r.auVolant && r.arrivee < 9 && r.propose === 'Nathan_pro' && r.passager && r.cache
-    && r.ordre2 && r.dVilla < 9 && r.suit < 0.5 && r.descendu;
-  return { ok, detail: `« prends une voiture et viens devant la banque » → au volant en ${r.s1} s, garé à ${r.arrivee} m · montée proposée (${r.propose}) · « va à la villa » → ${r.s2} s, arrivé à ${r.dVilla} m de l'allée (le joueur reste à bord, ${r.suit} m) · descente OK` };
+  const ok = r.ordre && r.dest && r.auVolant && r.arrivee < 9 && r.propose === 'Nathan_pro' && r.passager && r.vu
+    && r.ordre2 && r.dVilla < 12 && r.suit < 3 && r.descendu;
+  return { ok, detail: `« prends une voiture et viens devant la banque » → au volant en ${r.s1} s, garé à ${r.arrivee} m · montée proposée (${r.propose}), joueur VISIBLE à bord (${r.vu}) · « va à la villa » → ${r.s2} s, voiture arrivée à ${r.dVilla} m de l'allée (le joueur reste à bord, ${r.suit} m du centre de la caisse) · descente OK` };
 });
 
 
@@ -15739,7 +15744,746 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
 
+// ============================================================================
+// POSTE MANETTE & CAMERA (round 71) — « la manette n est pas au point avec la camera »
+// Les cinq tests ci-dessous mesurent la camera COMME UNE MANETTE la pilote : on branche une
+// DualSense simulee, on pousse les sticks, et on compte des degres par seconde et des metres.
+// Le banc tourne a une image par seconde : rien n'est mesure a la montre, tout est compte en
+// IMAGES SIMULEES (pollGamepad / camPerche appeles a la main, 60 ou 120 fois par seconde).
+// ============================================================================
+const MAN_DS = () => ({ index: 0, connected: true, mapping: 'standard',
+  id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+  axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) });
+
+test('stick droit relache : la camera ne bouge pas d un degre, et une poussee legere repond tout de suite', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'cam'; G.P.drawn = false; G.P.aim = false;
+      // une seconde simulee de stick (120 images a 1/120), en degres par seconde
+      const vit = (rx, ry) => {
+        ds.axes = [0, 0, rx, ry]; G.cam.yaw = 0; G.cam.pitch = 0.32;
+        for (let i = 0; i < 120; i++) G.pollGamepad(1 / 120);
+        return { yaw: +(Math.abs(G.cam.yaw) * DEG).toFixed(1), pitch: +(Math.abs(G.cam.pitch - 0.32) * DEG).toFixed(1) };
+      };
+      const res = {};
+      // 1) MANETTE AU REPOS, et manette qui DERIVE (une DualSense usee rend 5 % au repos)
+      res.repos = vit(0, 0);
+      res.derive05 = vit(0.05, 0.05);
+      // 2) POUSSEE LEGERE : 12 % de la course doit deja faire tourner l'image
+      res.legere = vit(0.12, 0);
+      res.legereV = vit(0, 0.12);
+      // 3) LA COURBE : quart, moitie, trois quarts, bord
+      res.q25 = vit(0.25, 0); res.q50 = vit(0.5, 0); res.q75 = vit(0.75, 0); res.plein = vit(1, 0);
+      // LE VERTICAL SE MESURE SUR UN DIXIEME DE SECONDE : sa course entiere ne fait que
+      // 1,75 rad, une seconde de stick la sature et l'on mesurerait la BUTEE, pas la vitesse
+      ds.axes = [0, 0, 0, 1]; G.cam.pitch = 0.32;
+      for (let i = 0; i < 12; i++) G.pollGamepad(1 / 120);
+      res.pleinV = { pitch: +(Math.abs(G.cam.pitch - 0.32) * DEG * 10).toFixed(1) };
+      G.cam.pitch = 0.32; ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      // 4) PAS DE MARCHE D'ESCALIER : la vitesse doit monter sans saut en balayant la course
+      const courbe = [];
+      for (let v = 0; v <= 1.0001; v += 0.05) courbe.push(vit(+v.toFixed(2), 0).yaw);
+      let saut = 0;
+      for (let i = 1; i < courbe.length; i++) saut = Math.max(saut, courbe[i] - courbe[i - 1]);
+      res.sautMax = +saut.toFixed(1); res.courbe = courbe;
+      // 5) LE STICK DROIT NE DEPLACE PAS LE JOUEUR, LE STICK GAUCHE N'ARRACHE PAS LA CAMERA
+      G.settings.ctrl = 'cam'; G.P.vel.set(0, 0, 0); G.P.facing = 0; G.cam.yaw = 0;
+      ds.axes = [0, 0, 1, 0];
+      for (let i = 0; i < 60; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 60); G.step(1 / 60, true); }
+      res.stickDroitBouge = +Math.hypot(G.P.vel.x, G.P.vel.z).toFixed(2);
+      res.stickDroitFacing = +(Math.abs(G.P.facing) * DEG).toFixed(1);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.settings.ctrl = 'cam'; }
+  });
+  const ratioV = +(r.pleinV.pitch / r.plein.yaw).toFixed(2);
+  const ok = r.repos.yaw === 0 && r.repos.pitch === 0 && r.derive05.yaw === 0 && r.derive05.pitch === 0
+    && r.legere.yaw > 2 && r.legere.yaw < 25 && r.legereV.pitch > 1 && r.legereV.pitch < 20
+    && r.q50.yaw > 60 && r.q50.yaw < 0.35 * r.plein.yaw
+    && r.plein.yaw > 280 && r.plein.yaw < 340 && r.sautMax < 45
+    && ratioV > 0.55 && ratioV < 0.7
+    && r.stickDroitBouge < 0.05 && r.stickDroitFacing < 0.5;
+  return { ok, detail: `stick droit relache : ${r.repos.yaw} °/s (une manette usee qui derive de 5 % : ${r.derive05.yaw} °/s) — la zone morte ronde tient · poussee legere a 12 % : ${r.legere.yaw} °/s horizontal et ${r.legereV.pitch} °/s vertical, ca repond sans seuil · la courbe monte ${r.q25.yaw} → ${r.q50.yaw} → ${r.q75.yaw} → ${r.plein.yaw} °/s (a mi-course on est a ${Math.round(r.q50.yaw / r.plein.yaw * 100)} % de la vitesse maximale, contre 43 % avec la courbe de MARCHE d'avant : c'est ce qui rendait le cadrage impossible) · plus grosse marche d'une graduation a l'autre : ${r.sautMax} °/s, aucune saccade en poussant a fond · le vertical rend ${r.pleinV.pitch} °/s au bord, soit ${ratioV} fois l'horizontal : le MEME ressenti sur les deux axes · et le stick droit ne deplace pas le personnage (${r.stickDroitBouge} m/s, cap ${r.stickDroitFacing}°)` };
+});
+
+test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s inverse depuis la pause', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const vueY = () => {   // composante verticale de la direction du regard : > 0 = on regarde vers le haut
+      const d = new THREE.Vector3(); G.camera.getWorldDirection(d); return +d.y.toFixed(3);
+    };
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'cam'; G.P.drawn = false; G.P.aim = false;
+      const invAvant = !!G.settings.invY; G.settings.invY = false;
+      const pousse = (ry, n) => {
+        ds.axes = [0, 0, 0, ry];
+        for (let i = 0; i < n; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 120); G.pollGamepad(1 / 120); G.camPerche(1 / 60, false); }
+        return { pitch: +G.cam.pitch.toFixed(3), deg: +(G.cam.pitch * DEG).toFixed(1), camY: +G.camera.position.y.toFixed(2),
+          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY() };
+      };
+      const res = {};
+      G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null;
+      res.ciel = pousse(-1, 240);      // stick droit vers le haut : on leve les yeux
+      res.sol = pousse(1, 300);        // puis vers le bas : on regarde ses pieds
+      // ... et on revient : aucun retournement, l'image reste a l'endroit (la camera ne passe
+      // jamais sous l'horizon du joueur au point de se mettre la tete en bas)
+      res.retour = pousse(-1, 200);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      // L'INVERSION : le meme geste doit faire l'inverse
+      G.cam.pitch = 0.32; G.settings.invY = true;
+      res.inverse = pousse(-1, 120);
+      G.settings.invY = false; G.cam.pitch = 0.32;
+      res.normal = pousse(-1, 120);
+      G.settings.invY = invAvant;
+      res.bouton = !!document.getElementById('invYBtn');
+      res.retenu = (() => { const b = document.getElementById('invYBtn'); if (!b) return null; b.click(); const v = localStorage.getItem('superobby.invY'); b.click(); return v; })();
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120); G.cam.pitch = 0.32;
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.cam.pitch = 0.32; }
+  });
+  const ok = r.ciel.pitch <= -0.4 && r.ciel.vue > 0.25 && r.ciel.camY > 0.5 && r.ciel.d > 1.5
+    && r.sol.pitch >= 1.2 && r.sol.vue < -0.6 && r.retour.pitch <= -0.4
+    && r.inverse.pitch > 0.32 && r.normal.pitch < 0.32 && r.bouton && r.retenu === '1';
+  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
+});
+
+test('apres un virage, la camera se replace derriere le joueur en douceur, sans coup sec', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard',
+      id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      G.settings.sensib = 1; G.settings.ctrl = 'rot'; G.settings.turn = 160;
+      G.P.drawn = false; G.P.aim = false; G.P.run = false;
+      // LE DEMI-TOUR AU STICK DROIT : on regarde derriere soi, on relache, et la camera
+      // revient derriere le joueur. On compte la vitesse de retour IMAGE PAR IMAGE.
+      // le joueur a regarde DERRIERE lui au stick droit : la camera est a 180° de son dos
+      G.cam.yaw = 0; G.P.facing = 0; G.cam.freeUntil = 0; G.P.vel.set(0, 0, 0); G.cam.facingPrec = 0;
+      const pas = [];
+      for (let i = 0; i < 300; i++) {
+        G.P.pos.set(-60, 0.5, 196);
+        const y0 = G.cam.yaw; G.step(1 / 60, true); G.camRecentre(1 / 60, false); G.camPerche(1 / 60, false);
+        pas.push(Math.abs(Math.atan2(Math.sin(G.cam.yaw - y0), Math.cos(G.cam.yaw - y0))) * DEG * 60);
+      }
+      const ecart = a => { const d = Math.atan2(Math.sin(a), Math.cos(a)); return Math.abs(d) * DEG; };
+      const res = { pointe: +Math.max(...pas).toFixed(0), reste: +ecart(G.P.facing + Math.PI - G.cam.yaw).toFixed(1),
+        images: pas.findIndex(v => v < 1) };
+      // LA MARCHE N'ARRACHE PAS LA CAMERA : on tourne au stick GAUCHE (mode rotation, le choix
+      // du joueur), la camera suit le personnage mais jamais plus vite que lui.
+      G.cam.yaw = Math.PI; G.P.facing = 0; G.cam.freeUntil = 0; G.cam.facingPrec = 0;
+      ds.axes = [1, 0, 0, 0];
+      const pas2 = [];
+      for (let i = 0; i < 120; i++) {
+        G.P.pos.set(-60, 0.5, 196);
+        const y0 = G.cam.yaw; G.pollGamepad(1 / 60); G.step(1 / 60, true); G.camRecentre(1 / 60, false); G.camPerche(1 / 60, false);
+        pas2.push(Math.abs(Math.atan2(Math.sin(G.cam.yaw - y0), Math.cos(G.cam.yaw - y0))) * DEG * 60);
+      }
+      res.marche = +Math.max(...pas2).toFixed(0);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      // LE STICK DROIT GARDE LA MAIN : tant qu'on le pousse, aucun replacement ne vient
+      // contrarier le joueur (deux secondes et demie de repit apres le dernier geste)
+      G.cam.yaw = 0; G.P.facing = 0; G.cam.freeUntil = 0; G.cam.facingPrec = 0;
+      ds.axes = [0, 0, 0.6, 0];
+      for (let i = 0; i < 120; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 60); G.step(1 / 60, true); G.camRecentre(1 / 60, false); }
+      res.libre = +(ecart(G.P.facing + Math.PI - G.cam.yaw)).toFixed(0);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+      G.settings.ctrl = 'cam';
+      return res;
+    } finally { navigator.getGamepads = vrai; ds.axes = [0, 0, 0, 0]; G.settings.ctrl = 'cam'; }
+  });
+  const ok = r.pointe <= 140 && r.reste < 2 && r.images > 30 && r.images < 200 && r.marche <= 200 && r.libre > 40;
+  return { ok, detail: `avant : le replacement automatique etait une simple exponentielle de constante 5 — au retour d un demi-tour il rendait 15° EN UNE IMAGE, soit plus de 900 °/s : c'etait le coup sec · maintenant la vitesse de retour est plafonnee : pointe a ${r.pointe} °/s, le demi-tour se rattrape en ${r.images} images (${(r.images / 60).toFixed(1)} s) et se pose a ${r.reste}° du dos du joueur · en tournant au stick GAUCHE la camera ne depasse jamais ${r.marche} °/s (elle suit le personnage, elle ne l'arrache pas) · et tant que le stick droit est pousse, la camera reste ou le joueur la met (${r.libre}° de decalage garde)` };
+});
+
+test('la camera ne traverse pas les murs et ne rentre pas dans la tete du joueur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.P.drawn = false; G.P.aim = false;
+    // UNE FACADE : le plus gros mur de la ville, et le joueur colle dessus (1,2 m)
+    let mur = null;
+    for (const o of G.solids) {
+      if (o.veh || o.deco || o.glass || o.xray || o.h < 4 || o.h > 30) continue;
+      if (o.w < 6 || o.d < 6) continue;
+      if (!mur || o.w * o.d > mur.w * mur.d) mur = o;
+    }
+    const px = mur.x, pz = mur.z + mur.d / 2 + 1.2;
+    const res = { mur: { x: +mur.x.toFixed(1), z: +mur.z.toFixed(1), w: +mur.w.toFixed(1), d: +mur.d.toFixed(1), h: +mur.h.toFixed(1) } };
+    // on fait le tour complet de la perche, un degre a la fois, et on regarde ou finit l'objectif
+    let dedans = 0, traverse = 0, dMin = 99, dMax = 0, souterrain = 0;
+    G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null; G.cam.hausse = 0; G.cam.yaw = 0;
+    for (let i = 0; i < 720; i++) {
+      G.P.pos.set(px, 0.3, pz); G.P.vel.set(0, 0, 0);
+      G.cam.yaw = i * Math.PI / 180;
+      G.simTime += 1 / 60;
+      G.camPerche(1 / 60, false);
+      if (i < 360) continue;   // premier tour : la perche se met en place (elle ne se rallonge que de 5 m/s)
+      const c = G.camera.position;
+      const d = Math.hypot(c.x - G.P.pos.x, c.y - (G.P.pos.y + 1.2), c.z - (G.P.pos.z));
+      dMin = Math.min(dMin, d); dMax = Math.max(dMax, d);
+      if (c.y < 0.35) souterrain++;
+      // 1) la camera est-elle DANS un solide ?
+      for (const o of G.solidsAutour(c.x, c.z, 2)) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 - 0.02 && Math.abs(c.y - o.y) < o.h / 2 - 0.02 && Math.abs(c.z - o.z) < o.d / 2 - 0.02) { dedans++; break; }
+      }
+      // 2) y a-t-il un mur ENTRE la camera et le joueur ? (l'image serait bouchee)
+      const dx = (G.P.pos.x - c.x) / d, dy = (G.P.pos.y + 1.2 - c.y) / d, dz = (G.P.pos.z - c.z) / d;
+      if (G.murEntreVue(c.x, c.y, c.z, dx, dy, dz, d - 0.3) >= 0) traverse++;
+    }
+    res.dedans = dedans; res.traverse = traverse; res.souterrain = souterrain;
+    res.dMin = +dMin.toFixed(2); res.dMax = +dMax.toFixed(2);
+    return res;
+  });
+  const ok = r.dedans === 0 && r.traverse === 0 && r.souterrain === 0 && r.dMin > 0.6 && r.dMax < 12;
+  return { ok, detail: `dos a la plus grande facade de la ville (${r.mur.w} × ${r.mur.d} × ${r.mur.h} m), le joueur a 1,2 m du mur : on fait tourner la perche sur 360°, un degre par image · la camera n'est DANS un solide sur aucune des 360 positions (${r.dedans}), aucun mur ne vient entre elle et le joueur (${r.traverse}), elle ne passe jamais sous le sol (${r.souterrain}) · et elle reste entre ${r.dMin} m (elle ne rentre pas dans la tete : plancher a 0,5 m) et ${r.dMax} m du joueur` };
+});
+
+test('au volant la camera reste accrochee a la voiture : le recul suit la vitesse mais ne s emballe pas', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
+    if (!c) return { voiture: null };
+    G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c);
+    const res = { voiture: c.kind || 'voiture', max: +c.spec.max.toFixed(1) };
+    const dCar = () => Math.hypot(G.camera.position.x - c.x, G.camera.position.y - (c.y + 1.2), G.camera.position.z - c.z);
+    // ---- A PLEINE VITESSE, huit secondes simulees. On n'a pas besoin de la circulation ni
+    // d'une avenue assez longue : la voiture est avancee A LA MAIN a sa vitesse maximale,
+    // image par image (c'est ce que fait driveStep), et on regarde ou se trouve l'objectif.
+    // La mesure est ainsi strictement deterministe : rien ne peut venir la percuter.
+    const roule = (dt, n) => {
+      c.x = -60; c.z = 196; c.h = Math.PI / 2; c.vy = 0; G.drive.speed = c.spec.max;
+      G.P.pos.set(c.x, (c.y || 0) + 0.3, c.z); G.P.facing = c.h;
+      G.cam.yaw = c.h + Math.PI; G.cam.pitch = 0.32; G.cam.dist = 3.9;
+      G.cam.libre = null; G.cam.dLisse = null; G.cam.hausse = 0; G.cam.target.set(c.x, (c.y || 0) + 1.5, c.z);
+      const suite = [];
+      for (let i = 0; i < n; i++) {
+        const av = c.spec.max * dt;
+        c.x += Math.sin(c.h) * av; c.z += Math.cos(c.h) * av;
+        G.P.pos.set(c.x, (c.y || 0) + 0.3, c.z);
+        G.simTime += dt; G.camPerche(dt, false);
+        suite.push(+dCar().toFixed(1));
+        if (c.x > 300) { const dx = 360; c.x -= dx; G.P.pos.x -= dx; G.cam.target.x -= dx; }
+      }
+      return suite;
+    };
+    res.kmhFin = Math.round(c.spec.max * 3.6);
+    const vite = roule(1 / 60, 480);
+    res.course = [1, 2, 3, 4, 5, 6, 7, 8].map(k => ({ s: k, kmh: res.kmhFin, d: vite[k * 60 - 1] }));
+    res.dMax = +Math.max(...vite.slice(60)).toFixed(1);
+    res.dFin = vite[vite.length - 1];
+    // LE MEME ESSAI AVEC DES IMAGES LENTES (une demi-seconde chacune, comme sur une television
+    // chargee) : c'est la que le retard s'emballait, parce qu'il se rattrape PAR IMAGE.
+    res.lent = +Math.max(...roule(0.5, 20).slice(2)).toFixed(1);
+    G.drive.speed = 0;
+    // ---- A L'ARRET, NEZ CONTRE UN MUR (c'est l'etat d'apres un choc)
+    let mur = null;
+    for (const o of G.solids) {
+      if (o.veh || o.deco || o.glass || o.xray || o.h < 4 || o.h > 30 || o.w < 6 || o.d < 6) continue;
+      if (!mur || o.w * o.d > mur.w * mur.d) mur = o;
+    }
+    const mx = mur.x, mz = mur.z + mur.d / 2 + 2.4;
+    c.cmd = c.cmd || {};
+    c.x = mx; c.z = mz; c.h = 0; c.vy = 0; G.drive.speed = 0; c.cmd.gaz = 0; c.cmd.frein = 1;
+    G.cam.yaw = c.h + Math.PI; G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null; G.cam.dist = 11;
+    G.cam.target.set(c.x, c.y + 1.5, c.z);
+    for (let i = 0; i < 300; i++) { c.x = mx; c.z = mz; c.h = 0; G.drive.speed = 0; G.driveStep(1 / 60); G.camPerche(1 / 60, false); }
+    res.choc = { d: +dCar().toFixed(2), camY: +G.camera.position.y.toFixed(2) };
+    // ---- LE STICK DROIT REGARDE AUTOUR SANS LACHER LA VOITURE
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense (Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 1, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai2 = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      c.x = -60; c.z = 196; c.h = Math.PI / 2; G.drive.speed = 14; G.cam.yaw = c.h + Math.PI;
+      G.P.pos.set(c.x, (c.y || 0) + 0.3, c.z); G.cam.target.set(c.x, (c.y || 0) + 1.5, c.z); G.cam.libre = null; G.cam.dLisse = null;
+      const y0 = G.cam.yaw;
+      for (let i = 0; i < 60; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); G.camPerche(1 / 60, false); }
+      res.regard = { tourne: +Math.abs((G.cam.yaw - y0) * 180 / Math.PI).toFixed(0), d: +dCar().toFixed(1) };
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+    } finally { navigator.getGamepads = vrai2; }
+    G.drive.speed = 0;   // (le bloc precedent laissait la voiture a 14 m/s : le recul « a l'arret » n'etait pas mesure a l'arret)
+    res.recul = { arret: +G.reculConduite().toFixed(2) };
+    G.drive.speed = c.spec.max; res.recul.fond = +G.reculConduite().toFixed(2);
+    G.drive.speed = 0;
+    G.exitCar();
+    return res;
+  });
+  const ok = r.voiture && r.dMax < 16.5 && r.dFin > 8 && r.kmhFin > 50 && r.lent < 16.5
+    && r.choc.d > 3.6 && r.choc.d < 14 && r.recul.fond > 2.4 && r.recul.fond < 2.8 && r.recul.arret === 0
+    && r.regard.tourne > 100 && r.regard.d < 16;
+  return { ok, detail: `defaut du Joueur : plein gaz, la camera decrochait — 11 → 25 → 34 → 41 → 46 → 50 m a 75 km/h, la voiture n'etait plus qu'un point · mesure ici, huit secondes plein gaz : ${r.course.map(v => v.kmh + ' km/h→' + v.d + ' m').join(' · ')} — au plus loin ${r.dMax} m, et ${r.lent} m meme avec des images d'une demi-seconde (c'est LA que le retard s'emballait : il se rattrape par image, il est maintenant borne a 2 m) · conforme au recul voulu (${r.recul.arret} m a l'arret, ${r.recul.fond} m a fond, test 288) · a l'arret nez contre une facade (l'etat d'apres un choc, ou la camera collait au toit a 1,9 m) : ${r.choc.d} m, objectif a ${r.choc.camY} m de haut · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lacher la voiture (${r.regard.d} m)` };
+});
+
+test('L2 braque : la camera vient par-dessus l epaule et le stick droit y vise deux fois plus fin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.settings.ctrl = 'cam'; G.settings.sensib = 1;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+    const pose = (drawn, aim) => {
+      G.P.drawn = drawn; G.P.aim = aim;
+      G.cam.libre = null; G.cam.dLisse = null; G.cam.avance = 0; G.cam.hausse = 0; G.cam.yaw = 0; G.cam.pitch = 0.32;
+      for (let i = 0; i < 240; i++) { G.P.pos.set(-60, 0.5, 196); G.P.vel.set(0, 0, 0); G.simTime += 1 / 60; G.camPerche(1 / 60, drawn); }
+      const c = G.camera.position;
+      // le DECALAGE LATERAL : de combien la camera est-elle sur le cote du joueur ?
+      const dx = c.x - G.P.pos.x, dz = c.z - G.P.pos.z;
+      const lat = Math.abs(dx * Math.cos(G.cam.yaw) - dz * Math.sin(G.cam.yaw));
+      return { d: +Math.hypot(dx, c.y - (G.P.pos.y + 1.2), dz).toFixed(2), epaule: +lat.toFixed(2) };
+    };
+    const res = { range: pose(false, false), degaine: pose(true, false), braque: pose(true, true) };
+    // LA FINESSE DE VISEE : le meme coup de pouce doit balayer deux fois moins d'angle
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense (Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0.6, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      const balaye = aim => { G.P.drawn = true; G.P.aim = aim; G.cam.yaw = 0;
+        for (let i = 0; i < 120; i++) G.pollGamepad(1 / 120);
+        return +(Math.abs(G.cam.yaw) * DEG).toFixed(1); };
+      res.libre = balaye(false); res.vise = balaye(true);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+    } finally { navigator.getGamepads = vrai; }
+    G.P.drawn = false; G.P.aim = false; G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return res;
+  });
+  const fin = +(r.vise / r.libre).toFixed(2);
+  const ok = r.range.d > 7 && r.degaine.d > 4.5 && r.degaine.d < 6.5
+    && r.braque.d > 2.5 && r.braque.d < 4.2 && r.braque.epaule > r.degaine.epaule + 0.2
+    && fin > 0.4 && fin < 0.6;
+  return { ok, detail: `arme rangee la camera est a ${r.range.d} m ; degainee elle avance a ${r.degaine.d} m (decalage d epaule ${r.degaine.epaule} m) ; et quand le joueur BRAQUE (L2 maintenue) elle vient a ${r.braque.d} m avec ${r.braque.epaule} m de decalage — le cadrage par-dessus l epaule des jeux d action, la ou avant braquer ne changeait RIEN a la camera (5,5 m dans les deux cas) · au meme coup de pouce le stick droit balaie ${r.libre}° arme sortie et ${r.vise}° en visee, soit ${fin} fois moins : on pointe deux fois plus fin` };
+});
+// ================= POSTE CONDUITE (round 71) =================
+// Mise en place commune aux deux trajets : un ami, une voiture posée à côté de lui, et il
+// vient chercher le joueur. Rendue depuis la page pour que les trois tests partent du même
+// état (le monde est reconstruit avant chacun : `frais: true`).
+const CONDUITE_SETUP = `(() => {
+  const G = __G, P = G.P;
+  __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+  const b = G.bots.find(x => x.av && !x.ko);
+  G.devenirAmi(b);
+  b.pos.set(6, 0, 8); b.av.group.position.copy(b.pos); b.rdv = null; b.drive = null; b.wait = 0; b.fight = null;
+  const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+  c.x = 8; c.z = 8; c.h = 0; c.busy = false; G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z);
+  G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+  return { b: b, c: c };
+})()`;
+
+test('le joueur est vu assis sur le siège passager quand un membre vient le chercher en voiture', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais pris la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    pas(); G.poseJoueurAuVolant(1 / 60);   // UNE seule image : on doit déjà être assis
+    const c = b.drive.car, av = G.me.group, cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const mesure = () => {
+      const dx = av.position.x - c.x, dz = av.position.z - c.z, k = Math.cos(c.h), s = Math.sin(c.h);
+      return { visible: av.visible, hauteur: +(av.position.y - (c.y || 0)).toFixed(2),
+        droite: +(dx * k - dz * s).toFixed(2), avant: +(dx * s + dz * k).toFixed(2),
+        cap: +Math.abs(Math.atan2(Math.sin(av.rotation.y - c.h), Math.cos(av.rotation.y - c.h))).toFixed(3),
+        cuisse: +G.me.rig.legL.rotation.x.toFixed(2),
+        genou: +(G.me.rig.legL.genou ? G.me.rig.legL.genou.rotation.x : 0).toFixed(2),
+        duConducteur: +Math.hypot(av.position.x - b.av.group.position.x, av.position.z - b.av.group.position.z).toFixed(2) };
+    };
+    const montee = mesure();
+    // puis 15 s de route : il doit RESTER assis, pas seulement à la montée
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    for (let k = 0; k < 900; k++) pas();
+    G.poseJoueurAuVolant(1 / 60);
+    const route = mesure();
+    const T = G.placesDe(c);
+    return { montee: montee, route: route, largeur: c.baseW || 2.4, longueur: c.baseD || 4.4,
+      siege: T.avant ? [T.avant.x, T.avant.y, T.avant.z] : null, place: (G.vehiculeDuJoueur() || {}).place };
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const bon = m => m.visible && Math.abs(m.droite) < r.largeur / 2 && Math.abs(m.avant) < r.longueur / 2
+    && m.cap < 0.05 && m.hauteur > -1.1 && m.hauteur < 0.9 && m.cuisse < -1 && m.genou > 1 && m.duConducteur > 0.7;
+  const ok = bon(r.montee) && bon(r.route) && r.place === 'avant';
+  return { ok, detail: `avant : l'avatar était rendu invisible et laissé hors de la caisse (visible=false, 7,65 m à gauche, cuisses à 0) · maintenant, place « ${r.place} » : à la montée visible=${r.montee.visible}, ${r.montee.droite} m sur le côté et ${r.montee.avant} m en avant du centre (caisse ${r.largeur} × ${r.longueur} m), ${r.montee.hauteur} m sous le repère du véhicule, cap identique à ${r.montee.cap} rad près, cuisses ${r.montee.cuisse} / genoux ${r.montee.genou}, à ${r.montee.duConducteur} m du conducteur — et après 15 s de route : ${r.route.droite} / ${r.route.avant} m, cuisses ${r.route.cuisse}, visible=${r.route.visible}` };
+});
+
+test('un membre emmène le joueur à la villa : il vient, on monte, il conduit par la route, on descend au portail', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais amené la voiture' };
+    const c = b.drive.car;
+    const venue = +t.toFixed(1), dVenue = +Math.hypot(c.x - P.pos.x, c.z - P.pos.z).toFixed(1);
+    G.city.botCarNear = b; G.monterAvecBot(b); pas();
+    const monte = !!(G.city.rideBot === b && b.drive.passager && G.me.group.visible);
+    // le vrai chemin du joueur : « emmène-moi à la villa » passe par lieuDe()
+    const V = G.city.villaMine, lieu = G.lieuDe('la villa');
+    const dest = (lieu && Math.hypot(lieu.x - V.x, lieu.z - V.z) < 40) ? lieu : { nom: 'ta villa', x: V.x, z: V.z };
+    const t0 = t;
+    G.botConduireVers(b, dest);
+    let n = 0, surRoute = 0, ech = 0, dParc = 0, px = c.x, pz = c.z;
+    while (t - t0 < 240 && b.drive && b.drive.etat === 'route') {
+      pas(); n++;
+      dParc += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+      if (n % 10 === 0) { ech++; if (G.surLaChaussee(c.x, c.z, 0.4)) surRoute++; }
+    }
+    const G2 = G.city.gate;
+    const out = { venue: venue, dVenue: dVenue, monte: monte, dest: dest.nom,
+      trajet: +(t - t0).toFixed(1), arrive: b.drive && b.drive.etat === 'arrive',
+      dVilla: +Math.hypot(c.x - V.x, c.z - V.z).toFixed(1),
+      dPortail: G2 ? +Math.hypot(c.x - G2.x, c.z - G2.z).toFixed(1) : null,
+      surChaussee: ech ? Math.round(100 * surRoute / ech) : 0,
+      vMoy: +(dParc / Math.max(0.001, t - t0)).toFixed(2), parcouru: +dParc.toFixed(0),
+      volOiseau: +Math.hypot(V.x - 8, V.z - 8).toFixed(0), garee: G.surLaChaussee(c.x, c.z, 0.6) };
+    // on descend : l'avatar redevient un piéton, dehors, visible
+    G.botDescendre(b, true);
+    for (let k = 0; k < 6; k++) pas();
+    out.descendu = { rideBot: !!G.city.rideBot, visible: G.me.group.visible,
+      dVoiture: +Math.hypot(P.pos.x - c.x, P.pos.z - c.z).toFixed(1) };
+    return out;
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.monte && r.arrive && r.trajet < 150 && r.dPortail != null && r.dPortail < 40
+    && r.surChaussee >= 80 && r.vMoy > 3 && !r.descendu.rideBot && r.descendu.visible && r.descendu.dVoiture > 1.5;
+  return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.surChaussee} % du trajet sur la chaussée), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
+});
+
+
+// TOUTE la circulation, pas un véhicule choisi : une minute de ville, on regarde ce que font
+// les voitures conduites par l'ordinateur. Piège trouvé en mesurant : une ligne de feu se
+// prolonge à l'infini de part et d'autre de la rue — sans le test LATÉRAL (le même que
+// codeRoute : 5 m), une voiture qui roule dans la rue d'à côté « franchit » la ligne et on
+// compte 7 feux grillés qui n'ont jamais existé.
+test('en auto-conduite la ville respecte le code de la route : chaussée, bon sens, feux rouges', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const dt = 1 / 60;
+    const flotte = (G.city.aiCars || []).slice();
+    const feux = (G.city.trafficLights || []).filter(t => t.ligne && !t.broken);
+    if (!flotte.length || !feux.length) return { erreur: `circulation ${flotte.length} véhicules, ${feux.length} feux` };
+    const rougeDepuis = feux.map(() => 0), prec = flotte.map(() => feux.map(() => null));
+    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, contresens = 0, arretRouge = 0;
+    for (let k = 0; k < 60 * 60; k++) {
+      G.step(dt, true);
+      feux.forEach((tl, j) => { rougeDepuis[j] = tl.state === 0 ? rougeDepuis[j] + dt : 0; });
+      flotte.forEach((c, i) => {
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        feux.forEach((tl, j) => {
+          if (Math.abs(tl.x - c.x) > 40 || Math.abs(tl.z - c.z) > 40) { prec[i][j] = null; return; }
+          if (Math.abs(Math.atan2(Math.sin(tl.sens - c.h), Math.cos(tl.sens - c.h))) > 0.5) { prec[i][j] = null; return; }
+          const dx = tl.ligne.x - c.x, dz = tl.ligne.z - c.z;
+          const al = dx * fx + dz * fz, lat = Math.abs(-dx * fz + dz * fx);
+          if (lat < 5 && tl.state === 0 && al > 0.5 && al < 8 && Math.abs(c.speed || 0) < 0.6) arretRouge++;
+          const q = prec[i][j];
+          if (q != null && q > 0 && q < 4 && al <= 0 && lat < 5) {
+            franchi++;
+            if (tl.state === 0 && rougeDepuis[j] > 1.5) grille++;
+          }
+          prec[i][j] = al;
+        });
+      });
+      if (k % 20) continue;
+      for (const c of flotte) {
+        ech++; const v = Math.abs(c.speed || 0); vsum += v;
+        if (v < 0.3) immo++;
+        if (!G.surLaChaussee(c.x, c.z, 0.6)) hors++;
+        const vp = G.voieProche(c.x, c.z);
+        if (vp) { const d = Math.atan2(Math.sin(vp.arete.sens - c.h), Math.cos(vp.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
+      }
+    }
+    return { vehicules: flotte.length, feux: feux.length, lignesFranchies: franchi, feuxGrilles: grille,
+      imagesArretAuRouge: arretRouge, vMoy: +(vsum / ech).toFixed(2),
+      pctImmobile: Math.round(100 * immo / ech), pctHorsChaussee: Math.round(100 * hors / ech),
+      pctContresens: Math.round(100 * contresens / ech) };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.feuxGrilles === 0 && r.lignesFranchies >= 3 && r.imagesArretAuRouge > 0
+    && r.pctHorsChaussee <= 5 && r.pctContresens <= 6 && r.vMoy >= 3;
+  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % hors chaussée, ${r.pctContresens} % à contresens de la voie la plus proche` };
+});
+// ================= POSTE DRONE & ROBOT (round 71) =================
+test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort, se range et s\'offre', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    for (const k of Object.keys(G.sac.objets)) delete G.sac.objets[k];
+    // 1. le recensement : tout article de comptoir qui ne se mange pas doit avoir un usage
+    const morts = [];
+    for (const e of G.city.etals) for (const a of e.articles)
+      if (a.f === undefined && !G.JOUETS.some(j => j.article === a.n)) morts.push(e.id + '/' + a.n);
+    // 2. l'achat d'une rose : l'argent part ET l'objet arrive dans le sac
+    const rose = G.city.etals.find(e => e.id === 'fleurs').articles.find(a => a.n === 'Rose unique');
+    G.wallet = 50; const w0 = G.wallet;
+    G.acheterArticle(rose);
+    const w1 = G.wallet, dansSac = G.sacNb('rose');
+    // 3. on la sort : elle est en main, puis on la range
+    const sorti = G.sacSortir('rose'), enMain = G.sac.main;
+    G.sacRangerObjet('rose'); const apresRangement = G.sac.main;
+    // 4. on la sort de nouveau et on l'offre au bot le plus proche : il devient un ami
+    G.sacSortir('rose');
+    const b = G.bots.filter(x => !x.ko && x.av && x.av.group.visible)
+      .sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z))[0];
+    b.pos.x = P.pos.x + 1.2; b.pos.z = P.pos.z; b.ko = 0;
+    G.amis.delete(b.name);
+    const vise = G.botAOffrir();
+    const offert = vise ? G.offreFleur(vise) : false;
+    return { morts, w0, w1, dansSac, sorti, enMain, apresRangement,
+      offert, ami: G.amis.has(b.name), resteDansSac: G.sacNb('rose'), mainApres: G.sac.main };
+  });
+  const ok = r.w1 === r.w0 - 3 && r.dansSac === 1 && r.sorti && r.enMain === 'rose'
+    && r.apresRangement === null && r.offert && r.ami && r.resteDansSac === 0 && r.mainApres === null;
+  return { ok, detail: `avant : l'achat déduisait l'argent et n'en faisait RIEN (aucun inventaire) · maintenant la rose coûte ${r.w0 - r.w1} 🪙 et arrive dans le sac (×${r.dansSac}), se sort en main (${r.enMain}), se range (${r.apresRangement}), s'offre (${r.offert ? 'oui' : 'non'}) et fait un ami (${r.ami ? 'oui' : 'non'}) — il en reste ${r.resteDansSac} dans le sac · articles encore sans usage : ${r.morts.length}` };
+});
+
+test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentre tout seul à batterie basse', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, d = G.drone;
+    __SHOT.go({ world: 4, x: 3, y: 1, z: -118, hour: 12 });
+    G.sacAjoute('drone');
+    const sorti = G.sacSortir('drone');
+    const alt0 = G.droneAlt();
+    // 1. il décolle et il monte quand on pousse « monter » — et le joueur, lui, ne bouge pas
+    const pj = { x: P.pos.x, z: P.pos.z };
+    G.keys.add('Space');
+    for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+    const alt1 = G.droneAlt(), pilote = G.dronePilote();
+    // 2. il avance quand on pousse « avant »
+    G.keys.delete('Space'); G.keys.add('KeyW');
+    const x0 = d.x, z0 = d.z;
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    const parcouru = Math.hypot(d.x - x0, d.z - z0);
+    const joueurBouge = Math.hypot(P.pos.x - pj.x, P.pos.z - pj.z);
+    G.keys.delete('KeyW');
+    // 3. le plafond : il ne monte pas à l'infini
+    d.bat = 100; G.keys.add('Space');
+    for (let i = 0; i < 60 * 25; i++) G.step(1 / 60, true);
+    const altMax = G.droneAlt();
+    G.keys.delete('Space');
+    // 4. UN IMMEUBLE : il fonce dedans, il ne le traverse pas
+    const sol = G.solids.filter(s => s.h > 6 && s.h < 30 && s.w > 6)
+      .sort((a, c) => Math.hypot(a.x - 3, a.z + 118) - Math.hypot(c.x - 3, c.z + 118))[0];
+    d.x = sol.x; d.z = sol.z + sol.d / 2 + 12; d.y = sol.y; d.h = Math.PI;
+    d.vx = d.vz = d.vy = 0; d.bat = 100; d.vol = true; d.mode = 'pilote'; d.decolle = 0;
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW');
+    const mur = { face: +(sol.z + sol.d / 2).toFixed(2), drone: +d.z.toFixed(2), dedans: d.z < sol.z + sol.d / 2 - 0.1 };
+    // 5. batterie basse : il rentre tout seul et il se pose près du joueur
+    d.x = P.pos.x + 60; d.z = P.pos.z; d.y = 20; d.vx = d.vz = d.vy = 0;
+    d.bat = G.DRONE_BAS + 0.5; d.mode = 'pilote'; d.vol = true;
+    let modeRetour = false;
+    for (let i = 0; i < 60 * 90 && !d.posee; i++) { G.step(1 / 60, true); if (d.mode === 'retour') modeRetour = true; }
+    const distFin = Math.hypot(d.x - P.pos.x, d.z - P.pos.z);
+    // 6. la vue à bord, et le rangement
+    G.droneVue(true); const vue = d.vue && document.body.classList.contains('dronevue');
+    G.droneRanger(true);
+    return { sorti, alt0: +alt0.toFixed(2), alt1: +alt1.toFixed(1), pilote, parcouru: +parcouru.toFixed(1),
+      joueurBouge: +joueurBouge.toFixed(2), altMax: +altMax.toFixed(1), plafond: G.DRONE_PLAFOND,
+      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif };
+  });
+  const ok = r.sorti && r.alt0 < 0.5 && r.alt1 > 8 && r.pilote && r.parcouru > 12 && r.joueurBouge < 0.05
+    && Math.abs(r.altMax - r.plafond) < 0.6 && !r.mur.dedans && r.modeRetour && r.posee && r.distFin < 3
+    && r.vue && r.range;
+  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${__G.DRONE_BAS} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
+});
+
+test('le petit robot acheté marche, parle, reste collé au joueur (escalier compris) et obéit à ses ordres', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, R = G.robot;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('robot');
+    const sorti = G.sacSortir('robot');
+    // ---- 1. il colle au joueur qui marche vraiment (touches réelles, collisions comprises)
+    let max = 0; const angles = [];
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60 * 12; i++) {
+      G.cam.yaw = Math.sin(i / 260) * 2.2;
+      G.step(1 / 60, true);
+      max = Math.max(max, G.robotDist());
+      if (i % 9 === 0) angles.push(+R.rig.jambes.g.ha.rotation.x.toFixed(3));
+    }
+    G.keys.delete('KeyW');
+    const marche = { valeurs: new Set(angles).size, amplitude: +(Math.max(...angles) - Math.min(...angles)).toFixed(3) };
+    // ---- 2. UN ESCALIER : on cherche une vraie volée dans la ville et on la monte
+    const pl = G.solids.filter(s => s.h > 0.05 && s.h < 1.4 && s.w < 4.5 && s.d < 4.5 && s.y > 0.1)
+      .map(s => ({ x: s.x, z: s.z, t: +(s.y + s.h / 2).toFixed(2) }));
+    let volee = [];
+    for (const d of pl) {
+      let cur = [d], g = 0;
+      while (g++ < 30) {
+        const q = cur[cur.length - 1];
+        const n = pl.find(o => !cur.includes(o) && Math.hypot(o.x - q.x, o.z - q.z) < 1.6 && o.t - q.t > 0.15 && o.t - q.t < 0.8);
+        if (!n) break; cur.push(n);
+      }
+      if (cur.length > volee.length) volee = cur;
+      if (volee.length >= 9) break;
+    }
+    let maxEsc = 0, yDep = 0, yFin = 0;
+    if (volee.length >= 5) {
+      P.pos.set(volee[0].x, volee[0].t, volee[0].z); P.vel.set(0, 0, 0);
+      R.x = P.pos.x; R.z = P.pos.z + 1; R.y = volee[0].t;
+      for (let k = 0; k < 30; k++) G.step(1 / 60, true);
+      yDep = R.y;
+      for (const m of volee) {
+        P.pos.set(m.x, m.t, m.z);
+        for (let k = 0; k < 26; k++) { G.step(1 / 60, true); maxEsc = Math.max(maxEsc, G.robotDist()); }
+      }
+      yFin = R.y;
+    }
+    // ---- 3. les ordres, par le MÊME interprète que le chien et le gang
+    const faits = {};
+    const essai = (txt, verif) => { G.commandeExacte(txt); for (let k = 0; k < 40; k++) G.step(1 / 60, true); faits[txt] = !!verif(); };
+    essai('robot attends ici', () => R.ordre === 'reste');
+    const px = R.x, pz = R.z;
+    for (let i = 0; i < 60 * 3; i++) { P.pos.x += 0.08; G.step(1 / 60, true); }
+    faits['il attend vraiment sur place'] = Math.hypot(R.x - px, R.z - pz) < 0.8;
+    essai('robot viens', () => R.ordre === 'viens' || R.ordre === 'suit');
+    essai('robot suis moi', () => R.ordre === 'suit');
+    const avantDit = R.dit;
+    essai('robot parle', () => R.dit && R.dit !== avantDit);
+    essai('robot danse', () => R.ordre === 'danse');
+    essai('robot garde cet endroit', () => R.ordre === 'garde' && !!R.poste);
+    essai('robot va chercher', () => R.ordre === 'cherche' && !!R.objet);
+    let rapporte = false;
+    for (let i = 0; i < 60 * 30 && !rapporte; i++) { G.step(1 / 60, true); if (R.ordre === 'suit' && !R.objet) rapporte = true; }
+    faits['il rapporte l\'objet'] = rapporte;
+    G.robotRanger(true);
+    return { sorti, ecartMax: +max.toFixed(2), colle: G.ROBOT_COLLE, marche, replaces: R.replaces,
+      marches: volee.length, maxEsc: +maxEsc.toFixed(2), monte: +(yFin - yDep).toFixed(2),
+      faits, compris: Object.values(faits).filter(Boolean).length, total: Object.keys(faits).length, nbOrdres: G.ORDRES_ROBOT.length };
+  });
+  const ok = r.sorti && r.ecartMax < r.colle && r.marche.valeurs > 20 && r.marche.amplitude > 0.5
+    && r.marches >= 5 && r.maxEsc < r.colle && r.monte > 1.5
+    && r.compris === r.total && r.compris >= 8;
+  return { ok, detail: `avant : le Robot compagnon (30 🪙) ne faisait rien (« il te suit partout… en théorie ») · maintenant il ne s'éloigne jamais de plus de ${r.ecartMax} m sur 12 s de marche (limite ${r.colle} m, ${r.replaces} replacement), ses jambes prennent ${r.marche.valeurs} angles différents sur ${r.marche.amplitude} rad d'amplitude, il monte une volée de ${r.marches} marches (+${r.monte} m) en restant à ${r.maxEsc} m, et il exécute ${r.compris}/${r.total} ordres écrits (${r.nbOrdres} au catalogue) : ${Object.entries(r.faits).map(([k, v]) => `${k} ${v ? '✅' : '❌'}`).join(', ')}` };
+});
+
+test('les jeux achetés en boutique se jouent vraiment et rapportent des pièces', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('arcade'); G.sacAjoute('jeu'); G.sacAjoute('ordi');
+    // ---- la borne : la suite de couleurs ----
+    // (on saute le spectacle lumineux, qui tient à des minuteurs : le test mesure la RÈGLE
+    //  du jeu, pas la durée d'un clignotement — sinon il dépendrait de la vitesse machine)
+    G.sacSortir('arcade');
+    const A = G.arcade;
+    const suiteMontree = A.sim.length, jeu = A.jeu;
+    A.attente = false; A.montre = -1;
+    // on la répète correctement : le tour est gagné
+    for (const c of A.sim.slice()) G.arcadeAppui(c);
+    const gagne = A.gains;
+    // puis on se trompe : la partie s'arrête et paie ce qu'on a gagné
+    A.attente = false; A.pos = 0;
+    const w0 = G.wallet;
+    const faux = (A.sim[0] + 1) % 4; G.arcadeAppui(faux);
+    const gainSimon = G.wallet - w0;
+    // ---- le jeu du mois : Memory, gagné en trichant (on connaît les cartes) ----
+    G.arcadeMemory();
+    const w1 = G.wallet, cartes = G.arcade.cartes.map(c => c.e);
+    const vus = new Set();
+    for (let i = 0; i < cartes.length; i++) {
+      if (vus.has(i)) continue;
+      const j = cartes.findIndex((e, k) => k > i && e === cartes[i] && !vus.has(k));
+      vus.add(i); vus.add(j);
+      G.arcadeCarte(i); G.arcadeCarte(j);
+    }
+    const gainMemo = G.wallet - w1, paires = G.arcade.paires;
+    G.arcade.jeu = null; if (G.uiOpen) G.closeUI();
+    return { jeu, suiteMontree, gagne, gainSimon, gainMemo, paires };
+  });
+  const ok = r.jeu === 'simon' && r.suiteMontree === 1 && r.gagne >= 1 && r.gainSimon >= 1
+    && r.paires === 8 && r.gainMemo >= 6;
+  return { ok, detail: `avant : borne d'arcade (25 🪙), jeu du mois (9 🪙) et ordinateur portable (40 🪙) ne faisaient RIEN · maintenant la borne lance « ${r.jeu} » (suite de ${r.suiteMontree} couleur, ${r.gagne} point quand on répète juste, ${r.gainSimon} 🪙 encaissés à l'erreur) et le jeu du mois est un Memory de 8 paires terminé (${r.paires}/8) pour ${r.gainMemo} 🪙` };
+});
+
+test('aucun article acheté en boutique ne reste un objet mort, et les jouets de plein air se jouent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    for (const k of Object.keys(G.sac.objets)) delete G.sac.objets[k];
+    // ---- 1. le recensement : plus un seul article de comptoir sans usage ----
+    const morts = [], vivants = [];
+    for (const e of G.city.etals) for (const a of e.articles) {
+      if (a.f !== undefined) continue;                       // ça se mange : eat() s'en occupe
+      const j = G.JOUETS.find(x => x.article === a.n);
+      (j ? vivants : morts).push(e.id + '/' + a.n);
+    }
+    // ---- 2. le ballon : posé, il tombe au sol, et un coup de pied l'envoie loin ----
+    G.sacAjoute('ballon'); G.sacSortir('ballon');
+    const b = G.sac.ballon;
+    for (let i = 0; i < 90; i++) G.step(1 / 60, true);
+    const pose = +b.pos.y.toFixed(2);
+    const d0 = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+    b.hitCd = 0; G.hitBall(b, P.pos.x, P.pos.z, Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 6, 0);
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    const d1 = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+    // ---- 3. le cerf-volant : il monte quand le joueur court ----
+    G.sacAjoute('cerf'); G.sacSortir('cerf');
+    for (let i = 0; i < 40; i++) G.step(1 / 60, true);
+    const h0 = G.sac.cerf.h;
+    G.keys.add('KeyW'); P.run = true;
+    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW');
+    const h1 = G.sac.cerf.h, hautCerf = +(G.sac.cerf.g.position.y - P.pos.y).toFixed(1);
+    // ---- 4. le boomerang : il part, il s'éloigne, il revient en main ----
+    G.sacAjoute('boomerang'); G.sacSortir('boomerang');
+    const enMain0 = G.sac.main;
+    G.jouetAction(G.jouetActionPrete());
+    let loin = 0;
+    for (let i = 0; i < 60 * 4; i++) { G.step(1 / 60, true);
+      if (G.sac.boom) loin = Math.max(loin, Math.hypot(G.sac.boom.m.position.x - P.pos.x, G.sac.boom.m.position.z - P.pos.z)); }
+    const revenu = G.sac.main === 'boomerang' && !G.sac.boom;
+    // ---- 5. la peluche : le câlin rend de la vie ----
+    G.sacAjoute('peluche'); G.sacSortir('peluche');
+    P.hp = 40; const calin = G.jouetAction(G.jouetActionPrete()); const hp = P.hp;
+    return { morts, nbVivants: vivants.length, pose, d0: +d0.toFixed(1), d1: +d1.toFixed(1),
+      h0: +h0.toFixed(1), h1: +h1.toFixed(1), hautCerf, enMain0, loin: +loin.toFixed(1), revenu, calin, hp };
+  });
+  const ok = r.morts.length === 0 && r.nbVivants >= 14 && r.pose < 1.2 && r.d1 > r.d0 + 4
+    && r.h1 > r.h0 + 4 && r.hautCerf > 6 && r.enMain0 === 'boomerang' && r.loin > 10 && r.revenu
+    && r.calin && r.hp > 40;
+  return { ok, detail: `avant : 11 articles achetés au comptoir sur 11 ne faisaient RIEN · maintenant ${r.morts.length} article sans usage (${r.morts.join(', ') || 'aucun'}) sur ${r.nbVivants} au catalogue du sac · ballon posé au sol à ${r.pose} m, envoyé de ${r.d0} m à ${r.d1} m d'un coup de pied · cerf-volant monté de ${r.h0} m à ${r.h1} m en courant (${r.hautCerf} m au-dessus du joueur) · boomerang parti à ${r.loin} m et revenu en main : ${r.revenu ? 'oui' : 'non'} · câlin de peluche : ❤️ 40 → ${r.hp}` };
+});
+
 // ======================= POSTE BÂTIMENTS (école, banque) =======================
+
 test('on entre vraiment dans chaque salle de classe et rien ne barre le seuil', async p => {
   const r = await p.evaluate(() => {
     const G = __G;

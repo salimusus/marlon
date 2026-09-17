@@ -16315,12 +16315,12 @@ test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentr
     G.droneRanger(true);
     return { sorti, alt0: +alt0.toFixed(2), alt1: +alt1.toFixed(1), pilote, parcouru: +parcouru.toFixed(1),
       joueurBouge: +joueurBouge.toFixed(2), altMax: +altMax.toFixed(1), plafond: G.DRONE_PLAFOND,
-      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif };
+      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif, bas: G.DRONE_BAS };
   });
   const ok = r.sorti && r.alt0 < 0.5 && r.alt1 > 8 && r.pilote && r.parcouru > 12 && r.joueurBouge < 0.05
     && Math.abs(r.altMax - r.plafond) < 0.6 && !r.mur.dedans && r.modeRetour && r.posee && r.distFin < 3
     && r.vue && r.range;
-  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${__G.DRONE_BAS} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
+  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${r.bas} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
 });
 
 test('le petit robot acheté marche, parle, reste collé au joueur (escalier compris) et obéit à ses ordres', async p => {
@@ -16380,8 +16380,9 @@ test('le petit robot acheté marche, parle, reste collé au joueur (escalier com
     essai('robot danse', () => R.ordre === 'danse');
     essai('robot garde cet endroit', () => R.ordre === 'garde' && !!R.poste);
     essai('robot va chercher', () => R.ordre === 'cherche' && !!R.objet);
+    const rap0 = R.rapportes || 0;
     let rapporte = false;
-    for (let i = 0; i < 60 * 30 && !rapporte; i++) { G.step(1 / 60, true); if (R.ordre === 'suit' && !R.objet) rapporte = true; }
+    for (let i = 0; i < 60 * 40 && !rapporte; i++) { G.step(1 / 60, true); if ((R.rapportes || 0) > rap0) rapporte = true; }
     faits['il rapporte l\'objet'] = rapporte;
     G.robotRanger(true);
     return { sorti, ecartMax: +max.toFixed(2), colle: G.ROBOT_COLLE, marche, replaces: R.replaces,

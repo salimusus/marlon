@@ -5627,7 +5627,11 @@ const ballMats = (() => {
 function makeBall(kind, x, y, z) {
   const r = kind === 'foot' ? 0.5 : 0.28;   // (les boules sont retaillées après création)
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, kind === 'foot' ? 20 : 12, kind === 'foot' ? 14 : 9), ballMats[kind] || lam(0xb9c2cf)); mesh.castShadow = true; mesh.position.set(x, y, z); worldGroup.add(mesh);
-  const b = { mesh, pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), r, kind, hitCd: 0, state: 'idle', bounces: 0, ground: 0.15, bounds: null, id: ++ballSeq, tgt: new THREE.Vector3(x, y, z), lastHit: -1 };
+  // `home` : le point d'engagement, où le ballon revient après un but. Il n'était posé QUE
+  // sur le ballon du terrain de foot ; le jour où un autre ballon (celui du sac, poste DRONE
+  // & ROBOT) a franchi la ligne de but, `b.pos.copy(b.home)` a fait planter toute la ville
+  // (« Cannot read properties of undefined »). Chaque ballon naît donc avec le sien.
+  const b = { mesh, pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), r, kind, hitCd: 0, state: 'idle', bounces: 0, ground: 0.15, bounds: null, id: ++ballSeq, tgt: new THREE.Vector3(x, y, z), home: new THREE.Vector3(x, y, z), lastHit: -1 };
   city.balls.push(b); return b;
 }
 let ballSeq = 0;
@@ -18423,12 +18427,19 @@ const ORDRES_ROBOT = [
 // rapporte. Exactement le geste du chien avec sa balle — ce que l'enfant connaît déjà.
 function robotLance() {
   if (robot.objet) { worldGroup.remove(robot.objet.m); robot.objet = null; }
-  const d = 11 + Math.random() * 6;
-  const bx = P.pos.x + Math.sin(P.facing) * d, bz = P.pos.z + Math.cos(P.facing) * d;
+  // ON NE LANCE PAS LE BOULON DANS UN MUR. La distance était tirée au sort entre 11 et 17 m
+  // devant le joueur : une fois sur trois il atterrissait DANS une façade ou derrière une
+  // clôture, le robot s'y cognait et ne revenait jamais (test rouge « il rapporte » une fois
+  // sur deux). On recule le point de chute mètre par mètre jusqu'à trouver de la place.
+  let d = 11 + Math.random() * 6, bx = 0, bz = 0;
+  for (; d > 3; d -= 1) {
+    bx = P.pos.x + Math.sin(P.facing) * d; bz = P.pos.z + Math.cos(P.facing) * d;
+    if (!npcBlocked(bx, P.pos.y, bz, 0.5)) break;
+  }
   const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshLambertMaterial({ color: 0xffd23f }));
   m.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); worldGroup.add(m);
   robot.objet = { m, x: bx, z: bz, y: groundUnder(bx, bz, null, P.pos.y + 1.2) + 0.1, tenu: false, t: 0,
-    dep: [P.pos.x, P.pos.y + 1.2, P.pos.z] };
+    dep: [P.pos.x, P.pos.y + 1.2, P.pos.z], fin: simTime + 25 };
   robot.ordre = 'cherche'; robot.phase = 'aller'; robot.poste = null;
   robotDit('j\'y vais ! je te le rapporte', 2400);
   return true;
@@ -18535,12 +18546,21 @@ function robotTick(dt) {
     if (robot.phase === 'aller' && ob.t >= 1 && Math.hypot(robot.x - ob.x, robot.z - ob.z) < 0.9) {
       ob.tenu = true; robot.phase = 'retour'; robotDit('je l\'ai ! je reviens', 2200);
     }
+    // IL NE PART PAS POUR TOUJOURS. Si au bout de 25 s il n'a pas mis la main dessus (une
+    // grille, un fossé, un camion garé entre les deux), il abandonne et revient : un
+    // compagnon qui disparaît de la partie est pire qu'un compagnon qui échoue.
+    if (robot.phase === 'aller' && simTime > ob.fin) {
+      worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
+      robotDit('je n\'arrive pas à l\'attraper, je reviens', 2800);
+      return robotAnime(dt);
+    }
     if (ob.tenu && robot.rig && robot.rig.main) {
       const p = robot.rig.main.getWorldPosition(new THREE.Vector3());
       ob.m.position.copy(p); ob.m.rotation.set(0, robot.h, 0);
     }
     if (robot.phase === 'retour' && robotDist() < 1.4) {
       worldGroup.remove(ob.m); robot.objet = null; robot.ordre = 'suit'; robot.phase = '';
+      robot.rapportes = (robot.rapportes || 0) + 1;
       robotDit('tiens, je te le rends !', 2400);
       try { sfx.coin(); } catch (e) {}
     }
@@ -18648,7 +18668,7 @@ function ordreRobotTexte(txt) {
   for (const o of ORDRES_ROBOT) if (o.mots.test(t)) { robotOrdre(o.id, txt); return true; }
   return false;
 }
-function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.lampe = false; robot.faisceau = null; }
+function robotReset() { robotRanger(true); robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.rapportes = 0; robot.lampe = false; robot.faisceau = null; }
 // ================= LES JOUETS DE PLEIN AIR (round 71) =================
 // Le joueur cite « ballon, cerf-volant, skate, boomerang, peluche ». Le rayon Jeux Vidéo du
 // Techno-Parc ne vendait que de l'électronique : on y ajoute quatre jouets, et chacun se joue
@@ -23234,7 +23254,7 @@ function cityVie(dt) {
     // but ?
     // les deux buts ont recule de 3 m (leur filet debordait sur la chaussee) : la ligne de but
     // est a x = -19 et -7, le ballon compte des qu'il l'a franchie de 20 cm
-    if (b.kind === 'foot' && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -18.8 || b.pos.x > -7.2) && b.state !== 'goal') {
+    if (b.kind === 'foot' && !b.jouet && Math.abs(b.pos.z + 13) < 2.5 && b.pos.y < 2.1 && (b.pos.x < -18.8 || b.pos.x > -7.2) && b.state !== 'goal') {   // `!b.jouet` : le ballon sorti du sac n'est pas celui du match, il ne compte pas les buts de la ville
       b.state = 'goal';
       if (fm.on) footBut(b);
       else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);

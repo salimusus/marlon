@@ -21440,15 +21440,22 @@ function step(dt, active) {
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
   if (drive.car) { driveStep(dt); return; }
-  if (gym.on) { cityCommon(dt); return; }
-  if (P.swing) { swingTick(dt); cityCommon(dt); return; }
-  if (P.ride) { cityCommon(dt); return; }
-  if (P.sit) { sitTick(dt); cityCommon(dt); return; }
+  // PAS DE `cityCommon(dt)` DANS CES CINQ SORTIES. `cityStep(dt)`, appele quelques lignes plus
+  // haut, se termine deja par `if (!drive.car) cityCommon(dt)` — et ici `drive.car` est vide,
+  // sinon on serait sorti par la ligne du conducteur. Le rappeler faisait vivre la ville DEUX
+  // FOIS par image : mesure a l'appui, assis sur un banc, une voiture du trafic parcourait
+  // 13,29 m quand son compteur en annoncait 6,66 (rapport 2,00 ; debout il est de 1,00).
+  // Tout partait en accelere des que le joueur s'asseyait, montait sur un manege, une
+  // balancoire, un appareil de sport ou le brancard des secours.
+  if (gym.on) { return; }
+  if (P.swing) { swingTick(dt); return; }
+  if (P.ride) { return; }
+  if (P.sit) { sitTick(dt); return; }
   // ALLONGE SUR LE BRANCARD DES SECOURS : il regarde la scene, il ne la pilote pas. On sort
   // AVANT toute lecture des commandes de deplacement (aucune touche, aucun stick ne le fait
   // bouger) mais APRES `cityCommon`, qui fait justement avancer l'ambulance qui le transporte.
   // La camera, elle, reste entiere : elle est pilotee ailleurs, dans la boucle d'affichage.
-  if (P.secours) { cityCommon(dt); return; }
+  if (P.secours) { return; }   // meme raison : cityStep a deja fait vivre la ville (voir ci-dessus)
   // PASSAGER D'UN AMI : LE JOUEUR EST DANS LA CAISSE, PAS SUR LE BITUME. C'est la racine du
   // « quand le joueur est dans un vehicule avec un membre, ca bug » du joueur. step() n'avait
   // AUCUNE sortie pour lui : on lui appliquait la gravite, les collisions et tout le code de la

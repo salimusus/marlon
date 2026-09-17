@@ -2072,6 +2072,19 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  // POSTE FLUIDITE : le cout d'une image (ajoute tes exports SOUS cette ligne)
+  rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
+  detailsLOD: typeof detailsLOD === 'function' ? detailsLOD : null,
+  detailsInit: typeof detailsInit === 'function' ? detailsInit : null,
+  ombresMobilesTick: typeof ombresMobilesTick === 'function' ? ombresMobilesTick : null,
+  OMBRES_MOB: typeof OMBRES_MOB !== 'undefined' ? OMBRES_MOB : null,
+  OMBRES: typeof OMBRES !== 'undefined' ? OMBRES : null,
+  DETAILS: typeof DETAILS !== 'undefined' ? DETAILS : null,
+  ARETES: typeof ARETES !== 'undefined' ? ARETES : null,
+  DETAIL_OMBRE_MOBILE: typeof DETAIL_OMBRE_MOBILE !== 'undefined' ? DETAIL_OMBRE_MOBILE : 0,
+  OMBRE_CADRE: typeof OMBRE_CADRE !== 'undefined' ? OMBRE_CADRE : 0,
+  solids: typeof solids !== 'undefined' ? solids : null,
+  worldGroup: typeof worldGroup !== 'undefined' ? worldGroup : null,
 };
 `;
 

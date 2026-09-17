@@ -1769,6 +1769,7 @@ function postCible() {
   return post.rt;
 }
 function rendreImage() {
+  ombresMobilesTick();   // recense (par petits bouts) les ombres des véhicules et des habitants
   detailsLOD();   // le budget d'image : on éteint d'abord ce qui ne se voit plus
   if (!post.on) { renderer.render(scene, camera); return false; }
   try {
@@ -1896,6 +1897,9 @@ const addEdges = mesh => {
 // parcourir vingt-huit mille objets à chaque image, ce serait pire que le mal.
 function detailsInit() {
   DETAILS.length = 0; OMBRES.length = 0; detailCam = null; detailOmbres = 0;
+  // le recensement des ombres mobiles repart de zero : les vehicules et les habitants du monde
+  // precedent n'existent plus, garder leurs entrees ferait lire des matrices de fantomes
+  OMBRES_MOB.length = 0; OMBRE_MOB_NEUF = []; ombreMobI = 0;
   if (typeof worldGroup === 'undefined' || !worldGroup) return 0;
   // les maillages « de structure » : murs, sols, marches, toits. Ils ne sont jamais des détails.
   const structure = new Set();
@@ -1961,9 +1965,70 @@ function detailsLOD(force) {
     if (off !== e.off) { e.off = off; e.o.castShadow = !off; }
     if (off) ombresOff++;
   }
+  // LES PORTEURS D'OMBRE QUI BOUGENT (voir ombresMobilesTick) : même règle, en plus douce.
+  const M2 = DETAIL_OMBRE_MOBILE * DETAIL_OMBRE_MOBILE;
+  for (let i = OMBRES_MOB.length - 1; i >= 0; i--) {
+    const e = OMBRES_MOB[i], m = e.o.matrixWorld.elements;
+    const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
+    const off = dx * dx + dy * dy + dz * dz > e.r * e.r * M2;
+    if (off !== e.off) { e.off = off; e.o.castShadow = !off; e.o.ombreLoin = off; }
+    if (off) ombresOff++;
+  }
   detailOmbresOff = ombresOff;
   detailCoupes = coupes;
   return coupes;
+}
+// ================= L'OMBRE DE CE QUI BOUGE : VEHICULES ET HABITANTS =================
+// Mesure au banc d'essai, en ville a midi : la passe d'ombres coute 3 845 appels de dessin
+// contre 2 440 pour l'image elle-meme. PLUS DE LA MOITIE de la facture — et personne ne l'avait
+// vue, parce que `renderer.info` remet ses compteurs a zero APRES la carte d'ombres : trois
+// mille huit cents appels par image n'apparaissaient nulle part.
+// Repartition de ces 3 845 : 904 pour le decor (detailsInit fait deja le menage), 302 pour les
+// vehicules… et 2 657 POUR LES PERSONNAGES. Un habitant, c'est 133 maillages dont 128 portent
+// une ombre : le blanc de l'oeil, la languette de la basket, chaque doigt, chaque bouton. A
+// quarante metres, tout cela tient dans huit pixels de la carte d'ombres.
+// Ces groupes vivent DIRECTEMENT sur la scene (ils naissent et meurent en cours de partie) :
+// detailsInit(), qui ne parcourt que `worldGroup`, ne les avait jamais vus. On leur applique la
+// meme regle que le decor, en plus douce — un morceau cesse de porter son ombre quand sa taille
+// apparente tombe sous 1/90 de l'ecran, contre 1/55 pour le mobilier — et L'AVATAR DU JOUEUR EN
+// EST EXCLU : c'est le seul personnage qu'on regarde de pres, il garde tout, toujours.
+// Mesure apres : 3 845 → 2 098 appels dans la passe d'ombres (−45 %).
+const OMBRES_MOB = [];              // { o, r, off } : les porteurs d'ombre hors decor
+const DETAIL_OMBRE_MOBILE = 90;     // 1/90e de l'ecran : sous cette taille apparente, l'ombre portee s'efface
+const DETAIL_OMBRE_SUIVI = 1;       // m de rayon : au-dela, l'ombre se voit toujours, inutile de la suivre
+const OMBRE_MOB_RACINES = 3;        // racines de la scene recensees par image (le recensement est etale)
+let ombreMobI = 0, OMBRE_MOB_NEUF = [];
+// Le recensement est ETALE sur les images : parcourir d'un coup les douze mille maillages des
+// vehicules et des habitants couterait quatre millisecondes, soit un a-coup visible toutes les
+// deux secondes — exactement ce qu'on cherche a supprimer. On traite trois racines par image
+// (worldGroup et l'avatar du joueur sont sautes sans etre parcourus), et la liste neuve
+// remplace l'ancienne quand le tour est complet : une trentaine d'images, un demi-seconde.
+function ombresMobilesTick() {
+  if (typeof scene === 'undefined' || !scene || !scene.children) return;
+  const moi = (typeof me !== 'undefined' && me && me.group) ? me.group : null;
+  const enfants = scene.children;
+  for (let n = 0; n < OMBRE_MOB_RACINES && ombreMobI < enfants.length; n++, ombreMobI++) {
+    const racine = enfants[ombreMobI];
+    if (!racine || racine === worldGroup || racine === moi || typeof racine.traverse !== 'function') continue;
+    racine.traverse(o => {
+      if (!o.isMesh || !o.geometry) return;
+      // une ombre que LE JEU a eteinte (piece cassee, vehicule detruit) reste eteinte : on ne
+      // reprend la main que sur celles qu'on a eteintes nous-memes (`ombreLoin`).
+      if (!o.castShadow && !o.ombreLoin) return;
+      const g = o.geometry;
+      if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
+      if (!g.boundingSphere) return;
+      const r = g.boundingSphere.radius * Math.max(Math.abs(o.scale.x), Math.abs(o.scale.y), Math.abs(o.scale.z));
+      if (r >= DETAIL_OMBRE_SUIVI) return;   // un capot, un torse : son ombre se voit a toute distance utile
+      OMBRE_MOB_NEUF.push({ o, r, off: !!o.ombreLoin });
+    });
+  }
+  if (ombreMobI >= enfants.length) {
+    ombreMobI = 0;
+    OMBRES_MOB.length = 0;
+    for (let i = 0; i < OMBRE_MOB_NEUF.length; i++) OMBRES_MOB.push(OMBRE_MOB_NEUF[i]);
+    OMBRE_MOB_NEUF = [];
+  }
 }
 const STUD = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;

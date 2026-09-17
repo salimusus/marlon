@@ -812,7 +812,7 @@ body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 
   </div>
   <div class="tc">
     <div class="pill" id="world">🌳 <span class="wn">Prairie · </span><span id="stageTxt">1/8</span></div>
-    <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt"> · 🚩 0/8</span></div>
+    <div class="pill cityonly" id="respect" title="Guerre des gangs">⭐ 0<span class="rt">&nbsp;· 🚩 0/8</span></div>
     <div class="pill cityonly" id="alliance" title="Alliance temporaire">🤝 —</div>
     <div class="pill" id="timer">⏱ 0:00</div>
     <div class="pill" id="coins">🪙 0/0</div>
@@ -10380,7 +10380,7 @@ function schDire(txt) {
     .replace(/(\d)\s*²/g, '$1 au carré').replace(/×/g, ' fois ').replace(/÷/g, ' divisé par ')
     .replace(/\+/g, ' plus ').replace(/[−–]/g, ' moins ').replace(/=/g, ' égale ')
     .replace(/%/g, ' pour cent ').replace(/°/g, ' degrés ').replace(/€/g, ' euros ')
-    .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/…/g, ' et ensuite ')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1 sur $2').replace(/\s*(…|\.\.\.)\s*\?/g, ' quoi ?').replace(/…|\.\.\./g, ', ')   // « a la forme d'une… ? » se lit « d'une quoi ? », pas « et ensuite » (n° 66)
     .replace(/\s+/g, ' ').trim();
   school.dit = dit; school.ditT = Date.now();
   voice.say(dit, true, true);
@@ -16369,7 +16369,7 @@ function updateHud() {
   const st = $('stageTxt'); if (st && cp) st.textContent = `${cp.idx}/8`;
   // pastille de la guerre des gangs : respect gagné et quartiers tenus
   const rp = $('respect');
-  if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt"> · 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }
+  if (rp) { rp.innerHTML = `⭐ ${HUD_GUERRE.rep}<span class="rt">&nbsp;· 🚩 ${HUD_GUERRE.terr}/${HUD_GUERRE.total}</span>`; rp.title = 'Rang : ' + HUD_GUERRE.rang; }   // &nbsp; : l'espace ouvrante d'un inline-block s'effaçait (« ⭐ 0· », n° 12)
   // le sablier de l'alliance : on voit toujours le temps qu'il reste, on n'est jamais surpris
   const al = $('alliance');
   if (al) {
@@ -16422,7 +16422,8 @@ function chat(name, text, color = '#fff') {
 const CHAT_IDLE = ['salut tout le monde !', 'gg', "trop dur l'étape 5 mdr", 'qui a déjà fini ?', "let's go", 'attendez-moi !', "c'est le meilleur obby", 'vous êtes à quelle étape ?', 'trop belle ma jupe 💃', 'qui vient à la piscine ?', "on fait une course d'hélico ?",
   'je suis pro 😎', 'la lave c chaud', 'mdr', 'jsuis trop fort', "quelqu'un veut faire équipe ?", 'la poutre est trop dure', 'le monde espace est trop bien', 'la glace ça glisse trop', '/e dance'];
 const CHAT_FALL = ['nooooon', 'argh je suis tombé', 'mdr la lave', 'pfff', 'encore tombé 😭', "c'est pas juste"];
-const CHAT_IDLE_CITY = ['la police court après quelqu\'un !', 'j\'ai réparé mon kart au garage', 'ma moto va trop vite 🏍️', 'qui vient à la piscine ?'];
+const CHAT_IDLE_CITY = ['la police court après quelqu\'un !', 'j\'ai réparé mon kart au garage', 'ma moto va trop vite 🏍️', 'qui vient à la piscine ?',
+  'quelqu\'un a vu le glacier ? 🍦', 'je vais au parc, qui vient ?', 'trop beau, le coucher de soleil sur la plage', 'j\'ai gagné 3 pièces à l\'école 📚', 'on fait un foot ? ⚽'];
 const CHAT_FINISH = ["GG j'ai fini !!!", 'trop facile 😎', 'FINI !!! gg', "j'ai gagné 🏆"];
 const CHAT_REPLY = ['lol', 'mdr', 'oui', 'gg', 'trop bien', 'moi aussi', 'ok', '👍', 'haha', 'pareil', 'go go go'];
 // ---- petit "cerveau" de discussion des bots (mots-clés + suivi de la question posée) ----
@@ -16431,8 +16432,8 @@ const norm = t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '
 const BOT_QUESTIONS = [
   { q: 'tu veux faire une course de karts ?', topic: 'course', yes: 'go ! rendez-vous au portique du circuit, appuie sur F 🏁', no: 'ok, une autre fois alors' },
   { q: 'tu preferes le foot ou le tennis ?', topic: 'sport', foot: 'moi aussi le foot ⚽ viens, je te fais des passes', tennis: 'le tennis ! prends une raquette au râtelier 🎾' },
-  { q: 'tu as deja pilote l\'helico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec F', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
-  { q: 'tu as combien de pieces ?', topic: 'pieces', any: 'pas mal ! achète-toi un chapeau à la boutique 👑' },
+  { q: 'tu as déjà piloté l\'hélico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec F', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
+  { q: 'tu as combien de pièces ?', topic: 'pieces', any: 'pas mal ! achète-toi un chapeau à la boutique 👑' },
   { q: 'on va a la piscine ?', topic: 'piscine', yes: 'yes ! le dernier au plongeoir a perdu 🏊', no: 'tant pis, moi j\'y vais' },
   { q: 'tu es musclé toi ?', topic: 'muscle', yes: 'montre à la salle de sport alors 💪', no: 'va soulever la barre à la salle de sport, tape vite sur Espace !' },
   { q: 'c\'est quoi ton maillot préféré ?', topic: 'maillot', any: 'stylé ! moi je change tout le temps' },
@@ -17042,6 +17043,15 @@ function conduireVersPoint(c, tx, tz, dt, st) {
 // balade d'un habitant s'annonçait comme un rendez-vous pris avec l'enfant (« ok Joueur, je te
 // retrouve à Tatouage »), avec le gros message central et la colonne GPS allumée alors qu'il
 // n'avait parlé à personne (n° 24 du Joueur).
+// « je te retrouve à Quartier résidentiel » (n° 34) : l'article selon le nom du lieu
+function auLieu(nom) {
+  const n = String(nom || ''); if (!n) return 'là-bas';
+  if (/^(le |la |les |l')/i.test(n)) return (n.startsWith('le ') ? 'au ' + n.slice(3) : n.startsWith('les ') ? 'aux ' + n.slice(4) : 'à ' + n);
+  if (/^[aeiouéèêh]/i.test(n)) return 'à l\'' + n;
+  if (/^(quartier|parking|parc|garage|centre|commissariat|stade|techno|marché|circuit|port|dépôt|bureau|casino|snack|cinéma|terrain)/i.test(n)) return 'au ' + n;
+  if (/^(plage|banque|zone|villa|fête|caserne|école|piscine|rue|place|prison|boutique|concession|clinique|gare)/i.test(n)) return 'à la ' + n;
+  return 'à ' + n;
+}
 function botPrendVoiture(b, lieu, genre, libre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
@@ -17057,7 +17067,7 @@ function botPrendVoiture(b, lieu, genre, libre) {
   b.rdv = { x: c.x + 2.2, z: c.z + 2.2, y: 0.3, nom: nomV, arrive: false, auto: { car: c, tx: arr.x, tz: arr.z, nom: lieu.nom } };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
   if (libre) return;   // il l'a déjà dit avec ses mots à lui, et ça ne regarde pas le GPS du joueur
-  botSay(b, [`ok ${myCfg.name}, je prends ${nomV} et je te retrouve à ${lieu.nom} 🚗`]);
+  botSay(b, [`ok ${myCfg.name}, je prends ${nomV} et je te retrouve ${auLieu(lieu.nom)} 🚗`]);
   msg(`🚗 ${b.name} va chercher ${nomV}, direction ${lieu.nom}`, 3200);
   setBeacon(lieu.x, lieu.z);
 }
@@ -18816,9 +18826,9 @@ function updateBot(b, dt) {
           b.rdvRoute = null; b.wait = 0; botDit(b, `j'ai ${it.e} ${it.n}, j'arrive !`); }
         if (!b.rdv.arrive && !b.rdv.gang && !b.rdv.entrain && !b.rdv.soin) finirOrdre(b, 'reussi');
         if (!b.rdv.arrive && b.rdv.sport) { b.rdv.arrive = true; demarreSport(b); }
-        else if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on joue ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
+        else if (!b.rdv.arrive) { b.rdv.arrive = true; botSay(b, [b.rdv.suit ? `je suis là ${myCfg.name} ! 👋` : b.rdv.coup ? 'je suis au volant, moteur tournant 🚗💨' : b.rdv.jeu ? `je suis à ${b.rdv.nom}, on va ${b.rdv.jeu} ! 🎉` : `je suis arrivé à ${b.rdv.nom}, je t'attends 😊`]); if (!b.rdv.coup) clearBeacon(); }
         const dp = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
-        if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on joue ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
+        if (dp < 4 && simTime > (b.rdvT || 0)) { b.rdvT = simTime + 12; if (b.rdv.jeu) { b.dance = 2.5; botSay(b, [`allez, on va ${b.rdv.jeu} ! 😄`]); } else botSay(b, ['te voilà ! 😄', 'salut l\'ami ⭐']); }
       }
     }
     // Arrivé au rendez-vous, il reste sur place : avant, il repartait aussitôt se promener
@@ -24227,7 +24237,7 @@ function frame() {
   if (n === 8) acc = 0;
   if (active && timerOn) { elapsed += dt; updateTimer(); }
   if (!paused && !net.on) bots.forEach(b => updateBot(b, dt)); else if (net.on) bots.forEach(b => { b.av.group.visible = false; });
-  if (running && !paused && !net.on && simTime > nextChat) { const b = pickOne(bots); const t = pickOne(CHAT_IDLE); chat(b.name, t, b.color); if (t === '/e dance') b.dance = 3; else bubble(b.av, t); dialog.lastBot = b; nextChat = simTime + rnd(16, 32); }
+  if (running && !paused && !net.on && simTime > nextChat) { const b = pickOne(bots); const t = pickOne(city.on ? CHAT_IDLE_CITY : CHAT_IDLE); /* en ville, on ne parle pas de lave ni de l'étape 5 (n° 10) */ chat(b.name, t, b.color); if (t === '/e dance') b.dance = 3; else bubble(b.av, t); dialog.lastBot = b; nextChat = simTime + rnd(16, 32); }
   if (running && !paused && !net.on && simTime > dialog.nextAsk) { botAsk(); dialog.nextAsk = simTime + rnd(45, 80); }
   if (running && !paused && !net.on && city.on) for (const b of bots) { const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < 3.5 && simTime > (b.greetT || 0)) { b.greetT = simTime + 45; const g = pickOne([`salut ${myCfg.name} !`, `coucou ${myCfg.name}, ça va ?`, `hé ${myCfg.name}, tu viens jouer ?`, 'salut toi !', `${myCfg.name} ! trop content de te voir`]); bubble(b.av, g); voice.say(g, !!b.girl); } }
   if (!paused) { try { meteoTick(dt); } catch (e) { if (loopErr++ < 3) console.error('météo', e); } }

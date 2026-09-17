@@ -20874,9 +20874,7 @@ function moveAxis(axis, amount, canStep) {
     {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
       // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
-      // `P.marcheLisse` : la hauteur gagnee d'un coup, que l'AFFICHAGE va rattraper en douceur
-      // (voir la boucle d'affichage). La physique, elle, monte franchement comme avant.
-      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; P.marcheLisse = Math.min(STEP_UP, (P.marcheLisse || 0) + rise); continue; }
+      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }
       const half = (axis === 'x' ? o.w : o.d) / 2;
       const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
@@ -26781,6 +26779,15 @@ function loop() {
   if (window.__manetteSeule) { clock.getDelta(); return; }
   try { frame(); } catch (e) { if (loopErr++ < 3) console.error(e); }
 }
+// La hauteur a laquelle on DESSINE le joueur. Voir l'appel dans frame() : la physique monte
+// une marche d'un bloc, l'affichage la monte en un dixieme de seconde. Au-dela de 75 cm
+// d'ecart (teleportation, respawn, grande chute) on recolle d'un coup.
+function hauteurVue(dt) {
+  if (P.yVu == null || !P.grounded || drive.car || Math.abs(P.pos.y - P.yVu) > 0.75) return P.pos.y;
+  const ecart = P.pos.y - P.yVu;
+  const pas = Math.max(1.8, Math.abs(ecart) * 9) * dt;
+  return P.yVu + Math.max(-pas, Math.min(pas, ecart));
+}
 function frame() {
   const brut = clock.getDelta();
   let dt = Math.min(brut, 0.05);
@@ -26834,11 +26841,14 @@ function frame() {
   // joueur
   me.group.position.copy(P.pos);
   // MONTER UN ESCALIER SANS TRESSAUTER. moveAxis fait sauter P.pos.y d'un coup jusqu'en haut
-  // de la marche (jusqu'a 60 cm en une image) : l'avatar sautillait a chaque marche. On garde
-  // la physique telle quelle — c'est elle qui doit rester franche — et on RATTRAPE le saut a
-  // l'affichage en un dixieme de seconde. Le decalage est applique AVANT animateRig pour que
-  // le pied verrouille au sol le suive aussi.
-  if (P.marcheLisse) { P.marcheLisse = Math.max(0, P.marcheLisse - Math.max(1.6, P.marcheLisse * 9) * dt); me.group.position.y -= P.marcheLisse; }
+  // de la marche (jusqu'a 60 cm en une image, et deux fois quand on aborde une marche en
+  // biais) : l'avatar sautillait a chaque marche. On garde la physique telle quelle — c'est
+  // elle qui doit rester franche — et l'AFFICHAGE suit une hauteur `P.yVu` qui ne peut pas
+  // monter ni descendre de plus de quelques centimetres par image. Applique AVANT animateRig,
+  // pour que le pied verrouille au sol suive la meme hauteur.
+  // En l'air (saut, chute) on colle a la physique : la reception doit rester seche.
+  P.yVu = hauteurVue(dt);
+  me.group.position.y = P.yVu;
   const sp = Math.hypot(P.vel.x, P.vel.z);
   if (P.dance > 0 && active) { P.dance -= dt; P.facing += dt * 2.5; if (P.dance <= 0) stopDance(); }
   else if (settings.ctrl !== 'rot' && (sp > 0.6 || (active && P.capVoulu != null && !surLeCourt()))) {

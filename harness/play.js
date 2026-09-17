@@ -17258,7 +17258,11 @@ const LOCO_AIDE = `
   const locoPose = t => {
     const G = __G, P = G.P, me = G.me;
     me.group.position.copy(P.pos);
-    if (P.marcheLisse) { P.marcheLisse = Math.max(0, P.marcheLisse - Math.max(1.6, P.marcheLisse * 9) * DTL); me.group.position.y -= P.marcheLisse; }
+    // meme rattrapage de hauteur que frame() : la physique monte une marche d'un bloc,
+    // l'affichage la monte en un dixieme de seconde
+    if (P.yVu == null || !P.grounded || Math.abs(P.pos.y - P.yVu) > 0.75) P.yVu = P.pos.y;
+    else { const ec = P.pos.y - P.yVu, q = Math.max(1.8, Math.abs(ec) * 9) * DTL; P.yVu += Math.max(-q, Math.min(q, ec)); }
+    me.group.position.y = P.yVu;
     const sp = Math.hypot(P.vel.x, P.vel.z);
     if (sp > 0.6) { const c = Math.atan2(P.vel.x, P.vel.z); let d = c - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d)); P.facing += d * Math.min(1, DTL * 14); }
     me.group.rotation.y = P.facing; me.group.rotation.x = 0;

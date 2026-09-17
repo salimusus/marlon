@@ -15741,3 +15741,181 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
     && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
+
+// ================= POSTE AMBULANCE (round 71) =================
+// « améliore le système ambulance, crée une animation qui sort le brancard et met le joueur ou
+// un bot allongé dessus, le fait rentrer à l'intérieur du fourgon puis l'emmène à l'hôpital »
+test('les secours sortent le brancard du fourgon, allongent le blessé dessus, le font rentrer et l\'emmènent à l\'hôpital', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const av20 = () => { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); };
+    for (const a2 of (G.city.ambulances || [])) { a2.etat = null; a2.victime = null; a2.x = a2.home0[0]; a2.z = a2.home0[1]; a2.h = a2.home0[2]; a2.g.position.set(a2.x, a2.y || 0, a2.z); G.vehicleSolid(a2); }
+    const hx = G.city.medDesk.x, hz = G.city.medDesk.z;
+    const b = G.bots.find(x => x.av && x.av.group.visible && !x.prison && !x.drive);
+    b.pos.set(hx + 26, G.groundUnder(hx + 26, hz + 18, null, 1), hz + 18); b.hp = 0; b.ko = G.simTime + 9000;
+    G.corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
+    const brancards0 = (G.city.brancards || []).length;
+    G.P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
+    const a = (G.city.ambulances || []).find(x => x.victime === b);
+    if (!a) return { err: 'aucune ambulance ne repond' };
+    const phases = [], m = {}; let last = null, t0 = G.simTime;
+    const loc = (br, w) => { br.g.updateMatrixWorld(true); return br.g.worldToLocal(w.clone()); };
+    const trois = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+    for (let i = 0; i < 20 * 300; i++) {
+      av20();
+      const cle = a.etat + '/' + (a.phase || '-');
+      if (cle !== last) { phases.push(cle); last = cle; }
+      const br = a.civiere;
+      // 1. LE BRANCARD EST DEHORS, pieds dépliés, porté par les deux ambulanciers, blessé dessus
+      if (br && a.phase === 'ramene' && a.surCiviere && !m.dehors) {
+        br.g.updateMatrixWorld(true);
+        const pb = br.g.getWorldPosition(new T.Vector3());
+        m.dehors = { dansLeFourgon: br.g.parent !== G.worldGroup, pieds: +(br.pieds == null ? -1 : br.pieds).toFixed(2),
+          porteurs: (br.avant ? 1 : 0) + (br.arriere ? 1 : 0), couvert: !!br.couvert,
+          duFourgon: +Math.hypot(pb.x - a.x, pb.z - a.z).toFixed(1), portes: +(a.amb || 0).toFixed(2),
+          equipeVisible: (a.equipe || []).filter(w => w.av.group.visible).length };
+        // 2. LE BLESSÉ EST VRAIMENT ALLONGÉ DESSUS : mesuré dans le repère du brancard
+        const tete = loc(br, b.av.tete.getWorldPosition(new T.Vector3()));
+        const pied = loc(br, b.av.rig.legL.shoe.getWorldPosition(new T.Vector3()));
+        const main = loc(br, b.av.rig.armR.poing.getWorldPosition(new T.Vector3()));
+        m.allonge = { angle: +b.av.group.rotation.x.toFixed(2), ordre: b.av.group.rotation.order,
+          tete: trois(tete), pied: trois(pied), main: trois(main) };
+      }
+      // 3. LE BRANCARD EST RENTRÉ DANS LA CAISSE, pieds repliés, portes refermées
+      if (br && a.etat === 'transport' && !m.dedans) {
+        const anc = a.brancard.getWorldPosition(new T.Vector3()), pb = br.g.getWorldPosition(new T.Vector3());
+        m.dedans = { dansLeFourgon: br.g.parent !== G.worldGroup, etat: br.etat, pieds: +(br.pieds == null ? -1 : br.pieds).toFixed(2),
+          ecartAncrage: +pb.distanceTo(anc).toFixed(2), portes: +(a.amb || 0).toFixed(2) };
+        // le blessé roule AVEC le fourgon : il est au-dessus du plancher de la cellule
+        const c = loc(br, b.av.group.getWorldPosition(new T.Vector3()));
+        m.dedans.blesseSurLeMatelas = +Math.hypot(c.x, c.z + 0.92).toFixed(2);
+      }
+      if (!a.etat && phases.length > 4) break;
+    }
+    const br = a.civiere;
+    return { phases, m, total: +(G.simTime - t0).toFixed(1), brancards0, brancards: (G.city.brancards || []).length,
+      hp: b.hp, ko: b.ko, dist: +Math.hypot(b.pos.x - hx, b.pos.z - hz).toFixed(1), abandon: a.abandon || null,
+      debout: +b.av.group.rotation.x.toFixed(2), etatFin: a.etat,
+      rangee: br ? { dansLeFourgon: br.g.parent !== G.worldGroup, pieds: +(br.pieds == null ? -1 : br.pieds).toFixed(2) } : null,
+      equipeRangee: (a.equipe || []).filter(w => w.av.group.visible).length };
+  });
+  const de = r.m && r.m.dehors, al = r.m && r.m.allonge, da = r.m && r.m.dedans, ph = r.phases || [];
+  const attendues = ['route/-', 'charge/ouvre', 'charge/sortie', 'charge/approche', 'charge/allonge', 'charge/ramene',
+    'charge/embarque', 'transport/-', 'depose/ouvreHop', 'depose/sortieHop', 'depose/livre', 'depose/rembarque', 'retour/-'];
+  const ok = !r.err && attendues.every(e => ph.includes(e))
+    && de && !de.dansLeFourgon && de.pieds > 0.9 && de.porteurs === 2 && de.couvert && de.duFourgon > 1.5 && de.portes > 0.5 && de.equipeVisible === 2
+    && al && Math.abs(al.angle + 1.57) < 0.05 && al.ordre === 'YXZ'
+    && Math.abs(al.tete[0]) < 0.4 && Math.abs(al.pied[0]) < 0.4 && Math.abs(al.main[0]) < 0.55
+    && al.tete[2] > 0.1 && al.tete[2] < 1.35 && al.pied[2] > -1.35 && al.pied[2] < -0.2
+    && al.tete[1] > 0.3 && al.tete[1] < 1.2
+    && da && da.dansLeFourgon && da.etat === 'charge' && da.pieds < 0.1 && da.ecartAncrage < 0.1 && da.portes < 0.1 && da.blesseSurLeMatelas < 0.35
+    && r.hp === 100 && r.ko === 0 && r.dist < 8 && Math.abs(r.debout) < 0.05 && !r.abandon && !r.etatFin
+    && r.rangee && r.rangee.dansLeFourgon && r.rangee.pieds < 0.1 && r.equipeRangee === 0
+    && r.brancards === r.brancards0 + 1;
+  return { ok, detail: `l'ambulance roulait jusqu'au blessé, attendait 3 s devant un fourgon fermé et le TÉLÉPORTAIT dans la cellule (12,6 s, aucun geste) · elle joue maintenant les ${ph.length} étapes ${ph.join(' → ')} en ${r.total} s simulées : le brancard sort du fourgon (${de ? de.duFourgon : '?'} m derrière, pieds dépliés à ${de ? de.pieds : '?'}, portes ouvertes à ${de ? de.portes : '?'}, ${de ? de.porteurs : 0} porteurs), le blessé est allongé dessus (${al ? al.angle : '?'} rad, tête en ${al ? al.tete.join('/') : '?'} et pieds en ${al ? al.pied.join('/') : '?'} dans le repère du brancard, poing à ${al ? al.main[0] : '?'} m de l'axe : rien ne dépasse), il RENTRE dans la caisse (${da ? da.ecartAncrage : '?'} m de l'ancrage, pieds repliés à ${da ? da.pieds : '?'}, portes refermées à ${da ? da.portes : '?'}) et ressort à l'hôpital : ${r.dist} m de l'accueil, ${r.hp} PV, debout (${r.debout} rad), civière rangée (${r.rangee ? r.rangee.dansLeFourgon : '?'}) et équipage remonté (${r.equipeRangee} dehors)` };
+});
+
+test('transporté par les secours, le joueur est allongé sans commandes et reprend la main debout à l\'arrivée', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const av20 = () => { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); };
+    for (const a2 of (G.city.ambulances || [])) { a2.etat = null; a2.victime = null; a2.x = a2.home0[0]; a2.z = a2.home0[1]; a2.h = a2.home0[2]; a2.g.position.set(a2.x, a2.y || 0, a2.z); G.vehicleSolid(a2); }
+    const hx = G.city.medDesk.x, hz = G.city.medDesk.z;
+    P.pos.set(hx + 20, G.groundUnder(hx + 20, hz + 16, null, 2), hz + 16); P.vel.set(0, 0, 0);
+    P.hp = 8; G.city.urgT = 0; G.urgencesTick(0.1);
+    const a = (G.city.ambulances || []).find(x => x.victime === 'joueur');
+    if (!a) return { err: 'aucune ambulance pour le joueur' };
+    let k = 0;
+    while (!a.surCiviere && k++ < 20 * 200) av20();
+    if (!a.surCiviere) return { err: 'le joueur n\'a jamais ete allonge', etat: a.etat, phase: a.phase };
+    const msgPris = document.getElementById('msg').textContent;
+    // LES COMMANDES SONT COUPÉES : on pousse en avant pendant une seconde, il ne bouge pas de sa civière
+    const av0 = { x: P.pos.x, z: P.pos.z };
+    G.keys.add('KeyW'); G.keys.add('Space');
+    for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW'); G.keys.delete('Space');
+    const br = a.civiere; br.g.updateMatrixWorld(true);
+    const c = br.g.userData.couche.getWorldPosition(new G.THREE.Vector3());
+    const pendant = { bouge: +Math.hypot(P.pos.x - av0.x, P.pos.z - av0.z).toFixed(2),
+      surLeMatelas: +Math.hypot(P.pos.x - c.x, P.pos.z - c.z).toFixed(2),
+      couche: +G.me.group.rotation.x.toFixed(2), verrou: !!P.secours, hp: P.hp,
+      camera: { yaw: G.cam.yaw, libre: true } };
+    // la caméra reste pilotable : on la tourne à la main, elle suit
+    const yaw0 = G.cam.yaw; G.cam.yaw += 0.9; for (let i = 0; i < 6; i++) G.step(1 / 60, true);
+    pendant.camera.tourne = +(G.cam.yaw - yaw0).toFixed(2);
+    // ... et on va jusqu'à l'hôpital
+    let j = 0;
+    while (a.etat && j++ < 20 * 250) av20();
+    for (let i = 0; i < 12; i++) G.step(1 / 60, true);
+    const sol = G.groundUnder(P.pos.x, P.pos.z, null, P.pos.y + 2.5);
+    return { msgPris, pendant, etatFin: a.etat, verrouFin: !!P.secours, hp: P.hp,
+      deboutFin: +G.me.group.rotation.x.toFixed(2), auSol: +(P.pos.y - sol).toFixed(2),
+      dist: +Math.hypot(P.pos.x - hx, P.pos.z - hz).toFixed(1), abandon: a.abandon || null };
+  });
+  const d = r.pendant || {};
+  const ok = !r.err && /secours/i.test(r.msgPris || '') && d.verrou && d.bouge < 0.6 && d.surLeMatelas < 0.4
+    && Math.abs(d.couche + 1.57) < 0.05 && Math.abs(d.camera.tourne - 0.9) < 0.05
+    && !r.etatFin && !r.verrouFin && r.hp === 100 && Math.abs(r.deboutFin) < 0.05 && Math.abs(r.auSol) < 0.6 && r.dist < 12 && !r.abandon;
+  return { ok, detail: `le joueur blessé était TÉLÉPORTÉ dans la caisse puis re-téléporté au bureau de l'hôpital, debout, sans rien voir · maintenant il est allongé sur le brancard (${d.couche} rad, ${d.surLeMatelas} m du matelas), on le lui dit (« ${(r.msgPris || '').slice(0, 42)} »), ses commandes sont coupées (une seconde de W + saut : ${d.bouge} m) mais PAS sa caméra (+${d.camera.tourne} rad au stick), et à l'arrivée il reprend la main debout (${r.deboutFin} rad, ${r.auSol} m au-dessus du sol), soigné (${r.hp} PV), à ${r.dist} m de l'accueil` };
+});
+
+test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni ambulancier planté, ni joueur bloqué allongé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const av20 = () => { G.simTime = G.simTime + 1 / 20; G.servicesTick(1 / 20); };
+    const remise = () => { for (const a2 of (G.city.ambulances || [])) { if (a2.etat) G.ambulanceAbandon(a2, 'test'); a2.abandon = null; a2.x = a2.home0[0]; a2.z = a2.home0[1]; a2.h = a2.home0[2]; a2.g.position.set(a2.x, a2.y || 0, a2.z); G.vehicleSolid(a2); } };
+    remise();
+    const hx = G.city.medDesk.x, hz = G.city.medDesk.z;
+    const brancards0 = (G.city.brancards || []).length;
+    // ---- 1. le blessé se relève pendant que les brancardiers viennent le chercher ----
+    const b = G.bots.find(x => x.av && x.av.group.visible && !x.prison && !x.drive);
+    b.pos.set(hx + 20, G.groundUnder(hx + 20, hz + 16, null, 1), hz + 16); b.hp = 0; b.ko = G.simTime + 9000;
+    G.corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
+    P.hp = 100; G.city.urgT = 0; G.urgencesTick(0.1);
+    const a = (G.city.ambulances || []).find(x => x.victime === b);
+    if (!a) return { err: 'aucune ambulance (bot)' };
+    let k = 0;
+    while (a.phase !== 'approche' && k++ < 20 * 200) av20();
+    const dehors = a.civiere ? a.civiere.g.parent !== G.worldGroup : null;
+    b.hp = 100; b.ko = 0;                      // il se relève : plus rien à ramasser
+    for (let i = 0; i < 8; i++) av20();
+    const br = a.civiere;
+    const releve = { raison: a.abandon, etat: a.etat, victime: a.victime,
+      brancardRange: br ? br.g.parent !== G.worldGroup : null, pieds: br ? +(br.pieds == null ? -1 : br.pieds).toFixed(2) : null,
+      porteurs: br ? (br.avant ? 1 : 0) + (br.arriere ? 1 : 0) : null,
+      equipeDehors: (a.equipe || []).filter(w => w.av.group.visible).length,
+      portes: +(a.amb || 0).toFixed(2), fantomes: (G.city.brancards || []).length - brancards0, dehorsAvant: !dehors };
+    // ---- 2. l'ambulance est détruite pendant que le JOUEUR est sur le brancard ----
+    remise();
+    P.pos.set(hx + 20, G.groundUnder(hx + 20, hz + 16, null, 2), hz + 16); P.vel.set(0, 0, 0); P.hp = 8;
+    G.city.urgT = 0; G.urgencesTick(0.1);
+    const a2 = (G.city.ambulances || []).find(x => x.victime === 'joueur');
+    if (!a2) return { err: 'aucune ambulance (joueur)' };
+    let j = 0;
+    while (!a2.surCiviere && j++ < 20 * 200) av20();
+    const verrouAvant = !!P.secours;
+    a2.dead = true;                            // l'ambulance devient une épave
+    for (let i = 0; i < 8; i++) av20();
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    a2.dead = false;
+    const br2 = a2.civiere;
+    const sol = G.groundUnder(P.pos.x, P.pos.z, null, P.pos.y + 2.5);
+    const detruite = { verrouAvant, raison: a2.abandon, etat: a2.etat, verrou: !!P.secours,
+      debout: +G.me.group.rotation.x.toFixed(2), auSol: +(P.pos.y - sol).toFixed(2),
+      brancardRange: br2 ? br2.g.parent !== G.worldGroup : null,
+      equipeDehors: (a2.equipe || []).filter(w => w.av.group.visible).length,
+      bouge: 0 };
+    // il repart pour de bon : une seconde de marche le déplace
+    const x0 = P.pos.x, z0 = P.pos.z;
+    G.keys.add('KeyW'); for (let i = 0; i < 60; i++) G.step(1 / 60, true); G.keys.delete('KeyW');
+    detruite.bouge = +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2);
+    P.hp = 100;
+    return { releve, detruite, fantomes: (G.city.brancards || []).length - brancards0 };
+  });
+  const a = r.releve || {}, b = r.detruite || {};
+  const ok = !r.err && a.raison && !a.etat && !a.victime && a.brancardRange && a.pieds < 0.1 && a.porteurs === 0
+    && a.equipeDehors === 0 && a.portes < 0.1 && a.fantomes <= 1 && a.dehorsAvant === false
+    && b.verrouAvant && b.raison && !b.etat && !b.verrou && Math.abs(b.debout) < 0.05 && Math.abs(b.auSol) < 0.6
+    && b.brancardRange && b.equipeDehors === 0 && b.bouge > 1 && r.fantomes <= 2;
+  return { ok, detail: `une séquence coupée laissait tout en plan · le blessé qui se relève pendant l'approche : « ${a.raison} », civière remise dans le fourgon (${a.brancardRange}, pieds ${a.pieds}, ${a.porteurs} porteurs), portes refermées (${a.portes}), ${a.equipeDehors} ambulancier dehors, ${a.fantomes} brancard fantôme · l'ambulance détruite alors que le JOUEUR y est sanglé : « ${b.raison} », verrou levé (${b.verrou}), il se relève debout (${b.debout} rad, ${b.auSol} m du sol) et remarche tout de suite (${b.bouge} m en 1 s) · au total ${r.fantomes} brancard en plus dans la ville` };
+});

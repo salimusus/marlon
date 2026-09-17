@@ -345,7 +345,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 32. En voiture, la caméra traîne loin derrière, se cale derrière les poteaux et perd la voiture
 ✅ RÉPARÉ — `camLibres` ignorait déjà les vitres mais pas les poteaux : les solides de moins de 0,7 m de côté ne calent plus la perche ; en voiture la caméra vise base + 2 m + recul court (`reculConduite = vitesseRel × 1,2`) au lieu de traîner loin derrière. Mesuré à 60 km/h : distance caméra 9,4 m → 6,1 m, jamais coincée derrière un poteau sur 20 s de tour — commit 61df87c
-🔎 CONTRÔLÉ (bdcc5e4) : OK en partie — plus de caméra derrière les poteaux (0 objet entre caméra et voiture sur 10 relevés PC ; en TV les 4 relevés « bouchés » sont un véhicule garé contre lequel ma voiture rebondissait). Mais à l'arrêt la caméra colle au toit (1,9–3,0 m) : voir n° 76. Mesure à 60 km/h refaite au point 4 (`p4`).
+🔎 CONTRÔLÉ (bdcc5e4) : TOUJOURS CASSÉ à pleine vitesse — plus de caméra derrière les poteaux (0 objet entre caméra et voiture sur 10 relevés), mais sur la grande avenue du Quartier résidentiel (route x −110…190, z 196), caméra calée à 3,9 m à l'arrêt, R2 à fond : 11 m à 64 km/h (t+1 s), 25 m, 34 m, 41 m, 46 m, **50 m à 75 km/h (t+6 s)** — la voiture est un point au bout de l'avenue (`img/p4/p4-08-camera-60.png`) ; elle revient à 8,6 m 6 s après l'arrêt. Identique PC / TV (`p6-pc.log`, `p6-tv.log` `camera60`). Et à l'arrêt contre un mur elle colle au toit (1,9–3 m, n° 76).
 - **Gravité** : GÊNANT
 - **Reproduire** : rouler à 50 km/h vers l'est depuis (−15, 7) ; sortir de la ville.
 - **On voit** : `s4-6-mur.png` : la voiture est un point rouge au loin, le feu tricolore occupe le premier plan ; `s4-7b-apres-pieton.png` : la voiture n'est plus dans l'image du tout (dallage blanc, un arbre, un banc).
@@ -446,6 +446,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 59. Hélicoptère : ▢ pose l'appareil SUR un objet de la rue
 ✅ RÉPARÉ — la descente automatique (▢) se posait sur N'IMPORTE QUOI sous l'appareil. `heliPointLibre()` : on ne se pose que sur le sol ou un vrai toit (solide ≥ 8 × 8 m, pas un véhicule) et sinon l'hélico se décale sur la place libre la plus proche (cercles de 3 à 24 m), en restant à 1,5 m au-dessus des obstacles en chemin ; ▢ le dit (« je me décale sur une place libre »). Mesuré avec un objet de 3 × 2,4 × 7 m en (43, 51) : posé à y 2,49 SUR l'objet → posé à (38, 48) y 0,20 au sol, 0 dégât. Test 394 ajouté — commit 2f5d844
+🔎 CONTRÔLÉ (bdcc5e4) : OK — hélico au-dessus de la rue commerçante (43, 52,9) à 28 m, ▢ : l'appareil se décale de 2,7 m et se pose au sol en (43, 50,2), y = 0,44, aucun solide dessous (avant : sur l'abribus) ; PC et TV (`img/p6/p6-04-heli-pose.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : héliport (43, −13), △, ◯ 4 s, stick avant 4 s, ▢.
 - **On voit** : la descente automatique (« Atterrissage… ») se termine à y 0,21 en (43, 51) sur un solide de 3 × 2,4 × 7 m (abribus / mobilier) ; △ fait descendre le personnage à y 2,3, debout sur l'objet.
@@ -469,6 +470,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 63. Le joueur perd 56 PV sans qu'on lui dise pourquoi
 ✅ RÉPARÉ — `hurt()` affiche « 🤕 −12 ❤️ · Momo_king » (dégâts ≥ 5, avec l'auteur ou « un coup ») ; mesuré sur un coup de bot — commit 5b3e586
+🔎 CONTRÔLÉ (bdcc5e4) : OK — coup reçu d'un habitant qui se bat : « 🤕 −9 ❤️ · Karim_flash » à l'instant du coup (PC et TV, `img/p6/p6-00-coup-recu.png`).
 - **Gravité** : GÊNANT
 - **Reproduire** : après la voiture détruite (n° 61), rester au point d'apparition 40 s.
 - **On voit** : `P.hp` 100 → 72 → 44 puis remonte tout seul à 100 ; aucun message, aucun « aïe », la barre verte descend sans raison visible (explosion à distance ? bagarre de bots ?).

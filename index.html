@@ -9635,12 +9635,13 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // « La banque a toujours l'escalier collé contre le mur, réaménage l'emplacement,
   // réorganise la banque. » Repère local : dx = x - bx (est positif), dz = z - bz (sud
   // positif) ; les faces INTÉRIEURES des murs sont à ±9,60 m.
-  //   RDC : on entre à l'EST. Le tapis rouge file tout droit de la porte aux GUICHETS de
-  //         l'ouest (DÉPÔT au nord, RETRAIT au sud). L'ACCUEIL est à droite en entrant, la
-  //         FILE D'ATTENTE borde le tapis au sud et mène au guichet, le BUREAU DU
-  //         CONSEILLER occupe l'angle sud-ouest derrière une cloison vitrée, le SALON
-  //         D'ATTENTE l'angle sud-est. La volée du 1ᵉʳ longe le nord, mais collée au VIDE
-  //         de l'atrium : il reste 2,00 m de passage derrière elle (0,40 m avant).
+  //   RDC : on entre à l'EST. Le tapis rouge part du seuil, traverse le hall, puis tourne
+  //         vers les GUICHETS du mur SUD (DÉPÔT à l'ouest, RETRAIT à l'est) ; la FILE
+  //         D'ATTENTE encadre cette branche. L'ACCUEIL est à droite en entrant, le BUREAU
+  //         DU CONSEILLER occupe l'angle sud-ouest derrière une cloison vitrée, le SALON
+  //         D'ATTENTE l'angle sud-est, et la bande ouest reste un COULOIR LIBRE de 5,60 m
+  //         qui mène au pied de l'escalier. La volée du 1ᵉʳ longe le nord, mais collée au
+  //         VIDE de l'atrium : il reste 2,00 m de passage derrière elle (0,40 m avant).
   //   1ᵉʳ : bureaux au sud, coursives est et ouest. TOUT le bandeau nord est une trémie
   //         ouverte sur la volée du RDC — sans elle on montait la tête sous la dalle
   //         (1,60 m de passage au milieu de la volée).

@@ -17211,7 +17211,9 @@ function organiserCoup(b) {
   const bx = banque ? (banque.x1 + banque.x2) / 2 : -52, bz = banque ? (banque.z1 + banque.z2) / 2 : 70;
   // voiture de fuite : la plus proche de la banque, garée devant, moteur tournant
   let c = null, dmin = Infinity;
-  for (const v of city.cars) { if (v.heli || v.busy || v.kind === 'jetski' || v.kind === 'bike' || dansMonGarage(v)) continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
+  // Même règle que pour l'ami qui vient te chercher : une voiture de fuite, ça n'est pas
+  // l'ambulance de la ville ni la benne des travaux (voir voitureEmpruntable).
+  for (const v of city.cars) { if (v.busy || v.kind === 'bike' || dansMonGarage(v) || !voitureEmpruntable(v)) continue; const d = Math.hypot(v.x - bx, v.z - bz); if (d < dmin) { dmin = d; c = v; } }
   if (!c) { botSay(b, ['je ne trouve aucune voiture 😬']); return; }
   c.x = bx + 13; c.z = bz + 2; c.h = Math.PI / 2; settleVehicle(c); c.g.rotation.y = c.h; vehicleSolid(c);
   coup.etat = 'attente'; coup.bot = b; coup.car = c; coup.t = simTime;
@@ -17406,11 +17408,29 @@ function auLieu(nom) {
   if (/^(plage|banque|zone|villa|fête|caserne|école|piscine|rue|place|prison|boutique|concession|clinique|gare)/i.test(n)) return 'à la ' + n;
   return 'à ' + n;
 }
+// UN VEHICULE DE SERVICE APPARTIENT A SON SERVICE. Le membre du gang parti chercher le joueur
+// prenait la caisse la plus proche SANS REGARDER CE QUE C'EST : il est revenu au volant de
+// l'AMBULANCE de la ville — croix rouge sur le hayon blanc, un enfant la reconnait tout de
+// suite — et les secours n'avaient plus de vehicule pour le blesse suivant. On reconnait ces
+// vehicules a leur DRAPEAU D'IDENTITE, pose a la fabrication, plutot qu'a une liste de noms
+// qu'il faudrait tenir a jour : `travail` (tout le depot des travaux : benne, grue, pelle,
+// tracteur, bulldozer, fourgon, velo du facteur, camion de pompiers, depanneuse), `ambulance`,
+// `depanneuse`, `urgence` (le drapeau des secours), `police`.
+function vehiculeDeService(v) {
+  return !!v && !!(v.travail || v.ambulance || v.depanneuse || v.pompier || v.urgence || v.police || v.patrouille);
+}
+// La voiture qu'un habitant a le droit d'emprunter : une voiture ORDINAIRE. Ni un vehicule de
+// service, ni un kart du circuit, ni un engin qui ne se conduit pas assis (helico, jet-ski).
+// (Le deux-roues, lui, depend de ce qu'on a demande : voir `genre` chez l'appelant.)
+function voitureEmpruntable(v) {
+  return !!v && !v.heli && !v.kart && v.kind !== 'jetski' && !vehiculeDeService(v);
+}
 function botPrendVoiture(b, lieu, genre, libre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
   for (const v of city.cars) {
-    if (v.heli || v.busy || v.kind === 'jetski' || v === coup.car || v === drive.car || dansMonGarage(v)) continue;   // pas la tienne, garée chez toi
+    if (v.busy || v === coup.car || v === drive.car || dansMonGarage(v)) continue;   // pas la tienne, garée chez toi
+    if (!voitureEmpruntable(v)) continue;                                            // jamais l'ambulance ni un engin de chantier
     // « va me chercher un vélo » / « une moto » : on cible le bon type d'engin
     if (genre === 'bike' ? v.kind !== 'bike' : genre === 'moto' ? v.kind !== 'moto' : v.rider) continue;   // « une voiture » : pas un deux-roues
     const d = Math.hypot(v.x - b.pos.x, v.z - b.pos.z); if (d < dmin) { dmin = d; c = v; }

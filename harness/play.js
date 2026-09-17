@@ -17240,3 +17240,55 @@ test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout
   const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
   return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
 });
+
+// ================= POSTE CONDUITE — round 71, deuxième passe =================
+test('l\'ami qui vient chercher le joueur prend une voiture ordinaire, jamais l\'ambulance ni un engin de service', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av && !x.ko);
+    G.devenirAmi(b);
+    const services = (G.city.cars || []).filter(v => G.vehiculeDeService(v));
+    if (services.length < 5) return { erreur: `seulement ${services.length} véhicules de service dans la ville` };
+    // DIX TENTATIONS : on plante l'ami à 2,5 m d'un véhicule de service différent à chaque
+    // fois — c'est donc lui le plus proche, et c'est lui qu'il prenait (mesuré : il est parti
+    // avec l'ambulance de la ville, croix rouge sur le hayon).
+    const essais = [];
+    for (let k = 0; k < 10; k++) {
+      const cible = services[k % services.length];
+      if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.drive = null; b.wait = 0; b.target = null;
+      for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
+      b.pos.set(cible.x + 2.5, 0, cible.z + 2.5); b.av.group.position.copy(b.pos);
+      P.pos.set(cible.x + 12, 0.5, cible.z);
+      G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+      const choisi = b.rdv && b.rdv.auto ? b.rdv.auto.car : null;
+      essais.push({ tentation: cible.kind || 'service', choisi: choisi ? (choisi.kind || 'voiture ordinaire') : 'aucune',
+        estService: !!(choisi && G.vehiculeDeService(choisi)),
+        dTentation: +Math.hypot(cible.x - b.pos.x, cible.z - b.pos.z).toFixed(1),
+        dChoisi: choisi ? +Math.hypot(choisi.x - b.pos.x, choisi.z - b.pos.z).toFixed(1) : null });
+    }
+    // ... et une fois pour de vrai : il va la chercher et il arrive au volant
+    b.rdv = null; b.drive = null; b.wait = 0;
+    b.pos.set(6, 0, 8); b.av.group.position.copy(b.pos);
+    P.pos.set(0, 0.5, 8);
+    G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+    let t = 0; const dt = 1 / 60;
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) { G.step(dt, true); G.updateBot(b, dt); t += dt; }
+    const c = b.drive ? b.drive.car : null;
+    const arrive = { t: +t.toFixed(1), kind: c ? (c.kind || 'voiture ordinaire') : 'aucune',
+      estService: !!(c && G.vehiculeDeService(c)) };
+    if (b.drive) G.botDescendre(b, false);
+    b.rdv = null; b.wait = 0;
+    // les secours gardent leur véhicule : aucune ambulance réservée, et elles sont toujours là
+    const amb = (G.city.ambulances || []);
+    return { essais, arrive, ambulances: amb.length, ambulancesLibres: amb.filter(a => !a.busy).length,
+      services: services.length };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const fautes = r.essais.filter(e => e.estService || e.choisi === 'aucune');
+  const ok = fautes.length === 0 && !r.arrive.estService && r.arrive.kind !== 'aucune'
+    && r.ambulances > 0 && r.ambulancesLibres === r.ambulances;
+  return { ok, detail: `avant : il partait avec la caisse la plus proche sans regarder — l'AMBULANCE de la ville (croix rouge sur le hayon) · maintenant, 10 tentations (planté à 2,5 m d'un ${r.services > 0 ? 'véhicule de service' : '?'} différent à chaque fois : ${[...new Set(r.essais.map(e => e.tentation))].join(', ')}) → ${fautes.length} faute(s), il choisit « ${[...new Set(r.essais.map(e => e.choisi))].join(', ')} » à ${r.essais[0].dChoisi} m au lieu de celui à ${r.essais[0].dTentation} m · pour de vrai il arrive au volant d'un « ${r.arrive.kind} » en ${r.arrive.t} s · ${r.ambulancesLibres}/${r.ambulances} ambulance(s) restée(s) disponible(s) pour les secours` };
+});
+

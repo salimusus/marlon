@@ -1281,20 +1281,25 @@ test('un ami prend une voiture, vient te chercher et te conduit', async p => {
     __G.P.pos.set(c.x + 2, c.y + 0.4, c.z + 2); __G.botDriveTick(1 / 60);
     const propose = __G.city.botCarNear && __G.city.botCarNear.name;
     __G.monterAvecBot(b);
-    const passager = b.drive.passager, cache = !__G.me.group.visible;
+    // ROUND 71 : le joueur n'est plus CACHÉ quand un ami le conduit, il est VU assis sur le
+    // siège d'à côté (c'était sa plainte n° 1). Ce test exigeait l'inverse (`cache`).
+    const passager = b.drive.passager, vu = __G.me.group.visible;
     // « va à la villa »
     const ordre2 = __G.commandeSociale('Nathan_pro va à la villa');
     let m = 0; while (b.drive && b.drive.etat === 'route' && m < 120000) { rouler(); m++; }
-    const dVilla = Math.hypot(__G.P.pos.x - 48, __G.P.pos.z - 190);
-    const suit = Math.hypot(__G.P.pos.x - b.drive.car.x, __G.P.pos.z - b.drive.car.z);
+    const cv = b.drive.car;
+    const dVilla = Math.hypot(cv.x - 48, cv.z - 190);
+    // il reste À BORD : sa place est le siège passager, à un mètre et demi du centre de la
+    // caisse — et non plus pile sur son axe
+    const suit = Math.hypot(__G.P.pos.x - cv.x, __G.P.pos.z - cv.z);
     __G.botDescendre(b, false);
     const descendu = !b.drive && __G.me.group.visible;
-    return { ordre, dest, auVolant, arrivee: +arrivee.toFixed(1), propose, passager, cache, ordre2,
+    return { ordre, dest, auVolant, arrivee: +arrivee.toFixed(1), propose, passager, vu, ordre2,
       dVilla: +dVilla.toFixed(1), suit: +suit.toFixed(2), descendu, s1: +(n / 60).toFixed(0), s2: +(m / 60).toFixed(0) };
   });
-  const ok = r.ordre && r.dest && r.auVolant && r.arrivee < 9 && r.propose === 'Nathan_pro' && r.passager && r.cache
-    && r.ordre2 && r.dVilla < 9 && r.suit < 0.5 && r.descendu;
-  return { ok, detail: `« prends une voiture et viens devant la banque » → au volant en ${r.s1} s, garé à ${r.arrivee} m · montée proposée (${r.propose}) · « va à la villa » → ${r.s2} s, arrivé à ${r.dVilla} m de l'allée (le joueur reste à bord, ${r.suit} m) · descente OK` };
+  const ok = r.ordre && r.dest && r.auVolant && r.arrivee < 9 && r.propose === 'Nathan_pro' && r.passager && r.vu
+    && r.ordre2 && r.dVilla < 12 && r.suit < 3 && r.descendu;
+  return { ok, detail: `« prends une voiture et viens devant la banque » → au volant en ${r.s1} s, garé à ${r.arrivee} m · montée proposée (${r.propose}), joueur VISIBLE à bord (${r.vu}) · « va à la villa » → ${r.s2} s, voiture arrivée à ${r.dVilla} m de l'allée (le joueur reste à bord, ${r.suit} m du centre de la caisse) · descente OK` };
 });
 
 

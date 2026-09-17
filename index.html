@@ -23192,11 +23192,21 @@ function ambulanceRamassage(a, dt) {
   } else if (a.phase === 'allonge') {
     const c2 = ambulanceCible(a);
     if (!a.poseFaite) {
-      // le brancard se pose À CÔTÉ du blessé (1,1 m), jamais dessus : il faut qu'on voie les
-      // deux corps séparés avant le transfert, sinon le blessé a l'air de traverser la toile
+      // LE BRANCARD SE POSE À CÔTÉ DU BLESSÉ (1,10 m), jamais dessus : il faut qu'on voie les
+      // deux corps séparés avant le transfert, sinon le blessé a l'air de traverser la toile.
+      // MAIS PAS N'IMPORTE OÙ : à droite d'un blessé tombé le long d'un banc, d'une poubelle ou
+      // d'une boîte aux lettres, la civière se posait DANS le mobilier — capture à l'appui. On
+      // essaie donc les deux côtés puis les pieds, et on prend le premier emplacement libre.
       const cap = Math.atan2(a.x - c2.x, a.z - c2.z);   // tête du brancard tournée vers le fourgon
-      const px = c2.x + Math.sin(cap + Math.PI / 2) * 1.1, pz = c2.z + Math.cos(cap + Math.PI / 2) * 1.1;
-      poserBrancard(br, px, pz, groundUnder(px, pz, null, (c2.y || 0) + 2));
+      const sol0 = c2.y || 0;
+      let px = null, pz = null;
+      for (const ang of [cap + Math.PI / 2, cap - Math.PI / 2, cap + Math.PI, cap]) {
+        const qx = c2.x + Math.sin(ang) * 1.1, qz = c2.z + Math.cos(ang) * 1.1;
+        const libre = (typeof npcBlocked !== 'function') || !npcBlocked(qx, groundUnder(qx, qz, null, sol0 + 2), qz, 0.45);
+        if (libre) { px = qx; pz = qz; break; }
+      }
+      if (px == null) { px = c2.x + Math.sin(cap + Math.PI / 2) * 1.1; pz = c2.z + Math.cos(cap + Math.PI / 2) * 1.1; }
+      poserBrancard(br, px, pz, groundUnder(px, pz, null, sol0 + 2));
       br.cap = cap; a.poseFaite = true; plieBrancard(br, 1);
     }
     br.g.updateMatrixWorld(true);

@@ -12043,7 +12043,10 @@ function buildConcession(cx, cz) {
   // ---- l'ossature et la verrière jaune ----
   // La façade sud est percée d'une entrée de 6 m au milieu : on entre à pied, pile dans l'axe
   // de l'allée centrale, et le comptoir de vente est droit devant au fond.
-  const verre = (x, z, w, d) => box(x, HM / 2 + 0.3, z, w, HM, d, 0, { material: glassJaune, glass: true, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  // `camMur` : la caméra ne passe PAS à travers la verrière jaune (elle traversait le verre comme
+  // toute vitre, se plaçait dehors et regardait le show-room À TRAVERS le jaune : image sépia en
+  // mode TV, où elle recule plus loin — n° 47 du Joueur)
+  const verre = (x, z, w, d) => box(x, HM / 2 + 0.3, z, w, HM, d, 0, { material: glassJaune, glass: true, camMur: true, noEdges: true, noShadow: true, studs: false, noRoute: true });
   verre(cx - 13, SUD, 20, 0.3); verre(cx + 13, SUD, 20, 0.3);          // verrière sud, de part et d'autre de l'entrée de 6 m
   box(cx, HM - 0.4, SUD, 6, 1.6, 0.3, CONCES_JAUNE, { studs: false, noRoute: true });   // linteau au-dessus de l'entrée
   verre(OUEST, cz, 0.3, BD); verre(EST, cz, 0.3, BD);                  // pignons vitrés
@@ -20614,7 +20617,7 @@ function vitesseRel() {
   if (!c || c.heli) return 0;
   return clamp(Math.abs(drive.speed) / ((c.spec && c.spec.max) || 26), 0, 1.2);
 }
-function reculConduite() { return vitesseRel() * 2.6; }   // la caméra recule jusqu'à 3,1 m de plus
+function reculConduite() { return vitesseRel() * 1.2; }   // la caméra recule un peu avec la vitesse (1,2 m à fond : elle reste COLLÉE à la voiture, n° 32)
 function camConduite(dt) {
   const r = vitesseRel();
   // 55° à l'arrêt, jusqu'à 72° à fond : c'est ce qui donne l'impression que le décor défile
@@ -22294,7 +22297,11 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     }
   };
   for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || o.glass || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est
+    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
+    // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
+    // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
+    // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
+    if (o.w < 0.7 && o.d < 0.7) continue;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.
@@ -23992,7 +23999,9 @@ function camPerche(dt, aiming) {
     const inter = !veh && city.on ? city.interact : null;
     // la caméra RECULE avec la vitesse (jusqu'à 2,6 m de plus) : le capot rentre dans le
     // cadre et l'on voit venir la route
-    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 4 + reculConduite()) : 0);
+    // en voiture la caméra traînait 13 à 15 m derrière (base 9 + 4 + recul) : la voiture n'était qu'un
+    // point au loin et le premier poteau la cachait (n° 32). 2 m de plus que la base, et le recul court.
+    let want = aiming ? 5.5 : cam.base + (veh ? (veh.heli ? 8 : 2 + reculConduite()) : 0);
     // Caméra adaptative : cinq fois par seconde on mesure la place autour du joueur (quatre
     // murs et le plafond). Elle sert à savoir dans quel genre d'endroit on se trouve ; c'est
     // la LIGNE DE VUE (plus bas) qui décide vraiment de la longueur de la perche.

@@ -12000,7 +12000,10 @@ function voitureDeGamme(g, x, z, h, couleur) {
   // La TEINTE NACRÉE du haut de gamme : un rien d'émissif violet dans la laque blanche, elle
   // prend la lumière comme une perle sans qu'on ait à toucher au modèle de carrosserie.
   if (g.nacre && c.bodyMat) c.bodyMat.emissive.setHex(0x2a2440);
-  c.gamme = g.k; c.places = g.places; c.solidite = g.robu;
+  // Le NOMBRE de places va dans nbPlaces : c.places est réservé à la TABLE des places assises
+  // (placesDe), et y mettre « 4 » laissait le conducteur DEBOUT dans la caisse, la tête à
+  // travers le toit (mesuré : 75 cm au-dessus du toit de la citadine).
+  c.gamme = g.k; c.nbPlaces = g.places; c.solidite = g.robu;
   c.spec = { max: g.vmax, rev: -Math.round(g.vmax / 4), accel: g.accel, turn: g.turn, seat: 0 };
   c.specOrig = null;   // l'atelier repartira de CES valeurs-là quand il montera un moteur
   return c;

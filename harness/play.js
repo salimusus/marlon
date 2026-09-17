@@ -14637,7 +14637,7 @@ test('la voiture achetée au concessionnaire se conduit, se sauvegarde et se ret
       retrouvee: !!apres, gamme: apres && apres.gamme, mienne: !!(apres && apres.mienne),
       dansLeGarage: apres ? G.dansMonGarage(apres) : false,
       pointe: apres ? Math.round(apres.spec.max * 3.6) : 0, attendu: Math.round(ref.vmax * 3.6),
-      solidite: apres ? apres.solidite : 0, places: apres ? apres.places : 0 };
+      solidite: apres ? apres.solidite : 0, places: apres ? apres.nbPlaces : 0 };
     G.wallet = 25; G.saveWallet(); G.store.set('superobby.mavoiture', '');
     return res;
   });
@@ -15656,4 +15656,24 @@ test('un homme de gang en faction n\'est pas « paré » à chaque coup : le pos
   });
   const ok = r.coups >= 5 && r.pares === 0 && r.perdu >= 60;
   return { ok, detail: `avant : \`m.garde\` (le POSTE [x, z] du gangster) était lu comme « poings levés » → chaque coup paré à 45 %, 15 coups pour 50 ❤️ · maintenant 6 directs sur un homme en faction (poste=${r.avant.garde}) : ${r.coups} coups portés, ${r.pares} parés, ❤️ ${r.hp0} → ${r.hp} (−${r.perdu})` };
+});
+
+test('dans la citadine « Puce » du concessionnaire, le conducteur est ASSIS : sa tête reste sous le toit', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const mesure = c => {
+      G.P.pos.set(c.x + 2, 0.3, c.z); G.enterCar(c); G.poseJoueurAuVolant(1);
+      G.me.group.updateMatrixWorld(true); c.g.updateMatrixWorld(true);
+      const bh = new THREE.Box3().setFromObject(G.me.rig.head);
+      let toit = -1; c.g.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); if (b.max.y > toit && (b.max.x - b.min.x) > 1.2 && (b.max.z - b.min.z) > 1.2) toit = b.max.y; } });
+      const out = { placesDe: typeof G.placesDe(c), hautTete: +bh.max.y.toFixed(2), toit: +toit.toFixed(2), depasse: +(bh.max.y - toit).toFixed(2) };
+      G.exitCar(); return out;
+    };
+    const puce = G.voitureDeGamme(G.gammeDe('citadine'), -120, 121, 0); G.city.cars.push(puce);
+    const std = G.city.cars.find(c => c.parts && !c.gamme && !c.busy && !c.rider);
+    return { puce: mesure(puce), std: mesure(std) };
+  });
+  const ok = r.puce.placesDe === 'object' && r.puce.depasse < 0 && r.std.depasse < 0;
+  return { ok, detail: `avant : \`c.places = 4\` (le NOMBRE de places) écrasait la table des sièges → placesDe() rendait 4, le conducteur restait debout, tête 75 cm au-dessus du toit · maintenant Puce : haut de tête ${r.puce.hautTete} m, toit ${r.puce.toit} m (${r.puce.depasse} m) · voiture de rue : ${r.std.depasse} m` };
 });

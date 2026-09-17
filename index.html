@@ -26122,8 +26122,14 @@ function camPerche(dt, aiming) {
   const vehM = vehiculeAssis();
   const confort = camConfortVeh();
   const monteVeh = !!vehM && cam.dJoueur != null && cam.dJoueur < confort && !vehM.heli;
+  // URGENCE TÔLE : dans un véhicule, perche sous deux mètres — l'image n'est plus qu'un aplat
+  // de carrosserie, il n'y a rien à préserver. On recalcule la montée À CHAQUE IMAGE (au lieu
+  // de cinq fois par seconde) et on la monte trois fois plus vite : la caméra passe par-dessus
+  // le toit en deux dixièmes de seconde au lieu d'une seconde. C'est le cas qu'on voit en
+  // montant dans un camion garé dans un recoin — la capture du chef, prise juste après.
+  const urgence = monteVeh && cam.dJoueur < 2;
   if (running && !aiming && (!vehM || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {
-    if (simTime > (cam.hauT || 0) || simTime < cam.hauT - 0.3) {
+    if (urgence || simTime > (cam.hauT || 0) || simTime < cam.hauT - 0.3) {
       cam.hauT = simTime + 0.2;
       // on ne vise PAS la distance voulue (9 m) mais la distance CONFORTABLE : la caméra monte
       // juste ce qu'il faut pour qu'on joue bien, et pas un degré de plus — sinon le moindre
@@ -26141,7 +26147,7 @@ function camPerche(dt, aiming) {
   // place se libère la caméra revient en arrière EN DOUCEUR, sans le moindre à-coup
   {
     const hc = cam.hausseCible || 0, h0 = cam.hausse || 0;
-    cam.hausse = h0 + (hc - h0) * Math.min(1, dt * (hc > h0 ? 3.2 : 1.5));
+    cam.hausse = h0 + (hc - h0) * Math.min(1, dt * (hc > h0 ? (urgence ? 10 : 3.2) : 1.5));
     if (cam.hausse < 0.004) cam.hausse = 0;
   }
   const pitchVue = clamp(cam.pitch + cam.hausse, CAM_PITCH_ARME, 1.3);
@@ -26182,7 +26188,11 @@ function camPerche(dt, aiming) {
       // cinq mètres par seconde. C'est le dernier à-coup qui restait : en sortant d'un coin,
       // la perche passait de 5,4 m à 9 m en dix images (84 cm d'une image à l'autre).
       // Se RACCOURCIR, en revanche, reste instantané : c'est ce qui empêche de traverser un mur.
-      if (cam.dLisse != null && d > cam.dLisse + CAM_RETOUR * dt) d = cam.dLisse + CAM_RETOUR * dt;
+      // (et quand la caméra est dans la tôle d'un véhicule, la perche a le droit de se
+      //  rallonger deux fois et demie plus vite : il n'y a pas d'à-coup à épargner sur une
+      //  image qui ne montre rien)
+      const retour = urgence ? CAM_RETOUR * 2.5 : CAM_RETOUR;
+      if (cam.dLisse != null && d > cam.dLisse + retour * dt) d = cam.dLisse + retour * dt;
     } else { cam.libre = null; cam.dJoueur = null; cam.avance = 0; cam.dLisse = null; }
     camera.position.copy(cam.target).addScaledVector(dir, d);
     // Garde-fou. camLibres ignore volontairement une boite qui contient deja le point de

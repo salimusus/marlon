@@ -13273,6 +13273,9 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp > 0) sonAie(P.pos.x, P.pos.y + 1.5, P.pos.z, hauteurVoix((typeof myCfg !== 'undefined' && myCfg.name) || 'joueur'));
   impact(P.pos.x + dx * 0.4, P.pos.y + 1.2, P.pos.z + dz * 0.4, { x: dx, y: 0, z: dz }, 'sang', Math.min(1.5, 0.7 + dmg / 22));
   camSecousse(0.1 + Math.min(0.24, dmg / 90), 0.28);
+  // ON DIT POURQUOI ON A MAL (n° 63 du Joueur : 56 ❤️ perdus sans un mot). Un coup de 5 ❤️ ou plus
+  // affiche qui l'a donné, sauf s'il vient d'un message déjà à l'écran (KO plus bas).
+  if (P.hp > 0 && dmg >= 5) msg(`🤕 −${Math.round(dmg)} ❤️ · ${by || 'un coup'}`, 1100);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
 }

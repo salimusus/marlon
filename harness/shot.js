@@ -2087,6 +2087,10 @@ window.__G = {
   ambulanceEquipe: typeof ambulanceEquipe === 'function' ? ambulanceEquipe : null,
   ambulanceAbandon: typeof ambulanceAbandon === 'function' ? ambulanceAbandon : null,
   ambulanceEtapeDuree: typeof ambulanceEtapeDuree === 'function' ? ambulanceEtapeDuree : null,
+  caisseFermee: typeof caisseFermee === 'function' ? caisseFermee : null,
+  assiedAvatar: typeof assiedAvatar === 'function' ? assiedAvatar : null,
+  placeMonde: typeof placeMonde === 'function' ? placeMonde : null,
+  ambulanceAssied: typeof ambulanceAssied === 'function' ? ambulanceAssied : null,
 };
 `;
 

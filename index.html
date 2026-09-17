@@ -21624,13 +21624,54 @@ function ambulanceEquipe(a) {
 }
 // Assied un ambulancier à bord : 'volant' pour le conducteur, sinon la banquette de la cellule,
 // à côté du brancard. Les deux places sont dans le repère du fourgon.
+// LE STRAPONTIN DE LA CELLULE, le long du brancard. Mesuré : ASSIS, un personnage occupe
+// encore 2,05 m de haut (plier les cuisses ne descend pas le buste — le bassin reste à la même
+// hauteur au-dessus de l'origine). Posé pieds sur le plancher de la cellule (0,92 m), son crâne
+// sortait donc de 55 cm par le pavillon. Comme le fait le jeu pour le conducteur d'une berline,
+// on ENFONCE l'origine (−0,10 m) et on MASQUE ce qui passe sous le plancher : seuil 1,05, soit
+// 0,95 m au-dessus du sol — deux centimètres au-dessus de la tôle. Le crâne arrive à 2,26 m,
+// sous le pavillon de la cellule (2,35 m).
+const AMB_PLACE_CELLULE = { x: -0.78, y: -0.10, z: -1.8 }, AMB_SEUIL_CELLULE = 1.05;
 function ambulanceAssied(a, w, place, dt) {
-  const s = place === 'volant' ? { x: 0.5, y: 0.52, z: 1.35 } : { x: -0.72, y: 0.62, z: -1.85 };
-  const cs = Math.cos(a.h), sn = Math.sin(a.h);
-  w.pos.set(a.x + s.x * cs + s.z * sn, (a.y || 0) + s.y, a.z - s.x * sn + s.z * cs);
-  w.facing = place === 'volant' ? a.h : a.h + Math.PI / 2;
-  if (w.av) { animateRig(w.av.rig, 'sit', place === 'volant' ? Math.abs(a.speed || 0) : 0, dt, simTime); w.av.group.visible = true; }
-  metierSync(w);
+  if (!w || !w.av) return;
+  if (place === 'volant') {
+    // AU VOLANT : on réutilise la vraie table des places (poste Véhicules). Elle pose le bassin
+    // sur le siège, les mains sur le volant, et masque ce qui descend sous le seuil de caisse.
+    // Avec un siège inventé à 52 cm, la tête de l'ambulancier sortait par le pavillon.
+    const T = (typeof placesDe === 'function' ? placesDe(a) : null) || {};
+    const pl = T.conducteur || { x: 0.5, y: -0.45, z: 1.45 };
+    assiedAvatar(w.av, a, pl, dt, true);
+    const m = placeMonde(a, pl);
+    w.pos.set(m.x, m.y, m.z); w.facing = a.h; w.route = null;
+    w.av.group.visible = true; w.enCabine = true;
+    return;
+  }
+  // À L'ARRIÈRE : même principe, mais avec SON seuil. Celui de la table des places (1,50 m) est
+  // réglé sur le plancher de la CABINE ; appliqué dans la cellule, qui est 60 cm plus haut, il
+  // coupait l'ambulancier à la poitrine — on ne voyait plus qu'un buste posé sur le brancard.
+  const m = placeMonde(a, AMB_PLACE_CELLULE);
+  const g = w.av.group;
+  g.position.set(m.x, m.y, m.z);
+  g.rotation.set(0, a.h, 0, 'YXZ');
+  animateRig(w.av.rig, 'sit', 0, dt, simTime);
+  const r = w.av.rig;
+  r.legL.rotation.x = r.legR.rotation.x = -1.45;
+  if (r.legL.genou) r.legL.genou.rotation.x = 1.5;
+  if (r.legR.genou) r.legR.genou.rotation.x = 1.5;
+  r.armL.rotation.x = r.armR.rotation.x = -0.45;
+  if (r.armL.coude) r.armL.coude.rotation.x = -0.9;
+  if (r.armR.coude) r.armR.coude.rotation.x = -0.9;
+  try { jambesEnCabine(w.av, true, AMB_SEUIL_CELLULE); } catch (e) {}
+  w.pos.set(m.x, m.y, m.z); w.facing = a.h; w.route = null;
+  g.visible = true; w.enCabine = true;
+}
+// IL REDESCEND : on rend ses jambes et ses bras, que `jambesEnCabine` avait masqués sous le
+// seuil de caisse. Sans ça, un ambulancier ressortait du fourgon coupé aux genoux.
+function ambulanceDebout(w) {
+  if (!w || !w.av || !w.enCabine) return;
+  w.enCabine = false;
+  try { jambesEnCabine(w.av, false); musclesEnCabine(w.av, false); } catch (e) {}
+  w.av.group.rotation.order = 'XYZ'; w.av.group.rotation.set(0, w.facing, 0);
 }
 // LA CIVIÈRE DU FOURGON : créée à la première intervention, rangée dans la cellule, pieds
 // repliés. `br.ambu` dit à `brancardTick` de ne pas la repasser une deuxième fois par image.
@@ -21741,6 +21782,7 @@ function ambulanceRangeCiviere(a) {
 // L'ÉQUIPAGE REMONTE ET DISPARAÎT : fin de mission, ou interruption.
 function ambulanceRangeEquipe(a) {
   for (const w of (a.equipe || [])) {
+    ambulanceDebout(w);
     if (w.av && w.av.rig) w.av.rig.porte = false;
     if (w.av) w.av.group.visible = false;
     w.route = null;
@@ -21825,7 +21867,7 @@ function ambulanceRamassage(a, dt) {
     // Les deux ambulanciers descendent du fourgon et viennent derrière les portes, qui
     // s'ouvrent en grand pendant qu'ils marchent.
     a.ambCible = 1;
-    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
+    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; ambulanceDebout(e[i]); metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
     if (a.phaseT >= AMB_GESTES.ouvre && (a.amb || 0) > 0.28) ambPhase(a, 'sortie');
   } else if (a.phase === 'sortie') {
     ambulanceSortCiviere(a, dt, 'approche');
@@ -21865,7 +21907,7 @@ function ambulanceLivraison(a, dt, hop) {
   const cote = [ambulancePoint(a, 0.95, -3.3), ambulancePoint(a, -0.95, -3.3)];
   if (a.phase === 'ouvreHop') {
     a.ambCible = 1;
-    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
+    for (let i = 0; i < 2; i++) { e[i].av.group.visible = true; ambulanceDebout(e[i]); metierMarche(e[i], cote[i].x, cote[i].z, dt, 0.5); }
     if (a.phaseT >= AMB_GESTES.ouvreHop && (a.amb || 0) > 0.28) ambPhase(a, 'sortieHop');
   } else if (a.phase === 'sortieHop') {
     ambulanceSortCiviere(a, dt, 'livre');

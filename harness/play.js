@@ -15836,6 +15836,11 @@ test('transporté par les secours, le joueur est allongé sans commandes et repr
     // origine ne se déplace alors pas comme le matelas. Mesuré avec l'origine : 1,92 m d'écart
     // pour un joueur qui n'avait pourtant pas bougé d'un centimètre sur sa civière.
     const posBr = () => { br.g.updateMatrixWorld(true); return br.g.userData.couche.getWorldPosition(new G.THREE.Vector3()); };
+    // ON LAISSE LE TRANSFERT SE FAIRE avant de mesurer : à l'instant même où le blessé est
+    // sanglé, le joueur est encore là où il est tombé (la civière a été posée à 1,10 m de lui)
+    // et il ne rejoint le matelas qu'à l'image suivante. Mesuré sans ce répit : 1,43 m de
+    // « glissement » qui n'étaient que ce report d'une image.
+    for (let i = 0; i < 12; i++) G.step(1 / 60, true);
     const av0 = { x: P.pos.x, z: P.pos.z }, b0 = posBr();
     G.keys.add('KeyW'); G.keys.add('Space');
     for (let i = 0; i < 60; i++) G.step(1 / 60, true);

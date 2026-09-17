@@ -317,6 +317,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4/s4-6-mur.png` (non probant : la caméra est derrière un feu tricolore, cf. n° 32).
 
 ### 32. En voiture, la caméra traîne loin derrière, se cale derrière les poteaux et perd la voiture
+✅ RÉPARÉ — `camLibres` ignorait déjà les vitres mais pas les poteaux : les solides de moins de 0,7 m de côté ne calent plus la perche ; en voiture la caméra vise base + 2 m + recul court (`reculConduite = vitesseRel × 1,2`) au lieu de traîner loin derrière. Mesuré à 60 km/h : distance caméra 9,4 m → 6,1 m, jamais coincée derrière un poteau sur 20 s de tour — commit 61df87c
 - **Gravité** : GÊNANT
 - **Reproduire** : rouler à 50 km/h vers l'est depuis (−15, 7) ; sortir de la ville.
 - **On voit** : `s4-6-mur.png` : la voiture est un point rouge au loin, le feu tricolore occupe le premier plan ; `s4-7b-apres-pieton.png` : la voiture n'est plus dans l'image du tout (dallage blanc, un arbre, un banc).
@@ -331,12 +332,14 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s4/s4-9-accident.png`.
 
 ### 38. La dépanneuse est garée en travers de l'entrée du garage : on la percute en arrivant
+✅ RÉPARÉ — `makeDepanneuse(x - 10, z + 10, π/2)` : elle dort sur le côté du parvis (mesurée à (−55, 100), à 10 m de l'axe d'entrée) au lieu d'en travers de la porte — commit c6ea15b
 - **Gravité** : GÊNANT
 - **Reproduire** : arriver au garage (−45, 90) par le sud en voiture.
 - **On voit** : la dépanneuse stationnée sur la chaussée en (−45, 105), pile dans l'axe ; à 25 km/h on la tape (🔧 7 % avant même d'être au garage), étoile d'impact sur le capot.
 - **Capture** : `img/s5/s5-0-devant-garage.png`, `img/s5/s5-1-dans-garage.png`.
 
 ### 39. Au comptoir du garage, la caméra entre dans la tête du personnage
+✅ VÉRIFIÉ sans changement — au comptoir du garage la caméra reste à 4,86 m du personnage (mesure `J.dodo` en temps réel, mode PC et TV) ; l'entrée dans la tête venait de la perche calée par le poteau du comptoir, corrigée par le n° 32 (61df87c)
 - **Gravité** : GÊNANT
 - **Reproduire** : se placer devant le comptoir de l'atelier (−51, 96,6) face à l'ouest.
 - **On voit** : l'écran est rempli par l'arrière du crâne et la casquette du personnage (la caméra est repoussée par le comptoir derrière lui).
@@ -364,6 +367,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : « 🔫 Pistolet · clic pour tirer : le personnage vise tout seul la cible la plus proche » à la manette.
 
 ### 45. La tête du conducteur dépasse du toit de la citadine « Puce »
+✅ RÉPARÉ — `voitureDeGamme` écrivait `c.places = 4` (le NOMBRE de places) et `placesDe(c)` rendait ce 4 : pas de siège « conducteur », le joueur restait DEBOUT dans la caisse. Le nombre va dans `c.nbPlaces`. Mesuré : haut de tête 2,51 m pour un toit à 1,76 m (+0,75) → 1,56 m (−0,20, comme une voiture de rue). Test 393 ajouté, test 360 lit `nbPlaces` — commit 57bc272
 - **Gravité** : GÊNANT (ça se voit à chaque seconde de conduite)
 - **Reproduire** : acheter la citadine chez Blocs Motors, regarder la voiture de derrière.
 - **On voit** : la tête (et la casquette) du personnage plantée à travers le toit, le corps à l'intérieur.
@@ -391,6 +395,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s6b/s6b-1-portail.png`, `img/s6b/s6b-3-garage-villa.png`.
 
 ### 57. Conduire la grue hors du dépôt = « 💥 ACCIDENT ! — la police arrive »
+✅ RÉPARÉ — `choc(c, imp, v)` : frôler un véhicule GARÉ (immobile, pas en mission) sous 12 d'impact ne déclare plus d'accident ni n'appelle la police (seuls les vrais chocs, > 12, ou contre un véhicule qui roule). Mesuré : la grue sort du dépôt en frottant le camion garé → aucun « ACCIDENT », 0 ★ — commit f630b86
 - **Gravité** : GÊNANT
 - **Reproduire** : dépôt municipal, △ sur la grue (24,4, 130,5), R2 2 s, stick gauche 1,5 s.
 - **On voit** : accident, véhicule immobilisé, police, amende — les engins sont garés serrés et le moindre contact avec la benne voisine déclenche le constat.
@@ -403,6 +408,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s8b-pc.log` `tir.wanted = 0` ; `s9-pc.log` `coupsVitrine.cassee = false`, `coupDeFeu.wanted = 0`.
 
 ### 59. Hélicoptère : ▢ pose l'appareil SUR un objet de la rue
+✅ RÉPARÉ — la descente automatique (▢) se posait sur N'IMPORTE QUOI sous l'appareil. `heliPointLibre()` : on ne se pose que sur le sol ou un vrai toit (solide ≥ 8 × 8 m, pas un véhicule) et sinon l'hélico se décale sur la place libre la plus proche (cercles de 3 à 24 m), en restant à 1,5 m au-dessus des obstacles en chemin ; ▢ le dit (« je me décale sur une place libre »). Mesuré avec un objet de 3 × 2,4 × 7 m en (43, 51) : posé à y 2,49 SUR l'objet → posé à (38, 48) y 0,20 au sol, 0 dégât. Test 394 ajouté — commit 2f5d844
 - **Gravité** : GÊNANT
 - **Reproduire** : héliport (43, −13), △, ◯ 4 s, stick avant 4 s, ▢.
 - **On voit** : la descente automatique (« Atterrissage… ») se termine à y 0,21 en (43, 51) sur un solide de 3 × 2,4 × 7 m (abribus / mobilier) ; △ fait descendre le personnage à y 2,3, debout sur l'objet.
@@ -424,6 +430,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s9b/s9b-3-police-15s.png`, `img/s9b/s9b-4-police-30s.png`.
 
 ### 63. Le joueur perd 56 PV sans qu'on lui dise pourquoi
+✅ RÉPARÉ — `hurt()` affiche « 🤕 −12 ❤️ · Momo_king » (dégâts ≥ 5, avec l'auteur ou « un coup ») ; mesuré sur un coup de bot — commit 5b3e586
 - **Gravité** : GÊNANT
 - **Reproduire** : après la voiture détruite (n° 61), rester au point d'apparition 40 s.
 - **On voit** : `P.hp` 100 → 72 → 44 puis remonte tout seul à 100 ; aucun message, aucun « aïe », la barre verte descend sans raison visible (explosion à distance ? bagarre de bots ?).
@@ -432,7 +439,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ### 64. (retiré — fausse alerte : avec de vrais boutons (scénario 11c) les questions s'enchaînent, la maîtresse lit chaque question et dit « C'est gagné ! », la craie s'entend (`craieLit` 0,07), le score monte)
 
 ### 65. École : ◯ ferme la leçon mais le personnage reste assis
-✅ RÉPARÉ — `closeUI()` depuis la leçon demande le saut qui fait quitter la chaise (`P.jumpBuf`) : ◯ ferme ET lève ; message du bouton mis à jour — commit fe303fe
+✅ RÉPARÉ — `fermeUI()` (◯, Échap, ✕ de la leçon) demande le saut qui fait quitter la chaise ; `closeUI()` seul ne lève personne, test 245 (803b82d) (`P.jumpBuf`) : ◯ ferme ET lève ; message du bouton mis à jour — commit fe303fe
 - **Gravité** : GÊNANT
 - **Reproduire** : assis en classe, leçon ouverte, ◯.
 - **On voit** : la fenêtre se ferme, `P.sit` reste vrai, le message dit encore « 🪑 Assis (Espace / SAUT pour se lever) » — il faut un second ◯ (confirmé au scénario 11c : `leve1.sit = true`, `leve2.sit = false`), et la consigne parle d'« Espace ». À la manette, depuis les pastilles d'âge, ↓ saute sur la 2e réponse (« 2️⃣ cercle ») et non la 1re.
@@ -489,6 +496,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On devrait voir** : pas de cambriolage tant que le joueur n'a rien mis dans sa villa ni ouvert la guerre des gangs, un plafond (jamais plus de la moitié, comme l'amende du n° 35) et une alerte visible (message central + GPS).
 
 ### 73. Le pavé tactile ouvre « EMPIRE · Carte stratégique » : un écran d'adulte, sans bague, coupé en bas en 1280×720
+✅ RÉPARÉ — le pavé tactile ouvre l'AIDE des boutons (`PAD_CROIX[17] = 'aide'`, fiche lisible du n° 8) et plus la carte stratégique ; mesuré : pavé → `ui: null, aide: true`, la carte ne s'ouvre que par ↑ tenu et pose la bague sur « Fermer × » — commits 9ec9481, 27aa6bf, e4ac561
 - **Gravité** : GÊNANT (c'est le bouton « aide » de l'enfant : il tombe sur un tableau de bord de stratégie)
 - **Reproduire** : en ville à la manette, appuyer sur le pavé tactile. Reproduit 2/2 (PC 1280×720 et TV 1920×1080).
 - **On voit** : le jeu en pause sous un grand cadre « EMPIRE · Carte stratégique — Contrôle les 12 secteurs, puis tiens la ville pendant 90 secondes · 🚩 0/12 · difficulté 🔥 palier 1/5 », une carte à 12 numéros, un encart « RENSEIGNEMENTS · SECTEUR », cinq cartes d'opérations (« Reconnaissance du Nord · PREMIÈRE RÉUSSITE · 120 pièces · 25 respect »…). La bague reste sur le bouton du chat derrière (`aide.focus = chatBtn`), il faut un premier ↓ pour qu'elle apparaisse sur « Fermer × ». En 1280×720 la dernière carte (« Tenir la ligne ») passe sous le bord de l'écran (`img/l1/l1a-04-aide.png`) ; en TV ça tient (bas à 1048 px sur 1080, `img/l2/l1a-04-aide-tv.png`). Aucun rappel des boutons de la manette nulle part (l'ancienne aide du n° 8 a disparu).
@@ -496,6 +504,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `l1a-pc.log` / `l2a-tv.log` `aide = {ui: "guerre", focus: chatBtn, croixBas: [empireClose:Fermer ×, operation:…]}`.
 
 ### 74. ↑ (ordres) : l'écran « 📣 À qui donner un ordre ? » n'a pas de bague, dit « Clique sur quelqu'un » et sa liste est coupée
+✅ RÉPARÉ — la bague part sur la première carte d'habitant (`navPremier`, n° 43/71) ; à la manette la consigne dit « Choisis quelqu'un avec la croix, puis ✕ » au lieu de « Clique » ; la grille défile (52 vh) et la fenêtre tient en 1280×720 (bas de carte à 641 px). Mesuré : focus `ocard:Karim_flash`, 12 cartes — commit 6dca9df
 - **Gravité** : GÊNANT (à la manette, l'enfant ne peut désigner personne ; c'est pourtant l'entrée du recrutement promis par le message d'accueil « Recrute un ami via les ordres ↑ »)
 - **Reproduire** : en ville, appui court sur ↑. Reproduit 2/2 (PC 1280×720, TV 1920×1080).
 - **On voit** : douze cartes d'habitants (« Momo_king 4 m »…), la bague `.focustv` reste sur le bouton CACHÉ « Fermer × » de la carte stratégique (`focus.visible = false`), la consigne dit « Clique sur quelqu'un… Tu peux aussi écrire son nom dans le chat », et la 4e rangée de cartes passe sous le bord de la fenêtre en 1280×720 (`img/l1/l1c-14-ordres.png`).
@@ -505,6 +514,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 ## COSMÉTIQUE
 
 ### 10. Les bots parlent de lave et de tennis dans la Ville
+✅ RÉPARÉ — en ville les habitants tirent leurs phrases de `CHAT_IDLE_CITY` (plus de lave ni de tennis hors contexte) ; mesuré : 0 « lave » sur 40 phrases au point d'apparition — commit 6a3a769
 - **Reproduire** : rester 12 s au point d'apparition, lire le chat.
 - **On voit** : « Karim_flash : la lave c chaud », « Sarah_bee : qui a déjà fini ? », « Tom_le_ouf : je suis à 🎾 Tennis, on joue jouer au tennis ! » (faute : « on joue jouer »), « 🚩 Les Requins Rouges contrôle maintenant Zone industrielle » (accord : contrôlent).
 - **Capture** : `img/s1/s1-apres-12s.png`, `img/s1/s1-premier-regard.png`.
@@ -516,6 +526,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-accueil.png`, `img/s1/s1-accueil-tv.png`.
 
 ### 12. La pastille « ⭐ 0· 🚩 0/8 » a un point médian orphelin
+✅ RÉPARÉ — `&nbsp;·` dans `#respect` : la pastille lit « ⭐ 0 · 🚩 0/8 » (mesuré en TV) — commit 6a3a769
 - **On voit** : en TV « ⭐ 0· 🚩 0/8 » (le séparateur « · » colle au 0).
 - **Capture** : `img/s1/s1-premier-regard-tv.png`.
 
@@ -525,26 +536,32 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-focus-jouer.png`, `img/s1/s1-accueil-tv.png`.
 
 ### 19. Météo incohérente : « ❄️ Chute de neige » à 10 h en plein soleil, puis « ☀️ Beau temps » deux minutes plus tard
+✅ RÉPARÉ — le chat annonce ce qui ARRIVE (« La pluie arrive sur la ville », « La neige arrive », « Le beau temps revient ») au moment du changement, plus un état déjà passé — commit 12e38c4
 - **Capture** : `img/s2/s2-avant.png` (chat « ❄️ Chute de neige », ciel bleu).
 
 ### 20. Un carré de pelouse vert vif déborde sur le trottoir à l'angle sud-est du terrain de foot (vers (8, 10))
+✅ RÉPARÉ — la pelouse des trampolines (SE) mesurait 20 m et recouvrait les trottoirs (30 cm de haut sur 14 cm) jusqu'à la chaussée ; elle fait 16,4 m et s'arrête au bord du trottoir, le panneau 🤸 recule sur l'herbe. Mesuré en (8, 4) : dessus = pelouse verte y 0,30 → trottoir y 0,14 — commit f6e7672
 - **On voit** : rectangle vert plat posé par-dessus le trottoir gris et la bordure, arête franche (bas droite de `img/s2/s2-fin-tv.png`).
 
 ### 25. Petits défauts vus dans les bâtiments
+✅ RÉPARÉ — banque : les écrans du guichet et du comptoir d'accueil ont un socle et une tige posés sur le comptoir (écran bas 1,73 m sur tablette 1,575 m), la lampe a un pied et une tige sous son abat-jour (plus de cône « pyramide » posé à plat) ; hôpital : lignes de guidage à 0,4 m au lieu de 2 m ; concessionnaire : Gérard Boulon sans chapeau melon ni lunettes (mesuré : 0 chapeau visible, lunettes false). L'étiquette « Joueur40 » sur le panneau COFFRES est la pancarte du joueur lui-même vue depuis l'escalier, pas un défaut du bâtiment — commit 8a3ebc0
 - Banque : écrans d'ordinateur qui flottent sans pied sur le guichet, « pyramide » jaune posée sur le comptoir (`img/s3/s3-banque-1-porte.png`) ; étiquette « Joueur40 » qui recouvre le panneau « COFFRES · 2e ÉTAGE » (`img/s3/s3-banque-escalier-haut.png`).
 - Hôpital : bandes de sol cyan et verte de 2 m de large qui ressemblent à des tapis, sans explication (`img/s3/s3-hopital-2-dedans.png`).
 - Concessionnaire : le vendeur « Gérard Boulon » porte chapeau melon et lunettes noires derrière son comptoir (`img/s3/s3-concessionnaire-2-dedans.png`).
 
 ### 34. Fautes de frappe et d'accent dans les phrases des bots
+✅ RÉPARÉ — « pièces », « déjà piloté l'hélico », « on va jouer au tennis », `auLieu()` (« au Quartier résidentiel », « à la Zone »), « contrôlent » (le gang est pluriel) — commit 6a3a769
 - « Tu as combien de pieces ? » (pièces), « Tu as deja pilote l'helico ? », « on joue jouer au tennis / au foot », « je te retrouve à Quartier résidentiel » (au), « Les Requins Rouges contrôle » (contrôlent).
 - **Capture** : `img/s4/s4-8-voiture.png`, `img/s3/s3-banque-1-porte.png`.
 
 ### 47. Après l'achat, en mode TV, tout l'écran est teinté jaune
+✅ RÉPARÉ — la verrière du concessionnaire (`verre`, `camMur: true`) n'est plus traversée par la caméra : c'est elle qui teignait l'écran en jaune quand la caméra passait dedans — commit 61df87c
 - **Reproduire** : acheter une voiture (aire de livraison (−125, 121)), mode TV.
 - **On voit** : la caméra (plus reculée en TV, `cam.dist` 8,4–9,4) se retrouve sous la verrière jaune du concessionnaire : l'image entière est jaune-sépia.
 - **Capture** : `img/s6/s6-3-achetee-tv.png` (comparer `img/s6/s6-3-achetee.png`).
 
 ### 66. La maîtresse lit les points de suspension : « Un ballon de football a la forme d'une et ensuite ? »
+✅ RÉPARÉ — `schDire` remplace « …? » par « quoi ? » : la maîtresse lit « Un ballon de football a la forme d'une quoi ? » (mesuré) — commit 6a3a769
 - **Reproduire** : classe Géométrie, question « Un ballon de football a la forme d'une… ? ».
 - **On voit / entend** : la synthèse vocale reçoit « …forme d'une et ensuite ? ... Réponse un : cube… » — le « … » est remplacé par « et ensuite ».
 - **Sonde** : `s11c-pc.log` `reps[2].dits[1]`.

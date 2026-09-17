@@ -1988,14 +1988,29 @@ function detailsLOD(force) {
     if (off !== e.off) { e.off = off; e.o.castShadow = !off; }
     if (off) ombresOff++;
   }
-  // LES PORTEURS D'OMBRE QUI BOUGENT (voir ombresMobilesTick) : même règle, en plus douce.
-  const M2 = DETAIL_OMBRE_MOBILE * DETAIL_OMBRE_MOBILE;
+  // LES MORCEAUX DE CE QUI BOUGE (voir ombresMobilesTick) : deux règles d'un coup, la distance
+  // n'étant calculée qu'une fois. L'ombre part sous 1/90e de l'écran ; LE MORCEAU LUI-MÊME ne
+  // part que sous 1/300e, soit trois fois plus tard que le mobilier du décor — une poignée de
+  // portière ou un doigt à cette taille-là fait moins de six pixels, et rien n'est jamais
+  // effacé à moins de douze mètres de la caméra.
+  const M2 = DETAIL_OMBRE_MOBILE * DETAIL_OMBRE_MOBILE, V2 = DETAIL_MOB_VUE * DETAIL_MOB_VUE;
+  const GM2 = DETAIL_MOB_GARDE * DETAIL_MOB_GARDE;
   for (let i = OMBRES_MOB.length - 1; i >= 0; i--) {
     const e = OMBRES_MOB[i], m = e.o.matrixWorld.elements;
     const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
-    const off = dx * dx + dy * dy + dz * dz > e.r * e.r * M2;
-    if (off !== e.off) { e.off = off; e.o.castShadow = !off; e.o.ombreLoin = off; }
-    if (off) ombresOff++;
+    const d2 = dx * dx + dy * dy + dz * dz, s = e.r * e.r;
+    if (e.ombre) {
+      const off = d2 > s * M2;
+      if (off !== e.off) { e.off = off; e.o.castShadow = !off; e.o.ombreLoin = off; }
+      if (off) ombresOff++;
+    }
+    const offV = d2 > GM2 && d2 > s * V2;
+    if (offV !== e.offV) {
+      e.offV = offV;
+      if (e.o.layers) { if (offV) { e.o.masqueSauve = e.masque; e.o.layers.mask = 0; } else e.o.layers.mask = e.masque; }
+      e.o.detailLoin = offV;
+    }
+    if (offV) coupes++;
   }
   detailOmbresOff = ombresOff;
   detailCoupes = coupes;
@@ -2016,8 +2031,15 @@ function detailsLOD(force) {
 // apparente tombe sous 1/90 de l'ecran, contre 1/55 pour le mobilier — et L'AVATAR DU JOUEUR EN
 // EST EXCLU : c'est le seul personnage qu'on regarde de pres, il garde tout, toujours.
 // Mesure apres : 3 845 → 2 098 appels dans la passe d'ombres (−45 %).
-const OMBRES_MOB = [];              // { o, r, off } : les porteurs d'ombre hors decor
+const OMBRES_MOB = [];              // { o, r, off, offV, masque, ombre } : les morceaux hors decor
 const DETAIL_OMBRE_MOBILE = 90;     // 1/90e de l'ecran : sous cette taille apparente, l'ombre portee s'efface
+// … ET LE MORCEAU LUI-MEME, beaucoup plus tard. Mesure au point de vue fixe du test 410 : les
+// vehicules et les habitants demandaient 4 339 appels de dessin pour l'image ; leurs morceaux
+// devenus minuscules en coutent 639 pour rien (−15 %). Le seuil est trois fois plus severe que
+// celui du mobilier du decor (1/100e) : a 1/300e de l'ecran, une poignee de portiere ou un
+// doigt fait moins de six pixels de haut, et il reste dans l'image jusque-la.
+const DETAIL_MOB_VUE = 300;         // 1/300e de l'ecran : en dessous, le morceau n'est plus dessine
+const DETAIL_MOB_GARDE = 12;        // m : autour de la camera on ne coupe RIEN, quelle que soit la taille
 const DETAIL_OMBRE_SUIVI = 1;       // m de rayon : au-dela, l'ombre se voit toujours, inutile de la suivre
 const OMBRE_MOB_RACINES = 3;        // racines de la scene recensees par image (le recensement est etale)
 let ombreMobI = 0, OMBRE_MOB_NEUF = [];
@@ -2035,15 +2057,17 @@ function ombresMobilesTick() {
     if (!racine || racine === worldGroup || racine === moi || typeof racine.traverse !== 'function') continue;
     racine.traverse(o => {
       if (!o.isMesh || !o.geometry) return;
-      // une ombre que LE JEU a eteinte (piece cassee, vehicule detruit) reste eteinte : on ne
-      // reprend la main que sur celles qu'on a eteintes nous-memes (`ombreLoin`).
-      if (!o.castShadow && !o.ombreLoin) return;
       const g = o.geometry;
       if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
       if (!g.boundingSphere) return;
       const r = g.boundingSphere.radius * Math.max(Math.abs(o.scale.x), Math.abs(o.scale.y), Math.abs(o.scale.z));
-      if (r >= DETAIL_OMBRE_SUIVI) return;   // un capot, un torse : son ombre se voit a toute distance utile
-      OMBRE_MOB_NEUF.push({ o, r, off: !!o.ombreLoin });
+      if (r >= DETAIL_OMBRE_SUIVI) return;   // un capot, un torse : il se voit a toute distance utile
+      // une ombre que LE JEU a eteinte (piece cassee, vehicule detruit) reste eteinte : on ne
+      // reprend la main que sur celles qu'on a eteintes nous-memes (`ombreLoin`).
+      const ombre = !!o.castShadow || !!o.ombreLoin;
+      // le masque de calque d'origine : si on l'a deja efface, c'est celui qu'on avait mis de cote
+      const masque = o.detailLoin ? (o.masqueSauve == null ? 1 : o.masqueSauve) : (o.layers ? o.layers.mask : 1);
+      OMBRE_MOB_NEUF.push({ o, r, off: !!o.ombreLoin, offV: !!o.detailLoin, masque, ombre });
     });
   }
   if (ombreMobI >= enfants.length) {

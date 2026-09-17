@@ -16237,3 +16237,247 @@ test('en auto-conduite la ville respecte le code de la route : chaussée, bon se
     && r.pctHorsChaussee <= 5 && r.pctContresens <= 6 && r.vMoy >= 3;
   return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % hors chaussée, ${r.pctContresens} % à contresens de la voie la plus proche` };
 });
+// ================= POSTE DRONE & ROBOT (round 71) =================
+test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort, se range et s\'offre', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    for (const k of Object.keys(G.sac.objets)) delete G.sac.objets[k];
+    // 1. le recensement : tout article de comptoir qui ne se mange pas doit avoir un usage
+    const morts = [];
+    for (const e of G.city.etals) for (const a of e.articles)
+      if (a.f === undefined && !G.JOUETS.some(j => j.article === a.n)) morts.push(e.id + '/' + a.n);
+    // 2. l'achat d'une rose : l'argent part ET l'objet arrive dans le sac
+    const rose = G.city.etals.find(e => e.id === 'fleurs').articles.find(a => a.n === 'Rose unique');
+    G.wallet = 50; const w0 = G.wallet;
+    G.acheterArticle(rose);
+    const w1 = G.wallet, dansSac = G.sacNb('rose');
+    // 3. on la sort : elle est en main, puis on la range
+    const sorti = G.sacSortir('rose'), enMain = G.sac.main;
+    G.sacRangerObjet('rose'); const apresRangement = G.sac.main;
+    // 4. on la sort de nouveau et on l'offre au bot le plus proche : il devient un ami
+    G.sacSortir('rose');
+    const b = G.bots.filter(x => !x.ko && x.av && x.av.group.visible)
+      .sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z))[0];
+    b.pos.x = P.pos.x + 1.2; b.pos.z = P.pos.z; b.ko = 0;
+    G.amis.delete(b.name);
+    const vise = G.botAOffrir();
+    const offert = vise ? G.offreFleur(vise) : false;
+    return { morts, w0, w1, dansSac, sorti, enMain, apresRangement,
+      offert, ami: G.amis.has(b.name), resteDansSac: G.sacNb('rose'), mainApres: G.sac.main };
+  });
+  const ok = r.w1 === r.w0 - 3 && r.dansSac === 1 && r.sorti && r.enMain === 'rose'
+    && r.apresRangement === null && r.offert && r.ami && r.resteDansSac === 0 && r.mainApres === null;
+  return { ok, detail: `avant : l'achat déduisait l'argent et n'en faisait RIEN (aucun inventaire) · maintenant la rose coûte ${r.w0 - r.w1} 🪙 et arrive dans le sac (×${r.dansSac}), se sort en main (${r.enMain}), se range (${r.apresRangement}), s'offre (${r.offert ? 'oui' : 'non'}) et fait un ami (${r.ami ? 'oui' : 'non'}) — il en reste ${r.resteDansSac} dans le sac · articles encore sans usage : ${r.morts.length}` };
+});
+
+test('le drone acheté décolle, se pilote, ne traverse pas un immeuble et rentre tout seul à batterie basse', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, d = G.drone;
+    __SHOT.go({ world: 4, x: 3, y: 1, z: -118, hour: 12 });
+    G.sacAjoute('drone');
+    const sorti = G.sacSortir('drone');
+    const alt0 = G.droneAlt();
+    // 1. il décolle et il monte quand on pousse « monter » — et le joueur, lui, ne bouge pas
+    const pj = { x: P.pos.x, z: P.pos.z };
+    G.keys.add('Space');
+    for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+    const alt1 = G.droneAlt(), pilote = G.dronePilote();
+    // 2. il avance quand on pousse « avant »
+    G.keys.delete('Space'); G.keys.add('KeyW');
+    const x0 = d.x, z0 = d.z;
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    const parcouru = Math.hypot(d.x - x0, d.z - z0);
+    const joueurBouge = Math.hypot(P.pos.x - pj.x, P.pos.z - pj.z);
+    G.keys.delete('KeyW');
+    // 3. le plafond : il ne monte pas à l'infini
+    d.bat = 100; G.keys.add('Space');
+    for (let i = 0; i < 60 * 25; i++) G.step(1 / 60, true);
+    const altMax = G.droneAlt();
+    G.keys.delete('Space');
+    // 4. UN IMMEUBLE : il fonce dedans, il ne le traverse pas
+    const sol = G.solids.filter(s => s.h > 6 && s.h < 30 && s.w > 6)
+      .sort((a, c) => Math.hypot(a.x - 3, a.z + 118) - Math.hypot(c.x - 3, c.z + 118))[0];
+    d.x = sol.x; d.z = sol.z + sol.d / 2 + 12; d.y = sol.y; d.h = Math.PI;
+    d.vx = d.vz = d.vy = 0; d.bat = 100; d.vol = true; d.mode = 'pilote'; d.decolle = 0;
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW');
+    const mur = { face: +(sol.z + sol.d / 2).toFixed(2), drone: +d.z.toFixed(2), dedans: d.z < sol.z + sol.d / 2 - 0.1 };
+    // 5. batterie basse : il rentre tout seul et il se pose près du joueur
+    d.x = P.pos.x + 60; d.z = P.pos.z; d.y = 20; d.vx = d.vz = d.vy = 0;
+    d.bat = G.DRONE_BAS + 0.5; d.mode = 'pilote'; d.vol = true;
+    let modeRetour = false;
+    for (let i = 0; i < 60 * 90 && !d.posee; i++) { G.step(1 / 60, true); if (d.mode === 'retour') modeRetour = true; }
+    const distFin = Math.hypot(d.x - P.pos.x, d.z - P.pos.z);
+    // 6. la vue à bord, et le rangement
+    G.droneVue(true); const vue = d.vue && document.body.classList.contains('dronevue');
+    G.droneRanger(true);
+    return { sorti, alt0: +alt0.toFixed(2), alt1: +alt1.toFixed(1), pilote, parcouru: +parcouru.toFixed(1),
+      joueurBouge: +joueurBouge.toFixed(2), altMax: +altMax.toFixed(1), plafond: G.DRONE_PLAFOND,
+      mur, modeRetour, posee: d.posee, distFin: +distFin.toFixed(1), vue, range: !d.actif };
+  });
+  const ok = r.sorti && r.alt0 < 0.5 && r.alt1 > 8 && r.pilote && r.parcouru > 12 && r.joueurBouge < 0.05
+    && Math.abs(r.altMax - r.plafond) < 0.6 && !r.mur.dedans && r.modeRetour && r.posee && r.distFin < 3
+    && r.vue && r.range;
+  return { ok, detail: `avant : le Mini-drone (15 🪙) ne faisait RIEN · maintenant il part de ${r.alt0} m, monte à ${r.alt1} m en 3 s, parcourt ${r.parcouru} m en 2 s pendant que le joueur ne bouge que de ${r.joueurBouge} m, plafonne à ${r.altMax} m (limite ${r.plafond}), s'arrête à ${r.mur.drone} devant la façade à ${r.mur.face} (traversée : ${r.mur.dedans ? 'OUI' : 'non'}), rentre tout seul à ${__G.DRONE_BAS} % de batterie et se pose à ${r.distFin} m du joueur ; vue à bord : ${r.vue ? 'oui' : 'non'}` };
+});
+
+test('le petit robot acheté marche, parle, reste collé au joueur (escalier compris) et obéit à ses ordres', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, R = G.robot;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('robot');
+    const sorti = G.sacSortir('robot');
+    // ---- 1. il colle au joueur qui marche vraiment (touches réelles, collisions comprises)
+    let max = 0; const angles = [];
+    G.keys.add('KeyW');
+    for (let i = 0; i < 60 * 12; i++) {
+      G.cam.yaw = Math.sin(i / 260) * 2.2;
+      G.step(1 / 60, true);
+      max = Math.max(max, G.robotDist());
+      if (i % 9 === 0) angles.push(+R.rig.jambes.g.ha.rotation.x.toFixed(3));
+    }
+    G.keys.delete('KeyW');
+    const marche = { valeurs: new Set(angles).size, amplitude: +(Math.max(...angles) - Math.min(...angles)).toFixed(3) };
+    // ---- 2. UN ESCALIER : on cherche une vraie volée dans la ville et on la monte
+    const pl = G.solids.filter(s => s.h > 0.05 && s.h < 1.4 && s.w < 4.5 && s.d < 4.5 && s.y > 0.1)
+      .map(s => ({ x: s.x, z: s.z, t: +(s.y + s.h / 2).toFixed(2) }));
+    let volee = [];
+    for (const d of pl) {
+      let cur = [d], g = 0;
+      while (g++ < 30) {
+        const q = cur[cur.length - 1];
+        const n = pl.find(o => !cur.includes(o) && Math.hypot(o.x - q.x, o.z - q.z) < 1.6 && o.t - q.t > 0.15 && o.t - q.t < 0.8);
+        if (!n) break; cur.push(n);
+      }
+      if (cur.length > volee.length) volee = cur;
+      if (volee.length >= 9) break;
+    }
+    let maxEsc = 0, yDep = 0, yFin = 0;
+    if (volee.length >= 5) {
+      P.pos.set(volee[0].x, volee[0].t, volee[0].z); P.vel.set(0, 0, 0);
+      R.x = P.pos.x; R.z = P.pos.z + 1; R.y = volee[0].t;
+      for (let k = 0; k < 30; k++) G.step(1 / 60, true);
+      yDep = R.y;
+      for (const m of volee) {
+        P.pos.set(m.x, m.t, m.z);
+        for (let k = 0; k < 26; k++) { G.step(1 / 60, true); maxEsc = Math.max(maxEsc, G.robotDist()); }
+      }
+      yFin = R.y;
+    }
+    // ---- 3. les ordres, par le MÊME interprète que le chien et le gang
+    const faits = {};
+    const essai = (txt, verif) => { G.commandeExacte(txt); for (let k = 0; k < 40; k++) G.step(1 / 60, true); faits[txt] = !!verif(); };
+    essai('robot attends ici', () => R.ordre === 'reste');
+    const px = R.x, pz = R.z;
+    for (let i = 0; i < 60 * 3; i++) { P.pos.x += 0.08; G.step(1 / 60, true); }
+    faits['il attend vraiment sur place'] = Math.hypot(R.x - px, R.z - pz) < 0.8;
+    essai('robot viens', () => R.ordre === 'viens' || R.ordre === 'suit');
+    essai('robot suis moi', () => R.ordre === 'suit');
+    const avantDit = R.dit;
+    essai('robot parle', () => R.dit && R.dit !== avantDit);
+    essai('robot danse', () => R.ordre === 'danse');
+    essai('robot garde cet endroit', () => R.ordre === 'garde' && !!R.poste);
+    essai('robot va chercher', () => R.ordre === 'cherche' && !!R.objet);
+    let rapporte = false;
+    for (let i = 0; i < 60 * 30 && !rapporte; i++) { G.step(1 / 60, true); if (R.ordre === 'suit' && !R.objet) rapporte = true; }
+    faits['il rapporte l\'objet'] = rapporte;
+    G.robotRanger(true);
+    return { sorti, ecartMax: +max.toFixed(2), colle: G.ROBOT_COLLE, marche, replaces: R.replaces,
+      marches: volee.length, maxEsc: +maxEsc.toFixed(2), monte: +(yFin - yDep).toFixed(2),
+      faits, compris: Object.values(faits).filter(Boolean).length, total: Object.keys(faits).length, nbOrdres: G.ORDRES_ROBOT.length };
+  });
+  const ok = r.sorti && r.ecartMax < r.colle && r.marche.valeurs > 20 && r.marche.amplitude > 0.5
+    && r.marches >= 5 && r.maxEsc < r.colle && r.monte > 1.5
+    && r.compris === r.total && r.compris >= 8;
+  return { ok, detail: `avant : le Robot compagnon (30 🪙) ne faisait rien (« il te suit partout… en théorie ») · maintenant il ne s'éloigne jamais de plus de ${r.ecartMax} m sur 12 s de marche (limite ${r.colle} m, ${r.replaces} replacement), ses jambes prennent ${r.marche.valeurs} angles différents sur ${r.marche.amplitude} rad d'amplitude, il monte une volée de ${r.marches} marches (+${r.monte} m) en restant à ${r.maxEsc} m, et il exécute ${r.compris}/${r.total} ordres écrits (${r.nbOrdres} au catalogue) : ${Object.entries(r.faits).map(([k, v]) => `${k} ${v ? '✅' : '❌'}`).join(', ')}` };
+});
+
+test('les jeux achetés en boutique se jouent vraiment et rapportent des pièces', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('arcade'); G.sacAjoute('jeu'); G.sacAjoute('ordi');
+    // ---- la borne : la suite de couleurs ----
+    // (on saute le spectacle lumineux, qui tient à des minuteurs : le test mesure la RÈGLE
+    //  du jeu, pas la durée d'un clignotement — sinon il dépendrait de la vitesse machine)
+    G.sacSortir('arcade');
+    const A = G.arcade;
+    const suiteMontree = A.sim.length, jeu = A.jeu;
+    A.attente = false; A.montre = -1;
+    // on la répète correctement : le tour est gagné
+    for (const c of A.sim.slice()) G.arcadeAppui(c);
+    const gagne = A.gains;
+    // puis on se trompe : la partie s'arrête et paie ce qu'on a gagné
+    A.attente = false; A.pos = 0;
+    const w0 = G.wallet;
+    const faux = (A.sim[0] + 1) % 4; G.arcadeAppui(faux);
+    const gainSimon = G.wallet - w0;
+    // ---- le jeu du mois : Memory, gagné en trichant (on connaît les cartes) ----
+    G.arcadeMemory();
+    const w1 = G.wallet, cartes = G.arcade.cartes.map(c => c.e);
+    const vus = new Set();
+    for (let i = 0; i < cartes.length; i++) {
+      if (vus.has(i)) continue;
+      const j = cartes.findIndex((e, k) => k > i && e === cartes[i] && !vus.has(k));
+      vus.add(i); vus.add(j);
+      G.arcadeCarte(i); G.arcadeCarte(j);
+    }
+    const gainMemo = G.wallet - w1, paires = G.arcade.paires;
+    G.arcade.jeu = null; if (G.uiOpen) G.closeUI();
+    return { jeu, suiteMontree, gagne, gainSimon, gainMemo, paires };
+  });
+  const ok = r.jeu === 'simon' && r.suiteMontree === 1 && r.gagne >= 1 && r.gainSimon >= 1
+    && r.paires === 8 && r.gainMemo >= 6;
+  return { ok, detail: `avant : borne d'arcade (25 🪙), jeu du mois (9 🪙) et ordinateur portable (40 🪙) ne faisaient RIEN · maintenant la borne lance « ${r.jeu} » (suite de ${r.suiteMontree} couleur, ${r.gagne} point quand on répète juste, ${r.gainSimon} 🪙 encaissés à l'erreur) et le jeu du mois est un Memory de 8 paires terminé (${r.paires}/8) pour ${r.gainMemo} 🪙` };
+});
+
+test('aucun article acheté en boutique ne reste un objet mort, et les jouets de plein air se jouent', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    for (const k of Object.keys(G.sac.objets)) delete G.sac.objets[k];
+    // ---- 1. le recensement : plus un seul article de comptoir sans usage ----
+    const morts = [], vivants = [];
+    for (const e of G.city.etals) for (const a of e.articles) {
+      if (a.f !== undefined) continue;                       // ça se mange : eat() s'en occupe
+      const j = G.JOUETS.find(x => x.article === a.n);
+      (j ? vivants : morts).push(e.id + '/' + a.n);
+    }
+    // ---- 2. le ballon : posé, il tombe au sol, et un coup de pied l'envoie loin ----
+    G.sacAjoute('ballon'); G.sacSortir('ballon');
+    const b = G.sac.ballon;
+    for (let i = 0; i < 90; i++) G.step(1 / 60, true);
+    const pose = +b.pos.y.toFixed(2);
+    const d0 = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+    b.hitCd = 0; G.hitBall(b, P.pos.x, P.pos.z, Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 6, 0);
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    const d1 = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+    // ---- 3. le cerf-volant : il monte quand le joueur court ----
+    G.sacAjoute('cerf'); G.sacSortir('cerf');
+    for (let i = 0; i < 40; i++) G.step(1 / 60, true);
+    const h0 = G.sac.cerf.h;
+    G.keys.add('KeyW'); P.run = true;
+    for (let i = 0; i < 60 * 8; i++) G.step(1 / 60, true);
+    G.keys.delete('KeyW');
+    const h1 = G.sac.cerf.h, hautCerf = +(G.sac.cerf.g.position.y - P.pos.y).toFixed(1);
+    // ---- 4. le boomerang : il part, il s'éloigne, il revient en main ----
+    G.sacAjoute('boomerang'); G.sacSortir('boomerang');
+    const enMain0 = G.sac.main;
+    G.jouetAction(G.jouetActionPrete());
+    let loin = 0;
+    for (let i = 0; i < 60 * 4; i++) { G.step(1 / 60, true);
+      if (G.sac.boom) loin = Math.max(loin, Math.hypot(G.sac.boom.m.position.x - P.pos.x, G.sac.boom.m.position.z - P.pos.z)); }
+    const revenu = G.sac.main === 'boomerang' && !G.sac.boom;
+    // ---- 5. la peluche : le câlin rend de la vie ----
+    G.sacAjoute('peluche'); G.sacSortir('peluche');
+    P.hp = 40; const calin = G.jouetAction(G.jouetActionPrete()); const hp = P.hp;
+    return { morts, nbVivants: vivants.length, pose, d0: +d0.toFixed(1), d1: +d1.toFixed(1),
+      h0: +h0.toFixed(1), h1: +h1.toFixed(1), hautCerf, enMain0, loin: +loin.toFixed(1), revenu, calin, hp };
+  });
+  const ok = r.morts.length === 0 && r.nbVivants >= 14 && r.pose < 1.2 && r.d1 > r.d0 + 4
+    && r.h1 > r.h0 + 4 && r.hautCerf > 6 && r.enMain0 === 'boomerang' && r.loin > 10 && r.revenu
+    && r.calin && r.hp > 40;
+  return { ok, detail: `avant : 11 articles achetés au comptoir sur 11 ne faisaient RIEN · maintenant ${r.morts.length} article sans usage (${r.morts.join(', ') || 'aucun'}) sur ${r.nbVivants} au catalogue du sac · ballon posé au sol à ${r.pose} m, envoyé de ${r.d0} m à ${r.d1} m d'un coup de pied · cerf-volant monté de ${r.h0} m à ${r.h1} m en courant (${r.hautCerf} m au-dessus du joueur) · boomerang parti à ${r.loin} m et revenu en main : ${r.revenu ? 'oui' : 'non'} · câlin de peluche : ❤️ 40 → ${r.hp}` };
+});

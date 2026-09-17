@@ -519,6 +519,19 @@ window.__SHOT = {
           try { localStorage.setItem('superobby.stats', JSON.stringify(stats)); } catch (e37b) {}
         }
         try { applyMyLook(); } catch (e37) {}
+        // POSTE DRONE & ROBOT : le drone reste en l'air, le robot colle au joueur et les jouets
+        // restent poses d'un test (ou d'une capture) a l'autre. On vide le sac et on range tout.
+        try {
+          if (typeof droneRanger === 'function') droneRanger(true);
+          if (typeof robotRanger === 'function') robotRanger(true);
+          if (typeof jouetsReset === 'function') jouetsReset();
+          if (typeof sacReset === 'function') sacReset();
+          if (typeof sac !== 'undefined' && sac.objets) { for (const k of Object.keys(sac.objets)) delete sac.objets[k]; sacSauve(); }
+          if (typeof drone !== 'undefined') { drone.bat = 100; drone.album = []; drone.contacts = 0; }
+          if (typeof robot !== 'undefined') { robot.bat = 100; robot.ecartMax = 0; robot.replaces = 0; robot.nom = 'Bip'; robot.dit = ''; }
+          if (typeof arcade !== 'undefined') arcade.jeu = null;
+          localStorage.removeItem('superobby.sac');
+        } catch (e39b) {}
         // LE CHIEN ADOPTE. Il suit le joueur d'un test a l'autre, aboie, mord et se met entre
         // le joueur et ce qu'on mesure ; et ses points de vie restaient a 20 apres une bagarre.
         if (typeof chien !== 'undefined') {
@@ -844,6 +857,21 @@ window.__SHOT = {
         }
       } catch (e18) {}
     }
+    // poste DRONE & ROBOT : v.drone = altitude voulue du drone (m), v.dronevue = camera a bord,
+    // v.robot = le compagnon sorti a cote du joueur, v.jouet = un objet du sac en main.
+    if (v.drone) {
+      try {
+        sacAjoute('drone'); droneSortir(); drone.decolle = 0; drone.vy = 0;
+        drone.y = droneSolSous(drone.x, drone.z, drone.y) + v.drone;
+        drone.x = P.pos.x + Math.sin(P.facing) * 5; drone.z = P.pos.z + Math.cos(P.facing) * 5; drone.h = P.facing;
+        for (let i = 0; i < 12; i++) droneTick(1 / 60);
+        if (v.dronevue) droneVue(true);
+      } catch (e19) {}
+    }
+    if (v.robot) {
+      try { sacAjoute('robot'); robotSortir(); if (v.robotordre) robotOrdre(v.robotordre, ''); for (let i = 0; i < 90; i++) robotTick(1 / 60); } catch (e20) {}
+    }
+    if (v.jouet) { try { sacAjoute(v.jouet); sacSortir(v.jouet); for (let i = 0; i < 40; i++) { if (typeof jouetsTick === 'function') jouetsTick(1 / 60); } } catch (e21) {} }
   },
   stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     world: worldIdx, solides: solids.length, heure: +day.h.toFixed(1), nuit: +day.night.toFixed(2) }; }
@@ -2111,6 +2139,62 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  // ---- poste DRONE & ROBOT (round 71) : ajoute tes exports SOUS cette ligne ----
+  get sac() { return typeof sac !== 'undefined' ? sac : null; },
+  get JOUETS() { return typeof JOUETS !== 'undefined' ? JOUETS : null; },
+  sacAjoute: typeof sacAjoute === 'function' ? sacAjoute : null,
+  sacSortir: typeof sacSortir === 'function' ? sacSortir : null,
+  sacRangerObjet: typeof sacRangerObjet === 'function' ? sacRangerObjet : null,
+  sacDehors: typeof sacDehors === 'function' ? sacDehors : null,
+  sacNb: typeof sacNb === 'function' ? sacNb : null,
+  openSac: typeof openSac === 'function' ? openSac : null,
+  acheterArticle: typeof acheterArticle === 'function' ? acheterArticle : null,
+  botAOffrir: typeof botAOffrir === 'function' ? botAOffrir : null,
+  offreFleur: typeof offreFleur === 'function' ? offreFleur : null,
+  get drone() { return typeof drone !== 'undefined' ? drone : null; },
+  droneSortir: typeof droneSortir === 'function' ? droneSortir : null,
+  droneRanger: typeof droneRanger === 'function' ? droneRanger : null,
+  dronePoser: typeof dronePoser === 'function' ? dronePoser : null,
+  droneVue: typeof droneVue === 'function' ? droneVue : null,
+  droneSuit: typeof droneSuit === 'function' ? droneSuit : null,
+  dronePhoto: typeof dronePhoto === 'function' ? dronePhoto : null,
+  droneRepere: typeof droneRepere === 'function' ? droneRepere : null,
+  dronePilote: typeof dronePilote === 'function' ? dronePilote : null,
+  droneTick: typeof droneTick === 'function' ? droneTick : null,
+  droneAlt: typeof droneAlt === 'function' ? droneAlt : null,
+  droneBloque: typeof droneBloque === 'function' ? droneBloque : null,
+  droneSolSous: typeof droneSolSous === 'function' ? droneSolSous : null,
+  batterieUtilise: typeof batterieUtilise === 'function' ? batterieUtilise : null,
+  get DRONE_PLAFOND() { return typeof DRONE_PLAFOND !== 'undefined' ? DRONE_PLAFOND : null; },
+  get DRONE_BAS() { return typeof DRONE_BAS !== 'undefined' ? DRONE_BAS : null; },
+  get DRONE_AUTO() { return typeof DRONE_AUTO !== 'undefined' ? DRONE_AUTO : null; },
+  get robot() { return typeof robot !== 'undefined' ? robot : null; },
+  get ORDRES_ROBOT() { return typeof ORDRES_ROBOT !== 'undefined' ? ORDRES_ROBOT : null; },
+  get ROBOT_COLLE() { return typeof ROBOT_COLLE !== 'undefined' ? ROBOT_COLLE : null; },
+  robotSortir: typeof robotSortir === 'function' ? robotSortir : null,
+  robotRanger: typeof robotRanger === 'function' ? robotRanger : null,
+  robotOrdre: typeof robotOrdre === 'function' ? robotOrdre : null,
+  robotTick: typeof robotTick === 'function' ? robotTick : null,
+  robotDist: typeof robotDist === 'function' ? robotDist : null,
+  ordreRobotTexte: typeof ordreRobotTexte === 'function' ? ordreRobotTexte : null,
+  openOrdresRobot: typeof openOrdresRobot === 'function' ? openOrdresRobot : null,
+  commandeExacte: typeof commandeExacte === 'function' ? commandeExacte : null,
+  get arcade() { return typeof arcade !== 'undefined' ? arcade : null; },
+  ouvreArcade: typeof ouvreArcade === 'function' ? ouvreArcade : null,
+  arcadeSimon: typeof arcadeSimon === 'function' ? arcadeSimon : null,
+  arcadeAppui: typeof arcadeAppui === 'function' ? arcadeAppui : null,
+  arcadeMemory: typeof arcadeMemory === 'function' ? arcadeMemory : null,
+  arcadeCarte: typeof arcadeCarte === 'function' ? arcadeCarte : null,
+  ballonSortir: typeof ballonSortir === 'function' ? ballonSortir : null,
+  cerfSortir: typeof cerfSortir === 'function' ? cerfSortir : null,
+  boomerangLance: typeof boomerangLance === 'function' ? boomerangLance : null,
+  pelucheCalin: typeof pelucheCalin === 'function' ? pelucheCalin : null,
+  jouetActionPrete: typeof jouetActionPrete === 'function' ? jouetActionPrete : null,
+  jouetAction: typeof jouetAction === 'function' ? jouetAction : null,
+  jouetsTick: typeof jouetsTick === 'function' ? jouetsTick : null,
+  hitBall: typeof hitBall === 'function' ? hitBall : null,
+  sacSauve: typeof sacSauve === 'function' ? sacSauve : null,
+  jouetsReset: typeof jouetsReset === 'function' ? jouetsReset : null,
 };
 `;
 

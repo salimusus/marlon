@@ -1570,10 +1570,21 @@ function appliqueRendu() {
   return r;
 }
 function ombresRendu(on) {
-  if (rendu.ombres === on) return;
-  rendu.ombres = on;
   const low = settings.quality === 'low';
-  sun.castShadow = on && !low; renderer.shadowMap.enabled = on && !low;
+  const vraiment = on && !low;
+  // `rendu.ombres` MENTAIT en qualite « basse ». applyQuality appelle ombresRendu(false), puis
+  // ombresQualite(0) rappelle ombresRendu(true) pour le palier du haut : comme la garde ne
+  // regardait que l'argument, le drapeau repassait a VRAI alors que sun.castShadow, lui,
+  // restait faux. Le reglage de fluidite croyait donc avoir des ombres a eteindre et descendait
+  // un palier pour rien. On memorise maintenant ce qu'on FAIT, pas ce qu'on nous demande.
+  if (rendu.ombres === vraiment && sun.castShadow === vraiment) return;
+  rendu.ombres = vraiment;
+  sun.castShadow = vraiment; renderer.shadowMap.enabled = vraiment;
+  // ET LA CARTE D'OMBRES RESTAIT ALLOUEE : 4096 × 4096 points de profondeur, soit 64 Mo de
+  // memoire graphique gardes pour rien des que les ombres sont eteintes — c'est-a-dire en
+  // qualite « basse » et au dernier palier de fluidite, donc exactement sur les machines qui
+  // n'ont pas cette memoire. On la libere ; three.js la refabrique seule si les ombres reviennent.
+  if (!vraiment && sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
 }
 // la taille de la carte d'ombres, sans jamais reconstruire ce qui n'a pas change
 function ombresTaille(px) {

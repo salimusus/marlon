@@ -16601,3 +16601,37 @@ test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucu
     && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60;
   return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
 });
+
+// POSTE FLUIDITE (round 71). Les quatre reglages de qualite doivent faire EXACTEMENT ce que
+// leur nom promet, et surtout ne rien garder de ce qu'ils annoncent avoir eteint : en
+// « basse », le drapeau `rendu.ombres` restait a VRAI (applyQuality eteint les ombres, puis
+// ombresQualite(0) les rallume pour le palier du haut, et la garde ne regardait que
+// l'argument) et la carte d'ombres de 4096 × 4096 restait allouee — 64 Mo de memoire graphique
+// gardes pour rien sur la machine la plus faible, celle qui a justement choisi « basse ».
+test('les quatre reglages de qualite font ce qu\'ils disent, et « basse » libere vraiment la carte d\'ombres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderQualite: true });
+    const avant = G.settings.quality;
+    const etat = q => { G.settings.quality = q; G.applyQuality(); G.renderer.render(G.scene, G.camera);
+      return { n: G.QUALITES[q].n, ratio: +G.ratioQualite().toFixed(2), plafond: G.plafondPixels(),
+        post: !!G.post.on, halo: !!G.post.halo, drapeau: !!G.rendu.ombres, ombres: !!G.sun.castShadow,
+        carte: !!G.sun.shadow.map }; };
+    const ultra = etat('ultra'), haute = etat('high'), perf = etat('dlss'), basse = etat('low'), retour = etat('high');
+    // les paliers de fluidite : sur une tele on lache les OMBRES d'abord et la resolution ne
+    // descend jamais sous 78 % ; sur ordinateur c'est la carte d'ombres qui maigrit d'abord
+    const pc = G.paliersActifs();
+    G.diffusion.on = true; const tv = G.paliersActifs().slice(); G.diffusion.on = false;
+    G.settings.quality = avant; G.applyQuality();
+    return { ultra, haute, perf, basse, retour, plafondTV: G.PLAFOND_TV,
+      pcPremier: pc[0], pcDernier: pc[pc.length - 1], tvPremier: tv[0], tvDernier: tv[tv.length - 1],
+      ultraSurech: G.QUALITES.ultra.ratio(1), ultraPlafond: G.QUALITES.ultra.plafond };
+  });
+  // DECISION DU JOUEUR, on n'y touche pas : Ultra HD = surechantillonnage 2x, plafond 5120.
+  const ok = r.ultraSurech === 2 && r.ultraPlafond === 5120 && r.ultra.halo && r.ultra.post
+    && r.haute.post && !r.haute.halo && r.perf.ratio < 0.7
+    && !r.basse.post && !r.basse.ombres && !r.basse.drapeau && !r.basse.carte
+    && r.retour.ombres && r.retour.carte
+    && r.tvPremier.ombre < 1 && r.tvDernier.ech >= 0.78 && r.pcPremier.ech === 1 && r.pcDernier.ombre === 0;
+  return { ok, detail: `Ultra HD : surechantillonnage ${r.ultraSurech}x, plafond ${r.ultraPlafond} px, nettete + halo (decision du joueur, intacte) · haute : passe de nettete sans halo · ${r.perf.n} : rendu a ${r.perf.ratio} de la resolution · basse : pas de passe de nettete, pas d'ombres (drapeau=${r.basse.drapeau}) et la carte d'ombres est LIBEREE (allouee=${r.basse.carte}, elle l'etait encore avant ce round) · on repasse en haute et l'ombre revient (${r.retour.ombres}, carte=${r.retour.carte}) · paliers de fluidite : sur ordinateur on commence par diviser la carte d'ombres (echelle ${r.pcPremier.ech}) et on finit sans ombres, sur tele on lache l'ombre des le premier palier (ombre ${r.tvPremier.ombre}) et la resolution ne descend jamais sous ${r.tvDernier.ech}` };
+});

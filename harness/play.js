@@ -13893,8 +13893,11 @@ test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l
       // tombait sur une marche (y = 2,73 et 7,98) et on mesurait l'escalier au lieu de
       // l'étage. On vise maintenant le plancher plein de chaque niveau : les bureaux au sud
       // du 1ᵉʳ, la salle des coffres au nord du 2ᵉ, et le palier de départ de la volée basse.
+      // Au 1ᵉʳ on se place DERRIÈRE la volée du 2ᵉ (dz = +9) : à dz = +6 on naissait dessous,
+      // dans le vide entre le plancher et les marches, et la désincarcération éjectait le
+      // joueur hors du bâtiment (y = 0).
       ['le pied de l\'escalier de la banque', -60.2, 0.5, 64.2],
-      ['le 1er etage de la banque', -52, 5.1, 76],
+      ['le 1er etage de la banque', -52, 5.1, 79],
       ['la salle des coffres de la banque', -52, 9.9, 64],
       ['le commissariat', -54, 0.5, 28],
       ['la salle de sport', -1, 0.5, 20],

@@ -12319,12 +12319,21 @@ function jailFree(reason) {
 }
 function openJail() {
   const needs = jailNeeds(), fine = JAIL_FINE[jail.level] || 50, lvlTxt = jail.level >= 3 ? 'délit grave' : jail.level === 2 ? 'délit moyen' : 'petit délit';
-  $('jailText').innerHTML = `Tu as été arrêté pour un <b>${lvlTxt}</b>. Pour sortir, réussis ${needs.length > 1 ? 'les épreuves' : 'l\'épreuve'} ci-dessous (jusqu'au drapeau final), paie <b>${fine} 🪙</b> (tu as ${wallet}), ou utilise un <b>pass liberté</b> (${jailPasses} pour cette partie).`;
-  $('jailBtns').innerHTML = needs.map(i => `<button class="btn ${jail.done.includes(i) ? 'sec' : ''}" data-w="${i}">${WORLDS[i].emoji} ${WORLDS[i].name} ${jail.done.includes(i) ? '✅' : '▶'}</button>`).join('') + `<button class="btn" id="jailPay" ${wallet < fine ? 'disabled style="opacity:.5"' : ''}>💰 Payer ${fine} 🪙</button>` + `<button class="btn" id="jailPass" ${jailPasses <= 0 ? 'disabled style="opacity:.5"' : ''}>🎟️ Pass liberté (${jailPasses} restant${jailPasses > 1 ? 's' : ''})</button>`;
+  $('jailText').innerHTML = `Tu as été arrêté pour un <b>${lvlTxt}</b>. Pour sortir, attends ${jailAttente()} s dans ta cellule, réussis ${needs.length > 1 ? 'les épreuves' : 'l\'épreuve'} ci-dessous (jusqu'au drapeau final), paie <b>${fine} 🪙</b> (tu as ${wallet}), ou utilise un <b>pass liberté</b> (${jailPasses} pour cette partie).`;
+  $('jailBtns').innerHTML = `<button class="btn" id="jailAttend">⏳ Attendre ${jailAttente()} s en cellule</button>` + needs.map(i => `<button class="btn ${jail.done.includes(i) ? 'sec' : ''}" data-w="${i}">${WORLDS[i].emoji} ${WORLDS[i].name} ${jail.done.includes(i) ? '✅' : '▶'}</button>`).join('') + `<button class="btn" id="jailPay" ${wallet < fine ? 'disabled style="opacity:.5"' : ''}>💰 Payer ${fine} 🪙</button>` + `<button class="btn" id="jailPass" ${jailPasses <= 0 ? 'disabled style="opacity:.5"' : ''}>🎟️ Pass liberté (${jailPasses} restant${jailPasses > 1 ? 's' : ''})</button>`;
   $('jailBtns').querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => { closeUI(); chooseWorld(+b.dataset.w); }));
   $('jailPay').addEventListener('click', () => { if (wallet < fine) return; wallet -= fine; saveWallet(); updateHud(); jailFree(`💰 Amende payée (${fine} 🪙) : libre !`); });
   $('jailPass').addEventListener('click', () => { if (jailPasses <= 0) return; jailPasses--; jailFree(`🎟️ Pass liberté utilisé : libre ! (${jailPasses} restant${jailPasses > 1 ? 's' : ''})`); });
+  // UNE PEINE COURTE (n° 33 du Joueur). Sans pièces ni pass, un enfant devait finir un parcours
+  // d'obby ENTIER (huit étapes) pour revenir en ville. On peut maintenant purger sa peine en
+  // attendant dans la cellule : 30 s, 45 s ou 60 s selon la gravité, le compte à rebours dans la pastille.
+  const att = $('jailAttend'); if (att) att.addEventListener('click', () => { jail.attenteFin = simTime + jailAttente(); closeUI(); msg(`⏳ Tu purges ta peine : ${jailAttente()} s dans la cellule, sans bouger`, 3200); });
   openUI('jailUI');
+}
+function jailAttente() { return jail.level >= 3 ? 60 : jail.level === 2 ? 45 : 30; }
+function jailAttenteTick() {
+  if (!jail.on || !jail.attenteFin) return;
+  if (simTime >= jail.attenteFin) { jail.attenteFin = 0; jailFree('⏳ Peine purgée : tu es libre !'); }
 }
 $('jailClose').addEventListener('click', closeUI); $('jailBtn').addEventListener('click', () => { if (jail.on) openJail(); });
 function jailWorldDone(i) {   // une épreuve réussie compte pour la libération
@@ -21827,6 +21836,7 @@ function cityVie(dt) {
     $('act').textContent = `🏁 ${fmt(r.t)} · ${r.next}/${r.cps.length}`;
   }
   // la pastille d'action suit ce qu'on a sous le nez (guichet, comptoir, voiture, banc…)
+  jailAttenteTick();
   const cp2 = consigneProche(); if (cp2 !== VILLE.consigne) { VILLE.consigne = cp2; updateAct(); }
 }
 // CE QU'ON PEUT FAIRE ICI, EN UNE LIGNE. Devant le guichet de la banque ou le comptoir du
@@ -21835,7 +21845,9 @@ function cityVie(dt) {
 // suffit pas à un enfant qui arrive en regardant ailleurs. La consigne reste affichée tant
 // qu'on est devant (E devient △ ou ✋ selon la manette ou l'écran tactile, voir ctrlText).
 function consigneProche() {
-  if (!city.on || drive.car || P.sit || P.ride || P.swing) return null;
+  if (!city.on) return null;
+  if (jail.on && jail.attenteFin) return `⏳ Libre dans ${Math.max(0, Math.ceil(jail.attenteFin - simTime))} s`;
+  if (drive.car || P.sit || P.ride || P.swing) return null;
   if (city.deskNear) return '🏦 E : déposer ou retirer';
   if (city.concesNear) return '🚗 E : acheter une voiture';
   if (city.tuneNear) return '🔧 E : garage';

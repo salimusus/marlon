@@ -14965,7 +14965,7 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // de suivre un virage sans dépasser. La caméra a maintenant sa propre courbe (padVisee) :
 // une part LINÉAIRE qui répond dès le premier millimètre — le joueur ne veut pas d'un seuil —
 // et une part CARRÉE qui garde la grande vitesse pour le bord du stick.
-const CAM_MORTE = 0.06;        // zone morte ronde du stick droit (une DualSense neuve ne dérive pas au-delà de 5 %)
+const CAM_MORTE = 0.075;       // zone morte RONDE du stick droit : juste au-dessus de la dérive d'une DualSense usée (5 % sur les DEUX axes font 7,07 % en diagonale — mesuré : 0,9 °/s de rotation parasite avec 6 %)
 const CAM_LIN = 0.35;          // part linéaire de la courbe de visée ; le reste est en carré
 const CAM_VYAW = 5.5;          // rad/s au bord du stick, horizontal (315 °/s : de quoi se retourner d'un coup de pouce)
 const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal, le ratio qui donne le MÊME ressenti
@@ -24125,6 +24125,15 @@ let loopErr = 0;
 // par seconde sur le banc). Isole ici — et appele par camPerche, donc exactement au meme
 // moment qu'avant — un test peut compter sa vitesse image par image.
 function camRecentre(dt, aiming) {
+  // A QUELLE VITESSE LE PERSONNAGE PIVOTE-T-IL ? Le plafond ci-dessous sert a amortir un
+  // RETOUR (« j'ai regarde derriere moi au stick droit, l'image revient »). Il ne doit surtout
+  // pas empecher la camera de SUIVRE un personnage qui tourne a 160 °/s au stick gauche : le
+  // retard se creuserait alors sans fin et l'on jouerait de profil. On ajoute donc au plafond
+  // la vitesse de rotation du joueur.
+  let dF = P.facing - (cam.facingPrec == null ? P.facing : cam.facingPrec);
+  dF = Math.atan2(Math.sin(dF), Math.cos(dF));
+  cam.facingPrec = P.facing;
+  const suit = dt > 0.0001 ? Math.min(6, Math.abs(dF) / dt) : 0;
   if (!(settings.ctrl === 'rot' && running && !aiming && look.id === null && simTime > cam.freeUntil)) return 0;
   let d = P.facing + Math.PI - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   // LE REPLACEMENT NE DOIT PLUS ARRACHER L'IMAGE. Une simple exponentielle de constante 5
@@ -24133,13 +24142,12 @@ function camRecentre(dt, aiming) {
   // PLAFONNEE a CAM_RECENTRE (126 °/s) : un demi-tour se rattrape en une seconde et demie, en
   // douceur, et les derniers degres se posent tout seuls grace a l'exponentielle.
   let pas = d * (1 - Math.exp(-5 * dt));
-  const maxPas = CAM_RECENTRE * dt;
+  const maxPas = (CAM_RECENTRE + suit) * dt;
   if (pas > maxPas) pas = maxPas; else if (pas < -maxPas) pas = -maxPas;
   cam.yaw += pas;
   return pas;
 }
 function camPerche(dt, aiming) {
-  camRecentre(dt, aiming);
   // caméra
   // LA CAMERA DE L'ACCUEIL. A 5,2 m du joueur, presque a plat, le dernier rang des habitants
   // (z = 6,9, entre le joueur et l'objectif) passait a un metre de la camera : un personnage
@@ -24266,7 +24274,10 @@ function camPerche(dt, aiming) {
       // on ne vise PAS la distance voulue (9 m) mais la distance CONFORTABLE : la caméra monte
       // juste ce qu'il faut pour qu'on joue bien, et pas un degré de plus — sinon le moindre
       // muret la faisait basculer en vue de dessus
-      const plafondM = Math.min(cam.pmax == null ? 1.25 : cam.pmax, monteVeh ? 0.8 : 1.25);
+      // 1,0 rad (57°) au volant : mesuré, 0,8 ne suffisait pas — la caméra coincée entre la
+      // voiture et une façade de 4,2 m n'arrivait pas à passer PAR-DESSUS le toit du bâtiment
+      // et restait posée sur la carrosserie (2,6 m). Au-delà on basculerait en vue de dessus.
+      const plafondM = Math.min(cam.pmax == null ? 1.25 : cam.pmax, monteVeh ? 1 : 1.25);
       cam.hausseCible = camMontee(cam.target.x, cam.target.y, cam.target.z, cam.yaw, cam.pitch,
         Math.min(cam.dist, CAM_CONFORT), plafondM, vehM ? vehM.solid : null);
     }
@@ -24520,6 +24531,8 @@ function frame() {
   document.body.classList.toggle('drawn', !!P.drawn);
   if (armed && me.gun && me.inHand) { me.rig.armR.rotation.x = -1.55 - P.aimPitch; me.rig.armR.rotation.z = -0.12; me.rig.armR.coude.rotation.x = 0; }   // le bras suit la hauteur de visée, coude tendu
   if (cam.kick) { cam.kick *= Math.exp(-10 * dt); if (cam.kick < 0.0005) cam.kick = 0; }
+  // caméra qui se replace derrière le personnage (mode rotation) — voir camRecentre
+  camRecentre(dt, aiming);
   // joueurs distants, bulles, envoi de l'état
   netTick(dt, myAnim, sp);
   tickBubbles();

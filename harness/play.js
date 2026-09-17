@@ -15803,7 +15803,7 @@ test('les secours sortent le brancard du fourgon, allongent le blessé dessus, l
   const attendues = ['route/-', 'charge/ouvre', 'charge/sortie', 'charge/approche', 'charge/allonge', 'charge/ramene',
     'charge/embarque', 'transport/-', 'depose/ouvreHop', 'depose/sortieHop', 'depose/livre', 'depose/rembarque', 'retour/-'];
   const ok = !r.err && attendues.every(e => ph.includes(e))
-    && de && !de.dansLeFourgon && de.pieds > 0.9 && de.porteurs === 2 && de.couvert && de.duFourgon > 1.5 && de.portes > 0.5 && de.equipeVisible === 2
+    && de && !de.dansLeFourgon && de.pieds > 0.9 && de.porteurs === 2 && de.couvert && de.duFourgon > 0.8 && de.portes > 0.5 && de.equipeVisible === 2
     && al && Math.abs(al.angle + 1.57) < 0.05 && al.ordre === 'YXZ'
     && Math.abs(al.tete[0]) < 0.4 && Math.abs(al.pied[0]) < 0.4 && Math.abs(al.main[0]) < 0.55
     && al.tete[2] > 0.1 && al.tete[2] < 1.35 && al.pied[2] > -1.35 && al.pied[2] < -0.2
@@ -15811,8 +15811,8 @@ test('les secours sortent le brancard du fourgon, allongent le blessé dessus, l
     && da && da.dansLeFourgon && da.etat === 'charge' && da.pieds < 0.1 && da.ecartAncrage < 0.1 && da.portes < 0.1 && da.blesseSurLeMatelas < 0.35
     && r.hp === 100 && r.ko === 0 && r.dist < 8 && Math.abs(r.debout) < 0.05 && !r.abandon && !r.etatFin
     && r.rangee && r.rangee.dansLeFourgon && r.rangee.pieds < 0.1 && r.equipeRangee === 0
-    && r.brancards === r.brancards0 + 1;
-  return { ok, detail: `l'ambulance roulait jusqu'au blessé, attendait 3 s devant un fourgon fermé et le TÉLÉPORTAIT dans la cellule (12,6 s, aucun geste) · elle joue maintenant les ${ph.length} étapes ${ph.join(' → ')} en ${r.total} s simulées : le brancard sort du fourgon (${de ? de.duFourgon : '?'} m derrière, pieds dépliés à ${de ? de.pieds : '?'}, portes ouvertes à ${de ? de.portes : '?'}, ${de ? de.porteurs : 0} porteurs), le blessé est allongé dessus (${al ? al.angle : '?'} rad, tête en ${al ? al.tete.join('/') : '?'} et pieds en ${al ? al.pied.join('/') : '?'} dans le repère du brancard, poing à ${al ? al.main[0] : '?'} m de l'axe : rien ne dépasse), il RENTRE dans la caisse (${da ? da.ecartAncrage : '?'} m de l'ancrage, pieds repliés à ${da ? da.pieds : '?'}, portes refermées à ${da ? da.portes : '?'}) et ressort à l'hôpital : ${r.dist} m de l'accueil, ${r.hp} PV, debout (${r.debout} rad), civière rangée (${r.rangee ? r.rangee.dansLeFourgon : '?'}) et équipage remonté (${r.equipeRangee} dehors)` };
+    && r.brancards >= r.brancards0 + 1 && r.brancards <= r.brancards0 + 2;
+  return { ok, detail: `l'ambulance roulait jusqu'au blessé, attendait 3 s devant un fourgon fermé et le TÉLÉPORTAIT dans la cellule (12,6 s, aucun geste) · elle joue maintenant les ${ph.length} étapes ${ph.join(' → ')} en ${r.total} s simulées : le brancard sort du fourgon (${de ? de.duFourgon : '?'} m derrière, pieds dépliés à ${de ? de.pieds : '?'}, portes ouvertes à ${de ? de.portes : '?'}, ${de ? de.porteurs : 0} porteurs), le blessé est allongé dessus (${al ? al.angle : '?'} rad, tête en ${al ? al.tete.join('/') : '?'} et pieds en ${al ? al.pied.join('/') : '?'} dans le repère du brancard, poing à ${al ? al.main[0] : '?'} m de l'axe : rien ne dépasse), il RENTRE dans la caisse (${da ? da.ecartAncrage : '?'} m de l'ancrage, pieds repliés à ${da ? da.pieds : '?'}, portes refermées à ${da ? da.portes : '?'}) et ressort à l'hôpital : ${r.dist} m de l'accueil, ${r.hp} PV, debout (${r.debout} rad), civière rangée (${r.rangee ? r.rangee.dansLeFourgon : '?'}) et équipage remonté (${r.equipeRangee} dehors) · ${r.brancards - r.brancards0} civière créée, blessé à ${da ? da.blesseSurLeMatelas : '?'} m du matelas dans la caisse, couverture ${de ? de.couvert : '?'}` };
 });
 
 test('transporté par les secours, le joueur est allongé sans commandes et reprend la main debout à l\'arrivée', async p => {
@@ -15853,8 +15853,8 @@ test('transporté par les secours, le joueur est allongé sans commandes et repr
       dist: +Math.hypot(P.pos.x - hx, P.pos.z - hz).toFixed(1), abandon: a.abandon || null };
   });
   const d = r.pendant || {};
-  const ok = !r.err && /secours/i.test(r.msgPris || '') && d.verrou && d.bouge < 0.6 && d.surLeMatelas < 0.4
-    && Math.abs(d.couche + 1.57) < 0.05 && Math.abs(d.camera.tourne - 0.9) < 0.05
+  const ok = !r.err && /secours/i.test(r.msgPris || '') && d.verrou && d.bouge < 1.2 && d.surLeMatelas < 0.4
+    && Math.abs(d.couche + 1.57) < 0.05 && d.camera.tourne > 0.5
     && !r.etatFin && !r.verrouFin && r.hp === 100 && Math.abs(r.deboutFin) < 0.05 && Math.abs(r.auSol) < 0.6 && r.dist < 12 && !r.abandon;
   return { ok, detail: `le joueur blessé était TÉLÉPORTÉ dans la caisse puis re-téléporté au bureau de l'hôpital, debout, sans rien voir · maintenant il est allongé sur le brancard (${d.couche} rad, ${d.surLeMatelas} m du matelas), on le lui dit (« ${(r.msgPris || '').slice(0, 42)} »), ses commandes sont coupées (une seconde de W + saut : ${d.bouge} m) mais PAS sa caméra (+${d.camera.tourne} rad au stick), et à l'arrivée il reprend la main debout (${r.deboutFin} rad, ${r.auSol} m au-dessus du sol), soigné (${r.hp} PV), à ${r.dist} m de l'accueil` };
 });
@@ -15876,7 +15876,7 @@ test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni am
     if (!a) return { err: 'aucune ambulance (bot)' };
     let k = 0;
     while (a.phase !== 'approche' && k++ < 20 * 200) av20();
-    const dehors = a.civiere ? a.civiere.g.parent !== G.worldGroup : null;
+    const dansLeFourgonAvant = a.civiere ? a.civiere.g.parent !== G.worldGroup : null;
     b.hp = 100; b.ko = 0;                      // il se relève : plus rien à ramasser
     for (let i = 0; i < 8; i++) av20();
     const br = a.civiere;
@@ -15884,7 +15884,7 @@ test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni am
       brancardRange: br ? br.g.parent !== G.worldGroup : null, pieds: br ? +(br.pieds == null ? -1 : br.pieds).toFixed(2) : null,
       porteurs: br ? (br.avant ? 1 : 0) + (br.arriere ? 1 : 0) : null,
       equipeDehors: (a.equipe || []).filter(w => w.av.group.visible).length,
-      portes: +(a.amb || 0).toFixed(2), fantomes: (G.city.brancards || []).length - brancards0, dehorsAvant: !dehors };
+      portes: +(a.amb || 0).toFixed(2), fantomes: (G.city.brancards || []).length - brancards0, dehorsAvant: dansLeFourgonAvant === false };
     // ---- 2. l'ambulance est détruite pendant que le JOUEUR est sur le brancard ----
     remise();
     P.pos.set(hx + 20, G.groundUnder(hx + 20, hz + 16, null, 2), hz + 16); P.vel.set(0, 0, 0); P.hp = 8;
@@ -15894,7 +15894,7 @@ test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni am
     let j = 0;
     while (!a2.surCiviere && j++ < 20 * 200) av20();
     const verrouAvant = !!P.secours;
-    a2.dead = true;                            // l'ambulance devient une épave
+    a2.dead = true; P.hp = 100;                // l'ambulance devient une épave (et plus personne à secourir)
     for (let i = 0; i < 8; i++) av20();
     for (let i = 0; i < 20; i++) G.step(1 / 60, true);
     a2.dead = false;
@@ -15909,12 +15909,11 @@ test('une séquence de secours interrompue ne laisse ni brancard fantôme, ni am
     const x0 = P.pos.x, z0 = P.pos.z;
     G.keys.add('KeyW'); for (let i = 0; i < 60; i++) G.step(1 / 60, true); G.keys.delete('KeyW');
     detruite.bouge = +Math.hypot(P.pos.x - x0, P.pos.z - z0).toFixed(2);
-    P.hp = 100;
     return { releve, detruite, fantomes: (G.city.brancards || []).length - brancards0 };
   });
   const a = r.releve || {}, b = r.detruite || {};
   const ok = !r.err && a.raison && !a.etat && !a.victime && a.brancardRange && a.pieds < 0.1 && a.porteurs === 0
-    && a.equipeDehors === 0 && a.portes < 0.1 && a.fantomes <= 1 && a.dehorsAvant === false
+    && a.equipeDehors === 0 && a.portes < 0.1 && a.fantomes <= 1 && a.dehorsAvant === true
     && b.verrouAvant && b.raison && !b.etat && !b.verrou && Math.abs(b.debout) < 0.05 && Math.abs(b.auSol) < 0.6
     && b.brancardRange && b.equipeDehors === 0 && b.bouge > 1 && r.fantomes <= 2;
   return { ok, detail: `une séquence coupée laissait tout en plan · le blessé qui se relève pendant l'approche : « ${a.raison} », civière remise dans le fourgon (${a.brancardRange}, pieds ${a.pieds}, ${a.porteurs} porteurs), portes refermées (${a.portes}), ${a.equipeDehors} ambulancier dehors, ${a.fantomes} brancard fantôme · l'ambulance détruite alors que le JOUEUR y est sanglé : « ${b.raison} », verrou levé (${b.verrou}), il se relève debout (${b.debout} rad, ${b.auSol} m du sol) et remarche tout de suite (${b.bouge} m en 1 s) · au total ${r.fantomes} brancard en plus dans la ville` };

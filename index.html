@@ -14243,6 +14243,11 @@ function musclesEnCabine(av, cacher) {
   }
 }
 const caisseFermee = c => !!c && !c.rider && !c.heli && c.kind !== 'jetski';
+// Position À L'ÉCRAN (coordonnées normalisées −1…1) d'un point au-dessus d'un avatar : c'est là
+// que deux bulles ou deux noms se recouvrent, pas dans le monde. Deux habitants à 2 m l'un de
+// l'autre mais l'un DERRIÈRE l'autre se lisaient « IneZoe_rider » (n° 9 du Joueur).
+const _ecranV = new THREE.Vector3();
+function ecranDe(av, yOff) { _ecranV.set(av.group.position.x, av.group.position.y + yOff, av.group.position.z).project(camera); return [_ecranV.x, _ecranV.y, _ecranV.z]; }
 function tickBubbles() {
   const cp = camera.position;
   const parlants = [];   // ceux dont la bulle est visible : on les empile plus bas
@@ -14252,9 +14257,10 @@ function tickBubbles() {
     const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 3.35 - cp.y, av.group.position.z - cp.z);
     if (d > 48) { av.bubble.visible = false; continue; }
     av.bubble.visible = true;
-    const h = clamp(BULLE_K * d, 0.5, 1.6);
+    // 0,5 m de haut à moins de 4 m : la bulle d'un passant qui frôle la caméra remplissait l'écran
+    const h = clamp(BULLE_K * d, 0.3, 1.6);
     av.bubble.scale.set(h * 3.2, h, 1);
-    parlants.push({ av, h });
+    parlants.push({ av, h, e: ecranDe(av, 3.35) });
   }
   // QUAND PLUSIEURS PARLENT AU MEME ENDROIT, LES BULLES SE SUPERPOSAIENT : quatre habitants
   // cote a cote et on n'en lisait qu'une, les trois autres cachees derriere. On les EMPILE
@@ -14265,7 +14271,9 @@ function tickBubbles() {
     const a = parlants[i]; let y = 3.35;
     for (let j = 0; j < i; j++) {
       const b = parlants[j];
-      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 3.2) continue;
+      const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 3.2
+        || (a.e[2] < 1 && b.e[2] < 1 && Math.abs(a.e[0] - b.e[0]) < 0.3 && Math.abs(a.e[1] - b.e[1]) < 0.28);   // ou superposées À L'ÉCRAN
+      if (!pres) continue;
       y = Math.max(y, b.av.bubble.position.y + b.h * 1.25);
     }
     a.av.bubble.position.y = y;
@@ -14282,7 +14290,7 @@ function tickBubbles() {
     const h = clamp(0.055 * d, 0.3, 0.85);
     tg.scale.set(h * 4, h, 1);
     if (tg.userData.y0 == null) tg.userData.y0 = tg.position.y;
-    nommes.push({ av, tg, h });
+    nommes.push({ av, tg, h, e: ecranDe(av, 2.5) });
   }
   // meme empilement pour les ETIQUETTES DE NOM : cinq personnages groupes et les cinq noms
   // se chevauchaient en une bouillie illisible (vu en capture)
@@ -14290,7 +14298,9 @@ function tickBubbles() {
     const a = nommes[i]; let y = a.tg.userData.y0;
     for (let j = 0; j < i; j++) {
       const b = nommes[j];
-      if (Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) > 2.2) continue;
+      const pres = Math.hypot(a.av.group.position.x - b.av.group.position.x, a.av.group.position.z - b.av.group.position.z) <= 2.2
+        || (a.e[2] < 1 && b.e[2] < 1 && Math.abs(a.e[0] - b.e[0]) < 0.16 && Math.abs(a.e[1] - b.e[1]) < 0.09);   // ou superposés À L'ÉCRAN
+      if (!pres) continue;
       y = Math.max(y, b.tg.position.y + b.h * 1.15);
     }
     a.tg.position.y = y;

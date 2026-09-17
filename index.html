@@ -18512,9 +18512,12 @@ function openQui() {
   ajoute(bots.filter(b => dist(b) < 40), '🙋 Autour de toi');
   $('ordresTitre').textContent = '📣 À qui donner un ordre ?';
   ordresRetourVisible(false);
+  // À la manette on ne « clique » pas : la croix déplace la bague, ✕ choisit (n° 74).
+  const manette = document.body.classList.contains('manette') && !document.body.classList.contains('touch');
   $('ordresSub').innerHTML = (lignes.length
-    ? 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.'
-    : 'Personne autour de toi. Approche-toi de quelqu\'un, ou écris son nom dans le chat.') + resumeMissions();
+    ? (manette ? 'Choisis quelqu\'un avec la croix, puis ✕ : tu verras tout ce que tu peux lui demander.'
+      : 'Clique sur quelqu\'un pour voir tout ce que tu peux lui demander. Tu peux aussi écrire son nom dans le chat.')
+    : 'Personne autour de toi. Approche-toi de quelqu\'un' + (manette ? '.' : ', ou écris son nom dans le chat.')) + resumeMissions();
   let html = '';
   if ((gang.membres || []).length) html += '<p class="osec">👥 Mission de groupe</p>'
     + `<button class="ocard" data-equipe="1"><span>👥</span>Choisir plusieurs hommes<i>coche qui tu envoies, vois les chances, et lance le coup</i></button>`;

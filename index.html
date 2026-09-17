@@ -5997,7 +5997,10 @@ const WORLDS = [
       plat(-13, 0.15, -13, 20, 20, 0x5cc453, { studs: false, noRoute: true }, 0.3);   // NO : foot
       plat(13, 0.15, -13, 20, 20, 0xb9c2cf, { studs: false, noRoute: true }, 0.3);    // NE : tennis
       plat(-13, 0.15, 13, 20, 20, 0x8f98ab, { studs: false, noRoute: true }, 0.3);    // SO : parking
-      plat(13, 0.15, 13, 20, 20, 0x5cc453, { studs: false, noRoute: true }, 0.3);     // SE : trampolines
+      // SE : trampolines. La pelouse s'arrête au bord du trottoir (1,8 m de chaque côté) : à
+      // 20 m de large elle recouvrait les trottoirs et leur bordure, en vert vif à 30 cm de
+      // haut, jusqu'au bord de la chaussée (n° 20 du Joueur).
+      plat(13, 0.15, 13, 20 - 2 * TROTTOIR_L, 20 - 2 * TROTTOIR_L, 0x5cc453, { studs: false, noRoute: true }, 0.3);
       checkpoint(0, 0, 3, 1); sign(-4, 0, 5, 'Bienvenue en ville !', true);
       // ---- terrain de foot (NO) ----
       fieldLines(-13, 0.3, -13, 18, 12, (g, W, H) => { g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(6, 6, W - 12, H - 12); g.beginPath(); g.moveTo(W / 2, 6); g.lineTo(W / 2, H - 6); g.stroke(); g.beginPath(); g.arc(W / 2, H / 2, 40, 0, Math.PI * 2); g.stroke(); g.strokeRect(6, H * 0.28, 60, H * 0.44); g.strokeRect(W - 66, H * 0.28, 60, H * 0.44); });
@@ -6056,7 +6059,7 @@ const WORLDS = [
       // ---- parc à trampolines (SE) ----
       for (const [px, pz] of [[8, 8], [18, 8], [8, 18], [18, 18]]) bouncePad(px, 0.3, pz);
       box(13, 4.3, 13, 3, 8, 3, C.teal, { studs: false, noRoute: true }); coin(13, 8.3, 13); coin(12, 8.3, 14); coin(14, 8.3, 12);
-      sign(3.6, 0.3, 3.6, '🤸 Trampolines');
+      sign(5.6, 0.3, 5.6, '🤸 Trampolines');   // sur la pelouse, pas sur le trottoir
       // ---- immeubles autour de la ville ----
       const cols = [0xff8f3a, 0x4f8dff, 0xb57cff, 0x35d0e6, 0xff5c5c, 0xffd23f, 0x5cc453, 0xc9ced8];
       let k = 0;

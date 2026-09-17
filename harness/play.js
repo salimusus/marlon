@@ -17478,3 +17478,187 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
     && r.dMin > plancher && r.dMax < 17 && basses <= 2 && r.horsCadre === 0;
   return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m depuis le centre ; avant, le chef relevait 8 · 12 · 9,9 · 6,1 · 8,5 · 4,6 · 1,7 · 1,5 · 3,3 · 2,8 · 5,8 · 3,8 m), ${basses} seconde(s) sur douze sous la distance confortable de ${confort.toFixed(1)} m, et c'est un vrai mur qui la justifie (plus gros ecart d'une seconde a l'autre : ${r.sautMax} m ; au plus court, ce qui barrait la perche mesurait ${r.coupable ? r.coupable.w + ' × ' + r.coupable.d + ' × ' + r.coupable.h + ' m a ' + r.coupable.a + ' m' : 'rien'}), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
 });
+// ================= POSTE LOCOMOTION (round 72) =================
+// Le joueur : « améliore la rapidité de marche et la course du joueur, et améliore le mouvement
+// de (on a l'impression qu'il glisse) ». Le glissement a été MESURÉ avant correction : à
+// 5,6 m/s le corps avançait de 1,87 m par pas pendant que le pied « posé » n'en balayait que
+// 0,66 — 1,21 m de patinage par pas, 1,25 m en course.
+//
+// Note de méthode : l'animation de l'avatar du joueur vit dans la boucle d'AFFICHAGE, pas dans
+// step(). Les tests rejouent donc à la main les lignes de frame() qui posent l'avatar
+// (position, rattrapage de marche, cap, animateRig, décalages verticaux) — sinon rien ne
+// bougerait au banc, où le rendu tourne à une image par seconde. Les scripts sont des CHAÎNES
+// (IIFE évaluées dans la page) parce qu'ils partagent ce préambule.
+const LOCO_AIDE = `
+  const DTL = 1 / 60, SL = 0.36, VL = new __G.THREE.Vector3();
+  const locoSemelle = lg => { lg.semelle.getWorldPosition(VL); return { x: VL.x, y: VL.y - 0.12 * SL, z: VL.z }; };
+  const locoPose = t => {
+    const G = __G, P = G.P, me = G.me;
+    me.group.position.copy(P.pos);
+    // meme rattrapage de hauteur que frame() : la physique monte une marche d'un bloc,
+    // l'affichage la monte en un dixieme de seconde
+    if (P.yVu == null || !P.grounded || Math.abs(P.pos.y - P.yVu) > 0.75) P.yVu = P.pos.y;
+    else { const ec = P.pos.y - P.yVu, q = Math.max(1.8, Math.abs(ec) * 9) * DTL; P.yVu += Math.max(-q, Math.min(q, ec)); }
+    me.group.position.y = P.yVu;
+    const sp = Math.hypot(P.vel.x, P.vel.z);
+    if (sp > 0.6) { const c = Math.atan2(P.vel.x, P.vel.z); let d = c - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d)); P.facing += d * Math.min(1, DTL * 14); }
+    me.group.rotation.y = P.facing; me.group.rotation.x = 0;
+    G.animateRig(me.rig, sp > 0.6 ? 'walk' : 'idle', sp, DTL, t);
+    me.group.rotation.x = me.rig.inclin || 0;
+    me.group.position.y -= (me.rig.baisse || 0) + (me.rig.bassin || 0);
+    me.group.updateMatrixWorld(true);
+    return sp;
+  };
+  // longue rue nord-sud de 197 m (x = 104) : de quoi courir quatre secondes en ligne droite
+  const locoDepart = course => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 104, y: 1, z: -50, hour: 12 });
+    G.keys.clear(); P.vel.set(0, 0, 0); P.facing = 0; G.cam.yaw = Math.PI;
+    P.run = !!course; P.energie = 100; P.essouffle = false; G.keys.add('KeyW');
+  };
+`;
+
+test('le pied qui porte le poids ne glisse plus : moins de 6 cm par pas, a la marche comme a la course', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P, me = G.me;
+    const essai = course => {
+      locoDepart(course);
+      let t = 0;
+      for (let i = 0; i < 120; i++) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); }   // mise en vitesse
+      let L = locoSemelle(me.rig.legL), R = locoSemelle(me.rig.legR);
+      let glisse = 0, pire = 0, pas = 0, dernier = null, bas = 9, haut = -9;
+      const x0 = P.pos.x, z0 = P.pos.z;
+      for (let i = 0; i < 240; i++) {
+        P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t);
+        const nL = locoSemelle(me.rig.legL), nR = locoSemelle(me.rig.legR);
+        const dL = Math.hypot(nL.x - L.x, nL.z - L.z), dR = Math.hypot(nR.x - R.x, nR.z - R.z);
+        const gauche = nL.y <= nR.y;
+        // le pied PORTEUR : le plus bas des deux, et a moins de 2,5 cm du sol
+        if (Math.min(nL.y, nR.y) < P.pos.y + 0.025) {
+          const d = gauche ? dL : dR;
+          glisse += d; if (d > pire) pire = d;
+          const q = gauche ? 'L' : 'R';
+          if (dernier && q !== dernier) pas++;
+          dernier = q;
+        }
+        const h = me.group.position.y - P.pos.y; if (h < bas) bas = h; if (h > haut) haut = h;
+        L = nL; R = nR;
+      }
+      const dist = Math.hypot(P.pos.x - x0, P.pos.z - z0);
+      return { v: +(dist / 4).toFixed(2), pas, cadence: +(pas / 4).toFixed(2),
+        foulee: +(pas ? dist / pas : 0).toFixed(2), glisse: +(pas ? glisse / pas * 100 : 99).toFixed(2),
+        pire: +(pire * 100).toFixed(2), bassin: +((haut - bas) * 100).toFixed(1),
+        buste: +((me.rig.inclin || 0) * 180 / Math.PI).toFixed(1) };
+    };
+    return { marche: essai(false), course: essai(true) };
+  })()`);
+  const m = r.marche, c = r.course;
+  const ok = m.pas > 10 && c.pas > 10 && m.glisse < 6 && c.glisse < 6 && m.pire < 6 && c.pire < 6
+    && m.bassin > 4 && c.bassin > 4 && c.foulee > m.foulee && c.buste > m.buste;
+  return { ok, detail: `glissement du pied porteur, par pas : marche ${m.glisse} cm (121 cm avant ce round), course ${c.glisse} cm (125 cm avant) · pire image ${m.pire} / ${c.pire} cm · la foulee S'ALLONGE avec la vitesse : ${m.foulee} m a ${m.v} m/s (${m.cadence} pas/s), ${c.foulee} m a ${c.v} m/s (${c.cadence} pas/s) · le bassin monte et descend de ${m.bassin} / ${c.bassin} cm (0 cm avant) et le buste se penche de ${m.buste}° a la marche, ${c.buste}° en course` };
+});
+
+test('la marche monte a 6,2 m/s et la course a 9,6 m/s, et l\'endurance ne se vide pas pour autant', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P;
+    const vitesse = course => {
+      locoDepart(course);
+      for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); }
+      let s = 0;
+      for (let i = 0; i < 60; i++) { P.energie = 100; G.step(DTL, true); s += Math.hypot(P.vel.x, P.vel.z); }
+      return +(s / 60).toFixed(2);
+    };
+    const marche = vitesse(false), course = vitesse(true);
+    // l'endurance : combien de temps on tient a fond, et combien de metres ca represente
+    locoDepart(true); P.energie = 100;
+    let n = 0; while (n < 3000 && P.energie > 0) { G.step(DTL, true); n++; }
+    const tenue = +(n * DTL).toFixed(1);
+    // relacher la course (la bascule L3) ramene bien a la vitesse de marche
+    locoDepart(true);
+    for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); }
+    P.run = false;
+    for (let i = 0; i < 90; i++) { P.energie = 100; G.step(DTL, true); }
+    const retourMarche = +Math.hypot(P.vel.x, P.vel.z).toFixed(2);
+    return { marche, course, tenue, retourMarche, SPEED: G.SPEED, COURSE: G.COURSE };
+  })()`);
+  const ok = Math.abs(r.marche - 6.2) < 0.25 && Math.abs(r.course - 9.6) < 0.35
+    && r.course - r.marche > 3 && Math.abs(r.retourMarche - r.marche) < 0.25
+    && r.tenue > 5 && r.tenue < 12;
+  return { ok, detail: `marche ${r.marche} m/s (5,60 avant ce round, ${(r.marche * 3.6).toFixed(0)} km/h), course ${r.course} m/s (7,28 avant, ${(r.course * 3.6).toFixed(0)} km/h) — ${(r.course - r.marche).toFixed(2)} m/s d'ecart, on VOIT la difference · constantes SPEED=${r.SPEED}, COURSE=${r.COURSE} · on coupe la course (bascule L3, inchangee) et on retombe a ${r.retourMarche} m/s · l'endurance tient ${r.tenue} s a fond, soit ${Math.round(r.tenue * r.course)} m : elle ne se vide pas en deux secondes malgre la course plus rapide` };
+});
+
+test('le depart et l\'arret prennent une duree bornee, et le demi-tour fait pivoter le corps', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P;
+    const rampe = course => {
+      locoDepart(course);
+      const v = [];
+      for (let i = 0; i < 240; i++) { P.energie = 100; G.step(DTL, true); v.push(Math.hypot(P.vel.x, P.vel.z)); }
+      const vmax = Math.max.apply(null, v);
+      const iDep = v.findIndex(s => s >= vmax * 0.95);
+      G.keys.delete('KeyW');
+      const w = [];
+      for (let i = 0; i < 240; i++) { G.step(DTL, true); w.push(Math.hypot(P.vel.x, P.vel.z)); }
+      let iArr = w.findIndex(s => s < 0.15); if (iArr < 0) iArr = 239;
+      // reste-t-il une traine ? la vitesse doit etre EXACTEMENT nulle une fois arrete
+      return { vmax: +vmax.toFixed(2), depart: +((iDep + 1) * DTL).toFixed(3),
+        arret: +((iArr + 1) * DTL).toFixed(3), traine: +w[w.length - 1].toFixed(4) };
+    };
+    const marche = rampe(false), course = rampe(true);
+    // demi-tour : on court plein sud (+z), on demande plein nord, on compte le temps de bascule
+    locoDepart(true);
+    let t = 0;
+    for (let i = 0; i < 150; i++) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); }
+    const vAvant = +Math.hypot(P.vel.x, P.vel.z).toFixed(2);
+    G.keys.delete('KeyW'); G.keys.add('KeyS');
+    let n = 0;
+    while (n < 240) { P.energie = 100; G.step(DTL, true); t += DTL; locoPose(t); n++; if (P.vel.z < -vAvant * 0.8) break; }
+    const ecart = Math.abs(Math.atan2(Math.sin(P.facing - Math.PI), Math.cos(P.facing - Math.PI)));
+    return { marche, course, vAvant, demiTour: +(n * DTL).toFixed(3), capEcartDeg: +(ecart * 180 / Math.PI).toFixed(1) };
+  })()`);
+  const ok = r.marche.depart > 0.08 && r.marche.depart < 0.45 && r.course.depart > 0.1 && r.course.depart < 0.55
+    && r.marche.arret < 0.25 && r.course.arret < 0.35 && r.marche.traine === 0 && r.course.traine === 0
+    && r.demiTour < 0.9 && r.capEcartDeg < 25;
+  return { ok, detail: `depart (0 → 95 % de la vitesse) : ${r.marche.depart} s a la marche, ${r.course.depart} s en course — franc sans etre instantane · arret COMPLET : ${r.marche.arret} s et ${r.course.arret} s (0,27 s avant ce round) et la vitesse finit a ${r.marche.traine} m/s : plus aucune traine, c'est elle qui donnait l'impression de glisser au relachement · demi-tour a pleine course (${r.vAvant} m/s) : ${r.demiTour} s pour repartir en sens inverse, le corps a pivote et ne reste qu'a ${r.capEcartDeg}° du cap demande` };
+});
+
+test('monter une marche ne fait pas tressauter l\'avatar', async p => {
+  const r = await p.evaluate('(() => {' + LOCO_AIDE + `
+    const G = __G, P = G.P, me = G.me;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // on cherche une VRAIE marche franchissable dans la ville : un solide large, pose au sol,
+    // dont le dessus est entre 15 et 56 cm — un perron, une estrade, une bordure.
+    const cands = G.solids.filter(o => { const top = o.y + o.h / 2; return top > 0.15 && top < 0.56 && o.w > 2.5 && o.d > 2.5 && Math.abs(o.y - o.h / 2) < 0.3; })
+      .sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z)).slice(0, 10);
+    let res = null;
+    for (const o of cands) {
+      for (const d of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]]) {
+        const top = o.y + o.h / 2;
+        const x = o.x - d[0] * (o.w / 2 + 2.2), z = o.z - d[1] * (o.d / 2 + 2.2);
+        __SHOT.go({ world: 4, x: x, y: top + 1.5, z: z, hour: 12 });
+        G.keys.clear(); P.vel.set(0, 0, 0); P.run = false; P.facing = d[2]; G.cam.yaw = d[2] + Math.PI;
+        for (let i = 0; i < 40; i++) G.step(DTL, true);   // il retombe sur ses pieds
+        if (Math.abs(P.pos.y - top) < 0.1) continue;      // deja sur la marche : rien a monter
+        const y0 = P.pos.y;
+        G.keys.add('KeyW');
+        let t = 0, sautPhys = 0, sautVu = 0, monte = 0, yv = null;
+        for (let i = 0; i < 110; i++) {
+          const yA = P.pos.y;
+          G.step(DTL, true); t += DTL; locoPose(t);
+          sautPhys = Math.max(sautPhys, P.pos.y - yA);
+          if (yv != null) sautVu = Math.max(sautVu, me.group.position.y - yv);
+          yv = me.group.position.y;
+          monte = Math.max(monte, P.pos.y - y0);
+        }
+        if (sautPhys > 0.12) { res = { sautPhysCm: +(sautPhys * 100).toFixed(1), sautVuCm: +(sautVu * 100).toFixed(1), monteeCm: +(monte * 100).toFixed(1), marcheCm: +(top * 100).toFixed(0) }; break; }
+      }
+      if (res) break;
+    }
+    return { res: res, cands: cands.length };
+  })()`);
+  const d = r.res;
+  const ok = !!d && d.sautPhysCm > 12 && d.sautVuCm < 8 && d.monteeCm > 10;
+  return { ok, detail: d
+    ? `marche de ${d.marcheCm} cm : la physique fait bondir le joueur de ${d.sautPhysCm} cm en UNE image (c'est moveAxis, on n'y touche pas, la montee doit rester franche), mais l'avatar affiche ne monte jamais de plus de ${d.sautVuCm} cm par image — le rattrapage est etale sur un dixieme de seconde et l'avatar ne tressaute plus. Montee totale ${d.monteeCm} cm.`
+    : `aucune marche franchissable trouvee parmi les ${r.cands} candidates : le test n'a rien pu mesurer` };
+});

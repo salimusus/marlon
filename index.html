@@ -23575,10 +23575,11 @@ function padStick(x, y, morte = 0.08) {
 // LE STICK DROIT A SA PROPRE COURBE (round 71). Marcher et VISER ne demandent pas la meme
 // reponse : en marchant on veut la vitesse tout de suite, en visant on veut du DOSAGE. La
 // courbe de marche (exposant 1,2) rendait deja 43 % de la vitesse a mi-course : la camera
-// partait trop vite et l'on n'arrivait jamais a cadrer. Ici : zone morte ronde de 6 %
-// (au-dessus de la derive d'une DualSense), puis 35 % de lineaire — le premier millimetre
-// repond — et 65 % de carre, qui garde la grande vitesse pour le bord. A mi-course on tourne
-// a 28 % de la vitesse maximale, au bord a 100 %, sans marche d'escalier nulle part.
+// partait trop vite et l'on n'arrivait jamais a cadrer. Ici : zone morte ronde de 7,5 %
+// (au-dessus de la derive d'une DualSense usee), puis 35 % de lineaire — le premier
+// millimetre repond — et 65 % de carre, qui garde la grande vitesse pour le bord. MESURE :
+// 5,9 °/s a 12 % de course, 94 °/s a mi-course (30 % du maximum, contre 43 % avant),
+// 315 °/s au bord, et jamais plus de 27 °/s d'ecart d'une graduation de 5 % a la suivante.
 function padVisee(x, y) {
   const d = Math.hypot(x, y);
   if (d < CAM_MORTE) return [0, 0];
@@ -24122,8 +24123,9 @@ let loopErr = 0;
 // la loi de distance dans chaque situation.
 // LE REPLACEMENT AUTOMATIQUE DERRIERE LE JOUEUR (mode « rotation », le reglage par defaut).
 // Il vivait au milieu de frame() : impossible a mesurer sans attendre de VRAIES images (une
-// par seconde sur le banc). Isole ici — et appele par camPerche, donc exactement au meme
-// moment qu'avant — un test peut compter sa vitesse image par image.
+// par seconde sur le banc). Isole ici, mais toujours appele par frame() AU MEME ENDROIT
+// qu'avant (l'appeler depuis camPerche faisait deriver le cap des tests qui font tourner la
+// perche a la main) : un test peut desormais compter sa vitesse image par image.
 function camRecentre(dt, aiming) {
   // A QUELLE VITESSE LE PERSONNAGE PIVOTE-T-IL ? Le plafond ci-dessous sert a amortir un
   // RETOUR (« j'ai regarde derriere moi au stick droit, l'image revient »). Il ne doit surtout
@@ -24181,8 +24183,9 @@ function camPerche(dt, aiming) {
     // `camera.position.y >= 0.4` la faisait alors ramper — c'est pour ça que la butée haute
     // était bloquée à -0,15 rad et qu'on ne voyait jamais le ciel. On fait ce que font les
     // jeux d'action : quand le joueur lève les yeux, la perche se RACCOURCIT et le point visé
-    // MONTE. À -0,5 rad la caméra est à 2,6 m derrière, 77 cm au-dessus du sol, et l'on voit
-    // le haut des tours. Pas au volant (la voiture a sa propre loi de distance).
+    // MONTE. Mesuré : à -0,5 rad la caméra est à 1,78 m derrière et 1,53 m AU-DESSUS du sol, le
+    // regard pointe à 0,48 de vertical (29° au-dessus de l'horizon) et l'on voit le haut des
+    // tours. Pas au volant (la voiture a sa propre loi de distance).
     if (!veh && !P.zoom && !cam.fixe && cam.pitch < 0) {
       const leve = Math.min(0.5, -cam.pitch);
       tmpV.y += leve * 1.6;
@@ -24247,8 +24250,9 @@ function camPerche(dt, aiming) {
     // voiture n'était plus qu'un point au bout de l'avenue. Cause : le point visé rattrape le
     // véhicule d'un pourcentage PAR IMAGE ; dès qu'une image dure longtemps (télévision, ville
     // chargée, banc d'essai à 1 image/s) ou qu'un autre système avance la voiture sans repasser
-    // par la caméra, le retard s'accumule sans aucune borne. On le plafonne : deux mètres et
-    // demi, la sensation de poids reste, l'emballement disparaît.
+    // par la caméra, le retard s'accumule sans aucune borne. On le plafonne à deux mètres : la
+    // sensation de poids reste, l'emballement disparaît (mesuré : 15,6 m au pire à 108 km/h,
+    // et 14,3 m même avec des images d'une demi-seconde).
     const lx = tmpV.x - cam.target.x, ly = tmpV.y - cam.target.y, lz = tmpV.z - cam.target.z;
     const laisse = Math.hypot(lx, ly, lz);
     if (laisse > CAM_LAISSE) { const k = (laisse - CAM_LAISSE) / laisse; cam.target.x += lx * k; cam.target.y += ly * k; cam.target.z += lz * k; }
@@ -24264,8 +24268,8 @@ function camPerche(dt, aiming) {
   // interdite en voiture : dos à une façade, la perche tombait à 2,2 m et l'objectif se posait
   // SUR LE TOIT — « la carrosserie remplit l'écran », le défaut mesuré par le Joueur après un
   // choc. Elle est donc autorisée au volant, mais uniquement quand la perche est vraiment
-  // bridée (moins que la distance confortable) et sans jamais dépasser 0,8 rad : la caméra
-  // prend un peu de hauteur derrière la voiture, elle ne bascule pas en vue de dessus.
+  // bridée (moins que la distance confortable) et sans jamais dépasser 1,1 rad : la caméra
+  // prend de la hauteur derrière la voiture, elle ne bascule pas en vue de dessus.
   const vehM = drive.car || (city.rideBot && city.rideBot.drive ? city.rideBot.drive.car : null);
   const monteVeh = !!drive.car && cam.dJoueur != null && cam.dJoueur < CAM_CONFORT && !drive.car.heli;
   if (running && !aiming && (!drive.car || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {

@@ -20704,7 +20704,7 @@ function vitesseRel() {
   if (!c || c.heli) return 0;
   return clamp(Math.abs(drive.speed) / ((c.spec && c.spec.max) || 26), 0, 1.2);
 }
-function reculConduite() { return vitesseRel() * 1.2; }   // la caméra recule un peu avec la vitesse (1,2 m à fond : elle reste COLLÉE à la voiture, n° 32)
+function reculConduite() { return vitesseRel() * 2.6; }   // la caméra recule avec la vitesse (2,6 m à fond) : la sensation de vitesse du test 288 ; elle part de base + 2 m au lieu de base + 4 m, donc reste plus près qu'avant (n° 32)
 function camConduite(dt) {
   const r = vitesseRel();
   // 55° à l'arrêt, jusqu'à 72° à fond : c'est ce qui donne l'impression que le décor défile

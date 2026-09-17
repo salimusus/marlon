@@ -12308,7 +12308,11 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
 test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
-    __SHOT.go({ world: 4, x: -56, y: 1, z: 66, hour: 12, frais: true });
+    // ON PART DU SEUIL, PAS DU MILIEU DE L'ATRIUM. L'ancien point de départ (-56, 66) tombe
+    // depuis le réaménagement AU BEAU MILIEU de la volée du hall : le joueur naissait dans
+    // une marche, en était éjecté, et ne pouvait plus l'aborder que par le flanc (0,95 m à
+    // franchir d'un coup). On entre maintenant comme un joueur : par la grande porte de l'est.
+    __SHOT.go({ world: 4, x: -42, y: 1, z: 70, hour: 12, frais: true });
     const bk = G.city.bank;
     if (!bk || !bk.esc || bk.esc.length < 2) return { manque: true };
     const e0 = bk.esc[0], e1 = bk.esc[1], journal = [];
@@ -12326,13 +12330,15 @@ test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async 
       G.keys.delete('ArrowUp');
       journal.push(`${G.P.pos.y.toFixed(2)} m`);
     };
-    marcher(e0.bas[0] + 0.8, e0.bas[1], 10);      // le pied de la volée du hall
-    marcher(e0.haut[0] + 1.2, e0.haut[1], 16);    // on la monte jusqu'au palier du 1ᵉʳ
+    marcher(bk.x + 6.5, bk.z, 8);                 // on franchit le seuil, dans l'axe du tapis
+    marcher(bk.x - 7, bk.z, 12);                  // le couloir ouest, libéré par les guichets
+    marcher(e0.bas[0] + 0.6, e0.bas[1], 12);      // le palier de départ de la volée du hall
+    marcher(e0.haut[0] + 1.0, e0.haut[1], 20);    // on la monte jusqu'au palier du 1ᵉʳ
     const y1 = G.P.pos.y;
     marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
-    marcher(bk.x + 6.5, e1.bas[1] - 0.8, 10);
-    marcher(e1.bas[0], e1.bas[1], 10);            // le pied de la volée du 2ᵉ
-    marcher(e1.haut[0], e1.haut[1], 18);          // et on monte aux coffres
+    marcher(bk.x + 6.5, e1.bas[1] - 0.9, 12);
+    marcher(e1.bas[0], e1.bas[1], 12);            // le pied de la volée du 2ᵉ
+    marcher(e1.haut[0], e1.haut[1], 22);          // et on monte aux coffres
     const c = (G.city.safes || [])[0];
     // hauteur et profondeur des marches : la règle des autres escaliers du jeu
     const marches = bk.esc.map(e => {

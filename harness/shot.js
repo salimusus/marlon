@@ -281,8 +281,7 @@ window.__SHOT = {
       if (typeof defi !== 'undefined') defi.on = null;
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
-    // ================= LES SERVICES DE LA VILLE : ON REND LA VILLE AU REPOS =================
-    // Tout ce qui suit repare un DRAPEAU PERSISTANT. Les services municipaux (accidents,
+    // ================= LES SERVICES DE LA VILLE : ON REND LA VILLE AU REPOS ==========    // Tout ce qui suit repare un DRAPEAU PERSISTANT. Les services municipaux (accidents,
     // police en constat, depanneuse, ambulance, pompiers, equipes de metier) posent des
     // drapeaux sur des objets qui, eux, survivent a loadWorld et meme a frais: true :
     // ils restaient donc allumes d'un test a l'autre. Dix tests de la suite tombaient ainsi
@@ -2163,6 +2162,21 @@ window.__G = {
   // ---- poste BATIMENTS (ecole : entree des classes ; banque : escalier et plan) : ajoute tes exports SOUS cette ligne ----
   classroom: typeof classroom === 'function' ? classroom : null,
   buildBank: typeof buildBank === 'function' ? buildBank : null,
+  // POSTE FLUIDITE : le cout d'une image (ajoute tes exports SOUS cette ligne)
+  TRAFIC: typeof TRAFIC !== 'undefined' ? TRAFIC : null,
+  VILLE: typeof VILLE !== 'undefined' ? VILLE : null,
+  rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
+  detailsLOD: typeof detailsLOD === 'function' ? detailsLOD : null,
+  detailsInit: typeof detailsInit === 'function' ? detailsInit : null,
+  ombresMobilesTick: typeof ombresMobilesTick === 'function' ? ombresMobilesTick : null,
+  OMBRES_MOB: typeof OMBRES_MOB !== 'undefined' ? OMBRES_MOB : null,
+  OMBRES: typeof OMBRES !== 'undefined' ? OMBRES : null,
+  DETAILS: typeof DETAILS !== 'undefined' ? DETAILS : null,
+  ARETES: typeof ARETES !== 'undefined' ? ARETES : null,
+  DETAIL_OMBRE_MOBILE: typeof DETAIL_OMBRE_MOBILE !== 'undefined' ? DETAIL_OMBRE_MOBILE : 0,
+  OMBRE_CADRE: typeof OMBRE_CADRE !== 'undefined' ? OMBRE_CADRE : 0,
+  solids: typeof solids !== 'undefined' ? solids : null,
+  worldGroup: typeof worldGroup !== 'undefined' ? worldGroup : null,
   // ---- poste DRONE & ROBOT (round 71) : ajoute tes exports SOUS cette ligne ----
   get sac() { return typeof sac !== 'undefined' ? sac : null; },
   get JOUETS() { return typeof JOUETS !== 'undefined' ? JOUETS : null; },

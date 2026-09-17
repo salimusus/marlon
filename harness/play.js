@@ -11554,12 +11554,28 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     // a la position exacte de la camera : en temps normal le tri ne se refait que tous les
     // deux metres, et on mesurerait le decor trie depuis un autre point de vue.
     image();
+    // LE RECENSEMENT DES OMBRES MOBILES EST ETALE sur une trentaine d'images (vehicules et
+    // habitants vont et viennent) : sans ce tour complet force, la liste serait a moitie
+    // remplie et le test mesurerait la moitie du budget.
+    if (G.ombresMobilesTick) for (let k = 0; k < 120; k++) G.ombresMobilesTick();
     G.detailsLOD(true);
     const avec = image();
     // le MEME instant, budget desarme : tout le decor revient, ombres portees comprises
     G.DETAILS.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
     G.ARETES.forEach(e => { e.off = false; if (e.o.layers) e.o.layers.mask = e.masque; });
     G.OMBRES.forEach(e => { e.off = false; e.o.castShadow = true; });
+    // … Y COMPRIS CELLES DES VEHICULES ET DES HABITANTS (poste FLUIDITE, round 71) : elles font
+    // partie du meme budget d'image. Sans cette ligne, elles restaient eteintes des DEUX cotes
+    // de la mesure et la part economisee tombait a 16 % — le test criait au recul alors que
+    // l'image coutait mille cinq cents appels de MOINS qu'avant.
+    // `e.ombre` : on ne rallume l'ombre que des morceaux qui en portaient une. Sans ce filtre on
+    // en donnait une a des pieces qui n'en ont jamais eu (une vitre, un phare), et le budget
+    // rearme ne pouvait plus la leur reprendre : l'image « reprise » coutait treize appels de
+    // plus que l'image « armee » et le test criait a l'instabilite.
+    (G.OMBRES_MOB || []).forEach(e => {
+      if (e.ombre) { e.off = false; e.o.castShadow = true; e.o.ombreLoin = false; }
+      if (e.offV) { e.offV = false; e.o.detailLoin = false; if (e.o.layers) e.o.layers.mask = e.masque; }
+    });
     const sans = image();
     G.detailsLOD(true);                 // on rearme, et on doit retrouver EXACTEMENT la meme image
     const repris = image();
@@ -11573,6 +11589,8 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
     const res = { avec, sans, repris, fautes,
       coupes: G.DETAILS.filter(e => e.off).length, aretes: G.ARETES.filter(e => e.off).length,
       ombres: G.OMBRES.filter(e => e.off).length,
+      ombresMob: (G.OMBRES_MOB || []).filter(e => e.off).length, nM: (G.OMBRES_MOB || []).length,
+      mobEffaces: (G.OMBRES_MOB || []).filter(e => e.offV).length,
       nD: G.DETAILS.length, nA: G.ARETES.length, nO: G.OMBRES.length,
       fin: G.DETAIL_FIN, arete: G.DETAIL_ARETE, vueOmbre: G.DETAIL_OMBRE_VUE };
     G.renderer.info.autoReset = true;
@@ -11586,7 +11604,7 @@ test('le decor lointain ne coute plus rien : contours, details et ombres s\'effa
   const ok = pc > 0.20 && r.avec.appels < 9000 && r.avec.tris < 600000 && r.fautes === 0
     && r.repris.appels === r.avec.appels
     && r.aretes > r.nA * 0.5 && r.coupes > r.nD * 0.5 && r.ombres > r.nO * 0.4;
-  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
+  return { ok, detail: `chaque objet de la scene coute UN appel de dessin, et un deuxieme s'il porte une ombre : la ville en demandait ${r.sans.appels} par image (${r.sans.tris} triangles) · on efface ce qui ne se voit plus — ${r.aretes} contours noirs sur ${r.nA} au-dela de ${r.arete} m, ${r.coupes} petits maillages sur ${r.nD} tombes sous 1/${r.fin}e de l'ecran, ${r.ombres} ombres portees sur ${r.nO} tombees sous 1/${r.vueOmbre}e — et l'image ne coute plus que ${r.avec.appels} appels (${r.avec.tris} triangles), soit ${gain} de moins (${Math.round(pc * 100)} %) · ${r.ombresMob} ombres de vehicules et d'habitants sur ${r.nM} effacees au loin, et ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines · rien de ce qui se voit n'a disparu (${r.fautes} objet de plus de 25 cm coupe a moins de 20 m, ${r.fautes} contour coupe a moins de 30 m) et le tri est stable : desarme puis rearme, on retrouve exactement ${r.repris.appels} appels` };
 });
 
 // LE GRAPHE DES VOIES NE FAIT PLUS FAIRE LE TOUR DE LA VILLE. Trois defauts mesures ce round :
@@ -17056,4 +17074,169 @@ test('emmene par un ami, la camera reste accrochee au vehicule : elle sort de la
     && r.roule.d > 8 && r.roule.d < 16.5 && r.roule.recul > 0.8 && r.roule.vRel > 0.4 && r.roule.cadre
     && r.regard.tourne > 100 && r.regard.d > 4;
   return { ok, detail: `défaut du chef : passager d'un ami, « la caméra est collée à la carrosserie, on ne voit rien » · reproduit sur sa vue (elle tombe sur le ${r.engin.kind}, ${r.engin.long} m de long) : la perche se posait à 5,27 m avec l'objectif à 6,42 m de haut et 0,75 rad de montée — la caméra AU-DESSUS du toit — et elle passait la première seconde à 1,25 m de la tôle · cause : trois endroits de camPerche demandaient « suis-je en voiture ? » chacun à sa façon et deux ne lisaient que drive.car, donc le passager recevait la montée DU PIÉTON · maintenant tout passe par vehiculeAssis() (${r.vehiculeVu}), la distance confortable suit la taille de l'engin (${r.engin.confort} m ici) et la perche est POSÉE à la montée au lieu de ramper : ${r.montee.map(v => v.i + ' img→' + v.d + ' m').join(' · ')} · au bout du compte perche ${r.chef.d} m, la carrosserie occupe ${Math.round(r.chef.tole * 100)} % de l'image (contre l'aplat plein écran de la capture), joueur dans le cadre=${r.chef.cadre}, aucun mur entre elle et lui · sur une voiture ordinaire, avenue dégagée : ${r.arret.d} m à l'arrêt sans aucune montée (${r.arret.hausse}) et ${r.roule.d} m à 12 m/s — le recul de vitesse marche ENFIN en passager (${r.roule.recul} m, vitesse ressentie ${r.roule.vRel}, elle valait 0 avant) · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lâcher la voiture (${r.regard.d} m) · (la vue du chef tombe dans un recoin, camion nez contre une façade : la perche y est bridée les premières images, c'est la géométrie du lieu, pas la règle de caméra — la voiture ordinaire, elle, se comporte exactement comme au volant)` };
+});
+
+// ================= POSTE FLUIDITE (round 71) : LE COUT D'UNE IMAGE =================
+// Le joueur : « le jeu est lent, accelere les images ». Ce qui decide du prix d'une image,
+// ce sont les APPELS DE DESSIN : un par objet pour l'image, et un DEUXIEME s'il porte une
+// ombre. Piege : la passe d'ombres n'apparait PAS dans renderer.info, parce que three.js
+// remet ses compteurs a zero APRES elle — trois mille appels par image que personne ne
+// voyait. On la compte donc a la main, en regardant qui tombe dans le cadre de la carte
+// d'ombres. Meme point de vue fixe que le test 305, et en Ultra HD (la qualite que le joueur
+// a choisie) : sans cela, selon l'orientation laissee par le test precedent, la meme place
+// demande 6 000 ou 14 000 appels et aucun plafond chiffre ne tient.
+test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucun decor ni aucun habitant disparaisse", async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
+    const avantQ = G.settings.quality;
+    G.settings.quality = 'ultra'; G.applyQuality();
+    G.camera.position.set(0, 7, 58); G.camera.lookAt(0, 2, 34); G.camera.updateMatrixWorld(true);
+    // UNE IMAGE POUR DEGOURDIR : juste apres une teleportation, les matrices du monde datent
+    // encore de l'ancienne position, et le tri par la distance se tromperait de point de vue.
+    G.renderer.render(G.scene, G.camera);
+    // le recensement des ombres mobiles est etale sur une trentaine d'images (les vehicules et
+    // les habitants vont et viennent) : on lui fait faire plusieurs tours complets
+    for (let k = 0; k < 150; k++) G.ombresMobilesTick();
+    G.detailsLOD(true);
+    G.renderer.render(G.scene, G.camera);
+    const couleur = G.renderer.info.render.calls, tris = G.renderer.info.render.triangles;
+    // LA PASSE D'OMBRES, comptee a la main : tout maillage visible, non coupe par le budget,
+    // qui porte une ombre et tombe dans le cadre de la carte d'ombres, vaut un appel.
+    const sun = G.sun, sph = new T.Sphere();
+    sun.updateMatrixWorld(); sun.target.updateMatrixWorld(); sun.shadow.updateMatrices(sun);
+    const co = sun.shadow.camera, fo = new T.Frustum(), mo = new T.Matrix4();
+    mo.multiplyMatrices(co.projectionMatrix, co.matrixWorldInverse); fo.setFromProjectionMatrix(mo);
+    const dansCadre = o => { if (!o.geometry) return false;
+      if (!o.geometry.boundingSphere && o.geometry.computeBoundingSphere) o.geometry.computeBoundingSphere();
+      if (!o.geometry.boundingSphere) return false;
+      sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld); return fo.intersectsSphere(sph); };
+    let ombre = 0, dessines = 0;
+    const fc = new T.Frustum(), mc = new T.Matrix4();
+    mc.multiplyMatrices(G.camera.projectionMatrix, G.camera.matrixWorldInverse); fc.setFromProjectionMatrix(mc);
+    G.scene.traverse(o => {
+      if (!o.visible || !o.isMesh || !o.geometry) return;
+      if (o.layers && o.layers.mask === 0) return;
+      if (o.castShadow && dansCadre(o)) ombre++;
+      if (!o.geometry.boundingSphere) return;
+      sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
+      if (o.frustumCulled === false || fc.intersectsSphere(sph)) dessines++;
+    });
+    // RIEN N'A DISPARU. Trois garanties, chacune sur un point ou une bavure se verrait :
+    //  1. le decor proche : aucun maillage de plus de 25 cm coupe a moins de 20 m ;
+    //  2. l'avatar du joueur : il garde TOUTES ses ombres, toujours (c'est le seul personnage
+    //     qu'on regarde de pres, il est exclu du budget) ;
+    //  3. les habitants proches : a moins de dix metres, aucune de leurs ombres n'est eteinte.
+    const cam = G.camera.position;
+    const loin = o => { const m = o.matrixWorld.elements; return Math.hypot(m[12] - cam.x, m[13] - cam.y, m[14] - cam.z); };
+    const fautesDecor = G.DETAILS.filter(e => e.off && e.r > 0.25 && loin(e.o) < 20).length;
+    let joueurEteint = 0;
+    if (G.me && G.me.group) G.me.group.traverse(o => { if (o.isMesh && o.ombreLoin) joueurEteint++; });
+    // 3. RIEN DE PROCHE NE PERD SON OMBRE. La regle coupe a 90 fois le rayon du morceau, et le
+    //    plus petit morceau d'un personnage fait 9 cm de rayon : sous 8 m de la camera, aucune
+    //    ombre ne doit donc jamais s'eteindre. Si ce compte bouge, c'est que le seuil a ete
+    //    baisse et que le joueur verrait des morceaux perdre leur ombre sous son nez.
+    const procheEteints = G.OMBRES_MOB.filter(e => e.off && loin(e.o) < 8).length;
+    // 4. RIEN DE PROCHE NE DISPARAIT NON PLUS : un morceau de vehicule ou d'habitant n'est
+    //    efface qu'au-dela de douze metres ET sous 1/300e de l'ecran. Ce compte reste a zero.
+    const procheEfface = G.OMBRES_MOB.filter(e => e.offV && loin(e.o) < 12).length;
+    let botsProchesEteints = 0, botsProches = 0;
+    for (const b of G.bots) {
+      if (!b.av || !b.av.group) continue;
+      const d = Math.hypot(b.av.group.position.x - cam.x, b.av.group.position.z - cam.z);
+      if (d > 12) continue;
+      botsProches++;
+      b.av.group.traverse(o => { if (o.isMesh && o.ombreLoin) botsProchesEteints++; });
+    }
+    // LE COUT DU CODE DE JEU. La circulation tourne a 60 pas par seconde, la vie de la ville
+    // aussi : deux pas de simulation (1/120 s) pour un tour. C'est ce qui a divise par deux le
+    // travail de cityStep — si quelqu'un remet la circulation a 120 Hz, ce compte le dira.
+    const t0 = G.TRAFIC ? G.TRAFIC.tours : -1, v0 = G.VILLE ? G.VILLE.tours : -1;
+    for (let k = 0; k < 120; k++) G.step(1 / 120, true);
+    const toursTrafic = G.TRAFIC ? G.TRAFIC.tours - t0 : -1, toursVille = G.VILLE ? G.VILLE.tours - v0 : -1;
+    G.settings.quality = avantQ; G.applyQuality();
+    return { couleur, ombre, total: couleur + ombre, tris, dessines,
+      fautesDecor, joueurEteint, procheEteints, procheEfface, botsProches, botsProchesEteints, toursTrafic, toursVille,
+      mobEffaces: G.OMBRES_MOB.filter(e => e.offV).length,
+      mob: G.OMBRES_MOB.length, mobEteints: G.OMBRES_MOB.filter(e => e.off).length,
+      geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures,
+      prog: G.renderer.info.programs ? G.renderer.info.programs.length : -1 };
+  });
+  // PLAFONDS. Mesure A/B a ce point de vue exact, dans le meme navigateur, avant / apres le
+  // travail de ce round :
+  //   appels pour l'image     4 294 → 3 603
+  //   appels pour les ombres  3 732 → 1 123
+  //   TOTAL                   8 032 → 4 726  (−41 %)
+  //   triangles             199 117 → 133 229
+  //   maillages dessines      5 253 → 3 612  (les morceaux retires font tous moins de 1/300e
+  //                                           de l'ecran, soit moins de six pixels de haut)
+  // Les plafonds laissent de la marge pour que la ville puisse encore grandir, mais pas assez
+  // pour revenir en arriere.
+  const ok = r.total < 5600 && r.ombre < 1900 && r.couleur < 4400
+    && r.dessines > 2800 && r.fautesDecor === 0 && r.joueurEteint === 0 && r.procheEteints === 0
+    && r.procheEfface === 0 && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60;
+  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · ${r.mobEffaces} de leurs morceaux tombes sous 1/300e de l'ecran ne sont plus dessines, aucun a moins de 12 m (${r.procheEfface}) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
+});
+
+// POSTE FLUIDITE (round 71). Les quatre reglages de qualite doivent faire EXACTEMENT ce que
+// leur nom promet, et surtout ne rien garder de ce qu'ils annoncent avoir eteint : en
+// « basse », le drapeau `rendu.ombres` restait a VRAI (applyQuality eteint les ombres, puis
+// ombresQualite(0) les rallume pour le palier du haut, et la garde ne regardait que
+// l'argument) et la carte d'ombres de 4096 × 4096 restait allouee — 64 Mo de memoire graphique
+// gardes pour rien sur la machine la plus faible, celle qui a justement choisi « basse ».
+test('les quatre reglages de qualite font ce qu\'ils disent, et « basse » libere vraiment la carte d\'ombres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, garderQualite: true });
+    const avant = G.settings.quality;
+    const etat = q => { G.settings.quality = q; G.applyQuality(); G.renderer.render(G.scene, G.camera);
+      return { n: G.QUALITES[q].n, ratio: +G.ratioQualite().toFixed(2), plafond: G.plafondPixels(),
+        post: !!G.post.on, halo: !!G.post.halo, drapeau: !!G.rendu.ombres, ombres: !!G.sun.castShadow,
+        carte: !!G.sun.shadow.map }; };
+    const ultra = etat('ultra'), haute = etat('high'), perf = etat('dlss'), basse = etat('low'), retour = etat('high');
+    // les paliers de fluidite : sur une tele on lache les OMBRES d'abord et la resolution ne
+    // descend jamais sous 78 % ; sur ordinateur c'est la carte d'ombres qui maigrit d'abord
+    const pc = G.paliersActifs();
+    G.diffusion.on = true; const tv = G.paliersActifs().slice(); G.diffusion.on = false;
+    G.settings.quality = avant; G.applyQuality();
+    return { ultra, haute, perf, basse, retour, plafondTV: G.PLAFOND_TV,
+      pcPremier: pc[0], pcDernier: pc[pc.length - 1], tvPremier: tv[0], tvDernier: tv[tv.length - 1],
+      ultraSurech: G.QUALITES.ultra.ratio(1), ultraPlafond: G.QUALITES.ultra.plafond };
+  });
+  // DECISION DU JOUEUR, on n'y touche pas : Ultra HD = surechantillonnage 2x, plafond 5120.
+  const ok = r.ultraSurech === 2 && r.ultraPlafond === 5120 && r.ultra.halo && r.ultra.post
+    && r.haute.post && !r.haute.halo && r.perf.ratio < 0.7
+    && !r.basse.post && !r.basse.ombres && !r.basse.drapeau && !r.basse.carte
+    && r.retour.ombres && r.retour.carte
+    && r.tvPremier.ombre < 1 && r.tvDernier.ech >= 0.78 && r.pcPremier.ech === 1 && r.pcDernier.ombre === 0;
+  return { ok, detail: `Ultra HD : surechantillonnage ${r.ultraSurech}x, plafond ${r.ultraPlafond} px, nettete + halo (decision du joueur, intacte) · haute : passe de nettete sans halo · ${r.perf.n} : rendu a ${r.perf.ratio} de la resolution · basse : pas de passe de nettete, pas d'ombres (drapeau=${r.basse.drapeau}) et la carte d'ombres est LIBEREE (allouee=${r.basse.carte}, elle l'etait encore avant ce round) · on repasse en haute et l'ombre revient (${r.retour.ombres}, carte=${r.retour.carte}) · paliers de fluidite : sur ordinateur on commence par diviser la carte d'ombres (echelle ${r.pcPremier.ech}) et on finit sans ombres, sur tele on lache l'ombre des le premier palier (ombre ${r.tvPremier.ombre}) et la resolution ne descend jamais sous ${r.tvDernier.ech}` };
+});
+
+// POSTE FLUIDITE (round 71). La mer ondulait meme a deux cents metres de la plage : deplacer
+// les 5 917 points de la nappe PUIS refaire toutes ses normales coutait 9 % du temps de calcul
+// d'une image, en permanence, alors que le joueur est a l'autre bout de la ville. Le clapot
+// fait dix-sept centimetres : au-dela de quatre-vingt-dix metres du rivage, personne ne peut
+// voir qu'il s'est arrete. Ce test garantit les deux moities de la promesse : elle ondule quand
+// on est dans les parages, et elle se tait quand on n'y est plus.
+test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout de la ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const bouge = () => {
+      const pos = G.city.seaMesh.geometry.attributes.position;
+      const a = []; for (let i = 0; i < pos.count; i += 97) a.push(pos.getY(i));
+      for (let k = 0; k < 30; k++) G.step(1 / 120, true);
+      let d = 0, j = 0; for (let i = 0; i < pos.count; i += 97) d = Math.max(d, Math.abs(pos.getY(i) - a[j++]));
+      return +d.toFixed(4);
+    };
+    __SHOT.go({ world: 4, x: 150, y: 2, z: 30, hour: 12 }); const surLEau = bouge();
+    __SHOT.go({ world: 4, x: 115, y: 1, z: 30, hour: 12 }); const rivage = bouge();
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 30, hour: 12 });  const aSoixante = bouge();
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });    const enVille = bouge();
+    __SHOT.go({ world: 4, x: 115, y: 1, z: 30, hour: 12 }); const retour = bouge();
+    const b = G.city.seaMesh.userData.boite;
+    return { surLEau, rivage, aSoixante, enVille, retour, points: G.city.seaMesh.geometry.attributes.position.count,
+      boite: b ? [Math.round(b.min.x), Math.round(b.max.x), Math.round(b.min.z), Math.round(b.max.z)] : null };
+  });
+  const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
+  return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
 });

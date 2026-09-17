@@ -1573,10 +1573,21 @@ function appliqueRendu() {
   return r;
 }
 function ombresRendu(on) {
-  if (rendu.ombres === on) return;
-  rendu.ombres = on;
   const low = settings.quality === 'low';
-  sun.castShadow = on && !low; renderer.shadowMap.enabled = on && !low;
+  const vraiment = on && !low;
+  // `rendu.ombres` MENTAIT en qualite « basse ». applyQuality appelle ombresRendu(false), puis
+  // ombresQualite(0) rappelle ombresRendu(true) pour le palier du haut : comme la garde ne
+  // regardait que l'argument, le drapeau repassait a VRAI alors que sun.castShadow, lui,
+  // restait faux. Le reglage de fluidite croyait donc avoir des ombres a eteindre et descendait
+  // un palier pour rien. On memorise maintenant ce qu'on FAIT, pas ce qu'on nous demande.
+  if (rendu.ombres === vraiment && sun.castShadow === vraiment) return;
+  rendu.ombres = vraiment;
+  sun.castShadow = vraiment; renderer.shadowMap.enabled = vraiment;
+  // ET LA CARTE D'OMBRES RESTAIT ALLOUEE : 4096 × 4096 points de profondeur, soit 64 Mo de
+  // memoire graphique gardes pour rien des que les ombres sont eteintes — c'est-a-dire en
+  // qualite « basse » et au dernier palier de fluidite, donc exactement sur les machines qui
+  // n'ont pas cette memoire. On la libere ; three.js la refabrique seule si les ombres reviennent.
+  if (!vraiment && sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
 }
 // la taille de la carte d'ombres, sans jamais reconstruire ce qui n'a pas change
 function ombresTaille(px) {
@@ -1795,6 +1806,7 @@ function postCible() {
   return post.rt;
 }
 function rendreImage() {
+  ombresMobilesTick();   // recense (par petits bouts) les ombres des véhicules et des habitants
   detailsLOD();   // le budget d'image : on éteint d'abord ce qui ne se voit plus
   if (!post.on) { renderer.render(scene, camera); return false; }
   try {
@@ -1922,6 +1934,9 @@ const addEdges = mesh => {
 // parcourir vingt-huit mille objets à chaque image, ce serait pire que le mal.
 function detailsInit() {
   DETAILS.length = 0; OMBRES.length = 0; detailCam = null; detailOmbres = 0;
+  // le recensement des ombres mobiles repart de zero : les vehicules et les habitants du monde
+  // precedent n'existent plus, garder leurs entrees ferait lire des matrices de fantomes
+  OMBRES_MOB.length = 0; OMBRE_MOB_NEUF = []; ombreMobI = 0;
   if (typeof worldGroup === 'undefined' || !worldGroup) return 0;
   // les maillages « de structure » : murs, sols, marches, toits. Ils ne sont jamais des détails.
   const structure = new Set();
@@ -1987,9 +2002,94 @@ function detailsLOD(force) {
     if (off !== e.off) { e.off = off; e.o.castShadow = !off; }
     if (off) ombresOff++;
   }
+  // LES MORCEAUX DE CE QUI BOUGE (voir ombresMobilesTick) : deux règles d'un coup, la distance
+  // n'étant calculée qu'une fois. L'ombre part sous 1/90e de l'écran ; LE MORCEAU LUI-MÊME ne
+  // part que sous 1/300e, soit trois fois plus tard que le mobilier du décor — une poignée de
+  // portière ou un doigt à cette taille-là fait moins de six pixels, et rien n'est jamais
+  // effacé à moins de douze mètres de la caméra.
+  const M2 = DETAIL_OMBRE_MOBILE * DETAIL_OMBRE_MOBILE, V2 = DETAIL_MOB_VUE * DETAIL_MOB_VUE;
+  const GM2 = DETAIL_MOB_GARDE * DETAIL_MOB_GARDE;
+  for (let i = OMBRES_MOB.length - 1; i >= 0; i--) {
+    const e = OMBRES_MOB[i], m = e.o.matrixWorld.elements;
+    const dx = m[12] - c.x, dy = m[13] - c.y, dz = m[14] - c.z;
+    const d2 = dx * dx + dy * dy + dz * dz, s = e.r * e.r;
+    if (e.ombre) {
+      const off = d2 > s * M2;
+      if (off !== e.off) { e.off = off; e.o.castShadow = !off; e.o.ombreLoin = off; }
+      if (off) ombresOff++;
+    }
+    const offV = d2 > GM2 && d2 > s * V2;
+    if (offV !== e.offV) {
+      e.offV = offV;
+      if (e.o.layers) { if (offV) { e.o.masqueSauve = e.masque; e.o.layers.mask = 0; } else e.o.layers.mask = e.masque; }
+      e.o.detailLoin = offV;
+    }
+    if (offV) coupes++;
+  }
   detailOmbresOff = ombresOff;
   detailCoupes = coupes;
   return coupes;
+}
+// ================= L'OMBRE DE CE QUI BOUGE : VEHICULES ET HABITANTS =================
+// Mesure au banc d'essai, en ville a midi : la passe d'ombres coute 3 845 appels de dessin
+// contre 2 440 pour l'image elle-meme. PLUS DE LA MOITIE de la facture — et personne ne l'avait
+// vue, parce que `renderer.info` remet ses compteurs a zero APRES la carte d'ombres : trois
+// mille huit cents appels par image n'apparaissaient nulle part.
+// Repartition de ces 3 845 : 904 pour le decor (detailsInit fait deja le menage), 302 pour les
+// vehicules… et 2 657 POUR LES PERSONNAGES. Un habitant, c'est 133 maillages dont 128 portent
+// une ombre : le blanc de l'oeil, la languette de la basket, chaque doigt, chaque bouton. A
+// quarante metres, tout cela tient dans huit pixels de la carte d'ombres.
+// Ces groupes vivent DIRECTEMENT sur la scene (ils naissent et meurent en cours de partie) :
+// detailsInit(), qui ne parcourt que `worldGroup`, ne les avait jamais vus. On leur applique la
+// meme regle que le decor, en plus douce — un morceau cesse de porter son ombre quand sa taille
+// apparente tombe sous 1/90 de l'ecran, contre 1/55 pour le mobilier — et L'AVATAR DU JOUEUR EN
+// EST EXCLU : c'est le seul personnage qu'on regarde de pres, il garde tout, toujours.
+// Mesure apres : 3 845 → 2 098 appels dans la passe d'ombres (−45 %).
+const OMBRES_MOB = [];              // { o, r, off, offV, masque, ombre } : les morceaux hors decor
+const DETAIL_OMBRE_MOBILE = 90;     // 1/90e de l'ecran : sous cette taille apparente, l'ombre portee s'efface
+// … ET LE MORCEAU LUI-MEME, beaucoup plus tard. Mesure au point de vue fixe du test 410 : les
+// vehicules et les habitants demandaient 4 339 appels de dessin pour l'image ; leurs morceaux
+// devenus minuscules en coutent 639 pour rien (−15 %). Le seuil est trois fois plus severe que
+// celui du mobilier du decor (1/100e) : a 1/300e de l'ecran, une poignee de portiere ou un
+// doigt fait moins de six pixels de haut, et il reste dans l'image jusque-la.
+const DETAIL_MOB_VUE = 300;         // 1/300e de l'ecran : en dessous, le morceau n'est plus dessine
+const DETAIL_MOB_GARDE = 12;        // m : autour de la camera on ne coupe RIEN, quelle que soit la taille
+const DETAIL_OMBRE_SUIVI = 1;       // m de rayon : au-dela, l'ombre se voit toujours, inutile de la suivre
+const OMBRE_MOB_RACINES = 3;        // racines de la scene recensees par image (le recensement est etale)
+let ombreMobI = 0, OMBRE_MOB_NEUF = [];
+// Le recensement est ETALE sur les images : parcourir d'un coup les douze mille maillages des
+// vehicules et des habitants couterait quatre millisecondes, soit un a-coup visible toutes les
+// deux secondes — exactement ce qu'on cherche a supprimer. On traite trois racines par image
+// (worldGroup et l'avatar du joueur sont sautes sans etre parcourus), et la liste neuve
+// remplace l'ancienne quand le tour est complet : une trentaine d'images, un demi-seconde.
+function ombresMobilesTick() {
+  if (typeof scene === 'undefined' || !scene || !scene.children) return;
+  const moi = (typeof me !== 'undefined' && me && me.group) ? me.group : null;
+  const enfants = scene.children;
+  for (let n = 0; n < OMBRE_MOB_RACINES && ombreMobI < enfants.length; n++, ombreMobI++) {
+    const racine = enfants[ombreMobI];
+    if (!racine || racine === worldGroup || racine === moi || typeof racine.traverse !== 'function') continue;
+    racine.traverse(o => {
+      if (!o.isMesh || !o.geometry) return;
+      const g = o.geometry;
+      if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
+      if (!g.boundingSphere) return;
+      const r = g.boundingSphere.radius * Math.max(Math.abs(o.scale.x), Math.abs(o.scale.y), Math.abs(o.scale.z));
+      if (r >= DETAIL_OMBRE_SUIVI) return;   // un capot, un torse : il se voit a toute distance utile
+      // une ombre que LE JEU a eteinte (piece cassee, vehicule detruit) reste eteinte : on ne
+      // reprend la main que sur celles qu'on a eteintes nous-memes (`ombreLoin`).
+      const ombre = !!o.castShadow || !!o.ombreLoin;
+      // le masque de calque d'origine : si on l'a deja efface, c'est celui qu'on avait mis de cote
+      const masque = o.detailLoin ? (o.masqueSauve == null ? 1 : o.masqueSauve) : (o.layers ? o.layers.mask : 1);
+      OMBRE_MOB_NEUF.push({ o, r, off: !!o.ombreLoin, offV: !!o.detailLoin, masque, ombre });
+    });
+  }
+  if (ombreMobI >= enfants.length) {
+    ombreMobI = 0;
+    OMBRES_MOB.length = 0;
+    for (let i = 0; i < OMBRE_MOB_NEUF.length; i++) OMBRES_MOB.push(OMBRE_MOB_NEUF[i]);
+    OMBRE_MOB_NEUF = [];
+  }
 }
 const STUD = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -8875,14 +8975,29 @@ function vehiculeMord(c, x, z, h) {
   // velo du facteur, long de 2 m, passait ENTIER entre les deux sans jamais etre vu. Mesure
   // dans la cour du depot : 53 images de camion DANS le velo gare a cote, a chaque sortie.
   const pas = Math.max(2, Math.ceil(A * 2 / 1.2));
+  // FLUIDITE — ON TRIE GROSSIEREMENT AVANT DE TRIER FINEMENT. Au profileur, cette fonction et
+  // son appelante vehBloque pesaient 66 % du temps de calcul d'une image : 17 ms par pas de
+  // simulation, donc 34 ms par image affichee (deux pas fixes par image) — le jeu ne pouvait
+  // pas depasser 29 images/s, meme avec la meilleure carte graphique du monde. La raison :
+  // pour CHAQUE solide voisin on essayait les 15 a 21 points de controle de la caisse, alors
+  // que la plupart de ces solides sont a plusieurs metres. Or tous les points de controle
+  // tiennent dans le disque de rayon R = √(A²+B²) centre sur le vehicule, QUEL QUE SOIT son
+  // cap : si le rectangle du solide, elargi de R, ne contient pas ce centre, aucun point ne
+  // peut le toucher. Deux comparaisons remplacent vingt et une, et le resultat est
+  // rigoureusement le meme — c'est de l'arithmetique exacte, pas une approximation.
+  const R = Math.sqrt(A * A + B * B);
   for (const o of solidsAutour(x, z, A + B + 2, true)) {
     if (o === c.solid || o.h > 30) continue;
     if (o.veh && !c.exactVeh) continue;
     if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
+    if (Math.abs(x - o.x) > o.w / 2 + R || Math.abs(z - o.z) > o.d / 2 + R) continue;   // hors de portee de la caisse : inutile de sortir les points
     for (let i = 0; i <= pas; i++) {
       const lz = -A + 2 * A * i / pas;
-      for (const lx of [B, 0, -B]) {
+      // le tableau [B, 0, -B] etait recree pour CHAQUE solide et CHAQUE tranche : des millions
+      // de petits tableaux par seconde, donc du ramasse-miettes pur perte. On deroule la boucle.
+      for (let k = 0; k < 3; k++) {
+        const lx = k === 0 ? B : k === 1 ? 0 : -B;
         const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
         if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
       }
@@ -8892,31 +9007,54 @@ function vehiculeMord(c, x, z, h) {
 }
 // Le garde-fou complet d'un vehicule pilote par le jeu : les disques de `carBlocked` (murs,
 // batiments, barrieres, autres vehicules) ET le rectangle exact.
+// FLUIDITE — PLUS D'OBJET NEUF A CHAQUE APPEL. Au profileur, tout le circuit vehBloque pese
+// encore 68 % du temps de calcul d'une image, et il tourne trente-trois fois par pas de
+// simulation. `Object.assign({}, opt, ...)` fabriquait a chaque fois un objet DIFFERENT, dont
+// carBlocked relit ensuite `veh`, `bar`, `pol` et `ignore` : le moteur JavaScript ne peut pas
+// mettre en cache la lecture d'un champ sur une forme qui change tout le temps. On reutilise
+// donc UN SEUL objet par vehicule, toujours de la meme forme (ces quatre champs et pas
+// d'autres — verifie : carBlocked ne lit rien de plus). Au passage `vehHalf` renvoyait un
+// tableau qu'il fallait deballer par le protocole d'iteration : les deux valeurs sont
+// calculees sur place. Gain mesure en A/B entrelace : 5,67 → 5,44 ms par pas (−4 %).
 function vehBloque(c, x, z, h, opt) {
-  const [r0, L] = vehHalf(c);
-  const o = c.remorque && c.remorque.solid ? Object.assign({}, opt || {}, { ignore: c.remorque.solid }) : (opt || {});
+  const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
+  const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
+  const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null });
+  o.bar = !!(opt && opt.bar); o.veh = !!(opt && opt.veh); o.pol = !!(opt && opt.pol);
+  // l'epave au crochet de la depanneuse nous suit : ce n'est pas un obstacle
+  o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
   return carBlocked(x, z, c.solid, r0, o, 0, h, L) || vehiculeMord(c, x, z, h);
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
 function avanceVehicule(c, dt, spd, opt, h0) {
-  const o = Object.assign({ bar: true, veh: true }, opt || {});
+  // meme raison que dans vehBloque : un objet reutilise, toujours de la meme forme. Les quatre
+  // appelants ne passent que `{}` ou `{ bar: true, veh: true }`, et vehBloque ne relit que ces
+  // quatre champs — la valeur transmise est donc identique a celle d'avant.
+  const o = c.optAvance || (c.optAvance = { bar: true, veh: true, pol: false, ignore: null });
+  o.bar = true; o.veh = true; o.pol = !!(opt && opt.pol); o.ignore = (opt && opt.ignore) || null;
   // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
   // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
   // est dans un solide et pas l'ancien, on annule la rotation de cette image.
   if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
   const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
-  let bloque = 0;
+  let bloque = 0, posSaine = false;
   if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
-  if (!vehBloque(c, c.x, nz, c.h, o)) c.z = nz; else bloque++;
+  // `posSaine` : quand le pas en z passe, la question posee est EXACTEMENT celle du controle
+  // final plus bas — memes x, z, cap et memes options. On retient la reponse au lieu de la
+  // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
+  // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
+  if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
   // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
   // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
   // VERIFIEE et on y revient : plus une seule image avec un capot dans un mur.
-  if (!vehBloque(c, c.x, c.z, c.h, o)) c.libre = [c.x, c.z, c.h];
-  else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  if (posSaine || !vehBloque(c, c.x, c.z, c.h, o)) {
+    // on reecrit le triplet au lieu d'en creer un neuf a chaque image et par vehicule
+    if (c.libre) { c.libre[0] = c.x; c.libre[1] = c.z; c.libre[2] = c.h; } else c.libre = [c.x, c.z, c.h];
+  } else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
@@ -9617,11 +9755,31 @@ function ridesTick(dt) {
     // L'ONDULATION etait si plate qu'elle ne se voyait pas. Le clapot est maintenant plus
     // marque AU LARGE et s'aplatit en approchant du rivage, comme une houle qui meurt sur le
     // sable (x local : 0 au centre du rectangle, -42,5 au bord de la plage).
+    // FLUIDITE — LA MER ONDULAIT MEME A DEUX CENTS METRES DE LA PLAGE. Recalculer la houle,
+    // c'est deplacer chaque point de la nappe PUIS refaire toutes ses normales (trois produits
+    // vectoriels par triangle) : mesure au profileur, 9 % du temps de calcul d'une image, payes
+    // en permanence alors que le joueur est a l'autre bout de la ville. On ne l'anime que dans
+    // les parages — exactement ce que fait deja le parc d'attractions un peu plus haut. Le
+    // clapot fait dix-sept centimetres : a quatre-vingt-dix metres du bord, personne ne peut
+    // voir qu'il s'est arrete.
+    // La nappe fait 85 m sur 215 et 5 917 points : c'est sa BOITE qu'il faut mesurer, pas son
+    // centre — depuis la place de la ville on est a 166 m du centre mais a 121 m du rivage.
+    const sea = city.seaMesh;
+    if (!sea.userData.boite) {
+      const g0 = sea.geometry;
+      if (!g0.boundingBox && g0.computeBoundingBox) g0.computeBoundingBox();
+      sea.updateMatrixWorld();
+      sea.userData.boite = g0.boundingBox ? g0.boundingBox.clone().applyMatrix4(sea.matrixWorld) : null;
+    }
+    const bm = sea.userData.boite;
+    const dMer = bm ? Math.hypot(Math.max(0, bm.min.x - P.pos.x, P.pos.x - bm.max.x), Math.max(0, bm.min.z - P.pos.z, P.pos.z - bm.max.z)) : 0;
+    if (dMer < 90) {
     const pos = city.seaMesh.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i);
       const large = clamp((x + 42.5) / 22, 0, 1);   // 0 au rivage, 1 a 22 m du bord
       pos.setY(i, large * (Math.sin(x * 0.55 + simTime * 1.7) * 0.17 + Math.sin(z * 0.31 - simTime * 1.15) * 0.13 + Math.sin((x + z) * 0.17 + simTime * 0.7) * 0.09)); }
     pos.needsUpdate = true; city.seaMesh.geometry.computeVertexNormals();
+    }
     if (city.boat) { city.boat.rotation.z = Math.sin(simTime * 1.1) * 0.08; city.boat.rotation.x = Math.sin(simTime * 0.8) * 0.05; city.boat.position.y = 1.6 + Math.sin(simTime * 1.4) * 0.12; }
     if (city.foam) city.foam.scale.x = 1.2 + Math.sin(simTime * 1.8) * 0.5;
     for (const b of city.buoys) b.m.position.y = 1.8 + Math.sin(simTime * 1.6 + b.z) * 0.15;
@@ -20136,9 +20294,25 @@ function solidsAutour(x, z, r, avecVeh) {
   const j1 = Math.floor((z - r - z0) / cs), j2 = Math.floor((z + r - z0) / cs);
   if (i1 < 0 || j1 < 0 || i2 >= nx || j2 >= nz) return solids;
   if (i1 === i2 && j1 === j2 && !avecVeh && !SGRID.mob.length) return SGRID.cells[j1 * nx + i1] || SVIDE;
-  const out = avecVeh ? SGRID.veh.slice() : [];
-  if (SGRID.mob.length) out.push(...SGRID.mob);
-  for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const c = SGRID.cells[j * nx + i]; if (c) out.push(...c); }
+  const out = [];
+  // FLUIDITE — LES VEHICULES AUSSI SONT TRIES PAR LA POSITION. Ils vivent HORS de la grille
+  // (ils changent de case a chaque image) et on RECOPIAIT LES CINQUANTE-NEUF a chaque appel :
+  // la circulation en demande une centaine par pas de simulation, soit six mille recopies
+  // inutiles par pas, cent quarante mille par seconde. Or le contrat de la fonction est « les
+  // solides autour de ce point, dans un rayon r » : un vehicule dont la caisse ne touche meme
+  // pas ce carre ne peut satisfaire AUCUN test de l'appelant (verifie un par un : tous ont une
+  // portee inferieure ou egale a r). On le laisse donc de cote.
+  if (avecVeh) for (let k = 0; k < SGRID.veh.length; k++) {
+    const o = SGRID.veh[k];
+    if (Math.abs(x - o.x) <= o.w / 2 + r && Math.abs(z - o.z) <= o.d / 2 + r) out.push(o);
+  }
+  // `out.push(...tableau)` deplie le tableau en arguments : sur une case de deux cents solides
+  // c'est un appel a deux cents arguments, et il coute bien plus qu'une boucle ordinaire.
+  for (let k = 0; k < SGRID.mob.length; k++) out.push(SGRID.mob[k]);
+  for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) {
+    const c = SGRID.cells[j * nx + i];
+    if (c) for (let k = 0; k < c.length; k++) out.push(c[k]);
+  }
   return out;
 }
 // (`decor` : le mobilier solidifié pour le joueur est ignoré ici — les habitants gardent
@@ -23558,9 +23732,22 @@ const loopPos = s => {   // position le long de l'anneau routier (périmètre 20
   if (s < 156) return [-26, -26 + (s - 104), 0];
   return [-26 + (s - 156), 26, Math.PI / 2];
 };
+// LA CIRCULATION N'A PAS BESOIN DE CENT VINGT PAS PAR SECONDE. La physique du joueur tourne a
+// pas fixe de 1/120 s — c'est ce qui rend les sauts et les collisions precis — et cityStep
+// suivait la meme cadence : les voitures du trafic recalculaient leur itineraire, leur cap et
+// leurs cinq tests de collision CENT VINGT fois par seconde. Or a 10 m/s une voiture avance de
+// huit centimetres en 1/120 s ; deux pas de 1/120 s et un pas de 1/60 s la menent au meme
+// endroit, puisqu'on lui passe le temps REELLEMENT ecoule — pour moitie moins de calcul. C'est
+// exactement ce que `cityCommon` fait deja pour le reste de la vie de la ville.
+// Ce qui regarde le JOUEUR (braquage a la portiere, bousculade sur la chaussee, voiture a
+// portee) reste a pleine cadence : c'est lui qui doit repondre au doigt et a l'oeil.
+const TRAFIC = { acc: 0, tours: 0 };   // `tours` : compteur de passages, lu par le banc d'essai
 function cityStep(dt) {
   let jack = null;
   flotteMaj();   // la liste des vehicules du moment, une seule fois par image
+  TRAFIC.acc += dt;
+  const dtT = TRAFIC.acc, roule = dtT >= (isMobile ? 1 / 40 : 1 / 60);
+  if (roule) { TRAFIC.acc = 0; TRAFIC.tours++; }
   for (const c of city.aiCars) {
     // carjacking : le conducteur pile net des qu'on se plante a sa portiere
     let pile = false;
@@ -23570,6 +23757,7 @@ function cityStep(dt) {
       if (Math.abs(lx) > half[0] - 0.5 && Math.abs(lx) < half[0] + 2 && Math.abs(lz) < half[1]) { pile = true; jack = c; }
     }
     if (!c.spd) { if (c.driver) placeDriver(c); continue; }   // vehicule a l'arret (ambulance)
+    if (roule) {
     // Vitesses du code de la route : 8 a 10 m/s pour une voiture, 6 pour un camion.
     if (c.vmaxIA == null) c.vmaxIA = c.kind === 'truck' ? 6 : 8 + Math.round(traficRnd() * 2);
     if (pile) { c.speed = 0; c.stopped = true; c.raison = 'braquage'; }
@@ -23577,8 +23765,9 @@ function cityStep(dt) {
       // destination sur le GRAPHE, changee des qu'elle est atteinte : la circulation ne
       // tourne plus en rond sur un anneau de 26 m, elle traverse toute la ville.
       if (!c.ia && simTime > (c.destT || 0)) { c.destT = simTime + 1.5; traficDestination(c); }
-      if (c.ia) traficRoule(c, dt);
-      else { c.speed = Math.max(0, (c.speed || 0) - dt * 6); c.stopped = true; avanceVehicule(c, dt, c.speed, {}); }
+      if (c.ia) traficRoule(c, dtT);
+      else { c.speed = Math.max(0, (c.speed || 0) - dtT * 6); c.stopped = true; avanceVehicule(c, dtT, c.speed, {}); }
+    }
     }
     // LES TROIS LIGNES DE L'ANCIEN ANNEAU ONT ETE RETIREES ICI. La circulation ne suit plus
     // une boucle parametree (`c.s += spd * dt`, `loopPos(c.s)`) mais le GRAPHE DE VOIES, et
@@ -23586,7 +23775,7 @@ function cityStep(dt) {
     // collision. Le vieux bloc avait survecu a la fusion : il lisait une variable `spd` qui
     // n'existe plus (« spd is not defined » a CHAQUE image, cityStep entier en panne) et,
     // s'il avait tourne, il aurait reteleporte toutes les voitures sur l'anneau disparu.
-    if (c.driver) placeDriver(c);
+    if (roule && c.driver) placeDriver(c);
     if (!drive.car) {   // bousculade si le joueur est sur la route
       const dx = P.pos.x - c.x, dz = P.pos.z - c.z, cs = Math.cos(c.h), sn = Math.sin(c.h);
       const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
@@ -23628,6 +23817,7 @@ function cityStep(dt) {
   // voisine (il en faut 4,42) pendant onze images d'affilee. On fait donc vivre la ville
   // D'ABORD, on ecarte les toles ENSUITE, et on revalide le trafic apres l'ecartement.
   if (!drive.car) cityCommon(dt);
+  if (!roule) return;   // la circulation n'a pas avance : rien a ecarter ni a revalider
   separerVehicules();
   // L'ECARTEMENT DES VEHICULES peut pousser une voiture du trafic DANS un mur : deux voitures
   // qui se chevauchent au ras d'une facade sont separees vers l'exterieur, et l'une des deux

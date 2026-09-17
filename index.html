@@ -26517,6 +26517,23 @@ function camPerche(dt, aiming) {
       d = Math.max(0.6, t - 0.25); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
       camera.position.copy(cam.target).addScaledVector(dir, d);
     }
+    // LE PLANCHER DE LA TÔLE. Dans un véhicule, la perche ne descend JAMAIS sous la
+    // demi-longueur de la caisse plus 1,2 m. C'est la dernière réponse à « quand le joueur est
+    // dans un véhicule avec un membre, ça bug » : mesuré en pleine route, elle tombait encore à
+    // 1,99 m — l'écran entier rempli de carrosserie, le joueur ne voyait plus ni la rue ni son
+    // personnage. Tous les filets au-dessus (le cône, la ligne de vue, le garde-fou) sont faits
+    // pour un PIÉTON qu'un mur colle à la nuque ; dans une caisse de cinq mètres ils raccourcissent
+    // une perche qui est déjà à l'intérieur du véhicule. Le prix assumé : une demi-seconde de
+    // façade traversée quand la voiture frôle vraiment un mur — un mur qui passe vaut mieux
+    // qu'un capot fixe. On ne dépasse jamais la longueur voulue, donc ce plancher ne peut pas
+    // allonger la perche au-delà de ce que la loi de distance demande.
+    if (running) {
+      const vehP = vehiculeAssis();
+      if (vehP && vehP.solid && !vehP.heli) {
+        const plancher = Math.min(cam.dist, Math.max(vehP.solid.w, vehP.solid.d) / 2 + 1.2);
+        if (d < plancher) { d = plancher; camera.position.copy(cam.target).addScaledVector(dir, d); }
+      }
+    }
     if (running) cam.dLisse = d;   // longueur retenue : le limiteur repart de la perche VRAIMENT posée
     cam.voulu = cam.dist; cam.reel = d;   // ce qu'on voulait, ce qu'on a eu : sert au champ (plus bas)
     cam.dJoueur = Math.hypot(camera.position.x - P.pos.x, camera.position.y - (P.pos.y + 1.2), camera.position.z - P.pos.z);

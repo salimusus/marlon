@@ -17266,6 +17266,7 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
     // image reelle par seconde ne mesurerait rien). On releve une fois par seconde.
     const cam = () => G.camera.position;
     let dPireJoueur = 0, sauts = 0, sautMax = 0, prec = null, hors = 0;
+    let pireD = 99, pireQuoi = null;
     for (let s = 0; s < 12; s++) {
       for (let i = 0; i < 60; i++) {
         pas();
@@ -17275,6 +17276,23 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
       }
       const c = cam();
       const dCar = +Math.hypot(c.x - car.x, c.y - ((car.y || 0) + 1.2), c.z - car.z).toFixed(2);
+      // QUI COUPE LA PERCHE quand elle est courte ? on garde la taille du solide fautif, pour
+      // que le bilan dise s'il s'agit d'un poteau, d'une facade ou du vehicule lui-meme.
+      if (dCar < pireD) {
+        pireD = dCar; pireQuoi = null;
+        const cp2 = Math.cos(G.cam.pitch), T = G.cam.target;
+        const dir = [Math.sin(G.cam.yaw) * cp2, Math.sin(G.cam.pitch), Math.cos(G.cam.yaw) * cp2];
+        let m = 99;
+        for (const o of G.solidsAutour(T.x, T.z, 14)) {
+          if (o === car.solid || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;
+          if (o.mesh && !o.mesh.visible) continue;
+          const hx = Math.max(o.w, 0.36) / 2 + 0.3, hy = o.h / 2 + 0.3, hz = Math.max(o.d, 0.36) / 2 + 0.3;
+          if (o.y + hy < T.y - 1.4) continue;
+          if (Math.abs(T.x - o.x) < hx && Math.abs(T.y - o.y) < hy && Math.abs(T.z - o.z) < hz) continue;
+          const t2 = G.rayBox(T.x, T.y, T.z, dir[0], dir[1], dir[2], o.x, o.y, o.z, hx, hy, hz, 14);
+          if (t2 >= 0 && t2 < m) { m = t2; pireQuoi = { w: +o.w.toFixed(2), d: +o.d.toFixed(2), h: +o.h.toFixed(2), a: +t2.toFixed(2) }; }
+        }
+      }
       if (prec != null) { const j = Math.abs(dCar - prec); if (j > sautMax) sautMax = j; if (j > 5) sauts++; }
       prec = dCar;
       const v = new THREE.Vector3(car.x, (car.y || 0) + 0.8, car.z); v.project(G.camera);
@@ -17283,6 +17301,7 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
       out.sec.push({ s: s + 1, d: dCar, camY: +c.y.toFixed(2), vit: +((car.speed || 0)).toFixed(1), cadre: dansLeCadre });
     }
     out.dJoueurVoiture = +dPireJoueur.toFixed(2);
+    out.coupable = pireQuoi;
     out.sautMax = +sautMax.toFixed(2); out.sauts = sauts; out.horsCadre = hors;
     out.dMin = Math.min(...out.sec.map(x => x.d)); out.dMax = Math.max(...out.sec.map(x => x.d));
     out.passager = !!(G.city.rideBot && G.city.rideBot.drive && G.city.rideBot.drive.passager);
@@ -17300,5 +17319,5 @@ test('douze secondes de trajet en passager : la camera suit le vehicule sans plo
   const plancher = r.long / 2 + 1;
   const ok = r.passager && r.dJoueurVoiture < r.long / 2
     && r.dMin > plancher && r.dMax < 17 && r.sauts === 0 && r.sautMax < 5 && r.horsCadre === 0;
-  return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m = demi-longueur + 1 ; avant, le chef relevait 8 · 12 · 9,9 · 6,1 · 8,5 · 4,6 · 1,7 · 1,5 · 3,3 · 2,8 · 5,8 · 3,8 m), sans aucun saut de plus de 5 m d'une seconde a l'autre (plus gros : ${r.sautMax} m), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
+  return { ok, detail: `le joueur : « toujours le probleme quand le joueur est dans un vehicule avec un membre ca bug » · cause trouvee a la RACINE, et ce n'etait pas la camera : step() n'avait AUCUNE sortie pour le passager, on lui appliquait la gravite et le code de la MARCHE pendant que son avatar etait dessine sur le siege — sa position reelle restait plantee la ou il etait monte et la voiture partait sans lui (mesure avant : 32 m d'ecart au bout de douze secondes), la camera suivait donc fidelement un joueur reste sur le trottoir · et la regle « un poteau ne cale pas la camera » ne valait qu'AU VOLANT : un lampadaire de 36 cm ramenait la perche a 3,09 m en passager · maintenant, douze secondes de route sur la vraie scene (${r.voiture}, ${r.long} m), camera remise a jour a chaque image : le joueur ne quitte jamais son siege (ecart maximal ${r.dJoueurVoiture} m) et la camera reste entre ${r.dMin} et ${r.dMax} m de la voiture (plancher exige ${plancher.toFixed(1)} m = demi-longueur + 1 ; avant, le chef relevait 8 · 12 · 9,9 · 6,1 · 8,5 · 4,6 · 1,7 · 1,5 · 3,3 · 2,8 · 5,8 · 3,8 m), sans aucun saut de plus de 5 m d'une seconde a l'autre (plus gros : ${r.sautMax} m ; au plus court, ce qui barrait la perche mesurait ${r.coupable ? r.coupable.w + ' × ' + r.coupable.d + ' × ' + r.coupable.h + ' m a ' + r.coupable.a + ' m' : 'rien'}), la voiture dans le cadre les douze secondes (${12 - r.horsCadre}/12) · ${r.sec.map(x => x.s + 's ' + x.d + 'm@' + x.vit).join(' · ')}` };
 });

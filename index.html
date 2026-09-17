@@ -9111,6 +9111,19 @@ function pietonDevant(c) {
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
 }
+// QUELQU'UN DERRIÈRE LE COFFRE ? Le pendant de `pietonDevant`, pour la marche arrière de
+// dégagement : on ne recule JAMAIS sur un piéton. Même couloir que devant, en un peu plus
+// court (on ne recule que d'un mètre ou deux).
+function pietonDerriere(c) {
+  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.2);
+  const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, ar = -(dx * fx + dz * fz);
+    return Math.abs(y - (c.y || 0)) < 2.4 && ar > 0 && ar < 4 && Math.abs(-dx * fz + dz * fx) < lat; };
+  if (joueurAPied() && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
+  for (const b of bots) if (!b.drive && b.av && b.av.group.visible && gene(b.pos.x, b.pos.y, b.pos.z)) return true;
+  for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
+  return false;
+}
 function klaxonne(c) {
   if (simTime < (c.klaxT || 0)) return;
   c.klaxT = simTime + 2.4;
@@ -17357,6 +17370,29 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // mur n'est bloquee que sur un axe a la fois, si bien qu'elle remettait le compteur a zero
   // une image sur deux et que le deblocage ne partait jamais.
   st.bloqueT = bloque ? (st.bloqueT || 0) + dt : Math.max(0, (st.bloqueT || 0) - dt * 0.6);
+  // SE DÉGAGER EN MARCHE ARRIÈRE, COMME UN VRAI CONDUCTEUR.
+  // Mesuré image par image sur le trajet « un membre emmène le joueur à la villa » : trois
+  // arrêts de 3,5 s en 60 s de route (vitesses relevées 0,2 · 0,2 · 0,5 m/s), et toujours la
+  // même scène — en tournant au carrefour, la voiture se retrouve NEZ CONTRE UN LAMPADAIRE du
+  // trottoir (un poteau de 40 × 40 cm et 4,40 m de haut, à 0,97 — 1,32 m du capot). Elle est
+  // pourtant bien sur la chaussée, à 20 cm de l'axe de sa voie : c'est le tracé de la grille
+  // A*, qui raisonne en POINT et frôle le mobilier, qui l'y amène. Elle ne pouvait alors ni
+  // avancer (le poteau) ni tourner (la rotation qui l'en sortirait est annulée juste au-dessus,
+  // parce qu'elle mord elle aussi le poteau) : elle attendait les 3,5 s du filet de secours,
+  // qui la reposait trois mètres plus loin. C'est exactement ce que le joueur appelle « ça bug ».
+  // Au bout de 0,6 s à pousser contre l'obstacle, on recule donc pendant une seconde et on
+  // refait le tracé depuis la nouvelle place. Le recul passe par le MÊME garde-fou (aucun pas
+  // qui rentre dans quoi que ce soit) et s'annule si quelqu'un est à pied derrière.
+  if (bloque && Math.abs(c.speed || 0) < 1.5) st.colleT = (st.colleT || 0) + dt; else st.colleT = 0;
+  if (st.colleT > 0.45 && (st.reculT || 0) < T) { st.colleT = 0; st.reculT = T + 1; st.routeT = 0; }
+  if ((st.reculT || 0) > T) {
+    if (pietonDerriere(c)) { st.reculT = 0; klaxonne(c); }
+    else {
+      const rx = c.x - Math.sin(c.h) * 2.2 * dt, rz = c.z - Math.cos(c.h) * 2.2 * dt;
+      if (!vehBloque(c, rx, rz, c.h, opt)) { c.x = rx; c.z = rz; c.speed = 0; c.recule = true; st.bloqueT = 0; }
+      else st.reculT = 0;                 // l'arrière est pris aussi : on laisse le contournement jouer
+    }
+  } else c.recule = false;
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {

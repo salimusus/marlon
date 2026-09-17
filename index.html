@@ -12378,58 +12378,58 @@ function etoilesGamme(g) {
 // de 56 cm, le 4×4 passe sur ce qui arrête une berline — c'est ça, « il passe partout ».
 const CARROSSERIES = {
   berline: { e: '🚘', nom: 'Berline', trait: 'trois volumes, coffre marqué, toit bas',
-    W: 2.06, av: 2.20, ar: -2.25, sol: 0.32, ch: 0.60,
-    capot: { z0: 0.85, z1: 2.12, y: 0.98, h: 0.26 },
-    coffre: { z0: -1.42, z1: -2.18, y: 1.00, h: 0.32 },
-    toit: { z0: 0.55, z1: -1.35, y: 1.70, h: 0.16, w: 1.74 },
-    ws: { z: 0.92, y: 1.38, h: 0.62, a: 0.42 }, rw: { z: -1.42, y: 1.38, h: 0.58, a: -0.50 },
+    W: 2.06, av: 2.20, ar: -2.25, sol: 0.32, ch: 0.82,
+    capot: { z0: 0.85, z1: 2.12, y: 1.13, h: 0.14 },
+    coffre: { z0: -1.42, z1: -2.18, y: 1.14, h: 0.16 },
+    toit: { z0: 0.55, z1: -1.35, y: 1.74, h: 0.16, w: 1.96 },
+    ws: { z: 0.92, y: 1.40, h: 0.62, a: 0.42 }, rw: { z: -1.42, y: 1.40, h: 0.58, a: -0.50 },
     cote: { y: 1.40, h: 0.52, z0: 0.58, z1: -1.30, n: 2 },
     roue: 1.0, largeur: 1, essieu: [1.35, -1.45], voie: 1.02,
     siege: -0.80, zAv: 0.50, zAr: -0.85, zChien: -1.60, seuil: 1.62,
     baseW: 2.4, baseD: 4.55, portes: 4 },
 
   break: { e: '🚐', nom: 'Break', trait: 'toit prolongé jusqu\'au hayon droit, le plus long',
-    W: 2.08, av: 2.18, ar: -2.66, sol: 0.32, ch: 0.62,
-    capot: { z0: 0.95, z1: 2.10, y: 1.00, h: 0.26 },
+    W: 2.08, av: 2.18, ar: -2.66, sol: 0.32, ch: 0.84,
+    capot: { z0: 0.95, z1: 2.10, y: 1.15, h: 0.14 },
     coffre: null,
-    toit: { z0: 0.65, z1: -2.44, y: 1.74, h: 0.16, w: 1.78 },
-    ws: { z: 1.00, y: 1.40, h: 0.64, a: 0.42 }, rw: { z: -2.54, y: 1.44, h: 0.76, a: -0.10 },
+    toit: { z0: 0.65, z1: -2.44, y: 1.77, h: 0.16, w: 1.98 },
+    ws: { z: 1.00, y: 1.42, h: 0.64, a: 0.42 }, rw: { z: -2.54, y: 1.46, h: 0.76, a: -0.10 },
     cote: { y: 1.42, h: 0.54, z0: 0.72, z1: -2.32, n: 3 },
     roue: 1.0, largeur: 1, essieu: [1.42, -1.62], voie: 1.03,
     siege: -0.80, zAv: 0.60, zAr: -0.80, zChien: -1.95, seuil: 1.64,
     baseW: 2.45, baseD: 5.05, portes: 4, barres: true },
 
   suv: { e: '🚙', nom: 'SUV', trait: 'haut sur pattes, capot court, grandes vitres, barres de toit',
-    W: 2.16, av: 2.22, ar: -2.34, sol: 0.56, ch: 0.80,
-    capot: { z0: 1.32, z1: 2.16, y: 1.46, h: 0.24 },
+    W: 2.16, av: 2.22, ar: -2.34, sol: 0.56, ch: 0.83,
+    capot: { z0: 1.32, z1: 2.16, y: 1.38, h: 0.14 },
     coffre: null,
-    toit: { z0: 0.98, z1: -2.04, y: 2.12, h: 0.16, w: 1.86 },
+    toit: { z0: 0.98, z1: -2.04, y: 2.21, h: 0.16, w: 2.06 },
     ws: { z: 1.06, y: 1.76, h: 0.80, a: 0.34 }, rw: { z: -2.14, y: 1.76, h: 0.76, a: -0.22 },
     cote: { y: 1.76, h: 0.74, z0: 0.88, z1: -1.94, n: 3 },
     roue: 1.20, largeur: 1.2, essieu: [1.44, -1.50], voie: 1.09,
-    siege: -0.40, zAv: 0.55, zAr: -0.85, zChien: -1.75, seuil: 1.66,
+    siege: -0.40, zAv: 0.55, zAr: -0.85, zChien: -1.75, seuil: 1.47,
     baseW: 2.55, baseD: 4.80, portes: 4, barres: true },
 
   quatre: { e: '🛻', nom: '4×4', trait: 'pneus larges, pare-buffle, roue de secours, garde au sol',
-    W: 2.14, av: 2.10, ar: -2.24, sol: 0.76, ch: 0.80,
-    capot: { z0: 1.20, z1: 2.06, y: 1.66, h: 0.26 },
+    W: 2.14, av: 2.10, ar: -2.24, sol: 0.76, ch: 0.82,
+    capot: { z0: 1.20, z1: 2.06, y: 1.57, h: 0.14 },
     coffre: null,
-    toit: { z0: 1.02, z1: -2.00, y: 2.40, h: 0.16, w: 1.90 },
-    ws: { z: 1.12, y: 2.02, h: 0.74, a: 0.20 }, rw: { z: -2.08, y: 2.02, h: 0.72, a: -0.12 },
-    cote: { y: 2.02, h: 0.70, z0: 0.94, z1: -1.90, n: 2 },
+    toit: { z0: 1.02, z1: -2.00, y: 2.36, h: 0.16, w: 2.04 },
+    ws: { z: 1.12, y: 1.93, h: 0.70, a: 0.20 }, rw: { z: -2.08, y: 1.93, h: 0.68, a: -0.12 },
+    cote: { y: 1.93, h: 0.70, z0: 0.94, z1: -1.90, n: 2 },
     roue: 1.42, largeur: 1.55, essieu: [1.46, -1.52], voie: 1.14,
-    siege: -0.16, zAv: 0.50, zAr: -0.85, zChien: -1.70, seuil: 1.62,
+    siege: -0.16, zAv: 0.50, zAr: -0.85, zChien: -1.70, seuil: 1.42,
     baseW: 2.70, baseD: 4.90, portes: 4, barres: true, buffle: true, secours: true, marchepied: true },
 
   decapotable: { e: '🏎️', nom: 'Décapotable', trait: 'deux places, pas de toit, pare-brise couché',
-    W: 2.10, av: 2.24, ar: -2.20, sol: 0.26, ch: 0.60,
-    capot: { z0: 0.52, z1: 2.16, y: 0.94, h: 0.24 },
-    coffre: { z0: -1.28, z1: -2.14, y: 0.96, h: 0.26 },
+    W: 2.10, av: 2.24, ar: -2.20, sol: 0.26, ch: 0.66,
+    capot: { z0: 0.52, z1: 2.16, y: 0.91, h: 0.14 },
+    coffre: { z0: -1.28, z1: -2.14, y: 0.92, h: 0.16 },
     toit: null,
-    ws: { z: 0.46, y: 1.18, h: 0.56, a: 0.68 }, rw: null,
+    ws: { z: 0.46, y: 1.22, h: 0.56, a: 0.68 }, rw: null,
     cote: null,
     roue: 1.04, largeur: 1.1, essieu: [1.38, -1.42], voie: 1.06,
-    siege: -0.74, zAv: 0.15, zAr: null, zChien: -1.25, seuil: 1.30,
+    siege: -0.74, zAv: 0.15, zAr: null, zChien: -1.25, seuil: 1.21,
     baseW: 2.40, baseD: 4.55, portes: 2, capote: true, interieur: true },
 };
 function carrosserieDe(style) { return CARROSSERIES[style] || CARROSSERIES.berline; }
@@ -12486,10 +12486,13 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   if (S.rw) { rw = bx(glassCar, S.W - 0.40, S.rw.h, 0.06, 0, S.rw.y, S.rw.z * e); rw.rotation.x = S.rw.a; }
   const sides = [];
   if (S.cote) {
+    // LES MONTANTS SONT DE LA TÔLE, pas des piquets. Fins et noirs, ils donnaient un toit posé
+    // sur quatre bâtons : ils sont maintenant couleur carrosserie et deux fois plus larges,
+    // et le bas de caisse monte jusqu'à la ceinture de vitrage (plus de trou entre les deux).
     const cz = S.cote, z0 = cz.z0 * e, z1 = cz.z1 * e, pas = (z0 - z1) / cz.n;
     for (const sx of [-1, 1]) {
-      sides.push(bx(glassCar, 0.05, cz.h, z0 - z1, sx * (flanc - 0.14), cz.y, (z0 + z1) / 2));
-      for (let i = 0; i <= cz.n; i++) bx(dark, 0.06, cz.h + 0.10, 0.09, sx * (flanc - 0.13), cz.y, z1 + i * pas);
+      sides.push(bx(glassCar, 0.05, cz.h, z0 - z1, sx * (flanc - 0.13), cz.y, (z0 + z1) / 2));
+      for (let i = 0; i <= cz.n; i++) bx(body, 0.10, cz.h + 0.04, i === 0 || i === cz.n ? 0.20 : 0.11, sx * (flanc - 0.11), cz.y, z1 + i * pas);
     }
   }
   // ---- phares (les DEUX PREMIERS sont les blancs : le garage les rallume dans cet ordre) ----
@@ -12508,12 +12511,18 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   // ---- rétroviseurs, portières, poignées ----
   const mirrors = [];
   for (const sx of [-1, 1]) { mirrors.push(bx(body, 0.16, 0.12, 0.28, sx * (flanc + 0.12), hautC + 0.28, S.ws.z * e - 0.30)); bx(chrome, 0.14, 0.10, 0.04, sx * (flanc + 0.12), hautC + 0.28, S.ws.z * e - 0.30); }
+  // LES PORTIÈRES sont des panneaux DE CARROSSERIE (elles étaient en tôle sombre : une grosse
+  // bande noire en travers du flanc). Elles gardent leurs lignes de découpe et leur poignée,
+  // et restent détachables : ce sont elles que le garage recolle et que l'explosion arrache.
   const doors = [], pz1 = (S.zAv * e) + 0.10, pz2 = (S.zAr != null ? S.zAr * e : S.zAv * e) - 0.45;
+  const hPorte = S.ch * 0.86, yPorte = basC + S.ch * 0.50;
   for (const sx of [-1, 1]) {
-    doors.push(bx(dark, 0.03, S.ch * 0.70, 1.20, sx * (flanc + 0.01), basC + S.ch * 0.55, pz1));
-    if (S.portes === 4) doors.push(bx(dark, 0.03, S.ch * 0.70, 1.20, sx * (flanc + 0.01), basC + S.ch * 0.55, pz2));
-    bx(chrome, 0.05, 0.05, 0.22, sx * (flanc + 0.02), hautC - 0.12, pz1 - 0.16);
-    if (S.portes === 4) bx(chrome, 0.05, 0.05, 0.22, sx * (flanc + 0.02), hautC - 0.12, pz2 - 0.16);
+    doors.push(bx(body, 0.05, hPorte, 1.22, sx * (flanc + 0.01), yPorte, pz1));
+    if (S.portes === 4) doors.push(bx(body, 0.05, hPorte, 1.22, sx * (flanc + 0.01), yPorte, pz2));
+    for (const dz of (S.portes === 4 ? [pz1 + 0.64, pz1 - 0.64, pz2 - 0.64] : [pz1 + 0.64, pz1 - 0.64]))
+      bx(darkM, 0.04, hPorte, 0.04, sx * (flanc + 0.03), yPorte, dz);   // les lignes de découpe
+    bx(chrome, 0.06, 0.06, 0.24, sx * (flanc + 0.04), hautC - 0.16, pz1 - 0.20);
+    if (S.portes === 4) bx(chrome, 0.06, 0.06, 0.24, sx * (flanc + 0.04), hautC - 0.16, pz2 - 0.20);
   }
   // ---- les roues, les ailes qui les épousent, et la garde au sol ----
   const wheels = [], rRoue = 0.34 * S.roue;
@@ -12525,9 +12534,9 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   }
   // ---- ce qui n'appartient qu'à UN style ----
   if (S.barres) for (const sx of [-0.60, 0.60]) {   // barres de toit
-    bx(noir, 0.09, 0.09, (S.toit.z0 - S.toit.z1) * e * 0.86, sx, S.toit.y + S.toit.h / 2 + 0.06, (S.toit.z0 + S.toit.z1) * e / 2);
+    bx(noir, 0.09, 0.09, (S.toit.z0 - S.toit.z1) * e * 0.86, sx, S.toit.y + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2);
   }
-  if (S.barres) for (const tz of [0.5, -0.5]) bx(noir, 1.32, 0.08, 0.09, 0, S.toit.y + S.toit.h / 2 + 0.06, (S.toit.z0 + S.toit.z1) * e / 2 + tz * (S.toit.z0 - S.toit.z1) * e * 0.5);
+  if (S.barres) for (const tz of [0.5, -0.5]) bx(noir, 1.32, 0.08, 0.09, 0, S.toit.y + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2 + tz * (S.toit.z0 - S.toit.z1) * e * 0.5);
   if (S.buffle) {   // PARE-BUFFLE + rampe de phares : la signature du 4×4
     bx(chrome, S.W * 0.88, 0.13, 0.13, 0, basC + 0.34, AV + 0.16);
     bx(chrome, S.W * 0.88, 0.13, 0.13, 0, hautC - 0.10, AV + 0.16);
@@ -12546,14 +12555,15 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
     for (const sx of [-0.46, 0.46]) bx(chrome, 0.10, 0.34, 0.12, sx, hautC + 0.28, -0.72 * e);   // les arceaux de sécurité
   }
   // ---- L'INTÉRIEUR. Sans toit, on le voit : sièges, volant, planche de bord, tapis ----
-  bx(darkM, S.W - 0.26, 0.06, (S.ws.z * e - (S.zAr != null ? S.zAr * e : S.zAv * e - 0.9)) + 0.6, 0, basC + S.ch - 0.06, (S.ws.z * e + (S.zAr != null ? S.zAr * e : S.zAv * e - 0.9)) / 2);   // le plancher
-  bx(darkM, S.W - 0.34, 0.22, 0.34, 0, hautC - 0.06, S.ws.z * e - 0.24);                       // la planche de bord
+  const zArr = S.zAr != null ? S.zAr * e : S.zAv * e - 0.9;
+  bx(darkM, S.W - 0.26, 0.06, (S.ws.z * e - zArr) + 0.7, 0, basC + 0.12, (S.ws.z * e + zArr) / 2);   // le plancher
+  bx(darkM, S.W - 0.34, 0.24, 0.36, 0, hautC - 0.10, S.ws.z * e - 0.26);                            // la planche de bord
   const volant = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 6, 14), noir);
-  volant.position.set(0.5 * (opt.droite ? -1 : 1), hautC + 0.10, S.ws.z * e - 0.44); volant.rotation.x = 1.15; g.add(volant);
+  volant.position.set(0.5, hautC + 0.12, S.ws.z * e - 0.46); volant.rotation.x = 1.15; g.add(volant);
   if (S.interieur) for (const sx of [-0.5, 0.5]) {   // deux baquets : assise, dossier incliné, appui-tête
-    bx(darkM, 0.52, 0.12, 0.58, sx, basC + S.ch + 0.02, S.zAv * e);
-    const dos = bx(darkM, 0.52, 0.62, 0.14, sx, basC + S.ch + 0.32, S.zAv * e - 0.32); dos.rotation.x = -0.18;
-    bx(darkM, 0.36, 0.22, 0.14, sx, basC + S.ch + 0.66, S.zAv * e - 0.38);
+    bx(darkM, 0.54, 0.14, 0.60, sx, basC + 0.30, S.zAv * e);
+    const dos = bx(darkM, 0.54, 0.64, 0.16, sx, basC + 0.62, S.zAv * e - 0.34); dos.rotation.x = -0.18;
+    bx(darkM, 0.38, 0.22, 0.16, sx, basC + 1.00, S.zAv * e - 0.40);
   }
   // ---- fin du modèle : on pose, on cale les roues, on fabrique la boîte de collision ----
   g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -12700,7 +12710,7 @@ function buildConcession(cx, cz) {
   flowerBed(cx - 8, cz + 18.5, 6, 1.4); flowerBed(cx + 4, cz + 18.5, 6, 1.4);
   city.wander.push([cx, 0.3, cz + 17], [cx + 12, 0.3, cz + 17]);
   city.zones.push({ name: 'Concessionnaire', emoji: '🚗', x1: cx - BW / 2 - 7, x2: cx + BW / 2 + 7, z1: cz - BD / 2 - 4, z2: cz + BD / 2 + 9,
-    hint: '🚗 Blocs Motors : entre dans le show-room, regarde les podiums, et E au comptoir pour acheter ta voiture' });
+    hint: '🚗 Blocs Motors : cinq carrosseries exposées — berline, break, SUV, 4×4, décapotable. Regarde les podiums, puis E au comptoir pour acheter la tienne' });
 }
 // ---- LA FENÊTRE DU CONCESSIONNAIRE ----
 let concesSel = null;
@@ -12709,26 +12719,32 @@ function openConces() {
   openUI('conces'); majConces();
 }
 function majConces() {
-  const sel = gammeDe(concesSel) || GAMMES[0];
+  const sel = gammeDe(concesSel) || GAMMES[0], selS = carrosserieDe(sel.style);
   const mienne = maVoiture();
   $('concesSub').innerHTML = `Tu as <b style="color:#ffd23f">${wallet} 🪙</b>`
     + (mienne && mienne.gamme ? ` · ta voiture actuelle : <b>${(gammeDe(mienne.gamme) || {}).fam || '—'}</b>` : ' · tu n\'as pas encore de voiture à toi')
-    + ' — choisis un modèle, paie, et repars au volant.';
+    + ' — cinq carrosseries : 🚘 berline, 🚐 break, 🚙 SUV, 🛻 4×4, 🏎️ décapotable. Choisis, paie, et repars au volant.';
+  // CHAQUE LIGNE DIT SA CARROSSERIE. Avant, huit lignes décrivaient huit voitures identiques :
+  // le joueur voulait « des véhicules de différent style », il doit donc le lire ici aussi,
+  // et pas seulement le voir sur le podium.
   $('concesCorps').innerHTML = '<div class="tunelist">' + GAMMES.map(g => {
-    const s = etoilesGamme(g), trop = g.p > wallet;
+    const s = etoilesGamme(g), S = carrosserieDe(g.style), trop = g.p > wallet;
     const barre = (nom, n) => `<span style="color:#ffd23f">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span> ${nom}`;
     return `<button class="tunebtn large ${concesSel === g.k ? 'on' : ''}" data-g="${g.k}">`
       + `<b>${g.e} ${g.fam} « ${g.n} »</b><span style="color:${trop ? '#ff8f8f' : '#ffd23f'}">${g.p} 🪙</span>`
-      + `<i>${g.d}<br>${barre('vitesse', s.vitesse)} · ${barre('tenue', s.tenue)} · ${barre('solidité', s.robu)}`
+      + `<i><b style="color:#2b7fa8">${S.e} carrosserie ${S.nom}</b> — ${S.trait}<br>${g.d}<br>`
+      + `${barre('vitesse', s.vitesse)} · ${barre('tenue', s.tenue)} · ${barre('solidité', s.robu)}`
       + ` · 👥 ${g.places} places · 🏁 ${Math.round(g.vmax * 3.6)} km/h</i></button>`;
   }).join('') + '</div>';
   $('concesCorps').querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => { concesSel = b.dataset.g; majConces(); }));
   const manque = sel.p > wallet;
-  $('concesPrix').textContent = manque ? `${sel.fam} « ${sel.n} » : ${sel.p} 🪙 — il te manque ${sel.p - wallet} 🪙`
-    : `${sel.fam} « ${sel.n} » : ${sel.p} 🪙 — il te restera ${wallet - sel.p} 🪙`;
+  // LA FICHE DU MODÈLE CHOISI : le style, le prix, la vitesse et les places, en une ligne.
+  $('concesPrix').textContent = `${selS.e} ${selS.nom} · ${sel.fam} « ${sel.n} » · ${sel.p} 🪙`
+    + ` · 🏁 ${Math.round(sel.vmax * 3.6)} km/h · 👥 ${sel.places} places — `
+    + (manque ? `il te manque ${sel.p - wallet} 🪙` : `il te restera ${wallet - sel.p} 🪙`);
   const ok = $('concesOk');
   ok.disabled = manque; ok.style.opacity = manque ? 0.5 : 1;
-  ok.textContent = manque ? `🪙 Il te manque ${sel.p - wallet}` : `🔑 Acheter la ${sel.fam} (${sel.p} 🪙)`;
+  ok.textContent = manque ? `🪙 Il te manque ${sel.p - wallet}` : `🔑 Acheter la ${selS.nom} (${sel.p} 🪙)`;
 }
 // L'ACHAT. On paie, la voiture neuve est posée sur l'aire de livraison, et on part au volant.
 // Elle est marquée `mienne` : c'est ELLE que la sauvegarde garde et qu'on retrouve au garage
@@ -12747,7 +12763,7 @@ function acheterAuConces(k) {
   closeUI();
   try { sfx.win(); } catch (e) {}
   burst(v.x, (v.y || 0) + 1.2, v.z, CONCES_JAUNE, 20);
-  msg(`🔑 ${g.e} ${g.fam} « ${g.n} » achetée ! −${g.p} 🪙 — elle t'attend sur l'aire de livraison`, 3400);
+  msg(`🔑 ${g.e} ${g.fam} « ${g.n} » achetée ! −${g.p} 🪙 — ${carrosserieDe(g.style).nom.toLowerCase()} livrée sur l'aire de livraison`, 3400);
   try { chat(null, `🚗 ${myCfg.name} vient d'acheter une ${g.fam} « ${g.n} » chez Blocs Motors (${g.p} 🪙)`); } catch (e) {}
   P.pos.set(sp.x + 1.8, 0.3, sp.z); P.vel.set(0, 0, 0);
   try { enterCar(v); } catch (e) {}

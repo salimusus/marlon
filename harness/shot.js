@@ -2132,6 +2132,11 @@ window.__G = {
   camLibres: typeof camLibres === 'function' ? camLibres : null,
   interieurDe: typeof interieurDe === 'function' ? interieurDe : null,
   // ---- poste CONCESSIONNAIRE (batiment vitre jaune, gammes, achat d'une voiture) ----
+  CARROSSERIES: typeof CARROSSERIES !== 'undefined' ? CARROSSERIES : null,
+  carrosserieDe: typeof carrosserieDe === 'function' ? carrosserieDe : null,
+  makeCarrosserie: typeof makeCarrosserie === 'function' ? makeCarrosserie : null,
+  panneauGamme: typeof panneauGamme === 'function' ? panneauGamme : null,
+  navPremier: typeof navPremier === 'function' ? navPremier : null,
   GAMMES: typeof GAMMES !== 'undefined' ? GAMMES : null,
   gammeDe: typeof gammeDe === 'function' ? gammeDe : null,
   etoilesGamme: typeof etoilesGamme === 'function' ? etoilesGamme : null,

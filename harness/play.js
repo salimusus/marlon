@@ -16027,6 +16027,7 @@ test('au volant la camera reste accrochee a la voiture : le recul suit la vitess
       res.regard = { tourne: +Math.abs((G.cam.yaw - y0) * 180 / Math.PI).toFixed(0), d: +dCar().toFixed(1) };
       ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
     } finally { navigator.getGamepads = vrai2; }
+    G.drive.speed = 0;   // (le bloc precedent laissait la voiture a 14 m/s : le recul « a l'arret » n'etait pas mesure a l'arret)
     res.recul = { arret: +G.reculConduite().toFixed(2) };
     G.drive.speed = c.spec.max; res.recul.fond = +G.reculConduite().toFixed(2);
     G.drive.speed = 0;
@@ -16036,7 +16037,7 @@ test('au volant la camera reste accrochee a la voiture : le recul suit la vitess
   const ok = r.voiture && r.dMax < 16.5 && r.dFin > 8 && r.kmhFin > 50 && r.lent < 16.5
     && r.choc.d > 3.6 && r.choc.d < 14 && r.recul.fond > 2.4 && r.recul.fond < 2.8 && r.recul.arret === 0
     && r.regard.tourne > 100 && r.regard.d < 16;
-  return { ok, detail: `defaut du Joueur : plein gaz, la camera decrochait — 11 → 25 → 34 → 41 → 46 → 50 m a 75 km/h, la voiture n'etait plus qu'un point · mesure ici, huit secondes plein gaz : ${r.course.map(v => v.kmh + ' km/h→' + v.d + ' m').join(' · ')} — au plus loin ${r.dMax} m, et ${r.lent} m meme avec des images d'une demi-seconde (c'est LA que le retard s'emballait : il se rattrape par image, il est maintenant borne a 2,5 m) · conforme au recul voulu (0 m a l'arret, ${r.recul.fond} m a fond, test 288) · a l'arret nez contre une facade (l'etat d'apres un choc, ou la camera collait au toit a 1,9 m) : ${r.choc.d} m, objectif a ${r.choc.camY} m de haut · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lacher la voiture (${r.regard.d} m)` };
+  return { ok, detail: `defaut du Joueur : plein gaz, la camera decrochait — 11 → 25 → 34 → 41 → 46 → 50 m a 75 km/h, la voiture n'etait plus qu'un point · mesure ici, huit secondes plein gaz : ${r.course.map(v => v.kmh + ' km/h→' + v.d + ' m').join(' · ')} — au plus loin ${r.dMax} m, et ${r.lent} m meme avec des images d'une demi-seconde (c'est LA que le retard s'emballait : il se rattrape par image, il est maintenant borne a 2,5 m) · conforme au recul voulu (${r.recul.arret} m a l'arret, ${r.recul.fond} m a fond, test 288) · a l'arret nez contre une facade (l'etat d'apres un choc, ou la camera collait au toit a 1,9 m) : ${r.choc.d} m, objectif a ${r.choc.camY} m de haut · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lacher la voiture (${r.regard.d} m)` };
 });
 
 test('L2 braque : la camera vient par-dessus l epaule et le stick droit y vise deux fois plus fin', async p => {

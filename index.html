@@ -9636,8 +9636,28 @@ function ridesTick(dt) {
 }
 const bank = { balance: +store.get('superobby.bank') || 0, coffresJour: 0, jourT: 0 };
 const saveBank = () => store.set('superobby.bank', String(bank.balance));
-function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert : hall et guichet, bureaux, salle des coffres
+function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert : hall et guichets, bureaux, salle des coffres
   const W = 20, D = 20, F = 4.8, H = F * 3, wallC = 0xe8e2d4, trim = 0xc9a84c, marble = 0xd6d0c4;
+  // ==================== LE PLAN DE LA BANQUE (demande du Joueur) ====================
+  // « La banque a toujours l'escalier collé contre le mur, réaménage l'emplacement,
+  // réorganise la banque. » Repère local : dx = x - bx (est positif), dz = z - bz (sud
+  // positif) ; les faces INTÉRIEURES des murs sont à ±9,60 m.
+  //   RDC : on entre à l'EST. Le tapis rouge part du seuil, traverse le hall, puis tourne
+  //         vers les GUICHETS du mur SUD (DÉPÔT à l'ouest, RETRAIT à l'est) ; la FILE
+  //         D'ATTENTE encadre cette branche. L'ACCUEIL est à droite en entrant, le BUREAU
+  //         DU CONSEILLER occupe l'angle sud-ouest derrière une cloison vitrée, le SALON
+  //         D'ATTENTE l'angle sud-est, et la bande ouest reste un COULOIR LIBRE de 5,60 m
+  //         qui mène au pied de l'escalier. La volée du 1ᵉʳ longe le nord, mais collée au
+  //         VIDE de l'atrium : il reste 2,00 m de passage derrière elle (0,40 m avant).
+  //   1ᵉʳ : bureaux au sud, coursives est et ouest. TOUT le bandeau nord est une trémie
+  //         ouverte sur la volée du RDC — sans elle on montait la tête sous la dalle
+  //         (1,60 m de passage au milieu de la volée).
+  //   2ᵉ  : SALLE DES COFFRES au nord et à l'ouest, sous les caméras et deux gardes ; le
+  //         bandeau sud est la trémie de la volée du 1ᵉʳ au 2ᵉ, elle aussi à 2,00 m du mur.
+  const A = 8;          // côté de l'atrium ouvert
+  const LARG = 3.6;     // largeur d'une volée (marches ET paliers)
+  const zN = bz - A / 2 - LARG / 2;   // axe de la volée RDC → 1ᵉʳ (son bord sud borde le vide)
+  const zS = bz + A / 2 + LARG / 2;   // axe de la volée 1ᵉʳ → 2ᵉ (son bord nord borde le vide)
   plat(bx, 0.36, bz, W, D, marble, { studs: false, noRoute: true }, 0.12);
   box(bx, H / 2, bz - D / 2 + 0.2, W, H, 0.4, wallC, { studs: false, noRoute: true }); box(bx, H / 2, bz + D / 2 - 0.2, W, H, 0.4, wallC, { studs: false, noRoute: true }); box(bx - W / 2 + 0.2, H / 2, bz, 0.4, H, D, wallC, { studs: false, noRoute: true });
   const ex = bx + W / 2 - 0.2;   // façade est avec la grande porte
@@ -9649,176 +9669,221 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   for (let f = 0; f < 3; f++) for (const dz of [-7, 7]) { box(ex + 0.25, f * F + 2.7, bz + dz, 0.1, 1.8, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(ex + 0.3, f * F + 3.7, bz + dz, 0.2, 0.15, 2.8, trim, { deco: true, studs: false }); }
   for (let f = 0; f < 3; f++) for (const dx of [-7, -2.5, 2.5, 7]) for (const side of [-1, 1]) { box(bx + dx, f * F + 2.7, bz + side * (D / 2 - 0.25), 2.4, 1.8, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); }   // fenêtres nord / sud
   box(bx, H + 0.3, bz, W + 0.6, 0.6, D + 0.6, trim, { deco: true, studs: false }); const dome = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lam(0x9fdcff)); dome.position.set(bx, H + 0.6, bz); worldGroup.add(dome);   // verrière
-  // planchers en anneau autour de l'atrium (ouverture centrale 8 × 8) + garde-corps dorés
-  const A = 8;
+  // ---------- LES PLANCHERS EN ANNEAU + LES GARDE-CORPS ----------
+  // Le bandeau PLEIN est au sud au 1ᵉʳ (les bureaux) et au nord au 2ᵉ (les coffres) : de
+  // l'autre côté, c'est la TRÉMIE de la volée qui arrive à cet étage. Avant, le bandeau
+  // nord du 1ᵉʳ s'avançait jusqu'à 1,20 m de la volée : on montait la tête sous la dalle.
+  const bande = (W - A) / 2 - 0.4, axeB = W / 2 - (W - A) / 4 - 0.2;   // 5,60 m de large, axe à 6,80 m
+  // Les marches commencent 3 m après la face du mur ouest (1,50 m avant) : cela laisse un
+  // VRAI PALIER DE DÉPART de 2,60 m devant la première marche, au lieu d'une fente de
+  // 1,10 m où l'on ne pouvait pas se placer.
+  const xEsc0 = bx - W / 2 + 3, xEsc1 = xEsc0 + 15;                    // départ et fin des marches
   for (let f = 1; f <= 2; f++) {
-    const y = f * F;
-    if (f === 1) { box(bx, y + 0.15, bz - A / 2 - 1.1, W - 0.8, 0.3, 2.2, marble, { studs: false, noRoute: true }); box(bx + W / 2 - 1.6, y + 0.15, bz - D / 2 + 2.2, 2.8, 0.3, 3.2, marble, { studs: false, noRoute: true }); box(bx, y + 0.15, bz + D / 2 - (D - A) / 4 - 0.2, W - 0.8, 0.3, (D - A) / 2 - 0.4, marble, { studs: false, noRoute: true }); }   // trémie au-dessus de l'escalier nord
-    else { box(bx, y + 0.15, bz - D / 2 + (D - A) / 4 + 0.2, W - 0.8, 0.3, (D - A) / 2 - 0.4, marble, { studs: false, noRoute: true }); box(bx, y + 0.15, bz + A / 2 + 1.1, W - 0.8, 0.3, 2.2, marble, { studs: false, noRoute: true }); box(bx - W / 2 + 1.6, y + 0.15, bz + D / 2 - 2.2, 2.8, 0.3, 3.2, marble, { studs: false, noRoute: true }); }   // trémie au-dessus de l'escalier sud
-    box(bx - W / 2 + (W - A) / 4 + 0.2, y + 0.15, bz, (W - A) / 2 - 0.4, 0.3, A, marble, { studs: false, noRoute: true }); box(bx + W / 2 - (W - A) / 4 - 0.2, y + 0.15, bz, (W - A) / 2 - 0.4, 0.3, A, marble, { studs: false, noRoute: true });
-    for (const [rx, rz, rw, rd] of [[bx, bz - A / 2, A, 0.15], [bx, bz + A / 2, A, 0.15], [bx - A / 2, bz, 0.15, A], [bx + A / 2, bz, 0.15, A]]) { box(rx, y + 0.85, rz, rw, 1.1, rd, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); box(rx, y + 1.42, rz, rw + 0.1, 0.1, rd + 0.1, trim, { deco: true, studs: false }); }
+    const y = f * F, sens = f === 1 ? 1 : -1;   // +1 = plancher au sud (1ᵉʳ), −1 = au nord (2ᵉ)
+    box(bx - axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });
+    box(bx + axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });
+    box(bx, y + 0.15, bz + sens * axeB, W - 0.8, 0.3, bande, marble, { studs: false, noRoute: true });
+    // Garde-corps : uniquement sur les bords qui donnent sur le vide, et JAMAIS devant la
+    // sortie du palier d'escalier (avant, la rampe barrait la seule issue de l'arrivée).
+    const bords = [[bx - A / 2, bz, 0.15, A], [bx + A / 2, bz, 0.15, A], [bx, bz + sens * A / 2, A, 0.15]];
+    if (f === 1) {   // la volée du RDC débouche au nord-est : on laisse ouvert de xEsc1 au mur
+      bords.push([bx - axeB, bz - A / 2, bande, 0.15]);
+      bords.push([(bx + 4 + xEsc1 - 1.5) / 2, bz - A / 2, (xEsc1 - 1.5) - (bx + 4), 0.15]);
+    } else {         // la volée du 1ᵉʳ débouche au sud-ouest : ouvert du mur à xEsc0 + 1,50 m
+      bords.push([bx + axeB, bz + A / 2, bande, 0.15]);
+      bords.push([(bx - 4 + xEsc0 + 1.5) / 2, bz + A / 2, (bx - 4) - (xEsc0 + 1.5), 0.15]);
+    }
+    for (const [rx, rz, rw, rd] of bords) { box(rx, y + 0.85, rz, rw, 1.1, rd, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); box(rx, y + 1.42, rz, rw + 0.1, 0.1, rd + 0.1, trim, { deco: true, studs: false }); }
   }
-  // escaliers larges (3 m) avec rampes : RDC → étage 1 le long du mur nord, étage 1 → 2 le long du mur sud
-  // Escaliers larges (3 m) : marches à claire-voie qui partent du plancher de départ et
-  // arrivent au ras du plancher d'arrivée. Avant, c'étaient des blocs pleins montant du sol,
-  // et la dernière marche dépassait le plancher de 11 cm.
+  // ---------- LES DEUX VOLÉES, DÉCOLLÉES DU MUR ----------
+  // Avant, le bord de la volée passait à 40 cm de la paroi : une fente où l'on ne pouvait ni
+  // marcher ni faire tenir la caméra, et l'enfant a redit « l'escalier est collé contre le
+  // mur ». Chaque volée se colle maintenant au VIDE DE L'ATRIUM : 2,00 m de dégagement entre
+  // la volée et le mur qu'elle longe, une main courante DE CHAQUE CÔTÉ (les deux bords
+  // donnent sur le vide), un palier aussi large que la volée à l'arrivée, et la sortie de ce
+  // palier laissée libre. Marches inchangées : 1,50 m de giron, 47,4 cm de contremarche —
+  // la même géométrie que les escaliers des villas, que le pas du joueur (STEP_UP) franchit.
   const escaliers = [];
-  // La volée flottait à 45 cm du mur, main courante comprise : on montait dans une fente, et
-  // la bande de marbre entre la rampe et la paroi ne servait à rien. On l'élargit à 3,60 m
-  // pour qu'elle vienne SE PLAQUER contre le mur — plus de fente — et on ne garde la rampe
-  // que du côté du hall, le mur faisant garde-corps de l'autre. L'AXE ne bouge pas d'un
-  // centimètre : les policiers à pied s'y repèrent pour monter aux coffres.
-  const LARG = 3.6;
-  const stairs = (y0, y1, zc, dir, cote) => {
-    const n = 10, len = 1.5, x0 = bx - W / 2 + 1.5, rise = (y1 - y0) / n;
+  const stairs = (y0, y1, zc, dir, dehors) => {
+    const n = 10, len = 1.5, x0 = xEsc0, rise = (y1 - y0) / n;
     // mémorisé pour que les policiers à pied trouvent l'escalier et montent aux étages
-    escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });   // 35 cm : plus près du mur, un agent naissait dedans et ne pouvait plus bouger
+    escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });
     for (let i = 0; i < n; i++) {
       const x = x0 + (dir > 0 ? i : n - 1 - i) * len + len / 2, top = y0 + (i + 1) * rise;
       // Une marche = un bloc plein, haut d'une contremarche : la dalle fine de 18 cm avec sa
-      // contremarche de 10 cm collée à l'arrière laissait un vide béant sous chaque marche —
-      // on voyait le mur à travers l'escalier, qui semblait fait de dalles flottantes.
+      // contremarche de 10 cm collée à l'arrière laissait un vide béant sous chaque marche.
       box(x, top - rise / 2, zc, len + 0.06, rise, LARG, marble, { studs: false, noRoute: true });
-      {   // balustres et main courante côté hall, marche par marche (côté mur : le mur suffit)
-        const sz = cote * (LARG / 2 - 0.12);
+      for (const c2 of [-1, 1]) {   // balustres et main courante DES DEUX CÔTÉS
+        const sz = c2 * (LARG / 2 - 0.12);
         box(x, top + 0.5, zc + sz, 0.09, 1, 0.09, trim, { deco: true, studs: false });
         box(x, top + 1, zc + sz, len + 0.3, 0.12, 0.12, trim, { deco: true, studs: false });
       }
     }
-    // LE PALIER D'ARRIVÉE — la dernière partie de l'escalier, qui manquait.
-    // La dernière marche s'arrêtait 47 cm avant le plancher de l'étage, et la petite dalle
-    // d'angle qui en tenait lieu était 60 cm moins large que la volée et décalée sur le
-    // côté : depuis le hall, la volée SEMBLAIT S'ARRÊTER EN L'AIR, sans palier ni suite, et
-    // l'enfant ne montait pas au 2ᵉ étage faute de voir où l'escalier continuait.
-    // Chaque volée arrive désormais sur un vrai palier de marbre, aussi large qu'elle
-    // (3,60 m), jointif avec la dernière marche, qui file jusqu'au mur — main courante
-    // comprise, dans le style des marches.
+    // LE PALIER D'ARRIVÉE : du marbre continu, aussi large que la volée, jointif avec la
+    // dernière marche et filant jusqu'au mur. Sa rampe ne court que du côté `dehors` (celui
+    // du mur) : de l'autre, on doit pouvoir quitter le palier pour gagner la coursive.
     const xA = dir > 0 ? x0 + n * len : bx - W / 2 + 0.4, xB = dir > 0 ? bx + W / 2 - 0.4 : x0, wP = xB - xA;
     box((xA + xB) / 2, y1 - 0.15, zc, wP, 0.3, LARG, marble, { studs: false, noRoute: true });
     {
-      const sz = cote * (LARG / 2 - 0.12);
+      const sz = dehors * (LARG / 2 - 0.12);
       for (let k = 0; k <= 2; k++) box(xA + wP * k / 2, y1 + 0.5, zc + sz, 0.09, 1, 0.09, trim, { deco: true, studs: false });
       box((xA + xB) / 2, y1 + 1, zc + sz, wP, 0.12, 0.12, trim, { deco: true, studs: false });
     }
   };
-  // Les deux volées rasaient le mur : 65 cm entre la main courante et la paroi, on montait
-  // dans une fente. On les rentre d'1,20 m dans le hall — 1,85 m de dégagement — sans toucher
-  // au comptoir (à l'ouest) ni au tapis central.
-  // Les deux volées sont décollées du mur de 1,40 m : on monte sans se frotter à la paroi,
-  // et il reste 1,40 m de palier au pied pour se placer devant la première marche.
-  stairs(0.36, F + 0.3, bz - D / 2 + 2.6, 1, 1); stairs(F + 0.3, F * 2 + 0.3, bz + D / 2 - 2.6, -1, -1);   // rampe côté hall
-  // rez-de-chaussée : hall en marbre, tapis rouge, comptoir avec écrans, employés, plantes, horloge, lustre, tableaux
-  box(bx, 0.42, bz, 4, 0.04, D - 4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
-  box(bx - 6, 0.9, bz, 1.2, 1.1, 8, C.wood, { studs: false, noRoute: true }); box(bx - 6, 1.5, bz, 1.4, 0.15, 8.2, trim, { deco: true, studs: false });
-  for (const dz of [-2.6, 2.6]) { box(bx - 6, 2.4, bz + dz, 0.06, 1.6, 2.6, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(bx - 6.45, 1.98, bz + dz, 0.06, 0.5, 0.7, 0x111111, { deco: true, studs: false }); box(bx - 6.45, 1.6, bz + dz, 0.2, 0.04, 0.3, 0x2b2f3a, { deco: true, studs: false }); box(bx - 6.45, 1.68, bz + dz, 0.05, 0.12, 0.05, 0x2b2f3a, { deco: true, studs: false }); const emp = mannequin(bx - 7.6, bz + dz, Math.PI / 2, { jersey: 8, jacket: 1, hair: dz < 0 ? 2 : 1, hairColor: 2, skirt: dz < 0 }); emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dz < 0 ? 'Sophie · guichet' : 'Karim · guichet'); }
-  city.bankDesk = { x: bx - 4.4, z: bz };
-  for (const [dx, dz] of [[8, -8], [8, 8], [-8, 8], [-8, -8]]) { box(bx + dx, 0.7, bz + dz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false }); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), lam(0x3fae4a)); pl.position.set(bx + dx, 1.75, bz + dz); worldGroup.add(pl); }
-  for (const dz of [-3, 3]) bench(bx + 4, bz + dz, dz < 0 ? 0 : Math.PI);   // rapprochés du centre : les volées déplacées passaient dessus
+  stairs(0.36, F + 0.3, zN, 1, -1); stairs(F + 0.3, F * 2 + 0.3, zS, -1, 1);
+  // ---------- REZ-DE-CHAUSSÉE ----------
+  // LE TAPIS ROUGE EN ÉQUERRE : il filait du nord au sud, en travers du chemin. Il part
+  // maintenant du seuil (est), traverse le hall, puis tourne vers les GUICHETS (sud) : la
+  // première chose qu'on voit en entrant, c'est le chemin à suivre.
+  box(bx + 2.6, 0.42, bz, 14, 0.04, 3.2, 0xc23b5a, { deco: true, noEdges: true, studs: false });
+  box(bx, 0.42, bz + 4.4, 3.2, 0.04, 6.4, 0xc23b5a, { deco: true, noEdges: true, studs: false });
+  // LES GUICHETS passent sur le mur SUD. Contre le mur ouest, ils barraient le seul chemin
+  // qui mène au pied de l'escalier : pour monter, il fallait passer DERRIÈRE le comptoir,
+  // du côté des employés. La bande ouest est maintenant un couloir libre de 5,60 m.
+  box(bx, 0.9, bz + 7.5, 8, 1.1, 1.2, C.wood, { studs: false, noRoute: true }); box(bx, 1.5, bz + 7.5, 8.2, 0.15, 1.4, trim, { deco: true, studs: false });
+  for (const dx of [-2.6, 2.6]) {
+    box(bx + dx, 2.4, bz + 7.5, 2.6, 1.6, 0.06, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
+    box(bx + dx, 1.98, bz + 7.95, 0.7, 0.5, 0.06, 0x111111, { deco: true, studs: false });
+    box(bx + dx, 1.6, bz + 7.9, 0.3, 0.04, 0.2, 0x2b2f3a, { deco: true, studs: false });
+    box(bx + dx, 1.68, bz + 7.9, 0.05, 0.12, 0.05, 0x2b2f3a, { deco: true, studs: false });
+    const emp = mannequin(bx + dx, bz + 8.7, Math.PI, { jersey: 8, jacket: 1, hair: dx < 0 ? 2 : 1, hairColor: 2, skirt: dx < 0 });
+    emp.group.position.y = 0.36; emp.tag.visible = true; renommeEtiquette(emp, dx < 0 ? 'Sophie · dépôt' : 'Karim · retrait');
+  }
+  // On lit SANS DEMANDER à quel guichet aller : deux plaques au-dessus du comptoir, hautes
+  // de 3,25 m à 3,95 m — au-dessus des têtes, jamais dans le passage.
+  for (const [dx, txt] of [[-2.6, '💰 DÉPÔT'], [2.6, '💵 RETRAIT']])
+    box(bx + dx, 3.6, bz + 6.85, 2.4, 0.7, 0.08, 0xffffff, { material: matPlaque(txt), deco: true, noEdges: true });
+  city.bankDesk = { x: bx, z: bz + 5.9 };
+  // LA FILE D'ATTENTE encadre la branche sud du tapis et mène droit aux guichets. Avant, ses
+  // poteaux étaient plantés DANS le comptoir et DERRIÈRE, du côté des employés.
+  for (const dx of [-2.2, 2.2]) {
+    for (const dz of [2.2, 3.9, 5.6]) { const po = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1, 8), lam(trim)); po.position.set(bx + dx, 0.86, bz + dz); worldGroup.add(po); }
+    for (const dz of [3.05, 4.75]) box(bx + dx, 1.2, bz + dz, 0.06, 0.06, 1.7, 0x8b1a2b, { deco: true, studs: false });
+  }
+  { const po = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.4, 8), lam(trim)); po.position.set(bx + 2.2, 1.06, bz + 1.2); worldGroup.add(po);
+    box(bx + 2.2, 2.0, bz + 1.2, 0.07, 0.5, 1.7, 0xffffff, { material: matPlaque('FILE D\'ATTENTE'), deco: true, noEdges: true }); }
+  // L'ACCUEIL, à droite en entrant. Avant, un « comptoir d'accueil » de 5,20 m était planté
+  // EN TRAVERS du comptoir des guichets : les deux meubles s'interpénétraient et fermaient
+  // tout l'ouest du hall. Il revient là où il sert, face à la porte, hors du tapis.
+  box(bx + 6.4, 0.95, bz - 3.1, 1.1, 1.2, 1.8, 0x6b4423, { studs: false, noRoute: true });
+  box(bx + 6.4, 1.62, bz - 3.1, 1.3, 0.14, 2.0, trim, { deco: true, studs: false });
+  for (const dz of [-0.5, 0.5]) { box(bx + 6.55, 2.06, bz - 3.1 + dz, 0.06, 0.5, 0.8, 0x111111, { deco: true, studs: false });
+    box(bx + 6.55, 1.72, bz - 3.1 + dz, 0.2, 0.04, 0.3, 0x3b4252, { deco: true, studs: false }); }
+  { const pied = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), lam(0x2b2f3a)); pied.position.set(bx + 6.4, 1.71, bz - 3.8); worldGroup.add(pied);
+    const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 8), lam(0x2b2f3a)); tige.position.set(bx + 6.4, 1.93, bz - 3.8); worldGroup.add(tige);
+    const l = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8, side: THREE.DoubleSide }));
+    l.position.set(bx + 6.4, 2.2, bz - 3.8); worldGroup.add(l);
+    const ho = mannequin(bx + 7.4, bz - 3.1, -Math.PI / 2, { jersey: 8, jacket: 1, hair: 3, hairColor: 3, skirt: true }); ho.group.position.y = 0.36; ho.tag.visible = true; renommeEtiquette(ho, 'Nour · accueil'); }
+  box(bx + 5.8, 2.7, bz - 3.1, 0.08, 0.55, 1.9, 0xffffff, { material: matPlaque('ACCUEIL'), deco: true, noEdges: true });
+  // LE PLAN DES ÉTAGES, lisible du seuil : sur le mur est, à côté de la porte.
+  box(bx + W / 2 - 0.45, 2.9, bz + 3.4, 0.08, 0.9, 3.0, 0xffffff, { material: matPlaque('1ᵉʳ BUREAUX · 2ᵉ COFFRES'), deco: true, noEdges: true });
+  // LE BUREAU DU CONSEILLER : angle sud-ouest, cloison vitrée, porte de 2,40 m côté hall
+  {
+    box(bx - 8.3, 1.66, bz + 5.0, 2.6, 2.6, 0.12, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true });
+    box(bx - 4.6, 1.66, bz + 7.3, 0.12, 2.6, 4.6, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true });
+    box(bx - 8.3, 3.02, bz + 5.0, 2.7, 0.12, 0.2, trim, { deco: true, studs: false });
+    box(bx - 4.6, 3.02, bz + 7.3, 0.2, 0.12, 4.7, trim, { deco: true, studs: false });
+    box(bx - 5.8, 2.6, bz + 5.0, 2.2, 0.58, 0.08, 0xffffff, { material: matPlaque('CONSEILLER'), deco: true, noEdges: true });
+    box(bx - 7.2, 1.06, bz + 8.2, 2.2, 0.12, 1.0, C.wood, { studs: false, noRoute: true });
+    for (const dx of [-0.95, 0.95]) box(bx - 7.2 + dx, 0.71, bz + 8.2, 0.1, 0.7, 0.9, C.wood, { deco: true, studs: false });
+    box(bx - 7.6, 1.42, bz + 8.3, 0.9, 0.55, 0.06, 0x111111, { deco: true, studs: false });
+    box(bx - 6.6, 1.15, bz + 8.2, 0.5, 0.06, 0.35, 0xf4f6fa, { deco: true, studs: false });
+    for (const dx of [-0.7, 0.7]) { box(bx - 7.2 + dx, 0.82, bz + 7.2, 0.55, 0.06, 0.55, 0x4f8dff, { deco: true, studs: false });
+      box(bx - 7.2 + dx, 1.11, bz + 6.94, 0.55, 0.62, 0.06, 0x4f8dff, { deco: true, studs: false }); }
+    const cs = mannequin(bx - 7.2, bz + 9.1, Math.PI, { jersey: 8, jacket: 1, hair: 1, hairColor: 1, skirt: true }); cs.group.position.y = 0.36; cs.tag.visible = true; renommeEtiquette(cs, 'Claire · conseillère');
+  }
+  // LE SALON D'ATTENTE : angle sud-est, deux canapés qui se font face autour de la table
+  for (const [sx2, sz2, ry] of [[6.4, 5.6, 0], [6.4, 8.6, Math.PI]]) {
+    box(bx + sx2, 0.62, bz + sz2, 2.8, 0.5, 1.0, 0x4f8dff, { studs: false, noRoute: true, assise: 0.62 });
+    box(bx + sx2, 1.1, bz + sz2 + (ry ? 0.5 : -0.5), 2.8, 0.9, 0.25, 0x3a6fd8, { deco: true, studs: false });
+    city.benches.push({ x: bx + sx2, y: 0.36, z: bz + sz2, assise: 0.5, facing: ry });
+  }
+  box(bx + 6.4, 0.62, bz + 7.1, 1.6, 0.12, 1.0, 0x9fdcff, { deco: true, studs: false });
+  box(bx + 6.4, 0.4, bz + 7.1, 0.2, 0.5, 0.2, 0x8f98ab, { deco: true, studs: false });
+  for (let i = 0; i < 3; i++) box(bx + 6.1 + i * 0.3, 0.7, bz + 7.1 + rnd(-0.3, 0.3), 0.4, 0.03, 0.3, [0xff5c5c, 0xffd23f, 0x3ef2ff][i], { deco: true, studs: false });
+  // QUATRE COLONNES aux angles du hall central : à ±6 m, la nouvelle volée nord leur passait
+  // dessus et l'une d'elles se plantait dans la file d'attente.
+  for (const cx of [-4.6, 4.6]) for (const cz of [-3, 3]) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, F - 0.4, 12), lam(marble));
+    c.position.set(bx + cx, (F - 0.4) / 2 + 0.36, bz + cz); worldGroup.add(c);
+    solids.push({ mesh: c, x: bx + cx, y: F / 2, z: bz + cz, w: 0.9, h: F, d: 0.9 });
+    box(bx + cx, F - 0.1, bz + cz, 1.1, 0.22, 1.1, trim, { deco: true, studs: false });
+    box(bx + cx, 0.5, bz + cz, 1.1, 0.22, 1.1, trim, { deco: true, studs: false });
+  }
+  sgridSale();
+  // DEUX DISTRIBUTEURS contre le mur est, en retrait de la porte
+  for (const dz of [-5.6, 5.6]) {
+    const ex2 = bx + W / 2 - 1.3;
+    box(ex2, 1.2, bz + dz, 0.7, 1.8, 1.2, 0x3b4252, { studs: false, noRoute: true });
+    box(ex2 - 0.38, 1.55, bz + dz, 0.06, 0.6, 0.8, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
+    box(ex2 - 0.38, 1.0, bz + dz, 0.06, 0.18, 0.5, trim, { deco: true, studs: false });
+  }
+  // LES PLANTES aux quatre angles (elles étaient posées DEUX FOIS au même endroit). Un bac
+  // est SOLIDE pour le joueur (solidifieDecor le ramasse) : à 8,80 m du centre il mordait de
+  // 10 cm sur le couloir de 1,80 m qui passe derrière la volée. Il rentre dans l'angle exact.
+  for (const [px, pz] of [[-9.15, -9.15], [9.15, -9.15], [9.15, 9.15], [-9.15, 9.15]]) {
+    box(bx + px, 0.7, bz + pz, 0.7, 0.7, 0.7, 0x8b4a2b, { deco: true, studs: false });
+    const pl = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8), lam(0x3fae4a)); pl.position.set(bx + px, 1.7, bz + pz); pl.scale.y = 1.25; worldGroup.add(pl);
+  }
+  // L'HORLOGE du hall (ses aiguilles suivent l'heure du jeu) et celle du mur ouest
   const clock = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.1, 20), lam(0xffffff)); clock.rotation.x = Math.PI / 2; clock.position.set(bx, 3.6, bz - D / 2 + 0.5); worldGroup.add(clock); city.bankClock = { c: clock, x: bx, z: bz - D / 2 + 0.44 };
   city.bankHands = [0, 1].map(i => { const h = new THREE.Mesh(unitBox, lam(0x111111)); h.scale.set(0.06, i ? 0.7 : 0.5, 0.02); h.position.set(bx, 3.6, bz - D / 2 + 0.43); worldGroup.add(h); return h; });
-  const chand = new THREE.Group(); chand.position.set(bx, H - 0.6, bz); worldGroup.add(chand); const chain = new THREE.Mesh(unitBox, lam(trim)); chain.scale.set(0.06, 1.2, 0.06); chain.position.y = 0.6; chand.add(chain); const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.08, 8, 24), lam(trim)); ring.rotation.x = Math.PI / 2; chand.add(ring); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), neonMat(0xfff2b0)); b.position.set(Math.cos(a) * 1.6, -0.2, Math.sin(a) * 1.6); chand.add(b); }   // lustre dans l'atrium
-  for (const [px, pz, ry, col] of [[bx - 4, bz + D / 2 - 0.3, 0, 0x4f8dff], [bx + 4, bz + D / 2 - 0.3, 0, 0xff8f3a]]) { box(px, 2.5, pz, 2.2, 1.5, 0.1, trim, { deco: true, studs: false }); box(px, 2.5, pz - 0.06, 1.9, 1.2, 0.05, col, { deco: true, noEdges: true, studs: false }); }   // tableaux
-  // étage 1 : bureaux vitrés, ordinateurs, photocopieuse, distributeur
+  // LA DEUXIÈME HORLOGE, sur le mur ouest, EST SUPPRIMÉE. Il y en avait deux dans la même
+  // salle, et celle-ci (0,90 m de rayon, 3,20 m de haut, débordant de 16 cm du mur) était
+  // pile dans l'axe du nouveau couloir ouest : quand le joueur regarde vers l'ouest, la
+  // caméra passe derrière le mur (maison de poupée) et l'horloge, elle, restait pleine —
+  // elle bouchait le personnage (test 370). Le mur du couloir reste nu, c'est un passage.
+  // LE LUSTRE de l'atrium (il y en avait DEUX, empilés au même endroit)
+  const chand = new THREE.Group(); chand.position.set(bx, H - 0.6, bz); worldGroup.add(chand); const chain = new THREE.Mesh(unitBox, lam(trim)); chain.scale.set(0.06, 1.2, 0.06); chain.position.y = 0.6; chand.add(chain); const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.08, 8, 24), lam(trim)); ring.rotation.x = Math.PI / 2; chand.add(ring); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), neonMat(0xfff2b0)); b.position.set(Math.cos(a) * 1.6, -0.2, Math.sin(a) * 1.6); chand.add(b); }
+  // LES TABLEAUX : deux sur le mur ouest (le couloir de l'escalier), deux sur le mur est
+  for (const [tz, col] of [[-3.4, 0x2f6f4a], [3.4, 0x6b3a5a]]) {
+    box(bx - W / 2 + 0.5, 2.6, bz + tz, 0.12, 1.6, 2.2, trim, { deco: true, studs: false });
+    box(bx - W / 2 + 0.56, 2.6, bz + tz, 0.06, 1.3, 1.9, col, { deco: true, studs: false });
+  }
+  for (const [tz, col] of [[-7.2, 0x4f8dff], [7.2, 0xff8f3a]]) {
+    box(bx + W / 2 - 0.5, 2.6, bz + tz, 0.12, 1.6, 2.2, trim, { deco: true, studs: false });
+    box(bx + W / 2 - 0.56, 2.6, bz + tz, 0.06, 1.3, 1.9, col, { deco: true, studs: false });
+  }
+  // ---------- 1ᵉʳ ÉTAGE : les bureaux, au sud ----------
   for (const [dx, dz] of [[-6, 6], [0, 7], [6, 6]]) { box(bx + dx, F + 0.85, bz + dz, 2.4, 0.12, 1.2, C.wood, { deco: true, studs: false }); box(bx + dx, F + 1.2, bz + dz - 0.3, 1, 0.55, 0.06, 0x111111, { deco: true, studs: false }); box(bx + dx, F + 0.6, bz + dz + 1.2, 0.6, 0.6, 0.6, 0x3b4252, { deco: true, studs: false }); box(bx + dx, F + 0.9, bz + dz, 0.4, 0.05, 0.3, 0xffffff, { deco: true, noEdges: true, studs: false }); }
-  box(bx - 7.5, F + 1.1, bz - 6, 1.2, 1.5, 1.2, 0xd6e4ff, { deco: true, studs: false });
-  // Le distributeur était planté juste au débouché de l'escalier, en travers du palier : on
-  // arrivait du rez-de-chaussée dans une machine à boissons. Il passe contre le mur est, le
-  // long de la coursive qui mène à la volée du 2ᵉ étage.
+  // La photocopieuse était posée au nord, là où il n'y a plus de plancher : elle rejoint le
+  // mur sud, au bout de la rangée de bureaux.
+  box(bx - 8.6, F + 1.1, bz + 8.4, 1.2, 1.5, 1.2, 0xd6e4ff, { deco: true, studs: false });
+  // Le distributeur était planté en travers du palier d'arrivée : il passe contre le mur est.
   box(bx + W / 2 - 1.1, F + 1.3, bz + 2, 0.8, 1.9, 1, 0x4f8dff, { deco: true, studs: false }); box(bx + W / 2 - 1.55, F + 1.7, bz + 2, 0.05, 0.4, 0.6, 0x3ef2ff, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
-  box(bx, F + 2.5, bz + D / 2 - 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('BUREAUX · ACCÈS RÉSERVÉ') }), deco: true, noEdges: true });
-  // Arrivé au 1ᵉʳ étage, on ne savait plus où aller : la volée du 2ᵉ longe le mur SUD, à
-  // quinze mètres. Une pancarte au-dessus du palier d'arrivée montre la coursive à suivre.
-  { const pan = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.MeshBasicMaterial({ map: plaqueTexture('COFFRES · 2ᵉ ÉTAGE →') }));
-    pan.position.set(bx + W / 2 - 0.42, F + 2.7, bz - 6.4); pan.rotation.y = -Math.PI / 2; worldGroup.add(pan); }
-  // étage 2 : salle des coffres — porte blindée, coffres avec lingots, caméras, lampes rouges
-  box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: plaqueTexture('🔐 SALLE DES COFFRES') }), deco: true, noEdges: true });
+  box(bx, F + 2.5, bz + D / 2 - 0.35, 6, 1.2, 0.1, 0xffffff, { material: matPlaque('BUREAUX · ACCÈS RÉSERVÉ'), deco: true, noEdges: true });
+  // Arrivé au 1ᵉʳ on ne savait plus où aller : la volée du 2ᵉ longe le mur SUD. Une plaque
+  // sur le mur est (là où l'on débouche) et une pancarte suspendue AU PIED de la volée.
+  box(bx + W / 2 - 0.45, F + 2.8, bz - 1.4, 0.08, 0.85, 2.9, 0xffffff, { material: matPlaque('COFFRES · 2ᵉ ÉTAGE'), deco: true, noEdges: true });
+  box(bx + 6.6, F + 2.9, bz + A / 2, 2.8, 0.8, 0.08, 0xffffff, { material: matPlaque('🔐 COFFRES 2ᵉ'), deco: true, noEdges: true });
+  // ---------- 2ᵉ ÉTAGE : la salle des coffres, au nord et à l'ouest ----------
+  box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: matPlaque('🔐 SALLE DES COFFRES'), deco: true, noEdges: true });
   const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 24), lam(0x8f98ab)); vd.rotation.x = Math.PI / 2; vd.position.set(bx + 6, 2 * F + 2.1, bz - 6.5); worldGroup.add(vd); const vw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 16), lam(0xffd23f)); vw.position.set(bx + 6, 2 * F + 2.1, bz - 6.22); worldGroup.add(vw);
   city.safes = [];
+  // Les coffres étaient alignés jusqu'à dz = +6, c'est-à-dire AU-DESSUS de la trémie de la
+  // volée du 2ᵉ : ils flottaient. Ils se resserrent le long du mur ouest, tous sur le
+  // plancher, avec 1,60 m de dégagement devant chacun.
   for (let i = 0; i < 4; i++) {
-    const sx = bx - W / 2 + 1.2, sz = bz - 6 + i * 4, y = 2 * F + 0.3;
+    const sx = bx - W / 2 + 1.2, sz = bz - 7.5 + i * 3, y = 2 * F + 0.3;
     box(sx, y + 0.95, sz, 1.6, 1.9, 1.6, 0x6b7280, { studs: false, noRoute: true });
     for (let k = 0; k < 4; k++) box(sx + 0.2, y + 0.45 + (k % 2) * 0.32, sz - 0.3 + Math.floor(k / 2) * 0.6, 0.6, 0.28, 0.45, 0xffd23f, { deco: true, studs: false });   // lingots à l'intérieur
     const door = new THREE.Mesh(unitRound, lam(0x4a5060)); door.scale.set(0.14, 1.7, 1.4); door.position.set(sx + 0.82, y + 0.95, sz); worldGroup.add(door);
     const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), lam(0xffd23f)); dial.rotation.z = Math.PI / 2; dial.position.set(sx + 0.93, y + 1.05, sz); worldGroup.add(dial);
     city.safes.push({ x: sx + 1.6, z: sz, y, door, dial, open: false, progress: 0, amount: 500 });
   }
-  for (const [cx, cz] of [[bx - 8, bz + 8], [bx + 8, bz - 8]]) { box(cx, 2 * F + 3.6, cz, 0.35, 0.3, 0.7, 0x111111, { deco: true, studs: false }); box(cx, 2 * F + 3.6, cz + 0.45, 0.12, 0.12, 0.12, 0, { material: neonMat(0xff2020), deco: true, noEdges: true }); }   // caméras
-  // gardes
+  for (const [cx, cz] of [[bx - 8.6, bz - 8.6], [bx + 8.6, bz - 1]]) { box(cx, 2 * F + 3.6, cz, 0.35, 0.3, 0.7, 0x111111, { deco: true, studs: false }); box(cx, 2 * F + 3.6, cz + 0.45, 0.12, 0.12, 0.12, 0, { material: neonMat(0xff2020), deco: true, noEdges: true }); }   // caméras
+  // lingots et liasses sur le comptoir de l'étage des coffres
+  for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, trim, { deco: true, studs: false });
+  for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
+  // ---------- LES GARDES ----------
+  // Leurs rondes passaient par des points qui sont maintenant au-dessus du vide : chacune
+  // reste désormais sur le plancher de son étage, sans jamais traverser une trémie.
   city.guards = [];
   const mkGuard = (name, floorY, pts) => { const av = buildAvatar({ name, jersey: 12, pants: PAL.pants[1], cap: 0x1b2a4a, num: 1, hat: 'helmet', jacket: 1, glasses: true, m: 60 }); av.group.position.set(pts[0][0], floorY, pts[0][1]); city.mannequins.push(av); city.guards.push({ av, name, x: pts[0][0], z: pts[0][1], y: floorY, pts, i: 1, hp: 100, ko: 0, hitCd: 0, wait: 0 }); };
-  mkGuard('Garde Léo', F + 0.3, [[bx + 7, bz - 7], [bx - 7, bz - 7], [bx - 7, bz + 7], [bx + 7, bz + 7]]);
-  mkGuard('Garde Nina', 2 * F + 0.3, [[bx + 7, bz - 8], [bx + 7, bz + 8], [bx - 7, bz + 8], [bx - 7, bz - 8]]);
-  mkGuard('Garde Tom', 2 * F + 0.3, [[bx - 6, bz + 2], [bx - 6, bz - 8], [bx + 2, bz - 8]]);
+  mkGuard('Garde Léo', F + 0.3, [[bx + 7, bz + 8.6], [bx - 7, bz + 8.6]]);                       // 1ᵉʳ : derrière la rangée de bureaux, au sud de la volée du 2ᵉ
+  mkGuard('Garde Nina', 2 * F + 0.3, [[bx + 7, bz - 6.6], [bx - 7, bz - 6.6]]);                  // 2ᵉ : devant la porte blindée
+  mkGuard('Garde Tom', 2 * F + 0.3, [[bx - 6.6, bz + 2.6], [bx - 6.6, bz - 6.6]]);               // 2ᵉ : la rangée des coffres
   lamp(ex + 4.5, bz - 6); lamp(ex + 4.5, bz + 6); flowerBed(ex + 3, bz + 8.5, 1.4, 3); flowerBed(ex + 3, bz - 8.5, 1.4, 3);
-  // ---- décor du hall : colonnes, guichets, distributeurs, salon, lustre, tableaux ----
-  {
-    const bois = 0x6b4423, or = 0xc9a84c, verre = 0x9fdcff;
-    // quatre colonnes de marbre à chapiteau doré
-    for (const cx of [-6, 6]) for (const cz of [-6, 6]) {
-      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, F - 0.4, 12), lam(marble));
-      c.position.set(bx + cx, (F - 0.4) / 2 + 0.36, bz + cz); worldGroup.add(c);
-      solids.push({ mesh: c, x: bx + cx, y: F / 2, z: bz + cz, w: 0.9, h: F, d: 0.9 }); sgridSale();
-      box(bx + cx, F - 0.1, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
-      box(bx + cx, 0.5, bz + cz, 1.1, 0.22, 1.1, or, { deco: true, studs: false });
-    }
-    // comptoir d'accueil courbe avec vitre, ordinateurs et lampe
-    box(bx - 5.5, 0.95, bz - 2, 5.2, 1.2, 0.9, bois, { studs: false, noRoute: true });
-    box(bx - 5.5, 1.62, bz - 2, 5.4, 0.14, 1.1, or, { deco: true, studs: false });
-    box(bx - 5.5, 2.3, bz - 2, 5.2, 1.2, 0.06, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
-    // Les écrans ont un PIED (socle + tige) et la lampe un vrai pied : posés sur le comptoir,
-    // ils ne flottent plus et le cône jaune n'est plus une « pyramide » (n° 25 du Joueur).
-    for (const dx of [-1.6, 0, 1.6]) { box(bx - 5.5 + dx, 2.06, bz - 2.2, 0.8, 0.5, 0.06, 0x111111, { deco: true, studs: false });
-      box(bx - 5.5 + dx, 1.71, bz - 2.2, 0.3, 0.04, 0.2, 0x3b4252, { deco: true, studs: false }); box(bx - 5.5 + dx, 1.77, bz - 2.2, 0.06, 0.1, 0.05, 0x3b4252, { deco: true, studs: false });
-      box(bx - 5.5 + dx, 1.72, bz - 1.9, 0.7, 0.05, 0.35, 0x3b4252, { deco: true, studs: false }); }
-    { const pied = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), lam(0x2b2f3a)); pied.position.set(bx - 7.8, 1.71, bz - 2); worldGroup.add(pied);
-      const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.4, 8), lam(0x2b2f3a)); tige.position.set(bx - 7.8, 1.93, bz - 2); worldGroup.add(tige);
-      const l = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.3, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xffe08a, emissive: 0xffa020, emissiveIntensity: 0.8, side: THREE.DoubleSide }));
-      l.position.set(bx - 7.8, 2.2, bz - 2); worldGroup.add(l); }
-    // deux distributeurs automatiques près de l'entrée
-    for (const dz of [-3.4, 3.4]) {
-      const ex2 = bx + W / 2 - 1.3;
-      box(ex2, 1.2, bz + dz, 0.7, 1.8, 1.2, 0x3b4252, { studs: false, noRoute: true });
-      box(ex2 - 0.38, 1.55, bz + dz, 0.06, 0.6, 0.8, 0, { material: neonMat(0x3ef2ff), deco: true, noEdges: true });
-      box(ex2 - 0.38, 1.0, bz + dz, 0.06, 0.18, 0.5, or, { deco: true, studs: false });
-    }
-    // salon d'attente : deux canapés, table basse, magazines, plantes
-    for (const [sx2, sz2, ry] of [[4.5, -6.5, 0], [4.5, 6.5, Math.PI]]) {
-      box(bx + sx2, 0.62, bz + sz2, 2.8, 0.5, 1.0, 0x4f8dff, { studs: false, noRoute: true, assise: 0.62 });
-      box(bx + sx2, 1.1, bz + sz2 + (ry ? 0.5 : -0.5), 2.8, 0.9, 0.25, 0x3a6fd8, { deco: true, studs: false });
-      city.benches.push({ x: bx + sx2, y: 0.36, z: bz + sz2, assise: 0.5, facing: ry });
-    }
-    box(bx + 4.5, 0.62, bz, 1.6, 0.12, 1.0, verre, { deco: true, studs: false });
-    box(bx + 4.5, 0.4, bz, 0.2, 0.5, 0.2, 0x8f98ab, { deco: true, studs: false });
-    for (let i = 0; i < 3; i++) box(bx + 4.2 + i * 0.3, 0.7, bz + rnd(-0.3, 0.3), 0.4, 0.03, 0.3, [0xff5c5c, 0xffd23f, 0x3ef2ff][i], { deco: true, studs: false });
-    for (const [px, pz] of [[-8, -8], [8, 8], [-8, 8]]) {
-      box(bx + px, 0.6, bz + pz, 0.7, 0.6, 0.7, 0x8b5a2b, { deco: true, studs: false });
-      const f = new THREE.Mesh(new THREE.SphereGeometry(0.7, 9, 7), lam(0x3fae4a)); f.position.set(bx + px, 1.5, bz + pz); f.scale.y = 1.3; worldGroup.add(f);
-    }
-    // cordons de file d'attente devant le guichet
-    for (let i = 0; i < 4; i++) { const px = bx - 8 + i * 1.8;
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1, 8), lam(or)); p.position.set(px, 0.86, bz + 0.6); worldGroup.add(p);
-      if (i < 3) box(px + 0.9, 1.2, bz + 0.6, 1.8, 0.06, 0.06, 0x8b1a2b, { deco: true, studs: false }); }
-    // lustre au centre de l'atrium + grande horloge + tableaux
-    { const lu = new THREE.Group(); lu.position.set(bx, F * 2.6, bz); worldGroup.add(lu);
-      const anneau = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 6, 20), lam(or)); anneau.rotation.x = Math.PI / 2; lu.add(anneau);
-      for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2;
-        const b2 = new THREE.Mesh(unitRound, new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0xffd23f, emissiveIntensity: 1 }));
-        b2.scale.setScalar(0.22); b2.position.set(Math.cos(a) * 1.5, 0.1, Math.sin(a) * 1.5); lu.add(b2); }
-      const t = new THREE.Mesh(unitRound, lam(or)); t.scale.set(0.06, 3, 0.06); t.position.y = 1.5; lu.add(t); }
-    { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.16, 18), lam(or)); h.rotation.x = Math.PI / 2;
-      h.position.set(bx - W / 2 + 0.45, 3.2, bz); worldGroup.add(h);
-      const cad = new THREE.Mesh(new THREE.CircleGeometry(0.78, 18), lam(0xf4f0e4)); cad.position.set(bx - W / 2 + 0.55, 3.2, bz); cad.rotation.y = Math.PI / 2; worldGroup.add(cad);
-      for (const [lg, ang] of [[0.6, 1.1], [0.4, 2.6]]) { const ai = new THREE.Mesh(unitRound, lam(0x1b1b22));
-        ai.scale.set(0.04, lg, 0.05); ai.position.set(bx - W / 2 + 0.6, 3.2 + Math.cos(ang) * lg / 2, bz + Math.sin(ang) * lg / 2);
-        ai.rotation.x = -ang; worldGroup.add(ai); } }
-    for (const [tz, col] of [[-7.5, 0x2f6f4a], [7.5, 0x6b3a5a]]) {
-      box(bx - W / 2 + 0.5, 2.6, bz + tz, 0.12, 1.6, 2.2, or, { deco: true, studs: false });
-      box(bx - W / 2 + 0.56, 2.6, bz + tz, 0.06, 1.3, 1.9, col, { deco: true, studs: false });
-    }
-    // lingots et liasses sur le comptoir de l'étage des coffres
-    for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, or, { deco: true, studs: false });
-    for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
-  }
   city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5, nom: 'Banque' });   // plus de voiture de police dans le hall
   city.bank = { x: bx, z: bz, w: W, d: D, esc: escaliers, porte: [ex - 3.5, bz], approche: [ex + 4, bz] };   // la grande porte de la façade est : la police s'aligne dessus puis entre
   city.zones.push({ name: 'Banque', emoji: '🏦', x1: bx - 11, x2: bx + 14, z1: bz - 11, z2: bz + 11, hint: '🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés' });
@@ -10721,7 +10786,13 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
   // le mur de la cour, perce d'une porte de 2,2 m
   for (const sx of [-1, 1]) B(sx * (W / 4 + 0.55), H / 2 + 0.3, D / 2 - 0.15, W / 2 - 1.1, H, 0.3, col, { studs: false, noRoute: true });
   B(0, H - 0.35 + 0.3, D / 2 - 0.15, 2.2, 0.7, 0.3, col, { studs: false, noRoute: true });
-  B(0, 0.75, D / 2 - 0.32, W, 0.9, 0.06, 0xf4efe2, { deco: true, studs: false });
+  // LA PLAQUE DEVANT L'ENTREE DE LA CLASSE (demande du Joueur : « enleve la, je veux que le
+  // joueur puisse rentrer dans la classe »). Ce bandeau blanc faisait 10 m de long : il barrait
+  // la porte de 2,20 m sur TOUTE sa largeur, de 0,30 a 1,20 m de haut, 3 cm devant le mur.
+  // Sans collision, mais depuis la cour on voyait une plaque en travers du seuil, et l'enfant
+  // n'entrait pas. On le coupe en deux panneaux qui suivent EXACTEMENT les deux trumeaux du
+  // mur de la cour : l'ouverture reste libre du sol au linteau.
+  for (const sx of [-1, 1]) B(sx * (W / 4 + 0.55), 0.75, D / 2 - 0.32, W / 2 - 1.1, 0.9, 0.06, 0xf4efe2, { deco: true, studs: false });
   // plafond, neons
   B(0, H + 0.42, 0, W + 0.3, 0.24, D + 0.3, 0xf4efe2, { deco: true, studs: false });
   for (const dz of [-2.2, 1.4]) B(0, H + 0.22, dz, 2.6, 0.1, 0.6, 0, { material: neonMat(0xfff6d8), deco: true, noEdges: true });
@@ -10801,7 +10872,10 @@ function classroom(x, z, ry, subj, e, n, col) {   // une salle de classe, ouvert
     panneauFond(1, 2.3, 1.4, 1, 'A B C');
   }
   room.props = props;
-  affiche(0, 3.85, D / 2 - 0.34, 4.6, 0.6, `${e} ${n}`);
+  // LE NOM DE LA SALLE RESTE, MAIS AU-DESSUS DE LA PORTE : a 3,85 m il mordait de 25 cm sur
+  // l'ouverture (qui monte jusqu'a 3,80 m). Il se cale maintenant pile sur le linteau
+  // (3,80 a 4,50 m), sans collision : on lit la matiere sans rien avoir dans le passage.
+  affiche(0, 4.15, D / 2 - 0.34, 4.6, 0.6, `${e} ${n}`);
   tableauMaj(room, [`${e} Classe de ${n}`, 'Assieds-toi (E) pour jouer']);
   city.classes.push(room);
   return room;

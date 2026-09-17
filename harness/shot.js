@@ -2158,6 +2158,9 @@ window.__G = {
   assiedAvatar: typeof assiedAvatar === 'function' ? assiedAvatar : null,
   placeMonde: typeof placeMonde === 'function' ? placeMonde : null,
   ambulanceAssied: typeof ambulanceAssied === 'function' ? ambulanceAssied : null,
+  // ---- poste BATIMENTS (ecole : entree des classes ; banque : escalier et plan) : ajoute tes exports SOUS cette ligne ----
+  classroom: typeof classroom === 'function' ? classroom : null,
+  buildBank: typeof buildBank === 'function' ? buildBank : null,
   // ---- poste DRONE & ROBOT (round 71) : ajoute tes exports SOUS cette ligne ----
   get sac() { return typeof sac !== 'undefined' ? sac : null; },
   get JOUETS() { return typeof JOUETS !== 'undefined' ? JOUETS : null; },

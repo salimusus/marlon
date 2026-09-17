@@ -23806,6 +23806,7 @@ function startGame() {
   // revenait). La guerre ne commence que quand l'écran 🚩 a été ouvert. Le message de bienvenue
   // passe par ctrlText : « E » devient △ à la manette.
   else { chooseWorld(4); msg('🏙️ Bienvenue à Marlon ! Balade-toi : E pour agir, monter en voiture, parler', 5000); }
+  document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));   // la bague de l'accueil ne suit pas en ville (n° 71)
   updateHud();
 }
 $('hostBtn').addEventListener('click', () => hostGame());
@@ -25295,7 +25296,10 @@ function navValide() {
   if (e.tagName === 'INPUT') return true;
   e.click();
   // apres un clic la fenetre a pu changer : on garde un curseur visible dans la nouvelle
-  setTimeout(() => { if (!document.contains(e) || e.offsetParent === null || !document.querySelector('.overlay:not(.hidden)')) { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); if (manetteSalon.i >= 0) navPremier(); } }, 60);
+  // PAS DE BAGUE HORS D'UN MENU (n° 71). Après « Entrer dans Marlon » plus aucune fenêtre n'est
+  // ouverte : navPremier() posait alors la bague sur le premier bouton de la PAGE — le 💬 du chat,
+  // encadré de jaune pendant toute la partie. On ne repose une bague que s'il reste une fenêtre.
+  setTimeout(() => { if (!document.contains(e) || e.offsetParent === null || !document.querySelector('.overlay:not(.hidden)')) { document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv')); if (manetteSalon.i >= 0 && document.querySelector('.overlay:not(.hidden)')) navPremier(); } }, 60);
   return true;
 }
 // un curseur (input range) sous le doigt : gauche / droite le font glisser

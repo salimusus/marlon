@@ -20859,7 +20859,10 @@ function moveAxis(axis, amount, canStep) {
     if (!isSolid(o) || !overlaps(o, P.pos.x, P.pos.y, P.pos.z)) continue;
     {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
-      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }   // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
+      // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
+      // `P.marcheLisse` : la hauteur gagnee d'un coup, que l'AFFICHAGE va rattraper en douceur
+      // (voir la boucle d'affichage). La physique, elle, monte franchement comme avant.
+      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; P.marcheLisse = Math.min(STEP_UP, (P.marcheLisse || 0) + rise); continue; }
       const half = (axis === 'x' ? o.w : o.d) / 2;
       const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
@@ -21043,6 +21046,11 @@ function step(dt, active) {
     wantX = (fx * iz + rx * ix) * SPEED; wantZ = (fz * iz + rz * ix) * SPEED;
   }
   if (len > 0.05) { if (!timerOn) timerOn = true; if (P.dance > 0) stopDance(); }
+  // LE CAP DEMANDE par la commande, garde pour la boucle d'affichage. Le personnage ne
+  // s'orientait que sur sa VITESSE : a l'arret il ne tournait pas du tout (il demarrait de
+  // travers puis rattrapait en arc de cercle), et en demi-tour il passait par une vitesse
+  // nulle ou plus rien ne le guidait. Avec le cap demande, il PIVOTE sur place.
+  P.capVoulu = (Math.abs(wantX) + Math.abs(wantZ) > 0.05) ? Math.atan2(wantX, wantZ) : null;
   // BAISSÉ, ON AVANCE MOINS VITE. Sinon on esquivait tous les coups en sprintant accroupi.
   if (P.accroupi && !P.swimming) { wantX *= 0.42; wantZ *= 0.42; len *= 0.42; P.run = false; }
   if (P.court) len = Math.min(1.6, len * 1.55);   // les jambes suivent la cadence de course
@@ -26811,12 +26819,24 @@ function frame() {
 
   // joueur
   me.group.position.copy(P.pos);
+  // MONTER UN ESCALIER SANS TRESSAUTER. moveAxis fait sauter P.pos.y d'un coup jusqu'en haut
+  // de la marche (jusqu'a 60 cm en une image) : l'avatar sautillait a chaque marche. On garde
+  // la physique telle quelle — c'est elle qui doit rester franche — et on RATTRAPE le saut a
+  // l'affichage en un dixieme de seconde. Le decalage est applique AVANT animateRig pour que
+  // le pied verrouille au sol le suive aussi.
+  if (P.marcheLisse) { P.marcheLisse = Math.max(0, P.marcheLisse - Math.max(1.6, P.marcheLisse * 9) * dt); me.group.position.y -= P.marcheLisse; }
   const sp = Math.hypot(P.vel.x, P.vel.z);
   if (P.dance > 0 && active) { P.dance -= dt; P.facing += dt * 2.5; if (P.dance <= 0) stopDance(); }
-  else if (sp > 0.6 && settings.ctrl !== 'rot') {
-    const target = Math.atan2(P.vel.x, P.vel.z);
+  else if (settings.ctrl !== 'rot' && (sp > 0.6 || (P.capVoulu != null && !surLeCourt()))) {
+    // Au-dessus de 1,5 m/s on suit la VITESSE (le corps regarde ou il va) ; en dessous on
+    // suit le CAP DEMANDE, sinon a l'arret ou en plein demi-tour rien ne le fait tourner.
+    const target = (sp > 1.5 || P.capVoulu == null) ? Math.atan2(P.vel.x, P.vel.z) : P.capVoulu;
     let d = target - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
-    P.facing += d * Math.min(1, dt * 14);
+    // vitesse de rotation BORNEE (rad/s) au lieu d'une exponentielle : plus de traine sur les
+    // petits ecarts, et un demi-tour franc (un demi-tour complet en 0,16 s) quand on repart
+    // dans l'autre sens — le corps pivote au lieu de decrire un arc de cercle mou.
+    const vit = (P.demiTour > simTime ? 20 : 14) * dt;
+    P.facing += Math.abs(d) <= vit ? d : Math.sign(d) * vit;
   }
   me.group.rotation.y = P.facing;
   // Couché : le personnage bascule à plat, sur le dos. Avec l'ordre d'Euler par défaut il

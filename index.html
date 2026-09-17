@@ -27397,6 +27397,9 @@ function proposeReunion(G) {
 }
 function reunionTick(dt) {
   const r = guerre.reunion;
+  // Un chef de gang ne donne pas rendez-vous à un enfant qui n'est pas dans la guerre (n° 24 du
+  // Joueur : « MaxiBloc… rendez-vous à Tatouage » et la colonne bleue à t + 14 s d'une partie neuve)
+  if (!r && !joueurDansLaGuerre()) return;
   if (!r) {
     // les chefs finissent par s'appeler entre eux
     if (simTime > guerre.prochaineReunion && gangs.length) {

@@ -23142,8 +23142,14 @@ function ambulancesTick(dt) {
     const hop = city.medDesk || { x: a.home0[0], z: a.home0[1] };
     if (a.etat === 'route') {
       for (const w of (a.equipe || [])) ambulanceAssied(a, w, w === a.equipe[0] ? 'volant' : 'cellule', dt);
+      // ON SE GARE SUR LA CHAUSSÉE, PAS DANS LE JARDIN. Un blessé tombe sur un trottoir, dans
+      // un parc, au fond d'une cour : viser SA position envoyait le fourgon buter contre une
+      // haie, et il finissait « garé au plus près » à travers un massif. `arretVoiture` (poste
+      // Conduite) recale le but sur le bitume le plus proche — et comme ce sont les
+      // ambulanciers qui font les derniers mètres À PIED, la scène y gagne même en justesse.
       const c2 = ambulanceCible(a);
-      if (!etapeSecours(a, 'route', c2.x, c2.z, dt, VITESSE_SECOURS, { urgence: true }, 3.5)) continue;
+      const arr = (typeof arretVoiture === 'function') ? arretVoiture(c2.x, c2.z) : c2;
+      if (!etapeSecours(a, 'route', arr.x, arr.z, dt, VITESSE_SECOURS, { urgence: true }, 3.5)) continue;
       a.etat = 'charge'; a.t = simTime + AMBULANCE_CHARGE; ambPhase(a, 'ouvre');
       a.poseFaite = false; a.surCiviere = false;
       ambulanceCiviere(a); ambulanceEquipe(a);

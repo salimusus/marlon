@@ -264,6 +264,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 15. Les consignes affichées parlent des touches du CLAVIER à un enfant qui joue à la manette
 🔎 Revu round 70 (manette) : toujours là — « 🚗 Appuie sur E pour conduire », « 🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir », « 🪑 E : s'asseoir », « Espace maintenu = frein à main », « 🏊 Tu nages ! Espace pour sauter », « 🚗 E : monter à côté de Enzo_turbo », « ouvre la carte avec M » (`l1a-pc.log` `bilan.defauts[type=clavier]`, `c6-pc.log` `mer.msgs`).
+🔎 CONTRÔLÉ (bdcc5e4), bilan du point 5 : sur ~15 min de jeu cumulées à la manette (balade 4,5 min ×2, voiture, boutique, ordres, carte, réunion, hélico, bagarre — PC et TV), la sonde `prelude.js` n'a relevé AUCUNE pastille ni message avec E / Espace / clic / M / F / G / O / V (`bilan.defauts` vide dans `p1`, `p2`, `p4`, `p6`). Exemples vus : « 🚁 ▢ : course d'anneaux », « 🪴 Grande plante 15 🪙 · △ pour acheter », « 🔫 △ : voir toutes les armes ».
 🔎 CONTRÔLÉ (bdcc5e4) : OK sur 4,5 min de balade à pied (PC et TV) : « 🚗 Appuie sur △ pour conduire », « 🪑 △ : s'asseoir », « 📋 … △ devant le comptoir », « 🪟 △ : donner un coup de main », « 🚗 △ : monter à côté de Enzo_turbo » — 0 mot clavier détecté par la sonde (regex E/Espace/clic/M/F/G/O/V). Suite au point 5.
 ✅ RÉPARÉ — `ctrlText()` ne traduisait les touches que pour l'écran tactile : à la manette (`body.manette`) E → △, Espace → ◯, clic → R2, G → ✕, O/V/F → ▢, Ctrl → L2 (tous les msg() passent par là, y compris les `hint` de zone) — commit fe303fe
 - **Gravité** : GÊNANT (l'enfant cherche une touche « E » sur sa manette)
@@ -328,6 +329,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 30. Au volant, les messages parlent encore du clavier et proposent de s'asseoir sur un banc
 ✅ RÉPARÉ — plus de « E : s'asseoir » au volant (`benchNear` ignoré si `drive.car`) ; les touches passent par ctrlText (voir n° 15) — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — au volant : « 🚗 Boîte automatique · 📯 klaxon · ◯ maintenu = frein à main », plus de « E : s'asseoir » pendant 3 min de conduite (PC et TV, `p2-pc.log` `bilan.defauts = []`).
 - **Gravité** : GÊNANT
 - **Reproduire** : monter dans la voiture du parking (message « 🚗 Appuie sur E pour conduire »), rouler devant le snack.
 - **On voit** : à chaque seconde « 🪑 E : s'asseoir » pendant qu'on conduit ; « 🚗 Parking : E (ou 🚗) devant une voiture, une moto… » ; « Boîte automatique · 📯 klaxon · Espace maintenu = frein à main » ; « 🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau » ; « 🔧 E : garage — réparation, peinture… » ; « 🔫 E : voir toutes les armes ».
@@ -398,6 +400,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 44. Les messages des armes parlent de « clic »
 ✅ RÉPARÉ — voir n° 15 : « clic pour tirer » → « R2 pour tirer » à la manette — commit fe303fe
+🔎 CONTRÔLÉ (bdcc5e4) : OK — armes : « 🔪 Couteau de chasse · R2 pour planter… » à l'achat (PC et TV, `p4`).
 - **Gravité** : GÊNANT (cf. n° 15)
 - **On voit** : « 🔫 Pistolet · clic pour tirer : le personnage vise tout seul la cible la plus proche » à la manette.
 

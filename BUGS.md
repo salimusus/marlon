@@ -235,6 +235,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s1/s1-aide.png`, `img/s1/s1-aide-tv.png`.
 
 ### 9. Les étiquettes de nom et les bulles se chevauchent et se coupent
+✅ RÉPARÉ — les bulles et les étiquettes n'étaient empilées que pour des voisins dans le MONDE (3,2 / 2,2 m) : deux habitants l'un derrière l'autre se lisaient « IneZoe_rider ». Empilement aussi quand elles se recouvrent À L'ÉCRAN (projection caméra), et bulle de 0,3 m au minimum (plus de bulle géante contre la caméra). Mesuré : habitant à 5 m et un autre 6 m derrière → étiquette du second montée de 2,5 à 3,48 m, bulles à 3,35 / 5,35 m — commit 94b7fb7
 - **Gravité** : GÊNANT
 - **Reproduire** : point d'apparition, foule autour du joueur.
 - **On voit** : « IneZoe_rider » (Ines_gg + Zoe_rider superposés), bulle « Joueur63 ! trop content de » coupée par le message central, bulle « la lave c chaud » de 40 px qui déborde sous le classement, la pastille de vie du joueur (haut droite, TV) posée SUR une bulle de dialogue, et les bulles passent DERRIÈRE la barre d'icônes du haut (« Joueur79 ! trop content de » sous 📣🚩📺, `img/s2/s2-depart-tv.png`) ; une bulle proche de la caméra devient géante et son texte déborde des deux côtés (« ai repéré un truc dans ce… », `img/s15/s15-4-recharge-ville.png`).
@@ -283,6 +284,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s3/s3-banque-2-dedans.png`, `img/s3/s3-concessionnaire-2-dedans.png`.
 
 ### 24. Les habitants fixent des rendez-vous à l'enfant sans qu'il ait rien demandé, et le GPS s'allume tout seul
+✅ RÉPARÉ — `botPrendVoiture` (balade spontanée d'un habitant) parlait au joueur et allumait le GPS → drapeau `libre` (fe303fe) ; et `reunionTick` faisait proposer un rendez-vous par un chef de gang dès la première minute (`guerre.prochaineReunion = 0`) → plus de réunion tant que le joueur n'est pas entré dans la guerre. Mesuré : 90 s de partie neuve, aucune réunion, aucune colonne bleue — commit 5ffb3ce
 ✅ RÉPARÉ — `lancerActivite()` (balade spontanée d'un habitant en vélo/moto/voiture) passait par `botPrendVoiture` qui parlait au joueur, affichait le message central et allumait le GPS : nouveau drapeau `libre`, plus rien de tout ça pour une balade — commit fe303fe
 - **Gravité** : GÊNANT (les chevrons cyan au sol dès la première seconde viennent de là — cf. n° 3)
 - **Reproduire** : rester en ville 2 minutes.
@@ -382,6 +384,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s10-pc.log` `koGangster = {n: 15, ko: false, hp: 50}`.
 
 ### 56. Villa : le portail et la porte du garage s'ouvrent trop tard, la voiture les percute (16 % de dégâts en rentrant chez soi)
+✅ RÉPARÉ — le portail se déclenchait à 9 m fixes et s'ouvrait en ~1 s : à 45 km/h on était dessus avant. Déclenchement à `dist + vitesse × 1,6 s` et ouverture deux fois plus rapide. Mesuré : arrivée à 12,5 m/s, portail ouvert à 0,99 au passage, vitesse jamais cassée — commit cb3e7d9
 - **Gravité** : GÊNANT
 - **Reproduire** : sa propre voiture, arriver au portail (60, 189) à 45 km/h ; puis entrer dans le garage (48, 185,5).
 - **On voit** : le portail s'ouvre à 0,39 quand la voiture est déjà dessus (vitesse 13 → −1 m/s, 🔧 3,8 %), la porte du garage idem (🔧 16 % à l'arrivée). △ fait descendre le personnage alors que la voiture roule encore à 16 km/h.
@@ -406,6 +409,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/s14/s14-heli-4-au-sol.png`.
 
 ### 60. Le facteur fait sa tournée à pied à 25 km/h, le vélo reste au dépôt
+✅ RÉPARÉ — conséquence du n° 52/53 : le vélo dormait dans la cour du dépôt dont la sortie était bouchée par le mobilier public (`coursService`, fe303fe). Mesuré : tournée à vélo (facteur à 0,2 m de son vélo pendant 60 s, vélo à 240 m du dépôt)
 - **Gravité** : GÊNANT (promis au round 67 : le facteur, ses sacoches, son vélo)
 - **Reproduire** : dépôt municipal (27, 122), suivre « Paulette » (`city.metiers`, `facteur`) 90 s.
 - **On voit** : état `tournee`, elle traverse la ville à pied (26 m toutes les 5 s, soit 5 m/s+ sans courir), `b.drive = null` pendant les 90 s alors que le vélo de service (`kind: velo`) est garé en (40, 131) ; on ne voit ni sacoche ni courrier dans les mains. (Dans une autre partie, `img/s9b/s9b-9-fin.png`, on la voit bien à vélo : ce n'est donc pas systématique.)

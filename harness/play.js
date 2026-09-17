@@ -13887,9 +13887,15 @@ test('a l\'interieur d\'un batiment, le sol sous les pieds, les murs autour et l
     const rc = new T.Raycaster();
     const lieux = [
       ['le hall de la banque', -52, 0.5, 70],
-      ['le pied de l\'escalier de la banque', -60.2, 0.5, 62.6],
-      ['le 1er etage de la banque', -52, 5.1, 66],
-      ['la salle des coffres de la banque', -52, 9.9, 76],
+      // LES TROIS POINTS DE LA BANQUE SUIVENT LE RÉAMÉNAGEMENT. Les volées se sont décollées
+      // du mur, et les bandeaux de plancher qu'elles surplombaient sont devenus des trémies :
+      // (-52, 66) au 1ᵉʳ et (-52, 76) au 2ᵉ étaient désormais AU-DESSUS DU VIDE, le joueur y
+      // tombait sur une marche (y = 2,73 et 7,98) et on mesurait l'escalier au lieu de
+      // l'étage. On vise maintenant le plancher plein de chaque niveau : les bureaux au sud
+      // du 1ᵉʳ, la salle des coffres au nord du 2ᵉ, et le palier de départ de la volée basse.
+      ['le pied de l\'escalier de la banque', -60.2, 0.5, 64.2],
+      ['le 1er etage de la banque', -52, 5.1, 76],
+      ['la salle des coffres de la banque', -52, 9.9, 64],
       ['le commissariat', -54, 0.5, 28],
       ['la salle de sport', -1, 0.5, 20],
       ['une classe de l\'ecole', -69, 0.5, 209],

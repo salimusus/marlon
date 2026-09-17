@@ -2217,6 +2217,8 @@ window.__G = {
   robotSortir: typeof robotSortir === 'function' ? robotSortir : null,
   robotRanger: typeof robotRanger === 'function' ? robotRanger : null,
   robotOrdre: typeof robotOrdre === 'function' ? robotOrdre : null,
+  get mission() { return typeof mission !== 'undefined' ? mission : null; },
+  get MISSIONS() { return typeof MISSIONS !== 'undefined' ? MISSIONS : null; },
   robotTick: typeof robotTick === 'function' ? robotTick : null,
   robotDist: typeof robotDist === 'function' ? robotDist : null,
   ordreRobotTexte: typeof ordreRobotTexte === 'function' ? ordreRobotTexte : null,

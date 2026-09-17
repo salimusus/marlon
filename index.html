@@ -18903,7 +18903,11 @@ function droneReset() { droneRanger(true); drone.bat = 100; drone.album = []; dr
 // MÊME interprète (commandeExacte), plus une liste cliquable pour la manette.
 const ROBOT_COLLE = 2;        // m : la distance que le joueur a demandée — jamais plus loin
 const ROBOT_SUIT = 1.15;      // m : la place qu'il vise derrière l'épaule
-const ROBOT_VMAX = 9.4;       // m/s : nettement plus vite que le joueur qui court (5,6 × 1,3)
+const ROBOT_VMAX = 12.5;      // m/s : au-dessus du joueur qui court (SPEED 6,2 × COURSE 1,55
+                              // = 9,61 m/s depuis le poste LOCOMOTION). À 9,4 il se faisait
+                              // semer et c'était la laisse qui faisait tout le travail : on
+                              // voyait le robot GLISSER derrière le joueur au lieu de courir.
+const ROBOT_PLANE = 6.5;      // m/s : au-delà, il ne court plus, il plane sur son réacteur
 const ROBOT_AUTO = 900;       // s d'autonomie (15 min) : un pack de batteries le refait
 const robot = { actif: false, g: null, rig: null, nom: 'Bip', x: 0, y: 0, z: 0, h: 0,
   ordre: 'suit', poste: null, bat: 100, pas: 0, vit: 0, stuckT: 0, danse: 0, parleT: 0,
@@ -19201,7 +19205,7 @@ function robotTick(dt) {
     const joueur = robot.ordre === 'suit' || robot.ordre === 'viens' || (robot.ordre === 'cherche' && robot.phase === 'retour');
     // IL RESTE COLLÉ. Plus il traîne, plus il accélère — jusqu'à 9,4 m/s, nettement au-dessus
     // du joueur qui court (5,6 × 1,3 = 7,3 m/s). C'est ce qui garantit les 2 m demandés.
-    const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 2.2 + d * 5.5);
+    const v = d <= but.arret ? 0 : Math.min(ROBOT_VMAX, 3 + d * 7);   // pleine vitesse dès 1,36 m d'écart : il ne décroche plus d'un joueur qui sprinte
     if (v > 0) {
       // IL CONTOURNE. Tout droit et rien d'autre, il restait planté contre le premier mur
       // venu : mesuré, envoyé chercher un objet à 24 m il s'arrêtait à 8,4 m de lui, contre
@@ -19301,12 +19305,19 @@ function robotTick(dt) {
 // battent la cadence, les genoux plient, les bras balancent à contretemps.
 function robotAnime(dt) {
   const r = robot.rig; if (!r) return;
+  // IL COURT, PUIS IL PLANE. Le joueur court maintenant à 9,61 m/s : à cette vitesse, des
+  // jambes de 40 cm devraient battre à plus de dix pas par seconde — une bouillie à l'écran.
+  // Au-delà de 6,5 m/s le robot replie donc ses jambes, se penche en avant et file sur son
+  // réacteur. En dessous, il marche pour de bon, cadence proportionnelle à sa vitesse.
+  const plane = robot.vit > ROBOT_PLANE;
+  robot.plane = (robot.plane || 0) + ((plane ? 1 : 0) - (robot.plane || 0)) * Math.min(1, dt * 6);
   const v = Math.min(1, robot.vit / 4.5);
-  robot.pas += dt * (3 + robot.vit * 1.7);
-  const a = Math.sin(robot.pas * 2.4) * (0.15 + v * 0.55);
+  robot.pas += dt * Math.min(16, 2.5 + robot.vit * 1.9);
+  const a = Math.sin(robot.pas * 2.4) * (0.15 + v * 0.55) * (1 - robot.plane);
   robot.jambe = a;
-  r.jambes.g.ha.rotation.x = a; r.jambes.d.ha.rotation.x = -a;
-  r.jambes.g.ge.rotation.x = Math.max(0, -a) * 1.1; r.jambes.d.ge.rotation.x = Math.max(0, a) * 1.1;
+  const repli = robot.plane;
+  r.jambes.g.ha.rotation.x = a - repli * 0.75; r.jambes.d.ha.rotation.x = -a - repli * 0.75;
+  r.jambes.g.ge.rotation.x = Math.max(0, -a) * 1.1 + repli * 1.3; r.jambes.d.ge.rotation.x = Math.max(0, a) * 1.1 + repli * 1.3;
   const dans = robot.ordre === 'danse', garde = robot.defense > simTime;
   if (dans) {
     r.bras.g.rotation.z = 1.6 + Math.sin(simTime * 7) * 0.5; r.bras.d.rotation.z = -1.6 - Math.sin(simTime * 7) * 0.5;
@@ -19344,7 +19355,10 @@ function robotAnime(dt) {
     robot.bat < 15 || robot.energie < 20 ? (Math.sin(simTime * 8) > 0 ? 0xff5c5c : 0x3a0f0f)
     : garde ? 0x5cff7a : parle ? 0x5cff7a : 0xff5c5c);
   const saut = robot.saut && simTime < robot.saut ? Math.abs(Math.sin((robot.saut - simTime) * 8)) * 0.5 : 0;
-  robot.g.position.set(robot.x, robot.y + saut + Math.abs(Math.sin(robot.pas * 2.4)) * v * 0.035, robot.z);
+  // en vol plané il monte de 22 cm, se penche en avant et son réacteur chauffe
+  robot.g.rotation.x = robot.plane * 0.3;
+  if (r.reacteur) { const k = 0.14 + robot.plane * 0.1; r.reacteur.scale.set(k, k, 0.05); }
+  robot.g.position.set(robot.x, robot.y + saut + robot.plane * 0.22 + Math.abs(Math.sin(robot.pas * 2.4)) * v * 0.035 * (1 - robot.plane), robot.z);
   let dh = robot.h - robot.g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
   robot.g.rotation.y += dh * Math.min(1, dt * 9);
 }
@@ -19413,7 +19427,10 @@ function robotConseil(force) {
     .sort((a, b) => b.p - a.p);
   if (!dispo.length) return null;
   const neuf = dispo.find(c => !vus.includes(c.id));
-  const c = neuf || (force ? dispo[0] : null);
+  // JAMAIS DEUX FOIS DE SUITE LE MÊME, même quand tout a déjà été dit. Sans cette seconde
+  // ligne, le joueur qui demandait six conseils d'affilée s'entendait répéter le plus urgent
+  // deux fois de suite dès que la mémoire était pleine (mesuré : « vie → vie »).
+  const c = neuf || (force ? (dispo.find(x => x.id !== vus[0]) || dispo[0]) : null);
   if (!c) return null;
   let t = ''; try { t = c.dit(); } catch (e) { return null; }
   return { id: c.id, texte: t };
@@ -19543,11 +19560,17 @@ function robotDefends(on) {
 function openOrdresRobot() {
   if (!robot.actif) { msg('🤖 Sors d\'abord ton robot du sac (touche I)', 2600); return false; }
   $('ordresTitre').textContent = `🤖 Ordres pour ${robot.nom}`;
-  $('ordresSub').innerHTML = `🔋 ${Math.round(robot.bat)} % · à ${robot.ecart.toFixed(1)} m de toi · ordre en cours : ${robot.ordre}`
-    + '<br>Clique un ordre, ou écris-le dans le chat (« robot viens », « attends ici », « va chercher »…).';
+  const nrj = Math.round(robot.energie), pretes = Math.floor(robot.energie / ROBOT_DECHARGE);
+  const garde = robot.defense > simTime;
+  $('ordresSub').innerHTML = `🔋 batterie ${Math.round(robot.bat)} % · ⚡ condensateur ${nrj} % (${pretes} décharge${pretes > 1 ? 's' : ''} prête${pretes > 1 ? 's' : ''})`
+    + ` · à ${robot.ecart.toFixed(1)} m de toi · ${garde ? '🛡️ EN GARDE' : 'ordre : ' + robot.ordre}`
+    + '<br>Clique un ordre, ou écris-le dans le chat (« robot défends-moi », « un conseil », « deviens rouge »…).';
   $('ordresGrid').innerHTML = ORDRES_ROBOT.map(o =>
-    `<button class="ocard" data-rb="${o.id}"><span>${o.e}</span>${o.t}<i>${o.dit}</i></button>`).join('');
+    `<button class="ocard${o.id === 'defends' && garde ? ' on' : ''}" data-rb="${o.id}"><span>${o.e}</span>${o.id === 'defends' && garde ? 'Baisse la garde' : o.t}<i>${o.dit}</i></button>`).join('')
+    + '<p class="osec">🎨 Sa couleur</p>'
+    + ROBOT_COULEURS.map(c => `<button class="ocard${robot.couleur === c.k ? ' on' : ''}" data-rc="${c.k}"><span>${c.e}</span>${c.n}</button>`).join('');
   ordresRetourVisible(false);
+  $('ordresGrid').querySelectorAll('[data-rc]').forEach(b => b.addEventListener('click', () => { robotCouleur(b.dataset.rc); openOrdresRobot(); }));
   $('ordresGrid').querySelectorAll('[data-rb]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.rb; closeUI();
     try { chat(myCfg.name, `${robot.nom} ${(ORDRES_ROBOT.find(o => o.id === id) || {}).t || id}`); } catch (e) {}

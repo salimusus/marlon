@@ -17668,3 +17668,136 @@ test('monter une marche ne fait pas tressauter l\'avatar', async p => {
     ? `marche de ${d.marcheCm} cm : la physique fait bondir le joueur de ${d.sautPhysCm} cm en UNE image (c'est moveAxis, on n'y touche pas, la montee doit rester franche), mais l'avatar affiche ne monte jamais de plus de ${d.sautVuCm} cm par image — le rattrapage est etale sur un dixieme de seconde et l'avatar ne tressaute plus. Montee totale ${d.monteeCm} cm.`
     : `aucune marche franchissable trouvee parmi les ${r.cands} candidates : le test n'a rien pu mesurer` };
 });
+
+// ================= POSTE DRONE & ROBOT (round 71, seconde passe) =================
+test('le robot défend le joueur : il s\'interpose, il électrise, mais il ne le rend pas invincible', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, R = G.robot;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('robot'); G.sacSortir('robot');
+    for (let k = 0; k < 30; k++) G.step(1 / 60, true);
+    // ---- 1. l'ordre est compris, écrit dans le chat comme tous les autres ----
+    G.commandeExacte('robot défends-moi');
+    for (let k = 0; k < 20; k++) G.step(1 / 60, true);
+    const enGarde = R.defense > G.simTime, ditOrdre = R.dit;
+    // ---- 2. un agresseur arrive : le robot se met ENTRE lui et le joueur ----
+    const b = G.bots.filter(x => !x.ko && x.av && x.av.group.visible)[0];
+    b.ko = 0; b.hp = 100;
+    b.pos.x = P.pos.x + 5; b.pos.z = P.pos.z; b.pos.y = P.pos.y;
+    b.fight = 'fight'; b.fightT = G.simTime + 60;
+    R.energie = 100; R.dechargeT = 0; R.decharges = 0;
+    let entre = false;
+    for (let k = 0; k < 60 * 2; k++) {
+      G.step(1 / 60, true);
+      // « entre les deux » : le robot est plus près de l'agresseur que le joueur ne l'est
+      const dR = Math.hypot(R.x - b.pos.x, R.z - b.pos.z), dP = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z);
+      if (dR < dP) entre = true;
+      if (R.decharges > 0) break;
+    }
+    const decharge1 = R.decharges, nrjApres = R.energie, hpBotApres = b.hp, fuite = b.fight;
+    const etoiles = G.police.wanted;
+    // ---- 3. un coup qui passe malgré tout : atténué, PAS annulé ----
+    b.fight = 'fight'; b.fightT = G.simTime + 60; b.pos.x = P.pos.x + 2.5; b.hp = 100;
+    R.energie = 100; R.dechargeT = 0;
+    P.hp = 100; P.hurtT = 0;
+    G.hurt(20, b.name, 1, 0, 2, true);
+    const perdu = 100 - P.hp;
+    // ---- 4. trois décharges et le condensateur est à plat ----
+    R.energie = 100; R.dechargeT = 0; R.decharges = 0;
+    let n = 0;
+    for (let k = 0; k < 60 * 20 && n < 5; k++) {
+      b.fight = 'fight'; b.fightT = G.simTime + 60; b.pos.x = P.pos.x + 2; b.pos.z = P.pos.z; b.hp = 100;
+      G.step(1 / 60, true); n = R.decharges;
+    }
+    const platApres = R.energie < G.ROBOT_DECHARGE;
+    // ---- 5. sans l'ordre, il ne fait RIEN : ce n'est pas une arme ----
+    R.defense = 0; R.energie = 100; R.dechargeT = 0; R.decharges = 0;
+    b.fight = 'fight'; b.fightT = G.simTime + 60; b.pos.x = P.pos.x + 1.6; b.hp = 100;
+    for (let k = 0; k < 60 * 3; k++) G.step(1 / 60, true);
+    const sansOrdre = R.decharges;
+    // ---- 6. jamais de KO par la décharge seule ----
+    R.defense = G.simTime + 60; b.hp = 14; R.energie = 100; R.dechargeT = 0;
+    b.fight = 'fight'; b.fightT = G.simTime + 60; b.pos.x = P.pos.x + 2; b.pos.z = P.pos.z;
+    for (let k = 0; k < 60 * 3; k++) G.step(1 / 60, true);
+    const hpMini = b.hp, koParDecharge = !!b.ko;
+    G.robotRanger(true); G.police.wanted = 0;
+    return { enGarde, ditOrdre, entre, decharge1, nrjApres: +nrjApres.toFixed(0), hpBotApres, fuite, etoiles,
+      perdu: +perdu.toFixed(1), decharges: n, platApres, sansOrdre, hpMini, koParDecharge, cout: G.ROBOT_DECHARGE };
+  });
+  const ok = r.enGarde && r.entre && r.decharge1 >= 1 && r.nrjApres <= 100 - r.cout + 4
+    && r.hpBotApres < 100 && r.hpBotApres >= 12 && r.fuite === 'flee' && r.etoiles === 0
+    && r.perdu > 6 && r.perdu < 20 && r.decharges >= 3 && r.platApres
+    && r.sansOrdre === 0 && r.hpMini >= 12 && !r.koParDecharge;
+  return { ok, detail: `avant : le robot regardait le joueur se faire frapper · maintenant « défends-moi » le met EN GARDE (${r.ditOrdre ? 'annoncé' : 'muet'}), il se place entre l'agresseur et le joueur (${r.entre ? 'oui' : 'non'}) et l'électrise · la décharge coûte ${r.cout} % (reste ${r.nrjApres} %), fait tomber l'agresseur à ${r.hpBotApres} ❤️ et le met en « ${r.fuite} » — sans lui donner de KO (plancher 12 ❤️ : ${r.hpMini}, KO=${r.koParDecharge}) et SANS étoile de police (${r.etoiles}) · un coup de 20 ❤️ passé malgré la parade coûte quand même ${r.perdu} ❤️ (pas d'invincibilité) · ${r.decharges} décharges et le condensateur est à plat (${r.platApres}) · sans l'ordre : ${r.sansOrdre} décharge` };
+});
+
+test('le robot change de couleur, garde sa teinte, et son dessin reste bon marché', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, R = G.robot;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('robot'); G.sacSortir('robot');
+    for (let k = 0; k < 20; k++) G.step(1 / 60, true);
+    // ---- le coût du dessin ----
+    let meshes = 0, tris = 0; const mats = new Set(), geos = new Set();
+    R.g.traverse(o => { if (o.isMesh) { meshes++; mats.add(o.material.uuid); geos.add(o.geometry.uuid);
+      const idx = o.geometry.index, pos = o.geometry.attributes.position;
+      tris += idx ? idx.count / 3 : (pos ? pos.count / 3 : 0); } });
+    // ---- les huit couleurs teignent VRAIMENT la coque, et chacune est différente ----
+    const vues = [];
+    for (const c of G.ROBOT_COULEURS) { G.robotCouleur(c.k, true); vues.push(R.rig.coque.color.getHex()); }
+    const distinctes = new Set(vues).size;
+    // ---- le nom de la couleur dans la phrase, et la mémoire ----
+    G.commandeExacte('robot deviens violet');
+    for (let k = 0; k < 20; k++) G.step(1 / 60, true);
+    const parLaPhrase = R.couleur, enMemoire = localStorage.getItem('superobby.robotcouleur');
+    // ---- le tour des couleurs par l'ordre ----
+    G.robotCouleur('bleu', true); G.robotCouleurSuivante();
+    const suivante = R.couleur;
+    // ---- le visage vit : les yeux clignent, la bouche bouge quand il parle ----
+    const yeux = new Set(), bouches = new Set();
+    G.robotOrdre('parle', '');
+    for (let k = 0; k < 60 * 8; k++) { G.step(1 / 60, true);
+      yeux.add(+R.rig.yeux[0].scale.y.toFixed(3)); bouches.add(+R.rig.bouche.scale.y.toFixed(3)); }
+    G.robotRanger(true);
+    return { meshes, tris, materiaux: mats.size, geometries: geos.size, couleurs: G.ROBOT_COULEURS.length,
+      distinctes, parLaPhrase, enMemoire, suivante, cligne: yeux.size, parle: bouches.size };
+  });
+  const ok = r.couleurs >= 6 && r.distinctes === r.couleurs && r.parLaPhrase === 'violet'
+    && r.enMemoire === 'violet' && r.suivante === 'rouge'
+    && r.cligne >= 2 && r.parle >= 5
+    && r.meshes <= 30 && r.geometries <= 6 && r.materiaux <= 9 && r.tris <= 1600;
+  return { ok, detail: `avant : un cube bleu, deux billes cyan, une antenne — 18 maillages qui payaient chacun SA géométrie et SON matériau (18 et 18, 588 triangles) · maintenant ${r.meshes} maillages mais ${r.geometries} géométries et ${r.materiaux} matériaux partagés, ${r.tris} triangles · ${r.couleurs} couleurs toutes différentes (${r.distinctes}), « deviens violet » marche (${r.parLaPhrase}), c'est gardé dans la sauvegarde (${r.enMemoire}) et l'ordre fait tourner la roue (bleu → ${r.suivante}) · le visage vit : ${r.cligne} ouvertures d'yeux différentes (il cligne) et ${r.parle} positions de bouche quand il parle` };
+});
+
+test('les conseils du robot sortent de l\'état réel de la partie, et jamais deux fois le même', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, R = G.robot;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.sacAjoute('robot'); G.sacSortir('robot');
+    for (let k = 0; k < 20; k++) G.step(1 / 60, true);
+    const pris = {};
+    const situe = (nom, prepare, motif) => {
+      R.conseils = []; prepare();
+      const c = G.robotConseil(true);
+      pris[nom] = { id: c && c.id, ok: !!(c && motif.test(c.texte)), texte: c && c.texte.slice(0, 70) };
+    };
+    situe('vie basse', () => { P.hp = 22; G.police.wanted = 0; }, /vie|hopital|hôpital/i);
+    situe('police', () => { P.hp = 100; G.police.wanted = 2; }, /police|etoile|étoile/i);
+    situe('mission', () => { G.police.wanted = 0; G.mission.cur = G.MISSIONS ? G.MISSIONS[0] : { n: 'Livraison' }; }, /mission/i);
+    situe('comptoir', () => { G.mission.cur = null; const e = G.city.etals.find(x => x.id === 'drone');
+      P.pos.set(e.vx, 0.3, e.vz); G.wallet = 1; }, /manque|pieces|pièces/i);
+    situe('batterie', () => { P.pos.set(0, 0.3, 8); G.wallet = 60; R.bat = 10; }, /batterie/i);
+    // ---- jamais deux fois de suite le même : on en demande six d'affilée ----
+    R.conseils = []; R.bat = 100; P.hp = 40; G.police.wanted = 1; G.wallet = 5;
+    const suite = [];
+    for (let i = 0; i < 6; i++) { const c = G.robotConseilDit(true); suite.push(c ? c.id : null); }
+    let repete = false;
+    for (let i = 1; i < suite.length; i++) if (suite[i] && suite[i] === suite[i - 1]) repete = true;
+    // ---- et il le DIT à voix haute (bulle + chat), pas seulement en silence ----
+    const parle = !!R.dit && R.dit.indexOf('💡') === 0;
+    G.police.wanted = 0; G.robotRanger(true);
+    return { pris, suite, repete, parle, total: Object.values(pris).filter(x => x.ok).length };
+  });
+  const ok = r.total === 5 && !r.repete && r.parle && new Set(r.suite.filter(Boolean)).size >= 4;
+  return { ok, detail: `avant : le robot sortait une phrase au hasard d'une liste de huit · maintenant chaque conseil lit l'état réel : ${Object.entries(r.pris).map(([k, v]) => `${k} → ${v.ok ? '✅ ' + v.id : '❌'}`).join(', ')} · six conseils d'affilée donnent ${new Set(r.suite.filter(Boolean)).size} conseils différents (${r.suite.join(' → ')}), aucun répété d'affilée (${!r.repete}) et il les dit à voix haute` };
+});

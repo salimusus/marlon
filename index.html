@@ -15219,10 +15219,21 @@ function coneRue(x, z) {
 }
 
 // ================= JOUEUR =================
-// LA MARCHE. 7 m/s (25 km/h) sans courir : « on glisse », les jambes ne suivaient pas et on
-// traversait le centre-ville en 9 s (n° 17 du Joueur). 5,6 m/s à pied, la course (L3, à
-// bascule) monte à 7,3 m/s : on VOIT la différence, et le stick à mi-course marche vraiment.
-const JUMP = 12, SPEED = 5.6, COURSE = 1.3, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
+// LA MARCHE ET LA COURSE. Historique : 7 m/s d'un bloc (« on glisse »), puis 5,6 m/s avec la
+// course (L3, a bascule) a 7,3 m/s. Le joueur redemandait de la vitesse : on monte a 6,2 m/s
+// a pied (22 km/h) et 9,6 m/s en courant (35 km/h). Ce n'est jouable QUE parce que la foulee
+// est maintenant calee sur la vitesse reelle (fouleeDe / poseJambes) : avant, les jambes
+// tournaient a cadence fixe et le pied patinait de 1,2 m par pas. Verifie en rue etroite,
+// en escalier, en boutique et sur un toit : on garde le controle parce que le freinage est
+// borne en m/s2 (FREIN_SOL) et non en exponentielle, donc l'arret est NET.
+const JUMP = 12, SPEED = 6.2, COURSE = 1.55, PUSH = 13, STEP_UP = 0.6, CLIMB = 4.5;
+// DEMARRAGE, FREINAGE, DEMI-TOUR, en m/s2. L'ancienne mise en vitesse etait une exponentielle
+// (`vel += (cible - vel) * (1 - exp(-14 dt))`) : elle n'atteint JAMAIS sa cible, donc au
+// relachement le personnage gardait une longue traine de vitesse alors que ses jambes etaient
+// deja a l'arret — la deuxieme cause du « il glisse ». Une rampe bornee, elle, COLLE a la
+// cible des qu'elle est a portee : depart franc (0,16 s a pied, 0,25 s en course), arret net
+// (0,13 s / 0,20 s), demi-tour qui mord. Ni mou ni instantane : c'est un jeu d'enfant.
+const ACCEL_SOL = 38, FREIN_SOL = 48, DEMI_TOUR = 70, ACCEL_AIR = 20, ACCEL_GLACE = 5;
 // Mode « rotation » : zone morte du stick pour le braquage. Fine (6 %) — une DualSense neuve
 // ne derive pas au-dela de 5 % — la ou l'ancienne formule ignorait tout virage sous 32 %.
 const ROT_MORTE = 0.06;
@@ -20891,9 +20902,21 @@ function step(dt, active) {
     } else P.phasePas = 0;
     // À la manette, le retard d'affichage s'ajoute au temps de mise en vitesse : le personnage
     // semblait partir une demi-seconde après le pouce. On le rend plus vif dès qu'une manette pilote.
-    const vif = tel.on ? 26 : 14;
-    const a = 1 - Math.exp(-(P.grounded ? (onIce ? 2.2 : vif) : 4) * dt);
-    P.vel.x += (wantX - P.vel.x) * a; P.vel.z += (wantZ - P.vel.z) * a;
+    // LA RAMPE DE VITESSE (voir ACCEL_SOL). Quatre regimes : en l'air on corrige peu, sur la
+    // glace on patine pour de vrai, on lache la commande = FREINAGE, et si la cible part a
+    // plus de 110 degres de la vitesse actuelle c'est un DEMI-TOUR : on mord davantage pour
+    // que le corps pivote au lieu de deriver en arc de cercle.
+    const vx0 = P.vel.x, vz0 = P.vel.z, vn0 = Math.hypot(vx0, vz0), cn0 = Math.hypot(wantX, wantZ);
+    let taux;
+    if (!P.grounded) taux = ACCEL_AIR;
+    else if (onIce) taux = ACCEL_GLACE;
+    else if (cn0 < 0.05) taux = FREIN_SOL;
+    else if (vn0 > 0.8 && (vx0 * wantX + vz0 * wantZ) / (vn0 * cn0) < -0.35) { taux = DEMI_TOUR; P.demiTour = simTime + 0.25; }
+    else taux = ACCEL_SOL;
+    if (tel.on) taux *= 1.12;   // a la manette, l'affichage ajoute son propre retard : on compense
+    const dvx = wantX - vx0, dvz = wantZ - vz0, dvn = Math.hypot(dvx, dvz), marge = taux * dt;
+    if (dvn <= marge || dvn < 1e-6) { P.vel.x = wantX; P.vel.z = wantZ; }
+    else { P.vel.x = vx0 + dvx / dvn * marge; P.vel.z = vz0 + dvz / dvn * marge; }
     P.coyote = P.grounded ? 0.12 : P.coyote - dt;
     if (P.jumpBuf > 0) P.jumpBuf -= dt;
     if (P.jumpBuf > 0 && P.coyote > 0) { P.vel.y = JUMP * statMul().jump; P.grounded = false; P.coyote = 0; P.jumpBuf = 0; P.standing = null; P.dance = 0; sfx.jump(); }

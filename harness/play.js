@@ -15738,3 +15738,136 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
     && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
+
+// ================= POSTE CONDUITE (round 71) =================
+// Mise en place commune aux deux trajets : un ami, une voiture posée à côté de lui, et il
+// vient chercher le joueur. Rendue depuis la page pour que les trois tests partent du même
+// état (le monde est reconstruit avant chacun : `frais: true`).
+const CONDUITE_SETUP = `(() => {
+  const G = __G, P = G.P;
+  __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+  const b = G.bots.find(x => x.av && !x.ko);
+  G.devenirAmi(b);
+  b.pos.set(6, 0, 8); b.av.group.position.copy(b.pos); b.rdv = null; b.drive = null; b.wait = 0; b.fight = null;
+  const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+  c.x = 8; c.z = 8; c.h = 0; c.busy = false; G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z);
+  G.botPrendVoiture(b, { x: P.pos.x, z: P.pos.z, nom: 'toi' });
+  return { b: b, c: c };
+})()`;
+
+test('le joueur est vu assis sur le siège passager quand un membre vient le chercher en voiture', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais pris la voiture' };
+    G.city.botCarNear = b; G.monterAvecBot(b);
+    pas(); G.poseJoueurAuVolant(1 / 60);   // UNE seule image : on doit déjà être assis
+    const c = b.drive.car, av = G.me.group, cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const mesure = () => {
+      const dx = av.position.x - c.x, dz = av.position.z - c.z, k = Math.cos(c.h), s = Math.sin(c.h);
+      return { visible: av.visible, hauteur: +(av.position.y - (c.y || 0)).toFixed(2),
+        droite: +(dx * k - dz * s).toFixed(2), avant: +(dx * s + dz * k).toFixed(2),
+        cap: +Math.abs(Math.atan2(Math.sin(av.rotation.y - c.h), Math.cos(av.rotation.y - c.h))).toFixed(3),
+        cuisse: +G.me.rig.legL.rotation.x.toFixed(2),
+        genou: +(G.me.rig.legL.genou ? G.me.rig.legL.genou.rotation.x : 0).toFixed(2),
+        duConducteur: +Math.hypot(av.position.x - b.av.group.position.x, av.position.z - b.av.group.position.z).toFixed(2) };
+    };
+    const montee = mesure();
+    // puis 15 s de route : il doit RESTER assis, pas seulement à la montée
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    G.botConduireVers(b, { x: V.x, z: V.z, nom: 'la villa' });
+    for (let k = 0; k < 900; k++) pas();
+    G.poseJoueurAuVolant(1 / 60);
+    const route = mesure();
+    const T = G.placesDe(c);
+    return { montee: montee, route: route, largeur: c.baseW || 2.4, longueur: c.baseD || 4.4,
+      siege: T.avant ? [T.avant.x, T.avant.y, T.avant.z] : null, place: (G.vehiculeDuJoueur() || {}).place };
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const bon = m => m.visible && Math.abs(m.droite) < r.largeur / 2 && Math.abs(m.avant) < r.longueur / 2
+    && m.cap < 0.05 && m.hauteur > -1.1 && m.hauteur < 0.9 && m.cuisse < -1 && m.genou > 1 && m.duConducteur > 0.7;
+  const ok = bon(r.montee) && bon(r.route) && r.place === 'avant';
+  return { ok, detail: `avant : l'avatar était rendu invisible et laissé hors de la caisse (visible=false, 7,65 m à gauche, cuisses à 0) · maintenant, place « ${r.place} » : à la montée visible=${r.montee.visible}, ${r.montee.droite} m sur le côté et ${r.montee.avant} m en avant du centre (caisse ${r.largeur} × ${r.longueur} m), ${r.montee.hauteur} m sous le repère du véhicule, cap identique à ${r.montee.cap} rad près, cuisses ${r.montee.cuisse} / genoux ${r.montee.genou}, à ${r.montee.duConducteur} m du conducteur — et après 15 s de route : ${r.route.droite} / ${r.route.avant} m, cuisses ${r.route.cuisse}, visible=${r.route.visible}` };
+});
+
+test('un membre emmène le joueur à la villa : il vient, on monte, il conduit par la route, on descend au portail', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais amené la voiture' };
+    const c = b.drive.car;
+    const venue = +t.toFixed(1), dVenue = +Math.hypot(c.x - P.pos.x, c.z - P.pos.z).toFixed(1);
+    G.city.botCarNear = b; G.monterAvecBot(b); pas();
+    const monte = !!(G.city.rideBot === b && b.drive.passager && G.me.group.visible);
+    // le vrai chemin du joueur : « emmène-moi à la villa » passe par lieuDe()
+    const V = G.city.villaMine, lieu = G.lieuDe('la villa');
+    const dest = (lieu && Math.hypot(lieu.x - V.x, lieu.z - V.z) < 40) ? lieu : { nom: 'ta villa', x: V.x, z: V.z };
+    const t0 = t;
+    G.botConduireVers(b, dest);
+    let n = 0, surRoute = 0, ech = 0, dParc = 0, px = c.x, pz = c.z;
+    while (t - t0 < 240 && b.drive && b.drive.etat === 'route') {
+      pas(); n++;
+      dParc += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+      if (n % 10 === 0) { ech++; if (G.surLaChaussee(c.x, c.z, 0.4)) surRoute++; }
+    }
+    const G2 = G.city.gate;
+    const out = { venue: venue, dVenue: dVenue, monte: monte, dest: dest.nom,
+      trajet: +(t - t0).toFixed(1), arrive: b.drive && b.drive.etat === 'arrive',
+      dVilla: +Math.hypot(c.x - V.x, c.z - V.z).toFixed(1),
+      dPortail: G2 ? +Math.hypot(c.x - G2.x, c.z - G2.z).toFixed(1) : null,
+      surChaussee: ech ? Math.round(100 * surRoute / ech) : 0,
+      vMoy: +(dParc / Math.max(0.001, t - t0)).toFixed(2), parcouru: +dParc.toFixed(0),
+      volOiseau: +Math.hypot(V.x - 8, V.z - 8).toFixed(0), garee: G.surLaChaussee(c.x, c.z, 0.6) };
+    // on descend : l'avatar redevient un piéton, dehors, visible
+    G.botDescendre(b, true);
+    for (let k = 0; k < 6; k++) pas();
+    out.descendu = { rideBot: !!G.city.rideBot, visible: G.me.group.visible,
+      dVoiture: +Math.hypot(P.pos.x - c.x, P.pos.z - c.z).toFixed(1) };
+    return out;
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.monte && r.arrive && r.trajet < 150 && r.dPortail != null && r.dPortail < 40
+    && r.surChaussee >= 80 && r.vMoy > 3 && !r.descendu.rideBot && r.descendu.visible && r.descendu.dVoiture > 1.5;
+  return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.surChaussee} % du trajet sur la chaussée), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
+});
+
+test('en auto-conduite un véhicule reste sur la chaussée et ne grille pas un feu rouge', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // un feu qui arrête un sens, une voiture 14 m avant sa ligne, une cible 70 m plus loin
+    const tl = (G.city.trafficLights || []).find(t => t.ligne && !t.broken);
+    if (!tl) return { erreur: 'aucun feu dans la ville' };
+    const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
+    const fx = Math.sin(tl.sens), fz = Math.cos(tl.sens);
+    c.x = tl.ligne.x - fx * 16; c.z = tl.ligne.z - fz * 16; c.h = tl.sens; c.busy = true; c.speed = 0;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); c.ia = null;
+    const bx = tl.ligne.x + fx * 70, bz = tl.ligne.z + fz * 70;
+    const dt = 1 / 60;
+    let infractions = 0, feuxRencontres = 0, surRoute = 0, ech = 0, rougeVu = 0, arretAuRouge = 0;
+    let alPrec = (tl.ligne.x - c.x) * fx + (tl.ligne.z - c.z) * fz;
+    // deux cycles de feu complets (28 s le cycle) : on croise forcément du rouge
+    for (let k = 0; k < 60 * 70; k++) {
+      G.botConduit(c, bx, bz, dt, {});
+      G.step(dt, true);
+      const al = (tl.ligne.x - c.x) * fx + (tl.ligne.z - c.z) * fz;
+      const rouge = tl.state !== 2;
+      if (rouge && al > 0 && al < 12) { rougeVu++; if (Math.abs(c.speed || 0) < 0.6 && al < 6) arretAuRouge++; }
+      if (alPrec > 0 && al <= 0) { feuxRencontres++; if (rouge) infractions++; }
+      alPrec = al;
+      if (k % 10 === 0) { ech++; if (G.surLaChaussee(c.x, c.z, 0.5)) surRoute++; }
+    }
+    return { infractions, feuxRencontres, rougeVu, arretAuRouge,
+      surChaussee: Math.round(100 * surRoute / ech),
+      dRestante: +Math.hypot(c.x - bx, c.z - bz).toFixed(1), vFin: +(c.speed || 0).toFixed(1) };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.infractions === 0 && r.feuxRencontres >= 1 && r.surChaussee >= 85 && r.rougeVu > 0 && r.arretAuRouge > 0;
+  return { ok, detail: `ligne du feu franchie ${r.feuxRencontres} fois, dont ${r.infractions} au rouge · ${r.rougeVu} images passées au rouge à moins de 12 m de la ligne, dont ${r.arretAuRouge} à l'arrêt devant elle · ${r.surChaussee} % du temps sur la chaussée · il reste ${r.dRestante} m jusqu'à la cible posée à 70 m après le feu` };
+});

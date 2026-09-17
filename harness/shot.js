@@ -725,6 +725,29 @@ window.__SHOT = {
         if (mieux) { enterCar(mieux); poseJoueurAuVolant(1); }
       } catch (e40) {}
     }
+    // POSTE CONDUITE — EN PASSAGER : un ami au volant, le joueur assis a cote de lui. C'est
+    // la capture qui prouve la plainte n° 1 du round 71 (« le joueur n'apparait pas quand son
+    // membre vient le chercher en voiture »).
+    if (v.passager) {
+      try {
+        var bp = null;
+        for (var kb = 0; kb < bots.length; kb++) if (bots[kb].av && !bots[kb].ko) { bp = bots[kb]; break; }
+        var cp = null, dmin3 = 1e9;
+        for (var kv3 = 0; kv3 < city.cars.length; kv3++) {
+          var cv3 = city.cars[kv3];
+          if (!cv3 || cv3.heli || cv3.rider || cv3.busy || cv3.kind === 'jetski') continue;
+          var dd3 = Math.hypot(cv3.x - P.pos.x, cv3.z - P.pos.z);
+          if (dd3 < dmin3) { dmin3 = dd3; cp = cv3; }
+        }
+        if (bp && cp) {
+          cp.x = P.pos.x + Math.sin(P.facing) * 3; cp.z = P.pos.z + Math.cos(P.facing) * 3;
+          cp.h = P.facing; cp.busy = true; settleVehicle(cp); cp.g.position.set(cp.x, cp.y || 0, cp.z);
+          bp.drive = { car: cp, tx: cp.x, tz: cp.z, nom: 'la villa', etat: 'arrive', passager: false, annonce: simTime };
+          city.botCarNear = bp; monterAvecBot(bp);
+          botDriveTick(1 / 60); poseJoueurAuVolant(1);
+        }
+      } catch (e41) {}
+    }
     if (v.coup) {   // un coup en cours, figé au bon instant, pour juger l'impact
       try {
         const b = bots[0];

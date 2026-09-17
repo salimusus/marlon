@@ -17120,7 +17120,8 @@ function botPrendVoiture(b, lieu, genre, libre) {
     const d = Math.hypot(v.x - b.pos.x, v.z - b.pos.z); if (d < dmin) { dmin = d; c = v; }
   }
   if (!c) { botSay(b, [`je ne trouve aucun${genre === 'moto' ? 'e moto' : genre === 'bike' ? ' vélo' : 'e voiture'} libre 😬`]); return; }
-  const arr = lieu.auto || lieu;
+  // même règle qu'au volant : il vient se garer sur la chaussée la plus proche, pas dans un jardin
+  const arr = arretVoiture((lieu.auto || lieu).x, (lieu.auto || lieu).z);
   const nomV = genre === 'moto' ? 'une moto' : genre === 'bike' ? 'un vélo' : 'une voiture';
   b.rdv = { x: c.x + 2.2, z: c.z + 2.2, y: 0.3, nom: nomV, arrive: false, auto: { car: c, tx: arr.x, tz: arr.z, nom: lieu.nom } };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
@@ -17129,9 +17130,19 @@ function botPrendVoiture(b, lieu, genre, libre) {
   msg(`🚗 ${b.name} va chercher ${nomV}, direction ${lieu.nom}`, 3200);
   setBeacon(lieu.x, lieu.z);
 }
+// UNE VOITURE S'ARRÊTE SUR LA CHAUSSÉE, PAS DANS LE SALON. Le centre d'une zone (« ta villa »)
+// tombe au milieu du jardin : la voiture tournait autour du pâté de maisons sans jamais
+// « arriver », puis finissait par se déclarer coincée. On vise donc le point de chaussée
+// praticable le plus proche — devant le portail — dès que la destination n'est pas sur le
+// bitume. (city.plan fournit déjà une desserte pour les lieux connus : elle reste prioritaire.)
+function arretVoiture(x, z) {
+  if (surLaChaussee(x, z, 2)) return { x, z };
+  const p = (typeof pointRouteLibre === 'function') ? pointRouteLibre(x, z) : null;
+  return p ? { x: p.x, z: p.z } : { x, z };
+}
 function botConduireVers(b, lieu) {
   const st = b.drive; if (!st) return;
-  const arr = lieu.auto || lieu;
+  const arr = arretVoiture((lieu.auto || lieu).x, (lieu.auto || lieu).z);
   st.tx = arr.x; st.tz = arr.z; st.nom = lieu.nom; st.etat = 'route'; st.route = null; st.bloqueT = 0;
   botSay(b, [`c'est parti pour ${lieu.nom} ! 🚗💨`]);
   if (!st.passager) setBeacon(lieu.x, lieu.z);
@@ -17140,7 +17151,11 @@ function monterAvecBot(b) {
   const st = b && b.drive; if (!st || st.passager) return;
   if (drive.car) exitCar();
   const moto = !!st.car.rider;
-  st.passager = true; city.rideBot = b; me.group.visible = moto; P.vel.set(0, 0, 0);
+  // ON SE VOIT ASSIS À CÔTÉ DU CONDUCTEUR. L'avatar était rendu INVISIBLE dès qu'on montait
+  // dans une voiture (`me.group.visible = moto`) : le joueur ne se voyait nulle part pendant
+  // tout le trajet, plainte n° 1 du round. `drive.assis = false` fige la pose dès la première
+  // image : on APPARAÎT assis, sans une demi-seconde debout dans la caisse.
+  st.passager = true; city.rideBot = b; me.group.visible = true; drive.assis = false; P.vel.set(0, 0, 0);
   clearBeacon(); engine.start(moto ? 'moto' : 'car', moteurDe(drive.car));
   botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
@@ -17189,13 +17204,21 @@ function botDriveTick(dt) {
     jambesEnCabine(b.av, fermeB);
     // Deux-roues : le conducteur est bien AVANT sur la selle et le passager derrière lui.
     // À 0,30 et −0,62 les deux bonshommes se chevauchaient : on les écarte à 1,25 m.
-    const sx = moto ? 0 : 0.5, sz = moto ? 0.5 : (c.kind === 'truck' ? 2.55 : 0.3);
-    const sy = moto ? (c.spec.seat - 0.55) : (c.kind === 'truck' ? 0.3 : (fermeB ? -0.2 : -0.35));
     b.av.group.visible = !net.on;
-    b.av.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
-    b.av.group.rotation.y = c.h; b.av.group.rotation.z = moto ? (c.tilt || 0) : 0;
+    if (moto) {
+      const sx = 0, sz = 0.5, sy = c.spec.seat - 0.55;
+      b.av.group.position.set(c.x + sx * cs + sz * sn, c.y + sy, c.z - sx * sn + sz * cs);
+      b.av.group.rotation.y = c.h; b.av.group.rotation.z = c.tilt || 0;
+      b.av.rig.armL.rotation.x = b.av.rig.armR.rotation.x = -1.2;
+    } else {
+      // LE CONDUCTEUR S'ASSIED A SA PLACE, celle de la table PLACES — la même que le joueur
+      // au volant et que les occupants. Les trois décalages écrits à la main (0,5 / 0,3 /
+      // 2,55 m) ne valaient que pour une berline : dans un camion ou un fourgon le membre
+      // flottait au-dessus du capot, jambes tendues.
+      assiedAvatar(b.av, c, placesDe(c).conducteur, dt, true);
+      b.av.group.rotation.z = 0;
+    }
     b.pos.set(c.x, c.y, c.z); b.facing = c.h;
-    b.av.rig.armL.rotation.x = b.av.rig.armR.rotation.x = -1.2;
     if (st.passager) {
       if (moto) {   // en croupe : on voit le joueur assis derrière, penché comme l'ami
         const lz = -0.75;
@@ -17210,7 +17233,17 @@ function botDriveTick(dt) {
         me.rig.legL.rotation.z = 0.14; me.rig.legR.rotation.z = -0.14;
         cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.8, c.z), Math.min(1, dt * 6));
       } else {
-        P.pos.set(c.x, c.y + 0.4, c.z); P.vel.set(0, 0, 0); P.facing = c.h; me.group.visible = false;
+        // EN VOITURE : le joueur est ASSIS SUR LE SIEGE PASSAGER, à côté du conducteur, et on
+        // le VOIT. Avant : `me.group.visible = false` et le joueur posé au centre de la caisse
+        // — « le joueur n'apparaît pas quand son membre vient le chercher en voiture ».
+        // On passe par la même fonction que le conducteur (assiedAvatar + table PLACES) : même
+        // hauteur, même cap, jambes pliées, et la pose est figée dès la première image.
+        const vj = vehiculeDuJoueur();
+        const pl = vj && vj.car === c ? placesDe(c)[vj.place] : null;
+        const w = pl ? assiedAvatar(me, c, pl, drive.assis ? dt : 1, false) : null;
+        drive.assis = true;
+        if (w) P.pos.set(w.x, w.y, w.z); else P.pos.set(c.x, c.y + 0.4, c.z);
+        P.vel.set(0, 0, 0); P.facing = c.h; me.group.visible = true;
         cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
       }
       const emo = moto ? '🏍️' : '🚗';
@@ -17660,8 +17693,17 @@ function chienTick(dt) {
       if (c.panier) c.panier.position.set(0, (c.spec && c.spec.seat ? c.spec.seat : 1) - 0.36, pz);
       lx = 0; lz = pz; ly = ((c.spec && c.spec.seat ? c.spec.seat : 1) - 0.08);
     }
-    else if (c.kind === 'truck') { lx = -0.52; lz = 2.45; ly = 1.2; }                    // cabine du camion
-    else { lx = -0.52; lz = 0.05; ly = 0.45; }                                           // siège passager
+    // LE SIEGE D'A COTE EST PRIS quand un ami conduit : le joueur y est maintenant assis,
+    // visible. Le chien recule donc d'une rangée au lieu de s'asseoir sur ses genoux — il
+    // garde sa place à lui, celle de la table PLACES (`chien`).
+    else if (c.kind === 'truck') {
+      const avPris = !!(city.rideBot && city.rideBot.drive && city.rideBot.drive.passager && city.rideBot.drive.car === c);
+      lx = avPris ? 0 : -0.52; lz = avPris ? 1.55 : 2.45; ly = 1.2;                      // cabine du camion
+    }
+    else {
+      const avPris = !!(city.rideBot && city.rideBot.drive && city.rideBot.drive.passager && city.rideBot.drive.car === c);
+      lx = avPris ? 0 : -0.52; lz = avPris ? -1.3 : 0.05; ly = 0.45;                     // siège passager, sinon banquette arrière
+    }
     p.x = c.x + lx * cs + lz * sn; p.z = c.z - lx * sn + lz * cs; p.y = c.y + ly;
     p.g.position.set(p.x, p.y, p.z); p.g.rotation.y = c.h; p.g.rotation.x = 0; p.facing = c.h;
     p.tail.rotation.y = Math.sin(simTime * 8) * 0.4;

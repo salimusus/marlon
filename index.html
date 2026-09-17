@@ -26888,8 +26888,15 @@ function gangTick(dt) {
 function alarmeInstallee() { return owned.has('deco:alarme'); }
 function declencheCambriolage(G) {
   if (cambrio.on || !city.villaMine) return;
+  // PAS DE CAMBRIOLAGE SUBI SANS RAISON (n° 72 du Joueur, décision : pas de hasard sans
+  // explication). Un enfant qui vient d'arriver, sans gang ni quartier, visitait la banque et
+  // retrouvait son porte-monnaie à zéro avec une ligne de chat pour toute explication. Les gangs
+  // ne s'en prennent à la villa que d'un joueur ENTRÉ dans la guerre (un homme recruté ou un
+  // quartier pris), l'écran le dit clairement, et ils ne prennent jamais plus de la moitié.
+  const dansLeJeu = (gang.membres.length + (gang.membresLibres || []).length) > 0 || nbTerritoires('joueur') > 0;
+  if (!dansLeJeu) return;
   const v = city.villaMine;
-  cambrio.on = true; cambrio.t = simTime + 55; cambrio.voleurs = G ? G.membres.slice(0, 2) : [];
+  cambrio.on = true; cambrio.t = simTime + 55; cambrio.voleurs = G ? G.membres.slice(0, 2) : []; cambrio.gang = G ? G.nom : null;
   cambrio.butin = Math.floor(rnd(60, 240));
   for (const m of cambrio.voleurs) { m.cambrio = true; }
   if (G) { G.etat = 'cambriolage'; G.cible = [v.x, v.z]; G.t = simTime + 60; }
@@ -26903,7 +26910,9 @@ function declencheCambriolage(G) {
     sfx.tone(880, 0, .18, 'square', .07); setTimeout(() => sfx.tone(660, 0, .18, 'square', .07), 220);
     setBeacon(v.x, v.z, 2);
   } else {
-    chat(null, '🏠 Des ombres rôdent autour de ta villa…');
+    msg(`🏠 ${G ? G.nom : 'Des voleurs'} rôdent autour de ta villa ! Cours-y : la colonne bleue te guide`, 4200); sfx.tone(520, 0, .25, 'square', .06);
+    chat(null, `🏠 ${G ? G.nom : 'Des voleurs'} rôdent autour de la villa de ${myCfg.name}…`);
+    setBeacon(v.x, v.z, 2);
   }
 }
 function cambrioTick(dt) {
@@ -26924,7 +26933,7 @@ function cambrioTick(dt) {
   if (simTime > cambrio.t) cambrioFin(false);
 }
 function cambrioFin(sauve, par) {
-  const perdu = sauve ? 0 : Math.min(cambrio.butin, wallet);
+  const perdu = sauve ? 0 : Math.min(cambrio.butin, Math.floor(wallet / 2));   // jamais plus de la moitié du porte-monnaie (comme l'amende du n° 35)
   for (const m of cambrio.voleurs) m.cambrio = false;
   cambrio.voleurs = []; cambrio.on = false; cambrio.alerte = 0;
   document.body.classList.remove('alarme');
@@ -26933,7 +26942,8 @@ function cambrioFin(sauve, par) {
   if (sauve) { msg(`🛡️ Cambriolage évité — ${par === 'toi' ? 'tu les as' : 'ton gang les a'} fait fuir !`, 3600); sfx.win();
     chat(null, `🛡️ Les cambrioleurs ont fui la villa de ${myCfg.name}`); }
   else { wallet -= perdu; saveWallet(); updateHud();
-    msg(`💸 Cambriolage réussi : ils sont partis avec ${perdu} 🪙`, 4000); sfx.die();
+    const qui = cambrio.gang || 'Les voleurs';
+    msg(`💸 ${qui} ont cambriolé ta villa : −${perdu} 🪙 (jamais plus de la moitié). Un homme de ton gang près de la villa les fait fuir`, 5200); sfx.die();
     chat(null, `💸 La villa de ${myCfg.name} a été cambriolée (−${perdu} 🪙)`); }
 }
 

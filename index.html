@@ -22435,7 +22435,9 @@ function degatsVehicule(c, gravite, vx, vz) {
       if (p.sides[1]) p.sides[1].material = crackedGlass;
       if (p.lights[2]) p.lights[2].material = lam(0x2b2f3a);
       if (p.bumpers[1]) dropPart(c, p.bumpers[1], vx, vz);
-      if (p.doors[2]) dropPart(c, p.doors[2], vx, vz);                          // la portière est arrachée
+      // LA PORTIÈRE ARRACHÉE, c'est la DERNIÈRE de la liste : la décapotable du concessionnaire
+      // n'a que deux portes, et `p.doors[2]` n'existait pas — elle ne perdait jamais rien.
+      if (p.doors.length) dropPart(c, p.doors[p.doors.length - 1], vx, vz);   // la portière est arrachée
       arracheRoue(c, vx, vz);                                                   // le pneu se déjante et roule
       c.fumee = 'noire';
       feuVehicule(c, 10);                                                       // et ça prend feu une dizaine de secondes

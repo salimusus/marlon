@@ -13201,7 +13201,8 @@ function coupCouteau(av, duree) {
   camSecousse(0.2, 0.24); cam.kick = (cam.kick || 0) + 0.05;
   sfx.tone(120, 0, .14, 'sawtooth', .09, 60);
   let dmg = w.dmg;
-  if (gardeLevee(target)) dmg = Math.round(dmg * 0.7);   // une garde de poings arrête mal une lame
+  // Une garde de poings n'arrête PAS une lame : le coup passe entier. (Avant : ×0,7, et un habitant
+  // laissé en bagarre par la scène d'avant encaissait 24 au lieu de 34 dès le premier coup — test 262.)
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;

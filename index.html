@@ -22388,7 +22388,9 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
     // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
     // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
-    if (o.w < 0.7 && o.d < 0.7) continue;
+    // AU VOLANT seulement : à pied, en intérieur, ce sont justement les agrès et les petits
+    // meubles qui posent la caméra à bonne distance (maison de poupée, test 219).
+    if (drive.car && o.w < 0.7 && o.d < 0.7) continue;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.

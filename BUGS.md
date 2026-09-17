@@ -307,6 +307,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `s4-pc.log` pas `gaz+1s` … `recule+3s` : msg « 🪑 E : s'asseoir ».
 
 ### 31. Taper un mur : pas de BOOM, pas de secousse, la voiture glisse le long du mur et s'enfonce dans le sol
+✅ RÉPARÉ — les dégâts d'un mur suivent la vitesse PERDUE contre lui (`perte`), pas la vitesse : choc franc (> 4 m/s perdus, arrivée > 6 m/s) = BOUM + secousse + tôle (≤ 14 %), frottement = 0,2 % toutes les 1,5 s. Mesuré (viser l'immeuble Centre-ville à 11 m/s en biais) : avant 4 % → 25 % en 5 s de glissade, aucun message ; après « 💥 Choc contre le mur » 6,8 % puis 7,4 % après 5 s de glissade, kick 0,04. Le « s'enfonce » était le bord de la dalle (sol à 0 au-delà du trottoir) — commit 9554688
 - **Gravité** : GÊNANT (promis au round 67 : chocs BOOM, marques d'impact)
 - **Reproduire** : viser l'immeuble « Centre-ville » (−35,5, 16) depuis (−22, 7), R2 6 s.
 - **On voit** : vitesse 4 km/h collée au mur, la voiture continue de glisser (z 8,9 → 13,3), dégâts +2 % seulement, `cam.kick = 0`, aucun message ; `c.y` tombe de 0,15 à 0,00 et le bas des roues passe à −0,06 / −0,12 (sous la route).
@@ -453,6 +454,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Capture** : `img/c1/c1-14s.png`, `img/c1/c1-14s-tv.png`.
 
 ### 69. La première voiture du parking fonce dans le grillage du terrain de foot : R2 tout droit = 🔧 +21 % en 5 s
+✅ RÉPARÉ — voir n° 31 : R2 tout droit depuis la place → un seul « 💥 BOUM ! » contre le grillage (14 %), puis 14,6 % après 5 s gaz enfoncés (avant : 41 %). Les places regardent bien la rue z = 0 (le grillage du foot est juste derrière) — commit 9554688
 - **Gravité** : GÊNANT (suite du n° 26 : la voiture part maintenant, mais la sortie du parking est un mur)
 - **Reproduire** : parking du centre (voitures en (−17,9…−8, 10), cap nord), △ pour monter, R2 à fond 5 s sans toucher au stick. Reproduit 2/2 (`c3` run 1 et run 2).
 - **On voit** : run 1 — la voiture s'arrête contre le grillage du foot à 6 km/h, des cônes de chantier sont plantés sur la chaussée devant elle (`img/c3/c3-26-roule.png`) ; run 2 — 27 m/s atteints, 102 m parcourus en ricochant vers l'est jusqu'à la Zone industrielle, 🔧 +20,9 %. Dans les deux cas l'enfant qui « appuie sur le champignon » est puni dans les 3 premières secondes.
@@ -460,6 +462,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `c3-pc.log` `c26.gaz5s = {depl: 102.08, dmg: 20.87, spd: 27.12, cap: 1.08}`.
 
 ### 70. Au stick, sortir du parking du centre détruit la voiture : 🔧 100 % et incendie en 40 s, la dépanneuse l'emporte avec le conducteur éjecté
+✅ RÉPARÉ — voir n° 31 : 40 s de conduite « comme un enfant » dans le parking → 🔧 17,7 %, pas d'incendie (avant 96,6 % et le feu) ; `enterCar` refuse une épave (« 🔥 Cette voiture est une épave… »). L'éjection à l'explosion a déjà un message (« 💥 Le véhicule a explosé ! ») — commit 9554688
 - **Gravité** : GRAVE (la première voiture d'un enfant brûle avant même d'avoir quitté le parking)
 - **Reproduire** : parking du centre, △ pour monter, puis conduire « vers le parc » comme un enfant (R2 à 80 %, stick pour viser le nord, frein quand ça part de travers) pendant 40 s. Reproduit 3/3 (`l1a` run 1 et run 2 en PC, `l2a` en TV, mêmes commandes).
 - **On voit** : la voiture bute sur le grillage du foot et les tables du snack, les dégâts grimpent 2 % → 30 % → **96,6 %** en 41 s sans jamais dépasser 30 km/h, elle prend feu (run 1 : `img/l1/l1a-11-roule-garage.png`, carcasse en flammes devant la terrasse), le personnage se retrouve à pied à côté (run 2 : `car: false` à t+84 s, position (−12,8, 13,1)), puis « ⛓️ Véhicule chargé sur le plateau : direction le garage » — la dépanneuse emporte l'épave. Aucun message n'a dit à l'enfant pourquoi la voiture chauffait ni qu'elle allait brûler.
@@ -467,6 +470,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `l1a-pc.log` `conduite[0] = {secondes: 41, dmg: 96.63, fin: [−16.2, 9.5]}` ; `bilan.defauts` : « ⚙️ A2 · 0 km/h · 🔧 100% » à t+84 s. En TV (`l2a-tv.log`) : `dmg: 100` à 41 s, le joueur éjecté a perdu 28 ❤️ (100 → 72) sans message, et △ le fait REMONTER dans l'épave (« ⚙️ A1 · 0 km/h · 🔧 100% »).
 
 ### 71. En jeu, la bague jaune de la manette reste posée sur le bouton du chat (haut gauche) pendant toute la partie
+✅ RÉPARÉ — `navValide()` reposait une bague après un clic même sans fenêtre ouverte (d'où le 💬 encadré) ; plus de bague sans fenêtre, et `startGame()` efface celle de l'accueil — commit 3e84817
 - **Gravité** : GÊNANT (l'enfant croit qu'il a « sélectionné » quelque chose ; ✕ ne fait rien d'utile)
 - **Reproduire** : accueil, ✕ (« Entrer dans Marlon »). Reproduit 3/3 (`c1` PC, `c1` TV, `l1a`).
 - **On voit** : `.focustv` passe de « Entrer dans Marlon » à `#chatBtn` dès l'entrée en ville et y reste (t+2 s, t+14 s, t+40 s) : cadre jaune permanent autour de l'icône 💬 en haut à gauche (`img/c1/c1-2s.png`, `img/c1/c1-14s-tv.png`, `img/l1/l1a-08-parking.png`). ✕ en jeu ne l'active pas (`croixEnJeu.ui = null`).
@@ -474,6 +478,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Sonde** : `c1-pc.log` `c4.apresX1.focus = "chatBtn:"`, `l1a-pc.log` `focusEnJeu.el = "chatBtn:"`.
 
 ### 72. La villa d'un joueur qui vient d'arriver est cambriolée : tout son porte-monnaie (25 🪙 → 0) disparaît sans qu'il ait rien vu
+✅ RÉPARÉ — `declencheCambriolage` ne se lance que si le joueur a un homme (recruté ou libre) ou un quartier ; le butin est plafonné à la moitié du porte-monnaie ; sans alarme, message central « 🏠 Les Frelons Jaunes rôdent autour de ta villa ! Cours-y » + colonne bleue, et le bilan dit qui et pourquoi. Mesuré : profil neuf → rien ; avec un homme → message, beacon, 25 🪙 → 13 — commit 94973ac
 - **Gravité** : GRAVE (première partie : l'enfant perd tout son argent pendant qu'il visite la banque, sans explication visible)
 - **Reproduire** : partie neuve, se promener 10 minutes loin de la villa (contrôle 2 : banque, hôpital…). **Dépend de `Math.random`** : à chaque décision d'un gang (`gangTick`, l. 26547), 7 % de chances de tirer une villa, et si c'est celle du joueur (`v.mine`) le cambriolage démarre et réussit 55 s plus tard si personne n'est à moins de 22 m. Vu 1 fois sur 6 parties de contrôle (`img/c2/c2-banque-2-regard.png` : « 💸 Cambriolage réussi : ils sont partis avec 25 🪙 », chat « 💸 La villa de Joueur42 a été cambriolée (−25 🪙) », porte-monnaie 0 dans le HUD) ; la sonde `c8.js` (hasard forcé à 0,8 pendant 200 s) n'a pas retiré la villa du joueur.
 - **On voit** : seul avertissement, une ligne de chat « 🏠 Des ombres rôdent autour de ta villa… » (sans alarme achetée), à 175 m de là ; puis `wallet -= min(butin 60–240, wallet)` : un enfant à 25 🪙 perd tout.

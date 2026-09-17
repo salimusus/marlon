@@ -15738,3 +15738,59 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
     && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
+
+// ======================= POSTE BÂTIMENTS (école, banque) =======================
+test('on entre vraiment dans chaque salle de classe et rien ne barre le seuil', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 218, hour: 12, frais: true });
+    const T = G.THREE, bb = new T.Box3();
+    // on tient « avancer » en pointant la caméra sur le point visé, en temps SIMULÉ
+    const marcher = (tx, tz, secondes) => {
+      G.keys.add('ArrowUp');
+      let i = 0;
+      for (; i < secondes * 60; i++) {
+        G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9;
+        G.step(1 / 60, true);
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.55) break;
+      }
+      G.keys.delete('ArrowUp');
+      return i / 60;
+    };
+    const salles = [];
+    for (const r0 of G.city.classes) {
+      // RIEN DANS LE SEUIL : ni solide, ni décor. Le volume de la porte fait 2,10 m de large
+      // (x), 2,20 m de haut, et va de 70 cm DEDANS à 70 cm DEHORS du mur de la cour (épais de
+      // 30 cm) — assez serré pour ignorer les tables du fond, assez large pour attraper la
+      // plaque qui barrait le passage.
+      const dedans = (x0, x1, y0, y1, z0, z1) => x1 > r0.x - 1.05 && x0 < r0.x + 1.05
+        && z1 > r0.z - 0.7 && z0 < r0.z + 1.0 && y1 > 0.45 && y0 < 2.2;
+      let bloc = 0, pire = null;
+      for (const s of G.solids)
+        if (dedans(s.x - s.w / 2, s.x + s.w / 2, s.y - s.h / 2, s.y + s.h / 2, s.z - s.d / 2, s.z + s.d / 2)) bloc++;
+      G.worldGroup.traverse(m => {
+        if (!m.isMesh || !m.geometry) return;
+        bb.setFromObject(m);
+        if (!isFinite(bb.min.x)) return;
+        if (bb.max.x - bb.min.x > 12 || bb.max.z - bb.min.z > 12) return;   // la structure de l'école
+        if (dedans(bb.min.x, bb.max.x, bb.min.y, bb.max.y, bb.min.z, bb.max.z)) {
+          bloc++; if (!pire) pire = { l: +(bb.max.x - bb.min.x).toFixed(2), h: +(bb.max.y - bb.min.y).toFixed(2), y: +bb.min.y.toFixed(2) };
+        }
+      });
+      // et on y VA : de la cour jusqu'à sa table, puis on s'assoit
+      G.P.sit = null; G.P.pos.set(r0.x, 0.3, r0.z + 4.5); G.P.vel.set(0, 0, 0);
+      const t = marcher(r0.x, r0.z - 1.5, 8);
+      const zSeuil = G.P.pos.z;
+      const ch = r0.chaises[1];
+      marcher(ch.x, ch.z + 0.9, 10);
+      const approche = Math.hypot(G.P.pos.x - ch.x, G.P.pos.z - ch.z);
+      let assis = false;
+      try { G.sitBench(ch); assis = !!G.P.sit; } catch (e) {}
+      G.P.sit = null;
+      salles.push({ n: r0.n, bloc, pire, t: +t.toFixed(2), franchi: +(r0.z - zSeuil).toFixed(2), approche: +approche.toFixed(2), assis });
+    }
+    return { salles };
+  });
+  const ok = r.salles.length === 4 && r.salles.every(s => s.bloc === 0 && s.franchi > 1 && s.t < 4 && s.approche < 1.6 && s.assis);
+  return { ok, detail: `avant : un bandeau blanc de 10 m × 0,90 m barrait le seuil des 4 salles de 0,30 à 1,20 m · maintenant ${r.salles.map(s => `${s.n} : ${s.bloc} objet dans le seuil, franchi de ${s.franchi} m en ${s.t} s, table à ${s.approche} m, assis ${s.assis ? 'oui' : 'NON'}`).join(' · ')}` };
+});

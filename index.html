@@ -29372,7 +29372,10 @@ function metierRoule(w, tx, tz, dt, seuil = 6) {
   // s'approcher davantage (un incendie au milieu d'une cour, un chantier derrière une haie),
   // rouleVers rend 0 — « je me suis garé au plus près ». En recalculant la distance ici, le
   // camion de pompiers restait bloqué à 12,5 m du feu et ne déployait jamais sa lance.
-  const reste = rouleVers(c, tx, tz, dt, vmax, { urgence });
+  // Le camion de pompiers en route vers un feu se dégage comme une ambulance (`secours`) : coincé
+  // trois secondes derrière une voiture ou un poteau à 80 m du feu, il restait planté là et le
+  // feu brûlait ses 240 s (test 388 dans la suite complète, où la circulation le bloquait).
+  const reste = rouleVers(c, tx, tz, dt, vmax, { urgence, secours: urgence });
   metierAuVolant(w, c, Math.abs(c.speed || 0), dt);
   return reste;
 }
@@ -31326,7 +31329,7 @@ function pompiersTick(dt) {
       // mètre à moins de 70 m), l'équipe descend et finit à pied avec la lance.
       if (!chef.acces || chef.accesFeu !== feu) {
         const p = typeof pointRouteLibre === 'function' ? pointRouteLibre(feu.x, feu.z) : null;
-        chef.acces = p ? [p.x, p.z] : [feu.x, feu.z]; chef.accesFeu = feu; w0.progD = 1e9; w0.progT = simTime;
+        chef.acces = p ? [p.x, p.z] : [feu.x, feu.z]; chef.accesFeu = feu; w0.progD = 1e9; w0.progT = simTime; w0.progDT = simTime;
       }
       const dA = metierRoule(w0, chef.acces[0], chef.acces[1], dt, 11);
       for (let i = 0; i < suite.length; i++) metierPassager(suite[i].bot, veh, i, dt);
@@ -31334,7 +31337,13 @@ function pompiersTick(dt) {
       // « coincé » = le camion ne ROULE plus (pas la distance au feu : un itinéraire contourne
       // souvent un pâté de maisons et s'éloigne un moment avant de revenir)
       if (!veh || (veh.pas || 0) > 0.5 * dt) w0.progT = simTime;
-      const coince = simTime - w0.progT > 8 && dF < 70;
+      // … et « coincé » aussi quand on ne GAGNE plus un mètre vers le feu pendant 20 s à moins de
+      // 90 m : dans une file derrière une voiture au feu rouge, le camion reculait, repartait,
+      // re-butait — il « roulait » sans jamais avancer et l'équipe ne descendait jamais (test 388
+      // dans la suite complète : au plus près à 58 m, feu jamais éteint). Un détour honnête
+      // autour d'un pâté de maisons rapproche du feu bien avant vingt secondes.
+      if (dF < (w0.progD || 1e9) - 1) { w0.progD = dF; w0.progDT = simTime; }
+      const coince = (simTime - w0.progT > 8 && dF < 70) || (simTime - (w0.progDT || w0.progT) > 20 && dF < 90);
       if (dF < 12 || dA < 11 || coince) { majEtat('deploie'); w0.t = simTime + 3; w0.tMax = simTime + 40; if (veh) { veh.outilCible = 1; veh.speed = 0; veh.spd = 0; } }
       return;
     }

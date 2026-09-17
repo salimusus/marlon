@@ -16491,3 +16491,96 @@ test('aucun article acheté en boutique ne reste un objet mort, et les jouets de
     && r.calin && r.hp > 40;
   return { ok, detail: `avant : 11 articles achetés au comptoir sur 11 ne faisaient RIEN · maintenant ${r.morts.length} article sans usage (${r.morts.join(', ') || 'aucun'}) sur ${r.nbVivants} au catalogue du sac · ballon posé au sol à ${r.pose} m, envoyé de ${r.d0} m à ${r.d1} m d'un coup de pied · cerf-volant monté de ${r.h0} m à ${r.h1} m en courant (${r.hautCerf} m au-dessus du joueur) · boomerang parti à ${r.loin} m et revenu en main : ${r.revenu ? 'oui' : 'non'} · câlin de peluche : ❤️ 40 → ${r.hp}` };
 });
+
+// ================= POSTE FLUIDITE (round 71) : LE COUT D'UNE IMAGE =================
+// Le joueur : « le jeu est lent, accelere les images ». Ce qui decide du prix d'une image,
+// ce sont les APPELS DE DESSIN : un par objet pour l'image, et un DEUXIEME s'il porte une
+// ombre. Piege : la passe d'ombres n'apparait PAS dans renderer.info, parce que three.js
+// remet ses compteurs a zero APRES elle — trois mille appels par image que personne ne
+// voyait. On la compte donc a la main, en regardant qui tombe dans le cadre de la carte
+// d'ombres. Meme point de vue fixe que le test 305, et en Ultra HD (la qualite que le joueur
+// a choisie) : sans cela, selon l'orientation laissee par le test precedent, la meme place
+// demande 6 000 ou 14 000 appels et aucun plafond chiffre ne tient.
+test("une image en ville reste sous son plafond d'appels de dessin, sans qu'aucun decor ni aucun habitant disparaisse", async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
+    const avantQ = G.settings.quality;
+    G.settings.quality = 'ultra'; G.applyQuality();
+    G.camera.position.set(0, 7, 58); G.camera.lookAt(0, 2, 34); G.camera.updateMatrixWorld(true);
+    // UNE IMAGE POUR DEGOURDIR : juste apres une teleportation, les matrices du monde datent
+    // encore de l'ancienne position, et le tri par la distance se tromperait de point de vue.
+    G.renderer.render(G.scene, G.camera);
+    // le recensement des ombres mobiles est etale sur une trentaine d'images (les vehicules et
+    // les habitants vont et viennent) : on lui fait faire plusieurs tours complets
+    for (let k = 0; k < 150; k++) G.ombresMobilesTick();
+    G.detailsLOD(true);
+    G.renderer.render(G.scene, G.camera);
+    const couleur = G.renderer.info.render.calls, tris = G.renderer.info.render.triangles;
+    // LA PASSE D'OMBRES, comptee a la main : tout maillage visible, non coupe par le budget,
+    // qui porte une ombre et tombe dans le cadre de la carte d'ombres, vaut un appel.
+    const sun = G.sun, sph = new T.Sphere();
+    sun.updateMatrixWorld(); sun.target.updateMatrixWorld(); sun.shadow.updateMatrices(sun);
+    const co = sun.shadow.camera, fo = new T.Frustum(), mo = new T.Matrix4();
+    mo.multiplyMatrices(co.projectionMatrix, co.matrixWorldInverse); fo.setFromProjectionMatrix(mo);
+    const dansCadre = o => { if (!o.geometry) return false;
+      if (!o.geometry.boundingSphere && o.geometry.computeBoundingSphere) o.geometry.computeBoundingSphere();
+      if (!o.geometry.boundingSphere) return false;
+      sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld); return fo.intersectsSphere(sph); };
+    let ombre = 0, dessines = 0;
+    const fc = new T.Frustum(), mc = new T.Matrix4();
+    mc.multiplyMatrices(G.camera.projectionMatrix, G.camera.matrixWorldInverse); fc.setFromProjectionMatrix(mc);
+    G.scene.traverse(o => {
+      if (!o.visible || !o.isMesh || !o.geometry) return;
+      if (o.layers && o.layers.mask === 0) return;
+      if (o.castShadow && dansCadre(o)) ombre++;
+      if (!o.geometry.boundingSphere) return;
+      sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
+      if (o.frustumCulled === false || fc.intersectsSphere(sph)) dessines++;
+    });
+    // RIEN N'A DISPARU. Trois garanties, chacune sur un point ou une bavure se verrait :
+    //  1. le decor proche : aucun maillage de plus de 25 cm coupe a moins de 20 m ;
+    //  2. l'avatar du joueur : il garde TOUTES ses ombres, toujours (c'est le seul personnage
+    //     qu'on regarde de pres, il est exclu du budget) ;
+    //  3. les habitants proches : a moins de dix metres, aucune de leurs ombres n'est eteinte.
+    const cam = G.camera.position;
+    const loin = o => { const m = o.matrixWorld.elements; return Math.hypot(m[12] - cam.x, m[13] - cam.y, m[14] - cam.z); };
+    const fautesDecor = G.DETAILS.filter(e => e.off && e.r > 0.25 && loin(e.o) < 20).length;
+    let joueurEteint = 0;
+    if (G.me && G.me.group) G.me.group.traverse(o => { if (o.isMesh && o.ombreLoin) joueurEteint++; });
+    // 3. RIEN DE PROCHE NE PERD SON OMBRE. La regle coupe a 90 fois le rayon du morceau, et le
+    //    plus petit morceau d'un personnage fait 9 cm de rayon : sous 8 m de la camera, aucune
+    //    ombre ne doit donc jamais s'eteindre. Si ce compte bouge, c'est que le seuil a ete
+    //    baisse et que le joueur verrait des morceaux perdre leur ombre sous son nez.
+    const procheEteints = G.OMBRES_MOB.filter(e => e.off && loin(e.o) < 8).length;
+    let botsProchesEteints = 0, botsProches = 0;
+    for (const b of G.bots) {
+      if (!b.av || !b.av.group) continue;
+      const d = Math.hypot(b.av.group.position.x - cam.x, b.av.group.position.z - cam.z);
+      if (d > 12) continue;
+      botsProches++;
+      b.av.group.traverse(o => { if (o.isMesh && o.ombreLoin) botsProchesEteints++; });
+    }
+    // LE COUT DU CODE DE JEU. La circulation tourne a 60 pas par seconde, la vie de la ville
+    // aussi : deux pas de simulation (1/120 s) pour un tour. C'est ce qui a divise par deux le
+    // travail de cityStep — si quelqu'un remet la circulation a 120 Hz, ce compte le dira.
+    const t0 = G.TRAFIC ? G.TRAFIC.tours : -1, v0 = G.VILLE ? G.VILLE.tours : -1;
+    for (let k = 0; k < 120; k++) G.step(1 / 120, true);
+    const toursTrafic = G.TRAFIC ? G.TRAFIC.tours - t0 : -1, toursVille = G.VILLE ? G.VILLE.tours - v0 : -1;
+    G.settings.quality = avantQ; G.applyQuality();
+    return { couleur, ombre, total: couleur + ombre, tris, dessines,
+      fautesDecor, joueurEteint, procheEteints, botsProches, botsProchesEteints, toursTrafic, toursVille,
+      mob: G.OMBRES_MOB.length, mobEteints: G.OMBRES_MOB.filter(e => e.off).length,
+      geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures,
+      prog: G.renderer.info.programs ? G.renderer.info.programs.length : -1 };
+  });
+  // PLAFONDS. Mesure A/B a ce point de vue exact, dans le meme navigateur, avant / apres le
+  // travail de ce round : image 4 294 → 4 301 appels, OMBRES 3 732 → 1 123, total 8 032 →
+  // 5 424 (−32 %), et 5 253 → 5 259 maillages reellement dessines — rien n'a disparu, c'est la
+  // carte d'ombres qui a maigri. Les plafonds laissent de la marge pour que la ville puisse
+  // encore grandir, mais pas assez pour revenir en arriere.
+  const ok = r.total < 6500 && r.ombre < 1900 && r.couleur < 5200
+    && r.dessines > 4000 && r.fautesDecor === 0 && r.joueurEteint === 0 && r.procheEteints === 0
+    && r.botsProchesEteints === 0 && r.toursTrafic === 60 && r.toursVille === 60;
+  return { ok, detail: `une image en ville coute ${r.total} appels de dessin : ${r.couleur} pour l'image (${r.tris} triangles, ${r.dessines} maillages dans le champ) et ${r.ombre} pour la carte d'ombres — que renderer.info ne compte pas · ${r.mobEteints} ombres de vehicules et d'habitants sur ${r.mob} sont effacees au loin, mais l'avatar du joueur garde ses ${r.joueurEteint === 0 ? 'ombres entieres' : r.joueurEteint + ' ombres ETEINTES (defaut)'} et rien a moins de 8 m de la camera ne perd la sienne (${r.procheEteints}), habitants a moins de 12 m compris (${r.botsProches} habitants, ${r.botsProchesEteints} ombre eteinte) · aucun decor de plus de 25 cm coupe a moins de 20 m (${r.fautesDecor}) · la circulation et la vie de la ville tournent a 60 pas par seconde (${r.toursTrafic} et ${r.toursVille} tours pour 120 pas de simulation) · memoire : ${r.geo} geometries, ${r.tex} textures, ${r.prog} programmes` };
+});

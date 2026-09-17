@@ -2139,6 +2139,8 @@ window.__G = {
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
   // POSTE FLUIDITE : le cout d'une image (ajoute tes exports SOUS cette ligne)
+  TRAFIC: typeof TRAFIC !== 'undefined' ? TRAFIC : null,
+  VILLE: typeof VILLE !== 'undefined' ? VILLE : null,
   rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
   detailsLOD: typeof detailsLOD === 'function' ? detailsLOD : null,
   detailsInit: typeof detailsInit === 'function' ? detailsInit : null,

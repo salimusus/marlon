@@ -15837,37 +15837,57 @@ test('un membre emmène le joueur à la villa : il vient, on monte, il conduit p
   return { ok, detail: `avant : 195,4 s à 1,59 m/s, arrêté 67 % du temps pour des piétons de trottoir, joueur invisible · maintenant il amène la voiture en ${r.venue} s (à ${r.dVenue} m du joueur), on monte (visible=${r.monte}), il conduit jusqu'à ${r.dest} en ${r.trajet} s de temps simulé (${r.parcouru} m parcourus pour ${r.volOiseau} m à vol d'oiseau, ${r.vMoy} m/s de moyenne, ${r.surChaussee} % du trajet sur la chaussée), il s'arrête à ${r.dPortail} m du portail (sur la chaussée=${r.garee}) et on descend à ${r.descendu.dVoiture} m de la voiture, visible=${r.descendu.visible}` };
 });
 
-test('en auto-conduite un véhicule reste sur la chaussée et ne grille pas un feu rouge', async p => {
-  const r = await p.evaluate(async () => {
+
+// TOUTE la circulation, pas un véhicule choisi : une minute de ville, on regarde ce que font
+// les voitures conduites par l'ordinateur. Piège trouvé en mesurant : une ligne de feu se
+// prolonge à l'infini de part et d'autre de la rue — sans le test LATÉRAL (le même que
+// codeRoute : 5 m), une voiture qui roule dans la rue d'à côté « franchit » la ligne et on
+// compte 7 feux grillés qui n'ont jamais existé.
+test('en auto-conduite la ville respecte le code de la route : chaussée, bon sens, feux rouges', async p => {
+  const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
-    // un feu qui arrête un sens, une voiture 14 m avant sa ligne, une cible 70 m plus loin
-    const tl = (G.city.trafficLights || []).find(t => t.ligne && !t.broken);
-    if (!tl) return { erreur: 'aucun feu dans la ville' };
-    const c = G.city.cars.find(v => !v.heli && !v.rider && !v.busy && v.kind !== 'jetski');
-    const fx = Math.sin(tl.sens), fz = Math.cos(tl.sens);
-    c.x = tl.ligne.x - fx * 16; c.z = tl.ligne.z - fz * 16; c.h = tl.sens; c.busy = true; c.speed = 0;
-    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); c.ia = null;
-    const bx = tl.ligne.x + fx * 70, bz = tl.ligne.z + fz * 70;
     const dt = 1 / 60;
-    let infractions = 0, feuxRencontres = 0, surRoute = 0, ech = 0, rougeVu = 0, arretAuRouge = 0;
-    let alPrec = (tl.ligne.x - c.x) * fx + (tl.ligne.z - c.z) * fz;
-    // deux cycles de feu complets (28 s le cycle) : on croise forcément du rouge
-    for (let k = 0; k < 60 * 70; k++) {
-      G.botConduit(c, bx, bz, dt, {});
+    const flotte = (G.city.aiCars || []).slice();
+    const feux = (G.city.trafficLights || []).filter(t => t.ligne && !t.broken);
+    if (!flotte.length || !feux.length) return { erreur: `circulation ${flotte.length} véhicules, ${feux.length} feux` };
+    const rougeDepuis = feux.map(() => 0), prec = flotte.map(() => feux.map(() => null));
+    let franchi = 0, grille = 0, ech = 0, vsum = 0, immo = 0, hors = 0, contresens = 0, arretRouge = 0;
+    for (let k = 0; k < 60 * 60; k++) {
       G.step(dt, true);
-      const al = (tl.ligne.x - c.x) * fx + (tl.ligne.z - c.z) * fz;
-      const rouge = tl.state !== 2;
-      if (rouge && al > 0 && al < 12) { rougeVu++; if (Math.abs(c.speed || 0) < 0.6 && al < 6) arretAuRouge++; }
-      if (alPrec > 0 && al <= 0) { feuxRencontres++; if (rouge) infractions++; }
-      alPrec = al;
-      if (k % 10 === 0) { ech++; if (G.surLaChaussee(c.x, c.z, 0.5)) surRoute++; }
+      feux.forEach((tl, j) => { rougeDepuis[j] = tl.state === 0 ? rougeDepuis[j] + dt : 0; });
+      flotte.forEach((c, i) => {
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        feux.forEach((tl, j) => {
+          if (Math.abs(tl.x - c.x) > 40 || Math.abs(tl.z - c.z) > 40) { prec[i][j] = null; return; }
+          if (Math.abs(Math.atan2(Math.sin(tl.sens - c.h), Math.cos(tl.sens - c.h))) > 0.5) { prec[i][j] = null; return; }
+          const dx = tl.ligne.x - c.x, dz = tl.ligne.z - c.z;
+          const al = dx * fx + dz * fz, lat = Math.abs(-dx * fz + dz * fx);
+          if (lat < 5 && tl.state === 0 && al > 0.5 && al < 8 && Math.abs(c.speed || 0) < 0.6) arretRouge++;
+          const q = prec[i][j];
+          if (q != null && q > 0 && q < 4 && al <= 0 && lat < 5) {
+            franchi++;
+            if (tl.state === 0 && rougeDepuis[j] > 1.5) grille++;
+          }
+          prec[i][j] = al;
+        });
+      });
+      if (k % 20) continue;
+      for (const c of flotte) {
+        ech++; const v = Math.abs(c.speed || 0); vsum += v;
+        if (v < 0.3) immo++;
+        if (!G.surLaChaussee(c.x, c.z, 0.6)) hors++;
+        const vp = G.voieProche(c.x, c.z);
+        if (vp) { const d = Math.atan2(Math.sin(vp.arete.sens - c.h), Math.cos(vp.arete.sens - c.h)); if (Math.abs(d) > 1.2) contresens++; }
+      }
     }
-    return { infractions, feuxRencontres, rougeVu, arretAuRouge,
-      surChaussee: Math.round(100 * surRoute / ech),
-      dRestante: +Math.hypot(c.x - bx, c.z - bz).toFixed(1), vFin: +(c.speed || 0).toFixed(1) };
+    return { vehicules: flotte.length, feux: feux.length, lignesFranchies: franchi, feuxGrilles: grille,
+      imagesArretAuRouge: arretRouge, vMoy: +(vsum / ech).toFixed(2),
+      pctImmobile: Math.round(100 * immo / ech), pctHorsChaussee: Math.round(100 * hors / ech),
+      pctContresens: Math.round(100 * contresens / ech) };
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
-  const ok = r.infractions === 0 && r.feuxRencontres >= 1 && r.surChaussee >= 85 && r.rougeVu > 0 && r.arretAuRouge > 0;
-  return { ok, detail: `ligne du feu franchie ${r.feuxRencontres} fois, dont ${r.infractions} au rouge · ${r.rougeVu} images passées au rouge à moins de 12 m de la ligne, dont ${r.arretAuRouge} à l'arrêt devant elle · ${r.surChaussee} % du temps sur la chaussée · il reste ${r.dRestante} m jusqu'à la cible posée à 70 m après le feu` };
+  const ok = r.feuxGrilles === 0 && r.lignesFranchies >= 3 && r.imagesArretAuRouge > 0
+    && r.pctHorsChaussee <= 5 && r.pctContresens <= 6 && r.vMoy >= 3;
+  return { ok, detail: `une minute de ville, ${r.vehicules} voitures en auto-conduite et ${r.feux} feux : ${r.lignesFranchies} lignes de feu franchies dont ${r.feuxGrilles} au rouge établi (grillées), ${r.imagesArretAuRouge} images à l'arrêt devant un rouge · ${r.vMoy} m/s de moyenne (${r.pctImmobile} % à l'arrêt, feux compris), ${r.pctHorsChaussee} % hors chaussée, ${r.pctContresens} % à contresens de la voie la plus proche` };
 });

@@ -2072,6 +2072,18 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  // ---- poste DRONE & ROBOT (round 71) : ajoute tes exports SOUS cette ligne ----
+  get sac() { return typeof sac !== 'undefined' ? sac : null; },
+  get JOUETS() { return typeof JOUETS !== 'undefined' ? JOUETS : null; },
+  sacAjoute: typeof sacAjoute === 'function' ? sacAjoute : null,
+  sacSortir: typeof sacSortir === 'function' ? sacSortir : null,
+  sacRangerObjet: typeof sacRangerObjet === 'function' ? sacRangerObjet : null,
+  sacDehors: typeof sacDehors === 'function' ? sacDehors : null,
+  sacNb: typeof sacNb === 'function' ? sacNb : null,
+  openSac: typeof openSac === 'function' ? openSac : null,
+  acheterArticle: typeof acheterArticle === 'function' ? acheterArticle : null,
+  botAOffrir: typeof botAOffrir === 'function' ? botAOffrir : null,
+  offreFleur: typeof offreFleur === 'function' ? offreFleur : null,
 };
 `;
 

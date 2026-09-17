@@ -15738,3 +15738,37 @@ test('vitrines et coups de feu : le poing fissure puis brise une vitrine, une ba
     && r.balle.etat === 'brisée' && r.balle.wanted >= 1;
   return { ok, detail: `avant : « tirer en pleine rue : la police laisse passer » s'affichait juste avant l'infraction ★, trois coups de poing sur une vitrine ne faisaient rien, une balle dedans valait un avertissement · maintenant cible verrouillée ${r.tir.lock} (❤️ ${r.tir.hp}) : ★${r.tir.wanted}, ${r.tir.laissePasser} « laisse passer », ${r.tir.infraction} « Infraction » · poing : ${r.poing.etats.join(' puis ')} (★${r.poing.wanted}, avertissement) · balle : vitrine ${r.balle.etat}, ★${r.balle.wanted} (« ${r.balle.msg.slice(0, 40)} »)` };
 });
+
+// ================= POSTE DRONE & ROBOT (round 71) =================
+test('sac à jouets : un article acheté au comptoir tombe dans le sac, se sort, se range et s\'offre', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    for (const k of Object.keys(G.sac.objets)) delete G.sac.objets[k];
+    // 1. le recensement : tout article de comptoir qui ne se mange pas doit avoir un usage
+    const morts = [];
+    for (const e of G.city.etals) for (const a of e.articles)
+      if (a.f === undefined && !G.JOUETS.some(j => j.article === a.n)) morts.push(e.id + '/' + a.n);
+    // 2. l'achat d'une rose : l'argent part ET l'objet arrive dans le sac
+    const rose = G.city.etals.find(e => e.id === 'fleurs').articles.find(a => a.n === 'Rose unique');
+    G.wallet = 50; const w0 = G.wallet;
+    G.acheterArticle(rose);
+    const w1 = G.wallet, dansSac = G.sacNb('rose');
+    // 3. on la sort : elle est en main, puis on la range
+    const sorti = G.sacSortir('rose'), enMain = G.sac.main;
+    G.sacRangerObjet('rose'); const apresRangement = G.sac.main;
+    // 4. on la sort de nouveau et on l'offre au bot le plus proche : il devient un ami
+    G.sacSortir('rose');
+    const b = G.bots.filter(x => !x.ko && x.av && x.av.group.visible)
+      .sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z))[0];
+    b.pos.x = P.pos.x + 1.2; b.pos.z = P.pos.z; b.ko = 0;
+    G.amis.delete(b.name);
+    const vise = G.botAOffrir();
+    const offert = vise ? G.offreFleur(vise) : false;
+    return { morts, w0, w1, dansSac, sorti, enMain, apresRangement,
+      offert, ami: G.amis.has(b.name), resteDansSac: G.sacNb('rose'), mainApres: G.sac.main };
+  });
+  const ok = r.w1 === r.w0 - 3 && r.dansSac === 1 && r.sorti && r.enMain === 'rose'
+    && r.apresRangement === null && r.offert && r.ami && r.resteDansSac === 0 && r.mainApres === null;
+  return { ok, detail: `avant : l'achat déduisait l'argent et n'en faisait RIEN (aucun inventaire) · maintenant la rose coûte ${r.w0 - r.w1} 🪙 et arrive dans le sac (×${r.dansSac}), se sort en main (${r.enMain}), se range (${r.apresRangement}), s'offre (${r.offert ? 'oui' : 'non'}) et fait un ami (${r.ami ? 'oui' : 'non'}) — il en reste ${r.resteDansSac} dans le sac · articles encore sans usage : ${r.morts.length}` };
+});

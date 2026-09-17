@@ -11346,11 +11346,20 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
   box(HX + 4.75, 2, HZ + HD / 2 - 0.2, 0.5, 3, 0.4, wallC, { studs: false, noRoute: true });   // meneau : ne laisse ouverte que la porte, dans l'axe du perron
   for (const [fx, fy] of [[-8, 2.4], [8, 2.4], [-8, 7], [-2.5, 7], [3, 7], [8, 7]]) { box(HX + fx, fy, HZ + HD / 2 - 0.25, 3, 1.8, 0.1, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true }); box(HX + fx, fy + 1.05, HZ + HD / 2 - 0.32, 3.3, 0.2, 0.3, roof, { deco: true, studs: false }); }
   for (const side of [-1, 1]) for (const fy of [2.4, 7]) box(HX + side * (HW / 2 - 0.25), fy, HZ - 3, 0.1, 1.8, 3, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
-  {   // plancher de l'étage percé d'une trémie (cage d'ascenseur / escalier)
-    const OX = HX + 8, OZ = mine ? HZ + 4.4 : HZ + 4, OW = 4.2, OD = mine ? 4.2 : 8, w0 = HW - 0.8, d0 = HD - 0.8, x0 = HX - w0 / 2, x1 = HX + w0 / 2, z0 = HZ - d0 / 2, z1 = HZ + d0 / 2;
-    const hx0 = Math.max(x0, OX - OW / 2), hx1 = Math.min(x1, OX + OW / 2), hz0 = Math.max(z0, OZ - OD / 2), hz1 = Math.min(z1, OZ + OD / 2);
+  // L'EMPRISE DE LA TRÉMIE (cage d'ascenseur chez le joueur, cage d'escalier chez les voisins).
+  // Elle est hissée ici, au niveau de la maison, parce que les garde-corps de l'étage doivent
+  // se poser EXACTEMENT sur ses bords. Chez les voisins elle va désormais jusqu'au mur est —
+  // il restait une languette de plancher de 50 cm, inutile, au-dessus du passage — et elle
+  // remonte d'un mètre au nord pour que le PALIER d'arrivée de l'escalier soit dans le vide,
+  // visible du séjour, au lieu d'être coincé sous la dalle.
+  const OX = mine ? HX + 8 : HX + 8.25, OZ = mine ? HZ + 4.4 : HZ + 3.3, OW = mine ? 4.2 : 4.7, OD = mine ? 4.2 : 8.6;
+  const TRW = HW - 0.8, TRD = HD - 0.8;
+  const TR_X0 = Math.max(HX - TRW / 2, OX - OW / 2), TR_X1 = Math.min(HX + TRW / 2, OX + OW / 2);
+  const TR_Z0 = Math.max(HZ - TRD / 2, OZ - OD / 2), TR_Z1 = Math.min(HZ + TRD / 2, OZ + OD / 2);
+  {   // plancher de l'étage percé de cette trémie
+    const x0 = HX - TRW / 2, x1 = HX + TRW / 2, z0 = HZ - TRD / 2, z1 = HZ + TRD / 2;
     const put = (a, b, c, d) => { if (b - a > 0.05 && d - c > 0.05) box((a + b) / 2, F + 0.6, (c + d) / 2, b - a, 0.3, d - c, 0xe6ded0, { studs: false, noRoute: true }); };
-    put(x0, hx0, z0, z1); put(hx1, x1, z0, z1); put(hx0, hx1, z0, hz0); put(hx0, hx1, hz1, z1);
+    put(x0, TR_X0, z0, z1); put(TR_X1, x1, z0, z1); put(TR_X0, TR_X1, z0, TR_Z0); put(TR_X0, TR_X1, TR_Z1, z1);
   }
   box(HX, F * 2 + 0.7, HZ, HW + 0.8, 0.4, HD + 0.8, roof, { deco: true, studs: false });         // toit
   for (let i = 0; i < 11; i++) box(HX - HW / 2 + 1 + i * 2, F * 2 + 1.1, HZ + HD / 2 + 0.2, 1.4, 0.5, 0.2, 0xc9a84c, { deco: true, studs: false });
@@ -11388,7 +11397,10 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     for (const bx3 of [HX - 6, HX + 5]) { const g2 = new THREE.Group(); g2.position.set(bx3, F + 0.75, HZ - 3.5); worldGroup.add(g2);
       const add = (sx, sy, sz2, px, py, pz, c) => { const m = new THREE.Mesh(unitRound, lam(c)); m.scale.set(sx, sy, sz2); m.position.set(px, py, pz); m.castShadow = true; g2.add(m); };
       add(3.2, 0.5, 4.2, 0, 0.35, 0, 0x6b4423); add(3.1, 0.4, 4, 0, 0.75, 0, 0xffffff); add(3.1, 0.12, 2.2, 0, 0.98, 0.9, pickOne([0x4f8dff, 0xff7ad9, 0x5cc453])); add(3.4, 1.5, 0.25, 0, 0.9, -2.2, 0x8b5a2b);
-      tvSet(bx3, HZ + 4, Math.PI, 2.4, F + 0.75); box(bx3, F + 0.78, HZ + 0.5, 5, 0.04, 5, pickOne([0xb03a2e, 0x2f6fd0]), { deco: true, noEdges: true, studs: false });
+      // la chambre de droite longe la trémie élargie : sa télé et son tapis rentrent de 1,60 m
+      // pour ne plus flotter au-dessus du vide de la cage d'escalier
+      const dx3 = bx3 > HX ? -1.6 : 0;
+      tvSet(bx3 + dx3, HZ + 4, Math.PI, 2.4, F + 0.75); box(bx3 + dx3, F + 0.78, HZ + 0.5, 5, 0.04, 5, pickOne([0xb03a2e, 0x2f6fd0]), { deco: true, noEdges: true, studs: false });
       box(bx3, F + 1.9, HZ - 6.6, 3, 2.6, 0.5, 0xe8e2d4, { studs: false, noRoute: true }); }
     // Escalier des villas voisines (elles n'ont pas d'ascenseur). Marches à claire-voie :
     // avant, chaque marche était un bloc plein montant du sol, ce qui donnait un empilement
@@ -11407,22 +11419,63 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     // Pied de volée reculé d'un mètre de plus : il y a maintenant 1,86 m entre la première
     // marche et le mur du fond (0,84 m avant, 0,07 m à l'origine), de quoi se placer face à
     // l'escalier sans se coller à la paroi. Dix marches de 0,505 m, giron de 0,58.
-    const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 8, EN = 10;
+    // ÉCARTÉ DU MUR, ET UNE RAMBARDE QU'ON NE TRAVERSE PAS (demande du Joueur : « améliore
+    // les escaliers de toutes les villas en les écartant ENCORE du mur et en mettant une
+    // rambarde que le joueur ne peut traverser »).
+    //   1. L'axe de la volée recule de 60 cm vers l'ouest : il restait 1,30 m entre le bord
+    //      des marches et la face intérieure du mur est, il y en a 1,90 m, et la trémie
+    //      élargie ouvre ce passage jusqu'au toit au lieu de le coiffer d'une languette.
+    //   2. Les balustres étaient PUREMENT DÉCORATIFS : 10 cm de côté, donc sous le seuil de
+    //      solidification du décor (0,16 m), et la main courante ne faisait que 14 cm de
+    //      haut. Mesuré : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et
+    //      parcourait 18,20 m jusqu'au mur d'en face, en marchant comme en courant.
+    //      La rambarde devient un VRAI SOLIDE de 18 cm d'épaisseur et 1,10 m d'appui, des
+    //      DEUX côtés de la volée, marche par marche : chaque tronçon fait 68 cm de long
+    //      pour un pas de 58 cm, donc ils se recouvrent — aucun trou à la jonction — et
+    //      chacun monte 1,10 m au-dessus de sa marche pour une contremarche de 0,505 m :
+    //      il n'y a pas non plus de trou en hauteur.
+    //   3. Le palier d'arrivée passe de 1,20 m à 1,80 m de profondeur et reçoit la même
+    //      rambarde de chaque côté ; le bord ouest de la trémie et le retour nord-est
+    //      reçoivent un garde-corps solide de l'étage. On ne tombe plus du palier.
+    // Les marches ne changent pas : 10 contremarches de 0,505 m et 0,58 m de giron, la
+    // géométrie qui se monte déjà (STEP_UP = 0,60 m).
+    const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 7.4, EN = 10;
     const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.58, EZ0 = HZ + 5.4;
+    // LA HAUTEUR DE LA RAMBARDE EST CALCULÉE, PAS CHOISIE. Chaque tronçon est posé sur SA
+    // marche : le tronçon de la marche du dessous a donc son dessus à (hauteur − 0,505 m)
+    // au-dessus des pieds. À 1,10 m cela faisait 0,595 m, c'est-à-dire SOUS le pas du
+    // joueur (STEP_UP = 0,60 m) : mesuré, il montait sur la rambarde comme sur un second
+    // escalier, puis basculait de l'autre côté (2,80 m parcourus, 2,83 m de chute). À
+    // 1,30 m, le dessus du tronçon d'en dessous est à 0,795 m — hors de portée du pas.
+    const ERT = 0.18, ERAIL = 1.3;                       // épaisseur et hauteur d'appui de la rambarde
+    const EZ9 = EZ0 - (EN - 1) * ERUN;                   // axe de la dixième marche
+    const rambarde = (x, y, z, w, d) => box(x, y + ERAIL / 2, z, w, ERAIL, d, 0xc9a84c, { studs: false, noRoute: true });
     for (let i = 0; i < EN; i++) {
       const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
       // marche pleine : plus de vide sous les pieds (voir le même correctif à la banque)
       box(ESX, top - ERISE / 2, z, EW, ERISE, ERUN + 0.1, 0xe6ded0, { studs: false, noRoute: true });
+      for (const s of [-1, 1]) {   // la rambarde, des deux côtés : les deux bords donnent sur le vide
+        rambarde(ESX + s * (EW / 2 + ERT / 2), top, z, ERT, ERUN + 0.1);
+        box(ESX + s * (EW / 2 + ERT / 2), top + ERAIL + 0.07, z, ERT + 0.12, 0.14, ERUN + 0.3, 0xc9a84c, { deco: true, studs: false });   // main courante
+      }
     }
-    {   // garde-corps ajouré côté pièce : balustres et main courante suivent la pente, marche par marche
-      for (let i = 0; i < EN; i++) { const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
-        box(ESX - EW / 2 - 0.06, top + 0.5, z, 0.1, 1, 0.1, 0xc9a84c, { deco: true, studs: false });
-        box(ESX - EW / 2 - 0.06, top + 0.92, z, 0.14, 0.14, ERUN + 0.34, 0xc9a84c, { deco: true, studs: false }); }
-      // la dixième marche arrive pile au niveau de l'étage : le palier n'est plus qu'un
-      // raccord, à la MÊME hauteur, au lieu d'une dernière marche de 0,50 à escalader
-      box(ESX, ETAGE - 0.15, EZ0 - (EN - 1) * ERUN - 0.6, EW, 0.3, 1.2, 0xe6ded0, { studs: false, noRoute: true });
+    {   // LE PALIER D'ARRIVÉE, au ras de l'étage, et ses rambardes
+      const PZ = EZ9 - 0.9, PD = 1.8;
+      box(ESX, ETAGE - 0.15, PZ, EW, 0.3, PD, 0xe6ded0, { studs: false, noRoute: true });
+      for (const s of [-1, 1]) {
+        rambarde(ESX + s * (EW / 2 + ERT / 2), ETAGE, PZ, ERT, PD);
+        box(ESX + s * (EW / 2 + ERT / 2), ETAGE + ERAIL + 0.07, PZ, ERT + 0.12, 0.14, PD + 0.2, 0xc9a84c, { deco: true, studs: false });
+      }
+      // marquage au sol du palier de DÉPART, en bas : 1,86 m de dégagement devant la première
+      // marche, de quoi se placer face à la volée sans se coller au mur du fond
+      box(ESX, 0.51, EZ0 + 0.94, EW + 0.6, 0.02, 1.4, 0xd8d2c4, { deco: true, noEdges: true, studs: false });
     }
-    box(HX + 6.6, F + 1.2, HZ + 4, 0.2, 1.1, 8, 0xc9a84c, { deco: true, studs: false });   // garde-corps de la trémie
+    // GARDE-CORPS DE L'ÉTAGE, posés sur les bords de la trémie : le bord ouest au sud du
+    // palier, et le retour nord entre le palier et le mur est. Ils sont SOLIDES : avant, le
+    // seul garde-corps était décoratif et, en marchant vers le trou depuis l'étage, on
+    // tombait de 3,71 m dans le séjour.
+    rambarde(TR_X0 - ERT / 2, ETAGE, (EZ9 + TR_Z1) / 2, ERT, TR_Z1 - EZ9);
+    rambarde((ESX + EW / 2 + TR_X1) / 2, ETAGE, TR_Z0 - ERT / 2, TR_X1 - (ESX + EW / 2), ERT);
     for (const [dx, dz] of [[-19, -17], [18.5, -16], [-19, 1], [1, 17]]) palm(vx + dx, vz + dz);   // dégagés du garage, de l'allée et de la terrasse
     city.zones.push({ name: opt.name || 'Villa', emoji: '🏡', x1: vx - HP - 1, x2: vx + HP + 1, z1: vz - HP - 1, z2: vz + HP + 1, hint: `🏡 ${opt.name || 'Villa'} : villa du quartier (salon, cuisine, chambres, piscine)` });
     return;

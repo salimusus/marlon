@@ -16038,3 +16038,44 @@ test('au volant la camera reste accrochee a la voiture : le recul suit la vitess
     && r.regard.tourne > 100 && r.regard.d < 16;
   return { ok, detail: `defaut du Joueur : plein gaz, la camera decrochait — 11 → 25 → 34 → 41 → 46 → 50 m a 75 km/h, la voiture n'etait plus qu'un point · mesure ici, huit secondes plein gaz : ${r.course.map(v => v.kmh + ' km/h→' + v.d + ' m').join(' · ')} — au plus loin ${r.dMax} m, et ${r.lent} m meme avec des images d'une demi-seconde (c'est LA que le retard s'emballait : il se rattrape par image, il est maintenant borne a 2,5 m) · conforme au recul voulu (0 m a l'arret, ${r.recul.fond} m a fond, test 288) · a l'arret nez contre une facade (l'etat d'apres un choc, ou la camera collait au toit a 1,9 m) : ${r.choc.d} m, objectif a ${r.choc.camY} m de haut · et le stick droit fait le tour (${r.regard.tourne}° en une seconde) sans lacher la voiture (${r.regard.d} m)` };
 });
+
+test('L2 braque : la camera vient par-dessus l epaule et le stick droit y vise deux fois plus fin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, DEG = 180 / Math.PI;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.settings.ctrl = 'cam'; G.settings.sensib = 1;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol');
+    const pose = (drawn, aim) => {
+      G.P.drawn = drawn; G.P.aim = aim;
+      G.cam.libre = null; G.cam.dLisse = null; G.cam.avance = 0; G.cam.hausse = 0; G.cam.yaw = 0; G.cam.pitch = 0.32;
+      for (let i = 0; i < 240; i++) { G.P.pos.set(-60, 0.5, 196); G.P.vel.set(0, 0, 0); G.simTime += 1 / 60; G.camPerche(1 / 60, drawn); }
+      const c = G.camera.position;
+      // le DECALAGE LATERAL : de combien la camera est-elle sur le cote du joueur ?
+      const dx = c.x - G.P.pos.x, dz = c.z - G.P.pos.z;
+      const lat = Math.abs(dx * Math.cos(G.cam.yaw) - dz * Math.sin(G.cam.yaw));
+      return { d: +Math.hypot(dx, c.y - (G.P.pos.y + 1.2), dz).toFixed(2), epaule: +lat.toFixed(2) };
+    };
+    const res = { range: pose(false, false), degaine: pose(true, false), braque: pose(true, true) };
+    // LA FINESSE DE VISEE : le meme coup de pouce doit balayer deux fois moins d'angle
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense (Vendor: 054c Product: 0ce6)',
+      axes: [0, 0, 0.6, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      const balaye = aim => { G.P.drawn = true; G.P.aim = aim; G.cam.yaw = 0;
+        for (let i = 0; i < 120; i++) G.pollGamepad(1 / 120);
+        return +(Math.abs(G.cam.yaw) * DEG).toFixed(1); };
+      res.libre = balaye(false); res.vise = balaye(true);
+      ds.axes = [0, 0, 0, 0]; G.pollGamepad(1 / 120);
+    } finally { navigator.getGamepads = vrai; }
+    G.P.drawn = false; G.P.aim = false; G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return res;
+  });
+  const fin = +(r.vise / r.libre).toFixed(2);
+  const ok = r.range.d > 7 && r.degaine.d > 4.5 && r.degaine.d < 6.5
+    && r.braque.d > 2.5 && r.braque.d < 4.2 && r.braque.epaule > r.degaine.epaule + 0.2
+    && fin > 0.4 && fin < 0.6;
+  return { ok, detail: `arme rangee la camera est a ${r.range.d} m ; degainee elle avance a ${r.degaine.d} m (decalage d epaule ${r.degaine.epaule} m) ; et quand le joueur BRAQUE (L2 maintenue) elle vient a ${r.braque.d} m avec ${r.braque.epaule} m de decalage — le cadrage par-dessus l epaule des jeux d action, la ou avant braquer ne changeait RIEN a la camera (5,5 m dans les deux cas) · au meme coup de pouce le stick droit balaie ${r.libre}° arme sortie et ${r.vise}° en visee, soit ${fin} fois moins : on pointe deux fois plus fin` };
+});

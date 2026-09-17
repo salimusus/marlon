@@ -16627,7 +16627,9 @@ function resetBot(b, wait) {
   b.pos.set(-5 + (k % 4) * 3.4 + rnd(-0.5, 0.5), 0, 0.5 + Math.floor(k / 4) * 3.2 + rnd(-0.5, 0.5));
   b.cpPos = b.pos.clone(); b.cpStep = 0; b.facing = 0; b.av.group.visible = true; b.av.group.position.copy(b.pos);
 }
-function botSay(b, list) { const t = pickOne(list); chat(b.name, t, b.color); bubble(b.av, t); }
+// Un habitant qu'on ne voit pas n'écrit pas dans le chat : ses « aïe ! » et « police !! » à
+// l'autre bout de la ville faisaient croire à une bagarre invisible (n° 18). La bulle, elle, reste.
+function botSay(b, list) { const t = pickOne(list); if (!b.pos || Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 60) chat(b.name, t, b.color); bubble(b.av, t); }
 // ================= AMIS, CHIEN ADOPTÉ ET COUPS ORGANISÉS =================
 const amis = new Set(store.json('superobby.amis', []));
 const saveAmis = () => store.set('superobby.amis', JSON.stringify([...amis]));
@@ -25887,7 +25889,8 @@ function lancerActivite(b, a) {
       botSay(b, [`viens te battre ${myCfg.name} ! 😤`, 'tu me dois quelque chose !', 'approche un peu !']);
       chat(null, `😤 ${b.name} s'en prend à ${myCfg.name} !`);
     } else {
-      const o = pickOne(bots.filter(x => x !== b && !x.ko && x.av.group.visible));
+      // la victime aussi doit être sous les yeux du joueur : une bagarre hors champ n'est que du bruit dans le chat
+      const o = pickOne(bots.filter(x => x !== b && !x.ko && x.av.group.visible && Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) < 40));
       if (!o) { b.activite = null; return false; }
       botTape(b, o); b.ordre = null;
     }
@@ -25928,8 +25931,10 @@ function activiteTick(b, dt) {
     b.rdvRoute = null; b.wait = 0;
   }
 }
+const VIE_CALME = 180;   // secondes de ville sans vol, braquage ni bagarre : l'enfant arrive dans une ville tranquille
 function vieTick(dt) {
   if (!city.on || net.on || !running) return;
+  if (vie.debut == null || simTime < vie.debut) vie.debut = simTime;
   for (const b of bots) activiteTick(b, dt);
   if (simTime < vie.t) return;
   vie.t = simTime + rnd(6, 14);
@@ -25939,7 +25944,14 @@ function vieTick(dt) {
   const occupes = bots.filter(b => b.activite).length;
   if (occupes >= Math.ceil(bots.length * 0.6)) return;
   const b = pickOne(libres);
-  lancerActivite(b, choisirActivite());
+  // LA VILLE EST CALME AU DÉPART (n° 18 du Joueur) : « au secours ! police !! » et « X attaque Y » dès
+  // la première minute, sans rien voir. Pas de délit pendant les trois premières minutes, et une
+  // bagarre entre habitants ne se lance qu'à portée de vue du joueur (il la VOIT).
+  let a = choisirActivite();
+  const delit = k => k === 'vol' || k === 'braquage' || k === 'bagarre';
+  if (delit(a.k) && simTime - vie.debut < VIE_CALME) return;
+  if (a.k === 'bagarre' && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) > 45) return;
+  lancerActivite(b, a);
 }
 
 // ---- salon de tatouage : on compose son motif puis on paie ----

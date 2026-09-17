@@ -16635,3 +16635,32 @@ test('les quatre reglages de qualite font ce qu\'ils disent, et « basse » libe
     && r.tvPremier.ombre < 1 && r.tvDernier.ech >= 0.78 && r.pcPremier.ech === 1 && r.pcDernier.ombre === 0;
   return { ok, detail: `Ultra HD : surechantillonnage ${r.ultraSurech}x, plafond ${r.ultraPlafond} px, nettete + halo (decision du joueur, intacte) · haute : passe de nettete sans halo · ${r.perf.n} : rendu a ${r.perf.ratio} de la resolution · basse : pas de passe de nettete, pas d'ombres (drapeau=${r.basse.drapeau}) et la carte d'ombres est LIBEREE (allouee=${r.basse.carte}, elle l'etait encore avant ce round) · on repasse en haute et l'ombre revient (${r.retour.ombres}, carte=${r.retour.carte}) · paliers de fluidite : sur ordinateur on commence par diviser la carte d'ombres (echelle ${r.pcPremier.ech}) et on finit sans ombres, sur tele on lache l'ombre des le premier palier (ombre ${r.tvPremier.ombre}) et la resolution ne descend jamais sous ${r.tvDernier.ech}` };
 });
+
+// POSTE FLUIDITE (round 71). La mer ondulait meme a deux cents metres de la plage : deplacer
+// les 5 917 points de la nappe PUIS refaire toutes ses normales coutait 9 % du temps de calcul
+// d'une image, en permanence, alors que le joueur est a l'autre bout de la ville. Le clapot
+// fait dix-sept centimetres : au-dela de quatre-vingt-dix metres du rivage, personne ne peut
+// voir qu'il s'est arrete. Ce test garantit les deux moities de la promesse : elle ondule quand
+// on est dans les parages, et elle se tait quand on n'y est plus.
+test('la mer ondule quand on est au bord et se tait quand on est a l\'autre bout de la ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const bouge = () => {
+      const pos = G.city.seaMesh.geometry.attributes.position;
+      const a = []; for (let i = 0; i < pos.count; i += 97) a.push(pos.getY(i));
+      for (let k = 0; k < 30; k++) G.step(1 / 120, true);
+      let d = 0, j = 0; for (let i = 0; i < pos.count; i += 97) d = Math.max(d, Math.abs(pos.getY(i) - a[j++]));
+      return +d.toFixed(4);
+    };
+    __SHOT.go({ world: 4, x: 150, y: 2, z: 30, hour: 12 }); const surLEau = bouge();
+    __SHOT.go({ world: 4, x: 115, y: 1, z: 30, hour: 12 }); const rivage = bouge();
+    __SHOT.go({ world: 4, x: 60, y: 1, z: 30, hour: 12 });  const aSoixante = bouge();
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });    const enVille = bouge();
+    __SHOT.go({ world: 4, x: 115, y: 1, z: 30, hour: 12 }); const retour = bouge();
+    const b = G.city.seaMesh.userData.boite;
+    return { surLEau, rivage, aSoixante, enVille, retour, points: G.city.seaMesh.geometry.attributes.position.count,
+      boite: b ? [Math.round(b.min.x), Math.round(b.max.x), Math.round(b.min.z), Math.round(b.max.z)] : null };
+  });
+  const ok = r.surLEau > 0.05 && r.rivage > 0.05 && r.aSoixante > 0.05 && r.enVille === 0 && r.retour > 0.05;
+  return { ok, detail: `la nappe de mer (${r.points} points, boite x ${r.boite && r.boite[0]}…${r.boite && r.boite[1]}, z ${r.boite && r.boite[2]}…${r.boite && r.boite[3]}) : sur l'eau la houle monte et descend de ${r.surLEau} m en 30 pas, au rivage ${r.rivage} m, a 61 m du bord ${r.aSoixante} m — et depuis la place de la ville, a 121 m du rivage, elle est figee (${r.enVille} m) · on revient au bord et elle repart (${r.retour} m)` };
+});

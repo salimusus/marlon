@@ -9748,11 +9748,31 @@ function ridesTick(dt) {
     // L'ONDULATION etait si plate qu'elle ne se voyait pas. Le clapot est maintenant plus
     // marque AU LARGE et s'aplatit en approchant du rivage, comme une houle qui meurt sur le
     // sable (x local : 0 au centre du rectangle, -42,5 au bord de la plage).
+    // FLUIDITE — LA MER ONDULAIT MEME A DEUX CENTS METRES DE LA PLAGE. Recalculer la houle,
+    // c'est deplacer chaque point de la nappe PUIS refaire toutes ses normales (trois produits
+    // vectoriels par triangle) : mesure au profileur, 9 % du temps de calcul d'une image, payes
+    // en permanence alors que le joueur est a l'autre bout de la ville. On ne l'anime que dans
+    // les parages — exactement ce que fait deja le parc d'attractions un peu plus haut. Le
+    // clapot fait dix-sept centimetres : a quatre-vingt-dix metres du bord, personne ne peut
+    // voir qu'il s'est arrete.
+    // La nappe fait 85 m sur 215 et 5 917 points : c'est sa BOITE qu'il faut mesurer, pas son
+    // centre — depuis la place de la ville on est a 166 m du centre mais a 121 m du rivage.
+    const sea = city.seaMesh;
+    if (!sea.userData.boite) {
+      const g0 = sea.geometry;
+      if (!g0.boundingBox && g0.computeBoundingBox) g0.computeBoundingBox();
+      sea.updateMatrixWorld();
+      sea.userData.boite = g0.boundingBox ? g0.boundingBox.clone().applyMatrix4(sea.matrixWorld) : null;
+    }
+    const bm = sea.userData.boite;
+    const dMer = bm ? Math.hypot(Math.max(0, bm.min.x - P.pos.x, P.pos.x - bm.max.x), Math.max(0, bm.min.z - P.pos.z, P.pos.z - bm.max.z)) : 0;
+    if (dMer < 90) {
     const pos = city.seaMesh.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i);
       const large = clamp((x + 42.5) / 22, 0, 1);   // 0 au rivage, 1 a 22 m du bord
       pos.setY(i, large * (Math.sin(x * 0.55 + simTime * 1.7) * 0.17 + Math.sin(z * 0.31 - simTime * 1.15) * 0.13 + Math.sin((x + z) * 0.17 + simTime * 0.7) * 0.09)); }
     pos.needsUpdate = true; city.seaMesh.geometry.computeVertexNormals();
+    }
     if (city.boat) { city.boat.rotation.z = Math.sin(simTime * 1.1) * 0.08; city.boat.rotation.x = Math.sin(simTime * 0.8) * 0.05; city.boat.position.y = 1.6 + Math.sin(simTime * 1.4) * 0.12; }
     if (city.foam) city.foam.scale.x = 1.2 + Math.sin(simTime * 1.8) * 0.5;
     for (const b of city.buoys) b.m.position.y = 1.8 + Math.sin(simTime * 1.6 + b.z) * 0.15;

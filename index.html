@@ -3866,27 +3866,87 @@ function immeubleZone(x, z, w, d, col, dir) {
       box(ax, y + 2.86, z, 0.04, 0.36, 0.04, 0x2b2f3a, { deco: true, studs: false });
     }
   }
-  // escalier extérieur en béton, côté est, avec palier à chaque étage
-  const ex = x + w / 2 + 1.6;
-  for (let f = 0; f < N - 1; f++) {
-    // La volée faisait 8 marches de 0,62 m, soit 4,96 m, alors que le palier est posé (d - 2)
-    // mètres plus loin, c'est-à-dire 8 m : l'escalier s'arrêtait à plus de trois mètres dans
-    // le VIDE et ne montait donc nulle part. Le giron se calcule maintenant sur la distance
-    // réelle à parcourir, si bien que la dernière marche arrive au ras du palier.
-    const y0 = f * H + 0.2, y1 = (f + 1) * H + 0.2, n = 8, len = (d - 2) / n, rise = (y1 - y0) / n;
-    // Volées CÔTE À CÔTE et non plus l'une au-dessus de l'autre : en remontant à l'aplomb,
-    // la volée supérieure ne laissait que 1,60 m de hauteur libre et on se cognait la tête
-    // au sixième marche. Chacune a maintenant sa bande, et le palier les relie.
-    const sens = f % 2 ? -1 : 1, z0 = z - (d / 2 - 1) * sens, exf = ex + (f % 2 ? 2.6 : 0);   // vers l'extérieur : décalées vers le bâtiment, elles rentraient dans le mur
-    for (let i = 0; i < n; i++) {
-      const zz = z0 + sens * (i * len + len / 2), top = y0 + (i + 1) * rise;
-      box(exf, top - rise / 2, zz, 2.4, rise, len + 0.06, 0x9a9088, { studs: false, noRoute: true });   // marche pleine
-      box(exf + (f % 2 ? 1.25 : -1.25), top + 0.5, zz, 0.08, 1, 0.08, 0x6b6157, { deco: true, studs: false });   // rampe côté vide
-    }
-    plat(ex + 1.3, y1, z + (d / 2 - 1) * sens, 5.4, 2.4, 0x9a9088, { studs: false, noRoute: true }, 0.4);   // palier reliant les deux bandes, de plain-pied avec la dernière marche ET l'étage
+  // ---------- L'ESCALIER EXTÉRIEUR (demande du Joueur, capture à l'appui) ----------
+  // « corrige les escalier pour que joueur puisse monter et accéder au appartement du deuxième
+  // étage, mets des rambarde ». Ce qu'il voyait, et ce qui était vrai :
+  //   1. des DALLES QUI FLOTTENT — chaque marche était un bloc de 0,40 m posé dans le vide,
+  //      sans rien dessous, hérissé d'un piquet de 8 cm de côté ; aucune main courante ;
+  //   2. deux grands PALIERS EN PORTE-À-FAUX de 5,40 × 2,40 m suspendus à rien ;
+  //   3. surtout : le palier du 2ᵉ étage arrivait au NORD (z − 4) alors que la coursive des
+  //      appartements longe la façade SUD (z + 5,9). Mesuré : plancher du 2ᵉ à 6,60 m au
+  //      nord, coursive du 2ᵉ à 6,80 m au sud, et RIEN entre les deux. Le deuxième étage
+  //      était donc bel et bien inaccessible.
+  // À la place, un escalier d'immeuble à DEUX VOLÉES PAR ÉTAGE avec demi-tour sur palier
+  // intermédiaire : on part du palier sud, on monte vers le nord par la bande accolée au mur,
+  // on tourne à mi-hauteur, on redescend vers le sud par la bande extérieure et on arrive de
+  // plain-pied sur le palier de l'étage — TOUJOURS au sud, TOUJOURS au droit de la coursive.
+  // Les volées d'un étage ont la même pente et la même direction que celles de l'étage du
+  // dessous : la hauteur libre est constante (H − contremarche = 2,88 m) au lieu de varier.
+  const LARG = 2.6, EP = 0.22, RAMB = 1.15, PAL = 1.8;
+  const NM = 5, MONTE = H / 2 / NM, GIRON = 0.6;      // 5 marches de 0,32 m par demi-volée
+  const xE = x + w / 2;                                // la cage s'adosse à la façade est
+  const zS = z + d / 2 - 0.2;                          // extrémité sud de la cage
+  const palX = xE + LARG, palW = LARG * 2;             // les paliers couvrent les deux bandes
+  const bande = k => xE + LARG * (k + 0.5);            // k = 0 : volée montante ; 1 : volée descendante
+  // LA RAMBARDE EST UN VRAI SOLIDE, et elle descend jusqu'au plancher de l'étage : c'est à la
+  // fois le garde-corps et le limon qui ferme le flanc de la volée — plus de dalle flottante.
+  // SA HAUTEUR EST CALCULÉE : chaque tronçon est posé sur SA marche, donc le dessus du tronçon
+  // d'en dessous se retrouve à (RAMB − contremarche) au-dessus des pieds. À 1,15 m pour une
+  // contremarche de 0,32 m, cela fait 0,83 m — bien au-dessus du pas du joueur (STEP_UP =
+  // 0,60 m), sinon il escaladerait la rambarde comme un second escalier (piège mesuré dans
+  // les villas : à 1,10 m sur des marches de 0,505 m il passait par-dessus).
+  const rambarde = (cx, base, cz, cw, cd, bas) => box(cx, (Math.min(bas, base) + base + RAMB) / 2, cz,
+    cw, base + RAMB - Math.min(bas, base), cd, 0x8d8378, { studs: false, noRoute: true });
+  const mainCourante = (cx, base, cz, cw, cd) => box(cx, base + RAMB + 0.07, cz, cw + 0.1, 0.13, cd + 0.1, 0x6b6157, { deco: true, studs: false });
+  for (let f = 0; f < N; f++) {   // le palier de chaque étage : arrivée de l'étage du dessous ET départ du suivant
+    const y = f * H + 0.2;
+    plat(palX, y, zS - PAL / 2, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    if (f === 0) continue;        // au rez-de-chaussée le palier est le trottoir : on y entre librement
+    // bord est (le vide), et bord sud SAUF le passage vers la coursive, contre le bâtiment
+    rambarde(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL, y);
+    mainCourante(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL);
+    const ouv = x + w / 4 + (w / 2 + 3.4) / 2;   // le passage s'arrête pile au bout de la coursive
+    rambarde((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP, y);
+    mainCourante((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP);
   }
-  // coursive : on passe du palier à l'appartement
-  for (let f = 1; f < N; f++) plat(x + w / 4, f * H + 0.4, z + d / 2 + 0.9, w / 2 + 3.4, 1.8, 0x9a9088, { studs: false, noRoute: true }, 0.4);
+  for (let f = 0; f < N - 1; f++) {
+    const y0 = f * H + 0.2, ym = y0 + H / 2;
+    // VOLÉE MONTANTE, bande accolée au mur : elle part du palier sud et grimpe vers le nord
+    for (let i = 0; i < NM; i++) {
+      const zz = zS - PAL - GIRON * (i + 0.5), top = y0 + (i + 1) * MONTE;
+      box(bande(0), top - MONTE / 2, zz, LARG, MONTE, GIRON + 0.06, 0x9a9088, { studs: false, noRoute: true });
+      rambarde(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06, y0);   // côté vide ; le mur ferme l'autre
+      mainCourante(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06);
+    }
+    // PALIER INTERMÉDIAIRE : le demi-tour
+    const zM = zS - PAL - NM * GIRON - PAL / 2;
+    plat(palX, ym, zM, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    rambarde(palX, ym, zM - PAL / 2 + EP / 2, palW, EP, ym); mainCourante(palX, ym, zM - PAL / 2 + EP / 2, palW, EP);
+    rambarde(xE + palW - EP / 2, ym, zM, EP, PAL, ym); mainCourante(xE + palW - EP / 2, ym, zM, EP, PAL);
+    // VOLÉE DESCENDANTE (elle remonte vers le sud), bande extérieure : les deux bords donnent
+    // sur le vide, elle a donc une rambarde de chaque côté
+    for (let i = 0; i < NM; i++) {
+      const zz = zS - PAL - NM * GIRON + GIRON * (i + 0.5), top = ym + (i + 1) * MONTE;
+      box(bande(1), top - MONTE / 2, zz, LARG, MONTE, GIRON + 0.06, 0x9a9088, { studs: false, noRoute: true });
+      for (const sgn of [-1, 1]) {
+        rambarde(bande(1) + sgn * (LARG / 2 - EP / 2), top, zz, EP, GIRON + 0.06, ym);
+        mainCourante(bande(1) + sgn * (LARG / 2 - EP / 2), top, zz, EP, GIRON + 0.06);
+      }
+    }
+  }
+  // DEUX PILIERS portent la cage sur toute sa hauteur : les paliers ne sont plus suspendus
+  { const hc = (N - 1) * H + 0.2;
+    for (const cz2 of [zS - 0.35, zS - PAL - NM * GIRON - PAL + 0.35])
+      box(xE + palW + 0.25, hc / 2, cz2, 0.45, hc, 0.7, 0x8d8378, { studs: false, noRoute: true }); }
+  // COURSIVE : du palier à la porte de l'appartement, de plain-pied avec le plancher de
+  // l'étage (elle était 20 cm plus haut) et prolongée jusqu'au palier (il manquait 20 cm).
+  // Elle court à 3,40 m puis 6,60 m au-dessus du sol : elle reçoit elle aussi son garde-corps.
+  for (let f = 1; f < N; f++) {
+    const cy = f * H + 0.2, cz = z + d / 2 + 0.8, cd = 2, cw = w / 2 + 3.4, cx = x + w / 4;
+    plat(cx, cy, cz, cw, cd, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    rambarde(cx, cy, cz + cd / 2 - EP / 2, cw, EP, cy); mainCourante(cx, cy, cz + cd / 2 - EP / 2, cw, EP);
+    rambarde(cx - cw / 2 + EP / 2, cy, cz, EP, cd, cy); mainCourante(cx - cw / 2 + EP / 2, cy, cz, EP, cd);
+  }
   // toit : tôle, citerne, antenne, linge qui sèche
   plat(x, N * H + 0.4, z, w + 0.6, d + 0.6, 0x77706a, { studs: false, noRoute: true }, 0.4);
   const cit = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.4, 12), lam(0x3f7bd0));

@@ -679,3 +679,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : 100 % de l'image est occupée par deux aplats (rouge vif et gris clair) — les voitures garées de part et d'autre ; on ne voit ni sa voiture, ni la route, ni les passagers. Seuls le chat, le radar et la barre du haut restent lisibles (`img/q7/q7-cam-0-arret.png`, `img/q6/q6-amis-0-attente.png`). L'image ne se dégage qu'en roulant (à 0,6 km/h la caméra est à 7,3 m, à l'allure la vue redevient normale).
 - **Mesure** : à l'arrêt la sonde donne pourtant une caméra à 5,39 m derrière la voiture, 3,73 m de haut, hors de l'habitacle — le problème n'est pas la distance mais la hauteur : la perche passe entre deux voitures garées au lieu de monter au-dessus.
 - **On devrait voir** : la voiture et la rue devant, comme dès qu'on roule.
+
+### 82. La police « abandonne les recherches » douze secondes après le coup de feu, sans avoir bougé, à 37 m du joueur immobile
+- **Gravité** : GRAVE (le scénario « je tire, la police me poursuit, je me cache » ne peut pas avoir lieu)
+- **Reproduire** : se placer à 45 m du commissariat (−54, 45), dégainer le pistolet, L2, trois fois R2 sur un habitant, puis ne plus bouger. Reproduit 2/2 (`q7-pc.log`, `q7-tv.log`).
+- **On voit** : « 🚔 Infraction : tirer sur Lucas_2014 ! Niveau ★ — file, ils arrivent dans 14 s » à t+4 s, puis à **t+12 s** « 🙈 Ils t'ont perdu : la police abandonne les recherches » — alors que le joueur n'a pas fait un pas et qu'une voiture de police est à 38 m. Les deux voitures restent ensuite figées à 37,03 m et 38,30 m pendant 48 s, aucun agent ne descend, ★ retombe à 0.
+- **On devrait voir** : une voiture qui vient sur place, un agent qui descend, et une recherche qui ne s'arrête que si l'enfant se cache vraiment.
+- **Sonde** : `q7-pc.log` / `q7-tv.log` `police.suivi` (`voitures` constantes, `wanted` 1 → 0 à t+12 s).

@@ -18235,3 +18235,50 @@ test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joigna
     && r.pireSurOiseau <= 2.8 && r.moyenneSurGrille <= 1.6;
   return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, à contresens ; l'itinéraire faisait 2,28 fois le vol d'oiseau en moyenne, et jusqu'à 4,98 fois (450 m pour 90 m, la bonne voie étant à trois mètres) · maintenant ${r.sansRoute} trajet sans chemin, ${r.horsScc} voie hors du réseau sur ${r.aretes}, ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille` };
 });
+
+// Le joueur : « fais en sorte que les véhicules en intervention soient prioritaires dans la
+// circulation (tous les autres véhicules se poussent pour leur laisser le passage) ».
+test('une voiture conduite par un habitant se range pour laisser passer un gyrophare', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av && !x.ko);
+    G.devenirAmi(b);
+    // une voiture conduite par un ami, posée sur une voie, en route vers un point lointain
+    const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.busy && !v.rider);
+    const vp = G.voieProche(8, 8);
+    c.x = vp.px; c.z = vp.pz; c.h = vp.arete.sens; c.busy = true; c.speed = 6;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+    b.rdv = null; b.wait = 0;
+    b.drive = { car: c, tx: c.x + Math.sin(c.h) * 120, tz: c.z + Math.cos(c.h) * 120, nom: 'là-bas',
+      etat: 'route', passager: false, annonce: G.simTime };
+    // le véhicule de service arrive DERRIÈRE lui, gyrophare allumé
+    const amb = (G.city.ambulances || [])[0] || (G.city.depanneuses || [])[0];
+    amb.x = c.x - Math.sin(c.h) * 14; amb.z = c.z - Math.cos(c.h) * 14; amb.h = c.h;
+    G.settleVehicle(amb); amb.g.position.set(amb.x, amb.y || 0, amb.z); G.vehicleSolid(amb);
+    const dt = 1 / 60;
+    const mesure = () => ({ ecart: +Math.abs(c.ecart || 0).toFixed(2), sirene: !!c.sireneVeh,
+      surChaussee: G.surLaChaussee(c.x, c.z, 0), v: +Math.abs(c.speed || 0).toFixed(1) });
+    const avant = mesure();
+    let pire = 0, horsRoute = 0, n = 0, vuSirene = false;
+    const surRoute = (x, z) => G.surLaChaussee(x, z, 0.6) || (() => { const v = G.voieProche(x, z); return !!(v && v.d < 4.5); })();
+    for (let k = 0; k < 60 * 6; k++) {
+      G.prioriteService(amb);             // il est EN INTERVENTION, gyrophare allumé
+      // l'ambulance REMONTE derrière lui, comme dans la rue : sans ça elle reste sur place,
+      // la voiture la distance en six secondes et la sirène sort de portée
+      amb.x = c.x - Math.sin(c.h) * 12; amb.z = c.z - Math.cos(c.h) * 12; amb.h = c.h;
+      amb.g.position.set(amb.x, amb.y || 0, amb.z); G.vehicleSolid(amb);
+      G.step(dt, true); G.updateBot(b, dt);
+      n++; if (!surRoute(c.x, c.z)) horsRoute++;
+      if (c.sireneVeh) vuSirene = true;
+      if (Math.abs(c.ecart || 0) > pire) pire = Math.abs(c.ecart || 0);
+    }
+    const apres = mesure(); apres.vuSirene = vuSirene;
+    const dPieton = (() => { let m = 99; for (const o of G.bots) { if (o === b) continue;
+      const d = Math.hypot(o.pos.x - c.x, o.pos.z - c.z); if (d < m) m = d; } return +m.toFixed(1); })();
+    if (b.drive) G.botDescendre(b, false); b.rdv = null; b.wait = 0;
+    return { avant, apres, ecartMax: +pire.toFixed(2), pctHorsChaussee: Math.round(100 * horsRoute / n), dPieton };
+  });
+  const ok = r.apres.vuSirene && r.ecartMax > 0.8 && r.pctHorsChaussee === 0 && r.dPieton > 1.2;
+  return { ok, detail: `avant : le pas de côté n'existait que dans la circulation de fond — une voiture conduite par un habitant levait le pied devant l'ambulance sans jamais lui laisser la place (24 véhicules sur 78 ne s'écartaient pas d'un centimètre) · maintenant, six secondes de sirène derrière lui : il la voit (${r.apres.vuSirene}), il se déporte de ${r.ecartMax} m (${r.avant.ecart} m au départ), il reste ${100 - r.pctHorsChaussee} % du temps sur la route — aucune roue sur le trottoir — et le piéton le plus proche est à ${r.dPieton} m` };
+});

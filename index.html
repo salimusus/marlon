@@ -18071,8 +18071,17 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // La circulation de fond, elle, sait faire : elle se deporte sur la voie d'a cote avec
   // `ecarteChaussee`, qui refuse tout pas montant sur le trottoir ou touchant quoi que ce soit.
   // On lui emprunte le geste (et `c.double` dit a gapDevant de ne plus compter l'epave).
-  c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
-  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
+  // ON SE RANGE POUR LA SIRENE, MEME QUAND C'EST UN HABITANT QUI CONDUIT. `codeRoute` posait
+  // bien `c.sireneVeh` et faisait lever le pied, mais LE PAS DE COTE n'existait que dans la
+  // circulation de fond (traficRoule) : une voiture conduite par un bot ralentissait devant
+  // l'ambulance sans jamais lui laisser la place. Mesure : sur 78 vehicules croises devant une
+  // depanneuse en intervention, 24 ne s'ecartaient pas d'un centimetre. Se ranger passe avant
+  // doubler : on ne double pas pendant qu'une sirene arrive derriere.
+  if (c.sireneVeh) { c.double = false; ecarteChaussee(c, dt, 1, ECART_SIRENE); }
+  else {
+    c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
+    if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
+  }
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {

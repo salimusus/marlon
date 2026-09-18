@@ -1987,6 +1987,7 @@ window.__G = {
   pietonDevant: typeof pietonDevant === 'function' ? pietonDevant : null,
   conduire: typeof conduire === 'function' ? conduire : null,
   itineraireVoies: typeof itineraireVoies === 'function' ? itineraireVoies : null,
+  itineraireDepart: () => (typeof itineraireDepart !== 'undefined' ? itineraireDepart : -1),
   voieProche: typeof voieProche === 'function' ? voieProche : null,
   projVoie: typeof projVoie === 'function' ? projVoie : null,
   rattacheDessertes: typeof rattacheDessertes === 'function' ? rattacheDessertes : null,

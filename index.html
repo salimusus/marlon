@@ -3890,13 +3890,14 @@ function immeubleZone(x, z, w, d, col, dir) {
   const bande = k => xE + LARG * (k + 0.5);            // k = 0 : volée montante ; 1 : volée descendante
   // LA RAMBARDE EST UN VRAI SOLIDE, et elle descend jusqu'au plancher de l'étage : c'est à la
   // fois le garde-corps et le limon qui ferme le flanc de la volée — plus de dalle flottante.
-  // SA HAUTEUR EST CALCULÉE : chaque tronçon est posé sur SA marche, donc le dessus du tronçon
-  // d'en dessous se retrouve à (RAMB − contremarche) au-dessus des pieds. À 1,15 m pour une
-  // contremarche de 0,32 m, cela fait 0,83 m — bien au-dessus du pas du joueur (STEP_UP =
-  // 0,60 m), sinon il escaladerait la rambarde comme un second escalier (piège mesuré dans
-  // les villas : à 1,10 m sur des marches de 0,505 m il passait par-dessus).
-  const rambarde = (cx, base, cz, cw, cd, bas) => box(cx, (Math.min(bas, base) + base + RAMB) / 2, cz,
-    cw, base + RAMB - Math.min(bas, base), cd, 0x8d8378, { studs: false, noRoute: true });
+  // ELLE PORTE LE DRAPEAU `rambarde` : voir moveAxis, le joueur ne MONTE jamais sur un
+  // garde-corps. Une hauteur seule ne suffisait pas : les dessus des tronçons voisins ne sont
+  // qu'à une contremarche l'un de l'autre et formaient un second escalier (mesuré ici : le
+  // joueur poussé en courant montait 1,48 → 1,99 → 2,31 → 2,63 m en UNE image, puis partait
+  // à 18,09 m de là). Le drapeau ferme la faille quelle que soit la hauteur choisie.
+  const RAILS = [];
+  const rambarde = (cx, base, cz, cw, cd, bas) => { const o = box(cx, (Math.min(bas, base) + base + RAMB) / 2, cz,
+    cw, base + RAMB - Math.min(bas, base), cd, 0x8d8378, { studs: false, noRoute: true, rambarde: true }); RAILS.push(o); return o; };
   const mainCourante = (cx, base, cz, cw, cd) => box(cx, base + RAMB + 0.07, cz, cw + 0.1, 0.13, cd + 0.1, 0x6b6157, { deco: true, studs: false });
   for (let f = 0; f < N; f++) {   // le palier de chaque étage : arrivée de l'étage du dessous ET départ du suivant
     const y = f * H + 0.2;
@@ -3966,7 +3967,7 @@ function immeubleZone(x, z, w, d, col, dir) {
   }
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
-  return { x, z, w, d, etages: N, h: H,
+  return { x, z, w, d, etages: N, h: H, rails: RAILS,
     esc: { xE, zS, larg: LARG, pal: PAL, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP } };
 }
 function carcasse(x, z, h) {
@@ -11676,15 +11677,18 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     // géométrie qui se monte déjà (STEP_UP = 0,60 m).
     const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 7.4, EN = 10;
     const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.58, EZ0 = HZ + 5.4;
-    // LA HAUTEUR DE LA RAMBARDE EST CALCULÉE, PAS CHOISIE. Chaque tronçon est posé sur SA
-    // marche : le tronçon de la marche du dessous a donc son dessus à (hauteur − 0,505 m)
-    // au-dessus des pieds. À 1,10 m cela faisait 0,595 m, c'est-à-dire SOUS le pas du
-    // joueur (STEP_UP = 0,60 m) : mesuré, il montait sur la rambarde comme sur un second
-    // escalier, puis basculait de l'autre côté (2,80 m parcourus, 2,83 m de chute). À
-    // 1,30 m, le dessus du tronçon d'en dessous est à 0,795 m — hors de portée du pas.
+    // LA RAMBARDE PORTE LE DRAPEAU `rambarde` (voir moveAxis) : on ne monte pas dessus.
+    // La hauteur seule ne suffisait pas. À 1,10 m, le tronçon d'en dessous avait son dessus
+    // à 0,595 m des pieds, sous le pas du joueur (STEP_UP = 0,60 m) : il l'escaladait comme
+    // un second escalier (2,80 m parcourus, 2,83 m de chute). Passer à 1,30 m n'a fait que
+    // déplacer la faille : le joueur TIENT sur une marche tant que sa boîte la touche, son
+    // centre peut donc être à 0,73 m du bord et atteindre le tronçon posé DEUX marches plus
+    // bas — dessus à 1,30 − 2 × 0,505 = 0,29 m de ses pieds. Mesure sur cette volée avant le
+    // drapeau : 11 poussées sur 60 passaient au travers, jusqu'à 17,6 m parcourus et 4,85 m
+    // de chute. Avec le drapeau : 0 sur 60.
     const ERT = 0.18, ERAIL = 1.3;                       // épaisseur et hauteur d'appui de la rambarde
     const EZ9 = EZ0 - (EN - 1) * ERUN;                   // axe de la dixième marche
-    const rambarde = (x, y, z, w, d) => box(x, y + ERAIL / 2, z, w, ERAIL, d, 0xc9a84c, { studs: false, noRoute: true });
+    const rambarde = (x, y, z, w, d) => box(x, y + ERAIL / 2, z, w, ERAIL, d, 0xc9a84c, { studs: false, noRoute: true, rambarde: true });
     for (let i = 0; i < EN; i++) {
       const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
       // marche pleine : plus de vide sous les pieds (voir le même correctif à la banque)
@@ -21958,7 +21962,22 @@ function moveAxis(axis, amount, canStep) {
     {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
       // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
-      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }
+      // ON NE MONTE JAMAIS SUR UNE RAMBARDE (o.rambarde). Un garde-corps est posé tronçon par
+      // tronçon, un par marche : le dessus d'un tronçon n'est donc qu'À UNE CONTREMARCHE du
+      // dessus du suivant, et la ligne des dessus forme un SECOND ESCALIER, de même pente que
+      // le vrai, que le pas du joueur (STEP_UP) gravit sans effort. Pire, le joueur « tient »
+      // sur une marche tant que sa boîte la touche : son centre peut donc être à 0,73 m du
+      // bord, ce qui met à sa portée le tronçon posé DEUX marches plus bas — dont le dessus
+      // n'est qu'à (hauteur de rambarde − deux contremarches) au-dessus de ses pieds.
+      // MESURE (immeubles de La Zone, rambarde de 1,15 m sur des marches de 0,32 m) : poussé
+      // en courant contre le garde-corps, le joueur restait bloqué 228 images (0,61 m), puis
+      // montait 1,48 → 1,99 → 2,31 → 2,63 m EN UNE SEULE IMAGE, tronçon après tronçon, se
+      // retrouvait la tête dans la dalle de l'étage et se faisait éjecter à 15,70 m de là par
+      // la sortie de mur ci-dessous (la dalle fait 16 m de large) : 18,09 m parcourus et une
+      // chute de 1,10 m. Les villas avaient exactement le même défaut, latent (rambarde de
+      // 1,30 m, contremarches de 0,505 m : 0,29 m de marche d'un tronçon à l'autre).
+      // Monter une rambarde n'a de toute façon aucun sens : elle est là pour arrêter.
+      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep && !o.rambarde) { P.pos.y = top; continue; }
       const half = (axis === 'x' ? o.w : o.d) / 2;
       const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);

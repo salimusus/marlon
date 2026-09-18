@@ -5177,12 +5177,24 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
     res.gangsters = { avant: mini(gm, 'xz') };
     for (let i = 0; i < 240; i++) G.step(1 / 60, true);
     res.gangsters.apres = mini(gm, 'xz');
-    // le joueur, lui, ne se fait jamais bousculer
-    G.P.pos.set(50, 0.15, 50);
-    const px = G.P.pos.x, pz = G.P.pos.z;
-    l[0].pos.set(50, 0.15, 50); l[0].av.group.position.copy(l[0].pos);
+    // LE JOUEUR, LUI, NE SE FAIT JAMAIS BOUSCULER — et on mesure ce que fait LE BOT, pas ce
+    // que fait la ville. Le joueur peut dériver pour vingt raisons qui n'ont rien à voir avec
+    // la bousculade (pente, circulation, poursuite policière laissée par un test précédent) :
+    // lancé seul ce test relevait 0,000 m, en suite complète 0,05 — soit exactement la borne.
+    // On relève donc sa dérive PROPRE sur le même nombre d'images, sans bot, et on ne retient
+    // que ce que le bot ajoute.
+    const poser = () => { G.P.pos.set(50, 0.15, 50); G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true); };
+    poser();
+    let px = G.P.pos.x, pz = G.P.pos.z;
+    for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+    const derive = Math.hypot(G.P.pos.x - px, G.P.pos.z - pz);
+    poser();
+    px = G.P.pos.x; pz = G.P.pos.z;
+    l[0].pos.set(px, G.P.pos.y, pz); l[0].av.group.position.copy(l[0].pos);
     for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.updateBot(l[0], 1 / 60); }
-    res.joueur = { pousse: +Math.hypot(G.P.pos.x - px, G.P.pos.z - pz).toFixed(2),
+    res.joueur = { pousse: +Math.max(0, Math.hypot(G.P.pos.x - px, G.P.pos.z - pz) - derive).toFixed(2),
+      derive: +derive.toFixed(2),
       ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2) };
     return res;
   });
@@ -5191,7 +5203,7 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
   const ok = r.habitants.avant < 0.1 && r.habitants.apres > 1
     && r.gangsters.avant < 0.1 && r.gangsters.apres > 1
     && r.joueur.pousse < 0.05 && r.joueur.ecart > 1;
-  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
+  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m de plus que sa dérive propre de ${r.joueur.derive} m)` };
 });
 
 test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arrière', async p => {

@@ -15744,11 +15744,23 @@ function animateRig(rig, mode, speed, dt, t) {
   // de cuisse levee, elle bascule vers l'avant comme un vrai tissu qui glisse sur la jambe —
   // au plus 0,7 rad, sinon elle se coucherait a l'horizontale sur un coup de pied haut.
   if (rig.jupe && rig.jupe.visible) {
-    const leve = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
-    const cible = -Math.min(0.7, Math.max(0, leve - 0.25) * 0.85);
-    // elle se souleve D'UN COUP sous la cuisse qui monte (sinon, le temps qu'elle reagisse,
-    // un coup de pied la traversait) et elle retombe doucement, comme un vrai tissu
-    rig.jupe.rotation.x = cible < rig.jupe.rotation.x ? cible : rig.jupe.rotation.x + (cible - rig.jupe.rotation.x) * ease2;
+    // ELLE SUIT LA BISSECTRICE DES DEUX CUISSES, pas seulement celle qui monte. En ne
+    // regardant que le genou qui MONTE, elle basculait vers l'avant et venait s'empaler sur
+    // celui qui part EN ARRIÈRE — mesuré en marchant : hanche arrière à +1,48 rad (la jambe
+    // est presque à l'horizontale derrière), jupe penchée de 0,65 rad vers l'avant, 13 cm de
+    // genou DANS le tissu. On prend donc la MOYENNE SIGNÉE des deux cuisses : à genoux et au
+    // coup de pied elle se soulève comme avant (une seule cuisse monte), à la marche elle
+    // s'incline légèrement EN ARRIÈRE, du côté où la jambe est la plus ouverte, et les deux
+    // genoux passent au large. Zone morte de 0,12 rad : au repos elle ne bouge pas d'un poil.
+    const moyen = (-rig.legL.rotation.x - rig.legR.rotation.x) / 2;
+    const jeuJupe = Math.sign(moyen) * Math.min(0.7, Math.max(0, Math.abs(moyen) - 0.12));
+    const cible = -jeuJupe;
+    // elle est POUSSEE d'un coup par la cuisse (sinon, le temps qu'elle reagisse, un coup de
+    // pied la traversait) et elle RETOMBE doucement, comme un vrai tissu. « Poussee » = le
+    // basculement grandit ou change de cote : en ne traitant que le cote AVANT, la jupe
+    // mettait une demi-seconde a s'incliner en arriere et la jambe arriere la rattrapait.
+    const jr = rig.jupe.rotation.x;
+    rig.jupe.rotation.x = (Math.abs(cible) >= Math.abs(jr) || cible * jr < 0) ? cible : jr + (cible - jr) * ease2;
   }
 }
 function animateRigCorps(rig, mode, speed, dt, t) {

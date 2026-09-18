@@ -19435,8 +19435,23 @@ test('à mains nues on assomme et on peut encore embarquer l\'homme ; le gang n\
     const D = 1 / 60;
     const img = n => { for (let i = 0; i < (n || 1); i++) { G.step(D, true); G.gangTick(D); } };
     const GA = G.gangs.filter(g => !g.mort)[0];
-    const tous = GA.membres.slice();
     G.bots.forEach(b => { b.av.group.visible = false; });
+    // ---- ÉTAT D'ENTRÉE PROPRE. En suite complète, les tests d'avant laissent des otages, des
+    // hommes abattus ou déplacés : la mise en scène ne tenait plus et `peutKidnapper()`
+    // renvoyait le VOISIN de celui qu'on visait (les hommes d'un gang naissent à quatre mètres
+    // les uns des autres, et la fonction rend le premier qu'elle trouve à moins de 2,60 m).
+    // On remet donc CE gang d'aplomb, on écarte tous les autres, et on range ses hommes en
+    // file à six mètres d'écart : à cette distance un seul peut être désigné.
+    P.otage = null; if (G.gang.otages) G.gang.otages.length = 0;
+    for (const g of G.gangs) for (const x of g.membres) {
+      if (g !== GA) { x.x += 400; x.z += 400; if (x.av) x.av.group.position.set(x.x, x.y, x.z); continue; }
+      x.captif = false; x.enferme = false; x.abattu = 0; x.ko = 0; x.chasse = null; x.garde = null;
+      x.hp = x.hpMax || 90;
+      if (x.av) { x.av.group.visible = true; x.av.group.scale.setScalar(1); x.av.group.rotation.x = 0; }
+    }
+    const tous = GA.membres.slice();
+    tous.forEach((x, i) => { x.x = -18 + i * 6; x.z = 60; x.y = G.groundUnder(x.x, x.z, null, 2);
+      x.av.group.position.set(x.x, x.y, x.z); });
     // ---- 1. TOUT le gang mis au tapis à mains nues : il n'est PAS détruit, ils se relèvent
     for (const x of tous) { x.hp = 1; x.ko = 0; x.abattu = 0; G.gangeurKO(x, 'le joueur', true); }
     const poing = { tousAuSol: tous.every(x => !!x.ko), abattus: tous.filter(x => x.abattu).length,
@@ -19444,10 +19459,14 @@ test('à mains nues on assomme et on peut encore embarquer l\'homme ; le gang n\
     // l'un d'eux est à portée : on peut l'embarquer (c'est tout l'intérêt de l'assommer)
     const m0 = tous[1];
     P.pos.set(m0.x + 1.2, m0.y, m0.z); P.otage = null;
-    poing.kidnappable = G.peutKidnapper() === m0;
-    // ils se relèvent bien au bout de leurs 26 s
+    const designe = G.peutKidnapper();
+    poing.kidnappable = designe === m0;
+    poing.designe = designe ? designe.nom : null;
+    poing.voulu = m0.nom;
+    // ils se relèvent TOUS au bout de leurs 26 s
     for (let s = 0; s < 8; s++) img(300);
     poing.relevés = tous.filter(x => !x.ko).length;
+    poing.attendus = tous.length;
     // ---- 2. le même gang ABATTU à l'arme : détruit, et personne ne revient
     P.pos.set(0, 0.5, 200);   // loin, pour ne pas ramasser le butin ni gêner
     for (const x of GA.membres.slice()) { x.hp = 1; x.ko = 0; x.abattu = 0; G.gangeurKO(x, 'le joueur'); }
@@ -19460,7 +19479,7 @@ test('à mains nues on assomme et on peut encore embarquer l\'homme ; le gang n\
     return { poing, arme };
   });
   const ok = r.poing.tousAuSol && r.poing.abattus === 0 && !r.poing.gangMort && r.poing.kidnappable
-    && r.poing.relevés > 0 && r.arme.abattus > 0 && r.arme.gangMort
+    && r.poing.relevés === r.poing.attendus && r.arme.abattus > 0 && r.arme.gangMort
     && r.arme.membresApres === 0 && r.arme.deboutApres === 0 && r.arme.gangMortApres;
-  return { ok, detail: `avant : mettre tout le gang au tapis — même à mains nues — annonçait « 🏆 ils n'existent plus » juste avant de les voir tous se relever · maintenant la situation tranche : à mains nues ${r.poing.membres} hommes au sol, aucun abattu (${r.poing.abattus}), le gang n'est PAS déclaré détruit (${r.poing.gangMort}), on peut encore embarquer celui qui est à portée (${r.poing.kidnappable}) et ${r.poing.relevés} se relèvent au bout de leurs 26 s · à l'arme, ${r.arme.abattus} abattus, le gang est détruit (${r.arme.gangMort}) et quarante secondes plus tard il ne reste plus un homme (${r.arme.membresApres} membres, ${r.arme.deboutApres} debout, toujours mort=${r.arme.gangMortApres})` };
+  return { ok, detail: `avant : mettre tout le gang au tapis — même à mains nues — annonçait « 🏆 ils n'existent plus » juste avant de les voir tous se relever · maintenant la situation tranche : à mains nues ${r.poing.membres} hommes au sol, aucun abattu (${r.poing.abattus}), le gang n'est PAS déclaré détruit (${r.poing.gangMort}), on peut encore embarquer celui qui est à portée et c'est bien LUI que le jeu désigne (voulu ${r.poing.voulu}, désigné ${r.poing.designe}) et les ${r.poing.relevés}/${r.poing.attendus} se relèvent au bout de leurs 26 s · à l'arme, ${r.arme.abattus} abattus, le gang est détruit (${r.arme.gangMort}) et quarante secondes plus tard il ne reste plus un homme (${r.arme.membresApres} membres, ${r.arme.deboutApres} debout, toujours mort=${r.arme.gangMortApres})` };
 });

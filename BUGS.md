@@ -686,3 +686,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : « 🚔 Infraction : tirer sur Lucas_2014 ! Niveau ★ — file, ils arrivent dans 14 s » à t+4 s, puis à **t+12 s** « 🙈 Ils t'ont perdu : la police abandonne les recherches » — alors que le joueur n'a pas fait un pas et qu'une voiture de police est à 38 m. Les deux voitures restent ensuite figées à 37,03 m et 38,30 m pendant 48 s, aucun agent ne descend, ★ retombe à 0.
 - **On devrait voir** : une voiture qui vient sur place, un agent qui descend, et une recherche qui ne s'arrête que si l'enfant se cache vraiment.
 - **Sonde** : `q7-pc.log` / `q7-tv.log` `police.suivi` (`voitures` constantes, `wanted` 1 → 0 à t+12 s).
+
+### 83. Un membre de gang abattu à l'arme est annoncé « mis KO » alors qu'il meurt et disparaît
+- **Gravité** : COSMÉTIQUE (mais l'enfant ne comprend pas ce qui s'est passé : il croit l'avoir seulement assommé)
+- **Reproduire** : pistolet, L2 sur le chef d'un gang, R2 jusqu'à ce qu'il tombe. Reproduit 3/3 (`q2-pc.log`, `q7-pc.log`, `q7-tv.log`).
+- **On voit** : au 9ᵉ coup, « 💥 Joueur44 a mis KO Marco Cent-Clés, chef des Les Frelons Jaunes » et « 🚩 +30 points de réputation (chef à terre) » ; puis, quinze secondes plus tard, le corps disparaît, l'homme est marqué mort et il a quitté le gang définitivement. Rien n'a dit qu'il était mort.
+- **On devrait voir** : un message qui distingue l'assommé (poings) du mort (arme à feu), puisque le jeu, lui, fait bien la différence.
+- **Sonde** : `q7-pc.log` `gang.abattu = {ko: true, mort: false, msg: "chef à terre"}` puis `gang.corps` : invisible et `mort: true` à t+15 s.

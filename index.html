@@ -25489,7 +25489,15 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const enVehicule = !!vehiculeAssis();   // au volant OU passager : voir « UN POTEAU NE CALE PAS LA CAMÉRA »
   const essaie = (o) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
-    if (o.y + hy < oy - 1.4) return;   // sol et petits meubles : la caméra passe au-dessus
+    // LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR. On comparait le sommet de la boîte GARDE
+    // COMPRISE (les 30 cm de R) à « oy - 1,4 », c'est-à-dire aux pieds moins 20 cm : le PLANCHER
+    // d'un étage, épais de 30 cm, dépassait donc ce seuil de 30 cm et arrêtait la perche dès
+    // qu'elle piquait un peu. Mesuré à l'étage de la banque : la perche tombait à 4,66 m pour
+    // 6 m exigés, barrée par une dalle de 19,2 × 0,3 × 5,6 m — le plancher où le joueur se
+    // tenait. Au sol on ne l'avait jamais vu, la chaussée n'étant pas un solide. On compare
+    // maintenant le sommet RÉEL (sans la garde) au niveau des pieds plus 25 cm : un plancher et
+    // une bordure de trottoir laissent passer, un muret d'un demi-mètre arrête toujours.
+    if (o.y + o.h / 2 < oy - 1.25) return;
     // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
     // tomberaient à zéro dès qu'on frôle un mur
     if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;

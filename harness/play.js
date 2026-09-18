@@ -7161,10 +7161,19 @@ test('les personnages ont des genoux, des coudes, des poings et de vraies chauss
     const G = __G, T = G.THREE; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const rig = G.me.rig, res = {};
     res.rig = { genou: !!rig.legL.genou, coude: !!rig.armR.coude, poing: !!rig.armR.poing, semelle: !!rig.legL.semelle, languette: !!rig.legL.languette, muscles: !!G.me.muscles, visage: !!G.me.visage };
-    const kn = []; for (let i = 0; i < 120; i++) { G.animateRig(rig, 'walk', 1, 1 / 60, i / 60); kn.push(rig.legL.genou.rotation.x); }
-    res.marche = { genouMax: +Math.max(...kn).toFixed(2), genouMin: +Math.min(...kn).toFixed(2) };
-    const kr = []; for (let i = 0; i < 180; i++) { G.animateRig(rig, 'walk', 1.6, 1 / 60, i / 60); kr.push(rig.legL.genou.rotation.x); }
-    res.course = { genouMax: +Math.max(...kr).toFixed(2), coude: +rig.armL.coude.rotation.x.toFixed(2) };
+    // MARCHE ET COURSE AUX VITESSES REELLES DU JEU. Ce test demandait la pose de marche a
+    // 1 m/s et celle de course a 1,6 m/s : c'etait l'echelle d'un temps ou le seuil de course
+    // de l'animation etait a 1,3 m/s — alors que le joueur marchait deja a 5,6. Depuis le
+    // round 72 la foulee est calee sur la vitesse REELLE (marche 6,2 m/s, course 9,6) et le
+    // seuil des bras est passe entre les deux : a 1,6 m/s on demandait donc la pose de course
+    // a quelqu'un qui flane. On mesure aux deux vitesses que le jeu emploie vraiment, et
+    // l'exigence MONTE : le genou doit plier plus en courant qu'en marchant, pas seulement
+    // depasser un seuil. (L'avatar ne se deplace pas ici : la foulee le traite comme un tapis
+    // de course, les jambes tournent quand meme.)
+    const kn = []; for (let i = 0; i < 180; i++) { G.animateRig(rig, 'walk', G.SPEED, 1 / 60, i / 60); kn.push(rig.legL.genou.rotation.x); }
+    res.marche = { genouMax: +Math.max(...kn).toFixed(2), genouMin: +Math.min(...kn).toFixed(2), coude: +rig.armL.coude.rotation.x.toFixed(2), v: +G.SPEED.toFixed(1) };
+    const kr = []; for (let i = 0; i < 180; i++) { G.animateRig(rig, 'walk', G.SPEED * G.COURSE, 1 / 60, i / 60); kr.push(rig.legL.genou.rotation.x); }
+    res.course = { genouMax: +Math.max(...kr).toFixed(2), coude: +rig.armL.coude.rotation.x.toFixed(2), v: +(G.SPEED * G.COURSE).toFixed(1) };
     rig.swing = 0.35; const cs = []; for (let i = 0; i < 25; i++) { G.animateRig(rig, 'idle', 0, 1 / 60, i / 60); cs.push(+rig.armR.coude.rotation.x.toFixed(2)); }
     res.poing = { debut: cs[0], fin: cs[cs.length - 1] };
     G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.setWeapon(G.me, 'pistol', true);
@@ -7180,12 +7189,13 @@ test('les personnages ont des genoux, des coudes, des poings et de vraies chauss
     G.applyStats(G.me, 0, 0); res.zero = { pecs: G.me.muscles.pecs[0].visible, delt: G.me.muscles.delts[0].visible, mollet: +rig.legL.mollet.scale.x.toFixed(2) };
     return res;
   });
-  const ok = Object.values(r.rig).every(Boolean) && r.marche.genouMax > 0.3 && r.marche.genouMin >= 0 && r.course.genouMax > 1.0 && r.course.coude < -1
+  const ok = Object.values(r.rig).every(Boolean) && r.marche.genouMax > 0.3 && r.marche.genouMin >= 0
+    && r.course.genouMax > 1.0 && r.course.genouMax > r.marche.genouMax && r.course.coude < -1 && r.marche.coude > -1
     && r.poing.debut < -1 && r.poing.fin > -0.2 && r.arme.ecart < 0.08 && r.arme.auCoude
     && Math.abs(r.pied.basSemelle) < 0.02 && r.pied.avancee > 0.2 && r.pied.epaisseur > 0.08
     && r.pied.rond === 'SphereGeometry' && r.pied.rayonPoing > 0.15
     && r.muscles.pecs && r.muscles.pecsZ > 1.8 && r.muscles.delt > 1 && r.muscles.mollet > 1.2 && r.muscles.trap && !r.zero.pecs && !r.zero.delt && r.zero.mollet === 1;
-  return { ok, detail: `le bras etait un baton, la jambe aussi : pas de coude, pas de genou, un pied plat · chaque membre a maintenant deux segments — un coude et un POING ROND (une sphere de ${r.pied.rayonPoing} m de rayon), un genou et une VRAIE BASKET (semelle blanche de ${r.pied.epaisseur} m d'epaisseur qui depasse de ${r.pied.avancee} m devant, tige, languette ; elle touche le sol a ${r.pied.basSemelle} m) · en marchant les genoux plient (jusqu'a ${r.marche.genouMax} rad), en courant bien plus (${r.course.genouMax}) et les coudes se replient (${r.course.coude}) · un coup de poing part du coude replie (${r.poing.debut}) et se tend a l'impact (${r.poing.fin}) · l'arme est dans le poing, a ${r.arme.ecart} m de son centre · et les muscles se VOIENT : a 80 d'entrainement, pectoraux (×${r.muscles.pecsZ} d'epaisseur), trapezes, deltoides (×${r.muscles.delt}) et mollets (×${r.muscles.mollet}) ; a zero, rien de tout ca` };
+  return { ok, detail: `le bras etait un baton, la jambe aussi : pas de coude, pas de genou, un pied plat · chaque membre a maintenant deux segments — un coude et un POING ROND (une sphere de ${r.pied.rayonPoing} m de rayon), un genou et une VRAIE BASKET (semelle blanche de ${r.pied.epaisseur} m d'epaisseur qui depasse de ${r.pied.avancee} m devant, tige, languette ; elle touche le sol a ${r.pied.basSemelle} m) · en marchant (${r.marche.v} m/s) les genoux plient jusqu'a ${r.marche.genouMax} rad et les bras restent le long du corps (coude ${r.marche.coude}), en courant (${r.course.v} m/s) les genoux plient BIEN PLUS (${r.course.genouMax}) et les coudes se replient (${r.course.coude}) · un coup de poing part du coude replie (${r.poing.debut}) et se tend a l'impact (${r.poing.fin}) · l'arme est dans le poing, a ${r.arme.ecart} m de son centre · et les muscles se VOIENT : a 80 d'entrainement, pectoraux (×${r.muscles.pecsZ} d'epaisseur), trapezes, deltoides (×${r.muscles.delt}) et mollets (×${r.muscles.mollet}) ; a zero, rien de tout ca` };
 });
 
 test('un coup se voit : visage marque, recul, genou a terre, et l\'image plonge', async p => {

@@ -18645,3 +18645,60 @@ test('l\'éclair du canon ne dépend plus d\'un chronomètre mural, et ne reste 
     && !r.colle.pistolet && !r.colle.fusil && !r.retour && !r.rangee;
   return { ok, detail: `avant : l'éclair s'éteignait sur un setTimeout de 45 ms — sur une télévision qui rend une image toutes les 100 ms il était DÉJÀ éteint quand l'image suivante arrivait (on tirait sans voir partir le coup), et changer d'arme dans ces 45 ms laissait celui de l'ancienne allumé POUR TOUJOURS (mesuré : encore allumé en reprenant le pistolet) · maintenant il suit l'horloge du jeu et deux images rendues : ${r.rapide} images à 60 img/s, encore visible à l'image lente suivante=${r.lente1} puis ${r.lente2}/${r.lente3}, rien de collé après un changement d'arme (pistolet=${r.colle.pistolet}, fusil=${r.colle.fusil}, au retour=${r.retour}), rien d'allumé arme rangée=${r.rangee}` };
 });
+
+test('arme rengainée la pastille ne dit plus « visée », et la cible choisie à la flèche reste la sienne', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    G.owned.add('arme:pistol'); G.settings.ctrl = 'cam';
+    const D = 1 / 60;
+    const image = n => { for (let i = 0; i < (n || 1); i++) { G.step(D, true); G.armeTick(D); } };
+    const act = () => (document.getElementById('act') || {}).textContent || '';
+    // ---- 1. la pastille suit l'arme
+    G.cam.yaw = Math.PI; P.facing = 0;
+    // une seule cible en scène, droit devant : la mesure ne doit pas dépendre des passants
+    const cible = G.bots.find(x => x.av && !x.ko && !x.dead);
+    const caches = G.bots.filter(b => b !== cible && b.av && b.av.group.visible);
+    caches.forEach(b => { b.av.group.visible = false; });
+    const pose = (deg, dh) => { const a = deg * Math.PI / 180;
+      cible.pos.set(P.pos.x + Math.sin(a) * dh, 0, P.pos.z + Math.cos(a) * dh);
+      cible.av.group.position.copy(cible.pos); cible.av.group.visible = true;
+      cible.wait = 1e6; cible.hp = 100; cible.ko = 0; cible.dead = 0; cible.fight = null; };
+    pose(0, 7);
+    G.equipWeapon('pistol'); G.drawWeapon(true); P.aimToggle = true; image(6);
+    P.fireCd = 0; P.ammo = 8; G.fire(); image(4);
+    // en joue : la pastille DIT la visée (on la rafraîchit à la main, c'est l'état qui compte ici)
+    G.updateAct();
+    const braque = { act: act(), vise: act().includes('🎯 visée'), lock: !!P.lock, aim: !!P.aim };
+    // et maintenant on range : c'est drawWeapon LUI-MÊME qui doit remettre la pastille à jour,
+    // sans que personne ne le lui demande — c'est tout l'objet de la correction
+    G.drawWeapon(false); image(2);
+    const range = { act: act(), vise: act().includes('🎯 visée'), lock: !!P.lock, aim: !!P.aim };
+    // ---- 2. une cible choisie à la flèche ne doit pas être reprise par le verrouillage
+    // automatique dès que la caméra bouge un peu : elle garde l'ancienne portée angulaire
+    // (65,9 °), alors que l'automatique s'arrête au bord de l'écran.
+    G.drawWeapon(true); P.lockRef = null; image(4);
+    // on écarte l'habitant de l'axe de la caméra : 50 °, donc hors du cône de l'automatique
+    // (34 °) mais dans celui d'une cible choisie exprès (65,9 °)
+    pose(50, 9);
+    G.cam.yaw = Math.PI; P.lockRef = null; image(4);
+    const auto = { pris: !!(P.lock && P.lock.ref === cible), cone: +(G.coneVisee() * 180 / Math.PI).toFixed(1) };
+    // maintenant le joueur la choisit lui-même : la flèche → de la croix fait le tour des
+    // cibles (habitants, gang, gardes, véhicules), on appuie jusqu'à tomber sur la nôtre
+    P.lockRef = null;
+    let choisie = false, appuis = 0;
+    for (let k = 0; k < 12 && P.lockRef !== cible; k++) { choisie = G.cibleSuivante(1); appuis++; }
+    const mien = P.lockRef === cible;
+    // et il ramène la caméra devant lui : la cible se retrouve à 50 ° de l'axe
+    G.cam.yaw = Math.PI; image(20);
+    const garde = { lockRef: P.lockRef === cible, lock: !!(P.lock && P.lock.ref === cible) };
+    caches.forEach(b => { b.av.group.visible = true; });
+    cible.wait = 0; P.lockRef = null;
+    G.drawWeapon(false); G.equipWeapon(null); G.clearWanted();
+    return { braque, range, auto, choisie, mien, appuis, garde };
+  });
+  const ok = r.braque.aim && r.braque.vise && r.braque.lock && !r.range.vise && !r.range.lock && !r.range.aim
+    && !r.auto.pris && r.choisie && r.mien && r.garde.lockRef && r.garde.lock;
+  return { ok, detail: `avant : la pastille n'était rafraîchie que par un changement d'arme — le pistolet au fond de l'étui, elle affichait encore « ${r.braque.act} » et l'enfant se croyait en joue · maintenant, arme rengainée : « ${r.range.act} », plus de cible ni de visée · et la cible choisie à la flèche garde sa portée entière : à 50 ° de l'axe le verrouillage automatique la refuse (cône ${r.auto.cone} °, pris=${r.auto.pris}), mais une fois choisie à la croix (${r.appuis} appui(s), prise=${r.mien}) elle reste verrouillée même caméra revenue de face (choix gardé=${r.garde.lockRef}, visée dessus=${r.garde.lock})` };
+});

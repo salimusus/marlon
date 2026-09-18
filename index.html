@@ -25640,6 +25640,11 @@ function drawWeapon(on) {   // dégainer / rengainer
   // cuir qui frotte et du metal qui clique — qui MONTE quand l'arme sort, qui DESCEND quand
   // elle retourne au fond de l'etui.
   sonArme(P.drawn ? 'degaine' : 'rengaine', P.pos.x, P.pos.y + 1.1, P.pos.z, 1);
+  // LA PASTILLE SUIT L'ARME. Elle n'etait rafraichie que par equipWeapon : une fois l'arme
+  // rengainee, elle continuait d'afficher « 🔫 Pistolet 7/8 · 🎯 visee » avec le pistolet au
+  // fond de l'etui et plus aucune cible — l'enfant croyait etre encore en joue.
+  if (!P.drawn) { P.aim = false; P.lock = null; }
+  updateAct();
 }
 function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
   if (b.dead) return; b.dead = simTime + 8; b.hp = 0; b.fight = null; b.ko = 0;
@@ -25895,7 +25900,11 @@ function ciblesVerrouillables(tout, max, seul) {
     const dx = x - ox, dz = z - oz, dh = Math.hypot(dx, dz);
     if (dh > LOCK_PORTEE || dh < 0.6) return;
     let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
-    if (!tout && ec > coneVisee()) return;   // le cone suit le champ de la camera : on ne verrouille que ce qu'on VOIT
+    // LE CONE SUIT LE CHAMP DE LA CAMERA : on ne VERROUILLE QUE CE QU'ON VOIT.
+    // Mais seulement pour le verrouillage AUTOMATIQUE : la cible que le joueur a choisie
+    // lui-meme a la fleche (`seul`) garde l'ancienne portee angulaire, sinon un simple
+    // mouvement de camera la lui reprendrait pour lui en donner une autre.
+    if (!tout && ec > (seul ? LOCK_CONE : coneVisee())) return;
     // le plus proche et le plus en face l'emporte ; a la fleche, seule la distance compte
     cand.push({ ref, x, y, z, nom, dh, note: dh + (tout ? 0 : ec * 14) + (malus || 0) });
   };

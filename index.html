@@ -17124,8 +17124,12 @@ const music = (() => {   // musique de fond générée : batterie, basse, accord
     }
   }
   return {
-    start() { if (!timer) timer = setInterval(tick, 120); },
-    stop() { clearInterval(timer); timer = null; },
+    // COUPER LA MUSIQUE LA COUPE TOUT DE SUITE. `stop()` n'arretait que le sequenceur : les
+    // notes DEJA PROGRAMMEES continuaient — jusqu'a l'accord tenu de 1,9 s — et on entendait
+    // la musique jouer toute seule apres l'avoir eteinte dans le menu (mesure au bout de la
+    // chaine : 0,022 encore presents deux secondes apres le stop). On ferme aussi le robinet.
+    start() { const g0 = out(), c = sfx.ctx(); if (g0 && c) { g0.gain.cancelScheduledValues(c.currentTime); g0.gain.setTargetAtTime(0.9, c.currentTime, 0.01); } if (!timer) timer = setInterval(tick, 120); },
+    stop() { clearInterval(timer); timer = null; const c = sfx.ctx(); if (gainNode && c) { gainNode.gain.cancelScheduledValues(c.currentTime); gainNode.gain.setTargetAtTime(0.0001, c.currentTime, 0.06); } },
     setWorld(m) { cfg = m; step = 0; },
   };
 })();

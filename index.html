@@ -17043,8 +17043,12 @@ document.addEventListener('visibilitychange', () => { try { sfx.sourdine(documen
 // (le bourdonnement) s'installe par-dessus.
 const MOTEUR_VOIX = [
   { n: '100 chevaux', base: 50, pente: 7.0, coupe: 380, coupeV: 30, gain: 0.038, sub: 0, bourd: 0, bourdF: 0 },
-  { n: '300 chevaux', base: 38, pente: 5.6, coupe: 300, coupeV: 26, gain: 0.052, sub: 0.55, bourd: 0.30, bourdF: 8 },
-  { n: '500 chevaux', base: 30, pente: 4.6, coupe: 250, coupeV: 22, gain: 0.066, sub: 0.95, bourd: 0.46, bourdF: 6 },
+  // `bourd` : la PROFONDEUR du battement. A 0,46 le moteur perdait la moitie de son volume six
+  // fois par seconde — un tremolo de guitare, pas un moteur (mesure au bout de la chaine : le
+  // niveau passait de 0,395 a 0,129 et revenait, sans toucher a l'accelerateur). A 0,18 on
+  // entend toujours le battement du gros bloc, mais le moteur tient sa note.
+  { n: '300 chevaux', base: 38, pente: 5.6, coupe: 300, coupeV: 26, gain: 0.052, sub: 0.55, bourd: 0.12, bourdF: 8 },
+  { n: '500 chevaux', base: 30, pente: 4.6, coupe: 250, coupeV: 22, gain: 0.066, sub: 0.95, bourd: 0.18, bourdF: 6 },
 ];
 function moteurDe(c) { return (c && c.tune && c.tune.moteur) | 0; }   // 0 = 100 ch, 1 = 300 ch, 2 = 500 ch
 const engine = (() => {   // bruit moteur continu : deux oscillateurs filtrés, une scie de grave et un bourdonnement

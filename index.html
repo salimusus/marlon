@@ -10886,6 +10886,7 @@ const CRAIE_NIV = 0.07;     // niveau du lit de craie sur le bus « effets ». M
                             // 0,07 contre 0,022) : on l'entend nettement sans jamais coller le limiteur (0,34 tapait 0,93).
 const CRAIE_TENUE = 0.18;   // s : on garde le crissement ouvert apres la derniere lettre, sinon il hachait
 const craieLit = { src: null, bp: null, g: null, jusqu: 0 };
+const maintenant = () => performance.now() / 1000;   // l'horloge de la VRAIE vie (elle tourne meme jeu en pause)
 // Monte le lit une seule fois, puis rebranche sa sortie sur le bus « effets » a chaque
 // lettre (deux fois le meme lien ne compte qu'une fois en Web Audio : c'est sans risque, et
 // ca laisse le reglage du bus reprendre la main si le joueur l'a change).
@@ -10914,7 +10915,7 @@ function sonCraie(n) {
   try { ambiance.duck(); } catch (e) {}   // la rumeur du quartier recule pendant le crissement
   craieLit.bp.frequency.setTargetAtTime(2400 + Math.random() * 1600, c.currentTime, 0.012);
   craieLit.g.gain.setTargetAtTime(CRAIE_NIV, c.currentTime, 0.006);
-  craieLit.jusqu = simTime + CRAIE_TENUE;
+  craieLit.jusqu = maintenant() + CRAIE_TENUE;
   // et par-dessus le lit, l'attaque seche de chaque lettre (elle ne sort que sur une machine
   // au temps reel, mais c'est elle qui donne le « tac-tac » de la main de la maitresse)
   const t0 = c.currentTime;
@@ -10938,7 +10939,13 @@ function sonCraie(n) {
 // s'arretait (et aussi quand le joueur coupait le son en pleine phrase).
 function craieLitFerme() {
   const g = craieLit.g; if (!g || g.gain.value <= 0.0002) return;
-  if (settings.sound && simTime <= craieLit.jusqu) return;
+  // L'HORLOGE DU CRISSEMENT EST CELLE DE LA VRAIE VIE, pas celle de la partie. `simTime` ne
+  // tourne plus des que le jeu est en pause — et la lecon de l'ecole est justement jouee
+  // INTERFACE OUVERTE, jeu en pause : le lit de craie restait alors ouvert pour toujours, un
+  // souffle continu a 0,07 par-dessus tout le reste (mesure au bout de la chaine : plancher
+  // 0,0001 -> 0,0771 apres vingt phrases ecrites au tableau). Le tableau s'ecrit deja a
+  // `performance.now()` : la retombee suit la meme horloge.
+  if (settings.sound && maintenant() <= craieLit.jusqu) return;
   const c = sfx.ctx(); if (c) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
 }
 // Appele a CHAQUE image, meme interface ouverte (le jeu est en pause mais le tableau, lui,

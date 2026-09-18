@@ -672,3 +672,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : run 1 — palier du 1er atteint (y 1,80 puis 3,08), puis en continuant le personnage se retrouve à **y 0,06** (retombé au rez-de-chaussée, x −155,3, hors de la cage) ; run 2 — palier du 1er (y 3,08 → 3,40) puis **bloqué 10 s** en (−156,5 ; 14,1) sans monter d'un centimètre. Dans les deux cas le 2ᵉ étage (y > 6) n'est jamais atteint et aucun appartement n'est visité.
 - **On devrait voir** : la deuxième volée accessible depuis le palier du 1er, sans chute ni blocage.
 - **Sonde** : `q5-pc.log` `zone.montee.trace`, `q6-pc.log` `zone.suite` (y figé à 3,40 pendant 10 s).
+
+### 81. On monte dans une voiture du parking : l'écran est entièrement bouché par les carrosseries voisines, on ne voit plus rien
+- **Gravité** : GRAVE (première voiture d'un enfant : au moment où il monte, il n'a plus d'image)
+- **Reproduire** : parking du centre, se placer derrière une voiture, △ pour monter, ne rien faire. Reproduit 2/2 (`q6` avec trois passagers, `q7` seul au volant).
+- **On voit** : 100 % de l'image est occupée par deux aplats (rouge vif et gris clair) — les voitures garées de part et d'autre ; on ne voit ni sa voiture, ni la route, ni les passagers. Seuls le chat, le radar et la barre du haut restent lisibles (`img/q7/q7-cam-0-arret.png`, `img/q6/q6-amis-0-attente.png`). L'image ne se dégage qu'en roulant (à 0,6 km/h la caméra est à 7,3 m, à l'allure la vue redevient normale).
+- **Mesure** : à l'arrêt la sonde donne pourtant une caméra à 5,39 m derrière la voiture, 3,73 m de haut, hors de l'habitacle — le problème n'est pas la distance mais la hauteur : la perche passe entre deux voitures garées au lieu de monter au-dessus.
+- **On devrait voir** : la voiture et la rue devant, comme dès qu'on roule.

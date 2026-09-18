@@ -25497,7 +25497,12 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // tenait. Au sol on ne l'avait jamais vu, la chaussée n'étant pas un solide. On compare
     // maintenant le sommet RÉEL (sans la garde) au niveau des pieds plus 25 cm : un plancher et
     // une bordure de trottoir laissent passer, un muret d'un demi-mètre arrête toujours.
-    if (o.y + o.h / 2 < oy - 1.25) return;
+    // (mesuré : les pieds du joueur se posent parfois 25 cm SOUS le sommet de la dalle qui lui
+    //  sert de plancher — il s'y enfonce — et un seuil calé sur ses pieds tombe alors pile sur
+    //  l'arête. On le cale donc sur sa CEINTURE : ce qui ne monte pas plus haut que sa taille
+    //  ne peut pas le cacher à une caméra qui, elle, est toujours au-dessus de lui, l'inclinaison
+    //  restant positive. À l'étage de la banque, 5,97 m → la perche voulue.)
+    if (o.y + o.h / 2 < oy - 1.05) return;
     // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
     // tomberaient à zéro dès qu'on frôle un mur
     if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;

@@ -12772,6 +12772,17 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
     const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
     const c = G.city; c.horaires = false; G.metiersRepos();
     G.P.pos.set(300, 0.3, 300);   // le joueur loin de tout : il ne gêne aucun trajet
+    // ON MESURE UNE VILLE AU REPOS, comme au test « la ville respecte le code de la route ».
+    // Un test précédent peut laisser un habitant AU VOLANT (`botDescendre(b, true)` = « il
+    // garde la voiture ») ou un rendez-vous en cours : la caisse reste garée sur la chaussée,
+    // les cinq métiers se butent dessus et perdent leur temps à la contourner. Symptôme
+    // mesuré : 98 à 100 % du trajet sur le bitume lancé seul, 86 à 91 % enchaîné derrière
+    // d'autres tests — et c'est ce pourcentage, et lui seul, qui faisait tomber le test alors
+    // qu'aucun véhicule n'était bloqué ni dans un solide. On rend donc les véhicules et on
+    // renvoie tout le monde à pied AVANT de compter.
+    G.bots.forEach(b => { if (b.drive) G.botDescendre(b, false); b.rdv = null; b.rdvRoute = null; b.target = null; });
+    c.rideBot = null; c.botCarNear = null;
+    for (const v of (c.cars || [])) if (v.busy && !v.heli) v.busy = false;
     const DT = 1 / 20;
     // --- un coin d'un véhicule est-il DANS un solide non franchissable ? (même mesure que le
     // test « la circulation respecte le code de la route »)

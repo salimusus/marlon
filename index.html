@@ -25727,12 +25727,31 @@ function cityStep(dt) {
   // deplacement, et c'est lui que les soupapes lisent (`avanceReel`).
   for (const l of [city.cars, city.aiCars, police.cars]) for (const c of l) {
     c.reel = (c.reelX == null) ? 99 : Math.hypot(c.x - c.reelX, c.z - c.reelZ);
-    c.reelX = c.x; c.reelZ = c.z;
+    c.reelX = c.x; c.reelZ = c.z; c.reelT = simTime;
   }
 }
-// Le deplacement REEL de la derniere image. A defaut de mesure (vehicule qui n'est dans aucune
-// des trois listes), on retombe sur le pas accorde : le comportement d'avant.
-function avanceReel(c) { return (c && c.reel != null) ? c.reel : ((c && c.pas) || 0); }
+// Le deplacement REEL de la derniere image. La mesure est prise ICI, en fin de `cityStep` :
+// si elle n'a pas ete rafraichie, elle est PERIMEE et mentirait a son tour — exactement le
+// defaut qu'elle corrige. Cela arrive pour un vehicule absent des trois listes, quand le
+// joueur conduit (la ville ne tourne pas), et surtout quand un appelant fait rouler un
+// vehicule SANS faire vivre la ville : plusieurs bancs d'essai appellent `depanneusesTick`
+// tout seuls, et la depanneuse y lisait alors un chiffre vieux d'un autre test — elle se
+// croyait bloquee, reculait sans fin et ne rentrait jamais au garage.
+// Perimee, on NE retombe PAS sur `c.pas` : ce serait remettre le mensonge. On mesure alors
+// PAR NOUS-MEMES, une fois par instant de simulation, la distance parcourue depuis le dernier
+// passage ici. Mesure (test 321) : la depanneuse rentrant au garage passait 23 s des 49 a
+// l'arret derriere une voiture qui ne repartait jamais, avec « file » pour bonne excuse — la
+// soupape de degagement ne pouvait pas se declencher parce que son compteur lisait un chiffre
+// perime. Avec la mesure paresseuse, elle se declenche et la depanneuse contourne.
+function avanceReel(c) {
+  if (!c) return 0;
+  if (c.reel != null && simTime - (c.reelT || -1e9) < 0.5) return c.reel;
+  if (c.reelLT !== simTime) {
+    c.reelL = (c.reelLX == null) ? 99 : Math.hypot(c.x - c.reelLX, c.z - c.reelLZ);
+    c.reelLX = c.x; c.reelLZ = c.z; c.reelLT = simTime;
+  }
+  return c.reelL;
+}
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image
 // La physique du joueur tourne à pas fixe de 1/120 s (précision des sauts et des collisions),
 // mais la VIE de la ville — police, gangs, manèges, animaux, missions — n'a aucun besoin

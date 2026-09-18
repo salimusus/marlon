@@ -12212,6 +12212,32 @@ test('la dépanneuse rentre au garage après un dépannage sur place', async p =
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // ON MESURE UNE VILLE AU REPOS, comme aux tests 404 et « les cinq métiers ». Un test
+    // précédent peut laisser un habitant AU VOLANT (`botDescendre(b, true)` = « il garde la
+    // voiture ») : sa caisse reste garée sur la chaussée et la dépanneuse perd son temps à la
+    // contourner. Depuis que le retour au garage se fait POUR DE VRAI — plus aucune
+    // téléportation — ce temps perdu se voit : le test passait seul et tombait en lot.
+    G.bots.forEach(b => { if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.rdvRoute = null; b.target = null; b.ordre = null; b.gangMission = null; b.gardeCorps = null; b.sport = null; });
+    G.city.rideBot = null; G.city.botCarNear = null;
+    for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
+    // ET ON LÈVE LES CHANTIERS. Un chantier posé par un test précédent BARRE les voies qui
+    // passent à moins de 3,2 m : l'itinéraire contourne tout le quartier, et la dépanneuse
+    // n'arrive plus au garage dans le temps imparti. Symptôme mesuré : elle rentre en 37 s
+    // lancée seule, et s'arrête à 52,6 m du garage enchaînée derrière d'autres tests.
+    if (G.city.chantiers) G.city.chantiers.length = 0;
+    for (const b of (G.breakables || [])) if (b.broken || b.cracked) { G.repareChose(b); b.enCours = false; }
+    // ET ON ÔTE LA CIRCULATION DE FOND. Ce test appelle `depanneusesTick` SEUL : il ne fait
+    // pas vivre la ville, donc les voitures du trafic restent FIGÉES là où le test précédent
+    // les a laissées. Une seule en travers de la rue suffit : la dépanneuse fait la queue
+    // derrière elle avec « file » pour bonne excuse, et cette voiture ne repartira jamais.
+    // Mesuré : 24 s d'attente sur les 49 du retour, et elle s'arrête à 52 m du garage. Dans
+    // une vraie partie la voiture repart ; l'obstacle est un artefact du banc d'essai, pas un
+    // défaut de conduite — on l'écarte donc avant de mesurer.
+    for (const v of (G.city.aiCars || [])) {
+      v.x = 600; v.z = 600 + (v.z % 30); v.speed = 0; v.spd = 0; v.ia = null;
+      v.g.position.set(v.x, v.y || 0, v.z); G.vehicleSolid(v);
+    }
     const d = (G.city.depanneuses || [])[0];
     if (!d) return { manque: true };
     d.mission = null; d.remorque = null;
@@ -12223,17 +12249,42 @@ test('la dépanneuse rentre au garage après un dépannage sur place', async p =
     A.x = loin[0] + 3; A.z = loin[1]; A.h = 0; A.g.position.set(A.x, A.y || 0, A.z);
     B.x = loin[0] + 8; B.z = loin[1]; B.g.position.set(B.x, B.y || 0, B.z);
     d.x = loin[0]; d.z = loin[1]; d.g.position.set(d.x, d.y || 0, d.z);
+    // ET CHAQUE VÉHICULE RETOURNE À SA PLACE. Ce test ne fait PAS vivre la ville (il appelle
+    // `depanneusesTick` seul) : une voiture qu'un test précédent a laissée en travers de la
+    // chaussée n'en bougera donc JAMAIS, et la dépanneuse doit les contourner une par une.
+    // Depuis que le retour se fait pour de vrai — plus aucune téléportation — ce temps perdu
+    // se voit : le test passait seul et n'arrivait qu'à 52,6 m du garage en lot.
+    for (const v of (G.city.cars || [])) {
+      if (!v.home0 || v === d || v === A || v === B || v.heli) continue;
+      v.x = v.home0[0]; v.z = v.home0[1]; v.h = v.home0[2]; v.speed = 0; v.ia = null;
+      v.g.position.set(v.x, v.y || 0, v.z); v.g.rotation.y = v.h; G.vehicleSolid(v);
+    }
     const m = G.depanneuseAppel({ a: A, b: B, x: loin[0], z: loin[1] });
     if (!m) return { manque: true };
     const dG = () => +Math.hypot(d.x - d.home0[0], d.z - d.home0[1]).toFixed(1);
     const depart = dG();
-    let repare = null;
+    let repare = null, viaDep = null, roule = 0, immo = 0;
+    const causes = {};
+    let px = d.x, pz = d.z, parcouru = 0;
     for (let i = 0; i < 60 * 30; i++) { G.simTime += 1 / 30; G.depanneusesTick(1 / 30);
-      if (repare == null && m.fini) repare = dG(); }
-    return { depart, repare, arrivee: dG(), mission: !!d.mission, sirene: !!d.sirene, mode: m.mode, phase: m.phase };
+      if (repare == null && m.fini) repare = dG();
+      if (m.phase === 'retour') {
+        if (viaDep == null) { const q = G.itineraireVoies(d.x, d.z, d.home0[0], d.home0[1], d.h, d.departVoie);
+          let l = 0, a = [d.x, d.z]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
+          viaDep = q ? Math.round(l) : -1; }
+        const pas = Math.hypot(d.x - px, d.z - pz); px = d.x; pz = d.z; parcouru += pas;
+        if (pas > 0.02) roule++; else immo++;
+        const c0 = d.raison || 'rien'; causes[c0] = (causes[c0] || 0) + 1;
+      } }
+    // ON REMET LA CIRCULATION EN PLACE. Elle a ete ecartee le temps de la mesure ; la laisser
+    // garee au bout du monde serait exactement la pollution d'etat qu'on cherche a eviter chez
+    // les autres — les tests suivants trouveraient une ville sans une seule voiture qui roule.
+    for (const v of (G.city.aiCars || [])) { v.ia = null; v.destT = 0; G.traficPose(v); }
+    return { depart, repare, arrivee: dG(), mission: !!d.mission, sirene: !!d.sirene, mode: m.mode, phase: m.phase,
+      viaDep, parcouru: Math.round(parcouru), immo: Math.round(immo / 30), roule: Math.round(roule / 30), causes };
   });
   const ok = !r.manque && r.mode === 'place' && r.depart > 60 && r.repare > 60 && r.arrivee < 6 && !r.mission && !r.sirene;
-  return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene})` };
+  return { ok, detail: `la branche « réparation sur place » se terminait par « mission = null » SANS état de retour (l'ambulance, elle, en a un) : la dépanneuse restait plantée sur le lieu de l'accident, en pleine chaussée, à 104,8 m de son garage, inchangée trente secondes plus tard — et, gyrophare allumé, sirène comprise · elle part maintenant à ${r.depart} m du garage, répare sur place (${r.repare} m), puis RENTRE : ${r.arrivee} m du garage, mission close (${!r.mission}), sirène éteinte (${!r.sirene}) · le retour mesuré : ${r.viaDep} m d'itinéraire au départ, ${r.parcouru} m parcourus, ${r.roule} s en mouvement et ${r.immo} s à l'arrêt (${Object.entries(r.causes || {}).map(([k, n]) => k + ' ' + Math.round(n / 30) + ' s').join(', ')})` };
 });
 
 test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueur, et le plan de commandes n\'a aucune collision', async p => {

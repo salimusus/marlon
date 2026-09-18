@@ -9569,7 +9569,7 @@ function traceSuit(c, R, st) {
   return S;
 }
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
-const DEGAGE_QUAND_MEME = 14;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
+const DEGAGE_QUAND_MEME = 22;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
 const DEGAGE_DUREE = 1.6;        // s de marche arriere
 const DEGAGE_REPOS = 2.5;        // s avant d'avoir le droit de recommencer
 const DEGAGE_V = 1.8;            // m/s : on se degage au pas
@@ -9645,7 +9645,16 @@ function traficRoule(c, dt, opt) {
   let mou = false;
   if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
     c.h += (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
-    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage'; mou = true;
+    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage';
+    // ON NE TRAVERSE LES CAISSES QUE SI ON EST DEJA DEDANS. Premiere version : tout vehicule
+    // qui se degageait cessait de voir les autres pendant toute la manoeuvre. Mesure (test
+    // 298, trois minutes de circulation) : 876 chevauchements voiture-voiture et 2 075 images
+    // de degagement — dans une file dense, beaucoup de vehicules attendent puis reculent tous
+    // ensemble EN SE TRAVERSANT, alors qu'ils avaient la place de reculer normalement.
+    // Or le blocage mutuel qu'on corrige n'existe que si les toles se CHEVAUCHENT DEJA : c'est
+    // seulement alors qu'aucun pas ne peut plus etre accepte. On ne ramollit donc que dans ce
+    // cas-la, et le reste du temps la marche arriere obeit aux regles ordinaires.
+    mou = vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false });
   } else c.recule = false;
   const bloque = avanceVehicule(c, dt, c.speed, mou ? { mou: true } : {}, h0);
   // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un

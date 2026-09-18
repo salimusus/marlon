@@ -18399,3 +18399,41 @@ test('une voiture conduite par un habitant se range pour laisser passer un gyrop
   const ok = r.apres.vuSirene && r.ecartMax > 0.8 && r.pctHorsChaussee === 0 && r.dPieton > 1.2;
   return { ok, detail: `avant : le pas de côté n'existait que dans la circulation de fond — une voiture conduite par un habitant levait le pied devant l'ambulance sans jamais lui laisser la place (24 véhicules sur 78 ne s'écartaient pas d'un centimètre) · maintenant, six secondes de sirène derrière lui : il la voit (${r.apres.vuSirene}), il se déporte de ${r.ecartMax} m (${r.avant.ecart} m au départ), il reste ${100 - r.pctHorsChaussee} % du temps sur la route — aucune roue sur le trottoir — et le piéton le plus proche est à ${r.dPieton} m` };
 });
+
+// ================= POSTE CONDUITE — le demi-tour sur place =================
+test('un véhicule posé à contresens de sa destination fait demi-tour et repart, sans téléportation', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+    G.P.pos.set(300, 0.3, 300);   // le joueur loin de tout : il ne gêne rien
+    const dt = 1 / 60;
+    const vp = G.voieProche(8, 8);
+    const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.busy && !v.rider);
+    // posé sur sa voie mais LE NEZ À L'OPPOSÉ de là où il doit aller
+    c.x = vp.px; c.z = vp.pz; c.h = vp.arete.sens + Math.PI; c.busy = true; c.speed = 0; c.ia = null;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+    const cible = [vp.px + Math.sin(vp.arete.sens) * 90, vp.pz + Math.cos(vp.arete.sens) * 90];
+    const d0 = Math.hypot(cible[0] - c.x, cible[1] - c.z);
+    let t = 0, tourne = null, sauts = 0, dParc = 0, px = c.x, pz = c.z, horsRoute = 0, ech = 0, dansSolide = 0;
+    const surRoute = (x, z) => G.surLaChaussee(x, z, 0.6) || (() => { const v = G.voieProche(x, z); return !!(v && v.d < 4.5); })();
+    for (let k = 0; k < 60 * 40; k++) {
+      G.botConduit(c, cible[0], cible[1], dt, {});
+      G.step(dt, true); t += dt;
+      const d = Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+      if (d > 1) sauts++; else dParc += d;
+      if (k % 10 === 0) { ech++; if (!surRoute(c.x, c.z)) horsRoute++;
+        if (G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false })) dansSolide++; }
+      const capCible = Math.atan2(cible[0] - c.x, cible[1] - c.z);
+      const ecart = Math.abs(Math.atan2(Math.sin(capCible - c.h), Math.cos(capCible - c.h)));
+      if (tourne == null && ecart < 0.6) tourne = +t.toFixed(1);
+      if (Math.hypot(c.x - cible[0], c.z - cible[1]) < d0 - 30) break;
+    }
+    const gagne = +(d0 - Math.hypot(c.x - cible[0], c.z - cible[1])).toFixed(0);
+    c.busy = false;
+    return { secondes: tourne, sauts, gagne, parcouru: +dParc.toFixed(0),
+      pctHorsRoute: Math.round(100 * horsRoute / Math.max(1, ech)), imagesDansUnSolide: dansSolide };
+  });
+  const ok = r.secondes != null && r.secondes < 6 && r.sauts === 0 && r.gagne >= 25
+    && r.pctHorsRoute <= 5 && r.imagesDansUnSolide === 0;
+  return { ok, detail: `avant : un véhicule à l'arrêt ne savait pas se retourner — on lui donnait un point de passage derrière lui et il piétinait (la voiture de patrouille faisait 4 m en 60 s, et c'est ce qui m'a forcé à retirer le raccourci d'itinéraire) · maintenant, posé nez à l'opposé de sa destination : il est dans le bon cap en ${r.secondes} s, ${r.sauts} téléportation, il se rapproche de ${r.gagne} m (${r.parcouru} m parcourus), ${r.pctHorsRoute} % hors route et ${r.imagesDansUnSolide} image dans un solide` };
+});

@@ -31307,6 +31307,16 @@ function gangeurKO(m, par, assomme) {
   if (assomme) m.ko = simTime + 26; else { m.abattu = simTime; m.ko = simTime + 1e9; }
   m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y);
   burst(m.x, m.y + 1, m.z, 0xff5c5c, 12); sfx.tone(300, 0, .45, 'sawtooth', .07, 60);
+  // LE COUP VAINQUEUR SE VOIT AUSSI SUR UN VRAI ADVERSAIRE. C'etait a l'envers : abattre un
+  // habitant ordinaire declenchait le ralenti de trois secondes et laissait un tas de pieces
+  // (mesure : ralenti 3,00 s, 1 butin), tandis qu'abattre un homme de gang — l'ennemi que
+  // l'enfant cherche — ne donnait RIEN du tout (ralenti 0, butin 0). Le plus beau moment du
+  // jeu passait inapercu.
+  if (par === 'le joueur') {
+    const geste = assomme ? 'poing' : (P.weapon === 'knife' ? 'couteau' : 'pistolet');
+    try { ralentiCoup(m.x, m.y, m.z, geste, Math.atan2(m.x - P.pos.x, m.z - P.pos.z), 1); } catch (e) {}
+    if (!assomme) dropLoot(m.x, m.z, 10 + Math.floor(Math.random() * 12), Math.max(0.3, m.y));
+  }
   const G = gangDe(m.gang);
   if (!G) return;
   // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.

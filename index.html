@@ -12504,10 +12504,23 @@ function plaqueVoiture() {
 // NOMBRE de places, `c.places` la TABLE des sièges que lit placesDe() — y mettre un nombre
 // laissait le conducteur DEBOUT, la tête au travers du toit.
 function placesCarrosserie(S, n, ech) {
-  const e = ech || 1, y = S.siege;
-  const T = { seuil: S.seuil, conducteur: { x: 0.5, y, z: S.zAv * e }, avant: { x: -0.5, y, z: S.zAv * e },
-    chien: { x: 0, y: y + 0.38, z: S.zChien * e } };
-  if (n > 2 && S.zAr != null) { T.arriereG = { x: 0.5, y, z: S.zAr * e }; T.arriereD = { x: -0.5, y, z: S.zAr * e }; }
+  const e = ech || 1;
+  // L'HABITACLE DIT LA TAILLE DE CEUX QUI Y MONTENT (voir assiseCabine) : du bas de caisse
+  // (S.sol) au dessous du pavillon — ou, sur la décapotable qui n'a pas de toit, au haut du
+  // pare-brise, pour que la tête passe au-dessus : cheveux au vent.
+  const plafond = S.toit ? S.toit.y - S.toit.h / 2 : S.ws.y + S.ws.h / 2;
+  const A = assiseCabine(S.sol, plafond), y = A.y;
+  // LES SIÈGES AVANT RECULENT DE 35 cm. À leur ancienne place (S.zAv) l'occupant était collé
+  // au pare-brise, caché derrière le montant et le rétroviseur, et ses avant-bras sortaient
+  // au-dessus du capot — mesuré : 48 cm de bras au travers de la vitre d'une berline.
+  const zAv = +(S.zAv * e - 0.35).toFixed(3);
+  const zAr = S.zAr != null ? +(S.zAr * e).toFixed(3) : null;
+  // LE CHIEN RESTE SOUS LE PAVILLON. À S.zChien il était assis dans le COFFRE, derrière la
+  // lunette arrière : on le ramène au plus loin à 30 cm du bord arrière du toit.
+  const zChien = S.toit ? Math.max(+(S.zChien * e).toFixed(3), +(S.toit.z1 * e + 0.30).toFixed(3)) : +(S.zChien * e).toFixed(3);
+  const T = { seuil: -0.30, taille: A.taille, conducteur: { x: 0.5, y, z: zAv }, avant: { x: -0.5, y, z: zAv },
+    chien: { x: 0, y: +(y + 0.01).toFixed(3), z: zChien, taille: +Math.min(1, A.taille * 1.25).toFixed(3) } };
+  if (n > 2 && zAr != null) { T.arriereG = { x: 0.5, y, z: zAr }; T.arriereD = { x: -0.5, y, z: zAr }; }
   return T;
 }
 // UNE CARROSSERIE COMPLÈTE. Même contrat que `makeCar` (dont on ne touche pas une ligne : il
@@ -18136,7 +18149,7 @@ function monterAvecBot(b) {
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
 function botDescendre(b, garde) {
-  jambesEnCabine(b.av, false); musclesEnCabine(b.av, false);   // il retrouve ses jambes et ses epaules en sortant
+  jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1);   // il retrouve ses jambes, ses epaules et sa taille en sortant
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
@@ -20227,7 +20240,7 @@ function botDit(b, t) { botSay(b, [t]); }
 // Un véhicule réservé par un ami reste « busy » : s'il abandonne, il faut le rendre,
 // sinon la voiture était perdue pour tout le monde.
 function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0;
-  for (const b of bots) if (b.drive && b.drive.car === c) { jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); } }
+  for (const b of bots) if (b.drive && b.drive.car === c) { jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); } }
 function botStop(b, dire, libre) {
   if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
   if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
@@ -21775,7 +21788,13 @@ function step(dt, active) {
   if (!active) return;
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
-  if (drive.car) { driveStep(dt); return; }
+  // LA POSE ASSISE SE FAIT DANS LA SIMULATION, PAS SEULEMENT AU DESSIN. `poseJoueurAuVolant`
+  // n'était appelée que par frame(), la boucle d'AFFICHAGE : une image sautée (ou le banc
+  // d'essai, qui fait tourner step() seul) laissait le joueur DEBOUT à l'endroit où il était
+  // monté, la voiture partant sans lui. C'est exactement ce que le test 402 ne voyait pas :
+  // il appelait poseJoueurAuVolant à la main. Maintenant chaque pas de simulation assied tout
+  // le monde, et la boucle d'affichage la rappelle pour les images intermédiaires.
+  if (drive.car) { driveStep(dt); poseJoueurAuVolant(dt); return; }
   // PAS DE `cityCommon(dt)` DANS CES CINQ SORTIES. `cityStep(dt)`, appele quelques lignes plus
   // haut, se termine deja par `if (!drive.car) cityCommon(dt)` — et ici `drive.car` est vide,
   // sinon on serait sorti par la ligne du conducteur. Le rappeler faisait vivre la ville DEUX
@@ -21817,6 +21836,7 @@ function step(dt, active) {
       // soit 16,8 m/s de moyenne pour un pilote plafonné à 12 — et avec elle toute la ville
       // (police, secours, gangs, métiers) tournait à double vitesse tant que le joueur était
       // assis à côté de son ami.
+      poseJoueurAuVolant(dt);   // passager : assis dans la simulation, pas seulement au dessin
       return;
     }
   }
@@ -22267,6 +22287,7 @@ function exitCar() {
   P.vel.set(0, 0, 0); P.facing = c.h;
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) { chien.pet.g.position.set(P.pos.x + 1.2, groundUnder(P.pos.x + 1.2, P.pos.z, null, 1), P.pos.z); chien.pet.g.rotation.set(0, c.h, 0); } }
   sonPortiere(c, false);   // on descend : la portière claque derrière soi
+  tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1);   // on redescend : on retrouve sa taille normale
   me.group.visible = true; $('carBtn').textContent = '🚗'; $('jumpBtn').textContent = 'SAUT'; $('emoteBtn').textContent = '🕺'; $('punchBtn').textContent = '👊'; drive.gear = 1;
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)
@@ -23340,7 +23361,7 @@ function poseJoueurAuVolant(dt) {
   // garantir la bonne hauteur, le bon cap et les jambes pliées dans tous les véhicules.
   const vj = vehiculeDuJoueur();
   const c = vj ? vj.car : null;
-  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); me.group.rotation.z = 0; drive.assis = false; return null; }
+  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1); me.group.rotation.z = 0; drive.assis = false; return null; }
   if (c.rider) {
     // LE PILOTE ETAIT ASSIS A L'ORIGINE DU VEHICULE (z local = 0), c'est-a-dire au-dessus du
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
@@ -23803,10 +23824,51 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
 // Avant, elle en sortait de 40 cm — on voyait un crâne posé sur le toit. `seuil` dit à
 // partir de quelle hauteur (dans le repère de l'avatar) les morceaux restent visibles :
 // tout ce qui descend sous le bas de caisse est masqué, comme les jambes l'étaient déjà.
+// ================= LA TAILLE D'UN OCCUPANT ASSIS =================
+// « Le joueur et son membre quand ils sont dans le véhicule ne sont pas visibles assis. »
+// MESURE, dans la boucle du jeu, joueur au volant d'une berline neuve : 51 morceaux dessinés
+// sur 270, tout le corps entre 0,86 m et 1,76 m, et sur la capture d'écran la voiture a l'air
+// VIDE — seuls le bout du crâne et un avant-bras jaune dépassaient, l'avant-bras passant même
+// 48 cm AU TRAVERS du pare-brise.
+// LA CAUSE : un personnage mesure 2,586 m assis (2,358 m du repère — les pieds — au sommet du
+// crâne, plus 0,228 m de talons repliés sous le repère) et l'habitacle d'une berline fait
+// 1,34 m du plancher (0,32 m) au pavillon (1,66 m). À TAILLE RÉELLE PERSONNE NE PEUT TENIR
+// ASSIS DEDANS. Le jeu s'en tirait en enfonçant le bonhomme de 80 cm sous le plancher et en
+// MASQUANT (`seuil`) tout ce qui descendait sous la ceinture de caisse : il ne restait qu'un
+// morceau de crâne, coincé derrière le montant de pare-brise.
+// LA SOLUTION : on RÉDUIT l'occupant à la taille de son habitacle. Il tient alors tout entier
+// entre le plancher et le pavillon — tête et épaules dans la bande vitrée, mains sur le
+// volant, rien sous la caisse, rien au travers du pare-brise — et on le voit enfin assis.
+// C'est la même règle pour le joueur, les membres du gang, les habitants et les conducteurs
+// de la circulation : une seule table de places, une seule taille d'assise.
+const ASSIS_CRANE = 2.358, ASSIS_TALON = 0.228, ASSIS_CORPS = ASSIS_CRANE + ASSIS_TALON;
+const ASSIS_JEU_SOL = 0.02, ASSIS_JEU_TOIT = 0.10;   // le jeu laissé sous les talons et au-dessus du crâne
+// La taille et la hauteur d'assise d'un habitacle qui va de `plancher` à `plafond` (repère du
+// véhicule). En dessous de 0,30 on ne réduit plus : ce ne serait plus un bonhomme.
+function assiseCabine(plancher, plafond) {
+  const t = clamp((plafond - plancher - ASSIS_JEU_SOL - ASSIS_JEU_TOIT) / ASSIS_CORPS, 0.30, 1);
+  return { taille: +t.toFixed(3), y: +(plancher + ASSIS_JEU_SOL + ASSIS_TALON * t).toFixed(3) };
+}
+// LA TAILLE D'ASSISE S'APPLIQUE ET SE REND. On garde l'échelle de naissance de l'avatar dans
+// son userData : un personnage « taille XXL » ou la statue du parc ne doivent pas redescendre
+// à 1 en sortant de la voiture.
+function tailleEnCabine(av, taille) {
+  const g = av && (av.group || av); if (!g) return 0;
+  if (g.userData.ech0 == null) g.userData.ech0 = g.scale.x || 1;
+  const k = g.userData.ech0 * (taille || 1);
+  if (Math.abs(g.scale.x - k) > 1e-4) g.scale.setScalar(k);
+  return k;
+}
 const PLACES = {
-  voiture: { seuil: 1.62, conducteur: { x: 0.5, y: -0.8, z: 0.5 }, avant: { x: -0.5, y: -0.8, z: 0.5 },
-    arriereG: { x: 0.5, y: -0.8, z: -0.85 }, arriereD: { x: -0.5, y: -0.8, z: -0.85 },
-    chien: { x: 0, y: -0.42, z: -1.6 } },
+  // La voiture ordinaire de la ville (makeCar) : caisse de 0,325 m à 0,875 m, pavillon à
+  // 1,68 m d'épaisseur 0,16 → plancher 0,325, plafond 1,60, donc taille 0,447 et assise
+  // 0,447 m. Les sièges avant reculent de 0,50 m à 0,15 m : à 0,50 m l'occupant était collé
+  // au pare-brise, caché derrière le montant et le rétroviseur, et ses bras ressortaient
+  // devant le capot. Le chien quitte le coffre (z = −1,60, hors de l'habitacle) pour le
+  // milieu de la banquette.
+  voiture: { seuil: -0.30, taille: 0.447, conducteur: { x: 0.5, y: 0.447, z: 0.15 }, avant: { x: -0.5, y: 0.447, z: 0.15 },
+    arriereG: { x: 0.5, y: 0.447, z: -0.8 }, arriereD: { x: -0.5, y: 0.447, z: -0.8 },
+    chien: { x: 0, y: 0.45, z: -0.8, taille: 0.55 } },
   truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
     chien: { x: 0, y: 0.5, z: 1.55 } },
   moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
@@ -23896,6 +23958,11 @@ function placeMonde(c, p) {   // repère local du véhicule → monde
 function assiedAvatar(av, c, p, dt, volant) {
   if (!av || !c || !p) return null;
   const g = av.group || av; if (!g) return null;
+  // LA TAILLE DE L'HABITACLE (voir ASSIS_CRANE) : c'est elle qui rend l'occupant VISIBLE assis
+  // au lieu d'un bout de crâne enfoncé de 80 cm sous le plancher. Dehors (moto, vélo, jet-ski,
+  // hélico), on garde la taille normale : il n'y a pas de pavillon pour gêner.
+  const TT = placesDe(c);
+  tailleEnCabine(av, caisseFermee(c) ? (TT.taille || 1) : 1);
   const w = placeMonde(c, p);
   g.position.set(w.x, w.y, w.z);
   g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
@@ -23918,6 +23985,7 @@ function assiedAvatar(av, c, p, dt, volant) {
 function assiedChien(c, dt) {
   const p = chien.pet, pl = placesDe(c).chien;
   if (!p || !p.g || !pl) return null;
+  tailleEnCabine(p, pl.taille || 1);   // il se tient à la taille de l'habitacle, comme les gens
   const w = placeMonde(c, pl);
   p.g.position.set(w.x, w.y, w.z); p.g.rotation.y = c.h;
   chienPoseAssis(p, 0);
@@ -24759,6 +24827,7 @@ function stealCar(c) {   // vol à l'arraché : le conducteur est éjecté et pr
     const cs = Math.cos(c.h), sn = Math.sin(c.h);
     const ex = c.x + 2.6 * cs, ez = c.z - 2.6 * sn;   // posé sur le bas-côté, à gauche
     d.av.rig.armL.rotation.x = d.av.rig.armR.rotation.x = 0;
+    jambesEnCabine(d.av, false); musclesEnCabine(d.av, false); tailleEnCabine(d.av, 1);   // éjecté : il retrouve sa taille avant de fuir
     city.fleeing.push({ av: d.av, name: d.name, x: ex, z: ez, y: groundUnder(ex, ez, null, 0), facing: c.h, t: simTime + 14 });
     bubble(d.av, pickOne(['au secours !', 'ma voiture !!', 'police !', 'au voleur !']));
     chat(null, `🚗 ${myCfg.name} a volé la voiture de ${d.name} !`);

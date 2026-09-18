@@ -25790,6 +25790,15 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     if (me.weapons && me.weapons[P.weapon]) me.weapons[P.weapon].rotation.x = -0.12;   // léger recul de l'arme
     me.rig.swing = P.weapon === 'rifle' ? 0.06 : 0.14; if (me.gun && me.gun.flash) { me.gun.flash.visible = true; setTimeout(() => { if (me.gun) me.gun.flash.visible = false; }, 45); }
     cam.kick = (cam.kick || 0) + (P.weapon === 'rifle' ? 0.012 : 0.03);
+    // LE VERROUILLAGE EST REFAIT AU MOMENT DU TIR, pas seulement à l'image d'affichage.
+    // `P.lock` est un INSTANTANÉ (nom et coordonnées) posé par frame() : sur une machine lente,
+    // ou quand le jeu rend une image par seconde, on tirait sur une cible PÉRIMÉE — mesuré :
+    // la balle partait vers une moto restée accrochée à 125 m (bien au-delà des 45 m de portée),
+    // et l'enfant vidait son chargeur sans toucher l'habitant planté à 12 m devant lui
+    // (test 17 : 0 balle sur 6). On le refait ici : `cibleAuto()` revérifie la portée, le cône
+    // et la ligne de vue, et relit la position du moment. Le choix fait à la flèche (`P.lockRef`)
+    // est respecté comme avant.
+    if (P.weapon !== 'grenade' && P.drawn && !P.sit && !P.swing && !P.ride && !gym.on) P.lock = cibleAuto();
     aimTick();   // visée recalculée à l'instant du tir : plus de point de visée périmé
     P.holsterT = simTime + 0.85;   // rengainage automatique après le coup
     if (police.wanted > 0 || police.agents.length) police.riposte = simTime + 30;   // tirer sur la police : elle riposte

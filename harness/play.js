@@ -19199,15 +19199,42 @@ test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le fact
 test('le ralenti d elimination RACCORDE vers la camera de jeu : plus de saut de treize metres dans une facade', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
+    // LE TEST FAIT LE MENAGE EN ENTRANT. Vert seul, rouge en suite complete : ce qu'il mesure,
+    // c'est le PAS DE LA CAMERA d'une image a l'autre, et n'importe quoi qui bouge autour du
+    // joueur le fait bouger aussi — une voiture qui passe raccourcit la perche d'un coup (c'est
+    // VOULU : se raccourcir est instantane, c'est ce qui empeche de traverser un mur). On part
+    // donc d'une scene vraiment vide, et le tirage est force pour que la scene soit la meme a
+    // chaque essai. On rend tout dans le `finally`.
+    const vraiRnd = Math.random; let graine = 24680;
+    Math.random = () => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine / 0x7fffffff; };
+    try {
     __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 12 });
     try { G.closeUI(); } catch (e) {}
     document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    // le joueur est DEBOUT, a pied, libre : ni volant, ni brancard, ni siege, ni ralenti en cours
+    if (G.drive.car) { try { G.exitCar(); } catch (e) {} }
+    if (G.city.rideBot) { try { G.botDescendre(G.city.rideBot, false); } catch (e) {} }
+    G.P.sit = null; G.P.swing = null; G.P.ride = null; G.P.secours = null; G.P.aim = false; G.P.aimHeld = false;
+    G.RALENTI.t = 0; G.RALENTI.fige = null; G.RALENTI.sortie = 0; G.RALENTI.sortieT = 0; G.RALENTI.prochain = 0;
+    G.cam.freeUntil = 0; G.cam.fixe = false; G.cam.libre = null; G.cam.dLisse = null; G.cam.hausse = 0;
+    // ON VIDE LES ALENTOURS : habitants et vehicules loin du plan, sinon c'est la circulation
+    // qu'on mesure et non le raccord. On garde UN habitant : c'est lui qu'on abat.
+    const victime = G.bots.find(b => b.av && !b.ko);
+    let nLoin = 0;
+    for (const b of G.bots) { if (b === victime) continue; b.rdv = null; b.drive = null; b.wait = 1e6;
+      b.pos.set(b.pos.x + 400, b.pos.y, b.pos.z + 400); if (b.av) b.av.group.position.copy(b.pos); nLoin++; }
+    let nVeh = 0;
+    for (const c of (G.city.cars || [])) { if (Math.hypot(c.x + 60, c.z - 196) < 45) { c.busy = true; c.speed = 0;
+      c.x += 400; c.z += 400; if (c.g) c.g.position.set(c.x, c.y || 0, c.z); try { G.vehicleSolid(c); } catch (e) {} nVeh++; } }
+    for (const c of (G.city.aiCars || [])) { if (Math.hypot(c.x + 60, c.z - 196) < 45) { c.x += 400; c.z += 400; if (c.g) c.g.position.set(c.x, c.y || 0, c.z); nVeh++; } }
+    try { G.sgridSale(); } catch (e) {}
+    // la victime, juste devant le joueur : c'est SA mort qui declenche le ralenti
+    if (victime) { victime.pos.set(-60, 0, 199); if (victime.av) victime.av.group.position.copy(victime.pos); victime.rdv = null; victime.wait = 1e6; }
     G.P.pos.set(-60, 0.3, 196); G.P.facing = 0; G.cam.yaw = Math.PI; G.cam.pitch = 0.32;
     // la perche normale se pose d'abord : c'est d'elle que part et vers elle que revient le plan
     for (let i = 0; i < 90; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
     const jeu0 = G.camera.position.clone();
-    G.RALENTI.prochain = 0; G.RALENTI.fige = null;
     const lance = !!G.ralentiCoup(-60, 0.3, 199, 'pistolet', G.P.facing, 1);
     const dansUnSolide = (c) => {
       for (const o of G.solidsAutour(c.x, c.z, 3)) {
@@ -19217,32 +19244,46 @@ test('le ralenti d elimination RACCORDE vers la camera de jeu : plus de saut de 
       }
       return false;
     };
-    let prec = null, saut = 0, sautImg = -1, murs = 0, sol = 0;
+    let prec = null, saut = 0, sautImg = -1, murs = 0, sol = 0, apres = 0, imgFin = -1, corpsOte = -1;
     for (let i = 0; i < 360; i++) {
+      // LE CORPS DISPARAIT PENDANT LE PLAN. Le poste Armes fait rester l'abattu 14 s au sol puis
+      // l'efface : on verifie ici que le raccord n'en depend pas. On l'ote a mi-ralenti.
+      if (i === 90 && victime) { victime.ko = 1e6; victime.wait = 1e6;
+        if (victime.av) { victime.av.group.visible = false; victime.av.group.position.set(victime.pos.x + 400, 0, victime.pos.z + 400); }
+        victime.pos.set(victime.pos.x + 400, 0, victime.pos.z + 400); corpsOte = i; }
       G.ralentiEchelle(1 / 60);              // le decompte des trois secondes, en temps REEL, comme frame()
       G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196);
       G.camPerche(1 / 60, false);            // camPerche appelle ralentiCam a la toute fin
+      const enPlan = G.RALENTI.t > 0 || G.RALENTI.sortie > 0;
+      if (!enPlan && imgFin < 0) imgFin = i;
       const c = G.camera.position;
-      if (prec) { const dd = Math.hypot(c.x - prec.x, c.y - prec.y, c.z - prec.z); if (dd > saut) { saut = dd; sautImg = i; } }
+      if (prec) {
+        const dd = Math.hypot(c.x - prec.x, c.y - prec.y, c.z - prec.z);
+        // LA BORNE PORTE SUR CE QUE LE RACCORD GOUVERNE : le ralenti, sa reprise, et dix images
+        // de marge apres la main rendue. Au-dela c'est la camera de jeu ordinaire, dont le pas
+        // depend de la rue et non du raccord — on le releve, on ne l'exige pas.
+        if (imgFin < 0 || i <= imgFin + 10) { if (dd > saut) { saut = dd; sautImg = i; } }
+        else if (dd > apres) apres = dd;
+      }
       prec = c.clone();
       if (dansUnSolide(c)) murs++;
       if (c.y < 0.45) sol++;
     }
-    // au bout du compte, la camera de jeu a bien repris la main : on la compare a une perche
-    // posee a neuf, au meme endroit
     const finRalenti = G.camera.position.clone();
     G.RALENTI.t = 0; G.RALENTI.sortie = 0; G.RALENTI.sortieT = 0;
     for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
     const jeu1 = G.camera.position.clone();
-    return { lance, saut: +saut.toFixed(2), sautImg, murs, sol,
-      vitesse: +(saut * 60).toFixed(1),
+    return { lance, saut: +saut.toFixed(2), sautImg, murs, sol, imgFin, corpsOte, nLoin, nVeh,
+      apres: +apres.toFixed(2), vitesse: +(saut * 60).toFixed(1),
       ecartFin: +finRalenti.distanceTo(jeu1).toFixed(2),
       depart: { x: +jeu0.x.toFixed(2), y: +jeu0.y.toFixed(2), z: +jeu0.z.toFixed(2) } };
+    } finally { Math.random = vraiRnd; }
   });
   // 0,25 m par image a 60 images/s = 15 m/s : la borne du raccord est a 14 m/s, on laisse un
-  // cheveu pour le mouvement propre de la camera de jeu pendant la meme image.
-  const ok = r.lance && r.saut < 0.25 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5;
-  return { ok, detail: `defaut route par le poste Armes : a la derniere image du ralenti la camera de cinema lachait la main d'un coup · MESURE AVANT : 13,18 m EN UNE SEULE IMAGE (image 180, de (-58,27 ; 1,90 ; 200,19) a (-60 ; 4,65 ; 187,41)), soit 791 m/s, et le poste Armes l'a vue atterrir DANS une facade · maintenant elle RACCORDE : sur 360 images de ralenti et de reprise, le plus gros deplacement d'une image a l'autre est de ${r.saut} m (image ${r.sautImg}), soit ${r.vitesse} m/s — la borne est a 14 m/s — la camera n'est DANS un solide sur aucune image (${r.murs}) et ne passe jamais sous le sol (${r.sol}), et a la fin elle est revenue exactement la ou la camera de jeu la veut (${r.ecartFin} m d'ecart)` };
+  // cheveu pour le mouvement propre de la camera de jeu pendant la meme image. On ne l'assouplit
+  // pas — c'est elle que ce test protege.
+  const ok = r.lance && r.saut < 0.25 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5 && r.corpsOte > 0;
+  return { ok, detail: `defaut route par le poste Armes : a la derniere image du ralenti la camera de cinema lachait la main d'un coup · MESURE AVANT : 13,18 m EN UNE SEULE IMAGE (image 180, de (-58,27 ; 1,90 ; 200,19) a (-60 ; 4,65 ; 187,41)), soit 791 m/s, et le poste Armes l'a vue atterrir DANS une facade · maintenant elle RACCORDE : sur le plan et sa reprise (jusqu'a l'image ${r.imgFin}, main rendue, plus dix images de marge) le plus gros deplacement d'une image a l'autre est de ${r.saut} m (image ${r.sautImg}), soit ${r.vitesse} m/s — la borne du raccord est a 14 m/s · LE CORPS DISPARAIT A MI-PLAN (image ${r.corpsOte}, comme le fait le poste Armes au bout de 14 s) et cela ne change rien : le plan vise des COORDONNEES, pas un habitant · la camera n'est DANS un solide sur aucune des 360 images (${r.murs}), ne passe jamais sous le sol (${r.sol}), et a la fin elle est revenue exactement la ou la camera de jeu la veut (${r.ecartFin} m) · scene videe en entrant (${r.nLoin} habitants et ${r.nVeh} vehicules ecartes, tirage force) : sans ce menage, une voiture qui passe raccourcit la perche d'un coup — c'est voulu, se raccourcir est instantane pour ne pas traverser un mur — et c'est ce qui rendait ce test rouge en suite complete alors qu'il etait vert seul · apres la main rendue, le pas de la camera de jeu ordinaire monte a ${r.apres} m` };
 });
 
 test('en visee, la camera passe par-dessus l epaule qui TIENT l arme, sans decentrer le pointage', async p => {

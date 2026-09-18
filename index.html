@@ -9569,7 +9569,7 @@ function traceSuit(c, R, st) {
   return S;
 }
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
-const DEGAGE_QUAND_MEME = 14;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
+const DEGAGE_QUAND_MEME = 22;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
 const DEGAGE_DUREE = 1.6;        // s de marche arriere
 const DEGAGE_REPOS = 2.5;        // s avant d'avoir le droit de recommencer
 const DEGAGE_V = 1.8;            // m/s : on se degage au pas
@@ -9645,7 +9645,16 @@ function traficRoule(c, dt, opt) {
   let mou = false;
   if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
     c.h += (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
-    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage'; mou = true;
+    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage';
+    // ON NE TRAVERSE LES CAISSES QUE SI ON EST DEJA DEDANS. Premiere version : tout vehicule
+    // qui se degageait cessait de voir les autres pendant toute la manoeuvre. Mesure (test
+    // 298, trois minutes de circulation) : 876 chevauchements voiture-voiture et 2 075 images
+    // de degagement — dans une file dense, beaucoup de vehicules attendent puis reculent tous
+    // ensemble EN SE TRAVERSANT, alors qu'ils avaient la place de reculer normalement.
+    // Or le blocage mutuel qu'on corrige n'existe que si les toles se CHEVAUCHENT DEJA : c'est
+    // seulement alors qu'aucun pas ne peut plus etre accepte. On ne ramollit donc que dans ce
+    // cas-la, et le reste du temps la marche arriere obeit aux regles ordinaires.
+    mou = vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false });
   } else c.recule = false;
   const bloque = avanceVehicule(c, dt, c.speed, mou ? { mou: true } : {}, h0);
   // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un
@@ -15755,21 +15764,34 @@ function animateRig(rig, mode, speed, dt, t) {
   // passent sous l'ourlet, ou ils sont. A genoux, assis ou au coup de pied, une seule cuisse
   // monte : l'ecart est entier, la jupe se souleve comme avant.
   if (rig.jupe && rig.jupe.visible) {
-    const avant = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
-    const arriere = Math.max(rig.legL.rotation.x, rig.legR.rotation.x, 0);
-    const leve = Math.max(0, avant - arriere);
-    const cible = -Math.min(0.7, Math.max(0, leve - 0.25) * 0.85);
-    // elle se souleve D'UN COUP sous la cuisse qui monte (sinon, le temps qu'elle reagisse,
-    // un coup de pied la traversait) et elle retombe doucement, comme un vrai tissu
-    rig.jupe.rotation.x = cible < rig.jupe.rotation.x ? cible : rig.jupe.rotation.x + (cible - rig.jupe.rotation.x) * ease2;
-    // ET ELLE REMONTE QUAND LES DEUX CUISSES S'OUVRENT. En pleine foulee les jambes sont
-    // ecartees EN MEME TEMPS, l'une devant l'autre derriere : aucune bascule ne peut degager
-    // les deux genoux a la fois, c'est geometriquement impossible pour un cone rigide. Un vrai
-    // tissu, lui, remonte sur les cuisses quand elles s'ecartent. Mesure : a basse vitesse le
-    // genou arriere passait encore 6,9 cm dans l'ourlet une fois la bascule corrigee ; il suffit
-    // de 4,3 cm de montee pour qu'il repasse dans l'evasement du cone.
+    // ELLE SUIT LA BISSECTRICE DES DEUX CUISSES, pas seulement celle qui monte. En ne
+    // regardant que le genou qui MONTE, elle basculait vers l'avant et venait s'empaler sur
+    // celui qui part EN ARRIÈRE — mesuré en marchant : hanche arrière à +1,48 rad (la jambe
+    // est presque à l'horizontale derrière), jupe penchée de 0,65 rad vers l'avant, 13 cm de
+    // genou DANS le tissu. On prend donc la MOYENNE SIGNÉE des deux cuisses : à genoux et au
+    // coup de pied elle se soulève comme avant (une seule cuisse monte), à la marche elle
+    // s'incline légèrement EN ARRIÈRE, du côté où la jambe est la plus ouverte, et les deux
+    // genoux passent au large. Zone morte de 0,12 rad : au repos elle ne bouge pas d'un poil.
+    const moyen = (-rig.legL.rotation.x - rig.legR.rotation.x) / 2;
+    const jeuJupe = Math.sign(moyen) * Math.min(0.7, Math.max(0, Math.abs(moyen) - 0.12));
+    const cible = -jeuJupe;
+    // elle est POUSSEE d'un coup par la cuisse (sinon, le temps qu'elle reagisse, un coup de
+    // pied la traversait) et elle RETOMBE doucement, comme un vrai tissu. « Poussee » = le
+    // basculement grandit ou change de cote : en ne traitant que le cote AVANT, la jupe
+    // mettait une demi-seconde a s'incliner en arriere et la jambe arriere la rattrapait.
+    const jr = rig.jupe.rotation.x;
+    rig.jupe.rotation.x = (Math.abs(cible) >= Math.abs(jr) || cible * jr < 0) ? cible : jr + (cible - jr) * ease2;
+    // ET ELLE REMONTE QUAND LES DEUX CUISSES S'OUVRENT. La bissectrice ci-dessus regle les
+    // poses ASYMETRIQUES (a genoux, assis, coup de pied, et la marche quand une jambe est plus
+    // ouverte que l'autre). Mais au milieu de la foulee les deux cuisses sont ecartees AUTANT
+    // l'une que l'autre : la bissectrice vaut alors zero, et aucune inclinaison ne peut
+    // degager les deux genoux a la fois — c'est geometriquement impossible pour un cone
+    // rigide. Un vrai tissu, lui, remonte sur les cuisses quand elles s'ecartent. Mesure : le
+    // genou arriere passait encore 6,9 cm dans l'ourlet une fois la bascule corrigee, et
+    // 4,3 cm de montee suffisent a le remettre dans l'evasement du cone.
     if (rig.jupe.userData.jupeY0 == null) rig.jupe.userData.jupeY0 = rig.jupe.position.y;
-    const ouvre = Math.max(0, Math.min(0.07, (avant + arriere - 1.2) * 0.10));
+    const ecartCuisses = Math.abs(rig.legL.rotation.x - rig.legR.rotation.x);
+    const ouvre = Math.max(0, Math.min(0.07, (ecartCuisses - 1.2) * 0.10));
     rig.jupe.position.y += (rig.jupe.userData.jupeY0 + ouvre - rig.jupe.position.y) * Math.min(1, dt * 14);
   }
 }
@@ -24270,6 +24292,7 @@ function degageService(c, dt) {
   return true;
 }
 const VITESSE_SECOURS = 13;    // m/s (~47 km/h) sirene allumee : pressé, mais on le voit venir
+const APPROCHE_V = 6;          // m/s : plafond de l'approche finale, hors chaussee
 const VITESSE_SERVICE = 9;     // m/s : le retour au garage, la tournee du facteur, un engin
 // 18 m, et surtout PAS moins de 16 : au-dessous de 16 m `botConduit` ne calcule plus
 // d'itineraire du tout et se rabat sur une ligne droite. Avec un seuil a 15 m, la depanneuse
@@ -24416,6 +24439,13 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
   // l'hopital, la cour du hangar, l'epave sur le bas-cote) : on n'y traverse pas un parking a
   // 13 m/s. 6 m/s au plus, et de moins en moins vite a mesure qu'on arrive.
   const cible = Math.min(plafond, 6, 2 + d * 0.55, Math.abs(dh) > 1 ? 3 : 99);
+  // ... ET ON Y EST DEJA EN ARRIVANT. La consigne etait bien de 6 m/s, mais la vitesse y
+  // ARRIVAIT en douceur depuis les 13 m/s du trajet par les voies : pendant la seconde de
+  // freinage, le vehicule roulait encore a plus de 6,5 m/s ALORS QU'IL AVAIT DEJA QUITTE LA
+  // CHAUSSEE pour couper vers l'epave. Mesure (test 332) : c'est la seule chose qui sortait la
+  // voiture de police du bitume en trajet — 93,4 % au lieu des 95 % demandes, et toujours au
+  // meme endroit, a dix-sept metres de l'accident. On entre donc dans l'approche DEJA au pas.
+  c.speed = Math.min(c.speed || 0, APPROCHE_V);
   c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * 4);
   c.ia = null;
   const bloque = avanceVehicule(c, dt, c.speed, { bar: true, veh: true }, h0);
@@ -24510,16 +24540,42 @@ function assiseCabine(plancher, plafond) {
 // LA TAILLE D'ASSISE S'APPLIQUE ET SE REND. On garde l'échelle de naissance de l'avatar dans
 // son userData : un personnage « taille XXL » ou la statue du parc ne doivent pas redescendre
 // à 1 en sortant de la voiture.
+// CHACUN N'A PAS LA MÊME TAILLE. Les places sont calculées pour le GABARIT DE RÉFÉRENCE
+// (2,358 m debout) : un joueur en bottes, coiffé d'un haut-de-forme ou taillé « XXL » est
+// plus grand que ça, et à l'échelle d'assise de la table il ressortait SOUS LE PLANCHER —
+// mesuré dans le contrôle complet, corps à 0,26 m pour un plancher de berline à 0,32 m, sur
+// les quatorze véhicules à la fois. On mesure donc CET avatar-là, debout, juste avant qu'il
+// s'installe, et on corrige son échelle d'assise d'autant : quel que soit son gabarit, il
+// occupe exactement l'enveloppe prévue par la table. La mesure est refaite à chaque montée
+// (la tenue peut avoir changé entre-temps) et coûte une boîte englobante, une seule fois.
+function refAssise(av) {
+  const g = av && (av.group || av.g || av); if (!g) return 1;
+  if (g.userData.assisRef != null) return g.userData.assisRef;
+  let h = ASSIS_CRANE;
+  try {
+    const bb = new THREE.Box3(); bb.makeEmpty();
+    g.updateMatrixWorld(true);
+    g.traverse(o => { if (o.isMesh && o.visible) bb.expandByObject(o); });
+    // POSITION DU MONDE, pas la position locale : un avatar vit dans `worldGroup`, qui a son
+    // propre décalage — comparer une boîte du MONDE à une position LOCALE donnait n'importe quoi.
+    const sc = g.scale.y || 1, o0 = g.getWorldPosition(new THREE.Vector3());
+    const haut = (bb.max.y - o0.y) / sc;
+    if (isFinite(haut) && haut > 1.2 && haut < 6) h = haut;
+  } catch (e) {}
+  g.userData.assisRef = ASSIS_CRANE / h;
+  return g.userData.assisRef;
+}
 function tailleEnCabine(av, taille) {
   // `av` peut être un avatar (.group), le chien (.g) ou un groupe Three tout court
   const g = av && (av.group || av.g || av); if (!g || !g.scale || !g.userData) return 0;
   if (g.userData.ech0 == null) g.userData.ech0 = g.scale.x || 1;
+  if (taille === 1) g.userData.assisRef = null;   // il redescend : la prochaine montée le remesurera
   // L'ÉCHELLE D'ASSISE EST ABSOLUE, pas un facteur. C'est L'HABITACLE qui décide de la taille
   // de celui qui s'y assied : un avatar « XXL » (échelle de naissance 1,1) multipliait la
   // taille d'assise par la sienne et ressortait 10 cm SOUS le plancher de la berline —
   // relevé dans le contrôle complet, corps de 0,22 m pour un plancher à 0,32 m. On revient
   // à l'échelle de naissance en descendant (taille = 1).
-  const k = taille === 1 ? g.userData.ech0 : taille;
+  const k = taille === 1 ? g.userData.ech0 : taille * refAssise(av);
   if (Math.abs(g.scale.x - k) > 1e-4) g.scale.setScalar(k);
   return k;
 }

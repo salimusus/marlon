@@ -11020,6 +11020,7 @@ const CRAIE_NIV = 0.07;     // niveau du lit de craie sur le bus « effets ». M
                             // 0,07 contre 0,022) : on l'entend nettement sans jamais coller le limiteur (0,34 tapait 0,93).
 const CRAIE_TENUE = 0.18;   // s : on garde le crissement ouvert apres la derniere lettre, sinon il hachait
 const craieLit = { src: null, bp: null, g: null, jusqu: 0 };
+const maintenant = () => performance.now() / 1000;   // l'horloge de la VRAIE vie (elle tourne meme jeu en pause)
 // Monte le lit une seule fois, puis rebranche sa sortie sur le bus « effets » a chaque
 // lettre (deux fois le meme lien ne compte qu'une fois en Web Audio : c'est sans risque, et
 // ca laisse le reglage du bus reprendre la main si le joueur l'a change).
@@ -11048,7 +11049,7 @@ function sonCraie(n) {
   try { ambiance.duck(); } catch (e) {}   // la rumeur du quartier recule pendant le crissement
   craieLit.bp.frequency.setTargetAtTime(2400 + Math.random() * 1600, c.currentTime, 0.012);
   craieLit.g.gain.setTargetAtTime(CRAIE_NIV, c.currentTime, 0.006);
-  craieLit.jusqu = simTime + CRAIE_TENUE;
+  craieLit.jusqu = maintenant() + CRAIE_TENUE;
   // et par-dessus le lit, l'attaque seche de chaque lettre (elle ne sort que sur une machine
   // au temps reel, mais c'est elle qui donne le « tac-tac » de la main de la maitresse)
   const t0 = c.currentTime;
@@ -11072,7 +11073,13 @@ function sonCraie(n) {
 // s'arretait (et aussi quand le joueur coupait le son en pleine phrase).
 function craieLitFerme() {
   const g = craieLit.g; if (!g || g.gain.value <= 0.0002) return;
-  if (settings.sound && simTime <= craieLit.jusqu) return;
+  // L'HORLOGE DU CRISSEMENT EST CELLE DE LA VRAIE VIE, pas celle de la partie. `simTime` ne
+  // tourne plus des que le jeu est en pause — et la lecon de l'ecole est justement jouee
+  // INTERFACE OUVERTE, jeu en pause : le lit de craie restait alors ouvert pour toujours, un
+  // souffle continu a 0,07 par-dessus tout le reste (mesure au bout de la chaine : plancher
+  // 0,0001 -> 0,0771 apres vingt phrases ecrites au tableau). Le tableau s'ecrit deja a
+  // `performance.now()` : la retombee suit la meme horloge.
+  if (settings.sound && maintenant() <= craieLit.jusqu) return;
   const c = sfx.ctx(); if (c) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
 }
 // Appele a CHAQUE image, meme interface ouverte (le jeu est en pause mais le tableau, lui,
@@ -17201,8 +17208,12 @@ document.addEventListener('visibilitychange', () => { try { sfx.sourdine(documen
 // (le bourdonnement) s'installe par-dessus.
 const MOTEUR_VOIX = [
   { n: '100 chevaux', base: 50, pente: 7.0, coupe: 380, coupeV: 30, gain: 0.038, sub: 0, bourd: 0, bourdF: 0 },
-  { n: '300 chevaux', base: 38, pente: 5.6, coupe: 300, coupeV: 26, gain: 0.052, sub: 0.55, bourd: 0.30, bourdF: 8 },
-  { n: '500 chevaux', base: 30, pente: 4.6, coupe: 250, coupeV: 22, gain: 0.066, sub: 0.95, bourd: 0.46, bourdF: 6 },
+  // `bourd` : la PROFONDEUR du battement. A 0,46 le moteur perdait la moitie de son volume six
+  // fois par seconde — un tremolo de guitare, pas un moteur (mesure au bout de la chaine : le
+  // niveau passait de 0,395 a 0,129 et revenait, sans toucher a l'accelerateur). A 0,18 on
+  // entend toujours le battement du gros bloc, mais le moteur tient sa note.
+  { n: '300 chevaux', base: 38, pente: 5.6, coupe: 300, coupeV: 26, gain: 0.052, sub: 0.55, bourd: 0.12, bourdF: 8 },
+  { n: '500 chevaux', base: 30, pente: 4.6, coupe: 250, coupeV: 22, gain: 0.066, sub: 0.95, bourd: 0.18, bourdF: 6 },
 ];
 function moteurDe(c) { return (c && c.tune && c.tune.moteur) | 0; }   // 0 = 100 ch, 1 = 300 ch, 2 = 500 ch
 const engine = (() => {   // bruit moteur continu : deux oscillateurs filtrés, une scie de grave et un bourdonnement
@@ -17278,8 +17289,12 @@ const music = (() => {   // musique de fond générée : batterie, basse, accord
     }
   }
   return {
-    start() { if (!timer) timer = setInterval(tick, 120); },
-    stop() { clearInterval(timer); timer = null; },
+    // COUPER LA MUSIQUE LA COUPE TOUT DE SUITE. `stop()` n'arretait que le sequenceur : les
+    // notes DEJA PROGRAMMEES continuaient — jusqu'a l'accord tenu de 1,9 s — et on entendait
+    // la musique jouer toute seule apres l'avoir eteinte dans le menu (mesure au bout de la
+    // chaine : 0,022 encore presents deux secondes apres le stop). On ferme aussi le robinet.
+    start() { const g0 = out(), c = sfx.ctx(); if (g0 && c) { g0.gain.cancelScheduledValues(c.currentTime); g0.gain.setTargetAtTime(0.9, c.currentTime, 0.01); } if (!timer) timer = setInterval(tick, 120); },
+    stop() { clearInterval(timer); timer = null; const c = sfx.ctx(); if (gainNode && c) { gainNode.gain.cancelScheduledValues(c.currentTime); gainNode.gain.setTargetAtTime(0.0001, c.currentTime, 0.06); } },
     setWorld(m) { cfg = m; step = 0; },
   };
 })();

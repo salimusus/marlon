@@ -18965,3 +18965,109 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
   const ok = r.bloques === 0 && r.suivis >= 4 && r.pire < 5;
   return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
 });
+
+test('le ralenti d elimination RACCORDE vers la camera de jeu : plus de saut de treize metres dans une facade', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.P.pos.set(-60, 0.3, 196); G.P.facing = 0; G.cam.yaw = Math.PI; G.cam.pitch = 0.32;
+    // la perche normale se pose d'abord : c'est d'elle que part et vers elle que revient le plan
+    for (let i = 0; i < 90; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
+    const jeu0 = G.camera.position.clone();
+    G.RALENTI.prochain = 0; G.RALENTI.fige = null;
+    const lance = !!G.ralentiCoup(-60, 0.3, 199, 'pistolet', G.P.facing, 1);
+    const dansUnSolide = (c) => {
+      for (const o of G.solidsAutour(c.x, c.z, 3)) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    let prec = null, saut = 0, sautImg = -1, murs = 0, sol = 0;
+    for (let i = 0; i < 360; i++) {
+      G.ralentiEchelle(1 / 60);              // le decompte des trois secondes, en temps REEL, comme frame()
+      G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196);
+      G.camPerche(1 / 60, false);            // camPerche appelle ralentiCam a la toute fin
+      const c = G.camera.position;
+      if (prec) { const dd = Math.hypot(c.x - prec.x, c.y - prec.y, c.z - prec.z); if (dd > saut) { saut = dd; sautImg = i; } }
+      prec = c.clone();
+      if (dansUnSolide(c)) murs++;
+      if (c.y < 0.45) sol++;
+    }
+    // au bout du compte, la camera de jeu a bien repris la main : on la compare a une perche
+    // posee a neuf, au meme endroit
+    const finRalenti = G.camera.position.clone();
+    G.RALENTI.t = 0; G.RALENTI.sortie = 0; G.RALENTI.sortieT = 0;
+    for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
+    const jeu1 = G.camera.position.clone();
+    return { lance, saut: +saut.toFixed(2), sautImg, murs, sol,
+      vitesse: +(saut * 60).toFixed(1),
+      ecartFin: +finRalenti.distanceTo(jeu1).toFixed(2),
+      depart: { x: +jeu0.x.toFixed(2), y: +jeu0.y.toFixed(2), z: +jeu0.z.toFixed(2) } };
+  });
+  const ok = r.lance && r.saut < 0.6 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5;
+  return { ok, detail: `defaut route par le poste Armes : a la derniere image du ralenti la camera de cinema lachait la main d'un coup · MESURE AVANT : 13,18 m EN UNE SEULE IMAGE (image 180, de (-58,27 ; 1,90 ; 200,19) a (-60 ; 4,65 ; 187,41)), soit 791 m/s, et le poste Armes l'a vue atterrir DANS une facade · maintenant elle RACCORDE : sur 360 images de ralenti et de reprise, le plus gros deplacement d'une image a l'autre est de ${r.saut} m (image ${r.sautImg}), soit ${r.vitesse} m/s — la borne est a 14 m/s — la camera n'est DANS un solide sur aucune image (${r.murs}) et ne passe jamais sous le sol (${r.sol}), et a la fin elle est revenue exactement la ou la camera de jeu la veut (${r.ecartFin} m d'ecart)` };
+});
+
+test('en visee, la camera passe par-dessus l epaule qui TIENT l arme, sans decentrer le pointage', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.setWeapon(G.me, 'pistol', true);           // l'arme EN MAIN (c'est frame() qui le fait en jeu)
+    const mesure = (aim) => {
+      G.P.pos.set(-60, 0.3, 196); G.cam.yaw = Math.PI; G.cam.pitch = 0.32;
+      G.P.aim = aim; G.P.aimHeld = aim; G.P.facing = G.cam.yaw + Math.PI;
+      G.cam.libre = null; G.cam.dLisse = null; G.cam.avance = 0; G.cam.hausse = 0;
+      for (let i = 0; i < 240; i++) {
+        G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.P.facing = G.cam.yaw + Math.PI;
+        G.camPerche(1 / 60, true);
+      }
+      // on pose l'avatar la ou frame() le pose, pour lire ses morceaux dans le monde
+      G.me.group.position.set(G.P.pos.x, G.P.pos.y, G.P.pos.z);
+      G.me.group.rotation.set(0, G.P.facing, 0);
+      G.me.group.updateMatrixWorld(true);
+      const c = G.camera.position;
+      const f = G.P.facing, fx = Math.sin(f), fz = Math.cos(f), rx = fz, rz = -fx;   // avant, puis DROITE du personnage
+      const cote = (px, pz) => +((px - G.P.pos.x) * rx + (pz - G.P.pos.z) * rz).toFixed(2);
+      const o = { droite: cote(c.x, c.z), arriere: +(-((c.x - G.P.pos.x) * fx + (c.z - G.P.pos.z) * fz)).toFixed(2),
+        d: +Math.hypot(c.x - G.P.pos.x, c.y - (G.P.pos.y + 1.2), c.z - G.P.pos.z).toFixed(2) };
+      const poing = G.me.rig && G.me.rig.armR && G.me.rig.armR.poing;
+      if (poing) { const pp = poing.getWorldPosition(new THREE.Vector3()); o.mainDroite = cote(pp.x, pp.z); }
+      // L'ARME EST-ELLE VUE ? rayon camera → bouche du canon, et on regarde ce qu'il rencontre
+      // en premier parmi les morceaux du personnage.
+      const w = G.me.gun, muz = w && w.userData && w.userData.muzzle;
+      if (muz) {
+        const mp = muz.getWorldPosition(new THREE.Vector3());
+        o.bouche = cote(mp.x, mp.z);
+        const dir = mp.clone().sub(c); const L = dir.length(); dir.normalize();
+        const cibles = []; G.me.group.traverse(q => { if (q.isMesh && q.visible && q.geometry && q !== w && !w.getObjectById(q.id)) cibles.push(q); });
+        const ray = new THREE.Raycaster(c.clone(), dir, 0.05, Math.max(0.1, L - 0.25));
+        o.corpsDevant = ray.intersectObjects(cibles, false).length;
+        const v = mp.clone().project(G.camera);
+        o.dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
+        o.ecran = { x: +v.x.toFixed(2), y: +v.y.toFixed(2) };
+      }
+      return o;
+    };
+    const res = { braque: mesure(true), degaine: mesure(false) };
+    // LE POINTAGE N'EST PAS DECENTRE : le personnage regarde toujours exactement a l'oppose de
+    // cam.yaw, et le decalage d'epaule n'y touche pas.
+    res.pointage = +Math.abs(Math.atan2(Math.sin(G.P.facing - (G.cam.yaw + Math.PI)), Math.cos(G.P.facing - (G.cam.yaw + Math.PI)))).toFixed(4);
+    G.P.aim = false; G.P.aimHeld = false; G.setWeapon(G.me, 'pistol', false);
+    G.drawWeapon(false); G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return res;
+  });
+  const b = r.braque, d = r.degaine;
+  const memeCote = b.mainDroite == null || b.mainDroite > 0 ? b.droite > 0 : b.droite < 0;
+  const ok = b.droite > 0.8 && d.droite > 0.5 && memeCote && r.pointage < 0.01
+    && (b.corpsDevant == null || b.corpsDevant === 0) && (b.dansLeCadre !== false);
+  return { ok, detail: `defaut route par le poste Armes : « camera pile dans le dos, le corps masque l'arme et l'eclair du tir » · la cause n'etait pas la TAILLE du decalage mais son SENS — mesure avant : la camera se posait a 1,25 m a GAUCHE du personnage (droite = -1,25) alors que l'arme est dans sa main DROITE, le corps tombait donc pile entre l'objectif et le canon · apres : braque, la camera est a ${b.droite} m sur sa DROITE (main droite a ${b.mainDroite} m, bouche du canon a ${b.bouche} m — meme cote), a ${b.arriere} m derriere et ${b.d} m de lui ; arme degainee sans braquer, ${d.droite} m a droite · aucun morceau du corps entre l'objectif et la bouche du canon (${b.corpsDevant}), bouche dans le cadre=${b.dansLeCadre} en (${b.ecran ? b.ecran.x + ', ' + b.ecran.y : '—'}) · et le pointage ne bouge pas d'un pouce : le personnage vise toujours exactement a l'oppose de cam.yaw (ecart ${r.pointage} rad), parce que le reticule se calcule sur cam.yaw et non sur le point vise` };
+});

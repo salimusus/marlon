@@ -27825,11 +27825,16 @@ function camPerche(dt, aiming) {
     // l'eleve se retrouvait PILE devant le texte. On vise donc a hauteur du tableau : la
     // camera monte avec la cible et la tete passe dessous (verifie en capture).
     if (P.sit && P.sit.ecole && !aiming) tmpV.y += 1.25;
-    // PAR-DESSUS L'ÉPAULE. Arme dégainée on décalait déjà la visée de 90 cm ; quand le joueur
-    // BRAQUE (L2 maintenue, P.aim), on la décale de 1,25 m et la caméra vient se poser sur
-    // l'épaule — c'est le cadrage de visée des jeux d'action, et c'est ce qui rend le pointage
-    // au stick droit vraiment fin (la sensibilité est déjà divisée par deux dans pollGamepad).
-    if (aiming) { const ep = P.aim ? 1.25 : 0.9; tmpV.x += Math.cos(cam.yaw) * ep; tmpV.z -= Math.sin(cam.yaw) * ep; }
+    // PAR-DESSUS L'ÉPAULE — ET PAR-DESSUS LA BONNE (round 73). Arme dégainée on décalait la visée
+    // de 90 cm, braqué (L2) de 1,25 m… mais DU MAUVAIS CÔTÉ. Mesuré : la caméra se posait à
+    // 1,25 m à GAUCHE du personnage alors que l'arme est dans sa main DROITE (`me.rig.armR`) :
+    // le corps passait donc exactement entre l'objectif et le canon, et l'on ne voyait ni l'arme
+    // ni l'éclair du tir — le défaut que le poste Armes a photographié. `+cos(yaw), -sin(yaw)`
+    // est la GAUCHE du personnage : quand il vise, il regarde vers `(-sin yaw, -cos yaw)`, donc
+    // sa droite vaut `(-cos yaw, +sin yaw)`. On décale du bon côté, l'épaule droite.
+    // La visée, elle, ne bouge pas d'un pouce : le réticule est calculé sur `cam.yaw`, pas sur
+    // le point visé — décaler l'épaule cadre le personnage, il ne dépointe pas.
+    if (aiming) { const ep = P.aim ? 1.25 : 0.9; tmpV.x -= Math.cos(cam.yaw) * ep; tmpV.z += Math.sin(cam.yaw) * ep; }
     // Dans une pièce, la caméra reculait dans le mur ou par-dessus le plafond : on la ramène
     // près du joueur. Et devant un objet à manipuler, on se rapproche encore et on le cadre.
     // PASSAGER CHEZ UN AMI : ON EST EN VOITURE MÊME SI `drive.car` EST VIDE. Trois endroits de

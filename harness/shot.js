@@ -2185,6 +2185,10 @@ window.__G = {
   saveWallet: typeof saveWallet === 'function' ? saveWallet : null,
   // ---- poste COMBAT & ARMES (visee verrouillee, gestes de poing) : ajoute tes exports SOUS cette ligne ----
   armeTick: typeof armeTick === 'function' ? armeTick : null,
+  GANG_CORPS: typeof GANG_CORPS !== 'undefined' ? GANG_CORPS : 0,
+  GANG_EFFACE: typeof GANG_EFFACE !== 'undefined' ? GANG_EFFACE : 0,
+  forceGangRival: typeof forceGangRival === 'function' ? forceGangRival : null,
+  peutKidnapper: typeof peutKidnapper === 'function' ? peutKidnapper : null,
   viseurEcran: typeof viseurEcran === 'function' ? viseurEcran : null,
   coneVisee: typeof coneVisee === 'function' ? coneVisee : null,
   LUNETTE_EPAULE: typeof LUNETTE_EPAULE !== 'undefined' ? LUNETTE_EPAULE : 0,

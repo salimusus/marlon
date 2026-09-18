@@ -5529,13 +5529,21 @@ function makeCar(color, x, z, h, opt = {}) {
   const g = new THREE.Group(), body = new THREE.MeshPhongMaterial({ color, shininess: 100, specular: 0x849aaa, envMap: empireEnvironment(), reflectivity: 0.32, combine: THREE.MixOperation }), dark = lam(0x2b3550);
   const bx = (mat, sx, sy, sz, px, py, pz, edges = true) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const kart = !!opt.kart;
+  // LA SERRE DE LA VOITURE ORDINAIRE MONTE ELLE AUSSI (voir ASSIS_CIBLE) : c'est la voiture
+  // de toute la ville — celle de la circulation, de la police, des amis. Plancher de caisse
+  // à 0,325 m, pavillon déduit de l'occupant ; le capot, le coffre, les bas de caisse et la
+  // ceinture de vitrage ne bougent pas d'un centimètre.
+  const PLAFV = 0.325 + ASSIS_CIBLE * ASSIS_CORPS + ASSIS_JEU_SOL + ASSIS_JEU_TOIT;
+  const TOITV = PLAFV + 0.08, HAUSSE = TOITV - 1.68;   // de combien tout ce qui est posé SUR le toit monte
+  const mnt = (bas) => ({ y: (bas + PLAFV) / 2, h: PLAFV - bas });
+  const WSV = mnt(1.05), RWV = mnt(1.07), COTEV = mnt(1.16), MONTV = mnt(1.08);
   bx(body, 2.1, 0.55, 4.3, 0, 0.6, 0);                          // caisse
   const hood = bx(body, 2.0, 0.28, 1.35, 0, 1.0, 1.4);          // capot
   bx(body, 2.0, 0.3, 0.95, 0, 1.0, -1.65);                      // coffre
-  bx(body, 1.75, 0.16, 1.9, 0, 1.68, -0.15);                     // toit
-  const ws = bx(glassCar, 1.66, 0.62, 0.06, 0, 1.36, 0.92, false); ws.rotation.x = 0.42;      // pare-brise incliné
-  const rw = bx(glassCar, 1.66, 0.58, 0.06, 0, 1.36, -1.18, false); rw.rotation.x = -0.5;     // lunette arrière
-  const sides = []; for (const sx of [-0.87, 0.87]) { sides.push(bx(glassCar, 0.05, 0.48, 1.55, sx, 1.4, -0.15, false)); bx(dark, 0.06, 0.6, 0.08, sx, 1.38, 0.66, false); bx(dark, 0.06, 0.6, 0.08, sx, 1.38, -0.95, false); bx(dark, 0.06, 0.6, 0.08, sx, 1.38, -0.2, false); }   // vitres + montants
+  bx(body, 1.75, 0.16, 1.9, 0, TOITV, -0.15);                     // toit
+  const ws = bx(glassCar, 1.66, WSV.h, 0.06, 0, WSV.y, 0.92, false); ws.rotation.x = 0.42;      // pare-brise incliné
+  const rw = bx(glassCar, 1.66, RWV.h, 0.06, 0, RWV.y, -1.18, false); rw.rotation.x = -0.5;     // lunette arrière
+  const sides = []; for (const sx of [-0.87, 0.87]) { sides.push(bx(glassCar, 0.05, COTEV.h, 1.55, sx, COTEV.y, -0.15, false)); bx(dark, 0.06, MONTV.h, 0.08, sx, MONTV.y, 0.66, false); bx(dark, 0.06, MONTV.h, 0.08, sx, MONTV.y, -0.95, false); bx(dark, 0.06, MONTV.h, 0.08, sx, MONTV.y, -0.2, false); }   // vitres + montants
   const lights = []; for (const [sz, mat] of [[2.2, neonMat(0xffffcc)], [-2.2, neonMat(0xff3030)]]) for (const sx of [-0.72, 0.72]) lights.push(bx(mat, 0.42, 0.2, 0.08, sx, 0.8, sz, false));   // phares / feux
   const bumpers = [bx(dark, 2.16, 0.24, 0.16, 0, 0.36, 2.2), bx(dark, 2.16, 0.24, 0.16, 0, 0.36, -2.2)];   // pare-chocs
   bx(darkM, 1.1, 0.22, 0.06, 0, 0.62, 2.2, false); for (let i = 0; i < 3; i++) bx(chrome, 1.0, 0.03, 0.02, 0, 0.55 + i * 0.07, 2.24, false);   // calandre
@@ -5544,10 +5552,10 @@ function makeCar(color, x, z, h, opt = {}) {
   for (const [sx, sz] of [[-1.05, 1.3], [1.05, 1.3], [-1.05, -1.3], [1.05, -1.3]]) aileRoue(g, body, sx * 1.02, 0.36, sz, 1.06);   // ailes : un demi-tore qui epouse la roue
   const doors = []; for (const sx of [-1.06, 1.06]) { doors.push(bx(dark, 0.03, 0.42, 1.2, sx, 0.8, 0.5, false), bx(dark, 0.03, 0.42, 1.2, sx, 0.8, -0.8, false)); bx(chrome, 0.05, 0.05, 0.22, sx, 0.98, 0.35, false); bx(chrome, 0.05, 0.05, 0.22, sx, 0.98, -0.95, false); }   // portières + poignées
   const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), chrome); ex.rotation.x = Math.PI / 2; ex.position.set(0.6, 0.35, -2.25); g.add(ex);
-  bx(dark, 0.03, 0.5, 0.03, -0.7, 1.9, -1.2, false);                                           // antenne
+  bx(dark, 0.03, 0.5, 0.03, -0.7, 1.9 + HAUSSE, -1.2, false);                                  // antenne
   const wheels = [];
   for (const [wx, wz] of [[-1.05, 1.3], [1.05, 1.3], [-1.05, -1.3], [1.05, -1.3]]) { const w = makeWheel(1); w.position.set(wx, 0.34, wz); g.add(w); wheels.push(w); }
-  if (opt.police) { bx(lam(0x1b2a6b), 2.12, 0.28, 4.32, 0, 0.62, 0, false); bx(dark, 1.3, 0.16, 0.5, 0, 1.84, -0.15); g.lampR = bx(neonMat(0xff2020), 0.5, 0.2, 0.34, -0.4, 1.98, -0.15, false); g.lampB = bx(neonMat(0x2060ff), 0.5, 0.2, 0.34, 0.4, 1.98, -0.15, false); const pl = new THREE.MeshBasicMaterial({ map: plaqueTexture('POLICE') }); for (const [px, ry] of [[-1.07, -Math.PI / 2], [1.07, Math.PI / 2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), pl); m.position.set(px, 0.62, 0); m.rotation.y = ry; g.add(m); } }
+  if (opt.police) { bx(lam(0x1b2a6b), 2.12, 0.28, 4.32, 0, 0.62, 0, false); bx(dark, 1.3, 0.16, 0.5, 0, 1.84 + HAUSSE, -0.15); g.lampR = bx(neonMat(0xff2020), 0.5, 0.2, 0.34, -0.4, 1.98 + HAUSSE, -0.15, false); g.lampB = bx(neonMat(0x2060ff), 0.5, 0.2, 0.34, 0.4, 1.98 + HAUSSE, -0.15, false); const pl = new THREE.MeshBasicMaterial({ map: plaqueTexture('POLICE') }); for (const [px, ry] of [[-1.07, -Math.PI / 2], [1.07, Math.PI / 2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), pl); m.position.set(px, 0.62, 0); m.rotation.y = ry; g.add(m); } }
   if (opt.sport) { bx(dark, 2.2, 0.1, 0.5, 0, 1.55, -1.95); bx(dark, 2.3, 0.1, 0.4, 0, 0.3, 2.15); for (const sx of [-0.3, 0.3]) bx(lam(0xff3030), 0.26, 0.02, 3.9, sx, 1.13, 0, false); }   // sportive : becquet, splitter, bandes rouges
   if (kart) {   // voiture de course : aileron, splitter, bandes, numéro, échappements
     const wing = bx(dark, 2.3, 0.12, 0.6, 0, 1.6, -1.95); for (const sx of [-0.8, 0.8]) bx(dark, 0.12, 0.6, 0.35, sx, 1.25, -1.95, false);
@@ -12591,7 +12599,7 @@ const CARROSSERIES = {
     cote: { y: 1.42, h: 0.54, z0: 0.72, z1: -2.32, n: 3 },
     roue: 1.0, largeur: 1, essieu: [1.42, -1.62], voie: 1.03,
     siege: -0.80, zAv: 0.60, zAr: -0.80, zChien: -1.95, seuil: 1.64,
-    baseW: 2.45, baseD: 5.05, portes: 4, barres: true },
+    baseW: 2.45, baseD: 5.05, portes: 4, barres: true, plafondPlus: 0.03 },
 
   suv: { e: '🚙', nom: 'SUV', trait: 'haut sur pattes, capot court, grandes vitres, barres de toit',
     W: 2.16, av: 2.22, ar: -2.34, sol: 0.56, ch: 0.83,
@@ -12649,8 +12657,7 @@ function placesCarrosserie(S, n, ech) {
   // L'HABITACLE DIT LA TAILLE DE CEUX QUI Y MONTENT (voir assiseCabine) : du bas de caisse
   // (S.sol) au dessous du pavillon — ou, sur la décapotable qui n'a pas de toit, au haut du
   // pare-brise, pour que la tête passe au-dessus : cheveux au vent.
-  const plafond = S.toit ? S.toit.y - S.toit.h / 2 : S.ws.y + S.ws.h / 2;
-  const A = assiseCabine(S.sol, plafond), y = A.y;
+  const A = assiseCabine(S.sol, plafondAssise(S)), y = A.y;
   // LES SIÈGES AVANT RECULENT DE 35 cm. À leur ancienne place (S.zAv) l'occupant était collé
   // au pare-brise, caché derrière le montant et le rétroviseur, et ses avant-bras sortaient
   // au-dessus du capot — mesuré : 48 cm de bras au travers de la vitre d'une berline.
@@ -12663,8 +12670,8 @@ function placesCarrosserie(S, n, ech) {
     chien: { x: 0, y: +(y + 0.01).toFixed(3), z: zChien, taille: +Math.min(1, A.taille * 1.25).toFixed(3) },
     // le robot compagnon : DEBOUT sur le plancher, entre les deux sièges avant (90 cm de haut
     // pour 1,34 m sous le pavillon d'une berline : il tient sans qu'on le réduise)
-    // (il mesure 1,25 m : réduit à 0,85 il passe à 1,06 m et garde 20 cm sous le pavillon)
-    robot: { x: 0, y: +(S.sol + 0.02).toFixed(3), z: +(zAv - 0.45).toFixed(3), taille: 0.85 } };
+    // (il mesure 1,25 m ; depuis que le pavillon est monté, il tient DEBOUT à sa taille)
+    robot: { x: 0, y: +(S.sol + 0.02).toFixed(3), z: +(zAv - 0.45).toFixed(3), taille: 1 } };
   if (n > 2 && zAr != null) { T.arriereG = { x: 0.5, y, z: zAr }; T.arriereD = { x: -0.5, y, z: zAr }; }
   return T;
 }
@@ -12682,6 +12689,15 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   const bx = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; m.userData.pos0 = m.position.clone(); g.add(m); return m; };
   const AV = S.av * e, AR = S.ar * e, Lc = AV - AR, Zc = (AV + AR) / 2;
   const basC = S.sol, hautC = S.sol + S.ch, flanc = S.W / 2;
+  // LA SERRE (pavillon + vitrage) EST DÉDUITE DE CELUI QUI S'ASSIED DEDANS (voir ASSIS_CIBLE).
+  // On ne touche NI au capot, NI au coffre, NI aux bas de caisse, NI à la CEINTURE DE CAISSE
+  // (le bas du vitrage) : la silhouette — berline à trois volumes, break allongé, SUV haut,
+  // 4×4 très haut — reste exactement la même, seule la partie vitrée s'élève. Les chiffres
+  // `y`/`h` de la table ne servent donc plus que de BAS de vitrage.
+  const PLAF = hautVitrage(S);
+  const toitY = S.toit ? PLAF + S.toit.h / 2 : null;
+  const monte = p => { const bas = p.y - p.h / 2; return { y: (bas + PLAF) / 2, h: Math.max(0.2, PLAF - bas) }; };
+  const COTE = S.cote ? monte(S.cote) : null, WS = monte(S.ws), RW = S.rw ? monte(S.rw) : null;
   // ---- la caisse : le grand bloc de tôle, du nez au cul ----
   bx(body, S.W, S.ch, Lc, 0, basC + S.ch / 2, Zc);
   // ---- le capot (et, sur la berline et la décapotable, le COFFRE : le troisième volume) ----
@@ -12689,11 +12705,11 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   const hood = bx(body, S.W - 0.10, S.capot.h, cz1 - cz0, 0, S.capot.y, (cz0 + cz1) / 2);
   if (S.coffre) bx(body, S.W - 0.10, S.coffre.h, (S.coffre.z0 - S.coffre.z1) * e, 0, S.coffre.y, (S.coffre.z0 + S.coffre.z1) * e / 2);
   // ---- le toit (la décapotable n'en a pas : c'est toute sa silhouette) ----
-  if (S.toit) bx(body, S.toit.w, S.toit.h, (S.toit.z0 - S.toit.z1) * e, 0, S.toit.y, (S.toit.z0 + S.toit.z1) * e / 2);
+  if (S.toit) bx(body, S.toit.w, S.toit.h, (S.toit.z0 - S.toit.z1) * e, 0, toitY, (S.toit.z0 + S.toit.z1) * e / 2);
   // ---- les vitres : pare-brise, lunette, custodes, et les montants entre elles ----
-  const ws = bx(glassCar, S.W - 0.40, S.ws.h, 0.06, 0, S.ws.y, S.ws.z * e); ws.rotation.x = S.ws.a;
+  const ws = bx(glassCar, S.W - 0.40, WS.h, 0.06, 0, WS.y, S.ws.z * e); ws.rotation.x = S.ws.a;
   let rw = null;
-  if (S.rw) { rw = bx(glassCar, S.W - 0.40, S.rw.h, 0.06, 0, S.rw.y, S.rw.z * e); rw.rotation.x = S.rw.a; }
+  if (S.rw) { rw = bx(glassCar, S.W - 0.40, RW.h, 0.06, 0, RW.y, S.rw.z * e); rw.rotation.x = S.rw.a; }
   const sides = [];
   if (S.cote) {
     // LES MONTANTS SONT DE LA TÔLE, pas des piquets. Fins et noirs, ils donnaient un toit posé
@@ -12701,8 +12717,8 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
     // et le bas de caisse monte jusqu'à la ceinture de vitrage (plus de trou entre les deux).
     const cz = S.cote, z0 = cz.z0 * e, z1 = cz.z1 * e, pas = (z0 - z1) / cz.n;
     for (const sx of [-1, 1]) {
-      sides.push(bx(glassCar, 0.05, cz.h, z0 - z1, sx * (flanc - 0.13), cz.y, (z0 + z1) / 2));
-      for (let i = 0; i <= cz.n; i++) bx(body, 0.10, cz.h + 0.04, i === 0 || i === cz.n ? 0.20 : 0.11, sx * (flanc - 0.11), cz.y, z1 + i * pas);
+      sides.push(bx(glassCar, 0.05, COTE.h, z0 - z1, sx * (flanc - 0.13), COTE.y, (z0 + z1) / 2));
+      for (let i = 0; i <= cz.n; i++) bx(body, 0.10, COTE.h + 0.04, i === 0 || i === cz.n ? 0.20 : 0.11, sx * (flanc - 0.11), COTE.y, z1 + i * pas);
     }
   }
   // ---- phares (les DEUX PREMIERS sont les blancs : le garage les rallume dans cet ordre) ----
@@ -12744,15 +12760,15 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   }
   // ---- ce qui n'appartient qu'à UN style ----
   if (S.barres) for (const sx of [-0.60, 0.60]) {   // barres de toit
-    bx(noir, 0.09, 0.09, (S.toit.z0 - S.toit.z1) * e * 0.86, sx, S.toit.y + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2);
+    bx(noir, 0.09, 0.09, (S.toit.z0 - S.toit.z1) * e * 0.86, sx, toitY + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2);
   }
-  if (S.barres) for (const tz of [0.5, -0.5]) bx(noir, 1.32, 0.08, 0.09, 0, S.toit.y + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2 + tz * (S.toit.z0 - S.toit.z1) * e * 0.5);
+  if (S.barres) for (const tz of [0.5, -0.5]) bx(noir, 1.32, 0.08, 0.09, 0, toitY + S.toit.h / 2 + 0.045, (S.toit.z0 + S.toit.z1) * e / 2 + tz * (S.toit.z0 - S.toit.z1) * e * 0.5);
   if (S.buffle) {   // PARE-BUFFLE + rampe de phares : la signature du 4×4
     bx(chrome, S.W * 0.88, 0.13, 0.13, 0, basC + 0.34, AV + 0.16);
     bx(chrome, S.W * 0.88, 0.13, 0.13, 0, hautC - 0.10, AV + 0.16);
     for (const sx of [-0.62, 0, 0.62]) bx(chrome, 0.12, hautC - basC - 0.30, 0.12, sx, (basC + hautC) / 2 + 0.10, AV + 0.16);
-    bx(noir, 1.40, 0.14, 0.16, 0, S.toit.y + 0.22, S.toit.z0 * e - 0.10);
-    for (const sx of [-0.44, 0, 0.44]) bx(neonMat(0xffffcc), 0.30, 0.20, 0.12, sx, S.toit.y + 0.26, S.toit.z0 * e - 0.18);
+    bx(noir, 1.40, 0.14, 0.16, 0, toitY + 0.22, S.toit.z0 * e - 0.10);
+    for (const sx of [-0.44, 0, 0.44]) bx(neonMat(0xffffcc), 0.30, 0.20, 0.12, sx, toitY + 0.26, S.toit.z0 * e - 0.18);
   }
   if (S.secours) {   // LA ROUE DE SECOURS plaquée sur le hayon
     const r2 = makeWheel(S.roue * 0.94); r2.rotation.y = Math.PI / 2;
@@ -12760,9 +12776,9 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   }
   if (S.marchepied) for (const sx of [-1, 1]) bx(darkM, 0.26, 0.10, 2.20 * e, sx * (flanc + 0.10), basC - 0.16, 0);
   if (!S.toit) {   // SANS TOIT, le pare-brise seul ne se voyait pas : on lui met un cadre chromé
-    const hh = S.ws.h * Math.cos(S.ws.a), dz = S.ws.h * Math.sin(S.ws.a) / 2;
-    bx(chrome, S.W - 0.36, 0.07, 0.09, 0, S.ws.y + hh / 2, S.ws.z * e - dz);
-    for (const sx of [-1, 1]) { const mt = bx(chrome, 0.07, hh, 0.09, sx * (S.W / 2 - 0.20), S.ws.y, S.ws.z * e); mt.rotation.x = S.ws.a; }
+    const hh = WS.h * Math.cos(S.ws.a), dz = WS.h * Math.sin(S.ws.a) / 2;
+    bx(chrome, S.W - 0.36, 0.07, 0.09, 0, WS.y + hh / 2, S.ws.z * e - dz);
+    for (const sx of [-1, 1]) { const mt = bx(chrome, 0.07, hh, 0.09, sx * (S.W / 2 - 0.20), WS.y, S.ws.z * e); mt.rotation.x = S.ws.a; }
   }
   if (S.capote) {   // LA CAPOTE REPLIÉE derrière les sièges : on voit qu'elle existe, elle est juste rangée
     bx(darkM, S.W - 0.30, 0.26, 0.70, 0, hautC + 0.10, -1.05 * e);
@@ -12785,7 +12801,7 @@ function makeCarrosserie(style, color, x, z, h, opt = {}) {
   const solid = box(x, 0.7, z, S.baseW + 0.2, 1.4, S.baseD, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, veh: true });
   const c = { g, wheels, x, y: 0, z, h, color, busy: false, solid, baseW: S.baseW, baseD: S.baseD,
     dmg: 0, home0: [x, z, h], bodyMat: body, tuneMesh: [], style, carro: S, ech: e,
-    garde: S.sol, toitY: S.toit ? S.toit.y + S.toit.h / 2 : null,
+    garde: S.sol, toitY: S.toit ? toitY + S.toit.h / 2 : null,
     parts: { hood, lights, bumpers, ws, rw, sides, doors, mirrors } };
   c.spec = { max: 21, rev: -7, accel: 16, turn: 2.1, seat: 0 };
   prepareVehicule(c); vehicleSolid(c); return c;
@@ -24044,6 +24060,26 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
 // de la circulation : une seule table de places, une seule taille d'assise.
 const ASSIS_CRANE = 2.358, ASSIS_TALON = 0.228, ASSIS_CORPS = ASSIS_CRANE + ASSIS_TALON;
 const ASSIS_JEU_SOL = 0.02, ASSIS_JEU_TOIT = 0.10;   // le jeu laissé sous les talons et au-dessus du crâne
+// CE QU'ON VEUT VOIR : UN OCCUPANT DE LA MÊME TAILLE QUE CELUI QUI MARCHE DEHORS.
+// Réduire le bonhomme pour le faire tenir dans l'habitacle l'a rendu VISIBLE, mais un
+// habitant debout à côté de la portière était alors DEUX FOIS plus grand que celui qui est
+// assis dedans (0,47 contre 1) — un enfant le voit tout de suite. La capture le disait
+// encore plus franchement : un personnage de 2,36 m à côté d'une berline de 1,82 m, la
+// voiture lui arrivait à la taille. Ce n'est pas le bonhomme qui est trop grand, c'est
+// L'HABITACLE QUI EST TROP BAS. On déduit donc la hauteur de l'habitacle de celui qui doit
+// s'y asseoir, et plus l'inverse : le pavillon monte jusqu'à ce qu'un occupant à
+// ASSIS_CIBLE y tienne debout... assis. 0,68 : le toit d'une berline arrive alors très
+// exactement au sommet du crâne d'un piéton (2,36 m), ce qui est la proportion d'une vraie
+// voiture à côté d'une vraie personne. Au-delà, la berline devient un monospace et la
+// silhouette « berline basse » demandée par le concessionnaire est perdue.
+const ASSIS_CIBLE = 0.68;
+// Le PLAFOND qu'il faut à un habitacle dont le plancher est à `sol` pour qu'on s'y asseye
+// à ASSIS_CIBLE. `plafondPlus` sert au break, qui doit rester un poil plus haut que la
+// berline (le test des silhouettes exige berline < break < SUV < 4×4).
+function plafondAssise(S) { return S.sol + ASSIS_CIBLE * ASSIS_CORPS + ASSIS_JEU_SOL + ASSIS_JEU_TOIT + (S.plafondPlus || 0); }
+// Et jusqu'où monte LE VITRAGE : au plafond quand il y a un toit ; 55 cm plus bas sur une
+// décapotable, où la tête doit justement passer au-dessus du pare-brise (cheveux au vent).
+function hautVitrage(S) { return S.toit ? plafondAssise(S) : plafondAssise(S) - 0.55; }
 // La taille et la hauteur d'assise d'un habitacle qui va de `plancher` à `plafond` (repère du
 // véhicule). En dessous de 0,30 on ne réduit plus : ce ne serait plus un bonhomme.
 function assiseCabine(plancher, plafond) {
@@ -24068,9 +24104,9 @@ const PLACES = {
   // au pare-brise, caché derrière le montant et le rétroviseur, et ses bras ressortaient
   // devant le capot. Le chien quitte le coffre (z = −1,60, hors de l'habitacle) pour le
   // milieu de la banquette.
-  voiture: { seuil: -0.30, taille: 0.447, conducteur: { x: 0.5, y: 0.447, z: 0.15 }, avant: { x: -0.5, y: 0.447, z: 0.15 },
-    arriereG: { x: 0.5, y: 0.447, z: -0.8 }, arriereD: { x: -0.5, y: 0.447, z: -0.8 },
-    chien: { x: 0, y: 0.45, z: -1.05, taille: 0.55 }, robot: { x: 0, y: 0.345, z: -0.3, taille: 0.85 } },
+  voiture: { seuil: -0.30, taille: 0.68, conducteur: { x: 0.5, y: 0.5, z: 0.15 }, avant: { x: -0.5, y: 0.5, z: 0.15 },
+    arriereG: { x: 0.5, y: 0.5, z: -0.8 }, arriereD: { x: -0.5, y: 0.5, z: -0.8 },
+    chien: { x: 0, y: 0.51, z: -1.05, taille: 0.85 }, robot: { x: 0, y: 0.345, z: -0.3, taille: 1 } },
   truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
     chien: { x: 0, y: 0.5, z: 1.55 } },
   // LES DEUX-ROUES : le bassin d'un personnage est à 0,72 m au-dessus de son repère, et il

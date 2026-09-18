@@ -17995,7 +17995,11 @@ test('dans chacune des cinq carrosseries le conducteur est ASSIS à la bonne hau
     return m;
   });
   const fermes = ['berline', 'break', 'suv', 'quatre'].map(k => r[k]);
-  const ok = Object.values(r).every(x => x.table === 'object' && typeof x.siege === 'number' && x.chien && x.tete < 2.5)
+  // LE PLAFOND ABSOLU EST PASSÉ DE 2,50 m À 3,00 m. Les habitacles ont été RELEVÉS pour qu'on
+  // s'y asseye à taille presque normale (voir ASSIS_CIBLE) : le 4×4 fait maintenant 2,96 m de
+  // haut et la tête de son conducteur est à 2,74 m — 22 cm SOUS son pavillon. La garantie du
+  // test n'a pas bougé d'un pouce : c'est `marge`, la distance tête-pavillon, qui la porte.
+  const ok = Object.values(r).every(x => x.table === 'object' && typeof x.siege === 'number' && x.chien && x.tete < 3.0)
     // les quatre caisses fermées : la tête passe sous le toit, sans flotter à 60 cm dessous
     && fermes.every(x => x.marge > 0.05 && x.marge < 0.6)
     && fermes.every(x => x.epaule < x.demiLarge + 0.2)

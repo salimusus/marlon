@@ -17920,10 +17920,24 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   if (T > (st.oubliFile || 0)) {
     const [gapB, miniB] = gapDevant(c);
     if (gapB < miniB) { vmax = 0; c.raison = c.raison || 'file'; }
-    else if (gapB < miniB + 4) vmax = Math.min(vmax, (gapB - miniB) * 2.6);
+    else if (gapB < miniB + 4) {
+      const vSuit = (gapB - miniB) * 2.6;
+      vmax = Math.min(vmax, vSuit);
+      // ON DIT POURQUOI ON RALENTIT. Garder ses distances derriere un vehicule plus lent
+      // fermait les gaz SANS RIEN INSCRIRE dans `c.raison`. Deux consequences, les deux
+      // mesurees sur le trajet « un membre emmene le joueur a la villa » dans une ville deja
+      // jouee : la voiture rampait 5,8 s a 0,26 m/s derriere une autre a 1,2 m/s, sans une
+      // seule raison affichee (on ne pouvait donc pas distinguer une file d'un vrai plantage),
+      // ET la soupape anti-file juste dessous ne s'armait jamais, puisqu'elle exige
+      // `raison === 'file'` : la voiture pouvait ramper derriere une autre indefiniment.
+      if (vSuit < 2) c.raison = c.raison || 'file';
+    }
   }
   if (vmax < 0.4 && Math.abs(c.speed || 0) < 0.4 && c.raison === 'file') st.filT = (st.filT || 0) + dt; else st.filT = 0;
-  if (st.filT > 5) { st.filT = 0; st.oubliFile = T + 4; st.routeT = 0; }   // (on ne vide pas st.route : elle est encore relue plus bas)
+  // DEUX SECONDES ET DEMIE, PAS CINQ. Ce qui ne bouge pas au bout de deux secondes et demie
+  // n'est pas une file, c'est une epave : cinq secondes plantee derriere une voiture garee,
+  // c'est le « il reste coince » du joueur. (on ne vide pas st.route : elle est encore relue plus bas)
+  if (st.filT > 2.5) { st.filT = 0; st.oubliFile = T + 4; st.routeT = 0; }
   const accel = vmax < (c.speed || 0) ? 5.5 : 2.5;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (vmax - (c.speed || 0)) * Math.min(1, dt * accel);
   // Sur les DOUZE DERNIERS METRES on ne compte plus les autres vehicules : on se gare
@@ -17971,6 +17985,15 @@ function conduireVersPoint(c, tx, tz, dt, st) {
       else st.reculT = 0;                 // l'arrière est pris aussi : on laisse le contournement jouer
     }
   } else c.recule = false;
+  // ON CONTOURNE L'EPAVE, ON NE LA POUSSE PAS. Passe la soupape, `oubliFile` dit « ce qui est
+  // devant n'est pas une file, c'est un obstacle » — mais on se contentait alors d'oublier la
+  // distance de securite et d'aller PRESSER la tole. Mesure : 2 s immobile a 4,5 m derriere une
+  // voiture a l'arret garee sur le point de depose, sans raison affichee, puis on recommencait.
+  // La circulation de fond, elle, sait faire : elle se deporte sur la voie d'a cote avec
+  // `ecarteChaussee`, qui refuse tout pas montant sur le trottoir ou touchant quoi que ce soit.
+  // On lui emprunte le geste (et `c.double` dit a gapDevant de ne plus compter l'epave).
+  c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
+  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {

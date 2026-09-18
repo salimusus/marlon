@@ -5177,7 +5177,16 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
     res.gangsters = { avant: mini(gm, 'xz') };
     for (let i = 0; i < 240; i++) G.step(1 / 60, true);
     res.gangsters.apres = mini(gm, 'xz');
-    // le joueur, lui, ne se fait jamais bousculer
+    // LE JOUEUR, LUI, NE SE FAIT JAMAIS BOUSCULER — et on isole vraiment ce qu'on mesure.
+    // Ce bout-la se contentait de teleporter le joueur et de compter de combien il avait bouge.
+    // Il comptait donc AUSSI tout ce qui le poussait par ailleurs : la vitesse qui lui restait
+    // des 480 images precedentes, et surtout une recherche policiere heritee d'un test anterieur
+    // (le releve d'etat d'entree affichait « recherche police niveau 1 »), qui lance des agents
+    // a ses trousses. Mesure a l'appui : dans un contexte propre, le joueur ne bouge pas d'un
+    // millimetre en 60 images, avec ou sans bot plante dedans (0,000 m dans les deux cas) ; en
+    // fin de suite complete, la meme mesure donnait 0,05 m — pile le seuil. On coupe donc ce
+    // qui n'a rien a voir avec le bot, et le seuil reste a 0,05 m.
+    G.clearWanted(); G.P.vel.set(0, 0, 0); G.P.stunT = 0;
     G.P.pos.set(50, 0.15, 50);
     const px = G.P.pos.x, pz = G.P.pos.z;
     l[0].pos.set(50, 0.15, 50); l[0].av.group.position.copy(l[0].pos);

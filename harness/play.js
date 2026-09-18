@@ -18354,7 +18354,7 @@ test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joigna
   // immobilisait les véhicules de service — voir le commentaire de itineraireVoies.
   const ok = r.sansRoute === 0 && r.horsScc === 0 && r.moyenneSurOiseau <= 2.6
     && r.pireSurOiseau <= 5.2 && r.moyenneSurGrille <= 2.0;
-  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, qui ignore les sens de circulation · maintenant ${r.sansRoute} trajet sans chemin et ${r.horsScc} voie hors du réseau sur ${r.aretes} · l'itinéraire vaut ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille — mesuré aussi : en autorisant le départ par la voie d'en face on tombait à 1,83 en moyenne et 2,54 au pire (le trajet de 450 m à 125 m), mais la voiture de patrouille ne sortait alors plus du commissariat (4 m en 60 s, test 332) : le suivi de trace ne sait pas faire demi-tour, c'est lui qu'il faut équiper avant de reprendre ce raccourci` };
+  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, qui ignore les sens de circulation · maintenant ${r.sansRoute} trajet sans chemin et ${r.horsScc} voie hors du réseau sur ${r.aretes} · l'itinéraire vaut ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille — le raccourci qui vaut ce chiffre est le DÉPART PAR LA VOIE D'EN FACE : sans lui, 2,34 en moyenne et 4,98 au pire (le trajet de 450 m pour 125 m à vol d'oiseau). Il a fallu trois pièces pour qu'il tienne : le demi-tour sur place, le raccord « on rejoint une voie par son sens », et le GEL de la voie de départ — le choix dépend du cap, le cap tourne dès qu'on obéit au tracé, et sans gel la voie d'en face redevenait la moins chère au calcul suivant : demi-tour sans fin (4 choix instables sur 12 trajets, 0 avec le gel)` };
 });
 
 // Le joueur : « fais en sorte que les véhicules en intervention soient prioritaires dans la
@@ -18884,7 +18884,7 @@ test('arme rengainée la pastille ne dit plus « visée », et la cible choisie 
   return { ok, detail: `avant : la pastille n'était rafraîchie que par un changement d'arme — le pistolet au fond de l'étui, elle affichait encore « ${r.braque.act} » et l'enfant se croyait en joue · maintenant, arme rengainée : « ${r.range.act} », plus de cible ni de visée · et la cible choisie à la flèche garde sa portée entière : à 50 ° de l'axe le verrouillage automatique la refuse (cône ${r.auto.cone} °, pris=${r.auto.pris}), mais une fois choisie à la croix (${r.appuis} appui(s), prise=${r.mien}) elle reste verrouillée même caméra revenue de face (choix gardé=${r.garde.lockRef}, visée dessus=${r.garde.lock})` };
 });
 // ================= POSTE CONDUITE — le demi-tour sur place =================
-test('un véhicule posé à contresens de sa destination fait demi-tour et repart, sans téléportation', async p => {
+test('un véhicule posé à contresens de sa destination repart aussitôt et ARRIVE, sans téléportation', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
@@ -18897,28 +18897,41 @@ test('un véhicule posé à contresens de sa destination fait demi-tour et repar
     G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
     const cible = [vp.px + Math.sin(vp.arete.sens) * 90, vp.pz + Math.cos(vp.arete.sens) * 90];
     const d0 = Math.hypot(cible[0] - c.x, cible[1] - c.z);
-    let t = 0, tourne = null, sauts = 0, dParc = 0, px = c.x, pz = c.z, horsRoute = 0, ech = 0, dansSolide = 0;
+    // LE BUDGET DE TEMPS SUIT LE CHEMIN, PAS LE VOL D'OISEAU. Première version de ce test :
+    // « se rapprocher de 25 m en 40 s ». Mesuré depuis : la cible est à 90 m EN FACE, mais la
+    // rue est à sens unique et le tour du pâté fait 280 m — le véhicule s'ÉLOIGNE d'abord
+    // pendant vingt secondes. Le test passait seul et tombait en lot, selon la circulation.
+    // On demande donc ce que la correction promet vraiment : qu'il reparte tout de suite et
+    // qu'il ARRIVE, avec le temps qu'il faut pour le chemin qu'il doit faire.
+    const via = G.itineraireVoies(c.x, c.z, cible[0], cible[1], c.h) || [];
+    let lgVoies = 0, a = [c.x, c.z];
+    for (const b of via) { lgVoies += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
+    const budget = Math.min(90, Math.max(30, lgVoies / 4 + 20));
+    let t = 0, part = null, saut = 0, nSauts = 0, dParc = 0, px = c.x, pz = c.z, horsRoute = 0, ech = 0, dansSolide = 0;
+    let arrive = null, dMin = d0;
     const surRoute = (x, z) => G.surLaChaussee(x, z, 0.6) || (() => { const v = G.voieProche(x, z); return !!(v && v.d < 4.5); })();
-    for (let k = 0; k < 60 * 40; k++) {
+    for (let k = 0; k < Math.ceil(budget * 60); k++) {
       G.botConduit(c, cible[0], cible[1], dt, {});
       G.step(dt, true); t += dt;
       const d = Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
-      if (d > 1) sauts++; else dParc += d;
+      if (d > 1) { nSauts++; saut = Math.max(saut, d); } else dParc += d;
       if (k % 10 === 0) { ech++; if (!surRoute(c.x, c.z)) horsRoute++;
         if (G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false })) dansSolide++; }
-      const capCible = Math.atan2(cible[0] - c.x, cible[1] - c.z);
-      const ecart = Math.abs(Math.atan2(Math.sin(capCible - c.h), Math.cos(capCible - c.h)));
-      if (tourne == null && ecart < 0.6) tourne = +t.toFixed(1);
-      if (Math.hypot(c.x - cible[0], c.z - cible[1]) < d0 - 30) break;
+      // IL REPART : c'est la promesse. On ne demande pas le cap vers la cible — un tracé qui
+      // commence par s'en éloigner est le bon quand la rue est à sens unique.
+      if (part == null && Math.abs(c.speed || 0) > 2) part = +t.toFixed(1);
+      const reste = Math.hypot(c.x - cible[0], c.z - cible[1]);
+      if (reste < dMin) dMin = reste;
+      if (reste < 20) { arrive = +t.toFixed(1); break; }
     }
-    const gagne = +(d0 - Math.hypot(c.x - cible[0], c.z - cible[1])).toFixed(0);
     c.busy = false;
-    return { secondes: tourne, sauts, gagne, parcouru: +dParc.toFixed(0),
+    return { part, nSauts, saut: +saut.toFixed(1), arrive, dMin: +dMin.toFixed(0), d0: +d0.toFixed(0),
+      lgVoies: +lgVoies.toFixed(0), budget: +budget.toFixed(0), parcouru: +dParc.toFixed(0),
       pctHorsRoute: Math.round(100 * horsRoute / Math.max(1, ech)), imagesDansUnSolide: dansSolide };
   });
-  const ok = r.secondes != null && r.secondes < 6 && r.sauts === 0 && r.gagne >= 25
+  const ok = r.part != null && r.part < 6 && r.nSauts === 0 && r.arrive != null
     && r.pctHorsRoute <= 5 && r.imagesDansUnSolide === 0;
-  return { ok, detail: `avant : un véhicule à l'arrêt ne savait pas se retourner — on lui donnait un point de passage derrière lui et il piétinait (la voiture de patrouille faisait 4 m en 60 s, et c'est ce qui m'a forcé à retirer le raccourci d'itinéraire) · maintenant, posé nez à l'opposé de sa destination : il est dans le bon cap en ${r.secondes} s, ${r.sauts} téléportation, il se rapproche de ${r.gagne} m (${r.parcouru} m parcourus), ${r.pctHorsRoute} % hors route et ${r.imagesDansUnSolide} image dans un solide` };
+  return { ok, detail: `avant : un véhicule à l'arrêt ne savait pas se retourner — on lui donnait un point de passage derrière lui et il piétinait (la voiture de patrouille faisait 1 m en soixante secondes, et c'est ce qui m'avait forcé à retirer le raccourci d'itinéraire) · maintenant, posé nez à l'opposé de sa destination : il repart en ${r.part} s, ${r.nSauts} téléportation (plus grand saut ${r.saut} m), et il ARRIVE à moins de 20 m en ${r.arrive} s — cible à ${r.d0} m à vol d'oiseau mais ${r.lgVoies} m par les voies (rue à sens unique), budget ${r.budget} s, ${r.parcouru} m parcourus, au plus près ${r.dMin} m · ${r.pctHorsRoute} % hors route et ${r.imagesDansUnSolide} image dans un solide` };
 });
 
 // « véhicule qui se bloque, le passe corrige » : le recensement, avec la BONNE métrique.

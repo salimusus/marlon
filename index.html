@@ -8756,7 +8756,13 @@ function cheminAretes(e0, e1, cibles) {
 }
 // L'ITINERAIRE PAR LES VOIES : une suite de points [x, z] sur la voie de droite, echantillonnee
 // tous les 6 m environ et arrondie dans les virages. C'est l'interface promise aux autres postes.
-function itineraireVoies(x1, z1, x2, z2, cap) {
+// `itineraireDepart` : la voie de depart RETENUE par le dernier calcul. L'appelant la garde et
+// la redonne en `forceDepart` au calcul suivant, pour que l'itineraire ne se retourne pas a
+// chaque rafraichissement (voir le gel, plus bas). `interdit` est la voie de depart que le
+// vehicule vient de RENONCER a rejoindre, faute de place pour la manoeuvre : on lui en cherche
+// une autre au lieu de le laisser piocher indefiniment la meme.
+let itineraireDepart = -1;
+function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
   const G = city.graphe; if (!G || !G.aretes.length) return null;
   majVoiesBarrees();   // un chantier tout neuf ne doit pas se retrouver sur le trace
   const A = voieProche(x1, z1, cap), B = voieProche(x2, z2);
@@ -8772,18 +8778,38 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  // LE RACCOURCI DU DEPART RESTE EN RESERVE — cinquieme tentative, et cette fois on sait
-  // POURQUOI il ne tient pas. Il vaut 2,33 -> 1,83 de rapport distance sur vol d'oiseau (pire
-  // cas 4,98 -> 2,54), mais il est INSTABLE par construction : le choix de la voie de depart
-  // depend du CAP du vehicule (penalite de demi-tour), et ce cap change des qu'on obeit au
-  // trace. Mesure image par image sur la voiture de patrouille : elle part, fait son demi-tour,
-  // l'itineraire est recalcule six secondes plus tard, la voie d'en face redevient la moins
-  // chere puisque le cap a tourne, le premier point repasse derriere, nouveau demi-tour — et
-  // ainsi de suite, « demi-tour » affiche a chaque seconde. Pour qu'il tienne, il faudra GELER
-  // le choix de la voie de depart tant qu'un trace est suivi, au lieu de le refaire toutes les
-  // six secondes. Le multi-depart reste ecrit dans `cheminAretes`, pret a servir.
+  // TOUTES LES VOIES PROCHES DU DEPART. Un vehicule a l'arret sort de sa place dans le sens
+  // qu'il veut : lui imposer la voie la plus proche le faisait partir a l'oppose de sa
+  // destination et faire le tour de la ville — 450 m pour 90 m a vol d'oiseau, la bonne voie
+  // etant a TROIS METRES. Sur douze trajets : 2,33 fois le vol d'oiseau sans ce raccourci,
+  // 1,83 avec ; pire cas 4,98 contre 2,54.
+  // IL A FALLU TROIS PIECES POUR QU'IL TIENNE : le demi-tour sur place, le raccord « on rejoint
+  // une voie par son sens » — et le GEL ci-dessous. Sans lui il etait instable par construction :
+  // le choix depend du CAP, le cap change des qu'on obeit au trace, l'itineraire est refait
+  // toutes les six secondes, la voie d'en face redevient la moins chere, le premier point
+  // repasse derriere — demi-tour sans fin. Une fois la voie de depart choisie, on la GARDE tant
+  // qu'on la longe (`forceDepart`), et elle n'est reconsideree qu'a la prochaine destination.
+  const departs = new Map();
+  for (const e of city.graphe.aretes) {
+    const p = projVoie(x1, z1, e);
+    if (p.d > A.d + 6) continue;
+    if (interdit != null && e.id === interdit) continue;   // manoeuvre impossible : on n'y revient pas
+    if (e.route !== A.arete.route && p.d > A.d + 0.5) continue;
+    const contre = cap != null && Math.abs(CAP(e.sens - cap)) > 1.6;
+    const cout = (p.d - A.d) * 3 + (contre ? COUT_DEMI_TOUR_DEPART : 0) + p.t * e.long * (10 / e.vmax);
+    const v = departs.get(e.id); if (v == null || cout < v) departs.set(e.id, cout);
+  }
+  // LA VOIE GELEE par l'appelant : tant qu'on la LONGE ENCORE, elle devient le seul depart
+  // possible. On ne se contente pas de la chercher dans `departs` : la fenetre de candidature
+  // est mesuree depuis `A`, qui depend du cap — le cap tourne des qu'on obeit au trace, la voie
+  // gelee sortait de la fenetre et le choix repartait a zero. On la reteste donc DIRECTEMENT.
+  if (forceDepart != null && forceDepart >= 0 && forceDepart !== interdit && G.aretes[forceDepart]) {
+    const pf = projVoie(x1, z1, G.aretes[forceDepart]);
+    if (pf.d <= Math.max(A.d + 6, 8)) { departs.clear(); departs.set(forceDepart, 0); }
+  }
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
-  const suite = memeVoie ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
+  const suite = memeVoie ? [A.arete] : cheminAretes(departs.size ? departs : A.arete, B.arete, cibles);
+  itineraireDepart = suite && suite.length ? suite[0].id : -1;   // lu par l'appelant pour geler le depart
   if (!suite) return null;
   // ON NE REJOINT PAS UNE VOIE PAR LE TRAVERS. Quand le calcul retient une AUTRE voie que celle
   // ou se trouve le vehicule (celle d'en face, a trois metres), commencer le trace A SA HAUTEUR
@@ -9105,8 +9131,17 @@ function botConduit(c, x, z, dt, opt) {
   opt = opt || {};
   const dist = Math.hypot(x - c.x, z - c.z);
   const st = (c.ia && c.ia.but) ? c.ia : null;
-  if (!st || Math.hypot(st.but[0] - x, st.but[1] - z) > 6 || simTime > (st.refaire || 0) || st.i >= st.route.length) {
-    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c)) : null;
+  const butNeuf = !st || Math.hypot(st.but[0] - x, st.but[1] - z) > 6;
+  if (butNeuf || simTime > (st.refaire || 0) || st.i >= st.route.length || c.routeRefaire) {
+    c.routeRefaire = false;
+    // LE GEL DE LA VOIE DE DEPART. On refait l'itineraire toutes les six secondes ; le choix de
+    // la voie de depart depend du CAP, et le cap tourne des qu'on obeit au trace. Sans gel, la
+    // voie d'en face redevenait la moins chere au calcul suivant et le vehicule se retournait
+    // sans fin. On garde donc la voie retenue tant qu'on la longe, et on ne la reconsidere qu'a
+    // la prochaine destination.
+    if (butNeuf) c.departVoie = -1;
+    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    c.departVoie = via ? itineraireDepart : -1;
     const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
@@ -9351,18 +9386,50 @@ const DEMI_TOUR_MAX = 9;         // au-dela, la place est vraiment trop petite :
 // a chaque seconde, 1 m parcouru en soixante secondes. Quand la place manque, on rend la main
 // a la conduite normale — elle sortira de la cour en marche avant et tournera au carrefour.
 const DEMI_TOUR_REPOS = 12;
+// la voie de depart a laquelle ce vehicule vient de renoncer, tant que le repos dure
+function departInterdit(c) { return (c && simTime < (c.departNonT || 0)) ? c.departNon : null; }
+// ON NE SE MET PAS EN TRAVERS DEVANT QUELQU'UN. Un demi-tour occupe toute la largeur de la rue
+// pendant plusieurs secondes : commence devant un vehicule qui arrive, il finit nez a nez, et
+// AUCUN des deux ne peut plus bouger (mesure, test 332 : la voiture de patrouille et une
+// voiture de la circulation immobiles a 4,5 m l'une de l'autre pendant soixante secondes).
+// On verifie donc d'abord qu'on a la place — sinon on renonce a la voie qui exigeait ce
+// demi-tour et on repart par la sienne.
+const DEMI_TOUR_PLACE = 7;
+function placeDemiTour(c) {
+  for (const o of solidsAutour(c.x, c.z, DEMI_TOUR_PLACE, true)) {
+    if (!o.veh || o === c.solid) continue;
+    if (Math.hypot(o.x - c.x, o.z - c.z) < DEMI_TOUR_PLACE) return false;
+  }
+  return true;
+}
 function demiTourLance(c, dh) {
   if (!c || (c.dTour && c.dTour.reste > 0)) return;
   if (simTime < (c.dTourStop || 0)) return;
+  if (!placeDemiTour(c)) { renonceDepart(c); return; }
   c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1, h0: c.h };
 }
 // Rend vrai tant que la manoeuvre occupe l'image : l'appelant n'a plus rien a faire.
+// LA MANOEUVRE IMPOSSIBLE REND SA VOIE DE DEPART. Mesure (test 332) : la voiture de patrouille
+// sortait du commissariat, l'itineraire lui donnait la voie D'EN FACE — trois metres, mais un
+// demi-tour — et une voiture arrivait en sens inverse pendant le pivot. Les deux se retrouvaient
+// nez a nez en travers de la rue : plus personne ne bougeait, et le repos de douze secondes ne
+// servait qu'a relancer la meme manoeuvre impossible. 1 m parcouru en soixante secondes.
+// Un vrai conducteur, lui, RENONCE et repart par sa propre voie. C'est ce que fait `renonceDepart` :
+// il interdit la voie convoitee pour la duree du repos et force le recalcul de l'itineraire.
+function renonceDepart(c) {
+  c.dTourStop = simTime + DEMI_TOUR_REPOS;
+  if (c.departVoie != null && c.departVoie >= 0) { c.departNon = c.departVoie; c.departNonT = simTime + DEMI_TOUR_REPOS; }
+  c.departVoie = -1; c.routeRefaire = true;
+}
 function demiTourTick(c, dt, dh) {
   const m = c && c.dTour; if (!m || m.reste <= 0) return false;
   m.reste -= dt; m.t += dt;
+  // COINCE PAR UN AUTRE VEHICULE : on n'attend pas les neuf secondes. Rester en travers de la
+  // rue bloque aussi CELUI D'EN FACE — c'est le blocage mutuel qu'on vient de decrire.
+  if ((m.coince || 0) > 2) { renonceDepart(c); c.dTour = null; c.recule = false; return false; }
   if (Math.abs(dh) < 0.55 || m.reste <= 0) {
     // manoeuvre epuisee sans avoir tourne : la place est trop petite, on se repose
-    if (m.reste <= 0 && Math.abs(CAP(c.h - m.h0)) < 1) c.dTourStop = simTime + DEMI_TOUR_REPOS;
+    if (m.reste <= 0 && Math.abs(CAP(c.h - m.h0)) < 1) renonceDepart(c);
     c.dTour = null; c.recule = false; return false;
   }
   if (m.t > DEMI_TOUR_TEMPS) { m.t = 0; m.phase = m.phase === 'avant' ? 'arriere' : 'avant'; }
@@ -9372,6 +9439,9 @@ function demiTourTick(c, dt, dh) {
   if (!avant && pietonDerriere(c)) { klaxonne(c); c.h = h0; return true; }
   const bloque = avanceVehicule(c, dt, avant ? DEMI_TOUR_V : -DEMI_TOUR_V, { bar: true, veh: true }, h0);
   if (bloque) m.t = DEMI_TOUR_TEMPS;           // ce cote est pris : on change de temps tout de suite
+  // on ne compte comme « coince » que le vehicule VRAIMENT immobile : un temps qui bute d'un
+  // cote fait justement partie de la manoeuvre.
+  if ((c.pas || 0) < 0.02 * dt) m.coince = (m.coince || 0) + dt; else m.coince = 0;
   c.recule = !avant;
   c.raison = 'demi-tour';
   return true;
@@ -13813,8 +13883,11 @@ function policeTick(dt) {
         && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) { policeDebarque(pc, 2); continue; }
     // itinéraire par points de passage : sortie du commissariat par la voie nord, puis l'anneau routier, puis la cible
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
-    if (!pc.route || simTime > (pc.routeT || 0) || Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6) {
+    const cibleNeuve = Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6;
+    if (!pc.route || simTime > (pc.routeT || 0) || cibleNeuve || pc.routeRefaire) {
+      pc.routeRefaire = false;
       pc.routeT = simTime + 2.5; pc.routeTx = tx; pc.routeTz = tz;
+      if (cibleNeuve) pc.departVoie = -1;   // gel de la voie de depart : voir botConduit
       // cible posée sur le sable du rallye : on s'arrête au bord (sinon le dernier segment
       // était une ligne droite en plein milieu des dunes)
       const surSable = !!RALLY.mesh && terrainH(tx, tz) != null;
@@ -13825,7 +13898,8 @@ function policeTick(dt) {
       // rejoint par les voies jusqu'au bout. On ne basculait sur les voies qu'au-dela de 25 m,
       // et la grille A* finissait le trajet en diagonale a travers les pelouses.
       const seuilVoies = (pc.patrouille || pc.fouille) ? 8 : 25;
-      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > seuilVoies) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h) : null;
+      const via = (!surSable && Math.hypot(tx - pc.x, tz - pc.z) > seuilVoies) ? itineraireVoies(pc.x, pc.z, tx, tz, pc.h, pc.departVoie, departInterdit(pc)) : null;
+      pc.departVoie = via ? itineraireDepart : -1;
       if (via && via.length > 2) pc.route = via.concat([[tx, tz]]);
       else { const path = navPath(pc.x, pc.z, tx, tz);
         pc.route = path && path.length ? ((path.reached && !surSable) ? path.concat([[tx, tz]]) : path) : (surSable ? [[pc.x, pc.z]] : [[tx, tz]]); }
@@ -18146,8 +18220,11 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // L'itinéraire complet est calculé À L'AVANCE (A* + lissage) et gardé tel quel : on ne le
   // refait que si la destination a bougé, si on s'est fait bloquer, ou toutes les 8 s. Avant,
   // il était rejeté toutes les 2,5 s et le conducteur changeait d'avis en pleine courbe.
-  if (!st.route || !st.route.length || Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5 || T > (st.routeT || 0)) {
+  const destNeuve = Math.hypot((st.rtx != null ? st.rtx : 1e9) - tx, (st.rtz != null ? st.rtz : 1e9) - tz) > 5;
+  if (!st.route || !st.route.length || destNeuve || T > (st.routeT || 0) || c.routeRefaire) {
+    c.routeRefaire = false;
     st.routeT = T + 20; st.rtx = tx; st.rtz = tz;
+    if (destNeuve) c.departVoie = -1;   // gel de la voie de depart : voir botConduit
     // ON SUIT LES VOIES. La grille A* ignore les rues et les sens de circulation : le
     // conducteur coupait les carrefours en diagonale et roulait a gauche. On lui donne le
     // trace du graphe, et on ne retombe sur la grille que s'il n'y a pas de route.
@@ -18155,7 +18232,7 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
     // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
     // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
-    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, capDeRoute(c)) : null;
+    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
     const grille = navPath(c.x, c.z, tx, tz);
     // LE DETOUR ABSURDE. Dans un quartier ou un immeuble coupe la rue en deux, le graphe des
     // voies impose parfois trois fois le chemin direct : mesure relevee, 755 m par les voies
@@ -18164,6 +18241,7 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // grille, on reprend donc le trace de la grille.
     const lgTrace = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return q && q.length ? l : Infinity; };
     const pth = (via && via.length > 2 && lgTrace(via, c.x, c.z) < lgTrace(grille, c.x, c.z) * 2.1) ? via : grille;
+    c.departVoie = (pth === via) ? itineraireDepart : -1;   // on ne gele que la voie qu'on suit vraiment
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }
   // Progression : si l'on ne se rapproche plus du but pendant 40 s, on passe a la grille A*

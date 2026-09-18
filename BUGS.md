@@ -658,3 +658,17 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : trois membres du gang (bonnets jaunes, pistolet à la main) collés au joueur au point d'apparition (`img/q4/q4-agression.png`) ; la pastille dit seulement « 🤕 −9 ❤️ · Les Frelons Jaunes ». À 0 ❤️ : « 🚑 Une ambulance a été appelée », et **plus rien ne change pendant les 175 s suivantes** — `P.hp` reste 0, aucun écran de mort, aucune réapparition, aucun bouton ; le jeu est fini pour l'enfant sans qu'il ait appuyé sur un bouton.
 - **On devrait voir** : aucun gang qui s'en prend à un joueur qui n'est pas entré dans la guerre (même règle que les n° 67 / 72 / 75) ; et si le personnage tombe, une remise en jeu rapide et annoncée (hôpital, « tu te relèves… »), jamais trois minutes d'immobilité.
 - **Sonde** : `q4-pc.log` `agression.suivi` (t 110 → 300 s, `hp` 0, `wallet` 18), `q1-pc.log` `bilan.msgs`.
+
+### 79. On écrase ses propres passagers en démarrant : trois amis assis dans la voiture, ★★★ et « chauffard ! » au premier mètre
+- **Gravité** : GRAVE (la nouveauté « on monte à quatre » se retourne contre l'enfant : il devient recherché en avançant de trois mètres)
+- **Reproduire** : parking du centre, ↑ → « ⭐ Devenir ami » puis « 🫡 Suis-moi » sur trois habitants, △ pour monter, attendre qu'ils s'installent (« 🚗 Lucas_2014, Ines_gg, Sarah_bee montent avec toi · 4 places »), puis R2 à 30 % pendant 6 s. Reproduit 2/2 (`q5-pc.log`, `q6-pc.log`).
+- **On voit** : les trois passagers sont bien assis dans l'habitacle (mesuré : au-dessus du plancher, à moins de 1,4 m de l'axe), et pourtant le jeu les compte comme des piétons renversés : « 🚔 La police recherche Joueur11 (écraser Lucas_2014) », « (écraser Ines_gg) », « (écraser Sarah_bee) », bulles « aïïïe ! », « tu m'as écrasé ! », « chauffard !! » AU-DESSUS de la voiture, ★★★ « la police arrive dans 21 s », et leurs points de vie tombent de 100 à 40,9 (`img/q6/q6-amis-1-avance.png`).
+- **On devrait voir** : les passagers d'un véhicule ne peuvent pas être écrasés par ce véhicule.
+- **Sonde** : `q6-pc.log` `amis.apresAvance = {wanted: 3, hpAmis: [Lucas_2014:40.94, Ines_gg:40.94]}` alors que `dedans` les liste toujours dans la voiture.
+
+### 80. Immeuble de La Zone : on monte au 1er étage et on ne peut pas aller plus haut — ou l'on retombe au rez-de-chaussée
+- **Gravité** : GÊNANT (l'escalier refait promet le 2ᵉ étage et les appartements)
+- **Reproduire** : immeuble (−169, 10), cage d'escalier adossée à la façade est (palier x = −158,4, pied z = 14,8) ; monter la volée nord puis redescendre la volée sud jusqu'au palier du 1er, puis pousser le stick vers le nord pour continuer. Reproduit 2/2 (`q5-pc.log`, `q6-pc.log`).
+- **On voit** : run 1 — palier du 1er atteint (y 1,80 puis 3,08), puis en continuant le personnage se retrouve à **y 0,06** (retombé au rez-de-chaussée, x −155,3, hors de la cage) ; run 2 — palier du 1er (y 3,08 → 3,40) puis **bloqué 10 s** en (−156,5 ; 14,1) sans monter d'un centimètre. Dans les deux cas le 2ᵉ étage (y > 6) n'est jamais atteint et aucun appartement n'est visité.
+- **On devrait voir** : la deuxième volée accessible depuis le palier du 1er, sans chute ni blocage.
+- **Sonde** : `q5-pc.log` `zone.montee.trace`, `q6-pc.log` `zone.suite` (y figé à 3,40 pendant 10 s).

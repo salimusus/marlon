@@ -15093,8 +15093,17 @@ function poseJambes(rig, vDonne, dt) {
   rig.px = gx; rig.py = gy; rig.pz = gz; rig.pf = gf;
   if (saute || neuf) { wx = wy = wz = 0; df = 0; rig.pieds = null; }
   const cf = Math.cos(gf), sf = Math.sin(gf);
-  const lx = wx * cf - wz * sf, lz = wx * sf + wz * cf;   // deplacement du corps dans SON repere
-  const v = Math.min(16, rig.pieds ? Math.hypot(lx, lz) / dt : Math.max(0, vDonne || 0));
+  let lx = wx * cf - wz * sf, lz = wx * sf + wz * cf;   // deplacement du corps dans SON repere
+  // COURIR SUR PLACE. La foulee est menee par le deplacement REEL du corps : sur le tapis de
+  // la salle de sport (`gym.on === 'run'`, qui annonce 7 m/s alors que le joueur ne bouge pas
+  // d'un pouce) les jambes se figeaient net. Quand la vitesse annoncee est franche et que le
+  // corps, lui, n'avance pas, c'est que c'est LE SOL QUI DEFILE : on fait donc glisser le sol
+  // sous les pieds a la vitesse annoncee. Le verrouillage reste entier — il verrouille le pied
+  // sur un sol qui bouge, ce qui est exactement ce qu'est un tapis de course.
+  const vMes = Math.hypot(lx, lz) / dt, vDit = Math.max(0, vDonne || 0);
+  const surPlace = !!rig.pieds && vDit > 0.6 && vMes < vDit * 0.25;
+  if (surPlace) { lx = 0; lz = vDit * dt; }
+  const v = Math.min(16, rig.pieds ? (surPlace ? vDit : vMes) : vDit);
   const F = fouleeDe(v);
   if (!rig.pieds) {
     rig.cycle = 0; rig.dirx = 0; rig.dirz = 1; rig.foulK = 0; rig.bassinDecol = null;
@@ -15344,7 +15353,12 @@ function animateRigCorps(rig, mode, speed, dt, t) {
       to(rig.legL, s0); if (!(rig.kick > 0)) to(rig.legR, -s0);
       toK(gL, Math.max(0, -Math.sin(rig.walk + 0.9)) * 1.2); if (!(rig.kick > 0)) toK(gR, Math.max(0, Math.sin(rig.walk + 0.9)) * 1.2);
     } else rig.walk = cyc * Math.PI * 2 + Math.PI * 1.5;   // jambe gauche devant a cycle = 0
-    const s = Math.sin(rig.walk) * 0.85, course = speed > 5.5;
+    // SEUIL DE LA COURSE POUR LES BRAS : entre la marche (6,2 m/s) et la course (9,6 m/s).
+    // Il etait a 1,3 m/s, herite d'une epoque ou l'on marchait deja a 5,6 : TOUT LE MONDE
+    // avait donc les coudes de course en permanence, et marcher ne se distinguait pas de
+    // courir. A 7,5 m/s, un habitant qui se promene garde les bras le long du corps, et le
+    // joueur ne replie les coudes que quand il court vraiment.
+    const s = Math.sin(rig.walk) * 0.85, course = speed > 7.5;
     // les bras balancent a l'oppose des jambes, et plus ample quand on court
     const amp = course ? 1.05 : 0.8;
     if (!(rig.swingG > 0)) to(rig.armL, -s * amp); if (!(rig.swing > 0)) to(rig.armR, s * amp);

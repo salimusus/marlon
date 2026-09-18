@@ -17995,7 +17995,11 @@ test('dans chacune des cinq carrosseries le conducteur est ASSIS à la bonne hau
     return m;
   });
   const fermes = ['berline', 'break', 'suv', 'quatre'].map(k => r[k]);
-  const ok = Object.values(r).every(x => x.table === 'object' && typeof x.siege === 'number' && x.chien && x.tete < 2.5)
+  // LE PLAFOND ABSOLU EST PASSÉ DE 2,50 m À 3,00 m. Les habitacles ont été RELEVÉS pour qu'on
+  // s'y asseye à taille presque normale (voir ASSIS_CIBLE) : le 4×4 fait maintenant 2,96 m de
+  // haut et la tête de son conducteur est à 2,74 m — 22 cm SOUS son pavillon. La garantie du
+  // test n'a pas bougé d'un pouce : c'est `marge`, la distance tête-pavillon, qui la porte.
+  const ok = Object.values(r).every(x => x.table === 'object' && typeof x.siege === 'number' && x.chien && x.tete < 3.0)
     // les quatre caisses fermées : la tête passe sous le toit, sans flotter à 60 cm dessous
     && fermes.every(x => x.marge > 0.05 && x.marge < 0.6)
     && fermes.every(x => x.epaule < x.demiLarge + 0.2)
@@ -18408,7 +18412,8 @@ test('quatre occupants par carrosserie : tous assis, tous visibles, rien ne dép
     const m = {};
     for (const st of Object.keys(cle)) {
       const S = G.CARROSSERIES[st];
-      const plancher = S.sol, plafond = S.toit.y - S.toit.h / 2;
+      // le plafond n'est plus une constante de la table : il est DÉDUIT de l'occupant
+      const plancher = S.sol, plafond = G.plafondAssise(S);
       const v = G.voitureDeGamme(G.gammeDe(cle[st]), -120, 121, 0); G.city.cars.push(v); G.settleVehicle(v);
       // trois compagnons à côté de la portière : gang du joueur
       const suite = G.bots.filter(b => !b.ko && !b.mort && !b.drive && !b.enVoiture && b.av).slice(0, 3);
@@ -18457,7 +18462,7 @@ test('le chien et le robot ont leur place en voiture, et une décapotable dit cl
     __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
     const out = {};
     // ---- la berline : joueur + 3 compagnons + le chien + le robot
-    const S = G.CARROSSERIES.berline, plancher = S.sol, plafond = S.toit.y - S.toit.h / 2;
+    const S = G.CARROSSERIES.berline, plancher = S.sol, plafond = G.plafondAssise(S);
     const v = G.voitureDeGamme(G.gammeDe('berline'), -120, 121, 0); G.city.cars.push(v); G.settleVehicle(v);
     const pet = (G.city.pets || [])[0];
     if (pet) { G.adopterChien(pet, true); pet.g.position.set(v.x + 2, 0.3, v.z - 1); }
@@ -18559,7 +18564,10 @@ test('le facteur est assis sur SA selle, le joueur pédale sur un vélo et roule
     G.gang.membres.length = 0;
     return out;
   });
-  const surLaSelle = m => m && m.ecart != null && m.ecart > -0.02 && m.ecart < 0.30 && m.cuisse < -0.9 && m.bras < -0.5;
+  // La cuisse n'est plus à l'horizontale depuis que le pied va SUR la pédale (voir la pose
+  // « ride ») : elle oscille autour de 0,90 rad de la verticale, pas de 1,35.
+  const surLaSelle = m => m && m.ecart != null && m.ecart > -0.02 && m.ecart < 0.30
+    && m.cuisse > -1.25 && m.cuisse < -0.55 && m.bras < -0.5;
   const ok = surLaSelle(r.facteur) && r.facteur.cap < 0.05
     && surLaSelle(r.velo) && r.velo.chien && r.velo.chien.avant > 0.5
     && r.moto && r.moto.croupe && r.moto.croupe.place === 'arriereG' && r.moto.croupe.avant < r.moto.moi.avant - 0.5;
@@ -18964,4 +18972,97 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
   });
   const ok = r.bloques === 0 && r.suivis >= 4 && r.pire < 5;
   return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
+});
+
+test('assis dans un véhicule, on fait presque la taille de celui qui marche dehors — et on tient tout entier dans l\'habitacle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -104, y: 1, z: 150, hour: 12, frais: true });
+    const out = { cible: G.ASSIS_CIBLE, debout: G.ASSIS_CRANE, veh: {} };
+    // l'habitant DEBOUT à côté de la portière : c'est lui l'étalon
+    const b = G.bots.filter(x => !x.ko && !x.mort && !x.drive && !x.enVoiture && x.av)[0];
+    if (b) { b.av.group.updateMatrixWorld(true);
+      const bb = new THREE.Box3(); bb.makeEmpty();
+      b.av.group.traverse(o => { if (o.isMesh && o.visible) bb.expandByObject(o); });
+      out.piéton = +(bb.max.y - bb.min.y).toFixed(2); }
+    const mesure = (c, nom, plancher, plafond) => {
+      if (!c) { out.veh[nom] = null; return; }
+      c.busy = false; c.dead = false;
+      G.P.pos.set(c.x + 3, 0.5, c.z); G.enterCar(c);
+      if (G.drive.car !== c) { out.veh[nom] = 'montée refusée'; return; }
+      for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+      const base = c.y || 0; c.g.updateMatrixWorld(true); G.me.group.updateMatrixWorld(true);
+      const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
+      G.me.group.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
+      out.veh[nom] = { taille: +G.me.group.scale.x.toFixed(3), vu, tot,
+        bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
+        plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
+      G.exitCar();
+    };
+    // les cinq carrosseries du concessionnaire
+    for (const [nom, gam] of [['berline', 'berline'], ['break', 'break'], ['suv', 'suv'], ['quatre', 'quatre'], ['decapotable', 'sportive']]) {
+      const S = G.CARROSSERIES[nom];
+      const v = G.voitureDeGamme(G.gammeDe(gam), -104, 150, 0); G.city.cars.push(v); G.settleVehicle(v);
+      mesure(v, nom, S.sol, G.plafondAssise(S));
+      v.x = 500; v.z = 500; v.g.position.set(500, 0, 500);
+    }
+    // la voiture ordinaire de la ville, puis les gros véhicules de service
+    const ville = (G.city.cars || []).find(c => c.parts && c.parts.hood && !c.carro && !c.rider && !c.travail && !c.busy);
+    mesure(ville, 'voitureDeVille', 0.325, 0.325 + G.ASSIS_CIBLE * G.ASSIS_CORPS + 0.12);
+    const tous = (G.city.cars || []).concat(G.city.ambulances || [], G.city.aiCars || []);
+    const cab = { benne: [0.80, 2.678], grue: [0.80, 2.678], pompier: [0.70, 2.578], tracteur: [0.85, 2.728],
+      depanneuse: [0.725, 2.603], truck: [0.50, 2.60], ambulance: [0.895, 2.345], fourgon: [0.45, 1.75] };
+    for (const k of Object.keys(cab)) mesure(tous.find(c => c.kind === k), k, cab[k][0], cab[k][1]);
+    return out;
+  });
+  const V = r.veh, noms = Object.keys(V).filter(k => V[k] && V[k].taille != null);
+  // dans l'habitacle : rien sous le plancher, rien au travers du pavillon, et tout dessiné
+  const dedans = k => V[k].bas > V[k].plancher - 0.05 && V[k].haut < V[k].plafond + 0.02 && V[k].vu / V[k].tot > 0.8;
+  const voitures = ['berline', 'break', 'suv', 'quatre', 'decapotable', 'voitureDeVille'];
+  const ok = noms.length >= 12 && noms.every(dedans)
+    && voitures.every(k => V[k] && V[k].taille >= 0.65)          // les voitures : au moins 0,65 de la taille debout
+    && noms.every(k => V[k].taille >= 0.45)                      // et personne en dessous de 0,45, même dans le plus petit fourgon
+    && Math.abs(V.berline.taille - r.cible) < 0.02;
+  return { ok, detail: `avant : l'occupant était réduit à 0,472 pour tenir dans un habitacle de 1,34 m, soit LA MOITIÉ de l'habitant de ${r.piéton} m debout contre la portière · maintenant, rapport « taille assis / taille debout » : `
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans un habitacle ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
+    + ` · cible ${r.cible}` };
+});
+
+test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le facteur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -104, y: 1, z: 150, hour: 12, frais: true });
+    const out = {};
+    // LES PÉDALES, lues sur les maillages eux-mêmes (0,12 × 0,04 × 0,08) : une boîte
+    // englobante du monde monterait avec l'inclinaison du vélo en virage.
+    const pedales = c => { let bas = 9, haut = -9;
+      c.g.traverse(o => { if (o.isMesh && Math.abs(o.scale.x - 0.12) < 0.001 && Math.abs(o.scale.z - 0.08) < 0.001) { bas = Math.min(bas, o.position.y); haut = Math.max(haut, o.position.y); } });
+      return bas > 8 ? null : { bas: +bas.toFixed(3), haut: +haut.toFixed(3) }; };
+    const pied = (rig, base) => { let y = 9;
+      for (const lg of [rig.legL, rig.legR]) { const b = new THREE.Box3().setFromObject(lg); y = Math.min(y, b.min.y); }
+      return +(y - base).toFixed(3); };
+    const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    if (f && f.bot && f.bot.veh && f.bot.av) { const c = f.bot.veh; c.g.updateMatrixWorld(true); f.bot.av.group.updateMatrixWorld(true);
+      out.facteur = { pedales: pedales(c), pied: pied(f.bot.av.rig, c.y || 0),
+        selle: c.selle ? +(c.selle.position.y + c.selle.scale.y / 2).toFixed(3) : null,
+        cuisse: +f.bot.av.rig.legL.rotation.x.toFixed(2), genou: +f.bot.av.rig.legL.genou.rotation.x.toFixed(2) }; }
+    const v = (G.city.cars || []).find(c => c.kind === 'bike' && !c.busy);
+    if (v) { G.P.pos.set(v.x + 1.5, 0.3, v.z); G.enterCar(v);
+      G.keys.add('ArrowUp'); for (let i = 0; i < 240; i++) G.step(1 / 60, true); G.keys.delete('ArrowUp');
+      const c = G.drive.car; c.g.updateMatrixWorld(true); G.me.group.updateMatrixWorld(true);
+      out.joueur = { pedales: pedales(c), pied: pied(G.me.rig, c.y || 0),
+        selle: c.selle ? +(c.selle.position.y + c.selle.scale.y / 2).toFixed(3) : null,
+        cuisse: +G.me.rig.legL.rotation.x.toFixed(2), genou: +G.me.rig.legL.genou.rotation.x.toFixed(2),
+        vitesse: +G.drive.speed.toFixed(1) };
+      G.exitCar(); }
+    return out;
+  });
+  // le pied doit tomber DANS le cercle des manivelles, à 6 cm près de chaque côté
+  const surLaPedale = m => m && m.pedales && m.pied > m.pedales.bas - 0.06 && m.pied < m.pedales.haut + 0.06
+    && m.cuisse > -1.25 && m.cuisse < -0.55 && m.genou > 0.6 && m.genou < 1.5;
+  const ok = surLaPedale(r.facteur) && surLaPedale(r.joueur);
+  return { ok, detail: `avant : le pied du joueur restait 28 cm AU-DESSUS de la pédale (cuisse à l'horizontale, −1,35), et le vélo du facteur n'avait AUCUN pédalier — il pédalait dans le vide · maintenant · `
+    + `facteur : pédales ${r.facteur.pedales.bas}–${r.facteur.pedales.haut} m, pied à ${r.facteur.pied} m, selle ${r.facteur.selle} m, cuisse ${r.facteur.cuisse}, genou ${r.facteur.genou} · `
+    + `joueur : pédales ${r.joueur.pedales.bas}–${r.joueur.pedales.haut} m, pied à ${r.joueur.pied} m, cuisse ${r.joueur.cuisse}, genou ${r.joueur.genou}, à ${r.joueur.vitesse} m/s` };
 });

@@ -25526,7 +25526,20 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
   const enVehicule = !!vehiculeAssis();   // au volant OU passager : voir « UN POTEAU NE CALE PAS LA CAMÉRA »
   const essaie = (o) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
-    if (o.y + hy < oy - 1.4) return;   // sol et petits meubles : la caméra passe au-dessus
+    // LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR. On comparait le sommet de la boîte GARDE
+    // COMPRISE (les 30 cm de R) à « oy - 1,4 », c'est-à-dire aux pieds moins 20 cm : le PLANCHER
+    // d'un étage, épais de 30 cm, dépassait donc ce seuil de 30 cm et arrêtait la perche dès
+    // qu'elle piquait un peu. Mesuré à l'étage de la banque : la perche tombait à 4,66 m pour
+    // 6 m exigés, barrée par une dalle de 19,2 × 0,3 × 5,6 m — le plancher où le joueur se
+    // tenait. Au sol on ne l'avait jamais vu, la chaussée n'étant pas un solide. On compare
+    // maintenant le sommet RÉEL (sans la garde) au niveau des pieds plus 25 cm : un plancher et
+    // une bordure de trottoir laissent passer, un muret d'un demi-mètre arrête toujours.
+    // (mesuré : les pieds du joueur se posent parfois 25 cm SOUS le sommet de la dalle qui lui
+    //  sert de plancher — il s'y enfonce — et un seuil calé sur ses pieds tombe alors pile sur
+    //  l'arête. On le cale donc sur sa CEINTURE : ce qui ne monte pas plus haut que sa taille
+    //  ne peut pas le cacher à une caméra qui, elle, est toujours au-dessus de lui, l'inclinaison
+    //  restant positive. À l'étage de la banque, 5,97 m → la perche voulue.)
+    if (o.y + o.h / 2 < oy - 1.05) return;
     // boîte qui contient déjà le point de départ : on l'ignore, sinon toutes les directions
     // tomberaient à zéro dès qu'on frôle un mur
     if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;
@@ -27365,7 +27378,16 @@ function camPerche(dt, aiming) {
       cam.mesT = simTime + 0.2;
       const m = camLibres(P.pos.x, P.pos.y + 1.5, P.pos.z, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0],
         [-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)]], 9, veh ? veh.solid : null);
-      cam.salle = Math.min(m[0], m[1], m[2], m[3]); cam.plafond = m[4]; cam.devant = m[5];
+      // LA TAILLE DE LA PIÈCE, ET NON LA DISTANCE AU MEUBLE LE PLUS PROCHE. On gardait le
+      // MINIMUM des quatre directions : une caisse posée d'un seul côté suffisait à déclarer
+      // « petite pièce », et la maison de poupée rabotait alors la perche. C'est ce qui faisait
+      // tomber le test 336 EN SUITE COMPLÈTE seulement — à l'étage de la banque, 5,97 m au lieu
+      // des 6 m exigés, quand les tests précédents avaient laissé des objets dans la ville,
+      // alors que le même point mesuré seul donne 7,54 m. On mesure maintenant l'ENCOMBREMENT :
+      // la largeur (gauche + droite) et la profondeur (avant + arrière), dont on garde la plus
+      // petite, divisée par deux. Un obstacle d'un seul côté ne coûte plus que la moitié de ce
+      // qu'il coûtait, et la LIGNE DE VUE garde le dernier mot sur la longueur de la perche.
+      cam.salle = Math.min(m[0] + m[1], m[2] + m[3]) / 2; cam.plafond = m[4]; cam.devant = m[5];
     }
     // UN TOIT NE RACCOURCIT PLUS LA PERCHE, IL APLATIT SEULEMENT LA VISÉE. Avant, le moindre
     // couvert au-dessus de la tête (préau, halle, dépôt, auvent) — et la seule mesure de la

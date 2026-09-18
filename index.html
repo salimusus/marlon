@@ -21897,7 +21897,7 @@ function horlogeArriere() {
     c.fumeeT = 0; c.crisT = 0; c.revT = 0; c.hopT = 0;
     if (c.etat) { c.etat.shiftT = 0; c.etat.boostT = 0; } }
   drive.shiftT = 0; drive.boostT = 0; drive.nitroCd = 0; drive.nitroT = 0;
-  P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0; P.videT = 0;   // poste SON : videT = anti-repetition du clic a vide
+  P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0; P.videT = 0; P.flashT = 0; P.flashImg = 0; P.flashArme = null;   // poste SON : videT = anti-repetition du clic a vide ; flash* = l'eclair du canon
   meteo.next = simTime + 40; meteo.tonnerre = 0;
   if (city.cinema) { city.cinema.next = 0; city.cinema.essaiVideo = 0; }
   for (const s2 of city.safes || []) s2.tickT = 0;
@@ -25780,6 +25780,11 @@ function drawWeapon(on) {   // dégainer / rengainer
   // cuir qui frotte et du metal qui clique — qui MONTE quand l'arme sort, qui DESCEND quand
   // elle retourne au fond de l'etui.
   sonArme(P.drawn ? 'degaine' : 'rengaine', P.pos.x, P.pos.y + 1.1, P.pos.z, 1);
+  // LA PASTILLE SUIT L'ARME. Elle n'etait rafraichie que par equipWeapon : une fois l'arme
+  // rengainee, elle continuait d'afficher « 🔫 Pistolet 7/8 · 🎯 visee » avec le pistolet au
+  // fond de l'etui et plus aucune cible — l'enfant croyait etre encore en joue.
+  if (!P.drawn) { P.aim = false; P.lock = null; }
+  updateAct();
 }
 function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
   if (b.dead) return; b.dead = simTime + 8; b.hp = 0; b.fight = null; b.ko = 0;
@@ -25985,6 +25990,7 @@ function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
 }
 const AIM_MAX = 120, aimDir = new THREE.Vector3(0, 0, 1);
 const LUNETTE_EPAULE = 0.45;   // s : le temps d'amener l'oeil a la lunette avant que le coup puisse partir
+const ECLAIR_DUREE = 0.05, ECLAIR_IMAGES = 2;   // l'eclair du canon : 0,05 s de JEU, et au moins deux images rendues
 const LOCK_PORTEE = 45, LOCK_CONE = 1.15;   // portée du verrouillage et demi-angle du cône devant le joueur
 // LE CONE DU VERROUILLAGE AUTOMATIQUE SE CALE SUR CE QUE LA CAMERA MONTRE.
 // Il etait fige a 1,15 rad (65,9 deg) alors que la camera ne montre que 39,9 deg de part et
@@ -26034,7 +26040,11 @@ function ciblesVerrouillables(tout, max, seul) {
     const dx = x - ox, dz = z - oz, dh = Math.hypot(dx, dz);
     if (dh > LOCK_PORTEE || dh < 0.6) return;
     let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
-    if (!tout && ec > coneVisee()) return;   // le cone suit le champ de la camera : on ne verrouille que ce qu'on VOIT
+    // LE CONE SUIT LE CHAMP DE LA CAMERA : on ne VERROUILLE QUE CE QU'ON VOIT.
+    // Mais seulement pour le verrouillage AUTOMATIQUE : la cible que le joueur a choisie
+    // lui-meme a la fleche (`seul`) garde l'ancienne portee angulaire, sinon un simple
+    // mouvement de camera la lui reprendrait pour lui en donner une autre.
+    if (!tout && ec > (seul ? LOCK_CONE : coneVisee())) return;
     // le plus proche et le plus en face l'emporte ; a la fleche, seule la distance compte
     cand.push({ ref, x, y, z, nom, dh, note: dh + (tout ? 0 : ec * 14) + (malus || 0) });
   };
@@ -26224,7 +26234,7 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
     P.ammo--; if (P.ammo === 0) { P.reloadT = simTime + w.reload; msg('🔫 Rechargement…', 1200); sfx.tone(300, .4, .15, 'triangle', .04, 200); }
     P.fireCd = simTime + w.cd; P.drawT = simTime + 1.5; if (!me.inHand) setWeapon(me, P.weapon, true);
     if (me.weapons && me.weapons[P.weapon]) me.weapons[P.weapon].rotation.x = -0.12;   // léger recul de l'arme
-    me.rig.swing = P.weapon === 'rifle' ? 0.06 : 0.14; if (me.gun && me.gun.flash) { me.gun.flash.visible = true; setTimeout(() => { if (me.gun) me.gun.flash.visible = false; }, 45); }
+    me.rig.swing = P.weapon === 'rifle' ? 0.06 : 0.14; P.flashT = simTime + ECLAIR_DUREE; P.flashImg = ECLAIR_IMAGES; P.flashArme = P.weapon;   // l'eclair du canon : armeTick l'allume et l'eteint (voir la)
     cam.kick = (cam.kick || 0) + (P.weapon === 'rifle' ? 0.012 : 0.03);
     // LE VERROUILLAGE EST REFAIT AU MOMENT DU TIR, pas seulement à l'image d'affichage.
     // `P.lock` est un INSTANTANÉ (nom et coordonnées) posé par frame() : sur une machine lente,
@@ -28112,6 +28122,23 @@ function armeTick(dt) {
   laserDot.visible = !!P.lock; document.body.classList.toggle('lock', !!P.lock);   // repère posé sur la cible verrouillée
   if (aiming || P.lock) aimTick();
   if (P.gun && P.weapon !== 'grenade') { const wantHand = armed; if (wantHand !== !!me.inHand) setWeapon(me, P.weapon, wantHand); }
+  // L'ECLAIR DU CANON SUIT L'HORLOGE DU JEU, PLUS UN CHRONOMETRE MURAL. Il s'allumait au tir
+  // et s'eteignait sur un setTimeout de 45 ms : sur la television de l'enfant, qui rend une
+  // image toutes les 100 ms, il etait DEJA eteint quand l'image suivante arrivait — on tirait
+  // sans jamais voir partir le coup (mesure : allume au tir, eteint a l'image suivante).
+  // Pire, en changeant d'arme dans ces 45 ms le rappel eteignait l'eclair de la NOUVELLE arme :
+  // celui de l'ancienne restait allume POUR TOUJOURS, et l'on retrouvait une tache jaune collee
+  // au bout du canon en reprenant le pistolet (mesure : encore allume au retour).
+  // Il dure maintenant 0,05 s de jeu ET au moins deux images rendues, et l'on eteint celui de
+  // TOUTES les armes a chaque passage.
+  if (me.weapons) {
+    const vif = armed && ((P.flashImg || 0) > 0 || simTime < (P.flashT || 0));
+    for (const k in me.weapons) {
+      const dedans = me.weapons[k].userData && me.weapons[k].userData.inner;
+      if (dedans && dedans.flash) dedans.flash.visible = vif && k === P.flashArme && k === P.weapon;   // l'eclair appartient a l'arme QUI A TIRE
+    }
+    if (P.flashImg > 0) P.flashImg--;
+  }
   document.body.classList.toggle('drawn', !!P.drawn);
   if (armed && me.gun && me.inHand) { me.rig.armR.rotation.x = -1.55 - P.aimPitch; me.rig.armR.rotation.z = -0.12; me.rig.armR.coude.rotation.x = 0; }   // le bras suit la hauteur de visée, coude tendu
   return armed;

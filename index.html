@@ -25636,7 +25636,26 @@ function rayPerso(ox, oy, oz, dx, dy, dz, px, py, pz, maxD) {
   return rayBox(ox, oy, oz, dx, dy, dz, px, py + 1, pz, 0.42, 1, 0.42, maxD);
 }
 const AIM_MAX = 120, aimDir = new THREE.Vector3(0, 0, 1);
+const LUNETTE_EPAULE = 0.45;   // s : le temps d'amener l'oeil a la lunette avant que le coup puisse partir
 const LOCK_PORTEE = 45, LOCK_CONE = 1.15;   // portée du verrouillage et demi-angle du cône devant le joueur
+// LE CONE DU VERROUILLAGE AUTOMATIQUE SE CALE SUR CE QUE LA CAMERA MONTRE.
+// Il etait fige a 1,15 rad (65,9 deg) alors que la camera ne montre que 39,9 deg de part et
+// d'autre de l'axe : UNE IMAGE SUR QUATRE, le jeu annoncait « 🎯 Karim_flash · 4 m », tournait
+// le personnage vers lui et envoyait la balle sur quelqu'un qui n'etait PAS A L'ECRAN — viseur
+// rouge compris, puisque le reticule se posait alors hors du cadre (mesure au banc : 156 images
+// sur 567 avec le reticule hors ecran, cible jusqu'a 64,4 deg hors axe). C'est ce que le joueur
+// voit comme « la balle part ailleurs que la ou je vise ».
+// On prend donc le DEMI-CHAMP HORIZONTAL reel de la camera, moins 15 % de marge pour que le
+// reticule reste franchement dans le cadre : en television grand angle le cone s'elargit tout
+// seul, et il ne depasse jamais l'ancienne valeur.
+// Ceci ne touche QUE le verrouillage automatique. L2 et les fleches (`tout = true`) continuent
+// de prendre « la cible la plus proche, gang ou pas », meme dans le dos : c'est la demande du
+// joueur, et la camera se replace alors derriere lui (voir viseCible).
+function coneVisee() {
+  const c = typeof camera !== 'undefined' ? camera : null;
+  if (!c || !c.fov || !c.aspect) return LOCK_CONE;
+  return Math.min(LOCK_CONE, Math.atan(Math.tan(c.fov * Math.PI / 360) * c.aspect) * 0.85);
+}
 // ============ LA VISEE VERROUILLEE (demande du joueur, round 70) ============
 // Mot pour mot : « tu degaines et braques avec gachette gauche et tu rengaines avec gachette
 // gauche. La visee se met DIRECTEMENT sur le bot ou le VEHICULE le plus proche (gang ou pas),
@@ -25667,7 +25686,7 @@ function ciblesVerrouillables(tout, max, seul) {
     const dx = x - ox, dz = z - oz, dh = Math.hypot(dx, dz);
     if (dh > LOCK_PORTEE || dh < 0.6) return;
     let ec = Math.atan2(dx, dz) - vue; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
-    if (!tout && ec > LOCK_CONE) return;
+    if (!tout && ec > coneVisee()) return;   // le cone suit le champ de la camera : on ne verrouille que ce qu'on VOIT
     // le plus proche et le plus en face l'emporte ; a la fleche, seule la distance compte
     cand.push({ ref, x, y, z, nom, dh, note: dh + (tout ? 0 : ec * 14) + (malus || 0) });
   };
@@ -25752,9 +25771,22 @@ function aimTick() {   // la visée part du joueur : direction = son orientation
   const d = Math.max(0.7, Math.min(h.d, dMax));
   aimPoint.set(ox + dx * d, oy + dy * d, oz + dz * d);
   laserDot.position.copy(aimPoint);
-  const v = aimPoint.clone().project(camera); const el = $('cross');
-  el.style.left = ((v.x * 0.5 + 0.5) * 100) + '%'; el.style.top = ((-v.y * 0.5 + 0.5) * 100) + '%';   // le réticule suit le point visé
   $('aimUp').classList.toggle('on', P.aimPitch > 0.02); $('aimDown').classList.toggle('on', P.aimPitch < -0.02);
+}
+// LE RETICULE SE POSE APRES LA CAMERA, PAS AVANT.
+// `aimTick()` projetait le point vise avec `camera.matrixWorldInverse`, qui date du DERNIER
+// RENDU — donc de l'image PRECEDENTE — et il etait appele AVANT `camPerche()`, qui place la
+// camera de l'image courante. Le reticule avait donc systematiquement une image de retard, et
+// a l'instant ou le verrouillage fait pivoter la camera d'un coup il partait a l'autre bout de
+// l'ecran (mesure : jusqu'a 46 % de la largeur en marchant, une pointe a 122 % au verrouillage).
+// On separe donc : le RAYON reste dans aimTick (c'est lui qui sert au tir, et fire() le
+// rafraichit avant chaque balle), l'AFFICHAGE passe ici, appele juste apres camPerche avec des
+// matrices remises a jour.
+function viseurEcran() {
+  const el = $('cross'); if (!el || typeof camera === 'undefined' || !camera) return;
+  camera.updateMatrixWorld(true); camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const v = aimPoint.clone().project(camera);
+  el.style.left = ((v.x * 0.5 + 0.5) * 100) + '%'; el.style.top = ((-v.y * 0.5 + 0.5) * 100) + '%';   // le réticule suit le point visé
 }
 const saveMunitions = () => { store.set('superobby.muni', JSON.stringify({ k: P.munition, s: P.muniStock })); };
 (() => { try { const d = JSON.parse(store.get('superobby.muni') || 'null'); if (d) { P.munition = d.k || 'std'; P.muniStock = d.s || {}; } } catch (e) {} })();
@@ -25819,6 +25851,12 @@ function fire(remote) {   // remote = { p:[x,y,z], v:[vx,vy,vz], id } pour un ti
       if (P.lock) P.facing = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z);
       if (!P.drawn) { drawWeapon(true); setWeapon(me, P.weapon, true); }
       P.holsterT = 0; document.body.classList.add('zoom');
+      // LE TEMPS D'EPAULER. R2 maintenue, `pollGamepad` appelle fire() cent vingt fois par
+      // seconde : la branche « lunette » ne posait aucun delai, la balle partait donc a l'appel
+      // SUIVANT, huit millisecondes plus tard. Mesure : la lunette n'etait visible qu'UNE image
+      // sur quatre-vingt-dix — on ne la voyait jamais. Le temps d'epauler la bride maintenant :
+      // gachette maintenue, on voit la lunette puis le coup part ; en deux appuis, rien ne change.
+      P.fireCd = simTime + LUNETTE_EPAULE;
       msg('🔭 Dans la lunette… appuie encore pour tirer (G pour ranger)', 2600); sfx.tone(900, 0, .06, 'sine', .03, 1200);
       return;
     }
@@ -27835,6 +27873,7 @@ function frame() {
   tickBubbles();
 
   camPerche(dt, aiming);
+  if (aiming || P.lock) viseurEcran();   // le réticule se pose une fois la caméra placée (voir viseurEcran)
   try { interieurTick(); } catch (e) { if (!interieurTick.err) { interieurTick.err = 1; console.error('interieur', e); } }
   if (city.on && running) { try { gpsTick(); } catch (e) {} }
   // Le soleil suit le joueur (la carte d'ombres ne couvre qu'une centaine de mètres) mais sa

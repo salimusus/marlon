@@ -5187,20 +5187,33 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
     // fin de suite complete, la meme mesure donnait 0,05 m — pile le seuil. On coupe donc ce
     // qui n'a rien a voir avec le bot, et le seuil reste a 0,05 m.
     G.clearWanted(); G.P.vel.set(0, 0, 0); G.P.stunT = 0;
+    // ET ON ECARTE TOUT LE RESTE. Mesure a l'appui : la poussee ne venait PAS du bot plante
+    // dans le joueur — elle tombait aux images 53 a 55 sur 60, avec une vitesse imprimee de
+    // l'exterieur (−0,84 / +1,65 m/s) alors que le bot etait deja reparti a 1,18 m. C'est un
+    // AUTRE habitant, parti du tas de dix ou du groupe de gangsters huit cents images plus
+    // tot, qui arrivait sur le joueur pendant qu'on croyait mesurer la poussee du premier.
+    // Le point (50, 50) est au milieu d'une ville vivante : rien ne le protege. On degage donc
+    // les figurants, et la mesure porte enfin sur la seule paire annoncee par le titre.
+    G.bots.forEach(b => { if (b !== l[0]) { b.pos.set(b.pos.x + 300, b.pos.y, b.pos.z + 300); b.av.group.position.copy(b.pos); b.wait = 1e6; b.target = null; } });
+    G.gangs.forEach(g => g.membres.forEach(m => { m.x += 300; m.z += 300; if (m.av) m.av.group.position.set(m.x, m.av.group.position.y, m.z); }));
     G.P.pos.set(50, 0.15, 50);
     const px = G.P.pos.x, pz = G.P.pos.z;
     l[0].pos.set(50, 0.15, 50); l[0].av.group.position.copy(l[0].pos);
     for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.updateBot(l[0], 1 / 60); }
+    // combien de personnages restent a portee : si ce test retombe un jour, on saura tout de
+    // suite si c'est la separation qui a lache ou un figurant qui s'est invite
+    let voisins = 0;
+    for (const b of G.bots) if (b !== l[0] && Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z) < 3) voisins++;
     res.joueur = { pousse: +Math.hypot(G.P.pos.x - px, G.P.pos.z - pz).toFixed(2),
-      ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2) };
+      ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2), voisins };
     return res;
   });
   // 1,00 m et non 0,80 : un avatar mesure 1,53 m d'un bout de bras à l'autre, deux
   // silhouettes à 92 cm se traversaient encore, bien visibles à l'écran.
   const ok = r.habitants.avant < 0.1 && r.habitants.apres > 1
     && r.gangsters.avant < 0.1 && r.gangsters.apres > 1
-    && r.joueur.pousse < 0.05 && r.joueur.ecart > 1;
-  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
+    && r.joueur.pousse < 0.05 && r.joueur.ecart > 1 && r.joueur.voisins === 0;
+  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m), et aucun autre personnage n'est venu s'en mêler (${r.joueur.voisins} à moins de 3 m)` };
 });
 
 test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arrière', async p => {

@@ -9715,7 +9715,18 @@ test('marcher fait du bruit : les pas suivent la cadence de la foulee, plus vite
     G.settings.sound = true; G.sfx.unlock();
     // on compte les DECLENCHEMENTS sur 3 s simulees, a la vitesse de marche puis de course
     const compte = v => { G.P.phasePas = 0; let n = 0; for (let i = 0; i < 180; i++) n += G.cadencePas(G.P, v, 1 / 60); return n; };
-    const marche = compte(7), course = compte(7 * 1.55), arret = compte(0);
+    // AUX VITESSES REELLES DU JEU, et compare a la cadence des JAMBES (fouleeDe), pas a une
+    // fourchette figee. Ce test attendait 9 a 14 pas en 3 s : c'etait l'ancienne horloge
+    // (`dt × vitesse × 1,7 rad`, un pas par demi-periode), qui faisait tourner les jambes a
+    // cadence FIXE et faisait patiner le pied de 1,21 m par pas. Depuis le round 72 la foulee
+    // S'ALLONGE avec la vitesse et la cadence s'en deduit : elle est plus elevee, et surtout
+    // elle n'est plus arbitraire. L'exigence devient donc PLUS forte qu'une fourchette : le
+    // son doit tomber exactement sur la cadence des jambes, a moins d'un pas pres sur trois
+    // secondes — c'est la seule facon que le bruit tombe quand le pied touche.
+    const vM = G.SPEED, vC = G.SPEED * G.COURSE;
+    const marche = compte(vM), course = compte(vC), arret = compte(0);
+    const fM = G.fouleeDe(vM), fC = G.fouleeDe(vC);
+    const foulee = { freqM: +fM.freq.toFixed(2), freqC: +fC.freq.toFixed(2), pasM: +fM.pas.toFixed(2), pasC: +fC.pas.toFixed(2), vM: +vM.toFixed(1), vC: +vC.toFixed(1) };
     // le sol sous les pieds change bien de matiere selon l'endroit
     const sols = {
       route: G.solSous(0, 0, 8), plage: G.solSous(113, 0.2, 40), mer: G.solSous(150, 0.2, 40),
@@ -9731,11 +9742,13 @@ test('marcher fait du bruit : les pas suivent la cadence de la foulee, plus vite
     G.keys.delete('KeyW');
     const joues = G.SON.pas;
     G.bots.forEach(b => { b.wait = 0; });
-    return { marche, course, arret, sols, joues, timbres: Object.keys(G.SOLS).length };
+    return { marche, course, arret, sols, joues, foulee, timbres: Object.keys(G.SOLS).length };
   });
-  const ok = r.marche >= 9 && r.marche <= 14 && r.course > r.marche * 1.3 && r.arret === 0
+  const f = r.foulee;
+  const ok = Math.abs(r.marche - f.freqM * 3) <= 1 && Math.abs(r.course - f.freqC * 3) <= 1
+    && r.course > r.marche * 1.1 && f.pasC > f.pasM * 1.15 && r.arret === 0
     && r.sols.route === 'bitume' && r.sols.plage === 'sable' && r.sols.mer === 'eau' && r.timbres >= 7 && r.joues >= 2;
-  return { ok, detail: `on marchait EN SILENCE partout sauf dans la neige, et la neige elle-meme sonnait a un rythme fixe qui n'avait rien a voir avec les jambes · le pas est maintenant cale sur la MEME horloge que l'animation (dt × vitesse × 1,7 rad, un pas par demi-periode) : ${r.marche} pas en 3 s au pas de marche, ${r.course} en courant (×${(r.course / r.marche).toFixed(2)}), 0 a l'arret · et ${r.timbres} timbres de sol selon la matiere sous les pieds (route → ${r.sols.route}, plage → ${r.sols.plage}, mer → ${r.sols.mer}) · ${r.joues} pas reellement joues en avancant pour de vrai dans la ville` };
+  return { ok, detail: `on marchait EN SILENCE partout sauf dans la neige, et la neige elle-meme sonnait a un rythme fixe qui n'avait rien a voir avec les jambes · le pas tombe maintenant sur la MEME horloge que les jambes : ${r.marche} pas en 3 s a ${f.vM} m/s pour une cadence de foulee de ${f.freqM} pas/s, ${r.course} a ${f.vC} m/s pour ${f.freqC} pas/s — moins d'un pas d'ecart sur trois secondes, c'est ce qui fait que le bruit tombe quand le pied touche · en courant on va ×${(r.course / r.marche).toFixed(2)} plus vite ET la foulee s'ALLONGE (${f.pasM} m → ${f.pasC} m), au lieu de seulement s'accelerer comme avant ce round · 0 pas a l'arret · ${r.timbres} timbres de sol selon la matiere sous les pieds (route → ${r.sols.route}, plage → ${r.sols.plage}, mer → ${r.sols.mer}) · ${r.joues} pas reellement joues en avancant pour de vrai dans la ville` };
 });
 
 test('frapper fait mal AUX OREILLES aussi : impact du coup qui porte, cri « aie » de celui qui encaisse, souffle quand on frappe dans le vide', async p => {

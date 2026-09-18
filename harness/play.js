@@ -18605,3 +18605,43 @@ test('le fusil à lunette montre vraiment sa lunette, même gâchette maintenue'
   const ok = r.avecZoom >= 20 && r.imageDuTir >= 20 && r.ammo === 4;
   return { ok, detail: `avant : R2 maintenue, pollGamepad appelle fire() cent vingt fois par seconde et la branche « lunette » ne posait aucun délai — la balle partait huit millisecondes après, la lunette n'était visible qu'UNE image sur quatre-vingt-dix et l'enfant ne la voyait jamais · maintenant le temps d'épauler (${r.epaule} s) la bride : ${r.avecZoom} images l'œil dans la lunette, le coup part à l'image ${r.imageDuTir} et une seule balle sort (chargeur ${r.ammo}/5)` };
 });
+
+test('l\'éclair du canon ne dépend plus d\'un chronomètre mural, et ne reste pas collé au canon', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    for (const a of ['pistol', 'rifle']) G.owned.add('arme:' + a);
+    const D = 1 / 60;
+    const eclair = k => { const m = G.me.weapons && G.me.weapons[k]; const d = m && m.userData.inner;
+      return d && d.flash ? !!d.flash.visible : null; };
+    const image = (n = 1) => { for (let i = 0; i < n; i++) G.step(D, true); G.armeTick(D); };
+    const dors = ms => new Promise(rr => setTimeout(rr, ms));
+    G.equipWeapon('pistol'); G.drawWeapon(true); image(); image();
+    // ---- 1. à soixante images par seconde : l'éclair dure le temps qu'il faut pour se voir
+    P.fireCd = 0; P.ammo = 8; G.fire();
+    let vues = 0; for (let i = 0; i < 10; i++) { image(); if (eclair('pistol')) vues++; }
+    const rapide = vues;
+    // ---- 2. une image toutes les cent millisecondes (la télévision de l'enfant) : l'éclair
+    // doit être là À L'IMAGE SUIVANTE, alors que l'ancien chronomètre de 45 ms avait déjà expiré
+    P.fireCd = 0; P.ammo = 8; G.fire();
+    image(6); const lente1 = eclair('pistol');
+    image(6); const lente2 = eclair('pistol');
+    image(6); const lente3 = eclair('pistol');
+    // ---- 3. on change d'arme juste après le coup : l'éclair de l'ancienne ne doit pas rester
+    P.fireCd = 0; P.ammo = 8; G.fire();
+    G.equipWeapon('rifle'); G.drawWeapon(true); image(4);
+    await dors(130); image(4);
+    const colle = { pistolet: eclair('pistol'), fusil: eclair('rifle') };
+    G.equipWeapon('pistol'); G.drawWeapon(true); image(6);
+    const retour = eclair('pistol');
+    // ---- 4. arme rangée : plus aucun éclair
+    G.drawWeapon(false); image(4);
+    const rangee = eclair('pistol');
+    G.equipWeapon(null); G.clearWanted();
+    return { rapide, lente1, lente2, lente3, colle, retour, rangee };
+  });
+  const ok = r.rapide >= 1 && r.rapide <= 4 && r.lente1 && !r.lente3
+    && !r.colle.pistolet && !r.colle.fusil && !r.retour && !r.rangee;
+  return { ok, detail: `avant : l'éclair s'éteignait sur un setTimeout de 45 ms — sur une télévision qui rend une image toutes les 100 ms il était DÉJÀ éteint quand l'image suivante arrivait (on tirait sans voir partir le coup), et changer d'arme dans ces 45 ms laissait celui de l'ancienne allumé POUR TOUJOURS (mesuré : encore allumé en reprenant le pistolet) · maintenant il suit l'horloge du jeu et deux images rendues : ${r.rapide} images à 60 img/s, encore visible à l'image lente suivante=${r.lente1} puis ${r.lente2}/${r.lente3}, rien de collé après un changement d'arme (pistolet=${r.colle.pistolet}, fusil=${r.colle.fusil}, au retour=${r.retour}), rien d'allumé arme rangée=${r.rangee}` };
+});

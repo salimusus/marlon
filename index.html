@@ -18305,7 +18305,7 @@ function botDescendre(b, garde) {
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
-  debarqueOccupants(c); c.robot = false;   // les compagnons montés derrière descendent avec nous
+  debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // les compagnons montés derrière descendent avec nous
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) tailleEnCabine(chien.pet, 1); }
   st.passager = false; city.rideBot = null; me.group.visible = true; engine.stop(); updateAct();
   me.group.rotation.set(0, 0, 0); me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
@@ -22454,7 +22454,7 @@ function exitCar() {
     if (!trouve) msg('🚗 Pas beaucoup de place pour descendre !', 1400);
   }
   P.vel.set(0, 0, 0); P.facing = c.h;
-  debarqueOccupants(c); c.robot = false;   // tout le monde descend, chacun à côté de sa portière
+  debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // tout le monde descend, chacun à côté de sa portière, à sa taille normale
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) { chien.pet.g.position.set(P.pos.x + 1.2, groundUnder(P.pos.x + 1.2, P.pos.z, null, 1), P.pos.z); chien.pet.g.rotation.set(0, c.h, 0); } }
   sonPortiere(c, false);   // on descend : la portière claque derrière soi
   tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1);   // on redescend : on retrouve sa taille normale

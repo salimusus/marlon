@@ -18394,3 +18394,172 @@ test('une voiture conduite par un habitant se range pour laisser passer un gyrop
   const ok = r.apres.vuSirene && r.ecartMax > 0.8 && r.pctHorsChaussee === 0 && r.dPieton > 1.2;
   return { ok, detail: `avant : le pas de côté n'existait que dans la circulation de fond — une voiture conduite par un habitant levait le pied devant l'ambulance sans jamais lui laisser la place (24 véhicules sur 78 ne s'écartaient pas d'un centimètre) · maintenant, six secondes de sirène derrière lui : il la voit (${r.apres.vuSirene}), il se déporte de ${r.ecartMax} m (${r.avant.ecart} m au départ), il reste ${100 - r.pctHorsChaussee} % du temps sur la route — aucune roue sur le trottoir — et le piéton le plus proche est à ${r.dPieton} m` };
 });
+
+test('quatre occupants par carrosserie : tous assis, tous visibles, rien ne dépasse du toit ni du plancher', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const cle = { berline: 'berline', break: 'break', suv: 'suv', quatre: 'quatre' };
+    const m = {};
+    for (const st of Object.keys(cle)) {
+      const S = G.CARROSSERIES[st];
+      const plancher = S.sol, plafond = S.toit.y - S.toit.h / 2;
+      const v = G.voitureDeGamme(G.gammeDe(cle[st]), -120, 121, 0); G.city.cars.push(v); G.settleVehicle(v);
+      // trois compagnons à côté de la portière : gang du joueur
+      const suite = G.bots.filter(b => !b.ko && !b.mort && !b.drive && !b.enVoiture && b.av).slice(0, 3);
+      for (const b of suite) { if (G.gang.membres.indexOf(b) < 0) G.gang.membres.push(b); b.pos.set(v.x + 2, 0.3, v.z + 1); b.av.group.position.copy(b.pos); }
+      G.P.pos.set(v.x + 2.5, 0.3, v.z); G.enterCar(v);
+      // SIX SECONDES DE ROUTE, boucle du jeu SEULE : aucune fonction de placement à la main
+      G.keys.add('ArrowUp'); for (let i = 0; i < 360; i++) G.step(1 / 60, true); G.keys.delete('ArrowUp');
+      const c = G.drive.car; c.g.updateMatrixWorld(true);
+      const base = c.y || 0, cs = Math.cos(c.h), sn = Math.sin(c.h);
+      const lis = (g) => {
+        g.updateMatrixWorld(true);
+        const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
+        g.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
+        const dx = g.position.x - c.x, dz = g.position.z - c.z;
+        return { vu, tot, bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
+          droite: +(dx * cs - dz * sn).toFixed(2), avant: +(dx * sn + dz * cs).toFixed(2),
+          cap: +Math.abs(Math.atan2(Math.sin(g.rotation.y - c.h), Math.cos(g.rotation.y - c.h))).toFixed(3) };
+      };
+      const gens = [Object.assign({ qui: 'joueur', place: 'conducteur', cuisse: +G.me.rig.legL.rotation.x.toFixed(2) }, lis(G.me.group))];
+      (c.occupants || []).forEach(o => gens.push(Object.assign({ qui: o.bot ? o.bot.name : '?', place: o.place,
+        cuisse: +o.av.rig.legL.rotation.x.toFixed(2) }, lis(o.av.group))));
+      let ecart = 99;
+      for (let i = 0; i < gens.length; i++) for (let j = i + 1; j < gens.length; j++)
+        ecart = Math.min(ecart, Math.hypot(gens[i].droite - gens[j].droite, gens[i].avant - gens[j].avant));
+      m[st] = { plancher, plafond: +plafond.toFixed(2), taille: G.placesDe(c).taille, gens, ecart: +ecart.toFixed(2), vitesse: +G.drive.speed.toFixed(1) };
+      // ON REND LA VOITURE ET LES GENS : sinon les trois compagnons restent assis dans une
+      // épave garée au milieu de la chaussée pour tous les tests suivants.
+      G.exitCar();
+      v.x = 400; v.z = 400; v.g.position.set(400, 0, 400);
+    }
+    G.gang.membres.length = 0;
+    return m;
+  });
+  const styles = Object.keys(r);
+  const bon = (s, g) => g.vu >= 100 && g.vu / g.tot > 0.8 && g.bas > s.plancher - 0.05 && g.haut < s.plafond + 0.02
+    && g.cap < 0.05 && g.cuisse < -1;
+  const ok = styles.length === 4 && styles.every(k => r[k].gens.length === 4 && r[k].ecart > 0.9 && r[k].gens.every(g => bon(r[k], g)));
+  return { ok, detail: `avant : on ne montait jamais qu'à DEUX (c.occupants n'était jamais rempli) et l'occupant, enfoncé de 80 cm sous le plancher, n'avait que 51 morceaux dessinés sur 270 · maintenant, après 6 s de route dans step() seul · `
+    + styles.map(k => `${k} (taille d'assise ${r[k].taille}, habitacle ${r[k].plancher} → ${r[k].plafond} m, écart mini ${r[k].ecart} m) : `
+      + r[k].gens.map(g => `${g.place} ${g.vu}/${g.tot} morceaux, corps ${g.bas}–${g.haut} m, ${g.droite}/${g.avant} m, cap ${g.cap}, cuisse ${g.cuisse}`).join(' ; ')).join(' · ') };
+});
+
+test('le chien et le robot ont leur place en voiture, et une décapotable dit clairement qu\'elle n\'a que deux places', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -125, y: 1, z: 121, hour: 12, frais: true });
+    const out = {};
+    // ---- la berline : joueur + 3 compagnons + le chien + le robot
+    const S = G.CARROSSERIES.berline, plancher = S.sol, plafond = S.toit.y - S.toit.h / 2;
+    const v = G.voitureDeGamme(G.gammeDe('berline'), -120, 121, 0); G.city.cars.push(v); G.settleVehicle(v);
+    const pet = (G.city.pets || [])[0];
+    if (pet) { G.adopterChien(pet, true); pet.g.position.set(v.x + 2, 0.3, v.z - 1); }
+    G.P.pos.set(v.x + 2.5, 0.3, v.z);
+    try { G.robotSortir(); } catch (e) {}
+    G.enterCar(v);
+    for (let i = 0; i < 180; i++) G.step(1 / 60, true);
+    const c = G.drive.car, base = c.y || 0, cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const lis = (g) => { g.updateMatrixWorld(true);
+      const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
+      g.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
+      const dx = g.position.x - c.x, dz = g.position.z - c.z;
+      return { vu, tot, bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
+        droite: +(dx * cs - dz * sn).toFixed(2), avant: +(dx * sn + dz * cs).toFixed(2) }; };
+    out.plancher = plancher; out.plafond = +plafond.toFixed(2);
+    out.chien = (G.chien.pet && c.chien) ? lis(G.chien.pet.g) : null;
+    out.robot = (G.robot && G.robot.actif && G.robot.g && c.robot) ? lis(G.robot.g) : null;
+    out.placeChien = G.placesDe(c).chien; out.placeRobot = G.placesDe(c).robot;
+    G.exitCar();
+    out.tailleChienApres = G.chien.pet ? +G.chien.pet.g.scale.x.toFixed(2) : null;
+    out.tailleRobotApres = G.robot && G.robot.g ? +G.robot.g.scale.x.toFixed(2) : null;
+    v.x = 400; v.z = 400; v.g.position.set(400, 0, 400);
+    // ---- la décapotable : deux places, trois compagnons — le message doit être clair
+    const d = G.voitureDeGamme(G.gammeDe('sportive'), -120, 121, 0); G.city.cars.push(d); G.settleVehicle(d);
+    const suite = G.bots.filter(b => !b.ko && !b.mort && !b.drive && !b.enVoiture && b.av).slice(0, 3);
+    for (const b of suite) { if (G.gang.membres.indexOf(b) < 0) G.gang.membres.push(b); b.pos.set(d.x + 2, 0.3, d.z + 1); b.av.group.position.copy(b.pos); }
+    const eq = G.embarqueOccupants(d);
+    out.decapotable = { places: eq.places, montes: eq.montes.length, restes: eq.restes.length,
+      nbSieges: ['conducteur', 'avant', 'arriereG', 'arriereD'].filter(n => G.placesDe(d)[n]).length,
+      libresApres: G.placesLibres(d).length };
+    G.debarqueOccupants(d);
+    G.gang.membres.length = 0;
+    d.x = 400; d.z = 400; d.g.position.set(400, 0, 400);
+    return out;
+  });
+  const dans = g => g && g.vu === g.tot && g.bas > r.plancher - 0.05 && g.haut < r.plafond + 0.02;
+  const ok = dans(r.chien) && dans(r.robot) && r.tailleChienApres === 1 && r.tailleRobotApres === 1
+    && r.decapotable.nbSieges === 2 && r.decapotable.places === 2 && r.decapotable.montes === 1 && r.decapotable.restes === 2;
+  return { ok, detail: `avant : le chien était assis dans le COFFRE (z = −1,60, derrière la lunette) et le robot refusait de monter (« je n'entre pas dans les voitures ») · maintenant, habitacle ${r.plancher} → ${r.plafond} m : `
+    + `chien ${r.chien ? `${r.chien.vu}/${r.chien.tot} morceaux, corps ${r.chien.bas}–${r.chien.haut} m, à ${r.chien.avant} m de l'axe` : 'ABSENT'} · `
+    + `robot ${r.robot ? `${r.robot.vu}/${r.robot.tot} morceaux, corps ${r.robot.bas}–${r.robot.haut} m, à ${r.robot.avant} m` : 'ABSENT'} · `
+    + `taille rendue en descendant : chien ${r.tailleChienApres}, robot ${r.tailleRobotApres} · `
+    + `décapotable : ${r.decapotable.nbSieges} sièges pour ${r.decapotable.places} places annoncées, 1 compagnon monte, ${r.decapotable.restes} restent à pied (le message le dit avec leurs noms)` };
+});
+
+test('le facteur est assis sur SA selle, le joueur pédale sur un vélo et roule à deux sur une moto avec le chien', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -104, y: 1, z: 150, hour: 12, frais: true });
+    const out = {}, HANCHE = 0.72;   // hauteur du bassin au-dessus du repère d'un avatar
+    // LE DESSUS DE LA SELLE, DANS LE REPÈRE DU VÉLO. Une boîte englobante prise dans le MONDE
+    // monte avec l'inclinaison du deux-roues (c.tilt en virage) et avec la pente : on lisait
+    // 1,295 m pour une selle à 1,155 m. On lit donc le maillage lui-même.
+    const selleDe = c => (c && c.selle) ? +(c.selle.position.y + c.selle.scale.y / 2).toFixed(3) : null;
+    // et la boîte du CORPS ne compte que les maillages : l'étiquette et la bulle de chat sont
+    // des sprites qui flottent 1,5 m au-dessus de la tête.
+    const hautDe = (o) => { const b = new THREE.Box3(); b.makeEmpty();
+      o.updateMatrixWorld(true); o.traverse(q => { if (q.isMesh && q.visible) b.expandByObject(q); }); return b; };
+    // ---- LE FACTEUR : on laisse sa tournée se faire toute seule, 30 s de simulation
+    const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    const cv = f && f.bot && f.bot.veh;
+    if (cv && f.bot.av) {
+      const base = cv.y || 0;
+      const selle = selleDe(cv);
+      const bb = hautDe(f.bot.av.group);
+      out.facteur = { selle, bassin: +(f.bot.av.group.position.y - base + HANCHE).toFixed(3),
+        ecart: selle == null ? null : +((f.bot.av.group.position.y - base + HANCHE) - selle).toFixed(3),
+        corps: [+(bb.min.y - base).toFixed(2), +(bb.max.y - base).toFixed(2)],
+        cuisse: +f.bot.av.rig.legL.rotation.x.toFixed(2), bras: +f.bot.av.rig.armL.rotation.x.toFixed(2),
+        cap: +Math.abs(Math.atan2(Math.sin(f.bot.av.group.rotation.y - cv.h), Math.cos(f.bot.av.group.rotation.y - cv.h))).toFixed(3) };
+    }
+    // ---- LE JOUEUR sur un vélo, le chien dans le panier
+    const pet = (G.city.pets || [])[0]; if (pet) G.adopterChien(pet, true);
+    const deuxRoues = (kind, nom) => {
+      const c = (G.city.cars || []).find(x => x.kind === kind && !x.busy); if (!c) { out[nom] = null; return; }
+      if (G.chien.pet) G.chien.pet.g.position.set(c.x + 1, 0.3, c.z);
+      // un compagnon juste à côté : sur une moto, il monte en croupe
+      const ami = G.bots.filter(b => !b.ko && !b.mort && !b.drive && !b.enVoiture && b.av)[0];
+      if (ami) { if (G.gang.membres.indexOf(ami) < 0) G.gang.membres.push(ami); ami.pos.set(c.x + 1.4, 0.3, c.z); ami.av.group.position.copy(ami.pos); }
+      G.P.pos.set(c.x + 1.8, 0.3, c.z); G.enterCar(c);
+      G.keys.add('ArrowUp'); for (let i = 0; i < 240; i++) G.step(1 / 60, true); G.keys.delete('ArrowUp');
+      const cc = G.drive.car, base = cc.y || 0, cs = Math.cos(cc.h), sn = Math.sin(cc.h);
+      const selle = selleDe(cc);
+      const local = g => { const dx = g.position.x - cc.x, dz = g.position.z - cc.z;
+        return { droite: +(dx * cs - dz * sn).toFixed(2), avant: +(dx * sn + dz * cs).toFixed(2) }; };
+      const bb = hautDe(G.me.group);
+      out[nom] = { selle, bassin: +(G.me.group.position.y - base + HANCHE).toFixed(3),
+        ecart: selle == null ? null : +((G.me.group.position.y - base + HANCHE) - selle).toFixed(3),
+        corps: [+(bb.min.y - base).toFixed(2), +(bb.max.y - base).toFixed(2)],
+        cuisse: +G.me.rig.legL.rotation.x.toFixed(2), bras: +G.me.rig.armL.rotation.x.toFixed(2),
+        moi: local(G.me.group), vitesse: +G.drive.speed.toFixed(1),
+        chien: (G.chien.pet && cc.chien) ? local(G.chien.pet.g) : null,
+        croupe: (cc.occupants || []).length ? Object.assign({ place: cc.occupants[0].place }, local(cc.occupants[0].av.group)) : null };
+      G.exitCar();
+    };
+    deuxRoues('bike', 'velo');
+    deuxRoues('moto', 'moto');
+    G.gang.membres.length = 0;
+    return out;
+  });
+  const surLaSelle = m => m && m.ecart != null && m.ecart > -0.02 && m.ecart < 0.30 && m.cuisse < -0.9 && m.bras < -0.5;
+  const ok = surLaSelle(r.facteur) && r.facteur.cap < 0.05
+    && surLaSelle(r.velo) && r.velo.chien && r.velo.chien.avant > 0.5
+    && r.moto && r.moto.croupe && r.moto.croupe.place === 'arriereG' && r.moto.croupe.avant < r.moto.moi.avant - 0.5;
+  return { ok, detail: `avant : le bassin du facteur flottait 64,5 cm AU-DESSUS de sa selle (corps de 1,19 m à 3,40 m) et le joueur roulait DEBOUT sur son vélo (cuisses et bras à 0) · maintenant · `
+    + `facteur : selle à ${r.facteur.selle} m, bassin à ${r.facteur.bassin} m (${r.facteur.ecart} m de galette), corps ${r.facteur.corps}, cuisse ${r.facteur.cuisse}, bras ${r.facteur.bras}, cap ${r.facteur.cap} · `
+    + `joueur à vélo : selle ${r.velo.selle} m, bassin ${r.velo.bassin} m (${r.velo.ecart} m), cuisse ${r.velo.cuisse}, bras ${r.velo.bras}, ${r.velo.vitesse} m/s, chien dans le panier à ${r.velo.chien ? r.velo.chien.avant : '—'} m devant · `
+    + `moto : le joueur en selle à ${r.moto.moi.avant} m, le compagnon en croupe (${r.moto.croupe ? r.moto.croupe.place + ' à ' + r.moto.croupe.avant + ' m' : 'ABSENT'})` };
+});

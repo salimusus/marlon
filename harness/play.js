@@ -5177,12 +5177,24 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
     res.gangsters = { avant: mini(gm, 'xz') };
     for (let i = 0; i < 240; i++) G.step(1 / 60, true);
     res.gangsters.apres = mini(gm, 'xz');
-    // le joueur, lui, ne se fait jamais bousculer
-    G.P.pos.set(50, 0.15, 50);
-    const px = G.P.pos.x, pz = G.P.pos.z;
-    l[0].pos.set(50, 0.15, 50); l[0].av.group.position.copy(l[0].pos);
+    // LE JOUEUR, LUI, NE SE FAIT JAMAIS BOUSCULER — et on mesure ce que fait LE BOT, pas ce
+    // que fait la ville. Le joueur peut dériver pour vingt raisons qui n'ont rien à voir avec
+    // la bousculade (pente, circulation, poursuite policière laissée par un test précédent) :
+    // lancé seul ce test relevait 0,000 m, en suite complète 0,05 — soit exactement la borne.
+    // On relève donc sa dérive PROPRE sur le même nombre d'images, sans bot, et on ne retient
+    // que ce que le bot ajoute.
+    const poser = () => { G.P.pos.set(50, 0.15, 50); G.P.vel.set(0, 0, 0);
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true); };
+    poser();
+    let px = G.P.pos.x, pz = G.P.pos.z;
+    for (let i = 0; i < 60; i++) G.step(1 / 60, true);
+    const derive = Math.hypot(G.P.pos.x - px, G.P.pos.z - pz);
+    poser();
+    px = G.P.pos.x; pz = G.P.pos.z;
+    l[0].pos.set(px, G.P.pos.y, pz); l[0].av.group.position.copy(l[0].pos);
     for (let i = 0; i < 60; i++) { G.step(1 / 60, true); G.updateBot(l[0], 1 / 60); }
-    res.joueur = { pousse: +Math.hypot(G.P.pos.x - px, G.P.pos.z - pz).toFixed(2),
+    res.joueur = { pousse: +Math.max(0, Math.hypot(G.P.pos.x - px, G.P.pos.z - pz) - derive).toFixed(2),
+      derive: +derive.toFixed(2),
       ecart: +Math.hypot(l[0].pos.x - G.P.pos.x, l[0].pos.z - G.P.pos.z).toFixed(2) };
     return res;
   });
@@ -5191,7 +5203,7 @@ test('personne ne se tient à l\'intérieur de quelqu\'un d\'autre', async p => 
   const ok = r.habitants.avant < 0.1 && r.habitants.apres > 1
     && r.gangsters.avant < 0.1 && r.gangsters.apres > 1
     && r.joueur.pousse < 0.05 && r.joueur.ecart > 1;
-  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m)` };
+  return { ok, detail: `dix habitants empilés au même point (${r.habitants.avant} m d'écart) se démêlent et gardent ${r.habitants.apres} m entre eux · pareil pour cinq gangsters (${r.gangsters.avant} → ${r.gangsters.apres} m) · un bot planté DANS le joueur s'écarte de ${r.joueur.ecart} m sans bousculer le joueur (${r.joueur.pousse} m de plus que sa dérive propre de ${r.joueur.derive} m)` };
 });
 
 test('le haut-parleur montre d\'abord qui fait quoi, et on peut revenir en arrière', async p => {
@@ -19127,6 +19139,7 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
       const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
       G.me.group.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
       out.veh[nom] = { taille: +G.me.group.scale.x.toFixed(3), vu, tot,
+        ref: +(G.me.group.userData.assisRef == null ? 1 : G.me.group.userData.assisRef).toFixed(3),
         bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
         plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
       G.exitCar();
@@ -19151,11 +19164,15 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
   const T = r.toits;
   const toitsBons = Math.abs(T.berline.toit - 1.82) < 0.01 && Math.abs(T.break.toit - 1.85) < 0.01
     && Math.abs(T.suv.toit - 2.29) < 0.01 && Math.abs(T.quatre.toit - 2.44) < 0.01;
-  const ok = toitsBons && noms.length >= 12 && noms.every(dedans) && noms.every(k => V[k].taille >= 0.30);
+  // Le plancher de taille descend à 0,25 : un avatar plus grand que le gabarit de référence
+  // (bottes, couvre-chef, tenue « XXL ») est encore réduit d'autant par `refAssise` pour
+  // tenir dans la même enveloppe — c'est voulu, et c'est ce que `ref` affiche.
+  const ok = toitsBons && noms.length >= 12 && noms.every(dedans) && noms.every(k => V[k].taille >= 0.25);
   return { ok, detail: `le joueur a demandé « remet les voiture a bonne hauteur » : toits à `
     + ['berline', 'break', 'suv', 'quatre'].map(k => `${k} ${T[k].toit} m`).join(', ')
     + ` (pavillon intérieur ${T.berline.plafond} m pour un plancher à ${T.berline.sol} m) · l'occupant est donc réduit à ce que son habitacle contient, mais il y tient TOUT ENTIER et rien n'est masqué · rapport « taille assis / taille debout » (piéton de ${r.pieton} m) : `
-    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ') };
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
+    + ` · correction de gabarit de l'avatar mesuré : ${V[noms[0]].ref}` };
 });
 
 test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le facteur', async p => {

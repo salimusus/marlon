@@ -14456,7 +14456,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -18434,7 +18434,7 @@ function monterAvecBot(b) {
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
 function botDescendre(b, garde) {
-  jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1);   // il retrouve ses jambes, ses epaules et sa taille en sortant
+  jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1);   // il retrouve ses jambes, ses epaules et sa taille en sortant
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
@@ -20533,7 +20533,7 @@ function botDit(b, t) { botSay(b, [t]); }
 // Un véhicule réservé par un ami reste « busy » : s'il abandonne, il faut le rendre,
 // sinon la voiture était perdue pour tout le monde.
 function libereVoiture(c) { if (!c || c === drive.car) return; c.busy = false; c.speed = 0;
-  for (const b of bots) if (b.drive && b.drive.car === c) { jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); } }
+  for (const b of bots) if (b.drive && b.drive.car === c) { jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } }
 function botStop(b, dire, libre) {
   if (b.drive && b.drive.car) { if (b.drive.passager) botDescendre(b, false); else { libereVoiture(b.drive.car); b.drive = null; } }
   if (b.rdv && b.rdv.auto) libereVoiture(b.rdv.auto.car);
@@ -22619,7 +22619,7 @@ function exitCar() {
   debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // tout le monde descend, chacun à côté de sa portière, à sa taille normale
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) { chien.pet.g.position.set(P.pos.x + 1.2, groundUnder(P.pos.x + 1.2, P.pos.z, null, 1), P.pos.z); chien.pet.g.rotation.set(0, c.h, 0); } }
   sonPortiere(c, false);   // on descend : la portière claque derrière soi
-  tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1);   // on redescend : on retrouve sa taille normale
+  tailleEnCabine(me, 1); teteEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1);   // on redescend : on retrouve sa taille normale
   me.group.visible = true; $('carBtn').textContent = '🚗'; $('jumpBtn').textContent = 'SAUT'; $('emoteBtn').textContent = '🕺'; $('punchBtn').textContent = '👊'; drive.gear = 1;
 }
 function groundAt(x, z, self) {   // hauteur du sol/toit sous un point (pour poser l'hélico sur les immeubles)
@@ -23696,7 +23696,7 @@ function poseJoueurAuVolant(dt) {
   // garantir la bonne hauteur, le bon cap et les jambes pliées dans tous les véhicules.
   const vj = vehiculeDuJoueur();
   const c = vj ? vj.car : null;
-  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1); me.group.rotation.z = 0; drive.assis = false; return null; }
+  if (!c) { jambesEnCabine(me, false); musclesEnCabine(me, false); tailleEnCabine(me, 1); teteEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1); me.group.rotation.z = 0; drive.assis = false; return null; }
   if (c.rider) {
     // LE PILOTE ETAIT ASSIS A L'ORIGINE DU VEHICULE (z local = 0), c'est-a-dire au-dessus du
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
@@ -24186,6 +24186,31 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
 // C'est la même règle pour le joueur, les membres du gang, les habitants et les conducteurs
 // de la circulation : une seule table de places, une seule taille d'assise.
 const ASSIS_CRANE = 2.358, ASSIS_TALON = 0.228, ASSIS_CORPS = ASSIS_CRANE + ASSIS_TALON;
+// LE CRÂNE PREND 38 % DE LA HAUTEUR DU PERSONNAGE (0,902 m sur 2,358 : un vrai crâne en fait
+// 13 %). C'est LUI qui empêche de s'asseoir à taille normale dans une voiture en forme de
+// voiture — et depuis que le joueur a remis les toits à leur hauteur, c'est le seul levier
+// qui reste pour remonter le corps. `ASSIS_TETE` réduit la tête DE L'OCCUPANT ASSIS
+// SEULEMENT : le corps peut alors grandir d'autant dans le même habitacle.
+const ASSIS_TRONC = 1.456, ASSIS_TETE_H = 0.902;   // du repère à la base du crâne, puis le crâne
+// MESURÉ, ET LE RÉSULTAT EST CONTRE-INTUITIF : réduire le crâne NE FAIT PAS paraître
+// l'occupant plus grand. Sa hauteur totale assise est imposée par l'habitacle (1,22 m dans
+// une berline), quel que soit le crâne — on ne gagne que des PROPORTIONS, pas des
+// centimètres. Essai à 0,60 : la taille d'assise passe bien de 0,472 à 0,548, mais dans la
+// bande vitrée (1,14 – 1,66 m) on voit alors 30 cm de tête au lieu de 42, le reste étant du
+// torse, souvent de la couleur de l'habitacle. Or la tête — peau, casquette, cheveux — est
+// justement CE QU'ON VOIT par la vitre, et « on ne les voit pas assis » était la première
+// plainte du joueur. On garde donc le crâne entier. Le levier reste en place, à une
+// constante près, si quelqu'un veut réessayer.
+const ASSIS_TETE = 1;
+// La hauteur d'un personnage assis, talons compris, pour une tête réduite de `hs`.
+function corpsAssis(hs) { return ASSIS_TALON + ASSIS_TRONC + ASSIS_TETE_H * (hs == null ? ASSIS_TETE : hs); }
+// Applique (ou rend) la taille de crâne de l'occupant assis.
+function teteEnCabine(av, hs) {
+  const t = av && av.rig && av.rig.head; if (!t || !t.scale) return 0;
+  const k = hs || 1;
+  if (Math.abs(t.scale.x - k) > 1e-4) t.scale.setScalar(k);
+  return k;
+}
 const ASSIS_JEU_SOL = 0.02, ASSIS_JEU_TOIT = 0.10;   // le jeu laissé sous les talons et au-dessus du crâne
 // « REMET LES VOITURE A BONNE HAUTEUR » — DÉCISION DU JOUEUR, 18/09. On avait relevé les
 // habitacles pour qu'on s'y asseye à 0,68 de sa taille debout : il a joué cette version et
@@ -24202,7 +24227,7 @@ function hautVitrage(S) { return plafondAssise(S); }
 // La taille et la hauteur d'assise d'un habitacle qui va de `plancher` à `plafond` (repère du
 // véhicule). En dessous de 0,30 on ne réduit plus : ce ne serait plus un bonhomme.
 function assiseCabine(plancher, plafond) {
-  const t = clamp((plafond - plancher - ASSIS_JEU_SOL - ASSIS_JEU_TOIT) / ASSIS_CORPS, 0.30, 1);
+  const t = clamp((plafond - plancher - ASSIS_JEU_SOL - ASSIS_JEU_TOIT) / corpsAssis(), 0.30, 1);
   return { taille: +t.toFixed(3), y: +(plancher + ASSIS_JEU_SOL + ASSIS_TALON * t).toFixed(3) };
 }
 // LA TAILLE D'ASSISE S'APPLIQUE ET SE REND. On garde l'échelle de naissance de l'avatar dans
@@ -24342,7 +24367,9 @@ function assiedAvatar(av, c, p, dt, volant) {
   // au lieu d'un bout de crâne enfoncé de 80 cm sous le plancher. Dehors (moto, vélo, jet-ski,
   // hélico), on garde la taille normale : il n'y a pas de pavillon pour gêner.
   const TT = placesDe(c);
-  tailleEnCabine(av, caisseFermee(c) ? (TT.taille || 1) : 1);
+  const ferme = caisseFermee(c);
+  tailleEnCabine(av, ferme ? (TT.taille || 1) : 1);
+  teteEnCabine(av, ferme ? ASSIS_TETE : 1);
   const w = placeMonde(c, p);
   g.position.set(w.x, w.y, w.z);
   g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
@@ -24452,7 +24479,7 @@ function debarqueOccupants(c) {
     b.pos.set(x, groundUnder(x, z, c.solid, (c.y || 0) + 1), z);
     b.facing = c.h; b.enVoiture = null; b.wait = 1.2;
     if (b.av) { b.av.group.position.copy(b.pos); b.av.group.visible = !net.on; b.av.group.rotation.set(0, b.facing, 0);
-      jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); }
+      jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); }
   });
   c.occupants = [];
   return n;
@@ -25292,7 +25319,7 @@ function stealCar(c) {   // vol à l'arraché : le conducteur est éjecté et pr
     const cs = Math.cos(c.h), sn = Math.sin(c.h);
     const ex = c.x + 2.6 * cs, ez = c.z - 2.6 * sn;   // posé sur le bas-côté, à gauche
     d.av.rig.armL.rotation.x = d.av.rig.armR.rotation.x = 0;
-    jambesEnCabine(d.av, false); musclesEnCabine(d.av, false); tailleEnCabine(d.av, 1);   // éjecté : il retrouve sa taille avant de fuir
+    jambesEnCabine(d.av, false); musclesEnCabine(d.av, false); tailleEnCabine(d.av, 1); teteEnCabine(d.av, 1);   // éjecté : il retrouve sa taille avant de fuir
     city.fleeing.push({ av: d.av, name: d.name, x: ex, z: ez, y: groundUnder(ex, ez, null, 0), facing: c.h, t: simTime + 14 });
     bubble(d.av, pickOne(['au secours !', 'ma voiture !!', 'police !', 'au voleur !']));
     chat(null, `🚗 ${myCfg.name} a volé la voiture de ${d.name} !`);

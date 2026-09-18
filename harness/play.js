@@ -14327,13 +14327,17 @@ test('un gang sans plus aucun membre debout est mort pour de bon, et tous ses qu
     const A = G.gangs[0], B = G.gangs[1];
     G.guerre.territoires = {}; G.guerre.territoires.zone = A.id;
     G.guerre.territoires.industriel = A.id; G.guerre.territoires.plage = B.id;
+    // ROUND 73 : « a terre » ne suffit plus, il faut etre ABATTU. Un homme simplement assomme
+    // se releve au bout de 26 s — declarer le gang detruit dans ce cas faisait annoncer
+    // « 🏆 ils n'existent plus » juste avant de les voir tous se remettre debout (demande du
+    // joueur : « membre adverse tuer sont mort et ne revienne pas »). On les abat donc.
     // un seul homme encore debout : le gang tient toujours
-    A.membres.forEach((m, i) => { m.hp = i === 0 ? 90 : 0; m.ko = i === 0 ? 0 : G.simTime + 20; });
+    A.membres.forEach((m, i) => { m.hp = i === 0 ? 90 : 0; m.ko = i === 0 ? 0 : G.simTime + 20; m.abattu = i === 0 ? 0 : G.simTime; });
     G.verifieElimination(A);
     const tientEncore = !A.mort;
     // le dernier tombe : le gang n'existe plus
     const repAvant = G.gang.rep;
-    A.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; });
+    A.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; m.abattu = G.simTime; });
     G.verifieElimination(A);
     const mort = !!A.mort, repApres = G.gang.rep;
     const aMoi = G.nbTerritoires('joueur'), memoire = (G.guerre.morts || []).indexOf(A.id) >= 0;
@@ -14342,7 +14346,7 @@ test('un gang sans plus aucun membre debout est mort pour de bon, et tous ses qu
     for (let i = 0; i < 240; i++) G.guerreTick(1 / 60);
     const toujoursMort = !!A.mort;
     // un gang acheve par un AUTRE gang lui laisse ses quartiers, pas au joueur
-    B.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; });
+    B.membres.forEach(m => { m.hp = 0; m.ko = G.simTime + 20; m.abattu = G.simTime; });
     const C = G.gangs.find(g => g !== A && g !== B) || A;
     G.verifieElimination(B, C.id);
     const aLautre = G.proprio('plage') === C.id, pasAuJoueur = G.proprio('plage') !== 'joueur';
@@ -14352,7 +14356,7 @@ test('un gang sans plus aucun membre debout est mort pour de bon, et tous ses qu
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const ok = r.tientEncore && r.mort && r.repApres === r.repAvant + 120 && r.aMoi === 2
     && r.memoire && r.toujoursMort && r.aLautre && r.pasAuJoueur && r.detruits === 2;
-  return { ok, detail: `« plus de membres dans un gang = le gang est mort » : avec un homme encore debout il tient (${r.tientEncore}), le dernier a terre il disparait (${r.mort}) et rapporte 120 points de respect (${r.repAvant} → ${r.repApres}) · avant, ses quartiers redevenaient neutres et il fallait tout recapturer un par un, et surtout IL RENAISSAIT 90 s plus tard, ce qui rendait toute victoire impossible · maintenant ses ${r.aMoi} quartiers passent d'un coup a celui qui l'a acheve, il est inscrit dans les gangs detruits (${r.memoire}) et 4 minutes de jeu plus tard il est toujours mort (${r.toujoursMort}) · et si c'est un gang rival qui acheve l'autre, ce sont SES couleurs qui prennent le quartier (${r.aLautre}), pas celles du joueur (${r.pasAuJoueur}) — c'est ce qui rend une alliance trop longue dangereuse` };
+  return { ok, detail: `« plus un seul homme qui puisse se relever = le gang est mort » (round 73 : un homme seulement assommé se remet debout, il compte encore) : avec un homme encore debout il tient (${r.tientEncore}), le dernier a terre il disparait (${r.mort}) et rapporte 120 points de respect (${r.repAvant} → ${r.repApres}) · avant, ses quartiers redevenaient neutres et il fallait tout recapturer un par un, et surtout IL RENAISSAIT 90 s plus tard, ce qui rendait toute victoire impossible · maintenant ses ${r.aMoi} quartiers passent d'un coup a celui qui l'a acheve, il est inscrit dans les gangs detruits (${r.memoire}) et 4 minutes de jeu plus tard il est toujours mort (${r.toujoursMort}) · et si c'est un gang rival qui acheve l'autre, ce sont SES couleurs qui prennent le quartier (${r.aLautre}), pas celles du joueur (${r.pasAuJoueur}) — c'est ce qui rend une alliance trop longue dangereuse` };
 });
 
 test('un quartier vaut ce qu\'il rapporte et se prend deux fois plus vite quand on vient avec son gang', async p => {

@@ -19127,6 +19127,7 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
       const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
       G.me.group.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
       out.veh[nom] = { taille: +G.me.group.scale.x.toFixed(3), vu, tot,
+        ref: +(G.me.group.userData.assisRef == null ? 1 : G.me.group.userData.assisRef).toFixed(3),
         bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
         plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
       G.exitCar();
@@ -19151,11 +19152,15 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
   const T = r.toits;
   const toitsBons = Math.abs(T.berline.toit - 1.82) < 0.01 && Math.abs(T.break.toit - 1.85) < 0.01
     && Math.abs(T.suv.toit - 2.29) < 0.01 && Math.abs(T.quatre.toit - 2.44) < 0.01;
-  const ok = toitsBons && noms.length >= 12 && noms.every(dedans) && noms.every(k => V[k].taille >= 0.30);
+  // Le plancher de taille descend à 0,25 : un avatar plus grand que le gabarit de référence
+  // (bottes, couvre-chef, tenue « XXL ») est encore réduit d'autant par `refAssise` pour
+  // tenir dans la même enveloppe — c'est voulu, et c'est ce que `ref` affiche.
+  const ok = toitsBons && noms.length >= 12 && noms.every(dedans) && noms.every(k => V[k].taille >= 0.25);
   return { ok, detail: `le joueur a demandé « remet les voiture a bonne hauteur » : toits à `
     + ['berline', 'break', 'suv', 'quatre'].map(k => `${k} ${T[k].toit} m`).join(', ')
     + ` (pavillon intérieur ${T.berline.plafond} m pour un plancher à ${T.berline.sol} m) · l'occupant est donc réduit à ce que son habitacle contient, mais il y tient TOUT ENTIER et rien n'est masqué · rapport « taille assis / taille debout » (piéton de ${r.pieton} m) : `
-    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ') };
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
+    + ` · correction de gabarit de l'avatar mesuré : ${V[noms[0]].ref}` };
 });
 
 test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le facteur', async p => {

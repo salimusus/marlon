@@ -24488,16 +24488,42 @@ function assiseCabine(plancher, plafond) {
 // LA TAILLE D'ASSISE S'APPLIQUE ET SE REND. On garde l'échelle de naissance de l'avatar dans
 // son userData : un personnage « taille XXL » ou la statue du parc ne doivent pas redescendre
 // à 1 en sortant de la voiture.
+// CHACUN N'A PAS LA MÊME TAILLE. Les places sont calculées pour le GABARIT DE RÉFÉRENCE
+// (2,358 m debout) : un joueur en bottes, coiffé d'un haut-de-forme ou taillé « XXL » est
+// plus grand que ça, et à l'échelle d'assise de la table il ressortait SOUS LE PLANCHER —
+// mesuré dans le contrôle complet, corps à 0,26 m pour un plancher de berline à 0,32 m, sur
+// les quatorze véhicules à la fois. On mesure donc CET avatar-là, debout, juste avant qu'il
+// s'installe, et on corrige son échelle d'assise d'autant : quel que soit son gabarit, il
+// occupe exactement l'enveloppe prévue par la table. La mesure est refaite à chaque montée
+// (la tenue peut avoir changé entre-temps) et coûte une boîte englobante, une seule fois.
+function refAssise(av) {
+  const g = av && (av.group || av.g || av); if (!g) return 1;
+  if (g.userData.assisRef != null) return g.userData.assisRef;
+  let h = ASSIS_CRANE;
+  try {
+    const bb = new THREE.Box3(); bb.makeEmpty();
+    g.updateMatrixWorld(true);
+    g.traverse(o => { if (o.isMesh && o.visible) bb.expandByObject(o); });
+    // POSITION DU MONDE, pas la position locale : un avatar vit dans `worldGroup`, qui a son
+    // propre décalage — comparer une boîte du MONDE à une position LOCALE donnait n'importe quoi.
+    const sc = g.scale.y || 1, o0 = g.getWorldPosition(new THREE.Vector3());
+    const haut = (bb.max.y - o0.y) / sc;
+    if (isFinite(haut) && haut > 1.2 && haut < 6) h = haut;
+  } catch (e) {}
+  g.userData.assisRef = ASSIS_CRANE / h;
+  return g.userData.assisRef;
+}
 function tailleEnCabine(av, taille) {
   // `av` peut être un avatar (.group), le chien (.g) ou un groupe Three tout court
   const g = av && (av.group || av.g || av); if (!g || !g.scale || !g.userData) return 0;
   if (g.userData.ech0 == null) g.userData.ech0 = g.scale.x || 1;
+  if (taille === 1) g.userData.assisRef = null;   // il redescend : la prochaine montée le remesurera
   // L'ÉCHELLE D'ASSISE EST ABSOLUE, pas un facteur. C'est L'HABITACLE qui décide de la taille
   // de celui qui s'y assied : un avatar « XXL » (échelle de naissance 1,1) multipliait la
   // taille d'assise par la sienne et ressortait 10 cm SOUS le plancher de la berline —
   // relevé dans le contrôle complet, corps de 0,22 m pour un plancher à 0,32 m. On revient
   // à l'échelle de naissance en descendant (taille = 1).
-  const k = taille === 1 ? g.userData.ech0 : taille;
+  const k = taille === 1 ? g.userData.ech0 : taille * refAssise(av);
   if (Math.abs(g.scale.x - k) > 1e-4) g.scale.setScalar(k);
   return k;
 }

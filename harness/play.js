@@ -18394,3 +18394,214 @@ test('une voiture conduite par un habitant se range pour laisser passer un gyrop
   const ok = r.apres.vuSirene && r.ecartMax > 0.8 && r.pctHorsChaussee === 0 && r.dPieton > 1.2;
   return { ok, detail: `avant : le pas de côté n'existait que dans la circulation de fond — une voiture conduite par un habitant levait le pied devant l'ambulance sans jamais lui laisser la place (24 véhicules sur 78 ne s'écartaient pas d'un centimètre) · maintenant, six secondes de sirène derrière lui : il la voit (${r.apres.vuSirene}), il se déporte de ${r.ecartMax} m (${r.avant.ecart} m au départ), il reste ${100 - r.pctHorsChaussee} % du temps sur la route — aucune roue sur le trottoir — et le piéton le plus proche est à ${r.dPieton} m` };
 });
+
+// ============ POSTE ARMES (round 73) : « quand le joueur dégaine et tire, gros bug » ============
+// Les quatre tests qui suivent rejouent la séquence complète — dégainer, braquer, tirer,
+// rengainer — à la manette PS5 et au clavier, avec chaque arme, et vérifient ce que l'enfant
+// VOIT : le réticule sur la cible, la balle qui part là où il pointe, le chargeur, le son,
+// l'arme qui sort de l'étui et y retourne.
+// Ils s'appuient sur `armeTick(dt)` : la passe d'armement de chaque image, sortie de frame()
+// pour que le banc puisse la rejouer à 60 Hz sans dépendre du rendu (une image par seconde
+// en logiciel).
+
+test('braquer ne verrouille plus que ce que la caméra montre : le réticule tombe sur la cible', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.settings.ctrl = 'cam'; P.aimHeld = false; P.aimToggle = false;
+    const D = 1 / 60;
+    // le demi-champ HORIZONTAL réellement affiché : c'est la borne que le verrouillage
+    // automatique ne doit plus franchir
+    const demiChamp = Math.atan(Math.tan(G.camera.fov * Math.PI / 360) * G.camera.aspect);
+    let hors = 0, avecLock = 0, ecartMax = 0, retardMax = 0;
+    // on balaie la caméra sur un tour complet : la ville est peuplée, des habitants passent
+    // de tous les côtés et le verrouillage automatique doit en refuser ceux qui sont hors cadre
+    for (let i = 0; i < 720; i++) {
+      G.cam.yaw += 0.0087;                      // un demi-degré par image : deux tours en 720 images
+      G.step(D, true); G.armeTick(D); G.camPerche(D, true); G.viseurEcran();
+      G.camera.updateMatrixWorld(true); G.camera.matrixWorldInverse.copy(G.camera.matrixWorld).invert();
+      if (!P.lock) continue;
+      avecLock++;
+      const el = document.getElementById('cross');
+      const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+      if (!(x >= 0 && x <= 100 && y >= 0 && y <= 100)) hors++;
+      // écart entre l'axe de la caméra et la cible verrouillée
+      let e = Math.atan2(P.lock.x - P.pos.x, P.lock.z - P.pos.z) - (G.cam.yaw + Math.PI);
+      e = Math.abs(Math.atan2(Math.sin(e), Math.cos(e)));
+      if (e > ecartMax) ecartMax = e;
+      // le réticule affiché doit coller à la projection du point visé avec la caméra du moment
+      const v = G.aimPoint.clone().project(G.camera);
+      const err = Math.hypot(x - (v.x * 0.5 + 0.5) * 100, y - (-v.y * 0.5 + 0.5) * 100);
+      if (isFinite(err) && err > retardMax) retardMax = err;
+    }
+    // L2 garde sa portée entière : il verrouille même ce qui est hors cadre (demande du joueur)
+    P.lockRef = null;
+    const l2 = G.ciblesVerrouillables(true).length, auto = G.ciblesVerrouillables(false).length;
+    const cone = G.coneVisee();
+    G.drawWeapon(false); G.equipWeapon(null); G.clearWanted();
+    return { hors, avecLock, ecartMax: +(ecartMax * 180 / Math.PI).toFixed(1),
+      demiChamp: +(demiChamp * 180 / Math.PI).toFixed(1), cone: +(cone * 180 / Math.PI).toFixed(1),
+      retardMax: +retardMax.toFixed(2), l2, auto };
+  });
+  const ok = r.avecLock > 100 && r.hors === 0 && r.ecartMax <= r.demiChamp
+    && r.cone < r.demiChamp && r.retardMax < 1 && r.l2 >= r.auto;
+  return { ok, detail: `avant : le cône du verrouillage automatique était figé à 65,9 ° alors que la caméra n'en montre que ${r.demiChamp} ° de part et d'autre — le jeu annonçait « 🎯 untel · 4 m », tournait le personnage vers lui et la balle partait sur quelqu'un HORS DE L'ÉCRAN (156 images sur 567, cible jusqu'à 64,4 ° hors axe) ; et le réticule, projeté avec la matrice du dernier rendu AVANT le placement de la caméra, avait une image de retard (jusqu'à 46 % de la largeur, une pointe à 122 %) · après, sur deux tours de caméra : ${r.avecLock} images avec une cible verrouillée, ${r.hors} réticule hors de l'écran, cible au plus à ${r.ecartMax} ° (cône ${r.cone} °, champ ${r.demiChamp} °), écart réticule/point visé ${r.retardMax} % de l'écran · L2 garde sa portée entière (${r.l2} cibles contre ${r.auto} en automatique)` };
+});
+
+test('la séquence complète à la manette PS5 : ✕ dégaine, L2 braque, R2 tire, ✕ rengaine — avec les quatre armes', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    for (const a of ['pistol', 'rifle', 'sniper', 'knife']) G.owned.add('arme:' + a);
+    G.settings.ctrl = 'cam'; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const app = (i, v) => { ds.buttons[i] = { pressed: !!v, value: v ? 1 : 0 }; };
+    const D = 1 / 60;
+    const image = () => { G.pollGamepad(D); G.step(D, true); G.armeTick(D); G.camPerche(D, !!P.drawn); G.viseurEcran(); };
+    const N = n => { for (let i = 0; i < n; i++) image(); };
+    const erreurs = [];
+    const res = {};
+    // UNE SEULE cible en scène : sinon L2 (« la plus proche, gang ou pas ») et le couteau
+    // (`nearestFighter`) prennent un passant qui vient d'arriver, et la mesure change d'un
+    // essai à l'autre. On cache les autres habitants et on les remet à la fin.
+    const cible = G.bots.find(x => x.av && !x.ko && !x.dead);
+    const caches = G.bots.filter(b => b !== cible && b.av && b.av.group.visible);
+    caches.forEach(b => { b.av.group.visible = false; });
+    try {
+      // le joueur regarde le nord (+z) ; on lui plante une cible immobile droit devant
+      G.cam.yaw = Math.PI; P.facing = 0; P.aimToggle = false;
+      const pose = (d) => { cible.pos.set(0, 0, 8 + d); cible.av.group.position.copy(cible.pos);
+        cible.hp = 100; cible.ko = 0; cible.dead = 0; cible.wait = 1e6; cible.fight = null; cible.av.group.visible = true; };
+      for (const arme of ['pistol', 'rifle', 'sniper', 'knife']) {
+        G.equipWeapon(arme); P.drawn = false; G.setWeapon(G.me, arme, false); N(3);
+        pose(arme === 'knife' ? 1.4 : 3);
+        const e = { arme };
+        // ---- ✕ : dégainer
+        app(0, 1); N(2); app(0, 0); N(6);
+        e.degaine = { drawn: !!P.drawn, enMain: !!G.me.inHand, etui: !!document.body.classList.contains('drawn') };
+        // ---- L2 : braquer et verrouiller
+        app(6, 1); N(6);
+        e.braque = { lock: P.lock ? P.lock.nom : null, bonneCible: !!(P.lock && P.lock.ref === cible),
+          rangeeParL2: !P.drawn, viseur: getComputedStyle(document.getElementById('cross')).display };
+        // ---- R2 : tirer (ou planter). À trois mètres la balle touche dans l'image même :
+        // on relève donc le NOMBRE MAXIMAL de balles vues en vol pendant la séquence, pas
+        // l'état final, sinon on compte toujours zéro.
+        const n0 = G.shots.length, muni0 = P.ammo, pv0 = cible.hp, son0 = G.armVoix.joues;
+        P.fireCd = 0; P.punchT = 0;
+        app(7, 1);
+        let vues = 0;
+        for (let k = 0; k < (arme === 'sniper' ? 46 : 5); k++) { image(); vues = Math.max(vues, G.shots.length - n0); }
+        e.tir = { balles: vues, chargeur: muni0 - P.ammo, pv: pv0 - cible.hp,
+          sons: G.armVoix.joues - son0, enMain: !!G.me.inHand, drawn: !!P.drawn };
+        app(7, 0); N(6);
+        // ---- L2 toujours tenue : elle ne doit JAMAIS ranger l'arme
+        e.apresL2 = { drawn: !!P.drawn };
+        app(6, 0); N(4);
+        // ---- ✕ : rengainer
+        app(0, 1); N(2); app(0, 0); N(10);
+        e.rengaine = { drawn: !!P.drawn, enMain: !!G.me.inHand };
+        res[arme] = e;
+      }
+    } catch (ex) { erreurs.push(ex.message + ' | ' + (ex.stack || '').split('\n')[1]); }
+    caches.forEach(b => { b.av.group.visible = true; });
+    cible.wait = 0; cible.hp = 100; cible.ko = 0;
+    navigator.getGamepads = vrai;
+    P.drawn = false; G.equipWeapon(null); G.clearWanted();
+    return { res, erreurs };
+  });
+  const a = r.res;
+  const armes = ['pistol', 'rifle', 'sniper', 'knife'];
+  const ok = !r.erreurs.length && armes.every(k => a[k]
+    && a[k].degaine.drawn && a[k].degaine.enMain
+    && a[k].braque.bonneCible && !a[k].braque.rangeeParL2 && a[k].braque.viseur === 'block'
+    && a[k].tir.pv > 0 && a[k].tir.enMain && a[k].apresL2.drawn
+    && (k === 'knife' || (a[k].tir.chargeur === 1 && a[k].tir.sons > 0))   // à trois mètres la balle touche dans l'image même : c'est le chargeur et les ❤️ perdus qui prouvent qu'elle est partie
+    && !a[k].rengaine.drawn && !a[k].rengaine.enMain);
+  const dit = k => `${k} : dégainé=${a[k] && a[k].degaine.drawn} en main=${a[k] && a[k].degaine.enMain}, L2 verrouille la bonne cible=${a[k] && a[k].braque.bonneCible} sans ranger=${a[k] && !a[k].braque.rangeeParL2}, R2 → −${a[k] && a[k].tir.chargeur} au chargeur / −${a[k] && a[k].tir.pv} ❤️ / ${a[k] && a[k].tir.sons} son, arme toujours sortie L2 tenue=${a[k] && a[k].apresL2.drawn}, ✕ range=${a[k] && !a[k].rengaine.drawn}`;
+  return { ok, detail: `séquence ✕ → L2 → R2 → ✕ rejouée à la manette avec les quatre armes, ${r.erreurs.length} exception · ${armes.map(dit).join(' · ')}` };
+});
+
+test('la balle part là où le viseur pointe, au clavier comme à la manette', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, T = G.THREE;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    for (const a of ['pistol', 'rifle', 'sniper']) G.owned.add('arme:' + a);
+    G.settings.ctrl = 'cam'; G.cam.yaw = Math.PI; P.facing = 0; P.aimToggle = true;
+    const D = 1 / 60;
+    const image = () => { G.step(D, true); G.armeTick(D); G.camPerche(D, !!P.drawn); G.viseurEcran();
+      G.camera.updateMatrixWorld(true); G.camera.matrixWorldInverse.copy(G.camera.matrixWorld).invert(); };
+    const cible = G.bots.find(x => x.av && !x.ko && !x.dead);
+    cible.pos.set(0, 0, 8 + 14); cible.av.group.position.copy(cible.pos); cible.wait = 1e6;
+    cible.hp = 100; cible.ko = 0; cible.dead = 0;
+    const tirs = [];
+    for (const arme of ['pistol', 'rifle', 'sniper']) {
+      G.equipWeapon(arme); G.drawWeapon(true); G.braquerVerrouille();
+      for (let i = 0; i < 6; i++) image();
+      for (let k = 0; k < 4; k++) {
+        P.ammo = 9; P.fireCd = 0; P.zoom = arme === 'sniper';   // la lunette est déjà épaulée
+        const n0 = G.shots.length; G.fire();
+        const s = G.shots[G.shots.length - 1];
+        if (G.shots.length === n0 || !s) { tirs.push({ arme, rate: true }); continue; }
+        // 1. la balle suit-elle la ligne « bouche du canon → point visé » ?
+        const dir = s.v.clone().normalize();
+        const vers = G.aimPoint.clone().sub(s.p).normalize();
+        const ecart = Math.acos(Math.max(-1, Math.min(1, dir.dot(vers)))) * 180 / Math.PI;
+        // 2. le point visé est-il sur la cible verrouillée ?
+        const dCible = P.lock ? Math.hypot(G.aimPoint.x - P.lock.x, G.aimPoint.z - P.lock.z) : 99;
+        // 3. le réticule est-il posé dessus, à l'écran ?
+        const el = document.getElementById('cross');
+        const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+        tirs.push({ arme, ecart: +ecart.toFixed(2), dCible: +dCible.toFixed(2), x: +x.toFixed(1), y: +y.toFixed(1) });
+        for (let i = 0; i < 3; i++) image();
+      }
+      G.drawWeapon(false);
+    }
+    G.shots.length = 0; G.equipWeapon(null); G.clearWanted();
+    return { tirs, pvCible: cible.hp };
+  });
+  const bons = r.tirs.filter(t => !t.rate);
+  const ecartMax = bons.length ? Math.max(...bons.map(t => t.ecart)) : 99;
+  const cibleMax = bons.length ? Math.max(...bons.map(t => t.dCible)) : 99;
+  const dedans = bons.every(t => t.x > 5 && t.x < 95 && t.y > 5 && t.y < 95);
+  const ok = bons.length === r.tirs.length && r.tirs.length === 12 && ecartMax < 2 && cibleMax < 1.6 && dedans;
+  return { ok, detail: `douze balles (pistolet, fusil, fusil à lunette) tirées sur un habitant verrouillé à 14 m : ${r.tirs.length - bons.length} raté · l'écart entre la trajectoire de la balle et la ligne « canon → point visé » ne dépasse pas ${ecartMax} °, le point visé reste à ${cibleMax} m de la cible, et le réticule est dans le cadre à chaque coup (${bons.map(t => t.x + '/' + t.y).slice(0, 4).join(', ')}…)` };
+});
+
+test('le fusil à lunette montre vraiment sa lunette, même gâchette maintenue', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    G.owned.add('arme:sniper'); G.equipWeapon('sniper'); G.drawWeapon(true);
+    G.settings.ctrl = 'cam'; G.keys.clear();
+    const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    const D = 1 / 60;
+    P.ammo = 5; P.fireCd = 0; P.zoom = false;
+    const n0 = G.shots.length;
+    ds.buttons[7] = { pressed: true, value: 1 };   // R2 MAINTENUE, comme un enfant la tient
+    let avecZoom = 0, imageDuTir = -1;
+    for (let i = 0; i < 90; i++) {
+      G.pollGamepad(D); G.step(D, true); G.armeTick(D);
+      if (P.zoom) avecZoom++;
+      // la balle du fusil à lunette file à 190 m/s : elle peut avoir déjà touché quand on
+      // regarde. C'est le CHARGEUR qui dit à quelle image le coup est parti.
+      if (imageDuTir < 0 && P.ammo < 5) imageDuTir = i;
+    }
+    ds.buttons[7] = { pressed: false, value: 0 }; G.pollGamepad(D);
+    const apres = { avecZoom, imageDuTir, ammo: P.ammo, epaule: G.LUNETTE_EPAULE };
+    G.shots.length = n0; G.drawWeapon(false); G.equipWeapon(null); G.clearWanted();
+    navigator.getGamepads = vrai;
+    return apres;
+  });
+  const ok = r.avecZoom >= 20 && r.imageDuTir >= 20 && r.ammo === 4;
+  return { ok, detail: `avant : R2 maintenue, pollGamepad appelle fire() cent vingt fois par seconde et la branche « lunette » ne posait aucun délai — la balle partait huit millisecondes après, la lunette n'était visible qu'UNE image sur quatre-vingt-dix et l'enfant ne la voyait jamais · maintenant le temps d'épauler (${r.epaule} s) la bride : ${r.avecZoom} images l'œil dans la lunette, le coup part à l'image ${r.imageDuTir} et une seule balle sort (chargeur ${r.ammo}/5)` };
+});

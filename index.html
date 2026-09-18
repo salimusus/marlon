@@ -12653,7 +12653,11 @@ function placesCarrosserie(S, n, ech) {
   // lunette arrière : on le ramène au plus loin à 30 cm du bord arrière du toit.
   const zChien = S.toit ? Math.max(+(S.zChien * e).toFixed(3), +(S.toit.z1 * e + 0.30).toFixed(3)) : +(S.zChien * e).toFixed(3);
   const T = { seuil: -0.30, taille: A.taille, conducteur: { x: 0.5, y, z: zAv }, avant: { x: -0.5, y, z: zAv },
-    chien: { x: 0, y: +(y + 0.01).toFixed(3), z: zChien, taille: +Math.min(1, A.taille * 1.25).toFixed(3) } };
+    chien: { x: 0, y: +(y + 0.01).toFixed(3), z: zChien, taille: +Math.min(1, A.taille * 1.25).toFixed(3) },
+    // le robot compagnon : DEBOUT sur le plancher, entre les deux sièges avant (90 cm de haut
+    // pour 1,34 m sous le pavillon d'une berline : il tient sans qu'on le réduise)
+    // (il mesure 1,25 m : réduit à 0,85 il passe à 1,06 m et garde 20 cm sous le pavillon)
+    robot: { x: 0, y: +(S.sol + 0.02).toFixed(3), z: +(zAv - 0.45).toFixed(3), taille: 0.85 } };
   if (n > 2 && zAr != null) { T.arriereG = { x: 0.5, y, z: zAr }; T.arriereD = { x: -0.5, y, z: zAr }; }
   return T;
 }
@@ -14348,7 +14352,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.sport = null; if (b.av && b.av.racket) setRacket(b.av, false); }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -18288,6 +18292,15 @@ function monterAvecBot(b) {
   // comme le fait deja tout changement de monde.
   cam.libre = null; cam.dLisse = null; cam.hausse = 0; cam.hausseCible = 0; cam.hauT = 0; cam.mesT = 0; cam.recale = true;
   clearBeacon(); engine.start(moto ? 'moto' : 'car', moteurDe(drive.car));
+  // LE RESTE DU GANG MONTE DERRIÈRE. La place « avant » est RÉSERVÉE au joueur (c'est celle
+  // que lui donne vehiculeDuJoueur) : sans cette réserve, un membre s'y asseyait à sa place.
+  if (!moto) {
+    c.robot = !!(robot.actif && robot.g && placesDe(c).robot && Math.hypot(robot.x - c.x, robot.z - c.z) < 8);
+    if (chien.pet && placesDe(c).chien && Math.hypot(chien.pet.g.position.x - c.x, chien.pet.g.position.z - c.z) < 6) { c.chien = true; chien.enVoiture = c; }
+    const eqp = embarqueOccupants(c, ['avant']);
+    if (eqp.montes.length) msg(`🚗 ${eqp.montes.join(', ')} ${eqp.montes.length > 1 ? 'montent' : 'monte'} derrière`, 3000);
+    if (eqp.restes.length) msg(`🚗 Plus de place assise : ${eqp.restes.join(' et ')} ${eqp.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶`, 4200);
+  }
   botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
 }
@@ -18296,6 +18309,8 @@ function botDescendre(b, garde) {
   const st = b && b.drive; if (!st) return;
   const c = st.car;
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
+  debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // les compagnons montés derrière descendent avec nous
+  if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) tailleEnCabine(chien.pet, 1); }
   st.passager = false; city.rideBot = null; me.group.visible = true; engine.stop(); updateAct();
   me.group.rotation.set(0, 0, 0); me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
   me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
@@ -18348,6 +18363,7 @@ function botDriveTick(dt) {
       // flottait au-dessus du capot, jambes tendues.
       assiedAvatar(b.av, c, placesDe(c).conducteur, dt, true);
       b.av.group.rotation.z = 0;
+      placeOccupants(c, dt);   // et les autres passagers gardent leur siège pendant tout le trajet
     }
     b.pos.set(c.x, c.y, c.z); b.facing = c.h;
     if (st.passager) {
@@ -19654,7 +19670,12 @@ function robotTick(dt) {
   //  Même test que pour le chien : `city.rideBot`.)
   const enVoiture = drive.car || P.voile
     || (city.rideBot && city.rideBot.drive && city.rideBot.drive.passager ? city.rideBot.drive.car : null);
+  // SAUF QUAND LE VÉHICULE A UNE PLACE POUR LUI : le joueur a demandé que le robot monte
+  // aussi. Il tient debout sur le plancher entre les deux sièges avant (90 cm pour 1,34 m
+  // sous le pavillon) — voir la place `robot` des tables de sièges.
+  if (enVoiture && enVoiture.robot && placesDe(enVoiture).robot) { robot.vit = 0; robot.loin = false; placeRobotEnVoiture(enVoiture); robotAnime(dt); placeRobotEnVoiture(enVoiture); return; }
   if (enVoiture) { robot.vit = 0; robot.loin = true; robotAnime(dt); return; }
+  if (robot.g) tailleEnCabine(robot.g, 1);   // descendu de voiture, il reprend sa taille
   if (robot.loin) {
     robot.loin = false; robot.replaces++;
     robot.x = P.pos.x - Math.sin(P.facing) * ROBOT_SUIT; robot.z = P.pos.z - Math.cos(P.facing) * ROBOT_SUIT;
@@ -21508,6 +21529,7 @@ function botRespawn(b) {
 function updateBot(b, dt) {
   if (b.prison) return;  // en cellule : plainteTick le garde derrière les barreaux
   if (b.drive) return;   // au volant : botDriveTick s'en occupe
+  if (b.enVoiture) return;   // passager assis : placeOccupants le tient sur son siège
   const av = b.av;
   // POSTE ANIMATION : le combat d'un PNJ passe ici, entre la pose de base d'animateRig et la
   // mise en place du groupe — il faut que `rig.baisse` (l'esquive, la chute) soit déjà à
@@ -22396,6 +22418,14 @@ function enterCar(c) {
   // partir. S'il est à moins de 6 m et que le véhicule a une place pour lui, il grimpe.
   if (chien.pet && placesDe(c).chien && Math.hypot(chien.pet.g.position.x - c.x, chien.pet.g.position.z - c.z) < 6) { c.chien = true; chien.enVoiture = c; }
   else { c.chien = false; chien.enVoiture = null; }
+  // LE ROBOT MONTE AUSSI (il refusait net : « je n'entre pas dans les voitures »).
+  c.robot = !!(robot.actif && robot.g && placesDe(c).robot && Math.hypot(robot.x - c.x, robot.z - c.z) < 8);
+  // ET LE GANG MONTE : jusqu'à trois compagnons sur les sièges libres. On dit qui monte, où,
+  // et surtout QUI RESTE À PIED quand il n'y a pas assez de places — c'est la question que se
+  // pose l'enfant devant une décapotable à deux places.
+  const eq = embarqueOccupants(c);
+  if (eq.montes.length) msg(`🚗 ${eq.montes.join(', ')} ${eq.montes.length > 1 ? 'montent' : 'monte'} avec toi${c.chien ? ' + le chien 🐕' : ''}${c.robot ? ' + ' + robot.nom + ' 🤖' : ''} · ${eq.places} places`, 3400);
+  if (eq.restes.length) msg(`🚗 ${eq.places === 2 ? 'Ce véhicule n\'a que 2 places' : 'Il n\'y a plus de place assise'} : ${eq.restes.join(' et ')} ${eq.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶 — prends une voiture plus grande !`, 5200);
 }
 function exitCar() {
   const c = drive.car; if (!c) return;
@@ -22428,6 +22458,7 @@ function exitCar() {
     if (!trouve) msg('🚗 Pas beaucoup de place pour descendre !', 1400);
   }
   P.vel.set(0, 0, 0); P.facing = c.h;
+  debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // tout le monde descend, chacun à côté de sa portière, à sa taille normale
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) { chien.pet.g.position.set(P.pos.x + 1.2, groundUnder(P.pos.x + 1.2, P.pos.z, null, 1), P.pos.z); chien.pet.g.rotation.set(0, c.h, 0); } }
   sonPortiere(c, false);   // on descend : la portière claque derrière soi
   tailleEnCabine(me, 1); if (chien.pet) tailleEnCabine(chien.pet, 1);   // on redescend : on retrouve sa taille normale
@@ -22764,6 +22795,9 @@ function fumeeTick(dt) {
 // carrosserie noircie, et le conducteur est éjecté.
 function explodeVehicle(c) {
   if (c.explosed) return; c.explosed = true;
+  // TOUT LE MONDE SORT AVANT QUE ÇA BRÛLE. Sans ça, les compagnons montés à l'arrière
+  // restaient assis dans la carcasse, invisibles pour l'IA (`b.enVoiture`), pour toujours.
+  try { debarqueOccupants(c); c.robot = false; if (typeof robot !== 'undefined' && robot.g) tailleEnCabine(robot.g, 1); } catch (e42) {}
   const x = c.x, y = (c.y || 0) + 0.9, z = c.z;
   burst(x, y, z, 0xffd23f, 26); burst(x, y + 0.6, z, 0xff8f3a, 20); burst(x, y + 1.2, z, 0x2b2f3a, 16);
   sonExplosion(x, y, z);   // même « BOOM », mais PLACÉ : à soixante mètres il ne fait plus sursauter
@@ -23510,16 +23544,25 @@ function poseJoueurAuVolant(dt) {
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
     // et que c'est LA qu'est la selle. Sur une moto, ca fait 15 cm devant la selle ; sur un
     // velo, 22 cm derriere le pilote. On applique donc le meme deport a tout le monde.
-    const pc = (typeof placesDe === 'function' ? (placesDe(c) || {}).conducteur : null) || { x: 0, z: 0 };
-    // en croupe : 75 cm derrière le pilote, sinon les deux bonshommes se chevauchent
-    const pl = vj.volant ? pc : { x: pc.x, z: pc.z - 0.75 };
-    const sn = Math.sin(c.h), cs = Math.cos(c.h);
-    me.group.position.set(c.x + pl.x * cs + pl.z * sn, c.y + c.spec.seat - 0.55, c.z - pl.x * sn + pl.z * cs);
-    me.group.rotation.y = c.h; me.group.rotation.z = c.tilt || 0; return 'rider';
+    // ON PASSE PAR LE MÊME CHEMIN QUE TOUT LE MONDE (assiedAvatar) : c'est lui qui pose la
+    // VRAIE posture de cycliste / motard (animateRig 'ride' : buste sur le guidon, genoux
+    // pliés, mains sur les poignées). Avant, cette pose n'était faite QUE par la boucle
+    // d'AFFICHAGE : dans la simulation seule, le joueur roulait DEBOUT sur son vélo, cuisses
+    // et bras à 0 — mesuré. Et le passager prend la VRAIE selle arrière de la table
+    // (`arriereG`) au lieu d'un décalage de 75 cm écrit à la main.
+    const T = placesDe(c) || {};
+    const pc = T.conducteur || { x: 0, y: (c.spec.seat || 1) - 0.55, z: 0 };
+    const pl = vj.volant ? pc : (T.arriereG || { x: pc.x, y: pc.y, z: pc.z - 0.75 });
+    const fige2 = drive.assis ? dt : 1;
+    assiedAvatar(me, c, pl, fige2, vj.volant);
+    drive.assis = true;
+    placeOccupants(c, fige2);
+    return 'rider';
   }
-  assiedAvatar(me, c, placesDe(c)[vj.place] || placesDe(c).conducteur, drive.assis ? dt : 1, vj.volant);
+  const fige = drive.assis ? dt : 1;   // la première image est FIGÉE : on APPARAÎT assis
+  assiedAvatar(me, c, placesDe(c)[vj.place] || placesDe(c).conducteur, fige, vj.volant);
   drive.assis = true;
-  if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
+  placeOccupants(c, fige);   // le gang, le chien et le robot tiennent leur siège eux aussi
   return 'assis';
 }
 // LA SENSATION DE VITESSE, en UN SEUL endroit : le champ de vision qui s'ouvre, la caméra
@@ -23996,7 +24039,8 @@ function assiseCabine(plancher, plafond) {
 // son userData : un personnage « taille XXL » ou la statue du parc ne doivent pas redescendre
 // à 1 en sortant de la voiture.
 function tailleEnCabine(av, taille) {
-  const g = av && (av.group || av); if (!g) return 0;
+  // `av` peut être un avatar (.group), le chien (.g) ou un groupe Three tout court
+  const g = av && (av.group || av.g || av); if (!g || !g.scale || !g.userData) return 0;
   if (g.userData.ech0 == null) g.userData.ech0 = g.scale.x || 1;
   const k = g.userData.ech0 * (taille || 1);
   if (Math.abs(g.scale.x - k) > 1e-4) g.scale.setScalar(k);
@@ -24011,12 +24055,19 @@ const PLACES = {
   // milieu de la banquette.
   voiture: { seuil: -0.30, taille: 0.447, conducteur: { x: 0.5, y: 0.447, z: 0.15 }, avant: { x: -0.5, y: 0.447, z: 0.15 },
     arriereG: { x: 0.5, y: 0.447, z: -0.8 }, arriereD: { x: -0.5, y: 0.447, z: -0.8 },
-    chien: { x: 0, y: 0.45, z: -0.8, taille: 0.55 } },
+    chien: { x: 0, y: 0.45, z: -1.05, taille: 0.55 }, robot: { x: 0, y: 0.345, z: -0.3, taille: 0.85 } },
   truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
     chien: { x: 0, y: 0.5, z: 1.55 } },
-  moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
-  bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
-  velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
+  // LES DEUX-ROUES : le bassin d'un personnage est à 0,72 m au-dessus de son repère, et il
+  // doit reposer sur la selle (dessus à 1,025 m pour le pilote d'une moto, 1,065 m pour la
+  // selle passager, 1,155 m pour celle d'un vélo) avec 10 cm de galette. D'où les hauteurs
+  // ci-dessous — mesurées sur les maillages de selle eux-mêmes, plus jamais à vue d'œil.
+  // Le CHIEN a sa place sur les deux-roues aussi : dans le panier avant du vélo, sur le
+  // porte-bagages derrière la selle passager de la moto.
+  moto: { conducteur: { x: 0, y: 0.41, z: 0.15 }, arriereG: { x: 0, y: 0.45, z: -0.76 },
+    chien: { x: 0, y: 0.78, z: -1.12, taille: 0.5 } },
+  bike: { conducteur: { x: 0, y: 0.535, z: -0.22 }, chien: { x: 0, y: 1.0, z: 0.85, taille: 0.42 } },
+  velo: { conducteur: { x: 0, y: 0.535, z: -0.2 }, chien: { x: 0, y: 1.1, z: 0.85, taille: 0.42 } },
   // le buggy : les pieds passaient 12 cm sous le plancher tubulaire, on remonte de 14 cm
   buggy: { conducteur: { x: 0.48, y: 0.72, z: 0.25 }, avant: { x: -0.48, y: 0.72, z: 0.25 },
     chien: { x: 0, y: 0.95, z: -0.8 } },
@@ -24110,7 +24161,10 @@ function assiedAvatar(av, c, p, dt, volant) {
   g.position.set(w.x, w.y, w.z);
   g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
   const r = av.rig;
-  animateRig(r, c.rider ? 'ride' : 'sit', 0, dt, simTime);
+  // LA CADENCE DU PÉDALAGE SUIT LA VITESSE RÉELLE : à 0 le mode 'ride' ne fait pas tourner
+  // les jambes, et le cycliste roulait les pieds figés.
+  const vRoule = c.rider ? Math.abs(drive.car === c ? drive.speed : (c.speed || c.v || 0)) : 0;
+  animateRig(r, c.rider ? 'ride' : 'sit', vRoule, dt, simTime);
   if (!c.rider && r) {
     r.legL.rotation.x = r.legR.rotation.x = -1.45;                       // cuisses à l'horizontale
     if (r.legL.genou) r.legL.genou.rotation.x = 1.5;                     // genoux pliés, tibias vers le bas
@@ -24139,15 +24193,97 @@ function assiedChien(c, dt) {
 // le passager avant, puis les deux places arrière — chacun la sienne, jamais deux au même
 // endroit.
 function placeOccupants(c, dt) {
-  if (!c || !c.occupants || !c.occupants.length) return 0;
-  const T = placesDe(c); let n = 0;
-  c.occupants.forEach((o, i) => {
-    const nom = o.place || PLACES_ORDRE[i] || 'arriereD';
-    const p = T[nom]; if (!p || !o.av) return;
-    assiedAvatar(o.av, c, p, dt, nom === 'conducteur'); n++;
-  });
-  if (c.chien) assiedChien(c, dt);
+  if (!c) return 0;
+  let n = 0;
+  if (c.occupants && c.occupants.length) {
+    const T = placesDe(c);
+    c.occupants.forEach((o, i) => {
+      const nom = o.place || PLACES_ORDRE[i] || 'arriereD';
+      const p = T[nom]; if (!p || !o.av) return;
+      assiedAvatar(o.av, c, p, dt, nom === 'conducteur');
+      if (o.bot) { o.bot.pos.set(c.x, c.y || 0, c.z); o.bot.facing = c.h; o.bot.av.group.visible = !net.on; }
+      n++;
+    });
+  }
+  if (c.chien || (chien.pet && chien.enVoiture === c)) assiedChien(c, dt);
+  if (c.robot) placeRobotEnVoiture(c);
   return n;
+}
+// ================= MONTER À QUATRE (plus le chien et le robot) =================
+// « Ajoute la possibilité de monter à 4 dans les véhicules, tous assis visibles et que rien
+// ne dépasse (robot et chien aussi). » `placeOccupants` existait déjà, mais N'ÉTAIT APPELÉE
+// NULLE PART et `c.occupants` n'était JAMAIS rempli : on ne montait jamais qu'à deux, le
+// joueur et un ami. Les places libres d'un véhicule sont celles de sa table (placesDe) :
+// une berline en a quatre, une décapotable deux — et quand il n'y en a pas assez, LE JEU LE
+// DIT AVEC DES NOMS, pour qu'un enfant comprenne du premier coup qui reste à pied.
+const PLACES_PASSAGERS = ['avant', 'arriereG', 'arriereD'];
+// Les places assises libres d'un véhicule, conducteur exclu, dans l'ordre où l'on s'installe.
+function placesLibres(c, reserve) {
+  const T = placesDe(c), pris = reserve || [];
+  return PLACES_PASSAGERS.filter(nom => T[nom] && pris.indexOf(nom) < 0 && !(c.occupants || []).some(o => o.place === nom));
+}
+// Qui monte avec le joueur : ses gardes du corps d'abord (ce sont eux qui le suivent), puis
+// les autres membres du gang et les amis restés tout près du véhicule, du plus proche au plus
+// loin. Personne qui conduit, qui est à terre, en prison ou déjà installé ailleurs.
+function compagnonsProches(c, rayon) {
+  const r = rayon == null ? 9 : rayon, vus = new Set(), l = [];
+  const ajoute = b => {
+    if (!b || vus.has(b) || b.ko || b.mort || b.prison || b.drive || b.enVoiture || !b.av) return;
+    if (Math.hypot(b.pos.x - c.x, b.pos.z - c.z) > r) return;
+    vus.add(b); l.push(b);
+  };
+  try { gardesDuCorps().forEach(ajoute); } catch (e) {}
+  (gang.membres || []).forEach(ajoute);
+  bots.forEach(b => { if (estAmi(b.name)) ajoute(b); });
+  return l.sort((a, b) => Math.hypot(a.pos.x - c.x, a.pos.z - c.z) - Math.hypot(b.pos.x - c.x, b.pos.z - c.z));
+}
+// TOUT LE MONDE MONTE. Renvoie ce qui s'est passé, pour l'annoncer au joueur.
+function embarqueOccupants(c, reserve) {
+  if (!c) return { montes: [], restes: [], places: 0 };
+  c.occupants = c.occupants || [];
+  const libres = placesLibres(c, reserve), montes = [], restes = [];
+  for (const b of compagnonsProches(c)) {
+    const nom = libres.shift();
+    if (!nom) { restes.push(b.name); continue; }
+    c.occupants.push({ av: b.av, place: nom, bot: b });
+    b.enVoiture = c; b.wait = 0; b.target = null; b.bagarre = null; b.fight = null;
+    b.pos.set(c.x, c.y || 0, c.z); b.facing = c.h;
+    montes.push(b.name);
+  }
+  placeOccupants(c, 1);
+  return { montes, restes, places: (placesDe(c)[PLACES_ORDRE[0]] ? 1 : 0) + PLACES_PASSAGERS.filter(n => placesDe(c)[n]).length };
+}
+// ... ET TOUT LE MONDE DESCEND, chacun à côté de sa portière, taille et jambes rendues.
+function debarqueOccupants(c) {
+  if (!c || !c.occupants || !c.occupants.length) return 0;
+  const cs = Math.cos(c.h), sn = Math.sin(c.h), n = c.occupants.length;
+  c.occupants.forEach((o, i) => {
+    const b = o.bot; if (!b) return;
+    const cote = o.place === 'avant' || o.place === 'arriereD' ? -1 : 1;   // on sort du côté de sa portière
+    const recul = o.place === 'arriereG' || o.place === 'arriereD' ? -1.2 : 0.2;
+    const dx = cote * 2.6 * cs + recul * sn, dz = -cote * 2.6 * sn + recul * cs;
+    const x = c.x + dx, z = c.z + dz;
+    b.pos.set(x, groundUnder(x, z, c.solid, (c.y || 0) + 1), z);
+    b.facing = c.h; b.enVoiture = null; b.wait = 1.2;
+    if (b.av) { b.av.group.position.copy(b.pos); b.av.group.visible = !net.on; b.av.group.rotation.set(0, b.facing, 0);
+      jambesEnCabine(b.av, false); musclesEnCabine(b.av, false); tailleEnCabine(b.av, 1); }
+  });
+  c.occupants = [];
+  return n;
+}
+// LE ROBOT COMPAGNON A SA PLACE LUI AUSSI. Il refusait net de monter (« je n'entre pas dans
+// les voitures ») et attendait sur le trottoir : le joueur a demandé qu'il vienne. Il mesure
+// 90 cm, il tient DEBOUT entre les deux sièges avant d'une berline (1,34 m sous le pavillon),
+// donc pas besoin de le réduire : on le pose simplement sur le plancher, face à la route.
+function placeRobotEnVoiture(c) {
+  if (!c || !robot.actif || !robot.g) return null;
+  const pl = placesDe(c).robot; if (!pl) return null;
+  const w = placeMonde(c, pl);
+  tailleEnCabine(robot.g, pl.taille || 1);
+  robot.x = w.x; robot.y = w.y; robot.z = w.z; robot.h = c.h;
+  robot.g.position.set(w.x, w.y, w.z); robot.g.rotation.set(0, c.h, 0);
+  robot.vit = 0; robot.plane = 0;
+  return w;
 }
 // ================= LA DÉPANNEUSE =================
 // Bleu et blanc, gyrophare rond bleu, treuil et crochet — et PAYANTE : un petit accident est
@@ -33058,15 +33194,26 @@ function metierMarche(w, tx, tz, dt, seuil = 1.2) {
 }
 // Assied le travailleur à la place du conducteur (repère local du véhicule → monde).
 function metierAuVolant(w, c, v, dt) {
-  const s = c.siege || { x: 0.55, y: 1.3, z: 1.5 }, cs = Math.cos(c.h), sn = Math.sin(c.h);
-  w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
+  // UNE SEULE TABLE DE PLACES POUR TOUT LE MONDE. Le travailleur avait la sienne (`c.siege`)
+  // et, sur le vélo du facteur, elle donnait la hauteur de la SELLE (1,08 m) comme hauteur de
+  // PIEDS : mesuré dans la boucle du jeu, le bassin du facteur flottait 64,5 cm AU-DESSUS de
+  // sa selle et son corps montait jusqu'à 3,40 m — il pédalait dans le vide au-dessus de son
+  // vélo pendant toute la tournée. On passe désormais par placesDe()/assiedAvatar, comme le
+  // joueur, les bots et les conducteurs de la circulation.
+  const s = (placesDe(c) || {}).conducteur || c.siege || { x: 0.55, y: 1.3, z: 1.5 };
+  const m = assiedAvatar(w.av, c, s, dt, true);
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  if (m) w.pos.set(m.x, m.y, m.z);
+  else w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
   w.facing = c.h;
-  animateRig(w.av.rig, c.kind === 'velo' ? 'ride' : 'sit', v, dt, simTime);
   // À VÉLO, IL PÉDALE POUR DE BON : le genou est en retard sur la hanche, donc le pied
   // décrit un CERCLE au lieu de faire un aller-retour, et le buste se penche sur le guidon.
   // Le mode 'ride' d'animateRig ne faisait qu'osciller les deux cuisses en opposition.
   if (c.kind === 'velo') gesteMetier(w.av.rig, 'pedale', dt, simTime, { v });
-  metierSync(w);
+  // PAS de metierSync ici : il rabaisserait l'avatar de `rig.bassin` (le creux de la foulée),
+  // et assiedAvatar a déjà posé la position, le cap et l'inclinaison du deux-roues.
+  w.av.group.position.set(w.pos.x, w.pos.y, w.pos.z);
+  w.av.group.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
 }
 function metierPassager(w, c, i, dt) {
   if (!c) return;

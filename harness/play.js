@@ -3859,8 +3859,13 @@ test('on se voit assis au volant de la voiture qu\'on prend', async p => {
       dansLaCaisse: Math.abs(droite) < (c.baseW || 2.4) / 2 && Math.abs(avantArriere) < (c.baseD || 4.4) / 2 };
   });
   await p.evaluate(() => { if (__G.drive.car) __G.exitCar(); });
+  // LA HAUTEUR : on s'assied sur le PLANCHER DE CABINE, qui n'est pas le repère du véhicule.
+  // Dans une voiture il est 33 cm au-dessus, dans une ambulance ou un camion 90 cm au-dessus :
+  // la borne de 60 cm excluait TOUS les poids lourds, et ce test prend le premier véhicule
+  // libre de city.cars — souvent l'ambulance. On borne donc au plancher de la plus haute
+  // cabine du jeu, pas au repère d'une berline.
   const ok = r.visible && r.dansLaCaisse && Math.abs(r.capAvatar - r.capVoiture) < 0.05
-    && r.y > r.voitureY - 0.6 && r.y < r.voitureY + 0.6;
+    && r.y > r.voitureY - 0.6 && r.y < r.voitureY + 1.1;
   return { ok, detail: `avatar visible=${r.visible}, à ${r.droite} m à droite et ${r.avantArriere} m en avant du centre (donc dans la caisse=${r.dansLaCaisse}), à ${r.y} m de haut, orienté comme la voiture (${r.capAvatar} contre ${r.capVoiture})` };
 });
 
@@ -19016,17 +19021,23 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
   return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
 });
 
-test('assis dans un véhicule, on fait presque la taille de celui qui marche dehors — et on tient tout entier dans l\'habitacle', async p => {
+test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier dans son habitacle', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: -104, y: 1, z: 150, hour: 12, frais: true });
-    const out = { cible: G.ASSIS_CIBLE, debout: G.ASSIS_CRANE, veh: {} };
+    const out = { veh: {}, toits: {} };
     // l'habitant DEBOUT à côté de la portière : c'est lui l'étalon
     const b = G.bots.filter(x => !x.ko && !x.mort && !x.drive && !x.enVoiture && x.av)[0];
     if (b) { b.av.group.updateMatrixWorld(true);
       const bb = new THREE.Box3(); bb.makeEmpty();
       b.av.group.traverse(o => { if (o.isMesh && o.visible) bb.expandByObject(o); });
-      out.piéton = +(bb.max.y - bb.min.y).toFixed(2); }
+      out.pieton = +(bb.max.y - bb.min.y).toFixed(2); }
+    // LA HAUTEUR DES TOITS EST LA DÉCISION DU JOUEUR (« remet les voiture a bonne hauteur ») :
+    // on la verrouille ici, dans le repère de la carrosserie, pour que personne ne la relève.
+    for (const st of ['berline', 'break', 'suv', 'quatre']) {
+      const S = G.CARROSSERIES[st];
+      out.toits[st] = { toit: +(S.toit.y + S.toit.h / 2).toFixed(2), plafond: +G.plafondAssise(S).toFixed(2), sol: S.sol };
+    }
     const mesure = (c, nom, plancher, plafond) => {
       if (!c) { out.veh[nom] = null; return; }
       c.busy = false; c.dead = false;
@@ -19041,33 +19052,31 @@ test('assis dans un véhicule, on fait presque la taille de celui qui marche deh
         plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
       G.exitCar();
     };
-    // les cinq carrosseries du concessionnaire
     for (const [nom, gam] of [['berline', 'berline'], ['break', 'break'], ['suv', 'suv'], ['quatre', 'quatre'], ['decapotable', 'sportive']]) {
       const S = G.CARROSSERIES[nom];
       const v = G.voitureDeGamme(G.gammeDe(gam), -104, 150, 0); G.city.cars.push(v); G.settleVehicle(v);
       mesure(v, nom, S.sol, G.plafondAssise(S));
       v.x = 500; v.z = 500; v.g.position.set(500, 0, 500);
     }
-    // la voiture ordinaire de la ville, puis les gros véhicules de service
     const ville = (G.city.cars || []).find(c => c.parts && c.parts.hood && !c.carro && !c.rider && !c.travail && !c.busy);
-    mesure(ville, 'voitureDeVille', 0.325, 0.325 + G.ASSIS_CIBLE * G.ASSIS_CORPS + 0.12);
+    mesure(ville, 'voitureDeVille', 0.325, 1.60);
     const tous = (G.city.cars || []).concat(G.city.ambulances || [], G.city.aiCars || []);
-    const cab = { benne: [0.80, 2.678], grue: [0.80, 2.678], pompier: [0.70, 2.578], tracteur: [0.85, 2.728],
-      depanneuse: [0.725, 2.603], truck: [0.50, 2.60], ambulance: [0.895, 2.345], fourgon: [0.45, 1.75] };
+    const cab = { benne: [0.80, 2.30], grue: [0.80, 2.30], pompier: [0.70, 2.40], tracteur: [0.85, 2.15],
+      depanneuse: [0.725, 1.975], truck: [0.50, 2.60], ambulance: [0.895, 1.945], fourgon: [0.45, 1.75] };
     for (const k of Object.keys(cab)) mesure(tous.find(c => c.kind === k), k, cab[k][0], cab[k][1]);
     return out;
   });
   const V = r.veh, noms = Object.keys(V).filter(k => V[k] && V[k].taille != null);
-  // dans l'habitacle : rien sous le plancher, rien au travers du pavillon, et tout dessiné
   const dedans = k => V[k].bas > V[k].plancher - 0.05 && V[k].haut < V[k].plafond + 0.02 && V[k].vu / V[k].tot > 0.8;
-  const voitures = ['berline', 'break', 'suv', 'quatre', 'decapotable', 'voitureDeVille'];
-  const ok = noms.length >= 12 && noms.every(dedans)
-    && voitures.every(k => V[k] && V[k].taille >= 0.65)          // les voitures : au moins 0,65 de la taille debout
-    && noms.every(k => V[k].taille >= 0.45)                      // et personne en dessous de 0,45, même dans le plus petit fourgon
-    && Math.abs(V.berline.taille - r.cible) < 0.02;
-  return { ok, detail: `avant : l'occupant était réduit à 0,472 pour tenir dans un habitacle de 1,34 m, soit LA MOITIÉ de l'habitant de ${r.piéton} m debout contre la portière · maintenant, rapport « taille assis / taille debout » : `
-    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans un habitacle ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
-    + ` · cible ${r.cible}` };
+  // les toits d'origine, au centimètre : c'est la décision du joueur
+  const T = r.toits;
+  const toitsBons = Math.abs(T.berline.toit - 1.82) < 0.01 && Math.abs(T.break.toit - 1.85) < 0.01
+    && Math.abs(T.suv.toit - 2.29) < 0.01 && Math.abs(T.quatre.toit - 2.44) < 0.01;
+  const ok = toitsBons && noms.length >= 12 && noms.every(dedans) && noms.every(k => V[k].taille >= 0.30);
+  return { ok, detail: `le joueur a demandé « remet les voiture a bonne hauteur » : toits à `
+    + ['berline', 'break', 'suv', 'quatre'].map(k => `${k} ${T[k].toit} m`).join(', ')
+    + ` (pavillon intérieur ${T.berline.plafond} m pour un plancher à ${T.berline.sol} m) · l'occupant est donc réduit à ce que son habitacle contient, mais il y tient TOUT ENTIER et rien n'est masqué · rapport « taille assis / taille debout » (piéton de ${r.pieton} m) : `
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ') };
 });
 
 test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le facteur', async p => {

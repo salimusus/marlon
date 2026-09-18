@@ -21979,7 +21979,21 @@ function moveAxis(axis, amount, canStep) {
       // Monter une rambarde n'a de toute façon aucun sens : elle est là pour arrêter.
       if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep && !o.rambarde) { P.pos.y = top; continue; }
       const half = (axis === 'x' ? o.w : o.d) / 2;
-      const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
+      // PAR QUELLE FACE ON RESSORT. On sortait toujours par la face d'ENTREE, celle d'ou l'on
+      // vient (`-Math.sign(amount)`). C'est juste quand on vient de heurter le mur — et c'est
+      // meme indispensable, sinon une cloison fine abordee en courant se traverserait. Mais
+      // quand le joueur est DEJA DEDANS, il n'y a pas eu d'entree a cette image : le renvoyer
+      // « d'ou il vient » lui fait traverser toute la boite. MESURE, dalle d'etage de 16 m :
+      // pose contre le bord droit et poussant vers la droite, il ressortait 15,80 m plus loin
+      // EN UNE IMAGE (le poste batiments en a mesure 15,70 avec 1,10 m de chute au bout).
+      // On distingue donc les deux cas, et on n'en sacrifie aucun :
+      //   — il etait DEHORS avant ce deplacement : face d'entree, on annule la penetration,
+      //     rien ne traverse jamais une cloison, meme mince, meme lance a pleine vitesse ;
+      //   — il etait DEJA DEDANS (un vehicule qui se gare sur lui, un portail qui se referme,
+      //     un ascenseur, une dalle qui apparait) : face la PLUS PROCHE, donc le plus petit
+      //     deplacement possible. Le meme cas tombe alors a 1,00 m.
+      const dehorsAvant = Math.abs(avant - o[axis]) >= half + P.hw;
+      const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
       P.vel[axis] = 0;
     }

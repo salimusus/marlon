@@ -18193,3 +18193,45 @@ test('dans une villa on monte à l\'étage, on ne traverse pas la rambarde même
     && murs.every(m => m.avance < 1.2 && m.chute < 0.3 && m.courut);
   return { ok, detail: `avant : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et parcourait 18,20 m en tombant de 2,32 m ; depuis l'étage il tombait de 3,71 m dans la trémie · maintenant il monte à ${r.monte.y} m (étage ${r.monte.etage}) en ${r.monte.t} s simulées, et poussé 5 s EN COURANT (course engagée sur les ${murs.filter(m => m.courut).length} poussées, pointe ${Math.max(...murs.map(m => m.vmax))} m/s avant de buter) : volée ouest ${r.voleeOuest.avance} m (chute ${r.voleeOuest.chute}), volée est ${r.voleeEst.avance} m (${r.voleeEst.chute}), trémie nord ${r.tremieNord.avance} m (${r.tremieNord.chute}), trémie ouest ${r.tremieOuest.avance} m (${r.tremieOuest.chute}), palier est ${r.palierEst.avance} m (${r.palierEst.chute}), palier ouest ${r.palierOuest.avance} m (${r.palierOuest.chute})` };
 });
+
+// ================= POSTE CONDUITE — round 72 : le MEILLEUR chemin =================
+test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joignable, et plus de tour de la ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const lg = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : null; };
+    // douze trajets qui font le tour des quartiers : villa, commissariat, hôpital, garage,
+    // plage, La Zone, casino, circuit, école, port, maisons de l'ouest
+    const pts = [[8, 8], [48, 193], [-46, 16], [12, 190], [-22, -30], [108, 44], [-140, 40], [60, 288], [152, -77], [-62, 196], [100, 132], [-87, 44]];
+    const R = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const A = G.pointRouteLibre(a[0], a[1]) || { x: a[0], z: a[1] };
+      const B = G.pointRouteLibre(b[0], b[1]) || { x: b[0], z: b[1] };
+      const vp = G.voieProche(A.x, A.z);
+      const px = vp ? vp.px : A.x, pz = vp ? vp.pz : A.z;   // une voiture posée sur sa voie
+      const oiseau = Math.hypot(B.x - px, B.z - pz);
+      const via = G.itineraireVoies(px, pz, B.x, B.z, null);
+      const grille = G.navPath(px, pz, B.x, B.z);
+      const lv = via ? lg(via, px, pz) : null, lgr = grille ? lg(grille, px, pz) : null;
+      R.push({ oiseau: +oiseau.toFixed(0), voies: lv == null ? null : +lv.toFixed(0), grille: lgr == null ? null : +lgr.toFixed(0),
+        rOiseau: lv == null ? null : +(lv / oiseau).toFixed(2), rGrille: (lv == null || !lgr) ? null : +(lv / lgr).toFixed(2) });
+    }
+    // le réseau est-il d'un seul tenant POUR UN CONDUCTEUR ? (accessibilité dans les deux sens)
+    const Gr = G.city.graphe, A2 = Gr.aretes;
+    const suiv = A2.map(() => []), prec = A2.map(() => []);
+    for (const n of Gr.noeuds) for (const m of n.manoeuvres) { suiv[m.de].push(m.vers); prec[m.vers].push(m.de); }
+    const bfs = (adj, s) => { const vu = new Uint8Array(A2.length); const q = [s]; vu[s] = 1;
+      while (q.length) { const u = q.pop(); for (const v of adj[u]) if (!vu[v]) { vu[v] = 1; q.push(v); } } return vu; };
+    const av = bfs(suiv, 0), ar = bfs(prec, 0);
+    let horsScc = 0; for (let i = 0; i < A2.length; i++) if (!(av[i] && ar[i])) horsScc++;
+    const ok = R.filter(x => x.voies != null);
+    const moy = k => +(ok.reduce((s, x) => s + x[k], 0) / ok.length).toFixed(2);
+    return { trajets: R.length, sansRoute: R.filter(x => x.voies == null).length,
+      moyenneSurOiseau: moy('rOiseau'), pireSurOiseau: +Math.max(...ok.map(x => x.rOiseau)).toFixed(2),
+      moyenneSurGrille: moy('rGrille'), aretes: A2.length, horsScc };
+  });
+  const ok = r.sansRoute === 0 && r.horsScc === 0 && r.moyenneSurOiseau <= 2.0
+    && r.pireSurOiseau <= 2.8 && r.moyenneSurGrille <= 1.6;
+  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, à contresens ; l'itinéraire faisait 2,28 fois le vol d'oiseau en moyenne, et jusqu'à 4,98 fois (450 m pour 90 m, la bonne voie étant à trois mètres) · maintenant ${r.sansRoute} trajet sans chemin, ${r.horsScc} voie hors du réseau sur ${r.aretes}, ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille` };
+});

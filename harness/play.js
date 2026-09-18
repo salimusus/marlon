@@ -18564,7 +18564,10 @@ test('le facteur est assis sur SA selle, le joueur pédale sur un vélo et roule
     G.gang.membres.length = 0;
     return out;
   });
-  const surLaSelle = m => m && m.ecart != null && m.ecart > -0.02 && m.ecart < 0.30 && m.cuisse < -0.9 && m.bras < -0.5;
+  // La cuisse n'est plus à l'horizontale depuis que le pied va SUR la pédale (voir la pose
+  // « ride ») : elle oscille autour de 0,90 rad de la verticale, pas de 1,35.
+  const surLaSelle = m => m && m.ecart != null && m.ecart > -0.02 && m.ecart < 0.30
+    && m.cuisse > -1.25 && m.cuisse < -0.55 && m.bras < -0.5;
   const ok = surLaSelle(r.facteur) && r.facteur.cap < 0.05
     && surLaSelle(r.velo) && r.velo.chien && r.velo.chien.avant > 0.5
     && r.moto && r.moto.croupe && r.moto.croupe.place === 'arriereG' && r.moto.croupe.avant < r.moto.moi.avant - 0.5;

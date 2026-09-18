@@ -23537,12 +23537,20 @@ function poseJoueurAuVolant(dt) {
     // moteur — alors que les bots, eux, s'asseyent a la place `conducteur` de la table PLACES
     // et que c'est LA qu'est la selle. Sur une moto, ca fait 15 cm devant la selle ; sur un
     // velo, 22 cm derriere le pilote. On applique donc le meme deport a tout le monde.
-    const pc = (typeof placesDe === 'function' ? (placesDe(c) || {}).conducteur : null) || { x: 0, z: 0 };
-    // en croupe : 75 cm derrière le pilote, sinon les deux bonshommes se chevauchent
-    const pl = vj.volant ? pc : { x: pc.x, z: pc.z - 0.75 };
-    const sn = Math.sin(c.h), cs = Math.cos(c.h);
-    me.group.position.set(c.x + pl.x * cs + pl.z * sn, c.y + c.spec.seat - 0.55, c.z - pl.x * sn + pl.z * cs);
-    me.group.rotation.y = c.h; me.group.rotation.z = c.tilt || 0; return 'rider';
+    // ON PASSE PAR LE MÊME CHEMIN QUE TOUT LE MONDE (assiedAvatar) : c'est lui qui pose la
+    // VRAIE posture de cycliste / motard (animateRig 'ride' : buste sur le guidon, genoux
+    // pliés, mains sur les poignées). Avant, cette pose n'était faite QUE par la boucle
+    // d'AFFICHAGE : dans la simulation seule, le joueur roulait DEBOUT sur son vélo, cuisses
+    // et bras à 0 — mesuré. Et le passager prend la VRAIE selle arrière de la table
+    // (`arriereG`) au lieu d'un décalage de 75 cm écrit à la main.
+    const T = placesDe(c) || {};
+    const pc = T.conducteur || { x: 0, y: (c.spec.seat || 1) - 0.55, z: 0 };
+    const pl = vj.volant ? pc : (T.arriereG || { x: pc.x, y: pc.y, z: pc.z - 0.75 });
+    const fige2 = drive.assis ? dt : 1;
+    assiedAvatar(me, c, pl, fige2, vj.volant);
+    drive.assis = true;
+    placeOccupants(c, fige2);
+    return 'rider';
   }
   const fige = drive.assis ? dt : 1;   // la première image est FIGÉE : on APPARAÎT assis
   assiedAvatar(me, c, placesDe(c)[vj.place] || placesDe(c).conducteur, fige, vj.volant);
@@ -24043,9 +24051,16 @@ const PLACES = {
     chien: { x: 0, y: 0.45, z: -1.05, taille: 0.55 }, robot: { x: 0, y: 0.345, z: -0.3, taille: 0.85 } },
   truck: { seuil: 1.6, conducteur: { x: 0.6, y: 0.05, z: 2.6 }, avant: { x: -0.6, y: 0.05, z: 2.6 },
     chien: { x: 0, y: 0.5, z: 1.55 } },
-  moto: { conducteur: { x: 0, y: 0.47, z: 0.15 }, arriereG: { x: 0, y: 0.52, z: -0.8 } },
-  bike: { conducteur: { x: 0, y: 0.53, z: -0.22 } },
-  velo: { conducteur: { x: 0, y: 0.53, z: -0.2 } },
+  // LES DEUX-ROUES : le bassin d'un personnage est à 0,72 m au-dessus de son repère, et il
+  // doit reposer sur la selle (dessus à 1,025 m pour le pilote d'une moto, 1,065 m pour la
+  // selle passager, 1,155 m pour celle d'un vélo) avec 10 cm de galette. D'où les hauteurs
+  // ci-dessous — mesurées sur les maillages de selle eux-mêmes, plus jamais à vue d'œil.
+  // Le CHIEN a sa place sur les deux-roues aussi : dans le panier avant du vélo, sur le
+  // porte-bagages derrière la selle passager de la moto.
+  moto: { conducteur: { x: 0, y: 0.41, z: 0.15 }, arriereG: { x: 0, y: 0.45, z: -0.76 },
+    chien: { x: 0, y: 0.78, z: -1.12, taille: 0.5 } },
+  bike: { conducteur: { x: 0, y: 0.535, z: -0.22 }, chien: { x: 0, y: 1.0, z: 0.85, taille: 0.42 } },
+  velo: { conducteur: { x: 0, y: 0.535, z: -0.2 }, chien: { x: 0, y: 1.1, z: 0.85, taille: 0.42 } },
   // le buggy : les pieds passaient 12 cm sous le plancher tubulaire, on remonte de 14 cm
   buggy: { conducteur: { x: 0.48, y: 0.72, z: 0.25 }, avant: { x: -0.48, y: 0.72, z: 0.25 },
     chien: { x: 0, y: 0.95, z: -0.8 } },
@@ -24139,7 +24154,10 @@ function assiedAvatar(av, c, p, dt, volant) {
   g.position.set(w.x, w.y, w.z);
   g.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
   const r = av.rig;
-  animateRig(r, c.rider ? 'ride' : 'sit', 0, dt, simTime);
+  // LA CADENCE DU PÉDALAGE SUIT LA VITESSE RÉELLE : à 0 le mode 'ride' ne fait pas tourner
+  // les jambes, et le cycliste roulait les pieds figés.
+  const vRoule = c.rider ? Math.abs(drive.car === c ? drive.speed : (c.speed || c.v || 0)) : 0;
+  animateRig(r, c.rider ? 'ride' : 'sit', vRoule, dt, simTime);
   if (!c.rider && r) {
     r.legL.rotation.x = r.legR.rotation.x = -1.45;                       // cuisses à l'horizontale
     if (r.legL.genou) r.legL.genou.rotation.x = 1.5;                     // genoux pliés, tibias vers le bas
@@ -33169,15 +33187,26 @@ function metierMarche(w, tx, tz, dt, seuil = 1.2) {
 }
 // Assied le travailleur à la place du conducteur (repère local du véhicule → monde).
 function metierAuVolant(w, c, v, dt) {
-  const s = c.siege || { x: 0.55, y: 1.3, z: 1.5 }, cs = Math.cos(c.h), sn = Math.sin(c.h);
-  w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
+  // UNE SEULE TABLE DE PLACES POUR TOUT LE MONDE. Le travailleur avait la sienne (`c.siege`)
+  // et, sur le vélo du facteur, elle donnait la hauteur de la SELLE (1,08 m) comme hauteur de
+  // PIEDS : mesuré dans la boucle du jeu, le bassin du facteur flottait 64,5 cm AU-DESSUS de
+  // sa selle et son corps montait jusqu'à 3,40 m — il pédalait dans le vide au-dessus de son
+  // vélo pendant toute la tournée. On passe désormais par placesDe()/assiedAvatar, comme le
+  // joueur, les bots et les conducteurs de la circulation.
+  const s = (placesDe(c) || {}).conducteur || c.siege || { x: 0.55, y: 1.3, z: 1.5 };
+  const m = assiedAvatar(w.av, c, s, dt, true);
+  const cs = Math.cos(c.h), sn = Math.sin(c.h);
+  if (m) w.pos.set(m.x, m.y, m.z);
+  else w.pos.set(c.x + s.x * cs + s.z * sn, (c.y || 0) + s.y, c.z - s.x * sn + s.z * cs);
   w.facing = c.h;
-  animateRig(w.av.rig, c.kind === 'velo' ? 'ride' : 'sit', v, dt, simTime);
   // À VÉLO, IL PÉDALE POUR DE BON : le genou est en retard sur la hanche, donc le pied
   // décrit un CERCLE au lieu de faire un aller-retour, et le buste se penche sur le guidon.
   // Le mode 'ride' d'animateRig ne faisait qu'osciller les deux cuisses en opposition.
   if (c.kind === 'velo') gesteMetier(w.av.rig, 'pedale', dt, simTime, { v });
-  metierSync(w);
+  // PAS de metierSync ici : il rabaisserait l'avatar de `rig.bassin` (le creux de la foulée),
+  // et assiedAvatar a déjà posé la position, le cap et l'inclinaison du deux-roues.
+  w.av.group.position.set(w.pos.x, w.pos.y, w.pos.z);
+  w.av.group.rotation.set(c.tiltX || 0, c.h, c.rider ? (c.tilt || 0) : 0, 'YXZ');
 }
 function metierPassager(w, c, i, dt) {
   if (!c) return;

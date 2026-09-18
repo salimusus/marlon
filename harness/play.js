@@ -19287,3 +19287,92 @@ test('sortir d\'un mur ne catapulte plus le joueur de l\'autre cote du batiment'
     && !!r.cloison && !r.cloison.traverse;
   return { ok, detail: `dalle d'etage de ${r.dalle.w} × ${r.dalle.d} m · pose contre le bord et poussant ENCORE vers ce bord, le joueur ressortait 15,80 m plus loin en une seule image (toute la largeur de la dalle) : il ressort maintenant par la face la plus proche, a ${r.bord.droiteVersDroite} m d'un cote et ${r.bord.gaucheVersGauche} m de l'autre · pousse vers l'interieur : ${r.bord.droiteVersGauche} m · depuis le centre exact il reste ${r.centre} m, et c'est le minimum geometrique — la face la plus proche est a ${r.borne} m · pire bond ${pire} m pour une borne de ${r.borne} m (demi-epaisseur + demi-largeur du joueur), la ou l'ancienne regle pouvait faire la largeur ENTIERE · et la moitie qui compte : une cloison de ${r.cloison && r.cloison.epaisseur} m chargee a 11 m/s n'est toujours pas traversee (${r.cloison && r.cloison.traverse ? 'TRAVERSEE' : 'arretee'})` };
 });
+
+// ============ POSTE ARMES (round 73, 2) : « membre adverse tué reste mort » ============
+// Demande du joueur, mot pour mot : « fait en sorte que membre adverse tuer sont mort et ne
+// revienne pas bug au tir du joueur ». Les trois tests qui suivent tiennent la règle décidée :
+// à l'ARME on abat pour de bon, à MAINS NUES on assomme (et on peut encore embarquer l'homme).
+
+test('un homme de gang abattu reste mort : son corps s\'efface et il ne revient jamais', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    G.owned.add('arme:pistol'); G.settings.ctrl = 'cam';
+    const D = 1 / 60;
+    const img = n => { for (let i = 0; i < (n || 1); i++) { G.step(D, true); G.gangTick(D); G.armeTick(D); } };
+    const GA = G.gangs.filter(g => !g.mort)[0];
+    const m = GA.membres.find(x => !x.chef && !x.ko && !x.captif);
+    // une seule cible en scène : les autres hommes au loin, les habitants cachés
+    for (const g of G.gangs) for (const x of g.membres) if (x !== m) { x.x += 300; x.z += 300; x.av.group.position.set(x.x, x.y, x.z); }
+    G.bots.forEach(b => { b.av.group.visible = false; });
+    m.x = 0; m.z = 66; m.y = 0.15; m.av.group.position.set(m.x, m.y, m.z);
+    P.pos.set(0, 0.15, 60); P.vel.set(0, 0, 0); G.cam.yaw = Math.PI; P.facing = 0;
+    G.equipWeapon('pistol'); G.drawWeapon(true); img(6);
+    G.RALENTI.t = 0; G.RALENTI.prochain = 0;
+    const membres0 = GA.membres.length, force0 = GA.force, loots0 = G.city.loots.length;
+    let coups = 0;
+    for (let k = 0; k < 14 && !m.ko; k++) { P.ammo = 8; P.fireCd = 0; G.fire(); coups++; img(12); }
+    const tombe = { ko: !!m.ko, abattu: !!m.abattu, hp: m.hp, auSol: Math.abs(m.av.group.rotation.x) > 1,
+      visible: !!m.av.group.visible, verrouillable: G.ciblesVerrouillables(true).some(c => c.ref === m),
+      ralenti: +G.RALENTI.t.toFixed(1), butin: G.city.loots.length - loots0 };
+    // le corps reste un moment, puis il s'efface et l'homme quitte le gang
+    img(60 * 8);
+    const a8 = { visible: !!m.av.group.visible, dansLeGang: GA.membres.indexOf(m) >= 0 };
+    img(60 * 10);
+    const a18 = { visible: !!m.av.group.visible, dansLeGang: GA.membres.indexOf(m) >= 0,
+      membres: GA.membres.length, force: GA.force };
+    // et une minute et demie plus tard, toujours rien
+    let jamaisDebout = true, jamaisVerrou = true;
+    for (let s = 0; s < 18; s++) { img(300);
+      if (!m.ko || m.hp > 0 || m.av.group.visible) jamaisDebout = false;
+      if (G.ciblesVerrouillables(true).some(c => c.ref === m)) jamaisVerrou = false; }
+    G.drawWeapon(false); G.equipWeapon(null); G.clearWanted();
+    return { coups, tombe, a8, a18, membres0, force0, jamaisDebout, jamaisVerrou,
+      corps: G.GANG_CORPS, efface: G.GANG_EFFACE };
+  });
+  const ok = r.tombe.ko && r.tombe.abattu && r.tombe.auSol && r.tombe.visible && !r.tombe.verrouillable
+    && r.tombe.ralenti > 0 && r.tombe.butin >= 1
+    && r.a8.visible && r.a8.dansLeGang
+    && !r.a18.visible && !r.a18.dansLeGang && r.a18.membres === r.membres0 - 1 && r.a18.force > 0
+    && r.jamaisDebout && r.jamaisVerrou;
+  return { ok, detail: `avant : « ${r.coups} balles, il tombe » puis vingt-six secondes plus tard il SE RELEVAIT avec 60 ❤️, à nouveau verrouillable et prêt à se battre — le joueur ne pouvait jamais en finir · maintenant, ${r.coups} balles le mettent à terre (ralenti ${r.tombe.ralenti} s, ${r.tombe.butin} tas de pièces, plus verrouillable=${!r.tombe.verrouillable}), son corps est encore là à 8 s (${r.a8.visible}) et dans le gang (${r.a8.dansLeGang}), effacé à 18 s (visible=${r.a18.visible}, encore dans le gang=${r.a18.dansLeGang}), l'effectif passe de ${r.membres0} à ${r.a18.membres} pour de bon et la force du gang est recalculée sur les survivants (${r.force0} → ${r.a18.force} : c'est une MOYENNE par homme, elle ne baisse pas forcément) · sur 90 s de jeu de plus il ne se relève jamais (${r.jamaisDebout}) et n'est jamais reverrouillable (${r.jamaisVerrou})` };
+});
+
+test('à mains nues on assomme et on peut encore embarquer l\'homme ; le gang n\'est détruit que si personne ne peut revenir', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const D = 1 / 60;
+    const img = n => { for (let i = 0; i < (n || 1); i++) { G.step(D, true); G.gangTick(D); } };
+    const GA = G.gangs.filter(g => !g.mort)[0];
+    const tous = GA.membres.slice();
+    G.bots.forEach(b => { b.av.group.visible = false; });
+    // ---- 1. TOUT le gang mis au tapis à mains nues : il n'est PAS détruit, ils se relèvent
+    for (const x of tous) { x.hp = 1; x.ko = 0; x.abattu = 0; G.gangeurKO(x, 'le joueur', true); }
+    const poing = { tousAuSol: tous.every(x => !!x.ko), abattus: tous.filter(x => x.abattu).length,
+      gangMort: !!GA.mort, membres: GA.membres.length };
+    // l'un d'eux est à portée : on peut l'embarquer (c'est tout l'intérêt de l'assommer)
+    const m0 = tous[1];
+    P.pos.set(m0.x + 1.2, m0.y, m0.z); P.otage = null;
+    poing.kidnappable = G.peutKidnapper() === m0;
+    // ils se relèvent bien au bout de leurs 26 s
+    for (let s = 0; s < 8; s++) img(300);
+    poing.relevés = tous.filter(x => !x.ko).length;
+    // ---- 2. le même gang ABATTU à l'arme : détruit, et personne ne revient
+    P.pos.set(0, 0.5, 200);   // loin, pour ne pas ramasser le butin ni gêner
+    for (const x of GA.membres.slice()) { x.hp = 1; x.ko = 0; x.abattu = 0; G.gangeurKO(x, 'le joueur'); }
+    const arme = { abattus: GA.membres.filter(x => x.abattu).length, gangMort: !!GA.mort };
+    for (let s = 0; s < 8; s++) img(300);
+    arme.membresApres = GA.membres.length;
+    arme.deboutApres = GA.membres.filter(x => !x.ko).length;
+    arme.gangMortApres = !!GA.mort;
+    G.clearWanted();
+    return { poing, arme };
+  });
+  const ok = r.poing.tousAuSol && r.poing.abattus === 0 && !r.poing.gangMort && r.poing.kidnappable
+    && r.poing.relevés > 0 && r.arme.abattus > 0 && r.arme.gangMort
+    && r.arme.membresApres === 0 && r.arme.deboutApres === 0 && r.arme.gangMortApres;
+  return { ok, detail: `avant : mettre tout le gang au tapis — même à mains nues — annonçait « 🏆 ils n'existent plus » juste avant de les voir tous se relever · maintenant la situation tranche : à mains nues ${r.poing.membres} hommes au sol, aucun abattu (${r.poing.abattus}), le gang n'est PAS déclaré détruit (${r.poing.gangMort}), on peut encore embarquer celui qui est à portée (${r.poing.kidnappable}) et ${r.poing.relevés} se relèvent au bout de leurs 26 s · à l'arme, ${r.arme.abattus} abattus, le gang est détruit (${r.arme.gangMort}) et quarante secondes plus tard il ne reste plus un homme (${r.arme.membresApres} membres, ${r.arme.deboutApres} debout, toujours mort=${r.arme.gangMortApres})` };
+});

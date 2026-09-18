@@ -13145,6 +13145,11 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
         }
       }
       out.push({ nom, mini, d: dd, quoi,
+        // ce qui BRIDE la perche, quand elle est bridee : la piece mesuree (maison de poupee),
+        // la longueur voulue et la place libre dans la ligne de vue
+        salle: dd < mini ? +(G.cam.salle == null ? -1 : G.cam.salle).toFixed(1) : null,
+        veut: dd < mini ? +G.cam.dist.toFixed(1) : null,
+        dedansPiece: dd < mini ? !!G.cam.interieur : null,
         h: +(c.y - q.y).toFixed(2), coupe: mur >= 0, dans: dansUnSolide(c) });
     }
     if (G.drive.car) G.exitCar();
@@ -13169,7 +13174,7 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
   const rates = r.out.filter(s => s.d < s.mini);
   const traverse = r.out.filter(s => s.coupe || s.dans);
   const ok = rates.length === 0 && traverse.length === 0 && r.doux.fin > 8 && r.doux.saut < 0.2;
-  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h}${s.quoi ? ', BARRE PAR ' + s.quoi : ''})`).join(' · ')} · solides dans le monde : ${r.solides} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
+  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h}${s.quoi ? ', BARRE PAR ' + s.quoi : ''}${s.veut != null ? ', voulu ' + s.veut + ' m, piece mesuree ' + s.salle + ' m, maison de poupee=' + s.dedansPiece : ''})`).join(' · ')} · solides dans le monde : ${r.solides} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
 });
 
 test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne coutent qu\'UN appel de dessin', async p => {

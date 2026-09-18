@@ -13127,7 +13127,12 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
       } else if (G.drive.car) G.exitCar();
       // on fait tourner la perche À LA MAIN : camPerche() est isolée de frame() justement
       // pour que le banc d'essai n'ait pas à attendre de vraies images (2 par seconde ici)
-      tourne(150, v.auto ? null : { x: v.x, y: v.y, z: v.z });
+      // ON NE TIENT QUE LES SITUATIONS EN HAUTEUR. Pour les autres, « y » est une hauteur de
+      // LARGAGE (1 m au-dessus du sol) et non un plancher : les tenir la reviendrait a juger la
+      // camera avec un joueur suspendu en l'air — mesure, « sous le preau » tombait alors de
+      // 9,06 a 4,39 m. En hauteur, au contraire, « y » EST le plancher, et sans le tenir le
+      // joueur retombe dans le hall pendant le releve.
+      tourne(150, (!v.auto && v.y > 2) ? { x: v.x, y: v.y, z: v.z } : null);
       const c = G.camera.position, t = G.cam.target, q = G.P.pos;
       const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
       const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15);

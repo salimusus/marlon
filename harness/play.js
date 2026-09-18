@@ -18192,12 +18192,27 @@ test('dans une villa on monte à l\'étage, on ne traverse pas la rambarde même
     // 4. LE PALIER D'ARRIVÉE : on ne bascule ni à droite ni à gauche
     const palierEst = pousser(ESX, ETAGE + 0.05, HZ - 0.7, 1, 0, 5);
     const palierOuest = pousser(ESX, ETAGE + 0.05, HZ - 0.7, -1, 0, 5);
-    return { monte, voleeOuest, voleeEst, tremieNord, tremieOuest, palierEst, palierOuest };
+    // 5. BALAYAGE MARCHE PAR MARCHE. Une seule poussée à mi-volée ne prouve rien : au round 74,
+    // sur cette même volée, 11 poussées sur 60 traversaient (jusqu'à 17,6 m parcourus et 4,85 m
+    // de chute) alors que la poussée de mi-volée, elle, était verte. Le joueur TIENT sur une
+    // marche tant que sa boîte la touche : son centre peut être à 0,73 m du bord, et il
+    // atteignait alors le tronçon de rambarde posé DEUX marches plus bas, dont le dessus
+    // n'était qu'à 0,29 m de ses pieds — il montait dessus comme sur un second escalier.
+    const ESOL = 0.3, EN = 10, ERISE = (ETAGE - ESOL) / EN, ERUN = 0.58, EZ0 = HZ + 5.4;
+    let pireA = 0, pireC = 0, pireOu = '';
+    for (let i = 0; i < EN; i++) for (const sgn of [-1, 1]) {
+      const q = pousser(ESX, ESOL + (i + 1) * ERISE + 0.05, EZ0 - i * ERUN, sgn, 0, 5);
+      if (q.avance > pireA) { pireA = q.avance; pireOu = `marche ${i + 1} vers ${sgn < 0 ? "l'ouest" : "l'est"}`; }
+      if (q.chute > pireC) pireC = q.chute;
+    }
+    const balayage = { n: EN * 2, pireA, pireC, pireOu };
+    return { monte, voleeOuest, voleeEst, tremieNord, tremieOuest, palierEst, palierOuest, balayage };
   });
   const murs = [r.voleeOuest, r.voleeEst, r.tremieNord, r.tremieOuest, r.palierEst, r.palierOuest];
   const ok = r.monte.y > r.monte.etage - 0.1 && r.monte.t < 6
-    && murs.every(m => m.avance < 1.2 && m.chute < 0.3 && m.courut);
-  return { ok, detail: `avant : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et parcourait 18,20 m en tombant de 2,32 m ; depuis l'étage il tombait de 3,71 m dans la trémie · maintenant il monte à ${r.monte.y} m (étage ${r.monte.etage}) en ${r.monte.t} s simulées, et poussé 5 s EN COURANT (course engagée sur les ${murs.filter(m => m.courut).length} poussées, pointe ${Math.max(...murs.map(m => m.vmax))} m/s avant de buter) : volée ouest ${r.voleeOuest.avance} m (chute ${r.voleeOuest.chute}), volée est ${r.voleeEst.avance} m (${r.voleeEst.chute}), trémie nord ${r.tremieNord.avance} m (${r.tremieNord.chute}), trémie ouest ${r.tremieOuest.avance} m (${r.tremieOuest.chute}), palier est ${r.palierEst.avance} m (${r.palierEst.chute}), palier ouest ${r.palierOuest.avance} m (${r.palierOuest.chute})` };
+    && murs.every(m => m.avance < 1.2 && m.chute < 0.3 && m.courut)
+    && r.balayage.pireA < 1.2 && r.balayage.pireC < 0.3;
+  return { ok, detail: `avant : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et parcourait 18,20 m en tombant de 2,32 m ; depuis l'étage il tombait de 3,71 m dans la trémie · maintenant il monte à ${r.monte.y} m (étage ${r.monte.etage}) en ${r.monte.t} s simulées, et poussé 5 s EN COURANT (course engagée sur les ${murs.filter(m => m.courut).length} poussées, pointe ${Math.max(...murs.map(m => m.vmax))} m/s avant de buter) : volée ouest ${r.voleeOuest.avance} m (chute ${r.voleeOuest.chute}), volée est ${r.voleeEst.avance} m (${r.voleeEst.chute}), trémie nord ${r.tremieNord.avance} m (${r.tremieNord.chute}), trémie ouest ${r.tremieOuest.avance} m (${r.tremieOuest.chute}), palier est ${r.palierEst.avance} m (${r.palierEst.chute}), palier ouest ${r.palierOuest.avance} m (${r.palierOuest.chute}) · et marche par marche, ${r.balayage.n} poussées de 5 s sur toute la volée : au pire ${r.balayage.pireA} m (${r.balayage.pireOu}) et ${r.balayage.pireC} m de chute (avant le drapeau « rambarde » : 11 traversées sur 60, jusqu'à 17,6 m et 4,85 m de chute)` };
 });
 
 test('les immeubles de La Zone ont un vrai escalier : volées continues, paliers portés, rambardes solides', async p => {
@@ -18260,7 +18275,7 @@ test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement,
       for (; i < sec * 60; i++) { G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9; G.step(1 / 60, true);
         if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.6) break; }
       G.keys.delete('ArrowUp');
-      journal.push(`${G.P.pos.y.toFixed(2)} m`); return i / 60; };
+      journal.push(`${(i / 60).toFixed(1)}s→${G.P.pos.y.toFixed(2)}m`); return i / 60; };
     // ---- 1. DU TROTTOIR À L'APPARTEMENT DU 2ᵉ ÉTAGE, en temps simulé
     poser(E.xE + E.larg, 0.3, E.zS + 3);
     const t0 = G.simTime;
@@ -18279,6 +18294,12 @@ test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement,
     const dedans = { x: +(G.P.pos.x - b.x).toFixed(2), y: +G.P.pos.y.toFixed(2), z: +(G.P.pos.z - b.z).toFixed(2), t: +(G.simTime - t0).toFixed(1) };
     const meubles = G.solids.filter(o => o.y > (b.etages - 1) * b.h && o.y < b.etages * b.h
       && Math.abs(o.x - b.x) < b.w / 2 && Math.abs(o.z - b.z) < b.d / 2 && o.h < 2 && o.w < 3).length;
+    // ---- 1bis. SONDE : les rambardes sont-elles ENCORE des solides apres la montee ?
+    const dansScene = m => { let n = m, k = 0; while (n && k++ < 64) { if (n === G.scene) return true; n = n.parent; } return false; };
+    const rails = { pose: b.rails.length,
+      dansSolids: b.rails.filter(o => G.solids.indexOf(o) >= 0).length,
+      dansScene: b.rails.filter(o => o.mesh && dansScene(o.mesh)).length,
+      perdus: b.rails.filter(o => G.solids.indexOf(o) < 0).map(o => `(${o.x.toFixed(1)},${o.y.toFixed(1)},${o.z.toFixed(1)} ${o.w}x${o.h.toFixed(2)}x${o.d})`).slice(0, 12) };
     // ---- 2. LES RAMBARDES, poussées 5 s EN COURANT
     const pousser = (x, y, z, dx, dz) => {
       poser(x, y, z);
@@ -18302,13 +18323,34 @@ test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement,
       palierInter: pousser(E.xE + E.larg * 1.5, 0.2 + b.h / 2 + 0.05, E.zS - E.pal - E.nm * E.giron - E.pal / 2, 0, -1),
       coursive: pousser(b.x, yEt + 0.05, b.z + b.d / 2 + 0.8, 0, 1),
     };
-    return { monte, dedans, meubles, murs, journal };
+    // ---- 3. BALAYAGE MARCHE PAR MARCHE. La panne trouvée au round 74 ne se voyait QUE sur
+    // certaines marches : le joueur restait bloqué 228 images contre le garde-corps, puis
+    // montait d'un coup de tronçon en tronçon (1,48 → 1,99 → 2,31 → 2,63 m en une image) et
+    // partait à 18,09 m. Une seule poussée à mi-volée pouvait donc être verte alors que la
+    // volée était traversable. On pousse maintenant sur CHAQUE marche des deux volées.
+    let pireA = 0, pireC = 0, pireOu = '';
+    for (let i = 0; i < E.nm; i++) {
+      const zMo = E.zS - E.pal - E.giron * (i + 0.5) + 0.15;
+      const zDe = E.zS - E.pal - E.nm * E.giron + E.giron * (i + 0.5) - 0.15;
+      for (const [nom, x, y, z, dx] of [
+        [`montante ${i}`, E.xE + E.larg / 2, 0.2 + (i + 1) * E.monte, zMo, 1],
+        [`extérieure O ${i}`, E.xE + E.larg * 1.5, 0.2 + b.h / 2 + (i + 1) * E.monte, zDe, -1],
+        [`extérieure E ${i}`, E.xE + E.larg * 1.5, 0.2 + b.h / 2 + (i + 1) * E.monte, zDe, 1]]) {
+        const q = pousser(x, y + 0.05, z, dx, 0);
+        if (q.avance > pireA) { pireA = q.avance; pireOu = nom; }
+        if (q.chute > pireC) pireC = q.chute;
+      }
+    }
+    const balayage = { n: E.nm * 3, pireA, pireC, pireOu };
+    return { monte, dedans, meubles, murs, journal, rails, balayage };
   });
   const noms = Object.keys(r.murs);
   const ok = r.monte.y > r.monte.etage2 - 0.1 && r.monte.t < 12
     && Math.abs(r.dedans.y - r.monte.etage2) < 0.1 && Math.abs(r.dedans.z) < 4 && r.meubles >= 6
-    && noms.every(n => r.murs[n].avance < 1.3 && r.murs[n].chute < 0.3 && r.murs[n].courut);
-  return { ok, detail: `avant : le palier du 2ᵉ étage arrivait au nord, la coursive au sud, rien entre les deux — on n'atteignait pas le 2ᵉ · maintenant, du trottoir au palier du 2ᵉ (${r.monte.y} m, attendu ${r.monte.etage2}) en ${r.monte.t} s simulées, puis DANS l'appartement (${r.dedans.y} m, à ${r.dedans.z} m du centre) en ${r.dedans.t} s, ${r.meubles} meubles derrière la porte · poussé 5 s EN COURANT : ` + noms.map(n => `${n} ${r.murs[n].avance} m (chute ${r.murs[n].chute})`).join(', ') };
+    && noms.every(n => r.murs[n].avance < 1.3 && r.murs[n].chute < 0.3 && r.murs[n].courut)
+    && r.rails.dansSolids === r.rails.pose
+    && r.balayage.pireA < 1.3 && r.balayage.pireC < 0.3;
+  return { ok, detail: `avant : le palier du 2ᵉ étage arrivait au nord, la coursive au sud, rien entre les deux — on n'atteignait pas le 2ᵉ · maintenant, du trottoir au palier du 2ᵉ (${r.monte.y} m, attendu ${r.monte.etage2}) en ${r.monte.t} s simulées, puis DANS l'appartement (${r.dedans.y} m, à ${r.dedans.z} m du centre) en ${r.dedans.t} s, ${r.meubles} meubles derrière la porte · ${r.rails.dansSolids}/${r.rails.pose} rambardes encore dans les solides (${r.rails.dansScene} encore dans la scène)${r.rails.perdus.length ? ' — PERDUES : ' + r.rails.perdus.join(' ') : ''} · poussé 5 s EN COURANT : ` + noms.map(n => `${n} ${r.murs[n].avance} m (chute ${r.murs[n].chute})`).join(', ') + ` · et marche par marche, ${r.balayage.n} poussées de 5 s sur les deux volées : au pire ${r.balayage.pireA} m (${r.balayage.pireOu}) et ${r.balayage.pireC} m de chute · montée : ` + r.journal.join(' | ') };
 });
 // ================= POSTE CONDUITE — round 72 : le MEILLEUR chemin =================
 test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joignable, et plus de tour de la ville', async p => {
@@ -19078,4 +19120,183 @@ test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le fact
   return { ok, detail: `avant : le pied du joueur restait 28 cm AU-DESSUS de la pédale (cuisse à l'horizontale, −1,35), et le vélo du facteur n'avait AUCUN pédalier — il pédalait dans le vide · maintenant · `
     + `facteur : pédales ${r.facteur.pedales.bas}–${r.facteur.pedales.haut} m, pied à ${r.facteur.pied} m, selle ${r.facteur.selle} m, cuisse ${r.facteur.cuisse}, genou ${r.facteur.genou} · `
     + `joueur : pédales ${r.joueur.pedales.bas}–${r.joueur.pedales.haut} m, pied à ${r.joueur.pied} m, cuisse ${r.joueur.cuisse}, genou ${r.joueur.genou}, à ${r.joueur.vitesse} m/s` };
+});
+test('le ralenti d elimination RACCORDE vers la camera de jeu : plus de saut de treize metres dans une facade', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.P.pos.set(-60, 0.3, 196); G.P.facing = 0; G.cam.yaw = Math.PI; G.cam.pitch = 0.32;
+    // la perche normale se pose d'abord : c'est d'elle que part et vers elle que revient le plan
+    for (let i = 0; i < 90; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
+    const jeu0 = G.camera.position.clone();
+    G.RALENTI.prochain = 0; G.RALENTI.fige = null;
+    const lance = !!G.ralentiCoup(-60, 0.3, 199, 'pistolet', G.P.facing, 1);
+    const dansUnSolide = (c) => {
+      for (const o of G.solidsAutour(c.x, c.z, 3)) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    let prec = null, saut = 0, sautImg = -1, murs = 0, sol = 0;
+    for (let i = 0; i < 360; i++) {
+      G.ralentiEchelle(1 / 60);              // le decompte des trois secondes, en temps REEL, comme frame()
+      G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196);
+      G.camPerche(1 / 60, false);            // camPerche appelle ralentiCam a la toute fin
+      const c = G.camera.position;
+      if (prec) { const dd = Math.hypot(c.x - prec.x, c.y - prec.y, c.z - prec.z); if (dd > saut) { saut = dd; sautImg = i; } }
+      prec = c.clone();
+      if (dansUnSolide(c)) murs++;
+      if (c.y < 0.45) sol++;
+    }
+    // au bout du compte, la camera de jeu a bien repris la main : on la compare a une perche
+    // posee a neuf, au meme endroit
+    const finRalenti = G.camera.position.clone();
+    G.RALENTI.t = 0; G.RALENTI.sortie = 0; G.RALENTI.sortieT = 0;
+    for (let i = 0; i < 60; i++) { G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.camPerche(1 / 60, false); }
+    const jeu1 = G.camera.position.clone();
+    return { lance, saut: +saut.toFixed(2), sautImg, murs, sol,
+      vitesse: +(saut * 60).toFixed(1),
+      ecartFin: +finRalenti.distanceTo(jeu1).toFixed(2),
+      depart: { x: +jeu0.x.toFixed(2), y: +jeu0.y.toFixed(2), z: +jeu0.z.toFixed(2) } };
+  });
+  // 0,25 m par image a 60 images/s = 15 m/s : la borne du raccord est a 14 m/s, on laisse un
+  // cheveu pour le mouvement propre de la camera de jeu pendant la meme image.
+  const ok = r.lance && r.saut < 0.25 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5;
+  return { ok, detail: `defaut route par le poste Armes : a la derniere image du ralenti la camera de cinema lachait la main d'un coup · MESURE AVANT : 13,18 m EN UNE SEULE IMAGE (image 180, de (-58,27 ; 1,90 ; 200,19) a (-60 ; 4,65 ; 187,41)), soit 791 m/s, et le poste Armes l'a vue atterrir DANS une facade · maintenant elle RACCORDE : sur 360 images de ralenti et de reprise, le plus gros deplacement d'une image a l'autre est de ${r.saut} m (image ${r.sautImg}), soit ${r.vitesse} m/s — la borne est a 14 m/s — la camera n'est DANS un solide sur aucune image (${r.murs}) et ne passe jamais sous le sol (${r.sol}), et a la fin elle est revenue exactement la ou la camera de jeu la veut (${r.ecartFin} m d'ecart)` };
+});
+
+test('en visee, la camera passe par-dessus l epaule qui TIENT l arme, sans decentrer le pointage', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ frais: true, world: 4, x: -60, y: 1, z: 196, hour: 12 });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.setWeapon(G.me, 'pistol', true);           // l'arme EN MAIN (c'est frame() qui le fait en jeu)
+    const mesure = (aim) => {
+      G.P.pos.set(-60, 0.3, 196); G.cam.yaw = Math.PI; G.cam.pitch = 0.32;
+      G.P.aim = aim; G.P.aimHeld = aim; G.P.facing = G.cam.yaw + Math.PI;
+      G.cam.libre = null; G.cam.dLisse = null; G.cam.avance = 0; G.cam.hausse = 0;
+      for (let i = 0; i < 240; i++) {
+        G.simTime += 1 / 60; G.P.pos.set(-60, 0.3, 196); G.P.facing = G.cam.yaw + Math.PI;
+        G.camPerche(1 / 60, true);
+      }
+      // on pose l'avatar la ou frame() le pose, pour lire ses morceaux dans le monde
+      G.me.group.position.set(G.P.pos.x, G.P.pos.y, G.P.pos.z);
+      G.me.group.rotation.set(0, G.P.facing, 0);
+      G.me.group.updateMatrixWorld(true);
+      const c = G.camera.position;
+      const f = G.P.facing, fx = Math.sin(f), fz = Math.cos(f), rx = fz, rz = -fx;   // avant, puis DROITE du personnage
+      const cote = (px, pz) => +((px - G.P.pos.x) * rx + (pz - G.P.pos.z) * rz).toFixed(2);
+      const o = { droite: cote(c.x, c.z), arriere: +(-((c.x - G.P.pos.x) * fx + (c.z - G.P.pos.z) * fz)).toFixed(2),
+        d: +Math.hypot(c.x - G.P.pos.x, c.y - (G.P.pos.y + 1.2), c.z - G.P.pos.z).toFixed(2) };
+      const poing = G.me.rig && G.me.rig.armR && G.me.rig.armR.poing;
+      if (poing) { const pp = poing.getWorldPosition(new THREE.Vector3()); o.mainDroite = cote(pp.x, pp.z); }
+      // L'ARME EST-ELLE VUE ? On vise le POING DROIT, qui la tient : c'est le repere le plus sur
+      // (la bouche du canon n'existe pas toujours en tant qu'objet sur l'arme du joueur). Rayon
+      // camera → poing, et on compte les morceaux du CORPS rencontres en chemin. Si le repere
+      // est introuvable, on le DIT au lieu de laisser le test passer en silence.
+      if (!poing) { o.corpsDevant = -1; o.dansLeCadre = false; }
+      else {
+        const pp = poing.getWorldPosition(new THREE.Vector3());
+        const bras = G.me.rig.armR;
+        const dir = pp.clone().sub(c); const L = dir.length(); dir.normalize();
+        const cibles = []; G.me.group.traverse(q => { if (q.isMesh && q.visible && q.geometry && !bras.getObjectById(q.id)) cibles.push(q); });
+        o.piecesDuCorps = cibles.length;
+        const ray = new THREE.Raycaster(c.clone(), dir, 0.05, Math.max(0.1, L - 0.2));
+        o.corpsDevant = ray.intersectObjects(cibles, false).length;
+        const v = pp.clone().project(G.camera);
+        o.dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
+        o.ecran = { x: +v.x.toFixed(2), y: +v.y.toFixed(2) };
+      }
+      return o;
+    };
+    const res = { braque: mesure(true), degaine: mesure(false) };
+    // LE POINTAGE N'EST PAS DECENTRE : le personnage regarde toujours exactement a l'oppose de
+    // cam.yaw, et le decalage d'epaule n'y touche pas.
+    res.pointage = +Math.abs(Math.atan2(Math.sin(G.P.facing - (G.cam.yaw + Math.PI)), Math.cos(G.P.facing - (G.cam.yaw + Math.PI)))).toFixed(4);
+    G.P.aim = false; G.P.aimHeld = false; G.setWeapon(G.me, 'pistol', false);
+    G.drawWeapon(false); G.equipWeapon(null); G.owned.delete('arme:pistol');
+    return res;
+  });
+  const b = r.braque, d = r.degaine;
+  const memeCote = b.mainDroite == null || b.mainDroite > 0 ? b.droite > 0 : b.droite < 0;
+  const ok = b.droite > 0.8 && d.droite > 0.5 && memeCote && r.pointage < 0.01
+    && b.mainDroite > 0.2 && b.piecesDuCorps > 3 && b.corpsDevant === 0 && b.dansLeCadre === true;
+  return { ok, detail: `defaut route par le poste Armes : « camera pile dans le dos, le corps masque l'arme et l'eclair du tir » · la cause n'etait pas la TAILLE du decalage mais son SENS — mesure avant : la camera se posait a 1,25 m a GAUCHE du personnage (droite = -1,25) alors que l'arme est dans sa main DROITE, le corps tombait donc pile entre l'objectif et le canon · apres : braque, la camera est a ${b.droite} m sur sa DROITE (main droite a ${b.mainDroite} m, meme cote que la camera), a ${b.arriere} m derriere et ${b.d} m de lui ; arme degainee sans braquer, ${d.droite} m a droite · rayon tire de l'objectif vers le POING DROIT qui tient l'arme : ${b.corpsDevant} morceau de corps en travers sur les ${b.piecesDuCorps} testes, et le poing est dans le cadre=${b.dansLeCadre} en (${b.ecran ? b.ecran.x + ', ' + b.ecran.y : '—'}) · et le pointage ne bouge pas d'un pouce : le personnage vise toujours exactement a l'oppose de cam.yaw (ecart ${r.pointage} rad), parce que le reticule se calcule sur cam.yaw et non sur le point vise` };
+});
+
+// POSTE LOCOMOTION. L'AMPLIFICATEUR : une pénétration de trente centimètres devenait une
+// traversée de bâtiment. `moveAxis` sortait le joueur par la face d'ENTRÉE, celle d'où il
+// vient — juste quand il vient de heurter le mur, absurde quand il est déjà à l'intérieur,
+// car il lui fait alors traverser toute la boîte. Mesuré avant correction sur une dalle
+// d'étage de 16 m : 15,80 m EN UNE IMAGE (le poste bâtiments en avait relevé 15,70 avec
+// 1,10 m de chute au bout, en montant sur une rambarde). Le déclencheur est corrigé chez lui,
+// l'amplificateur l'est ici, et ce test le garde désarmé pour toutes les autres pénétrations :
+// un véhicule qui se gare sur le joueur, un portail qui se referme, un ascenseur, une dalle
+// qui apparaît.
+//
+// SEUIL : la face la plus PROCHE, c'est-à-dire au plus la DEMI-épaisseur du solide plus la
+// demi-largeur du joueur. Le seuil évident (« pas plus que sa largeur plus l'épaisseur du
+// solide ») ne servirait à rien : l'ancienne règle, qui traversait la boîte entière, le
+// respectait déjà tout juste. C'est la MOITIÉ qui fait la différence entre « on est repoussé
+// dehors » et « on est catapulté de l'autre côté du bâtiment ».
+test('sortir d\'un mur ne catapulte plus le joueur de l\'autre cote du batiment', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P, DT = 1 / 60;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // la plus grosse boîte pleine de la ville : une dalle d'étage
+    const gros = G.solids.filter(o => o.w > 10 && o.d > 6 && o.h > 1.2 && !o.porte)
+      .sort((a, b) => (b.w * b.d) - (a.w * a.d));
+    if (!gros.length) return { aucune: true };
+    const o = gros[0];
+    // on POSE le joueur à l'intérieur (il ne traverse rien : il y est déjà) et on pousse
+    const essai = (ecart, sens) => {
+      __SHOT.go({ world: 4, x: o.x, y: o.y, z: o.z, hour: 12 });
+      P.pos.set(o.x + ecart, o.y, o.z); P.vel.set(0, 0, 0); P.grounded = false; G.keys.clear();
+      const a = { x: P.pos.x, z: P.pos.z };
+      P.vel.x = sens * 0.6;   // un centimètre par image
+      G.step(DT, true);
+      return +Math.hypot(P.pos.x - a.x, P.pos.z - a.z).toFixed(2);
+    };
+    const b = o.w / 2 - 0.6;
+    const bord = { droiteVersDroite: essai(b, 1), gaucheVersGauche: essai(-b, -1), droiteVersGauche: essai(b, -1) };
+    const centre = essai(0, 1);
+    // CONTRE-ÉPREUVE, la moitié qui compte : une cloison fine chargée plus vite que la course
+    // ne doit PAS se traverser. C'est pour ça qu'on garde la face d'entrée quand on arrive
+    // de l'extérieur, au lieu de toujours prendre la plus proche.
+    const fines = G.solids.filter(s => Math.min(s.w, s.d) < 0.45 && Math.max(s.w, s.d) > 4 && s.h > 1.8
+      && !s.porte && Math.abs(s.y - s.h / 2) < 0.6).sort((a, c) => Math.min(a.w, a.d) - Math.min(c.w, c.d));
+    let cloison = null;
+    if (fines.length) {
+      const m = fines[0], surX = m.w < m.d;
+      const dep = surX ? { x: m.x - (m.w / 2 + 1.4), z: m.z } : { x: m.x, z: m.z - (m.d / 2 + 1.4) };
+      __SHOT.go({ world: 4, x: dep.x, y: m.y - m.h / 2 + 0.4, z: dep.z, hour: 12 });
+      P.pos.set(dep.x, P.pos.y, dep.z); P.vel.set(0, 0, 0); G.keys.clear();
+      const cote0 = surX ? Math.sign(P.pos.x - m.x) : Math.sign(P.pos.z - m.z);
+      let traverse = false;
+      for (let i = 0; i < 90; i++) {
+        if (surX) P.vel.x = 11; else P.vel.z = 11;   // 0,18 m par image, plus vite que la course
+        G.step(DT, true);
+        const c2 = surX ? Math.sign(P.pos.x - m.x) : Math.sign(P.pos.z - m.z);
+        if (c2 !== 0 && c2 !== cote0) { traverse = true; break; }
+      }
+      cloison = { epaisseur: +Math.min(m.w, m.d).toFixed(2), traverse };
+    }
+    return { bord, centre, cloison, hw: P.hw,
+      dalle: { w: +o.w.toFixed(1), d: +o.d.toFixed(1) }, borne: +(o.w / 2 + P.hw).toFixed(2) };
+  })()`);
+  if (r.aucune) return { ok: false, detail: 'aucune grosse dalle trouvee dans la ville : le test n\'a rien pu mesurer' };
+  const pire = Math.max(r.bord.droiteVersDroite, r.bord.gaucheVersGauche, r.bord.droiteVersGauche, r.centre);
+  const ok = pire <= r.borne + 0.05
+    && r.bord.droiteVersDroite <= r.hw + 1.1 && r.bord.gaucheVersGauche <= r.hw + 1.1
+    && r.bord.droiteVersGauche <= r.hw + 1.1
+    && !!r.cloison && !r.cloison.traverse;
+  return { ok, detail: `dalle d'etage de ${r.dalle.w} × ${r.dalle.d} m · pose contre le bord et poussant ENCORE vers ce bord, le joueur ressortait 15,80 m plus loin en une seule image (toute la largeur de la dalle) : il ressort maintenant par la face la plus proche, a ${r.bord.droiteVersDroite} m d'un cote et ${r.bord.gaucheVersGauche} m de l'autre · pousse vers l'interieur : ${r.bord.droiteVersGauche} m · depuis le centre exact il reste ${r.centre} m, et c'est le minimum geometrique — la face la plus proche est a ${r.borne} m · pire bond ${pire} m pour une borne de ${r.borne} m (demi-epaisseur + demi-largeur du joueur), la ou l'ancienne regle pouvait faire la largeur ENTIERE · et la moitie qui compte : une cloison de ${r.cloison && r.cloison.epaisseur} m chargee a 11 m/s n'est toujours pas traversee (${r.cloison && r.cloison.traverse ? 'TRAVERSEE' : 'arretee'})` };
 });

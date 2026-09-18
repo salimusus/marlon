@@ -3890,13 +3890,14 @@ function immeubleZone(x, z, w, d, col, dir) {
   const bande = k => xE + LARG * (k + 0.5);            // k = 0 : volée montante ; 1 : volée descendante
   // LA RAMBARDE EST UN VRAI SOLIDE, et elle descend jusqu'au plancher de l'étage : c'est à la
   // fois le garde-corps et le limon qui ferme le flanc de la volée — plus de dalle flottante.
-  // SA HAUTEUR EST CALCULÉE : chaque tronçon est posé sur SA marche, donc le dessus du tronçon
-  // d'en dessous se retrouve à (RAMB − contremarche) au-dessus des pieds. À 1,15 m pour une
-  // contremarche de 0,32 m, cela fait 0,83 m — bien au-dessus du pas du joueur (STEP_UP =
-  // 0,60 m), sinon il escaladerait la rambarde comme un second escalier (piège mesuré dans
-  // les villas : à 1,10 m sur des marches de 0,505 m il passait par-dessus).
-  const rambarde = (cx, base, cz, cw, cd, bas) => box(cx, (Math.min(bas, base) + base + RAMB) / 2, cz,
-    cw, base + RAMB - Math.min(bas, base), cd, 0x8d8378, { studs: false, noRoute: true });
+  // ELLE PORTE LE DRAPEAU `rambarde` : voir moveAxis, le joueur ne MONTE jamais sur un
+  // garde-corps. Une hauteur seule ne suffisait pas : les dessus des tronçons voisins ne sont
+  // qu'à une contremarche l'un de l'autre et formaient un second escalier (mesuré ici : le
+  // joueur poussé en courant montait 1,48 → 1,99 → 2,31 → 2,63 m en UNE image, puis partait
+  // à 18,09 m de là). Le drapeau ferme la faille quelle que soit la hauteur choisie.
+  const RAILS = [];
+  const rambarde = (cx, base, cz, cw, cd, bas) => { const o = box(cx, (Math.min(bas, base) + base + RAMB) / 2, cz,
+    cw, base + RAMB - Math.min(bas, base), cd, 0x8d8378, { studs: false, noRoute: true, rambarde: true }); RAILS.push(o); return o; };
   const mainCourante = (cx, base, cz, cw, cd) => box(cx, base + RAMB + 0.07, cz, cw + 0.1, 0.13, cd + 0.1, 0x6b6157, { deco: true, studs: false });
   for (let f = 0; f < N; f++) {   // le palier de chaque étage : arrivée de l'étage du dessous ET départ du suivant
     const y = f * H + 0.2;
@@ -3966,7 +3967,7 @@ function immeubleZone(x, z, w, d, col, dir) {
   }
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
-  return { x, z, w, d, etages: N, h: H,
+  return { x, z, w, d, etages: N, h: H, rails: RAILS,
     esc: { xE, zS, larg: LARG, pal: PAL, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP } };
 }
 function carcasse(x, z, h) {
@@ -11746,15 +11747,18 @@ function buildVilla(vx, vz, opt = {}) {   // villa identique pour tous : garage 
     // géométrie qui se monte déjà (STEP_UP = 0,60 m).
     const ESOL = 0.3, ETAGE = F + 0.75, EW = 2.6, ESX = HX + 7.4, EN = 10;
     const ERISE = (ETAGE - ESOL) / EN, ERUN = 0.58, EZ0 = HZ + 5.4;
-    // LA HAUTEUR DE LA RAMBARDE EST CALCULÉE, PAS CHOISIE. Chaque tronçon est posé sur SA
-    // marche : le tronçon de la marche du dessous a donc son dessus à (hauteur − 0,505 m)
-    // au-dessus des pieds. À 1,10 m cela faisait 0,595 m, c'est-à-dire SOUS le pas du
-    // joueur (STEP_UP = 0,60 m) : mesuré, il montait sur la rambarde comme sur un second
-    // escalier, puis basculait de l'autre côté (2,80 m parcourus, 2,83 m de chute). À
-    // 1,30 m, le dessus du tronçon d'en dessous est à 0,795 m — hors de portée du pas.
+    // LA RAMBARDE PORTE LE DRAPEAU `rambarde` (voir moveAxis) : on ne monte pas dessus.
+    // La hauteur seule ne suffisait pas. À 1,10 m, le tronçon d'en dessous avait son dessus
+    // à 0,595 m des pieds, sous le pas du joueur (STEP_UP = 0,60 m) : il l'escaladait comme
+    // un second escalier (2,80 m parcourus, 2,83 m de chute). Passer à 1,30 m n'a fait que
+    // déplacer la faille : le joueur TIENT sur une marche tant que sa boîte la touche, son
+    // centre peut donc être à 0,73 m du bord et atteindre le tronçon posé DEUX marches plus
+    // bas — dessus à 1,30 − 2 × 0,505 = 0,29 m de ses pieds. Mesure sur cette volée avant le
+    // drapeau : 11 poussées sur 60 passaient au travers, jusqu'à 17,6 m parcourus et 4,85 m
+    // de chute. Avec le drapeau : 0 sur 60.
     const ERT = 0.18, ERAIL = 1.3;                       // épaisseur et hauteur d'appui de la rambarde
     const EZ9 = EZ0 - (EN - 1) * ERUN;                   // axe de la dixième marche
-    const rambarde = (x, y, z, w, d) => box(x, y + ERAIL / 2, z, w, ERAIL, d, 0xc9a84c, { studs: false, noRoute: true });
+    const rambarde = (x, y, z, w, d) => box(x, y + ERAIL / 2, z, w, ERAIL, d, 0xc9a84c, { studs: false, noRoute: true, rambarde: true });
     for (let i = 0; i < EN; i++) {
       const top = ESOL + (i + 1) * ERISE, z = EZ0 - i * ERUN;
       // marche pleine : plus de vide sous les pieds (voir le même correctif à la banque)
@@ -22036,9 +22040,38 @@ function moveAxis(axis, amount, canStep) {
     {
       const top = o.y + o.h / 2, rise = top - P.pos.y;
       // marge : une marche pile à 0,60 m tombait parfois à 0,6000000000000001 et devenait infranchissable
-      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep) { P.pos.y = top; continue; }
+      // ON NE MONTE JAMAIS SUR UNE RAMBARDE (o.rambarde). Un garde-corps est posé tronçon par
+      // tronçon, un par marche : le dessus d'un tronçon n'est donc qu'À UNE CONTREMARCHE du
+      // dessus du suivant, et la ligne des dessus forme un SECOND ESCALIER, de même pente que
+      // le vrai, que le pas du joueur (STEP_UP) gravit sans effort. Pire, le joueur « tient »
+      // sur une marche tant que sa boîte la touche : son centre peut donc être à 0,73 m du
+      // bord, ce qui met à sa portée le tronçon posé DEUX marches plus bas — dont le dessus
+      // n'est qu'à (hauteur de rambarde − deux contremarches) au-dessus de ses pieds.
+      // MESURE (immeubles de La Zone, rambarde de 1,15 m sur des marches de 0,32 m) : poussé
+      // en courant contre le garde-corps, le joueur restait bloqué 228 images (0,61 m), puis
+      // montait 1,48 → 1,99 → 2,31 → 2,63 m EN UNE SEULE IMAGE, tronçon après tronçon, se
+      // retrouvait la tête dans la dalle de l'étage et se faisait éjecter à 15,70 m de là par
+      // la sortie de mur ci-dessous (la dalle fait 16 m de large) : 18,09 m parcourus et une
+      // chute de 1,10 m. Les villas avaient exactement le même défaut, latent (rambarde de
+      // 1,30 m, contremarches de 0,505 m : 0,29 m de marche d'un tronçon à l'autre).
+      // Monter une rambarde n'a de toute façon aucun sens : elle est là pour arrêter.
+      if (rise > 0 && rise <= STEP_UP + 1e-6 && canStep && !o.rambarde) { P.pos.y = top; continue; }
       const half = (axis === 'x' ? o.w : o.d) / 2;
-      const side = amount !== 0 ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
+      // PAR QUELLE FACE ON RESSORT. On sortait toujours par la face d'ENTREE, celle d'ou l'on
+      // vient (`-Math.sign(amount)`). C'est juste quand on vient de heurter le mur — et c'est
+      // meme indispensable, sinon une cloison fine abordee en courant se traverserait. Mais
+      // quand le joueur est DEJA DEDANS, il n'y a pas eu d'entree a cette image : le renvoyer
+      // « d'ou il vient » lui fait traverser toute la boite. MESURE, dalle d'etage de 16 m :
+      // pose contre le bord droit et poussant vers la droite, il ressortait 15,80 m plus loin
+      // EN UNE IMAGE (le poste batiments en a mesure 15,70 avec 1,10 m de chute au bout).
+      // On distingue donc les deux cas, et on n'en sacrifie aucun :
+      //   — il etait DEHORS avant ce deplacement : face d'entree, on annule la penetration,
+      //     rien ne traverse jamais une cloison, meme mince, meme lance a pleine vitesse ;
+      //   — il etait DEJA DEDANS (un vehicule qui se gare sur lui, un portail qui se referme,
+      //     un ascenseur, une dalle qui apparait) : face la PLUS PROCHE, donc le plus petit
+      //     deplacement possible. Le meme cas tombe alors a 1,00 m.
+      const dehorsAvant = Math.abs(avant - o[axis]) >= half + P.hw;
+      const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
       P.vel[axis] = 0;
     }
@@ -27982,11 +28015,16 @@ function camPerche(dt, aiming) {
     // l'eleve se retrouvait PILE devant le texte. On vise donc a hauteur du tableau : la
     // camera monte avec la cible et la tete passe dessous (verifie en capture).
     if (P.sit && P.sit.ecole && !aiming) tmpV.y += 1.25;
-    // PAR-DESSUS L'ÉPAULE. Arme dégainée on décalait déjà la visée de 90 cm ; quand le joueur
-    // BRAQUE (L2 maintenue, P.aim), on la décale de 1,25 m et la caméra vient se poser sur
-    // l'épaule — c'est le cadrage de visée des jeux d'action, et c'est ce qui rend le pointage
-    // au stick droit vraiment fin (la sensibilité est déjà divisée par deux dans pollGamepad).
-    if (aiming) { const ep = P.aim ? 1.25 : 0.9; tmpV.x += Math.cos(cam.yaw) * ep; tmpV.z -= Math.sin(cam.yaw) * ep; }
+    // PAR-DESSUS L'ÉPAULE — ET PAR-DESSUS LA BONNE (round 73). Arme dégainée on décalait la visée
+    // de 90 cm, braqué (L2) de 1,25 m… mais DU MAUVAIS CÔTÉ. Mesuré : la caméra se posait à
+    // 1,25 m à GAUCHE du personnage alors que l'arme est dans sa main DROITE (`me.rig.armR`) :
+    // le corps passait donc exactement entre l'objectif et le canon, et l'on ne voyait ni l'arme
+    // ni l'éclair du tir — le défaut que le poste Armes a photographié. `+cos(yaw), -sin(yaw)`
+    // est la GAUCHE du personnage : quand il vise, il regarde vers `(-sin yaw, -cos yaw)`, donc
+    // sa droite vaut `(-cos yaw, +sin yaw)`. On décale du bon côté, l'épaule droite.
+    // La visée, elle, ne bouge pas d'un pouce : le réticule est calculé sur `cam.yaw`, pas sur
+    // le point visé — décaler l'épaule cadre le personnage, il ne dépointe pas.
+    if (aiming) { const ep = P.aim ? 1.25 : 0.9; tmpV.x -= Math.cos(cam.yaw) * ep; tmpV.z += Math.sin(cam.yaw) * ep; }
     // Dans une pièce, la caméra reculait dans le mur ou par-dessus le plafond : on la ramène
     // près du joueur. Et devant un objet à manipuler, on se rapproche encore et on le cadre.
     // PASSAGER CHEZ UN AMI : ON EST EN VOITURE MÊME SI `drive.car` EST VIDE. Trois endroits de
@@ -28309,7 +28347,7 @@ function camPerche(dt, aiming) {
   // (L'appel avait DISPARU quand la caméra a été refaite en `camPerche` : le ralenti
   //  ralentissait bien le temps mais ne changeait plus d'angle — il ne restait que la moitié
   //  de ce que le joueur avait demandé.)
-  try { ralentiCam(); } catch (e) {}
+  try { ralentiCam(dt); } catch (e) {}
 }
 
 function loop() {
@@ -34094,7 +34132,13 @@ function animCombat(av, dt) {
 const RALENTI_DUREE = 3;         // s de TEMPS RÉEL
 const RALENTI_LENT = 0.30;       // l'horloge du jeu tourne à 30 % pendant le ralenti
 const RALENTI_REPOS = 9;         // s : pas deux ralentis coup sur coup
-const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null };
+const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null,
+  // LE RACCORD DE SORTIE (round 73). `sortie` = secondes restantes, `sortieT` = sa durée totale,
+  // `cx/cy/cz` la dernière position de cinéma et `vx/vy/vz` le dernier point visé par le cinéma.
+  sortie: 0, sortieT: 0, cx: 0, cy: 0, cz: 0, vx: 0, vy: 0, vz: 0, px: 0, py: 0, pz: 0 };
+const RALENTI_SORTIE_MAX = 1;    // s : durée maximale du raccord entre la caméra de cinéma et celle du jeu
+const RALENTI_SORTIE_MIN = 0.25; // s : et sa durée minimale, pour que le raccord se voie toujours comme un mouvement
+const RALENTI_VMAX = 14;         // m/s : vitesse maximale du raccord — c'est elle qui BORNE le mouvement
 // À APPELER AU COUP QUI MET À TERRE. `arme` : 'poing' | 'pied' | 'couteau' | 'pistolet'.
 // `cote` : +1 la caméra passe à droite de l'attaquant, −1 à gauche (on prend le côté du poing
 // qui frappe, pour que le bras soit entre la caméra et le visage de l'adversaire).
@@ -34122,9 +34166,64 @@ function ralentiEchelle(reel) {
 }
 // LA CAMÉRA DU RALENTI. Appelée à la toute fin du placement de caméra : elle écrase la
 // position et la visée, et rend true quand elle a pris la main.
-function ralentiCam() {
-  if (!(RALENTI.t > 0) && RALENTI.fige == null) return false;
+function ralentiCam(dt) {
   if (typeof camera === 'undefined' || !camera) return false;
+  const pas = dt > 0 && dt < 1 ? dt : 1 / 60;
+  if (!(RALENTI.t > 0) && RALENTI.fige == null) {
+    // LE RACCORD DE SORTIE. À la dernière image du ralenti, la caméra de cinéma lâchait la main
+    // d'un coup et l'image sautait sur la caméra de jeu : MESURÉ, 13,18 m EN UNE IMAGE (de
+    // (-58,27 ; 1,90 ; 200,19) à (-60 ; 4,65 ; 187,41)), et le poste Armes l'a vue atterrir DANS
+    // une façade. Même famille que la perche qui repartait de zéro en montant en voiture, même
+    // remède : on ne coupe pas, on RACCORDE — la caméra glisse du point de cinéma vers la caméra
+    // de jeu, à 14 m/s au plus, en traitant les murs comme partout ailleurs.
+    if (!(RALENTI.sortie > 0)) return false;
+    const jx = camera.position.x, jy = camera.position.y, jz = camera.position.z;   // la caméra de JEU, déjà posée par camPerche
+    if (!(RALENTI.sortieT > 0)) {
+      const D = Math.hypot(jx - RALENTI.cx, jy - RALENTI.cy, jz - RALENTI.cz);
+      RALENTI.sortieT = clamp(D / RALENTI_VMAX, RALENTI_SORTIE_MIN, RALENTI_SORTIE_MAX);
+      RALENTI.sortie = RALENTI.sortieT;
+      RALENTI.px = RALENTI.cx; RALENTI.py = RALENTI.cy; RALENTI.pz = RALENTI.cz;   // le raccord part du point de cinéma
+    }
+    RALENTI.sortie = Math.max(0, RALENTI.sortie - pas);
+    const k = animLiss(clamp(1 - RALENTI.sortie / RALENTI.sortieT, 0, 1));
+    let px = RALENTI.cx + (jx - RALENTI.cx) * k, py = RALENTI.cy + (jy - RALENTI.cy) * k, pz = RALENTI.cz + (jz - RALENTI.cz) * k;
+    // LE PAS D'UNE IMAGE A L'AUTRE EST BORNE POUR DE BON. Calculer la durée à partir de la
+    // vitesse MOYENNE ne suffit pas : l'atténuation a un milieu plus rapide que sa moyenne, et
+    // la mesure donnait 21 m/s de pointe pour une borne annoncée à 14. On borne donc le pas
+    // lui-même, et tant qu'on n'est pas arrivé on PROLONGE le raccord au lieu de sauter.
+    {
+      const mx = RALENTI_VMAX * pas;
+      const sx = px - RALENTI.px, sy = py - RALENTI.py, sz = pz - RALENTI.pz, sl = Math.hypot(sx, sy, sz);
+      if (sl > mx && sl > 0) { const q = mx / sl; px = RALENTI.px + sx * q; py = RALENTI.py + sy * q; pz = RALENTI.pz + sz * q; }
+    }
+    const reste = Math.hypot(px - jx, py - jy, pz - jz);
+    // ON NE LÂCHE QUE COLLÉ À LA CAMÉRA DE JEU. Mesuré : lâcher à 30 cm laissait encore un pas
+    // de 0,45 m à l'image de la reprise, au-dessus de la borne. À 12 cm, la dernière image ne se
+    // voit plus — et tant qu'on n'y est pas, le raccord se prolonge au pas borné.
+    if (k >= 1 && reste < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    if (k >= 1) RALENTI.sortie = pas;   // pas encore arrivé (pas borné) : on prolonge d'une image
+    const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
+          vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,
+          vz = RALENTI.vz + (cam.target.z - RALENTI.vz) * k;
+    // LE RACCORD NE TRAVERSE PAS LES MURS. Le chemin le plus court entre le point de cinéma et
+    // la caméra de jeu passe volontiers à travers une façade — c'est dans une façade que le
+    // saut atterrissait. On raccourcit comme le fait la perche normale.
+    if (typeof murEntreVue === 'function') {
+      let ax = px - vx, ay = py - vy, az = pz - vz, L = Math.hypot(ax, ay, az) || 1;
+      for (let i = 0; i < 4 && L > 0.8; i++) {
+        const t = murEntreVue(vx, vy, vz, ax / L, ay / L, az / L, L - 0.1);
+        if (t < 0) break;
+        const nl = Math.max(0.8, t - 0.25);
+        px = vx + ax / L * nl; py = vy + ay / L * nl; pz = vz + az / L * nl;
+        ax = px - vx; ay = py - vy; az = pz - vz; L = nl;
+      }
+    }
+    camera.position.set(px, py, pz);
+    if (camera.position.y < 0.5) camera.position.y = 0.5;
+    RALENTI.px = camera.position.x; RALENTI.py = camera.position.y; RALENTI.pz = camera.position.z;
+    camera.lookAt(vx, vy, vz);
+    return true;
+  }
   const u = RALENTI.fige != null ? clamp(RALENTI.fige, 0, 1) : clamp(1 - RALENTI.t / RALENTI_DUREE, 0, 1);
   // LE BALAYAGE : on part d'un trois-quarts arrière du côté du bras qui frappe et on passe
   // au profil, puis au trois-quarts avant de l'adversaire. 62° de course sur trois secondes.
@@ -34149,6 +34248,11 @@ function ralentiCam() {
   }
   camera.position.set(cx + Math.sin(a) * d, Math.max(0.5, RALENTI.y + hy), cz + Math.cos(a) * d);
   camera.lookAt(cx, cy, cz);
+  // tant que le cinéma tient la main, le raccord de sortie reste ARMÉ et retient la dernière
+  // position de cinéma : c'est de là que repartira le glissement vers la caméra de jeu.
+  RALENTI.cx = camera.position.x; RALENTI.cy = camera.position.y; RALENTI.cz = camera.position.z;
+  RALENTI.vx = cx; RALENTI.vy = cy; RALENTI.vz = cz;
+  RALENTI.sortie = RALENTI_SORTIE_MAX; RALENTI.sortieT = 0;
   return true;
 }
 // Filet de sécurité : le ralenti ne survit ni à la mort du joueur, ni au démontage de la ville.

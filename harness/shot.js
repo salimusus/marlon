@@ -990,6 +990,11 @@ window.__G = {
   assiedChien: typeof assiedChien === 'function' ? assiedChien : null,
   placeOccupants: typeof placeOccupants === 'function' ? placeOccupants : null,
   // ---- POSTE PLACES ASSISES : exports apres cette ligne-repere ----
+  ASSIS_CIBLE: typeof ASSIS_CIBLE !== 'undefined' ? ASSIS_CIBLE : null,
+  ASSIS_CRANE: typeof ASSIS_CRANE !== 'undefined' ? ASSIS_CRANE : null,
+  ASSIS_CORPS: typeof ASSIS_CORPS !== 'undefined' ? ASSIS_CORPS : null,
+  plafondAssise: typeof plafondAssise === 'function' ? plafondAssise : null,
+  hautVitrage: typeof hautVitrage === 'function' ? hautVitrage : null,
   embarqueOccupants: typeof embarqueOccupants === 'function' ? embarqueOccupants : null,
   debarqueOccupants: typeof debarqueOccupants === 'function' ? debarqueOccupants : null,
   compagnonsProches: typeof compagnonsProches === 'function' ? compagnonsProches : null,

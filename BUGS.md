@@ -643,3 +643,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : caméra à 2,99 m (PC) / 1,85 m (TV) de la voiture au 1er relevé, le toit et le capot occupent les deux tiers de l'image (`img/p2/p2-02-choc-mur.png`, `p2-02-choc-mur-tv.png`) ; la carrosserie est uniformément brun-noir à 🔧 49–70 % alors qu'il n'y a ni feu ni fumée.
 - **On devrait voir** : un recul minimal de ~5 m même à l'arrêt (la réparation n° 32 a réglé « recul = vitesse × 1,2 », donc rien à 0 km/h), et une teinte de dégâts qui reste une voiture cabossée (bosses, phares cassés) et non une carcasse.
 - **Sonde** : `p2-pc.log` `p32.releves[0].dist = 2.99`, `p2-tv.log` `p32.releves[0].dist = 1.85`.
+
+### 77. Se faire emmener par un habitant : on n'arrive jamais, la voiture s'arrête en route et l'enfant se retrouve debout sur la chaussée sans un mot
+- **Gravité** : GRAVE (fonction promise « monte à côté de X » : le trajet n'aboutit pas)
+- **Reproduire** : point d'apparition, attendre la proposition « 🚗 △ : monter à côté de <nom> », △, puis ne rien faire. Reproduit 2/2 (`q2-pc.log` Chloe_mia, `q3-pc.log` Nathan_pro).
+- **On voit** : run 1 — « 🚗 Chloe_mia conduit vers Caserne · 115 m » puis 124, 127, 127, 127, 128, **141, 146 m** : la distance AUGMENTE pendant 24 s, on s'éloigne du but. Run 2 — « Nathan_pro conduit vers Quartier résidentiel · 225 m » → 217 m, puis la voiture reste immobile en (20,3 ; 1,0) pendant 12 s, repart, descend jusqu'à 116 m, remonte à 124 m, et à t+45 s la pastille repasse à « 🚗 △ : monter » : le joueur a été **débarqué en pleine rue** (voiture arrêtée en (7,9 ; 108,5), qui n'y bouge plus pendant 15 s) sans aucun message.
+- **On devrait voir** : une distance qui diminue, une arrivée annoncée (« Arrivés à … »), et si le conducteur abandonne, une phrase qui le dit.
+- **Capture** : `img/q3/q3-covoit.png`, `img/q2/q2-covoit-0.png`.

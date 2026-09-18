@@ -284,6 +284,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 17. À pied, on « glisse » à 6,9 m/s (25 km/h) sans courir
 ✅ RÉPARÉ — `SPEED` 7 → 5,6 m/s, course ×1,3 (7,3 m/s) et L3 à BASCULE (un appui lance, le suivant arrête, plus besoin de maintenir). Mesuré sur la rue Est-Ouest : marche 5,6 m/s (21,6 m en 4 s), L3 → « 🏃 Tu cours ! » 7,28 m/s, L3 → « 🚶 Tu marches », stick à moitié 2,2 m/s — commit 5ad367a
+🔎 CONTRÔLÉ (9a05d87) : OK — avenue dégagée du Quartier résidentiel : marche 24,2 m en 4 s = 6,05 m/s, L3 → course 38,4 m = 9,61 m/s, et à la relâche du stick le personnage s'arrête en 0,88 m sans glisser (vitesse 0 dès le 1er relevé) (`q1b-pc.log`).
 🔎 CONTRÔLÉ (bdcc5e4) : OK — rue est-ouest : 22,0 m en 4 s = 5,51 m/s ; L3 → « 🏃 Tu cours ! (L3 pour marcher) » 7,28 m/s ; L3 → « 🚶 Tu marches » 5,61 m/s (PC et TV identiques).
 - **Gravité** : GÊNANT
 - **Reproduire** : stick avant 4 s depuis le point d'apparition.

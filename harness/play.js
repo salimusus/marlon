@@ -17423,7 +17423,17 @@ test('pendant que le membre conduit, la voiture ne reste pas plantée sans raiso
       dParc += bouge; px = c.x; pz = c.z;
       if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
         planteT += dt;
-        if (planteT > pire) { pire = planteT; pireOu = { x: +c.x.toFixed(1), z: +c.z.toFixed(1), raison: c.raison || '-' }; }
+        if (planteT > pire) { pire = planteT;
+          // QU'EST-CE QUI LA BLOQUE ? Sans ça on ne peut pas trancher entre une épave garée
+          // par un test précédent, un obstacle du décor et un vrai défaut de conduite.
+          let dv = 99, qui = null;
+          for (const o of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
+            if (o === c) continue; const d2 = Math.hypot(o.x - c.x, o.z - c.z);
+            if (d2 < dv) { dv = d2; qui = { kind: o.kind || 'voiture', v: +Math.abs(o.speed || 0).toFixed(1), busy: !!o.busy,
+              devant: +((o.x - c.x) * Math.sin(c.h) + (o.z - c.z) * Math.cos(c.h)).toFixed(1) }; }
+          }
+          pireOu = { x: +c.x.toFixed(1), z: +c.z.toFixed(1), raison: c.raison || '-',
+            vehiculeLePlusProche: +dv.toFixed(1), voisin: qui, recule: !!c.recule }; }
         if (planteT > 1.5 && !enPanne) { enPanne = true; plantages++; }
       } else { planteT = 0; enPanne = false; }
     }
@@ -17448,7 +17458,7 @@ test('pendant que le membre conduit, la voiture ne reste pas plantée sans raiso
   const ok = roule.etat === 'arrive' && roule.pire < 2.5 && roule.plantages === 0 && roule.vMoy > 3
     && assise.visible && assise.passager && Math.abs(assise.droite) < assise.largeur / 2
     && Math.abs(assise.avant) < assise.longueur / 2 && assise.cap < 0.05 && assise.cuisse < -1;
-  return { ok, detail: `avant : trois arrêts de 3,5 s en 60 s de route, toujours nez contre un lampadaire du trottoir (0,2 · 0,2 · 0,5 m/s relevés, aucune raison de s'arrêter) · maintenant, trajet en « ${depart.vehicule} » amené en ${depart.venue} s : ${roule.trajet} s jusqu'à la villa (${roule.parcouru} m, ${roule.vMoy} m/s, arrivé à ${roule.dVilla} m), le plus long arrêt SANS RAISON dure ${roule.pire} s${roule.pireOu ? ` (en ${roule.pireOu.x}, ${roule.pireOu.z})` : ''}, ${roule.plantages} plantage(s) de plus de 1,5 s · après 2,5 s de boucle d'affichage laissée seule : joueur visible=${assise.visible}, ${assise.droite} m sur le côté et ${assise.avant} m en avant du centre, ${assise.haut} m sous le repère, cuisses ${assise.cuisse}` };
+  return { ok, detail: `avant : trois arrêts de 3,5 s en 60 s de route, toujours nez contre un lampadaire du trottoir (0,2 · 0,2 · 0,5 m/s relevés, aucune raison de s'arrêter) · maintenant, trajet en « ${depart.vehicule} » amené en ${depart.venue} s : ${roule.trajet} s jusqu'à la villa (${roule.parcouru} m, ${roule.vMoy} m/s, arrivé à ${roule.dVilla} m), le plus long arrêt SANS RAISON dure ${roule.pire} s${roule.pireOu ? ` (en ${roule.pireOu.x}, ${roule.pireOu.z}, véhicule le plus proche à ${roule.pireOu.vehiculeLePlusProche} m${roule.pireOu.voisin ? ` — ${roule.pireOu.voisin.kind} à ${roule.pireOu.voisin.v} m/s, ${roule.pireOu.voisin.devant} m devant, réservé=${roule.pireOu.voisin.busy}` : ''})` : ''}, ${roule.plantages} plantage(s) de plus de 1,5 s · après 2,5 s de boucle d'affichage laissée seule : joueur visible=${assise.visible}, ${assise.droite} m sur le côté et ${assise.avant} m en avant du centre, ${assise.haut} m sous le repère, cuisses ${assise.cuisse}` };
 });
 test('douze secondes de trajet en passager : la camera suit le vehicule sans plonger dans la tole ni s envoler', async p => {
   const r = await p.evaluate(`(() => {

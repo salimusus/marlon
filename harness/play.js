@@ -3106,24 +3106,26 @@ test('La Zone : un quartier pauvre praticable du trottoir au toit', async p => {
     const imm = G.city.zoneImmeubles;
     res.n = imm.length;
     res.etages = imm.map(i => i.etages);
-    // Les volées ont été refaites : le giron se calcule sur la distance réelle jusqu'au
-    // palier (et non sur 0,62 m fixe), et une volée sur deux est décalée de 2,60 m vers
-    // l'extérieur pour ne plus passer sous la précédente. Le test suivait encore l'ancien
-    // tracé et sondait donc le vide.
-    const b = imm[0], ex0 = b.x + b.w / 2 + 1.6;
+    // L'ESCALIER A ÉTÉ REFAIT (deux volées par étage, demi-tour sur palier intermédiaire) :
+    // le test suivait l'ancien tracé à une volée par étage et sondait donc le vide. Il
+    // parcourt maintenant le gabarit publié par immeubleZone (b.esc).
+    const b = imm[0], E = b.esc;
     const marches = [], trous = [], hauteurs = [];
     for (let f = 0; f < b.etages - 1; f++) {
-      const y0 = f * b.h + 0.2, y1 = (f + 1) * b.h + 0.2, n = 8, len = (b.d - 2) / n, rise = (y1 - y0) / n;
-      const sens = f % 2 ? -1 : 1, z0 = b.z - (b.d / 2 - 1) * sens, exf = ex0 + (f % 2 ? 2.6 : 0);
-      for (let i = 0; i < n; i++) {
-        const zz = z0 + sens * (i * len + len / 2), attendu = y0 + (i + 1) * rise;
-        const y = G.groundUnder(exf, zz, null, attendu + 0.3);
+      const y0 = f * b.h + 0.2, ym = y0 + b.h / 2;
+      const volees = [
+        { cx: E.xE + E.larg / 2, base: y0, z0: E.zS - E.pal, sens: -1 },                       // volée montante, contre le mur
+        { cx: E.xE + E.larg * 1.5, base: ym, z0: E.zS - E.pal - E.nm * E.giron, sens: 1 },      // volée descendante, à l'extérieur
+      ];
+      for (const v of volees) for (let i = 0; i < E.nm; i++) {
+        const zz = v.z0 + v.sens * E.giron * (i + 0.5), attendu = v.base + (i + 1) * E.monte;
+        const y = G.groundUnder(v.cx, zz, null, attendu + 0.3);
         marches.push(+y.toFixed(2));
         if (Math.abs(y - attendu) > 0.12) trous.push([f, i, +y.toFixed(2), +attendu.toFixed(2)]);
         // hauteur libre au-dessus de la marche : on ne doit pas se cogner à la volée du dessus
         let plafond = 99;
         for (const o of G.solids) {
-          if (Math.abs(o.x - exf) > o.w / 2 + 0.4 || Math.abs(o.z - zz) > o.d / 2 + 0.4) continue;
+          if (Math.abs(o.x - v.cx) > o.w / 2 + 0.4 || Math.abs(o.z - zz) > o.d / 2 + 0.4) continue;
           const bas = o.y - o.h / 2;
           if (bas > y + 0.3 && bas < plafond) plafond = bas;
         }
@@ -3165,7 +3167,7 @@ test('La Zone : un quartier pauvre praticable du trottoir au toit', async p => {
     }
     return res;
   });
-  const ok = r.n === 5 && r.etages.every(e => e === 3) && r.trous.length === 0 && r.marches === 16
+  const ok = r.n === 5 && r.etages.every(e => e === 3) && r.trous.length === 0 && r.marches === 20
     && r.planchers.every((pp, f) => pp.every(y => Math.abs(y - (f * 3.2 + 0.2)) < 0.05))
     && r.toit > 9.5 && r.meubles.every(m => m >= 6) && r.chevauchements === 0 && r.hauteurLibre > 2
     && r.sol.every(y => y > 0.04) && r.errants >= 4 && r.zone && r.poubelles >= 10 && r.mur && !r.vide;
@@ -18194,6 +18196,116 @@ test('dans une villa on monte à l\'étage, on ne traverse pas la rambarde même
   return { ok, detail: `avant : poussé 5 s contre la rampe à mi-volée, le joueur la traversait et parcourait 18,20 m en tombant de 2,32 m ; depuis l'étage il tombait de 3,71 m dans la trémie · maintenant il monte à ${r.monte.y} m (étage ${r.monte.etage}) en ${r.monte.t} s simulées, et poussé 5 s EN COURANT (course engagée sur les ${murs.filter(m => m.courut).length} poussées, pointe ${Math.max(...murs.map(m => m.vmax))} m/s avant de buter) : volée ouest ${r.voleeOuest.avance} m (chute ${r.voleeOuest.chute}), volée est ${r.voleeEst.avance} m (${r.voleeEst.chute}), trémie nord ${r.tremieNord.avance} m (${r.tremieNord.chute}), trémie ouest ${r.tremieOuest.avance} m (${r.tremieOuest.chute}), palier est ${r.palierEst.avance} m (${r.palierEst.chute}), palier ouest ${r.palierOuest.avance} m (${r.palierOuest.chute})` };
 });
 
+test('les immeubles de La Zone ont un vrai escalier : volées continues, paliers portés, rambardes solides', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -152, y: 1, z: 20, hour: 12, frais: true });
+    const imm = G.city.zoneImmeubles || [];
+    const bilan = imm.map(b => {
+      const E = b.esc;
+      if (!E) return { x: b.x, z: b.z, esc: false };
+      const dans = o => Math.abs(o.x - (E.xE + E.larg)) < E.larg + 1.5 && Math.abs(o.z - b.z) < b.d / 2 + 3;
+      // les marches : des blocs pleins, larges, hauts d'une contremarche
+      const marches = G.solids.filter(o => dans(o) && Math.abs(o.h - E.monte) < 0.01 && Math.abs(o.w - E.larg) < 0.05);
+      // les rambardes : de VRAIS solides (pas du décor), minces, hauts d'au moins l'appui
+      const rambardes = G.solids.filter(o => dans(o) && !o.decor && Math.min(o.w, o.d) < 0.45 && o.h >= E.ramb - 0.01 && o.y - o.h / 2 > -0.1);
+      // les piliers qui portent la cage
+      const piliers = G.solids.filter(o => dans(o) && o.h > (b.etages - 1) * b.h && o.w < 1 && o.d < 1);
+      // continuité : sous chaque marche théorique, le sol est bien à la hauteur prévue
+      const trous = [];
+      for (let f = 0; f < b.etages - 1; f++) {
+        const y0 = f * b.h + 0.2, ym = y0 + b.h / 2;
+        for (const v of [{ cx: E.xE + E.larg / 2, base: y0, z0: E.zS - E.pal, sens: -1 },
+                         { cx: E.xE + E.larg * 1.5, base: ym, z0: E.zS - E.pal - E.nm * E.giron, sens: 1 }])
+          for (let i = 0; i < E.nm; i++) {
+            const zz = v.z0 + v.sens * E.giron * (i + 0.5), attendu = v.base + (i + 1) * E.monte;
+            if (Math.abs(G.groundUnder(v.cx, zz, null, attendu + 0.3) - attendu) > 0.1) trous.push([f, i]);
+          }
+      }
+      // le palier de CHAQUE étage est au sud, au droit de la coursive, et la coursive est
+      // de plain-pied avec le plancher de l'appartement
+      const niveaux = [];
+      for (let f = 1; f < b.etages; f++) {
+        const yEt = f * b.h + 0.2;
+        niveaux.push({ f,
+          palier: +G.groundUnder(E.xE + E.larg, E.zS - E.pal / 2, null, yEt + 0.4).toFixed(2),
+          coursive: +G.groundUnder(b.x + b.w / 4, b.z + b.d / 2 + 0.8, null, yEt + 0.4).toFixed(2),
+          appart: +G.groundUnder(b.x + b.w / 4, b.z, null, yEt + 0.4).toFixed(2), attendu: +yEt.toFixed(2) });
+      }
+      return { x: b.x, z: b.z, esc: true, marches: marches.length, rambardes: rambardes.length,
+        piliers: piliers.length, trous: trous.length, niveaux, monte: +E.monte.toFixed(2), giron: +E.giron.toFixed(2), ramb: +E.ramb.toFixed(2) };
+    });
+    return { n: imm.length, bilan };
+  });
+  const ok = r.n === 5 && r.bilan.every(b => b.esc && b.trous === 0
+    && b.marches >= 20 && b.rambardes >= 24 && b.piliers >= 2
+    && b.monte <= 0.55 && b.giron >= 0.55 && b.ramb - b.monte > 0.65
+    && b.niveaux.length === 2
+    && b.niveaux.every(n => Math.abs(n.palier - n.attendu) < 0.1 && Math.abs(n.coursive - n.attendu) < 0.1 && Math.abs(n.appart - n.attendu) < 0.1));
+  const b0 = r.bilan[0];
+  return { ok, detail: `avant : des dalles qui flottaient (blocs de 0,40 m posés dans le vide), des piquets de 8 cm sans main courante, deux paliers en porte-à-faux, et le palier du 2ᵉ arrivait au NORD alors que la coursive est au SUD — le 2ᵉ étage était inaccessible · maintenant ${r.n} immeubles, tous avec ${b0.marches} marches de ${b0.monte} m sur ${b0.giron} m de giron, ${b0.trous} trou, ${b0.rambardes} rambardes SOLIDES de ${b0.ramb} m d'appui et ${b0.piliers} piliers porteurs · ` + r.bilan.map(b => `(${b.x},${b.z}) ` + b.niveaux.map(n => `étage ${n.f} : palier ${n.palier} / coursive ${n.coursive} / appartement ${n.appart} m (attendu ${n.attendu})`).join(' — ')).join(' · ') };
+});
+
+test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement, et la rambarde tient même en courant', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -152, y: 1, z: 20, hour: 12, frais: true });
+    const b = G.city.zoneImmeubles[0], E = b.esc, journal = [];
+    const poser = (x, y, z) => { G.P.sit = null; G.P.pos.set(x, y, z); G.P.vel.set(0, 0, 0); for (let k = 0; k < 6; k++) G.step(1 / 60, true); };
+    const marcher = (tx, tz, sec) => { G.keys.add('ArrowUp'); let i = 0;
+      for (; i < sec * 60; i++) { G.cam.yaw = Math.atan2(-(tx - G.P.pos.x), -(tz - G.P.pos.z)); G.cam.freeUntil = 1e9; G.step(1 / 60, true);
+        if (Math.hypot(tx - G.P.pos.x, tz - G.P.pos.z) < 0.6) break; }
+      G.keys.delete('ArrowUp');
+      journal.push(`${G.P.pos.y.toFixed(2)} m`); return i / 60; };
+    // ---- 1. DU TROTTOIR À L'APPARTEMENT DU 2ᵉ ÉTAGE, en temps simulé
+    poser(E.xE + E.larg, 0.3, E.zS + 3);
+    const t0 = G.simTime;
+    marcher(E.xE + E.larg, E.zS - E.pal / 2, 6);
+    for (let f = 0; f < b.etages - 1; f++) {
+      const zM = E.zS - E.pal - E.nm * E.giron - E.pal / 2;
+      marcher(E.xE + E.larg / 2, E.zS - E.pal / 2, 6);     // on traverse le palier vers la volée montante
+      marcher(E.xE + E.larg / 2, zM, 14);                  // la volée montante
+      marcher(E.xE + E.larg * 1.5, zM, 8);                 // le demi-tour
+      marcher(E.xE + E.larg * 1.5, E.zS - E.pal / 2, 14);  // la volée descendante
+    }
+    const monte = { y: +G.P.pos.y.toFixed(2), etage2: +((b.etages - 1) * b.h + 0.2).toFixed(2), t: +(G.simTime - t0).toFixed(1) };
+    const porte = b.x + b.w / 4 - b.w / 2 + (b.w - 3.2) / 3 + 0.8 + ((b.w - 3.2) / 3 + 1.6);
+    marcher(b.x + 2.93, b.z + b.d / 2 + 1, 12);            // la coursive, devant la porte
+    marcher(b.x + 2.93, b.z + 1.5, 10);                    // on entre
+    const dedans = { x: +(G.P.pos.x - b.x).toFixed(2), y: +G.P.pos.y.toFixed(2), z: +(G.P.pos.z - b.z).toFixed(2), t: +(G.simTime - t0).toFixed(1) };
+    const meubles = G.solids.filter(o => o.y > (b.etages - 1) * b.h && o.y < b.etages * b.h
+      && Math.abs(o.x - b.x) < b.w / 2 && Math.abs(o.z - b.z) < b.d / 2 && o.h < 2 && o.w < 3).length;
+    // ---- 2. LES RAMBARDES, poussées 5 s EN COURANT
+    const pousser = (x, y, z, dx, dz) => {
+      poser(x, y, z);
+      const p0 = { x: G.P.pos.x, y: G.P.pos.y, z: G.P.pos.z };
+      let courut = false;
+      G.keys.add('ArrowUp');
+      for (let i = 0; i < 300; i++) { G.P.run = true; G.P.energie = 100; G.P.essouffle = false;
+        G.cam.yaw = Math.atan2(-dx, -dz); G.cam.freeUntil = 1e9; G.step(1 / 60, true); if (G.P.court) courut = true; }
+      G.keys.delete('ArrowUp'); G.P.run = false;
+      return { avance: +Math.hypot(G.P.pos.x - p0.x, G.P.pos.z - p0.z).toFixed(2), chute: +(p0.y - G.P.pos.y).toFixed(2), courut };
+    };
+    const yA = 0.2 + 3 * E.monte, zA = E.zS - E.pal - E.giron * 2.5 + 0.15;   // mi-volée montante
+    const yB = 0.2 + b.h / 2 + 3 * E.monte, zB = E.zS - E.pal - E.nm * E.giron + E.giron * 2.5 - 0.15;
+    const yEt = b.h + 0.2;
+    const murs = {
+      voleeMontante: pousser(E.xE + E.larg / 2, yA + 0.05, zA, 1, 0),
+      voleeExtEst: pousser(E.xE + E.larg * 1.5, yB + 0.05, zB, 1, 0),
+      voleeExtOuest: pousser(E.xE + E.larg * 1.5, yB + 0.05, zB, -1, 0),
+      palierEst: pousser(E.xE + E.larg * 1.35, yEt + 0.05, E.zS - E.pal / 2, 1, 0),
+      palierSud: pousser(E.xE + E.larg * 1.35, yEt + 0.05, E.zS - E.pal / 2, 0, 1),
+      palierInter: pousser(E.xE + E.larg * 1.5, 0.2 + b.h / 2 + 0.05, E.zS - E.pal - E.nm * E.giron - E.pal / 2, 0, -1),
+      coursive: pousser(b.x, yEt + 0.05, b.z + b.d / 2 + 0.8, 0, 1),
+    };
+    return { monte, dedans, meubles, murs, journal };
+  });
+  const noms = Object.keys(r.murs);
+  const ok = r.monte.y > r.monte.etage2 - 0.1 && r.monte.t < 12
+    && Math.abs(r.dedans.y - r.monte.etage2) < 0.1 && Math.abs(r.dedans.z) < 4 && r.meubles >= 6
+    && noms.every(n => r.murs[n].avance < 1.3 && r.murs[n].chute < 0.3 && r.murs[n].courut);
+  return { ok, detail: `avant : le palier du 2ᵉ étage arrivait au nord, la coursive au sud, rien entre les deux — on n'atteignait pas le 2ᵉ · maintenant, du trottoir au palier du 2ᵉ (${r.monte.y} m, attendu ${r.monte.etage2}) en ${r.monte.t} s simulées, puis DANS l'appartement (${r.dedans.y} m, à ${r.dedans.z} m du centre) en ${r.dedans.t} s, ${r.meubles} meubles derrière la porte · poussé 5 s EN COURANT : ` + noms.map(n => `${n} ${r.murs[n].avance} m (chute ${r.murs[n].chute})`).join(', ') };
+});
 // ================= POSTE CONDUITE — round 72 : le MEILLEUR chemin =================
 test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joignable, et plus de tour de la ville', async p => {
   const r = await p.evaluate(() => {

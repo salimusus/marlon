@@ -13122,11 +13122,33 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
       const c = G.camera.position, t = G.cam.target, q = G.P.pos;
       const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
       const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15);
-      out.push({ nom, mini,
-        d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+      const dd = +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2);
+      // QUAND UNE SITUATION EST TROP SERREE, ON DIT QUI BARRE LA PERCHE. Ce test tombait en
+      // SUITE COMPLETE et passait seul : sans nommer le solide fautif on ne peut pas savoir
+      // si c'est la loi de camera qui a change ou un objet laisse par un test precedent.
+      // On relance donc le cone a la main, rayon par rayon, et on garde le plus proche.
+      let quoi = null;
+      if (dd < mini) {
+        const pv = G.cam.pitch + (G.cam.hausse || 0), cp = Math.cos(pv), sp2 = Math.sin(pv);
+        let m = 99;
+        for (const a of [0, 0.4, -0.4]) {
+          const dr = [Math.sin(G.cam.yaw + a) * cp, sp2, Math.cos(G.cam.yaw + a) * cp];
+          for (const o of G.solidsAutour(t.x, t.z, 13)) {
+            if ((o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;
+            if (o.mesh && !o.mesh.visible) continue;
+            const hx = Math.max(o.w, 0.36) / 2 + 0.3, hy = o.h / 2 + 0.3, hz = Math.max(o.d, 0.36) / 2 + 0.3;
+            if (o.y + hy < t.y - 1.4) continue;
+            if (Math.abs(t.x - o.x) < hx && Math.abs(t.y - o.y) < hy && Math.abs(t.z - o.z) < hz) continue;
+            const tt = G.rayBox(t.x, t.y, t.z, dr[0], dr[1], dr[2], o.x, o.y, o.z, hx, hy, hz, 12);
+            if (tt >= 0 && tt < m) { m = tt; quoi = `${o.w.toFixed(1)}×${o.h.toFixed(1)}×${o.d.toFixed(1)} m en (${o.x.toFixed(0)}, ${o.y.toFixed(1)}, ${o.z.toFixed(0)}) a ${tt.toFixed(1)} m`; }
+          }
+        }
+      }
+      out.push({ nom, mini, d: dd, quoi,
         h: +(c.y - q.y).toFixed(2), coupe: mur >= 0, dans: dansUnSolide(c) });
     }
     if (G.drive.car) G.exitCar();
+    const nbSolides = (G.solids || []).length;
     // RETOUR EN DOUCEUR : on décolle du mur en marchant, la perche doit se rallonger sans
     // le moindre saut d'image (c'est l'à-coup dont se plaignait le joueur)
     __SHOT.go({ world: 4, x: -64, y: 1, z: 215.6, yaw: 3.14, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
@@ -13142,12 +13164,12 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
       G.camPerche(1 / 60, false); G.interieurTick();
       const L = dist(); saut = Math.max(saut, Math.abs(L - prec)); prec = L;
     }
-    return { out, doux: { debut: +debut.toFixed(2), fin: +prec.toFixed(2), saut: +saut.toFixed(3) } };
+    return { out, solides: nbSolides, doux: { debut: +debut.toFixed(2), fin: +prec.toFixed(2), saut: +saut.toFixed(3) } };
   });
   const rates = r.out.filter(s => s.d < s.mini);
   const traverse = r.out.filter(s => s.coupe || s.dans);
   const ok = rates.length === 0 && traverse.length === 0 && r.doux.fin > 8 && r.doux.saut < 0.2;
-  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h})`).join(' · ')} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
+  return { ok, detail: `la caméra se collait au personnage dès qu'un mur, un toit ou une simple paroi étroite se trouvait quelque part autour de lui : 1,68 m dos au mur de l'école, 1,58 m en travers d'une ruelle, 3,44 m sous le préau alors qu'il y a dix mètres de dégagé, 4,85 m dans la halle du marché qui en fait vingt-quatre · en cause : une distance rabotée par le PLAFOND (« il y a un toit, donc on se colle ») et par la plus petite paroi mesurée autour du joueur, sans jamais regarder si la vue elle-même était bouchée · la loi est maintenant : un toit n'aplatit que la VISÉE, la longueur de la perche ne dépend QUE de la ligne de vue, et quand un mur gêne pour de bon la caméra MONTE le long du mur (jusqu'à retrouver 4,6 m, pas plus) au lieu de coller à la nuque, le point de visée avance pour sortir le joueur du centre de l'image et le champ s'ouvre de 13° · ${r.out.map(s => `${s.nom} ${s.d} m (mini ${s.mini}, hauteur ${s.h}${s.quoi ? ', BARRE PAR ' + s.quoi : ''})`).join(' · ')} · solides dans le monde : ${r.solides} · aucun mur entre la caméra et le joueur, aucune caméra dans un solide (${traverse.length}) · et le retour est doux : de ${r.doux.debut} m à ${r.doux.fin} m en s'éloignant du mur, plus gros saut d'une image à l'autre ${r.doux.saut} m` };
 });
 
 test('les traces de pas dans la neige suivent le marcheur, s\'effacent et ne coutent qu\'UN appel de dessin', async p => {

@@ -28152,7 +28152,7 @@ function camPerche(dt, aiming) {
   // (L'appel avait DISPARU quand la caméra a été refaite en `camPerche` : le ralenti
   //  ralentissait bien le temps mais ne changeait plus d'angle — il ne restait que la moitié
   //  de ce que le joueur avait demandé.)
-  try { ralentiCam(); } catch (e) {}
+  try { ralentiCam(dt); } catch (e) {}
 }
 
 function loop() {
@@ -33921,7 +33921,13 @@ function animCombat(av, dt) {
 const RALENTI_DUREE = 3;         // s de TEMPS RÉEL
 const RALENTI_LENT = 0.30;       // l'horloge du jeu tourne à 30 % pendant le ralenti
 const RALENTI_REPOS = 9;         // s : pas deux ralentis coup sur coup
-const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null };
+const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null,
+  // LE RACCORD DE SORTIE (round 73). `sortie` = secondes restantes, `sortieT` = sa durée totale,
+  // `cx/cy/cz` la dernière position de cinéma et `vx/vy/vz` le dernier point visé par le cinéma.
+  sortie: 0, sortieT: 0, cx: 0, cy: 0, cz: 0, vx: 0, vy: 0, vz: 0 };
+const RALENTI_SORTIE_MAX = 1;    // s : durée maximale du raccord entre la caméra de cinéma et celle du jeu
+const RALENTI_SORTIE_MIN = 0.25; // s : et sa durée minimale, pour que le raccord se voie toujours comme un mouvement
+const RALENTI_VMAX = 14;         // m/s : vitesse maximale du raccord — c'est elle qui BORNE le mouvement
 // À APPELER AU COUP QUI MET À TERRE. `arme` : 'poing' | 'pied' | 'couteau' | 'pistolet'.
 // `cote` : +1 la caméra passe à droite de l'attaquant, −1 à gauche (on prend le côté du poing
 // qui frappe, pour que le bras soit entre la caméra et le visage de l'adversaire).
@@ -33949,9 +33955,48 @@ function ralentiEchelle(reel) {
 }
 // LA CAMÉRA DU RALENTI. Appelée à la toute fin du placement de caméra : elle écrase la
 // position et la visée, et rend true quand elle a pris la main.
-function ralentiCam() {
-  if (!(RALENTI.t > 0) && RALENTI.fige == null) return false;
+function ralentiCam(dt) {
   if (typeof camera === 'undefined' || !camera) return false;
+  const pas = dt > 0 && dt < 1 ? dt : 1 / 60;
+  if (!(RALENTI.t > 0) && RALENTI.fige == null) {
+    // LE RACCORD DE SORTIE. À la dernière image du ralenti, la caméra de cinéma lâchait la main
+    // d'un coup et l'image sautait sur la caméra de jeu : MESURÉ, 13,18 m EN UNE IMAGE (de
+    // (-58,27 ; 1,90 ; 200,19) à (-60 ; 4,65 ; 187,41)), et le poste Armes l'a vue atterrir DANS
+    // une façade. Même famille que la perche qui repartait de zéro en montant en voiture, même
+    // remède : on ne coupe pas, on RACCORDE — la caméra glisse du point de cinéma vers la caméra
+    // de jeu, à 14 m/s au plus, en traitant les murs comme partout ailleurs.
+    if (!(RALENTI.sortie > 0)) return false;
+    const jx = camera.position.x, jy = camera.position.y, jz = camera.position.z;   // la caméra de JEU, déjà posée par camPerche
+    if (!(RALENTI.sortieT > 0)) {
+      const D = Math.hypot(jx - RALENTI.cx, jy - RALENTI.cy, jz - RALENTI.cz);
+      RALENTI.sortieT = clamp(D / RALENTI_VMAX, RALENTI_SORTIE_MIN, RALENTI_SORTIE_MAX);
+      RALENTI.sortie = RALENTI.sortieT;
+    }
+    RALENTI.sortie = Math.max(0, RALENTI.sortie - pas);
+    const k = animLiss(clamp(1 - RALENTI.sortie / RALENTI.sortieT, 0, 1));
+    if (k >= 1) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    let px = RALENTI.cx + (jx - RALENTI.cx) * k, py = RALENTI.cy + (jy - RALENTI.cy) * k, pz = RALENTI.cz + (jz - RALENTI.cz) * k;
+    const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
+          vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,
+          vz = RALENTI.vz + (cam.target.z - RALENTI.vz) * k;
+    // LE RACCORD NE TRAVERSE PAS LES MURS. Le chemin le plus court entre le point de cinéma et
+    // la caméra de jeu passe volontiers à travers une façade — c'est dans une façade que le
+    // saut atterrissait. On raccourcit comme le fait la perche normale.
+    if (typeof murEntreVue === 'function') {
+      let ax = px - vx, ay = py - vy, az = pz - vz, L = Math.hypot(ax, ay, az) || 1;
+      for (let i = 0; i < 4 && L > 0.8; i++) {
+        const t = murEntreVue(vx, vy, vz, ax / L, ay / L, az / L, L - 0.1);
+        if (t < 0) break;
+        const nl = Math.max(0.8, t - 0.25);
+        px = vx + ax / L * nl; py = vy + ay / L * nl; pz = vz + az / L * nl;
+        ax = px - vx; ay = py - vy; az = pz - vz; L = nl;
+      }
+    }
+    camera.position.set(px, py, Math.abs(pz) < 1e9 ? pz : camera.position.z);
+    if (camera.position.y < 0.5) camera.position.y = 0.5;
+    camera.lookAt(vx, vy, vz);
+    return true;
+  }
   const u = RALENTI.fige != null ? clamp(RALENTI.fige, 0, 1) : clamp(1 - RALENTI.t / RALENTI_DUREE, 0, 1);
   // LE BALAYAGE : on part d'un trois-quarts arrière du côté du bras qui frappe et on passe
   // au profil, puis au trois-quarts avant de l'adversaire. 62° de course sur trois secondes.
@@ -33976,6 +34021,11 @@ function ralentiCam() {
   }
   camera.position.set(cx + Math.sin(a) * d, Math.max(0.5, RALENTI.y + hy), cz + Math.cos(a) * d);
   camera.lookAt(cx, cy, cz);
+  // tant que le cinéma tient la main, le raccord de sortie reste ARMÉ et retient la dernière
+  // position de cinéma : c'est de là que repartira le glissement vers la caméra de jeu.
+  RALENTI.cx = camera.position.x; RALENTI.cy = camera.position.y; RALENTI.cz = camera.position.z;
+  RALENTI.vx = cx; RALENTI.vy = cy; RALENTI.vz = cz;
+  RALENTI.sortie = RALENTI_SORTIE_MAX; RALENTI.sortieT = 0;
   return true;
 }
 // Filet de sécurité : le ralenti ne survit ni à la mort du joueur, ni au démontage de la ville.

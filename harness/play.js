@@ -19041,17 +19041,20 @@ test('en visee, la camera passe par-dessus l epaule qui TIENT l arme, sans decen
         d: +Math.hypot(c.x - G.P.pos.x, c.y - (G.P.pos.y + 1.2), c.z - G.P.pos.z).toFixed(2) };
       const poing = G.me.rig && G.me.rig.armR && G.me.rig.armR.poing;
       if (poing) { const pp = poing.getWorldPosition(new THREE.Vector3()); o.mainDroite = cote(pp.x, pp.z); }
-      // L'ARME EST-ELLE VUE ? rayon camera → bouche du canon, et on regarde ce qu'il rencontre
-      // en premier parmi les morceaux du personnage.
-      const w = G.me.gun, muz = w && w.userData && w.userData.muzzle;
-      if (muz) {
-        const mp = muz.getWorldPosition(new THREE.Vector3());
-        o.bouche = cote(mp.x, mp.z);
-        const dir = mp.clone().sub(c); const L = dir.length(); dir.normalize();
-        const cibles = []; G.me.group.traverse(q => { if (q.isMesh && q.visible && q.geometry && q !== w && !w.getObjectById(q.id)) cibles.push(q); });
-        const ray = new THREE.Raycaster(c.clone(), dir, 0.05, Math.max(0.1, L - 0.25));
+      // L'ARME EST-ELLE VUE ? On vise le POING DROIT, qui la tient : c'est le repere le plus sur
+      // (la bouche du canon n'existe pas toujours en tant qu'objet sur l'arme du joueur). Rayon
+      // camera → poing, et on compte les morceaux du CORPS rencontres en chemin. Si le repere
+      // est introuvable, on le DIT au lieu de laisser le test passer en silence.
+      if (!poing) { o.corpsDevant = -1; o.dansLeCadre = false; }
+      else {
+        const pp = poing.getWorldPosition(new THREE.Vector3());
+        const bras = G.me.rig.armR;
+        const dir = pp.clone().sub(c); const L = dir.length(); dir.normalize();
+        const cibles = []; G.me.group.traverse(q => { if (q.isMesh && q.visible && q.geometry && !bras.getObjectById(q.id)) cibles.push(q); });
+        o.piecesDuCorps = cibles.length;
+        const ray = new THREE.Raycaster(c.clone(), dir, 0.05, Math.max(0.1, L - 0.2));
         o.corpsDevant = ray.intersectObjects(cibles, false).length;
-        const v = mp.clone().project(G.camera);
+        const v = pp.clone().project(G.camera);
         o.dansLeCadre = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1;
         o.ecran = { x: +v.x.toFixed(2), y: +v.y.toFixed(2) };
       }
@@ -19068,6 +19071,6 @@ test('en visee, la camera passe par-dessus l epaule qui TIENT l arme, sans decen
   const b = r.braque, d = r.degaine;
   const memeCote = b.mainDroite == null || b.mainDroite > 0 ? b.droite > 0 : b.droite < 0;
   const ok = b.droite > 0.8 && d.droite > 0.5 && memeCote && r.pointage < 0.01
-    && (b.corpsDevant == null || b.corpsDevant === 0) && (b.dansLeCadre !== false);
-  return { ok, detail: `defaut route par le poste Armes : « camera pile dans le dos, le corps masque l'arme et l'eclair du tir » · la cause n'etait pas la TAILLE du decalage mais son SENS — mesure avant : la camera se posait a 1,25 m a GAUCHE du personnage (droite = -1,25) alors que l'arme est dans sa main DROITE, le corps tombait donc pile entre l'objectif et le canon · apres : braque, la camera est a ${b.droite} m sur sa DROITE (main droite a ${b.mainDroite} m, bouche du canon a ${b.bouche} m — meme cote), a ${b.arriere} m derriere et ${b.d} m de lui ; arme degainee sans braquer, ${d.droite} m a droite · aucun morceau du corps entre l'objectif et la bouche du canon (${b.corpsDevant}), bouche dans le cadre=${b.dansLeCadre} en (${b.ecran ? b.ecran.x + ', ' + b.ecran.y : '—'}) · et le pointage ne bouge pas d'un pouce : le personnage vise toujours exactement a l'oppose de cam.yaw (ecart ${r.pointage} rad), parce que le reticule se calcule sur cam.yaw et non sur le point vise` };
+    && b.mainDroite > 0.2 && b.piecesDuCorps > 3 && b.corpsDevant === 0 && b.dansLeCadre === true;
+  return { ok, detail: `defaut route par le poste Armes : « camera pile dans le dos, le corps masque l'arme et l'eclair du tir » · la cause n'etait pas la TAILLE du decalage mais son SENS — mesure avant : la camera se posait a 1,25 m a GAUCHE du personnage (droite = -1,25) alors que l'arme est dans sa main DROITE, le corps tombait donc pile entre l'objectif et le canon · apres : braque, la camera est a ${b.droite} m sur sa DROITE (main droite a ${b.mainDroite} m, meme cote que la camera), a ${b.arriere} m derriere et ${b.d} m de lui ; arme degainee sans braquer, ${d.droite} m a droite · rayon tire de l'objectif vers le POING DROIT qui tient l'arme : ${b.corpsDevant} morceau de corps en travers sur les ${b.piecesDuCorps} testes, et le poing est dans le cadre=${b.dansLeCadre} en (${b.ecran ? b.ecran.x + ', ' + b.ecran.y : '—'}) · et le pointage ne bouge pas d'un pouce : le personnage vise toujours exactement a l'oppose de cam.yaw (ecart ${r.pointage} rad), parce que le reticule se calcule sur cam.yaw et non sur le point vise` };
 });

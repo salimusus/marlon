@@ -33929,7 +33929,7 @@ const RALENTI_REPOS = 9;         // s : pas deux ralentis coup sur coup
 const RALENTI = { t: 0, x: 0, y: 0, z: 0, dir: 0, cote: 1, arme: 'poing', prochain: 0, n: 0, fige: null,
   // LE RACCORD DE SORTIE (round 73). `sortie` = secondes restantes, `sortieT` = sa durée totale,
   // `cx/cy/cz` la dernière position de cinéma et `vx/vy/vz` le dernier point visé par le cinéma.
-  sortie: 0, sortieT: 0, cx: 0, cy: 0, cz: 0, vx: 0, vy: 0, vz: 0 };
+  sortie: 0, sortieT: 0, cx: 0, cy: 0, cz: 0, vx: 0, vy: 0, vz: 0, px: 0, py: 0, pz: 0 };
 const RALENTI_SORTIE_MAX = 1;    // s : durée maximale du raccord entre la caméra de cinéma et celle du jeu
 const RALENTI_SORTIE_MIN = 0.25; // s : et sa durée minimale, pour que le raccord se voie toujours comme un mouvement
 const RALENTI_VMAX = 14;         // m/s : vitesse maximale du raccord — c'est elle qui BORNE le mouvement
@@ -33976,11 +33976,23 @@ function ralentiCam(dt) {
       const D = Math.hypot(jx - RALENTI.cx, jy - RALENTI.cy, jz - RALENTI.cz);
       RALENTI.sortieT = clamp(D / RALENTI_VMAX, RALENTI_SORTIE_MIN, RALENTI_SORTIE_MAX);
       RALENTI.sortie = RALENTI.sortieT;
+      RALENTI.px = RALENTI.cx; RALENTI.py = RALENTI.cy; RALENTI.pz = RALENTI.cz;   // le raccord part du point de cinéma
     }
     RALENTI.sortie = Math.max(0, RALENTI.sortie - pas);
     const k = animLiss(clamp(1 - RALENTI.sortie / RALENTI.sortieT, 0, 1));
-    if (k >= 1) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
     let px = RALENTI.cx + (jx - RALENTI.cx) * k, py = RALENTI.cy + (jy - RALENTI.cy) * k, pz = RALENTI.cz + (jz - RALENTI.cz) * k;
+    // LE PAS D'UNE IMAGE A L'AUTRE EST BORNE POUR DE BON. Calculer la durée à partir de la
+    // vitesse MOYENNE ne suffit pas : l'atténuation a un milieu plus rapide que sa moyenne, et
+    // la mesure donnait 21 m/s de pointe pour une borne annoncée à 14. On borne donc le pas
+    // lui-même, et tant qu'on n'est pas arrivé on PROLONGE le raccord au lieu de sauter.
+    {
+      const mx = RALENTI_VMAX * pas;
+      const sx = px - RALENTI.px, sy = py - RALENTI.py, sz = pz - RALENTI.pz, sl = Math.hypot(sx, sy, sz);
+      if (sl > mx && sl > 0) { const q = mx / sl; px = RALENTI.px + sx * q; py = RALENTI.py + sy * q; pz = RALENTI.pz + sz * q; }
+    }
+    const reste = Math.hypot(px - jx, py - jy, pz - jz);
+    if (k >= 1 && reste < 0.3) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    if (k >= 1) RALENTI.sortie = pas;   // pas encore arrivé (pas borné) : on prolonge d'une image
     const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
           vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,
           vz = RALENTI.vz + (cam.target.z - RALENTI.vz) * k;
@@ -33997,8 +34009,9 @@ function ralentiCam(dt) {
         ax = px - vx; ay = py - vy; az = pz - vz; L = nl;
       }
     }
-    camera.position.set(px, py, Math.abs(pz) < 1e9 ? pz : camera.position.z);
+    camera.position.set(px, py, pz);
     if (camera.position.y < 0.5) camera.position.y = 0.5;
+    RALENTI.px = camera.position.x; RALENTI.py = camera.position.y; RALENTI.pz = camera.position.z;
     camera.lookAt(vx, vy, vz);
     return true;
   }

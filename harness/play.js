@@ -18306,3 +18306,91 @@ test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement,
     && noms.every(n => r.murs[n].avance < 1.3 && r.murs[n].chute < 0.3 && r.murs[n].courut);
   return { ok, detail: `avant : le palier du 2ᵉ étage arrivait au nord, la coursive au sud, rien entre les deux — on n'atteignait pas le 2ᵉ · maintenant, du trottoir au palier du 2ᵉ (${r.monte.y} m, attendu ${r.monte.etage2}) en ${r.monte.t} s simulées, puis DANS l'appartement (${r.dedans.y} m, à ${r.dedans.z} m du centre) en ${r.dedans.t} s, ${r.meubles} meubles derrière la porte · poussé 5 s EN COURANT : ` + noms.map(n => `${n} ${r.murs[n].avance} m (chute ${r.murs[n].chute})`).join(', ') };
 });
+// ================= POSTE CONDUITE — round 72 : le MEILLEUR chemin =================
+test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joignable, et plus de tour de la ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const lg = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : null; };
+    // douze trajets qui font le tour des quartiers : villa, commissariat, hôpital, garage,
+    // plage, La Zone, casino, circuit, école, port, maisons de l'ouest
+    const pts = [[8, 8], [48, 193], [-46, 16], [12, 190], [-22, -30], [108, 44], [-140, 40], [60, 288], [152, -77], [-62, 196], [100, 132], [-87, 44]];
+    const R = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const A = G.pointRouteLibre(a[0], a[1]) || { x: a[0], z: a[1] };
+      const B = G.pointRouteLibre(b[0], b[1]) || { x: b[0], z: b[1] };
+      const vp = G.voieProche(A.x, A.z);
+      const px = vp ? vp.px : A.x, pz = vp ? vp.pz : A.z;   // une voiture posée sur sa voie
+      const oiseau = Math.hypot(B.x - px, B.z - pz);
+      const via = G.itineraireVoies(px, pz, B.x, B.z, null);
+      const grille = G.navPath(px, pz, B.x, B.z);
+      const lv = via ? lg(via, px, pz) : null, lgr = grille ? lg(grille, px, pz) : null;
+      R.push({ oiseau: +oiseau.toFixed(0), voies: lv == null ? null : +lv.toFixed(0), grille: lgr == null ? null : +lgr.toFixed(0),
+        rOiseau: lv == null ? null : +(lv / oiseau).toFixed(2), rGrille: (lv == null || !lgr) ? null : +(lv / lgr).toFixed(2) });
+    }
+    // le réseau est-il d'un seul tenant POUR UN CONDUCTEUR ? (accessibilité dans les deux sens)
+    const Gr = G.city.graphe, A2 = Gr.aretes;
+    const suiv = A2.map(() => []), prec = A2.map(() => []);
+    for (const n of Gr.noeuds) for (const m of n.manoeuvres) { suiv[m.de].push(m.vers); prec[m.vers].push(m.de); }
+    const bfs = (adj, s) => { const vu = new Uint8Array(A2.length); const q = [s]; vu[s] = 1;
+      while (q.length) { const u = q.pop(); for (const v of adj[u]) if (!vu[v]) { vu[v] = 1; q.push(v); } } return vu; };
+    const av = bfs(suiv, 0), ar = bfs(prec, 0);
+    let horsScc = 0; for (let i = 0; i < A2.length; i++) if (!(av[i] && ar[i])) horsScc++;
+    const ok = R.filter(x => x.voies != null);
+    const moy = k => +(ok.reduce((s, x) => s + x[k], 0) / ok.length).toFixed(2);
+    return { trajets: R.length, sansRoute: R.filter(x => x.voies == null).length,
+      moyenneSurOiseau: moy('rOiseau'), pireSurOiseau: +Math.max(...ok.map(x => x.rOiseau)).toFixed(2),
+      moyenneSurGrille: moy('rGrille'), aretes: A2.length, horsScc };
+  });
+  const ok = r.sansRoute === 0 && r.horsScc === 0 && r.moyenneSurOiseau <= 2.0
+    && r.pireSurOiseau <= 2.8 && r.moyenneSurGrille <= 1.6;
+  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, à contresens ; l'itinéraire faisait 2,28 fois le vol d'oiseau en moyenne, et jusqu'à 4,98 fois (450 m pour 90 m, la bonne voie étant à trois mètres) · maintenant ${r.sansRoute} trajet sans chemin, ${r.horsScc} voie hors du réseau sur ${r.aretes}, ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille` };
+});
+
+// Le joueur : « fais en sorte que les véhicules en intervention soient prioritaires dans la
+// circulation (tous les autres véhicules se poussent pour leur laisser le passage) ».
+test('une voiture conduite par un habitant se range pour laisser passer un gyrophare', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const b = G.bots.find(x => x.av && !x.ko);
+    G.devenirAmi(b);
+    // une voiture conduite par un ami, posée sur une voie, en route vers un point lointain
+    const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.busy && !v.rider);
+    const vp = G.voieProche(8, 8);
+    c.x = vp.px; c.z = vp.pz; c.h = vp.arete.sens; c.busy = true; c.speed = 6;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+    b.rdv = null; b.wait = 0;
+    b.drive = { car: c, tx: c.x + Math.sin(c.h) * 120, tz: c.z + Math.cos(c.h) * 120, nom: 'là-bas',
+      etat: 'route', passager: false, annonce: G.simTime };
+    // le véhicule de service arrive DERRIÈRE lui, gyrophare allumé
+    const amb = (G.city.ambulances || [])[0] || (G.city.depanneuses || [])[0];
+    amb.x = c.x - Math.sin(c.h) * 14; amb.z = c.z - Math.cos(c.h) * 14; amb.h = c.h;
+    G.settleVehicle(amb); amb.g.position.set(amb.x, amb.y || 0, amb.z); G.vehicleSolid(amb);
+    const dt = 1 / 60;
+    const mesure = () => ({ ecart: +Math.abs(c.ecart || 0).toFixed(2), sirene: !!c.sireneVeh,
+      surChaussee: G.surLaChaussee(c.x, c.z, 0), v: +Math.abs(c.speed || 0).toFixed(1) });
+    const avant = mesure();
+    let pire = 0, horsRoute = 0, n = 0, vuSirene = false;
+    const surRoute = (x, z) => G.surLaChaussee(x, z, 0.6) || (() => { const v = G.voieProche(x, z); return !!(v && v.d < 4.5); })();
+    for (let k = 0; k < 60 * 6; k++) {
+      G.prioriteService(amb);             // il est EN INTERVENTION, gyrophare allumé
+      // l'ambulance REMONTE derrière lui, comme dans la rue : sans ça elle reste sur place,
+      // la voiture la distance en six secondes et la sirène sort de portée
+      amb.x = c.x - Math.sin(c.h) * 12; amb.z = c.z - Math.cos(c.h) * 12; amb.h = c.h;
+      amb.g.position.set(amb.x, amb.y || 0, amb.z); G.vehicleSolid(amb);
+      G.step(dt, true); G.updateBot(b, dt);
+      n++; if (!surRoute(c.x, c.z)) horsRoute++;
+      if (c.sireneVeh) vuSirene = true;
+      if (Math.abs(c.ecart || 0) > pire) pire = Math.abs(c.ecart || 0);
+    }
+    const apres = mesure(); apres.vuSirene = vuSirene;
+    const dPieton = (() => { let m = 99; for (const o of G.bots) { if (o === b) continue;
+      const d = Math.hypot(o.pos.x - c.x, o.pos.z - c.z); if (d < m) m = d; } return +m.toFixed(1); })();
+    if (b.drive) G.botDescendre(b, false); b.rdv = null; b.wait = 0;
+    return { avant, apres, ecartMax: +pire.toFixed(2), pctHorsChaussee: Math.round(100 * horsRoute / n), dPieton };
+  });
+  const ok = r.apres.vuSirene && r.ecartMax > 0.8 && r.pctHorsChaussee === 0 && r.dPieton > 1.2;
+  return { ok, detail: `avant : le pas de côté n'existait que dans la circulation de fond — une voiture conduite par un habitant levait le pied devant l'ambulance sans jamais lui laisser la place (24 véhicules sur 78 ne s'écartaient pas d'un centimètre) · maintenant, six secondes de sirène derrière lui : il la voit (${r.apres.vuSirene}), il se déporte de ${r.ecartMax} m (${r.avant.ecart} m au départ), il reste ${100 - r.pctHorsChaussee} % du temps sur la route — aucune roue sur le trottoir — et le piéton le plus proche est à ${r.dPieton} m` };
+});

@@ -8409,6 +8409,15 @@ const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7
 // 7 m, il finissait par raboter le bout de l'impasse pendant une minute. On n'y va qu'en
 // dernier recours, quand il n'existe VRAIMENT pas d'autre chemin.
 const COUT_MANOEUVRE = { 'tout-droit': 0, droite: 2, gauche: 6, 'demi-tour': 250 };
+// Ce que coute, au depart seulement, de repartir DANS L'AUTRE SENS que celui ou l'on roule.
+// Ce n'est pas un demi-tour en pleine circulation (250) : c'est ce que fait une voiture a
+// l'arret qui sort de sa place du bon cote. Assez cher pour ne pas se retourner sans raison,
+// assez bon marche pour ne pas faire le tour de la ville quand la bonne voie est a trois metres.
+const COUT_DEMI_TOUR_DEPART = 60;
+// LE CAP A DONNER AU CALCUL D'ITINERAIRE. Un vehicule LANCE est tenu par sa voie : on donne
+// son cap. Un vehicule A L'ARRET (il sort d'une place, d'un garage, d'un depot) peut repartir
+// dans le sens qu'il veut : on ne lui impose rien, et l'itineraire prend la bonne voie.
+function capDeRoute(c) { return Math.abs((c && c.speed) || 0) > 1 ? c.h : null; }
 function construireGraphe() {
   const R = city.routes || [];
   const voies = [], noeuds = [], aretes = [];
@@ -8505,8 +8514,11 @@ function construireGraphe() {
   let nliaison = 0;
   // une liaison ne doit traverser NI un mur NI un massif : on la teste comme on testerait une
   // voiture qui l'emprunte (`carBlocked`, le meme garde-fou que la voiture du joueur)
+  // (on sonde TOUS LES TROIS METRES, et non en quatre points : sur un raccord long, quatre
+  //  points sautaient par-dessus un massif ou le coin d'un immeuble)
   const liaisonLibre = (A, B) => {
-    for (let u = 0; u <= 4; u++) { const x = A.x + (B.x - A.x) * u / 4, z = A.z + (B.z - A.z) * u / 4;
+    const k = Math.max(4, Math.ceil(Math.hypot(B.x - A.x, B.z - A.z) / 3));
+    for (let u = 0; u <= k; u++) { const x = A.x + (B.x - A.x) * u / k, z = A.z + (B.z - A.z) * u / k;
       if (carBlocked(x, z, null, 1.9, { veh: false })) return false; }
     return true;
   };
@@ -8531,7 +8543,34 @@ function construireGraphe() {
     unir(i, j); nliaison++;
     poseLiaison(i, j, d, -1 - nliaison);
   }
-  // ---- 5 bis) LES RACCORDS MANQUANTS. Les liaisons ci-dessus ne relient que des ILES
+  // ---- 5 bis) LES ILOTS QUI RESTENT HORS DU RESEAU. La passe ci-dessus ne raccorde que ce
+  // qui est a moins de 18 m. Mesure : la rue de La Zone entre (-185, 42) et (-146, 42) restait
+  // une ILE — deux voies que rien n'atteint et d'ou l'on ne sort pas. Tout itineraire vers La
+  // Zone rendait alors `null`, et le conducteur repartait sur la grille A*, qui ignore les sens
+  // de circulation : deux trajets sur douze n'avaient aucun chemin par les voies. On elargit
+  // donc la recherche pour les ilots restants — jusqu'a 45 m — en prenant le raccord le plus
+  // court qui soit vraiment libre.
+  {
+    const groupes = new Map();
+    for (let i = 0; i < noeuds.length; i++) { const r = trouve(i); if (!groupes.has(r)) groupes.set(r, []); groupes.get(r).push(i); }
+    if (groupes.size > 1) {
+      let principal = null, taille = -1;
+      groupes.forEach((l, r) => { if (l.length > taille) { taille = l.length; principal = r; } });
+      const gros = groupes.get(principal), loin = [];
+      groupes.forEach((l, r) => { if (r === principal) return;
+        for (const i of l) for (const j of gros) {
+          const d = Math.hypot(noeuds[i].x - noeuds[j].x, noeuds[i].z - noeuds[j].z);
+          if (d <= 45) loin.push([d, i, j]);
+        } });
+      loin.sort((u, v) => u[0] - v[0]);
+      for (const [d, i, j] of loin) {
+        if (trouve(i) === trouve(j)) continue;
+        if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+        unir(i, j); nliaison++; poseLiaison(i, j, d, -1 - nliaison);
+      }
+    }
+  }
+  // ---- 5 ter) LES RACCORDS MANQUANTS. Les liaisons ci-dessus ne relient que des ILES
   // differentes : deux bouts de rue separes par DOUZE METRES de trottoir restaient sans
   // raccord des lors qu'un grand tour les reliait deja. Mesure d'avant : pour aller de
   // (-40, -40) a (40, 90) — 243 m par la grille A* — le meilleur chemin par les voies
@@ -8655,9 +8694,15 @@ function majVoiesBarrees() {
 // a `e1` comme avant. Avec elle, on garde la MEILLEURE arrivee : la cible est souvent a
 // egale distance des deux sens de la meme rue, et retenir le mauvais obligeait a remonter
 // toute la rue puis a la redescendre (mesure : 83 m de demi-tour pur).
+// `departs` : soit une arete unique, soit une Map { id d'arete -> cout de depart }. Le second
+// cas sert aux vehicules A L'ARRET, qui peuvent sortir de leur place DANS LES DEUX SENS : leur
+// imposer la voie la plus proche coutait jusqu'a 450 m de detour pour 90 m a vol d'oiseau
+// (mesure : de (-81, 44) a (2, 8), la voiture montait 95 m au nord, traversait toute la ville
+// d'est en ouest et redescendait — la voie d'en face etait a TROIS METRES).
 function cheminAretes(e0, e1, cibles) {
   const G = city.graphe, A = G.aretes;
-  if (!cibles && e0.id === e1.id) return [e0];
+  const multi = e0 && e0 instanceof Map;
+  if (!cibles && !multi && e0.id === e1.id) return [e0];
   const dist = new Float64Array(A.length).fill(Infinity), prev = new Int32Array(A.length).fill(-1);
   const tas = [];
   const push = (id, d) => { tas.push([d, id]); let i = tas.length - 1;
@@ -8669,9 +8714,11 @@ function cheminAretes(e0, e1, cibles) {
         if (r < tas.length && tas[r][0] < tas[m][0]) m = r;
         if (m === i) break; const t = tas[m]; tas[m] = tas[i]; tas[i] = t; i = m; } }
     return top; };
-  dist[e0.id] = 0; push(e0.id, 0);
   let but = cibles ? -1 : e1.id, mieux = Infinity;
-  if (cibles && cibles.has(e0.id)) { mieux = cibles.get(e0.id); but = e0.id; }
+  const depart0 = [];
+  if (multi) e0.forEach((c0, id) => { if (c0 < dist[id]) { dist[id] = c0; push(id, c0); depart0.push(id); } });
+  else { dist[e0.id] = 0; push(e0.id, 0); depart0.push(e0.id); }
+  if (cibles) for (const id of depart0) { const r = cibles.get(id); if (r != null && dist[id] + r < mieux) { mieux = dist[id] + r; but = id; } }
   while (tas.length) {
     const [d, id] = pop();
     if (d > dist[id] + 1e-6) continue;
@@ -8686,7 +8733,8 @@ function cheminAretes(e0, e1, cibles) {
   }
   if (but < 0 || !isFinite(dist[but])) return null;
   const out = [];
-  for (let id = but; id >= 0; id = prev[id]) { out.push(A[id]); if (id === e0.id) break; }
+  const estDepart = id => multi ? e0.has(id) : id === e0.id;
+  for (let id = but; id >= 0; id = prev[id]) { out.push(A[id]); if (estDepart(id)) break; }
   return out.reverse();
 }
 // L'ITINERAIRE PAR LES VOIES : une suite de points [x, z] sur la voie de droite, echantillonnee
@@ -8707,9 +8755,26 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  const suite = (A.arete.id === B.arete.id && B.t >= A.t - 0.001) ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
+  // TOUTES les voies qui passent pres du DEPART, comme pour l'arrivee. Un vehicule a l'arret
+  // sort de sa place dans le sens qu'il veut : lui imposer la voie la plus proche le faisait
+  // partir a l'oppose de sa destination et faire le tour de la ville (mesure : 450 m pour
+  // 90 m a vol d'oiseau, la bonne voie etant a trois metres). Quand l'appelant donne un CAP
+  // (vehicule lance), la voie a contresens de sa marche reste possible mais coute cher : on
+  // ne fait pas demi-tour en pleine rue pour gagner dix metres, seulement pour en gagner cent.
+  const departs = new Map();
+  for (const e of city.graphe.aretes) {
+    const p = projVoie(x1, z1, e);
+    if (p.d > A.d + 6) continue;
+    const contre = cap != null && Math.abs(CAP(e.sens - cap)) > 1.6;
+    const cout = (p.d - A.d) * 3 + (contre ? COUT_DEMI_TOUR_DEPART : 0) + p.t * e.long * (10 / e.vmax);
+    const v = departs.get(e.id); if (v == null || cout < v) departs.set(e.id, cout);
+  }
+  const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
+  const suite = memeVoie ? [A.arete] : cheminAretes(departs.size > 1 ? departs : A.arete, B.arete, cibles);
   if (!suite) return null;
-  const pts = [[+A.px.toFixed(2), +A.pz.toFixed(2)]];
+  // le premier point : la projection sur la voie REELLEMENT choisie au depart
+  const d0 = projVoie(x1, z1, suite[0]);
+  const pts = [[+d0.px.toFixed(2), +d0.pz.toFixed(2)]];
   const pousse = (x, z, coupe) => {
     const p = pts[pts.length - 1], d = Math.hypot(p[0] - x, p[1] - z);
     if (d < 0.4) return;
@@ -9015,7 +9080,7 @@ function botConduit(c, x, z, dt, opt) {
   const dist = Math.hypot(x - c.x, z - c.z);
   const st = (c.ia && c.ia.but) ? c.ia : null;
   if (!st || Math.hypot(st.but[0] - x, st.but[1] - z) > 6 || simTime > (st.refaire || 0) || st.i >= st.route.length) {
-    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, c.h) : null;
+    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c)) : null;
     const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
@@ -9040,7 +9105,7 @@ function traficDestination(c) {
   for (let essai = 0; essai < 6; essai++) {
     const n = G.noeuds[Math.floor(traficRnd() * G.noeuds.length)];
     if (Math.hypot(n.x - c.x, n.z - c.z) < 40) continue;   // une vraie traversee, pas trois metres
-    const r = itineraireVoies(c.x, c.z, n.x, n.z, c.h);
+    const r = itineraireVoies(c.x, c.z, n.x, n.z, capDeRoute(c));
     if (r && r.length > 2) { c.ia = { route: r, i: 1, dest: [n.x, n.z], t: simTime, sig: voiesBarreesSig }; return true; }
   }
   c.ia = null; return false;
@@ -17961,7 +18026,7 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
     // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
     // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
-    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, c.h) : null;
+    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, capDeRoute(c)) : null;
     const grille = navPath(c.x, c.z, tx, tz);
     // LE DETOUR ABSURDE. Dans un quartier ou un immeuble coupe la rue en deux, le graphe des
     // voies impose parfois trois fois le chemin direct : mesure relevee, 755 m par les voies
@@ -18084,8 +18149,17 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // La circulation de fond, elle, sait faire : elle se deporte sur la voie d'a cote avec
   // `ecarteChaussee`, qui refuse tout pas montant sur le trottoir ou touchant quoi que ce soit.
   // On lui emprunte le geste (et `c.double` dit a gapDevant de ne plus compter l'epave).
-  c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
-  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
+  // ON SE RANGE POUR LA SIRENE, MEME QUAND C'EST UN HABITANT QUI CONDUIT. `codeRoute` posait
+  // bien `c.sireneVeh` et faisait lever le pied, mais LE PAS DE COTE n'existait que dans la
+  // circulation de fond (traficRoule) : une voiture conduite par un bot ralentissait devant
+  // l'ambulance sans jamais lui laisser la place. Mesure : sur 78 vehicules croises devant une
+  // depanneuse en intervention, 24 ne s'ecartaient pas d'un centimetre. Se ranger passe avant
+  // doubler : on ne double pas pendant qu'une sirene arrive derriere.
+  if (c.sireneVeh) { c.double = false; ecarteChaussee(c, dt, 1, ECART_SIRENE); }
+  else {
+    c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
+    if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
+  }
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.
   if (bloque && (st.evT || 0) < T) {

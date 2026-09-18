@@ -8759,15 +8759,16 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  // LE RACCOURCI DU DEPART RESTE EN RESERVE — quatre tentatives, quatre mesures. Faire partir un
-  // vehicule a l'arret par la voie d'en face vaut 2,33 -> 1,83 de rapport distance sur vol
-  // d'oiseau (pire cas 4,98 -> 2,54), et le test du GPS le confirme a chaque essai. Mais il fait
-  // retomber le test 332 a tous les coups, et ce n'est plus la geometrie du trace : avec le
-  // raccord « on rejoint la voie douze metres plus loin, dans son sens » et le demi-tour sur
-  // place, la voiture de patrouille reste quand meme devant le commissariat. Ce qui coince est
-  // DANS LE PILOTE DES VEHICULES DE SERVICE (rouleVers / botConduit), pas dans l'itineraire :
-  // c'est lui qu'il faut instrumenter au prochain round. Le multi-depart reste ecrit dans
-  // `cheminAretes`, pret a servir le jour ou ce pilote saura executer un depart en sens inverse.
+  // LE RACCOURCI DU DEPART RESTE EN RESERVE — cinquieme tentative, et cette fois on sait
+  // POURQUOI il ne tient pas. Il vaut 2,33 -> 1,83 de rapport distance sur vol d'oiseau (pire
+  // cas 4,98 -> 2,54), mais il est INSTABLE par construction : le choix de la voie de depart
+  // depend du CAP du vehicule (penalite de demi-tour), et ce cap change des qu'on obeit au
+  // trace. Mesure image par image sur la voiture de patrouille : elle part, fait son demi-tour,
+  // l'itineraire est recalcule six secondes plus tard, la voie d'en face redevient la moins
+  // chere puisque le cap a tourne, le premier point repasse derriere, nouveau demi-tour — et
+  // ainsi de suite, « demi-tour » affiche a chaque seconde. Pour qu'il tienne, il faudra GELER
+  // le choix de la voie de depart tant qu'un trace est suivi, au lieu de le refaire toutes les
+  // six secondes. Le multi-depart reste ecrit dans `cheminAretes`, pret a servir.
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
   const suite = memeVoie ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
   if (!suite) return null;
@@ -9374,7 +9375,21 @@ function traficRoule(c, dt, opt) {
   const st = c.ia, R = st.route;
   // un chantier vient d'etre pose (ou leve) : le trace n'est plus valable, on en refait un
   if (!opt.pilote && st.sig !== undefined && st.sig !== voiesBarreesSig) { c.ia = null; c.destT = 0; return; }
-  while (st.i < R.length - 1 && Math.hypot(R[st.i][0] - c.x, R[st.i][1] - c.z) < 2.8) st.i++;
+  // UN POINT DE PASSAGE DEPASSE EST UN POINT DE PASSAGE FAIT. On ne le validait qu'au RAYON
+  // (2,80 m) : rate de trois metres dans une courbe, il restait la cible pour toujours, la
+  // voiture s'en eloignait, et le cap demande se retournait — elle finissait par faire demi-tour
+  // vers un point qu'elle avait deja passe, puis a osciller. C'est LA cause de la voiture de
+  // patrouille qui ne quittait pas le commissariat : trace image par image, elle depassait le
+  // point n° 9 a 2 m, l'index restait a 9, et `devantWp` tombait a −8,6 m.
+  // On valide donc aussi ce qui est DERRIERE nous et proche (moins de 10 m) — mais jamais le
+  // TOUT PREMIER point : celui-la peut etre legitimement derriere (on doit faire demi-tour pour
+  // prendre la voie d'en face), et le sauter ferait repartir la voiture du mauvais cote.
+  for (;;) {
+    if (st.i >= R.length - 1) break;
+    const dx0 = R[st.i][0] - c.x, dz0 = R[st.i][1] - c.z, d0 = Math.hypot(dx0, dz0);
+    const derriere = dx0 * Math.sin(c.h) + dz0 * Math.cos(c.h) < -0.5;
+    if (d0 < 2.8 || (st.i > 0 && derriere && d0 < 10)) st.i++; else break;
+  }
   const wp = R[Math.min(st.i, R.length - 1)];
   const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
   const want = Math.atan2(dx, dz), dh = CAP(want - c.h), h0 = c.h;

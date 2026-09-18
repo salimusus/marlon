@@ -18437,3 +18437,56 @@ test('un véhicule posé à contresens de sa destination fait demi-tour et repar
     && r.pctHorsRoute <= 5 && r.imagesDansUnSolide === 0;
   return { ok, detail: `avant : un véhicule à l'arrêt ne savait pas se retourner — on lui donnait un point de passage derrière lui et il piétinait (la voiture de patrouille faisait 4 m en 60 s, et c'est ce qui m'a forcé à retirer le raccourci d'itinéraire) · maintenant, posé nez à l'opposé de sa destination : il est dans le bon cap en ${r.secondes} s, ${r.sauts} téléportation, il se rapproche de ${r.gagne} m (${r.parcouru} m parcourus), ${r.pctHorsRoute} % hors route et ${r.imagesDansUnSolide} image dans un solide` };
 });
+
+// « véhicule qui se bloque, le passe corrige » : le recensement, avec la BONNE métrique.
+// Première version (jetée) : elle comptait 41 « bloqués » sur 42 — c'étaient les voitures
+// GARÉES, qui ne vont nulle part. On ne compte donc que ce qui a une DESTINATION (une mission,
+// un itinéraire en cours, un conducteur bot, un constat), et on laisse à la ville une minute
+// de vie avant de mesurer, épave et incendie compris, pour qu'elle soit déjà jouée.
+test('dans une ville déjà jouée, aucun véhicule qui a une destination ne reste bloqué sans raison', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const dt = 1 / 60;
+    const garage = G.city.garage || { x: -22, z: -30 };
+    const cands = (G.city.cars || []).filter(c => G.voitureEmpruntable(c) && !c.rider)
+      .map(c => ({ c, d: Math.hypot(c.x - garage.x, c.z - garage.z) })).sort((a, b) => b.d - a.d);
+    if (cands[0]) { cands[0].c.noirci = true; cands[0].c.noirciT = 0; cands[0].c.feu = null; }   // la dépanneuse part
+    if (G.declencheIncendie) G.declencheIncendie(40, -30, 500);                                   // les pompiers partent
+    for (let k = 0; k < 60 * 45; k++) G.step(dt, true);                                           // la ville tourne d'abord
+    const excuses = ['feu', 'feu-panne', 'stop', 'cede', 'passage', 'pieton', 'sirene', 'priorite', 'file', 'demi-tour'];
+    const pilotes = () => { const m = new Map(); for (const b of G.bots) if (b.drive && b.drive.car) m.set(b.drive.car, b); return m; };
+    // QUI EST CENSE ROULER EN CE MOMENT ? Un itinéraire (`c.ia`) ne suffit pas : un véhicule de
+    // service dont la mission est finie garde son tracé en mémoire alors que PLUS PERSONNE ne
+    // le conduit — mesuré, le camion de pompiers reste 67 s à l'arrêt en (4, 25) avec 81 points
+    // de passage et un incendie déjà éteint. Ce n'est pas un blocage, c'est un camion garé avec
+    // une vieille feuille de route. On compte donc : la circulation de fond (elle est conduite à
+    // chaque image), et tout véhicule qui a une mission, un constat ou un conducteur bot.
+    const fond = new Set(G.city.aiCars || []);
+    const aUnBut = (c, pil) => !!(c.mission || c.constat || c.srvBut || pil.has(c) || (fond.has(c) && c.ia && c.ia.route));
+    const etats = new Map(); let ech = 0;
+    for (let k = 0; k < 60 * 90; k++) {
+      G.step(dt, true);
+      if (k % 6) continue;
+      const pil = pilotes();
+      for (const c of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
+        if (c.heli || c === G.drive.car) continue;
+        if (!aUnBut(c, pil)) { etats.delete(c); continue; }
+        ech++;
+        let e = etats.get(c); if (!e) { e = { x: c.x, z: c.z, planteT: 0, pire: 0, ou: null, kind: c.kind || 'voiture' }; etats.set(c, e); }
+        const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
+        if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
+          e.planteT += dt * 6;
+          if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-']; }
+        } else e.planteT = 0;
+      }
+    }
+    const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null;
+    etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; }
+      if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou }); });
+    return { suivis: etats.size, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
+      pire: +pireGlobal.toFixed(1), pireOu, pireKind };
+  });
+  const ok = r.bloques === 0 && r.suivis >= 4 && r.pire < 5;
+  return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
+});

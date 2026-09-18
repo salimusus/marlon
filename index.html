@@ -8759,16 +8759,18 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  // LE MULTI-DEPART EST RETIRE, ET VOICI POURQUOI (mesure, pas avis). Faire partir un vehicule
-  // a l'arret par la voie d'en face — a trois metres — faisait tomber l'itineraire le plus long
-  // de 450 m a 125 m pour 90 m a vol d'oiseau, et la moyenne sur douze trajets de 2,28 a 1,83
-  // fois le vol d'oiseau. Mais le SUIVI DE TRACE ne sait pas faire demi-tour : la voiture de
-  // patrouille envoyee a un accident a l'est, garee sur la voie qui file a l'ouest, se voyait
-  // donner un premier point de passage derriere elle et faisait QUATRE METRES en soixante
-  // secondes, compteur de blocage tournant en rond (test 332). Un vehicule de service qui ne
-  // sort jamais de sa caserne est bien pire qu'un itineraire trop long. Le gain revient donc
-  // le jour ou le suivi saura tourner sur place ; la reconnaissance de plusieurs departs reste
-  // dans `cheminAretes`, prete a servir.
+  // LE MULTI-DEPART RESTE EN RESERVE — ESSAYE DEUX FOIS, MESURE DEUX FOIS. Faire partir un
+  // vehicule a l'arret par la voie d'en face vaut 2,28 -> 1,83 de rapport distance sur vol
+  // d'oiseau (pire cas 4,98 -> 2,54). Mais il rend le PREMIER point de passage LATERAL : a
+  // trois metres sur le cote, et un suivi de trace ne sait pas glisser de cote. Le demi-tour
+  // sur place (demiTourTick), ecrit expres pour ca, ne suffit pas : le cap vers un point situe
+  // A COTE tourne avec la voiture, la consigne n'est jamais atteinte et le vehicule fait des
+  // va-et-vient sur place (mesure test 332 : la voiture de patrouille, 1 m parcouru, pointe a
+  // 2,2 m/s, c'est-a-dire la vitesse de manoeuvre). Ce qu'il manque n'est donc pas la manoeuvre
+  // mais le TRACE : quand on choisit une autre voie que celle du vehicule, il faut commencer
+  // l'itineraire la ou il peut la REJOINDRE — plus loin, dans le sens de cette voie — et non a
+  // sa hauteur. A faire avant de reprendre ce raccourci ; la reconnaissance de plusieurs
+  // departs reste dans `cheminAretes`, prete a servir.
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
   const suite = memeVoie ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
   if (!suite) return null;
@@ -9308,6 +9310,41 @@ function pietonDerriere(c) {
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
 }
+// ================= LE DEMI-TOUR SUR PLACE =================
+// LA PIECE QUI MANQUAIT AUX DEUX PILOTES AUTOMATIQUES. Un vehicule a l'arret qui doit repartir
+// DANS L'AUTRE SENS ne savait pas tourner : il recevait un point de passage derriere lui et
+// pietinait. Mesure : la voiture de patrouille garee sur la voie qui file a l'ouest, envoyee a
+// un accident a l'est, faisait QUATRE METRES en soixante secondes, son compteur de blocage
+// tournant en rond — et c'est ce qui m'a force a retirer le raccourci d'itineraire (partir par
+// la voie d'en face) au round precedent.
+// C'est une vraie manoeuvre en plusieurs temps, comme au permis : braquage a fond, un temps en
+// avant, un temps en arriere, et on recommence jusqu'a etre dans le bon cap. Dans les DEUX
+// temps la caisse pivote du MEME cote (c'est le braquage qui s'inverse, pas le sens de
+// rotation). Chaque pas passe par `avanceVehicule`, donc par le meme garde-fou que la marche
+// avant — aucun pas qui rentre dans quoi que ce soit — et on ne recule jamais sur un pieton.
+const DEMI_TOUR_V = 2.2;         // m/s : on manoeuvre au pas, on ne fonce pas
+const DEMI_TOUR_TEMPS = 1.1;     // duree d'un temps (avant, puis arriere)
+const DEMI_TOUR_MAX = 9;         // au-dela, la place est vraiment trop petite : on abandonne
+function demiTourLance(c, dh) {
+  if (!c || (c.dTour && c.dTour.reste > 0)) return;
+  c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1 };
+}
+// Rend vrai tant que la manoeuvre occupe l'image : l'appelant n'a plus rien a faire.
+function demiTourTick(c, dt, dh) {
+  const m = c && c.dTour; if (!m || m.reste <= 0) return false;
+  m.reste -= dt; m.t += dt;
+  if (Math.abs(dh) < 0.55 || m.reste <= 0) { c.dTour = null; c.recule = false; return false; }
+  if (m.t > DEMI_TOUR_TEMPS) { m.t = 0; m.phase = m.phase === 'avant' ? 'arriere' : 'avant'; }
+  const avant = m.phase === 'avant', h0 = c.h;
+  c.h += m.sens * 1.6 * dt;                    // la caisse pivote du meme cote dans les deux temps
+  c.speed = 0; c.v = 0; c.stopped = false;
+  if (!avant && pietonDerriere(c)) { klaxonne(c); c.h = h0; return true; }
+  const bloque = avanceVehicule(c, dt, avant ? DEMI_TOUR_V : -DEMI_TOUR_V, { bar: true, veh: true }, h0);
+  if (bloque) m.t = DEMI_TOUR_TEMPS;           // ce cote est pris : on change de temps tout de suite
+  c.recule = !avant;
+  c.raison = 'demi-tour';
+  return true;
+}
 function klaxonne(c) {
   if (simTime < (c.klaxT || 0)) return;
   c.klaxT = simTime + 2.4;
@@ -9324,6 +9361,13 @@ function traficRoule(c, dt, opt) {
   const wp = R[Math.min(st.i, R.length - 1)];
   const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
   const want = Math.atan2(dx, dz), dh = CAP(want - c.h), h0 = c.h;
+  // LE POINT DE PASSAGE EST DERRIERE : ON FAIT DEMI-TOUR AU LIEU DE PIETINER. Reserve aux
+  // vehicules PILOTES par un autre poste (services, police, missions) : la circulation de fond,
+  // elle, part toujours d'une destination prise depuis sa propre voie.
+  if (opt.pilote) {
+    if (Math.abs(c.speed || 0) < 1.5 && Math.abs(dh) > 2 && dwp > 3) demiTourLance(c, dh);
+    if (demiTourTick(c, dt, dh)) return;   // (avanceVehicule a deja fait tourner les roues)
+  }
   c.h += clamp(dh, -1, 1) * clamp(4.4 - Math.abs(c.speed || 0) * 0.1, 2.2, 4.2) * dt;
   // on leve le pied AVANT le virage, pas dedans
   let virage = Math.abs(dh);
@@ -18070,6 +18114,14 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // contournement en cours : on vise la direction libre trouvée plutôt que le point de passage
   const want = ((st.evT || 0) > T) ? st.evH : Math.atan2(dx, dz);
   let dh = want - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  // meme manoeuvre pour la voiture d'un ami ou la voiture de fuite : si le point de passage est
+  // DERRIERE et qu'on est a l'arret, on tourne sur place au lieu de pietiner
+  if (Math.abs(c.speed || 0) < 1.5 && Math.abs(dh) > 2 && Math.hypot(dx, dz) > 3) demiTourLance(c, dh);
+  if (demiTourTick(c, dt, dh)) {
+    c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
+    vehicleSolid(c);   // (avanceVehicule a deja fait tourner les roues)
+    return dist;
+  }
   // Le braquage dépend de l'allure, comme une vraie voiture : vif à basse vitesse pour se
   // dégager d'un créneau, plus posé à pleine vitesse pour ne pas partir en zigzag.
   const braq = clamp(5.2 - Math.abs(c.speed || 0) * 0.11, 2.5, 4.6), h0 = c.h;

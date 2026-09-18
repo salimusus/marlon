@@ -631,6 +631,7 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 
 ### 75. Un chef de gang donne rendez-vous à un enfant qui vient d'arriver (« la colonne bleue t'y emmène ») et son gang « le cherche » dès la première demi-minute
 - **Gravité** : GÊNANT (première minute ; contredit la règle du n° 67 : rien de la guerre tant que l'écran 🚩 n'a pas été ouvert)
+🔎 REVU (9a05d87) : TOUJOURS LÀ — profil vierge, 2/2 : « 🤝 Rocco le Rouge (Les Requins Rouges) te donne rendez-vous à la fête foraine — la colonne bleue t'y emmène » à ~4 min en TV, et dans les 30 premières secondes le chat annonce « 🚩 Les Requins Rouges attaquent Les Frelons Jaunes ! » (PC et TV). `guerre.vu` est pourtant faux (`q1-pc.log`, `q1-tv.log`).
 - **Reproduire** : profil vierge, ✕ sur l'accueil, se balader 4 minutes sans rien faire d'autre. Reproduit 2/2 (PC 1280×720 à t+~250 s : « 🤝 Gina Grelot (Les Requins Rouges) te donne rendez-vous à La Zone — la colonne bleue t'y emmène » ; TV 1920×1080 à t+~250 s : « 🤝 Tonio Turbo (Les Requins Rouges) te donne rendez-vous à la fête foraine… »). En TV, dans les 30 premières secondes de chat : « 🚩 Les Requins Rouges te cherchent… », « 🚩 Les Frelons Jaunes attaquent Les Requins Rouges ! » ; en PC « 🚩 Les Frelons Jaunes te cherchent… » à ~4 min.
 - **On voit** : gros message central + colonne bleue GPS vers La Zone / la fête foraine ; `guerre.vu` est pourtant faux et le joueur n'a ni respect ni recrue.
 - **On devrait voir** : aucune réunion, aucun « te cherchent » avant que l'enfant soit entré dans la guerre (même garde que `captureTick` / `declencheCambriolage`).

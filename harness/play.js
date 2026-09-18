@@ -19009,7 +19009,9 @@ test('le ralenti d elimination RACCORDE vers la camera de jeu : plus de saut de 
       ecartFin: +finRalenti.distanceTo(jeu1).toFixed(2),
       depart: { x: +jeu0.x.toFixed(2), y: +jeu0.y.toFixed(2), z: +jeu0.z.toFixed(2) } };
   });
-  const ok = r.lance && r.saut < 0.6 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5;
+  // 0,25 m par image a 60 images/s = 15 m/s : la borne du raccord est a 14 m/s, on laisse un
+  // cheveu pour le mouvement propre de la camera de jeu pendant la meme image.
+  const ok = r.lance && r.saut < 0.25 && r.murs === 0 && r.sol === 0 && r.ecartFin < 0.5;
   return { ok, detail: `defaut route par le poste Armes : a la derniere image du ralenti la camera de cinema lachait la main d'un coup · MESURE AVANT : 13,18 m EN UNE SEULE IMAGE (image 180, de (-58,27 ; 1,90 ; 200,19) a (-60 ; 4,65 ; 187,41)), soit 791 m/s, et le poste Armes l'a vue atterrir DANS une facade · maintenant elle RACCORDE : sur 360 images de ralenti et de reprise, le plus gros deplacement d'une image a l'autre est de ${r.saut} m (image ${r.sautImg}), soit ${r.vitesse} m/s — la borne est a 14 m/s — la camera n'est DANS un solide sur aucune image (${r.murs}) et ne passe jamais sous le sol (${r.sol}), et a la fin elle est revenue exactement la ou la camera de jeu la veut (${r.ecartFin} m d'ecart)` };
 });
 

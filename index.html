@@ -33991,7 +33991,10 @@ function ralentiCam(dt) {
       if (sl > mx && sl > 0) { const q = mx / sl; px = RALENTI.px + sx * q; py = RALENTI.py + sy * q; pz = RALENTI.pz + sz * q; }
     }
     const reste = Math.hypot(px - jx, py - jy, pz - jz);
-    if (k >= 1 && reste < 0.3) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    // ON NE LÂCHE QUE COLLÉ À LA CAMÉRA DE JEU. Mesuré : lâcher à 30 cm laissait encore un pas
+    // de 0,45 m à l'image de la reprise, au-dessus de la borne. À 12 cm, la dernière image ne se
+    // voit plus — et tant qu'on n'y est pas, le raccord se prolonge au pas borné.
+    if (k >= 1 && reste < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
     if (k >= 1) RALENTI.sortie = pas;   // pas encore arrivé (pas borné) : on prolonge d'une image
     const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
           vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,

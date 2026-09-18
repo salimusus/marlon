@@ -8759,26 +8759,26 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  // TOUTES les voies qui passent pres du DEPART, comme pour l'arrivee. Un vehicule a l'arret
-  // sort de sa place dans le sens qu'il veut : lui imposer la voie la plus proche le faisait
-  // partir a l'oppose de sa destination et faire le tour de la ville (mesure : 450 m pour
-  // 90 m a vol d'oiseau, la bonne voie etant a trois metres). Quand l'appelant donne un CAP
-  // (vehicule lance), la voie a contresens de sa marche reste possible mais coute cher : on
-  // ne fait pas demi-tour en pleine rue pour gagner dix metres, seulement pour en gagner cent.
-  const departs = new Map();
-  for (const e of city.graphe.aretes) {
-    const p = projVoie(x1, z1, e);
-    if (p.d > A.d + 6) continue;
-    const contre = cap != null && Math.abs(CAP(e.sens - cap)) > 1.6;
-    const cout = (p.d - A.d) * 3 + (contre ? COUT_DEMI_TOUR_DEPART : 0) + p.t * e.long * (10 / e.vmax);
-    const v = departs.get(e.id); if (v == null || cout < v) departs.set(e.id, cout);
-  }
+  // LE MULTI-DEPART EST RETIRE, ET VOICI POURQUOI (mesure, pas avis). Faire partir un vehicule
+  // a l'arret par la voie d'en face — a trois metres — faisait tomber l'itineraire le plus long
+  // de 450 m a 125 m pour 90 m a vol d'oiseau, et la moyenne sur douze trajets de 2,28 a 1,83
+  // fois le vol d'oiseau. Mais le SUIVI DE TRACE ne sait pas faire demi-tour : la voiture de
+  // patrouille envoyee a un accident a l'est, garee sur la voie qui file a l'ouest, se voyait
+  // donner un premier point de passage derriere elle et faisait QUATRE METRES en soixante
+  // secondes, compteur de blocage tournant en rond (test 332). Un vehicule de service qui ne
+  // sort jamais de sa caserne est bien pire qu'un itineraire trop long. Le gain revient donc
+  // le jour ou le suivi saura tourner sur place ; la reconnaissance de plusieurs departs reste
+  // dans `cheminAretes`, prete a servir.
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
-  const suite = memeVoie ? [A.arete] : cheminAretes(departs.size > 1 ? departs : A.arete, B.arete, cibles);
+  const suite = memeVoie ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
   if (!suite) return null;
-  // le premier point : la projection sur la voie REELLEMENT choisie au depart
-  const d0 = projVoie(x1, z1, suite[0]);
-  const pts = [[+d0.px.toFixed(2), +d0.pz.toFixed(2)]];
+  // LE PREMIER POINT RESTE SUR LA VOIE OU LE VEHICULE SE TROUVE. On l'avait mis sur la voie
+  // choisie par le calcul : quand c'etait celle d'en face, le tout premier point de passage
+  // tombait A QUATRE METRES SUR LE COTE, et le suivi de trace ne sait pas glisser de cote —
+  // mesure (test 332), la voiture de patrouille restait sur place a 1,2 m/s, son compteur de
+  // blocage tournant en rond, 4 m parcourus en soixante secondes. En partant de SA voie, la
+  // voiture avance vraiment et rejoint la voie retenue en roulant, le long de la rue.
+  const pts = [[+A.px.toFixed(2), +A.pz.toFixed(2)]];
   const pousse = (x, z, coupe) => {
     const p = pts[pts.length - 1], d = Math.hypot(p[0] - x, p[1] - z);
     if (d < 0.4) return;

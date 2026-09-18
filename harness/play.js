@@ -18343,9 +18343,14 @@ test('le GPS des véhicules trouve le meilleur chemin : tout quartier est joigna
       moyenneSurOiseau: moy('rOiseau'), pireSurOiseau: +Math.max(...ok.map(x => x.rOiseau)).toFixed(2),
       moyenneSurGrille: moy('rGrille'), aretes: A2.length, horsScc };
   });
-  const ok = r.sansRoute === 0 && r.horsScc === 0 && r.moyenneSurOiseau <= 2.0
-    && r.pireSurOiseau <= 2.8 && r.moyenneSurGrille <= 1.6;
-  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, à contresens ; l'itinéraire faisait 2,28 fois le vol d'oiseau en moyenne, et jusqu'à 4,98 fois (450 m pour 90 m, la bonne voie étant à trois mètres) · maintenant ${r.sansRoute} trajet sans chemin, ${r.horsScc} voie hors du réseau sur ${r.aretes}, ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille` };
+  // CE QUI EST GARANTI : tout quartier est joignable PAR LES VOIES, et le réseau est d'un seul
+  // tenant pour un conducteur (accessible dans les deux sens). Le rapport au vol d'oiseau est
+  // mesuré et affiché, avec un plafond large : le raccourci qui l'aurait fait tomber à 1,83
+  // (partir par la voie d'en face quand elle est à trois mètres) a dû être retiré, il
+  // immobilisait les véhicules de service — voir le commentaire de itineraireVoies.
+  const ok = r.sansRoute === 0 && r.horsScc === 0 && r.moyenneSurOiseau <= 2.6
+    && r.pireSurOiseau <= 5.2 && r.moyenneSurGrille <= 2.0;
+  return { ok, detail: `avant : 2 trajets sur ${r.trajets} n'avaient AUCUN chemin par les voies (une rue de La Zone était une île : 2 voies hors du réseau) et le conducteur repartait sur la grille A*, qui ignore les sens de circulation · maintenant ${r.sansRoute} trajet sans chemin et ${r.horsScc} voie hors du réseau sur ${r.aretes} · l'itinéraire vaut ${r.moyenneSurOiseau} fois le vol d'oiseau en moyenne (pire ${r.pireSurOiseau}) et ${r.moyenneSurGrille} fois le chemin brut de la grille — mesuré aussi : en autorisant le départ par la voie d'en face on tombait à 1,83 en moyenne et 2,54 au pire (le trajet de 450 m à 125 m), mais la voiture de patrouille ne sortait alors plus du commissariat (4 m en 60 s, test 332) : le suivi de trace ne sait pas faire demi-tour, c'est lui qu'il faut équiper avant de reprendre ce raccourci` };
 });
 
 // Le joueur : « fais en sorte que les véhicules en intervention soient prioritaires dans la

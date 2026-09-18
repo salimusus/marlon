@@ -3965,7 +3965,9 @@ function immeubleZone(x, z, w, d, col, dir) {
     m.position.set(x - w / 2 - 0.18, 1.6 + i * 0.2, z - 2 + i * 2); m.rotation.y = -Math.PI / 2; worldGroup.add(m);
   }
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
-  return { x, z, w, d, etages: N, h: H };
+  // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
+  return { x, z, w, d, etages: N, h: H,
+    esc: { xE, zS, larg: LARG, pal: PAL, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP } };
 }
 function carcasse(x, z, h) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -4003,8 +4005,11 @@ function buildZone(X, Z) {
   box(X + 34, 4.6, Z + 8.6, 1.4, 0.9, 0.1, 0xd8d2c0, { deco: true, studs: false });
   { const cer = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 14), lam(0xd8622b));
     cer.rotation.x = Math.PI / 2; cer.rotation.z = 0.25; cer.position.set(X + 34, 4.1, Z + 9.2); worldGroup.add(cer); }
-  // carcasses de voitures
-  for (const [dx, dz, h] of [[-34, -12, 0.6], [-8, 2, 2.1], [30, -12, 1.2], [-14, 22, 0.2], [6, 26, 2.6]])
+  // Carcasses de voitures. La quatrieme etait garee EN PLEIN DANS LA CAGE D'ESCALIER de
+  // l'immeuble du nord-ouest : son volume de collision (2,40 x 1,40 x 4,20 m, dessus a 1,40 m)
+  // recouvrait les deux premieres marches, hautes de 0,52 et 0,84 m. On la recule de 10 m a
+  // l'est, sur le terre-plein libre.
+  for (const [dx, dz, h] of [[-34, -12, 0.6], [-8, 2, 2.1], [30, -12, 1.2], [-4, 22, 0.2], [6, 26, 2.6]])
     carcasse(X + dx, Z + dz, h);
   // poubelles, sacs et déchets
   for (let i = 0; i < 16; i++) {

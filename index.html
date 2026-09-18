@@ -8759,28 +8759,34 @@ function itineraireVoies(x1, z1, x2, z2, cap) {
     const cout = -(1 - p.t) * e.long * (10 / e.vmax) + (p.d - B.d) * 3;
     const v = cibles.get(e.id); if (v == null || cout < v) cibles.set(e.id, cout);
   }
-  // LE MULTI-DEPART RESTE EN RESERVE — ESSAYE DEUX FOIS, MESURE DEUX FOIS. Faire partir un
-  // vehicule a l'arret par la voie d'en face vaut 2,28 -> 1,83 de rapport distance sur vol
-  // d'oiseau (pire cas 4,98 -> 2,54). Mais il rend le PREMIER point de passage LATERAL : a
-  // trois metres sur le cote, et un suivi de trace ne sait pas glisser de cote. Le demi-tour
-  // sur place (demiTourTick), ecrit expres pour ca, ne suffit pas : le cap vers un point situe
-  // A COTE tourne avec la voiture, la consigne n'est jamais atteinte et le vehicule fait des
-  // va-et-vient sur place (mesure test 332 : la voiture de patrouille, 1 m parcouru, pointe a
-  // 2,2 m/s, c'est-a-dire la vitesse de manoeuvre). Ce qu'il manque n'est donc pas la manoeuvre
-  // mais le TRACE : quand on choisit une autre voie que celle du vehicule, il faut commencer
-  // l'itineraire la ou il peut la REJOINDRE — plus loin, dans le sens de cette voie — et non a
-  // sa hauteur. A faire avant de reprendre ce raccourci ; la reconnaissance de plusieurs
-  // departs reste dans `cheminAretes`, prete a servir.
+  // LE RACCOURCI DU DEPART RESTE EN RESERVE — quatre tentatives, quatre mesures. Faire partir un
+  // vehicule a l'arret par la voie d'en face vaut 2,33 -> 1,83 de rapport distance sur vol
+  // d'oiseau (pire cas 4,98 -> 2,54), et le test du GPS le confirme a chaque essai. Mais il fait
+  // retomber le test 332 a tous les coups, et ce n'est plus la geometrie du trace : avec le
+  // raccord « on rejoint la voie douze metres plus loin, dans son sens » et le demi-tour sur
+  // place, la voiture de patrouille reste quand meme devant le commissariat. Ce qui coince est
+  // DANS LE PILOTE DES VEHICULES DE SERVICE (rouleVers / botConduit), pas dans l'itineraire :
+  // c'est lui qu'il faut instrumenter au prochain round. Le multi-depart reste ecrit dans
+  // `cheminAretes`, pret a servir le jour ou ce pilote saura executer un depart en sens inverse.
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
   const suite = memeVoie ? [A.arete] : cheminAretes(A.arete, B.arete, cibles);
   if (!suite) return null;
-  // LE PREMIER POINT RESTE SUR LA VOIE OU LE VEHICULE SE TROUVE. On l'avait mis sur la voie
-  // choisie par le calcul : quand c'etait celle d'en face, le tout premier point de passage
-  // tombait A QUATRE METRES SUR LE COTE, et le suivi de trace ne sait pas glisser de cote —
-  // mesure (test 332), la voiture de patrouille restait sur place a 1,2 m/s, son compteur de
-  // blocage tournant en rond, 4 m parcourus en soixante secondes. En partant de SA voie, la
-  // voiture avance vraiment et rejoint la voie retenue en roulant, le long de la rue.
-  const pts = [[+A.px.toFixed(2), +A.pz.toFixed(2)]];
+  // ON NE REJOINT PAS UNE VOIE PAR LE TRAVERS. Quand le calcul retient une AUTRE voie que celle
+  // ou se trouve le vehicule (celle d'en face, a trois metres), commencer le trace A SA HAUTEUR
+  // donne un premier point de passage LATERAL : le cap vers un point situe a cote tourne avec la
+  // voiture, la consigne n'est jamais atteinte, et le vehicule fait des va-et-vient sur place —
+  // mesure (test 332), la voiture de patrouille faisait 1 m en soixante secondes, a 2,2 m/s,
+  // c'est-a-dire la vitesse de manoeuvre. On vise donc PLUS LOIN, dans le sens de la voie
+  // retenue, la ou le vehicule peut vraiment la rejoindre : douze metres, ou trois fois l'ecart
+  // lateral s'il est plus grand, sans depasser le bout de la voie. Le point est alors devant ou
+  // franchement derriere — deux cas que la conduite sait traiter, le second avec le demi-tour.
+  const p0 = projVoie(x1, z1, suite[0]);
+  let px0 = p0.px, pz0 = p0.pz;
+  if (suite[0].id !== A.arete.id) {
+    const u = Math.min(Math.max(12, p0.d * 3), (1 - p0.t) * suite[0].long);
+    px0 += Math.sin(suite[0].sens) * u; pz0 += Math.cos(suite[0].sens) * u;
+  }
+  const pts = [[+px0.toFixed(2), +pz0.toFixed(2)]];
   const pousse = (x, z, coupe) => {
     const p = pts[pts.length - 1], d = Math.hypot(p[0] - x, p[1] - z);
     if (d < 0.4) return;
@@ -9325,15 +9331,26 @@ function pietonDerriere(c) {
 const DEMI_TOUR_V = 2.2;         // m/s : on manoeuvre au pas, on ne fonce pas
 const DEMI_TOUR_TEMPS = 1.1;     // duree d'un temps (avant, puis arriere)
 const DEMI_TOUR_MAX = 9;         // au-dela, la place est vraiment trop petite : on abandonne
+// APRES UN ECHEC, ON N'INSISTE PAS. Sans ce repos, une voiture coincee dans une cour trop
+// etroite relancait la manoeuvre a l'image suivante, indefiniment : mesure (test 332), la
+// voiture de patrouille restait a l'arret devant le commissariat avec la raison « demi-tour »
+// a chaque seconde, 1 m parcouru en soixante secondes. Quand la place manque, on rend la main
+// a la conduite normale — elle sortira de la cour en marche avant et tournera au carrefour.
+const DEMI_TOUR_REPOS = 12;
 function demiTourLance(c, dh) {
   if (!c || (c.dTour && c.dTour.reste > 0)) return;
-  c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1 };
+  if (simTime < (c.dTourStop || 0)) return;
+  c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1, h0: c.h };
 }
 // Rend vrai tant que la manoeuvre occupe l'image : l'appelant n'a plus rien a faire.
 function demiTourTick(c, dt, dh) {
   const m = c && c.dTour; if (!m || m.reste <= 0) return false;
   m.reste -= dt; m.t += dt;
-  if (Math.abs(dh) < 0.55 || m.reste <= 0) { c.dTour = null; c.recule = false; return false; }
+  if (Math.abs(dh) < 0.55 || m.reste <= 0) {
+    // manoeuvre epuisee sans avoir tourne : la place est trop petite, on se repose
+    if (m.reste <= 0 && Math.abs(CAP(c.h - m.h0)) < 1) c.dTourStop = simTime + DEMI_TOUR_REPOS;
+    c.dTour = null; c.recule = false; return false;
+  }
   if (m.t > DEMI_TOUR_TEMPS) { m.t = 0; m.phase = m.phase === 'avant' ? 'arriere' : 'avant'; }
   const avant = m.phase === 'avant', h0 = c.h;
   c.h += m.sens * 1.6 * dt;                    // la caisse pivote du meme cote dans les deux temps

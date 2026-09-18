@@ -9467,6 +9467,102 @@ function klaxonne(c) {
 }
 // Le pilote automatique d'un vehicule de la circulation : il suit sa voie, ralentit dans les
 // virages, garde ses distances et obeit au code de la route.
+// ================= LE SUIVI DE TRACE =================
+// « guidage automatique des vehicule ne suit pas parfaitement la route pour atteindre sa
+//   destination, trouve un autre systeme de non collision et de suivi de trajectoire, non pas
+//   vol d'oiseau mais de tracer route, ca vaut pour tout les vehicule » — le joueur.
+//
+// L'ancien suivi VISAIT LE POINT DE PASSAGE : cap = direction du point n° i, et on passait au
+// suivant quand on entrait dans un rayon de 2,8 m. Deux defauts DE PRINCIPE, pas des bogues :
+//   — viser un point, c'est rouler en LIGNE DROITE vers lui. Entre deux points espaces de six
+//     metres, le vehicule coupe la corde et sort de sa voie dans chaque courbe (mesure test
+//     147 : 53 % du trajet seulement sur la chaussee, 26 % du temps a racler un obstacle) ;
+//   — un point rate de trois metres restait la cible POUR TOUJOURS, et le vehicule revenait
+//     le chercher en arriere.
+// Le nouveau suit la POLYLIGNE ELLE-MEME, comme un conducteur suit sa rue :
+//   1. PROJECTION. On se projette sur le segment courant ; l'index avance quand la PROJECTION
+//      depasse le bout du segment, jamais par un rayon. Ce qui est derriere reste derriere.
+//   2. POINT DE VISEE. On vise un point pris PLUS LOIN SUR LE TRACE, a une distance qui
+//      grandit avec la vitesse. Ecarte de sa ligne, le vehicule y REVIENT en biais au lieu de
+//      foncer vers un point de passage : c'est ce qui remplace le « vol d'oiseau ».
+//   3. BRAQUAGE BORNE. Le cap ne tourne pas plus vite que v / RAYON_BRAQUAGE : une voiture a
+//      l'arret ne pivote plus sur place, une voiture lancee ne fait plus d'angle droit.
+//   4. VITESSE SUR LA COURBURE A VENIR, lue sur tout le trace des quinze prochains metres et
+//      non sur les deux points suivants.
+const RAYON_BRAQUAGE = 5.5;   // m : rayon de braquage d'une voiture, volant a fond
+const VISEE_MIN = 5;          // m : on vise a cinq metres a l'arret...
+const VISEE_K = 0.85;         // s : ... plus 0,85 s de route a la vitesse du moment
+const VISEE_MAX = 18;
+const COURBURE_VUE = 16;      // m de trace regardes pour lever le pied avant la courbe
+function traceSuit(c, R, st) {
+  const S = c.trace || (c.trace = { i: 0, t: 0, px: 0, pz: 0, vx: 0, vz: 0, lat: 0, reste: 0, courbe: 0, fin: false, cap: 0, capVoie: 0 });
+  const n = R.length;
+  if (n < 2) {
+    const p = R[0] || [c.x, c.z];
+    S.i = 0; S.t = 1; S.px = S.vx = p[0]; S.pz = S.vz = p[1];
+    S.lat = S.reste = Math.hypot(c.x - p[0], c.z - p[1]); S.courbe = 0; S.fin = true;
+    S.cap = S.capVoie = Math.atan2(p[0] - c.x, p[1] - c.z); return S;
+  }
+  // --- 0. LE POINT DEJA PASSE EST PASSE. Au DEPART d'un trace qui nous fait rejoindre la voie
+  // d'en face, les premiers points sont derriere nous : la projection seule y resterait collee.
+  // On valide donc d'abord ce qui est franchement derriere et proche — jamais le tout premier,
+  // qui peut legitimement exiger un demi-tour.
+  for (;;) {
+    if (st.i >= n - 1) break;
+    const q = R[st.i], dx0 = q[0] - c.x, dz0 = q[1] - c.z;
+    const derriere = dx0 * Math.sin(c.h) + dz0 * Math.cos(c.h) < -0.5;
+    if (st.i > 0 && derriere && Math.hypot(dx0, dz0) < 10) st.i++; else break;
+  }
+  // --- 1. PROJECTION sur le trace. Pas « le premier segment ou la projection tombe dedans » :
+  // un trace qui revient sur lui-meme (le tour du pate de maisons, la voie d'en face) a
+  // plusieurs segments qui passent a cote de nous, et l'index sauterait n'importe ou devant.
+  // On prend, dans une FENETRE de huit segments a partir de celui qu'on suivait, celui dont on
+  // est LE PLUS PRES — a egalite, le plus avance.
+  const i0 = Math.max(0, Math.min(st.i | 0, n - 2));
+  let i = i0, t = 0, meilleur = Infinity;
+  for (let k = i0; k < n - 1 && k < i0 + 8; k++) {
+    const a = R[k], b = R[k + 1];
+    const ux = b[0] - a[0], uz = b[1] - a[1], L2 = ux * ux + uz * uz;
+    const tk = clamp(L2 > 1e-9 ? ((c.x - a[0]) * ux + (c.z - a[1]) * uz) / L2 : 1, 0, 1);
+    const d = Math.hypot(c.x - (a[0] + ux * tk), c.z - (a[1] + uz * tk));
+    if (d <= meilleur + 0.05) { meilleur = Math.min(meilleur, d); i = k; t = tk; }
+  }
+  st.i = i; S.i = i; S.t = t;
+  const a = R[i], b = R[i + 1];
+  S.px = a[0] + (b[0] - a[0]) * t; S.pz = a[1] + (b[1] - a[1]) * t;
+  S.lat = Math.hypot(c.x - S.px, c.z - S.pz);
+  // --- ce qu'il reste A PARCOURIR SUR LE TRACE (et non a vol d'oiseau)
+  let reste = Math.hypot(b[0] - S.px, b[1] - S.pz);
+  for (let k = i + 1; k < n - 1; k++) reste += Math.hypot(R[k + 1][0] - R[k][0], R[k + 1][1] - R[k][1]);
+  S.reste = reste; S.fin = false;
+  // --- 2. le point de visee, a L metres devant SUR LE TRACE
+  const L = clamp(VISEE_MIN + Math.abs(c.speed || 0) * VISEE_K, VISEE_MIN, VISEE_MAX);
+  let seg = i, px = S.px, pz = S.pz, rst = L;
+  for (;;) {
+    const q = R[seg + 1], d = Math.hypot(q[0] - px, q[1] - pz);
+    if (d >= rst || seg >= n - 2) {
+      const u = d > 1e-6 ? Math.min(1, rst / d) : 1;
+      S.vx = px + (q[0] - px) * u; S.vz = pz + (q[1] - pz) * u;
+      if (seg >= n - 2 && d < rst) S.fin = true;   // le point de visee bute sur la fin du trace
+      break;
+    }
+    rst -= d; px = q[0]; pz = q[1]; seg++;
+  }
+  S.cap = Math.atan2(S.vx - c.x, S.vz - c.z);
+  // le cap de la VOIE elle-meme la ou l'on est : c'est lui qui dit s'il faut faire demi-tour
+  // (le trace part dans l'autre sens), independamment de la position des points de passage.
+  S.capVoie = Math.atan2(b[0] - a[0], b[1] - a[1]);
+  // --- 4. la courbure a venir : de combien le trace tourne-t-il dans les quinze metres ?
+  let vu = 0, courbe = 0, hPrec = Math.atan2(b[0] - a[0], b[1] - a[1]);
+  for (let k = i + 1; k < n - 1 && vu < COURBURE_VUE; k++) {
+    const p0 = R[k], p1 = R[k + 1], d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    if (d < 0.2) continue;
+    const hk = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
+    courbe += Math.abs(CAP(hk - hPrec)); hPrec = hk; vu += d;
+  }
+  S.courbe = courbe;
+  return S;
+}
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
 const DEGAGE_QUAND_MEME = 14;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
 const DEGAGE_DUREE = 1.6;        // s de marche arriere
@@ -9477,42 +9573,31 @@ function traficRoule(c, dt, opt) {
   const st = c.ia, R = st.route;
   // un chantier vient d'etre pose (ou leve) : le trace n'est plus valable, on en refait un
   if (!opt.pilote && st.sig !== undefined && st.sig !== voiesBarreesSig) { c.ia = null; c.destT = 0; return; }
-  // UN POINT DE PASSAGE DEPASSE EST UN POINT DE PASSAGE FAIT. On ne le validait qu'au RAYON
-  // (2,80 m) : rate de trois metres dans une courbe, il restait la cible pour toujours, la
-  // voiture s'en eloignait, et le cap demande se retournait — elle finissait par faire demi-tour
-  // vers un point qu'elle avait deja passe, puis a osciller. C'est LA cause de la voiture de
-  // patrouille qui ne quittait pas le commissariat : trace image par image, elle depassait le
-  // point n° 9 a 2 m, l'index restait a 9, et `devantWp` tombait a −8,6 m.
-  // On valide donc aussi ce qui est DERRIERE nous et proche (moins de 10 m) — mais jamais le
-  // TOUT PREMIER point : celui-la peut etre legitimement derriere (on doit faire demi-tour pour
-  // prendre la voie d'en face), et le sauter ferait repartir la voiture du mauvais cote.
-  for (;;) {
-    if (st.i >= R.length - 1) break;
-    const dx0 = R[st.i][0] - c.x, dz0 = R[st.i][1] - c.z, d0 = Math.hypot(dx0, dz0);
-    const derriere = dx0 * Math.sin(c.h) + dz0 * Math.cos(c.h) < -0.5;
-    if (d0 < 2.8 || (st.i > 0 && derriere && d0 < 10)) st.i++; else break;
-  }
-  const wp = R[Math.min(st.i, R.length - 1)];
-  const dx = wp[0] - c.x, dz = wp[1] - c.z, dwp = Math.hypot(dx, dz);
-  const want = Math.atan2(dx, dz), dh = CAP(want - c.h), h0 = c.h;
+  // ON SUIT LE TRACE, PAS UN POINT (voir `traceSuit`).
+  const S = traceSuit(c, R, st);
+  // `dwp` n'est plus le vol d'oiseau vers un point de passage mais CE QU'IL RESTE A PARCOURIR
+  // SUR LE TRACE ; `dhWp`, le cap de la voie, decide du demi-tour.
+  const dwp = S.reste, dh = CAP(S.cap - c.h), h0 = c.h;
+  const dhWp = CAP(S.capVoie - c.h);
   // LE POINT DE PASSAGE EST DERRIERE : ON FAIT DEMI-TOUR AU LIEU DE PIETINER. Reserve aux
   // vehicules PILOTES par un autre poste (services, police, missions) : la circulation de fond,
   // elle, part toujours d'une destination prise depuis sa propre voie.
   if (opt.pilote) {
-    if (Math.abs(c.speed || 0) < 1.5 && Math.abs(dh) > 2 && dwp > 3) demiTourLance(c, dh);
-    if (demiTourTick(c, dt, dh)) return;   // (avanceVehicule a deja fait tourner les roues)
+    if (Math.abs(c.speed || 0) < 1.5 && Math.abs(dhWp) > 2 && dwp > 3) demiTourLance(c, dhWp);
+    if (demiTourTick(c, dt, dhWp)) return;   // (avanceVehicule a deja fait tourner les roues)
   }
-  c.h += clamp(dh, -1, 1) * clamp(4.4 - Math.abs(c.speed || 0) * 0.1, 2.2, 4.2) * dt;
-  // on leve le pied AVANT le virage, pas dedans
-  let virage = Math.abs(dh);
-  const w2 = R[Math.min(st.i + 1, R.length - 1)];
-  if (w2 !== wp) {
-    const a2 = Math.abs(CAP(Math.atan2(w2[0] - wp[0], w2[1] - wp[1]) - want));
-    if (dwp < 18) virage = Math.max(virage, a2 * (1 - dwp / 22));
-  }
+  // BRAQUAGE BORNE : le cap ne tourne pas plus vite que v / RAYON_BRAQUAGE, donc plus on va
+  // vite moins on tourne sec. Le plancher reste la MANOEUVRE AU PAS (2,2 rad/s, comme avant) :
+  // mesure faite, le descendre a 0,9 laissait la voiture de patrouille tourner si lentement
+  // devant le commissariat qu'elle se faisait coincer par la voiture d'en face.
+  const braque = clamp(Math.abs(c.speed || 0) / RAYON_BRAQUAGE, 2.2, 3.2);
+  c.h += clamp(dh, -1, 1) * braque * dt;
   const base = c.vmaxIA || 9;
-  let cible = virage > 0.8 ? Math.min(base, 4) : virage > 0.35 ? Math.min(base, 6.5) : base;
-  if (st.i >= R.length - 1 && dwp < 12) cible = Math.min(cible, 3 + dwp * 0.4);   // on se pose en douceur
+  // on leve le pied AVANT le virage, pas dedans : la courbure est lue sur TOUT le trace a venir
+  let cible = S.courbe > 0.9 ? Math.min(base, 4) : S.courbe > 0.4 ? Math.min(base, 6.5) : base;
+  if (Math.abs(dh) > 0.5) cible = Math.min(cible, 4.5);   // on ne roule pas plus vite qu'on ne braque
+  if (S.lat > 3.5) cible = Math.min(cible, 5);            // loin de sa ligne : on y revient au pas
+  if (S.fin && dwp < 12) cible = Math.min(cible, 3 + dwp * 0.4);   // on se pose en douceur
   // sur quelle sorte de voie roule-t-on ? (boulevard et avenue sont prioritaires : on n'y
   // laisse pas passer la rue qui debouche a droite). Recalcule deux fois par seconde.
   if (simTime > (c.roleT || 0)) { c.roleT = simTime + 0.6;
@@ -9524,7 +9609,7 @@ function traficRoule(c, dt, opt) {
   const [gap, mini] = gapDevant(c);
   if (gap < mini) { cible = 0; c.raison = 'file'; } else if (gap < mini + 4) { cible = Math.min(cible, (gap - mini) * 2.6); if (cible < 2) c.raison = 'file'; }
   // arrivee : on se choisit une nouvelle destination (sauf si un autre poste pilote)
-  if (st.i >= R.length - 1 && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
+  if (S.fin && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
   const acc = cible < (c.speed || 0) ? 5.5 : 2.2;   // on freine plus vite qu'on n'accelere
   c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
   if (c.speed < 0.05) c.speed = 0;

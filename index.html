@@ -8802,7 +8802,12 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
   // gelee sortait de la fenetre et le choix repartait a zero. On la reteste donc DIRECTEMENT.
   if (forceDepart != null && forceDepart >= 0 && forceDepart !== interdit && G.aretes[forceDepart]) {
     const pf = projVoie(x1, z1, G.aretes[forceDepart]);
-    if (pf.d <= Math.max(A.d + 6, 8)) { departs.clear(); departs.set(forceDepart, 0); }
+    // La fenetre est LARGE a dessein. Elle dit « est-ce que je longe encore cette voie ? », et
+    // un vehicule qui manoeuvre, qui double ou qui traine une epave s'en ecarte de dix metres
+    // sans l'avoir quittee. Mesure (trajet de remorquage) : a 8 m, le gel lachait des que le
+    // camion s'ecartait de sa ligne, la voie d'en face redevenait la moins chere, et le trace
+    // basculait entre 455 m et 362 m a chaque recalcul — le camion tournait en rond.
+    if (pf.d <= Math.max(A.d + 6, 14)) { departs.clear(); departs.set(forceDepart, 0); }
   }
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
   const suite = memeVoie ? [A.arete] : cheminAretes(departs.size ? departs : A.arete, B.arete, cibles);
@@ -23127,8 +23132,21 @@ function remiseTick(dt) {
   }
   // Les karts aussi : apres une course ils restaient la ou ils s'etaient arretes et la grille
   // de depart restait vide pour la suivante. Hors course, ils regagnent leur emplacement.
+  // UN VEHICULE QUI TRAVAILLE NE SE FAIT PAS RANGER. Cette ronde remet a leur place les
+  // vehicules qu'on a laisses trainer — mais elle ne regardait pas s'ils etaient EN TRAIN DE
+  // SERVIR. Mesure (mouchard pose sur la position de la depanneuse) : partie chercher une
+  // epave, elle etait ramenee au garage D'UN SEUL COUP, 96 m, PENDANT LE TREUILLAGE, mission
+  // en cours — c'etait la derniere teleportation que le joueur voyait, et elle ne venait ni du
+  // filet des secours ni de la circulation de fond, mais d'ici.
+  // On epargne donc tout ce qui a un travail en cours : une mission, un constat, une epave au
+  // crochet, un occupant — et tout vehicule qu'un autre poste est en train de conduire
+  // (`piloteT`, pose par `botConduit`). Une voiture de la circulation de fond, elle, n'a aucun
+  // de ces drapeaux : la ville continue de se ranger comme avant.
+  const vj = vehiculeDuJoueur();
   for (const c of [...city.cars, ...raceKarts]) {
-    if (!c.home0 || c === drive.car || c.busy || (c.kart && race.state !== 'idle')) { c.loinT = 0; continue; }
+    const auTravail = c.mission || c.constat || c.remorque
+      || simTime - (c.piloteT || -1e9) < 3 || (vj && vj.car === c);
+    if (!c.home0 || c === drive.car || c.busy || auTravail || (c.kart && race.state !== 'idle')) { c.loinT = 0; continue; }
     const [hx, hz, hh] = c.home0;
     const epave = !!(c.dead || c.explosed);
     const enVol = !!(c.heli && (c.y || 0) > (c.y0 || 0) + 1.5);

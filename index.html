@@ -24292,14 +24292,36 @@ function convoieSecours(c, tx, tz, h) {
 // Une etape de trajet d'un vehicule de service : on roule vers le but, et on dit si l'etape
 // est FINIE. `cle` identifie l'etape (son compteur repart a zero quand elle change) et `pose`
 // est le point ou le convoyage depose le vehicule s'il n'y arrive pas (par defaut le but).
+// LA PATIENCE SUIT LE CHEMIN A FAIRE, PAS LE CHRONOMETRE. Elle etait FIXE : quarante-cinq
+// secondes, quelle que soit l'etape. Or 45 s a 9 m/s ne font que 400 m de route THEORIQUE,
+// feux, stops et circulation non comptes — sur une etape de 240 m par les voies, la depanneuse
+// etait donc teleportee alors qu'elle roulait parfaitement normalement. C'est la cause des
+// sauts que le joueur voit. On accorde maintenant le temps du CHEMIN RESTANT a une moyenne
+// realiste de 4 m/s (la vitesse d'un vehicule de service arrets compris), plus vingt-cinq
+// secondes de marge — et le filet garde un plafond pour que rien ne traine indefiniment.
+const SECOURS_MOYENNE = 4;     // m/s : vitesse moyenne reelle d'un vehicule de service
+const SECOURS_MARGE = 25;      // s de marge par-dessus le temps de route
+const SECOURS_PLAFOND = 260;   // s : au-dela, c'est vraiment bloque
+function patienceSecours(c, tx, tz, loin) {
+  // le chemin RESTANT sur le trace si on en suit un, sinon le vol d'oiseau
+  const reste = (c.trace && c.trace.reste > 0 && c.ia && c.ia.route) ? c.trace.reste
+    : Math.hypot(tx - c.x, tz - c.z);
+  const base = loin ? SECOURS_PATIENCE : SECOURS_FORCE;
+  return Math.min(SECOURS_PLAFOND, Math.max(base, reste / SECOURS_MOYENNE + SECOURS_MARGE));
+}
 function etapeSecours(c, cle, tx, tz, dt, vmax, opt, seuil, pose) {
-  if (c.etapeK !== cle) { c.etapeK = cle; c.etapeT = 0; }
+  if (c.etapeK !== cle) { c.etapeK = cle; c.etapeT = 0; c.etapeMieux = null; }
   const o = Object.assign({ secours: true }, opt || {});
-  if (rouleVers(c, tx, tz, dt, vmax, o) <= seuil) { c.etapeT = 0; return true; }
+  const reste = rouleVers(c, tx, tz, dt, vmax, o);
+  if (reste <= seuil) { c.etapeT = 0; c.etapeMieux = null; return true; }
+  // TANT QU'IL SE RAPPROCHE, IL N'EST PAS BLOQUE. Un long trajet par les voies commence
+  // souvent par s'eloigner (sens unique), puis revient : on ne compte donc pas le vol d'oiseau
+  // mais le MEILLEUR approche atteint, et on rend sa patience au vehicule des qu'il l'ameliore.
+  if (c.etapeMieux == null || reste < c.etapeMieux - 2) { c.etapeMieux = reste; c.etapeT = 0; }
   c.etapeT = (c.etapeT || 0) + dt;
   const loin = Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > SECOURS_LOIN;
-  if (c.etapeT > (loin ? SECOURS_PATIENCE : SECOURS_FORCE)) {
-    c.etapeT = 0;
+  if (c.etapeT > patienceSecours(c, tx, tz, loin)) {
+    c.etapeT = 0; c.etapeMieux = null;
     if (convoieSecours(c, pose ? pose[0] : tx, pose ? pose[1] : tz, pose ? pose[2] : null)) return true;
   }
   return false;
@@ -25602,8 +25624,16 @@ function cityStep(dt) {
       // destination sur le GRAPHE, changee des qu'elle est atteinte : la circulation ne
       // tourne plus en rond sur un anneau de 26 m, elle traverse toute la ville.
       if (!c.ia && simTime > (c.destT || 0)) { c.destT = simTime + 1.5; traficDestination(c); }
-      if (c.ia && simTime - (c.piloteT || -99) > 0.25) traficRoule(c, dtT);
-      else if (c.ia) { /* un autre poste le conduit deja cette image */ }
+      // CE VEHICULE APPARTIENT-IL A UN AUTRE POSTE ? La boucle de circulation de fond parcourt
+      // `city.cars` et conduisait tout ce qui a un `ia` : elle reprenait la main sur un
+      // vehicule deja pilote, le traitait en voiture de decor, et finissait par le TELEPORTER
+      // (`traficPose`). Mesure : un saut de 149 m en plein trajet (test 449), et un autre de
+      // 96 m pendant que la depanneuse treuillait une epave — car pendant le treuillage son
+      // pilote se tait, et la circulation de fond en profitait. On regarde donc l'APPARTENANCE
+      // du vehicule, pas seulement qui l'a conduit a l'image precedente.
+      const aUnPilote = (simTime - (c.piloteT || -99) < 0.25) || c.mission || c.constat
+        || c.remorque || c.busy || vehiculeDeService(c);
+      if (c.ia && !aUnPilote) traficRoule(c, dtT);
       else { c.speed = Math.max(0, (c.speed || 0) - dtT * 6); c.stopped = true; avanceVehicule(c, dtT, c.speed, {}); }
     }
     }

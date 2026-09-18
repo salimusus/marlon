@@ -8349,10 +8349,14 @@ const COUT_MANOEUVRE = { 'tout-droit': 0, droite: 2, gauche: 6, 'demi-tour': 250
 // l'arret qui sort de sa place du bon cote. Assez cher pour ne pas se retourner sans raison,
 // assez bon marche pour ne pas faire le tour de la ville quand la bonne voie est a trois metres.
 const COUT_DEMI_TOUR_DEPART = 60;
-// LE CAP A DONNER AU CALCUL D'ITINERAIRE. Un vehicule LANCE est tenu par sa voie : on donne
-// son cap. Un vehicule A L'ARRET (il sort d'une place, d'un garage, d'un depot) peut repartir
-// dans le sens qu'il veut : on ne lui impose rien, et l'itineraire prend la bonne voie.
-function capDeRoute(c) { return Math.abs((c && c.speed) || 0) > 1 ? c.h : null; }
+// LE CAP A DONNER AU CALCUL D'ITINERAIRE : TOUJOURS CELUI DU VEHICULE, meme a l'arret.
+// Premiere version : on rendait `null` pour un vehicule arrete, en se disant qu'il sort de sa
+// place dans le sens qu'il veut. Mesure (test 332) : la voiture de police faisait alors 4 m,
+// la depanneuse 0 et le camion de pompiers 75 m — l'itineraire leur donnait un premier point
+// de passage DERRIERE eux, dans leur garage, et ils n'en sortaient plus. Le cap reste donc
+// donne ; c'est la PENALITE (COUT_DEMI_TOUR_DEPART) qui decide : on repart dans l'autre sens
+// seulement quand ca fait gagner bien plus que le detour, pas pour dix metres.
+function capDeRoute(c) { return c ? c.h : null; }
 function construireGraphe() {
   const R = city.routes || [];
   const voies = [], noeuds = [], aretes = [];

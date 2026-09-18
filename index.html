@@ -15743,12 +15743,34 @@ function animateRig(rig, mode, speed, dt, t) {
   // qu'un genou montait (marche, coup de pied, genou a terre, position assise). Passe 0,25 rad
   // de cuisse levee, elle bascule vers l'avant comme un vrai tissu qui glisse sur la jambe —
   // au plus 0,7 rad, sinon elle se coucherait a l'horizontale sur un coup de pied haut.
+  //
+  // ELLE BASCULE SUR LA DIFFERENCE ENTRE LES DEUX CUISSES, PAS SUR LA SEULE CUISSE AVANT.
+  // On ne regardait que la cuisse levee DEVANT. Tant que la foulee restait courte c'etait sans
+  // consequence ; depuis que le pas s'allonge avec la vitesse, la cuisse ARRIERE monte autant
+  // que l'avant (mesure : ±1,18 rad a 6,2 m/s). La jupe basculait alors de 0,65 rad vers
+  // l'avant — et c'est cette bascule elle-meme qui enfoncait son ourlet ARRIERE sur le genou
+  // arriere : 13 cm de tissu traverse en pleine marche, a toutes les vitesses (test 230).
+  // Un vrai tissu ne bascule que s'il est pousse PLUS d'un cote que de l'autre. En marche, les
+  // deux cuisses s'ouvrent symetriquement : la jupe ne bascule plus, et les deux genoux
+  // passent sous l'ourlet, ou ils sont. A genoux, assis ou au coup de pied, une seule cuisse
+  // monte : l'ecart est entier, la jupe se souleve comme avant.
   if (rig.jupe && rig.jupe.visible) {
-    const leve = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
+    const avant = Math.max(-rig.legL.rotation.x, -rig.legR.rotation.x, 0);
+    const arriere = Math.max(rig.legL.rotation.x, rig.legR.rotation.x, 0);
+    const leve = Math.max(0, avant - arriere);
     const cible = -Math.min(0.7, Math.max(0, leve - 0.25) * 0.85);
     // elle se souleve D'UN COUP sous la cuisse qui monte (sinon, le temps qu'elle reagisse,
     // un coup de pied la traversait) et elle retombe doucement, comme un vrai tissu
     rig.jupe.rotation.x = cible < rig.jupe.rotation.x ? cible : rig.jupe.rotation.x + (cible - rig.jupe.rotation.x) * ease2;
+    // ET ELLE REMONTE QUAND LES DEUX CUISSES S'OUVRENT. En pleine foulee les jambes sont
+    // ecartees EN MEME TEMPS, l'une devant l'autre derriere : aucune bascule ne peut degager
+    // les deux genoux a la fois, c'est geometriquement impossible pour un cone rigide. Un vrai
+    // tissu, lui, remonte sur les cuisses quand elles s'ecartent. Mesure : a basse vitesse le
+    // genou arriere passait encore 6,9 cm dans l'ourlet une fois la bascule corrigee ; il suffit
+    // de 4,3 cm de montee pour qu'il repasse dans l'evasement du cone.
+    if (rig.jupe.userData.jupeY0 == null) rig.jupe.userData.jupeY0 = rig.jupe.position.y;
+    const ouvre = Math.max(0, Math.min(0.07, (avant + arriere - 1.2) * 0.10));
+    rig.jupe.position.y += (rig.jupe.userData.jupeY0 + ouvre - rig.jupe.position.y) * Math.min(1, dt * 14);
   }
 }
 function animateRigCorps(rig, mode, speed, dt, t) {

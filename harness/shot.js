@@ -2149,6 +2149,11 @@ window.__G = {
   set concesSel(v) { if (typeof concesSel !== 'undefined') concesSel = v; },
   saveWallet: typeof saveWallet === 'function' ? saveWallet : null,
   // ---- poste COMBAT & ARMES (visee verrouillee, gestes de poing) : ajoute tes exports SOUS cette ligne ----
+  armeTick: typeof armeTick === 'function' ? armeTick : null,
+  telTouche: typeof telTouche === 'function' ? telTouche : null,
+  toggleGun: typeof toggleGun === 'function' ? toggleGun : null,
+  fermeLunette: typeof fermeLunette === 'function' ? fermeLunette : null,
+  get laserDot() { return typeof laserDot !== 'undefined' ? laserDot : null; },
   ciblesVerrouillables: typeof ciblesVerrouillables === 'function' ? ciblesVerrouillables : null,
   cibleAuto: typeof cibleAuto === 'function' ? cibleAuto : null,
   cibleSuivante: typeof cibleSuivante === 'function' ? cibleSuivante : null,

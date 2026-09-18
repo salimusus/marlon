@@ -159,6 +159,24 @@ window.__SHOT = {
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
       if (typeof gym !== 'undefined') gym.on = null;
     } catch (e) {}
+    // TOUT CE QUI BRIDE LA MARCHE. On remettait la course a zero, mais pas les etats qui
+    // DIVISENT la vitesse. Le pire est P.accroupi : une esquive (esquive()) le pose, et
+    // seul un tick de combat le retire — un tick qui ne revient jamais si le test s'arrete
+    // juste apres. Il restait donc arme pour TOUS les tests suivants, et il ne coupe pas
+    // seulement 58 % de la vitesse (× 0,42), il interdit aussi de courir. MESURE : 6,20 m/s
+    // en marche propre, 2,60 m/s avec un accroupi herite — soit exactement le facteur deux
+    // releve sur la montee du test 437, « y compris a plat ». Le meme heritage vide de son
+    // sens toute mesure de foulee, puisque la pose accroupie sort avant la foulee.
+    // cityReset nettoyait deja tout ca, mais il ne tourne qu'au changement de monde ou sur
+    // demande de ville fraiche : la plupart des tests restent dans le monde 4 sans la demander.
+    try {
+      P.accroupi = false; P.garde = false;
+      if (typeof me !== 'undefined' && me.rig) { me.rig.accroupi = false; me.rig.agenou = false; me.rig.garde = false; }
+      document.body.classList.remove('accroupi', 'garde');
+      P.stunT = 0; P.boostT = 0; P.climbing = false; P.swimming = false; P.secours = null;
+      P.demiTour = 0; P.capVoulu = null; P.yVu = null;   // cap demande et hauteur affichee : recalcules seuls
+      if (P.jet) { P.jet = false; P.fuel = 100; if (typeof setJet === 'function') setJet(me, false); }
+    } catch (e) {}
     // MONDE NEUF (v.frais). Les tests ne rebatissent le monde que s'ils CHANGENT de monde :
     // la neige, les chantiers, les epaves et les vehicules deplaces par le test precedent
     // restent donc en place. C'est sans consequence pour la plupart des mesures, mais un

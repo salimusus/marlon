@@ -9143,6 +9143,12 @@ function botConduit(c, x, z, dt, opt) {
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
   c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
+  // CE VEHICULE A UN PILOTE. La boucle de circulation de fond parcourt `city.cars` et conduit
+  // tout ce qui a un `ia` : elle reprenait donc la main sur un vehicule qu'un autre poste (ou
+  // un banc d'essai) est en train de conduire, et le traitait en voiture de decor — jusqu'a le
+  // TELEPORTER ailleurs quand il tardait (`traficPose`). Mesure (test 449) : un saut de 149 m
+  // en plein trajet. On marque donc l'image : la circulation de fond passe son tour.
+  c.piloteT = simTime;
   // `c.urgence` est le drapeau d'IDENTITE du vehicule (ambulance, depanneuse) : l'ecraser ici
   // rendait muette une ambulance qu'un autre poste faisait rouler sans urgence. La priorite
   // de circulation passe par le bail `c.prio`.
@@ -9257,11 +9263,16 @@ function vehiculeMord(c, x, z, h) {
 function vehBloque(c, x, z, h, opt) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
-  const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null });
+  const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null, mou: false });
   o.bar = !!(opt && opt.bar); o.veh = !!(opt && opt.veh); o.pol = !!(opt && opt.pol);
+  // `mou` : le vehicule se degage, les autres CAISSES ne comptent plus. Il faut le dire aux
+  // DEUX controles : `carBlocked` (par l'option `veh`) et `vehiculeMord`, qui teste les caisses
+  // de son cote des que `c.exactVeh` est pose — c'est-a-dire pour tous les vehicules de
+  // service. Sans cette ligne, un vehicule de service ne pouvait pas se degager du tout.
+  o.mou = !!(opt && opt.mou);
   // l'epave au crochet de la depanneuse nous suit : ce n'est pas un obstacle
   o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
-  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || vehiculeMord(c, x, z, h);
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || (o.mou ? false : vehiculeMord(c, x, z, h));
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
@@ -9270,8 +9281,14 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   // meme raison que dans vehBloque : un objet reutilise, toujours de la meme forme. Les quatre
   // appelants ne passent que `{}` ou `{ bar: true, veh: true }`, et vehBloque ne relit que ces
   // quatre champs — la valeur transmise est donc identique a celle d'avant.
-  const o = c.optAvance || (c.optAvance = { bar: true, veh: true, pol: false, ignore: null });
+  const o = c.optAvance || (c.optAvance = { bar: true, veh: true, pol: false, ignore: null, mou: false });
   o.bar = true; o.veh = true; o.pol = !!(opt && opt.pol); o.ignore = (opt && opt.ignore) || null;
+  // `mou` : ON EST EN TRAIN DE SE DEGAGER. Tant que la manoeuvre dure, les autres CAISSES ne
+  // sont plus des murs — sans quoi deux vehicules qui se chevauchent restent cloues l'un a
+  // l'autre pour toujours, chacun interdisant a l'autre le pas qui les separerait. Les vrais
+  // solides, eux, restent infranchissables : personne ne traverse jamais un mur.
+  o.mou = !!(opt && opt.mou);
+  if (o.mou) o.veh = false;
   // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
   // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
   // est dans un solide et pas l'ancien, on annule la rotation de cette image.
@@ -9450,6 +9467,11 @@ function klaxonne(c) {
 }
 // Le pilote automatique d'un vehicule de la circulation : il suit sa voie, ralentit dans les
 // virages, garde ses distances et obeit au code de la route.
+const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
+const DEGAGE_QUAND_MEME = 14;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
+const DEGAGE_DUREE = 1.6;        // s de marche arriere
+const DEGAGE_REPOS = 2.5;        // s avant d'avoir le droit de recommencer
+const DEGAGE_V = 1.8;            // m/s : on se degage au pas
 function traficRoule(c, dt, opt) {
   opt = opt || {};
   const st = c.ia, R = st.route;
@@ -9507,7 +9529,35 @@ function traficRoule(c, dt, opt) {
   c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
   if (c.speed < 0.05) c.speed = 0;
   c.stopped = c.speed < 0.4;
-  const bloque = avanceVehicule(c, dt, c.speed, {}, h0);
+  // ================= LE DEGAGEMENT =================
+  // « trouve un autre systeme de non collision », demande le joueur. Le garde-fou refuse tout
+  // pas dont l'arrivee chevauche une autre caisse — mais une caisse deja chevauchee ne peut
+  // alors PLUS EN SORTIR : deux vehicules nez a nez se clouent MUTUELLEMENT, chacun attendant
+  // que l'autre parte. Mesure (test 332) : la voiture de patrouille et une voiture de la
+  // circulation immobiles a 4,5 m l'une de l'autre, 1 m parcouru en soixante secondes ; et
+  // toute la file derriere avec elles, avec « file » pour bonne excuse.
+  // Un conducteur, lui, RECULE. C'est ce qu'on fait : au bout de quelques secondes sans avoir
+  // reellement bouge, on se degage en marche arriere, les caisses cessant d'etre des murs le
+  // temps de la manoeuvre (`mou`) — jamais les solides. Deux declencheurs :
+  //   — SANS RAISON LEGALE, vite (DEGAGE_SANS_RAISON) : on est plante ;
+  //   — MEME AVEC UNE BONNE RAISON, plus tard (DEGAGE_QUAND_MEME) : une file qui ne repart pas
+  //     est une file dont la tete est coincee, et « file » n'est plus une excuse a ce stade.
+  if (simTime > (c.degageFin || 0)
+      && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME)
+      && simTime > (c.degageRepos || 0)) {
+    c.degageFin = simTime + DEGAGE_DUREE; c.degageSens = (c.degageSens === 1) ? -1 : 1;
+    c.degageRepos = simTime + DEGAGE_DUREE + DEGAGE_REPOS;
+    c.figeT = 0; c.attenteT = 0;
+    // le trace qu'on suivait nous a menes la : on en redemande un autre, et on renonce a la
+    // voie de depart convoitee si c'est elle qui exigeait une manoeuvre impossible.
+    st.refaire = 0; if (opt.pilote) renonceDepart(c);
+  }
+  let mou = false;
+  if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
+    c.h += (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
+    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage'; mou = true;
+  } else c.recule = false;
+  const bloque = avanceVehicule(c, dt, c.speed, mou ? { mou: true } : {}, h0);
   // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un
   // pas de cote (ecarteChaussee ne pose le pas que s'il est libre : zero degat) ; le
   // prioritaire, lui, deborde a GAUCHE pour doubler celui qui vient de se ranger. Des que la
@@ -9518,7 +9568,7 @@ function traficRoule(c, dt, opt) {
   // fait partie des bonnes excuses, donc la soupape de traficRoule ne se declenchait jamais
   // (mesure : 175 s immobile a 30 m de l'epave, gyrophare allume). Au bout de trois secondes
   // sans avancer, un vehicule PILOTE par un autre poste se deporte a gauche et double.
-  if (opt.pilote && (c.pas || 0) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
+  if (opt.pilote && avanceReel(c) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
   else c.fileT = 0;
   c.double = c.fileT > 3;
   if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
@@ -9542,11 +9592,11 @@ function traficRoule(c, dt, opt) {
   const excuse = c.raison === 'feu' || c.raison === 'stop' || c.raison === 'cede' || c.raison === 'passage' || c.raison === 'pieton' || c.raison === 'file';
   // On juge sur le chemin REELLEMENT parcouru : une voiture qui rabote un mur affiche encore
   // 1,2 m/s au compteur et n'avance que de trente centimetres par seconde.
-  if ((c.pas || 0) < 2.2 * dt && !excuse) c.figeT = (c.figeT || 0) + dt; else c.figeT = 0;
+  if (avanceReel(c) < 2.2 * dt && !excuse) c.figeT = (c.figeT || 0) + dt; else c.figeT = 0;
   // Et le garde-fou ultime : meme avec une bonne excuse, PERSONNE ne reste immobile 40 s.
   // Un feu dure 16 s, un stop 2 s, un pieton quelques secondes ; au-dela, c'est une file qui
   // ne repartira jamais (la voiture de tete est coincee) et on va circuler ailleurs.
-  if ((c.pas || 0) < 0.6 * dt) c.attenteT = (c.attenteT || 0) + dt; else c.attenteT = 0;
+  if (avanceReel(c) < 0.6 * dt) c.attenteT = (c.attenteT || 0) + dt; else c.attenteT = 0;
   if (opt.pilote) { if (c.figeT > 6) { c.figeT = 0; st.refaire = 0; } return; }   // pilote par un autre poste : on refait le trace, on ne le teleporte pas
   if (c.figeT > 20 || c.attenteT > 40) { traficPose(c); }
   else if (c.figeT > 8 && c.ia) { c.ia = null; c.destT = 0; }
@@ -24147,7 +24197,7 @@ function convoieSecours(c, tx, tz, h) {
     r.g.position.set(r.x, r.y, r.z);
     try { vehicleSolid(r); } catch (e) {}
   }
-  c.speed = 0; c.spd = 0; c.v = 0; c.pas = 0; c.ia = null; c.libre = null;
+  c.speed = 0; c.spd = 0; c.v = 0; c.pas = 0; c.ia = null; c.libre = null; c.reelX = null; c.reel = 99;
   c.srvBut = null; c.srvFige = 0; c.srvRecul = 0; c.srvDirect = 0; c.recule = false;
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
@@ -24181,7 +24231,7 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
   // `etapeSecours`) : la manoeuvre n'est utile qu'a la depanneuse et a l'ambulance, dont la
   // mission doit ABOUTIR. Les pompiers, les travaux et le facteur, eux, ont tout leur temps —
   // leur faire faire des marches arriere ne ferait que les sortir de leur file.
-  if (opt.secours && (c.pas || 0) < 0.03) c.srvFige = (c.srvFige || 0) + dt; else c.srvFige = 0;
+  if (opt.secours && avanceReel(c) < 0.03) c.srvFige = (c.srvFige || 0) + dt; else c.srvFige = 0;
   if (c.srvFige > SERVICE_COINCE) { c.srvFige = 0; c.srvRecul = simTime + SERVICE_RECUL; c.srvSens = (c.srvSens === 1) ? -1 : 1; }
   if (simTime < (c.srvRecul || 0)) {
     c.h += (c.srvSens || 1) * 0.9 * dt;
@@ -24204,7 +24254,7 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
     // itinéraire — six secondes au plus. Dès qu'il est au clair, le garde-fou reprend la main
     // et ne le lâche plus : c'est le seul endroit du jeu où un véhicule de service peut
     // traverser quelque chose, et c'est pour en SORTIR.
-    if ((c.pas || 0) < 0.05 * dt && vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) {
+    if (avanceReel(c) < 0.05 * dt && vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) {
       c.degageT = (c.degageT || 0) + dt;
       if (c.degageT < 6) degageService(c, dt);
     } else c.degageT = 0;
@@ -24229,7 +24279,7 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
   // et le service continue. C'est ce qui evite qu'une depanneuse POUSSE la voiture accidentee
   // pour venir se coller dessus — et c'est ce qui remplace l'ancienne traversee pure et simple.
   const reste = Math.hypot(tx - c.x, tz - c.z);
-  if (bloque || (c.pas || 0) < 0.15 * dt) c.serviceBloqueT = (c.serviceBloqueT || 0) + dt;
+  if (bloque || avanceReel(c) < 0.15 * dt) c.serviceBloqueT = (c.serviceBloqueT || 0) + dt;
   else c.serviceBloqueT = 0;
   if (c.serviceBloqueT > 2.5 && reste < APPROCHE_SERVICE) { c.serviceBloqueT = 0; c.speed = 0; return 0; }
   return reste;
@@ -25467,7 +25517,8 @@ function cityStep(dt) {
       // destination sur le GRAPHE, changee des qu'elle est atteinte : la circulation ne
       // tourne plus en rond sur un anneau de 26 m, elle traverse toute la ville.
       if (!c.ia && simTime > (c.destT || 0)) { c.destT = simTime + 1.5; traficDestination(c); }
-      if (c.ia) traficRoule(c, dtT);
+      if (c.ia && simTime - (c.piloteT || -99) > 0.25) traficRoule(c, dtT);
+      else if (c.ia) { /* un autre poste le conduit deja cette image */ }
       else { c.speed = Math.max(0, (c.speed || 0) - dtT * 6); c.stopped = true; avanceVehicule(c, dtT, c.speed, {}); }
     }
     }
@@ -25531,7 +25582,24 @@ function cityStep(dt) {
     c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h; vehicleSolid(c);
   }
+  // CE QUE CHAQUE VEHICULE A REELLEMENT PARCOURU DANS L'IMAGE. `c.pas` est le pas que le
+  // garde-fou a bien voulu accorder PENDANT l'appel du pilote — mais l'ecartement des toles,
+  // juste au-dessus, repousse ensuite la caisse a sa place. Mesure (test 332) : une voiture de
+  // patrouille affichait 0,45 m de pas par image, soit 9 m/s au compteur, et n'avait pas bouge
+  // d'un centimetre en soixante secondes ; la depanneuse, elle, ment par salves de 2,5 s.
+  // Or TOUTES les soupapes du jeu — recalcul d'itineraire, contournement, changement de
+  // destination, marche arriere des secours — se demandent « est-ce que j'avance ? » et
+  // lisaient `c.pas` : le compteur se remettait a zero avant que le compte a rebours n'arrive
+  // au bout, et AUCUNE ne se declenchait jamais. On mesure donc ici, en dernier, le vrai
+  // deplacement, et c'est lui que les soupapes lisent (`avanceReel`).
+  for (const l of [city.cars, city.aiCars, police.cars]) for (const c of l) {
+    c.reel = (c.reelX == null) ? 99 : Math.hypot(c.x - c.reelX, c.z - c.reelZ);
+    c.reelX = c.x; c.reelZ = c.z;
+  }
 }
+// Le deplacement REEL de la derniere image. A defaut de mesure (vehicule qui n'est dans aucune
+// des trois listes), on retombe sur le pas accorde : le comportement d'avant.
+function avanceReel(c) { return (c && c.reel != null) ? c.reel : ((c && c.pas) || 0); }
 const safeSeen = {};   // pannes déjà signalées : hors de cityCommon, sinon l'avertissement repartait à chaque image
 // La physique du joueur tourne à pas fixe de 1/120 s (précision des sauts et des collisions),
 // mais la VIE de la ville — police, gangs, manèges, animaux, missions — n'a aucun besoin

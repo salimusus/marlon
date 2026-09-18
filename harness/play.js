@@ -19108,3 +19108,72 @@ test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le fact
     + `facteur : pédales ${r.facteur.pedales.bas}–${r.facteur.pedales.haut} m, pied à ${r.facteur.pied} m, selle ${r.facteur.selle} m, cuisse ${r.facteur.cuisse}, genou ${r.facteur.genou} · `
     + `joueur : pédales ${r.joueur.pedales.bas}–${r.joueur.pedales.haut} m, pied à ${r.joueur.pied} m, cuisse ${r.joueur.cuisse}, genou ${r.joueur.genou}, à ${r.joueur.vitesse} m/s` };
 });
+
+// POSTE LOCOMOTION. L'AMPLIFICATEUR : une pénétration de trente centimètres devenait une
+// traversée de bâtiment. `moveAxis` sortait le joueur par la face d'ENTRÉE, celle d'où il
+// vient — juste quand il vient de heurter le mur, absurde quand il est déjà à l'intérieur,
+// car il lui fait alors traverser toute la boîte. Mesuré avant correction sur une dalle
+// d'étage de 16 m : 15,80 m EN UNE IMAGE (le poste bâtiments en avait relevé 15,70 avec
+// 1,10 m de chute au bout, en montant sur une rambarde). Le déclencheur est corrigé chez lui,
+// l'amplificateur l'est ici, et ce test le garde désarmé pour toutes les autres pénétrations :
+// un véhicule qui se gare sur le joueur, un portail qui se referme, un ascenseur, une dalle
+// qui apparaît.
+//
+// SEUIL : la face la plus PROCHE, c'est-à-dire au plus la DEMI-épaisseur du solide plus la
+// demi-largeur du joueur. Le seuil évident (« pas plus que sa largeur plus l'épaisseur du
+// solide ») ne servirait à rien : l'ancienne règle, qui traversait la boîte entière, le
+// respectait déjà tout juste. C'est la MOITIÉ qui fait la différence entre « on est repoussé
+// dehors » et « on est catapulté de l'autre côté du bâtiment ».
+test('sortir d\'un mur ne catapulte plus le joueur de l\'autre cote du batiment', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P, DT = 1 / 60;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // la plus grosse boîte pleine de la ville : une dalle d'étage
+    const gros = G.solids.filter(o => o.w > 10 && o.d > 6 && o.h > 1.2 && !o.porte)
+      .sort((a, b) => (b.w * b.d) - (a.w * a.d));
+    if (!gros.length) return { aucune: true };
+    const o = gros[0];
+    // on POSE le joueur à l'intérieur (il ne traverse rien : il y est déjà) et on pousse
+    const essai = (ecart, sens) => {
+      __SHOT.go({ world: 4, x: o.x, y: o.y, z: o.z, hour: 12 });
+      P.pos.set(o.x + ecart, o.y, o.z); P.vel.set(0, 0, 0); P.grounded = false; G.keys.clear();
+      const a = { x: P.pos.x, z: P.pos.z };
+      P.vel.x = sens * 0.6;   // un centimètre par image
+      G.step(DT, true);
+      return +Math.hypot(P.pos.x - a.x, P.pos.z - a.z).toFixed(2);
+    };
+    const b = o.w / 2 - 0.6;
+    const bord = { droiteVersDroite: essai(b, 1), gaucheVersGauche: essai(-b, -1), droiteVersGauche: essai(b, -1) };
+    const centre = essai(0, 1);
+    // CONTRE-ÉPREUVE, la moitié qui compte : une cloison fine chargée plus vite que la course
+    // ne doit PAS se traverser. C'est pour ça qu'on garde la face d'entrée quand on arrive
+    // de l'extérieur, au lieu de toujours prendre la plus proche.
+    const fines = G.solids.filter(s => Math.min(s.w, s.d) < 0.45 && Math.max(s.w, s.d) > 4 && s.h > 1.8
+      && !s.porte && Math.abs(s.y - s.h / 2) < 0.6).sort((a, c) => Math.min(a.w, a.d) - Math.min(c.w, c.d));
+    let cloison = null;
+    if (fines.length) {
+      const m = fines[0], surX = m.w < m.d;
+      const dep = surX ? { x: m.x - (m.w / 2 + 1.4), z: m.z } : { x: m.x, z: m.z - (m.d / 2 + 1.4) };
+      __SHOT.go({ world: 4, x: dep.x, y: m.y - m.h / 2 + 0.4, z: dep.z, hour: 12 });
+      P.pos.set(dep.x, P.pos.y, dep.z); P.vel.set(0, 0, 0); G.keys.clear();
+      const cote0 = surX ? Math.sign(P.pos.x - m.x) : Math.sign(P.pos.z - m.z);
+      let traverse = false;
+      for (let i = 0; i < 90; i++) {
+        if (surX) P.vel.x = 11; else P.vel.z = 11;   // 0,18 m par image, plus vite que la course
+        G.step(DT, true);
+        const c2 = surX ? Math.sign(P.pos.x - m.x) : Math.sign(P.pos.z - m.z);
+        if (c2 !== 0 && c2 !== cote0) { traverse = true; break; }
+      }
+      cloison = { epaisseur: +Math.min(m.w, m.d).toFixed(2), traverse };
+    }
+    return { bord, centre, cloison, hw: P.hw,
+      dalle: { w: +o.w.toFixed(1), d: +o.d.toFixed(1) }, borne: +(o.w / 2 + P.hw).toFixed(2) };
+  })()`);
+  if (r.aucune) return { ok: false, detail: 'aucune grosse dalle trouvee dans la ville : le test n\'a rien pu mesurer' };
+  const pire = Math.max(r.bord.droiteVersDroite, r.bord.gaucheVersGauche, r.bord.droiteVersGauche, r.centre);
+  const ok = pire <= r.borne + 0.05
+    && r.bord.droiteVersDroite <= r.hw + 1.1 && r.bord.gaucheVersGauche <= r.hw + 1.1
+    && r.bord.droiteVersGauche <= r.hw + 1.1
+    && !!r.cloison && !r.cloison.traverse;
+  return { ok, detail: `dalle d'etage de ${r.dalle.w} × ${r.dalle.d} m · pose contre le bord et poussant ENCORE vers ce bord, le joueur ressortait 15,80 m plus loin en une seule image (toute la largeur de la dalle) : il ressort maintenant par la face la plus proche, a ${r.bord.droiteVersDroite} m d'un cote et ${r.bord.gaucheVersGauche} m de l'autre · pousse vers l'interieur : ${r.bord.droiteVersGauche} m · depuis le centre exact il reste ${r.centre} m, et c'est le minimum geometrique — la face la plus proche est a ${r.borne} m · pire bond ${pire} m pour une borne de ${r.borne} m (demi-epaisseur + demi-largeur du joueur), la ou l'ancienne regle pouvait faire la largeur ENTIERE · et la moitie qui compte : une cloison de ${r.cloison && r.cloison.epaisseur} m chargee a 11 m/s n'est toujours pas traversee (${r.cloison && r.cloison.traverse ? 'TRAVERSEE' : 'arretee'})` };
+});

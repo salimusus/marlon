@@ -9203,6 +9203,31 @@ function traficPlace() {
   for (const c of city.aiCars) if (c.spd && traficPose(c)) n++;
   return n;
 }
+// LES CAISSES DANS LESQUELLES ON EST DEJA IMBRIQUE, au cap `h`.
+// A quoi ca sert : pendant un degagement (marche arriere de desencastrement), le jeu coupait
+// la collision avec TOUS les vehicules a la fois (`mou`). C'est trop : un vehicule imbrique
+// dans SON voisin traversait ensuite tout ce qu'il croisait. Mesure (test 298 rejoue dans son
+// lot 288-298, round 74) : un camion en manoeuvre traversait pendant 14 images une voiture
+// arretee a 6,4 m de lui, avec laquelle il n'avait jamais ete en contact. On ne rend donc
+// transparentes que les toles reellement imbriquees — celles qui, sinon, nous clouent sur
+// place, ce qui est tout ce que le mode mou devait resoudre.
+// Meme modele geometrique que `carBlocked` (trois disques le long de la caisse), pour que la
+// liste designe exactement les solides que carBlocked refuserait.
+function tolesImbriquees(c, x, z, h) {
+  const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
+  const r = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
+  const sn = Math.sin(h) * L, cs = Math.cos(h) * L;
+  const out = [];
+  for (const o of solidsAutour(x, z, r + 2.6 + L, true)) {
+    if (!o.veh || o === c.solid || (c.remorque && o === c.remorque.solid)) continue;
+    const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;
+    const x0 = o.x - o.w / 2 - r, x1 = o.x + o.w / 2 + r, z0 = o.z - o.d / 2 - r, z1 = o.z + o.d / 2 + r;
+    if ((x > x0 && x < x1 && z > z0 && z < z1)
+      || (x + sn > x0 && x + sn < x1 && z + cs > z0 && z + cs < z1)
+      || (x - sn > x0 && x - sn < x1 && z - cs > z0 && z - cs < z1)) out.push(o);
+  }
+  return out;
+}
 // LE TEST EXACT DU RECTANGLE. `carBlocked` echantillonne trois disques le long de la caisse :
 // c'est rapide, mais un coin de remorque pouvait mordre un panneau mince ou l'angle d'une
 // enseigne sans qu'aucun disque ne le voie. Ici on teste les quatre coins, les deux flancs et
@@ -9215,7 +9240,7 @@ function traficPlace() {
 // facteur ne traversent « ni les vehicule » : eux testent les quatre coins. Sans ça, une
 // manoeuvre dans la cour du depot faisait passer le coin du fourgon DANS la benne d'a cote
 // (mesure : 57 images de chevauchement par aller-retour).
-function vehiculeMord(c, x, z, h) {
+function vehiculeMord(c, x, z, h, ignore) {
   const cs = Math.cos(h), sn = Math.sin(h);
   const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
   // LES POINTS DE CONTROLE SUIVENT LA LONGUEUR DU VEHICULE, un tous les 1,2 m au plus.
@@ -9239,6 +9264,7 @@ function vehiculeMord(c, x, z, h) {
     if (o === c.solid || o.h > 30) continue;
     if (o.veh && !c.exactVeh) continue;
     if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
+    if (ignore && (Array.isArray(ignore) ? ignore.indexOf(o) >= 0 : o === ignore)) continue;   // tole deja imbriquee : voir tolesImbriquees
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
     if (Math.abs(x - o.x) > o.w / 2 + R || Math.abs(z - o.z) > o.d / 2 + R) continue;   // hors de portee de la caisse : inutile de sortir les points
     for (let i = 0; i <= pas; i++) {
@@ -9276,8 +9302,11 @@ function vehBloque(c, x, z, h, opt) {
   // service. Sans cette ligne, un vehicule de service ne pouvait pas se degager du tout.
   o.mou = !!(opt && opt.mou);
   // l'epave au crochet de la depanneuse nous suit : ce n'est pas un obstacle
-  o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
-  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || (o.mou ? false : vehiculeMord(c, x, z, h));
+  // L'EPAVE AU CROCHET *ET* LES TOLES DEJA IMBRIQUEES. L'un ecrasait l'autre : une depanneuse
+  // qui se degageait perdait l'exception de sa propre remorque (ou l'inverse). On garde les deux.
+  const rem = (c.remorque && c.remorque.solid) || null, ig = (opt && opt.ignore) || null;
+  o.ignore = (rem && ig) ? (Array.isArray(ig) ? ig.concat([rem]) : [ig, rem]) : (rem || ig);
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || (o.mou ? false : vehiculeMord(c, x, z, h, o.ignore));
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
@@ -9642,12 +9671,10 @@ function traficRoule(c, dt, opt) {
     // voie de depart convoitee si c'est elle qui exigeait une manoeuvre impossible.
     st.refaire = 0; if (opt.pilote) renonceDepart(c);
   }
-  let mou = false;
+  let soft = null;   // les toles DEJA imbriquees, rendues transparentes le temps de la manoeuvre
   if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
-    // « suis-je DEJA imbrique dans une autre tole, a ce cap-la ? » — la reponse depend du cap,
-    // et c'est tout le sujet du piege ci-dessous.
-    const imbrique = hh => vehBloque(c, c.x, c.z, hh, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, hh, { bar: true, veh: false });
-    const dejaDedans = imbrique(c.h);
+    const imbrique = hh => tolesImbriquees(c, c.x, c.z, hh);
+    const dejaDedans = imbrique(c.h).length > 0;
     const hTourne = c.h + (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
     // ON NE BALAYE PAS LE VOISIN EN TOURNANT SUR PLACE.
     // PIEGE MESURE (round 74, test 298 rejoue dans son lot 288-298) : le braquage etait applique
@@ -9659,7 +9686,7 @@ function traficRoule(c, dt, opt) {
     // lancee seule n'en comptait aucune. On n'applique donc le braquage que s'il ne CREE pas un
     // chevauchement qui n'existait pas ; quand les toles sont deja imbriquees, le braquage reste
     // libre — c'est lui qui desencastre la paire, et rien ici ne le bride.
-    if (dejaDedans || !imbrique(hTourne)) c.h = hTourne;
+    if (dejaDedans || !imbrique(hTourne).length) c.h = hTourne;
     c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage';
     // ON NE TRAVERSE LES CAISSES QUE SI ON EST DEJA DEDANS. Premiere version : tout vehicule
     // qui se degageait cessait de voir les autres pendant toute la manoeuvre. Mesure (test
@@ -9669,9 +9696,10 @@ function traficRoule(c, dt, opt) {
     // Or le blocage mutuel qu'on corrige n'existe que si les toles se CHEVAUCHENT DEJA : c'est
     // seulement alors qu'aucun pas ne peut plus etre accepte. On ne ramollit donc que dans ce
     // cas-la, et le reste du temps la marche arriere obeit aux regles ordinaires.
-    mou = imbrique(c.h);
+    soft = imbrique(c.h);
+    if (!soft.length) soft = null;
   } else c.recule = false;
-  const bloque = avanceVehicule(c, dt, c.speed, mou ? { mou: true } : {}, h0);
+  const bloque = avanceVehicule(c, dt, c.speed, soft ? { ignore: soft } : {}, h0);
   // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un
   // pas de cote (ecarteChaussee ne pose le pas que s'il est libre : zero degat) ; le
   // prioritaire, lui, deborde a GAUCHE pour doubler celui qui vient de se ranger. Des que la
@@ -22721,7 +22749,10 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
     // depanneuse suit a 5,85 m : le disque arriere du camion (1,64 m de rayon a 2,17 m du
     // centre) la touchait, et la depanneuse se bloquait sur sa propre remorque — elle n'est
     // jamais repartie au garage (mesure : remorquage jamais termine, tarif 0).
-    if (opt.ignore && o === opt.ignore) continue;
+    // `opt.ignore` accepte AUSSI UNE LISTE. Le degagement d'un vehicule imbrique dans un autre
+    // ne doit rendre transparentes que LES CAISSES DANS LESQUELLES IL EST DEJA, pas toutes
+    // celles de la rue (voir `tolesImbriquees` et le degagement dans traficRoule).
+    if (opt.ignore && (Array.isArray(opt.ignore) ? opt.ignore.indexOf(o) >= 0 : o === opt.ignore)) continue;
     if (o.decor) continue;   // mobilier solidifié pour le joueur : la conduite reste exactement celle d'avant
     // `opt.garde` : LA GARDE AU SOL DU VÉHICULE. La marche franchissable valait 56 cm pour
     // tout le monde, berline basse comme 4×4 perché sur ses gros pneus. Le 4×4 du

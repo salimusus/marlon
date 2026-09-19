@@ -19764,6 +19764,8 @@ test('tous les bâtiments à étages ont un chemin montant jusqu\'au dernier niv
     }
     return { bilan, total: bilan.length, rates: bilan.filter(b => !b.ok) };
   });
-  const ok = r.total >= 10 && r.rates.length === 0;
+  // au moins les 5 immeubles et les 4 villas nommées ; le nombre de villas de gang varie
+  // avec la partie (elles ne sont bâties que pour les gangs présents au chargement).
+  const ok = r.total >= 9 && r.rates.length === 0;
   return { ok, detail: `balayage de ${r.total} bâtiments à étages (les 5 immeubles de La Zone + ${r.total - 5} villas voisines ; la villa du joueur a un ascenseur, pas d'escalier) : pour chacun, une inondation des surfaces praticables part du pied de l'escalier et n'accepte qu'une marche de 0,60 m, jamais le dessus d'un garde-corps — ${r.total - r.rates.length}/${r.total} atteignent leur dernier niveau${r.rates.length ? ' · manquent : ' + r.rates.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(', ') : ''} · détail : ${r.bilan.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(' | ')}` };
 });

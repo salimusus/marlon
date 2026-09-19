@@ -18704,6 +18704,14 @@ function botDescendre(b, garde) {
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
   debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // les compagnons montés derrière descendent avec nous
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) tailleEnCabine(chien.pet, 1); }
+  // ON NE DEBARQUE JAMAIS LE JOUEUR SANS UN MOT. Releve du controleur : « a t+45 s la pastille
+  // repasse a "monter" — le joueur a ete debarque en pleine rue sans aucun message ». Le
+  // joueur qui descend LUI-MEME passe par `garde = true` (touche E, bouton voiture) ; tout
+  // autre chemin est une decision du conducteur ou du jeu, et elle se dit.
+  if (st.passager && !garde) {
+    botSay(b, [`je te laisse ici, desolé ! 🚗`]);
+    msg(`🚗 ${b.name} s'arrête et te laisse descendre`, 2600);
+  }
   st.passager = false; city.rideBot = null; me.group.visible = true; engine.stop(); updateAct();
   me.group.rotation.set(0, 0, 0); me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
   me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
@@ -18714,6 +18722,16 @@ function botDescendre(b, garde) {
     b.av.group.position.copy(b.pos); b.av.group.visible = !net.on;
     b.drive = null; b.wait = 1.5; b.target = null;
   }
+}
+// Ce qu'il reste a parcourir SUR LE TRACE suivi (et non a vol d'oiseau) : la somme des
+// segments qui restent, depuis le vehicule. A defaut de trace, la ligne droite.
+function resteSurRoute(c, st) {
+  const R = st && st.route;
+  const vol = Math.hypot(st.tx - c.x, st.tz - c.z);
+  if (!R || !R.length) return vol;
+  let l = Math.hypot(R[0][0] - c.x, R[0][1] - c.z);
+  for (let i = 0; i + 1 < R.length; i++) l += Math.hypot(R[i + 1][0] - R[i][0], R[i + 1][1] - R[i][1]);
+  return Math.max(vol, l);
 }
 function botDriveTick(dt) {
   for (const b of bots) {
@@ -18787,7 +18805,15 @@ function botDriveTick(dt) {
         cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
       }
       const emo = moto ? '🏍️' : '🚗';
-      $('act').textContent = st.etat === 'route' ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(Math.hypot(st.tx - c.x, st.tz - c.z))} m` : `${emo} Arrivés à ${st.nom} · E pour descendre`;
+      // LA DISTANCE ANNONCEE SUIT LA ROUTE, PAS LE VOL D'OISEAU. Releve du controleur qui joue :
+      // « 115 m puis 124, 127, 128, 141, 146 — la distance AUGMENTE pendant 24 s, on s'eloigne
+      // du but ». C'etait vrai et normal : les rues sont a sens unique, le trajet commence
+      // souvent par s'ecarter, et le chiffre affiche etait la ligne droite. Pour l'enfant,
+      // c'est un conducteur qui se trompe de chemin. On annonce donc CE QU'IL RESTE A
+      // PARCOURIR sur le trace, qui lui ne fait que diminuer.
+      $('act').textContent = st.etat === 'route'
+        ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(resteSurRoute(c, st))} m`
+        : `${emo} Arrivés à ${st.nom} · E pour descendre`;
     }
   }
   // proposer de monter quand un ami attend au volant tout près

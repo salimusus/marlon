@@ -20857,3 +20857,41 @@ test('les jeux du Hameau de la Ferme se declenchent et se terminent, et les aile
     && r.enSelle && r.fini && r.tourneMoulin > 0.2 && r.monteBien;
   return { ok, detail: `balancoire-pneu : on s'assoit (${r.assis}), amplitude ${r.ampli} rad en 90 pas, le corps colle au pneu (${r.colle}), le saut en decroche (${r.descendu}) · manege a poneys : ${r.six} poneys, on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, le joueur est bien en selle a ${'plus de 1 m'} du sol (${r.enSelle}) et le saut l'en fait descendre (${r.fini}) · les ailes du moulin tournent de ${r.tourneMoulin} rad en 60 pas autour de leur SEUL axe z (decoSpin tournait en y et en x a la fois, le mat aurait pivote sur lui-meme) · parcours de bottes : ${r.paliers.join(' → ')} m, chaque marche monte de moins de 0,56 m, on peut donc vraiment les enchainer (${r.monteBien})` };
 });
+
+// LE BUDGET D'IMAGE DES DEUX QUARTIERS NEUFS. Le jeu tourne sur une tele et sur une PS5 :
+// tout quartier ajoute doit se payer. PIEGE CONNU DE CE PROJET : `renderer.info` est remis a
+// zero au DEBUT de chaque render(), et la passe d'ombres est un render() a part — 3 735
+// appels de dessin s'etaient deja caches la. On coupe donc `autoReset` et on additionne
+// TOUTES les passes d'une seule image, ombres comprises.
+test('les deux quartiers neufs tiennent dans le budget d\'image (appels de dessin et triangles, passe d\'ombres comprise)', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
+    const avantQ = G.settings.quality; G.settings.quality = 'ultra'; G.applyQuality();
+    G.renderer.info.autoReset = false;
+    const image = () => { G.renderer.info.reset(); G.rendreImage(); return { appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    // Un point de vue par mesure, fixe : sans camera fixee, la meme place demandait 6 100 ou
+    // 14 400 appels selon l'orientation laissee par le test precedent.
+    const vue = (cx, cy, cz, tx, ty, tz) => {
+      G.P.pos.set(cx, 1, cz + 2); G.camera.position.set(cx, cy, cz); G.camera.lookAt(tx, ty, tz); G.camera.updateMatrixWorld(true);
+      image();                                    // une image pour degourdir (le tri travaille sur les matrices de l'image precedente)
+      if (G.ombresMobilesTick) for (let k = 0; k < 120; k++) G.ombresMobilesTick();
+      G.detailsLOD(true);
+      return image();
+    };
+    const centre = vue(0, 7, 58, 0, 2, 34);                        // LE MEME point de vue que le test du budget general
+    const sports = vue(-150, 8, -110, -150, 2, -150);              // l'Allee des Sports, vue plongeante sur tout le quartier
+    const stade = vue(-164, 6, -160, -164, 2, -180);               // dans le city-stade
+    const hameau = vue(-145, 8, 268, -145, 2, 310);                // le Chemin de la Ferme, vue sur tout le hameau
+    const ferme = vue(-150, 6, 290, -168, 3, 300);                 // devant la grange et l'enclos
+    G.renderer.info.autoReset = true;
+    G.settings.quality = avantQ; G.applyQuality();
+    return { centre, sports, stade, hameau, ferme, solides: G.solids.length, zones: G.city.zones.length };
+  });
+  const pire = Math.max(r.sports.appels, r.stade.appels, r.hameau.appels, r.ferme.appels);
+  const pireT = Math.max(r.sports.tris, r.stade.tris, r.hameau.tris, r.ferme.tris);
+  // Les MEMES plafonds que le test du budget general de la ville : un quartier neuf ne peut
+  // pas couter plus cher a regarder que le centre-ville.
+  const ok = pire < 9000 && pireT < 600000 && r.centre.appels < 9000 && r.centre.tris < 600000;
+  return { ok, detail: `mesure en qualite Ultra HD, autoReset coupe, donc PASSE D'OMBRES COMPRISE (le piege maison : renderer.info remet ses compteurs a zero au debut de chaque render(), et 3 735 appels d'ombres s'y etaient deja caches) · AVANT ces deux quartiers, la place du centre demandait 5 412 appels et 179 812 triangles depuis (0 ; 7 ; 58) ; APRES : ${r.centre.appels} appels et ${r.centre.tris} triangles depuis le MEME point — les quartiers neufs sont a 150 et 250 m de la, ils ne coutent rien la ou le joueur passe le plus de temps · DANS les quartiers : Allee des Sports ${r.sports.appels} appels / ${r.sports.tris} tri, city-stade ${r.stade.appels} / ${r.stade.tris}, Chemin de la Ferme ${r.hameau.appels} / ${r.hameau.tris}, la grange et l'enclos ${r.ferme.appels} / ${r.ferme.tris} · le pire des quatre (${pire} appels, ${pireT} triangles) tient sous le MEME plafond que le centre-ville (9 000 appels, 600 000 triangles) · la ville compte maintenant ${r.solides} solides et ${r.zones} quartiers` };
+});

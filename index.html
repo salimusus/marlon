@@ -8876,7 +8876,13 @@ function buildHameau() {
   // ---- LES CHEMINS (8 m pour les deux axes, 7 m pour les deux chemins de bord) ----
   road(-145, 290, 8, 104);    // Chemin de la Ferme : de la route du Marche (z 240) au bas de la carte
   road(-145, 264, 78, 8);     // Route des Champs : elle vient buter sur la longue rue de l'ouest (x −175, qui s'arrete a z = 260)
-  road(-178, 296, 7, 72);     // Chemin des Vergers
+  // LE CHEMIN DES VERGERS EST DECLARE A 9 M, ET IL PART DE z = 264. A 7 m et depuis z = 260,
+  // la passe d'elargissement des voies (poste URBANISME) ne pouvait pas le monter : son bord
+  // ouest serait entre dans la PARCELLE DE LA VILLA DE MARCO CENT-CLES (x −221 a −179,
+  // z 219 a 261), et le controle « croisement possible partout » comptait une chaussee de
+  // trop sous 7,60 m (73 sur 84 au lieu de 74). Ecarte a x = −182 et raccourci de 4 m au
+  // nord, il ne touche plus la parcelle et tient les 9 m tout seul.
+  road(-182, 298, 9, 68);     // Chemin des Vergers
   road(-110, 296, 7, 72);     // Chemin de la Grange
   road(-145, 328, 78, 8);     // Route du Moulin
   // ---- LES CHAMPS : ce sont eux qui font la campagne. Dalles basses, sans collision. ----
@@ -9031,7 +9037,7 @@ function buildHameau() {
   bench(-134, 278, -Math.PI / 2); bench(-120, 278, Math.PI / 2); bench(-127, 272, Math.PI);
   bench(-136, 296, -Math.PI / 2); bench(-155, 302, Math.PI / 2); bench(-127, 310, 0);
   for (const [tx, tz] of [[-172, 272], [-172, 322], [-116, 272], [-116, 322], [-135, 276], [-135, 324],
-    [-155, 276], [-155, 324], [-168, 300], [-116, 300], [-186, 296], [-104, 296]]) tree(tx, 0, tz, (tx + tz) % 2 ? C.leaf : 0x4a8f3a);
+    [-155, 276], [-155, 324], [-168, 300], [-116, 300], [-192, 296], [-104, 296]]) tree(tx, 0, tz, (tx + tz) % 2 ? C.leaf : 0x4a8f3a);
   flowerBed(-137, 274, 5, 1.4); flowerBed(-119, 274, 5, 1.4); flowerBed(-137, 322, 5, 1.4); flowerBed(-119, 322, 5, 1.4);
   abribus(-136.5, 268, -Math.PI / 2);
   borneEau(-131, 282); borneEau(-153, 306);

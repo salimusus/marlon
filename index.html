@@ -4172,7 +4172,13 @@ function buildOuterDistricts() {   // nouveaux quartiers : entrepôts à l'est, 
     tree(x + 6, 0, z + 2, C.leaf);
   }
   // entrepôts : hangars ouverts, on peut même y rentrer en voiture par le rideau
-  for (const [x, z, w] of [[92, -20, 14], [92, 10, 14], [92, 50, 18], [92, 92, 14]]) {
+  // LE TROISIEME ENTREPOT FAISAIT 18 m LA OU LES TROIS AUTRES EN FONT 14, et c'est LUI, tout
+  // seul, qui interdisait d'elargir les DEUX plus longues rues de la ville : ses murs tombaient
+  // a 3,20 m de l'axe de la rue de l'est (x = 80) ET de celui de la promenade du littoral
+  // (x = 104), soit 1 m de mur dans chaque chaussee des qu'elles passaient a 8 m. Ramene au
+  // gabarit de ses trois freres, il reste exactement aussi ouvert (meme rideau, meme allee
+  // d'entree, on y rentre toujours en voiture) et 394 m de rue montent d'un palier.
+  for (const [x, z, w] of [[92, -20, 14], [92, 10, 14], [92, 50, 14], [92, 92, 14]]) {
     coque(x, z, w, 12, 8, 0x9aa4b8, 3, 5, 4.6, 0.4);
     box(x, 8.3, z, w + 0.6, 0.6, 12.6, 0x6b7280, { studs: false, noRoute: true });   // toit
     for (let i = 0; i < 4; i++) box(x - w / 2 - 0.08, 5.1 + i * 0.3, z, 0.06, 0.08, 5, 0x8f98ab, { deco: true, noEdges: true, studs: false });   // rideau roulé au-dessus de l'ouverture

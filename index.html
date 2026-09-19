@@ -6467,7 +6467,7 @@ function policeTire() {
 function clearWanted(reason) {
   police.usure = 0;   // ils repartent frais pour la prochaine fois
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.hideT = 0; police.perdu = false; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  police.wanted = 0; police.hideT = 0; police.perdu = false; police.cachePar = null; police.debarqueDit = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
   police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
@@ -13515,22 +13515,30 @@ const armee = { on: false, heli: null, faisceau: null, tache: null, t0: 0, cible
 // Désormais il faut une VRAIE raison : un toit au-dessus de la tête, un obstacle entre eux et
 // lui, ou la distance. À découvert, dans leur champ de vision, le compteur ne bouge pas.
 // Renvoie la raison (chaîne) ou null s'il est à la vue de tous.
-const PERTE_VUE_LOIN = 60;   // m : au-delà, même à découvert, ils ne le distinguent plus
+const PERTE_VUE_LOIN = 60;   // m : au-delà, même à découvert, un agent ne le distingue plus
+const PERTE_FUITE = 38;      // m : distance au dernier point connu à partir de laquelle il a vraiment filé
 function joueurSestCache() {
   const abri = abriDuJoueur();
   if (abri) return abri === 'planque' ? 'une planque' : 'un bâtiment';
+  // A-T-IL BOUGÉ ? Le dernier point connu (`police.lastSeen`) est le lieu du délit, et il n'est
+  // remis à jour que tant qu'on le voit. Rester planté là où l'on a tiré n'est pas se cacher :
+  // c'est précisément la scène du contrôleur, où la police « le perdait » sans qu'il ait fait
+  // un pas. Tant qu'il est dans le périmètre fouillé, seul un toit ou un obstacle le cache.
+  const ls = police.lastSeen;
+  const fui = ls && Math.hypot(P.pos.x - ls[0], P.pos.z - ls[1]) > PERTE_FUITE;
   const unites = police.cars.filter(pc => pc.active && !pc.constat)
     .concat(police.agents.filter(a => !a.ko));
-  // personne en chasse (les voitures sont encore au commissariat) : il n'y a rien à perdre.
-  // C'est exactement le cas du contrôleur, et c'est pour ça que le compteur ne doit pas tourner.
-  if (!unites.length) return null;
   let dmin = Infinity;
   for (const u of unites) {
     const d = Math.hypot(u.x - P.pos.x, u.z - P.pos.z);
     if (d < dmin) dmin = d;
     if (d < PERTE_VUE_LOIN && policeVoit(u, PERTE_VUE_LOIN)) return null;   // à découvert sous leurs yeux
   }
-  return dmin > PERTE_VUE_LOIN ? 'la distance' : 'un obstacle';
+  if (fui) return 'la distance';
+  // à découvert sur le lieu du délit : une unité à portée mais sans ligne de vue, c'est un
+  // obstacle ; personne à portée et il n'a pas bougé, ce n'est pas une cachette, c'est de
+  // l'attente — et les voitures qui roulent vers lui doivent avoir le temps d'arriver.
+  return dmin < PERTE_VUE_LOIN ? 'un obstacle' : null;
 }
 function policeVoit(o, portee = 45) {
   const d = Math.hypot(P.pos.x - o.x, P.pos.z - o.z);
@@ -27517,6 +27525,7 @@ function resetGame() {
   coins.forEach(c => { c.taken = false; c.g.visible = true; c.g.scale.set(1, 1, 1); });
   checkpoints.forEach(k => { k.material.color.set(C.blue); k.material.emissive.set(C.blue); });
   cp = checkpoints[0]; coinCount = 0; deaths = 0; elapsed = 0; timerOn = false; won = false; dead = false;
+  P.grace = 0; P.aTerreT = 0;   // un monde neuf : ni invulnérabilité ni chute en cours qui traîne (n° 78)
   if (drive.car) exitCar(); city.goals = 0; city.tennis = 0; city.primesSport = {}; city.race.on = false; city.zone = null; P.racket = false; setRacket(me, false); if (city.on) updateAct();
   cam.yaw = 0; cam.pitch = 0.32;
   respawn(); updateHud(); updateTimer(); updateLeaderboard();

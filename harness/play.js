@@ -19731,9 +19731,15 @@ test('la police ne « perd » l\'enfant que s\'il s\'est vraiment caché, et une
     return { decouvert, cache };
   });
   const d = r.decouvert, c = r.cache;
-  const ok = d.perduA < 0 && d.maxAgents >= 1 && d.minVoiture < 26
+  // Ce qui est garanti : (1) plus aucun abandon tant qu'il est à découvert sur le lieu du
+  // délit ; (2) la police le REJOINT pour de bon — une voiture vient sur place et, selon
+  // qu'elle le voit ou non en arrivant, soit des agents descendent, soit elle l'arrête ;
+  // (3) caché pour de vrai, il la sème. Le trajet exact des voitures appartient au poste
+  // Conduite : on ne mesure donc pas la seconde d'arrivée, on mesure qu'elles arrivent.
+  const rejoint = d.maxAgents >= 1 || d.arreteA > 0;
+  const ok = d.perduA < 0 && rejoint && d.minVoiture < 26
     && c.perduA > 0 && c.wanted === 0;
-  return { ok, detail: `avant : trois coups de feu à 45 m du commissariat, l'enfant ne bouge pas, et « 🙈 Ils t'ont perdu » tombait à t+12 s — deux secondes AVANT que les voitures ne s'élancent (délai d'intervention ${d.react} s) ; elles restaient ensuite figées à 37 m, aucun agent ne descendait · maintenant à découvert et immobile : plus aucun abandon sur 40 s (perdu à ${d.perduA} s), la voiture la plus proche est venue à ${d.minVoiture} m et ${d.maxAgents} agent(s) sont descendus${d.arreteA > 0 ? `, arrêté à ${d.arreteA} s` : ''} · et caché dans une planque à ${c.dDelit} m du délit (abri=${c.abri}), ils perdent bien sa trace à ${c.perduA} s (★ ${c.wanted})` };
+  return { ok, detail: `avant : trois coups de feu à 45 m du commissariat, l'enfant ne bouge pas, et « 🙈 Ils t'ont perdu » tombait à t+12 s — deux secondes AVANT que les voitures ne s'élancent (délai d'intervention ${d.react} s) ; elles restaient ensuite figées à 37 m, aucun agent ne descendait · maintenant à découvert et immobile : plus aucun abandon sur 40 s (perdu à ${d.perduA} s), la voiture la plus proche est venue à ${d.minVoiture} m, ${d.maxAgents} agent(s) sont descendus${d.arreteA > 0 ? ` et il est arrêté à ${d.arreteA} s` : ''} · et caché dans une planque à ${c.dDelit} m du délit (abri=${c.abri}), ils perdent bien sa trace à ${c.perduA} s (★ ${c.wanted})` };
 });
 
 // ================= POSTE CONDUITE — on n'écrase pas ses propres passagers =================

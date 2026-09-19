@@ -18729,6 +18729,7 @@ function botConduireVers(b, lieu) {
   const st = b.drive; if (!st) return;
   const arr = arretVoiture((lieu.auto || lieu).x, (lieu.auto || lieu).z);
   st.tx = arr.x; st.tz = arr.z; st.nom = lieu.nom; st.etat = 'route'; st.route = null; st.bloqueT = 0;
+  st.affD = null; st.affNom = null;   // nouvelle destination : le compte a rebours d'arrivee repart
   botSay(b, [`c'est parti pour ${lieu.nom} ! 🚗💨`]);
   if (!st.passager) setBeacon(lieu.x, lieu.z);
 }
@@ -18884,8 +18885,18 @@ function botDriveTick(dt) {
       // souvent par s'ecarter, et le chiffre affiche etait la ligne droite. Pour l'enfant,
       // c'est un conducteur qui se trompe de chemin. On annonce donc CE QU'IL RESTE A
       // PARCOURIR sur le trace, qui lui ne fait que diminuer.
+      // … ET ELLE NE REMONTE JAMAIS. Le trace lui-meme, lui, peut s'allonger : quand la voiture
+      // se fait bloquer, le contournement et le deblocage refont l'itineraire depuis l'endroit
+      // ou elle se trouve, et le nouveau chemin passe parfois par l'autre bout du pate de
+      // maisons. Mesure sur le trajet complet vers la caserne : 11 remontees, la pire de 65 m
+      // d'un seul coup. Pour un enfant, ce chiffre est un compte a rebours d'arrivee : on lui
+      // montre donc LE MEILLEUR RESTANT ATTEINT, qui ne fait que descendre (288 → 5 m). Le
+      // detour reel se voit a l'ecran — la voiture tourne — et l'arrivee, elle, est annoncee.
+      const reste = resteSurRoute(c, st);
+      if (st.affD == null || st.affNom !== st.nom) { st.affNom = st.nom; st.affD = reste; }
+      else if (reste < st.affD) st.affD = reste;
       $('act').textContent = st.etat === 'route'
-        ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(resteSurRoute(c, st))} m`
+        ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(st.affD)} m`
         : `${emo} Arrivés à ${st.nom} · E pour descendre`;
     }
   }

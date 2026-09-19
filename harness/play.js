@@ -19593,3 +19593,71 @@ test('on ne renverse jamais ses propres passagers : trois amis à bord, on déma
   const ok = r.montes === 3 && r.hp1.every(h => h === 100) && r.aTerre === 0 && r.etoiles === 0 && r.parcouru > 30;
   return { ok, detail: `relevé en jeu : trois amis montés, et le PREMIER MÈTRE de conduite donnait ★★★, « chauffard ! » et leurs points de vie tombés de 100 à 41 — alors qu'ils étaient assis sur leur siège. Le garde-fou écartait le bot AU VOLANT, jamais les PASSAGERS · maintenant ${r.montes} amis à bord, ${r.parcouru} m parcourus : points de vie ${r.hp0.join('/')} → ${r.hp1.join('/')}, ${r.aTerre} à terre, ${r.etoiles} étoile(s) de recherche` };
 });
+
+// DÉFAUT 77 (GRAVE, reproduit 2/2 par le contrôleur qui joue) : « se faire emmener par un
+// habitant n'aboutit JAMAIS ». Relevé : « 🚗 Chloe_mia conduit vers Caserne · 115 m » puis 124,
+// 127, 127, 127, 128, 141, 146 m — la distance AUGMENTE pendant 24 s ; et au bout de 45 s le
+// joueur se retrouve DEBOUT SUR LA CHAUSSÉE sans un mot, voiture arrêtée.
+// Ce test suit UN TRAJET ENTIER, du premier mètre à l'arrivée, et garantit les trois choses
+// que le joueur attend : le chiffre annoncé ne remonte pas, on n'est jamais débarqué en route,
+// et l'arrivée (ou l'abandon) est ANNONCÉE.
+test('se faire emmener par un habitant aboutit : la distance annoncée ne remonte pas, on n\'est jamais débarqué en route, et l\'arrivée est annoncée', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const { b } = ${CONDUITE_SETUP};
+    const dt = 1 / 60; let t = 0;
+    const msgEl = document.getElementById("msg"), actEl = document.getElementById("act");
+    const dits = []; let dernier = "";
+    const note = () => { const m = msgEl.textContent || ""; if (m !== dernier) { dernier = m; if (m) dits.push(m); } };
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; note(); };
+    while (t < 90 && !(b.drive && b.drive.etat === "arrive")) pas();
+    if (!b.drive) return { erreur: "l'ami n'a jamais amene la voiture" };
+    G.city.botCarNear = b; G.monterAvecBot(b); pas();
+    const c = b.drive.car;
+    if (!b.drive.passager) return { erreur: "le joueur n'est pas monte" };
+    // LE TRAJET DU RELEVÉ : le point d'apparition vers la caserne, à l'autre bout de la ville.
+    const lieu = G.lieuDe("la caserne") || G.lieuDe("le quartier residentiel") || G.lieuDe("l'hopital");
+    if (!lieu) return { erreur: "aucun lieu de destination connu" };
+    const t0 = t, dits0 = dits.length;
+    G.botConduireVers(b, lieu);
+    const suite = [];
+    let debarqueEnRoute = 0, remontees = 0, pire = 0, prec = null, dMax = 0;
+    while (t - t0 < 300 && b.drive && b.drive.etat === "route") {
+      pas();
+      if (!b.drive) break;
+      if (!b.drive.passager || G.city.rideBot !== b) { debarqueEnRoute++; break; }
+      const m = /·\\s*(\\d+)\\s*m/.exec(actEl.textContent || "");
+      if (m) {
+        const d = +m[1];
+        if (prec != null && d > prec) { remontees++; pire = Math.max(pire, d - prec); }
+        if (d > dMax) dMax = d;
+        if (suite.length < 4000) suite.push(d);
+        prec = d;
+      }
+    }
+    const fini = b.drive ? b.drive.etat : "plus de conducteur";
+    const act = actEl.textContent || "";
+    const encoreDedans = !!(b.drive && b.drive.passager && G.city.rideBot === b);
+    // l'arrivée (ou l'abandon) doit être DITE : bulle du conducteur ou bandeau
+    const ditsTrajet = dits.slice(dits0);
+    const out = {
+      depart: suite.length ? suite[0] : null, fin: suite.length ? suite[suite.length - 1] : null,
+      dMax: dMax, points: suite.length, remontees: remontees, pire: pire,
+      trajet: +(t - t0).toFixed(1), etat: fini, act: act, debarqueEnRoute: debarqueEnRoute,
+      encoreDedans: encoreDedans, dVraie: +Math.hypot(c.x - lieu.x, c.z - lieu.z).toFixed(0),
+      nom: lieu.nom, dits: ditsTrajet.slice(-6)
+    };
+    // et on descend proprement pour ne rien laisser au test suivant
+    if (G.city.rideBot === b) G.botDescendre(b, true);
+    G.botDescendre(b, false); b.rdv = null; b.wait = 0;
+    return out;
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  // Seuil de remontée : l'itinéraire est REFAIT toutes les 20 s de route (et à chaque
+  // déblocage), et un tracé neuf peut être un peu plus long que ce qui restait de l'ancien.
+  // Mesuré sur ce trajet : au plus 1 remontée, de 4 m au plus. Le défaut relevé par le
+  // contrôleur, lui, faisait 31 m de remontée sur 24 s d'affilée.
+  const ok = r.etat === 'arrive' && /Arriv/.test(r.act) && r.debarqueEnRoute === 0 && r.encoreDedans
+    && r.remontees <= 2 && r.pire <= 8 && r.fin != null && r.fin < r.depart / 2;
+  return { ok, detail: `relevé du joueur : « conduit vers Caserne · 115 m » puis 124, 127, 128, 141, 146 m (+31 m en 24 s), puis débarqué en pleine rue sans un mot · trajet complet suivi image par image vers ${r.nom} : la distance annoncée part de ${r.depart} m et finit à ${r.fin} m (maximum ${r.dMax} m, ${r.points} relevés, ${r.remontees} remontée(s), la pire de ${r.pire} m), ${r.trajet} s de temps simulé, état final « ${r.etat} », pastille « ${r.act} », joueur encore à bord = ${r.encoreDedans}, débarquements en route = ${r.debarqueEnRoute}, voiture à ${r.dVraie} m du but · derniers messages : ${r.dits.join(' | ')}` };
+});

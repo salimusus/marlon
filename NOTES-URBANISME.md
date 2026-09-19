@@ -83,13 +83,37 @@ Circulation laissée tourner **900 pas de simulation** (`__G.step(1/60, true)`),
 Le débit n'est pas cassé, c'est le **détour** qui l'est : 2,25 fois le vol d'oiseau, parce que
 le réseau est un damier plein de trous où chaque trou oblige à un contournement.
 
-## 6. Ce que je fais, dans l'ordre
+## 6. APRÈS TRAVAUX — les mêmes mesures
 
-1. (ce fichier) la carte mesurée — fait.
-2. Déplacer l'armurerie et son stand de tir hors des deux rues, avec accès et stationnement,
-   et rendre la rue x = 52 continue ; supprimer les 3 tronçons de contournement.
-3. Élargir : une passe `elargirLesVoies()` qui monte chaque chaussée au palier supérieur
-   SANS entrer dans un bâtiment, dans la mer, dans le sable, dans une parcelle, ni avaler
-   un véhicule garé. Nouvelle hiérarchie : 8 / 9 / 11 / 13 m.
-4. Réorganiser : boucher les trous relevés au § 4.
-5. Mesurer à nouveau le § 5.
+| mesure | avant | après |
+|--------|-------|-------|
+| chaussées | 72 | 73 |
+| chaussées où deux véhicules de 2,80 m se croisent (≥ 7,60 m) | **27 / 72** | **63 / 73** |
+| largeur moyenne gagnée | — | +2,22 m sur 63 chaussées |
+| chaussées restées sous le seuil | 45 | 10 (coincées entre deux murs) |
+| liaisons du graphe passant **hors bitume** | **21** | **0** |
+| détour moyen, 56 trajets bout à bout de la ville | **2,25 ×** | **1,90 ×** |
+| nœuds cul-de-sac | 48 | 43 |
+| véhicules IA bloqués après 900 pas | 0 / 8 | 0 / 8 |
+| chevauchements de véhicules | 0 | 0 |
+| véhicules hors chaussée | 0 | 0 |
+| rue x = 52, de z = 6 à z = 32 (26 m à vol d'oiseau) | **520 m**, puis 70 m avec le contournement | **28 m** |
+| stops en ville | 5 (0 arrêt complet mesuré) | 9 (arrêt complet de 429 images mesuré) |
+| panneaux | 76 | 94 |
+| carrefours sans stop ni cédez-le-passage | 2 | 0 |
+
+Nouvelle hiérarchie : **boulevard 13 m · avenue 11 m · rue 9 m · ruelle 8 m**
+(au lieu de 9 / 8 / 7 / 6 / 5). Les paliers 5, 6 et 7 restent déclarés dans `VOIES` pour les
+rares chaussées qu'aucune largeur supérieure ne laisse passer.
+
+## 7. Ce qui reste ouvert
+
+- **10 chaussées** ne peuvent pas atteindre 7,60 m : elles sont bordées des deux côtés par un
+  bâtiment ou une parcelle. Les plus gênantes sont la rue de l'est (x = 80, 7 m, 190 m de long)
+  et la promenade du littoral (x = 104, 7 m). Les élargir demanderait de **déplacer des
+  bâtiments**, ce qui sort de la demande du joueur.
+- **43 nœuds cul-de-sac**, dont 22 à plus de 6 m de toute autre chaussée. Une bonne part sont
+  des fins de rue légitimes (accès circuit, hélistations, bord de carte) ; les autres attendent
+  les terrains neufs du poste QUARTIERS.
+- Le débit brut (50 m parcourus en 900 pas) n'a pas bougé : il est limité par la vitesse des
+  conducteurs, pas par la géométrie. C'est le **détour** qui a baissé de 16 %.

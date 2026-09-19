@@ -20808,3 +20808,44 @@ test('aucun véhicule ne se chevauche au départ : les 47 caisses posées à la 
   const ok = r.total >= 40 && r.paires.length === 0 && r.pire.d > 0.1 && r.ecartMotos >= 2 && r.ecartChantier >= 7;
   return { ok, detail: `avant : DEUX paires se chevauchaient sans qu'aucun véhicule n'ait roulé — les deux motos à 1,10 m d'entraxe pour 1,10 m de large, et la benne (7 m) / le bulldozer (5,40 m) à 5,81 m, 5 cm de caisse dans la caisse · maintenant, sur les ${r.total} véhicules posés à la construction : ${r.paires.length} chevauchement${r.paires.length ? ' → ' + r.paires.slice(0, 6).join(' · ') : ''}, la paire la plus serrée garde ${r.pire.d} m (${r.pire.quoi}) · motos à ${r.ecartMotos} m d'entraxe, benne ↔ bulldozer à ${r.ecartChantier} m` };
 });
+
+// LE TRI DES IMPASSES. Le réseau comptait 43 nœuds cul-de-sac et personne ne savait lesquels
+// étaient de VRAIES fins de rue (bord de carte, accès circuit, hélistation, fond d'un
+// quartier) et lesquels étaient des ACCIDENTS — deux bouts de la même rue que le graphe
+// ignorait l'un l'autre. Le critère est mesuré, pas décrété : une impasse est ACCIDENTELLE
+// quand il existe un autre nœud à moins de 20 m dont le chemin RÉEL par les voies fait plus
+// de trois fois ce saut, plus 10 m de marge. Relevé d'avant : la rue de l'école, (-54,5 ; 110)
+// et (-47,5 ; 110), SEPT MÈTRES sur le même bitume pour 62 m de détour ; les deux rues de
+// l'ouest, douze mètres pour 57 m ; le commissariat, 5,30 m pour 26 m.
+test('les impasses sont triées : plus aucun cul-de-sac accidentel, et les fins de rue légitimes restent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, frais: true });
+    const c = G.city, Gr = c.graphe, N = Gr.noeuds, A = Gr.aretes;
+    const vois = N.map(() => new Set()), adj = N.map(() => []);
+    for (const e of A) { vois[e.de].add(e.vers); vois[e.vers].add(e.de); adj[e.de].push([e.vers, e.long]); adj[e.vers].push([e.de, e.long]); }
+    const dij = (i, j) => { const dd = new Float64Array(N.length).fill(Infinity); dd[i] = 0; const t = [[0, i]];
+      while (t.length) { let b = 0; for (let k = 1; k < t.length; k++) if (t[k][0] < t[b][0]) b = k;
+        const [dc, u] = t.splice(b, 1)[0]; if (dc > dd[u] + 1e-6) continue; if (u === j) return dc;
+        for (const [v, L] of adj[u]) { const nd = dc + L; if (nd < dd[v]) { dd[v] = nd; t.push([nd, v]); } } }
+      return Infinity; };
+    const culs = [], accidentelles = [], legitimes = [];
+    for (let i = 0; i < N.length; i++) {
+      if (vois[i].size !== 1) continue;
+      const n = N[i]; culs.push(i);
+      let best = null;
+      for (let k = 0; k < N.length; k++) { if (k === i || vois[i].has(k)) continue;
+        const d = Math.hypot(N[k].x - n.x, N[k].z - n.z); if (d > 20) continue;
+        if (!best || d < best.d) best = { d, k }; }
+      const ou = `(${n.x.toFixed(0)} ; ${n.z.toFixed(0)})`;
+      if (!best) { legitimes.push(ou + ' bout de rue'); continue; }
+      const det = dij(i, best.k);
+      if (det > best.d * 3 + 10) accidentelles.push(`${ou} → ${best.d.toFixed(1)} m à vol d'oiseau, ${det.toFixed(0)} m par les voies`);
+      else legitimes.push(ou);
+    }
+    return { noeuds: N.length, culs: culs.length, accidentelles, legitimes: legitimes.length,
+      routes: c.routes.length };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.accidentelles.length === 0 && r.culs >= 20 && r.culs <= 40;
+  return { ok, detail: `avant : 43 nœuds cul-de-sac, dont plusieurs où deux bouts de la MÊME rue s'ignoraient — (-54,5 ; 110) et (-47,5 ; 110), 7 m sur le même bitume pour 62 m de détour · maintenant ${r.culs} culs-de-sac sur ${r.noeuds} nœuds et ${r.routes} chaussées : ${r.accidentelles.length} accidentelle${r.accidentelles.length ? ' → ' + r.accidentelles.slice(0, 5).join(' · ') : ''}, ${r.legitimes} vraies fins de rue (bord de carte, accès circuit, hélistation, fond de quartier)` };
+});

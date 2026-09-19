@@ -5147,6 +5147,15 @@ const PLAN_ROUTIER = {
     // 11,2 m en travers de la pelouse, et le conducteur quittait le bitume pour passer. Ce
     // raccord nord-sud de 8 m fait le coude pour de bon.
     { n: 'Coude de l\'ouest', x: -63, z: 5, w: 8, d: 18 },
+    // LES DEUX RUES DE L'OUEST SE REGARDAIENT SANS SE TOUCHER. Releve sur les noeuds cul-de-sac :
+    // la rue z = 10 (x -105 a -61) et la rue z = 22 (x -105 a -63) courent PARALLELES a 1 m
+    // d'ecart de bitume, et leurs deux bouts ouest, (-102,5 ; 10) et (-102,5 ; 22), n'avaient
+    // pour chemin commun qu'un detour de 57 m pour DOUZE METRES a vol d'oiseau. Idem a l'est
+    // pour le bout (-65,5 ; 22), a 42 m de detour. Deux raccords nord-sud de 8 m ferment les
+    // deux extremites : ce sont les seules impasses ACCIDENTELLES que le releve ait trouvees
+    // hors du bitume existant (les autres sont de vraies fins de rue).
+    { n: 'Raccord ouest des rues de l\'ouest', x: -101, z: 16, w: 8, d: 23 },
+    { n: 'Raccord est des rues de l\'ouest', x: -65, z: 18, w: 8, d: 12 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
     // Le reseau etait coupe en 25 morceaux pour les voitures : la statue bouchait le carrefour
@@ -8979,6 +8988,34 @@ function construireGraphe() {
     if (detourNoeuds(i, j, d * 8 + 20) < d * 8 + 20) continue;       // un chemin raisonnable existe deja
     if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
     nraccord++; poseLiaison(i, j, d, -1000 - nraccord);
+  }
+  // ---- 5 quater) LES IMPASSES QUI N'EN SONT PAS. Relevé sur les 43 nœuds cul-de-sac : la
+  // plupart sont de vraies fins de rue (bord de carte, hélistation, accès circuit), mais
+  // quelques-unes sont DEUX BOUTS DE LA MEME CHAUSSEE que le graphe ignore l'un l'autre. La
+  // rue de l'école, par exemple : ses deux rectangles se recouvrent, la voiture y roule tout
+  // droit, et pourtant (-54,5 ; 110) et (-47,5 ; 110) — SEPT METRES, sur le meme bitume —
+  // n'avaient pour chemin commun qu'un détour de 62 m. Le raccord du 5 ter ne les prenait pas :
+  // il exige un détour de huit fois le saut, et 62 m ne fait « que » neuf fois 7 m moins la
+  // marge. On ajoute donc un raccord dès que le détour vaut TROIS fois le saut — mais
+  // seulement quand TOUT le segment est sur du bitume declare. Ce garde-fou est ce qui
+  // distingue ce raccord d'une liaison a travers un trottoir : le reseau garde ses ZERO
+  // liaison hors chaussee.
+  let nsurBitume = 0;
+  const toutSurBitume = (A, B) => {
+    const k = Math.max(4, Math.ceil(Math.hypot(B.x - A.x, B.z - A.z) / 2));
+    for (let u = 0; u <= k; u++) {
+      const x = A.x + (B.x - A.x) * u / k, z = A.z + (B.z - A.z) * u / k;
+      if (!surLaChaussee(x, z, 0)) return false;
+    }
+    return true;
+  };
+  for (const [d, i, j] of cand) {
+    if (d > 14) continue;
+    if (adj[i].some(([v]) => v === j)) continue;
+    if (detourNoeuds(i, j, d * 3 + 10) < d * 3 + 10) continue;
+    if (!toutSurBitume(noeuds[i], noeuds[j])) continue;
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    nsurBitume++; poseLiaison(i, j, d, -2000 - nsurBitume);
   }
   // ---- 5 ter) LES VOIES OU UNE VOITURE NE PASSE PAS. Le graphe ne connaissait que les
   // rectangles du plan : un abribus, un massif ou le coin d'un immeuble plante au milieu de la

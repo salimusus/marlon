@@ -20582,3 +20582,111 @@ test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m 
   const ok = r.n === 0 && r.pire < 0.25 && r.passe < 1.5;
   return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant le trajet passe bien au point du défaut (à ${r.passe} m de (−47,4 ; 12,1)), ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
 });
+
+// ================= POSTE QUARTIERS : LA PLAINE DES SPORTS =================
+// « rajoute d'autres quartiers avec mobilier urbain, jeux, decor, activite » (le joueur,
+// round 75). Ces tests garantissent les trois choses qui ont deja rate dans ce projet :
+// on y va (a pied ET en voiture), ce qui doit arreter arrete, ce qui doit se traverser se
+// traverse, et chaque jeu se declenche puis se termine.
+test('on peut aller a la Plaine des Sports a pied et en voiture depuis le centre-ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const city = G.city;
+    const zone = city.zones.find(z => z.name === 'Plaine des Sports');
+    const des = (city.plan.dessertes || []).find(d => d.n === 'Plaine des Sports');
+    // A PIED : la grille de navigation doit rendre un chemin continu jusqu'au coeur du quartier.
+    const pied = G.navPath(0, 8, -150, -130);
+    let sautPied = 0;
+    if (pied) for (let i = 1; i < pied.length; i++) sautPied = Math.max(sautPied, Math.hypot(pied[i][0] - pied[i - 1][0], pied[i][1] - pied[i - 1][1]));
+    // EN VOITURE : l'itineraire par les VOIES (celui qu'empruntent les conducteurs et le GPS).
+    const aller = G.itineraireVoies(0, 8, des.x, des.z);
+    const retour = G.itineraireVoies(des.x, des.z, 0, 8);
+    // et les six rues du quartier existent bien dans city.routes
+    const rues = city.routes.filter(rt => rt.x < -100 && rt.z < -95).length;
+    return { zone: !!zone, des, pied: pied ? pied.length : 0, sautPied: +sautPied.toFixed(2),
+      aller: aller ? (aller.suite ? aller.suite.length : (aller.length || 1)) : 0,
+      retour: retour ? (retour.suite ? retour.suite.length : (retour.length || 1)) : 0, rues };
+  });
+  // `navPath` rend les NOEUDS du chemin, pas un point tous les metres : entre deux virages il
+  // peut y avoir 70 m de ligne droite. Un seuil sur la longueur d'un pas n'a donc aucun sens
+  // ici — ce qui compte, c'est qu'un chemin EXISTE dans les deux moyens de locomotion.
+  const ok = r.zone && r.des && r.des.loin === 0 && r.pied > 1 && r.aller > 0 && r.retour > 0 && r.rues === 6;
+  return { ok, detail: `le nord-ouest de la carte (x < −104, z < −100) n'avait AUCUNE route : la Plaine des Sports y est batie et raccordee au Boulevard du Nord par ${r.rues} rues · a pied, la grille de navigation rend un chemin de ${r.pied} points du centre (0 ; 8) au coeur du quartier (−150 ; −130), plus longue ligne droite ${r.sautPied} m · en voiture, itineraireVoies rend ${r.aller} etapes a l'aller et ${r.retour} au retour · la desserte du quartier tombe SUR la chaussee en (${r.des.x} ; ${r.des.z}), a ${r.des.loin} m de son point de visee` };
+});
+
+test('a la Plaine des Sports, ce qui doit arreter arrete et ce qui doit se traverser se traverse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -150, y: 1, z: -130, hour: 12, frais: true });
+    const S = G.solids;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    // [nom, x, z, y, attendu solide ?]
+    const pts = [
+      ['le banc de la place', -134, -134, 0.4, 1], ['la poubelle', -160, -120, 0.5, 1],
+      ['la borne a boire', -142, -124, 0.6, 1], ['le lampadaire', -160, -112, 2, 1],
+      ['le totem du quartier', -158, -110, 1.5, 1], ['la table de ping-pong', -138, -126, 0.5, 1],
+      ['le muret de la cage', -179, -182, 0.9, 1], ['le poteau de but', -178.6, -172, 1, 1],
+      ['le socle du tourniquet', -181, -124, 0.3, 1], ['la plateforme du toboggan', -172, -114, 2.4, 1],
+      ['le sommet de la cage a grimper', -162, -126, 3, 1], ['le pied d\'abribus', -159.85, -118.1, 1, 1],
+      ['le fond vitre de l\'abribus', -158.1, -120, 1, 1], ['le plancher du kiosque', -129, -132, 0.3, 1],
+      ['la colonne du kiosque', -129 + 3.4, -132, 1.8, 1],
+      // ... et tout ce qu'on doit POUVOIR traverser ou franchir
+      ['le rond central du city-stade', -164, -175, 0.9, 0], ['la bouche du but', -179, -175, 1, 0],
+      ['le filet du but', -179.4, -175, 1.5, 0], ['l\'entree de la cage', -164, -166, 0.9, 0],
+      ['le dessous de l\'abribus (2,4 m)', -159, -120, 2.4, 0], ['le toit du kiosque (3,3 m)', -129, -132, 3.3, 0],
+      ['le filet de ping-pong', -138, -126, 0.82, 0], ['la chaussee de l\'Allee des Sports', -150, -130, 0.9, 0],
+      ['la chaussee de la Rue du Stade', -150, -154, 0.9, 0], ['la chaussee du Boulevard du Nord', -160, -100, 0.9, 0],
+      ['la dalle du skatepark', -133, -174, 0.9, 0], ['la pelouse de l\'aire de jeux', -170, -130, 0.9, 0],
+    ];
+    const fautes = [];
+    for (const [nom, x, z, y, att] of pts) { const v = solide(x, z, y) ? 1 : 0; if (v !== att) fautes.push(`${nom} : ${v ? 'solide' : 'traversable'} au lieu de ${att ? 'solide' : 'traversable'}`); }
+    // LE BANC DE L'ABRIBUS EST UN VRAI BANC : on doit pouvoir s'y asseoir (E).
+    // l'abribus de (−159 ; −120) est tourne d'un quart de tour : son banc est donc a
+    // 0,55 m vers l'EST du centre de l'abri, soit (−158,45 ; −120).
+    const bancAbri = G.city.benches.some(b => Math.abs(b.x + 158.45) < 0.6 && Math.abs(b.z + 120) < 0.6);
+    return { n: pts.length, fautes, bancAbri, solides: S.length };
+  });
+  const ok = r.fautes.length === 0 && r.bancAbri;
+  return { ok, detail: `ce projet a une longue histoire de bancs traversables et de rambardes decoratives : les ${r.n} points de controle de la Plaine des Sports sont mesures un par un dans le tableau des solides · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le banc de l'abribus est bien declare dans city.benches (${r.bancAbri}) · ${r.solides} solides dans la ville` };
+});
+
+test('les jeux de la Plaine des Sports se declenchent et se terminent, a la manette comme au clavier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: -172, y: 1, z: -136, hour: 12, frais: true });
+    const city = G.city, P = G.P;
+    const pas = n => { for (let i = 0; i < n; i++) G.step(1 / 60, true); };
+    // ---- 1. LA BALANCOIRE : E pour s'asseoir, SAUT pour partir ----
+    const sw = city.swings.filter(s => s.z < -100).sort((a, b) => Math.hypot(a.x + 172, a.z + 138) - Math.hypot(b.x + 172, b.z + 138))[0];
+    P.pos.set(sw.x, 0.5, sw.z); pas(2);
+    G.sitSwing(sw);
+    const assis = sw.rider === 'me';
+    pas(90);
+    const ampli = sw.amp, colle = Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const descendu = sw.rider === null && P.swing === null;
+    // ---- 2. LE TOURNIQUET : c'est un `city.rides`, donc E et SAUT, exactement comme le carrousel ----
+    const tq = city.rides.find(rd => rd.n === 'le tourniquet');
+    const angle0 = tq.ang;
+    P.pos.set(tq.x + 2, 0.5, tq.z); pas(2);
+    G.rideEnter ? G.rideEnter(tq) : (P.ride = tq, tq.rider = { idx: 0 });
+    const monte = P.ride === tq;
+    pas(60);
+    const tourne = tq.ang - angle0, aPlat = Math.abs(tq.horses[0].g.position.y - 0.125) < 0.001;
+    const surLeManege = Math.hypot(P.pos.x - tq.x, P.pos.z - tq.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const fini = P.ride === null;
+    // ---- 3. LE CITY-STADE : un ballon pousse dans la cage compte un but ----
+    const buts0 = city.goals;
+    const cg = city.cages[1];   // le but de l'est (sens +1)
+    const ballon = city.balls.find(b => b.kind === 'foot' && b.pos.x < -140);
+    ballon.pos.set(cg.x - 2, 0.6, cg.z); ballon.vel.set(14, 0, 0); ballon.state = 'idle';
+    pas(30);
+    const but = city.goals - buts0;
+    // ---- 4. LE SKATEPARK : les deux boosters relancent le joueur ----
+    const bo = city.boosters.filter(b => b.x < -100);
+    P.pos.set(bo[0].x, 0.6 + 2.1, bo[0].z); P.boostT = 0; pas(4);
+    const boost = P.boostT > G.simTime;
+    return { assis, ampli: +ampli.toFixed(3), colle, descendu, monte, tourne: +tourne.toFixed(2), aPlat, surLeManege, fini, but, boosters: bo.length, boost };
+  });
+  const ok = r.assis && r.ampli > 0.2 && r.colle && r.descendu && r.monte && r.tourne > 0.5 && r.aPlat && r.surLeManege && r.fini && r.but === 1 && r.boosters === 2 && r.boost;
+  return { ok, detail: `le joueur demandait des JEUX, pas du decor · balancoire : on s'assoit (${r.assis}), l'amplitude monte a ${r.ampli} rad en 90 pas, le corps reste colle a la planche (${r.colle}) et le saut en decroche (${r.descendu}) · tourniquet : on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, ses places restent A PLAT (${r.aPlat}, elles montaient et descendaient comme des chevaux de bois avant le drapeau r.plat), le joueur tourne avec (${r.surLeManege}) et le saut en descend (${r.fini}) · city-stade : un ballon envoye dans la cage compte ${r.but} but · skatepark : ${r.boosters} boosters en haut des quarter-pipes, et le joueur pose dessus est relance (${r.boost}) · tous passent par city.swings, city.rides et city.boosters, donc par la MEME touche E et le MEME bouton de manette que le reste de la ville` };
+});

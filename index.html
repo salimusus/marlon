@@ -6040,6 +6040,11 @@ function makeBall(kind, x, y, z) {
   // sur le ballon du terrain de foot ; le jour où un autre ballon (celui du sac, poste DRONE
   // & ROBOT) a franchi la ligne de but, `b.pos.copy(b.home)` a fait planter toute la ville
   // (« Cannot read properties of undefined »). Chaque ballon naît donc avec le sien.
+  // UN BALLON BOUGE : solidifieDecor() ne doit pas le figer en bloc. Mesure : le ballon du
+  // city-stade de la Plaine des Sports devenait un cube solide de 0,92 m plante au rond
+  // central — on ne pouvait plus traverser son propre terrain. `userData.mobile` est la
+  // marque que la passe de solidification comprend deja (elle sert aux animaux).
+  mesh.userData.mobile = true;
   const b = { mesh, pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), r, kind, hitCd: 0, state: 'idle', bounces: 0, ground: 0.15, bounds: null, id: ++ballSeq, tgt: new THREE.Vector3(x, y, z), home: new THREE.Vector3(x, y, z), lastHit: -1 };
   city.balls.push(b); return b;
 }
@@ -6537,7 +6542,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
+      B('le marché', buildMarche); B('techno-parc', buildTechno); B('plaine des sports', buildSports);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -6582,7 +6587,7 @@ const WORLDS = [
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0 };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0, cages: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 // Les trois réglages des SENSATIONS DE CONDUITE (voir la grande section « conduire »).
@@ -8474,6 +8479,290 @@ function buildTechno() {
   city.zones.push({ name: 'Techno-Parc', emoji: '🛰️', x1: TECHNO.x1, x2: TECHNO.x2, z1: TECHNO.z1, z2: TECHNO.z2,
     hint: '🛰️ Techno-Parc : bureaux vitrés, informatique, drones, jeux vidéo et food-trucks — E devant un comptoir pour acheter' });
   city.wander.push([3, 0.3, -118], [-17, 0.3, -108], [13, 0.3, -108], [3, 0.3, -140]);
+}
+// ================= QUARTIER : LA PLAINE DES SPORTS (nord-ouest) =================
+// Le nord-ouest de la carte (x < −104, z < −100) etait un desert : pas une route, pas un
+// batiment, rien. Le joueur a demande « d'autres quartiers avec mobilier urbain, jeux, decor,
+// activite » : celui-ci est le QUARTIER DES JEUX DE PLEIN AIR. On l'a choisi parce qu'aucun
+// des quartiers existants ne propose de sport libre — le parc a des balancoires et des boules,
+// le centre un terrain de foot minuscule coince entre deux rues — et parce qu'un enfant a la
+// manette comprend tout de suite un city-stade et un skatepark.
+// Il s'accroche au PROLONGEMENT OUEST du Boulevard du Nord (poste URBANISME l'arrete a
+// x = −104), et son damier de six rues le relie au reste de la ville.
+const SPORTS = { x: -150, z: -150, x1: -198, x2: -104, z1: -198, z2: -100 };
+function buildSports() {
+  city.cages = city.cages || [];
+  // ---- LES RUES (largeurs de la hierarchie du plan : 9 = boulevard, 8 = avenue, 7 = rue) ----
+  road(-152, -100, 96, 9);    // prolongement ouest du Boulevard du Nord : x −200 → −104, il rejoint l'axe existant sur 4 m
+  road(-150, -128, 8, 48);    // Allee des Sports : du boulevard (z −104) a la Rue du Stade (z −152)
+  road(-150, -154, 80, 8);    // Rue du Stade : x −190 → −110
+  road(-186.5, -174, 7, 40);  // Rue des Gradins (ouest)
+  road(-113.5, -174, 7, 40);  // Rue du Skatepark (est)
+  road(-150, -194, 80, 7);    // Rue du Nord : elle boucle le quartier par le haut
+  // ---- LE CITY-STADE : une vraie cage grillagee, deux buts, un ballon ----
+  const CX = -164, CZ = -175, CW = 30, CD = 18;
+  plat(CX, 0.14, CZ, CW + 4, CD + 4, 0x2f7d3a, { studs: false, noRoute: true }, 0.12);              // le gazon
+  fieldLines(CX, 0.22, CZ, CW, CD, (g, W, H) => {   // le marquage peint : touches, rond central, surfaces
+    g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 3;
+    g.strokeRect(6, 6, W - 12, H - 12);
+    g.beginPath(); g.moveTo(W / 2, 6); g.lineTo(W / 2, H - 6); g.stroke();
+    g.beginPath(); g.arc(W / 2, H / 2, H * 0.16, 0, 7); g.stroke();
+    g.strokeRect(6, H / 2 - H * 0.28, W * 0.08, H * 0.56); g.strokeRect(W - 6 - W * 0.08, H / 2 - H * 0.28, W * 0.08, H * 0.56);
+  });
+  // LE GRILLAGE. Un muret PLEIN de 1,10 m (solide, il renvoie le ballon et arrete le joueur),
+  // surmonte de poteaux et d'un filet AJOURE. Le filet est en materiau transparent a 0,35
+  // d'opacite : solidifieDecor() ecarte d'office tout materiau sous 0,6 d'opacite, il ne
+  // deviendra donc jamais un mur invisible de 3 m (le filet du trampoline avait fait ce coup-la).
+  const filetMat = new THREE.MeshLambertMaterial({ color: 0xc9ced8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+  const murets = [
+    // Ouverture de 7 m en face de chaque but (le but fait 6,2 m) : a 3,2 m le muret mangeait
+    // un metre et demi de chaque cote de la cage, et le ballon ne pouvait plus y entrer.
+    [CX - CW / 2, CZ - CD / 4 - 1.75, 0.3, CD / 2 - 3.5], [CX - CW / 2, CZ + CD / 4 + 1.75, 0.3, CD / 2 - 3.5],
+    [CX + CW / 2, CZ - CD / 4 - 1.75, 0.3, CD / 2 - 3.5], [CX + CW / 2, CZ + CD / 4 + 1.75, 0.3, CD / 2 - 3.5],
+    [CX - CW / 4 - 1.5, CZ - CD / 2, CW / 2 - 3, 0.3], [CX + CW / 4 + 1.5, CZ - CD / 2, CW / 2 - 3, 0.3],       // cotes longs, ouverts au milieu (les entrees)
+    [CX - CW / 4 - 1.5, CZ + CD / 2, CW / 2 - 3, 0.3], [CX + CW / 4 + 1.5, CZ + CD / 2, CW / 2 - 3, 0.3],
+  ];
+  for (const [mx, mz, mw, md] of murets) {
+    box(mx, 0.55, mz, mw, 1.1, md, 0x3b4252, { studs: false, noRoute: true });
+    const f = new THREE.Mesh(unitBox, filetMat); f.scale.set(Math.max(mw, 0.06), 2.3, Math.max(md, 0.06)); f.position.set(mx, 2.25, mz); worldGroup.add(f);
+  }
+  // les poteaux d'angle SEULEMENT : places a CZ +/- CD/6 ils se dressaient en pleine bouche de but
+  for (const px of [CX - CW / 2, CX + CW / 2]) for (const pz of [CZ - CD / 2, CZ + CD / 2])
+    box(px, 1.75, pz, 0.18, 3.5, 0.18, 0x4f8dff, { studs: false, noRoute: true });
+  // PAS DE POTEAU AU MILIEU : celui de x = CX se dressait pile au centre de l'entree de 6 m
+  // (mesure : solide de 0,36 m a (-164 ; -166), on ne pouvait plus entrer dans la cage de face).
+  for (const pz of [CZ - CD / 2, CZ + CD / 2]) for (const px of [CX - CW / 3, CX + CW / 3])
+    box(px, 1.75, pz, 0.18, 3.5, 0.18, 0x4f8dff, { studs: false, noRoute: true });
+  // LES DEUX BUTS. Montants et barre transversale SOLIDES, filet ajoure. Le but est declare
+  // dans `city.cages` : ballsTick y compte les buts exactement comme sur le terrain du centre.
+  for (const s of [-1, 1]) {
+    const gx = CX + s * (CW / 2 - 0.4);
+    for (const dz of [-3, 3]) box(gx, 1.1, CZ + dz, 0.16, 2.2, 0.16, 0xf4f6fa, { studs: false, noRoute: true });
+    box(gx, 2.25, CZ, 0.16, 0.16, 6.2, 0xf4f6fa, { studs: false, noRoute: true });
+    const net = new THREE.Mesh(unitBox, filetMat); net.scale.set(1.4, 2.2, 6.2); net.position.set(gx + s * 0.8, 1.1, CZ); worldGroup.add(net);
+    city.cages.push({ x: gx, z: CZ, demi: 3.1, haut: 2.2, sens: s, nom: 'city-stade' });
+  }
+  const ballon = makeBall('foot', CX, 0.6, CZ); ballon.ground = 0.5; ballon.home.set(CX, 0.6, CZ);
+  ballon.bounds = { x1: CX - CW / 2 - 1.2, x2: CX + CW / 2 + 1.2, z1: CZ - CD / 2 + 0.2, z2: CZ + CD / 2 - 0.2 };
+  // LES GRADINS : trois rangs de beton, face au terrain. Marches de 0,5 m : on les MONTE
+  // (le pas franchissable du joueur), on ne bute pas dedans.
+  for (let i = 0; i < 3; i++) {
+    plat(CX, 0.5 + i * 0.5, CZ + CD / 2 + 3.2 + i * 1.3, CW - 4, 1.3, i % 2 ? 0xb9c2cf : 0xc9ced8, { studs: false, noRoute: true }, 0.5 + i * 0.5);
+    for (let k = 0; k < 6; k++) box(CX - CW / 2 + 4 + k * (CW - 8) / 5, 0.5 + i * 0.5 + 0.25, CZ + CD / 2 + 3.2 + i * 1.3, 1.4, 0.5, 0.5, [0xff5c5c, 0xffd23f, 0x4f8dff][i], { deco: true, studs: false });   // les sieges de couleur
+  }
+  sign(CX - 10, 0.15, CZ + CD / 2 + 11, '⚽ City-stade : marque des buts !', true, 0);
+  // ---- LE SKATEPARK : deux quarter-pipes en marches, un funbox, deux rails, deux boosters ----
+  const KX = -133, KZ = -174;
+  plat(KX, 0.16, KZ, 26, 24, 0x6b7280, { studs: false, noRoute: true }, 0.14);
+  // LES RAMPES SONT DES MARCHES, PAS DES PLANS INCLINES. `box()` ne sait pas tourner un
+  // volume, et une rampe posee de travers rend une boite de collision FAUSSE — c'est
+  // exactement ce qui ejectait le joueur a quinze metres dans les rounds precedents. Cinq
+  // marches de 0,42 m (sous le pas franchissable de 0,56 m) : on les monte en courant.
+  const rampe = (rx, rz, sens) => {
+    for (let i = 0; i < 5; i++) {
+      plat(rx + sens * (2.2 - i * 1.1), 0.16 + (i + 1) * 0.42, rz, 1.1, 8, i % 2 ? 0xb9c2cf : 0xc9ced8, { studs: false, noRoute: true }, 0.16 + (i + 1) * 0.42);
+      box(rx + sens * (2.2 - i * 1.1 + 0.5), 0.16 + (i + 1) * 0.42 + 0.03, rz, 0.1, 0.06, 8, 0x3ef2ff, { deco: true, studs: false, noEdges: true });   // la nervure cyan de chaque marche
+    }
+    box(rx - sens * 2.75, 2.36, rz, 0.16, 0.16, 8, 0xff8f3a, { studs: false, noRoute: true });   // le coping, la barre orange du haut
+    city.boosters.push({ x: rx - sens * 2.2, z: rz, cd: 0 });   // en haut de la rampe : l'elan du skateur
+  };
+  rampe(KX - 8, KZ - 5, 1); rampe(KX + 8, KZ - 5, -1);
+  // le funbox central : un plateau de 0,84 m avec ses deux marches, et un rail par-dessus
+  // LE FUNBOX ETAIT UNE DALLE GRISE, et la capture ne montrait qu'un parpaing. Beton clair,
+  // arete de coping ORANGE sur les quatre bords du plateau et bandes de couleur sur les
+  // marches : l'oeil comprend tout de suite ou l'on monte et ou l'on retombe.
+  plat(KX - 4.5, 0.16 + 0.42, KZ + 5, 3, 7, 0xb9c2cf, { studs: false, noRoute: true }, 0.58);
+  plat(KX, 0.16 + 0.84, KZ + 5, 6, 7, 0xd8d8de, { studs: false, noRoute: true }, 1.0);
+  plat(KX + 4.5, 0.16 + 0.42, KZ + 5, 3, 7, 0xb9c2cf, { studs: false, noRoute: true }, 0.58);
+  for (const dx of [-3.05, 3.05]) box(KX + dx, 0.97, KZ + 5, 0.12, 0.1, 7, 0xff8f3a, { deco: true, studs: false, noEdges: true });
+  for (const dz of [-3.55, 3.55]) box(KX, 0.97, KZ + 5 + dz, 6.2, 0.1, 0.12, 0xff8f3a, { deco: true, studs: false, noEdges: true });
+  for (const [bx, bz, bc] of [[KX - 4.5, KZ + 1.3, 0xffd23f], [KX + 4.5, KZ + 1.3, 0x3ef2ff], [KX - 4.5, KZ + 8.7, 0x3ef2ff], [KX + 4.5, KZ + 8.7, 0xffd23f]])
+    box(bx, 0.57, bz, 3, 0.06, 0.5, bc, { deco: true, studs: false, noEdges: true });
+  for (const rz of [KZ - 9.5, KZ + 10]) { for (const dx of [-4, 4]) box(KX + dx, 0.36, rz, 0.16, 0.4, 0.16, 0x3b4252, { studs: false, noRoute: true }); box(KX, 0.62, rz, 9, 0.18, 0.18, 0xffd23f, { studs: false, noRoute: true }); }   // les deux rails de slide
+  // le mur de graffitis : le decor qui donne son caractere au skatepark
+  for (let i = 0; i < 4; i++) box(KX - 12 + i * 8, 1.5, KZ - 11.6, 7.4, 3, 0.4, [0xff5c5c, 0xffd23f, 0x4f8dff, 0xb57cff][i], { studs: false, noRoute: true });
+  for (let i = 0; i < 10; i++) box(KX - 12 + i * 2.7, 1.4 + rnd(-0.5, 0.6), KZ - 11.35, rnd(0.8, 1.8), rnd(0.5, 1.2), 0.08, pickOne([0x3ef2ff, 0xff7ad9, 0x5cc453, 0xffffff, 0xff8f3a]), { deco: true, studs: false, noEdges: true });
+  sign(KX + 11, 0.16, KZ + 11.5, '🛹 Skatepark', true, Math.PI);
+  // ---- L'AIRE DE JEUX (ouest de l'Allee des Sports) ----
+  // L'ELARGISSEMENT DES VOIES (poste URBANISME) a porte l'Allee des Sports de 8 a 11 m : sa
+  // chaussee va de x = -155,5 a -144,5. Les deux dalles s'arretent a 1,5 m de ces bords, sinon
+  // elles recouvrent le bitume (12 cm de dalle par-dessus 6 cm de route : la rue disparait).
+  plat(-173, 0.15, -128, 32, 42, 0x5cc453, { studs: false, noRoute: true }, 0.12);
+  plat(-172, 0.2, -136, 16, 14, 0xe0c890, { studs: false, noRoute: true }, 0.1);   // le sable, sous les balancoires
+  // LES BALANCOIRES : meme portique que celui du parc, meme mecanique (city.swings), donc
+  // meme touche E et meme saut a la manette. Trois sieges, cordes de 2,85 m sous une poutre
+  // a 3,75 m : la planche retombe a 0,95 m du sol, la hauteur mesuree au parc.
+  const SWX = -172, SWZ = -138, SWL = 7.8, SWH = 3.55, SWC = 0x4f8dff, SWCORDE = 2.85;
+  for (const px of [SWX - SWL / 2, SWX + SWL / 2]) {
+    for (const dz of [-1.5, 1.5]) box(px, SWH / 2, SWZ + dz, 0.2, SWH, 0.2, SWC, { studs: false, noRoute: true });
+    box(px, SWH + 0.04, SWZ, 0.22, 0.2, 3.4, SWC, { deco: true, studs: false });
+    box(px, 0.6, SWZ, 0.16, 0.16, 2.6, SWC, { deco: true, studs: false });
+  }
+  box(SWX, SWH + 0.2, SWZ, SWL + 0.7, 0.22, 0.22, SWC, { deco: true, studs: false });
+  for (let i = 1; i <= 3; i++) {
+    const sx = SWX - SWL / 2 + SWL * i / 4;
+    const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
+    for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, SWCORDE, 0.06); rope.position.set(dx, -SWCORDE / 2, 0); piv.add(rope); }
+    const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -SWCORDE, 0); piv.add(seat);
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null });
+  }
+  sign(SWX, 0.2, SWZ + 6, '🎠 Balançoires : E pour s\'asseoir', false, 0);
+  // LE TOURNIQUET : un manege que l'on pousse. Il reutilise `city.rides` (kind 'carousel'),
+  // donc E pour monter et SAUT pour descendre, exactement comme le carrousel de la fete
+  // foraine — et la manette le prend sans une ligne de plus. `plat: true` dit a ridesTick de
+  // NE PAS faire monter et descendre les places : un tourniquet tourne a plat.
+  const TX = -181, TZ = -124;
+  const socle = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.1, 0.3, 20), lam(0x8f98ab)); socle.position.set(TX, 0.3, TZ); socle.receiveShadow = true; worldGroup.add(socle);
+  solids.push({ mesh: socle, x: TX, y: 0.3, z: TZ, w: 6.2, h: 0.3, d: 6.2 }); sgridSale();
+  const plateau = new THREE.Group(); plateau.position.set(TX, 0.45, TZ); worldGroup.add(plateau);
+  const disque = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 0.16, 20), lam(0xff5c5c)); plateau.add(disque);
+  const moyeu = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.5, 8), lam(0x3b4252)); moyeu.position.y = 0.75; plateau.add(moyeu);
+  const places = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2, px = Math.cos(a) * 1.7, pz = Math.sin(a) * 1.7;
+    const h = new THREE.Group(); h.position.set(px, 0.125, pz); h.rotation.y = -a; plateau.add(h);
+    // Les assises faisaient 0,8 x 0,7 m : sur la capture « sports-aire-de-jeux » on ne voyait
+    // qu'un disque rouge nu. Elles font maintenant 1,1 m de large et leur dossier monte a
+    // 1,15 m — on lit un tourniquet a quatre places depuis l'autre bout de l'aire de jeux.
+    const assise = new THREE.Mesh(unitRound, lam([0xffd23f, 0x5cc453, 0x4f8dff, 0xb57cff][i])); assise.scale.set(1.1, 0.3, 0.9); assise.position.y = 0.3; h.add(assise);   // dessus de l'assise : 0,125 + 0,3 = 0,425 au-dessus du groupe, ce que ridesTick attend
+    const dos = new THREE.Mesh(unitRound, lam([0xffd23f, 0x5cc453, 0x4f8dff, 0xb57cff][i])); dos.scale.set(1.1, 0.85, 0.14); dos.position.set(0, 0.75, -0.44); h.add(dos);
+    const barre = new THREE.Mesh(unitBox, lam(0xffd23f)); barre.scale.set(0.08, 0.08, 1.7); barre.position.set(0, 1.05, 0.85); h.add(barre);
+    const mont = new THREE.Mesh(unitBox, lam(0xffd23f)); mont.scale.set(0.08, 1.3, 0.08); mont.position.set(0, 0.7, 1.6); h.add(mont);
+    places.push({ g: h, a });
+  }
+  city.rides.push({ kind: 'carousel', plat: true, n: 'le tourniquet', e: '🎡', group: plateau, horses: places, x: TX, z: TZ, ang: 0, speed: 1.15, ex: TX + 4.2, ez: TZ, rayon: 3.1, rider: null });
+  sign(TX + 5, 0.2, TZ, '🎡 Tourniquet : E pour monter', false, -Math.PI / 2);
+  // LA CAGE A GRIMPER : trois etages de barres, chacun a 0,55 m du precedent. Chaque barre
+  // est un solide declare : on monte dessus, on ne la traverse pas.
+  const GX = -162, GZ = -126;
+  for (const dx of [-2.4, 2.4]) for (const dz of [-2.4, 2.4]) box(GX + dx, 1.5, GZ + dz, 0.18, 3, 0.18, 0xff8f3a, { studs: false, noRoute: true });
+  for (let n = 1; n <= 3; n++) {
+    const y = n * 0.9;
+    for (const dz of [-2.4, 0, 2.4]) box(GX, y, GZ + dz, 4.98, 0.16, 0.16, 0x5cc453, { studs: false, noRoute: true });
+    for (const dx of [-2.4, 2.4]) box(GX + dx, y, GZ, 0.16, 0.16, 4.98, 0x5cc453, { studs: false, noRoute: true });
+  }
+  plat(GX, 3.05, GZ, 5, 5, 0xffd23f, { studs: false, noRoute: true }, 0.16);   // le plancher du sommet
+  sign(GX, 0.2, GZ + 4.5, '🧗 Cage à grimper', false, 0);
+  // LE TOBOGGAN : une tour, un escalier, et une glissade faite de marches de 0,35 m — un plan
+  // incline ne peut pas etre declare juste avec `box()`, et une boite tournee rend une
+  // collision fausse qui ejecte le joueur. En marches, la descente est sure et se voit.
+  const BX = -172, BZ = -114;
+  box(BX, 1.2, BZ, 3, 2.4, 3, 0xb57cff, { studs: false, noRoute: true });                  // la tour
+  plat(BX, 2.5, BZ, 3.4, 3.4, 0xffd23f, { studs: false, noRoute: true }, 0.2);              // sa plateforme
+  for (const dx of [-1.6, 1.6]) box(BX + dx, 3.2, BZ, 0.14, 1.2, 3.2, 0xb57cff, { studs: false, noRoute: true });   // les garde-corps, solides
+  for (let i = 0; i < 5; i++) plat(BX, 0.5 + i * 0.4, BZ - 2 - i * 0.9, 2.6, 0.9, 0x8f98ab, { studs: false, noRoute: true }, 0.5 + i * 0.4);   // l'escalier, au nord
+  for (let i = 0; i < 6; i++) plat(BX, 2.3 - i * 0.35, BZ + 2 + i * 0.95, 1.6, 0.95, 0x35d0e6, { studs: false, noRoute: true }, 2.3 - i * 0.35);   // la glissade, au sud
+  sign(BX + 3.5, 0.2, BZ + 3, '🛝 Toboggan', false, -Math.PI / 2);
+  // ---- LA PLACE DU SPORT (est de l'Allee) : la buvette, le ping-pong, la fontaine ----
+  plat(-129, 0.16, -128, 30, 40, 0xd8cfbc, { studs: false, noRoute: true }, 0.12);
+  shop(-128, -144, 12, 8, 0x35d0e6, '🥤 Buvette du Stade', 0x35d0e6, 2);
+  box(-128, 0.05, -140, 2.6, 0.1, 0.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, porte: true });   // repere de porte : rien ne se plante devant la vitrine
+  comptoir(-128, -145.2, 0, 'buvette', '🥤', 'Buvette du Stade', 'Boissons fraîches et barres de céréales, entre deux matchs', [
+    { e: '🥤', n: 'Grand soda', p: 2, f: 5, d: 'Bien frais, après l\'effort.' },
+    { e: '💧', n: 'Bouteille d\'eau', p: 1, f: -1, d: 'La meilleure amie du sportif.' },
+    { e: '🍫', n: 'Barre de céréales', p: 2, f: 3, d: 'Le coup de fouet du deuxième mi-temps.' },
+    { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3, d: 'Pour repartir en forme.' }], 0x35d0e6);
+  mannequin(-128, -146.4, 0, { jersey: 2, hat: 'cap' });
+  // les tables de ping-pong : dessus a 0,76 m, donc SOLIDES (au-dessus du pas franchissable
+  // de 0,56 m). Le filet, lui, fait 15 cm de haut : sous le seuil de 0,35 m, il ne sera
+  // jamais solidifie — on ne se cogne pas dans un filet de ping-pong.
+  for (const tx of [-138, -131]) {
+    box(tx, 0.38, -126, 2.74, 0.76, 1.53, 0x2f7d3a, { studs: false, noRoute: true });
+    box(tx, 0.775, -126, 2.8, 0.03, 1.59, 0xffffff, { deco: true, studs: false, noEdges: true });
+    box(tx, 0.845, -126, 0.04, 0.15, 1.83, 0xf4f6fa, { deco: true, studs: false, noEdges: true });
+  }
+  sign(-134.5, 0.16, -121, '🏓 Tables de ping-pong', false, Math.PI);   // le texte regarde la place, pas le city-stade
+  // LE KIOSQUE DE LA PLACE. Vue depuis le milieu de la place, la dalle beige n'offrait RIEN a
+  // l'oeil sur trente metres (capture « sports-place ») : huit colonnes, un toit rouge a
+  // 3,20 m — donc franchement au-dessus de la tete, il ne sera jamais solidifie — et un
+  // plancher de bois d'une marche de haut, sur lequel on monte.
+  const QX = -129, QZ = -132;
+  plat(QX, 0.5, QZ, 8, 8, 0x9c6a3c, { studs: false, noRoute: true }, 0.5);
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; box(QX + Math.cos(a) * 3.4, 1.85, QZ + Math.sin(a) * 3.4, 0.24, 2.7, 0.24, 0xf4f6fa, { studs: false, noRoute: true }); }
+  const toitK = new THREE.Mesh(new THREE.ConeGeometry(5.4, 1.8, 8), lam(0xc23b5a)); toitK.position.set(QX, 4.1, QZ); toitK.castShadow = true; worldGroup.add(toitK);
+  box(QX, 3.25, QZ, 7.6, 0.2, 7.6, 0xf4f6fa, { deco: true, studs: false });
+  for (const [bx, bz, bf] of [[QX - 2.6, QZ, Math.PI / 2], [QX + 2.6, QZ, -Math.PI / 2], [QX, QZ + 2.6, Math.PI]]) { // `assise` est comptee DEPUIS `y` (sitBench fait y + assise - 0,51) : le plancher du
+    // kiosque est a 0,50 m et le dessus du banc a 1,16 m, donc assise = 0,66 — pas 1,16.
+    const b = { x: bx, z: bz, facing: bf, y: 0.5, assise: 0.66 }; box(bx, 0.83, bz, 2.3, 0.66, 0.85, C.wood, { studs: false, noRoute: true }); city.benches.push(b); }
+  flowerBed(QX - 6.5, QZ - 5, 4, 1.4); flowerBed(QX + 6.5, QZ - 5, 4, 1.4);
+  for (const [tx, tz] of [[-142, -134], [-142, -122], [-118, -134], [-118, -122], [-130, -118]]) tree(tx, 0.16, tz, C.leaf);
+  // la fontaine de la place
+  const bass = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3, 0.8, 18), lam(0xc9ced8)); bass.position.set(-122, 0.4, -136); bass.receiveShadow = true; worldGroup.add(bass);
+  solids.push({ mesh: bass, x: -122, y: 0.4, z: -136, w: 6, h: 0.8, d: 6 }); sgridSale();
+  const eau = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.12, 18), new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.7 })); eau.position.set(-122, 0.82, -136); worldGroup.add(eau);
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.28, 2.2, 10), new THREE.MeshLambertMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.5 })); jet.position.set(-122, 1.95, -136); worldGroup.add(jet);
+  // ---- LE MOBILIER URBAIN : c'est lui qui fait qu'une rue a l'air habitee ----
+  // TOUT EST POSE A 8 M AU MOINS DE L'AXE DE LA RUE LA PLUS PROCHE. Mesure : au premier jet,
+  // la borne a boire, la moitie des pieds d'abribus et trois arbres avaient disparu — c'est
+  // `degageDecorSurRoutes()` qui retire la collision de tout poteau fin (moins de 1,2 m) pose
+  // sur une chaussee, et l'elargissement des voies avait porte l'Allee a 11 m et le boulevard
+  // a 13. A 8 m de l'axe, aucune largeur de voie du jeu ne peut plus les rattraper.
+  for (const [lx, lz] of [[-160, -112], [-140, -112], [-160, -130], [-140, -130], [-160, -146], [-140, -146],
+    [-176, -112], [-124, -112], [-176, -146], [-124, -146],
+    [-178, -162], [-158, -162], [-140, -162], [-122, -162],
+    [-178, -186], [-150, -186], [-122, -186]]) lamp(lx, lz);
+  for (const [px, pz] of [[-160, -120], [-140, -120], [-160, -140], [-140, -140], [-126, -118], [-172, -118], [-162, -163], [-138, -163]]) poubelle(px, pz);
+  bench(-166, -132, Math.PI / 2); bench(-166, -124, Math.PI / 2); bench(-178, -134, -Math.PI / 2);
+  bench(-134, -134, 0); bench(-126, -134, 0); bench(-122, -128, -Math.PI / 2);
+  bench(-176, -163, Math.PI); bench(-152, -163, Math.PI);   // face au city-stade, dos a la Rue du Stade
+  for (const [tx, tz] of [[-178, -120], [-178, -140], [-160, -110], [-140, -110], [-122, -120], [-122, -140],
+    [-178, -188], [-122, -188], [-166, -146], [-134, -146], [-196, -130], [-106, -130]]) tree(tx, 0, tz, (tx + tz) % 3 === 0 ? C.pine : C.leaf, (tx + tz) % 3 === 0);
+  flowerBed(-162, -110, 6, 1.6); flowerBed(-138, -110, 6, 1.6); flowerBed(-124, -144, 5, 1.4); flowerBed(-176, -110, 6, 1.6);
+  // L'ABRIBUS de l'Allee des Sports : quatre poteaux, un toit qui passe AU-DESSUS DE LA TETE
+  // (dessous a 2,3 m, donc jamais solidifie : on entre dedans), et un banc a l'interieur.
+  abribus(-159, -120, Math.PI / 2); abribus(-141, -140, -Math.PI / 2);
+  // la borne-fontaine a boire, le totem d'information et la barriere du parvis
+  borneEau(-142, -124); borneEau(-168, -142);
+  totemInfo(-158, -110, '🏟️ LA PLAINE DES SPORTS', 0x4f8dff);
+  for (let i = 0; i < 8; i++) box(-161, 0.5, -146 + i * 4, 0.12, 1, 3.4, 0xc9ced8, { deco: true, studs: false });   // la barriere du trottoir, cote city-stade
+  sign(-160, 0.15, -108, '🏟️ La Plaine des Sports', true, 0);
+  // ---- L'ACTIVITE : des habitants qui y vivent vraiment ----
+  // Le quartier est desservi par la circulation (le graphe des voies le ramasse tout seul) et
+  // ces points de flanerie donnent aux bots une raison d'y venir a pied.
+  city.wander.push([-150, 0.3, -120], [-128, 0.3, -130], [-164, 0.3, -160], [-133, 0.3, -160],
+    [-172, 0.3, -130], [-150, 0.3, -148], [-150, 0.3, -186], [-128, 0.3, -140]);
+  // les joueurs du city-stade et les spectateurs des gradins : le quartier n'est jamais vide
+  mannequin(-158, -178, Math.PI / 2, { jersey: 3, hat: 'cap' });
+  mannequin(-170, -172, -Math.PI / 2, { jersey: 6 });
+  mannequin(-166, -162.5, Math.PI, { jersey: 10, glasses: true });
+  mannequin(-138, -168, 0, { jersey: 8, jacket: 3 });
+  for (const [cx, cz] of [[-150, -120], [-164, -170], [-133, -170], [-128, -134], [-172, -132], [-150, -186]]) coin(cx, 0.3, cz);
+  city.zones.push({ name: 'Plaine des Sports', emoji: '🏟️', x1: SPORTS.x1, x2: SPORTS.x2, z1: SPORTS.z1, z2: SPORTS.z2,
+    hint: '🏟️ La Plaine des Sports : city-stade (marque des buts), skatepark, balançoires, tourniquet, cage à grimper, toboggan et la buvette — E devant le comptoir' });
+}
+// ---- TROIS MEUBLES DE RUE, ecrits une fois et poses dans tous les nouveaux quartiers ----
+// L'ABRIBUS. Le toit est a 2,3 m du sol : obstacleDecor() ecarte d'office tout volume dont le
+// DESSOUS passe au-dessus de 1,15 m (on passe dessous), il ne bouchera donc jamais l'abri.
+// Les quatre poteaux et le fond vitre, eux, sont declares solides a la main.
+function abribus(x, z, ry = 0) {
+  const cs = Math.cos(ry), sn = Math.sin(ry);
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g);
+  const toit = new THREE.Mesh(unitRound, lam(0x35d0e6)); toit.scale.set(4.2, 0.22, 2); toit.position.y = 2.5; toit.castShadow = true; g.add(toit);
+  const fond = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.45 })); fond.scale.set(4, 2.1, 0.1); fond.position.set(0, 1.3, -0.9); g.add(fond);
+  const ens = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: textTexture('🚌 Arrêt') })); ens.scale.set(1.6, 0.5, 0.06); ens.position.set(0, 2.9, 0); g.add(ens);
+  // collision : les quatre pieds et le fond. Le toit reste traversable (on est dessous).
+  for (const dx of [-1.9, 1.9]) for (const dz of [-0.85, 0.85])
+    box(x + cs * dx - sn * dz, 1.2, z + sn * dx + cs * dz, 0.16, 2.4, 0.16, 0x3b4252, { studs: false, noRoute: true });
+  box(x - sn * -0.9, 1.05, z + cs * -0.9, Math.abs(cs) * 4 + 0.12, 2.1, Math.abs(sn) * 4 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  // le banc de l'abri : on s'y assoit (E), comme sur tous les bancs de la ville
+  const assise = new THREE.Mesh(unitRound, lam(C.wood)); assise.scale.set(3, 0.12, 0.45); assise.position.set(0, 0.6, -0.55); assise.castShadow = true; g.add(assise);
+  box(x - sn * -0.55, 0.33, z + cs * -0.55, Math.abs(cs) * 3 + 0.12, 0.66, Math.abs(sn) * 3 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  city.benches.push({ x: x - sn * -0.55, z: z + cs * -0.55, facing: ry, y: 0, assise: 0.66 });
+}
+// LA BORNE-FONTAINE A BOIRE : 1 m de haut, solide (on ne traverse pas une borne en fonte).
+function borneEau(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const f = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1, 10), lam(0x2f6f4a)); f.position.y = 0.5; f.castShadow = true; g.add(f);
+  const vasque = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.14, 12), lam(0xc9ced8)); vasque.position.y = 1.03; g.add(vasque);
+  const bec = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 6), lam(0xb9c2cf)); bec.position.set(0, 1.18, 0); g.add(bec);
+  solids.push({ mesh: f, x, y: 0.5, z, w: 0.4, h: 1, d: 0.4, noRoute: true }); sgridSale();
+}
+// LE TOTEM D'INFORMATION du quartier : un panneau sur pied, solide, qui dit ou l'on est.
+function totemInfo(x, z, titre, couleur) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
+  const pied = new THREE.Mesh(unitBox, lam(0x3b4252)); pied.scale.set(0.3, 2.6, 0.3); pied.position.y = 1.3; pied.castShadow = true; g.add(pied);
+  const panneau = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, couleur) })); panneau.scale.set(3.4, 1, 0.12); panneau.position.y = 3.2; g.add(panneau);
+  solids.push({ mesh: pied, x, y: 1.3, z, w: 0.34, h: 2.6, d: 0.34, noRoute: true }); sgridSale();
 }
 function signalisation() {
   const R = city.routes || [];
@@ -10596,7 +10885,10 @@ function ridesTick(dt) {
   for (const r of city.rides) {
     r.ang += r.speed * dt;
     if (r.kind === 'wheel') { r.group.rotation.x = r.ang; r.gondolas.forEach(g => { g.piv.rotation.x = -r.ang; }); }
-    else { r.group.rotation.y = r.ang; r.horses.forEach((h, i) => { h.g.position.y = 1.3 + Math.sin(r.ang * 3 + i) * 0.35; }); }
+    // `r.plat` : un TOURNIQUET tourne a plat. Sans ce test, ses quatre places montaient et
+      // descendaient de 35 cm comme les chevaux de bois du carrousel — et le joueur assis dessus
+      // avec (ridesTick lit la place du siege dans le monde), ce qui n'a aucun sens sur un tourniquet.
+      else { r.group.rotation.y = r.ang; if (!r.plat) r.horses.forEach((h, i) => { h.g.position.y = 1.3 + Math.sin(r.ang * 3 + i) * 0.35; }); }
     if (P.ride === r) {
       r.group.updateMatrixWorld(true);
       if (r.kind === 'wheel') { const g = r.gondolas[r.rider.idx]; const v = new THREE.Vector3(0, -0.9, 0); g.piv.localToWorld(v); worldGroup.worldToLocal(v); P.pos.set(v.x, v.y - 0.35, v.z); P.facing = Math.PI / 2; }
@@ -26713,6 +27005,18 @@ function cityVie(dt) {
       else { city.goals++; sfx.check(); sfx.cheer(); msg(`⚽ BUT ! ${city.goals}`, 1500); updateAct(); burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);
         if (net.host) netBroadcast({ t: 'score', goals: city.goals }); }
       b.reprise = simTime + 1.5;   // engagement au centre : sur l'horloge du jeu, pas sur un minuteur
+    }
+    // LES BUTS DES CITY-STADES DES NOUVEAUX QUARTIERS (poste QUARTIERS). Le controle ci-dessus
+    // ne connait QUE le terrain du centre-ville (ses coordonnees sont ecrites en dur). Chaque
+    // cage declaree dans `city.cages` est verifiee ici : le ballon doit avoir franchi la ligne
+    // de but de 20 cm, passer entre les montants et sous la barre.
+    if (b.kind === 'foot' && !b.jouet && b.state !== 'goal' && city.cages) for (const cg of city.cages) {
+      if (Math.abs(b.pos.z - cg.z) > cg.demi || b.pos.y > cg.haut) continue;
+      if ((b.pos.x - cg.x) * cg.sens < 0.2) continue;
+      b.state = 'goal'; city.goals++; sfx.check(); sfx.cheer(); msg(`\u26bd BUT ! ${city.goals}`, 1500); updateAct();
+      burst(b.pos.x, b.pos.y, b.pos.z, 0xffffff, 12); primeSport('foot', city.goals);
+      if (net.host) netBroadcast({ t: 'score', goals: city.goals });
+      b.reprise = simTime + 1.5; break;
     }
     if (b.kind === 'foot' && b.state === 'goal' && b.reprise && simTime > b.reprise) {
       b.reprise = 0; b.pos.copy(b.home); b.vel.set(0, 0, 0); b.state = 'idle';

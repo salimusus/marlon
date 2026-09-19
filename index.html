@@ -2750,7 +2750,10 @@ function declareLesParkings() {
   P(-13, 8.5, 24, 16, 'Parking du centre');                                   // la dalle du sud-ouest
   if (city.casino) P(city.casino.x - 30, city.casino.z + 26, 26, 20, 'Parking du casino');
   if (city.garage) P(city.garage.x, city.garage.z + 13, 30, 18, 'Parvis du garage');
-  if (city.depot) P(city.depot.x, city.depot.z + 10, 48, 20, 'Cour du dépôt municipal');
+  // La cour du dépôt englobe DESORMAIS le hangar lui-meme (z + 9 sur 26 m au lieu de z + 10 sur
+  // 20) : le bulldozer, septieme engin pour six places marquees, se gare a l'abri DANS le
+  // hangar, et un engin gare dans le garage de son service n'est pas du stationnement sauvage.
+  if (city.depot) P(city.depot.x, city.depot.z + 9, 48, 26, 'Cour du dépôt municipal');
   if (city.caserne) P(city.caserne.x, city.caserne.z + 9, 26, 20, 'Cour de la caserne');
   if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
   if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
@@ -6631,7 +6634,12 @@ const WORLDS = [
       // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
       // pointe. Il prend maintenant le bord est du Parking du Sud, dans la longueur (8,60 m ne
       // tient pas dans une place de 5,40 m) : il ne gêne ni les places ni l'allée.
-      city.cars.push(makeVehicle('moto', 0xff5c5c, -5.6, 10, Math.PI), makeVehicle('moto', 0x1b2a4a, -4.5, 10, Math.PI),   // les motos au bout de la rangee, pres de la rue
+      // LES DEUX MOTOS ETAIENT COLLEES : 1,10 m d'entraxe pour 1,10 m de large chacune, soit
+      // ZERO degagement — tout compteur de chevauchements les paie des la construction, avant
+      // qu'aucun vehicule n'ait roule. La rouge ne peut pas reculer (la voiture de x = -8 tient
+      // -9,20 a -6,80) : c'est la bleue qui avance a -3,60, soit 2 m d'entraxe et 90 cm entre
+      // les deux garde-boue.
+      city.cars.push(makeVehicle('moto', 0xff5c5c, -5.6, 10, Math.PI), makeVehicle('moto', 0x1b2a4a, -3.6, 10, Math.PI),   // les motos au bout de la rangee, pres de la rue
         makeVehicle('truck', 0x5cc453, parkSud.x + parkSud.w / 2 - 1.7, parkSud.z, 0));
       // ---- points de balade pour les bots ----
       city.wander = [[0, 0, 3], [-13, 0.3, -8], [13, 0.3, -8], [13, 0.3, 13], [-13, 0.3, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [48, 0.3, 22], [46, 0, -8], [0, 0.3, 70], [-14, 0.3, 66], [14, 0.3, 74], [-22, 0.3, 84], [20, 0.3, 90], [-84, 0, 12], [-84, 0, 60], [84, 0, 30], [50, 0, 60], [40, 0.36, 10], [0, 0.36, 150], [-30, 0.36, 160]];
@@ -34863,7 +34871,11 @@ function buildMetiers() {
   const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 1.5, 0));
   // POSTE ANIMATION : le BULLDOZER, septieme engin du depot. Il se gare une rangee en
   // arriere (les six places de la cour sont prises) et se conduit comme les autres.
-  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 10.4, PARC - 6.2, 0));
+  // Il etait gare en (dx - 10,4 ; PARC - 6,2) : sa caisse de 2,80 x 5,40 m mordait de 5 cm sur
+  // celle de la benne (7 m de long, rangee juste devant) ET chevauchait le mur ouest du hangar.
+  // Il recule d'un metre huit de plus et se decale vers l'est : 0,40 m du mur, 1,80 m derriere
+  // la benne.
+  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, PARC - 8, 0));
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
   const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });

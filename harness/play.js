@@ -7013,7 +7013,12 @@ test('a la manette, les menus se parcourent vraiment : onglets, grilles, curseur
       document.getElementById('volIn').value = '80'; document.getElementById('volIn').dispatchEvent(new Event('input'));   // le volume par defaut est a 100 %, plein : on part de 80 pour voir la glissiere monter
       const v0 = +document.getElementById('volIn').value; tap(15); tap(15); const v1 = +document.getElementById('volIn').value; tap(14); const v2 = +document.getElementById('volIn').value;
       res.curseur = { v0, v1, v2, reglage: G.settings.volume, encoreOuvert: !!document.querySelector('#menu:not(.hidden)') };
-      document.getElementById('volIn').value = '80'; document.getElementById('volIn').dispatchEvent(new Event('input'));
+      // ON REND LE VOLUME AU JEU, ET A 100 %. Ce test le descend volontairement a 80 % pour
+      // voir la glissiere monter, mais il le RELACHAIT a 80 % : tous les tests audio suivants
+      // mesuraient alors une chaine attenuee d'un cinquieme. Mesure (test 218, « le son SORT
+      // vraiment ») : moteur 500 chevaux a 0,2565 quand le test est lance seul, 0,1639 apres
+      // celui-ci — pour un seuil a 0,12, les deux tiers de la marge partaient en fumee.
+      document.getElementById('volIn').value = '100'; document.getElementById('volIn').dispatchEvent(new Event('input'));
       G.toggleMenu(false); ferme();
       res.cadence = G.PAD_HZ;
       res.aide = (document.querySelector('.keys') || {}).textContent || '';

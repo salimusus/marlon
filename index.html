@@ -9689,7 +9689,22 @@ function traficRoule(c, dt, opt) {
   }
   let mou = false;
   if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
-    c.h += (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
+    // « suis-je DEJA imbrique dans une autre tole, a ce cap-la ? » — la reponse depend du cap,
+    // et c'est tout le sujet du piege ci-dessous.
+    const imbrique = hh => vehBloque(c, c.x, c.z, hh, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, hh, { bar: true, veh: false });
+    const dejaDedans = imbrique(c.h);
+    const hTourne = c.h + (c.degageSens || 1) * 0.7 * dt;   // on braque en reculant : on ne revient pas au meme endroit
+    // ON NE BALAYE PAS LE VOISIN EN TOURNANT SUR PLACE.
+    // PIEGE MESURE (round 74, test 298 rejoue dans son lot 288-298) : le braquage etait applique
+    // AVANT de decider du mode mou, et le mode mou etait donc juge au cap DEJA BRAQUE. Un camion
+    // (9 m de long) qui tourne sur place balayait son voisin avec son arriere, constatait « je
+    // chevauche deja une tole » — le chevauchement qu'il venait lui-meme de creer — et passait
+    // en mode mou, qui l'autorise justement a y rester. Cercle vicieux mesure : 14 images de
+    // camion traversant une voiture arretee en (-87 ; 136), centres a 6,4 m, alors que la suite
+    // lancee seule n'en comptait aucune. On n'applique donc le braquage que s'il ne CREE pas un
+    // chevauchement qui n'existait pas ; quand les toles sont deja imbriquees, le braquage reste
+    // libre — c'est lui qui desencastre la paire, et rien ici ne le bride.
+    if (dejaDedans || !imbrique(hTourne)) c.h = hTourne;
     c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage';
     // ON NE TRAVERSE LES CAISSES QUE SI ON EST DEJA DEDANS. Premiere version : tout vehicule
     // qui se degageait cessait de voir les autres pendant toute la manoeuvre. Mesure (test
@@ -9699,7 +9714,7 @@ function traficRoule(c, dt, opt) {
     // Or le blocage mutuel qu'on corrige n'existe que si les toles se CHEVAUCHENT DEJA : c'est
     // seulement alors qu'aucun pas ne peut plus etre accepte. On ne ramollit donc que dans ce
     // cas-la, et le reste du temps la marche arriere obeit aux regles ordinaires.
-    mou = vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false });
+    mou = imbrique(c.h);
   } else c.recule = false;
   const bloque = avanceVehicule(c, dt, c.speed, mou ? { mou: true } : {}, h0);
   // ON S'ECARTE POUR DE BON. Tant qu'une sirene arrive derriere, on se range a DROITE d'un
@@ -13785,7 +13800,13 @@ function agentsTick(dt) {
     // SORTIR : la banque n'a qu'une porte. Un agent redescendu des coffres pour poursuivre le
     // braqueur dans la rue tournait en rond dans l'angle sud-ouest, faute de la viser.
     if (bk && bk.porte && agentDedans && !a.surEsc && !dansBanque(tx, tz) && Math.abs(P.pos.y - a.y) < 2) {
-      const auSeuil = a.x > bk.porte[0] - 1.2 && Math.abs(a.z - bk.porte[1]) < 2.2;
+      // PIÈGE MESURÉ (round 74) : un agent LÂCHE son point de passage dès 1,4 m (voir `d > 1.4`
+      // plus bas), mais ce seuil-ci ne s'ouvrait qu'à 1,2 m de la porte. Les quatre agents
+      // s'immobilisaient donc à x = -47,0, soit 1,31 m de la porte intérieure — arrivés pour la
+      // marche, pas encore « au seuil » — et campaient 90 s dans le hall : le braqueur ressorti
+      // dans la rue n'était plus poursuivi du tout (21,1 m → 21,4 m en 90 s, mesuré à la sonde).
+      // On ouvre le seuil à 2,2 m, franchement au-delà du rayon d'arrivée.
+      const auSeuil = a.x > bk.porte[0] - 2.2 && Math.abs(a.z - bk.porte[1]) < 2.2;
       // Et on QUITTE D'ABORD la volée : en filant vers la porte le long des marches, l'agent
       // remontait l'escalier au lieu de sortir. On gagne le milieu du hall, puis la porte.
       const surVolee = (bk.esc || []).some(e => Math.abs(a.z - e.z) < 3.4
@@ -20035,6 +20056,13 @@ function robotMesh() {
     rig.jambes[s < 0 ? 'g' : 'd'] = { ha, ge };
   }
   g.userData.rig = rig;
+  // IL N'EST PAS BÂTI AU GABARIT HUMAIN. `refAssise` corrige l'échelle d'assise d'un AVATAR
+  // en la ramenant au gabarit de référence (2,358 m debout) ; appliquée au robot, qui mesure
+  // 1,25 m, elle le grossissait de 1,88× : mesuré dans la berline, échelle 1,597 au lieu de
+  // 0,85 et un crâne à 2,34 m pour un pavillon à 1,66 m — il traversait le toit. La table des
+  // places lui donne déjà une taille ABSOLUE (0,85), on demande donc à `refAssise` de ne pas
+  // y toucher. Même principe pour toute pièce rapportée qui n'est pas un humain.
+  g.userData.horsGabarit = true;
   return g;
 }
 // IL PARLE. Même voix que la maîtresse d'école : `voice.say(texte, fille, force)`. Le texte
@@ -20193,6 +20221,29 @@ function robotBut() {
   }
   // « viens » et « suis » : la place derrière l'épaule du joueur
   return { x: P.pos.x - Math.sin(P.facing) * ROBOT_SUIT, z: P.pos.z - Math.cos(P.facing) * ROBOT_SUIT, arret: 0.35 };
+}
+// LA LAISSE, REPRISE APRÈS LE DÉPLACEMENT DU JOUEUR.
+// `robotTick` vit dans `cityVie()`, qui tourne TOUT EN HAUT de `step()` — donc AVANT la
+// physique du joueur. La laisse y est toujours calculée sur la position de l'image
+// PRÉCÉDENTE. Tant que le joueur marche, l'erreur vaut un pas (0,10 m à 6,2 m/s) et personne
+// ne la voit ; mais quand la résolution des collisions le REPOUSSE d'un bloc — mesuré à la
+// sonde, 1,75 m en UNE SEULE image contre les solides bas de la rue en (−48 ; 12) — l'écart
+// sautait d'un coup à 2,30 m alors que le jeu promet « jamais plus de 2 m ».
+// On reprend donc la laisse ici, une fois le joueur vraiment arrivé. Le point d'appel est
+// dans la branche À PIED de `step()` : toutes les sorties (au volant, passager, assis,
+// manège, balançoire, brancard) sont déjà passées, le robot ne peut donc pas être arraché
+// d'un siège de voiture par cette ligne.
+function robotLaisse() {
+  if (!robot.actif || !robot.g || robot.loin || robot.ordre !== 'suit') return;
+  const d = robotDist();
+  if (!(d > ROBOT_COLLE - 0.1)) return;
+  const k = (ROBOT_COLLE - 0.1) / d;
+  robot.x = P.pos.x + (robot.x - P.pos.x) * k;
+  robot.z = P.pos.z + (robot.z - P.pos.z) * k;
+  robot.y = groundUnder(robot.x, robot.z, null, P.pos.y + 1.2);
+  robot.ecart = robotDist();
+  robot.ecartMax = Math.max(robot.ecartMax, robot.ecart);
+  robot.g.position.set(robot.x, robot.y, robot.z);
 }
 function robotTick(dt) {
   if (!robot.actif || !robot.g) return;
@@ -22752,6 +22803,7 @@ function step(dt, active) {
       sfx.hit();
     }
   }
+  robotLaisse();   // la laisse du petit robot : reprise ICI, une fois le joueur arrivé (voir robotLaisse)
   if (P.pos.y < water.position.y + 4) return die();
   for (const o of kills) if (overlaps(o, P.pos.x, P.pos.y + 0.05, P.pos.z)) return die();
   const cx = P.pos.x, cy = P.pos.y + 0.9, cz = P.pos.z;
@@ -24727,6 +24779,10 @@ function assiseCabine(plancher, plafond) {
 // (la tenue peut avoir changé entre-temps) et coûte une boîte englobante, une seule fois.
 function refAssise(av) {
   const g = av && (av.group || av.g || av); if (!g) return 1;
+  // CE CORRECTIF EST RÉSERVÉ AUX HUMAINS. Il ramène un avatar au gabarit de référence ; sur un
+  // compagnon qui n'a pas ce gabarit (le robot, 1,25 m) il fait l'inverse de ce qu'on veut et
+  // le grossit jusqu'à lui faire traverser le pavillon. Voir `horsGabarit` dans robotMesh.
+  if (g.userData.horsGabarit) return 1;
   if (g.userData.assisRef != null) return g.userData.assisRef;
   let h = ASSIS_CRANE;
   try {

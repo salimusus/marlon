@@ -9214,14 +9214,21 @@ function botConduit(c, x, z, dt, opt) {
     // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
     // maisons. Mesure sur l'incendie en (0, 20) : depuis (-6, 1) il rendait 146 m de rues pour
     // 24,6 m a vol d'oiseau — soit 5,9 fois — et le camion de pompiers arrivait 30 s trop tard.
-    // Au-dela de deux fois le trace de la grille A*, on prend donc la grille (qui prefere deja
+    // Au-dela de TROIS fois le trace de la grille A*, on prend donc la grille (qui prefere deja
     // la chaussee : NAV.cout vaut 1 sur route et 3 en dehors). Le code de la route, les feux et
     // les distances de securite continuent de s'appliquer : c'est traficRoule qui conduit.
+    // TROIS ET NON DEUX, ET LA MESURE LE DIT. A 2,1 (le facteur employe pour la voiture d'un
+    // ami) le raccourci se declenchait aussi sur des detours honnetes, et le premier point du
+    // trace de la grille tombait DERRIERE le vehicule : demi-tour, marche arriere, demi-tour.
+    // Mesure sur l'ambulance appelee pour un blesse a 200,1 m, 60 s de simulation : 117,9 m
+    // parcourus et 1 078 images de marche arriere de degagement a 2,1 ; 264,1 m et 60 images de
+    // marche arriere a 3,0. Le detour absurde du camion de pompiers, lui, valait 5,9 fois le
+    // chemin de la grille : il est toujours pris.
     let pts = null;
     if (via && via.length > 1) {
       const lgT = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : Infinity; };
       const grille = navPath(c.x, c.z, x, z);
-      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 2.1) { via = null; pts = grille.concat([[x, z]]); }
+      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 3) { via = null; pts = grille.concat([[x, z]]); }
     }
     c.departVoie = via ? itineraireDepart : -1;
     if (!pts) pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
@@ -9337,13 +9344,18 @@ function vehiculeMord(c, x, z, h) {
         if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
       }
     }
-    // ET LEURS COINS DANS NOTRE CAISSE, pas seulement les notres dans la leur. Nos points de
-    // controle ne couvrent que TROIS lignes dans la largeur (gauche, milieu, droite) : un coin
-    // de pare-chocs qui entre par le flanc, entre deux de ces lignes, passait entre les
-    // mailles. Mesure (test 332, apres que le disque grossier de carBlocked s'est tu pour les
-    // vehicules a controle exact) : 24 images de depanneuse et 9 de fourgon encastres dans une
-    // autre caisse, la ou le disque en voyait zero. Les quatre coins du solide d'en face,
-    // ramenes dans notre repere, referment le trou — et c'est exact, pas approche.
+    // ET LEURS COINS DANS NOTRE CAISSE — MAIS SEULEMENT CEUX D'UN AUTRE VEHICULE.
+    // Nos points de controle ne couvrent que TROIS lignes dans la largeur (gauche, milieu,
+    // droite) : un coin de pare-chocs qui entre par le flanc, entre deux de ces lignes, passe
+    // entre les mailles. Mesure, 3 000 images de ville vivante avec 42 vehicules : 998 images
+    // avec au moins une paire de caisses encastrees sans ce controle, 0 avec.
+    // MAIS JAMAIS POUR UN SOLIDE FIXE. Applique aussi aux murs, le controle devient assez fin
+    // pour voir que la PLACE DE L'AMBULANCE, devant l'hopital, mord l'auvent du hangar : le
+    // fourgon se declarait en faute des l'arret, tous ses pas etaient refuses, marche arriere
+    // comprise, et il ne partait plus jamais en intervention. Mesure, blesse a 200,1 m, 60 s de
+    // simulation : 0 m parcourus et 3 579 images sur 3 600 declarees coincees, contre 264,1 m
+    // sans lui. Ce que le decor a de mal pose n'est pas a nous de le decouvrir a l'execution.
+    if (!o.veh) continue;
     const ox = o.w / 2, oz = o.d / 2;
     for (let k = 0; k < 4; k++) {
       const qx = o.x + (k < 2 ? ox : -ox), qz = o.z + (k % 2 ? oz : -oz);

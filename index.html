@@ -2755,6 +2755,7 @@ function declareLesParkings() {
   if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
   if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
   P(43, -13, 22, 20, 'Héliport');
+  if (city.armoryParc) P(city.armoryParc.x, city.armoryParc.z, city.armoryParc.w, city.armoryParc.d, 'Parking de l\'armurerie');   // la dalle a quatre places devant le stand de tir
   P(8, 230, 22, 20, 'Hélistation nord');
   if (city.sea) P(city.sea.x1 + 3, 45, 12, 20, 'Rampe de mise à l\'eau');      // les jet-skis
   P(-70, -70, 14, 20, 'Dépôt du rallye');                                     // les buggys
@@ -3064,8 +3065,28 @@ const WEAPONS = {
   grenade: { n: 'Grenades de choc ×5', e: '💣', p: 15, ammo: 5, consumable: true },
 };
 function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E devant le présentoir = achat direct), comptoir, râtelier, munitions
-  shop(52, 19, 12, 9, 0x2b3550, '🔫 Armurerie', 0x1b2a4a);
-  box(52, 0.85, 22.4, 7, 1, 1, C.wood, { studs: false, noRoute: true }); box(52, 1.5, 22.4, 6.6, 0.35, 0.9, 0x8f98ab, { deco: true, studs: false });   // comptoir
+  // ---- L'ARMURERIE A DÉMÉNAGÉ (demande du joueur, round 75) ----
+  // « déplace l'armurerie (mets-la dans une zone qui ne gêne pas la circulation) ».
+  // La gêne était RÉELLE et mesurée. Le magasin était en (52, 19) et son stand de tir en
+  // (52, 7) : deux rues leur passaient dessous.
+  //   · la rue de l'héliport `road(52, -16, 6, 58)` s'arrête à z = 13, la rue commerçante
+  //     `road(52, 69, 6, 88)` reprend à z = 25 : le bâtiment COUPAIT la rue x = 52 sur 12 m
+  //     (relevé de la grille NAV le long de x = 52 : z = 12 bloqué, z = 14 · 16 · 18 · 20 à
+  //     coût 3, c'est-à-dire hors chaussée). Le round précédent avait bricolé trois tronçons
+  //     de contournement ; ils disparaissent avec ce déménagement.
+  //   · la DALLE du stand de tir (15 × 12 m) recouvrait la rue x = 52 sur 12 m ET les deux
+  //     premiers mètres de la rue z = 0. Conséquence relevée après chargement : la dalle, la
+  //     ligne de tir et le portique n'existaient plus dans `solids` — `degageLesRoutes()` les
+  //     effaçait à chaque partie (38 objets ramassés). Le stand de tir du joueur était
+  //     littéralement détruit au démarrage, parce qu'il était posé sur deux rues.
+  // Nouvel emplacement : (67, 27), l'îlot vide entre la rue x = 52 et la rue de l'est
+  // (x = 80) — relevé : 0 bâtiment, 0 chaussée, 2 lampadaires sur x 58→84 · z −10→40.
+  // Il est desservi par la rue z = 0 qui passe devant (elle file maintenant jusqu'à la rue
+  // de l'est) et flanqué à l'est par la rue de l'est ; son parking est entre les deux.
+  const AX = 67, AZ = 27;                      // le magasin
+  const SZ = AZ - 12;                          // le stand de tir, 12 m devant la porte (comme avant)
+  shop(AX, AZ, 12, 9, 0x2b3550, '🔫 Armurerie', 0x1b2a4a);
+  box(AX, 0.85, AZ + 3.4, 7, 1, 1, C.wood, { studs: false, noRoute: true }); box(AX, 1.5, AZ + 3.4, 6.6, 0.35, 0.9, 0x8f98ab, { deco: true, studs: false });   // comptoir
   const stand = (x, z, mesh, ry, key, label, ech = 1.1) => {
     box(x, 0.8, z, 1.3, 0.9, 1.3, 0x3b4252, { studs: false, noRoute: true }); box(x, 1.65, z, 1.2, 0.8, 1.2, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true, glass: true });
     // l'arme tourne À L'INTÉRIEUR de la vitrine : les modèles sont dessinés autour de y = -0,75,
@@ -3078,28 +3099,34 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
     vitrine(x, z + 1.2, 'armes', key, label, 1.7);
   };
   // présentoirs le long des murs : l'allée centrale reste libre entre la porte (2,2 m) et le comptoir
-  stand(47.9, 17.2, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
-  stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
-  stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
-  stand(56.1, 20.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
-  for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
-  // Râtelier : les fusils étaient posés à x = 57,4 en travers — leur canon traversait le mur
-  // est (57,7 → 58). On les rentre de 90 cm et on réduit un peu l'échelle.
-  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(56.5, 2.7, 19 + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.1); worldGroup.add(r); }   // râtelier mural
-  box(57.5, 2.4, 20.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
-  box(49, 2.6, 22.9, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible (elle débordait du mur ouest)
-  city.armory = { x: 52, z: 20.8 };
+  stand(AX - 4.1, AZ - 1.8, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
+  stand(AX + 4.1, AZ - 1.8, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
+  stand(AX - 4.1, AZ + 1.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
+  stand(AX + 4.1, AZ + 1.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
+  for (let i = 0; i < 6; i++) box(AX - 4.5 + i * 1.5, 0.75, AZ + 3.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
+  // Râtelier : les fusils étaient posés à 5,4 m de l'axe, en travers — leur canon traversait le
+  // mur est. On les rentre de 90 cm et on réduit un peu l'échelle.
+  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(AX + 4.5, 2.7, AZ + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.1); worldGroup.add(r); }   // râtelier mural
+  box(AX + 5.5, 2.4, AZ + 1.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
+  box(AX - 3, 2.6, AZ + 3.9, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible (elle débordait du mur ouest)
+  city.armory = { x: AX, z: AZ + 1.8 };
   // Stand de tir devant la boutique : la fonction makeTarget existait mais n'était jamais
-  // appelée — le jeu n'avait aucune cible sur laquelle s'entraîner.
-  plat(52, 0.06, 7, 15, 12, 0x6b7280, { studs: false, noRoute: true }, 0.12);
-  for (const [tx, tmx] of [[47, 0], [52, 1.6], [57, 0]]) makeTarget(tx, 3.4, 1.5, tmx);
-  for (const bx2 of [45.4, 58.6]) box(bx2, 1.1, 3.4, 0.5, 2.2, 0.5, 0x3b4252, { studs: false, noRoute: true });
-  box(52, 2.6, 2.6, 13, 0.4, 0.5, 0xffd23f, { deco: true, studs: false });   // portique
-  box(52, 0.9, 11.4, 13, 1, 0.5, C.wood, { studs: false, noRoute: true });   // ligne de tir
-  box(52, 1.9, 11.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎯 STAND DE TIR', 0xff5c5c) }), deco: true, noEdges: true });
-  city.zones.push({ name: 'Stand de tir', emoji: '🎯', x1: 44, x2: 60, z1: 1, z2: 13, hint: '🎯 Stand de tir : dégaine (G) et vise les cibles — celle du milieu se déplace' });
-  for (const x of [45.5, 58.5]) lamp(x, 13.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
-  city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: 45, x2: 59, z1: 12, z2: 26, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
+  // appelée — le jeu n'avait aucune cible sur laquelle s'entraîner. Il est maintenant
+  // ENTIÈREMENT hors chaussée (x 59,5 → 74,5 · z 9 → 21), donc il survit au nettoyage des rues.
+  plat(AX, 0.06, SZ, 15, 12, 0x6b7280, { studs: false, noRoute: true }, 0.12);
+  for (const [tx, tmx] of [[AX - 5, 0], [AX, 1.6], [AX + 5, 0]]) makeTarget(tx, SZ - 3.6, 1.5, tmx);
+  for (const bx2 of [AX - 6.6, AX + 6.6]) box(bx2, 1.1, SZ - 3.6, 0.5, 2.2, 0.5, 0x3b4252, { studs: false, noRoute: true });
+  box(AX, 2.6, SZ - 4.4, 13, 0.4, 0.5, 0xffd23f, { deco: true, studs: false });   // portique
+  box(AX, 0.9, SZ + 4.4, 13, 1, 0.5, C.wood, { studs: false, noRoute: true });   // ligne de tir
+  box(AX, 1.9, SZ + 4.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎯 STAND DE TIR', 0xff5c5c) }), deco: true, noEdges: true });
+  city.zones.push({ name: 'Stand de tir', emoji: '🎯', x1: AX - 8, x2: AX + 8, z1: SZ - 6, z2: SZ + 6, hint: '🎯 Stand de tir : dégaine (G) et vise les cibles — celle du milieu se déplace' });
+  for (const x of [AX - 6.5, AX + 6.5]) lamp(x, SZ + 6.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
+  city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: AX - 7, x2: AX + 7, z1: AZ - 7, z2: AZ + 7, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
+  // LE STATIONNEMENT. Une dalle de 16 × 5 m entre la rue z = 0 et le stand de tir, avec quatre
+  // places marquées : on se gare devant la boutique sans jamais s'arrêter sur la chaussée.
+  city.armoryParc = { x: AX, z: SZ - 8.5, w: 16, d: 5 };
+  plat(AX, 0.07, SZ - 8.5, 16, 5, 0x5a6270, { studs: false, noRoute: true, deco: true }, 0.14);
+  for (let i = 0; i < 5; i++) box(AX - 8 + i * 4, 0.145, SZ - 8.5, 0.12, 0.02, 4.6, 0xffffff, { deco: true, noEdges: true, studs: false });
 }
 function buildHelipad() {   // héliport (est, nord)
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
@@ -4998,7 +5025,8 @@ function road(x, z, w, d, yOff = 0, plain) {
   // (le sable de la plage, un chemin de terre de La Zone) et disparaissaient dessous : on les
   // pose quelques centimetres plus haut avec `yOff`, et le controle « du bitume sur toute la
   // longueur » a besoin de savoir a quelle hauteur chercher la chaussee.
-  if (city.routes) city.routes.push({ x, z, w, d, top: 0.06 + yOff });
+  const fiche = { x, z, w, d, top: 0.06 + yOff, w0: w, d0: d };
+  if (city.routes) city.routes.push(fiche);
   const t = ROAD.clone(); t.needsUpdate = true;
   // Une fois la texture tournee d'un quart de tour, la repetition s'applique dans SES axes :
   // (w/4, 1) rayait la chaussee de huit axes jaunes en travers au lieu d'un seul au milieu.
@@ -5008,6 +5036,17 @@ function road(x, z, w, d, yOff = 0, plain) {
   const top = new THREE.MeshLambertMaterial({ map: t });
   const m = new THREE.Mesh(unitBox, [lam(0x4a4f5c), lam(0x4a4f5c), top, lam(0x4a4f5c), lam(0x4a4f5c), lam(0x4a4f5c)]);
   m.scale.set(w, 0.06, d); m.position.set(x, 0.03 + yOff, z); m.receiveShadow = true; worldGroup.add(m);
+  fiche.mesh = m; fiche.tex = t;   // `elargirLesVoies()` et `bouchLesTrous()` redimensionnent le bitume en place
+}
+// REDIMENSIONNER UNE CHAUSSÉE DÉJÀ POSÉE. La texture du bitume se répète SUR LA LONGUEUR
+// (`repeat`) : changer la seule échelle du maillage étirait l'axe jaune et les bords blancs —
+// une rue rallongée de 8 m se retrouvait avec des pointillés deux fois trop longs. On remet
+// donc la répétition en même temps que l'échelle et la position.
+function majBitume(r) {
+  if (!r.mesh) return;
+  r.mesh.scale.set(r.w, 0.06, r.d);
+  r.mesh.position.x = r.x; r.mesh.position.z = r.z;
+  if (r.tex) { const alongZ = r.d >= r.w; if (alongZ) r.tex.repeat.set(1, r.d / 4); else r.tex.repeat.set(1, r.w / 4); r.tex.needsUpdate = true; }
 }
 function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false }); }
 // ================= LE PLAN ROUTIER =================
@@ -5051,8 +5090,23 @@ function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, n
 //   Boulevard du casino .......... 9 m, Desserte du casino 8 m, Contournements 8 m,
 //                                  Avenue du casino 9 m · ils contournent le casino au lieu
 //                                  de le traverser, et se garent devant la grande entrée
-const VOIES = { boulevard: 9, avenue: 8, rue: 7, ruelle: 6, desserte: 5 };
-const roleVoie = r => { const l = Math.min(r.w, r.d); return l >= 9 ? 'boulevard' : l >= 8 ? 'avenue' : l >= 7 ? 'rue' : l >= 6 ? 'ruelle' : 'desserte'; };
+// ================= « REFAIS LES ROUTES PLUS LARGES » (joueur, round 75) =================
+// LE CRITÈRE, MESURÉ. Le plus large véhicule du jeu est le bulldozer : 2,80 m (relevé sur
+// `baseW` de tous les véhicules — 4x4 2,70 · camion et camion de pompiers 2,60 · voiture 2,40).
+// `construireGraphe()` pose la voie de droite à `largeur / 4` de l'axe : deux véhicules qui se
+// croisent occupent donc `largeur/4 ± 1,40`. Pour qu'ils se croisent avec 50 cm de garde de
+// chaque côté il faut `largeur/4 ≥ 1,90`, soit UNE LARGEUR MINIMALE DE 7,60 m.
+// AVANT ce round : 45 chaussées sur 72 étaient sous ce seuil (2 dessertes de 5 m, 28 ruelles
+// de 6 m, 15 rues de 7 m) — 62 % de la ville où le camion de pompiers ne pouvait croiser
+// personne. C'est le défaut ouvert 239/240 du poste Conduite.
+// La hiérarchie monte donc d'un cran partout : 8 / 9 / 11 / 13 m au lieu de 5 / 6 / 7 / 8 / 9.
+// Les deux derniers paliers (venelle 6, impasse 5) ne sont plus visés : ils restent déclarés
+// parce qu'une chaussée coincée entre deux murs a le droit de ne pas pouvoir s'élargir, et
+// que le contrôle du plan (test 235) exige que TOUTE largeur figure dans cette table.
+const VOIES = { boulevard: 13, avenue: 11, rue: 9, ruelle: 8, desserte: 7, venelle: 6, impasse: 5 };
+const PALIERS_VOIE = [5, 6, 7, 8, 9, 11, 13];
+const ELARGIR = { 5: 8, 6: 8, 7: 9, 8: 11, 9: 13 };   // la largeur visée pour chaque largeur d'avant
+const roleVoie = r => { const l = Math.min(r.w, r.d); return l >= 13 ? 'boulevard' : l >= 11 ? 'avenue' : l >= 9 ? 'rue' : l >= 8 ? 'ruelle' : l >= 7 ? 'desserte' : l >= 6 ? 'venelle' : 'impasse'; };
 const PLAN_ROUTIER = {
   // Les axes AJOUTÉS par le plan : ceux qui manquaient pour que chaque quartier soit
   // vraiment desservi. Les rues historiques du centre restent où elles sont.
@@ -5078,6 +5132,12 @@ const PLAN_ROUTIER = {
     { n: 'Contournement ouest du casino', x: 14, z: 315, w: 8, d: 70 },
     { n: 'Contournement est du casino', x: 102, z: 315, w: 8, d: 70 },
     { n: 'Avenue du casino', x: 56, z: 345, w: 100, d: 9 },
+    // LE COUDE DE L'OUEST. La rue est-ouest z = 0 s'arrete a x = -61 ; celle qui reprend a
+    // l'ouest est decalee de 9 m au nord (z 4,5 a 15,5) et commence exactement a x = -61.
+    // Les deux se touchaient par un COIN : le graphe des voies posait une liaison virtuelle de
+    // 11,2 m en travers de la pelouse, et le conducteur quittait le bitume pour passer. Ce
+    // raccord nord-sud de 8 m fait le coude pour de bon.
+    { n: 'Coude de l\'ouest', x: -63, z: 5, w: 8, d: 18 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
     // Le reseau etait coupe en 25 morceaux pour les voitures : la statue bouchait le carrefour
@@ -5106,16 +5166,13 @@ const PLAN_ROUTIER = {
     { n: 'Rue des Primeurs', x: -160, z: 185, w: 7, d: 116 },
     { n: 'Rue de la Halle', x: -125, z: 185, w: 7, d: 116 },
     { n: 'Cours du Marché', x: -149, z: 185, w: 56, d: 9 },
-    // ---- LE CONTOURNEMENT DE L'ARMURERIE ----
-    // La rue x = 52 etait COUPEE EN DEUX par l'armurerie (12 x 9 m en (52, 19)) : la rue de
-    // l'heliport s'arretait a z = 13, la rue commercante reprenait a z = 25, et pour passer il
-    // fallait redescendre au bord de mer et remonter par la rue de l'est — 520 m de detour pour
-    // 12 m de trou. On ne deplace pas le magasin (ses vitrines, son comptoir et son ratelier
-    // sont poses a la main) : la rue le CONTOURNE par l'est, ou le terrain est vide sur 14 m.
-    // Trois troncons de 6 m, comme les deux rues qu'ils raccordent : 30 m de detour au lieu de 520.
-    { n: 'Contournement sud de l\'armurerie', x: 57.5, z: 10, w: 17, d: 6 },
-    { n: 'Contournement est de l\'armurerie', x: 63, z: 19, w: 6, d: 26 },
-    { n: 'Contournement nord de l\'armurerie', x: 57.5, z: 27.5, w: 17, d: 6 },
+    // ---- LA RUE X = 52 EST REDEVENUE DROITE (round 75) ----
+    // Elle etait COUPEE EN DEUX par l'armurerie (12 x 9 m en (52, 19)) : la rue de l'heliport
+    // s'arretait a z = 13, la rue commercante reprenait a z = 25. Le round precedent avait
+    // bricole TROIS TRONCONS DE CONTOURNEMENT par l'est — 30 m de detour et deux carrefours
+    // parasites la ou il n'y a rien a desservir. Le joueur a tranche : « deplace l'armurerie ».
+    // Le magasin est parti en (67, 27) ; la rue de l'heliport monte maintenant d'une traite
+    // jusqu'a la rue commercante, et les trois contournements ont disparu.
   ],
   // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
@@ -5153,6 +5210,170 @@ function finirPlan() {
   }
   city.plan.dessertes = liste;
   return liste;
+}
+// BOUCHER LES TROUS DU RÉSEAU (joueur, round 75 : « mieux organisées »). La ville a grandi par
+// ajouts successifs, et le graphe des voies le rattrapait avec des LIAISONS : des bouts de voie
+// virtuels posés là où deux morceaux de bitume ne se touchent pas. Mesure avant : 21 liaisons,
+// dont 12 de moins de 6 m — une rue qui s'arrête à 3,50 m du boulevard, une bretelle qui passe
+// à 4 m du contournement, deux bouts de la même rue séparés par 5 m de pelouse. Rouler y était
+// possible (le graphe trichait) mais on quittait le bitume, on montait sur la bordure, et le
+// GPS envoyait le conducteur en travers d'un trottoir.
+// On pose donc du VRAI bitume dans chaque trou, sous les mêmes conditions que l'élargissement :
+// jamais dans un mur, une parcelle, la mer, le sable, l'anneau, un véhicule garé ni une place.
+//   A) deux chaussées PARALLÈLES et alignées, séparées de moins de 14 m → on coule le morceau
+//      qui manque entre les deux ;
+//   B) une chaussée dont le BOUT s'arrête à moins de 14 m d'une chaussée perpendiculaire qu'elle
+//      vise → on la rallonge jusqu'à elle (le carrefour devient un vrai carrefour).
+function bouchLesTrous() {
+  const R = city.routes || [];
+  if (!R.length) return { combles: 0, rallonges: 0 };
+  const tabous = tabousDeLaVille();
+  let combles = 0, rallonges = 0;
+  // ---- A) les trous entre deux chaussées parallèles et alignées
+  const nouveaux = [];
+  for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) {
+    const a = R[i], b = R[j], aZ = a.d >= a.w;
+    if (aZ !== (b.d >= b.w)) continue;
+    // recouvrement EN TRAVERS (la largeur commune) et trou LE LONG de l'axe
+    const trX = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
+    const trZ = Math.min(a.z + a.d / 2, b.z + b.d / 2) - Math.max(a.z - a.d / 2, b.z - b.d / 2);
+    const trav = aZ ? trX : trZ, trou = aZ ? -trZ : -trX;
+    if (trav < 6 || trou <= 0.2 || trou > 14) continue;   // moins de 6 m de large, ce n'est plus une rue (controle du plan : « aucun bout de rue de moins de 6 m »)
+    // LES DEUX COTES DU BOUCHON DOIVENT ETRE DES LARGEURS DE LA HIERARCHIE (controle du plan) :
+    // un bouchon de 5,60 m entre deux avenues etait « hors hierarchie ». La largeur est celle de
+    // la plus etroite des deux rues ; la longueur est montee au palier juste au-dessus du trou,
+    // quitte a mordre un peu sur les deux rues — c'est justement ce qu'on veut a un carrefour.
+    const larg = aZ ? Math.min(a.w, b.w) : Math.min(a.d, b.d);
+    if (trav < larg - 0.01) continue;   // elles ne sont pas alignees : ce n'est pas un trou, c'est un decalage
+    const c0 = aZ ? Math.min(a.z + a.d / 2, b.z + b.d / 2) : Math.min(a.x + a.w / 2, b.x + b.w / 2);
+    const mid = c0 + trou / 2;
+    const cx = aZ ? (Math.max(a.x - a.w / 2, b.x - b.w / 2) + Math.min(a.x + a.w / 2, b.x + b.w / 2)) / 2 : mid;
+    const cz = aZ ? mid : (Math.max(a.z - a.d / 2, b.z - b.d / 2) + Math.min(a.z + a.d / 2, b.z + b.d / 2)) / 2;
+    const lg = PALIERS_VOIE.find(L => L >= trou + 0.6) || larg;
+    const w = aZ ? larg : lg, d = aZ ? lg : larg;
+    if (!chausseeAcceptable(cx, cz, w, d, tabous)) continue;
+    if (nouveaux.some(n => Math.abs(n.x - cx) < 1 && Math.abs(n.z - cz) < 1)) continue;
+    nouveaux.push({ x: cx, z: cz, w, d, y: Math.max(a.top, b.top) - 0.06 });
+  }
+  for (const n of nouveaux) { road(n.x, n.z, n.w, n.d, n.y); combles++; }
+  // ---- B) les bouts de rue qui s'arrêtent avant le carrefour
+  for (const r of R) {
+    const aZ = r.d >= r.w;
+    for (const sg of [-1, 1]) {
+      const bout = aZ ? r.z + sg * r.d / 2 : r.x + sg * r.w / 2;
+      let cible = null;
+      for (const q of R) {
+        if (q === r || (q.d >= q.w) === aZ) continue;
+        // la perpendiculaire doit couvrir l'axe de r en travers
+        const couvre = aZ ? Math.abs(q.x - r.x) < q.w / 2 - 0.5 : Math.abs(q.z - r.z) < q.d / 2 - 0.5;
+        if (!couvre) continue;
+        const bord = aZ ? q.z - sg * q.d / 2 : q.x - sg * q.w / 2;
+        const gap = sg * (bord - bout);
+        if (gap <= 0.2 || gap > 14) continue;
+        if (cible == null || gap < cible) cible = gap;
+      }
+      if (cible == null) continue;
+      const rall = cible + 0.6;
+      const nx = aZ ? r.x : r.x + sg * rall / 2, nz = aZ ? r.z + sg * rall / 2 : r.z;
+      const nw = aZ ? r.w : r.w + rall, nd = aZ ? r.d + rall : r.d;
+      if (!chausseeAcceptable(nx, nz, nw, nd, tabous)) continue;
+      r.x = nx; r.z = nz; r.w = nw; r.d = nd;
+      majBitume(r);
+      rallonges++;
+    }
+  }
+  navSale(); sgridSale();
+  return { combles, rallonges };
+}
+// ÉLARGIR LES VOIES SANS ENTRER DANS UN MUR (joueur, round 75 : « refais les routes plus
+// larges »). On ne peut pas élargir en aveugle : la ville est pleine de bâtiments posés à des
+// coordonnées en dur, et un précédent exact existe dans ce projet — une coursive qui s'arrêtait
+// avant une porte, et un appartement sur deux devenait inatteignable. Cette passe monte donc
+// CHAQUE chaussée au palier le plus haut qu'elle puisse tenir, et redescend d'un palier tant
+// que le nouveau bord entamerait :
+//   · un bâtiment ou un intérieur (plus de 20 cm) ;
+//   · une parcelle de villa ou de base de gang ;
+//   · la mer, le sable du rallye, l'anneau du circuit ;
+//   · un solide que le nettoyage des chaussées NE RAMASSE PAS (mur, porte, barrière, vitrage,
+//     statue, étage) : ceux-là resteraient en pleine voie, et le contrôle du plan les compte ;
+//   · un véhicule garé au départ (plus de 40 cm — le contrôle du plan en tolère 60).
+// Elle tourne APRÈS les bâtiments et les véhicules, AVANT le dégagement des chaussées, les
+// trottoirs, la signalisation, la grille de navigation et le graphe des voies : tout ce qui
+// suit se calcule donc sur les NOUVELLES largeurs, et rien ne reste sur l'ancien tracé.
+// LES TABOUS DE LA VILLE : tout ce qu'une chaussée n'a pas le droit d'entamer, avec la
+// profondeur tolérée pour chacun. Partagé par l'élargissement et par le bouchage des trous.
+function tabousDeLaVille() {
+  const tabous = [];
+  const T = (x, z, w, d, m, quoi) => tabous.push({ x, z, w, d, m, quoi });
+  for (const b of [...(city.batiments || []), ...(city.interieurs || [])]) T(b.x, b.z, b.w, b.d, 0.2, 'bâtiment');
+  if (typeof VILLAS !== 'undefined') for (const v of VILLAS) T(v.x, v.z, VILLA_HALF * 2, VILLA_HALF * 2, 0.2, 'villa');
+  if (typeof GANG_DEFS !== 'undefined') for (const g of GANG_DEFS) if (g.villa) T(g.villa[0], g.villa[1], 42, 42, 0.2, 'base');
+  // LES PLACES DE STATIONNEMENT DÉJÀ MARQUÉES. Mesure : le Boulevard du Nord (z = -100) passé
+  // de 9 à 13 m mordait de 40 cm sur la rangée nord du Parking du Sud (z = -93,9), et une des
+  // seize places devenait inutilisable — le contrôle des places (test 362) le voyait tout de
+  // suite. Une place marquée est aussi intouchable qu'un mur.
+  for (const q of (city.parkings || [])) T(q.x, q.z, q.w, q.d, 0.2, 'parking');
+  // LES ABORDS DE L'ÉCOLE. Le contrôle des rues exige que l'avenue de 300 m reste à plus de 9 m
+  // des salles de classe (« l'école ne mord plus sur l'avenue ») : passée de 9 à 13 m, son bord
+  // sud arrivait 2 m trop près. On garde 10 m tout autour de chaque salle.
+  for (const q of (city.classes || [])) T(q.x, q.z, 20, 20, 0.2, 'école');
+  if (city.armoryParc) T(city.armoryParc.x, city.armoryParc.z, city.armoryParc.w, city.armoryParc.d, 0.2, 'parking');
+  if (city.sea) T((city.sea.x1 + city.sea.x2) / 2, (city.sea.z1 + city.sea.z2) / 2, city.sea.x2 - city.sea.x1, city.sea.z2 - city.sea.z1, 1, 'mer');
+  if (typeof RALLY !== 'undefined' && RALLY.mesh) T((RALLY.x1 + RALLY.x2) / 2, (RALLY.z1 + RALLY.z2) / 2, RALLY.x2 - RALLY.x1, RALLY.z2 - RALLY.z1, 1, 'sable');
+  // les solides que degageLesRoutes() protège : eux resteraient bel et bien au milieu de la voie
+  const protege = o => o.porte || o.bar || o.glass || o.statue || o.trottoir || o.sol || o.feu || o.lampe
+    || (o.h > 4.6 && (o.w > 1 || o.d > 1)) || (o.w > 14 && o.d > 14) || o.y - o.h / 2 > 0.8;
+  const vsol = new Set();
+  for (const v of [...(city.cars || []), ...(city.aiCars || []), ...(police.cars || []), ...(typeof raceKarts !== 'undefined' ? raceKarts : [])]) if (v && v.solid) vsol.add(v.solid);
+  for (const o of solids) {
+    if (vsol.has(o) || o.veh || !o.mesh) continue;
+    const top = o.y + o.h / 2, bas = o.y - o.h / 2;
+    if (top < 0.57 || bas > 0.9) continue;            // la voiture passe dessus ou dessous
+    if (o.w > 40 && o.d > 40) continue;               // le grand sol de la carte
+    if (!protege(o)) continue;                        // le reste sera ramassé par degageLesRoutes()
+    T(o.x, o.z, o.w, o.d, 0.5, 'solide');
+  }
+  // les véhicules garés au départ, gabarit tourné avec leur cap
+  for (const v of (city.cars || [])) {
+    if (v.heli && (v.y || 0) > 2) continue;
+    const W = v.baseW || 2.6, D = v.baseD || 3, cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+    T(v.x, v.z, W * cs + D * sn, W * sn + D * cs, 0.4, 'véhicule garé');
+  }
+  return tabous;
+}
+// Un rectangle de chaussée est-il acceptable ? (l'anneau du circuit est un DISQUE, pas un
+// rectangle : on teste ses quatre coins et son centre.)
+function chausseeAcceptable(x, z, w, d, tabous) {
+  for (const t of tabous) {
+    const p = Math.min(t.w / 2 + w / 2 - Math.abs(x - t.x), t.d / 2 + d / 2 - Math.abs(z - t.z));
+    if (p > t.m) return false;
+  }
+  for (const sx of [-1, 0, 1]) for (const sz of [-1, 0, 1])
+    if (Math.hypot(x + sx * w / 2 - RACE_C.x, z + sz * d / 2 - RACE_C.z) < RACE_C.r - 6) return false;
+  if (city.sea && x - w / 2 < city.sea.x2 - 1 && x + w / 2 > city.sea.x1 + 1 && z - d / 2 < city.sea.z2 - 1 && z + d / 2 > city.sea.z1 + 1) return false;
+  return true;
+}
+function elargirLesVoies() {
+  const R = city.routes || [];
+  if (!R.length) return { montees: 0, bloquees: 0 };
+  const tabous = tabousDeLaVille();
+  const tient = (r, L) => chausseeAcceptable(r.x, r.z, r.d >= r.w ? L : r.w, r.d >= r.w ? r.d : L, tabous);
+  let montees = 0, bloquees = 0, gagne = 0;
+  for (const r of R) {
+    const cur = +Math.min(r.w, r.d).toFixed(2);
+    const vise = ELARGIR[cur] || cur;
+    if (vise <= cur) continue;
+    // du palier visé, on redescend jusqu'à celui qui passe — jamais sous la largeur d'avant
+    const echelle = PALIERS_VOIE.filter(L => L <= vise && L >= cur).sort((a, b) => b - a);
+    const L = echelle.find(l => l === cur || tient(r, l));
+    if (L == null || L === cur) { bloquees++; continue; }
+    const alongZ = r.d >= r.w;
+    if (alongZ) r.w = L; else r.d = L;
+    gagne += L - cur; montees++;
+    majBitume(r);
+  }
+  navSale(); sgridSale();
+  return { montees, bloquees, gagne: +(gagne / Math.max(1, montees)).toFixed(2) };
 }
 // ON DÉGAGE LES CHAUSSÉES. Bancs, poubelles, caisses, palmiers ou bornes posés au fil des
 // quartiers finissaient parfois AU MILIEU d'une rue : les conducteurs s'y encastraient. On
@@ -6302,7 +6523,7 @@ const WORLDS = [
         box(x, 0.6, z, w, 1.2, d, 0x2f7d3a, { deco: true, studs: false, noRoute: true, noEdges: true });
         box(x, 1.28, z, w - 0.2, 0.22, d - 0.2, 0x49a552, { deco: true, studs: false, noRoute: true, noEdges: true });
       }
-      road(-45, 0, 32, 6); road(52, 0, 46, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m)
+      road(-45, 0, 32, 6); road(54.5, 0, 51, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m) ; et la rue z = 0 s'arretait a x = 75, DEUX METRES avant la rue de l'est (x 77) : le graphe compensait par une liaison de rattrapage, elle va maintenant jusqu'a x = 80
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));
       B('bureau', () => buildOffice(38, 9)); B('rue commerçante', buildMall); B('fête foraine', buildFair); B('déco', buildDeco); B('rues', buildStreets); B('banque', () => buildBank(-52, 70));
@@ -6427,6 +6648,8 @@ const WORLDS = [
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
+      city.elargies = elargirLesVoies();   // « plus larges » : chaque chaussee monte d'un palier tant qu'elle n'entame ni mur, ni parcelle, ni vehicule gare
+      city.trous = bouchLesTrous();        // « mieux organisees » : du vrai bitume dans les trous que le graphe rattrapait par des liaisons virtuelles
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs);
       // la signalisation vient APRES les trottoirs (elle a besoin de savoir ou ils sont) et
@@ -8080,7 +8303,7 @@ function panneau(x, z, type, sens, route) {
   city.panneaux.push(p); return p;
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
-  road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -16, 6, 58, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport s'arrete avant l'armurerie   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
+  road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -9, 6, 72, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport monte d'une traite jusqu'a la rue commercante, QU'ELLE RECOUVRE sur 2 m (z 27) : bout a bout exactement, le graphe des voies posait encore une liaison virtuelle de 5 m entre les deux depuis que l'armurerie a demenage : le trou de 12 m est bouche   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
   for (const [x, z] of [[-26, -8], [-26, 8], [26, -8], [26, 8]]) crosswalk(x, z, true); for (const [x, z] of [[-8, -26], [8, -26], [-8, 26], [8, 26]]) crosswalk(x, z, false);
   crosswalk(-26, 38, true); crosswalk(-41, 0, true); crosswalk(52, 20, true); crosswalk(0, -44, false, 6);
   // feux : 2 groupes alternés (A pour la circulation nord-sud, B pour est-ouest)
@@ -8434,11 +8657,43 @@ function signalisation() {
     for (const s of caps) {
       const ux = Math.sin(s), uz = Math.cos(s), rx = Math.cos(s), rz = -Math.sin(s);
       let mis = false;
-      for (const dep of [0, 2, 4, -1.6]) {
-        const x = k.cx - ux * (recul + dep) + rx * lat, z = k.cz - uz * (recul + dep) + rz * lat;
-        if (!posLibre(x, z)) continue;
-        if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
-        panneau(x, z, type, s, ir); mis = true; break;
+      // ON CHERCHE PLUS LOIN, ET DES DEUX COTES (round 75). Les carrefours se sont elargis avec
+      // les chaussees : le recul (oz/2 + 2,6) a grandi, et deux panneaux ne trouvaient plus un
+      // metre de trottoir libre — deux carrefours de l'ouest (-97, 138) et (-104, 132) restaient
+      // sans stop ni cedez-le-passage. On balaie sept reculs et les deux trottoirs.
+      for (const dep of [0, 2, 4, 6, 8, -1.6, -3.2]) {
+        for (const cote of [1, -1]) {
+          const x = k.cx - ux * (recul + dep) + rx * lat * cote, z = k.cz - uz * (recul + dep) + rz * lat * cote;
+          if (!posLibre(x, z)) continue;
+          if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
+          panneau(x, z, type, s, ir); mis = true; break;
+        }
+        if (mis) break;
+      }
+      // DERNIER RECOURS : ON POSE LE BOUT DE TROTTOIR QUI MANQUE (round 75). Depuis que les
+      // chaussees sont plus larges, trois carrefours de l'ouest n'avaient plus un seul metre de
+      // trottoir libre pour accrocher leur panneau — et une rue secondaire qui debouche sur une
+      // avenue SANS stop ni cedez-le-passage, c'est un carrefour dangereux, pas un detail. On
+      // coule donc une dalle de 2,2 m hors chaussee (jamais dans un mur, jamais devant une
+      // porte), on la declare comme trottoir, et le panneau s'y plante.
+      if (!mis) for (const dep of [0, 2, 4, 6, 8, 10, -1.6, -3.2]) {
+        let pose2 = false;
+        for (const [cote, sup] of [[1, 0], [-1, 0], [1, 2], [-1, 2]]) {
+          const x = k.cx - ux * (recul + dep) + rx * (lat + sup) * cote, z = k.cz - uz * (recul + dep) + rz * (lat + sup) * cote;
+          // La dalle fait 2,2 m de cote : son centre doit etre BIEN hors de la chaussee, pas a
+          // 15 cm du bord comme pour un panneau — une dalle posee en (-69,8 ; 16,6) tombait
+          // dans la voie et le controle des trottoirs la comptait « sur la chaussee ».
+          if (surChaussee(x, z, 1.3)) continue;
+          if (portes.some(o => Math.abs(x - o.x) < o.w / 2 + 2.6 && Math.abs(z - o.z) < o.d / 2 + 2.6)) continue;
+          if (bats.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1)) continue;
+          if (solidsAutour(x, z, 1.6, true).some(o => !o.trottoir && !o.sol && o.h > 0.5 && o.h < 30
+            && Math.abs(x - o.x) < o.w / 2 + 0.7 && Math.abs(z - o.z) < o.d / 2 + 0.7)) continue;
+          const tx = TROTTOIR.clone(); tx.needsUpdate = true; tx.repeat.set(1.1, 1.1);
+          const o2 = box(x, 0.07, z, 2.2, 0.14, 2.2, 0, { material: new THREE.MeshLambertMaterial({ map: tx }), noEdges: true, noShadow: true, studs: false, noRoute: true, trottoir: true });
+          city.trottoirs.push({ x, z, w: 2.2, d: 2.2, alongZ: r.d >= r.w, side: 0, route: r, o: o2 });
+          panneau(x, z, type, s, ir); pose2 = true; mis = true; break;
+        }
+        if (pose2) break;
       }
       void mis;
     }
@@ -8451,7 +8706,14 @@ function signalisation() {
     const maj = la > lb ? k.a : k.b, imaj = la > lb ? k.ia : k.ib;
     const min = la > lb ? k.b : k.a, imin = la > lb ? k.ib : k.ia;
     pose(maj, imaj, k, 'prioritaire');
-    pose(min, imin, k, Math.min(min.w, min.d) <= 6 ? 'stop' : 'cede');
+    // STOP OU CEDEZ-LE-PASSAGE. La regle etait « rue de 6 m ou moins = stop » ; depuis que la
+    // hierarchie est montee d'un cran (round 75), presque plus aucune rue ne fait 6 m, et il ne
+    // restait que TROIS stops dans toute la ville — le controle du code de la route (test 298)
+    // ne trouvait plus une seule voiture qui s'arrete vraiment. On juge maintenant sur l'ECART
+    // DE RANG : une ruelle (8 m au plus) qui debouche sur une avenue ou un boulevard (11 m ou
+    // plus) a un STOP ; entre voisins de rang, un cedez-le-passage suffit.
+    const lmin = Math.min(min.w, min.d), lmaj = Math.min(maj.w, maj.d);
+    pose(min, imin, k, (lmin <= 8 && lmaj >= 11) ? 'stop' : 'cede');
   }
   // fin de priorite : au tout dernier carrefour de chaque boulevard, la priorite s'arrete
   for (let i = 0; i < R.length; i++) {
@@ -8501,7 +8763,7 @@ function signalisation() {
 // points DANS LA VOIE DE DROITE, arrondis dans les virages (arc de Bezier). C'est ce que
 // suivent la circulation de fond, les bots conducteurs et les voitures de police.
 const CAP = a => Math.atan2(Math.sin(a), Math.cos(a));   // ramene un ecart de cap dans ]-PI, PI]
-const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7 };
+const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7, venelle: 7, impasse: 6 };   // venelle/impasse : les rares chaussees que l'elargissement n'a pas pu monter (coincees entre deux murs)
 // Le demi-tour coute une fortune : un camion de 8,60 m ne fait pas demi-tour dans une rue de
 // 7 m, il finissait par raboter le bout de l'impasse pendant une minute. On n'y va qu'en
 // dernier recours, quand il n'existe VRAIMENT pas d'autre chemin.
@@ -15074,7 +15336,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol

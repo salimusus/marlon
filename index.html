@@ -5017,7 +5017,8 @@ function road(x, z, w, d, yOff = 0, plain) {
   // (le sable de la plage, un chemin de terre de La Zone) et disparaissaient dessous : on les
   // pose quelques centimetres plus haut avec `yOff`, et le controle « du bitume sur toute la
   // longueur » a besoin de savoir a quelle hauteur chercher la chaussee.
-  if (city.routes) city.routes.push({ x, z, w, d, top: 0.06 + yOff });
+  const fiche = { x, z, w, d, top: 0.06 + yOff, w0: w, d0: d };
+  if (city.routes) city.routes.push(fiche);
   const t = ROAD.clone(); t.needsUpdate = true;
   // Une fois la texture tournee d'un quart de tour, la repetition s'applique dans SES axes :
   // (w/4, 1) rayait la chaussee de huit axes jaunes en travers au lieu d'un seul au milieu.
@@ -5027,6 +5028,7 @@ function road(x, z, w, d, yOff = 0, plain) {
   const top = new THREE.MeshLambertMaterial({ map: t });
   const m = new THREE.Mesh(unitBox, [lam(0x4a4f5c), lam(0x4a4f5c), top, lam(0x4a4f5c), lam(0x4a4f5c), lam(0x4a4f5c)]);
   m.scale.set(w, 0.06, d); m.position.set(x, 0.03 + yOff, z); m.receiveShadow = true; worldGroup.add(m);
+  fiche.mesh = m;   // `elargirLesVoies()` redimensionne le bitume en place
 }
 function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false }); }
 // ================= LE PLAN ROUTIER =================
@@ -5070,8 +5072,23 @@ function wall(x, z, w, d) { box(x, 2, z, w, 4, d, 0, { material: invisibleMat, n
 //   Boulevard du casino .......... 9 m, Desserte du casino 8 m, Contournements 8 m,
 //                                  Avenue du casino 9 m · ils contournent le casino au lieu
 //                                  de le traverser, et se garent devant la grande entrée
-const VOIES = { boulevard: 9, avenue: 8, rue: 7, ruelle: 6, desserte: 5 };
-const roleVoie = r => { const l = Math.min(r.w, r.d); return l >= 9 ? 'boulevard' : l >= 8 ? 'avenue' : l >= 7 ? 'rue' : l >= 6 ? 'ruelle' : 'desserte'; };
+// ================= « REFAIS LES ROUTES PLUS LARGES » (joueur, round 75) =================
+// LE CRITÈRE, MESURÉ. Le plus large véhicule du jeu est le bulldozer : 2,80 m (relevé sur
+// `baseW` de tous les véhicules — 4x4 2,70 · camion et camion de pompiers 2,60 · voiture 2,40).
+// `construireGraphe()` pose la voie de droite à `largeur / 4` de l'axe : deux véhicules qui se
+// croisent occupent donc `largeur/4 ± 1,40`. Pour qu'ils se croisent avec 50 cm de garde de
+// chaque côté il faut `largeur/4 ≥ 1,90`, soit UNE LARGEUR MINIMALE DE 7,60 m.
+// AVANT ce round : 45 chaussées sur 72 étaient sous ce seuil (2 dessertes de 5 m, 28 ruelles
+// de 6 m, 15 rues de 7 m) — 62 % de la ville où le camion de pompiers ne pouvait croiser
+// personne. C'est le défaut ouvert 239/240 du poste Conduite.
+// La hiérarchie monte donc d'un cran partout : 8 / 9 / 11 / 13 m au lieu de 5 / 6 / 7 / 8 / 9.
+// Les deux derniers paliers (venelle 6, impasse 5) ne sont plus visés : ils restent déclarés
+// parce qu'une chaussée coincée entre deux murs a le droit de ne pas pouvoir s'élargir, et
+// que le contrôle du plan (test 235) exige que TOUTE largeur figure dans cette table.
+const VOIES = { boulevard: 13, avenue: 11, rue: 9, ruelle: 8, desserte: 7, venelle: 6, impasse: 5 };
+const PALIERS_VOIE = [5, 6, 7, 8, 9, 11, 13];
+const ELARGIR = { 5: 8, 6: 8, 7: 9, 8: 11, 9: 13 };   // la largeur visée pour chaque largeur d'avant
+const roleVoie = r => { const l = Math.min(r.w, r.d); return l >= 13 ? 'boulevard' : l >= 11 ? 'avenue' : l >= 9 ? 'rue' : l >= 8 ? 'ruelle' : l >= 7 ? 'desserte' : l >= 6 ? 'venelle' : 'impasse'; };
 const PLAN_ROUTIER = {
   // Les axes AJOUTÉS par le plan : ceux qui manquaient pour que chaque quartier soit
   // vraiment desservi. Les rues historiques du centre restent où elles sont.
@@ -5169,6 +5186,88 @@ function finirPlan() {
   }
   city.plan.dessertes = liste;
   return liste;
+}
+// ÉLARGIR LES VOIES SANS ENTRER DANS UN MUR (joueur, round 75 : « refais les routes plus
+// larges »). On ne peut pas élargir en aveugle : la ville est pleine de bâtiments posés à des
+// coordonnées en dur, et un précédent exact existe dans ce projet — une coursive qui s'arrêtait
+// avant une porte, et un appartement sur deux devenait inatteignable. Cette passe monte donc
+// CHAQUE chaussée au palier le plus haut qu'elle puisse tenir, et redescend d'un palier tant
+// que le nouveau bord entamerait :
+//   · un bâtiment ou un intérieur (plus de 20 cm) ;
+//   · une parcelle de villa ou de base de gang ;
+//   · la mer, le sable du rallye, l'anneau du circuit ;
+//   · un solide que le nettoyage des chaussées NE RAMASSE PAS (mur, porte, barrière, vitrage,
+//     statue, étage) : ceux-là resteraient en pleine voie, et le contrôle du plan les compte ;
+//   · un véhicule garé au départ (plus de 40 cm — le contrôle du plan en tolère 60).
+// Elle tourne APRÈS les bâtiments et les véhicules, AVANT le dégagement des chaussées, les
+// trottoirs, la signalisation, la grille de navigation et le graphe des voies : tout ce qui
+// suit se calcule donc sur les NOUVELLES largeurs, et rien ne reste sur l'ancien tracé.
+function elargirLesVoies() {
+  const R = city.routes || [];
+  if (!R.length) return { montees: 0, bloquees: 0 };
+  // ---- ce qu'on n'a pas le droit d'entamer, avec la profondeur tolérée pour chacun
+  const tabous = [];
+  const T = (x, z, w, d, m, quoi) => tabous.push({ x, z, w, d, m, quoi });
+  for (const b of [...(city.batiments || []), ...(city.interieurs || [])]) T(b.x, b.z, b.w, b.d, 0.2, 'bâtiment');
+  if (typeof VILLAS !== 'undefined') for (const v of VILLAS) T(v.x, v.z, VILLA_HALF * 2, VILLA_HALF * 2, 0.2, 'villa');
+  if (typeof GANG_DEFS !== 'undefined') for (const g of GANG_DEFS) if (g.villa) T(g.villa[0], g.villa[1], 42, 42, 0.2, 'base');
+  // LES PLACES DE STATIONNEMENT DÉJÀ MARQUÉES. Mesure : le Boulevard du Nord (z = -100) passé
+  // de 9 à 13 m mordait de 40 cm sur la rangée nord du Parking du Sud (z = -93,9), et une des
+  // seize places devenait inutilisable — le contrôle des places (test 362) le voyait tout de
+  // suite. Une place marquée est aussi intouchable qu'un mur.
+  for (const q of (city.parkings || [])) T(q.x, q.z, q.w, q.d, 0.2, 'parking');
+  if (city.armoryParc) T(city.armoryParc.x, city.armoryParc.z, city.armoryParc.w, city.armoryParc.d, 0.2, 'parking');
+  if (city.sea) T((city.sea.x1 + city.sea.x2) / 2, (city.sea.z1 + city.sea.z2) / 2, city.sea.x2 - city.sea.x1, city.sea.z2 - city.sea.z1, 1, 'mer');
+  if (typeof RALLY !== 'undefined' && RALLY.mesh) T((RALLY.x1 + RALLY.x2) / 2, (RALLY.z1 + RALLY.z2) / 2, RALLY.x2 - RALLY.x1, RALLY.z2 - RALLY.z1, 1, 'sable');
+  // les solides que degageLesRoutes() protège : eux resteraient bel et bien au milieu de la voie
+  const protege = o => o.porte || o.bar || o.glass || o.statue || o.trottoir || o.sol || o.feu || o.lampe
+    || (o.h > 4.6 && (o.w > 1 || o.d > 1)) || (o.w > 14 && o.d > 14) || o.y - o.h / 2 > 0.8;
+  const vsol = new Set();
+  for (const v of [...(city.cars || []), ...(city.aiCars || []), ...(police.cars || []), ...(typeof raceKarts !== 'undefined' ? raceKarts : [])]) if (v && v.solid) vsol.add(v.solid);
+  for (const o of solids) {
+    if (vsol.has(o) || o.veh || !o.mesh) continue;
+    const top = o.y + o.h / 2, bas = o.y - o.h / 2;
+    if (top < 0.57 || bas > 0.9) continue;            // la voiture passe dessus ou dessous
+    if (o.w > 40 && o.d > 40) continue;               // le grand sol de la carte
+    if (!protege(o)) continue;                        // le reste sera ramassé par degageLesRoutes()
+    T(o.x, o.z, o.w, o.d, 0.5, 'solide');
+  }
+  // les véhicules garés au départ, gabarit tourné avec leur cap
+  for (const v of (city.cars || [])) {
+    if (v.heli && (v.y || 0) > 2) continue;
+    const W = v.baseW || 2.6, D = v.baseD || 3, cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+    T(v.x, v.z, W * cs + D * sn, W * sn + D * cs, 0.4, 'véhicule garé');
+  }
+  // l'anneau du circuit : un disque, pas un rectangle
+  const dansAnneau = (x, z, w, d) => {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1])
+      if (Math.hypot(x + sx * w / 2 - RACE_C.x, z + sz * d / 2 - RACE_C.z) < RACE_C.r - 6) return true;
+    return Math.hypot(x - RACE_C.x, z - RACE_C.z) < RACE_C.r - 6;
+  };
+  const tient = (r, L) => {
+    const w = r.d >= r.w ? L : r.w, d = r.d >= r.w ? r.d : L;
+    for (const t of tabous) {
+      const p = Math.min(t.w / 2 + w / 2 - Math.abs(r.x - t.x), t.d / 2 + d / 2 - Math.abs(r.z - t.z));
+      if (p > t.m) return false;
+    }
+    return !dansAnneau(r.x, r.z, w, d);
+  };
+  let montees = 0, bloquees = 0, gagne = 0;
+  for (const r of R) {
+    const cur = +Math.min(r.w, r.d).toFixed(2);
+    const vise = ELARGIR[cur] || cur;
+    if (vise <= cur) continue;
+    // du palier visé, on redescend jusqu'à celui qui passe — jamais sous la largeur d'avant
+    const echelle = PALIERS_VOIE.filter(L => L <= vise && L >= cur).sort((a, b) => b - a);
+    const L = echelle.find(l => l === cur || tient(r, l));
+    if (L == null || L === cur) { bloquees++; continue; }
+    const alongZ = r.d >= r.w;
+    if (alongZ) r.w = L; else r.d = L;
+    gagne += L - cur; montees++;
+    if (r.mesh) r.mesh.scale.set(r.w, 0.06, r.d);
+  }
+  navSale(); sgridSale();
+  return { montees, bloquees, gagne: +(gagne / Math.max(1, montees)).toFixed(2) };
 }
 // ON DÉGAGE LES CHAUSSÉES. Bancs, poubelles, caisses, palmiers ou bornes posés au fil des
 // quartiers finissaient parfois AU MILIEU d'une rue : les conducteurs s'y encastraient. On
@@ -6443,6 +6542,7 @@ const WORLDS = [
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
+      city.elargies = elargirLesVoies();   // « plus larges » : chaque chaussee monte d'un palier tant qu'elle n'entame ni mur, ni parcelle, ni vehicule gare
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs);
       // la signalisation vient APRES les trottoirs (elle a besoin de savoir ou ils sont) et
@@ -8450,11 +8550,40 @@ function signalisation() {
     for (const s of caps) {
       const ux = Math.sin(s), uz = Math.cos(s), rx = Math.cos(s), rz = -Math.sin(s);
       let mis = false;
-      for (const dep of [0, 2, 4, -1.6]) {
-        const x = k.cx - ux * (recul + dep) + rx * lat, z = k.cz - uz * (recul + dep) + rz * lat;
-        if (!posLibre(x, z)) continue;
-        if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
-        panneau(x, z, type, s, ir); mis = true; break;
+      // ON CHERCHE PLUS LOIN, ET DES DEUX COTES (round 75). Les carrefours se sont elargis avec
+      // les chaussees : le recul (oz/2 + 2,6) a grandi, et deux panneaux ne trouvaient plus un
+      // metre de trottoir libre — deux carrefours de l'ouest (-97, 138) et (-104, 132) restaient
+      // sans stop ni cedez-le-passage. On balaie sept reculs et les deux trottoirs.
+      for (const dep of [0, 2, 4, 6, 8, -1.6, -3.2]) {
+        for (const cote of [1, -1]) {
+          const x = k.cx - ux * (recul + dep) + rx * lat * cote, z = k.cz - uz * (recul + dep) + rz * lat * cote;
+          if (!posLibre(x, z)) continue;
+          if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
+          panneau(x, z, type, s, ir); mis = true; break;
+        }
+        if (mis) break;
+      }
+      // DERNIER RECOURS : ON POSE LE BOUT DE TROTTOIR QUI MANQUE (round 75). Depuis que les
+      // chaussees sont plus larges, trois carrefours de l'ouest n'avaient plus un seul metre de
+      // trottoir libre pour accrocher leur panneau — et une rue secondaire qui debouche sur une
+      // avenue SANS stop ni cedez-le-passage, c'est un carrefour dangereux, pas un detail. On
+      // coule donc une dalle de 2,2 m hors chaussee (jamais dans un mur, jamais devant une
+      // porte), on la declare comme trottoir, et le panneau s'y plante.
+      if (!mis) for (const dep of [0, 2, 4, -1.6]) {
+        let pose2 = false;
+        for (const cote of [1, -1]) {
+          const x = k.cx - ux * (recul + dep) + rx * lat * cote, z = k.cz - uz * (recul + dep) + rz * lat * cote;
+          if (surChaussee(x, z, -0.15)) continue;
+          if (portes.some(o => Math.abs(x - o.x) < o.w / 2 + 2.6 && Math.abs(z - o.z) < o.d / 2 + 2.6)) continue;
+          if (bats.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1)) continue;
+          if (solidsAutour(x, z, 1.6, true).some(o => !o.trottoir && !o.sol && o.h > 0.5 && o.h < 30
+            && Math.abs(x - o.x) < o.w / 2 + 0.7 && Math.abs(z - o.z) < o.d / 2 + 0.7)) continue;
+          const tx = TROTTOIR.clone(); tx.needsUpdate = true; tx.repeat.set(1.1, 1.1);
+          const o2 = box(x, 0.07, z, 2.2, 0.14, 2.2, 0, { material: new THREE.MeshLambertMaterial({ map: tx }), noEdges: true, noShadow: true, studs: false, noRoute: true, trottoir: true });
+          city.trottoirs.push({ x, z, w: 2.2, d: 2.2, alongZ: r.d >= r.w, side: 0, route: r, o: o2 });
+          panneau(x, z, type, s, ir); pose2 = true; mis = true; break;
+        }
+        if (pose2) break;
       }
       void mis;
     }
@@ -8517,7 +8646,7 @@ function signalisation() {
 // points DANS LA VOIE DE DROITE, arrondis dans les virages (arc de Bezier). C'est ce que
 // suivent la circulation de fond, les bots conducteurs et les voitures de police.
 const CAP = a => Math.atan2(Math.sin(a), Math.cos(a));   // ramene un ecart de cap dans ]-PI, PI]
-const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7 };
+const VITESSE_VOIE = { boulevard: 10, avenue: 10, rue: 9, ruelle: 8, desserte: 7, venelle: 7, impasse: 6 };   // venelle/impasse : les rares chaussees que l'elargissement n'a pas pu monter (coincees entre deux murs)
 // Le demi-tour coute une fortune : un camion de 8,60 m ne fait pas demi-tour dans une rue de
 // 7 m, il finissait par raboter le bout de l'impasse pendant une minute. On n'y va qu'en
 // dernier recours, quand il n'existe VRAIMENT pas d'autre chemin.

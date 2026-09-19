@@ -8007,7 +8007,8 @@ test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const c = G.city;
-    // 1. la hiérarchie annoncée : toute chaussée mesure 5, 6, 7, 8 ou 9 m de large
+    // 1. la hiérarchie annoncée : toute chaussée tient dans la table VOIES (round 75 : 8 / 9 /
+    //    11 / 13 m ; 5, 6 et 7 restent déclarés pour les rares chaussées coincées entre deux murs)
     const largeurs = {}, horsHierarchie = [];
     for (const rt of c.routes) {
       const l = +Math.min(rt.w, rt.d).toFixed(2);
@@ -8041,13 +8042,18 @@ test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un
       tailles.push(t); nc++;
     }
     const total = tailles.reduce((a, b) => a + b, 0), part = Math.max(...tailles) / total;
+    // 4. LE CROISEMENT (round 75). Le plus large véhicule du jeu fait 2,80 m ; la voie de droite
+    //    est posée à largeur/4 de l'axe : il faut 7,60 m pour que deux s'y croisent avec 50 cm
+    //    de garde. AVANT : 45 chaussées sur 72 étaient sous ce seuil.
+    const larges = c.routes.filter(rt => Math.min(rt.w, rt.d) >= 7.6).length;
     return { routes: c.routes.length, axes: c.plan.axes.length, largeurs, horsHierarchie, roles,
-      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4) };
+      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4),
+      larges, elargies: c.elargies };
   });
   const ok = r.horsHierarchie.length === 0 && r.dansBat.length === 0 && r.dansEau.length === 0 && r.dansSable.length === 0
     && r.dansAnneau.length === 0 && r.dansParcelle.length === 0 && r.minus.length === 0 && r.part >= 0.99
-    && r.roles.boulevard >= 8 && r.routes >= 65;
-  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard} boulevards, ${r.roles.avenue} avenues, ${r.roles.rue} rues, ${r.roles.ruelle} ruelles, ${r.roles.desserte} dessertes), ${r.horsHierarchie.length} hors hiérarchie · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) — il y en avait 7 · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
+    && r.larges >= r.routes - 10 && r.routes >= 65;
+  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard || 0} boulevards de 13 m, ${r.roles.avenue || 0} avenues de 11 m, ${r.roles.rue || 0} rues de 9 m, ${r.roles.ruelle || 0} ruelles de 8 m), ${r.horsHierarchie.length} hors hiérarchie · ${r.larges}/${r.routes} chaussées laissent deux véhicules de 2,80 m se croiser avec 50 cm de garde (seuil 7,60 m) — il n'y en avait que 27 sur 72 avant l'élargissement, qui a monté ${r.elargies && r.elargies.montees} chaussées de ${r.elargies && r.elargies.gagne} m en moyenne et en a laissé ${r.elargies && r.elargies.bloquees} coincées entre deux murs · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
 });
 
 test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux sur le trottoir, passages pietons devant les equipements', async p => {

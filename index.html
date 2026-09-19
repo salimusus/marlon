@@ -3908,6 +3908,25 @@ function immeubleZone(x, z, w, d, col, dir) {
   const zS = z + d / 2 - 0.2;                          // extrémité sud de la cage
   const palX = xE + LARG, palW = LARG * 2;             // les paliers couvrent les deux bandes
   const bande = k => xE + LARG * (k + 0.5);            // k = 0 : volée montante ; 1 : volée descendante
+  // ---------- DE LA PLACE POUR FAIRE DEMI-TOUR (défaut n° 80, round 73) ----------
+  // Le 2ᵉ étage restait inatteignable alors que TOUTES les marches étaient franchissables
+  // (0,32 m, contre 0,60 m au pas du joueur). Ce qui bloquait, c'était la PLACE pour tourner.
+  // Mesuré sur l'immeuble (−169 ; 10) : en arrivant au palier du 1er par la volée sud, le
+  // joueur continuait tout droit et butait sur le garde-corps sud en (−157,10 ; 3,40 ; 14,11)
+  // — exactement le point relevé par le contrôle qualité, bloqué 10 s. Pour repartir il
+  // fallait un demi-tour PLUS un pas de côté de 2,60 m, dans un couloir de 0,75 m de large
+  // seulement, coincé entre le bout du limon de la volée (z 13,03) et le garde-corps sud
+  // (z 14,58). Un enfant ne le trouve pas, et notre propre autopilote non plus.
+  // Deux élargissements, mesurés :
+  //   — palier d'étage : il ne s'arrête plus au nu de la façade, il SE PROLONGE dans la
+  //     coursive (qui est à la même cote). Couloir de demi-tour : 0,75 m → 2,68 m ;
+  //   — palier de demi-tour : allongé vers le nord (PALD au lieu de PAL). 0,68 m → 1,78 m.
+  // La coursive, elle, court désormais sur TOUTE la façade : avant, elle s'arrêtait en
+  // x −170,70 et la porte de l'appartement ouest (x −172,73 à −171,13) donnait dans le vide.
+  const PALD = 2.9;                                    // profondeur du palier de demi-tour
+  const courZ0 = zS, courZ1 = z + d / 2 + 1.8;         // la coursive, au sud, de plain-pied avec le palier
+  const pontX0 = x - w / 2, pontX1 = xE + palW;        // le plancher d'étage extérieur va d'un bout à l'autre
+  const zM0 = zS - PAL - NM * GIRON - PALD, zM1 = zS - PAL - NM * GIRON;   // palier de demi-tour
   // LA RAMBARDE EST UN VRAI SOLIDE, et elle descend jusqu'au plancher de l'étage : c'est à la
   // fois le garde-corps et le limon qui ferme le flanc de la volée — plus de dalle flottante.
   // ELLE PORTE LE DRAPEAU `rambarde` : voir moveAxis, le joueur ne MONTE jamais sur un
@@ -3923,12 +3942,20 @@ function immeubleZone(x, z, w, d, col, dir) {
     const y = f * H + 0.2;
     plat(palX, y, zS - PAL / 2, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
     if (f === 0) continue;        // au rez-de-chaussée le palier est le trottoir : on y entre librement
-    // bord est (le vide), et bord sud SAUF le passage vers la coursive, contre le bâtiment
-    rambarde(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL, y);
-    mainCourante(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL);
-    const ouv = x + w / 4 + (w / 2 + 3.4) / 2;   // le passage s'arrête pile au bout de la coursive
-    rambarde((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP, y);
-    mainCourante((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP);
+    // COURSIVE + PALIER D'UN SEUL TENANT : le joueur qui débouche de la volée continue tout
+    // droit vers le sud, tourne à son aise, puis part vers l'ouest le long des portes.
+    plat((pontX0 + pontX1) / 2, y, (courZ0 + courZ1) / 2, pontX1 - pontX0, courZ1 - courZ0, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    // garde-corps : tout le bord est (palier + coursive), tout le bord sud, le retour ouest
+    rambarde(pontX1 - EP / 2, y, (zS - PAL + courZ1) / 2, EP, courZ1 - (zS - PAL), y);
+    mainCourante(pontX1 - EP / 2, y, (zS - PAL + courZ1) / 2, EP, courZ1 - (zS - PAL));
+    rambarde((pontX0 + pontX1) / 2, y, courZ1 - EP / 2, pontX1 - pontX0, EP, y);
+    mainCourante((pontX0 + pontX1) / 2, y, courZ1 - EP / 2, pontX1 - pontX0, EP);
+    rambarde(pontX0 + EP / 2, y, (courZ0 + courZ1) / 2, EP, courZ1 - courZ0, y);
+    mainCourante(pontX0 + EP / 2, y, (courZ0 + courZ1) / 2, EP, courZ1 - courZ0);
+    // DERNIER ÉTAGE : plus de volée au-dessus, donc le bord nord de la bande montante donne
+    // sur le vide de la cage (2,90 m de chute mesurés) — on le ferme. La bande descendante,
+    // elle, reste ouverte : c'est par là qu'on arrive.
+    if (f === N - 1) { rambarde(bande(0), y, zS - PAL + EP / 2, LARG, EP, y); mainCourante(bande(0), y, zS - PAL + EP / 2, LARG, EP); }
   }
   for (let f = 0; f < N - 1; f++) {
     const y0 = f * H + 0.2, ym = y0 + H / 2;
@@ -3939,11 +3966,13 @@ function immeubleZone(x, z, w, d, col, dir) {
       rambarde(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06, y0);   // côté vide ; le mur ferme l'autre
       mainCourante(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06);
     }
-    // PALIER INTERMÉDIAIRE : le demi-tour
-    const zM = zS - PAL - NM * GIRON - PAL / 2;
-    plat(palX, ym, zM, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
-    rambarde(palX, ym, zM - PAL / 2 + EP / 2, palW, EP, ym); mainCourante(palX, ym, zM - PAL / 2 + EP / 2, palW, EP);
-    rambarde(xE + palW - EP / 2, ym, zM, EP, PAL, ym); mainCourante(xE + palW - EP / 2, ym, zM, EP, PAL);
+    // PALIER INTERMÉDIAIRE : le demi-tour. Allongé vers le nord (PALD = 2,90 m au lieu de
+    // 1,80 m) : le limon de la volée montante s'arrête en z 9,97 et le garde-corps nord
+    // était en z 8,31, ce qui ne laissait que 0,68 m pour passer d'une bande à l'autre.
+    const zM = (zM0 + zM1) / 2;
+    plat(palX, ym, zM, palW, PALD, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    rambarde(palX, ym, zM0 + EP / 2, palW, EP, ym); mainCourante(palX, ym, zM0 + EP / 2, palW, EP);
+    rambarde(xE + palW - EP / 2, ym, zM, EP, PALD, ym); mainCourante(xE + palW - EP / 2, ym, zM, EP, PALD);
     // VOLÉE DESCENDANTE (elle remonte vers le sud), bande extérieure : les deux bords donnent
     // sur le vide, elle a donc une rambarde de chaque côté
     for (let i = 0; i < NM; i++) {
@@ -3957,17 +3986,12 @@ function immeubleZone(x, z, w, d, col, dir) {
   }
   // DEUX PILIERS portent la cage sur toute sa hauteur : les paliers ne sont plus suspendus
   { const hc = (N - 1) * H + 0.2;
-    for (const cz2 of [zS - 0.35, zS - PAL - NM * GIRON - PAL + 0.35])
+    for (const cz2 of [zS - 0.35, zM0 + 0.35])
       box(xE + palW + 0.25, hc / 2, cz2, 0.45, hc, 0.7, 0x8d8378, { studs: false, noRoute: true }); }
-  // COURSIVE : du palier à la porte de l'appartement, de plain-pied avec le plancher de
-  // l'étage (elle était 20 cm plus haut) et prolongée jusqu'au palier (il manquait 20 cm).
-  // Elle court à 3,40 m puis 6,60 m au-dessus du sol : elle reçoit elle aussi son garde-corps.
-  for (let f = 1; f < N; f++) {
-    const cy = f * H + 0.2, cz = z + d / 2 + 0.8, cd = 2, cw = w / 2 + 3.4, cx = x + w / 4;
-    plat(cx, cy, cz, cw, cd, 0x9a9088, { studs: false, noRoute: true }, 0.35);
-    rambarde(cx, cy, cz + cd / 2 - EP / 2, cw, EP, cy); mainCourante(cx, cy, cz + cd / 2 - EP / 2, cw, EP);
-    rambarde(cx - cw / 2 + EP / 2, cy, cz, EP, cd, cy); mainCourante(cx - cw / 2 + EP / 2, cy, cz, EP, cd);
-  }
+  // POTEAUX SOUS LA COURSIVE : elle traverse toute la façade, elle ne flotte plus (le joueur
+  // avait justement reproché « des dalles qui flottent »). Décoratifs : au sol, on passe entre.
+  for (let i = 0; i < 5; i++) box(pontX0 + 1.4 + i * (pontX1 - pontX0 - 2.8) / 4, (N - 1) * H / 2 + 0.1, courZ1 - 0.3,
+    0.22, (N - 1) * H + 0.2, 0.22, 0x8d8378, { deco: true, studs: false });
   // toit : tôle, citerne, antenne, linge qui sèche
   plat(x, N * H + 0.4, z, w + 0.6, d + 0.6, 0x77706a, { studs: false, noRoute: true }, 0.4);
   const cit = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.4, 12), lam(0x3f7bd0));
@@ -3988,7 +4012,8 @@ function immeubleZone(x, z, w, d, col, dir) {
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
   return { x, z, w, d, etages: N, h: H, rails: RAILS,
-    esc: { xE, zS, larg: LARG, pal: PAL, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP } };
+    esc: { xE, zS, larg: LARG, pal: PAL, pald: PALD, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP,
+      palX, palW, b0: bande(0), b1: bande(1), zM0, zM1, courZ0, courZ1, pontX0, pontX1 } };
 }
 function carcasse(x, z, h) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -22336,6 +22361,25 @@ function moveAxis(axis, amount, canStep) {
       //     un ascenseur, une dalle qui apparait) : face la PLUS PROCHE, donc le plus petit
       //     deplacement possible. Le meme cas tombe alors a 1,00 m.
       const dehorsAvant = Math.abs(avant - o[axis]) >= half + P.hw;
+      if (!dehorsAvant || amount === 0) {
+        // DEJA DEDANS : ON SORT PAR LE COTE LE PLUS COURT, TOUS AXES CONFONDUS.
+        // « Face la plus proche SUR CET AXE » ne suffisait pas : une rambarde est une boîte
+        // LONGUE et MINCE. Le joueur qui mord de 9 cm dans le garde-corps sud d'un palier
+        // (3,50 m de long, 0,36 m d'épais) était, au sens de l'axe x, « au milieu » de la
+        // boîte : le moindre pas de côté le renvoyait à la face x la plus proche, soit
+        // 1,00 à 1,48 m PLUS LOIN, hors de la cage d'escalier — et il tombait de 3,34 m.
+        // MESURE (immeuble de La Zone, palier du 1er, joueur en −156,40 ; 3,45 ; 14,20) :
+        // un seul pas vers l'ouest le déplaçait de 1,48 m vers l'EST, en −154,92, puis il
+        // retombait à y 0,06 au pied de l'immeuble. Reproduit sur 8 directions sur 8.
+        // On compare donc la sortie x ET la sortie z : si la plus courte est sur l'AUTRE
+        // axe, on se contente d'annuler le pas (l'autre appel de moveAxis, ou à défaut
+        // desincarcere() au bout d'une demi-seconde, fera sortir le joueur du bon côté).
+        const autre = axis === 'x' ? 'z' : 'x';
+        const demiA = (autre === 'x' ? o.w : o.d) / 2;
+        const sortieIci = half + P.hw - Math.abs(P.pos[axis] - o[axis]);
+        const sortieLa = demiA + P.hw - Math.abs(P.pos[autre] - o[autre]);
+        if (sortieLa < sortieIci) { P.pos[axis] = avant; P.vel[axis] = 0; continue; }
+      }
       const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
       P.vel[axis] = 0;

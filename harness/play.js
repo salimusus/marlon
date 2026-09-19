@@ -18414,8 +18414,14 @@ test('dans La Zone on monte jusqu\'au 2ᵉ étage, on entre dans l\'appartement,
       voleeExtEst: pousser(E.xE + E.larg * 1.5, yB + 0.05, zB, 1, 0),
       voleeExtOuest: pousser(E.xE + E.larg * 1.5, yB + 0.05, zB, -1, 0),
       palierEst: pousser(E.xE + E.larg * 1.35, yEt + 0.05, E.zS - E.pal / 2, 1, 0),
-      palierSud: pousser(E.xE + E.larg * 1.35, yEt + 0.05, E.zS - E.pal / 2, 0, 1),
-      palierInter: pousser(E.xE + E.larg * 1.5, 0.2 + b.h / 2 + 0.05, E.zS - E.pal - E.nm * E.giron - E.pal / 2, 0, -1),
+      // DÉFAUT N° 80 : les deux paliers ont été AGRANDIS pour qu'on puisse y faire demi-tour
+      // (le palier d'étage se prolonge maintenant dans la coursive, le palier de demi-tour
+      // monte jusqu'à E.zM0). Le garde-corps n'est donc plus au ras du départ : on part d'un
+      // point qui le touche presque, sans quoi on mesurerait la traversée du palier, pas
+      // celle de la rambarde (relevé avant correction du test : 2,10 m et 1,31 m de MARCHE,
+      // 0 m de chute, sur des paliers devenus profonds de 3,80 m et 2,90 m).
+      palierSud: pousser(E.xE + E.larg * 1.35, yEt + 0.05, E.courZ1 - 0.9, 0, 1),
+      palierInter: pousser(E.xE + E.larg * 1.5, 0.2 + b.h / 2 + 0.05, E.zM0 + 0.9, 0, -1),
       coursive: pousser(b.x, yEt + 0.05, b.z + b.d / 2 + 0.8, 0, 1),
     };
     // ---- 3. BALAYAGE MARCHE PAR MARCHE. La panne trouvée au round 74 ne se voyait QUE sur
@@ -19877,4 +19883,174 @@ test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus b
     && r.rueDevant.libre && r.rueDevant.cadre && !r.dansUnVoisin
     && !!r.versVoisine && r.versVoisine.camLibres < r.versVoisine.ecart && r.versVoisine.murEntreVue >= 0;
   return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant, à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
+});
+
+// ================= POSTE BÂTIMENTS — escaliers, paliers et garde-corps =================
+// Défaut n° 80 : dans l'immeuble de La Zone on montait au 1er et jamais plus haut.
+// L'autopilote ne vise que les DEUX BOUTS de chaque demi-volée (pied et tête) : s'il faut
+// un itinéraire plus fin que ça pour monter, c'est que l'escalier n'est pas praticable.
+test('immeuble de La Zone : on monte du trottoir au 2e étage et on entre dans un appartement', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -158.4, y: 1, z: 18, hour: 12, frais: true });
+    G.settings.ctrl = 'cam';
+    const im = G.city.zoneImmeubles[0], e = im.esc;
+    const marche = (tx, tz, nMax) => {
+      let n = 0, fige = 0, last = null;
+      while (n < nMax) {
+        const dx = tx - G.P.pos.x, dz = tz - G.P.pos.z;
+        if (Math.hypot(dx, dz) < 0.3) break;
+        G.cam.yaw = Math.atan2(-dx, -dz);
+        G.keys.add('KeyW'); G.step(1 / 60, true); n++;
+        const q = [G.P.pos.x, G.P.pos.z];
+        if (last && Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.004) fige++; else fige = 0;
+        last = q;
+        if (fige > 60) break;              // une seconde sans bouger d'un demi-centimètre : bloqué
+      }
+      G.keys.delete('KeyW');
+      return { x: +G.P.pos.x.toFixed(2), y: +G.P.pos.y.toFixed(2), z: +G.P.pos.z.toFixed(2), bloque: fige > 60 };
+    };
+    const etapes = [];
+    etapes.push(marche(e.palX, e.zS - e.pal / 2, 500));                 // le trottoir, au pied de la cage
+    const paliers = [];
+    for (let f = 0; f < im.etages - 1; f++) {
+      etapes.push(marche(e.b0, e.zM1 + 0.5, 500));                      // volée montante, vers le nord
+      etapes.push(marche(e.b0, (e.zM0 + e.zM1) / 2, 400));              // palier de demi-tour
+      etapes.push(marche(e.b1, (e.zM0 + e.zM1) / 2, 400));              // on change de bande
+      etapes.push(marche(e.b1, e.zS - 0.6, 600));                       // volée descendante, vers le sud
+      paliers.push(+G.P.pos.y.toFixed(2));
+    }
+    const yHaut = +G.P.pos.y.toFixed(2);
+    // la coursive, puis la porte de l'appartement est : on rentre dans le séjour
+    etapes.push(marche(im.x + im.w / 4 - 0.9, (e.courZ0 + e.courZ1) / 2, 900));
+    etapes.push(marche(im.x + im.w / 4 - 0.9, im.z + im.d / 2 - 1.2, 600));
+    const dedans = G.P.pos.z < im.z + im.d / 2 - 0.4 && G.P.pos.y > 6;
+    const app = { x: +G.P.pos.x.toFixed(2), y: +G.P.pos.y.toFixed(2), z: +G.P.pos.z.toFixed(2) };
+    // ET LE RÉFLEXE DU JOUEUR : arrivé au palier du 1er, il continue TOUT DROIT vers le sud.
+    // Avant, il butait là sur le garde-corps et restait planté (relevé QA : 10 s sur place).
+    __SHOT.go({ world: 4, x: e.b1, y: 3.5, z: e.zS - 2.3, hour: 12 });
+    G.settings.ctrl = 'cam'; G.cam.yaw = Math.atan2(0, -1);            // plein sud
+    for (let n = 0; n < 240; n++) { G.keys.add('KeyW'); G.step(1 / 60, true); }
+    G.keys.delete('KeyW');
+    const droitDevant = { y: +G.P.pos.y.toFixed(2), z: +G.P.pos.z.toFixed(2) };
+    return { etages: im.etages, paliers, yHaut, app, dedans, droitDevant,
+      bloques: etapes.filter(s => s.bloque).length, etapes };
+  });
+  const ok = r.yHaut > 6 && r.dedans && r.bloques === 0 && r.droitDevant.z > 15.4 && r.droitDevant.y > 3;
+  return { ok, detail: `avant : le palier du 1er (y 3,40) était un cul-de-sac — le joueur qui continuait tout droit butait sur le garde-corps sud en z 14,11 et y restait 10 s, le 2e étage (y > 6) n'était jamais atteint · maintenant l'autopilote monte ${r.etages} niveaux sans un seul blocage (${r.bloques}), paliers atteints à y ${r.paliers.join(' puis ')}, sommet y ${r.yHaut}, et il entre dans l'appartement en ${r.app.x} ; ${r.app.y} ; ${r.app.z} (dedans=${r.dedans}) ; tout droit vers le sud depuis le palier du 1er il arrive maintenant sur la coursive en z ${r.droitDevant.z} à y ${r.droitDevant.y} au lieu de rester coincé en z 14,11` };
+});
+
+test('garde-corps des immeubles de La Zone : on ne les traverse pas et on ne les escalade pas', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -158.4, y: 1, z: 18, hour: 12, frais: true });
+    const im = G.city.zoneImmeubles[0], e = im.esc;
+    // le dessus d'une marche de la volée f, montante (k = 0) ou descendante (k = 1)
+    const marcheY = (f, k, i) => f * im.h + 0.2 + k * im.h / 2 + (i + 1) * e.monte;
+    const cas = [];
+    for (const [f, y] of [[1, 3.45], [2, 6.65]]) {
+      cas.push(['sud coursive ' + f, im.x, y, e.courZ1 - 0.8, 0, 1]);
+      cas.push(['est palier ' + f, e.pontX1 - 0.9, y, e.zS - e.pal / 2, 1, 0]);
+      cas.push(['est coursive ' + f, e.pontX1 - 0.9, y, (e.courZ0 + e.courZ1) / 2, 1, 0]);
+      cas.push(['ouest coursive ' + f, e.pontX0 + 0.9, y, (e.courZ0 + e.courZ1) / 2, -1, 0]);
+    }
+    cas.push(['nord palier de demi-tour', e.palX, 5.05, e.zM0 + 0.7, 0, -1]);
+    cas.push(['limon de la volée montante', e.b0 + 0.8, marcheY(1, 0, 1) + 0.05, e.zS - e.pal - e.giron * 1.5, 1, 0]);
+    cas.push(['limon de la volée descendante', e.pontX1 - 0.9, marcheY(1, 1, 2) + 0.05, e.zM1 + e.giron * 2.5, 1, 0]);
+    const out = [];
+    for (const [nom, x0, y0, z0, dx, dz] of cas) {
+      for (const court of [false, true]) {
+        __SHOT.go({ world: 4, x: x0, y: y0, z: z0, hour: 12 });
+        G.settings.ctrl = 'cam'; G.cam.yaw = Math.atan2(-dx, -dz);
+        const y1 = G.P.pos.y;
+        let ymax = y1, ymin = y1, bond = 0, px = G.P.pos.x, pz = G.P.pos.z;
+        for (let n = 0; n < 300; n++) {
+          G.keys.add('KeyW'); if (court) { G.P.run = true; G.P.energie = 100; }
+          G.step(1 / 60, true);
+          bond = Math.max(bond, Math.hypot(G.P.pos.x - px, G.P.pos.z - pz));
+          px = G.P.pos.x; pz = G.P.pos.z;
+          ymax = Math.max(ymax, G.P.pos.y); ymin = Math.min(ymin, G.P.pos.y);
+        }
+        G.keys.delete('KeyW');
+        // dehors = sorti de l'emprise de la cage et de la coursive
+        const dehors = G.P.pos.x > e.pontX1 + 0.2 || G.P.pos.x < e.pontX0 - 0.2
+          || G.P.pos.z > e.courZ1 + 0.2 || G.P.pos.z < e.zM0 - 0.2;
+        out.push({ nom, court, fin: [+G.P.pos.x.toFixed(2), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(2)],
+          chute: +(y1 - ymin).toFixed(2), monte: +(ymax - y1).toFixed(2), bond: +bond.toFixed(2), dehors });
+      }
+    }
+    return { n: out.length, out, rails: im.rails.length, drapeau: im.rails.every(o => o.rambarde === true), monte: e.monte };
+  });
+  const traverse = r.out.filter(c => c.dehors);
+  const chutes = r.out.filter(c => c.chute > 0.6);
+  const teleport = r.out.filter(c => c.bond > 0.4);
+  // « escalader » = gagner plus d'une contremarche : au-delà, c'est qu'on est monté SUR le
+  // garde-corps (les marches d'une même volée se recouvrent, un riser de plus est normal).
+  const escalade = r.out.filter(c => c.monte > r.monte + 0.05);
+  const ok = traverse.length === 0 && chutes.length === 0 && teleport.length === 0 && escalade.length === 0
+    && r.drapeau && r.rails > 40;
+  return { ok, detail: `avant : le garde-corps sud du palier est une boîte de 3,50 m de long ; le joueur qui mordait dedans de 9 cm était « au milieu » au sens de l'axe x, et le moindre pas le renvoyait 1,48 m plus loin hors de la cage, d'où il tombait de 3,34 m (mesuré en −156,40 ; 3,45 ; 14,20 → −154,92 ; 0,06 — 8 directions sur 8) · maintenant ${r.n} poussées (marche ET course, 5 s chacune) contre les ${r.rails} tronçons de garde-corps de la cage, tous marqués rambarde=${r.drapeau} : ${traverse.length} sorties de la cage, ${chutes.length} chutes de plus de 0,60 m, ${teleport.length} bonds de plus de 0,40 m en une image, ${escalade.length} escalades (plus d'une contremarche de ${r.monte} m gagnée). Réserve : le saut du joueur monte à 2,25 m, il passe donc PAR-DESSUS un garde-corps de 1,15 m s'il le veut — ce test garantit qu'il ne le traverse pas et ne l'escalade pas en marchant.` };
+});
+
+test('tous les bâtiments à étages ont un chemin montant jusqu\'au dernier niveau', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const HW = G.P.hw, HH = G.P.h, SU = G.STEP_UP, PAS = 0.25;
+    // Inondation des surfaces praticables, avec les RÈGLES DE moveAxis : on ne se pose
+    // jamais sur un garde-corps (drapeau `rambarde`), on ne franchit qu'une marche de
+    // STEP_UP, et il faut la hauteur du joueur au-dessus des pieds pour passer.
+    const chevauche = (o, x, z) => x + HW > o.x - o.w / 2 && x - HW < o.x + o.w / 2
+      && z + HW > o.z - o.d / 2 && z - HW < o.z + o.d / 2;
+    const solSous = (x, z, y) => { let t = -99;
+      for (const o of G.solidsAutour(x, z, 2, true)) { if (o.rambarde || !chevauche(o, x, z)) continue;
+        const top = o.y + o.h / 2; if (top <= y + SU + 1e-6 && top > t) t = top; } return t; };
+    const bloque = (x, z, y) => {
+      for (const o of G.solidsAutour(x, z, 2, true)) { if (!chevauche(o, x, z)) continue;
+        if (o.y + o.h / 2 > y + SU + 1e-6 && o.y - o.h / 2 < y + HH - 0.02) return true; } return false; };
+    const inonde = (x0, z0, y0, x1, x2, z1, z2) => {
+      const NI = Math.round((x2 - x1) / PAS), NJ = Math.round((z2 - z1) / PAS);
+      const i0 = Math.round((x0 - x1) / PAS), j0 = Math.round((z0 - z1) / PAS);
+      const vus = new Set([i0 + '|' + j0 + '|' + Math.round(y0 * 4)]);
+      const file = [[i0, j0, y0]]; let yMax = y0, tete = 0, n = 0;
+      while (tete < file.length && n < 120000) {
+        const [i, j, y] = file[tete++];
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di, nj = j + dj;
+          if (ni < 0 || nj < 0 || ni > NI || nj > NJ) continue;
+          const x = x1 + ni * PAS, z = z1 + nj * PAS;
+          const t = solSous(x, z, y);
+          if (t < -50 || t < y - 3.2) continue;           // le vide, ou une chute de plus de 3,20 m
+          const k = ni + '|' + nj + '|' + Math.round(t * 4);
+          if (vus.has(k)) continue;
+          if (bloque(x, z, t)) continue;
+          vus.add(k); file.push([ni, nj, t]); n++;
+          if (t > yMax) yMax = t;
+        }
+      }
+      return { yMax: +yMax.toFixed(2), n };
+    };
+    const bilan = [];
+    // 1) les cinq immeubles de La Zone : on part du trottoir au pied de la cage
+    for (const im of G.city.zoneImmeubles) {
+      const e = im.esc, haut = (im.etages - 1) * im.h + 0.2;
+      const f = inonde(e.palX, e.zS - e.pal / 2, 0.2, im.x - im.w / 2 - 1, e.pontX1 + 1, e.zM0 - 1, e.courZ1 + 1);
+      bilan.push({ nom: 'immeuble ' + im.x + ';' + im.z, vise: +haut.toFixed(2), atteint: f.yMax, cases: f.n, ok: f.yMax >= haut - 0.05 });
+    }
+    // 2) toutes les villas voisines : on part du pied de leur escalier, au rez-de-chaussée
+    const F = 4.6, ETAGE = F + 0.75;
+    // les VILLAS seulement : « Quartier résidentiel » porte le même emoji mais c'est le
+    // quartier entier. La villa du joueur, elle, a un ascenseur et pas d'escalier.
+    for (const zo of G.city.zones.filter(z2 => z2.emoji === '🏡' && /villa/i.test(z2.name))) {
+      const vx = (zo.x1 + zo.x2) / 2, vz = (zo.z1 + zo.z2) / 2;
+      const HX = vx + 3, HZ = vz - 6, HW2 = 22, HD2 = 16;
+      const f = inonde(HX + 7.4, HZ + 6.34, 0.3, HX - HW2 / 2 - 1, HX + HW2 / 2 + 1, HZ - HD2 / 2 - 1, HZ + HD2 / 2 + 1);
+      bilan.push({ nom: zo.name, vise: ETAGE, atteint: f.yMax, cases: f.n, ok: f.yMax >= ETAGE - 0.05 });
+    }
+    return { bilan, total: bilan.length, rates: bilan.filter(b => !b.ok) };
+  });
+  // au moins les 5 immeubles et les 4 villas nommées ; le nombre de villas de gang varie
+  // avec la partie (elles ne sont bâties que pour les gangs présents au chargement).
+  const ok = r.total >= 9 && r.rates.length === 0;
+  return { ok, detail: `balayage de ${r.total} bâtiments à étages (les 5 immeubles de La Zone + ${r.total - 5} villas voisines ; la villa du joueur a un ascenseur, pas d'escalier) : pour chacun, une inondation des surfaces praticables part du pied de l'escalier et n'accepte qu'une marche de 0,60 m, jamais le dessus d'un garde-corps — ${r.total - r.rates.length}/${r.total} atteignent leur dernier niveau${r.rates.length ? ' · manquent : ' + r.rates.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(', ') : ''} · détail : ${r.bilan.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(' | ')}` };
 });

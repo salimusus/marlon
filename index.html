@@ -2755,6 +2755,7 @@ function declareLesParkings() {
   if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
   if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
   P(43, -13, 22, 20, 'Héliport');
+  if (city.armoryParc) P(city.armoryParc.x, city.armoryParc.z, city.armoryParc.w, city.armoryParc.d, 'Parking de l\'armurerie');   // la dalle a quatre places devant le stand de tir
   P(8, 230, 22, 20, 'Hélistation nord');
   if (city.sea) P(city.sea.x1 + 3, 45, 12, 20, 'Rampe de mise à l\'eau');      // les jet-skis
   P(-70, -70, 14, 20, 'Dépôt du rallye');                                     // les buggys
@@ -3064,8 +3065,28 @@ const WEAPONS = {
   grenade: { n: 'Grenades de choc ×5', e: '💣', p: 15, ammo: 5, consumable: true },
 };
 function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E devant le présentoir = achat direct), comptoir, râtelier, munitions
-  shop(52, 19, 12, 9, 0x2b3550, '🔫 Armurerie', 0x1b2a4a);
-  box(52, 0.85, 22.4, 7, 1, 1, C.wood, { studs: false, noRoute: true }); box(52, 1.5, 22.4, 6.6, 0.35, 0.9, 0x8f98ab, { deco: true, studs: false });   // comptoir
+  // ---- L'ARMURERIE A DÉMÉNAGÉ (demande du joueur, round 75) ----
+  // « déplace l'armurerie (mets-la dans une zone qui ne gêne pas la circulation) ».
+  // La gêne était RÉELLE et mesurée. Le magasin était en (52, 19) et son stand de tir en
+  // (52, 7) : deux rues leur passaient dessous.
+  //   · la rue de l'héliport `road(52, -16, 6, 58)` s'arrête à z = 13, la rue commerçante
+  //     `road(52, 69, 6, 88)` reprend à z = 25 : le bâtiment COUPAIT la rue x = 52 sur 12 m
+  //     (relevé de la grille NAV le long de x = 52 : z = 12 bloqué, z = 14 · 16 · 18 · 20 à
+  //     coût 3, c'est-à-dire hors chaussée). Le round précédent avait bricolé trois tronçons
+  //     de contournement ; ils disparaissent avec ce déménagement.
+  //   · la DALLE du stand de tir (15 × 12 m) recouvrait la rue x = 52 sur 12 m ET les deux
+  //     premiers mètres de la rue z = 0. Conséquence relevée après chargement : la dalle, la
+  //     ligne de tir et le portique n'existaient plus dans `solids` — `degageLesRoutes()` les
+  //     effaçait à chaque partie (38 objets ramassés). Le stand de tir du joueur était
+  //     littéralement détruit au démarrage, parce qu'il était posé sur deux rues.
+  // Nouvel emplacement : (67, 27), l'îlot vide entre la rue x = 52 et la rue de l'est
+  // (x = 80) — relevé : 0 bâtiment, 0 chaussée, 2 lampadaires sur x 58→84 · z −10→40.
+  // Il est desservi par la rue z = 0 qui passe devant (elle file maintenant jusqu'à la rue
+  // de l'est) et flanqué à l'est par la rue de l'est ; son parking est entre les deux.
+  const AX = 67, AZ = 27;                      // le magasin
+  const SZ = AZ - 12;                          // le stand de tir, 12 m devant la porte (comme avant)
+  shop(AX, AZ, 12, 9, 0x2b3550, '🔫 Armurerie', 0x1b2a4a);
+  box(AX, 0.85, AZ + 3.4, 7, 1, 1, C.wood, { studs: false, noRoute: true }); box(AX, 1.5, AZ + 3.4, 6.6, 0.35, 0.9, 0x8f98ab, { deco: true, studs: false });   // comptoir
   const stand = (x, z, mesh, ry, key, label, ech = 1.1) => {
     box(x, 0.8, z, 1.3, 0.9, 1.3, 0x3b4252, { studs: false, noRoute: true }); box(x, 1.65, z, 1.2, 0.8, 1.2, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true, glass: true });
     // l'arme tourne À L'INTÉRIEUR de la vitrine : les modèles sont dessinés autour de y = -0,75,
@@ -3078,28 +3099,34 @@ function buildArmory() {   // armurerie : vitrines où l'on choisit son arme (E 
     vitrine(x, z + 1.2, 'armes', key, label, 1.7);
   };
   // présentoirs le long des murs : l'allée centrale reste libre entre la porte (2,2 m) et le comptoir
-  stand(47.9, 17.2, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
-  stand(56.1, 17.2, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
-  stand(47.9, 20.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
-  stand(56.1, 20.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
-  for (let i = 0; i < 6; i++) box(47.5 + i * 1.5, 0.75, 22.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
-  // Râtelier : les fusils étaient posés à x = 57,4 en travers — leur canon traversait le mur
-  // est (57,7 → 58). On les rentre de 90 cm et on réduit un peu l'échelle.
-  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(56.5, 2.7, 19 + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.1); worldGroup.add(r); }   // râtelier mural
-  box(57.5, 2.4, 20.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
-  box(49, 2.6, 22.9, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible (elle débordait du mur ouest)
-  city.armory = { x: 52, z: 20.8 };
+  stand(AX - 4.1, AZ - 1.8, gunMesh(), 0.3, 'arme:pistol', '🔫 Pistolet laser 20 🪙', 1.15);
+  stand(AX + 4.1, AZ - 1.8, rifleMesh(), 0.2, 'arme:rifle', '🎯 Fusil laser 45 🪙', 0.62);
+  stand(AX - 4.1, AZ + 1.2, grenadeMesh(), 0, 'arme:grenade', '💣 Grenades ×5 15 🪙', 1.5);
+  stand(AX + 4.1, AZ + 1.2, knifeMesh(), 0.25, 'arme:knife', '🔪 Couteau de chasse 35 🪙', 1.35);
+  for (let i = 0; i < 6; i++) box(AX - 4.5 + i * 1.5, 0.75, AZ + 3.6, 0.9, 0.5, 0.6, [0x5cc453, 0x8b4a2b, 0x5cc453][i % 3], { deco: true, studs: false });   // caisses de munitions
+  // Râtelier : les fusils étaient posés à 5,4 m de l'axe, en travers — leur canon traversait le
+  // mur est. On les rentre de 90 cm et on réduit un peu l'échelle.
+  for (let i = 0; i < 3; i++) { const r = rifleMesh(); r.position.set(AX + 4.5, 2.7, AZ + i * 1.1); r.rotation.set(0, Math.PI / 2, 0.3); r.scale.setScalar(1.1); worldGroup.add(r); }   // râtelier mural
+  box(AX + 5.5, 2.4, AZ + 1.1, 0.1, 2, 3.6, 0x8b4a2b, { deco: true, studs: false });
+  box(AX - 3, 2.6, AZ + 3.9, 2.6, 1.6, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: TARGET }), deco: true, noEdges: true });   // affiche cible (elle débordait du mur ouest)
+  city.armory = { x: AX, z: AZ + 1.8 };
   // Stand de tir devant la boutique : la fonction makeTarget existait mais n'était jamais
-  // appelée — le jeu n'avait aucune cible sur laquelle s'entraîner.
-  plat(52, 0.06, 7, 15, 12, 0x6b7280, { studs: false, noRoute: true }, 0.12);
-  for (const [tx, tmx] of [[47, 0], [52, 1.6], [57, 0]]) makeTarget(tx, 3.4, 1.5, tmx);
-  for (const bx2 of [45.4, 58.6]) box(bx2, 1.1, 3.4, 0.5, 2.2, 0.5, 0x3b4252, { studs: false, noRoute: true });
-  box(52, 2.6, 2.6, 13, 0.4, 0.5, 0xffd23f, { deco: true, studs: false });   // portique
-  box(52, 0.9, 11.4, 13, 1, 0.5, C.wood, { studs: false, noRoute: true });   // ligne de tir
-  box(52, 1.9, 11.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎯 STAND DE TIR', 0xff5c5c) }), deco: true, noEdges: true });
-  city.zones.push({ name: 'Stand de tir', emoji: '🎯', x1: 44, x2: 60, z1: 1, z2: 13, hint: '🎯 Stand de tir : dégaine (G) et vise les cibles — celle du milieu se déplace' });
-  for (const x of [45.5, 58.5]) lamp(x, 13.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
-  city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: 45, x2: 59, z1: 12, z2: 26, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
+  // appelée — le jeu n'avait aucune cible sur laquelle s'entraîner. Il est maintenant
+  // ENTIÈREMENT hors chaussée (x 59,5 → 74,5 · z 9 → 21), donc il survit au nettoyage des rues.
+  plat(AX, 0.06, SZ, 15, 12, 0x6b7280, { studs: false, noRoute: true }, 0.12);
+  for (const [tx, tmx] of [[AX - 5, 0], [AX, 1.6], [AX + 5, 0]]) makeTarget(tx, SZ - 3.6, 1.5, tmx);
+  for (const bx2 of [AX - 6.6, AX + 6.6]) box(bx2, 1.1, SZ - 3.6, 0.5, 2.2, 0.5, 0x3b4252, { studs: false, noRoute: true });
+  box(AX, 2.6, SZ - 4.4, 13, 0.4, 0.5, 0xffd23f, { deco: true, studs: false });   // portique
+  box(AX, 0.9, SZ + 4.4, 13, 1, 0.5, C.wood, { studs: false, noRoute: true });   // ligne de tir
+  box(AX, 1.9, SZ + 4.4, 6, 0.8, 0.12, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎯 STAND DE TIR', 0xff5c5c) }), deco: true, noEdges: true });
+  city.zones.push({ name: 'Stand de tir', emoji: '🎯', x1: AX - 8, x2: AX + 8, z1: SZ - 6, z2: SZ + 6, hint: '🎯 Stand de tir : dégaine (G) et vise les cibles — celle du milieu se déplace' });
+  for (const x of [AX - 6.5, AX + 6.5]) lamp(x, SZ + 6.2);   // dégagés de la porte : un lampadaire au milieu la réduisait à deux passages de 0,9 m
+  city.zones.push({ name: 'Armurerie', emoji: '🔫', x1: AX - 7, x2: AX + 7, z1: AZ - 7, z2: AZ + 7, hint: '🔫 Armurerie : E devant une vitrine pour acheter l\'arme exposée' });
+  // LE STATIONNEMENT. Une dalle de 16 × 5 m entre la rue z = 0 et le stand de tir, avec quatre
+  // places marquées : on se gare devant la boutique sans jamais s'arrêter sur la chaussée.
+  city.armoryParc = { x: AX, z: SZ - 8.5, w: 16, d: 5 };
+  plat(AX, 0.07, SZ - 8.5, 16, 5, 0x5a6270, { studs: false, noRoute: true, deco: true }, 0.14);
+  for (let i = 0; i < 5; i++) box(AX - 8 + i * 4, 0.145, SZ - 8.5, 0.12, 0.02, 4.6, 0xffffff, { deco: true, noEdges: true, studs: false });
 }
 function buildHelipad() {   // héliport (est, nord)
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
@@ -5098,16 +5125,13 @@ const PLAN_ROUTIER = {
     { n: 'Rue des Primeurs', x: -160, z: 185, w: 7, d: 116 },
     { n: 'Rue de la Halle', x: -125, z: 185, w: 7, d: 116 },
     { n: 'Cours du Marché', x: -149, z: 185, w: 56, d: 9 },
-    // ---- LE CONTOURNEMENT DE L'ARMURERIE ----
-    // La rue x = 52 etait COUPEE EN DEUX par l'armurerie (12 x 9 m en (52, 19)) : la rue de
-    // l'heliport s'arretait a z = 13, la rue commercante reprenait a z = 25, et pour passer il
-    // fallait redescendre au bord de mer et remonter par la rue de l'est — 520 m de detour pour
-    // 12 m de trou. On ne deplace pas le magasin (ses vitrines, son comptoir et son ratelier
-    // sont poses a la main) : la rue le CONTOURNE par l'est, ou le terrain est vide sur 14 m.
-    // Trois troncons de 6 m, comme les deux rues qu'ils raccordent : 30 m de detour au lieu de 520.
-    { n: 'Contournement sud de l\'armurerie', x: 57.5, z: 10, w: 17, d: 6 },
-    { n: 'Contournement est de l\'armurerie', x: 63, z: 19, w: 6, d: 26 },
-    { n: 'Contournement nord de l\'armurerie', x: 57.5, z: 27.5, w: 17, d: 6 },
+    // ---- LA RUE X = 52 EST REDEVENUE DROITE (round 75) ----
+    // Elle etait COUPEE EN DEUX par l'armurerie (12 x 9 m en (52, 19)) : la rue de l'heliport
+    // s'arretait a z = 13, la rue commercante reprenait a z = 25. Le round precedent avait
+    // bricole TROIS TRONCONS DE CONTOURNEMENT par l'est — 30 m de detour et deux carrefours
+    // parasites la ou il n'y a rien a desservir. Le joueur a tranche : « deplace l'armurerie ».
+    // Le magasin est parti en (67, 27) ; la rue de l'heliport monte maintenant d'une traite
+    // jusqu'a la rue commercante, et les trois contournements ont disparu.
   ],
   // Les rares exceptions : là où le centre du quartier n'est pas le bon point de visée.
   // Tout le reste est calculé automatiquement à partir du repère vivant du quartier.
@@ -6294,7 +6318,7 @@ const WORLDS = [
         box(x, 0.6, z, w, 1.2, d, 0x2f7d3a, { deco: true, studs: false, noRoute: true, noEdges: true });
         box(x, 1.28, z, w - 0.2, 0.22, d - 0.2, 0x49a552, { deco: true, studs: false, noRoute: true, noEdges: true });
       }
-      road(-45, 0, 32, 6); road(52, 0, 46, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m)
+      road(-45, 0, 32, 6); road(54.5, 0, 51, 6); road(0, -34, 6, 12);   // la rue est rejoint la rue du bord de mer (il manquait 14 m) ; et la rue z = 0 s'arretait a x = 75, DEUX METRES avant la rue de l'est (x 77) : le graphe compensait par une liaison de rattrapage, elle va maintenant jusqu'a x = 80
       const B = (n, fn) => { try { fn(); } catch (e) { console.error('build:' + n, e); setTimeout(() => chat(null, `⚠️ ${n} n'a pas pu être construit (${(e && e.message || e).toString().slice(0, 60)})`), 1500); } };
       B('piscine', buildPool); B('armurerie', buildArmory); B('héliport', buildHelipad); B('anneaux', buildRings); B('parc', buildPark); B('police', buildPolice); B('quartiers', buildOuterDistricts); B('la zone', () => buildZone(-145, 40));
       B('bureau', () => buildOffice(38, 9)); B('rue commerçante', buildMall); B('fête foraine', buildFair); B('déco', buildDeco); B('rues', buildStreets); B('banque', () => buildBank(-52, 70));
@@ -8072,7 +8096,7 @@ function panneau(x, z, type, sens, route) {
   city.panneaux.push(p); return p;
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
-  road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -16, 6, 58, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport s'arrete avant l'armurerie   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
+  road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -10, 6, 70, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport monte d'une traite jusqu'a la rue commercante (z 25) depuis que l'armurerie a demenage : le trou de 12 m est bouche   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
   for (const [x, z] of [[-26, -8], [-26, 8], [26, -8], [26, 8]]) crosswalk(x, z, true); for (const [x, z] of [[-8, -26], [8, -26], [-8, 26], [8, 26]]) crosswalk(x, z, false);
   crosswalk(-26, 38, true); crosswalk(-41, 0, true); crosswalk(52, 20, true); crosswalk(0, -44, false, 6);
   // feux : 2 groupes alternés (A pour la circulation nord-sud, B pour est-ouest)
@@ -14985,7 +15009,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol

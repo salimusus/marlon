@@ -2036,15 +2036,17 @@ test('un seul coffre laisse le temps de fuir, trois font venir tout le monde', a
 
 test('rien ne dépasse des murs de l\'armurerie, et la banque est meublée', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 52, y: 1, z: 19, hour: 12 });
+    // L'ARMURERIE A DEMENAGE (round 75) : elle est en (67, 27) et non plus en (52, 19), parce
+    // qu'elle coupait la rue x = 52 en deux. Les murs suivent.
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 27, hour: 12 });
     const B = new __G.THREE.Box3(), p2 = new __G.THREE.Vector3();
-    const murs = { x1: 46, x2: 58, z1: 14.5, z2: 23.5 };
+    const murs = { x1: 61, x2: 73, z1: 22.5, z2: 31.5 };
     const dehors = [];
     let objets = 0;
     __G.worldGroup.traverse(o => {
       if (!o.isMesh || !o.geometry) return;
       o.getWorldPosition(p2);
-      if (p2.x < 46.4 || p2.x > 57.6 || p2.z < 14.9 || p2.z > 23.1 || p2.y < 0.4 || p2.y > 4.3) return;
+      if (p2.x < 61.4 || p2.x > 72.6 || p2.z < 22.9 || p2.z > 31.1 || p2.y < 0.4 || p2.y > 4.3) return;
       B.setFromObject(o);
       if (B.max.x - B.min.x > 5 || B.max.z - B.min.z > 5) return;   // la structure elle-même
       objets++;
@@ -11807,9 +11809,11 @@ test('le plan de ville est net : aucun obstacle ni véhicule garé dans une chau
 
 // Défaut 3 : l'armurerie coupait la rue x = 52 en deux (la rue de l'héliport s'arrêtait à z = 13,
 // la rue commerçante reprenait à z = 25). Pour franchir ces 12 m il fallait redescendre au bord de
-// mer et remonter par la rue de l'est : plus de 500 m. On mesure le trajet VRAIMENT roulable, par
-// la grille des voitures, entre les deux bouts de la rue.
-test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement de l\'armurerie remplace 520 m de détour', async p => {
+// mer et remonter par la rue de l'est : plus de 500 m. Le round 68 avait bricolé un contournement
+// par l'est (30 m de détour, deux carrefours parasites). Le joueur a tranché au round 75 :
+// « déplace l'armurerie ». Elle est partie en (67, 27), les contournements ont disparu, et la rue
+// est DROITE. On mesure le trajet VRAIMENT roulable, par la grille des voitures.
+test('plus aucune rue n\'est coupée en deux par un bâtiment : la rue x = 52 est droite depuis que l\'armurerie a déménagé', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     if (!G.NAV.voit) G.buildNav();
@@ -11821,18 +11825,27 @@ test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement
       m += Math.hypot(c2 - p2[p2.length - 1][0], d - p2[p2.length - 1][1]);
       return { m: Math.round(m), n: p2.length };
     };
-    const rue52 = lg(52, 6, 52, 32);            // les deux bouts de la rue coupée
+    const rue52 = lg(52, 6, 52, 32);            // les deux bouts de la rue autrefois coupée
     const voisin = lg(26, 6, 26, 32);           // la rue parallèle, jamais coupée : le mètre-étalon
-    // le contournement est bien de la chaussée ouverte aux voitures (coût 1 dans la grille)
-    const ouvert = [[57.5, 10], [63, 19], [57.5, 27.5]].map(([x, z]) => {
-      const N = G.NAV, i = Math.round((x - N.x0) / N.cs), j = Math.round((z - N.z0) / N.cs);
-      const k = j * N.nx + i;
-      return N.cout[k] === 1 && !N.voit[k];
-    });
-    return { rue52: rue52.m, voisin: voisin.m, direct: 26, ouvert };
+    // toute la traversée x = 52 est de la chaussée ouverte aux voitures (coût 1 dans la grille)
+    const N = G.NAV;
+    const cell = z => { const i = Math.round((52 - N.x0) / N.cs), j = Math.round((z - N.z0) / N.cs), k = j * N.nx + i; return N.cout[k] === 1 && !N.voit[k]; };
+    const ouvert = []; for (let z = 0; z <= 30; z += 2) ouvert.push(cell(z));
+    // l'armurerie et son stand de tir sont hors de TOUTE chaussée
+    const c = G.city, emp = [];
+    for (const q of [{ x: 67, z: 27, w: 12, d: 9 }, c.armoryParc, { x: 67, z: 15, w: 15, d: 12 }]) {
+      if (!q) { emp.push('absent'); continue; }
+      for (const rt of c.routes) if (Math.abs(q.x - rt.x) < q.w / 2 + rt.w / 2 - 0.5 && Math.abs(q.z - rt.z) < q.d / 2 + rt.d / 2 - 0.5) { emp.push([q.x, q.z, rt.x, rt.z]); break; }
+    }
+    // la ligne de tir, la dalle et les cibles ont survécu au nettoyage des chaussées
+    const ligne = G.solids.filter(o => Math.abs(o.x - 67) < 1 && Math.abs(o.z - 19.4) < 1 && o.w > 12).length;
+    return { rue52: rue52.m, voisin: voisin.m, direct: 26, ouvert, emp,
+      ligne, cibles: (c.targets || []).length, armory: c.armory, parc: c.armoryParc,
+      contournements: (c.plan.axes || []).filter(a => /ontournement.*armurerie/.test(a.n)).length };
   });
-  const ok = isFinite(r.rue52) && r.rue52 <= 70 && r.ouvert.every(Boolean);
-  return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant le contournement de l'armurerie, et la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les trois tronçons du contournement sont bien de la chaussée ouverte aux voitures (${r.ouvert.filter(Boolean).length}/3)` };
+  const ok = isFinite(r.rue52) && r.rue52 <= 40 && r.ouvert.every(Boolean) && r.emp.length === 0
+    && r.ligne === 1 && r.cibles === 3 && r.contournements === 0 && !!r.parc;
+  return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant, puis 70 avec le contournement ; la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les ${r.ouvert.length} relevés de z = 0 à z = 30 sont tous de la chaussée ouverte (${r.ouvert.filter(Boolean).length}/${r.ouvert.length}) · l'armurerie (${r.armory && r.armory.x}, ${r.armory && r.armory.z}), son stand de tir et son parking (${r.parc && r.parc.w} × ${r.parc && r.parc.d} m) ne mordent aucune chaussée (${r.emp.length} empiètement) · la ligne de tir (${r.ligne}/1) et les ${r.cibles} cibles survivent au nettoyage des rues, qui les effaçait à chaque chargement · ${r.contournements} tronçon de contournement restant` };
 });
 
 // ===================== POSTE FINITION (contrôle qualité, round 67) =====================

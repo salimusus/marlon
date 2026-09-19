@@ -2224,6 +2224,10 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  botKill: typeof botKill === 'function' ? botKill : null,
+  get shots() { return typeof shots !== 'undefined' ? shots : null; },
+  spawnShot: typeof spawnShot === 'function' ? spawnShot : null,
+  joueurAProvoque: typeof joueurAProvoque === 'function' ? joueurAProvoque : null,
   // ---- poste AMBULANCE (round 71 : la sequence de secours complete) : ajoute tes exports SOUS cette ligne ----
   majBrancard: typeof majBrancard === 'function' ? majBrancard : null,
   plieBrancard: typeof plieBrancard === 'function' ? plieBrancard : null,

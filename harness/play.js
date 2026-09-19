@@ -20054,3 +20054,139 @@ test('tous les bâtiments à étages ont un chemin montant jusqu\'au dernier niv
   const ok = r.total >= 9 && r.rates.length === 0;
   return { ok, detail: `balayage de ${r.total} bâtiments à étages (les 5 immeubles de La Zone + ${r.total - 5} villas voisines ; la villa du joueur a un ascenseur, pas d'escalier) : pour chacun, une inondation des surfaces praticables part du pied de l'escalier et n'accepte qu'une marche de 0,60 m, jamais le dessus d'un garde-corps — ${r.total - r.rates.length}/${r.total} atteignent leur dernier niveau${r.rates.length ? ' · manquent : ' + r.rates.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(', ') : ''} · détail : ${r.bilan.map(b => `${b.nom} ${b.atteint}/${b.vise}`).join(' | ')}` };
 });
+
+test('un habitant ordinaire ne lève jamais la main sur un enfant qui n\'a rien fait, mais la ville continue de se chamailler', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const D = 1 / 60;
+    const el = document.getElementById('msg');
+    // La ville est VOLONTAIREMENT calme pendant ses 180 premières secondes (VIE_CALME) :
+    // sans reculer `vie.debut`, aucune bagarre d'habitant ne peut se lancer et la mesure ne
+    // verrait rien du tout. On se place donc APRÈS cette accalmie, là où le défaut vivait.
+    G.vie.debut = G.simTime - 1000; G.vie.t = 0;
+    P.hp = 100;
+    // 1) LA SCÈNE DU CONTRÔLEUR : manette posée, 240 s de simulation, relevé À CHAQUE PAS.
+    let minHp = 100, chasse = 0, portee = 0, wantedMax = 0, coups = [], dernier = '';
+    for (let i = 0; i < 14400; i++) {
+      G.step(D, true);
+      if (P.hp < minHp) minHp = P.hp;
+      if (G.police.wanted > wantedMax) wantedMax = G.police.wanted;
+      const t = el && el.textContent || '';
+      if (t && t !== dernier) { dernier = t; if (/🤕|😵|👊/.test(t) && coups.length < 10) coups.push(t); }
+      for (const b of G.bots) {   // un habitant « en chasse » ne vise QUE le joueur (la bagarre entre bots passe par bagarreTick)
+        if (b.ko || !b.fight || b.fight === 'flee' || G.simTime > (b.fightT || 0)) continue;
+        chasse++;
+        if (Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 2.0) portee++;
+      }
+    }
+    const pose = { minHp: +minHp.toFixed(1), chasse, portee, wantedMax, coups };
+
+    // 2) LE TIRAGE FORCÉ : on ne laisse rien au hasard. On lance l'activité « bagarre » sur
+    //    douze habitants tirés autour de l'enfant, avec un hasard bloqué sur la valeur qui,
+    //    avant, envoyait tout le monde sur LUI (0,1 < 0,6).
+    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre') || { k: 'bagarre', e: '😤', n: 'bagarre' };
+    const vrai = Math.random;
+    const tirage = (provoque) => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+      G.jail.on = false; P.hp = 100; G.vie.debut = G.simTime - 1000;
+      G.police.wanted = 0; P.crime = 0; P.crimeTir = 0; P.drawn = false;
+      if (provoque) P.crime = G.simTime + 20;   // l'enfant vient de frapper quelqu'un
+      const proches = G.bots.filter(b => !b.ko && b.av && b.av.group.visible
+        && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40).slice(0, 12);
+      let surJoueur = 0, surBot = 0;
+      Math.random = () => 0.1;
+      for (const b of proches) {
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null; b.rdv = null; b.wait = 0;
+        G.lancerActivite(b, bag);
+        if (b.fight && b.fight !== 'flee') surJoueur++;
+        if (b.bagarre) surBot++;
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null;
+      }
+      Math.random = vrai;
+      return { essais: proches.length, surJoueur, surBot };
+    };
+    const propre = tirage(false);
+    const cherche = tirage(true);
+    return { pose, propre, cherche };
+  });
+  // 0 coup reçu d'un habitant non provoqué ; la ville se bagarre quand même entre bots ;
+  // et un enfant qui VIENT de frapper reste, lui, une cible légitime.
+  const ok = r.pose.chasse === 0 && r.pose.portee === 0 && r.pose.minHp === 100
+    && r.propre.surJoueur === 0 && r.propre.surBot > 0
+    && r.cherche.surJoueur > 0;
+  return { ok, detail: `avant : profil vierge, manette posée, « 🤕 −9 ❤️ · Karim_flash » puis « 😵 KO par Karim_flash ! −7 🪙 » — et sur 10 tirages « bagarre » forcés à moins de 45 m, 10 partaient sur le JOUEUR, 0 sur un autre bot · maintenant 240 s de simulation (14 400 pas, relevés à chaque pas, après l'accalmie des 180 premières secondes) : ${r.pose.chasse} image où un habitant est lancé sur lui, ${r.pose.portee} image où il est à portée de coup, ❤️ au plus bas ${r.pose.minHp}, ★ au plus haut ${r.pose.wantedMax}${r.pose.coups.length ? ' (' + r.pose.coups.join(' | ') + ')' : ' (aucun coup encaissé)'} · tirage forcé sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent à lui et ${r.propre.surBot} à un autre habitant (la ville vit toujours) · même tirage sur ${r.cherche.essais} habitants APRÈS un coup porté par l'enfant : ${r.cherche.surJoueur} s'en prennent à lui — la provocation marche encore` };
+});
+
+test('une infraction n\'est imputée à l\'enfant que s\'il en est l\'auteur : un bot qui en tue un autre ne le fait pas rechercher', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const log = document.getElementById('chatLog');
+    const lis = () => Array.prototype.map.call(log.children, d => d.textContent).join(' ⏎ ');
+    const raz = () => {   // on repart d'une ardoise vierge : ni étoile, ni avertissement en cours
+      G.police.wanted = 0; G.police.avert = 0; G.police.avertT = -999; G.police.crimeLevel = 0;
+      G.police.reactT = 0; G.police.decayT = 0; P.crime = 0; P.crimeTir = 0; log.innerHTML = '';
+    };
+    const vivants = () => G.bots.filter(b => !b.ko && !b.dead && b.av && b.av.group.visible);
+    const D = 1 / 60;
+
+    // A) un habitant en élimine un autre : l'auteur est le bot, l'enfant n'est pas inquiété
+    raz();
+    const v = vivants(); const A = v[0], B = v[1];
+    G.botKill(B, A);
+    const parBot = { wanted: G.police.wanted, texte: lis() };
+
+    // B) NON-RÉGRESSION : quand c'est l'enfant, il est toujours recherché
+    raz();
+    const C = vivants()[0];
+    G.botKill(C);
+    const parJoueur = { wanted: G.police.wanted, texte: lis() };
+
+    // C) LA CHAÎNE COMPLÈTE, sans rien toucher : une bagarre de rue menée jusqu'au KO.
+    //    On COLLE les deux habitants l'un à l'autre à chaque pas et on prolonge la bagarre :
+    //    sinon la victime part faire du vélo au bout de quelques secondes et on ne mesure rien.
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; raz(); P.hp = 100;
+    const w = vivants(); const cogneur = w[0], victime = w[1];
+    for (const b of [cogneur, victime]) { b.activite = null; b.rdv = null; b.ordre = null; b.drive = null; b.ko = 0; b.dead = 0; b.bagarre = null; b.fight = null; }
+    victime.hp = 14;
+    G.botTape(cogneur, victime);   // PAS un ordre du joueur : deux habitants qui se prennent la tête
+    let pasBagarre = 0;
+    while (pasBagarre < 900 && !victime.dead) {
+      victime.pos.set(cogneur.pos.x + 0.7, cogneur.pos.y, cogneur.pos.z);
+      victime.av.group.position.copy(victime.pos);
+      victime.activite = null; victime.rdv = null; victime.drive = null;
+      if (cogneur.bagarre) cogneur.bagarre.fin = G.simTime + 22;
+      G.step(D, true); pasBagarre++;
+    }
+    const bagarre = { wanted: G.police.wanted, mort: !!victime.dead, pas: pasBagarre, texte: lis() };
+
+    // D) UNE BALLE QUI N'EST PAS LA SIENNE : l'ami armé qui te protège abat un agresseur.
+    //    (Une balle de la police, elle, ne peut toucher que le joueur : le test de collision
+    //    des bots est enfermé dans `if (s.mine)` — mesuré en lisant `shotsTick`.)
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 });
+    G.jail.on = false; raz(); P.hp = 100; G.police.agents.length = 0;
+    G.bots.forEach(x => { x.activite = null; x.rdv = null; x.ordre = null; x.fight = null; x.bagarre = null; x.garde = 0; x.gardeArme = 0; x.ko = 0; x.dead = 0; x.hp = 100; });
+    const ami = G.bots[0], agresseur = G.bots[1];
+    G.amis.add(ami.name);
+    G.commandeSociale(ami.name + ' tire pour me protéger');
+    ami.pos.set(P.pos.x + 1, 0.3, P.pos.z); ami.av.group.position.copy(ami.pos);
+    agresseur.pos.set(P.pos.x + 3, 0.3, P.pos.z + 1); agresseur.av.group.position.copy(agresseur.pos);
+    agresseur.hp = 20; agresseur.fight = 'chase'; agresseur.fightT = G.simTime + 60;
+    log.innerHTML = '';
+    for (let i = 0; i < 12 && !agresseur.dead; i++) { ami.tirT = 0; G.gardeArmeTick(ami, 1 / 30); }
+    const balle = { wanted: G.police.wanted, mort: !!agresseur.dead, texte: lis(), ami: ami.name };
+
+    return { parBot, parJoueur, bagarre, balle };
+  });
+  const dit = (t, mot) => (t || '').toLowerCase().includes(mot);
+  const ok = r.parBot.wanted === 0 && !dit(r.parBot.texte, 'la police recherche')
+    && r.parJoueur.wanted > 0 && dit(r.parJoueur.texte, 'la police recherche')
+    && r.bagarre.mort && r.bagarre.wanted === 0 && !dit(r.bagarre.texte, 'la police recherche')
+    && r.balle.mort && r.balle.wanted === 0 && !dit(r.balle.texte, 'la police recherche')
+    && dit(r.balle.texte, r.balle.ami.toLowerCase());
+  return { ok, detail: `avant : 14 400 pas manette posée donnaient « 💥 Lea_star attaque Karim_flash » puis « 💀 Karim_flash a été éliminé par Joueur58 » et « 🚔 Infraction : éliminer Karim_flash ! Niveau ★★ » — la police tirait ensuite sur l'enfant (−8 puis −7 ❤️, ❤️ au plus bas 54) · maintenant — (a) un bot en élimine un autre : ★ ${r.parBot.wanted}, « ${r.parBot.texte} » · (b) l'enfant en élimine un : ★ ${r.parJoueur.wanted}, « ${r.parJoueur.texte} » (non-régression) · (c) bagarre de rue menée au KO en ${r.bagarre.pas} pas, mort=${r.bagarre.mort} : ★ ${r.bagarre.wanted}, « ${r.bagarre.texte} » · (d) un agresseur abattu par la balle de l'ami armé ${r.balle.ami}, mort=${r.balle.mort} : ★ ${r.balle.wanted}, « ${r.balle.texte} »` };
+});

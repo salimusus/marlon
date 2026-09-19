@@ -14368,6 +14368,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.wait = 0.5; b.dance = 0;
+    b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
     // ON PEUT SE BATTRE. Un habitant sur deux detalait au premier coup a 5,5 m/s et ne
     // revenait jamais : les coups suivants frappaient le vide et il recuperait 100 ❤️ hors de
     // vue — jamais de KO, jamais le ralenti du coup final. Un sur trois recule encore, mais
@@ -14447,6 +14448,7 @@ function coupCouteau(av, duree) {
   // laissé en bagarre par la scène d'avant encaissait 24 au lieu de 34 dès le premier coup — test 262.)
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
+    b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
     avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
@@ -14560,6 +14562,24 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); }
 }
+// UN HABITANT NE S'EN PREND AU JOUEUR QUE S'IL L'A CHERCHÉ (n° 84 du Joueur). C'est la
+// moitié du n° 78 qui restait : la garde `joueurDansLaGuerre()` ne couvrait que les gangs,
+// et la bagarre ORDINAIRE des habitants n'avait aucune garde équivalente. Mesuré avant, sur
+// un profil vierge manette posée : sur 10 tirages « bagarre » forcés à moins de 45 m,
+// 10 partaient sur le JOUEUR (0 sur un autre bot) — l'enfant tombait à 0 ❤️ et perdait
+// 7 🪙 sous les poings d'un simple passant (Karim_flash). Après : 0 sur 10, et les 10
+// bagarres partent sur un autre habitant.
+// La ville, elle, continue de se chamailler entre bots : c'est le JOUEUR qui est hors
+// d'atteinte tant qu'il n'a rien fait.
+function joueurAProvoque() {
+  if (typeof P === 'undefined' || !P) return false;
+  if (police.wanted > 0) return true;                       // il est recherché : toute la rue le sait
+  if (P.crime && simTime < P.crime) return true;            // délit tout frais (coup, vol, tir, vitrine…)
+  if (P.crimeTir && simTime < P.crimeTir) return true;      // il vient de tirer en pleine rue
+  if (P.drawn && P.weapon) return true;                     // arme dégainée devant tout le monde
+  if (typeof joueurDansLaGuerre === 'function' && joueurDansLaGuerre()) return true;
+  return false;
+}
 function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénération du joueur
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
   for (const b of bots) {
@@ -14588,6 +14608,19 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
       const fx = qui.x - b.pos.x, fz = qui.z - b.pos.z, fd = Math.hypot(fx, fz) || 1;
       const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -fx / fd * vf * dt, -fz / fd * vf * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-fx, -fz); animateRig(b.av.rig, 'walk', vf, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
     else {
+      // FILET DE SÛRETÉ (n° 84). Cette branche-ci ne vise QUE le joueur (la bagarre entre
+      // bots passe par `bagarreTick`, qui a déjà rendu la main plus haut). On ne coupe que
+      // la poursuite « chase » : c'est le SEUL état posé par l'activité « bagarre » de la vie
+      // de la ville (vérifié : une seule écriture de `'chase'` dans tout le fichier), donc la
+      // seule qui puisse partir sans que l'enfant y soit pour rien. Les ripostes légitimes
+      // (`'fight'`, posé par le coup de poing, la lame, la balle du joueur) ne sont pas
+      // touchées. Utile même avec la garde posée au départ dans `lancerActivite` : une
+      // poursuite dure 16 s, et l'enfant peut être redevenu propre entre-temps.
+      // `b.rancune` est la mémoire du bot : elle n'est posée que par un coup DU JOUEUR.
+      if (b.fight === 'chase' && simTime > (b.rancune || 0) && !joueurAProvoque()) {
+        b.fight = null; b.fuitDe = null; b.garde = false; if (b.av && b.av.rig) b.av.rig.garde = false;
+        b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); continue;
+      }
       // EN FACE AUSSI ON SE GARDE : entre deux coups, l'habitant lève les deux poings devant
       // son visage. Un coup qui arrive à ce moment-là ne passe qu'au quart (voir `attack`).
       // La fenêtre de garde couvrait 0,8 s sur 1,1 : l'habitant était garde LEVEE les trois
@@ -19155,7 +19188,7 @@ function chienTick(dt) {
       }
       if (d < 1.6 && simTime > (chien.morsT || 0)) {
         chien.morsT = simTime + 1.1;
-        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0;
+        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
           impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sfx.noise(.08, 500, .07);
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
@@ -20940,13 +20973,13 @@ function botAttendIci(b) {
 }
 // Ami ou homme du gang : c'est quelqu'un du camp du joueur.
 function estDesNotres(o) { return !!o && !!o.name && (estDuGang(o) || estAmi(o.name)); }
-function botTape(b, cible) {
+function botTape(b, cible, parJoueur) {   // `parJoueur` : la bagarre a été ORDONNÉE par l'enfant (n° 85)
   if (!cible || cible === b) { botDit(b, 'qui ça ?'); return; }
   // Ils se tapaient DESSUS entre eux : dès qu'un membre se faisait frapper, il passait en
   // « bagarre », et les gardes du corps du gang lui sautaient dessus à leur tour. On ne
   // lève pas la main sur les siens.
   if (estDesNotres(cible)) { botDit(b, `${cible.name} est des nôtres, je ne le touche pas 😐`); return; }
-  b.bagarre = { cible, fin: simTime + 22, cd: 0 }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
+  b.bagarre = { cible, fin: simTime + 22, cd: 0, parJoueur: !!parJoueur }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
   noteOrdre(b, '💥', `s'en prendre à ${cible.name}`);
   botDit(b, pickOne([`ok, je m'occupe de ${cible.name} ! 😤`, `${cible.name} va comprendre 💥`]));
   msg(`💥 ${b.name} s'en prend à ${cible.name}`, 2400);
@@ -21160,7 +21193,10 @@ function bagarreTick(b, dt) {
       // Un homme du gang (ou un ami) ne « meurt » pas dans une bagarre : il tombe, et on
       // l'envoie à l'hôpital. Avant, il explosait comme un passant.
       if (estDesNotres(c)) { c.hp = 0; c.ko = simTime + 14; c.fight = null; corpsAuSol(c.av, c.pos.x, c.pos.z, c.pos.y); }
-      else botKill(c);
+      // (n° 85) l'auteur, c'est CELUI QUI COGNE. Le joueur n'en répond que s'il a donné
+      // l'ordre lui-même (« tape Momo ») — pas quand deux habitants se battent tout seuls,
+      // ni quand son garde du corps le défend.
+      else botKill(c, (b.bagarre && b.bagarre.parJoueur) ? null : b);
       b.bagarre = null; b.ordre = null;
     }
   } else animateRig(b.av.rig, 'idle', 0, dt, simTime);
@@ -21268,7 +21304,7 @@ function commandeExacte(txt) {
     let vic = null;
     for (const o of bots) { if (o === cible || o.ko) continue; if (norm(txt).includes(norm(o.name)) || norm(txt).includes(norm(o.name.split('_')[0]))) vic = o; }
     if (!vic) vic = bots.filter(o => o !== cible && !o.ko).map(o => ({ o, d: Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) })).sort((a, c) => a.d - c.d)[0]?.o;
-    botTape(cible, vic); return true;
+    botTape(cible, vic, true); return true;
   }
   if (/\b(entraine|entraîne|entrainer|entraînement|muscle|muscler|sport|salle de sport)\b/.test(t) && estDuGang(cible)) { entrainerMembre(cible, 'sport'); return true; }
   if (/\b(stand de tir|tir a la cible|vise|viser|apprend a tirer|apprends a tirer)\b/.test(t) && estDuGang(cible)) { entrainerMembre(cible, 'tir'); return true; }
@@ -24256,7 +24292,8 @@ function ecraseAuSol(c, V) {
     corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
     botSay(b, ['aïïïe !!', 'au secours !', 'tu m\'as écrasé !', 'chauffard !!']);
     boom(c.x, c.z, v * 0.6);
-    if (drive.car === c) { infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
+    if (drive.car === c) { b.rancune = simTime + 45;   /* (n° 84) écrasé par le joueur : il peut lui courir après */
+      infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
     // L'AMBULANCE VIENT AUSSI POUR UN BLESSE LOURD. Elle n'etait appelee qu'a zero point de
     // vie : un passant renverse a 50 km/h (❤️ 56) se relevait au bout de 4,5 s en disant
     // « plus jamais ca », et aucun secours ne partait. Au-dessus de 8 m/s (30 km/h), on
@@ -26517,11 +26554,23 @@ function drawWeapon(on) {   // dégainer / rengainer
   if (!P.drawn) { P.aim = false; P.lock = null; }
   updateAct();
 }
-function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
+// L'AUTEUR D'UNE ÉLIMINATION N'EST PLUS LE JOUEUR PAR DÉFAUT (n° 85 du Joueur). Mesuré,
+// profil vierge, manette posée, 14 400 pas de simulation : « 💥 Lea_star attaque
+// Karim_flash » (bagarre entre deux HABITANTS) puis « 💀 Karim_flash a été éliminé par
+// Joueur58 » et « 🚔 Infraction : éliminer Karim_flash ! Niveau ★★ » — la police ouvrait
+// ensuite le feu sur l'enfant (−8 puis −7 ❤️, ❤️ au plus bas 54) et l'emmenait en cellule.
+// `auteur` absent = c'est bien le joueur (poing, lame, sa balle, son explosif) ; sinon on
+// passe le bot (ou son nom) qui a porté le coup, et AUCUNE infraction n'est imputée.
+function botKill(b, auteur) {
   if (b.dead) return; b.dead = simTime + 8; b.hp = 0; b.fight = null; b.ko = 0;
+  const parJoueur = !auteur;
+  const nomAuteur = parJoueur ? myCfg.name : (typeof auteur === 'string' ? auteur : (auteur.name || auteur.nom || 'quelqu\'un'));
   explode(b.av); sfx.die(); sfx.noise(.3, 400, .1); const amount = 8 + Math.floor(Math.random() * 10); dropLoot(b.pos.x, b.pos.z, amount, Math.max(0.3, b.pos.y));
-  chat(null, `💀 ${b.name} a été éliminé par ${myCfg.name}`); msg(`💀 ${b.name} éliminé ! Ramasse ses pièces`, 1800);
-  infraction('éliminer ' + b.name, 2, 3);
+  chat(null, `💀 ${b.name} a été éliminé par ${nomAuteur}`);
+  if (parJoueur) { msg(`💀 ${b.name} éliminé ! Ramasse ses pièces`, 1800); infraction('éliminer ' + b.name, 2, 3); }
+  // la pastille ne parle que de ce que l'enfant peut VOIR : sinon la ville entière lui
+  // racontait ses règlements de comptes à quatre cents mètres.
+  else if (Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40) msg(`💀 ${nomAuteur} a éliminé ${b.name}`, 1600);
   setTimeout(() => { resetBot(b, 1); b.hp = 100; b.dead = 0; b.av.group.rotation.x = 0; botSay(b, ['je reviens !', 'même pas mal', 'la police va venir !']); }, 8000);
 }
 function dropLoot(x, z, amount, y = 0.3) {   // petit tas de pièces à ramasser (y : l'étage où il tombe)
@@ -27129,18 +27178,22 @@ function shotsTick(dt) {
       impact(tg.m.position.x, tg.y, tg.z, { x: dx, y: dy, z: dz }, 'metal', 1.2); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
       const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); impact(r.cur.x, r.cur.y + 1, r.cur.z, { x: dx, y: dy, z: dz }, 'balle', 1); updateAct();
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte
+      if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte — mais seulement si c'est NOTRE balle (n° 85)
     } else if (quoi === 'bot') {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
+      if (s.mine) b.rancune = simTime + 45;   // (n° 84) touché par LA balle du joueur : il garde sa rancune
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
       if (b.hp <= 0) {
-        botKill(b);
+        // (n° 85) la police, l'hélicoptère ou un ami armé tirent aussi : `s.mine` dit si la
+        // balle est celle de l'enfant. Sans ça, une balle de la police qui tuait un passant
+        // valait deux étoiles AU JOUEUR.
+        botKill(b, s.mine ? null : (s.ami || s.byName || 'un tireur'));
         // POSTE ANIMATION : la balle qui abat l'adversaire déclenche elle aussi le ralenti de
         // trois secondes — mais SEULEMENT si c'est le joueur qui a tiré (`s.mine`) : se faire
         // descendre par la police n'est pas un coup vainqueur.
         if (s.mine) { try { ralentiCoup(b.pos.x, b.pos.y, b.pos.z, 'pistolet', Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 1); } catch (e) {} }
-      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 3); } }
+      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 3); } }
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;
@@ -27151,30 +27204,33 @@ function shotsTick(dt) {
       applyDamageVisual(v, s.v.x / L2 * 3, s.v.z / L2 * 3);
       if ((v.dmg || 0) >= 100 && av < 100) {
         explodeVehicle(v);
-        if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); }
+        if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); if (s.mine) { chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); } }   // (n° 85) pas NOTRE balle, pas NOTRE délit
         else {
           msg('💥 Véhicule détruit !', 1600);
           // FAIRE EXPLOSER UNE VOITURE, C'EST DEUX ÉTOILES, SANS PITIÉ. Avant : un message, et
           // personne ne venait (mesuré : voiture en feu devant le snack, ⭐ 0 pendant 90 s).
           if (s.mine) { P.crime = simTime + 20; infraction('faire exploser un véhicule', 2, 3, true); }
         }
-      } else if (v.mil || (v.solid && v.solid.pol)) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } }
+      } else if (v.mil || (v.solid && v.solid.pol)) { if (s.mine) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } } }
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
-      police.riposte = simTime + 30;
+      if (s.mine) police.riposte = simTime + 30;
       if (a.hp <= 0) agentTue(a);
-      else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
+      else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
       const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
-      if (m.hp <= 0) gangeurKO(m, 'le joueur');
-      else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
+      // (n° 85) « le joueur » n'est l'auteur que si la balle est la sienne : une balle de la
+      // police ou d'un ami armé annonçait « X a été tué par <l'enfant> » et retournait le gang
+      // contre lui pour un coup qu'il n'avait pas porté.
+      if (m.hp <= 0) gangeurKO(m, s.mine ? 'le joueur' : (s.byName || (s.ami && s.ami.name) || 'un tireur'));
+      else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (s.mine && G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
     } else if (quoi === 'garde') {
       const gd = cible; gd.hp -= (s.dmg || 20); impact(gd.x, gd.y + 1.2, gd.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       if (gd.hp <= 0) { gd.ko = simTime + 12; corpsAuSol(gd.av, gd.x, gd.z, gd.y); bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
       // les gardes ripostent, mais tirer sur l'un d'eux n'est pas un braquage de banque :
       // avant, la moindre balle perdue déclenchait l'alerte maximale et trois voitures.
-      gd.alert = true; police.riposte = simTime + 30;
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2, true); }   // sans pitié : on ne tire pas sur un vigile par accident
+      gd.alert = true; if (s.mine) police.riposte = simTime + 30;
+      if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2, true); }   // sans pitié : on ne tire pas sur un vigile par accident — mais il faut que la balle soit la nôtre (n° 85)
     }
     if (s.feu) feuAuSol(s.p.x, Math.max(0.05, s.p.y - 0.6), s.p.z);
     if (s.boom) balleExplose(s.p.x, s.p.y, s.p.z);
@@ -30646,7 +30702,7 @@ function gardeArmeTick(b, dt) {
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }
   else if (c.bot) { c.bot.hp = (c.bot.hp ?? 100) - 22; c.bot.fight = 'flee'; c.bot.fightT = simTime + 6;
     impact(c.bot.pos.x, c.bot.pos.y + 1.2, c.bot.pos.z, null, 'sang', 1);
-    if (c.bot.hp <= 0) botKill(c.bot); }
+    if (c.bot.hp <= 0) botKill(c.bot, b); }   // (n° 85) c'est l'ami ARMÉ qui tire, pas l'enfant
   if (simTime > (b.criT || 0)) { b.criT = simTime + 5; botSay(b, [`recule, ${c.nom} !`, 'je te couvre !', 'baisse-toi !']); }
   return true;
 }
@@ -30715,8 +30771,10 @@ function lancerActivite(b, a) {
     chat(null, `👀 ${b.name} rôde autour de la banque…`);
   } else if (a.k === 'bagarre') {
     // il s'en prend au joueur, ou à un autre bot si le joueur est loin
+    // (n° 84) — et il ne s'en prend au JOUEUR que si le joueur l'a cherché. Sinon on tombe
+    // dans la branche du dessous : la bagarre a bien lieu, mais entre deux habitants.
     const dp = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
-    if (dp < 45 && Math.random() < 0.6) {
+    if (joueurAProvoque() && dp < 45 && Math.random() < 0.6) {
       b.fight = 'chase'; b.fightT = simTime + 16; b.wait = 0;
       botSay(b, [`viens te battre ${myCfg.name} ! 😤`, 'tu me dois quelque chose !', 'approche un peu !']);
       chat(null, `😤 ${b.name} s'en prend à ${myCfg.name} !`);
@@ -31952,10 +32010,18 @@ function gangeurKO(m, par, assomme) {
   }
   const G = gangDe(m.gang);
   if (!G) return;
-  // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.
-  if (G.allieJoueur) rompsAlliance(G, 'trahison');
-  G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
-  G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
+  // LE GANG NE SE RETOURNE CONTRE L'ENFANT QUE SI C'EST LUI QUI A TIRÉ (n° 85). `gangeurKO`
+  // est aussi appelé pour une bagarre entre deux gangs (`gangeurKO(cible, m.nom, true)`) et
+  // pour une balle de la police : dans ces cas-là le gang partait « état joueur », se lançait
+  // à ses trousses et l'enfant empochait même la réputation du coup. Il ne perd la face du
+  // gang, et ne gagne du respect, que pour les coups qu'il a portés.
+  const parLeJoueur = (par === 'le joueur');
+  if (parLeJoueur) {
+    // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.
+    if (G.allieJoueur) rompsAlliance(G, 'trahison');
+    G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
+    G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
+  }
   // ON DIT CE QUI S'EST VRAIMENT PASSÉ (n° 83 du contrôleur). Le jeu fait déjà la différence
   // en interne — `m.abattu` est posé quand le coup est porté à l'arme, le corps s'efface au
   // bout de 15 s et l'homme quitte le gang pour de bon — mais il annonçait « a mis KO » dans
@@ -31967,13 +32033,13 @@ function gangeurKO(m, par, assomme) {
       : `💀 ${m.nom}, le chef des ${G.nom}, est mort.`, 3200);
     chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom}, chef des ${G.nom}`
       : `💀 ${auteur} a tué ${m.nom}, chef des ${G.nom}`);
-    gagneRep(30, assomme ? 'chef assommé' : 'chef abattu');
+    if (parLeJoueur) gagneRep(30, assomme ? 'chef assommé' : 'chef abattu');
   } else {
     // même règle pour un simple homme de main : jusqu'ici il tombait sans un mot, et son corps
     // disparaissait quinze secondes plus tard sans que rien n'ait dit qu'il était mort.
     chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom} (${G.nom})`
       : `💀 ${auteur} a tué ${m.nom} (${G.nom})`);
-    gagneRep(3, null);
+    if (parLeJoueur) gagneRep(3, null);
   }
   verifieElimination(G);
 }

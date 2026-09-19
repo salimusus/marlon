@@ -2788,6 +2788,12 @@ function buildShops() {
     const tb = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 14), lam(0xf4f6fa)); tb.position.set(tx, 0.9, 14.7); worldGroup.add(tb); box(tx, 0.45, 14.7, 0.12, 0.85, 0.12, 0x3b4252, { deco: true, studs: false });
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6), lam(0x3b4252)); pole.position.set(tx, 2.2, 14.7); worldGroup.add(pole);
     const par = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.6, 10), lam(tx < -9 ? 0xff5c5c : 0xffd23f)); par.position.set(tx, 3.4, 14.7); worldGroup.add(par);
+    // MEME RAISON QUE L'AUVENT (defaut 81) : ce parasol de 3,2 m de diametre est plante juste
+    // derriere les places de stationnement, a hauteur de perche. Mesure au parking du centre,
+    // joueur au volant : il restait le dernier obstacle colle a l'objectif (1,71 m, 4 % de
+    // l'image dans le coin bas). Il est fait a la main (un cone), donc estUnToit() ne l'a
+    // jamais vu : on l'inscrit a la main, comme l'auvent.
+    camToits.push({ mesh: par, x: tx, y: 3.4, z: 14.7, w: 3.2, h: 0.6, d: 3.2 });
     for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 1.1], [0, -1.1]]) { box(tx + dx, 0.45, 14.7 + dz, 0.5, 0.08, 0.5, 0xffd23f, { deco: true, studs: false }); box(tx + dx, 0.25, 14.7 + dz, 0.08, 0.45, 0.08, 0x3b4252, { deco: true, studs: false }); }
   }
   const cone = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), lam(0xd9a066)); cone.rotation.x = Math.PI; cone.position.set(-9.5, 6.3, 16.2); worldGroup.add(cone);

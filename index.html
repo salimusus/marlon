@@ -8698,7 +8698,14 @@ function signalisation() {
     const maj = la > lb ? k.a : k.b, imaj = la > lb ? k.ia : k.ib;
     const min = la > lb ? k.b : k.a, imin = la > lb ? k.ib : k.ia;
     pose(maj, imaj, k, 'prioritaire');
-    pose(min, imin, k, Math.min(min.w, min.d) <= 6 ? 'stop' : 'cede');
+    // STOP OU CEDEZ-LE-PASSAGE. La regle etait « rue de 6 m ou moins = stop » ; depuis que la
+    // hierarchie est montee d'un cran (round 75), presque plus aucune rue ne fait 6 m, et il ne
+    // restait que TROIS stops dans toute la ville — le controle du code de la route (test 298)
+    // ne trouvait plus une seule voiture qui s'arrete vraiment. On juge maintenant sur l'ECART
+    // DE RANG : une ruelle (8 m au plus) qui debouche sur une avenue ou un boulevard (11 m ou
+    // plus) a un STOP ; entre voisins de rang, un cedez-le-passage suffit.
+    const lmin = Math.min(min.w, min.d), lmaj = Math.min(maj.w, maj.d);
+    pose(min, imin, k, (lmin <= 8 && lmaj >= 11) ? 'stop' : 'cede');
   }
   // fin de priorite : au tout dernier carrefour de chaque boulevard, la priorite s'arrete
   for (let i = 0; i < R.length; i++) {

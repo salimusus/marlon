@@ -19735,3 +19735,43 @@ test('la police ne « perd » l\'enfant que s\'il s\'est vraiment caché, et une
     && c.perduA > 0 && c.wanted === 0;
   return { ok, detail: `avant : trois coups de feu à 45 m du commissariat, l'enfant ne bouge pas, et « 🙈 Ils t'ont perdu » tombait à t+12 s — deux secondes AVANT que les voitures ne s'élancent (délai d'intervention ${d.react} s) ; elles restaient ensuite figées à 37 m, aucun agent ne descendait · maintenant à découvert et immobile : plus aucun abandon sur 40 s (perdu à ${d.perduA} s), la voiture la plus proche est venue à ${d.minVoiture} m et ${d.maxAgents} agent(s) sont descendus${d.arreteA > 0 ? `, arrêté à ${d.arreteA} s` : ''} · et caché dans une planque à ${c.dDelit} m du délit (abri=${c.abri}), ils perdent bien sa trace à ${c.perduA} s (★ ${c.wanted})` };
 });
+
+// ================= POSTE CONDUITE — on n'écrase pas ses propres passagers =================
+test('on ne renverse jamais ses propres passagers : trois amis à bord, on démarre, personne n\'est blessé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    G.police.wanted = 0;
+    // une voiture ordinaire, posée sur la chaussée, et le joueur au volant
+    const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.busy && !v.rider);
+    const vp = G.voieProche(8, 8);
+    c.x = vp.px; c.z = vp.pz; c.h = vp.arete.sens; c.speed = 0; c.ia = null;
+    G.settleVehicle(c); c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+    G.P.pos.set(c.x + 2.5, c.y || 1, c.z);
+    G.enterCar(c); G.poseJoueurAuVolant(1);
+    // trois amis amenés à portée, puis embarqués sur leurs sièges
+    const amis = G.bots.filter(b => b.av && !b.prison && !b.drive && !b.enVoiture).slice(0, 3);
+    G.gang.membres = amis.slice();   // `compagnonsProches` embarque les membres du gang et les amis
+    amis.forEach((b, i) => { b.hp = 100; b.ko = 0; b.mort = false;
+      b.pos.set(c.x + 1.6 + i * 0.4, c.y || 0, c.z + 1.2); });
+    G.embarqueOccupants(c);
+    const montes = amis.filter(b => b.enVoiture === c).length;
+    const hp0 = amis.map(b => b.hp);
+    // ON DÉMARRE. C'est le premier mètre qui faisait tout le mal.
+    const dt = 1 / 60;
+    let parcouru = 0, px = c.x, pz = c.z;
+    for (let k = 0; k < 60 * 6; k++) {
+      c.speed = 7; c.v = 7;            // `ecraseAuSol` lit `c.v` quand on ne lui passe pas le pilote
+      G.ecraseAuSol(c, null);
+      c.x += Math.sin(c.h) * 7 * dt; c.z += Math.cos(c.h) * 7 * dt;
+      c.g.position.set(c.x, c.y || 0, c.z); G.vehicleSolid(c);
+      parcouru += Math.hypot(c.x - px, c.z - pz); px = c.x; pz = c.z;
+    }
+    const hp1 = amis.map(b => b.hp);
+    const aTerre = amis.filter(b => b.ko && b.ko > G.simTime).length;
+    G.exitCar();
+    return { montes, hp0, hp1, aTerre, etoiles: G.police.wanted || 0, parcouru: +parcouru.toFixed(0) };
+  });
+  const ok = r.montes === 3 && r.hp1.every(h => h === 100) && r.aTerre === 0 && r.etoiles === 0 && r.parcouru > 30;
+  return { ok, detail: `relevé en jeu : trois amis montés, et le PREMIER MÈTRE de conduite donnait ★★★, « chauffard ! » et leurs points de vie tombés de 100 à 41 — alors qu'ils étaient assis sur leur siège. Le garde-fou écartait le bot AU VOLANT, jamais les PASSAGERS · maintenant ${r.montes} amis à bord, ${r.parcouru} m parcourus : points de vie ${r.hp0.join('/')} → ${r.hp1.join('/')}, ${r.aTerre} à terre, ${r.etoiles} étoile(s) de recherche` };
+});

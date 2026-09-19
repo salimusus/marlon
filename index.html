@@ -24162,7 +24162,15 @@ function ecraseAuSol(c, V) {
   const rr = (c.baseW || 2.4) / 2 + 0.5, rl = (c.baseD || 4.4) / 2 + 0.5, cs = Math.cos(c.h), sn = Math.sin(c.h);
   let n = 0;
   for (const b of bots) {
-    if (!b.av || !b.av.group.visible || b.prison || b.drive || simTime < (b.hitT || 0)) continue;
+    // ON N'ECRASE PAS SES PROPRES PASSAGERS. Un ami ASSIS DANS LA VOITURE est, par
+    // construction, dans le rectangle du capot : au premier metre de conduite il se faisait
+    // « renverser » par le vehicule ou il etait monte. Releve en jeu : trois amis a bord,
+    // trois etoiles de recherche, « chauffard ! », et leurs points de vie tombes de 100 a 41
+    // — alors qu'ils etaient sur leur siege. Le garde-fou ecartait bien le bot AU VOLANT
+    // (`b.drive`), jamais les PASSAGERS (`b.enVoiture`). C'est le pendant exact de ce qu'on a
+    // fait pour les pietons du trottoir : on ne freine, et on n'ecrase, que pour qui est
+    // vraiment sur la chaussee.
+    if (!b.av || !b.av.group.visible || b.prison || b.drive || b.enVoiture || simTime < (b.hitT || 0)) continue;
     if (Math.abs(b.pos.y - (c.y || 0)) > 2) continue;
     const dx = b.pos.x - c.x, dz = b.pos.z - c.z;
     const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;

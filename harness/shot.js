@@ -2332,6 +2332,11 @@ window.__G = {
   fouleeDe: typeof fouleeDe === 'function' ? fouleeDe : null,
   poseJambes: typeof poseJambes === 'function' ? poseJambes : null,
   poseAvatarJoueur: typeof poseAvatarJoueur === 'function' ? poseAvatarJoueur : null,
+  // ---- POSTE BATIMENTS (escaliers, paliers, garde-corps) : exports apres cette ligne-repere ----
+  STEP_UP: typeof STEP_UP !== 'undefined' ? STEP_UP : 0,
+  MARCHE_MONTEE: typeof MARCHE_MONTEE !== 'undefined' ? MARCHE_MONTEE : 0,
+  JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
+  buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
 };
 `;
 

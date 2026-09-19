@@ -946,6 +946,10 @@ window.__G = {
   FREIN_PEDALE: typeof FREIN_PEDALE !== 'undefined' ? FREIN_PEDALE : 0,
   FREIN_MAIN: typeof FREIN_MAIN !== 'undefined' ? FREIN_MAIN : 0,
   heliPoser: typeof heliPoser === 'function' ? heliPoser : null,
+  remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
+  pointDeReveil: typeof pointDeReveil === 'function' ? pointDeReveil : null,
+  relevageTick: typeof relevageTick === 'function' ? relevageTick : null,
+  joueurSestCache: typeof joueurSestCache === 'function' ? joueurSestCache : null,
   heliSolSous: typeof heliSolSous === 'function' ? heliSolSous : null,
   HELI_POSE_MAX: typeof HELI_POSE_MAX !== 'undefined' ? HELI_POSE_MAX : 0,
   PT_AXES: typeof PT_AXES !== 'undefined' ? PT_AXES : null,
@@ -2224,6 +2228,10 @@ window.__G = {
   navChoisit: typeof navChoisit === 'function' ? navChoisit : null,
   navValide: typeof navValide === 'function' ? navValide : null,
   updateLeaderboard: typeof updateLeaderboard === 'function' ? updateLeaderboard : null,
+  botKill: typeof botKill === 'function' ? botKill : null,
+  get shots() { return typeof shots !== 'undefined' ? shots : null; },
+  spawnShot: typeof spawnShot === 'function' ? spawnShot : null,
+  joueurAProvoque: typeof joueurAProvoque === 'function' ? joueurAProvoque : null,
   // ---- poste AMBULANCE (round 71 : la sequence de secours complete) : ajoute tes exports SOUS cette ligne ----
   majBrancard: typeof majBrancard === 'function' ? majBrancard : null,
   plieBrancard: typeof plieBrancard === 'function' ? plieBrancard : null,
@@ -2336,6 +2344,11 @@ window.__G = {
   fouleeDe: typeof fouleeDe === 'function' ? fouleeDe : null,
   poseJambes: typeof poseJambes === 'function' ? poseJambes : null,
   poseAvatarJoueur: typeof poseAvatarJoueur === 'function' ? poseAvatarJoueur : null,
+  // ---- POSTE BATIMENTS (escaliers, paliers, garde-corps) : exports apres cette ligne-repere ----
+  STEP_UP: typeof STEP_UP !== 'undefined' ? STEP_UP : 0,
+  MARCHE_MONTEE: typeof MARCHE_MONTEE !== 'undefined' ? MARCHE_MONTEE : 0,
+  JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
+  buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
 };
 `;
 

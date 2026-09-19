@@ -2596,6 +2596,20 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = th; worldGroup.add(g);   // éléments visuels tournés avec le magasin
   const at = AWNING.clone(); at.needsUpdate = true; at.repeat.set(w / 1.5, 1);
   const aw = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: at })); aw.scale.set(w + 0.2, 0.12, 1.4); aw.position.set(0, 3.5, fz - 0.7); aw.rotation.x = 0.35; g.add(aw);
+  // L'AUVENT RAYÉ BOUCHAIT TOUT L'ÉCRAN (défaut 81 — « on monte dans une voiture du parking et
+  // on ne voit plus rien »). Il est fait à la main (`new THREE.Mesh`), donc il n'a jamais été ni
+  // un solide ni un « toit de caméra » : la perche lui passait AU TRAVERS. Mesuré au parking du
+  // centre, joueur au volant de la voiture garée en (−11,3 ; 10) : la caméra se posait en
+  // (−11,3 ; 3,73 ; 15,39) — les 5,39 m et 3,73 m relevés par le QA — soit À 15 CM sous
+  // l'auvent du snack (8,2 × 0,6 × 1,4 m, centré en (−9,5 ; 3,5 ; 15,4)). Les deux « aplats
+  // rouge vif et gris clair » de sa capture ne sont pas deux voitures voisines : ce sont les
+  // rayures rouge et blanc de cette toile, vue de l'intérieur. On l'inscrit donc dans camToits
+  // (c'est exactement ce que cette liste sert à faire : « auvent, halle, préau »). estUnToit()
+  // ne pouvait pas l'y mettre toute seule, elle exige 2,5 m dans les deux sens et l'auvent n'est
+  // profond que de 1,4 m. La boîte tient compte de l'inclinaison de 0,35 rad : 0,12 m
+  // d'épaisseur + 1,4 m de pente = 0,62 m de haut, centrés sur 3,5 m.
+  { const [ax, az] = M(0, fz - 0.7), sw = facing % 2 === 1;
+    camToits.push({ mesh: aw, x: ax, y: 3.5, z: az, w: sw ? 1.4 : w + 0.2, h: 0.62, d: sw ? w + 0.2 : 1.4 }); }
   const sg = new THREE.Mesh(unitBox, matEnseigne(title, color)); sg.scale.set(w * 0.95, 1.25, 0.14); sg.position.set(0, 4.9, fz - 0.1); g.add(sg);   // grande enseigne colorée, nom écrit en gros
   { const dos = new THREE.Mesh(unitBox, lam(0x20263a)); dos.scale.set(w * 0.99, 1.45, 0.1); dos.position.set(0, 4.9, fz - 0.02); g.add(dos); }
   for (let i = -1; i <= 1; i++) { const n = new THREE.Mesh(unitBox, neonMat(0xffffcc)); n.scale.set(0.5, 0.12, 0.5); n.position.set(i * w * 0.3, H + 0.2, 0); g.add(n); }
@@ -2774,6 +2788,12 @@ function buildShops() {
     const tb = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 14), lam(0xf4f6fa)); tb.position.set(tx, 0.9, 14.7); worldGroup.add(tb); box(tx, 0.45, 14.7, 0.12, 0.85, 0.12, 0x3b4252, { deco: true, studs: false });
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6), lam(0x3b4252)); pole.position.set(tx, 2.2, 14.7); worldGroup.add(pole);
     const par = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.6, 10), lam(tx < -9 ? 0xff5c5c : 0xffd23f)); par.position.set(tx, 3.4, 14.7); worldGroup.add(par);
+    // MEME RAISON QUE L'AUVENT (defaut 81) : ce parasol de 3,2 m de diametre est plante juste
+    // derriere les places de stationnement, a hauteur de perche. Mesure au parking du centre,
+    // joueur au volant : il restait le dernier obstacle colle a l'objectif (1,71 m, 4 % de
+    // l'image dans le coin bas). Il est fait a la main (un cone), donc estUnToit() ne l'a
+    // jamais vu : on l'inscrit a la main, comme l'auvent.
+    camToits.push({ mesh: par, x: tx, y: 3.4, z: 14.7, w: 3.2, h: 0.6, d: 3.2 });
     for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 1.1], [0, -1.1]]) { box(tx + dx, 0.45, 14.7 + dz, 0.5, 0.08, 0.5, 0xffd23f, { deco: true, studs: false }); box(tx + dx, 0.25, 14.7 + dz, 0.08, 0.45, 0.08, 0x3b4252, { deco: true, studs: false }); }
   }
   const cone = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), lam(0xd9a066)); cone.rotation.x = Math.PI; cone.position.set(-9.5, 6.3, 16.2); worldGroup.add(cone);
@@ -3888,6 +3908,25 @@ function immeubleZone(x, z, w, d, col, dir) {
   const zS = z + d / 2 - 0.2;                          // extrémité sud de la cage
   const palX = xE + LARG, palW = LARG * 2;             // les paliers couvrent les deux bandes
   const bande = k => xE + LARG * (k + 0.5);            // k = 0 : volée montante ; 1 : volée descendante
+  // ---------- DE LA PLACE POUR FAIRE DEMI-TOUR (défaut n° 80, round 73) ----------
+  // Le 2ᵉ étage restait inatteignable alors que TOUTES les marches étaient franchissables
+  // (0,32 m, contre 0,60 m au pas du joueur). Ce qui bloquait, c'était la PLACE pour tourner.
+  // Mesuré sur l'immeuble (−169 ; 10) : en arrivant au palier du 1er par la volée sud, le
+  // joueur continuait tout droit et butait sur le garde-corps sud en (−157,10 ; 3,40 ; 14,11)
+  // — exactement le point relevé par le contrôle qualité, bloqué 10 s. Pour repartir il
+  // fallait un demi-tour PLUS un pas de côté de 2,60 m, dans un couloir de 0,75 m de large
+  // seulement, coincé entre le bout du limon de la volée (z 13,03) et le garde-corps sud
+  // (z 14,58). Un enfant ne le trouve pas, et notre propre autopilote non plus.
+  // Deux élargissements, mesurés :
+  //   — palier d'étage : il ne s'arrête plus au nu de la façade, il SE PROLONGE dans la
+  //     coursive (qui est à la même cote). Couloir de demi-tour : 0,75 m → 2,68 m ;
+  //   — palier de demi-tour : allongé vers le nord (PALD au lieu de PAL). 0,68 m → 1,78 m.
+  // La coursive, elle, court désormais sur TOUTE la façade : avant, elle s'arrêtait en
+  // x −170,70 et la porte de l'appartement ouest (x −172,73 à −171,13) donnait dans le vide.
+  const PALD = 2.9;                                    // profondeur du palier de demi-tour
+  const courZ0 = zS, courZ1 = z + d / 2 + 1.8;         // la coursive, au sud, de plain-pied avec le palier
+  const pontX0 = x - w / 2, pontX1 = xE + palW;        // le plancher d'étage extérieur va d'un bout à l'autre
+  const zM0 = zS - PAL - NM * GIRON - PALD, zM1 = zS - PAL - NM * GIRON;   // palier de demi-tour
   // LA RAMBARDE EST UN VRAI SOLIDE, et elle descend jusqu'au plancher de l'étage : c'est à la
   // fois le garde-corps et le limon qui ferme le flanc de la volée — plus de dalle flottante.
   // ELLE PORTE LE DRAPEAU `rambarde` : voir moveAxis, le joueur ne MONTE jamais sur un
@@ -3903,12 +3942,20 @@ function immeubleZone(x, z, w, d, col, dir) {
     const y = f * H + 0.2;
     plat(palX, y, zS - PAL / 2, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
     if (f === 0) continue;        // au rez-de-chaussée le palier est le trottoir : on y entre librement
-    // bord est (le vide), et bord sud SAUF le passage vers la coursive, contre le bâtiment
-    rambarde(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL, y);
-    mainCourante(xE + palW - EP / 2, y, zS - PAL / 2, EP, PAL);
-    const ouv = x + w / 4 + (w / 2 + 3.4) / 2;   // le passage s'arrête pile au bout de la coursive
-    rambarde((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP, y);
-    mainCourante((ouv + xE + palW) / 2, y, zS - EP / 2, xE + palW - ouv, EP);
+    // COURSIVE + PALIER D'UN SEUL TENANT : le joueur qui débouche de la volée continue tout
+    // droit vers le sud, tourne à son aise, puis part vers l'ouest le long des portes.
+    plat((pontX0 + pontX1) / 2, y, (courZ0 + courZ1) / 2, pontX1 - pontX0, courZ1 - courZ0, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    // garde-corps : tout le bord est (palier + coursive), tout le bord sud, le retour ouest
+    rambarde(pontX1 - EP / 2, y, (zS - PAL + courZ1) / 2, EP, courZ1 - (zS - PAL), y);
+    mainCourante(pontX1 - EP / 2, y, (zS - PAL + courZ1) / 2, EP, courZ1 - (zS - PAL));
+    rambarde((pontX0 + pontX1) / 2, y, courZ1 - EP / 2, pontX1 - pontX0, EP, y);
+    mainCourante((pontX0 + pontX1) / 2, y, courZ1 - EP / 2, pontX1 - pontX0, EP);
+    rambarde(pontX0 + EP / 2, y, (courZ0 + courZ1) / 2, EP, courZ1 - courZ0, y);
+    mainCourante(pontX0 + EP / 2, y, (courZ0 + courZ1) / 2, EP, courZ1 - courZ0);
+    // DERNIER ÉTAGE : plus de volée au-dessus, donc le bord nord de la bande montante donne
+    // sur le vide de la cage (2,90 m de chute mesurés) — on le ferme. La bande descendante,
+    // elle, reste ouverte : c'est par là qu'on arrive.
+    if (f === N - 1) { rambarde(bande(0), y, zS - PAL + EP / 2, LARG, EP, y); mainCourante(bande(0), y, zS - PAL + EP / 2, LARG, EP); }
   }
   for (let f = 0; f < N - 1; f++) {
     const y0 = f * H + 0.2, ym = y0 + H / 2;
@@ -3919,11 +3966,13 @@ function immeubleZone(x, z, w, d, col, dir) {
       rambarde(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06, y0);   // côté vide ; le mur ferme l'autre
       mainCourante(xE + LARG - EP / 2, top, zz, EP, GIRON + 0.06);
     }
-    // PALIER INTERMÉDIAIRE : le demi-tour
-    const zM = zS - PAL - NM * GIRON - PAL / 2;
-    plat(palX, ym, zM, palW, PAL, 0x9a9088, { studs: false, noRoute: true }, 0.35);
-    rambarde(palX, ym, zM - PAL / 2 + EP / 2, palW, EP, ym); mainCourante(palX, ym, zM - PAL / 2 + EP / 2, palW, EP);
-    rambarde(xE + palW - EP / 2, ym, zM, EP, PAL, ym); mainCourante(xE + palW - EP / 2, ym, zM, EP, PAL);
+    // PALIER INTERMÉDIAIRE : le demi-tour. Allongé vers le nord (PALD = 2,90 m au lieu de
+    // 1,80 m) : le limon de la volée montante s'arrête en z 9,97 et le garde-corps nord
+    // était en z 8,31, ce qui ne laissait que 0,68 m pour passer d'une bande à l'autre.
+    const zM = (zM0 + zM1) / 2;
+    plat(palX, ym, zM, palW, PALD, 0x9a9088, { studs: false, noRoute: true }, 0.35);
+    rambarde(palX, ym, zM0 + EP / 2, palW, EP, ym); mainCourante(palX, ym, zM0 + EP / 2, palW, EP);
+    rambarde(xE + palW - EP / 2, ym, zM, EP, PALD, ym); mainCourante(xE + palW - EP / 2, ym, zM, EP, PALD);
     // VOLÉE DESCENDANTE (elle remonte vers le sud), bande extérieure : les deux bords donnent
     // sur le vide, elle a donc une rambarde de chaque côté
     for (let i = 0; i < NM; i++) {
@@ -3937,17 +3986,12 @@ function immeubleZone(x, z, w, d, col, dir) {
   }
   // DEUX PILIERS portent la cage sur toute sa hauteur : les paliers ne sont plus suspendus
   { const hc = (N - 1) * H + 0.2;
-    for (const cz2 of [zS - 0.35, zS - PAL - NM * GIRON - PAL + 0.35])
+    for (const cz2 of [zS - 0.35, zM0 + 0.35])
       box(xE + palW + 0.25, hc / 2, cz2, 0.45, hc, 0.7, 0x8d8378, { studs: false, noRoute: true }); }
-  // COURSIVE : du palier à la porte de l'appartement, de plain-pied avec le plancher de
-  // l'étage (elle était 20 cm plus haut) et prolongée jusqu'au palier (il manquait 20 cm).
-  // Elle court à 3,40 m puis 6,60 m au-dessus du sol : elle reçoit elle aussi son garde-corps.
-  for (let f = 1; f < N; f++) {
-    const cy = f * H + 0.2, cz = z + d / 2 + 0.8, cd = 2, cw = w / 2 + 3.4, cx = x + w / 4;
-    plat(cx, cy, cz, cw, cd, 0x9a9088, { studs: false, noRoute: true }, 0.35);
-    rambarde(cx, cy, cz + cd / 2 - EP / 2, cw, EP, cy); mainCourante(cx, cy, cz + cd / 2 - EP / 2, cw, EP);
-    rambarde(cx - cw / 2 + EP / 2, cy, cz, EP, cd, cy); mainCourante(cx - cw / 2 + EP / 2, cy, cz, EP, cd);
-  }
+  // POTEAUX SOUS LA COURSIVE : elle traverse toute la façade, elle ne flotte plus (le joueur
+  // avait justement reproché « des dalles qui flottent »). Décoratifs : au sol, on passe entre.
+  for (let i = 0; i < 5; i++) box(pontX0 + 1.4 + i * (pontX1 - pontX0 - 2.8) / 4, (N - 1) * H / 2 + 0.1, courZ1 - 0.3,
+    0.22, (N - 1) * H + 0.2, 0.22, 0x8d8378, { deco: true, studs: false });
   // toit : tôle, citerne, antenne, linge qui sèche
   plat(x, N * H + 0.4, z, w + 0.6, d + 0.6, 0x77706a, { studs: false, noRoute: true }, 0.4);
   const cit = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.4, 12), lam(0x3f7bd0));
@@ -3968,7 +4012,8 @@ function immeubleZone(x, z, w, d, col, dir) {
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
   return { x, z, w, d, etages: N, h: H, rails: RAILS,
-    esc: { xE, zS, larg: LARG, pal: PAL, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP } };
+    esc: { xE, zS, larg: LARG, pal: PAL, pald: PALD, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP,
+      palX, palW, b0: bande(0), b1: bande(1), zM0, zM1, courZ0, courZ1, pontX0, pontX1 } };
 }
 function carcasse(x, z, h) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = h; worldGroup.add(g);
@@ -6480,7 +6525,7 @@ function policeTire() {
 function clearWanted(reason) {
   police.usure = 0;   // ils repartent frais pour la prochaine fois
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
-  police.wanted = 0; police.hideT = 0; police.perdu = false; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
+  police.wanted = 0; police.hideT = 0; police.perdu = false; police.cachePar = null; police.debarqueDit = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();
   police.cars.forEach(pc => { pc.active = false; pc.goHome = true; pc.debarque = false; });
   if (reason) msg(reason, 2200);
@@ -13599,6 +13644,39 @@ function jailWorldDone(i) {   // une épreuve réussie compte pour la libératio
 // ---- policiers à pied, planques dans les bâtiments et intervention de l'armée ----
 const armee = { on: false, heli: null, faisceau: null, tache: null, t0: 0, cible: [0, 0] };
 // Ligne de vue depuis une voiture de police ou un agent jusqu'au joueur.
+// S'EST-IL VRAIMENT CACHÉ ? (n° 82 du contrôleur). La police ne « perdait » pas le joueur
+// parce qu'il s'était caché, mais parce qu'un compte à rebours arrivait au bout : mesuré sur
+// la version d'avant, l'enfant tire trois fois à 45 m du commissariat et ne bouge plus —
+// « 🙈 Ils t'ont perdu » à t+12 s, alors que les deux voitures n'étaient même pas encore
+// parties (act=false, le délai d'intervention courait encore : il reste 2 s au compteur).
+// Désormais il faut une VRAIE raison : un toit au-dessus de la tête, un obstacle entre eux et
+// lui, ou la distance. À découvert, dans leur champ de vision, le compteur ne bouge pas.
+// Renvoie la raison (chaîne) ou null s'il est à la vue de tous.
+const PERTE_VUE_LOIN = 60;   // m : au-delà, même à découvert, un agent ne le distingue plus
+const PERTE_FUITE = 38;      // m : distance au dernier point connu à partir de laquelle il a vraiment filé
+function joueurSestCache() {
+  const abri = abriDuJoueur();
+  if (abri) return abri === 'planque' ? 'une planque' : 'un bâtiment';
+  // A-T-IL BOUGÉ ? Le dernier point connu (`police.lastSeen`) est le lieu du délit, et il n'est
+  // remis à jour que tant qu'on le voit. Rester planté là où l'on a tiré n'est pas se cacher :
+  // c'est précisément la scène du contrôleur, où la police « le perdait » sans qu'il ait fait
+  // un pas. Tant qu'il est dans le périmètre fouillé, seul un toit ou un obstacle le cache.
+  const ls = police.lastSeen;
+  const fui = ls && Math.hypot(P.pos.x - ls[0], P.pos.z - ls[1]) > PERTE_FUITE;
+  const unites = police.cars.filter(pc => pc.active && !pc.constat)
+    .concat(police.agents.filter(a => !a.ko));
+  let dmin = Infinity;
+  for (const u of unites) {
+    const d = Math.hypot(u.x - P.pos.x, u.z - P.pos.z);
+    if (d < dmin) dmin = d;
+    if (d < PERTE_VUE_LOIN && policeVoit(u, PERTE_VUE_LOIN)) return null;   // à découvert sous leurs yeux
+  }
+  if (fui) return 'la distance';
+  // à découvert sur le lieu du délit : une unité à portée mais sans ligne de vue, c'est un
+  // obstacle ; personne à portée et il n'a pas bougé, ce n'est pas une cachette, c'est de
+  // l'attente — et les voitures qui roulent vers lui doivent avoir le temps d'arriver.
+  return dmin < PERTE_VUE_LOIN ? 'un obstacle' : null;
+}
 function policeVoit(o, portee = 45) {
   const d = Math.hypot(P.pos.x - o.x, P.pos.z - o.z);
   if (d > portee || d < 0.4) return d <= portee;
@@ -13967,6 +14045,9 @@ function majWanted() {
   const et = '★'.repeat(police.wanted);
   if (simTime - (police.vuT || -999) < 1.2 || police.sait) el.textContent = `🚔 Recherché ${et}${policeTire() ? ' · ils tirent !' : ''} · ils te voient — sauve-toi !`;
   else if (police.perdu) el.textContent = `🙈 Ils t'ont perdu ${et} · ne te montre pas`;
+  // « reste hors de vue N s » ne voulait rien dire tant que le compteur ne tournait pas : on dit
+  // maintenant ce qu'il manque pour semer la police (n° 82).
+  else if (!police.cachePar) el.textContent = `🔎 On te cherche… ${et} · ils te voient : cache-toi !`;
   else el.textContent = `🔎 On te cherche… ${et} · reste hors de vue ${Math.max(0, Math.ceil(PERTE_DELAI(police.wanted) - police.hideT))} s`;
 }
 function policeTick(dt) {
@@ -14044,7 +14125,15 @@ function policeTick(dt) {
     // tu es) aussi. Sinon le compte a rebours tourne.
     const vuLa = simTime - (police.vuT || -999) < 0.5;
     const agentColle = police.agents.some(a => !a.ko && Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 30 && Math.abs(a.y - P.pos.y) < 6);
-    if (vuLa || police.sait || agentColle || armee.on) { police.hideT = 0; police.perdu = false; }
+    // ON NE PEUT PERDRE QUE CE QU'ON CHERCHE (n° 82). Tant que le délai d'intervention court
+    // (`police.reactT`), les voitures sont encore au commissariat : le compteur de perte de vue
+    // partait pourtant dès l'infraction, et comme PERTE_DELAI(★) vaut 12 s pour un délai
+    // d'intervention de 14 s, la recherche s'arrêtait DEUX SECONDES AVANT DE COMMENCER.
+    // Et même après, il faut que l'enfant se soit vraiment caché : voir joueurSestCache().
+    const pasEncorePartis = police.reactT > simTime;
+    const cache = pasEncorePartis ? null : joueurSestCache();
+    police.cachePar = cache;
+    if (vuLa || police.sait || agentColle || armee.on || pasEncorePartis || !cache) { police.hideT = 0; police.perdu = false; }
     else police.hideT += dt;
     if (police.hideT > (police.perdu ? PERTE_PALIER : PERTE_DELAI(police.wanted))) {
       police.hideT = 0; police.perdu = true; police.wanted--;
@@ -14120,8 +14209,24 @@ function policeTick(dt) {
       }
     }
     const dist = Math.hypot(tx - pc.x, tz - pc.z);
-    if (police.sait && pc.active && !pc.debarque && police.agents.length < 10
-        && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) { policeDebarque(pc, 2); continue; }
+    // UNE VOITURE ARRIVÉE SUR PLACE DÉPOSE UN AGENT (n° 82). On l'exigeait de `police.sait`,
+    // qui n'est posé QUE pour un braquage ou quand ils t'ont vu entrer quelque part : dans une
+    // poursuite ordinaire la voiture roulait jusqu'au dernier point connu et attendait là,
+    // moteur tournant. Mesure du contrôleur : deux voitures figées à 37,03 m et 38,30 m
+    // pendant 48 s, zéro agent descendu. Tant qu'ils te VOIENT, la voiture continue de te
+    // suivre (on ne saute pas d'une voiture en pleine poursuite) ; dès qu'ils t'ont perdu de
+    // vue plus de deux secondes, les agents descendent et fouillent à pied.
+    // `!hidden` : s'il s'est mis à l'abri sans qu'on le voie entrer, on ne débarque PAS —
+    // sinon les agents se posteraient à côté de sa cachette et le compteur de perte de vue
+    // (`agentColle`, 30 m) ne tournerait plus jamais : se planquer ne servirait plus à rien.
+    const surPlace = police.sait || (police.wanted > 0 && !hidden && simTime - (police.vuT || -999) > 2);
+    if (surPlace && pc.active && !pc.debarque && police.agents.length < 10
+        && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) {
+      policeDebarque(pc, 2);
+      if (!police.debarqueDit || simTime > police.debarqueDit) { police.debarqueDit = simTime + 20;
+        msg('👮 Les policiers descendent de voiture et fouillent le quartier !', 2600); }
+      continue;
+    }
     // itinéraire par points de passage : sortie du commissariat par la voie nord, puis l'anneau routier, puis la cible
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
     const cibleNeuve = Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6;
@@ -14355,6 +14460,7 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
   if (pare) { dmg = Math.max(1, Math.round(dmg * 0.45)); kb *= 0.3; msg('🛡️ Paré !', 700); sfx.tone(520, 0, .08, 'square', .05, 380); }
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8; b.wait = 0.5; b.dance = 0;
+    b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
     // ON PEUT SE BATTRE. Un habitant sur deux detalait au premier coup a 5,5 m/s et ne
     // revenait jamais : les coups suivants frappaient le vide et il recuperait 100 ❤️ hors de
     // vue — jamais de KO, jamais le ralenti du coup final. Un sur trois recule encore, mais
@@ -14434,6 +14540,7 @@ function coupCouteau(av, duree) {
   // laissé en bagarre par la scène d'avant encaissait 24 au lieu de 34 dès le premier coup — test 262.)
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
+    b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
     avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
@@ -14475,7 +14582,7 @@ function chuteImpact(vy) {
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) {
     msg(`💀 Chute mortelle ! ${haut} m de haut…`, 2400); chat(null, `💀 ${myCfg.name} s'est écrasé après une chute de ${haut} m`);
-    sfx.die(); die(true); setTimeout(() => { P.hp = 100; majVie(); }, 1300);
+    sfx.die(); die(true);
   } else msg(`🤕 Aïe ! Chute de ${haut} m · −${deg} PV`, 1800);
   return deg;
 }
@@ -14514,6 +14621,9 @@ function setAccroupi(on) {   // point d'entrée manette / tactile / clavier : se
 }
 function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp <= 0) return;
+  // ON NE RETOMBE PAS SOUS LES COUPS EN SE RELEVANT (n° 78). Sans ces quelques secondes,
+  // les trois hommes du gang restés sur place remettaient l'enfant à terre dans la seconde.
+  if (simTime < (P.grace || 0)) return 0;
   // LE ROBOT COMPAGNON S'INTERPOSE (poste DRONE & ROBOT). `hurt` est le SEUL endroit par
   // lequel un coup atteint le joueur : en le branchant ici, le robot ne peut pas rater une
   // agression, et il ne peut rien déclencher d'autre. Il atténue, il ne protège pas de tout.
@@ -14542,7 +14652,25 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   // affiche qui l'a donné, sauf s'il vient d'un message déjà à l'écran (KO plus bas).
   if (P.hp > 0 && dmg >= 5) msg(`🤕 −${Math.round(dmg)} ❤️ · ${by || 'un coup'}`, 1100);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
+  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); }
+}
+// UN HABITANT NE S'EN PREND AU JOUEUR QUE S'IL L'A CHERCHÉ (n° 84 du Joueur). C'est la
+// moitié du n° 78 qui restait : la garde `joueurDansLaGuerre()` ne couvrait que les gangs,
+// et la bagarre ORDINAIRE des habitants n'avait aucune garde équivalente. Mesuré avant, sur
+// un profil vierge manette posée : sur 10 tirages « bagarre » forcés à moins de 45 m,
+// 10 partaient sur le JOUEUR (0 sur un autre bot) — l'enfant tombait à 0 ❤️ et perdait
+// 7 🪙 sous les poings d'un simple passant (Karim_flash). Après : 0 sur 10, et les 10
+// bagarres partent sur un autre habitant.
+// La ville, elle, continue de se chamailler entre bots : c'est le JOUEUR qui est hors
+// d'atteinte tant qu'il n'a rien fait.
+function joueurAProvoque() {
+  if (typeof P === 'undefined' || !P) return false;
+  if (police.wanted > 0) return true;                       // il est recherché : toute la rue le sait
+  if (P.crime && simTime < P.crime) return true;            // délit tout frais (coup, vol, tir, vitrine…)
+  if (P.crimeTir && simTime < P.crimeTir) return true;      // il vient de tirer en pleine rue
+  if (P.drawn && P.weapon) return true;                     // arme dégainée devant tout le monde
+  if (typeof joueurDansLaGuerre === 'function' && joueurDansLaGuerre()) return true;
+  return false;
 }
 function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénération du joueur
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
@@ -14572,6 +14700,19 @@ function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénérati
       const fx = qui.x - b.pos.x, fz = qui.z - b.pos.z, fd = Math.hypot(fx, fz) || 1;
       const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; npcMove(o, -fx / fd * vf * dt, -fz / fd * vf * dt, 0.4); b.pos.x = o.x; b.pos.z = o.z; b.facing = Math.atan2(-fx, -fz); animateRig(b.av.rig, 'walk', vf, dt, simTime); if (Math.random() < dt * 0.3) botSay(b, ['au secours !', 'police !!', 'laisse-moi !']); }
     else {
+      // FILET DE SÛRETÉ (n° 84). Cette branche-ci ne vise QUE le joueur (la bagarre entre
+      // bots passe par `bagarreTick`, qui a déjà rendu la main plus haut). On ne coupe que
+      // la poursuite « chase » : c'est le SEUL état posé par l'activité « bagarre » de la vie
+      // de la ville (vérifié : une seule écriture de `'chase'` dans tout le fichier), donc la
+      // seule qui puisse partir sans que l'enfant y soit pour rien. Les ripostes légitimes
+      // (`'fight'`, posé par le coup de poing, la lame, la balle du joueur) ne sont pas
+      // touchées. Utile même avec la garde posée au départ dans `lancerActivite` : une
+      // poursuite dure 16 s, et l'enfant peut être redevenu propre entre-temps.
+      // `b.rancune` est la mémoire du bot : elle n'est posée que par un coup DU JOUEUR.
+      if (b.fight === 'chase' && simTime > (b.rancune || 0) && !joueurAProvoque()) {
+        b.fight = null; b.fuitDe = null; b.garde = false; if (b.av && b.av.rig) b.av.rig.garde = false;
+        b.hp = Math.min(100, (b.hp ?? 100) + (estDuGang(b) ? 4 : 20)); continue;
+      }
       // EN FACE AUSSI ON SE GARDE : entre deux coups, l'habitant lève les deux poings devant
       // son visage. Un coup qui arrive à ce moment-là ne passe qu'au quart (voir `attack`).
       // La fenêtre de garde couvrait 0,8 s sur 1,1 : l'habitant était garde LEVEE les trois
@@ -19184,7 +19325,7 @@ function chienTick(dt) {
       }
       if (d < 1.6 && simTime > (chien.morsT || 0)) {
         chien.morsT = simTime + 1.1;
-        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0;
+        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
           impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sfx.noise(.08, 500, .07);
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
@@ -20969,13 +21110,13 @@ function botAttendIci(b) {
 }
 // Ami ou homme du gang : c'est quelqu'un du camp du joueur.
 function estDesNotres(o) { return !!o && !!o.name && (estDuGang(o) || estAmi(o.name)); }
-function botTape(b, cible) {
+function botTape(b, cible, parJoueur) {   // `parJoueur` : la bagarre a été ORDONNÉE par l'enfant (n° 85)
   if (!cible || cible === b) { botDit(b, 'qui ça ?'); return; }
   // Ils se tapaient DESSUS entre eux : dès qu'un membre se faisait frapper, il passait en
   // « bagarre », et les gardes du corps du gang lui sautaient dessus à leur tour. On ne
   // lève pas la main sur les siens.
   if (estDesNotres(cible)) { botDit(b, `${cible.name} est des nôtres, je ne le touche pas 😐`); return; }
-  b.bagarre = { cible, fin: simTime + 22, cd: 0 }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
+  b.bagarre = { cible, fin: simTime + 22, cd: 0, parJoueur: !!parJoueur }; b.ordre = { type: 'tape' }; b.rdv = null; b.wait = 0;
   noteOrdre(b, '💥', `s'en prendre à ${cible.name}`);
   botDit(b, pickOne([`ok, je m'occupe de ${cible.name} ! 😤`, `${cible.name} va comprendre 💥`]));
   msg(`💥 ${b.name} s'en prend à ${cible.name}`, 2400);
@@ -21189,7 +21330,10 @@ function bagarreTick(b, dt) {
       // Un homme du gang (ou un ami) ne « meurt » pas dans une bagarre : il tombe, et on
       // l'envoie à l'hôpital. Avant, il explosait comme un passant.
       if (estDesNotres(c)) { c.hp = 0; c.ko = simTime + 14; c.fight = null; corpsAuSol(c.av, c.pos.x, c.pos.z, c.pos.y); }
-      else botKill(c);
+      // (n° 85) l'auteur, c'est CELUI QUI COGNE. Le joueur n'en répond que s'il a donné
+      // l'ordre lui-même (« tape Momo ») — pas quand deux habitants se battent tout seuls,
+      // ni quand son garde du corps le défend.
+      else botKill(c, (b.bagarre && b.bagarre.parJoueur) ? null : b);
       b.bagarre = null; b.ordre = null;
     }
   } else animateRig(b.av.rig, 'idle', 0, dt, simTime);
@@ -21297,7 +21441,7 @@ function commandeExacte(txt) {
     let vic = null;
     for (const o of bots) { if (o === cible || o.ko) continue; if (norm(txt).includes(norm(o.name)) || norm(txt).includes(norm(o.name.split('_')[0]))) vic = o; }
     if (!vic) vic = bots.filter(o => o !== cible && !o.ko).map(o => ({ o, d: Math.hypot(o.pos.x - P.pos.x, o.pos.z - P.pos.z) })).sort((a, c) => a.d - c.d)[0]?.o;
-    botTape(cible, vic); return true;
+    botTape(cible, vic, true); return true;
   }
   if (/\b(entraine|entraîne|entrainer|entraînement|muscle|muscler|sport|salle de sport)\b/.test(t) && estDuGang(cible)) { entrainerMembre(cible, 'sport'); return true; }
   if (/\b(stand de tir|tir a la cible|vise|viser|apprend a tirer|apprends a tirer)\b/.test(t) && estDuGang(cible)) { entrainerMembre(cible, 'tir'); return true; }
@@ -22390,6 +22534,25 @@ function moveAxis(axis, amount, canStep) {
       //     un ascenseur, une dalle qui apparait) : face la PLUS PROCHE, donc le plus petit
       //     deplacement possible. Le meme cas tombe alors a 1,00 m.
       const dehorsAvant = Math.abs(avant - o[axis]) >= half + P.hw;
+      if (!dehorsAvant || amount === 0) {
+        // DEJA DEDANS : ON SORT PAR LE COTE LE PLUS COURT, TOUS AXES CONFONDUS.
+        // « Face la plus proche SUR CET AXE » ne suffisait pas : une rambarde est une boîte
+        // LONGUE et MINCE. Le joueur qui mord de 9 cm dans le garde-corps sud d'un palier
+        // (3,50 m de long, 0,36 m d'épais) était, au sens de l'axe x, « au milieu » de la
+        // boîte : le moindre pas de côté le renvoyait à la face x la plus proche, soit
+        // 1,00 à 1,48 m PLUS LOIN, hors de la cage d'escalier — et il tombait de 3,34 m.
+        // MESURE (immeuble de La Zone, palier du 1er, joueur en −156,40 ; 3,45 ; 14,20) :
+        // un seul pas vers l'ouest le déplaçait de 1,48 m vers l'EST, en −154,92, puis il
+        // retombait à y 0,06 au pied de l'immeuble. Reproduit sur 8 directions sur 8.
+        // On compare donc la sortie x ET la sortie z : si la plus courte est sur l'AUTRE
+        // axe, on se contente d'annuler le pas (l'autre appel de moveAxis, ou à défaut
+        // desincarcere() au bout d'une demi-seconde, fera sortir le joueur du bon côté).
+        const autre = axis === 'x' ? 'z' : 'x';
+        const demiA = (autre === 'x' ? o.w : o.d) / 2;
+        const sortieIci = half + P.hw - Math.abs(P.pos[axis] - o[axis]);
+        const sortieLa = demiA + P.hw - Math.abs(P.pos[autre] - o[autre]);
+        if (sortieLa < sortieIci) { P.pos[axis] = avant; P.vel[axis] = 0; continue; }
+      }
       const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
       P.vel[axis] = 0;
@@ -22509,6 +22672,11 @@ function step(dt, active) {
   // les traces de pas dans la neige : posees ici, dans la simulation, pour qu'elles suivent
   // exactement la distance parcourue (et non la cadence d'affichage). Cout nul hors hiver.
   if (city.on) { try { empreintesTick(dt); } catch (eEmp) {} }
+  // LE CHIEN DE GARDE DU RELEVAGE, AVANT LA SORTIE `!active` (n° 78). Quand le joueur est à
+  // terre, frame() passe `active = false` et step() ressort juste en dessous : placé plus bas,
+  // l'appel ne serait jamais atteint et rien ne pourrait plus relever l'enfant — c'est
+  // exactement le blocage de 175 s mesuré par le contrôleur.
+  try { relevageTick(); } catch (eRel) {}
   if (!active) return;
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
@@ -24301,7 +24469,8 @@ function ecraseAuSol(c, V) {
     corpsAuSol(b.av, b.pos.x, b.pos.z, b.pos.y);
     botSay(b, ['aïïïe !!', 'au secours !', 'tu m\'as écrasé !', 'chauffard !!']);
     boom(c.x, c.z, v * 0.6);
-    if (drive.car === c) { infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
+    if (drive.car === c) { b.rancune = simTime + 45;   /* (n° 84) écrasé par le joueur : il peut lui courir après */
+      infraction('écraser ' + b.name, 1, 2); vehicleDamage(c, 4); }
     // L'AMBULANCE VIENT AUSSI POUR UN BLESSE LOURD. Elle n'etait appelee qu'a zero point de
     // vie : un passant renverse a 50 km/h (❤️ 56) se relevait au bout de 4,5 s en disant
     // « plus jamais ca », et aucun secours ne partait. Au-dessus de 8 m/s (30 km/h), on
@@ -26562,11 +26731,23 @@ function drawWeapon(on) {   // dégainer / rengainer
   if (!P.drawn) { P.aim = false; P.lock = null; }
   updateAct();
 }
-function botKill(b) {   // le bot est éliminé : il vole en éclats, lâche ses pièces et revient 8 s plus tard
+// L'AUTEUR D'UNE ÉLIMINATION N'EST PLUS LE JOUEUR PAR DÉFAUT (n° 85 du Joueur). Mesuré,
+// profil vierge, manette posée, 14 400 pas de simulation : « 💥 Lea_star attaque
+// Karim_flash » (bagarre entre deux HABITANTS) puis « 💀 Karim_flash a été éliminé par
+// Joueur58 » et « 🚔 Infraction : éliminer Karim_flash ! Niveau ★★ » — la police ouvrait
+// ensuite le feu sur l'enfant (−8 puis −7 ❤️, ❤️ au plus bas 54) et l'emmenait en cellule.
+// `auteur` absent = c'est bien le joueur (poing, lame, sa balle, son explosif) ; sinon on
+// passe le bot (ou son nom) qui a porté le coup, et AUCUNE infraction n'est imputée.
+function botKill(b, auteur) {
   if (b.dead) return; b.dead = simTime + 8; b.hp = 0; b.fight = null; b.ko = 0;
+  const parJoueur = !auteur;
+  const nomAuteur = parJoueur ? myCfg.name : (typeof auteur === 'string' ? auteur : (auteur.name || auteur.nom || 'quelqu\'un'));
   explode(b.av); sfx.die(); sfx.noise(.3, 400, .1); const amount = 8 + Math.floor(Math.random() * 10); dropLoot(b.pos.x, b.pos.z, amount, Math.max(0.3, b.pos.y));
-  chat(null, `💀 ${b.name} a été éliminé par ${myCfg.name}`); msg(`💀 ${b.name} éliminé ! Ramasse ses pièces`, 1800);
-  infraction('éliminer ' + b.name, 2, 3);
+  chat(null, `💀 ${b.name} a été éliminé par ${nomAuteur}`);
+  if (parJoueur) { msg(`💀 ${b.name} éliminé ! Ramasse ses pièces`, 1800); infraction('éliminer ' + b.name, 2, 3); }
+  // la pastille ne parle que de ce que l'enfant peut VOIR : sinon la ville entière lui
+  // racontait ses règlements de comptes à quatre cents mètres.
+  else if (Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40) msg(`💀 ${nomAuteur} a éliminé ${b.name}`, 1600);
   setTimeout(() => { resetBot(b, 1); b.hp = 100; b.dead = 0; b.av.group.rotation.x = 0; botSay(b, ['je reviens !', 'même pas mal', 'la police va venir !']); }, 8000);
 }
 function dropLoot(x, z, amount, y = 0.3) {   // petit tas de pièces à ramasser (y : l'étage où il tombe)
@@ -26677,8 +26858,12 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
       if (t >= 0 && t < out[i]) out[i] = t;
     }
   };
-  for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
+  // LES VÉHICULES BOUCHENT LA VUE EUX AUSSI (défaut 81). `solidsAutour` ne rend les carrosseries
+  // que si on les DEMANDE (4ᵉ argument), et la boucle sautait de toute façon tout ce qui porte
+  // `o.veh` : la perche traversait donc les voitures garées de part et d'autre et allait se
+  // loger entre elles. On les fait entrer dans le test — sauf la nôtre, qui reste en `skip`.
+  for (const o of solidsAutour(ox, oz, maxD + 1, true)) {
+    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
     // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
     // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
     // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
@@ -26711,10 +26896,11 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
 }
 // UN MUR ENTRE LA CAMÉRA ET LE JOUEUR ? Renvoie la distance du premier obstacle qui coupe la
 // ligne de vue (−1 si la vue est dégagée). On regarde les solides ET les toits décoratifs, on
-// ignore les vitres, les murs rendus traversables par la maison de poupée (`xray`), les
-// véhicules et la boîte qui contient déjà le joueur (sinon frôler une cloison collerait la
-// caméra à la nuque en permanence).
-function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
+// ignore les vitres, les murs rendus traversables par la maison de poupée (`xray`), le véhicule
+// passé en `skip` (le sien : on est assis dedans) et la boîte qui contient déjà le joueur (sinon
+// frôler une cloison collerait la caméra à la nuque en permanence). Les AUTRES véhicules, eux,
+// comptent depuis le défaut 81 : une carrosserie bouche la vue autant qu'un mur.
+function murEntreVue(ox, oy, oz, dx, dy, dz, maxD, skip) {
   if (!(maxD > 0.2)) return -1;
   let best = -1;
   // MÊME RÈGLE QUE camLibres : dans un véhicule, un poteau ne bouche pas la vue. Sans cela ce
@@ -26727,8 +26913,11 @@ function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
     const t = rayBox(ox, oy, oz, dx, dy, dz, o.x, o.y, o.z, hx, hy, hz, best < 0 ? maxD : best);
     if (t >= 0 && (best < 0 || t < best)) best = t;
   };
-  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3)) {
-    if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+  // MÊME CORRECTION QUE DANS camLibres (défaut 81) : une carrosserie est un obstacle. Sans elle,
+  // ce dernier filet répondait « la vue est dégagée » alors que l'objectif était DANS la voiture
+  // d'à côté. `skip` est la nôtre : elle, on la traverse, on est assis dedans.
+  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3, true)) {
+    if (o === skip || o.glass || o.h > 30 || o.xray) continue;
     if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
     if (o.mesh && !o.mesh.visible) continue;   // un solide efface (plafond de la maison de poupee) ne bouche rien
     essaie(o);
@@ -27166,18 +27355,22 @@ function shotsTick(dt) {
       impact(tg.m.position.x, tg.y, tg.z, { x: dx, y: dy, z: dz }, 'metal', 1.2); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
       const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); impact(r.cur.x, r.cur.y + 1, r.cur.z, { x: dx, y: dy, z: dz }, 'balle', 1); updateAct();
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte
+      if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte — mais seulement si c'est NOTRE balle (n° 85)
     } else if (quoi === 'bot') {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
+      if (s.mine) b.rancune = simTime + 45;   // (n° 84) touché par LA balle du joueur : il garde sa rancune
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
       if (b.hp <= 0) {
-        botKill(b);
+        // (n° 85) la police, l'hélicoptère ou un ami armé tirent aussi : `s.mine` dit si la
+        // balle est celle de l'enfant. Sans ça, une balle de la police qui tuait un passant
+        // valait deux étoiles AU JOUEUR.
+        botKill(b, s.mine ? null : (s.ami || s.byName || 'un tireur'));
         // POSTE ANIMATION : la balle qui abat l'adversaire déclenche elle aussi le ralenti de
         // trois secondes — mais SEULEMENT si c'est le joueur qui a tiré (`s.mine`) : se faire
         // descendre par la police n'est pas un coup vainqueur.
         if (s.mine) { try { ralentiCoup(b.pos.x, b.pos.y, b.pos.z, 'pistolet', Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z), 1); } catch (e) {} }
-      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 3); } }
+      } else { bubble(b.av, `aïe ! ❤️ ${Math.max(0, b.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + b.name, 1, 3); } }
       updateAct();
     } else if (quoi === 'vehicule') {
       const v = cible;
@@ -27188,30 +27381,33 @@ function shotsTick(dt) {
       applyDamageVisual(v, s.v.x / L2 * 3, s.v.z / L2 * 3);
       if ((v.dmg || 0) >= 100 && av < 100) {
         explodeVehicle(v);
-        if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); }
+        if (v.mil || (v.solid && v.solid.pol)) { msg('🚔💥 Voiture de police détruite !', 2200); if (s.mine) { chat(null, `💥 ${myCfg.name} a fait exploser une voiture de police`); police.riposte = simTime + 45; infraction('détruire une voiture de police', 2, 3); } }   // (n° 85) pas NOTRE balle, pas NOTRE délit
         else {
           msg('💥 Véhicule détruit !', 1600);
           // FAIRE EXPLOSER UNE VOITURE, C'EST DEUX ÉTOILES, SANS PITIÉ. Avant : un message, et
           // personne ne venait (mesuré : voiture en feu devant le snack, ⭐ 0 pendant 90 s).
           if (s.mine) { P.crime = simTime + 20; infraction('faire exploser un véhicule', 2, 3, true); }
         }
-      } else if (v.mil || (v.solid && v.solid.pol)) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } }
+      } else if (v.mil || (v.solid && v.solid.pol)) { if (s.mine) { police.riposte = simTime + 30; if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 1, 2); } } }
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
-      police.riposte = simTime + 30;
+      if (s.mine) police.riposte = simTime + 30;
       if (a.hp <= 0) agentTue(a);
-      else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
+      else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
       const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
-      if (m.hp <= 0) gangeurKO(m, 'le joueur');
-      else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
+      // (n° 85) « le joueur » n'est l'auteur que si la balle est la sienne : une balle de la
+      // police ou d'un ami armé annonçait « X a été tué par <l'enfant> » et retournait le gang
+      // contre lui pour un coup qu'il n'avait pas porté.
+      if (m.hp <= 0) gangeurKO(m, s.mine ? 'le joueur' : (s.byName || (s.ami && s.ami.name) || 'un tireur'));
+      else { bubble(m.av, `❤️ ${Math.max(0, m.hp)}`); const G = gangDe(m.gang); if (s.mine && G) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 30; G.relation = clamp((G.relation || 0) - 3, -100, 100); } }
     } else if (quoi === 'garde') {
       const gd = cible; gd.hp -= (s.dmg || 20); impact(gd.x, gd.y + 1.2, gd.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       if (gd.hp <= 0) { gd.ko = simTime + 12; corpsAuSol(gd.av, gd.x, gd.z, gd.y); bubble(gd.av, 'argh…'); } else bubble(gd.av, `❤️ ${gd.hp}`);
       // les gardes ripostent, mais tirer sur l'un d'eux n'est pas un braquage de banque :
       // avant, la moindre balle perdue déclenchait l'alerte maximale et trois voitures.
-      gd.alert = true; police.riposte = simTime + 30;
-      if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2, true); }   // sans pitié : on ne tire pas sur un vigile par accident
+      gd.alert = true; if (s.mine) police.riposte = simTime + 30;
+      if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur un vigile', 1, 2, true); }   // sans pitié : on ne tire pas sur un vigile par accident — mais il faut que la balle soit la nôtre (n° 85)
     }
     if (s.feu) feuAuSol(s.p.x, Math.max(0.05, s.p.y - 0.6), s.p.z);
     if (s.boom) balleExplose(s.p.x, s.p.y, s.p.z);
@@ -27532,7 +27728,79 @@ function die(silent) {
   explode(me);
   if (!silent) { const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on'))); msg('Oups !', 900); }
   if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
-  setTimeout(() => { respawn(); dead = false; }, 1200);
+  // PLUS AUCUN `setTimeout` POUR SE RELEVER (n° 78, BLOQUANT). C'était la racine du blocage :
+  // le retour en jeu pendait à un minuteur du navigateur, invisible pour la simulation. Quand
+  // ce minuteur ne partait pas (boucle qui ne rend pas la main, onglet ralenti, ou simplement
+  // une exception levée plus haut dans die() avant qu'il soit posé), `dead` restait vrai POUR
+  // TOUJOURS — et frame() calcule `active = running && !paused && !dead && !won`, donc step()
+  // ressortait aussitôt : la ville entière se figeait sans qu'un seul bouton puisse en sortir.
+  // Mesuré sur la version d'avant, gang collé au point d'apparition : ❤️ à 0, position et
+  // porte-monnaie figés (18 🪙) pendant 200 s de simulation. Exactement les 175 s du contrôleur.
+  // Maintenant c'est `relevageTick()`, appelé à CHAQUE pas de simulation — et avant la sortie
+  // `!active` de step(), sinon rien ne pourrait plus jamais relever l'enfant.
+  P.aTerreT = simTime;
+}
+// ============ ON SE RELÈVE TOUJOURS, ET LOIN DES COUPS (n° 78 du contrôleur) ============
+// Le défaut avait deux moitiés. (a) un gang s'en prenait à un enfant qui n'était jamais entré
+// dans la guerre : traité dans gangTick, avec la même garde que les n° 67 / 72 / 75.
+// (b) une fois à terre, on n'en sortait plus. `respawn()` reposait en plus le joueur EXACTEMENT
+// au point d'apparition — c'est-à-dire au milieu des trois hommes qui venaient de l'abattre,
+// sans un instant d'invulnérabilité. Mesure du contrôleur : 100 → 91 → 41 → 5 → 0 en 125 s,
+// puis 175 s où plus rien ne bouge.
+// Maintenant : UN SEUL point de passage, `remiseEnJeu()`, déclenché par l'horloge de la
+// simulation. On lâche le volant, le siège et le brancard ; on rouvre les yeux à l'accueil de
+// l'hôpital (ou dans la cellule si on est en prison, ou au dernier point de passage hors de la
+// ville) ; on est intouchable quelques secondes, et une phrase dit ce qui vient de se passer.
+const RELEVE_GRACE = 6;      // s d'invulnérabilité après s'être relevé, le temps de reprendre la manette
+const RELEVE_DELAI = 1.6;    // s de simulation à terre avant de se relever (on voit sa chute, on ne la subit pas)
+const RELEVE_SECOURS = 30;   // plafond quand l'ambulance nous transporte pour de bon : au-delà, on se relève quand même
+function pointDeReveil() {
+  // l'hôpital si on le connaît, sinon le point de passage : dans les deux cas, LOIN des coups
+  if (jail.on && police.cell) return { x: police.cell.x, y: 0, z: police.cell.z };   // en prison, on se soigne sur place
+  if (city.on && city.medDesk) return { x: city.medDesk.x + 1.6, z: city.medDesk.z + 2.4 };
+  if (cp) return { x: cp.x, y: cp.y + 0.15, z: cp.z + 0.5 };
+  return { x: P.pos.x, z: P.pos.z };
+}
+function remiseEnJeu(cause) {
+  // on lâche tout ce qui retient : volant, siège, manège, brancard des secours
+  try { if (drive.car) exitCar(); } catch (e) {}
+  try { if (uiOpen) closeUI(); } catch (e) {}
+  try { for (const a of (city.ambulances || [])) if (a.victime === 'joueur') ambulanceAbandon(a, 'silence'); } catch (e) {}
+  P.sit = null; P.swing = null; P.ride = null; P.secours = null; P.otage = null;
+  P.stunT = 0; P.aTerreT = 0;
+  const p = pointDeReveil();
+  let y = (p.y != null ? p.y : 0);
+  try { y = groundUnder(p.x, p.z, null, y + 2.4); } catch (e) {}
+  P.pos.set(p.x, y + 0.15, p.z); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
+  if (!city.on) P.facing = running ? Math.PI : 0;   // dans un parcours, on repart FACE à la suite, comme respawn()
+  try { cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z); } catch (e) {}
+  me.group.visible = true; me.group.rotation.order = 'XYZ'; me.group.rotation.set(0, P.facing, 0);
+  try { corpsDebout(me, P.pos.x, P.pos.z, P.pos.y); } catch (e) {}
+  P.hp = 100; P.hurtT = simTime; P.grace = simTime + RELEVE_GRACE;
+  try { majVie(); } catch (e) {}
+  dead = false;
+  // DANS UN PARCOURS, ON NE DIT RIEN : on y meurt vingt fois par étape, `die()` a déjà affiché
+  // « Oups ! » et une phrase de plus à chaque chute serait insupportable. En ville, au
+  // contraire, c'est tout l'objet du n° 78 : l'enfant doit comprendre où il se réveille.
+  const aLHopital = !!(city.on && city.medDesk && !jail.on);
+  const pourquoi = cause ? ' (' + cause + ')' : '';
+  try { if (city.on) msg(aLHopital ? `🏥 Tu te réveilles à l'hôpital, remis sur pied${pourquoi} — repars tranquille !`
+    : `💪 Tu te relèves${pourquoi} — repars tranquille !`, 3200); } catch (e) {}
+  try { sfx.check(); } catch (e) {}
+  return true;
+}
+// LE CHIEN DE GARDE. Appelé à chaque pas de simulation, AVANT la sortie `!active` de step() :
+// c'est la seule façon d'en sortir quand `dead` est vrai, puisque step() ne fait plus rien
+// dans ce cas. Il n'y a plus qu'UN chemin pour se relever, et il ne dépend que de `simTime`.
+function relevageTick() {
+  const aTerre = dead || (P.hp <= 0 && running);
+  if (!aTerre) { if (P.aTerreT) P.aTerreT = 0; return; }
+  if (!P.aTerreT) { P.aTerreT = simTime; return; }
+  // sur le brancard, les secours font leur travail : on leur laisse du temps, mais pas la partie
+  const attente = P.secours ? RELEVE_SECOURS : RELEVE_DELAI;
+  if (simTime - P.aTerreT < attente) return;
+  try { remiseEnJeu(P.secours ? 'les secours ont mis trop longtemps' : null); }
+  catch (e) { try { respawn(); } catch (e2) {} dead = false; P.aTerreT = 0; }
 }
 function respawn() {
   P.pos.set(cp.x, cp.y + 0.15, cp.z + 0.5); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
@@ -27562,6 +27830,7 @@ function resetGame() {
   coins.forEach(c => { c.taken = false; c.g.visible = true; c.g.scale.set(1, 1, 1); });
   checkpoints.forEach(k => { k.material.color.set(C.blue); k.material.emissive.set(C.blue); });
   cp = checkpoints[0]; coinCount = 0; deaths = 0; elapsed = 0; timerOn = false; won = false; dead = false;
+  P.grace = 0; P.aTerreT = 0;   // un monde neuf : ni invulnérabilité ni chute en cours qui traîne (n° 78)
   if (drive.car) exitCar(); city.goals = 0; city.tennis = 0; city.primesSport = {}; city.race.on = false; city.zone = null; P.racket = false; setRacket(me, false); if (city.on) updateAct();
   cam.yaw = 0; cam.pitch = 0.32;
   respawn(); updateHud(); updateTimer(); updateLeaderboard();
@@ -28665,13 +28934,22 @@ function camPerche(dt, aiming) {
   // voiture. Les deux lignes passent par `vehiculeAssis()` : même règle qu'au volant.
   const vehM = vehiculeAssis();
   const confort = camConfortVeh();
-  const monteVeh = !!vehM && cam.dJoueur != null && cam.dJoueur < confort && !vehM.heli;
+  // MONTER PLUTÔT QUE RECULER (défaut 81, deuxième exigence). La montée au volant ne partait
+  // QUE sur la distance OBTENUE (cam.dJoueur < 4,7 m) : au parking du centre, l'auvent du snack
+  // coupait la perche à 4,65 m, cam.dJoueur tombait à 4,70 m PILE sur le seuil, et la caméra
+  // restait à osciller au ras de la toile au lieu de passer par-dessus (mesuré : hausse 0,10 rad
+  // après six secondes, perche 4,57 m). C'est la PLACE LIBRE derrière (cam.libre) qui dit s'il
+  // manque du dégagement, et on la compare à la distance demandée avec 1,2 m de marge : la
+  // caméra part chercher la hauteur AVANT d'être coincée. camMontee(), elle, rend 0 dès que
+  // l'inclinaison courante suffit — sur route dégagée (cam.libre ≈ 11 m) rien ne change.
+  const bridee = cam.libre != null && cam.libre < Math.min(cam.dist, confort) + 1.2;
+  const monteVeh = !!vehM && !vehM.heli && ((cam.dJoueur != null && cam.dJoueur < confort) || bridee);
   // URGENCE TÔLE : dans un véhicule, perche sous deux mètres — l'image n'est plus qu'un aplat
   // de carrosserie, il n'y a rien à préserver. On recalcule la montée À CHAQUE IMAGE (au lieu
   // de cinq fois par seconde) et on la monte trois fois plus vite : la caméra passe par-dessus
   // le toit en deux dixièmes de seconde au lieu d'une seconde. C'est le cas qu'on voit en
   // montant dans un camion garé dans un recoin — la capture du chef, prise juste après.
-  const urgence = monteVeh && cam.dJoueur < 2;
+  const urgence = monteVeh && cam.dJoueur != null && cam.dJoueur < 2;
   if (running && !aiming && (!vehM || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {
     if (urgence || simTime > (cam.hauT || 0) || simTime < cam.hauT - 0.3) {
       cam.hauT = simTime + 0.2;
@@ -28759,10 +29037,13 @@ function camPerche(dt, aiming) {
     // depart (sinon toutes les directions tomberaient a zero des qu'on frole un mur) : la
     // camera pouvait donc finir DANS ce meuble-la. On verifie sa position finale et on la
     // ramene vers le joueur jusqu'a en sortir.
+    // (défaut 81 : les carrosseries entrent dans le garde-fou comme dans le reste — sauf la
+    //  nôtre, `monSolide`, à l'intérieur de laquelle la caméra a parfaitement le droit d'être)
+    const monSolide = (() => { const v = vehiculeAssis(); return v ? v.solid : null; })();
     if (running) for (let k = 0; k < 8 && d > 0.4; k++) {
       const c = camera.position; let coince = false;
-      for (const o of solidsAutour(c.x, c.z, 2)) {
-        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+      for (const o of solidsAutour(c.x, c.z, 2, true)) {
+        if (o === monSolide || o.glass || o.h > 30 || o.xray) continue;
         if (o.mesh && !o.mesh.visible) continue;   // efface a l'ecran : la camera peut s'y trouver sans gener
         if (Math.abs(c.x - o.x) < o.w / 2 + 0.15 && Math.abs(c.y - o.y) < o.h / 2 + 0.15
           && Math.abs(c.z - o.z) < o.d / 2 + 0.15) { coince = true; break; }
@@ -28777,7 +29058,7 @@ function camPerche(dt, aiming) {
     // la mesure. Au lieu d'une liste d'« intérieurs » écrite à la main, on interroge la LIGNE
     // DE VUE elle-même et on raccourcit la perche jusqu'à ce que le joueur soit dégagé.
     if (running) for (let k = 0; k < 6 && d > 0.6; k++) {
-      const t = murEntreVue(cam.target.x, cam.target.y, cam.target.z, dir.x, dir.y, dir.z, d - 0.1);
+      const t = murEntreVue(cam.target.x, cam.target.y, cam.target.z, dir.x, dir.y, dir.z, d - 0.1, monSolide);
       if (t < 0) break;
       d = Math.max(0.6, t - 0.25); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
       camera.position.copy(cam.target).addScaledVector(dir, d);
@@ -30598,7 +30879,7 @@ function gardeArmeTick(b, dt) {
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }
   else if (c.bot) { c.bot.hp = (c.bot.hp ?? 100) - 22; c.bot.fight = 'flee'; c.bot.fightT = simTime + 6;
     impact(c.bot.pos.x, c.bot.pos.y + 1.2, c.bot.pos.z, null, 'sang', 1);
-    if (c.bot.hp <= 0) botKill(c.bot); }
+    if (c.bot.hp <= 0) botKill(c.bot, b); }   // (n° 85) c'est l'ami ARMÉ qui tire, pas l'enfant
   if (simTime > (b.criT || 0)) { b.criT = simTime + 5; botSay(b, [`recule, ${c.nom} !`, 'je te couvre !', 'baisse-toi !']); }
   return true;
 }
@@ -30667,8 +30948,10 @@ function lancerActivite(b, a) {
     chat(null, `👀 ${b.name} rôde autour de la banque…`);
   } else if (a.k === 'bagarre') {
     // il s'en prend au joueur, ou à un autre bot si le joueur est loin
+    // (n° 84) — et il ne s'en prend au JOUEUR que si le joueur l'a cherché. Sinon on tombe
+    // dans la branche du dessous : la bagarre a bien lieu, mais entre deux habitants.
     const dp = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
-    if (dp < 45 && Math.random() < 0.6) {
+    if (joueurAProvoque() && dp < 45 && Math.random() < 0.6) {
       b.fight = 'chase'; b.fightT = simTime + 16; b.wait = 0;
       botSay(b, [`viens te battre ${myCfg.name} ! 😤`, 'tu me dois quelque chose !', 'approche un peu !']);
       chat(null, `😤 ${b.name} s'en prend à ${myCfg.name} !`);
@@ -31457,9 +31740,14 @@ function gangTick(dt) {
       G.t = simTime + rnd(35, 80);
       // EMBUSCADE : plutôt que de déplacer tout le gang, ils détachent un ou deux hommes
       // pour aller cueillir le joueur — ou l'un de SES hommes — là où il se trouve.
-      if (G.relation < -20 && Math.random() < 0.35 && !G.membres.some(m => m.chasse)) {
+      if (G.relation < -20 && Math.random() < 0.35 && !G.membres.some(m => m.chasse) && (joueurDansLaGuerre() || gang.membres.length)) {
         const dispo = G.membres.filter(m => !m.ko && !m.captif);
-        const proies = [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }]
+        // ON NE S'EN PREND JAMAIS À UN ENFANT QUI N'EST PAS ENTRÉ DANS LA GUERRE (n° 78, même
+        // règle que les n° 67, 72 et 75). Mesure du contrôleur, profil vierge, manette posée :
+        // trois hommes armés venaient le cueillir au point d'apparition à t+110 s et le
+        // descendaient à 0 ❤️ à t+125 s. Tant qu'il n'a ni homme ni respect, il n'existe pas
+        // pour eux : ils s'en prennent à un rival ou à une boutique, pas à lui.
+        const proies = (joueurDansLaGuerre() ? [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }] : [])
           .concat(gang.membres.filter(b => !b.ko && !b.mort && b.av.group.visible)
             .map(b => ({ bot: b, x: b.pos.x, z: b.pos.z, nom: b.name })));
         const proie = pickOne(proies);
@@ -31477,7 +31765,9 @@ function gangTick(dt) {
       const r = Math.random();
       if (r < 0.3 && city.vitrines && city.vitrines.length) { const v = pickOne(city.vitrines); G.etat = 'boutique'; G.cible = [v.x, v.z];
         chat(null, `🚩 ${G.nom} s'en prennent à une boutique !`); }
-      else if (r < 0.5) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z];
+      // même garde ici (n° 78) : sans elle, `G.etat = 'joueur'` lançait tout le gang aux
+      // trousses d'un enfant qui n'a rien demandé, et les membres frappent dès `etat === 'joueur'`.
+      else if (r < 0.5 && joueurDansLaGuerre()) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z];
         if (Math.hypot(P.pos.x - G.membres[0].x, P.pos.z - G.membres[0].z) < 120) chat(null, `🚩 ${G.nom} te cherchent…`); }
       else if (r < 0.7 && gangs.length > 1) { const o = pickOne(gangs.filter(x => x !== G)); G.etat = 'rival'; G.cible = [o.base[0], o.base[1]];
         chat(null, `🚩 ${G.nom} attaquent ${o.nom} !`); }
@@ -31897,15 +32187,37 @@ function gangeurKO(m, par, assomme) {
   }
   const G = gangDe(m.gang);
   if (!G) return;
-  // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.
-  if (G.allieJoueur) rompsAlliance(G, 'trahison');
-  G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
-  G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
+  // LE GANG NE SE RETOURNE CONTRE L'ENFANT QUE SI C'EST LUI QUI A TIRÉ (n° 85). `gangeurKO`
+  // est aussi appelé pour une bagarre entre deux gangs (`gangeurKO(cible, m.nom, true)`) et
+  // pour une balle de la police : dans ces cas-là le gang partait « état joueur », se lançait
+  // à ses trousses et l'enfant empochait même la réputation du coup. Il ne perd la face du
+  // gang, et ne gagne du respect, que pour les coups qu'il a portés.
+  const parLeJoueur = (par === 'le joueur');
+  if (parLeJoueur) {
+    // TRAHIR UN ALLIÉ, ça se paie tout de suite : l'alliance saute et le respect tombe.
+    if (G.allieJoueur) rompsAlliance(G, 'trahison');
+    G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
+    G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
+  }
+  // ON DIT CE QUI S'EST VRAIMENT PASSÉ (n° 83 du contrôleur). Le jeu fait déjà la différence
+  // en interne — `m.abattu` est posé quand le coup est porté à l'arme, le corps s'efface au
+  // bout de 15 s et l'homme quitte le gang pour de bon — mais il annonçait « a mis KO » dans
+  // les DEUX cas. L'enfant croyait l'avoir seulement assommé, puis voyait le corps disparaître
+  // sans comprendre. Aux poings on assomme (il se relève au bout de 26 s), à l'arme on tue.
+  const auteur = (par === 'le joueur') ? myCfg.name : par;
   if (m.chef) {
-    msg(`💥 ${m.nom}, le chef des ${G.nom}, est à terre !`, 3200);
-    chat(null, `💥 ${myCfg.name} a mis KO ${m.nom}, chef des ${G.nom}`);
-    gagneRep(30, 'chef à terre');
-  } else gagneRep(3, null);
+    msg(assomme ? `😵 ${m.nom}, le chef des ${G.nom}, est assommé !`
+      : `💀 ${m.nom}, le chef des ${G.nom}, est mort.`, 3200);
+    chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom}, chef des ${G.nom}`
+      : `💀 ${auteur} a tué ${m.nom}, chef des ${G.nom}`);
+    if (parLeJoueur) gagneRep(30, assomme ? 'chef assommé' : 'chef abattu');
+  } else {
+    // même règle pour un simple homme de main : jusqu'ici il tombait sans un mot, et son corps
+    // disparaissait quinze secondes plus tard sans que rien n'ait dit qu'il était mort.
+    chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom} (${G.nom})`
+      : `💀 ${auteur} a tué ${m.nom} (${G.nom})`);
+    if (parLeJoueur) gagneRep(3, null);
+  }
   verifieElimination(G);
 }
 // ---- élimination d'un gang et naissance du suivant ----

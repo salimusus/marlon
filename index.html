@@ -9142,9 +9142,23 @@ function botConduit(c, x, z, dt, opt) {
     // sans fin. On garde donc la voie retenue tant qu'on la longe, et on ne la reconsidere qu'a
     // la prochaine destination.
     if (butNeuf) c.departVoie = -1;
-    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    let via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    // LE DETOUR ABSURDE (la meme regle que pour la voiture d'un ami, voir conduireVersPoint).
+    // Le graphe des voies respecte les sens uniques, et c'est ce qu'on veut : mais quand le but
+    // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
+    // maisons. Mesure sur l'incendie en (0, 20) : depuis (-6, 1) il rendait 146 m de rues pour
+    // 24,6 m a vol d'oiseau — soit 5,9 fois — et le camion de pompiers arrivait 30 s trop tard.
+    // Au-dela de deux fois le trace de la grille A*, on prend donc la grille (qui prefere deja
+    // la chaussee : NAV.cout vaut 1 sur route et 3 en dehors). Le code de la route, les feux et
+    // les distances de securite continuent de s'appliquer : c'est traficRoule qui conduit.
+    let pts = null;
+    if (via && via.length > 1) {
+      const lgT = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : Infinity; };
+      const grille = navPath(c.x, c.z, x, z);
+      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 2.1) { via = null; pts = grille.concat([[x, z]]); }
+    }
     c.departVoie = via ? itineraireDepart : -1;
-    const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
+    if (!pts) pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
   c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
@@ -18723,16 +18737,24 @@ function botDescendre(b, garde) {
     b.drive = null; b.wait = 1.5; b.target = null;
   }
 }
-// Ce qu'il reste a parcourir SUR LE TRACE suivi (et non a vol d'oiseau) : la somme des
-// segments qui restent, depuis le vehicule. A defaut de trace, la ligne droite.
-function resteSurRoute(c, st) {
-  const R = st && st.route;
-  const vol = Math.hypot(st.tx - c.x, st.tz - c.z);
+// CE QU'IL RESTE A PARCOURIR SUR LE TRACE, ET NON A VOL D'OISEAU. La somme des segments qui
+// restent, depuis le vehicule jusqu'au bout du trace, puis du bout du trace jusqu'au but.
+// A defaut de trace, la ligne droite. C'est la SEULE mesure d'avancement honnete dans une
+// ville a sens uniques : un detour legitime autour d'un pate de maisons ELOIGNE du but a vol
+// d'oiseau pendant vingt secondes (mesure : 24,6 m a vol d'oiseau, 146 m par les rues).
+function longueurReste(x, z, R, i0, tx, tz) {
+  const vol = Math.hypot(tx - x, tz - z);
   if (!R || !R.length) return vol;
-  let l = Math.hypot(R[0][0] - c.x, R[0][1] - c.z);
-  for (let i = 0; i + 1 < R.length; i++) l += Math.hypot(R[i + 1][0] - R[i][0], R[i + 1][1] - R[i][1]);
+  const i = Math.max(0, Math.min(i0 | 0, R.length - 1));
+  let l = Math.hypot(R[i][0] - x, R[i][1] - z);
+  for (let k = i; k + 1 < R.length; k++) l += Math.hypot(R[k + 1][0] - R[k][0], R[k + 1][1] - R[k][1]);
+  l += Math.hypot(tx - R[R.length - 1][0], tz - R[R.length - 1][1]);
   return Math.max(vol, l);
 }
+// le trace d'un ami qui te conduit (`st.route`, le prochain point est toujours en tete)
+function resteSurRoute(c, st) { return longueurReste(c.x, c.z, st && st.route, 0, st.tx, st.tz); }
+// le trace d'un vehicule conduit par botConduit (`c.ia.route`, index courant `c.ia.i`)
+function resteSurIA(c, tx, tz) { return longueurReste(c.x, c.z, c && c.ia && c.ia.route, c && c.ia ? c.ia.i : 0, tx, tz); }
 function botDriveTick(dt) {
   for (const b of bots) {
     const st = b.drive; if (!st) continue;
@@ -22683,12 +22705,40 @@ function vehHalf(c) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   return [Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, A * 2 / 3];
 }
-// h = orientation du véhicule, L = demi-longueur : on teste l'avant, le milieu et l'arrière.
+// LE GABARIT REEL DU VEHICULE, ET NON CELUI D'UNE BERLINE.
+// La carrosserie est couverte par une CHAINE DE DISQUES. Trois suffisaient tant que tout le
+// monde avait la taille d'une voiture : demi-cotes 2,20 x 1,20 m, rayon sqrt((A/3)^2+B^2) =
+// 1,41 m, soit 21 cm de large en trop. Mais ce rayon grandit avec la LONGUEUR : le camion de
+// pompiers (8,00 x 2,60 m, demi-cotes 4,00 x 1,30) se retrouvait traite comme un engin de
+// 3,76 m de LARGE. Mesure sur l'incendie en (0, 20) : le camion partait bien de la caserne,
+// roulait 78 m, et se plantait pour de bon en (-78,1 ; 15,0) — bloque par un simple lampadaire
+// de 36 cm pose a 1,92 m de son axe, alors que sa carrosserie n'en fait que 1,30. Au plus pres
+// 74,2 m du feu, jamais arrive (tests 239 et 240 rouges). Le trace, lui, etait bon : chacun de
+// ses points de passage etait libre pour son propre gabarit.
+// On ajoute donc des disques jusqu'a ce que le debord retombe a celui d'une berline (22 cm) :
+// TROIS pour une voiture (le calcul est alors identique au precedent, au bit pres), SIX pour le
+// camion — rayon 1,49 m au lieu de 1,88. La chaine reste une couverture EXACTE du rectangle
+// (chaque disque couvre sa tranche jusqu'au coin), donc on ne laisse jamais passer un obstacle
+// qui touche vraiment la tole : on cesse seulement d'en inventer.
+const DISQ = { n: 3, r: 1.4, ux: [0, 0, 0, 0, 0, 0], uz: [0, 0, 0, 0, 0, 0] };   // tampon reutilise : carBlocked tourne des centaines de fois par image
+function chaineDisques(r, L, h) {
+  const A = L * 1.5;                                    // demi-longueur (L valait 2A/3)
+  const B2 = (r - 0.02) * (r - 0.02) - (L / 2) * (L / 2);
+  const B = B2 > 0.0025 ? Math.sqrt(B2) : (r - 0.02);   // demi-largeur retrouvee depuis r et L
+  let n = 3;
+  while (n < 6 && Math.sqrt((A / n) * (A / n) + B * B) - B > 0.22) n++;
+  DISQ.n = n; DISQ.r = Math.sqrt((A / n) * (A / n) + B * B) + 0.02;
+  const sn = Math.sin(h), cs = Math.cos(h);
+  for (let i = 0; i < n; i++) { const u = A * (2 * i - n + 1) / n; DISQ.ux[i] = sn * u; DISQ.uz[i] = cs * u; }
+  return DISQ;
+}
+// h = orientation du véhicule, L = demi-longueur : on teste la chaîne de disques ci-dessus.
 // Avec un seul disque au centre, les coins d'une voiture en biais s'enfonçaient de 60 cm
 // dans les murs — on voyait le capot traverser la façade.
 function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
-  const deux = h != null && L > 0.05, sn = deux ? Math.sin(h) * L : 0, cs = deux ? Math.cos(h) * L : 0;
-  const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
+  const deux = h != null && L > 0.05;
+  const D = deux ? chaineDisques(r, L, h) : null;
+  const rr = deux ? D.r : r;
   for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
     // `opt.ignore` : UN SOLIDE QU'ON TRAINE DERRIERE SOI. L'epave accrochee au crochet de la
@@ -22707,14 +22757,20 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
     if (o.pol && opt.pol) continue;   // les voitures de police ne se bloquent pas entre elles
     if (o.veh && opt.pol && o.w < 1.7 && o.d < 3) continue;   // ni les vélos / motos garés
     const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;
-    const x0 = o.x - o.w / 2 - r, x1 = o.x + o.w / 2 + r, z0 = o.z - o.d / 2 - r, z1 = o.z + o.d / 2 + r;
-    if (x > x0 && x < x1 && z > z0 && z < z1) return true;
-    if (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1))) return true;
+    const x0 = o.x - o.w / 2 - rr, x1 = o.x + o.w / 2 + rr, z0 = o.z - o.d / 2 - rr, z1 = o.z + o.d / 2 + rr;
+    if (!deux) { if (x > x0 && x < x1 && z > z0 && z < z1) return true; continue; }
+    for (let i = 0; i < D.n; i++) {
+      const qx = x + D.ux[i], qz = z + D.uz[i];
+      if (qx > x0 && qx < x1 && qz > z0 && qz < z1) return true;
+    }
   }
   for (const b of city.batiments) {   // intérieur d'un bâtiment : interdit aux véhicules
     const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
-    if ((x > x0 && x < x1 && z > z0 && z < z1)
-      || (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1)))) return true;
+    if (x > x0 && x < x1 && z > z0 && z < z1) return true;
+    if (deux) for (let i = 0; i < D.n; i++) {
+      const qx = x + D.ux[i], qz = z + D.uz[i];
+      if (qx > x0 && qx < x1 && qz > z0 && qz < z1) return true;
+    }
   }
   return false;
 }
@@ -35999,12 +36055,25 @@ function pompiersTick(dt) {
       // « coincé » = le camion ne ROULE plus (pas la distance au feu : un itinéraire contourne
       // souvent un pâté de maisons et s'éloigne un moment avant de revenir)
       if (!veh || (veh.pas || 0) > 0.5 * dt) w0.progT = simTime;
-      // … et « coincé » aussi quand on ne GAGNE plus un mètre vers le feu pendant 20 s à moins de
-      // 90 m : dans une file derrière une voiture au feu rouge, le camion reculait, repartait,
-      // re-butait — il « roulait » sans jamais avancer et l'équipe ne descendait jamais (test 388
-      // dans la suite complète : au plus près à 58 m, feu jamais éteint). Un détour honnête
-      // autour d'un pâté de maisons rapproche du feu bien avant vingt secondes.
-      if (dF < (w0.progD || 1e9) - 1) { w0.progD = dF; w0.progDT = simTime; }
+      // … et « coincé » aussi quand on n'AVANCE plus sur son trajet pendant 20 s à moins de 90 m :
+      // dans une file derrière une voiture au feu rouge, le camion reculait, repartait, re-butait —
+      // il « roulait » sans jamais avancer et l'équipe ne descendait jamais (test 388 dans la suite
+      // complète : au plus près à 58 m, feu jamais éteint).
+      // ON MESURE L'AVANCEMENT SUR LE TRACÉ, PLUS À VOL D'OISEAU. Relevé sur l'incendie en (0, 20) :
+      // le camion roulait parfaitement, mais son itinéraire faisait le tour du pâté de maisons —
+      // 146 m de rues pour 24,6 m à vol d'oiseau, à cause des sens uniques. Pendant ce tour la
+      // distance au feu AUGMENTE forcément, le filet de sécurité se déclenchait au bout de 20 s et
+      // arrêtait le camion à 33 m du feu, équipage à pied. Mesure : au plus près 20,3 m, jamais
+      // arrivé, feu éteint en 132 s (tests 239 et 240 rouges).
+      // ON NE MELANGE PAS DEUX MESURES DANS LE MEME COMPTEUR. `c.ia` est vide pendant une marche
+      // arriere de degagement et pendant l'approche finale ; `resteSurIA` retombe alors sur la
+      // ligne droite. Mesure : a t+33 s le camion manoeuvrait, la ligne droite valait 77 m contre
+      // 238 m de trace, le record passait a 76 m — et plus aucun metre parcouru ensuite ne
+      // pouvait le battre. Il s'arretait vingt secondes plus tard, a 46 m du feu. Sans trace on
+      // ne compte donc rien : le filet « le camion ne roule plus depuis 8 s » couvre ce cas.
+      const dR = (veh && veh.ia && veh.ia.route && veh.ia.route.length) ? resteSurIA(veh, chef.acces[0], chef.acces[1]) : null;
+      if (dR == null) w0.progDT = simTime;
+      else if (dR < (w0.progD || 1e9) - 1) { w0.progD = dR; w0.progDT = simTime; }
       const coince = (simTime - w0.progT > 8 && dF < 70) || (simTime - (w0.progDT || w0.progT) > 20 && dF < 90);
       if (dF < 12 || dA < 11 || coince) { majEtat('deploie'); w0.t = simTime + 3; w0.tMax = simTime + 40; if (veh) { veh.outilCible = 1; veh.speed = 0; veh.spd = 0; } }
       return;

@@ -19593,3 +19593,100 @@ test('on ne renverse jamais ses propres passagers : trois amis à bord, on déma
   const ok = r.montes === 3 && r.hp1.every(h => h === 100) && r.aTerre === 0 && r.etoiles === 0 && r.parcouru > 30;
   return { ok, detail: `relevé en jeu : trois amis montés, et le PREMIER MÈTRE de conduite donnait ★★★, « chauffard ! » et leurs points de vie tombés de 100 à 41 — alors qu'ils étaient assis sur leur siège. Le garde-fou écartait le bot AU VOLANT, jamais les PASSAGERS · maintenant ${r.montes} amis à bord, ${r.parcouru} m parcourus : points de vie ${r.hp0.join('/')} → ${r.hp1.join('/')}, ${r.aTerre} à terre, ${r.etoiles} étoile(s) de recherche` };
 });
+// ============================================================================================
+// DÉFAUT 81 — « on monte dans une voiture du parking, l'écran est entièrement bouché ».
+// Le QA relevait 100 % de l'image prise par deux aplats « rouge vif et gris clair », et une
+// caméra pourtant à 5,39 m derrière la voiture et 3,73 m de haut. Ce n'étaient pas les voitures
+// voisines : c'est l'AUVENT RAYÉ du snack (8,2 × 0,6 × 1,4 m, centré en (−9,5 ; 3,5 ; 15,4)),
+// fabriqué à la main dans shop() — ni solide, ni « toit de caméra ». La perche le traversait et
+// l'objectif se posait à 15 CM sous la toile. Mesure de référence, grille de 16 × 9 rayons
+// lancés dans le champ : 88,9 % des rayons touchaient un objet à moins de 1,80 m de l'objectif.
+// Le test refait la scène exacte du QA (il monte dans la voiture garée en (−11,3 ; 10), entre
+// deux autres, et ne touche à rien) et vérifie les deux exigences : plus rien de collé à
+// l'objectif, et l'on voit SA voiture ET un point de rue devant elle.
+// ============================================================================================
+test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus bouché : on voit sa voiture et la rue devant', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, out = {};
+    __SHOT.go({ frais: true, world: 4, x: -11, y: 1, z: 11.5, hour: 12, hideHud: true });
+    try { G.closeUI(); } catch (e) {}
+    document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear();
+    // la voiture du milieu du parking du centre : celle que le QA a prise (x = −11,3 ; z = 10),
+    // garée entre celle de −14,6 et celle de −8, cap au nord (h = π)
+    let vp = null, dmin = 1e9;
+    for (const v of G.city.cars) {
+      if (!(v.x > -26 && v.x < 0 && v.z > 0 && v.z < 16) || v.kind === 'velo' || v.travail || /moto/.test(v.kind || '')) continue;
+      const dd = Math.hypot(v.x + 11, v.z - 11.5); if (dd < dmin) { dmin = dd; vp = v; }
+    }
+    if (!vp) return { erreur: 'aucune voiture garée au parking du centre' };
+    out.place = { x: +vp.x.toFixed(1), z: +vp.z.toFixed(1) };
+    out.voisines = G.city.cars.filter(c => c !== vp && Math.abs(c.z - vp.z) < 3 && Math.abs(c.x - vp.x) < 4.2).length;
+    G.P.pos.set(vp.x, 0.3, vp.z + 3.2); G.P.facing = Math.PI;
+    G.enterCar(vp); G.cam.recale = true;
+    // LE CAP DE LA CAMÉRA SE POSE À LA MAIN. `__SHOT.go` ne le remet pas quand la vue ne le
+    // demande pas : lancé APRÈS un autre test, celui-ci héritait du cap laissé par le
+    // précédent, la caméra regardait à côté du parking et la mesure ne voulait plus rien dire
+    // (relevé : perche 10,95 m, rue devant hors cadre). On la place derrière la voiture, comme
+    // le jeu le fait tout seul quand on monte : cap du joueur + π, inclinaison de croisière.
+    G.cam.yaw = G.P.facing + Math.PI; G.cam.pitch = 0.32; G.cam.freeUntil = 0;
+    G.cam.hausse = 0; G.cam.hausseCible = 0; G.cam.libre = null; G.cam.dLisse = null;
+    // sept secondes de simulation, À L'ARRÊT : la caméra ne se met à jour que dans camPerche,
+    // il faut donc l'appeler dans la MÊME image que step() (piège déjà payé sur ce poste)
+    for (let i = 0; i < 420; i++) {
+      G.simTime += 1 / 60; G.step(1 / 60, true);
+      G.camPerche(1 / 60, false); try { G.interieurTick(); } catch (e) {}
+    }
+    const cc = G.camera.position;
+    out.cam = { y: +cc.y.toFixed(2), recul: +Math.hypot(cc.x - vp.x, cc.z - vp.z).toFixed(2),
+      hausse: +(G.cam.hausse || 0).toFixed(3), perche: +G.cam.reel.toFixed(2) };
+    // ---- 1) QU'EST-CE QUI EST COLLÉ À L'OBJECTIF ? 16 × 9 rayons dans tout le champ
+    const rc = new THREE.Raycaster(); let colle = 0, n = 0, mini = 1e9, quoi = null;
+    for (let iy = 0; iy < 9; iy++) for (let ix = 0; ix < 16; ix++) {
+      const sx = (ix + 0.5) / 16 * 2 - 1, sy = (iy + 0.5) / 9 * 2 - 1;
+      rc.setFromCamera({ x: sx, y: sy }, G.camera);
+      const h = rc.intersectObject(G.scene, true).filter(t => t.object.isMesh && t.object.visible)[0];
+      n++;
+      if (h && h.distance < 1.8) {
+        colle++;
+        if (h.distance < mini) {
+          mini = h.distance; const bb = new THREE.Box3().setFromObject(h.object);
+          quoi = { d: +h.distance.toFixed(2),
+            taille: [+(bb.max.x - bb.min.x).toFixed(1), +(bb.max.y - bb.min.y).toFixed(1), +(bb.max.z - bb.min.z).toFixed(1)],
+            centre: [+((bb.max.x + bb.min.x) / 2).toFixed(1), +((bb.max.y + bb.min.y) / 2).toFixed(1), +((bb.max.z + bb.min.z) / 2).toFixed(1)] };
+        }
+      }
+    }
+    out.bouche = +(colle / n).toFixed(3); out.plusProche = quoi;
+    // ---- 2) VOIT-ON SA VOITURE ET LA RUE DEVANT ? (segment caméra → cible, et point à l'écran)
+    const vis = (tx, ty, tz) => {
+      const dx = tx - cc.x, dy = ty - cc.y, dz = tz - cc.z, L = Math.hypot(dx, dy, dz) || 1;
+      const q = new THREE.Vector3(tx, ty, tz); q.project(G.camera);
+      return { libre: G.murEntreVue(cc.x, cc.y, cc.z, dx / L, dy / L, dz / L, L - 0.3, vp.solid) < 0,
+        cadre: Math.abs(q.x) < 1 && Math.abs(q.y) < 1 && q.z < 1 };
+    };
+    out.saVoiture = vis(vp.x, (vp.y || 0) + 1.4, vp.z);
+    const rx = vp.x + Math.sin(vp.h) * 12, rz = vp.z + Math.cos(vp.h) * 12;   // 12 m devant le capot
+    out.rueDevant = Object.assign({ x: +rx.toFixed(1), z: +rz.toFixed(1) }, vis(rx, 0.4, rz));
+    // ---- 3) LA PERCHE NE SE LOGE PLUS DANS UNE CARROSSERIE VOISINE
+    out.dansUnVoisin = G.city.cars.concat(G.city.aiCars || []).some(c => c && c !== vp && c.solid
+      && Math.abs(cc.x - c.solid.x) < c.solid.w / 2 && Math.abs(cc.y - c.solid.y) < c.solid.h / 2
+      && Math.abs(cc.z - c.solid.z) < c.solid.d / 2);
+    // ---- 4) PREUVE DIRECTE : une carrosserie ARRÊTE bien la perche maintenant. On tire un rayon
+    // du centre de sa voiture vers la voisine de droite : avant, camLibres et murEntreVue
+    // sautaient tout ce qui porte `o.veh` et rendaient « rien sur le chemin » (6 m et −1).
+    const vd = G.city.cars.find(c => c !== vp && Math.abs(c.z - vp.z) < 3 && c.x > vp.x && c.x - vp.x < 4.2);
+    if (vd) {
+      const s = Math.sign(vd.x - vp.x);
+      out.versVoisine = { ecart: +Math.abs(vd.x - vp.x).toFixed(1),
+        camLibres: +G.camLibres(vp.x, (vp.y || 0) + 1.2, vp.z, [[s, 0, 0]], 6, vp.solid)[0].toFixed(2),
+        murEntreVue: +G.murEntreVue(vp.x, (vp.y || 0) + 1.2, vp.z, s, 0, 0, 6, vp.solid).toFixed(2) };
+    }
+    return out;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.voisines >= 2 && r.bouche <= 0.08 && r.saVoiture.libre && r.saVoiture.cadre
+    && r.rueDevant.libre && r.rueDevant.cadre && !r.dansUnVoisin
+    && !!r.versVoisine && r.versVoisine.camLibres < r.versVoisine.ecart && r.versVoisine.murEntreVue >= 0;
+  return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant, à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
+});

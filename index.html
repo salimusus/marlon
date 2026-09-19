@@ -2596,6 +2596,20 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = th; worldGroup.add(g);   // éléments visuels tournés avec le magasin
   const at = AWNING.clone(); at.needsUpdate = true; at.repeat.set(w / 1.5, 1);
   const aw = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: at })); aw.scale.set(w + 0.2, 0.12, 1.4); aw.position.set(0, 3.5, fz - 0.7); aw.rotation.x = 0.35; g.add(aw);
+  // L'AUVENT RAYÉ BOUCHAIT TOUT L'ÉCRAN (défaut 81 — « on monte dans une voiture du parking et
+  // on ne voit plus rien »). Il est fait à la main (`new THREE.Mesh`), donc il n'a jamais été ni
+  // un solide ni un « toit de caméra » : la perche lui passait AU TRAVERS. Mesuré au parking du
+  // centre, joueur au volant de la voiture garée en (−11,3 ; 10) : la caméra se posait en
+  // (−11,3 ; 3,73 ; 15,39) — les 5,39 m et 3,73 m relevés par le QA — soit À 15 CM sous
+  // l'auvent du snack (8,2 × 0,6 × 1,4 m, centré en (−9,5 ; 3,5 ; 15,4)). Les deux « aplats
+  // rouge vif et gris clair » de sa capture ne sont pas deux voitures voisines : ce sont les
+  // rayures rouge et blanc de cette toile, vue de l'intérieur. On l'inscrit donc dans camToits
+  // (c'est exactement ce que cette liste sert à faire : « auvent, halle, préau »). estUnToit()
+  // ne pouvait pas l'y mettre toute seule, elle exige 2,5 m dans les deux sens et l'auvent n'est
+  // profond que de 1,4 m. La boîte tient compte de l'inclinaison de 0,35 rad : 0,12 m
+  // d'épaisseur + 1,4 m de pente = 0,62 m de haut, centrés sur 3,5 m.
+  { const [ax, az] = M(0, fz - 0.7), sw = facing % 2 === 1;
+    camToits.push({ mesh: aw, x: ax, y: 3.5, z: az, w: sw ? 1.4 : w + 0.2, h: 0.62, d: sw ? w + 0.2 : 1.4 }); }
   const sg = new THREE.Mesh(unitBox, matEnseigne(title, color)); sg.scale.set(w * 0.95, 1.25, 0.14); sg.position.set(0, 4.9, fz - 0.1); g.add(sg);   // grande enseigne colorée, nom écrit en gros
   { const dos = new THREE.Mesh(unitBox, lam(0x20263a)); dos.scale.set(w * 0.99, 1.45, 0.1); dos.position.set(0, 4.9, fz - 0.02); g.add(dos); }
   for (let i = -1; i <= 1; i++) { const n = new THREE.Mesh(unitBox, neonMat(0xffffcc)); n.scale.set(0.5, 0.12, 0.5); n.position.set(i * w * 0.3, H + 0.2, 0); g.add(n); }
@@ -26500,8 +26514,12 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
       if (t >= 0 && t < out[i]) out[i] = t;
     }
   };
-  for (const o of solidsAutour(ox, oz, maxD + 1)) {
-    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
+  // LES VÉHICULES BOUCHENT LA VUE EUX AUSSI (défaut 81). `solidsAutour` ne rend les carrosseries
+  // que si on les DEMANDE (4ᵉ argument), et la boucle sautait de toute façon tout ce qui porte
+  // `o.veh` : la perche traversait donc les voitures garées de part et d'autre et allait se
+  // loger entre elles. On les fait entrer dans le test — sauf la nôtre, qui reste en `skip`.
+  for (const o of solidsAutour(ox, oz, maxD + 1, true)) {
+    if (o === skip || (o.glass && !o.camMur) || o.h > 30 || o.xray) continue;   // xray : les murs de la piece ou l'on est ; camMur : une vitre teintée que la caméra ne traverse pas
     // UN POTEAU NE CALE PAS LA CAMÉRA. Lampadaires, feux et panneaux (36 cm de côté) coupaient la
     // perche : en voiture la caméra se plantait derrière un poteau et perdait la voiture (n° 32).
     // La perche passe à travers ce qui est plus fin que 70 cm ; on ne bute que sur les murs.
@@ -26534,10 +26552,11 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
 }
 // UN MUR ENTRE LA CAMÉRA ET LE JOUEUR ? Renvoie la distance du premier obstacle qui coupe la
 // ligne de vue (−1 si la vue est dégagée). On regarde les solides ET les toits décoratifs, on
-// ignore les vitres, les murs rendus traversables par la maison de poupée (`xray`), les
-// véhicules et la boîte qui contient déjà le joueur (sinon frôler une cloison collerait la
-// caméra à la nuque en permanence).
-function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
+// ignore les vitres, les murs rendus traversables par la maison de poupée (`xray`), le véhicule
+// passé en `skip` (le sien : on est assis dedans) et la boîte qui contient déjà le joueur (sinon
+// frôler une cloison collerait la caméra à la nuque en permanence). Les AUTRES véhicules, eux,
+// comptent depuis le défaut 81 : une carrosserie bouche la vue autant qu'un mur.
+function murEntreVue(ox, oy, oz, dx, dy, dz, maxD, skip) {
   if (!(maxD > 0.2)) return -1;
   let best = -1;
   // MÊME RÈGLE QUE camLibres : dans un véhicule, un poteau ne bouche pas la vue. Sans cela ce
@@ -26550,8 +26569,11 @@ function murEntreVue(ox, oy, oz, dx, dy, dz, maxD) {
     const t = rayBox(ox, oy, oz, dx, dy, dz, o.x, o.y, o.z, hx, hy, hz, best < 0 ? maxD : best);
     if (t >= 0 && (best < 0 || t < best)) best = t;
   };
-  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3)) {
-    if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+  // MÊME CORRECTION QUE DANS camLibres (défaut 81) : une carrosserie est un obstacle. Sans elle,
+  // ce dernier filet répondait « la vue est dégagée » alors que l'objectif était DANS la voiture
+  // d'à côté. `skip` est la nôtre : elle, on la traverse, on est assis dedans.
+  for (const o of solidsAutour(ox + dx * maxD / 2, oz + dz * maxD / 2, maxD / 2 + 3, true)) {
+    if (o === skip || o.glass || o.h > 30 || o.xray) continue;
     if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
     if (o.mesh && !o.mesh.visible) continue;   // un solide efface (plafond de la maison de poupee) ne bouche rien
     essaie(o);
@@ -28488,13 +28510,22 @@ function camPerche(dt, aiming) {
   // voiture. Les deux lignes passent par `vehiculeAssis()` : même règle qu'au volant.
   const vehM = vehiculeAssis();
   const confort = camConfortVeh();
-  const monteVeh = !!vehM && cam.dJoueur != null && cam.dJoueur < confort && !vehM.heli;
+  // MONTER PLUTÔT QUE RECULER (défaut 81, deuxième exigence). La montée au volant ne partait
+  // QUE sur la distance OBTENUE (cam.dJoueur < 4,7 m) : au parking du centre, l'auvent du snack
+  // coupait la perche à 4,65 m, cam.dJoueur tombait à 4,70 m PILE sur le seuil, et la caméra
+  // restait à osciller au ras de la toile au lieu de passer par-dessus (mesuré : hausse 0,10 rad
+  // après six secondes, perche 4,57 m). C'est la PLACE LIBRE derrière (cam.libre) qui dit s'il
+  // manque du dégagement, et on la compare à la distance demandée avec 1,2 m de marge : la
+  // caméra part chercher la hauteur AVANT d'être coincée. camMontee(), elle, rend 0 dès que
+  // l'inclinaison courante suffit — sur route dégagée (cam.libre ≈ 11 m) rien ne change.
+  const bridee = cam.libre != null && cam.libre < Math.min(cam.dist, confort) + 1.2;
+  const monteVeh = !!vehM && !vehM.heli && ((cam.dJoueur != null && cam.dJoueur < confort) || bridee);
   // URGENCE TÔLE : dans un véhicule, perche sous deux mètres — l'image n'est plus qu'un aplat
   // de carrosserie, il n'y a rien à préserver. On recalcule la montée À CHAQUE IMAGE (au lieu
   // de cinq fois par seconde) et on la monte trois fois plus vite : la caméra passe par-dessus
   // le toit en deux dixièmes de seconde au lieu d'une seconde. C'est le cas qu'on voit en
   // montant dans un camion garé dans un recoin — la capture du chef, prise juste après.
-  const urgence = monteVeh && cam.dJoueur < 2;
+  const urgence = monteVeh && cam.dJoueur != null && cam.dJoueur < 2;
   if (running && !aiming && (!vehM || monteVeh) && !P.zoom && !cam.interieur && !cam.fixe && !(P.sit && P.sit.ecole)) {
     if (urgence || simTime > (cam.hauT || 0) || simTime < cam.hauT - 0.3) {
       cam.hauT = simTime + 0.2;
@@ -28582,10 +28613,13 @@ function camPerche(dt, aiming) {
     // depart (sinon toutes les directions tomberaient a zero des qu'on frole un mur) : la
     // camera pouvait donc finir DANS ce meuble-la. On verifie sa position finale et on la
     // ramene vers le joueur jusqu'a en sortir.
+    // (défaut 81 : les carrosseries entrent dans le garde-fou comme dans le reste — sauf la
+    //  nôtre, `monSolide`, à l'intérieur de laquelle la caméra a parfaitement le droit d'être)
+    const monSolide = (() => { const v = vehiculeAssis(); return v ? v.solid : null; })();
     if (running) for (let k = 0; k < 8 && d > 0.4; k++) {
       const c = camera.position; let coince = false;
-      for (const o of solidsAutour(c.x, c.z, 2)) {
-        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+      for (const o of solidsAutour(c.x, c.z, 2, true)) {
+        if (o === monSolide || o.glass || o.h > 30 || o.xray) continue;
         if (o.mesh && !o.mesh.visible) continue;   // efface a l'ecran : la camera peut s'y trouver sans gener
         if (Math.abs(c.x - o.x) < o.w / 2 + 0.15 && Math.abs(c.y - o.y) < o.h / 2 + 0.15
           && Math.abs(c.z - o.z) < o.d / 2 + 0.15) { coince = true; break; }
@@ -28600,7 +28634,7 @@ function camPerche(dt, aiming) {
     // la mesure. Au lieu d'une liste d'« intérieurs » écrite à la main, on interroge la LIGNE
     // DE VUE elle-même et on raccourcit la perche jusqu'à ce que le joueur soit dégagé.
     if (running) for (let k = 0; k < 6 && d > 0.6; k++) {
-      const t = murEntreVue(cam.target.x, cam.target.y, cam.target.z, dir.x, dir.y, dir.z, d - 0.1);
+      const t = murEntreVue(cam.target.x, cam.target.y, cam.target.z, dir.x, dir.y, dir.z, d - 0.1, monSolide);
       if (t < 0) break;
       d = Math.max(0.6, t - 0.25); cam.libre = Math.min(cam.libre == null ? d : cam.libre, d);
       camera.position.copy(cam.target).addScaledVector(dir, d);

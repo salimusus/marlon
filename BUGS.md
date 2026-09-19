@@ -699,3 +699,16 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : au 9ᵉ coup, « 💥 Joueur44 a mis KO Marco Cent-Clés, chef des Les Frelons Jaunes » et « 🚩 +30 points de réputation (chef à terre) » ; puis, quinze secondes plus tard, le corps disparaît, l'homme est marqué mort et il a quitté le gang définitivement. Rien n'a dit qu'il était mort.
 - **On devrait voir** : un message qui distingue l'assommé (poings) du mort (arme à feu), puisque le jeu, lui, fait bien la différence.
 - **Sonde** : `q7-pc.log` `gang.abattu = {ko: true, mort: false, msg: "chef à terre"}` puis `gang.corps` : invisible et `mort: true` à t+15 s.
+
+### 84. Un habitant ordinaire met l'enfant KO alors qu'il ne fait rien — la moitié du n° 78 qui reste
+- **Gravité** : BLOQUANT (même scénario que le n° 78 : profil vierge, manette posée, l'enfant ne touche à rien)
+- **Reproduire** : profil vierge, point d'apparition, ne rien faire pendant 120 s.
+- **On voit** : relevé DANS le test 459 du banc d'essai (celui qui prouve que les gangs, eux, laissent l'enfant tranquille) : « 🤕 −9 ❤️ · Karim_flash | 🚑 Une ambulance a été appelée | 🤕 −9 ❤️ · Karim_flash | **😵 KO par Karim_flash ! −7 🪙** ». Karim_flash n'est pas un homme de gang : c'est un habitant. La garde `joueurDansLaGuerre()` posée pour le n° 78 ne couvre que `gangTick` ; la bagarre ordinaire des habitants n'a aucune garde équivalente.
+- **Conséquence mesurée** : dans la suite complète, le test de caméra 463 est tombé pour cette seule raison — l'enfant a été mis KO pendant les 7 s de mesure, le chien de garde du n° 78 l'a réveillé à l'hôpital, et la caméra s'est retrouvée **à 159 m de la voiture** au lieu de 3 m. Lancé seul, le même test est vert.
+- **On devrait voir** : aucun habitant ne frappe un enfant qui n'a rien fait. La provocation doit venir du joueur (coup porté, vol, arme dégainée), comme pour les gangs.
+
+### 85. L'enfant est recherché puis emprisonné pour un meurtre commis par un bot sur un autre bot
+- **Gravité** : BLOQUANT (l'enfant qui pose la manette finit en cellule sans avoir rien fait)
+- **Reproduire** : profil vierge, ne rien faire. Reproduit 2/2 (noms différents : Lucas_2014 puis Zoe_rider).
+- **On voit** : « 💥 Lucas_2014 s'en prend à Momo_king » **puis** « 🚔 Infraction : éliminer Momo_king ! Niveau ★★ » — l'infraction est mise au compte du joueur alors que l'auteur est un bot. Même racine probable que le n° 83 (l'auteur d'une élimination était attribué au joueur par défaut) ; le n° 83 a été corrigé côté message, pas côté infraction.
+- **On devrait voir** : une infraction n'est imputée au joueur que s'il en est l'auteur.

@@ -1929,8 +1929,6 @@ window.__G = {
   longueurRoute: typeof longueurRoute !== 'undefined' ? longueurRoute : null,
   vehiculeMission: typeof vehiculeMission !== 'undefined' ? vehiculeMission : null,
   fabriqueDepanneuse: typeof fabriqueDepanneuse !== 'undefined' ? fabriqueDepanneuse : null,
-  suitRouteMission: typeof suitRouteMission !== 'undefined' ? suitRouteMission : null,
-  traceRouteMission: typeof traceRouteMission !== 'undefined' ? traceRouteMission : null,
   sireneMission: typeof sireneMission !== 'undefined' ? sireneMission : null,
   arreteSuspect: typeof arreteSuspect !== 'undefined' ? arreteSuspect : null,
   SINISTRES: typeof SINISTRES !== 'undefined' ? SINISTRES : null,

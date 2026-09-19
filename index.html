@@ -6761,6 +6761,21 @@ function vehiculeMission(cle, fabrique, x, z, h) {
   c.home0 = [x, z, h]; c.route = null; c.outil = 0; c.outilCible = 0;
   c.g.position.set(x, c.y || 0, z); c.g.rotation.y = h;
   settleVehicle(c); vehicleSolid(c);
+  // UN VEHICULE DE MISSION N'APPARAIT PAS DANS UN MUR. Le point d'appel radio est une adresse
+  // du quartier, pas une place de stationnement : le chauffard naissait le pare-chocs dans un
+  // muret ou un lampadaire. Tant qu'il traversait tout, ca ne se voyait pas ; depuis qu'il
+  // roule avec le garde-fou de collision comme les autres, il y reste cloue — mesure : 120 s
+  // de mission, 0 m parcouru, vitesse plafonnee a 1,2 m/s (la marque d'un pas refuse) en
+  // (46 ; 13). On le pose donc sur la chaussee libre la plus proche.
+  if (typeof vehBloque === 'function' && vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) {
+    const essais = [];
+    const pr = (typeof pointRouteLibre === 'function') ? pointRouteLibre(x, z) : null;
+    if (pr) essais.push([pr.x, pr.z]);
+    for (let r = 2.5; r <= 12; r += 2.5) for (let a = 0; a < 8; a++) essais.push([x + Math.sin(a * Math.PI / 4) * r, z + Math.cos(a * Math.PI / 4) * r]);
+    for (const [px, pz] of essais) if (!vehBloque(c, px, pz, h, { bar: true, veh: true })) { c.x = px; c.z = pz; break; }
+    c.home0 = [c.x, c.z, h];
+    c.g.position.set(c.x, c.y || 0, c.z); settleVehicle(c); vehicleSolid(c);
+  }
   return c;
 }
 // LA DÉPANNEUSE. Le poste Véhicules doit livrer la vraie (genre « depanneuse » avec son
@@ -6777,28 +6792,14 @@ function fabriqueDepanneuse(x, z, h) {
   const g = makeVehiculeTravail('grue', 0xffd23f, x, z, h);
   g.depanneuse = true; return g;
 }
-// Conduite d'un véhicule de mission (chauffard, convoi) le long d'un itinéraire routier.
-// Rien à voir avec la physique du joueur : on avance simplement le long des points, mais
-// EN SUIVANT LA ROUTE calculée par A*, pour ne pas traverser les immeubles.
-function traceRouteMission(c, tx, tz) {
-  let p = null;
-  try { p = navPath(c.x, c.z, tx, tz); } catch (e) { p = null; }
-  c.route = (p && p.length ? p.map(q => [q[0], q[1]]) : []).concat([[tx, tz]]);
-}
-function suitRouteMission(c, dt, vitesse) {
-  if (!c.route || !c.route.length) { c.speed = 0; return true; }
-  const [tx, tz] = c.route[0], dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
-  if (d < 3.4) { c.route.shift(); return !c.route.length; }
-  const cap = Math.atan2(dx, dz);
-  let dh = cap - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-  c.h += clamp(dh, -2.4 * dt, 2.4 * dt);
-  c.x += Math.sin(c.h) * vitesse * dt; c.z += Math.cos(c.h) * vitesse * dt;
-  c.speed = vitesse;
-  c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
-  if (c.wheels) for (const w of c.wheels) w.rotation.x -= vitesse * dt * 1.5;
-  settleVehicle(c); vehicleSolid(c);
-  return false;
-}
+// LES DEUX VEHICULES DE MISSION (le chauffard a intercepter, le convoi a escorter) SONT
+// PASSES A `botConduit`. Ils avaient ici leur propre conduite : elle suivait bien un trace A*,
+// mais elle avancait `c.x += sin(h) * v * dt` SANS LE MOINDRE CONTROLE DE COLLISION — ni mur,
+// ni mobilier, ni autre voiture, ni feu rouge. Deux vehicules du jeu se deplacaient encore
+// ainsi, et c'est exactement ce que le joueur demande de faire disparaitre (round 74 : « trouve
+// un autre systeme de non collision et de suivi de trajectoire, non pas vol d'oiseau mais de
+// trace route, ca vaut pour tous les vehicules »). Les deux fonctions ont donc ete retirees :
+// tout ce qui roule en ville passe maintenant par `botConduit` ou `conduireVersPoint`.
 // Sirène + gyrophare : ils s'allument TOUT SEULS dès que le joueur roule en intervention.
 // Demander une touche de plus à un enfant qui conduit déjà, c'est la garantie qu'il roule
 // sans sirène et croit que le véhicule est cassé.
@@ -7187,7 +7188,6 @@ function policeDemarre(d) {
     d.cible = ch; ch.busy = true;
     d.tour = 0; d.colle = 0;
     d.circuit = [...PANNES].sort(() => Math.random() - 0.5).slice(0, 4);
-    traceRouteMission(ch, d.circuit[0].x, d.circuit[0].z);
   }
   if (d.variante === 'voleur') {
     const b = pickOne(bots.filter(x => x.av.group.visible && !x.prison)) || bots[0];
@@ -7247,11 +7247,17 @@ function policeTickAct(dt, d) {
     const ch = d.cible; if (!ch) { endMission(false); return; }
     setBeacon(ch.x, ch.z, 0, 'mission');
     if (mission.step === 2) {
-      if (suitRouteMission(ch, dt, 15)) { d.tour = (d.tour + 1) % d.circuit.length; traceRouteMission(ch, d.circuit[d.tour].x, d.circuit[d.tour].z); }
+      // LE CHAUFFARD ROULE SUR LA ROUTE, COMME TOUT LE MONDE (joueur, round 74 : « ça vaut
+      // pour tous les véhicules »). Il passait par `suitRouteMission`, qui suit bien un tracé
+      // A* mais SANS AUCUN contrôle de collision : il traversait les façades, le mobilier et
+      // les autres voitures, et ignorait feux et priorités. Il passe maintenant par la même
+      // porte que tous les autres, `botConduit` : itinéraire par les voies, code de la route,
+      // garde-fou de collision. Il reste rapide (15 m/s) — c'est sa raison d'être.
+      if (botConduit(ch, d.circuit[d.tour].x, d.circuit[d.tour].z, dt, { vmax: 15 }) < 8) d.tour = (d.tour + 1) % d.circuit.length;
       const colle = enVoiture(veh) && veh.sireneOn && Math.hypot(veh.x - ch.x, veh.z - ch.z) < 9;
       d.colle = colle ? (d.colle || 0) + dt : Math.max(0, (d.colle || 0) - dt * 0.5);
       if (d.colle > 3) {
-        mission.step = 3; ch.route = null; ch.speed = 0;
+        mission.step = 3; ch.route = null; ch.ia = null; ch.speed = 0;
         const b = d.bot;
         if (b) { b.pos.set(ch.x + 2.4, 0.15, ch.z); b.av.group.position.copy(b.pos); b.av.group.visible = true; b.wait = 999; b.tgt = null; botSay(b, ['c\'est bon, je me range…', 'j\'allais pas si vite !']); }
         msg('🚓 Il se range ! Descends et contrôle le conducteur', 3400); sfx.check();
@@ -7282,8 +7288,10 @@ function policeTickAct(dt, d) {
   }
   if (d.variante === 'escorte') {
     const cv = d.convoi; if (!cv) { endMission(false); return; }
-    if (!d.parti) { d.parti = true; traceRouteMission(cv, d.station.x, d.station.z + 8); }
-    const arrive = suitRouteMission(cv, dt, 7.5);
+    // MEME CHOSE POUR LE CONVOI : il roulait le long d'un tracé A* sans jamais tester une
+    // collision, camion de 5 m traversant les voitures garées et les angles d'immeuble.
+    d.parti = true;
+    const arrive = botConduit(cv, d.station.x, d.station.z + 8, dt, { vmax: 7.5 }) < 8;
     setBeacon(cv.x, cv.z, 0, 'mission');
     const dist = Math.hypot(P.pos.x - cv.x, P.pos.z - cv.z);
     d.dist = Math.round(dist);
@@ -7332,8 +7340,8 @@ function policeBandeauAct(d) {
 }
 function policeNettoieAct(d) {
   if (d.veh) sireneMission(d.veh, false);
-  if (d.cible) { d.cible.route = null; d.cible.speed = 0; d.cible.busy = false; }
-  if (d.convoi) { d.convoi.route = null; d.convoi.speed = 0; d.convoi.busy = false; }
+  if (d.cible) { d.cible.route = null; d.cible.ia = null; d.cible.speed = 0; d.cible.busy = false; }
+  if (d.convoi) { d.convoi.route = null; d.convoi.ia = null; d.convoi.speed = 0; d.convoi.busy = false; }
   for (const c of (d.files || [])) c.busy = false;
   const b = d.bot; if (b && !b.prison) { b.wait = 1; b.fight = null; b.av.group.visible = true; }
 }

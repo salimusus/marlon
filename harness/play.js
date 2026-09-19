@@ -1381,12 +1381,33 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
     detail: `état : ${JSON.stringify(etat)} · double appui → course (énergie ${vite.e} %, ${apres.couru} images de course) · jauge tombée à ${apres.mini} % : essoufflé=${apres.vu}, course coupée=${apres.coupe} · après repos : ${fin.e} % et on peut recourir` };
 });
 
+// POURQUOI CE TEST NE MESURE PLUS AU TEMPS REEL (round 74). Il forcait l'inclinaison a 0,60
+// sous un plafond bas, attendait 900 ms de TEMPS REEL, puis lisait `cam.pitch`. Or le banc
+// tourne sous swiftshader a environ UNE image par seconde : ces 900 ms valent tantot une
+// image, tantot zero. Releve, avec le MEME code de jeu et le meme decor : 0,60 (aucune image
+// jouee, l'inclinaison n'avait pas encore ete rabattue -> test rouge) quand plusieurs
+// Chromium tournaient sur la machine, 0,36 (rabattue -> test vert) lance seul. Ce n'etait
+// donc pas le jeu qui changeait, c'etait la CHARGE DE LA MACHINE. On joue maintenant des
+// IMAGES SIMULEES, comme le reste du banc : 54 images de 1/60 s remplacent les 900 ms, 42 les
+// 700 ms de reglage de perche, et l'attente de la condition se fait image par image. La
+// mesure ne depend plus que du jeu.
 test('la caméra colle aux murs sans les traverser, et se baisse sous les plafonds bas', async p => {
+  // UNE IMAGE SIMULEE DU BANC. `step()` ne place PAS la camera : la perche (`camPerche`) et la
+  // maison de poupee (`interieurTick`) vivent dans `frame()`, qui n'est appele que par le
+  // rendu. On les joue donc a la main, exactement comme le fait le test 336.
+  const images = n => p.evaluate(k => {
+    for (let i = 0; i < k; i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); }
+  }, n);
   const lis = async (x, y, z, cond) => {
     // orientation figée : sinon la caméra peut tomber sur un arbre et la mesure danse
-    await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 }); }, { x, y, z });
-    await attendre(p, cond, 25000);
-    await p.waitForTimeout(700);   // la perche se règle avant la caméra : on la laisse arriver
+    await p.evaluate(v => {
+      __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 });
+      // la condition s'attend EN IMAGES SIMULEES (900 au plus, soit 15 s de jeu) et non en
+      // secondes reelles : sous charge, 25 s reelles ne valaient parfois que deux images.
+      const pret = new Function('return (' + v.cond + ')')();
+      for (let i = 0; i < 900 && !pret(); i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); }
+    }, { x, y, z, cond: cond.toString() });
+    await images(42);   // les 700 ms d'avant : la perche se règle avant la caméra, on la laisse arriver
     return p.evaluate(() => {
       const c = __G.camera.position, dedans = __G.solids.filter(o => !o.veh && o.h < 30
         && Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2);
@@ -1400,12 +1421,12 @@ test('la caméra colle aux murs sans les traverser, et se baisse sous les plafon
   const rue = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const cuisine = await lis(70, 1, 158, () => __G.cam.dist < 4);
   await p.evaluate(() => { __G.cam.pitch = 0.6; });
-  await p.waitForTimeout(900);
+  await images(54);   // les 900 ms d'avant, en images simulées (voir le commentaire du test)
   const basPlafond = await p.evaluate(() => ({ pitch: +__G.cam.pitch.toFixed(2), plafond: +(__G.cam.plafond || 9).toFixed(1) }));
   const retour = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const ok = !rue.dedansMur && !cuisine.dedansMur && !retour.dedansMur
     && cuisine.dist < rue.dist - 2 && cuisine.plafond < 3.2 && basPlafond.pitch < 0.42 && cuisine.libre != null && retour.dist > 7;
-  return { ok, detail: `rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · de retour dehors : ${retour.dist} m · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
+  return { ok, detail: `mesuré en images simulées (54 images au lieu de 900 ms réelles : sous charge le banc ne jouait aucune image et relevait 0.60 au lieu de 0.36) · rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · de retour dehors : ${retour.dist} m · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
 });
 
 test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur et s\'arrête', async p => {
@@ -19206,7 +19227,23 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
       const base = c.y || 0; c.g.updateMatrixWorld(true); G.me.group.updateMatrixWorld(true);
       const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
       G.me.group.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
+      // QUI DEPASSE ? Quand un morceau sort de l'habitacle on le NOMME, avec sa chaine de
+      // parents dans le squelette : sans cela on ne peut pas savoir si c'est la pose, la
+      // taille d'assise, ou un accessoire laisse par un test precedent.
+      const role = o => { let n = o, r = []; const R = G.me.rig || {};
+        while (n && n !== G.me.group) {
+          for (const k of Object.keys(R)) { if (R[k] === n) { r.push(k); break; } }
+          if (n.name) r.push(n.name);
+          n = n.parent; }
+        return r.length ? r.join('<') : 'sans nom'; };
+      const fautifs = [];
+      G.me.group.traverse(o => { if (!o.isMesh || !o.visible) return;
+        const b2 = new THREE.Box3().setFromObject(o);
+        if (isFinite(b2.min.y) && b2.min.y - base < plancher - 0.05)
+          fautifs.push(`${(b2.min.y - base).toFixed(2)} m ${role(o)} (${o.geometry && o.geometry.type ? o.geometry.type.replace('Geometry', '') : '?'} ${o.scale.x.toFixed(2)}x${o.scale.y.toFixed(2)}x${o.scale.z.toFixed(2)})`); });
+      fautifs.sort();
       out.veh[nom] = { taille: +G.me.group.scale.x.toFixed(3), vu, tot,
+        sous: fautifs.slice(0, 6),
         ref: +(G.me.group.userData.assisRef == null ? 1 : G.me.group.userData.assisRef).toFixed(3),
         bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
         plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
@@ -19239,7 +19276,7 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
   return { ok, detail: `le joueur a demandé « remet les voiture a bonne hauteur » : toits à `
     + ['berline', 'break', 'suv', 'quatre'].map(k => `${k} ${T[k].toit} m`).join(', ')
     + ` (pavillon intérieur ${T.berline.plafond} m pour un plancher à ${T.berline.sol} m) · l'occupant est donc réduit à ce que son habitacle contient, mais il y tient TOUT ENTIER et rien n'est masqué · rapport « taille assis / taille debout » (piéton de ${r.pieton} m) : `
-    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux${V[k].sous && V[k].sous.length ? ', SOUS LE PLANCHER : ' + V[k].sous.join(' | ') : ''})`).join(' · ')
     + ` · correction de gabarit de l'avatar mesuré : ${V[noms[0]].ref}` };
 });
 

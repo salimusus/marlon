@@ -2972,7 +2972,20 @@ function setWeapon(av, kind, inHand) {   // arme : dans la main si dégainée, s
       // harnais de dos, entre les deux appuis
       if (k === 'pistol') { m.position.set(1.02 * S, 1.9 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.25, 0, 0.12); m.scale.setScalar(0.95); }
       else if (k === 'knife') { m.position.set(-1.02 * S, 1.92 * S, 0.02); m.rotation.set(Math.PI / 2 + 0.22, 0, -0.1); m.scale.setScalar(0.95); }
-      else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(Math.PI / 2, 0.12, 1.15); m.scale.setScalar(k === 'sniper' ? 0.9 : 0.95); }
+      // LE FUSIL EN BANDOULIÈRE NE PLANTE PLUS SON CANON DANS LE SOL. Avec `rotation.x = π/2`
+      // et `y = 0,12`, l'axe du canon valait (0,12 ; −0,99 ; 0) : le fusil pendait À LA
+      // VERTICALE le long du dos, bouche EN BAS. MESURÉ debout, à l'échelle 1 : la bouche du
+      // fusil à lunette arrivait à 0,405 m SOUS les pieds de son porteur — 40 cm de canon
+      // enfoncés dans le trottoir — et assis dans une berline (échelle d'assise 0,472) à
+      // 0,257 m pour un plancher à 0,320 m, soit 6 cm de canon dehors, sous la caisse. C'est
+      // ce qui faisait échouer le contrôle « rien ne dépasse de l'habitacle » dès qu'un test
+      // précédent avait laissé une arme au joueur.
+      // On le couche EN DIAGONALE sur le harnais, bouche en haut à gauche, crosse en bas à
+      // droite : axe (−0,436 ; 0,900 ; 0), soit `rotation = (−π/2 ; −0,4513 ; 0)`. Le fusil
+      // tient alors entre 0,61 m et 2,05 m au-dessus des pieds (le crâne est à 2,358 m), et
+      // sa lunette regarde vers l'arrière, à plat sur le dos. Le POINT D'ACCROCHE ne bouge
+      // pas d'un millimètre : c'est lui que mesurent les tests du harnais de dos.
+      else { m.position.set(-0.28 * S, 2.5 * S, -0.72 * S); m.rotation.set(-Math.PI / 2, -0.4513, 0); m.scale.setScalar(k === 'sniper' ? 0.9 : 0.95); }
     }
   }
   av.gun = av.weapons[kind] ? av.weapons[kind].userData.inner : null; av.inHand = !!inHand;
@@ -25220,7 +25233,31 @@ function assiedAvatar(av, c, p, dt, volant) {
   }
   jambesEnCabine(av, caisseFermee(c), placesDe(c).seuil);
   musclesEnCabine(av, caisseFermee(c));
+  armeEnCabine(av, caisseFermee(c));
   return w;
+}
+// L'ARME RENTRE AVEC SON PORTEUR. Assis dans une caisse fermée, un fusil TENU EN MAIN (la
+// crosse au poing, le bras posé sur le volant) ressort PAR LE PLANCHER : mesuré au banc
+// d'essai, le canon du fusil à lunette descendait à 0,26 m dans une berline dont le plancher
+// est à 0,32 m — 8 cm sous la caisse — et à 0,38 m dans un camion dont le plancher est à
+// 0,50 m, soit 12 cm dehors. C'est exactement ce que le joueur ne veut plus voir (« tous
+// assis visibles et que rien ne dépasse »).
+// `armeTick()` rangeait déjà l'arme dès qu'on prend le volant (`armed` exige `!drive.car`),
+// MAIS seulement à l'image suivante : il vit dans `frame()`, que la simulation seule
+// (`step()`) n'appelle pas. On range donc l'arme là où l'on vérifie déjà que rien ne
+// dépasse — à l'instant où l'on s'assied, et pour tout le monde (joueur, gang, habitants).
+// On ne touche pas à la grenade : `setWeapon` la garde en main par construction, et elle
+// tient dans le poing. En descendant, `armeTick` la ressort tout seul.
+function armeEnCabine(av, ferme) {
+  if (!ferme || !av || !av.weapons || !av.inHand) return;
+  // Au volant on ne tire pas (`armeTick` exige `!drive.car`) : l'arme retourne sur son
+  // harnais. `armeTick` le faisait déjà, mais seulement à l'IMAGE suivante — il vit dans
+  // `frame()`, que la simulation seule (`step()`) n'appelle jamais. On la range donc là où
+  // l'on vérifie déjà que rien ne dépasse : à l'instant où l'on s'assied, et pour tout le
+  // monde (joueur, gang, habitants). La grenade reste en main : `setWeapon` la tient ainsi
+  // par construction, et elle tient dans le poing.
+  const k = Object.keys(av.weapons).find(n => av.weapons[n].visible);
+  if (k && k !== 'grenade') setWeapon(av, k, false);
 }
 // Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un.
 function assiedChien(c, dt) {

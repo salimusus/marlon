@@ -20680,3 +20680,87 @@ test('les routes sont plus larges, mieux raccordées et moins tortueuses : crois
     && r.detour <= 2.0 && r.immobiles === 0 && r.chev === 0 && r.dehors === 0 && r.parcours > 20;
   return { ok, detail: `PLUS LARGES : le plus gros véhicule du jeu fait ${r.plusLarge} m, il faut donc 7,60 m pour un croisement avec 50 cm de garde — ${r.larges}/${r.routes} chaussées y arrivent, contre 27/72 avant (élargissement : ${r.elargies && r.elargies.montees} chaussées montées de ${r.elargies && r.elargies.gagne} m en moyenne, ${r.elargies && r.elargies.bloquees} coincées entre deux murs)${r.etroites.length ? ' — restent ' + JSON.stringify(r.etroites) : ''} · MIEUX ORGANISÉES : ${r.horsBitume.length} liaison du graphe hors chaussée (il y en avait 21, dont 11,20 m au coude de l'ouest) après ${r.trous && r.trous.combles} trous comblés et ${r.trous && r.trous.rallonges} rues rallongées jusqu'à leur carrefour${r.horsBitume.length ? ' → ' + JSON.stringify(r.horsBitume.slice(0, 6)) : ''} · PLUS FLUIDES : sur ${r.trajets} trajets d'un bout à l'autre de la ville, ${r.detour}× le vol d'oiseau en moyenne (2,25 avant), au pire ${r.pire}×, ${r.sans} sans chemin · et 900 pas de simulation plus tard, ${r.immobiles}/${r.aiCars} véhicules bloqués, ${r.chev} chevauchement, ${r.dehors} hors chaussée, ${r.parcours} m parcourus en moyenne` };
 });
+
+// ================= [77] SE FAIRE EMMENER PAR UN HABITANT =================
+// Le defaut du joueur : « on n'arrive jamais, la voiture s'arrete en route et l'enfant se
+// retrouve debout sur la chaussee sans un mot ». Quatre promesses, mesurees une par une sur
+// le meme trajet :
+//   1. LA DISTANCE DIMINUE. Mesuree SUR LE TRACE (resteSurRoute) et non a vol d'oiseau : dans
+//      une ville a sens uniques, un detour legitime eloigne du but pendant vingt secondes. Le
+//      releve du joueur montrait 115 → 124 → 127 → 141 → 146 m, la distance qui MONTE.
+//   2. L'ARRIVEE EST ANNONCEE, par une phrase du conducteur dans le journal.
+//   3. ON N'EST JAMAIS DEBARQUE EN PLEINE RUE : le joueur reste passager de bout en bout. Le
+//      releve du joueur montrait la pastille « monter » revenue a t+45 s, voiture arretee en
+//      (7,9 ; 108,5) — l'enfant remis sur le bitume sans un mot.
+//   4. ET SI LE CONDUCTEUR ABANDONNE, UNE PHRASE LE DIT. On force le cas (douze secondes
+//      coince, le seuil de botDriveTick) et on verifie que le journal le dit.
+test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est annoncee, on n est jamais debarque en pleine rue', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G, P = G.P;
+    const journal = () => [].slice.call(document.querySelectorAll('#chatLog div')).map(d => d.textContent).join(' | ');
+    const { b } = ${CONDUITE_SETUP};
+    // ON MESURE UNE VILLE AU REPOS, comme les tests 332 et 404. Enchaine derriere le test
+    // d'auto-conduite, ce test trouvait un incendie en cours et d'autres habitants au volant :
+    // les rues se bouchent et le trajet ne se termine plus dans les 240 s. On rend donc les
+    // vehicules et on renvoie tout le monde a pied, SAUF notre conducteur.
+    G.bots.forEach(o => { if (o === b) return; if (o.drive) G.botDescendre(o, false);
+      o.rdv = null; o.rdvRoute = null; o.target = null; o.tgt = null; o.ordre = null; });
+    (G.city.incendies || []).length = 0;
+    const dt = 1 / 60; let t = 0;
+    const pas = () => { G.step(dt, true); G.updateBot(b, dt); t += dt; };
+    while (t < 90 && !(b.drive && b.drive.etat === 'arrive')) pas();
+    if (!b.drive) return { erreur: 'l\\'ami n\\'a jamais amene la voiture' };
+    const c = b.drive.car;
+    G.city.botCarNear = b; G.monterAvecBot(b); pas();
+    const monte = !!(G.city.rideBot === b && b.drive.passager);
+    const V = G.city.villaMine || { x: 60, z: 168 };
+    const avantDepart = journal().length;
+    G.botConduireVers(b, { nom: 'ta villa', x: V.x, z: V.z });
+    const st = b.drive;
+    // LE PREMIER PAS NE COMPTE PAS. Avant la premiere image, st.route est vide et
+    // resteSurRoute rend le vol d'oiseau (193 m) ; des que le trace existe il rend la vraie
+    // longueur par les rues (396 m). Ce saut de 203 m n'est pas une remontee, c'est le passage
+    // du vol d'oiseau au trace : on prend donc la mesure APRES la premiere image.
+    pas();
+    let d0 = G.resteSurRoute(c, st), dPrec = d0, remonteeMax = 0, cumulRemontee = 0;
+    let horsVoiture = 0, plusPasPassager = 0; const releves = []; const t0 = t;
+    while (t - t0 < 240 && st.etat === 'route') {
+      pas();
+      if (!(G.city.rideBot === b && st.passager)) plusPasPassager++;
+      else if (Math.hypot(P.pos.x - c.x, P.pos.z - c.z) > 4) horsVoiture++;
+      const d = G.resteSurRoute(c, st);
+      if (d > dPrec + 0.02) { const h = d - dPrec; cumulRemontee += h; if (h > remonteeMax) remonteeMax = h; }
+      dPrec = d;
+      if (releves.length < 12 && (t - t0) > releves.length * 12) releves.push(+d.toFixed(0));
+    }
+    const dFin = +G.resteSurRoute(c, st).toFixed(1);
+    const arrive = st.etat === 'arrive';
+    const texteArrivee = journal().slice(avantDepart);
+    const annonce = /arriv/i.test(texteArrivee);
+    const toujoursDedans = G.city.rideBot === b && st.passager;
+    G.botConduireVers(b, { nom: 'le bout du monde', x: 4000, z: 4000 });
+    const avantRenonce = journal().length;
+    // ON POSE LE COMPTEUR DE BLOCAGE AU-DELA DU SEUIL et on laisse le jeu decider : c'est
+    // exactement le chemin qu'emprunte un conducteur vraiment coince. Ce test a servi a
+    // trouver le defaut : le filet « saute au point de passage suivant » REMETTAIT ce compteur
+    // a zero toutes les 3,5 s, donc le seuil des douze secondes n'etait jamais atteint et le
+    // conducteur ne disait jamais qu'il renonce. Il ne fait plus que retirer les 3,5 s.
+    let nCoince = 0;
+    while (nCoince < 60 * 20 && b.drive && b.drive.etat === 'route') { b.drive.bloqueT = 40; pas(); nCoince++; }
+    const texteRenonce = journal().slice(avantRenonce);
+    const ditRenonce = /arr[e\\u00ea]te|peux pas|plus pr/i.test(texteRenonce);
+    G.botDescendre(b, false); for (let k = 0; k < 6; k++) pas();
+    b.rdv = null; b.wait = 0;
+    return { monte, d0: +d0.toFixed(1), dFin, arrive, annonce, ditRenonce, toujoursDedans,
+      remonteeMax: +remonteeMax.toFixed(2), cumulRemontee: +cumulRemontee.toFixed(1),
+      horsVoiture, plusPasPassager, releves, trajet: +(t - t0).toFixed(1),
+      extraitArrivee: texteArrivee.slice(-120), extraitRenonce: texteRenonce.slice(0, 120) };
+  })()`);
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  // cumulRemontee : on tolere le bruit d'un recalcul d'itineraire (le trace change, la
+  // longueur restante saute d'un metre ou deux), pas une derive — le defaut mesure faisait
+  // remonter la distance de trente et un metres au total.
+  const ok = r.monte && r.arrive && r.dFin < 8 && r.annonce && r.ditRenonce
+    && r.toujoursDedans && r.plusPasPassager === 0 && r.horsVoiture === 0 && r.cumulRemontee < 12;
+  return { ok, detail: 'avant : la distance MONTAIT (115 → 124 → 127 → 141 → 146 m en 24 s), aucune annonce, et le joueur etait debarque en pleine rue a t+45 s sans un mot · maintenant : ' + r.d0 + ' m au depart → ' + r.dFin + ' m a l arrivee en ' + r.trajet + ' s simulees (releves toutes les 12 s : ' + r.releves.join(' → ') + ' m), la distance ne remonte au total que de ' + r.cumulRemontee + ' m (plus forte remontee ' + r.remonteeMax + ' m), le joueur est reste passager sur TOUTES les images (' + r.plusPasPassager + ' image(s) hors du role de passager, ' + r.horsVoiture + ' a plus de 4 m de la caisse), l arrivee est annoncee (' + r.annonce + ') — «' + r.extraitArrivee + '» — et le renoncement aussi (' + r.ditRenonce + ') — «' + r.extraitRenonce + '»' };
+});

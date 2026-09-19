@@ -19277,7 +19277,16 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // mur — chaque candidat est verifie), en cherchant d'abord dans la direction du point de
   // passage puis tout autour. Sans ce filet, un ami reste plante contre l'angle d'un immeuble.
   if (st.saut !== false && st.bloqueT > 3.5 && st.route && st.route.length) {   // (le contournement juste au-dessus a pu vider le trace)
-    st.bloqueT = 0;
+    // ON N'EFFACE PAS L'ARDOISE, ON LA DIMINUE. Ce filet remettait `bloqueT` a zero a chaque
+    // fois qu'il reposait le vehicule quelques metres plus loin. Consequence mesuree (defaut
+    // n° 77) : le seuil des douze secondes de `botDriveTick`, celui qui fait DIRE au conducteur
+    // qu'il renonce (« je ne peux pas approcher plus pres, on s'arrete la »), etait
+    // INATTEIGNABLE tant qu'un trace existait — le compteur repartait de zero toutes les 3,5 s.
+    // L'enfant restait donc assis dans une voiture qui ne bougeait plus, sans un mot. On retire
+    // maintenant la duree consommee : un conducteur qui se degage vraiment repart a zero en
+    // quelques secondes, un conducteur qui saute dans le vide trois fois de suite atteint les
+    // douze secondes et le dit.
+    st.bloqueT = Math.max(0, st.bloqueT - 3.5);
     const w2 = st.route[Math.min(1, st.route.length - 1)];
     const el = Math.hypot(w2[0] - c.x, w2[1] - c.z) || 1, ex = (w2[0] - c.x) / el, ez = (w2[1] - c.z) / el;
     let pose = null;

@@ -2331,6 +2331,9 @@ window.__G = {
   sacSauve: typeof sacSauve === 'function' ? sacSauve : null,
   jouetsReset: typeof jouetsReset === 'function' ? jouetsReset : null,
   // ---- POSTE LOCOMOTION (marche, course, foulee) : exports apres cette ligne-repere ----
+  moveAxis: typeof moveAxis === 'function' ? moveAxis : null,
+  SPEED: typeof SPEED !== 'undefined' ? SPEED : 0,
+  overlaps: typeof overlaps === 'function' ? overlaps : null,
   animateRig: typeof animateRig === 'function' ? animateRig : null,
   animateRigCorps: typeof animateRigCorps === 'function' ? animateRigCorps : null,
   COURSE: typeof COURSE !== 'undefined' ? COURSE : 0,

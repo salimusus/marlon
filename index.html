@@ -22383,6 +22383,10 @@ function solidifieDecor() {
 }
 
 // ================= PHYSIQUE DU JOUEUR =================
+// Ce qu'un obstacle LANCE (voiture, portail, ascenseur) peut pousser le joueur en une seule
+// image : 0,30 m, soit 18 m/s, plus vite qu'aucun vehicule de la ville. Sert de plafond a la
+// sortie de boite de moveAxis (defaut n° 86).
+const POUSSEE_IMAGE = 0.30;
 const overlaps = (o, px, py, pz) =>
   px + P.hw > o.x - o.w / 2 && px - P.hw < o.x + o.w / 2 &&
   py + P.h > o.y - o.h / 2 && py < o.y + o.h / 2 &&
@@ -22468,7 +22472,36 @@ function moveAxis(axis, amount, canStep) {
         if (sortieLa < sortieIci) { P.pos[axis] = avant; P.vel[axis] = 0; continue; }
       }
       const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
-      P.pos[axis] = o[axis] + side * (half + P.hw + 0.001);
+      const cible = o[axis] + side * (half + P.hw + 0.001);
+      // PLAFOND DU PAS : AUCUNE IMAGE NE DEPLACE LE JOUEUR PLUS VITE QU'IL NE MARCHE.
+      // Complement du garde-fou ci-dessus (defaut n° 80), qui ne comparait QUE les deux
+      // sorties entre elles : quand la sortie la plus courte est bien sur CET axe mais
+      // qu'elle mesure un metre et demi, on la prenait quand meme, et l'enfant voyait son
+      // personnage SAUTER. MESURE (defaut n° 86, trajet du test du petit robot, image 669) :
+      // en marchant vers l'ouest le long de la rue, arrive en (−47,36 ; 12,05), le joueur
+      // effleurait de 1,5 cm en z la boite d'une voiture garee en (−46,85 ; 9,19) — une
+      // boite de 3,73 m de large. Sur l'axe x il etait « au milieu » de cette boite, donc
+      // « deja dedans » : la sortie x la plus proche valait 1,755 m et il etait TELEPORTE
+      // de 1,75 m EN UNE IMAGE (0,103 m autorises au pas), P.vel.x remis a 0, pour finir
+      // pose sur la dalle du trottoir. C'est aussi ce qui faisait bondir de 1,75 m l'ecart
+      // de la laisse du petit robot.
+      // On n'ejecte donc, quand le joueur etait DEJA DEDANS, que ce que son propre pas
+      // autorise (plus 5 cm de jeu pour les tassements d'un centimetre). Au-dela on annule
+      // le pas : l'autre axe, ou desincarcere() au bout d'une demi-seconde, sortira le
+      // joueur — c'est desincarcere qui garde le droit de faire le grand saut, et lui seul
+      // (vehicule qui se gare sur le joueur, portail qui se referme : test 142).
+      // MESURE DU PLAFOND : le pas du joueur, plus ce qu'un obstacle LANCE peut le pousser
+      // dans la meme image (POUSSEE_IMAGE = 0,30 m, soit 18 m/s : plus vite qu'aucune
+      // voiture de la ville). Un premier essai a 5 cm seulement a ete MESURE et retire :
+      // il rendait a desincarcere() un cas qu'il ne faut pas lui laisser — une voiture qui
+      // roulait sur le joueur ne le poussait plus du tout, il s'enfoncait d'un metre dans
+      // la caisse en une demi-seconde, et desincarcere le rejetait alors de 1,04 m d'un
+      // coup (meme trajet, image 583, boite de vehicule 5,00 x 4,36 m en −42,82 ; 10,53).
+      // Pousse image par image, il reste dehors et rien ne saute.
+      if ((!dehorsAvant || amount === 0) && Math.abs(cible - avant) > Math.abs(amount) + POUSSEE_IMAGE) {
+        P.pos[axis] = avant; P.vel[axis] = 0; continue;
+      }
+      P.pos[axis] = cible;
       P.vel[axis] = 0;
     }
   }

@@ -20195,3 +20195,82 @@ test('une infraction n\'est imputée à l\'enfant que s\'il en est l\'auteur : u
     && dit(r.balle.texte, r.balle.ami.toLowerCase());
   return { ok, detail: `avant : 14 400 pas manette posée donnaient « 💥 Lea_star attaque Karim_flash » puis « 💀 Karim_flash a été éliminé par Joueur58 » et « 🚔 Infraction : éliminer Karim_flash ! Niveau ★★ » — la police tirait ensuite sur l'enfant (−8 puis −7 ❤️, ❤️ au plus bas 54) · maintenant — (a) un bot en élimine un autre : ★ ${r.parBot.wanted}, « ${r.parBot.texte} » · (b) l'enfant en élimine un : ★ ${r.parJoueur.wanted}, « ${r.parJoueur.texte} » (non-régression) · (c) bagarre de rue menée au KO en ${r.bagarre.pas} pas, mort=${r.bagarre.mort} : ★ ${r.bagarre.wanted}, « ${r.bagarre.texte} » · (d) un agresseur abattu par la balle de l'ami armé ${r.balle.ami}, mort=${r.balle.mort} : ★ ${r.balle.wanted}, « ${r.balle.texte} »` };
 });
+
+test('aucun pas ne dépasse ce que la vitesse du joueur autorise, sur un long trajet à travers toute la ville', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // POURQUOI CE TEST. Le defaut n° 86 : en marchant vers l'ouest le long de la rue, le
+    // joueur etait deplace de 1,75 m EN UNE IMAGE (0,103 m autorises au pas) et se
+    // retrouvait pose sur le trottoir d'en face. A l'ecran c'est un SAUT du personnage, et
+    // c'est ce qui faisait bondir l'ecart de la laisse du petit robot. Aucun test ne le
+    // voyait parce qu'aucun ne regardait le deplacement IMAGE PAR IMAGE.
+    // La ville entiere est donc parcourue a pied, en marche puis en course, et l'on releve
+    // le plus grand deplacement d'une seule image.
+    const hasard = Math.random; let g = 12345;
+    Math.random = () => (g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;   // trajet reproductible
+    const ETAPES = [[26, 0], [26, 40], [0, 26], [-26, 26], [-46, 9], [-47, 12], [-60, 10], [-80, 20],
+      [-80, 60], [-42, 40], [-26, 46], [0, 110], [48, 110], [52, 60], [52, 0], [80, -20], [52, -16],
+      [6, -44], [-30, -44], [-90, -70], [-85, -57], [-42, 25], [0, 0]];
+    const dt = 1 / 60, bilan = {};
+    for (const mode of ['marche', 'course']) {
+      P.pos.set(26, 1, 0); P.vel.set(0, 0, 0);
+      const limite = G.SPEED * (mode === 'course' ? G.COURSE : 1) * dt;
+      const B = { pire: 0, ou: null, n: 0, images: 0, limite: +limite.toFixed(3) };
+      G.keys.add('KeyW');
+      let px = P.pos.x, pz = P.pos.z;
+      for (const [tx, tz] of ETAPES) for (let f = 0; f < 900; f++) {
+        const dx = tx - P.pos.x, dz = tz - P.pos.z;
+        if (Math.hypot(dx, dz) < 2.2) break;
+        G.cam.yaw = Math.atan2(-dx, -dz);
+        P.run = mode === 'course'; P.energie = 100; P.essouffle = false;   // le souffle n'est pas le sujet
+        const vx = P.vel.x, vz = P.vel.z;
+        G.step(dt, true); B.images++;
+        const d = Math.hypot(P.pos.x - px, P.pos.z - pz);
+        const permis = Math.max(Math.hypot(vx, vz) * dt, limite);
+        if (d - permis > B.pire) { B.pire = d - permis; B.ou = { de: [+px.toFixed(2), +pz.toFixed(2)], a: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)], d: +d.toFixed(3), permis: +permis.toFixed(3) }; }
+        if (d > permis + 0.25) B.n++;
+        px = P.pos.x; pz = P.pos.z;
+      }
+      G.keys.delete('KeyW'); P.run = false;
+      B.pire = +B.pire.toFixed(3);
+      bilan[mode] = B;
+    }
+    Math.random = hasard;
+    return bilan;
+  });
+  const ok = r.marche.images > 8000 && r.course.images > 6000 && r.marche.n === 0 && r.course.n === 0
+    && r.marche.pire < 0.25 && r.course.pire < 0.25;
+  return { ok, detail: `avant : 1,75 m en une image en (−47,36 ; 12,05) pour 0,103 m autorisés · maintenant, marche ${r.marche.images} images (pas autorisé ${r.marche.limite} m) : ${r.marche.n} saut, excès maxi ${r.marche.pire} m${r.marche.ou ? ` (${r.marche.ou.d} m en ${r.marche.ou.a}) ` : ' '}· course ${r.course.images} images (pas autorisé ${r.course.limite} m) : ${r.course.n} saut, excès maxi ${r.course.pire} m${r.course.ou ? ` (${r.course.ou.d} m en ${r.course.ou.a})` : ''}` };
+});
+
+test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m au droit de la voiture garée', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    // LE TRAJET EXACT DU DEFAUT n° 86, celui du test du petit robot : on part de (0 ; 8) et
+    // l'on marche 12 s en balayant le cap. Le joueur passe en (−47,36 ; 12,05) et y
+    // effleurait de 1,5 cm en z la boite d'une voiture garee en (−46,85 ; 9,19) — large de
+    // 3,73 m. Sur l'axe x il etait « au milieu » de cette boite : la sortie x la plus proche
+    // valait 1,755 m, et il etait ejecte de 1,75 m EN UNE IMAGE sur le trottoir d'en face.
+    const hasard = Math.random; let g = 777;
+    Math.random = () => (g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    G.keys.add('KeyW');
+    let px = P.pos.x, pz = P.pos.z, pire = 0, ou = null, n = 0, passe = 99;
+    for (let i = 0; i < 60 * 12; i++) {
+      G.cam.yaw = Math.sin(i / 260) * 2.2;
+      const vx = P.vel.x, vz = P.vel.z;
+      G.step(1 / 60, true);
+      const d = Math.hypot(P.pos.x - px, P.pos.z - pz), permis = Math.max(Math.hypot(vx, vz) / 60, G.SPEED / 60);
+      if (d - permis > pire) { pire = d - permis; ou = { de: [+px.toFixed(2), +pz.toFixed(2)], a: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)], d: +d.toFixed(3) }; }
+      if (d > permis + 0.25) n++;
+      passe = Math.min(passe, Math.hypot(P.pos.x + 47.4, P.pos.z - 12.1));
+      px = P.pos.x; pz = P.pos.z;
+    }
+    G.keys.delete('KeyW');
+    Math.random = hasard;
+    return { pire: +pire.toFixed(3), ou, n, passe: +passe.toFixed(2), fin: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)] };
+  });
+  const ok = r.n === 0 && r.pire < 0.25 && r.passe < 1.5;
+  return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant le trajet passe bien au point du défaut (à ${r.passe} m de (−47,4 ; 12,1)), ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
+});

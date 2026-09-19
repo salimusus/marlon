@@ -9686,13 +9686,14 @@ const VISEE_MIN = 5;          // m : on vise a cinq metres a l'arret...
 const VISEE_K = 0.85;         // s : ... plus 0,85 s de route a la vitesse du moment
 const VISEE_MAX = 18;
 const COURBURE_VUE = 16;      // m de trace regardes pour lever le pied avant la courbe
+const COURBURE_PAS = 6;       // m : longueur des cordes sur lesquelles on lit cette courbure
 function traceSuit(c, R, st) {
-  const S = c.trace || (c.trace = { i: 0, t: 0, px: 0, pz: 0, vx: 0, vz: 0, lat: 0, reste: 0, courbe: 0, fin: false, cap: 0, capVoie: 0 });
+  const S = c.trace || (c.trace = { i: 0, t: 0, px: 0, pz: 0, vx: 0, vz: 0, lat: 0, reste: 0, courbe: 0, courbeCorde: 0, fin: false, cap: 0, capVoie: 0 });
   const n = R.length;
   if (n < 2) {
     const p = R[0] || [c.x, c.z];
     S.i = 0; S.t = 1; S.px = S.vx = p[0]; S.pz = S.vz = p[1];
-    S.lat = S.reste = Math.hypot(c.x - p[0], c.z - p[1]); S.courbe = 0; S.fin = true;
+    S.lat = S.reste = Math.hypot(c.x - p[0], c.z - p[1]); S.courbe = 0; S.courbeCorde = 0; S.fin = true;
     S.cap = S.capVoie = Math.atan2(p[0] - c.x, p[1] - c.z); return S;
   }
   // --- 0. LE POINT DEJA PASSE EST PASSE. Au DEPART d'un trace qui nous fait rejoindre la voie
@@ -9745,14 +9746,47 @@ function traceSuit(c, R, st) {
   // (le trace part dans l'autre sens), independamment de la position des points de passage.
   S.capVoie = Math.atan2(b[0] - a[0], b[1] - a[1]);
   // --- 4. la courbure a venir : de combien le trace tourne-t-il dans les quinze metres ?
-  let vu = 0, courbe = 0, hPrec = Math.atan2(b[0] - a[0], b[1] - a[1]);
+  // ON LA MESURE A LA CORDE, PAS POINT PAR POINT.
+  // PIEGE MESURE (ambulance appelee pour le joueur a terre, blesse a 200,1 m). La courbure
+  // etait la SOMME des changements de cap d'un point de passage au suivant. Or le graphe des
+  // voies pose ses points tous les cinq metres et change de VOIE par un escalier : deux angles
+  // droits separes de deux metres — (-59 ; 0) → (-59 ; 2) → (-32 ; 2) → (-32 ; 0) — sur une rue
+  // parfaitement droite. Chaque changement de voie injectait ainsi 3,14 rad de courbure qui
+  // n'existe pas. Mesure : 7 343 images sur 10 800 (68 %) au-dessus du seuil de 0,9 rad, donc
+  // vitesse plaquee a 4 m/s pour un plafond de 13 ; l'ambulance mettait 157,5 s a faire 200 m.
+  // On lit donc le cap sur des CORDES de six metres (COURBURE_PAS) au lieu de segment a
+  // segment : un ecart de deux metres etale sur vingt-sept ne pese plus que 0,07 rad, tandis
+  // qu'un vrai carrefour a angle droit vaut toujours ses 1,57 rad et fait bien lever le pied.
+  const surTrace = s => {   // le point situe a s metres devant la projection, SUR le trace
+    let seg2 = i, qx = S.px, qz = S.pz, r2 = s;
+    for (;;) {
+      if (seg2 >= n - 1) return [qx, qz];
+      const q = R[seg2 + 1], d = Math.hypot(q[0] - qx, q[1] - qz);
+      if (d >= r2) { const u = d > 1e-6 ? r2 / d : 1; return [qx + (q[0] - qx) * u, qz + (q[1] - qz) * u]; }
+      r2 -= d; qx = q[0]; qz = q[1]; seg2++;
+    }
+  };
+  // LA CIRCULATION DE FOND, ELLE, NE CHANGE PAS D'UN POUCE. Mesure : lue a la corde pour TOUT
+  // LE MONDE, cette courbure fait prendre les virages trop vite aux voitures de decor — 1 046
+  // chevauchements voiture-voiture sur 3 000 images de ville vivante contre 20 avant. La
+  // lecture segment par segment reste donc `S.courbe`, celle des voitures ordinaires ; la
+  // lecture a la corde est `S.courbeCorde`, et seul un vehicule EN INTERVENTION s'en sert.
+  let vu = 0, courbeSeg = 0, hSeg = Math.atan2(b[0] - a[0], b[1] - a[1]);
   for (let k = i + 1; k < n - 1 && vu < COURBURE_VUE; k++) {
     const p0 = R[k], p1 = R[k + 1], d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
     if (d < 0.2) continue;
     const hk = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
-    courbe += Math.abs(CAP(hk - hPrec)); hPrec = hk; vu += d;
+    courbeSeg += Math.abs(CAP(hk - hSeg)); hSeg = hk; vu += d;
   }
-  S.courbe = courbe;
+  let courbe = 0, hPrec = null, prec = [S.px, S.pz];
+  for (let s2 = COURBURE_PAS; s2 <= COURBURE_VUE + 0.01; s2 += COURBURE_PAS) {
+    const q = surTrace(s2), d = Math.hypot(q[0] - prec[0], q[1] - prec[1]);
+    if (d < 0.2) break;                    // le trace se termine avant : plus rien a lire
+    const hk = Math.atan2(q[0] - prec[0], q[1] - prec[1]);
+    if (hPrec !== null) courbe += Math.abs(CAP(hk - hPrec));
+    hPrec = hk; prec = q;
+  }
+  S.courbe = courbeSeg; S.courbeCorde = courbe;
   return S;
 }
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
@@ -9786,7 +9820,8 @@ function traficRoule(c, dt, opt) {
   c.h += clamp(dh, -1, 1) * braque * dt;
   const base = c.vmaxIA || 9;
   // on leve le pied AVANT le virage, pas dedans : la courbure est lue sur TOUT le trace a venir
-  let cible = S.courbe > 0.9 ? Math.min(base, 4) : S.courbe > 0.4 ? Math.min(base, 6.5) : base;
+  const cb = opt.urgence ? S.courbeCorde : S.courbe;
+  let cible = cb > 0.9 ? Math.min(base, 4) : cb > 0.4 ? Math.min(base, 6.5) : base;
   if (Math.abs(dh) > 0.5) cible = Math.min(cible, 4.5);   // on ne roule pas plus vite qu'on ne braque
   if (S.lat > 3.5) cible = Math.min(cible, 5);            // loin de sa ligne : on y revient au pas
   if (S.fin && dwp < 12) cible = Math.min(cible, 3 + dwp * 0.4);   // on se pose en douceur

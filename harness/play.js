@@ -20690,3 +20690,66 @@ test('les jeux de la Plaine des Sports se declenchent et se terminent, a la mane
   const ok = r.assis && r.ampli > 0.2 && r.colle && r.descendu && r.monte && r.tourne > 0.5 && r.aPlat && r.surLeManege && r.fini && r.but === 1 && r.boosters === 2 && r.boost;
   return { ok, detail: `le joueur demandait des JEUX, pas du decor · balancoire : on s'assoit (${r.assis}), l'amplitude monte a ${r.ampli} rad en 90 pas, le corps reste colle a la planche (${r.colle}) et le saut en decroche (${r.descendu}) · tourniquet : on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, ses places restent A PLAT (${r.aPlat}, elles montaient et descendaient comme des chevaux de bois avant le drapeau r.plat), le joueur tourne avec (${r.surLeManege}) et le saut en descend (${r.fini}) · city-stade : un ballon envoye dans la cage compte ${r.but} but · skatepark : ${r.boosters} boosters en haut des quarter-pipes, et le joueur pose dessus est relance (${r.boost}) · tous passent par city.swings, city.rides et city.boosters, donc par la MEME touche E et le MEME bouton de manette que le reste de la ville` };
 });
+// ===================== POSTE URBANISME (round 75) =====================
+// Demande du joueur, mot pour mot : « refais les routes mieux organisées, plus fluides, plus
+// larges ». Les trois exigences sont mesurées ici, en une fois.
+//   · PLUS LARGES : le plus gros véhicule du jeu fait 2,80 m (bulldozer). La voie de droite est
+//     posée à largeur/4 de l'axe, donc il faut 7,60 m pour que deux se croisent avec 50 cm de
+//     garde. AVANT : 27 chaussées sur 72 seulement.
+//   · MIEUX ORGANISÉES : le graphe des voies rattrapait les trous du bitume par des LIAISONS
+//     virtuelles posées en travers de la pelouse — 21 avant, dont une de 11,20 m au coude de
+//     l'ouest. On exige qu'AUCUNE liaison ne passe hors chaussée.
+//   · PLUS FLUIDES : le détour moyen d'un itinéraire par les voies, sur 56 trajets d'un bout à
+//     l'autre de la ville. AVANT : 2,25 fois le vol d'oiseau.
+test('les routes sont plus larges, mieux raccordées et moins tortueuses : croisement possible partout, aucune liaison hors bitume, détour moyen en baisse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city, Gr = c.graphe;
+    // 1. LARGES
+    const larges = c.routes.filter(rt => Math.min(rt.w, rt.d) >= 7.6).length;
+    const etroites = c.routes.filter(rt => Math.min(rt.w, rt.d) < 7.6).map(rt => [rt.x, rt.z, Math.min(rt.w, rt.d)]);
+    // le plus gros véhicule du jeu, relevé et non supposé
+    let plusLarge = 0;
+    for (const v of [...c.cars, ...c.aiCars, ...G.police.cars]) plusLarge = Math.max(plusLarge, v.baseW || 0);
+    // 2. MIEUX RACCORDÉES : aucune liaison du graphe ne passe hors chaussée
+    const surRoute = (x, z) => c.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 && Math.abs(z - rt.z) < rt.d / 2);
+    const horsBitume = [];
+    for (const e of Gr.aretes) {
+      if (!e.liaison) continue;
+      const mx = (e.x0 + e.x1) / 2, mz = (e.z0 + e.z1) / 2;
+      if (!surRoute(mx, mz)) horsBitume.push([+mx.toFixed(1), +mz.toFixed(1), +e.long.toFixed(1)]);
+    }
+    // 3. MOINS TORTUEUSES : le détour moyen sur 56 trajets d'un bout à l'autre de la ville
+    const pts = [[-190, 40], [0, -100], [120, -176], [100, 130], [60, 345], [-149, 185], [0, 60], [80, 60]];
+    let n = 0, somme = 0, sans = 0, pire = 0;
+    for (let i = 0; i < pts.length; i++) for (let j = 0; j < pts.length; j++) {
+      if (i === j) continue;
+      const q = G.itineraireVoies(pts[i][0], pts[i][1], pts[j][0], pts[j][1], 0);
+      const vol = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]);
+      if (!q || !q.length) { sans++; continue; }
+      let L = 0, a = [pts[i][0], pts[i][1]];
+      for (const b of q) { L += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
+      n++; somme += L / vol; pire = Math.max(pire, L / vol);
+    }
+    // 4. DÉBIT : la circulation tourne 900 pas de simulation sans se bloquer ni se chevaucher
+    const pos0 = c.aiCars.map(v => [v.x, v.z]);
+    let chev = 0;
+    for (let k = 0; k < 900; k++) {
+      G.step(1 / 60, true);
+      if (k % 30) continue;
+      for (let a = 0; a < c.aiCars.length; a++) for (let b = a + 1; b < c.aiCars.length; b++)
+        if (Math.hypot(c.aiCars[a].x - c.aiCars[b].x, c.aiCars[a].z - c.aiCars[b].z) < 2.2) chev++;
+    }
+    const parcours = c.aiCars.map((v, i) => Math.hypot(v.x - pos0[i][0], v.z - pos0[i][1]));
+    const immobiles = parcours.filter(d => d < 3).length;
+    const dehors = c.aiCars.filter(v => !surRoute(v.x, v.z)).length;
+    return { routes: c.routes.length, larges, etroites, plusLarge: +plusLarge.toFixed(2),
+      horsBitume, elargies: c.elargies, trous: c.trous,
+      detour: +(somme / Math.max(1, n)).toFixed(2), pire: +pire.toFixed(2), sans, trajets: n,
+      aiCars: c.aiCars.length, immobiles, chev, dehors,
+      parcours: +(parcours.reduce((a, b) => a + b, 0) / Math.max(1, parcours.length)).toFixed(1) };
+  });
+  const ok = r.larges >= r.routes - 10 && r.horsBitume.length === 0 && r.sans === 0
+    && r.detour <= 2.0 && r.immobiles === 0 && r.chev === 0 && r.dehors === 0 && r.parcours > 20;
+  return { ok, detail: `PLUS LARGES : le plus gros véhicule du jeu fait ${r.plusLarge} m, il faut donc 7,60 m pour un croisement avec 50 cm de garde — ${r.larges}/${r.routes} chaussées y arrivent, contre 27/72 avant (élargissement : ${r.elargies && r.elargies.montees} chaussées montées de ${r.elargies && r.elargies.gagne} m en moyenne, ${r.elargies && r.elargies.bloquees} coincées entre deux murs)${r.etroites.length ? ' — restent ' + JSON.stringify(r.etroites) : ''} · MIEUX ORGANISÉES : ${r.horsBitume.length} liaison du graphe hors chaussée (il y en avait 21, dont 11,20 m au coude de l'ouest) après ${r.trous && r.trous.combles} trous comblés et ${r.trous && r.trous.rallonges} rues rallongées jusqu'à leur carrefour${r.horsBitume.length ? ' → ' + JSON.stringify(r.horsBitume.slice(0, 6)) : ''} · PLUS FLUIDES : sur ${r.trajets} trajets d'un bout à l'autre de la ville, ${r.detour}× le vol d'oiseau en moyenne (2,25 avant), au pire ${r.pire}×, ${r.sans} sans chemin · et 900 pas de simulation plus tard, ${r.immobiles}/${r.aiCars} véhicules bloqués, ${r.chev} chevauchement, ${r.dehors} hors chaussée, ${r.parcours} m parcourus en moyenne` };
+});

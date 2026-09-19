@@ -8708,7 +8708,10 @@ function signalisation() {
       // porte), on la declare comme trottoir, et le panneau s'y plante.
       if (!mis) for (const dep of [0, 2, 4, 6, 8, 10, -1.6, -3.2]) {
         let pose2 = false;
-        for (const [cote, sup] of [[1, 0], [-1, 0], [1, 2], [-1, 2]]) {
+        // (on s'ecarte jusqu'a 6 m du bord : deux carrefours — l'un contre la barriere de
+        // l'anneau en (-26 ; -25,3), l'autre en (-62 ; 144,3) — n'avaient pas 2 m de libre
+        // au ras de la chaussee, et restaient sans stop ni cedez-le-passage)
+        for (const [cote, sup] of [[1, 0], [-1, 0], [1, 2], [-1, 2], [1, 4], [-1, 4], [1, 6], [-1, 6]]) {
           const x = k.cx - ux * (recul + dep) + rx * (lat + sup) * cote, z = k.cz - uz * (recul + dep) + rz * (lat + sup) * cote;
           // La dalle fait 2,2 m de cote : son centre doit etre BIEN hors de la chaussee, pas a
           // 15 cm du bord comme pour un panneau — une dalle posee en (-69,8 ; 16,6) tombait

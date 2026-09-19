@@ -6640,7 +6640,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno); B('plaine des sports', buildSports); B('hameau de la ferme', buildHameau);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
+      B('le marché', buildMarche); B('techno-parc', buildTechno); B('plaine des sports', buildSports); B('hameau de la ferme', buildHameau); B('bois des aventuriers', buildBois);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -9116,6 +9116,208 @@ function animalFerme(kind, x, z, ry) {
   const cs = Math.abs(Math.cos(ry)), sn = Math.abs(Math.sin(ry));
   solids.push({ mesh: g.children[0], x, y: h / 2, z, w: w * cs + d * sn, h, d: w * sn + d * cs, noRoute: true }); sgridSale();
   g.userData.mobile = true;   // la boite ci-dessus suffit : solidifieDecor ne doit pas en rajouter une par morceau
+}
+// ================= QUARTIER : LE BOIS DES AVENTURIERS (sud-est) =================
+// Troisieme quartier demande par le joueur. Le sud-est (x > 110, z > 260) etait le dernier
+// grand vide : entre le quartier residentiel et le bord de la carte, 90 m sur 80 de rien.
+// On y a mis UN PARC D'AVENTURE EN FORET, parce que SuperObby est d'abord un jeu de
+// plateformes — passerelles, echelles, cabane perchee — et que c'est precisement ce que la
+// ville ne proposait nulle part : partout ailleurs on marche a plat. Ici on GRIMPE.
+// Il s'accroche a la grande rue du sud du quartier residentiel (z = 250, de x −70 a x 200).
+const BOIS = { x: 152, z: 304, x1: 110, x2: 196, z1: 260, z2: 346 };
+function buildBois() {
+  // ---- LES CHEMINS ----
+  road(152, 300, 8, 96);     // Allee des Cimes : de la rue du sud (z 250) au bas de la carte
+  road(152, 272, 76, 8);     // Route du Bois
+  road(152, 336, 76, 8);     // Route des Sentiers
+  // Le Chemin des Fougeres etait a x = 118 : elargi a 11 m par la passe d'URBANISME, son bord
+  // est passait a 123,50 m et le grand toboggan de la cabane (123,50 a 125,30) tombait dedans —
+  // la passe de degagement lui aurait retire sa collision, et on serait passe AU TRAVERS en
+  // sortant de la cabane, a 7 m du sol. Il recule a x = 114.
+  road(114, 304, 8, 64);     // Chemin des Fougeres (ouest)
+  road(186, 304, 8, 64);     // Chemin des Ecureuils (est)
+  // ---- LE SOUS-BOIS : deux grandes clairieres d'aiguilles, et beaucoup d'arbres ----
+  plat(135, 0.14, 304, 24, 52, 0x4b6b3a, { studs: false, noRoute: true }, 0.12);   // le parcours
+  plat(169, 0.14, 304, 24, 52, 0x5c7d42, { studs: false, noRoute: true }, 0.12);   // le camp
+  // MEME REGLE QUE DANS LES DEUX AUTRES QUARTIERS : rien a moins de 8 m de l'axe d'un chemin.
+  // Au premier jet, six arbres, quatre lampadaires, l'abribus et le totem tombaient dans une
+  // chaussee elargie et y perdaient leur collision.
+  for (const [tx, tz] of [[127, 282], [127, 296], [127, 312], [127, 326], [141, 282], [141, 326],
+    [163, 282], [163, 326], [177, 282], [177, 296], [177, 312], [177, 326],
+    [104, 296], [104, 314], [196, 296], [196, 314], [135, 260], [169, 260], [135, 346], [169, 346]])
+    tree(tx, 0, tz, (tx + tz) % 3 ? C.pine : 0x2f6f3a, true);
+  for (let i = 0; i < 14; i++) {   // les rochers du sous-bois : solides, on s'appuie dessus
+    const rx = [126, 131, 140, 144, 160, 166, 174, 178, 128, 142, 163, 177, 133, 171][i], rz = [320, 326, 322, 330, 286, 282, 288, 284, 284, 282, 328, 326, 296, 312][i];
+    const r = new THREE.Mesh(new THREE.DodecahedronGeometry(rnd(0.8, 1.5)), lam(0x6f6a66));
+    r.position.set(rx, 0.5, rz); r.rotation.set(rnd(0, 3), rnd(0, 3), rnd(0, 3)); r.castShadow = true; worldGroup.add(r);
+    solids.push({ mesh: r, x: rx, y: 0.5, z: rz, w: 2, h: 1.1, d: 2, noRoute: true });
+  }
+  sgridSale();
+  // LE RUISSEAU : une nappe d'eau de 12 cm qu'on TRAVERSE (materiau a 0,55 d'opacite, sous le
+  // seuil de 0,6 de solidifieDecor : il ne pourra jamais devenir un mur), et ses berges de galets.
+  // LE RUISSEAU EST COUPE EN DEUX BRAS, un par clairiere. D'un seul tenant il traversait
+  // l'Allee des Cimes : sa nappe (12 cm) recouvrait le bitume (6 cm) et son petit pont de bois
+  // etait plante en pleine chaussee — la passe de degagement lui retirait sa collision et on
+  // tombait dans le trou. Chaque bras s'arrete au bord de la chaussee, et chacun a son pont.
+  const eauMat = new THREE.MeshLambertMaterial({ color: 0x3aa0ff, transparent: true, opacity: 0.55 });
+  for (const [rx, rw] of [[135, 22], [169, 22]]) {
+    const ru = new THREE.Mesh(unitBox, eauMat); ru.scale.set(rw, 0.12, 2.6); ru.position.set(rx, 0.16, 316); worldGroup.add(ru);
+    for (const bz of [314.5, 317.5]) for (let i = 0; i <= rw / 2; i++) box(rx - rw / 2 + i * 2, 0.24, bz + rnd(-0.3, 0.3), 0.7, 0.3, 0.6, 0x8f98ab, { deco: true, studs: false, noEdges: true });
+    plat(rx, 0.7, 316, 4, 4.4, 0x9c6a3c, { studs: false, noRoute: true }, 0.7);              // le petit pont de bois
+    for (const dx of [-1.9, 1.9]) box(rx + dx, 1.25, 316, 0.14, 1.1, 4.4, 0x8b5a2b, { studs: false, noRoute: true });
+    for (const dz of [-2.4, 2.4]) plat(rx, 0.35, 316 + dz, 4, 1.2, 0x9c6a3c, { studs: false, noRoute: true }, 0.35);   // les deux rampes d'acces
+  }
+  // ---- LE PARCOURS D'ACCROBRANCHE : quatre plateformes qui montent, trois passerelles ----
+  // C'est le VRAI jeu de ce quartier, et c'est du plateforme pur : tout est solide, les
+  // marches montent de 0,45 m (sous le pas franchissable de 0,56 m) et chaque garde-corps
+  // est un solide declare — pas une rambarde decorative qu'on traverse en tombant de 6 m.
+  // LA PLATEFORME EST BATIE DANS UN ARBRE, pas sur un mur. Au premier jet, l'escalier avait
+  // des marches de 1,30 m de profondeur espacees de 0,80 m : elles se recouvraient et le tout
+  // ne lisait plus que comme UN GROS BLOC DE BOIS (capture « bois-cabane »). Les marches ne se
+  // touchent plus qu'a peine, les quatre pieds sont de vrais troncs ronds, et un feuillage les
+  // coiffe au-dessus du plancher — de loin on voit quatre arbres et une cabane, pas un mur.
+  const tour = (tx, tz, haut, col, cotEsc = -1) => {
+    const n = Math.max(3, Math.round((haut - 0.14) / 0.45));
+    // l'escalier arrive par le cote `cotEsc` : marche de 0,45 m de haut, 0,9 m de profondeur
+    for (let i = 0; i < n; i++) {
+      const y = 0.14 + (i + 1) * (haut - 0.14) / n;
+      plat(tx + cotEsc * 2.9, y, tz - 2 + 0.45 + i * (3.1 / n), 1.7, 3.1 / n + 0.06, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, y);
+    }
+    box(tx + cotEsc * 3.78, haut / 2 + 0.3, tz, 0.14, haut + 0.6, 4, 0x8b5a2b, { studs: false, noRoute: true });   // la rampe de l'escalier, SOLIDE
+    for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) {
+      const tronc = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, haut + 3.4, 9), lam(0x6b4423));
+      tronc.position.set(tx + dx, (haut + 3.4) / 2, tz + dz); tronc.castShadow = true; worldGroup.add(tronc);
+      solids.push({ mesh: tronc, x: tx + dx, y: (haut + 3.4) / 2, z: tz + dz, w: 0.84, h: haut + 3.4, d: 0.84, noRoute: true });
+      const feuilles = new THREE.Mesh(new THREE.SphereGeometry(1.5, 9, 7), lam(0x2f7a4a));   // le feuillage : au-dessus de la tete, jamais solidifie
+      feuilles.position.set(tx + dx, haut + 3.9, tz + dz); worldGroup.add(feuilles);
+    }
+    sgridSale();
+    plat(tx, haut, tz, 4, 4, col, { studs: false, noRoute: true }, 0.22);        // le plancher
+    for (const [rx, rz, rw, rd] of [[tx, tz - 2, 4, 0.14], [tx, tz + 2, 4, 0.14], [tx - 2, tz, 0.14, 4], [tx + 2, tz, 0.14, 4]])
+      box(rx, haut + 0.55, rz, rw, 1.1, rd, 0x8b5a2b, { studs: false, noRoute: true });   // le garde-corps : SOLIDE, tout autour
+    return { x: tx, z: tz, y: haut };
+  };
+  const passerelle = (x1, z1, x2, z2, y) => {
+    const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), n = Math.round(L / 1.1);
+    for (let i = 0; i <= n; i++) {
+      const px = x1 + dx * i / n, pz = z1 + dz * i / n;
+      // 1,30 m de planche pour un pas de 1,11 m : elles SE RECOUVRENT. A 1,00 m il restait
+      // 11 cm de vide entre deux planches — mesure : (135 ; 288) a 2,55 m tombait pile dans un
+      // trou, et le joueur serait passe au travers de la passerelle a 2,60 m du sol.
+      plat(px, y, pz, Math.abs(dx) > Math.abs(dz) ? 1.3 : 2, Math.abs(dx) > Math.abs(dz) ? 2 : 1.3, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, 0.16);   // les planches
+    }
+    // les deux cordes de main courante : SOLIDES elles aussi (une passerelle a 6 m sans
+    // garde-corps qui arrete, c'est une chute assuree — et ce projet a deja paye ce prix-la)
+    const s = Math.abs(dx) > Math.abs(dz);
+    for (const c of [-1, 1]) box((x1 + x2) / 2 + (s ? 0 : c), y + 0.6, (z1 + z2) / 2 + (s ? c : 0), s ? L : 0.12, 1.1, s ? 0.12 : L, 0x8b5a2b, { studs: false, noRoute: true });
+  };
+  // CHAQUE TOUR A SON PROPRE ESCALIER, du cote exterieur du parcours. C'est voulu : un enfant
+  // qui tombe d'une passerelle ne doit pas avoir a refaire tout le circuit pour remonter — il
+  // reprend a la tour ou il en etait. Les passerelles et les montees, elles, font le parcours
+  // complet de 2,60 m a 6,80 m, et le grand toboggan ramene au sol d'une traite.
+  const T1 = tour(128, 288, 2.6, 0xd8b45a, -1), T2 = tour(142, 288, 4.0, 0xd8c8a0, 1);
+  const T3 = tour(142, 300, 5.4, 0xe0c890, 1), T4 = tour(128, 300, 6.8, 0xd8b45a, -1);
+  passerelle(T1.x + 2, T1.z, T2.x - 2, T2.z, 2.6);
+  for (let i = 0; i < 4; i++) plat(142, 2.9 + i * 0.4, 290.6 + i * 0.7, 3.6, 0.8, 0xb08050, { studs: false, noRoute: true }, 2.9 + i * 0.4);   // la montee de T1/T2 vers 4 m
+  passerelle(T2.x, T2.z + 2, T3.x, T3.z - 2, 4.0);
+  for (let i = 0; i < 4; i++) plat(140.6 - i * 0.7, 4.3 + i * 0.4, 300, 0.8, 3.6, 0xb08050, { studs: false, noRoute: true }, 4.3 + i * 0.4);   // la montee vers 5,4 m
+  passerelle(T3.x - 2, T3.z, T4.x + 2, T4.z, 5.4);
+  for (let i = 0; i < 4; i++) plat(128, 5.7 + i * 0.4, 297.4 - i * 0.7, 3.6, 0.8, 0xb08050, { studs: false, noRoute: true }, 5.7 + i * 0.4);   // la derniere montee, vers la cabane
+  // LA CABANE DANS LES ARBRES, au sommet de la quatrieme tour : le bout du parcours.
+  for (const [wx, wz, ww, wd] of [[128, 298, 4.4, 0.3], [126, 300, 0.3, 4.4], [130, 300, 0.3, 4.4]])
+    box(wx, 8.2, wz, ww, 2.4, wd, 0x8b5a2b, { studs: false, noRoute: true });
+  box(128, 9.7, 300, 5.4, 0.9, 5.4, 0xc23b5a, { deco: true, studs: false });     // le toit (a 9,25 m : on passe dessous)
+  box(128, 8.3, 302.2, 2.8, 1, 0.12, 0, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏕️ LA CABANE', 0x5cc453) }), deco: true, noEdges: true });
+  checkpoint(128, 7.02, 300, 1);   // le drapeau du sommet : on a fini le parcours
+  for (const [cx, cz, cy] of [[135, 288, 2.9], [142, 294, 4.3], [135, 300, 5.7], [128, 294, 0.5], [142, 306, 0.5]]) coin(cx, cy, cz);
+  // LE GRAND TOBOGGAN qui ramene au sol depuis la cabane : quinze marches de 0,42 m.
+  for (let i = 0; i < 15; i++) plat(124.4, 6.9 - i * 0.45, 300 + i * 0.9, 1.8, 0.95, i % 2 ? 0x35d0e6 : 0x3ef2ff, { studs: false, noRoute: true }, 6.9 - i * 0.45);
+  sign(132, 0.14, 280, '🌲 Parcours dans les arbres : grimpe jusqu\'à la cabane !', true, Math.PI);
+  // ---- LE CAMP (est de l'Allee des Cimes) ----
+  // la cabane du ranger : on y achete de quoi tenir la journee en foret
+  shop(169, 284, 12, 8, 0x5cc453, '🏕️ Cabane du Ranger', 0x5cc453, 2);
+  box(169, 0.05, 288, 2.6, 0.1, 0.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, porte: true });
+  comptoir(169, 285.2, 0, 'ranger', '🏕️', 'Cabane du Ranger', 'Tout ce qu\'il faut avant de monter dans les arbres', [
+    { e: '🥪', n: 'Sandwich du randonneur', p: 2, f: 4, d: 'Épais. Il tient au ventre jusqu\'au sommet.' },
+    { e: '💧', n: 'Gourde pleine', p: 1, f: -1, d: 'On la remplit à la borne d\'à côté.' },
+    { e: '🍎', n: 'Pomme du verger', p: 1, f: -3, d: 'Pour la route.' },
+    { e: '🔦', n: 'Lampe frontale', p: 8, d: 'Le bois est sombre sous les sapins.' },
+    { e: '🧭', n: 'Boussole', p: 6, d: 'Pour ne plus jamais tourner en rond.' }], 0x5cc453);
+  mannequin(169, 286.4, 0, { jersey: 5, hat: 'cap', jacket: 1 });
+  // l'aire de pique-nique : quatre tables de bois, SOLIDES (plateau a 0,76 m)
+  // Sur la capture « bois-camp », les tables n'etaient que trois pavés bruns colles : on ne
+  // lisait ni le plateau, ni les bancs, ni les pieds. Plateau clair en debord, pieds en V
+  // sombres, bancs ecartes de 1,10 m — on reconnait une table de pique-nique.
+  for (const [px, pz] of [[162, 296], [176, 296], [162, 306], [176, 306]]) {
+    box(px, 0.38, pz, 2.4, 0.76, 0.95, 0x6b4423, { studs: false, noRoute: true });        // le corps de la table
+    box(px, 0.79, pz, 2.7, 0.1, 1.2, 0xd8b45a, { deco: true, studs: false });             // le plateau clair, en debord
+    for (const dz of [-1.1, 1.1]) {
+      box(px, 0.22, pz + dz, 2.4, 0.44, 0.34, 0x8b5a2b, { studs: false, noRoute: true }); // les bancs
+      box(px, 0.46, pz + dz, 2.6, 0.08, 0.42, 0xd8b45a, { deco: true, studs: false });
+    }
+    for (const dx of [-0.9, 0.9]) box(px + dx, 0.2, pz, 0.14, 0.4, 2.4, 0x3b2a16, { deco: true, studs: false });   // les pieds en travers
+  }
+  // le feu de camp de la clairiere, cercle de pierres et rondins
+  const foyer = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.35, 14), lam(0x6f6a66)); foyer.position.set(169, 0.32, 300); worldGroup.add(foyer);
+  solids.push({ mesh: foyer, x: 169, y: 0.32, z: 300, w: 3.2, h: 0.35, d: 3.2, noRoute: true }); sgridSale();
+  // Le feu etait un cone plante a 1,30 m, c'est-a-dire A HAUTEUR DE TETE : sur la capture on
+  // aurait dit un chapeau pose derriere le joueur. Le tipi de rondins est plus large et plus
+  // bas, les braises rougeoient au ras des pierres, et la flamme tient dans les rondins.
+  for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 1.9, 6), lam(0x6b4423)); b.position.set(169 + Math.cos(i * 1.05) * 0.16, 0.85, 300 + Math.sin(i * 1.05) * 0.16); b.rotation.set(0.42 * Math.cos(i * 1.05 + 1.57), 0, 0.42 * Math.sin(i * 1.05 + 1.57)); worldGroup.add(b); }
+  const braises = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.12, 12), new THREE.MeshLambertMaterial({ color: 0xff5c00, emissive: 0xff3000, emissiveIntensity: 0.9 }));
+  braises.position.set(169, 0.54, 300); worldGroup.add(braises);
+  const flamme = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 8), new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0xff8f00, emissiveIntensity: 0.9, transparent: true, opacity: 0.8 }));
+  flamme.position.set(169, 1.05, 300); worldGroup.add(flamme);
+  for (const [bx, bz, bf] of [[169, 296.6, Math.PI], [169, 303.4, 0], [165.6, 300, Math.PI / 2], [172.4, 300, -Math.PI / 2]]) {
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.6, 10), lam(0x9c6a3c)); r.rotation.z = Math.PI / 2; r.rotation.y = bf; r.position.set(bx, 0.28, bz); worldGroup.add(r);
+    solids.push({ mesh: r, x: bx, y: 0.28, z: bz, w: Math.abs(Math.cos(bf)) * 2.6 + 0.6, h: 0.56, d: Math.abs(Math.sin(bf)) * 2.6 + 0.6, noRoute: true });
+  }
+  sgridSale();
+  // les deux tentes du camp
+  for (const [tx, tz, col] of [[161, 314, 0xff8f3a], [177, 314, 0x4f8dff]]) {
+    for (let i = 0; i < 5; i++) box(tx, 0.3 + i * 0.36, tz, 3.4 - i * 0.62, 0.36, 3.6, col, { studs: false, noRoute: true });
+    box(tx, 0.9, tz + 1.85, 1.2, 1.6, 0.1, 0x2b3550, { deco: true, studs: false });
+  }
+  // LES DEUX BALANCOIRES « NID D'OISEAU » : meme mecanique que toutes les balancoires de la
+  // ville (city.swings), donc meme touche E et meme saut a la manette.
+  const NX = 169, NZ = 324, NH = 3.5, NL = 2.85;
+  for (const dx of [-3.2, 3.2]) for (const dz of [-1.5, 1.5]) box(NX + dx, NH / 2, NZ + dz, 0.22, NH, 0.22, 0x6b4423, { studs: false, noRoute: true });
+  box(NX, NH + 0.14, NZ, 7.2, 0.26, 0.26, 0x6b4423, { deco: true, studs: false });
+  for (const sx of [NX - 1.8, NX + 1.8]) {
+    const piv = new THREE.Group(); piv.position.set(sx, NH + 0.14, NZ); worldGroup.add(piv);
+    for (const dx of [-0.5, 0.5]) { const c = new THREE.Mesh(unitBox, lam(0x8f98ab)); c.scale.set(0.05, NL - 0.2, 0.05); c.position.set(dx, -(NL - 0.2) / 2, 0); piv.add(c); }
+    const nid = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.14, 8, 16), lam(0x6b4423)); nid.rotation.x = Math.PI / 2; nid.position.y = -NL; piv.add(nid);
+    const fond = new THREE.Mesh(unitBox, lam(0x3b2a16)); fond.scale.set(1.1, 0.06, 1.1); fond.position.y = -NL - 0.06; piv.add(fond);
+    city.swings.push({ x: sx, z: NZ, piv, siege: nid, L: NL, ang: 0, vel: 0, amp: 0, rider: null });
+  }
+  sign(NX, 0.14, NZ + 4, '🪺 Balançoires nid d\'oiseau : E pour s\'asseoir', false, 0);
+  // ---- LE MOBILIER URBAIN (a 8 m au moins de l'axe de chaque chemin) ----
+  for (const [lx, lz] of [[144, 284], [160, 284], [144, 300], [160, 300], [144, 316], [160, 316], [144, 328], [160, 328],
+    [128, 282], [128, 326], [176, 282], [176, 326], [104, 304], [196, 304]]) lamp(lx, lz);
+  for (const [px, pz] of [[144, 290], [160, 290], [144, 322], [160, 322], [176, 292], [128, 292]]) poubelle(px, pz);
+  bench(144, 294, -Math.PI / 2); bench(160, 294, Math.PI / 2); bench(144, 312, -Math.PI / 2); bench(160, 312, Math.PI / 2);
+  bench(169, 292, Math.PI); bench(135, 328, 0);
+  flowerBed(141, 284, 5, 1.4); flowerBed(163, 284, 5, 1.4); flowerBed(141, 324, 5, 1.4); flowerBed(163, 324, 5, 1.4);
+  abribus(143.5, 306, Math.PI / 2);
+  borneEau(160, 288); borneEau(144, 308);
+  totemInfo(161, 282, '🌲 LE BOIS DES AVENTURIERS', 0x5cc453);
+  boiteAuxLettres(143, 284, -Math.PI / 2);
+  // les totems de bois sculptes de l'entree : le decor qui signe le quartier
+  for (const [tx, tz] of [[144, 262], [160, 262]]) {
+    box(tx, 1.6, tz, 1, 3.2, 1, 0x6b4423, { studs: false, noRoute: true });
+    box(tx, 3.5, tz, 1.6, 0.6, 1.6, 0xc23b5a, { deco: true, studs: false });
+    box(tx, 4.1, tz, 1.2, 0.6, 1.2, 0x5cc453, { deco: true, studs: false });
+    box(tx, 4.7, tz, 0.8, 0.6, 0.8, 0xffd23f, { deco: true, studs: false });
+  }
+  sign(138, 0.14, 262, '🌲 Le Bois des Aventuriers', true, 0);
+  // ---- L'ACTIVITE ----
+  city.wander.push([152, 0.3, 280], [135, 0.3, 296], [169, 0.3, 300], [152, 0.3, 320],
+    [169, 0.3, 288], [135, 0.3, 324], [152, 0.3, 340], [128, 0.3, 306]);
+  mannequin(166, 300, -Math.PI / 2, { jersey: 8, hat: 'cap' });     // le ranger, au feu de camp
+  mannequin(163, 296, 0, { jersey: 3 });                            // deux campeurs a la table
+  mannequin(133, 288, Math.PI / 2, { jersey: 11, jacket: 3 });      // le moniteur du parcours
+  city.zones.push({ name: 'Bois des Aventuriers', emoji: '🌲', x1: BOIS.x1, x2: BOIS.x2, z1: BOIS.z1, z2: BOIS.z2,
+    hint: '🌲 Le Bois des Aventuriers : le parcours dans les arbres (quatre plateformes, trois passerelles, la cabane au sommet), le grand toboggan, le camp, le feu et les balançoires nid d\'oiseau' });
 }
 function signalisation() {
   const R = city.routes || [];

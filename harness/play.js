@@ -20753,3 +20753,107 @@ test('les routes sont plus larges, mieux raccordées et moins tortueuses : crois
     && r.detour <= 2.0 && r.immobiles === 0 && r.chev === 0 && r.dehors === 0 && r.parcours > 20;
   return { ok, detail: `PLUS LARGES : le plus gros véhicule du jeu fait ${r.plusLarge} m, il faut donc 7,60 m pour un croisement avec 50 cm de garde — ${r.larges}/${r.routes} chaussées y arrivent, contre 27/72 avant (élargissement : ${r.elargies && r.elargies.montees} chaussées montées de ${r.elargies && r.elargies.gagne} m en moyenne, ${r.elargies && r.elargies.bloquees} coincées entre deux murs)${r.etroites.length ? ' — restent ' + JSON.stringify(r.etroites) : ''} · MIEUX ORGANISÉES : ${r.horsBitume.length} liaison du graphe hors chaussée (il y en avait 21, dont 11,20 m au coude de l'ouest) après ${r.trous && r.trous.combles} trous comblés et ${r.trous && r.trous.rallonges} rues rallongées jusqu'à leur carrefour${r.horsBitume.length ? ' → ' + JSON.stringify(r.horsBitume.slice(0, 6)) : ''} · PLUS FLUIDES : sur ${r.trajets} trajets d'un bout à l'autre de la ville, ${r.detour}× le vol d'oiseau en moyenne (2,25 avant), au pire ${r.pire}×, ${r.sans} sans chemin · et 900 pas de simulation plus tard, ${r.immobiles}/${r.aiCars} véhicules bloqués, ${r.chev} chevauchement, ${r.dehors} hors chaussée, ${r.parcours} m parcourus en moyenne` };
 });
+
+// ================= POSTE QUARTIERS : LE HAMEAU DE LA FERME =================
+test('on peut aller au Hameau de la Ferme a pied et en voiture, et les deux quartiers neufs tiennent dans un seul reseau', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const city = G.city;
+    const zone = city.zones.find(z => z.name === 'Hameau de la Ferme');
+    const des = (city.plan.dessertes || []).find(d => d.n === 'Hameau de la Ferme');
+    const pied = G.navPath(0, 8, -145, 296);
+    const aller = G.itineraireVoies(0, 8, des.x, des.z), retour = G.itineraireVoies(des.x, des.z, 0, 8);
+    // ET D'UN QUARTIER NEUF A L'AUTRE : la Plaine des Sports est au nord-ouest, le Hameau au
+    // sud-ouest. Si le reseau tenait en deux morceaux, ce trajet-la n'existerait pas.
+    const sp = (city.plan.dessertes || []).find(d => d.n === 'Plaine des Sports');
+    const entre = G.itineraireVoies(sp.x, sp.z, des.x, des.z);
+    // le graphe des voies est-il d'un seul tenant ? (composante joignable depuis le centre)
+    const GR = city.graphe, A = GR.aretes, N = GR.noeuds;
+    const proche = (x, z) => { let b = -1, bd = 1e9; A.forEach((e, i) => { const dd = Math.hypot((e.x0 + e.x1) / 2 - x, (e.z0 + e.z1) / 2 - z); if (dd < bd) { bd = dd; b = i; } }); return b; };
+    const dep = proche(0, 8), vus = new Set([dep]), q = [dep];
+    while (q.length) { const c = q.pop(); for (const n of N[A[c].vers].sortantes) if (!vus.has(n)) { vus.add(n); q.push(n); } }
+    const rues = city.routes.filter(rt => rt.x < -100 && rt.z > 250).length;
+    return { zone: !!zone, des, pied: pied ? pied.length : 0, rues,
+      aller: aller ? (aller.suite ? aller.suite.length : (aller.length || 1)) : 0,
+      retour: retour ? (retour.suite ? retour.suite.length : (retour.length || 1)) : 0,
+      entre: entre ? (entre.suite ? entre.suite.length : (entre.length || 1)) : 0,
+      aretes: A.length, joignables: vus.size };
+  });
+  const ok = r.zone && r.des && r.des.loin === 0 && r.pied > 1 && r.aller > 0 && r.retour > 0 && r.entre > 0
+    && r.rues === 5 && r.joignables === r.aretes;
+  return { ok, detail: `le sud-ouest (x < −100, z > 250) etait le plus grand vide de la carte : 150 m sur 90 sans une route · le Hameau de la Ferme y est bati et raccorde par ${r.rues} chemins, dont la Route des Champs qui vient buter sur la longue rue de l'ouest · a pied : chemin de ${r.pied} points depuis le centre · en voiture : ${r.aller} etapes a l'aller, ${r.retour} au retour, et ${r.entre} etapes d'un quartier neuf a l'autre (Plaine des Sports → Hameau) · le graphe des voies reste D'UN SEUL TENANT : ${r.joignables} aretes joignables sur ${r.aretes} · desserte sur la chaussee en (${r.des.x} ; ${r.des.z}), a ${r.des.loin} m du point de visee` };
+});
+
+test('au Hameau de la Ferme, les bottes, les betes et les barrieres arretent, et les chemins restent libres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -145, y: 1, z: 296, hour: 12, frais: true });
+    const S = G.solids;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    const pts = [
+      ['une botte du labyrinthe', -126, 282, 0.9, 1], ['le mur de la grange', -172, 278, 1, 1],
+      ['le silo', -174, 288, 2, 1], ['la tour du moulin', -160, 316, 2, 1],
+      ['une vache', -168, 307, 0.8, 1], ['un mouton', -164, 312, 0.6, 1],
+      ['la barriere de l\'enclos', -151, 310, 0.9, 1], ['l\'abreuvoir', -162, 303, 0.4, 1],
+      ['le tracteur', -151, 280, 1, 1], ['le socle du manege', -125, 310, 0.5, 1],
+      ['la boite aux lettres', -134, 274, 1.2, 1], ['la borne a boire', -131, 282, 0.6, 1],
+      ['le lampadaire', -136, 288, 2, 1], ['la poubelle', -136, 280, 0.5, 1],
+      ['le banc du village', -134, 278, 0.4, 1], ['le totem du hameau', -136, 272, 1.5, 1],
+      // ... et ce qui doit se traverser
+      ['l\'entree du labyrinthe', -124, 282, 0.9, 0], ['le coeur du labyrinthe', -124, 290, 0.9, 0],
+      ['la porte de la grange', -163, 285, 1, 0], ['l\'interieur de la grange', -163, 278, 1, 0],
+      ['l\'ouverture de l\'enclos', -162, 300, 0.9, 0], ['le pre de l\'enclos', -158, 312, 0.9, 0],
+      ['l\'auvent du marche (2,6 m)', -127, 275, 2.6, 0], ['la place du village', -127, 284, 0.9, 0],
+      ['la chaussee du Chemin de la Ferme', -145, 290, 0.9, 0],
+      ['la chaussee de la Route des Champs', -160, 264, 0.9, 0],
+      ['la chaussee de la Route du Moulin', -130, 328, 0.9, 0],
+    ];
+    const fautes = [];
+    for (const [nom, x, z, y, att] of pts) { const v = solide(x, z, y) ? 1 : 0; if (v !== att) fautes.push(`${nom} : ${v ? 'solide' : 'traversable'} au lieu de ${att ? 'solide' : 'traversable'}`); }
+    // LE LABYRINTHE EST UN VRAI LABYRINTHE : on ne traverse pas ses murs. On compte les bottes
+    // solides de son emprise (7 x 7 cases de 2,6 m autour de (−120 ; 288)).
+    const bottes = S.filter(o => Math.abs(o.h - 1.3) < 0.01 && Math.abs(o.x + 124) < 8 && Math.abs(o.z - 288) < 8).length;
+    return { n: pts.length, fautes, bottes };
+  });
+  const ok = r.fautes.length === 0 && r.bottes >= 20;
+  return { ok, detail: `${r.n} points de controle mesures un par un dans le tableau des solides du Hameau · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le labyrinthe est fait de ${r.bottes} bottes de paille SOLIDES de 1,30 m — au-dessus du pas franchissable de 0,56 m, on ne les enjambe pas, on en fait le tour` };
+});
+
+test('les jeux du Hameau de la Ferme se declenchent et se terminent, et les ailes du moulin tournent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -137, y: 1, z: 292, hour: 12, frais: true });
+    const city = G.city, P = G.P;
+    const pas = n => { for (let i = 0; i < n; i++) G.step(1 / 60, true); };
+    // ---- 1. LA BALANCOIRE-PNEU ----
+    const sw = city.swings.find(s => Math.hypot(s.x + 137, s.z - 288) < 1.5);
+    P.pos.set(sw.x, 0.5, sw.z); pas(2);
+    G.sitSwing(sw);
+    const assis = sw.rider === 'me'; pas(90);
+    const ampli = sw.amp, colle = Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const descendu = sw.rider === null && P.swing === null;
+    // ---- 2. LE MANEGE A PONEYS ----
+    const mg = city.rides.find(rd => rd.n === 'le manège à poneys');
+    const a0 = mg.ang; P.pos.set(mg.x + 3, 0.9, mg.z); pas(2);
+    G.rideEnter(mg);
+    const monte = P.ride === mg; pas(60);
+    const tourne = mg.ang - a0, six = mg.horses.length;
+    const enSelle = Math.hypot(P.pos.x - mg.x, P.pos.z - mg.z) < 5.5 && P.pos.y > 1;
+    P.jumpBuf = 1; pas(2);
+    const fini = P.ride === null;
+    // ---- 3. LES AILES DU MOULIN TOURNENT ----
+    const ml = city.moulins[0], r0 = ml.rotation.z; pas(60); const tourneMoulin = ml.rotation.z - r0;
+    // ---- 4. LE PARCOURS DE BOTTES : cinq paliers qui montent de 0,35 m, tous franchissables ----
+    const S = G.solids;
+    const paliers = [];
+    for (let i = 0; i < 5; i++) {
+      const x = -136 + i * 2.4;
+      const o = S.find(s => Math.abs(s.x - x) < 0.3 && Math.abs(s.z - 320) < 0.3);
+      if (o) paliers.push(+(o.y + o.h / 2).toFixed(2));
+    }
+    const monteBien = paliers.length === 5 && paliers.every((h, i) => i === 0 || (h - paliers[i - 1] > 0.3 && h - paliers[i - 1] < 0.56));
+    return { assis, ampli: +ampli.toFixed(3), colle, descendu, monte, tourne: +tourne.toFixed(2), six, enSelle, fini, tourneMoulin: +tourneMoulin.toFixed(2), paliers, monteBien };
+  });
+  const ok = r.assis && r.ampli > 0.2 && r.colle && r.descendu && r.monte && r.tourne > 0.3 && r.six === 6
+    && r.enSelle && r.fini && r.tourneMoulin > 0.2 && r.monteBien;
+  return { ok, detail: `balancoire-pneu : on s'assoit (${r.assis}), amplitude ${r.ampli} rad en 90 pas, le corps colle au pneu (${r.colle}), le saut en decroche (${r.descendu}) · manege a poneys : ${r.six} poneys, on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, le joueur est bien en selle a ${'plus de 1 m'} du sol (${r.enSelle}) et le saut l'en fait descendre (${r.fini}) · les ailes du moulin tournent de ${r.tourneMoulin} rad en 60 pas autour de leur SEUL axe z (decoSpin tournait en y et en x a la fois, le mat aurait pivote sur lui-meme) · parcours de bottes : ${r.paliers.join(' → ')} m, chaque marche monte de moins de 0,56 m, on peut donc vraiment les enchainer (${r.monteBien})` };
+});

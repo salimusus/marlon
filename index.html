@@ -6640,7 +6640,7 @@ const WORLDS = [
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
       // points de balade) et AVANT le degagement des chaussees et les trottoirs.
-      B('le marché', buildMarche); B('techno-parc', buildTechno); B('plaine des sports', buildSports);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
+      B('le marché', buildMarche); B('techno-parc', buildTechno); B('plaine des sports', buildSports); B('hameau de la ferme', buildHameau);   // (l'extension nord du commit distant n'est plus bâtie : voir TERRITOIRES)
       // LE CONCESSIONNAIRE : sur la friche au sud de la Traverse de l'Ouest, entre La Zone et
       // Le Marché. Avant les trottoirs et le dégagement des chaussées, comme les autres quartiers.
       B('concessionnaire', () => buildConcession(-140, 103));
@@ -8863,6 +8863,254 @@ function totemInfo(x, z, titre, couleur) {
   const panneau = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, couleur) })); panneau.scale.set(3.4, 1, 0.12); panneau.position.y = 3.2; g.add(panneau);
   solids.push({ mesh: pied, x, y: 1.3, z, w: 0.34, h: 2.6, d: 0.34, noRoute: true }); sgridSale();
 }
+// ================= QUARTIER : LE HAMEAU DE LA FERME (sud-ouest) =================
+// Deuxieme quartier demande par le joueur. Le sud-ouest (x < −100, z > 250) etait le plus
+// grand vide de la carte : 150 m sur 90, pas un batiment, pas une route. On y a choisi LA
+// CAMPAGNE parce que c'est le seul decor que la ville n'avait pas du tout — tout est urbain,
+// du centre au casino — et parce qu'un hameau donne des jeux qu'on ne trouve nulle part
+// ailleurs : un manege a poneys, un labyrinthe de bottes de paille, une balancoire-pneu.
+// Il s'accroche au sud du MARCHE : la rue de la Halle et la rue des Primeurs descendent
+// jusqu'a z = 243, et le Cours du Marche (z = 240) file d'un bout a l'autre.
+const HAMEAU = { x: -145, z: 296, x1: -186, x2: -104, z1: 256, z2: 336 };
+function buildHameau() {
+  // ---- LES CHEMINS (8 m pour les deux axes, 7 m pour les deux chemins de bord) ----
+  road(-145, 290, 8, 104);    // Chemin de la Ferme : de la route du Marche (z 240) au bas de la carte
+  road(-145, 264, 78, 8);     // Route des Champs : elle vient buter sur la longue rue de l'ouest (x −175, qui s'arrete a z = 260)
+  road(-178, 296, 7, 72);     // Chemin des Vergers
+  road(-110, 296, 7, 72);     // Chemin de la Grange
+  road(-145, 328, 78, 8);     // Route du Moulin
+  // ---- LES CHAMPS : ce sont eux qui font la campagne. Dalles basses, sans collision. ----
+  // Les sillons faisaient 50 cm de large dans un brun fonce : sur la capture « ferme-village »
+  // on ne voyait pas un champ laboure mais DES PLANCHES posees en travers de la campagne. Ils
+  // font maintenant 18 cm, dans un ton a peine plus sombre que la terre, et seul le champ de
+  // ble est laboure — un pre ne l'est pas.
+  const champ = (cx, cz, w, d, col, laboure) => {
+    plat(cx, 0.1, cz, w, d, col, { studs: false, noRoute: true }, 0.08);
+    if (!laboure) return;
+    for (let i = 0; i < Math.floor(d / 1.6); i++) box(cx, 0.15, cz - d / 2 + 0.8 + i * 1.6, w - 1.2, 0.04, 0.18, 0x8f8c4a, { deco: true, studs: false, noEdges: true });
+  };
+  champ(-162, 294, 24, 46, 0xa8b04a, true);   // le champ de ble, a l'ouest
+  champ(-127, 300, 24, 38, 0x7fa83c, false);  // le pre, a l'est : on n'y laboure pas
+  // ---- LA GRANDE GRANGE ROUGE ----
+  const GX = -163, GZ = 278, GW = 18, GD = 14;
+  plat(GX, 0.2, GZ, GW + 6, GD + 6, 0xb08050, { studs: false, noRoute: true }, 0.14);   // la cour de terre battue
+  for (const [wx, wz, ww, wd] of [[GX, GZ - GD / 2, GW, 0.5], [GX - GW / 2, GZ, 0.5, GD], [GX + GW / 2, GZ, 0.5, GD],
+    [GX - GW / 4 - 1.5, GZ + GD / 2, GW / 2 - 3, 0.5], [GX + GW / 4 + 1.5, GZ + GD / 2, GW / 2 - 3, 0.5]])
+    box(wx, 3, wz, ww, 6, wd, 0xc23b5a, { studs: false, noRoute: true });
+  box(GX, 6.6, GZ, GW + 1.4, 1.2, GD + 1.4, 0x8b3a4a, { deco: true, studs: false });          // le bandeau du toit (a 6 m : on passe dessous)
+  for (let i = 0; i < 5; i++) box(GX, 7.3 + i * 0.55, GZ, GW + 1.2 - i * 1.6, 0.55, GD + 1.2 - i * 2.2, i % 2 ? 0x8b3a4a : 0x9c4452, { deco: true, studs: false });   // le toit a deux pentes, en gradins
+  // Le pignon blanc descendait a 2 m du sol et MASQUAIT toute la porte de la grange (capture
+  // « ferme-enclos ») : un grand rectangle blanc au milieu d'un mur rouge. Il remonte
+  // au-dessus du linteau, et la porte est degagee.
+  box(GX, 7.4, GZ + GD / 2 + 0.32, 6.2, 2.2, 0.16, 0xf4f6fa, { deco: true, studs: false });
+  box(GX, 7.8, GZ + GD / 2 + 0.4, 5, 1.1, 0.14, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🌾 LA GRANGE', 0xc23b5a) }), deco: true, noEdges: true });
+  box(GX, 0.05, GZ + GD / 2, 6, 0.1, 0.6, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true, porte: true });   // repere de porte : rien ne se plante devant la grange
+  city.interieurs.push({ x: GX, z: GZ, w: GW, d: GD });
+  for (let i = 0; i < 6; i++) botte(GX - 6 + (i % 3) * 5, GZ - 3 + Math.floor(i / 3) * 3.2);   // les bottes rangees dans la grange
+  // le tracteur devant la grange (du decor solide : ce n'est pas un vehicule conduisible)
+  box(GX + 12, 1.2, GZ + 2, 2.4, 1.6, 4.2, 0x2f7d3a, { studs: false, noRoute: true });
+  box(GX + 12, 2.5, GZ + 3.4, 2, 1.4, 1.8, 0x2f7d3a, { studs: false, noRoute: true });
+  box(GX + 12, 2.5, GZ + 3.4, 2.1, 1, 1.85, 0, { material: glassMat, deco: true, noEdges: true, noShadow: true });
+  for (const [rx, rz, rr] of [[-1.35, -1.4, 1.1], [1.35, -1.4, 1.1], [-1.2, 1.8, 0.6], [1.2, 1.8, 0.6]]) {
+    const roue = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 0.5, 14), lam(0x1b1b1b)); roue.rotation.z = Math.PI / 2; roue.position.set(GX + 12 + rx, rr, GZ + 2 + rz); worldGroup.add(roue);
+  }
+  // ---- LE SILO ET LE MOULIN ----
+  const silo = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 9, 16), lam(0xc9ced8)); silo.position.set(-174, 4.5, 288); silo.castShadow = true; worldGroup.add(silo);
+  solids.push({ mesh: silo, x: -174, y: 4.5, z: 288, w: 4.6, h: 9, d: 4.6 }); sgridSale();
+  const chapeau = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.6, 16), lam(0x8f98ab)); chapeau.position.set(-174, 9.8, 288); worldGroup.add(chapeau);
+  // LE MOULIN. Ses ailes TOURNENT : elles sont rangees dans `city.moulins`, que ridesTick fait
+  // tourner autour de l'axe z. On ne pouvait pas se servir de `decoSpin`, qui tourne en y ET en
+  // x a la fois — un moulin a vent dont le mat pivote sur lui-meme n'a aucun sens.
+  const MX = -160, MZ = 316;
+  const tour = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 3, 8, 14), lam(0xe8e2d4)); tour.position.set(MX, 4, MZ); tour.castShadow = true; worldGroup.add(tour);
+  solids.push({ mesh: tour, x: MX, y: 4, z: MZ, w: 6, h: 8, d: 6 }); sgridSale();
+  const toitM = new THREE.Mesh(new THREE.ConeGeometry(2.6, 2.4, 14), lam(0x8b3a4a)); toitM.position.set(MX, 9.2, MZ); worldGroup.add(toitM);
+  const ailes = new THREE.Group(); ailes.position.set(MX, 7.6, MZ - 2.4); worldGroup.add(ailes);
+  for (let i = 0; i < 4; i++) {
+    const a = new THREE.Group(); a.rotation.z = i * Math.PI / 2; ailes.add(a);
+    const mat = new THREE.Mesh(unitBox, lam(0x9c6a3c)); mat.scale.set(0.28, 6, 0.2); mat.position.y = 3; a.add(mat);
+    const toile = new THREE.Mesh(unitBox, lam(0xf4f6fa)); toile.scale.set(1.5, 5, 0.1); toile.position.set(0.85, 3.2, -0.12); a.add(toile);
+  }
+  city.moulins = city.moulins || []; city.moulins.push(ailes);
+  // ---- L'ENCLOS ET SES BETES ----
+  const EX = -162, EZ = 310, EW = 22, ED = 20;
+  plat(EX, 0.12, EZ, EW, ED, 0x6fae52, { studs: false, noRoute: true }, 0.1);
+  barriereBois(EX, EZ, EW, ED, [[EX, EZ - ED / 2]]);   // une barriere de bois tout autour, ouverte au nord
+  animalFerme('vache', EX - 6, EZ - 3, 0.6); animalFerme('vache', EX + 4, EZ + 5, 2.4);
+  animalFerme('mouton', EX - 2, EZ + 2, 1.2); animalFerme('mouton', EX + 6, EZ - 4, 4);
+  animalFerme('mouton', EX - 7, EZ + 6, 3.1); animalFerme('cochon', EX + 8, EZ + 2, 0.4);
+  for (let i = 0; i < 5; i++) animalFerme('poule', EX - 9 + i * 1.6, EZ + 8, rnd(0, 6));
+  const abreuvoir = new THREE.Mesh(unitRound, lam(0x8f98ab)); abreuvoir.scale.set(3.2, 0.7, 1.4); abreuvoir.position.set(EX, 0.45, EZ - 7); abreuvoir.castShadow = true; worldGroup.add(abreuvoir);
+  solids.push({ mesh: abreuvoir, x: EX, y: 0.45, z: EZ - 7, w: 3.2, h: 0.7, d: 1.4 }); sgridSale();
+  box(EX, 0.76, EZ - 7, 2.9, 0.08, 1.1, 0x3aa0ff, { deco: true, studs: false, noEdges: true });
+  sign(EX, 0.12, EZ - ED / 2 - 1.5, '🐄 L\'enclos du hameau', false, Math.PI);
+  // ---- LA PLACE DU VILLAGE ET SON MARCHE FERMIER (est du Chemin de la Ferme) ----
+  plat(-127, 0.16, 278, 24, 20, 0xd8cfbc, { studs: false, noRoute: true }, 0.12);
+  // l'etal du marche fermier : un auvent raye, une planche, des cageots, une fermiere
+  box(-127, 2.7, 275, 7, 0.16, 4, 0x5cc453, { deco: true, studs: false });
+  for (const dx of [-3.2, 3.2]) for (const dz of [-1.8, 1.8]) box(-127 + dx, 1.4, 275 + dz, 0.14, 2.6, 0.14, 0x9c6a3c, { studs: false, noRoute: true });
+  for (let i = 0; i < 5; i++) box(-130 + i * 1.5, 1.35, 274.4, 0.9, 0.34, 0.7, pickOne([0xff5c5c, 0xffd23f, 0x5cc453, 0xff8f3a, 0xb57cff]), { deco: true, studs: false });
+  comptoir(-127, 276.2, 0, 'ferme', '🧺', 'Marché fermier du Hameau', 'Tout vient des champs d\'à côté, ramassé le matin même', [
+    { e: '🥚', n: 'Boîte de six œufs', p: 2, f: 2, d: 'Encore tièdes, du poulailler d\'en face.' },
+    { e: '🥛', n: 'Pot de lait', p: 2, f: 1, d: 'Les vaches sont dans l\'enclos, tu peux aller voir.' },
+    { e: '🍯', n: 'Pot de miel', p: 4, f: 6, d: 'Des ruches du verger. Ça colle aux doigts.' },
+    { e: '🍎', n: 'Panier de pommes', p: 3, f: -3, d: 'Croquantes et acidulées.' },
+    { e: '🍓', n: 'Confiture de fraises', p: 3, f: 7, d: 'Faite hier, encore chaude.' }], 0x5cc453);
+  mannequin(-127, 277.4, 0, { jersey: 5, hat: 'cap' });
+  sign(-127, 0.16, 270, '🧺 Marché fermier', false, 0);
+  // ---- L'AIRE DE JEUX DU HAMEAU ----
+  // LE MANEGE A PONEYS : le meme mecanisme que le carrousel de la fete foraine (city.rides),
+  // donc E pour monter et SAUT pour descendre, manette comprise. Six poneys sous un toit de
+  // chaume, et non plus six chevaux de bois : c'est ce qui le distingue de la fete foraine.
+  const PX = -125, PZ = 310;   // a (−127 ; 300) il chevauchait le labyrinthe de paille
+  const socleP = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.2, 0.5, 22), lam(0x9c6a3c)); socleP.position.set(PX, 0.55, PZ); socleP.receiveShadow = true; worldGroup.add(socleP);
+  solids.push({ mesh: socleP, x: PX, y: 0.55, z: PZ, w: 10.4, h: 0.5, d: 10.4 }); sgridSale();
+  const tourne = new THREE.Group(); tourne.position.set(PX, 0.8, PZ); worldGroup.add(tourne);
+  const chaume = new THREE.Mesh(new THREE.ConeGeometry(6, 2.4, 22), lam(0xd8b45a)); chaume.position.y = 5; tourne.add(chaume);
+  const mat = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 10), lam(0xe8e2d4)); mat.position.y = 2; tourne.add(mat);
+  const poneys = [];
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3, hx = Math.cos(a) * 3.8, hz = Math.sin(a) * 3.8;
+    const barre = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.8, 6), lam(0xffd23f)); barre.position.set(hx, 1.9, hz); tourne.add(barre);
+    const h = new THREE.Group(); h.position.set(hx, 1.3, hz); h.rotation.y = -a; tourne.add(h);
+    const robe = [0x9c6a3c, 0xd8c8a0, 0x5b3a1e, 0x1b1b1b, 0xf4f6fa, 0xb08050][i];
+    const corps = new THREE.Mesh(unitRound, lam(robe)); corps.scale.set(0.52, 0.62, 1.35); h.add(corps);
+    const cou = new THREE.Mesh(unitRound, lam(robe)); cou.scale.set(0.34, 0.6, 0.34); cou.position.set(0, 0.42, 0.62); cou.rotation.x = -0.4; h.add(cou);
+    const tete = new THREE.Mesh(unitRound, lam(robe)); tete.scale.set(0.3, 0.32, 0.55); tete.position.set(0, 0.72, 0.86); h.add(tete);
+    const criniere = new THREE.Mesh(unitRound, lam(0x3b2a18)); criniere.scale.set(0.12, 0.5, 0.5); criniere.position.set(0, 0.6, 0.55); h.add(criniere);
+    const selle = new THREE.Mesh(unitRound, lam(0xc23b5a)); selle.scale.set(0.58, 0.16, 0.62); selle.position.y = 0.35; h.add(selle);
+    for (const dz of [-0.45, 0.45]) for (const dx of [-0.16, 0.16]) { const patte = new THREE.Mesh(unitBox, lam(robe)); patte.scale.set(0.13, 0.62, 0.13); patte.position.set(dx, -0.58, dz); h.add(patte); }
+    poneys.push({ g: h, a });
+  }
+  city.rides.push({ kind: 'carousel', n: 'le manège à poneys', e: '🐴', group: tourne, horses: poneys, x: PX, z: PZ, ang: 0, speed: 0.5, ex: PX + 6.5, ez: PZ, rayon: 5.2, rider: null });
+  sign(PX + 7.5, 0.16, PZ, '🐴 Manège à poneys : E pour monter', false, -Math.PI / 2);
+  // LA BALANCOIRE-PNEU : un seul siege, un vrai pneu. Meme mecanique que toutes les
+  // balancoires de la ville (city.swings), donc meme touche et meme saut a la manette.
+  const BX = -137, BZ = 288, BH = 3.4, BL = 2.85;
+  for (const dz of [-1.6, 1.6]) { box(BX - 2.2, BH / 2, BZ + dz, 0.22, BH, 0.22, 0x9c6a3c, { studs: false, noRoute: true }); box(BX + 2.2, BH / 2, BZ + dz, 0.22, BH, 0.22, 0x9c6a3c, { studs: false, noRoute: true }); }
+  box(BX, BH + 0.12, BZ, 5.2, 0.24, 0.24, 0x9c6a3c, { deco: true, studs: false });
+  {
+    const piv = new THREE.Group(); piv.position.set(BX, BH + 0.12, BZ); worldGroup.add(piv);
+    const corde = new THREE.Mesh(unitBox, lam(0x8f98ab)); corde.scale.set(0.06, BL - 0.3, 0.06); corde.position.y = -(BL - 0.3) / 2; piv.add(corde);
+    const pneu = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.17, 8, 16), lam(0x1b1b1b)); pneu.rotation.x = Math.PI / 2; pneu.position.y = -BL; piv.add(pneu);
+    city.swings.push({ x: BX, z: BZ, piv, siege: pneu, L: BL, ang: 0, vel: 0, amp: 0, rider: null });
+  }
+  sign(BX, 0.12, BZ + 4, '🛞 Balançoire-pneu : E pour s\'asseoir', false, 0);
+  // LE LABYRINTHE DE BOTTES DE PAILLE. Chaque botte est un cylindre SOLIDE de 1,3 m : trop
+  // haut pour l'enjamber (le pas franchissable du jeu est a 0,56 m), on en fait donc vraiment
+  // le tour. Le plan est ecrit a la main, avec une entree au nord et la sortie au sud.
+  // A 2,60 m d'ecart pour des bottes de 1,30 m de diametre, il restait 1,30 m de trou entre
+  // deux bottes : on passait a travers les « murs » et la capture ne montrait qu'un tas de
+  // bottes eparpillees. Le pas tombe a 2,00 m pour des bottes de 1,80 m, et plus aucune n'est
+  // couchee — les murs sont continus. Le labyrinthe recule aussi a x = −124 : a −120 sa
+  // colonne est mordait le Chemin de la Grange.
+  const LX = -124, LZ = 288;   // 7 colonnes x 7 rangees, pas de 2,00 m
+  const PLAN = [
+    '###.###',
+    '#.....#',
+    '#.##.##',
+    '#.#...#',
+    '#.#.#.#',
+    '#...#.#',
+    '###.###',
+  ];
+  plat(LX, 0.12, LZ, 15, 15, 0xb08050, { studs: false, noRoute: true }, 0.1);   // l'aire de terre battue du labyrinthe
+  for (let j = 0; j < PLAN.length; j++) for (let i = 0; i < PLAN[j].length; i++) if (PLAN[j][i] === '#')
+    botte(LX - 6 + i * 2, LZ - 6 + j * 2, 0.9);
+  coin(LX, 0.3, LZ + 2);   // la piece au coeur du labyrinthe : la raison d'y entrer
+  sign(LX, 0.12, LZ - 9, '🌾 Labyrinthe de paille', false, Math.PI);
+  // LE PARCOURS DE BOTTES : cinq bottes couchees a sauter de l'une a l'autre, en montant
+  // Il traversait le Chemin de la Grange (x −114,5 a −105,5) : cinq plateformes plantees en
+  // pleine chaussee. Il est repose entre le Chemin de la Ferme et le manege.
+  for (let i = 0; i < 5; i++) plat(-136 + i * 2.4, 0.5 + i * 0.35, 320, 2, 2, 0xd8b45a, { studs: false, noRoute: true }, 0.5 + i * 0.35);
+  sign(-138, 0.12, 320, '🦘 Parcours de bottes', false, -Math.PI / 2);
+  // ---- LE MOBILIER URBAIN DU HAMEAU (a 8 m au moins de l'axe de chaque chemin) ----
+  for (const [lx, lz] of [[-136, 272], [-136, 288], [-136, 304], [-136, 320], [-154, 272], [-154, 320],
+    [-170, 274], [-170, 318], [-118, 274], [-118, 318], [-154, 296], [-119, 296]]) lamp(lx, lz);
+  for (const [px, pz] of [[-136, 280], [-136, 312], [-154, 280], [-154, 312], [-120, 276], [-168, 276]]) poubelle(px, pz);
+  bench(-134, 278, -Math.PI / 2); bench(-120, 278, Math.PI / 2); bench(-127, 272, Math.PI);
+  bench(-136, 296, -Math.PI / 2); bench(-155, 302, Math.PI / 2); bench(-127, 310, 0);
+  for (const [tx, tz] of [[-172, 272], [-172, 322], [-116, 272], [-116, 322], [-135, 276], [-135, 324],
+    [-155, 276], [-155, 324], [-168, 300], [-116, 300], [-186, 296], [-104, 296]]) tree(tx, 0, tz, (tx + tz) % 2 ? C.leaf : 0x4a8f3a);
+  flowerBed(-137, 274, 5, 1.4); flowerBed(-119, 274, 5, 1.4); flowerBed(-137, 322, 5, 1.4); flowerBed(-119, 322, 5, 1.4);
+  abribus(-136.5, 268, -Math.PI / 2);
+  borneEau(-131, 282); borneEau(-153, 306);
+  totemInfo(-136, 272, '🚜 LE HAMEAU DE LA FERME', 0x5cc453);   // a 265 il etait plante DANS la Route des Champs (z 260 a 268) et la passe de degagement lui retirait sa collision
+  boiteAuxLettres(-134, 274, Math.PI);
+  boiteAuxLettres(-156, 318, 0);
+  // la barriere de bois qui borde les champs le long des chemins : le trait de campagne
+  barriereBois(-162, 294, 24, 46, [[-162, 271], [-150.5, 294]]);
+  sign(-140, 0.16, 274, '🚜 Le Hameau de la Ferme', true, 0);
+  // ---- L'ACTIVITE ----
+  city.wander.push([-145, 0.3, 276], [-127, 0.3, 280], [-145, 0.3, 300], [-127, 0.3, 294],
+    [-162, 0.3, 288], [-145, 0.3, 320], [-120, 0.3, 300], [-160, 0.3, 272]);
+  mannequin(-156, 282, -Math.PI / 2, { jersey: 9, hat: 'cap', jacket: 1 });   // le fermier devant la grange
+  mannequin(-162, 302, 0, { jersey: 7 });                                     // le berger, pres de l'enclos
+  mannequin(-124, 294, Math.PI, { jersey: 4, hat: 'cap' });                   // le forain du manege
+  for (const [cx, cz] of [[-145, 276], [-127, 282], [-162, 300], [-145, 316], [-119, 296], [-137, 292]]) coin(cx, 0.3, cz);
+  city.zones.push({ name: 'Hameau de la Ferme', emoji: '🚜', x1: HAMEAU.x1, x2: HAMEAU.x2, z1: HAMEAU.z1, z2: HAMEAU.z2,
+    hint: '🚜 Le Hameau de la Ferme : manège à poneys, labyrinthe de paille, balançoire-pneu, l\'enclos et ses bêtes, le moulin — E devant le marché fermier' });
+}
+// UNE BOTTE DE PAILLE : 1,30 m de haut, SOLIDE. C'est ce qui fait les murs du labyrinthe —
+// au-dessus du pas franchissable (0,56 m), on ne l'enjambe pas, on en fait le tour.
+function botte(x, z, r = 0.65) {
+  const g = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1.3, 12), lam(0xd8b45a));
+  g.position.set(x, 0.65, z); g.castShadow = true; g.receiveShadow = true; worldGroup.add(g);
+  solids.push({ mesh: g, x, y: 0.65, z, w: r * 2, h: 1.3, d: r * 2, noRoute: true }); sgridSale();
+  for (let i = 0; i < 3; i++) { const lien = new THREE.Mesh(unitBox, lam(0x9c6a3c)); lien.scale.set(r * 2.06, 0.06, 0.06); lien.position.set(x, 0.35 + i * 0.35, z); worldGroup.add(lien); }
+}
+// UNE BARRIERE DE BOIS autour d'un rectangle, avec des ouvertures. Deux lisses et des poteaux,
+// tout est SOLIDE : une rambarde decorative que le joueur traverse, ce projet en a deja paye
+// le prix. `ouvertures` : la liste des points ou la barriere s'interrompt sur 4 m.
+function barriereBois(cx, cz, w, d, ouvertures = []) {
+  const libre = (x, z) => ouvertures.some(o => Math.hypot(x - o[0], z - o[1]) < 2.6);
+  const pose = (x, z, alongZ) => {
+    if (libre(x, z)) return;
+    box(x, 0.6, z, 0.16, 1.2, 0.16, 0x9c6a3c, { studs: false, noRoute: true });
+    for (const y of [0.5, 0.95]) box(x, y, z, alongZ ? 0.1 : 2, 0.12, alongZ ? 2 : 0.1, 0xb08050, { studs: false, noRoute: true });
+  };
+  for (let x = cx - w / 2; x <= cx + w / 2 + 0.01; x += 2) { pose(x, cz - d / 2, false); pose(x, cz + d / 2, false); }
+  for (let z = cz - d / 2 + 2; z <= cz + d / 2 - 2 + 0.01; z += 2) { pose(cx - w / 2, z, true); pose(cx + w / 2, z, true); }
+}
+// LES BETES DE L'ENCLOS. Ce sont des DECORS SOLIDES, pas des animaux qui marchent : elles ne
+// bougent pas, donc on les declare comme n'importe quel obstacle — et on ne les traverse pas.
+// (Les chiens et les chats qui se promenent, eux, passent par makePet et petsTick.)
+function animalFerme(kind, x, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; worldGroup.add(g);
+  const M = c => lam(c);
+  const piece = (mat, sx, sy, sz, px, py, pz) => { const m = new THREE.Mesh(unitRound, mat); m.scale.set(sx, sy, sz); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  let w = 1, h = 1.2, d = 2;
+  if (kind === 'vache') {
+    const robe = M(0xf4f6fa), tache = M(0x2b2b2b);
+    piece(robe, 1, 1.05, 2.1, 0, 1.15, 0); piece(tache, 0.55, 0.5, 0.8, 0.3, 1.4, -0.3); piece(tache, 0.5, 0.45, 0.6, -0.35, 1.3, 0.5);
+    piece(robe, 0.65, 0.7, 0.75, 0, 1.45, 1.2); piece(M(0xff9ad5), 0.42, 0.3, 0.3, 0, 1.3, 1.55);
+    for (const dx of [-0.28, 0.28]) piece(M(0xe8e2d4), 0.12, 0.28, 0.12, dx, 1.8, 1.15);
+    for (const dx of [-0.35, 0.35]) for (const dz of [-0.75, 0.7]) piece(robe, 0.24, 1.2, 0.24, dx, 0.6, dz);
+    piece(M(0xff9ad5), 0.45, 0.35, 0.45, 0, 0.75, -0.35);
+    w = 1.1; h = 1.9; d = 2.4;
+  } else if (kind === 'mouton') {
+    const laine = M(0xf4f6fa);
+    piece(laine, 0.85, 0.95, 1.4, 0, 0.85, 0); piece(M(0x3b3b3b), 0.42, 0.45, 0.5, 0, 1.05, 0.85);
+    for (const dx of [-0.25, 0.25]) piece(M(0x3b3b3b), 0.2, 0.16, 0.14, dx, 1.15, 0.75);
+    for (const dx of [-0.28, 0.28]) for (const dz of [-0.45, 0.45]) piece(M(0x3b3b3b), 0.16, 0.75, 0.16, dx, 0.38, dz);
+    w = 0.9; h = 1.35; d = 1.6;
+  } else if (kind === 'cochon') {
+    const rose = M(0xff9ad5);
+    piece(rose, 0.85, 0.8, 1.35, 0, 0.6, 0); piece(rose, 0.5, 0.5, 0.5, 0, 0.7, 0.8); piece(M(0xe07aa8), 0.26, 0.22, 0.14, 0, 0.66, 1.03);
+    for (const dx of [-0.2, 0.2]) piece(rose, 0.18, 0.2, 0.1, dx, 0.92, 0.72);
+    for (const dx of [-0.26, 0.26]) for (const dz of [-0.42, 0.42]) piece(rose, 0.16, 0.45, 0.16, dx, 0.25, dz);
+    w = 0.9; h = 1; d = 1.5;
+  } else {   // poule
+    const plume = M(0xf4f6fa);
+    piece(plume, 0.36, 0.42, 0.5, 0, 0.35, 0); piece(plume, 0.22, 0.25, 0.22, 0, 0.62, 0.2);
+    piece(M(0xe0202a), 0.06, 0.16, 0.18, 0, 0.78, 0.2); piece(M(0xffd23f), 0.1, 0.08, 0.16, 0, 0.6, 0.36);
+    for (const dx of [-0.08, 0.08]) piece(M(0xffd23f), 0.06, 0.2, 0.06, dx, 0.12, 0);
+    w = 0.45; h = 0.75; d = 0.6;
+  }
+  const cs = Math.abs(Math.cos(ry)), sn = Math.abs(Math.sin(ry));
+  solids.push({ mesh: g.children[0], x, y: h / 2, z, w: w * cs + d * sn, h, d: w * sn + d * cs, noRoute: true }); sgridSale();
+  g.userData.mobile = true;   // la boite ci-dessus suffit : solidifieDecor ne doit pas en rajouter une par morceau
+}
 function signalisation() {
   const R = city.routes || [];
   city.panneaux = []; city.passages = [];
@@ -11007,6 +11255,9 @@ function ridesTick(dt) {
       if (P.jumpBuf > 0) { P.jumpBuf = 0; P.ride = null; r.rider = null; P.vel.set(0, 4, 0); msg(`${r.e} Terminé !`, 800); }
     }
   }
+  // LES AILES DES MOULINS (poste QUARTIERS). `decoSpin` ne pouvait pas servir : il tourne
+  // en y ET en x a la fois, et le mat d'un moulin se serait mis a pivoter sur lui-meme.
+  if (city.moulins) for (const ml of city.moulins) ml.rotation.z += dt * 0.35;
   if (city.balloons) for (const b of city.balloons) b.position.y = b.userData.balloon.y0 + Math.sin(simTime * 1.2 + b.userData.balloon.ph) * 0.4;
   if (city.bankHands) { const h = day.h; city.bankHands[0].rotation.z = -(h % 12) / 12 * Math.PI * 2; city.bankHands[1].rotation.z = -((h * 60) % 60) / 60 * Math.PI * 2; }
   if (city.seaMesh) {   // vagues

@@ -6257,7 +6257,7 @@ const WORLDS = [
   { id: 'ville', name: 'Marlon · Empire urbain', emoji: '🏙️', color: '#53cdb5', diff: '12 territoires', gravity: 30, free: true, music: { bpm: 118, root: 247, minor: false },
     theme: { sky: 0x8fd0ff, fog: [0xa8d8ff, 90, 260], water: [0x3a8fe6, -16, 0], hemi: [0xe8f6ff, 0x6a7a8a, 0.95], sun: [0xfff5e0, 1.0], clouds: 0xffffff, stars: false },
     build: () => {
-      city.on = true; noSigns = true;
+      city.on = true; noSigns = true; traficGraine = TRAFIC_GRAINE0;   // meme ville, meme circulation (voir TRAFIC_GRAINE0)
       // LE SOL DE TOUTE LA CARTE. Le plateau s'arrêtait à z = 282 et le mur d'enceinte juste
       // derrière : le quartier du casino (z 287 → 340) et le circuit (z −192 → −112) étaient
       // bâtis DEHORS, sur du vide — un trou béant devant le casino, et deux quartiers que le
@@ -6427,6 +6427,19 @@ const WORLDS = [
       // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
       B('places de stationnement', declareLesParkings);   // poste Circulation : la liste des places légitimes (dépôt, caserne, garage, héliports…)
       B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
+      // « REMETS LES VOITURES A BONNE HAUTEUR » (joueur, round 74). On repose TOUS les vehicules
+      // sur ce qu'il y a VRAIMENT sous leurs roues, une fois la ville entiere batie. Un vehicule
+      // construit avec son batiment (les deux voitures du commissariat viennent avec lui) reste
+      // sinon a la hauteur du terrain nu : la rue qui passe devant n'est pavee que plus tard.
+      // Mesure (test 460, 38 vehicules a roues) : ecart moyen roue / appui 0,007 m, mais la
+      // voiture de patrouille de (-49 ; 9) etait a -0,136 m — 13,6 cm de carrosserie dans le
+      // bitume. Apres cette passe : 0 vehicule qui flotte, 0 qui s'enfonce.
+      B('assiette des vehicules', () => {
+        for (const v of [].concat(city.cars || [], city.aiCars || [], police.cars || [])) {
+          if (!v || !v.g || v.heli || v.kind === 'jetski') continue;
+          settleVehicle(v); vehicleSolid(v);
+        }
+      });
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -6793,6 +6806,21 @@ function vehiculeMission(cle, fabrique, x, z, h) {
   c.home0 = [x, z, h]; c.route = null; c.outil = 0; c.outilCible = 0;
   c.g.position.set(x, c.y || 0, z); c.g.rotation.y = h;
   settleVehicle(c); vehicleSolid(c);
+  // UN VEHICULE DE MISSION N'APPARAIT PAS DANS UN MUR. Le point d'appel radio est une adresse
+  // du quartier, pas une place de stationnement : le chauffard naissait le pare-chocs dans un
+  // muret ou un lampadaire. Tant qu'il traversait tout, ca ne se voyait pas ; depuis qu'il
+  // roule avec le garde-fou de collision comme les autres, il y reste cloue — mesure : 120 s
+  // de mission, 0 m parcouru, vitesse plafonnee a 1,2 m/s (la marque d'un pas refuse) en
+  // (46 ; 13). On le pose donc sur la chaussee libre la plus proche.
+  if (typeof vehBloque === 'function' && vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true })) {
+    const essais = [];
+    const pr = (typeof pointRouteLibre === 'function') ? pointRouteLibre(x, z) : null;
+    if (pr) essais.push([pr.x, pr.z]);
+    for (let r = 2.5; r <= 12; r += 2.5) for (let a = 0; a < 8; a++) essais.push([x + Math.sin(a * Math.PI / 4) * r, z + Math.cos(a * Math.PI / 4) * r]);
+    for (const [px, pz] of essais) if (!vehBloque(c, px, pz, h, { bar: true, veh: true })) { c.x = px; c.z = pz; break; }
+    c.home0 = [c.x, c.z, h];
+    c.g.position.set(c.x, c.y || 0, c.z); settleVehicle(c); vehicleSolid(c);
+  }
   return c;
 }
 // LA DÉPANNEUSE. Le poste Véhicules doit livrer la vraie (genre « depanneuse » avec son
@@ -6809,28 +6837,14 @@ function fabriqueDepanneuse(x, z, h) {
   const g = makeVehiculeTravail('grue', 0xffd23f, x, z, h);
   g.depanneuse = true; return g;
 }
-// Conduite d'un véhicule de mission (chauffard, convoi) le long d'un itinéraire routier.
-// Rien à voir avec la physique du joueur : on avance simplement le long des points, mais
-// EN SUIVANT LA ROUTE calculée par A*, pour ne pas traverser les immeubles.
-function traceRouteMission(c, tx, tz) {
-  let p = null;
-  try { p = navPath(c.x, c.z, tx, tz); } catch (e) { p = null; }
-  c.route = (p && p.length ? p.map(q => [q[0], q[1]]) : []).concat([[tx, tz]]);
-}
-function suitRouteMission(c, dt, vitesse) {
-  if (!c.route || !c.route.length) { c.speed = 0; return true; }
-  const [tx, tz] = c.route[0], dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
-  if (d < 3.4) { c.route.shift(); return !c.route.length; }
-  const cap = Math.atan2(dx, dz);
-  let dh = cap - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-  c.h += clamp(dh, -2.4 * dt, 2.4 * dt);
-  c.x += Math.sin(c.h) * vitesse * dt; c.z += Math.cos(c.h) * vitesse * dt;
-  c.speed = vitesse;
-  c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = c.h;
-  if (c.wheels) for (const w of c.wheels) w.rotation.x -= vitesse * dt * 1.5;
-  settleVehicle(c); vehicleSolid(c);
-  return false;
-}
+// LES DEUX VEHICULES DE MISSION (le chauffard a intercepter, le convoi a escorter) SONT
+// PASSES A `botConduit`. Ils avaient ici leur propre conduite : elle suivait bien un trace A*,
+// mais elle avancait `c.x += sin(h) * v * dt` SANS LE MOINDRE CONTROLE DE COLLISION — ni mur,
+// ni mobilier, ni autre voiture, ni feu rouge. Deux vehicules du jeu se deplacaient encore
+// ainsi, et c'est exactement ce que le joueur demande de faire disparaitre (round 74 : « trouve
+// un autre systeme de non collision et de suivi de trajectoire, non pas vol d'oiseau mais de
+// trace route, ca vaut pour tous les vehicules »). Les deux fonctions ont donc ete retirees :
+// tout ce qui roule en ville passe maintenant par `botConduit` ou `conduireVersPoint`.
 // Sirène + gyrophare : ils s'allument TOUT SEULS dès que le joueur roule en intervention.
 // Demander une touche de plus à un enfant qui conduit déjà, c'est la garantie qu'il roule
 // sans sirène et croit que le véhicule est cassé.
@@ -7219,7 +7233,6 @@ function policeDemarre(d) {
     d.cible = ch; ch.busy = true;
     d.tour = 0; d.colle = 0;
     d.circuit = [...PANNES].sort(() => Math.random() - 0.5).slice(0, 4);
-    traceRouteMission(ch, d.circuit[0].x, d.circuit[0].z);
   }
   if (d.variante === 'voleur') {
     const b = pickOne(bots.filter(x => x.av.group.visible && !x.prison)) || bots[0];
@@ -7279,11 +7292,17 @@ function policeTickAct(dt, d) {
     const ch = d.cible; if (!ch) { endMission(false); return; }
     setBeacon(ch.x, ch.z, 0, 'mission');
     if (mission.step === 2) {
-      if (suitRouteMission(ch, dt, 15)) { d.tour = (d.tour + 1) % d.circuit.length; traceRouteMission(ch, d.circuit[d.tour].x, d.circuit[d.tour].z); }
+      // LE CHAUFFARD ROULE SUR LA ROUTE, COMME TOUT LE MONDE (joueur, round 74 : « ça vaut
+      // pour tous les véhicules »). Il passait par `suitRouteMission`, qui suit bien un tracé
+      // A* mais SANS AUCUN contrôle de collision : il traversait les façades, le mobilier et
+      // les autres voitures, et ignorait feux et priorités. Il passe maintenant par la même
+      // porte que tous les autres, `botConduit` : itinéraire par les voies, code de la route,
+      // garde-fou de collision. Il reste rapide (15 m/s) — c'est sa raison d'être.
+      if (botConduit(ch, d.circuit[d.tour].x, d.circuit[d.tour].z, dt, { vmax: 15 }) < 8) d.tour = (d.tour + 1) % d.circuit.length;
       const colle = enVoiture(veh) && veh.sireneOn && Math.hypot(veh.x - ch.x, veh.z - ch.z) < 9;
       d.colle = colle ? (d.colle || 0) + dt : Math.max(0, (d.colle || 0) - dt * 0.5);
       if (d.colle > 3) {
-        mission.step = 3; ch.route = null; ch.speed = 0;
+        mission.step = 3; ch.route = null; ch.ia = null; ch.speed = 0;
         const b = d.bot;
         if (b) { b.pos.set(ch.x + 2.4, 0.15, ch.z); b.av.group.position.copy(b.pos); b.av.group.visible = true; b.wait = 999; b.tgt = null; botSay(b, ['c\'est bon, je me range…', 'j\'allais pas si vite !']); }
         msg('🚓 Il se range ! Descends et contrôle le conducteur', 3400); sfx.check();
@@ -7314,8 +7333,10 @@ function policeTickAct(dt, d) {
   }
   if (d.variante === 'escorte') {
     const cv = d.convoi; if (!cv) { endMission(false); return; }
-    if (!d.parti) { d.parti = true; traceRouteMission(cv, d.station.x, d.station.z + 8); }
-    const arrive = suitRouteMission(cv, dt, 7.5);
+    // MEME CHOSE POUR LE CONVOI : il roulait le long d'un tracé A* sans jamais tester une
+    // collision, camion de 5 m traversant les voitures garées et les angles d'immeuble.
+    d.parti = true;
+    const arrive = botConduit(cv, d.station.x, d.station.z + 8, dt, { vmax: 7.5 }) < 8;
     setBeacon(cv.x, cv.z, 0, 'mission');
     const dist = Math.hypot(P.pos.x - cv.x, P.pos.z - cv.z);
     d.dist = Math.round(dist);
@@ -7364,8 +7385,8 @@ function policeBandeauAct(d) {
 }
 function policeNettoieAct(d) {
   if (d.veh) sireneMission(d.veh, false);
-  if (d.cible) { d.cible.route = null; d.cible.speed = 0; d.cible.busy = false; }
-  if (d.convoi) { d.convoi.route = null; d.convoi.speed = 0; d.convoi.busy = false; }
+  if (d.cible) { d.cible.route = null; d.cible.ia = null; d.cible.speed = 0; d.cible.busy = false; }
+  if (d.convoi) { d.convoi.route = null; d.convoi.ia = null; d.convoi.speed = 0; d.convoi.busy = false; }
   for (const c of (d.files || [])) c.busy = false;
   const b = d.bot; if (b && !b.prison) { b.wait = 1; b.fight = null; b.av.group.visible = true; }
 }
@@ -9187,9 +9208,44 @@ function botConduit(c, x, z, dt, opt) {
     // sans fin. On garde donc la voie retenue tant qu'on la longe, et on ne la reconsidere qu'a
     // la prochaine destination.
     if (butNeuf) c.departVoie = -1;
-    const via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    let via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    // LE DETOUR ABSURDE (la meme regle que pour la voiture d'un ami, voir conduireVersPoint).
+    // Le graphe des voies respecte les sens uniques, et c'est ce qu'on veut : mais quand le but
+    // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
+    // maisons. Mesure sur l'incendie en (0, 20) : depuis (-6, 1) il rendait 146 m de rues pour
+    // 24,6 m a vol d'oiseau — soit 5,9 fois — et le camion de pompiers arrivait 30 s trop tard.
+    // Au-dela de deux fois le trace de la grille A*, on prend donc la grille (qui prefere deja
+    // la chaussee : NAV.cout vaut 1 sur route et 3 en dehors). Le code de la route, les feux et
+    // les distances de securite continuent de s'appliquer : c'est traficRoule qui conduit.
+    // Le camion de pompiers en a besoin des 2,2 fois : son detour vaut 146 m de rues pour 65 m
+    // par la grille, et sans le raccourci il tourne autour du pate de maisons au lieu d'arriver
+    // sur le feu (mesure : au plus pres 47 m, equipage a pied).
+    let pts = null;
+    if (via && via.length > 1) {
+      const lgT = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : Infinity; };
+      const grille = navPath(c.x, c.z, x, z);
+      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 2.1) {
+        // ON NE PREND PAS UN RACCOURCI QUI COMMENCE PAR UN DEMI-TOUR. Le trace de la grille part
+        // de la case ou l'on se trouve : ses premiers points sont a un ou deux metres, parfois
+        // DERRIERE le pare-chocs. `traficRoule` lit alors « le point de passage est derriere
+        // moi » et lance un demi-tour, qui echoue, qui recommence, et le vehicule ne part
+        // jamais. Mesure sur l'ambulance appelee pour un blesse a 200,1 m, 60 s de simulation :
+        // 0 m parcouru, 3 579 images sur 3 600 declarees coincees, 2 005 en marche arriere.
+        // On jette donc les premiers points deja depasses, et si ce qui reste commence encore
+        // par un demi-tour de pres, on garde le trace par les voies : il sait, lui, comment on
+        // sort d'une place de stationnement.
+        const g = grille.slice();
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        while (g.length > 1) {
+          const dx0 = g[0][0] - c.x, dz0 = g[0][1] - c.z;
+          if (Math.hypot(dx0, dz0) < 5 && dx0 * fx + dz0 * fz < 0) g.shift(); else break;
+        }
+        const dx1 = g[0][0] - c.x, dz1 = g[0][1] - c.z, d1 = Math.hypot(dx1, dz1);
+        if (d1 > 8 || Math.abs(CAP(Math.atan2(dx1, dz1) - c.h)) < 2) { via = null; pts = g.concat([[x, z]]); }
+      }
+    }
     c.departVoie = via ? itineraireDepart : -1;
-    const pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
+    if (!pts) pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
   c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
@@ -9210,7 +9266,13 @@ function botConduit(c, x, z, dt, opt) {
 // L'anneau code en dur (208 m de perimetre autour de la place centrale) a disparu : les
 // voitures se donnent maintenant des destinations sur le graphe, les changent en arrivant,
 // et roulent a droite en respectant la signalisation.
-let traficGraine = 20240607;
+// LA GRAINE DE LA CIRCULATION REPART AVEC LA VILLE. Elle ne repartait jamais : une fois la
+// ville reconstruite, la circulation continuait la suite de nombres la ou elle en etait. Deux
+// villes identiques ne donnaient donc pas la meme circulation, et le banc d'essai mesurait un
+// tirage (test 332 : 1 189 m pour la voiture de police enchainee derriere un autre test,
+// 1 416 m lancee seule, meme code). On la remet a sa valeur de depart a chaque construction.
+const TRAFIC_GRAINE0 = 20240607;
+let traficGraine = TRAFIC_GRAINE0;
 const traficRnd = () => ((traficGraine = (traficGraine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 function traficDestination(c) {
   const G = city.graphe;
@@ -9296,6 +9358,25 @@ function vehiculeMord(c, x, z, h) {
         if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
       }
     }
+    // ET LEURS COINS DANS NOTRE CAISSE — MAIS SEULEMENT CEUX D'UN AUTRE VEHICULE.
+    // Nos points de controle ne couvrent que TROIS lignes dans la largeur (gauche, milieu,
+    // droite) : un coin de pare-chocs qui entre par le flanc, entre deux de ces lignes, passe
+    // entre les mailles. Mesure, 3 000 images de ville vivante avec 42 vehicules : 998 images
+    // avec au moins une paire de caisses encastrees sans ce controle, 0 avec.
+    // MAIS JAMAIS POUR UN SOLIDE FIXE. Applique aussi aux murs, le controle devient assez fin
+    // pour voir que la PLACE DE L'AMBULANCE, devant l'hopital, mord l'auvent du hangar : le
+    // fourgon se declarait en faute des l'arret, tous ses pas etaient refuses, marche arriere
+    // comprise, et il ne partait plus jamais en intervention. Mesure, blesse a 200,1 m, 60 s de
+    // simulation : 0 m parcourus et 3 579 images sur 3 600 declarees coincees, contre 264,1 m
+    // sans lui. Ce que le decor a de mal pose n'est pas a nous de le decouvrir a l'execution.
+    if (!o.veh) continue;
+    const ox = o.w / 2, oz = o.d / 2;
+    for (let k = 0; k < 4; k++) {
+      const qx = o.x + (k < 2 ? ox : -ox), qz = o.z + (k % 2 ? oz : -oz);
+      const dx2 = qx - x, dz2 = qz - z;
+      const lx = dx2 * cs - dz2 * sn, lz = dx2 * sn + dz2 * cs;
+      if (Math.abs(lx) < B && Math.abs(lz) < A) return true;
+    }
   }
   return false;
 }
@@ -9314,7 +9395,26 @@ function vehBloque(c, x, z, h, opt) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
   const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null, mou: false });
-  o.bar = !!(opt && opt.bar); o.veh = !!(opt && opt.veh); o.pol = !!(opt && opt.pol);
+  o.bar = !!(opt && opt.bar); o.pol = !!(opt && opt.pol);
+  // `veh: false` VEUT DIRE « SANS LES AUTRES CAISSES », ET POUR TOUT LE MONDE. Tout le jeu pose
+  // par la la question « suis-je bloque par une TOLE ou par un MUR ? » — c'est elle qui arme le
+  // mode mou du degagement et la marche arriere. Or `vehiculeMord` comptait les caisses dans
+  // LES DEUX cas des que `c.exactVeh` etait pose : pour une ambulance, une depanneuse ou une
+  // voiture de police, la reponse etait donc toujours « c'est un mur », et aucune d'elles ne
+  // pouvait se degager d'une tole. On coupe donc aussi le controle exact quand on demande
+  // « sans les caisses ».
+  // (ESSAYE ET RETIRE, avec ses chiffres : faire taire le disque grossier de `carBlocked` pour
+  // les vehicules a controle exact, sous pretexte que `vehiculeMord` refait le travail. Mesure
+  // sur 3 000 images de ville vivante, 42 vehicules : 156 images avec au moins une paire de
+  // caisses encastrees, contre 0 en gardant le disque. Le disque est plus gros que la voiture,
+  // et c'est justement cette marge qui empeche les toles de se toucher.)
+  // (ESSAYE ET RETIRE : laisser le seul controle exact decider pendant l'approche finale d'un
+  // vehicule de service, pour qu'il puisse se garer tole contre tole. Mesure : le camion de
+  // pompiers s'arrete toujours a 19,6 m du feu — ce n'est pas une tole qui le gene la, c'est un
+  // solide — ET les chevauchements de la ville vivante passent de 0 a 186 images sur 3 000. Le
+  // disque grossier, plus large que la voiture, est ce qui empeche les toles de se toucher.)
+  const veutVeh = !!(opt && opt.veh);
+  o.veh = veutVeh;
   // `mou` : le vehicule se degage, les autres CAISSES ne comptent plus. Il faut le dire aux
   // DEUX controles : `carBlocked` (par l'option `veh`) et `vehiculeMord`, qui teste les caisses
   // de son cote des que `c.exactVeh` est pose — c'est-a-dire pour tous les vehicules de
@@ -9322,11 +9422,22 @@ function vehBloque(c, x, z, h, opt) {
   o.mou = !!(opt && opt.mou);
   // l'epave au crochet de la depanneuse nous suit : ce n'est pas un obstacle
   o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
-  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || (o.mou ? false : vehiculeMord(c, x, z, h));
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || ((o.mou || !veutVeh) ? false : vehiculeMord(c, x, z, h));
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
+// Le meme controle que vehBloque, MAIS SANS LES AUTRES CAISSES : murs, batiments, barrieres.
+// Il a son propre tampon : appele depuis avanceVehicule, il ne doit pas ecraser `c.optBloque`
+// que vehBloque est en train d'utiliser.
+function vehBloqueDur(c, x, z, h, opt) {
+  const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
+  const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
+  const o = c.optDur || (c.optDur = { bar: false, veh: false, pol: false, ignore: null, mou: false });
+  o.bar = !!(opt && opt.bar); o.pol = !!(opt && opt.pol); o.veh = false; o.mou = false;
+  o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L);
+}
 function avanceVehicule(c, dt, spd, opt, h0) {
   // meme raison que dans vehBloque : un objet reutilise, toujours de la meme forme. Les quatre
   // appelants ne passent que `{}` ou `{ bar: true, veh: true }`, et vehBloque ne relit que ces
@@ -9352,6 +9463,24 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
   // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
   if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
+  // ON SORT DE CE DANS QUOI ON EST DEJA — MAIS SEULEMENT DE CA.
+  // Le garde-fou refuse tout pas dont l'arrivee touche une autre caisse, et le filet plus bas
+  // ramene le vehicule a sa derniere position VERIFIEE. Les deux se retournent contre nous des
+  // que la position de depart est ELLE-MEME en faute : aucun pas n'est accepte, on est renvoye
+  // a une place libre d'il y a longtemps, et `separerVehicules` — qui tourne a chaque image —
+  // repousse aussitot le vehicule a l'endroit fautif. Mesure (test 332, voiture de patrouille
+  // appelee sur un accident) : c.pas = 0,450 m annonce a chaque image pour un vehicule qui n'a
+  // pas bouge d'un millimetre en 225 s (piege connu : `c.pas` est le pas DEMANDE, pas le pas
+  // fait), 1 m parcouru en tout, accident jamais constate et depanneuse jamais partie (0 m).
+  // On ne LAISSE PAS pour autant le vehicule traverser la tole d'en face : on a mesure ce que
+  // ca coute (test 333 : 283 images de caisses encastrees, et la depanneuse qui doublait en
+  // poussant les trois voitures). On se contente de LEVER LE FILET : quand la position de
+  // depart est deja en faute, on ne s'y replie plus, et `separerVehicules` — dont c'est
+  // justement le metier — ecarte les deux caisses en quelques images sans etre contredit.
+  // (on ne paie ces deux controles de plus que sur une image OU RIEN NE PASSE : partout
+  // ailleurs avanceVehicule coute exactement ce qu'il coutait, la fluidite ne bouge pas)
+  const dejaDedans = bloque === 2 && !o.mou
+    && vehBloque(c, c.x, c.z, c.h, o) && !vehBloqueDur(c, c.x, c.z, c.h, o);
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
   // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
   // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
@@ -9359,7 +9488,7 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   if (posSaine || !vehBloque(c, c.x, c.z, c.h, o)) {
     // on reecrit le triplet au lieu d'en creer un neuf a chaque image et par vehicule
     if (c.libre) { c.libre[0] = c.x; c.libre[1] = c.z; c.libre[2] = c.h; } else c.libre = [c.x, c.z, c.h];
-  } else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  } else if (c.libre && !dejaDedans) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
@@ -18826,6 +18955,7 @@ function botConduireVers(b, lieu) {
   const st = b.drive; if (!st) return;
   const arr = arretVoiture((lieu.auto || lieu).x, (lieu.auto || lieu).z);
   st.tx = arr.x; st.tz = arr.z; st.nom = lieu.nom; st.etat = 'route'; st.route = null; st.bloqueT = 0;
+  st.affD = null; st.affNom = null;   // nouvelle destination : le compte a rebours d'arrivee repart
   botSay(b, [`c'est parti pour ${lieu.nom} ! 🚗💨`]);
   if (!st.passager) setBeacon(lieu.x, lieu.z);
 }
@@ -18866,6 +18996,14 @@ function botDescendre(b, garde) {
   if (st.passager) { P.pos.set(c.x - Math.cos(c.h) * 2.4, c.y + 0.5, c.z + Math.sin(c.h) * 2.4); P.vel.set(0, 0, 0); }
   debarqueOccupants(c); c.robot = false; if (robot.g) tailleEnCabine(robot.g, 1);   // les compagnons montés derrière descendent avec nous
   if (c.chien) { c.chien = false; chien.enVoiture = null; if (chien.pet) tailleEnCabine(chien.pet, 1); }
+  // ON NE DEBARQUE JAMAIS LE JOUEUR SANS UN MOT. Releve du controleur : « a t+45 s la pastille
+  // repasse a "monter" — le joueur a ete debarque en pleine rue sans aucun message ». Le
+  // joueur qui descend LUI-MEME passe par `garde = true` (touche E, bouton voiture) ; tout
+  // autre chemin est une decision du conducteur ou du jeu, et elle se dit.
+  if (st.passager && !garde) {
+    botSay(b, [`je te laisse ici, desolé ! 🚗`]);
+    msg(`🚗 ${b.name} s'arrête et te laisse descendre`, 2600);
+  }
   st.passager = false; city.rideBot = null; me.group.visible = true; engine.stop(); updateAct();
   me.group.rotation.set(0, 0, 0); me.rig.armL.rotation.set(0, 0, 0); me.rig.armR.rotation.set(0, 0, 0);
   me.rig.legL.rotation.set(0, 0, 0); me.rig.legR.rotation.set(0, 0, 0);
@@ -18877,6 +19015,24 @@ function botDescendre(b, garde) {
     b.drive = null; b.wait = 1.5; b.target = null;
   }
 }
+// CE QU'IL RESTE A PARCOURIR SUR LE TRACE, ET NON A VOL D'OISEAU. La somme des segments qui
+// restent, depuis le vehicule jusqu'au bout du trace, puis du bout du trace jusqu'au but.
+// A defaut de trace, la ligne droite. C'est la SEULE mesure d'avancement honnete dans une
+// ville a sens uniques : un detour legitime autour d'un pate de maisons ELOIGNE du but a vol
+// d'oiseau pendant vingt secondes (mesure : 24,6 m a vol d'oiseau, 146 m par les rues).
+function longueurReste(x, z, R, i0, tx, tz) {
+  const vol = Math.hypot(tx - x, tz - z);
+  if (!R || !R.length) return vol;
+  const i = Math.max(0, Math.min(i0 | 0, R.length - 1));
+  let l = Math.hypot(R[i][0] - x, R[i][1] - z);
+  for (let k = i; k + 1 < R.length; k++) l += Math.hypot(R[k + 1][0] - R[k][0], R[k + 1][1] - R[k][1]);
+  l += Math.hypot(tx - R[R.length - 1][0], tz - R[R.length - 1][1]);
+  return Math.max(vol, l);
+}
+// le trace d'un ami qui te conduit (`st.route`, le prochain point est toujours en tete)
+function resteSurRoute(c, st) { return longueurReste(c.x, c.z, st && st.route, 0, st.tx, st.tz); }
+// le trace d'un vehicule conduit par botConduit (`c.ia.route`, index courant `c.ia.i`)
+function resteSurIA(c, tx, tz) { return longueurReste(c.x, c.z, c && c.ia && c.ia.route, c && c.ia ? c.ia.i : 0, tx, tz); }
 function botDriveTick(dt) {
   for (const b of bots) {
     const st = b.drive; if (!st) continue;
@@ -18949,7 +19105,25 @@ function botDriveTick(dt) {
         cam.target.lerp(new THREE.Vector3(c.x, c.y + 1.6, c.z), Math.min(1, dt * 6));
       }
       const emo = moto ? '🏍️' : '🚗';
-      $('act').textContent = st.etat === 'route' ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(Math.hypot(st.tx - c.x, st.tz - c.z))} m` : `${emo} Arrivés à ${st.nom} · E pour descendre`;
+      // LA DISTANCE ANNONCEE SUIT LA ROUTE, PAS LE VOL D'OISEAU. Releve du controleur qui joue :
+      // « 115 m puis 124, 127, 128, 141, 146 — la distance AUGMENTE pendant 24 s, on s'eloigne
+      // du but ». C'etait vrai et normal : les rues sont a sens unique, le trajet commence
+      // souvent par s'ecarter, et le chiffre affiche etait la ligne droite. Pour l'enfant,
+      // c'est un conducteur qui se trompe de chemin. On annonce donc CE QU'IL RESTE A
+      // PARCOURIR sur le trace, qui lui ne fait que diminuer.
+      // … ET ELLE NE REMONTE JAMAIS. Le trace lui-meme, lui, peut s'allonger : quand la voiture
+      // se fait bloquer, le contournement et le deblocage refont l'itineraire depuis l'endroit
+      // ou elle se trouve, et le nouveau chemin passe parfois par l'autre bout du pate de
+      // maisons. Mesure sur le trajet complet vers la caserne : 11 remontees, la pire de 65 m
+      // d'un seul coup. Pour un enfant, ce chiffre est un compte a rebours d'arrivee : on lui
+      // montre donc LE MEILLEUR RESTANT ATTEINT, qui ne fait que descendre (288 → 5 m). Le
+      // detour reel se voit a l'ecran — la voiture tourne — et l'arrivee, elle, est annoncee.
+      const reste = resteSurRoute(c, st);
+      if (st.affD == null || st.affNom !== st.nom) { st.affNom = st.nom; st.affD = reste; }
+      else if (reste < st.affD) st.affD = reste;
+      $('act').textContent = st.etat === 'route'
+        ? `${emo} ${b.name} conduit vers ${st.nom} · ${Math.round(st.affD)} m`
+        : `${emo} Arrivés à ${st.nom} · E pour descendre`;
     }
   }
   // proposer de monter quand un ami attend au volant tout près
@@ -22910,12 +23084,40 @@ function vehHalf(c) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   return [Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, A * 2 / 3];
 }
-// h = orientation du véhicule, L = demi-longueur : on teste l'avant, le milieu et l'arrière.
+// LE GABARIT REEL DU VEHICULE, ET NON CELUI D'UNE BERLINE.
+// La carrosserie est couverte par une CHAINE DE DISQUES. Trois suffisaient tant que tout le
+// monde avait la taille d'une voiture : demi-cotes 2,20 x 1,20 m, rayon sqrt((A/3)^2+B^2) =
+// 1,41 m, soit 21 cm de large en trop. Mais ce rayon grandit avec la LONGUEUR : le camion de
+// pompiers (8,00 x 2,60 m, demi-cotes 4,00 x 1,30) se retrouvait traite comme un engin de
+// 3,76 m de LARGE. Mesure sur l'incendie en (0, 20) : le camion partait bien de la caserne,
+// roulait 78 m, et se plantait pour de bon en (-78,1 ; 15,0) — bloque par un simple lampadaire
+// de 36 cm pose a 1,92 m de son axe, alors que sa carrosserie n'en fait que 1,30. Au plus pres
+// 74,2 m du feu, jamais arrive (tests 239 et 240 rouges). Le trace, lui, etait bon : chacun de
+// ses points de passage etait libre pour son propre gabarit.
+// On ajoute donc des disques jusqu'a ce que le debord retombe a celui d'une berline (22 cm) :
+// TROIS pour une voiture (le calcul est alors identique au precedent, au bit pres), SIX pour le
+// camion — rayon 1,49 m au lieu de 1,88. La chaine reste une couverture EXACTE du rectangle
+// (chaque disque couvre sa tranche jusqu'au coin), donc on ne laisse jamais passer un obstacle
+// qui touche vraiment la tole : on cesse seulement d'en inventer.
+const DISQ = { n: 3, r: 1.4, ux: [0, 0, 0, 0, 0, 0], uz: [0, 0, 0, 0, 0, 0] };   // tampon reutilise : carBlocked tourne des centaines de fois par image
+function chaineDisques(r, L, h) {
+  const A = L * 1.5;                                    // demi-longueur (L valait 2A/3)
+  const B2 = (r - 0.02) * (r - 0.02) - (L / 2) * (L / 2);
+  const B = B2 > 0.0025 ? Math.sqrt(B2) : (r - 0.02);   // demi-largeur retrouvee depuis r et L
+  let n = 3;
+  while (n < 6 && Math.sqrt((A / n) * (A / n) + B * B) - B > 0.22) n++;
+  DISQ.n = n; DISQ.r = Math.sqrt((A / n) * (A / n) + B * B) + 0.02;
+  const sn = Math.sin(h), cs = Math.cos(h);
+  for (let i = 0; i < n; i++) { const u = A * (2 * i - n + 1) / n; DISQ.ux[i] = sn * u; DISQ.uz[i] = cs * u; }
+  return DISQ;
+}
+// h = orientation du véhicule, L = demi-longueur : on teste la chaîne de disques ci-dessus.
 // Avec un seul disque au centre, les coins d'une voiture en biais s'enfonçaient de 60 cm
 // dans les murs — on voyait le capot traverser la façade.
 function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
-  const deux = h != null && L > 0.05, sn = deux ? Math.sin(h) * L : 0, cs = deux ? Math.cos(h) * L : 0;
-  const ax = x + sn, az = z + cs, bx2 = x - sn, bz2 = z - cs;
+  const deux = h != null && L > 0.05;
+  const D = deux ? chaineDisques(r, L, h) : null;
+  const rr = deux ? D.r : r;
   for (const o of solidsAutour(x, z, r + 2.6 + Math.abs(L), true)) {
     if (o === self) continue;
     // `opt.ignore` : UN SOLIDE QU'ON TRAINE DERRIERE SOI. L'epave accrochee au crochet de la
@@ -22934,14 +23136,20 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
     if (o.pol && opt.pol) continue;   // les voitures de police ne se bloquent pas entre elles
     if (o.veh && opt.pol && o.w < 1.7 && o.d < 3) continue;   // ni les vélos / motos garés
     const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;
-    const x0 = o.x - o.w / 2 - r, x1 = o.x + o.w / 2 + r, z0 = o.z - o.d / 2 - r, z1 = o.z + o.d / 2 + r;
-    if (x > x0 && x < x1 && z > z0 && z < z1) return true;
-    if (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1))) return true;
+    const x0 = o.x - o.w / 2 - rr, x1 = o.x + o.w / 2 + rr, z0 = o.z - o.d / 2 - rr, z1 = o.z + o.d / 2 + rr;
+    if (!deux) { if (x > x0 && x < x1 && z > z0 && z < z1) return true; continue; }
+    for (let i = 0; i < D.n; i++) {
+      const qx = x + D.ux[i], qz = z + D.uz[i];
+      if (qx > x0 && qx < x1 && qz > z0 && qz < z1) return true;
+    }
   }
   for (const b of city.batiments) {   // intérieur d'un bâtiment : interdit aux véhicules
     const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
-    if ((x > x0 && x < x1 && z > z0 && z < z1)
-      || (deux && ((ax > x0 && ax < x1 && az > z0 && az < z1) || (bx2 > x0 && bx2 < x1 && bz2 > z0 && bz2 < z1)))) return true;
+    if (x > x0 && x < x1 && z > z0 && z < z1) return true;
+    if (deux) for (let i = 0; i < D.n; i++) {
+      const qx = x + D.ux[i], qz = z + D.uz[i];
+      if (qx > x0 && qx < x1 && qz > z0 && qz < z1) return true;
+    }
   }
   return false;
 }
@@ -23033,8 +23241,14 @@ function separerVehicules() {
     // considérés comme se chevauchant). On laisse un vrai filet d'air entre les tôles.
     const ox = (a.solid.w + b.solid.w) / 2 + 0.02 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 + 0.02 - Math.abs(a.z - b.z);
     if (ox <= 0 || oz <= 0) continue;
-    // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte
-    const ra = a.s != null || a.busy, rb = b.s != null || b.busy;
+    // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte.
+    // UN VEHICULE OCCUPE N'EST PAS UN RAIL. `busy` veut dire « en mission », pas « posé sur un
+    // rail » : le camion de pompiers garé contre le feu, la dépanneuse au travail, le fourgon
+    // sur son chantier refusaient donc d'être écartés d'un centimètre, et quand l'autre caisse
+    // ne pouvait pas bouger non plus (coincée contre un mur) le couple restait encastré.
+    // Mesure (test 332) : 32 images d'affilée — 1,6 s — de camion de pompiers dans une voiture,
+    // à l'arrêt sur l'incendie. Seul `c.s` (la voiture de décor sur son rail) reste intouchable.
+    const ra = a.s != null, rb = b.s != null;
     const pa = ra && !rb ? 0 : rb && !ra ? 1 : 0.5, pb = 1 - pa;
     // ON NE POUSSE PERSONNE DANS UN MUR. L'ecartement est maintenant la DERNIERE chose de
     // l'image (voir cityStep) : si le pas de cote met une caisse dans une facade, plus
@@ -24690,12 +24904,30 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
       c.degageT = (c.degageT || 0) + dt;
       if (c.degageT < 6) degageService(c, dt);
     } else c.degageT = 0;
-    c.v = Math.abs(c.speed || 0); c.serviceBloqueT = 0;
+    c.v = Math.abs(c.speed || 0); c.serviceBloqueT = 0; c.appr = null;   // le trace d'approche n'a plus cours
     return Math.hypot(tx - c.x, tz - c.z);
   }
   // ---- l'approche : on vise le but, doucement, et on s'arrete devant ce qui gene
+  // MEME LES DIX-HUIT DERNIERS METRES SUIVENT UN TRACE, PAS UNE LIGNE DROITE. C'est la seule
+  // portion de trajet qui quitte le reseau des voies (le parvis de l'hopital, la cour du hangar,
+  // l'epave sur le bas-cote, le bord de l'incendie) et elle visait le but EN DIRECT. Un angle de
+  // batiment ou un massif entre le vehicule et le point d'arrivee suffisait alors a tout arreter :
+  // au bout de 2,5 s sans avancer, le vehicule « se gare la ou il est » et le service continue de
+  // loin. Mesure sur l'incendie en (0, 20) : le camion de pompiers renonce a 19,6 m du feu — donc
+  // a quinze metres de son point d'acces — et l'equipage finit a pied. On prend donc le trace de
+  // la grille A* (qui, elle, contourne les solides) pour ces derniers metres aussi, recalcule
+  // toutes les 1,5 s. C'est la demande du joueur, mot pour mot : « non pas vol d'oiseau mais de
+  // trace route, ca vaut pour tous les vehicules ».
+  if (!c.appr || !c.appr.length || simTime > (c.apprT || 0)
+      || Math.hypot((c.apprX != null ? c.apprX : 1e9) - tx, (c.apprZ != null ? c.apprZ : 1e9) - tz) > 3) {
+    c.apprT = simTime + 1.5; c.apprX = tx; c.apprZ = tz;
+    let pa = null; try { pa = navPath(c.x, c.z, tx, tz); } catch (e) { pa = null; }
+    c.appr = (pa && pa.length) ? pa.map(q => [q[0], q[1]]).concat([[tx, tz]]) : [[tx, tz]];
+  }
+  while (c.appr.length > 1 && Math.hypot(c.appr[0][0] - c.x, c.appr[0][1] - c.z) < 2.5) c.appr.shift();
+  const vise = c.appr[0];
   const h0 = c.h;
-  const dh = CAP(Math.atan2(tx - c.x, tz - c.z) - c.h);
+  const dh = CAP(Math.atan2(vise[0] - c.x, vise[1] - c.z) - c.h);
   c.h += clamp(dh, -1, 1) * 2.6 * dt;
   // ON APPROCHE AU PAS. C'est la seule portion de trajet qui quitte le bitume (le parvis de
   // l'hopital, la cour du hangar, l'epave sur le bas-cote) : on n'y traverse pas un parking a
@@ -36374,12 +36606,25 @@ function pompiersTick(dt) {
       // « coincé » = le camion ne ROULE plus (pas la distance au feu : un itinéraire contourne
       // souvent un pâté de maisons et s'éloigne un moment avant de revenir)
       if (!veh || (veh.pas || 0) > 0.5 * dt) w0.progT = simTime;
-      // … et « coincé » aussi quand on ne GAGNE plus un mètre vers le feu pendant 20 s à moins de
-      // 90 m : dans une file derrière une voiture au feu rouge, le camion reculait, repartait,
-      // re-butait — il « roulait » sans jamais avancer et l'équipe ne descendait jamais (test 388
-      // dans la suite complète : au plus près à 58 m, feu jamais éteint). Un détour honnête
-      // autour d'un pâté de maisons rapproche du feu bien avant vingt secondes.
-      if (dF < (w0.progD || 1e9) - 1) { w0.progD = dF; w0.progDT = simTime; }
+      // … et « coincé » aussi quand on n'AVANCE plus sur son trajet pendant 20 s à moins de 90 m :
+      // dans une file derrière une voiture au feu rouge, le camion reculait, repartait, re-butait —
+      // il « roulait » sans jamais avancer et l'équipe ne descendait jamais (test 388 dans la suite
+      // complète : au plus près à 58 m, feu jamais éteint).
+      // ON MESURE L'AVANCEMENT SUR LE TRACÉ, PLUS À VOL D'OISEAU. Relevé sur l'incendie en (0, 20) :
+      // le camion roulait parfaitement, mais son itinéraire faisait le tour du pâté de maisons —
+      // 146 m de rues pour 24,6 m à vol d'oiseau, à cause des sens uniques. Pendant ce tour la
+      // distance au feu AUGMENTE forcément, le filet de sécurité se déclenchait au bout de 20 s et
+      // arrêtait le camion à 33 m du feu, équipage à pied. Mesure : au plus près 20,3 m, jamais
+      // arrivé, feu éteint en 132 s (tests 239 et 240 rouges).
+      // ON NE MELANGE PAS DEUX MESURES DANS LE MEME COMPTEUR. `c.ia` est vide pendant une marche
+      // arriere de degagement et pendant l'approche finale ; `resteSurIA` retombe alors sur la
+      // ligne droite. Mesure : a t+33 s le camion manoeuvrait, la ligne droite valait 77 m contre
+      // 238 m de trace, le record passait a 76 m — et plus aucun metre parcouru ensuite ne
+      // pouvait le battre. Il s'arretait vingt secondes plus tard, a 46 m du feu. Sans trace on
+      // ne compte donc rien : le filet « le camion ne roule plus depuis 8 s » couvre ce cas.
+      const dR = (veh && veh.ia && veh.ia.route && veh.ia.route.length) ? resteSurIA(veh, chef.acces[0], chef.acces[1]) : null;
+      if (dR == null) w0.progDT = simTime;
+      else if (dR < (w0.progD || 1e9) - 1) { w0.progD = dR; w0.progDT = simTime; }
       const coince = (simTime - w0.progT > 8 && dF < 70) || (simTime - (w0.progDT || w0.progT) > 20 && dF < 90);
       if (dF < 12 || dA < 11 || coince) { majEtat('deploie'); w0.t = simTime + 3; w0.tMax = simTime + 40; if (veh) { veh.outilCible = 1; veh.speed = 0; veh.spd = 0; } }
       return;

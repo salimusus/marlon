@@ -2352,6 +2352,11 @@ window.__G = {
   MARCHE_MONTEE: typeof MARCHE_MONTEE !== 'undefined' ? MARCHE_MONTEE : 0,
   JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
   buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
+  // ---- POSTE QUARTIERS (quartiers neufs, mobilier, jeux) : exports apres cette ligne-repere ----
+  // PIEGE DU BANC (round 71) : surtout PAS de « solids: solids » ici ni ailleurs — cette cle
+  // ecrase le « get solids() » plus haut et fige un instantane du tableau.
+  get checkpoints() { return typeof checkpoints !== 'undefined' ? checkpoints : []; },
+  rideEnter: typeof rideEnter === 'function' ? rideEnter : null,
 };
 `;
 

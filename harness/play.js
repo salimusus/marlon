@@ -20617,6 +20617,113 @@ test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m 
   return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant le trajet passe bien au point du défaut (à ${r.passe} m de (−47,4 ; 12,1)), ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
 });
 
+// ================= POSTE QUARTIERS : LA PLAINE DES SPORTS =================
+// « rajoute d'autres quartiers avec mobilier urbain, jeux, decor, activite » (le joueur,
+// round 75). Ces tests garantissent les trois choses qui ont deja rate dans ce projet :
+// on y va (a pied ET en voiture), ce qui doit arreter arrete, ce qui doit se traverser se
+// traverse, et chaque jeu se declenche puis se termine.
+test('on peut aller a la Plaine des Sports a pied et en voiture depuis le centre-ville', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const city = G.city;
+    const zone = city.zones.find(z => z.name === 'Plaine des Sports');
+    const des = (city.plan.dessertes || []).find(d => d.n === 'Plaine des Sports');
+    // A PIED : la grille de navigation doit rendre un chemin continu jusqu'au coeur du quartier.
+    const pied = G.navPath(0, 8, -150, -130);
+    let sautPied = 0;
+    if (pied) for (let i = 1; i < pied.length; i++) sautPied = Math.max(sautPied, Math.hypot(pied[i][0] - pied[i - 1][0], pied[i][1] - pied[i - 1][1]));
+    // EN VOITURE : l'itineraire par les VOIES (celui qu'empruntent les conducteurs et le GPS).
+    const aller = G.itineraireVoies(0, 8, des.x, des.z);
+    const retour = G.itineraireVoies(des.x, des.z, 0, 8);
+    // et les six rues du quartier existent bien dans city.routes
+    const rues = city.routes.filter(rt => rt.x < -100 && rt.z < -95).length;
+    return { zone: !!zone, des, pied: pied ? pied.length : 0, sautPied: +sautPied.toFixed(2),
+      aller: aller ? (aller.suite ? aller.suite.length : (aller.length || 1)) : 0,
+      retour: retour ? (retour.suite ? retour.suite.length : (retour.length || 1)) : 0, rues };
+  });
+  // `navPath` rend les NOEUDS du chemin, pas un point tous les metres : entre deux virages il
+  // peut y avoir 70 m de ligne droite. Un seuil sur la longueur d'un pas n'a donc aucun sens
+  // ici — ce qui compte, c'est qu'un chemin EXISTE dans les deux moyens de locomotion.
+  const ok = r.zone && r.des && r.des.loin === 0 && r.pied > 1 && r.aller > 0 && r.retour > 0 && r.rues === 6;
+  return { ok, detail: `le nord-ouest de la carte (x < −104, z < −100) n'avait AUCUNE route : la Plaine des Sports y est batie et raccordee au Boulevard du Nord par ${r.rues} rues · a pied, la grille de navigation rend un chemin de ${r.pied} points du centre (0 ; 8) au coeur du quartier (−150 ; −130), plus longue ligne droite ${r.sautPied} m · en voiture, itineraireVoies rend ${r.aller} etapes a l'aller et ${r.retour} au retour · la desserte du quartier tombe SUR la chaussee en (${r.des.x} ; ${r.des.z}), a ${r.des.loin} m de son point de visee` };
+});
+
+test('a la Plaine des Sports, ce qui doit arreter arrete et ce qui doit se traverser se traverse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -150, y: 1, z: -130, hour: 12, frais: true });
+    const S = G.solids;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    // [nom, x, z, y, attendu solide ?]
+    const pts = [
+      ['le banc de la place', -134, -134, 0.4, 1], ['la poubelle', -160, -120, 0.5, 1],
+      ['la borne a boire', -142, -124, 0.6, 1], ['le lampadaire', -160, -112, 2, 1],
+      ['le totem du quartier', -158, -110, 1.5, 1], ['la table de ping-pong', -138, -126, 0.5, 1],
+      ['le muret de la cage', -179, -182, 0.9, 1], ['le poteau de but', -178.6, -172, 1, 1],
+      ['le socle du tourniquet', -181, -124, 0.3, 1], ['la plateforme du toboggan', -172, -114, 2.4, 1],
+      ['le sommet de la cage a grimper', -162, -126, 3, 1], ['le pied d\'abribus', -159.85, -118.1, 1, 1],
+      ['le fond vitre de l\'abribus', -158.1, -120, 1, 1], ['le plancher du kiosque', -129, -132, 0.3, 1],
+      ['la colonne du kiosque', -129 + 3.4, -132, 1.8, 1],
+      // ... et tout ce qu'on doit POUVOIR traverser ou franchir
+      ['le rond central du city-stade', -164, -175, 0.9, 0], ['la bouche du but', -179, -175, 1, 0],
+      ['le filet du but', -179.4, -175, 1.5, 0], ['l\'entree de la cage', -164, -166, 0.9, 0],
+      ['le dessous de l\'abribus (2,4 m)', -159, -120, 2.4, 0], ['le toit du kiosque (3,3 m)', -129, -132, 3.3, 0],
+      ['le filet de ping-pong', -138, -126, 0.82, 0], ['la chaussee de l\'Allee des Sports', -150, -130, 0.9, 0],
+      ['la chaussee de la Rue du Stade', -150, -154, 0.9, 0], ['la chaussee du Boulevard du Nord', -160, -100, 0.9, 0],
+      ['la dalle du skatepark', -133, -174, 0.9, 0], ['la pelouse de l\'aire de jeux', -170, -130, 0.9, 0],
+    ];
+    const fautes = [];
+    for (const [nom, x, z, y, att] of pts) { const v = solide(x, z, y) ? 1 : 0; if (v !== att) fautes.push(`${nom} : ${v ? 'solide' : 'traversable'} au lieu de ${att ? 'solide' : 'traversable'}`); }
+    // LE BANC DE L'ABRIBUS EST UN VRAI BANC : on doit pouvoir s'y asseoir (E).
+    // l'abribus de (−159 ; −120) est tourne d'un quart de tour : son banc est donc a
+    // 0,55 m vers l'EST du centre de l'abri, soit (−158,45 ; −120).
+    const bancAbri = G.city.benches.some(b => Math.abs(b.x + 158.45) < 0.6 && Math.abs(b.z + 120) < 0.6);
+    return { n: pts.length, fautes, bancAbri, solides: S.length };
+  });
+  const ok = r.fautes.length === 0 && r.bancAbri;
+  return { ok, detail: `ce projet a une longue histoire de bancs traversables et de rambardes decoratives : les ${r.n} points de controle de la Plaine des Sports sont mesures un par un dans le tableau des solides · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le banc de l'abribus est bien declare dans city.benches (${r.bancAbri}) · ${r.solides} solides dans la ville` };
+});
+
+test('les jeux de la Plaine des Sports se declenchent et se terminent, a la manette comme au clavier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G; __SHOT.go({ world: 4, x: -172, y: 1, z: -136, hour: 12, frais: true });
+    const city = G.city, P = G.P;
+    const pas = n => { for (let i = 0; i < n; i++) G.step(1 / 60, true); };
+    // ---- 1. LA BALANCOIRE : E pour s'asseoir, SAUT pour partir ----
+    const sw = city.swings.filter(s => s.z < -100).sort((a, b) => Math.hypot(a.x + 172, a.z + 138) - Math.hypot(b.x + 172, b.z + 138))[0];
+    P.pos.set(sw.x, 0.5, sw.z); pas(2);
+    G.sitSwing(sw);
+    const assis = sw.rider === 'me';
+    pas(90);
+    const ampli = sw.amp, colle = Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const descendu = sw.rider === null && P.swing === null;
+    // ---- 2. LE TOURNIQUET : c'est un `city.rides`, donc E et SAUT, exactement comme le carrousel ----
+    const tq = city.rides.find(rd => rd.n === 'le tourniquet');
+    const angle0 = tq.ang;
+    P.pos.set(tq.x + 2, 0.5, tq.z); pas(2);
+    G.rideEnter ? G.rideEnter(tq) : (P.ride = tq, tq.rider = { idx: 0 });
+    const monte = P.ride === tq;
+    pas(60);
+    const tourne = tq.ang - angle0, aPlat = Math.abs(tq.horses[0].g.position.y - 0.125) < 0.001;
+    const surLeManege = Math.hypot(P.pos.x - tq.x, P.pos.z - tq.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const fini = P.ride === null;
+    // ---- 3. LE CITY-STADE : un ballon pousse dans la cage compte un but ----
+    const buts0 = city.goals;
+    const cg = city.cages[1];   // le but de l'est (sens +1)
+    const ballon = city.balls.find(b => b.kind === 'foot' && b.pos.x < -140);
+    ballon.pos.set(cg.x - 2, 0.6, cg.z); ballon.vel.set(14, 0, 0); ballon.state = 'idle';
+    pas(30);
+    const but = city.goals - buts0;
+    // ---- 4. LE SKATEPARK : les deux boosters relancent le joueur ----
+    const bo = city.boosters.filter(b => b.x < -100);
+    P.pos.set(bo[0].x, 0.6 + 2.1, bo[0].z); P.boostT = 0; pas(4);
+    const boost = P.boostT > G.simTime;
+    return { assis, ampli: +ampli.toFixed(3), colle, descendu, monte, tourne: +tourne.toFixed(2), aPlat, surLeManege, fini, but, boosters: bo.length, boost };
+  });
+  const ok = r.assis && r.ampli > 0.2 && r.colle && r.descendu && r.monte && r.tourne > 0.5 && r.aPlat && r.surLeManege && r.fini && r.but === 1 && r.boosters === 2 && r.boost;
+  return { ok, detail: `le joueur demandait des JEUX, pas du decor · balancoire : on s'assoit (${r.assis}), l'amplitude monte a ${r.ampli} rad en 90 pas, le corps reste colle a la planche (${r.colle}) et le saut en decroche (${r.descendu}) · tourniquet : on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, ses places restent A PLAT (${r.aPlat}, elles montaient et descendaient comme des chevaux de bois avant le drapeau r.plat), le joueur tourne avec (${r.surLeManege}) et le saut en descend (${r.fini}) · city-stade : un ballon envoye dans la cage compte ${r.but} but · skatepark : ${r.boosters} boosters en haut des quarter-pipes, et le joueur pose dessus est relance (${r.boost}) · tous passent par city.swings, city.rides et city.boosters, donc par la MEME touche E et le MEME bouton de manette que le reste de la ville` };
+});
 // ===================== POSTE URBANISME (round 75) =====================
 // Demande du joueur, mot pour mot : « refais les routes mieux organisées, plus fluides, plus
 // larges ». Les trois exigences sont mesurées ici, en une fois.
@@ -20763,4 +20870,272 @@ test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est ann
   const ok = r.monte && r.arrive && r.dFin < 8 && r.annonce && r.ditRenonce
     && r.toujoursDedans && r.plusPasPassager === 0 && r.horsVoiture === 0 && r.cumulRemontee < 12;
   return { ok, detail: 'avant : la distance MONTAIT (115 → 124 → 127 → 141 → 146 m en 24 s), aucune annonce, et le joueur etait debarque en pleine rue a t+45 s sans un mot · maintenant : ' + r.d0 + ' m au depart → ' + r.dFin + ' m a l arrivee en ' + r.trajet + ' s simulees (releves toutes les 12 s : ' + r.releves.join(' → ') + ' m), la distance ne remonte au total que de ' + r.cumulRemontee + ' m (plus forte remontee ' + r.remonteeMax + ' m), le joueur est reste passager sur TOUTES les images (' + r.plusPasPassager + ' image(s) hors du role de passager, ' + r.horsVoiture + ' a plus de 4 m de la caisse), l arrivee est annoncee (' + r.annonce + ') — «' + r.extraitArrivee + '» — et le renoncement aussi (' + r.ditRenonce + ') — «' + r.extraitRenonce + '»' };
+});
+// ================= POSTE QUARTIERS : LE HAMEAU DE LA FERME =================
+test('on peut aller au Hameau de la Ferme a pied et en voiture, et les deux quartiers neufs tiennent dans un seul reseau', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const city = G.city;
+    const zone = city.zones.find(z => z.name === 'Hameau de la Ferme');
+    const des = (city.plan.dessertes || []).find(d => d.n === 'Hameau de la Ferme');
+    const pied = G.navPath(0, 8, -145, 296);
+    const aller = G.itineraireVoies(0, 8, des.x, des.z), retour = G.itineraireVoies(des.x, des.z, 0, 8);
+    // ET D'UN QUARTIER NEUF A L'AUTRE : la Plaine des Sports est au nord-ouest, le Hameau au
+    // sud-ouest. Si le reseau tenait en deux morceaux, ce trajet-la n'existerait pas.
+    const sp = (city.plan.dessertes || []).find(d => d.n === 'Plaine des Sports');
+    const entre = G.itineraireVoies(sp.x, sp.z, des.x, des.z);
+    // le graphe des voies est-il d'un seul tenant ? (composante joignable depuis le centre)
+    const GR = city.graphe, A = GR.aretes, N = GR.noeuds;
+    const proche = (x, z) => { let b = -1, bd = 1e9; A.forEach((e, i) => { const dd = Math.hypot((e.x0 + e.x1) / 2 - x, (e.z0 + e.z1) / 2 - z); if (dd < bd) { bd = dd; b = i; } }); return b; };
+    const dep = proche(0, 8), vus = new Set([dep]), q = [dep];
+    while (q.length) { const c = q.pop(); for (const n of N[A[c].vers].sortantes) if (!vus.has(n)) { vus.add(n); q.push(n); } }
+    const rues = city.routes.filter(rt => rt.x < -100 && rt.z > 250).length;
+    return { zone: !!zone, des, pied: pied ? pied.length : 0, rues,
+      aller: aller ? (aller.suite ? aller.suite.length : (aller.length || 1)) : 0,
+      retour: retour ? (retour.suite ? retour.suite.length : (retour.length || 1)) : 0,
+      entre: entre ? (entre.suite ? entre.suite.length : (entre.length || 1)) : 0,
+      aretes: A.length, joignables: vus.size };
+  });
+  const ok = r.zone && r.des && r.des.loin === 0 && r.pied > 1 && r.aller > 0 && r.retour > 0 && r.entre > 0
+    && r.rues === 5 && r.joignables === r.aretes;
+  return { ok, detail: `le sud-ouest (x < −100, z > 250) etait le plus grand vide de la carte : 150 m sur 90 sans une route · le Hameau de la Ferme y est bati et raccorde par ${r.rues} chemins, dont la Route des Champs qui vient buter sur la longue rue de l'ouest · a pied : chemin de ${r.pied} points depuis le centre · en voiture : ${r.aller} etapes a l'aller, ${r.retour} au retour, et ${r.entre} etapes d'un quartier neuf a l'autre (Plaine des Sports → Hameau) · le graphe des voies reste D'UN SEUL TENANT : ${r.joignables} aretes joignables sur ${r.aretes} · desserte sur la chaussee en (${r.des.x} ; ${r.des.z}), a ${r.des.loin} m du point de visee` };
+});
+
+test('au Hameau de la Ferme, les bottes, les betes et les barrieres arretent, et les chemins restent libres', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -145, y: 1, z: 296, hour: 12, frais: true });
+    const S = G.solids;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    const pts = [
+      ['une botte du labyrinthe', -126, 282, 0.9, 1], ['le mur de la grange', -172, 278, 1, 1],
+      ['le silo', -174, 288, 2, 1], ['la tour du moulin', -160, 316, 2, 1],
+      ['une vache', -168, 307, 0.8, 1], ['un mouton', -164, 312, 0.6, 1],
+      ['la barriere de l\'enclos', -151, 310, 0.9, 1], ['l\'abreuvoir', -162, 303, 0.4, 1],
+      ['le tracteur', -151, 280, 1, 1], ['le socle du manege', -125, 310, 0.5, 1],
+      ['la boite aux lettres', -134, 274, 1.2, 1], ['la borne a boire', -131, 282, 0.6, 1],
+      ['le lampadaire', -136, 288, 2, 1], ['la poubelle', -136, 280, 0.5, 1],
+      ['le banc du village', -134, 278, 0.4, 1], ['le totem du hameau', -136, 272, 1.5, 1],
+      // ... et ce qui doit se traverser
+      ['l\'entree du labyrinthe', -124, 282, 0.9, 0], ['le coeur du labyrinthe', -124, 290, 0.9, 0],
+      ['la porte de la grange', -163, 285, 1, 0], ['l\'interieur de la grange', -163, 278, 1, 0],
+      ['l\'ouverture de l\'enclos', -162, 300, 0.9, 0], ['le pre de l\'enclos', -158, 312, 0.9, 0],
+      ['l\'auvent du marche (2,6 m)', -127, 275, 2.6, 0], ['la place du village', -127, 284, 0.9, 0],
+      ['la chaussee du Chemin de la Ferme', -145, 290, 0.9, 0],
+      ['la chaussee de la Route des Champs', -160, 264, 0.9, 0],
+      ['la chaussee de la Route du Moulin', -130, 328, 0.9, 0],
+    ];
+    const fautes = [];
+    for (const [nom, x, z, y, att] of pts) { const v = solide(x, z, y) ? 1 : 0; if (v !== att) fautes.push(`${nom} : ${v ? 'solide' : 'traversable'} au lieu de ${att ? 'solide' : 'traversable'}`); }
+    // LE LABYRINTHE EST UN VRAI LABYRINTHE : on ne traverse pas ses murs. On compte les bottes
+    // solides de son emprise (7 x 7 cases de 2,6 m autour de (−120 ; 288)).
+    const bottes = S.filter(o => Math.abs(o.h - 1.3) < 0.01 && Math.abs(o.x + 124) < 8 && Math.abs(o.z - 288) < 8).length;
+    return { n: pts.length, fautes, bottes };
+  });
+  const ok = r.fautes.length === 0 && r.bottes >= 20;
+  return { ok, detail: `${r.n} points de controle mesures un par un dans le tableau des solides du Hameau · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le labyrinthe est fait de ${r.bottes} bottes de paille SOLIDES de 1,30 m — au-dessus du pas franchissable de 0,56 m, on ne les enjambe pas, on en fait le tour` };
+});
+
+test('les jeux du Hameau de la Ferme se declenchent et se terminent, et les ailes du moulin tournent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -137, y: 1, z: 292, hour: 12, frais: true });
+    const city = G.city, P = G.P;
+    const pas = n => { for (let i = 0; i < n; i++) G.step(1 / 60, true); };
+    // ---- 1. LA BALANCOIRE-PNEU ----
+    const sw = city.swings.find(s => Math.hypot(s.x + 137, s.z - 288) < 1.5);
+    P.pos.set(sw.x, 0.5, sw.z); pas(2);
+    G.sitSwing(sw);
+    const assis = sw.rider === 'me'; pas(90);
+    const ampli = sw.amp, colle = Math.hypot(P.pos.x - sw.x, P.pos.z - sw.z) < 3.2;
+    P.jumpBuf = 1; pas(2);
+    const descendu = sw.rider === null && P.swing === null;
+    // ---- 2. LE MANEGE A PONEYS ----
+    const mg = city.rides.find(rd => rd.n === 'le manège à poneys');
+    const a0 = mg.ang; P.pos.set(mg.x + 3, 0.9, mg.z); pas(2);
+    G.rideEnter(mg);
+    const monte = P.ride === mg; pas(60);
+    const tourne = mg.ang - a0, six = mg.horses.length;
+    const enSelle = Math.hypot(P.pos.x - mg.x, P.pos.z - mg.z) < 5.5 && P.pos.y > 1;
+    P.jumpBuf = 1; pas(2);
+    const fini = P.ride === null;
+    // ---- 3. LES AILES DU MOULIN TOURNENT ----
+    const ml = city.moulins[0], r0 = ml.rotation.z; pas(60); const tourneMoulin = ml.rotation.z - r0;
+    // ---- 4. LE PARCOURS DE BOTTES : cinq paliers qui montent de 0,35 m, tous franchissables ----
+    const S = G.solids;
+    const paliers = [];
+    for (let i = 0; i < 5; i++) {
+      const x = -136 + i * 2.4;
+      const o = S.find(s => Math.abs(s.x - x) < 0.3 && Math.abs(s.z - 320) < 0.3);
+      if (o) paliers.push(+(o.y + o.h / 2).toFixed(2));
+    }
+    const monteBien = paliers.length === 5 && paliers.every((h, i) => i === 0 || (h - paliers[i - 1] > 0.3 && h - paliers[i - 1] < 0.56));
+    return { assis, ampli: +ampli.toFixed(3), colle, descendu, monte, tourne: +tourne.toFixed(2), six, enSelle, fini, tourneMoulin: +tourneMoulin.toFixed(2), paliers, monteBien };
+  });
+  const ok = r.assis && r.ampli > 0.2 && r.colle && r.descendu && r.monte && r.tourne > 0.3 && r.six === 6
+    && r.enSelle && r.fini && r.tourneMoulin > 0.2 && r.monteBien;
+  return { ok, detail: `balancoire-pneu : on s'assoit (${r.assis}), amplitude ${r.ampli} rad en 90 pas, le corps colle au pneu (${r.colle}), le saut en decroche (${r.descendu}) · manege a poneys : ${r.six} poneys, on monte (${r.monte}), il tourne de ${r.tourne} rad en 60 pas, le joueur est bien en selle a ${'plus de 1 m'} du sol (${r.enSelle}) et le saut l'en fait descendre (${r.fini}) · les ailes du moulin tournent de ${r.tourneMoulin} rad en 60 pas autour de leur SEUL axe z (decoSpin tournait en y et en x a la fois, le mat aurait pivote sur lui-meme) · parcours de bottes : ${r.paliers.join(' → ')} m, chaque marche monte de moins de 0,56 m, on peut donc vraiment les enchainer (${r.monteBien})` };
+});
+
+// LE BUDGET D'IMAGE DES TROIS QUARTIERS NEUFS. Le jeu tourne sur une tele et sur une PS5 :
+// tout quartier ajoute doit se payer, et on doit pouvoir dire COMBIEN. On mesure donc chaque
+// quartier deux fois depuis le MEME point de vue — une fois tel quel, une fois avec tous ses
+// objets caches — et la difference est son prix exact en appels de dessin et en triangles.
+// PIEGE CONNU DE CE PROJET : `renderer.info` est remis a zero au DEBUT de chaque render(), et
+// la passe d'ombres est un render() a part — 3 735 appels de dessin s'etaient deja caches la.
+// On coupe donc `autoReset` et on additionne TOUTES les passes d'une seule image.
+test('les trois quartiers neufs tiennent dans le budget d\'image : leur cout exact est mesure, passe d\'ombres comprise', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, garderQualite: true, frais: true });
+    const avantQ = G.settings.quality; G.settings.quality = 'ultra'; G.applyQuality();
+    G.renderer.info.autoReset = false;
+    const image = () => { G.renderer.info.reset(); G.rendreImage(); return { appels: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles }; };
+    const poser = (cx, cy, cz, tx, ty, tz) => {
+      G.P.pos.set(cx, 1, cz); G.camera.position.set(cx, cy, cz); G.camera.lookAt(tx, ty, tz); G.camera.updateMatrixWorld(true);
+      image();                                    // une image pour degourdir : le tri travaille sur les matrices de l'image PRECEDENTE
+      if (G.ombresMobilesTick) for (let k = 0; k < 120; k++) G.ombresMobilesTick();
+      G.detailsLOD(true);
+      return image();
+    };
+    // CACHER UN QUARTIER : on parcourt la scene et on eteint tout maillage dont la position
+    // dans le monde tombe dans sa boite. C'est la seule facon honnete de dire ce qu'il coute —
+    // sans ca on ne mesurerait que « la ville vue depuis la-bas », decor lointain compris.
+    const V = new THREE.Vector3();
+    const cacher = (x1, x2, z1, z2) => {
+      const eteints = [];
+      G.worldGroup.updateMatrixWorld(true);
+      G.worldGroup.traverse(n => {
+        if (!n.isMesh || !n.visible) return;
+        n.getWorldPosition(V);
+        if (V.x >= x1 && V.x <= x2 && V.z >= z1 && V.z <= z2) { n.visible = false; eteints.push(n); }
+      });
+      return eteints;
+    };
+    const cout = (nom, x1, x2, z1, z2, cam) => {
+      const avec = poser(...cam);
+      const eteints = cacher(x1, x2, z1, z2);
+      const sans = poser(...cam);
+      for (const n of eteints) n.visible = true;
+      return { nom, avec, sans, objets: eteints.length, appels: avec.appels - sans.appels, tris: avec.tris - sans.tris };
+    };
+    const centre = poser(0, 7, 58, 0, 2, 34);   // LE MEME point de vue que le test du budget general de la ville
+    const q = [
+      cout('la Plaine des Sports', -198, -104, -198, -100, [-150, 8, -110, -150, 2, -160]),
+      cout('le Hameau de la Ferme', -186, -104, 256, 336, [-145, 8, 268, -145, 2, 310]),
+      cout('le Bois des Aventuriers', 110, 196, 260, 346, [135, 7, 312, 135, 4, 290]),
+    ];
+    G.renderer.info.autoReset = true;
+    G.settings.quality = avantQ; G.applyQuality();
+    return { centre, q, solides: G.solids.length, zones: G.city.zones.length };
+  });
+  const pire = Math.max(...r.q.map(x => x.appels)), pireT = Math.max(...r.q.map(x => x.tris));
+  const pireVue = Math.max(...r.q.map(x => x.avec.appels));
+  // Deux garde-fous. 1) le PRIX d'un quartier : moins de 1 500 appels et 60 000 triangles —
+  // c'est le quart de ce que coute la place du centre-ville. 2) l'image entiere vue depuis
+  // dedans : moins de 10 000 appels, le plafond que tient le budget general de la ville pour
+  // une vue en enfilade (le meme point de vue tourne d'un quart de tour en demande la moitie).
+  const ok = pire < 1500 && pireT < 60000 && pireVue < 10000 && r.centre.appels < 9000 && r.centre.tris < 600000;
+  return { ok, detail: `mesure en qualite Ultra HD, autoReset coupe, donc PASSE D'OMBRES COMPRISE (le piege maison : renderer.info remet ses compteurs a zero au debut de chaque render(), et 3 735 appels d'ombres s'y etaient deja caches) · AVANT ces trois quartiers, la place du centre demandait 5 412 appels et 179 812 triangles depuis (0 ; 7 ; 58) ; APRES : ${r.centre.appels} appels et ${r.centre.tris} triangles depuis le MEME point — a 150, 250 et 300 m de la, ils ne coutent rien la ou le joueur passe le plus de temps · LE PRIX EXACT DE CHAQUE QUARTIER, mesure en eteignant tous ses maillages depuis un point de vue place dedans : ${r.q.map(x => `${x.nom} — ${x.objets} maillages, ${x.appels} appels et ${x.tris} triangles de plus (${x.sans.appels} → ${x.avec.appels})`).join(' ; ')} · le plus cher des trois demande ${pire} appels et ${pireT} triangles, soit moins du quart de la place du centre-ville · et l'image entiere vue depuis dedans reste sous le plafond (au pire ${pireVue} appels) · la ville compte maintenant ${r.solides} solides et ${r.zones} quartiers` };
+});
+
+// ================= POSTE QUARTIERS : LE BOIS DES AVENTURIERS =================
+test('on peut aller au Bois des Aventuriers a pied et en voiture, et les TROIS quartiers neufs tiennent dans un seul reseau', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const city = G.city;
+    const zone = city.zones.find(z => z.name === 'Bois des Aventuriers');
+    const des = (city.plan.dessertes || []).find(d => d.n === 'Bois des Aventuriers');
+    const pied = G.navPath(0, 8, 152, 304);
+    const aller = G.itineraireVoies(0, 8, des.x, des.z), retour = G.itineraireVoies(des.x, des.z, 0, 8);
+    const GR = city.graphe, A = GR.aretes, N = GR.noeuds;
+    const proche = (x, z) => { let b = -1, bd = 1e9; A.forEach((e, i) => { const dd = Math.hypot((e.x0 + e.x1) / 2 - x, (e.z0 + e.z1) / 2 - z); if (dd < bd) { bd = dd; b = i; } }); return b; };
+    const dep = proche(0, 8), vus = new Set([dep]), q = [dep];
+    while (q.length) { const c = q.pop(); for (const n of N[A[c].vers].sortantes) if (!vus.has(n)) { vus.add(n); q.push(n); } }
+    // LES TROIS QUARTIERS NEUFS, chacun joignable depuis le centre ET dans les deux sens
+    const neufs = ['Plaine des Sports', 'Hameau de la Ferme', 'Bois des Aventuriers'].map(nom => {
+      const d = (city.plan.dessertes || []).find(x => x.n === nom);
+      const a = G.itineraireVoies(0, 8, d.x, d.z), b = G.itineraireVoies(d.x, d.z, 0, 8);
+      return { nom, sur: d.loin, aller: !!a, retour: !!b };
+    });
+    const rues = city.routes.filter(rt => rt.x > 105 && rt.z > 255).length;
+    return { zone: !!zone, des, pied: pied ? pied.length : 0, rues, neufs,
+      aller: aller ? (aller.suite ? aller.suite.length : (aller.length || 1)) : 0,
+      retour: retour ? (retour.suite ? retour.suite.length : (retour.length || 1)) : 0,
+      aretes: A.length, joignables: vus.size, zones: city.zones.length };
+  });
+  const ok = r.zone && r.des && r.des.loin === 0 && r.pied > 1 && r.aller > 0 && r.retour > 0
+    && r.rues === 5 && r.joignables === r.aretes && r.neufs.every(n => n.sur === 0 && n.aller && n.retour);
+  return { ok, detail: `le sud-est (x > 110, z > 260) etait le dernier grand vide de la carte : le Bois des Aventuriers y est bati et raccorde par ${r.rues} chemins a la grande rue du sud du quartier residentiel (z = 250) · a pied : ${r.pied} points depuis le centre · en voiture : ${r.aller} etapes a l'aller, ${r.retour} au retour · LES TROIS QUARTIERS NEUFS sont desservis, tous dans les deux sens et tous avec une desserte POSEE SUR la chaussee : ${r.neufs.map(n => `${n.nom} (a ${n.sur} m, aller ${n.aller}, retour ${n.retour})`).join(' ; ')} · le graphe des voies reste D'UN SEUL TENANT : ${r.joignables} aretes joignables sur ${r.aretes} · la ville compte ${r.zones} quartiers` };
+});
+
+test('le parcours dans les arbres se monte vraiment : marches franchissables, planchers pleins, garde-corps solides', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 135, y: 1, z: 304, hour: 12, frais: true });
+    const S = G.solids;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    const haut = (x, z) => { let t = 0; for (const o of S) if (Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2) t = Math.max(t, o.y + o.h / 2); return +t.toFixed(2); };
+    // LES PLANCHERS DES QUATRE TOURS
+    // On mesure a 0,80 m du centre (entre le mat du drapeau et les troncs, qui commencent a 1,08 m) de la plateforme : AU CENTRE, le mat du drapeau d'arrivee
+    // de la quatrieme tour depasse de 34 cm et faussait la mesure (7,14 m au lieu de 6,80).
+    const tours = [[128, 288, 2.6], [142, 288, 4.0], [142, 300, 5.4], [128, 300, 6.8]].map(([x, z, h]) => ({ x, z, h, mesure: haut(x + 0.8, z + 0.8) }));
+    // LA PASSERELLE EST PLEINE : on l'echantillonne tous les 25 cm d'un bout a l'autre. Au
+    // premier jet, ses planches de 1,00 m espacees de 1,11 m laissaient 11 cm de vide entre
+    // chacune, et on serait passe au travers a 2,60 m du sol.
+    let trous = 0, releves = 0;
+    for (let x = 130.2; x <= 139.8; x += 0.25) { releves++; if (!solide(x, 288, 2.55)) trous++; }
+    for (let z = 290.2; z <= 297.8; z += 0.25) { releves++; if (!solide(142, z, 3.95)) trous++; }
+    for (let x = 130.2; x <= 139.8; x += 0.25) { releves++; if (!solide(x, 300, 5.35)) trous++; }
+    // L'ESCALIER DE LA PREMIERE TOUR : chaque marche doit monter de MOINS de 0,56 m, le pas
+    // franchissable du joueur — au-dela, on ne peut plus monter du tout.
+    const esc = [];
+    for (let i = 0; i < 6; i++) { const h = haut(128 - 2.9, 286.45 + i * (3.1 / 6) + 0.2); if (h > 0.2) esc.push(h); }
+    let pireMarche = 0;
+    for (let i = 1; i < esc.length; i++) pireMarche = Math.max(pireMarche, esc[i] - esc[i - 1]);
+    // LE GRAND TOBOGGAN : quinze marches qui descendent, chacune de moins de 0,56 m
+    const tob = [];
+    for (let i = 0; i < 15; i++) tob.push(haut(124.4, 300 + i * 0.9));
+    let pireTob = 0;
+    for (let i = 1; i < tob.length; i++) pireTob = Math.max(pireTob, Math.abs(tob[i] - tob[i - 1]));
+    // LES GARDE-CORPS SONT SOLIDES (une passerelle a 5,40 m sans rien qui arrete, c'est la chute)
+    const gardes = [solide(128, 286, 3.1), solide(128, 290, 3.1), solide(126, 288, 3.1), solide(130, 288, 3.1),
+      solide(135, 287, 3.1), solide(135, 289, 3.1), solide(128, 298, 7.3), solide(128, 302, 7.3)];
+    // et la cabane du sommet a bien son drapeau d'arrivee
+    const drapeau = G.checkpoints.some(c => Math.hypot(c.x - 128, c.z - 300) < 3 && c.y > 6);
+    return { tours, trous, releves, esc, pireMarche: +pireMarche.toFixed(2), tob: [tob[0], tob[14]], pireTob: +pireTob.toFixed(2), gardes: gardes.filter(Boolean).length, nGardes: gardes.length, drapeau };
+  });
+  // La quatrieme plateforme porte le DRAPEAU D'ARRIVEE : sa dalle bleue de 2,40 m fait
+  // 14 cm d'epaisseur et pose donc le sol marchable a 6,94 m au lieu de 6,80. C'est le bon
+  // chiffre : c'est sur cette dalle qu'on pose les pieds.
+  const bonnesTours = r.tours.filter(t => t.mesure - t.h > -0.05 && t.mesure - t.h < 0.4).length;
+  const ok = bonnesTours === 4 && r.trous === 0 && r.pireMarche > 0 && r.pireMarche < 0.56
+    && r.pireTob > 0 && r.pireTob < 0.56 && r.gardes === r.nGardes && r.drapeau;
+  return { ok, detail: `SuperObby est d'abord un jeu de plateformes, et c'est la seule chose que la ville ne proposait nulle part : partout ailleurs on marche a plat · les quatre plateformes sont bien a ${r.tours.map(t => t.mesure + ' m').join(', ')} (voulu ${r.tours.map(t => t.h).join(', ')}) — ${bonnesTours}/4 · les trois passerelles sont PLEINES : ${r.trous} trou sur ${r.releves} releves tous les 25 cm (au premier jet, des planches de 1,00 m espacees de 1,11 m laissaient 11 cm de vide entre chacune, et on passait au travers a 2,60 m du sol) · l'escalier monte ${r.esc.join(' → ')} m, plus grande marche ${r.pireMarche} m, sous le pas franchissable de 0,56 m · le grand toboggan redescend de ${r.tob[0]} a ${r.tob[1]} m par marches de ${r.pireTob} m au plus · les ${r.gardes}/${r.nGardes} garde-corps testes sont SOLIDES (une rambarde decorative a 5,40 m, c'est une chute) · le drapeau d'arrivee est bien sur la cabane du sommet (${r.drapeau})` };
+});
+
+test('au Bois des Aventuriers, le camp et le mobilier arretent, le ruisseau et le sous-bois se traversent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 169, y: 1, z: 304, hour: 12, frais: true });
+    const S = G.solids, city = G.city;
+    const solide = (x, z, y) => S.some(o => Math.abs(x - o.x) < o.w / 2 && Math.abs(z - o.z) < o.d / 2 && y > o.y - o.h / 2 && y < o.y + o.h / 2);
+    const pts = [
+      ['un rocher du sous-bois', 126, 320, 0.5, 1], ['le pont du ruisseau', 135, 316, 0.5, 1],
+      ['une table de pique-nique', 162, 296, 0.5, 1], ['un rondin du feu de camp', 169, 296.6, 0.3, 1],
+      ['le foyer', 169, 300, 0.2, 1], ['une tente', 161, 314, 0.5, 1],
+      ['le portique des nids', 165.8, 322.5, 1.5, 1], ['un totem sculpte', 144, 262, 1.5, 1],
+      ['le totem du quartier', 161, 282, 1.5, 1], ['un lampadaire', 144, 284, 2, 1],
+      ['un banc', 144, 294, 0.4, 1], ['une borne a boire', 160, 288, 0.6, 1], ['une poubelle', 144, 290, 0.5, 1],
+      // ... et ce qui se traverse
+      ['le ruisseau', 130, 316, 0.3, 0], ['la clairiere du camp', 172, 308, 0.9, 0],
+      ['la chaussee de l\'Allee des Cimes', 152, 300, 0.9, 0], ['la chaussee de la Route du Bois', 130, 272, 0.9, 0],
+      ['la chaussee du Chemin des Fougeres', 114, 300, 0.9, 0], ['la chaussee du Chemin des Ecureuils', 186, 300, 0.9, 0],
+      ['la chaussee de la Route des Sentiers', 170, 336, 0.9, 0],
+    ];
+    const fautes = [];
+    for (const [nom, x, z, y, att] of pts) { const v = solide(x, z, y) ? 1 : 0; if (v !== att) fautes.push(`${nom} : ${v ? 'solide' : 'traversable'} au lieu de ${att ? 'solide' : 'traversable'}`); }
+    // LES DEUX BALANCOIRES NID D'OISEAU : elles passent par city.swings, donc par la meme
+    // touche E et le meme bouton de manette que toutes les balancoires de la ville.
+    const nids = city.swings.filter(s => Math.abs(s.z - 324) < 1 && s.x > 160);
+    return { n: pts.length, fautes, nids: nids.length, swings: city.swings.length, zones: city.zones.length };
+  });
+  const ok = r.fautes.length === 0 && r.nids === 2;
+  return { ok, detail: `${r.n} points de controle mesures un par un dans le tableau des solides du Bois · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le ruisseau est une nappe a 0,55 d'opacite : solidifieDecor ecarte d'office tout materiau sous 0,6, elle ne pourra jamais devenir un mur invisible en travers de la clairiere (c'est exactement ce qui etait arrive au filet du trampoline) · les ${r.nids} balancoires nid d'oiseau passent par city.swings, comme les ${r.swings} balancoires de la ville` };
 });

@@ -714,3 +714,10 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **Reproduire** : profil vierge, ne rien faire. Reproduit 2/2 (noms différents : Lucas_2014 puis Zoe_rider).
 - **On voit** : « 💥 Lucas_2014 s'en prend à Momo_king » **puis** « 🚔 Infraction : éliminer Momo_king ! Niveau ★★ » — l'infraction est mise au compte du joueur alors que l'auteur est un bot. Même racine probable que le n° 83 (l'auteur d'une élimination était attribué au joueur par défaut) ; le n° 83 a été corrigé côté message, pas côté infraction.
 - **On devrait voir** : une infraction n'est imputée au joueur que s'il en est l'auteur.
+
+### 86. Le joueur est téléporté de 1,75 m en une seule image en marchant dans la rue
+- **Gravité** : GRAVE (à l'écran c'est un saut du personnage ; c'est aussi ce qui cassait la laisse du petit robot)
+- **Reproduire** : marcher vers l'ouest le long de la rue, arriver vers (−47,4 ; 12,1).
+- **On voit** : mesuré à la sonde par le poste Finition — le joueur est déplacé de **1,75 m en UNE image**, `P.vel.x` remis à 0, et il se retrouve posé sur une dalle basse en (−49,9 ; 9,2). Aucun test du banc ne le voyait jusqu'ici.
+- **Racine probable** : la résolution axe par axe de `moveAxis` — la sortie « face la plus proche » quand on est déjà dans une boîte, ou un enchaînement marche + mur. C'est la même famille que le défaut n° 80 (le garde-corps de La Zone qui éjectait le joueur de 1,48 m hors de la cage) et que l'éjection de 15,8 m trouvée au round 73.
+- **On devrait voir** : un déplacement continu. Aucun pas ne doit jamais dépasser ce que la vitesse du joueur autorise dans une image.

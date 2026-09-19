@@ -679,10 +679,22 @@ test('prison : entrer et sortir laisse un état propre', async p => {
 });
 
 test('300 images de simulation en ville sans exception', async p => {
+  // EN IMAGES SIMULÉES, PAS EN TEMPS RÉEL. Le titre promet 300 IMAGES, et on attendait 5 s
+  // de montre en espérant que la boucle d'affichage les fournisse. Sous swiftshader, avec
+  // les trois postes qui travaillent en parallèle sur cette machine, le rendu tombe à une
+  // image par seconde : ces 5 s valaient 5 images, simTime montait à 0,08 s, et le seuil
+  // « simTime > 3 » faisait échouer un jeu qui tournait parfaitement. On demande donc les
+  // 300 images à step(), et on relève l'exception qui les interromprait.
   await p.evaluate(()=>{ __SHOT.go({world:4,x:0,y:1,z:0,hour:12}); });
-  await p.waitForTimeout(5000);
-  const s = await p.evaluate(()=>({t:__G.simTime, run:__G.running}));
-  return { ok: s.t>3 && s.run, detail:`simTime=${s.t.toFixed(1)} s` };
+  const s = await p.evaluate(()=>{
+    const t0 = __G.simTime; let images = 0, err = null;
+    try { for (; images < 300; images++) __G.step(1/60, true); }
+    catch (e) { err = String(e && e.message || e); }
+    return { images, err, t: __G.simTime - t0, run: __G.running };
+  });
+  return { ok: s.images === 300 && !s.err && s.t > 3 && s.run,
+    detail: s.err ? `exception à l'image ${s.images} : ${s.err}`
+      : `${s.images} images simulées sans exception, simTime +${s.t.toFixed(1)} s, boucle vivante=${s.run}` };
 });
 
 
@@ -11911,7 +11923,12 @@ test('sous un toit non déclaré « intérieur », aucun mur ne sépare la camé
   const lis = async (v) => {
     await p.evaluate(vv => __SHOT.go(vv), v);
     await attendre(p, () => __G.cam.libre != null, 30000);
-    await p.waitForTimeout(2600);   // deux ou trois images de plus : la perche finit de se caler
+    // LA PERCHE FINIT DE SE CALER EN IMAGES SIMULÉES, pas en 2,6 s de montre. Le calage prend
+    // une trentaine d'images ; sous swiftshader, avec trois postes en parallèle, 2,6 s réelles
+    // n'en fournissent que deux ou trois et la perche était relevée à mi-course. Même mesure
+    // que pour le test de la caméra collée aux murs : 0,60 m d'écart sous charge contre 0,36 m
+    // lancé seul, à code de jeu identique. On lui donne donc 120 images pour de bon.
+    await p.evaluate(() => { for (let i = 0; i < 120; i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); } });
     return p.evaluate(() => {
       const G = __G, c = G.camera.position, t = G.cam.target;
       const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;

@@ -4648,6 +4648,14 @@ function makePet(kind, x, z, color) {
   // est deja comprise par solidifieDecor : elle couvre d'office toute nouvelle famille
   // d'animaux, sans liste a tenir a la main.
   g.userData.mobile = true;
+  // PAS PLUS QUE LE ROBOT, UN CHIEN N'EST BÂTI AU GABARIT HUMAIN. `refAssise` ramène un
+  // AVATAR au gabarit de référence (2,358 m debout) ; le chien en mesure 1,01 et le chat
+  // 0,71, donc appliquée telle quelle elle les grossirait de 2,3× et leur crâne sortirait
+  // du pavillon, comme cela est arrivé au robot. Aujourd'hui elle les épargne par ricochet
+  // (elle ignore toute mesure sous 1,20 m), mais c'est un hasard : on le dit pour de bon,
+  // avec la même marque que le robot. La table des places leur donne déjà une taille
+  // ABSOLUE (0,55 dans la berline, 0,76 dans le camion de pompiers).
+  g.userData.horsGabarit = true;
   g.position.set(x, 0.3, z); worldGroup.add(g);
   return { g, kind, x, z, y: 0.3, home: [x, z], tgt: null, wait: rnd(0, 3), facing: 0, tail, head, pattes, corps: g, follow: 0, soundT: 0, petT: 0 };
 }

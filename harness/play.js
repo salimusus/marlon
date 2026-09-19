@@ -549,7 +549,10 @@ test('on est bien assis sur la balançoire', async p => {
     __G.P.swing = sw; sw.rider = 'me'; sw.t = 0; sw.ang = 0; sw.amp = 0;
     return { x: sw.x, z: sw.z };
   });
-  await p.waitForTimeout(900);
+  // EN IMAGES SIMULÉES, pas en temps réel : swingTick() vit dans step(), et 900 ms réelles ne
+  // valent qu'une image ou deux quand plusieurs Chromium tournent sur la machine (voir le test
+  // de la caméra collée aux murs : 0,60 sous charge contre 0,36 lancé seul, même code de jeu).
+  await p.evaluate(() => { for (let i = 0; i < 54; i++) __G.step(1 / 60, true); });
   const a = await p.evaluate(() => ({ y: +__G.P.pos.y.toFixed(2), rot: +__G.me.group.rotation.x.toFixed(2), ang: +__G.P.swing.ang.toFixed(2) }));
   await p.evaluate(() => { const sw = __G.P.swing; if (sw) sw.rider = null; __G.P.swing = null; });
   // planche à 0,90 m, dessus 0,95 m : le joueur s'assoit à 0,49 m
@@ -628,7 +631,9 @@ test('on enfourche le cheval le plus proche du carrousel', async p => {
     return { ok: true, idx: car.rider ? car.rider.idx : -1 };
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
-  await p.waitForTimeout(700);
+  // EN IMAGES SIMULÉES : ridesTick() vit dans step() (via cityCommon), et 700 ms réelles ne
+  // valent parfois aucune image sous charge — le cheval n'aurait pas encore bougé.
+  await p.evaluate(() => { for (let i = 0; i < 42; i++) __G.step(1 / 60, true); });
   const a = await p.evaluate(() => {
     const car = __G.city.rides.find(x => x.kind === 'carousel');
     const h = car.horses[car.rider.idx];
@@ -674,10 +679,22 @@ test('prison : entrer et sortir laisse un état propre', async p => {
 });
 
 test('300 images de simulation en ville sans exception', async p => {
+  // EN IMAGES SIMULÉES, PAS EN TEMPS RÉEL. Le titre promet 300 IMAGES, et on attendait 5 s
+  // de montre en espérant que la boucle d'affichage les fournisse. Sous swiftshader, avec
+  // les trois postes qui travaillent en parallèle sur cette machine, le rendu tombe à une
+  // image par seconde : ces 5 s valaient 5 images, simTime montait à 0,08 s, et le seuil
+  // « simTime > 3 » faisait échouer un jeu qui tournait parfaitement. On demande donc les
+  // 300 images à step(), et on relève l'exception qui les interromprait.
   await p.evaluate(()=>{ __SHOT.go({world:4,x:0,y:1,z:0,hour:12}); });
-  await p.waitForTimeout(5000);
-  const s = await p.evaluate(()=>({t:__G.simTime, run:__G.running}));
-  return { ok: s.t>3 && s.run, detail:`simTime=${s.t.toFixed(1)} s` };
+  const s = await p.evaluate(()=>{
+    const t0 = __G.simTime; let images = 0, err = null;
+    try { for (; images < 300; images++) __G.step(1/60, true); }
+    catch (e) { err = String(e && e.message || e); }
+    return { images, err, t: __G.simTime - t0, run: __G.running };
+  });
+  return { ok: s.images === 300 && !s.err && s.t > 3 && s.run,
+    detail: s.err ? `exception à l'image ${s.images} : ${s.err}`
+      : `${s.images} images simulées sans exception, simTime +${s.t.toFixed(1)} s, boucle vivante=${s.run}` };
 });
 
 
@@ -2036,15 +2053,17 @@ test('un seul coffre laisse le temps de fuir, trois font venir tout le monde', a
 
 test('rien ne dépasse des murs de l\'armurerie, et la banque est meublée', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 52, y: 1, z: 19, hour: 12 });
+    // L'ARMURERIE A DEMENAGE (round 75) : elle est en (67, 27) et non plus en (52, 19), parce
+    // qu'elle coupait la rue x = 52 en deux. Les murs suivent.
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 27, hour: 12 });
     const B = new __G.THREE.Box3(), p2 = new __G.THREE.Vector3();
-    const murs = { x1: 46, x2: 58, z1: 14.5, z2: 23.5 };
+    const murs = { x1: 61, x2: 73, z1: 22.5, z2: 31.5 };
     const dehors = [];
     let objets = 0;
     __G.worldGroup.traverse(o => {
       if (!o.isMesh || !o.geometry) return;
       o.getWorldPosition(p2);
-      if (p2.x < 46.4 || p2.x > 57.6 || p2.z < 14.9 || p2.z > 23.1 || p2.y < 0.4 || p2.y > 4.3) return;
+      if (p2.x < 61.4 || p2.x > 72.6 || p2.z < 22.9 || p2.z > 31.1 || p2.y < 0.4 || p2.y > 4.3) return;
       B.setFromObject(o);
       if (B.max.x - B.min.x > 5 || B.max.z - B.min.z > 5) return;   // la structure elle-même
       objets++;
@@ -8005,7 +8024,8 @@ test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const c = G.city;
-    // 1. la hiérarchie annoncée : toute chaussée mesure 5, 6, 7, 8 ou 9 m de large
+    // 1. la hiérarchie annoncée : toute chaussée tient dans la table VOIES (round 75 : 8 / 9 /
+    //    11 / 13 m ; 5, 6 et 7 restent déclarés pour les rares chaussées coincées entre deux murs)
     const largeurs = {}, horsHierarchie = [];
     for (const rt of c.routes) {
       const l = +Math.min(rt.w, rt.d).toFixed(2);
@@ -8039,13 +8059,18 @@ test('le plan routier est coherent : hierarchie des largeurs, aucune rue dans un
       tailles.push(t); nc++;
     }
     const total = tailles.reduce((a, b) => a + b, 0), part = Math.max(...tailles) / total;
+    // 4. LE CROISEMENT (round 75). Le plus large véhicule du jeu fait 2,80 m ; la voie de droite
+    //    est posée à largeur/4 de l'axe : il faut 7,60 m pour que deux s'y croisent avec 50 cm
+    //    de garde. AVANT : 45 chaussées sur 72 étaient sous ce seuil.
+    const larges = c.routes.filter(rt => Math.min(rt.w, rt.d) >= 7.6).length;
     return { routes: c.routes.length, axes: c.plan.axes.length, largeurs, horsHierarchie, roles,
-      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4) };
+      dansBat, dansEau, dansSable, dansAnneau, dansParcelle, minus, composantes: nc, part: +part.toFixed(4),
+      larges, elargies: c.elargies };
   });
   const ok = r.horsHierarchie.length === 0 && r.dansBat.length === 0 && r.dansEau.length === 0 && r.dansSable.length === 0
     && r.dansAnneau.length === 0 && r.dansParcelle.length === 0 && r.minus.length === 0 && r.part >= 0.99
-    && r.roles.boulevard >= 8 && r.routes >= 65;
-  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard} boulevards, ${r.roles.avenue} avenues, ${r.roles.rue} rues, ${r.roles.ruelle} ruelles, ${r.roles.desserte} dessertes), ${r.horsHierarchie.length} hors hiérarchie · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) — il y en avait 7 · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
+    && r.larges >= r.routes - 10 && r.routes >= 65;
+  return { ok, detail: `le plan a ${r.routes} chaussées (${r.axes} axes nommés) et toutes tiennent dans la hiérarchie annoncée — ${JSON.stringify(r.largeurs)} m (${r.roles.boulevard || 0} boulevards de 13 m, ${r.roles.avenue || 0} avenues de 11 m, ${r.roles.rue || 0} rues de 9 m, ${r.roles.ruelle || 0} ruelles de 8 m), ${r.horsHierarchie.length} hors hiérarchie · ${r.larges}/${r.routes} chaussées laissent deux véhicules de 2,80 m se croiser avec 50 cm de garde (seuil 7,60 m) — il n'y en avait que 27 sur 72 avant l'élargissement, qui a monté ${r.elargies && r.elargies.montees} chaussées de ${r.elargies && r.elargies.gagne} m en moyenne et en a laissé ${r.elargies && r.elargies.bloquees} coincées entre deux murs · aucune rue ne traverse un bâtiment (${r.dansBat.length}), la mer (${r.dansEau.length}), le sable du rallye (${r.dansSable.length}), l'anneau (${r.dansAnneau.length}) ni une parcelle de villa (${r.dansParcelle.length}) · aucun bout de rue de moins de 6 m (${r.minus.length}) · la chaussée ne fait qu'UN réseau pour les voitures : ${(r.part * 100).toFixed(2)} % d'un seul tenant en ${r.composantes} morceau(x)` };
 });
 
 test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux sur le trottoir, passages pietons devant les equipements', async p => {
@@ -11807,9 +11832,11 @@ test('le plan de ville est net : aucun obstacle ni véhicule garé dans une chau
 
 // Défaut 3 : l'armurerie coupait la rue x = 52 en deux (la rue de l'héliport s'arrêtait à z = 13,
 // la rue commerçante reprenait à z = 25). Pour franchir ces 12 m il fallait redescendre au bord de
-// mer et remonter par la rue de l'est : plus de 500 m. On mesure le trajet VRAIMENT roulable, par
-// la grille des voitures, entre les deux bouts de la rue.
-test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement de l\'armurerie remplace 520 m de détour', async p => {
+// mer et remonter par la rue de l'est : plus de 500 m. Le round 68 avait bricolé un contournement
+// par l'est (30 m de détour, deux carrefours parasites). Le joueur a tranché au round 75 :
+// « déplace l'armurerie ». Elle est partie en (67, 27), les contournements ont disparu, et la rue
+// est DROITE. On mesure le trajet VRAIMENT roulable, par la grille des voitures.
+test('plus aucune rue n\'est coupée en deux par un bâtiment : la rue x = 52 est droite depuis que l\'armurerie a déménagé', async p => {
   const r = await p.evaluate(() => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     if (!G.NAV.voit) G.buildNav();
@@ -11821,18 +11848,27 @@ test('plus aucune rue n\'est coupée en deux par un bâtiment : le contournement
       m += Math.hypot(c2 - p2[p2.length - 1][0], d - p2[p2.length - 1][1]);
       return { m: Math.round(m), n: p2.length };
     };
-    const rue52 = lg(52, 6, 52, 32);            // les deux bouts de la rue coupée
+    const rue52 = lg(52, 6, 52, 32);            // les deux bouts de la rue autrefois coupée
     const voisin = lg(26, 6, 26, 32);           // la rue parallèle, jamais coupée : le mètre-étalon
-    // le contournement est bien de la chaussée ouverte aux voitures (coût 1 dans la grille)
-    const ouvert = [[57.5, 10], [63, 19], [57.5, 27.5]].map(([x, z]) => {
-      const N = G.NAV, i = Math.round((x - N.x0) / N.cs), j = Math.round((z - N.z0) / N.cs);
-      const k = j * N.nx + i;
-      return N.cout[k] === 1 && !N.voit[k];
-    });
-    return { rue52: rue52.m, voisin: voisin.m, direct: 26, ouvert };
+    // toute la traversée x = 52 est de la chaussée ouverte aux voitures (coût 1 dans la grille)
+    const N = G.NAV;
+    const cell = z => { const i = Math.round((52 - N.x0) / N.cs), j = Math.round((z - N.z0) / N.cs), k = j * N.nx + i; return N.cout[k] === 1 && !N.voit[k]; };
+    const ouvert = []; for (let z = 0; z <= 30; z += 2) ouvert.push(cell(z));
+    // l'armurerie et son stand de tir sont hors de TOUTE chaussée
+    const c = G.city, emp = [];
+    for (const q of [{ x: 67, z: 27, w: 12, d: 9 }, c.armoryParc, { x: 67, z: 15, w: 15, d: 12 }]) {
+      if (!q) { emp.push('absent'); continue; }
+      for (const rt of c.routes) if (Math.abs(q.x - rt.x) < q.w / 2 + rt.w / 2 - 0.5 && Math.abs(q.z - rt.z) < q.d / 2 + rt.d / 2 - 0.5) { emp.push([q.x, q.z, rt.x, rt.z]); break; }
+    }
+    // la ligne de tir, la dalle et les cibles ont survécu au nettoyage des chaussées
+    const ligne = G.solids.filter(o => Math.abs(o.x - 67) < 1 && Math.abs(o.z - 19.4) < 1 && o.w > 12).length;
+    return { rue52: rue52.m, voisin: voisin.m, direct: 26, ouvert, emp,
+      ligne, cibles: (c.targets || []).length, armory: c.armory, parc: c.armoryParc,
+      contournements: (c.plan.axes || []).filter(a => /ontournement.*armurerie/.test(a.n)).length };
   });
-  const ok = isFinite(r.rue52) && r.rue52 <= 70 && r.ouvert.every(Boolean);
-  return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant le contournement de l'armurerie, et la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les trois tronçons du contournement sont bien de la chaussée ouverte aux voitures (${r.ouvert.filter(Boolean).length}/3)` };
+  const ok = isFinite(r.rue52) && r.rue52 <= 40 && r.ouvert.every(Boolean) && r.emp.length === 0
+    && r.ligne === 1 && r.cibles === 3 && r.contournements === 0 && !!r.parc;
+  return { ok, detail: `pour passer d'un bout à l'autre de la rue x = 52 (de z = 6 à z = 32, soit ${r.direct} m à vol d'oiseau) une voiture roule ${r.rue52} m — il y en avait 520 avant, puis 70 avec le contournement ; la rue parallèle x = 26, jamais coupée, en demande ${r.voisin} · les ${r.ouvert.length} relevés de z = 0 à z = 30 sont tous de la chaussée ouverte (${r.ouvert.filter(Boolean).length}/${r.ouvert.length}) · l'armurerie (${r.armory && r.armory.x}, ${r.armory && r.armory.z}), son stand de tir et son parking (${r.parc && r.parc.w} × ${r.parc && r.parc.d} m) ne mordent aucune chaussée (${r.emp.length} empiètement) · la ligne de tir (${r.ligne}/1) et les ${r.cibles} cibles survivent au nettoyage des rues, qui les effaçait à chaque chargement · ${r.contournements} tronçon de contournement restant` };
 });
 
 // ===================== POSTE FINITION (contrôle qualité, round 67) =====================
@@ -11906,7 +11942,12 @@ test('sous un toit non déclaré « intérieur », aucun mur ne sépare la camé
   const lis = async (v) => {
     await p.evaluate(vv => __SHOT.go(vv), v);
     await attendre(p, () => __G.cam.libre != null, 30000);
-    await p.waitForTimeout(2600);   // deux ou trois images de plus : la perche finit de se caler
+    // LA PERCHE FINIT DE SE CALER EN IMAGES SIMULÉES, pas en 2,6 s de montre. Le calage prend
+    // une trentaine d'images ; sous swiftshader, avec trois postes en parallèle, 2,6 s réelles
+    // n'en fournissent que deux ou trois et la perche était relevée à mi-course. Même mesure
+    // que pour le test de la caméra collée aux murs : 0,60 m d'écart sous charge contre 0,36 m
+    // lancé seul, à code de jeu identique. On lui donne donc 120 images pour de bon.
+    await p.evaluate(() => { for (let i = 0; i < 120; i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); } });
     return p.evaluate(() => {
       const G = __G, c = G.camera.position, t = G.cam.target;
       const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
@@ -12491,9 +12532,11 @@ test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async 
     marcher(e0.bas[0] + 0.6, e0.bas[1], 12);      // le palier de départ de la volée du hall
     marcher(e0.haut[0] + 1.0, e0.haut[1], 20);    // on la monte jusqu'au palier du 1ᵉʳ
     const y1 = G.P.pos.y;
-    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
-    marcher(bk.x + 6.5, e1.bas[1] - 0.9, 12);
-    marcher(e1.bas[0], e1.bas[1], 12);            // le pied de la volée du 2ᵉ
+    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est
+    marcher(bk.x + 6.5, bk.z + 8, 10);            // le bandeau sud (les bureaux)
+    marcher(bk.x - 6.5, bk.z + 8, 16);            // on le longe jusqu'à l'ouest
+    marcher(bk.x - 7.5, bk.z, 12);                // la coursive ouest
+    marcher(e1.bas[0], e1.bas[1], 14);            // le pied de la volée du 2ᵉ, au nord-ouest
     marcher(e1.haut[0], e1.haut[1], 22);          // et on monte aux coffres
     const c = (G.city.safes || [])[0];
     // hauteur et profondeur des marches : la règle des autres escaliers du jeu
@@ -17162,9 +17205,19 @@ test('l\'escalier de la banque ne touche plus le mur : on passe derrière, et on
     marcher(bx + 6.5, bz, 8); marcher(bx - 7, bz, 14);
     marcher(e0.bas[0] + 0.6, e0.bas[1], 12); marcher(e0.haut[0] + 1.0, e0.haut[1], 20);
     const y1 = +G.P.pos.y.toFixed(2), t1 = +(G.simTime - t0).toFixed(1);
-    marcher(bx + 6.5, bz, 12); marcher(bx + 6.5, e1.bas[1] - 0.9, 12);
-    marcher(e1.bas[0], e1.bas[1], 12); marcher(e1.haut[0], e1.haut[1], 22);
+    // LE TOUR DE LA COURSIVE. Les DEUX volées sont maintenant au nord, empilées : on arrive
+    // du hall au nord-est, et le pied de la volée du 2ᵉ est au nord-OUEST. On fait donc le
+    // tour de l'anneau par le sud, comme un visiteur — le bandeau nord, lui, est la trémie.
+    marcher(bx + 6.5, bz, 12); marcher(bx + 6.5, bz + 8, 10); marcher(bx - 6.5, bz + 8, 16);
+    marcher(bx - 7.5, bz, 12);
+    marcher(e1.bas[0], e1.bas[1], 14); marcher(e1.haut[0], e1.haut[1], 22);
     const y2 = +G.P.pos.y.toFixed(2);
+    // AU 2ᵉ ON ARRIVE AU NORD-EST, et les coffres sont au nord-OUEST : on y va par le passage
+    // de 2 m qui longe le mur nord DERRIÈRE la volée (le seul plancher continu de cet étage,
+    // le sud étant laissé ouvert pour la caméra). On sort du palier par son bord EST (bx + 8) :
+    // à bx + 6,5 on tombait pile sur le bout de la rampe de la trémie et l'on restait collé
+    // contre elle, puis on passait de l'autre côté et l'on retombait sur les marches (6,02 m).
+    marcher(bx + 8, bz - 8.6, 10); marcher(bx - 6.5, bz - 8.6, 16);
     const c = (G.city.safes || []).find(s => Math.abs(s.x - bx) < 10 && Math.abs(s.z - bz) < 10);
     marcher(c.x + 0.7, c.z, 16);
     return { volees, derriere, zDerriere, y1, t1, y2, coffreY: +c.y.toFixed(2),
@@ -20562,4 +20615,68 @@ test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m 
   });
   const ok = r.n === 0 && r.pire < 0.25 && r.passe < 1.5;
   return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant le trajet passe bien au point du défaut (à ${r.passe} m de (−47,4 ; 12,1)), ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
+});
+
+// ===================== POSTE URBANISME (round 75) =====================
+// Demande du joueur, mot pour mot : « refais les routes mieux organisées, plus fluides, plus
+// larges ». Les trois exigences sont mesurées ici, en une fois.
+//   · PLUS LARGES : le plus gros véhicule du jeu fait 2,80 m (bulldozer). La voie de droite est
+//     posée à largeur/4 de l'axe, donc il faut 7,60 m pour que deux se croisent avec 50 cm de
+//     garde. AVANT : 27 chaussées sur 72 seulement.
+//   · MIEUX ORGANISÉES : le graphe des voies rattrapait les trous du bitume par des LIAISONS
+//     virtuelles posées en travers de la pelouse — 21 avant, dont une de 11,20 m au coude de
+//     l'ouest. On exige qu'AUCUNE liaison ne passe hors chaussée.
+//   · PLUS FLUIDES : le détour moyen d'un itinéraire par les voies, sur 56 trajets d'un bout à
+//     l'autre de la ville. AVANT : 2,25 fois le vol d'oiseau.
+test('les routes sont plus larges, mieux raccordées et moins tortueuses : croisement possible partout, aucune liaison hors bitume, détour moyen en baisse', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const c = G.city, Gr = c.graphe;
+    // 1. LARGES
+    const larges = c.routes.filter(rt => Math.min(rt.w, rt.d) >= 7.6).length;
+    const etroites = c.routes.filter(rt => Math.min(rt.w, rt.d) < 7.6).map(rt => [rt.x, rt.z, Math.min(rt.w, rt.d)]);
+    // le plus gros véhicule du jeu, relevé et non supposé
+    let plusLarge = 0;
+    for (const v of [...c.cars, ...c.aiCars, ...G.police.cars]) plusLarge = Math.max(plusLarge, v.baseW || 0);
+    // 2. MIEUX RACCORDÉES : aucune liaison du graphe ne passe hors chaussée
+    const surRoute = (x, z) => c.routes.some(rt => Math.abs(x - rt.x) < rt.w / 2 && Math.abs(z - rt.z) < rt.d / 2);
+    const horsBitume = [];
+    for (const e of Gr.aretes) {
+      if (!e.liaison) continue;
+      const mx = (e.x0 + e.x1) / 2, mz = (e.z0 + e.z1) / 2;
+      if (!surRoute(mx, mz)) horsBitume.push([+mx.toFixed(1), +mz.toFixed(1), +e.long.toFixed(1)]);
+    }
+    // 3. MOINS TORTUEUSES : le détour moyen sur 56 trajets d'un bout à l'autre de la ville
+    const pts = [[-190, 40], [0, -100], [120, -176], [100, 130], [60, 345], [-149, 185], [0, 60], [80, 60]];
+    let n = 0, somme = 0, sans = 0, pire = 0;
+    for (let i = 0; i < pts.length; i++) for (let j = 0; j < pts.length; j++) {
+      if (i === j) continue;
+      const q = G.itineraireVoies(pts[i][0], pts[i][1], pts[j][0], pts[j][1], 0);
+      const vol = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]);
+      if (!q || !q.length) { sans++; continue; }
+      let L = 0, a = [pts[i][0], pts[i][1]];
+      for (const b of q) { L += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; }
+      n++; somme += L / vol; pire = Math.max(pire, L / vol);
+    }
+    // 4. DÉBIT : la circulation tourne 900 pas de simulation sans se bloquer ni se chevaucher
+    const pos0 = c.aiCars.map(v => [v.x, v.z]);
+    let chev = 0;
+    for (let k = 0; k < 900; k++) {
+      G.step(1 / 60, true);
+      if (k % 30) continue;
+      for (let a = 0; a < c.aiCars.length; a++) for (let b = a + 1; b < c.aiCars.length; b++)
+        if (Math.hypot(c.aiCars[a].x - c.aiCars[b].x, c.aiCars[a].z - c.aiCars[b].z) < 2.2) chev++;
+    }
+    const parcours = c.aiCars.map((v, i) => Math.hypot(v.x - pos0[i][0], v.z - pos0[i][1]));
+    const immobiles = parcours.filter(d => d < 3).length;
+    const dehors = c.aiCars.filter(v => !surRoute(v.x, v.z)).length;
+    return { routes: c.routes.length, larges, etroites, plusLarge: +plusLarge.toFixed(2),
+      horsBitume, elargies: c.elargies, trous: c.trous,
+      detour: +(somme / Math.max(1, n)).toFixed(2), pire: +pire.toFixed(2), sans, trajets: n,
+      aiCars: c.aiCars.length, immobiles, chev, dehors,
+      parcours: +(parcours.reduce((a, b) => a + b, 0) / Math.max(1, parcours.length)).toFixed(1) };
+  });
+  const ok = r.larges >= r.routes - 10 && r.horsBitume.length === 0 && r.sans === 0
+    && r.detour <= 2.0 && r.immobiles === 0 && r.chev === 0 && r.dehors === 0 && r.parcours > 20;
+  return { ok, detail: `PLUS LARGES : le plus gros véhicule du jeu fait ${r.plusLarge} m, il faut donc 7,60 m pour un croisement avec 50 cm de garde — ${r.larges}/${r.routes} chaussées y arrivent, contre 27/72 avant (élargissement : ${r.elargies && r.elargies.montees} chaussées montées de ${r.elargies && r.elargies.gagne} m en moyenne, ${r.elargies && r.elargies.bloquees} coincées entre deux murs)${r.etroites.length ? ' — restent ' + JSON.stringify(r.etroites) : ''} · MIEUX ORGANISÉES : ${r.horsBitume.length} liaison du graphe hors chaussée (il y en avait 21, dont 11,20 m au coude de l'ouest) après ${r.trous && r.trous.combles} trous comblés et ${r.trous && r.trous.rallonges} rues rallongées jusqu'à leur carrefour${r.horsBitume.length ? ' → ' + JSON.stringify(r.horsBitume.slice(0, 6)) : ''} · PLUS FLUIDES : sur ${r.trajets} trajets d'un bout à l'autre de la ville, ${r.detour}× le vol d'oiseau en moyenne (2,25 avant), au pire ${r.pire}×, ${r.sans} sans chemin · et 900 pas de simulation plus tard, ${r.immobiles}/${r.aiCars} véhicules bloqués, ${r.chev} chevauchement, ${r.dehors} hors chaussée, ${r.parcours} m parcourus en moyenne` };
 });

@@ -2394,6 +2394,12 @@ if (require.main === module) {
     // lignes a 1024 px et il n'y avait aucun moyen de le photographier (le banc est en 1280)
     if (v.w || v.h) { await page.setViewportSize({ width: v.w || 1280, height: v.h || 720 }); await page.waitForTimeout(300); }
     await page.evaluate(vv => window.__SHOT.go(vv), v);
+    // SCENE A MONTER APRES go(). go() remet expres le jeu a plat, et il fait DESCENDRE le
+    // joueur de voiture : il n'y avait donc aucun moyen de photographier une scene au volant,
+    // ni les quatre occupants assis d'un vehicule. Une vue peut maintenant porter un champ
+    // `apres` : le corps d'une fonction, evalue dans la page apres go() et avant la photo.
+    // Sans ce champ, rien ne change pour les vues existantes.
+    if (v.apres) await page.evaluate(src => { const G = window.__G; return (new Function('G', src))(G); }, v.apres);
     await page.waitForTimeout(v.wait || 700);
     // 30 s (le delai par defaut de Playwright) ne suffisent plus des que plusieurs bancs
     // d'essai tournent en meme temps sur la machine : la capture expirait et le poste

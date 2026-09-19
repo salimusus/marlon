@@ -19171,7 +19171,23 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
       const base = c.y || 0; c.g.updateMatrixWorld(true); G.me.group.updateMatrixWorld(true);
       const bb = new THREE.Box3(); bb.makeEmpty(); let vu = 0, tot = 0;
       G.me.group.traverse(o => { if (o.isMesh) { tot++; if (o.visible) { vu++; bb.expandByObject(o); } } });
+      // QUI DEPASSE ? Quand un morceau sort de l'habitacle on le NOMME, avec sa chaine de
+      // parents dans le squelette : sans cela on ne peut pas savoir si c'est la pose, la
+      // taille d'assise, ou un accessoire laisse par un test precedent.
+      const role = o => { let n = o, r = []; const R = G.me.rig || {};
+        while (n && n !== G.me.group) {
+          for (const k of Object.keys(R)) { if (R[k] === n) { r.push(k); break; } }
+          if (n.name) r.push(n.name);
+          n = n.parent; }
+        return r.length ? r.join('<') : 'sans nom'; };
+      const fautifs = [];
+      G.me.group.traverse(o => { if (!o.isMesh || !o.visible) return;
+        const b2 = new THREE.Box3().setFromObject(o);
+        if (isFinite(b2.min.y) && b2.min.y - base < plancher - 0.05)
+          fautifs.push(`${(b2.min.y - base).toFixed(2)} m ${role(o)} (${o.geometry && o.geometry.type ? o.geometry.type.replace('Geometry', '') : '?'} ${o.scale.x.toFixed(2)}x${o.scale.y.toFixed(2)}x${o.scale.z.toFixed(2)})`); });
+      fautifs.sort();
       out.veh[nom] = { taille: +G.me.group.scale.x.toFixed(3), vu, tot,
+        sous: fautifs.slice(0, 6),
         ref: +(G.me.group.userData.assisRef == null ? 1 : G.me.group.userData.assisRef).toFixed(3),
         bas: +(bb.min.y - base).toFixed(2), haut: +(bb.max.y - base).toFixed(2),
         plancher: +plancher.toFixed(2), plafond: +plafond.toFixed(2) };
@@ -19204,7 +19220,7 @@ test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier d
   return { ok, detail: `le joueur a demandé « remet les voiture a bonne hauteur » : toits à `
     + ['berline', 'break', 'suv', 'quatre'].map(k => `${k} ${T[k].toit} m`).join(', ')
     + ` (pavillon intérieur ${T.berline.plafond} m pour un plancher à ${T.berline.sol} m) · l'occupant est donc réduit à ce que son habitacle contient, mais il y tient TOUT ENTIER et rien n'est masqué · rapport « taille assis / taille debout » (piéton de ${r.pieton} m) : `
-    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux)`).join(' · ')
+    + noms.map(k => `${k} ${V[k].taille} (corps ${V[k].bas}–${V[k].haut} m dans ${V[k].plancher}–${V[k].plafond} m, ${V[k].vu}/${V[k].tot} morceaux${V[k].sous && V[k].sous.length ? ', SOUS LE PLANCHER : ' + V[k].sous.join(' | ') : ''})`).join(' · ')
     + ` · correction de gabarit de l'avatar mesuré : ${V[noms[0]].ref}` };
 });
 

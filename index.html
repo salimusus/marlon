@@ -9382,14 +9382,25 @@ function vehBloque(c, x, z, h, opt) {
   const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
   const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null, mou: false });
   o.bar = !!(opt && opt.bar); o.pol = !!(opt && opt.pol);
-  // ON NE COMPTE PAS DEUX FOIS LES AUTRES VEHICULES. Un vehicule de service ou de police porte
-  // `exactVeh` : son gabarit est confronte aux autres caisses par `vehiculeMord`, qui promene un
-  // point de controle tous les 1,2 m le long de SA carrosserie. `carBlocked`, lui, refaisait le
-  // meme controle avec un simple disque de 1,41 m de rayon — bien plus gros que la voiture.
-  // Mesure (test 332) : la voiture de patrouille garee au commissariat a 4,37 m de sa voisine,
-  // dont le disque arriere mordait la caisse d'a cote de SIX MILLIMETRES alors que les deux
-  // rectangles ne se touchaient pas. Quand le controle exact tourne, le disque se tait.
-  o.veh = !!(opt && opt.veh) && !c.exactVeh;
+  // `veh: false` VEUT DIRE « SANS LES AUTRES CAISSES », ET POUR TOUT LE MONDE. Tout le jeu pose
+  // par la la question « suis-je bloque par une TOLE ou par un MUR ? » — c'est elle qui arme le
+  // mode mou du degagement et la marche arriere. Or `vehiculeMord` comptait les caisses dans
+  // LES DEUX cas des que `c.exactVeh` etait pose : pour une ambulance, une depanneuse ou une
+  // voiture de police, la reponse etait donc toujours « c'est un mur », et aucune d'elles ne
+  // pouvait se degager d'une tole. On coupe donc aussi le controle exact quand on demande
+  // « sans les caisses ».
+  // (ESSAYE ET RETIRE, avec ses chiffres : faire taire le disque grossier de `carBlocked` pour
+  // les vehicules a controle exact, sous pretexte que `vehiculeMord` refait le travail. Mesure
+  // sur 3 000 images de ville vivante, 42 vehicules : 156 images avec au moins une paire de
+  // caisses encastrees, contre 0 en gardant le disque. Le disque est plus gros que la voiture,
+  // et c'est justement cette marge qui empeche les toles de se toucher.)
+  // (ESSAYE ET RETIRE : laisser le seul controle exact decider pendant l'approche finale d'un
+  // vehicule de service, pour qu'il puisse se garer tole contre tole. Mesure : le camion de
+  // pompiers s'arrete toujours a 19,6 m du feu — ce n'est pas une tole qui le gene la, c'est un
+  // solide — ET les chevauchements de la ville vivante passent de 0 a 186 images sur 3 000. Le
+  // disque grossier, plus large que la voiture, est ce qui empeche les toles de se toucher.)
+  const veutVeh = !!(opt && opt.veh);
+  o.veh = veutVeh;
   // `mou` : le vehicule se degage, les autres CAISSES ne comptent plus. Il faut le dire aux
   // DEUX controles : `carBlocked` (par l'option `veh`) et `vehiculeMord`, qui teste les caisses
   // de son cote des que `c.exactVeh` est pose — c'est-a-dire pour tous les vehicules de
@@ -9397,7 +9408,7 @@ function vehBloque(c, x, z, h, opt) {
   o.mou = !!(opt && opt.mou);
   // l'epave au crochet de la depanneuse nous suit : ce n'est pas un obstacle
   o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
-  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || (o.mou ? false : vehiculeMord(c, x, z, h));
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L) || ((o.mou || !veutVeh) ? false : vehiculeMord(c, x, z, h));
 }
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il

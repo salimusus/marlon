@@ -10061,7 +10061,14 @@ function traceSuit(c, R, st) {
 }
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
 const DEGAGE_QUAND_MEME = 22;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
-const DEGAGE_DUREE = 1.6;        // s de marche arriere
+// COMBIEN DE TEMPS ON A LE DROIT DE TRAVERSER. Pendant le degagement, les caisses cessent
+// d'etre des murs (mode « mou ») : cette duree est donc AUSSI la duree maximale pendant
+// laquelle deux tolles peuvent rester l'une dans l'autre. Mesure (test 332, nouveau reseau
+// routier) : le fourgon des travaux passait 24 images d'affilee encastre dans une autre caisse
+// pour un seuil a 10 — c'etait exactement une manoeuvre de degagement. Ramenee a 0,9 s, la
+// manoeuvre desencastre toujours (elle recule de 1,6 m au lieu de 2,9) et l'encastrement ne
+// peut plus durer.
+const DEGAGE_DUREE = 0.9;        // s de marche arriere
 const DEGAGE_REPOS = 2.5;        // s avant d'avoir le droit de recommencer
 const DEGAGE_V = 1.8;            // m/s : on se degage au pas
 function traficRoule(c, dt, opt) {

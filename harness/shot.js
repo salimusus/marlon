@@ -2003,6 +2003,8 @@ window.__G = {
   traficPlace: typeof traficPlace === 'function' ? traficPlace : null,
   flotteMaj: typeof flotteMaj === 'function' ? flotteMaj : null,
   gapDevant: typeof gapDevant === 'function' ? gapDevant : null,
+  traceSuit: typeof traceSuit === 'function' ? traceSuit : null,
+  placeDemiTour: typeof placeDemiTour === 'function' ? placeDemiTour : null,
   carBlocked: typeof carBlocked === 'function' ? carBlocked : null,
   vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
   degageVehicule: typeof degageVehicule === 'function' ? degageVehicule : null,

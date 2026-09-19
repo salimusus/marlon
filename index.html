@@ -9265,6 +9265,20 @@ function vehiculeMord(c, x, z, h) {
         if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
       }
     }
+    // ET LEURS COINS DANS NOTRE CAISSE, pas seulement les notres dans la leur. Nos points de
+    // controle ne couvrent que TROIS lignes dans la largeur (gauche, milieu, droite) : un coin
+    // de pare-chocs qui entre par le flanc, entre deux de ces lignes, passait entre les
+    // mailles. Mesure (test 332, apres que le disque grossier de carBlocked s'est tu pour les
+    // vehicules a controle exact) : 24 images de depanneuse et 9 de fourgon encastres dans une
+    // autre caisse, la ou le disque en voyait zero. Les quatre coins du solide d'en face,
+    // ramenes dans notre repere, referment le trou — et c'est exact, pas approche.
+    const ox = o.w / 2, oz = o.d / 2;
+    for (let k = 0; k < 4; k++) {
+      const qx = o.x + (k < 2 ? ox : -ox), qz = o.z + (k % 2 ? oz : -oz);
+      const dx2 = qx - x, dz2 = qz - z;
+      const lx = dx2 * cs - dz2 * sn, lz = dx2 * sn + dz2 * cs;
+      if (Math.abs(lx) < B && Math.abs(lz) < A) return true;
+    }
   }
   return false;
 }
@@ -9283,7 +9297,15 @@ function vehBloque(c, x, z, h, opt) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
   const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
   const o = c.optBloque || (c.optBloque = { bar: false, veh: false, pol: false, ignore: null, mou: false });
-  o.bar = !!(opt && opt.bar); o.veh = !!(opt && opt.veh); o.pol = !!(opt && opt.pol);
+  o.bar = !!(opt && opt.bar); o.pol = !!(opt && opt.pol);
+  // ON NE COMPTE PAS DEUX FOIS LES AUTRES VEHICULES. Un vehicule de service ou de police porte
+  // `exactVeh` : son gabarit est confronte aux autres caisses par `vehiculeMord`, qui promene un
+  // point de controle tous les 1,2 m le long de SA carrosserie. `carBlocked`, lui, refaisait le
+  // meme controle avec un simple disque de 1,41 m de rayon — bien plus gros que la voiture.
+  // Mesure (test 332) : la voiture de patrouille garee au commissariat a 4,37 m de sa voisine,
+  // dont le disque arriere mordait la caisse d'a cote de SIX MILLIMETRES alors que les deux
+  // rectangles ne se touchaient pas. Quand le controle exact tourne, le disque se tait.
+  o.veh = !!(opt && opt.veh) && !c.exactVeh;
   // `mou` : le vehicule se degage, les autres CAISSES ne comptent plus. Il faut le dire aux
   // DEUX controles : `carBlocked` (par l'option `veh`) et `vehiculeMord`, qui teste les caisses
   // de son cote des que `c.exactVeh` est pose — c'est-a-dire pour tous les vehicules de
@@ -9296,6 +9318,17 @@ function vehBloque(c, x, z, h, opt) {
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
+// Le meme controle que vehBloque, MAIS SANS LES AUTRES CAISSES : murs, batiments, barrieres.
+// Il a son propre tampon : appele depuis avanceVehicule, il ne doit pas ecraser `c.optBloque`
+// que vehBloque est en train d'utiliser.
+function vehBloqueDur(c, x, z, h, opt) {
+  const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
+  const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
+  const o = c.optDur || (c.optDur = { bar: false, veh: false, pol: false, ignore: null, mou: false });
+  o.bar = !!(opt && opt.bar); o.pol = !!(opt && opt.pol); o.veh = false; o.mou = false;
+  o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
+  return carBlocked(x, z, c.solid, r0, o, 0, h, L);
+}
 function avanceVehicule(c, dt, spd, opt, h0) {
   // meme raison que dans vehBloque : un objet reutilise, toujours de la meme forme. Les quatre
   // appelants ne passent que `{}` ou `{ bar: true, veh: true }`, et vehBloque ne relit que ces
@@ -9321,6 +9354,24 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
   // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
   if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
+  // ON SORT DE CE DANS QUOI ON EST DEJA — MAIS SEULEMENT DE CA.
+  // Le garde-fou refuse tout pas dont l'arrivee touche une autre caisse, et le filet plus bas
+  // ramene le vehicule a sa derniere position VERIFIEE. Les deux se retournent contre nous des
+  // que la position de depart est ELLE-MEME en faute : aucun pas n'est accepte, on est renvoye
+  // a une place libre d'il y a longtemps, et `separerVehicules` — qui tourne a chaque image —
+  // repousse aussitot le vehicule a l'endroit fautif. Mesure (test 332, voiture de patrouille
+  // appelee sur un accident) : c.pas = 0,450 m annonce a chaque image pour un vehicule qui n'a
+  // pas bouge d'un millimetre en 225 s (piege connu : `c.pas` est le pas DEMANDE, pas le pas
+  // fait), 1 m parcouru en tout, accident jamais constate et depanneuse jamais partie (0 m).
+  // On ne LAISSE PAS pour autant le vehicule traverser la tole d'en face : on a mesure ce que
+  // ca coute (test 333 : 283 images de caisses encastrees, et la depanneuse qui doublait en
+  // poussant les trois voitures). On se contente de LEVER LE FILET : quand la position de
+  // depart est deja en faute, on ne s'y replie plus, et `separerVehicules` — dont c'est
+  // justement le metier — ecarte les deux caisses en quelques images sans etre contredit.
+  // (on ne paie ces deux controles de plus que sur une image OU RIEN NE PASSE : partout
+  // ailleurs avanceVehicule coute exactement ce qu'il coutait, la fluidite ne bouge pas)
+  const dejaDedans = bloque === 2 && !o.mou
+    && vehBloque(c, c.x, c.z, c.h, o) && !vehBloqueDur(c, c.x, c.z, c.h, o);
   if (bloque) c.speed = Math.min(c.speed || 0, 1.2);
   // FILET DE SECURITE : un chantier pose sous les roues, l'ecartement des vehicules ou une
   // manoeuvre serree peuvent quand meme faire mordre un solide. On garde la derniere position
@@ -9328,7 +9379,7 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   if (posSaine || !vehBloque(c, c.x, c.z, c.h, o)) {
     // on reecrit le triplet au lieu d'en creer un neuf a chaque image et par vehicule
     if (c.libre) { c.libre[0] = c.x; c.libre[1] = c.z; c.libre[2] = c.h; } else c.libre = [c.x, c.z, c.h];
-  } else if (c.libre) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
+  } else if (c.libre && !dejaDedans) { c.x = c.libre[0]; c.z = c.libre[1]; c.h = c.libre[2]; c.speed = 0; bloque = 2; }
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;

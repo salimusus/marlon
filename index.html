@@ -6664,6 +6664,13 @@ const WORLDS = [
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.elargies = elargirLesVoies();   // « plus larges » : chaque chaussee monte d'un palier tant qu'elle n'entame ni mur, ni parcelle, ni vehicule gare
       city.trous = bouchLesTrous();        // « mieux organisees » : du vrai bitume dans les trous que le graphe rattrapait par des liaisons virtuelles
+      // SECOND PASSAGE DE L'ELARGISSEMENT. Les bouchons de bouchLesTrous() naissent APRES le
+      // premier passage : ils heritent de la largeur de la plus etroite de leurs deux voisines
+      // et restaient donc a 6 ou 7 m au milieu d'un reseau passe a 8, 9, 11 ou 13. Trois d'entre
+      // eux (les deux raccords de l'anneau en (±26 ; 0) et le bouchon de (0 ; -31,55)) faisaient
+      // a eux seuls trois des dix chaussees sous le seuil de croisement. Le second passage ne
+      // touche QUE ce qui est encore sous 8 m : ELARGIR n'a pas d'entree au-dela de 9.
+      city.elargies2 = elargirLesVoies();
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs);
       // la signalisation vient APRES les trottoirs (elle a besoin de savoir ou ils sont) et
@@ -34881,7 +34888,12 @@ function buildMetiers() {
   // celle de la benne (7 m de long, rangee juste devant) ET chevauchait le mur ouest du hangar.
   // Il recule d'un metre huit de plus et se decale vers l'est : 0,40 m du mur, 1,80 m derriere
   // la benne.
-  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, PARC - 8, 0));
+  // Sa place se calcule SUR CELLE DE LA BENNE, pas sur la cour : `gare()` recule les engins de
+  // la premiere rangee des que la chaussee devant eux s'elargit, et une place ecrite en dur
+  // derriere eux se retrouve alors DANS la benne — c'est exactement ce qui est arrive au
+  // second passage d'elargissement. 7 m d'entraxe pour 7 m + 5,40 m de caisses : 0,80 m entre
+  // les deux, quelle que soit la largeur de la rue.
+  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, benne.z - 7, 0));
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
   const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });

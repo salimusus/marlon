@@ -549,7 +549,10 @@ test('on est bien assis sur la balançoire', async p => {
     __G.P.swing = sw; sw.rider = 'me'; sw.t = 0; sw.ang = 0; sw.amp = 0;
     return { x: sw.x, z: sw.z };
   });
-  await p.waitForTimeout(900);
+  // EN IMAGES SIMULÉES, pas en temps réel : swingTick() vit dans step(), et 900 ms réelles ne
+  // valent qu'une image ou deux quand plusieurs Chromium tournent sur la machine (voir le test
+  // de la caméra collée aux murs : 0,60 sous charge contre 0,36 lancé seul, même code de jeu).
+  await p.evaluate(() => { for (let i = 0; i < 54; i++) __G.step(1 / 60, true); });
   const a = await p.evaluate(() => ({ y: +__G.P.pos.y.toFixed(2), rot: +__G.me.group.rotation.x.toFixed(2), ang: +__G.P.swing.ang.toFixed(2) }));
   await p.evaluate(() => { const sw = __G.P.swing; if (sw) sw.rider = null; __G.P.swing = null; });
   // planche à 0,90 m, dessus 0,95 m : le joueur s'assoit à 0,49 m
@@ -628,7 +631,9 @@ test('on enfourche le cheval le plus proche du carrousel', async p => {
     return { ok: true, idx: car.rider ? car.rider.idx : -1 };
   });
   if (!r.ok) return { ok: false, detail: r.pourquoi };
-  await p.waitForTimeout(700);
+  // EN IMAGES SIMULÉES : ridesTick() vit dans step() (via cityCommon), et 700 ms réelles ne
+  // valent parfois aucune image sous charge — le cheval n'aurait pas encore bougé.
+  await p.evaluate(() => { for (let i = 0; i < 42; i++) __G.step(1 / 60, true); });
   const a = await p.evaluate(() => {
     const car = __G.city.rides.find(x => x.kind === 'carousel');
     const h = car.horses[car.rider.idx];
@@ -12486,9 +12491,11 @@ test('on monte vraiment au 2ᵉ étage de la banque, jusqu\'aux coffres', async 
     marcher(e0.bas[0] + 0.6, e0.bas[1], 12);      // le palier de départ de la volée du hall
     marcher(e0.haut[0] + 1.0, e0.haut[1], 20);    // on la monte jusqu'au palier du 1ᵉʳ
     const y1 = G.P.pos.y;
-    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est, le long des bureaux
-    marcher(bk.x + 6.5, e1.bas[1] - 0.9, 12);
-    marcher(e1.bas[0], e1.bas[1], 12);            // le pied de la volée du 2ᵉ
+    marcher(bk.x + 6.5, bk.z, 10);                // la coursive est
+    marcher(bk.x + 6.5, bk.z + 8, 10);            // le bandeau sud (les bureaux)
+    marcher(bk.x - 6.5, bk.z + 8, 16);            // on le longe jusqu'à l'ouest
+    marcher(bk.x - 7.5, bk.z, 12);                // la coursive ouest
+    marcher(e1.bas[0], e1.bas[1], 14);            // le pied de la volée du 2ᵉ, au nord-ouest
     marcher(e1.haut[0], e1.haut[1], 22);          // et on monte aux coffres
     const c = (G.city.safes || [])[0];
     // hauteur et profondeur des marches : la règle des autres escaliers du jeu
@@ -17112,9 +17119,19 @@ test('l\'escalier de la banque ne touche plus le mur : on passe derrière, et on
     marcher(bx + 6.5, bz, 8); marcher(bx - 7, bz, 14);
     marcher(e0.bas[0] + 0.6, e0.bas[1], 12); marcher(e0.haut[0] + 1.0, e0.haut[1], 20);
     const y1 = +G.P.pos.y.toFixed(2), t1 = +(G.simTime - t0).toFixed(1);
-    marcher(bx + 6.5, bz, 12); marcher(bx + 6.5, e1.bas[1] - 0.9, 12);
-    marcher(e1.bas[0], e1.bas[1], 12); marcher(e1.haut[0], e1.haut[1], 22);
+    // LE TOUR DE LA COURSIVE. Les DEUX volées sont maintenant au nord, empilées : on arrive
+    // du hall au nord-est, et le pied de la volée du 2ᵉ est au nord-OUEST. On fait donc le
+    // tour de l'anneau par le sud, comme un visiteur — le bandeau nord, lui, est la trémie.
+    marcher(bx + 6.5, bz, 12); marcher(bx + 6.5, bz + 8, 10); marcher(bx - 6.5, bz + 8, 16);
+    marcher(bx - 7.5, bz, 12);
+    marcher(e1.bas[0], e1.bas[1], 14); marcher(e1.haut[0], e1.haut[1], 22);
     const y2 = +G.P.pos.y.toFixed(2);
+    // AU 2ᵉ ON ARRIVE AU NORD-EST, et les coffres sont au nord-OUEST : on y va par le passage
+    // de 2 m qui longe le mur nord DERRIÈRE la volée (le seul plancher continu de cet étage,
+    // le sud étant laissé ouvert pour la caméra). On sort du palier par son bord EST (bx + 8) :
+    // à bx + 6,5 on tombait pile sur le bout de la rampe de la trémie et l'on restait collé
+    // contre elle, puis on passait de l'autre côté et l'on retombait sur les marches (6,02 m).
+    marcher(bx + 8, bz - 8.6, 10); marcher(bx - 6.5, bz - 8.6, 16);
     const c = (G.city.safes || []).find(s => Math.abs(s.x - bx) < 10 && Math.abs(s.z - bz) < 10);
     marcher(c.x + 0.7, c.z, 16);
     return { volees, derriere, zDerriere, y1, t1, y2, coffreY: +c.y.toFixed(2),

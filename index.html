@@ -10342,15 +10342,18 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   //         D'ATTENTE l'angle sud-est, et la bande ouest reste un COULOIR LIBRE de 5,60 m
   //         qui mène au pied de l'escalier. La volée du 1ᵉʳ longe le nord, mais collée au
   //         VIDE de l'atrium : il reste 2,00 m de passage derrière elle (0,40 m avant).
-  //   1ᵉʳ : bureaux au sud, coursives est et ouest. TOUT le bandeau nord est une trémie
-  //         ouverte sur la volée du RDC — sans elle on montait la tête sous la dalle
-  //         (1,60 m de passage au milieu de la volée).
-  //   2ᵉ  : SALLE DES COFFRES au nord et à l'ouest, sous les caméras et deux gardes ; le
-  //         bandeau sud est la trémie de la volée du 1ᵉʳ au 2ᵉ, elle aussi à 2,00 m du mur.
+  //   1ᵉʳ : bureaux au sud, coursives est et ouest, et un plancher au NORD-OUEST — c'est le
+  //         palier de départ de la volée du 2ᵉ. Le NORD-EST est une trémie ouverte sur la
+  //         volée du RDC : sans elle on montait la tête sous la dalle (1,60 m de passage).
+  //   2ᵉ  : SALLE DES COFFRES au nord-ouest et à l'ouest, sous les caméras et deux gardes ;
+  //         le bandeau sud est plein (il relie les deux coursives), et le NORD-EST est la
+  //         trémie de la seconde volée, qui monte EMPILÉE sur la première.
+  //   LES DEUX VOLÉES SONT AU NORD, l'une au-dessus de l'autre et dans le même sens : c'est
+  //         la seule place où elles ne barrent pas la caméra du joueur à l'étage (voir plus
+  //         bas la mesure : 4,40 m de recul quand la seconde longeait le mur sud, 7,54 m ici).
   const A = 8;          // côté de l'atrium ouvert
   const LARG = 3.6;     // largeur d'une volée (marches ET paliers)
-  const zN = bz - A / 2 - LARG / 2;   // axe de la volée RDC → 1ᵉʳ (son bord sud borde le vide)
-  const zS = bz + A / 2 + LARG / 2;   // axe de la volée 1ᵉʳ → 2ᵉ (son bord nord borde le vide)
+  const zN = bz - A / 2 - LARG / 2;   // axe des DEUX volées, empilées (leur bord sud borde le vide)
   plat(bx, 0.36, bz, W, D, marble, { studs: false, noRoute: true }, 0.12);
   box(bx, H / 2, bz - D / 2 + 0.2, W, H, 0.4, wallC, { studs: false, noRoute: true }); box(bx, H / 2, bz + D / 2 - 0.2, W, H, 0.4, wallC, { studs: false, noRoute: true }); box(bx - W / 2 + 0.2, H / 2, bz, 0.4, H, D, wallC, { studs: false, noRoute: true });
   const ex = bx + W / 2 - 0.2;   // façade est avec la grande porte
@@ -10371,20 +10374,49 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // VRAI PALIER DE DÉPART de 2,60 m devant la première marche, au lieu d'une fente de
   // 1,10 m où l'on ne pouvait pas se placer.
   const xEsc0 = bx - W / 2 + 3, xEsc1 = xEsc0 + 15;                    // départ et fin des marches
+  // LES DEUX VOLÉES PASSENT MAINTENANT AU NORD, L'UNE AU-DESSUS DE L'AUTRE, ET LE SUD EST
+  // PLEIN AUX DEUX ÉTAGES. La volée du 1ᵉʳ au 2ᵉ longeait le mur SUD : à l'étage, la caméra
+  // du joueur — qui recule vers le sud depuis le vide de l'atrium — butait sur sa 7ᵉ marche,
+  // un bloc de 1,56 × 0,48 × 3,60 m en (−53,8 ; 8,22 ; 75,8), à 4,30 m de l'objectif. Elle
+  // n'obtenait plus que 4,40 m de recul là où il en faut 6,00 pour jouer. MESURÉ en déplaçant
+  // la volée dans la page : la même volée posée au NORD rend 7,54 m, plus rien ne barre la
+  // perche et la pièce mesurée repasse de 6,4 à 9,0 m. Le sud de l'étage des coffres devient
+  // donc un vrai plancher (il relie aussi les deux coursives), et le nord porte les deux
+  // volées. LA TRÉMIE DU NORD commence à `xTremie` : à l'ouest de cette ligne il y a un
+  // plancher (c'est le palier de départ de la volée du dessus et, au 2ᵉ, la salle des
+  // coffres), à l'est c'est le vide où les volées montent. La ligne est placée pour laisser
+  // 2,5 m de passage sous la dalle à celui qui monte (2,4 m suffisent : le crâne est à 2,36 m).
+  const xTremie = bx - 3;
+  const zArr = bz - axeB - bande / 2 + 1.0;   // axe du passage DERRIÈRE la volée (2,00 m de large)
+  const xOuest = bx - W / 2 + 0.4;            // face intérieure du mur ouest
   for (let f = 1; f <= 2; f++) {
-    const y = f * F, sens = f === 1 ? 1 : -1;   // +1 = plancher au sud (1ᵉʳ), −1 = au nord (2ᵉ)
-    box(bx - axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });
-    box(bx + axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });
-    box(bx, y + 0.15, bz + sens * axeB, W - 0.8, 0.3, bande, marble, { studs: false, noRoute: true });
-    // Garde-corps : uniquement sur les bords qui donnent sur le vide, et JAMAIS devant la
-    // sortie du palier d'escalier (avant, la rampe barrait la seule issue de l'arrivée).
-    const bords = [[bx - A / 2, bz, 0.15, A], [bx + A / 2, bz, 0.15, A], [bx, bz + sens * A / 2, A, 0.15]];
-    if (f === 1) {   // la volée du RDC débouche au nord-est : on laisse ouvert de xEsc1 au mur
-      bords.push([bx - axeB, bz - A / 2, bande, 0.15]);
-      bords.push([(bx + 4 + xEsc1 - 1.5) / 2, bz - A / 2, (xEsc1 - 1.5) - (bx + 4), 0.15]);
-    } else {         // la volée du 1ᵉʳ débouche au sud-ouest : ouvert du mur à xEsc0 + 1,50 m
-      bords.push([bx + axeB, bz + A / 2, bande, 0.15]);
-      bords.push([(bx - 4 + xEsc0 + 1.5) / 2, bz + A / 2, (bx - 4) - (xEsc0 + 1.5), 0.15]);
+    const y = f * F;
+    box(bx - axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });          // coursive ouest
+    box(bx + axeB, y + 0.15, bz, bande, 0.3, A, marble, { studs: false, noRoute: true });          // coursive est
+    const bords = [[bx - A / 2, bz, 0.15, A], [bx + A / 2, bz, 0.15, A],                           // les deux bords de l'atrium
+      [(bx + A / 2 + xEsc1 - 1.5) / 2, bz - A / 2, (xEsc1 - 1.5) - (bx + A / 2), 0.15]];           // coursive est, ouverte devant le palier
+    if (f === 1) {
+      box(bx, y + 0.15, bz + axeB, W - 0.8, 0.3, bande, marble, { studs: false, noRoute: true });  // bandeau sud plein : les bureaux
+      box((xOuest + xTremie) / 2, y + 0.15, bz - axeB, xTremie - xOuest, 0.3, bande, marble, { studs: false, noRoute: true });   // nord-ouest : le palier de départ de la volée du 2ᵉ
+      bords.push([bx, bz + A / 2, A, 0.15]);                                                       // bord sud de l'atrium
+      bords.push([(bx - A / 2 + xTremie) / 2, bz - A / 2, xTremie - (bx - A / 2), 0.15]);          // bord nord de l'atrium, partie pleine
+      bords.push([xTremie, bz - axeB, 0.15, bande]);                                               // bord est du plancher nord-ouest
+    } else {
+      // AU 2ᵉ, LE SUD RESTE OUVERT — ET C'EST UNE MESURE, PAS UN CHOIX DE STYLE. C'est par là
+      // que la caméra du joueur recule quand il est à l'étage, et quand la perche est barée
+      // elle MONTE au lieu de reculer. Une dalle posée sur ce bandeau sud (19,2 × 0,3 × 5,6 m
+      // à 9,75 m) devient alors le plafond qu'elle heurte : relevé en suite complète, 4,64 m
+      // de recul pour 6 m exigés, l'objectif butant dessus à 4,5 m dès que la caméra avait
+      // pris 0,25 rad de hauteur. Sans elle : 7,54 m.
+      // L'étage fait donc le tour par le NORD, en passant DERRIÈRE la volée : la bande de
+      // 2,00 m qui la longe (la même qu'au rez-de-chaussée) court d'un mur à l'autre et
+      // relie la coursive ouest, la salle des coffres et le palier d'arrivée.
+      box(bx, y + 0.15, zArr, W - 0.8, 0.3, 2.0, marble, { studs: false, noRoute: true });
+      box((xOuest + xTremie) / 2, y + 0.15, bz - axeB + 1.0, xTremie - xOuest, 0.3, bande - 2.0, marble, { studs: false, noRoute: true });
+      bords.push([bx - axeB, bz + A / 2, bande, 0.15]);                                            // bord sud de la coursive ouest
+      bords.push([bx + axeB, bz + A / 2, bande, 0.15]);                                            // bord sud de la coursive est
+      bords.push([xTremie, bz - axeB + 1.0, 0.15, bande - 2.0]);                                   // bord ouest de la trémie
+      bords.push([(xTremie + xEsc1 - 1.5) / 2, zArr + 1.0, (xEsc1 - 1.5) - xTremie, 0.15]);        // bord nord de la trémie, le long du passage
     }
     for (const [rx, rz, rw, rd] of bords) { box(rx, y + 0.85, rz, rw, 1.1, rd, 0, { material: glassMat, noEdges: true, noShadow: true, studs: false, noRoute: true, glass: true }); box(rx, y + 1.42, rz, rw + 0.1, 0.1, rd + 0.1, trim, { deco: true, studs: false }); }
   }
@@ -10397,8 +10429,8 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // palier laissée libre. Marches inchangées : 1,50 m de giron, 47,4 cm de contremarche —
   // la même géométrie que les escaliers des villas, que le pas du joueur (STEP_UP) franchit.
   const escaliers = [];
-  const stairs = (y0, y1, zc, dir, dehors) => {
-    const n = 10, len = 1.5, x0 = xEsc0, rise = (y1 - y0) / n;
+  const stairs = (y0, y1, zc, dir, dehors, xDep) => {
+    const n = 10, len = 1.5, x0 = xDep == null ? xEsc0 : xDep, rise = (y1 - y0) / n;
     // mémorisé pour que les policiers à pied trouvent l'escalier et montent aux étages
     escaliers.push({ y0, y1, z: zc, bas: [dir > 0 ? x0 - 0.35 : x0 + n * len + 0.35, zc], haut: [dir > 0 ? x0 + n * len + 0.35 : x0 - 0.35, zc] });
     for (let i = 0; i < n; i++) {
@@ -10423,7 +10455,23 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
       box((xA + xB) / 2, y1 + 1, zc + sz, wP, 0.12, 0.12, trim, { deco: true, studs: false });
     }
   };
-  stairs(0.36, F + 0.3, zN, 1, -1); stairs(F + 0.3, F * 2 + 0.3, zS, -1, 1);
+  // LES DEUX VOLÉES SONT EMPILÉES, ET DANS LE MÊME SENS. Elles montent toutes les deux
+  // d'ouest en est, sur le même axe (z = zN) : celui qui monte a donc 4,98 m de dégagement
+  // au-dessus de la tête sur TOUTE la volée du hall. Deux volées empilées en SENS INVERSES
+  // se croiseraient : le dégagement tomberait à zéro à l'endroit précis où l'on arrive au
+  // 1ᵉʳ, et l'on ne pourrait plus finir la première volée.
+  // LA VOLÉE DU HAUT DÉMARRE UNE MARCHE (1,50 m) PLUS À L'OUEST QUE CELLE DU BAS, ET CE
+  // DEMI-MÈTRE-LÀ SE MESURE. La maison de poupée sonde la place autour du joueur par quatre
+  // rayons HORIZONTAUX à hauteur d'épaules — ici y = 7,10 m à l'étage de la banque — et chaque
+  // boîte de solide est grossie de 30 cm avant l'essai. À l'aplomb du joueur (x = −52), la
+  // volée du haut présente donc UNE marche, et c'est sa hauteur qui décide de tout :
+  //   alignée sur celle du bas .. marche 7,02–7,50 m → le rayon du nord tape dedans, la pièce
+  //                               mesurée tombe à 6,35 m et la perche à 5,90 m (mesuré) ;
+  //   décalée d'une demi-marche  .. même chose, 7,02–7,50 m → 5,90 m ;
+  //   décalée d'UNE marche ...... marche 7,50–7,98 m → le rayon passe 10 cm sous la boîte
+  //                               grossie, la pièce vaut 9 m et la perche 7,44 m.
+  // C'est exactement la marge dont vivait déjà l'ancienne implantation, mais au sud.
+  stairs(0.36, F + 0.3, zN, 1, -1); stairs(F + 0.3, F * 2 + 0.3, zN, 1, -1, xEsc0 - 1.5);
   // ---------- REZ-DE-CHAUSSÉE ----------
   // LE TAPIS ROUGE EN ÉQUERRE : il filait du nord au sud, en travers du chemin. Il part
   // maintenant du seuil (est), traverse le hall, puis tourne vers les GUICHETS (sud) : la
@@ -10548,10 +10596,14 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
   // Arrivé au 1ᵉʳ on ne savait plus où aller : la volée du 2ᵉ longe le mur SUD. Une plaque
   // sur le mur est (là où l'on débouche) et une pancarte suspendue AU PIED de la volée.
   box(bx + W / 2 - 0.45, F + 2.8, bz - 1.4, 0.08, 0.85, 2.9, 0xffffff, { material: matPlaque('COFFRES · 2ᵉ ÉTAGE'), deco: true, noEdges: true });
-  box(bx + 6.6, F + 2.9, bz + A / 2, 2.8, 0.8, 0.08, 0xffffff, { material: matPlaque('🔐 COFFRES 2ᵉ'), deco: true, noEdges: true });
+  box(bx - 6.6, F + 2.9, bz - A / 2, 2.8, 0.8, 0.08, 0xffffff, { material: matPlaque('🔐 COFFRES 2ᵉ'), deco: true, noEdges: true });   // au PIED de la volée, qui est passé au nord-ouest
   // ---------- 2ᵉ ÉTAGE : la salle des coffres, au nord et à l'ouest ----------
-  box(bx, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: matPlaque('🔐 SALLE DES COFFRES'), deco: true, noEdges: true });
-  const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 24), lam(0x8f98ab)); vd.rotation.x = Math.PI / 2; vd.position.set(bx + 6, 2 * F + 2.1, bz - 6.5); worldGroup.add(vd); const vw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 16), lam(0xffd23f)); vw.position.set(bx + 6, 2 * F + 2.1, bz - 6.22); worldGroup.add(vw);
+  box(bx - 4, 2 * F + 2.5, bz - D / 2 + 0.35, 6, 1.2, 0.1, 0xffffff, { material: matPlaque('🔐 SALLE DES COFFRES'), deco: true, noEdges: true });
+  // LA PORTE BLINDÉE est ramassée par solidifieDecor : c'est un SOLIDE de 3,5 × 3,6 × 0,4 m,
+  // pas un simple décor. À l'est elle flottait au-dessus de la nouvelle trémie, et ramenée à
+  // l'ouest elle bouchait le couloir de 1,40 m qui passe devant les coffres (test des passages).
+  // Elle se plaque donc contre le mur NORD, hors du couloir.
+  const vd = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 24), lam(0x8f98ab)); vd.rotation.x = Math.PI / 2; vd.position.set(bx - 6, 2 * F + 2.1, bz - 8.7); worldGroup.add(vd); const vw = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 16), lam(0xffd23f)); vw.position.set(bx + 6, 2 * F + 2.1, bz - 6.22); worldGroup.add(vw);
   city.safes = [];
   // Les coffres étaient alignés jusqu'à dz = +6, c'est-à-dire AU-DESSUS de la trémie de la
   // volée du 2ᵉ : ils flottaient. Ils se resserrent le long du mur ouest, tous sur le
@@ -10564,17 +10616,17 @@ function buildBank(bx, bz) {   // banque sur 3 niveaux autour d'un atrium ouvert
     const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), lam(0xffd23f)); dial.rotation.z = Math.PI / 2; dial.position.set(sx + 0.93, y + 1.05, sz); worldGroup.add(dial);
     city.safes.push({ x: sx + 1.6, z: sz, y, door, dial, open: false, progress: 0, amount: 500 });
   }
-  for (const [cx, cz] of [[bx - 8.6, bz - 8.6], [bx + 8.6, bz - 1]]) { box(cx, 2 * F + 3.6, cz, 0.35, 0.3, 0.7, 0x111111, { deco: true, studs: false }); box(cx, 2 * F + 3.6, cz + 0.45, 0.12, 0.12, 0.12, 0, { material: neonMat(0xff2020), deco: true, noEdges: true }); }   // caméras
+  for (const [cx, cz] of [[bx - 8.6, bz - 8.6], [bx + 8.6, bz + 1]]) { box(cx, 2 * F + 3.6, cz, 0.35, 0.3, 0.7, 0x111111, { deco: true, studs: false }); box(cx, 2 * F + 3.6, cz + 0.45, 0.12, 0.12, 0.12, 0, { material: neonMat(0xff2020), deco: true, noEdges: true }); }   // caméras
   // lingots et liasses sur le comptoir de l'étage des coffres
-  for (let i = 0; i < 6; i++) box(bx + 3 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, trim, { deco: true, studs: false });
-  for (let i = 0; i < 4; i++) box(bx + 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
+  for (let i = 0; i < 6; i++) box(bx - 4.5 + (i % 3) * 0.5, 2 * F + 0.45, bz - 8 + Math.floor(i / 3) * 0.6, 0.4, 0.16, 0.24, trim, { deco: true, studs: false });
+  for (let i = 0; i < 4; i++) box(bx - 5.5, 2 * F + 0.42 + i * 0.1, bz - 6 + i * 0.05, 0.5, 0.1, 0.3, 0x3fae4a, { deco: true, studs: false });
   // ---------- LES GARDES ----------
   // Leurs rondes passaient par des points qui sont maintenant au-dessus du vide : chacune
   // reste désormais sur le plancher de son étage, sans jamais traverser une trémie.
   city.guards = [];
   const mkGuard = (name, floorY, pts) => { const av = buildAvatar({ name, jersey: 12, pants: PAL.pants[1], cap: 0x1b2a4a, num: 1, hat: 'helmet', jacket: 1, glasses: true, m: 60 }); av.group.position.set(pts[0][0], floorY, pts[0][1]); city.mannequins.push(av); city.guards.push({ av, name, x: pts[0][0], z: pts[0][1], y: floorY, pts, i: 1, hp: 100, ko: 0, hitCd: 0, wait: 0 }); };
   mkGuard('Garde Léo', F + 0.3, [[bx + 7, bz + 8.6], [bx - 7, bz + 8.6]]);                       // 1ᵉʳ : derrière la rangée de bureaux, au sud de la volée du 2ᵉ
-  mkGuard('Garde Nina', 2 * F + 0.3, [[bx + 7, bz - 6.6], [bx - 7, bz - 6.6]]);                  // 2ᵉ : devant la porte blindée
+  mkGuard('Garde Nina', 2 * F + 0.3, [[bx - 4, bz - 6.6], [bx - 8, bz - 6.6]]);                  // 2ᵉ : devant la porte blindée, à l'OUEST de la trémie des volées
   mkGuard('Garde Tom', 2 * F + 0.3, [[bx - 6.6, bz + 2.6], [bx - 6.6, bz - 6.6]]);               // 2ᵉ : la rangée des coffres
   lamp(ex + 4.5, bz - 6); lamp(ex + 4.5, bz + 6); flowerBed(ex + 3, bz + 8.5, 1.4, 3); flowerBed(ex + 3, bz - 8.5, 1.4, 3);
   city.batiments.push({ x: bx, z: bz, w: W - 0.5, d: D - 0.5, nom: 'Banque' });   // plus de voiture de police dans le hall
@@ -13731,8 +13783,37 @@ function agentsTick(dt) {
         const e = bk.esc.find(v => monte ? (a.y > v.y0 - 1.4 && a.y < v.y1 - 0.3) : (a.y > v.y0 + 0.3 && a.y < v.y1 + 1.4));
         if (e) {
           const dep = monte ? e.bas : e.haut, arr = monte ? e.haut : e.bas;
-          if (Math.hypot(a.x - dep[0], a.z - dep[1]) < 1.4) { a.esc = e; a.escMonte = monte; tx = arr[0]; tz = arr[1]; a.surEsc = true; }
-          else if (Math.abs(a.x - dep[0]) > 2.2) { tx = dep[0]; tz = bk.z; }   // on longe d'abord le milieu de la banque, sinon on butte sous les marches
+          // DÉJÀ SUR LES MARCHES : ON NE REDESCEND PAS LE CHERCHER. Un agent qui avait lâché
+          // sa volée en cours de montée était renvoyé vers son PIED, donc vers le bas ; et
+          // depuis que les deux volées sont au nord, vers le tour de l'anneau — il quittait
+          // les marches par le côté et retombait. Mesuré : quatre agents entraient dans la
+          // banque et plafonnaient à 5,30 m, la première marche de la seconde volée, au lieu
+          // d'atteindre les coffres à 9,90 m. S'il est DÉJÀ dessus, il reprend sa montée.
+          const surE = Math.abs(a.z - e.z) < 2.0 && a.y > e.y0 + 0.1 && a.y < e.y1 - 0.1
+            && a.x > Math.min(e.bas[0], e.haut[0]) - 0.6 && a.x < Math.max(e.bas[0], e.haut[0]) + 0.6;
+          // et le TOUR DE L'ANNEAU ne vaut que pour celui qui est POSÉ sur un plancher
+          // d'étage (0,36 / 5,10 / 9,90 m) : au milieu d'une volée il n'a rien à y faire.
+          const auSol = a.y < 2 || bk.esc.some(v => Math.abs(a.y - v.y0) < 0.4 || Math.abs(a.y - v.y1) < 0.4);
+          const zTour = bk.z + (a.y > 6 ? -8.6 : 6.8);
+          if (surE || Math.hypot(a.x - dep[0], a.z - dep[1]) < 1.4) { a.esc = e; a.escMonte = monte; tx = arr[0]; tz = arr[1]; a.surEsc = true; }
+          // EN HAUT, LE MILIEU DE LA BANQUE EST LE VIDE DE L'ATRIUM. Longer `bk.z` va bien au
+          // rez-de-chaussée, dont le hall est plein ; à l'étage, l'agent marchait droit dans la
+          // trémie. Depuis que les deux volées sont au nord, le pied de la seconde est à
+          // l'opposé de l'arrivée de la première : mesuré, 4 agents entraient, montaient à
+          // 5,10 m et n'atteignaient JAMAIS les coffres à 9,90 m. On fait donc le tour de
+          // l'anneau par le BANDEAU SUD, qui est plein aux deux étages : d'abord on le gagne
+          // tout droit, puis on le longe jusqu'à l'aplomb du pied de la volée.
+          // (au 1ᵉʳ le tour se fait par le bandeau SUD, au 2ᵉ par le passage qui longe le mur
+          //  NORD derrière la volée : ce sont les deux planchers continus d'un bout à l'autre)
+          // LE DÉTOUR NE VAUT QUE TANT QU'ON N'EST PAS À L'APLOMB DU PIED. Testé AVANT le
+          // rapprochement, il piégeait l'agent sur la frontière : arrivé à l'aplomb du pied
+          // mais 1,8 m trop au nord de la bande, il était renvoyé vers la bande, la
+          // dépassait, repartait vers le pied, et ainsi de suite — mesuré, quatre agents
+          // figés à (−60,8 ; 5,10 ; 75,0) pendant cent secondes, à dix mètres du pied.
+          else if (Math.abs(a.x - dep[0]) > 2.2) {
+            if (a.y > 2 && auSol && Math.abs(a.z - zTour) > 1.8) { tx = a.x; tz = zTour; }   // on gagne d'abord le plancher continu
+            else { tx = dep[0]; tz = (a.y > 2 && auSol) ? zTour : bk.z; }                    // puis on le longe
+          }
           else { tx = dep[0]; tz = dep[1]; }
         }
       }

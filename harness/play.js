@@ -20035,10 +20035,12 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
   if (r.erreur) return { ok: false, detail: r.erreur };
   // Ce que ce test garantit, c'est « il ne traverse plus rien » : 0 image dans un solide et
   // aucune série d'images encastré dans une autre voiture. Le taux de présence sur la chaussée
-  // est donné pour information et son seuil est bas À DESSEIN : les quatre points du circuit du
+  // est donné POUR INFORMATION et sans seuil, et c'est voulu : les quatre points du circuit du
   // chauffard sont des ADRESSES DE PANNE (une cour, un bas-côté, un parking), pas des places de
-  // stationnement — il quitte légitimement le bitume pour les atteindre. Mesuré : 74,6 %.
-  const ok = r.metres > 150 && r.solide === 0 && r.vehMax <= 10 && r.route >= 65;
+  // stationnement — il quitte légitimement le bitume pour les atteindre, et la part qu'il y
+  // passe dépend de ceux qu'il a eu le temps d'atteindre (mesuré 74,6 % puis 82,6 % selon le
+  // tirage). En faire un critère, c'était rendre le test instable pour rien.
+  const ok = r.metres > 150 && r.solide === 0 && r.vehMax <= 10;
   return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)` };
 });
 

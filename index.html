@@ -9214,21 +9214,35 @@ function botConduit(c, x, z, dt, opt) {
     // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
     // maisons. Mesure sur l'incendie en (0, 20) : depuis (-6, 1) il rendait 146 m de rues pour
     // 24,6 m a vol d'oiseau — soit 5,9 fois — et le camion de pompiers arrivait 30 s trop tard.
-    // Au-dela de TROIS fois le trace de la grille A*, on prend donc la grille (qui prefere deja
+    // Au-dela de deux fois le trace de la grille A*, on prend donc la grille (qui prefere deja
     // la chaussee : NAV.cout vaut 1 sur route et 3 en dehors). Le code de la route, les feux et
     // les distances de securite continuent de s'appliquer : c'est traficRoule qui conduit.
-    // TROIS ET NON DEUX, ET LA MESURE LE DIT. A 2,1 (le facteur employe pour la voiture d'un
-    // ami) le raccourci se declenchait aussi sur des detours honnetes, et le premier point du
-    // trace de la grille tombait DERRIERE le vehicule : demi-tour, marche arriere, demi-tour.
-    // Mesure sur l'ambulance appelee pour un blesse a 200,1 m, 60 s de simulation : 117,9 m
-    // parcourus et 1 078 images de marche arriere de degagement a 2,1 ; 264,1 m et 60 images de
-    // marche arriere a 3,0. Le detour absurde du camion de pompiers, lui, valait 5,9 fois le
-    // chemin de la grille : il est toujours pris.
+    // Le camion de pompiers en a besoin des 2,2 fois : son detour vaut 146 m de rues pour 65 m
+    // par la grille, et sans le raccourci il tourne autour du pate de maisons au lieu d'arriver
+    // sur le feu (mesure : au plus pres 47 m, equipage a pied).
     let pts = null;
     if (via && via.length > 1) {
       const lgT = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return (q && q.length) ? l : Infinity; };
       const grille = navPath(c.x, c.z, x, z);
-      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 3) { via = null; pts = grille.concat([[x, z]]); }
+      if (grille && grille.length && lgT(via, c.x, c.z) > lgT(grille, c.x, c.z) * 2.1) {
+        // ON NE PREND PAS UN RACCOURCI QUI COMMENCE PAR UN DEMI-TOUR. Le trace de la grille part
+        // de la case ou l'on se trouve : ses premiers points sont a un ou deux metres, parfois
+        // DERRIERE le pare-chocs. `traficRoule` lit alors « le point de passage est derriere
+        // moi » et lance un demi-tour, qui echoue, qui recommence, et le vehicule ne part
+        // jamais. Mesure sur l'ambulance appelee pour un blesse a 200,1 m, 60 s de simulation :
+        // 0 m parcouru, 3 579 images sur 3 600 declarees coincees, 2 005 en marche arriere.
+        // On jette donc les premiers points deja depasses, et si ce qui reste commence encore
+        // par un demi-tour de pres, on garde le trace par les voies : il sait, lui, comment on
+        // sort d'une place de stationnement.
+        const g = grille.slice();
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        while (g.length > 1) {
+          const dx0 = g[0][0] - c.x, dz0 = g[0][1] - c.z;
+          if (Math.hypot(dx0, dz0) < 5 && dx0 * fx + dz0 * fz < 0) g.shift(); else break;
+        }
+        const dx1 = g[0][0] - c.x, dz1 = g[0][1] - c.z, d1 = Math.hypot(dx1, dz1);
+        if (d1 > 8 || Math.abs(CAP(Math.atan2(dx1, dz1) - c.h)) < 2) { via = null; pts = g.concat([[x, z]]); }
+      }
     }
     c.departVoie = via ? itineraireDepart : -1;
     if (!pts) pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
@@ -24857,12 +24871,30 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
       c.degageT = (c.degageT || 0) + dt;
       if (c.degageT < 6) degageService(c, dt);
     } else c.degageT = 0;
-    c.v = Math.abs(c.speed || 0); c.serviceBloqueT = 0;
+    c.v = Math.abs(c.speed || 0); c.serviceBloqueT = 0; c.appr = null;   // le trace d'approche n'a plus cours
     return Math.hypot(tx - c.x, tz - c.z);
   }
   // ---- l'approche : on vise le but, doucement, et on s'arrete devant ce qui gene
+  // MEME LES DIX-HUIT DERNIERS METRES SUIVENT UN TRACE, PAS UNE LIGNE DROITE. C'est la seule
+  // portion de trajet qui quitte le reseau des voies (le parvis de l'hopital, la cour du hangar,
+  // l'epave sur le bas-cote, le bord de l'incendie) et elle visait le but EN DIRECT. Un angle de
+  // batiment ou un massif entre le vehicule et le point d'arrivee suffisait alors a tout arreter :
+  // au bout de 2,5 s sans avancer, le vehicule « se gare la ou il est » et le service continue de
+  // loin. Mesure sur l'incendie en (0, 20) : le camion de pompiers renonce a 19,6 m du feu — donc
+  // a quinze metres de son point d'acces — et l'equipage finit a pied. On prend donc le trace de
+  // la grille A* (qui, elle, contourne les solides) pour ces derniers metres aussi, recalcule
+  // toutes les 1,5 s. C'est la demande du joueur, mot pour mot : « non pas vol d'oiseau mais de
+  // trace route, ca vaut pour tous les vehicules ».
+  if (!c.appr || !c.appr.length || simTime > (c.apprT || 0)
+      || Math.hypot((c.apprX != null ? c.apprX : 1e9) - tx, (c.apprZ != null ? c.apprZ : 1e9) - tz) > 3) {
+    c.apprT = simTime + 1.5; c.apprX = tx; c.apprZ = tz;
+    let pa = null; try { pa = navPath(c.x, c.z, tx, tz); } catch (e) { pa = null; }
+    c.appr = (pa && pa.length) ? pa.map(q => [q[0], q[1]]).concat([[tx, tz]]) : [[tx, tz]];
+  }
+  while (c.appr.length > 1 && Math.hypot(c.appr[0][0] - c.x, c.appr[0][1] - c.z) < 2.5) c.appr.shift();
+  const vise = c.appr[0];
   const h0 = c.h;
-  const dh = CAP(Math.atan2(tx - c.x, tz - c.z) - c.h);
+  const dh = CAP(Math.atan2(vise[0] - c.x, vise[1] - c.z) - c.h);
   c.h += clamp(dh, -1, 1) * 2.6 * dt;
   // ON APPROCHE AU PAS. C'est la seule portion de trajet qui quitte le bitume (le parvis de
   // l'hopital, la cour du hangar, l'epave sur le bas-cote) : on n'y traverse pas un parking a

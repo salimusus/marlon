@@ -1381,12 +1381,33 @@ test('double appui sur avancer : on court, on s\'épuise, on récupère', async 
     detail: `état : ${JSON.stringify(etat)} · double appui → course (énergie ${vite.e} %, ${apres.couru} images de course) · jauge tombée à ${apres.mini} % : essoufflé=${apres.vu}, course coupée=${apres.coupe} · après repos : ${fin.e} % et on peut recourir` };
 });
 
+// POURQUOI CE TEST NE MESURE PLUS AU TEMPS REEL (round 74). Il forcait l'inclinaison a 0,60
+// sous un plafond bas, attendait 900 ms de TEMPS REEL, puis lisait `cam.pitch`. Or le banc
+// tourne sous swiftshader a environ UNE image par seconde : ces 900 ms valent tantot une
+// image, tantot zero. Releve, avec le MEME code de jeu et le meme decor : 0,60 (aucune image
+// jouee, l'inclinaison n'avait pas encore ete rabattue -> test rouge) quand plusieurs
+// Chromium tournaient sur la machine, 0,36 (rabattue -> test vert) lance seul. Ce n'etait
+// donc pas le jeu qui changeait, c'etait la CHARGE DE LA MACHINE. On joue maintenant des
+// IMAGES SIMULEES, comme le reste du banc : 54 images de 1/60 s remplacent les 900 ms, 42 les
+// 700 ms de reglage de perche, et l'attente de la condition se fait image par image. La
+// mesure ne depend plus que du jeu.
 test('la caméra colle aux murs sans les traverser, et se baisse sous les plafonds bas', async p => {
+  // UNE IMAGE SIMULEE DU BANC. `step()` ne place PAS la camera : la perche (`camPerche`) et la
+  // maison de poupee (`interieurTick`) vivent dans `frame()`, qui n'est appele que par le
+  // rendu. On les joue donc a la main, exactement comme le fait le test 336.
+  const images = n => p.evaluate(k => {
+    for (let i = 0; i < k; i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); }
+  }, n);
   const lis = async (x, y, z, cond) => {
     // orientation figée : sinon la caméra peut tomber sur un arbre et la mesure danse
-    await p.evaluate(v => { __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 }); }, { x, y, z });
-    await attendre(p, cond, 25000);
-    await p.waitForTimeout(700);   // la perche se règle avant la caméra : on la laisse arriver
+    await p.evaluate(v => {
+      __SHOT.go({ world: 4, x: v.x, y: v.y, z: v.z, hour: 12, yaw: 0, pitch: 0.12 });
+      // la condition s'attend EN IMAGES SIMULEES (900 au plus, soit 15 s de jeu) et non en
+      // secondes reelles : sous charge, 25 s reelles ne valaient parfois que deux images.
+      const pret = new Function('return (' + v.cond + ')')();
+      for (let i = 0; i < 900 && !pret(); i++) { __G.step(1 / 60, true); __G.camPerche(1 / 60, false); __G.interieurTick(); }
+    }, { x, y, z, cond: cond.toString() });
+    await images(42);   // les 700 ms d'avant : la perche se règle avant la caméra, on la laisse arriver
     return p.evaluate(() => {
       const c = __G.camera.position, dedans = __G.solids.filter(o => !o.veh && o.h < 30
         && Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2);
@@ -1400,12 +1421,12 @@ test('la caméra colle aux murs sans les traverser, et se baisse sous les plafon
   const rue = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const cuisine = await lis(70, 1, 158, () => __G.cam.dist < 4);
   await p.evaluate(() => { __G.cam.pitch = 0.6; });
-  await p.waitForTimeout(900);
+  await images(54);   // les 900 ms d'avant, en images simulées (voir le commentaire du test)
   const basPlafond = await p.evaluate(() => ({ pitch: +__G.cam.pitch.toFixed(2), plafond: +(__G.cam.plafond || 9).toFixed(1) }));
   const retour = await lis(0, 1, 40, () => __G.cam.dist > 7.5);
   const ok = !rue.dedansMur && !cuisine.dedansMur && !retour.dedansMur
     && cuisine.dist < rue.dist - 2 && cuisine.plafond < 3.2 && basPlafond.pitch < 0.42 && cuisine.libre != null && retour.dist > 7;
-  return { ok, detail: `rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · de retour dehors : ${retour.dist} m · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
+  return { ok, detail: `mesuré en images simulées (54 images au lieu de 900 ms réelles : sous charge le banc ne jouait aucune image et relevait 0.60 au lieu de 0.36) · rue : ${rue.dist} m (place ${rue.salle} m, plafond ${rue.plafond}) · cuisine de la villa : ${cuisine.dist} m (plafond ${cuisine.plafond} m, libre ${cuisine.libre} m) · plafond bas : inclinaison ramenée à ${basPlafond.pitch} · de retour dehors : ${retour.dist} m · caméra dans un mur : ${rue.dedansMur || cuisine.dedansMur || retour.dedansMur}` };
 });
 
 test('« Nathan viens devant l\'hélicoptère » : il vient à côté du joueur et s\'arrête', async p => {

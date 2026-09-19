@@ -19553,3 +19553,185 @@ test('à mains nues on assomme et on peut encore embarquer l\'homme ; le gang n\
     && r.arme.membresApres === 0 && r.arme.deboutApres === 0 && r.arme.gangMortApres;
   return { ok, detail: `avant : mettre tout le gang au tapis — même à mains nues — annonçait « 🏆 ils n'existent plus » juste avant de les voir tous se relever · maintenant la situation tranche : à mains nues ${r.poing.membres} hommes au sol, aucun abattu (${r.poing.abattus}), le gang n'est PAS déclaré détruit (${r.poing.gangMort}), on peut encore embarquer celui qui est à portée et c'est bien LUI que le jeu désigne (voulu ${r.poing.voulu}, désigné ${r.poing.designe}) et les ${r.poing.relevés}/${r.poing.attendus} se relèvent au bout de leurs 26 s · à l'arme, ${r.arme.abattus} abattus, le gang est détruit (${r.arme.gangMort}) et quarante secondes plus tard il ne reste plus un homme (${r.arme.membresApres} membres, ${r.arme.deboutApres} debout, toujours mort=${r.arme.gangMortApres})` };
 });
+
+test('mis à terre, l\'enfant est toujours remis debout en quelques secondes de simulation, loin de ses agresseurs', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const D = 1 / 60;
+    // ON NE REND PAS LA MAIN AU NAVIGATEUR de toute la mesure : c'est ce que fait le banc
+    // d'essai, et c'est justement ce qui mettait la version d'avant en échec — le retour en
+    // jeu pendait à un setTimeout du navigateur, qu'aucun pas de simulation ne déclenche.
+    const GA = G.gangs.filter(g => !g.mort)[0];
+    GA.relation = -60;
+    const trois = GA.membres.filter(m => !m.ko && !m.captif).slice(0, 3);
+    trois.forEach((m, i) => { m.hp = 60; m.ko = 0; m.cd = 0; m.x = P.pos.x + (i - 1) * 1.1; m.z = P.pos.z + 1.2;
+      m.y = G.groundUnder(m.x, m.z, null, 2); m.av.group.position.set(m.x, m.y, m.z); });
+    const agresseurs = trois.map(m => ({ x: m.x, z: m.z }));
+    const loinDesAgresseurs = () => Math.min.apply(null, agresseurs.map(a => Math.hypot(P.pos.x - a.x, P.pos.z - a.z)));
+    // on l'achève comme le gang l'a fait : un dernier coup qui passe sous zéro
+    P.hp = 4;
+    G.hurt(30, 'Les Frelons Jaunes', 0, 1, 2, 'poing');
+    const aTerre = { hp: +P.hp.toFixed(1), mort: G.mort };
+    let pasDebout = -1;
+    const trace = [];
+    for (let i = 1; i <= 1800 && pasDebout < 0; i++) {   // 30 s de simulation au plus
+      G.step(D, true);
+      if (i % 30 === 0) trace.push({ t: +(i * D).toFixed(1), hp: +P.hp.toFixed(1), mort: G.mort });
+      if (!G.mort && P.hp > 0) pasDebout = i;
+    }
+    const releve = { pas: pasDebout, t: pasDebout < 0 ? null : +(pasDebout * D).toFixed(2),
+      hp: +P.hp.toFixed(1), x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), d: +loinDesAgresseurs().toFixed(1) };
+    // et il le RESTE : soixante secondes de simulation de plus sans retomber
+    let minHp = P.hp, retombe = false;
+    for (let i = 0; i < 3600; i++) { G.step(D, true); if (P.hp < minHp) minHp = P.hp; if (G.mort) retombe = true; }
+    const apres = { hp: +P.hp.toFixed(1), minHp: +minHp.toFixed(1), retombe, mort: G.mort,
+      d: +loinDesAgresseurs().toFixed(1) };
+    return { aTerre, releve, apres, trace: trace.slice(0, 6) };
+  });
+  const ok = r.aTerre.hp === 0 && r.aTerre.mort
+    && r.releve.pas > 0 && r.releve.t <= 5 && r.releve.hp > 0 && r.releve.d > 40
+    && !r.apres.retombe && r.apres.hp > 0;
+  return { ok, detail: `avant : le retour en jeu pendait à un setTimeout du navigateur — mesuré sur la version d'avant, ❤️ figé à 0, position et porte-monnaie inchangés pendant 200 s de simulation (le contrôleur en avait relevé 175) · maintenant il tombe (❤️ ${r.aTerre.hp}, mort=${r.aTerre.mort}) puis se relève au pas ${r.releve.pas} soit ${r.releve.t} s de simulation, ❤️ ${r.releve.hp}, à ${r.releve.d} m de ses trois agresseurs, et 60 s de simulation plus tard il est toujours debout (❤️ ${r.apres.hp}, plus bas relevé ${r.apres.minHp}, retombé=${r.apres.retombe})` };
+});
+
+test('un gang ne s\'en prend jamais à un enfant qui n\'est pas entré dans la guerre des gangs', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const D = 1 / 60;
+    const vierge = !G.joueurDansLaGuerre();
+    const gangsVivants = G.gangs.filter(g => !g.mort);
+    for (const g of gangsVivants) { g.relation = -60; g.etat = 'repos'; g.cible = null;
+      for (const m of g.membres) { m.chasse = null; m.ko = 0; } }
+    // 1) LA SCÈNE DU CONTRÔLEUR : manette posée, on ne touche à RIEN pendant deux minutes.
+    //    C'est fait AVANT les tirages forcés ci-dessous, qui laissent les gangs en campagne.
+    P.hp = 100;
+    let minHp = 100, msgs = [];
+    const el = document.getElementById('msg');
+    let dernier = '';
+    // On relève À CHAQUE PAS, pas seulement à la fin : un gang qui se lance sur lui puis
+    // renonce trente secondes plus tard ne doit pas passer entre les mailles.
+    let cherchentMax = 0, chassesMax = 0, presMax = 0;
+    for (let i = 0; i < 7200; i++) {
+      G.step(D, true);
+      if (P.hp < minHp) minHp = P.hp;
+      for (const g of G.gangs) {
+        if (g.etat === 'joueur') cherchentMax++;
+        for (const m of g.membres) {
+          if (m.chasse && m.chasse.joueur) chassesMax++;
+          // un homme de gang collé à lui, c'est à cette distance-là qu'il frappe (1,8 m)
+          if (!m.ko && !m.abattu && Math.hypot(m.x - P.pos.x, m.z - P.pos.z) < 1.8) presMax++;
+        }
+      }
+      if (el && el.textContent && el.textContent !== dernier) { dernier = el.textContent; if (msgs.length < 12) msgs.push(dernier); }
+    }
+    const pose = { minHp: +minHp.toFixed(1), hp: +P.hp.toFixed(1),
+      cherchent: cherchentMax, chasses: chassesMax,
+      pres: presMax };
+    // 2) puis on FORCE la décision des gangs, tirage par tirage, pour ne rien laisser au hasard
+    const vrai = Math.random;
+    const decide = (valeur, tours) => {   // on force le tirage : la décision devient déterministe
+      Math.random = () => valeur;
+      let cherchentLeJoueur = 0, chasses = 0;
+      for (let k = 0; k < tours; k++) {
+        for (const g of gangsVivants) g.t = 0;   // on force la prise de décision à chaque tour
+        G.gangTick(D);
+        for (const g of gangsVivants) {
+          if (g.etat === 'joueur') { cherchentLeJoueur++; g.etat = 'repos'; g.cible = null; }
+          for (const m of g.membres) if (m.chasse && m.chasse.joueur) { chasses++; m.chasse = null; }
+        }
+      }
+      Math.random = vrai;
+      return { cherchentLeJoueur, chasses, tours, gangs: gangsVivants.length };
+    };
+    const traque = decide(0.4, 40);    // 0,4 : pas d'embuscade (0,4 > 0,35), et r = 0,4 → l'ancienne branche « joueur »
+    const embuscade = decide(0.2, 40); // 0,2 : embuscade (0,2 < 0,35), l'ancienne proie n° 0 était le joueur
+    return { vierge, pose, msgs, traque, embuscade,
+      guerreVue: !!G.guerre.vu, mesHommes: G.gang.membres.length };
+  });
+  // On ne juge PAS sur les points de vie : la ville a d'autres façons de blesser le joueur
+  // (la police, un incendie, un habitant qui se bat) et elles ne regardent pas ce défaut-ci.
+  // Ce qui est garanti ici, c'est qu'aucun gang ne le prend pour cible.
+  const ok = r.vierge && r.pose.cherchent === 0 && r.pose.chasses === 0
+    && r.traque.cherchentLeJoueur === 0 && r.embuscade.chasses === 0;
+  return { ok, detail: `avant : profil vierge, manette posée, trois hommes de gang venaient cueillir l'enfant au point d'apparition et le descendaient à 0 ❤️ en 125 s · maintenant joueurDansLaGuerre()=${!r.vierge ? 'vrai' : 'faux'} (🚩 vu=${r.guerreVue}, ${r.mesHommes} homme(s) à moi) : 120 s de simulation manette posée (7200 pas, relevés à chaque pas) : ${r.pose.cherchent} image où un gang « te cherche », ${r.pose.chasses} image où un homme est lancé sur lui, ${r.pose.pres} image où un homme de gang est à portée de coup ; ❤️ au plus bas ${r.pose.minHp} (ce qui reste vient de la ville, pas des gangs : ${r.msgs.join(' | ') || 'aucun message'}) · et sur ${r.traque.tours} décisions forcées de ${r.traque.gangs} gangs, ${r.traque.cherchentLeJoueur} « te cherchent » ; sur ${r.embuscade.tours} embuscades forcées, ${r.embuscade.chasses} homme(s) lancé(s) sur lui` };
+});
+
+test('un homme de gang abattu à l\'arme est annoncé mort, pas « mis KO » — seuls les poings assomment', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const log = document.getElementById('chatLog');
+    const lis = () => Array.prototype.map.call(log.children, d => d.textContent).join(' ⏎ ');
+    const GA = G.gangs.filter(g => !g.mort)[0];
+    const chef = GA.membres.find(m => m.chef) || GA.membres[0];
+    const autre = GA.membres.find(m => m !== chef) || GA.membres[1];
+    for (const m of [chef, autre]) { m.ko = 0; m.abattu = 0; m.hp = 1; m.captif = false;
+      if (m.av) { m.av.group.visible = true; m.av.group.rotation.x = 0; } }
+    P.pos.set(chef.x + 30, 0.5, chef.z + 30);   // loin : on ne ramasse pas le butin
+    // 1) AUX POINGS : on assomme, il se relèvera
+    log.innerHTML = '';
+    G.gangeurKO(chef, 'le joueur', true);
+    const poings = { texte: lis(), abattu: !!chef.abattu, seReleve: chef.ko > 0 && chef.ko < 1e8 };
+    // 2) À L'ARME : il meurt, son corps s'effacera et il quitte le gang pour de bon
+    log.innerHTML = '';
+    G.gangeurKO(autre, 'le joueur');
+    const arme = { texte: lis(), abattu: !!autre.abattu, definitif: autre.ko >= 1e8 };
+    return { poings, arme };
+  });
+  const dit = (t, mot) => t.toLowerCase().includes(mot);
+  const ok = !r.poings.abattu && r.poings.seReleve && dit(r.poings.texte, 'assomm') && !dit(r.poings.texte, 'tué')
+    && r.arme.abattu && r.arme.definitif && dit(r.arme.texte, 'tué') && !dit(r.arme.texte, 'assomm');
+  return { ok, detail: `avant : les deux cas annonçaient « a mis KO », puis le corps de l'homme abattu disparaissait 15 s plus tard sans un mot · maintenant aux poings « ${r.poings.texte} » (abattu=${r.poings.abattu}, il se relève=${r.poings.seReleve}) et à l'arme « ${r.arme.texte} » (abattu=${r.arme.abattu}, définitif=${r.arme.definitif})` };
+});
+
+test('la police ne « perd » l\'enfant que s\'il s\'est vraiment caché, et une voiture appelée vient déposer un agent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -54, y: 1, z: 73, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const pol = G.police, D = 1 / 60;
+    const el = document.getElementById('msg');
+    const suit = pas => {   // avance la simulation en relevant messages et voitures
+      const msgs = []; let dernier = '';
+      let maxAgents = 0, minVoiture = Infinity, perduA = -1, arreteA = -1;
+      for (let i = 0; i < pas; i++) {
+        G.step(D, true);
+        if (el && el.textContent && el.textContent !== dernier) {
+          dernier = el.textContent;
+          if (msgs.length < 14) msgs.push({ t: +(i * D).toFixed(1), m: dernier });
+          if (perduA < 0 && /perdu/i.test(dernier)) perduA = +(i * D).toFixed(1);
+        }
+        if (pol.agents.length > maxAgents) maxAgents = pol.agents.length;
+        for (const pc of pol.cars) { const d = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z); if (d < minVoiture) minVoiture = d; }
+        if (arreteA < 0 && G.jail.on) arreteA = +(i * D).toFixed(1);
+      }
+      return { msgs, maxAgents, minVoiture: +minVoiture.toFixed(1), perduA, arreteA, wanted: pol.wanted };
+    };
+    // ---- 1) À DÉCOUVERT, IMMOBILE : la police ne doit pas abandonner
+    G.clearWanted(); pol.agents.length = 0;
+    G.infraction('tirer sur un habitant', 1, 3);
+    const reactT0 = +(pol.reactT - G.simTime).toFixed(1);
+    const decouvert = suit(2400);   // 40 s de simulation
+    decouvert.react = reactT0;
+    // ---- 2) CACHÉ DANS UNE PLANQUE, LOIN DU DÉLIT : là, ils perdent la trace
+    G.jail.on = false; G.clearWanted(); pol.agents.length = 0;
+    P.pos.set(-54, 0.2, 73);
+    G.infraction('tirer sur un habitant', 1, 3);
+    const h = (G.city.hideouts || [])[0];
+    P.pos.set(h.x, G.groundUnder(h.x, h.z, null, 3), h.z);   // il a couru se planquer, loin du lieu du délit
+    const cache = suit(3000);       // 50 s de simulation
+    cache.abri = G.abriDuJoueur ? G.abriDuJoueur() : null;
+    cache.dDelit = +Math.hypot(h.x + 54, h.z - 73).toFixed(0);
+    G.jail.on = false; G.clearWanted();
+    return { decouvert, cache };
+  });
+  const d = r.decouvert, c = r.cache;
+  const ok = d.perduA < 0 && d.maxAgents >= 1 && d.minVoiture < 26
+    && c.perduA > 0 && c.wanted === 0;
+  return { ok, detail: `avant : trois coups de feu à 45 m du commissariat, l'enfant ne bouge pas, et « 🙈 Ils t'ont perdu » tombait à t+12 s — deux secondes AVANT que les voitures ne s'élancent (délai d'intervention ${d.react} s) ; elles restaient ensuite figées à 37 m, aucun agent ne descendait · maintenant à découvert et immobile : plus aucun abandon sur 40 s (perdu à ${d.perduA} s), la voiture la plus proche est venue à ${d.minVoiture} m et ${d.maxAgents} agent(s) sont descendus${d.arreteA > 0 ? `, arrêté à ${d.arreteA} s` : ''} · et caché dans une planque à ${c.dDelit} m du délit (abri=${c.abri}), ils perdent bien sa trace à ${c.perduA} s (★ ${c.wanted})` };
+});

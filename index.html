@@ -13507,6 +13507,31 @@ function jailWorldDone(i) {   // une épreuve réussie compte pour la libératio
 // ---- policiers à pied, planques dans les bâtiments et intervention de l'armée ----
 const armee = { on: false, heli: null, faisceau: null, tache: null, t0: 0, cible: [0, 0] };
 // Ligne de vue depuis une voiture de police ou un agent jusqu'au joueur.
+// S'EST-IL VRAIMENT CACHÉ ? (n° 82 du contrôleur). La police ne « perdait » pas le joueur
+// parce qu'il s'était caché, mais parce qu'un compte à rebours arrivait au bout : mesuré sur
+// la version d'avant, l'enfant tire trois fois à 45 m du commissariat et ne bouge plus —
+// « 🙈 Ils t'ont perdu » à t+12 s, alors que les deux voitures n'étaient même pas encore
+// parties (act=false, le délai d'intervention courait encore : il reste 2 s au compteur).
+// Désormais il faut une VRAIE raison : un toit au-dessus de la tête, un obstacle entre eux et
+// lui, ou la distance. À découvert, dans leur champ de vision, le compteur ne bouge pas.
+// Renvoie la raison (chaîne) ou null s'il est à la vue de tous.
+const PERTE_VUE_LOIN = 60;   // m : au-delà, même à découvert, ils ne le distinguent plus
+function joueurSestCache() {
+  const abri = abriDuJoueur();
+  if (abri) return abri === 'planque' ? 'une planque' : 'un bâtiment';
+  const unites = police.cars.filter(pc => pc.active && !pc.constat)
+    .concat(police.agents.filter(a => !a.ko));
+  // personne en chasse (les voitures sont encore au commissariat) : il n'y a rien à perdre.
+  // C'est exactement le cas du contrôleur, et c'est pour ça que le compteur ne doit pas tourner.
+  if (!unites.length) return null;
+  let dmin = Infinity;
+  for (const u of unites) {
+    const d = Math.hypot(u.x - P.pos.x, u.z - P.pos.z);
+    if (d < dmin) dmin = d;
+    if (d < PERTE_VUE_LOIN && policeVoit(u, PERTE_VUE_LOIN)) return null;   // à découvert sous leurs yeux
+  }
+  return dmin > PERTE_VUE_LOIN ? 'la distance' : 'un obstacle';
+}
 function policeVoit(o, portee = 45) {
   const d = Math.hypot(P.pos.x - o.x, P.pos.z - o.z);
   if (d > portee || d < 0.4) return d <= portee;
@@ -13875,6 +13900,9 @@ function majWanted() {
   const et = '★'.repeat(police.wanted);
   if (simTime - (police.vuT || -999) < 1.2 || police.sait) el.textContent = `🚔 Recherché ${et}${policeTire() ? ' · ils tirent !' : ''} · ils te voient — sauve-toi !`;
   else if (police.perdu) el.textContent = `🙈 Ils t'ont perdu ${et} · ne te montre pas`;
+  // « reste hors de vue N s » ne voulait rien dire tant que le compteur ne tournait pas : on dit
+  // maintenant ce qu'il manque pour semer la police (n° 82).
+  else if (!police.cachePar) el.textContent = `🔎 On te cherche… ${et} · ils te voient : cache-toi !`;
   else el.textContent = `🔎 On te cherche… ${et} · reste hors de vue ${Math.max(0, Math.ceil(PERTE_DELAI(police.wanted) - police.hideT))} s`;
 }
 function policeTick(dt) {
@@ -13952,7 +13980,15 @@ function policeTick(dt) {
     // tu es) aussi. Sinon le compte a rebours tourne.
     const vuLa = simTime - (police.vuT || -999) < 0.5;
     const agentColle = police.agents.some(a => !a.ko && Math.hypot(a.x - P.pos.x, a.z - P.pos.z) < 30 && Math.abs(a.y - P.pos.y) < 6);
-    if (vuLa || police.sait || agentColle || armee.on) { police.hideT = 0; police.perdu = false; }
+    // ON NE PEUT PERDRE QUE CE QU'ON CHERCHE (n° 82). Tant que le délai d'intervention court
+    // (`police.reactT`), les voitures sont encore au commissariat : le compteur de perte de vue
+    // partait pourtant dès l'infraction, et comme PERTE_DELAI(★) vaut 12 s pour un délai
+    // d'intervention de 14 s, la recherche s'arrêtait DEUX SECONDES AVANT DE COMMENCER.
+    // Et même après, il faut que l'enfant se soit vraiment caché : voir joueurSestCache().
+    const pasEncorePartis = police.reactT > simTime;
+    const cache = pasEncorePartis ? null : joueurSestCache();
+    police.cachePar = cache;
+    if (vuLa || police.sait || agentColle || armee.on || pasEncorePartis || !cache) { police.hideT = 0; police.perdu = false; }
     else police.hideT += dt;
     if (police.hideT > (police.perdu ? PERTE_PALIER : PERTE_DELAI(police.wanted))) {
       police.hideT = 0; police.perdu = true; police.wanted--;
@@ -14028,8 +14064,24 @@ function policeTick(dt) {
       }
     }
     const dist = Math.hypot(tx - pc.x, tz - pc.z);
-    if (police.sait && pc.active && !pc.debarque && police.agents.length < 10
-        && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) { policeDebarque(pc, 2); continue; }
+    // UNE VOITURE ARRIVÉE SUR PLACE DÉPOSE UN AGENT (n° 82). On l'exigeait de `police.sait`,
+    // qui n'est posé QUE pour un braquage ou quand ils t'ont vu entrer quelque part : dans une
+    // poursuite ordinaire la voiture roulait jusqu'au dernier point connu et attendait là,
+    // moteur tournant. Mesure du contrôleur : deux voitures figées à 37,03 m et 38,30 m
+    // pendant 48 s, zéro agent descendu. Tant qu'ils te VOIENT, la voiture continue de te
+    // suivre (on ne saute pas d'une voiture en pleine poursuite) ; dès qu'ils t'ont perdu de
+    // vue plus de deux secondes, les agents descendent et fouillent à pied.
+    // `!hidden` : s'il s'est mis à l'abri sans qu'on le voie entrer, on ne débarque PAS —
+    // sinon les agents se posteraient à côté de sa cachette et le compteur de perte de vue
+    // (`agentColle`, 30 m) ne tournerait plus jamais : se planquer ne servirait plus à rien.
+    const surPlace = police.sait || (police.wanted > 0 && !hidden && simTime - (police.vuT || -999) > 2);
+    if (surPlace && pc.active && !pc.debarque && police.agents.length < 10
+        && (dist < 14 || ((pc.stuck || 0) > 1.5 && dist < 26))) {
+      policeDebarque(pc, 2);
+      if (!police.debarqueDit || simTime > police.debarqueDit) { police.debarqueDit = simTime + 20;
+        msg('👮 Les policiers descendent de voiture et fouillent le quartier !', 2600); }
+      continue;
+    }
     // itinéraire par points de passage : sortie du commissariat par la voie nord, puis l'anneau routier, puis la cible
     const nearS = (x, z) => { let bs = 0, bd = Infinity; for (let s = 0; s < 208; s += 2) { const [lx, lz] = loopPos(s); const d = (lx - x) ** 2 + (lz - z) ** 2; if (d < bd) { bd = d; bs = s; } } return [bs, Math.sqrt(bd)]; };
     const cibleNeuve = Math.hypot(tx - (pc.routeTx || 1e9), tz - (pc.routeTz || 1e9)) > 6;
@@ -14383,7 +14435,7 @@ function chuteImpact(vy) {
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
   if (P.hp <= 0) {
     msg(`💀 Chute mortelle ! ${haut} m de haut…`, 2400); chat(null, `💀 ${myCfg.name} s'est écrasé après une chute de ${haut} m`);
-    sfx.die(); die(true); setTimeout(() => { P.hp = 100; majVie(); }, 1300);
+    sfx.die(); die(true);
   } else msg(`🤕 Aïe ! Chute de ${haut} m · −${deg} PV`, 1800);
   return deg;
 }
@@ -14422,6 +14474,9 @@ function setAccroupi(on) {   // point d'entrée manette / tactile / clavier : se
 }
 function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   if (P.hp <= 0) return;
+  // ON NE RETOMBE PAS SOUS LES COUPS EN SE RELEVANT (n° 78). Sans ces quelques secondes,
+  // les trois hommes du gang restés sur place remettaient l'enfant à terre dans la seconde.
+  if (simTime < (P.grace || 0)) return 0;
   // LE ROBOT COMPAGNON S'INTERPOSE (poste DRONE & ROBOT). `hurt` est le SEUL endroit par
   // lequel un coup atteint le joueur : en le branchant ici, le robot ne peut pas rater une
   // agression, et il ne peut rien déclencher d'autre. Il atténue, il ne protège pas de tout.
@@ -14450,7 +14505,7 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   // affiche qui l'a donné, sauf s'il vient d'un message déjà à l'écran (KO plus bas).
   if (P.hp > 0 && dmg >= 5) msg(`🤕 −${Math.round(dmg)} ❤️ · ${by || 'un coup'}`, 1100);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); setTimeout(() => { P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a'; }, 1300); }
+  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); }
 }
 function combatTick(dt) {   // bots : riposte ou fuite, KO au sol, régénération du joueur
   if (P.hp < 100 && P.hp > 0 && simTime - (P.hurtT || 0) > 5) { P.hp = Math.min(100, P.hp + 4 * dt); $('hpBar').style.width = P.hp + '%'; $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c'; }
@@ -22372,6 +22427,11 @@ function step(dt, active) {
   // les traces de pas dans la neige : posees ici, dans la simulation, pour qu'elles suivent
   // exactement la distance parcourue (et non la cadence d'affichage). Cout nul hors hiver.
   if (city.on) { try { empreintesTick(dt); } catch (eEmp) {} }
+  // LE CHIEN DE GARDE DU RELEVAGE, AVANT LA SORTIE `!active` (n° 78). Quand le joueur est à
+  // terre, frame() passe `active = false` et step() ressort juste en dessous : placé plus bas,
+  // l'appel ne serait jamais atteint et rien ne pourrait plus relever l'enfant — c'est
+  // exactement le blocage de 175 s mesuré par le contrôleur.
+  try { relevageTick(); } catch (eRel) {}
   if (!active) return;
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
@@ -27347,7 +27407,79 @@ function die(silent) {
   explode(me);
   if (!silent) { const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on'))); msg('Oups !', 900); }
   if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
-  setTimeout(() => { respawn(); dead = false; }, 1200);
+  // PLUS AUCUN `setTimeout` POUR SE RELEVER (n° 78, BLOQUANT). C'était la racine du blocage :
+  // le retour en jeu pendait à un minuteur du navigateur, invisible pour la simulation. Quand
+  // ce minuteur ne partait pas (boucle qui ne rend pas la main, onglet ralenti, ou simplement
+  // une exception levée plus haut dans die() avant qu'il soit posé), `dead` restait vrai POUR
+  // TOUJOURS — et frame() calcule `active = running && !paused && !dead && !won`, donc step()
+  // ressortait aussitôt : la ville entière se figeait sans qu'un seul bouton puisse en sortir.
+  // Mesuré sur la version d'avant, gang collé au point d'apparition : ❤️ à 0, position et
+  // porte-monnaie figés (18 🪙) pendant 200 s de simulation. Exactement les 175 s du contrôleur.
+  // Maintenant c'est `relevageTick()`, appelé à CHAQUE pas de simulation — et avant la sortie
+  // `!active` de step(), sinon rien ne pourrait plus jamais relever l'enfant.
+  P.aTerreT = simTime;
+}
+// ============ ON SE RELÈVE TOUJOURS, ET LOIN DES COUPS (n° 78 du contrôleur) ============
+// Le défaut avait deux moitiés. (a) un gang s'en prenait à un enfant qui n'était jamais entré
+// dans la guerre : traité dans gangTick, avec la même garde que les n° 67 / 72 / 75.
+// (b) une fois à terre, on n'en sortait plus. `respawn()` reposait en plus le joueur EXACTEMENT
+// au point d'apparition — c'est-à-dire au milieu des trois hommes qui venaient de l'abattre,
+// sans un instant d'invulnérabilité. Mesure du contrôleur : 100 → 91 → 41 → 5 → 0 en 125 s,
+// puis 175 s où plus rien ne bouge.
+// Maintenant : UN SEUL point de passage, `remiseEnJeu()`, déclenché par l'horloge de la
+// simulation. On lâche le volant, le siège et le brancard ; on rouvre les yeux à l'accueil de
+// l'hôpital (ou dans la cellule si on est en prison, ou au dernier point de passage hors de la
+// ville) ; on est intouchable quelques secondes, et une phrase dit ce qui vient de se passer.
+const RELEVE_GRACE = 6;      // s d'invulnérabilité après s'être relevé, le temps de reprendre la manette
+const RELEVE_DELAI = 1.6;    // s de simulation à terre avant de se relever (on voit sa chute, on ne la subit pas)
+const RELEVE_SECOURS = 30;   // plafond quand l'ambulance nous transporte pour de bon : au-delà, on se relève quand même
+function pointDeReveil() {
+  // l'hôpital si on le connaît, sinon le point de passage : dans les deux cas, LOIN des coups
+  if (jail.on && police.cell) return { x: police.cell.x, y: 0, z: police.cell.z };   // en prison, on se soigne sur place
+  if (city.on && city.medDesk) return { x: city.medDesk.x + 1.6, z: city.medDesk.z + 2.4 };
+  if (cp) return { x: cp.x, y: cp.y + 0.15, z: cp.z + 0.5 };
+  return { x: P.pos.x, z: P.pos.z };
+}
+function remiseEnJeu(cause) {
+  // on lâche tout ce qui retient : volant, siège, manège, brancard des secours
+  try { if (drive.car) exitCar(); } catch (e) {}
+  try { if (uiOpen) closeUI(); } catch (e) {}
+  try { for (const a of (city.ambulances || [])) if (a.victime === 'joueur') ambulanceAbandon(a, 'silence'); } catch (e) {}
+  P.sit = null; P.swing = null; P.ride = null; P.secours = null; P.otage = null;
+  P.stunT = 0; P.aTerreT = 0;
+  const p = pointDeReveil();
+  let y = (p.y != null ? p.y : 0);
+  try { y = groundUnder(p.x, p.z, null, y + 2.4); } catch (e) {}
+  P.pos.set(p.x, y + 0.15, p.z); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
+  if (!city.on) P.facing = running ? Math.PI : 0;   // dans un parcours, on repart FACE à la suite, comme respawn()
+  try { cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z); } catch (e) {}
+  me.group.visible = true; me.group.rotation.order = 'XYZ'; me.group.rotation.set(0, P.facing, 0);
+  try { corpsDebout(me, P.pos.x, P.pos.z, P.pos.y); } catch (e) {}
+  P.hp = 100; P.hurtT = simTime; P.grace = simTime + RELEVE_GRACE;
+  try { majVie(); } catch (e) {}
+  dead = false;
+  // DANS UN PARCOURS, ON NE DIT RIEN : on y meurt vingt fois par étape, `die()` a déjà affiché
+  // « Oups ! » et une phrase de plus à chaque chute serait insupportable. En ville, au
+  // contraire, c'est tout l'objet du n° 78 : l'enfant doit comprendre où il se réveille.
+  const aLHopital = !!(city.on && city.medDesk && !jail.on);
+  const pourquoi = cause ? ' (' + cause + ')' : '';
+  try { if (city.on) msg(aLHopital ? `🏥 Tu te réveilles à l'hôpital, remis sur pied${pourquoi} — repars tranquille !`
+    : `💪 Tu te relèves${pourquoi} — repars tranquille !`, 3200); } catch (e) {}
+  try { sfx.check(); } catch (e) {}
+  return true;
+}
+// LE CHIEN DE GARDE. Appelé à chaque pas de simulation, AVANT la sortie `!active` de step() :
+// c'est la seule façon d'en sortir quand `dead` est vrai, puisque step() ne fait plus rien
+// dans ce cas. Il n'y a plus qu'UN chemin pour se relever, et il ne dépend que de `simTime`.
+function relevageTick() {
+  const aTerre = dead || (P.hp <= 0 && running);
+  if (!aTerre) { if (P.aTerreT) P.aTerreT = 0; return; }
+  if (!P.aTerreT) { P.aTerreT = simTime; return; }
+  // sur le brancard, les secours font leur travail : on leur laisse du temps, mais pas la partie
+  const attente = P.secours ? RELEVE_SECOURS : RELEVE_DELAI;
+  if (simTime - P.aTerreT < attente) return;
+  try { remiseEnJeu(P.secours ? 'les secours ont mis trop longtemps' : null); }
+  catch (e) { try { respawn(); } catch (e2) {} dead = false; P.aTerreT = 0; }
 }
 function respawn() {
   P.pos.set(cp.x, cp.y + 0.15, cp.z + 0.5); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
@@ -31272,9 +31404,14 @@ function gangTick(dt) {
       G.t = simTime + rnd(35, 80);
       // EMBUSCADE : plutôt que de déplacer tout le gang, ils détachent un ou deux hommes
       // pour aller cueillir le joueur — ou l'un de SES hommes — là où il se trouve.
-      if (G.relation < -20 && Math.random() < 0.35 && !G.membres.some(m => m.chasse)) {
+      if (G.relation < -20 && Math.random() < 0.35 && !G.membres.some(m => m.chasse) && (joueurDansLaGuerre() || gang.membres.length)) {
         const dispo = G.membres.filter(m => !m.ko && !m.captif);
-        const proies = [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }]
+        // ON NE S'EN PREND JAMAIS À UN ENFANT QUI N'EST PAS ENTRÉ DANS LA GUERRE (n° 78, même
+        // règle que les n° 67, 72 et 75). Mesure du contrôleur, profil vierge, manette posée :
+        // trois hommes armés venaient le cueillir au point d'apparition à t+110 s et le
+        // descendaient à 0 ❤️ à t+125 s. Tant qu'il n'a ni homme ni respect, il n'existe pas
+        // pour eux : ils s'en prennent à un rival ou à une boutique, pas à lui.
+        const proies = (joueurDansLaGuerre() ? [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }] : [])
           .concat(gang.membres.filter(b => !b.ko && !b.mort && b.av.group.visible)
             .map(b => ({ bot: b, x: b.pos.x, z: b.pos.z, nom: b.name })));
         const proie = pickOne(proies);
@@ -31292,7 +31429,9 @@ function gangTick(dt) {
       const r = Math.random();
       if (r < 0.3 && city.vitrines && city.vitrines.length) { const v = pickOne(city.vitrines); G.etat = 'boutique'; G.cible = [v.x, v.z];
         chat(null, `🚩 ${G.nom} s'en prennent à une boutique !`); }
-      else if (r < 0.5) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z];
+      // même garde ici (n° 78) : sans elle, `G.etat = 'joueur'` lançait tout le gang aux
+      // trousses d'un enfant qui n'a rien demandé, et les membres frappent dès `etat === 'joueur'`.
+      else if (r < 0.5 && joueurDansLaGuerre()) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z];
         if (Math.hypot(P.pos.x - G.membres[0].x, P.pos.z - G.membres[0].z) < 120) chat(null, `🚩 ${G.nom} te cherchent…`); }
       else if (r < 0.7 && gangs.length > 1) { const o = pickOne(gangs.filter(x => x !== G)); G.etat = 'rival'; G.cible = [o.base[0], o.base[1]];
         chat(null, `🚩 ${G.nom} attaquent ${o.nom} !`); }
@@ -31716,11 +31855,25 @@ function gangeurKO(m, par, assomme) {
   if (G.allieJoueur) rompsAlliance(G, 'trahison');
   G.relation = clamp((G.relation || 0) - (m.chef ? 25 : 8), -100, 100);
   G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 40;
+  // ON DIT CE QUI S'EST VRAIMENT PASSÉ (n° 83 du contrôleur). Le jeu fait déjà la différence
+  // en interne — `m.abattu` est posé quand le coup est porté à l'arme, le corps s'efface au
+  // bout de 15 s et l'homme quitte le gang pour de bon — mais il annonçait « a mis KO » dans
+  // les DEUX cas. L'enfant croyait l'avoir seulement assommé, puis voyait le corps disparaître
+  // sans comprendre. Aux poings on assomme (il se relève au bout de 26 s), à l'arme on tue.
+  const auteur = (par === 'le joueur') ? myCfg.name : par;
   if (m.chef) {
-    msg(`💥 ${m.nom}, le chef des ${G.nom}, est à terre !`, 3200);
-    chat(null, `💥 ${myCfg.name} a mis KO ${m.nom}, chef des ${G.nom}`);
-    gagneRep(30, 'chef à terre');
-  } else gagneRep(3, null);
+    msg(assomme ? `😵 ${m.nom}, le chef des ${G.nom}, est assommé !`
+      : `💀 ${m.nom}, le chef des ${G.nom}, est mort.`, 3200);
+    chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom}, chef des ${G.nom}`
+      : `💀 ${auteur} a tué ${m.nom}, chef des ${G.nom}`);
+    gagneRep(30, assomme ? 'chef assommé' : 'chef abattu');
+  } else {
+    // même règle pour un simple homme de main : jusqu'ici il tombait sans un mot, et son corps
+    // disparaissait quinze secondes plus tard sans que rien n'ait dit qu'il était mort.
+    chat(null, assomme ? `😵 ${auteur} a assommé ${m.nom} (${G.nom})`
+      : `💀 ${auteur} a tué ${m.nom} (${G.nom})`);
+    gagneRep(3, null);
+  }
   verifieElimination(G);
 }
 // ---- élimination d'un gang et naissance du suivant ----

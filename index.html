@@ -6212,7 +6212,7 @@ const WORLDS = [
   { id: 'ville', name: 'Marlon · Empire urbain', emoji: '🏙️', color: '#53cdb5', diff: '12 territoires', gravity: 30, free: true, music: { bpm: 118, root: 247, minor: false },
     theme: { sky: 0x8fd0ff, fog: [0xa8d8ff, 90, 260], water: [0x3a8fe6, -16, 0], hemi: [0xe8f6ff, 0x6a7a8a, 0.95], sun: [0xfff5e0, 1.0], clouds: 0xffffff, stars: false },
     build: () => {
-      city.on = true; noSigns = true;
+      city.on = true; noSigns = true; traficGraine = TRAFIC_GRAINE0;   // meme ville, meme circulation (voir TRAFIC_GRAINE0)
       // LE SOL DE TOUTE LA CARTE. Le plateau s'arrêtait à z = 282 et le mur d'enceinte juste
       // derrière : le quartier du casino (z 287 → 340) et le circuit (z −192 → −112) étaient
       // bâtis DEHORS, sur du vide — un trou béant devant le casino, et deux quartiers que le
@@ -6382,6 +6382,19 @@ const WORLDS = [
       // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
       B('places de stationnement', declareLesParkings);   // poste Circulation : la liste des places légitimes (dépôt, caserne, garage, héliports…)
       B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
+      // « REMETS LES VOITURES A BONNE HAUTEUR » (joueur, round 74). On repose TOUS les vehicules
+      // sur ce qu'il y a VRAIMENT sous leurs roues, une fois la ville entiere batie. Un vehicule
+      // construit avec son batiment (les deux voitures du commissariat viennent avec lui) reste
+      // sinon a la hauteur du terrain nu : la rue qui passe devant n'est pavee que plus tard.
+      // Mesure (test 460, 38 vehicules a roues) : ecart moyen roue / appui 0,007 m, mais la
+      // voiture de patrouille de (-49 ; 9) etait a -0,136 m — 13,6 cm de carrosserie dans le
+      // bitume. Apres cette passe : 0 vehicule qui flotte, 0 qui s'enfonce.
+      B('assiette des vehicules', () => {
+        for (const v of [].concat(city.cars || [], city.aiCars || [], police.cars || [])) {
+          if (!v || !v.g || v.heli || v.kind === 'jetski') continue;
+          settleVehicle(v); vehicleSolid(v);
+        }
+      });
       B('sauvegarde', () => rechargeTout());   // argent, achats, voiture et gang reviennent tout seuls
       if (jail.on) setTimeout(() => jailEnter(false), 300);
     } },
@@ -9179,7 +9192,13 @@ function botConduit(c, x, z, dt, opt) {
 // L'anneau code en dur (208 m de perimetre autour de la place centrale) a disparu : les
 // voitures se donnent maintenant des destinations sur le graphe, les changent en arrivant,
 // et roulent a droite en respectant la signalisation.
-let traficGraine = 20240607;
+// LA GRAINE DE LA CIRCULATION REPART AVEC LA VILLE. Elle ne repartait jamais : une fois la
+// ville reconstruite, la circulation continuait la suite de nombres la ou elle en etait. Deux
+// villes identiques ne donnaient donc pas la meme circulation, et le banc d'essai mesurait un
+// tirage (test 332 : 1 189 m pour la voiture de police enchainee derriere un autre test,
+// 1 416 m lancee seule, meme code). On la remet a sa valeur de depart a chaque construction.
+const TRAFIC_GRAINE0 = 20240607;
+let traficGraine = TRAFIC_GRAINE0;
 const traficRnd = () => ((traficGraine = (traficGraine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 function traficDestination(c) {
   const G = city.graphe;
@@ -22924,8 +22943,14 @@ function separerVehicules() {
     // considérés comme se chevauchant). On laisse un vrai filet d'air entre les tôles.
     const ox = (a.solid.w + b.solid.w) / 2 + 0.02 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 + 0.02 - Math.abs(a.z - b.z);
     if (ox <= 0 || oz <= 0) continue;
-    // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte
-    const ra = a.s != null || a.busy, rb = b.s != null || b.busy;
+    // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte.
+    // UN VEHICULE OCCUPE N'EST PAS UN RAIL. `busy` veut dire « en mission », pas « posé sur un
+    // rail » : le camion de pompiers garé contre le feu, la dépanneuse au travail, le fourgon
+    // sur son chantier refusaient donc d'être écartés d'un centimètre, et quand l'autre caisse
+    // ne pouvait pas bouger non plus (coincée contre un mur) le couple restait encastré.
+    // Mesure (test 332) : 32 images d'affilée — 1,6 s — de camion de pompiers dans une voiture,
+    // à l'arrêt sur l'incendie. Seul `c.s` (la voiture de décor sur son rail) reste intouchable.
+    const ra = a.s != null, rb = b.s != null;
     const pa = ra && !rb ? 0 : rb && !ra ? 1 : 0.5, pb = 1 - pa;
     // ON NE POUSSE PERSONNE DANS UN MUR. L'ecartement est maintenant la DERNIERE chose de
     // l'image (voir cityStep) : si le pas de cote met une caisse dans une facade, plus

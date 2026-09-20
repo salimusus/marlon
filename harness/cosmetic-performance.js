@@ -1,0 +1,25 @@
+'use strict';
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+const THREE = require('../vendor/three.min.js');
+const html = fs.readFileSync(require('node:path').join(__dirname, '../index.html'), 'utf8');
+const source = html.match(/function actualiseAccessoire\(force\) \{[\s\S]*?\n\}/)[0];
+const update = vm.runInNewContext(source + '\nactualiseAccessoire', { THREE });
+const root = new THREE.Group(), cosmetic = new THREE.Group(); root.add(cosmetic);
+const pieces = Array.from({ length: 80 }, (_, i) => { const p = new THREE.Group(); p.position.set(i * .01, 1, 2); cosmetic.add(p); return p; });
+let visited = 0;
+for (const p of pieces) { const original = p.updateMatrix; p.updateMatrix = function () { visited++; original.call(this); }; }
+cosmetic.visible = false;
+root.updateMatrixWorld(true); assert.equal(visited, 80);
+cosmetic.updateMatrixWorld = update; visited = 0;
+root.position.set(12, 3, -8); cosmetic.position.set(2, 1, 4); pieces[0].position.set(.5, 2, 1);
+for (let i = 0; i < 120; i++) root.updateMatrixWorld(true);
+assert.equal(visited, 0, 'Hidden cosmetic meshes must not recalculate local matrices');
+cosmetic.visible = true; root.updateMatrixWorld(true);
+assert.equal(visited, 80);
+const world = new THREE.Vector3().setFromMatrixPosition(pieces[0].matrixWorld);
+assert.deepEqual(world.toArray(), [14.5, 6, -3]);
+cosmetic.visible = false; root.updateMatrixWorld(true); cosmetic.visible = true;
+root.position.x = 30; root.updateMatrixWorld(false);
+assert.equal(new THREE.Vector3().setFromMatrixPosition(pieces[0].matrixWorld).x, 32.5);
+assert.equal(pieces[0].visible, true, 'Cosmetic optimization never changes visibility');
+console.log('PASS hidden cosmetics: 0/9600 redundant matrix updates; visible transform restored in the first frame.');

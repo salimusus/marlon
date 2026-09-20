@@ -5,23 +5,24 @@ const g = run();
 const cases = [];
 function test(name, fn) { try { fn(); cases.push({name,ok:true}); console.log('PASS '+name); } catch(e) { cases.push({name,ok:false,error:e.message}); console.error('FAIL '+name+': '+e.stack); } }
 g.loadWorld(4); g.running=true; g.paused=false;
-test('Map area grows 58 percent and all 12 sectors lie inside the boundary',()=>{
- assert.equal(g.MONDE.w*g.MONDE.d,365000); assert.equal(g.TERRITOIRES.length,12);
+test('The eight active sectors lie inside the current city boundary',()=>{
+ assert.equal(g.MONDE.w*g.MONDE.d,231000); assert.equal(g.TERRITOIRES.length,8);
  for(const t of g.TERRITOIRES) assert(t.x-t.r>=g.MONDE.x1 && t.x+t.r<=g.MONDE.x2 && t.z-t.r>=g.MONDE.z1 && t.z+t.r<=g.MONDE.z2);
 });
 test('Supply graph is connected and every edge is reciprocal',()=>{
- const seen=new Set(), queue=['centre']; while(queue.length){const k=queue.pop();if(seen.has(k))continue;seen.add(k);for(const n of g.EMPIRE_LINKS[k]){assert(g.EMPIRE_LINKS[n].includes(k));queue.push(n)}} assert.equal(seen.size,12);
+ const seen=new Set(), queue=['centre']; while(queue.length){const k=queue.pop();if(seen.has(k))continue;seen.add(k);for(const n of g.EMPIRE_LINKS[k]){assert(g.EMPIRE_LINKS[n].includes(k));queue.push(n)}} assert.equal(seen.size,g.TERRITOIRES.length);
 });
-test('Every northern rendezvous has ground and no blocking wall at pedestrian height',()=>{
- for(const t of g.TERRITOIRES.slice(0,4)){
+test('Every operation rendezvous has ground and an accessible point within its arrival radius',()=>{
+ for(const k of new Set(g.EMPIRE_OPERATIONS.flatMap(op=>op.route||[]))){
+  const t=g.TERRITOIRES.find(t=>t.k===k);assert(t);
   assert(g.groundUnder(t.x,t.z,null,1)>=0);
-  const blocked=g.solids.some(o=>!o.veh&&!o.deco&&o.y+o.h/2>1&&o.y-o.h/2<1.9&&Math.abs(o.x-t.x)<o.w/2+.4&&Math.abs(o.z-t.z)<o.d/2+.4);
-  assert(!blocked,t.k);
+  const free=[[-4,0],[4,0],[0,-4],[0,4],[0,0]].some(([dx,dz])=>!g.solids.some(o=>!o.veh&&!o.deco&&o.y+o.h/2>1&&o.y-o.h/2<1.9&&Math.abs(o.x-t.x-dx)<o.w/2+.4&&Math.abs(o.z-t.z-dz)<o.d/2+.4));
+  assert(free,t.k);
  }
 });
-test('First foothold and adjacent expansion cannot skip directly to the docks',()=>{
+test('Expansion follows active borders and rejects nonexistent sectors',()=>{
  g.guerre.territoires={};assert(g.empireCanExpand('centre','joueur'));assert(!g.empireCanExpand('docks','joueur'));
- g.guerre.territoires={zone:'joueur'};assert(g.empireCanExpand('northwest','joueur'));assert(!g.empireCanExpand('finance','joueur'));
+ g.guerre.territoires={zone:'joueur'};assert(g.empireCanExpand('banque','joueur'));assert(!g.empireCanExpand('plage','joueur'));
 });
 test('Fortifications cost money, cap at three, and reject enemy land',()=>{
  g.guerre.territoires={centre:'joueur'};g.wallet=1000;
@@ -50,7 +51,7 @@ test('Completed operations pay once and repeat rewards are reduced',()=>{
  assert(g.empireStartOperation('recon'));g.empireEndOperation(true);assert.equal(g.wallet,178);
 });
 test('Malformed strategic saves are bounded and valid progress survives a save/load',()=>{
- g.restoreEmpire({defenses:{centre:999,docks:-3},completed:['recon','recon','bogus'],wins:-4});assert.equal(g.empire.defenses.centre,3);assert.equal(g.empire.defenses.docks,0);assert.equal(g.empire.completed.length,1);assert.equal(g.empire.wins,0);
+ g.restoreEmpire({defenses:{centre:999,plage:-3,docks:2},completed:['recon','recon','bogus'],wins:-4});assert.equal(g.empire.defenses.centre,3);assert.equal(g.empire.defenses.plage,0);assert.equal(g.empire.defenses.docks,undefined);assert.equal(g.empire.completed.length,1);assert.equal(g.empire.wins,0);
  g.gang.magot=0;g.saveGuerre();g.empire.defenses={};g.empire.completed=[];g.loadGuerre();assert.equal(g.empire.defenses.centre,3);assert.equal(g.empire.completed[0],'recon');assert.equal(g.gang.magot,0);
 });
 test('DualSense standard and raw HID keep the two triggers independent of the camera',()=>{

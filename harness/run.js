@@ -30,15 +30,20 @@ globalThis.__G = {
   get wallet() { return wallet; }, set wallet(v) { wallet = v; }, get paused() { return paused; }, set paused(v) { paused = v; }, get running() { return running; }, set running(v) { running = v; },
   get simTime() { return simTime; }, get uiOpen() { return uiOpen; }, get elapsed() { return elapsed; },
   empire, EMPIRE_LINKS, EMPIRE_OPERATIONS, MONDE, TERRITOIRES, gang, gangs, guerre,
+  empireSupply, empireEconomy, empireFortifyCost,
+  beacon, setBeacon, clearBeacon, startMission,
   empireCanExpand, empireFortify, empireStartOperation, empireEndOperation, empireResolveAttack, empireTick, empireGuardCount, restoreEmpire, captureTick, saveGuerre, loadGuerre, padProfil, padLu, padStick, pollGamepad, releaseGamepad, pad, PAD_MAP, carteTerritoires, empireMapSvg,
   city, police, jail, drive, bank, mission, stats, WORLDS, P, cam, NAV, owned, settings, bots, me,
   worldGroup, scene, renderer, shots, grenades, debrisParts, net, gym, race, RALLY, day, tm,
+  sun, SOLEIL_DIR, suitOmbres, buildAvatar, animateRig, animateRigCorps, empireEnvironment, glassMat, glassCar, FACE, FACE_FERMEE, WINDOWS_SPEC, shared, libereBranche,
   loadWorld, clearWorld, buildNav, navPath, navCell, navFree, groundUnder, groundCar, carBlocked,
   overlaps, step, cityStep, cityCommon, applyQuality, genPath, resetGame, respawn, cityReset,
   updateBot, policeTick, missionTick, villaTick, petsTick, driveStep, heliStep, shotsTick,
   enterCar, exitCar, terrainH, allAvatars, buildVilla, msg, chat,
   pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
   schQuestion, schTirage, school, swingTick, sitSwing, CULT,
+  construireGraphe, traficDestination, traficPose, traficRoule, gapDevant, codeRoute, croisementLibre, carrefourLibre, flotteMaj, vehBloque, vehiculeMord, vehBloqueDur, vehicleSolid, avanceVehicule, surLaChaussee, itineraireVoies, traceSuit, feuPhase, separerVehicules, pointRouteLibre, makeCar, makeVehicle, degageLesRoutes,
+  setTrafficTime(v) { simTime = v; flotteT = -1; }, cheminAretes, projVoie, pietonDevant,
 };
 `;
 

@@ -1,0 +1,11 @@
+{
+  "name": "marlon-empire-urbain",
+  "version": "0.9.0",
+  "private": true,
+  "description": "Marlon — ville ouverte et conquête territoriale",
+  "scripts": {
+    "start": "node serve.cjs",
+    "test": "node harness/verify.cjs"
+  },
+  "engines": { "node": ">=18" }
+}

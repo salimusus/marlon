@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>MARLON — Empire urbain</title>
+<link rel="stylesheet" href="./cinematic.css">
 <link rel="manifest" href='data:application/manifest+json,{"name":"MARLON Empire urbain","short_name":"MARLON","display":"fullscreen","orientation":"landscape","background_color":"%231b2a4a","theme_color":"%231b2a4a","start_url":".","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%231b2a4a%27/%3E%3Crect x=%2716%27 y=%2758%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%235cc453%27/%3E%3Crect x=%2737%27 y=%2737%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%234f8dff%27/%3E%3Crect x=%2758%27 y=%2716%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%23ff5c5c%27/%3E%3C/svg%3E","sizes":"192x192 512x512","type":"image/svg+xml","purpose":"any"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -779,11 +780,11 @@ button:focus-visible{outline:3px solid #f1cf83!important;outline-offset:3px}butt
 .operation b{font-size:13px}.operation span{color:#aebdc6;font-size:11px;line-height:1.5}.operation small{font-size:10px;color:#6bd1b9;letter-spacing:.04em}
 #guerreCarte{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tcase{font:inherit;cursor:pointer;background:#182934!important;border:1px solid #455660!important;border-top:3px solid var(--owner)!important;min-width:0;box-shadow:none!important;padding:12px 8px!important;border-radius:6px!important}
 .tcase[data-sel]{outline:2px solid #e7c78a;outline-offset:1px}.tcase .te{display:none}.tcase .tn{color:#eff3f4!important;font-size:12px!important}.tcase .tq{color:#b8c7ce!important;font-size:10px!important}.tcase .tv{font-size:10px!important}
-#empireHud{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:min(390px,44vw);z-index:3;background:#0d1a22e8;border:1px solid #52636c;border-radius:6px;color:#e6edef;padding:12px 14px;pointer-events:none;box-shadow:0 5px 24px #0005}
+#empireHud{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 24px);left:calc(50% + 88px);width:min(360px,calc(50vw - 112px));z-index:5;background:#0d1a22e8;border:1px solid #52636c;border-radius:6px;color:#e6edef;padding:12px 14px;pointer-events:none;box-shadow:0 5px 24px #0005}
 #empireHud[hidden],body.lobby #empireHud,body.uiopen #empireHud{display:none!important}#empireHudTitle{display:block;font-size:10px;letter-spacing:.16em;color:#72d4bf;margin-bottom:6px}#empireHudText{display:block;font-size:12px;line-height:1.5}
 #empireHud .track{height:3px;background:#43545c;margin-top:10px}#empireProgress{display:block;height:100%;background:#73d4be;width:0;transition:width .25s}#empireMapBtn{pointer-events:auto;margin-top:8px;border:0;color:#a9bdc8;background:none;font-size:10px;cursor:pointer}
-@media(max-width:700px){.empire-layout{grid-template-columns:1fr}#empireMap svg{height:300px}#empireOps{grid-template-columns:1fr}#guerreCarte{grid-template-columns:repeat(3,minmax(0,1fr))}#guerre .card{padding:16px}#empireHud{bottom:10px;width:44vw;padding:8px}#empireHudText{font-size:10px}#empireHudTitle{font-size:8px}#start .card{padding:20px}}
-body.tv #empireHud{width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 3.2);padding:calc(var(--uh) * .5)}body.tv #empireHudTitle{font-size:calc(var(--uh) * .55)}body.tv #empireHudText{font-size:calc(var(--uh) * .7)}body.tv #empireMapBtn{font-size:calc(var(--uh) * .55)}
+@media(max-width:700px){.empire-layout{grid-template-columns:1fr}#empireMap svg{height:300px}#empireOps{grid-template-columns:1fr}#guerreCarte{grid-template-columns:repeat(3,minmax(0,1fr))}#guerre .card{padding:16px}#empireHud{bottom:calc(env(safe-area-inset-bottom) + 156px);left:16px;width:calc(100vw - 32px);padding:10px}#empireHudText{font-size:12px}#empireHudTitle{font-size:10px}#start .card{padding:20px}}
+body.tv #empireHud{left:50%;transform:translateX(-50%);width:min(30vw,720px);bottom:calc(var(--tvpad) + var(--uh) * 3.2);padding:calc(var(--uh) * .5)}body.tv #empireHudTitle{font-size:calc(var(--uh) * .55)}body.tv #empireHudText{font-size:calc(var(--uh) * .7)}body.tv #empireMapBtn{font-size:calc(var(--uh) * .55)}
 @media(max-height:500px){#empireHud{bottom:8px;width:34vw;padding:7px}#empireHudTitle{font-size:8px;margin-bottom:3px}#empireHudText{font-size:10px}#empireMapBtn{margin-top:2px}#start .card{padding:16px}#start h1{font-size:34px}#start h1 span{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
@@ -935,6 +936,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
     </div>
     <p id="bestTime"></p>
     <button class="btn" id="play">Entrer dans Marlon</button>
+    <button class="btn sec small" id="introPlay" style="margin-top:10px">Voir l’introduction · 32 s</button>
   </div>
 </div>
 
@@ -955,6 +957,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
         <canvas id="qrTV" width="180" height="180"></canvas>
         <p id="tvCastEtat">Scanne ce code avec ton téléphone puis envoie le lien à ta télé, ou tape-le dans le navigateur de la télé — le jeu s'ouvre directement en affichage géant.</p>
         <button class="btn small" id="tvCast">📡 Diffuser sur la télé</button>
+        <button class="btn sec small" id="tvTransfer">Transférer le code à la TV</button>
         <div class="tvlien" id="lienTV"></div>
       </div>
       <div class="tvcase">
@@ -1323,6 +1326,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
 </div>
 
 <script src="./vendor/three.min.js"></script>
+<script src="./cinematic.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)"></script>
 <script>
 (() => {
@@ -1337,7 +1341,7 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
   json: (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch (e) { return d; } },
 };
-const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || (/(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1' || !(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1) ? 'ultra' : 'high'),
+const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160,
   // AXE VERTICAL DE LA CAMERA : normal par defaut (pousser le stick vers le bas fait monter
   // la camera, comme dans les jeux de ville). Inversable a la demande, et retenu d'une partie
@@ -1502,6 +1506,19 @@ const NEONS = [];
 // La direction du soleil, partagée par la lumière directe, le halo du dôme et le sprite.
 // Elle REMPLACE la constante figée SUN_DIR : c'est elle qui fait tourner les ombres.
 const SOLEIL_DIR = new THREE.Vector3().copy(SUN_DIR);
+// Anchor the shadow camera to its texel grid: walking no longer makes facade edges shimmer.
+const OMBRE_AXE_X = new THREE.Vector3(), OMBRE_AXE_Y = new THREE.Vector3();
+const OMBRE_HAUT = new THREE.Vector3(0, 1, 0);
+function suitOmbres(pos) {
+  const sc = sun.shadow.camera, pas = (sc.right - sc.left) / sun.shadow.mapSize.x;
+  OMBRE_AXE_X.crossVectors(OMBRE_HAUT, SOLEIL_DIR).normalize();
+  OMBRE_AXE_Y.crossVectors(SOLEIL_DIR, OMBRE_AXE_X).normalize();
+  const x = pos.dot(OMBRE_AXE_X), y = pos.dot(OMBRE_AXE_Y);
+  sun.target.position.copy(pos)
+    .addScaledVector(OMBRE_AXE_X, Math.round(x / pas) * pas - x)
+    .addScaledVector(OMBRE_AXE_Y, Math.round(y / pas) * pas - y);
+  sun.position.copy(sun.target.position).addScaledVector(SOLEIL_DIR, 95);
+}
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
 // Ni la scène ni le monde ne bougent jamais : inutile de recomposer leur matrice à chaque
 // image, et surtout de forcer par ricochet celle de leurs 22 000 descendants (three.js r128
@@ -2572,7 +2589,7 @@ function fenceBox(cx, base, cz, w, d, h, gapsSouth = []) {   // grillage autour 
   for (let x = cx - w / 2; x <= cx + w / 2 + 0.01; x += 4) for (const z of [cz - d / 2, cz + d / 2]) box(x, base + h / 2, z, 0.16, h, 0.16, 0x2b3550, { studs: false, noRoute: true, deco: true });
   for (let z = cz - d / 2; z <= cz + d / 2 + 0.01; z += 4) for (const x of [cx - w / 2, cx + w / 2]) box(x, base + h / 2, z, 0.16, h, 0.16, 0x2b3550, { studs: false, noRoute: true, deco: true });
 }
-const glassMat = new THREE.MeshLambertMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.35, side: THREE.DoubleSide }); shared.add(glassMat);
+const glassMat = new THREE.MeshPhongMaterial({ color: 0x9bc9dd, specular: 0xddefff, shininess: 100, reflectivity: 0.25, combine: THREE.MixOperation, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide }); shared.add(glassMat);
 const AWNING = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 32; const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 32); g.fillStyle = '#e0202a'; g.fillRect(0, 0, 16, 32); g.fillRect(32, 0, 16, 32); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t; })();
 function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magasin vitré ; facing : 0 = devanture au nord, 1 = est, 2 = sud, 3 = ouest
   const th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][facing], cs = Math.cos(th), sn = Math.sin(th);
@@ -2765,16 +2782,19 @@ function declareLesParkings() {
 }
 function buildShops() {
   // ---- boutique de vêtements : vitrines avec mannequins habillés, portants, miroir, tapis rouge ----
-  shop(-19, 19.5, 9, 7, 0xb57cff, '👕 Vêtements', 0xb57cff);
-  box(-19, 0.44, 19.5, 6, 0.05, 5, 0xc23b5a, { deco: true, noEdges: true, studs: false });   // tapis
-  for (let r = 0; r < 2; r++) { box(-21.5 + r * 5, 2.6, 22.6, 3.4, 0.08, 0.15, 0x8f98ab, { deco: true, studs: false }); for (let i = 0; i < 4; i++) box(-22.7 + r * 5 + i * 0.85, 1.95, 22.6, 0.65, 1.1, 0.25, [0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xff7ad9, 0x35d0e6, 0xffffff, 0x1b2a4a][(r * 4 + i) % 8], { deco: true, studs: false }); }
-  const m1 = mannequin(-21.8, 16.8, Math.PI, { hat: 'top', jacket: 6, jersey: 3 }), m2 = mannequin(-16.2, 16.8, Math.PI, { hat: 'cowboy', jacket: 2, jersey: 7, glasses: true });
-  vitrine(-21.8, 16.8, 'accessoires', 'Chapeaux:top', '🎩 Haut-de-forme 15 🪙'); vitrine(-16.2, 16.8, 'accessoires', 'Chapeaux:cowboy', '🤠 Chapeau cowboy 12 🪙');
-  const m3 = mannequin(-22.5, 21, -Math.PI / 2, { hat: 'crown', jacket: 5, jersey: 12, bag: 1 }); vitrine(-22.5, 21, 'accessoires', 'Chapeaux:crown', '👑 Couronne 30 🪙');
+  // La façade ouest mordait la rue de 80 cm. Une boutique plus compacte libère
+  // 1,20 m devant le trottoir et conserve le passage entre les deux commerces.
+  shop(-18, 19.5, 7, 7, 0xb57cff, '👕 Vêtements', 0xb57cff);
+  box(-18, 0.44, 19.5, 5, 0.05, 5, 0xc23b5a, { deco: true, noEdges: true, studs: false });   // tapis
+  box(-18, 2.6, 22.6, 5.4, 0.08, 0.15, 0x8f98ab, { deco: true, studs: false });
+  for (let i = 0; i < 6; i++) box(-20.2 + i * 0.85, 1.95, 22.6, 0.65, 1.1, 0.25, [0xff5c5c, 0x4f8dff, 0xffd23f, 0x5cc453, 0xff7ad9, 0x35d0e6][i], { deco: true, studs: false });
+  const m1 = mannequin(-20.2, 16.8, Math.PI, { hat: 'top', jacket: 6, jersey: 3 }), m2 = mannequin(-16.2, 16.8, Math.PI, { hat: 'cowboy', jacket: 2, jersey: 7, glasses: true });
+  vitrine(-20.2, 16.8, 'accessoires', 'Chapeaux:top', '🎩 Haut-de-forme 15 🪙'); vitrine(-16.2, 16.8, 'accessoires', 'Chapeaux:cowboy', '🤠 Chapeau cowboy 12 🪙');
+  const m3 = mannequin(-20.5, 21, -Math.PI / 2, { hat: 'crown', jacket: 5, jersey: 12, bag: 1 }); vitrine(-20.5, 21, 'accessoires', 'Chapeaux:crown', '👑 Couronne 30 🪙');
   box(-14.9, 1.6, 20, 0.12, 2.2, 2.4, 0, { material: new THREE.MeshLambertMaterial({ color: 0xbfe6ff, emissive: 0x334455 }), deco: true, noEdges: true });   // miroir
-  box(-19, 0.85, 22.2, 2.2, 0.9, 0.8, C.wood, { studs: false, noRoute: true }); box(-19, 1.4, 22.2, 0.4, 0.2, 0.3, 0x1b1b1b, { deco: true, studs: false });   // caisse
-  city.cabin = { x: -19, z: 20.2 }; city.cabinIn = true;
-  vitrine(-19, 21.5, 'accessoires', null, '👕 Toute la boutique', 1.6);
+  box(-18, 0.85, 22.2, 2.2, 0.9, 0.8, C.wood, { studs: false, noRoute: true }); box(-18, 1.4, 22.2, 0.4, 0.2, 0.3, 0x1b1b1b, { deco: true, studs: false });   // caisse
+  city.cabin = { x: -18, z: 20.2 }; city.cabinIn = true;
+  vitrine(-18, 21.5, 'accessoires', null, '👕 Toute la boutique', 1.6);
   // ---- snack : comptoir, vitrine réfrigérée, machine à glaces, terrasse avec parasols ----
   shop(-9.5, 19.5, 8, 7, 0xffa040, '🍔 Snack', 0xffa040);
   box(-9.5, 0.85, 19.5, 5.2, 1, 1, C.wood, { studs: false, noRoute: true }); box(-9.5, 1.5, 19.5, 4.8, 0.35, 0.9, 0xf4f6fa, { deco: true, studs: false });   // comptoir
@@ -3758,7 +3778,7 @@ function buildCasino(x, z) {
   const cols = [0x1b2a4a, 0x2b1a3a, 0x1a2b3a, 0x3a1a2a];
   // Le Boulevard du casino (9 m, x = 60) passait DANS les deux immeubles du milieu de cette
   // rangee : on laisse un trou de 26 m en son centre, la ou il descend vers la ville.
-  for (const [i, dx] of [[0, -46], [1, -32], [2, -18], [3, 18], [4, 32], [5, 46]]) building(x + dx, z - 34, 10, 10 + (i % 3) * 6, 10, cols[i % 4]);
+  for (const [i, dx] of [[0, -46], [1, -32], [2, -18], [3, 18], [4, 32], [5, 44]]) building(x + dx, z - 34, 10, 10 + (i % 3) * 6, 10, cols[i % 4]);   // dernier immeuble reculé du Chemin des Fougères
   // la Desserte du casino (z = 282) traversait le premier immeuble de cette colonne : elle
   // commence maintenant 8 m plus au sud, et la colonne s'arrete avant l'Avenue du casino.
   for (let i = 0; i < 4; i++) building(x + 30, z - 8 + i * 12, 11, 12 + (i % 2) * 8, 11, cols[(i + 1) % 4]);
@@ -4787,6 +4807,17 @@ const WINDOWS = (() => {
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
 
+// Glass highlights are masked to the panes, leaving masonry and mullions matte.
+const WINDOWS_SPEC = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#080808'; g.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 512; y += 128) for (let x = 0; x < 512; x += 128) {
+    g.fillStyle = '#c8c8c8'; g.fillRect(x + 21, y + 17, 86, 90);
+    g.fillStyle = '#181818'; g.fillRect(x + 61, y + 17, 4, 90); g.fillRect(x + 21, y + 60, 86, 3);
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+})();
+
 // LA CHAUSSEE : un vrai bitume (grain), une ligne blanche continue sur chaque bord et la
 // ligne jaune discontinue au milieu. Une tuile = 4 m de route, dans la largeur de la voie.
 const ROAD = (() => {
@@ -4904,7 +4935,8 @@ function building(x, z, w, h, d, color, dir) {
   const GF = 3.8, hh = Math.max(h - GF, 2.2);   // rez-de-chaussée creux : on entre dans le hall
   const tx = WINDOWS.clone(); tx.needsUpdate = true; tx.repeat.set(w / 8.8, hh / 8.8);
   const tz = WINDOWS.clone(); tz.needsUpdate = true; tz.repeat.set(d / 8.8, hh / 8.8);
-  const mx = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x929799), 0.65), map: tx, shininess: 24, specular: 0x485c67 }), mz = mx.clone(); mz.map = tz;
+  // r128 shares map-transformed vUv with specularMap: one mask serves every facade repeat.
+  const mx = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x929799), 0.65), map: tx, specularMap: WINDOWS_SPEC, shininess: 72, specular: 0x91b4c3, envMap: empireEnvironment(), reflectivity: 0.16, combine: THREE.MixOperation }), mz = mx.clone(); mz.map = tz;
   const ex = WINMASK.clone(); ex.needsUpdate = true; ex.repeat.set(w / 8.8, hh / 8.8); const ez = WINMASK.clone(); ez.needsUpdate = true; ez.repeat.set(d / 8.8, hh / 8.8);
   mx.emissiveMap = ex; mz.emissiveMap = ez; mx.emissive.set(0x000000); mz.emissive.set(0x000000); city.buildings.push(mx, mz);
   box(x, GF + hh / 2, z, w, hh, d, color, { material: [mx, mx, lam(color), lam(color), mz, mz] });   // les étages
@@ -5794,7 +5826,7 @@ function numberDecal(n, color) {
   g.fillStyle = '#1b2a4a'; g.font = 'bold 76px Nunito, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), 64, 70);
   return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true });
 }
-const glassCar = new THREE.MeshPhongMaterial({ color: 0x7893a4, specular: 0xc8e5ed, shininess: 110, transparent: true, opacity: 0.56 }); shared.add(glassCar);
+const glassCar = new THREE.MeshPhongMaterial({ color: 0x7893a4, specular: 0xc8e5ed, shininess: 110, reflectivity: 0.3, combine: THREE.MixOperation, transparent: true, opacity: 0.56, depthWrite: false }); shared.add(glassCar);
 const chrome = lam(0xd8dde6), darkM = lam(0x23262e), tireM = lam(0x1e1e1e);
 // L'AILE AU-DESSUS DE LA ROUE. C'etait une planche noire de 20 cm collee sur le flanc, qui
 // depassait comme une equerre : rien a voir avec un passage de roue. C'est maintenant un
@@ -6175,12 +6207,18 @@ const EMPIRE_OPERATIONS = [
   { id: 'defense', name: 'Tenir la ligne', desc: 'Rejoins le quartier menacé et repousse l’attaque en cours.', reward: 200, rep: 40, seconds: 90, defense: true },
 ];
 function empireEscape(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function guerreNombre(value, min, max, fallback = 0) {
+  // Une sauvegarde JSON endommagée ne doit ni concaténer l'argent, ni injecter NaN
+  // dans les revenus. Les anciennes valeurs numériques enregistrées en texte restent lues.
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return fallback;
+  const n = Number(value); return Number.isFinite(n) ? clamp(n, min, max) : fallback;
+}
 function restoreEmpire(d) {
   empire.defenses = {}; empire.completed = []; empire.wins = 0;
-  if (!d || typeof d !== 'object') return;
-  for (const k of Object.keys(EMPIRE_LINKS)) empire.defenses[k] = clamp(Math.floor(Number(d.defenses && d.defenses[k]) || 0), 0, 3);
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return;
+  for (const k of Object.keys(EMPIRE_LINKS)) empire.defenses[k] = Math.floor(guerreNombre(d.defenses && d.defenses[k], 0, 3));
   empire.completed = Array.isArray(d.completed) ? [...new Set(d.completed.filter(id => EMPIRE_OPERATIONS.some(o => o.id === id)))] : [];
-  empire.wins = Math.max(0, Math.min(100000, Math.floor(Number(d.wins) || 0)));
+  empire.wins = Math.floor(guerreNombre(d.wins, 0, 100000));
 }
 function empireCanExpand(k, owner) {
   if (!EMPIRE_LINKS[k]) return false;
@@ -6189,19 +6227,49 @@ function empireCanExpand(k, owner) {
   if (!hasLand) return !['northwest', 'finance', 'freight', 'docks'].includes(k);
   return EMPIRE_LINKS[k].some(t => proprio(t) === owner);
 }
+// A connected supply network makes expansion a choice: cut-off districts still
+// earn half their income, so losing one bridge never makes the campaign unwinnable.
+function empireSupply() {
+  const owned = TERRITOIRES.filter(t => proprio(t.k) === 'joueur').map(t => t.k);
+  const remaining = new Set(owned), groups = [];
+  while (remaining.size) {
+    const queue = [remaining.values().next().value], group = [];
+    while (queue.length) {
+      const k = queue.pop(); if (!remaining.delete(k)) continue;
+      group.push(k);
+      for (const n of EMPIRE_LINKS[k] || []) if (remaining.has(n)) queue.push(n);
+    }
+    groups.push(group);
+  }
+  groups.sort((a, b) => b.length - a.length || Number(b.includes('centre')) - Number(a.includes('centre')));
+  return new Set(groups[0] || []);
+}
+function empireEconomy() {
+  const supply = empireSupply();
+  let value = 0, isolated = 0;
+  for (const t of TERRITOIRES) if (proprio(t.k) === 'joueur') {
+    const linked = supply.has(t.k); value += t.v * (linked ? 1 : .5); if (!linked) isolated++;
+  }
+  const bankBonus = supply.has('banque') ? 1.25 : 1;
+  return { supply, isolated, income: Math.floor(value * (6 + Math.floor(gang.rep / 200) * 2) * bankBonus), bankBonus };
+}
+function empireFortifyCost(k) {
+  return Math.round(80 * ((empire.defenses[k] || 0) + 1) * (empireSupply().has('industriel') ? .8 : 1));
+}
 function empireGuardCount(t) {
   return gang.membres.filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.pos.x - t.x, b.pos.z - t.z) < t.r).length
     + (gang.membresLibres || []).filter(b => !b.ko && !b.captif && (b.hp == null || b.hp > 0) && Math.hypot(b.x - t.x, b.z - t.z) < t.r).length;
 }
 function empireFortify(k) {
   if (!city.on || proprio(k) !== 'joueur' || !EMPIRE_LINKS[k]) return false;
-  const n = empire.defenses[k] || 0, cost = 80 * (n + 1);
+  const n = empire.defenses[k] || 0, cost = empireFortifyCost(k);
   if (n >= 3) { msg('Défense maximale : niveau 3.', 1800); return false; }
   if (wallet < cost) { msg(`Il te manque ${cost - wallet} pièces pour cette défense.`, 2400); return false; }
   wallet -= cost; empire.defenses[k] = n + 1; saveWallet(); saveGuerre(); updateHud(); majGuerre();
   msg(`Défense renforcée · niveau ${n + 1}/3`, 2200); return true;
 }
 function empireStartOperation(id) {
+  if (mission.cur) { msg('Termine la mission du bureau avant de lancer une opération territoriale.', 3200); return false; }
   if (!city.on || empire.operation) { msg('Termine ou abandonne d’abord l’opération en cours.', 2500); return false; }
   const def = EMPIRE_OPERATIONS.find(o => o.id === id); if (!def) return false;
   let route = def.route ? [...def.route] : [empire.selected];
@@ -6221,6 +6289,7 @@ function empireEndOperation(success) {
   const op = empire.operation; if (!op) return;
   const def = EMPIRE_OPERATIONS.find(o => o.id === op.id);
   empire.operation = null;
+  clearBeacon('empire');
   if (success) {
     // First completion pays full value; replay rewards are smaller and shown in the UI.
     const reward = empire.completed.includes(op.id) ? Math.round(def.reward * .4) : def.reward;
@@ -6231,7 +6300,7 @@ function empireEndOperation(success) {
 }
 function empireTrack(k, close = true) {
   const t = TERRITOIRES.find(t => t.k === k); if (!t) return;
-  empire.selected = k; setBeacon(t.x, t.z, .3);
+  empire.selected = k; setBeacon(t.x, t.z, .3, empire.operation ? 'empire' : 'autre');
   if (close) { closeUI(); msg(`OBJECTIF · ${t.n} · ${Math.round(Math.hypot(P.pos.x - t.x, P.pos.z - t.z))} m`, 2500); }
 }
 function empireResolveAttack() {
@@ -6303,8 +6372,13 @@ function empireMapSvg() {
 }
 function renderEmpirePanel() {
   const t = TERRITOIRES.find(t => t.k === empire.selected) || TERRITOIRES[0], mine = proprio(t.k) === 'joueur', n = empire.defenses[t.k] || 0;
+  const economy = empireEconomy(), attack = empire.attack && empire.attack.k === t.k ? empire.attack : null;
+  const defense = n + empireGuardCount(t);
   $('empireMap').innerHTML = empireMapSvg();
   $('empireSelected').innerHTML = `<span class="eyebrow">RENSEIGNEMENTS · SECTEUR</span><h3>${t.n}</h3><p>${empireEscape(nomGang(proprio(t.k)))} · valeur ${t.v} · défense ${n}/3</p><p>${mine ? 'Territoire contrôlé. Les défenses et les recrues présentes repoussent les attaques.' : empireCanExpand(t.k, 'joueur') ? 'Frontière accessible. Rejoins le secteur avec une recrue et élimine la présence rivale pour le capturer.' : 'Frontière inaccessible. Conquiers d’abord un secteur voisin relié sur la carte.'}</p><button class="btn" data-empire="track">Marquer l’objectif</button>${mine ? `<button class="btn sec" data-empire="fortify" ${n >= 3 ? 'disabled' : ''}>${n >= 3 ? 'Défense maximale' : 'Renforcer · ' + 80 * (n + 1) + ' pièces'}</button>` : ''}`;
+  $('empireSelected').innerHTML += `<p><b>Réseau : ${economy.supply.size}/${nbTerritoires('joueur')} quartiers reliés</b><br>Revenus prévus : ${economy.income} pièces / 2 min dans la planque.${economy.isolated ? '<br>Quartiers isolés : revenus divisés par deux. Reprends les liaisons.' : ''}</p><p>Banque reliée : revenus +25 %. Industrie reliée : fortifications −20 %.${mine ? '<br>' + (economy.supply.has(t.k) ? 'Ce secteur est ravitaillé.' : 'Ce secteur est isolé.') + ' Défense locale : ' + defense + ' (+2 si tu es présent).' : ''}${attack ? '<br><strong>Attaque : force ' + attack.strength + ' · ' + Math.ceil(attack.remaining) + ' s restantes.</strong>' : ''}</p>`;
+  const fortifyButton = $('empireSelected').querySelector('[data-empire="fortify"]');
+  if (fortifyButton && n < 3) fortifyButton.textContent = 'Renforcer · ' + empireFortifyCost(t.k) + ' pièces';
   $('empireOps').innerHTML = EMPIRE_OPERATIONS.map(o => `<button class="operation" data-operation="${o.id}" ${empire.operation ? 'disabled' : ''}><b>${o.name}</b><span>${o.desc}</span><small>${empire.completed.includes(o.id) ? 'REJOUER · ' + Math.round(o.reward * .4) : 'PREMIÈRE RÉUSSITE · ' + o.reward} pièces · ${o.rep} respect</small></button>`).join('')
     + (empire.operation ? '<button class="btn sec" data-empire="abandon">Abandonner l’opération</button>' : '');
 }
@@ -6314,12 +6388,21 @@ function empireEnvironment() {
   const faces = [];
   for (let side = 0; side < 6; side++) {
     const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-    const sky = g.createLinearGradient(0, 0, 0, 128); sky.addColorStop(0, '#789caf'); sky.addColorStop(.5, '#d2dcd9'); sky.addColorStop(.54, '#515d61'); sky.addColorStop(1, '#242a30');
+    const sky = g.createLinearGradient(0, 0, 0, 128);
+    if (side === 2) { sky.addColorStop(0, '#739dbb'); sky.addColorStop(1, '#99b9cb'); }
+    else if (side === 3) { sky.addColorStop(0, '#555957'); sky.addColorStop(1, '#333b40'); }
+    else { sky.addColorStop(0, '#789caf'); sky.addColorStop(.5, '#d2dcd9'); sky.addColorStop(.54, '#515d61'); sky.addColorStop(1, '#242a30'); }
     g.fillStyle = sky; g.fillRect(0, 0, 128, 128);
-    if (side !== 2) for (let x = 0; x < 128; x += 18) { const h = 12 + ((x * 7 + side * 11) % 31); g.fillStyle = '#56616b'; g.fillRect(x, 66 - h, 12, h); }
+    if (side !== 2 && side !== 3) for (let x = 0; x < 128; x += 18) {
+      const h = 12 + ((x * 7 + side * 11) % 31); g.fillStyle = '#56616b'; g.fillRect(x, 66 - h, 12, h);
+      g.fillStyle = '#8caaad'; for (let yy = 69 - h; yy < 62; yy += 7) g.fillRect(x + 3, yy, 3, 3);
+    }
     faces.push(c);
   }
-  empire.env = new THREE.CubeTexture(faces); empire.env.needsUpdate = true; shared.add(empire.env); return empire.env;
+  empire.env = new THREE.CubeTexture(faces); empire.env.needsUpdate = true; shared.add(empire.env);
+  glassMat.envMap = glassCar.envMap = empire.env;
+  glassMat.needsUpdate = glassCar.needsUpdate = true;
+  return empire.env;
 }
 function buildEmpireDistricts() {
   // Four north blocks, connected by a ring road with a western link to the existing city.
@@ -6370,7 +6453,8 @@ function releaseGamepad() {
   for (const key of Object.values(PAD_MAP)) keys.delete(key);
   pad.x = pad.y = pad.gaz = pad.frein = 0; pad.l2 = pad.l2Bas = pad.tirR2 = false;
   pad.bas = null; pad.lu = null; pad.longT = {}; pad.longFait = {}; pad.baisse = false;
-  P.run = false; P.aimHeld = false; P.jumpBuf = 0; jumpHeld = downHeld = false;
+  pad.a = false; pad.menuDir = null; pad.hautFait = true; pad.neutralRequired = true;
+  P.run = false; P.aimHeld = false; P.jumpBuf = 0; P.vDown = null; jumpHeld = downHeld = false;
   setGarde(false); setAccroupi(false);
 }
 function initEmpireUI() {
@@ -6389,7 +6473,8 @@ function initEmpireUI() {
     e.preventDefault(); if (uiOpen === 'guerre') closeUI(); else if (!uiOpen) openGuerre();
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') releaseGamepad(); });
-  window.addEventListener('blur', releaseGamepad);
+  window.addEventListener('blur', () => { pad.suspended = true; releaseGamepad(); });
+  window.addEventListener('focus', () => { pad.suspended = false; });
   $('padLeg').innerHTML = $('padLeg').innerHTML.replace('arme équipée : 🎯 braquer / rengainer', 'arme équipée : viser en maintenant L2');
 }
 
@@ -6806,12 +6891,14 @@ const beacon = { m: null, mission: null };
 // mission est PRIORITAIRE : tant qu'elle a un objectif, rien d'autre ne peut le remplacer
 // ni l'effacer.
 function setBeacon(x, z, y = 0, src = 'autre') {
+  if (empire.operation && src !== 'empire') return;
   if (src === 'mission') beacon.mission = { x, z, y };
   else if (beacon.mission) return;
   if (!beacon.m) { const geo = new THREE.CylinderGeometry(0.7, 0.7, 60, 12, 1, true); beacon.m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); const top = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), neonMat(0x7fe0ff)); top.position.y = 4; beacon.m.add(top); beacon.top = top; scene.add(beacon.m); }
   beacon.m.position.set(x, y + 30, z); beacon.top.position.y = -26 + 2.5; beacon.m.visible = true; beacon.x = x; beacon.z = z; beacon.y = y;
 }
 function clearBeacon(src = 'autre') {
+  if (empire.operation && src !== 'empire') return;
   if (src === 'mission') beacon.mission = null;
   else if (beacon.mission) return;
   if (beacon.m) beacon.m.visible = false; gpsRoute.hide();
@@ -7648,6 +7735,7 @@ const ACT_MISSIONS = {
   police: { demarre: policeDemarre, tick: policeTickAct, bandeau: policeBandeauAct, nettoie: policeNettoieAct },
 };
 function startMission(id) {
+  if (empire.operation) { msg('Termine ou abandonne l’opération territoriale avant une mission du bureau.', 3200); return; }
   if (jail.on) { msg('🔒 Pas de mission en prison', 1000); return; }
   // On cherche la mission AVANT d'abandonner celle en cours : sur un identifiant inconnu ou
   // une mission encore verrouillée, on perdait celle qu'on était en train de jouer.
@@ -9807,7 +9895,7 @@ function majVoiesBarrees() {
 // imposer la voie la plus proche coutait jusqu'a 450 m de detour pour 90 m a vol d'oiseau
 // (mesure : de (-81, 44) a (2, 8), la voiture montait 95 m au nord, traversait toute la ville
 // d'est en ouest et redescendait — la voie d'en face etait a TROIS METRES).
-function cheminAretes(e0, e1, cibles) {
+function cheminAretes(e0, e1, cibles, arriveesDerriere) {
   const G = city.graphe, A = G.aretes;
   const multi = e0 && e0 instanceof Map;
   if (!cibles && !multi && e0.id === e1.id) return [e0];
@@ -9822,27 +9910,36 @@ function cheminAretes(e0, e1, cibles) {
         if (r < tas.length && tas[r][0] < tas[m][0]) m = r;
         if (m === i) break; const t = tas[m]; tas[m] = tas[i]; tas[i] = t; i = m; } }
     return top; };
-  let but = cibles ? -1 : e1.id, mieux = Infinity;
+  let but = cibles ? -1 : e1.id, mieux = Infinity, finDepuis = -1;
   const depart0 = [];
   if (multi) e0.forEach((c0, id) => { if (c0 < dist[id]) { dist[id] = c0; push(id, c0); depart0.push(id); } });
   else { dist[e0.id] = 0; push(e0.id, 0); depart0.push(e0.id); }
-  if (cibles) for (const id of depart0) { const r = cibles.get(id); if (r != null && dist[id] + r < mieux) { mieux = dist[id] + r; but = id; } }
+  // Le coût d'une arête représente son extrémité. Une arrivée derrière le départ
+  // ne peut pas être atteinte en remontant cette même voie à contresens. Elle reste
+  // atteignable après un tour du quartier : on évalue aussi les transitions avant
+  // relaxation, même si l'arête de départ possède déjà un coût plus petit.
+  const arrive = (id, d, depuis) => {
+    if (!cibles || (depuis < 0 && arriveesDerriere && arriveesDerriere.has(id))) return;
+    const r = cibles.get(id);
+    if (r != null && d + r < mieux) { mieux = d + r; but = id; finDepuis = depuis; }
+  };
+  if (cibles) for (const id of depart0) arrive(id, dist[id], -1);
   while (tas.length) {
     const [d, id] = pop();
     if (d > dist[id] + 1e-6) continue;
-    if (cibles) { const r = cibles.get(id); if (r != null && d + r < mieux) { mieux = d + r; but = id; } }
+    if (cibles) arrive(id, d, prev[id]);
     else if (id === e1.id) break;
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
       const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
+      if (cibles) arrive(e2.id, nd, id);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
   }
   if (but < 0 || !isFinite(dist[but])) return null;
-  const out = [];
-  const estDepart = id => multi ? e0.has(id) : id === e0.id;
-  for (let id = but; id >= 0; id = prev[id]) { out.push(A[id]); if (estDepart(id)) break; }
+  const out = cibles ? [A[but]] : [];
+  for (let id = cibles ? finDepuis : but; id >= 0; id = prev[id]) out.push(A[id]);
   return out.reverse();
 }
 // L'ITINERAIRE PAR LES VOIES : une suite de points [x, z] sur la voie de droite, echantillonnee
@@ -9880,14 +9977,15 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
   // toutes les six secondes, la voie d'en face redevient la moins chere, le premier point
   // repasse derriere — demi-tour sans fin. Une fois la voie de depart choisie, on la GARDE tant
   // qu'on la longe (`forceDepart`), et elle n'est reconsideree qu'a la prochaine destination.
-  const departs = new Map();
+  const departs = new Map(), arriveesDerriere = new Set();
   for (const e of city.graphe.aretes) {
     const p = projVoie(x1, z1, e);
     if (p.d > A.d + 6) continue;
     if (interdit != null && e.id === interdit) continue;   // manoeuvre impossible : on n'y revient pas
     if (e.route !== A.arete.route && p.d > A.d + 0.5) continue;
     const contre = cap != null && Math.abs(CAP(e.sens - cap)) > 1.6;
-    const cout = (p.d - A.d) * 3 + (contre ? COUT_DEMI_TOUR_DEPART : 0) + p.t * e.long * (10 / e.vmax);
+    const cout = (p.d - A.d) * 3 + (contre ? COUT_DEMI_TOUR_DEPART : 0) + (1 - p.t) * e.long * (10 / e.vmax);
+    if (projVoie(x2, z2, e).t < p.t - 0.001) arriveesDerriere.add(e.id);
     const v = departs.get(e.id); if (v == null || cout < v) departs.set(e.id, cout);
   }
   // LA VOIE GELEE par l'appelant : tant qu'on la LONGE ENCORE, elle devient le seul depart
@@ -9901,10 +9999,13 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
     // sans l'avoir quittee. Mesure (trajet de remorquage) : a 8 m, le gel lachait des que le
     // camion s'ecartait de sa ligne, la voie d'en face redevenait la moins chere, et le trace
     // basculait entre 455 m et 362 m a chaque recalcul — le camion tournait en rond.
-    if (pf.d <= Math.max(A.d + 6, 14)) { departs.clear(); departs.set(forceDepart, 0); }
+    if (pf.d <= Math.max(A.d + 6, 14)) {
+      departs.clear(); departs.set(forceDepart, (1 - pf.t) * G.aretes[forceDepart].long * (10 / G.aretes[forceDepart].vmax));
+      if (projVoie(x2, z2, G.aretes[forceDepart]).t < pf.t - 0.001) arriveesDerriere.add(forceDepart);
+    }
   }
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
-  const suite = memeVoie ? [A.arete] : cheminAretes(departs.size ? departs : A.arete, B.arete, cibles);
+  const suite = memeVoie ? [A.arete] : cheminAretes(departs.size ? departs : A.arete, B.arete, cibles, arriveesDerriere);
   itineraireDepart = suite && suite.length ? suite[0].id : -1;   // lu par l'appelant pour geler le depart
   if (!suite) return null;
   // ON NE REJOINT PAS UNE VOIE PAR LE TRAVERS. Quand le calcul retient une AUTRE voie que celle
@@ -10113,7 +10214,8 @@ function ecarteChaussee(c, dt, sens, but) {
 function codeRoute(c, dt, opt) {
   opt = opt || {};
   const h = c.h, fx = Math.sin(h), fz = Math.cos(h), spd = Math.abs(c.speed || 0);
-  const frein = 2.6 + spd * spd / 7;   // de quoi s'arreter en douceur (environ 3,5 m/s²)
+  const avant = (c.baseD || 4.4) / 2;
+  const frein = avant + 1 + spd * spd / 7;   // distance de freinage mesurée au pare-chocs, y compris les camions
   let v = 99, raison = null;
   const cap = (val, r) => { if (val < v) { v = val; raison = r; } };
   const approche = (al, marge) => Math.max(0, (al - marge) * 1.7);
@@ -10132,7 +10234,7 @@ function codeRoute(c, dt, opt) {
     if (Math.abs(tl.x - c.x) > 45 || Math.abs(tl.z - c.z) > 45) continue;
     if (Math.abs(CAP(tl.sens - h)) > 0.5) continue;
     const al = devant(tl.ligne.x, tl.ligne.z, frein + 2.5, 5);
-    if (al > 0) { const v2 = approche(al, 1.4); if (vFeu == null || v2 < vFeu) vFeu = v2; }
+    if (al > 0) { const v2 = approche(al, avant + 0.5); if (vFeu == null || v2 < vFeu) vFeu = v2; }
   }
   // Un feu qui reste rouge plus longtemps qu'un cycle entier est un feu EN PANNE : on ne
   // l'attend pas jusqu'a la fin des temps, on franchit prudemment. (C'est aussi ce qui sauve
@@ -10149,9 +10251,9 @@ function codeRoute(c, dt, opt) {
     if (Math.abs(CAP(q.sens - h)) > 0.5) continue;
     const al = devant(q.x, q.z, frein + 3, 7);
     if (al < 0) continue;
-    if (q.type === 'cede') { if (!croisementLibre(c, 18, false)) cap(approche(al, 1.2), 'cede'); continue; }
+    if (q.type === 'cede') { if (!croisementLibre(c, 18, false)) cap(approche(al, avant + 0.4), 'cede'); continue; }
     if (c.stopOK === q) continue;                       // arret deja marque a ce stop
-    if (spd > 0.6 || al > 2.8) { c.stopDep = 0; cap(approche(al, 1.2), 'stop'); continue; }
+    if (spd > 0.6 || al > avant + 1) { c.stopDep = 0; cap(approche(al, avant + 0.4), 'stop'); continue; }
     // l'arret marque se compte en temps ECOULE (dt) : compare a l'horloge, il ne s'achevait
     // jamais quand un banc d'essai fait rouler la voiture avec `simTime` fige
     c.stopDep = (c.stopDep || 0) + (dt || 0);
@@ -10167,7 +10269,7 @@ function codeRoute(c, dt, opt) {
     if (Math.abs(p.x - c.x) > 28 || Math.abs(p.z - c.z) > 28) continue;
     const prof = Math.abs(fx) * p.w + Math.abs(fz) * p.d;
     const al = devant(p.x, p.z, frein + prof, 6);
-    if (al > 0 && pietonSurPassage(p)) { alP = al; margeP = prof / 2 + 0.9; break; }
+    if (al > 0 && pietonSurPassage(p)) { alP = al; margeP = prof / 2 + avant + 0.6; break; }
   }
   if (alP > 0) {
     c.passT = (c.passT || 0) + (dt || 0);
@@ -10207,7 +10309,7 @@ function codeRoute(c, dt, opt) {
       if (k.feu || k.panneau) continue;
       if (Math.abs(k.cx - c.x) > 32 || Math.abs(k.cz - c.z) > 32) continue;
       const al = devant(k.cx, k.cz, frein + k.larg, 5);
-      if (al > 0 && !carrefourLibre(c, k)) cap(approche(al, k.larg + 0.8), 'priorite');
+      if (al > 0 && !carrefourLibre(c, k)) cap(approche(al, k.larg + avant + 0.4), 'priorite');
     }
   }
   return { v, raison };
@@ -10306,10 +10408,14 @@ function traficDestination(c) {
   const G = city.graphe;
   if (!G || !G.noeuds.length) { c.ia = null; return false; }
   majVoiesBarrees();
+  // Un véhicule déjà dans le trafic garde son sens de circulation. Le choix
+  // libre du départ est réservé aux véhicules pilotés qui savent manœuvrer :
+  // sinon un camion recevait la voie opposée derrière lui et sortait de la rue.
+  const depart = voieProche(c.x, c.z, capDeRoute(c));
   for (let essai = 0; essai < 6; essai++) {
     const n = G.noeuds[Math.floor(traficRnd() * G.noeuds.length)];
     if (Math.hypot(n.x - c.x, n.z - c.z) < 40) continue;   // une vraie traversee, pas trois metres
-    const r = itineraireVoies(c.x, c.z, n.x, n.z, capDeRoute(c));
+    const r = itineraireVoies(c.x, c.z, n.x, n.z, capDeRoute(c), depart ? depart.arete.id : null);
     if (r && r.length > 2) { c.ia = { route: r, i: 1, dest: [n.x, n.z], t: simTime, sig: voiesBarreesSig }; return true; }
   }
   c.ia = null; return false;
@@ -10327,7 +10433,12 @@ function traficPose(c) {   // pose UN vehicule sur une voie libre, au hasard, da
     if (FLOTTE.some(v => v !== c && Math.hypot(v.x - p.px, v.z - p.pz) < 12)) continue;
     if (Math.hypot(p.px - P.pos.x, p.pz - P.pos.z) < 30) continue;   // jamais sous les yeux du joueur
     if (carBlocked(p.px, p.pz, c.solid, r0, { veh: true, bar: true }, 0, e.sens, l0)) continue;
-    c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null; c.libre = null; c.figeT = 0;
+    c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null; c.libre = null;
+    c.figeT = c.attenteT = c.bloqueT = c.fileT = c.feuT = c.passT = c.pietT = 0;
+    c.degageFin = c.degageRepos = c.dTourStop = c.departNonT = c.destT = 0;
+    c.dTour = c.stopOK = c.sireneVeh = c.voieSir = null; c.stopDep = c.ecart = 0;
+    c.double = c.recule = c.stopped = false; c.raison = null; c.routeRefaire = false; c.departVoie = -1;
+    c.reel = c.reelL = 0; c.reelX = c.reelLX = c.x; c.reelZ = c.reelLZ = c.z; c.reelT = c.reelLT = simTime;
     c.y = groundCar(c.x, c.z, c.solid, 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
     vehicleSolid(c); return true;
   }
@@ -10520,7 +10631,7 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   c.pas = Math.hypot(c.x - x0, c.z - z0);
   c.y = groundCar(c.x, c.z, c.solid, c.y || 0);
   c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
-  if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= spd * dt / 0.3; });
+  if (c.wheels) c.wheels.forEach(w => { w.rotation.x -= Math.sign(spd) * c.pas / 0.3; });
   vehicleSolid(c);
   return bloque;
 }
@@ -10562,12 +10673,13 @@ function gapDevant(c, latVoulu) {
 // chaussee, et dans la largeur de la caisse (1,35 m de demi-couloir) plutot que d'un bus.
 function pietonDevant(c) {
   const fx = Math.sin(c.h), fz = Math.cos(c.h), spd = Math.abs(c.speed || 0);
-  const portee = 3.2 + spd * 0.7, lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.2);
+  const avant = (c.baseD || 4.4) / 2;
+  const portee = avant + 1 + spd * 0.7, lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.2);
   const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, al = dx * fx + dz * fz;
     // hors chaussee (parking, allee, place), on freine quand meme pour qui est a TOUCHER le
     // pare-chocs : on ne renverse personne, meme au milieu d'un parking.
     return Math.abs(y - (c.y || 0)) < 2.4 && al > 0 && al < portee && Math.abs(-dx * fz + dz * fx) < lat
-      && (surLaChaussee(x, z, 0) || al < 2.4); };
+      && (surLaChaussee(x, z, 0) || al < avant + 0.5); };
   if (joueurAPied() && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
   for (const b of bots) if (!b.drive && b.av && b.av.group.visible && gene(b.pos.x, b.pos.y, b.pos.z)) return true;
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
@@ -10744,7 +10856,20 @@ function traceSuit(c, R, st) {
   for (let k = i + 1; k < n - 1; k++) reste += Math.hypot(R[k + 1][0] - R[k][0], R[k + 1][1] - R[k][1]);
   S.reste = reste; S.fin = false;
   // --- 2. le point de visee, a L metres devant SUR LE TRACE
-  const L = clamp(VISEE_MIN + Math.abs(c.speed || 0) * VISEE_K, VISEE_MIN, VISEE_MAX);
+  let L = clamp(VISEE_MIN + Math.abs(c.speed || 0) * VISEE_K, VISEE_MIN, VISEE_MAX);
+  // Dans un angle, une visée à 8–12 m coupe la corde et envoie le trafic sur
+  // le trottoir. On rapproche progressivement la cible quand la tangente du
+  // tracé change devant nous. Les pilotes de missions gardent leur réglage.
+  if (c.spd > 0 && city.aiCars.includes(c)) {
+    let angle = 0, vu = Math.hypot(b[0] - S.px, b[1] - S.pz), cap = Math.atan2(b[0] - a[0], b[1] - a[1]);
+    for (let k = i + 1; k < n - 1 && vu < L; k++) {
+      const dx = R[k + 1][0] - R[k][0], dz = R[k + 1][1] - R[k][1], d = Math.hypot(dx, dz);
+      if (d < 0.2) continue;
+      const prochain = Math.atan2(dx, dz); angle += Math.abs(CAP(prochain - cap)); cap = prochain; vu += d;
+    }
+    const proche = clamp(3 + Math.abs(c.speed || 0) * 0.35, 3, 6);
+    L += (proche - L) * clamp((angle - 0.25) / 0.7, 0, 1);
+  }
   let seg = i, px = S.px, pz = S.pz, rst = L;
   for (;;) {
     const q = R[seg + 1], d = Math.hypot(q[0] - px, q[1] - pz);
@@ -10860,7 +10985,7 @@ function traficRoule(c, dt, opt) {
   // arrivee : on se choisit une nouvelle destination (sauf si un autre poste pilote)
   if (S.fin && dwp < 4) { if (!opt.pilote) c.ia = null; else { c.speed = Math.max(0, c.speed - dt * 8); avanceVehicule(c, dt, c.speed, {}, h0); } return; }
   const acc = cible < (c.speed || 0) ? 5.5 : 2.2;   // on freine plus vite qu'on n'accelere
-  c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * Math.min(1, dt * acc);
+  c.speed = (c.speed || 0) + (cible - (c.speed || 0)) * (1 - Math.exp(-dt * acc));
   if (c.speed < 0.05) c.speed = 0;
   c.stopped = c.speed < 0.4;
   // ================= LE DEGAGEMENT =================
@@ -16268,6 +16393,13 @@ function drawJerseyBase(g, S, j) {
   if (j.pat === 'vband') { g.fillRect(S * 0.38, 0, S * 0.24, S); g.fillStyle = hex(j.trim); g.fillRect(S * 0.355, 0, S * 0.025, S); g.fillRect(S * 0.62, 0, S * 0.025, S); }
   if (j.pat === 'sash') { g.save(); g.translate(S / 2, S / 2); g.rotate(-Math.PI / 4); g.fillRect(-S, -S * 0.1, S * 2, S * 0.2); g.fillStyle = hex(j.trim); g.fillRect(-S, -S * 0.13, S * 2, S * 0.03); g.restore(); }
   if (j.pat === 'halves') g.fillRect(0, 0, S / 2, S);
+  const plis = g.createLinearGradient(0, 0, S, 0);
+  plis.addColorStop(0, 'rgba(0,0,0,.16)'); plis.addColorStop(.23, 'rgba(255,255,255,.035)');
+  plis.addColorStop(.52, 'rgba(0,0,0,0)'); plis.addColorStop(.78, 'rgba(255,255,255,.045)'); plis.addColorStop(1, 'rgba(0,0,0,.16)');
+  g.fillStyle = plis; g.fillRect(0, 0, S, S);
+  g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1;
+  for (const x of [S * .07, S * .93]) { g.beginPath(); g.moveTo(x, S * .16); g.lineTo(x, S * .95); g.stroke(); }
+  g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(0, S * .94, S, S * .018);
   g.fillStyle = hex(j.trim); g.beginPath(); g.arc(S / 2, 0, S * 0.14, 0, Math.PI); g.fill();   // col
   g.fillStyle = hex(j.base); g.beginPath(); g.arc(S / 2, 0, S * 0.1, 0, Math.PI); g.fill();
 }
@@ -16364,16 +16496,33 @@ const owned = new Set(store.json('superobby.owned', []));
 const saveOwned = () => store.set('superobby.owned', JSON.stringify([...owned]));
 const jerseyOf = i => JERSEYS[((i | 0) % JERSEYS.length + JERSEYS.length) % JERSEYS.length];
 const S = 0.36;
-const FACE = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 128;
-  const g = c.getContext('2d');
+function textureVisage(ferme) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'); g.scale(2, 2);
   g.fillStyle = '#f5c39a'; g.fillRect(0, 0, 128, 128);
-  g.fillStyle = '#1b2a4a';
-  const eye = x => { g.beginPath(); g.ellipse(x, 56, 7, 12, 0, 0, Math.PI * 2); g.fill(); };
-  eye(42); eye(86);
-  g.strokeStyle = '#1b2a4a'; g.lineWidth = 7; g.lineCap = 'round'; g.beginPath(); g.arc(64, 82, 20, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
-  return new THREE.CanvasTexture(c);
-})();
+  const joue = g.createRadialGradient(64, 76, 18, 64, 76, 58);
+  joue.addColorStop(0, 'rgba(255,229,193,.16)'); joue.addColorStop(1, 'rgba(154,85,57,.08)');
+  g.fillStyle = joue; g.fillRect(0, 0, 128, 128); g.lineCap = 'round';
+  for (const x of [42, 86]) {
+    g.strokeStyle = '#60432e'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(x - 8, 39); g.quadraticCurveTo(x, 36, x + 8, 39); g.stroke();
+    if (ferme) { g.strokeStyle = '#26313c'; g.beginPath(); g.moveTo(x - 7, 57); g.quadraticCurveTo(x, 62, x + 7, 57); g.stroke(); }
+    else {
+      g.fillStyle = '#fff3db'; g.beginPath(); g.ellipse(x, 57, 8, 10, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#314856'; g.beginPath(); g.ellipse(x, 58, 5.5, 8, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#172432'; g.beginPath(); g.ellipse(x, 58, 3, 5.5, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x - 2, 54, 1.8, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.strokeStyle = 'rgba(144,82,53,.5)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(65, 65); g.quadraticCurveTo(59, 76, 66, 76); g.stroke();
+  g.strokeStyle = '#704936'; g.lineWidth = 4;
+  g.beginPath(); g.arc(64, 81, 19, .19 * Math.PI, .81 * Math.PI); g.stroke();
+  g.strokeStyle = 'rgba(255,239,205,.8)'; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(64, 83, 19, .3 * Math.PI, .7 * Math.PI); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; shared.add(t); return t;
+}
+const FACE = textureVisage(false), FACE_FERMEE = textureVisage(true);
 function nameTag(name) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 128;
   const g = c.getContext('2d');
@@ -16393,6 +16542,12 @@ function renommeEtiquette(av, nom) {
   if (av.tag) { av.group.remove(av.tag); try { av.tag.material.map.dispose(); av.tag.material.dispose(); } catch (e) {} }
   av.tag = nameTag(nom); av.group.add(av.tag); return av.tag;
 }
+// Three.js r128 updates hidden descendants too. Cosmetic branches have no physics;
+// defer their matrices until worn, then update the whole branch on that same frame.
+function actualiseAccessoire(force) {
+  if (!this.visible) return;
+  THREE.Group.prototype.updateMatrixWorld.call(this, force);
+}
 function buildAvatar(cfg) {
   const g = new THREE.Group();
   g.userData.perso = true;   // (poste G) marque tout avatar : solidifieDecor ne fige jamais un personnage qui marche
@@ -16409,12 +16564,21 @@ function buildAvatar(cfg) {
   const torso = part(2 * S, 2 * S, S, [shirt, shirt, shirt, shirt, front, back], 0, 3 * S, 0, g);
   // BIJOUX : la chaîne pend au cou, le pendentif sur le torse. Tout est dans un groupe qu'on
   // vide et reconstruit quand on change de bijou à la boutique.
-  const bijouMat = M(0xffd23f), bijou2Mat = M(0xf4f6fa);
+  const bijouMat = new THREE.MeshPhongMaterial({ color: 0xeabd4e, specular: 0xffe9a1, shininess: 90, envMap: empireEnvironment(), reflectivity: .28, combine: THREE.MixOperation });
+  const bijou2Mat = new THREE.MeshPhongMaterial({ color: 0xdce2e8, specular: 0xffffff, shininess: 110, envMap: empireEnvironment(), reflectivity: .36, combine: THREE.MixOperation });
   const bijoux = new THREE.Group(); bijoux.position.set(0, 3 * S, 0); g.add(bijoux);
   const setBijou = kind => {
     if (bijoux.userData.k === kind) return;
     bijoux.userData.k = kind;
-    while (bijoux.children.length) bijoux.remove(bijoux.children[0]);
+    while (bijoux.children.length) {
+      const ancien = bijoux.children[0]; bijoux.remove(ancien);
+      if (ancien.geometry && !shared.has(ancien.geometry)) ancien.geometry.dispose();
+      // Keep the two recolourable metal materials; release disposable pendant labels.
+      if (ancien.material && ancien.material !== bijouMat && ancien.material !== bijou2Mat) {
+        if (ancien.material.map && !shared.has(ancien.material.map)) ancien.material.map.dispose();
+        ancien.material.dispose();
+      }
+    }
     const B = BIJOUX_DEF[kind]; if (!B) return;
     const mat = B.argent ? bijou2Mat : bijouMat;
     const t = new THREE.Mesh(new THREE.TorusGeometry(B.r * S, B.ep * S, 6, 18), mat);
@@ -16480,7 +16644,7 @@ function buildAvatar(cfg) {
   // LUNETTES : c'était une barre qui s'enfonçait dans le visage. Deux VERRES posés devant les
   // yeux, un pont, et deux branches qui repartent le long des tempes jusqu'aux oreilles.
   const glasses = new THREE.Group(); glasses.position.set(0, 0.84 * S, 0); head.add(glasses); glasses.visible = !!cfg.glasses;
-  const verreM = new THREE.MeshLambertMaterial({ color: 0x14203a, transparent: true, opacity: 0.82 });
+  const verreM = new THREE.MeshPhongMaterial({ color: 0x14203a, specular: 0xb9dce8, shininess: 100, envMap: empireEnvironment(), reflectivity: .22, combine: THREE.MixOperation, transparent: true, opacity: 0.82, depthWrite: false });
   const montureM = M(0x111111);
   for (const sx of [-1, 1]) part(0.5 * S, 0.34 * S, 0.1 * S, verreM, sx * 0.31 * S, 0, 0.72 * S, glasses);
   for (const sx of [-1, 1]) part(0.56 * S, 0.4 * S, 0.06 * S, montureM, sx * 0.31 * S, 0, 0.69 * S, glasses);
@@ -16583,6 +16747,8 @@ function buildAvatar(cfg) {
   };
   const rig = { armL: limb(-1.5 * S, S, sleeve, skin, 0.9 * S), armR: limb(1.5 * S, S, sleeve, skin, 0.9 * S), legL: leg(-0.5 * S), legR: leg(0.5 * S), head, groupe: g, walk: 0, swing: 0, swingG: 0, kick: 0, recul: 0, penche: 0, baisse: 0, agenou: false, garde: false, gardeK: 0, accroupi: false, porte: false, porteK: 0 };
   // MUSCLES : pectoraux, trapezes, deltoides — ils apparaissent et grossissent avec l'entrainement
+  rig.faceMat = faceMat; rig.headY0 = head.position.y;
+  rig.idlePhase = Array.from(String(cfg.name || '')).reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 1) * .017;
   const pecs = [-0.45, 0.45].map(sx => part(0.72 * S, 0.5 * S, 0.22 * S, shirt, sx * S, 3.3 * S, 0.52 * S, g));
   const trap = part(1.7 * S, 0.34 * S, 0.8 * S, shirt, 0, 4.05 * S, -0.1 * S, g);
   const delts = [-1.5, 1.5].map(sx => { const d = new THREE.Mesh(new THREE.SphereGeometry(0.62 * S, 10, 8), sleeve); d.position.set(sx * S, 3.85 * S, 0); d.castShadow = true; g.add(d); return d; });
@@ -16622,6 +16788,7 @@ function buildAvatar(cfg) {
     brasG: rig.armL, brasD: rig.armR, avantBrasG: rig.armL.coude, avantBrasD: rig.armR.coude,
     poingG: rig.armL.poing, poingD: rig.armR.poing, mainG: rig.armL.main, mainD: rig.armR.main,
     cuisseG: rig.legL, cuisseD: rig.legR, jambeG: rig.legL.genou, jambeD: rig.legR.genou };
+  for (const branche of [jacket, bag, sacDos, sacBanane, glasses, bretelles, ...Object.values(hatGroups)]) branche.updateMatrixWorld = actualiseAccessoire;
   // un mannequin de vitrine est construit sans passer par applyLook : il faut donc lui
   // monter ses chaussures et ses gants ici, sinon il restait pieds en baskets par defaut
   poseChaussures(av, cfg.chaussures || 'basket'); poseGants(av, cfg.gants || 'rien');
@@ -17150,15 +17317,15 @@ function animateRig(rig, mode, speed, dt, t) {
   // sol sont perimees, le bassin remonte et le buste se redresse.
   if (!rig.foulActive) {
     rig.pieds = null; rig.foulK = 0;
-    const r = Math.max(0, 1 - dt * 8);
+    const r = Math.exp(-Math.max(0, dt) * 8);
     rig.bassin = (rig.bassin || 0) * r; rig.inclin = (rig.inclin || 0) * r;
     if (rig.bassin < 0.001) rig.bassin = 0;
-    if (rig.inclin < 0.001) rig.inclin = 0;
+    if (Math.abs(rig.inclin) < 0.001) rig.inclin = 0;
     // l'ouverture laterale de la jambe (le pas de cote) se referme : les poses assise,
     // accroupie ou a genoux sortent avant d'avoir remis rotation.z a zero
     if (rig.legL && rig.legR) { const k = Math.min(1, dt * 10); rig.legL.rotation.z -= rig.legL.rotation.z * k; rig.legR.rotation.z -= rig.legR.rotation.z * k; }
   }
-  const ease2 = Math.min(1, dt * 12);
+  const ease2 = 1 - Math.exp(-Math.max(0, dt) * 12);
   // LE PIED RESTE A PLAT. La basket est plus longue que l'ancien pied carre : soudee au tibia,
   // sa pointe s'enfoncait de 10 cm dans le bitume au milieu de la foulee. La CHEVILLE compense
   // donc l'angle de la hanche et du genou, et la semelle reste parallele au sol. C'est calcule
@@ -17244,7 +17411,15 @@ function animateRig(rig, mode, speed, dt, t) {
   }
 }
 function animateRigCorps(rig, mode, speed, dt, t) {
-  const ease = Math.min(1, dt * 12);
+  const ease = 1 - Math.exp(-Math.max(0, dt) * 12);
+  const repos = speed < .6 && (mode === 'idle' || mode === 'walk' || mode === 'stand');
+  const tempsPerso = t + (rig.idlePhase || 0);
+  if (rig.faceMat) rig.faceMat.map = mode === 'sleep' || tempsPerso % 5.3 < .12 ? FACE_FERMEE : FACE;
+  if (rig.headY0 != null) {
+    const respiration = repos ? Math.sin(tempsPerso * 1.8) * .006 : 0;
+    rig.head.position.y += (rig.headY0 + respiration - rig.head.position.y) * ease;
+    rig.head.rotation.z += ((repos ? Math.sin(tempsPerso * .63) * .025 : 0) - rig.head.rotation.z) * ease;
+  }
   const to = (p, v) => { p.rotation.x += (v - p.rotation.x) * ease; };
   const gL = rig.legL.genou, gR = rig.legR.genou, cL = rig.armL.coude, cR = rig.armR.coude;
   const toK = (p, v) => { if (p) p.rotation.x += (v - p.rotation.x) * ease; };
@@ -17256,7 +17431,7 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   // 0,95 S a genoux, 0,55 S accroupi : c'est la hauteur dont le bassin descend, et les
   // jambes se plient pile de ce qu'il faut pour que les semelles restent au sol.
   const baisseVoulue = debout ? (rig.agenou ? 0.95 * S : rig.accroupi ? 0.55 * S : 0) : 0;
-  rig.baisse = (rig.baisse || 0) + (baisseVoulue - (rig.baisse || 0)) * Math.min(1, dt * 6);
+  rig.baisse = (rig.baisse || 0) + (baisseVoulue - (rig.baisse || 0)) * (1 - Math.exp(-Math.max(0, dt) * 6));
   if (rig.agenou && debout) {
     to(rig.legR, -1.5); toK(gR, 1.55); to(rig.legL, 0.2); toK(gL, 1.8);
     to(rig.armL, -0.5); to(rig.armR, -0.3); toK(cL, -0.9); toK(cR, -0.6);
@@ -17330,14 +17505,16 @@ function animateRigCorps(rig, mode, speed, dt, t) {
     // avait donc les coudes de course en permanence, et marcher ne se distinguait pas de
     // courir. A 7,5 m/s, un habitant qui se promene garde les bras le long du corps, et le
     // joueur ne replie les coudes que quand il court vraiment.
-    const s = Math.sin(rig.walk) * 0.85, course = speed > 7.5;
+    const s = Math.sin(rig.walk) * 0.85, courseCible = clamp((speed - 6.2) / 3.4, 0, 1);
+    rig.courseK = (rig.courseK || 0) + (courseCible - (rig.courseK || 0)) * ease;
+    const course = rig.courseK;
     // les bras balancent a l'oppose des jambes, et plus ample quand on court
-    const amp = course ? 1.05 : 0.8;
+    const amp = .8 + course * .25;
     if (!(rig.swingG > 0)) to(rig.armL, -s * amp); if (!(rig.swing > 0)) to(rig.armR, s * amp);
-    if (!(rig.swingG > 0)) toK(cL, course ? -1.3 : -0.4); if (!(rig.swing > 0)) toK(cR, course ? -1.3 : -0.4);
+    if (!(rig.swingG > 0)) toK(cL, -.4 - course * .9); if (!(rig.swing > 0)) toK(cR, -.4 - course * .9);
   } else { if (!(rig.swingG > 0)) to(rig.armL, 0); if (!(rig.swing > 0)) to(rig.armR, 0); to(rig.legL, 0); if (!(rig.kick > 0)) to(rig.legR, 0); toK(gL, 0); if (!(rig.kick > 0)) toK(gR, 0); if (!(rig.swingG > 0)) toK(cL, -0.15); if (!(rig.swing > 0)) toK(cR, -0.15); rig.legL.rotation.z += (0 - rig.legL.rotation.z) * ease; rig.legR.rotation.z += (0 - rig.legR.rotation.z) * ease; }
   if (!(rig.swingG > 0) && !(rig.swing > 0)) { rig.armL.rotation.z += ((mode === 'air' ? 0.15 : 0.05 * Math.sin(t * 2)) - rig.armL.rotation.z) * ease; rig.armR.rotation.z = -rig.armL.rotation.z; }
-  rig.head.rotation.y += (Math.sin(t * 0.9) * 0.12 - rig.head.rotation.y) * ease;
+  rig.head.rotation.y += (Math.sin(tempsPerso * 0.9) * (speed > .6 ? .045 : .12) - rig.head.rotation.y) * ease;
 }
 const debris = [];
 function explode(av) {
@@ -19014,7 +19191,7 @@ for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) document.addEv
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') unlockAudio(); });
 // Onglet en arriere-plan : le moteur continuait de tourner et la musique de jouer dans le
 // vide (et sur une tele, par-dessus la chaine qu'on venait de lancer). Sourdine, puis retour.
-document.addEventListener('visibilitychange', () => { try { sfx.sourdine(document.hidden); } catch (e) {} });
+document.addEventListener('visibilitychange', () => { try { sfx.sourdine(document.hidden || !!(marlonCinema && marlonCinema.active)); } catch (e) {} });
 // LE BRUIT DU MOTEUR. Il était le même pour tout le monde : une 100 chevaux et une 500
 // chevaux ronronnaient exactement pareil, parce que le régime ne dépendait que du rapport de
 // boîte. Chaque niveau a maintenant SA voix — et plus il y a de chevaux, plus c'est gros et
@@ -29480,13 +29657,14 @@ function padAxeChapeau(gp, depart) {
 function padLu(gp) {
   const profil = padProfil(gp);
   const a = (gp && gp.axes) || [], bt = (gp && gp.buttons) || [];
-  const val = i => { const b = bt[i]; return b ? (b.value != null ? b.value : (b.pressed ? 1 : 0)) : 0; };
+  const axe = i => Number.isFinite(a[i]) ? clamp(a[i], -1, 1) : 0;
+  const val = i => { const b = bt[i]; return b ? (Number.isFinite(b.value) ? clamp(b.value, 0, 1) : (b.pressed ? 1 : 0)) : 0; };
   const app = i => !!(bt[i] && bt[i].pressed);
   const b = new Array(PAD_BOUTONS).fill(false), v = new Array(PAD_BOUTONS).fill(0);
-  let lx = a[0] || 0, ly = a[1] || 0, rx = a[2] || 0, ry = a[3] || 0, l2 = 0, r2 = 0;
+  let lx = axe(0), ly = axe(1), rx = axe(2), ry = axe(3), l2 = 0, r2 = 0;
   if (profil === 'ps-hid') {
-    ry = a[5] || 0;
-    const ax = i => (typeof a[i] === 'number' ? a[i] : -1);   // a MI-COURSE une gachette rend 0 : `a[i] || -1` la croyait relachee
+    ry = axe(5);
+    const ax = i => (Number.isFinite(a[i]) ? clamp(a[i], -1, 1) : -1);   // 0 est une gâchette à mi-course.
     l2 = clamp((ax(3) + 1) / 2, 0, 1); r2 = clamp((ax(4) + 1) / 2, 0, 1);   // -1 = relachee, +1 = a fond
     for (let i = 0; i < PAD_HID_PS.length; i++) { const s = PAD_HID_PS[i]; b[s] = app(i); v[s] = val(i); }
     v[6] = Math.max(v[6], l2); v[7] = Math.max(v[7], r2);
@@ -29509,19 +29687,20 @@ function padLu(gp) {
   return { profil, lx, ly, rx, ry, l2, r2, b, v, chapeau, brut: a };
 }
 // une gachette au repos ne rend pas toujours 0 : petite zone morte, puis pleine course
-const padCourse = t => (t > PAD_GACHETTE_MORTE ? (t - PAD_GACHETTE_MORTE) / (1 - PAD_GACHETTE_MORTE) : 0);
+const padCourse = t => Number.isFinite(t) && t > PAD_GACHETTE_MORTE ? clamp((t - PAD_GACHETTE_MORTE) / (1 - PAD_GACHETTE_MORTE), 0, 1) : 0;
 const manetteSalon = { i: -1, nom: '', vibT: 0, profil: 'aucun' };
 function padActive() {
   if (!gamepadOk || !navigator.getGamepads) return null;
   let liste; try { liste = navigator.getGamepads(); } catch (e) { gamepadOk = false; return null; }
-  // on cherche dans TOUTES les prises, et on préfère une DualSense si plusieurs répondent
+  // Garder la manette choisie : brancher une seconde manette ne vole pas les commandes.
   let choix = null;
   for (let i = 0; i < liste.length; i++) {
     const g = liste[i]; if (!g || g.connected === false) continue;
+    if (g.index === manetteSalon.i) { choix = g; break; }
     const ps = /dualsense|dualshock|playstation|054c/i.test(g.id || '');
     if (!choix || (ps && !/dualsense|dualshock|playstation|054c/i.test(choix.id || ''))) choix = g;
   }
-  if (choix && manetteSalon.i !== (choix.index | 0)) { manetteSalon.i = choix.index | 0; manetteSalon.nom = choix.id || 'manette'; document.body.classList.add('manette'); try { curseurAccueil(); } catch (e) {} try { tvManettesMaj(); } catch (e) {} }
+  if (choix && manetteSalon.i !== (choix.index | 0)) { if (manetteSalon.i >= 0) releaseGamepad(); manetteSalon.i = choix.index | 0; manetteSalon.nom = choix.id || 'manette'; document.body.classList.add('manette'); try { curseurAccueil(); } catch (e) {} try { tvManettesMaj(); } catch (e) {} }
   return choix;
 }
 // Zone morte RONDE : avec une zone morte carrée, pousser en diagonale coupait un axe et le
@@ -29530,6 +29709,7 @@ function padActive() {
 // LEGEREMENT progressive (exposant 1,2) : precis pres du centre, pleine vitesse au bord.
 // L'ancienne courbe divisait la reponse par deux a mi-course : on se trainait.
 function padStick(x, y, morte = 0.08) {
+  x = Number.isFinite(x) ? x : 0; y = Number.isFinite(y) ? y : 0;
   const d = Math.hypot(x, y);
   if (d < morte) return [0, 0];
   const m = Math.min(1, (d - morte) / (1 - morte)), k = Math.pow(m, 1.2) / (d || 1);
@@ -29544,6 +29724,7 @@ function padStick(x, y, morte = 0.08) {
 // 5,9 °/s a 12 % de course, 94 °/s a mi-course (30 % du maximum, contre 43 % avant),
 // 315 °/s au bord, et jamais plus de 27 °/s d'ecart d'une graduation de 5 % a la suivante.
 function padVisee(x, y) {
+  x = Number.isFinite(x) ? x : 0; y = Number.isFinite(y) ? y : 0;
   const d = Math.hypot(x, y);
   if (d < CAM_MORTE) return [0, 0];
   const m = Math.min(1, (d - CAM_MORTE) / (1 - CAM_MORTE));
@@ -29565,9 +29746,18 @@ function pollGamepad(dt) {
     if (uiOpen === 'padTest') padEssaiTick(null); return; }
   const L = padLu(gp);                       // agencement normalise : voir padLu
   pad.lu = L; manetteSalon.profil = L.profil;
-  if (document.visibilityState === 'hidden') { releaseGamepad(); return; }
+  if (document.visibilityState === 'hidden' || pad.suspended) { releaseGamepad(); return; }
   const menu = !!document.querySelector('.overlay:not(.hidden)');
-  if (menu && !pad.menuAvant) releaseGamepad(); pad.menuAvant = menu;
+  if (menu !== !!pad.menuAvant) releaseGamepad(); pad.menuAvant = menu;
+  // Un bouton qui a ouvert/fermé un menu ou survécu à une perte de focus n'est pas un
+  // nouvel appui. Le relâchement réarme les commandes sans répétition accidentelle.
+  if (pad.neutralRequired) {
+    pad.bas = Object.fromEntries(L.b.map((pressed, i) => [i, pressed])); pad.lu = L;
+    if (L.b.some(Boolean) || Math.hypot(L.lx, L.ly) > 0.18 || Math.hypot(L.rx, L.ry) > 0.18) {
+      if (uiOpen === 'padTest') padEssaiTick(L); return;
+    }
+    pad.neutralRequired = false;
+  }
   const [gx, gy] = padStick(L.lx, L.ly);
   pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
   // LES DEUX GACHETTES, NOUVEAU PARTAGE (round 68). Le joueur a change d'avis : les gachettes
@@ -29693,7 +29883,7 @@ function pollGamepad(dt) {
     if (!neuf[12] && bas[12] && !pad.hautFait) padAction('ordres');
     if ((neuf[1] && !bas[1]) || (neuf[5] && !bas[5])) padVibre(0.35, 60);   // ◯ saute, R1 tire
   }
-  pad.bas = neuf; pad.a = neuf[1];   // ◯ maintenu = monter (jetpack, hélico)
+  pad.bas = neuf; pad.a = !menu && neuf[1];   // ◯ maintenu = monter (jetpack, hélico)
 }
 // LA MANETTE DANS LES MENUS. Avant : ↑ et ← faisaient « precedent », ↓ et → « suivant », dans
 // l'ordre du code — dans une grille on atterrissait a cote ; il fallait relacher et rappuyer
@@ -29819,6 +30009,7 @@ setInterval(() => {
   try { pollGamepad(dt); } catch (e) { if (!pollGamepad.err) { pollGamepad.err = 1; console.error('manette', e); } }
 }, Math.round(1000 / PAD_HZ));
 window.addEventListener('gamepadconnected', e => {
+  gamepadOk = true;
   const nom = (e.gamepad && e.gamepad.id) || '';
   const ps = /dualsense|dualshock|playstation|054c/i.test(nom);
   msg(ps ? '🎮 Manette PlayStation connectée — stick gauche marcher · △ agir · ◯ sauter · ✕ braquer · L2 viser / se baisser' : '🎮 Manette connectée !', 3200);
@@ -29829,7 +30020,7 @@ window.addEventListener('gamepadconnected', e => {
   try { manetteBTSonde(); } catch (_) {}
   try { chat(null, ps ? '🎮 DualSense prête : stick gauche pour marcher et tourner, △ pour agir, ◯ pour sauter, ✕ pour braquer (puis R2 pour tirer), L2 pour se baisser. Au volant : R2 accélère, L2 freine.' : '🎮 Manette prête.'); } catch (_) {}
 });
-window.addEventListener('gamepaddisconnected', () => { releaseGamepad(); manetteSalon.i = -1; document.body.classList.remove('manette'); try { manetteBTSonde(); } catch (_) {} });
+window.addEventListener('gamepaddisconnected', e => { if (!e.gamepad || e.gamepad.index === manetteSalon.i) { releaseGamepad(); manetteSalon.i = -1; } if (!padActive()) document.body.classList.remove('manette'); try { manetteBTSonde(); tvManettesMaj(); } catch (_) {} });
 // ================= « CONNECTER UNE MANETTE PS5 » =================
 // Ce qu'une page web PEUT faire, honnetement : elle ne peut pas appairer une manette en
 // Bluetooth a la place de l'appareil (le navigateur l'interdit pour les manettes). Mais elle
@@ -29931,6 +30122,10 @@ swatches('swPants', 'pants'); swatches('swCap', 'cap'); swatches('swHair', 'hair
 (function pills(id, key) { const el = $(id); [...el.children].forEach(b => { b.classList.toggle('sel', +b.dataset.v === +myCfg[key]); b.addEventListener('click', () => { myCfg[key] = key === 'skirt' ? !!+b.dataset.v : +b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })('hairStyle', 'hair');
 (function () { const el = $('skirtSel'); [...el.children].forEach(b => { b.classList.toggle('sel', !!+b.dataset.v === myCfg.skirt); b.addEventListener('click', () => { myCfg.skirt = !!+b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })();
 function startGame() {
+  if (!net.on && !marlonCinemaSeen && !store.get('marlon.intro.seen') && typeof window.MarlonIntro !== 'undefined') {
+    if (marlonCinema && marlonCinema.active) return;
+    showMarlonIntro(startGame); return;
+  }
   const n = nameIn.value.trim().slice(0, 16) || myCfg.name;
   myCfg.name = n; store.set('superobby.name', n); store.set('superobby.avatar', JSON.stringify(myLook()));
   renommeEtiquette(me, n);
@@ -30481,6 +30676,15 @@ function camPerche(dt, aiming) {
 
 function loop() {
   requestAnimationFrame(loop);
+  if (marlonCinema && marlonCinema.active) {
+    try { marlonCinema.tick(clock.getDelta()); }
+    catch (error) {
+      console.error('Cinématique interrompue', error);
+      try { marlonCinema.finish(); }
+      catch (_) { marlonCinema = null; marlonCinemaSeen = true; sfx.sourdine(document.hidden); resize(); }
+    }
+    return;
+  }
   // en mode manette, le téléphone n'affiche que les boutons : inutile de faire tourner
   // la ville en 3D, ça viderait la batterie pour rien
   if (window.__manetteSeule) { clock.getDelta(); return; }
@@ -30671,8 +30875,7 @@ function frame() {
   // Le soleil suit le joueur (la carte d'ombres ne couvre qu'une centaine de mètres) mais sa
   // DIRECTION vient maintenant de l'heure : les ombres tournent du matin au soir au lieu de
   // tomber éternellement vers le sud-ouest.
-  sun.position.copy(P.pos).addScaledVector(SOLEIL_DIR, 95);
-  sun.target.position.copy(P.pos);
+  suitOmbres(P.pos);
   sunSprite.position.copy(camera.position).addScaledVector(SOLEIL_DIR, 400);
   cielDome.position.copy(camera.position);
   stars.position.copy(camera.position);
@@ -31078,7 +31281,7 @@ const QR = (() => {
 })();
 
 // ---- entrée venue du téléphone : elle s'ajoute au clavier et au joystick tactile ----
-const tel = { on: false, x: 0, y: 0, nom: '', vus: 0 };
+const tel = { on: false, x: 0, y: 0, nom: '', vus: 0, buttons: new Set(), last: 0, source: null };
 
 function telTouche(code, bas) {   // on rejoue une vraie touche : tout le jeu y répond déjà
   try { window.dispatchEvent(new KeyboardEvent(bas ? 'keydown' : 'keyup', { code, key: code, bubbles: true })); } catch (e) {}
@@ -31086,31 +31289,60 @@ function telTouche(code, bas) {   // on rejoue une vraie touche : tout le jeu y 
 const TEL_TOUCHES = { saut: 'Space', action: 'KeyE', tir: 'KeyX', degaine: 'KeyG', frappe: 'KeyV',
   danse: 'KeyE', course_auto: 'KeyF', menu: 'Escape', hautVisee: 'ArrowUp', basVisee: 'ArrowDown' };
 
+function telRelache() {
+  for (const name of tel.buttons) { const key = TEL_TOUCHES[name]; if (key) keys.delete(key); }
+  tel.buttons.clear(); tel.x = tel.y = 0; tel.last = 0;
+  P.run = false; P.jumpBuf = 0; P.vDown = null; P.handHeld = false;
+  jumpHeld = downHeld = false;
+}
+function telBouton(name, down) {
+  if (!(Object.prototype.hasOwnProperty.call(TEL_TOUCHES, name) || name === 'course' || name === 'viser')) return;
+  down = !!down; if (tel.buttons.has(name) === down) return;
+  if (down) tel.buttons.add(name); else tel.buttons.delete(name);
+  if (name === 'course') { P.run = down && running && !paused && !P.essouffle && P.energie > 10; return; }
+  if (name === 'viser') { if (down && running && !paused) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } return; }
+  telTouche(TEL_TOUCHES[name], down);
+}
+function telVeille() {
+  // Horloge réelle : la déconnexion doit aussi arrêter un saut pendant un menu en pause.
+  if (tel.last && performance.now() - tel.last > 900) telRelache();
+}
+setInterval(telVeille, 200);
+document.addEventListener('visibilitychange', () => { if (document.hidden) telRelache(); });
+
 function telCommande(d) {   // message reçu d'une manette
   if (!d || typeof d !== 'object') return;
+  if (d.t === 'hello') { telRelache(); tel.n = null; tel.nom = String(d.nom || 'Manette').slice(0, 16); tvManettesMaj(); return; }
+  if (d.t === 'release') { telRelache(); return; }
+  if (document.hidden) { telRelache(); return; }
+  tel.last = performance.now();
   // « in » : le paquet unique, direction ET caméra, envoyé une fois par image. On ignore un
   // paquet arrivé dans le désordre (le canal est non fiable) : une commande périmée ferait
   // reculer le personnage d'un cran.
   if (d.t === 'in') {
-    if (d.n != null) { if (tel.n != null && d.n <= tel.n && tel.n - d.n < 1000) return; tel.n = d.n; }
-    if (d.x != null) { tel.x = clamp(+d.x || 0, -1, 1); tel.y = clamp(+d.y || 0, -1, 1); }
-    if (d.dx || d.dy) {
-      cam.yaw -= (+d.dx || 0) * 0.0055;
-      cam.pitch = clamp(cam.pitch + (+d.dy || 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
+    if (d.n != null) { if (!Number.isSafeInteger(d.n) || d.n < 0 || (tel.n != null && d.n <= tel.n)) return; tel.n = d.n; }
+    if (d.x != null) { tel.x = Number.isFinite(d.x) ? clamp(d.x, -1, 1) : 0; tel.y = Number.isFinite(d.y) ? clamp(d.y, -1, 1) : 0; }
+    if (Array.isArray(d.buttons)) {
+      const held = new Set(d.buttons.slice(0, 16));
+      for (const name of [...tel.buttons]) if (!held.has(name)) telBouton(name, false);
+      for (const name of held) telBouton(name, true);
+    }
+    if ((d.dx || d.dy) && running && !paused) {
+      cam.yaw -= (Number.isFinite(d.dx) ? clamp(d.dx, -160, 160) : 0) * 0.0055;
+      cam.pitch = clamp(cam.pitch + (Number.isFinite(d.dy) ? clamp(d.dy, -160, 160) : 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
       cam.freeUntil = simTime + 2.5;
     }
     return;
   }
   if (d.t === 'ax') { tel.x = clamp(+d.x || 0, -1, 1); tel.y = clamp(+d.y || 0, -1, 1); return; }
   if (d.t === 'look') {
-    cam.yaw -= (+d.dx || 0) * 0.0055;
-    cam.pitch = clamp(cam.pitch + (+d.dy || 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
+    if (!running || paused) return;
+    cam.yaw -= (Number.isFinite(d.dx) ? clamp(d.dx, -160, 160) : 0) * 0.0055;
+    cam.pitch = clamp(cam.pitch + (Number.isFinite(d.dy) ? clamp(d.dy, -160, 160) : 0) * 0.0055, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
     cam.freeUntil = simTime + 2.5; return;
   }
   if (d.t === 'btn') {
-    if (d.b === 'course') { P.run = !!d.down && !P.essouffle && P.energie > 10; if (P.run) msg('🏃 Tu cours !', 900); return; }
-    if (d.b === 'viser') { if (d.down) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } return; }
-    const k = TEL_TOUCHES[d.b]; if (k) telTouche(k, !!d.down);
+    telBouton(d.b, d.down);
     return;
   }
   if (d.t === 'chat' && d.text) {
@@ -31120,7 +31352,6 @@ function telCommande(d) {   // message reçu d'une manette
     if (!commandeSociale(t) && !net.on) botReply(t);
     return;
   }
-  if (d.t === 'hello') { tel.nom = String(d.nom || 'Manette').slice(0, 16); tvManettesMaj(); }
 }
 
 // ---- côté télé : on héberge un salon de manettes ------------------------------------
@@ -31130,14 +31361,15 @@ const lienBase = () => location.href.split('#')[0];
 // tombe (mise en veille, Wi-Fi qui saute), on la remonte toute seule.
 let tvVeilleT = 0;
 function tvVeille() {
-  if (simTime < tvVeilleT) return;
-  tvVeilleT = simTime + 3;
+  const now = Date.now(); if (now < tvVeilleT) return;
+  tvVeilleT = now + 3000;
   // trace locale : elle permet à l'écran manette, ouvert dans un AUTRE onglet du même
   // navigateur, de comprendre pourquoi il n'arrivera jamais à se connecter
   if (tv.on && tv.code && !tv.cede) { try { store.set('superobby.hote', JSON.stringify({ code: tv.code, t: Date.now() })); } catch (e) {} }
-  if (!tv.code || tv.cede || tv.peer) return;
+  if (!tv.code || tv.cede || tv.peer || now < (tv.retryAt || 0)) return;
   tvHeberge(tv.code);
 }
+setInterval(tvVeille, 3000);
 function tvManettesMaj() {
   // UNE LIAISON SANS PAIR N'EST PAS UNE MANETTE. Quand le pair PeerJS est fermé (salon quitté,
   // liaison cédée à la télé, page relancée), les connexions qu'il portait restaient dans
@@ -31150,6 +31382,7 @@ function tvManettesMaj() {
   // le message ne distinguait pas « personne n'a encore scanné » de « rien n'écoute ».
   if (el) el.textContent = n > 0 ? `🎮 ${n} manette${n > 1 ? 's' : ''} connectée${n > 1 ? 's' : ''}${tel.nom ? ' · ' + tel.nom : ''}`
     : tv.cede ? `📺 Le code ${tv.code} est passé à la télé : c'est elle qui attend ton téléphone.`
+    : tv.erreur ? tv.erreur
     : tv.on ? `🟢 Prêt : cet écran attend une manette au code ${tv.code}.`
     : '⏳ Préparation de la liaison…';
   tel.on = n > 0;
@@ -31170,26 +31403,29 @@ function tvManettesMaj() {
 // Google TV / Android TV, écrans compatibles) diffuse la page d'un clic ; sinon on affiche le
 // lien #tv et son QR, à ouvrir dans le navigateur de la télé. Dans les deux cas la page
 // s'ouvre directement en affichage géant.
-const cast = { req: null, session: null, dispo: false };
+const cast = { req: null, session: null, dispo: false, url: '', starting: false };
 function lienTV() { if (!tv.code) tv.code = makeCode(); return lienBase() + '#tv=' + tv.code; }
 // On passe la main à la télé : on lâche le code pour qu'elle puisse le prendre. Si on rouvre
 // ce salon sans être allé au bout, on le reprend — rien n'est perdu.
 function tvPasseLaMain() {
-  if (!tv.peer) { tv.cede = true; return false; }
-  try { tv.peer.destroy(); } catch (e) {}
+  const peer = tv.peer;
   tv.peer = null; tv.on = false; tv.conns.length = 0; tv.cede = true; tv.essais = 0;
+  telRelache(); tel.source = null;
+  try { if (peer) peer.destroy(); } catch (e) {}
   tvManettesMaj();
   return true;
 }
 function castPret() { return typeof PresentationRequest !== 'undefined'; }
 function castPrepare() {
-  if (!castPret() || cast.req) return cast.req;
+  if (!castPret()) return null;
+  const url = lienTV(); if (cast.req && cast.url === url) return cast.req;
   try {
-    cast.req = new PresentationRequest([lienTV()]);
-    cast.req.getAvailability().then(a => {
+    const req = new PresentationRequest([url]); cast.req = req; cast.url = url;
+    req.getAvailability().then(a => {
+      if (cast.req !== req) return;
       cast.dispo = !!a.value; castMaj();
-      a.addEventListener('change', () => { cast.dispo = !!a.value; castMaj(); });
-    }).catch(() => { cast.dispo = false; castMaj(); });
+      a.addEventListener('change', () => { if (cast.req === req) { cast.dispo = !!a.value; castMaj(); } });
+    }).catch(() => { if (cast.req === req) { cast.dispo = false; castMaj(); } });
   } catch (e) { cast.req = null; }
   return cast.req;
 }
@@ -31200,12 +31436,15 @@ function castPrepare() {
 function castMaj() {
   const b = $('tvCast'), e = $('tvCastEtat');
   if (!b || !e) return;
+  const transfer = $('tvTransfer'); if (transfer) transfer.style.display = tv.cede || cast.session || cast.starting ? 'none' : '';
   b.style.display = '';
+  b.disabled = cast.starting;
+  if (cast.starting) { b.textContent = '📡 Connexion à la télé…'; e.textContent = 'Choisis un écran dans la fenêtre du navigateur.'; return; }
   if (cast.session) { b.textContent = '📴 Arrêter la diffusion'; e.textContent = 'Le jeu tourne sur ta télé. Ton téléphone reste la manette.'; return; }
   if (tv.cede) { b.textContent = '↩️ Reprendre la main ici'; e.textContent = `Le code ${tv.code} appartient maintenant à la TÉLÉ : c'est elle qui attend ton téléphone. Le lien ci-dessous porte ce même code — les deux écrans afficheront donc le même.`; return; }
   if (!castPret()) {
     b.textContent = '📋 Copier le lien pour la télé';
-    e.textContent = 'Ce navigateur ne sait pas diffuser tout seul (il faut Chrome ou Edge, en https). Copie le lien, ouvre-le dans le navigateur de ta télé — ou scanne le QR avec ton téléphone puis partage-le à la télé. Le lien porte le code, la télé affichera donc le MÊME que celui d\'ici.';
+    e.textContent = 'La diffusion directe est indisponible ici. Copie le lien, transfère le code avec le bouton ci-dessous, puis ouvre le lien sur la télé. La TV lance une partie sur son propre appareil. Pour garder cette partie et cette image, utilise HDMI ou la recopie d’écran de ton appareil.';
     return;
   }
   b.textContent = cast.dispo ? '📡 Diffuser sur la télé' : '📡 Chercher une télé';
@@ -31227,23 +31466,28 @@ function copieLienTV() {
   return l;
 }
 function castLance() {
+  if (cast.starting) return;
   if (tv.cede && !cast.session) { tv.cede = false; tvHeberge(tv.code); tvSalonMaj(); return; }
-  if (cast.session) { try { cast.session.terminate(); } catch (e) {} cast.session = null; castMaj(); return; }
+  if (cast.session) { const sess = cast.session; cast.session = null; try { sess.terminate(); } catch (e) {} tv.cede = false; tvHeberge(tv.code); castMaj(); return; }
   const r = castPrepare();
   // ATTENTION : on ne lâche PAS le code ici. Copier un lien ne prouve pas que le jeu est
   // parti sur la télé — et sans hôte, le téléphone qui scanne ce même écran tourne dans le
   // vide. On ne cède le code qu'une fois la diffusion vraiment établie.
   if (!r) { copieLienTV(); castMaj(); return; }
-  r.start().then(sess => {
-    cast.session = sess; tvPasseLaMain(); castMaj();
+  cast.starting = true; castMaj();
+  let pending; try { pending = r.start(); } catch (e) { cast.starting = false; castMaj(); msg('📺 Diffusion indisponible : utilise le lien TV ou HDMI', 3000); return; }
+  Promise.resolve(pending).then(sess => {
+    cast.starting = false; cast.session = sess; tvPasseLaMain(); castMaj();
     msg('📺 C\'est parti sur la télé ! Ton téléphone reste la manette', 3200);
-    sess.addEventListener('terminate', () => { cast.session = null; castMaj(); });
-  }).catch(() => { msg('📺 Aucune télé choisie — tu peux aussi ouvrir le lien sur la télé', 3000); castMaj(); });
+    const ended = () => { if (cast.session !== sess) return; cast.session = null; castMaj(); msg('📺 Liaison TV terminée — tu peux reprendre la main ici', 3000); };
+    sess.addEventListener('terminate', ended); sess.addEventListener('close', ended);
+  }).catch(e => { cast.starting = false; msg(e && e.name === 'NotAllowedError' ? '📺 Autorise la diffusion dans le navigateur ou utilise le lien TV' : '📺 Aucune télé choisie — tu peux aussi ouvrir le lien sur la télé', 3000); castMaj(); });
 }
 // LE MÊME CODE DES DEUX CÔTÉS. L'ordinateur affichait un code, la télé en tirait un autre au
 // hasard en ouvrant le lien : on scannait le mauvais. Le code voyage maintenant DANS le lien
 // (#tv=CODE), et l'écran qui passe la main libère le sien pour que la télé le reprenne.
 function tvHeberge(force) {
+  if (tv.cede) return;
   // la bibliothèque réseau arrive parfois APRÈS l'ouverture du salon : on l'attend au lieu de
   // renoncer, sinon l'écran affiche un code que personne n'écoute et le téléphone tourne dans le vide
   if (typeof Peer === 'undefined') {
@@ -31256,26 +31500,31 @@ function tvHeberge(force) {
   if (tv.peer) return;
   const code = force || tv.code || (net.on && net.code ? net.code : makeCode());
   let peer;
-  try { peer = new Peer('superobby-tv-' + code, RESEAU); } catch (e) { return; }
-  tv.peer = peer; tv.code = code; tv.cede = false;
-  peer.on('open', () => { tv.on = true; tvSalonMaj(); });
+  try { peer = new Peer('superobby-tv-' + code, RESEAU); } catch (e) { tv.erreur = 'Connexion TV indisponible. Vérifie Internet et réessaie.'; tvManettesMaj(); return; }
+  tv.peer = peer; tv.code = code; tv.cede = false; tv.erreur = ''; tv.on = false;
+  peer.on('open', () => { if (tv.peer !== peer) return; tv.on = true; tv.essais = 0; tv.erreur = ''; tvSalonMaj(); });
   peer.on('connection', c => {
-    c.on('open', () => { tv.conns.push(c); tel.on = true; tvManettesMaj();
+    c.on('open', () => { if (tv.peer !== peer) { c.close(); return; } tv.conns.push(c); if (!tel.source) { telRelache(); tel.n = null; tel.source = c; } tel.on = true; tvManettesMaj();
       msg('🎮 Une manette est connectée !', 2200); sfx.win();
-      try { c.send({ t: 'ok', jeu: myCfg.name }); } catch (_) {} });
-    c.on('data', d => telCommande(d));
-    const fin = () => { const i = tv.conns.indexOf(c); if (i >= 0) tv.conns.splice(i, 1); tel.x = tel.y = 0; P.run = false; tvManettesMaj(); };
+      try { c.send({ t: 'ok', jeu: myCfg.name, active: tel.source === c }); } catch (_) {} });
+    c.on('data', d => { if (tv.peer === peer && tel.source === c) telCommande(d); });
+    const fin = () => { const i = tv.conns.indexOf(c); if (i >= 0) tv.conns.splice(i, 1);
+      if (tel.source === c) { telRelache(); tel.n = null; tel.source = tv.conns.find(other => other.open) || null; if (tel.source) { try { tel.source.send({ t: 'ok', active: true }); } catch (_) {} } }
+      tvManettesMaj(); };
     c.on('close', fin); c.on('error', fin);
   });
   // « identifiant déjà pris » : c'est l'autre écran qui n'a pas encore lâché CE code. On le
   // rappelle, au lieu d'en tirer un nouveau — sinon la télé changeait de code toute seule.
   peer.on('error', e => {
-    if (e.type !== 'unavailable-id') return;
-    tv.peer = null; tv.essais = (tv.essais || 0) + 1;
-    if (tv.essais <= 8) setTimeout(() => tvHeberge(code), 700);
-    else { tv.essais = 0; tv.code = makeCode(); setTimeout(() => tvHeberge(tv.code), 200); }
+    if (tv.peer !== peer) return;
+    tv.peer = null; tv.on = false; tv.essais = (tv.essais || 0) + 1;
+    tv.erreur = e && e.type === 'unavailable-id' ? `Code ${code} déjà utilisé : sur le premier écran, appuie sur « Transférer le code à la TV ».` : 'Liaison TV interrompue. Vérifie Internet ; reconnexion automatique…';
+    tv.retryAt = Date.now() + Math.min(15000, 1000 * tv.essais);
+    telRelache(); tel.source = null; tv.conns.length = 0;
+    try { peer.destroy(); } catch (_) {} tvManettesMaj();
   });
-  peer.on('disconnected', () => { try { peer.reconnect(); } catch (_) {} });
+  peer.on('disconnected', () => { if (tv.peer !== peer || tv.cede) return; tv.on = false; tv.erreur = 'Reconnexion au service TV…'; tvManettesMaj(); try { peer.reconnect(); } catch (_) { tv.peer = null; } });
+  peer.on('close', () => { if (tv.peer !== peer) return; tv.peer = null; tv.on = false; telRelache(); tel.source = null; tv.conns.length = 0; tvManettesMaj(); });
 }
 function tvSalonMaj() {
   if (!tv.code) tv.code = net.on && net.code ? net.code : makeCode();   // le code s'affiche même sans réseau
@@ -31288,6 +31537,7 @@ function tvSalonMaj() {
   const lt = lienTV();
   $('lienTV').textContent = lt; QR.dessine($('qrTV'), lt);
   castPrepare(); castMaj();
+  $('tvTransfer').style.display = tv.cede || cast.session ? 'none' : '';
   if (net.on && net.code) {
     const lj = lienBase() + '#jeu=' + net.code;
     $('lienJeu').textContent = lj; QR.dessine($('qrJeu'), lj);
@@ -31340,17 +31590,26 @@ const RESEAU = { debug: 0, config: { iceServers: [
   { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ], sdpSemantics: 'unified-plan' } };
 const MANETTE_HZ = 60;   // 25 par seconde, c'était 40 ms de retard avant même le réseau
-const man = { peer: null, conn: null, id: null, x: 0, y: 0, lx: 0, ly: 0, env: 0 };
+const man = { peer: null, conn: null, id: null, x: 0, y: 0, lx: 0, ly: 0, env: 0, buttons: new Set(), generation: 0 };
+function manRelache() {
+  man.x = man.y = man.vx = man.vy = 0; man.px = man.py = null; man.buttons.clear();
+  manEnvoie({ t: 'release' });
+  if (man.resetGestes) man.resetGestes();
+}
 function manetteOuvre(code) {
+  if (!window.__manetteSeule) man.wasRunning = running;
   document.getElementById('manette').classList.add('on');
   running = false; window.__manetteSeule = true;
   try { renderer.setAnimationLoop && renderer.setAnimationLoop(null); } catch (e) {}
   if (code) { $('telCode').value = code; manetteConnecte(code); }
 }
 function manetteFerme() {
+  manRelache(); ++man.generation; clearTimeout(man.chrono); clearTimeout(man.retry);
   document.getElementById('manette').classList.remove('on');
-  try { if (man.peer) man.peer.destroy(); } catch (_) {}
-  man.peer = null; man.conn = null; window.__manetteSeule = false;
+  document.getElementById('manette').classList.remove('pret');
+  const peer = man.peer; man.peer = null; man.conn = null;
+  try { if (peer) peer.destroy(); } catch (_) {}
+  window.__manetteSeule = false; running = !!man.wasRunning;
   if (location.hash) location.hash = '';
 }
 function manetteEtat(t) { $('telEtat').textContent = t; }
@@ -31369,6 +31628,7 @@ function manetteEchec(txt, code) {
 function manetteConnecte(code, essai) {
   code = (code || '').toUpperCase();
   if (!/^[A-Z]{4}$/.test(code)) { manetteEchec('Entre le code à 4 lettres affiché sur l\'écran de jeu.'); return; }
+  const generation = ++man.generation; clearTimeout(man.retry);
   man.essai = essai || 1; man.code = code; man.inscrit = false; if (man.essai === 1) man.raison = '';
   $('telErr').textContent = '';
   clearTimeout(man.chrono);
@@ -31381,16 +31641,21 @@ function manetteConnecte(code, essai) {
   }
   man.attente = 0;
   manetteEtat(`Recherche de l'écran ${code}… (essai ${man.essai}/${MAN_ESSAIS})`);
-  try { if (man.peer) man.peer.destroy(); } catch (_) {}
-  man.peer = null; man.conn = null;
+  manRelache(); const previous = man.peer; man.peer = null; man.conn = null;
+  document.getElementById('manette').classList.remove('pret');
+  try { if (previous) previous.destroy(); } catch (_) {}
   let peer; try { peer = new Peer(undefined, RESEAU); } catch (e) { manetteEchec('Manette indisponible sur ce téléphone.', code); return; }
   man.peer = peer;
   // 2) rien ne doit pouvoir « bloquer » : au bout de sept secondes, on recommence
+  let retrying = false;
   const relance = (pourquoi) => {
+    if (generation !== man.generation || retrying) return;
     clearTimeout(man.chrono);
     if (man.conn && man.conn.open) return;
+    retrying = true; man.peer = null; man.conn = null; manRelache();
+    document.getElementById('manette').classList.remove('pret');
     try { peer.destroy(); } catch (_) {}
-    if (man.essai < MAN_ESSAIS) { manetteEtat(pourquoi + ' — nouvel essai…'); setTimeout(() => manetteConnecte(code, man.essai + 1), 600); }
+    if (man.essai < MAN_ESSAIS) { manetteEtat(pourquoi + ' — nouvel essai…'); man.retry = setTimeout(() => { if (generation === man.generation) manetteConnecte(code, man.essai + 1); }, 600); }
     else {
       // on dit CE QUI a échoué : ça change complètement ce qu'il y a à faire
       // CAS TRÈS FRÉQUENT : le jeu et la manette dans deux onglets du MÊME téléphone. L'onglet
@@ -31410,29 +31675,47 @@ function manetteConnecte(code, essai) {
   };
   man.chrono = setTimeout(() => { if (!man.raison) man.raison = 'canal'; relance('L\'écran ne répond pas'); }, MAN_DELAI);
   peer.on('open', () => {
+    if (man.peer !== peer || generation !== man.generation) return;
     // attention : « open » veut dire que MA manette est inscrite — pas que l'écran a répondu
     man.inscrit = true;
     manetteEtat(`Manette prête, on appelle l'écran ${code}…`);
-    const c = peer.connect('superobby-tv-' + code, { reliable: false });
+    const c = peer.connect('superobby-tv-' + code, { reliable: true });
     man.conn = c;
     c.on('open', () => {
+      if (man.peer !== peer || generation !== man.generation) { c.close(); return; }
       clearTimeout(man.chrono); man.essai = 0;
+      man.n = 0; man.px = man.py = null; man.lastSent = 0;
       document.getElementById('manette').classList.add('pret');
       manetteEtat('🎮 Connecté · code ' + code);
       $('telErr').textContent = '';
       try { c.send({ t: 'hello', nom: (localStorage.getItem('superobby.name') || 'Manette') }); } catch (_) {}
       if (navigator.vibrate) navigator.vibrate(60);
     });
-    c.on('close', () => { document.getElementById('manette').classList.remove('pret'); manetteEtat('Déconnecté'); manetteEchec('La liaison s\'est coupée.', code); });
+    c.on('data', d => { if (man.conn !== c || !d || d.t !== 'ok') return; manetteEtat(d.active === false ? '🎮 Connecté · en attente de la première manette' : '🎮 Connecté · code ' + code); });
+    c.on('close', () => { if (man.conn !== c || generation !== man.generation) return; man.conn = null; manetteEtat('Déconnecté'); relance('Liaison interrompue'); });
     c.on('error', () => relance('Liaison refusée'));
   });
   peer.on('error', e => {
     // « peer-unavailable » = l'écran de jeu n'écoute pas ENCORE : ça vaut la peine d'insister
+    if (man.peer !== peer || generation !== man.generation) return;
     if (e && e.type === 'peer-unavailable') { man.raison = 'absent'; relance(`Aucun écran au code ${code} pour l'instant`); }
     else { man.raison = (e && e.type) || 'reseau'; relance('Réseau capricieux'); }
   });
 }
-function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); } catch (_) {} } }
+function manEnvoie(o) {
+  const c = man.conn; if (!c || !c.open) return false;
+  // Ne pas empiler d'anciennes positions sur un Wi-Fi saturé. Le prochain état complet
+  // récupère les boutons et la direction ; le watchdog du jeu arrête une liaison muette.
+  if (o.t === 'in' && c.dataChannel && c.dataChannel.bufferedAmount > 8192) return false;
+  try { c.send(o); return true; } catch (_) { return false; }
+}
+function telStickAxes(dx, dy, radius) {
+  if (!Number.isFinite(radius) || radius <= 0) return [0, 0];
+  const d = Math.hypot(dx, dy); if (!Number.isFinite(d) || d < 0.01) return [0, 0];
+  let mag = clamp((Math.min(1, d / radius) - 0.12) / 0.88, 0, 1);
+  mag *= 0.45 + 0.55 * mag;
+  return [dx / d * mag, -dy / d * mag];
+}
 
 // ---- les gestes sur le téléphone-manette --------------------------------------------
 (() => {
@@ -31456,19 +31739,17 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
     if (e.pointerId !== sid) return;
     let dx = e.clientX - man.cx, dy = e.clientY - man.cy;
     const d = Math.hypot(dx, dy), r = rayon();
+    const axes = telStickAxes(dx, dy, r);
     if (d > r) { dx *= r / d; dy *= r / d; }
     bougeKnob(dx, dy);
     // zone morte de 12 %, puis une courbe douce au centre et pleine puissance au bord :
     // c'est ce qui manquait au premier joystick, où tout partait à fond dès le moindre appui
-    let mag = Math.min(1, d / r); mag = mag < 0.12 ? 0 : (mag - 0.12) / 0.88;
-    mag = mag * (0.45 + 0.55 * mag);
-    const nx = d > 0.01 ? dx / d : 0, ny = d > 0.01 ? dy / d : 0;
-    man.x = nx * mag; man.y = -ny * mag;
+    man.x = axes[0]; man.y = axes[1];
   });
   const lacheStick = e => { if (e.pointerId !== sid) return;
     sid = null; stick.classList.remove('on'); man.x = man.y = 0; bougeKnob(0, 0);
     base.style.left = '50%'; base.style.top = '52%'; };
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) stick.addEventListener(ev, lacheStick);
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) stick.addEventListener(ev, lacheStick);
   // ---- LA CROIX, en option : on suit chaque doigt pour pouvoir GLISSER d'une flèche a l'autre ----
   const doigts = new Map();
   const fleches = [...croix.querySelectorAll('[data-d]')];
@@ -31521,27 +31802,35 @@ function manEnvoie(o) { const c = man.conn; if (c && c.open) { try { c.send(o); 
     man.lx = e.clientX; man.ly = e.clientY;
   });
   const lache = e => { if (e.pointerId === vid) vid = null; };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) vise.addEventListener(ev, lache);
+  man.resetGestes = () => { sid = vid = null; doigts.clear(); stick.classList.remove('on'); bougeKnob(0, 0);
+    base.style.left = '50%'; base.style.top = '52%';
+    for (const b of document.querySelectorAll('#telBtns .tb, #telCroix [data-d]')) b.classList.remove('on'); };
+  window.addEventListener('pagehide', manRelache);
+  window.addEventListener('blur', manRelache);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) manRelache(); });
   // UN SEUL PAQUET PAR IMAGE, avec l'état LE PLUS RÉCENT. Avant, la direction partait dans un
   // message et chaque glissement de caméra dans un autre — plus de cent par seconde. Le canal
   // saturait, les paquets faisaient la queue, et la commande arrivait avec un retard qui
   // grandissait tant qu'on bougeait le doigt. Maintenant tout tient dans un envoi à 60 Hz :
   // la direction courante et le cumul de la caméra depuis le dernier envoi.
   setInterval(() => {
-    if (!man.conn || !man.conn.open) return;
+    if (!man.conn || !man.conn.open || document.hidden) return;
     const bougeAxe = man.x !== man.px || man.y !== man.py;
     const bougeVue = (man.vx || man.vy);
-    if (!bougeAxe && !bougeVue) return;
-    const p2 = { t: 'in', n: (man.n = (man.n || 0) + 1) };
-    if (bougeAxe) { p2.x = +man.x.toFixed(3); p2.y = +man.y.toFixed(3); man.px = man.x; man.py = man.y; }
-    if (bougeVue) { p2.dx = Math.round(man.vx || 0); p2.dy = Math.round(man.vy || 0); man.vx = man.vy = 0; }
-    manEnvoie(p2);
+    const now = performance.now();
+    if (!bougeAxe && !bougeVue && now - (man.lastSent || 0) < 200) return;
+    const p2 = { t: 'in', n: (man.n = (man.n || 0) + 1), x: +man.x.toFixed(3), y: +man.y.toFixed(3), buttons: [...man.buttons] };
+    if (bougeVue) { p2.dx = Math.round(man.vx || 0); p2.dy = Math.round(man.vy || 0); }
+    if (manEnvoie(p2)) { man.px = man.x; man.py = man.y; man.lastSent = now; }
+    man.vx = man.vy = 0;
   }, Math.round(1000 / MANETTE_HZ));
   for (const b of document.querySelectorAll('#telBtns .tb')) {
     const nom = b.dataset.b;
-    b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('on'); manEnvoie({ t: 'btn', b: nom, down: true });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); man.buttons.add(nom); manEnvoie({ t: 'btn', b: nom, down: true });
       if (navigator.vibrate) navigator.vibrate(18); });
-    for (const ev of ['pointerup', 'pointercancel', 'pointerleave'])
-      b.addEventListener(ev, () => { b.classList.remove('on'); manEnvoie({ t: 'btn', b: nom, down: false }); });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'])
+      b.addEventListener(ev, () => { b.classList.remove('on'); man.buttons.delete(nom); manEnvoie({ t: 'btn', b: nom, down: false }); });
   }
   const envoieChat = () => { const t = el('telChat').value.trim(); if (!t) return; manEnvoie({ t: 'chat', text: t }); el('telChat').value = ''; el('telChat').blur(); };
   el('telEnvoi').addEventListener('click', envoieChat);
@@ -31581,6 +31870,7 @@ $('tvStart').addEventListener('click', () => { modeTV(true); ouvreSalonTV(); });
 $('manetteStart').addEventListener('click', () => manetteOuvre(''));
 $('tvFerme').addEventListener('click', () => closeUI());
 $('tvCast').addEventListener('click', castLance);
+$('tvTransfer').addEventListener('click', () => { copieLienTV(); tvPasseLaMain(); tvSalonMaj(); msg('📺 Code transféré : ouvre maintenant le lien sur la télé', 3500); });
 $('tvGros').addEventListener('click', () => { modeTV(!document.body.classList.contains('tv')); tvSalonMaj(); });
 $('tvTurbo').addEventListener('click', () => { diffusionMode(!diffusion.on, true); tvSalonMaj(); msg(diffusion.on ? '⚡ Accélérateur d\'image : 60 images/s nettes' : '⚡ Accélérateur d\'image éteint', 1600); });
 $('tvCreePartie').addEventListener('click', () => {
@@ -33057,6 +33347,7 @@ function buildGangs() {
   for (const r of (guerre.sauveRecrues || [])) {
     const m = creerGangeur(modeleJoueur, gang.planque.x + rnd(-7, 7), gang.planque.z + rnd(5, 9));
     m.nom = r.n || m.nom; m.gang = 'joueur'; m.recrue = true; m.force = r.f || 0;
+    if (r.p != null) m.perf = guerreNombre(r.p, 0, 100, m.perf);
     m.fidelite = r.fi != null ? r.fi : 80; m.ancien = r.an || null;
     gang.membresLibres.push(m);
   }
@@ -33974,7 +34265,7 @@ function revenusTick() {
   const mien = Object.keys(guerre.territoires).filter(k => guerre.territoires[k] === 'joueur');
   if (!mien.length) return;
   // chaque quartier rapporte selon SA valeur (le centre-ville vaut trois fois le parc)
-  const gainT = valeurTerritoires('joueur') * (6 + Math.floor(gang.rep / 200) * 2);
+  const gainT = empireEconomy().income;
   gang.magot += gainT;
   if (gang.planque) gang.planque.coffre.amount = gang.magot;
   msg(`💵 Protection des quartiers : +${gainT} 🪙 déposés dans ta planque (${gang.magot} 🪙)`, 3600);
@@ -34436,16 +34727,31 @@ function saveGuerre() {
 }
 function loadGuerre() {
   const d = store.json('superobby.guerre', null);
-  if (!d || typeof d !== 'object') return;
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return;
   restoreEmpire(d.empire);
-  gang.rep = d.rep || 0; gang.force = d.force || 20; gang.magot = d.magot || 0; gang.armes = d.armes || 0;
+  gang.rep = guerreNombre(d.rep, 0, Number.MAX_SAFE_INTEGER); gang.force = guerreNombre(d.force, 0, 100, 20);
+  gang.magot = guerreNombre(d.magot, 0, Number.MAX_SAFE_INTEGER); gang.armes = Math.floor(guerreNombre(d.armes, 0, Number.MAX_SAFE_INTEGER));
   guerre.territoires = {};
   if (d.terr && typeof d.terr === 'object') for (const k of Object.keys(EMPIRE_LINKS)) { const owner = d.terr[k]; if (owner === 'joueur' || GANG_DEFS.some(g => g.id === owner)) guerre.territoires[k] = owner; }
-  guerre.saison = d.saison || 1;
-  guerre.palier = d.palier || 1; guerre.morts = d.morts || []; guerre.gagne = !!d.gagne && Object.keys(EMPIRE_LINKS).every(k => guerre.territoires[k] === 'joueur'); guerre.detruits = d.detruits || 0;
-  guerre.sauve = d.gangs || null; guerre.sauveRecrues = d.recrues || [];
-  guerre.sauvePerf = d.membres || [];   // on retrouve le niveau de chacun à la reprise
-  if (d.perf != null) { P.perf = clamp(d.perf, 0, 100); savePerf(); }
+  guerre.saison = Math.floor(guerreNombre(d.saison, 1, Number.MAX_SAFE_INTEGER, 1));
+  guerre.palier = Math.floor(guerreNombre(d.palier, 1, PALIERS_GUERRE.length, 1));
+  const rival = id => GANG_DEFS.some(g => g.id === id);
+  guerre.morts = Array.isArray(d.morts) ? [...new Set(d.morts.filter(rival))] : [];
+  guerre.gagne = !!d.gagne && Object.keys(EMPIRE_LINKS).every(k => guerre.territoires[k] === 'joueur'); guerre.detruits = Math.floor(guerreNombre(d.detruits, 0, Number.MAX_SAFE_INTEGER));
+  guerre.sauve = {};
+  for (const def of GANG_DEFS) {
+    const r = d.gangs && d.gangs[def.id]; if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    guerre.sauve[def.id] = { nom: typeof r.nom === 'string' ? r.nom.slice(0, 80) : def.nom,
+      chef: typeof r.chef === 'string' ? r.chef.slice(0, 80) : '', gen: Math.floor(guerreNombre(r.gen, 1, Number.MAX_SAFE_INTEGER, 1)),
+      force: guerreNombre(r.force, 0, 100, def.f0 || 25), rel: guerreNombre(r.rel, -100, 100),
+      magot: guerreNombre(r.magot, 0, Number.MAX_SAFE_INTEGER), connu: !!r.connu };
+  }
+  const personne = r => r && typeof r === 'object' && typeof r.n === 'string' && r.n.length > 0;
+  guerre.sauveRecrues = Array.isArray(d.recrues) ? d.recrues.filter(personne).slice(0, 24).map(r => ({
+    n: r.n.slice(0, 80), f: guerreNombre(r.f, 0, 100), p: r.p == null ? null : guerreNombre(r.p, 0, 100, 25),
+    fi: guerreNombre(r.fi, 0, 100, 80), an: rival(r.an) ? r.an : null })) : [];
+  guerre.sauvePerf = Array.isArray(d.membres) ? d.membres.filter(personne).slice(0, 128).map(r => ({ n: r.n.slice(0, 80), p: guerreNombre(r.p, 0, 100, 15) })) : [];
+  if (d.perf != null) { P.perf = guerreNombre(d.perf, 0, 100, Number.isFinite(P.perf) ? P.perf : 0); savePerf(); }
 }
 $('victoireRejouer').addEventListener('click', rejouerGuerre);
 $('victoireBack').addEventListener('click', closeUI);
@@ -38340,6 +38646,31 @@ window.addEventListener('keydown', e => {
   else if (drive.car) msg('🔧 O n\'actionne un outil que sur un véhicule de travail (dépôt municipal, caserne)', 2200);
 });
 
+let marlonCinema = null, marlonCinemaSeen = false;
+function showMarlonIntro(next) {
+  if (typeof window.MarlonIntro === 'undefined' || (marlonCinema && marlonCinema.active)) return;
+  const capture = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).has('capture');
+  keys.clear(); releaseGamepad(); music.stop(); sfx.sourdine(true);
+  const closed = () => {
+    marlonCinemaSeen = true; store.set('marlon.intro.seen', '1'); marlonCinema = null;
+    keys.clear(); releaseGamepad(); sfx.sourdine(document.hidden); applyQuality(); clock.getDelta();
+    if (next) next(); else { if (running) music.start(); $('introPlay').focus(); }
+  };
+  try { marlonCinema = window.MarlonIntro.create({ THREE, renderer, sourceCanvas: canvas, capture, muted: !settings.sound || !settings.music, volume: settings.volume,
+    makeAvatar(i) {
+      const config = i === 1 ? { ...myCfg, pants: PAL.pants[myCfg.pants], cap: PAL.cap[myCfg.cap] }
+        : { name: i === 0 ? 'Rival' : 'Alliée', jersey: i === 0 ? 3 : 1, pants: PAL.pants[i === 0 ? 1 : 3], cap: i === 0 ? 0x17313d : null, num: i === 0 ? 7 : 12, hair: i === 0 ? 1 : 2, hairColor: i === 0 ? 0 : 2, glasses: i === 0, bag: i === 0 ? 0 : 1 };
+      return buildAvatar(config);
+    },
+    disposeAvatar: libereBranche,
+    onClose: closed
+  }); } catch (error) {
+    console.error('Introduction indisponible', error);
+    const layer = $('marlonCinema'); if (layer) layer.remove();
+    resize(); closed();
+  }
+}
+$('introPlay').addEventListener('click', () => showMarlonIntro());
 initEmpireUI();
 loop();
 })();

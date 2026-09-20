@@ -171,7 +171,7 @@ const THREE = {
   CanvasTexture: Tex, Texture: Tex, DataTexture: Tex, CubeTexture: Tex,
   HemisphereLight: class extends Obj3D { constructor(a, b, i) { super(); this.color = new Col(a); this.groundColor = new Col(b); this.intensity = i; } },
   DirectionalLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; this.target = new Obj3D();
-    this.shadow = { mapSize: { set() {}, width: 1024, height: 1024 }, camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0, updateProjectionMatrix() {} }, bias: 0, normalBias: 0, radius: 1 }; } },
+    this.shadow = { mapSize: new V2(1024, 1024), camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0, updateProjectionMatrix() {} }, bias: 0, normalBias: 0, radius: 1 }; } },
   AmbientLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; } },
   PointLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; } },
   SpotLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; this.target = new Obj3D(); } },

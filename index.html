@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>MARLON — Empire urbain</title>
-<link rel="stylesheet" href="./cinematic.css">
+<link rel="stylesheet" href="./cinematic.css?v=010-action">
 <link rel="manifest" href='data:application/manifest+json,{"name":"MARLON Empire urbain","short_name":"MARLON","display":"fullscreen","orientation":"landscape","background_color":"%231b2a4a","theme_color":"%231b2a4a","start_url":".","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%231b2a4a%27/%3E%3Crect x=%2716%27 y=%2758%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%235cc453%27/%3E%3Crect x=%2737%27 y=%2737%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%234f8dff%27/%3E%3Crect x=%2758%27 y=%2716%27 width=%2726%27 height=%2726%27 rx=%275%27 fill=%27%23ff5c5c%27/%3E%3C/svg%3E","sizes":"192x192 512x512","type":"image/svg+xml","purpose":"any"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -858,14 +858,14 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
      l'action en clair, les cas particuliers en petit dessous — plus de parenthèses imbriquées en 11 px. -->
 <div id="padLeg">
   <div class="plt">🎮 Les touches de la manette</div>
-  <div class="pl"><b>Stick G</b><span>marcher / tourner</span></div>
+  <div class="pl"><b>Stick G</b><span>se déplacer dans la direction de la caméra</span></div>
   <div class="pl"><b>L3</b><span>courir</span></div>
   <div class="pl"><b>L2</b><span>se baisser<i>arme équipée : 🎯 viser · au volant : freiner · hélico : descendre</i></span></div>
   <div class="pl"><b>R2</b><span>accélérer<i>arme braquée : tirer</i></span></div>
-  <div class="pl"><b>✕</b><span>braquer / rengainer l'arme</span></div>
-  <div class="pl"><b>◯</b><span>sauter</span></div>
-  <div class="pl"><b>△</b><span>agir : monter, parler, prendre</span></div>
-  <div class="pl"><b>▢</b><span>frapper<i>hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame</i></span></div>
+  <div class="pl"><b>✕ / A</b><span>braquer / rengainer l'arme</span></div>
+  <div class="pl"><b>◯ / B</b><span>sauter</span></div>
+  <div class="pl"><b>△ / Y</b><span>agir : monter, parler, prendre</span></div>
+  <div class="pl"><b>▢ / X</b><span>frapper<i>hélico : 🚁 atterrir · engin de chantier : 🚜 creuser / lever / lame</i></span></div>
   <div class="pl"><b>L1</b><span>garde / viser</span></div>
   <div class="pl"><b>← →</b><span>🔫 changer d'arme<i>arme braquée : 🎯 changer de cible · tenu : 🛍️ boutique / 🎯 missions</i></span></div>
   <div class="pl"><b>↑</b><span>📣 ordres<i>ton sac 🎒, ton robot 🤖, ton drone 🚁 · tenu : 🚩 guerre des gangs</i></span></div>
@@ -896,7 +896,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
 
 <div class="overlay" id="start">
   <div class="card">
-    <div class="eyebrow">MONDE OUVERT · STRATÉGIE</div><h1>MARLON<span>EMPIRE URBAIN</span></h1>
+    <div class="eyebrow">MONDE OUVERT · STRATÉGIE · VERSION 0.10</div><h1>MARLON<span>EMPIRE URBAIN</span></h1>
     <p class="sub">Bâtis ton gang. Relie tes territoires. Défends ton empire.</p>
     <div class="field"><span>Pseudo</span><input id="nameIn" maxlength="16" placeholder="Ton pseudo"></div>
     <div class="field"><span>Maillot</span><div><div class="sw" id="swShirt"></div><div class="jn" id="jerseyName"></div></div></div>
@@ -1285,14 +1285,16 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
     <button class="btn sec" id="wipeBtn">🗑️ Nouvelle partie (tout effacer)</button>
     <button class="btn sec" id="resetChar">Réinitialiser le personnage</button>
     <button class="btn sec" id="changeWorld">Changer de monde</button>
-    <button class="btn sec" id="ctrlBtn">Contrôles : rotation</button>
+    <button class="btn sec" id="ctrlBtn">Clavier : rotation</button>
+    <button class="btn sec" id="padMoveBtn">🎮 Déplacement : relatif à la caméra</button>
     <button class="btn sec" id="turnBtn">Vitesse de rotation : 160°/s</button>
     <button class="btn sec" id="invYBtn">Caméra verticale : normale</button>
     <button class="btn sec" id="leaveNet" style="display:none">Quitter la partie en ligne</button>
     <button class="btn sec" id="sndBtn">Son : activé</button>
     <button class="btn sec" id="musBtn">Musique : activée</button>
     <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
-    <div id="volRow" class="sensRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
+    <div id="sensRow" class="volRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
+    <div class="volRow" id="padDeadRow"><span>🎮 Zone morte</span><input type="range" id="padDeadIn" min="6" max="30" step="1" aria-label="Zone morte des sticks"><b id="padDeadVal">12 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <details id="mixBloc"><summary id="mixTitre">🎧 Volume par famille ▾</summary><div id="mixRows"></div></details>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
@@ -1326,7 +1328,9 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
 </div>
 
 <script src="./vendor/three.min.js"></script>
-<script src="./cinematic.js"></script>
+<script src="./city-detail.js?v=010-action"></script>
+<script src="./cinematic.js?v=010-action"></script>
+<script src="./controls.js?v=010-action"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)"></script>
 <script>
 (() => {
@@ -1343,6 +1347,8 @@ const store = {
 };
 const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160,
+  padMove: store.get('superobby.padMove') === 'rot' ? 'rot' : 'camera',
+  padDeadzone: (v => v >= .06 && v <= .30 ? v : .12)(parseFloat(store.get('superobby.padDeadzone'))),
   // AXE VERTICAL DE LA CAMERA : normal par defaut (pousser le stick vers le bas fait monter
   // la camera, comme dans les jeux de ville). Inversable a la demande, et retenu d'une partie
   // sur l'autre : c'est un reflexe, pas un gout du jour.
@@ -1358,6 +1364,8 @@ const canvas = $('c');
 const versTV = /(^|#)tv(=|$)/.test(location.hash) || store.get('superobby.tv') === '1';
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile || versTV, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
+// Both direct rendering and the post target contain display-ready sRGB pixels.
+renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;   // couleurs franches façon briques : ACES délavait toute la palette
 renderer.physicallyCorrectLights = false;
 const scene = new THREE.Scene();
@@ -1787,7 +1795,7 @@ function postMonte() {
           o *= 1.0 - vign * dot(q, q) * 1.6;
         #endif
         gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
-      }`, depthTest: false, depthWrite: false });
+      }`, depthTest: false, depthWrite: false, toneMapped: false });
   post.scene = new THREE.Scene(); post.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat));
   post.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   postDefines();
@@ -1816,6 +1824,9 @@ function postCible() {
   post.msaa = gl2 && typeof THREE.WebGLMultisampleRenderTarget === 'function';
   const opt = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, stencilBuffer: false };
   post.rt = post.msaa ? new THREE.WebGLMultisampleRenderTarget(w, h, opt) : new THREE.WebGLRenderTarget(w, h, opt);
+  // CAS/grade samples display RGB directly. The scene encodes once into this target;
+  // the final custom shader deliberately performs no second encoding or tone mapping.
+  post.rt.texture.encoding = THREE.sRGBEncoding;
   // 4 echantillons par pixel en 4K, c'est le double du cout d'une image entiere sur une tele :
   // en diffusion on passe a 2 et on laisse la passe de nettete faire le reste du travail.
   if (post.msaa) post.rt.samples = diffusion.on ? diffusion.msaa : 4;
@@ -2215,6 +2226,7 @@ function clearWorld() {
   empire.operation = null; empire.attack = null; empire.markers = []; empire.acc = 0;
   if ($('empireHud')) $('empireHud').hidden = true;
   libereBranche(worldGroup);
+  city.art = null;
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   balaieAvatars();
   // les marques de choc et les véhicules en feu vivaient dans l'ancien monde : sans cette
@@ -2590,7 +2602,7 @@ function fenceBox(cx, base, cz, w, d, h, gapsSouth = []) {   // grillage autour 
   for (let z = cz - d / 2; z <= cz + d / 2 + 0.01; z += 4) for (const x of [cx - w / 2, cx + w / 2]) box(x, base + h / 2, z, 0.16, h, 0.16, 0x2b3550, { studs: false, noRoute: true, deco: true });
 }
 const glassMat = new THREE.MeshPhongMaterial({ color: 0x9bc9dd, specular: 0xddefff, shininess: 100, reflectivity: 0.25, combine: THREE.MixOperation, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide }); shared.add(glassMat);
-const AWNING = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 32; const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 32); g.fillStyle = '#e0202a'; g.fillRect(0, 0, 16, 32); g.fillRect(32, 0, 16, 32); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t; })();
+const AWNING = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 32; const g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 32); g.fillStyle = '#77818a'; g.fillRect(0, 0, 16, 32); g.fillRect(32, 0, 16, 32); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t; })();
 function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magasin vitré ; facing : 0 = devanture au nord, 1 = est, 2 = sud, 3 = ouest
   const th = [0, -Math.PI / 2, Math.PI, Math.PI / 2][facing], cs = Math.cos(th), sn = Math.sin(th);
   const M = (lx, lz) => [x + lx * cs + lz * sn, z - lx * sn + lz * cs];
@@ -2612,7 +2624,7 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   B(0, H + 0.5, 0, w + 0.4, 0.4, d + 0.4, 0x3b4252, { deco: true, studs: false }); B(0, H + 0.9, d / 2 - 0.2, w + 0.4, 0.5, 0.4, 0x3b4252, { deco: true, studs: false });
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = th; worldGroup.add(g);   // éléments visuels tournés avec le magasin
   const at = AWNING.clone(); at.needsUpdate = true; at.repeat.set(w / 1.5, 1);
-  const aw = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: at })); aw.scale.set(w + 0.2, 0.12, 1.4); aw.position.set(0, 3.5, fz - 0.7); aw.rotation.x = 0.35; g.add(aw);
+  const aw = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ map: at, color: awn })); aw.scale.set(w + 0.2, 0.12, 1.4); aw.position.set(0, 3.5, fz - 0.7); aw.rotation.x = 0.35; g.add(aw);
   // L'AUVENT RAYÉ BOUCHAIT TOUT L'ÉCRAN (défaut 81 — « on monte dans une voiture du parking et
   // on ne voit plus rien »). Il est fait à la main (`new THREE.Mesh`), donc il n'a jamais été ni
   // un solide ni un « toit de caméra » : la perche lui passait AU TRAVERS. Mesuré au parking du
@@ -2634,7 +2646,7 @@ function shop(x, z, w, d, color, title, awn = 0xe0202a, facing = 0) {   // magas
   // l'INTERIEUR du magasin : un axe passe parfois par-dessus (la rue des commerces), et le
   // grand nettoyage des chaussées emportait alors le mobilier posé DANS la boutique.
   const swapWD = facing % 2 === 1;
-  city.interieurs.push({ x, z, w: (swapWD ? d : w) + 0.6, d: (swapWD ? w : d) + 0.6 });
+  city.interieurs.push({ x, z, w: (swapWD ? d : w) + 0.6, d: (swapWD ? w : d) + 0.6, artShop: { w, d, facing, color: awn } });
   floor.M = M; return floor;
 }
 function mannequin(x, z, ry, look) {   // mannequin habillé (vrai avatar, sans nom) posé sur un socle
@@ -4793,18 +4805,18 @@ function buildRings() {   // anneaux de la course d'hélico
 // ---- briques de la ville ----
 const WINDOWS = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
-  g.fillStyle = '#b4b1a8'; g.fillRect(0, 0, 512, 512);
+  g.fillStyle = '#e7dac5'; g.fillRect(0, 0, 512, 512);
   for (let y = 0; y < 512; y += 128) for (let x = 0; x < 512; x += 128) {
-    g.fillStyle = '#535d61'; g.fillRect(x + 17, y + 13, 94, 100);
+    g.fillStyle = '#2c4850'; g.fillRect(x + 17, y + 13, 94, 100);
     const glass = g.createLinearGradient(x, y, x + 128, y + 110);
-    glass.addColorStop(0, '#263e4e'); glass.addColorStop(.45, '#76939e'); glass.addColorStop(1, '#354957');
+    glass.addColorStop(0, '#163e54'); glass.addColorStop(.45, '#62aec4'); glass.addColorStop(.49, '#92c9d7'); glass.addColorStop(1, '#235469');
     g.fillStyle = glass; g.fillRect(x + 21, y + 17, 86, 90);
-    g.fillStyle = 'rgba(217,236,235,.16)'; g.fillRect(x + 25, y + 19, 26, 86);
-    g.fillStyle = '#9ba1a0'; g.fillRect(x + 61, y + 17, 4, 90); g.fillRect(x + 21, y + 60, 86, 3);
-    g.fillStyle = '#656967'; g.fillRect(x + 14, y + 111, 100, 4);
-    g.fillStyle = '#cecbc0'; g.fillRect(x, y + 124, 128, 4);
+    g.fillStyle = 'rgba(233,251,255,.28)'; g.fillRect(x + 25, y + 19, 15, 86);
+    g.fillStyle = '#e6d8bd'; g.fillRect(x + 61, y + 17, 4, 90); g.fillRect(x + 21, y + 60, 86, 3);
+    g.fillStyle = '#b49673'; g.fillRect(x + 14, y + 111, 100, 4);
+    g.fillStyle = '#f5ead8'; g.fillRect(x, y + 122, 128, 6);
   }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
 
 // Glass highlights are masked to the panes, leaving masonry and mullions matte.
@@ -4818,31 +4830,29 @@ const WINDOWS_SPEC = (() => {
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
 
-// LA CHAUSSEE : un vrai bitume (grain), une ligne blanche continue sur chaque bord et la
-// ligne jaune discontinue au milieu. Une tuile = 4 m de route, dans la largeur de la voie.
+// Fine graphite asphalt. The final road network generates its paint after intersections
+// and widths are settled, so crossing roads no longer superimpose painted stripes.
 const ROAD = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = '#464b57'; g.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 900; i++) { const v = 60 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 4},${v + 12},0.5)`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
-  g.fillStyle = '#e8ebf0'; g.fillRect(3, 0, 4, 128); g.fillRect(121, 0, 4, 128);           // bords blancs
-  g.fillStyle = '#ffd23f'; g.fillRect(61, 8, 6, 56);                                        // axe jaune discontinu
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#434d56'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 4200; i++) { const v = 45 + i % 31; g.fillStyle = `rgba(${v},${v + 8},${v + 15},0.32)`; g.fillRect((i * 71) % 256, (i * 137 + (i >> 4)) % 256, 1, 1); }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
 // LE SOL DE LA VILLE : des dalles de beton clair, avec leurs joints, au lieu d'une plaque
 // du meme gris que les routes (on ne distinguait plus la chaussee du trottoir).
 const PAVE = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = '#a4aab3'; g.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 700; i++) { const v = 150 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 3},${v + 8},0.55)`; g.fillRect(Math.random() * 128, Math.random() * 128, 3, 3); }
-  g.strokeStyle = '#7f8691'; g.lineWidth = 2; for (let k = 0; k <= 128; k += 64) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 128); g.moveTo(0, k); g.lineTo(128, k); g.stroke(); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
+  g.fillStyle = '#bcb8aa'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 700; i++) { const v = 168 + i % 28; g.fillStyle = `rgba(${v + 6},${v + 3},${v - 6},0.35)`; g.fillRect((i * 41) % 128, (i * 73 + (i >> 3)) % 128, 1, 1); }
+  g.strokeStyle = '#989789'; g.lineWidth = 1; for (let k = 0; k <= 128; k += 64) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 128); g.moveTo(0, k); g.lineTo(128, k); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; shared.add(t); return t;
 })();
 const TROTTOIR = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#c9ced8'; g.fillRect(0, 0, 64, 64);
-  for (let i = 0; i < 200; i++) { const v = 180 + Math.floor(Math.random() * 40); g.fillStyle = `rgba(${v},${v + 2},${v + 8},0.6)`; g.fillRect(Math.random() * 64, Math.random() * 64, 2, 2); }
-  g.strokeStyle = '#a3aab5'; g.lineWidth = 2; for (let k = 0; k <= 64; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 64); g.moveTo(0, k); g.lineTo(64, k); g.stroke(); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
+  g.fillStyle = '#e2d8c5'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#d8cbb3'; g.fillRect(1, 1, 30, 30); g.fillRect(33, 33, 30, 30);
+  g.strokeStyle = '#b9ad95'; g.lineWidth = 1; for (let k = 0; k <= 64; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 64); g.moveTo(0, k); g.lineTo(64, k); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; shared.add(t); return t;
 })();
 const invisibleMat = new THREE.MeshBasicMaterial({ visible: false }); shared.add(invisibleMat);
 const BARRIER = (() => {
@@ -4936,7 +4946,7 @@ function building(x, z, w, h, d, color, dir) {
   const tx = WINDOWS.clone(); tx.needsUpdate = true; tx.repeat.set(w / 8.8, hh / 8.8);
   const tz = WINDOWS.clone(); tz.needsUpdate = true; tz.repeat.set(d / 8.8, hh / 8.8);
   // r128 shares map-transformed vUv with specularMap: one mask serves every facade repeat.
-  const mx = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0x929799), 0.65), map: tx, specularMap: WINDOWS_SPEC, shininess: 72, specular: 0x91b4c3, envMap: empireEnvironment(), reflectivity: 0.16, combine: THREE.MixOperation }), mz = mx.clone(); mz.map = tz;
+  const mx = new THREE.MeshPhongMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0xf1dfc5), 0.26), map: tx, specularMap: WINDOWS_SPEC, shininess: 72, specular: 0x91b4c3, envMap: empireEnvironment(), reflectivity: 0.16, combine: THREE.MixOperation }), mz = mx.clone(); mz.map = tz;
   const ex = WINMASK.clone(); ex.needsUpdate = true; ex.repeat.set(w / 8.8, hh / 8.8); const ez = WINMASK.clone(); ez.needsUpdate = true; ez.repeat.set(d / 8.8, hh / 8.8);
   mx.emissiveMap = ex; mz.emissiveMap = ez; mx.emissive.set(0x000000); mz.emissive.set(0x000000); city.buildings.push(mx, mz);
   box(x, GF + hh / 2, z, w, hh, d, color, { material: [mx, mx, lam(color), lam(color), mz, mz] });   // les étages
@@ -4954,7 +4964,7 @@ function building(x, z, w, h, d, color, dir) {
   if (h >= 12) toitAccessible(x, z, w, d, GF + hh, fx, fz);
   // Une porte de hall fait 2,6 m de large : les voitures de police entraient dans les halls.
   // L'intérieur des bâtiments est désormais interdit aux véhicules (les piétons passent).
-  city.batiments.push({ x, z, w: w - 0.5, d: d - 0.5, toit: GF + hh });
+  city.batiments.push({ x, z, w: w - 0.5, d: d - 0.5, toit: GF + hh, artFacade: true });
 }
 // Ascenseur vitré collé à la façade + toit équipé (parachute, deltaplane, garde-corps).
 function toitAccessible(x, z, w, d, toit, fx, fz) {
@@ -6448,14 +6458,18 @@ function buildEmpireDistricts() {
     box(x, 19, -351, 2, 2, 2, 0x4c5e66, { studs: false, noRoute: true });
   }
 }
-function releaseGamepad() {
-  // Remove held keys directly: synthesizing a KeyV key-up would throw a punch on disconnect.
-  for (const key of Object.values(PAD_MAP)) keys.delete(key);
+function releaseGamepad(reset = true) {
+  // Cancel without keyup: keyup on a held punch would attack on disconnect.
+  for (const key of inputKeys.release('gamepad')) keys.delete(key);
+  if (reset) padController.reset();
   pad.x = pad.y = pad.gaz = pad.frein = 0; pad.l2 = pad.l2Bas = pad.tirR2 = false;
   pad.bas = null; pad.lu = null; pad.longT = {}; pad.longFait = {}; pad.baisse = false;
   pad.a = false; pad.menuDir = null; pad.hautFait = true; pad.neutralRequired = true;
-  P.run = false; P.aimHeld = false; P.jumpBuf = 0; P.vDown = null; jumpHeld = downHeld = false;
-  setGarde(false); setAccroupi(false);
+  if (pad.sprint) P.run = false; pad.sprint = false;
+  P.aimHeld = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  if (!keys.has('Space')) P.jumpBuf = 0;
+  if (!keys.has('KeyV')) P.vDown = null;
+  setGarde(keys.has('KeyH')); setAccroupi(keys.has('KeyC') || keys.has('ControlLeft'));
 }
 function initEmpireUI() {
   $('empireClose').addEventListener('click', closeUI);
@@ -6753,6 +6767,7 @@ const WORLDS = [
       // APRÈS le décor solidifié : c'est le dernier moment où un nouveau mur peut apparaître
       // dans le plancher d'une cabine d'ascenseur (voir degageLesCabines).
       B('cabines d\'ascenseur', degageLesCabines);
+      B('architecture et voirie', () => { city.art = MarlonCityDetail.build(THREE, city, worldGroup); });
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
       nommeLesBatiments();   // chaque batiment sait dans quel quartier il est : les sinistres et les pannes s'y placent tout seuls
@@ -18017,8 +18032,8 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // et une part CARRÉE qui garde la grande vitesse pour le bord du stick.
 const CAM_MORTE = 0.075;       // zone morte RONDE du stick droit : juste au-dessus de la dérive d'une DualSense usée (5 % sur les DEUX axes font 7,07 % en diagonale — mesuré : 0,9 °/s de rotation parasite avec 6 %)
 const CAM_LIN = 0.35;          // part linéaire de la courbe de visée ; le reste est en carré
-const CAM_VYAW = 5.5;          // rad/s au bord du stick, horizontal (315 °/s : de quoi se retourner d'un coup de pouce)
-const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal, le ratio qui donne le MÊME ressenti
+const CAM_VYAW = 3.8;          // rad/s au bord ; zone morte et sensibilité réglables dans le menu
+const CAM_VPITCH = 2.4;        // le cadrage vertical est plus fin que le demi-tour horizontal
 // REGARDER LE CIEL. La butée haute était à -0,15 rad (-8,6°) arme rangée : on ne voyait ni le
 // haut des tours, ni l'hélicoptère, ni le ciel — l'image se bloquait net. Elle descend à
 // -0,5 rad (-29°) ; c'est camPerche qui raccourcit alors la perche pour que l'objectif ne
@@ -18180,6 +18195,7 @@ function interieurTick() {
   }
 }
 const keys = new Set();
+const inputKeys = MarlonControls.createKeySources();
 const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
 // gaz = R2 et frein = L2, analogiques, AU VOLANT seulement. l2 = la gachette gauche en tout
 // ou rien : a pied elle baisse le joueur, en helico elle le fait descendre.
@@ -19514,6 +19530,7 @@ function renderWorlds() {
   $('worldGrid').querySelectorAll('.wcard').forEach(el => el.addEventListener('click', () => chooseWorld(+el.dataset.i)));
 }
 function chooseWorld(i) {
+  if (uiOpen) closeUI();
   $('worlds').classList.add('hidden'); $('menu').classList.add('hidden'); $('win').classList.add('hidden');
   loadWorld(i); paused = false; running = true; document.body.classList.remove('lobby');
   P.facing = Math.PI; cam.yaw = 0; cam.pitch = 0.32; cam.dist = cam.base; cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);   // cam.dist : la camera de l'accueil etait a 9 m, on repart de la distance de jeu
@@ -24225,7 +24242,7 @@ function step(dt, active) {
     wantX = ix * vers * SPEED; wantZ = iz * vers * SPEED;
     let d = capTennis() - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
     P.facing += d * Math.min(1, dt * 10);   // il se tourne vers la balle sans qu'on ait à le piloter
-  } else if (settings.ctrl === 'rot' && !(P.gun && P.drawn)) {
+  } else if ((padActif() ? settings.padMove === 'rot' : settings.ctrl === 'rot') && !(P.gun && P.drawn)) {
     // MODE ROTATION AU STICK. Le stick etait exclu de ce mode (`!padActif()`) : pousse a
     // gauche, le personnage GLISSAIT de cote au lieu de TOURNER — « le joystick gauche ne
     // dirige pas le joueur gauche/droite en rotation ». Il y est de nouveau, et sans le
@@ -24570,6 +24587,26 @@ function separerPersos() {
     e.pose(o.x, o.z);
   }
 }
+// Minimum separating vector for the actual oriented chassis. Axis-aligned
+// envelopes grow in a bend and used to push apart cars that never touched.
+function contactVehicules(a, b) {
+  const aw = (a.baseW || 2.4) / 2, ad = (a.baseD || 4.4) / 2;
+  const bw = (b.baseW || 2.4) / 2, bd = (b.baseD || 4.4) / 2;
+  const dx = a.x - b.x, dz = a.z - b.z;
+  if (Math.abs(dx) > aw + ad + bw + bd || Math.abs(dz) > aw + ad + bw + bd) return null;
+  const ac = Math.cos(a.h || 0), as = Math.sin(a.h || 0), bc = Math.cos(b.h || 0), bs = Math.sin(b.h || 0);
+  let depth = Infinity, nx = 0, nz = 0;
+  for (let i = 0; i < 4; i++) {
+    const x = i === 0 ? ac : i === 1 ? as : i === 2 ? bc : bs;
+    const z = i === 0 ? -as : i === 1 ? ac : i === 2 ? -bs : bc;
+    const ra = aw * Math.abs(x * ac - z * as) + ad * Math.abs(x * as + z * ac);
+    const rb = bw * Math.abs(x * bc - z * bs) + bd * Math.abs(x * bs + z * bc);
+    const projection = dx * x + dz * z, overlap = ra + rb + .02 - Math.abs(projection);
+    if (overlap <= 0) return null;
+    if (overlap < depth) { depth = overlap; const sign = projection < 0 ? -1 : 1; nx = x * sign; nz = z * sign; }
+  }
+  return { x: nx * depth, z: nz * depth };
+}
 function separerVehicules() {
   const tous = [];
   for (const v of city.cars) tous.push(v);
@@ -24582,8 +24619,8 @@ function separerVehicules() {
     // DEUX CENTIMÈTRES DE JEU. On séparait pile jusqu'au contact : deux véhicules de même
     // gabarit finissaient collés au millimètre (et, au chouïa d'arrondi près, encore
     // considérés comme se chevauchant). On laisse un vrai filet d'air entre les tôles.
-    const ox = (a.solid.w + b.solid.w) / 2 + 0.02 - Math.abs(a.x - b.x), oz = (a.solid.d + b.solid.d) / 2 + 0.02 - Math.abs(a.z - b.z);
-    if (ox <= 0 || oz <= 0) continue;
+    const contact = contactVehicules(a, b);
+    if (!contact) continue;
     // une voiture du trafic suit son rail : on ne la pousse pas, c'est l'autre qui s'écarte.
     // UN VEHICULE OCCUPE N'EST PAS UN RAIL. `busy` veut dire « en mission », pas « posé sur un
     // rail » : le camion de pompiers garé contre le feu, la dépanneuse au travail, le fourgon
@@ -24606,8 +24643,7 @@ function separerVehicules() {
       const x0 = v.x, z0 = v.z; v.x += dx; v.z += dz;
       if (mur(v)) { v.x = x0; v.z = z0; return false; }
       bougea = true; return true; };
-    const sgx = Math.sign(a.x - b.x) || 1, sgz = Math.sign(a.z - b.z) || 1;
-    const ux = ox < oz ? sgx * ox : 0, uz = ox < oz ? 0 : sgz * oz;
+    const ux = contact.x, uz = contact.z;
     if (!bouge(a, ux * pa, uz * pa) && pa) bouge(b, -ux * pa, -uz * pa);
     if (!bouge(b, -ux * pb, -uz * pb) && pb) bouge(a, ux * pb, uz * pb);
     // DERNIER RECOURS : LE COUPLE COINCE. Le garde-fou ci-dessus refuse le pas qui finit dans
@@ -24623,7 +24659,9 @@ function separerVehicules() {
       const qa = ca ? (cb ? pa : 1) : 0, qb = cb ? (ca ? pb : 1) : 0;
       a.x += ux * qa; a.z += uz * qa; b.x -= ux * qb; b.z -= uz * qb;
     }
-    for (const v of [a, b]) if (v.s == null) { v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
+    // Physics, collider and image must agree in the same frame, including
+    // ambient traffic (s != null). Otherwise the next pair reads a stale box.
+    for (const v of [a, b]) { v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
   }
 }
 function enterCar(c) {
@@ -29368,8 +29406,12 @@ window.addEventListener('error', e => {   // un plantage est signalé une fois, 
 window.addEventListener('keydown', e => {
   if (document.activeElement === chatIn) { if (e.code === 'Escape') chatIn.blur(); return; }
   if (document.activeElement === $('nameIn')) return;
+  const field = document.activeElement;
+  if (field && e.code !== 'Escape' && (field.tagName === 'TEXTAREA' || field.isContentEditable || (field.tagName === 'INPUT' && !['range', 'checkbox', 'button'].includes(field.type)))) return;
+  if (document.querySelector('#marlonCinema')) return;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
+  if (!inputKeys.set(e.code, e.marlonSource || 'keyboard', true)) return;
   if (e.code === 'Slash' || e.key === '/') { if (running) { e.preventDefault(); $('chat').classList.add('open'); $('chatBtn').classList.add('on'); chatIn.focus(); } return; }
   if (e.code === 'Escape') { if (uiOpen) fermeUI(); else if (running) toggleMenu(); return; }   // une fenêtre ouverte se ferme avec Échap (la branche suivante n'était jamais atteinte)
   if (e.code === 'KeyR' && running && !paused && !dead && !won) { die(true); msg('Réinitialisation…', 900); return; }
@@ -29415,10 +29457,14 @@ window.addEventListener('keydown', e => {
   keys.add(e.code);
   if (e.code === 'Space') { if (!(typeof dronePilote === 'function' && dronePilote())) P.jumpBuf = 0.15; }   // aux manches du drone, Espace fait MONTER (droneEntrees)
 });
-window.addEventListener('keyup', e => { if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') P.run = false;
-  if (e.code === 'KeyC' || e.code === 'ControlLeft') { keys.delete(e.code); if (!keys.has('KeyC') && !keys.has('ControlLeft')) setAccroupi(false); return; }
-  if (e.code === 'KeyH') { keys.delete(e.code); setGarde(false); return; } if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') P.aimHeld = false; if (e.code === 'KeyV' && keys.has('KeyV')) { keys.delete('KeyV'); if (simTime - (P.vDown || 0) > 0.4) kick(); else punch(); return; } keys.delete(e.code); });
-window.addEventListener('blur', () => { keys.clear(); setGarde(false); setAccroupi(false); });
+window.addEventListener('keyup', e => { if (!inputKeys.set(e.code, e.marlonSource || 'keyboard', false)) return;
+  if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') P.run = !!pad.sprint;
+  if (e.code === 'KeyC' || e.code === 'ControlLeft') { keys.delete(e.code); setAccroupi(!!pad.baisse || keys.has('KeyC') || keys.has('ControlLeft')); return; }
+  if (e.code === 'KeyH') { keys.delete(e.code); setGarde(!!(pad.bas && pad.bas[4])); return; }
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { keys.delete(e.code); P.aimHeld = !!(pad.l2 && P.weapon && !drive.car) || keys.has('ShiftLeft') || keys.has('ShiftRight'); return; }
+  if (e.code === 'KeyV' && keys.has('KeyV')) { keys.delete('KeyV'); if (running && !paused) { if (simTime - (P.vDown || 0) > 0.4) kick(); else punch(); } P.vDown = null; return; }
+  keys.delete(e.code); });
+window.addEventListener('blur', () => { inputKeys.clear(); keys.clear(); setGarde(false); setAccroupi(false); });
 chatIn.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     const t = chatIn.value.trim(); chatIn.value = '';
@@ -29626,72 +29672,23 @@ const PAD_GACHETTE_MORTE = 0.06;   // une gâchette au repos rend rarement exact
 // On normalise donc TOUT ici, une fois pour toutes : le reste du jeu ne voit qu'un agencement.
 const PAD_HID_PS = [2, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17];   // ordre HID DualShock/DualSense → index standard
 function padProfil(gp) {
-  if (!gp) return 'aucun';
-  if (gp.mapping === 'standard') return 'standard';
-  const nb = (gp.buttons || []).length, na = (gp.axes || []).length;
-  if (/dualsense|dualshock|playstation|054c|wireless controller/i.test(gp.id || '') && nb <= 15 && na >= 6) return 'ps-hid';   // DualSense/DualShock brut : gachettes sur les axes, croix sur un chapeau
-  return 'brut';
+  return MarlonControls.profile(gp);
 }
-// Le « chapeau » : un seul axe code les huit directions de la croix (et le repos hors de
-// [-1, 1]). Retourne [x, y] avec y = +1 vers le HAUT, comme un stick.
 function padChapeau(v) {
-  if (!(v >= -1.001 && v <= 1.001)) return [0, 0];   // repos : 1,28 chez Firefox, NaN ailleurs
-  const d = Math.round((v + 1) * 3.5) % 8;           // 0 = haut, puis dans le sens des aiguilles
-  return [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]][d];
+  return MarlonControls.hat(v);
 }
-// L'axe du chapeau : le premier axe au-dela des sticks dont la valeur ne ressemble pas a un
-// stick au repos. On ne le cherche que si la croix n'a pas de boutons a elle.
-// `depart` = premier axe qui PEUT etre un chapeau : sur une DualSense brute les axes 0 a 5
-// sont deja pris (sticks et gachettes), et une gachette a fond ressemble a un cran de chapeau.
 function padAxeChapeau(gp, depart) {
-  const a = gp.axes || [];
-  for (let i = Math.min(a.length - 1, 9); i >= (depart || 4); i--) {
-    const v = a[i];
-    if (typeof v !== 'number') continue;
-    if (v > 1.001 || v < -1.001) return i;                       // repos « hors bornes » : c'est un chapeau
-    if (Math.abs(Math.round((v + 1) * 3.5) - (v + 1) * 3.5) < 0.02 && Math.abs(v) > 0.05) return i;   // pile sur un cran
-  }
-  return -1;
+  return MarlonControls.hatAxis(gp, depart);
 }
-// Lecture normalisee d'une manette : sticks, gachettes analogiques et 18 boutons standard.
 function padLu(gp) {
-  const profil = padProfil(gp);
-  const a = (gp && gp.axes) || [], bt = (gp && gp.buttons) || [];
-  const axe = i => Number.isFinite(a[i]) ? clamp(a[i], -1, 1) : 0;
-  const val = i => { const b = bt[i]; return b ? (Number.isFinite(b.value) ? clamp(b.value, 0, 1) : (b.pressed ? 1 : 0)) : 0; };
-  const app = i => !!(bt[i] && bt[i].pressed);
-  const b = new Array(PAD_BOUTONS).fill(false), v = new Array(PAD_BOUTONS).fill(0);
-  let lx = axe(0), ly = axe(1), rx = axe(2), ry = axe(3), l2 = 0, r2 = 0;
-  if (profil === 'ps-hid') {
-    ry = axe(5);
-    const ax = i => (Number.isFinite(a[i]) ? clamp(a[i], -1, 1) : -1);   // 0 est une gâchette à mi-course.
-    l2 = clamp((ax(3) + 1) / 2, 0, 1); r2 = clamp((ax(4) + 1) / 2, 0, 1);   // -1 = relachee, +1 = a fond
-    for (let i = 0; i < PAD_HID_PS.length; i++) { const s = PAD_HID_PS[i]; b[s] = app(i); v[s] = val(i); }
-    v[6] = Math.max(v[6], l2); v[7] = Math.max(v[7], r2);
-  } else {
-    for (let i = 0; i < PAD_BOUTONS; i++) { b[i] = app(i); v[i] = val(i); }
-    l2 = v[6]; r2 = v[7];
-  }
-  // la croix : soit de vrais boutons, soit un chapeau sur un axe
-  let chapeau = -1;
-  if (!b[12] && !b[13] && !b[14] && !b[15] && profil !== 'standard') {
-    chapeau = padAxeChapeau(gp, profil === 'ps-hid' ? 6 : 4);
-    if (chapeau >= 0) {
-      const [hx, hy] = padChapeau(a[chapeau]);
-      b[12] = hy > 0.5; b[13] = hy < -0.5; b[14] = hx < -0.5; b[15] = hx > 0.5;
-      for (const i of [12, 13, 14, 15]) v[i] = b[i] ? 1 : 0;
-    }
-  }
-  // les gachettes commandent aussi les boutons 6/7 : le reste du jeu peut les traiter en tout ou rien
-  b[6] = b[6] || l2 > PAD_SEUIL_GACHETTE; b[7] = b[7] || r2 > PAD_SEUIL_GACHETTE;
-  return { profil, lx, ly, rx, ry, l2, r2, b, v, chapeau, brut: a };
+  return MarlonControls.normalize(gp);
 }
 // une gachette au repos ne rend pas toujours 0 : petite zone morte, puis pleine course
 const padCourse = t => Number.isFinite(t) && t > PAD_GACHETTE_MORTE ? clamp((t - PAD_GACHETTE_MORTE) / (1 - PAD_GACHETTE_MORTE), 0, 1) : 0;
 const manetteSalon = { i: -1, nom: '', vibT: 0, profil: 'aucun' };
 function padActive() {
   if (!gamepadOk || !navigator.getGamepads) return null;
-  let liste; try { liste = navigator.getGamepads(); } catch (e) { gamepadOk = false; return null; }
+  let liste; try { liste = navigator.getGamepads() || []; } catch (e) { return null; }
   // Garder la manette choisie : brancher une seconde manette ne vole pas les commandes.
   let choix = null;
   for (let i = 0; i < liste.length; i++) {
@@ -29708,28 +29705,25 @@ function padActive() {
 // Zone morte de 8 % (une DualSense neuve ne derive pas au-dela de 5 %) et une courbe
 // LEGEREMENT progressive (exposant 1,2) : precis pres du centre, pleine vitesse au bord.
 // L'ancienne courbe divisait la reponse par deux a mi-course : on se trainait.
-function padStick(x, y, morte = 0.08) {
-  x = Number.isFinite(x) ? x : 0; y = Number.isFinite(y) ? y : 0;
-  const d = Math.hypot(x, y);
-  if (d < morte) return [0, 0];
-  const m = Math.min(1, (d - morte) / (1 - morte)), k = Math.pow(m, 1.2) / (d || 1);
-  return [x * k, y * k];
+function padStick(x, y, morte = settings.padDeadzone || .12) {
+  return MarlonControls.radial(x, y, morte);
 }
-// LE STICK DROIT A SA PROPRE COURBE (round 71). Marcher et VISER ne demandent pas la meme
-// reponse : en marchant on veut la vitesse tout de suite, en visant on veut du DOSAGE. La
-// courbe de marche (exposant 1,2) rendait deja 43 % de la vitesse a mi-course : la camera
-// partait trop vite et l'on n'arrivait jamais a cadrer. Ici : zone morte ronde de 7,5 %
-// (au-dessus de la derive d'une DualSense usee), puis 35 % de lineaire — le premier
-// millimetre repond — et 65 % de carre, qui garde la grande vitesse pour le bord. MESURE :
-// 5,9 °/s a 12 % de course, 94 °/s a mi-course (30 % du maximum, contre 43 % avant),
-// 315 °/s au bord, et jamais plus de 27 °/s d'ecart d'une graduation de 5 % a la suivante.
 function padVisee(x, y) {
-  x = Number.isFinite(x) ? x : 0; y = Number.isFinite(y) ? y : 0;
-  const d = Math.hypot(x, y);
-  if (d < CAM_MORTE) return [0, 0];
-  const m = Math.min(1, (d - CAM_MORTE) / (1 - CAM_MORTE));
-  const k = (CAM_LIN * m + (1 - CAM_LIN) * m * m) / (d || 1);
-  return [x * k, y * k];
+  return MarlonControls.radial(x, y, settings.padDeadzone || .12, true);
+}
+const padController = MarlonControls.createController();
+function padContexte() {
+  if (document.visibilityState === 'hidden' || pad.suspended || document.querySelector('#marlonCinema')) return 'blocked';
+  const overlay = document.querySelector('.overlay:not(.hidden)');
+  if (overlay) return 'menu:' + (overlay.id || uiOpen || 'start');
+  const active = document.activeElement;
+  if (active && active.offsetParent !== null && ((active.tagName === 'INPUT' && !['range', 'checkbox', 'button'].includes(active.type)) || active.tagName === 'TEXTAREA' || active.isContentEditable)) return 'typing';
+  if (!running || paused) return 'blocked';
+  if (typeof dronePilote === 'function' && dronePilote()) return 'game:drone';
+  return drive.car ? 'game:vehicle' : 'game:foot';
+}
+function padTouche(code, down) {
+  telTouche(code, down, 'gamepad');
 }
 const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) + (pad.gaz || 0) + (pad.frein || 0) > 0.02;
 // LA VIBRATION : la DualSense la gère nativement dans le navigateur.
@@ -29740,150 +29734,84 @@ function padVibre(force = 0.6, ms = 120) {
   catch (e) { return false; }
 }
 function pollGamepad(dt) {
-  const gp = padActive();
-  if (!gp) { if (pad.bas || pad.lu || pad.l2) releaseGamepad(); pad.x = pad.y = 0; pad.gaz = pad.frein = 0; pad.l2 = false; if (pad.baisse) { pad.baisse = false; setAccroupi(false); } pad.lu = null;
-    if (pad.bas) { for (const k of Object.values(PAD_MAP)) telTouche(k, false); pad.bas = null; if (P.garde) setGarde(false); }
-    if (uiOpen === 'padTest') padEssaiTick(null); return; }
-  const L = padLu(gp);                       // agencement normalise : voir padLu
-  pad.lu = L; manetteSalon.profil = L.profil;
-  if (document.visibilityState === 'hidden' || pad.suspended) { releaseGamepad(); return; }
-  const menu = !!document.querySelector('.overlay:not(.hidden)');
-  if (menu !== !!pad.menuAvant) releaseGamepad(); pad.menuAvant = menu;
-  // Un bouton qui a ouvert/fermé un menu ou survécu à une perte de focus n'est pas un
-  // nouvel appui. Le relâchement réarme les commandes sans répétition accidentelle.
-  if (pad.neutralRequired) {
-    pad.bas = Object.fromEntries(L.b.map((pressed, i) => [i, pressed])); pad.lu = L;
-    if (L.b.some(Boolean) || Math.hypot(L.lx, L.ly) > 0.18 || Math.hypot(L.rx, L.ry) > 0.18) {
-      if (uiOpen === 'padTest') padEssaiTick(L); return;
-    }
-    pad.neutralRequired = false;
+  const gp = padActive(), context = padContexte();
+  if (!gp) {
+    if (pad.bas || pad.lu) releaseGamepad();
+    if (uiOpen === 'padTest') padEssaiTick(null);
+    return;
   }
-  const [gx, gy] = padStick(L.lx, L.ly);
-  pad.x = menu ? 0 : gx; pad.y = menu ? 0 : -gy;
-  // LES DEUX GACHETTES, NOUVEAU PARTAGE (round 68). Le joueur a change d'avis : les gachettes
-  // ne font plus AVANCER A PIED (c'est le stick gauche, et lui seul). Elles gardent trois
-  // roles, qui ne se croisent jamais parce que la SITUATION tranche :
-  //   au volant   : R2 accelere, L2 freine puis recule  (analogiques — voir commandesManette)
-  //   a pied      : R2 tire quand l'arme est braquee, L2 baisse le joueur
-  //   en helico   : L2 fait descendre, ▢ pose l'appareil
-  const armeBraquee = !!P.drawn && !drive.car;
-  pad.armeBraquee = armeBraquee;
-  pad.gaz = menu ? 0 : padCourse(L.r2); pad.frein = menu ? 0 : padCourse(L.l2);
-  pad.l2 = !menu && L.b[6];
-  // L2 A PIED : SE BAISSER. Le geste existait deja (l'esquive du combat : bassin abaisse de
-  // 19,8 cm, genoux plies a 1,66 rad, semelles au sol) mais n'avait aucun bouton a lui sur la
-  // manette — seulement C ou Ctrl au clavier. Il tient maintenant dans la gachette gauche,
-  // libree par le changement ci-dessus, et coherente avec le reste : a gauche on ralentit
-  // (frein), on descend (helico) ou on se baisse (a pied).
-  // L2 A PIED, ARME EQUIPEE : DEGAINER ET BRAQUER (round 70, demande du joueur). Un appui sort
-  // l'arme et POSE la visee sur la cible la plus proche ; le suivant la rengaine. Sans arme
-  // equipee, L2 fait toujours se baisser : c'est la SITUATION qui tranche, pas un second role.
-  {
-    // AUX MANCHES DU DRONE, LES GACHETTES LE FONT MONTER ET DESCENDRE (poste DRONE & ROBOT).
-    // Sans ce garde-fou, L2 baissait le JOUEUR (ou verrouillait une visee) pendant qu'on
-    // faisait descendre l'appareil : on se retrouvait accroupi au sol sans l'avoir demande.
-    const auxManches = typeof dronePilote === 'function' && dronePilote();
-    const aPied = !drive.car && running && !paused && !auxManches;
-    const braque = aPied && !!P.weapon;
-    // (le commit distant avait ajouté « && !P.drawn » : arme déjà sortie par ✕, L2 ne verrouillait
-    // plus rien — braquerVerrouille() sait déjà quoi faire arme sortie : reverrouiller sans ranger)
-    if (braque && pad.l2 && !pad.l2Bas) braquerVerrouille();
-    P.aimHeld = braque && pad.l2;
-    const baisse = pad.l2 && aPied && !braque;
-    if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse); }
-    pad.l2Bas = pad.l2;
+  const frame = padController.sample(gp, { context: context === 'typing' ? 'blocked' : context,
+    now: performance.now(), deadzone: settings.padDeadzone, lookDeadzone: settings.padDeadzone });
+  if (frame.changed) releaseGamepad(false);
+  const L = frame.raw, neuf = frame.b, bas = frame.previous;
+  pad.lu = L; pad.neutralRequired = frame.neutralRequired;
+  manetteSalon.profil = L.profil;
+  if (context === 'blocked' || context === 'typing') { pad.bas = neuf; return; }
+  if (frame.pressed.some(Boolean)) padSon();
+  if (context.startsWith('menu:')) {
+    if (uiOpen === 'padTest') padEssaiTick(L, neuf, bas);
+    else padMenu(L, neuf, bas, frame.navigation);
+    pad.bas = neuf; return;
   }
-  if (running && !paused && !menu) {
-    const [vx, vy] = padVisee(L.rx, L.ry);
-    // la camera tournait a 3,4 rad/s : trop lent pour se retourner. 5,5 rad/s au bord, et le
-    // reglage « sensibilite manette » (0,5 a 2) multiplie le tout ; en visee, deux fois plus fin
-    const sens = (settings.sensib || 1) * (P.aim ? 0.5 : 1);
-    // L'AXE VERTICAL S'INVERSE (reglage ⚙️). Certains joueurs — dont beaucoup d'enfants qui
-    // ont appris au pilotage — poussent le stick vers le HAUT pour lever les yeux. Sans ce
-    // reglage il n'y avait aucun moyen de le changer, et l'inversion se joue a la manette,
-    // pas au clavier : c'est ici qu'elle doit vivre.
-    const invV = settings.invY ? -1 : 1;
-    cam.yaw -= vx * dt * CAM_VYAW * sens;
-    cam.pitch = clamp(cam.pitch + vy * invV * dt * CAM_VPITCH * sens, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
-    // AU VOLANT ON REVIENT PLUS VITE SUR LA ROUTE. A pied, deux secondes et demie de regard
-    // libre ; au volant, une seconde et demie — le temps de jeter un oeil dans le retroviseur
-    // sans perdre la rue, puisque la voiture, elle, continue d'avancer.
-    if (vx || vy) cam.freeUntil = simTime + (drive.car ? 1.5 : 2.5);
+  // A context change is a boundary: no remaining actions from the old frame may leak.
+  const stillPlaying = () => padContexte() === context;
+  pad.x = frame.move[0]; pad.y = -frame.move[1];
+  pad.gaz = frame.gaz; pad.frein = frame.frein; pad.l2 = neuf[6];
+  const auxManches = context === 'game:drone', aPied = context === 'game:foot';
+  const braque = aPied && !!P.weapon;
+  if (braque && frame.pressed[6]) braquerVerrouille();
+  P.aimHeld = (braque && pad.l2) || keys.has('ShiftLeft') || keys.has('ShiftRight');
+  const baisse = pad.l2 && aPied && !braque;
+  if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse || keys.has('KeyC') || keys.has('ControlLeft')); }
+  pad.l2Bas = pad.l2;
+  const [vx, vy] = frame.look;
+  const seconds = Number.isFinite(dt) ? clamp(dt, 0, .05) : 0;
+  const sens = clamp(Number.isFinite(settings.sensib) ? settings.sensib : 1, .5, 2) * (P.aim ? .5 : 1);
+  cam.yaw -= vx * seconds * CAM_VYAW * sens;
+  cam.pitch = clamp(cam.pitch + vy * (settings.invY ? -1 : 1) * seconds * CAM_VPITCH * sens, P.drawn ? CAM_PITCH_ARME : CAM_PITCH_HAUT, 1.25);
+  if (vx || vy) cam.freeUntil = simTime + (drive.car ? 1.5 : 2.5);
+  // Process Pause before every gameplay button, even when several buttons arrive together.
+  if (frame.pressed[9] || frame.pressed[16]) { padTouche('Escape', true); releaseGamepad(false); return; }
+  const enHelico = !!drive.car && !!drive.car.heli;
+  const enEngin = !!drive.car && !!drive.car.travail && !drive.car.heli;
+  if (frame.pressed[2] && enHelico) { heliPoser(); padVibre(.25, 60); }
+  if (frame.pressed[2] && enEngin && actionneOutil(drive.car)) padVibre(.35, 70);
+  for (const [i, code] of Object.entries(PAD_MAP)) {
+    if (+i === 9 || (+i === 2 && (enHelico || enEngin))) continue;
+    if (neuf[i] === bas[i]) continue;
+    padTouche(code, neuf[i]);
+    if (!stillPlaying()) { releaseGamepad(false); return; }
   }
-  const bas = pad.bas || {};
-  const neuf = {};
-  for (let i = 0; i < PAD_BOUTONS; i++) neuf[i] = L.b[i];
-  // Le son : une manette ne compte pas comme un « geste » pour le navigateur. On tente
-  // quand meme de reveiller la carte son au premier bouton, et on dit quoi faire si elle
-  // reste muette (touche OK de la telecommande, ou un doigt sur l'ecran).
-  if (Object.keys(neuf).some(i => neuf[i] && !bas[i])) padSon();
-  if (menu) {
-    if (P.garde) setGarde(false);   // un menu s'ouvre : on ne reste pas fige en garde ou accroupi
-    if (uiOpen === 'padTest') padEssaiTick(L, neuf, bas); else padMenu(L, neuf, bas);
-  } else {
-    // ▢ EN HELICO = ATTERRIR. Au sol le carre frappe (KeyV) ; aux commandes d'un helicoptere
-    // il n'y a personne a frapper, donc le meme bouton y enclenche la descente automatique.
-    // Aucune collision : c'est l'un OU l'autre selon qu'on vole ou non.
-    const enHelico = !!drive.car && !!drive.car.heli;
-    if (enHelico && neuf[2] && !bas[2]) { heliPoser(); padVibre(0.25, 60); }
-    // ▢ AU VOLANT D'UN ENGIN DE CHANTIER = ACTIONNER L'OUTIL (poste Animation).
-    // Le joueur : « quand le joueur prend par ex la pelleteuse pour faire un trou, aucune
-    // touche de la manette n'est affectee a cette action ». C'etait vrai : le cycle de fouille
-    // n'etait branche que sur la touche O du CLAVIER, et l'enfant joue a la manette sur sa
-    // television — le travail etait inutilisable pour lui.
-    // Pourquoi ▢ et pas un bouton neuf : les dix-huit boutons sont deja pris, et ▢ a
-    // exactement le bon profil. A pied il FRAPPE ; dans un vehicule ordinaire il ne fait que
-    // klaxonner (ce que fait deja ↓ de la croix, c'etait donc un doublon) ; en helicoptere il
-    // POSE l'appareil. C'est le bouton « geste du vehicule ». La situation tranche, comme pour
-    // l'helicoptere : aucun des dix-huit boutons ne gagne un second role.
-    const enEngin = !!drive.car && !!drive.car.travail && !drive.car.heli;
-    if (enEngin && neuf[2] && !bas[2]) { if (actionneOutil(drive.car)) padVibre(0.35, 70); }
-    for (const [i, k] of Object.entries(PAD_MAP)) {
-      if (neuf[i] === bas[i]) continue;
-      if (+i === 2 && (enHelico || enEngin)) { if (!neuf[i]) telTouche(k, false); continue; }   // le carre ne klaxonne pas dans un engin : il actionne l'outil
-      telTouche(k, neuf[i]);
-    }
-    // LA GACHETTE DE TIR. Arme braquee (✕), a pied : R2 tire — maintenue, elle tire en
-    // rafale, la cadence etant deja bridee par `P.fireCd` (sauf la grenade, qu'on ne lance
-    // qu'au premier appui). Arme rangee ou au volant, la meme gachette fait avancer.
-    const tireR2 = armeBraquee && neuf[7];
-    if (tireR2 && running && !paused) {
-      const debut = !pad.tirR2;
-      if (debut || P.weapon !== 'grenade') fire();
-      if (debut) padVibre(0.3, 50);
-    }
-    pad.tirR2 = tireR2;
-    // « courir » est sur L3, comme dans les grands jeux de ville (L2 baisse le joueur).
-    // L3 : COURIR, À BASCULE. Il fallait MAINTENIR L3 enfoncé tout en poussant le stick — impossible
-    // pour une petite main, et rien ne le disait (n° 17). Un appui lance la course, le suivant l'arrête ;
-    // elle s'arrête aussi toute seule à bout de souffle (voir plus haut).
-    if (neuf[10] && !bas[10]) { P.run = !P.run && !P.essouffle && P.energie > 10; msg(P.run ? '🏃 Tu cours ! (L3 pour marcher)' : '🚶 Tu marches', 900); }
-    // L1 : GARDE quand l'arme est rangee (on MAINTIENT, les deux poings devant le visage),
-    // VISEE quand elle est braquee. Les deux ne peuvent pas coexister — setGarde() refuse la
-    // garde une arme au poing —, donc un seul bouton suffit et rien ne se marche dessus.
-    if (neuf[4] !== !!bas[4]) {
-      if (P.drawn || drive.car) { if (neuf[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } }
-      else setGarde(neuf[4]);
-    }
-    if (neuf[11] && !bas[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }   // R3 : recentrer la caméra
-    if (neuf[16] && !bas[16]) telTouche('Escape', true);
-    // la croix : appui court = l'action ; ↑ ← → tenus 0,7 s = guerre des gangs / boutique / missions
-    for (const [i, quoi] of Object.entries(PAD_CROIX)) {
-      if (PAD_CROIX_LONG[i]) continue;
-      if (neuf[i] && !bas[i]) padAction(quoi);
-    }
-    for (const i of Object.keys(PAD_CROIX_LONG)) {
-      if (+i === 12) continue;   // ↑ garde sa mecanique historique juste en dessous
-      if (neuf[i] && !bas[i]) { pad.longT = pad.longT || {}; pad.longT[i] = simTime; pad.longFait = pad.longFait || {}; pad.longFait[i] = false; }
-      else if (neuf[i] && bas[i] && pad.longT && !pad.longFait[i] && simTime - pad.longT[i] >= PAD_LONG) { pad.longFait[i] = true; padAction(PAD_CROIX_LONG[i]); }
-      else if (!neuf[i] && bas[i] && pad.longT && !pad.longFait[i]) padAction(PAD_CROIX[i]);
-    }
-    if (neuf[12] && !bas[12]) { pad.hautT = simTime; pad.hautFait = false; }
-    if (neuf[12] && bas[12] && !pad.hautFait && simTime - (pad.hautT || 0) >= PAD_LONG) { pad.hautFait = true; padAction('guerre'); }
-    if (!neuf[12] && bas[12] && !pad.hautFait) padAction('ordres');
-    if ((neuf[1] && !bas[1]) || (neuf[5] && !bas[5])) padVibre(0.35, 60);   // ◯ saute, R1 tire
+  // Drawing with L2 and firing with R2 in the same sample uses the new weapon state.
+  pad.armeBraquee = aPied && !!P.drawn;
+  const tireR2 = pad.armeBraquee && neuf[7];
+  if (tireR2) {
+    if (!pad.tirR2 || P.weapon !== 'grenade') fire();
+    if (!pad.tirR2) padVibre(.3, 50);
   }
-  pad.bas = neuf; pad.a = !menu && neuf[1];   // ◯ maintenu = monter (jetpack, hélico)
+  pad.tirR2 = tireR2;
+  if (frame.pressed[10] && aPied) {
+    P.run = !P.run && !P.essouffle && P.energie > 10; pad.sprint = P.run;
+    msg(P.run ? '🏃 Tu cours ! (L3 / LS pour marcher)' : '🚶 Tu marches', 900);
+  }
+  if (neuf[4] !== bas[4]) {
+    if (P.drawn || drive.car) { if (neuf[4]) { P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); } }
+    else setGarde(neuf[4] || keys.has('KeyH'));
+  }
+  if (frame.pressed[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }
+  // Long presses use wall time, independent of game speed and simulation frame rate.
+  const now = performance.now() / 1000;
+  for (const [i, action] of Object.entries(PAD_CROIX)) {
+    if (!PAD_CROIX_LONG[i]) { if (frame.pressed[i]) padAction(action); }
+    else {
+      if (frame.pressed[i]) { pad.longT[i] = now; pad.longFait[i] = false; }
+      if (neuf[i] && !pad.longFait[i] && now - pad.longT[i] >= PAD_LONG) { pad.longFait[i] = true; padAction(PAD_CROIX_LONG[i]); }
+      if (frame.released[i] && !pad.longFait[i] && pad.longT[i] != null) padAction(action);
+    }
+    if (!stillPlaying()) { releaseGamepad(false); return; }
+  }
+  if (frame.pressed[1] || frame.pressed[5]) padVibre(.35, 60);
+  pad.bas = neuf; pad.a = neuf[1];
 }
 // LA MANETTE DANS LES MENUS. Avant : ↑ et ← faisaient « precedent », ↓ et → « suivant », dans
 // l'ordre du code — dans une grille on atterrissait a cote ; il fallait relacher et rappuyer
@@ -29901,24 +29829,16 @@ function curseurAccueil() {
   if (document.querySelector('.focustv')) return false;
   return navChoisit($('play'));
 }
-function padMenu(L, neuf, bas) {
-  const t = performance.now();
-  if (neuf[0] && !bas[0] && !document.querySelector('.focustv') && curseurAccueil()) { pad.menuDir = null; return; }
-  const sx = L.lx || 0, sy = L.ly || 0;   // agencement deja normalise (voir padLu)
-  const dir = neuf[12] || sy < -0.55 ? 'haut' : neuf[13] || sy > 0.55 ? 'bas' : neuf[14] || sx < -0.55 ? 'gauche' : neuf[15] || sx > 0.55 ? 'droite' : null;
-  if (dir) {
-    const meme = pad.menuDir === dir;
-    if (!meme || t >= (pad.menuT || 0)) {
-      if ((dir === 'gauche' || dir === 'droite') && navGlisse(dir === 'droite' ? 1 : -1)) { /* un curseur : on l'a fait glisser */ }
-      else navVers(dir);
-      pad.menuT = t + (meme ? PAD_REPET.puis : PAD_REPET.avant);
-    }
-    pad.menuDir = dir;
-  } else pad.menuDir = null;
-  if (neuf[0] && !bas[0]) navValide();
+function padMenu(L, neuf, bas, direction) {
+  if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) { padTouche('Escape', true); return; }
+  if (!document.querySelector('.focustv')) { if (!curseurAccueil()) navPremier(); }
+  if (direction) {
+    if ((direction === 'gauche' || direction === 'droite') && navGlisse(direction === 'gauche' ? -1 : 1)) { /* range / select */ }
+    else navVers(direction);
+  }
+  if (neuf[0] && !bas[0]) { navValide(); return; }
   if (neuf[5] && !bas[5]) navOnglet(1);
-  if (neuf[4] && !bas[4]) navOnglet(-1);
-  if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) telTouche('Escape', true);
+  else if (neuf[4] && !bas[4]) navOnglet(-1);
 }
 // ================= « TESTER LA MANETTE » =================
 // Ce que fait tout jeu du commerce, et qui manquait : un ecran qui montre EN DIRECT ce que le
@@ -29934,12 +29854,14 @@ const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper �
   12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };
 function padEssaiMonte() {
-  if (padEssai.fait) return;
+  const xbox = /xbox|xinput|045e/i.test(manetteSalon.nom || '');
+  if (padEssai.fait && padEssai.xbox === xbox) return;
   const a = $('ptAxes'); if (!a) return;
   a.innerHTML = PT_AXES.map(([n, k]) => `<div class="ptrow"><span>${n}</span><div class="ptbar${k === 'l2' || k === 'r2' ? '' : ' ctr'}"><i id="pt_${k}"></i></div><b id="ptv_${k}">0.00</b></div>`).join('');
   const b = $('ptBoutons');
-  if (b) b.innerHTML = Array.from({ length: PAD_BOUTONS }, (_, i) => `<u id="ptb_${i}">${PS_NOMS[i] || i}<em>${PT_ROLES[i] || ''}</em></u>`).join('');
-  padEssai.fait = true;
+  const noms = xbox ? { 0:'A', 1:'B', 2:'X', 3:'Y', 4:'LB', 5:'RB', 6:'LT', 7:'RT', 8:'View', 9:'Menu', 10:'LS', 11:'RS', 12:'↑', 13:'↓', 14:'←', 15:'→', 16:'Xbox', 17:'—' } : PS_NOMS;
+  if (b) b.innerHTML = Array.from({ length: PAD_BOUTONS }, (_, i) => `<u id="ptb_${i}">${noms[i] || i}<em>${PT_ROLES[i] || ''}</em></u>`).join('');
+  padEssai.fait = true; padEssai.xbox = xbox;
 }
 function padEssaiTick(L, neuf, bas) {
   padEssaiMonte();
@@ -29970,7 +29892,7 @@ function padEssaiTick(L, neuf, bas) {
   if (d) {
     const p = [];
     if (L.profil !== 'standard') p.push(`agencement non standard corrigé (${L.profil}${L.chapeau >= 0 ? `, croix sur l'axe ${L.chapeau}` : ''})`);
-    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : settings.ctrl === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
+    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : settings.padMove === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
     if (Math.abs(ny) > 0.15) p.push(`stick gauche : ${ny < 0 ? 'AVANT' : 'ARRIÈRE'} (${(-ny).toFixed(2)}) → ${drive.car ? 'rien (au volant, on accélère aux gâchettes)' : 'on marche'}`);
     if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) p.push(`stick droit : la CAMERA (${Math.abs(dx) > 0.1 ? (dx > 0 ? 'tourne a droite' : 'tourne a gauche') : ''}${Math.abs(dx) > 0.1 && Math.abs(dy) > 0.1 ? ', ' : ''}${Math.abs(dy) > 0.1 ? ((settings.invY ? -dy : dy) > 0 ? 'regarde en bas' : 'regarde en haut') : ''})${settings.invY ? ' — axe vertical inverse (⚙️)' : ''}`);
@@ -29979,7 +29901,7 @@ function padEssaiTick(L, neuf, bas) {
     if (L.b[3]) p.push('△ : agir');
     if (L.b[2] && drive.car && drive.car.heli) p.push('▢ : 🚁 se poser (descente automatique)');
     if (vals.r2 > 0.05) p.push(`R2 = ${drive.car ? 'ACCÉLÉRER' : pad.armeBraquee ? 'TIRER' : '(à pied, arme rangée : rien — on marche au stick gauche)'} à ${Math.round(vals.r2 * 100)} %`);
-    if (vals.l2 > 0.05) p.push(`L2 = ${drive.car ? (drive.car.heli ? 'DESCENDRE' : 'FREINER (à l\'arrêt : marche arrière)') : 'SE BAISSER'} à ${Math.round(vals.l2 * 100)} %`);
+    if (vals.l2 > 0.05) p.push(`L2 / LT = ${drive.car ? (drive.car.heli ? 'DESCENDRE' : 'FREINER (à l\'arrêt : marche arrière)') : P.weapon ? 'VISER (maintenir)' : 'SE BAISSER'} à ${Math.round(vals.l2 * 100)} %`);
     d.textContent = p.length ? p.join(' · ') : 'Bouge les sticks, appuie sur les gâchettes et sur la croix : tout doit s\'allumer ici.';
   }
   padEssai.diag = d ? d.textContent : '';
@@ -30122,7 +30044,7 @@ swatches('swPants', 'pants'); swatches('swCap', 'cap'); swatches('swHair', 'hair
 (function pills(id, key) { const el = $(id); [...el.children].forEach(b => { b.classList.toggle('sel', +b.dataset.v === +myCfg[key]); b.addEventListener('click', () => { myCfg[key] = key === 'skirt' ? !!+b.dataset.v : +b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })('hairStyle', 'hair');
 (function () { const el = $('skirtSel'); [...el.children].forEach(b => { b.classList.toggle('sel', !!+b.dataset.v === myCfg.skirt); b.addEventListener('click', () => { myCfg.skirt = !!+b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })();
 function startGame() {
-  if (!net.on && !marlonCinemaSeen && !store.get('marlon.intro.seen') && typeof window.MarlonIntro !== 'undefined') {
+  if (!net.on && !marlonCinemaSeen && store.get('marlon.intro.seen') !== MARLON_INTRO_VERSION && typeof window.MarlonIntro !== 'undefined') {
     if (marlonCinema && marlonCinema.active) return;
     showMarlonIntro(startGame); return;
   }
@@ -30150,19 +30072,21 @@ $('netPill').addEventListener('click', () => { if (net.code) msg(`Code : ${net.c
 $('leaveNet').addEventListener('click', () => { netTeardown(); toggleMenu(false); chat(null, 'Tu as quitté la partie en ligne.'); });
 $('play').addEventListener('click', startGame);
 nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
-$('worldsBack').addEventListener('click', () => { $('worlds').classList.add('hidden'); if (running) { paused = false; } else $('start').classList.remove('hidden'); });
+$('worldsBack').addEventListener('click', () => { if (uiOpen === 'worlds') closeUI(); $('worlds').classList.add('hidden'); if (running) { paused = false; } else $('start').classList.remove('hidden'); });
 $('again').addEventListener('click', () => { $('win').classList.add('hidden'); resetGame(); });
 $('nextWorld').addEventListener('click', () => chooseWorld(Math.min(WORLDS.length - 1, worldIdx + 1)));
-$('pickWorld').addEventListener('click', () => { $('win').classList.add('hidden'); renderWorlds(); $('worlds').classList.remove('hidden'); });
+$('pickWorld').addEventListener('click', () => { $('win').classList.add('hidden'); renderWorlds(); openUI('worlds'); });
 function toggleMenu(force) {
-  paused = force ?? !paused;
-  $('menu').classList.toggle('hidden', !paused);
+  const open = force ?? uiOpen !== 'menu';
+  if (open) openUI('menu');
+  else if (uiOpen === 'menu') closeUI();
+  else { $('menu').classList.add('hidden'); paused = false; }
   keys.clear();
 }
 $('menuBtn').addEventListener('click', () => { if (running) toggleMenu(); });
 $('resume').addEventListener('click', () => toggleMenu(false));
 $('resetChar').addEventListener('click', () => { toggleMenu(false); if (!dead && !won) die(true); });
-$('changeWorld').addEventListener('click', () => { if (net.on && !net.host) { msg('Le créateur de la partie choisit le monde', 1800); return; } $('menu').classList.add('hidden'); renderWorlds(); $('worlds').classList.remove('hidden'); });
+$('changeWorld').addEventListener('click', () => { if (net.on && !net.host) { msg('Le créateur de la partie choisit le monde', 1800); return; } renderWorlds(); openUI('worlds'); });
 function setSound(on) {
   settings.sound = on; store.set('superobby.sound', on ? '1' : '0');
   $('sndBtn').textContent = 'Son : ' + (on ? 'activé' : 'coupé'); $('sndTop').textContent = on ? '🔊' : '🔇'; $('sndTop').classList.toggle('on', !on);
@@ -30175,6 +30099,14 @@ $('volIn').value = String(Math.round(settings.volume * 100)); $('volVal').textCo
 $('volIn').addEventListener('input', () => { const v = sfx.volume((+$('volIn').value || 0) / 100); $('volVal').textContent = Math.round(v * 100) + ' %'; if (v > 0 && !settings.sound) setSound(true); });
 $('volIn').addEventListener('change', () => { unlockAudio(); sfx.coin(); });
 settings.sensib = (v => v >= 0.5 && v <= 2 ? v : 1)(parseFloat(store.get('superobby.sensib')));
+function padReglagesMaj() {
+  $('padMoveBtn').textContent = '🎮 Déplacement : ' + (settings.padMove === 'rot' ? 'rotation du personnage' : 'relatif à la caméra');
+  $('padDeadIn').value = String(Math.round(settings.padDeadzone * 100));
+  $('padDeadVal').textContent = Math.round(settings.padDeadzone * 100) + ' %';
+}
+$('padMoveBtn').addEventListener('click', () => { settings.padMove = settings.padMove === 'rot' ? 'camera' : 'rot'; store.set('superobby.padMove', settings.padMove); padReglagesMaj(); });
+$('padDeadIn').addEventListener('input', () => { settings.padDeadzone = clamp((+$('padDeadIn').value || 12) / 100, .06, .30); store.set('superobby.padDeadzone', String(settings.padDeadzone)); padReglagesMaj(); });
+padReglagesMaj();
 $('sensIn').value = String(Math.round(settings.sensib * 100)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %';
 $('sensIn').addEventListener('input', () => { settings.sensib = clamp((+$('sensIn').value || 100) / 100, 0.5, 2); store.set('superobby.sensib', String(settings.sensib)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %'; });
 // UN CURSEUR PAR FAMILLE. Il n'y avait qu'un volume general : impossible de baisser le
@@ -30258,7 +30190,7 @@ ambianceLibelle();
 $('qualBtn').addEventListener('click', () => { settings.quality = { ultra: 'high', high: 'dlss', dlss: 'low', low: 'ultra' }[settings.quality] || 'ultra'; store.set('superobby.quality', settings.quality); applyQuality(); msg(`🖼️ Qualité : ${qualite().n}`, 1400); });
 $('quit').addEventListener('click', () => { toggleMenu(false); running = false; resetGame(); $('start').classList.remove('hidden'); document.body.classList.add('lobby'); showBest(); });
 setSound(settings.sound);
-const ctrlLabel = () => { $('ctrlBtn').textContent = 'Contrôles : ' + (settings.ctrl === 'rot' ? 'rotation' : 'caméra'); $('turnBtn').textContent = `Vitesse de rotation : ${settings.turn}°/s`; $('turnBtn').style.display = settings.ctrl === 'rot' ? '' : 'none'; };
+const ctrlLabel = () => { $('ctrlBtn').textContent = 'Clavier : ' + (settings.ctrl === 'rot' ? 'rotation' : 'caméra'); $('turnBtn').textContent = `Vitesse de rotation : ${settings.turn}°/s`; $('turnBtn').style.display = settings.ctrl === 'rot' ? '' : 'none'; };
 $('ctrlBtn').addEventListener('click', () => { settings.ctrl = settings.ctrl === 'rot' ? 'cam' : 'rot'; store.set('superobby.ctrl', settings.ctrl); ctrlLabel(); });
 $('turnBtn').addEventListener('click', () => { settings.turn = { 100: 160, 160: 240, 240: 100 }[settings.turn] || 160; store.set('superobby.turn', String(settings.turn)); ctrlLabel(); });
 ctrlLabel();
@@ -31283,17 +31215,24 @@ const QR = (() => {
 // ---- entrée venue du téléphone : elle s'ajoute au clavier et au joystick tactile ----
 const tel = { on: false, x: 0, y: 0, nom: '', vus: 0, buttons: new Set(), last: 0, source: null };
 
-function telTouche(code, bas) {   // on rejoue une vraie touche : tout le jeu y répond déjà
-  try { window.dispatchEvent(new KeyboardEvent(bas ? 'keydown' : 'keyup', { code, key: code, bubbles: true })); } catch (e) {}
+function telTouche(code, bas, source = 'phone') {
+  try {
+    const event = new KeyboardEvent(bas ? 'keydown' : 'keyup', { code, key: code, bubbles: true });
+    Object.defineProperty(event, 'marlonSource', { value: source });
+    window.dispatchEvent(event);
+  } catch (e) {}
 }
 const TEL_TOUCHES = { saut: 'Space', action: 'KeyE', tir: 'KeyX', degaine: 'KeyG', frappe: 'KeyV',
   danse: 'KeyE', course_auto: 'KeyF', menu: 'Escape', hautVisee: 'ArrowUp', basVisee: 'ArrowDown' };
 
 function telRelache() {
-  for (const name of tel.buttons) { const key = TEL_TOUCHES[name]; if (key) keys.delete(key); }
+  const sprint = tel.buttons.has('course');
+  for (const key of inputKeys.release('phone')) keys.delete(key);
   tel.buttons.clear(); tel.x = tel.y = 0; tel.last = 0;
-  P.run = false; P.jumpBuf = 0; P.vDown = null; P.handHeld = false;
-  jumpHeld = downHeld = false;
+  if (sprint && !pad.sprint) P.run = false;
+  P.handHeld = false;
+  if (!keys.has('Space')) P.jumpBuf = 0;
+  if (!keys.has('KeyV')) P.vDown = null;
 }
 function telBouton(name, down) {
   if (!(Object.prototype.hasOwnProperty.call(TEL_TOUCHES, name) || name === 'course' || name === 'viser')) return;
@@ -31896,13 +31835,15 @@ function navCibles() {
   const ouvert = document.querySelector('.overlay:not(.hidden)');
   const racine = ouvert || document.body;
   const vus = new Set();
-  return [...racine.querySelectorAll('button:not([disabled]), input, select, .sw i, .pills b, [data-k], [data-v], [data-i], .item, .fcard, .wcard, .ocard, [data-nav]')]
-    .filter(e => { if (vus.has(e) || e.offsetParent === null) return false; vus.add(e); const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; });
+  return [...racine.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, .sw i, .pills b, [data-k], [data-v], [data-i], .item, .fcard, .wcard, .ocard, [data-nav]')]
+    .filter(e => { if (vus.has(e) || e.disabled || e.getAttribute('aria-disabled') === 'true' || e.offsetParent === null) return false; vus.add(e); const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; });
 }
 function navChoisit(e) {
   document.querySelectorAll('.focustv').forEach(x => x.classList.remove('focustv'));
   if (!e) return false;
   e.classList.add('focustv');
+  if (e.tabIndex < 0) e.tabIndex = 0;
+  try { e.focus({ preventScroll: true }); } catch (_) {}
   try { e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
   return true;
 }
@@ -31945,7 +31886,9 @@ function navOnglet(d) {
   t[i].click(); navChoisit(t[i]); return true;
 }
 function navValide() {
-  const e = document.querySelector('.focustv'); if (!e) return false;
+  let e = document.querySelector('.focustv');
+  if (!e || !navCibles().includes(e)) { navPremier(); e = document.querySelector('.focustv'); }
+  if (!e || !navCibles().includes(e)) return false;
   if (e.tagName === 'INPUT' && e.type !== 'range' && e.type !== 'checkbox') { e.focus(); return true; }
   if (e.tagName === 'INPUT' && e.type === 'checkbox') { e.click(); return true; }
   if (e.tagName === 'INPUT') return true;
@@ -31959,8 +31902,13 @@ function navValide() {
 }
 // un curseur (input range) sous le doigt : gauche / droite le font glisser
 function navGlisse(d) {
-  const e = document.querySelector('.focustv'); if (!e || e.tagName !== 'INPUT' || e.type !== 'range') return false;
-  const pas = +e.step || 1; e.value = String(clamp((+e.value || 0) + d * pas, +e.min || 0, +e.max || 100));
+  const e = document.querySelector('.focustv'); if (!e || e.disabled) return false;
+  if (e.tagName === 'SELECT') { e.selectedIndex = clamp(e.selectedIndex + d, 0, e.options.length - 1); }
+  else if (e.tagName === 'INPUT' && e.type === 'range') {
+    const pas = Number.isFinite(+e.step) && +e.step > 0 ? +e.step : 1;
+    const lo = e.min === '' ? 0 : +e.min, hi = e.max === '' ? 100 : +e.max;
+    e.value = String(clamp((+e.value || 0) + d * pas, lo, hi));
+  } else return false;
   e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); return true;
 }
 window.addEventListener('keydown', e => {
@@ -38646,13 +38594,14 @@ window.addEventListener('keydown', e => {
   else if (drive.car) msg('🔧 O n\'actionne un outil que sur un véhicule de travail (dépôt municipal, caserne)', 2200);
 });
 
+const MARLON_INTRO_VERSION = 'action-v2';
 let marlonCinema = null, marlonCinemaSeen = false;
 function showMarlonIntro(next) {
   if (typeof window.MarlonIntro === 'undefined' || (marlonCinema && marlonCinema.active)) return;
   const capture = location.hostname === '127.0.0.1' && new URLSearchParams(location.search).has('capture');
   keys.clear(); releaseGamepad(); music.stop(); sfx.sourdine(true);
   const closed = () => {
-    marlonCinemaSeen = true; store.set('marlon.intro.seen', '1'); marlonCinema = null;
+    marlonCinemaSeen = true; store.set('marlon.intro.seen', MARLON_INTRO_VERSION); marlonCinema = null;
     keys.clear(); releaseGamepad(); sfx.sourdine(document.hidden); applyQuality(); clock.getDelta();
     if (next) next(); else { if (running) music.start(); $('introPlay').focus(); }
   };

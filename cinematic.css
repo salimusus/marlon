@@ -1,8 +1,9 @@
-#marlonCinema{position:fixed;inset:0;background:#06131e;z-index:99999;display:flex;align-items:center;justify-content:center;color:#fff4e1;font-family:"Segoe UI",Arial,sans-serif}
+#marlonCinema{position:fixed;inset:0;background:#10152b;z-index:99999;display:flex;align-items:center;justify-content:center;color:#fff4e1;font-family:"Segoe UI",Arial,sans-serif}
 #marlonCinema>canvas{width:100%;height:100%;object-fit:contain}
-.cinemaControls{position:absolute;right:max(22px,env(safe-area-inset-right));top:max(20px,env(safe-area-inset-top));display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.cinemaControls button{font:600 14px "Segoe UI",Arial,sans-serif;color:#e3f4ef;background:#102d38e8;border:1px solid #5c8c91;border-radius:6px;padding:12px 16px;cursor:pointer}
-.cinemaControls button:hover,.cinemaControls button:focus-visible{background:#1e515c;outline:2px solid #65dfc6;outline-offset:2px}
+.cinemaControls{position:absolute;right:max(22px,env(safe-area-inset-right));top:max(68px,env(safe-area-inset-top));display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.cinemaControls button{font:600 14px "Segoe UI",Arial,sans-serif;color:#fff7ec;background:#18203bed;border:1px solid #8d8cbc;border-radius:24px;padding:11px 17px;cursor:pointer;box-shadow:0 3px 14px #0a12234d}
+.cinemaControls button[data-cinema="skip"]{color:#121b34;background:#ffe36a;border-color:#ffe36a}
+.cinemaControls button:hover,.cinemaControls button:focus-visible{outline:3px solid #64f3df;outline-offset:3px;border-color:#64f3df}
 .cinemaControls button:disabled{opacity:.55;cursor:wait}
-.cinemaStatus{position:absolute;bottom:12px;left:20px;font-size:14px;color:#a8c9ca}
-@media(max-width:600px){.cinemaControls{top:10px;right:10px;left:10px}.cinemaControls button{font-size:12px;padding:9px}.cinemaStatus{font-size:11px}}
+.cinemaStatus{position:absolute;bottom:max(8px,env(safe-area-inset-bottom));left:max(20px,env(safe-area-inset-left));max-width:calc(100% - 40px);font-size:13px;color:#c6d5ee}
+@media(max-width:600px){.cinemaControls{top:max(12px,env(safe-area-inset-top));right:10px;left:10px;gap:6px}.cinemaControls button{font-size:11px;padding:8px 11px}.cinemaStatus{font-size:11px}}

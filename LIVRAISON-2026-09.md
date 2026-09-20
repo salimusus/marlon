@@ -1,14 +1,25 @@
-# MARLON — version de validation, septembre 2026
+# MARLON 0.10 — ville, action et commandes
 
 Cette livraison améliore le jeu de `index.html`, celui de la page principale. `sunshine.html` reste une autre version historique du projet.
 
 ## Jouer
 
-Avec Node.js 18 ou plus, lancer `npm start`, puis ouvrir `http://127.0.0.1:8080`. Aucun téléchargement de dépendances n’est nécessaire. Garder ensemble `index.html`, `cinematic.js`, `cinematic.css` et `vendor/`. Le mode solo utilise le moteur local. Le multijoueur et le téléphone-manette nécessitent une connexion réseau au service PeerJS.
+Avec Node.js 18 ou plus, lancer `npm start`, puis ouvrir `http://127.0.0.1:8080`. Aucun téléchargement de dépendances n’est nécessaire. Garder ensemble `index.html`, `cinematic.js`, `cinematic.css`, `controls.js`, `city-detail.js` et `vendor/`. Le mode solo utilise le moteur local. Le multijoueur et le téléphone-manette nécessitent une connexion réseau au service PeerJS.
 
 L’introduction de 32 secondes utilise les vrais modèles des personnages du jeu, une mise en scène dédiée et une musique synthétisée originale. Elle peut être passée et revue depuis l’accueil. « Exporter la vidéo » produit un fichier WebM ou MP4 selon les codecs du navigateur. La scène de présentation n’est pas une capture de la ville complète.
 
 ## Changements
+
+### Refonte 0.10
+
+- Introduction entièrement remontée en cinq plans : avenue au coucher du soleil, course et saut des personnages, voitures en mouvement, prise progressive des huit quartiers et finale d’équipe. Nouvelle musique originale. La nouvelle introduction est présentée une fois même si l’ancienne avait déjà été vue.
+- Voirie : bitume graphite, marquages découpés aux carrefours, flèches par sens de circulation et trottoirs crème. Façades avec relief, corniches, jardinières et devantures structurées. Les ajouts utilisent trois lots géométriques ; les portes et les voies restent dégagées.
+- Couleurs : sortie sRGB cohérente avec et sans post-traitement ; textures des routes et des façades revues. L’introduction utilise sa propre palette corrigée pour conserver des couleurs franches.
+- PS5/Xbox : gestion des entrées extraite dans `controls.js`, sources clavier/téléphone/manette séparées, gâchettes avec hystérésis, actions bloquées pendant l’introduction et la saisie, retour des menus sans saut ou tir parasite. Pause et changement de monde utilisent le même circuit de menus.
+- Stick gauche relatif à la caméra par défaut ; le mode rotation reste disponible. Sensibilité et zone morte réglables. Voir `CONTROLES.md` pour les boutons conservés et les options.
+- Contacts des véhicules : rectangles orientés réels, sans collision artificielle des boîtes englobantes dans les virages. Les positions physiques, les colliders et les modèles du trafic sont synchronisés après séparation.
+
+### Améliorations conservées de la version précédente
 
 - Circulation : routes calculées dans le bon sens, destinations derrière le véhicule traitées par une boucle autorisée, anticipation réduite dans les virages, freinage adapté à la longueur, roues liées au déplacement réel, nettoyage de l’état lors d’une reprise.
 - Urbanisme : boutique et immeuble reculés ou redimensionnés pour libérer la chaussée et préserver les entrées.
@@ -21,7 +32,7 @@ L’introduction de 32 secondes utilise les vrais modèles des personnages du je
 
 ## Vérifier
 
-`npm test` contrôle la syntaxe, la stratégie, les commandes, la circulation, les sauvegardes et les invariants visuels dans des simulations CPU. Les résultats détaillés de cette livraison sont dans `verification/release-2026-09.md`.
+`npm test` contrôle la syntaxe, la stratégie, les commandes, la circulation, les sauvegardes et les invariants visuels dans des simulations CPU. La refonte 0.10 est documentée dans `verification/refonte-0.10.md` ; le rapport de la première livraison reste dans `verification/release-2026-09.md`.
 
 ## État de livraison
 

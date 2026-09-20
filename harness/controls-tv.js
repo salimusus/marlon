@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const MarlonControls = require('../controls.js');
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 function declaration(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -18,7 +19,8 @@ function sandbox(names, extra = {}) {
   const element = () => ({ textContent: '', innerHTML: '', style: {}, disabled: false,
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     querySelector() { return null; }, addEventListener() {} });
-  const s = { console, Math, Set, Map, Number, Object, Array, Promise, Date,
+  const s = { console, Math, Set, Map, Number, Object, Array, Promise, Date, MarlonControls,
+    inputKeys: MarlonControls.createKeySources(), padController: MarlonControls.createController(),
     clamp: (x, lo, hi) => Math.max(lo, Math.min(hi, x)),
     $: id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); },
     document: { hidden: false, visibilityState: 'visible', body: element(), querySelector() { return null; } },
@@ -72,7 +74,8 @@ test('phone joystick keeps full speed after dragging beyond its visual radius', 
 test('disconnect cancels helicopter ascent, held punch and crouch without emitting an attack', () => {
   const s = sandbox(['releaseGamepad']);
   Object.assign(s.pad, { a: true, l2: true, x: 1, y: 1, gaz: 1, frein: 1, bas: { 1: true } });
-  s.jumpHeld = true; s.keys.add('Space'); s.keys.add('KeyV'); s.P.vDown = 2;
+  s.keys.add('Space'); s.keys.add('KeyV'); s.P.vDown = 2;
+  s.inputKeys.set('Space', 'gamepad', true); s.inputKeys.set('KeyV', 'gamepad', true);
   s.releaseGamepad();
   assert.equal(s.pad.a, false); assert.equal(s.pad.gaz, 0); assert.equal(s.pad.frein, 0);
   assert.equal(s.jumpHeld, false); assert.equal(s.keys.has('KeyV'), false); assert.equal(s.P.vDown, null);
@@ -87,14 +90,15 @@ test('plugging another controller does not steal the active controller', () => {
 test('menu transitions require release, so a held Options button cannot reopen the menu', () => {
   const gp = gamepad(); gp.buttons[9].pressed = true;
   let menuCalls = 0;
-  const s = sandbox([...padRead, 'releaseGamepad', 'pollGamepad'], {
-    padActive: () => gp, manetteSalon: {}, padMenu() { ++menuCalls; }, padCourse: x => x });
-  s.document.querySelector = () => ({});
+  const s = sandbox([...padRead, 'padContexte', 'releaseGamepad', 'pollGamepad'], {
+    padActive: () => gp, manetteSalon: {}, padMenu(L, b, before) { if (b[9] && !before[9]) ++menuCalls; }, padCourse: x => x });
+  s.document.querySelector = sel => sel === '.overlay:not(.hidden)' ? { id: 'menu' } : null;
   s.pollGamepad(.008); s.pollGamepad(.008);
   assert.equal(menuCalls, 0); assert.equal(s.pad.neutralRequired, true);
   gp.buttons[9].pressed = false;
   s.pollGamepad(.008);
-  assert.equal(menuCalls, 1); assert.equal(s.pad.neutralRequired, false);
+  assert.equal(menuCalls, 0); assert.equal(s.pad.neutralRequired, false);
+  gp.buttons[9].pressed = true; s.pollGamepad(.008); assert.equal(menuCalls, 1);
 });
 
 const telFunctions = ['telRelache', 'telBouton', 'telVeille', 'telCommande'];
@@ -103,7 +107,7 @@ function remote(extra = {}) {
   const s = sandbox(telFunctions, {
     tel: { x: 0, y: 0, last: 0, buttons: new Set(), n: null },
     TEL_TOUCHES: { saut: 'Space', action: 'KeyE', frappe: 'KeyV', menu: 'Escape' },
-    telTouche(k, down) { events.push([k, down]); if (down) s.keys.add(k); else s.keys.delete(k); },
+    telTouche(k, down) { events.push([k, down]); s.inputKeys.set(k, 'phone', down); if (down) s.keys.add(k); else s.keys.delete(k); },
     ...extra });
   s.events = events; return s;
 }

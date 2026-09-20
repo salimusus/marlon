@@ -1,0 +1,16 @@
+PASS The eight active sectors lie inside the current city boundary
+PASS Supply graph is connected and every edge is reciprocal
+PASS Every operation rendezvous has ground and an accessible point within its arrival radius
+PASS Expansion follows active borders and rejects nonexistent sectors
+PASS Fortifications cost money, cap at three, and reject enemy land
+PASS KO and captive recruits do not count as a defensive force
+PASS A living recruit can capture an adjacent sector; KO support cannot
+PASS An announced attack resolves using defenses; an undefended sector falls
+PASS Completed operations pay once and repeat rewards are reduced
+PASS Malformed strategic saves are bounded and valid progress survives a save/load
+PASS DualSense standard and raw HID keep the two triggers independent of the camera
+PASS Disconnect clears held movement and combat without a synthetic attack
+PASS No gamepad connected does not erase keyboard controls
+PASS Changing world clears active operations and marker references
+PASS An empty wallet stays empty on reload
+{"passed":15,"failed":0}

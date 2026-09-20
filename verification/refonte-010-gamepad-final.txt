@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: PS5 and Xbox standard layouts expose the same sticks and action edges
+ok 1 - PS5 and Xbox standard layouts expose the same sticks and action edges
+  ---
+  duration_ms: 2.4846
+  type: 'test'
+  ...
+# Subtest: DualSense raw HID keeps resting triggers out of the camera and maps all face buttons
+ok 2 - DualSense raw HID keeps resting triggers out of the camera and maps all face buttons
+  ---
+  duration_ms: 2.8452
+  type: 'test'
+  ...
+# Subtest: trigger hysteresis prevents repeat actions at a noisy threshold
+ok 3 - trigger hysteresis prevents repeat actions at a noisy threshold
+  ---
+  duration_ms: 2.2522
+  type: 'test'
+  ...
+# Subtest: diagonals retain full speed and default radial deadzone removes paired 8% drift
+ok 4 - diagonals retain full speed and default radial deadzone removes paired 8% drift
+  ---
+  duration_ms: 1.0093
+  type: 'test'
+  ...
+# Subtest: malformed and out-of-range browser readings never inject NaN into camera or movement
+ok 5 - malformed and out-of-range browser readings never inject NaN into camera or movement
+  ---
+  duration_ms: 0.3538
+  type: 'test'
+  ...
+# Subtest: menu transition rearms each control independently, so a held stick cannot trap Back
+ok 6 - menu transition rearms each control independently, so a held stick cannot trap Back
+  ---
+  duration_ms: 0.2187
+  type: 'test'
+  ...
+# Subtest: changing between two menus suppresses held confirm without losing the next press
+ok 7 - changing between two menus suppresses held confirm without losing the next press
+  ---
+  duration_ms: 0.5632
+  type: 'test'
+  ...
+# Subtest: small held throttle cannot accelerate when a menu closes
+ok 8 - small held throttle cannot accelerate when a menu closes
+  ---
+  duration_ms: 0.6404
+  type: 'test'
+  ...
+# Subtest: focus loss and a replaced controller cannot replay held jump or shooting
+ok 9 - focus loss and a replaced controller cannot replay held jump or shooting
+  ---
+  duration_ms: 0.775
+  type: 'test'
+  ...
+# Subtest: menu navigation has hysteresis and a bounded repeat delay instead of flooding clicks
+ok 10 - menu navigation has hysteresis and a bounded repeat delay instead of flooding clicks
+  ---
+  duration_ms: 1.2532
+  type: 'test'
+  ...
+# Subtest: keyboard, phone and physical controller own their holds independently
+ok 11 - keyboard, phone and physical controller own their holds independently
+  ---
+  duration_ms: 1.7631
+  type: 'test'
+  ...
+# Subtest: full game: jump travels through the real gamepad → keyboard bridge exactly once
+ok 12 - full game: jump travels through the real gamepad → keyboard bridge exactly once
+  ---
+  duration_ms: 8.1747
+  type: 'test'
+  ...
+# Subtest: full game: disconnect preserves a physical keyboard hold and cancels only controller punch
+ok 13 - full game: disconnect preserves a physical keyboard hold and cancels only controller punch
+  ---
+  duration_ms: 1.5349
+  type: 'test'
+  ...
+# Subtest: full game: phone disconnect cannot cancel controller jump
+ok 14 - full game: phone disconnect cannot cancel controller jump
+  ---
+  duration_ms: 2.1125
+  type: 'test'
+  ...
+# Subtest: full game: introduction blocks movement, camera and jump through its closing button
+ok 15 - full game: introduction blocks movement, camera and jump through its closing button
+  ---
+  duration_ms: 1.3263
+  type: 'test'
+  ...
+# Subtest: full game: Options takes priority over simultaneous jump and held Options does not reopen
+ok 16 - full game: Options takes priority over simultaneous jump and held Options does not reopen
+  ---
+  duration_ms: 1.1053
+  type: 'test'
+  ...
+# Subtest: full game: camera rotation is identical at 30, 60 and 120 input samples per second
+ok 17 - full game: camera rotation is identical at 30, 60 and 120 input samples per second
+  ---
+  duration_ms: 10.1929
+  type: 'test'
+  ...
+# Subtest: full game: keyboard aim survives idle gamepad polling and stick drift does not move the view
+ok 18 - full game: keyboard aim survives idle gamepad polling and stick drift does not move the view
+  ---
+  duration_ms: 0.3717
+  type: 'test'
+  ...
+# Subtest: full game: a focused text field cannot move the player or camera with a controller
+ok 19 - full game: a focused text field cannot move the player or camera with a controller
+  ---
+  duration_ms: 0.2036
+  type: 'test'
+  ...
+# Subtest: full game: camera-relative stick moves sideways, while rotation mode remains selectable
+ok 20 - full game: camera-relative stick moves sideways, while rotation mode remains selectable
+  ---
+  duration_ms: 31.7138
+  type: 'test'
+  ...
+# Subtest: full game: changing world closes menu ownership so subsequent controller actions remain available
+ok 21 - full game: changing world closes menu ownership so subsequent controller actions remain available
+  ---
+  duration_ms: 10.2653
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 509.4884

@@ -62,7 +62,11 @@ test('DualSense standard and raw HID keep the two triggers independent of the ca
  const std={...raw,id:'DualSense',mapping:'standard',axes:[0,0,.2,-.4],buttons:Array.from({length:18},()=>({pressed:false,value:0}))};std.buttons[7]={pressed:true,value:.8};p=g.padLu(std);assert.equal(p.ry,-.4);assert.equal(p.r2,.8);
 });
 test('Disconnect clears held movement and combat without a synthetic attack',()=>{
- g.keys.add('Space');g.keys.add('KeyV');g.pad.bas={1:true,2:true};g.pad.gaz=1;g.P.run=true;g.releaseGamepad();assert(!g.keys.has('Space'));assert(!g.keys.has('KeyV'));assert.equal(g.pad.gaz,0);assert.equal(g.P.run,false);
+ for(const code of ['Space','KeyV']){g.inputKeys.set(code,'gamepad',true);g.keys.add(code)}
+ g.inputKeys.set('KeyW','keyboard',true);g.keys.add('KeyW');
+ g.pad.bas={1:true,2:true};g.pad.gaz=1;g.pad.sprint=true;g.P.run=true;g.P.vDown=2;
+ g.releaseGamepad();assert(!g.keys.has('Space'));assert(!g.keys.has('KeyV'));assert.equal(g.pad.gaz,0);assert.equal(g.P.run,false);assert.equal(g.P.vDown,null);assert(g.keys.has('KeyW'));
+ g.inputKeys.clear();g.keys.clear();
 });
 test('No gamepad connected does not erase keyboard controls',()=>{
  g.pad.bas=null;g.pad.lu=null;g.pad.l2=false;g.keys.add('Space');g.P.run=true;g.pollGamepad(.016);assert(g.keys.has('Space'));assert.equal(g.P.run,true);g.keys.clear();

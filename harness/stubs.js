@@ -148,7 +148,7 @@ class Mat { constructor(p = {}) { Object.assign(this, p); this.disposed = false;
     if (p.transparent === undefined) this.transparent = false; }
   dispose() { this.disposed = true; } clone() { return new Mat(this); } }
 class Tex { constructor(img) { this.image = img; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); this.center = new V2(0, 0); this.rotation = 0; this.flipY = true; this.encoding = 3000; this.format = 1023; this.wrapS = 0; this.wrapT = 0; this.needsUpdate = false; this.disposed = false; this.anisotropy = 1; this.magFilter = 0; this.minFilter = 0; }
-  dispose() { this.disposed = true; } clone() { return new Tex(this.image); } }
+  dispose() { this.disposed = true; } clone() { const t = new Tex(this.image); t.encoding = this.encoding; return t; } }
 class Mesh extends Obj3D { constructor(g, m) { super(); this.geometry = g || new Geo('none'); this.material = m || new Mat(); this.isMesh = true; } clone() { const m = new Mesh(this.geometry, this.material); m.position.copy(this.position); m.scale.copy(this.scale); m.rotation.copy(this.rotation); return m; } }
 
 const THREE = {

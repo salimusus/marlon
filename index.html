@@ -16647,8 +16647,22 @@ function renommeEtiquette(av, nom) {
   if (av.tag) { av.group.remove(av.tag); try { av.tag.material.map.dispose(); av.tag.material.dispose(); } catch (e) {} }
   av.tag = nameTag(nom); av.group.add(av.tag); return av.tag;
 }
-// Three.js r128 updates hidden descendants too. Cosmetic branches have no physics;
-// defer their matrices until worn, then update the whole branch on that same frame.
+// ARBITRAGE 0.10 / CONDUITE (round 76). La 0.10 posait cette fonction sur les branches
+// d'accessoires (veste, sacs, lunettes, bretelles, couvre-chefs) pour ne plus recalculer
+// leurs matrices tant qu'on ne les porte pas. MESURE DU GAIN, ville chargée, 13 avatars et
+// 1 014 maillages figés, 300 passes de `updateMatrixWorld` sur la scène entière :
+// 5,437 ms par passe avec, 5,584 ms sans — 0,147 ms par image, soit 2,7 % d'UNE passe de
+// matrices, elle-même noyée dans le rendu.
+// MESURE DU PRIX : une branche cachée garde sa matrice MONDE d'origine alors que ses
+// maillages, eux, restent `visible === true` (Three.js ne propage pas la visibilité). Tout
+// ce qui mesure une boîte englobante sur `o.visible` — et c'est l'idiome du jeu entier,
+// `refAssise` en tête — lisait donc des accessoires restés à l'origine de l'avatar :
+// `refAssise` trouvait 2,11 m au lieu de 2,36 m debout, corrigeait l'échelle d'assise de
+// 1,12×, et l'occupant d'une berline descendait à −0,38 m pour un plancher à 0,32 m
+// (tests 440 et 451, quatorze véhicules à la fois, casquettes sous le plancher).
+// 0,147 ms par image ne paie pas ce prix : les branches ne sont plus détournées. La
+// fonction reste définie — `harness/cosmetic-performance.js` la mesure telle quelle — et
+// le jour où le gain vaudra la peine, il faudra d'abord rendre `o.visible` transitif.
 function actualiseAccessoire(force) {
   if (!this.visible) return;
   THREE.Group.prototype.updateMatrixWorld.call(this, force);
@@ -16893,7 +16907,6 @@ function buildAvatar(cfg) {
     brasG: rig.armL, brasD: rig.armR, avantBrasG: rig.armL.coude, avantBrasD: rig.armR.coude,
     poingG: rig.armL.poing, poingD: rig.armR.poing, mainG: rig.armL.main, mainD: rig.armR.main,
     cuisseG: rig.legL, cuisseD: rig.legR, jambeG: rig.legL.genou, jambeD: rig.legR.genou };
-  for (const branche of [jacket, bag, sacDos, sacBanane, glasses, bretelles, ...Object.values(hatGroups)]) branche.updateMatrixWorld = actualiseAccessoire;
   // un mannequin de vitrine est construit sans passer par applyLook : il faut donc lui
   // monter ses chaussures et ses gants ici, sinon il restait pieds en baskets par defaut
   poseChaussures(av, cfg.chaussures || 'basket'); poseGants(av, cfg.gants || 'rien');

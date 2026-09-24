@@ -24106,7 +24106,20 @@ function moveAxis(axis, amount, canStep) {
       //   — il etait DEJA DEDANS (un vehicule qui se gare sur lui, un portail qui se referme,
       //     un ascenseur, une dalle qui apparait) : face la PLUS PROCHE, donc le plus petit
       //     deplacement possible. Le meme cas tombe alors a 1,00 m.
-      const dehorsAvant = Math.abs(avant - o[axis]) >= half + P.hw;
+      // OU IL ETAIT AVANT CE SOLIDE-CI, PAS AVANT LA FONCTION (defaut n° 86, round 76).
+      // `avant` est releve UNE FOIS, a l'entree de moveAxis ; mais la boucle traverse
+      // plusieurs solides et chacun peut DEJA avoir repousse le joueur. On comparait donc la
+      // boite courante a une position perimee. MESURE, image 592 du trajet du defaut n° 86 :
+      // le joueur colle a la face est d'une voiture garee (qui le repose en x = −39,404)
+      // fait un pas de 1,05 cm VERS L'OUEST, donc en s'ELOIGNANT du muret de 0,36 m plante
+      // en −38,825. Avec l'ancien `avant` (−39,411) il etait juge « dehors » de ce muret,
+      // donc « entre par l'est », et renvoye sur sa face EST : 1,167 m EN UNE IMAGE (0,103 m
+      // autorises au pas), a travers le mur. Avec sa position reelle d'avant CE solide
+      // (−39,3935) il est « deja dedans », la sortie la plus courte l'emporte, et le pas est
+      // simplement annule : 0,005 m. Hors de ce cas, avantIci === avant — les correctifs
+      // n° 80 (sortie x comparee a la sortie z) et n° 86 (plafond du pas) sont intacts.
+      const avantIci = P.pos[axis] - amount;
+      const dehorsAvant = Math.abs(avantIci - o[axis]) >= half + P.hw;
       if (!dehorsAvant || amount === 0) {
         // DEJA DEDANS : ON SORT PAR LE COTE LE PLUS COURT, TOUS AXES CONFONDUS.
         // « Face la plus proche SUR CET AXE » ne suffisait pas : une rambarde est une boîte
@@ -24124,7 +24137,7 @@ function moveAxis(axis, amount, canStep) {
         const demiA = (autre === 'x' ? o.w : o.d) / 2;
         const sortieIci = half + P.hw - Math.abs(P.pos[axis] - o[axis]);
         const sortieLa = demiA + P.hw - Math.abs(P.pos[autre] - o[autre]);
-        if (sortieLa < sortieIci) { P.pos[axis] = avant; P.vel[axis] = 0; continue; }
+        if (sortieLa < sortieIci) { P.pos[axis] = avantIci; P.vel[axis] = 0; continue; }
       }
       const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       const cible = o[axis] + side * (half + P.hw + 0.001);
@@ -24153,8 +24166,8 @@ function moveAxis(axis, amount, canStep) {
       // la caisse en une demi-seconde, et desincarcere le rejetait alors de 1,04 m d'un
       // coup (meme trajet, image 583, boite de vehicule 5,00 x 4,36 m en −42,82 ; 10,53).
       // Pousse image par image, il reste dehors et rien ne saute.
-      if ((!dehorsAvant || amount === 0) && Math.abs(cible - avant) > Math.abs(amount) + POUSSEE_IMAGE) {
-        P.pos[axis] = avant; P.vel[axis] = 0; continue;
+      if ((!dehorsAvant || amount === 0) && Math.abs(cible - avantIci) > Math.abs(amount) + POUSSEE_IMAGE) {
+        P.pos[axis] = avantIci; P.vel[axis] = 0; continue;
       }
       P.pos[axis] = cible;
       P.vel[axis] = 0;
@@ -24191,11 +24204,33 @@ function desincarcere(dt) {
     { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
     { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
   ].sort((u, v) => u.d - v.d)[0];
-  // On le pose dehors D'UN COUP. Le pousser doucement ne servait à rien : la résolution
-  // axe par axe de l'image suivante le renvoyait aussitôt au milieu, et il vibrait sur
-  // place indéfiniment. Un saut d'un mètre et demi, une fois, et il est libre.
-  P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
-  P.coinceN = (P.coinceN || 0) + 1;
+  // ON LE POUSSE DEHORS, ON NE L'Y TELEPORTE PLUS (defaut n° 86, round 76).
+  // ANCIEN TEXTE : « On le pose dehors D'UN COUP. Le pousser doucement ne servait à rien :
+  // la résolution axe par axe de l'image suivante le renvoyait aussitôt au milieu. » C'etait
+  // vrai AVANT le correctif n° 80 : moveAxis ejectait alors sur l'axe le plus court quoi
+  // qu'il arrive et defaisait la poussee. Depuis, quand la sortie la plus courte est sur
+  // l'AUTRE axe, moveAxis se contente d'ANNULER le pas — il ne ramene plus personne au
+  // milieu — et une poussee progressive tient.
+  // CE QUE LE SAUT COUTAIT, MESURE : trajet du defaut n° 86, image 622. Une voiture du
+  // trafic roule sur le joueur pendant qu'un muret de 0,36 m lui barre l'est ; il est pince,
+  // la sortie la plus courte reste sur x (bloquee par le muret) et la penetration en z monte
+  // a 1,113 m. Au bout d'une demi-seconde il etait TELEPORTE de 1,133 m en une image (0,103 m
+  // autorises au pas) — le dernier « saut » du trajet, apres celui de moveAxis.
+  // MAINTENANT : la meme sortie, mais par pas de POUSSEE_IMAGE (0,30 m, la vitesse a laquelle
+  // un vehicule lance peut deja pousser le joueur). 1,11 m se resorbent en quatre images,
+  // soit 0,066 s : a l'oeil c'est un degagement, plus une teleportation. Tant qu'il reste
+  // dedans on garde le compteur arme (0,5 s) pour continuer des l'image suivante au lieu
+  // d'attendre une nouvelle demi-seconde.
+  const ecart = sorties.v - P.pos[sorties.a];
+  if (Math.abs(ecart) <= POUSSEE_IMAGE) {
+    P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
+    P.coinceN = (P.coinceN || 0) + 1;
+  } else {
+    P.pos[sorties.a] += Math.sign(ecart) * POUSSEE_IMAGE; P.vel[sorties.a] = 0;
+    P.coinceT = 0.5;   // arme pour l'image suivante : la poussee reprend sans nouvelle attente
+    if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }   // meme garde-fou que la sortie d'un coup
+    return;
+  }
   // enfermé de tous les côtés (quatre meubles autour de lui) : on le pose sur le dessus
   if (P.coinceN > 3) { P.coinceN = 0; P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.grounded = true; }
   // dernier garde-fou : jamais éjecté hors de la carte
@@ -36496,7 +36531,14 @@ function gesteMetier(rig, nom, dt, t, opt) {
   const veut = pres ? nom : null;
   if (veut && veut !== rig.gNom && (rig.gK || 0) <= 0.03) { rig.gNom = veut; rig.gT = t; }
   const meme = !!veut && veut === rig.gNom;
-  rig.gK = clamp((rig.gK || 0) + (meme ? dt : -dt) * ANIM.fondu, 0, 1);
+  // FONDU SUR MESURE (`opt.fondu`). ANIM.fondu (4,2 → 0 à 1 en 0,24 s) va bien aux gestes de
+  // faible amplitude, mais un geste qui emmène le bras LOIN de la pose neutre saute à
+  // l'entrée : le fondu déplace l'épaule de (amplitude × fondu / 60) par image. MESURE sur
+  // « capot » (le réparateur, test 326), dont l'épaule droite part à −1,46 rad : 0,1211 rad
+  // par image à l'ouverture du capot, soit 7,3 rad/s — le bras se téléportait dans le moteur.
+  // Un geste peut donc demander un fondu plus lent ; sans rien, c'est ANIM.fondu, et aucun
+  // des onze autres gestes ne change.
+  rig.gK = clamp((rig.gK || 0) + (meme ? dt : -dt) * ((opt && opt.fondu) || ANIM.fondu), 0, 1);
   if (!rig.gNom || rig.gK <= 0.002) { rig.gK = 0; if (!meme) rig.gNom = null; return; }
   const f = GESTES[rig.gNom]; if (!f) { rig.gNom = null; rig.gK = 0; return; }
   animPose(rig, f(t, t - (rig.gT || 0), opt || {}), rig.gK);
@@ -37436,7 +37478,12 @@ function reparateurTick(r, dt) {
   // d'essai fait tourner une réparation sans que l'horloge du jeu avance (le geste restait
   // alors figé sur une seule pose), et deux réparateurs côte à côte, décalés par `r.ph`, ne
   // serrent pas leurs boulons en cadence comme deux métronomes.
-  gesteMetier(av.rig, r.capot > 0.55 ? 'capot' : null, dt, r.t + r.ph);
+  // FONDU LENT (0,45 s au lieu de 0,24 s) : voir gesteMetier. Le geste du capot emmène
+  // l'épaule droite à −1,46 rad ; au fondu ordinaire elle balayait 0,1211 rad par image
+  // (7,3 rad/s) et le bras SAUTAIT dans le moteur dès que le capot passait 0,55. À 2,2 le
+  // même passage mesure 0,067 rad par image, et on SUIT le bras des yeux — c'est justement
+  // ce que le joueur a demandé à voir.
+  gesteMetier(av.rig, r.capot > 0.55 ? 'capot' : null, dt, r.t + r.ph, { fondu: 2.2 });
   av.group.position.y = r.y - (av.rig.baisse || 0) - (av.rig.bassin || 0);
   // UNE ÉTINCELLE ET UN COUP DE CLÉ, toutes les 0,7 s : on l'ENTEND réparer. Le son et la
   // gerbe sont calés sur la MÊME horloge que le geste, pas sur simTime : deux réparations

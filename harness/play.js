@@ -21441,29 +21441,40 @@ test('le parcours dans les arbres se monte vraiment : marches franchissables, pl
     for (let x = 130.2; x <= 139.8; x += 0.25) { releves++; if (!solide(x, 300, 5.35)) trous++; }
     // L'ESCALIER DE LA PREMIERE TOUR : chaque marche doit monter de MOINS de 0,56 m, le pas
     // franchissable du joueur — au-dela, on ne peut plus monter du tout.
+    // (l'escalier de la premiere tour compte 5 marches de 0,62 m de profondeur, la derniere
+    // centree sur z = 288, le milieu du cote — c'est la que s'ouvre le garde-corps, n° 102)
     const esc = [];
-    for (let i = 0; i < 6; i++) { const h = haut(128 - 2.9, 286.45 + i * (3.1 / 6) + 0.2); if (h > 0.2) esc.push(h); }
+    for (let i = 0; i < 5; i++) { const h = haut(128 - 2.9, 288 - (4 - i) * 0.62); if (h > 0.2) esc.push(h); }
     let pireMarche = 0;
     for (let i = 1; i < esc.length; i++) pireMarche = Math.max(pireMarche, esc[i] - esc[i - 1]);
-    // LE GRAND TOBOGGAN : quinze marches qui descendent, chacune de moins de 0,56 m
+    // LE GRAND TOBOGGAN : quinze marches qui descendent, chacune de moins de 0,56 m.
+    // Il partait de (124,40 ; 300), c'est-a-dire DANS l'escalier de la quatrieme tour (n° 102) :
+    // il part maintenant du cote sud de la cabane, en (128,50 ; 302,60), pas de 0,80 m.
     const tob = [];
-    for (let i = 0; i < 15; i++) tob.push(haut(124.4, 300 + i * 0.9));
+    for (let i = 0; i < 15; i++) tob.push(haut(128.5, 302.6 + i * 0.8));
     let pireTob = 0;
     for (let i = 1; i < tob.length; i++) pireTob = Math.max(pireTob, Math.abs(tob[i] - tob[i - 1]));
     // LES GARDE-CORPS SONT SOLIDES (une passerelle a 5,40 m sans rien qui arrete, c'est la chute)
-    const gardes = [solide(128, 286, 3.1), solide(128, 290, 3.1), solide(126, 288, 3.1), solide(130, 288, 3.1),
-      solide(135, 287, 3.1), solide(135, 289, 3.1), solide(128, 298, 7.3), solide(128, 302, 7.3)];
+    // MAIS ILS SONT PERCES LA OU L'ON ENTRE (n° 102 du controleur). Les deux points (126 ; 288)
+    // et (130 ; 288) etaient DANS l'ouverture de l'escalier et dans celle de la passerelle :
+    // les y exiger solides, c'etait exiger le defaut. On mesure maintenant les TRONCONS qui
+    // restent (a 1,45 m du milieu du cote, l'ouverture ne faisant que 1,80 m).
+    const gardes = [solide(128, 286, 3.1), solide(128, 290, 3.1), solide(126, 286.6, 3.1), solide(130, 289.4, 3.1),
+      solide(135, 287, 3.1), solide(135, 289, 3.1), solide(128, 298, 7.3), solide(126.6, 302, 7.3)];
+    // … et les ouvertures, elles, sont LIBRES a hauteur de poitrine : c'est par la qu'on entre
+    const portes = [solide(126, 288, 3.1), solide(130, 288, 3.1), solide(140, 288, 4.5), solide(142, 290, 4.5),
+      solide(142, 298, 5.9), solide(140, 300, 5.9), solide(130, 300, 7.3), solide(126, 300, 7.3), solide(128, 302, 7.3)];
     // et la cabane du sommet a bien son drapeau d'arrivee
     const drapeau = G.checkpoints.some(c => Math.hypot(c.x - 128, c.z - 300) < 3 && c.y > 6);
-    return { tours, trous, releves, esc, pireMarche: +pireMarche.toFixed(2), tob: [tob[0], tob[14]], pireTob: +pireTob.toFixed(2), gardes: gardes.filter(Boolean).length, nGardes: gardes.length, drapeau };
+    return { tours, trous, releves, esc, pireMarche: +pireMarche.toFixed(2), tob: [tob[0], tob[14]], pireTob: +pireTob.toFixed(2), gardes: gardes.filter(Boolean).length, nGardes: gardes.length, portes: portes.filter(Boolean).length, nPortes: portes.length, drapeau };
   });
   // La quatrieme plateforme porte le DRAPEAU D'ARRIVEE : sa dalle bleue de 2,40 m fait
   // 14 cm d'epaisseur et pose donc le sol marchable a 6,94 m au lieu de 6,80. C'est le bon
   // chiffre : c'est sur cette dalle qu'on pose les pieds.
   const bonnesTours = r.tours.filter(t => t.mesure - t.h > -0.05 && t.mesure - t.h < 0.4).length;
   const ok = bonnesTours === 4 && r.trous === 0 && r.pireMarche > 0 && r.pireMarche < 0.56
-    && r.pireTob > 0 && r.pireTob < 0.56 && r.gardes === r.nGardes && r.drapeau;
-  return { ok, detail: `SuperObby est d'abord un jeu de plateformes, et c'est la seule chose que la ville ne proposait nulle part : partout ailleurs on marche a plat · les quatre plateformes sont bien a ${r.tours.map(t => t.mesure + ' m').join(', ')} (voulu ${r.tours.map(t => t.h).join(', ')}) — ${bonnesTours}/4 · les trois passerelles sont PLEINES : ${r.trous} trou sur ${r.releves} releves tous les 25 cm (au premier jet, des planches de 1,00 m espacees de 1,11 m laissaient 11 cm de vide entre chacune, et on passait au travers a 2,60 m du sol) · l'escalier monte ${r.esc.join(' → ')} m, plus grande marche ${r.pireMarche} m, sous le pas franchissable de 0,56 m · le grand toboggan redescend de ${r.tob[0]} a ${r.tob[1]} m par marches de ${r.pireTob} m au plus · les ${r.gardes}/${r.nGardes} garde-corps testes sont SOLIDES (une rambarde decorative a 5,40 m, c'est une chute) · le drapeau d'arrivee est bien sur la cabane du sommet (${r.drapeau})` };
+    && r.pireTob > 0 && r.pireTob < 0.56 && r.gardes === r.nGardes && r.portes === 0 && r.drapeau;
+  return { ok, detail: `SuperObby est d'abord un jeu de plateformes, et c'est la seule chose que la ville ne proposait nulle part : partout ailleurs on marche a plat · les quatre plateformes sont bien a ${r.tours.map(t => t.mesure + ' m').join(', ')} (voulu ${r.tours.map(t => t.h).join(', ')}) — ${bonnesTours}/4 · les trois passerelles sont PLEINES : ${r.trous} trou sur ${r.releves} releves tous les 25 cm (au premier jet, des planches de 1,00 m espacees de 1,11 m laissaient 11 cm de vide entre chacune, et on passait au travers a 2,60 m du sol) · l'escalier monte ${r.esc.join(' → ')} m, plus grande marche ${r.pireMarche} m, sous le pas franchissable de 0,56 m · le grand toboggan redescend de ${r.tob[0]} a ${r.tob[1]} m par marches de ${r.pireTob} m au plus · les ${r.gardes}/${r.nGardes} garde-corps testes sont SOLIDES (une rambarde decorative a 5,40 m, c'est une chute) · et les ${r.nPortes} ouvertures par lesquelles on ENTRE (escalier et passerelles des quatre tours, plus les deux portes de la cabane) sont libres a hauteur de poitrine : ${r.portes} bouchee · le drapeau d'arrivee est bien sur la cabane du sommet (${r.drapeau})` };
 });
 
 test('au Bois des Aventuriers, le camp et le mobilier arretent, le ruisseau et le sous-bois se traversent', async p => {
@@ -21773,4 +21784,63 @@ test('mis KO sur une balancoire, l\'enfant est RENDU a lui-meme : le siege lache
     && !r.apres.pswing && r.marche > 8 && r.heritage === 0 && r.rassis
     && /balan|saut/i.test(r.consigne || '') && /◯/.test(r.pastilleManette);
   return { ok, detail: `n° 87, BLOQUANT : le relevage rendait bien 100 ❤️ et remettait P.swing a null, mais le SIEGE gardait son cavalier (sw.rider === 'me') et swingTick reposait le joueur sur la planche a chaque image — 28 s a se balancer tout seul et 400 images de stick a fond pour −0,09 m parcouru · maintenant remiseEnJeu() passe par lacheBalancoire(), le seul endroit du jeu qui decroche un cavalier : apres le KO, ❤️ ${r.apres.hp}, sw.rider = ${r.apres.rider}, ${r.apres.cavaliers} siege occupe sur les 10 de la ville, P.swing ${r.apres.pswing} · et l'enfant REMARCHE : ${r.marche} m en 400 images (direction ${r.ou}) (avant : −0,09 m) · la consigne pour descendre ne dure plus 1,6 s, elle reste affichee tant qu'on est assis : pastille « ${r.pastille} », et a la manette « ${r.pastilleManette} » · enfin __SHOT.go() rend les sieges qu'il occupait (${r.heritage} cavalier herite apres un go, et on se rassoit : ${r.rassis}) — sans quoi ce test serait vert pour de mauvaises raisons` };
+});
+
+test('le parcours dans les arbres se PARCOURT A PIED du sol au drapeau de la cabane, sans un seul saut', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 125.1, y: 1, z: 285, hour: 12, frais: true });
+    // AUCUN SAUT N'EST AUTORISE DANS CE TEST. Le contrôleur n'entrait sur la premiere
+    // plateforme qu'en sautant par-dessus la rambarde (apogee 4,90 m, on retombe DEBOUT SUR
+    // LE GARDE-CORPS) : c'est precisement ce qu'un enfant ne devine pas. On marche, point.
+    const etapes = [[125.1, 288.0], [128, 288], [134, 288], [139.5, 288], [142, 288.5],
+      [142, 292], [142, 296.5], [142, 299], [138, 300], [133, 300], [130.5, 300], [128, 300]];
+    P.pos.set(125.1, 0.6, 283); P.vel.set(0, 0, 0); P.standing = null;
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const piecesAvant = G.wallet;
+    let images = 0, monte = false, rechute = 0, yMax = 0, sauts = 0;
+    const bloques = [];
+    for (const [tx, tz] of etapes) {
+      let n = 0;
+      while (n < 500) {
+        const dx = tx - P.pos.x, dz = tz - P.pos.z;
+        if (Math.hypot(dx, dz) < 0.6) break;
+        P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz);
+        G.keys.clear(); G.keys.add('KeyW');            // JAMAIS de Space : on marche
+        G.step(1 / 60, true); n++; images++;
+        if (P.jumpBuf > 0) sauts++;
+        yMax = Math.max(yMax, P.pos.y);
+        if (yMax > 2.5) { monte = true; if (P.pos.y < 1.5) rechute++; }
+      }
+      G.keys.clear();
+      if (n >= 500) bloques.push(`(${tx} ; ${tz}) — arrete a ${P.pos.x.toFixed(2)} ; ${P.pos.z.toFixed(2)} ; ${P.pos.y.toFixed(2)} m`);
+    }
+    const sommet = { x: +P.pos.x.toFixed(2), z: +P.pos.z.toFixed(2), y: +P.pos.y.toFixed(2) };
+    const drapeau = G.checkpoints.find(c => Math.hypot(c.x - 128, c.z - 300) < 3);
+    const surLeDrapeau = !!drapeau && Math.hypot(P.pos.x - drapeau.x, P.pos.z - drapeau.z) < 2.2 && P.pos.y > drapeau.y;
+    // LES QUATRE ESCALIERS, un par tour : chacun doit monter jusqu'au plancher de SA tour.
+    const escaliers = [];
+    for (const [tx, tz, h, cot] of [[128, 288, 2.6, -1], [142, 288, 4.0, 1], [142, 300, 5.4, 1], [128, 300, 6.8, -1]]) {
+      const px = tx + cot * 2.9;
+      P.pos.set(px, 0.6, tz - 5); P.vel.set(0, 0, 0); P.standing = null;
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      let n = 0;
+      // on monte l'escalier (vers le sud), puis on entre sur la plateforme (vers la tour)
+      for (const [bx, bz] of [[px, tz], [tx, tz]]) {
+        n = 0;
+        while (n < 600) {
+          const dx = bx - P.pos.x, dz = bz - P.pos.z;
+          if (Math.hypot(dx, dz) < 0.7) break;
+          P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz);
+          G.keys.clear(); G.keys.add('KeyW'); G.step(1 / 60, true); n++;
+        }
+        G.keys.clear();
+      }
+      escaliers.push({ tour: `${tx} ; ${tz}`, voulu: h, y: +P.pos.y.toFixed(2), sur: P.pos.y > h - 0.1 });
+    }
+    return { images, bloques, sommet, surLeDrapeau, drapeauY: drapeau ? drapeau.y : null, rechute, sauts, yMax: +yMax.toFixed(2), escaliers, piecesAvant, monte };
+  });
+  const bonsEsc = r.escaliers.filter(e => e.sur).length;
+  const ok = r.bloques.length === 0 && r.surLeDrapeau && r.sommet.y > 7 && r.rechute === 0 && r.sauts === 0 && bonsEsc === 4;
+  return { ok, detail: `n° 102, BLOQUANT pour le quartier : le garde-corps etait pose sur les QUATRE bords des quatre tours, y compris celui par lequel l'escalier arrive (464 images de stick a fond, arrete a 2,58 m de la plateforme), les murs de la cabane barraient le plancher de la 4ᵉ tour sur toute sa largeur, et les trois « montees » etaient plantees SOUS le tablier de la passerelle suivante — le parcours s'arretait donc au pied de la premiere plateforme · maintenant on le fait EN MARCHANT, sans un seul saut (${r.sauts} saut) : ${r.images} images du sol (0,14 m) au drapeau de la cabane, ${r.bloques.length} etape bloquee, point le plus haut ${r.yMax} m, arrivee en (${r.sommet.x} ; ${r.sommet.z}) a ${r.sommet.y} m, sur la dalle du drapeau (${r.surLeDrapeau}) · et ${r.rechute} image passee sous 1,50 m apres etre monte : on ne retombe jamais · les QUATRE escaliers menent bien chacun au plancher de SA tour : ${r.escaliers.map(e => `${e.tour} → ${e.y} m (voulu ${e.voulu})`).join(' ; ')} — ${bonsEsc}/4${r.bloques.length ? ' · BLOQUE : ' + r.bloques.join(' | ') : ''}` };
 });

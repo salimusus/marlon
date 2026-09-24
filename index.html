@@ -9446,14 +9446,28 @@ function buildBois() {
   // ne lisait plus que comme UN GROS BLOC DE BOIS (capture « bois-cabane »). Les marches ne se
   // touchent plus qu'a peine, les quatre pieds sont de vrais troncs ronds, et un feuillage les
   // coiffe au-dessus du plancher — de loin on voit quatre arbres et une cabane, pas un mur.
-  const tour = (tx, tz, haut, col, cotEsc = -1) => {
-    const n = Math.max(3, Math.round((haut - 0.14) / 0.45));
-    // l'escalier arrive par le cote `cotEsc` : marche de 0,45 m de haut, 0,9 m de profondeur
+  // LES OUVERTURES DU GARDE-CORPS (n° 102 du contrôleur, BLOQUANT pour le quartier).
+  // Le garde-corps était posé sur les QUATRE bords, y compris celui par lequel l'escalier
+  // arrive et ceux d'où partent les passerelles : c'est une boîte solide de 1,10 m de haut,
+  // le double du pas franchissable (0,56 m). Mesure du contrôleur : l'escalier monte
+  // impeccablement de 0,14 m à 2,60 m, puis 464 images (7,7 s) de stick à fond, arrêté à
+  // 2,58 m de la plateforme. Le seul moyen d'entrer était de sauter PAR-DESSUS la rambarde
+  // et de retomber DEBOUT DESSUS, à 3,90 m. `ouvre` liste les côtés percés ('x-', 'x+',
+  // 'z-', 'z+') : le côté de l'escalier, et chaque côté d'où part ou arrive une passerelle.
+  const OUV = 1.8;   // m : la largeur d'une ouverture de garde-corps (1,00 m de passage net pour un joueur large de 0,80 m)
+  const tour = (tx, tz, haut, col, cotEsc = -1, ouvre = []) => {
+    const n = Math.max(3, Math.round((haut - 0.14) / 0.45)), pas = 3.1 / n;
+    // L'ESCALIER ARRIVE AU MILIEU DU COTE, pas a son coin (n° 102). Il montait de tz − 1,55 a
+    // tz + 1,10 : sa DERNIERE MARCHE tombait donc a cote de l'ouverture du garde-corps (qui est
+    // centree sur le milieu du cote) et, pire, entre les deux troncs de la tour, qui ne laissent
+    // qu'un couloir de 1,36 m centre sur tz. Mesure sur la tour 3 : arrive en haut de l'escalier
+    // en (144,90 ; 301,29), le joueur butait dans le tronçon de garde-corps et redescendait a
+    // 4,40 m. La derniere marche est maintenant centree sur tz, dans l'axe de l'ouverture.
     for (let i = 0; i < n; i++) {
       const y = 0.14 + (i + 1) * (haut - 0.14) / n;
-      plat(tx + cotEsc * 2.9, y, tz - 2 + 0.45 + i * (3.1 / n), 1.7, 3.1 / n + 0.06, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, y);
+      plat(tx + cotEsc * 2.9, y, tz - (n - 1 - i) * pas, 1.7, pas + 0.06, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, y);
     }
-    box(tx + cotEsc * 3.78, haut / 2 + 0.3, tz, 0.14, haut + 0.6, 4, 0x8b5a2b, { studs: false, noRoute: true });   // la rampe de l'escalier, SOLIDE
+    box(tx + cotEsc * 3.78, haut / 2 + 0.3, tz - 1.2, 0.14, haut + 0.6, 4, 0x8b5a2b, { studs: false, noRoute: true });   // la rampe de l'escalier, SOLIDE, dans l'axe des marches
     for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) {
       const tronc = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, haut + 3.4, 9), lam(0x6b4423));
       tronc.position.set(tx + dx, (haut + 3.4) / 2, tz + dz); tronc.castShadow = true; worldGroup.add(tronc);
@@ -9463,9 +9477,39 @@ function buildBois() {
     }
     sgridSale();
     plat(tx, haut, tz, 4, 4, col, { studs: false, noRoute: true }, 0.22);        // le plancher
-    for (const [rx, rz, rw, rd] of [[tx, tz - 2, 4, 0.14], [tx, tz + 2, 4, 0.14], [tx - 2, tz, 0.14, 4], [tx + 2, tz, 0.14, 4]])
-      box(rx, haut + 0.55, rz, rw, 1.1, rd, 0x8b5a2b, { studs: false, noRoute: true });   // le garde-corps : SOLIDE, tout autour
+    // LE GARDE-CORPS, avec son ouverture du côté par lequel on entre. Un côté fermé reste
+    // une seule boîte de 4 m ; un côté ouvert devient DEUX tronçons de 1,10 m, de part et
+    // d'autre d'un passage de 1,80 m, et deux montants clairs (décoratifs : jamais solides)
+    // disent à l'œil où l'on entre. Les trois autres côtés protègent toujours : une
+    // passerelle à 6,80 m sans rien qui arrête, c'est une chute.
+    const cotes = [['z-', tx, tz - 2, 4, 0.14], ['z+', tx, tz + 2, 4, 0.14], ['x-', tx - 2, tz, 0.14, 4], ['x+', tx + 2, tz, 0.14, 4]];
+    const ouvertures = ouvre.concat([cotEsc < 0 ? 'x-' : 'x+']);   // le côté de l'escalier est TOUJOURS ouvert
+    for (const [nom, rx, rz, rw, rd] of cotes) {
+      if (!ouvertures.includes(nom)) { box(rx, haut + 0.55, rz, rw, 1.1, rd, 0x8b5a2b, { studs: false, noRoute: true }); continue; }
+      const longX = rw > rd;                       // le côté court-il en x ou en z ?
+      const c = longX ? rx : rz, demi = 2;         // centre et demi-longueur du côté
+      for (const s of [-1, 1]) {                   // les deux tronçons qui restent
+        const a = s < 0 ? c - demi : c + OUV / 2, b = s < 0 ? c - OUV / 2 : c + demi;
+        if (b - a < 0.2) continue;
+        box(longX ? (a + b) / 2 : rx, haut + 0.55, longX ? rz : (a + b) / 2, longX ? b - a : rw, 1.1, longX ? rd : b - a, 0x8b5a2b, { studs: false, noRoute: true });
+        box(longX ? c + s * OUV / 2 : rx, haut + 0.75, longX ? rz : c + s * OUV / 2, 0.2, 1.5, 0.2, 0xd8b45a, { deco: true, studs: false });   // le montant de l'ouverture
+      }
+    }
     return { x: tx, z: tz, y: haut };
+  };
+  // LA MONTÉE DE BOUT DE PASSERELLE. Les passerelles arrivent au niveau de la tour de DÉPART
+  // et repartaient sur une tour 1,40 m plus haute : un mur, quatre fois de suite. Les trois
+  // « montées » existaient bien, mais posées à côté de la route — celle de T1/T2 était plantée
+  // en (142 ; 290,6…292,7), c'est-à-dire SOUS le tablier de la passerelle suivante (mesuré :
+  // haut(142 ; 291) = 4,00 m, le tablier, et non 3,30 m, la marche). On les remet au bout de
+  // la passerelle, dans son axe : quatre marches de 0,35 m qui butent contre le plancher de la
+  // tour d'arrivée, avec 0,35 m de recouvrement pour que le pied ne trouve jamais le vide.
+  const monteeBout = (axe, bord, sens, autre, yBas, yHaut) => {
+    for (let i = 0; i < 4; i++) {
+      const c = bord + sens * (0.9 + i * 0.9), y = yHaut - i * (yHaut - yBas) / 3;
+      if (axe === 'x') plat(c, y, autre, 0.9, 1.7, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, y);
+      else plat(autre, y, c, 1.7, 0.9, i % 2 ? 0x9c6a3c : 0xb08050, { studs: false, noRoute: true }, y);
+    }
   };
   const passerelle = (x1, z1, x2, z2, y) => {
     const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), n = Math.round(L / 1.1);
@@ -9485,23 +9529,41 @@ function buildBois() {
   // qui tombe d'une passerelle ne doit pas avoir a refaire tout le circuit pour remonter — il
   // reprend a la tour ou il en etait. Les passerelles et les montees, elles, font le parcours
   // complet de 2,60 m a 6,80 m, et le grand toboggan ramene au sol d'une traite.
-  const T1 = tour(128, 288, 2.6, 0xd8b45a, -1), T2 = tour(142, 288, 4.0, 0xd8c8a0, 1);
-  const T3 = tour(142, 300, 5.4, 0xe0c890, 1), T4 = tour(128, 300, 6.8, 0xd8b45a, -1);
+  // CHAQUE TOUR EST PERCÉE DU CÔTÉ DE SON ESCALIER **ET** DU CÔTÉ DE SES PASSERELLES.
+  const T1 = tour(128, 288, 2.6, 0xd8b45a, -1, ['x+']);              // escalier à l'ouest, passerelle vers T2 à l'est
+  const T2 = tour(142, 288, 4.0, 0xd8c8a0, 1, ['x-', 'z+']);         // passerelle de T1 à l'ouest, escalier à l'est, passerelle vers T3 au sud
+  const T3 = tour(142, 300, 5.4, 0xe0c890, 1, ['z-', 'x-']);         // passerelle de T2 au nord, escalier à l'est, passerelle vers T4 à l'ouest
+  const T4 = tour(128, 300, 6.8, 0xd8b45a, -1, ['x+', 'z+']);        // passerelle de T3 à l'est, escalier à l'ouest, grand toboggan au sud
   passerelle(T1.x + 2, T1.z, T2.x - 2, T2.z, 2.6);
-  for (let i = 0; i < 4; i++) plat(142, 2.9 + i * 0.4, 290.6 + i * 0.7, 3.6, 0.8, 0xb08050, { studs: false, noRoute: true }, 2.9 + i * 0.4);   // la montee de T1/T2 vers 4 m
+  monteeBout('x', T2.x - 2, -1, T2.z, 2.95, 4.0);                    // le bout de la passerelle monte de 2,60 m au plancher de T2
   passerelle(T2.x, T2.z + 2, T3.x, T3.z - 2, 4.0);
-  for (let i = 0; i < 4; i++) plat(140.6 - i * 0.7, 4.3 + i * 0.4, 300, 0.8, 3.6, 0xb08050, { studs: false, noRoute: true }, 4.3 + i * 0.4);   // la montee vers 5,4 m
+  monteeBout('z', T3.z - 2, -1, T3.x, 4.35, 5.4);                    // … puis au plancher de T3
   passerelle(T3.x - 2, T3.z, T4.x + 2, T4.z, 5.4);
-  for (let i = 0; i < 4; i++) plat(128, 5.7 + i * 0.4, 297.4 - i * 0.7, 3.6, 0.8, 0xb08050, { studs: false, noRoute: true }, 5.7 + i * 0.4);   // la derniere montee, vers la cabane
+  monteeBout('x', T4.x + 2, 1, T4.z, 5.75, 6.8);                     // … puis au plancher de T4, celui de la cabane
   // LA CABANE DANS LES ARBRES, au sommet de la quatrieme tour : le bout du parcours.
-  for (const [wx, wz, ww, wd] of [[128, 298, 4.4, 0.3], [126, 300, 0.3, 4.4], [130, 300, 0.3, 4.4]])
-    box(wx, 8.2, wz, ww, 2.4, wd, 0x8b5a2b, { studs: false, noRoute: true });
+  // SES MURS SONT PERCÉS DE DEUX PORTES (n° 102). Ils barraient le plancher de T4 sur toute
+  // sa largeur, de 7,00 m à 9,40 m : l'escalier de T4 arrivait contre le mur ouest et la
+  // passerelle de T3 contre le mur est. Une porte de 1,80 m dans chacun, en face l'une de
+  // l'autre et dans l'axe des ouvertures du garde-corps : on entre dans la cabane, on touche
+  // le drapeau, et le mur du fond plus le toit font toujours une vraie cabane.
+  box(128, 8.2, 298, 4.4, 2.4, 0.3, 0x8b5a2b, { studs: false, noRoute: true });   // le mur du fond, plein
+  for (const wx of [126, 130]) for (const s of [-1, 1]) {
+    box(wx, 8.2, 300 + s * (0.9 + 1.3 / 2), 0.3, 2.4, 1.3, 0x8b5a2b, { studs: false, noRoute: true });
+    box(wx, 8.2, 300 + s * 0.9, 0.34, 2.4, 0.22, 0xd8b45a, { deco: true, studs: false });   // le montant de la porte
+  }
   box(128, 9.7, 300, 5.4, 0.9, 5.4, 0xc23b5a, { deco: true, studs: false });     // le toit (a 9,25 m : on passe dessous)
   box(128, 8.3, 302.2, 2.8, 1, 0.12, 0, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏕️ LA CABANE', 0x5cc453) }), deco: true, noEdges: true });
   checkpoint(128, 7.02, 300, 1);   // le drapeau du sommet : on a fini le parcours
   for (const [cx, cz, cy] of [[135, 288, 2.9], [142, 294, 4.3], [135, 300, 5.7], [128, 294, 0.5], [142, 306, 0.5]]) coin(cx, cy, cz);
-  // LE GRAND TOBOGGAN qui ramene au sol depuis la cabane : quinze marches de 0,42 m.
-  for (let i = 0; i < 15; i++) plat(124.4, 6.9 - i * 0.45, 300 + i * 0.9, 1.8, 0.95, i % 2 ? 0x35d0e6 : 0x3ef2ff, { studs: false, noRoute: true }, 6.9 - i * 0.45);
+  // LE GRAND TOBOGGAN qui ramene au sol depuis la cabane : quinze marches de 0,45 m.
+  // IL ETAIT PLANTE SUR L'ESCALIER DE LA QUATRIEME TOUR (n° 102). Sa premiere marche, en
+  // (124,40 ; 300), est un bloc plein de 6,90 m de haut et de 1,80 m de large : elle mordait
+  // de 1,05 m dans les marches de l'escalier de T4 (x 124,25 a 125,95, au meme endroit).
+  // Mesure : en montant cet escalier on butait dedans a 3,25 m et on n'allait pas plus haut.
+  // Le toboggan part maintenant du cote SUD de la cabane, dans l'axe du plancher (x 128,5) :
+  // on sort par l'ouverture sud du garde-corps et on descend d'une traite. Pas de 0,80 m au
+  // lieu de 0,90 pour que la derniere marche (313,80) s'arrete AVANT le ruisseau (314,70).
+  for (let i = 0; i < 15; i++) plat(128.5, 6.9 - i * 0.45, 302.6 + i * 0.8, 1.8, 0.95, i % 2 ? 0x35d0e6 : 0x3ef2ff, { studs: false, noRoute: true }, 6.9 - i * 0.45);
   sign(132, 0.14, 280, '🌲 Parcours dans les arbres : grimpe jusqu\'à la cabane !', true, Math.PI);
   // ---- LE CAMP (est de l'Allee des Cimes) ----
   // la cabane du ranger : on y achete de quoi tenir la journee en foret

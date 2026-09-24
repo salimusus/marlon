@@ -20730,14 +20730,20 @@ test('aucun pas ne dépasse ce que la vitesse du joueur autorise, sur un long tr
 test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m au droit de la voiture garée', async p => {
   const r = await p.evaluate(async () => {
     const G = __G, P = G.P;
+    // LE TIRAGE AU SORT EST FIGE **AVANT** LA RECONSTRUCTION DU MONDE. Il ne l'etait qu'apres :
+    // or __SHOT.go() rebatit la ville, et cette reconstruction consomme Math.random (voitures
+    // garees, habitants, decor). La ville n'etait donc PAS la meme d'un lancement a l'autre, et
+    // le trajet — qui n'est qu'une marche de 12 s avec le cap qui balaie — derivait avec elle :
+    // meme test, le point du defaut passait a 1,24 m lance seul et a 2,04 m en suite. On fige
+    // le tirage d'abord : la ville et le trajet sont alors les memes a chaque fois.
+    const hasard = Math.random; let g = 777;
+    Math.random = () => (g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     // LE TRAJET EXACT DU DEFAUT n° 86, celui du test du petit robot : on part de (0 ; 8) et
     // l'on marche 12 s en balayant le cap. Le joueur passe en (−47,36 ; 12,05) et y
     // effleurait de 1,5 cm en z la boite d'une voiture garee en (−46,85 ; 9,19) — large de
     // 3,73 m. Sur l'axe x il etait « au milieu » de cette boite : la sortie x la plus proche
     // valait 1,755 m, et il etait ejecte de 1,75 m EN UNE IMAGE sur le trottoir d'en face.
-    const hasard = Math.random; let g = 777;
-    Math.random = () => (g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
     G.keys.add('KeyW');
     let px = P.pos.x, pz = P.pos.z, pire = 0, ou = null, n = 0, passe = 99;
     for (let i = 0; i < 60 * 12; i++) {
@@ -20751,11 +20757,46 @@ test('le trajet de la rue vers l\'ouest ne téléporte plus le joueur de 1,75 m 
       px = P.pos.x; pz = P.pos.z;
     }
     G.keys.delete('KeyW');
+    // ON VA AU POINT DU DEFAUT, ON N'ESPERE PLUS Y PASSER. La marche ci-dessus est EMERGENTE :
+    // elle depend des voitures du trafic et de l'heure de simulation, qui ne sont pas les memes
+    // d'un lot a l'autre (l'horloge du jeu, elle, n'est jamais remise a zero entre les tests).
+    // MESURE : le meme test frolait le point du defaut a 1,24 m lance seul et a 2,10 m derriere
+    // deux voisins — le garde-fou « on est bien passe par la » tombait alors, alors que la
+    // mesure qui compte (aucun saut) etait bonne. On repasse donc SUR le point, huit fois, cap
+    // par cap : le trajet libre cherche les surprises, ces huit approches garantissent que
+    // l'endroit exact du defaut n° 86 est mesure a chaque lancement.
+    const CX = -47.4, CZ = 12.1, caps = [0, 0.7854, 1.5708, 2.3562, 3.1416, -2.3562, -1.5708, -0.7854];
+    let approches = 0;
+    for (const cap of caps) {
+      const dx = Math.sin(cap), dz = Math.cos(cap);
+      P.pos.set(CX - dx * 3.5, 0.4, CZ - dz * 3.5); P.vel.set(0, 0, 0);
+      P.coinceT = 0; P.coinceN = 0;
+      // ON LE LAISSE SE POSER, SIMULATION ACTIVE, ET CE TEMPS-LA NE COMPTE PAS. Deux des huit
+      // points de depart tombent dans un mur (celui du nord-ouest est en plein dans la
+      // cloison de 0,40 m plantee en x = −50) : avec step(dt, false) la desincarceration ne
+      // tourne pas, et elle degageait le joueur de 0,495 m PENDANT la mesure. Une demi-seconde
+      // de simulation active suffit a l'en sortir avant qu'on ne compte quoi que ce soit.
+      for (let i = 0; i < 45; i++) G.step(1 / 60, true);
+      G.cam.yaw = Math.atan2(-dx, -dz); G.cam.freeUntil = 1e9;   // « avancer » va vers (-sin yaw, -cos yaw)
+      G.keys.add('KeyW');
+      px = P.pos.x; pz = P.pos.z;
+      for (let i = 0; i < 60 * 7; i++) {
+        const vx = P.vel.x, vz = P.vel.z;
+        G.step(1 / 60, true);
+        const d = Math.hypot(P.pos.x - px, P.pos.z - pz), permis = Math.max(Math.hypot(vx, vz) / 60, G.SPEED / 60);
+        if (d - permis > pire) { pire = d - permis; ou = { de: [+px.toFixed(2), +pz.toFixed(2)], a: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)], d: +d.toFixed(3) }; }
+        if (d > permis + 0.25) n++;
+        passe = Math.min(passe, Math.hypot(P.pos.x - CX, P.pos.z - CZ));
+        px = P.pos.x; pz = P.pos.z;
+      }
+      G.keys.delete('KeyW');
+      approches++;
+    }
     Math.random = hasard;
-    return { pire: +pire.toFixed(3), ou, n, passe: +passe.toFixed(2), fin: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)] };
+    return { pire: +pire.toFixed(3), ou, n, passe: +passe.toFixed(2), approches, fin: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)] };
   });
-  const ok = r.n === 0 && r.pire < 0.25 && r.passe < 1.5;
-  return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant le trajet passe bien au point du défaut (à ${r.passe} m de (−47,4 ; 12,1)), ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
+  const ok = r.n === 0 && r.pire < 0.25 && r.passe < 1.5 && r.approches === 8;
+  return { ok, detail: `avant : 1,75 m en une image à l'image 669, arrivé en (−47,36 ; 12,05), et le joueur finissait posé sur la dalle basse de (−49,9 ; 9,2) · maintenant la marche libre de 12 s PUIS ${r.approches} approches du point du défaut cap par cap (au plus près : ${r.passe} m de (−47,4 ; 12,1)) donnent ${r.n} saut, excès maxi ${r.pire} m${r.ou ? ` (${r.ou.d} m en ${r.ou.a})` : ''}, arrivée en (${r.fin.join(' ; ')})` };
 });
 
 // ================= POSTE QUARTIERS : LA PLAINE DES SPORTS =================

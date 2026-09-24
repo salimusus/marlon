@@ -24247,33 +24247,31 @@ function desincarcere(dt) {
     { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
     { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
   ].sort((u, v) => u.d - v.d)[0];
-  // ON LE POUSSE DEHORS, ON NE L'Y TELEPORTE PLUS (defaut n° 86, round 76).
-  // ANCIEN TEXTE : « On le pose dehors D'UN COUP. Le pousser doucement ne servait à rien :
-  // la résolution axe par axe de l'image suivante le renvoyait aussitôt au milieu. » C'etait
-  // vrai AVANT le correctif n° 80 : moveAxis ejectait alors sur l'axe le plus court quoi
-  // qu'il arrive et defaisait la poussee. Depuis, quand la sortie la plus courte est sur
-  // l'AUTRE axe, moveAxis se contente d'ANNULER le pas — il ne ramene plus personne au
-  // milieu — et une poussee progressive tient.
-  // CE QUE LE SAUT COUTAIT, MESURE : trajet du defaut n° 86, image 622. Une voiture du
-  // trafic roule sur le joueur pendant qu'un muret de 0,36 m lui barre l'est ; il est pince,
-  // la sortie la plus courte reste sur x (bloquee par le muret) et la penetration en z monte
-  // a 1,113 m. Au bout d'une demi-seconde il etait TELEPORTE de 1,133 m en une image (0,103 m
-  // autorises au pas) — le dernier « saut » du trajet, apres celui de moveAxis.
-  // MAINTENANT : la meme sortie, mais par pas de POUSSEE_IMAGE (0,30 m, la vitesse a laquelle
-  // un vehicule lance peut deja pousser le joueur). 1,11 m se resorbent en quatre images,
-  // soit 0,066 s : a l'oeil c'est un degagement, plus une teleportation. Tant qu'il reste
-  // dedans on garde le compteur arme (0,5 s) pour continuer des l'image suivante au lieu
-  // d'attendre une nouvelle demi-seconde.
+  // UN VEHICULE QUI ROULE SUR LE JOUEUR LE POUSSE ; UN OBJET QUI APPARAIT LE POSE DEHORS.
+  // On le posait dehors D'UN COUP dans les deux cas, et c'est la bonne reponse quand un
+  // portail se referme, qu'un ascenseur remonte ou qu'un decor devient solide : le joueur
+  // est au MILIEU d'une boite qui n'etait pas la, il faut l'en sortir tout de suite (c'est
+  // ce que mesure le test 277 : dehors en une demi-seconde, et pas un frolement plus tot).
+  // MAIS un vehicule, lui, ARRIVE : il pousse deja le joueur image par image dans moveAxis,
+  // a POUSSEE_IMAGE au plus. MESURE (defaut n° 86, trajet du test du petit robot, image 622) :
+  // une voiture du trafic roule sur le joueur pendant qu'un muret de 0,36 m lui barre l'est.
+  // Pince, il ne peut sortir ni a l'est (le muret) ni en z (moveAxis annule le pas, la sortie
+  // la plus courte etant sur x) : la penetration en z monte a 1,113 m, et au bout d'une
+  // demi-seconde il etait TELEPORTE de 1,133 m en une image — 0,103 m autorises au pas.
+  // On finit donc la sortie A LA MEME VITESSE que la poussee qui l'a mis la : 1,11 m en
+  // quatre images (0,066 s), et le compteur reste arme pour continuer des l'image suivante.
+  // (Le pousser doucement ne servait a rien AVANT le correctif n° 80, quand moveAxis
+  //  ejectait sur l'axe le plus court quoi qu'il arrive et defaisait la poussee ; depuis, il
+  //  ANNULE le pas au lieu de ramener au milieu, et la poussee tient.)
   const ecart = sorties.v - P.pos[sorties.a];
-  if (Math.abs(ecart) <= POUSSEE_IMAGE) {
-    P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
-    P.coinceN = (P.coinceN || 0) + 1;
-  } else {
+  if (o.veh && Math.abs(ecart) > POUSSEE_IMAGE) {
     P.pos[sorties.a] += Math.sign(ecart) * POUSSEE_IMAGE; P.vel[sorties.a] = 0;
     P.coinceT = 0.5;   // arme pour l'image suivante : la poussee reprend sans nouvelle attente
     if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }   // meme garde-fou que la sortie d'un coup
     return;
   }
+  P.pos[sorties.a] = sorties.v; P.vel[sorties.a] = 0; P.coinceT = 0;
+  P.coinceN = (P.coinceN || 0) + 1;
   // enfermé de tous les côtés (quatre meubles autour de lui) : on le pose sur le dessus
   if (P.coinceN > 3) { P.coinceN = 0; P.pos.y = Math.max(P.pos.y, o.y + o.h / 2 + 0.02); P.vel.y = 0; P.grounded = true; }
   // dernier garde-fou : jamais éjecté hors de la carte

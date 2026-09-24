@@ -10438,7 +10438,8 @@ function botConduit(c, x, z, dt, opt) {
     // sans fin. On garde donc la voie retenue tant qu'on la longe, et on ne la reconsidere qu'a
     // la prochaine destination.
     if (butNeuf) c.departVoie = -1;
-    let via = (dist > 16 && simTime > (c.grilleJusqua || 0)) ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;   // `grilleJusqua` : voir rouleVers, deux fois coince au meme endroit
+    const loinAssez = dist > 16;   // en deca, le but est a portee : on y va en direct, comme avant
+    let via = (loinAssez && simTime > (c.grilleJusqua || 0)) ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;   // `grilleJusqua` : voir rouleVers, deux fois coince au meme endroit
     // LE DETOUR ABSURDE (la meme regle que pour la voiture d'un ami, voir conduireVersPoint).
     // Le graphe des voies respecte les sens uniques, et c'est ce qu'on veut : mais quand le but
     // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
@@ -10479,7 +10480,10 @@ function botConduit(c, x, z, dt, opt) {
     // (trop pres, ou `grilleJusqua` apres deux blocages), on posait comme itineraire le BUT
     // TOUT SEUL : le vehicule visait le foyer en ligne droite, murs compris. Mesure (test 388)
     // : le camion de pompiers ne sortait alors JAMAIS de sa cour (12 m en plus de 60 s).
-    if (!pts) { const g0 = via ? null : navPath(c.x, c.z, x, z);
+    // LES SEIZE DERNIERS METRES RESTENT EN DIRECT : le but n'y est plus sur une voie (un
+    // parking, une cour, un bord d'incendie) et la grille A*, prise si pres, fait le tour du
+    // pate de maisons — mesure, un camion reste 14,4 s a l'arret en (-62 ; -2).
+    if (!pts) { const g0 = (!via && loinAssez) ? navPath(c.x, c.z, x, z) : null;
       pts = (via && via.length > 1) ? via.concat([[x, z]]) : (g0 && g0.length ? g0.concat([[x, z]]) : [[x, z]]); }
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
@@ -10854,13 +10858,25 @@ function placeDemiTour(c) {
 // On compte donc le demi-tour PRECEDENT : s'il s'est acheve il y a moins de huit secondes a
 // moins de douze metres d'ici, on renonce a la voie qui l'exige (`renonceDepart` l'interdit
 // douze secondes et refait l'itineraire) au lieu de recommencer.
-const DEMI_TOUR_RIEN_T = 8, DEMI_TOUR_RIEN_D = 12;
+const DEMI_TOUR_RIEN_T = 8, DEMI_TOUR_RIEN_D = 8;
 function demiTourFini(c) { c.dTourFin = simTime; c.dTourX = c.x; c.dTourZ = c.z; c.dTour = null; c.recule = false; }
+// CE N'EST PAS L'ENVIE DE TOURNER QU'ON PUNIT, C'EST LA VOIE. `renonceDepart` impose douze
+// secondes de repos, parce qu'il repond a une manoeuvre IMPOSSIBLE (pas la place, quelqu'un
+// arrive en face) : recommencer tout de suite ne servirait a rien. Ici la manoeuvre est
+// possible, elle ne sert juste a rien — c'est le trace qu'il faut changer. Imposer les douze
+// secondes CLOUAIT le vehicule : mesure (test 450, en lot), une voiture immobile 38,6 s en
+// (-2 ; 5) sans aucune raison legale, trois cycles de douze secondes. On interdit donc la voie
+// et on refait l'itineraire, mais on peut retourner dans trois secondes si le nouveau trace
+// l'exige encore.
+function renonceVoieDemiTour(c) {
+  if (c.departVoie != null && c.departVoie >= 0) { c.departNon = c.departVoie; c.departNonT = simTime + DEMI_TOUR_REPOS; }
+  c.departVoie = -1; c.routeRefaire = true; c.dTourStop = simTime + 3;
+}
 function demiTourLance(c, dh) {
   if (!c || (c.dTour && c.dTour.reste > 0)) return;
   if (simTime < (c.dTourStop || 0)) return;
   if (simTime - (c.dTourFin || -99) < DEMI_TOUR_RIEN_T
-    && Math.hypot(c.x - (c.dTourX || 0), c.z - (c.dTourZ || 0)) < DEMI_TOUR_RIEN_D) { renonceDepart(c); return; }
+    && Math.hypot(c.x - (c.dTourX || 0), c.z - (c.dTourZ || 0)) < DEMI_TOUR_RIEN_D) { renonceVoieDemiTour(c); return; }
   if (!placeDemiTour(c)) { renonceDepart(c); return; }
   c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1, h0: c.h };
 }

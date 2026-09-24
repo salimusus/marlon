@@ -6802,7 +6802,7 @@ test('le telephone se connecte vraiment a l\'ecran de jeu, et n\'attend jamais d
       G.manetteFerme();
       // 5) l'écran ne doit jamais cesser d'écouter : on coupe, la veille le remonte
       try { G.tv.peer.destroy(); } catch (e) {} G.tv.peer = null; G.tv.on = false;
-      G.simTime += 10; G.tvVeille();
+      G.simTime += 10; G.tvVeille(true);   // reveil A LA DEMANDE : la veille tourne sur l'horloge du mur (toutes les 3 s), le banc ne peut pas l'attendre
       await attend(120);
       const remonte = !!G.tv.on;
       G.closeUI();
@@ -6825,6 +6825,14 @@ test('quand la manette ne passe pas, elle dit POURQUOI', async p => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const attend = ms => new Promise(r2 => setTimeout(r2, ms));
+    // CE TELEPHONE N'EST PAS L'ECRAN. Le scenario B est « le jeu tourne dans un AUTRE onglet » :
+    // la page d'ici ne doit donc pas heberger elle-meme un salon TV. Le test precedent en laisse
+    // un ouvert, et depuis la version 0.10 la veille tourne toutes les 3 s sur l'horloge du mur
+    // et reecrivait `superobby.hote` avec SON code — le diagnostic « autre onglet » ne se
+    // declenchait alors jamais, on tombait sur celui de la liaison directe.
+    G.tv.on = false; G.tv.code = ''; G.tv.conns.length = 0;
+    try { if (G.tv.peer) G.tv.peer.destroy(); } catch (e) {}
+    G.tv.peer = null; try { G.closeUI(); } catch (e) {}
     const vrai = window.Peer;
     // un faux réseau qui joue une panne précise
     const scene = (panne) => {

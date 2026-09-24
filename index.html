@@ -31487,13 +31487,20 @@ const lienBase = () => location.href.split('#')[0];
 // L'écran de jeu ne doit JAMAIS cesser d'écouter tant qu'il affiche un code : si la liaison
 // tombe (mise en veille, Wi-Fi qui saute), on la remonte toute seule.
 let tvVeilleT = 0;
-function tvVeille() {
-  const now = Date.now(); if (now < tvVeilleT) return;
+// LA VEILLE DE L'ÉCRAN. Elle remonte la liaison quand le pair PeerJS est tombé.
+// ARBITRAGE r76 : la version 0.10 l'a sortie de la boucle de jeu (setInterval, horloge du
+// mur) et elle a raison — un écran de télé qui attend un téléphone ne fait tourner aucune
+// image, donc l'horloge du JEU n'avance pas et la veille ne se serait jamais réveillée.
+// On lui ajoute seulement un réveil À LA DEMANDE (`force`) : c'est ce qu'il faut quand
+// l'enfant rouvre 📺 après une coupure — et c'est la seule façon de la mesurer au banc,
+// qui ne peut pas attendre trois secondes de temps réel par essai.
+function tvVeille(force) {
+  const now = Date.now(); if (!force && now < tvVeilleT) return;
   tvVeilleT = now + 3000;
   // trace locale : elle permet à l'écran manette, ouvert dans un AUTRE onglet du même
   // navigateur, de comprendre pourquoi il n'arrivera jamais à se connecter
   if (tv.on && tv.code && !tv.cede) { try { store.set('superobby.hote', JSON.stringify({ code: tv.code, t: Date.now() })); } catch (e) {} }
-  if (!tv.code || tv.cede || tv.peer || now < (tv.retryAt || 0)) return;
+  if (!tv.code || tv.cede || tv.peer || (!force && now < (tv.retryAt || 0))) return;
   tvHeberge(tv.code);
 }
 setInterval(tvVeille, 3000);

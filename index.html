@@ -1551,7 +1551,7 @@ const worldGroup = new THREE.Group(); scene.add(worldGroup);
 // pour un habitant, chacun avec son ombre portee, donc pres de 500 appels de dessin par mort.
 // Ils ne disparaissent que par vieillissement dans `frame()`, la boucle d'affichage : 1,4 s de
 // vie, mais avec un pas plafonne a 0,05 s il faut VINGT-HUIT IMAGES. Dans le jeu (60 images
-// par seconde) c'est un demi-seconde et rien ne traine — mesure faite : 110 objets au depart,
+// par seconde) c'est une demi-seconde et rien ne traine — mesure faite : 110 objets au depart,
 // 115 au bout de six tours de partie complete (morts, explosions, incendies, police,
 // grenades, changements de monde). DANS LE BANC D'ESSAI, en revanche, un test enchaine des
 // centaines de `step()` dans UN SEUL appel de page sans laisser passer une image : les

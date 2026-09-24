@@ -723,3 +723,132 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : mesuré à la sonde par le poste Finition — le joueur est déplacé de **1,75 m en UNE image**, `P.vel.x` remis à 0, et il se retrouve posé sur une dalle basse en (−49,9 ; 9,2). Aucun test du banc ne le voyait jusqu'ici.
 - **Racine probable** : la résolution axe par axe de `moveAxis` — la sortie « face la plus proche » quand on est déjà dans une boîte, ou un enchaînement marche + mur. C'est la même famille que le défaut n° 80 (le garde-corps de La Zone qui éjectait le joueur de 1,48 m hors de la cage) et que l'éjection de 15,8 m trouvée au round 73.
 - **On devrait voir** : un déplacement continu. Aucun pas ne doit jamais dépasser ce que la vitesse du joueur autorise dans une image.
+
+## CONTRÔLE DU JOUEUR — round 77 (entrées 87 à 99, jouées à la manette DualSense sur `fa07c93`)
+Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4d4-336d04aef788/scratchpad/r77` (scripts `q-*.js`, journaux `q*.log`, images `img/`).
+
+### 87. Mis KO sur une balançoire, l'enfant reste prisonnier de la balançoire : il se balance tout seul et ne peut plus bouger
+- **Gravité** : BLOQUANT (l'enfant n'a plus de personnage ; seul un bouton que rien n'annonce le libère)
+- **Reproduire** : Plaine des Sports, marcher jusqu'aux balançoires (−172 ; −138), △ pour s'asseoir, puis se faire mettre KO (14 coups de 9 ❤️). Reproduit **2/2** (`q-swing.js` et `q-verif.js`, deux mondes neufs indépendants).
+- **On voit** : à t+2 s le relevage du n° 78 fait son travail — ❤️ 100, `P.swing` repasse à faux. **Mais le siège garde son cavalier** : `sw.rider === 'me'` pendant les 30 s suivantes, et `swingTick` repose le joueur sur la planche à chaque image. Le personnage se balance tout seul, y 0,51 → 1,92 → 0,48, cycle de 3,4 s, pendant 28 s. Stick poussé à fond vers une cible à 22 m pendant 400 images : **0 m parcouru**, il est toujours en (−172 ; −137,5). Il n'est pas emmené à l'hôpital, il ne marche pas, il ne court pas, il ne monte pas en voiture. Le seul geste qui le libère est ◯ — et le message qui l'annonçait (« 🎠 ◯ pour sauter de la balançoire ! ») a disparu depuis longtemps, remplacé par la pastille du quartier (« 🏟️ La Plaine des Sports : city-stade… »). Deuxième essai, monde neuf : ❤️ 100, `P.swing` faux, **un siège garde toujours son cavalier**, et 400 images de stick à fond donnent **−0,09 m** de déplacement. Après ◯, tout redevient normal (22 m parcourus, `rider` à zéro).
+- **On devrait voir** : la remise en jeu lâche la balançoire comme elle lâche déjà le volant, le siège et le brancard (`remiseEnJeu()`), et `sitSwing` n'est pas le seul endroit du jeu à savoir décrocher un cavalier.
+- **Capture** : `img/i2-balancoire-prison-3-4.png` — le chat dit « 😵 Joueur77 a été mis KO par Karim_flash », la barre de vie est pleine, et le personnage est suspendu au-dessus de la poutre du portique.
+
+### 88. Au stand de tir, viser les cibles du jeu rend l'enfant recherché par la police (★★★, « éliminer Momo_king »)
+- **Gravité** : GRAVE (le jeu invite à s'entraîner et punit l'entraînement)
+- **Reproduire** : armurerie (67 ; 27), descendre au stand de tir, se placer sur la ligne de tir (67 ; 19), ✕ pour dégainer, L2 pour braquer, R2 sur chacune des trois cibles (8 à 10 balles par cible). Reproduit 2/2 (`qarme.log`, `qq.log`).
+- **On voit** : run 1 — « 🎯 Touché ! », « 🔫 Rechargement… », « 🎯 Touché ! », puis **« 🚔 Infraction : tirer sur Momo_king ! Niveau ★ — file, ils arrivent dans 14 s »** et **« 🚔 Infraction : éliminer Momo_king ! Niveau ★★★ — file, ils arrivent dans 13 s »**. Run 2 — 11 cibles touchées, ★ 1 à l'arrivée. Le stand n'a aucune butte : derrière les trois cibles (z = 11,4) le relevé des solides entre x = 60 et x = 74 sur z = 0 → 11 ne donne que **deux poteaux de 0,5 m de large** (x 60,1 et 72,3) et une dalle de 14 cm ; entre les deux, c'est le parking de l'armurerie (16 × 5 m en (67 ; 6,5)) puis la rue z = 0, où passent les habitants et les voitures.
+- **On devrait voir** : un mur ou une butte pleine derrière les cibles — ou des balles qui s'arrêtent dans la cible. Jamais une étoile pour avoir fait ce que le panneau demande (« 🎯 Stand de tir : dégaine et vise les cibles »).
+- **Capture** : `img/d4-stand-large.png` — on voit à travers les trois cibles la chaussée, son passage piéton et une voiture garée.
+
+### 89. « 🏁 ▢ : lancer la course » — à la manette, ▢ ne lance rien : la course de karts et la course d'anneaux sont injouables
+- **Gravité** : GRAVE (deux modes de jeu entiers — le circuit, ses karts, sa grille de départ et ses adversaires ; les anneaux de l'hélicoptère — n'existent pas pour un enfant qui joue à la manette)
+- **Reproduire** : manette DualSense, aller au portique du circuit (`RACE_C`), lire le message, appuyer sur ▢. Puis monter dans l'hélicoptère et appuyer sur ▢. Reproduit 2/2 (`q-heli3.js`, `q-mort.js`).
+- **On voit** : au circuit, le jeu écrit lui-même **« 🏁 Circuit : △ pour un kart, ▢ pour lancer la course sur l'anneau »**. ▢ → `race.state` reste `idle`. △, ✕, ◯ → `idle` aussi. La touche clavier F, elle, marche : `race.state` passe à `countdown` et l'écran affiche « 🏁 2 ». Dans l'hélicoptère, le message est **« 🚁 ▢ : course d'anneaux »** et ▢ appelle en fait `heliPoser()` : on lit « 🚁 Remise des gaz », l'appareil se pose, la course ne démarre pas.
+- **Racine** : `ctrlText()` traduit « F » par « ▢ » (ligne `\bF\b(?= pour| =| :|\))` → ▢), mais `PAD_MAP` ne contient **aucune** entrée qui envoie `KeyF` : `PAD_MAP[2]` vaut `'KeyV'` (frapper). Le seul `KeyF` du jeu vient du clavier ou du téléphone-manette (`TEL_TOUCHES.course_auto`, qui a bien son bouton « 🏁Course » à l'écran).
+- **On devrait voir** : un vrai bouton de manette qui lance la course, et un message qui nomme CE bouton.
+
+### 90. La cage à grimper ne se grimpe pas : la première barre est à 0,98 m, on butte dedans
+- **Gravité** : GÊNANT (une des sept attractions annoncées de la Plaine des Sports ; de loin on voit une pergola, pas une cage)
+- **Reproduire** : Plaine des Sports, partir de (−162 ; −131) et marcher vers la cage (−162 ; −126), stick à fond. Reproduit 2/2 (`qs2.log`, `qtob.log`).
+- **On voit** : bloqué à (−162 ; −128,98), **275 images (4,6 s) stick à fond sans monter d'un centimètre**. Relevé des solides autour de (−162 ; −126) : les barres sont à **0,98 m, 1,88 m et 2,78 m**, et le plancher du sommet à 3,05 m. Le pas franchissable du joueur est de **0,56 m**. Le commentaire du code annonce pourtant « trois étages de barres, chacun à 0,55 m du précédent ». En sautant (apogée mesurée 2,30 m) on peut se hisser, mais on ne se pose sur aucune barre de 16 cm de large, et le plancher du sommet (dalle pleine de 5 × 5 m) coiffe tout l'ensemble.
+- **On devrait voir** : des barreaux à 0,55 m, comme le dit le commentaire — un enfant doit pouvoir monter au sommet en marchant.
+- **Capture** : `img/a9-cage-pres.png` — la première barre arrive à la poitrine du personnage ; `img/a4-sports-aire.png` (vue d'ensemble : le sommet se lit comme une grande table jaune).
+
+### 91. L'escalier du toboggan de la Plaine des Sports monte à l'envers : on n'atteint la plateforme qu'en sautant
+- **Gravité** : GÊNANT
+- **Reproduire** : Plaine des Sports, marcher vers le toboggan (−172 ; −114) en venant du nord, stick à fond, sans sauter. Reproduit 2/2 (`qs2.log`, `qtob.log`).
+- **On voit** : bloqué à (−172 ; −120,45), **226 images** sans avancer. Relevé des solides de la tour : les marches vont de **0,50 m en z = −116** (celle qui touche la tour) à **2,10 m en z = −119,6** (la plus éloignée) — l'escalier MONTE EN S'ÉLOIGNANT de la tour. La plateforme est à 2,50 m en z = −114 et le mur de la tour fait 2,40 m de haut : depuis la dernière marche il n'y a aucun chemin, et depuis le nord la première chose qu'on rencontre est une face de 2,10 m. Le même trajet avec un saut toutes les 22 images amène bien à y = 2,50 (le saut du jeu culmine à 2,30 m) — mais un enfant ne devine pas qu'il faut sauter par-dessus son propre escalier.
+- **On devrait voir** : un escalier qui monte VERS la tour, comme celui de toutes les autres tours du jeu.
+- **Capture** : `img/a6-toboggan-sud.png` (la glissade cyan, côté sud), `img/a4-sports-aire.png` (les marches grises, côté nord).
+
+### 92. Le ballon du city-stade flotte à 36 cm au-dessus du gazon
+- **Gravité** : COSMÉTIQUE (mais c'est la première chose qu'on regarde en entrant dans la cage)
+- **Reproduire** : Plaine des Sports, city-stade, aller au rond central (−164 ; −175) et regarder le ballon au repos.
+- **On voit** : le ballon repose à y = 1,00 (`ground` = 0,50 + rayon 0,50), donc son bas est à **0,50 m**, alors que le gazon du city-stade est posé à **0,14 m** : **36 cm de vide sous le ballon**. Le ballon du terrain du centre, lui, est juste (`ground` 0,30 + rayon 0,50 = bas à 0,30, pelouse à 0,30).
+- **On devrait voir** : `ballon.ground = 0.14`, comme le gazon sur lequel il est posé.
+- **Bonne nouvelle mesurée au passage** : le but fonctionne — en poussant le ballon vers la cage ouest, « ⚽ BUT ! 1 » et `city.goals` passe bien de 0 à 1.
+- **Capture** : `img/a3-sports-stade.png`.
+
+### 93. Les panneaux des trois quartiers neufs disent « E pour s'asseoir » à un enfant qui joue à la manette
+- **Gravité** : GÊNANT (même famille que les n° 15, 30 et 44 ; ici c'est le décor tout neuf qui parle clavier)
+- **Reproduire** : manette, Plaine des Sports, s'approcher du panneau des balançoires (−172 ; −132). Reproduit sur les cinq panneaux des trois quartiers.
+- **On voit** : gravé sur le panneau, en grand : **« 🎠 Balançoires : E pour s'asseoir »**. Idem « 🎡 Tourniquet : **E** pour monter », « 🐴 Manège à poneys : **E** pour monter », « 🛞 Balançoire-pneu : **E** pour s'asseoir », « 🪺 Balançoires nid d'oiseau : **E** pour s'asseoir » — et six autres en ville (hélico, karts, balançoires du parc, boules, vélos, propulseur), soit onze panneaux. `ctrlText()` traduit bien les messages et la pastille d'action (mesuré : « 🏫 École : … assieds-toi a une table (△) », « 🎠 ◯ pour sauter de la balançoire ! »), mais pas les textures des panneaux, qui sont cuites une fois pour toutes à la construction par `sign()`.
+- **On devrait voir** : le panneau dit le bouton que l'enfant a sous le pouce — ou, à défaut, une formule qui ne nomme aucune touche (« monte sur le tourniquet »).
+- **Capture** : `img/a8-balancoires.png`.
+
+### 94. Le panneau du manège à poneys bouche complètement le manège : en arrivant par l'est, on ne voit qu'une planche de bois
+- **Gravité** : COSMÉTIQUE
+- **Reproduire** : Hameau de la Ferme, arriver au manège à poneys par l'est (le Chemin de la Grange, x = −110), s'arrêter à 7 m.
+- **On voit** : le panneau « 🐴 Manège à poneys » est posé en (−117,5 ; 310) face à l'ouest ; sa face arrière est un aplat de bois nu de **3,45 × 1,65 m**, de 1,70 m à 3,10 m de haut, et il remplit **tout l'écran**. Le manège, son toit de chaume et ses six poneys sont entièrement cachés. `sign()` ne texture que la face avant ; les dix autres panneaux des trois quartiers ont le même dos.
+- **On devrait voir** : le texte des deux côtés, ou le panneau tourné vers le chemin par lequel on arrive.
+- **Capture** : `img/b1-hameau-manege.png`.
+
+### 95. Le chien n'est pas déclaré passager mais voyage quand même dans l'habitacle, à 10 cm du genou de l'ami assis devant
+- **Gravité** : GÊNANT (la nouveauté « on monte à quatre + le chien + le robot » marche pour tout le monde sauf le chien)
+- **Reproduire** : centre, adopter le chien, poser trois amis à côté d'un 4×4 à quatre places, se mettre au volant (△), puis rouler 8 s à R2 40 %. Reproduit 1/1 (`qq.log`).
+- **On voit** : le message annonce **« 🚗 Lucas_2014, MaxiBloc, Ines_gg montent avec toi + Bip 🤖 · 4 places »** — le robot est nommé, **le chien non**, et `c.chien` reste faux. Mais le chien est quand même dans la caisse : il est en (−7,48 ; 0,60 ; 9,95) alors que Lucas_2014, place « avant », est en (−7,50 ; 0,60 ; 9,85) — **10 cm d'écart, même hauteur, tous deux à 0,52 m de l'axe du véhicule**. Il y reste en roulant : sur 480 images et 17,1 m parcourus, son écart à la caisse ne bouge pas d'un centimètre (0,52 m). Le commentaire du code promet pourtant « Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un ».
+- **On devrait voir** : soit le chien monte vraiment (place `chien` de la table, annoncée dans le message), soit il reste dehors et attend — pas un chien qui traverse la carrosserie et se pose sur le passager.
+- **Le reste est bon, et ça se voit** : les trois amis sont bien assis (avant, arrière gauche, arrière droite), tous visibles, à 0,52 et 0,94 m de l'axe, têtes à 1,24 m, et **le n° 79 est réglé** : 8 s de conduite, ★ 0 et les trois amis toujours à 100 ❤️ (ils étaient écrasés au premier mètre au round précédent).
+- **Capture** : `img/e2-quatre-haut.png`.
+
+### 96. Un contact à 2,5 km/h contre une voiture garée déclenche « ACCIDENT ! », la police, et la voiture ne repart plus jamais
+- **Gravité** : GRAVE (c'est le premier geste de l'enfant avec sa première voiture, au parking du centre — le terrain du n° 70)
+- **Reproduire** : parking du centre, se mettre au volant de la voiture la plus proche (−8 ; 10) avec △, R2 à fond **en braquant vers la sortie** (cap visé (0 ; −30), donc un quart de tour à gauche dès le départ). Reproduit 1/1 (`qc.log`, section `place`).
+- **On voit** : à **t = 0,4 s**, alors que la voiture roule à **0,7 m/s (2,5 km/h)**, « 💥 **ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive** ». Et c'est fini : sur 900 images (15 s de simulation), la voiture n'a parcouru que **3,7 m**, **875 images sur 900** sont sous 0,6 m/s, elle a pris **19 % de dégâts** et elle reste figée en (−8,4 ; 6,4), vitesse 0, pendant les 14 s restantes.
+- **Contre-épreuve, à décharge** : la MÊME voiture, R2 à fond **tout droit** sans braquer, fait **46,6 m en 15 s** avec 12 % de dégâts, 80 images lentes sur 900 et aucun accident (`q-verif.js`). Le piège n'est donc pas l'accélérateur, c'est le frôlement de la voisine au moment de sortir de la place — et c'est exactement ce qu'un enfant fait.
+- **On devrait voir** : à 2,5 km/h, un bruit de tôle et un pare-chocs qui recule — pas un constat, pas deux véhicules immobilisés à vie, pas la police.
+
+### 97. Après un KO, l'enfant se réveille à 200 m de là sans que rien ne le lui dise
+- **Gravité** : GÊNANT (le relevage du n° 78 marche ; c'est son récit qui manque)
+- **Reproduire** : centre, profil vierge, se faire mettre KO (14 coups de 9 ❤️), regarder les messages. Reproduit 2/2 (`qm.log`, `q-swing.js`).
+- **On voit** : « 😵 KO par Karim_flash ! −7 🪙 » à t+0, « 🚑 Une ambulance a été appelée » à t+1,2 s, et **1,6 s après le KO** le personnage est déjà debout, 100 ❤️, en (22 ; 0,8 ; 207,9) — l'accueil de l'hôpital, à **200 m** de l'endroit où il est tombé. Le seul message encore à l'écran est **« 🪑 △ : s'asseoir »**. Rien ne dit qu'il a été soigné, ni où il est, ni pourquoi son porte-monnaie est passé de 25 à 18 🪙. Un enfant qui regarde ailleurs une seconde et demie ne saura jamais ce qui s'est passé.
+- **On devrait voir** : une phrase qui RESTE (« Tu t'es réveillé à l'hôpital · −7 🪙 »), et assez de temps pour la lire — 1,6 s, c'est plus court qu'un clignement d'attention.
+
+### 98. Une fusillade à cinq morts ajoute 117 maillages à la scène — et ils y restent
+- **Gravité** : GÊNANT (pas le gouffre annoncé, mais le coût ne redescend jamais)
+- **Reproduire** : centre, rassembler cinq habitants à 5 m, les abattre tous les cinq d'un coup, compter les maillages visibles de la scène avant / au pic / quatre secondes après. Reproduit 1/1 (`qr.log`).
+- **On voit** : **31 943** maillages visibles avant, **32 060** au pic, **32 059** quatre secondes plus tard — alors que les cinq avatars, eux, sont devenus invisibles (`visible: false`, une trentaine de maillages chacun, donc environ −150 qui auraient dû être rendus). Le solde net est donc de l'ordre de **+270 maillages créés pour cinq morts, dont +117 encore là après**. Le pas de simulation passe de **14,06 ms à 16,43 ms (+17 %)** pendant la fusillade.
+- **Ce que je n'ai PAS pu mesurer** : les appels de dessin. Sous swiftshader le banc ne rend qu'une image par seconde et `renderer.info.render.calls` reste bloqué à 1 ; l'avertissement du poste FIABILITÉ (+455 appels pendant une demi-seconde par mort) n'est donc ni confirmé ni infirmé ici. Ce que je peux dire, c'est que la scène ne rend pas ce qu'elle a pris.
+- **On devrait voir** : ce que la scène gagne pendant la fusillade, elle doit le rendre après — un corps effacé doit emporter ses maillages.
+
+### 99. Manette posée, profil vierge : l'enfant est emporté sur 32 m sans avoir touché à rien, et arrive collé à « éjecter le conducteur (gros délit !) »
+- **Gravité** : GÊNANT (1 fois sur 3 ; le personnage part tout seul et finit devant une proposition de délit)
+- **Reproduire** : profil vierge, manette branchée et posée, ne rien faire pendant 320 s de simulation (relevés toutes les 10 s). Reproduit **1 fois sur 3** (`j1.log` oui, `j2.log` et `j3.log` non : dans les deux autres runs le joueur ne bouge pas d'un millimètre sur 320 s).
+- **On voit** : le joueur reste en (0 ; 3,5) de t = 150 s à t = 250 s, puis (1,3 ; 3,5) à 260 s, **(16,3 ; 3,5) à 270 s**, **(31,8 ; 3,7) à 280 s**, et plus rien ensuite — **31,8 m parcourus en 25 s** sans qu'aucune touche ait été pressée ni aucun stick poussé. Juste avant le départ, à t = 250 s : « 🔥 AU FEU ! La caserne envoie le camion ». Pendant le trajet, à t = 275,4 s : **« 🚗 △ : éjecter le conducteur et voler la voiture (gros délit !) »** — l'enfant est déposé contre une voiture conduite, avec un gros délit à portée de pouce.
+- **On devrait voir** : un joueur immobile reste immobile. Si un véhicule de service doit passer là, il contourne ou il klaxonne ; il n'emporte pas l'enfant sur trente mètres.
+- **Ce qui est ACQUIS et qui se voit, sur les trois mêmes runs** : sur 320 s de simulation manette posée, **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, 0 habitant à moins de 6 m à l'arrivée, aucun gang, aucune bagarre, aucune infraction**. Les n° 78, 84 et 85 sont réparés pour de bon — la ville laisse enfin l'enfant tranquille.
+
+### 100. Sur l'écran de l'introduction, un bouton « Exporter la vidéo » relance le film depuis le début
+- **Gravité** : GÊNANT (c'est le tout premier écran du jeu, et c'est un outil de studio posé à côté du bouton « Passer »)
+- **Reproduire** : premier lancement, « Entrer dans Marlon », laisser tourner le film, puis cliquer sur « Exporter la vidéo » (le bouton du milieu des trois). Reproduit 1/1 (`cine3.js`).
+- **On voit** : les trois boutons de la cinématique sont « Son : activé », **« Exporter la vidéo »** et « Passer · Entrée / A ». Au clic, le film **repart de zéro** (`elapsed = 0`), le bouton se grise et l'écran affiche **« Enregistrement de l'introduction · 32 secondes »**. L'enfant qui voulait juste appuyer sur un bouton se retrouve à revoir le film en entier pendant qu'un fichier vidéo de 8 Mbit/s s'enregistre. (Heureusement, « Passer » reste actif pendant l'enregistrement.)
+- **On devrait voir** : pas ce bouton-là devant un enfant — au mieux derrière un `?capture` d'URL, comme le mode capture l'est déjà.
+- **Capture** : `img/j1-export-video.png`, `img/cine-01-t1.png`.
+
+### 101. La « vie » des trois quartiers neufs, ce sont des mannequins de vitrine sur socle blanc — dont quatre plantés sur le terrain de foot
+- **Gravité** : COSMÉTIQUE
+- **Reproduire** : Plaine des Sports, entrer dans le city-stade ; Bois des Aventuriers, aller au feu de camp ; Hameau de la Ferme, aller au marché.
+- **On voit** : les « joueurs du city-stade », le « berger », le « fermier », le « forain », le « ranger », les « campeurs » et le « moniteur » sont des `mannequin()` — c'est-à-dire des mannequins de boutique : immobiles, sans nom, bras écartés, **posés sur un socle gris clair de 1,10 × 1,10 × 0,30 m qui est en plus un SOLIDE**. Sur la pelouse du city-stade, cela fait quatre statues sur piédestal au milieu du terrain, dont une dans la surface de but, et le ballon y rebondit. Au total : 4 à la Plaine des Sports, 4 au Hameau, 4 au Bois.
+- **On devrait voir** : soit de vrais habitants (`bots`, qui marchent et qui parlent, et les trois quartiers en ont déjà les points de flânerie), soit au moins pas de socle de musée sur un terrain de foot.
+- **Capture** : `img/a3-sports-stade.png` (deux socles blancs en plein terrain), `img/c1-bois-parcours.png` (le moniteur sur son socle).
+
+### 102. Le parcours dans les arbres est fermé : on monte l'escalier, on arrive au niveau du plancher, et un garde-corps barre l'entrée
+- **Gravité** : BLOQUANT pour le quartier (c'est LE jeu du Bois des Aventuriers : quatre plateformes, trois passerelles, la cabane au sommet, le drapeau d'arrivée et cinq pièces — rien de tout ça n'est atteignable à pied)
+- **Reproduire** : Bois des Aventuriers, pied de la première tour (125,1 ; 285), monter l'escalier vers le nord, puis avancer vers la plateforme (128 ; 288). Reproduit 2/2 (`q-bois.js`, `q-arbres.js`).
+- **On voit** : l'escalier, lui, est parfait — on monte de 0,14 m à **y = 2,60** en (125,1 ; 289,16), sans une image de blocage, exactement au niveau du plancher de la tour. Et là, plus rien : **464 images (7,7 s) stick à fond vers l'est, arrêté à x = 125,42, à 2,58 m de la plateforme**. La cause est dans `tour()` : le garde-corps est posé sur les QUATRE bords (`[tx, tz−2], [tx, tz+2], [tx−2, tz], [tx+2, tz]`), donc aussi sur le bord **par lequel l'escalier arrive** ; c'est une boîte solide de 2,60 m à 3,70 m, soit 1,10 m au-dessus des pieds du joueur — bien au-delà du pas franchissable de 0,56 m. Le seul moyen d'entrer est de **sauter par-dessus la rambarde** (mesuré : apogée 4,90 m, on retombe à y = 3,90, c'est-à-dire DEBOUT SUR LE GARDE-CORPS).
+- **On devrait voir** : une ouverture dans le garde-corps du côté de l'escalier, sur chacune des quatre tours.
+- **Capture** : `img/c5-bois-haut.png`, `img/c1-bois-parcours.png`.
+
+### CE QUI EST ACQUIS — ce que j'ai joué au round 77 et qui marche
+Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout ce qui suit est mesuré.
+- **La ville laisse enfin l'enfant tranquille** (n° 78, 84, 85). Trois parties « profil vierge, manette posée, on ne touche à rien », 320 s de simulation chacune, relevés toutes les 10 s au-delà des 180 s de calme volontaire : **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, aucun gang, aucune bagarre, aucune infraction, 0 habitant à portée de coup**. C'était le défaut bloquant du round précédent ; il est mort.
+- **On monte vraiment à quatre** (n° 79). Trois amis + le robot + le joueur dans un 4×4 : tous assis à leur place (avant, arrière gauche, arrière droite), tous visibles, à 0,52 et 0,94 m de l'axe, têtes à 1,24 m, rien qui dépasse. Le message les nomme. Et surtout : 8 s de conduite, **★ 0, les trois amis à 100 ❤️** — ils étaient écrasés au premier mètre au round 76.
+- **L'introduction est belle et elle se tient.** 32 s, quatre plans, la ville de nuit rose, l'équipe qui traverse, la conquête ; le texte est net et lisible. Un enfant qui tient déjà la croix au moment où le film démarre **ne le saute pas** (il faut relâcher puis rappuyer — bonne règle, mesurée) ; le stick ne le saute pas non plus. Une fois vue, elle ne revient pas au deuxième lancement (`marlon.intro.seen = action-v2`). Le bouton « Voir l'introduction · 32 s » de l'accueil est là pour la revoir.
+- **Le mode d'emploi PS5 de l'accueil est enfin plié** en une ligne dépliable (« ▶ Comment jouer (clavier, souris, manette PS5) ») — le pavé de 25 lignes du n° 13 a disparu.
+- **La manette est bonne partout ailleurs** : △ monte en voiture, s'assied, ouvre les boutiques et les comptoirs ; ◯ saute et descend des manèges ; ✕ dégaine ; L2 braque et R2 tire (11 cibles touchées au stand) ; R2 accélère et le stick braque au volant ; ◯ fait décoller l'hélicoptère (25,9 m en 4 s) et le stick le déplace ; les messages parlent manette (« assieds-toi à une table (△) », « 🎠 ◯ pour sauter »).
+- **Les jeux des quartiers neufs qui marchent** : balançoires (△ pour s'asseoir, ◯ pour sauter, le message le dit), tourniquet (« 🎡 C'est parti ! (◯ pour descendre) »), skatepark (on monte la rampe en marchant, « 🚀 BOOST ! » en haut), city-stade (« ⚽ BUT ! 1 »), buvette du Stade et marché fermier (le comptoir s'ouvre au △), grand toboggan du Bois, manège à poneys, labyrinthe de paille.
+- **Le tour des lieux répond** : école (« 🏫 École : entre dans une classe, assieds-toi a une table (△) »), banque et ses coffres au 2ᵉ, commissariat (dépôt de plainte), hôpital (« 🏥 △ : se faire soigner »), casino (la roulette s'ouvre au △), cinéma en plein air, garage custom, villa, rue commerçante, marché, dépôt municipal, caserne, plage, fête foraine. Le mode TV grossit bien la pastille d'action (11 → 20,4 px), les messages (50 → 62,4 px) et les étoiles (15 → 26,4 px).
+- **La sortie de la cour de la caserne est dégagée** : camion de pompiers pris au dépôt, 14,1 m parcourus jusqu'à la rue, **1 seule image lente sur 700, 0 % de dégâts**. Des trois points de blocage annoncés par le poste VÉHICULES, celui-là est réglé.
+- **Le labyrinthe de paille tient debout** : ses murs de bottes sont continus, on ne passe pas entre deux bottes — 684 images de stick à fond contre un mur, 0 traversée. C'est un vrai labyrinthe : il faut le contourner, pas le traverser (mon pilote automatique, lui, n'a jamais trouvé le cœur).
+- **L'escalier de la première tour du Bois** monte impeccablement de 0,14 m à 2,60 m sans une image de blocage — c'est la rambarde d'en haut qui gâche tout (n° 102).

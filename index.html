@@ -9992,15 +9992,29 @@ function construireGraphe() {
   // caserne et les cinq engins du depot municipal sont gares en travers du boulevard z = 140,
   // sur vingt-cinq metres de long. Le graphe est bati apres eux, une seule fois : aucun cout
   // par image, et la ronde de police fait le tour du pate de maisons au lieu de la pelouse.
+  // ON NE DECLARE PAS « BOUCHEE » UNE VOIE QU'ON LONGE EN SERRANT UN PEU. Premiere version : UN
+  // SEUL sondage, au milieu de la voie, avec 1,40 m de rayon. Or le mobilier de trottoir mord
+  // legalement jusqu'a 40 cm sur la chaussee (c'est la tolerance des bancs Node), et sur une
+  // desserte de sept metres la voie de droite passe alors a 35 cm du garde-corps : CHAQUE
+  // sondage touchait. Mesure (test 147) : la rue x = 52, le seul axe direct du centre vers
+  // (40 ; 90), avait dur = 8 sur son sens nord — 480 de penalite, plus cher que le tour de la
+  // ville — et l'itineraire filait 26 m plus a l'est par x = 78 : 307 m pour 215 m par la
+  // grille, soit 1,45 fois le chemin prevu. Un vrai conducteur s'ecarte d'un metre et passe. On
+  // sonde donc AUSSI un point decale vers l'axe de la chaussee, et le point ne compte comme
+  // bouche que si les DEUX sont pris — ce qui reste vrai d'un engin gare en travers.
   for (const e of aretes) {
     if (e.liaison) { e.dur = 0; continue; }
     const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), k = Math.max(1, Math.round(L / 4));
-    let dur = 0;
+    const gx = Math.cos(e.sens), gz = -Math.sin(e.sens);   // la GAUCHE de la voie, c'est-a-dire l'axe de la chaussee
+    const dec = Math.min(1.2, (e.larg || 8) / 5);
+    let dur = 0, frotte = 0;
     for (let u = 0; u <= k; u++) {
       const x = e.x0 + (e.x1 - e.x0) * u / k, z = e.z0 + (e.z1 - e.z0) * u / k;
-      if (carBlocked(x, z, null, 1.4, { veh: true })) dur++;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+      if (!carBlocked(x, z, null, 1.4, { veh: true })) continue;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+      if (carBlocked(x + gx * dec, z + gz * dec, null, 1.4, { veh: true })) dur++;   // bouchee : personne ne passe
+      else frotte++;                                                                 // il faut serrer : on passe, mais on prefere une rue propre
     }
-    e.dur = dur;
+    e.dur = dur; e.frotte = frotte;
   }
   // l'arete INVERSE (meme troncon, sens oppose) : c'est elle qu'on interdit, pour ne pas
   // faire demi-tour en pleine rue
@@ -10121,7 +10135,10 @@ function cheminAretes(e0, e1, cibles, arriveesDerriere) {
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
+      // `frotte` : la voie n'est pas bouchee, mais on y longe le mobilier — on la prend s'il n'y
+      // a pas franchement mieux, pas pour gagner trois metres. Huit points de penalite chacun,
+      // contre soixante pour un point VRAIMENT bouche.
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (e2.frotte || 0) * 8 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
       if (cibles) arrive(e2.id, nd, id);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }
@@ -10182,15 +10199,24 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
   // est mesuree depuis `A`, qui depend du cap — le cap tourne des qu'on obeit au trace, la voie
   // gelee sortait de la fenetre et le choix repartait a zero. On la reteste donc DIRECTEMENT.
   if (forceDepart != null && forceDepart >= 0 && forceDepart !== interdit && G.aretes[forceDepart]) {
-    const pf = projVoie(x1, z1, G.aretes[forceDepart]);
+    const eg = G.aretes[forceDepart], pf = projVoie(x1, z1, eg);
     // La fenetre est LARGE a dessein. Elle dit « est-ce que je longe encore cette voie ? », et
     // un vehicule qui manoeuvre, qui double ou qui traine une epave s'en ecarte de dix metres
     // sans l'avoir quittee. Mesure (trajet de remorquage) : a 8 m, le gel lachait des que le
     // camion s'ecartait de sa ligne, la voie d'en face redevenait la moins chere, et le trace
     // basculait entre 455 m et 362 m a chaque recalcul — le camion tournait en rond.
-    if (pf.d <= Math.max(A.d + 6, 14)) {
-      departs.clear(); departs.set(forceDepart, (1 - pf.t) * G.aretes[forceDepart].long * (10 / G.aretes[forceDepart].vmax));
-      if (projVoie(x2, z2, G.aretes[forceDepart]).t < pf.t - 0.001) arriveesDerriere.add(forceDepart);
+    // MAIS ON NE GELE PLUS UNE VOIE QU'ON A DEPASSEE. `projVoie` RABAT la projection sur le
+    // segment : un vehicule qui a franchi le bout de sa voie (il est dans le carrefour, ou deja
+    // engage dans la rue suivante) y projette encore, a t = 1 et a quelques metres — la fenetre
+    // tenait donc, la voie finie restait le seul depart possible, et le trace REPARTAIT DE SON
+    // BOUT, derriere le pare-chocs. Mesure (test 147, trajet (0 ; 0) -> (-92 ; 60)) : 24 s de
+    // ronds dans un carre de huit metres sur la place du centre, 2 488 degres de volant et
+    // 1,55 fois le chemin prevu. On mesure donc le DEPASSEMENT LE LONG de la voie (positif
+    // quand on est au-dela de son bout) et, passe trois metres, le gel tombe.
+    const depasse = (x1 - eg.x1) * Math.sin(eg.sens) + (z1 - eg.z1) * Math.cos(eg.sens);
+    if (pf.d <= Math.max(A.d + 6, 14) && depasse < 3) {
+      departs.clear(); departs.set(forceDepart, (1 - pf.t) * eg.long * (10 / eg.vmax));
+      if (projVoie(x2, z2, eg).t < pf.t - 0.001) arriveesDerriere.add(forceDepart);
     }
   }
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
@@ -10228,7 +10254,19 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
     const cx = e.alongZ ? e.lat : (f.alongZ ? f.lat : n.x);
     const cz = e.alongZ ? (f.alongZ ? n.z : f.lat) : e.lat;
     if (Math.abs(CAP(f.sens - e.sens)) < 0.2) { pousse(cx, cz); continue; }   // tout droit : rien a arrondir
-    const ray = Math.max(1.2, Math.min(4.5, e.long * 0.35, f.long * 0.35));
+    let ray = Math.max(1.2, Math.min(4.5, e.long * 0.35, f.long * 0.35));
+    // LE PREMIER VIRAGE NE S'AMORCE PAS DERRIERE LE PARE-CHOCS. L'arrondi entre dans le virage
+    // quatre metres et demi AVANT le coin. Quand le vehicule est deja A LA HAUTEUR du coin — il
+    // sort d'une place, il est arrete dans le carrefour, il vient de finir sa voie — ce point
+    // d'entree tombe DERRIERE lui : le trace commence par un demi-tour, le demi-tour echoue dans
+    // une venelle de six metres, et la voiture tourne en rond (mesure : test 147, depart (0 ; 0),
+    // le point d'entree du virage etait a 6,8 m en arriere). On borne donc le rayon du PREMIER
+    // virage a ce qu'il reste vraiment a parcourir avant le coin.
+    if (k === 0) {
+      const s0 = Math.sin(e.sens), c0 = Math.cos(e.sens);
+      const avant = cx * s0 + cz * c0 - Math.max(x1 * s0 + z1 * c0, pts[0][0] * s0 + pts[0][1] * c0);
+      if (avant - 0.5 < ray) ray = Math.max(0, avant - 0.5);
+    }
     const ax = cx - Math.sin(e.sens) * ray, az = cz - Math.cos(e.sens) * ray;
     const bx = cx + Math.sin(f.sens) * ray, bz = cz + Math.cos(f.sens) * ray;
     pousse(ax, az);
@@ -10679,6 +10717,15 @@ function traficPlace() {
 // facteur ne traversent « ni les vehicule » : eux testent les quatre coins. Sans ça, une
 // manoeuvre dans la cour du depot faisait passer le coin du fourgon DANS la benne d'a cote
 // (mesure : 57 images de chevauchement par aller-retour).
+// ON S'ARRETE AVANT LA TOLE, PAS DESSUS. Le conducteur pouvait avancer jusqu'au contact EXACT
+// d'une autre carrosserie : `separerVehicules` rouvrait alors les deux centimetres d'air de
+// `contactVehicules`, et le conducteur les refermait a l'image suivante. Les bancs d'essai, dont
+// le test d'axes separateurs n'est PAS strict, comptent un contact exact comme un chevauchement.
+// Mesure (test 332) : 11 images d'affilee de depanneuse « dans » une voiture arretee devant elle
+// — seuil 10 — pour un chevauchement reel de 1,4 cm, sans qu'aucun des deux ne bouge.
+// (declaree ici et non pres de `contactVehicules` : un seul <script>, et `vehiculeMord` tourne
+//  des la construction du monde — une constante declaree plus bas serait en zone morte)
+const JEU_TOLES_CONDUITE = 0.06; // m : l'air que le garde-fou de conduite laisse devant une autre tole
 function vehiculeMord(c, x, z, h) {
   const cs = Math.cos(h), sn = Math.sin(h);
   const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
@@ -10701,6 +10748,14 @@ function vehiculeMord(c, x, z, h) {
   const R = Math.sqrt(A * A + B * B);
   for (const o of solidsAutour(x, z, A + B + 2, true)) {
     if (o === c.solid || o.h > 30) continue;
+    // LE MOBILIER SOLIDIFIE POUR LE JOUEUR N'ARRETE PAS UNE VOITURE. `carBlocked` l'ignore
+    // depuis toujours (« la conduite reste exactement celle d'avant ») ; ce controle-ci, lui,
+    // le comptait — et comme il ne sert QU'aux vehicules de service (`exactVeh`), ils etaient
+    // les seuls du jeu a s'y cogner. Mesure (test 388) : le camion de pompiers dort avec son
+    // arriere dans le vantail decoratif de la caserne (2,9 x 0,20 m en (-40 ; 126)) ; tous ses
+    // pas vers la sortie etaient refuses par ce seul panneau, et il lui fallait vingt-quatre
+    // secondes de glissades laterales pour s'echapper de sa propre cour.
+    if (o.decor) continue;
     if (o.veh && !c.exactVeh) continue;
     if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit
@@ -10712,7 +10767,11 @@ function vehiculeMord(c, x, z, h) {
       for (let k = 0; k < 3; k++) {
         const lx = k === 0 ? B : k === 1 ? 0 : -B;
         const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
-        if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+        // ON S'ARRETE AVANT LA TOLE, PAS DESSUS. Sans cette marge, un vehicule de service
+        // pouvait avancer jusqu'au contact EXACT : la mesure comptait un chevauchement, et
+        // `separerVehicules` rouvrait un jeu que le conducteur refermait a l'image suivante.
+        const mv = o.veh ? JEU_TOLES_CONDUITE : 0;
+        if (Math.abs(px - o.x) < o.w / 2 + mv && Math.abs(pz - o.z) < o.d / 2 + mv) return true;
       }
     }
     // ET LEURS COINS DANS NOTRE CAISSE — MAIS SEULEMENT CEUX D'UN AUTRE VEHICULE.
@@ -10732,7 +10791,7 @@ function vehiculeMord(c, x, z, h) {
       const qx = o.x + (k < 2 ? ox : -ox), qz = o.z + (k % 2 ? oz : -oz);
       const dx2 = qx - x, dz2 = qz - z;
       const lx = dx2 * cs - dz2 * sn, lz = dx2 * sn + dz2 * cs;
-      if (Math.abs(lx) < B && Math.abs(lz) < A) return true;
+      if (Math.abs(lx) < B + JEU_TOLES_CONDUITE && Math.abs(lz) < A + JEU_TOLES_CONDUITE) return true;
     }
   }
   return false;
@@ -10781,6 +10840,48 @@ function vehBloque(c, x, z, h, opt) {
   o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
   return carBlocked(x, z, c.solid, r0, o, 0, h, L) || ((o.mou || !veutVeh) ? false : vehiculeMord(c, x, z, h));
 }
+// DE COMBIEN DEUX CAISSES SE CHEVAUCHENT-ELLES, EXACTEMENT ? `vehiculeMord` rend un oui/non et
+// ne regarde les autres vehicules que pour les vehicules de service (`exactVeh`) ; `vehBloque`,
+// lui, sonde des DISQUES plus larges que la voiture (rayon 1,41 m pour une demi-largeur de
+// 1,20 m) — c'est ce qui empeche les toles de se toucher, mais c'est aussi pourquoi il repond
+// « je suis deja dedans » bien avant que les rectangles ne se touchent vraiment.
+// La manoeuvre de degagement a besoin de la vraie mesure : elle s'autorise a tourner sur place
+// quand elle est deja encastree, et avec la reponse grossiere elle s'autorisait a tourner ALORS
+// QU'ELLE NE L'ETAIT PAS ENCORE — donc a planter son coin dans le voisin (voir le garde-fou de
+// `traficRoule`). On repond ici par le theoreme des axes separateurs sur les deux rectangles
+// orientes, exactement comme le fait le banc d'essai qui compte les chevauchements.
+function coinsVeh(v, x, z, h) {
+  const cs = Math.cos(h), sn = Math.sin(h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+  return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [x + lx * cs + lz * sn, z - lx * sn + lz * cs]);
+}
+function penetrationToles(c, x, z, h) {
+  flotteMaj();
+  const P1 = coinsVeh(c, x, z, h);
+  const port = (c.baseD || 4.4) / 2 + 6;
+  let pire = 0;
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    if (c.remorque && v === c.remorque) continue;   // l'epave au crochet nous suit
+    if (Math.abs(v.x - x) > port || Math.abs(v.z - z) > port) continue;
+    const P2 = coinsVeh(v, v.x, v.z, v.h || 0);
+    let mn = Infinity;
+    for (const [U, V] of [[P1, P2], [P2, P1]]) {
+      for (let i = 0; i < 4; i++) {
+        const nx = U[(i + 1) % 4][1] - U[i][1], nz = U[i][0] - U[(i + 1) % 4][0];
+        const nl = Math.hypot(nx, nz) || 1;
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of U) { const d = q[0] * nx + q[1] * nz; if (d < a1) a1 = d; if (d > a2) a2 = d; }
+        for (const q of V) { const d = q[0] * nx + q[1] * nz; if (d < b1) b1 = d; if (d > b2) b2 = d; }
+        if (a2 < b1 || b2 < a1) { mn = 0; break; }
+        const ch = Math.min(a2 - b1, b2 - a1) / nl;
+        if (ch < mn) mn = ch;
+      }
+      if (mn === 0) break;
+    }
+    if (mn > pire) pire = mn;
+  }
+  return pire;
+}
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
@@ -10810,16 +10911,48 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
   // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
   // est dans un solide et pas l'ancien, on annule la rotation de cette image.
-  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
+  // « BLOQUE AVANT COMME APRES » N'AUTORISE PAS A TOURNER DANS LE VOISIN. Ce garde-fou annulait
+  // la rotation quand le nouveau cap etait pris ET PAS L'ANCIEN ; deux vehicules cote a cote
+  // sont tous les deux « pris » (les disques de `vehBloque` sont plus larges que la caisse), et
+  // la rotation redevenait libre — celui qui manoeuvrait vissait alors son coin dans l'autre.
+  // Mesure (test 333) : la depanneuse prioritaire, immobile a cote d'une voiture rangee, lui
+  // enfoncait son arriere de 0,63 m en tournant de 0,08 rad. Quand les deux caps sont pris, on
+  // tranche donc sur la VRAIE profondeur de chevauchement (rectangles orientes) : on ne tourne
+  // pas si ca l'aggrave. Le calcul exact ne se fait QUE dans ce cas — en circulation libre le
+  // premier test repond « rien devant » et rien de plus n'est calcule.
+  if (h0 != null && h0 !== c.h) {
+    const gene = vehBloque(c, c.x, c.z, c.h, o);
+    if (gene && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
+    else if (gene && penetrationToles(c, c.x, c.z, c.h) > penetrationToles(c, c.x, c.z, h0) + 1e-9) c.h = h0;
+  }
+  // LE MODE MOU SERT A SORTIR D'UN ENCASTREMENT, PAS A EN CREUSER UN. Le controle ci-dessus,
+  // comme les deux pas ci-dessous, passe par `vehBloque` — et le mode mou y COUPE les autres
+  // caisses (`o.veh = false`). Pendant toute la manoeuvre de degagement, ni la rotation ni la
+  // marche arriere ne voyaient donc une seule tole. Mesure (test 333) : une voiture rangee pour
+  // la sirene se degageait a cote de la depanneuse prioritaire et reculait DEDANS en lui
+  // vissant son arriere — 291 images de chevauchement, profondeur portee de 0,02 m a 1,10 m en
+  // cinq secondes, pour un seuil de ZERO chevauchement. On mesure donc la VRAIE profondeur de
+  // chevauchement (rectangles orientes) et, en mode mou, on n'accepte de rotation ni de pas qui
+  // l'AGGRAVE : tout ce qui desencastre reste libre, et c'est tout ce dont la manoeuvre a besoin.
+  let penMou = -1;   // -1 : on n'est pas en mode mou, rien de tout cela ne se calcule
+  if (o.mou) {
+    penMou = penetrationToles(c, c.x, c.z, h0 != null ? h0 : c.h);
+    if (h0 != null && h0 !== c.h) {
+      const pa = penetrationToles(c, c.x, c.z, c.h);
+      if (pa > penMou + 1e-9) c.h = h0; else penMou = pa;
+    }
+  }
   const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
-  let bloque = 0, posSaine = false;
-  if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
+  let bloque = 0, posSaine = false, pmou = 0;
+  if (!vehBloque(c, nx, c.z, c.h, o)
+    && (penMou < 0 || (pmou = penetrationToles(c, nx, c.z, c.h)) <= penMou + 1e-9)) { c.x = nx; if (penMou >= 0) penMou = pmou; } else bloque++;
   // `posSaine` : quand le pas en z passe, la question posee est EXACTEMENT celle du controle
   // final plus bas — memes x, z, cap et memes options. On retient la reponse au lieu de la
   // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
   // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
-  if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
+  if (!vehBloque(c, c.x, nz, c.h, o)
+    && (penMou < 0 || (pmou = penetrationToles(c, c.x, nz, c.h)) <= penMou + 1e-9)) { c.z = nz; posSaine = true; if (penMou >= 0) penMou = pmou; } else bloque++;
   // ON SORT DE CE DANS QUOI ON EST DEJA — MAIS SEULEMENT DE CA.
   // Le garde-fou refuse tout pas dont l'arrivee touche une autre caisse, et le filet plus bas
   // ramene le vehicule a sa derniere position VERIFIEE. Les deux se retournent contre nous des
@@ -15233,8 +15366,29 @@ function policeVoit(o, portee = 45) {
   if (simTime < (o.vueT || 0) && simTime > o.vueT - 0.3) return o.vue;
   o.vueT = simTime + 0.25;
   const oy = (o.y || 0) + 1.5;
-  const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d, dy = (P.pos.y + 1.2 - oy) / d;
-  o.vue = castSolids(o.x, oy, o.z, dx, dy, dz, d, true).d >= d - 0.6;
+  // UN POTEAU N'EST PAS UNE CACHETTE ; UN BATIMENT EN EST UNE. On ne tirait qu'UN rayon, du
+  // pare-brise vers la poitrine. Un piquet de 0,36 x 0,36 m plante a un metre du joueur
+  // suffisait donc a le rendre invisible : la voiture en concluait « plus de contact depuis
+  // deux secondes », vidait ses deux agents DES LA PREMIERE IMAGE de la poursuite, posait
+  // `pc.debarque` — et restait figee la jusqu'a la fin de la traque. Pour l'enfant, une
+  // poursuite qui s'arrete sans raison. Mesure (poursuite ordinaire, releve du controleur) :
+  // a l'image 0 le rayon butait a 10,82 m sur les 12, sur le poteau de (-38 ; 9,1).
+  // On tire donc TROIS rayons, ecartes d'un metre en travers de la ligne de vue et vises a
+  // trois hauteurs : genoux, poitrine, tete. Il faut que LES TROIS soient bouches pour qu'on
+  // ne voie rien — c'est-a-dire un vrai obstacle, pas un piquet.
+  // MESURE, 480 lignes de vue tirees dans toute la ville a douze metres : 406 voyaient (85 %)
+  // avec un rayon, 415 (86 %) avec trois, et AUCUNE n'est perdue. Les neuf lignes gagnees
+  // etaient toutes bouchees par un poteau de 0,36 a 0,48 m. Derriere un vrai batiment
+  // (16 x 10 m), les trois rayons restent bouches : se cacher marche toujours.
+  const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d;
+  const gx = -dz, gz = dx;   // en travers de la ligne de vue
+  o.vue = false;
+  for (const [lat, haut] of [[0, 1.2], [-0.5, 0.9], [0.5, 1.7]]) {
+    const cx = P.pos.x + gx * lat, cz = P.pos.z + gz * lat, cy = P.pos.y + haut;
+    const dd = Math.hypot(cx - o.x, cz - o.z); if (dd < 0.4) { o.vue = true; break; }
+    const ux = (cx - o.x) / dd, uz = (cz - o.z) / dd, uy = (cy - oy) / dd;
+    if (castSolids(o.x, oy, o.z, ux, uy, uz, dd, true).d >= dd - 0.6) { o.vue = true; break; }
+  }
   return o.vue;
 }
 // Le joueur est-il à couvert ? 'planque' = garage à semer la police, 'batiment' = sous un toit.
@@ -15805,7 +15959,16 @@ function policeTick(dt) {
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
-    if (pc.debarque) { pc.speed = 0; policeVoitureTire(pc, hidden); continue; }   // les agents sont descendus : la voiture attend devant le bâtiment, mais le conducteur riposte toujours
+    // LES AGENTS SONT DESCENDUS : la voiture attend devant le bâtiment, mais le conducteur
+    // riposte toujours. ELLE NE RESTE PAS FIGÉE POUR AUTANT. `pc.debarque` n'était levé qu'à la
+    // fin de la traque (`policeRepli`) : une voiture qui avait lâché ses agents ne repartait
+    // plus JAMAIS, même quand le fuyard repassait devant son capot — et il suffisait d'un
+    // débarquement prématuré (voir le poteau de `policeVoit`) pour l'immobiliser toute la
+    // poursuite. Dès qu'on le revoit à découvert et qu'il est loin d'ici, elle se remet en
+    // chasse ; ses agents, eux, continuent à pied.
+    if (pc.debarque && pc.active && police.wanted > 0 && !hidden
+      && simTime - (police.vuT || -999) < 0.5 && Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z) > 18) pc.debarque = false;
+    if (pc.debarque) { pc.speed = 0; policeVoitureTire(pc, hidden); continue; }
     // envoyée sur un accident : c'est accidentsTick qui la pilote (par les voies, sirène
     // allumée). ON NE REMET PLUS SA VITESSE À ZÉRO ICI : policeTick passe AVANT servicesTick,
     // et remettre le compteur à zéro à chaque image empêchait la voiture de prendre de la
@@ -26608,7 +26771,18 @@ function degageService(c, dt) {
   const wp = R && R.length ? R[Math.min(c.ia.i, R.length - 1)] : null;
   if (!wp) return false;
   const dh = CAP(Math.atan2(wp[0] - c.x, wp[1] - c.z) - c.h);
+  // ON NE TOURNE PAS DANS LE VOISIN NON PLUS. Le pas de sortie etait bien refuse s'il touchait
+  // une autre tole, mais LE BRAQUAGE, lui, n'etait jamais annule : un vehicule de service qui
+  // sort de son hangar pivotait son arriere dans la caisse d'a cote et l'y laissait. C'est le
+  // meme defaut que la marche arriere de `rouleVers` (cap de depart releve apres le braquage).
+  // ON COMPARE LA PROFONDEUR, PAS UN OUI/NON. Premiere version : on refusait tout braquage qui
+  // TOUCHE une autre tole. Mesure (test 332) : le velo du facteur, gare serre sous l'abri du
+  // depot entre deux engins, ne pouvait plus tourner du tout — 77 m de tournee en 225 s au lieu
+  // de 468, et la depanneuse remontait a 24 images d'affilee encastree. Le hangar est justement
+  // l'endroit ou les caisses SE TOUCHENT DEJA : on n'y interdit donc que ce qui AGGRAVE.
+  const h0d = c.h;
   c.h += clamp(dh, -1, 1) * 1.8 * dt;
+  if (penetrationToles(c, c.x, c.z, c.h) > penetrationToles(c, c.x, c.z, h0d) + 1e-9) c.h = h0d;
   const v = 3;
   const nx = c.x + Math.sin(c.h) * v * dt, nz = c.z + Math.cos(c.h) * v * dt;
   // On sort d'un MUR, jamais d'un VEHICULE : le camion de pompiers qui se degageait d'un
@@ -26752,8 +26926,15 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
     if (c.srvEchecs >= 2) { c.grilleJusqua = simTime + 25; c.ia = null; c.departVoie = -1; }
   }
   if (simTime < (c.srvRecul || 0)) {
-    c.h += (c.srvSens || 1) * 0.9 * dt;
+    // LE CAP D'AVANT, PAS CELUI D'APRES. On relevait `h0r` APRES avoir braque : `avanceVehicule`
+    // recevait donc un cap de depart EGAL au cap d'arrivee, son garde-fou « la rotation
+    // rentre-t-elle dans quelque chose ? » ne se declenchait jamais, et la marche arriere de
+    // degagement d'un vehicule de service tournait LIBREMENT dans ce qui l'entourait.
+    // Mesure (test 332) : la depanneuse, en manoeuvre avec son epave au crochet, a tourne de
+    // 0,59 rad en 14 images en vissant son coin dans une voiture arretee au feu — 14 images
+    // d'affilee de chevauchement pour un seuil de 10, alors qu'elle n'avancait pas d'un metre.
     const h0r = c.h;
+    c.h += (c.srvSens || 1) * 0.9 * dt;
     avanceVehicule(c, dt, -3, { bar: true, veh: true }, h0r);
     c.speed = 0; c.v = 0; c.ia = null; c.recule = true; c.stopped = false;
     return Math.hypot(tx - c.x, tz - c.z);

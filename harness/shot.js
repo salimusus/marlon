@@ -2275,6 +2275,7 @@ window.__G = {
   agentTue: typeof agentTue === 'function' ? agentTue : null,
   arrestation: typeof arrestation === 'function' ? arrestation : null,
   separerVehicules: typeof separerVehicules === 'function' ? separerVehicules : null,
+  contactVehicules: typeof contactVehicules === 'function' ? contactVehicules : null,   // poste Circulation
   vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
   camLibres: typeof camLibres === 'function' ? camLibres : null,
   venirAMoi: typeof venirAMoi === 'function' ? venirAMoi : null,

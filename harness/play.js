@@ -1281,6 +1281,10 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   //  parce qu'a 4,8 m dans une halle de vingt-quatre metres on ne voyait rien. Le seuil de ce
   //  test passe donc de 4,2 a 6,2 m : ce qu'il garantit reste « dedans, on est plus pres que
   //  dehors, et devant un objet plus pres encore ».)
+  // (round 77 : la perche POSEE de ce hall vaut 4,84 m. Elle valait 6,54 m tant que la taille
+  //  de la piece etait prise au lancer de rayons, qui sortait par la porte et faisait passer un
+  //  hall de 6,5 x 8,5 m pour une halle de quinze metres — capture a l'appui, la camera sortait
+  //  du batiment et l'enfant se voyait tout petit au fond d'une porte.)
   const dedans = await lis(() => __G.cam.dist < 6.2);
   await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
   const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);

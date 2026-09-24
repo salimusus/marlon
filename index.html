@@ -30840,10 +30840,12 @@ function camPerche(dt, aiming) {
       // UNE PORTE OUVERTE FAISAIT PASSER UN HALL POUR UNE HALLE (round 77, poste CAMÉRA). La
       // mesure au lancer de rayons sort par la porte et par la vitrine : dans le hall d'immeuble
       // (pièce déclarée de 6,5 × 8,5 m) elle rendait 7,6 m d'encombrement, c'est-à-dire une salle
-      // de quinze mètres, et la maison de poupée reculait à 6,54 m. Regardé en capture : vers le
-      // nord et le sud l'image passe, mais vers l'est la caméra sort du bâtiment et l'on voit
-      // l'enfant tout petit au fond d'une porte, et vers l'ouest le comptoir d'accueil mange la
-      // moitié basse de l'écran. À 4,8 m les quatre côtés sont propres. Quand la pièce est
+      // de quinze mètres, et la maison de poupée reculait à 6,54 m. Regardé en capture, les quatre
+      // côtés : au nord et au sud l'image passe, mais à l'est la caméra SORT du bâtiment et l'on
+      // voit l'enfant tout petit au fond d'une porte, dans une façade restée opaque ; à 4,84 m
+      // elle reste dedans et cadre le hall entier. (À l'ouest le comptoir d'accueil mange la
+      // moitié basse de l'écran dans les deux cas : là c'est la ligne de vue qui commande, pas
+      // la longueur voulue — le joueur est collé au comptoir.) Quand la pièce est
       // DÉCLARÉE (interieurEntre pose son rectangle), on connaît sa vraie taille : on la prend
       // si elle est plus petite que ce que voient les rayons. Le minimum des deux, donc : un
       // salon encombré reste petit, et une grande halle (24 × 38 m) garde ses 7,4 m.

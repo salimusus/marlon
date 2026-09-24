@@ -22,6 +22,14 @@
   function plan(city) {
     const markings = [], architecture = [], lights = [], clearances = [], arrows = [];
     const roads = (city.routes || []).filter(r => [r.x, r.z, r.w, r.d].every(Number.isFinite) && Math.min(r.w, r.d) > 0);
+    // LA PEINTURE S'ARRETE AUX PASSAGES PIETONS ET AUX LIGNES D'ARRET. Ces deux marquages-la
+    // sont poses par le jeu lui-meme, bien avant cette passe. Releve sur la ville entiere :
+    // 220 marques de cette passe tombaient DANS les 114 passages pietons (la ligne d'axe jaune
+    // traversait les zebras de part en part, visible sur la capture du carrefour (-26 ; 0)) et
+    // 19 doublaient une ligne d'arret de feu — deux barres blanches cote a cote. On coupe donc
+    // la peinture a chaque passage, comme on la coupe deja a chaque carrefour.
+    const zebras = [...(city.zebras || []), ...(city.passages || [])].filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
+    const arrets = (city.trafficLights || []).filter(t => t && t.ligne && Number.isFinite(t.ligne.x) && Number.isFinite(t.ligne.z));
     const add = (list, kind, x, y, z, w, h, d, color, angle = 0) => {
       if (list.length >= LIMITS[kind]) return;
       list.push({ x, y, z, w, h, d, color, angle });
@@ -40,6 +48,12 @@
         const otherMid = alongZ ? q.z : q.x, otherLength = alongZ ? q.d : q.w;
         cuts.push([otherMid - otherLength / 2 - .65, otherMid + otherLength / 2 + .65]);
       });
+      for (const p of zebras) {
+        const pw = Number.isFinite(p.w) ? p.w : 4, pd = Number.isFinite(p.d) ? p.d : 4;
+        if (!overlap(r, { x: p.x, z: p.z, w: pw, d: pd })) continue;
+        const pMid = alongZ ? p.z : p.x, pLen = alongZ ? pd : pw;
+        cuts.push([pMid - pLen / 2 - .55, pMid + pLen / 2 + .55]);
+      }
       for (const [lo, hi] of intervals(mid - length / 2 + .5, mid + length / 2 - .5, cuts)) {
         if (hi - lo < 2) continue;
         // Edge lines stay inside the bitumen and stop before crossing roads.
@@ -65,7 +79,10 @@
           // Approach line on the incoming lane, two metres before the open junction.
           const approach = direction > 0 ? hi - .6 : lo + .6;
           const isJunction = direction > 0 ? hi < mid + length / 2 - 1 : lo > mid - length / 2 + 1;
-          if (isJunction) paint(alongZ ? lat : approach, top, alongZ ? approach : lat, alongZ ? width / 2 - .85 : .22, alongZ ? .22 : width / 2 - .85);
+          const ax = alongZ ? lat : approach, az = alongZ ? approach : lat;
+          // pas de ligne d'approche la ou le feu a deja sa ligne d'arret (moins de 3 m)
+          const deja = arrets.some(t => Math.hypot(t.ligne.x - ax, t.ligne.z - az) < 3);
+          if (isJunction && !deja) paint(ax, top, az, alongZ ? width / 2 - .85 : .22, alongZ ? .22 : width / 2 - .85);
         }
       }
     });

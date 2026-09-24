@@ -10007,13 +10007,14 @@ function construireGraphe() {
     const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), k = Math.max(1, Math.round(L / 4));
     const gx = Math.cos(e.sens), gz = -Math.sin(e.sens);   // la GAUCHE de la voie, c'est-a-dire l'axe de la chaussee
     const dec = Math.min(1.2, (e.larg || 8) / 5);
-    let dur = 0;
+    let dur = 0, frotte = 0;
     for (let u = 0; u <= k; u++) {
       const x = e.x0 + (e.x1 - e.x0) * u / k, z = e.z0 + (e.z1 - e.z0) * u / k;
-      if (carBlocked(x, z, null, 1.4, { veh: true })   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
-        && carBlocked(x + gx * dec, z + gz * dec, null, 1.4, { veh: true })) dur++;
+      if (!carBlocked(x, z, null, 1.4, { veh: true })) continue;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+      if (carBlocked(x + gx * dec, z + gz * dec, null, 1.4, { veh: true })) dur++;   // bouchee : personne ne passe
+      else frotte++;                                                                 // il faut serrer : on passe, mais on prefere une rue propre
     }
-    e.dur = dur;
+    e.dur = dur; e.frotte = frotte;
   }
   // l'arete INVERSE (meme troncon, sens oppose) : c'est elle qu'on interdit, pour ne pas
   // faire demi-tour en pleine rue
@@ -10134,7 +10135,10 @@ function cheminAretes(e0, e1, cibles, arriveesDerriere) {
     const n = G.noeuds[A[id].vers];
     for (const m of n.manoeuvres) {
       if (m.de !== id) continue;
-      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
+      // `frotte` : la voie n'est pas bouchee, mais on y longe le mobilier — on la prend s'il n'y
+      // a pas franchement mieux, pas pour gagner trois metres. Huit points de penalite chacun,
+      // contre soixante pour un point VRAIMENT bouche.
+      const e2 = A[m.vers], nd = d + e2.long * (10 / e2.vmax) + (COUT_MANOEUVRE[m.type] || 0) + (e2.liaison ? 45 : 0) + (e2.dur || 0) * 60 + (e2.frotte || 0) * 8 + (G.barrees && G.barrees.has(e2.id) ? 4000 : 0);
       if (cibles) arrive(e2.id, nd, id);
       if (nd < dist[e2.id]) { dist[e2.id] = nd; prev[e2.id] = id; push(e2.id, nd); }
     }

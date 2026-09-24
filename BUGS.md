@@ -783,3 +783,11 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : le panneau « 🐴 Manège à poneys » est posé en (−117,5 ; 310) face à l'ouest ; sa face arrière est un aplat de bois nu de **3,45 × 1,65 m**, de 1,70 m à 3,10 m de haut, et il remplit **tout l'écran**. Le manège, son toit de chaume et ses six poneys sont entièrement cachés. `sign()` ne texture que la face avant ; les dix autres panneaux des trois quartiers ont le même dos.
 - **On devrait voir** : le texte des deux côtés, ou le panneau tourné vers le chemin par lequel on arrive.
 - **Capture** : `img/b1-hameau-manege.png`.
+
+### 95. Le chien n'est pas déclaré passager mais voyage quand même dans l'habitacle, à 10 cm du genou de l'ami assis devant
+- **Gravité** : GÊNANT (la nouveauté « on monte à quatre + le chien + le robot » marche pour tout le monde sauf le chien)
+- **Reproduire** : centre, adopter le chien, poser trois amis à côté d'un 4×4 à quatre places, se mettre au volant (△), puis rouler 8 s à R2 40 %. Reproduit 1/1 (`qq.log`).
+- **On voit** : le message annonce **« 🚗 Lucas_2014, MaxiBloc, Ines_gg montent avec toi + Bip 🤖 · 4 places »** — le robot est nommé, **le chien non**, et `c.chien` reste faux. Mais le chien est quand même dans la caisse : il est en (−7,48 ; 0,60 ; 9,95) alors que Lucas_2014, place « avant », est en (−7,50 ; 0,60 ; 9,85) — **10 cm d'écart, même hauteur, tous deux à 0,52 m de l'axe du véhicule**. Il y reste en roulant : sur 480 images et 17,1 m parcourus, son écart à la caisse ne bouge pas d'un centimètre (0,52 m). Le commentaire du code promet pourtant « Le CHIEN a sa place à lui : assis sur la banquette, jamais sur les genoux de quelqu'un ».
+- **On devrait voir** : soit le chien monte vraiment (place `chien` de la table, annoncée dans le message), soit il reste dehors et attend — pas un chien qui traverse la carrosserie et se pose sur le passager.
+- **Le reste est bon, et ça se voit** : les trois amis sont bien assis (avant, arrière gauche, arrière droite), tous visibles, à 0,52 et 0,94 m de l'axe, têtes à 1,24 m, et **le n° 79 est réglé** : 8 s de conduite, ★ 0 et les trois amis toujours à 100 ❤️ (ils étaient écrasés au premier mètre au round précédent).
+- **Capture** : `img/e2-quatre-haut.png`.

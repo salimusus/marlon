@@ -12449,6 +12449,7 @@ test('le carre pose l\'helicoptere tout seul, la gachette gauche baisse le joueu
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : __SHOT.go() relache la manette, et un appui ne tombe jamais dans la meme lecture que son apparition (la manette est lue 120 fois/s)
     const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
     const clic = i => { bt(i, 1); G.pollGamepad(1 / 60); bt(i, 0); G.pollGamepad(1 / 60); };
     const res = {};
@@ -14118,6 +14119,7 @@ test('au volant d\'un engin de chantier, le carré de la manette actionne l\'out
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : __SHOT.go() relache la manette, et un appui ne tombe jamais dans la meme lecture que son apparition (la manette est lue 120 fois/s)
     const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
     const carre = () => { bt(2, 1); G.pollGamepad(1 / 60); bt(2, 0); G.pollGamepad(1 / 60); };
     const res = {};
@@ -15183,6 +15185,7 @@ test('la gâchette gauche dégaine et braque la cible la plus proche, les flèch
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : __SHOT.go() relache la manette, et un appui ne tombe jamais dans la meme lecture que son apparition (la manette est lue 120 fois/s)
     const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
     const clic = i => { bt(i, 1); G.pollGamepad(1 / 60); bt(i, 0); G.pollGamepad(1 / 60); };
     const res = {};
@@ -15596,6 +15599,7 @@ test('accueil à la manette : la bague est sur « Jouer » dès que la manette p
     const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.tagName) : null; };
     const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : __SHOT.go() relache la manette, et un appui ne tombe jamais dans la meme lecture que son apparition (la manette est lue 120 fois/s)
     const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.05); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); };
     const res = {};
     try {
@@ -15735,6 +15739,7 @@ test('armes à la manette : ✕ sort l\'arme, L2 verrouille SANS la rengainer, R
     P.facing = Math.PI; G.cam.yaw = 0; G.cam.freeUntil = 0;
     const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : __SHOT.go() relache la manette, et un appui ne tombe jamais dans la meme lecture que son apparition (la manette est lue 120 fois/s)
     const tap = (i, v = 1) => { ds.buttons[i] = { pressed: true, value: v }; G.pollGamepad(0.05); G.step(1 / 60, true); ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.05); G.step(1 / 60, true); };
     const lire = () => (document.getElementById('msg').textContent || '').trim();
     const res = {};

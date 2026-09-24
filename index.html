@@ -18117,8 +18117,15 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // et une part CARRÉE qui garde la grande vitesse pour le bord du stick.
 const CAM_MORTE = 0.075;       // zone morte RONDE du stick droit : juste au-dessus de la dérive d'une DualSense usée (5 % sur les DEUX axes font 7,07 % en diagonale — mesuré : 0,9 °/s de rotation parasite avec 6 %)
 const CAM_LIN = 0.35;          // part linéaire de la courbe de visée ; le reste est en carré
-const CAM_VYAW = 3.8;          // rad/s au bord ; zone morte et sensibilité réglables dans le menu
-const CAM_VPITCH = 2.4;        // le cadrage vertical est plus fin que le demi-tour horizontal
+// ARBITRAGE DE FUSION (round 76). La version 0.10 avait ramené ces deux vitesses à 3,8 et
+// 2,4 rad/s. Mesuré au banc (test 396) avec ces valeurs : 217,7 °/s au bord du stick pour
+// 280 à 340 exigés, 59,3 °/s à mi-course pour 60 au minimum — on n'arrive plus à se retourner
+// d'un coup de pouce, ce dont le joueur se plaignait justement au round 71 (« la manette n'est
+// pas au point avec la caméra »). On garde donc les valeurs du round 71, mesurées : 315 °/s au
+// bord, 94 °/s à mi-course (30 % du maximum), et un rapport vertical/horizontal de 0,62 qui
+// donne le MÊME ressenti sur les deux axes.
+const CAM_VYAW = 5.5;          // rad/s au bord du stick, horizontal (315 °/s : de quoi se retourner d'un coup de pouce)
+const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal, le ratio qui donne le MÊME ressenti
 // REGARDER LE CIEL. La butée haute était à -0,15 rad (-8,6°) arme rangée : on ne voyait ni le
 // haut des tours, ni l'hélicoptère, ni le ciel — l'image se bloquait net. Elle descend à
 // -0,5 rad (-29°) ; c'est camPerche qui raccourcit alors la perche pour que l'objectif ne
@@ -29794,7 +29801,7 @@ function padStick(x, y, morte = settings.padDeadzone || .12) {
   return MarlonControls.radial(x, y, morte);
 }
 function padVisee(x, y) {
-  return MarlonControls.radial(x, y, settings.padDeadzone || .12, true);
+  return MarlonControls.radial(x, y, CAM_MORTE, true);
 }
 const padController = MarlonControls.createController();
 function padContexte() {
@@ -29849,7 +29856,20 @@ function pollGamepad(dt) {
   const baisse = pad.l2 && aPied && !braque;
   if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse || keys.has('KeyC') || keys.has('ControlLeft')); }
   pad.l2Bas = pad.l2;
-  const [vx, vy] = frame.look;
+  // LE STICK DROIT N'EST JAMAIS MIS EN QUARANTAINE (arbitrage de fusion, round 76). La version
+  // 0.10 fait passer le regard par `frame.look`, qui hérite de la règle « au changement de
+  // contexte, un axe déjà poussé reste bloqué tant qu'on ne l'a pas relâché ». Cette règle est
+  // bonne pour les BOUTONS (une croix maintenue en fermant le menu ne doit pas tirer) mais
+  // catastrophique pour la caméra : le premier relevé de la manette est TOUJOURS un changement
+  // de contexte, donc un joueur qui pousse déjà le stick droit — ou qui sort de la cinématique
+  // d'introduction en le tenant — se retrouve avec une caméra morte jusqu'à ce qu'il le lâche.
+  // Mesuré au banc : 0 °/s de rotation dans les tests 397, 398, 400, 401 et 416, c'est-à-dire
+  // cinq essais sur neuf rendus rouges par cette seule ligne. Derrière le stick droit il n'y a
+  // aucune action destructrice à retenir : on lit donc les axes bruts, avec la courbe de VISÉE
+  // du round 71 (zone morte ronde CAM_MORTE = 7,5 %, part linéaire CAM_LIN). La zone morte du
+  // menu (settings.padDeadzone, 12 %) mangeait au passage la poussée légère à 12 % de course :
+  // mesuré 0 °/s là où il en faut entre 2 et 25 (test 396) ; avec CAM_MORTE, 5,9 °/s.
+  const [vx, vy] = padVisee(L.rx, L.ry);
   const seconds = Number.isFinite(dt) ? clamp(dt, 0, .05) : 0;
   const sens = clamp(Number.isFinite(settings.sensib) ? settings.sensib : 1, .5, 2) * (P.aim ? .5 : 1);
   cam.yaw -= vx * seconds * CAM_VYAW * sens;

@@ -2450,6 +2450,15 @@ window.__G = {
   TRAFIC: typeof TRAFIC !== 'undefined' ? TRAFIC : null,
   VILLE: typeof VILLE !== 'undefined' ? VILLE : null,
   rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
+  // LA BOUCLE D'AFFICHAGE ELLE-MEME (poste FIABILITE, round 78). Les morceaux d'explosion,
+  // les impacts et les ondes de choc ne meurent QUE dans frame() : un test qui enchaine des
+  // step() ne les voit jamais disparaitre, et toute mesure de « ce que la scene garde apres
+  // une mort » y est donc fausse. En exposant frame() et son horloge, un test peut jouer une
+  // vraie partie longue — images comprises — sans dependre du temps reel (le banc ne rend
+  // qu'une image par seconde sous swiftshader : 28 images de vieillissement prendraient
+  // une demi-minute de mur).
+  frame: typeof frame === 'function' ? frame : null,
+  clock: typeof clock !== 'undefined' ? clock : null,
   detailsLOD: typeof detailsLOD === 'function' ? detailsLOD : null,
   detailsInit: typeof detailsInit === 'function' ? detailsInit : null,
   ombresMobilesTick: typeof ombresMobilesTick === 'function' ? ombresMobilesTick : null,

@@ -18174,6 +18174,33 @@ function fxTrainee(x, y, z, facing, pied) {
   }
 }
 function fxClear() { for (const f of fx) { EPHEMERES.remove(f.m); f.mat.dispose(); } fx.length = 0; }
+// ================= LES EPHEMERES VIEILLISSENT DANS LA SIMULATION, PLUS AU DESSIN ==========
+// MESURE (poste FIABILITE, round 78). Les morceaux d'explosion et les effets d'impact ne
+// vieillissaient que dans frame(), la boucle d'AFFICHAGE. Consequence : tout ce qui fait
+// avancer le jeu SANS rendre d'image les laissait vivre pour toujours. Mesure a la sonde,
+// cinq habitants abattus puis quatre secondes de simulation sans une seule image : 611
+// morceaux toujours accroches au groupe des ephemeres, soit +620 maillages visibles qui ne
+// redescendent JAMAIS. Et ils sont invisibles au garde-fou existant : celui-ci compte
+// `scene.children`, or les 611 morceaux sont UN cran plus bas, dans le groupe `ephemeres`.
+// Le banc d'essai est le cas extreme (un test enchaine des centaines de step() dans un seul
+// appel de page), mais ce n'est pas un defaut « de banc » : le jeu lui-meme fait tourner
+// jusqu'a huit pas de simulation pour une seule image quand ca rame, et la cinematique
+// d'introduction comme le mode « manette seule » sortent de loop() AVANT frame().
+// La reparation est a la source : le vieillissement part dans step(), avec le reste de la
+// simulation. Un morceau vit donc exactement le meme temps DE JEU qu'avant (l'accumulateur
+// de frame() distribue le meme dt total aux pas qu'il distribuait a l'image), mais il meurt
+// aussi quand personne ne regarde. Appele AVANT le « if (!active) return » de step, comme
+// avant : un joueur a terre (active = false) doit voir les morceaux de sa propre mort
+// retomber.
+function ephemeresTick(dt) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i]; d.t += dt; d.vel.y -= (d.tiny ? 12 : G) * dt; d.m.position.addScaledVector(d.vel, dt);
+    d.m.rotation.x += d.ang.x * dt; d.m.rotation.y += d.ang.y * dt; d.m.rotation.z += d.ang.z * dt;
+    if (d.tiny) { const s = Math.max(0.05, 1 - d.t / d.life); d.m.scale.setScalar(s); }
+    if (d.t > d.life) { EPHEMERES.remove(d.m); debris.splice(i, 1); }
+  }
+  fxTick(dt);
+}
 // LA SECOUSSE DE CAMÉRA : un coup qui porte se sent aussi à l'image.
 function camSecousse(amp = 0.18, duree = 0.22) {
   cam.shake = Math.max(cam.shake || 0, amp); cam.shakeT = Math.max(cam.shakeT || 0, simTime + duree);
@@ -24796,6 +24823,12 @@ function step(dt, active) {
   // l'appel ne serait jamais atteint et rien ne pourrait plus relever l'enfant — c'est
   // exactement le blocage de 175 s mesuré par le contrôleur.
   try { relevageTick(); } catch (eRel) {}
+  // LES EPHEMERES VIEILLISSENT ICI, dans la simulation (voir ephemeresTick) : avant, les
+  // morceaux d'explosion et les impacts ne mouraient que dans la boucle d'affichage, et tout
+  // ce qui simule sans rendre d'image les gardait pour toujours. Comme relevageTick, l'appel
+  // est AVANT la sortie « !active » : les morceaux de la mort du joueur doivent retomber
+  // meme quand il est a terre.
+  try { ephemeresTick(dt); } catch (eEph) {}
   if (!active) return;
   if (city.on) cityStep(dt);
   if (city.lift || (city.lifts && city.lifts.length)) villaTick(dt);   // ascenseurs, portail, garage : mis à jour avant le déplacement du joueur
@@ -31491,13 +31524,6 @@ function frame() {
   for (const c of clouds) { c.position.x += c.userData.speed * dt; if (c.position.x > 60) c.position.x = -60; }
   for (const a of decoSpin) { a.rotation.y += dt * 0.25; a.rotation.x += dt * 0.1; }
   if (city.rings.length) city.rings.forEach((r, i) => { const cur = hrace.on && i === hrace.next, done = hrace.on && i < hrace.next; r.m.material.emissiveIntensity = cur ? 0.7 + 0.3 * Math.sin(simTime * 8) : 0.5; r.m.material.color.set(cur ? 0xffd23f : done ? 0x8f98ab : 0x3ef2ff); r.m.material.emissive.set(cur ? 0xd4a800 : done ? 0x333333 : 0x1e8fa0); r.m.scale.setScalar(cur ? 1.08 + 0.05 * Math.sin(simTime * 8) : 1); });
-  for (let i = debris.length - 1; i >= 0; i--) {
-    const d = debris[i]; d.t += dt; d.vel.y -= (d.tiny ? 12 : G) * dt; d.m.position.addScaledVector(d.vel, dt);
-    d.m.rotation.x += d.ang.x * dt; d.m.rotation.y += d.ang.y * dt; d.m.rotation.z += d.ang.z * dt;
-    if (d.tiny) { const s = Math.max(0.05, 1 - d.t / d.life); d.m.scale.setScalar(s); }
-    if (d.t > d.life) { EPHEMERES.remove(d.m); debris.splice(i, 1); }
-  }
-  fxTick(dt);
   animMondeTick(dt);   // poste Animation : les feux qui brûlent, la dépanneuse et l'ambulance qui manœuvrent
   // le tableau s'ecrit meme quand l'interface de la classe est ouverte (le jeu est en pause,
   // mais la craie, elle, doit continuer sous les yeux du joueur)

@@ -2585,6 +2585,10 @@ window.__G = {
   JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
   buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
   // ---- POSTE QUARTIERS (quartiers neufs, mobilier, jeux) : exports apres cette ligne-repere ----
+  groundAt: typeof groundAt === 'function' ? groundAt : null,
+  solSousHabitant: typeof solSousHabitant === 'function' ? solSousHabitant : null,
+  habitantsTick: typeof habitantsTick === 'function' ? habitantsTick : null,
+  get habitants() { return typeof city !== 'undefined' ? (city.habitants || []) : []; },
   lacheBalancoire: typeof lacheBalancoire === 'function' ? lacheBalancoire : null,
   consigneProche: typeof consigneProche === 'function' ? consigneProche : null,
   updateAct: typeof updateAct === 'function' ? updateAct : null,

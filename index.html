@@ -2744,6 +2744,79 @@ function mannequin(x, z, ry, look) {   // mannequin habillé (vrai avatar, sans 
   av.rig.armL.rotation.z = 0.25; av.rig.armR.rotation.z = -0.25; city.mannequins.push(av);
   box(x, 0.3, z, 1.1, 0.3, 1.1, 0xc9ced8, { studs: false, noRoute: true }); return av;
 }
+// ================= LES HABITANTS DES TROIS QUARTIERS NEUFS =================
+// n° 101 du contrôleur, et c'est une remarque de joueur, pas de testeur : « la vie des trois
+// quartiers, ce sont douze mannequins de vitrine sur socle blanc solide, dont quatre plantés
+// sur le terrain de foot ». C'était exact : les « joueurs du city-stade », le berger, le
+// fermier, le forain, le ranger, les campeurs et le moniteur étaient des `mannequin()`,
+// c'est-à-dire des mannequins de boutique — immobiles, sans nom, bras écartés, chacun sur un
+// socle gris de 1,10 × 1,10 × 0,30 m QUI EST UN SOLIDE. Sur la pelouse du city-stade cela
+// faisait deux statues sur piédestal en plein terrain, dont le ballon rebondissait.
+// `habitant()` fait d'eux ce que l'enfant demandait : des gens. Même recette que les médecins
+// de l'hôpital et les employés de la banque, les seuls PNJ de la ville qui vivent sans être
+// l'un des douze `bots` : un vrai avatar, un NOM au-dessus de la tête, une tournée de points
+// qu'il fait à pied (`npcMove`, donc il contourne les obstacles), la marche animée, et une
+// phrase quand le joueur s'approche. Pas de socle : ils posent les pieds par terre.
+// LE SOL SOUS LES PIEDS D'UN HABITANT. `groundAt()` ne convient pas ici : il ratisse à 0,90 m
+// à la ronde et rend le dessus du solide le PLUS HAUT du coin — mesuré, il posait les trois
+// commerçants DEBOUT SUR LEUR COMPTOIR (1,10 m) et le supporter en l'air au-dessus du premier
+// rang des gradins (il avait attrapé le deuxième rang, 0,50 m plus haut). On cherche donc le
+// dessus le plus haut qui soit VRAIMENT sous les pieds (0,30 m de marge, la demi-largeur d'un
+// personnage) et à portée de jambe : jusqu'à 0,60 m au-dessus (une marche qu'on monte) et
+// 1,50 m en dessous (le talus d'où l'on descend). Au-delà, c'est un toit ou une passerelle.
+function solSousHabitant(x, z, yRef) {
+  let top = 0;
+  for (const o of solidsAutour(x, z, 1.2, true)) {
+    if (o.h > 30) continue;
+    const t = o.y + o.h / 2;
+    if (t > yRef + 0.6 || t < yRef - 1.5) continue;
+    if (Math.abs(x - o.x) < o.w / 2 + 0.3 && Math.abs(z - o.z) < o.d / 2 + 0.3) top = Math.max(top, t);
+  }
+  return top;
+}
+function habitant(x, z, nom, look, pts, mots) {
+  const av = buildAvatar(Object.assign({ name: nom, jersey: 0, pants: PAL.pants[1], cap: null, num: 1 }, look));
+  const y = solSousHabitant(x, z, 0.2);   // 0,20 m : on part du niveau de la rue, pas du comptoir
+  av.group.position.set(x, y, z); av.tag.visible = true; renommeEtiquette(av, nom);
+  city.mannequins.push(av);   // pour que le changement de monde le retire de la scène
+  city.habitants.push({ av, nom, x, z, y, pts: (pts && pts.length) ? pts : [[x, z]],
+    i: 0, wait: rnd(0.5, 3), facing: av.group.rotation.y, mots: mots || null, sayT: 0, coince: 0 });
+  return av;
+}
+function habitantsTick(dt) {
+  for (const h of city.habitants) {
+    const pt = h.pts[h.i], dx = pt[0] - h.x, dz = pt[1] - h.z, dist = Math.hypot(dx, dz);
+    if (dist < 0.5 || h.pts.length < 2) {
+      h.wait -= dt;
+      if (h.wait <= 0 && h.pts.length > 1) { h.i = (h.i + 1) % h.pts.length; h.wait = rnd(2, 6); }
+      animateRig(h.av.rig, 'idle', 0, dt, simTime);
+    } else {
+      const o = { x: h.x, y: h.y, z: h.z }, av = 1.5 * dt;
+      npcMove(o, dx / dist * av, dz / dist * av, 0.4);
+      // UN HABITANT NE POUSSE PAS UN MUR POUR L'ÉTERNITÉ. Si son point est devenu inatteignable
+      // (un banc déplacé, une rampe rebâtie), il y renonce au bout de 2 s et passe au suivant —
+      // sans quoi on retrouverait exactement ce qu'on vient d'enlever : quelqu'un d'immobile.
+      if (Math.hypot(o.x - h.x, o.z - h.z) < av * 0.25) {
+        h.coince += dt;
+        if (h.coince > 2) { h.i = (h.i + 1) % h.pts.length; h.coince = 0; }
+      } else h.coince = 0;
+      h.x = o.x; h.z = o.z; h.facing = Math.atan2(dx, dz);
+      animateRig(h.av.rig, 'walk', 1.5, dt, simTime);
+    }
+    // IL SUIT LE SOL. Sa hauteur était fixée une fois pour toutes au moment où on le posait :
+    // mesuré sur 60 s, la bergère finissait 0,68 m EN L'AIR au-dessus de l'enclos et le forain
+    // 1,18 m DANS la piste du manège. Il monte une marche d'un coup (c'est un pas) et il
+    // redescend à 8 m/s (c'est une chute), comme n'importe qui.
+    const sol = solSousHabitant(h.x, h.z, h.y);
+    h.y = sol > h.y ? sol : Math.max(sol, h.y - 8 * dt);
+    h.av.group.position.set(h.x, h.y, h.z);
+    let dh = h.facing - h.av.group.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    h.av.group.rotation.y += dh * Math.min(1, dt * 8);
+    if (h.mots && Math.hypot(P.pos.x - h.x, P.pos.z - h.z) < 5 && simTime > h.sayT) {
+      h.sayT = simTime + rnd(18, 32); bubble(h.av, pickOne(h.mots));
+    }
+  }
+}
 function lamp(x, z) {   // lampadaire cassable
   const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
   const post = new THREE.Mesh(unitBox, lam(0x3b4252)); post.scale.set(0.18, 4.4, 0.18); post.position.y = 2.2; post.castShadow = true; g.add(post);
@@ -9123,7 +9196,9 @@ function buildSports() {
     { e: '💧', n: 'Bouteille d\'eau', p: 1, f: -1, d: 'La meilleure amie du sportif.' },
     { e: '🍫', n: 'Barre de céréales', p: 2, f: 3, d: 'Le coup de fouet du deuxième mi-temps.' },
     { e: '💪', n: 'Shake protéiné', p: 4, f: -2, m: 3, d: 'Pour repartir en forme.' }], 0x35d0e6);
-  mannequin(-128, -146.4, 0, { jersey: 2, hat: 'cap' });
+  city.habitants = city.habitants || [];
+  habitant(-128, -146.4, 'Malik · buvette', { jersey: 2, hat: 'cap' }, null,
+    ['un grand soda ? il est frais !', 'tu as vu le but de tout à l\'heure ?', 'la barre de céréales, c\'est mon conseil']);
   // les tables de ping-pong : dessus a 0,76 m, donc SOLIDES (au-dessus du pas franchissable
   // de 0,56 m). Le filet, lui, fait 15 cm de haut : sous le seuil de 0,35 m, il ne sera
   // jamais solidifie — on ne se cogne pas dans un filet de ping-pong.
@@ -9187,11 +9262,23 @@ function buildSports() {
   // ces points de flanerie donnent aux bots une raison d'y venir a pied.
   city.wander.push([-150, 0.3, -120], [-128, 0.3, -130], [-164, 0.3, -160], [-133, 0.3, -160],
     [-172, 0.3, -130], [-150, 0.3, -148], [-150, 0.3, -186], [-128, 0.3, -140]);
-  // les joueurs du city-stade et les spectateurs des gradins : le quartier n'est jamais vide
-  mannequin(-158, -178, Math.PI / 2, { jersey: 3, hat: 'cap' });
-  mannequin(-170, -172, -Math.PI / 2, { jersey: 6 });
-  mannequin(-166, -162.5, Math.PI, { jersey: 10, glasses: true });
-  mannequin(-138, -168, 0, { jersey: 8, jacket: 3 });
+  // LES HABITANTS DE LA PLAINE (n° 101). C'étaient quatre mannequins de vitrine sur socle
+  // blanc, dont DEUX en plein terrain — le ballon leur rebondissait dessus. Ce sont maintenant
+  // quatre habitants qui font leur tournée à pied : deux joueurs qui courent d'un but à
+  // l'autre, un supporter qui longe le premier rang des gradins, un curieux au skatepark.
+  city.habitants = city.habitants || [];
+  habitant(-158, -178, 'Ilyes', { jersey: 3, hat: 'cap' },
+    [[-158, -178], [-153, -171], [-161, -169], [-168, -180]],
+    ['passe ! passe !', 'on joue jusqu\'à cinq buts', 'tu veux jouer avec nous ?']);
+  habitant(-170, -172, 'Nina', { jersey: 6 },
+    [[-170, -172], [-176, -179], [-167, -182], [-173, -169]],
+    ['j\'en suis à trois buts', 'la cage est ouverte, entre !', 'à toi !']);
+  habitant(-171, -162.8, 'Papi Georges', { jersey: 10, glasses: true, jacket: 2 },
+    [[-171, -162.8], [-157, -162.8]],
+    ['de mon temps on jouait sur du gravier', 'allez les petits !', 'joli, ça, joli']);
+  habitant(-145, -180, 'Sofia', { jersey: 8, jacket: 3 },
+    [[-145, -180], [-145, -166], [-148, -172]],
+    ['le boost est en haut de la rampe', 'je regarde avant d\'essayer', 'la planche, c\'est dur au début']);
   for (const [cx, cz] of [[-150, -120], [-164, -170], [-133, -170], [-128, -134], [-172, -132], [-150, -186]]) coin(cx, 0.3, cz);
   city.zones.push({ name: 'Plaine des Sports', emoji: '🏟️', x1: SPORTS.x1, x2: SPORTS.x2, z1: SPORTS.z1, z2: SPORTS.z2,
     hint: '🏟️ La Plaine des Sports : city-stade (marque des buts), skatepark, balançoires, tourniquet, cage à grimper, toboggan et la buvette — E devant le comptoir' });
@@ -9329,7 +9416,9 @@ function buildHameau() {
     { e: '🍯', n: 'Pot de miel', p: 4, f: 6, d: 'Des ruches du verger. Ça colle aux doigts.' },
     { e: '🍎', n: 'Panier de pommes', p: 3, f: -3, d: 'Croquantes et acidulées.' },
     { e: '🍓', n: 'Confiture de fraises', p: 3, f: 7, d: 'Faite hier, encore chaude.' }], 0x5cc453);
-  mannequin(-127, 277.4, 0, { jersey: 5, hat: 'cap' });
+  city.habitants = city.habitants || [];
+  habitant(-127, 277.4, 'Jeanne · marché', { jersey: 5, hat: 'cap' }, null,
+    ['la confiture a été faite hier', 'les pommes sont du verger d\'à côté', 'goûte le miel, tu m\'en diras des nouvelles']);
   sign(-127, 0.16, 270, '🧺 Marché fermier', false, 0);
   // ---- L'AIRE DE JEUX DU HAMEAU ----
   // LE MANEGE A PONEYS : le meme mecanisme que le carrousel de la fete foraine (city.rides),
@@ -9417,9 +9506,17 @@ function buildHameau() {
   // ---- L'ACTIVITE ----
   city.wander.push([-145, 0.3, 276], [-127, 0.3, 280], [-145, 0.3, 300], [-127, 0.3, 294],
     [-162, 0.3, 288], [-145, 0.3, 320], [-120, 0.3, 300], [-160, 0.3, 272]);
-  mannequin(-156, 282, -Math.PI / 2, { jersey: 9, hat: 'cap', jacket: 1 });   // le fermier devant la grange
-  mannequin(-162, 302, 0, { jersey: 7 });                                     // le berger, pres de l'enclos
-  mannequin(-124, 294, Math.PI, { jersey: 4, hat: 'cap' });                   // le forain du manege
+  // LES HABITANTS DU HAMEAU (n° 101) : le fermier fait le tour de sa grange, le berger longe
+  // l'enclos, le forain tourne autour de son manège. Plus de socle, plus de bras écartés.
+  habitant(-156, 282, 'Gilles · fermier', { jersey: 9, hat: 'cap', jacket: 1 },
+    [[-156, 282], [-148, 279], [-148, 289], [-157, 289]],
+    ['le tracteur démarre au quart de tour', 'les vaches sont dans l\'enclos', 'attention où tu mets les pieds !']);
+  habitant(-162, 302, 'Awa · bergère', { jersey: 7, hair: 2, hairColor: 1, skirt: true },
+    [[-162, 302], [-157, 307], [-166, 307], [-166, 297]],
+    ['les brebis rentrent au coucher du soleil', 'tu as vu le labyrinthe de paille ?', 'ne cours pas, tu vas les effrayer']);
+  habitant(-124, 294, 'Rico · forain', { jersey: 4, hat: 'cap' },
+    [[-124, 294], [-120, 299], [-120, 289]],
+    ['🎠 un tour de poney ? monte !', 'le manège tourne toute la journée', 'tiens-toi bien à la crinière']);
   for (const [cx, cz] of [[-145, 276], [-127, 282], [-162, 300], [-145, 316], [-119, 296], [-137, 292]]) coin(cx, 0.3, cz);
   city.zones.push({ name: 'Hameau de la Ferme', emoji: '🚜', x1: HAMEAU.x1, x2: HAMEAU.x2, z1: HAMEAU.z1, z2: HAMEAU.z2,
     hint: '🚜 Le Hameau de la Ferme : manège à poneys, labyrinthe de paille, balançoire-pneu, l\'enclos et ses bêtes, le moulin — E devant le marché fermier' });
@@ -9672,7 +9769,9 @@ function buildBois() {
     { e: '🍎', n: 'Pomme du verger', p: 1, f: -3, d: 'Pour la route.' },
     { e: '🔦', n: 'Lampe frontale', p: 8, d: 'Le bois est sombre sous les sapins.' },
     { e: '🧭', n: 'Boussole', p: 6, d: 'Pour ne plus jamais tourner en rond.' }], 0x5cc453);
-  mannequin(169, 286.4, 0, { jersey: 5, hat: 'cap', jacket: 1 });
+  city.habitants = city.habitants || [];
+  habitant(169, 286.4, 'Hugo · boutique', { jersey: 5, hat: 'cap', jacket: 1 }, null,
+    ['la gourde se remplit à la borne', 'sous les sapins il fait sombre, prends la lampe', 'bonne balade !']);
   // l'aire de pique-nique : quatre tables de bois, SOLIDES (plateau a 0,76 m)
   // Sur la capture « bois-camp », les tables n'etaient que trois pavés bruns colles : on ne
   // lisait ni le plateau, ni les bancs, ni les pieds. Plateau clair en debord, pieds en V
@@ -9742,9 +9841,21 @@ function buildBois() {
   // ---- L'ACTIVITE ----
   city.wander.push([152, 0.3, 280], [135, 0.3, 296], [169, 0.3, 300], [152, 0.3, 320],
     [169, 0.3, 288], [135, 0.3, 324], [152, 0.3, 340], [128, 0.3, 306]);
-  mannequin(166, 300, -Math.PI / 2, { jersey: 8, hat: 'cap' });     // le ranger, au feu de camp
-  mannequin(163, 296, 0, { jersey: 3 });                            // deux campeurs a la table
-  mannequin(133, 288, Math.PI / 2, { jersey: 11, jacket: 3 });      // le moniteur du parcours
+  // LES HABITANTS DU BOIS (n° 101) : le ranger fait sa ronde autour du feu, un campeur va et
+  // vient entre sa table et le ruisseau, et le moniteur attend au PIED de la première tour du
+  // parcours dans les arbres — c'est lui qu'on croise en arrivant, il dit par où l'on monte.
+  habitant(166, 300, 'Yanis · ranger', { jersey: 8, hat: 'cap' },
+    [[166, 300], [160, 304], [170, 306], [172, 298]],
+    ['le feu, on ne s\'en approche pas', 'la cabane est au bout du parcours', 'on rentre avant la nuit']);
+  habitant(163, 296, 'Lila · campeuse', { jersey: 3, hair: 2, hairColor: 0, skirt: true },
+    [[163, 296], [158, 292], [167, 292]],
+    ['on dort sous la tente ce soir', 'tu as trouvé les cinq pièces ?', 'il y a des grenouilles dans le ruisseau']);
+  // sa tournée reste AU PIED du parcours, à l'écart de l'escalier de la première tour
+  // (x 124,25 à 125,95 ; z 285,2 à 288,3) : mesuré, en passant par (126 ; 290) il montait
+  // l'escalier jusqu'à 2,60 m puis retombait de la plateforme au point suivant.
+  habitant(127, 283, 'Théo · moniteur', { jersey: 11, jacket: 3 },
+    [[127, 283], [133, 283], [129, 280]],
+    ['🌲 l\'escalier est là, à l\'ouest de la première tour', 'on marche, on ne saute pas : ça monte tout seul', 'le drapeau est sur la cabane, tout en haut']);
   city.zones.push({ name: 'Bois des Aventuriers', emoji: '🌲', x1: BOIS.x1, x2: BOIS.x2, z1: BOIS.z1, z2: BOIS.z2,
     hint: '🌲 Le Bois des Aventuriers : le parcours dans les arbres (quatre plateformes, trois passerelles, la cabane au sommet), le grand toboggan, le camp, le feu et les balançoires nid d\'oiseau' });
 }
@@ -16912,7 +17023,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.habitants = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => scene.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -28706,6 +28817,7 @@ function cityVie(dt) {
   safe('jouets', () => jouetsTick(dt));   // poste DRONE & ROBOT
   safe('sons du monde', () => sonsVille(dt));   // pas des bots, rotor, ambiance du quartier, accueils parles
   if (city.docs) safe('médecins', () => docsTick(dt));
+  if (city.habitants && city.habitants.length) safe('habitants des quartiers', () => habitantsTick(dt));
   safe('fumée', () => fumeeTick(dt)); safe('feu des véhicules', () => feuxVehiculesTick(dt)); safe('parking', () => meterTick(dt)); safe('villa', () => villaTick(dt)); safe('basket', () => hoopTick(dt)); safe('déco', () => parcelTick(dt));
   if (city.swings.length && !P.swing) swingTick(dt); boulesTick(dt);   // (plus de rafale : le tir est automatique, un appui = un coup)
   const jetNear = !!city.jetSpot && Math.hypot(P.pos.x - city.jetSpot.x, P.pos.z - city.jetSpot.z) < 2.6; if (jetNear !== city.jetNear) { city.jetNear = jetNear; if (jetNear && !isMobile) msg(P.jet ? '🚀 E : ranger le propulseur' : '🚀 E : enfiler le propulseur', 1200); }

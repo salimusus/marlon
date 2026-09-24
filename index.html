@@ -10713,6 +10713,15 @@ function traficPlace() {
 // facteur ne traversent « ni les vehicule » : eux testent les quatre coins. Sans ça, une
 // manoeuvre dans la cour du depot faisait passer le coin du fourgon DANS la benne d'a cote
 // (mesure : 57 images de chevauchement par aller-retour).
+// ON S'ARRETE AVANT LA TOLE, PAS DESSUS. Le conducteur pouvait avancer jusqu'au contact EXACT
+// d'une autre carrosserie : `separerVehicules` rouvrait alors les deux centimetres d'air de
+// `contactVehicules`, et le conducteur les refermait a l'image suivante. Les bancs d'essai, dont
+// le test d'axes separateurs n'est PAS strict, comptent un contact exact comme un chevauchement.
+// Mesure (test 332) : 11 images d'affilee de depanneuse « dans » une voiture arretee devant elle
+// — seuil 10 — pour un chevauchement reel de 1,4 cm, sans qu'aucun des deux ne bouge.
+// (declaree ici et non pres de `contactVehicules` : un seul <script>, et `vehiculeMord` tourne
+//  des la construction du monde — une constante declaree plus bas serait en zone morte)
+const JEU_TOLES_CONDUITE = 0.06; // m : l'air que le garde-fou de conduite laisse devant une autre tole
 function vehiculeMord(c, x, z, h) {
   const cs = Math.cos(h), sn = Math.sin(h);
   const A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
@@ -10754,7 +10763,11 @@ function vehiculeMord(c, x, z, h) {
       for (let k = 0; k < 3; k++) {
         const lx = k === 0 ? B : k === 1 ? 0 : -B;
         const px = x + lx * cs + lz * sn, pz = z - lx * sn + lz * cs;
-        if (Math.abs(px - o.x) < o.w / 2 && Math.abs(pz - o.z) < o.d / 2) return true;
+        // ON S'ARRETE AVANT LA TOLE, PAS DESSUS. Sans cette marge, un vehicule de service
+        // pouvait avancer jusqu'au contact EXACT : la mesure comptait un chevauchement, et
+        // `separerVehicules` rouvrait un jeu que le conducteur refermait a l'image suivante.
+        const mv = o.veh ? JEU_TOLES_CONDUITE : 0;
+        if (Math.abs(px - o.x) < o.w / 2 + mv && Math.abs(pz - o.z) < o.d / 2 + mv) return true;
       }
     }
     // ET LEURS COINS DANS NOTRE CAISSE — MAIS SEULEMENT CEUX D'UN AUTRE VEHICULE.
@@ -10774,7 +10787,7 @@ function vehiculeMord(c, x, z, h) {
       const qx = o.x + (k < 2 ? ox : -ox), qz = o.z + (k % 2 ? oz : -oz);
       const dx2 = qx - x, dz2 = qz - z;
       const lx = dx2 * cs - dz2 * sn, lz = dx2 * sn + dz2 * cs;
-      if (Math.abs(lx) < B && Math.abs(lz) < A) return true;
+      if (Math.abs(lx) < B + JEU_TOLES_CONDUITE && Math.abs(lz) < A + JEU_TOLES_CONDUITE) return true;
     }
   }
   return false;
@@ -26898,8 +26911,15 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
     if (c.srvEchecs >= 2) { c.grilleJusqua = simTime + 25; c.ia = null; c.departVoie = -1; }
   }
   if (simTime < (c.srvRecul || 0)) {
-    c.h += (c.srvSens || 1) * 0.9 * dt;
+    // LE CAP D'AVANT, PAS CELUI D'APRES. On relevait `h0r` APRES avoir braque : `avanceVehicule`
+    // recevait donc un cap de depart EGAL au cap d'arrivee, son garde-fou « la rotation
+    // rentre-t-elle dans quelque chose ? » ne se declenchait jamais, et la marche arriere de
+    // degagement d'un vehicule de service tournait LIBREMENT dans ce qui l'entourait.
+    // Mesure (test 332) : la depanneuse, en manoeuvre avec son epave au crochet, a tourne de
+    // 0,59 rad en 14 images en vissant son coin dans une voiture arretee au feu — 14 images
+    // d'affilee de chevauchement pour un seuil de 10, alors qu'elle n'avancait pas d'un metre.
     const h0r = c.h;
+    c.h += (c.srvSens || 1) * 0.9 * dt;
     avanceVehicule(c, dt, -3, { bar: true, veh: true }, h0r);
     c.speed = 0; c.v = 0; c.ia = null; c.recule = true; c.stopped = false;
     return Math.hypot(tx - c.x, tz - c.z);

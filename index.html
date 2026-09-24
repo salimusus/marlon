@@ -30198,7 +30198,13 @@ swatches('swPants', 'pants'); swatches('swCap', 'cap'); swatches('swHair', 'hair
 (function pills(id, key) { const el = $(id); [...el.children].forEach(b => { b.classList.toggle('sel', +b.dataset.v === +myCfg[key]); b.addEventListener('click', () => { myCfg[key] = key === 'skirt' ? !!+b.dataset.v : +b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })('hairStyle', 'hair');
 (function () { const el = $('skirtSel'); [...el.children].forEach(b => { b.classList.toggle('sel', !!+b.dataset.v === myCfg.skirt); b.addEventListener('click', () => { myCfg.skirt = !!+b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })();
 function startGame() {
-  if (!net.on && !marlonCinemaSeen && store.get('marlon.intro.seen') !== MARLON_INTRO_VERSION && typeof window.MarlonIntro !== 'undefined') {
+  // ARBITRAGE r76 : PAS DE FILM SUR LA TÉLÉ (`tvAuto`, le chemin du lien #tv). L'introduction
+  // de la version 0.10 est gardée — c'est un vrai plus, et elle ne passe qu'une fois — mais
+  // pas sur ce chemin-là : sur une télé personne ne peut cliquer, et tant que le film tourne
+  // le code de pairage n'est pas affiché, donc aucun téléphone ne peut devenir manette
+  // (mesuré au test 202 : accueil jamais passé, écran du code jamais ouvert). Elle reste au
+  // lancement normal, et le bouton « Voir l'introduction » de l'accueil la rejoue quand on veut.
+  if (!net.on && !tvAuto && !marlonCinemaSeen && store.get('marlon.intro.seen') !== MARLON_INTRO_VERSION && typeof window.MarlonIntro !== 'undefined') {
     if (marlonCinema && marlonCinema.active) return;
     showMarlonIntro(startGame); return;
   }
@@ -32096,6 +32102,7 @@ function routeLien() {
 let tvAuto = false;
 function demarreTV(code) {
   modeTV(true); tvAuto = true;
+
   if (code) tv.code = code;   // le code vient du lien : la télé affiche EXACTEMENT le même que l'autre écran
   document.body.classList.remove('lobby');
   setTimeout(() => {

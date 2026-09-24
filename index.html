@@ -34697,8 +34697,14 @@ function gangTick(dt) {
         chat(null, `🚩 ${G.nom} s'en prennent à une boutique !`); }
       // même garde ici (n° 78) : sans elle, `G.etat = 'joueur'` lançait tout le gang aux
       // trousses d'un enfant qui n'a rien demandé, et les membres frappent dès `etat === 'joueur'`.
+      // PLANTAGE (round 78) : `G.membres[0].x` sans garde. Un gang dont TOUS les hommes sont
+      // tombes garde son entree dans `gangs` mais son tableau `membres` est vide — et la suite
+      // complete l'a attrape : « gangs TypeError: Cannot read properties of undefined
+      // (reading 'x') », une erreur console pour toute la serie. On ne parle que s'il reste
+      // quelqu'un pour te chercher.
       else if (r < 0.5 && joueurDansLaGuerre()) { G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z];
-        if (Math.hypot(P.pos.x - G.membres[0].x, P.pos.z - G.membres[0].z) < 120) chat(null, `🚩 ${G.nom} te cherchent…`); }
+        const chef = G.membres && G.membres[0];
+        if (chef && Math.hypot(P.pos.x - chef.x, P.pos.z - chef.z) < 120) chat(null, `🚩 ${G.nom} te cherchent…`); }
       else if (r < 0.7 && gangs.length > 1) { const o = pickOne(gangs.filter(x => x !== G)); G.etat = 'rival'; G.cible = [o.base[0], o.base[1]];
         chat(null, `🚩 ${G.nom} attaquent ${o.nom} !`); }
       else if (r < 0.78 && G.relation < -40 && gang.planque && gang.magot > 0) {

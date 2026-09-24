@@ -761,3 +761,11 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : bloqué à (−172 ; −120,45), **226 images** sans avancer. Relevé des solides de la tour : les marches vont de **0,50 m en z = −116** (celle qui touche la tour) à **2,10 m en z = −119,6** (la plus éloignée) — l'escalier MONTE EN S'ÉLOIGNANT de la tour. La plateforme est à 2,50 m en z = −114 et le mur de la tour fait 2,40 m de haut : depuis la dernière marche il n'y a aucun chemin, et depuis le nord la première chose qu'on rencontre est une face de 2,10 m. Le même trajet avec un saut toutes les 22 images amène bien à y = 2,50 (le saut du jeu culmine à 2,30 m) — mais un enfant ne devine pas qu'il faut sauter par-dessus son propre escalier.
 - **On devrait voir** : un escalier qui monte VERS la tour, comme celui de toutes les autres tours du jeu.
 - **Capture** : `img/a6-toboggan-sud.png` (la glissade cyan, côté sud), `img/a4-sports-aire.png` (les marches grises, côté nord).
+
+### 92. Le ballon du city-stade flotte à 36 cm au-dessus du gazon
+- **Gravité** : COSMÉTIQUE (mais c'est la première chose qu'on regarde en entrant dans la cage)
+- **Reproduire** : Plaine des Sports, city-stade, aller au rond central (−164 ; −175) et regarder le ballon au repos.
+- **On voit** : le ballon repose à y = 1,00 (`ground` = 0,50 + rayon 0,50), donc son bas est à **0,50 m**, alors que le gazon du city-stade est posé à **0,14 m** : **36 cm de vide sous le ballon**. Le ballon du terrain du centre, lui, est juste (`ground` 0,30 + rayon 0,50 = bas à 0,30, pelouse à 0,30).
+- **On devrait voir** : `ballon.ground = 0.14`, comme le gazon sur lequel il est posé.
+- **Bonne nouvelle mesurée au passage** : le but fonctionne — en poussant le ballon vers la cage ouest, « ⚽ BUT ! 1 » et `city.goals` passe bien de 0 à 1.
+- **Capture** : `img/a3-sports-stade.png`.

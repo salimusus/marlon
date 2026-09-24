@@ -776,3 +776,10 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : gravé sur le panneau, en grand : **« 🎠 Balançoires : E pour s'asseoir »**. Idem « 🎡 Tourniquet : **E** pour monter », « 🐴 Manège à poneys : **E** pour monter », « 🛞 Balançoire-pneu : **E** pour s'asseoir », « 🪺 Balançoires nid d'oiseau : **E** pour s'asseoir » — et six autres en ville (hélico, karts, balançoires du parc, boules, vélos, propulseur), soit onze panneaux. `ctrlText()` traduit bien les messages et la pastille d'action (mesuré : « 🏫 École : … assieds-toi a une table (△) », « 🎠 ◯ pour sauter de la balançoire ! »), mais pas les textures des panneaux, qui sont cuites une fois pour toutes à la construction par `sign()`.
 - **On devrait voir** : le panneau dit le bouton que l'enfant a sous le pouce — ou, à défaut, une formule qui ne nomme aucune touche (« monte sur le tourniquet »).
 - **Capture** : `img/a8-balancoires.png`.
+
+### 94. Le panneau du manège à poneys bouche complètement le manège : en arrivant par l'est, on ne voit qu'une planche de bois
+- **Gravité** : COSMÉTIQUE
+- **Reproduire** : Hameau de la Ferme, arriver au manège à poneys par l'est (le Chemin de la Grange, x = −110), s'arrêter à 7 m.
+- **On voit** : le panneau « 🐴 Manège à poneys » est posé en (−117,5 ; 310) face à l'ouest ; sa face arrière est un aplat de bois nu de **3,45 × 1,65 m**, de 1,70 m à 3,10 m de haut, et il remplit **tout l'écran**. Le manège, son toit de chaume et ses six poneys sont entièrement cachés. `sign()` ne texture que la face avant ; les dix autres panneaux des trois quartiers ont le même dos.
+- **On devrait voir** : le texte des deux côtés, ou le panneau tourné vers le chemin par lequel on arrive.
+- **Capture** : `img/b1-hameau-manege.png`.

@@ -191,3 +191,69 @@ Mobilier et décor : les 98 panneaux de signalisation ne se chevauchent pas deux
   les terrains neufs du poste QUARTIERS.
 - Le débit brut (50 m parcourus en 900 pas) n'a pas bougé : il est limité par la vitesse des
   conducteurs, pas par la géométrie. C'est le **détour** qui a baissé de 16 %.
+
+---
+
+# ROUND 76 — LA RÉCONCILIATION (poste VILLE & DÉCOR)
+
+La version 0.10 (Codex) et les travaux du round 75 (routes élargies, armurerie déplacée,
+trois quartiers neufs) ont fusionné sans conflit git mais se contredisaient par endroits.
+Règle suivie : pour chaque désaccord, **mesurer les deux versions** et garder la meilleure.
+Toutes les valeurs ci-dessous sont relevées en page (`harness/sonde.js`).
+
+## 1. Ce que la fusion n'avait PAS cassé (vérifié, pas supposé)
+
+L'état pré-fusion de notre branche (`git show 4dfb71c:index.html`, passé au banc avec
+`JEU=`) donne **exactement** les mêmes relevés que l'état fusionné pour : les 10 balançoires,
+le mur qui ferme le hall de l'immeuble (-8 ; -35,5), les 2 et 5 lampadaires du Marché et du
+Techno-Parc, les 3 murs du commissariat, les 2 articles morts du camp du Bois. **Ces six
+défauts sont les nôtres**, pas ceux de la 0.10 : ils datent du round 75 (ou d'avant).
+
+## 2. Les réparations, avec la mesure qui les a tranchées
+
+| défaut | avant | après |
+|--------|-------|-------|
+| lampadaires du Marché / du Techno-Parc | 2 et 5 | **11 et 10** (156 en ville, 105 avant) |
+| murs du commissariat (h = 3,8 m) | 3 | **5** (nord et ouest rendus) |
+| carrefours rue secondaire / boulevard sans stop ni cédez | 1 | **0** (210 panneaux) |
+| culs-de-sac accidentels | 1 — (-175 ; 257,5), 9,2 m à vol d'oiseau, 108 m par les voies | **0** (38 impasses, toutes légitimes) |
+| entrée du hall des immeubles | porte de 2 m, arrêt nez au mur à z = -31,6 | **baie de 5 m**, on entre en marchant droit |
+| articles de comptoir sans usage | 2 (Lampe frontale, Boussole) | **0** sur 17 au catalogue du sac |
+
+**Le lampadaire n'était pas déplacé, il était SUPPRIMÉ.** `degageLesRoutes()` épargne « les
+feux et les lampadaires » (`o.feu || o.lampe`) parce qu'une passe spéciale les repousse
+ensuite au bord de la voie — mais le solide créé par `lamp()` ne portait pas la marque
+`lampe` : il partait avec le mobilier ordinaire, avant. Depuis l'élargissement (Rue des
+Primeurs et Rue de la Halle, 7 → 11 m), c'était 8 lampadaires sur 10 au Marché.
+
+**Les murs du commissariat** tombaient pour la même raison : le « Raccord est des rues de
+l'ouest » (x = -65, 8 m) posé au round 75 mordait d'un mètre dans la coque (mur ouest à
+x = -62), et la protection « objet DANS un bâtiment » rate les murs de 7 cm (l'emprise
+`city.batiments` est rognée de 0,5 m). Le raccord est passé en x = -66,5 : il garde ses 8 m,
+recouvre toujours les deux rues de l'ouest et laisse 50 cm entre son bitume et le mur.
+
+## 3. L'art de la ville de la 0.10 : gardé, et corrigé
+
+La 0.10 a sorti les lignes blanches et l'axe jaune de la TEXTURE de la chaussée (ils se
+répétaient à l'identique et traversaient tous les carrefours) pour les peindre en géométrie
+découpée à chaque croisement, avec les flèches de direction. **C'est mieux : on garde.**
+Prix mesuré (Ultra HD, passe d'ombres comprise) : 3 maillages fusionnés, +30 756 triangles
+et +4 appels de dessin, identiques depuis n'importe quel point de vue (rien n'est jamais
+éliminé par le tronc de vue). Le budget d'image tient : 9 621 appels au pire (plafond 10 000)
+et 6 018 au centre-ville (plafond 9 000).
+
+Ce qu'elle ignorait : **les deux marquages que le jeu pose lui-même avant elle**. Relevé sur
+la ville entière : **220 marques tombaient dans les 114 passages piétons** (l'axe jaune
+traversait les zébras de part en part) et **19 doublaient une ligne d'arrêt de feu** (deux
+barres blanches côte à côte). La peinture est maintenant coupée à chaque passage comme elle
+l'est à chaque carrefour : **0 et 0**, et 394 marques de moins (2 267 → 1 873).
+`city.zebras` recense l'emprise de chaque passage peint — c'est une liste de DÉCOR, les
+conducteurs continuent de ne lire que `city.passages`.
+
+## 4. Ce qui reste ouvert
+
+- **5 lampadaires posés à la main dans l'emprise d'un bâtiment** — (-4,2 ; 20), (0 ; 201,6),
+  (10 ; -108), (-124 ; -146), (-170 ; 274) — et 7 plantés dans un autre objet. Ces douze-là
+  sont antérieurs (mesurés identiques avant/après) : ils appartiennent aux postes qui ont
+  bâti ces quartiers.
+- **Les six chaussées sous 7,60 m** du §7 restent comme décrites.

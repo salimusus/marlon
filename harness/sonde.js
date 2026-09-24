@@ -14,8 +14,23 @@ function serve(file){
     .replace(/<link href="https:\/\/fonts\.googleapis\.com[^>]*>/,'')
     .replace(/\nloop\(\);/, '\nloop();\n'+HOOK);
   const three=fs.readFileSync(path.join(ROOT,'vendor','three.min.js'));
+  // FICHIERS VOISINS. Depuis la version 0.10, index.html ne se suffit plus a lui-meme : il
+  // charge ./city-detail.js, ./cinematic.js et ./controls.js. Le serveur du banc rendait la
+  // PAGE pour toute URL inconnue, donc ces trois requetes recevaient du HTML — d'ou trois
+  // « Unexpected token '<' » puis « MarlonControls is not defined », l'IIFE du jeu avortait
+  // avant loop(), le HOOK n'etait jamais pose et window.__SHOT restait indefini : la suite
+  // entiere mourait sur waitForFunction au bout de 60 s, sans jouer un seul test.
+  const RACINE_PAGE = ROOT;
+  const voisin = u => {
+    const nom = (u.split('?')[0] || '').replace(/^\/+/, '');
+    if (!/^[\w.-]+\.js$/.test(nom)) return null;
+    const p = path.join(RACINE_PAGE, nom);
+    try { return fs.readFileSync(p); } catch (e) { return null; }
+  };
   const srv=http.createServer((q,r)=>{ if(q.url.startsWith('/three')){r.writeHead(200,{'Content-Type':'application/javascript'});r.end(three);}
-    else {r.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});r.end(html);} });
+    else { const v = voisin(q.url);
+      if (v) { r.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'}); r.end(v); }
+      else {r.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});r.end(html);} } });
   return new Promise(res=>srv.listen(0,'127.0.0.1',()=>res({srv,port:srv.address().port})));
 }
 (async()=>{

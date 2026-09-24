@@ -2368,9 +2368,24 @@ function serve(htmlFile) {
     .replace(/<script src="\.\/vendor\/three\.min\.js"><\/script>/, '<script src="/three.min.js"></script>')
     .replace(/\nloop\(\);/, '\nloop();\n' + HOOK);
   const three = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'three.min.js'));
+  // FICHIERS VOISINS. Depuis la version 0.10, index.html ne se suffit plus a lui-meme : il
+  // charge ./city-detail.js, ./cinematic.js et ./controls.js. Le serveur du banc rendait la
+  // PAGE pour toute URL inconnue, donc ces trois requetes recevaient du HTML — d'ou trois
+  // « Unexpected token '<' » puis « MarlonControls is not defined », l'IIFE du jeu avortait
+  // avant loop(), le HOOK n'etait jamais pose et window.__SHOT restait indefini : la suite
+  // entiere mourait sur waitForFunction au bout de 60 s, sans jouer un seul test.
+  const RACINE_PAGE = path.join(__dirname, '..');
+  const voisin = u => {
+    const nom = (u.split('?')[0] || '').replace(/^\/+/, '');
+    if (!/^[\w.-]+\.js$/.test(nom)) return null;
+    const p = path.join(RACINE_PAGE, nom);
+    try { return fs.readFileSync(p); } catch (e) { return null; }
+  };
   const srv = http.createServer((req, res) => {
     if (req.url.startsWith('/three.min.js')) { res.writeHead(200, { 'Content-Type': 'application/javascript' }); res.end(three); }
-    else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); }
+    else { const v = voisin(req.url);
+      if (v) { res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' }); res.end(v); }
+      else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); } }
   });
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }

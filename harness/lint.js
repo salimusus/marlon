@@ -93,6 +93,38 @@ if (!process.env.LINT_RAPIDE) {
     process.exit(1);
   }
 }
+// LES FICHIERS VOISINS DOIVENT ÊTRE LÀ, ET LE BANC DOIT LES SERVIR. Depuis la version 0.10,
+// index.html ne se suffit plus a lui-meme : il charge ./city-detail.js, ./cinematic.js et
+// ./controls.js. Le serveur du banc rendait la PAGE pour toute URL inconnue, donc ces trois
+// requetes recevaient du HTML : trois « Unexpected token '<' », puis « MarlonControls is not
+// defined », l'IIFE du jeu avortait AVANT loop(), le HOOK n'etait jamais pose, window.__SHOT
+// restait indefini — et la suite complete mourait sur waitForFunction au bout de 60 s sans
+// jouer un seul test. Les trois controles precedents etaient tous verts pendant ce temps-la :
+// ils ne lisent que le script EN LIGNE. D'ou ce quatrieme controle.
+{
+  const src = fs.readFileSync(fichier, 'utf8');
+  const dossier = path.dirname(path.resolve(fichier));
+  const manquants = [], nonServis = [];
+  const re = /<script[^>]*\ssrc="\.\/([^"?]+)(?:\?[^"]*)?"/g;
+  let m, total = 0;
+  while ((m = re.exec(src))) {
+    total++;
+    const nom = m[1];
+    if (!fs.existsSync(path.join(dossier, nom))) { manquants.push(nom); continue; }
+    // vendor/three.min.js est le seul cas particulier : les serveurs du banc le reecrivent
+    // en /three.min.js et le servent depuis le depot. Tout le reste doit etre un « nom.js »
+    // a la racine, seule forme que le serveur du banc sait rendre.
+    if (nom === 'vendor/three.min.js') continue;
+    if (!/^[\w.-]+\.js$/.test(nom)) nonServis.push(nom);
+  }
+  if (manquants.length || nonServis.length) {
+    if (manquants.length) console.log('❌ fichier(s) chargé(s) par index.html et ABSENTS du dépôt : ' + manquants.join(', '));
+    if (nonServis.length) console.log('❌ fichier(s) que le serveur du banc d\'essai ne sait pas servir : ' + nonServis.join(', ')
+      + '\n   (il ne sert que « nom.js » à la racine ; sans ça la page reçoit du HTML et le jeu avorte avant loop())');
+    process.exit(1);
+  }
+  console.log(`✅ les ${total} fichier(s) voisins d'index.html sont présents et servis par le banc`);
+}
 if (!suspects.length) { console.log('✅ aucun code avalé par un commentaire'); process.exit(0); }
 console.log(`❌ ${suspects.length} ligne(s) où un commentaire semble avaler du code :`);
 for (const [n, l] of suspects) console.log(`  ${n} : ${l.slice(0, 180)}`);

@@ -8923,7 +8923,7 @@ function buildSports() {
   // ---- LE CITY-STADE : une vraie cage grillagee, deux buts, un ballon ----
   const CX = -164, CZ = -175, CW = 30, CD = 18;
   plat(CX, 0.14, CZ, CW + 4, CD + 4, 0x2f7d3a, { studs: false, noRoute: true }, 0.12);              // le gazon
-  fieldLines(CX, 0.22, CZ, CW, CD, (g, W, H) => {   // le marquage peint : touches, rond central, surfaces
+  fieldLines(CX, 0.14, CZ, CW, CD, (g, W, H) => {   // le marquage peint, POSE SUR LE GAZON (0,14 + 2 cm) : a 0,22 il flottait 10 cm au-dessus, comme le ballon
     g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 3;
     g.strokeRect(6, 6, W - 12, H - 12);
     g.beginPath(); g.moveTo(W / 2, 6); g.lineTo(W / 2, H - 6); g.stroke();
@@ -8963,7 +8963,11 @@ function buildSports() {
     const net = new THREE.Mesh(unitBox, filetMat); net.scale.set(1.4, 2.2, 6.2); net.position.set(gx + s * 0.8, 1.1, CZ); worldGroup.add(net);
     city.cages.push({ x: gx, z: CZ, demi: 3.1, haut: 2.2, sens: s, nom: 'city-stade' });
   }
-  const ballon = makeBall('foot', CX, 0.6, CZ); ballon.ground = 0.5; ballon.home.set(CX, 0.6, CZ);
+  // LE BALLON REPOSE SUR LE GAZON, PAS 36 CM AU-DESSUS (n° 90 bis, n° 92 du contrôleur).
+  // `ground` est le niveau du sol sous la balle : elle s'immobilise a ground + rayon. Il
+  // valait 0,50 pour un gazon pose a 0,14 : la balle flottait, et c'est la premiere chose
+  // qu'on regarde en entrant dans la cage. Le ballon du terrain du centre, lui, etait juste.
+  const ballon = makeBall('foot', CX, 0.64, CZ); ballon.ground = 0.14; ballon.home.set(CX, 0.64, CZ);
   ballon.bounds = { x1: CX - CW / 2 - 1.2, x2: CX + CW / 2 + 1.2, z1: CZ - CD / 2 + 0.2, z2: CZ + CD / 2 - 0.2 };
   // LES GRADINS : trois rangs de beton, face au terrain. Marches de 0,5 m : on les MONTE
   // (le pas franchissable du joueur), on ne bute pas dedans.

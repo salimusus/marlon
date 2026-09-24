@@ -1,0 +1,16 @@
+PASS All building and shop footprints stay outside the 89 streets
+PASS Clothes shop has a clear entrance and fitting-room access
+PASS Destination behind never draws a wrong-way line on the departure lane
+PASS Destination ahead stays a direct route in the correct lane
+PASS A destination behind remains reachable after a legal loop
+PASS Every district has a route from the central road
+PASS Moving traffic keeps its departure direction across destination changes
+PASS Traffic shortens anticipation only on curves and keeps mission steering unchanged
+PASS All vehicle lengths keep their front bumper behind a red light
+PASS Long vehicles complete a stop while their bumper stays behind the line
+PASS Truck sees a pedestrian in front of its bumper even outside a road
+PASS Acceleration converges equally at 30, 60 and 120 simulation steps per second
+PASS Repositioned traffic clears every stale blocking and manoeuvre state
+TRAFFIC_METRICS [{"kind":"car","distance":307,"teleports":0,"offRoad":0,"x":-32.91477541484522,"z":44.27935139171194,"reason":null},{"kind":"car","distance":326,"teleports":0,"offRoad":0,"x":63.229452600289825,"z":206.10554342733917,"reason":null},{"kind":"car","distance":322,"teleports":0,"offRoad":0,"x":-13.460127914015773,"z":193.74962686757544,"reason":null},{"kind":"car","distance":169,"teleports":0,"offRoad":0,"x":4.658482840536125,"z":136.00583116906867,"reason":null},{"kind":"car","distance":288,"teleports":0,"offRoad":0,"x":-187.7818967039876,"z":-0.9836647019308902,"reason":null},{"kind":"car","distance":261,"teleports":0,"offRoad":0,"x":-53.10485614366341,"z":193.7499999999962,"reason":"feu"},{"kind":"truck","distance":257,"teleports":0,"offRoad":0,"x":29.38043541621838,"z":111.95408746995399,"reason":null},{"kind":"truck","distance":283,"teleports":0,"offRoad":0,"x":-60.19929088110522,"z":197.8268302372722,"reason":null}]
+PASS One minute of real street traffic moves every car and truck without non-finite state
+14/14 traffic tests passed

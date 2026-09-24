@@ -30,15 +30,21 @@ globalThis.__G = {
   get wallet() { return wallet; }, set wallet(v) { wallet = v; }, get paused() { return paused; }, set paused(v) { paused = v; }, get running() { return running; }, set running(v) { running = v; },
   get simTime() { return simTime; }, get uiOpen() { return uiOpen; }, get elapsed() { return elapsed; },
   empire, EMPIRE_LINKS, EMPIRE_OPERATIONS, MONDE, TERRITOIRES, gang, gangs, guerre,
+  empireSupply, empireEconomy, empireFortifyCost,
+  beacon, setBeacon, clearBeacon, startMission,
   empireCanExpand, empireFortify, empireStartOperation, empireEndOperation, empireResolveAttack, empireTick, empireGuardCount, restoreEmpire, captureTick, saveGuerre, loadGuerre, padProfil, padLu, padStick, pollGamepad, releaseGamepad, pad, PAD_MAP, carteTerritoires, empireMapSvg,
   city, police, jail, drive, bank, mission, stats, WORLDS, P, cam, NAV, owned, settings, bots, me,
+  inputKeys, padController, padContexte, padTouche, padMenu, openUI, closeUI, chooseWorld, telTouche, telRelache, telBouton, tel,
   worldGroup, scene, renderer, shots, grenades, debrisParts, net, gym, race, RALLY, day, tm,
+  sun, SOLEIL_DIR, suitOmbres, buildAvatar, animateRig, animateRigCorps, empireEnvironment, glassMat, glassCar, FACE, FACE_FERMEE, WINDOWS_SPEC, shared, libereBranche,
   loadWorld, clearWorld, buildNav, navPath, navCell, navFree, groundUnder, groundCar, carBlocked,
   overlaps, step, cityStep, cityCommon, applyQuality, genPath, resetGame, respawn, cityReset,
   updateBot, policeTick, missionTick, villaTick, petsTick, driveStep, heliStep, shotsTick,
   enterCar, exitCar, terrainH, allAvatars, buildVilla, msg, chat,
   pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
   schQuestion, schTirage, school, swingTick, sitSwing, CULT,
+  construireGraphe, traficDestination, traficPose, traficRoule, gapDevant, codeRoute, croisementLibre, carrefourLibre, flotteMaj, vehBloque, vehiculeMord, vehBloqueDur, vehicleSolid, avanceVehicule, surLaChaussee, itineraireVoies, traceSuit, feuPhase, separerVehicules, pointRouteLibre, makeCar, makeVehicle, degageLesRoutes,
+  setTrafficTime(v) { simTime = v; flotteT = -1; }, cheminAretes, projVoie, pietonDevant,
 };
 `;
 
@@ -58,7 +64,8 @@ function run() {
   const sandbox = Object.assign(Object.create(null), {
     THREE: stubs.THREE, document: stubs.document, window: stubs.window,
     navigator: stubs.window.navigator, location: stubs.window.location, localStorage: stubs.localStorage,
-    sessionStorage: stubs.localStorage, screen: stubs.window.screen, performance: { now: () => 0 },
+    sessionStorage: stubs.localStorage, screen: stubs.window.screen, performance: stubs.window.performance,
+    KeyboardEvent: stubs.window.KeyboardEvent,
     requestAnimationFrame: stubs.window.requestAnimationFrame, cancelAnimationFrame: () => {},
     setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     AudioContext: stubs.FakeAudioContext, webkitAudioContext: stubs.FakeAudioContext,
@@ -71,6 +78,10 @@ function run() {
   sandbox.globalThis = sandbox; sandbox.self = sandbox; sandbox.window.self = sandbox;
   vm.createContext(sandbox);
   try {
+    for (const name of ['city-detail.js', 'controls.js']) {
+      const file = path.join(path.dirname(HTML), name);
+      if (fs.existsSync(file)) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: name });
+    }
     vm.runInContext(src, sandbox, { filename: 'superobby.js' });
   } catch (e) {
     console.error('ERREUR pendant l\'exécution du script du jeu :');

@@ -148,7 +148,7 @@ class Mat { constructor(p = {}) { Object.assign(this, p); this.disposed = false;
     if (p.transparent === undefined) this.transparent = false; }
   dispose() { this.disposed = true; } clone() { return new Mat(this); } }
 class Tex { constructor(img) { this.image = img; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); this.center = new V2(0, 0); this.rotation = 0; this.flipY = true; this.encoding = 3000; this.format = 1023; this.wrapS = 0; this.wrapT = 0; this.needsUpdate = false; this.disposed = false; this.anisotropy = 1; this.magFilter = 0; this.minFilter = 0; }
-  dispose() { this.disposed = true; } clone() { return new Tex(this.image); } }
+  dispose() { this.disposed = true; } clone() { const t = new Tex(this.image); t.encoding = this.encoding; return t; } }
 class Mesh extends Obj3D { constructor(g, m) { super(); this.geometry = g || new Geo('none'); this.material = m || new Mat(); this.isMesh = true; } clone() { const m = new Mesh(this.geometry, this.material); m.position.copy(this.position); m.scale.copy(this.scale); m.rotation.copy(this.rotation); return m; } }
 
 const THREE = {
@@ -171,7 +171,7 @@ const THREE = {
   CanvasTexture: Tex, Texture: Tex, DataTexture: Tex, CubeTexture: Tex,
   HemisphereLight: class extends Obj3D { constructor(a, b, i) { super(); this.color = new Col(a); this.groundColor = new Col(b); this.intensity = i; } },
   DirectionalLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; this.target = new Obj3D();
-    this.shadow = { mapSize: { set() {}, width: 1024, height: 1024 }, camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0, updateProjectionMatrix() {} }, bias: 0, normalBias: 0, radius: 1 }; } },
+    this.shadow = { mapSize: new V2(1024, 1024), camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0, updateProjectionMatrix() {} }, bias: 0, normalBias: 0, radius: 1 }; } },
   AmbientLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; } },
   PointLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; } },
   SpotLight: class extends Obj3D { constructor(c, i) { super(); this.color = new Col(c); this.intensity = i; this.target = new Obj3D(); } },

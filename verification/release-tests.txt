@@ -1,0 +1,173 @@
+
+> marlon-empire-urbain@0.9.0 test
+> node harness/verify.cjs
+
+PASS syntax: game and cinematic
+PASS The eight active sectors lie inside the current city boundary
+PASS Supply graph is connected and every edge is reciprocal
+PASS Every operation rendezvous has ground and an accessible point within its arrival radius
+PASS Expansion follows active borders and rejects nonexistent sectors
+PASS Fortifications cost money, cap at three, and reject enemy land
+PASS KO and captive recruits do not count as a defensive force
+PASS A living recruit can capture an adjacent sector; KO support cannot
+PASS An announced attack resolves using defenses; an undefended sector falls
+PASS Completed operations pay once and repeat rewards are reduced
+PASS Malformed strategic saves are bounded and valid progress survives a save/load
+PASS DualSense standard and raw HID keep the two triggers independent of the camera
+PASS Disconnect clears held movement and combat without a synthetic attack
+PASS No gamepad connected does not erase keyboard controls
+PASS Changing world clears active operations and marker references
+PASS An empty wallet stays empty on reload
+{"passed":15,"failed":0}
+PASS No land earns no passive income
+PASS Separated districts earn half until their connecting border is restored
+PASS Industrial discount is earned only by a supplied industry
+PASS Losing a connecting district changes the income forecast immediately
+PASS Entire city forms one network and earns the announced bank bonus
+PASS A social invitation cannot steal or clear an operation GPS destination
+PASS Territory operations do not replace an active city mission
+{"passed":7,"failed":0}
+TAP version 13
+# Subtest: sticks: radial dead zone, full diagonal speed and finite malformed values
+ok 1 - sticks: radial dead zone, full diagonal speed and finite malformed values
+  ---
+  duration_ms: 27.6677
+  type: 'test'
+  ...
+# Subtest: DualSense HID: centered trigger is half pressed, hat and face buttons map correctly
+ok 2 - DualSense HID: centered trigger is half pressed, hat and face buttons map correctly
+  ---
+  duration_ms: 15.1497
+  type: 'test'
+  ...
+# Subtest: phone joystick keeps full speed after dragging beyond its visual radius
+ok 3 - phone joystick keeps full speed after dragging beyond its visual radius
+  ---
+  duration_ms: 11.3001
+  type: 'test'
+  ...
+# Subtest: disconnect cancels helicopter ascent, held punch and crouch without emitting an attack
+ok 4 - disconnect cancels helicopter ascent, held punch and crouch without emitting an attack
+  ---
+  duration_ms: 4.5479
+  type: 'test'
+  ...
+# Subtest: plugging another controller does not steal the active controller
+ok 5 - plugging another controller does not steal the active controller
+  ---
+  duration_ms: 6.8463
+  type: 'test'
+  ...
+# Subtest: menu transitions require release, so a held Options button cannot reopen the menu
+ok 6 - menu transitions require release, so a held Options button cannot reopen the menu
+  ---
+  duration_ms: 16.4895
+  type: 'test'
+  ...
+# Subtest: network reconnect resets packet ordering and accepts a fresh sequence immediately
+ok 7 - network reconnect resets packet ordering and accepts a fresh sequence immediately
+  ---
+  duration_ms: 18.9192
+  type: 'test'
+  ...
+# Subtest: full input snapshots recover a missed button release without duplicate key presses
+ok 8 - full input snapshots recover a missed button release without duplicate key presses
+  ---
+  duration_ms: 14.0421
+  type: 'test'
+  ...
+# Subtest: silent connection watchdog clears held controls using wall time even while paused
+ok 9 - silent connection watchdog clears held controls using wall time even while paused
+  ---
+  duration_ms: 23.0236
+  type: 'test'
+  ...
+# Subtest: hidden receiver rejects movement and malformed camera values never corrupt the view
+ok 10 - hidden receiver rejects movement and malformed camera values never corrupt the view
+  ---
+  duration_ms: 18.4508
+  type: 'test'
+  ...
+# Subtest: TV room conflict preserves the code in the link and exposes a recoverable error
+ok 11 - TV room conflict preserves the code in the link and exposes a recoverable error
+  ---
+  duration_ms: 13.6476
+  type: 'test'
+  ...
+# Subtest: only one phone drives the player and control transfers cleanly after disconnect
+ok 12 - only one phone drives the player and control transfers cleanly after disconnect
+  ---
+  duration_ms: 8.8791
+  type: 'test'
+  ...
+# Subtest: obsolete TV peer events cannot clear a replacement host
+ok 13 - obsolete TV peer events cannot clear a replacement host
+  ---
+  duration_ms: 4.7814
+  type: 'test'
+  ...
+# Subtest: Presentation request refreshes when the room changes and failures restore its button
+ok 14 - Presentation request refreshes when the room changes and failures restore its button
+  ---
+  duration_ms: 12.0315
+  type: 'test'
+  ...
+# Subtest: congested phone channel drops stale motion while preserving urgent release
+ok 15 - congested phone channel drops stale motion while preserving urgent release
+  ---
+  duration_ms: 4.9539
+  type: 'test'
+  ...
+# Subtest: phone reconnect uses one retry and ignores callbacks from its previous peer
+ok 16 - phone reconnect uses one retry and ignores callbacks from its previous peer
+  ---
+  duration_ms: 14.1716
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 275.2821
+PASS Shadow camera remains on texels at every supported shadow resolution
+PASS All transparent glass uses shared reflections and does not hide geometry behind it
+PASS Blinking and sleeping reuse shared face textures
+PASS Static pose convergence is identical at 30, 60 and 120 Hz
+PASS Negative leaning returns smoothly without snapping on the first idle frame
+PASS Walk to sprint blends elbow pose around the former threshold
+PASS Avatar transforms remain finite through every movement mode at three frame rates
+PASS Changing jewelry disposes old geometry and labels while preserving reusable metal
+PASS City facades share one specular mask with no per-building reflection textures
+9 visual runtime tests passed (CPU stubs; no GPU assertions).
+PASS All building and shop footprints stay outside the 89 streets
+PASS Clothes shop has a clear entrance and fitting-room access
+PASS Destination behind never draws a wrong-way line on the departure lane
+PASS Destination ahead stays a direct route in the correct lane
+PASS A destination behind remains reachable after a legal loop
+PASS Every district has a route from the central road
+PASS Moving traffic keeps its departure direction across destination changes
+PASS All vehicle lengths keep their front bumper behind a red light
+PASS Long vehicles complete a stop while their bumper stays behind the line
+PASS Truck sees a pedestrian in front of its bumper even outside a road
+PASS Acceleration converges equally at 30, 60 and 120 simulation steps per second
+PASS Repositioned traffic clears every stale blocking and manoeuvre state
+TRAFFIC_METRICS [{"kind":"car","distance":296,"teleports":0,"offRoad":4.1,"x":-31.989038620762887,"z":39.462698433304084,"reason":null},{"kind":"car","distance":320,"teleports":0,"offRoad":0.3,"x":62.880949574760955,"z":202.49015679625714,"reason":null},{"kind":"car","distance":273,"teleports":0,"offRoad":0,"x":28.89690056039941,"z":193.75614539737356,"reason":"feu"},{"kind":"car","distance":47,"teleports":0,"offRoad":7.3,"x":45.27346531332459,"z":243.451079962276,"reason":"feu"},{"kind":"car","distance":284,"teleports":0,"offRoad":0.1,"x":-182.6451111805145,"z":-0.5451678350005486,"reason":null},{"kind":"car","distance":259,"teleports":0,"offRoad":0,"x":-51.93420146935148,"z":193.74999999999957,"reason":"feu"},{"kind":"truck","distance":256,"teleports":0,"offRoad":0,"x":33.83743274677331,"z":112.05593947859167,"reason":null},{"kind":"truck","distance":281,"teleports":0,"offRoad":0,"x":-58.640800986334966,"z":196.89583343598014,"reason":null}]
+PASS One minute of real street traffic moves every car and truck without non-finite state
+13/13 traffic tests passed
+PASS Malformed numeric objects cannot throw during strategic restore
+PASS Malformed campaign lists and economy fields produce a usable finite state
+PASS Legacy numeric strings are converted before income can concatenate cash
+PASS Valid recruit performance survives both initial startup and city reconstruction
+{"passed":4,"failed":0}
+PASS Intro closes once, releases avatars/listeners/audio and restores viewport after resize
+PASS Focused controls keep Enter/Space activation and Tab stays inside intro
+PASS Background tab suspends audio and video recording together without drawing frames
+PASS Recorder failure cannot trap the player inside the cinematic
+PASS Held gamepad confirmation does not skip until it is released and pressed again
+PASS Playback without exporting continues into the game at the end
+6 cinematic lifecycle tests passed (mock media and canvas; real Three.js scene objects).
+PASS hidden cosmetics: 0/9600 redundant matrix updates; visible transform restored in the first frame.

@@ -1,4 +1,6 @@
-> **Deux jeux cohabitent sur cette branche.** `index.html` est SuperObby / MARLON (le jeu suivi par le banc d'essai `harness/`, 370 tests). `sunshine.html` est « MARLON — Sunshine City 05 » (réécriture séparée, code dans `src/`, tests dans `tests/`). Le reste de ce fichier décrit Sunshine City.
+> **Version actuelle : MARLON — Empire urbain (`index.html`).** La livraison de septembre améliore circulation, urbanisme, manette/téléphone/TV, rendu, stratégie et sauvegardes, et ajoute une introduction animée exportable. Lire [les changements et limites](LIVRAISON-2026-09.md). Lancer `npm start` pour jouer localement, `npm test` pour les régressions ciblées. Il s’agit d’une version de validation, pas d’une certification commerciale.
+>
+> **Documentation historique ci-dessous.** `sunshine.html` est « MARLON — Sunshine City 05 », une autre réécriture (`src/`, `tests/`). Les chiffres et fonctionnalités qui suivent concernent cette autre version, pas le jeu de la page principale.
 
 # MARLON — Sunshine City · 05
 

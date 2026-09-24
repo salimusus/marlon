@@ -5544,7 +5544,18 @@ function degageLesRoutes() {
     const s1 = long ? (br.x <= r.x ? -1 : 1) : (br.z <= r.z ? -1 : 1);
     const dep = (long ? r.w : r.d) / 2 + 1.0;
     const essais = long ? [[r.x + s1 * dep, br.z], [r.x - s1 * dep, br.z]] : [[br.x, r.z + s1 * dep], [br.x, r.z - s1 * dep]];
-    const ok = essais.find(([x, z]) => !surBord(x, z));
+    // LE TROTTOIR VISE DOIT ETRE VIDE. Depuis que les lampadaires ne partent plus a la benne
+    // (ils portent la marque `lampe`), ils sont 53 de plus a etre POUSSES — et quatre
+    // atterrissaient DANS un mur : les deux de (±4,2 ; -30) finissaient a z = -32, c'est-a-dire
+    // dans la facade des immeubles de la rangee nord (mur avant a z = -32,17). On refuse donc
+    // un emplacement qui tombe dans un batiment ou sur un autre objet ; si aucun des deux bords
+    // n'est libre, le lampadaire est retire comme avant.
+    const bats = [...(city.batiments || []), ...(city.interieurs || [])];
+    const libre = (x, z) => !surBord(x, z)
+      && !bats.some(q => Math.abs(x - q.x) < q.w / 2 + 0.3 && Math.abs(z - q.z) < q.d / 2 + 0.3)
+      && !solidsAutour(x, z, 1.4, false).some(o => o !== br.solid && !o.sol && !o.trottoir && o.h > 0.6
+        && Math.abs(x - o.x) < o.w / 2 + 0.25 && Math.abs(z - o.z) < o.d / 2 + 0.25);
+    const ok = essais.find(([x, z]) => libre(x, z));
     if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; } }
     else {   // en plein carrefour : aucun trottoir n'est libre, on retire le lampadaire
       if (br.g) worldGroup.remove(br.g);

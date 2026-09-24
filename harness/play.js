@@ -19032,7 +19032,13 @@ test('le facteur est assis sur SA selle, le joueur pédale sur un vélo et roule
       o.updateMatrixWorld(true); o.traverse(q => { if (q.isMesh && q.visible) b.expandByObject(q); }); return b; };
     // ---- LE FACTEUR : on laisse sa tournée se faire toute seule, 30 s de simulation
     const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    // ON ATTEND LA CONDITION, PAS UN DELAI (regle du banc). Le facteur MET PIED A TERRE a
+    // chaque boite aux lettres : a la 1 800e image pile, il pouvait etre DEBOUT a cote de son
+    // velo, et on mesurait alors une pose de pieton — bassin a 0,72 m pour une selle a
+    // 1,155 m, cuisse 0. Ce test juge la pose EN SELLE : on laisse donc la tournee se faire
+    // ses trente secondes, puis on avance jusqu'a ce qu'il soit remonte.
     for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 3600 && !(f && f.bot && f.bot.enSelle && f.etat === 'tournee'); i++) G.step(1 / 60, true);
     const cv = f && f.bot && f.bot.veh;
     if (cv && f.bot.av) {
       const base = cv.y || 0;
@@ -19598,7 +19604,13 @@ test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le fact
       for (const lg of [rig.legL, rig.legR]) { const b = new THREE.Box3().setFromObject(lg); y = Math.min(y, b.min.y); }
       return +(y - base).toFixed(3); };
     const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    // ON ATTEND LA CONDITION, PAS UN DELAI (regle du banc). Le facteur MET PIED A TERRE a
+    // chaque boite aux lettres : a la 1 800e image pile, il pouvait etre DEBOUT a cote de son
+    // velo, et on mesurait alors une pose de pieton — bassin a 0,72 m pour une selle a
+    // 1,155 m, cuisse 0. Ce test juge la pose EN SELLE : on laisse donc la tournee se faire
+    // ses trente secondes, puis on avance jusqu'a ce qu'il soit remonte.
     for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 3600 && !(f && f.bot && f.bot.enSelle && f.etat === 'tournee'); i++) G.step(1 / 60, true);
     if (f && f.bot && f.bot.veh && f.bot.av) { const c = f.bot.veh; c.g.updateMatrixWorld(true); f.bot.av.group.updateMatrixWorld(true);
       out.facteur = { pedales: pedales(c), pied: pied(f.bot.av.rig, c.y || 0),
         selle: c.selle ? +(c.selle.position.y + c.selle.scale.y / 2).toFixed(3) : null,
@@ -21096,6 +21108,13 @@ test('les routes sont plus larges, mieux raccordées et moins tortueuses : crois
 test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est annoncee, on n est jamais debarque en pleine rue', async p => {
   const r = await p.evaluate(`(() => {
     const G = __G, P = G.P;
+    // LE JOURNAL SE FAIT ROGNER. On prenait la LONGUEUR EN CARACTERES du journal avant le
+    // depart puis \`.slice(avantDepart)\` : des que le jeu retire les vieilles lignes du
+    // #chatLog, ce decalage ne veut plus rien dire — releve, l'extrait commencait au milieu
+    // d'un mot (« ux pas approcher plus pre ») et la phrase d'arrivee, pourtant prononcee,
+    // tombait hors de la tranche. On VIDE donc le journal avant chaque phase et on lit tout
+    // ce qui s'y ecrit ensuite.
+    const videJournal = () => [].slice.call(document.querySelectorAll('#chatLog div')).forEach(d => d.remove());
     const journal = () => [].slice.call(document.querySelectorAll('#chatLog div')).map(d => d.textContent).join(' | ');
     const { b } = ${CONDUITE_SETUP};
     // ON MESURE UNE VILLE AU REPOS, comme les tests 332 et 404. Enchaine derriere le test
@@ -21113,7 +21132,7 @@ test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est ann
     G.city.botCarNear = b; G.monterAvecBot(b); pas();
     const monte = !!(G.city.rideBot === b && b.drive.passager);
     const V = G.city.villaMine || { x: 60, z: 168 };
-    const avantDepart = journal().length;
+    videJournal(); const avantDepart = 0;
     G.botConduireVers(b, { nom: 'ta villa', x: V.x, z: V.z });
     const st = b.drive;
     // LE PREMIER PAS NE COMPTE PAS. Avant la premiere image, st.route est vide et
@@ -21138,7 +21157,7 @@ test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est ann
     const annonce = /arriv/i.test(texteArrivee);
     const toujoursDedans = G.city.rideBot === b && st.passager;
     G.botConduireVers(b, { nom: 'le bout du monde', x: 4000, z: 4000 });
-    const avantRenonce = journal().length;
+    videJournal(); const avantRenonce = 0;
     // ON POSE LE COMPTEUR DE BLOCAGE AU-DELA DU SEUIL et on laisse le jeu decider : c'est
     // exactement le chemin qu'emprunte un conducteur vraiment coince. Ce test a servi a
     // trouver le defaut : le filet « saute au point de passage suivant » REMETTAIT ce compteur

@@ -833,6 +833,13 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : soit de vrais habitants (`bots`, qui marchent et qui parlent, et les trois quartiers en ont déjà les points de flânerie), soit au moins pas de socle de musée sur un terrain de foot.
 - **Capture** : `img/a3-sports-stade.png` (deux socles blancs en plein terrain), `img/c1-bois-parcours.png` (le moniteur sur son socle).
 
+### 102. Le parcours dans les arbres est fermé : on monte l'escalier, on arrive au niveau du plancher, et un garde-corps barre l'entrée
+- **Gravité** : BLOQUANT pour le quartier (c'est LE jeu du Bois des Aventuriers : quatre plateformes, trois passerelles, la cabane au sommet, le drapeau d'arrivée et cinq pièces — rien de tout ça n'est atteignable à pied)
+- **Reproduire** : Bois des Aventuriers, pied de la première tour (125,1 ; 285), monter l'escalier vers le nord, puis avancer vers la plateforme (128 ; 288). Reproduit 2/2 (`q-bois.js`, `q-arbres.js`).
+- **On voit** : l'escalier, lui, est parfait — on monte de 0,14 m à **y = 2,60** en (125,1 ; 289,16), sans une image de blocage, exactement au niveau du plancher de la tour. Et là, plus rien : **464 images (7,7 s) stick à fond vers l'est, arrêté à x = 125,42, à 2,58 m de la plateforme**. La cause est dans `tour()` : le garde-corps est posé sur les QUATRE bords (`[tx, tz−2], [tx, tz+2], [tx−2, tz], [tx+2, tz]`), donc aussi sur le bord **par lequel l'escalier arrive** ; c'est une boîte solide de 2,60 m à 3,70 m, soit 1,10 m au-dessus des pieds du joueur — bien au-delà du pas franchissable de 0,56 m. Le seul moyen d'entrer est de **sauter par-dessus la rambarde** (mesuré : apogée 4,90 m, on retombe à y = 3,90, c'est-à-dire DEBOUT SUR LE GARDE-CORPS).
+- **On devrait voir** : une ouverture dans le garde-corps du côté de l'escalier, sur chacune des quatre tours.
+- **Capture** : `img/c5-bois-haut.png`, `img/c1-bois-parcours.png`.
+
 ### CE QUI EST ACQUIS — ce que j'ai joué au round 77 et qui marche
 Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout ce qui suit est mesuré.
 - **La ville laisse enfin l'enfant tranquille** (n° 78, 84, 85). Trois parties « profil vierge, manette posée, on ne touche à rien », 320 s de simulation chacune, relevés toutes les 10 s au-delà des 180 s de calme volontaire : **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, aucun gang, aucune bagarre, aucune infraction, 0 habitant à portée de coup**. C'était le défaut bloquant du round précédent ; il est mort.

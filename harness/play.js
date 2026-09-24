@@ -7324,7 +7324,11 @@ test('une manette PlayStation 5 pilote tout le jeu', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const ferme = () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
+    // `ferme()` ne faisait que CACHER les panneaux : apres l'essai du bouton Options, le jeu
+    // restait `paused` et la manette, a raison, ne commandait plus rien — les gachettes et L3
+    // se mesuraient dans un jeu en pause. On referme pour de bon, et on laisse une lecture au
+    // repos pour que le premier appui ne tombe pas dans la meme image que la bascule.
+    const ferme = () => { try { __G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); try { __G.pollGamepad(0.02); } catch (e) {} };
     ferme();
     // FAUSSE DUALSENSE, branchée sur la prise 2 : l'ancienne version ne regardait que la prise 0
     const vib = [];
@@ -7727,6 +7731,7 @@ test('a la manette PS5, on marche au STICK GAUCHE seul, et on conduit a la gache
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos avant de pousser quoi que ce soit (voir le test 232)
     const bt = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; };
     try {
       const res = {};
@@ -7829,13 +7834,20 @@ test('la croix gauche/droite et les sticks en x font enfin ce qu\'on attend', as
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); G.pollGamepad(0.02); };
     ferme();
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.P.drawn = false;   // rien d'autre ne doit pousser le joueur
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
     try {
+      // UNE LECTURE AU REPOS AVANT DE COMMENCER. La manette est lue 120 fois par seconde par
+      // son propre minuteur : un appui ne tombe jamais dans la MEME lecture que la fermeture
+      // d'un menu ou que l'apparition de la manette. Le test, lui, enchaine les deux d'un
+      // coup ; depuis la version 0.10 la manette rearme ses boutons a ces bascules (a raison :
+      // un ✕ tenu dans la boutique ne doit pas degainer en sortant), et le premier appui
+      // etait avale. On lui donne donc la lecture au repos qu'elle a toujours en vrai.
+      G.pollGamepad(0.02);
       const res = {};
       // ---- LA CROIX ← → : elle change d'ARME et n'ouvre plus de menu en pleine course
       G.owned.add('arme:pistol'); G.owned.add('arme:rifle'); G.P.grenades = 0; G.P.weapon = null;
@@ -9604,6 +9616,7 @@ test('en mode rotation, le stick gauche fait TOURNER le personnage et braquer le
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos avant de pousser quoi que ce soit (voir le test 232)
     const ctrl0 = G.settings.ctrl, turn0 = G.settings.turn;
     try {
       const res = {};
@@ -9666,12 +9679,13 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const dodo = ms => new Promise(rr => setTimeout(rr, ms));
-    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); };
+    const ferme = () => { try { G.closeUI(); } catch (e) {} document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); G.pollGamepad(0.02); };
     ferme();
     G.tel.x = G.tel.y = 0; G.joy.x = G.joy.y = 0; G.keys.clear(); G.settings.ctrl = 'cam';
     const ds = { index: 0, connected: true, mapping: 'standard', id: 'DualSense Wireless Controller',
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    G.pollGamepad(0.02);   // une lecture au repos : la manette est lue 120 fois/s, l'appui ne tombe jamais dans la meme image que son apparition
     const tap = i => { ds.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(0.02); G.simTime += 0.1;
       ds.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(0.02); };
     const gach = (i, v) => { ds.buttons[i] = { pressed: v > 0.35, value: v }; G.pollGamepad(0.02); };

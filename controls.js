@@ -92,7 +92,15 @@
       // donc trois cas — changement de CONTEXTE, retour de coupure (`rearmer`) et VOL de la
       // manette par une autre prise — de la toute premiere manette, qui, elle, repond tout
       // de suite. Les axes ne se rearment QUE sur un changement de contexte.
-      const changementContexte = context !== null && current !== context;
+      // ARBITRAGE r76 (suite). La 0.10 rearmait a CHAQUE changement de contexte, y compris
+      // entre deux situations de JEU : monter en voiture (game:foot → game:vehicle) rendait
+      // le stick et R2 muets tant qu'on ne les relachait pas. Mesure : au volant, stick
+      // maintenu, 0 rad de braquage au lieu de -0,96 (test 265) et gaz a 0 a fond (test 231).
+      // Or l'enfant entre dans la voiture en poussant deja le stick et la gachette. Le
+      // rearmement ne garde donc que les bascules qui passent par un MENU ou une pause —
+      // celles ou un bouton tenu appartenait a l'ecran precedent (tests node de la 0.10).
+      const enJeu = c => /^game:/.test(c || '');
+      const changementContexte = context !== null && current !== context && !(enJeu(current) && enJeu(context));
       // La TOUTE PREMIERE lecture d'une manette, EN JEU, ne bloque rien : un navigateur ne
       // revele une manette qu'APRES un appui du joueur, donc cet appui-la est le sien et doit
       // compter (sinon le premier ✕, la premiere fleche et le premier coup de stick sont

@@ -1723,6 +1723,7 @@ window.__G = {
   CHAUD: typeof CHAUD !== 'undefined' ? CHAUD : null,
   pollGamepad: typeof pollGamepad === 'function' ? pollGamepad : null,
   padActive: typeof padActive === 'function' ? padActive : null,
+  MARLON_INTRO_VERSION: typeof MARLON_INTRO_VERSION !== 'undefined' ? MARLON_INTRO_VERSION : null,
   padStick: typeof padStick === 'function' ? padStick : null,
   padVibre: typeof padVibre === 'function' ? padVibre : null,
   padVisee: typeof padVisee === 'function' ? padVisee : null,

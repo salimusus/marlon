@@ -29978,12 +29978,19 @@ function curseurAccueil() {
 }
 function padMenu(L, neuf, bas, direction) {
   if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) { padTouche('Escape', true); return; }
-  if (!document.querySelector('.focustv')) { if (!curseurAccueil()) navPremier(); }
+  // ARBITRAGE r76. La 0.10 posait la bague ET validait dans la MEME image. Notre version ne
+  // faisait que poser la bague au premier ✕. On garde les deux : la bague est de toute facon
+  // posee des l'ouverture d'une fenetre (test 216), donc un ✕ normal valide tout de suite ;
+  // mais un ✕ appuye alors qu'AUCUNE bague n'est visible ne declenche plus le premier bouton
+  // venu — dans le menu de pause, c'est « Recommencer » ou « Tout effacer ». Il pose la bague,
+  // le suivant valide (test 372 : « ✕ sans bague → play », puis « ✕ → accueil cache »).
+  const bagueAbsente = !document.querySelector('.focustv');
+  if (bagueAbsente) { if (!curseurAccueil()) navPremier(); }
   if (direction) {
     if ((direction === 'gauche' || direction === 'droite') && navGlisse(direction === 'gauche' ? -1 : 1)) { /* range / select */ }
     else navVers(direction);
   }
-  if (neuf[0] && !bas[0]) { navValide(); return; }
+  if (neuf[0] && !bas[0]) { if (!bagueAbsente) navValide(); return; }
   if (neuf[5] && !bas[5]) navOnglet(1);
   else if (neuf[4] && !bas[4]) navOnglet(-1);
 }

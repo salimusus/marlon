@@ -15596,6 +15596,13 @@ test('accueil à la manette : la bague est sur « Jouer » dès que la manette p
     const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: 0, y: 1, z: 6, hour: 12 });
     const st = document.getElementById('start'), play = document.getElementById('play');
+    // L'INTRODUCTION CINEMA DE LA 0.10 N'EST PAS LE SUJET ICI. Depuis la version 0.10,
+    // « Jouer » lance d'abord un film de 32 s (une fois, puis plus jamais : `marlon.intro.seen`).
+    // Ce test mesure la BAGUE et le bouton ✕ ; en laissant le film partir, l'accueil ne se
+    // referme qu'a la fin — et sur le banc (1 image/s) il ne finit jamais, ce qui bloquerait la
+    // manette de tous les tests suivants. On le declare deja vu, comme pour un enfant qui a
+    // deja lance le jeu une fois.
+    try { localStorage.setItem('marlon.intro.seen', G.MARLON_INTRO_VERSION || 'action-v2'); } catch (e) {}
     const focus = () => { const f = document.querySelector('.focustv'); return f ? (f.id || f.tagName) : null; };
     const ds = { id: 'DualSense Wireless Controller (054c)', index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];

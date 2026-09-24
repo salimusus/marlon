@@ -5537,13 +5537,27 @@ function degageLesRoutes() {
     const r = (city.routes || []).find(r2 => Math.abs(t.x - r2.x) < r2.w / 2 && Math.abs(t.z - r2.z) < r2.d / 2);
     if (!r) continue;
     const long = r.d >= r.w;
-    const dep = (long ? r.w : r.d) / 2 + 1.2;
+    const demi = (long ? r.w : r.d) / 2;
     // On ramenait le feu sur l'AXE de la rue qu'on lui faisait quitter : deux feux du rond-point
     // atterrissaient ainsi en plein milieu de la rue perpendiculaire. On garde sa position LE
     // LONG de la rue, on ne le decale que de cote, et on verifie que le nouveau coin est libre.
+    // UN SEUL ECART DE 1,20 M, C'ETAIT TROP LOIN POUR LE ROND-POINT. Les deux feux du
+    // rond-point de la statue (±4,2 ; -30,2), pris dans sa dalle de 16 x 8, etaient pousses
+    // a z = -32,2 — c'est-a-dire DANS le mur avant des immeubles de (±8 ; -35,5), qui est a
+    // z = -32,17 (releve par harness/audit.js : 2 poteaux dans un batiment de plus). On essaie
+    // maintenant quatre ecarts, du plus court au plus long, des deux cotes, et on refuse un
+    // emplacement qui tombe dans un batiment ou sur un autre objet : le feu se pose a 40 cm
+    // du bord de la dalle au lieu de traverser la facade.
     const s1 = long ? (t.x >= r.x ? 1 : -1) : (t.z >= r.z ? 1 : -1);
-    const essais = long ? [[r.x + s1 * dep, t.z], [r.x - s1 * dep, t.z]] : [[t.x, r.z + s1 * dep], [t.x, r.z - s1 * dep]];
-    const ok = essais.find(([x, z]) => !surChaussee(x, z));
+    const batsF = [...(city.batiments || []), ...(city.interieurs || [])];
+    const libreF = (x, z) => !surChaussee(x, z)
+      && !batsF.some(q => Math.abs(x - q.x) < q.w / 2 + 0.5 && Math.abs(z - q.z) < q.d / 2 + 0.5)
+      && !solidsAutour(x, z, 1.4, false).some(o => o !== t.solid && !o.sol && !o.trottoir && o.h > 0.6
+        && Math.abs(x - o.x) < o.w / 2 + 0.3 && Math.abs(z - o.z) < o.d / 2 + 0.3);
+    const essais = [];
+    for (const e of [0.6, 1.2, 1.8, 2.4]) for (const sg of [s1, -s1])
+      essais.push(long ? [r.x + sg * (demi + e), t.z] : [t.x, r.z + sg * (demi + e)]);
+    const ok = essais.find(([x, z]) => libreF(x, z));
     if (!ok) continue;
     t.x = ok[0]; t.z = ok[1];
     if (t.g) t.g.position.set(t.x, t.g.position.y, t.z);

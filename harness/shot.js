@@ -2377,6 +2377,9 @@ window.__G = {
   classroom: typeof classroom === 'function' ? classroom : null,
   buildBank: typeof buildBank === 'function' ? buildBank : null,
   // POSTE FLUIDITE : le cout d'une image (ajoute tes exports SOUS cette ligne)
+  explode: typeof explode === 'function' ? explode : null,
+  morceaux: typeof debris !== 'undefined' ? debris : null,   // le mot « debris » est deja pris plus haut par debrisParts (les toles de vehicule)
+  EPHEMERES: typeof EPHEMERES !== 'undefined' ? EPHEMERES : null,
   TRAFIC: typeof TRAFIC !== 'undefined' ? TRAFIC : null,
   VILLE: typeof VILLE !== 'undefined' ? VILLE : null,
   rendreImage: typeof rendreImage === 'function' ? rendreImage : null,

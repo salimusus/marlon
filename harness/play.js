@@ -22053,3 +22053,212 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
   const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
   return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
 });
+
+test('la cage à grimper se GRIMPE A PIED du gazon au plancher du sommet, sans un seul saut', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -162, y: 1, z: -136, hour: 12, frais: true });
+    const GX = -162, GZ = -126;
+    // LES BARREAUX. Le commentaire du code annonçait « chacun a 0,55 m du precedent » et le
+    // code ecrivait y = n * 0.9 : 0,98 / 1,88 / 2,78 m de dessus, pour un pas de 0,60 m.
+    const barres = [];
+    for (const o of G.solids) if (Math.abs(o.x - GX) < 3 && Math.abs(o.z - GZ) < 8 && o.h < 0.4 && o.h > 0.05)
+      barres.push(+(o.y + o.h / 2).toFixed(2));
+    const etages = [...new Set(barres)].sort((a, b) => a - b);
+    let pire = 0;
+    for (let i = 1; i < etages.length; i++) pire = Math.max(pire, etages[i] - etages[i - 1]);
+    // ON MONTE. Aucun saut : c'est tout le defaut n° 90 — le controleur restait 275 images
+    // stick a fond contre la premiere barre, a 0,98 m, sans monter d'un centimetre.
+    P.pos.set(-162, 0.6, -136); P.vel.set(0, 0, 0); P.standing = null;
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const yDepart = +P.pos.y.toFixed(2);
+    let images = 0, sauts = 0;
+    const trace = [], bloques = [];
+    for (const [tx, tz] of [[-162, -132.4], [-162, -130.6], [-162, -128.8], [-162, -127], [-162, -126]]) {
+      let n = 0;
+      while (n < 400) {
+        const dx = tx - P.pos.x, dz = tz - P.pos.z;
+        if (Math.hypot(dx, dz) < 0.6) break;
+        P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz);
+        G.keys.clear(); G.keys.add('KeyW');          // JAMAIS de Space
+        G.step(1 / 60, true); n++; images++;
+        if (P.jumpBuf > 0) sauts++;
+      }
+      G.keys.clear();
+      trace.push(+P.pos.y.toFixed(2));
+      if (n >= 400) bloques.push(`(${tx} ; ${tz}) — arrete a ${P.pos.x.toFixed(2)} ; ${P.pos.z.toFixed(2)} ; ${P.pos.y.toFixed(2)} m`);
+    }
+    const sommet = +P.pos.y.toFixed(2);
+    // ET LA BARRIERE DU TROTTOIR NE TRAVERSE PLUS LA CAGE : deux de ses huit panneaux etaient
+    // plantes a x = -161, soit A L'INTERIEUR de la cage (x -164,4 a -159,6), et decoratifs.
+    let dedans = 0;
+    G.scene.traverse(o => {
+      if (!o.isMesh || !o.geometry || !o.geometry.boundingBox) o.geometry && o.geometry.computeBoundingBox && o.geometry.computeBoundingBox();
+      if (!o.isMesh) return;
+      const p2 = new (o.position.constructor)(); o.getWorldPosition(p2);
+      if (Math.abs(p2.x - GX) < 2.5 && Math.abs(p2.z - GZ) < 2.5 && p2.y > 0.3 && p2.y < 1.2
+        && o.scale && Math.abs(o.scale.x - 0.12) < 0.01 && Math.abs(o.scale.z - 3.4) < 0.01) dedans++;
+    });
+    return { etages, pire: +pire.toFixed(2), yDepart, trace, bloques, images, sauts, sommet, dedans };
+  });
+  const ok = r.bloques.length === 0 && r.sommet > 3.0 && r.sauts === 0 && r.pire > 0 && r.pire <= 0.56
+    && r.etages.length >= 5 && r.dedans === 0;
+  return { ok, detail: `n° 90 : le commentaire du code annonçait « trois etages de barres, chacun a 0,55 m du precedent », le code ecrivait y = n * 0.9 — barres a 0,98 / 1,88 / 2,78 m pour un pas franchissable de 0,60 m, et le plancher du sommet (dalle PLEINE de 5 x 5 m) coiffait tout : 275 images (4,6 s) de stick a fond, bloque a (-162 ; -128,98), pas un centimetre de monte · maintenant les ${r.etages.length} etages de barreaux sont a ${r.etages.join(' / ')} m, plus grand ecart ${r.pire} m · et SURTOUT on monte EN MARCHANT, sans un seul saut (${r.sauts} saut) : ${r.images} images du gazon (${r.yDepart} m) au plancher du sommet (${r.sommet} m) par l'echelle de la face nord, ${r.bloques.length} etape bloquee, hauteurs ${r.trace.join(' → ')} m · la barriere du trottoir, qui etait plantee a un metre du centre de la cage et la traversait (deux panneaux decoratifs qu'on franchissait a pied), n'y est plus : ${r.dedans} panneau dedans${r.bloques.length ? ' · BLOQUE : ' + r.bloques.join(' | ') : ''}` };
+});
+
+test('le toboggan de la Plaine des Sports se monte A PIED par son escalier, et la glissade ramène au sol', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -123, hour: 12, frais: true });
+    const BX = -172, BZ = -114;
+    // LES MARCHES. Elles montaient EN S'ELOIGNANT de la tour : 0,50 m collee a la tour,
+    // 2,10 m a l'autre bout, pour une plateforme a 2,50 m.
+    const marches = [];
+    for (const o of G.solids) if (Math.abs(o.x - BX) < 1.5 && o.z < BZ - 1.5 && o.z > BZ - 7 && Math.abs(o.d - 0.9) < 0.01)
+      marches.push({ z: +o.z.toFixed(1), h: +(o.y + o.h / 2).toFixed(2) });
+    marches.sort((a, b) => b.z - a.z);               // du plus proche de la tour au plus loin
+    const monteVersLaTour = marches.length >= 4 && marches[0].h > marches[marches.length - 1].h;
+    let pireMarche = 0;
+    for (let i = 1; i < marches.length; i++) pireMarche = Math.max(pireMarche, Math.abs(marches[i].h - marches[i - 1].h));
+    // ON MONTE, PUIS ON REDESCEND PAR LA GLISSADE. Sans un saut.
+    const parcours = (depart, etapes) => {
+      // `depart` a trois nombres quand on repart d'en haut : reposer le joueur a 0,60 m au
+      // centre de la tour, c'est le poser DANS un bloc plein de 2,40 m — il en est ejecte au
+      // sol et le test mesurait alors une promenade sur le gazon, pas la glissade.
+      if (depart) { P.pos.set(depart[0], depart[2] === undefined ? 0.6 : depart[2], depart[1]); P.vel.set(0, 0, 0); P.standing = null; }
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      let images = 0, sauts = 0; const bloques = [], trace = [];
+      for (const [tx, tz] of etapes) {
+        let n = 0;
+        while (n < 400) {
+          const dx = tx - P.pos.x, dz = tz - P.pos.z;
+          if (Math.hypot(dx, dz) < 0.6) break;
+          P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz);
+          G.keys.clear(); G.keys.add('KeyW'); G.step(1 / 60, true); n++; images++;
+          if (P.jumpBuf > 0) sauts++;
+        }
+        G.keys.clear(); trace.push(+P.pos.y.toFixed(2));
+        if (n >= 400) bloques.push(`(${tx} ; ${tz}) — arrete a ${P.pos.z.toFixed(2)} ; ${P.pos.y.toFixed(2)} m`);
+      }
+      return { images, sauts, bloques, trace, y: +P.pos.y.toFixed(2), z: +P.pos.z.toFixed(2) };
+    };
+    const montee = parcours([BX, BZ - 9], [[BX, BZ - 5.6], [BX, BZ - 3.8], [BX, BZ - 2], [BX, BZ]]);
+    // depuis la plateforme OU L'ON VIENT D'ARRIVER, la glissade part vers le sud et rend le sol
+    const descente = parcours(null, [[BX, BZ + 3], [BX, BZ + 6], [BX, BZ + 9.5]]);
+    return { marches, monteVersLaTour, pireMarche: +pireMarche.toFixed(2), montee, descente };
+  });
+  const ok = r.monteVersLaTour && r.pireMarche > 0 && r.pireMarche <= 0.56
+    && r.montee.bloques.length === 0 && r.montee.y > 2.4 && r.montee.sauts === 0
+    && r.descente.bloques.length === 0 && r.descente.y < 0.6;
+  return { ok, detail: `n° 91 : l'escalier MONTAIT EN S'ELOIGNANT de la tour — 0,50 m pour la marche collee a la tour, 2,10 m pour la plus lointaine, et la plateforme a 2,50 m : en arrivant du nord on rencontrait d'abord une face de 2,10 m (bloque a z = -120,45, 226 images sans avancer), et depuis la derniere marche il n'y avait plus aucun chemin · maintenant les marches vont de ${r.marches.map(m => m.h + ' m').join(' / ')} en partant de la tour — elles montent bien VERS elle (${r.monteVersLaTour}), contremarche maxi ${r.pireMarche} m · et on le fait a pied : ${r.montee.images} images du sol a la plateforme a ${r.montee.y} m sans un saut (${r.montee.sauts}), ${r.montee.bloques.length} etape bloquee, hauteurs ${r.montee.trace.join(' → ')} m · la glissade rend le sol de l'autre cote : ${r.descente.trace.join(' → ')} m en ${r.descente.images} images${r.montee.bloques.length ? ' · BLOQUE : ' + r.montee.bloques.join(' | ') : ''}` };
+});
+
+test('le ballon du city-stade est posé SUR le gazon, et il rentre toujours dans le but', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -164, y: 1, z: -172, hour: 12, frais: true });
+    const CX = -164, CZ = -175;
+    const b = G.city.balls.find(x => Math.hypot(x.mesh.position.x - CX, x.mesh.position.z - CZ) < 3);
+    if (!b) return { pourquoi: 'pas de ballon au city-stade' };
+    for (let i = 0; i < 180; i++) G.step(1 / 60, true);   // qu'il se pose
+    const gazon = Math.max(...G.solids.filter(o => Math.abs(o.x - CX) < 2 && Math.abs(o.z - CZ) < 2).map(o => o.y + o.h / 2), 0)
+      || 0.14;
+    const bas = +(b.mesh.position.y - b.r).toFixed(2);
+    // ET LE MARQUAGE PEINT NE FLOTTE PLUS NON PLUS (il etait a 0,24 pour un gazon a 0,14)
+    let marquage = null;
+    G.scene.traverse(o => {
+      if (o.isMesh && o.geometry && o.geometry.type === 'PlaneGeometry' && Math.abs(o.rotation.x + Math.PI / 2) < 0.01) {
+        const q = new (o.position.constructor)(); o.getWorldPosition(q);
+        if (Math.hypot(q.x - CX, q.z - CZ) < 2) marquage = +q.y.toFixed(2);
+      }
+    });
+    // LE BUT MARCHE TOUJOURS : on pousse le ballon dans la cage ouest
+    const avant = G.city.goals;
+    b.mesh.position.set(CX - 10, 0.64, CZ); b.vel.set(-14, 0, 0);
+    for (let i = 0; i < 240; i++) G.step(1 / 60, true);
+    return { bas, gazon: +gazon.toFixed(2), ground: b.ground, marquage, avant, apres: G.city.goals };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = Math.abs(r.bas - r.gazon) < 0.03 && r.ground === 0.14 && r.apres > r.avant
+    && r.marquage !== null && r.marquage - r.gazon < 0.05;
+  return { ok, detail: `n° 92 : le ballon reposait a y = 1,00 (ground 0,50 + rayon 0,50), donc son BAS a 0,50 m, pour un gazon pose a 0,14 — 36 cm de vide sous la balle, et c'est la premiere chose qu'on regarde en entrant dans la cage · maintenant ground = ${r.ground}, bas du ballon ${r.bas} m, gazon ${r.gazon} m : il touche l'herbe · le marquage peint flottait lui aussi (0,24 pour un gazon a 0,14), il est a ${r.marquage} m · et le but marche toujours : ${r.avant} → ${r.apres} en poussant la balle vers la cage ouest` };
+});
+
+test('un panneau se lit des DEUX côtés : son dos ne cache plus le manège à poneys', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -110, y: 1, z: 310, hour: 12, frais: true });
+    // Chaque panneau est un groupe : un poteau, un cadre, et LES FACES. On compte les faces.
+    let panneaux = 0, recto = 0, versoTexture = 0, versoRetourne = 0, memeMateriau = 0;
+    G.scene.traverse(o => {
+      if (!o.isGroup) return;
+      // un panneau de sign(), et rien d'autre : son poteau fait 0,18 x 1,70 x 0,18, et ses
+      // faces sont les seuls plans textures poses a +/- 8 cm de l'axe du cadre.
+      const poteau = o.children.some(c => c.isMesh && c.scale && Math.abs(c.scale.x - 0.18) < 0.001
+        && Math.abs(c.scale.y - 1.7) < 0.001 && Math.abs(c.scale.z - 0.18) < 0.001);
+      if (!poteau) return;
+      const faces = o.children.filter(c => c.isMesh && c.geometry && c.geometry.type === 'PlaneGeometry'
+        && c.material && c.material.map && Math.abs(Math.abs(c.position.z) - 0.08) < 0.001);
+      if (faces.length !== 2) return;
+      panneaux++;
+      for (const f of faces) {
+        if (f.position.z > 0) recto++;
+        else { versoTexture++; if (Math.abs(Math.abs(f.rotation.y) - Math.PI) < 0.01) versoRetourne++; }
+      }
+      if (faces.length === 2 && faces[0].material === faces[1].material) memeMateriau++;
+    });
+    // ET ON LE VERIFIE LA OU CA COMPTE : debout sur le Chemin de la Grange, a l'EST du panneau
+    // du manege. Une face est lisible si elle REGARDE le joueur — c'est-a-dire si son axe +Z
+    // (celui vers lequel le texte est tourne) pointe de son cote. Avant, la seule face
+    // texturee regardait l'ouest : de l'est on n'avait que la planche.
+    const joueur = new THREE.Vector3(-110, 1.6, 310);
+    let faceLisible = 0, faceDeDos = 0, distance = null;
+    G.scene.traverse(o => {
+      if (!o.isMesh || !o.geometry || o.geometry.type !== 'PlaneGeometry' || !o.material || !o.material.map) return;
+      const q = new THREE.Vector3(); o.getWorldPosition(q);
+      if (Math.hypot(q.x + 117.5, q.z - 310) > 1) return;      // le panneau du manege, et lui seul
+      distance = +joueur.distanceTo(q).toFixed(2);
+      const axe = new THREE.Vector3(); o.getWorldDirection(axe);
+      if (axe.dot(joueur.clone().sub(q).normalize()) > 0.3) faceLisible++; else faceDeDos++;
+    });
+    return { panneaux, recto, versoTexture, versoRetourne, memeMateriau, faceLisible, faceDeDos, distance };
+  });
+  // 22 : le coeur de la ville est bati avec `noSigns = true` ; les panneaux reellement
+  // poses sont ceux des trois quartiers neufs et de leurs abords — precisement les onze
+  // dont le controleur dit qu'ils ont « tous le meme dos ».
+  const ok = r.panneaux >= 18 && r.recto === r.panneaux && r.versoTexture === r.recto && r.versoRetourne === r.versoTexture
+    && r.memeMateriau === r.panneaux && r.faceLisible === 1 && r.faceDeDos === 1;
+  return { ok, detail: `n° 94 : sign() ne texturait que la face AVANT. Le dos etait un aplat de bois nu de 3,45 x 1,65 m, de 1,70 a 3,10 m de haut — le panneau « 🐴 Manege a poneys » est pose en (-117,5 ; 310) face a l'ouest, et l'on arrive au manege par l'EST, le Chemin de la Grange : la planche remplissait tout l'ecran et cachait le manege, son toit de chaume et ses six poneys · maintenant les ${r.panneaux} panneaux poses du jeu (le coeur de la ville est bati avec noSigns : ce sont ceux des trois quartiers neufs et de leurs abords) portent ${r.recto} faces avant et ${r.versoTexture} faces arriere texturees, dont ${r.versoRetourne} retournees d'un demi-tour pour que le texte se lise a l'endroit, et ${r.memeMateriau} partagent le MEME materiau que leur recto (une seule texture, un maillage de plus) · et debout sur le Chemin de la Grange, a ${r.distance} m du panneau du manege : ${r.faceLisible} face texturee tournee vers le joueur (avant : 0, la seule qu'il y avait regardait l'ouest) et ${r.faceDeDos} de l'autre cote` };
+});
+
+test('les trois quartiers neufs sont HABITÉS : des gens qui marchent, pas des mannequins sur socle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -164, y: 1, z: -172, hour: 12, frais: true });
+    const H = G.city.habitants;
+    if (!H || !H.length) return { pourquoi: 'aucun habitant dans les trois quartiers' };
+    const suivi = H.map(h => ({ px: h.x, pz: h.z, chemin: 0 }));
+    // 60 s de jeu : de quoi faire une tournee complete pour chacun
+    for (let i = 0; i < 3600; i++) {
+      G.step(1 / 60, true);
+      H.forEach((h, k) => { const s = suivi[k]; s.chemin += Math.hypot(h.x - s.px, h.z - s.pz); s.px = h.x; s.pz = h.z; });
+    }
+    const bilan = H.map((h, k) => ({ nom: h.nom, pts: h.pts.length, chemin: +suivi[k].chemin.toFixed(1),
+      y: +h.y.toFixed(2), sol: +G.solSousHabitant(h.x, h.z, h.y).toFixed(2), nomme: !!(h.av.tag && h.av.tag.visible) }));
+    const tournees = bilan.filter(b => b.pts > 1);
+    // LES SOCLES : un solide de 1,10 x 1,10 x 0,30 m. Il n'en reste aucun dans les trois quartiers.
+    const socle = o => Math.abs(o.w - 1.1) < 0.01 && Math.abs(o.d - 1.1) < 0.01 && Math.abs(o.h - 0.3) < 0.01;
+    const zones = [[-198, -104, -198, -100], [-170, -110, 262, 330], [110, 190, 258, 350]];
+    const soclesQuartiers = G.solids.filter(o => socle(o) && zones.some(z => o.x > z[0] && o.x < z[1] && o.z > z[2] && o.z < z[3])).length;
+    const soclesTerrain = G.solids.filter(o => socle(o) && o.x > -181 && o.x < -147 && o.z > -186 && o.z < -164).length;
+    return { n: H.length, bilan, tournees: tournees.length,
+      immobiles: tournees.filter(b => b.chemin < 10).map(b => b.nom),
+      enLair: bilan.filter(b => Math.abs(b.y - b.sol) > 0.05).map(b => `${b.nom} (${b.y} m, sol ${b.sol} m)`),
+      sansNom: bilan.filter(b => !b.nomme).length, soclesQuartiers, soclesTerrain,
+      pireChemin: Math.min(...tournees.map(b => b.chemin)), parlent: H.filter(h => h.mots && h.mots.length).length };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.n >= 12 && r.tournees >= 9 && r.immobiles.length === 0 && r.enLair.length === 0
+    && r.sansNom === 0 && r.soclesQuartiers === 0 && r.soclesTerrain === 0 && r.parlent === r.n;
+  return { ok, detail: `n° 101, et c'est une remarque de joueur : « la vie des trois quartiers, ce sont des mannequins de vitrine sur socle blanc, dont quatre plantes sur le terrain de foot ». C'etait exact — les joueurs du city-stade, le berger, le fermier, le forain, le ranger, les campeurs et le moniteur etaient des mannequin() : immobiles, sans nom, bras ecartes, chacun sur un socle gris de 1,10 x 1,10 x 0,30 m QUI EST UN SOLIDE, et le ballon rebondissait dessus · maintenant ce sont ${r.n} habitants, ${r.tournees} avec une tournee : sur 60 s de jeu (3 600 images) ils parcourent ${r.bilan.filter(b => b.pts > 1).map(b => b.nom + ' ' + b.chemin + ' m').join(', ')} — le moins marcheur fait ${r.pireChemin} m (avant : 0,00 m pour les treize) · ${r.immobiles.length} immobile, ${r.enLair.length} en l'air ou dans le sol (leur hauteur etait figee a la pose : la bergere finissait 0,68 m en l'air, le forain 1,18 m dans la piste du manege), ${r.n - r.sansNom}/${r.n} ont leur nom au-dessus de la tete et ${r.parlent} ont quelque chose a dire quand on s'approche · socles blancs restants : ${r.soclesQuartiers} dans les trois quartiers, ${r.soclesTerrain} sur le terrain de foot (avant : 2)` };
+});

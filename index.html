@@ -10735,6 +10735,14 @@ function vehiculeMord(c, x, z, h) {
   const R = Math.sqrt(A * A + B * B);
   for (const o of solidsAutour(x, z, A + B + 2, true)) {
     if (o === c.solid || o.h > 30) continue;
+    // LE MOBILIER SOLIDIFIE POUR LE JOUEUR N'ARRETE PAS UNE VOITURE. `carBlocked` l'ignore
+    // depuis toujours (« la conduite reste exactement celle d'avant ») ; ce controle-ci, lui,
+    // le comptait — et comme il ne sert QU'aux vehicules de service (`exactVeh`), ils etaient
+    // les seuls du jeu a s'y cogner. Mesure (test 388) : le camion de pompiers dort avec son
+    // arriere dans le vantail decoratif de la caserne (2,9 x 0,20 m en (-40 ; 126)) ; tous ses
+    // pas vers la sortie etaient refuses par ce seul panneau, et il lui fallait vingt-quatre
+    // secondes de glissades laterales pour s'echapper de sa propre cour.
+    if (o.decor) continue;
     if (o.veh && !c.exactVeh) continue;
     if (c.remorque && o === c.remorque.solid) continue;   // l'epave au crochet nous suit : ce n'est pas un obstacle
     if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // franchissable, ou au-dessus du toit

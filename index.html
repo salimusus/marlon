@@ -20903,7 +20903,7 @@ function monterAvecBot(b) {
   // que lui donne vehiculeDuJoueur) : sans cette réserve, un membre s'y asseyait à sa place.
   if (!moto) {
     c.robot = !!(robot.actif && robot.g && placesDe(c).robot && Math.hypot(robot.x - c.x, robot.z - c.z) < 8);
-    if (chien.pet && placesDe(c).chien && Math.hypot(chien.pet.g.position.x - c.x, chien.pet.g.position.z - c.z) < 6) { c.chien = true; chien.enVoiture = c; }
+    if (chien.pet && placesDe(c).chien && !chien.couche && !chien.attaque) { c.chien = true; chien.enVoiture = c; }   // même règle qu'au volant (défaut n° 95)
     const eqp = embarqueOccupants(c, ['avant']);
     if (eqp.montes.length) msg(`🚗 ${eqp.montes.join(', ')} ${eqp.montes.length > 1 ? 'montent' : 'monte'} derrière`, 3000);
     if (eqp.restes.length) msg(`🚗 Plus de place assise : ${eqp.restes.join(' et ')} ${eqp.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶`, 4200);
@@ -21487,6 +21487,28 @@ function chienTick(dt) {
   if (vehChien) {
     const c = vehChien, cs = Math.cos(c.h), sn = Math.sin(c.h), dessus = !!c.rider;
     let lx, lz, ly;
+    // ---- LE CHIEN S'ASSIED À SA PLACE, CELLE DE LA TABLE `PLACES` (défaut n° 95) ----
+    // Cette branche avait sa PROPRE table de sièges, écrite à la main, et pour une voiture
+    // fermée elle posait le chien à lx = −0,52 / lz = +0,05 : c'est-à-dire EXACTEMENT le
+    // siège du PASSAGER AVANT. Relevé du contrôleur, quatre à bord d'un 4×4 : le chien en
+    // (−7,48 ; 0,60 ; 9,95) et Lucas_2014, place « avant », en (−7,50 ; 0,60 ; 9,85) —
+    // 10 cm d'écart, même hauteur, tous deux à 0,52 m de l'axe. Le chien voyageait donc
+    // SUR LES GENOUX de l'ami, et il y restait : 480 images, 17 m parcourus, pas un
+    // centimètre d'écart. `placeOccupants` l'asseyait pourtant correctement (assiedChien,
+    // place `chien` de la table), mais `poseJoueurAuVolant` tourne AVANT `cityCommon` :
+    // chienTick le remettait sur le passager à chaque image.
+    // Il n'y a plus qu'UNE table de sièges pour le joueur, les amis, le robot et le chien.
+    // Les DEUX-ROUES et le jet-ski gardent leur repère à eux : le chien y voyage dans son
+    // panier (`panierChien`), qui est calé sur ces valeurs-là, et personne ne s'y assied
+    // à sa place.
+    if (!dessus && c.kind !== 'jetski' && placesDe(c).chien) {
+      const w = assiedChien(c, dt);
+      if (w) {
+        p.tail.rotation.y = Math.sin(simTime * 8) * 0.4;
+        if (simTime > chien.aboiT && (Math.abs(drive.speed) > 12 || c.heli)) { chien.aboiT = simTime + rnd(6, 14); aboie(1); }
+        return;
+      }
+    }
     if (c.heli) { lx = -0.6; lz = 0.25; ly = (c.y != null ? 0 : 0) + 0.55; }            // à côté du pilote, dans la bulle
     else if (c.kind === 'jetski') { lx = 0; lz = -0.85; ly = 0.95; }                     // en croupe, derrière le pilote
     else if (dessus) {
@@ -25345,9 +25367,15 @@ function enterCar(c) {
   else { msg(c.kind === 'bike' ? '🚲 Pédale ! (E pour descendre)' : c.kind === 'jetski' ? '🌊 Jet-ski ! Reste dans l\'eau (E pour descendre)' : c.kind === 'buggy' ? '🏜️ Buggy de rallye : fonce sur les bosses !' : (isMobile ? '🚗 Boîte automatique · 📯 klaxon' : '🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main'), 1800); drive.gear = 1; if (c.kind !== 'bike') { $('jumpBtn').textContent = c.kind === 'buggy' ? 'SAUT' : '📯'; $('emoteBtn').textContent = '📯'; $('punchBtn').textContent = '📯'; } }
   sonPortiere(c, true);   // on ouvre, on s'installe, la portière claque : on monte VRAIMENT dans la voiture
   if (c.kind !== 'bike') engine.start(c.heli ? 'heli' : 'car', moteurDe(c)); c.vy = 0;
-  // LE CHIEN MONTE AVEC SON MAÎTRE. Il restait planté sur le trottoir à regarder la voiture
-  // partir. S'il est à moins de 6 m et que le véhicule a une place pour lui, il grimpe.
-  if (chien.pet && placesDe(c).chien && Math.hypot(chien.pet.g.position.x - c.x, chien.pet.g.position.z - c.z) < 6) { c.chien = true; chien.enVoiture = c; }
+  // LE CHIEN MONTE AVEC SON MAÎTRE, ET IL EST DÉCLARÉ PASSAGER (défaut n° 95).
+  // La déclaration exigeait qu'il soit à moins de 6 m — mais `chienTick` l'embarque, LUI,
+  // sans aucune condition de distance (au-delà de 25 m il se téléporte à son maître, c'est
+  // la promesse du jeu : « il te suit partout, même en voiture »). Résultat relevé par le
+  // contrôleur : « 🚗 Lucas_2014, MaxiBloc, Ines_gg montent avec toi + Bip 🤖 · 4 places »
+  // — le robot nommé, le chien non, `c.chien` faux… et le chien quand même dans la caisse.
+  // Les deux règles n'en font plus qu'une : il monte s'il a une place et qu'il n'est ni
+  // couché dans sa niche ni lancé sur quelqu'un — exactement ce que fait `chienTick`.
+  if (chien.pet && placesDe(c).chien && !chien.couche && !chien.attaque) { c.chien = true; chien.enVoiture = c; }
   else { c.chien = false; chien.enVoiture = null; }
   // LE ROBOT MONTE AUSSI (il refusait net : « je n'entre pas dans les voitures »).
   c.robot = !!(robot.actif && robot.g && placesDe(c).robot && Math.hypot(robot.x - c.x, robot.z - c.z) < 8);
@@ -25355,7 +25383,10 @@ function enterCar(c) {
   // et surtout QUI RESTE À PIED quand il n'y a pas assez de places — c'est la question que se
   // pose l'enfant devant une décapotable à deux places.
   const eq = embarqueOccupants(c);
-  if (eq.montes.length) msg(`🚗 ${eq.montes.join(', ')} ${eq.montes.length > 1 ? 'montent' : 'monte'} avec toi${c.chien ? ' + le chien 🐕' : ''}${c.robot ? ' + ' + robot.nom + ' 🤖' : ''} · ${eq.places} places`, 3400);
+  // Le chien est nommé comme le robot : c'est un passager, pas un accessoire (défaut n° 95).
+  const nomChien = c.chien ? ' + ' + (chien.nom || 'le chien') + ' 🐕' : '';
+  if (eq.montes.length) msg(`🚗 ${eq.montes.join(', ')} ${eq.montes.length > 1 ? 'montent' : 'monte'} avec toi${nomChien}${c.robot ? ' + ' + robot.nom + ' 🤖' : ''} · ${eq.places} places`, 3400);
+  else if (c.chien || c.robot) msg(`🚗 ${(nomChien + (c.robot ? ' + ' + robot.nom + ' 🤖' : '')).replace(/^ \+ /, '')} monte avec toi · ${eq.places} places`, 2600);
   if (eq.restes.length) msg(`🚗 ${eq.places === 2 ? 'Ce véhicule n\'a que 2 places' : 'Il n\'y a plus de place assise'} : ${eq.restes.join(' et ')} ${eq.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶 — prends une voiture plus grande !`, 5200);
 }
 function exitCar() {
@@ -27330,7 +27361,11 @@ function assiedChien(c, dt) {
   const w = placeMonde(c, pl);
   p.g.position.set(w.x, w.y, w.z); p.g.rotation.y = c.h;
   chienPoseAssis(p, 0);
-  p.g.rotation.y = c.h;
+  p.g.rotation.y = c.h; p.g.rotation.x = 0;
+  // SES COORDONNÉES SUIVENT SON MAILLAGE (défaut n° 95). `p.x / p.y / p.z` sont ce que lit
+  // tout le reste du jeu (la montée en voiture, la caresse, le veto du vétérinaire) : elles
+  // restaient à l'endroit du trottoir où il se tenait avant de monter.
+  p.x = w.x; p.y = w.y; p.z = w.z; p.facing = c.h;
   return w;
 }
 // Les occupants d'un véhicule : c.occupants = [{ av, place }]. Le conducteur d'abord, puis

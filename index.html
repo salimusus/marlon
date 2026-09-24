@@ -15685,6 +15685,30 @@ function majWanted() {
   else if (!police.cachePar) el.textContent = `🔎 On te cherche… ${et} · ils te voient : cache-toi !`;
   else el.textContent = `🔎 On te cherche… ${et} · reste hors de vue ${Math.max(0, Math.ceil(PERTE_DELAI(police.wanted) - police.hideT))} s`;
 }
+// LA VOITURE DE POLICE OUVRE LE FEU. Ce bloc était au MILIEU de la boucle de `policeTick`,
+// donc APRÈS deux `continue` : celui des voitures dont les agents sont descendus
+// (`pc.debarque`) et celui du débarquement lui-même. Depuis que les agents descendent aussi
+// dans une poursuite ORDINAIRE (n° 82), la toute première image d'une traque vide la voiture
+// — et une voiture vidée ne repassait PLUS JAMAIS par le bloc de tir : la police n'ouvrait
+// plus le feu du tout (mesuré à la sonde : niveau 3, joueur à 12 m, 30 images — 0 tir, contre
+// 1 avant le n° 82 ; le débarquement tombait dès l'image 0 parce qu'un simple poteau de 36 cm
+// planté à (-38 ; 9,1) coupe la ligne de vue de la voiture, qui se croit donc « sans contact »).
+// Le conducteur, lui, reste au volant : il continue de riposter. La fonction est donc appelée
+// AUSSI pour une voiture dont les agents sont descendus, et sur l'image du débarquement.
+function policeVoitureTire(pc, hidden) {
+  const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
+  if (!((braquage || policeTire()) && pc.active && !hidden && simTime > (pc.shotT || 0))) return false;
+  const d = Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z);
+  const portee = armee.on ? 40 : braquage ? 32 : 10 + police.wanted * 4 + tenace * 2;
+  if (d >= portee || d <= 3) return false;
+  pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.8, 2.2 - police.wanted * 0.3 - tenace * 0.15));
+  const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize();
+  const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
+  dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
+  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: Math.max(2, Math.round(((pc.mil ? 16 : 4) + police.wanted + tenace) * (0.45 + policePerf() / 100))) };
+  shots.push(sh); spawnShot(sh); sonDetonation('rifle', origin.x, origin.y, origin.z, 0.85);   // poste SON : la police tire la meme detonation que le joueur, placee a SON canon
+  return true;
+}
 function policeTick(dt) {
   if (!police.cars.length) return;
   if (armee.on) armeeTick(dt);
@@ -15781,7 +15805,7 @@ function policeTick(dt) {
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
-    if (pc.debarque) { pc.speed = 0; continue; }   // les agents sont descendus : la voiture attend devant le bâtiment
+    if (pc.debarque) { pc.speed = 0; policeVoitureTire(pc, hidden); continue; }   // les agents sont descendus : la voiture attend devant le bâtiment, mais le conducteur riposte toujours
     // envoyée sur un accident : c'est accidentsTick qui la pilote (par les voies, sirène
     // allumée). ON NE REMET PLUS SA VITESSE À ZÉRO ICI : policeTick passe AVANT servicesTick,
     // et remettre le compteur à zéro à chaque image empêchait la voiture de prendre de la
@@ -15860,6 +15884,7 @@ function policeTick(dt) {
       policeDebarque(pc, 2);
       if (!police.debarqueDit || simTime > police.debarqueDit) { police.debarqueDit = simTime + 20;
         msg('👮 Les policiers descendent de voiture et fouillent le quartier !', 2600); }
+      policeVoitureTire(pc, hidden);   // l'image du débarquement n'est pas une image de répit
       continue;
     }
     // itinéraire par points de passage : sortie du commissariat par la voie nord, puis l'anneau routier, puis la cible
@@ -15954,14 +15979,7 @@ function policeTick(dt) {
     if (pc.sireneVeh) ecarteChaussee(pc, dt, 1, pc.sireneVeh); else pc.ecart = 0;
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
-    const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
-    if ((braquage || policeTire()) && pc.active && !hidden && simTime > (pc.shotT || 0)) {
-      const d = Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z);
-      const portee = armee.on ? 40 : braquage ? 32 : 10 + police.wanted * 4 + tenace * 2;
-      if (d < portee && d > 3) { pc.shotT = simTime + (braquage ? 0.55 : Math.max(0.8, 2.2 - police.wanted * 0.3 - tenace * 0.15)); const origin = new THREE.Vector3(pc.x, pc.y + 1.5, pc.z), dir = new THREE.Vector3(P.pos.x - pc.x, (P.pos.y + 1.2) - (pc.y + 1.5), P.pos.z - pc.z).normalize(); const disp = Math.max(0.012, 0.075 - police.wanted * 0.012 - tenace * 0.008);
-        dir.x += rnd(-disp, disp); dir.y += rnd(-disp * 0.6, disp * 0.6); dir.z += rnd(-disp, disp); dir.normalize().multiplyScalar(80);
-        const sh = { m: null, p: origin, v: dir, t: 0, mine: false, police: true, byName: pc.mil ? 'l\'armée' : 'la police', dmg: Math.max(2, Math.round(((pc.mil ? 16 : 4) + police.wanted + tenace) * (0.45 + policePerf() / 100))) }; shots.push(sh); spawnShot(sh); sonDetonation('rifle', origin.x, origin.y, origin.z, 0.85); }   // poste SON : la police tire la meme detonation que le joueur, placee a SON canon
-    }
+    policeVoitureTire(pc, hidden);
     // arrestation : la police me touche (ou reste coincée tout près : les agents descendent et m'attrapent à pied)
     const dP = Math.hypot(pc.x - P.pos.x, pc.z - P.pos.z);
     // à l'abri dans un bâtiment, seule une arrestation par un agent à pied compte : la

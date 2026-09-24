@@ -590,6 +590,11 @@ window.__SHOT = {
       try { if (typeof music !== 'undefined' && music.stop) music.stop(); } catch (e26b) {}
       try { if (typeof engine !== 'undefined' && engine.stop) engine.stop(); } catch (e26c) {}
       try { if (typeof craieLitFerme === 'function') craieLitFerme(); } catch (e26d) {}
+      // LA BILLE DE LA ROULETTE est la derniere boucle audio que rien ne ramassait : un
+      // souffle en bande passante a 0,05 de gain qui tourne jusqu'a billeSon.stop(). Un tour
+      // de casino interrompu (touche Echap, test coupe en plein vol) la laissait tourner pour
+      // TOUTE la suite, et le « silence » de reference du test 218 partait a 0,03 au lieu de 0.
+      try { if (typeof billeSon !== 'undefined' && billeSon.stop) billeSon.stop(); } catch (e26h) {}
       try {
         var chn = (typeof sfx !== 'undefined' && sfx.chaine) ? sfx.chaine() : null;
         var actx = chn && chn.master && chn.master.context;

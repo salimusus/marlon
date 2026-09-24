@@ -120,7 +120,12 @@ test('full game: phone disconnect cannot cancel controller jump', () => {
 test('full game: introduction blocks movement, camera and jump through its closing button', () => {
   reset(); cinema = true; G.pollGamepad(.008); button(device, 1, 1); device.axes = [1, -1, 1, 1]; G.pollGamepad(.008);
   near(G.pad.x, 0); near(G.cam.yaw, 0); assert.equal(G.P.jumpBuf, 0);
-  cinema = false; G.pollGamepad(.008); assert.equal(G.P.jumpBuf, 0); near(G.pad.x, 0);
+  // ARBITRAGE r76 : a la SORTIE de l'introduction, le saut tenu ne doit toujours pas repartir
+  // (c'est l'action destructrice qu'on retient), mais le STICK, lui, repond tout de suite —
+  // l'enfant qui tient deja le pouce ne va pas le relacher pour que le jeu veuille bien
+  // demarrer. Mesure : cette quarantaine des axes rendait rouges cinq essais de camera du banc
+  // (397, 398, 400, 401, 416) et bloquait la marche au premier releve de la manette.
+  cinema = false; G.pollGamepad(.008); assert.equal(G.P.jumpBuf, 0); assert.ok(G.pad.x > .5, `stick a la sortie ${G.pad.x}`);
   button(device, 1, 0); device.axes.fill(0); G.pollGamepad(.008); button(device, 1, 1); G.pollGamepad(.008); assert.equal(G.P.jumpBuf, .15);
 });
 test('full game: Options takes priority over simultaneous jump and held Options does not reopen', () => {
@@ -134,7 +139,14 @@ test('full game: Options takes priority over simultaneous jump and held Options 
 test('full game: camera rotation is identical at 30, 60 and 120 input samples per second', () => {
   const angles = [];
   for (const hz of [30, 60, 120]) { reset(); device.axes[2] = .6; for (let i = 0; i < hz; i++) { now += 1000 / hz; G.pollGamepad(1 / hz); } angles.push(G.cam.yaw); }
-  near(angles[0], angles[1]); near(angles[1], angles[2]); assert.ok(Math.abs(angles[0]) > .8 && Math.abs(angles[0]) < 2);
+  // BORNE HAUTE PORTEE DE 2 A 2,6 rad (arbitrage de fusion, round 76). Ce que ce test protege,
+  // c'est l'INDEPENDANCE de la rotation vis-a-vis de la cadence d'echantillonnage ; la valeur
+  // absolue, elle, appartient au reglage de la camera. La 0.10 tournait a 3,8 rad/s au bord du
+  // stick, ce qui donne 1,46 rad ici — mais le banc de jeu (play.js, test 396) exige entre 280
+  // et 340 °/s au bord, mesure du round 71 apres la plainte du joueur (« la manette n'est pas
+  // au point avec la camera » : a 3,8 rad/s on ne se retourne plus d'un coup de pouce). A
+  // 5,5 rad/s, un stick a 0,6 pendant une seconde rend 2,24 rad. On elargit la borne.
+  near(angles[0], angles[1]); near(angles[1], angles[2]); assert.ok(Math.abs(angles[0]) > .8 && Math.abs(angles[0]) < 2.6);
 });
 test('full game: keyboard aim survives idle gamepad polling and stick drift does not move the view', () => {
   reset(); key('ShiftLeft', true); device.axes = [.08, -.08, .08, .08]; G.pollGamepad(.008);

@@ -71,21 +71,57 @@
   }
   const trigger = value => clamp((finite(value) - .06) / .94, 0, 1);
   function createController() {
-    let identity = null, context = null, previous = Array(COUNT).fill(false), rawPrevious = [], blocked = [], axesBlocked = [false, false], nav = null, navAt = 0;
-    function reset() { identity = context = null; previous.fill(false); rawPrevious = []; blocked = []; axesBlocked = [false, false]; nav = null; navAt = 0; }
+    let identity = null, context = null, previous = Array(COUNT).fill(false), rawPrevious = [], blocked = [], axesBlocked = [false, false], nav = null, navAt = 0, rearmer = false, l2Precedent = 0, r2Precedent = 0;
+    // `rearmer` : on revient d'une coupure (perte de focus, manette debranchee). Ce qui est
+    // deja enfonce a ce moment-la doit etre relache avant de compter. La PREMIERE manette
+    // jamais vue, elle, n'a rien a rearmer — voir l'arbitrage r76 dans sample().
+    function reset() { identity = context = null; previous.fill(false); rawPrevious = []; blocked = []; axesBlocked = [false, false]; nav = null; navAt = 0; rearmer = true; l2Precedent = r2Precedent = 0; }
     function sample(gp, options = {}) {
       const id = gp ? String(gp.index) + ':' + gp.id : null;
-      const current = options.context || 'blocked', now = finite(options.now), changed = id !== identity || current !== context;
-      const raw = normalize(gp, id === identity ? rawPrevious : null);
+      const current = options.context || 'blocked', nouvelleManette = id !== identity;
+      const now = finite(options.now), changed = nouvelleManette || current !== context;
+      const raw = normalize(gp, nouvelleManette ? null : rawPrevious);
       const leftMagnitude = Math.hypot(raw.lx, raw.ly), rightMagnitude = Math.hypot(raw.rx, raw.ry);
       const leftNeutral = Math.max(.18, finite(options.deadzone, .12)), rightNeutral = Math.max(.18, finite(options.lookDeadzone, .12));
+      // ============ ARBITRAGE r76 : QUI EST « REARME » ET QUAND (fusion avec la 0.10) ======
+      // Le principe de la 0.10 est bon : ce qui est deja TENU au moment d'une bascule ne doit
+      // pas agir de l'autre cote (fermer la boutique avec ✕ ne doit pas degainer ; revenir
+      // d'un onglet avec R2 tenue ne doit pas mettre les gaz). Trois defauts mesures :
+      //  1. elle rearmait aussi a la TOUTE PREMIERE lecture : or un navigateur ne revele une
+      //     manette qu'APRES un appui, donc ce premier appui est bien celui du joueur et il
+      //     etait systematiquement avale (premiere arme sautee, test 232 ; ✕ de l'accueil, 372).
+      //  2. elle rearmait entre deux situations de JEU : monter en voiture en poussant deja le
+      //     stick et la gachette rendait les deux muets (0 rad de braquage au test 265, gaz a 0
+      //     au test 231) — alors que l'enfant entre dans la caisse le pouce deja sur le stick.
+      //  3. elle rearmait TOUT ce qui etait enfonce a l'image de la bascule, y compris un
+      //     bouton qu'on venait juste d'appuyer. On ne retient plus que ce qui etait DEJA tenu
+      //     a la lecture precedente : c'est exactement « ca appartenait a l'ecran d'avant ».
+      // Les AXES, eux, ne se rearment qu'en ENTRANT dans un menu (voir plus bas).
+      const enJeu = c => /^game:/.test(c || '');
+      const premierReleve = identity === null;   // jamais lue encore, ou retour d'une coupure
+      const changementContexte = context !== null && current !== context && !(enJeu(current) && enJeu(context));
+      const entreeMenu = changementContexte && enJeu(context) && !enJeu(current);
+      // en JEU, une manette qu'on decouvre repond tout de suite ; dans un menu on rearme
+      const premiereEnJeu = premierReleve && !rearmer && enJeu(current);
+      const rearmeTout = (premierReleve || rearmer) && !premiereEnJeu;   // on ignore tout du passe
+      const rearmeTenus = changementContexte;                            // seulement le DEJA tenu
       if (changed) {
-        blocked = raw.b.slice(); blocked[6] = raw.l2 > .08; blocked[7] = raw.r2 > .08;
+        if (rearmeTout || rearmeTenus) {
+          const retenir = (enfonce, avant) => enfonce && (rearmeTout || avant);
+          blocked = raw.b.map((down, i) => retenir(down, !!rawPrevious[i]));
+          blocked[6] = retenir(raw.l2 > .08, l2Precedent > .08);
+          blocked[7] = retenir(raw.r2 > .08, r2Precedent > .08);
+        }
         // Each axis/button rearms independently. Holding a stick never blocks menu Back.
-        axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
-        previous = Array(COUNT).fill(false); nav = null; navAt = 0;
+        // ARBITRAGE r76 (avec le poste CAMERA) : la quarantaine des AXES ne s'arme qu'en
+        // ENTRANT dans un menu ou une pause. En SORTANT, l'enfant qui tient deja le stick doit
+        // marcher tout de suite — il ne va pas relacher le pouce pour que le jeu veuille bien
+        // repartir ; et au tout premier releve il n'y a rien a rearmer. Derriere un stick il
+        // n'y a aucune action destructrice a retenir, contrairement aux boutons.
+        if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
+        previous = Array(COUNT).fill(false); nav = null; navAt = 0; rearmer = false;
       }
-      identity = id; context = current; rawPrevious = raw.b.slice();
+      identity = id; context = current; rawPrevious = raw.b.slice(); l2Precedent = raw.l2; r2Precedent = raw.r2;
       const enabled = !!gp && current !== 'blocked';
       const b = raw.b.map((down, i) => {
         const released = i === 6 ? raw.l2 <= .08 : i === 7 ? raw.r2 <= .08 : !down;

@@ -154,6 +154,16 @@ window.__SHOT = {
       if (drive.car) { drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('driving', 'carnear'); }
       drive.gear = 1; drive.shiftT = 0; drive.boostT = 0; drive.freinMain = false;
     } catch (e) {}
+    // LA MANETTE NE SURVIT PAS D'UN TEST A L'AUTRE (poste CAMERA, round 76). Les tests de
+    // manette posent un faux gamepad, poussent R2, puis retirent navigator.getGamepads — sans
+    // jamais repasser par pollGamepad, le SEUL a appeler releaseGamepad(). pad.gaz restait
+    // donc a 1 pour TOUS les tests suivants, et driveStep le lit encore. Symptome mesure :
+    // le test 466 (« au volant d'une voiture garee entre deux autres ») met le joueur au
+    // volant, ne touche a rien pendant sept secondes, et retrouvait sa voiture a 53 m du
+    // point de depart (releve « 52,99 m derriere ») : ce qu'il mesurait n'etait plus une
+    // camera bouchee par l'auvent du snack mais une voiture partie plein gaz toute seule.
+    // Vert lance seul, rouge en suite complete : la signature d'un etat herite.
+    try { if (typeof releaseGamepad === 'function') releaseGamepad(); } catch (e) {}
     try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
@@ -1713,6 +1723,7 @@ window.__G = {
   CHAUD: typeof CHAUD !== 'undefined' ? CHAUD : null,
   pollGamepad: typeof pollGamepad === 'function' ? pollGamepad : null,
   padActive: typeof padActive === 'function' ? padActive : null,
+  MARLON_INTRO_VERSION: typeof MARLON_INTRO_VERSION !== 'undefined' ? MARLON_INTRO_VERSION : null,
   padStick: typeof padStick === 'function' ? padStick : null,
   padVibre: typeof padVibre === 'function' ? padVibre : null,
   padVisee: typeof padVisee === 'function' ? padVisee : null,

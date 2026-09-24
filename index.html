@@ -858,7 +858,11 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
      l'action en clair, les cas particuliers en petit dessous — plus de parenthèses imbriquées en 11 px. -->
 <div id="padLeg">
   <div class="plt">🎮 Les touches de la manette</div>
-  <div class="pl"><b>Stick G</b><span>se déplacer dans la direction de la caméra</span></div>
+  <!-- ARBITRAGE r76 : la 0.10 annonçait « se déplacer dans la direction de la caméra », ce qui
+       n'est vrai qu'en mode « caméra ». Par défaut le stick gauche fait MARCHER ET TOURNER
+       (réglage « rotation », demande du joueur) : on reprend le libellé mesuré du test 231,
+       en gardant les doubles étiquettes PS/Xbox apportées par la 0.10. -->
+  <div class="pl"><b>Stick G</b><span>marcher / tourner<i>réglage « Déplacement : relatif à la caméra » : on se déplace dans la direction de la caméra</i></span></div>
   <div class="pl"><b>L3</b><span>courir</span></div>
   <div class="pl"><b>L2</b><span>se baisser<i>arme équipée : 🎯 viser · au volant : freiner · hélico : descendre</i></span></div>
   <div class="pl"><b>R2</b><span>accélérer<i>arme braquée : tirer</i></span></div>
@@ -1294,7 +1298,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
     <button class="btn sec" id="musBtn">Musique : activée</button>
     <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
     <div id="sensRow" class="volRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
-    <div class="volRow" id="padDeadRow"><span>🎮 Zone morte</span><input type="range" id="padDeadIn" min="6" max="30" step="1" aria-label="Zone morte des sticks"><b id="padDeadVal">12 %</b></div>
+    <div class="volRow" id="padDeadRow"><span>🎮 Zone morte</span><input type="range" id="padDeadIn" min="6" max="30" step="1" aria-label="Zone morte des sticks"><b id="padDeadVal">8 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <details id="mixBloc"><summary id="mixTitre">🎧 Volume par famille ▾</summary><div id="mixRows"></div></details>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
@@ -1347,8 +1351,21 @@ const store = {
 };
 const settings = { volume: (v => v >= 0 && v <= 1 ? v : 1)(parseFloat(store.get('superobby.volume'))), sound: store.get('superobby.sound') !== '0', music: store.get('superobby.music') !== '0', voices: store.get('superobby.voices') !== '0', quality: store.get('superobby.quality') || 'high',
   ctrl: store.get('superobby.ctrl') || 'rot', turn: +store.get('superobby.turn') || 160,
-  padMove: store.get('superobby.padMove') === 'rot' ? 'rot' : 'camera',
-  padDeadzone: (v => v >= .06 && v <= .30 ? v : .12)(parseFloat(store.get('superobby.padDeadzone'))),
+  // ARBITRAGE r76 : la version 0.10 a donné à la MANETTE son propre réglage de déplacement
+  // (bonne idée : clavier et manette n'ont pas les mêmes réflexes) mais l'a forcé sur
+  // « relatif à la caméra ». Résultat mesuré : en mode rotation le stick gauche ne faisait
+  // plus TOURNER le personnage (tests 220, 232 et 265 : 0 rad de braquage au lieu de 2,8),
+  // alors que c'est une demande explicite du joueur (« le joystick gauche ne dirige pas le
+  // joueur gauche/droite en rotation »). On garde le réglage séparé, mais tant que personne
+  // n'y a touché il SUIT le réglage général (settings.ctrl), qui vaut « rot » par défaut.
+  padMove: (v => v === 'rot' || v === 'camera' ? v : null)(store.get('superobby.padMove')),
+  // ARBITRAGE r76 : le CURSEUR de zone morte vient de la version 0.10 et on le garde (une
+  // manette usée dérive, l'enfant peut l'élargir) ; en revanche son défaut de 12 % écrasait
+  // la valeur mesurée du round 71. MESURE : à 12 % une poussée de 12 % du stick ne fait plus
+  // tourner la caméra du tout (test 396 exige > 2 °/s) et 30 % de course ne rendent que 0,149
+  // au lieu des 0,15 exigés par le test 220. Défaut remis à 8 % (une DualSense neuve ne
+  // dérive pas au-delà de 5 %), le curseur couvrant toujours 6 à 30 %.
+  padDeadzone: (v => v >= .06 && v <= .30 ? v : .08)(parseFloat(store.get('superobby.padDeadzone'))),
   // AXE VERTICAL DE LA CAMERA : normal par defaut (pousser le stick vers le bas fait monter
   // la camera, comme dans les jeux de ville). Inversable a la demande, et retenu d'une partie
   // sur l'autre : c'est un reflexe, pas un gout du jour.
@@ -15455,11 +15472,16 @@ function agentsTick(dt) {
     }
   }
 }
-function agentTue(a) {   // un policier abattu : c'est l'armée qui prend le relais
+function agentTue(a, auteur) {   // un policier abattu : c'est l'armée qui prend le relais
+  // (n° 85) L'AUTEUR N'EST PLUS FORCEMENT L'ENFANT. Depuis qu'une balle qui n'est pas la
+  // sienne peut atteindre un agent (celle d'un homme de gang, celle de l'ami arme), cette
+  // fonction annoncait « <l'enfant> a abattu un policier » et lui collait L'ARMEE AUX TROUSSES
+  // pour un coup qu'il n'avait pas tire. Sans argument, rien ne change : c'est lui.
   a.ko = simTime + 60; a.hp = 0;
   burst(a.x, a.y + 1, a.z, 0xff2020, 14); sfx.die();
-  chat(null, `🚨 ${myCfg.name} a abattu un policier !`);
-  armeeAlerte();
+  if (!auteur) { chat(null, `🚨 ${myCfg.name} a abattu un policier !`); armeeAlerte(); return; }
+  const nom = typeof auteur === 'string' ? auteur : (auteur.name || auteur.nom || 'quelqu\'un');
+  chat(null, `🚨 ${nom} a abattu un policier !`);
 }
 function armeeAlerte() {
   if (armee.on) return;
@@ -18168,8 +18190,26 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // et une part CARRÉE qui garde la grande vitesse pour le bord du stick.
 const CAM_MORTE = 0.075;       // zone morte RONDE du stick droit : juste au-dessus de la dérive d'une DualSense usée (5 % sur les DEUX axes font 7,07 % en diagonale — mesuré : 0,9 °/s de rotation parasite avec 6 %)
 const CAM_LIN = 0.35;          // part linéaire de la courbe de visée ; le reste est en carré
-const CAM_VYAW = 3.8;          // rad/s au bord ; zone morte et sensibilité réglables dans le menu
-const CAM_VPITCH = 2.4;        // le cadrage vertical est plus fin que le demi-tour horizontal
+// SYNTHÈSE DES DEUX VERSIONS (round 76). La 0.10 posait la zone morte du regard à 12 % pour
+// qu'une manette usée qui rend 8 % SUR LES DEUX AXES (11,3 % en diagonale) ne fasse pas tourner
+// l'image toute seule — mesuré : 3,4 °/s de dérive avec 7,5 % de zone morte ronde, et c'est un
+// vrai défaut, l'enfant verrait le décor partir. Mais 12 % de zone morte RONDE avale aussi la
+// poussée LÉGÈRE à 12 % de course : mesuré 0 °/s là où il en faut entre 2 et 25 (test 396), et
+// l'on ne peut pas avoir les deux avec une seule zone morte ronde. On garde donc les deux :
+// un squelch par AXE à 8,5 % qui n'agit que si AUCUN des deux axes ne dépasse ce seuil — la
+// dérive meurt, et le grief classique de la zone morte carrée (« en diagonale un axe est coupé
+// et l'on part tout droit ») ne s'applique pas, puisqu'on annule le vecteur ENTIER ou rien —
+// puis la zone morte RONDE de 7,5 % et la courbe de visée du round 71.
+const CAM_DERIVE = 0.085;      // dérive d'un stick usé : 8 % sur chaque axe doivent rester du silence
+// ARBITRAGE DE FUSION (round 76). La version 0.10 avait ramené ces deux vitesses à 3,8 et
+// 2,4 rad/s. Mesuré au banc (test 396) avec ces valeurs : 217,7 °/s au bord du stick pour
+// 280 à 340 exigés, 59,3 °/s à mi-course pour 60 au minimum — on n'arrive plus à se retourner
+// d'un coup de pouce, ce dont le joueur se plaignait justement au round 71 (« la manette n'est
+// pas au point avec la caméra »). On garde donc les valeurs du round 71, mesurées : 315 °/s au
+// bord, 94 °/s à mi-course (30 % du maximum), et un rapport vertical/horizontal de 0,62 qui
+// donne le MÊME ressenti sur les deux axes.
+const CAM_VYAW = 5.5;          // rad/s au bord du stick, horizontal (315 °/s : de quoi se retourner d'un coup de pouce)
+const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal, le ratio qui donne le MÊME ressenti
 // REGARDER LE CIEL. La butée haute était à -0,15 rad (-8,6°) arme rangée : on ne voyait ni le
 // haut des tours, ni l'hélicoptère, ni le ciel — l'image se bloquait net. Elle descend à
 // -0,5 rad (-29°) ; c'est camPerche qui raccourcit alors la perche pour que l'objectif ne
@@ -24437,7 +24477,7 @@ function step(dt, active) {
     wantX = ix * vers * SPEED; wantZ = iz * vers * SPEED;
     let d = capTennis() - P.facing; d = Math.atan2(Math.sin(d), Math.cos(d));
     P.facing += d * Math.min(1, dt * 10);   // il se tourne vers la balle sans qu'on ait à le piloter
-  } else if ((padActif() ? settings.padMove === 'rot' : settings.ctrl === 'rot') && !(P.gun && P.drawn)) {
+  } else if (modeRotation() && !(P.gun && P.drawn)) {
     // MODE ROTATION AU STICK. Le stick etait exclu de ce mode (`!padActif()`) : pousse a
     // gauche, le personnage GLISSAIT de cote au lieu de TOURNER — « le joystick gauche ne
     // dirige pas le joueur gauche/droite en rotation ». Il y est de nouveau, et sans le
@@ -29040,6 +29080,24 @@ function shotsTick(dt) {
     const hs = castSolids(s.p.x, s.p.y, s.p.z, dx, dy, dz, best, true);
     if (hs.o) { best = hs.d; quoi = 'solide'; cible = hs.o; }
 
+    // ---- QUI UNE BALLE PEUT-ELLE TOUCHER ? (arbitrage r76, défaut 85) ----
+    // Tout ce test de collision était enfermé dans `if (s.mine)` : SEULE la balle de l'enfant
+    // touchait quelqu'un. Mesuré à la sonde, 3 balles de police tirées sur un habitant planté
+    // à 6 m (l'enfant ailleurs) : avant 100 → 100 PV, 0 dégât — elles le TRAVERSAIENT ; après
+    // 100 → 34 PV, 66 dégâts, et ★ de l'enfant toujours à 0. La balle de l'ami armé, elle, ne
+    // devait ses victimes qu'à
+    // un retrait de points de vie fait À LA MAIN dans `gardeArmeTick`, faute de quoi elle ne
+    // faisait rien du tout. La règle du défaut 85 — « une infraction n'est imputée à l'enfant
+    // que s'il en est l'auteur » — ne se joue PAS ici : elle se joue sur les gardes `s.mine`
+    // posées plus bas, sur chaque déclaration d'infraction, et elles restent toutes en place.
+    // Une balle touche donc maintenant tout être vivant sur son trajet, SAUF :
+    //   · son propre tireur (`s.ami`) et la victime déjà décomptée à bout portant (`s.deja`) ;
+    //   · les agents, quand c'est la police elle-même qui tire (elle ne fauche pas les siens).
+    // Le STAND DE TIR, les joueurs DISTANTS et les VÉHICULES restent réservés à la balle de
+    // l'enfant : ce sont son entraînement, sa partie en réseau et ses dégâts matériels (une
+    // balle perdue de la police qui fait exploser une voiture garée déclencherait une scène
+    // d'accident à l'autre bout de la ville, sans personne pour l'avoir voulue).
+    const tireur = s.ami || null, balleFlic = !!s.police;
     if (!s.mine && !drive.car) {   // une balle (police ou joueur) me touche
       const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, P.pos.x, P.pos.y, P.pos.z, best);
       if (t >= 0 && t < best) { best = t; quoi = 'moi'; cible = null; }
@@ -29053,23 +29111,25 @@ function shotsTick(dt) {
         const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, r.cur.x, r.cur.y, r.cur.z, best);
         if (t >= 0 && t < best) { best = t; quoi = 'distant'; cible = r; }
       }
-      if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, b.pos.x, b.pos.y, b.pos.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'bot'; cible = b; }
-      }
-      for (const gd of city.guards) if (!gd.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
-      }
-      for (const G of gangs) for (const m of G.membres) {   // les membres de gang encaissent aussi
-        if (m.ko || m.captif) continue;
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, m.x, m.y, m.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'gangeur'; cible = m; }
-      }
-      for (const a of police.agents) if (!a.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
-      }
+    }
+    if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko && b !== tireur && b !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, b.pos.x, b.pos.y, b.pos.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'bot'; cible = b; }
+    }
+    for (const gd of city.guards) if (!gd.ko && gd !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
+    }
+    for (const G of gangs) for (const m of G.membres) {   // les membres de gang encaissent aussi
+      if (m.ko || m.captif || m === s.deja) continue;
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, m.x, m.y, m.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'gangeur'; cible = m; }
+    }
+    if (!balleFlic) for (const a of police.agents) if (!a.ko && a !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
+    }
+    if (s.mine) {
       // les véhicules encaissent les balles (et finissent par exploser)
       for (const v of [...city.cars, ...city.aiCars, ...police.cars]) {
         const o = v.solid; if (!o || v === drive.car) continue;
@@ -29148,7 +29208,7 @@ function shotsTick(dt) {
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       if (s.mine) police.riposte = simTime + 30;
-      if (a.hp <= 0) agentTue(a);
+      if (a.hp <= 0) agentTue(a, s.mine ? null : (s.ami || s.byName || 'un tireur'));   // (n° 85) pas NOTRE balle, pas NOTRE meurtre : ni l'annonce, ni l'armée
       else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
       const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
@@ -29900,11 +29960,12 @@ function padActive() {
 // Zone morte de 8 % (une DualSense neuve ne derive pas au-dela de 5 %) et une courbe
 // LEGEREMENT progressive (exposant 1,2) : precis pres du centre, pleine vitesse au bord.
 // L'ancienne courbe divisait la reponse par deux a mi-course : on se trainait.
-function padStick(x, y, morte = settings.padDeadzone || .12) {
+function padStick(x, y, morte = settings.padDeadzone || .08) {
   return MarlonControls.radial(x, y, morte);
 }
 function padVisee(x, y) {
-  return MarlonControls.radial(x, y, settings.padDeadzone || .12, true);
+  if (Math.max(Math.abs(x), Math.abs(y)) < CAM_DERIVE) return [0, 0];   // voir CAM_DERIVE : le silence d'un stick usé
+  return MarlonControls.radial(x, y, CAM_MORTE, true);
 }
 const padController = MarlonControls.createController();
 function padContexte() {
@@ -29921,6 +29982,13 @@ function padTouche(code, down) {
   telTouche(code, down, 'gamepad');
 }
 const padActif = () => Math.abs(pad.x) + Math.abs(pad.y) + (pad.gaz || 0) + (pad.frein || 0) > 0.02;
+// « MODE ROTATION » : le stick/les touches font TOURNER le personnage au lieu de le faire
+// glisser. Le clavier suit settings.ctrl ; la manette suit settings.padMove SI le joueur l'a
+// réglé, sinon elle suit le réglage général (voir l'arbitrage r76 au-dessus de `padMove`).
+function modeRotation() {
+  if (typeof padActif === 'function' && padActif() && settings.padMove) return settings.padMove === 'rot';
+  return settings.ctrl === 'rot';
+}
 // LA VIBRATION : la DualSense la gère nativement dans le navigateur.
 function padVibre(force = 0.6, ms = 120) {
   const g = padActive(); if (!g || !g.vibrationActuator || simTime < manetteSalon.vibT) return false;
@@ -29959,7 +30027,20 @@ function pollGamepad(dt) {
   const baisse = pad.l2 && aPied && !braque;
   if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse || keys.has('KeyC') || keys.has('ControlLeft')); }
   pad.l2Bas = pad.l2;
-  const [vx, vy] = frame.look;
+  // LE STICK DROIT N'EST JAMAIS MIS EN QUARANTAINE (arbitrage de fusion, round 76). La version
+  // 0.10 fait passer le regard par `frame.look`, qui hérite de la règle « au changement de
+  // contexte, un axe déjà poussé reste bloqué tant qu'on ne l'a pas relâché ». Cette règle est
+  // bonne pour les BOUTONS (une croix maintenue en fermant le menu ne doit pas tirer) mais
+  // catastrophique pour la caméra : le premier relevé de la manette est TOUJOURS un changement
+  // de contexte, donc un joueur qui pousse déjà le stick droit — ou qui sort de la cinématique
+  // d'introduction en le tenant — se retrouve avec une caméra morte jusqu'à ce qu'il le lâche.
+  // Mesuré au banc : 0 °/s de rotation dans les tests 397, 398, 400, 401 et 416, c'est-à-dire
+  // cinq essais sur neuf rendus rouges par cette seule ligne. Derrière le stick droit il n'y a
+  // aucune action destructrice à retenir : on lit donc les axes bruts, avec la courbe de VISÉE
+  // du round 71 (zone morte ronde CAM_MORTE = 7,5 %, part linéaire CAM_LIN). La zone morte du
+  // menu (settings.padDeadzone, 12 %) mangeait au passage la poussée légère à 12 % de course :
+  // mesuré 0 °/s là où il en faut entre 2 et 25 (test 396) ; avec CAM_MORTE, 5,9 °/s.
+  const [vx, vy] = padVisee(L.rx, L.ry);
   const seconds = Number.isFinite(dt) ? clamp(dt, 0, .05) : 0;
   const sens = clamp(Number.isFinite(settings.sensib) ? settings.sensib : 1, .5, 2) * (P.aim ? .5 : 1);
   cam.yaw -= vx * seconds * CAM_VYAW * sens;
@@ -29994,8 +30075,14 @@ function pollGamepad(dt) {
     else setGarde(neuf[4] || keys.has('KeyH'));
   }
   if (frame.pressed[11]) { cam.yaw = P.facing + Math.PI; cam.freeUntil = 0; }
-  // Long presses use wall time, independent of game speed and simulation frame rate.
-  const now = performance.now() / 1000;
+  // ARBITRAGE r76. La version 0.10 comptait l'appui long en temps REEL (performance.now).
+  // On revient a l'horloge du JEU (`simTime`), celle de PAD_LONG, de pad.sonT, de la
+  // vibration et de tous les autres delais de la manette. Deux raisons mesurees : le banc
+  // avance simTime sans avancer l'horloge du mur, donc ← et → tenus n'ouvraient plus jamais
+  // la boutique ni les missions (tests 212 et 232 : « null / null » au lieu de store /
+  // missions), et une horloge unique evite qu'un ralenti compte deux appuis differemment.
+  // La lecture, elle, reste a 120 Hz en temps reel (setInterval) : la reactivite ne change pas.
+  const now = simTime;
   for (const [i, action] of Object.entries(PAD_CROIX)) {
     if (!PAD_CROIX_LONG[i]) { if (frame.pressed[i]) padAction(action); }
     else {
@@ -30026,12 +30113,19 @@ function curseurAccueil() {
 }
 function padMenu(L, neuf, bas, direction) {
   if ((neuf[1] && !bas[1]) || (neuf[9] && !bas[9]) || (neuf[16] && !bas[16])) { padTouche('Escape', true); return; }
-  if (!document.querySelector('.focustv')) { if (!curseurAccueil()) navPremier(); }
+  // ARBITRAGE r76. La 0.10 posait la bague ET validait dans la MEME image. Notre version ne
+  // faisait que poser la bague au premier ✕. On garde les deux : la bague est de toute facon
+  // posee des l'ouverture d'une fenetre (test 216), donc un ✕ normal valide tout de suite ;
+  // mais un ✕ appuye alors qu'AUCUNE bague n'est visible ne declenche plus le premier bouton
+  // venu — dans le menu de pause, c'est « Recommencer » ou « Tout effacer ». Il pose la bague,
+  // le suivant valide (test 372 : « ✕ sans bague → play », puis « ✕ → accueil cache »).
+  const bagueAbsente = !document.querySelector('.focustv');
+  if (bagueAbsente) { if (!curseurAccueil()) navPremier(); }
   if (direction) {
     if ((direction === 'gauche' || direction === 'droite') && navGlisse(direction === 'gauche' ? -1 : 1)) { /* range / select */ }
     else navVers(direction);
   }
-  if (neuf[0] && !bas[0]) { navValide(); return; }
+  if (neuf[0] && !bas[0]) { if (!bagueAbsente) navValide(); return; }
   if (neuf[5] && !bas[5]) navOnglet(1);
   else if (neuf[4] && !bas[4]) navOnglet(-1);
 }
@@ -30087,7 +30181,7 @@ function padEssaiTick(L, neuf, bas) {
   if (d) {
     const p = [];
     if (L.profil !== 'standard') p.push(`agencement non standard corrigé (${L.profil}${L.chapeau >= 0 ? `, croix sur l'axe ${L.chapeau}` : ''})`);
-    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : settings.padMove === 'rot' ? 'le personnage TOURNE' : 'déplacement latéral'}`);
+    if (Math.abs(nx) > 0.15) p.push(`stick gauche : ${nx > 0 ? 'DROITE' : 'GAUCHE'} (${nx.toFixed(2)}) → ${drive.car ? 'braquage' : modeRotation() ? 'le personnage TOURNE' : 'déplacement latéral'}`);
     if (Math.abs(ny) > 0.15) p.push(`stick gauche : ${ny < 0 ? 'AVANT' : 'ARRIÈRE'} (${(-ny).toFixed(2)}) → ${drive.car ? 'rien (au volant, on accélère aux gâchettes)' : 'on marche'}`);
     if (L.b[14] || L.b[15]) p.push(`croix ${L.b[14] ? '←' : '→'} : change d'arme (maintenue : ${L.b[14] ? 'boutique' : 'missions'})`);
     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) p.push(`stick droit : la CAMERA (${Math.abs(dx) > 0.1 ? (dx > 0 ? 'tourne a droite' : 'tourne a gauche') : ''}${Math.abs(dx) > 0.1 && Math.abs(dy) > 0.1 ? ', ' : ''}${Math.abs(dy) > 0.1 ? ((settings.invY ? -dy : dy) > 0 ? 'regarde en bas' : 'regarde en haut') : ''})${settings.invY ? ' — axe vertical inverse (⚙️)' : ''}`);
@@ -30239,7 +30333,13 @@ swatches('swPants', 'pants'); swatches('swCap', 'cap'); swatches('swHair', 'hair
 (function pills(id, key) { const el = $(id); [...el.children].forEach(b => { b.classList.toggle('sel', +b.dataset.v === +myCfg[key]); b.addEventListener('click', () => { myCfg[key] = key === 'skirt' ? !!+b.dataset.v : +b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })('hairStyle', 'hair');
 (function () { const el = $('skirtSel'); [...el.children].forEach(b => { b.classList.toggle('sel', !!+b.dataset.v === myCfg.skirt); b.addEventListener('click', () => { myCfg.skirt = !!+b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); applyMyLook(); }); }); })();
 function startGame() {
-  if (!net.on && !marlonCinemaSeen && store.get('marlon.intro.seen') !== MARLON_INTRO_VERSION && typeof window.MarlonIntro !== 'undefined') {
+  // ARBITRAGE r76 : PAS DE FILM SUR LA TÉLÉ (`tvAuto`, le chemin du lien #tv). L'introduction
+  // de la version 0.10 est gardée — c'est un vrai plus, et elle ne passe qu'une fois — mais
+  // pas sur ce chemin-là : sur une télé personne ne peut cliquer, et tant que le film tourne
+  // le code de pairage n'est pas affiché, donc aucun téléphone ne peut devenir manette
+  // (mesuré au test 202 : accueil jamais passé, écran du code jamais ouvert). Elle reste au
+  // lancement normal, et le bouton « Voir l'introduction » de l'accueil la rejoue quand on veut.
+  if (!net.on && !tvAuto && !marlonCinemaSeen && store.get('marlon.intro.seen') !== MARLON_INTRO_VERSION && typeof window.MarlonIntro !== 'undefined') {
     if (marlonCinema && marlonCinema.active) return;
     showMarlonIntro(startGame); return;
   }
@@ -30295,12 +30395,15 @@ $('volIn').addEventListener('input', () => { const v = sfx.volume((+$('volIn').v
 $('volIn').addEventListener('change', () => { unlockAudio(); sfx.coin(); });
 settings.sensib = (v => v >= 0.5 && v <= 2 ? v : 1)(parseFloat(store.get('superobby.sensib')));
 function padReglagesMaj() {
-  $('padMoveBtn').textContent = '🎮 Déplacement : ' + (settings.padMove === 'rot' ? 'rotation du personnage' : 'relatif à la caméra');
+  $('padMoveBtn').textContent = '🎮 Déplacement : ' + (settings.padMove === 'rot' ? 'rotation du personnage'
+    : settings.padMove === 'camera' ? 'relatif à la caméra' : 'comme le clavier (' + (settings.ctrl === 'rot' ? 'rotation' : 'caméra') + ')');
   $('padDeadIn').value = String(Math.round(settings.padDeadzone * 100));
   $('padDeadVal').textContent = Math.round(settings.padDeadzone * 100) + ' %';
 }
-$('padMoveBtn').addEventListener('click', () => { settings.padMove = settings.padMove === 'rot' ? 'camera' : 'rot'; store.set('superobby.padMove', settings.padMove); padReglagesMaj(); });
-$('padDeadIn').addEventListener('input', () => { settings.padDeadzone = clamp((+$('padDeadIn').value || 12) / 100, .06, .30); store.set('superobby.padDeadzone', String(settings.padDeadzone)); padReglagesMaj(); });
+// trois positions : « comme le clavier » (défaut), rotation, caméra — on peut donc revenir
+// au réglage automatique sans vider le stockage
+$('padMoveBtn').addEventListener('click', () => { settings.padMove = settings.padMove === 'rot' ? 'camera' : settings.padMove === 'camera' ? null : 'rot'; store.set('superobby.padMove', settings.padMove || ''); padReglagesMaj(); });
+$('padDeadIn').addEventListener('input', () => { settings.padDeadzone = clamp((+$('padDeadIn').value || 8) / 100, .06, .30); store.set('superobby.padDeadzone', String(settings.padDeadzone)); padReglagesMaj(); });
 padReglagesMaj();
 $('sensIn').value = String(Math.round(settings.sensib * 100)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %';
 $('sensIn').addEventListener('input', () => { settings.sensib = clamp((+$('sensIn').value || 100) / 100, 0.5, 2); store.set('superobby.sensib', String(settings.sensib)); $('sensVal').textContent = Math.round(settings.sensib * 100) + ' %'; });
@@ -31494,13 +31597,20 @@ const lienBase = () => location.href.split('#')[0];
 // L'écran de jeu ne doit JAMAIS cesser d'écouter tant qu'il affiche un code : si la liaison
 // tombe (mise en veille, Wi-Fi qui saute), on la remonte toute seule.
 let tvVeilleT = 0;
-function tvVeille() {
-  const now = Date.now(); if (now < tvVeilleT) return;
+// LA VEILLE DE L'ÉCRAN. Elle remonte la liaison quand le pair PeerJS est tombé.
+// ARBITRAGE r76 : la version 0.10 l'a sortie de la boucle de jeu (setInterval, horloge du
+// mur) et elle a raison — un écran de télé qui attend un téléphone ne fait tourner aucune
+// image, donc l'horloge du JEU n'avance pas et la veille ne se serait jamais réveillée.
+// On lui ajoute seulement un réveil À LA DEMANDE (`force`) : c'est ce qu'il faut quand
+// l'enfant rouvre 📺 après une coupure — et c'est la seule façon de la mesurer au banc,
+// qui ne peut pas attendre trois secondes de temps réel par essai.
+function tvVeille(force) {
+  const now = Date.now(); if (!force && now < tvVeilleT) return;
   tvVeilleT = now + 3000;
   // trace locale : elle permet à l'écran manette, ouvert dans un AUTRE onglet du même
   // navigateur, de comprendre pourquoi il n'arrivera jamais à se connecter
   if (tv.on && tv.code && !tv.cede) { try { store.set('superobby.hote', JSON.stringify({ code: tv.code, t: Date.now() })); } catch (e) {} }
-  if (!tv.code || tv.cede || tv.peer || now < (tv.retryAt || 0)) return;
+  if (!tv.code || tv.cede || tv.peer || (!force && now < (tv.retryAt || 0))) return;
   tvHeberge(tv.code);
 }
 setInterval(tvVeille, 3000);
@@ -32134,6 +32244,7 @@ function routeLien() {
 let tvAuto = false;
 function demarreTV(code) {
   modeTV(true); tvAuto = true;
+
   if (code) tv.code = code;   // le code vient du lien : la télé affiche EXACTEMENT le même que l'autre écran
   document.body.classList.remove('lobby');
   setTimeout(() => {
@@ -32650,10 +32761,16 @@ function gardeArmeTick(b, dt) {
   const dir = new THREE.Vector3(c.x - origin.x, c.y - origin.y, c.z - origin.z).normalize();
   dir.x += rnd(-0.02, 0.02); dir.z += rnd(-0.02, 0.02);
   dir.normalize().multiplyScalar(95);
-  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22 };
+  // `deja` : la victime visee est decomptee TOUT DE SUITE, a bout portant (voir plus bas).
+  // Depuis que la balle d'un autre que l'enfant touche vraiment les gens, il faut dire a
+  // `shotsTick` de ne pas la compter une SECONDE fois sur la meme personne — la balle garde
+  // en revanche tout son effet sur qui se trouverait sur son trajet.
+  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22, deja: c.bot || c.agent || null };
   shots.push(sh); spawnShot(sh);
   sonDetonation('pistol', origin.x, origin.y, origin.z, 0.9);   // poste SON : le coequipier tire la meme detonation, placee a SON canon
-  // touche directe : la balle de l'ami compte tout de suite (le rayon générique ne vise que le joueur)
+  // touche directe : la balle de l'ami compte tout de suite, a bout portant, sans attendre
+  // l'image suivante (c'est ce qui permet de rejouer la scene sans faire tourner la boucle) ;
+  // `deja` empeche `shotsTick` de la recompter sur la meme victime.
   if (c.agent) { c.agent.hp -= 22; impact(c.agent.x, c.agent.y + 1.3, c.agent.z, null, 'sang', 1);
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }
   else if (c.bot) { c.bot.hp = (c.bot.hp ?? 100) - 22; c.bot.fight = 'flee'; c.bot.fightT = simTime + 6;
@@ -36873,7 +36990,16 @@ function ralentiCam(dt) {
     // ON NE LÂCHE QUE COLLÉ À LA CAMÉRA DE JEU. Mesuré : lâcher à 30 cm laissait encore un pas
     // de 0,45 m à l'image de la reprise, au-dessus de la borne. À 12 cm, la dernière image ne se
     // voit plus — et tant qu'on n'y est pas, le raccord se prolonge au pas borné.
-    if (k >= 1 && reste < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    // LE SAUT SE MESURE DEPUIS LÀ OÙ LA CAMÉRA EST VRAIMENT, PAS DEPUIS LE POINT VISÉ (round 76).
+    // `reste` part de `px`, qui a DÉJÀ été ramené au pas borné : quand il restait 0,35 m à
+    // parcourir, `px` avançait de 0,233 m (14 m/s), `reste` tombait à 0,117 m — on lâchait donc,
+    // et l'image sautait des 0,35 m entiers depuis la position précédente. C'est le seul pas
+    // hors borne qui restait au test 453 : 0,35 m à l'image de la reprise, soit 20,8 m/s pour
+    // 14 annoncés (mesure avant : 0,35 m ; après : 0,23 m au pire, sous la borne du test).
+    // On exige donc aussi que le saut RÉEL — de la position de l'image précédente à la caméra
+    // de jeu — tienne dans les 12 cm.
+    const sautLache = Math.hypot(jx - RALENTI.px, jy - RALENTI.py, jz - RALENTI.pz);
+    if (k >= 1 && reste < 0.12 && sautLache < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
     if (k >= 1) RALENTI.sortie = pas;   // pas encore arrivé (pas borné) : on prolonge d'une image
     const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
           vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,

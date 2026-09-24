@@ -828,6 +828,18 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 
     Le solde passe donc de **+395 qui ne redescendent jamais** à **−224** : la scène rend plus qu'elle n'a pris, parce que les cinq corps effacés (≈ 45 maillages chacun) emportent enfin leurs maillages avec eux. Le groupe se vide entre 1,0 s et 1,5 s (durée de vie d'un morceau : 1,4 s), `debris` et `fx` reviennent à 0.
   - **Pourquoi le garde-fou ne voyait rien** : il compte `scene.children`, or les 619 morceaux sont **un cran plus bas**, dans le groupe `ephemeres`.
+  - **L'ENFANT LE SUBIT-IL SUR SA TÉLÉ ? NON.** Mesuré, et c'est le point qui compte. Partie longue **avec la boucle d'affichage qui tourne pour de bon** (`frame()` appelé image par image, rendu compris, cadence imposée à 1/60 s pour ne pas dépendre du temps réel du banc) : dix vagues de morts, 150 images de jeu entre chaque. Le groupe des éphémères **revient à zéro après chaque vague, avant comme après le correctif**, et rien ne s'accumule :
+
+    | | tour 0 | tour 5 | tour 10 |
+    |---|---|---|---|
+    | maillages visibles, **avant** le correctif | 24 601 | 24 111 | 24 123 |
+    | maillages visibles, **après** | 24 602 | 24 053 | 24 009 |
+    | appels de dessin (image + passe d'ombres, comptés à la main), **avant** | 10 720 | 10 691 | 10 873 |
+    | appels de dessin, **après** | 10 720 | 10 729 | 10 753 |
+
+    La courbe **monte une fois puis reste plate** — elle redescend même, les habitants abattus n'étant plus dessinés. Le pas de simulation ne dérive pas non plus (16,1 → 8,0 ms avant, 15,3 → 3,1 ms après ; il baisse parce que les habitants morts ne sont plus simulés). **Le surcoût de 14,06 → 16,43 ms était un effet du banc d'essai**, qui enchaîne des `step()` sans jamais rendre d'image : c'est exactement le cas où le vieillissement, logé dans `frame()`, ne tournait jamais. Dès que la boucle d'affichage tourne — c'est-à-dire tout le temps chez l'enfant — les morceaux mouraient déjà.
+  - **Le correctif reste utile** pour les trois cas où le jeu simule sans passer par `frame()` : la cinématique d'introduction et le mode « manette seule » sortent de `loop()` avant `frame()`, et `frame()` lui-même enchaîne jusqu'à huit pas de simulation pour une seule image quand ça rame. Et il rend le banc d'essai honnête.
+  - **Garde-fou** : test 497, « une fusillade a cinq morts ne laisse aucun maillage derriere elle, meme sans une seule image rendue ».
 
 ### 99. Manette posée, profil vierge : l'enfant est emporté sur 32 m sans avoir touché à rien, et arrive collé à « éjecter le conducteur (gros délit !) »
 - **Gravité** : GÊNANT (1 fois sur 3 ; le personnage part tout seul et finit devant une proposition de délit)

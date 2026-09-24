@@ -21984,3 +21984,75 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
   return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
 });
 
+
+// ================= POSTE FIABILITE (round 78) : deux garde-fous =================
+test('une fusillade a cinq morts ne laisse aucun maillage derriere elle, meme sans une seule image rendue', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 12, frais: true });
+    // le hasard est fige : une mort tire la vitesse et la rotation de chacun de ses morceaux
+    let g = 12345; const vrai = Math.random;
+    Math.random = () => ((g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const visibles = () => { let n = 0; G.scene.traverseVisible(o => { if (o.isMesh) n++; }); return n; };
+    const eph = () => { let n = 0; G.EPHEMERES.traverse(o => { if (o.isMesh) n++; }); return n; };
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);   // rechauffement
+    const avant = visibles(), avantEph = eph();
+    const proches = G.bots.filter(b => b.av && !b.dead)
+      .map(b => ({ b, d: Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z) }))
+      .sort((a, x) => a.d - x.d).slice(0, 5).map(o => o.b);
+    for (const b of proches) { try { G.botKill(b, 'essai'); } catch (e) {} }
+    const pic = visibles(), picEph = eph();
+    // QUATRE SECONDES DE SIMULATION SANS UNE SEULE IMAGE RENDUE. C'est tout le defaut n° 98 :
+    // les morceaux ne vieillissaient que dans frame(), la boucle d'AFFICHAGE, et tout ce qui
+    // fait avancer le jeu sans rendre d'image les gardait pour toujours.
+    const courbe = [];
+    for (let k = 0; k < 8; k++) { for (let i = 0; i < 30; i++) G.step(1 / 60, true); courbe.push(eph()); }
+    const apres = visibles(), apresEph = eph();
+    Math.random = vrai;
+    return { tues: proches.length, avant, pic, apres, avantEph, picEph, apresEph, courbe,
+      morceaux: G.morceaux.length, fx: G.fx.length };
+  });
+  // le groupe des ephemeres se remplit au coup de feu et se VIDE tout seul ; la scene rend
+  // moins apres qu'avant, parce que les cinq corps effaces emportent enfin leurs maillages.
+  const ok = r.tues === 5 && r.avantEph === 0 && r.picEph > 300 && r.apresEph === 0
+    && r.morceaux === 0 && r.fx === 0 && r.apres <= r.avant;
+  return { ok, detail: `cinq habitants abattus d'un coup, puis quatre secondes de simulation SANS une seule image rendue : `
+    + `${r.avant} maillages visibles avant, ${r.pic} au pic (+${r.pic - r.avant}), ${r.apres} apres, soit ${r.apres - r.avant} au total `
+    + `— la scene rend MOINS qu'avant la fusillade, les cinq corps effaces ayant emporte leurs maillages · `
+    + `le groupe des ephemeres passe de ${r.avantEph} a ${r.picEph} puis redescend a ${r.apresEph} (courbe : ${r.courbe.join(' → ')}) · `
+    + `debris ${r.morceaux}, effets ${r.fx} · avant le correctif du n° 98 : +395 maillages et 619 morceaux qui ne redescendaient JAMAIS, `
+    + `parce que le vieillissement vivait dans frame() et non dans step()` };
+});
+
+test('la ville se rebatit a l\'identique, ou que le test precedent ait laisse le joueur', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    // ON REJOUE L'ENTREE DU TEST 332, trois fois, en ne changeant QUE la position ou le test
+    // precedent aurait laisse le joueur. traficPose() refuse toute voie a moins de 30 m du
+    // joueur et chaque refus consomme un tirage de traficRnd : si la ville est batie avant que
+    // le joueur soit pose, les huit voitures de la circulation se decalent toutes.
+    const entree = () => {
+      let g = 20240607; const vrai = Math.random;
+      Math.random = () => ((g = (g * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+      G.simTime = 3000;
+      __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
+      Math.random = vrai;
+      return G.city.aiCars.map(c => [+c.x.toFixed(2), +c.z.toFixed(2), +c.h.toFixed(3)]);
+    };
+    const ecarts = (a, b) => a.reduce((n, v, i) => n + (b[i] && v[0] === b[i][0] && v[1] === b[i][1] && v[2] === b[i][2] ? 0 : 1), 0);
+    G.P.pos.set(0, 0.3, 0); const a1 = entree();
+    G.P.pos.set(0, 0.3, 0); const a2 = entree();          // bruit de fond
+    G.P.pos.set(300, 0.3, 300); const b1 = entree();      // la ou finit le test 299
+    G.P.pos.set(-35.5, 0.3, -27); const c1 = entree();    // le hall d'immeuble du test 299
+    G.P.pos.set(-158, 0.3, 212); const d1 = entree();     // un coin de la carte
+    return { n: a1.length, bruit: ecarts(a1, a2), b: ecarts(a1, b1), c: ecarts(a1, c1), d: ecarts(a1, d1) };
+  });
+  const ok = r.n >= 8 && r.bruit === 0 && r.b === 0 && r.c === 0 && r.d === 0;
+  return { ok, detail: `meme graine, meme heure, monde neuf a chaque fois : les ${r.n} voitures de la circulation `
+    + `naissent aux MEMES places quelle que soit la case ou le test precedent a laisse le joueur `
+    + `(bruit de fond ${r.bruit} ecart ; joueur laisse en 300;300 : ${r.b} ; dans le hall du test 299 : ${r.c} ; `
+    + `au coin de la carte : ${r.d}) · avant le correctif, __SHOT.go posait le joueur APRES loadWorld : la ville `
+    + `se batissait autour du joueur du test PRECEDENT, traficPose refusait d'autres voies, et 2 voitures sur 8 `
+    + `changeaient de place — c'est par la que le test 299 empoisonnait le test 332 a lui seul` };
+});
+

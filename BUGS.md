@@ -723,3 +723,13 @@ GÊNANT (ça se voit, ça agace) · COSMÉTIQUE.
 - **On voit** : mesuré à la sonde par le poste Finition — le joueur est déplacé de **1,75 m en UNE image**, `P.vel.x` remis à 0, et il se retrouve posé sur une dalle basse en (−49,9 ; 9,2). Aucun test du banc ne le voyait jusqu'ici.
 - **Racine probable** : la résolution axe par axe de `moveAxis` — la sortie « face la plus proche » quand on est déjà dans une boîte, ou un enchaînement marche + mur. C'est la même famille que le défaut n° 80 (le garde-corps de La Zone qui éjectait le joueur de 1,48 m hors de la cage) et que l'éjection de 15,8 m trouvée au round 73.
 - **On devrait voir** : un déplacement continu. Aucun pas ne doit jamais dépasser ce que la vitesse du joueur autorise dans une image.
+
+## CONTRÔLE DU JOUEUR — round 77 (entrées 87 à 99, jouées à la manette DualSense sur `fa07c93`)
+Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4d4-336d04aef788/scratchpad/r77` (scripts `q-*.js`, journaux `q*.log`, images `img/`).
+
+### 87. Mis KO sur une balançoire, l'enfant reste prisonnier de la balançoire : il se balance tout seul et ne peut plus bouger
+- **Gravité** : BLOQUANT (l'enfant n'a plus de personnage ; seul un bouton que rien n'annonce le libère)
+- **Reproduire** : Plaine des Sports, marcher jusqu'aux balançoires (−172 ; −138), △ pour s'asseoir, puis se faire mettre KO (14 coups de 9 ❤️). Reproduit 2/2 (`q-swing.js`, et vu une première fois par accident quand `__SHOT.go()` n'a pas suffi à décrocher le joueur).
+- **On voit** : à t+2 s le relevage du n° 78 fait son travail — ❤️ 100, `P.swing` repasse à faux. **Mais le siège garde son cavalier** : `sw.rider === 'me'` pendant les 30 s suivantes, et `swingTick` repose le joueur sur la planche à chaque image. Le personnage se balance tout seul, y 0,51 → 1,92 → 0,48, cycle de 3,4 s, pendant 28 s. Stick poussé à fond vers une cible à 22 m pendant 400 images : **0 m parcouru**, il est toujours en (−172 ; −137,5). Il n'est pas emmené à l'hôpital, il ne marche pas, il ne court pas, il ne monte pas en voiture. Le seul geste qui le libère est ◯ — et le message qui l'annonçait (« 🎠 ◯ pour sauter de la balançoire ! ») a disparu depuis longtemps, remplacé par la pastille du quartier (« 🏟️ La Plaine des Sports : city-stade… »). Après ◯, tout redevient normal (22 m parcourus, `rider` à zéro).
+- **On devrait voir** : la remise en jeu lâche la balançoire comme elle lâche déjà le volant, le siège et le brancard (`remiseEnJeu()`), et `sitSwing` n'est pas le seul endroit du jeu à savoir décrocher un cavalier.
+- **Capture** : `img/i2-balancoire-prison-3-4.png` — le chat dit « 😵 Joueur77 a été mis KO par Karim_flash », la barre de vie est pleine, et le personnage est suspendu au-dessus de la poutre du portique.

@@ -10815,6 +10815,48 @@ function vehBloque(c, x, z, h, opt) {
   o.ignore = (c.remorque && c.remorque.solid) || (opt && opt.ignore) || null;
   return carBlocked(x, z, c.solid, r0, o, 0, h, L) || ((o.mou || !veutVeh) ? false : vehiculeMord(c, x, z, h));
 }
+// DE COMBIEN DEUX CAISSES SE CHEVAUCHENT-ELLES, EXACTEMENT ? `vehiculeMord` rend un oui/non et
+// ne regarde les autres vehicules que pour les vehicules de service (`exactVeh`) ; `vehBloque`,
+// lui, sonde des DISQUES plus larges que la voiture (rayon 1,41 m pour une demi-largeur de
+// 1,20 m) — c'est ce qui empeche les toles de se toucher, mais c'est aussi pourquoi il repond
+// « je suis deja dedans » bien avant que les rectangles ne se touchent vraiment.
+// La manoeuvre de degagement a besoin de la vraie mesure : elle s'autorise a tourner sur place
+// quand elle est deja encastree, et avec la reponse grossiere elle s'autorisait a tourner ALORS
+// QU'ELLE NE L'ETAIT PAS ENCORE — donc a planter son coin dans le voisin (voir le garde-fou de
+// `traficRoule`). On repond ici par le theoreme des axes separateurs sur les deux rectangles
+// orientes, exactement comme le fait le banc d'essai qui compte les chevauchements.
+function coinsVeh(v, x, z, h) {
+  const cs = Math.cos(h), sn = Math.sin(h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
+  return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [x + lx * cs + lz * sn, z - lx * sn + lz * cs]);
+}
+function penetrationToles(c, x, z, h) {
+  flotteMaj();
+  const P1 = coinsVeh(c, x, z, h);
+  const port = (c.baseD || 4.4) / 2 + 6;
+  let pire = 0;
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    if (c.remorque && v === c.remorque) continue;   // l'epave au crochet nous suit
+    if (Math.abs(v.x - x) > port || Math.abs(v.z - z) > port) continue;
+    const P2 = coinsVeh(v, v.x, v.z, v.h || 0);
+    let mn = Infinity;
+    for (const [U, V] of [[P1, P2], [P2, P1]]) {
+      for (let i = 0; i < 4; i++) {
+        const nx = U[(i + 1) % 4][1] - U[i][1], nz = U[i][0] - U[(i + 1) % 4][0];
+        const nl = Math.hypot(nx, nz) || 1;
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of U) { const d = q[0] * nx + q[1] * nz; if (d < a1) a1 = d; if (d > a2) a2 = d; }
+        for (const q of V) { const d = q[0] * nx + q[1] * nz; if (d < b1) b1 = d; if (d > b2) b2 = d; }
+        if (a2 < b1 || b2 < a1) { mn = 0; break; }
+        const ch = Math.min(a2 - b1, b2 - a1) / nl;
+        if (ch < mn) mn = ch;
+      }
+      if (mn === 0) break;
+    }
+    if (mn > pire) pire = mn;
+  }
+  return pire;
+}
 // Un vehicule bot ne doit JAMAIS entrer dans un solide : avant chaque pas on teste le point
 // d'arrivee (garde-fou `carBlocked`, le meme que la voiture du joueur). S'il est bloque, il
 // s'arrete net et recalcule son itineraire au lieu de traverser le mur.
@@ -10844,16 +10886,48 @@ function avanceVehicule(c, dt, spd, opt, h0) {
   // TOURNER SUR PLACE fait aussi entrer un coin dans un mur : c'est comme ca qu'un camion
   // plantait l'angle de sa remorque dans une facade sans bouger d'un metre. Si le nouveau cap
   // est dans un solide et pas l'ancien, on annule la rotation de cette image.
-  if (h0 != null && h0 !== c.h && vehBloque(c, c.x, c.z, c.h, o) && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
+  // « BLOQUE AVANT COMME APRES » N'AUTORISE PAS A TOURNER DANS LE VOISIN. Ce garde-fou annulait
+  // la rotation quand le nouveau cap etait pris ET PAS L'ANCIEN ; deux vehicules cote a cote
+  // sont tous les deux « pris » (les disques de `vehBloque` sont plus larges que la caisse), et
+  // la rotation redevenait libre — celui qui manoeuvrait vissait alors son coin dans l'autre.
+  // Mesure (test 333) : la depanneuse prioritaire, immobile a cote d'une voiture rangee, lui
+  // enfoncait son arriere de 0,63 m en tournant de 0,08 rad. Quand les deux caps sont pris, on
+  // tranche donc sur la VRAIE profondeur de chevauchement (rectangles orientes) : on ne tourne
+  // pas si ca l'aggrave. Le calcul exact ne se fait QUE dans ce cas — en circulation libre le
+  // premier test repond « rien devant » et rien de plus n'est calcule.
+  if (h0 != null && h0 !== c.h) {
+    const gene = vehBloque(c, c.x, c.z, c.h, o);
+    if (gene && !vehBloque(c, c.x, c.z, h0, o)) c.h = h0;
+    else if (gene && penetrationToles(c, c.x, c.z, c.h) > penetrationToles(c, c.x, c.z, h0) + 1e-9) c.h = h0;
+  }
+  // LE MODE MOU SERT A SORTIR D'UN ENCASTREMENT, PAS A EN CREUSER UN. Le controle ci-dessus,
+  // comme les deux pas ci-dessous, passe par `vehBloque` — et le mode mou y COUPE les autres
+  // caisses (`o.veh = false`). Pendant toute la manoeuvre de degagement, ni la rotation ni la
+  // marche arriere ne voyaient donc une seule tole. Mesure (test 333) : une voiture rangee pour
+  // la sirene se degageait a cote de la depanneuse prioritaire et reculait DEDANS en lui
+  // vissant son arriere — 291 images de chevauchement, profondeur portee de 0,02 m a 1,10 m en
+  // cinq secondes, pour un seuil de ZERO chevauchement. On mesure donc la VRAIE profondeur de
+  // chevauchement (rectangles orientes) et, en mode mou, on n'accepte de rotation ni de pas qui
+  // l'AGGRAVE : tout ce qui desencastre reste libre, et c'est tout ce dont la manoeuvre a besoin.
+  let penMou = -1;   // -1 : on n'est pas en mode mou, rien de tout cela ne se calcule
+  if (o.mou) {
+    penMou = penetrationToles(c, c.x, c.z, h0 != null ? h0 : c.h);
+    if (h0 != null && h0 !== c.h) {
+      const pa = penetrationToles(c, c.x, c.z, c.h);
+      if (pa > penMou + 1e-9) c.h = h0; else penMou = pa;
+    }
+  }
   const x0 = c.x, z0 = c.z;
   const nx = c.x + Math.sin(c.h) * spd * dt, nz = c.z + Math.cos(c.h) * spd * dt;
-  let bloque = 0, posSaine = false;
-  if (!vehBloque(c, nx, c.z, c.h, o)) c.x = nx; else bloque++;
+  let bloque = 0, posSaine = false, pmou = 0;
+  if (!vehBloque(c, nx, c.z, c.h, o)
+    && (penMou < 0 || (pmou = penetrationToles(c, nx, c.z, c.h)) <= penMou + 1e-9)) { c.x = nx; if (penMou >= 0) penMou = pmou; } else bloque++;
   // `posSaine` : quand le pas en z passe, la question posee est EXACTEMENT celle du controle
   // final plus bas — memes x, z, cap et memes options. On retient la reponse au lieu de la
   // redemander : c'est un appel de vehBloque sur cinq qui disparait (mesure au profileur :
   // vehBloque et ses deux tests pesaient les deux tiers du temps de calcul d'une image).
-  if (!vehBloque(c, c.x, nz, c.h, o)) { c.z = nz; posSaine = true; } else bloque++;
+  if (!vehBloque(c, c.x, nz, c.h, o)
+    && (penMou < 0 || (pmou = penetrationToles(c, c.x, nz, c.h)) <= penMou + 1e-9)) { c.z = nz; posSaine = true; if (penMou >= 0) penMou = pmou; } else bloque++;
   // ON SORT DE CE DANS QUOI ON EST DEJA — MAIS SEULEMENT DE CA.
   // Le garde-fou refuse tout pas dont l'arrivee touche une autre caisse, et le filet plus bas
   // ramene le vehicule a sa derniere position VERIFIEE. Les deux se retournent contre nous des

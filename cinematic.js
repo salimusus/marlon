@@ -13,7 +13,15 @@
     const reduced = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const layer = document.createElement('section'); layer.id = 'marlonCinema';
     layer.setAttribute('role', 'dialog'); layer.setAttribute('aria-label', 'Introduction de Marlon'); layer.setAttribute('aria-modal', 'true');
-    layer.innerHTML = '<canvas aria-label="Cinématique : recruter son équipe, conquérir huit quartiers et contrôler la ville"></canvas><div class="cinemaControls"><button type="button" data-cinema="sound">Son : activé</button><button type="button" data-cinema="record">Exporter la vidéo</button><button type="button" data-cinema="skip">Passer · Entrée / A</button></div><p class="cinemaStatus" role="status"></p>';
+    // n° 100 du contrôleur : « Exporter la vidéo » est un OUTIL DE STUDIO, pas un bouton de jeu.
+    // Posé entre « Son » et « Passer » sur le tout premier écran, il relançait le film depuis
+    // zéro (elapsed = 0) et enregistrait 32 secondes à 8 Mbit/s : l'enfant qui voulait juste
+    // appuyer sur un bouton revoyait le film en entier. Il n'existe plus que derrière
+    // `?capture` sur 127.0.0.1, comme le mode capture lui-même (voir showMarlonIntro).
+    const exportable = !!options.capture;
+    layer.innerHTML = '<canvas aria-label="Cinématique : recruter son équipe, conquérir huit quartiers et contrôler la ville"></canvas><div class="cinemaControls"><button type="button" data-cinema="sound">Son : activé</button>'
+      + (exportable ? '<button type="button" data-cinema="record">Exporter la vidéo</button>' : '')
+      + '<button type="button" data-cinema="skip">Passer · Entrée / A</button></div><p class="cinemaStatus" role="status"></p>';
     document.body.appendChild(layer);
     const canvas = layer.querySelector('canvas'), ctx = canvas.getContext('2d');
     canvas.width = 1920; canvas.height = 1080;
@@ -126,7 +134,7 @@
     const volume = Math.max(0, Math.min(1, Number.isFinite(options.volume) ? options.volume : 1)) * .16;
     const originalRatio = renderer.getPixelRatio(), originalSize = renderer.getSize(new T.Vector2());
     renderer.setPixelRatio(1); renderer.setSize(1920, 1080, false);
-    const status = layer.querySelector('.cinemaStatus'), recordButton = layer.querySelector('[data-cinema="record"]');
+    const status = layer.querySelector('.cinemaStatus'), recordButton = exportable ? layer.querySelector('[data-cinema="record"]') : null;
     const music = () => {
       if (audio || !(root.AudioContext || root.webkitAudioContext)) return;
       try {
@@ -163,7 +171,7 @@
       recording = false;
       if (recorder && recorder.state !== 'inactive') {
         try { recorder.stop(); }
-        catch (_) { if (stream) stream.getTracks().forEach(t => t.stop()); recordButton.disabled = false; }
+        catch (_) { if (stream) stream.getTracks().forEach(t => t.stop()); if (recordButton) recordButton.disabled = false; }
       }
     }
     const visibility = () => {
@@ -213,7 +221,7 @@
     const soundButton = layer.querySelector('[data-cinema="sound"]');
     soundButton.textContent = 'Son : ' + (muted ? 'coupé' : 'activé'); soundButton.setAttribute('aria-pressed', String(!muted));
     soundButton.onclick = e => { muted = !muted; if (audio) { audio.ac.resume().catch(() => {}); audio.master.gain.setTargetAtTime(muted ? 0 : volume, audio.ac.currentTime, .03); } e.target.textContent = 'Son : ' + (muted ? 'coupé' : 'activé'); e.target.setAttribute('aria-pressed', String(!muted)); };
-    recordButton.onclick = () => {
+    if (recordButton) recordButton.onclick = () => {
       if (recording) return;
       if (!root.MediaRecorder || !canvas.captureStream) { status.textContent = 'Export vidéo non pris en charge. La cinématique reste jouable.'; return; }
       try {
@@ -224,18 +232,18 @@
         const currentRecorder = recorder, currentStream = stream, chunks = [];
         recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
         let failed = false;
-        recorder.onerror = () => { failed = true; if (recorder === currentRecorder) stopRecording(); currentStream.getTracks().forEach(t => t.stop()); recordButton.disabled = false; status.textContent = 'Enregistrement interrompu. Tu peux réessayer.'; };
+        recorder.onerror = () => { failed = true; if (recorder === currentRecorder) stopRecording(); currentStream.getTracks().forEach(t => t.stop()); if (recordButton) recordButton.disabled = false; status.textContent = 'Enregistrement interrompu. Tu peux réessayer.'; };
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: currentRecorder.mimeType }), extension = currentRecorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
           currentStream.getTracks().forEach(t => t.stop());
-          if (failed || !blob.size) { recordButton.disabled = false; if (!failed) status.textContent = 'Aucune image enregistrée. Relance l’export.'; return; }
+          if (failed || !blob.size) { if (recordButton) recordButton.disabled = false; if (!failed) status.textContent = 'Aucune image enregistrée. Relance l’export.'; return; }
           if (options.capture) {
             try { const response = await fetch('/__capture', { method: 'POST', body: blob }); if (!response.ok) throw new Error('capture'); status.textContent = 'Vidéo enregistrée dans les livrables.'; } catch (_) { status.textContent = 'Échec de l’enregistrement local.'; }
           } else {
             const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'MARLON-introduction.' + extension; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
             status.textContent = 'Vidéo exportée. Prêt à conquérir la ville.';
           }
-          recordButton.disabled = false; recordButton.textContent = 'Exporter à nouveau';
+          if (recordButton) { recordButton.disabled = false; recordButton.textContent = 'Exporter à nouveau'; }
         };
         recorder.start(1000); recording = true; recordButton.disabled = true; status.textContent = 'Enregistrement de l’introduction · 32 secondes';
       } catch (_) { recording = false; if (stream) stream.getTracks().forEach(t => t.stop()); recordButton.disabled = false; status.textContent = 'Export indisponible sur ce navigateur.'; }
@@ -355,7 +363,7 @@
         }
         for (const id of padButtons.keys()) if (!present.has(id)) padButtons.delete(id);
       } catch (_) {}
-      if (elapsed >= 32 && recording) { recordButton.disabled = true; stopRecording(); }
+      if (elapsed >= 32 && recording) { if (recordButton) recordButton.disabled = true; stopRecording(); }
       else if (elapsed >= 32 && !options.capture && !recorder) finish();
     }
     layer.querySelector('[data-cinema="skip"]').focus();

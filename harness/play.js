@@ -21723,3 +21723,263 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
   return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
 });
+
+// ================= POSTE JEUX & QUARTIERS — round 78 =================
+test('mis KO sur une balancoire, l\'enfant est RENDU a lui-meme : le siege lache son cavalier, il remarche, et la consigne pour descendre reste affichee', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    // Le scenario EXACT du controleur (n° 87) : Plaine des Sports, on s'assoit sur une
+    // balancoire, on se fait mettre KO. `balancoire: 5` est le premier siege de la Plaine
+    // (les quatre premiers sont ceux du parc).
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, frais: true, balancoire: 5 });
+    const sw = G.city.swings.find(s => s.rider === 'me');
+    if (!sw) return { pourquoi: 'personne ne s\'est assis sur la balancoire' };
+    const assis = { lieu: sw.lieu, rider: sw.rider };
+    // la consigne pour DESCENDRE reste affichee tant qu'on est assis (elle disparaissait au
+    // bout de 1,6 s, remplacee par la pastille du quartier)
+    for (let i = 0; i < 40; i++) G.step(1 / 60, true);
+    const consigne = G.consigneProche();
+    document.body.classList.add('manette'); G.updateAct();
+    const pastilleManette = document.getElementById('act').textContent;
+    document.body.classList.remove('manette'); G.updateAct();
+    const pastille = document.getElementById('act').textContent;
+    // LE KO. Le relevage (n° 78) doit rendre 100 ❤️ ET decrocher le siege.
+    P.hp = 0;
+    for (let i = 0; i < 300; i++) G.step(1 / 60, true);
+    const apres = { hp: P.hp, rider: sw.rider, cavaliers: G.city.swings.filter(s => s.rider).length, pswing: !!P.swing };
+    // ON REMARCHE. Depuis le point de reveil, 400 images de stick a fond dans les quatre
+    // directions : le controleur mesurait -0,09 m, le personnage etant repose sur la planche
+    // a chaque image. On garde la meilleure des quatre (l'accueil de l'hopital est meuble).
+    const depart = P.pos.clone();
+    let mieux = 0, ou = null;
+    for (const [dx, dz, nom] of [[1, 0, 'est'], [-1, 0, 'ouest'], [0, 1, 'sud'], [0, -1, 'nord']]) {
+      P.pos.copy(depart); P.vel.set(0, 0, 0);
+      for (let i = 0; i < 400; i++) { P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz); G.keys.clear(); G.keys.add('KeyW'); G.step(1 / 60, true); }
+      G.keys.clear();
+      const d = Math.hypot(P.pos.x - depart.x, P.pos.z - depart.z);
+      if (d > mieux) { mieux = d; ou = nom; }
+    }
+    // ON NE CONTAMINE PLUS LE TEST SUIVANT : __SHOT.go() doit rendre TOUS les sieges.
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, balancoire: 5 });
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const heritage = G.city.swings.filter(s => s.rider).length;
+    // et on se rassoit pour de bon apres : un siege rendu se represente
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, balancoire: 5 });
+    const rassis = !!G.city.swings.find(s => s.rider === 'me');
+    return { assis, consigne, pastille, pastilleManette, apres, marche: +mieux.toFixed(2), ou, heritage, rassis };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.assis.rider === 'me' && r.apres.hp === 100 && r.apres.rider === null && r.apres.cavaliers === 0
+    && !r.apres.pswing && r.marche > 8 && r.heritage === 0 && r.rassis
+    && /balan|saut/i.test(r.consigne || '') && /◯/.test(r.pastilleManette);
+  return { ok, detail: `n° 87, BLOQUANT : le relevage rendait bien 100 ❤️ et remettait P.swing a null, mais le SIEGE gardait son cavalier (sw.rider === 'me') et swingTick reposait le joueur sur la planche a chaque image — 28 s a se balancer tout seul et 400 images de stick a fond pour −0,09 m parcouru · maintenant remiseEnJeu() passe par lacheBalancoire(), le seul endroit du jeu qui decroche un cavalier : apres le KO, ❤️ ${r.apres.hp}, sw.rider = ${r.apres.rider}, ${r.apres.cavaliers} siege occupe sur les 10 de la ville, P.swing ${r.apres.pswing} · et l'enfant REMARCHE : ${r.marche} m en 400 images (direction ${r.ou}) (avant : −0,09 m) · la consigne pour descendre ne dure plus 1,6 s, elle reste affichee tant qu'on est assis : pastille « ${r.pastille} », et a la manette « ${r.pastilleManette} » · enfin __SHOT.go() rend les sieges qu'il occupait (${r.heritage} cavalier herite apres un go, et on se rassoit : ${r.rassis}) — sans quoi ce test serait vert pour de mauvaises raisons` };
+});
+// ============ POSTE MANETTE & MESSAGES (round 78) ============
+test('les deux courses se lancent avec un BOUTON de manette, jamais avec une touche', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const R = G.RACE_C;
+    // ---- 1) LE CIRCUIT : a pied devant le portique, ▢ doit lancer la course ----
+    __SHOT.go({ world: 4, x: R.x, y: 1, z: R.z + R.r - 12, hour: 12 });
+    if (G.uiOpen) G.closeUI();
+    await dodo(250);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    document.body.classList.add('manette');
+    const gp = { index: 0, id: 'DualSense Wireless Controller', mapping: 'standard',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    navigator.getGamepads = () => [gp];
+    G.pollGamepad(1 / 60); G.pollGamepad(1 / 60);
+    const presse = i => { gp.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(1 / 60);
+      gp.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(1 / 60); };
+    const out = { pres: !!G.city.raceNear, depart: G.race.state };
+    for (const i of [0, 1, 3]) presse(i);       // ✕ ◯ △ : aucun ne doit lancer quoi que ce soit
+    out.autres = G.race.state;
+    presse(2);                                   // ▢
+    out.carre = G.race.state;
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    out.bandeau = document.getElementById('msg').textContent;
+    // ---- 2) L'HELICO : ▢ pose toujours, R1 lance la course d'anneaux ----
+    __SHOT.go({ world: 4, x: 47, y: 1, z: -13, hour: 12 });
+    if (G.uiOpen) G.closeUI();
+    await dodo(250);
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    const heli = G.city.cars.find(c => c.heli);
+    out.heli = !!heli;
+    if (heli) {
+      G.enterCar(heli);
+      for (let i = 0; i < 10; i++) G.step(1 / 60, true);
+      out.auxCommandes = !!(G.drive.car && G.drive.car.heli);
+      document.body.classList.add('manette');
+      navigator.getGamepads = () => [gp];
+      G.pollGamepad(1 / 60); G.pollGamepad(1 / 60);
+      presse(2); out.carreHeli = G.hrace.on;     // ▢ pose l'appareil, il ne lance PAS la course
+      presse(5); out.r1Heli = G.hrace.on;        // R1 lance la course d'anneaux
+      G.hrace.on = false;
+    }
+    // ---- 3) AUCUN LIBELLE NE MENT : chaque touche traduite en bouton est vraiment envoyee ----
+    // Le n° 89 vient de la : ctrlText() ecrivait « ▢ » pour « F » alors qu'aucun bouton
+    // n'envoyait KeyF. On refait la verification pour TOUTE la famille.
+    const envoyes = {};
+    for (const [i, code] of Object.entries(G.PAD_MAP)) envoyes[G.PS_NOMS[i]] = code;
+    const attendu = { 'E pour monter': '△', 'Espace pour sauter': '◯', 'G pour dégainer': '✕',
+      'V pour frapper': '▢', 'O pour creuser': '▢', 'T pour parler': 'Create' };
+    out.libelles = {};
+    for (const [phrase, bouton] of Object.entries(attendu)) {
+      const traduit = G.ctrlText(phrase);
+      const codeAttendu = { '△': 'KeyE', '◯': 'Space', '✕': 'KeyG', '▢': 'KeyV', 'Create': 'KeyT' }[bouton];
+      out.libelles[phrase] = { traduit, vrai: traduit.startsWith(bouton) && envoyes[bouton] === codeAttendu };
+    }
+    // « F » vaut ▢ : ce bouton lance desormais vraiment la course (mesure 1)
+    out.libelleF = G.ctrlText('🏁 F : lancer la course');
+    out.libelleAnneaux = G.ctrlText("🚁 %anneaux% : course d'anneaux");
+    delete navigator.getGamepads;
+    document.body.classList.remove('manette');
+    return out;
+  });
+  const mensonges = Object.entries(r.libelles || {}).filter(([, v]) => !v.vrai).map(([k]) => k);
+  const ok = r.pres && r.depart === 'idle' && r.autres === 'idle' && r.carre === 'countdown'
+    && /🏁/.test(r.bandeau) && r.heli && r.auxCommandes && r.carreHeli === false && r.r1Heli === true
+    && mensonges.length === 0 && r.libelleF === '🏁 ▢ : lancer la course'
+    && r.libelleAnneaux === "🚁 R1 : course d'anneaux";
+  return { ok, detail: `n° 89 : le jeu ecrivait « ▢ pour lancer la course » et « 🚁 ▢ : course d'anneaux » mais AUCUN bouton n'envoyait KeyF — avant, ▢ △ ✕ ◯ laissaient race.state a « idle » · maintenant, devant le portique : ✕ ◯ △ → ${r.autres}, ▢ → ${r.carre} (« ${r.bandeau} ») · aux commandes de l'helico ▢ pose toujours (course d'anneaux = ${r.carreHeli}) et R1 la lance (${r.r1Heli}) · et les libelles disent la verite : « ${r.libelleF} », « ${r.libelleAnneaux} », ${Object.keys(r.libelles).length} traductions verifiees bouton par bouton, ${mensonges.length} mensonge(s)` };
+});
+
+test('les panneaux gravés parlent manette, pas clavier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await dodo(250);
+    // une touche de clavier ecrite en dur : E, F, G, O, V, T seuls, ou « Espace » / « Ctrl »
+    const clavier = /\b(?:[EFGOVT]|Espace|Ctrl)\b(?!\.)/;
+    document.body.classList.remove('manette');
+    const textes = G.PANNEAUX.map(x => x.texte);
+    const avant = textes.filter(t => clavier.test(t));
+    // pixels du panneau des balancoires du nid d'oiseau AVANT / APRES : la texture est bien recuite
+    const nid = G.PANNEAUX.find(x => /nid d'oiseau/.test(x.texte));
+    const image = m => { const c = m && m.map && m.map.image; if (!c) return null;
+      const g = c.getContext('2d'); const d = g.getImageData(0, 0, c.width, c.height).data;
+      let somme = 0; for (let i = 0; i < d.length; i += 4) somme += d[i] + d[i + 1] + d[i + 2]; return somme; };
+    const pxClavier = image(nid && nid.mat);
+    document.body.classList.add('manette');
+    const recuits = G.panneauxMaj();
+    const pxManette = image(nid && nid.mat);
+    const apres = textes.map(t => G.ctrlText(t)).filter(t => clavier.test(t));
+    const lus = textes.filter(t => clavier.test(t)).map(t => G.ctrlText(t));
+    document.body.classList.remove('manette');
+    G.panneauxMaj();
+    return { total: textes.length, recuits, avant, apres, lus, pxClavier, pxManette,
+      pxRendu: image(nid && nid.mat) };
+  });
+  const ok = r.total > 15 && r.recuits === r.total && r.avant.length >= 6 && r.apres.length === 0
+    && r.lus.every(t => /[△◯✕▢]/.test(t))
+    && r.pxClavier != null && r.pxManette != null && r.pxClavier !== r.pxManette
+    && r.pxRendu === r.pxClavier;
+  return { ok, detail: `n° 93 : le texte d'un panneau est cuit dans une texture a la construction de la ville, donc ctrlText ne le voyait jamais · ${r.total} panneaux dans la ville, ${r.avant.length} nommaient une touche de clavier (${r.avant.slice(0, 3).join(' · ')}…) · manette branchee, les ${r.recuits} textures sont recuites et il n'en reste ${r.apres.length} : « ${r.lus.slice(0, 3).join(' · ')}… » · la texture du panneau du nid d'oiseau change vraiment de pixels (${r.pxClavier} → ${r.pxManette}) et revient a l'identique manette debranchee (${r.pxRendu})` };
+});
+
+test('après un KO, la phrase du réveil reste à l\'écran et dit où on est', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await dodo(250);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const el = document.getElementById('msg');
+    const depart = { x: G.P.pos.x, z: G.P.pos.z };
+    G.P.koPerte = 7;                       // ce que le KO a coûté (mis par la vraie mise a terre)
+    G.P.hp = 0;                            // a terre
+    const trace = []; let releve = null, reveil = null;
+    for (let i = 0; i < 420; i++) {
+      G.step(1 / 60, true);
+      const t = el.classList.contains('show') ? el.textContent : '';
+      if (!trace.length || trace[trace.length - 1].t !== t) trace.push({ s: +(i / 60).toFixed(2), t });
+      if (releve === null && G.P.hp === 100) { releve = i; reveil = t; }
+    }
+    const fin = el.classList.contains('show') ? el.textContent : '';
+    // la pastille de proximité (priorité 0) ne peut pas effacer la phrase du réveil…
+    G.P.hp = 0; G.P.koPerte = 5;
+    let apresReveil = null;
+    for (let i = 0; i < 200 && apresReveil === null; i++) { G.step(1 / 60, true); if (G.P.hp === 100) apresReveil = i; }
+    G.msg('🪑 E : s\'asseoir', 1200);      // exactement le message qui recouvrait tout
+    const tenue = el.textContent;
+    // … mais une autre annonce de même importance, si : l'histoire se raconte en entier
+    G.msg('🚑 Une ambulance a été appelée', 1200, 1);
+    const prio1 = el.textContent;
+    G.msg('🏥 Test prioritaire', 1200, 2);
+    const prio2 = el.textContent;
+    return { distance: +Math.hypot(G.P.pos.x - depart.x, G.P.pos.z - depart.z).toFixed(1),
+      releve: +(releve / 60).toFixed(2), reveil, fin, tenue, prio1, prio2, trace };
+  });
+  const dit = /🏥/.test(r.reveil || '') && /hôpital/.test(r.reveil || '') && /−7 🪙/.test(r.reveil || '');
+  const ok = dit && r.fin === r.reveil && r.distance > 150
+    && /🏥/.test(r.tenue) && !/🪑/.test(r.tenue)
+    && /🏥/.test(r.prio1) && /🏥 Test prioritaire/.test(r.prio2);
+  return { ok, detail: `n° 97 : après un KO on se réveillait à ${r.distance} m sans un mot — la phrase « 🏥 Tu te réveilles… » était effacée DANS LA MÊME IMAGE par la pastille du banc de l'accueil, et le seul texte restant était « 🪑 E : s'asseoir » · maintenant la bannière a une priorité : au relevage (${r.releve} s) elle affiche « ${r.reveil} », elle y est encore 7 s de simulation plus tard (« ${r.fin} »), un « 🪑 E : s'asseoir » de priorité 0 ne la remplace pas (« ${r.tenue} ») et une annonce de même importance, si (« ${r.prio2} ») · ${r.trace.length} textes différents sur tout le KO` };
+});
+
+test('l\'écran de l\'introduction ne propose plus « Exporter la vidéo » à un enfant', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const btn = document.getElementById('introPlay');
+    if (!btn) return { pourquoi: 'pas de bouton introPlay' };
+    btn.click();
+    await dodo(700);
+    const couche = document.getElementById('marlonCinema');
+    if (!couche) return { pourquoi: 'la cinématique ne s\'est pas ouverte' };
+    const boutons = [...couche.querySelectorAll('.cinemaControls button')].map(b => b.dataset.cinema);
+    const libelles = [...couche.querySelectorAll('.cinemaControls button')].map(b => b.textContent);
+    const skip = couche.querySelector('[data-cinema="skip"]');
+    if (skip) skip.click();
+    await dodo(500);
+    return { boutons, libelles, fermee: !document.getElementById('marlonCinema') };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.boutons.length === 2 && !r.boutons.includes('record')
+    && r.boutons.includes('sound') && r.boutons.includes('skip') && r.fermee;
+  return { ok, detail: `n° 100 : le premier écran du jeu offrait trois boutons dont « Exporter la vidéo », un outil de studio qui relançait le film depuis zéro et enregistrait 32 s à 8 Mbit/s · il n'en reste ${r.boutons.length} : « ${r.libelles.join(' » · « ')} » (l'export ne sort plus que derrière ?capture sur 127.0.0.1), et « Passer » referme bien la cinématique (${r.fermee})` };
+});
+// ================= POSTE VILLE & VÉHICULES (round 78) =================
+
+test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas une étoile, et l\'habitant derrière les cibles est indemne', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 19.4, hour: 12 });
+    // 1) GÉOMÉTRIE : depuis six points de la dalle, un rayon prolongé d'un demi-mètre AU-DELÀ
+    // de chaque cible doit rencontrer un solide. Avant la butte, la cible du milieu ne donnait
+    // RIEN sur 200 m : la balle filait jusqu'à la rue z = 0 et à ses passants.
+    const postes = [[67, 19.4], [60.5, 19.4], [73.5, 19.4], [67, 15], [62, 16], [72, 16]];
+    let libres = 0, pire = 0, n = 0;
+    for (const [px, pz] of postes) for (const t of G.city.targets) {
+      const dx = t.x - px, dz = t.z - pz, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
+      const h = G.castSolids(px + ux * (L + 0.5), t.y, pz + uz * (L + 0.5), ux, 0, uz, 200, true);
+      n++;
+      if (!h || !h.o) libres++; else pire = Math.max(pire, h.d);
+    }
+    // 2) EN JEU : quarante coups sur les trois cibles, un habitant planté juste derrière
+    // (rue z = 0), tir déterministe (pas de dispersion).
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 19.4, hour: 12 });
+    const alea = Math.random; Math.random = () => 0.5;
+    const b = G.bots.find(q => q.av && q.av.group);
+    b.pos.set(67, 0, 1.5); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    b.ko = 0; b.hp = 100; b.wait = 1e6; b.rdv = null; b.fight = null; b.name = 'Momo_king';
+    G.P.pos.set(67, 0.3, 19.4); G.P.hp = 100;
+    G.equipWeapon('pistol'); G.P.drawn = true;
+    for (let k = 0; k < 40; k++) {
+      const t = G.city.targets[k % 3];
+      // on VISE la cible : la balle suit le point de visée, qui suit la caméra (aimTick)
+      const dx = t.m.position.x - G.P.pos.x, dy = t.y - (G.P.pos.y + 1.35), dz = t.z - G.P.pos.z;
+      const L3 = Math.hypot(dx, dy, dz);
+      G.cam.yaw = Math.atan2(dx, dz) - Math.PI; G.cam.pitch = -Math.asin(dy / L3);
+      G.P.facing = Math.atan2(dx, dz);
+      G.P.fireCd = 0; G.P.ammo = 999; G.P.reloadT = 0; G.P.holsterT = G.simTime + 5;
+      G.fire();
+      for (let i = 0; i < 40; i++) { G.simTime += 1 / 60; G.shotsTick(1 / 60); }
+    }
+    Math.random = alea;
+    const out = { rayons: n, libres, pire: +pire.toFixed(2), etoiles: G.police.wanted,
+      touchees: G.city.shots, hpVoisin: b.hp, zVoisin: +b.pos.z.toFixed(2), enVol: (G.shots || []).length };
+    G.P.gun = false; G.P.weapon = null; G.P.drawn = false;
+    return out;
+  });
+  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
+  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
+});

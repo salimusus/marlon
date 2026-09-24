@@ -215,6 +215,44 @@ window.__SHOT = {
         var fant = 0; for (var q2 = 0; q2 < solids.length; q2++) { var o2 = solids[q2]; if (o2 && o2.mesh && !auMonde(o2.mesh)) fant++; }
         dit(fant, fant + ' boite(s) de collision fantomes laissees par une reconstruction du monde');
       }
+      // LES DEUX RESIDUS QUI RESTAIENT APRES LA POSITION D'ENTREE (poste FIABILITE, r78).
+      // Une fois le joueur pose avant la reconstruction, le test 299 ne changeait plus RIEN au
+      // test 332 (memes huit voitures de trafic, memes chantiers, meme police, memes gangs, meme
+      // argent) sauf ces deux-la, mesures au releve d'entree :
+      //
+      //  1. LES BULLES DE DIALOGUE FIGEES. bubble() accroche un panneau a l'avatar et le fait
+      //     expirer... dans la boucle d'AFFICHAGE. Un banc qui enchaine des step() ne l'efface
+      //     donc jamais, et l'avatar garde un enfant de plus pour tous les tests suivants.
+      //     Mesure : 3 bulles restantes derriere le test 299, horodatees a 295,5 s pour une
+      //     horloge reposee a 3 000 s — expirees depuis longtemps, mais toujours accrochees.
+      //     (Meme famille que le defaut n° 98 : un objet qui ne vieillit qu'au dessin.)
+      //
+      //  2. LES OBJETS POSES DANS LA SCENE AU LIEU DE worldGroup. clearWorld vide worldGroup ;
+      //     ce qui a ete ajoute d'un cran plus haut, directement dans la scene, SURVIT a la
+      //     reconstruction. Mesure derriere le test 299 : 4 objets de plus restes dans la scene
+      //     (1 LineSegments, 2 Mesh de PlaneGeometry, 1 Points) et un solide qui change de
+      //     famille (4 583 « autre » + 613 « decor » devient 4 581 + 614). C'est le dernier
+      //     ecart qui subsiste entre « 332 seul » et « 332 derriere 299 » : le fourgon des
+      //     travaux parcourt 687 m dans un cas et 621 m dans l'autre, les quatre autres
+      //     vehicules de service etant desormais rigoureusement identiques.
+      try {
+        var libres = 0;
+        for (var li = 0; li < scene.children.length; li++) {
+          var lo = scene.children[li];
+          if (lo && (lo.isMesh || lo.isPoints || lo.isLineSegments)) libres++;
+        }
+        // UNE VILLE NEUVE EN A QUATRE, mesures : le dome du ciel et sa doublure (2 spheres),
+        // la nappe d'eau (1 plan) et le champ d'etoiles (1 nuage de points). Au-dela, c'est un
+        // test precedent qui a laisse quelque chose — derriere le test 299 on en compte 8.
+        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4) : '
+          + 'worldGroup est vide par la reconstruction, la scene NON — ils survivent meme a frais: true');
+      } catch (eLib) {}
+      try {
+        var bul = 0;
+        if (typeof bots !== 'undefined') for (var bi = 0; bi < bots.length; bi++)
+          if (bots[bi].av && bots[bi].av.bubble) bul++;
+        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (elles n\u2019expirent que dans la boucle d\u2019affichage)');
+      } catch (eBul) {}
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
       dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');

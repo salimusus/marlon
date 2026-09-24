@@ -21983,3 +21983,4 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
   const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
   return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
 });
+

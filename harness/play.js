@@ -21983,3 +21983,90 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
   const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
   return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
 });
+
+// ---- DÉFAUT N° 96 : un contact au pas ne déclenche plus le constat d'accident ----
+// La géométrie de contact de la voiture CONDUITE lisait la boîte alignée sur les axes, qui
+// gonfle de 2,00 m dès qu'on braque : au parking du centre (voisines à 2,40 m) il suffisait de
+// tourner le volant pour « toucher » une voiture qu'on n'avait pas approchée. Et l'impact était
+// mesuré sur `drive.speed`, la vitesse que le MOTEUR réclame, pas celle du rapprochement réel.
+function ecartChassis(a, b) {   // > 0 : les deux tôles ne se touchent pas, et de cette distance
+  const aw = (a.baseW || 2.4) / 2, ad = (a.baseD || 4.4) / 2;
+  const bw = (b.baseW || 2.4) / 2, bd = (b.baseD || 4.4) / 2;
+  const dx = a.x - b.x, dz = a.z - b.z;
+  const ac = Math.cos(a.h || 0), as = Math.sin(a.h || 0), bc = Math.cos(b.h || 0), bs = Math.sin(b.h || 0);
+  let g = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const x = i === 0 ? ac : i === 1 ? as : i === 2 ? bc : bs;
+    const z = i === 0 ? -as : i === 1 ? ac : i === 2 ? -bs : bc;
+    const ra = aw * Math.abs(x * ac - z * as) + ad * Math.abs(x * as + z * ac);
+    const rb = bw * Math.abs(x * bc - z * bs) + bd * Math.abs(x * bs + z * bc);
+    g = Math.max(g, Math.abs(dx * x + dz * z) - ra - rb);
+  }
+  return g;
+}
+
+test('sortir d\'une place de parking en braquant ne déclenche plus d\'accident : on ne « touche » plus une voiture qu\'on n\'a pas approchée', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+    let c = null, best = 1e9;
+    for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+    const voisines = G.city.cars.filter(v => v !== c && Math.hypot(v.x - c.x, v.z - c.z) < 9);
+    G.enterCar(c);
+    const ecart = ${ecartChassis.toString()};
+    let contacts = 0, fantomes = 0, pireEcart = 0, bump = c.bumpT || 0;
+    let avant = new Map(voisines.map(v => [v, ecart(c, v)]));
+    const x0 = c.x, z0 = c.z;
+    // le geste exact de l'enfant : R2 à fond, un quart de tour à gauche pour sortir de la place
+    for (let i = 0; i < 200; i++) {
+      G.keys.add('ArrowUp'); G.keys.add('ArrowLeft');
+      const gAv = new Map(avant);
+      G.step(1 / 60, true);
+      if ((c.bumpT || 0) !== bump) {
+        bump = c.bumpT || 0;
+        let v = null, gv = Infinity;
+        for (const o of voisines) { const g = ecart(c, o); if (g < gv) { gv = g; v = o; } }
+        if (v) { contacts++; const e = gAv.get(v); if (e > 0.05) { fantomes++; pireEcart = Math.max(pireEcart, e); } }
+      }
+      for (const o of voisines) avant.set(o, ecart(c, o));
+    }
+    G.keys.clear();
+    Math.random = alea;
+    return { contacts, fantomes, pireEcart: +pireEcart.toFixed(3), accidents: G.city.accidents.length,
+             accidente: !!c.accidente, voisines: voisines.length,
+             parcouru: +Math.hypot(c.x - x0, c.z - z0).toFixed(2) };
+  })()`);
+  const ok = r.fantomes === 0 && r.accidents === 0 && !r.accidente && r.parcouru > 8;
+  return { ok, detail: `même manœuvre, R2 à fond et un quart de tour à gauche : AVANT, 7 contacts en 2,9 s dont SIX où les deux châssis ne se touchaient pas (le pire à 1,278 m d'écart), puis « 💥 ACCIDENT ! » à t = 2,9 s alors qu'il restait 0,255 m d'air entre les tôles et que le compteur affichait 16,62 m/s pour une voiture qui n'avançait plus — 58,5 % de dégâts, voiture figée, 1,58 m parcourus en 15 s · APRÈS, ${r.contacts} contact(s) contre ${r.voisines} voisines, dont ${r.fantomes} fantôme(s)${r.pireEcart ? ' (pire écart ' + r.pireEcart + ' m)' : ''}, ${r.accidents} accident ouvert, et la voiture sort de sa place : ${r.parcouru} m` };
+});
+
+test('un vrai encastrement dans une voiture garée reste un accident : le constat n\'a pas été désarmé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+    let c = null, best = 1e9;
+    for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+    let cible = null, bc = 1e9;
+    for (const v of G.city.cars) { if (v === c) continue; const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bc) { bc = d; cible = v; } }
+    G.enterCar(c);
+    // cap 0 = vers +z (facing = atan2(dx, dz)) : la cible est droit devant, à 7 m
+    cible.h = 0; cible.g.rotation.y = 0; G.vehicleSolid(cible);
+    c.h = 0; c.x = cible.x; c.z = cible.z - 7; c.dmg = 0;
+    c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+    const VIT = 14;
+    let vChoc = null;
+    for (let i = 0; i < 90 && !c.accidente; i++) {
+      G.drive.speed = VIT;                      // pied au plancher jusqu'au choc
+      const av = Math.abs(G.drive.speed);
+      G.step(1 / 60, true);
+      if (c.accidente && vChoc == null) vChoc = +av.toFixed(2);
+    }
+    Math.random = alea;
+    return { accidente: !!c.accidente, accidents: G.city.accidents.length, vChoc,
+             dmg: +(c.dmg || 0).toFixed(1), dmgCible: +(cible.dmg || 0).toFixed(1) };
+  });
+  const ok = r.accidente === true && r.accidents === 1;
+  return { ok, detail: `contre-épreuve de la correction du n° 96 : l'impact se mesure maintenant sur le rapprochement RÉEL des deux tôles et non sur le compteur, il fallait donc vérifier qu'un vrai choc déclenche encore le constat · voiture lancée à ${r.vChoc || 14} m/s (50 km/h) dans une voiture garée droit devant : ${r.accidents} accident ouvert, véhicule immobilisé = ${r.accidente}, ${r.dmg} % de dégâts sur la sienne et ${r.dmgCible} % sur l'autre` };
+});

@@ -25687,17 +25687,55 @@ function startHeliRace() {
   if (!drive.car || !drive.car.heli) { msg('🚁 Monte dans l\'hélico pour la course d\'anneaux', 1600); return; }
   hrace.on = true; hrace.next = 0; hrace.t0 = simTime; msg(`🚁 Passe les ${city.rings.length} anneaux dans l'ordre !`, 2200); sfx.check();
 }
-function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus les autres : on le repousse hors de leur boîte
+function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus les autres : on le repousse hors de sa tôle
   const a = c.solid; if (!a) return;
   for (const v of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) {
     if (v === c || !v.solid || !!v.heli !== !!c.heli) continue;
-    const b = v.solid, ox = (a.w + b.w) / 2 - Math.abs(a.x - b.x), oz = (a.d + b.d) / 2 - Math.abs(a.z - b.z);
-    if (ox <= 0 || oz <= 0) continue;
+    const b = v.solid;
     if (c.heli && Math.abs(a.y - b.y) > (a.h + b.h) / 2) continue;
-    if (ox < oz) c.x += (Math.sign(a.x - b.x) || 1) * ox; else c.z += (Math.sign(a.z - b.z) || 1) * oz;
+    // LA TÔLE, PAS L'ENVELOPPE (défaut n° 96). On lisait ici la boîte ALIGNÉE SUR LES AXES
+    // (`c.solid`), qui GONFLE dès que la voiture tourne : une caisse de 2,40 × 4,40 m braquée
+    // à 45° présente une boîte de 4,81 m de côté, soit 2,00 m de large en trop. Au parking du
+    // centre, où les voitures sont garées à 2,40 m l'une de l'autre, il suffisait donc de
+    // BRAQUER pour « toucher » la voisine sans l'avoir approchée. Mesuré sur la manœuvre de
+    // sortie de place, R2 à fond, un quart de tour à gauche : 7 contacts détectés en 2,9 s,
+    // dont SIX où les deux châssis ne se touchaient pas — l'un d'eux à 1,278 m d'écart — et
+    // le septième, celui qui a déclenché le constat, à 0,255 m d'air entre les deux tôles.
+    // `contactVehicules()` est le calcul orienté que le jeu applique DÉJÀ à toutes les autres
+    // paires de véhicules (`separerVehicules`) ; il saute justement la voiture conduite, au
+    // motif qu'« elle a son propre traitement » — c'est ce traitement-là qui était resté sur
+    // l'enveloppe. Il n'y a plus qu'une seule géométrie de contact pour tout le monde.
+    const sep = contactVehicules(c, v);
+    if (!sep) continue;
+    const prof = Math.hypot(sep.x, sep.z);        // de combien les deux tôles se sont interpénétrées
+    c.x += sep.x; c.z += sep.z;
     a.x = c.x; a.z = c.z;
     if (race.state === 'running' || race.state === 'countdown') continue;   // pendant une course, aucun véhicule ne bloque : on se frôle
-    if (simTime > (c.bumpT || 0)) { c.bumpT = simTime + 0.4; const imp = Math.abs(drive.speed);
+    // CE QUI COMPTE, C'EST LA VITESSE À LAQUELLE LES DEUX TÔLES SE RAPPROCHENT (n° 96).
+    // C'est l'esprit de la règle que le choc contre un MUR applique déjà quelques lignes plus
+    // haut (`perte` : la vitesse que le mur a ÔTÉE), et qui manquait ici. On lisait
+    // `drive.speed`, c'est-à-dire la vitesse que le MOTEUR réclame : une voiture calée contre
+    // sa voisine, pied au plancher, affichait 16,62 m/s au compteur alors qu'elle n'avançait
+    // plus — constat d'accident, police, 58 % de dégâts et voiture morte pour une manœuvre de
+    // stationnement.
+    // La bonne mesure est la vitesse de rapprochement LE LONG DE LA NORMALE DE CONTACT
+    // (`sep`, l'axe par lequel les deux caisses s'écartent), vitesse RELATIVE pour qu'un choc
+    // frontal entre deux véhicules lancés compte les deux élans :
+    //   - encastrement de face : la normale est dans l'axe de la marche, on prend tout ;
+    //   - frôlement en longeant une voiture garée : la normale est perpendiculaire à la
+    //     marche, le rapprochement est quasi nul — une rayure, pas un constat. C'est très
+    //     exactement « un frôlement au pas n'est pas un accident » ;
+    //   - caisse coincée qui racle en tournant : rapprochement quasi nul lui aussi.
+    // (La PROFONDEUR d'interpénétration ne convient pas : sur la première image de contact
+    //  elle ne vaut que « ce qu'on a avancé MOINS le jeu qui restait », donc elle dépend de
+    //  l'endroit où la voiture se trouvait dans l'image d'avant — mesuré 3,2 m/s pour un
+    //  encastrement à 14 m/s.)
+    const nx = sep.x / (prof || 1), nz = sep.z / (prof || 1);
+    const vv = v.speed || v.spd || 0;
+    const rx = drive.speed * Math.sin(c.h) - vv * Math.sin(v.h || 0);
+    const rz = drive.speed * Math.cos(c.h) - vv * Math.cos(v.h || 0);
+    const imp = Math.max(0, -(rx * nx + rz * nz));
+    if (simTime > (c.bumpT || 0)) { c.bumpT = simTime + 0.4;
       if (imp > 3) {
         // frotter une autre voiture coûte trois fois moins cher qu'avant : la tôle marque, mais
         // le véhicule ne part plus à la casse au bout de deux minutes de jeu (durabilité demandée par le joueur)
@@ -25720,7 +25758,10 @@ function resolveVehicleOverlap(c) {   // le véhicule conduit ne traverse plus l
         choc(c, imp, imp > 7 && !(gare && imp < 12) ? v : null);
       } else sfx.tone(120, 0, .06, 'square', .04, 80); }
     drive.speed *= 0.75;
-    if (!v.busy && !v.spd && !v.kart && !v.active) { const push = 0.5; if (ox < oz) v.x -= (Math.sign(a.x - b.x) || 1) * push; else v.z -= (Math.sign(a.z - b.z) || 1) * push; v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }   // une voiture garée se déplace un peu
+    // UNE VOITURE GARÉE SE DÉPLACE UN PEU — dans l'axe du contact réel, et seulement si on l'a
+    // vraiment poussée : la bourrade forfaitaire de 50 cm partait aussi sur les contacts fantômes.
+    if (!v.busy && !v.spd && !v.kart && !v.active) { const push = Math.min(0.5, prof + 0.05), n = prof || 1;
+      v.x -= sep.x / n * push; v.z -= sep.z / n * push; v.g.position.set(v.x, v.y || 0, v.z); vehicleSolid(v); }
   }
 }
 const CRACK = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = 'rgba(160,220,255,0.55)'; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 2; for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.beginPath(); g.moveTo(64, 64); let x = 64, y = 64; for (let k = 0; k < 4; k++) { x += Math.cos(a + rnd(-0.4, 0.4)) * 16; y += Math.sin(a + rnd(-0.4, 0.4)) * 16; g.lineTo(x, y); } g.stroke(); } const t = new THREE.CanvasTexture(c); shared.add(t); return t; })();

@@ -12604,6 +12604,28 @@ test('rien ne cache le tableau gris des salles de l\'école', async p => {
     const G = __G;
     __SHOT.go({ world: 4, x: -62, y: 1, z: 213, hour: 12, frais: true });
     const bb = new G.THREE.Box3(), salles = [];
+    // UN MAILLAGE FUSIONNE N'EST PAS UN MEUBLE. Depuis la version 0.10, la voirie et le relief
+    // des facades sont poses en TROIS maillages fusionnes qui couvrent la ville entiere
+    // (x -153,9 → 174,9) : leur boite englobante recouvre forcement le tableau et comptait
+    // 13,23 m² de faux masquage chacun, soit 26,46 m² par salle alors que la mesure exacte
+    // (les boites de la passe d'art, une par une, a moins de 6 m du tableau et devant lui)
+    // en donne ZERO. Pour un maillage plus large que la salle, on regarde donc ses VRAIS
+    // sommets au lieu de sa boite : ca reste severe (un vrai panneau pose devant le tableau
+    // serait vu), mais ca ne condamne plus une geometrie qui passe a cent metres de la.
+    const V3 = new G.THREE.Vector3();
+    const sommetsDedans = (o, x1, x2, y1, y2, bz) => {
+      const pos = o.geometry && o.geometry.attributes && o.geometry.attributes.position;
+      if (!pos) return null;
+      let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, n = 0;
+      for (let i = 0; i < pos.count; i++) {
+        V3.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        if (V3.z <= bz + 0.002 || V3.z > bz + 2.5) continue;
+        if (V3.x < x1 || V3.x > x2 || V3.y < y1 || V3.y > y2) continue;
+        n++; if (V3.x < minx) minx = V3.x; if (V3.x > maxx) maxx = V3.x;
+        if (V3.y < miny) miny = V3.y; if (V3.y > maxy) maxy = V3.y;
+      }
+      return n ? { aire: (maxx - minx) * (maxy - miny), minx, maxx } : { aire: 0 };
+    };
     for (const room of (G.city.classes || [])) {
       const t = room.tableau, bz = t.position.z, bx = t.position.x;
       // la surface écrite : le plan de 5,40 × 2,45 m posé à 2,25 m du sol
@@ -12614,6 +12636,12 @@ test('rien ne cache le tableau gris des salles de l\'école', async p => {
         bb.setFromObject(o);
         if (bb.max.z <= bz + 0.002 || bb.min.z > bz + 2.5) return;   // seulement ce qui est DEVANT le tableau
         if (bb.max.x < x1 || bb.min.x > x2 || bb.max.y < y1 || bb.min.y > y2) return;
+        if (bb.max.x - bb.min.x > 12 || bb.max.z - bb.min.z > 12) {   // plus large que la salle : maillage fusionne
+          const ex = sommetsDedans(o, x1, x2, y1, y2, bz);
+          if (!ex || !ex.aire) return;
+          aire += ex.aire; pires.push(`${ex.aire.toFixed(2)} m² (sommets) en x ${ex.minx.toFixed(1)}→${ex.maxx.toFixed(1)}`);
+          return;
+        }
         const a = (Math.min(bb.max.x, x2) - Math.max(bb.min.x, x1)) * (Math.min(bb.max.y, y2) - Math.max(bb.min.y, y1));
         aire += a; pires.push(`${a.toFixed(2)} m² en x ${bb.min.x.toFixed(1)}→${bb.max.x.toFixed(1)}`);
       });

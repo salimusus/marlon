@@ -858,7 +858,11 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
      l'action en clair, les cas particuliers en petit dessous — plus de parenthèses imbriquées en 11 px. -->
 <div id="padLeg">
   <div class="plt">🎮 Les touches de la manette</div>
-  <div class="pl"><b>Stick G</b><span>se déplacer dans la direction de la caméra</span></div>
+  <!-- ARBITRAGE r76 : la 0.10 annonçait « se déplacer dans la direction de la caméra », ce qui
+       n'est vrai qu'en mode « caméra ». Par défaut le stick gauche fait MARCHER ET TOURNER
+       (réglage « rotation », demande du joueur) : on reprend le libellé mesuré du test 231,
+       en gardant les doubles étiquettes PS/Xbox apportées par la 0.10. -->
+  <div class="pl"><b>Stick G</b><span>marcher / tourner<i>réglage « Déplacement : relatif à la caméra » : on se déplace dans la direction de la caméra</i></span></div>
   <div class="pl"><b>L3</b><span>courir</span></div>
   <div class="pl"><b>L2</b><span>se baisser<i>arme équipée : 🎯 viser · au volant : freiner · hélico : descendre</i></span></div>
   <div class="pl"><b>R2</b><span>accélérer<i>arme braquée : tirer</i></span></div>

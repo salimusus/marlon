@@ -9709,17 +9709,27 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       // balles reveillent la police, dont les voitures viennent se coller a la notre)
       const c = (G.city.cars || []).find(v => !v.heli && !v.rider && v.spec);
       if (c) {
-        // la voiture est ramenee sur la case degagee ou apparait le joueur : un essai
-        // precedent a pu la laisser le nez contre un mur, et elle n'accelererait pas
-        c.x = 0; c.z = 8; c.h = 0; G.settleVehicle(c);
+        // LA VOITURE EST POSEE SUR UNE RUE DEGAGEE, CAP A L'EST (la meme que le test 265 :
+        // rue Est-Ouest, z = 26, 58 m devant elle). Elle partait de (0, 8) cap au nord et,
+        // depuis que R2 accelere vraiment, ces vingt images a pleine charge la jetaient dans
+        // le parking du centre : elle finissait en EPAVE et le △ d'apres ne pouvait plus y
+        // monter. Un essai precedent a pu aussi la laisser le nez contre un mur.
+        c.x = -20; c.z = 26; c.h = Math.PI / 2; c.dead = false; c.accidente = false; c.stopped = false;
+        if (G.city.accidents) G.city.accidents.length = 0;
+        G.settleVehicle(c);
         G.P.pos.set(c.x, 0.6, c.z); G.enterCar(c); G.P.drawn = true;
         gach(7, 1); res.volant = { gaz: +G.pad.gaz.toFixed(2), braquee: !!G.pad.armeBraquee };
         G.drive.speed = 0;
         for (let i = 0; i < 20; i++) { G.pollGamepad(1 / 60); G.driveStep(1 / 60); }
         res.volant.vitesse = +G.drive.speed.toFixed(2);
-        gach(7, 0); G.P.drawn = false; G.exitCar();
+        gach(7, 0); G.drive.speed = 0; G.P.drawn = false; G.exitCar();
       }
       // ---- R2 : TIRE quand l'arme est braquee, et n'avance plus
+      // ON ECARTE LA VOITURE DE LA LIGNE DE TIR. Le joueur tire depuis (0, 8), la ou la
+      // voiture d'essai etait garee : depuis que R2 tire vraiment, les cinq balles de la
+      // rafale la reduisaient en epave (`dead`) et le △ d'apres ne pouvait plus y monter
+      // (« 🔥 Cette voiture est une épave »). On la range, on la ramene ensuite.
+      if (c) { c.x = -40; c.z = 40; G.settleVehicle(c); }
       G.drawWeapon(true); G.P.fireCd = 0; G.simTime += 1;
       const n0 = G.shots.length;
       gach(7, 1);
@@ -9733,8 +9743,15 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
       gach(7, 0); G.drawWeapon(false); G.P.drawn = false; G.pollGamepad(0.02);
       // ---- ◯ SAUTE
       G.P.pos.set(0, 0.5, 8); G.P.jumpBuf = 0; tap(1); res.saut = G.P.jumpBuf;
+      // le saut mesure ne doit pas DEBORDER sur l'essai suivant : la premiere image de l'essai
+      // du △ le consommait, le joueur decollait, et on ne monte pas dans une voiture en l'air
+      G.P.jumpBuf = 0;
       // ---- △ AGIT : monter dans la voiture
-      if (c) { G.P.pos.set(c.x + 1, 0.6, c.z); G.step(1 / 60, true);
+      // la voiture vient de rouler vingt images a pleine charge : on la remet sur la case
+      // degagee du depart avant d'essayer △, sinon le joueur est pose a cote d'une caisse qui
+      // a fini le nez dans un trottoir (mesure : △ ne montait plus, agit=false)
+      if (c) { c.x = 0; c.z = 8; c.h = 0; c.dead = false; c.accidente = false; c.stopped = false; G.drive.speed = 0; G.settleVehicle(c);
+        G.P.pos.set(c.x + 1, 0.6, c.z); G.step(1 / 60, true);
         res.pres = !!G.city.near; tap(3); res.agit = !!G.drive.car;
         if (G.drive.car) G.exitCar(); }
       // ---- ▢ frappe toujours (le poste Personnages en a besoin) : le coup part au relâchement
@@ -9760,7 +9777,7 @@ test('la facade PS5 refaite : ✕ braque et rengaine, R2 tire, ◯ saute, △ ag
     && /△/.test(r.legende) && /agir/.test(r.legende)
     && /braquer \/ rengainer/.test(r.roles) && /sauter/.test(r.roles) && /agir/.test(r.roles)
     && /braquer/.test(r.diag);
-  return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée sa course est lue pour la conduite (${r.gazRange}) mais elle ne fait plus marcher personne (${r.marcheRange} m/s — c'est le stick gauche qui marche depuis le round 68), arme braquée elle TIRE (${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant) sans deplacer le joueur (${r.tir.marche} m/s), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
+  return { ok, detail: `nouveau mappage demandé par le joueur — « ✕ pour braquer, gâchette droite pour tirer, ✕ pour rengainer », « ◯ pour sauter, △ pour agir » · ✕ sort l'arme (${r.braque}) et la MEME touche la range (${r.rengaine}) · la gâchette R2 garde ses deux vies sans jamais les mélanger : arme rangée sa course est lue pour la conduite (${r.gazRange}) mais elle ne fait plus marcher personne (${r.marcheRange} m/s — c'est le stick gauche qui marche depuis le round 68), arme braquée elle TIRE (${r.tir.tirs} tir au premier appui, ${r.rafale} en la maintenant) sans deplacer le joueur (${r.tir.marche} m/s), et au volant elle accélère toujours même arme sortie (gaz ${r.volant.gaz} → ${r.volant.vitesse} m/s) · ◯ saute (${r.saut}), △ fait monter en voiture (${r.agit}, voiture a portee=${r.pres}), ▢ frappe toujours (${r.frappe}) · la légende du bandeau et l'écran « Tester la manette » annoncent le rôle de chaque bouton` };
 });
 // ================= POSTE F : LES SONS DU MONDE =================
 test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus faible qu\'un son proche, et le panoramique suit la camera', async p => {

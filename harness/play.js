@@ -282,23 +282,41 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
     b.rdv = null; b.rdvRoute = null; b.ordre = null; b.activite = null; b.bagarre = null; b.fight = null;
     b.drive = null; b.enVoiture = null; b.sport = null; b.gangMission = null; b.gardeCorps = 0; b.prison = 0;
     b.av.group.position.copy(b.pos);
+    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
+    __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
   });
   const hp0 = await p.evaluate(() => __G.bots[0].hp);
   const pos0 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
   // Une balle avance de ~4,7 m par image : l'ancien test ponctuel ne la voyait dans la
   // boîte du bot (0,84 m) qu'environ une fois sur six. La rafale rend l'écart visible.
-  let partis = 0;
+  let partis = 0, mutisme = '', fuite = 0;
   for (let i = 0; i < 6; i++) {
-    partis += await p.evaluate(() => { const n = __G.shots.length;
-      __G.P.fireCd = 0; __G.P.ammo = 8; __G.P.aim = true; __G.aimTick(); __G.fire();
-      return __G.shots.length > n ? 1 : 0; });
+    const t = await p.evaluate(() => { const G = __G, P = G.P, n = G.shots.length, b = G.bots[0];
+      // LA CIBLE EST REMISE A 12 M AVANT CHAQUE COUP. Une balle qui touche pose `fight = 'flee'`
+      // pour huit secondes : l'habitant DETALE. Mesure : 12,50 m parcourus pendant la rafale —
+      // plus que la distance de tir. Le verrouillage automatique ne le reprend que dans le cone
+      // de la camera (0,65 rad) ; une fois sorti du cone, la balle part tout droit et les cinq
+      // coups suivants manquent. C'est exactement « 0 balle sur 6 » releve sur la suite
+      // complete, alors que le meme test, lance seul sur une machine au repos, en touche 6 sur
+      // 6 : plus la page est lourde, plus chaque attente dure, plus l'habitant a le temps de
+      // fuir. Le test mesure la BALISTIQUE a 12 m, pas la course a pied : on le repose.
+      const derive = Math.hypot(b.pos.x - 110, b.pos.z - 72);
+      b.pos.set(110, 0.4, 72); b.av.group.position.copy(b.pos);
+      b.fight = null; b.fightT = 0; b.wait = 9999; b.rdv = null; b.activite = null; b.bagarre = null; b.ko = 0; b.dead = 0;
+      P.fireCd = 0; P.ammo = 8; P.aim = true; G.aimTick(); G.fire();
+      // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
+      // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer.
+      if (G.shots.length > n) return { parti: 1, derive };
+      return { parti: 0, derive, pourquoi: `arme=${P.weapon} degainee=${!!P.drawn} munitions=${P.ammo} fireCd=${(P.fireCd || 0).toFixed(2)} horloge=${G.simTime.toFixed(2)} rechargeT=${(P.reloadT || 0).toFixed(2)} volant=${!!G.drive.car} assis=${!!P.sit} balancoire=${!!P.swing} manege=${!!P.ride} gym=${!!G.gym.on} zoom=${!!P.zoom} enJeu=${G.running}/${!G.paused} prison=${!!G.jail.on} monde=${G.worldIdx} ville=${G.city.on} achetee=${G.owned.has('arme:pistol')} fenetre=${G.uiOpen}` };
+    });
+    partis += t.parti; fuite = Math.max(fuite, t.derive); if (!t.parti && !mutisme) mutisme = t.pourquoi;
     await attendre(p, () => __G.shots.length === 0, 20000);
   }
   const hp1 = await p.evaluate(() => __G.bots[0].hp);
   const pos1 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
   const bouge = Math.hypot(pos1[0] - pos0[0], pos1[1] - pos0[1]);
   const touches = Math.round((hp0 - hp1) / 24);
-  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon, la cible s'est déplacée de ${bouge.toFixed(2)} m pendant la rafale` };
+  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}` };
 });
 
 test('une balle ne traverse plus une cloison fine', async p => {

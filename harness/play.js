@@ -5989,7 +5989,12 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
     } catch (e) {} }
     console.log(`${ok?'  OK  ':'ÉCHEC '} [${idx+1}] ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}${sale}`);
     ok?pass++:fail++;
-    // ---- TEMPORAIRE (poste FIABILITE r76) : qui fait grossir la scene, test par test ----
+    // ---- FUITE=1 : QUI FAIT GROSSIR LA SCENE, TEST PAR TEST (poste FIABILITE, r76) ----
+    // Le garde-fou de fin de suite dit QU'IL y a une fuite ; cette sonde dit QUEL TEST la
+    // pose. Elle releve le classement par origine apres chaque test et n'imprime, en fin de
+    // serie, que les tests qui ont change le compte, avec le detail par origine. C'est ce qui
+    // a nomme `explode()` en une seule serie au round 76 — utilisez-la pour la prochaine.
+    // Elle coute un aller-retour de page par test : on ne l'allume que quand on cherche.
     if (process.env.FUITE) { try {
       const c2 = await page.evaluate(() => window.__SHOT.fuites());
       if (fuitePrec) { const d = c2.total - fuitePrec.total;

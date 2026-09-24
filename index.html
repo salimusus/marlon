@@ -15349,8 +15349,29 @@ function policeVoit(o, portee = 45) {
   if (simTime < (o.vueT || 0) && simTime > o.vueT - 0.3) return o.vue;
   o.vueT = simTime + 0.25;
   const oy = (o.y || 0) + 1.5;
-  const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d, dy = (P.pos.y + 1.2 - oy) / d;
-  o.vue = castSolids(o.x, oy, o.z, dx, dy, dz, d, true).d >= d - 0.6;
+  // UN POTEAU N'EST PAS UNE CACHETTE ; UN BATIMENT EN EST UNE. On ne tirait qu'UN rayon, du
+  // pare-brise vers la poitrine. Un piquet de 0,36 x 0,36 m plante a un metre du joueur
+  // suffisait donc a le rendre invisible : la voiture en concluait « plus de contact depuis
+  // deux secondes », vidait ses deux agents DES LA PREMIERE IMAGE de la poursuite, posait
+  // `pc.debarque` — et restait figee la jusqu'a la fin de la traque. Pour l'enfant, une
+  // poursuite qui s'arrete sans raison. Mesure (poursuite ordinaire, releve du controleur) :
+  // a l'image 0 le rayon butait a 10,82 m sur les 12, sur le poteau de (-38 ; 9,1).
+  // On tire donc TROIS rayons, ecartes d'un metre en travers de la ligne de vue et vises a
+  // trois hauteurs : genoux, poitrine, tete. Il faut que LES TROIS soient bouches pour qu'on
+  // ne voie rien — c'est-a-dire un vrai obstacle, pas un piquet.
+  // MESURE, 480 lignes de vue tirees dans toute la ville a douze metres : 406 voyaient (85 %)
+  // avec un rayon, 415 (86 %) avec trois, et AUCUNE n'est perdue. Les neuf lignes gagnees
+  // etaient toutes bouchees par un poteau de 0,36 a 0,48 m. Derriere un vrai batiment
+  // (16 x 10 m), les trois rayons restent bouches : se cacher marche toujours.
+  const dx = (P.pos.x - o.x) / d, dz = (P.pos.z - o.z) / d;
+  const gx = -dz, gz = dx;   // en travers de la ligne de vue
+  o.vue = false;
+  for (const [lat, haut] of [[0, 1.2], [-0.5, 0.9], [0.5, 1.7]]) {
+    const cx = P.pos.x + gx * lat, cz = P.pos.z + gz * lat, cy = P.pos.y + haut;
+    const dd = Math.hypot(cx - o.x, cz - o.z); if (dd < 0.4) { o.vue = true; break; }
+    const ux = (cx - o.x) / dd, uz = (cz - o.z) / dd, uy = (cy - oy) / dd;
+    if (castSolids(o.x, oy, o.z, ux, uy, uz, dd, true).d >= dd - 0.6) { o.vue = true; break; }
+  }
   return o.vue;
 }
 // Le joueur est-il à couvert ? 'planque' = garage à semer la police, 'batiment' = sous un toit.
@@ -15921,7 +15942,16 @@ function policeTick(dt) {
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);
     let tx = null, tz = null;
-    if (pc.debarque) { pc.speed = 0; policeVoitureTire(pc, hidden); continue; }   // les agents sont descendus : la voiture attend devant le bâtiment, mais le conducteur riposte toujours
+    // LES AGENTS SONT DESCENDUS : la voiture attend devant le bâtiment, mais le conducteur
+    // riposte toujours. ELLE NE RESTE PAS FIGÉE POUR AUTANT. `pc.debarque` n'était levé qu'à la
+    // fin de la traque (`policeRepli`) : une voiture qui avait lâché ses agents ne repartait
+    // plus JAMAIS, même quand le fuyard repassait devant son capot — et il suffisait d'un
+    // débarquement prématuré (voir le poteau de `policeVoit`) pour l'immobiliser toute la
+    // poursuite. Dès qu'on le revoit à découvert et qu'il est loin d'ici, elle se remet en
+    // chasse ; ses agents, eux, continuent à pied.
+    if (pc.debarque && pc.active && police.wanted > 0 && !hidden
+      && simTime - (police.vuT || -999) < 0.5 && Math.hypot(P.pos.x - pc.x, P.pos.z - pc.z) > 18) pc.debarque = false;
+    if (pc.debarque) { pc.speed = 0; policeVoitureTire(pc, hidden); continue; }
     // envoyée sur un accident : c'est accidentsTick qui la pilote (par les voies, sirène
     // allumée). ON NE REMET PLUS SA VITESSE À ZÉRO ICI : policeTick passe AVANT servicesTick,
     // et remettre le compteur à zéro à chaque image empêchait la voiture de prendre de la

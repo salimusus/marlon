@@ -155,6 +155,21 @@ window.__SHOT = {
       dit(typeof uiOpen !== 'undefined' && uiOpen, 'fenetre ouverte : ' + (typeof uiOpen !== 'undefined' ? uiOpen : ''));
       dit(typeof paused !== 'undefined' && paused, 'jeu en pause');
       dit(typeof jail !== 'undefined' && jail.on, 'joueur en prison');
+      // QUI TIENT LA CAMERA ? (poste CAMERA, round 77.) Trois systemes ont le droit d'ECRASER
+      // la position de l'objectif a la toute fin de camPerche : le ralenti du coup vainqueur,
+      // la vue a bord du drone et les plans fixes (cam.fixe). Aucun ne se voyait dans ce
+      // releve, et un test qui en heritait mesurait une camera plantee a l'autre bout de la
+      // ville en croyant mesurer la sienne (tests 397 et 466, round 76).
+      try {
+        if (typeof RALENTI !== 'undefined' && RALENTI && (RALENTI.t > 0 || RALENTI.sortie > 0 || RALENTI.fige != null))
+          dit(true, 'le plan de cinema du coup vainqueur tient encore la camera (ralenti ' + (+RALENTI.t).toFixed(1)
+            + ' s, raccord ' + (+RALENTI.sortie).toFixed(2) + ' s, point de vue en '
+            + Math.round(RALENTI.x) + ' ; ' + Math.round(RALENTI.z) + ')');
+        if (typeof drone !== 'undefined' && drone && drone.actif && drone.vue) dit(true, 'la camera est a bord du drone');
+        if (typeof cam !== 'undefined' && cam && cam.fixe) dit(true, 'un plan fixe tient la camera (cam.fixe)');
+        if (typeof cam !== 'undefined' && cam && Math.abs((cam.dist || 0) - 9) > 0.5)
+          dit(true, 'perche de camera heritee : ' + (+cam.dist).toFixed(2) + ' m au lieu de 9 m');
+      } catch (eCam) {}
       dit(typeof police !== 'undefined' && police.wanted > 0, 'recherche police niveau ' + (typeof police !== 'undefined' ? police.wanted : '?'));
       dit(typeof mission !== 'undefined' && mission.cur, 'mission en cours');
       dit(typeof city !== 'undefined' && city.accidents && city.accidents.length, (typeof city !== 'undefined' && city.accidents ? city.accidents.length : 0) + ' accident(s) en cours');
@@ -786,6 +801,47 @@ window.__SHOT = {
       simTime = cible + jours * day.len;
       try { day.last = -1; dayTick(); } catch (e) {}   // la lumiere prend tout de suite, sans attendre une image
     }
+    // ================= LA CAMERA NE SURVIT PAS D'UN TEST A L'AUTRE =================
+    // (poste CAMERA, round 77.) Deux heritages mesures, tous deux invisibles quand le test est
+    // lance SEUL et rouges en suite complete — la signature meme d'un etat herite.
+    //
+    // 1. LE CINEMA DU COUP VAINQUEUR RESTE ALLUME. RALENTI.t ne se decompte que dans
+    //    frame() (via ralentiEchelle), et un test du banc n'appelle jamais frame() : il
+    //    avance la simulation a la main, par step() et camPerche(). Un test qui met un
+    //    adversaire a terre laisse donc le plan de combat ARME pour tous les suivants, et
+    //    ralentiCam — appelee tout a la fin de camPerche — ECRASE la position de l'objectif
+    //    par celle du plan, restee a l'autre bout de la ville. Mesure a la sonde : un coup
+    //    vainqueur en (60 ; 160), puis un __SHOT.go en (-11 ; 11,5), et la camera passe les
+    //    420 images du test suivant a 163,53 m du joueur et 2,45 m de haut, alors que la perche
+    //    du jeu (cam.reel) vaut 4,29 m — parfaitement normale. C'est mot pour mot ce que
+    //    relevaient le test 397 (« la perche se raccourcit a 56 m ») et le test 466
+    //    (« 53,25 m derriere, 2,3 m de haut ») en suite complete, et jamais seuls.
+    //    Le raccord de sortie (RALENTI.sortie) porte la meme panne a lui tout seul : il glisse
+    //    depuis le dernier point de cinema, donc depuis l'autre bout de la ville.
+    // 2. LA LONGUEUR DE LA PERCHE. cam.dist n'etait remis que si la vue demandait dist.
+    //    Mesure : apres la scene du frigo, cam.dist vaut 3,15 m, et le test suivant, en pleine
+    //    rue, lit la perche PENDANT qu'elle remonte vers 9 m au lieu de la lire posee — 7,67 m
+    //    en suite contre 9,05 m seul, et c'est ce qui faisait tomber le test 66 pour TROIS
+    //    CENTIMETRES (il exige « dedans, on est 2 m plus pres que dehors »).
+    // On repose donc toute la camera comme au chargement de la page ; les reglages de la vue
+    // (v.yaw, v.pitch, v.dist) sont appliques juste apres et gardent le dernier mot.
+    try {
+      if (typeof RALENTI !== 'undefined' && RALENTI) {
+        RALENTI.t = 0; RALENTI.fige = null; RALENTI.prochain = 0; RALENTI.sortie = 0; RALENTI.sortieT = 0;
+      }
+    } catch (eRal) {}
+    try { if (typeof P !== 'undefined' && P.zoom && typeof fermeLunette === 'function') fermeLunette(); } catch (eZo) {}
+    try { if (typeof interieurQuitte === 'function') interieurQuitte(); } catch (eIn) {}   // la maison de poupee d'une piece ne suit pas dehors
+    try {
+      if (cam.fovAjout) { camera.fov -= cam.fovAjout; camera.updateProjectionMatrix(); }   // le champ elargi par un couloir etroit reste sinon dans l'objectif
+    } catch (eFov) {}
+    cam.base = 9; cam.dist = 9; cam.pitch = 0.32;            // les valeurs du chargement de la page
+    cam.voulu = 9; cam.reel = 9; cam.fovAjout = 0;
+    cam.hausse = 0; cam.hausseCible = 0; cam.hauT = 0; cam.mesT = 0;
+    cam.libre = null; cam.dLisse = null; cam.dJoueur = null; cam.avance = 0;
+    cam.salle = null; cam.plafond = null; cam.devant = null; cam.pmax = 1.25;
+    cam.fixe = false; cam.kick = 0; cam.shake = 0; cam.shakeT = 0; cam.vibr = 0;
+    cam.dedans = false; cam.dedansT = 0; cam.recale = true;
     // La camera suit le joueur en douceur : apres une teleportation elle met plusieurs images
     // a le rattraper, et une mesure prise entre-temps porte sur une camera encore en route.
     // On la pose donc d'un coup sur le nouveau point de vue.

@@ -1258,8 +1258,21 @@ test('un ami organise un braquage, attend au volant et file à la villa', async 
 
 
 test('la caméra se rapproche dans une pièce et devant un objet', async p => {
-  // la distance de caméra glisse doucement : on attend qu'elle se stabilise
-  const lis = async cond => { await attendre(p, cond, 40000); return p.evaluate(() => ({ dedans: __G.cam.dedans, dist: +__G.cam.dist.toFixed(2), inter: !!__G.city.interact })); };
+  // ON LIT UNE PERCHE POSÉE, PAS UNE PERCHE EN ROUTE (poste CAMÉRA, round 77). `attendre` rend
+  // la main à la PREMIÈRE image où le seuil est franchi : on mesurait donc la perche en plein
+  // glissement, et la valeur dépendait de l'endroit d'où elle partait. Mesuré : 9,05 m en pleine
+  // rue lancé seul (perche déjà posée à 9 m) contre 7,67 m derrière un autre test (perche qui
+  // remontait de 3,15 m, héritée de la scène du frigo) — et comme le test exige « dedans, on est
+  // 2 m plus près que dehors », il tombait pour TROIS CENTIMÈTRES en suite complète. La cause
+  // première est corrigée dans `__SHOT.go` (la caméra y est reposée comme au chargement) ; ici on
+  // ajoute la ceinture : on attend le seuil, PUIS on attend que la perche ne bouge plus.
+  const posee = () => { const d = __G.cam.dist, p0 = window.__camPrec; window.__camPrec = d; return p0 != null && Math.abs(d - p0) < 0.02; };
+  const lis = async cond => {
+    await attendre(p, cond, 40000);
+    await p.evaluate(() => { window.__camPrec = null; });
+    await attendre(p, posee, 30000);
+    return p.evaluate(() => ({ dedans: __G.cam.dedans, dist: +__G.cam.dist.toFixed(2), inter: !!__G.city.interact }));
+  };
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
   const dehors = await lis(() => __G.cam.dist > 7.5);
   await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
@@ -16399,7 +16412,11 @@ test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s
         ds.axes = [0, 0, 0, ry];
         for (let i = 0; i < n; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 120); G.pollGamepad(1 / 120); G.camPerche(1 / 60, false); }
         return { pitch: +G.cam.pitch.toFixed(3), deg: +(G.cam.pitch * DEG).toFixed(1), camY: +G.camera.position.y.toFixed(2),
-          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY() };
+          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY(),
+          // de quoi lire un echec EN LOT sans relancer : ce qui pilote la longueur de la perche
+          dist: +G.cam.dist.toFixed(2), base: +G.cam.base.toFixed(2), hausse: +(G.cam.hausse || 0).toFixed(3),
+          cible: +Math.hypot(G.cam.target.x - G.P.pos.x, G.cam.target.z - G.P.pos.z).toFixed(2),
+          dedans: !!G.cam.interieur, fixe: !!G.cam.fixe, zoom: !!G.P.zoom, veh: !!G.drive.car };
       };
       const res = {};
       G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null;
@@ -16424,7 +16441,7 @@ test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s
   const ok = r.ciel.pitch <= -0.4 && r.ciel.vue > 0.25 && r.ciel.camY > 0.5 && r.ciel.d > 1.5
     && r.sol.pitch >= 1.2 && r.sol.vue < -0.6 && r.retour.pitch <= -0.4
     && r.inverse.pitch > 0.32 && r.normal.pitch < 0.32 && r.bouton && r.retenu === '1';
-  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
+  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m (voulue ${r.ciel.dist}, base ${r.ciel.base}, hausse ${r.ciel.hausse}, cible a ${r.ciel.cible} m du joueur, dedans=${r.ciel.dedans}, fixe=${r.ciel.fixe}, zoom=${r.ciel.zoom}, vehicule=${r.ciel.veh}) pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
 });
 
 test('apres un virage, la camera se replace derriere le joueur en douceur, sans coup sec', async p => {
@@ -20427,7 +20444,9 @@ test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus b
     out.place = { x: +vp.x.toFixed(1), z: +vp.z.toFixed(1) };
     out.voisines = G.city.cars.filter(c => c !== vp && Math.abs(c.z - vp.z) < 3 && Math.abs(c.x - vp.x) < 4.2).length;
     G.P.pos.set(vp.x, 0.3, vp.z + 3.2); G.P.facing = Math.PI;
+    out.prise = { busy: !!vp.busy, epave: !!vp.dead };   // ce qui EMPECHE de monter (enterCar sort sans un mot)
     G.enterCar(vp); G.cam.recale = true;
+    out.auVolant = G.drive.car === vp;
     // LE CAP DE LA CAMÉRA SE POSE À LA MAIN. `__SHOT.go` ne le remet pas quand la vue ne le
     // demande pas : lancé APRÈS un autre test, celui-ci héritait du cap laissé par le
     // précédent, la caméra regardait à côté du parking et la mesure ne voulait plus rien dire
@@ -20489,10 +20508,10 @@ test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus b
     return out;
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
-  const ok = r.voisines >= 2 && r.bouche <= 0.08 && r.saVoiture.libre && r.saVoiture.cadre
+  const ok = r.auVolant && r.voisines >= 2 && r.bouche <= 0.08 && r.saVoiture.libre && r.saVoiture.cadre
     && r.rueDevant.libre && r.rueDevant.cadre && !r.dansUnVoisin
     && !!r.versVoisine && r.versVoisine.camLibres < r.versVoisine.ecart && r.versVoisine.murEntreVue >= 0;
-  return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant, à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
+  return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant=${r.auVolant} (réservée par un autre=${r.prise.busy}, épave=${r.prise.epave}), à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
 });
 
 // ================= POSTE BÂTIMENTS — escaliers, paliers et garde-corps =================

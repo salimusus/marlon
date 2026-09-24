@@ -13331,6 +13331,19 @@ test('un petit accrochage ne dérange personne : pas de police, pas de dépanneu
 test('la caméra garde une distance jouable dans toutes les situations, sans jamais traverser un mur', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
+    // LE MEME DECOR A CHAQUE FOIS (poste CAMERA, round 76). Ce test rebatit la ville avant
+    // CHACUNE de ses dix-huit situations (frais par defaut) : le tirage au sort qui place les
+    // voitures et le mobilier repart donc de l'etat ou le test precedent l'a laisse, et la
+    // ville n'est pas la meme d'un lancement a l'autre. Releve en suite complete : « ruelle,
+    // dans l'axe » tombait a 5,18 m pour 8 exiges, SANS aucun solide coupable nomme — la
+    // signature d'une carrosserie posee la par le hasard (les vehicules entrent dans camLibres
+    // depuis le defaut 81, mais le diagnostic les sautait). Le meme point mesure seul rend
+    // 9,10 m. On force donc le tirage, et on le REPOSE avant chaque situation pour que les
+    // dix-huit jugent exactement la meme ville. Meme remede qu'au test 453.
+    const vraiRnd = Math.random; let graine = 24680;
+    const semer = () => { graine = 24680; };
+    Math.random = () => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine / 0x7fffffff; };
+    try {
     // chaque situation : le point, le cap de la caméra, et la distance MINIMALE acceptable
     // (mesurée caméra ↔ poitrine du joueur) pour que l'on joue confortablement
     const SIT = [
@@ -13376,6 +13389,7 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
     } };
     const out = [];
     for (const [nom, v, mini] of SIT) {
+      semer();
       __SHOT.go(Object.assign({ world: 4, hour: 12, pitch: 0.32, dist: 9, hideHud: true }, v));
       if (v.auto) {
         const c = G.city.cars.find(w => !w.heli && !w.rider && !w.busy) || G.city.cars[0];
@@ -13405,14 +13419,20 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
         let m = 99;
         for (const a of [0, 0.4, -0.4]) {
           const dr = [Math.sin(G.cam.yaw + a) * cp, sp2, Math.cos(G.cam.yaw + a) * cp];
-          for (const o of G.solidsAutour(t.x, t.z, 13)) {
-            if ((o.glass && !o.camMur) || o.h > 30 || o.veh || o.xray) continue;
+          // ON REGARDE AUSSI LES CARROSSERIES (poste CAMERA, round 76). Depuis que les vehicules
+          // entrent dans camLibres (defaut 81, test 466), une voiture arretee derriere le joueur
+          // raccourcit legitimement la perche — mais ce diagnostic-ci les SAUTAIT, et la seule
+          // situation rouge en suite complete (« ruelle, dans l'axe », 5,18 m pour 8 exiges)
+          // s'affichait sans aucun coupable nomme. Sans le nom, impossible de savoir si c'est la
+          // loi de camera qui a change ou un vehicule pose la par le hasard de la reconstruction.
+          for (const o of G.solidsAutour(t.x, t.z, 13, true)) {
+            if ((o.glass && !o.camMur) || o.h > 30 || o.xray) continue;
             if (o.mesh && !o.mesh.visible) continue;
             const hx = Math.max(o.w, 0.36) / 2 + 0.3, hy = o.h / 2 + 0.3, hz = Math.max(o.d, 0.36) / 2 + 0.3;
             if (o.y + hy < t.y - 1.4) continue;
             if (Math.abs(t.x - o.x) < hx && Math.abs(t.y - o.y) < hy && Math.abs(t.z - o.z) < hz) continue;
             const tt = G.rayBox(t.x, t.y, t.z, dr[0], dr[1], dr[2], o.x, o.y, o.z, hx, hy, hz, 12);
-            if (tt >= 0 && tt < m) { m = tt; quoi = `${o.w.toFixed(1)}×${o.h.toFixed(1)}×${o.d.toFixed(1)} m en (${o.x.toFixed(0)}, ${o.y.toFixed(1)}, ${o.z.toFixed(0)}) a ${tt.toFixed(1)} m`; }
+            if (tt >= 0 && tt < m) { m = tt; quoi = `${o.veh ? 'un VEHICULE ' : ''}${o.w.toFixed(1)}×${o.h.toFixed(1)}×${o.d.toFixed(1)} m en (${o.x.toFixed(0)}, ${o.y.toFixed(1)}, ${o.z.toFixed(0)}) a ${tt.toFixed(1)} m`; }
           }
         }
       }
@@ -13429,6 +13449,7 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
     const nbSolides = (G.solids || []).length;
     // RETOUR EN DOUCEUR : on décolle du mur en marchant, la perche doit se rallonger sans
     // le moindre saut d'image (c'est l'à-coup dont se plaignait le joueur)
+    semer();
     __SHOT.go({ world: 4, x: -64, y: 1, z: 215.6, yaw: 3.14, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
     tourne(150);
     const dist = () => Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.y - (G.P.pos.y + 1.2), G.camera.position.z - G.P.pos.z);
@@ -13443,6 +13464,7 @@ test('la caméra garde une distance jouable dans toutes les situations, sans jam
       const L = dist(); saut = Math.max(saut, Math.abs(L - prec)); prec = L;
     }
     return { out, solides: nbSolides, doux: { debut: +debut.toFixed(2), fin: +prec.toFixed(2), saut: +saut.toFixed(3) } };
+    } finally { Math.random = vraiRnd; }
   });
   const rates = r.out.filter(s => s.d < s.mini);
   const traverse = r.out.filter(s => s.coupe || s.dans);

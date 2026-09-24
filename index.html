@@ -36775,7 +36775,16 @@ function ralentiCam(dt) {
     // ON NE LÂCHE QUE COLLÉ À LA CAMÉRA DE JEU. Mesuré : lâcher à 30 cm laissait encore un pas
     // de 0,45 m à l'image de la reprise, au-dessus de la borne. À 12 cm, la dernière image ne se
     // voit plus — et tant qu'on n'y est pas, le raccord se prolonge au pas borné.
-    if (k >= 1 && reste < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
+    // LE SAUT SE MESURE DEPUIS LÀ OÙ LA CAMÉRA EST VRAIMENT, PAS DEPUIS LE POINT VISÉ (round 76).
+    // `reste` part de `px`, qui a DÉJÀ été ramené au pas borné : quand il restait 0,35 m à
+    // parcourir, `px` avançait de 0,233 m (14 m/s), `reste` tombait à 0,117 m — on lâchait donc,
+    // et l'image sautait des 0,35 m entiers depuis la position précédente. C'est le seul pas
+    // hors borne qui restait au test 453 : 0,35 m à l'image de la reprise, soit 20,8 m/s pour
+    // 14 annoncés (mesure avant : 0,35 m ; après : 0,23 m au pire, sous la borne du test).
+    // On exige donc aussi que le saut RÉEL — de la position de l'image précédente à la caméra
+    // de jeu — tienne dans les 12 cm.
+    const sautLache = Math.hypot(jx - RALENTI.px, jy - RALENTI.py, jz - RALENTI.pz);
+    if (k >= 1 && reste < 0.12 && sautLache < 0.12) { RALENTI.sortie = 0; RALENTI.sortieT = 0; return false; }   // arrivé : la caméra de jeu reprend, au même endroit
     if (k >= 1) RALENTI.sortie = pas;   // pas encore arrivé (pas borné) : on prolonge d'une image
     const vx = RALENTI.vx + (cam.target.x - RALENTI.vx) * k,
           vy = RALENTI.vy + (cam.target.y - RALENTI.vy) * k,

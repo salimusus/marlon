@@ -10835,9 +10835,27 @@ function placeDemiTour(c) {
   }
   return true;
 }
+// DEUX DEMI-TOURS DE SUITE AU MEME ENDROIT : CE N'EST PAS LA VOITURE QUI A TORT, C'EST LE
+// TRACE. La voie de depart est GELEE tant qu'on la longe (voir `itineraireVoies`), et ce gel
+// se perpetue tout seul quand la voie gelee est celle d'en face : le trace commence derriere,
+// le vehicule fait demi-tour, se retrouve face au point — puis l'itineraire est refait, le
+// premier point repasse derriere, et il retourne. Le demi-tour REUSSIT a chaque fois : ni
+// `placeDemiTour` ni la manoeuvre epuisee ne s'en apercevaient, et seul le filet des 40 s sans
+// progres finissait par le sortir de la.
+// MESURE (test 478, l'habitant qui nous emmene a la villa) : de la 2e a la 42e seconde, la
+// voiture tourne en rond dans un carre de six metres autour du point de ramassage, 9 demi-tours,
+// 18 recalculs, et la distance restante fait le yo-yo entre 212 et 224 m — 556 m de remontee
+// cumulee pour un seuil de 12. Apres : la voiture part au premier demi-tour renonce.
+// On compte donc le demi-tour PRECEDENT : s'il s'est acheve il y a moins de huit secondes a
+// moins de douze metres d'ici, on renonce a la voie qui l'exige (`renonceDepart` l'interdit
+// douze secondes et refait l'itineraire) au lieu de recommencer.
+const DEMI_TOUR_RIEN_T = 8, DEMI_TOUR_RIEN_D = 12;
+function demiTourFini(c) { c.dTourFin = simTime; c.dTourX = c.x; c.dTourZ = c.z; c.dTour = null; c.recule = false; }
 function demiTourLance(c, dh) {
   if (!c || (c.dTour && c.dTour.reste > 0)) return;
   if (simTime < (c.dTourStop || 0)) return;
+  if (simTime - (c.dTourFin || -99) < DEMI_TOUR_RIEN_T
+    && Math.hypot(c.x - (c.dTourX || 0), c.z - (c.dTourZ || 0)) < DEMI_TOUR_RIEN_D) { renonceDepart(c); return; }
   if (!placeDemiTour(c)) { renonceDepart(c); return; }
   c.dTour = { reste: DEMI_TOUR_MAX, phase: 'avant', t: 0, sens: dh >= 0 ? 1 : -1, h0: c.h };
 }
@@ -10859,11 +10877,11 @@ function demiTourTick(c, dt, dh) {
   m.reste -= dt; m.t += dt;
   // COINCE PAR UN AUTRE VEHICULE : on n'attend pas les neuf secondes. Rester en travers de la
   // rue bloque aussi CELUI D'EN FACE — c'est le blocage mutuel qu'on vient de decrire.
-  if ((m.coince || 0) > 2) { renonceDepart(c); c.dTour = null; c.recule = false; return false; }
+  if ((m.coince || 0) > 2) { renonceDepart(c); demiTourFini(c); return false; }
   if (Math.abs(dh) < 0.55 || m.reste <= 0) {
     // manoeuvre epuisee sans avoir tourne : la place est trop petite, on se repose
     if (m.reste <= 0 && Math.abs(CAP(c.h - m.h0)) < 1) renonceDepart(c);
-    c.dTour = null; c.recule = false; return false;
+    demiTourFini(c); return false;
   }
   if (m.t > DEMI_TOUR_TEMPS) { m.t = 0; m.phase = m.phase === 'avant' ? 'arriere' : 'avant'; }
   const avant = m.phase === 'avant', h0 = c.h;

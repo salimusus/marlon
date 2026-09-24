@@ -167,8 +167,8 @@ window.__SHOT = {
             + Math.round(RALENTI.x) + ' ; ' + Math.round(RALENTI.z) + ')');
         if (typeof drone !== 'undefined' && drone && drone.actif && drone.vue) dit(true, 'la camera est a bord du drone');
         if (typeof cam !== 'undefined' && cam && cam.fixe) dit(true, 'un plan fixe tient la camera (cam.fixe)');
-        if (typeof cam !== 'undefined' && cam && Math.abs((cam.dist || 0) - 9) > 0.5)
-          dit(true, 'perche de camera heritee : ' + (+cam.dist).toFixed(2) + ' m au lieu de 9 m');
+        // (la LONGUEUR de perche heritee n'est plus listee : go() la repose a 9 m comme au
+        //  chargement, elle n'explique donc plus rien et elle aurait parle a chaque test.)
       } catch (eCam) {}
       dit(typeof police !== 'undefined' && police.wanted > 0, 'recherche police niveau ' + (typeof police !== 'undefined' ? police.wanted : '?'));
       dit(typeof mission !== 'undefined' && mission.cur, 'mission en cours');

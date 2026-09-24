@@ -818,6 +818,16 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : **31 943** maillages visibles avant, **32 060** au pic, **32 059** quatre secondes plus tard — alors que les cinq avatars, eux, sont devenus invisibles (`visible: false`, une trentaine de maillages chacun, donc environ −150 qui auraient dû être rendus). Le solde net est donc de l'ordre de **+270 maillages créés pour cinq morts, dont +117 encore là après**. Le pas de simulation passe de **14,06 ms à 16,43 ms (+17 %)** pendant la fusillade.
 - **Ce que je n'ai PAS pu mesurer** : les appels de dessin. Sous swiftshader le banc ne rend qu'une image par seconde et `renderer.info.render.calls` reste bloqué à 1 ; l'avertissement du poste FIABILITÉ (+455 appels pendant une demi-seconde par mort) n'est donc ni confirmé ni infirmé ici. Ce que je peux dire, c'est que la scène ne rend pas ce qu'elle a pris.
 - **On devrait voir** : ce que la scène gagne pendant la fusillade, elle doit le rendre après — un corps effacé doit emporter ses maillages.
+- **CORRIGÉ (poste FIABILITÉ, round 78)** — *Les éphémères vieillissent dans la simulation, plus seulement au dessin.* Les morceaux d'explosion et les effets d'impact ne mouraient que dans `frame()`, la boucle d'**affichage** ; tout ce qui fait avancer le jeu sans rendre d'image les gardait pour toujours. Le vieillissement est passé dans `step()` (`ephemeresTick`), avec le reste de la simulation, et **avant** la sortie `!active` pour que les morceaux de la mort du joueur retombent aussi quand il est à terre.
+  - **Mesure avant / après**, même sonde, même graine, cinq habitants abattus d'un coup puis quatre secondes de simulation :
+
+    | | maillages visibles avant | au pic | 4 s plus tard | solde | groupe `ephemeres` après |
+    |---|---|---|---|---|---|
+    | **avant** | 24 588 | 24 983 | **24 983** | **+395, définitifs** | **619** (513 boîtes, 56 cylindres, 50 sphères) |
+    | **après** | 24 595 | 24 990 | **24 371** | **−224** | **0** |
+
+    Le solde passe donc de **+395 qui ne redescendent jamais** à **−224** : la scène rend plus qu'elle n'a pris, parce que les cinq corps effacés (≈ 45 maillages chacun) emportent enfin leurs maillages avec eux. Le groupe se vide entre 1,0 s et 1,5 s (durée de vie d'un morceau : 1,4 s), `debris` et `fx` reviennent à 0.
+  - **Pourquoi le garde-fou ne voyait rien** : il compte `scene.children`, or les 619 morceaux sont **un cran plus bas**, dans le groupe `ephemeres`.
 
 ### 99. Manette posée, profil vierge : l'enfant est emporté sur 32 m sans avoir touché à rien, et arrive collé à « éjecter le conducteur (gros délit !) »
 - **Gravité** : GÊNANT (1 fois sur 3 ; le personnage part tout seul et finit devant une proposition de délit)

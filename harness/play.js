@@ -289,7 +289,8 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
   const pos0 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
   // Une balle avance de ~4,7 m par image : l'ancien test ponctuel ne la voyait dans la
   // boîte du bot (0,84 m) qu'environ une fois sur six. La rafale rend l'écart visible.
-  let partis = 0, mutisme = '', fuite = 0;
+  let partis = 0, mutisme = '', fuite = 0, trajets = '', vol = null, pasDeVol = 0;
+  const sim0 = await p.evaluate(() => __G.simTime);
   for (let i = 0; i < 6; i++) {
     const t = await p.evaluate(() => { const G = __G, P = G.P, n = G.shots.length, b = G.bots[0];
       // LA CIBLE EST REMISE A 12 M AVANT CHAQUE COUP. Une balle qui touche pose `fight = 'flee'`
@@ -306,17 +307,37 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
       P.fireCd = 0; P.ammo = 8; P.aim = true; G.aimTick(); G.fire();
       // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
       // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer.
-      if (G.shots.length > n) return { parti: 1, derive };
+      if (G.shots.length > n) {
+        // OU PART LA BALLE ? Une balle partie sans toucher un homme immobile a 12 m ne dit rien
+        // par elle-meme : on releve la cible verrouillee, le cap de la balle et le cap qu'il
+        // aurait fallu. Sans ce releve, « 0 balle sur 6 » reste une enigme.
+        const sh = G.shots[G.shots.length - 1];
+        const vise = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+        let ec = Math.atan2(sh.v.x, sh.v.z) - vise; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
+        // LA BALLE AVANCE EN PAS DE SIMULATION, PAS EN TEMPS REEL. Le test attendait jusqu'a
+        // 20 s de temps MUR que `shots` se vide ; sous rendu logiciel et machine chargee, la
+        // page peut ne rendre AUCUNE image pendant ce temps-la : les six balles restaient
+        // suspendues en l'air, 0 degat, alors que rien n'etait casse dans le tir. Signature
+        // relevee : 6 balles parties, 0 touche, fuite de la cible 0,00 m — elle n'avait jamais
+        // ete touchee. On fait donc voler la balle nous-memes, image par image (c'est la
+        // fonction du jeu, `shotsTick`), jusqu'a l'impact : la mesure ne depend plus de la
+        // charge de la machine. Cent pas = 1,67 s de vol, la balle en vit 1,6.
+        let pas = 0; while (G.shots.length && pas++ < 100) G.shotsTick(1 / 60);
+        return { parti: 1, derive, pas, tir: `verrou=${P.lock ? P.lock.nom : 'AUCUN'} ecart de cap=${ec.toFixed(3)} rad joueur=${P.pos.x.toFixed(1)}/${P.pos.z.toFixed(1)} cible=${b.pos.x.toFixed(1)}/${b.pos.z.toFixed(1)} camYaw=${G.cam.yaw.toFixed(2)} visible=${b.av.group.visible} degainee=${!!P.drawn}` };
+      }
       return { parti: 0, derive, pourquoi: `arme=${P.weapon} degainee=${!!P.drawn} munitions=${P.ammo} fireCd=${(P.fireCd || 0).toFixed(2)} horloge=${G.simTime.toFixed(2)} rechargeT=${(P.reloadT || 0).toFixed(2)} volant=${!!G.drive.car} assis=${!!P.sit} balancoire=${!!P.swing} manege=${!!P.ride} gym=${!!G.gym.on} zoom=${!!P.zoom} enJeu=${G.running}/${!G.paused} prison=${!!G.jail.on} monde=${G.worldIdx} ville=${G.city.on} achetee=${G.owned.has('arme:pistol')} fenetre=${G.uiOpen}` };
     });
-    partis += t.parti; fuite = Math.max(fuite, t.derive); if (!t.parti && !mutisme) mutisme = t.pourquoi;
-    await attendre(p, () => __G.shots.length === 0, 20000);
+    partis += t.parti; fuite = Math.max(fuite, t.derive);
+    if (!t.parti && !mutisme) mutisme = t.pourquoi;
+    if (t.tir && !trajets) trajets = t.tir;
+    if (t.pas != null) pasDeVol = Math.max(pasDeVol, t.pas);
+    vol = await p.evaluate(() => ({ sim: __G.simTime, reste: __G.shots.length }));
   }
   const hp1 = await p.evaluate(() => __G.bots[0].hp);
   const pos1 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
   const bouge = Math.hypot(pos1[0] - pos0[0], pos1[1] - pos0[1]);
   const touches = Math.round((hp0 - hp1) / 24);
-  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}` };
+  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}${touches < 5 && trajets ? ' · premier tir : ' + trajets : ''}${touches < 5 && vol ? ` · vol le plus long ${pasDeVol} pas de simulation (une balle met 8 pas pour faire 12 m), ${vol.reste} balle(s) volaient encore à la fin` : ''}` };
 });
 
 test('une balle ne traverse plus une cloison fine', async p => {

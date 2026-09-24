@@ -18818,7 +18818,13 @@ test('le facteur est assis sur SA selle, le joueur pédale sur un vélo et roule
       o.updateMatrixWorld(true); o.traverse(q => { if (q.isMesh && q.visible) b.expandByObject(q); }); return b; };
     // ---- LE FACTEUR : on laisse sa tournée se faire toute seule, 30 s de simulation
     const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    // ON ATTEND LA CONDITION, PAS UN DELAI (regle du banc). Le facteur MET PIED A TERRE a
+    // chaque boite aux lettres : a la 1 800e image pile, il pouvait etre DEBOUT a cote de son
+    // velo, et on mesurait alors une pose de pieton — bassin a 0,72 m pour une selle a
+    // 1,155 m, cuisse 0. Ce test juge la pose EN SELLE : on laisse donc la tournee se faire
+    // ses trente secondes, puis on avance jusqu'a ce qu'il soit remonte.
     for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 3600 && !(f && f.bot && f.bot.enSelle && f.etat === 'tournee'); i++) G.step(1 / 60, true);
     const cv = f && f.bot && f.bot.veh;
     if (cv && f.bot.av) {
       const base = cv.y || 0;
@@ -19375,7 +19381,13 @@ test('à vélo, le pied est SUR la pédale — pour le joueur comme pour le fact
       for (const lg of [rig.legL, rig.legR]) { const b = new THREE.Box3().setFromObject(lg); y = Math.min(y, b.min.y); }
       return +(y - base).toFixed(3); };
     const f = (G.METIERS && G.METIERS.facteurs || [])[0];
+    // ON ATTEND LA CONDITION, PAS UN DELAI (regle du banc). Le facteur MET PIED A TERRE a
+    // chaque boite aux lettres : a la 1 800e image pile, il pouvait etre DEBOUT a cote de son
+    // velo, et on mesurait alors une pose de pieton — bassin a 0,72 m pour une selle a
+    // 1,155 m, cuisse 0. Ce test juge la pose EN SELLE : on laisse donc la tournee se faire
+    // ses trente secondes, puis on avance jusqu'a ce qu'il soit remonte.
     for (let i = 0; i < 1800; i++) G.step(1 / 60, true);
+    for (let i = 0; i < 3600 && !(f && f.bot && f.bot.enSelle && f.etat === 'tournee'); i++) G.step(1 / 60, true);
     if (f && f.bot && f.bot.veh && f.bot.av) { const c = f.bot.veh; c.g.updateMatrixWorld(true); f.bot.av.group.updateMatrixWorld(true);
       out.facteur = { pedales: pedales(c), pied: pied(f.bot.av.rig, c.y || 0),
         selle: c.selle ? +(c.selle.position.y + c.selle.scale.y / 2).toFixed(3) : null,

@@ -817,3 +817,17 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : le joueur reste en (0 ; 3,5) de t = 150 s à t = 250 s, puis (1,3 ; 3,5) à 260 s, **(16,3 ; 3,5) à 270 s**, **(31,8 ; 3,7) à 280 s**, et plus rien ensuite — **31,8 m parcourus en 25 s** sans qu'aucune touche ait été pressée ni aucun stick poussé. Juste avant le départ, à t = 250 s : « 🔥 AU FEU ! La caserne envoie le camion ». Pendant le trajet, à t = 275,4 s : **« 🚗 △ : éjecter le conducteur et voler la voiture (gros délit !) »** — l'enfant est déposé contre une voiture conduite, avec un gros délit à portée de pouce.
 - **On devrait voir** : un joueur immobile reste immobile. Si un véhicule de service doit passer là, il contourne ou il klaxonne ; il n'emporte pas l'enfant sur trente mètres.
 - **Ce qui est ACQUIS et qui se voit, sur les trois mêmes runs** : sur 320 s de simulation manette posée, **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, 0 habitant à moins de 6 m à l'arrivée, aucun gang, aucune bagarre, aucune infraction**. Les n° 78, 84 et 85 sont réparés pour de bon — la ville laisse enfin l'enfant tranquille.
+
+### 100. Sur l'écran de l'introduction, un bouton « Exporter la vidéo » relance le film depuis le début
+- **Gravité** : GÊNANT (c'est le tout premier écran du jeu, et c'est un outil de studio posé à côté du bouton « Passer »)
+- **Reproduire** : premier lancement, « Entrer dans Marlon », laisser tourner le film, puis cliquer sur « Exporter la vidéo » (le bouton du milieu des trois). Reproduit 1/1 (`cine3.js`).
+- **On voit** : les trois boutons de la cinématique sont « Son : activé », **« Exporter la vidéo »** et « Passer · Entrée / A ». Au clic, le film **repart de zéro** (`elapsed = 0`), le bouton se grise et l'écran affiche **« Enregistrement de l'introduction · 32 secondes »**. L'enfant qui voulait juste appuyer sur un bouton se retrouve à revoir le film en entier pendant qu'un fichier vidéo de 8 Mbit/s s'enregistre. (Heureusement, « Passer » reste actif pendant l'enregistrement.)
+- **On devrait voir** : pas ce bouton-là devant un enfant — au mieux derrière un `?capture` d'URL, comme le mode capture l'est déjà.
+- **Capture** : `img/j1-export-video.png`, `img/cine-01-t1.png`.
+
+### 101. La « vie » des trois quartiers neufs, ce sont des mannequins de vitrine sur socle blanc — dont quatre plantés sur le terrain de foot
+- **Gravité** : COSMÉTIQUE
+- **Reproduire** : Plaine des Sports, entrer dans le city-stade ; Bois des Aventuriers, aller au feu de camp ; Hameau de la Ferme, aller au marché.
+- **On voit** : les « joueurs du city-stade », le « berger », le « fermier », le « forain », le « ranger », les « campeurs » et le « moniteur » sont des `mannequin()` — c'est-à-dire des mannequins de boutique : immobiles, sans nom, bras écartés, **posés sur un socle gris clair de 1,10 × 1,10 × 0,30 m qui est en plus un SOLIDE**. Sur la pelouse du city-stade, cela fait quatre statues sur piédestal au milieu du terrain, dont une dans la surface de but, et le ballon y rebondit. Au total : 4 à la Plaine des Sports, 4 au Hameau, 4 au Bois.
+- **On devrait voir** : soit de vrais habitants (`bots`, qui marchent et qui parlent, et les trois quartiers en ont déjà les points de flânerie), soit au moins pas de socle de musée sur un terrain de foot.
+- **Capture** : `img/a3-sports-stade.png` (deux socles blancs en plein terrain), `img/c1-bois-parcours.png` (le moniteur sur son socle).

@@ -1581,8 +1581,8 @@ function videEphemeres() {
 // modeste — l'essentiel du coût est la simple traversée du graphe, pas le calcul — mais il
 // est gratuit. Geler en plus tout le décor immobile a été essayé et mesuré : 13,4 ms contre
 // 13,1 ms sans, donc aucun gain pour un vrai risque de figer un objet censé bouger. Écarté.
-scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false;
-scene.updateMatrix(); worldGroup.updateMatrix();
+scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false; EPHEMERES.matrixAutoUpdate = false;
+scene.updateMatrix(); worldGroup.updateMatrix(); EPHEMERES.updateMatrix();
 // ================= FLUIDITÉ : LA RÉSOLUTION S'ADAPTE TOUTE SEULE =================
 // Une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en
 // 4K le jeu calculait 8 millions de pixels par image et saccadait. Deux garde-fous :

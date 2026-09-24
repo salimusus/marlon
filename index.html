@@ -8324,7 +8324,17 @@ function buildMall() {   // rue commerçante (est) : les magasins font face à l
   buildTatoo(43, 80);      // et le salon de tatouage, un peu plus haut sur le même trottoir
   buildCoiffeur(43, 92);   // le salon de coiffure ferme la rue au nord
   for (const z of [40, 52, 64, 76, 88]) { lamp(55.5, z + 5.5); flowerBed(55.5, z - 5, 1.2, 3); }
-  for (let i = 0; i < 6; i++) bench(48.5, 40 + i * 9, Math.PI / 2);   // bancs le long de la rue
+  // LES BANCS SONT SUR LE TROTTOIR, PAS SUR LA CHAUSSÉE (point de géométrie du round 78).
+  // Ils étaient à x = 48,5, c'est-à-dire sur le bord même de la rue : un banc tourné dans l'axe
+  // de la rue a une boîte de collision de 0,85 m de large, donc il s'étendait jusqu'à
+  // x = 48,925 alors que le bitume commence à 48,5 — **42,5 cm de banc dans la voie**, six fois
+  // de suite (z = 40, 49, 58, 67, 76, 85). Et ça se voit : regardé en capture
+  // (geo2-rue52.png), les bancs débordent de la ligne blanche de rive sur le goudron.
+  // C'est la rue x = 52, le seul axe direct du centre vers le nord-est. Ils reculent de 60 cm :
+  // bord est à 48,325, soit 17,5 cm de dégagement franc avant la rive. On RECULE LE MOBILIER
+  // plutôt que d'élargir la rue — l'avertissement du round 76 est clair, il ne reste que 10 cm
+  // de marge géométrique en ville, et un banc qui recule ne coûte rien à personne.
+  for (let i = 0; i < 6; i++) bench(47.9, 40 + i * 9, Math.PI / 2);   // bancs le long de la rue, sur le trottoir
   for (let i = 0; i < 14; i++) box(49 + (i % 2) * 6, 5.4, 34 + i * 4.3, 0.5, 0.5, 0.5, 0, { material: neonMat([0xff5c5c, 0xffd23f, 0x5cc453, 0x4f8dff][i % 4]), deco: true, noEdges: true });   // guirlande de la rue
   for (const z of [36, 92]) { box(52, 6.6, z, 8, 0.08, 0.08, 0x3b4252, { deco: true, noEdges: true, studs: false }); for (const x of [48.1, 55.9]) box(x, 3.3, z, 0.15, 6.6, 0.15, 0x3b4252, { studs: false, noRoute: true }); }
   box(52, 7.2, 36, 6, 1, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🛍️ RUE COMMERÇANTE', 0xff7ad9) }), deco: true, noEdges: true });
@@ -36944,7 +36954,22 @@ function buildMetiers() {
   const [kx, kz] = emplacementsService().caserne;
   city.caserne = { x: kx, z: kz };
   hangar(kx, kz, 18, 11, MET_C.rouge, '🚒 CASERNE DES POMPIERS', '🚒 Caserne · prends le camion (E) et arrose (O)', 22, 8);
-  box(kx, 3.4, kz + 4, 3, 6.8, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
+  // ---- LA PERCHE DE DESCENTE (point de géométrie du round 78) ----
+  // Elle était posée en (kx ; kz + 4), 3 m de large, 6,80 m de haut, 0,30 m d'épais : pas une
+  // perche, un PANNEAU. Et il était planté au milieu de la travée, là où se gare le camion.
+  // Mesuré : caisse du camion (−40 ; 128), 2,60 × 8 m, donc z de 124 à 132 ; le panneau en
+  // (−40 ; 126) tombe en plein dedans, sur toute sa largeur — le camion est garé AU TRAVERS.
+  // Et ça se voit de la rue : regardé en capture (geo1-caserne-face.png), c'est une plaque
+  // blanche qui fend la travée en deux et qui SORT PAR LE TOIT — le pavillon de la caserne
+  // plafonne à 5,10 m, elle monte à 6,80, soit 1,70 m de panneau en l'air au-dessus du toit.
+  // On en fait une vraie perche : 0,30 m de section, du sol au plafond (4,50 m, la sous-face
+  // du toit est à 4,70), rangée contre le flanc OUEST de la travée. Elle est à 4,70 m de la
+  // caisse du camion — c'est le camion qu'on ne déplace pas : sa place est calculée par
+  // `gare()` / `placeDeService`, le garde-fou qui tient son gabarit hors de la chaussée, et la
+  // sortie de la cour est un acquis mesuré du round 77 (14,1 m jusqu'à la rue, 1 image lente
+  // sur 700). On ne va pas discuter avec le garde-fou pour un décor mal taillé.
+  box(kx - 6, 2.25, kz + 1, 0.3, 4.5, 0.3, 0xf4f6fa, { deco: true, studs: false });   // la perche de descente
+  box(kx - 6, 4.55, kz + 1, 1.1, 0.14, 1.1, 0x8f98ab, { deco: true, studs: false });   // la trappe du dortoir, d'où l'on se laisse glisser
   for (const sx of [-6, 6]) box(kx + sx, 1.2, kz + 3.4, 1.6, 2.4, 0.3, MET_C.rouge, { deco: true, studs: false });
   city.zones.push({ name: 'Caserne', emoji: '🚒', x1: kx - 12, x2: kx + 12, z1: kz - 11, z2: kz + 11,
     hint: '🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau' });

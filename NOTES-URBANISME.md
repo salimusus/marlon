@@ -280,3 +280,145 @@ connu du §7).
 sur les 12 bancs**. `harness/audit.js` : la liste des poteaux plantés dans un bâtiment est
 redevenue celle d'avant mes corrections (10, tous antérieurs, tous à La Zone) et le nombre de
 régions piétonnes séparées passe de 11 à 10.
+
+---
+
+# ROUND 78 — POSTE VILLE & VÉHICULES
+
+Trois défauts (n° 95, 96, 99) et trois relevés de géométrie laissés par le poste CONDUITE.
+Règle de travail du round : **pour chaque point, regarder une capture avant de conclure.**
+Un camion garé dans une porte, ça se voit ; ça ne se calcule pas.
+
+## 1. Le contact des véhicules : la tôle, pas l'enveloppe (n° 96)
+
+La voiture **conduite** était le seul véhicule dont le contact se calculait encore sur la boîte
+**alignée sur les axes**. Cette boîte GONFLE quand on braque : `vehicleSolid()` la recalcule en
+`W·|cos h| + D·|sin h|`, donc une caisse de 2,40 × 4,40 m à 45° présente une boîte de **4,81 m
+de côté** — 2,00 m de large en trop. Au parking du centre, voisines à 2,40 m, il suffisait de
+tourner le volant pour « toucher » une voiture jamais approchée.
+
+| manœuvre de sortie de place, R2 à fond, quart de tour à gauche | avant | après |
+|---|---|---|
+| contacts détectés en 2,9 s | 7 | **1** |
+| dont contacts FANTÔMES (châssis non jointifs) | **6** (le pire à **1,278 m** d'écart) | **0** |
+| écart réel des tôles au moment du constat | **0,255 m** | — (aucun constat) |
+| accidents ouverts | 1 | **0** |
+| dégâts | 58,5 % | **0 %** |
+| distance parcourue en 15 s | 1,58 m | **29,02 m** |
+| images sous 0,6 m/s (sur 900) | 725 | **111** |
+
+`contactVehicules()` — la séparation orientée (SAT) — existait déjà et servait à **toutes les
+autres paires** de véhicules. `separerVehicules()` saute explicitement `drive.car` au motif
+qu'« elle a son propre traitement » : c'est ce traitement-là qui était resté en arrière. Il n'y
+a plus qu'**une seule géométrie de contact** pour tout le monde.
+
+Second défaut au même endroit : l'impact se lisait sur `drive.speed`, **la vitesse que le moteur
+réclame**. Calée contre sa voisine, pied au plancher, la voiture affichait **16,62 m/s** en
+n'avançant plus. On mesure maintenant le rapprochement des deux tôles **le long de la normale de
+contact**, en vitesse relative. C'est l'esprit de la règle déjà appliquée au choc contre un MUR
+(`perte` : « la vitesse que le mur a ÔTÉE »). Un frôlement a une normale perpendiculaire à la
+marche : rapprochement quasi nul, donc une rayure. **Les seuils n'ont pas bougé**
+(`ACCIDENT_VITESSE_MIN` = 10 m/s, 12 m/s contre un véhicule garé) — ils recevaient une valeur
+fausse, voilà tout. Contre-épreuve : lancée à 14 m/s dans une voiture garée, elle ouvre toujours
+un accident et s'immobilise.
+
+*(Essayé et retiré : mesurer l'impact par la PROFONDEUR d'interpénétration rapportée à la durée
+de l'image. Sur la première image de contact elle ne vaut que « ce qu'on a avancé MOINS le jeu
+qui restait », donc elle dépend de l'endroit où la voiture se trouvait à l'image d'avant —
+mesuré **3,2 m/s pour un encastrement à 14 m/s**, et plus aucun accident nulle part.)*
+
+## 2. Une seule table de sièges (n° 95)
+
+Il y en avait **deux**. `chienTick` portait la sienne, écrite à la main, qui posait le chien à
+`lx −0,52 / lz +0,05` dans une voiture fermée — très exactement le siège « avant » de `PLACES`.
+`placeOccupants` l'asseyait pourtant bien (`assiedChien`, place `chien`, centre de la banquette),
+mais `poseJoueurAuVolant` tourne AVANT `cityCommon` : chienTick le remettait sur les genoux du
+passager à chaque image. Écart chien ↔ passager avant : **0,10 m → 1,30 m**, stable sur 8 s.
+
+Deuxième racine, la **déclaration** : `enterCar` n'inscrivait `c.chien` que si le chien était à
+moins de 6 m, alors que chienTick l'embarque sans aucune condition de distance. D'où « le chien
+est dans la caisse et `c.chien` est faux ». Une seule règle : il monte s'il a une place et qu'il
+n'est ni couché dans sa niche ni lancé sur quelqu'un.
+
+Les **deux-roues et le jet-ski** gardent leur repère à eux : le chien y voyage dans son panier
+(`panierChien`), calé sur ces valeurs-là, et personne ne s'y assied à sa place.
+
+## 3. Un pare-chocs pousse de côté, il n'emporte pas (n° 99)
+
+Ce n'est pas le pilote, c'est la **résolution de collision du joueur** — et ce n'est pas propre
+au camion de pompiers : **n'importe quel véhicule qui avance** emportait l'enfant immobile.
+
+Quand le joueur est déjà dans la boîte d'un solide, `moveAxis` le repose sur **la face la plus
+proche**. C'est juste pour un portail qui se referme. Face à un véhicule qui roule, c'est un
+**chasse-neige** : collé au pare-chocs, la face la plus proche est la face AVANT, donc on le
+repose devant la caisse, à chaque image. `desincarcere` ne voyait rien : le joueur ne pénétrait
+jamais la caisse, il était reposé devant elle.
+
+| manette posée, aucune entrée, 30 s | avant | après |
+|---|---|---|
+| emporté par un camion à 1,5 m/s (allure « au pas » en intervention) | **33,4 m** | **0 m** |
+| emporté par une voiture à 1,5 m/s | 33,4 m | **0 m** |
+| emporté à 0,8 m/s | 20,4 m | **0,37 m** |
+| écart latéral (il sort de la voie) | 1,7 m | **1,72 m**, et le véhicule le dépasse |
+| véhicule à l'ARRÊT | 0 m | **0 m** |
+
+Sur l'axe de marche du véhicule on annule le pas au lieu de reposer le joueur devant lui, et le
+dégagement — armé sur-le-champ — l'écarte **du côté LIBRE** (testé par `penetration`) pour ne pas
+l'envoyer dans une façade. La boîte de collision retient pour cela le cap du véhicule et le fait
+qu'il roule (`o.vh`, `o.vmob`, posés dans `vehicleSolid`).
+
+## 4. Les trois relevés de géométrie du poste CONDUITE
+
+### a) Le camion de pompiers garé au travers de sa caserne — **corrigé**
+
+La « perche de descente » n'était pas une perche : un **panneau de 3 × 6,80 × 0,30 m** planté en
+(−40 ; 126), au milieu de la travée. Le camion (2,60 × 8 m en (−40 ; 128), donc z de 124 à 132)
+le contenait sur toute sa largeur. Et — vu en capture, pas calculé — il **sortait par le toit** :
+le pavillon de la caserne plafonne à 5,10 m, le panneau montait à 6,80, soit **1,70 m de plaque
+blanche en l'air au-dessus du toit**, qui coupait en deux l'enseigne « CASERNE DES POMPIERS ».
+
+C'est une vraie perche maintenant : 0,30 m de section, du sol à 4,50 m (la sous-face du toit est
+à 4,70), contre le flanc ouest de la travée, avec sa trappe de dortoir — à 4,70 m de la caisse du
+camion. **Solides dans la caisse du camion : 1 → 0. Solides qui percent le toit : 1 → 0.**
+
+**C'est le décor qu'on déplace, pas le camion** : sa place est calculée par `gare()` /
+`placeDeService`, le garde-fou qui tient son gabarit hors de la chaussée, et la sortie de la cour
+est un acquis mesuré du round 77 (14,1 m jusqu'à la rue, 1 image lente sur 700). On ne discute pas
+avec le garde-fou pour un décor mal taillé.
+
+### b) La rue x = 52 mordue par son propre mobilier — **corrigé**
+
+Six bancs en x = 48,5 (z = 40, 49, 58, 67, 76, 85). Un banc tourné dans l'axe de la rue a une
+boîte de **0,85 m** de large : il s'étendait donc jusqu'à **x = 48,925** alors que le bitume
+commence à 48,5 — **42,5 cm de banc dans la voie**, six fois. Et ça se voit : sur la capture, les
+bancs débordent de la ligne blanche de rive sur le goudron.
+
+| rue x = 52 (section nord, 7 m, x 48,5 → 55,5) | avant | après |
+|---|---|---|
+| pire chevauchement du mobilier sur la chaussée | **0,425 m** | **0** |
+| jeu entre le mobilier et le gabarit de la voie de droite (axe x = 50,25, demi-gabarit 1,20 m) | **0,125 m** | **0,725 m** |
+
+Les bancs reculent de 60 cm, à x = 47,9 (bord est 48,325). **On recule le mobilier, on n'élargit
+pas la rue** : l'avertissement du round 76 est clair, il ne reste que 10 cm de marge géométrique
+en ville. `node harness/traffic.js` lancé avant de commiter : **14/14**.
+
+*Nuance sur le relevé reçu* : les **deux poteaux de x = 48,1** (z = 36 et 92) ne mordaient PAS.
+Leur section est de 0,15 m, donc leur bord est tombe à 48,175 — 32,5 cm en deçà de la rive.
+Mesuré, seuls les six bancs étaient en cause. Et l'itinéraire du centre vers (40 ; 90) passait
+**déjà** par la rue x = 52 (80,0 m pour 80,9 m à vol d'oiseau, 11 points sur 15 sur cet axe) : le
+calcul d'itinéraire n'était plus en cause, c'était bien la **marge** qui manquait — 12,5 cm.
+
+### c) La place du centre étroite pour les gros véhicules — **laissé, volontairement**
+
+Relevé : sur les 9 chaussées à moins de 30 m du centre, **3 sont sous le seuil de 7,60 m** —
+(0 ; −4) 6 m, (−26 ; 0) 6 m, (0 ; 26) 6 m. Le plus long véhicule du jeu est le camion, 8,60 m.
+
+Ce sont **exactement** les trois chaussées déjà documentées au §7 ci-dessus comme laissées
+sciemment au round 75, avec leur raison chiffrée : la dalle du **Parking du centre** et ses
+16 places marquées pour les deux premières, les **trois boutiques de z = 19,5** pour la troisième.
+Ces trois boutiques sont par ailleurs la **pire valeur de la ville** (+0,30 m contre la rue
+z = 26) : c'est précisément sur elles que porte l'avertissement des 10 cm. Les élargir demande de
+déplacer le parking et les intérieurs des trois boutiques (comptoirs, vitrines, mannequins, tapis
+de course, points d'interaction), tous posés à la main coordonnée par coordonnée. **C'est un
+chantier à part, et il mangerait la marge que le round 76 demande de préserver.** Le pilotage gère
+la place aujourd'hui ; on ne touche pas.

@@ -22170,3 +22170,53 @@ test('manette posée, un véhicule qui passe au pas écarte l\'enfant de sa traj
     && r.camion.depasse && r.arret.bouge < 0.6;
   return { ok, detail: `manette posée, aucune entrée : la résolution de collision reposait le joueur sur la face du véhicule LA PLUS PROCHE, c'est-à-dire, collé au pare-chocs, sur la face AVANT — donc devant la caisse, à chaque image. Un chasse-neige : mesuré 33,4 m d'emport en 30 s derrière un camion à 1,5 m/s (l'allure « au pas » d'un véhicule en intervention), 20,4 m à 0,8 m/s, l'enfant tenu à 4,40 m du centre du camion, pile sur son pare-chocs, tout du long · sur l'AXE DE MARCHE du véhicule on annule maintenant le pas et le dégagement l'écarte DE CÔTÉ : emporté ${r.camion.emporte} m (camion 1,5 m/s, qui roule ${r.camion.roule} m), ${r.voiture.emporte} m (voiture) et ${r.lent.emporte} m (0,8 m/s), écarté de ${r.camion.lat} m hors de la voie, ❤️ ${r.camion.hp}, et le véhicule le dépasse (${r.camion.depasse}) · un véhicule à l'ARRÊT ne pousse toujours personne : ${r.arret.bouge} m` };
 });
+
+test('le camion de pompiers n\'est plus garé au travers de sa caserne, et les bancs de la rue x = 52 sont sur le trottoir', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const out = {};
+    // ---- 1. LA CASERNE : rien de planté dans la caisse du camion, rien qui sorte du toit ----
+    const k = G.city.caserne;
+    const camion = [...G.city.cars].find(v => v.kind === 'pompier');
+    const cx1 = camion.x - camion.baseW / 2, cx2 = camion.x + camion.baseW / 2;
+    const cz1 = camion.z - camion.baseD / 2, cz2 = camion.z + camion.baseD / 2;
+    const dedans = [], perce = [];
+    for (const o of G.solids) {
+      if (Math.abs(o.x - k.x) > 14 || Math.abs(o.z - k.z) > 14) continue;
+      // `o.veh` : la boîte de collision du camion lui-même, et celles des autres véhicules
+      if (!o.veh && o.h > 1.2 && o.x - o.w / 2 < cx2 && o.x + o.w / 2 > cx1 && o.z - o.d / 2 < cz2 && o.z + o.d / 2 > cz1)
+        dedans.push({ x: +o.x.toFixed(2), z: +o.z.toFixed(2), w: +o.w.toFixed(2), h: +o.h.toFixed(2) });
+      // le pavillon de la caserne plafonne à 5,10 m : rien du bâti ne doit le percer
+      if (!o.veh && Math.abs(o.x - k.x) < 10 && Math.abs(o.z - k.z) < 7 && o.y + o.h / 2 > 5.4)
+        perce.push({ x: +o.x.toFixed(2), z: +o.z.toFixed(2), haut: +(o.y + o.h / 2).toFixed(2) });
+    }
+    out.camion = { x: +camion.x.toFixed(2), z: +camion.z.toFixed(2), z1: +cz1.toFixed(2), z2: +cz2.toFixed(2) };
+    out.dansLaCaisse = dedans; out.percentLeToit = perce;
+    // ---- 2. LA RUE x = 52 : aucun mobilier sur la chaussée ----
+    const rues = (G.city.routes || []).filter(q => Math.abs(q.x - 52) < 2 && q.d > 20);
+    let pireChev = 0, pireObj = null, jeuVoie = 1e9, jeuObj = null;
+    const AXE = 50.25, DEMI = 1.2;   // axe de la voie de droite (largeur/4) et demi-gabarit d'une voiture
+    for (const o of G.solids) {
+      if (o.h > 30 || o.sol || o.trottoir) continue;
+      const ox1 = o.x - o.w / 2, ox2 = o.x + o.w / 2;
+      for (const q of rues) {
+        const rx1 = q.x - q.w / 2, rx2 = q.x + q.w / 2;
+        if (o.z - o.d / 2 > q.z + q.d / 2 || o.z + o.d / 2 < q.z - q.d / 2) continue;
+        const chev = Math.min(ox2, rx2) - Math.max(ox1, rx1);
+        if (chev > pireChev && ox1 < rx1 + 1.5) { pireChev = chev; pireObj = { x: +o.x.toFixed(2), z: +o.z.toFixed(2), ox2: +ox2.toFixed(3) }; }
+      }
+      if (o.z - o.d / 2 <= 113 && o.z + o.d / 2 >= 25 && ox2 >= 45 && ox1 <= AXE) {
+        const j = (AXE - DEMI) - ox2;
+        if (j < jeuVoie) { jeuVoie = j; jeuObj = { x: +o.x.toFixed(2), z: +o.z.toFixed(2), ox2: +ox2.toFixed(3) }; }
+      }
+    }
+    out.rue52 = { pireChevauchement: +pireChev.toFixed(3), pireObjet: pireObj,
+                  jeuVoieDroite: +jeuVoie.toFixed(3), objetLePlusProche: jeuObj,
+                  bancs: (G.city.benches || []).filter(b => b.x > 46 && b.x < 50 && b.z > 30 && b.z < 95).length };
+    return out;
+  });
+  const ok = r.dansLaCaisse.length === 0 && r.percentLeToit.length === 0
+    && r.rue52.pireChevauchement < 0.01 && r.rue52.jeuVoieDroite > 0.5 && r.rue52.bancs === 6;
+  return { ok, detail: `deux relevés de géométrie du poste CONDUITE · CASERNE : le camion (2,60 × 8 m en ${r.camion.x} ; ${r.camion.z}, donc z de ${r.camion.z1} à ${r.camion.z2}) était garé AU TRAVERS de la « perche de descente » — en réalité un panneau de 3 × 6,80 × 0,30 m planté en (−40 ; 126), au milieu de la travée, et qui sortait de 1,70 m AU-DESSUS du toit (pavillon à 5,10 m) ; c'est une vraie perche de 0,30 m rangée contre le flanc ouest : ${r.dansLaCaisse.length} solide dans la caisse du camion, ${r.percentLeToit.length} qui perce le toit · RUE x = 52 : les six bancs (x = 48,5, boîte de 0,85 m, donc jusqu'à x = 48,925) mordaient de 42,5 cm sur une chaussée qui commence à 48,5, et l'axe de la voie de droite ne leur laissait que 12,5 cm pour un demi-gabarit de 1,20 m ; reculés à 47,9 : chevauchement ${r.rue52.pireChevauchement} m, jeu de la voie ${r.rue52.jeuVoieDroite} m, et les ${r.rue52.bancs} bancs sont toujours là` };
+});

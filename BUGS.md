@@ -769,3 +769,10 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : `ballon.ground = 0.14`, comme le gazon sur lequel il est posé.
 - **Bonne nouvelle mesurée au passage** : le but fonctionne — en poussant le ballon vers la cage ouest, « ⚽ BUT ! 1 » et `city.goals` passe bien de 0 à 1.
 - **Capture** : `img/a3-sports-stade.png`.
+
+### 93. Les panneaux des trois quartiers neufs disent « E pour s'asseoir » à un enfant qui joue à la manette
+- **Gravité** : GÊNANT (même famille que les n° 15, 30 et 44 ; ici c'est le décor tout neuf qui parle clavier)
+- **Reproduire** : manette, Plaine des Sports, s'approcher du panneau des balançoires (−172 ; −132). Reproduit sur les cinq panneaux des trois quartiers.
+- **On voit** : gravé sur le panneau, en grand : **« 🎠 Balançoires : E pour s'asseoir »**. Idem « 🎡 Tourniquet : **E** pour monter », « 🐴 Manège à poneys : **E** pour monter », « 🛞 Balançoire-pneu : **E** pour s'asseoir », « 🪺 Balançoires nid d'oiseau : **E** pour s'asseoir » — et six autres en ville (hélico, karts, balançoires du parc, boules, vélos, propulseur), soit onze panneaux. `ctrlText()` traduit bien les messages et la pastille d'action (mesuré : « 🏫 École : … assieds-toi a une table (△) », « 🎠 ◯ pour sauter de la balançoire ! »), mais pas les textures des panneaux, qui sont cuites une fois pour toutes à la construction par `sign()`.
+- **On devrait voir** : le panneau dit le bouton que l'enfant a sous le pouce — ou, à défaut, une formule qui ne nomme aucune touche (« monte sur le tourniquet »).
+- **Capture** : `img/a8-balancoires.png`.

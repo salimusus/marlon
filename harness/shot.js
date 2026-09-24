@@ -75,6 +75,14 @@ window.__SHOT = {
   // elle est ENREGISTREE. Un test qui s'entraine laissait donc un joueur plus fort pour tous
   // les suivants, et le test de rechargement pose en plus une sauvegarde a 42 : sans cette
   // valeur mise de cote au premier chargement, on n'a plus aucun moyen de revenir au depart.
+  // LE VOLUME AU CHARGEMENT DE LA PAGE. Meme famille que achats0 : le curseur du menu est
+  // un reglage PERSISTE, et le test des menus a la manette le laisse a 80 %. Tout ce que
+  // les tests suivants mesurent au bout de la chaine audio est alors attenue d un cinquieme.
+  volume0: (function () {
+    try { var k = 'superobby.banc.volume0';
+      if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.volume') || '1');
+      var v = parseFloat(localStorage.getItem(k)); return (v >= 0 && v <= 1) ? v : 1; } catch (e) { return 1; }
+  })(),
   perf0: (function () {
     try { var k = 'superobby.banc.perf0';
       if (localStorage.getItem(k) == null) localStorage.setItem(k, localStorage.getItem('superobby.perf') || '10');
@@ -126,6 +134,14 @@ window.__SHOT = {
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
       dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');
+      // LA SOURDINE ET LE VOLUME : invisibles a l ecran, ils divisent (ou annulent) tout ce
+      // que les deux tests audio mesurent au bout de la chaine.
+      try {
+        var ch0 = (typeof sfx !== 'undefined' && sfx.chaine) ? sfx.chaine() : null;
+        dit(ch0 && ch0.sourdine, 'son en sourdine (bus general a 0)');
+        if (typeof settings !== 'undefined' && Math.abs(settings.volume - __SHOT.volume0) > 0.01)
+          dit(true, 'volume a ' + Math.round(settings.volume * 100) + ' % au lieu de ' + Math.round(__SHOT.volume0 * 100) + ' %');
+      } catch (e0v) {}
       dit(typeof SON !== 'undefined' && SON.vivants && SON.vivants.length, (typeof SON !== 'undefined' && SON.vivants ? SON.vivants.length : 0) + ' son(s) places encore vivants');
       dit(typeof casino !== 'undefined' && casino.cine, 'un tour de roulette en cours (bruit de bille en boucle)');
       // LA MEMOIRE DU RENDU : une fuite ne se voit qu'en comparant d'un test a l'autre.
@@ -164,6 +180,17 @@ window.__SHOT = {
     // camera bouchee par l'auvent du snack mais une voiture partie plein gaz toute seule.
     // Vert lance seul, rouge en suite complete : la signature d'un etat herite.
     try { if (typeof releaseGamepad === 'function') releaseGamepad(); } catch (e) {}
+    // LES TOUCHES NE SURVIVENT PAS D'UN TEST A L'AUTRE NON PLUS (poste DIVERS, round 76).
+    // Depuis la 0.10, chaque keydown passe par « inputKeys.set(code, source, true) », qui rend
+    // FAUX quand la touche est deja tenue par la meme source — et la fonction sort alors
+    // AVANT toute action. Or un test qui simule une touche envoie un keydown et, neuf fois
+    // sur dix, jamais le keyup : la touche reste tenue POUR TOUJOURS, et le meme code est
+    // silencieusement ignore dans tous les tests suivants. C est exactement la panne du
+    // test 246 (E sur une chaise d ecole) : le premier E asseyait bien l eleve, le second
+    // ne faisait plus rien du tout — aucune erreur, aucune trace. On repart donc d un
+    // clavier relache, comme le fait deja le navigateur quand la fenetre perd le focus.
+    try { if (typeof inputKeys !== 'undefined' && inputKeys.clear) inputKeys.clear(); } catch (e) {}
+    try { if (typeof keys !== 'undefined' && keys.clear) keys.clear(); } catch (e) {}
     try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
@@ -483,6 +510,31 @@ window.__SHOT = {
       // son de sirene en boucle : la mesure de silence des deux tests audio partait deja a
       // pleine puissance.
       if (typeof siren !== 'undefined') { try { siren.stop(); } catch (e26) {} }
+      // --- 13 bis. LE SON REPART A ZERO (poste DIVERS, round 76). Trois residus, tous
+      // mesures sur les deux seuls tests qui ECOUTENT vraiment la sortie (214 et 218) :
+      //   - LA SOURDINE. showMarlonIntro (la cinematique de la 0.10) coupe le son par
+      //     sfx.sourdine(true) et ne le rend qu a la fermeture du film ; une page jugee
+      //     cachee fait de meme (visibilitychange). Le bus general restait donc a 0,0001
+      //     POUR TOUTE LA SUITE. Releve dans le journal r75 : le test 214 lisait « bus
+      //     general a 0 » apres avoir mis le curseur sur 35 %, et le test 218 mesurait un
+      //     moteur 500 chevaux a 0,0001 — plus faible que son propre silence.
+      //   - LE VOLUME (voir volume0) : le test des menus a la manette le laisse a 80 %.
+      //   - LES BOUCLES. Musique, moteur et sons places continuent de jouer : le
+      //     « silence » de reference des mesures de niveau n en est plus un.
+      try { if (typeof music !== 'undefined' && music.stop) music.stop(); } catch (e26b) {}
+      try { if (typeof engine !== 'undefined' && engine.stop) engine.stop(); } catch (e26c) {}
+      try { if (typeof craieLitFerme === 'function') craieLitFerme(); } catch (e26d) {}
+      try {
+        var chn = (typeof sfx !== 'undefined' && sfx.chaine) ? sfx.chaine() : null;
+        var actx = chn && chn.master && chn.master.context;
+        if (actx && typeof SON !== 'undefined' && SON.vivants && typeof sonCoupe === 'function') {
+          for (var iv = SON.vivants.length - 1; iv >= 0; iv--) sonCoupe(SON.vivants[iv], actx.currentTime);
+        }
+      } catch (e26e) {}
+      try { if (typeof sfx !== 'undefined') { sfx.volume(__SHOT.volume0); sfx.sourdine(false); } } catch (e26f) {}
+      try { var vIn = document.getElementById('volIn');
+        if (vIn) { vIn.value = String(Math.round(__SHOT.volume0 * 100));
+          var vVal = document.getElementById('volVal'); if (vVal) vVal.textContent = Math.round(__SHOT.volume0 * 100) + ' %'; } } catch (e26g) {}
       // --- 14. L'INVENTAIRE DU JOUEUR. C'est le residu que MEME un monde neuf ne repare pas :
       // owned (les achats), le portefeuille, les grenades et l'arme en main vivent EN DEHORS du
       // monde, loadWorld ne les touche pas. Or chaque test qui s'offre un fusil a lunette ou un

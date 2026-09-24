@@ -290,7 +290,6 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
   // Une balle avance de ~4,7 m par image : l'ancien test ponctuel ne la voyait dans la
   // boîte du bot (0,84 m) qu'environ une fois sur six. La rafale rend l'écart visible.
   let partis = 0, mutisme = '', fuite = 0, trajets = '', vol = null, pasDeVol = 0;
-  const sim0 = await p.evaluate(() => __G.simTime);
   for (let i = 0; i < 6; i++) {
     const t = await p.evaluate(() => { const G = __G, P = G.P, n = G.shots.length, b = G.bots[0];
       // LA CIBLE EST REMISE A 12 M AVANT CHAQUE COUP. Une balle qui touche pose `fight = 'flee'`
@@ -305,8 +304,6 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
       b.pos.set(110, 0.4, 72); b.av.group.position.copy(b.pos);
       b.fight = null; b.fightT = 0; b.wait = 9999; b.rdv = null; b.activite = null; b.bagarre = null; b.ko = 0; b.dead = 0;
       P.fireCd = 0; P.ammo = 8; P.aim = true; G.aimTick(); G.fire();
-      // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
-      // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer.
       if (G.shots.length > n) {
         // OU PART LA BALLE ? Une balle partie sans toucher un homme immobile a 12 m ne dit rien
         // par elle-meme : on releve la cible verrouillee, le cap de la balle et le cap qu'il
@@ -325,6 +322,9 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
         let pas = 0; while (G.shots.length && pas++ < 100) G.shotsTick(1 / 60);
         return { parti: 1, derive, pas, tir: `verrou=${P.lock ? P.lock.nom : 'AUCUN'} ecart de cap=${ec.toFixed(3)} rad joueur=${P.pos.x.toFixed(1)}/${P.pos.z.toFixed(1)} cible=${b.pos.x.toFixed(1)}/${b.pos.z.toFixed(1)} camYaw=${G.cam.yaw.toFixed(2)} visible=${b.av.group.visible} degainee=${!!P.drawn}` };
       }
+      // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
+      // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer. C'est ce releve qui a
+      // trouve, en une mesure, que le canon se taisait sur « arme = null ».
       return { parti: 0, derive, pourquoi: `arme=${P.weapon} degainee=${!!P.drawn} munitions=${P.ammo} fireCd=${(P.fireCd || 0).toFixed(2)} horloge=${G.simTime.toFixed(2)} rechargeT=${(P.reloadT || 0).toFixed(2)} volant=${!!G.drive.car} assis=${!!P.sit} balancoire=${!!P.swing} manege=${!!P.ride} gym=${!!G.gym.on} zoom=${!!P.zoom} enJeu=${G.running}/${!G.paused} prison=${!!G.jail.on} monde=${G.worldIdx} ville=${G.city.on} achetee=${G.owned.has('arme:pistol')} fenetre=${G.uiOpen}` };
     });
     partis += t.parti; fuite = Math.max(fuite, t.derive);

@@ -2320,6 +2320,11 @@ function vehicleSolid(c) {   // boîte englobante d'un véhicule selon son orien
   const o = c.solid; if (!o) return;
   const W = c.baseW || 2.6, D = c.baseD || 3, cs = Math.abs(Math.cos(c.h)), sn = Math.abs(Math.sin(c.h));
   o.x = c.x; o.z = c.z; o.w = W * cs + D * sn; o.d = W * sn + D * cs; if (c.heli) o.y = c.y + 1.2;
+  // LE CAP ET LE FAIT DE ROULER VOYAGENT AVEC LA BOÎTE (défaut n° 99). La boîte de collision
+  // est alignée sur les axes : elle ne dit pas dans quel sens le véhicule avance, et le
+  // dégagement du joueur (`desincarcere`) en a besoin pour l'écarter DE CÔTÉ au lieu de le
+  // pousser devant le pare-chocs. Deux champs, posés là où la boîte est déjà tenue à jour.
+  o.vh = c.h; o.vmob = Math.abs(c.speed || c.spd || c.v || 0) > 0.2;
 }
 // Dalle percée de trous rectangulaires : sert à creuser les piscines dans le sol,
 // la pelouse et la terrasse, au lieu de poser un bassin par-dessus une dalle pleine.
@@ -24779,6 +24784,26 @@ function moveAxis(axis, amount, canStep) {
         const sortieIci = half + P.hw - Math.abs(P.pos[axis] - o[axis]);
         const sortieLa = demiA + P.hw - Math.abs(P.pos[autre] - o[autre]);
         if (sortieLa < sortieIci) { P.pos[axis] = avantIci; P.vel[axis] = 0; continue; }
+        // ---- ON NE SE FAIT PAS POUSSER DEVANT UN VÉHICULE QUI ROULE (défaut n° 99) ----
+        // « Face la plus proche » est la bonne réponse pour un décor qui devient solide. Pour
+        // un VÉHICULE QUI AVANCE, c'est la mécanique du chasse-neige : le joueur collé au
+        // pare-chocs est, à chaque image, reposé sur la face AVANT de la caisse — donc devant
+        // elle — et le véhicule l'emmène aussi loin qu'il va. Mesuré, manette posée, aucune
+        // entrée, véhicule à 1,5 m/s (l'allure « au pas » qu'un véhicule en intervention
+        // s'autorise au bout de 2,5 s derrière un piéton) : l'enfant est emporté sur 33,4 m en
+        // 30 s, à 4,40 m du centre du camion, c'est-à-dire pile sur son pare-chocs, tout du
+        // long. C'est le n° 99 — il repart sur trente mètres sans avoir rien touché.
+        // Sur l'AXE DE MARCHE du véhicule, on annule donc le pas au lieu de reposer le joueur
+        // devant lui : il reste où il est, il pénètre la caisse, et `desincarcere` — armé ici
+        // même pour qu'il agisse dès cette image au lieu d'attendre sa demi-seconde — l'écarte
+        // DE CÔTÉ, hors de la trajectoire. C'est ce que fait un vrai pare-chocs au pas : il
+        // pousse sur le côté, il n'embarque pas. Le véhicule à l'arrêt, lui, ne change pas.
+        if (o.veh && o.vmob && o.vh != null
+            && axis === (Math.abs(Math.cos(o.vh)) >= Math.abs(Math.sin(o.vh)) ? 'z' : 'x')) {
+          P.pos[axis] = avantIci; P.vel[axis] = 0;
+          P.coinceT = Math.max(P.coinceT || 0, 0.5);
+          continue;
+        }
       }
       const side = (dehorsAvant && amount !== 0) ? -Math.sign(amount) : (P.pos[axis] >= o[axis] ? 1 : -1);
       const cible = o[axis] + side * (half + P.hw + 0.001);
@@ -24839,12 +24864,35 @@ function desincarcere(dt) {
   P.coinceT = (P.coinceT || 0) + dt;
   if (P.coinceT < 0.5) return;
   const o = p.o;
-  const sorties = [
+  const cotes = [
     { a: 'x', v: o.x - o.w / 2 - P.hw - 0.02, d: (P.pos.x + P.hw) - (o.x - o.w / 2) },
     { a: 'x', v: o.x + o.w / 2 + P.hw + 0.02, d: (o.x + o.w / 2) - (P.pos.x - P.hw) },
     { a: 'z', v: o.z - o.d / 2 - P.hw - 0.02, d: (P.pos.z + P.hw) - (o.z - o.d / 2) },
     { a: 'z', v: o.z + o.d / 2 + P.hw + 0.02, d: (o.z + o.d / 2) - (P.pos.z - P.hw) },
-  ].sort((u, v) => u.d - v.d)[0];
+  ].sort((u, v) => u.d - v.d);
+  let sorties = cotes[0];
+  // ---- ON S'ÉCARTE DE LA TRAJECTOIRE, ON NE SE FAIT PAS POUSSER DEVANT (défaut n° 99) ----
+  // La sortie LA PLUS COURTE est la bonne réponse pour un décor qui devient solide. Face à un
+  // véhicule QUI ROULE, c'est la pire : quand le joueur est contre le pare-chocs, la sortie la
+  // plus courte est celle par l'AVANT, c'est-à-dire droit devant la voiture — on le remet donc
+  // dans la trajectoire à chaque image, et il se fait porter aussi loin que le véhicule va.
+  // Mesuré, manette posée, aucune entrée : un véhicule à 1,5 m/s (l'allure « au pas » qu'un
+  // véhicule en intervention s'autorise au bout de 2,5 s d'attente derrière un piéton)
+  // emporte l'enfant sur 33,4 m en 30 s, et 20,4 m même à 0,8 m/s. C'est le n° 99 : l'enfant
+  // part tout seul sur trente mètres et arrive devant « éjecter le conducteur (gros délit !) ».
+  // Un pare-chocs qui arrive au pas, ça vous POUSSE DE CÔTÉ : on prend donc la sortie
+  // perpendiculaire à la marche du véhicule, celle qui sort vraiment de son chemin — et, des
+  // deux côtés, celui qui est LIBRE, pour ne pas l'écarter dans une façade. Un véhicule à
+  // l'arrêt (parking, feu rouge) ne change rien : il ne pousse personne.
+  if (o.veh && o.vmob && o.vh != null) {
+    const axeMarche = Math.abs(Math.cos(o.vh)) >= Math.abs(Math.sin(o.vh)) ? 'z' : 'x';
+    const lat = cotes.filter(u => u.a !== axeMarche);
+    const libre = lat.find(u => {
+      const qx = u.a === 'x' ? u.v : P.pos.x, qz = u.a === 'z' ? u.v : P.pos.z;
+      return !penetration(qx, P.pos.y, qz).o;
+    });
+    if (libre) sorties = libre; else if (lat.length) sorties = lat[0];
+  }
   // UN VEHICULE QUI ROULE SUR LE JOUEUR LE POUSSE ; UN OBJET QUI APPARAIT LE POSE DEHORS.
   // On le posait dehors D'UN COUP dans les deux cas, et c'est la bonne reponse quand un
   // portail se referme, qu'un ascenseur remonte ou qu'un decor devient solide : le joueur

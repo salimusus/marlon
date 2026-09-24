@@ -22128,3 +22128,45 @@ test('le chien est déclaré passager et s\'assied à SA place, jamais sur les g
     && r.occupants === 'arriereD,arriereG,avant';
   return { ok, detail: `le chien voyageait dans l'habitacle SANS être déclaré passager, et à 0,10 m du genou du passager avant : \`chienTick\` avait sa PROPRE table de sièges, écrite à la main, qui le posait à lx −0,52 / lz +0,05 — très exactement le siège « avant » — et elle repassait après \`placeOccupants\`, qui l'asseyait pourtant correctement · il n'y a plus qu'UNE table de sièges (PLACES) : le chien est à lx ${r.local.lx} / lz ${r.local.lz}, soit sa place ${r.table.lx} / ${r.table.lz} au centimètre, à ${r.ecartAvant} m du passager avant (0,10 m avant) pendant 8 s de conduite · il est déclaré (${r.declare}) et NOMMÉ : « ${r.message} », et seul : « ${r.messageSeul} » · à 35 m il monte quand même (${r.loinDeclare}, la règle des 6 m contredisait chienTick) et couché dans sa niche il ne monte pas (${!r.coucheDeclare})` };
 });
+
+test('manette posée, un véhicule qui passe au pas écarte l\'enfant de sa trajectoire au lieu de l\'emporter', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    // Le véhicule est avancé À LA MAIN, à l'allure « au pas » (1,5 m/s) qu'un véhicule en
+    // intervention s'autorise au bout de 2,5 s derrière un piéton : on mesure la POUSSÉE,
+    // pas le pilote (auquel ce poste ne touche pas).
+    const essai = (vit, kind) => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+      let c = [...G.city.cars].find(v => (v.kind || 'voiture') === kind) || G.city.cars[0];
+      c.h = 0; c.x = G.P.pos.x; c.z = G.P.pos.z - 8;
+      c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+      const x0 = G.P.pos.x, z0 = G.P.pos.z;
+      let emporte = 0, lat = 0;
+      for (let i = 0; i < 60 * 30; i++) {
+        c.speed = vit; c.z += vit / 60; c.g.position.z = c.z; G.vehicleSolid(c);
+        G.keys.clear(); G.step(1 / 60, true);     // manette posée : simulé, aucune entrée
+        emporte = Math.max(emporte, Math.abs(G.P.pos.z - z0));
+        lat = Math.max(lat, Math.abs(G.P.pos.x - x0));
+      }
+      return { emporte: +emporte.toFixed(2), lat: +lat.toFixed(2), hp: G.P.hp,
+               roule: +(vit * 30).toFixed(0), depasse: c.z > G.P.pos.z + 4 };
+    };
+    const out = { camion: essai(1.5, 'pompier'), voiture: essai(1.5, 'voiture'), lent: essai(0.8, 'pompier') };
+    // un véhicule À L'ARRÊT ne pousse personne : le joueur qui se colle à lui ne doit pas bouger
+    { __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+      const c = G.city.cars[0];
+      // garé JUSTE devant lui, pare-chocs à 1,2 m, mais sans le chevaucher
+      c.speed = 0; c.h = 0; c.x = G.P.pos.x; c.z = G.P.pos.z - ((c.baseD || 4.4) / 2 + 1.2);
+      c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+      const x0 = G.P.pos.x, z0 = G.P.pos.z;
+      for (let i = 0; i < 180; i++) { G.keys.clear(); G.step(1 / 60, true); }
+      out.arret = { bouge: +Math.hypot(G.P.pos.x - x0, G.P.pos.z - z0).toFixed(2) }; }
+    Math.random = alea;
+    return out;
+  });
+  const ok = r.camion.emporte < 1.5 && r.voiture.emporte < 1.5 && r.lent.emporte < 1.5
+    && r.camion.lat > 1 && r.camion.hp === 100 && r.voiture.hp === 100
+    && r.camion.depasse && r.arret.bouge < 0.6;
+  return { ok, detail: `manette posée, aucune entrée : la résolution de collision reposait le joueur sur la face du véhicule LA PLUS PROCHE, c'est-à-dire, collé au pare-chocs, sur la face AVANT — donc devant la caisse, à chaque image. Un chasse-neige : mesuré 33,4 m d'emport en 30 s derrière un camion à 1,5 m/s (l'allure « au pas » d'un véhicule en intervention), 20,4 m à 0,8 m/s, l'enfant tenu à 4,40 m du centre du camion, pile sur son pare-chocs, tout du long · sur l'AXE DE MARCHE du véhicule on annule maintenant le pas et le dégagement l'écarte DE CÔTÉ : emporté ${r.camion.emporte} m (camion 1,5 m/s, qui roule ${r.camion.roule} m), ${r.voiture.emporte} m (voiture) et ${r.lent.emporte} m (0,8 m/s), écarté de ${r.camion.lat} m hors de la voie, ❤️ ${r.camion.hp}, et le véhicule le dépasse (${r.camion.depasse}) · un véhicule à l'ARRÊT ne pousse toujours personne : ${r.arret.bouge} m` };
+});

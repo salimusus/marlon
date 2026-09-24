@@ -21517,14 +21517,32 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
   return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts` };
 });
 
-// ---- TEMPORAIRE (poste FIABILITE r76) : recensement, pas encore un garde-fou ----
-test('RECENSEMENT des objets restes directement dans scene', async p => {
+// ================= POSTE FIABILITE (round 76) : LA SCENE NE DOIT PLUS GROSSIR ==============
+// Le banc enchaine ~490 tests dans UNE SEULE page : tout objet ajoute a `scene` et jamais
+// retire s'accumule pendant deux heures, et ce n'est pas une curiosite de banc — c'est du
+// budget d'image vole a tous les tests qui suivent. Defaut trouve au round 76 : `explode()`
+// (la mort d'un personnage) posait 249 maillages DIRECTEMENT dans `scene`, ne vieillissant
+// que dans la boucle d'AFFICHAGE, donc jamais pendant un test. Le poste VILLE a releve
+// 2 612 objets a l'entree d'un test pour 135 attendus, soit ~5 000 appels de dessin herites,
+// et le test du budget d'image mesurait 15 166 appels au lieu de 9 621 pour un plafond de
+// 10 000. On tient maintenant le compte, avec DEUX bornes :
+//   - ce que les tests precedents ont laisse (avant toute remise a zero) : une derive s'y voit
+//     tout de suite, et le classement par origine NOMME le coupable dans le message d'echec ;
+//   - ce que vaut une ville NEUVE : si la reconstruction du monde ne ramene plus la scene a
+//     son etat de depart, c'est qu'une famille d'objets lui echappe.
+// Et l'invariant de structure : apres une reconstruction, le groupe des ephemeres est VIDE.
+test('la scene ne grossit pas d un test a l autre : les objets directement dans scene ne derivent pas', async p => {
   const r = await p.evaluate(() => {
-    const avant = __SHOT.fuites();
+    const avant = __SHOT.fuites();                                        // l'heritage des tests precedents
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
-    const apres = __SHOT.fuites();
-    return { avant, apres };
+    const apres = __SHOT.fuites();                                        // une ville neuve : la reference
+    const g = __G.scene.children.find(o => o.name === 'ephemeres');
+    const dit = c => c.classement.slice(0, 5).map(e => e.objets + ' obj / ' + e.maillages + ' maillages ← ' + e.ou);
+    return { avant: avant.total, apres: apres.total, ephemeres: g ? g.children.length : -1,
+      pireAvant: dit(avant), pireApres: dit(apres) };
   });
-  const f = (c) => c.classement.slice(0, 14).map(e => `${e.objets} obj / ${e.maillages} maillages ← ${e.ou} [${Object.keys(e.types).slice(0, 4).join(', ')}]`).join('\n           ');
-  return { ok: true, detail: `AVANT go() : ${r.avant.total} objets\n           ${f(r.avant)}\n        APRES go(frais) : ${r.apres.total} objets\n           ${f(r.apres)}` };
+  // 115 objets pour une ville neuve (mesure du round 76) ; 200 laisse de la marge a un quartier
+  // de plus, 400 a l'heritage normal d'un test voisin (balles en vol, grenades posees).
+  const ok = r.apres <= 200 && r.avant <= 400 && r.ephemeres === 0;
+  return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · maintenant tout ce qui est ephemere (morceaux d'explosion, ondes de choc, impacts) vit dans le groupe \`ephemeres\` que la reconstruction du monde vide d'office · heritage des tests precedents : ${r.avant} objets (plafond 400) → ${r.pireAvant.join(' · ')} · ville neuve : ${r.apres} objets (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} → ${r.pireApres.join(' · ')}` };
 });

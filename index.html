@@ -30837,6 +30837,18 @@ function camPerche(dt, aiming) {
       // petite, divisée par deux. Un obstacle d'un seul côté ne coûte plus que la moitié de ce
       // qu'il coûtait, et la LIGNE DE VUE garde le dernier mot sur la longueur de la perche.
       cam.salle = Math.min(m[0] + m[1], m[2] + m[3]) / 2; cam.plafond = m[4]; cam.devant = m[5];
+      // UNE PORTE OUVERTE FAISAIT PASSER UN HALL POUR UNE HALLE (round 77, poste CAMÉRA). La
+      // mesure au lancer de rayons sort par la porte et par la vitrine : dans le hall d'immeuble
+      // (pièce déclarée de 6,5 × 8,5 m) elle rendait 7,6 m d'encombrement, c'est-à-dire une salle
+      // de quinze mètres, et la maison de poupée reculait à 6,54 m. Regardé en capture : vers le
+      // nord et le sud l'image passe, mais vers l'est la caméra sort du bâtiment et l'on voit
+      // l'enfant tout petit au fond d'une porte, et vers l'ouest le comptoir d'accueil mange la
+      // moitié basse de l'écran. À 4,8 m les quatre côtés sont propres. Quand la pièce est
+      // DÉCLARÉE (interieurEntre pose son rectangle), on connaît sa vraie taille : on la prend
+      // si elle est plus petite que ce que voient les rayons. Le minimum des deux, donc : un
+      // salon encombré reste petit, et une grande halle (24 × 38 m) garde ses 7,4 m.
+      if (cam.interieur && cam.interieur.w && cam.interieur.d)
+        cam.salle = Math.min(cam.salle, Math.min(cam.interieur.w, cam.interieur.d) / 2);
     }
     // UN TOIT NE RACCOURCIT PLUS LA PERCHE, IL APLATIT SEULEMENT LA VISÉE. Avant, le moindre
     // couvert au-dessus de la tête (préau, halle, dépôt, auvent) — et la seule mesure de la

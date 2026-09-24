@@ -272,6 +272,17 @@ window.__SHOT = {
     // clavier relache, comme le fait deja le navigateur quand la fenetre perd le focus.
     try { if (typeof inputKeys !== 'undefined' && inputKeys.clear) inputKeys.clear(); } catch (e) {}
     try { if (typeof keys !== 'undefined' && keys.clear) keys.clear(); } catch (e) {}
+    // LE SIEGE DE LA BALANCOIRE GARDE SON CAVALIER (n° 87 du controleur, round 77).
+    // On remettait P.swing et P.ride a null sans jamais decrocher le siege ni la place du
+    // manege : sw.rider restait a 'me' POUR TOUS LES TESTS SUIVANTS. Consequences mesurees :
+    // (a) le siege occupe n'est plus propose (cityCommon saute les balancoires qui ont un
+    // cavalier), donc un test qui s'assoit apres un test de balancoire ne s'assoit sur rien ;
+    // (b) swingTick continue a balancer un siege qu'aucun joueur n'occupe. C'est par cette
+    // contamination que le controleur a trouve le defaut — on la coupe ici ET dans le jeu
+    // (lacheBalancoire), sinon le test de non-regression serait vert pour de mauvaises
+    // raisons.
+    try { for (const s of ((typeof city !== 'undefined' && city.swings) || [])) if (s.rider) s.rider = null; } catch (e) {}
+    try { for (const r of ((typeof city !== 'undefined' && city.rides) || [])) if (r.rider) r.rider = null; } catch (e) {}
     try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
@@ -882,6 +893,9 @@ window.__SHOT = {
     // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
     // normalement qu'a la demande, par le pave tactile) ; v.padTest ouvre « Tester la manette ».
     if (v.aide) { document.body.classList.add('manette', 'city', 'aide'); }
+    // POSTE MANETTE & MESSAGES (r78) : v.pad = la manette pilote l'affichage (sans le bandeau
+    // d'aide). Les panneaux graves sont alors recuits en boutons (n° 93).
+    if (v.pad != null) { document.body.classList.toggle('manette', !!v.pad); try { if (typeof panneauxMaj === 'function') panneauxMaj(); } catch (e93) {} }
     if (v.padTest && typeof ouvreTestManette === 'function') { try { ouvreTestManette(); } catch (e16) {} }
     // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
     // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
@@ -1133,6 +1147,16 @@ window.__G = {
   PAD_CROIX_LONG: typeof PAD_CROIX_LONG !== 'undefined' ? PAD_CROIX_LONG : null,
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : 0,
   PAD_BOUTONS: typeof PAD_BOUTONS !== 'undefined' ? PAD_BOUTONS : 0,
+  // ---- POSTE MANETTE & MESSAGES (round 78) : exports apres cette ligne-repere ----
+  PAD_CROIX: typeof PAD_CROIX !== 'undefined' ? PAD_CROIX : null,
+  PS_NOMS: typeof PS_NOMS !== 'undefined' ? PS_NOMS : null,
+  launchRace: typeof launchRace === 'function' ? launchRace : null,
+  startHeliRace: typeof startHeliRace === 'function' ? startHeliRace : null,
+  hrace: typeof hrace !== 'undefined' ? hrace : null,
+  PANNEAUX: typeof PANNEAUX !== 'undefined' ? PANNEAUX : null,
+  panneauxMaj: typeof panneauxMaj === 'function' ? panneauxMaj : null,
+  msg: typeof msg === 'function' ? msg : null,
+  msgTexte() { const e = document.getElementById('msg'); return e ? e.textContent : null; },
   readInput: typeof readInput === 'function' ? readInput : null,
   gachetteConduite: typeof gachetteConduite === 'function' ? gachetteConduite : null,
   CONDUITE_V0: typeof CONDUITE_V0 !== 'undefined' ? CONDUITE_V0 : 0,
@@ -2450,6 +2474,15 @@ window.__G = {
   TRAFIC: typeof TRAFIC !== 'undefined' ? TRAFIC : null,
   VILLE: typeof VILLE !== 'undefined' ? VILLE : null,
   rendreImage: typeof rendreImage === 'function' ? rendreImage : null,
+  // LA BOUCLE D'AFFICHAGE ELLE-MEME (poste FIABILITE, round 78). Les morceaux d'explosion,
+  // les impacts et les ondes de choc ne meurent QUE dans frame() : un test qui enchaine des
+  // step() ne les voit jamais disparaitre, et toute mesure de « ce que la scene garde apres
+  // une mort » y est donc fausse. En exposant frame() et son horloge, un test peut jouer une
+  // vraie partie longue — images comprises — sans dependre du temps reel (le banc ne rend
+  // qu'une image par seconde sous swiftshader : 28 images de vieillissement prendraient
+  // une demi-minute de mur).
+  frame: typeof frame === 'function' ? frame : null,
+  clock: typeof clock !== 'undefined' ? clock : null,
   detailsLOD: typeof detailsLOD === 'function' ? detailsLOD : null,
   detailsInit: typeof detailsInit === 'function' ? detailsInit : null,
   ombresMobilesTick: typeof ombresMobilesTick === 'function' ? ombresMobilesTick : null,
@@ -2552,6 +2585,12 @@ window.__G = {
   JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
   buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
   // ---- POSTE QUARTIERS (quartiers neufs, mobilier, jeux) : exports apres cette ligne-repere ----
+  lacheBalancoire: typeof lacheBalancoire === 'function' ? lacheBalancoire : null,
+  consigneProche: typeof consigneProche === 'function' ? consigneProche : null,
+  updateAct: typeof updateAct === 'function' ? updateAct : null,
+  remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
+  relevageTick: typeof relevageTick === 'function' ? relevageTick : null,
+  get villageois() { return typeof city !== 'undefined' ? (city.villageois || []) : []; },
   // PIEGE DU BANC (round 71) : surtout PAS de « solids: solids » ici ni ailleurs — cette cle
   // ecrase le « get solids() » plus haut et fige un instantane du tableau.
   get checkpoints() { return typeof checkpoints !== 'undefined' ? checkpoints : []; },

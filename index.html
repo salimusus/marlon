@@ -16498,7 +16498,7 @@ function hurt(dmg, by, dx, dz, kb = 2, melee) {   // je prends un coup
   // affiche qui l'a donné, sauf s'il vient d'un message déjà à l'écran (KO plus bas).
   if (P.hp > 0 && dmg >= 5) msg(`🤕 −${Math.round(dmg)} ❤️ · ${by || 'un coup'}`, 1100);
   const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); }
+  if (P.hp <= 0) { const butin = Math.min(police.butin || 0, wallet); const lost = Math.floor((wallet - butin) * 0.3); wallet -= lost; saveWallet(); updateHud(); P.koPerte = lost; msg(`😵 KO par ${by} ! −${lost} 🪙`, 2200, 1); chat(null, `😵 ${myCfg.name} a été mis KO par ${by}`); sfx.die(); die(true); }
 }
 // UN HABITANT NE S'EN PREND AU JOUEUR QUE S'IL L'A CHERCHÉ (n° 84 du Joueur). C'est la
 // moitié du n° 78 qui restait : la garde `joueurDansLaGuerre()` ne couvrait que les gangs,
@@ -20014,7 +20014,7 @@ function netTick(dt, myAnim, sp) {
 }
 
 // ================= INTERFACE =================
-const msgEl = $('msg'); let msgTimer = 0;
+const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0;
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
 // au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
@@ -20049,10 +20049,23 @@ function ctrlText(t) {
   if (!b.contains('touch')) return t;
   return t.replace(/Espace \/ SAUT/g, 'SAUT').replace(/\bEspace(?=\s*(?:\/|pour|ou|,))/g, 'SAUT').replace(/\bE\b/g, '✋');
 };
-function msg(text, ms = 1400) {
+// ===== UNE PHRASE IMPORTANTE NE SE FAIT PLUS RECOUVRIR (n° 97 du contrôleur) =====
+// Au réveil à l'hôpital, « 🏥 Tu te réveilles… » était effacée DANS LA MÊME IMAGE par la
+// pastille de proximité du banc de l'accueil. Mesuré : KO au centre, 1,6 s plus tard le
+// personnage est debout à 201 m de là, et le seul texte à l'écran est « 🪑 E : s'asseoir ».
+// Rien ne lui dit qu'il a été soigné, ni où il est. La bannière accepte donc une PRIORITÉ :
+// une annonce qui raconte ce qui vient d'arriver (prio 2) réserve l'écran pour sa durée, et
+// les conseils de proximité (prio 0) attendent leur tour. Une annonce de même priorité passe
+// toujours : la suite « 😵 KO » → « 🚑 ambulance » → « 🏥 réveil » se raconte en entier.
+// L'horloge est celle du JEU (simTime), comme l'appui long de la croix : le banc avance la
+// simulation sans avancer la montre. Le minuteur d'effacement libère aussi la réservation,
+// pour qu'un menu qui gèle simTime ne verrouille pas la bannière.
+function msg(text, ms = 1400, prio = 0) {
+  if (prio < msgPrio && simTime < msgPrioT) return;
+  msgPrio = prio; msgPrioT = prio > 0 ? simTime + ms / 1000 : 0;
   text = ctrlText(text);
   msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16); msgEl.classList.add('show');
-  clearTimeout(msgTimer); msgTimer = setTimeout(() => msgEl.classList.remove('show'), ms);
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => { msgEl.classList.remove('show'); msgPrio = 0; msgPrioT = 0; }, ms);
 }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -27783,7 +27796,7 @@ function ambulanceAppel(x, z, victime) {
   amb.phase = null; amb.phaseT = 0; amb.surCiviere = false; amb.poseFaite = false;
   amb.sortDe = null; amb.sortVers = null; amb.abandon = null;
   try { ambulanceEquipe(amb); } catch (e) {}   // l'equipage est a bord des le depart, visible par le pare-brise
-  msg('🚑 Une ambulance a été appelée', 2200);
+  msg('🚑 Une ambulance a été appelée', 2200, 1);
   return amb;
 }
 // ================= LA SÉQUENCE DE SECOURS, D'UN BOUT À L'AUTRE =================
@@ -30055,6 +30068,7 @@ function die(silent) {
 // ville) ; on est intouchable quelques secondes, et une phrase dit ce qui vient de se passer.
 const RELEVE_GRACE = 6;      // s d'invulnérabilité après s'être relevé, le temps de reprendre la manette
 const RELEVE_DELAI = 1.6;    // s de simulation à terre avant de se relever (on voit sa chute, on ne la subit pas)
+const RELEVE_MSG = 4.6;      // s pendant lesquelles la phrase du réveil tient l'écran (n° 97 : « 1,6 s, c'est plus court qu'un clignement d'attention »)
 const RELEVE_SECOURS = 30;   // plafond quand l'ambulance nous transporte pour de bon : au-delà, on se relève quand même
 function pointDeReveil() {
   // l'hôpital si on le connaît, sinon le point de passage : dans les deux cas, LOIN des coups
@@ -30086,8 +30100,13 @@ function remiseEnJeu(cause) {
   // contraire, c'est tout l'objet du n° 78 : l'enfant doit comprendre où il se réveille.
   const aLHopital = !!(city.on && city.medDesk && !jail.on);
   const pourquoi = cause ? ' (' + cause + ')' : '';
-  try { if (city.on) msg(aLHopital ? `🏥 Tu te réveilles à l'hôpital, remis sur pied${pourquoi} — repars tranquille !`
-    : `💪 Tu te relèves${pourquoi} — repars tranquille !`, 3200); } catch (e) {}
+  // n° 97 : on redit ce que le KO a coûté — l'enfant voyait son porte-monnaie fondre de 25 à
+  // 18 🪙 sans jamais savoir pourquoi. Et la phrase est PRIORITAIRE : la pastille du banc de
+  // l'accueil de l'hôpital l'effaçait dans la même image.
+  const perte = P.koPerte > 0 ? ` · −${P.koPerte} 🪙` : '';
+  P.koPerte = 0;
+  try { if (city.on) msg(aLHopital ? `🏥 Tu te réveilles à l'hôpital, remis sur pied${pourquoi}${perte} — repars tranquille !`
+    : `💪 Tu te relèves${pourquoi}${perte} — repars tranquille !`, RELEVE_MSG * 1000, 2); } catch (e) {}
   try { sfx.check(); } catch (e) {}
   return true;
 }

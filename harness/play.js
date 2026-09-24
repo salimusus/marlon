@@ -21826,3 +21826,42 @@ test('les panneaux gravés parlent manette, pas clavier', async p => {
     && r.pxRendu === r.pxClavier;
   return { ok, detail: `n° 93 : le texte d'un panneau est cuit dans une texture a la construction de la ville, donc ctrlText ne le voyait jamais · ${r.total} panneaux dans la ville, ${r.avant.length} nommaient une touche de clavier (${r.avant.slice(0, 3).join(' · ')}…) · manette branchee, les ${r.recuits} textures sont recuites et il n'en reste ${r.apres.length} : « ${r.lus.slice(0, 3).join(' · ')}… » · la texture du panneau du nid d'oiseau change vraiment de pixels (${r.pxClavier} → ${r.pxManette}) et revient a l'identique manette debranchee (${r.pxRendu})` };
 });
+
+test('après un KO, la phrase du réveil reste à l\'écran et dit où on est', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await dodo(250);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const el = document.getElementById('msg');
+    const depart = { x: G.P.pos.x, z: G.P.pos.z };
+    G.P.koPerte = 7;                       // ce que le KO a coûté (mis par la vraie mise a terre)
+    G.P.hp = 0;                            // a terre
+    const trace = []; let releve = null, reveil = null;
+    for (let i = 0; i < 420; i++) {
+      G.step(1 / 60, true);
+      const t = el.classList.contains('show') ? el.textContent : '';
+      if (!trace.length || trace[trace.length - 1].t !== t) trace.push({ s: +(i / 60).toFixed(2), t });
+      if (releve === null && G.P.hp === 100) { releve = i; reveil = t; }
+    }
+    const fin = el.classList.contains('show') ? el.textContent : '';
+    // la pastille de proximité (priorité 0) ne peut pas effacer la phrase du réveil…
+    G.P.hp = 0; G.P.koPerte = 5;
+    let apresReveil = null;
+    for (let i = 0; i < 200 && apresReveil === null; i++) { G.step(1 / 60, true); if (G.P.hp === 100) apresReveil = i; }
+    G.msg('🪑 E : s\'asseoir', 1200);      // exactement le message qui recouvrait tout
+    const tenue = el.textContent;
+    // … mais une autre annonce de même importance, si : l'histoire se raconte en entier
+    G.msg('🚑 Une ambulance a été appelée', 1200, 1);
+    const prio1 = el.textContent;
+    G.msg('🏥 Test prioritaire', 1200, 2);
+    const prio2 = el.textContent;
+    return { distance: +Math.hypot(G.P.pos.x - depart.x, G.P.pos.z - depart.z).toFixed(1),
+      releve: +(releve / 60).toFixed(2), reveil, fin, tenue, prio1, prio2, trace };
+  });
+  const dit = /🏥/.test(r.reveil || '') && /hôpital/.test(r.reveil || '') && /−7 🪙/.test(r.reveil || '');
+  const ok = dit && r.fin === r.reveil && r.distance > 150
+    && /🏥/.test(r.tenue) && !/🪑/.test(r.tenue)
+    && /🏥/.test(r.prio1) && /🏥 Test prioritaire/.test(r.prio2);
+  return { ok, detail: `n° 97 : après un KO on se réveillait à ${r.distance} m sans un mot — la phrase « 🏥 Tu te réveilles… » était effacée DANS LA MÊME IMAGE par la pastille du banc de l'accueil, et le seul texte restant était « 🪑 E : s'asseoir » · maintenant la bannière a une priorité : au relevage (${r.releve} s) elle affiche « ${r.reveil} », elle y est encore 7 s de simulation plus tard (« ${r.fin} »), un « 🪑 E : s'asseoir » de priorité 0 ne la remplace pas (« ${r.tenue} ») et une annonce de même importance, si (« ${r.prio2} ») · ${r.trace.length} textes différents sur tout le KO` };
+});

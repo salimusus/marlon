@@ -754,3 +754,10 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : bloqué à (−162 ; −128,98), **275 images (4,6 s) stick à fond sans monter d'un centimètre**. Relevé des solides autour de (−162 ; −126) : les barres sont à **0,98 m, 1,88 m et 2,78 m**, et le plancher du sommet à 3,05 m. Le pas franchissable du joueur est de **0,56 m**. Le commentaire du code annonce pourtant « trois étages de barres, chacun à 0,55 m du précédent ». En sautant (apogée mesurée 2,30 m) on peut se hisser, mais on ne se pose sur aucune barre de 16 cm de large, et le plancher du sommet (dalle pleine de 5 × 5 m) coiffe tout l'ensemble.
 - **On devrait voir** : des barreaux à 0,55 m, comme le dit le commentaire — un enfant doit pouvoir monter au sommet en marchant.
 - **Capture** : `img/a9-cage-pres.png` — la première barre arrive à la poitrine du personnage ; `img/a4-sports-aire.png` (vue d'ensemble : le sommet se lit comme une grande table jaune).
+
+### 91. L'escalier du toboggan de la Plaine des Sports monte à l'envers : on n'atteint la plateforme qu'en sautant
+- **Gravité** : GÊNANT
+- **Reproduire** : Plaine des Sports, marcher vers le toboggan (−172 ; −114) en venant du nord, stick à fond, sans sauter. Reproduit 2/2 (`qs2.log`, `qtob.log`).
+- **On voit** : bloqué à (−172 ; −120,45), **226 images** sans avancer. Relevé des solides de la tour : les marches vont de **0,50 m en z = −116** (celle qui touche la tour) à **2,10 m en z = −119,6** (la plus éloignée) — l'escalier MONTE EN S'ÉLOIGNANT de la tour. La plateforme est à 2,50 m en z = −114 et le mur de la tour fait 2,40 m de haut : depuis la dernière marche il n'y a aucun chemin, et depuis le nord la première chose qu'on rencontre est une face de 2,10 m. Le même trajet avec un saut toutes les 22 images amène bien à y = 2,50 (le saut du jeu culmine à 2,30 m) — mais un enfant ne devine pas qu'il faut sauter par-dessus son propre escalier.
+- **On devrait voir** : un escalier qui monte VERS la tour, comme celui de toutes les autres tours du jeu.
+- **Capture** : `img/a6-toboggan-sud.png` (la glissade cyan, côté sud), `img/a4-sports-aire.png` (les marches grises, côté nord).

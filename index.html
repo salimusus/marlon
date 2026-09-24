@@ -10438,7 +10438,7 @@ function botConduit(c, x, z, dt, opt) {
     // sans fin. On garde donc la voie retenue tant qu'on la longe, et on ne la reconsidere qu'a
     // la prochaine destination.
     if (butNeuf) c.departVoie = -1;
-    let via = dist > 16 ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    let via = (dist > 16 && simTime > (c.grilleJusqua || 0)) ? itineraireVoies(c.x, c.z, x, z, capDeRoute(c), c.departVoie, departInterdit(c)) : null;   // `grilleJusqua` : voir rouleVers, deux fois coince au meme endroit
     // LE DETOUR ABSURDE (la meme regle que pour la voiture d'un ami, voir conduireVersPoint).
     // Le graphe des voies respecte les sens uniques, et c'est ce qu'on veut : mais quand le but
     // est de l'autre cote d'une chaussee a double sens, il impose le tour complet du pate de
@@ -10475,7 +10475,12 @@ function botConduit(c, x, z, dt, opt) {
       }
     }
     c.departVoie = via ? itineraireDepart : -1;
-    if (!pts) pts = (via && via.length > 1) ? via.concat([[x, z]]) : [[x, z]];
+    // SANS TRACE PAR LES VOIES, ON PREND LA GRILLE, PAS LE VOL D'OISEAU. Quand `via` est nul
+    // (trop pres, ou `grilleJusqua` apres deux blocages), on posait comme itineraire le BUT
+    // TOUT SEUL : le vehicule visait le foyer en ligne droite, murs compris. Mesure (test 388)
+    // : le camion de pompiers ne sortait alors JAMAIS de sa cour (12 m en plus de 60 s).
+    if (!pts) { const g0 = via ? null : navPath(c.x, c.z, x, z);
+      pts = (via && via.length > 1) ? via.concat([[x, z]]) : (g0 && g0.length ? g0.concat([[x, z]]) : [[x, z]]); }
     c.ia = { route: pts, i: 0, but: [x, z], dest: [x, z], refaire: simTime + 6, t: simTime };
   }
   c.vmaxIA = opt.vmax || (c.kind === 'truck' ? 6 : 9);
@@ -20534,8 +20539,15 @@ function botDriveTick(dt) {
       st.saut = true;
       const d = conduireVersPoint(c, st.tx, st.tz, dt, st);
       const coince = (st.bloqueT || 0) > 12;   // on insiste bien plus longtemps avant d'abandonner
+      // SE GARER AU BORD, C'EST ARRIVER. La destination est le CENTRE du lieu (une villa, une
+      // boutique) : une voiture ne peut pas s'y rendre, elle se range au plus près. En restant
+      // sur le seuil des cinq metres, le conducteur finissait par annoncer « je ne peux pas
+      // approcher plus pres » alors qu'il etait GARE DEVANT — mesure (test 478) : arret a 6,0 m
+      // de la villa, aucune annonce d'arrivee, et l'enfant descend sans savoir qu'il y est.
+      // A douze metres du but, on est arrive ; au-dela seulement, on renonce.
+      const arriveVrai = d < 5 || (coince && d < 12);
       if (d < 5 || coince) { st.etat = 'arrive'; st.annonce = simTime; st.bloqueT = 0;
-        botSay(b, [coince ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
+        botSay(b, [!arriveVrai ? `je ne peux pas approcher plus près de ${st.nom}, on s'arrête là 🚗`
           : st.passager ? `voilà, on est arrivés à ${st.nom} 🚗` : `je suis à ${st.nom} avec la voiture, monte à côté de moi ! (E)`]);
         if (!st.passager) setBeacon(c.x, c.z); else clearBeacon(); }
     } else {
@@ -26390,7 +26402,23 @@ function rouleVers(c, tx, tz, dt, vmax, opt) {
   // mission doit ABOUTIR. Les pompiers, les travaux et le facteur, eux, ont tout leur temps —
   // leur faire faire des marches arriere ne ferait que les sortir de leur file.
   if (opt.secours && avanceReel(c) < 0.03) c.srvFige = (c.srvFige || 0) + dt; else c.srvFige = 0;
-  if (c.srvFige > SERVICE_COINCE) { c.srvFige = 0; c.srvRecul = simTime + SERVICE_RECUL; c.srvSens = (c.srvSens === 1) ? -1 : 1; }
+  if (c.srvFige > SERVICE_COINCE) {
+    c.srvFige = 0; c.srvRecul = simTime + SERVICE_RECUL; c.srvSens = (c.srvSens === 1) ? -1 : 1;
+    // DEUX FOIS COINCE AU MEME ENDROIT : CE N'EST PAS UN OBSTACLE, C'EST LE TRACE. Le graphe
+    // des voies ne connait que des VOIES : depuis la cour d'une caserne ou d'un hangar, il
+    // donne la voie la plus proche a VOL D'OISEAU, meme quand un mur est entre les deux. La
+    // grille A*, elle, contourne les solides.
+    // MESURE (test 388, le camion de pompiers) : sorti de sa remise, le camion pousse contre le
+    // mur ouest de la caserne (0,4 x 4,6 x 11 m en (-48,8 ; 122)) pendant 1 012 images — il
+    // avance trois secondes, recule une seconde et demie, repart dans le mur. Il lui faut 36 s
+    // pour s'eloigner de douze metres, la ou il en mettait quinze avant l'elargissement des
+    // rues. Apres deux echecs au meme endroit, on lui interdit donc le trace par les voies
+    // pendant vingt-cinq secondes : le temps de sortir de la cour par la grille.
+    const loin = Math.hypot(c.x - (c.srvX == null ? 1e9 : c.srvX), c.z - (c.srvZ == null ? 1e9 : c.srvZ)) > 15;
+    c.srvEchecs = loin ? 1 : (c.srvEchecs || 0) + 1;
+    c.srvX = c.x; c.srvZ = c.z;
+    if (c.srvEchecs >= 2) { c.grilleJusqua = simTime + 25; c.ia = null; c.departVoie = -1; }
+  }
   if (simTime < (c.srvRecul || 0)) {
     c.h += (c.srvSens || 1) * 0.9 * dt;
     const h0r = c.h;

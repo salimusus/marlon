@@ -21627,3 +21627,55 @@ test('la scene ne grossit pas d un test a l autre : les objets directement dans 
   const ok = r.apres <= 200 && r.avant <= 400 && r.ephemeres === 0;
   return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · maintenant tout ce qui est ephemere (morceaux d'explosion, ondes de choc, impacts) vit dans le groupe \`ephemeres\` que la reconstruction du monde vide d'office · heritage des tests precedents : ${r.avant} objets (plafond 400) → ${r.pireAvant.join(' · ')} · ville neuve : ${r.apres} objets (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} → ${r.pireApres.join(' · ')}` };
 });
+
+// ---- POSTE DIVERS (round 77) : CE QUE COUTE UNE MORT ----
+// Le poste FIABILITE avait mesure +455 appels de dessin par mort, dont la moitie pour les
+// seules ombres portees des morceaux. Ce test fige une explosion (vitesses a zero, duree de
+// vie repoussee), rend DEUX FOIS la meme image depuis la MEME camera posee a la main — une
+// fois avec l'ancien comportement (tous les morceaux portent leur ombre), une fois avec la
+// regle en vigueur — et compare a la fois la facture et LES PIXELS. Aucune image de jeu ne
+// tourne pendant la mesure : elle est donc reproductible au pixel pres (le bruit de fond est
+// verifie a zero).
+test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l\'explosion reste la meme', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 16, frais: true });
+    const b = G.bots.find(x => x.av && x.av.group.visible && !x.ko);
+    if (!b) return { pourquoi: 'aucun habitant visible' };
+    b.pos.set(0, 0, 49); b.av.group.position.set(0, 0, 49); b.av.group.updateMatrixWorld(true);
+    // camera posee a la main : la perche du jeu n'arrive jamais deux fois au meme endroit
+    G.camera.position.set(0, 9, 41); G.camera.lookAt(0, 0.4, 50); G.camera.updateMatrixWorld(true);
+    const gl = G.renderer.getContext(), w = G.renderer.domElement.width, h = G.renderer.domElement.height;
+    const pixels = () => { G.renderer.render(G.scene, G.camera); const t = new Uint8Array(w * h * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, t); return t; };
+    const ecart = (a, c) => { let n = 0; for (let i = 0; i < a.length; i += 4) {
+      const d = Math.max(Math.abs(a[i] - c[i]), Math.abs(a[i + 1] - c[i + 1]), Math.abs(a[i + 2] - c[i + 2]));
+      if (d > 4) n++; } return +(100 * n / (a.length / 4)).toFixed(3); };
+    G.renderer.info.autoReset = false;
+    const cout = () => { G.renderer.info.reset(); G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const calme = cout();
+    const n0 = G.morceaux.length;
+    G.explode(b.av);
+    const nx = G.morceaux.slice(n0);
+    for (const d of nx) { d.vel.set(0, 0, 0); d.ang.set(0, 0, 0); d.life = 9999; }   // l'explosion se fige
+    const garde = nx.map(d => d.m.castShadow);
+    const douze = cout(), imgDouze = pixels();
+    for (const d of nx) d.m.castShadow = true;
+    const toutes = cout(), imgToutes = pixels(), imgToutes2 = pixels();
+    for (const d of nx) d.m.castShadow = false;
+    const aucune = cout(), imgAucune = pixels();
+    G.renderer.info.autoReset = true;
+    // ON NE LAISSE RIEN DERRIERE : les morceaux figes pollueraient le budget d'image du test
+    // suivant (voir « la scene ne grossit pas d un test a l autre »).
+    for (const d of nx) G.EPHEMERES.remove(d.m);
+    G.morceaux.length = n0;
+    return { morceaux: nx.length, ombres: garde.filter(Boolean).length,
+      calme, douze, toutes, aucune,
+      bruit: ecart(imgToutes, imgToutes2), pxDouze: ecart(imgToutes, imgDouze), pxAucune: ecart(imgToutes, imgAucune) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const coutDouze = r.douze - r.calme, coutToutes = r.toutes - r.calme;
+  const ok = r.morceaux >= 80 && r.ombres <= 12 && r.bruit === 0
+    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
+  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
+});

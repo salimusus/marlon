@@ -893,6 +893,9 @@ window.__SHOT = {
     // POSTE MANETTE : v.aide sort le bandeau de la legende des touches (il ne s'affiche
     // normalement qu'a la demande, par le pave tactile) ; v.padTest ouvre « Tester la manette ».
     if (v.aide) { document.body.classList.add('manette', 'city', 'aide'); }
+    // POSTE MANETTE & MESSAGES (r78) : v.pad = la manette pilote l'affichage (sans le bandeau
+    // d'aide). Les panneaux graves sont alors recuits en boutons (n° 93).
+    if (v.pad != null) { document.body.classList.toggle('manette', !!v.pad); try { if (typeof panneauxMaj === 'function') panneauxMaj(); } catch (e93) {} }
     if (v.padTest && typeof ouvreTestManette === 'function') { try { ouvreTestManette(); } catch (e16) {} }
     // LE RADAR s'appelle #gps, pas #radar : hideHud visait un identifiant qui n'existe pas, et
     // le radar restait donc allume sur TOUTES les captures « sans interface » (et devenait
@@ -1144,6 +1147,16 @@ window.__G = {
   PAD_CROIX_LONG: typeof PAD_CROIX_LONG !== 'undefined' ? PAD_CROIX_LONG : null,
   PAD_LONG: typeof PAD_LONG !== 'undefined' ? PAD_LONG : 0,
   PAD_BOUTONS: typeof PAD_BOUTONS !== 'undefined' ? PAD_BOUTONS : 0,
+  // ---- POSTE MANETTE & MESSAGES (round 78) : exports apres cette ligne-repere ----
+  PAD_CROIX: typeof PAD_CROIX !== 'undefined' ? PAD_CROIX : null,
+  PS_NOMS: typeof PS_NOMS !== 'undefined' ? PS_NOMS : null,
+  launchRace: typeof launchRace === 'function' ? launchRace : null,
+  startHeliRace: typeof startHeliRace === 'function' ? startHeliRace : null,
+  hrace: typeof hrace !== 'undefined' ? hrace : null,
+  PANNEAUX: typeof PANNEAUX !== 'undefined' ? PANNEAUX : null,
+  panneauxMaj: typeof panneauxMaj === 'function' ? panneauxMaj : null,
+  msg: typeof msg === 'function' ? msg : null,
+  msgTexte() { const e = document.getElementById('msg'); return e ? e.textContent : null; },
   readInput: typeof readInput === 'function' ? readInput : null,
   gachetteConduite: typeof gachetteConduite === 'function' ? gachetteConduite : null,
   CONDUITE_V0: typeof CONDUITE_V0 !== 'undefined' ? CONDUITE_V0 : 0,

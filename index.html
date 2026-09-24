@@ -17843,16 +17843,48 @@ function animateRigCorps(rig, mode, speed, dt, t) {
   rig.head.rotation.y += (Math.sin(tempsPerso * 0.9) * (speed > .6 ? .045 : .12) - rig.head.rotation.y) * ease;
 }
 const debris = [];
+// ================= CE QUE COUTE UNE MORT (piste du poste FIABILITE, mesuree au round 77) =====
+// Chaque morceau d'un corps qui explose portait son ombre. Mesure a la sonde, un habitant
+// abattu a 6 m de la camera : 125 morceaux, +153 appels de dessin pendant une demi-seconde —
+// dont +135 POUR LA SEULE PASSE D'OMBRES (88 % de la facture). L'image, elle, ne bougeait
+// presque pas (+18) : le corps disparait en meme temps que ses morceaux apparaissent. Une
+// fusillade de gang a cinq morts simultanees, c'est donc +675 appels le temps d'un battement
+// de cil, et une saccade possible sur la tele.
+// POURQUOI LE GARDE-FOU HABITUEL NE VOYAIT RIEN. `ombresMobilesTick` recense la scene trois
+// racines par image et `detailsLOD` eteint ensuite l'ombre d'un morceau devenu trop petit a
+// l'ecran. Un debris ne vit que 1,4 s : il etait toujours reparti avant d'avoir ete recense.
+// Il naissait donc avec son ombre et la gardait jusqu'au bout, quoi qu'il arrive.
+// LA REGLE. On tranche a la naissance, une fois pour toutes, sans un seul calcul par image :
+//   1. SEULS LES PLUS GROS MORCEAUX portent une ombre — au plus douze par explosion. Les 125
+//      morceaux d'un corps tiennent dans un metre cube pendant une demi-seconde et leurs
+//      ombres se recouvrent en UNE SEULE tache : celles des douze gros la dessinent en entier,
+//      les cent treize autres n'y ajoutent rien de visible (compare sur capture avant/apres).
+//   2. Et meme ceux-la suivent le critere deja en vigueur partout ailleurs dans le jeu
+//      (`DETAIL_OMBRE_MOBILE`) : sous un quatre-vingt-dixieme de l'ecran, l'ombre ne se voit
+//      plus. Une mort a l'autre bout de la rue ne coute donc plus rien du tout.
+// Le morceau lui-meme, lui, est toujours dessine : l'explosion n'a pas perdu un seul eclat.
+const OMBRE_DEBRIS_MAX = 12;   // morceaux porteurs d'ombre par explosion, les plus gros d'abord
 function explode(av) {
   const q = new THREE.Quaternion(), p = new THREE.Vector3();
   av.group.updateMatrixWorld(true);
+  const nes = [];
   av.group.traverse(o => {
     if (!o.isMesh || o.isSprite || o.isLineSegments || !o.visible) return;
-    const m = new THREE.Mesh(o.geometry, o.material); m.castShadow = true;
+    const m = new THREE.Mesh(o.geometry, o.material); m.castShadow = false;
     o.getWorldPosition(p); o.getWorldQuaternion(q); m.position.copy(p); m.quaternion.copy(q);
     EPHEMERES.add(m);   // et non `scene` : une mort posait 249 maillages directement dans la scene (voir LES EPHEMERES)
+    // le rayon de la geometrie, et non celui du maillage d'origine : le clone ci-dessus ne
+    // reprend pas son echelle, c'est donc bien cette taille-la qui sera dessinee
+    const g = o.geometry; if (!g.boundingSphere && g.computeBoundingSphere) { try { g.computeBoundingSphere(); } catch (e) {} }
+    nes.push({ m, r: g.boundingSphere ? g.boundingSphere.radius : 0 });
     debris.push({ m, vel: new THREE.Vector3(rnd(-4, 4), rnd(4, 9), rnd(-4, 4)), ang: new THREE.Vector3(rnd(-6, 6), rnd(-6, 6), rnd(-6, 6)), t: 0, life: 1.4 });
   });
+  nes.sort((a, b) => b.r - a.r);
+  for (let i = 0; i < nes.length && i < OMBRE_DEBRIS_MAX; i++) {
+    const e = nes[i], c = camera.position;
+    const d2 = (e.m.position.x - c.x) ** 2 + (e.m.position.y - c.y) ** 2 + (e.m.position.z - c.z) ** 2;
+    e.m.castShadow = d2 < (e.r * DETAIL_OMBRE_MOBILE) ** 2;
+  }
   av.group.visible = false;
 }
 const burstGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);

@@ -20844,6 +20844,13 @@ test('les routes sont plus larges, mieux raccordées et moins tortueuses : crois
 test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est annoncee, on n est jamais debarque en pleine rue', async p => {
   const r = await p.evaluate(`(() => {
     const G = __G, P = G.P;
+    // LE JOURNAL SE FAIT ROGNER. On prenait la LONGUEUR EN CARACTERES du journal avant le
+    // depart puis \`.slice(avantDepart)\` : des que le jeu retire les vieilles lignes du
+    // #chatLog, ce decalage ne veut plus rien dire — releve, l'extrait commencait au milieu
+    // d'un mot (« ux pas approcher plus pre ») et la phrase d'arrivee, pourtant prononcee,
+    // tombait hors de la tranche. On VIDE donc le journal avant chaque phase et on lit tout
+    // ce qui s'y ecrit ensuite.
+    const videJournal = () => [].slice.call(document.querySelectorAll('#chatLog div')).forEach(d => d.remove());
     const journal = () => [].slice.call(document.querySelectorAll('#chatLog div')).map(d => d.textContent).join(' | ');
     const { b } = ${CONDUITE_SETUP};
     // ON MESURE UNE VILLE AU REPOS, comme les tests 332 et 404. Enchaine derriere le test
@@ -20861,7 +20868,7 @@ test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est ann
     G.city.botCarNear = b; G.monterAvecBot(b); pas();
     const monte = !!(G.city.rideBot === b && b.drive.passager);
     const V = G.city.villaMine || { x: 60, z: 168 };
-    const avantDepart = journal().length;
+    videJournal(); const avantDepart = 0;
     G.botConduireVers(b, { nom: 'ta villa', x: V.x, z: V.z });
     const st = b.drive;
     // LE PREMIER PAS NE COMPTE PAS. Avant la premiere image, st.route est vide et
@@ -20886,7 +20893,7 @@ test('un habitant nous emmene : la distance ne remonte jamais, l arrivee est ann
     const annonce = /arriv/i.test(texteArrivee);
     const toujoursDedans = G.city.rideBot === b && st.passager;
     G.botConduireVers(b, { nom: 'le bout du monde', x: 4000, z: 4000 });
-    const avantRenonce = journal().length;
+    videJournal(); const avantRenonce = 0;
     // ON POSE LE COMPTEUR DE BLOCAGE AU-DELA DU SEUIL et on laisse le jeu decider : c'est
     // exactement le chemin qu'emprunte un conducteur vraiment coince. Ce test a servi a
     // trouver le defaut : le filet « saute au point de passage suivant » REMETTAIT ce compteur

@@ -2287,24 +2287,19 @@ function clearWorld() {
   // les deux listes du budget d'image pointaient vers des objets retirés de la scène : elles
   // grossissaient à chaque changement de monde et on triait des fantômes à chaque image
   try { ARETES.length = 0; DETAILS.length = 0; OMBRES.length = 0; detailCam = null; } catch (e7) {}
-  // ================= LA FLOTTE MEMORISEE APPARTENAIT AU MONDE D'AVANT ======================
-  // MESURE (poste FIABILITE, round 78). `flotteMaj()` garde sa liste en memoire pour une image
-  // (« if (flotteT === simTime ... ) return FLOTTE »). Cette liste et son horodatage ne sont pas
-  // remis a zero par la reconstruction du monde : FLOTTE continue de designer les 42 vehicules
-  // DETRUITS de l'ancienne ville. Tant que l'horloge n'a pas bouge, le monde neuf se batit donc
-  // contre les fantomes du precedent — et `traficPose`, qui place la circulation, refuse toute
-  // voie a moins de 12 m de l'un d'eux : les huit voitures du trafic naissent ailleurs.
-  // C'est l'heritage entre tests que le poste CONDUITE avait mesure sans pouvoir le nommer :
-  // le test 299 (la traque) fait avancer l'horloge, le test 332 la repose a 3 000 s, l'ancien
-  // horodatage ne vaut donc plus, la flotte est rebatie — et les huit voitures du trafic
-  // atterrissent A HUIT ENDROITS DIFFERENTS de ceux du test lance seul. Chiffres du poste
-  // CONDUITE : 55 images d'affilee encastrees pour la depanneuse, 47 pour le camion de
-  // pompiers, 9 images dans un solide pour le fourgon — alors que le monde est rebati, que
-  // `Math.random` est fige et que `simTime` est fige. Mesure ici : 8 ecarts sur 8 voitures,
-  // 8 boites de collision deplacees, reproductible a l'identique (bruit de fond : zero ecart
-  // entre deux entrees de suite).
-  // En jeu, c'est la meme chose en plus discret : le monde change, et la premiere image du
-  // monde neuf compte encore les voitures de l'ancien.
+  // ================= LE CACHE DE LA FLOTTE APPARTENAIT AU MONDE D'AVANT ===================
+  // `flotteMaj()` garde sa liste une image en memoire (« if (flotteT === simTime ...) return
+  // FLOTTE »). Ni la liste ni son horodatage n'etaient remis a zero par la reconstruction du
+  // monde : FLOTTE continuait donc de DESIGNER des vehicules detruits, et il suffisait que
+  // l'horloge n'ait pas bouge entre la destruction et la relecture pour que le monde neuf soit
+  // bati contre les fantomes du precedent.
+  // CE QUI A ETE MESURE, HONNETEMENT : en rebatissant le monde sans toucher a l'horloge, on
+  // retrouve 44 vehicules et ZERO fantome — le cas ne se declenche pas aujourd'hui, parce que
+  // la construction avance l'horloge avant la premiere relecture. Ce n'est donc PAS la cause
+  // de l'heritage 299 → 332 (celle-la est dans harness/shot.js : le joueur etait pose APRES
+  // la reconstruction). On garde quand meme la remise a zero : un cache d'une image qui retient
+  // des objets retires de la scene n'a aucune raison de survivre au monde qui les portait, et
+  // il coute deux affectations.
   try { FLOTTE.length = 0; flotteT = -1; } catch (e7b) {}
   solids = []; kills = []; coins = []; checkpoints = []; blinkers = []; movers = []; spinners = []; conveyors = []; clouds = []; pads = []; trusses = []; crumbles = []; decoSpin = []; route = []; camToits = []; sgridSale();
   goal = null; cityReset();
@@ -7099,10 +7094,11 @@ function clearWanted(reason) {
   police.usure = 0;   // ils repartent frais pour la prochaine fois
   police.crimeLevel = 0;   // l'escalade retombe avec la traque : sinon un vieux braquage valait perpète pour une broutille
   // `decayT` etait le seul horodatage de la traque que la fin de traque ne remettait pas a
-  // zero : il restait pose dans l'avenir (jusqu'a +300 s) et survivait meme a une
-  // reconstruction du monde. Releve a l'entree d'un test : decayT = 13 066 s pour une horloge
-  // reposee a 3 000 s — dix mille secondes pendant lesquelles l'etoile suivante ne pouvait
-  // plus redescendre d'un cran.
+  // zero. Il reste pose dans l'avenir (jusqu'a simTime + 300 s selon la gravite du delit) et
+  // survit a une reconstruction du monde, qui ne touche pas a l'objet `police`. Un test qui
+  // repose l'horloge en arriere le laisse donc dans un futur inatteignable, et la prochaine
+  // etoile ne peut plus redescendre d'un cran tant qu'on n'y est pas revenu. Mesure : apres
+  // clearWanted(), decayT vaut bien 0 — la traque suivante repart d'un compteur neuf.
   police.decayT = 0;
   police.wanted = 0; police.hideT = 0; police.perdu = false; police.cachePar = null; police.debarqueDit = 0; police.alarmT = 0; police.riposte = 0; police.vuT = -99; police.renfortT = 0; police.reactT = 0; police.avert = 0; police.alarmeBot = 0; city.guards.forEach(g => { g.alert = false; }); $('wanted').classList.remove('on'); siren.stop();
   armeeFin(); policeRepli();

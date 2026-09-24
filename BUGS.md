@@ -791,3 +791,9 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : soit le chien monte vraiment (place `chien` de la table, annoncée dans le message), soit il reste dehors et attend — pas un chien qui traverse la carrosserie et se pose sur le passager.
 - **Le reste est bon, et ça se voit** : les trois amis sont bien assis (avant, arrière gauche, arrière droite), tous visibles, à 0,52 et 0,94 m de l'axe, têtes à 1,24 m, et **le n° 79 est réglé** : 8 s de conduite, ★ 0 et les trois amis toujours à 100 ❤️ (ils étaient écrasés au premier mètre au round précédent).
 - **Capture** : `img/e2-quatre-haut.png`.
+
+### 96. Premier coup d'accélérateur sur le parking du centre : « 💥 ACCIDENT ! » à 2,5 km/h, la voiture est morte avant le premier mètre
+- **Gravité** : GRAVE (le n° 70 n'est donc pas clos : c'est le tout premier geste de l'enfant avec sa première voiture)
+- **Reproduire** : parking du centre, se mettre au volant de la voiture la plus proche (−8 ; 10) avec △, puis R2 à fond et rien d'autre. Reproduit 1/1 (`qc.log`, section `place`).
+- **On voit** : à **t = 0,4 s**, alors que la voiture roule à **0,7 m/s (2,5 km/h)**, « 💥 **ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive** ». Et c'est fini : sur 900 images (15 s de simulation), la voiture n'a parcouru que **3,7 m**, **875 images sur 900** sont sous 0,6 m/s, et elle a pris **19 % de dégâts**. Elle finit figée en (−8,4 ; 6,4), vitesse 0, pendant les 14 s restantes.
+- **On devrait voir** : à 2,5 km/h, un petit bruit de tôle et un pare-chocs qui recule — pas un constat, pas deux véhicules immobilisés, pas la police. Et une voiture qui peut toujours ressortir de sa place.

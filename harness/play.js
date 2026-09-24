@@ -5958,6 +5958,7 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   await page.evaluate(f => { window.__SHOT.fraisDefaut = f;
     try { if (f) localStorage.setItem('superobby.banc.frais', '1'); else localStorage.removeItem('superobby.banc.frais'); } catch (e) {} }, fraisDefaut);
   let pass=0, fail=0;
+  let fuitePrec = null; const fuiteLog = [];
   const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;
   // PLAGE="180-250" : ne joue que les tests n° 180 a 250 (numerotation = ordre du fichier).
   // Les pannes de FIABILITE ne se voient qu'en LOT : un test sali par ses voisins est vert
@@ -5988,6 +5989,28 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
     } catch (e) {} }
     console.log(`${ok?'  OK  ':'ÉCHEC '} [${idx+1}] ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}${sale}`);
     ok?pass++:fail++;
+    // ---- FUITE=1 : QUI FAIT GROSSIR LA SCENE, TEST PAR TEST (poste FIABILITE, r76) ----
+    // Le garde-fou de fin de suite dit QU'IL y a une fuite ; cette sonde dit QUEL TEST la
+    // pose. Elle releve le classement par origine apres chaque test et n'imprime, en fin de
+    // serie, que les tests qui ont change le compte, avec le detail par origine. C'est ce qui
+    // a nomme `explode()` en une seule serie au round 76 — utilisez-la pour la prochaine.
+    // Elle coute un aller-retour de page par test : on ne l'allume que quand on cherche.
+    if (process.env.FUITE) { try {
+      const c2 = await page.evaluate(() => window.__SHOT.fuites());
+      if (fuitePrec) { const d = c2.total - fuitePrec.total;
+        if (d !== 0) { const par = {};
+          const m = x => { const o = {}; x.classement.forEach(e => o[e.ou] = e.objets); return o; };
+          const a = m(fuitePrec), b = m(c2);
+          Object.keys(b).forEach(k => { if ((b[k] || 0) !== (a[k] || 0)) par[k] = (b[k] || 0) - (a[k] || 0); });
+          Object.keys(a).forEach(k => { if (!(k in b)) par[k] = -a[k]; });
+          fuiteLog.push({ idx: idx + 1, n: c.n.slice(0, 70), d, total: c2.total, par });
+        } }
+      fuitePrec = c2;
+    } catch (e) {} }
+  }
+  if (process.env.FUITE && fuiteLog.length) {
+    console.log('\n===== CROISSANCE DE LA SCENE, TEST PAR TEST =====');
+    for (const e of fuiteLog) console.log(`  [${e.idx}] ${e.d > 0 ? '+' : ''}${e.d} → ${e.total}  ${e.n}\n       ${Object.entries(e.par).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join('\n       ')}`);
   }
   console.log(`\n${pass} réussis, ${fail} échoués — ${errors.length} erreur(s) console au total`);
   if(errors.length) errors.slice(0,8).forEach(e=>console.log('  '+e.slice(0,200)));
@@ -21554,4 +21577,34 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
     && r.mort.mort && r.mort.wanted === 0 && !dit(r.mort.texte, 'la police recherche')
     && r.moi.partis === 6 && r.moi.touches === 6;
   return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts` };
+});
+
+// ================= POSTE FIABILITE (round 76) : LA SCENE NE DOIT PLUS GROSSIR ==============
+// Le banc enchaine ~490 tests dans UNE SEULE page : tout objet ajoute a `scene` et jamais
+// retire s'accumule pendant deux heures, et ce n'est pas une curiosite de banc — c'est du
+// budget d'image vole a tous les tests qui suivent. Defaut trouve au round 76 : `explode()`
+// (la mort d'un personnage) posait 249 maillages DIRECTEMENT dans `scene`, ne vieillissant
+// que dans la boucle d'AFFICHAGE, donc jamais pendant un test. Le poste VILLE a releve
+// 2 612 objets a l'entree d'un test pour 135 attendus, soit ~5 000 appels de dessin herites,
+// et le test du budget d'image mesurait 15 166 appels au lieu de 9 621 pour un plafond de
+// 10 000. On tient maintenant le compte, avec DEUX bornes :
+//   - ce que les tests precedents ont laisse (avant toute remise a zero) : une derive s'y voit
+//     tout de suite, et le classement par origine NOMME le coupable dans le message d'echec ;
+//   - ce que vaut une ville NEUVE : si la reconstruction du monde ne ramene plus la scene a
+//     son etat de depart, c'est qu'une famille d'objets lui echappe.
+// Et l'invariant de structure : apres une reconstruction, le groupe des ephemeres est VIDE.
+test('la scene ne grossit pas d un test a l autre : les objets directement dans scene ne derivent pas', async p => {
+  const r = await p.evaluate(() => {
+    const avant = __SHOT.fuites();                                        // l'heritage des tests precedents
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const apres = __SHOT.fuites();                                        // une ville neuve : la reference
+    const g = __G.scene.children.find(o => o.name === 'ephemeres');
+    const dit = c => c.classement.slice(0, 5).map(e => e.objets + ' obj / ' + e.maillages + ' maillages ← ' + e.ou);
+    return { avant: avant.total, apres: apres.total, ephemeres: g ? g.children.length : -1,
+      pireAvant: dit(avant), pireApres: dit(apres) };
+  });
+  // 115 objets pour une ville neuve (mesure du round 76) ; 200 laisse de la marge a un quartier
+  // de plus, 400 a l'heritage normal d'un test voisin (balles en vol, grenades posees).
+  const ok = r.apres <= 200 && r.avant <= 400 && r.ephemeres === 0;
+  return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · maintenant tout ce qui est ephemere (morceaux d'explosion, ondes de choc, impacts) vit dans le groupe \`ephemeres\` que la reconstruction du monde vide d'office · heritage des tests precedents : ${r.avant} objets (plafond 400) → ${r.pireAvant.join(' · ')} · ville neuve : ${r.apres} objets (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} → ${r.pireApres.join(' · ')}` };
 });

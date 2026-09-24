@@ -1545,14 +1545,44 @@ function suitOmbres(pos) {
   sun.position.copy(sun.target.position).addScaledVector(SOLEIL_DIR, 95);
 }
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
+// ================= LES EPHEMERES : CE QUI VIT MOINS DE DEUX SECONDES =================
+// MESURE (poste FIABILITE, round 76). `explode()` — la mort d'un personnage — posait ses
+// morceaux UN PAR UN DIRECTEMENT DANS `scene` : 249 maillages pour l'avatar du joueur, 135
+// pour un habitant, chacun avec son ombre portee, donc pres de 500 appels de dessin par mort.
+// Ils ne disparaissent que par vieillissement dans `frame()`, la boucle d'affichage : 1,4 s de
+// vie, mais avec un pas plafonne a 0,05 s il faut VINGT-HUIT IMAGES. Dans le jeu (60 images
+// par seconde) c'est une demi-seconde et rien ne traine — mesure faite : 110 objets au depart,
+// 115 au bout de six tours de partie complete (morts, explosions, incendies, police,
+// grenades, changements de monde). DANS LE BANC D'ESSAI, en revanche, un test enchaine des
+// centaines de `step()` dans UN SEUL appel de page sans laisser passer une image : les
+// morceaux s'empilent, et AUCUNE remise a zero ne les ramassait — ni `cityReset` (qui ne vide
+// que `debrisParts`, les tôles de vehicule), ni `__SHOT.go()`. Mesure : 986 morceaux restes
+// dans la scene apres une partie simulee sans affichage, et jusqu'a 2 612 objets releves par
+// le poste VILLE a l'entree d'un test de la suite complete, pour 135 attendus.
+// LA REPARATION EST STRUCTURELLE, pas une ligne de menage de plus : tout ce qui est ephemere
+// vit desormais dans CE groupe, que la reconstruction du monde vide d'office (voir
+// `videEphemeres`, appele par `clearWorld`). Une nouvelle famille d'ephemeres y sera donc
+// couverte sans que personne ait a y penser.
+// POURQUOI PAS DANS `worldGroup` : `clearWorld` lui applique `libereBranche`, qui LIBERE les
+// geometries et les materiaux. Or un morceau d'explosion PARTAGE la geometrie et le materiau
+// de l'avatar dont il vient — et le joueur, lui, survit au changement de monde. On aurait
+// detruit son corps avec les debris de sa derniere mort.
+const EPHEMERES = new THREE.Group(); EPHEMERES.name = 'ephemeres'; scene.add(EPHEMERES);
+function videEphemeres() {
+  try { fxClear(); } catch (e) {}   // les impacts : fxClear libere LEURS materiaux (ils sont a eux)
+  try { debris.length = 0; } catch (e) {}
+  // l'onde de choc d'une grenade, elle, a sa geometrie et son materiau a elle : on les libere
+  try { for (const w of shockwaves) { try { w.m.geometry.dispose(); w.m.material.dispose(); } catch (e) {} } shockwaves.length = 0; } catch (e) {}
+  while (EPHEMERES.children.length) EPHEMERES.remove(EPHEMERES.children[0]);
+}
 // Ni la scène ni le monde ne bougent jamais : inutile de recomposer leur matrice à chaque
 // image, et surtout de forcer par ricochet celle de leurs 22 000 descendants (three.js r128
 // propage le drapeau depuis tout parent dont matrixAutoUpdate est actif). Le gain mesuré est
 // modeste — l'essentiel du coût est la simple traversée du graphe, pas le calcul — mais il
 // est gratuit. Geler en plus tout le décor immobile a été essayé et mesuré : 13,4 ms contre
 // 13,1 ms sans, donc aucun gain pour un vrai risque de figer un objet censé bouger. Écarté.
-scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false;
-scene.updateMatrix(); worldGroup.updateMatrix();
+scene.matrixAutoUpdate = false; worldGroup.matrixAutoUpdate = false; EPHEMERES.matrixAutoUpdate = false;
+scene.updateMatrix(); worldGroup.updateMatrix(); EPHEMERES.updateMatrix();
 // ================= FLUIDITÉ : LA RÉSOLUTION S'ADAPTE TOUTE SEULE =================
 // Une télé, c'est un très grand écran branché sur un tout petit processeur graphique : en
 // 4K le jeu calculait 8 millions de pixels par image et saccadait. Deux garde-fous :
@@ -2246,6 +2276,7 @@ function clearWorld() {
   city.art = null;
   while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
   balaieAvatars();
+  videEphemeres();   // les morceaux d'explosion et les ondes de choc de l'ancien monde (voir LES EPHEMERES)
   // les marques de choc et les véhicules en feu vivaient dans l'ancien monde : sans cette
   // remise à zéro, on gardait des références vers des objets retirés de la scène
   // (NEONS aussi : les matériaux de néon appartiennent au monde qu'on vient de jeter ; sans
@@ -17771,7 +17802,7 @@ function explode(av) {
     if (!o.isMesh || o.isSprite || o.isLineSegments || !o.visible) return;
     const m = new THREE.Mesh(o.geometry, o.material); m.castShadow = true;
     o.getWorldPosition(p); o.getWorldQuaternion(q); m.position.copy(p); m.quaternion.copy(q);
-    scene.add(m);
+    EPHEMERES.add(m);   // et non `scene` : une mort posait 249 maillages directement dans la scene (voir LES EPHEMERES)
     debris.push({ m, vel: new THREE.Vector3(rnd(-4, 4), rnd(4, 9), rnd(-4, 4)), ang: new THREE.Vector3(rnd(-6, 6), rnd(-6, 6), rnd(-6, 6)), t: 0, life: 1.4 });
   });
   av.group.visible = false;
@@ -17794,7 +17825,7 @@ function fxMat(color, additif, opac) {
   return m;
 }
 function fxAjoute(m, mat, vie, maj) {
-  scene.add(m); fx.push({ m, mat, t: 0, vie, maj });
+  EPHEMERES.add(m); fx.push({ m, mat, t: 0, vie, maj });   // groupe des ephemeres : voir LES EPHEMERES
   return m;
 }
 function fxTick(dt) {
@@ -17805,7 +17836,7 @@ function fxTick(dt) {
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i]; f.t += dt;
     const k = f.t / f.vie;
-    if (k >= 1) { scene.remove(f.m); f.mat.dispose(); fx.splice(i, 1); continue; }
+    if (k >= 1) { EPHEMERES.remove(f.m); f.mat.dispose(); fx.splice(i, 1); continue; }
     f.maj(f, k, dt);
   }
 }
@@ -17853,7 +17884,7 @@ function fxEclats(x, y, z, dir, color, n = 8, force = 1) {
       f.m.scale.set(1 - k * 0.75, 1 - k * 0.75, l * (1 + sp * 0.06));   // il s'étire à la vitesse, et s'affine en s'éteignant
       f.mat.opacity = 1 - k * k;
     } });
-    scene.add(m);
+    EPHEMERES.add(m);
   }
 }
 // La fumée : deux ou trois bouffées grises qui s'ouvrent doucement (murs, sol, béton).
@@ -17896,10 +17927,10 @@ function fxTrainee(x, y, z, facing, pied) {
     fx.push({ m, mat, t: -i * 0.011, vie: 0.18, maj: (f, k) => {
       const o = clamp(1 - k, 0, 1); f.mat.opacity = 0.5 * o * o; f.m.scale.z = 0.9 * (0.4 + o * 0.8);
     } });
-    scene.add(m);
+    EPHEMERES.add(m);
   }
 }
-function fxClear() { for (const f of fx) { scene.remove(f.m); f.mat.dispose(); } fx.length = 0; }
+function fxClear() { for (const f of fx) { EPHEMERES.remove(f.m); f.mat.dispose(); } fx.length = 0; }
 // LA SECOUSSE DE CAMÉRA : un coup qui porte se sent aussi à l'image.
 function camSecousse(amp = 0.18, duree = 0.22) {
   cam.shake = Math.max(cam.shake || 0, amp); cam.shakeT = Math.max(cam.shakeT || 0, simTime + duree);
@@ -28686,7 +28717,7 @@ function grenadesTick(dt) {
     if (gr.t > 2) {   // explosion : éclats colorés, onde de choc, souffle
       scene.remove(gr.m); grenades.splice(i, 1);
       burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0xff8f3a, 18); burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0xffd23f, 12); burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0x3ef2ff, 10);
-      const wave = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); wave.position.copy(gr.p); scene.add(wave); shockwaves.push({ m: wave, t: 0 });
+      const wave = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); wave.position.copy(gr.p); EPHEMERES.add(wave); shockwaves.push({ m: wave, t: 0 });
       sfx.noise(.5, 220, .14); sfx.tone(60, 0, .5, 'sine', .12, 30); if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) {} }
       const R = 6;
       if (gr.mine) {
@@ -28697,7 +28728,7 @@ function grenadesTick(dt) {
       const dme = Math.hypot(P.pos.x - gr.p.x, P.pos.z - gr.p.z); if (dme < R && !drive.car) { const k = 1 - dme / R; P.vel.x += (P.pos.x - gr.p.x) / (dme || 1) * 9 * k; P.vel.z += (P.pos.z - gr.p.z) / (dme || 1) * 9 * k; P.vel.y = Math.max(P.vel.y, 5 * k + 2); }
     }
   }
-  for (let i = shockwaves.length - 1; i >= 0; i--) { const w = shockwaves[i]; w.t += dt; w.m.scale.setScalar(1 + w.t * 16); w.m.material.opacity = Math.max(0, 0.5 - w.t * 1.4); if (w.t > 0.4) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); shockwaves.splice(i, 1); } }
+  for (let i = shockwaves.length - 1; i >= 0; i--) { const w = shockwaves[i]; w.t += dt; w.m.scale.setScalar(1 + w.t * 16); w.m.material.opacity = Math.max(0, 0.5 - w.t * 1.4); if (w.t > 0.4) { EPHEMERES.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); shockwaves.splice(i, 1); } }
 }
 const shockwaves = [];
 const laserDot = (() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), neonMat(0xff3030)); m.visible = false; scene.add(m); return m; })();
@@ -31134,7 +31165,7 @@ function frame() {
     const d = debris[i]; d.t += dt; d.vel.y -= (d.tiny ? 12 : G) * dt; d.m.position.addScaledVector(d.vel, dt);
     d.m.rotation.x += d.ang.x * dt; d.m.rotation.y += d.ang.y * dt; d.m.rotation.z += d.ang.z * dt;
     if (d.tiny) { const s = Math.max(0.05, 1 - d.t / d.life); d.m.scale.setScalar(s); }
-    if (d.t > d.life) { scene.remove(d.m); debris.splice(i, 1); }
+    if (d.t > d.life) { EPHEMERES.remove(d.m); debris.splice(i, 1); }
   }
   fxTick(dt);
   animMondeTick(dt);   // poste Animation : les feux qui brûlent, la dépanneuse et l'ambulance qui manœuvrent

@@ -13,7 +13,64 @@ const VIEWS = JSON.parse(fs.readFileSync(process.env.VUES || path.join(__dirname
 
 
 const HOOK = `
+// ================= TRACEUR DES AJOUTS DIRECTS DANS LA SCENE (poste FIABILITE, r76) ========
+// Le banc enchaine ~490 tests dans UNE page : tout objet ajoute a scene (et non a worldGroup)
+// survit a la reconstruction du monde. On note donc, sur CHAQUE objet ajoute, d'ou venait
+// l'appel — deux lignes de pile suffisent a nommer le coupable. Sans cela on ne peut que
+// compter les fuites, jamais les nommer.
+// NOTE D'ECRITURE : ce HOOK est extrait par play.js au moyen d'une expression reguliere, donc
+// TEL QUEL. Pas d'apostrophe inverse et pas d'antislash ici : shot.js, lui, l'evalue comme un
+// litteral de gabarit et les deux lectures ne donneraient pas le meme code.
+(function () {
+  try {
+    if (typeof scene === 'undefined' || scene.__traceAjouts) return;
+    var LF = String.fromCharCode(10);
+    var origine = function () {
+      var st = '';
+      try { st = new Error().stack || ''; } catch (e) { return '?'; }
+      var lignes = st.split(LF).slice(1), out = [], base = location.origin + '/';
+      for (var i = 0; i < lignes.length && out.length < 3; i++) {
+        var L = lignes[i].trim();
+        if (L.indexOf('origine') >= 0 || L.indexOf('__traceAjouts') >= 0) continue;
+        if (L.indexOf('at Object.add') === 0 || L.indexOf('at scene.add') === 0) continue;
+        while (L.indexOf(base) >= 0) L = L.replace(base, '');
+        if (L.indexOf('at ') === 0) L = L.slice(3);
+        out.push(L);
+      }
+      return out.join(' < ');
+    };
+    var brut = scene.add.bind(scene);
+    scene.add = function () {
+      for (var i = 0; i < arguments.length; i++) {
+        var o = arguments[i];
+        if (!o || o === scene) continue;
+        try { if (!o.userData) o.userData = {}; if (!o.userData.__origine) o.userData.__origine = origine(); } catch (e) {}
+      }
+      return brut.apply(null, arguments);
+    };
+    scene.__traceAjouts = true;
+  } catch (e) {}
+})();
 window.__SHOT = {
+  // RECENSEMENT DES OBJETS RESTES DIRECTEMENT DANS LA SCENE : classement par origine.
+  fuites: function () {
+    var parOrigine = {}, parType = {};
+    var cls = function (o) { return (o.type || '?') + (o.userData && o.userData.avatar ? '/avatar' : '') + (o.name ? '#' + o.name : ''); };
+    for (var i = 0; i < scene.children.length; i++) {
+      var o = scene.children[i];
+      var k = (o.userData && o.userData.__origine) || '(pose avant le traceur)';
+      if (!parOrigine[k]) parOrigine[k] = { n: 0, types: {}, maillages: 0 };
+      parOrigine[k].n++;
+      parOrigine[k].types[cls(o)] = (parOrigine[k].types[cls(o)] || 0) + 1;
+      var mm = 0; try { o.traverse(function (q) { if (q.isMesh || q.isLine || q.isPoints || q.isSprite) mm++; }); } catch (e) {}
+      parOrigine[k].maillages += mm;
+      parType[cls(o)] = (parType[cls(o)] || 0) + 1;
+    }
+    var liste = Object.keys(parOrigine).map(function (k) {
+      return { ou: k, objets: parOrigine[k].n, maillages: parOrigine[k].maillages, types: parOrigine[k].types };
+    }).sort(function (a, b) { return b.maillages - a.maillages || b.objets - a.objets; });
+    return { total: scene.children.length, parType: parType, classement: liste };
+  },
   ready: true,
   // Le banc d'essai pose ce drapeau (par localStorage, pour qu'il survive au rechargement de
   // page du test de sauvegarde) : chaque __SHOT.go() rebatit alors la ville de zero.
@@ -147,6 +204,15 @@ window.__SHOT = {
       // LA MEMOIRE DU RENDU : une fuite ne se voit qu'en comparant d'un test a l'autre.
       var m = renderer.info.memory;
       __SHOT.memoire = { geo: m.geometries, tex: m.textures, prog: renderer.info.programs.length, objets: scene.children.length, solides: solids.length };
+      // LA SCENE QUI GROSSIT : on ne se contente pas de la compter, on NOMME le lot fautif.
+      // Une ville neuve tient en ~115 objets directement dans scene ; au-dela de 200, c'est
+      // qu'un test precedent a laisse quelque chose, et chaque objet en trop coute un appel de
+      // dessin (deux s'il porte une ombre) a TOUS les tests suivants.
+      if (scene.children.length > 200) {
+        var f0 = __SHOT.fuites().classement[0];
+        dit(true, scene.children.length + ' objets directement dans la scene (une ville neuve en a ~115)'
+          + (f0 ? ' — le plus gros lot : ' + f0.objets + ' pose(s) par ' + f0.ou : ''));
+      }
     } catch (e) { s.push('releve impossible : ' + (e && e.message)); }
     return s;
   },

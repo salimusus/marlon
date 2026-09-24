@@ -21723,3 +21723,50 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
   return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
 });
+
+// ================= POSTE VILLE & VÉHICULES (round 78) =================
+
+test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas une étoile, et l\'habitant derrière les cibles est indemne', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 19.4, hour: 12 });
+    // 1) GÉOMÉTRIE : depuis six points de la dalle, un rayon prolongé d'un demi-mètre AU-DELÀ
+    // de chaque cible doit rencontrer un solide. Avant la butte, la cible du milieu ne donnait
+    // RIEN sur 200 m : la balle filait jusqu'à la rue z = 0 et à ses passants.
+    const postes = [[67, 19.4], [60.5, 19.4], [73.5, 19.4], [67, 15], [62, 16], [72, 16]];
+    let libres = 0, pire = 0, n = 0;
+    for (const [px, pz] of postes) for (const t of G.city.targets) {
+      const dx = t.x - px, dz = t.z - pz, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
+      const h = G.castSolids(px + ux * (L + 0.5), t.y, pz + uz * (L + 0.5), ux, 0, uz, 200, true);
+      n++;
+      if (!h || !h.o) libres++; else pire = Math.max(pire, h.d);
+    }
+    // 2) EN JEU : quarante coups sur les trois cibles, un habitant planté juste derrière
+    // (rue z = 0), tir déterministe (pas de dispersion).
+    __SHOT.go({ world: 4, x: 67, y: 1, z: 19.4, hour: 12 });
+    const alea = Math.random; Math.random = () => 0.5;
+    const b = G.bots.find(q => q.av && q.av.group);
+    b.pos.set(67, 0, 1.5); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    b.ko = 0; b.hp = 100; b.wait = 1e6; b.rdv = null; b.fight = null; b.name = 'Momo_king';
+    G.P.pos.set(67, 0.3, 19.4); G.P.hp = 100;
+    G.equipWeapon('pistol'); G.P.drawn = true;
+    for (let k = 0; k < 40; k++) {
+      const t = G.city.targets[k % 3];
+      // on VISE la cible : la balle suit le point de visée, qui suit la caméra (aimTick)
+      const dx = t.m.position.x - G.P.pos.x, dy = t.y - (G.P.pos.y + 1.35), dz = t.z - G.P.pos.z;
+      const L3 = Math.hypot(dx, dy, dz);
+      G.cam.yaw = Math.atan2(dx, dz) - Math.PI; G.cam.pitch = -Math.asin(dy / L3);
+      G.P.facing = Math.atan2(dx, dz);
+      G.P.fireCd = 0; G.P.ammo = 999; G.P.reloadT = 0; G.P.holsterT = G.simTime + 5;
+      G.fire();
+      for (let i = 0; i < 40; i++) { G.simTime += 1 / 60; G.shotsTick(1 / 60); }
+    }
+    Math.random = alea;
+    const out = { rayons: n, libres, pire: +pire.toFixed(2), etoiles: G.police.wanted,
+      touchees: G.city.shots, hpVoisin: b.hp, zVoisin: +b.pos.z.toFixed(2), enVol: (G.shots || []).length };
+    G.P.gun = false; G.P.weapon = null; G.P.drawn = false;
+    return out;
+  });
+  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
+  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
+});

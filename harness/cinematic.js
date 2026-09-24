@@ -37,7 +37,9 @@ function setup({ reducedMotion = false, ...options } = {}) {
   const root = Object.assign(events(), { innerWidth: 1280, innerHeight: 720, AudioContext: Audio, MediaRecorder: Recorder, matchMedia: () => ({ matches: reducedMotion }) });
   const navigator = { getGamepads: () => pads };
   const renderer = { ratio: 1.5, size: new T.Vector2(1280, 720), rendered: 0, getPixelRatio() { return this.ratio; }, setPixelRatio(r) { this.ratio = r; }, getSize(v) { return v.copy(this.size); }, setSize(w, h) { this.size.set(w, h); }, setRenderTarget() {}, render(scene, camera) { this.scene = scene; this.camera = camera; this.rendered++; } };
-  vm.runInNewContext(source, { window: root, document, navigator, MediaRecorder: Recorder, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, setTimeout() {}, console });
+  const posts = [];
+  const fetch = (url, init) => { posts.push({ url, body: init && init.body }); return Promise.resolve({ ok: true }); };
+  vm.runInNewContext(source, { window: root, document, navigator, MediaRecorder: Recorder, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, setTimeout() {}, fetch, console });
   const movie = root.MarlonIntro.create({ THREE: T, renderer, sourceCanvas: {}, makeAvatar() {
     const rig = { head: new T.Group(), armL: new T.Group(), armR: new T.Group(), legL: new T.Group(), legR: new T.Group() };
     for (const arm of [rig.armL, rig.armR]) { arm.coude = new T.Group(); arm.add(arm.coude); }
@@ -46,7 +48,8 @@ function setup({ reducedMotion = false, ...options } = {}) {
   }, disposeAvatar() { disposed++; }, onClose() { closed++; }, ...options });
   const layer = document.layers[0], button = k => layer.querySelector(`[data-cinema="${k}"]`);
   const key = (code, target = button('skip'), shiftKey = false) => { const e = { code, target, shiftKey, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } }; root.emit('keydown', e); return e; };
-  return { movie, root, document, renderer, audioContexts, recorders, downloads, avatars, button, key, get closed() { return closed; }, get disposed() { return disposed; }, setPads(v) { pads = v; } };
+  return { movie, root, document, renderer, audioContexts, recorders, downloads, posts, avatars, button, key, get closed() { return closed; }, get disposed() { return disposed; },
+    get layer() { return layer; }, get status() { return layer.querySelector('.cinemaStatus').textContent; }, setPads(v) { pads = v; } };
 }
 
 test('Intro closes once, releases avatars/listeners/audio and restores viewport after resize', () => {
@@ -67,16 +70,16 @@ test('Focused controls keep Enter/Space activation and Tab stays inside intro', 
   assert(h.key('KeyW').stopped); h.key('Escape'); assert(!h.movie.active);
 });
 test('Background tab suspends audio and video recording together without drawing frames', () => {
-  const h = setup(); h.button('record').onclick(); const recorder = h.recorders[0];
+  const h = setup({ capture: true }); h.button('record').onclick(); const recorder = h.recorders[0];
   assert.equal(recorder.state, 'recording'); h.document.hidden = true; h.document.emit('visibilitychange');
   assert.equal(recorder.state, 'paused'); assert.equal(h.audioContexts.at(-1).state, 'suspended');
   const frames = h.renderer.rendered; h.movie.tick(5); assert.equal(h.renderer.rendered, frames);
   h.document.hidden = false; h.document.emit('visibilitychange'); assert.equal(recorder.state, 'recording');
   h.movie.finish(); assert.equal(recorder.state, 'inactive'); assert(recorder.stream.getTracks().every(t => t.stopped));
-  assert.equal(h.downloads.length, 1);
+  assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/__capture');
 });
 test('Recorder failure cannot trap the player inside the cinematic', () => {
-  const h = setup(); h.button('record').onclick(); h.recorders[0].throwStop = true;
+  const h = setup({ capture: true }); h.button('record').onclick(); h.recorders[0].throwStop = true;
   assert.doesNotThrow(() => h.movie.finish()); assert.equal(h.closed, 1); assert(!h.movie.active);
 });
 test('Held gamepad confirmation does not skip until it is released and pressed again', () => {
@@ -153,4 +156,19 @@ test('Every owned cinematic geometry and material is disposed exactly once', () 
   for (const r of resources) r.addEventListener('dispose', () => disposed.set(r, (disposed.get(r) || 0) + 1));
   h.movie.finish(); h.movie.finish(); assert(resources.size > 35); for (const r of resources) assert.equal(disposed.get(r), 1, 'Owned resource leaked or was double-disposed.');
 });
+test('Aucun bouton « Exporter la vidéo » hors du mode capture (n° 100)', () => {
+  // Sur l'ecran de l'introduction, « Exporter la vidéo » relançait le film depuis zéro
+  // (elapsed = 0) et enregistrait 32 s a 8 Mbit/s : l'enfant qui voulait juste appuyer sur un
+  // bouton revoyait tout le film. C'est un outil de studio : il ne sort plus que derriere
+  // ?capture, comme le mode capture lui-meme.
+  const jeu = setup();
+  assert(!/data-cinema="record"/.test(jeu.layer.innerHTML));
+  assert(/data-cinema="sound"/.test(jeu.layer.innerHTML) && /data-cinema="skip"/.test(jeu.layer.innerHTML));
+  jeu.movie.tick(.1); assert(jeu.movie.active);          // le film continue, rien ne le relance
+  const studio = setup({ capture: true });
+  assert(/data-cinema="record"/.test(studio.layer.innerHTML));
+  assert.equal(typeof studio.button('record').onclick, 'function');
+});
+
 console.log(`${count} cinematic action and lifecycle tests passed (mock media/canvas; real Three.js transforms, resources and camera projection).`);
+

@@ -21865,3 +21865,25 @@ test('après un KO, la phrase du réveil reste à l\'écran et dit où on est', 
     && /🏥/.test(r.prio1) && /🏥 Test prioritaire/.test(r.prio2);
   return { ok, detail: `n° 97 : après un KO on se réveillait à ${r.distance} m sans un mot — la phrase « 🏥 Tu te réveilles… » était effacée DANS LA MÊME IMAGE par la pastille du banc de l'accueil, et le seul texte restant était « 🪑 E : s'asseoir » · maintenant la bannière a une priorité : au relevage (${r.releve} s) elle affiche « ${r.reveil} », elle y est encore 7 s de simulation plus tard (« ${r.fin} »), un « 🪑 E : s'asseoir » de priorité 0 ne la remplace pas (« ${r.tenue} ») et une annonce de même importance, si (« ${r.prio2} ») · ${r.trace.length} textes différents sur tout le KO` };
 });
+
+test('l\'écran de l\'introduction ne propose plus « Exporter la vidéo » à un enfant', async p => {
+  const r = await p.evaluate(async () => {
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const btn = document.getElementById('introPlay');
+    if (!btn) return { pourquoi: 'pas de bouton introPlay' };
+    btn.click();
+    await dodo(700);
+    const couche = document.getElementById('marlonCinema');
+    if (!couche) return { pourquoi: 'la cinématique ne s\'est pas ouverte' };
+    const boutons = [...couche.querySelectorAll('.cinemaControls button')].map(b => b.dataset.cinema);
+    const libelles = [...couche.querySelectorAll('.cinemaControls button')].map(b => b.textContent);
+    const skip = couche.querySelector('[data-cinema="skip"]');
+    if (skip) skip.click();
+    await dodo(500);
+    return { boutons, libelles, fermee: !document.getElementById('marlonCinema') };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.boutons.length === 2 && !r.boutons.includes('record')
+    && r.boutons.includes('sound') && r.boutons.includes('skip') && r.fermee;
+  return { ok, detail: `n° 100 : le premier écran du jeu offrait trois boutons dont « Exporter la vidéo », un outil de studio qui relançait le film depuis zéro et enregistrait 32 s à 8 Mbit/s · il n'en reste ${r.boutons.length} : « ${r.libelles.join(' » · « ')} » (l'export ne sort plus que derrière ?capture sur 127.0.0.1), et « Passer » referme bien la cinématique (${r.fermee})` };
+});

@@ -781,6 +781,11 @@ window.__SHOT = {
       if (typeof gang !== 'undefined') { gang.mission = null; if (gang.missions) gang.missions.length = 0; }
     } catch (e13) {}
     settings.ctrl = 'cam';                       // la caméra ne suit plus l'orientation du joueur
+    // LES REGLAGES DE MANETTE NE SURVIVENT PAS D'UN TEST A L'AUTRE (poste CAMERA, r77). Depuis
+    // que le curseur « zone morte » regle AUSSI la camera (camMorte / camDerive), un test qui le
+    // pousse a 30 % rendrait la camera sourde a tous les suivants. Sensibilite et axe vertical
+    // sont du meme bois : ils multiplient ou retournent tout ce que mesure un test de camera.
+    try { settings.padDeadzone = 0.08; settings.sensib = 1; settings.invY = false; settings.padMove = null; } catch (ePad) {}
     // L'heure se pilote par simTime (journee de 7 h a 19 h). Mais l'horloge ne doit JAMAIS
     // reculer : des minuteries posees par un test precedent (le prochain habitant qui va au
     // casino, la prochaine reunion de gang...) vivent sur des objets qui, eux, survivent, et

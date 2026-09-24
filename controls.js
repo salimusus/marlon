@@ -69,6 +69,20 @@
     const response = aim ? .35 * travel + .65 * travel * travel : Math.pow(travel, 1.2);
     return [x * response / length, y * response / length];
   }
+  // LE STICK DE LA CAMERA — UNE SEULE IMPLEMENTATION (arbitrage r77, poste CAMERA). Le regard
+  // avait deux chemins : `frame.look` ici, et `padVisee` dans le jeu, avec des reglages
+  // differents. Deux chemins pour la meme chose, dont un seul etait branche : le prochain qui
+  // corrigeait l'un laissait l'autre en place. C'est desormais la seule implementation, et le
+  // jeu la consomme par `frame.look`.
+  //   deadzone : zone morte RONDE (la course utile repart de zero juste apres).
+  //   squelch  : silence CARRE par axe — une DualSense usee derive de 5 a 8 % sur chaque axe,
+  //              et 8 % sur les deux font 11 % en diagonale, donc au-dela de la zone ronde.
+  // La courbe est celle de la VISEE (aim = true) : lineaire pres du centre, carree au bord.
+  function look(x, y, deadzone = .075, squelch = 0) {
+    const sq = finite(squelch, 0);
+    if (sq > 0 && Math.max(Math.abs(finite(x)), Math.abs(finite(y))) < sq) return [0, 0];
+    return radial(x, y, deadzone, true);
+  }
   const trigger = value => clamp((finite(value) - .06) / .94, 0, 1);
   function createController() {
     let identity = null, context = null, previous = Array(COUNT).fill(false), rawPrevious = [], blocked = [], axesBlocked = [false, false], nav = null, navAt = 0, rearmer = false, l2Precedent = 0, r2Precedent = 0;
@@ -81,8 +95,8 @@
       const current = options.context || 'blocked', nouvelleManette = id !== identity;
       const now = finite(options.now), changed = nouvelleManette || current !== context;
       const raw = normalize(gp, nouvelleManette ? null : rawPrevious);
-      const leftMagnitude = Math.hypot(raw.lx, raw.ly), rightMagnitude = Math.hypot(raw.rx, raw.ry);
-      const leftNeutral = Math.max(.18, finite(options.deadzone, .12)), rightNeutral = Math.max(.18, finite(options.lookDeadzone, .12));
+      const leftMagnitude = Math.hypot(raw.lx, raw.ly);   // le stick DROIT n'a plus de quarantaine (voir l'arbitrage r77 plus bas)
+      const leftNeutral = Math.max(.18, finite(options.deadzone, .12));
       // ============ ARBITRAGE r76 : QUI EST « REARME » ET QUAND (fusion avec la 0.10) ======
       // Le principe de la 0.10 est bon : ce qui est deja TENU au moment d'une bascule ne doit
       // pas agir de l'autre cote (fermer la boutique avec ✕ ne doit pas degainer ; revenir
@@ -118,7 +132,13 @@
         // marcher tout de suite — il ne va pas relacher le pouce pour que le jeu veuille bien
         // repartir ; et au tout premier releve il n'y a rien a rearmer. Derriere un stick il
         // n'y a aucune action destructrice a retenir, contrairement aux boutons.
-        if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
+        // ARBITRAGE r77 : SEUL LE STICK GAUCHE EST MIS EN QUARANTAINE. Le stick DROIT ne
+        // declenche rien de destructeur — il ne fait que tourner l'image — et le bloquer en
+        // sortie de menu laissait la camera morte tant que l'enfant n'avait pas relache le
+        // pouce. Le jeu contournait deja la regle en lisant les axes bruts (padVisee) : la
+        // quarantaine du droit ne protegeait donc plus rien, elle ne faisait que rendre
+        // `frame.look` faux. axesBlocked[1] n'existe plus.
+        if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, false];
         previous = Array(COUNT).fill(false); nav = null; navAt = 0; rearmer = false;
       }
       identity = id; context = current; rawPrevious = raw.b.slice(); l2Precedent = raw.l2; r2Precedent = raw.r2;
@@ -129,9 +149,8 @@
         return enabled && down && !blocked[i];
       });
       if (leftMagnitude <= leftNeutral) axesBlocked[0] = false;
-      if (rightMagnitude <= rightNeutral) axesBlocked[1] = false;
       const move = enabled && !axesBlocked[0] ? radial(raw.lx, raw.ly, options.deadzone) : [0, 0];
-      const look = enabled && !axesBlocked[1] ? radial(raw.rx, raw.ry, options.lookDeadzone, true) : [0, 0];
+      const lookAxes = enabled ? look(raw.rx, raw.ry, options.lookDeadzone, options.lookSquelch) : [0, 0];
       let direction = null;
       if (b[12]) direction = 'haut'; else if (b[13]) direction = 'bas'; else if (b[14]) direction = 'gauche'; else if (b[15]) direction = 'droite';
       else if (enabled && !axesBlocked[0]) {
@@ -143,7 +162,7 @@
       const navigation = direction && (direction !== nav || now >= navAt) ? direction : null;
       if (navigation) navAt = now + (direction !== nav ? 380 : 130);
       nav = direction;
-      const frame = { raw, b, previous, changed, move, look, navigation,
+      const frame = { raw, b, previous, changed, move, look: lookAxes, navigation,
         pressed: b.map((v, i) => v && !previous[i]), released: b.map((v, i) => !v && previous[i]),
         gaz: enabled && !blocked[7] ? trigger(raw.r2) : 0, frein: enabled && !blocked[6] ? trigger(raw.l2) : 0,
         neutralRequired: blocked.some(Boolean) || axesBlocked.some(Boolean) };
@@ -166,5 +185,5 @@
       clear() { held.clear(); }
     };
   }
-  return { profile, hat, hatAxis, normalize, radial, trigger, createController, createKeySources };
+  return { profile, hat, hatAxis, normalize, radial, look, trigger, createController, createKeySources };
 });

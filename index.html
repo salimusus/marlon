@@ -1298,7 +1298,7 @@ body.tv #droneAide{font-size:calc(var(--uh) * .6);bottom:calc(var(--tvpad) + var
     <button class="btn sec" id="musBtn">Musique : activée</button>
     <div id="volRow"><span>🔊 Volume</span><input type="range" id="volIn" min="0" max="100" step="5" aria-label="Volume"><b id="volVal">100 %</b></div>
     <div id="sensRow" class="volRow"><span>🎮 Sensibilité</span><input type="range" id="sensIn" min="50" max="200" step="10" aria-label="Sensibilité de la manette"><b id="sensVal">100 %</b></div>
-    <div class="volRow" id="padDeadRow"><span>🎮 Zone morte</span><input type="range" id="padDeadIn" min="6" max="30" step="1" aria-label="Zone morte des sticks"><b id="padDeadVal">8 %</b></div>
+    <div class="volRow" id="padDeadRow"><span>🎮 Zone morte des sticks</span><input type="range" id="padDeadIn" min="6" max="30" step="1" aria-label="Zone morte des sticks : marche et caméra" title="Monte-la si la manette est usée et que le personnage ou l'image bougent tout seuls"><b id="padDeadVal">8 %</b></div>
     <button class="btn sec" id="sndTest">🔔 Tester le son</button>
     <details id="mixBloc"><summary id="mixTitre">🎧 Volume par famille ▾</summary><div id="mixRows"></div></details>
     <button class="btn sec" id="padConnect2">🎮 Connecter une manette PS5</button>
@@ -30169,9 +30169,23 @@ function padActive() {
 function padStick(x, y, morte = settings.padDeadzone || .08) {
   return MarlonControls.radial(x, y, morte);
 }
+// LE CURSEUR « ZONE MORTE » RÈGLE AUSSI LA CAMÉRA (arbitrage r77, poste CAMÉRA). Depuis que le
+// regard a sa propre courbe, la caméra était sur deux constantes fixes et le curseur du menu
+// n'agissait plus que sur le stick de MARCHE — sans que rien ne le dise, alors qu'il s'appelle
+// « zone morte des sticks » et qu'il monte jusqu'à 30 % justement pour faire taire une manette
+// usée. Mais on ne peut pas non plus recopier le réglage tel quel : à 12 %, une poussée légère à
+// 12 % de course ne rendrait plus rien (mesuré : 0 °/s là où il en faut entre 2 et 25, test 396),
+// et la caméra deviendrait impossible à cadrer. Le curseur AJOUTE donc au minimum de la caméra
+// au lieu de le remplacer : au réglage d'usine (8 %) on retrouve exactement CAM_MORTE = 7,5 % et
+// CAM_DERIVE = 8,5 % ; poussé à 30 %, il ajoute 22 points et la manette la plus usée se tait.
+function camMorte() { return CAM_MORTE + Math.max(0, (settings.padDeadzone || 0.08) - 0.08); }
+function camDerive() { return CAM_DERIVE + Math.max(0, (settings.padDeadzone || 0.08) - 0.08); }
+// UNE SEULE IMPLÉMENTATION DU STICK DE VISÉE (arbitrage r77). Elle vit dans controls.js, avec
+// celle du stick de marche, et c'est elle que `frame.look` rend à pollGamepad : le jeu et le
+// banc `gamepad.js` mesurent donc le MÊME chemin. Cette fonction n'est plus qu'un raccourci pour
+// l'écran « Tester la manette », qui doit afficher exactement ce que la caméra reçoit.
 function padVisee(x, y) {
-  if (Math.max(Math.abs(x), Math.abs(y)) < CAM_DERIVE) return [0, 0];   // voir CAM_DERIVE : le silence d'un stick usé
-  return MarlonControls.radial(x, y, CAM_MORTE, true);
+  return MarlonControls.look(x, y, camMorte(), camDerive());
 }
 const padController = MarlonControls.createController();
 function padContexte() {
@@ -30210,7 +30224,9 @@ function pollGamepad(dt) {
     return;
   }
   const frame = padController.sample(gp, { context: context === 'typing' ? 'blocked' : context,
-    now: performance.now(), deadzone: settings.padDeadzone, lookDeadzone: settings.padDeadzone });
+    now: performance.now(), deadzone: settings.padDeadzone,
+    // la caméra a sa propre zone morte, plus fine que celle de la marche (voir camMorte)
+    lookDeadzone: camMorte(), lookSquelch: camDerive() });
   if (frame.changed) releaseGamepad(false);
   const L = frame.raw, neuf = frame.b, bas = frame.previous;
   pad.lu = L; pad.neutralRequired = frame.neutralRequired;
@@ -30233,20 +30249,21 @@ function pollGamepad(dt) {
   const baisse = pad.l2 && aPied && !braque;
   if (baisse !== !!pad.baisse) { pad.baisse = baisse; setAccroupi(baisse || keys.has('KeyC') || keys.has('ControlLeft')); }
   pad.l2Bas = pad.l2;
-  // LE STICK DROIT N'EST JAMAIS MIS EN QUARANTAINE (arbitrage de fusion, round 76). La version
-  // 0.10 fait passer le regard par `frame.look`, qui hérite de la règle « au changement de
-  // contexte, un axe déjà poussé reste bloqué tant qu'on ne l'a pas relâché ». Cette règle est
-  // bonne pour les BOUTONS (une croix maintenue en fermant le menu ne doit pas tirer) mais
-  // catastrophique pour la caméra : le premier relevé de la manette est TOUJOURS un changement
-  // de contexte, donc un joueur qui pousse déjà le stick droit — ou qui sort de la cinématique
-  // d'introduction en le tenant — se retrouve avec une caméra morte jusqu'à ce qu'il le lâche.
-  // Mesuré au banc : 0 °/s de rotation dans les tests 397, 398, 400, 401 et 416, c'est-à-dire
-  // cinq essais sur neuf rendus rouges par cette seule ligne. Derrière le stick droit il n'y a
-  // aucune action destructrice à retenir : on lit donc les axes bruts, avec la courbe de VISÉE
-  // du round 71 (zone morte ronde CAM_MORTE = 7,5 %, part linéaire CAM_LIN). La zone morte du
-  // menu (settings.padDeadzone, 12 %) mangeait au passage la poussée légère à 12 % de course :
-  // mesuré 0 °/s là où il en faut entre 2 et 25 (test 396) ; avec CAM_MORTE, 5,9 °/s.
-  const [vx, vy] = padVisee(L.rx, L.ry);
+  // LE STICK DROIT N'EST JAMAIS MIS EN QUARANTAINE (arbitrage de fusion, round 76, tenu en r77).
+  // La version 0.10 fait passer le regard par `frame.look`, qui héritait de la règle « au
+  // changement de contexte, un axe déjà poussé reste bloqué tant qu'on ne l'a pas relâché ».
+  // Cette règle est bonne pour les BOUTONS (une croix maintenue en fermant le menu ne doit pas
+  // tirer) mais catastrophique pour la caméra : le premier relevé de la manette est TOUJOURS un
+  // changement de contexte, donc un joueur qui pousse déjà le stick droit — ou qui sort de la
+  // cinématique d'introduction en le tenant — se retrouvait avec une caméra morte jusqu'à ce
+  // qu'il le lâche. Mesuré au banc : 0 °/s de rotation dans les tests 397, 398, 400, 401 et 416.
+  // Le round 76 contournait la règle en relisant les axes BRUTS ici, ce qui laissait vivre deux
+  // chemins pour la même chose (`frame.look` calculé et testé par gamepad.js, mais débranché).
+  // Depuis r77 la quarantaine du stick droit n'existe plus DANS controls.js (seul le gauche en
+  // garde une, pour la navigation des menus), et le jeu reprend donc `frame.look` : un seul
+  // chemin, celui que le banc `gamepad.js` mesure. Les réglages passent par camMorte() et
+  // camDerive() (zone morte ronde 7,5 % + silence carré 8,5 %, augmentés par le curseur du menu).
+  const [vx, vy] = frame.look;
   const seconds = Number.isFinite(dt) ? clamp(dt, 0, .05) : 0;
   const sens = clamp(Number.isFinite(settings.sensib) ? settings.sensib : 1, .5, 2) * (P.aim ? .5 : 1);
   cam.yaw -= vx * seconds * CAM_VYAW * sens;

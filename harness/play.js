@@ -11415,7 +11415,14 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
     const dansUnSolide = c => {
       const cs = Math.cos(c.h), sn = Math.sin(c.h), A = (c.baseD || 4.4) / 2, B = (c.baseW || 2.4) / 2;
       for (const o of G.solidsAutour(c.x, c.z, 6, true)) {
-        if (o === c.solid || o.veh || o.h > 30) continue;
+        // LE MOBILIER `decor` NE COMPTE PAS, PARCE QUE LE JEU NE LE COMPTE PAS. `carBlocked` — le
+        // garde-fou de collision de TOUT ce qui roule, la voiture du joueur comprise — ignore les
+        // solides marques `decor` depuis toujours (« mobilier solidifie pour le joueur : la conduite
+        // reste exactement celle d'avant »). Les compter ici reviendrait a exiger des cinq vehicules
+        // de service une regle que le jeu n'applique a personne d'autre — et c'etait bien le cas :
+        // `vehiculeMord`, qui ne sert qu'a eux, etait le seul endroit du jeu ou le mobilier decoratif
+        // arretait une voiture. Il ne l'est plus (voir le camion de pompiers dans sa caserne).
+        if (o === c.solid || o.veh || o.decor || o.h > 30) continue;
         if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;   // marche franchissable
         for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
           const x = c.x + lx * cs + lz * sn, z = c.z - lx * sn + lz * cs;
@@ -13178,7 +13185,14 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
     const dansUnSolide = v => {
       const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
       for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
-        if (o === v.solid || o.veh || o.h > 30) continue;
+        // LE MOBILIER `decor` NE COMPTE PAS, PARCE QUE LE JEU NE LE COMPTE PAS. `carBlocked` — le
+        // garde-fou de collision de TOUT ce qui roule, la voiture du joueur comprise — ignore les
+        // solides marques `decor` depuis toujours (« mobilier solidifie pour le joueur : la conduite
+        // reste exactement celle d'avant »). Les compter ici reviendrait a exiger des cinq vehicules
+        // de service une regle que le jeu n'applique a personne d'autre — et c'etait bien le cas :
+        // `vehiculeMord`, qui ne sert qu'a eux, etait le seul endroit du jeu ou le mobilier decoratif
+        // arretait une voiture. Il ne l'est plus (voir le camion de pompiers dans sa caserne).
+        if (o === v.solid || o.veh || o.decor || o.h > 30) continue;
         if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
         for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
           const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;
@@ -13369,7 +13383,14 @@ test('un véhicule de service en intervention a la priorité : les autres se ran
     const dansUnSolide = v => {
       const cs = Math.cos(v.h), sn = Math.sin(v.h), A = (v.baseD || 4.4) / 2, B = (v.baseW || 2.4) / 2;
       for (const o of G.solidsAutour(v.x, v.z, 8, true)) {
-        if (o === v.solid || o.veh || o.h > 30) continue;
+        // LE MOBILIER `decor` NE COMPTE PAS, PARCE QUE LE JEU NE LE COMPTE PAS. `carBlocked` — le
+        // garde-fou de collision de TOUT ce qui roule, la voiture du joueur comprise — ignore les
+        // solides marques `decor` depuis toujours (« mobilier solidifie pour le joueur : la conduite
+        // reste exactement celle d'avant »). Les compter ici reviendrait a exiger des cinq vehicules
+        // de service une regle que le jeu n'applique a personne d'autre — et c'etait bien le cas :
+        // `vehiculeMord`, qui ne sert qu'a eux, etait le seul endroit du jeu ou le mobilier decoratif
+        // arretait une voiture. Il ne l'est plus (voir le camion de pompiers dans sa caserne).
+        if (o === v.solid || o.veh || o.decor || o.h > 30) continue;
         if (o.y + o.h / 2 < 0.56 || o.y - o.h / 2 > 1.6) continue;
         for (const [lx, lz] of [[B, A], [-B, A], [B, -A], [-B, -A], [0, 0]]) {
           const x = v.x + lx * cs + lz * sn, z = v.z - lx * sn + lz * cs;

@@ -26768,12 +26768,17 @@ function degageService(c, dt) {
   if (!wp) return false;
   const dh = CAP(Math.atan2(wp[0] - c.x, wp[1] - c.z) - c.h);
   // ON NE TOURNE PAS DANS LE VOISIN NON PLUS. Le pas de sortie etait bien refuse s'il touchait
-  // une autre tole, mais LE BRAQUAGE, lui, n'etait jamais annule : un camion de service qui
+  // une autre tole, mais LE BRAQUAGE, lui, n'etait jamais annule : un vehicule de service qui
   // sort de son hangar pivotait son arriere dans la caisse d'a cote et l'y laissait. C'est le
   // meme defaut que la marche arriere de `rouleVers` (cap de depart releve apres le braquage).
+  // ON COMPARE LA PROFONDEUR, PAS UN OUI/NON. Premiere version : on refusait tout braquage qui
+  // TOUCHE une autre tole. Mesure (test 332) : le velo du facteur, gare serre sous l'abri du
+  // depot entre deux engins, ne pouvait plus tourner du tout — 77 m de tournee en 225 s au lieu
+  // de 468, et la depanneuse remontait a 24 images d'affilee encastree. Le hangar est justement
+  // l'endroit ou les caisses SE TOUCHENT DEJA : on n'y interdit donc que ce qui AGGRAVE.
   const h0d = c.h;
   c.h += clamp(dh, -1, 1) * 1.8 * dt;
-  if (vehiculeMord(c, c.x, c.z, c.h) && !vehiculeMord(c, c.x, c.z, h0d)) c.h = h0d;
+  if (penetrationToles(c, c.x, c.z, c.h) > penetrationToles(c, c.x, c.z, h0d) + 1e-9) c.h = h0d;
   const v = 3;
   const nx = c.x + Math.sin(c.h) * v * dt, nz = c.z + Math.cos(c.h) * v * dt;
   // On sort d'un MUR, jamais d'un VEHICULE : le camion de pompiers qui se degageait d'un

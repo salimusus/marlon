@@ -170,6 +170,18 @@ window.__SHOT = {
         // (la LONGUEUR de perche heritee n'est plus listee : go() la repose a 9 m comme au
         //  chargement, elle n'explique donc plus rien et elle aurait parle a chaque test.)
       } catch (eCam) {}
+      // OU LE TEST PRECEDENT A LAISSE LE JOUEUR (poste FIABILITE, round 78). Ce n'est pas un
+      // detail d'affichage : la ville se REBATIT autour de cette case. traficPose refuse toute
+      // voie a moins de 30 m du joueur, chaque refus consomme un tirage de traficRnd, et les
+      // huit voitures de la circulation se decalent toutes. C'est ce qui faisait que le test
+      // 299 (la traque, qui finit en 300 ; 300) empoisonnait le test 332 a lui seul.
+      // go() repose maintenant le joueur AVANT loadWorld, donc cette ligne ne devrait plus
+      // rien expliquer — elle reste pour que le prochain qui lit un releve d'entree sache que
+      // la position d'entree fait partie des etats herites, et voie tout de suite si un
+      // nouveau code s'est remis a dependre d'elle pendant la construction.
+      if (typeof P !== 'undefined' && P.pos)
+        dit(true, 'joueur trouve en (' + Math.round(P.pos.x) + ' ; ' + Math.round(P.pos.z)
+          + ") : la ville serait rebatie autour de cette case");
       dit(typeof police !== 'undefined' && police.wanted > 0, 'recherche police niveau ' + (typeof police !== 'undefined' ? police.wanted : '?'));
       dit(typeof mission !== 'undefined' && mission.cur, 'mission en cours');
       dit(typeof city !== 'undefined' && city.accidents && city.accidents.length, (typeof city !== 'undefined' && city.accidents ? city.accidents.length : 0) + ' accident(s) en cours');
@@ -203,6 +215,44 @@ window.__SHOT = {
         var fant = 0; for (var q2 = 0; q2 < solids.length; q2++) { var o2 = solids[q2]; if (o2 && o2.mesh && !auMonde(o2.mesh)) fant++; }
         dit(fant, fant + ' boite(s) de collision fantomes laissees par une reconstruction du monde');
       }
+      // LES DEUX RESIDUS QUI RESTAIENT APRES LA POSITION D'ENTREE (poste FIABILITE, r78).
+      // Une fois le joueur pose avant la reconstruction, le test 299 ne changeait plus RIEN au
+      // test 332 (memes huit voitures de trafic, memes chantiers, meme police, memes gangs, meme
+      // argent) sauf ces deux-la, mesures au releve d'entree :
+      //
+      //  1. LES BULLES DE DIALOGUE FIGEES. bubble() accroche un panneau a l'avatar et le fait
+      //     expirer... dans la boucle d'AFFICHAGE. Un banc qui enchaine des step() ne l'efface
+      //     donc jamais, et l'avatar garde un enfant de plus pour tous les tests suivants.
+      //     Mesure : 3 bulles restantes derriere le test 299, horodatees a 295,5 s pour une
+      //     horloge reposee a 3 000 s — expirees depuis longtemps, mais toujours accrochees.
+      //     (Meme famille que le defaut n° 98 : un objet qui ne vieillit qu'au dessin.)
+      //
+      //  2. LES OBJETS POSES DANS LA SCENE AU LIEU DE worldGroup. clearWorld vide worldGroup ;
+      //     ce qui a ete ajoute d'un cran plus haut, directement dans la scene, SURVIT a la
+      //     reconstruction. Mesure derriere le test 299 : 4 objets de plus restes dans la scene
+      //     (1 LineSegments, 2 Mesh de PlaneGeometry, 1 Points) et un solide qui change de
+      //     famille (4 583 « autre » + 613 « decor » devient 4 581 + 614). C'est le dernier
+      //     ecart qui subsiste entre « 332 seul » et « 332 derriere 299 » : le fourgon des
+      //     travaux parcourt 687 m dans un cas et 621 m dans l'autre, les quatre autres
+      //     vehicules de service etant desormais rigoureusement identiques.
+      try {
+        var libres = 0;
+        for (var li = 0; li < scene.children.length; li++) {
+          var lo = scene.children[li];
+          if (lo && (lo.isMesh || lo.isPoints || lo.isLineSegments)) libres++;
+        }
+        // UNE VILLE NEUVE EN A QUATRE, mesures : le dome du ciel et sa doublure (2 spheres),
+        // la nappe d'eau (1 plan) et le champ d'etoiles (1 nuage de points). Au-dela, c'est un
+        // test precedent qui a laisse quelque chose — derriere le test 299 on en compte 8.
+        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4) : '
+          + 'worldGroup est vide par la reconstruction, la scene NON — ils survivent meme a frais: true');
+      } catch (eLib) {}
+      try {
+        var bul = 0;
+        if (typeof bots !== 'undefined') for (var bi = 0; bi < bots.length; bi++)
+          if (bots[bi].av && bots[bi].av.bubble) bul++;
+        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (elles n\u2019expirent que dans la boucle d\u2019affichage)');
+      } catch (eBul) {}
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
       dit(typeof craieLit !== 'undefined' && craieLit.g && craieLit.g.gain.value > 0.0002, 'lit de craie ouvert');
@@ -357,6 +407,35 @@ window.__SHOT = {
         if (typeof P !== 'undefined') P.perf = __SHOT.perf0;
       } catch (e40b) {}
     }
+    // ============ LE JOUEUR EST POSE AVANT LA RECONSTRUCTION, PAS APRES ============
+    // MESURE (poste FIABILITE, round 78). C'est l'heritage entre tests que le poste CONDUITE
+    // avait mesure sans pouvoir le nommer : le test 299 (la traque) empoisonnait le test 332
+    // (les cinq vehicules de service) A LUI SEUL, alors que le monde est rebati (frais: true),
+    // que Math.random est fige et que l'horloge est reposee a 3 000 s.
+    //
+    // LA CAUSE. traficPlace() tourne a la fin de la construction de la ville, et traficPose()
+    // refuse toute voie a moins de 30 m du joueur (« jamais sous les yeux du joueur »). Or la
+    // position du joueur n'etait reposee sur la case demandee que BIEN PLUS BAS, apres
+    // loadWorld : la ville se batissait donc autour du joueur LAISSE PAR LE TEST PRECEDENT.
+    // Chaque refus consomme un tirage de traficRnd, la suite entiere se decale, et les huit
+    // voitures de la circulation n'atterrissent pas aux memes endroits.
+    //
+    // MESURE EXACTE, meme graine, meme heure, meme monde neuf, seule change la position
+    // laissee par le test d'avant : joueur laisse en (0 ; 0) contre joueur laisse en
+    // (300 ; 300) — la 7e voiture nait en (23,75 ; 13) dans un cas, en (-58,75 ; 169,25) dans
+    // l'autre, et tout ce qui suit se decale : 2 voitures sur 8 changent de place. Bruit de
+    // fond : ZERO ecart entre deux entrees de suite a position egale. Le test 299 finit en
+    // (300 ; 300), et c'est pour cela que lui seul suffisait — seule compte la position
+    // laissee par le test IMMEDIATEMENT precedent, puisque seule la derniere est encore la.
+    //
+    // Effet mesure par le poste CONDUITE avant ses correctifs : 55 images d'affilee encastrees
+    // pour la depanneuse, 47 pour le camion de pompiers, 9 images dans un solide pour le
+    // fourgon. Ses correctifs absorbent l'effet ; ceci enleve la cause.
+    //
+    // On pose donc le joueur AVANT de rebatir : la ville nait toujours autour de la case que
+    // le test a demandee, quel que soit le test d'avant. La pose complete (vitesse, cible de
+    // camera, cap) reste plus bas, inchangee.
+    if (v.x != null) { try { P.pos.set(v.x, v.y != null ? v.y : P.pos.y, v.z); P.vel.set(0, 0, 0); } catch (ePos0) {} }
     if (veutFrais && v.world != null) loadWorld(v.world);
     else if (v.world != null && worldIdx !== v.world) loadWorld(v.world);
     document.body.classList.remove('lobby');

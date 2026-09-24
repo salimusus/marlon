@@ -21139,3 +21139,88 @@ test('au Bois des Aventuriers, le camp et le mobilier arretent, le ruisseau et l
   const ok = r.fautes.length === 0 && r.nids === 2;
   return { ok, detail: `${r.n} points de controle mesures un par un dans le tableau des solides du Bois · ${r.fautes.length} ecart${r.fautes.length ? ' : ' + r.fautes.join(' ; ') : ''} · le ruisseau est une nappe a 0,55 d'opacite : solidifieDecor ecarte d'office tout materiau sous 0,6, elle ne pourra jamais devenir un mur invisible en travers de la clairiere (c'est exactement ce qui etait arrive au filet du trampoline) · les ${r.nids} balancoires nid d'oiseau passent par city.swings, comme les ${r.swings} balancoires de la ville` };
 });
+
+// DEUX PAIRES DE VEHICULES SE CHEVAUCHAIENT DES LA CONSTRUCTION DU MONDE, avant qu'aucun
+// n'ait roule : les deux motos du parking a 1,10 m d'entraxe pour 1,10 m de large chacune
+// (zero degagement), et la benne (7 m) et le bulldozer (5,40 m) du depot a 5,81 m de centre
+// a centre — 5 cm de caisse dans la caisse, et le bulldozer en plus a cheval sur le mur
+// ouest du hangar. Tout compteur de chevauchements du banc les payait A CHAQUE IMAGE, ce qui
+// polluait les mesures de tous les autres postes. Ce test BALAYE les 47 vehicules poses a la
+// construction et exige zero paire qui se touche, sans qu'aucun ait roule.
+test('aucun véhicule ne se chevauche au départ : les 47 caisses posées à la construction sont toutes séparées', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, frais: true });
+    const vus = new Set(), L = [];
+    const pousse = (arr, src) => { for (const v of (arr || [])) { if (!v || vus.has(v) || v.heli) continue; vus.add(v);
+      L.push({ src, nom: (v.kind || (v.kart ? 'kart' : 'voiture')) + '(' + v.x.toFixed(1) + ',' + v.z.toFixed(1) + ')',
+        x: v.x, z: v.z, h: v.h || 0, W: v.baseW || 2.4, D: v.baseD || 4.4 }); } };
+    pousse(G.city.cars, 'city.cars'); pousse(G.city.aiCars, 'aiCars'); pousse(G.police.cars, 'police'); pousse(G.raceKarts, 'karts');
+    // rectangles ORIENTES : theoreme des axes separateurs, distance signee (>0 = chevauchement)
+    const coins = v => { const cs = Math.cos(v.h), sn = Math.sin(v.h), A = v.D / 2, B = v.W / 2;
+      return [[B, A], [-B, A], [-B, -A], [B, -A]].map(([lx, lz]) => [v.x + lx * cs + lz * sn, v.z - lx * sn + lz * cs]); };
+    const sep = (u, v) => { const P1 = coins(u), P2 = coins(v); let mini = 1e9;
+      for (const [A, B] of [[P1, P2], [P2, P1]]) for (let i = 0; i < 4; i++) {
+        const nx = A[(i + 1) % 4][1] - A[i][1], nz = A[i][0] - A[(i + 1) % 4][0], n = Math.hypot(nx, nz) || 1;
+        let a1 = 1e9, a2 = -1e9, b1 = 1e9, b2 = -1e9;
+        for (const q of A) { const t = (q[0] * nx + q[1] * nz) / n; a1 = Math.min(a1, t); a2 = Math.max(a2, t); }
+        for (const q of B) { const t = (q[0] * nx + q[1] * nz) / n; b1 = Math.min(b1, t); b2 = Math.max(b2, t); }
+        mini = Math.min(mini, Math.min(a2 - b1, b2 - a1)); }
+      return mini; };
+    const paires = []; let pire = { d: 1e9, quoi: '' };
+    for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+      if (Math.abs(L[i].x - L[j].x) > 20 || Math.abs(L[i].z - L[j].z) > 20) continue;
+      const s = sep(L[i], L[j]);
+      if (s > 0) paires.push(L[i].nom + ' ∩ ' + L[j].nom + ' = ' + s.toFixed(2) + ' m');
+      else if (-s < pire.d) pire = { d: +(-s).toFixed(2), quoi: L[i].nom + ' / ' + L[j].nom }; }
+    // et les deux paires nommees sont bien celles que l'on a corrigees
+    const motos = L.filter(v => v.nom.startsWith('moto')).map(v => +v.x.toFixed(2)).sort((a, b) => a - b);
+    const benne = L.find(v => v.nom.startsWith('benne')), bull = L.find(v => v.nom.startsWith('bulldozer'));
+    return { total: L.length, paires, pire,
+      ecartMotos: motos.length === 2 ? +(motos[1] - motos[0]).toFixed(2) : null,
+      ecartChantier: benne && bull ? +Math.hypot(benne.x - bull.x, benne.z - bull.z).toFixed(2) : null };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.total >= 40 && r.paires.length === 0 && r.pire.d > 0.1 && r.ecartMotos >= 2 && r.ecartChantier >= 7;
+  return { ok, detail: `avant : DEUX paires se chevauchaient sans qu'aucun véhicule n'ait roulé — les deux motos à 1,10 m d'entraxe pour 1,10 m de large, et la benne (7 m) / le bulldozer (5,40 m) à 5,81 m, 5 cm de caisse dans la caisse · maintenant, sur les ${r.total} véhicules posés à la construction : ${r.paires.length} chevauchement${r.paires.length ? ' → ' + r.paires.slice(0, 6).join(' · ') : ''}, la paire la plus serrée garde ${r.pire.d} m (${r.pire.quoi}) · motos à ${r.ecartMotos} m d'entraxe, benne ↔ bulldozer à ${r.ecartChantier} m` };
+});
+
+// LE TRI DES IMPASSES. Le réseau comptait 43 nœuds cul-de-sac et personne ne savait lesquels
+// étaient de VRAIES fins de rue (bord de carte, accès circuit, hélistation, fond d'un
+// quartier) et lesquels étaient des ACCIDENTS — deux bouts de la même rue que le graphe
+// ignorait l'un l'autre. Le critère est mesuré, pas décrété : une impasse est ACCIDENTELLE
+// quand il existe un autre nœud à moins de 20 m dont le chemin RÉEL par les voies fait plus
+// de trois fois ce saut, plus 10 m de marge. Relevé d'avant : la rue de l'école, (-54,5 ; 110)
+// et (-47,5 ; 110), SEPT MÈTRES sur le même bitume pour 62 m de détour ; les deux rues de
+// l'ouest, douze mètres pour 57 m ; le commissariat, 5,30 m pour 26 m.
+test('les impasses sont triées : plus aucun cul-de-sac accidentel, et les fins de rue légitimes restent', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, frais: true });
+    const c = G.city, Gr = c.graphe, N = Gr.noeuds, A = Gr.aretes;
+    const vois = N.map(() => new Set()), adj = N.map(() => []);
+    for (const e of A) { vois[e.de].add(e.vers); vois[e.vers].add(e.de); adj[e.de].push([e.vers, e.long]); adj[e.vers].push([e.de, e.long]); }
+    const dij = (i, j) => { const dd = new Float64Array(N.length).fill(Infinity); dd[i] = 0; const t = [[0, i]];
+      while (t.length) { let b = 0; for (let k = 1; k < t.length; k++) if (t[k][0] < t[b][0]) b = k;
+        const [dc, u] = t.splice(b, 1)[0]; if (dc > dd[u] + 1e-6) continue; if (u === j) return dc;
+        for (const [v, L] of adj[u]) { const nd = dc + L; if (nd < dd[v]) { dd[v] = nd; t.push([nd, v]); } } }
+      return Infinity; };
+    const culs = [], accidentelles = [], legitimes = [];
+    for (let i = 0; i < N.length; i++) {
+      if (vois[i].size !== 1) continue;
+      const n = N[i]; culs.push(i);
+      let best = null;
+      for (let k = 0; k < N.length; k++) { if (k === i || vois[i].has(k)) continue;
+        const d = Math.hypot(N[k].x - n.x, N[k].z - n.z); if (d > 20) continue;
+        if (!best || d < best.d) best = { d, k }; }
+      const ou = `(${n.x.toFixed(0)} ; ${n.z.toFixed(0)})`;
+      if (!best) { legitimes.push(ou + ' bout de rue'); continue; }
+      const det = dij(i, best.k);
+      if (det > best.d * 3 + 10) accidentelles.push(`${ou} → ${best.d.toFixed(1)} m à vol d'oiseau, ${det.toFixed(0)} m par les voies`);
+      else legitimes.push(ou);
+    }
+    return { noeuds: N.length, culs: culs.length, accidentelles, legitimes: legitimes.length,
+      routes: c.routes.length };
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const ok = r.accidentelles.length === 0 && r.culs >= 20 && r.culs <= 40;
+  return { ok, detail: `avant : 43 nœuds cul-de-sac, dont plusieurs où deux bouts de la MÊME rue s'ignoraient — (-54,5 ; 110) et (-47,5 ; 110), 7 m sur le même bitume pour 62 m de détour · maintenant ${r.culs} culs-de-sac sur ${r.noeuds} nœuds et ${r.routes} chaussées : ${r.accidentelles.length} accidentelle${r.accidentelles.length ? ' → ' + r.accidentelles.slice(0, 5).join(' · ') : ''}, ${r.legitimes} vraies fins de rue (bord de carte, accès circuit, hélistation, fond de quartier)` };
+});

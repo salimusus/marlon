@@ -2750,7 +2750,10 @@ function declareLesParkings() {
   P(-13, 8.5, 24, 16, 'Parking du centre');                                   // la dalle du sud-ouest
   if (city.casino) P(city.casino.x - 30, city.casino.z + 26, 26, 20, 'Parking du casino');
   if (city.garage) P(city.garage.x, city.garage.z + 13, 30, 18, 'Parvis du garage');
-  if (city.depot) P(city.depot.x, city.depot.z + 10, 48, 20, 'Cour du dépôt municipal');
+  // La cour du dépôt englobe DESORMAIS le hangar lui-meme (z + 9 sur 26 m au lieu de z + 10 sur
+  // 20) : le bulldozer, septieme engin pour six places marquees, se gare a l'abri DANS le
+  // hangar, et un engin gare dans le garage de son service n'est pas du stationnement sauvage.
+  if (city.depot) P(city.depot.x, city.depot.z + 9, 48, 26, 'Cour du dépôt municipal');
   if (city.caserne) P(city.caserne.x, city.caserne.z + 9, 26, 20, 'Cour de la caserne');
   if (police.station) P(police.station.x + 7, police.station.z - 14, 26, 14, 'Parking du commissariat');
   if (city.medDesk) P(city.medDesk.x + 8.6, city.medDesk.z + 11, 18, 44, 'Parking de l\'hôpital');
@@ -4169,7 +4172,13 @@ function buildOuterDistricts() {   // nouveaux quartiers : entrepôts à l'est, 
     tree(x + 6, 0, z + 2, C.leaf);
   }
   // entrepôts : hangars ouverts, on peut même y rentrer en voiture par le rideau
-  for (const [x, z, w] of [[92, -20, 14], [92, 10, 14], [92, 50, 18], [92, 92, 14]]) {
+  // LE TROISIEME ENTREPOT FAISAIT 18 m LA OU LES TROIS AUTRES EN FONT 14, et c'est LUI, tout
+  // seul, qui interdisait d'elargir les DEUX plus longues rues de la ville : ses murs tombaient
+  // a 3,20 m de l'axe de la rue de l'est (x = 80) ET de celui de la promenade du littoral
+  // (x = 104), soit 1 m de mur dans chaque chaussee des qu'elles passaient a 8 m. Ramene au
+  // gabarit de ses trois freres, il reste exactement aussi ouvert (meme rideau, meme allee
+  // d'entree, on y rentre toujours en voiture) et 394 m de rue montent d'un palier.
+  for (const [x, z, w] of [[92, -20, 14], [92, 10, 14], [92, 50, 14], [92, 92, 14]]) {
     coque(x, z, w, 12, 8, 0x9aa4b8, 3, 5, 4.6, 0.4);
     box(x, 8.3, z, w + 0.6, 0.6, 12.6, 0x6b7280, { studs: false, noRoute: true });   // toit
     for (let i = 0; i < 4; i++) box(x - w / 2 - 0.08, 5.1 + i * 0.3, z, 0.06, 0.08, 5, 0x8f98ab, { deco: true, noEdges: true, studs: false });   // rideau roulé au-dessus de l'ouverture
@@ -5138,6 +5147,15 @@ const PLAN_ROUTIER = {
     // 11,2 m en travers de la pelouse, et le conducteur quittait le bitume pour passer. Ce
     // raccord nord-sud de 8 m fait le coude pour de bon.
     { n: 'Coude de l\'ouest', x: -63, z: 5, w: 8, d: 18 },
+    // LES DEUX RUES DE L'OUEST SE REGARDAIENT SANS SE TOUCHER. Releve sur les noeuds cul-de-sac :
+    // la rue z = 10 (x -105 a -61) et la rue z = 22 (x -105 a -63) courent PARALLELES a 1 m
+    // d'ecart de bitume, et leurs deux bouts ouest, (-102,5 ; 10) et (-102,5 ; 22), n'avaient
+    // pour chemin commun qu'un detour de 57 m pour DOUZE METRES a vol d'oiseau. Idem a l'est
+    // pour le bout (-65,5 ; 22), a 42 m de detour. Deux raccords nord-sud de 8 m ferment les
+    // deux extremites : ce sont les seules impasses ACCIDENTELLES que le releve ait trouvees
+    // hors du bitume existant (les autres sont de vraies fins de rue).
+    { n: 'Raccord ouest des rues de l\'ouest', x: -101, z: 16, w: 8, d: 23 },
+    { n: 'Raccord est des rues de l\'ouest', x: -65, z: 18, w: 8, d: 12 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
     // Le reseau etait coupe en 25 morceaux pour les voitures : la statue bouchait le carrefour
@@ -6636,7 +6654,12 @@ const WORLDS = [
       // à 60 m de la moindre place : c'est exactement le stationnement sauvage que le joueur
       // pointe. Il prend maintenant le bord est du Parking du Sud, dans la longueur (8,60 m ne
       // tient pas dans une place de 5,40 m) : il ne gêne ni les places ni l'allée.
-      city.cars.push(makeVehicle('moto', 0xff5c5c, -5.6, 10, Math.PI), makeVehicle('moto', 0x1b2a4a, -4.5, 10, Math.PI),   // les motos au bout de la rangee, pres de la rue
+      // LES DEUX MOTOS ETAIENT COLLEES : 1,10 m d'entraxe pour 1,10 m de large chacune, soit
+      // ZERO degagement — tout compteur de chevauchements les paie des la construction, avant
+      // qu'aucun vehicule n'ait roule. La rouge ne peut pas reculer (la voiture de x = -8 tient
+      // -9,20 a -6,80) : c'est la bleue qui avance a -3,60, soit 2 m d'entraxe et 90 cm entre
+      // les deux garde-boue.
+      city.cars.push(makeVehicle('moto', 0xff5c5c, -5.6, 10, Math.PI), makeVehicle('moto', 0x1b2a4a, -3.6, 10, Math.PI),   // les motos au bout de la rangee, pres de la rue
         makeVehicle('truck', 0x5cc453, parkSud.x + parkSud.w / 2 - 1.7, parkSud.z, 0));
       // ---- points de balade pour les bots ----
       city.wander = [[0, 0, 3], [-13, 0.3, -8], [13, 0.3, -8], [13, 0.3, 13], [-13, 0.3, 6], [0, 0, -20], [20, 0, 0], [-20, 0, 0], [0, 0, 20], [-48, 0, 5], [48, 0.3, 22], [46, 0, -8], [0, 0.3, 70], [-14, 0.3, 66], [14, 0.3, 74], [-22, 0.3, 84], [20, 0.3, 90], [-84, 0, 12], [-84, 0, 60], [84, 0, 30], [50, 0, 60], [40, 0.36, 10], [0, 0.36, 150], [-30, 0.36, 160]];
@@ -6655,6 +6678,13 @@ const WORLDS = [
       for (const c of [...city.cars, ...city.aiCars, ...raceKarts, ...police.cars]) if (!c.heli) { if (c.kind === 'jetski') { c.y = 1.35; c.g.position.y = 1.35; } else { settleVehicle(c); const th = terrainH(c.x, c.z); if (th != null && th > c.y) { c.y = th; c.g.position.y = th; } } }
       city.elargies = elargirLesVoies();   // « plus larges » : chaque chaussee monte d'un palier tant qu'elle n'entame ni mur, ni parcelle, ni vehicule gare
       city.trous = bouchLesTrous();        // « mieux organisees » : du vrai bitume dans les trous que le graphe rattrapait par des liaisons virtuelles
+      // SECOND PASSAGE DE L'ELARGISSEMENT. Les bouchons de bouchLesTrous() naissent APRES le
+      // premier passage : ils heritent de la largeur de la plus etroite de leurs deux voisines
+      // et restaient donc a 6 ou 7 m au milieu d'un reseau passe a 8, 9, 11 ou 13. Trois d'entre
+      // eux (les deux raccords de l'anneau en (±26 ; 0) et le bouchon de (0 ; -31,55)) faisaient
+      // a eux seuls trois des dix chaussees sous le seuil de croisement. Le second passage ne
+      // touche QUE ce qui est encore sous 8 m : ELARGIR n'a pas d'entree au-dela de 9.
+      city.elargies2 = elargirLesVoies();
       city.degagees = degageLesRoutes();   // plus rien ne traîne au milieu des rues
       B('trottoirs', trottoirs);
       // la signalisation vient APRES les trottoirs (elle a besoin de savoir ou ils sont) et
@@ -9423,7 +9453,10 @@ function signalisation() {
       // porte), on la declare comme trottoir, et le panneau s'y plante.
       if (!mis) for (const dep of [0, 2, 4, 6, 8, 10, -1.6, -3.2]) {
         let pose2 = false;
-        for (const [cote, sup] of [[1, 0], [-1, 0], [1, 2], [-1, 2]]) {
+        // (on s'ecarte jusqu'a 6 m du bord : deux carrefours — l'un contre la barriere de
+        // l'anneau en (-26 ; -25,3), l'autre en (-62 ; 144,3) — n'avaient pas 2 m de libre
+        // au ras de la chaussee, et restaient sans stop ni cedez-le-passage)
+        for (const [cote, sup] of [[1, 0], [-1, 0], [1, 2], [-1, 2], [1, 4], [-1, 4], [1, 6], [-1, 6]]) {
           const x = k.cx - ux * (recul + dep) + rx * (lat + sup) * cote, z = k.cz - uz * (recul + dep) + rz * (lat + sup) * cote;
           // La dalle fait 2,2 m de cote : son centre doit etre BIEN hors de la chaussee, pas a
           // 15 cm du bord comme pour un panneau — une dalle posee en (-69,8 ; 16,6) tombait
@@ -9703,6 +9736,34 @@ function construireGraphe() {
     if (detourNoeuds(i, j, d * 8 + 20) < d * 8 + 20) continue;       // un chemin raisonnable existe deja
     if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
     nraccord++; poseLiaison(i, j, d, -1000 - nraccord);
+  }
+  // ---- 5 quater) LES IMPASSES QUI N'EN SONT PAS. Relevé sur les 43 nœuds cul-de-sac : la
+  // plupart sont de vraies fins de rue (bord de carte, hélistation, accès circuit), mais
+  // quelques-unes sont DEUX BOUTS DE LA MEME CHAUSSEE que le graphe ignore l'un l'autre. La
+  // rue de l'école, par exemple : ses deux rectangles se recouvrent, la voiture y roule tout
+  // droit, et pourtant (-54,5 ; 110) et (-47,5 ; 110) — SEPT METRES, sur le meme bitume —
+  // n'avaient pour chemin commun qu'un détour de 62 m. Le raccord du 5 ter ne les prenait pas :
+  // il exige un détour de huit fois le saut, et 62 m ne fait « que » neuf fois 7 m moins la
+  // marge. On ajoute donc un raccord dès que le détour vaut TROIS fois le saut — mais
+  // seulement quand TOUT le segment est sur du bitume declare. Ce garde-fou est ce qui
+  // distingue ce raccord d'une liaison a travers un trottoir : le reseau garde ses ZERO
+  // liaison hors chaussee.
+  let nsurBitume = 0;
+  const toutSurBitume = (A, B) => {
+    const k = Math.max(4, Math.ceil(Math.hypot(B.x - A.x, B.z - A.z) / 2));
+    for (let u = 0; u <= k; u++) {
+      const x = A.x + (B.x - A.x) * u / k, z = A.z + (B.z - A.z) * u / k;
+      if (!surLaChaussee(x, z, 0)) return false;
+    }
+    return true;
+  };
+  for (const [d, i, j] of cand) {
+    if (d > 14) continue;
+    if (adj[i].some(([v]) => v === j)) continue;
+    if (detourNoeuds(i, j, d * 3 + 10) < d * 3 + 10) continue;
+    if (!toutSurBitume(noeuds[i], noeuds[j])) continue;
+    if (!liaisonLibre(noeuds[i], noeuds[j])) continue;
+    nsurBitume++; poseLiaison(i, j, d, -2000 - nsurBitume);
   }
   // ---- 5 ter) LES VOIES OU UNE VOITURE NE PASSE PAS. Le graphe ne connaissait que les
   // rectangles du plan : un abribus, un massif ou le coin d'un immeuble plante au milieu de la
@@ -35626,7 +35687,16 @@ function buildMetiers() {
   const camion = gare(makeVehiculeTravail('pompier', MET_C.rouge, kx, kz + 5.5 + 1.5, 0));
   // POSTE ANIMATION : le BULLDOZER, septieme engin du depot. Il se gare une rangee en
   // arriere (les six places de la cour sont prises) et se conduit comme les autres.
-  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 10.4, PARC - 6.2, 0));
+  // Il etait gare en (dx - 10,4 ; PARC - 6,2) : sa caisse de 2,80 x 5,40 m mordait de 5 cm sur
+  // celle de la benne (7 m de long, rangee juste devant) ET chevauchait le mur ouest du hangar.
+  // Il recule d'un metre huit de plus et se decale vers l'est : 0,40 m du mur, 1,80 m derriere
+  // la benne.
+  // Sa place se calcule SUR CELLE DE LA BENNE, pas sur la cour : `gare()` recule les engins de
+  // la premiere rangee des que la chaussee devant eux s'elargit, et une place ecrite en dur
+  // derriere eux se retrouve alors DANS la benne — c'est exactement ce qui est arrive au
+  // second passage d'elargissement. 7 m d'entraxe pour 7 m + 5,40 m de caisses : 0,80 m entre
+  // les deux, quelle que soit la largeur de la rue.
+  const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, benne.z - 7, 0));
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
   const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });

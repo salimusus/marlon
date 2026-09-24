@@ -106,7 +106,81 @@ Nouvelle hiérarchie : **boulevard 13 m · avenue 11 m · rue 9 m · ruelle 8 m*
 (au lieu de 9 / 8 / 7 / 6 / 5). Les paliers 5, 6 et 7 restent déclarés dans `VOIES` pour les
 rares chaussées qu'aucune largeur supérieure ne laisse passer.
 
-## 7. Ce qui reste ouvert
+## 6 bis. LA SECONDE VAGUE (arbitrage du chef : élargir là où c'est prouvable)
+
+| mesure | avant travaux | fin du 1er lot | fin du 2e lot |
+|--------|---------------|----------------|---------------|
+| chaussées | 72 | 73 | **75** |
+| croisement possible (≥ 7,60 m) | 27 / 72 | 63 / 73 | **69 / 75** |
+| liaisons du graphe hors bitume | 21 | 0 | **0** |
+| détour moyen, 56 trajets | 2,25 × | 1,90 × | **1,76 ×** |
+| parcours moyen en 900 pas | 50,5 m | 45,8 m | **62,8 m** |
+| nœuds cul-de-sac | 48 | 43 | **37**, dont **0 accidentel** |
+| chevauchements de véhicules au DÉPART | 2 paires | 2 paires | **0 sur 47 véhicules** |
+
+### Ce qui a débloqué quoi
+
+1. **L'entrepôt de (92 ; 50), 18 m → 14 m.** Il était le SEUL obstacle des deux plus longues
+   rues de la ville : la rue de l'est (x = 80, 196,6 m) et la promenade du littoral
+   (x = 104, 197 m). Ses murs tombaient à 3,20 m de chacun des deux axes ; à 8 m de chaussée,
+   1,00 m de mur dans la voie. Ses trois frères font 14 m : il les rejoint, garde sa coque
+   ouverte, son rideau roulé et son allée d'entrée. **+394 m de rue au gabarit.**
+2. **Second passage d'élargissement après `bouchLesTrous()`.** Les bouchons naissent après le
+   premier passage et héritaient de la largeur de la plus étroite de leurs voisines : trois
+   d'entre eux (les raccords de l'anneau en (±26 ; 0), la desserte du parc en (-30,8 ; 46))
+   restaient sous le seuil au milieu d'un réseau passé à 8-13 m.
+3. **Deux raccords neufs à l'ouest** (voir §8).
+
+## 7. Ce qui reste ouvert — les SIX chaussées sous 7,60 m, et POURQUOI
+
+Chacune a été mesurée taboo par taboo (`chausseeAcceptable` au palier suivant) :
+
+| chaussée | longueur | ce qui bloque | verdict |
+|----------|----------|---------------|---------|
+| (0 ; -34) 7 m et (0 ; -31,55) 7 m | 12 et 18 m | les deux immeubles de (±8 ; -35,5), qui mordent de **25 cm** | **laissées**. Leur écart intérieur est de 7,50 m pour 7 m de chaussée : il n'y a DÉJÀ pas de trottoir. Les écarter assez pour une vraie rue de 8 m + trottoirs demanderait de respacer toute la rangée (-30, -18, ±8, 18, 30), qui vient alors buter dans la colonne x = ±35,5. |
+| (-42 ; 25) 6 m | 56 m | le **Parking du commissariat** (mord 12 m) et les deux immeubles de x = -35,5 (0,75 m) | **laissée**. Les deux voitures de patrouille sont garées en (-49 ; 9) et (-44 ; 9) : la seconde est à 1 m du bord actuel de la rue. Élargir, c'est la mettre dans la voie. |
+| (-26 ; 0) 6 m | 58 m | le **Parking du centre** (24 × 16 en (-13 ; 8,5), mord 3 m) et la boutique de vêtements (1,8 m) | **laissée**. La dalle du parking et ses 16 places sont entre les deux. |
+| (0 ; -4) 6 m | 38 m | le même **Parking du centre** (mord 3 m) | **laissée**, même raison. |
+| (0 ; 26) 6 m | 58 m | les **trois boutiques** (Vêtements, Snack, Salle de sport) alignées en z = 19,5, qui mordent de 1,30 m | **laissée**. Il faudrait les reculer de 1,50 m au sud — où se trouvent déjà la terrasse, les trois bancs et le parking. Leurs intérieurs (comptoirs, vitrines, mannequins, tapis de course, banc de musculation, points d'interaction) sont posés à la main, coordonnée par coordonnée : les déplacer sans les casser demande un chantier à part. |
+
+## 8. Les impasses (43 → 37, 0 accidentelle)
+
+**Le critère, mesuré** : une impasse est ACCIDENTELLE quand il existe un autre nœud à moins de
+20 m dont le chemin RÉEL par les voies dépasse trois fois ce saut plus 10 m de marge.
+
+- **Sur bitume existant** (le graphe ignorait une arête) : (-54,5 ; 110) ↔ (-47,5 ; 110),
+  7 m sur le même goudron pour 62 m de détour ; (-46 ; 12,5) ↔ (-42 ; 9), 5,30 m pour 26 m.
+  Passe « 5 quater » de `construireGraphe()` : raccord dès que le détour vaut 3 × le saut + 10,
+  **et seulement si tout le segment est sur du bitume déclaré** — c'est ce garde-fou qui garde
+  les 0 liaison hors chaussée.
+- **Bitume manquant** : les deux rues parallèles de l'ouest (z = 10 et z = 22, 1 m de pelouse
+  entre elles) se regardaient sans se toucher à leurs deux bouts : 57 m et 42 m de détour pour
+  12 m. Deux raccords nord-sud neufs : « Raccord ouest / est des rues de l'ouest ».
+- **Les 37 restantes sont des fins de rue légitimes** : bord de carte, accès circuit,
+  hélistation nord, bretelle du rallye, fond du Quartier résidentiel (8), Techno-Parc (2),
+  La Zone, Commerces.
+
+## 9. Les véhicules posés à la construction
+
+Balayage des **47 véhicules** (city.cars + aiCars + police + karts), rectangles orientés :
+**0 chevauchement**, la paire la plus serrée garde 0,65 m. Deux paires étaient fautives :
+
+- les deux **motos** du parking, 1,10 m d'entraxe pour 1,10 m de large — zéro dégagement.
+  La rouge ne peut pas reculer (la voiture de x = -8 tient -9,20 à -6,80) : la bleue avance
+  à -3,60. Entraxe 2 m.
+- la **benne** (7 m) et le **bulldozer** (5,40 m) du dépôt, 5,81 m de centre à centre, et le
+  bulldozer en plus à cheval sur le mur ouest du hangar. Il se gare maintenant dans le hangar,
+  à 0,40 m du mur, et sa place se calcule sur la position RÉELLE de la benne (`benne.z - 7`) —
+  `gare()` recule la première rangée dès que la rue s'élargit.
+
+Reste connu, **hors urbanisme** : deux karts de la grille de départ du rallye touchent la
+barrière basse (0,80 m) du circuit. La grille est calée par `grilleDepart()` ; y toucher
+déplacerait le départ de la course.
+
+Mobilier et décor : les 98 panneaux de signalisation ne se chevauchent pas deux à deux
+(mesuré) ; arbres, bancs et poubelles sont déjà posés par `decorPublic` avec évitement.
+
+## 10. Journal du premier lot (conservé)
 
 - **10 chaussées** ne peuvent pas atteindre 7,60 m : elles sont bordées des deux côtés par un
   bâtiment ou une parcelle. Les plus gênantes sont la rue de l'est (x = 80, 7 m, 190 m de long)

@@ -272,6 +272,17 @@ window.__SHOT = {
     // clavier relache, comme le fait deja le navigateur quand la fenetre perd le focus.
     try { if (typeof inputKeys !== 'undefined' && inputKeys.clear) inputKeys.clear(); } catch (e) {}
     try { if (typeof keys !== 'undefined' && keys.clear) keys.clear(); } catch (e) {}
+    // LE SIEGE DE LA BALANCOIRE GARDE SON CAVALIER (n° 87 du controleur, round 77).
+    // On remettait P.swing et P.ride a null sans jamais decrocher le siege ni la place du
+    // manege : sw.rider restait a 'me' POUR TOUS LES TESTS SUIVANTS. Consequences mesurees :
+    // (a) le siege occupe n'est plus propose (cityCommon saute les balancoires qui ont un
+    // cavalier), donc un test qui s'assoit apres un test de balancoire ne s'assoit sur rien ;
+    // (b) swingTick continue a balancer un siege qu'aucun joueur n'occupe. C'est par cette
+    // contamination que le controleur a trouve le defaut — on la coupe ici ET dans le jeu
+    // (lacheBalancoire), sinon le test de non-regression serait vert pour de mauvaises
+    // raisons.
+    try { for (const s of ((typeof city !== 'undefined' && city.swings) || [])) if (s.rider) s.rider = null; } catch (e) {}
+    try { for (const r of ((typeof city !== 'undefined' && city.rides) || [])) if (r.rider) r.rider = null; } catch (e) {}
     try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;
@@ -2552,6 +2563,12 @@ window.__G = {
   JUMP: typeof JUMP !== 'undefined' ? JUMP : 0,
   buildVilla: typeof buildVilla === 'function' ? buildVilla : null,
   // ---- POSTE QUARTIERS (quartiers neufs, mobilier, jeux) : exports apres cette ligne-repere ----
+  lacheBalancoire: typeof lacheBalancoire === 'function' ? lacheBalancoire : null,
+  consigneProche: typeof consigneProche === 'function' ? consigneProche : null,
+  updateAct: typeof updateAct === 'function' ? updateAct : null,
+  remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
+  relevageTick: typeof relevageTick === 'function' ? relevageTick : null,
+  get villageois() { return typeof city !== 'undefined' ? (city.villageois || []) : []; },
   // PIEGE DU BANC (round 71) : surtout PAS de « solids: solids » ici ni ailleurs — cette cle
   // ecrase le « get solids() » plus haut et fige un instantane du tableau.
   get checkpoints() { return typeof checkpoints !== 'undefined' ? checkpoints : []; },

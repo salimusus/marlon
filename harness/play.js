@@ -21723,3 +21723,54 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
   return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
 });
+
+// ================= POSTE JEUX & QUARTIERS — round 78 =================
+test('mis KO sur une balancoire, l\'enfant est RENDU a lui-meme : le siege lache son cavalier, il remarche, et la consigne pour descendre reste affichee', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    // Le scenario EXACT du controleur (n° 87) : Plaine des Sports, on s'assoit sur une
+    // balancoire, on se fait mettre KO. `balancoire: 5` est le premier siege de la Plaine
+    // (les quatre premiers sont ceux du parc).
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, frais: true, balancoire: 5 });
+    const sw = G.city.swings.find(s => s.rider === 'me');
+    if (!sw) return { pourquoi: 'personne ne s\'est assis sur la balancoire' };
+    const assis = { lieu: sw.lieu, rider: sw.rider };
+    // la consigne pour DESCENDRE reste affichee tant qu'on est assis (elle disparaissait au
+    // bout de 1,6 s, remplacee par la pastille du quartier)
+    for (let i = 0; i < 40; i++) G.step(1 / 60, true);
+    const consigne = G.consigneProche();
+    document.body.classList.add('manette'); G.updateAct();
+    const pastilleManette = document.getElementById('act').textContent;
+    document.body.classList.remove('manette'); G.updateAct();
+    const pastille = document.getElementById('act').textContent;
+    // LE KO. Le relevage (n° 78) doit rendre 100 ❤️ ET decrocher le siege.
+    P.hp = 0;
+    for (let i = 0; i < 300; i++) G.step(1 / 60, true);
+    const apres = { hp: P.hp, rider: sw.rider, cavaliers: G.city.swings.filter(s => s.rider).length, pswing: !!P.swing };
+    // ON REMARCHE. Depuis le point de reveil, 400 images de stick a fond dans les quatre
+    // directions : le controleur mesurait -0,09 m, le personnage etant repose sur la planche
+    // a chaque image. On garde la meilleure des quatre (l'accueil de l'hopital est meuble).
+    const depart = P.pos.clone();
+    let mieux = 0, ou = null;
+    for (const [dx, dz, nom] of [[1, 0, 'est'], [-1, 0, 'ouest'], [0, 1, 'sud'], [0, -1, 'nord']]) {
+      P.pos.copy(depart); P.vel.set(0, 0, 0);
+      for (let i = 0; i < 400; i++) { P.facing = Math.atan2(dx, dz); G.cam.yaw = Math.atan2(-dx, -dz); G.keys.clear(); G.keys.add('KeyW'); G.step(1 / 60, true); }
+      G.keys.clear();
+      const d = Math.hypot(P.pos.x - depart.x, P.pos.z - depart.z);
+      if (d > mieux) { mieux = d; ou = nom; }
+    }
+    // ON NE CONTAMINE PLUS LE TEST SUIVANT : __SHOT.go() doit rendre TOUS les sieges.
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, balancoire: 5 });
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const heritage = G.city.swings.filter(s => s.rider).length;
+    // et on se rassoit pour de bon apres : un siege rendu se represente
+    __SHOT.go({ world: 4, x: -172, y: 1, z: -138, hour: 12, balancoire: 5 });
+    const rassis = !!G.city.swings.find(s => s.rider === 'me');
+    return { assis, consigne, pastille, pastilleManette, apres, marche: +mieux.toFixed(2), ou, heritage, rassis };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const ok = r.assis.rider === 'me' && r.apres.hp === 100 && r.apres.rider === null && r.apres.cavaliers === 0
+    && !r.apres.pswing && r.marche > 8 && r.heritage === 0 && r.rassis
+    && /balan|saut/i.test(r.consigne || '') && /◯/.test(r.pastilleManette);
+  return { ok, detail: `n° 87, BLOQUANT : le relevage rendait bien 100 ❤️ et remettait P.swing a null, mais le SIEGE gardait son cavalier (sw.rider === 'me') et swingTick reposait le joueur sur la planche a chaque image — 28 s a se balancer tout seul et 400 images de stick a fond pour −0,09 m parcouru · maintenant remiseEnJeu() passe par lacheBalancoire(), le seul endroit du jeu qui decroche un cavalier : apres le KO, ❤️ ${r.apres.hp}, sw.rider = ${r.apres.rider}, ${r.apres.cavaliers} siege occupe sur les 10 de la ville, P.swing ${r.apres.pswing} · et l'enfant REMARCHE : ${r.marche} m en 400 images (direction ${r.ou}) (avant : −0,09 m) · la consigne pour descendre ne dure plus 1,6 s, elle reste affichee tant qu'on est assis : pastille « ${r.pastille} », et a la manette « ${r.pastilleManette} » · enfin __SHOT.go() rend les sieges qu'il occupait (${r.heritage} cavalier herite apres un go, et on se rassoit : ${r.rassis}) — sans quoi ce test serait vert pour de mauvaises raisons` };
+});

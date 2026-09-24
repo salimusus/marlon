@@ -9992,13 +9992,26 @@ function construireGraphe() {
   // caserne et les cinq engins du depot municipal sont gares en travers du boulevard z = 140,
   // sur vingt-cinq metres de long. Le graphe est bati apres eux, une seule fois : aucun cout
   // par image, et la ronde de police fait le tour du pate de maisons au lieu de la pelouse.
+  // ON NE DECLARE PAS « BOUCHEE » UNE VOIE QU'ON LONGE EN SERRANT UN PEU. Premiere version : UN
+  // SEUL sondage, au milieu de la voie, avec 1,40 m de rayon. Or le mobilier de trottoir mord
+  // legalement jusqu'a 40 cm sur la chaussee (c'est la tolerance des bancs Node), et sur une
+  // desserte de sept metres la voie de droite passe alors a 35 cm du garde-corps : CHAQUE
+  // sondage touchait. Mesure (test 147) : la rue x = 52, le seul axe direct du centre vers
+  // (40 ; 90), avait dur = 8 sur son sens nord — 480 de penalite, plus cher que le tour de la
+  // ville — et l'itineraire filait 26 m plus a l'est par x = 78 : 307 m pour 215 m par la
+  // grille, soit 1,45 fois le chemin prevu. Un vrai conducteur s'ecarte d'un metre et passe. On
+  // sonde donc AUSSI un point decale vers l'axe de la chaussee, et le point ne compte comme
+  // bouche que si les DEUX sont pris — ce qui reste vrai d'un engin gare en travers.
   for (const e of aretes) {
     if (e.liaison) { e.dur = 0; continue; }
     const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), k = Math.max(1, Math.round(L / 4));
+    const gx = Math.cos(e.sens), gz = -Math.sin(e.sens);   // la GAUCHE de la voie, c'est-a-dire l'axe de la chaussee
+    const dec = Math.min(1.2, (e.larg || 8) / 5);
     let dur = 0;
     for (let u = 0; u <= k; u++) {
       const x = e.x0 + (e.x1 - e.x0) * u / k, z = e.z0 + (e.z1 - e.z0) * u / k;
-      if (carBlocked(x, z, null, 1.4, { veh: true })) dur++;   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+      if (carBlocked(x, z, null, 1.4, { veh: true })   // `veh: true` : les vehicules DEJA GARES comptent (voir ci-dessus)
+        && carBlocked(x + gx * dec, z + gz * dec, null, 1.4, { veh: true })) dur++;
     }
     e.dur = dur;
   }
@@ -10182,15 +10195,24 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
   // est mesuree depuis `A`, qui depend du cap — le cap tourne des qu'on obeit au trace, la voie
   // gelee sortait de la fenetre et le choix repartait a zero. On la reteste donc DIRECTEMENT.
   if (forceDepart != null && forceDepart >= 0 && forceDepart !== interdit && G.aretes[forceDepart]) {
-    const pf = projVoie(x1, z1, G.aretes[forceDepart]);
+    const eg = G.aretes[forceDepart], pf = projVoie(x1, z1, eg);
     // La fenetre est LARGE a dessein. Elle dit « est-ce que je longe encore cette voie ? », et
     // un vehicule qui manoeuvre, qui double ou qui traine une epave s'en ecarte de dix metres
     // sans l'avoir quittee. Mesure (trajet de remorquage) : a 8 m, le gel lachait des que le
     // camion s'ecartait de sa ligne, la voie d'en face redevenait la moins chere, et le trace
     // basculait entre 455 m et 362 m a chaque recalcul — le camion tournait en rond.
-    if (pf.d <= Math.max(A.d + 6, 14)) {
-      departs.clear(); departs.set(forceDepart, (1 - pf.t) * G.aretes[forceDepart].long * (10 / G.aretes[forceDepart].vmax));
-      if (projVoie(x2, z2, G.aretes[forceDepart]).t < pf.t - 0.001) arriveesDerriere.add(forceDepart);
+    // MAIS ON NE GELE PLUS UNE VOIE QU'ON A DEPASSEE. `projVoie` RABAT la projection sur le
+    // segment : un vehicule qui a franchi le bout de sa voie (il est dans le carrefour, ou deja
+    // engage dans la rue suivante) y projette encore, a t = 1 et a quelques metres — la fenetre
+    // tenait donc, la voie finie restait le seul depart possible, et le trace REPARTAIT DE SON
+    // BOUT, derriere le pare-chocs. Mesure (test 147, trajet (0 ; 0) -> (-92 ; 60)) : 24 s de
+    // ronds dans un carre de huit metres sur la place du centre, 2 488 degres de volant et
+    // 1,55 fois le chemin prevu. On mesure donc le DEPASSEMENT LE LONG de la voie (positif
+    // quand on est au-dela de son bout) et, passe trois metres, le gel tombe.
+    const depasse = (x1 - eg.x1) * Math.sin(eg.sens) + (z1 - eg.z1) * Math.cos(eg.sens);
+    if (pf.d <= Math.max(A.d + 6, 14) && depasse < 3) {
+      departs.clear(); departs.set(forceDepart, (1 - pf.t) * eg.long * (10 / eg.vmax));
+      if (projVoie(x2, z2, eg).t < pf.t - 0.001) arriveesDerriere.add(forceDepart);
     }
   }
   const memeVoie = A.arete.id === B.arete.id && B.t >= A.t - 0.001;
@@ -10228,7 +10250,19 @@ function itineraireVoies(x1, z1, x2, z2, cap, forceDepart, interdit) {
     const cx = e.alongZ ? e.lat : (f.alongZ ? f.lat : n.x);
     const cz = e.alongZ ? (f.alongZ ? n.z : f.lat) : e.lat;
     if (Math.abs(CAP(f.sens - e.sens)) < 0.2) { pousse(cx, cz); continue; }   // tout droit : rien a arrondir
-    const ray = Math.max(1.2, Math.min(4.5, e.long * 0.35, f.long * 0.35));
+    let ray = Math.max(1.2, Math.min(4.5, e.long * 0.35, f.long * 0.35));
+    // LE PREMIER VIRAGE NE S'AMORCE PAS DERRIERE LE PARE-CHOCS. L'arrondi entre dans le virage
+    // quatre metres et demi AVANT le coin. Quand le vehicule est deja A LA HAUTEUR du coin — il
+    // sort d'une place, il est arrete dans le carrefour, il vient de finir sa voie — ce point
+    // d'entree tombe DERRIERE lui : le trace commence par un demi-tour, le demi-tour echoue dans
+    // une venelle de six metres, et la voiture tourne en rond (mesure : test 147, depart (0 ; 0),
+    // le point d'entree du virage etait a 6,8 m en arriere). On borne donc le rayon du PREMIER
+    // virage a ce qu'il reste vraiment a parcourir avant le coin.
+    if (k === 0) {
+      const s0 = Math.sin(e.sens), c0 = Math.cos(e.sens);
+      const avant = cx * s0 + cz * c0 - Math.max(x1 * s0 + z1 * c0, pts[0][0] * s0 + pts[0][1] * c0);
+      if (avant - 0.5 < ray) ray = Math.max(0, avant - 0.5);
+    }
     const ax = cx - Math.sin(e.sens) * ray, az = cz - Math.cos(e.sens) * ray;
     const bx = cx + Math.sin(f.sens) * ray, bz = cz + Math.cos(f.sens) * ray;
     pousse(ax, az);

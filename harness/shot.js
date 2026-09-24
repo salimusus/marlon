@@ -164,6 +164,17 @@ window.__SHOT = {
     // camera bouchee par l'auvent du snack mais une voiture partie plein gaz toute seule.
     // Vert lance seul, rouge en suite complete : la signature d'un etat herite.
     try { if (typeof releaseGamepad === 'function') releaseGamepad(); } catch (e) {}
+    // LES TOUCHES NE SURVIVENT PAS D'UN TEST A L'AUTRE NON PLUS (poste DIVERS, round 76).
+    // Depuis la 0.10, chaque keydown passe par « inputKeys.set(code, source, true) », qui rend
+    // FAUX quand la touche est deja tenue par la meme source — et la fonction sort alors
+    // AVANT toute action. Or un test qui simule une touche envoie un keydown et, neuf fois
+    // sur dix, jamais le keyup : la touche reste tenue POUR TOUJOURS, et le meme code est
+    // silencieusement ignore dans tous les tests suivants. C est exactement la panne du
+    // test 246 (E sur une chaise d ecole) : le premier E asseyait bien l eleve, le second
+    // ne faisait plus rien du tout — aucune erreur, aucune trace. On repart donc d un
+    // clavier relache, comme le fait deja le navigateur quand la fenetre perd le focus.
+    try { if (typeof inputKeys !== 'undefined' && inputKeys.clear) inputKeys.clear(); } catch (e) {}
+    try { if (typeof keys !== 'undefined' && keys.clear) keys.clear(); } catch (e) {}
     try {
       P.sit = null; P.swing = null; P.ride = null; P.eat = null; P.deco = null;
       P.run = false; P.court = false; P.essouffle = false; P.energie = 100;

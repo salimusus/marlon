@@ -8684,15 +8684,31 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
       pos: [+G.P.pos.x.toFixed(1), +G.P.pos.y.toFixed(2), +G.P.pos.z.toFixed(1)], chaise: [+ch.x.toFixed(1), +ch.z.toFixed(1)] };
     if (!proche.bench) return { pourquoi: `la chaise d'école n'est pas détectée à portée : joueur ${proche.pos}, chaise ${proche.chaise}, benchNear=${G.city.benchNear ? 'un autre banc' : 'aucun'}` };
     // c'est exactement l'événement que produit la manette (◯ → telTouche('KeyE'))
-    const presseE = () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+    // ON RELÂCHE LA TOUCHE. Depuis la 0.10, chaque keydown passe par
+    // « inputKeys.set(code, source, true) », qui rend FAUX quand la touche est déjà tenue par
+    // la même source — et le gestionnaire sort alors AVANT toute action. Ce test appuyait
+    // trois fois sur E sans jamais le relâcher : le premier appui asseyait l'élève, les deux
+    // suivants étaient purement et simplement ignorés (mesuré : après « Sortir », E ne
+    // rouvrait plus rien, jamais, même après 12 s d'attente). Un joueur, lui, relâche.
+    const presseE = () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+    };
     presseE();
     const assis = { sit: G.P.sit === visee, ui: G.uiOpen };
     for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
     const classe = { ui: G.uiOpen, q: !!G.school.q, chaise: G.school.chaise === visee };
-    // 3) on ferme la classe mais on reste assis : E la rouvre
+    // 3) « Sortir de la classe » ferme la fenêtre ET fait se lever (décision n° 65 du joueur,
+    //    garantie par le test 245 : ◯ / Échap / ✕ lèvent l'élève, closeUI() ne lève personne).
+    //    Ce qu'on garantit ici, c'est la suite promise par le message du jeu lui-même,
+    //    « E sur une chaise pour reprendre » : E rassied l'élève et la classe se rouvre.
     document.getElementById('schClose').click(); await dodo(80);
     const ferme = { ui: G.uiOpen, sit: G.P.sit === visee };
-    presseE(); await dodo(80);
+    // ON ATTEND LA CONDITION, PAS 80 ms. S'asseoir déclenche la classe par un setTimeout de
+    // 900 ms, et le banc d'essai rend 1 à 2 images par seconde : 80 ms ne suffisaient jamais
+    // (mesuré : interface null à 80 ms, schoolUI au bout de 1,2 s de simulation).
+    presseE();
+    for (let i = 0; i < 60 && G.uiOpen !== 'schoolUI'; i++) await dodo(100);
     const rouvre = { ui: G.uiOpen, sit: G.P.sit === visee };
     // 4) on se lève : la classe se ferme toute seule
     G.P.sit = null;
@@ -8708,7 +8724,7 @@ test('à l\'école on s\'assoit AVANT les exercices : E sur la chaise, et se lev
     && r.classe.ui === 'schoolUI' && r.classe.q && r.classe.chaise
     && r.ferme.ui === null && r.rouvre.ui === 'schoolUI' && r.rouvre.sit
     && r.leve.ui === null && r.leve.chaise === false && /bientôt/i.test(r.leve.dit || '');
-  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » laisse assis (${r.ferme.sit}) et E rouvre (${r.rouvre.ui}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
+  return { ok, detail: `on ouvrait les exercices DEBOUT au milieu de la classe : openSchool refuse maintenant (${r.debout.retour}, interface ${r.debout.ui}) · devant une chaise d'école, E (clavier — et ◯ de la manette, qui rejoue exactement cette touche) fait d'abord ASSEOIR (assis=${r.assis.sit}, interface encore ${r.assis.ui}) puis la classe s'ouvre d'elle-même (${r.classe.ui}, exercice=${r.classe.q}) · « Sortir de la classe » ferme tout et lève l'élève (assis=${r.ferme.sit}), et E le rassied et rouvre la classe (${r.rouvre.ui}, assis=${r.rouvre.sit}) · se lever ferme tout, en ${r.leve.images} image(s) : interface ${r.leve.ui}, chaise oubliée (${!r.leve.chaise}), la maîtresse dit « ${String(r.leve.dit || '').slice(0, 20)} »` };
 });
 
 test('le bandeau des touches ne barre plus l\'ecran : il ne sort qu\'a la demande', async p => {

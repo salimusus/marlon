@@ -188,6 +188,15 @@ window.__SHOT = {
       // LA MEMOIRE DU RENDU : une fuite ne se voit qu'en comparant d'un test a l'autre.
       var m = renderer.info.memory;
       __SHOT.memoire = { geo: m.geometries, tex: m.textures, prog: renderer.info.programs.length, objets: scene.children.length, solides: solids.length };
+      // LA SCENE QUI GROSSIT : on ne se contente pas de la compter, on NOMME le lot fautif.
+      // Une ville neuve tient en ~115 objets directement dans scene ; au-dela de 200, c'est
+      // qu'un test precedent a laisse quelque chose, et chaque objet en trop coute un appel de
+      // dessin (deux s'il porte une ombre) a TOUS les tests suivants.
+      if (scene.children.length > 200) {
+        var f0 = __SHOT.fuites().classement[0];
+        dit(true, scene.children.length + ' objets directement dans la scene (une ville neuve en a ~115)'
+          + (f0 ? ' — le plus gros lot : ' + f0.objets + ' pose(s) par ' + f0.ou : ''));
+      }
     } catch (e) { s.push('releve impossible : ' + (e && e.message)); }
     return s;
   },

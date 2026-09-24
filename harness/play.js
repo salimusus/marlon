@@ -22334,3 +22334,239 @@ test('la ville se rebatit a l\'identique, ou que le test precedent ait laisse le
     + `changeaient de place — c'est par la que le test 299 empoisonnait le test 332 a lui seul` };
 });
 
+// ---- DÉFAUT N° 96 : un contact au pas ne déclenche plus le constat d'accident ----
+// La géométrie de contact de la voiture CONDUITE lisait la boîte alignée sur les axes, qui
+// gonfle de 2,00 m dès qu'on braque : au parking du centre (voisines à 2,40 m) il suffisait de
+// tourner le volant pour « toucher » une voiture qu'on n'avait pas approchée. Et l'impact était
+// mesuré sur `drive.speed`, la vitesse que le MOTEUR réclame, pas celle du rapprochement réel.
+function ecartChassis(a, b) {   // > 0 : les deux tôles ne se touchent pas, et de cette distance
+  const aw = (a.baseW || 2.4) / 2, ad = (a.baseD || 4.4) / 2;
+  const bw = (b.baseW || 2.4) / 2, bd = (b.baseD || 4.4) / 2;
+  const dx = a.x - b.x, dz = a.z - b.z;
+  const ac = Math.cos(a.h || 0), as = Math.sin(a.h || 0), bc = Math.cos(b.h || 0), bs = Math.sin(b.h || 0);
+  let g = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const x = i === 0 ? ac : i === 1 ? as : i === 2 ? bc : bs;
+    const z = i === 0 ? -as : i === 1 ? ac : i === 2 ? -bs : bc;
+    const ra = aw * Math.abs(x * ac - z * as) + ad * Math.abs(x * as + z * ac);
+    const rb = bw * Math.abs(x * bc - z * bs) + bd * Math.abs(x * bs + z * bc);
+    g = Math.max(g, Math.abs(dx * x + dz * z) - ra - rb);
+  }
+  return g;
+}
+
+test('sortir d\'une place de parking en braquant ne déclenche plus d\'accident : on ne « touche » plus une voiture qu\'on n\'a pas approchée', async p => {
+  const r = await p.evaluate(`(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+    let c = null, best = 1e9;
+    for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+    const voisines = G.city.cars.filter(v => v !== c && Math.hypot(v.x - c.x, v.z - c.z) < 9);
+    G.enterCar(c);
+    const ecart = ${ecartChassis.toString()};
+    let contacts = 0, fantomes = 0, pireEcart = 0, bump = c.bumpT || 0;
+    let avant = new Map(voisines.map(v => [v, ecart(c, v)]));
+    const x0 = c.x, z0 = c.z;
+    // le geste exact de l'enfant : R2 à fond, un quart de tour à gauche pour sortir de la place
+    for (let i = 0; i < 200; i++) {
+      G.keys.add('ArrowUp'); G.keys.add('ArrowLeft');
+      const gAv = new Map(avant);
+      G.step(1 / 60, true);
+      if ((c.bumpT || 0) !== bump) {
+        bump = c.bumpT || 0;
+        let v = null, gv = Infinity;
+        for (const o of voisines) { const g = ecart(c, o); if (g < gv) { gv = g; v = o; } }
+        if (v) { contacts++; const e = gAv.get(v); if (e > 0.05) { fantomes++; pireEcart = Math.max(pireEcart, e); } }
+      }
+      for (const o of voisines) avant.set(o, ecart(c, o));
+    }
+    G.keys.clear();
+    Math.random = alea;
+    return { contacts, fantomes, pireEcart: +pireEcart.toFixed(3), accidents: G.city.accidents.length,
+             accidente: !!c.accidente, voisines: voisines.length,
+             parcouru: +Math.hypot(c.x - x0, c.z - z0).toFixed(2) };
+  })()`);
+  const ok = r.fantomes === 0 && r.accidents === 0 && !r.accidente && r.parcouru > 8;
+  return { ok, detail: `même manœuvre, R2 à fond et un quart de tour à gauche : AVANT, 7 contacts en 2,9 s dont SIX où les deux châssis ne se touchaient pas (le pire à 1,278 m d'écart), puis « 💥 ACCIDENT ! » à t = 2,9 s alors qu'il restait 0,255 m d'air entre les tôles et que le compteur affichait 16,62 m/s pour une voiture qui n'avançait plus — 58,5 % de dégâts, voiture figée, 1,58 m parcourus en 15 s · APRÈS, ${r.contacts} contact(s) contre ${r.voisines} voisines, dont ${r.fantomes} fantôme(s)${r.pireEcart ? ' (pire écart ' + r.pireEcart + ' m)' : ''}, ${r.accidents} accident ouvert, et la voiture sort de sa place : ${r.parcouru} m` };
+});
+
+test('un vrai encastrement dans une voiture garée reste un accident : le constat n\'a pas été désarmé', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+    let c = null, best = 1e9;
+    for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+    let cible = null, bc = 1e9;
+    for (const v of G.city.cars) { if (v === c) continue; const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bc) { bc = d; cible = v; } }
+    G.enterCar(c);
+    // cap 0 = vers +z (facing = atan2(dx, dz)) : la cible est droit devant, à 7 m
+    cible.h = 0; cible.g.rotation.y = 0; G.vehicleSolid(cible);
+    c.h = 0; c.x = cible.x; c.z = cible.z - 7; c.dmg = 0;
+    c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+    const VIT = 14;
+    let vChoc = null;
+    for (let i = 0; i < 90 && !c.accidente; i++) {
+      G.drive.speed = VIT;                      // pied au plancher jusqu'au choc
+      const av = Math.abs(G.drive.speed);
+      G.step(1 / 60, true);
+      if (c.accidente && vChoc == null) vChoc = +av.toFixed(2);
+    }
+    Math.random = alea;
+    return { accidente: !!c.accidente, accidents: G.city.accidents.length, vChoc,
+             dmg: +(c.dmg || 0).toFixed(1), dmgCible: +(cible.dmg || 0).toFixed(1) };
+  });
+  const ok = r.accidente === true && r.accidents === 1;
+  return { ok, detail: `contre-épreuve de la correction du n° 96 : l'impact se mesure maintenant sur le rapprochement RÉEL des deux tôles et non sur le compteur, il fallait donc vérifier qu'un vrai choc déclenche encore le constat · voiture lancée à ${r.vChoc || 14} m/s (50 km/h) dans une voiture garée droit devant : ${r.accidents} accident ouvert, véhicule immobilisé = ${r.accidente}, ${r.dmg} % de dégâts sur la sienne et ${r.dmgCible} % sur l'autre` };
+});
+
+test('le chien est déclaré passager et s\'assied à SA place, jamais sur les genoux du passager avant', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    const prep = nAmis => {
+      __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+      let c = null, best = 1e9;
+      for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+      const dog = G.city.pets.find(q => q.kind === 'dog');
+      G.chien.nom = 'Rex'; G.adopterChien(dog, true);
+      dog.x = c.x + 3; dog.z = c.z; dog.y = 0; dog.g.position.set(dog.x, 0, dog.z);
+      const amis = G.bots.filter(b => b.av && b.av.group && !b.ko && !b.prison).slice(0, nAmis);
+      amis.forEach((b, i) => { b.pos.set(c.x - 2 + i * 1.2, 0, c.z + 2.5); b.av.group.position.copy(b.pos);
+        b.av.group.visible = true; b.ko = 0; b.hp = 100; b.rdv = null; b.drive = null; b.enVoiture = null;
+        G.gang.membres.push(b); });
+      return { c, dog };
+    };
+    const out = {};
+    // --- trois amis + le chien dans une voiture à quatre places ---
+    const { c, dog } = prep(3);
+    document.getElementById('msg').textContent = '';
+    G.enterCar(c);
+    out.message = document.getElementById('msg').textContent;
+    out.declare = !!c.chien;
+    out.occupants = (c.occupants || []).map(o => o.place).sort().join(',');
+    // 8 s de conduite : il ne doit pas glisser vers l'avant
+    let ecartMin = 1e9;
+    for (let i = 0; i < 480; i++) {
+      G.keys.add('ArrowUp'); G.step(1 / 60, true);
+      const av = (c.occupants || []).find(o => o.place === 'avant');
+      if (av && i % 30 === 0) ecartMin = Math.min(ecartMin, Math.hypot(dog.g.position.x - av.av.group.position.x, dog.g.position.z - av.av.group.position.z));
+    }
+    G.keys.clear();
+    out.ecartAvant = +ecartMin.toFixed(3);
+    // assis EXACTEMENT sur la place `chien` de la table PLACES, pas sur un repère écrit à la main
+    const T = G.placesDe(c), cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const dx = dog.g.position.x - c.x, dz = dog.g.position.z - c.z;
+    out.local = { lx: +(dx * cs - dz * sn).toFixed(2), lz: +(dx * sn + dz * cs).toFixed(2) };
+    out.table = { lx: +T.chien.x.toFixed(2), lz: +T.chien.z.toFixed(2) };
+    out.coordsSuivent = Math.hypot(dog.x - dog.g.position.x, dog.z - dog.g.position.z) < 0.05;
+    // --- le chien SEUL : il doit être annoncé quand même ---
+    { const a = prep(0); document.getElementById('msg').textContent = ''; G.enterCar(a.c);
+      out.messageSeul = document.getElementById('msg').textContent; }
+    // --- le chien LOIN (35 m) : chienTick l'embarquait sans condition de distance, la déclaration doit suivre ---
+    { const a = prep(0); a.dog.x = a.c.x + 25; a.dog.z = a.c.z + 25; a.dog.g.position.set(a.dog.x, 0, a.dog.z);
+      G.enterCar(a.c); out.loinDeclare = !!a.c.chien; }
+    // --- le chien COUCHÉ dans sa niche : il reste dormir ---
+    { const a = prep(0); G.chien.couche = true; G.enterCar(a.c);
+      out.coucheDeclare = !!a.c.chien; G.chien.couche = false; }
+    Math.random = alea;
+    return out;
+  });
+  const ok = r.declare && r.ecartAvant > 1 && Math.abs(r.local.lx - r.table.lx) < 0.05 && Math.abs(r.local.lz - r.table.lz) < 0.05
+    && /Rex/.test(r.message) && /Rex/.test(r.messageSeul) && r.loinDeclare && !r.coucheDeclare && r.coordsSuivent
+    && r.occupants === 'arriereD,arriereG,avant';
+  return { ok, detail: `le chien voyageait dans l'habitacle SANS être déclaré passager, et à 0,10 m du genou du passager avant : \`chienTick\` avait sa PROPRE table de sièges, écrite à la main, qui le posait à lx −0,52 / lz +0,05 — très exactement le siège « avant » — et elle repassait après \`placeOccupants\`, qui l'asseyait pourtant correctement · il n'y a plus qu'UNE table de sièges (PLACES) : le chien est à lx ${r.local.lx} / lz ${r.local.lz}, soit sa place ${r.table.lx} / ${r.table.lz} au centimètre, à ${r.ecartAvant} m du passager avant (0,10 m avant) pendant 8 s de conduite · il est déclaré (${r.declare}) et NOMMÉ : « ${r.message} », et seul : « ${r.messageSeul} » · à 35 m il monte quand même (${r.loinDeclare}, la règle des 6 m contredisait chienTick) et couché dans sa niche il ne monte pas (${!r.coucheDeclare})` };
+});
+
+test('manette posée, un véhicule qui passe au pas écarte l\'enfant de sa trajectoire au lieu de l\'emporter', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    // Le véhicule est avancé À LA MAIN, à l'allure « au pas » (1,5 m/s) qu'un véhicule en
+    // intervention s'autorise au bout de 2,5 s derrière un piéton : on mesure la POUSSÉE,
+    // pas le pilote (auquel ce poste ne touche pas).
+    const essai = (vit, kind) => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+      let c = [...G.city.cars].find(v => (v.kind || 'voiture') === kind) || G.city.cars[0];
+      c.h = 0; c.x = G.P.pos.x; c.z = G.P.pos.z - 8;
+      c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+      const x0 = G.P.pos.x, z0 = G.P.pos.z;
+      let emporte = 0, lat = 0;
+      for (let i = 0; i < 60 * 30; i++) {
+        c.speed = vit; c.z += vit / 60; c.g.position.z = c.z; G.vehicleSolid(c);
+        G.keys.clear(); G.step(1 / 60, true);     // manette posée : simulé, aucune entrée
+        emporte = Math.max(emporte, Math.abs(G.P.pos.z - z0));
+        lat = Math.max(lat, Math.abs(G.P.pos.x - x0));
+      }
+      return { emporte: +emporte.toFixed(2), lat: +lat.toFixed(2), hp: G.P.hp,
+               roule: +(vit * 30).toFixed(0), depasse: c.z > G.P.pos.z + 4 };
+    };
+    const out = { camion: essai(1.5, 'pompier'), voiture: essai(1.5, 'voiture'), lent: essai(0.8, 'pompier') };
+    // un véhicule À L'ARRÊT ne pousse personne : le joueur qui se colle à lui ne doit pas bouger
+    { __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12 });
+      const c = G.city.cars[0];
+      // garé JUSTE devant lui, pare-chocs à 1,2 m, mais sans le chevaucher
+      c.speed = 0; c.h = 0; c.x = G.P.pos.x; c.z = G.P.pos.z - ((c.baseD || 4.4) / 2 + 1.2);
+      c.g.position.set(c.x, c.y || 0, c.z); c.g.rotation.y = 0; G.vehicleSolid(c);
+      const x0 = G.P.pos.x, z0 = G.P.pos.z;
+      for (let i = 0; i < 180; i++) { G.keys.clear(); G.step(1 / 60, true); }
+      out.arret = { bouge: +Math.hypot(G.P.pos.x - x0, G.P.pos.z - z0).toFixed(2) }; }
+    Math.random = alea;
+    return out;
+  });
+  const ok = r.camion.emporte < 1.5 && r.voiture.emporte < 1.5 && r.lent.emporte < 1.5
+    && r.camion.lat > 1 && r.camion.hp === 100 && r.voiture.hp === 100
+    && r.camion.depasse && r.arret.bouge < 0.6;
+  return { ok, detail: `manette posée, aucune entrée : la résolution de collision reposait le joueur sur la face du véhicule LA PLUS PROCHE, c'est-à-dire, collé au pare-chocs, sur la face AVANT — donc devant la caisse, à chaque image. Un chasse-neige : mesuré 33,4 m d'emport en 30 s derrière un camion à 1,5 m/s (l'allure « au pas » d'un véhicule en intervention), 20,4 m à 0,8 m/s, l'enfant tenu à 4,40 m du centre du camion, pile sur son pare-chocs, tout du long · sur l'AXE DE MARCHE du véhicule on annule maintenant le pas et le dégagement l'écarte DE CÔTÉ : emporté ${r.camion.emporte} m (camion 1,5 m/s, qui roule ${r.camion.roule} m), ${r.voiture.emporte} m (voiture) et ${r.lent.emporte} m (0,8 m/s), écarté de ${r.camion.lat} m hors de la voie, ❤️ ${r.camion.hp}, et le véhicule le dépasse (${r.camion.depasse}) · un véhicule à l'ARRÊT ne pousse toujours personne : ${r.arret.bouge} m` };
+});
+
+test('le camion de pompiers n\'est plus garé au travers de sa caserne, et les bancs de la rue x = 52 sont sur le trottoir', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const out = {};
+    // ---- 1. LA CASERNE : rien de planté dans la caisse du camion, rien qui sorte du toit ----
+    const k = G.city.caserne;
+    const camion = [...G.city.cars].find(v => v.kind === 'pompier');
+    const cx1 = camion.x - camion.baseW / 2, cx2 = camion.x + camion.baseW / 2;
+    const cz1 = camion.z - camion.baseD / 2, cz2 = camion.z + camion.baseD / 2;
+    const dedans = [], perce = [];
+    for (const o of G.solids) {
+      if (Math.abs(o.x - k.x) > 14 || Math.abs(o.z - k.z) > 14) continue;
+      // `o.veh` : la boîte de collision du camion lui-même, et celles des autres véhicules
+      if (!o.veh && o.h > 1.2 && o.x - o.w / 2 < cx2 && o.x + o.w / 2 > cx1 && o.z - o.d / 2 < cz2 && o.z + o.d / 2 > cz1)
+        dedans.push({ x: +o.x.toFixed(2), z: +o.z.toFixed(2), w: +o.w.toFixed(2), h: +o.h.toFixed(2) });
+      // le pavillon de la caserne plafonne à 5,10 m : rien du bâti ne doit le percer
+      if (!o.veh && Math.abs(o.x - k.x) < 10 && Math.abs(o.z - k.z) < 7 && o.y + o.h / 2 > 5.4)
+        perce.push({ x: +o.x.toFixed(2), z: +o.z.toFixed(2), haut: +(o.y + o.h / 2).toFixed(2) });
+    }
+    out.camion = { x: +camion.x.toFixed(2), z: +camion.z.toFixed(2), z1: +cz1.toFixed(2), z2: +cz2.toFixed(2) };
+    out.dansLaCaisse = dedans; out.percentLeToit = perce;
+    // ---- 2. LA RUE x = 52 : aucun mobilier sur la chaussée ----
+    const rues = (G.city.routes || []).filter(q => Math.abs(q.x - 52) < 2 && q.d > 20);
+    let pireChev = 0, pireObj = null, jeuVoie = 1e9, jeuObj = null;
+    const AXE = 50.25, DEMI = 1.2;   // axe de la voie de droite (largeur/4) et demi-gabarit d'une voiture
+    for (const o of G.solids) {
+      if (o.h > 30 || o.sol || o.trottoir) continue;
+      const ox1 = o.x - o.w / 2, ox2 = o.x + o.w / 2;
+      for (const q of rues) {
+        const rx1 = q.x - q.w / 2, rx2 = q.x + q.w / 2;
+        if (o.z - o.d / 2 > q.z + q.d / 2 || o.z + o.d / 2 < q.z - q.d / 2) continue;
+        const chev = Math.min(ox2, rx2) - Math.max(ox1, rx1);
+        if (chev > pireChev && ox1 < rx1 + 1.5) { pireChev = chev; pireObj = { x: +o.x.toFixed(2), z: +o.z.toFixed(2), ox2: +ox2.toFixed(3) }; }
+      }
+      if (o.z - o.d / 2 <= 113 && o.z + o.d / 2 >= 25 && ox2 >= 45 && ox1 <= AXE) {
+        const j = (AXE - DEMI) - ox2;
+        if (j < jeuVoie) { jeuVoie = j; jeuObj = { x: +o.x.toFixed(2), z: +o.z.toFixed(2), ox2: +ox2.toFixed(3) }; }
+      }
+    }
+    out.rue52 = { pireChevauchement: +pireChev.toFixed(3), pireObjet: pireObj,
+                  jeuVoieDroite: +jeuVoie.toFixed(3), objetLePlusProche: jeuObj,
+                  bancs: (G.city.benches || []).filter(b => b.x > 46 && b.x < 50 && b.z > 30 && b.z < 95).length };
+    return out;
+  });
+  const ok = r.dansLaCaisse.length === 0 && r.percentLeToit.length === 0
+    && r.rue52.pireChevauchement < 0.01 && r.rue52.jeuVoieDroite > 0.5 && r.rue52.bancs === 6;
+  return { ok, detail: `deux relevés de géométrie du poste CONDUITE · CASERNE : le camion (2,60 × 8 m en ${r.camion.x} ; ${r.camion.z}, donc z de ${r.camion.z1} à ${r.camion.z2}) était garé AU TRAVERS de la « perche de descente » — en réalité un panneau de 3 × 6,80 × 0,30 m planté en (−40 ; 126), au milieu de la travée, et qui sortait de 1,70 m AU-DESSUS du toit (pavillon à 5,10 m) ; c'est une vraie perche de 0,30 m rangée contre le flanc ouest : ${r.dansLaCaisse.length} solide dans la caisse du camion, ${r.percentLeToit.length} qui perce le toit · RUE x = 52 : les six bancs (x = 48,5, boîte de 0,85 m, donc jusqu'à x = 48,925) mordaient de 42,5 cm sur une chaussée qui commence à 48,5, et l'axe de la voie de droite ne leur laissait que 12,5 cm pour un demi-gabarit de 1,20 m ; reculés à 47,9 : chevauchement ${r.rue52.pireChevauchement} m, jeu de la voie ${r.rue52.jeuVoieDroite} m, et les ${r.rue52.bancs} bancs sont toujours là` };
+});

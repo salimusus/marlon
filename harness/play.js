@@ -21793,3 +21793,36 @@ test('les deux courses se lancent avec un BOUTON de manette, jamais avec une tou
     && r.libelleAnneaux === "🚁 R1 : course d'anneaux";
   return { ok, detail: `n° 89 : le jeu ecrivait « ▢ pour lancer la course » et « 🚁 ▢ : course d'anneaux » mais AUCUN bouton n'envoyait KeyF — avant, ▢ △ ✕ ◯ laissaient race.state a « idle » · maintenant, devant le portique : ✕ ◯ △ → ${r.autres}, ▢ → ${r.carre} (« ${r.bandeau} ») · aux commandes de l'helico ▢ pose toujours (course d'anneaux = ${r.carreHeli}) et R1 la lance (${r.r1Heli}) · et les libelles disent la verite : « ${r.libelleF} », « ${r.libelleAnneaux} », ${Object.keys(r.libelles).length} traductions verifiees bouton par bouton, ${mensonges.length} mensonge(s)` };
 });
+
+test('les panneaux gravés parlent manette, pas clavier', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await dodo(250);
+    // une touche de clavier ecrite en dur : E, F, G, O, V, T seuls, ou « Espace » / « Ctrl »
+    const clavier = /\b(?:[EFGOVT]|Espace|Ctrl)\b(?!\.)/;
+    document.body.classList.remove('manette');
+    const textes = G.PANNEAUX.map(x => x.texte);
+    const avant = textes.filter(t => clavier.test(t));
+    // pixels du panneau des balancoires du nid d'oiseau AVANT / APRES : la texture est bien recuite
+    const nid = G.PANNEAUX.find(x => /nid d'oiseau/.test(x.texte));
+    const image = m => { const c = m && m.map && m.map.image; if (!c) return null;
+      const g = c.getContext('2d'); const d = g.getImageData(0, 0, c.width, c.height).data;
+      let somme = 0; for (let i = 0; i < d.length; i += 4) somme += d[i] + d[i + 1] + d[i + 2]; return somme; };
+    const pxClavier = image(nid && nid.mat);
+    document.body.classList.add('manette');
+    const recuits = G.panneauxMaj();
+    const pxManette = image(nid && nid.mat);
+    const apres = textes.map(t => G.ctrlText(t)).filter(t => clavier.test(t));
+    const lus = textes.filter(t => clavier.test(t)).map(t => G.ctrlText(t));
+    document.body.classList.remove('manette');
+    G.panneauxMaj();
+    return { total: textes.length, recuits, avant, apres, lus, pxClavier, pxManette,
+      pxRendu: image(nid && nid.mat) };
+  });
+  const ok = r.total > 15 && r.recuits === r.total && r.avant.length >= 6 && r.apres.length === 0
+    && r.lus.every(t => /[△◯✕▢]/.test(t))
+    && r.pxClavier != null && r.pxManette != null && r.pxClavier !== r.pxManette
+    && r.pxRendu === r.pxClavier;
+  return { ok, detail: `n° 93 : le texte d'un panneau est cuit dans une texture a la construction de la ville, donc ctrlText ne le voyait jamais · ${r.total} panneaux dans la ville, ${r.avant.length} nommaient une touche de clavier (${r.avant.slice(0, 3).join(' · ')}…) · manette branchee, les ${r.recuits} textures sont recuites et il n'en reste ${r.apres.length} : « ${r.lus.slice(0, 3).join(' · ')}… » · la texture du panneau du nid d'oiseau change vraiment de pixels (${r.pxClavier} → ${r.pxManette}) et revient a l'identique manette debranchee (${r.pxRendu})` };
+});

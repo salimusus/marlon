@@ -797,3 +797,9 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Reproduire** : parking du centre, se mettre au volant de la voiture la plus proche (−8 ; 10) avec △, puis R2 à fond et rien d'autre. Reproduit 1/1 (`qc.log`, section `place`).
 - **On voit** : à **t = 0,4 s**, alors que la voiture roule à **0,7 m/s (2,5 km/h)**, « 💥 **ACCIDENT ! Les deux véhicules sont immobilisés — la police arrive** ». Et c'est fini : sur 900 images (15 s de simulation), la voiture n'a parcouru que **3,7 m**, **875 images sur 900** sont sous 0,6 m/s, et elle a pris **19 % de dégâts**. Elle finit figée en (−8,4 ; 6,4), vitesse 0, pendant les 14 s restantes.
 - **On devrait voir** : à 2,5 km/h, un petit bruit de tôle et un pare-chocs qui recule — pas un constat, pas deux véhicules immobilisés, pas la police. Et une voiture qui peut toujours ressortir de sa place.
+
+### 97. Après un KO, l'enfant se réveille à 200 m de là sans que rien ne le lui dise
+- **Gravité** : GÊNANT (le relevage du n° 78 marche ; c'est son récit qui manque)
+- **Reproduire** : centre, profil vierge, se faire mettre KO (14 coups de 9 ❤️), regarder les messages. Reproduit 2/2 (`qm.log`, `q-swing.js`).
+- **On voit** : « 😵 KO par Karim_flash ! −7 🪙 » à t+0, « 🚑 Une ambulance a été appelée » à t+1,2 s, et **1,6 s après le KO** le personnage est déjà debout, 100 ❤️, en (22 ; 0,8 ; 207,9) — l'accueil de l'hôpital, à **200 m** de l'endroit où il est tombé. Le seul message encore à l'écran est **« 🪑 △ : s'asseoir »**. Rien ne dit qu'il a été soigné, ni où il est, ni pourquoi son porte-monnaie est passé de 25 à 18 🪙. Un enfant qui regarde ailleurs une seconde et demie ne saura jamais ce qui s'est passé.
+- **On devrait voir** : une phrase qui RESTE (« Tu t'es réveillé à l'hôpital · −7 🪙 »), et assez de temps pour la lire — 1,6 s, c'est plus court qu'un clignement d'attention.

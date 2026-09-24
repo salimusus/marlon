@@ -2524,6 +2524,16 @@ function sign(x, top, z, text, big, ry = 0) {
   const matFace = panneauEnregistre(new THREE.MeshBasicMaterial({ map: textTexture(ctrlText(text)) }), text, t => textTexture(t));
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W, H), matFace);
   face.position.set(0, 1.7 + H / 2, 0.08); g.add(face);
+  // LE TEXTE DES DEUX COTES (n° 94 du contrôleur). `sign()` ne texturait que la face avant :
+  // le DOS etait un aplat de bois nu de 3,45 × 1,65 m, de 1,70 à 3,10 m de haut. Le panneau
+  // « 🐴 Manège à poneys » est posé en (−117,5 ; 310) face à l'ouest, et l'on arrive au manège
+  // par l'EST, le Chemin de la Grange : la planche remplissait tout l'écran et cachait le
+  // manège entier, son toit de chaume et ses six poneys (capture b1-hameau-manege.png).
+  // Les dix autres panneaux des trois quartiers neufs avaient le même dos. Un second plan,
+  // retourné d'un demi-tour pour que le texte se lise à l'endroit, et QUI PARTAGE LE MÊME
+  // MATÉRIAU : une seule texture, un maillage de plus, et le panneau se lit des deux côtés.
+  const dos = new THREE.Mesh(new THREE.PlaneGeometry(W, H), matFace);
+  dos.position.set(0, 1.7 + H / 2, -0.08); dos.rotation.y = Math.PI; g.add(dos);
 }
 function tree(x, top, z, leaf = C.leaf, pine = false) {
   if (city.on) {

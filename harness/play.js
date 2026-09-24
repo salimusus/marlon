@@ -424,8 +424,14 @@ test('les feux ne sont plus qu\'aux carrefours', async p => {
 });
 
 test('le parc compte quatre balançoires', async p => {
-  const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: -12, y: 1, z: 66, hour: 12 }); return __G.city.swings.length; });
-  return { ok: n === 4, detail: `${n} balançoires` };
+  // ON COMPTAIT TOUTES LES BALANCOIRES DE LA CARTE. Les trois quartiers neufs (Plaine des
+  // Sports, Hameau de la Ferme, Bois des Aventuriers) posent les leurs dans LE MEME tableau
+  // `city.swings`, parce qu'elles partagent la mecanique (swingTick, la touche E, le saut a
+  // la manette) : le releve donnait 10 sieges, dont 4 au parc. Chaque siege porte desormais
+  // son `lieu` ; ce test-ci est celui du PARC, les six autres ont leurs propres tests.
+  const r = await p.evaluate(() => { __SHOT.go({ world: 4, x: -12, y: 1, z: 66, hour: 12 });
+    return { parc: __G.city.swings.filter(s => s.lieu === 'parc').length, tout: __G.city.swings.length }; });
+  return { ok: r.parc === 4, detail: `${r.parc} balançoires au parc (${r.tout} en tout sur la carte, avec celles des trois quartiers neufs)` };
 });
 
 test('dans la villa, le frigo est accessible et donne à manger', async p => {
@@ -4271,7 +4277,9 @@ test('les conducteurs suivent les rues au lieu de couper à travers tout', async
 test('les balançoires sont alignées et centrées sous leur portique', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: -12, y: 1, z: 66, hour: 12 });
-    const G = __G, sw = G.city.swings.map(s => +s.x.toFixed(2));
+    // les QUATRE sieges du parc (les six autres appartiennent aux trois quartiers neufs,
+    // qui passent par le meme tableau `city.swings` pour partager la mecanique)
+    const G = __G, sw = G.city.swings.filter(s => s.lieu === 'parc').map(s => +s.x.toFixed(2));
     const ecarts = []; for (let i = 1; i < sw.length; i++) ecarts.push(+(sw[i] - sw[i - 1]).toFixed(2));
     const regulier = ecarts.every(e => Math.abs(e - ecarts[0]) < 0.01);
     const centre = +((sw[0] + sw[sw.length - 1]) / 2).toFixed(2);
